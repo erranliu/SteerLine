@@ -1,0 +1,36 @@
+{
+  "repository": "C:/Projects/my-existing-repo",
+  "remote": "origin",
+  "branch": "main",
+  "run_dir": "C:/SteerlineRuntime/my-existing-repo",
+  "runtime_file": "runtime.json",
+  "claimant": "",
+  "git": {"executable": "git.exe", "args": []},
+  "bd": {"executable": "bd.exe", "args": []},
+  "codex": {"executable": "C:/Tools/codex/codex.exe", "args": []},
+  "start_skill": {
+    "path": ".agents/skills/steerline-start/SKILL.md",
+    "invocation": "Read and execute the configured start entry with the supplied dispatch context."
+  },
+  "finish_skill": {
+    "path": ".agents/skills/steerline-finish/SKILL.md",
+    "invocation": "Read and execute the configured finish entry, stopping after PR publication."
+  },
+  "workflow": "Follow the established repository workflow between these two entries.",
+  "executable_types": ["task", "bug", "feature", "chore"],
+  "task_poll": "10s",
+  "pr_poll": "30s",
+  "heartbeat": "5s",
+  "command_timeout": "30s",
+  "shutdown_grace": "10s",
+  "sandbox": "workspace-write",
+  "model": "",
+  "profile": "",
+  "pr": {
+    "kind": "gitea",
+    "base_url": "https://gitea.example.com",
+    "repository": "owner/my-existing-repo",
+    "token_env": "STEERLINE_GITEA_TOKEN",
+    "query": {"executable": "", "args": []}
+  }
+}

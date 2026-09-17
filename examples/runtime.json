@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "updated_at": "2026-09-17T08:30:00Z",
+  "heartbeat_at": "2026-09-17T08:30:00Z",
+  "service": {
+    "instance_id": "fd054ee51ff2431a8025a63b015f3229",
+    "pid": 1234,
+    "status": "running",
+    "claimant": "steerline-example",
+    "error": null
+  },
+  "repository": {
+    "path": "C:/Projects/repo",
+    "remote": "origin",
+    "branch": "main",
+    "identity": "c:\\projects\\repo\\.git"
+  },
+  "current_task": null,
+  "slot_occupied": false,
+  "runs": [
+    {
+      "task_id": "demo-1",
+      "title": "Implement the first task",
+      "run_id": "64f36c8449324eecb4223b8a28ac90c2",
+      "claimant": "steerline-example",
+      "beads_status": "in_progress",
+      "execution_status": "succeeded",
+      "finish_task_status": "waiting_pr_merge",
+      "codex_session_id": "0199a213-81c0-7800-8aa1-bbab2a035a53",
+      "process": {
+        "pid": 5678,
+        "created": "01db000000000000",
+        "executable": "c:\\tools\\codex\\codex.exe"
+      },
+      "started_at": "2026-09-17T08:00:00Z",
+      "ended_at": "2026-09-17T08:20:00Z",
+      "worktree_path": "C:/Worktrees/demo-1",
+      "base_commit": "0123456789abcdef0123456789abcdef01234567",
+      "pr": {
+        "url": "https://gitea.example.com/owner/repo/pulls/42",
+        "state": "open",
+        "merged_at": null,
+        "merge_commit": null,
+        "queried_at": "2026-09-17T08:29:50Z",
+        "query_error": null
+      },
+      "last_event": "turn.completed ",
+      "log_path": "C:/SteerlineRuntime/repo/runs/64f36c8449324eecb4223b8a28ac90c2/events.jsonl",
+      "result_path": "C:/SteerlineRuntime/repo/runs/64f36c8449324eecb4223b8a28ac90c2/result.json",
+      "summary": "Implemented the task and published its PR; waiting for human merge.",
+      "error": null
+    }
+  ]
+}

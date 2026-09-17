@@ -1,0 +1,35 @@
+{
+  "repository": "C:/Projects/merge-h-308-code",
+  "remote": "origin",
+  "branch": "AIRefactor",
+  "run_dir": "C:/SteerlineRuntime/merge-h-308-code",
+  "runtime_file": "runtime.json",
+  "git": {"executable": "git.exe", "args": []},
+  "bd": {"executable": "C:/Users/lmas1/AppData/Local/Programs/bd/bd.exe", "args": []},
+  "codex": {
+    "executable": "C:/Users/lmas1/AppData/Roaming/npm/node_modules/@openai/codex/node_modules/@openai/codex-win32-x64/vendor/x86_64-pc-windows-msvc/bin/codex.exe",
+    "args": []
+  },
+  "start_skill": {
+    "path": ".agents/skills/start-bd-task/SKILL.md",
+    "invocation": "Use this repository entry only after implementing the documented already-claimed dispatch mode."
+  },
+  "finish_skill": {
+    "path": ".agents/skills/finish-beads-task/SKILL.md",
+    "invocation": "This legacy post-merge entry is NOT compatible yet. Replace with the repository's adapted pre-merge publication entry."
+  },
+  "workflow": "This is an inspection-derived integration draft. See docs/merge-h-308-integration.md before activation.",
+  "executable_types": ["task", "bug", "feature", "chore"],
+  "task_poll": "10s",
+  "pr_poll": "30s",
+  "heartbeat": "5s",
+  "command_timeout": "30s",
+  "shutdown_grace": "10s",
+  "sandbox": "workspace-write",
+  "pr": {
+    "kind": "gitea",
+    "base_url": "http://192.168.0.66:3000",
+    "repository": "zymobile/merge-h-308-code",
+    "token_env": "STEERLINE_GITEA_TOKEN"
+  }
+}

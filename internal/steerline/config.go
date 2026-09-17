@@ -1,0 +1,266 @@
+package steerline
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"regexp"
+	"strings"
+	"time"
+)
+
+type Command struct {
+	Executable string   `json:"executable"`
+	Args       []string `json:"args"`
+}
+type Skill struct {
+	Path       string `json:"path"`
+	Invocation string `json:"invocation"`
+}
+type Config struct {
+	Repository      string   `json:"repository"`
+	Remote          string   `json:"remote"`
+	Branch          string   `json:"branch"`
+	RunDir          string   `json:"run_dir"`
+	RuntimeFile     string   `json:"runtime_file"`
+	Claimant        string   `json:"claimant"`
+	BD              Command  `json:"bd"`
+	Git             Command  `json:"git"`
+	Codex           Command  `json:"codex"`
+	StartSkill      Skill    `json:"start_skill"`
+	FinishSkill     Skill    `json:"finish_skill"`
+	Workflow        string   `json:"workflow"`
+	ExecutableTypes []string `json:"executable_types"`
+	TaskPoll        string   `json:"task_poll"`
+	PRPoll          string   `json:"pr_poll"`
+	Heartbeat       string   `json:"heartbeat"`
+	CommandTimeout  string   `json:"command_timeout"`
+	ShutdownGrace   string   `json:"shutdown_grace"`
+	Model           string   `json:"model"`
+	Sandbox         string   `json:"sandbox"`
+	Profile         string   `json:"profile"`
+	PR              PRConfig `json:"pr"`
+	identity        string
+	startText       string
+	finishText      string
+}
+type PRConfig struct {
+	Kind       string  `json:"kind"`
+	BaseURL    string  `json:"base_url"`
+	Repository string  `json:"repository"`
+	TokenEnv   string  `json:"token_env"`
+	Query      Command `json:"query"`
+}
+
+func decode(data []byte, v any) error {
+	d := json.NewDecoder(bytes.NewReader(bytes.TrimPrefix(data, []byte{0xef, 0xbb, 0xbf})))
+	d.DisallowUnknownFields()
+	if err := d.Decode(v); err != nil {
+		return err
+	}
+	var extra any
+	if err := d.Decode(&extra); err != io.EOF {
+		return errors.New("expected exactly one JSON value")
+	}
+	return nil
+}
+func LoadConfig(path string) (Config, error) {
+	c := Config{Remote: "origin", RuntimeFile: "runtime.json", TaskPoll: "10s", PRPoll: "30s", Heartbeat: "5s", CommandTimeout: "30s", ShutdownGrace: "10s", Sandbox: "workspace-write", Git: Command{Executable: "git"}, BD: Command{Executable: "bd"}, Codex: Command{Executable: "codex"}, ExecutableTypes: []string{"task", "bug", "feature", "chore"}}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return c, err
+	}
+	if err = decode(b, &c); err != nil {
+		return c, err
+	}
+	base, err := filepath.Abs(filepath.Dir(path))
+	if err != nil {
+		return c, err
+	}
+	if c.Repository == "" || c.RunDir == "" || c.Branch == "" {
+		return c, errors.New("repository, branch and run_dir are required")
+	}
+	for _, p := range []*string{&c.Repository, &c.RunDir} {
+		if !filepath.IsAbs(*p) {
+			*p = filepath.Join(base, *p)
+		}
+	}
+	if filepath.Base(c.RuntimeFile) != c.RuntimeFile || c.RuntimeFile == "." {
+		return c, errors.New("runtime_file must be a filename inside run_dir")
+	}
+	for _, v := range []string{c.TaskPoll, c.PRPoll, c.Heartbeat, c.CommandTimeout, c.ShutdownGrace} {
+		d, e := time.ParseDuration(v)
+		if e != nil || d <= 0 {
+			return c, fmt.Errorf("invalid positive duration %q", v)
+		}
+	}
+	if c.Sandbox != "read-only" && c.Sandbox != "workspace-write" {
+		return c, errors.New("M0 sandbox must be read-only or workspace-write; use a reviewed Codex profile for other settings")
+	}
+	if len(c.ExecutableTypes) == 0 {
+		return c, errors.New("executable_types is empty")
+	}
+	for _, s := range c.ExecutableTypes {
+		if !regexp.MustCompile(`^[a-z][a-z0-9-]*$`).MatchString(s) || s == "epic" || s == "molecule" || s == "convoy" {
+			return c, fmt.Errorf("invalid executable type %q", s)
+		}
+	}
+	return c, nil
+}
+func duration(s string) time.Duration { d, _ := time.ParseDuration(s); return d }
+func (c Config) Identity() string     { return c.identity }
+func resolveCommand(c *Command) error {
+	p, e := exec.LookPath(c.Executable)
+	if e != nil {
+		return e
+	}
+	ext := strings.ToLower(filepath.Ext(p))
+	if ext == ".cmd" || ext == ".bat" || ext == ".ps1" {
+		return fmt.Errorf("use a native executable (or node.exe with a script argument), not a shell shim: %s", p)
+	}
+	c.Executable = p
+	return nil
+}
+func (c *Config) Preflight(ctx context.Context, checkSkills bool) error {
+	for _, cmd := range []*Command{&c.Git, &c.BD, &c.Codex} {
+		if e := resolveCommand(cmd); e != nil {
+			return e
+		}
+	}
+	r := Runner{Dir: c.Repository, Timeout: duration(c.CommandTimeout)}
+	root, e := r.Output(ctx, c.Git, "rev-parse", "--show-toplevel")
+	if e != nil {
+		return e
+	}
+	c.Repository, e = filepath.EvalSymlinks(strings.TrimSpace(string(root)))
+	if e != nil {
+		return e
+	}
+	r.Dir = c.Repository
+	common, e := r.Output(ctx, c.Git, "rev-parse", "--path-format=absolute", "--git-common-dir")
+	if e != nil {
+		return e
+	}
+	c.identity, e = filepath.EvalSymlinks(strings.TrimSpace(string(common)))
+	if e != nil {
+		return e
+	}
+	c.identity = canonical(c.identity)
+	if c.Claimant == "" {
+		c.Claimant = "steerline-" + shortHash(c.identity)
+	}
+	if !regexp.MustCompile(`^[a-zA-Z0-9._-]+$`).MatchString(c.Claimant) {
+		return errors.New("claimant must contain only letters, numbers, dot, underscore or hyphen")
+	}
+	if _, e = r.Output(ctx, c.Git, "check-ref-format", "refs/heads/"+c.Branch); e != nil {
+		return e
+	}
+	remote, e := r.Output(ctx, c.Git, "remote", "get-url", c.Remote)
+	if e != nil {
+		return e
+	}
+	if e = c.PR.ValidateRemote(strings.TrimSpace(string(remote))); e != nil {
+		return e
+	}
+	if c.PR.Kind == "command" {
+		if e = resolveCommand(&c.PR.Query); e != nil {
+			return e
+		}
+	}
+	// Keep runtime data outside every checkout; never edit the target's ignore rules.
+	if e = os.MkdirAll(c.RunDir, 0700); e != nil {
+		return e
+	}
+	c.RunDir, e = filepath.EvalSymlinks(c.RunDir)
+	if e != nil {
+		return e
+	}
+	if inside(c.Repository, c.RunDir) {
+		return errors.New("run_dir must be outside the target checkout")
+	}
+	wt, e := r.Output(ctx, c.Git, "worktree", "list", "--porcelain", "-z")
+	if e != nil {
+		return e
+	}
+	for _, line := range strings.Split(string(wt), "\x00") {
+		if strings.HasPrefix(line, "worktree ") && inside(strings.TrimPrefix(line, "worktree "), c.RunDir) {
+			return errors.New("run_dir must be outside all linked worktrees")
+		}
+	}
+	for _, probe := range []struct {
+		cmd   Command
+		args  []string
+		flags []string
+	}{
+		{c.BD, []string{"ready", "--help"}, []string{"--unassigned", "--limit"}},
+		{c.BD, []string{"update", "--help"}, []string{"--claim", "--actor"}},
+		{c.BD, []string{"list", "--help"}, []string{"--assignee", "--limit", "--all"}},
+		{c.BD, []string{"close", "--help"}, []string{"--reason"}},
+		{c.Codex, []string{"exec", "--help"}, []string{"--json", "--output-schema", "--output-last-message", "--sandbox"}},
+	} {
+		b, e := r.Output(ctx, probe.cmd, probe.args...)
+		if e != nil {
+			return e
+		}
+		for _, flag := range probe.flags {
+			if !strings.Contains(string(b), flag) {
+				return fmt.Errorf("tool help missing required flag %s", flag)
+			}
+		}
+	}
+	b := Beads{Runner: r, Command: c.BD, Claimant: c.Claimant}
+	if _, e = b.Ready(ctx); e != nil {
+		return fmt.Errorf("Beads preflight (no initialization performed): %w", e)
+	}
+	if _, e = b.Owned(ctx); e != nil {
+		return e
+	}
+	if !checkSkills {
+		return nil
+	}
+	for _, entry := range []struct {
+		s      *Skill
+		text   *string
+		marker string
+	}{{&c.StartSkill, &c.startText, "steerline:start-v1"}, {&c.FinishSkill, &c.finishText, "steerline:finish-v1"}} {
+		if entry.s.Path == "" || entry.s.Invocation == "" {
+			return errors.New("both skill paths and invocation instructions are required")
+		}
+		p := entry.s.Path
+		if !filepath.IsAbs(p) {
+			p = filepath.Join(c.Repository, p)
+		}
+		p, e = filepath.EvalSymlinks(p)
+		if e != nil {
+			return fmt.Errorf("missing skill: %w", e)
+		}
+		if !inside(c.Repository, p) {
+			return errors.New("skill entry must resolve inside the configured repository")
+		}
+		b, e := os.ReadFile(p)
+		if e != nil {
+			return e
+		}
+		*entry.text = string(b)
+		entry.s.Path = p
+		if !strings.Contains(*entry.text, "<!-- "+entry.marker+" -->") {
+			return fmt.Errorf("skill contract conflict: %s lacks reviewed <!-- %s --> adapter; see docs/skill-contract.md", p, entry.marker)
+		}
+	}
+	if c.PR.Kind == "gitea" {
+		if e = (&PRClient{Config: c.PR, Runner: r}).Check(ctx); e != nil {
+			return e
+		}
+	}
+	return nil
+}
+func inside(root, path string) bool {
+	rel, e := filepath.Rel(root, path)
+	return e == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && !filepath.IsAbs(rel)
+}

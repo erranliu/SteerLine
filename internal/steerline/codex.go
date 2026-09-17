@@ -1,0 +1,197 @@
+package steerline
+
+import (
+	"bufio"
+	"bytes"
+	_ "embed"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"regexp"
+	"strings"
+	"sync"
+	"text/template"
+)
+
+//go:embed result.schema.json
+var ResultSchema []byte
+
+//go:embed prompt.tmpl
+var promptTemplate string
+var commitHash = regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`)
+
+type WorkerEvent struct {
+	Session string
+	Summary string
+}
+type Worker struct {
+	process *childProcess
+	Events  chan WorkerEvent
+	Done    chan error
+}
+
+func (w *Worker) Kill()  { w.process.Kill() }
+func (w *Worker) Close() { w.process.Close() }
+func Prompt(c Config, t Task, r *Run) (string, error) {
+	contextJSON, _ := json.MarshalIndent(map[string]string{"task_id": t.ID, "run_id": r.RunID, "claimant": r.Claimant, "remote": c.Remote, "branch": c.Branch}, "", "  ")
+	taskJSON, _ := json.MarshalIndent(t, "", "  ")
+	data := map[string]string{"Context": string(contextJSON), "Task": string(taskJSON), "StartPath": c.StartSkill.Path, "FinishPath": c.FinishSkill.Path, "StartInvocation": c.StartSkill.Invocation, "FinishInvocation": c.FinishSkill.Invocation, "Workflow": c.Workflow}
+	tmpl, e := template.New("prompt").Parse(promptTemplate)
+	if e != nil {
+		return "", e
+	}
+	var b bytes.Buffer
+	e = tmpl.Execute(&b, data)
+	return b.String(), e
+}
+func StartWorker(c Config, t Task, r *Run) (*Worker, error) {
+	dir := filepath.Join(c.RunDir, "runs", r.RunID)
+	if e := os.MkdirAll(dir, 0700); e != nil {
+		return nil, e
+	}
+	schema := filepath.Join(dir, "result.schema.json")
+	if e := AtomicWrite(schema, ResultSchema); e != nil {
+		return nil, e
+	}
+	prompt, e := Prompt(c, t, r)
+	if e != nil {
+		return nil, e
+	}
+	if e = AtomicWrite(filepath.Join(dir, "prompt.txt"), []byte(prompt)); e != nil {
+		return nil, e
+	}
+	logFile, e := os.OpenFile(*r.LogPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+	if e != nil {
+		return nil, e
+	}
+	errFile, e := os.OpenFile(filepath.Join(dir, "stderr.log"), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+	if e != nil {
+		logFile.Close()
+		return nil, e
+	}
+	args := append([]string{}, c.Codex.Args...)
+	args = append(args, "exec", "--json", "--output-schema", schema, "--output-last-message", *r.ResultPath, "--sandbox", c.Sandbox)
+	if c.Model != "" {
+		args = append(args, "--model", c.Model)
+	}
+	if c.Profile != "" {
+		args = append(args, "--profile", c.Profile)
+	}
+	args = append(args, "-")
+	cmd := exec.Command(c.Codex.Executable, args...)
+	cmd.Dir = c.Repository
+	cmd.Stdin = strings.NewReader(prompt)
+	cmd.Stderr = errFile
+	// An explicit pipe lets the event reader finish before Wait, avoiding StdoutPipe races.
+	reader, writer, e := os.Pipe()
+	if e != nil {
+		logFile.Close()
+		errFile.Close()
+		return nil, e
+	}
+	cmd.Stdout = writer
+	p, e := startProcess(cmd)
+	writer.Close()
+	if e != nil {
+		reader.Close()
+		logFile.Close()
+		errFile.Close()
+		return nil, e
+	}
+	w := &Worker{process: p, Events: make(chan WorkerEvent, 64), Done: make(chan error, 1)}
+	go func() {
+		var wg sync.WaitGroup
+		var scanErr error
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			defer reader.Close()
+			s := bufio.NewScanner(io.TeeReader(reader, logFile))
+			s.Buffer(make([]byte, 64<<10), 4<<20)
+			for s.Scan() {
+				var event struct {
+					Type     string `json:"type"`
+					ThreadID string `json:"thread_id"`
+					Item     struct {
+						Type string `json:"type"`
+					} `json:"item"`
+				}
+				if e := json.Unmarshal(s.Bytes(), &event); e != nil {
+					continue
+				}
+				ev := WorkerEvent{Summary: clip(event.Type+" "+event.Item.Type, 512)}
+				if event.Type == "thread.started" {
+					ev.Session = event.ThreadID
+				}
+				w.Events <- ev
+			}
+			scanErr = s.Err()
+			if scanErr != nil {
+				p.Kill()
+			}
+		}()
+		err := cmd.Wait()
+		p.Close()
+		wg.Wait()
+		if scanErr != nil {
+			err = scanErr
+		}
+		if e := logFile.Sync(); err == nil {
+			err = e
+		}
+		if e := logFile.Close(); err == nil {
+			err = e
+		}
+		if e := errFile.Close(); err == nil {
+			err = e
+		}
+		close(w.Events)
+		w.Done <- err
+	}()
+	return w, nil
+}
+func ReadResult(path string, r *Run) (Result, error) {
+	f, e := os.Open(path)
+	if e != nil {
+		return Result{}, e
+	}
+	defer f.Close()
+	stat, e := f.Stat()
+	if e != nil {
+		return Result{}, e
+	}
+	if stat.Size() > 2<<20 {
+		return Result{}, errors.New("result exceeds 2 MiB")
+	}
+	b, e := io.ReadAll(io.LimitReader(f, 2<<20))
+	if e != nil {
+		return Result{}, e
+	}
+	var fields map[string]json.RawMessage
+	if e = json.Unmarshal(b, &fields); e != nil {
+		return Result{}, e
+	}
+	for _, name := range []string{"task_id", "run_id", "outcome", "pr_url", "worktree_path", "base_commit", "summary", "error"} {
+		if _, ok := fields[name]; !ok {
+			return Result{}, fmt.Errorf("missing result field %s", name)
+		}
+	}
+	var result Result
+	if e = decode(b, &result); e != nil {
+		return result, e
+	}
+	if result.TaskID != r.TaskID || result.RunID != r.RunID {
+		return result, errors.New("result task_id/run_id mismatch")
+	}
+	if result.Outcome != "pr_submitted" && result.Outcome != "blocked" {
+		return result, errors.New("invalid result outcome")
+	}
+	if result.Outcome == "pr_submitted" && (result.PRURL == nil || *result.PRURL == "" || result.WorktreePath == nil || !filepath.IsAbs(*result.WorktreePath) || result.BaseCommit == nil || !commitHash.MatchString(*result.BaseCommit)) {
+		return result, errors.New("submitted PR requires URL, absolute worktree_path and full base_commit")
+	}
+	return result, nil
+}

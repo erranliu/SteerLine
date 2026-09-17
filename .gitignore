@@ -1,0 +1,5 @@
+/bin/
+/.steerline/
+*.local.json
+*.test.exe
+coverage.out

@@ -1,0 +1,15 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["task_id", "run_id", "outcome", "pr_url", "worktree_path", "base_commit", "summary", "error"],
+  "properties": {
+    "task_id": {"type": "string"},
+    "run_id": {"type": "string"},
+    "outcome": {"type": "string", "enum": ["pr_submitted", "blocked"]},
+    "pr_url": {"type": ["string", "null"]},
+    "worktree_path": {"type": ["string", "null"]},
+    "base_commit": {"type": ["string", "null"]},
+    "summary": {"type": ["string", "null"]},
+    "error": {"type": ["string", "null"]}
+  }
+}
