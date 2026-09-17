@@ -31,25 +31,37 @@ type ProcessIdentity struct {
 	Executable string `json:"executable"`
 }
 type Run struct {
-	TaskID           string           `json:"task_id"`
-	Title            string           `json:"title"`
-	RunID            string           `json:"run_id"`
-	Claimant         string           `json:"claimant"`
-	BeadsStatus      string           `json:"beads_status"`
-	ExecutionStatus  string           `json:"execution_status"`
-	FinishTaskStatus string           `json:"finish_task_status"`
-	SessionID        *string          `json:"codex_session_id"`
-	Process          *ProcessIdentity `json:"process"`
-	StartedAt        *time.Time       `json:"started_at"`
-	EndedAt          *time.Time       `json:"ended_at"`
-	WorktreePath     *string          `json:"worktree_path"`
-	BaseCommit       *string          `json:"base_commit"`
-	PR               PRState          `json:"pr"`
-	LastEvent        *string          `json:"last_event"`
-	LogPath          *string          `json:"log_path"`
-	ResultPath       *string          `json:"result_path"`
-	Summary          *string          `json:"summary"`
-	Error            *string          `json:"error"`
+	TaskID           string            `json:"task_id"`
+	Title            string            `json:"title"`
+	RunID            string            `json:"run_id"`
+	Claimant         string            `json:"claimant"`
+	BeadsStatus      string            `json:"beads_status"`
+	ExecutionStatus  string            `json:"execution_status"`
+	FinishTaskStatus string            `json:"finish_task_status"`
+	SessionID        *string           `json:"codex_session_id"`
+	Process          *ProcessIdentity  `json:"process"`
+	StartedAt        *time.Time        `json:"started_at"`
+	EndedAt          *time.Time        `json:"ended_at"`
+	WorktreePath     *string           `json:"worktree_path"`
+	WorktreeBranch   *string           `json:"worktree_branch"`
+	WorkspaceIntent  *WorkspaceIntent  `json:"workspace_intent"`
+	Completion       *CompletionConfig `json:"completion"`
+	BeadsContext     *BeadsContext     `json:"beads_context"`
+	BaseCommit       *string           `json:"base_commit"`
+	PR               PRState           `json:"pr"`
+	LastEvent        *string           `json:"last_event"`
+	LogPath          *string           `json:"log_path"`
+	ResultPath       *string           `json:"result_path"`
+	Summary          *string           `json:"summary"`
+	Error            *string           `json:"error"`
+}
+
+// Intent is durable before Git creates anything; actual workspace fields stay null
+// until creation and verification succeed.
+type WorkspaceIntent struct {
+	Path       string `json:"path"`
+	Branch     string `json:"branch"`
+	BaseCommit string `json:"base_commit"`
 }
 type PRState struct {
 	URL         *string    `json:"url"`

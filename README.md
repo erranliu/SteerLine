@@ -2,7 +2,7 @@
 
 Steerline 是面向持续软件工程的本机调度器：读取既有 Beads 可执行任务，原子领取后启动一个 `codex exec`，让仓库技能完成开发和提 PR；人工合并后，服务验证 PR 事实再关闭 Beads 任务，释放依赖。
 
-本实现优先支持 Windows 原生运行。没有 Web 服务、新任务数据库、独立 worker、自动规划、多机调度、自动修复/回退或自动合并。worker 就是 Codex 进程。代码、worktree、测试、审计、提交和创建 PR 都由目标仓库的技能负责。
+本实现优先支持 Windows 原生运行。没有 Web 服务、新任务数据库、独立 worker、自动规划、多机调度、自动修复/回退或自动合并。worker 就是 Codex 进程。调度器获取目标主线并准备隔离 worktree；代码、测试、审计、提交和创建 PR 由目标仓库的技能负责。并发执行上限固定为 1，准备工作也占执行槽。
 
 ## 构建和启动
 
@@ -19,19 +19,20 @@ Copy-Item .\examples\config.json .\steerline.local.json
 
 `check` 只执行工具帮助、Git/Beads 读取、技能契约和 Gitea 仓库查询，可创建指定运行目录，不领取任务或调用模型。`run` 会真正领取任务并调用模型。目标仓库缺少 Beads 时直接报错，不执行 init 或迁移。
 
-**提供的 `merge-h-308-code` 仓库目前存在技能和自定义结项语义冲突。** 已生成 [实际配置草案](examples/merge-h-308-code.json) 和 [接入诊断及最小调整](docs/merge-h-308-integration.md)，原技能未改动。草案当前被 `check` 拒绝是预期行为，不能直接启动业务调度。
+`merge-h-308-code` 已新增两个专用技能和合并后结项适配脚本，[接入配置](examples/merge-h-308-code.json) 已更新，既有手动技能保留原用途。真实启动前需将新文件合入 AIRefactor 并完成认证、执行权限及工具配置，见 [接入说明](docs/merge-h-308-integration.md)。本地 check 不会替代远端主线文件的发布。
 
 Windows 的 npm `codex.cmd`/`codex.ps1` 不是原生可执行文件。配置应指向安装包里的 `codex.exe`，或使用 `node.exe` 加真实脚本路径的参数数组；服务拒绝隐式 shell shim。真实机器的原生 exe 路径已写入接入草案，升级 Codex 后应重新核对。
 
 ## 配置
 
-完整例子见 [config.json](examples/config.json)。JSON 不支持注释，未知字段被拒绝；相对 repository/run_dir 路径相对配置文件目录，技能路径相对仓库根。可执行文件使用绝对路径或 PATH 中的原生命令。
+完整例子见 [config.json](examples/config.json)。JSON 不支持注释，未知字段被拒绝；相对 repository/run_dir/worktree_root 路径相对配置文件目录，技能路径相对仓库根，执行时映射到新 worktree。可执行文件使用绝对路径或 PATH 中的原生命令。
 
 | 字段 | 用途 / 默认值 |
 | --- | --- |
 | repository | 已存在的目标 Git 仓库；运行前解析真实路径 |
 | remote / branch | 目标远端（默认 origin）和必须显式填写的主线 |
 | run_dir / runtime_file | 仓库外的运行目录 / `runtime.json`；拒绝放入主 checkout 或任何 linked worktree |
+| worktree_root | 默认 `<run_dir>/worktrees`；必须在已有 checkout 和 Git 元数据之外，不能与运行记录重叠 |
 | claimant | 固定领取者；空值使用 Git common-dir 的稳定摘要。恢复时不得改变 |
 | bd / git / codex | `{executable, args}`，不通过 shell 拼接任务文本 |
 | start_skill / finish_skill | `{path, invocation}`，真实仓库入口，见 [技能契约](docs/skill-contract.md) |
@@ -42,8 +43,9 @@ Windows 的 npm `codex.cmd`/`codex.ps1` 不是原生可执行文件。配置应�
 | model / profile | 可选 Codex 模型和已有 profile，空值沿用本机设置 |
 | sandbox | 默认 workspace-write，也允许 read-only；不默认绕过审批与沙箱 |
 | pr | Gitea 原生只读 API，或可配置的规范化查询命令，见下文 |
+| completion | 可选 `{command:{executable,args},timeout}`；默认 null 使用原生 close，自定义仓库通过它完成合并后的结项，详见 [命令协议](docs/completion-command.md) |
 
-Codex 的技能可能需要在仓库外创建 worktree、运行目录或报告。请在已审阅的 Codex profile 中配置必要权限和工具登录；服务不会为了让任务通过而自动提升权限。权限不足作为执行失败/blocked 保留。
+调度器使用本机 Git 准备 worktree，Codex 以该目录为工作根执行；技能不再创建或切换 worktree。技能仍可能需要访问共享 Spec、Beads 和仓库外报告目录，请在已审阅的 Codex profile 中配置必要权限和工具登录；服务不会为了让任务通过而自动提升权限。权限不足作为执行失败/blocked 保留。
 
 ## PR 查询
 
@@ -73,7 +75,11 @@ state 仅接受 open / merged / closed_unmerged / unknown。未知的合并时�
 
 每个 Git common-dir 有一个 OS 文件锁，linked worktree、不同配置和不同 run_dir 都不能绕过它。锁文件位于共享 Git 元数据目录 `steerline.lock`，不进入业务提交；退出/崩溃后由 OS 释放，无需删除锁文件。run_dir 也加锁，防止不同仓库误写同一运行目录。默认 claimant 同样基于 common-dir，修改运行目录仍可核对遗失记录的领取。
 
-领取前先写 durable intent，领取成功后再保存状态，然后启动 Codex。bd 1.1.2 在领取冲突时可能退出 0 却不返回领取 JSON，因此会同时检查 update 响应和 show 的 ID、assignee、in_progress。只信任 Beads ready 的依赖就绪结果，不读取数据库内部文件。
+有候选任务时先 fetch 配置的远端主线，用本次运行独立的 Git 引用固定 base_commit；fetch 失败不领取任务。领取前保存运行与 workspace_intent，领取成功后持久化，再创建 `<worktree_root>/<run_id>` 和 `codex/<task_id>-<run_id短码>` 分支。核验新目录、分支、HEAD、技能文件和共享 Beads 后保存实际准备结果，才启动 Codex。详细行为见 [worktree 准备与恢复](docs/worktree-preparation.md)。
+
+bd 1.1.2 在领取冲突时可能退出 0 却不返回领取 JSON，因此会同时检查 update 响应和 show 的 ID、assignee、in_progress。worker 使用显式 BEADS_DIR 和 BEADS_ACTOR；从新 worktree 验证数据库身份和领取后才执行。只信任 Beads ready 的依赖就绪结果，不读取数据库内部文件。
+
+启用 completion 时，将命令和 Beads 身份随派发记录固定下来。确认 PR 合并后，服务在该 worktree 中通过参数数组和 stdin JSON 调用命令，核对返回的任务/运行/PR 回执并重新读取 Beads closed。自定义回调失败不会退回普通 close，即使任务已经关闭也继续重试其尾部流程。merge-h-308-code 的适配器复用原有生命周期脚本，处理拆分与后继，并刷新核验 BV。
 
 执行期间事件写入每次运行的 `events.jsonl`，stderr 单独写入 `stderr.log`。运行快照只保存最近事件类型摘要（最多 512 字符），不累计对话。退出 0 后仍必须验证独立结构化结果；PR 绑定在 runtime 中持久保存，并拒绝同一 PR 被多个本地运行复用。
 
@@ -87,8 +93,9 @@ state 仅接受 open / merged / closed_unmerged / unknown。未知的合并时�
 
 恢复规则：
 
-- 等待合并：重启只恢复 PR 查询，绝不重新执行 Codex。
-- PR 已合并但 bd close 失败：保持 waiting_pr_merge，持续重查 PR 并幂等重试 close，show 确认 closed 后才 completed。
+- 等待合并：重启核对已准备工作目录，正常则恢复 PR 查询，绝不重新执行 Codex；目录/分支/起点异常时阻塞并保留现场。
+- worktree 准备失败：保留领取、创建意图和已有目录/分支，failed/blocked，不自动重复创建；准备中崩溃则 unknown/blocked。
+- PR 已合并但原生 close 或自定义 completion 失败：保持 waiting_pr_merge，持续重查 PR 并幂等重试。自定义命令必须完整成功，且 show 确认 closed 后才 completed；已经 closed 也不能跳过失败的尾部步骤。
 - 遗留 pending/running：核对 PID、进程创建时间和可执行文件；变为 unknown/blocked，保留错误说明、日志和领取。无法确认旧执行已经结束时整个执行槽保守暂停。
 - 有固定 claimant 的领取但没有本地运行记录：创建 unknown/blocked 恢复记录，不启动 worker。
 - Beads 不可用：暂停新派发，runtime 报告错误并按轮询重试。关键快照写入失败：停止服务和新派发，退出报错，保留上一份完整快照。
@@ -109,25 +116,31 @@ state 仅接受 open / merged / closed_unmerged / unknown。未知的合并时�
 .\bin\steerline.exe run -config .\steerline.local.json
 ```
 
-accept-result 在仓库锁下重新验证结果和真实 PR，只接受指向目标主线的 open/merged PR，恢复等待合并状态；不会启动 Codex。对未能匹配身份的进程，这个确认代表人工核验责任。两个人工命令均拒绝已知仍在运行的原进程。不要删除领取或运行记录来触发“自动重试”，不要编辑结果把不同任务的 PR 伪装成本任务。
+accept-result 在仓库锁下重新核验调度器准备记录、工作目录/分支/起点、结果和真实 PR，只接受指向目标主线的 open/merged PR，恢复等待合并状态；不会启动 Codex。它不能为准备未完成的任务、旧格式或孤儿记录补造工作环境事实。对未能匹配身份的进程，这个确认代表人工核验责任。两个人工命令均拒绝已知仍在运行的原进程。不要删除领取或运行记录来触发“自动重试”，不要编辑结果把不同任务的 PR 伪装成本任务。
 
 ## 数据与保留
 
-见 [数据契约](docs/data-contract.md)、[完整 runtime 示例](examples/runtime.json)、[结果示例](examples/result.json)。所有时间 UTC，未知值 null。runtime.json 只由服务写，Codex 仅写自己这次运行的结果文件。
+见 [数据契约](docs/data-contract.md)、[完整 runtime 示例](examples/runtime.json)、[结果示例](examples/result.json)。运行快照现在为 schema_version=2，可读取 v1 的等待合并记录继续查询，不自动将旧技能自报目录当作已核验工作环境。所有时间 UTC，未知值 null。runtime.json 只由服务写，Codex 仅写自己这次运行的结果文件；其回传的目录和起点必须与调度器记录一致。
 
 同目录临时文件写完并 Sync 后，以 Windows MoveFileEx 原子替换发布；短暂 sharing violation 有限重试。替换失败保留旧快照并报错，不先删目标。读取器可能收到短暂共享冲突，应重试打开；一旦读到内容必须是完整 JSON。根据 heartbeat_at 判断是否过期，建议阈值至少为心跳间隔三倍并包含存储抖动余量。不要仅凭 service.status 推断进程还活着。
 
 M0 不自动清理历史：runtime 保存全部运行概要，runs/<run_id> 保存 prompt、Schema、结果和日志，容量随任务数和日志量增长。停机后可备份并移走**已完成**运行的详细日志，保留 runtime 中的历史概要和 PR 绑定；未完成运行的文件不要清理。runtime 是恢复记录和外部读取出口，不是任务数据库。配置和日志应留在本机受控目录；程序不序列化认证环境变量。
 
+worktrees/<run_id>、任务分支和 refs/steerline/bases/<run_id> 同样保留，包括准备失败或 fetch 后尚未领取留下的现场。不把 worktree 当日志目录自动删除；等待合并时保留目录但释放执行槽，后续任务从新获取的主线起步。
+
 ## 验证
 
 ```powershell
-go test ./... -count=1 -timeout 180s
+go test ./... -count=1 -timeout 360s
 go vet ./...
 ```
 
 测试使用原生替身命令和本地 HTTP Gitea 替身，不调用真实模型，不领取业务任务，不创建或合并业务 PR。覆盖空闲心跳、跨进程并发 JSON 读取、同仓库锁、领取冲突、单次执行、等待合并释放执行槽、合并结项、依赖释放、查询失败、错误关联、缺失/无效结果、重启防重、关闭重试、Beads 不可用、持久化失败及进程树退出。另有构建并启动真正 CLI 可执行文件、第二实例拒绝和 stop 正常退出的集成测试；临时仓库路径包含空格和中文。
 
-真实环境只读验证了本机 CLI 帮助、目标 Beads JSON、远端/技能配置及 Gitea 版本。真实带认证的 PR 查询、实际 Codex 开发流程、生产 PR 合并结项未执行；技能适配尚未完成，详情见接入诊断。
+worktree 测试使用真实的临时 Git 仓库与本地 bare 远端，验证远端主线更新后新任务使用新提交、原 checkout 的分支/HEAD/文件保持不变、目录与分支冲突不覆盖、共享 Beads 身份错误或技能缺失时不启动、准备前后崩溃不重建不重跑，以及结构化结果不能改写工作环境事实。
+
+completion 测试覆盖关闭后部分失败、重启重试、错误回执以及错误 PR/领取者不调用。目标仓库适配器测试命令为 `python -B -m unittest discover -s C:/Projects/merge-h-308-code/tools/Beads/tests -p test_steerline_completion.py -v`，只操作临时替身，不写真实 Beads。
+
+真实环境只读验证了本机 CLI 帮助、目标 Beads JSON、BV JSON 形状、远端/技能配置及 Gitea 版本。专用技能和适配器已在本地新增并验证；真实带认证的 PR 查询、模型驱动的技能执行与 PR 出版、生产 PR 合并结项未执行，详情见接入说明。
 
 接口参考：[Beads](https://github.com/gastownhall/beads)、[本机版本对应的 claim 实现](https://github.com/gastownhall/beads/blob/20e493e569c9/cmd/bd/update.go)、[Codex 非交互与结构化输出](https://learn.chatgpt.com/docs/non-interactive-mode)、[Gitea API](https://docs.gitea.com/api/1.24/)。具体命令能力还会在启动时通过本机 help 验证。

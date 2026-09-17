@@ -21,13 +21,19 @@ type Service struct {
 }
 
 func NewService(c Config) (*Service, error) {
+	if e := c.Completion.validate(); e != nil {
+		return nil, e
+	}
+	if e := c.prepareWorktreeRoot(); e != nil {
+		return nil, e
+	}
 	r := Runner{Dir: c.Repository, Timeout: duration(c.CommandTimeout)}
 	s := &Service{Config: c, store: &Store{Path: filepath.Join(c.RunDir, c.RuntimeFile)}, beads: Beads{Runner: r, Command: c.BD, Claimant: c.Claimant}, prs: &PRClient{Config: c.PR, Runner: r}}
 	old, e := LoadRuntime(s.store.Path)
 	if e != nil {
 		return nil, e
 	}
-	s.State = Runtime{SchemaVersion: 1, Repository: Repository{Path: c.Repository, Remote: c.Remote, Branch: c.Branch, Identity: c.identity}, Runs: []*Run{}}
+	s.State = Runtime{SchemaVersion: 2, Repository: Repository{Path: c.Repository, Remote: c.Remote, Branch: c.Branch, Identity: c.identity}, Runs: []*Run{}}
 	if old != nil {
 		if old.Repository.Identity != c.identity || old.Repository.Remote != c.Remote || old.Repository.Branch != c.Branch || old.Service.Claimant != c.Claimant {
 			return nil, errors.New("runtime repository/branch/claimant mismatch; preserve state and use the original configuration")
@@ -39,6 +45,9 @@ func NewService(c Config) (*Service, error) {
 				return nil, errors.New("invalid or duplicate saved run")
 			}
 			seen[r.TaskID] = true
+			if e := r.Completion.validate(); e != nil {
+				return nil, e
+			}
 			switch r.ExecutionStatus {
 			case "pending", "running", "succeeded", "failed", "unknown":
 			default:
@@ -56,6 +65,20 @@ func NewService(c Config) (*Service, error) {
 				r.ExecutionStatus = "unknown"
 				r.FinishTaskStatus = "blocked"
 				r.Error = ptr("Interrupted execution: " + inspectProcess(r.Process) + "; manual recovery required; never auto-resumed")
+			}
+			if r.WorkspaceIntent != nil && r.FinishTaskStatus != "completed" {
+				err := verifyWorkspace(context.Background(), c, r.WorkspaceIntent, false)
+				if err == nil && (r.WorktreePath != nil || r.WorktreeBranch != nil || r.BaseCommit != nil) {
+					err = verifyRunWorkspace(context.Background(), c, r)
+				}
+				if err != nil {
+					r.FinishTaskStatus = "blocked"
+					previous := ""
+					if r.Error != nil {
+						previous = *r.Error + "; "
+					}
+					r.Error = ptr(clip(previous+"Workspace recovery check failed: "+err.Error()+"; no recreation attempted", 2000))
+				}
 			}
 		}
 	}
@@ -122,8 +145,34 @@ func (s *Service) dispatch(ctx context.Context) error {
 			continue
 		}
 		id := newID()
+		s.State.SlotOccupied = true
+		s.State.CurrentTask = ptr(t.ID)
+		if e = s.save(); e != nil {
+			return e
+		}
+		source, err := s.beads.Context(ctx)
+		base := ""
+		if err == nil {
+			base, err = fetchBase(ctx, s.Config, id)
+		}
+		var intent *WorkspaceIntent
+		if err == nil {
+			intent, err = planWorkspace(s.Config, t.ID, id, base)
+		}
+		if err != nil {
+			s.State.SlotOccupied = false
+			s.State.CurrentTask = nil
+			return errors.Join(err, s.save())
+		}
 		dir := filepath.Join(s.Config.RunDir, "runs", id)
 		r := &Run{TaskID: t.ID, Title: t.Title, RunID: id, Claimant: s.Config.Claimant, BeadsStatus: t.Status, ExecutionStatus: "pending", FinishTaskStatus: "pending", PR: PRState{State: "unknown"}, LogPath: ptr(filepath.Join(dir, "events.jsonl")), ResultPath: ptr(filepath.Join(dir, "result.json"))}
+		r.WorkspaceIntent = intent
+		r.BeadsContext = &source
+		if s.Config.Completion != nil {
+			copy := *s.Config.Completion
+			copy.Command.Args = append([]string{}, copy.Command.Args...)
+			r.Completion = &copy
+		}
 		s.State.Runs = append(s.State.Runs, r)
 		// Durable intent BEFORE the external claim closes the crash window.
 		if e = s.save(); e != nil {
@@ -140,6 +189,8 @@ func (s *Service) dispatch(ctx context.Context) error {
 			return err
 		}
 		if !ok {
+			s.State.SlotOccupied = false
+			s.State.CurrentTask = nil
 			s.State.Runs = s.State.Runs[:len(s.State.Runs)-1]
 			if e = s.save(); e != nil {
 				return e
@@ -157,7 +208,20 @@ func (s *Service) dispatch(ctx context.Context) error {
 			s.blocked(r, "Stopped after claim, before worker launch")
 			return s.save()
 		}
-		w, err := StartWorker(s.Config, t, r)
+		workerConfig, err := prepareWorkspace(ctx, s.Config, r, source)
+		if err != nil {
+			return s.preparationFailed(r, "Worktree preparation failed: "+err.Error())
+		}
+		r.WorktreePath = ptr(intent.Path)
+		r.WorktreeBranch = ptr(intent.Branch)
+		r.BaseCommit = ptr(intent.BaseCommit)
+		if e = s.save(); e != nil {
+			return e
+		}
+		if ctx.Err() != nil {
+			return s.preparationFailed(r, "Stopped after worktree preparation, before worker launch")
+		}
+		w, err := StartWorker(workerConfig, t, r)
 		if err != nil {
 			r.ExecutionStatus = "failed"
 			r.EndedAt = ptr(now())
@@ -175,9 +239,25 @@ func (s *Service) dispatch(ctx context.Context) error {
 	}
 	return nil
 }
+
+func (s *Service) preparationFailed(r *Run, reason string) error {
+	r.ExecutionStatus = "failed"
+	r.EndedAt = ptr(now())
+	s.blocked(r, reason)
+	s.State.SlotOccupied = false
+	s.State.CurrentTask = nil
+	return s.save()
+}
 func (s *Service) bind(r *Run, result Result) error {
-	r.WorktreePath = result.WorktreePath
-	r.BaseCommit = result.BaseCommit
+	if r.WorkspaceIntent == nil || r.WorktreePath == nil || r.WorktreeBranch == nil || r.BaseCommit == nil {
+		return errors.New("run has no verified scheduler-prepared workspace; legacy/orphan result requires manual recovery")
+	}
+	if (result.WorktreePath != nil && canonical(*result.WorktreePath) != canonical(*r.WorktreePath)) || (result.BaseCommit != nil && *result.BaseCommit != *r.BaseCommit) {
+		return errors.New("handoff workspace/base differs from scheduler record")
+	}
+	if result.Outcome == "pr_submitted" && (result.WorktreePath == nil || result.BaseCommit == nil) {
+		return errors.New("handoff missing prepared workspace facts")
+	}
 	r.Summary = result.Summary
 	if r.Summary != nil {
 		r.Summary = ptr(clip(*r.Summary, 4096))
@@ -218,6 +298,9 @@ func (s *Service) finished(err error) error {
 	}
 	r.ExecutionStatus = "succeeded"
 	result, e := ReadResult(*r.ResultPath, r)
+	if e == nil {
+		e = verifyRunWorkspace(context.Background(), s.Config, r)
+	}
 	if e == nil {
 		e = s.bind(r, result)
 	}
@@ -267,8 +350,8 @@ func (s *Service) pollPRs(ctx context.Context) error {
 			return e
 		}
 		if info.State == "merged" {
-			if e = s.beads.Close(ctx, r.TaskID, *r.PR.URL); e != nil {
-				r.Error = ptr("PR merged; Beads close will retry: " + clip(e.Error(), 1000))
+			if e = s.complete(ctx, r, info); e != nil {
+				r.Error = ptr("PR merged; completion will retry: " + clip(e.Error(), 1000))
 				operationErr = e
 			} else {
 				r.BeadsStatus = "closed"
@@ -299,14 +382,22 @@ func (s *Service) Run(ctx context.Context) (retErr error) {
 		return e
 	}
 	heartDone := make(chan struct{})
+	instanceID := s.State.Service.InstanceID
 	go func() {
 		defer close(heartDone)
 		t := time.NewTicker(duration(s.Config.Heartbeat))
 		defer t.Stop()
+		stopTick := time.NewTicker(200 * time.Millisecond)
+		defer stopTick.Stop()
 		for {
 			select {
 			case <-ctx.Done():
 				return
+			case <-stopTick.C:
+				if stopRequested(s.Config, instanceID) {
+					cancel()
+					return
+				}
 			case <-t.C:
 				if e := s.store.Heartbeat(); e != nil {
 					cancel()
@@ -336,8 +427,6 @@ func (s *Service) Run(ctx context.Context) (retErr error) {
 	defer taskTick.Stop()
 	prTick := time.NewTicker(duration(s.Config.PRPoll))
 	defer prTick.Stop()
-	stopTick := time.NewTicker(200 * time.Millisecond)
-	defer stopTick.Stop()
 	step := func(fn func(context.Context) error) error {
 		e := fn(ctx)
 		if s.store.Err() != nil {
@@ -368,15 +457,6 @@ func (s *Service) Run(ctx context.Context) (retErr error) {
 		select {
 		case <-ctx.Done():
 			return nil
-		case <-stopTick.C:
-			if b, e := os.ReadFile(filepath.Join(s.Config.RunDir, "stop.json")); e == nil {
-				var request struct {
-					InstanceID string `json:"instance_id"`
-				}
-				if json.Unmarshal(b, &request) == nil && request.InstanceID == s.State.Service.InstanceID {
-					return nil
-				}
-			}
 		case ev, ok := <-events:
 			if ok {
 				if e := s.event(ev); e != nil {
@@ -435,6 +515,17 @@ func RequestStop(c Config) error {
 	return AtomicWrite(filepath.Join(c.RunDir, "stop.json"), b)
 }
 
+func stopRequested(c Config, instanceID string) bool {
+	b, e := os.ReadFile(filepath.Join(c.RunDir, "stop.json"))
+	if e != nil {
+		return false
+	}
+	var request struct {
+		InstanceID string `json:"instance_id"`
+	}
+	return json.Unmarshal(b, &request) == nil && request.InstanceID == instanceID
+}
+
 // AcceptResult is an explicit operator action, never an automatic retry/resume.
 func (s *Service) AcceptResult(ctx context.Context, runID, path string) error {
 	for _, r := range s.State.Runs {
@@ -449,6 +540,9 @@ func (s *Service) AcceptResult(ctx context.Context, runID, path string) error {
 		}
 		result, e := ReadResult(path, r)
 		if e != nil {
+			return e
+		}
+		if e = verifyRunWorkspace(ctx, s.Config, r); e != nil {
 			return e
 		}
 		if result.Outcome != "pr_submitted" {

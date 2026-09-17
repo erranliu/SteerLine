@@ -20,13 +20,16 @@ import (
 
 // Native subprocess substitutes: no real task writes, model calls, or PR mutations.
 type fakeDB struct {
-	Tasks        []Task
-	Dependencies map[string]string
-	Claims       map[string]int
-	Starts       map[string]int
-	FailClose    int
-	Behavior     string
-	PRBase       string
+	Tasks           []Task
+	Dependencies    map[string]string
+	Claims          map[string]int
+	Starts          map[string]int
+	FailClose       int
+	Behavior        string
+	PRBase          string
+	CompletionCalls int
+	FailCompletion  int
+	CompletionMode  string
 }
 
 func TestMain(m *testing.M) {
@@ -102,6 +105,50 @@ func fakeMain(args []string) int {
 		return 0
 	}
 	db := readFake(path)
+	if mode == "completion" {
+		var request CompletionRequest
+		if e := json.NewDecoder(os.Stdin).Decode(&request); e != nil {
+			panic(e)
+		}
+		cwd, _ := os.Getwd()
+		if request.PR.State != "merged" || request.Claimant != os.Getenv("BEADS_ACTOR") || canonical(request.Beads.Directory) != canonical(os.Getenv("BEADS_DIR")) || canonical(cwd) != canonical(request.WorktreePath) || len(argv) != 1 || canonical(argv[0]) != canonical(cwd) {
+			fmt.Fprintln(os.Stderr, "invalid completion dispatch")
+			return 9
+		}
+		db.CompletionCalls++
+		if db.CompletionMode != "no-close" {
+			for i := range db.Tasks {
+				if db.Tasks[i].ID == request.TaskID {
+					db.Tasks[i].Status = "closed"
+				}
+			}
+		}
+		receipt := CompletionReceipt{SchemaVersion: 1, TaskID: request.TaskID, RunID: request.RunID, PRURL: request.PR.URL, Status: "completed"}
+		if db.FailCompletion > 0 {
+			db.FailCompletion--
+			writeFake(path, db)
+			receipt.Status = "failed"
+			receipt.Error = ptr("BV refresh unavailable after task close")
+			receipt.Details = json.RawMessage(`{"changed":true}`)
+			json.NewEncoder(os.Stdout).Encode(receipt)
+			fmt.Fprintln(os.Stderr, *receipt.Error)
+			return 2
+		}
+		writeFake(path, db)
+		switch db.CompletionMode {
+		case "wrong-run":
+			receipt.RunID = "wrong"
+		case "wrong-task":
+			receipt.TaskID = "other"
+		case "wrong-pr":
+			receipt.PRURL = "http://wrong/pulls/1"
+		case "malformed":
+			fmt.Print("not JSON")
+			return 0
+		}
+		json.NewEncoder(os.Stdout).Encode(receipt)
+		return 0
+	}
 	if mode == "codex" {
 		b, _ := io.ReadAll(os.Stdin)
 		get := func(key string) string {
@@ -113,6 +160,11 @@ func fakeMain(args []string) int {
 		}
 		id := get("task_id")
 		runID := get("run_id")
+		cwd, _ := os.Getwd()
+		if os.Getenv("BEADS_ACTOR") != get("claimant") || canonical(os.Getenv("BEADS_DIR")) != canonical(filepath.Join(filepath.Dir(path), "shared beads")) {
+			fmt.Fprintln(os.Stderr, "incorrect shared Beads environment")
+			return 8
+		}
 		db.Starts[id]++
 		writeFake(path, db)
 		fmt.Println(`{"type":"thread.started","thread_id":"test-session"}`)
@@ -136,7 +188,13 @@ func fakeMain(args []string) int {
 			return 0
 		}
 		n := strings.TrimPrefix(id, "t-")
-		result := Result{TaskID: id, RunID: runID, Outcome: "pr_submitted", PRURL: ptr(db.PRBase + "/owner/repo/pulls/" + n), WorktreePath: ptr(filepath.Dir(path)), BaseCommit: ptr(strings.Repeat("a", 40)), Summary: ptr("done")}
+		result := Result{TaskID: id, RunID: runID, Outcome: "pr_submitted", PRURL: ptr(db.PRBase + "/owner/repo/pulls/" + n), WorktreePath: ptr(cwd), BaseCommit: ptr(get("base_commit")), Summary: ptr("done")}
+		if db.Behavior == "wrong-worktree" {
+			result.WorktreePath = ptr(filepath.Dir(path))
+		}
+		if db.Behavior == "wrong-commit" {
+			result.BaseCommit = ptr(strings.Repeat("f", 40))
+		}
 		if db.Behavior == "wrong-id" {
 			result.TaskID = "other"
 		}
@@ -164,6 +222,19 @@ func fakeMain(args []string) int {
 		return nil
 	}
 	switch argv[0] {
+	case "context":
+		if db.Behavior == "slow-context" {
+			os.WriteFile(path+".context-started", []byte("ready"), 0600)
+			time.Sleep(time.Hour)
+		}
+		dir := filepath.Join(filepath.Dir(path), "shared beads")
+		project := "fixture-project"
+		cwd, _ := os.Getwd()
+		if db.Behavior == "wrong-database" && canonical(cwd) != canonical(filepath.Join(filepath.Dir(path), "repo")) {
+			project = "other-project"
+		}
+		json.NewEncoder(os.Stdout).Encode(BeadsContext{Directory: dir, ProjectID: project, Database: "fixture-db", Backend: "dolt"})
+		return 0
 	case "ready":
 		for _, task := range db.Tasks {
 			if task.Status != "open" || task.Assignee != "" {
@@ -198,6 +269,17 @@ func fakeMain(args []string) int {
 		db.Claims[task.ID]++
 		out = append(out, *task)
 		writeFake(path, db)
+		if db.Behavior == "path-conflict" {
+			v, e := LoadRuntime(filepath.Join(filepath.Dir(path), "runtime", "runtime.json"))
+			if e != nil {
+				panic(e)
+			}
+			intent := v.Runs[len(v.Runs)-1].WorkspaceIntent
+			if e = os.MkdirAll(intent.Path, 0700); e != nil {
+				panic(e)
+			}
+			os.WriteFile(filepath.Join(intent.Path, "keep.txt"), []byte("unrelated existing contents"), 0600)
+		}
 	case "close":
 		if db.FailClose > 0 {
 			db.FailClose--
@@ -231,6 +313,7 @@ func newFixture(t *testing.T, tasks ...Task) *fixture {
 	runs := filepath.Join(base, "runtime")
 	os.MkdirAll(repo, 0700)
 	os.MkdirAll(runs, 0700)
+	os.MkdirAll(filepath.Join(base, "shared beads"), 0700)
 	f := &fixture{db: filepath.Join(base, "fake.json"), states: map[string]string{}}
 	f.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		f.mu.Lock()
@@ -277,13 +360,19 @@ func newFixture(t *testing.T, tasks ...Task) *fixture {
 	if e != nil {
 		t.Fatal(e)
 	}
-	for _, args := range [][]string{{"init", "--quiet", repo}, {"-C", repo, "remote", "add", "origin", f.server.URL + "/owner/repo.git"}} {
+	remote := filepath.Join(base, "remote.git")
+	for _, args := range [][]string{{"init", "--quiet", "-b", "main", repo}, {"init", "--quiet", "--bare", remote}, {"-C", repo, "config", "core.hooksPath", filepath.Join(base, "no-hooks")}, {"-C", repo, "remote", "add", "origin", remote}, {"-C", repo, "remote", "add", "web", f.server.URL + "/owner/repo.git"}} {
 		if out, e := exec.Command(git, args...).CombinedOutput(); e != nil {
 			t.Fatalf("git: %s %v", out, e)
 		}
 	}
 	for _, name := range []string{"start", "finish"} {
 		os.WriteFile(filepath.Join(repo, name+".md"), []byte("<!-- steerline:"+name+"-v1 -->\nFixture skill"), 0600)
+	}
+	for _, args := range [][]string{{"-C", repo, "add", "start.md", "finish.md"}, {"-C", repo, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "Fixture baseline"}, {"-C", repo, "push", "--quiet", "origin", "main"}} {
+		if out, e := exec.Command(git, args...).CombinedOutput(); e != nil {
+			t.Fatalf("git fixture: %v %s", e, out)
+		}
 	}
 	f.c = Config{Repository: repo, Remote: "origin", Branch: "main", RunDir: runs, RuntimeFile: "runtime.json", Claimant: "test-claimant", Git: Command{Executable: git}, BD: Command{Executable: exe, Args: []string{"--fake", "bd", f.db}}, Codex: Command{Executable: exe, Args: []string{"--fake", "codex", f.db}}, StartSkill: Skill{Path: "start.md", Invocation: "Read start.md"}, FinishSkill: Skill{Path: "finish.md", Invocation: "Read finish.md"}, ExecutableTypes: []string{"task", "bug", "feature", "chore"}, TaskPoll: "100ms", PRPoll: "100ms", Heartbeat: "20ms", CommandTimeout: "5s", ShutdownGrace: "80ms", Sandbox: "workspace-write", PR: PRConfig{Kind: "gitea", BaseURL: f.server.URL, Repository: "owner/repo"}, identity: canonical(filepath.Join(repo, ".git"))}
 	if tasks == nil {
@@ -381,7 +470,7 @@ func TestLifecycleDependenciesAndRestart(t *testing.T) {
 	finishWorker(t, s)
 	prompt, e := os.ReadFile(filepath.Join(f.c.RunDir, "runs", s.State.Runs[2].RunID, "prompt.txt"))
 	require(t, e)
-	if !strings.Contains(string(prompt), "fetch the latest") || !strings.Contains(string(prompt), `"branch": "main"`) {
+	if !strings.Contains(string(prompt), "scheduler has already fetched") || !strings.Contains(string(prompt), `"branch": "main"`) {
 		t.Fatal("missing fresh base contract")
 	}
 	db = readFake(f.db)
@@ -392,7 +481,7 @@ func TestLifecycleDependenciesAndRestart(t *testing.T) {
 	}
 }
 func TestBadHandoffsNeverClose(t *testing.T) {
-	for _, behavior := range []string{"missing", "malformed", "wrong-id", "wrong-url", "exit"} {
+	for _, behavior := range []string{"missing", "malformed", "wrong-id", "wrong-url", "wrong-worktree", "wrong-commit", "exit"} {
 		t.Run(behavior, func(t *testing.T) {
 			f := newFixture(t, task("t-1"))
 			db := readFake(f.db)
@@ -483,6 +572,7 @@ func TestBeadsUnavailableStopsDispatch(t *testing.T) {
 }
 func TestPreflightReadsSkillsAndNativeCommands(t *testing.T) {
 	f := newFixture(t)
+	f.c.Remote = "web"
 	require(t, f.c.Preflight(context.Background(), true))
 	require(t, os.WriteFile(filepath.Join(f.c.Repository, "finish.md"), []byte("bd close; incompatible legacy skill"), 0600))
 	if e := f.c.Preflight(context.Background(), true); e == nil || !strings.Contains(e.Error(), "skill contract conflict") {

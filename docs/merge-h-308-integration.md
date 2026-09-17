@@ -1,35 +1,34 @@
-# merge-h-308-code 实际接入检查
+# merge-h-308-code 接入
 
-检查日期：2026-09-17。只读检查，未领取、关闭业务任务，未调用真实模型，未修改技能，未创建/合并 PR。
+目标：`C:/Projects/merge-h-308-code`，Gitea `http://192.168.0.66:3000/zymobile/merge-h-308-code`，远端 origin，主线 AIRefactor（来自仓库 `.codex/gitea.json`）。检查版本为 bd 1.1.2、codex-cli 0.145.0、Gitea 1.27.1。
 
-| 项目 | 实际发现 |
-| --- | --- |
-| 仓库 | `C:/Projects/merge-h-308-code` |
-| origin | `http://192.168.0.66:3000/zymobile/merge-h-308-code.git` |
-| 主线配置 | `.codex/gitea.json` 的 `default_base_branch = AIRefactor`，与 origin/HEAD 一致 |
-| Beads | 本机 bd 1.1.2；真实 ready/show/list JSON 成功解析；未初始化数据库 |
-| Codex | 本机 codex-cli 0.145.0；exec help 支持 JSON 事件、output-schema、output-last-message、stdin |
-| Gitea | `/api/v1/version` 返回 1.27.1；匿名查询私有仓库返回 404，需认证 |
-| start | `.agents/skills/start-bd-task/SKILL.md` |
-| finish | `.agents/skills/finish-beads-task/SKILL.md` |
+## 已实现的专用接入
 
-`examples/merge-h-308-code.json` 是按现状生成的接入草案，**当前预期无法通过技能契约检查**。不要直接将它当作已经启用的生产配置。
+| 组件 | 仓库内路径 | 职责 |
+| --- | --- | --- |
+| start | `.agents/skills/steerline-start-task/SKILL.md` | 核验已领取派发、worktree/Beads，Spec → Plan → 实现和验证 |
+| finish | `.agents/skills/steerline-finish-task/SKILL.md` | 提交、推送、创建/复用并核验 PR，返回结构化结果，保留 in_progress |
+| completion | `tools/Beads/Complete-SteerlineTask.py` | 接收已核验的合并事实，复用生命周期脚本，记录 PR/run 并核验 BV |
+| adapter tests | `tools/Beads/tests/test_steerline_completion.py` | 用临时目录和替身验证副作用边界及部分成功重试 |
 
-## 已确认的契约差异
+手动 start-sl-task、finish-beads-task、start-bd-task 和既有生命周期脚本保留原用途。新 start/finish 在一次 codex exec 中串行执行；只有服务的 PR 轮询确认合并后才调用 completion。
 
-- `start-bd-task` 只接收数字后缀，在其步骤 5 自己执行 `bd update --claim`。需要一个显式接受完整调度上下文的已领取模式，核实 claimant 后跳过重复领取。现有前缀校验、数据库定位和 BV 约定由仓库维护。
-- `start-bd-task` 在刷新 BV 后即停止，不执行 Spec/开发。适配入口必须明确衔接仓库实际开发流程；服务不猜测。
-- `finish-beads-task` 要求 PR **已经合并**，随后调用 `tools/Beads/Invoke-BdTaskLifecycle.ps1`，处理结项、拆分树、后继状态和 BV。它不是 M0 所需的提 PR 后返回入口，不能直接绑定成 finish。
-- 仓库存在 `.codex/skills/mrac-auto/SKILL.md`，其职责包含开发到 PR。应由维护者确定是否将该既有流程封装成 finish 接入入口，并确认它能在等待人工合并时返回；不把 MRAC 内部实现复制进调度器。
-- 仓库的手动 `worktree-start` 技能仍指定 `AIRefactor_5`，不同于 PR 配置的 `AIRefactor`。接入入口必须使用显式传入的主线，不调用会忽略它的旧默认流程。本次按 `.codex/gitea.json` 生成草案，没有切换业务分支。
-- 当前 finish 的自定义结项事务不能被 M0 的普通 `bd close` 完整替代。尤其是 split 聚合收尾、blocked 后继变为 open、BV 刷新。**在维护者确定采用原生依赖结项的接入范围，或完成独立的生命周期适配之前，不启用真实自动调度。** 单纯替换技能名字不足以解决这一差异。
+`examples/merge-h-308-code.json` 已指向这些新文件，并启用 completion 命令。并发执行固定为 1。工作目录和实现分支由调度器准备，不调用默认 AIRefactor_5 的手动 worktree 技能。
 
-## 最小接入调整
+## 真实启动前
 
-1. 在目标仓库中由维护者添加/适配两个入口，落实 [技能契约](skill-contract.md)，保留既有流程。完成后才写入 v1 标记。
-2. 明确 M0 接管任务使用原生 Beads 依赖与 close 语义，并只选择这类可执行类型；现有自定义拆分生命周期先继续人工运行。若无法按类型隔离这类任务，则该仓库暂不适合启用 M0。
-3. 配置草案的两个路径和 invocation 指向真正适配后的入口，核实目标主线。
-4. 在启动环境中设置 `STEERLINE_GITEA_TOKEN` 为该仓库的只读查询凭据。服务不会写 token 到配置或 runtime。Codex 内部创建 PR 所需的 tea 登录沿用目标仓库原有方式，属于独立的开发流程权限。
-5. 运行 `steerline check -config ...`。只有检查通过后才运行 `run`；`run` 将真正领取业务任务并调用模型，验收期间不要运行它。
+1. 将新技能、适配脚本和测试审阅并合入 AIRefactor。它们目前是本地新增文件；新 worktree 只取得远端主线文件，不复制未提交内容。本地 check 通过不证明文件已经发布。
+2. 确认 Python 3、pwsh、bv、bd、Codex 原生 exe 可用。适配器使用 Python 标准库；既有生命周期通过 PATH 调用原生 bd，不支持 bd 的额外前置 args。
+3. 启动环境设置 STEERLINE_GITEA_TOKEN 为服务的 PR 读取凭据；该私有仓库匿名访问曾返回 404。token 不写配置或 runtime。创建 PR 所需的 tea 登录独立沿用仓库配置。
+4. 确认 Codex profile 允许访问 worktree、共享 Beads、共享 Spec 和必要工具。pr-gitea 的 tea 包装器有 Windows 控制台要求；本次未用真实模型验证无人值守出版，权限或控制台不满足时技能返回 blocked。
+5. 构建后先执行 `steerline check -config examples/merge-h-308-code.json`，再执行 run。run 会真正领取业务任务并调用模型。
 
-启动检查不会创建、迁移或修复 Beads 数据库。现有 `beads.role not configured` 提示保留原样，不替用户修改 Git 配置。
+## 验证范围
+
+技能通过 skill-creator 格式验证。Python unittest 使用临时替身，覆盖错误 PR/领取者/前缀/数据库无写入、拆分父任务和后继验证、生命周期部分成功重试、关闭后 BV 失败重试、拓扑/视图错误拒绝完成。
+
+Steerline 测试覆盖 PR 未合并不调用 completion、回执 task/run/PR 错误不完成、回执成功但 Beads 未关闭不完成，以及重启后保留派发时的命令并重试尾部。请求和回执保存于运行目录，可查看部分已应用操作。
+
+本次创建技能不执行其业务工作流：没有领取/关闭业务任务，没有真实模型开发、创建/合并业务 PR 或真实结项。已有 Beads 运行文件不纳入技能交付。
+
+详细约定见 [技能契约](skill-contract.md)、[worktree 准备](worktree-preparation.md)、[completion 协议](completion-command.md)。

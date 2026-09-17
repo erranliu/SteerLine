@@ -3,6 +3,7 @@
   "remote": "origin",
   "branch": "main",
   "run_dir": "C:/SteerlineRuntime/my-existing-repo",
+  "worktree_root": "C:/SteerlineRuntime/my-existing-repo/worktrees",
   "runtime_file": "runtime.json",
   "claimant": "",
   "git": {"executable": "git.exe", "args": []},
@@ -26,6 +27,7 @@
   "sandbox": "workspace-write",
   "model": "",
   "profile": "",
+  "completion": null,
   "pr": {
     "kind": "gitea",
     "base_url": "https://gitea.example.com",

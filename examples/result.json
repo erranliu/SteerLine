@@ -3,7 +3,7 @@
   "run_id": "64f36c8449324eecb4223b8a28ac90c2",
   "outcome": "pr_submitted",
   "pr_url": "https://gitea.example.com/owner/repo/pulls/42",
-  "worktree_path": "C:/Worktrees/demo-1",
+  "worktree_path": "C:/SteerlineRuntime/repo/worktrees/64f36c8449324eecb4223b8a28ac90c2",
   "base_commit": "0123456789abcdef0123456789abcdef01234567",
   "summary": "Implemented the task and published its PR; waiting for human merge.",
   "error": null

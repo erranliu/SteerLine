@@ -5,12 +5,15 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"strings"
 	"time"
 )
 
 type Runner struct {
 	Dir     string
 	Timeout time.Duration
+	Env     map[string]string
+	Input   []byte
 }
 type limitedBuffer struct {
 	bytes.Buffer
@@ -24,10 +27,19 @@ func (b *limitedBuffer) Write(p []byte) (int, error) {
 	return b.Buffer.Write(p)
 }
 func (r Runner) Output(ctx context.Context, command Command, args ...string) ([]byte, error) {
+	if e := ctx.Err(); e != nil {
+		return nil, e
+	}
 	ctx, cancel := context.WithTimeout(ctx, r.Timeout)
 	defer cancel()
 	cmd := exec.Command(command.Executable, append(append([]string{}, command.Args...), args...)...)
 	cmd.Dir = r.Dir
+	if r.Input != nil {
+		cmd.Stdin = bytes.NewReader(r.Input)
+	}
+	if len(r.Env) > 0 {
+		cmd.Env = overrideEnv(cmd.Environ(), r.Env)
+	}
 	var stdout = limitedBuffer{max: 16 << 20}
 	var stderr = limitedBuffer{max: 1 << 20}
 	cmd.Stdout = &stdout
@@ -47,9 +59,30 @@ func (r Runner) Output(ctx context.Context, command Command, args ...string) ([]
 	}
 	p.Close()
 	if e != nil {
-		return nil, fmt.Errorf("%s failed: %w (%s)", command.Executable, e, clip(stderr.String(), 1000))
+		return stdout.Bytes(), fmt.Errorf("%s failed: %w (%s)", command.Executable, e, clip(stderr.String(), 1000))
 	}
 	return stdout.Bytes(), nil
+}
+
+func overrideEnv(base []string, values map[string]string) []string {
+	out := make([]string, 0, len(base)+len(values))
+	for _, entry := range base {
+		key, _, _ := strings.Cut(entry, "=")
+		replace := false
+		for name := range values {
+			if strings.EqualFold(key, name) {
+				replace = true
+				break
+			}
+		}
+		if !replace {
+			out = append(out, entry)
+		}
+	}
+	for key, value := range values {
+		out = append(out, key+"="+value)
+	}
+	return out
 }
 func clip(s string, n int) string {
 	r := []rune(s)

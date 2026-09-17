@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"path/filepath"
 )
 
 type Task struct {
@@ -18,6 +19,33 @@ type Task struct {
 	Metadata    map[string]any `json:"metadata"`
 	Labels      []string       `json:"labels"`
 }
+
+type BeadsContext struct {
+	Directory string `json:"beads_dir"`
+	ProjectID string `json:"project_id"`
+	Database  string `json:"database"`
+	Backend   string `json:"backend"`
+}
+
+func (b Beads) Context(ctx context.Context) (BeadsContext, error) {
+	var c BeadsContext
+	out, e := b.Runner.Output(ctx, b.Command, "context", "--json")
+	if e != nil {
+		return c, e
+	}
+	if e = json.Unmarshal(out, &c); e != nil {
+		return c, e
+	}
+	if !filepath.IsAbs(c.Directory) || c.ProjectID == "" || c.Database == "" || c.Backend == "" {
+		return c, errors.New("Beads context requires absolute beads_dir, project_id, database and backend")
+	}
+	c.Directory, e = filepath.EvalSymlinks(c.Directory)
+	return c, e
+}
+func (c BeadsContext) Same(other BeadsContext) bool {
+	return canonical(c.Directory) == canonical(other.Directory) && c.ProjectID == other.ProjectID && c.Database == other.Database && c.Backend == other.Backend
+}
+
 type Beads struct {
 	Runner   Runner
 	Command  Command
