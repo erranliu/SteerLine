@@ -63,8 +63,12 @@ func TestResultRequiredFieldsAndDuplicatePR(t *testing.T) {
 		t.Fatal("missing fields accepted")
 	}
 	url := f.server.URL + "/owner/repo/pulls/1"
+	r.WorkspaceIntent = &WorkspaceIntent{Path: filepath.Join(f.c.RunDir, "worktrees", "test"), Branch: "codex/test", BaseCommit: strings.Repeat("a", 40)}
+	r.WorktreePath = &r.WorkspaceIntent.Path
+	r.WorktreeBranch = &r.WorkspaceIntent.Branch
+	r.BaseCommit = &r.WorkspaceIntent.BaseCommit
 	s.State.Runs = []*Run{{RunID: "other", PR: PRState{URL: &url}}}
-	if e := s.bind(r, Result{Outcome: "pr_submitted", PRURL: &url}); e == nil {
+	if e := s.bind(r, Result{Outcome: "pr_submitted", PRURL: &url, WorktreePath: r.WorktreePath, BaseCommit: r.BaseCommit}); e == nil || !strings.Contains(e.Error(), "already bound") {
 		t.Fatal("duplicate PR accepted")
 	}
 }

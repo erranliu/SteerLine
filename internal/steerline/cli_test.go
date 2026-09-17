@@ -12,6 +12,7 @@ import (
 
 func TestNativeCLIStartSecondInstanceAndStop(t *testing.T) {
 	f := newFixture(t)
+	f.c.Remote = "web"
 	exe := filepath.Join(t.TempDir(), "steerline.exe")
 	build := exec.Command("go", "build", "-o", exe, "../../cmd/steerline")
 	if b, e := build.CombinedOutput(); e != nil {

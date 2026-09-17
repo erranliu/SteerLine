@@ -37,7 +37,7 @@ type Worker struct {
 func (w *Worker) Kill()  { w.process.Kill() }
 func (w *Worker) Close() { w.process.Close() }
 func Prompt(c Config, t Task, r *Run) (string, error) {
-	contextJSON, _ := json.MarshalIndent(map[string]string{"task_id": t.ID, "run_id": r.RunID, "claimant": r.Claimant, "remote": c.Remote, "branch": c.Branch}, "", "  ")
+	contextJSON, _ := json.MarshalIndent(map[string]any{"task_id": t.ID, "run_id": r.RunID, "claimant": r.Claimant, "remote": c.Remote, "branch": c.Branch, "worktree_path": r.WorktreePath, "worktree_branch": r.WorktreeBranch, "base_commit": r.BaseCommit, "beads_directory": c.workerEnv["BEADS_DIR"], "beads_context": r.BeadsContext}, "", "  ")
 	taskJSON, _ := json.MarshalIndent(t, "", "  ")
 	data := map[string]string{"Context": string(contextJSON), "Task": string(taskJSON), "StartPath": c.StartSkill.Path, "FinishPath": c.FinishSkill.Path, "StartInvocation": c.StartSkill.Invocation, "FinishInvocation": c.FinishSkill.Invocation, "Workflow": c.Workflow}
 	tmpl, e := template.New("prompt").Parse(promptTemplate)
@@ -49,6 +49,9 @@ func Prompt(c Config, t Task, r *Run) (string, error) {
 	return b.String(), e
 }
 func StartWorker(c Config, t Task, r *Run) (*Worker, error) {
+	if r.WorktreePath == nil || r.BaseCommit == nil || r.WorktreeBranch == nil || canonical(c.Repository) != canonical(*r.WorktreePath) || c.workerEnv["BEADS_DIR"] == "" || c.workerEnv["BEADS_ACTOR"] != r.Claimant {
+		return nil, errors.New("worker requires verified workspace and shared Beads environment")
+	}
 	dir := filepath.Join(c.RunDir, "runs", r.RunID)
 	if e := os.MkdirAll(dir, 0700); e != nil {
 		return nil, e
@@ -84,6 +87,7 @@ func StartWorker(c Config, t Task, r *Run) (*Worker, error) {
 	args = append(args, "-")
 	cmd := exec.Command(c.Codex.Executable, args...)
 	cmd.Dir = c.Repository
+	cmd.Env = overrideEnv(cmd.Environ(), c.workerEnv)
 	cmd.Stdin = strings.NewReader(prompt)
 	cmd.Stderr = errFile
 	// An explicit pipe lets the event reader finish before Wait, avoiding StdoutPipe races.

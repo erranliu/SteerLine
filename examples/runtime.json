@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "updated_at": "2026-09-17T08:30:00Z",
   "heartbeat_at": "2026-09-17T08:30:00Z",
   "service": {
@@ -23,6 +23,13 @@
       "title": "Implement the first task",
       "run_id": "64f36c8449324eecb4223b8a28ac90c2",
       "claimant": "steerline-example",
+      "completion": null,
+      "beads_context": {
+        "beads_dir": "C:/Projects/repo/.beads",
+        "project_id": "example-project-id",
+        "database": "example_beads",
+        "backend": "dolt"
+      },
       "beads_status": "in_progress",
       "execution_status": "succeeded",
       "finish_task_status": "waiting_pr_merge",
@@ -34,7 +41,13 @@
       },
       "started_at": "2026-09-17T08:00:00Z",
       "ended_at": "2026-09-17T08:20:00Z",
-      "worktree_path": "C:/Worktrees/demo-1",
+      "workspace_intent": {
+        "path": "C:/SteerlineRuntime/repo/worktrees/64f36c8449324eecb4223b8a28ac90c2",
+        "branch": "codex/demo-1-64f36c844932",
+        "base_commit": "0123456789abcdef0123456789abcdef01234567"
+      },
+      "worktree_path": "C:/SteerlineRuntime/repo/worktrees/64f36c8449324eecb4223b8a28ac90c2",
+      "worktree_branch": "codex/demo-1-64f36c844932",
       "base_commit": "0123456789abcdef0123456789abcdef01234567",
       "pr": {
         "url": "https://gitea.example.com/owner/repo/pulls/42",

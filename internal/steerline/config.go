@@ -24,32 +24,57 @@ type Skill struct {
 	Invocation string `json:"invocation"`
 }
 type Config struct {
-	Repository      string   `json:"repository"`
-	Remote          string   `json:"remote"`
-	Branch          string   `json:"branch"`
-	RunDir          string   `json:"run_dir"`
-	RuntimeFile     string   `json:"runtime_file"`
-	Claimant        string   `json:"claimant"`
-	BD              Command  `json:"bd"`
-	Git             Command  `json:"git"`
-	Codex           Command  `json:"codex"`
-	StartSkill      Skill    `json:"start_skill"`
-	FinishSkill     Skill    `json:"finish_skill"`
-	Workflow        string   `json:"workflow"`
-	ExecutableTypes []string `json:"executable_types"`
-	TaskPoll        string   `json:"task_poll"`
-	PRPoll          string   `json:"pr_poll"`
-	Heartbeat       string   `json:"heartbeat"`
-	CommandTimeout  string   `json:"command_timeout"`
-	ShutdownGrace   string   `json:"shutdown_grace"`
-	Model           string   `json:"model"`
-	Sandbox         string   `json:"sandbox"`
-	Profile         string   `json:"profile"`
-	PR              PRConfig `json:"pr"`
+	Repository      string            `json:"repository"`
+	Remote          string            `json:"remote"`
+	Branch          string            `json:"branch"`
+	RunDir          string            `json:"run_dir"`
+	WorktreeRoot    string            `json:"worktree_root"`
+	RuntimeFile     string            `json:"runtime_file"`
+	Claimant        string            `json:"claimant"`
+	BD              Command           `json:"bd"`
+	Git             Command           `json:"git"`
+	Codex           Command           `json:"codex"`
+	StartSkill      Skill             `json:"start_skill"`
+	FinishSkill     Skill             `json:"finish_skill"`
+	Workflow        string            `json:"workflow"`
+	ExecutableTypes []string          `json:"executable_types"`
+	TaskPoll        string            `json:"task_poll"`
+	PRPoll          string            `json:"pr_poll"`
+	Heartbeat       string            `json:"heartbeat"`
+	CommandTimeout  string            `json:"command_timeout"`
+	ShutdownGrace   string            `json:"shutdown_grace"`
+	Model           string            `json:"model"`
+	Sandbox         string            `json:"sandbox"`
+	Profile         string            `json:"profile"`
+	PR              PRConfig          `json:"pr"`
+	Completion      *CompletionConfig `json:"completion"`
 	identity        string
 	startText       string
 	finishText      string
+	workerEnv       map[string]string
 }
+
+type CompletionConfig struct {
+	Command Command `json:"command"`
+	Timeout string  `json:"timeout"`
+}
+
+func (c *CompletionConfig) validate() error {
+	if c == nil {
+		return nil
+	}
+	if c.Timeout == "" {
+		c.Timeout = "2m"
+	}
+	if d, e := time.ParseDuration(c.Timeout); e != nil || d <= 0 {
+		return errors.New("completion.timeout must be positive")
+	}
+	if c.Command.Executable == "" {
+		return errors.New("completion.command.executable is required")
+	}
+	return nil
+}
+
 type PRConfig struct {
 	Kind       string  `json:"kind"`
 	BaseURL    string  `json:"base_url"`
@@ -91,6 +116,12 @@ func LoadConfig(path string) (Config, error) {
 			*p = filepath.Join(base, *p)
 		}
 	}
+	if c.WorktreeRoot == "" {
+		c.WorktreeRoot = filepath.Join(c.RunDir, "worktrees")
+	}
+	if !filepath.IsAbs(c.WorktreeRoot) {
+		c.WorktreeRoot = filepath.Join(base, c.WorktreeRoot)
+	}
 	if filepath.Base(c.RuntimeFile) != c.RuntimeFile || c.RuntimeFile == "." {
 		return c, errors.New("runtime_file must be a filename inside run_dir")
 	}
@@ -105,6 +136,9 @@ func LoadConfig(path string) (Config, error) {
 	}
 	if len(c.ExecutableTypes) == 0 {
 		return c, errors.New("executable_types is empty")
+	}
+	if err = c.Completion.validate(); err != nil {
+		return c, err
 	}
 	for _, s := range c.ExecutableTypes {
 		if !regexp.MustCompile(`^[a-z][a-z0-9-]*$`).MatchString(s) || s == "epic" || s == "molecule" || s == "convoy" {
@@ -128,6 +162,14 @@ func resolveCommand(c *Command) error {
 	return nil
 }
 func (c *Config) Preflight(ctx context.Context, checkSkills bool) error {
+	if e := c.Completion.validate(); e != nil {
+		return e
+	}
+	if c.Completion != nil {
+		if e := resolveCommand(&c.Completion.Command); e != nil {
+			return e
+		}
+	}
 	for _, cmd := range []*Command{&c.Git, &c.BD, &c.Codex} {
 		if e := resolveCommand(cmd); e != nil {
 			return e
@@ -188,9 +230,15 @@ func (c *Config) Preflight(ctx context.Context, checkSkills bool) error {
 	if e != nil {
 		return e
 	}
+	if e = c.prepareWorktreeRoot(); e != nil {
+		return e
+	}
 	for _, line := range strings.Split(string(wt), "\x00") {
 		if strings.HasPrefix(line, "worktree ") && inside(strings.TrimPrefix(line, "worktree "), c.RunDir) {
 			return errors.New("run_dir must be outside all linked worktrees")
+		}
+		if strings.HasPrefix(line, "worktree ") && inside(strings.TrimPrefix(line, "worktree "), c.WorktreeRoot) {
+			return errors.New("worktree_root must be outside all existing checkouts")
 		}
 	}
 	for _, probe := range []struct {
@@ -221,9 +269,24 @@ func (c *Config) Preflight(ctx context.Context, checkSkills bool) error {
 	if _, e = b.Owned(ctx); e != nil {
 		return e
 	}
+	if _, e = b.Context(ctx); e != nil {
+		return fmt.Errorf("shared Beads context: %w", e)
+	}
 	if !checkSkills {
 		return nil
 	}
+	if e = c.validateSkills(); e != nil {
+		return e
+	}
+	if c.PR.Kind == "gitea" {
+		if e = (&PRClient{Config: c.PR, Runner: r}).Check(ctx); e != nil {
+			return e
+		}
+	}
+	return nil
+}
+
+func (c *Config) validateSkills() error {
 	for _, entry := range []struct {
 		s      *Skill
 		text   *string
@@ -236,7 +299,7 @@ func (c *Config) Preflight(ctx context.Context, checkSkills bool) error {
 		if !filepath.IsAbs(p) {
 			p = filepath.Join(c.Repository, p)
 		}
-		p, e = filepath.EvalSymlinks(p)
+		p, e := filepath.EvalSymlinks(p)
 		if e != nil {
 			return fmt.Errorf("missing skill: %w", e)
 		}
@@ -251,11 +314,6 @@ func (c *Config) Preflight(ctx context.Context, checkSkills bool) error {
 		entry.s.Path = p
 		if !strings.Contains(*entry.text, "<!-- "+entry.marker+" -->") {
 			return fmt.Errorf("skill contract conflict: %s lacks reviewed <!-- %s --> adapter; see docs/skill-contract.md", p, entry.marker)
-		}
-	}
-	if c.PR.Kind == "gitea" {
-		if e = (&PRClient{Config: c.PR, Runner: r}).Check(ctx); e != nil {
-			return e
 		}
 	}
 	return nil
