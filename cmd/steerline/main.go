@@ -19,7 +19,7 @@ func main() {
 }
 func run() error {
 	if len(os.Args) < 2 {
-		return fmt.Errorf("usage: steerline <run|check|stop|accept-result|mark-stopped> -config config.json")
+		return fmt.Errorf("usage: steerline <run|retry|check|stop|accept-result|mark-stopped> -config config.json")
 	}
 	command := os.Args[1]
 	fs := flag.NewFlagSet(command, flag.ContinueOnError)
@@ -33,8 +33,11 @@ func run() error {
 	if fs.NArg() != 0 {
 		return fmt.Errorf("unexpected positional arguments")
 	}
-	if command != "run" && command != "check" && command != "stop" && command != "accept-result" && command != "mark-stopped" {
+	if command != "run" && command != "retry" && command != "check" && command != "stop" && command != "accept-result" && command != "mark-stopped" {
 		return fmt.Errorf("unknown command %q", command)
+	}
+	if command == "retry" && (!*confirmed || *runID == "") {
+		return fmt.Errorf("retry requires -run-id and -confirm-process-stopped")
 	}
 	c, e := steerline.LoadConfig(*config)
 	if e != nil {
@@ -45,7 +48,7 @@ func run() error {
 	}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
-	if e = c.Preflight(ctx, command == "run" || command == "check"); e != nil {
+	if e = c.Preflight(ctx, command == "run" || command == "retry" || command == "check"); e != nil {
 		return e
 	}
 	if command == "check" {
@@ -65,6 +68,10 @@ func run() error {
 	s, e := steerline.NewService(c)
 	if e != nil {
 		return e
+	}
+	if command == "retry" {
+		fmt.Printf("Steerline retry-one: %s; no new tasks will be claimed\n", *runID)
+		return s.RetryOne(ctx, *runID)
 	}
 	if command == "mark-stopped" {
 		if !*confirmed || *runID == "" {

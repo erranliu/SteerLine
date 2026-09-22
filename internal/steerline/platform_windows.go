@@ -4,6 +4,7 @@ package steerline
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -17,6 +18,28 @@ import (
 )
 
 func canonical(s string) string { return strings.ToLower(filepath.Clean(s)) }
+
+// Snapshot readers cooperate with atomic replacement, including the stop CLI.
+func readSnapshot(path string) ([]byte, error) {
+	name, err := windows.UTF16PtrFromString(path)
+	if err != nil {
+		return nil, err
+	}
+	for attempt := 0; attempt < 100; attempt++ {
+		h, e := windows.CreateFile(name, windows.GENERIC_READ, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, nil, windows.OPEN_EXISTING, windows.FILE_ATTRIBUTE_NORMAL, 0)
+		if e == nil {
+			file := os.NewFile(uintptr(h), path)
+			defer file.Close()
+			return io.ReadAll(file)
+		}
+		err = e
+		if e != windows.ERROR_SHARING_VIOLATION && e != windows.ERROR_ACCESS_DENIED {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	return nil, &os.PathError{Op: "read snapshot", Path: path, Err: err}
+}
 func replaceFile(from, to string) error {
 	a, e := windows.UTF16PtrFromString(from)
 	if e != nil {

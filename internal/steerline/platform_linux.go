@@ -12,8 +12,9 @@ import (
 	"syscall"
 )
 
-func canonical(s string) string         { return filepath.Clean(s) }
-func replaceFile(from, to string) error { return os.Rename(from, to) }
+func canonical(s string) string                { return filepath.Clean(s) }
+func readSnapshot(path string) ([]byte, error) { return os.ReadFile(path) }
+func replaceFile(from, to string) error        { return os.Rename(from, to) }
 
 type RepoLock struct{ f *os.File }
 

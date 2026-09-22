@@ -87,7 +87,7 @@ func (s *Store) Heartbeat() error {
 }
 func (s *Store) Err() error { s.mu.Lock(); defer s.mu.Unlock(); return s.failure }
 func LoadRuntime(path string) (*Runtime, error) {
-	b, e := os.ReadFile(path)
+	b, e := readSnapshot(path)
 	if os.IsNotExist(e) {
 		return nil, nil
 	}

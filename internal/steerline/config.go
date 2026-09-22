@@ -131,8 +131,8 @@ func LoadConfig(path string) (Config, error) {
 			return c, fmt.Errorf("invalid positive duration %q", v)
 		}
 	}
-	if c.Sandbox != "read-only" && c.Sandbox != "workspace-write" {
-		return c, errors.New("M0 sandbox must be read-only or workspace-write; use a reviewed Codex profile for other settings")
+	if c.Sandbox != "read-only" && c.Sandbox != "workspace-write" && c.Sandbox != "danger-full-access" {
+		return c, errors.New("sandbox must be read-only, workspace-write or explicitly configured danger-full-access")
 	}
 	if len(c.ExecutableTypes) == 0 {
 		return c, errors.New("executable_types is empty")

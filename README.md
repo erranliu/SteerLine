@@ -41,7 +41,7 @@ Windows 的 npm `codex.cmd`/`codex.ps1` 不是原生可执行文件。配置应�
 | task_poll / pr_poll / heartbeat | `10s` / `30s` / `5s`，必须为正时长 |
 | command_timeout / shutdown_grace | 短命令和 API 的超时 `30s` / 正常退出等待 worker `10s` |
 | model / profile | 可选 Codex 模型和已有 profile，空值沿用本机设置 |
-| sandbox | 默认 workspace-write，也允许 read-only；不默认绕过审批与沙箱 |
+| sandbox | 默认 workspace-write；允许 read-only，以及用户明确授权后显式配置的 danger-full-access |
 | pr | Gitea 原生只读 API，或可配置的规范化查询命令，见下文 |
 | completion | 可选 `{command:{executable,args},timeout}`；默认 null 使用原生 close，自定义仓库通过它完成合并后的结项，详见 [命令协议](docs/completion-command.md) |
 
@@ -117,6 +117,17 @@ bd 1.1.2 在领取冲突时可能退出 0 却不返回领取 JSON，因此会同
 ```
 
 accept-result 在仓库锁下重新核验调度器准备记录、工作目录/分支/起点、结果和真实 PR，只接受指向目标主线的 open/merged PR，恢复等待合并状态；不会启动 Codex。它不能为准备未完成的任务、旧格式或孤儿记录补造工作环境事实。对未能匹配身份的进程，这个确认代表人工核验责任。两个人工命令均拒绝已知仍在运行的原进程。不要删除领取或运行记录来触发“自动重试”，不要编辑结果把不同任务的 PR 伪装成本任务。
+
+如果是模型版本、权限等启动阶段失败，且工作目录完整、干净、HEAD 仍等于 base_commit、没有绑定 PR，可以在确认旧进程已停止后仅重试这一项：
+
+```powershell
+.\bin\steerline.exe retry -config .\steerline.local.json `
+  -run-id <已有运行ID> -confirm-process-stopped
+```
+
+retry 复用同一个任务、领取和 worktree，使用当前配置的模型与权限。它不重新 claim、不根据 ready 派发其他任务，也不处理其他运行的 PR；启动检查仍可只读探测 Beads。旧日志原地保留，新日志写入 `runs/<run_id>/attempts/<attempt_id>`，其中 previous-run.json 保存上一次状态。失败/阻塞后停止；成功提 PR 后仅轮询该 PR，完成结项后停止。已有代码改动、提交、未知执行或其他仍存活的 worker 会拒绝重试，应走人工修复流程。
+
+“并发 1”只表示最多一个 worker，正常 run 会在它退出后继续处理队列；需要限制本次只验证一个已有任务时使用 retry。retry 不是自动重跑机制。默认权限仍是 workspace-write，只有显式配置 sandbox=danger-full-access 才使用全访问。
 
 ## 数据与保留
 
