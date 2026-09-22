@@ -19,6 +19,7 @@ type Runtime struct {
 	Runs          []*Run       `json:"runs"`
 }
 type ServiceState struct {
+	Mode       string  `json:"mode"`
 	InstanceID string  `json:"instance_id"`
 	PID        int     `json:"pid"`
 	Status     string  `json:"status"`

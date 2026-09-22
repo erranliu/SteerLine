@@ -12,6 +12,7 @@
 | service.instance_id | string | 每次启动新的随机实例 ID，不等于 claimant |
 | service.pid | integer | 服务进程 PID |
 | service.status | string | running / stopping / stopped / error |
+| service.mode | string | scheduler（正常轮询派发）/ retry-one（仅重试指定已有运行）/ maintenance（人工恢复命令） |
 | service.claimant | string | 稳定 Beads 领取者，用于恢复不完整记录 |
 | service.error | string/null | 最近服务级错误，查询恢复后可能清除 |
 | repository.path | string | 解析后的仓库绝对路径 |
@@ -72,6 +73,8 @@ Codex 通过 `exec --json --output-schema <file> --output-last-message <per-run-
 PR 命令适配器的数据结构与 result 不同，见 README 的 PR 查询部分。命令查询是可信的本机适配边界，必须直接验证平台事实。
 
 completion-request.json 与 completion-result.json 是每次运行目录下的最近一次结项请求和回执。服务通过 stdin 传请求，读取 stdout，非零退出时也保存返回的部分写入证据；这两份文件不会包含 PR 认证 token。详情见 [结项命令协议](completion-command.md)。completion 和 beads_context 是 v2 的可空扩展字段；不要用旧二进制读取新程序写入的快照。
+
+显式 retry 不改变 task_id/run_id/worktree/base_commit。log_path/result_path 指向本次 attempts/<attempt_id> 目录；该目录的 previous-run.json 保留上一次运行概要，原日志和结果不移动、不覆盖。重试准备状态同样先落盘，意外中断后仍变成 unknown，不能自动恢复。service.mode 是 v2 的新增可选读取字段。
 
 ## 历史与读取规则
 

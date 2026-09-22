@@ -3,6 +3,7 @@
   "updated_at": "2026-09-17T08:30:00Z",
   "heartbeat_at": "2026-09-17T08:30:00Z",
   "service": {
+    "mode": "scheduler",
     "instance_id": "fd054ee51ff2431a8025a63b015f3229",
     "pid": 1234,
     "status": "running",

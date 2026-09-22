@@ -82,7 +82,7 @@ func NewService(c Config) (*Service, error) {
 			}
 		}
 	}
-	s.State.Service = ServiceState{InstanceID: newID(), PID: os.Getpid(), Status: "running", Claimant: c.Claimant}
+	s.State.Service = ServiceState{InstanceID: newID(), PID: os.Getpid(), Status: "running", Claimant: c.Claimant, Mode: "maintenance"}
 	return s, nil
 }
 func (s *Service) save() error { return s.store.Publish(s.State) }
@@ -310,8 +310,14 @@ func (s *Service) finished(err error) error {
 	return s.save()
 }
 func (s *Service) pollPRs(ctx context.Context) error {
+	return s.pollPRsFor(ctx, "")
+}
+func (s *Service) pollPRsFor(ctx context.Context, runID string) error {
 	var operationErr error
 	for _, r := range s.State.Runs {
+		if runID != "" && r.RunID != runID {
+			continue
+		}
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
@@ -376,8 +382,23 @@ func (s *Service) event(ev WorkerEvent) error {
 	return s.save()
 }
 func (s *Service) Run(ctx context.Context) (retErr error) {
+	return s.run(ctx, "")
+}
+
+// RetryOne is a bounded operator action. It never selects or claims another task.
+func (s *Service) RetryOne(ctx context.Context, runID string) error {
+	if runID == "" {
+		return errors.New("retry requires a run ID")
+	}
+	return s.run(ctx, runID)
+}
+func (s *Service) run(ctx context.Context, retryRunID string) (retErr error) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	s.State.Service.Mode = "scheduler"
+	if retryRunID != "" {
+		s.State.Service.Mode = "retry-one"
+	}
 	if e := s.save(); e != nil {
 		return e
 	}
@@ -441,11 +462,17 @@ func (s *Service) Run(ctx context.Context) (retErr error) {
 		return s.save()
 	}
 	// On startup query saved PRs first, then reconcile claims before any new dispatch.
-	if e := step(s.pollPRs); e != nil {
-		return e
-	}
-	if e := step(s.dispatch); e != nil {
-		return e
+	if retryRunID == "" {
+		if e := step(s.pollPRs); e != nil {
+			return e
+		}
+		if e := step(s.dispatch); e != nil {
+			return e
+		}
+	} else {
+		if e := s.startRetry(ctx, retryRunID); e != nil {
+			return e
+		}
 	}
 	for {
 		var events <-chan WorkerEvent
@@ -467,16 +494,34 @@ func (s *Service) Run(ctx context.Context) (retErr error) {
 			if err := s.finished(e); err != nil {
 				return err
 			}
+			if retryRunID != "" && !s.retryWaiting(retryRunID) {
+				return nil
+			}
 		case <-taskTick.C:
+			if retryRunID != "" {
+				continue
+			}
 			if e := step(s.dispatch); e != nil {
 				return e
 			}
 		case <-prTick.C:
-			if e := step(s.pollPRs); e != nil {
+			if e := step(func(ctx context.Context) error { return s.pollPRsFor(ctx, retryRunID) }); e != nil {
 				return e
+			}
+			if retryRunID != "" && s.worker == nil && !s.retryWaiting(retryRunID) {
+				return nil
 			}
 		}
 	}
+}
+
+func (s *Service) retryWaiting(id string) bool {
+	for _, r := range s.State.Runs {
+		if r.RunID == id {
+			return r.FinishTaskStatus == "waiting_pr_merge"
+		}
+	}
+	return false
 }
 func (s *Service) shutdown() {
 	if s.worker == nil {

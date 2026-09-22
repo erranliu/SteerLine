@@ -123,6 +123,15 @@ func prepareWorkspace(ctx context.Context, c Config, r *Run, source BeadsContext
 	if e = verifyWorkspace(ctx, c, i, true); e != nil {
 		return c, e
 	}
+	return workerForWorkspace(ctx, c, r, source)
+}
+
+// Reused for an explicit clean-start retry without creating a new workspace or claim.
+func workerForWorkspace(ctx context.Context, c Config, r *Run, source BeadsContext) (Config, error) {
+	i := r.WorkspaceIntent
+	if i == nil {
+		return c, errors.New("missing workspace intent")
+	}
 	worker := c
 	worker.Repository = i.Path
 	for _, pair := range []struct {
@@ -139,7 +148,7 @@ func prepareWorkspace(ctx context.Context, c Config, r *Run, source BeadsContext
 		}
 		pair.to.Path = filepath.Join(i.Path, rel)
 	}
-	if e = worker.validateSkills(); e != nil {
+	if e := worker.validateSkills(); e != nil {
 		return c, e
 	}
 	worker.workerEnv = map[string]string{"BEADS_DIR": source.Directory, "BEADS_ACTOR": r.Claimant}

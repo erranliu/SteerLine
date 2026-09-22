@@ -52,7 +52,13 @@ func StartWorker(c Config, t Task, r *Run) (*Worker, error) {
 	if r.WorktreePath == nil || r.BaseCommit == nil || r.WorktreeBranch == nil || canonical(c.Repository) != canonical(*r.WorktreePath) || c.workerEnv["BEADS_DIR"] == "" || c.workerEnv["BEADS_ACTOR"] != r.Claimant {
 		return nil, errors.New("worker requires verified workspace and shared Beads environment")
 	}
-	dir := filepath.Join(c.RunDir, "runs", r.RunID)
+	if r.ResultPath == nil || r.LogPath == nil {
+		return nil, errors.New("worker output paths are missing")
+	}
+	dir := filepath.Dir(*r.ResultPath)
+	if !inside(filepath.Join(c.RunDir, "runs", r.RunID), dir) || filepath.Base(*r.ResultPath) != "result.json" || filepath.Base(*r.LogPath) != "events.jsonl" || canonical(filepath.Dir(*r.LogPath)) != canonical(dir) {
+		return nil, errors.New("worker output paths must share a directory inside this run")
+	}
 	if e := os.MkdirAll(dir, 0700); e != nil {
 		return nil, e
 	}
