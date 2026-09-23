@@ -1,4 +1,4 @@
-# runtime v2 / result v1 数据契约
+# runtime v3 / result v1 数据契约
 
 编码为 UTF-8，时间为 RFC3339 UTC。完整例子：[runtime](../examples/runtime.json)、[result](../examples/result.json)。结果的可执行 JSON Schema 与程序一起嵌入：[result.schema.json](../internal/steerline/result.schema.json)。
 
@@ -31,9 +31,10 @@
 | host | string | `local` 或 `orca`；v1/v2 记录视为 local |
 | completion | object/null | 派发时固定的 `{command:{executable,args},timeout}`；null 使用原生 close。重启按该记录继续，配置变更不能跳过旧运行的结项尾部 |
 | beads_context | object/null | 派发时的 beads_dir、project_id、database、backend；回调前再次核对。旧记录可能为 null，不包含认证信息 |
-| beads_status | string | 最近核实的 Beads 状态，不以本地预测替代 closed |
+| beads_status | string | 最近核实的 Beads 状态，不以本地预测替代 closed。这是过渡期的外部任务态镜像，见 [状态模型](state-model.md) |
 | execution_status | string | pending / running / succeeded / failed / unknown |
-| finish_task_status | string | pending / waiting_pr_merge / completed / blocked |
+| finish_task_status | string | pending / waiting_decision / waiting_pr_merge / completed / blocked |
+| decision | object/null | 仅 outcome=needs_decision 时存在：{id, request, status(pending/resuming/applied), option_id, note, answered_by, answered_at, applied_at, request_path, answer_path}。见 [decisions](decisions.md) |
 | codex_session_id | string/null | 从 thread.started.thread_id 得到，不从日志文字猜测 |
 | process | object/null | 宿主无关身份：kind（os/orca）、PID/Created/Executable（os）或 Terminal/RuntimeID/Incarnation（orca）；kind 为空视为 os |
 | started_at / ended_at | timestamp/null | 服务记录的执行起止时间；崩溃导致终止时间未知时仍为 null |
@@ -49,7 +50,7 @@
 
 `process.created` 在 Windows 为进程创建 FILETIME 的十六进制标识，Linux 为 boot ID 和 /proc starttime。PID 可复用，读取器不能仅凭 PID 判定存活。遗留进程的核验结论写入 error；unknown 不代表服务已接管或恢复该会话。
 
-execution_status=succeeded 仅表示进程正常退出，仍可能 finish_task_status=blocked（结果缺失/无效）或 waiting_pr_merge。只有重新核实对应 PR 确实合入目标主线、配置的结项命令成功返回匹配回执（若有），且 Beads show 返回 closed，才写 completed。任务已 closed 但回调失败时仍 waiting_pr_merge，重启后重跑幂等回调。finish_task_status 不是“finish 技能函数是否返回”。
+execution_status=succeeded 仅表示进程正常退出，仍可能 finish_task_status=blocked（结果缺失/无效）、waiting_decision（等待人工决策）或 waiting_pr_merge。只有重新核实对应 PR 确实合入目标主线、配置的结项命令成功返回匹配回执（若有），且 Beads show 返回 closed，才写 completed。任务已 closed 但回调失败时仍 waiting_pr_merge，重启后重跑幂等回调。finish_task_status 不是“finish 技能函数是否返回”。
 
 准备 worktree 时 execution_status=pending；创建或接入检查失败为 failed/blocked；遗留 pending/running 为 unknown/blocked。重启只核对目录、共享 Git 元数据、分支和起点祖先关系，不重建、不重跑。实际工作目录等字段只在创建及技能/Beads 核验全部通过后写入；创建后检查失败时，目录可能已存在，应查看 workspace_intent 和 error。
 
@@ -59,10 +60,11 @@ PR 查询失败会清除 state 的可信结论并写 unknown，但保留过去�
 
 ## 执行结果
 
-所有八个键都必须出现，不允许额外键：task_id、run_id、outcome、pr_url、worktree_path、base_commit、summary、error。
+八个基础键都必须出现，不允许额外键：task_id、run_id、outcome、pr_url、worktree_path、base_commit、summary、error；此外 `decision` 是可选键（仅 outcome=needs_decision 时使用）。
 
 - task_id/run_id 必须与此次派发精确匹配。
-- outcome 仅允许 pr_submitted 或 blocked。
+- outcome 允许 pr_submitted、blocked、needs_decision。
+- needs_decision 必须带 `decision` 对象：`question`、1–12 个 `options`（每个含 `id`、`label`，可选 `detail`），以及可选 `context`/`recommended`/`allow_free_text`。服务会置 `finish_task_status=waiting_decision` 并等待人工回答，见 [decisions](decisions.md)。
 - pr_submitted 必须提供 PR URL，并原样回传调度器提供的绝对工作目录、40 或 64 位小写十六进制 base commit；不能用最后的实现 HEAD 替代 base。summary/error 可为 null。
 - blocked 可将未知字段设为 null，应在 error 中解释原因。
 - 最多读取 2 MiB，拒绝缺失字段、额外字段、多个 JSON 值、Markdown 包装或自然语言。

@@ -46,7 +46,9 @@
 | note | compaction、队列等提示 |
 | unknown | 未识别的类型，保留 `raw` |
 
-调度器生命周期额外使用 `claim`、`prepare`、`worker_start`、`worker_exit`、`result`、`retry`、`pr`、`completion`。
+调度器生命周期额外使用 `claim`、`prepare`、`worker_start`、`worker_exit`、`result`、`retry`、`pr`、`completion`、`decision`。
+
+`decision` 表示 agent 请求人工决策以及该决策的流转（`status` 为 `pending`/`answered`/`applied`/`failed`）；`meta` 带 `decision_id`、`options`、`option_id`、`answered_by`。协议见 [decisions](decisions.md)。
 
 ### 关键规则
 

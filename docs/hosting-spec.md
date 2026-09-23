@@ -94,8 +94,10 @@ agent = codex | pi | ... 交给 Orca 的 --agent id（默认 codex，仅 orca ho
 | --- | --- | --- |
 | P0 | `activity.jsonl` + normalizer + `steerline watch` + `run -console` | 已实现 |
 | P1 | `Spawner`/`Worker` 抽象 + `LocalSpawner` | 已实现（保留给 local host） |
+| P1-decision | 人工决策通道：`needs_decision` + `waiting_decision` + request/answer 文件 + `steerline answer` + 同终端续跑 | 已实现（含集成测试） |
 | P2-v1 | Orca 当可见终端宿主（headless worker） | 已被 v2 取代 |
 | P2-v2 | Orca 建 worktree + `--agent` 启 agent + R-a 结果 | 已实现（含集成测试） |
+| P2-viewer | 全屏交互查看器（`steerline watch`，run 列表 + activity + 决策面板，bubbletea） | 已实现（teatest 风格单测 + 真实 TTY 冒烟） |
 | P3 | 远程 host（`--on`/`--environment`）+ 结果回传 | 待做 |
 
 > 迁移说明：`host=local` 路径与旧测试保留，作为无 Orca 环境与回归基线；`host=orca` 走 v2 模型。

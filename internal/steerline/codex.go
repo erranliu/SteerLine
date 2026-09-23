@@ -127,11 +127,18 @@ func ReadResult(path string, r *Run) (Result, error) {
 	if result.TaskID != r.TaskID || result.RunID != r.RunID {
 		return result, errors.New("result task_id/run_id mismatch")
 	}
-	if result.Outcome != "pr_submitted" && result.Outcome != "blocked" {
+	switch result.Outcome {
+	case "pr_submitted":
+		if result.PRURL == nil || *result.PRURL == "" || result.WorktreePath == nil || !filepath.IsAbs(*result.WorktreePath) || result.BaseCommit == nil || !commitHash.MatchString(*result.BaseCommit) {
+			return result, errors.New("submitted PR requires URL, absolute worktree_path and full base_commit")
+		}
+	case "blocked":
+	case "needs_decision":
+		if e := validateDecisionRequest(result.Decision); e != nil {
+			return result, e
+		}
+	default:
 		return result, errors.New("invalid result outcome")
-	}
-	if result.Outcome == "pr_submitted" && (result.PRURL == nil || *result.PRURL == "" || result.WorktreePath == nil || !filepath.IsAbs(*result.WorktreePath) || result.BaseCommit == nil || !commitHash.MatchString(*result.BaseCommit)) {
-		return result, errors.New("submitted PR requires URL, absolute worktree_path and full base_commit")
 	}
 	return result, nil
 }
