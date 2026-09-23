@@ -101,9 +101,9 @@ func TestViewerShowsStatusAndAxes(t *testing.T) {
 			t.Fatalf("status/axes missing %q:\n%s", want, view)
 		}
 	}
-	// The execution axis must be shown separately from the delivery badge.
-	if !strings.Contains(view, "ok") {
-		t.Fatalf("execution axis marker missing:\n%s", view)
+	// The execution axis now lives in the detail pane (list is title-focused).
+	if !strings.Contains(view, "succeeded") {
+		t.Fatalf("execution status missing:\n%s", view)
 	}
 }
 
@@ -119,6 +119,7 @@ func TestViewerShowsTaskDetailAndTabs(t *testing.T) {
 		},
 	}
 	m := newTestModel(f)
+	m.width, m.height = 170, 40
 	// The first load is lazy; simulate the async result arriving.
 	mm, _ := m.Update(taskDetailMsg{taskID: "n308-21", detail: f.taskDetail["n308-21"]})
 	m = mm.(Model)

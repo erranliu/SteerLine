@@ -34,27 +34,6 @@ func deliveryBadge(r *runRow) string {
 	return "IDLE"
 }
 
-// execCode is the compact execution-axis marker shown next to the delivery
-// badge, so the two orthogonal axes stay visibly distinct.
-func execCode(r *runRow) string {
-	if r == nil || r.run == nil {
-		return ""
-	}
-	switch r.run.ExecutionStatus {
-	case "running":
-		return "run"
-	case "succeeded":
-		return "ok"
-	case "failed":
-		return "fail"
-	case "unknown":
-		return "unk"
-	case "pending":
-		return "pend"
-	}
-	return ""
-}
-
 // badgeColor picks a color for a delivery badge; delimiters are plain text so
 // they can be width-measured reliably.
 func badgeColor(badge string) lipgloss.Style {

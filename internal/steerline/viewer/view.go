@@ -40,16 +40,17 @@ func (m Model) View() string {
 const detailTabCount = 5
 
 var detailTabs = []string{"Summary", "Workspace", "PR", "Decision", "Result"}
+var detailTabsCompact = []string{"Sum", "Work", "PR", "Dec", "Res"}
 
 // paneWidths splits the terminal into the run-list and detail/activity columns.
-// The list gets 40% so task titles stay readable; the detail pane keeps the rest.
+// The list gets 46% so task titles stay readable; the detail pane keeps the rest.
 func paneWidths(width int) (left, right int) {
-	left = width * 2 / 5
-	if left < 34 {
-		left = 34
+	left = width * 46 / 100
+	if left < 40 {
+		left = 40
 	}
-	if left > 76 {
-		left = 76
+	if left > 72 {
+		left = 72
 	}
 	return left, width - left - 1
 }
@@ -79,16 +80,11 @@ func (m Model) viewDetail(w, h int) []string {
 	if r == nil {
 		return []string{styleLabel.Render("Detail"), styleFaint.Render("  (no run selected)")}
 	}
-	var bar strings.Builder
-	for i, name := range detailTabs {
-		if i == m.detailTab {
-			bar.WriteString(" [" + name + "]")
-		} else {
-			bar.WriteString(" " + name)
-		}
-	}
-	tabBar := bar.String()
 	prefix := "Detail · " + r.TaskID
+	tabBar := m.tabBar(detailTabs)
+	if lipgloss.Width(prefix)+lipgloss.Width(tabBar) > w {
+		tabBar = m.tabBar(detailTabsCompact)
+	}
 	if r.Title != "" {
 		// Reserve room for the tab bar; only show the title when it fits.
 		budget := w - lipgloss.Width(prefix) - lipgloss.Width(tabBar) - 3
@@ -106,6 +102,18 @@ func (m Model) viewDetail(w, h int) []string {
 		content = content[:body]
 	}
 	return append(lines, content...)
+}
+
+func (m Model) tabBar(labels []string) string {
+	var b strings.Builder
+	for i, name := range labels {
+		if i == m.detailTab {
+			b.WriteString(" [" + name + "]")
+		} else {
+			b.WriteString(" " + name)
+		}
+	}
+	return b.String()
 }
 
 func (m Model) detailContent(r *steerline.Run, w int) []string {
@@ -481,10 +489,19 @@ func (m Model) viewRuns(w, h int) []string {
 	}
 	lines := []string{
 		styleLabel.Render(fmt.Sprintf("Runs · %d", len(m.rows))),
-		styleFaint.Render(truncate("! needs you · STAGE delivery · EXEC ok/fail · TIME worker run", w)),
+		styleFaint.Render(truncate("! needs you · STAGE delivery · TIME worker run · EXEC in Detail", w)),
 	}
 	if len(m.rows) == 0 {
 		lines = append(lines, styleFaint.Render("(no runs)"))
+	}
+	taskW := 6
+	for _, rr := range m.rows {
+		if n := lipgloss.Width(rr.run.TaskID); n > taskW {
+			taskW = n
+		}
+	}
+	if taskW > 10 {
+		taskW = 10
 	}
 	for i := start; i < len(m.rows) && len(lines) <= body; i++ {
 		r := m.rows[i]
@@ -493,16 +510,15 @@ func (m Model) viewRuns(w, h int) []string {
 			mark = "!"
 		}
 		badge := deliveryBadge(&r)
-		exec := execCode(&r)
 		el := elapsedShort(r.run)
-		// mark(1)+sp+task(9)+sp+badge(6)+sp+exec(4)+sp+elapsed(5)+sp
-		prefixW := 1 + 1 + 9 + 1 + 6 + 1 + 4 + 1 + 5 + 1
+		// mark(1)+sp+task+sp+badge(6)+sp+elapsed(5)+sp
+		prefixW := 1 + 1 + taskW + 1 + 6 + 1 + 5 + 1
 		title := ""
 		titleBudget := w - prefixW
 		if titleBudget >= 4 {
 			title = truncate(r.run.Title, titleBudget)
 		}
-		plain := fmt.Sprintf("%s %-9s %-6s %-4s %5s %s", mark, truncate(r.run.TaskID, 9), badge, exec, el, title)
+		plain := fmt.Sprintf("%s %-*s %-6s %5s %s", mark, taskW, truncate(r.run.TaskID, taskW), badge, el, title)
 		if lipgloss.Width(plain) > w {
 			plain = truncate(plain, w)
 		}
@@ -511,7 +527,7 @@ func (m Model) viewRuns(w, h int) []string {
 		case i == m.sel:
 			line = styleSel.Render(plain)
 		case titleBudget >= 4:
-			line = fmt.Sprintf("%s %-9s %s %-4s %5s %s", mark, truncate(r.run.TaskID, 9), badgeColor(badge).Render(fmt.Sprintf("%-6s", badge)), truncate(exec, 4), el, title)
+			line = fmt.Sprintf("%s %-*s %s %5s %s", mark, taskW, truncate(r.run.TaskID, taskW), badgeColor(badge).Render(fmt.Sprintf("%-6s", badge)), el, title)
 		default:
 			line = plain
 		}
