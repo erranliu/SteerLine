@@ -97,8 +97,13 @@ type PRConfig struct {
 	Query      Command `json:"query"`
 }
 
+// trimBOM removes a leading UTF-8 byte-order mark. Windows tooling (notably
+// PowerShell) prepends one when writing JSON, and encoding/json rejects it.
+func trimBOM(b []byte) []byte {
+	return bytes.TrimPrefix(b, []byte{0xef, 0xbb, 0xbf})
+}
 func decode(data []byte, v any) error {
-	d := json.NewDecoder(bytes.NewReader(bytes.TrimPrefix(data, []byte{0xef, 0xbb, 0xbf})))
+	d := json.NewDecoder(bytes.NewReader(trimBOM(data)))
 	d.DisallowUnknownFields()
 	if err := d.Decode(v); err != nil {
 		return err

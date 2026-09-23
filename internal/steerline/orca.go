@@ -53,6 +53,7 @@ func (c orcaClient) call(ctx context.Context, timeout time.Duration, args ...str
 }
 
 func parseEnvelope(b []byte) (orcaEnvelope, error) {
+	b = trimBOM(b)
 	var e orcaEnvelope
 	if err := json.Unmarshal(b, &e); err != nil {
 		return e, err

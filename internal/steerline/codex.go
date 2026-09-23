@@ -111,6 +111,9 @@ func ReadResult(path string, r *Run) (Result, error) {
 	if e != nil {
 		return Result{}, e
 	}
+	// The result file may be written by an agent (e.g. PowerShell on Windows)
+	// with a UTF-8 BOM; strip it before the strict field check and decode.
+	b = trimBOM(b)
 	var fields map[string]json.RawMessage
 	if e = json.Unmarshal(b, &fields); e != nil {
 		return Result{}, e
