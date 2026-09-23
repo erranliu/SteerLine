@@ -1,95 +1,188 @@
 package viewer
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
-	"io"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync"
 
 	"github.com/erranliu/SteerLine/internal/steerline"
 )
 
 // Source is the read-mostly data the viewer needs. Only Answer writes, and it
-// writes only the immutable decision answer file; runtime.json is never touched
-// from here. A fake implementation makes the UI fully testable.
+// writes only the immutable decision answer file; runtime.json is never touched.
 type Source interface {
-	// Snapshot returns the last runtime snapshot (runs + service/heartbeat
-	// state for the status bar), or nil when no snapshot exists yet.
-	Snapshot() (*steerline.Runtime, error)
-	Activity(logPath string, from int64) ([]steerline.ActivityEvent, int64, error)
-	// Events reads raw agent stream lines from events.jsonl for the raw view.
-	Events(logPath string, from int64) ([]string, int64, error)
-	// TaskDetail reads provider metadata (type/priority/description/labels)
-	// that runtime.json does not keep. It must stay read-only.
+	Snapshot() steerline.ObservationSnapshot
+	ReadLog(logPath string, cursor steerline.JournalCursor, raw bool) (LogBatch, error)
 	TaskDetail(taskID string) (steerline.TaskDetail, error)
 	Answer(run *steerline.Run, optionID, note, by string) error
 }
 
-// FileSource reads the same files `steerline watch` reads.
-type FileSource struct{ cfg steerline.Config }
+type LogBatch struct {
+	Cursor      steerline.JournalCursor
+	Reset       bool
+	Activity    []steerline.ActivityEvent
+	Raw         []string
+	Diagnostics []string
+}
 
-func NewFileSource(c steerline.Config) *FileSource { return &FileSource{cfg: c} }
+// FileSource reads the same journal framing used by `steerline watch`.
+type FileSource struct {
+	cfg steerline.Config
 
-func (f *FileSource) Snapshot() (*steerline.Runtime, error) {
-	return steerline.LoadRuntime(filepath.Join(f.cfg.RunDir, f.cfg.RuntimeFile))
+	mu          sync.Mutex
+	last        *steerline.ObservationSnapshot
+	normalizers map[string]steerline.Normalizer
+}
+
+func NewFileSource(c steerline.Config) *FileSource {
+	return &FileSource{cfg: c, normalizers: make(map[string]steerline.Normalizer)}
+}
+
+func (f *FileSource) Snapshot() steerline.ObservationSnapshot {
+	obs := steerline.ReadObservationSnapshot(filepath.Join(f.cfg.RunDir, f.cfg.RuntimeFile), f.cfg.Heartbeat, nil)
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if obs.Runtime != nil && (obs.State == steerline.SnapshotValid || obs.State == steerline.SnapshotStale) {
+		copy := cloneRuntime(obs.Runtime)
+		obs.Runtime = copy
+		stored := obs
+		f.last = &stored
+		return obs
+	}
+	if f.last != nil && (obs.State == steerline.SnapshotReadFailed || obs.State == steerline.SnapshotUnknownVersion || obs.State == steerline.SnapshotNone) {
+		observedAt := obs.SampledAt
+		if obs.State == steerline.SnapshotNone {
+			obs.State = steerline.SnapshotReadFailed
+			obs.Error = "runtime snapshot disappeared; showing the last successful snapshot"
+		}
+		obs.Runtime = cloneRuntime(f.last.Runtime)
+		obs.SampledAt = f.last.SampledAt
+		if obs.Runtime != nil && !obs.Runtime.HeartbeatAt.IsZero() {
+			obs.HeartbeatAge = observedAt.Sub(obs.Runtime.HeartbeatAt.UTC())
+			obs.ClockSkew = obs.HeartbeatAge < 0
+			if obs.ClockSkew {
+				obs.HeartbeatAge = 0
+			}
+		}
+	}
+	return obs
+}
+
+func cloneRuntime(rt *steerline.Runtime) *steerline.Runtime {
+	if rt == nil {
+		return nil
+	}
+	b, err := json.Marshal(rt)
+	if err != nil {
+		return rt
+	}
+	var copy steerline.Runtime
+	if json.Unmarshal(b, &copy) != nil {
+		return rt
+	}
+	return &copy
 }
 
 func (f *FileSource) TaskDetail(taskID string) (steerline.TaskDetail, error) {
 	return steerline.LoadTaskDetail(context.Background(), f.cfg, taskID)
 }
 
-// Activity reads the run's normalized journal from a byte offset and returns the
-// events plus the next offset, so the viewer only ever reads new lines.
-func (f *FileSource) Activity(logPath string, from int64) ([]steerline.ActivityEvent, int64, error) {
-	file, e := os.Open(steerline.ActivityPath(logPath))
-	if e != nil {
-		return nil, from, e
+func (f *FileSource) ReadLog(logPath string, cursor steerline.JournalCursor, raw bool) (LogBatch, error) {
+	if strings.TrimSpace(logPath) == "" {
+		return LogBatch{}, fmt.Errorf("empty run log path")
 	}
-	defer file.Close()
-	if from > 0 {
-		if _, e := file.Seek(from, io.SeekStart); e != nil {
-			return nil, from, e
+	path := logPath
+	activityFile := false
+	if !raw {
+		candidate := steerline.ActivityPath(logPath)
+		if _, err := os.Stat(candidate); err == nil {
+			path, activityFile = candidate, true
 		}
 	}
-	sc := bufio.NewScanner(file)
-	sc.Buffer(make([]byte, 0, 64*1024), 8*1024*1024)
-	var events []steerline.ActivityEvent
-	off := from
-	for sc.Scan() {
-		line := sc.Bytes()
-		off += int64(len(line)) + 1
-		var ev steerline.ActivityEvent
-		if json.Unmarshal(line, &ev) == nil {
-			events = append(events, ev)
-		}
+	framed, err := steerline.ReadJournalBatch(path, cursor, steerline.JournalOptions{
+		FromStart: !cursor.Initialized,
+		Activity:  activityFile,
+	})
+	if err != nil {
+		return LogBatch{}, err
 	}
-	return events, off, sc.Err()
+	batch := LogBatch{Cursor: framed.Cursor, Reset: framed.Reset, Diagnostics: append([]string(nil), framed.Diagnostics...)}
+	if raw {
+		for _, line := range framed.Lines {
+			batch.Raw = append(batch.Raw, string(line))
+		}
+		return batch, nil
+	}
+	if activityFile {
+		for _, line := range framed.Lines {
+			ev, err := steerline.DecodeActivityLine(line)
+			if err != nil {
+				batch.Diagnostics = append(batch.Diagnostics, fmt.Sprintf("invalid activity JSON: %v", err))
+				continue
+			}
+			batch.Activity = append(batch.Activity, ev)
+		}
+		return batch, nil
+	}
+	var firstLine []byte
+	if len(framed.Lines) > 0 {
+		firstLine = framed.Lines[0]
+	}
+	normalizer := f.normalizerFor(path, framed.Cursor, firstLine)
+	for _, line := range framed.Lines {
+		if normalizer == nil {
+			normalizer = steerline.DetectNormalizer(line)
+			f.storeNormalizer(path, framed.Cursor, normalizer)
+		}
+		batch.Activity = append(batch.Activity, steerline.NormalizeFallbackLine(normalizer, line, &framed.Cursor)...)
+	}
+	batch.Cursor = framed.Cursor
+	return batch, nil
 }
 
-// Events reads events.jsonl verbatim (one line per record) from a byte offset.
-func (f *FileSource) Events(logPath string, from int64) ([]string, int64, error) {
-	file, e := os.Open(logPath)
-	if e != nil {
-		return nil, from, e
+func (f *FileSource) normalizerFor(path string, cursor steerline.JournalCursor, firstRecord []byte) steerline.Normalizer {
+	key := fmt.Sprintf("%s|%s|%d", path, cursor.FileID, cursor.Generation)
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if n := f.normalizers[key]; n != nil {
+		return n
 	}
-	defer file.Close()
-	if from > 0 {
-		if _, e := file.Seek(from, io.SeekStart); e != nil {
-			return nil, from, e
-		}
+	first, err := steerline.FirstJournalLine(path)
+	if err == nil && len(first) == 0 {
+		first = firstRecord
 	}
-	sc := bufio.NewScanner(file)
-	sc.Buffer(make([]byte, 0, 64*1024), 8*1024*1024)
-	var lines []string
-	off := from
-	for sc.Scan() {
-		line := sc.Bytes()
-		off += int64(len(line)) + 1
-		lines = append(lines, string(line))
+	if err != nil && len(firstRecord) > 0 {
+		first, err = firstRecord, nil
 	}
-	return lines, off, sc.Err()
+	if err != nil {
+		first = nil
+	}
+	if len(first) == 0 {
+		return nil
+	}
+	n := steerline.DetectNormalizer(first)
+	if len(f.normalizers) >= 64 {
+		f.normalizers = make(map[string]steerline.Normalizer)
+	}
+	f.normalizers[key] = n
+	return n
+}
+
+func (f *FileSource) storeNormalizer(path string, cursor steerline.JournalCursor, normalizer steerline.Normalizer) {
+	if normalizer == nil {
+		return
+	}
+	key := fmt.Sprintf("%s|%s|%d", path, cursor.FileID, cursor.Generation)
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(f.normalizers) >= 64 {
+		f.normalizers = make(map[string]steerline.Normalizer)
+	}
+	f.normalizers[key] = normalizer
 }
 
 func (f *FileSource) Answer(run *steerline.Run, optionID, note, by string) error {

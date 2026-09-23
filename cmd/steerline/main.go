@@ -94,7 +94,7 @@ func run() error {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 	if command == "watch" {
-		if !*jsonOut && !*rawEvents && !*noTUI && viewer.IsInteractive() {
+		if useWatchTUI(viewer.IsInteractive(), *jsonOut, *rawEvents, *noTUI, *follow, *fromStart) {
 			return viewer.Run(ctx, c, viewer.Options{RunID: *runID, Color: steerline.ColorEnabled()})
 		}
 		return steerline.Watch(ctx, c, *runID, steerline.WatchOptions{Follow: *follow, FromStart: *fromStart, JSON: *jsonOut, Raw: *rawEvents, Color: steerline.ColorEnabled()})
@@ -143,6 +143,10 @@ func run() error {
 	}
 	fmt.Printf("Steerline M0 running: %s -> %s/%s; Ctrl+C or steerline stop to exit\n", c.Repository, c.Remote, c.Branch)
 	return s.Run(ctx)
+}
+
+func useWatchTUI(tty, jsonOut, raw, noTUI, follow, fromStart bool) bool {
+	return tty && !jsonOut && !raw && !noTUI && follow && fromStart
 }
 
 // runProjects picks a project under <STEERLINE_HOME>\etc and re-execs this
