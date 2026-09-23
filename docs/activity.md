@@ -8,6 +8,7 @@
 - 派生自 `events.jsonl`（原始取证，永不改动）和调度器生命周期。删掉 `activity.jsonl` 不影响任何恢复：它可随时由 `events.jsonl` 重放重建。
 - **单写者**：只有服务写该文件。任何宿主（本地进程、Orca）都不直接写它。
 - **按 run 隔离**：每个 run 一个 writer，PR/合并/结项等 worker 退出后的事件仍写入**该 run 自己**的文件，不会串到别的 run。
+- **不承载控制审计**：control 请求和回执保存在 run_dir 的 `control/requests` 与 `control/receipts`；删除或重建 activity 不会重放、确认或改变控制指令结果。
 - **追加、不截断**：worker 退出后 writer 不关闭，重启后按需重开并续写；`seq` 从文件里已存在的最大值继续，末尾半行会在重开时修复。
 - **每行 flush**，读者可近实时跟随。
 

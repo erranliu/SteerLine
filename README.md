@@ -15,6 +15,8 @@ Copy-Item .\examples\config.json .\steerline.local.json
 # 编辑 steerline.local.json，填写实际仓库、技能、主线、运行目录、工具和 PR 查询配置。
 .\bin\steerline.exe check -config .\steerline.local.json
 .\bin\steerline.exe run -config .\steerline.local.json
+# 手动派发：服务启动并刷新候选，但不会自动领取 ready 任务
+.\bin\steerline.exe run -config .\steerline.local.json -dispatch manual
 ```
 
 ### 机器级目录（跨 worktree 稳定）
@@ -108,6 +110,29 @@ bd 1.1.2 在领取冲突时可能退出 0 却不返回领取 JSON，因此会同
 .\bin\steerline.exe stop -config .\steerline.local.json
 ```
 
+`run` 每次启动默认 `-dispatch auto`，保持既有自动调度；`-dispatch manual` 会刷新候选并继续处理当前运行、决策和 PR，但不自动领取新任务。控制客户端读取 runtime v4 后发布带实例 ID 和控制版本的不可变请求，服务完成后写持久回执：
+
+```powershell
+# 读取本服务最新 ready 候选
+.\bin\steerline.exe tasks -config .\steerline.local.json
+
+# 只启动指定任务；手动模式下重新核验 ready 后领取
+.\bin\steerline.exe control -config .\steerline.local.json -action start_task -task-id <task-id> -wait
+
+# 模式切换、暂停/恢复派发
+.\bin\steerline.exe control -config .\steerline.local.json -action set_dispatch_mode -mode manual -wait
+.\bin\steerline.exe control -config .\steerline.local.json -action pause_dispatch -wait
+.\bin\steerline.exe control -config .\steerline.local.json -action resume_dispatch -wait
+
+# 以控制协议停服；steerline stop 仍保留 stop.json 兼容入口
+.\bin\steerline.exe control -config .\steerline.local.json -action stop_service -wait
+
+# 用回执中的 request_id 再次查询原操作结果
+.\bin\steerline.exe control -config .\steerline.local.json -request-id <request-id>
+```
+
+`start_task` 只领取所选任务；模式不符、暂停、占槽、任务失去 ready 或 claim 冲突会返回明确拒绝原因。暂停不冻结已启动 worker。`applied` 表示该指令定义的完成条件已持久化，任务是否交付仍查看 run 状态。控制请求和回执保存在 `control/`，不写入 activity 日志。
+
 停止新派发，等待当前 worker 最多 shutdown_grace，超时则终止它的整棵进程树，保留领取并记录 failed/blocked。Windows 使用“挂起启动 → Job Object → 恢复线程”，避免进程在纳入 Job 前派生子进程；服务崩溃时 Job 句柄关闭也会清理后代。短命令同样有超时及进程树清理。Linux 提供进程组实现，但本次未实机验证 Linux，Windows 才是本次验收平台。
 
 恢复规则：
@@ -191,7 +216,7 @@ Agent 需要人工决策时（`outcome=needs_decision`），运行进入 `finish
 
 ## 数据与保留
 
-见 [数据契约](docs/data-contract.md)、[完整 runtime 示例](examples/runtime.json)、[结果示例](examples/result.json)。运行快照现在为 schema_version=3，可读取 v1/v2/v3 历史快照（v1/v2 视为 local），不自动将旧技能自报目录当作已核验工作环境。所有时间 UTC，未知值 null。runtime.json 只由服务写，Codex 仅写自己这次运行的结果文件；其回传的目录和起点必须与调度器记录一致。
+见 [数据契约](docs/data-contract.md)、[runtime 示例](examples/runtime.json)、[候选快照](examples/tasks.json)、[控制请求](examples/control-request.json)、[控制回执](examples/control-receipt.json) 和 [结果示例](examples/result.json)。运行快照现在为 schema_version=4，可读取 v1–v4；只有持锁服务保存时迁移旧快照。控制协议为 v1，候选任务快照为 v1。所有时间 UTC，未知值 null。runtime.json 只由服务写，控制客户端仅发布不可变请求并读取回执，Codex 仅写自己这次运行的结果文件。
 
 同目录临时文件写完并 Sync 后，以 Windows MoveFileEx 原子替换发布；短暂 sharing violation 有限重试。替换失败保留旧快照并报错，不先删目标。读取器可能收到短暂共享冲突，应重试打开；一旦读到内容必须是完整 JSON。根据 heartbeat_at 判断是否过期，建议阈值至少为心跳间隔三倍并包含存储抖动余量。不要仅凭 service.status 推断进程还活着。
 
@@ -202,7 +227,7 @@ worktrees/<run_id>、任务分支和 refs/steerline/bases/<run_id> 同样保留�
 ## 验证
 
 ```powershell
-go test ./... -count=1 -timeout 360s
+go test ./... -count=1 -timeout 10m
 go vet ./...
 ```
 

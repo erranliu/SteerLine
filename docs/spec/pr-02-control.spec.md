@@ -1,6 +1,6 @@
 # PR 2 Spec：服务控制协议与定向执行
 
-状态：待实现。依赖：PR 1。对应 [Plan](pr-02-control.plan.md)。
+状态：实现完成，待 PR 审核。依赖：PR 1（已合并）。代码包含本 Spec 的 C1–C7；自动恢复动作仍按范围限制留待后续 PR。对应 [Plan](pr-02-control.plan.md)。
 
 ## 目标
 

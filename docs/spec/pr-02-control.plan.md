@@ -1,5 +1,11 @@
 # PR 2 Plan：服务控制协议与定向执行
 
+实施状态：代码、文档和完整回归已完成，待 PR 创建和审核。Windows 验证：`go test ./... -timeout 10m` 通过（steerline 291.048s；最后一次未缓存全量结果 297.441s）。
+
+当前实现已增加 runtime v4、控制协议/客户端/回执、候选快照、定向执行、manual/auto、暂停/恢复、停服取消和 v1–v3 迁移。定向证据位于 `internal/steerline/control_test.go`、`service_test.go`、`workspace_test.go` 与 `cli_test.go`。
+
+控制专项证据覆盖：真实子进程竞争同一 request ID 且不同内容不可覆盖；fake Beads claim/start 计数；manual 多 tick、仅启动 B、同 ID 重扫及不同请求抢槽；心跳与候选刷新不推进 revision；checkpoint、claim、worktree、worker、终态 checkpoint/receipt 崩溃恢复；applied-receipt 写失败不派发、终态回执失败阻塞并从 checkpoint 重建；stop 取消长准备命令；旧实例/过期/旧 revision/错误仓库拒绝；v1–v3 只读不迁移与持锁保存迁移；原生 CLI 候选、控制回执、stop_service 和旧 stop 路径。
+
 依据：[Spec](pr-02-control.spec.md)。依赖：PR 1。
 
 ## 实施步骤

@@ -45,6 +45,9 @@ func TestRetryOnePreservesHistoryAndNeverClaimsAnotherTask(t *testing.T) {
 	if string(current) != string(oldBytes) || *r.LogPath == oldLog || *r.ResultPath == oldResult {
 		t.Fatal("old attempt overwritten")
 	}
+	if r.AttemptID == r.RunID || filepath.Base(filepath.Dir(*r.LogPath)) != r.AttemptID {
+		t.Fatal("retry did not assign a distinct attempt identity")
+	}
 	previous, e := os.ReadFile(filepath.Join(filepath.Dir(*r.ResultPath), "previous-run.json"))
 	require(t, e)
 	var before Run

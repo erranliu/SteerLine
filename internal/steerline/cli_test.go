@@ -45,6 +45,57 @@ func TestNativeCLIStartSecondInstanceAndStop(t *testing.T) {
 		b, _ := os.ReadFile(log.Name())
 		t.Fatalf("CLI never started: %s", b)
 	}
+	readyDeadline := time.Now().Add(15 * time.Second)
+	for {
+		if rt, err := ControlSnapshot(f.c); err == nil {
+			if rt.Control.DispatchMode != "auto" {
+				t.Fatalf("default run mode=%q", rt.Control.DispatchMode)
+			}
+			break
+		}
+		if time.Now().After(readyDeadline) {
+			t.Fatal("CLI runtime did not become control-ready")
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	var taskSnapshot TaskSnapshot
+	tasksDeadline := time.Now().Add(15 * time.Second)
+	for {
+		tasksOut, taskErr := exec.Command(exe, "tasks", "-config", configPath).CombinedOutput()
+		if taskErr == nil && json.Unmarshal(tasksOut, &taskSnapshot) == nil && taskSnapshot.InstanceID != "" {
+			break
+		}
+		if time.Now().After(tasksDeadline) {
+			t.Fatalf("task candidate CLI: %v %s", taskErr, tasksOut)
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	controlOut, e := exec.Command(exe, "control", "-config", configPath, "-action", "set_dispatch_mode", "-mode", "manual", "-wait").CombinedOutput()
+	if e != nil {
+		t.Fatalf("control CLI submit/wait: %v %s", e, controlOut)
+	}
+	fields := strings.Fields(string(controlOut))
+	var request string
+	for i := 0; i+1 < len(fields); i++ {
+		if fields[i] == "request_id" {
+			request = fields[i+1]
+			break
+		}
+	}
+	if request == "" {
+		t.Fatalf("control CLI omitted request ID: %s", controlOut)
+	}
+	queryOut, e := exec.Command(exe, "control", "-config", configPath, "-request-id", request).CombinedOutput()
+	if e != nil {
+		t.Fatalf("control CLI receipt query: %v %s", e, queryOut)
+	}
+	var receipt ControlReceipt
+	if e = json.Unmarshal(queryOut, &receipt); e != nil || receipt.Status != "applied" || receipt.RequestID != request {
+		t.Fatalf("CLI receipt query returned %s (%v)", queryOut, e)
+	}
+	if rt, err := ControlSnapshot(f.c); err != nil || rt.Control.DispatchMode != "manual" {
+		t.Fatalf("CLI did not apply manual mode: runtime=%+v err=%v", rt, err)
+	}
 	other := f.c
 	other.RunDir = filepath.Join(filepath.Dir(f.c.RunDir), "other runtime")
 	secondConfig := filepath.Join(f.c.RunDir, "other.json")
@@ -54,15 +105,61 @@ func TestNativeCLIStartSecondInstanceAndStop(t *testing.T) {
 	if e == nil || !strings.Contains(string(out), "repository already locked") {
 		t.Fatalf("second CLI lock: %v %s", e, out)
 	}
-	out, e = exec.Command(exe, "stop", "-config", configPath).CombinedOutput()
+	stopOut, e := exec.Command(exe, "control", "-config", configPath, "-action", "stop_service", "-wait").CombinedOutput()
 	if e != nil {
-		t.Fatalf("stop: %v %s", e, out)
+		t.Fatalf("control stop: %v %s", e, stopOut)
+	}
+	stopFields := strings.Fields(string(stopOut))
+	stopID := ""
+	for i := 0; i+1 < len(stopFields); i++ {
+		if stopFields[i] == "request_id" {
+			stopID = stopFields[i+1]
+			break
+		}
+	}
+	if stopID == "" {
+		t.Fatalf("control stop omitted request ID: %s", stopOut)
+	}
+	stopQuery, e := exec.Command(exe, "control", "-config", configPath, "-request-id", stopID).CombinedOutput()
+	if e != nil {
+		t.Fatalf("control stop receipt query: %v %s", e, stopQuery)
+	}
+	var stopReceipt ControlReceipt
+	if e = json.Unmarshal(stopQuery, &stopReceipt); e != nil || stopReceipt.Status != "applied" {
+		t.Fatalf("control stop receipt=%s err=%v", stopQuery, e)
 	}
 	select {
 	case e := <-done:
 		require(t, e)
 	case <-time.After(10 * time.Second):
-		t.Fatal("native CLI did not exit")
+		t.Fatal("control stop did not exit the native CLI")
+	}
+	secondCmd := exec.Command(exe, "run", "-config", configPath)
+	secondCmd.Stdout, secondCmd.Stderr = log, log
+	require(t, secondCmd.Start())
+	secondDone := make(chan error, 1)
+	go func() { secondDone <- secondCmd.Wait() }()
+	defer secondCmd.Process.Kill()
+	secondDeadline := time.Now().Add(15 * time.Second)
+	for {
+		rt, err := ControlSnapshot(f.c)
+		if err == nil && rt.Service.InstanceID != stopReceipt.InstanceID {
+			break
+		}
+		if time.Now().After(secondDeadline) {
+			t.Fatal("second service instance did not become ready")
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	out, e = exec.Command(exe, "stop", "-config", configPath).CombinedOutput()
+	if e != nil {
+		t.Fatalf("legacy stop: %v %s", e, out)
+	}
+	select {
+	case e := <-secondDone:
+		require(t, e)
+	case <-time.After(10 * time.Second):
+		t.Fatal("legacy stop did not exit the native CLI")
 	}
 	r, e := LoadRuntime(filepath.Join(f.c.RunDir, f.c.RuntimeFile))
 	require(t, e)

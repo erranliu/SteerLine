@@ -1,14 +1,26 @@
 {
-  "schema_version": 3,
-  "updated_at": "2026-09-17T08:30:00Z",
-  "heartbeat_at": "2026-09-17T08:30:00Z",
+  "schema_version": 4,
+  "updated_at": "2026-09-23T08:30:00Z",
+  "heartbeat_at": "2026-09-23T08:30:00Z",
   "service": {
     "mode": "scheduler",
     "instance_id": "fd054ee51ff2431a8025a63b015f3229",
     "pid": 1234,
     "status": "running",
     "claimant": "steerline-example",
-    "error": null
+    "error": null,
+    "process_identity": {
+      "kind": "os",
+      "pid": 1234,
+      "created": "01db000000000000",
+      "executable": "c:\\tools\\steerline.exe"
+    },
+    "startup_id": null,
+    "config_digest": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "ready": true,
+    "control_protocol": 1,
+    "capabilities": ["start_task", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "stop_service"],
+    "heartbeat_interval_ms": 5000
   },
   "repository": {
     "path": "C:/Projects/repo",
@@ -18,11 +30,20 @@
   },
   "current_task": null,
   "slot_occupied": false,
+  "control": {
+    "dispatch_mode": "auto",
+    "dispatch_paused": false,
+    "revision": 4,
+    "operation": null,
+    "blockers": []
+  },
   "runs": [
     {
       "task_id": "demo-1",
       "title": "Implement the first task",
       "run_id": "64f36c8449324eecb4223b8a28ac90c2",
+      "attempt_id": "64f36c8449324eecb4223b8a28ac90c2",
+      "control_revision": 3,
       "claimant": "steerline-example",
       "completion": null,
       "beads_context": {
