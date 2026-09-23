@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func writeWatchFixture(t *testing.T, withActivity bool) Config {
@@ -80,6 +81,129 @@ func TestWatchFallsBackToRawEvents(t *testing.T) {
 	}
 }
 
+func TestWatchRawStdoutIsOnlyCompleteRawLines(t *testing.T) {
+	c := writeWatchFixture(t, false)
+	var buf bytes.Buffer
+	if e := Watch(context.Background(), c, "", WatchOptions{FromStart: true, Raw: true, Out: &buf}); e != nil {
+		t.Fatal(e)
+	}
+	want := `{"type":"thread.started","thread_id":"t"}` + "\n" + `{"type":"item.completed","item":{"id":"i1","type":"agent_message","text":"hello"}}` + "\n"
+	if buf.String() != want {
+		t.Fatalf("raw stdout included status/diagnostic or changed records: %q", buf.String())
+	}
+}
+
+func TestWatchRawPreservesMalformedContentWithoutJSONFiltering(t *testing.T) {
+	c := writeWatchFixture(t, false)
+	path := filepath.Join(c.RunDir, "runs", "abc", "events.jsonl")
+	if err := os.WriteFile(path, []byte("not json\n{"+"broken\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	if err := Watch(context.Background(), c, "", WatchOptions{FromStart: true, Raw: true, Out: &out}); err != nil {
+		t.Fatal(err)
+	}
+	if out.String() != "not json\n{broken\n" {
+		t.Fatalf("raw mode parsed or changed complete lines: %q", out.String())
+	}
+}
+
+func TestWatchJSONFallbackEmitsUnknownForMalformedRawRecord(t *testing.T) {
+	c := writeWatchFixture(t, false)
+	path := filepath.Join(c.RunDir, "runs", "abc", "events.jsonl")
+	if err := os.WriteFile(path, []byte("not json\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	if err := Watch(context.Background(), c, "", WatchOptions{FromStart: true, JSON: true, Out: &out}); err != nil {
+		t.Fatal(err)
+	}
+	var ev ActivityEvent
+	if err := json.Unmarshal(bytes.TrimSpace(out.Bytes()), &ev); err != nil {
+		t.Fatalf("invalid JSON stdout %q: %v", out.String(), err)
+	}
+	if ev.V != ActivityVersion || ev.Seq != 1 || ev.TS.IsZero() || ev.Kind != "unknown" || ev.Source != "codex" || string(ev.Raw) != `"not json"` {
+		t.Fatalf("malformed raw record not represented as unknown event: %+v raw=%s", ev, ev.Raw)
+	}
+}
+
+func TestWatchFromStartFalseDetectsPiNormalizer(t *testing.T) {
+	c := writeWatchFixture(t, false)
+	runDir := filepath.Join(c.RunDir, "runs", "abc")
+	eventsPath := filepath.Join(runDir, "events.jsonl")
+	if err := os.WriteFile(eventsPath, []byte(`{"type":"session","version":1,"session_id":"pi-session"}`+"\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() {
+		time.Sleep(40 * time.Millisecond)
+		f, err := os.OpenFile(eventsPath, os.O_APPEND|os.O_WRONLY, 0600)
+		if err == nil {
+			_, _ = f.WriteString(`{"type":"message_start","message":{"role":"assistant","content":[{"type":"text","text":"hello"}]}}` + "\n")
+			_ = f.Close()
+		}
+		time.Sleep(320 * time.Millisecond)
+		cancel()
+	}()
+	var buf bytes.Buffer
+	if err := Watch(ctx, c, "", WatchOptions{FromStart: false, Follow: true, JSON: true, Out: &buf}); err != nil {
+		t.Fatal(err)
+	}
+	var events []ActivityEvent
+	for _, line := range strings.Split(strings.TrimSpace(buf.String()), "\n") {
+		if line == "" {
+			continue
+		}
+		var ev ActivityEvent
+		if err := json.Unmarshal([]byte(line), &ev); err != nil {
+			t.Fatal(err)
+		}
+		events = append(events, ev)
+	}
+	if len(events) != 1 || events[0].Source != "pi" || events[0].Kind != "message" || !strings.Contains(events[0].Detail, "hello") {
+		t.Fatalf("from-start=false lost Pi detection: %+v stdout=%q", events, buf.String())
+	}
+}
+
+func TestWatchFromStartFalseDetectsHostWhenFileStartsEmpty(t *testing.T) {
+	c := writeWatchFixture(t, false)
+	eventsPath := filepath.Join(c.RunDir, "runs", "abc", "events.jsonl")
+	if err := os.WriteFile(eventsPath, nil, 0600); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() {
+		time.Sleep(40 * time.Millisecond)
+		f, err := os.OpenFile(eventsPath, os.O_APPEND|os.O_WRONLY, 0600)
+		if err == nil {
+			_, _ = f.WriteString(`{"type":"session","version":1,"session_id":"pi-session"}` + "\n" + `{"type":"message_start","message":{"role":"assistant","content":[{"type":"text","text":"after open"}]}}` + "\n")
+			_ = f.Close()
+		}
+		time.Sleep(320 * time.Millisecond)
+		cancel()
+	}()
+	var out bytes.Buffer
+	if err := Watch(ctx, c, "", WatchOptions{FromStart: false, Follow: true, JSON: true, Out: &out}); err != nil {
+		t.Fatal(err)
+	}
+	var events []ActivityEvent
+	for _, line := range strings.Split(strings.TrimSpace(out.String()), "\n") {
+		if line == "" {
+			continue
+		}
+		var ev ActivityEvent
+		if err := json.Unmarshal([]byte(line), &ev); err != nil {
+			t.Fatal(err)
+		}
+		events = append(events, ev)
+	}
+	if len(events) != 2 || events[0].Source != "pi" || events[1].Source != "pi" || events[1].Kind != "message" {
+		t.Fatalf("empty-at-open stream lost host detection: %+v stdout=%q", events, out.String())
+	}
+}
+
 func TestWatchResolvesRunByID(t *testing.T) {
 	c := writeWatchFixture(t, true)
 	var buf bytes.Buffer
@@ -91,5 +215,62 @@ func TestWatchResolvesRunByID(t *testing.T) {
 	}
 	if e := Watch(context.Background(), c, "missing", WatchOptions{JSON: true, Out: &buf}); e == nil {
 		t.Fatal("expected error for unknown run")
+	}
+}
+
+type cancelOnWrite struct {
+	bytes.Buffer
+	cancel context.CancelFunc
+	writes int
+}
+
+func (w *cancelOnWrite) Write(b []byte) (int, error) {
+	w.writes++
+	w.cancel()
+	return w.Buffer.Write(b)
+}
+
+func TestWatchCancellationWhileReplaying(t *testing.T) {
+	c := writeWatchFixture(t, false)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	out := &cancelOnWrite{cancel: cancel}
+	if err := Watch(ctx, c, "", WatchOptions{FromStart: true, Raw: true, Out: out}); err != nil {
+		t.Fatal(err)
+	}
+	if out.writes != 1 {
+		t.Fatalf("continued replay after cancellation: writes=%d", out.writes)
+	}
+}
+
+func TestWatchPreservesRecordsAcrossSequenceGenerations(t *testing.T) {
+	c := writeWatchFixture(t, true)
+	path := filepath.Join(c.RunDir, "runs", "abc", "activity.jsonl")
+	body := "{\"seq\":10,\"kind\":\"old-generation\"}\n{\"seq\":1,\"kind\":\"new-generation\"}\n"
+	if err := os.WriteFile(path, []byte(body), 0600); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	if err := Watch(context.Background(), c, "", WatchOptions{FromStart: true, JSON: true, Out: &out}); err != nil {
+		t.Fatal(err)
+	}
+	if out.String() != body {
+		t.Fatalf("logical reset lost valid replay records: %q", out.String())
+	}
+}
+
+func TestWatchRawPreservesCRLF(t *testing.T) {
+	c := writeWatchFixture(t, false)
+	path := filepath.Join(c.RunDir, "runs", "abc", "events.jsonl")
+	body := "first\r\n雪\r\nlast\n"
+	if err := os.WriteFile(path, []byte(body), 0600); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	if err := Watch(context.Background(), c, "", WatchOptions{FromStart: true, Raw: true, Out: &out}); err != nil {
+		t.Fatal(err)
+	}
+	if out.String() != body {
+		t.Fatalf("raw output changed line bytes: %q", out.String())
 	}
 }

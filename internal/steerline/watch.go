@@ -1,8 +1,6 @@
 package steerline
 
 import (
-	"bufio"
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -20,8 +18,7 @@ type WatchOptions struct {
 	JSON      bool
 	Raw       bool
 	Color     bool
-	// Out receives rendered or JSON lines. Nil means os.Stdout.
-	Out io.Writer
+	Out       io.Writer
 }
 
 type watchedRun struct {
@@ -33,83 +30,130 @@ type watchedRun struct {
 	Activity string
 }
 
-// Watch streams a run's activity. It never mutates service state and never
-// requires the service to be running: it reads runtime.json and the per-run
-// files only. The JSONL contract it emits is documented in docs/activity.md.
+// Watch streams one run and one source path, selected once at invocation time.
+// It never mutates service state and reads records through the same bounded
+// journal cursor used by the viewer.
 func Watch(ctx context.Context, c Config, runID string, o WatchOptions) error {
-	r, e := resolveWatchedRun(c, runID)
-	if e != nil {
-		return e
+	r, err := resolveWatchedRun(c, runID)
+	if err != nil {
+		return err
 	}
 	out := o.Out
 	if out == nil {
 		out = os.Stdout
 	}
-	if !o.JSON {
+	if !o.JSON && !o.Raw {
 		fmt.Fprintf(os.Stderr, "steerline watch · run %s · %s %q · %s\n", r.RunID, r.TaskID, r.Title, r.Status)
 	}
+	path := r.Events
 	if o.Raw {
-		if r.Events == "" {
+		if path == "" {
 			return errors.New("run has no raw event log")
 		}
-		return followLines(ctx, r.Events, o.Follow, o.FromStart, func(line []byte, _ bool) error {
-			_, e := out.Write(append(append([]byte{}, line...), '\n'))
-			return e
-		})
-	}
-	// Prefer the normalized activity log. Fall back to normalizing the raw agent
-	// stream so watch still works for runs produced by an older binary or by a
-	// raw host capture.
-	if r.Activity != "" && fileExists(r.Activity) {
-		return followLines(ctx, r.Activity, o.Follow, o.FromStart, func(line []byte, _ bool) error {
-			var ev ActivityEvent
-			if json.Unmarshal(line, &ev) != nil {
-				return nil
-			}
-			if o.JSON {
-				_, e := out.Write(append(append([]byte{}, line...), '\n'))
-				return e
-			}
-			_, e := fmt.Fprintln(out, RenderActivity(ev, RenderOptions{Color: o.Color}))
-			return e
-		})
-	}
-	if r.Events == "" {
+	} else if r.Activity != "" && fileExists(r.Activity) {
+		path = r.Activity
+	} else if path == "" {
 		return errors.New("no activity or event log for this run")
 	}
+
 	var normalizer Normalizer
-	return followLines(ctx, r.Events, o.Follow, o.FromStart, func(line []byte, first bool) error {
-		if normalizer == nil {
-			if first {
-				normalizer = DetectNormalizer(line)
-			} else {
-				normalizer = NewCodexNormalizer()
-			}
+	cursor := JournalCursor{}
+	firstSourceLine := func() []byte {
+		line, e := FirstJournalLine(path)
+		if e != nil {
+			return nil
 		}
-		events := normalizer.Normalize(line)
-		for _, ev := range events {
-			if o.JSON {
-				b, e := json.Marshal(ev)
-				if e != nil {
-					continue
-				}
-				if _, e = out.Write(append(b, '\n')); e != nil {
-					return e
+		return line
+	}
+	for {
+		if ctx.Err() != nil {
+			return nil
+		}
+		batch, readErr := ReadJournalBatch(path, cursor, JournalOptions{
+			FromStart: o.FromStart,
+			Activity:  !o.Raw && path == r.Activity,
+			KeepCR:    o.Raw,
+		})
+		if readErr != nil {
+			if o.Follow && os.IsNotExist(readErr) {
+				if e := sleepOrDone(ctx); e != nil {
+					return nil
 				}
 				continue
 			}
-			if _, e := fmt.Fprintln(out, RenderActivity(ev, RenderOptions{Color: o.Color})); e != nil {
-				return e
+			return readErr
+		}
+		cursor = batch.Cursor
+		for _, diagnostic := range batch.Diagnostics {
+			fmt.Fprintln(os.Stderr, "steerline watch:", diagnostic)
+		}
+		if batch.Reset && !o.Raw && path != r.Activity {
+			first := firstSourceLine()
+			if len(first) > 0 {
+				normalizer = DetectNormalizer(first)
+			} else {
+				normalizer = nil
 			}
 		}
-		return nil
-	})
+		for _, line := range batch.Lines {
+			if ctx.Err() != nil {
+				return nil
+			}
+			if o.Raw {
+				if _, err = out.Write(append(append([]byte(nil), line...), '\n')); err != nil {
+					return err
+				}
+				continue
+			}
+			if path == r.Activity {
+				var ev ActivityEvent
+				ev, err = DecodeActivityLine(line)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "steerline watch: invalid activity JSON: %v\n", err)
+					continue
+				}
+				if o.JSON {
+					if _, err = out.Write(append(append([]byte(nil), line...), '\n')); err != nil {
+						return err
+					}
+				} else if _, err = fmt.Fprintln(out, RenderActivity(ev, RenderOptions{Color: o.Color})); err != nil {
+					return err
+				}
+				continue
+			}
+			if normalizer == nil {
+				normalizer = DetectNormalizer(line)
+			}
+			for _, ev := range NormalizeFallbackLine(normalizer, line, &cursor) {
+				if o.JSON {
+					var b []byte
+					b, err = json.Marshal(ev)
+					if err == nil {
+						_, err = out.Write(append(b, '\n'))
+					}
+				} else {
+					_, err = fmt.Fprintln(out, RenderActivity(ev, RenderOptions{Color: o.Color}))
+				}
+				if err != nil {
+					return err
+				}
+			}
+		}
+		if !o.Follow && len(batch.Lines) == 0 && !batch.More {
+			return nil
+		}
+		if len(batch.Lines) == 0 && o.Follow {
+			if e := sleepOrDone(ctx); e != nil {
+				return nil
+			}
+		}
+	}
 }
 
 func resolveWatchedRun(c Config, runID string) (watchedRun, error) {
-	snapshot, e := LoadRuntime(filepath.Join(c.RunDir, c.RuntimeFile))
-	if e != nil {
-		return watchedRun{}, e
+	snapshot, err := LoadRuntime(filepath.Join(c.RunDir, c.RuntimeFile))
+	if err != nil {
+		return watchedRun{}, err
 	}
 	if snapshot == nil {
 		return watchedRun{}, errors.New("no runtime snapshot; start the service or pass an existing run")
@@ -141,93 +185,12 @@ func resolveWatchedRun(c Config, runID string) (watchedRun, error) {
 	out := watchedRun{RunID: chosen.RunID, TaskID: chosen.TaskID, Title: chosen.Title, Status: chosen.ExecutionStatus + "/" + chosen.FinishTaskStatus}
 	if chosen.LogPath != nil {
 		out.Events = *chosen.LogPath
-		out.Activity = activityPath(*chosen.LogPath)
+		out.Activity = ActivityPath(*chosen.LogPath)
 	}
 	return out, nil
 }
 
-func fileExists(path string) bool {
-	_, e := os.Stat(path)
-	return e == nil
-}
-
-// followLines reads newline-delimited records, tolerating a partial trailing
-// line, file truncation and atomic replacement. handle receives the line without
-// the newline and whether it is the first line observed.
-func followLines(ctx context.Context, path string, follow, fromStart bool, handle func(line []byte, first bool) error) error {
-	if path == "" {
-		return errors.New("empty log path")
-	}
-	var f *os.File
-	var reader *bufio.Reader
-	var offset int64
-	var pending []byte
-	first := true
-	defer func() {
-		if f != nil {
-			f.Close()
-		}
-	}()
-	for {
-		if f == nil {
-			opened, e := os.Open(path)
-			if e != nil {
-				if !follow || !os.IsNotExist(e) {
-					return e
-				}
-				if e := sleepOrDone(ctx); e != nil {
-					return nil
-				}
-				continue
-			}
-			f = opened
-			reader = bufio.NewReaderSize(f, 64<<10)
-			offset = 0
-			if !fromStart {
-				if end, se := f.Seek(0, io.SeekEnd); se == nil {
-					reader.Reset(f)
-					offset = end
-				}
-			}
-		}
-		chunk := make([]byte, 64<<10)
-		n, e := reader.Read(chunk)
-		if n > 0 {
-			offset += int64(n)
-			pending = append(pending, chunk[:n]...)
-			for {
-				i := bytes.IndexByte(pending, '\n')
-				if i < 0 {
-					break
-				}
-				line := pending[:i]
-				if err := handle(line, first); err != nil {
-					return err
-				}
-				first = false
-				pending = pending[i+1:]
-			}
-		}
-		if e != nil && e != io.EOF {
-			return e
-		}
-		if st, se := os.Stat(path); se == nil && st.Size() < offset {
-			f.Close()
-			f = nil
-			pending = nil
-			continue
-		}
-		if !follow {
-			if e == io.EOF {
-				return nil
-			}
-			continue
-		}
-		if e := sleepOrDone(ctx); e != nil {
-			return nil
-		}
-	}
-}
+func fileExists(path string) bool { _, err := os.Stat(path); return err == nil }
 
 func sleepOrDone(ctx context.Context) error {
 	t := time.NewTimer(200 * time.Millisecond)

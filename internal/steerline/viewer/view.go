@@ -94,7 +94,7 @@ func (m Model) viewDetail(w, h int) []string {
 	}
 	lines := []string{styleLabel.Render(truncate(prefix+tabBar, w))}
 	content := m.detailContent(r, w)
-	body := h - 1
+	body := h - len(lines)
 	if body < 1 {
 		body = 1
 	}
@@ -349,8 +349,11 @@ func wrapText(s string, width int) []string {
 // freshness, not just service.status), execution slot, and attention counts.
 func (m Model) viewStatusBar(w int) string {
 	if m.rt == nil {
+		if m.observation.State == steerline.SnapshotUnknownVersion {
+			return stylePending.Render(truncate("runtime schema unknown · sampled "+m.observation.SampledAt.Format("15:04:05")+" · "+m.observation.Error, w))
+		}
 		if m.err != nil {
-			return stylePending.Render(truncate("err: "+m.err.Error(), w))
+			return stylePending.Render(truncate("snapshot read failed · "+m.observation.Error, w))
 		}
 		return styleFaint.Render(truncate("no runtime snapshot — waiting for the service", w))
 	}
@@ -377,8 +380,11 @@ func (m Model) viewStatusBar(w int) string {
 	parts := []string{
 		repo + " · " + branch,
 		fmt.Sprintf("svc %s pid %d", svc, rt.Service.PID),
-		heartbeatText(rt, m.cfg),
+		heartbeatText(m.observation),
 		"slot " + slot,
+	}
+	if m.observation.State == steerline.SnapshotReadFailed || m.observation.State == steerline.SnapshotUnknownVersion {
+		parts = append(parts, "snapshot error · last good sample "+m.observation.SampledAt.Format("15:04:05"))
 	}
 	if counts := countRuns(rt.Runs); counts != "" {
 		parts = append(parts, counts)
@@ -396,23 +402,22 @@ func (m Model) viewStatusBar(w int) string {
 
 // heartbeatText reports how fresh the heartbeat is. A stopped process cannot
 // refresh heartbeat_at, so age beyond three heartbeat intervals is flagged.
-func heartbeatText(rt *steerline.Runtime, cfg steerline.Config) string {
-	if rt == nil || rt.HeartbeatAt.IsZero() {
+func heartbeatText(obs steerline.ObservationSnapshot) string {
+	if obs.Runtime == nil || obs.Runtime.HeartbeatAt.IsZero() {
 		return "hb n/a"
 	}
-	age := time.Since(rt.HeartbeatAt)
-	if age < 0 {
-		age = 0
+	if obs.ClockSkew {
+		return "hb clock-skew · timestamp in future"
 	}
-	limit := 15 * time.Second
-	if d, e := time.ParseDuration(cfg.Heartbeat); e == nil && d > 0 {
-		limit = 3 * d
+	age := obs.HeartbeatAge
+	text := "hb " + shortDur(age) + " ago"
+	if obs.State == steerline.SnapshotStale || age > obs.FreshnessLimit {
+		text += " stale!"
 	}
-	mark := ""
-	if age > limit {
-		mark = "!"
+	if obs.State == steerline.SnapshotReadFailed || obs.State == steerline.SnapshotUnknownVersion {
+		text += " unverified"
 	}
-	return "hb " + shortDur(age) + " ago" + mark
+	return text
 }
 
 func countRuns(runs []*steerline.Run) string {
@@ -540,6 +545,12 @@ func (m Model) viewLog(w, h int) []string {
 	title := "Activity"
 	if r := m.current(); r != nil {
 		title = "Activity · " + r.TaskID
+		if r.LogPath != nil && *r.LogPath != "" {
+			attemptDir := filepath.Dir(*r.LogPath)
+			if filepath.Base(filepath.Dir(attemptDir)) == "attempts" {
+				title += " · attempt " + filepath.Base(attemptDir)
+			}
+		}
 	}
 	var rendered []string
 	if m.mode == modeRaw {
@@ -566,8 +577,21 @@ func (m Model) viewLog(w, h int) []string {
 	if scroll > 0 {
 		chips = append(chips, fmt.Sprintf("+%d", scroll))
 	}
-	lines := []string{styleLabel.Render(title) + "  " + styleFaint.Render("["+strings.Join(chips, " · ")+"]")}
-	body := h - 1
+	chip := "[" + strings.Join(chips, " · ") + "]"
+	titleWidth := w - lipgloss.Width(chip) - 2
+	lines := []string{styleLabel.Render(truncate(title, titleWidth)) + "  " + styleFaint.Render(chip)}
+	if m.logError != "" {
+		lines = append(lines, stylePending.Render(truncate("log read · "+m.logError, w)))
+	}
+	if len(rendered) == 0 {
+		message := "waiting for complete log records"
+		if r := m.current(); r == nil || r.LogPath == nil || *r.LogPath == "" {
+			message = "selected run has no log file"
+		}
+		lines = append(lines, styleFaint.Render(truncate(message, w)))
+		return lines
+	}
+	body := h - len(lines)
 	if body < 1 {
 		body = 1
 	}

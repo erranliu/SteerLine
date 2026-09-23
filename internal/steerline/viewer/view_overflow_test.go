@@ -35,10 +35,10 @@ func TestViewerLinesFitPaneWidth(t *testing.T) {
 	for _, width := range []int{80, 120, 170} {
 		m := NewModel(steerline.Config{}, f, Options{})
 		m.width, m.height = width, 52
-		rt, _ := f.Snapshot()
-		mm, _ := m.Update(runsMsg{runs: f.runs, rt: rt})
+		obs := f.Snapshot()
+		mm, _ := m.Update(runsMsg{observation: obs})
 		m = mm.(Model)
-		mm, _ = m.Update(activityMsg{logPath: "log-overflow", events: f.activity["log-overflow"], from: 2})
+		mm, _ = m.Update(pendingLogMessage(m, LogBatch{Activity: f.activity["log-overflow"], Reset: true, Cursor: steerline.JournalCursor{Path: "activity", FileID: "fake-file", Generation: 1, Initialized: true, Offset: 2}}))
 		m = mm.(Model)
 		leftW, rightW := paneWidths(m.width)
 		check := func(name string, lines []string, limit int) {
@@ -62,8 +62,8 @@ func TestViewerDetailHeaderShowsTitle(t *testing.T) {
 	f := &fakeSource{runs: []*steerline.Run{run}}
 	m := NewModel(steerline.Config{}, f, Options{})
 	m.width, m.height = 170, 40
-	rt, _ := f.Snapshot()
-	mm, _ := m.Update(runsMsg{runs: f.runs, rt: rt})
+	obs := f.Snapshot()
+	mm, _ := m.Update(runsMsg{observation: obs})
 	m = mm.(Model)
 	if view := m.View(); !strings.Contains(view, "存档兼容迁移") {
 		t.Fatalf("detail header should show the task title:\n%s", view)

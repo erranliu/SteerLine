@@ -163,6 +163,7 @@ retry 复用同一个任务、领取和 worktree，使用当前配置的模型�
 .\bin\steerline.exe watch -config .\steerline.local.json
 .\bin\steerline.exe watch -config .\steerline.local.json --no-tui   # 强制流式（管道/CI 自动如此）
 .\bin\steerline.exe watch -config .\steerline.local.json -run-id <run-id|task-id> --follow=false
+.\bin\steerline.exe watch -config .\steerline.local.json -run-id <run-id|task-id> --from-start=false
 .\bin\steerline.exe watch -config .\steerline.local.json --json   # 稳定 JSONL
 .\bin\steerline.exe watch -config .\steerline.local.json --raw    # 原始事件流
 
@@ -170,7 +171,9 @@ retry 复用同一个任务、领取和 worktree，使用当前配置的模型�
 .\bin\steerline.exe answer -config .\steerline.local.json -run-id <run-id|task-id> -option <option-id> [-note "..."] [-by "<name>"]
 ```
 
-`watch` 只读 `runtime.json` 和运行文件，不需要服务在跑，也不改任何状态。若 `activity.jsonl` 不存在（旧运行或原始宿主采集），会回退到现场归一化 `events.jsonl`。
+`watch` 只读 `runtime.json` 和运行文件，不需要服务在跑，也不改任何状态。单次调用固定开始时选中的 run 和日志路径；retry 会显示为新的 attempt，不会跟着 runtime 中的当前任务切换。读取器只提交换行结束的完整记录，支持 UTF-8 与 CRLF，遇到截断、文件替换或 activity `seq` 回退会清空旧代次后继续读。每批最多 256 行或约 1 MiB，单行上限 8 MiB；坏行诊断写入 stderr，JSON/raw stdout 不混入状态文字。若启动 watch 时 `activity.jsonl` 不存在（旧运行或原始宿主采集），会固定使用并归一化 `events.jsonl`；再次启动时会重新选择来源。TTY 下 `--follow=false` 或 `--from-start=false` 会使用流式输出，让这两个参数按请求生效。
+
+查看器按 `run_id` 保持选中项，列表排序变化不会悄悄切换任务；切换 attempt、日志文件代次或读取源时会清空旧日志。runtime 读取失败会保留最后一次成功快照，并显示采样时间与错误；heartbeat 新鲜度独立于 runtime 中服务上次报告的状态。
 
 Agent 需要人工决策时（`outcome=needs_decision`），运行进入 `finish_task_status=waiting_decision`：服务保留 claim/worktree/终端、暂停新派发并等待。`steerline answer` 原子写入答案文件，服务读回后在同一终端续跑。协议见 [decisions](docs/decisions.md)；Beads 与 SteerLine 三个状态轴的关系见 [状态模型](docs/state-model.md)。
 
