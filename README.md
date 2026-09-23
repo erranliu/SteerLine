@@ -150,6 +150,8 @@ retry 复用同一个任务、领取和 worktree，使用当前配置的模型�
 
 ## 查看运行
 
+控制台升级的设计稿与分 PR 实施计划见 [控制台升级 Spec + Plan](docs/console-upgrade/README.md)；以下描述当前已实现行为。
+
 每个运行有两份日志：`events.jsonl` 是 codex/pi 的原始事件流（取证，永不改动）；`activity.jsonl` 是归一化后的稳定记录，与 codex/pi 的 schema 解耦。两者都在 `runs/<run_id>/`（retry 在 `attempts/<attempt_id>/`）。契约见 [activity](docs/activity.md)。
 
 ```powershell
