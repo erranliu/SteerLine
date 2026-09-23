@@ -1,6 +1,6 @@
 # PR 2 Plan：服务控制协议与定向执行
 
-实施状态：代码、文档和完整回归已完成，待 PR 创建和审核。Windows 验证：`go test ./... -timeout 10m` 通过（steerline 291.048s；最后一次未缓存全量结果 297.441s）。
+实施状态：PR 已创建，待审核。Windows 验证：`go test ./... -timeout 10m` 通过（steerline 291.048s；最后一次未缓存全量结果 297.441s）。
 
 当前实现已增加 runtime v4、控制协议/客户端/回执、候选快照、定向执行、manual/auto、暂停/恢复、停服取消和 v1–v3 迁移。定向证据位于 `internal/steerline/control_test.go`、`service_test.go`、`workspace_test.go` 与 `cli_test.go`。
 
