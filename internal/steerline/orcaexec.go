@@ -2,14 +2,18 @@ package steerline
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"time"
+	"unicode/utf16"
 )
 
 // Orca execution model v2: Orca creates the worktree and launches the agent;
@@ -99,6 +103,45 @@ func (c orcaClient) terminalSend(ctx context.Context, handle, text string) error
 	return nil
 }
 
+func (c orcaClient) terminalCreate(ctx context.Context, worktreePath, title, command string) (orcaTerminal, error) {
+	args := []string{"terminal", "create", "--worktree", "path:" + filepath.ToSlash(worktreePath), "--title", title, "--shell", c.cfg.Orca.Shell, "--command", command, "--json"}
+	out, callErr := c.call(ctx, positiveDuration(c.cfg.CommandTimeout, 30*time.Second), args...)
+	env, e := parseEnvelope(out)
+	if e != nil {
+		if callErr != nil {
+			return orcaTerminal{}, fmt.Errorf("%v (%w)", e, callErr)
+		}
+		return orcaTerminal{}, e
+	}
+	var res struct {
+		Terminal            orcaTerminal `json:"terminal"`
+		Handle              string       `json:"handle"`
+		AgentTerminalHandle string       `json:"agentTerminalHandle"`
+	}
+	if e = json.Unmarshal(env.Result, &res); e != nil {
+		return orcaTerminal{}, e
+	}
+	if res.Terminal.Handle == "" {
+		res.Terminal.Handle = res.Handle
+	}
+	if res.Terminal.Handle == "" {
+		res.Terminal.Handle = res.AgentTerminalHandle
+	}
+	if res.Terminal.Handle == "" {
+		terms, listErr := c.terminalListForWorktree(ctx, worktreePath)
+		if listErr != nil {
+			return orcaTerminal{}, fmt.Errorf("orca terminal create returned no handle and list failed: %w", listErr)
+		}
+		for _, term := range terms {
+			if term.Title == title && term.Handle != "" {
+				return term, nil
+			}
+		}
+		return orcaTerminal{}, errors.New("orca terminal create returned no matching terminal handle")
+	}
+	return res.Terminal, nil
+}
+
 func (c orcaClient) terminalListForWorktree(ctx context.Context, worktreePath string) ([]orcaTerminal, error) {
 	out, callErr := c.call(ctx, positiveDuration(c.cfg.CommandTimeout, 30*time.Second), "terminal", "list", "--worktree", "path:"+filepath.ToSlash(worktreePath), "--json")
 	env, e := parseEnvelope(out)
@@ -128,13 +171,20 @@ func startOrcaRun(ctx context.Context, c Config, t Task, r *Run, source BeadsCon
 	client := orcaClient{cfg: c}
 	name := orcaSafeName(t.ID, r.RunID)
 	baseRef := "refs/steerline/bases/" + r.RunID
-	// Orca prefills the agent with --prompt, so the agent gets its instructions
-	// without fragile post-launch keystrokes. The pointer is just the prompt path;
-	// the prompt itself needs the worktree path Orca assigns, so it is written
-	// right after create, well before the agent TUI finishes loading.
+	// Orca's built-in agent selector cannot pass model/reasoning overrides. For a
+	// configured Codex model, create the worktree first, write the dispatch, then
+	// start Codex in a fresh terminal with CLI overrides and the pointer as its
+	// initial prompt. Other Orca agents retain the native --agent/--prompt path.
+	customCodex := c.agentName() == "codex" && (c.Model != "" || c.ReasoningEffort != "" || c.Profile != "")
 	promptPath := filepath.Join(dir, "prompt.txt")
 	pointer := "Read and execute " + promptPath + " now. Follow it exactly."
-	created, e := client.worktreeCreate(ctx, name, c.agentName(), baseRef, pointer, c.Orca.Activate)
+	var created orcaWorktreeCreated
+	var e error
+	if customCodex {
+		created, e = client.worktreeCreate(ctx, name, "", baseRef, "", c.Orca.Activate)
+	} else {
+		created, e = client.worktreeCreate(ctx, name, c.agentName(), baseRef, pointer, c.Orca.Activate)
+	}
 	if e != nil {
 		return nil, e
 	}
@@ -143,17 +193,20 @@ func startOrcaRun(ctx context.Context, c Config, t Task, r *Run, source BeadsCon
 	if branch == "" {
 		branch = filepath.Base(path)
 	}
-	handle := created.AgentTerminalHandle
-	if handle == "" {
-		handle = created.StartupTerminal.Handle
-	}
-	if handle == "" {
-		if terms, te := client.terminalListForWorktree(ctx, path); te == nil && len(terms) > 0 {
-			handle = terms[0].Handle
+	handle := ""
+	if !customCodex {
+		handle = created.AgentTerminalHandle
+		if handle == "" {
+			handle = created.StartupTerminal.Handle
 		}
-	}
-	if handle == "" {
-		return nil, errors.New("orca worktree create returned no agent terminal handle")
+		if handle == "" {
+			if terms, te := client.terminalListForWorktree(ctx, path); te == nil && len(terms) > 0 {
+				handle = terms[0].Handle
+			}
+		}
+		if handle == "" {
+			return nil, errors.New("orca worktree create returned no agent terminal handle")
+		}
 	}
 	r.WorktreePath = ptr(path)
 	r.WorktreeBranch = ptr(branch)
@@ -174,12 +227,77 @@ func startOrcaRun(ctx context.Context, c Config, t Task, r *Run, source BeadsCon
 	if e := AtomicWrite(promptPath, []byte(prompt)); e != nil {
 		return nil, e
 	}
+	if customCodex {
+		command, ce := orcaCodexLaunchCommand(c, pointer)
+		if ce != nil {
+			return nil, ce
+		}
+		term, ce := client.terminalCreate(ctx, path, "SteerLine "+name, command)
+		startupHandle := created.StartupTerminal.Handle
+		if startupHandle != "" && startupHandle != term.Handle {
+			client.closeTerminal(ctx, startupHandle)
+		}
+		if ce != nil {
+			return nil, ce
+		}
+		handle = term.Handle
+	}
 
 	resultInWorktree := filepath.Join(path, orcaResultFile)
 	term, _ := client.showTerminal(ctx, handle)
 	proc := &orcaProcess{cfg: c, term: term}
 	proc.term.Handle = handle
 	return superviseOrcaResult(c, r, client, proc, resultInWorktree, *r.ResultPath), nil
+}
+
+func orcaCodexLaunchCommand(c Config, prompt string) (string, error) {
+	if strings.TrimSpace(c.Codex.Executable) == "" {
+		return "", errors.New("orca Codex launch requires codex.executable")
+	}
+	args := append([]string{}, c.Codex.Args...)
+	if c.Profile != "" {
+		args = append(args, "--profile", c.Profile)
+	}
+	if c.Model != "" {
+		args = append(args, "--model", c.Model)
+	}
+	if c.ReasoningEffort != "" {
+		args = append(args, "--config", "model_reasoning_effort="+c.ReasoningEffort)
+	}
+	if c.Sandbox != "" {
+		args = append(args, "--sandbox", c.Sandbox)
+	}
+	args = append(args, prompt)
+	if runtime.GOOS == "windows" {
+		quoted := make([]string, len(args))
+		for i, arg := range args {
+			quoted[i] = powershellLiteral(arg)
+		}
+		script := "$codex = " + powershellLiteral(c.Codex.Executable) + "\n$codexArgs = @(" + strings.Join(quoted, ", ") + ")\n& $codex @codexArgs"
+		return "powershell.exe -NoLogo -NoProfile -EncodedCommand " + encodePowerShell(script), nil
+	}
+	command := []string{shellQuote(c.Codex.Executable)}
+	for _, arg := range args {
+		command = append(command, shellQuote(arg))
+	}
+	return strings.Join(command, " "), nil
+}
+
+func powershellLiteral(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", "''") + "'"
+}
+
+func encodePowerShell(script string) string {
+	words := utf16.Encode([]rune(script))
+	data := make([]byte, len(words)*2)
+	for i, word := range words {
+		binary.LittleEndian.PutUint16(data[i*2:], word)
+	}
+	return base64.StdEncoding.EncodeToString(data)
+}
+
+func shellQuote(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'"
 }
 
 func orcaPromptAddendum(promptPath, beadsDir, claimant string) string {

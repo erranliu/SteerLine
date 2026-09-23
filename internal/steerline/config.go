@@ -45,6 +45,7 @@ type Config struct {
 	CommandTimeout  string            `json:"command_timeout"`
 	ShutdownGrace   string            `json:"shutdown_grace"`
 	Model           string            `json:"model"`
+	ReasoningEffort string            `json:"reasoning_effort"`
 	Sandbox         string            `json:"sandbox"`
 	Profile         string            `json:"profile"`
 	Agent           string            `json:"agent"`
@@ -260,6 +261,13 @@ func LoadConfig(path string) (Config, error) {
 	if c.Sandbox != "read-only" && c.Sandbox != "workspace-write" && c.Sandbox != "danger-full-access" {
 		return c, errors.New("sandbox must be read-only, workspace-write or explicitly configured danger-full-access")
 	}
+	if c.ReasoningEffort != "" {
+		switch c.ReasoningEffort {
+		case "none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra":
+		default:
+			return c, fmt.Errorf("invalid reasoning_effort %q", c.ReasoningEffort)
+		}
+	}
 	// Empty means "use the default" so programmatic Configs stay valid.
 	if c.Host != "" && c.Host != "local" && c.Host != "orca" {
 		return c, errors.New("host must be local or orca")
@@ -270,6 +278,9 @@ func LoadConfig(path string) (Config, error) {
 		}
 	}
 	if c.Host == "orca" {
+		if c.agentName() != "codex" && (c.Model != "" || c.Profile != "" || c.ReasoningEffort != "") {
+			return c, errors.New("orca model, profile and reasoning_effort overrides require agent=codex")
+		}
 		if c.Orca.Executable == "" || c.Orca.Shell == "" {
 			return c, errors.New("orca.executable and orca.shell are required")
 		}

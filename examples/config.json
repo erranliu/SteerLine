@@ -26,6 +26,7 @@
   "shutdown_grace": "10s",
   "sandbox": "workspace-write",
   "model": "",
+  "reasoning_effort": "",
   "profile": "",
   "agent": "codex",
   "host": "orca",
