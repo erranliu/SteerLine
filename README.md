@@ -28,6 +28,14 @@ Copy-Item .\examples\config.json .\steerline.local.json
 
 之后服务、查看器和 `viewer.bat` 都跑 `%STEERLINE_HOME%\bin\steerline.exe`；源码换哪个 worktree 都不影响本机状态。详见 [状态模型](docs/state-model.md)。
 
+多项目：每个目标仓库一份 `etc\<repo>.json`，各自派生出独立的 `state\<repoKey>\`；每个项目起一个 `run` 进程即可并行（锁按仓库）。用菜单选择：
+
+```powershell
+.\bin\steerline.exe launchers                 # 在 %STEERLINE_HOME% 生成双击入口 projects/viewer/run/stop/home
+.\bin\steerline.exe projects                  # 交互式：选项目 + 选动作
+.\bin\steerline.exe projects -action list     # 列出 etc\ 下的项目
+```
+
 `check` 只执行工具帮助、Git/Beads 读取、技能契约和 Gitea 仓库查询，可创建指定运行目录，不领取任务或调用模型。`run` 会真正领取任务并调用模型。目标仓库缺少 Beads 时直接报错，不执行 init 或迁移。
 
 `merge-h-308-code` 已新增两个专用技能和合并后结项适配脚本，[接入配置](examples/merge-h-308-code.json) 已更新，既有手动技能保留原用途。真实启动前需将新文件合入 AIRefactor 并完成认证、执行权限及工具配置，见 [接入说明](docs/merge-h-308-integration.md)。本地 check 不会替代远端主线文件的发布。

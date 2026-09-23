@@ -76,6 +76,13 @@ PR 已合并 + 结项命令 + bd close:  finish=completed   beads=closed
 
 一句话：**改代码在任意 worktree，`steerline install` 一次；服务和查看器永远跑 `bin\steerline.exe`，状态永远在 `state\<repoKey>\`。**
 
+## 多项目
+
+- 每个目标仓库一份 `etc\<repo>.json`；`run_dir` 省略时各自派生到 `state\<repoKey>`，互不干扰。
+- 并行：一个项目一个 `steerline run` 进程；锁按仓库（git common-dir + run_dir），不同项目可同时跑，同一项目重复启动会被拒绝。
+- 入口：`steerline projects`（交互选项目/动作）、`steerline launchers`（生成双击 `.bat`）。查看器目前一个窗口看一个项目（标题带 repo）。
+- 目标仓库需先在 Orca 注册。
+
 ## 相关文档
 
 - 数据契约字段细节：[data-contract](data-contract.md)
