@@ -1,19 +1,16 @@
 package steerline
 
 import (
-	"bufio"
 	"bytes"
+	"context"
 	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
-	"strings"
-	"sync"
 	"text/template"
 )
 
@@ -25,17 +22,18 @@ var promptTemplate string
 var commitHash = regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`)
 
 type WorkerEvent struct {
-	Session string
-	Summary string
+	Session  string
+	Summary  string
+	Activity ActivityEvent
 }
 type Worker struct {
-	process *childProcess
-	Events  chan WorkerEvent
-	Done    chan error
+	proc   process
+	Events chan WorkerEvent
+	Done   chan error
 }
 
-func (w *Worker) Kill()  { w.process.Kill() }
-func (w *Worker) Close() { w.process.Close() }
+func (w *Worker) Kill()  { w.proc.Kill() }
+func (w *Worker) Close() { w.proc.Close() }
 func Prompt(c Config, t Task, r *Run) (string, error) {
 	contextJSON, _ := json.MarshalIndent(map[string]any{"task_id": t.ID, "run_id": r.RunID, "claimant": r.Claimant, "remote": c.Remote, "branch": c.Branch, "worktree_path": r.WorktreePath, "worktree_branch": r.WorktreeBranch, "base_commit": r.BaseCommit, "beads_directory": c.workerEnv["BEADS_DIR"], "beads_context": r.BeadsContext}, "", "  ")
 	taskJSON, _ := json.MarshalIndent(t, "", "  ")
@@ -48,6 +46,9 @@ func Prompt(c Config, t Task, r *Run) (string, error) {
 	e = tmpl.Execute(&b, data)
 	return b.String(), e
 }
+
+// StartWorker prepares the per-run files and hands the actual process launch to
+// the configured host. Scheduling, recovery and result authority stay here.
 func StartWorker(c Config, t Task, r *Run) (*Worker, error) {
 	if r.WorktreePath == nil || r.BaseCommit == nil || r.WorktreeBranch == nil || canonical(c.Repository) != canonical(*r.WorktreePath) || c.workerEnv["BEADS_DIR"] == "" || c.workerEnv["BEADS_ACTOR"] != r.Claimant {
 		return nil, errors.New("worker requires verified workspace and shared Beads environment")
@@ -73,15 +74,6 @@ func StartWorker(c Config, t Task, r *Run) (*Worker, error) {
 	if e = AtomicWrite(filepath.Join(dir, "prompt.txt"), []byte(prompt)); e != nil {
 		return nil, e
 	}
-	logFile, e := os.OpenFile(*r.LogPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
-	if e != nil {
-		return nil, e
-	}
-	errFile, e := os.OpenFile(filepath.Join(dir, "stderr.log"), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
-	if e != nil {
-		logFile.Close()
-		return nil, e
-	}
 	args := append([]string{}, c.Codex.Args...)
 	args = append(args, "exec", "--json", "--output-schema", schema, "--output-last-message", *r.ResultPath, "--sandbox", c.Sandbox)
 	if c.Model != "" {
@@ -91,79 +83,17 @@ func StartWorker(c Config, t Task, r *Run) (*Worker, error) {
 		args = append(args, "--profile", c.Profile)
 	}
 	args = append(args, "-")
-	cmd := exec.Command(c.Codex.Executable, args...)
-	cmd.Dir = c.Repository
-	cmd.Env = overrideEnv(cmd.Environ(), c.workerEnv)
-	cmd.Stdin = strings.NewReader(prompt)
-	cmd.Stderr = errFile
-	// An explicit pipe lets the event reader finish before Wait, avoiding StdoutPipe races.
-	reader, writer, e := os.Pipe()
-	if e != nil {
-		logFile.Close()
-		errFile.Close()
-		return nil, e
+	spec := SpawnSpec{
+		Dir:        c.Repository,
+		EventsPath: *r.LogPath,
+		StderrPath: filepath.Join(dir, "stderr.log"),
+		Command:    Command{Executable: c.Codex.Executable, Args: args},
+		Stdin:      bytes.NewReader([]byte(prompt)),
+		Env:        c.workerEnv,
 	}
-	cmd.Stdout = writer
-	p, e := startProcess(cmd)
-	writer.Close()
-	if e != nil {
-		reader.Close()
-		logFile.Close()
-		errFile.Close()
-		return nil, e
-	}
-	w := &Worker{process: p, Events: make(chan WorkerEvent, 64), Done: make(chan error, 1)}
-	go func() {
-		var wg sync.WaitGroup
-		var scanErr error
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			defer reader.Close()
-			s := bufio.NewScanner(io.TeeReader(reader, logFile))
-			s.Buffer(make([]byte, 64<<10), 4<<20)
-			for s.Scan() {
-				var event struct {
-					Type     string `json:"type"`
-					ThreadID string `json:"thread_id"`
-					Item     struct {
-						Type string `json:"type"`
-					} `json:"item"`
-				}
-				if e := json.Unmarshal(s.Bytes(), &event); e != nil {
-					continue
-				}
-				ev := WorkerEvent{Summary: clip(event.Type+" "+event.Item.Type, 512)}
-				if event.Type == "thread.started" {
-					ev.Session = event.ThreadID
-				}
-				w.Events <- ev
-			}
-			scanErr = s.Err()
-			if scanErr != nil {
-				p.Kill()
-			}
-		}()
-		err := cmd.Wait()
-		p.Close()
-		wg.Wait()
-		if scanErr != nil {
-			err = scanErr
-		}
-		if e := logFile.Sync(); err == nil {
-			err = e
-		}
-		if e := logFile.Close(); err == nil {
-			err = e
-		}
-		if e := errFile.Close(); err == nil {
-			err = e
-		}
-		close(w.Events)
-		w.Done <- err
-	}()
-	return w, nil
+	return SpawnerFor(c).Start(context.Background(), spec)
 }
+
 func ReadResult(path string, r *Run) (Result, error) {
 	f, e := os.Open(path)
 	if e != nil {

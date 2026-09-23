@@ -71,6 +71,9 @@ func fakeMain(args []string) int {
 		time.Sleep(time.Hour)
 		return 0
 	}
+	if mode == "orca" {
+		return fakeOrca(args[1], args[2:])
+	}
 	if mode == "lock" {
 		l, e := LockRepository(args[1])
 		if e != nil {

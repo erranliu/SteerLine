@@ -26,16 +26,25 @@ type ServiceState struct {
 	Claimant   string  `json:"claimant"`
 	Error      *string `json:"error"`
 }
+
+// ProcessIdentity is the host-neutral identity of a running worker. OS hosts use
+// PID/Created/Executable; the Orca host uses Terminal/RuntimeID/Incarnation.
+// Kind is "os" for local runs and "orca" when hosted by Orca.
 type ProcessIdentity struct {
-	PID        int    `json:"pid"`
-	Created    string `json:"created"`
-	Executable string `json:"executable"`
+	Kind        string `json:"kind,omitempty"`
+	PID         int    `json:"pid,omitempty"`
+	Created     string `json:"created,omitempty"`
+	Executable  string `json:"executable,omitempty"`
+	Terminal    string `json:"terminal,omitempty"`
+	RuntimeID   string `json:"runtime_id,omitempty"`
+	Incarnation string `json:"incarnation,omitempty"`
 }
 type Run struct {
 	TaskID           string            `json:"task_id"`
 	Title            string            `json:"title"`
 	RunID            string            `json:"run_id"`
 	Claimant         string            `json:"claimant"`
+	Host             string            `json:"host,omitempty"`
 	BeadsStatus      string            `json:"beads_status"`
 	ExecutionStatus  string            `json:"execution_status"`
 	FinishTaskStatus string            `json:"finish_task_status"`

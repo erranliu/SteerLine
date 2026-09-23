@@ -46,12 +46,26 @@ type Config struct {
 	Model           string            `json:"model"`
 	Sandbox         string            `json:"sandbox"`
 	Profile         string            `json:"profile"`
+	Agent           string            `json:"agent"`
+	Host            string            `json:"host"`
+	StallTimeout    string            `json:"stall_timeout"`
+	Orca            OrcaConfig        `json:"orca"`
 	PR              PRConfig          `json:"pr"`
 	Completion      *CompletionConfig `json:"completion"`
 	identity        string
 	startText       string
 	finishText      string
 	workerEnv       map[string]string
+}
+
+type OrcaConfig struct {
+	Executable   string   `json:"executable"`
+	Args         []string `json:"args"`
+	Shell        string   `json:"shell"`
+	WaitTimeout  string   `json:"wait_timeout"`
+	KeepTerminal bool     `json:"keep_terminal"`
+	Activate     bool     `json:"activate"`
+	Fallback     string   `json:"fallback"`
 }
 
 type CompletionConfig struct {
@@ -96,7 +110,7 @@ func decode(data []byte, v any) error {
 	return nil
 }
 func LoadConfig(path string) (Config, error) {
-	c := Config{Remote: "origin", RuntimeFile: "runtime.json", TaskPoll: "10s", PRPoll: "30s", Heartbeat: "5s", CommandTimeout: "30s", ShutdownGrace: "10s", Sandbox: "workspace-write", Git: Command{Executable: "git"}, BD: Command{Executable: "bd"}, Codex: Command{Executable: "codex"}, ExecutableTypes: []string{"task", "bug", "feature", "chore"}}
+	c := Config{Remote: "origin", RuntimeFile: "runtime.json", TaskPoll: "10s", PRPoll: "30s", Heartbeat: "5s", CommandTimeout: "30s", ShutdownGrace: "10s", Sandbox: "workspace-write", Git: Command{Executable: "git"}, BD: Command{Executable: "bd"}, Codex: Command{Executable: "codex"}, ExecutableTypes: []string{"task", "bug", "feature", "chore"}, Agent: "codex", Host: "orca", StallTimeout: "5m", Orca: OrcaConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "15m", Fallback: "local"}}
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return c, err
@@ -134,6 +148,26 @@ func LoadConfig(path string) (Config, error) {
 	if c.Sandbox != "read-only" && c.Sandbox != "workspace-write" && c.Sandbox != "danger-full-access" {
 		return c, errors.New("sandbox must be read-only, workspace-write or explicitly configured danger-full-access")
 	}
+	// Empty means "use the default" so programmatic Configs stay valid.
+	if c.Host != "" && c.Host != "local" && c.Host != "orca" {
+		return c, errors.New("host must be local or orca")
+	}
+	if c.StallTimeout != "" {
+		if d, e := time.ParseDuration(c.StallTimeout); e != nil || d < 0 {
+			return c, errors.New("stall_timeout must be zero or a positive duration")
+		}
+	}
+	if c.Host == "orca" {
+		if c.Orca.Executable == "" || c.Orca.Shell == "" {
+			return c, errors.New("orca.executable and orca.shell are required")
+		}
+		if c.Orca.Fallback != "" && c.Orca.Fallback != "local" && c.Orca.Fallback != "fail" {
+			return c, errors.New("orca.fallback must be local or fail")
+		}
+		if d, e := time.ParseDuration(c.Orca.WaitTimeout); e != nil || d <= 0 {
+			return c, errors.New("orca.wait_timeout must be a positive duration")
+		}
+	}
 	if len(c.ExecutableTypes) == 0 {
 		return c, errors.New("executable_types is empty")
 	}
@@ -149,6 +183,27 @@ func LoadConfig(path string) (Config, error) {
 }
 func duration(s string) time.Duration { d, _ := time.ParseDuration(s); return d }
 func (c Config) Identity() string     { return c.identity }
+
+// hostName, agentName and fallbackMode apply the documented defaults for
+// programmatic Configs that do not go through LoadConfig.
+func (c Config) hostName() string {
+	if c.Host == "" {
+		return "local"
+	}
+	return c.Host
+}
+func (c Config) agentName() string {
+	if c.Agent == "" {
+		return "codex"
+	}
+	return c.Agent
+}
+func (c Config) fallbackMode() string {
+	if c.Orca.Fallback == "" {
+		return "local"
+	}
+	return c.Orca.Fallback
+}
 func resolveCommand(c *Command) error {
 	p, e := exec.LookPath(c.Executable)
 	if e != nil {
@@ -176,6 +231,11 @@ func (c *Config) Preflight(ctx context.Context, checkSkills bool) error {
 		}
 	}
 	r := Runner{Dir: c.Repository, Timeout: duration(c.CommandTimeout)}
+	if c.hostName() == "orca" {
+		if _, e := r.Output(ctx, Command{Executable: c.Orca.Executable}, "status", "--json"); e != nil {
+			return fmt.Errorf("orca host is not reachable: %w", e)
+		}
+	}
 	root, e := r.Output(ctx, c.Git, "rev-parse", "--show-toplevel")
 	if e != nil {
 		return e

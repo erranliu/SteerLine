@@ -33,8 +33,9 @@ func (l *RepoLock) Close() { l.f.Close() }
 
 type childProcess struct{ identity ProcessIdentity }
 
-func (p *childProcess) Kill()  { syscall.Kill(-p.identity.PID, syscall.SIGKILL) }
-func (p *childProcess) Close() { p.Kill() }
+func (p *childProcess) Identity() ProcessIdentity { return p.identity }
+func (p *childProcess) Kill()                     { syscall.Kill(-p.identity.PID, syscall.SIGKILL) }
+func (p *childProcess) Close()                    { p.Kill() }
 func startProcess(cmd *exec.Cmd) (*childProcess, error) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true, Pdeathsig: syscall.SIGKILL}
 	if e := cmd.Start(); e != nil {
@@ -66,7 +67,7 @@ func linuxIdentity(pid int) (ProcessIdentity, error) {
 	if e != nil {
 		return ProcessIdentity{}, e
 	}
-	return ProcessIdentity{PID: pid, Created: strings.TrimSpace(string(boot)) + ":" + fields[19], Executable: exe}, nil
+	return ProcessIdentity{Kind: "os", PID: pid, Created: strings.TrimSpace(string(boot)) + ":" + fields[19], Executable: exe}, nil
 }
 func inspectProcess(old *ProcessIdentity) string {
 	if old == nil {

@@ -18,6 +18,11 @@ type Service struct {
 	prs    *PRClient
 	worker *Worker
 	active *Run
+	// activities holds one journal per run so PR/completion events always land in
+	// their own run's file, even after the worker exited.
+	activities map[string]*ActivityWriter
+	// Console selects service-side rendering: "", "off", "pretty", "summary" or "json".
+	Console string
 }
 
 func NewService(c Config) (*Service, error) {
@@ -28,12 +33,12 @@ func NewService(c Config) (*Service, error) {
 		return nil, e
 	}
 	r := Runner{Dir: c.Repository, Timeout: duration(c.CommandTimeout)}
-	s := &Service{Config: c, store: &Store{Path: filepath.Join(c.RunDir, c.RuntimeFile)}, beads: Beads{Runner: r, Command: c.BD, Claimant: c.Claimant}, prs: &PRClient{Config: c.PR, Runner: r}}
+	s := &Service{Config: c, store: &Store{Path: filepath.Join(c.RunDir, c.RuntimeFile)}, beads: Beads{Runner: r, Command: c.BD, Claimant: c.Claimant}, prs: &PRClient{Config: c.PR, Runner: r}, activities: map[string]*ActivityWriter{}}
 	old, e := LoadRuntime(s.store.Path)
 	if e != nil {
 		return nil, e
 	}
-	s.State = Runtime{SchemaVersion: 2, Repository: Repository{Path: c.Repository, Remote: c.Remote, Branch: c.Branch, Identity: c.identity}, Runs: []*Run{}}
+	s.State = Runtime{SchemaVersion: 3, Repository: Repository{Path: c.Repository, Remote: c.Remote, Branch: c.Branch, Identity: c.identity}, Runs: []*Run{}}
 	if old != nil {
 		if old.Repository.Identity != c.identity || old.Repository.Remote != c.Remote || old.Repository.Branch != c.Branch || old.Service.Claimant != c.Claimant {
 			return nil, errors.New("runtime repository/branch/claimant mismatch; preserve state and use the original configuration")
@@ -47,6 +52,13 @@ func NewService(c Config) (*Service, error) {
 			seen[r.TaskID] = true
 			if e := r.Completion.validate(); e != nil {
 				return nil, e
+			}
+			// v1/v2 runs predate hosting; they are local by definition.
+			if r.Host == "" {
+				r.Host = "local"
+			}
+			if r.Process != nil && r.Process.Kind == "" {
+				r.Process.Kind = "os"
 			}
 			switch r.ExecutionStatus {
 			case "pending", "running", "succeeded", "failed", "unknown":
@@ -64,7 +76,7 @@ func NewService(c Config) (*Service, error) {
 			if r.ExecutionStatus == "pending" || r.ExecutionStatus == "running" {
 				r.ExecutionStatus = "unknown"
 				r.FinishTaskStatus = "blocked"
-				r.Error = ptr("Interrupted execution: " + inspectProcess(r.Process) + "; manual recovery required; never auto-resumed")
+				r.Error = ptr("Interrupted execution: " + inspectProcessWithConfig(c, r.Process) + "; manual recovery required; never auto-resumed")
 			}
 			if r.WorkspaceIntent != nil && r.FinishTaskStatus != "completed" {
 				err := verifyWorkspace(context.Background(), c, r.WorkspaceIntent, false)
@@ -86,6 +98,84 @@ func NewService(c Config) (*Service, error) {
 	return s, nil
 }
 func (s *Service) save() error { return s.store.Publish(s.State) }
+
+// activityWriter returns the lazily-opened journal for one run. Opening is
+// idempotent and append-only, so a run keeps accumulating lifecycle events after
+// its worker exits and after a service restart.
+func (s *Service) activityWriter(r *Run) *ActivityWriter {
+	if r == nil || r.LogPath == nil || r.RunID == "" {
+		return nil
+	}
+	if w, ok := s.activities[r.RunID]; ok {
+		return w
+	}
+	path := activityPath(*r.LogPath)
+	if e := os.MkdirAll(filepath.Dir(path), 0700); e != nil {
+		s.setError(fmt.Errorf("activity log unavailable: %w", e))
+		return nil
+	}
+	w, e := OpenActivity(path, r.RunID, r.TaskID)
+	if e != nil {
+		s.setError(fmt.Errorf("activity log unavailable: %w", e))
+		return nil
+	}
+	s.activities[r.RunID] = w
+	return w
+}
+
+func (s *Service) closeActivity(r *Run) {
+	if r == nil {
+		return
+	}
+	w, ok := s.activities[r.RunID]
+	if !ok {
+		return
+	}
+	if e := w.Close(); e != nil {
+		s.setError(fmt.Errorf("activity log close: %w", e))
+	}
+	delete(s.activities, r.RunID)
+}
+
+func (s *Service) closeAllActivities() {
+	for id, w := range s.activities {
+		if e := w.Close(); e != nil {
+			s.setError(fmt.Errorf("activity log close: %w", e))
+		}
+		delete(s.activities, id)
+	}
+}
+
+// note records a scheduler lifecycle event on that run's own journal. Activity
+// failures are diagnostic: runtime.json and the per-run files stay authoritative.
+func (s *Service) note(r *Run, source, kind, status, title, detail string, meta map[string]any) {
+	ev := ActivityEvent{Source: source, Kind: kind, Status: status, Title: title, Detail: detail, Meta: meta}
+	if w := s.activityWriter(r); w != nil {
+		if e := w.Write(ev); e != nil {
+			s.setError(e)
+		}
+	}
+	s.emitConsole(ev)
+}
+
+func (s *Service) emitConsole(ev ActivityEvent) {
+	if s.Console == "" || s.Console == "off" {
+		return
+	}
+	switch s.Console {
+	case "json":
+		b, e := json.Marshal(ev)
+		if e == nil {
+			fmt.Fprintln(os.Stdout, string(b))
+		}
+	case "summary":
+		if ev.Source == "steer" {
+			fmt.Fprintln(os.Stdout, RenderActivity(ev, RenderOptions{Color: false}))
+		}
+	default:
+		fmt.Fprintln(os.Stdout, RenderActivity(ev, RenderOptions{Color: stdoutColor()}))
+	}
+}
 func (s *Service) find(id string) *Run {
 	for _, r := range s.State.Runs {
 		if r.TaskID == id {
@@ -165,7 +255,7 @@ func (s *Service) dispatch(ctx context.Context) error {
 			return errors.Join(err, s.save())
 		}
 		dir := filepath.Join(s.Config.RunDir, "runs", id)
-		r := &Run{TaskID: t.ID, Title: t.Title, RunID: id, Claimant: s.Config.Claimant, BeadsStatus: t.Status, ExecutionStatus: "pending", FinishTaskStatus: "pending", PR: PRState{State: "unknown"}, LogPath: ptr(filepath.Join(dir, "events.jsonl")), ResultPath: ptr(filepath.Join(dir, "result.json"))}
+		r := &Run{TaskID: t.ID, Title: t.Title, RunID: id, Claimant: s.Config.Claimant, Host: s.Config.hostName(), BeadsStatus: t.Status, ExecutionStatus: "pending", FinishTaskStatus: "pending", PR: PRState{State: "unknown"}, LogPath: ptr(filepath.Join(dir, "events.jsonl")), ResultPath: ptr(filepath.Join(dir, "result.json"))}
 		r.WorkspaceIntent = intent
 		r.BeadsContext = &source
 		if s.Config.Completion != nil {
@@ -203,11 +293,40 @@ func (s *Service) dispatch(ctx context.Context) error {
 		if e = s.save(); e != nil {
 			return e
 		}
+		s.note(r, "steer", "claim", "completed", "claimed "+t.ID, "", map[string]any{"beads_status": "in_progress"})
 		if ctx.Err() != nil {
 			r.ExecutionStatus = "unknown"
 			s.blocked(r, "Stopped after claim, before worker launch")
+			s.note(r, "steer", "error", "failed", "stopped after claim", "no worker launched", nil)
+			s.closeActivity(r)
 			return s.save()
 		}
+		if s.Config.hostName() == "orca" {
+			s.note(r, "steer", "prepare", "started", "orca worktree create", intent.Branch, map[string]any{"base_commit": intent.BaseCommit, "agent": s.Config.agentName()})
+			w, err := startOrcaRun(ctx, s.Config, t, r, source, intent, dir)
+			if err != nil {
+				r.ExecutionStatus = "failed"
+				r.EndedAt = ptr(now())
+				s.blocked(r, "Orca execution failed to start: "+err.Error())
+				s.State.SlotOccupied = false
+				s.State.CurrentTask = nil
+				s.note(r, "steer", "error", "failed", "orca start failed", err.Error(), nil)
+				s.closeActivity(r)
+				return s.save()
+			}
+			s.worker = w
+			s.active = r
+			r.ExecutionStatus = "running"
+			r.StartedAt = ptr(now())
+			procID := w.proc.Identity()
+			r.Process = &procID
+			if e = s.save(); e != nil {
+				return e
+			}
+			s.note(r, "steer", "worker_start", "started", "orca agent started", deref(r.WorktreePath), map[string]any{"terminal": procID.Terminal, "agent": s.Config.agentName()})
+			return s.save()
+		}
+		s.note(r, "steer", "prepare", "started", "preparing worktree", intent.Path, map[string]any{"branch": intent.Branch, "base_commit": intent.BaseCommit})
 		workerConfig, err := prepareWorkspace(ctx, s.Config, r, source)
 		if err != nil {
 			return s.preparationFailed(r, "Worktree preparation failed: "+err.Error())
@@ -218,6 +337,7 @@ func (s *Service) dispatch(ctx context.Context) error {
 		if e = s.save(); e != nil {
 			return e
 		}
+		s.note(r, "steer", "prepare", "completed", "worktree ready", intent.Path, map[string]any{"branch": intent.Branch, "base_commit": intent.BaseCommit})
 		if ctx.Err() != nil {
 			return s.preparationFailed(r, "Stopped after worktree preparation, before worker launch")
 		}
@@ -228,13 +348,17 @@ func (s *Service) dispatch(ctx context.Context) error {
 			s.blocked(r, "Worker startup failed: "+err.Error())
 			s.State.SlotOccupied = false
 			s.State.CurrentTask = nil
+			s.note(r, "steer", "error", "failed", "worker startup failed", err.Error(), nil)
+			s.closeActivity(r)
 			return s.save()
 		}
 		s.worker = w
 		s.active = r
 		r.ExecutionStatus = "running"
 		r.StartedAt = ptr(now())
-		r.Process = &w.process.identity
+		procID := w.proc.Identity()
+		r.Process = &procID
+		s.note(r, "steer", "worker_start", "started", "worker started", intent.Path, map[string]any{"pid": procID.PID})
 		return s.save()
 	}
 	return nil
@@ -246,6 +370,8 @@ func (s *Service) preparationFailed(r *Run, reason string) error {
 	s.blocked(r, reason)
 	s.State.SlotOccupied = false
 	s.State.CurrentTask = nil
+	s.note(r, "steer", "prepare", "failed", "worktree preparation failed", reason, nil)
+	s.closeActivity(r)
 	return s.save()
 }
 func (s *Service) bind(r *Run, result Result) error {
@@ -286,6 +412,15 @@ func (s *Service) bind(r *Run, result Result) error {
 }
 func (s *Service) finished(err error) error {
 	r := s.active
+	if s.worker != nil {
+		// The host closes Events before signalling Done, so draining here always
+		// terminates and no tail event is lost by the Done-first select race.
+		for ev := range s.worker.Events {
+			if e := s.event(ev); e != nil {
+				s.setError(e)
+			}
+		}
+	}
 	s.worker = nil
 	s.active = nil
 	s.State.CurrentTask = nil
@@ -294,9 +429,12 @@ func (s *Service) finished(err error) error {
 	if err != nil {
 		r.ExecutionStatus = "failed"
 		s.blocked(r, "Codex execution failed: "+err.Error())
+		s.note(r, "steer", "error", "failed", "worker exited", err.Error(), map[string]any{"execution_status": "failed"})
+		s.closeActivity(r)
 		return s.save()
 	}
 	r.ExecutionStatus = "succeeded"
+	s.note(r, "steer", "worker_exit", "completed", "worker exited", "", map[string]any{"exit_code": 0})
 	result, e := ReadResult(*r.ResultPath, r)
 	if e == nil {
 		e = verifyRunWorkspace(context.Background(), s.Config, r)
@@ -306,8 +444,22 @@ func (s *Service) finished(err error) error {
 	}
 	if e != nil {
 		s.blocked(r, "Invalid handoff: "+e.Error())
+		s.note(r, "steer", "result", "failed", "invalid handoff", e.Error(), nil)
+		s.closeActivity(r)
+	} else if r.PR.URL != nil {
+		s.note(r, "steer", "result", "completed", "pr submitted", *r.PR.URL, nil)
+	} else {
+		s.note(r, "steer", "result", "completed", "blocked by workflow", deref(r.Error), nil)
+		s.closeActivity(r)
 	}
 	return s.save()
+}
+
+func deref(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
 }
 func (s *Service) pollPRs(ctx context.Context) error {
 	return s.pollPRsFor(ctx, "")
@@ -337,12 +489,17 @@ func (s *Service) pollPRsFor(ctx context.Context, runID string) error {
 			}
 			continue
 		}
+		previous := r.PR.State
 		r.PR.QueryError = nil
 		r.PR.State = info.State
 		r.PR.MergedAt = info.MergedAt
 		r.PR.MergeCommit = info.MergeCommit
+		if info.State != previous {
+			s.note(r, "steer", "pr", "info", "pr "+info.State, *r.PR.URL, map[string]any{"previous": previous})
+		}
 		if info.BaseBranch != s.Config.Branch {
 			s.blocked(r, "PR target branch mismatch: "+info.BaseBranch)
+			s.note(r, "steer", "pr", "failed", "pr target mismatch", info.BaseBranch, nil)
 			if e = s.save(); e != nil {
 				return e
 			}
@@ -350,6 +507,7 @@ func (s *Service) pollPRsFor(ctx context.Context, runID string) error {
 		}
 		if info.State == "closed_unmerged" {
 			s.blocked(r, "PR closed without merge; manual recovery required")
+			s.note(r, "steer", "pr", "failed", "pr closed unmerged", *r.PR.URL, nil)
 		}
 		// Persist authoritative merge evidence before attempting an external close.
 		if e = s.save(); e != nil {
@@ -363,6 +521,8 @@ func (s *Service) pollPRsFor(ctx context.Context, runID string) error {
 				r.BeadsStatus = "closed"
 				r.FinishTaskStatus = "completed"
 				r.Error = nil
+				s.note(r, "steer", "completion", "completed", "task closed", r.TaskID, nil)
+				s.closeActivity(r)
 			}
 			if e = s.save(); e != nil {
 				return e
@@ -378,6 +538,14 @@ func (s *Service) event(ev WorkerEvent) error {
 	s.active.LastEvent = ptr(ev.Summary)
 	if ev.Session != "" {
 		s.active.SessionID = ptr(ev.Session)
+	}
+	if ev.Activity.Kind != "" {
+		if w := s.activityWriter(s.active); w != nil {
+			if e := w.Write(ev.Activity); e != nil {
+				s.setError(e)
+			}
+		}
+		s.emitConsole(ev.Activity)
 	}
 	return s.save()
 }
@@ -395,6 +563,7 @@ func (s *Service) RetryOne(ctx context.Context, runID string) error {
 func (s *Service) run(ctx context.Context, retryRunID string) (retErr error) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	defer s.closeAllActivities()
 	s.State.Service.Mode = "scheduler"
 	if retryRunID != "" {
 		s.State.Service.Mode = "retry-one"
@@ -580,7 +749,7 @@ func (s *Service) AcceptResult(ctx context.Context, runID, path string) error {
 		if r.FinishTaskStatus == "completed" {
 			return errors.New("completed runs cannot be changed")
 		}
-		if inspectProcess(r.Process) == "matching process still exists" {
+		if inspectProcessWithConfig(s.Config, r.Process) == "matching process still exists" {
 			return errors.New("original process still exists; stop it first")
 		}
 		result, e := ReadResult(path, r)
@@ -622,7 +791,7 @@ func (s *Service) MarkStopped(runID string) error {
 		if r.ExecutionStatus != "unknown" {
 			return errors.New("mark-stopped only applies to unknown execution")
 		}
-		if inspectProcess(r.Process) == "matching process still exists" {
+		if inspectProcessWithConfig(s.Config, r.Process) == "matching process still exists" {
 			return errors.New("original process still exists; stop it first")
 		}
 		r.ExecutionStatus = "failed"

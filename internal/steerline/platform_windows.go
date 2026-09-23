@@ -92,6 +92,7 @@ type childProcess struct {
 	identity ProcessIdentity
 }
 
+func (p *childProcess) Identity() ProcessIdentity { return p.identity }
 func (p *childProcess) Kill() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -183,7 +184,7 @@ func identityFromHandle(h windows.Handle, pid int) (ProcessIdentity, error) {
 	if e := windows.QueryFullProcessImageName(h, 0, &b[0], &n); e != nil {
 		return ProcessIdentity{}, e
 	}
-	return ProcessIdentity{PID: pid, Created: fmt.Sprintf("%08x%08x", created.HighDateTime, created.LowDateTime), Executable: canonical(windows.UTF16ToString(b[:n]))}, nil
+	return ProcessIdentity{Kind: "os", PID: pid, Created: fmt.Sprintf("%08x%08x", created.HighDateTime, created.LowDateTime), Executable: canonical(windows.UTF16ToString(b[:n]))}, nil
 }
 func inspectProcess(old *ProcessIdentity) string {
 	if old == nil {

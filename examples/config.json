@@ -27,6 +27,18 @@
   "sandbox": "workspace-write",
   "model": "",
   "profile": "",
+  "agent": "codex",
+  "host": "orca",
+  "stall_timeout": "5m",
+  "orca": {
+    "executable": "orca",
+    "args": [],
+    "shell": "cmd.exe",
+    "wait_timeout": "15m",
+    "keep_terminal": false,
+    "activate": false,
+    "fallback": "local"
+  },
   "completion": null,
   "pr": {
     "kind": "gitea",

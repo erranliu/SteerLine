@@ -81,7 +81,7 @@ bd 1.1.2 在领取冲突时可能退出 0 却不返回领取 JSON，因此会同
 
 启用 completion 时，将命令和 Beads 身份随派发记录固定下来。确认 PR 合并后，服务在该 worktree 中通过参数数组和 stdin JSON 调用命令，核对返回的任务/运行/PR 回执并重新读取 Beads closed。自定义回调失败不会退回普通 close，即使任务已经关闭也继续重试其尾部流程。merge-h-308-code 的适配器复用原有生命周期脚本，处理拆分与后继，并刷新核验 BV。
 
-执行期间事件写入每次运行的 `events.jsonl`，stderr 单独写入 `stderr.log`。运行快照只保存最近事件类型摘要（最多 512 字符），不累计对话。退出 0 后仍必须验证独立结构化结果；PR 绑定在 runtime 中持久保存，并拒绝同一 PR 被多个本地运行复用。
+执行期间事件写入每次运行的 `events.jsonl`，stderr 单独写入 `stderr.log`；同目录的 `activity.jsonl` 是归一化后的稳定事件流（见下文“查看运行”）。运行快照只保存最近事件类型摘要（最多 512 字符），不累计对话。退出 0 后仍必须验证独立结构化结果；PR 绑定在 runtime 中持久保存，并拒绝同一 PR 被多个本地运行复用。
 
 正常停止：前台按 Ctrl+C，或另一终端执行：
 
@@ -128,6 +128,34 @@ accept-result 在仓库锁下重新核验调度器准备记录、工作目录/�
 retry 复用同一个任务、领取和 worktree，使用当前配置的模型与权限。它不重新 claim、不根据 ready 派发其他任务，也不处理其他运行的 PR；启动检查仍可只读探测 Beads。旧日志原地保留，新日志写入 `runs/<run_id>/attempts/<attempt_id>`，其中 previous-run.json 保存上一次状态。失败/阻塞后停止；成功提 PR 后仅轮询该 PR，完成结项后停止。已有代码改动、提交、未知执行或其他仍存活的 worker 会拒绝重试，应走人工修复流程。
 
 “并发 1”只表示最多一个 worker，正常 run 会在它退出后继续处理队列；需要限制本次只验证一个已有任务时使用 retry。retry 不是自动重跑机制。默认权限仍是 workspace-write，只有显式配置 sandbox=danger-full-access 才使用全访问。
+
+## 查看运行
+
+每个运行有两份日志：`events.jsonl` 是 codex/pi 的原始事件流（取证，永不改动）；`activity.jsonl` 是归一化后的稳定记录，与 codex/pi 的 schema 解耦。两者都在 `runs/<run_id>/`（retry 在 `attempts/<attempt_id>/`）。契约见 [activity](docs/activity.md)。
+
+```powershell
+# 单终端：run 直接实时渲染（TTY 下默认 pretty）
+.\bin\steerline.exe run -config .\steerline.local.json
+.\bin\steerline.exe run -config .\steerline.local.json -console summary|json|off
+
+# 第二终端或事后：跟随某次运行的完整生命周期
+.\bin\steerline.exe watch -config .\steerline.local.json
+.\bin\steerline.exe watch -config .\steerline.local.json -run-id <run-id|task-id> --follow=false
+.\bin\steerline.exe watch -config .\steerline.local.json --json   # 稳定 JSONL
+.\bin\steerline.exe watch -config .\steerline.local.json --raw    # 原始事件流
+```
+
+`watch` 只读 `runtime.json` 和运行文件，不需要服务在跑，也不改任何状态。若 `activity.jsonl` 不存在（旧运行或原始宿主采集），会回退到现场归一化 `events.jsonl`。
+
+执行宿主可配置为 Orca（仅作可见终端/远程宿主；调度、编排、恢复仍在服务）。`host: "orca"` 时 worker 在 Orca 终端里运行，`events.jsonl` / `result.json` / 退出码仍是权威；Orca 不可用按 `fallback` 回退本地或失败。红线与规范见 [hosting](docs/hosting.md)、[hosting 规范](docs/hosting-spec.md)。
+
+```json
+"agent": "codex",
+"host": "orca",
+"orca": {"executable": "orca", "shell": "cmd.exe", "wait_timeout": "15m", "keep_terminal": false, "fallback": "local"}
+```
+
+`host` 取 `orca`（默认，由 Orca 创建 worktree 并启动 agent）或 `local`（headless 本地进程，保留作回归基线）；`agent` 是交给 Orca `--agent` 的 id（默认 `codex`，可 `pi`/`claude`/…）。执行事实（worktree、agent 存活）以 Orca 为准；任务、完成、PR 核实仍以 Steerline + 平台为准。详见 [hosting 红线](docs/hosting.md)。
 
 ## 数据与保留
 

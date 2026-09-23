@@ -293,7 +293,7 @@ func TestWorktreeRootConfigurationAndLegacySnapshot(t *testing.T) {
 	s.State.Runs = []*Run{{TaskID: "old-1", RunID: "legacy", Claimant: f.c.Claimant, ExecutionStatus: "succeeded", FinishTaskStatus: "waiting_pr_merge", PR: PRState{URL: ptr(f.server.URL + "/owner/repo/pulls/1"), State: "open"}}}
 	require(t, s.save())
 	restarted := f.service(t)
-	if restarted.State.SchemaVersion != 2 || restarted.State.Runs[0].FinishTaskStatus != "waiting_pr_merge" {
+	if restarted.State.SchemaVersion != 3 || restarted.State.Runs[0].FinishTaskStatus != "waiting_pr_merge" {
 		t.Fatal("legacy PR polling was not preserved")
 	}
 }
