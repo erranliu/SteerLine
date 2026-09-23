@@ -2,6 +2,8 @@
 
 依据：[Spec](pr-03-service-lifecycle.spec.md)。依赖：PR 2。
 
+实现状态：本分支已完成代码与文档，等待协调审核。下表记录本环境实际执行的验证；未取得成功证据的验收仍保持未验证，不以 mock 或字段断言替代。
+
 ## 实施步骤
 
 1. **提取项目身份与探测。** 增加轻量、只读的配置身份解析，获得 canonical common-dir、run_dir 和配置目标。新增结构化 OS 进程探测结果，Windows 复用 FILETIME/可执行路径身份，Linux 复用 boot ID/starttime；区分不存在与不可访问。
@@ -19,6 +21,17 @@
 - 并发运行两个 start-service，覆盖相同配置以及同 common-dir 不同 run_dir；检查唯一 ready 实例、失败诊断和连接获胜者行为。
 - 故障注入 preflight 失败、锁失败、子进程早退、握手延期；断言 UI/CLI 不误报成功，不自动重试。
 - Linux 平台至少做编译检查；若未实机验证，文档明确标注。Windows 是合并验收平台。
+
+### 本分支实际结果
+
+- 新增连接组合、进程匹配/PID 复用/确定不存在分类的原生测试；这些定向测试通过。
+- `go test ./... -timeout 10m` 通过（Windows，327.702 秒）；Linux amd64 的 `internal/steerline` 测试二进制和 CLI 均交叉编译通过。
+- 原生 Windows 上，`CreateProcess` 使用 `CREATE_BREAKAWAY_FROM_JOB | DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP` 成功；父测试进程的直接 Job flags 为 `0x2800`，但隔离子进程仍通过 `IsProcessInJob` 报告属于一个 flags 为 `0x2000` 的 Job。启动器据此终止该启动尝试、返回明确错误并写入失败 startup 记录。隔离子进程复测确认不是 `IsProcessInJob` 的误判。
+- Explorer PID 40708 也处于 Job Object。经 WMI 创建独立 console 的验收探针被本地执行策略拒绝，命令没有执行；本次没有可用的独立真实 TTY 窗口，故未运行 TTY 关闭验收。
+- 依赖成功脱离的真实后台 ready/worker 存活、关闭父 TTY 后身份不变、后台 stop 的进程退出、同配置竞争启动及不同 run_dir 锁竞争集成用例按 Job 能力检查跳过，尚无成功脱离结论。需要在允许该子进程链离开所有祖先 Job 的 Windows 会话补跑，尤其 L-A1～L-A5 与 L-A7。
+- 原生测试覆盖了启动锁互斥、pending startup_id 重观测、preflight 失败记录与日志、PID 复用/不存在及连接分类；完整套件内前台 CLI 的实例锁和停服回归通过。
+- L-A6 的新鲜度、ready、协议不兼容、配置摘要变化、仓库身份不匹配、PID 已复用和确定不存在分类已由原生定向测试覆盖；访问拒绝仍未实测。
+- Linux 未在主机实测会话分离。
 
 ## 完成条件
 

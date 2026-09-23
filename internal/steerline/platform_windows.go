@@ -3,6 +3,7 @@
 package steerline
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -69,14 +70,8 @@ type RepoLock struct {
 func LockRepository(identity string) (*RepoLock, error) {
 	// Inside Git's common directory: shared by linked worktrees and all configurations,
 	// outside the tracked checkout. Lock lifetime belongs to the OS, not a stale PID file.
-	f, e := os.OpenFile(filepath.Join(identity, "steerline.lock"), os.O_CREATE|os.O_RDWR, 0600)
+	l, e := lockPath(filepath.Join(identity, "steerline.lock"))
 	if e != nil {
-		return nil, e
-	}
-	l := &RepoLock{f: f}
-	e = windows.LockFileEx(windows.Handle(f.Fd()), windows.LOCKFILE_EXCLUSIVE_LOCK|windows.LOCKFILE_FAIL_IMMEDIATELY, 0, 1, 0, &l.o)
-	if e != nil {
-		f.Close()
 		return nil, fmt.Errorf("repository already locked: %w", e)
 	}
 	return l, nil
@@ -84,6 +79,46 @@ func LockRepository(identity string) (*RepoLock, error) {
 func (l *RepoLock) Close() {
 	windows.UnlockFileEx(windows.Handle(l.f.Fd()), 0, 1, 0, &l.o)
 	l.f.Close()
+}
+
+func lockPath(path string) (*RepoLock, error) {
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0600)
+	if err != nil {
+		return nil, err
+	}
+	l := &RepoLock{f: f}
+	err = windows.LockFileEx(windows.Handle(f.Fd()), windows.LOCKFILE_EXCLUSIVE_LOCK|windows.LOCKFILE_FAIL_IMMEDIATELY, 0, 1, 0, &l.o)
+	if err != nil {
+		f.Close()
+		if errors.Is(err, windows.ERROR_LOCK_VIOLATION) {
+			return nil, errLockBusy
+		}
+		return nil, err
+	}
+	return l, nil
+}
+
+func tryExistingLock(path string) (*RepoLock, error) { return lockPath(path) }
+
+func probeLockFile(path string) (bool, error) {
+	f, err := os.OpenFile(path, os.O_RDWR, 0)
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	defer f.Close()
+	lock := &RepoLock{f: f}
+	err = windows.LockFileEx(windows.Handle(f.Fd()), windows.LOCKFILE_EXCLUSIVE_LOCK|windows.LOCKFILE_FAIL_IMMEDIATELY, 0, 1, 0, &lock.o)
+	if errors.Is(err, windows.ERROR_LOCK_VIOLATION) {
+		return true, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	err = windows.UnlockFileEx(windows.Handle(f.Fd()), 0, 1, 0, &lock.o)
+	return false, err
 }
 
 type childProcess struct {
@@ -174,6 +209,94 @@ func startProcess(cmd *exec.Cmd) (*childProcess, error) {
 	}
 	return fail(fmt.Errorf("cannot locate suspended initial thread: %w", e))
 }
+
+func startDetachedProcess(cmd *exec.Cmd) (ProcessIdentity, error) {
+	// CREATE_BREAKAWAY_FROM_JOB is required because the caller may be a UI in a
+	// kill-on-close job. IsProcessInJob below verifies the result before we claim
+	// the service is detached. DETACHED_PROCESS also prevents console inheritance.
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		CreationFlags: windows.CREATE_BREAKAWAY_FROM_JOB | windows.DETACHED_PROCESS | windows.CREATE_NEW_PROCESS_GROUP,
+		HideWindow:    true,
+	}
+	if err := cmd.Start(); err != nil {
+		return ProcessIdentity{}, fmt.Errorf("cannot detach service from caller job or console: %w", err)
+	}
+	h, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION|windows.SYNCHRONIZE, false, uint32(cmd.Process.Pid))
+	if err != nil {
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+		return ProcessIdentity{}, fmt.Errorf("cannot verify detached service process: %w", err)
+	}
+	defer windows.CloseHandle(h)
+	var inJob uint32
+	ok, _, callErr := windows.NewLazySystemDLL("kernel32.dll").NewProc("IsProcessInJob").Call(uintptr(h), 0, uintptr(unsafe.Pointer(&inJob)))
+	if ok == 0 {
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+		return ProcessIdentity{}, fmt.Errorf("cannot verify service Job Object isolation: %w", callErr)
+	}
+	if inJob != 0 {
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+		parentInJob, parentFlags, parentErr := currentJobDiagnostics()
+		detail := fmt.Sprintf("service remains inside a Job Object (parent_in_job=%t", parentInJob)
+		if parentInJob {
+			detail += fmt.Sprintf(", parent_job_limit_flags=0x%x", parentFlags)
+		}
+		if parentErr != nil {
+			detail += ", parent_job_query_error=" + parentErr.Error()
+		}
+		return ProcessIdentity{}, errors.New(detail + "); cannot guarantee survival after the UI exits")
+	}
+	id, err := identityFromHandle(h, cmd.Process.Pid)
+	if err != nil {
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+		return ProcessIdentity{}, fmt.Errorf("cannot identify detached service process: %w", err)
+	}
+	return id, nil
+}
+
+func currentJobDiagnostics() (bool, uint32, error) {
+	process, err := windows.GetCurrentProcess()
+	if err != nil {
+		return false, 0, err
+	}
+	inJob, err := processInAnyJob(process)
+	if err != nil {
+		return false, 0, err
+	}
+	if !inJob {
+		return false, 0, nil
+	}
+	var limits windows.JOBOBJECT_EXTENDED_LIMIT_INFORMATION
+	err = windows.QueryInformationJobObject(0, windows.JobObjectExtendedLimitInformation, uintptr(unsafe.Pointer(&limits)), uint32(unsafe.Sizeof(limits)), nil)
+	if err != nil {
+		return true, 0, err
+	}
+	return true, limits.BasicLimitInformation.LimitFlags, nil
+}
+
+func processInAnyJob(process windows.Handle) (bool, error) {
+	var inJob uint32
+	ok, _, callErr := windows.NewLazySystemDLL("kernel32.dll").NewProc("IsProcessInJob").Call(uintptr(process), 0, uintptr(unsafe.Pointer(&inJob)))
+	if ok == 0 {
+		return false, callErr
+	}
+	return inJob != 0, nil
+}
+
+func processInJobByPID(pid int) (bool, error) {
+	if pid <= 0 {
+		return false, errors.New("invalid process ID")
+	}
+	process, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, uint32(pid))
+	if err != nil {
+		return false, err
+	}
+	defer windows.CloseHandle(process)
+	return processInAnyJob(process)
+}
 func identityFromHandle(h windows.Handle, pid int) (ProcessIdentity, error) {
 	var created, exit, kernel, user windows.Filetime
 	if e := windows.GetProcessTimes(h, &created, &exit, &kernel, &user); e != nil {
@@ -199,20 +322,37 @@ func currentProcessIdentity() (*ProcessIdentity, error) {
 	return &id, nil
 }
 func inspectProcess(old *ProcessIdentity) string {
-	if old == nil {
-		return "identity unavailable"
+	probe := probeProcess(old)
+	switch probe.State {
+	case ProcessAbsent:
+		return "process absent"
+	case ProcessMatches:
+		return "matching process still exists"
+	case ProcessReused:
+		return "PID belongs to a different process"
+	default:
+		return "process identity unavailable: " + probe.Reason
 	}
-	h, e := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, uint32(old.PID))
-	if e != nil {
-		return "process absent or inaccessible"
+}
+
+func probeProcess(old *ProcessIdentity) ProcessProbe {
+	if old == nil || old.PID <= 0 || old.Kind != "os" {
+		return ProcessProbe{State: ProcessUnknown, Reason: "process identity is missing or unsupported"}
+	}
+	h, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, uint32(old.PID))
+	if err != nil {
+		if errors.Is(err, windows.ERROR_INVALID_PARAMETER) {
+			return ProcessProbe{State: ProcessAbsent, Reason: "process does not exist"}
+		}
+		return ProcessProbe{State: ProcessUnknown, Reason: err.Error()}
 	}
 	defer windows.CloseHandle(h)
-	id, e := identityFromHandle(h, old.PID)
-	if e != nil {
-		return "process identity unavailable"
+	id, err := identityFromHandle(h, old.PID)
+	if err != nil {
+		return ProcessProbe{State: ProcessUnknown, Reason: err.Error()}
 	}
 	if id.Created == old.Created && id.Executable == old.Executable {
-		return "matching process still exists"
+		return ProcessProbe{State: ProcessMatches, Reason: "process creation identity and executable match"}
 	}
-	return "PID belongs to a different process"
+	return ProcessProbe{State: ProcessReused, Reason: "PID belongs to a different process identity"}
 }

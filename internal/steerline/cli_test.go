@@ -1,6 +1,9 @@
 package steerline
 
 import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"os"
 	"os/exec"
@@ -21,6 +24,8 @@ func TestNativeCLIStartSecondInstanceAndStop(t *testing.T) {
 	configPath := filepath.Join(f.c.RunDir, "config.json")
 	data, _ := json.Marshal(f.c)
 	require(t, os.WriteFile(configPath, data, 0600))
+	digest := sha256.Sum256(data)
+	f.c.configDigest = hex.EncodeToString(digest[:])
 	log, e := os.Create(filepath.Join(f.c.RunDir, "cli.log"))
 	require(t, e)
 	defer log.Close()
@@ -54,7 +59,9 @@ func TestNativeCLIStartSecondInstanceAndStop(t *testing.T) {
 			break
 		}
 		if time.Now().After(readyDeadline) {
-			t.Fatal("CLI runtime did not become control-ready")
+			connection := ConnectService(context.Background(), f.c)
+			b, _ := os.ReadFile(log.Name())
+			t.Fatalf("CLI runtime did not become control-ready: state=%s diagnostic=%q runtime=%+v log=%s", connection.State, connection.Diagnostic, connection.Snapshot.Runtime, b)
 		}
 		time.Sleep(25 * time.Millisecond)
 	}

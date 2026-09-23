@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -12,11 +13,22 @@ import (
 
 func controlReviewService(t *testing.T) *Service {
 	t.Helper()
-	dir := t.TempDir()
-	c := Config{RunDir: dir, RuntimeFile: "runtime.json", Repository: dir, Remote: "origin", Branch: "main", Claimant: "review", Heartbeat: "5s", identity: filepath.Join(dir, ".git")}
-	s := &Service{Config: c, store: &Store{Path: filepath.Join(dir, c.RuntimeFile)}, activities: map[string]*ActivityWriter{}, State: Runtime{
-		SchemaVersion: 4, Repository: Repository{Identity: c.identity, Remote: c.Remote, Branch: c.Branch},
-		Service: ServiceState{Status: "running", Ready: true, InstanceID: newID(), Claimant: c.Claimant, ControlProtocol: 1},
+	root := t.TempDir()
+	repo, runDir := filepath.Join(root, "repo"), filepath.Join(root, "runtime")
+	require(t, os.MkdirAll(repo, 0700))
+	require(t, os.MkdirAll(runDir, 0700))
+	git, err := exec.LookPath("git")
+	require(t, err)
+	if output, e := exec.Command(git, "init", "--quiet", repo).CombinedOutput(); e != nil {
+		t.Fatalf("initialize control review repository: %v %s", e, output)
+	}
+	identity := fixtureGit(t, repo, "rev-parse", "--path-format=absolute", "--git-common-dir")
+	processIdentity, err := currentProcessIdentity()
+	require(t, err)
+	c := Config{RunDir: runDir, RuntimeFile: "runtime.json", Repository: repo, Remote: "origin", Branch: "main", Claimant: "review", Heartbeat: "5s", Git: Command{Executable: git}, identity: canonical(identity), configDigest: strings.Repeat("a", 64)}
+	s := &Service{Config: c, store: &Store{Path: filepath.Join(runDir, c.RuntimeFile)}, activities: map[string]*ActivityWriter{}, State: Runtime{
+		SchemaVersion: 4, Repository: Repository{Path: c.Repository, Identity: c.identity, Remote: c.Remote, Branch: c.Branch},
+		Service: ServiceState{Status: "running", Ready: true, InstanceID: newID(), PID: processIdentity.PID, Claimant: c.Claimant, ProcessIdentity: processIdentity, ConfigDigest: c.configDigest, ControlProtocol: 1, Capabilities: []string{"start_task", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "stop_service"}},
 		Control: ControlState{DispatchMode: "manual", Revision: 1, Blockers: []ControlBlocker{}}, Runs: []*Run{},
 	}}
 	require(t, s.save())

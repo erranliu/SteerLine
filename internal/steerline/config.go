@@ -305,9 +305,6 @@ func (c Config) Identity() string     { return c.identity }
 // or create runtime directories. Control clients use it without constructing a
 // Service or taking ownership of scheduler state.
 func (c *Config) ResolveIdentity(ctx context.Context) error {
-	if c.identity != "" {
-		return nil
-	}
 	timeout := duration(c.CommandTimeout)
 	if timeout <= 0 {
 		timeout = 30 * time.Second
@@ -325,7 +322,11 @@ func (c *Config) ResolveIdentity(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	c.identity = canonical(resolved)
+	identity := canonical(resolved)
+	if c.identity != "" && canonical(c.identity) != identity {
+		return errors.New("configured repository identity changed after it was resolved")
+	}
+	c.identity = identity
 	return nil
 }
 

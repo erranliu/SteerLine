@@ -75,14 +75,28 @@ PR 已合并 + 结项命令 + bd close:  finish=completed   beads=closed
 命令：
 
 - `steerline home -config ...`：打印 home / bin / etc / state / repository / run_dir。
-- `steerline install`：把当前二进制拷到 `%STEERLINE_HOME%\bin\steerline.exe`（目标被运行中的服务占用时会报错，先 `steerline stop`）。
+- `steerline install`：把当前二进制拷到 `%STEERLINE_HOME%\bin\steerline.exe`（目标被运行中的服务占用时会报错，先用 `steerline stop-service` 停服并核验退出）。
+- `steerline start-service -config ...`：从稳定安装路径显式启动独立服务，新实例为 manual 派发模式；已存在兼容实例则连接并保留现有模式。
+- `steerline stop-service -config ...`：提交 `stop_service`，并等待终态回执、原服务进程退出及仓库/run_dir 锁释放。`steerline stop` 仍是旧 `stop.json` 兼容入口。
 
 一句话：**改代码在任意 worktree，`steerline install` 一次；服务和查看器永远跑 `bin\steerline.exe`，状态永远在 `state\<repoKey>\`。**
+
+## 后台服务身份与启动记录
+
+`start-service` 的启动尝试记录保存在 `run_dir/service/startups/<startup_id>/startup.json`，独立日志为同目录的 `service.log`。记录绑定 repository identity/path、run_dir、remote、branch、claimant、配置摘要、startup_id、实例 ID 和 OS 进程身份；它只用于识别启动尝试，不代替 runtime。startup_id 只接受 32 位小写十六进制，输出文件路径必须留在本次启动目录中。
+
+对于 PR 2 的 v4 服务（没有 `startup_id`），配置摘要变化时，连接端还要求匹配的 OS 身份及 repository/run_dir 两把锁，才能保留显式 stop 能力。停服客户端确认 `stop_service=applied`、原进程退出和两把锁释放后，会在 `service/stops/<instance_id>.json` 写入版本化停服观察记录，证明该旧实例原本属于此 run_dir；这使已停服务在修改配置摘要后仍可显式重新启动，不改 runtime v4。
+
+连接读取 runtime 快照、新鲜度、进程探测、配置摘要和控制协议能力，并单独呈现。进程探测区分匹配、确定不存在、PID 已复用和无法核验；权限不足及身份不明不等于离线。过期 heartbeat、ready=false 和协议不兼容均保留旧实例，不自动另起服务。配置摘要变化时保留观察与显式停服能力，并禁用其他控制动作。控制台退出、连接断开和等待超时都不会停止服务。
+
+`service/launch.lock` 只串行化同一 run_dir 下的启动客户端；服务仍分别持有 Git common-dir 仓库锁和 run_dir 锁。两配置指向同仓库但使用不同 run_dir 时，仓库锁拒绝第二个服务。启动请求返回成功只代表子进程已创建；客户端须收到同一 startup_id、身份匹配且 ready=true 的 runtime 握手。30 秒超时会保留该 ID；后续启动调用观察原尝试，不会因为超时重复启动或杀掉它。
+
+Windows 后台启动要求服务进程离开启动它的 Job Object，并脱离父控制台；创建后还会核验 Job Object 隔离。若宿主不允许 breakaway，明确返回错误。Linux 服务以新会话启动，不使用 worker 的父死亡信号。新启动使用 manual 派发；兼容服务连接时保留它的 mode/pause。
 
 ## 多项目
 
 - 每个目标仓库一份 `etc\<repo>.json`；`run_dir` 省略时各自派生到 `state\<repoKey>`，互不干扰。
-- 并行：一个项目一个 `steerline run` 进程；锁按仓库（git common-dir + run_dir），不同项目可同时跑，同一项目重复启动会被拒绝。
+- 并行：一个项目一个服务进程；锁按仓库（git common-dir）和 run_dir，不同仓库可同时跑。同一项目的 `start-service` 连接已有兼容服务，前台 `run` 的重复服务仍由仓库锁拒绝。
 - 入口：`steerline projects`（交互选项目/动作）、`steerline launchers`（生成双击 `.bat`）。查看器目前一个窗口看一个项目（标题带 repo）。
 - 目标仓库需先在 Orca 注册。
 

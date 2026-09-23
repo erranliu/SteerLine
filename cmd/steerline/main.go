@@ -26,13 +26,14 @@ func main() {
 }
 func run() error {
 	if len(os.Args) < 2 {
-		return fmt.Errorf("usage: steerline <run|retry|check|control|tasks|stop|watch|answer|accept-result|mark-stopped|home|install|launchers|projects> -config config.json")
+		return fmt.Errorf("usage: steerline <run|start-service|stop-service|retry|check|control|tasks|stop|watch|answer|accept-result|mark-stopped|home|install|launchers|projects> -config config.json")
 	}
 	command := os.Args[1]
 	fs := flag.NewFlagSet(command, flag.ContinueOnError)
 	config := fs.String("config", "steerline.local.json", "configuration JSON")
 	runID := fs.String("run-id", "", "manual recovery run ID, run to watch, or run to answer")
 	dispatchMode := fs.String("dispatch", "auto", "run dispatch mode: auto|manual")
+	startupID := fs.String("startup-id", "", "internal startup attempt ID")
 	taskID := fs.String("task-id", "", "control start_task target")
 	controlMode := fs.String("mode", "", "control set_dispatch_mode value: auto|manual")
 	requestID := fs.String("request-id", "", "control request to query")
@@ -57,7 +58,7 @@ func run() error {
 	if fs.NArg() != 0 {
 		return fmt.Errorf("unexpected positional arguments")
 	}
-	if command != "run" && command != "retry" && command != "check" && command != "stop" && command != "control" && command != "tasks" && command != "answer" && command != "accept-result" && command != "mark-stopped" && command != "watch" && command != "home" && command != "install" && command != "launchers" && command != "projects" {
+	if command != "run" && command != "start-service" && command != "stop-service" && command != "retry" && command != "check" && command != "stop" && command != "control" && command != "tasks" && command != "answer" && command != "accept-result" && command != "mark-stopped" && command != "watch" && command != "home" && command != "install" && command != "launchers" && command != "projects" {
 		return fmt.Errorf("unknown command %q", command)
 	}
 	if command == "run" && *dispatchMode != "manual" && *dispatchMode != "auto" {
@@ -94,6 +95,32 @@ func run() error {
 	c, e := steerline.LoadConfig(*config)
 	if e != nil {
 		return e
+	}
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+	if command == "start-service" {
+		result, err := steerline.StartService(ctx, *config, steerline.StartServiceOptions{})
+		if err != nil {
+			return err
+		}
+		b, _ := json.Marshal(result)
+		fmt.Println(string(b))
+		if result.Status == "failed" {
+			return fmt.Errorf("service startup failed: %s", result.Error)
+		}
+		return nil
+	}
+	if command == "stop-service" {
+		result, err := steerline.StopService(ctx, c, *by, 30*time.Second)
+		if err != nil {
+			return err
+		}
+		b, _ := json.Marshal(result)
+		fmt.Println(string(b))
+		if result.Status != "stopped" {
+			return fmt.Errorf("service stop is %s: %s", result.Status, result.Diagnostic)
+		}
+		return nil
 	}
 	if command == "stop" {
 		return steerline.RequestStop(c)
@@ -182,15 +209,16 @@ func run() error {
 	if command == "answer" {
 		return steerline.AnswerDecision(c, steerline.AnswerOptions{RunID: *runID, DecisionID: *decisionID, Option: *option, Note: *note, By: *by})
 	}
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer cancel()
 	if command == "watch" {
 		if useWatchTUI(viewer.IsInteractive(), *jsonOut, *rawEvents, *noTUI, *follow, *fromStart) {
 			return viewer.Run(ctx, c, viewer.Options{RunID: *runID, Color: steerline.ColorEnabled()})
 		}
 		return steerline.Watch(ctx, c, *runID, steerline.WatchOptions{Follow: *follow, FromStart: *fromStart, JSON: *jsonOut, Raw: *rawEvents, Color: steerline.ColorEnabled()})
 	}
-	if e = c.Preflight(ctx, command == "run" || command == "retry" || command == "check"); e != nil {
+	if command == "run" {
+		return steerline.RunConfiguredService(ctx, c, *dispatchMode, *startupID, *console)
+	}
+	if e = c.Preflight(ctx, command == "retry" || command == "check"); e != nil {
 		return e
 	}
 	if command == "check" {

@@ -34,6 +34,7 @@ type Service struct {
 	candidateSnapshot *TaskSnapshot
 	explicitDispatch  bool
 	controlFault      func(string)
+	startupID         string
 }
 
 func NewService(c Config) (*Service, error) {
@@ -1060,7 +1061,13 @@ func (s *Service) run(ctx context.Context, retryRunID, dispatchMode string) (ret
 			s.State.Service.Status = "running"
 			s.State.Service.Error = nil
 		}
-		return s.save()
+		if e := s.save(); e != nil {
+			return e
+		}
+		if s.State.Service.Ready {
+			return s.publishStartupReady()
+		}
+		return nil
 	}
 	if retryRunID == "" {
 		for s.State.Control.Operation != nil {
@@ -1098,11 +1105,18 @@ func (s *Service) run(ctx context.Context, retryRunID, dispatchMode string) (ret
 				return saveErr
 			}
 		}
-		s.State.Service.Ready = candidateErr == nil && ctx.Err() == nil
+		s.State.Service.Ready = false
 		if e := s.save(); e != nil {
 			return e
 		}
 		if e := s.pollControl(ctx, cancel); e != nil {
+			return e
+		}
+		s.State.Service.Ready = candidateErr == nil && ctx.Err() == nil && s.State.Control.Operation == nil
+		if e := s.save(); e != nil {
+			return e
+		}
+		if e := s.publishStartupReady(); e != nil {
 			return e
 		}
 		if s.State.Control.Operation == nil {

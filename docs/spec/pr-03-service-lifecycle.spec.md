@@ -1,6 +1,8 @@
 # PR 3 Spec：后台服务生命周期
 
-状态：待实现。依赖：PR 2。对应 [Plan](pr-03-service-lifecycle.plan.md)。
+状态：本分支已实现，待协调审核。依赖：PR 2。对应 [Plan](pr-03-service-lifecycle.plan.md)。
+
+当前 Windows 宿主中的测试进程处于不允许脱离的 Job Object 环境。实现会检测并明确拒绝这种启动；因此本分支尚未取得“启动父进程退出后服务与 worker 仍存活”的成功实测证据。该验收门槛保留给协调审核/合并前在允许 breakaway 的 Windows 会话复测。
 
 ## 目标
 

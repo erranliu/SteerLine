@@ -17,6 +17,9 @@ Copy-Item .\examples\config.json .\steerline.local.json
 .\bin\steerline.exe run -config .\steerline.local.json
 # 手动派发：服务启动并刷新候选，但不会自动领取 ready 任务
 .\bin\steerline.exe run -config .\steerline.local.json -dispatch manual
+# 安装当前构建，然后显式启动独立后台服务；新服务为 manual 派发模式
+.\bin\steerline.exe install
+.\bin\steerline.exe start-service -config .\steerline.local.json
 ```
 
 ### 机器级目录（跨 worktree 稳定）
@@ -110,6 +113,15 @@ bd 1.1.2 在领取冲突时可能退出 0 却不返回领取 JSON，因此会同
 .\bin\steerline.exe stop -config .\steerline.local.json
 ```
 
+`start-service` 使用安装目录 `%STEERLINE_HOME%\bin\steerline.exe` 启动独立服务，stdin 脱离，输出写入 `run_dir\service\startups\<startup_id>\service.log`。只有匹配 `startup_id`、完整实例身份且 `ready=true` 的 runtime 快照才算启动成功。新服务以 manual 模式启动，不自动领取 ready 任务；若已存在兼容服务，命令连接它并保留其派发模式和暂停状态。启动等待最多 30 秒；超时返回待确认的 `startup_id`，再次执行会观察该次启动，不会另起服务。启动失败的原因写入同目录 `startup.json` 和日志。
+
+```powershell
+# 明确停止服务，等待 stop 回执、原服务进程退出和仓库/run_dir 锁释放
+.\bin\steerline.exe stop-service -config .\steerline.local.json
+```
+
+关闭 `watch` 或控制台不会发送停止请求，服务及其 worker 继续运行。若 Windows 父进程所在的 Job Object 不允许 breakaway，`start-service` 会报告无法托管服务，并保留启动诊断；此时可继续使用前台 `run`。连接会分别报告心跳过期、ready=false、PID 已复用、进程访问受限、配置摘要变化和协议不兼容，不会将未知进程当作已退出。
+
 `run` 每次启动默认 `-dispatch auto`，保持既有自动调度；`-dispatch manual` 会刷新候选并继续处理当前运行、决策和 PR，但不自动领取新任务。控制客户端读取 runtime v4 后发布带实例 ID 和控制版本的不可变请求，服务完成后写持久回执：
 
 ```powershell
@@ -124,8 +136,11 @@ bd 1.1.2 在领取冲突时可能退出 0 却不返回领取 JSON，因此会同
 .\bin\steerline.exe control -config .\steerline.local.json -action pause_dispatch -wait
 .\bin\steerline.exe control -config .\steerline.local.json -action resume_dispatch -wait
 
-# 以控制协议停服；steerline stop 仍保留 stop.json 兼容入口
+# 提交停服请求并等待控制回执（不等同于进程退出确认）
 .\bin\steerline.exe control -config .\steerline.local.json -action stop_service -wait
+
+# 一步提交并核验停服、原进程退出和两把服务锁释放
+.\bin\steerline.exe stop-service -config .\steerline.local.json
 
 # 用回执中的 request_id 再次查询原操作结果
 .\bin\steerline.exe control -config .\steerline.local.json -request-id <request-id>
@@ -232,6 +247,8 @@ go vet ./...
 ```
 
 测试使用原生替身命令和本地 HTTP Gitea 替身，不调用真实模型，不领取业务任务，不创建或合并业务 PR。覆盖空闲心跳、跨进程并发 JSON 读取、同仓库锁、领取冲突、单次执行、等待合并释放执行槽、合并结项、依赖释放、查询失败、错误关联、缺失/无效结果、重启防重、关闭重试、Beads 不可用、持久化失败及进程树退出。另有构建并启动真正 CLI 可执行文件、第二实例拒绝和 stop 正常退出的集成测试；临时仓库路径包含空格和中文。
+
+PR 3 新增了真实 OS 进程身份、启动锁、pending startup ID、preflight 诊断和旧 runtime 分类测试。当前 Windows 宿主中，启动父进程位于嵌套 Job Object；其直接 Job 允许 breakaway，但外层 Job 不允许。启动器检测到新进程仍在 Job 内后会拒绝托管。本宿主尚未验证允许 breakaway 的环境下，后台服务/worker 在父进程退出后的存活，以及关闭真实 TTY 窗口后的行为。
 
 worktree 测试使用真实的临时 Git 仓库与本地 bare 远端，验证远端主线更新后新任务使用新提交、原 checkout 的分支/HEAD/文件保持不变、目录与分支冲突不覆盖、共享 Beads 身份错误或技能缺失时不启动、准备前后崩溃不重建不重跑，以及结构化结果不能改写工作环境事实。
 
