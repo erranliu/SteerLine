@@ -51,6 +51,31 @@ PR 已合并 + 结项命令 + bd close:  finish=completed   beads=closed
 - 现阶段**有意不对账**：为即将移除的 Beads 增加对账/漂移检测投入与目标相悖。运维上以 Beads 侧为准；需要时人工核对。
 - 若在移除 Beads 之前必须更安全，最小代价是在 `reconcile` 里对本地所有未完成 run 调 `bd show` 比对——列为可选后续项，不做默认投入。
 
+## 源码 / 二进制 / 状态 三分与 STEERLINE_HOME
+
+三种东西本质不同，不应共用一套路径习惯：
+
+| 类别 | 位置 | 生命周期 |
+| --- | --- | --- |
+| 源码 | 任意 git worktree / 分支 | 临时，可随时丢弃 |
+| 二进制 | `%STEERLINE_HOME%\bin\steerline.exe` | 稳定；`steerline install` 升级 |
+| 配置 | `%STEERLINE_HOME%\etc\<repo>.json` | 每个目标仓库一份 |
+| 状态 / 数据 | `%STEERLINE_HOME%\state\<repoKey>\runtime.json` + `runs\` | 本机该仓库的唯一真相 |
+
+`STEERLINE_HOME` 默认 `C:\SteerlineRuntime`（同名环境变量可覆盖）。
+
+`repoKey` 由仓库的 Git common-dir 派生：`<name>-<shortHash(commonDir)>`。**同一仓库的所有 worktree/clone 的 common-dir 相同**，因此：
+
+- 从任何 worktree 运行，`run_dir` 都解析到同一个 `state\<repoKey>`；
+- 配置可省略 `run_dir`，自动派生（`worktree_root` 缺省为 `<run_dir>\worktrees`）；显式写 `run_dir` 仍然生效，向后兼容。
+
+命令：
+
+- `steerline home -config ...`：打印 home / bin / etc / state / repository / run_dir。
+- `steerline install`：把当前二进制拷到 `%STEERLINE_HOME%\bin\steerline.exe`（目标被运行中的服务占用时会报错，先 `steerline stop`）。
+
+一句话：**改代码在任意 worktree，`steerline install` 一次；服务和查看器永远跑 `bin\steerline.exe`，状态永远在 `state\<repoKey>\`。**
+
 ## 相关文档
 
 - 数据契约字段细节：[data-contract](data-contract.md)
