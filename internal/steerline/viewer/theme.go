@@ -13,9 +13,11 @@ var (
 	styleLabel   = lipgloss.NewStyle().Bold(true)
 )
 
-func runBadge(r *runRow) string {
-	if r == nil {
-		return ""
+// deliveryBadge is the primary badge. It reflects the SteerLine delivery axis
+// (finish_task_status plus the pending-decision pause), not the Beads status.
+func deliveryBadge(r *runRow) string {
+	if r == nil || r.run == nil {
+		return "IDLE"
 	}
 	switch {
 	case r.pending:
@@ -27,7 +29,25 @@ func runBadge(r *runRow) string {
 	case r.run.FinishTaskStatus == "blocked":
 		return "BLOCK"
 	case r.run.ExecutionStatus == "running":
-		return "RUN"
+		return "ACTIVE"
 	}
 	return "IDLE"
+}
+
+// badgeColor picks a color for a delivery badge; delimiters are plain text so
+// they can be width-measured reliably.
+func badgeColor(badge string) lipgloss.Style {
+	switch badge {
+	case "DECIDE":
+		return lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("13"))
+	case "BLOCK":
+		return lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("9"))
+	case "MERGE":
+		return lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12"))
+	case "DONE":
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
+	case "ACTIVE":
+		return lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("11"))
+	}
+	return lipgloss.NewStyle().Faint(true)
 }

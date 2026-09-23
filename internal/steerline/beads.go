@@ -14,10 +14,37 @@ type Task struct {
 	Status      string         `json:"status"`
 	Type        string         `json:"issue_type"`
 	Assignee    string         `json:"assignee"`
+	Priority    *int           `json:"priority"`
 	Description string         `json:"description"`
 	SpecID      string         `json:"spec_id"`
 	Metadata    map[string]any `json:"metadata"`
 	Labels      []string       `json:"labels"`
+}
+
+// TaskDetail is the read-only, human-facing view of one provider task. It is a
+// viewer convenience: it never claims, closes or otherwise mutates state.
+type TaskDetail struct {
+	ID          string
+	Title       string
+	Type        string
+	Status      string
+	Assignee    string
+	Priority    *int
+	Description string
+	SpecID      string
+	Labels      []string
+}
+
+// LoadTaskDetail reads one task's metadata with `bd show`. It is read-only and
+// is used by the viewer to surface task fields that runtime.json does not keep.
+func LoadTaskDetail(ctx context.Context, c Config, id string) (TaskDetail, error) {
+	r := Runner{Dir: c.Repository, Timeout: duration(c.CommandTimeout)}
+	b := Beads{Runner: r, Command: c.BD, Claimant: c.Claimant}
+	t, e := b.Show(ctx, id)
+	if e != nil {
+		return TaskDetail{}, e
+	}
+	return TaskDetail{ID: t.ID, Title: t.Title, Type: t.Type, Status: t.Status, Assignee: t.Assignee, Priority: t.Priority, Description: t.Description, SpecID: t.SpecID, Labels: t.Labels}, nil
 }
 
 type BeadsContext struct {
