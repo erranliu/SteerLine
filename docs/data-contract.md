@@ -26,11 +26,13 @@
 | repository.remote / branch | string | 明确的目标远端和主线 |
 | repository.identity | string | 规范化 Git common-dir，用于跨 worktree 锁与恢复校验 |
 | current_task | string/null | 当前准备或执行的候选任务；fetch 阶段可能尚未领取，没有则 null |
-| slot_occupied | boolean | 主线获取/worktree 准备/worker 占用，或因 unknown 旧执行而保守保留 |
+| slot_occupied | boolean | 主线获取/worktree 准备/worker 占用，或为待决策、unknown 旧执行、未结算控制操作及副作用 blocker 保留；保存时从这些事实重算 |
 | runs | array | 本服务管理的全部运行概要，初始为空数组 |
 | control | object | 派发模式、暂停、控制版本、单条 operation checkpoint 和未决副作用阻塞 |
 
 `control.dispatch_mode` 为 `manual` 或 `auto`。每次 `run` 默认 auto，也可用 `-dispatch manual` 显式启动手动模式；启动参数生效，不隐式恢复上次模式。`dispatch_paused` 只阻止新派发，当前 worker、决策续跑和 PR 核验继续。`revision` 随模式/暂停、执行槽或执行阻塞变化；心跳、日志和重复 PR 轮询不推进。`control.operation` 是服务主状态机正在执行或等待发布终态回执的 checkpoint。`control.blockers` 保留不确定的 claim/worktree/worker 等执行副作用，阻止新任务派发，直到后续人工恢复动作解除。
+
+控制 revision 按 service.instance_id 隔离，每个新实例从 1 开始；不占执行槽的其他 PR 完成不会使派发版本失效。run.control_revision 跨实例保存，并覆盖工作目录、base、进程身份等恢复证据的变化。自动派发、显式启动、旧 retry 和决策续跑共用执行守卫；决策续跑可以使用为待决策预留的槽，但不能绕过 unknown、控制 checkpoint 或 blocker。
 
 ## 每项运行
 
@@ -80,9 +82,9 @@ control/receipts/<request_id>.json
 tasks.json
 ```
 
-客户端使用完整 32 位小写十六进制 request ID，通过同目录临时文件加原子 create-if-absent 发布 request.json。相同 ID、相同内容再次发布只查询原回执；同 ID 不同内容冲突，不覆盖原请求。空目录和临时文件不会被服务消费。服务只处理完整请求并自行推导回执路径，单请求上限 3 MiB。
+客户端使用完整 32 位小写十六进制 request ID，通过同目录临时文件加原子 create-if-absent 发布 request.json。相同 ID、相同内容再次发布只查询原回执；同 ID 不同内容冲突，不覆盖原请求。空目录和临时文件不会被服务消费。服务只处理完整请求，并以经过校验的请求目录 ID 推导回执路径；请求正文中的错误 ID 不能指定另一个输出文件。单请求上限 3 MiB。
 
-请求协议固定 `protocol_version=1`，包含 `repository_identity`、精确的 `instance_id`、`action`、`expected_control_revision`、严格动作 payload、`requested_by`、`created_at` 和 `expires_at`。客户端默认两分钟有效期；服务在受理前核验仓库、实例、版本和期限。`stop_service` 只核验实例和仓库，不依赖易变化的控制 revision。未知字段或不匹配的路径 ID 均拒绝。
+请求协议固定 `protocol_version=1`，包含 `repository_identity`、精确的 `instance_id`、`action`、`expected_control_revision`、严格动作 payload、`requested_by`、`created_at` 和 `expires_at`。客户端默认两分钟有效期；服务在受理前核验仓库、实例、版本和期限。`stop_service` 仍核验协议、实例、仓库、payload 与受理期限，但不依赖 ready 或易变化的控制 revision。停止请求可以取消初始化，受理后也不会因清理期间超过 expires_at 而丢弃。未知字段、缺失必需 payload 或不匹配的路径 ID 均拒绝；无参数动作允许省略 payload 或使用空对象。
 
 本阶段支持的动作和 payload：
 
@@ -97,6 +99,8 @@ tasks.json
 回执状态：`applying` 表示服务已持久化 checkpoint 并开始动作；`applied` 表示动作完成条件已落盘；`rejected` 表示前提不符、没有任务副作用；`failed` 表示动作失败且已知副作用已记录；`indeterminate` 表示重启或通信中断后无法证明结果。常用 `code` 包括 `stale_instance`、`stale_revision`、`expired`、`slot_busy`、`dispatch_paused`、`wrong_mode`、`task_not_ready`、`already_managed`、`claim_conflict`、`host_unsupported`、`invalid_request`、`persistence_failed`。客户端按 code 分支，不解析 message。
 
 runtime 中的 `control.operation` 先于副作用保存；完成时把业务结果和终态 receipt 一起保存为 completed checkpoint，再原子发布 receipt，最后清除 checkpoint。发布 applying receipt 失败时不派发。重启可重建 completed 回执；applying 操作不会重放 claim、worktree create、worker start 或 terminal send，不确定副作用进入 blockers。停服不能覆盖未结算操作的 evidence。控制历史不会自动清理，日志删除不影响指令次数。
+
+终态回执暂时无法发布时，服务保留 completed checkpoint 并重试发布，继续监督已有 worker、响应停服；后续变更、决策续跑和 PR 结项先等待该 checkpoint 结算。runtime 自身持久化失败仍按既有规则停止服务。恢复时，缺失 applying 回执不能否认已保存的 run/领取证据；这种情况保留 indeterminate 与执行阻塞。完整历史请求只索引一次，既有终态回执不会因归档请求后来损坏而被重写。
 
 ## 候选任务快照
 

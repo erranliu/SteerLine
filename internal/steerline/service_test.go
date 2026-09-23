@@ -256,6 +256,9 @@ func fakeMain(args []string) int {
 		json.NewEncoder(os.Stdout).Encode(BeadsContext{Directory: dir, ProjectID: project, Database: "fixture-db", Backend: "dolt"})
 		return 0
 	case "ready":
+		if db.Behavior == "slow-ready-control" {
+			time.Sleep(time.Second)
+		}
 		for _, task := range db.Tasks {
 			if task.Status != "open" || task.Assignee != "" {
 				continue

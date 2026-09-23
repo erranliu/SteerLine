@@ -8,6 +8,8 @@
 
 依据：[Spec](pr-02-control.spec.md)。依赖：PR 1。
 
+协调审核补充了 `control_review_test.go` 中的 21 个回归场景，覆盖请求路径与 payload、准入过期、停服受理事实、回执故障保持可控、执行槽/决策/重试守卫、恢复证据和版本范围。修复后 `go test ./... -count=1 -timeout 10m` 全量通过（Windows 服务包 306.106 秒）；Linux amd64 编译、文档链接和 JSON 样例检查通过。未操作真实 Beads/Orca 或生产状态目录。
+
 ## 实施步骤
 
 1. **先提取派发原语。** 从 `Service.dispatch` 分离候选刷新、统一执行槽守卫、选定任务的 fetch/claim/prepare/start。自动 dispatch 保留原选择行为；定向入口严格匹配 ID 并重新查询 ready。用现有 fake Beads/worker/Orca 验证提取前后的一致性。

@@ -198,29 +198,40 @@ func validControlAction(action string) bool {
 	return false
 }
 
+func terminalControlStatus(status string) bool {
+	switch status {
+	case "applied", "rejected", "failed", "indeterminate":
+		return true
+	}
+	return false
+}
+
 func decodeControlPayload(req ControlRequest) (ControlPayload, error) {
 	var p ControlPayload
-	if len(req.Payload) == 0 {
-		return p, nil
-	}
-	raw := strings.TrimSpace(string(req.Payload))
-	if raw == "" || raw[0] != '{' {
-		return p, errors.New("action payload must be a JSON object")
-	}
-	if err := decode(req.Payload, &p); err != nil {
-		return p, fmt.Errorf("invalid action payload: %w", err)
+	var fields map[string]json.RawMessage
+	if len(req.Payload) != 0 {
+		raw := strings.TrimSpace(string(req.Payload))
+		if raw == "" || raw[0] != '{' {
+			return p, errors.New("action payload must be a JSON object")
+		}
+		if err := decode(req.Payload, &p); err != nil {
+			return p, fmt.Errorf("invalid action payload: %w", err)
+		}
+		if err := json.Unmarshal(req.Payload, &fields); err != nil {
+			return p, err
+		}
 	}
 	switch req.Action {
 	case "start_task":
-		if p.TaskID == "" || p.Mode != "" {
+		if strings.TrimSpace(p.TaskID) == "" || len(fields) != 1 {
 			return p, errors.New("start_task requires only task_id")
 		}
 	case "set_dispatch_mode":
-		if (p.Mode != "manual" && p.Mode != "auto") || p.TaskID != "" {
+		if (p.Mode != "manual" && p.Mode != "auto") || len(fields) != 1 {
 			return p, errors.New("set_dispatch_mode requires mode=manual|auto")
 		}
 	default:
-		if p.TaskID != "" || p.Mode != "" {
+		if len(fields) != 0 {
 			return p, errors.New("action does not accept payload fields")
 		}
 	}
@@ -228,10 +239,5 @@ func decodeControlPayload(req ControlRequest) (ControlPayload, error) {
 }
 
 func DefaultRequestedBy() string {
-	for _, key := range []string{"USER", "USERNAME", "LOGNAME"} {
-		if v := strings.TrimSpace(os.Getenv(key)); v != "" {
-			return v
-		}
-	}
-	return "unknown"
+	return AnswererName()
 }

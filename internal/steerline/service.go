@@ -27,6 +27,7 @@ type Service struct {
 	versionPrevious   *Runtime
 	controlSeen       map[string]string
 	stopControl       *ControlRequest
+	stopAcceptedAt    *time.Time
 	targetTask        string
 	lastDispatched    string
 	reservedRunID     string
@@ -56,13 +57,10 @@ func NewService(c Config) (*Service, error) {
 		baselineBytes, _ := json.Marshal(old)
 		var baseline Runtime
 		_ = json.Unmarshal(baselineBytes, &baseline)
-		baseline.Control = old.Control
 		if baseline.Control.DispatchMode == "" {
 			baseline.Control.DispatchMode = "auto"
 		}
-		if baseline.Control.Revision == 0 {
-			baseline.Control.Revision = 1
-		}
+		baseline.Control.Revision = 1
 		if baseline.Control.Blockers == nil {
 			baseline.Control.Blockers = []ControlBlocker{}
 		}
@@ -75,15 +73,16 @@ func NewService(c Config) (*Service, error) {
 		if s.State.Control.DispatchMode == "" {
 			s.State.Control.DispatchMode = "auto"
 		}
-		if s.State.Control.Revision == 0 {
-			s.State.Control.Revision = 1
-		}
+		s.State.Control.Revision = 1 // A control revision is scoped to its instance.
 		if s.State.Control.Blockers == nil {
 			s.State.Control.Blockers = []ControlBlocker{}
 		}
 		if op := s.State.Control.Operation; op != nil {
 			if !controlIDPattern.MatchString(op.RequestID) || !validControlAction(op.Action) || (op.Phase != "applying" && op.Phase != "completed") || len(op.RequestDigest) != 64 || op.Action == "start_task" && (!controlIDPattern.MatchString(op.RunID) || op.TaskID == "") || op.Phase == "completed" && op.Result == nil {
 				return nil, errors.New("invalid runtime control operation; preserve the snapshot for recovery")
+			}
+			if op.Phase == "completed" && (op.Result.Version != ControlProtocolVersion || op.Result.RequestID != op.RequestID || op.Result.RequestDigest != op.RequestDigest || op.Result.Action != op.Action || !terminalControlStatus(op.Result.Status)) {
+				return nil, errors.New("completed control receipt does not match its operation")
 			}
 		}
 		seen := map[string]bool{}
@@ -129,6 +128,7 @@ func NewService(c Config) (*Service, error) {
 					r.FinishTaskStatus = "blocked"
 					r.Error = ptr("waiting_decision run lacks decision state; manual recovery required")
 				case r.Decision.Status == "resuming":
+					r.ExecutionStatus = "unknown"
 					r.FinishTaskStatus = "blocked"
 					r.Error = ptr("Interrupted while resuming a decision; manual recovery required; never auto-resumed")
 				}
@@ -194,13 +194,21 @@ func runVersionShape(r *Run) any {
 	if r.PR.URL != nil {
 		prURL = *r.PR.URL
 	}
-	return struct{ TaskID, RunID, AttemptID, Execution, Finish, DecisionID, DecisionStatus, PRURL string }{r.TaskID, r.RunID, r.AttemptID, r.ExecutionStatus, r.FinishTaskStatus, decisionID, decisionStatus, prURL}
+	return struct {
+		TaskID, RunID, AttemptID, Execution, Finish, DecisionID, DecisionStatus, PRURL, Host, BeadsStatus string
+		WorktreePath, WorktreeBranch, BaseCommit                                                          *string
+		Process                                                                                           *ProcessIdentity
+		WorkspaceIntent                                                                                   *WorkspaceIntent
+	}{r.TaskID, r.RunID, r.AttemptID, r.ExecutionStatus, r.FinishTaskStatus, decisionID, decisionStatus, prURL, r.Host, r.BeadsStatus, r.WorktreePath, r.WorktreeBranch, r.BaseCommit, r.Process, r.WorkspaceIntent}
 }
 func controlVersionShape(r Runtime) any {
 	type runShape struct{ TaskID, RunID, Execution, Finish, Decision string }
 	runs := make([]runShape, 0, len(r.Runs))
 	for _, run := range r.Runs {
 		if run != nil {
+			if run.ExecutionStatus != "pending" && run.ExecutionStatus != "running" && run.ExecutionStatus != "unknown" && run.FinishTaskStatus != "waiting_decision" {
+				continue // Delivery progress without a slot reservation is unrelated.
+			}
 			d := ""
 			if run.Decision != nil {
 				d = run.Decision.Status
@@ -219,6 +227,7 @@ func controlVersionShape(r Runtime) any {
 }
 func jsonShape(v any) string { b, _ := json.Marshal(v); return string(b) }
 func (s *Service) save() error {
+	s.refreshSlotOccupancy()
 	if s.versionPrevious != nil {
 		prev := *s.versionPrevious
 		if jsonShape(controlVersionShape(prev)) != jsonShape(controlVersionShape(s.State)) {
@@ -388,6 +397,9 @@ func (s *Service) dispatch(ctx context.Context) error {
 	}
 	if candidateErr != nil {
 		return candidateErr
+	}
+	if s.State.Service.Mode == "scheduler" && ctx.Err() == nil {
+		s.State.Service.Ready = true
 	}
 	if (!s.explicitDispatch && s.State.Control.DispatchMode != "auto") || s.State.Control.DispatchPaused {
 		return nil
@@ -591,12 +603,16 @@ func (s *Service) injectControlFault(point string) {
 }
 
 func (s *Service) activeControlRequestID() string {
-	if s.State.Control.Operation != nil {
+	if s.explicitDispatch && s.State.Control.Operation != nil {
 		return s.State.Control.Operation.RequestID
 	}
 	return ""
 }
 func (s *Service) slotReason(ignoreRequestID string) string {
+	return s.executionSlotReason(ignoreRequestID, false)
+}
+
+func (s *Service) executionSlotReason(ignoreRequestID string, resumingDecision bool) string {
 	if s.worker != nil {
 		return "worker is running"
 	}
@@ -610,17 +626,40 @@ func (s *Service) slotReason(ignoreRequestID string) string {
 		return s.State.Control.Blockers[0].Reason
 	}
 	for _, r := range s.State.Runs {
+		if r == nil {
+			continue
+		}
 		if r.ExecutionStatus == "unknown" {
 			return "unresolved unknown execution; manual recovery required"
 		}
-		if r.FinishTaskStatus == "waiting_decision" {
+		if r.ExecutionStatus == "pending" || r.ExecutionStatus == "running" {
+			return "execution preparation or supervision is still active"
+		}
+	}
+	for _, r := range s.State.Runs {
+		if r != nil && !resumingDecision && r.FinishTaskStatus == "waiting_decision" {
 			return "waiting for a human decision"
 		}
 	}
-	if s.State.SlotOccupied {
-		return "execution slot is occupied"
+	if s.State.SlotOccupied && s.State.CurrentTask != nil && s.find(*s.State.CurrentTask) == nil {
+		return "execution preparation is still active"
 	}
 	return ""
+}
+
+// Exported occupancy is derived from reservations; it is not itself proof of a
+// worker and must not bypass pending decisions or persistent control blockers.
+func (s *Service) refreshSlotOccupancy() {
+	occupied := s.worker != nil || s.State.Control.Operation != nil || len(s.State.Control.Blockers) > 0
+	for _, r := range s.State.Runs {
+		if r != nil && (r.ExecutionStatus == "unknown" || r.ExecutionStatus == "pending" || r.ExecutionStatus == "running" || r.FinishTaskStatus == "waiting_decision") {
+			occupied = true
+		}
+	}
+	if s.State.SlotOccupied && s.State.CurrentTask != nil && s.find(*s.State.CurrentTask) == nil {
+		occupied = true // Reservation saved before the first run/claim exists.
+	}
+	s.State.SlotOccupied = occupied
 }
 func (s *Service) refreshCandidates(ctx context.Context) error {
 	queried := now()
@@ -914,6 +953,9 @@ func (s *Service) RetryOne(ctx context.Context, runID string) error {
 	if s.State.Control.DispatchPaused {
 		return errors.New("dispatch is paused; explicit retry is refused")
 	}
+	if reason := s.slotReason(""); reason != "" {
+		return errors.New(reason)
+	}
 	return s.run(ctx, runID, "manual")
 }
 func (s *Service) run(ctx context.Context, retryRunID, dispatchMode string) (retErr error) {
@@ -932,6 +974,7 @@ func (s *Service) run(ctx context.Context, retryRunID, dispatchMode string) (ret
 		return e
 	}
 	heartDone := make(chan struct{})
+	acceptedStops := make(chan stopAcceptance, 1)
 	instanceID := s.State.Service.InstanceID
 	go func() {
 		defer close(heartDone)
@@ -939,13 +982,17 @@ func (s *Service) run(ctx context.Context, retryRunID, dispatchMode string) (ret
 		defer t.Stop()
 		stopTick := time.NewTicker(100 * time.Millisecond)
 		defer stopTick.Stop()
+		stopSeen := map[string]bool{}
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case <-stopTick.C:
-				stopReq, _ := findStopRequest(s.Config, instanceID)
+				stopReq, _, checkedAt := findStopRequestCached(s.Config, instanceID, stopSeen)
 				if stopRequested(s.Config, instanceID) || stopReq != nil {
+					if stopReq != nil {
+						acceptedStops <- stopAcceptance{Request: *stopReq, At: checkedAt}
+					}
 					cancel()
 					return
 				}
@@ -960,6 +1007,14 @@ func (s *Service) run(ctx context.Context, retryRunID, dispatchMode string) (ret
 	defer func() {
 		cancel()
 		<-heartDone
+		if s.stopControl == nil {
+			select {
+			case accepted := <-acceptedStops:
+				s.stopControl = &accepted.Request
+				s.stopAcceptedAt = &accepted.At
+			default:
+			}
+		}
 		s.State.Service.Status = "stopping"
 		s.State.Service.Ready = false
 		s.save()
@@ -1008,8 +1063,17 @@ func (s *Service) run(ctx context.Context, retryRunID, dispatchMode string) (ret
 		return s.save()
 	}
 	if retryRunID == "" {
-		if e := s.recoverControlOperation(); e != nil {
-			return e
+		for s.State.Control.Operation != nil {
+			if e := s.recoverControlOperation(); e != nil {
+				if e = s.retainControlPublicationFailure(e); e != nil {
+					return e
+				}
+				select {
+				case <-ctx.Done():
+					return nil
+				case <-controlTick.C:
+				}
+			}
 		}
 	}
 	// On startup query saved PRs, apply any already-answered decisions, then
@@ -1027,21 +1091,24 @@ func (s *Service) run(ctx context.Context, retryRunID, dispatchMode string) (ret
 				return saveErr
 			}
 		}
-		if e := s.refreshCandidates(ctx); e != nil {
-			s.setError(e)
+		candidateErr := s.refreshCandidates(ctx)
+		if candidateErr != nil {
+			s.setError(candidateErr)
 			if saveErr := s.save(); saveErr != nil {
 				return saveErr
 			}
 		}
-		s.State.Service.Ready = true
+		s.State.Service.Ready = candidateErr == nil && ctx.Err() == nil
 		if e := s.save(); e != nil {
 			return e
 		}
-		if e := s.processNextControl(ctx, cancel); e != nil {
+		if e := s.pollControl(ctx, cancel); e != nil {
 			return e
 		}
-		if e := step(s.dispatch); e != nil {
-			return e
+		if s.State.Control.Operation == nil {
+			if e := step(s.dispatch); e != nil {
+				return e
+			}
 		}
 	} else {
 		if e := s.startRetry(ctx, retryRunID); e != nil {
@@ -1072,6 +1139,9 @@ func (s *Service) run(ctx context.Context, retryRunID, dispatchMode string) (ret
 				return nil
 			}
 		case <-decisionTick.C:
+			if s.State.Control.Operation != nil {
+				continue
+			}
 			if e := step(s.applyDecisions); e != nil {
 				return e
 			}
@@ -1079,19 +1149,25 @@ func (s *Service) run(ctx context.Context, retryRunID, dispatchMode string) (ret
 			if retryRunID != "" {
 				continue
 			}
-			if e := s.processNextControl(ctx, cancel); e != nil {
+			if e := s.pollControl(ctx, cancel); e != nil {
 				return e
+			}
+			if s.State.Control.Operation != nil {
+				continue
 			}
 			if e := step(s.dispatch); e != nil {
 				return e
 			}
 		case <-controlTick.C:
 			if retryRunID == "" {
-				if e := s.processNextControl(ctx, cancel); e != nil {
+				if e := s.pollControl(ctx, cancel); e != nil {
 					return e
 				}
 			}
 		case <-prTick.C:
+			if s.State.Control.Operation != nil {
+				continue
+			}
 			if e := step(func(ctx context.Context) error { return s.pollPRsFor(ctx, retryRunID) }); e != nil {
 				return e
 			}
