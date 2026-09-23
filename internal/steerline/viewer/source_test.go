@@ -85,3 +85,40 @@ func TestFileSourceDiagnosesBadActivityAndKeepsFollowingValidLine(t *testing.T) 
 		t.Fatalf("bad activity line blocked the next valid record: %+v", batch)
 	}
 }
+
+func TestFileSourceInvalidSequenceCannotEraseValidEvents(t *testing.T) {
+	logPath := filepath.Join(t.TempDir(), "events.jsonl")
+	body := "{\"seq\":10,\"kind\":\"claim\"}\n{\"seq\":1}\n{\"seq\":11,\"kind\":\"message\"}\n"
+	if err := os.WriteFile(steerline.ActivityPath(logPath), []byte(body), 0600); err != nil {
+		t.Fatal(err)
+	}
+	batch, err := NewFileSource(steerline.Config{}).ReadLog(logPath, steerline.JournalCursor{}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(batch.Activity) != 2 || batch.Activity[0].Seq != 10 || batch.Activity[1].Seq != 11 || len(batch.Diagnostics) != 1 {
+		t.Fatalf("bad record changed sequence state: events=%+v diagnostics=%v", batch.Activity, batch.Diagnostics)
+	}
+}
+
+func TestFileSourceFreshReplayResetsNormalizer(t *testing.T) {
+	logPath := filepath.Join(t.TempDir(), "events.jsonl")
+	source := NewFileSource(steerline.Config{})
+	if err := os.WriteFile(logPath, []byte("{\"type\":\"thread.started\",\"thread_id\":\"old\"}\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := source.ReadLog(logPath, steerline.JournalCursor{}, false); err != nil {
+		t.Fatal(err)
+	}
+	// A new visit starts at zero even if the same inode was rewritten while away.
+	if err := os.WriteFile(logPath, []byte("{\"type\":\"session\",\"version\":1}\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	batch, err := source.ReadLog(logPath, steerline.JournalCursor{}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(batch.Activity) != 1 || batch.Activity[0].Source != "pi" || batch.Activity[0].Kind != "session" {
+		t.Fatalf("fresh replay reused another reader's normalizer: %+v", batch.Activity)
+	}
+}

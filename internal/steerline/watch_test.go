@@ -217,3 +217,60 @@ func TestWatchResolvesRunByID(t *testing.T) {
 		t.Fatal("expected error for unknown run")
 	}
 }
+
+type cancelOnWrite struct {
+	bytes.Buffer
+	cancel context.CancelFunc
+	writes int
+}
+
+func (w *cancelOnWrite) Write(b []byte) (int, error) {
+	w.writes++
+	w.cancel()
+	return w.Buffer.Write(b)
+}
+
+func TestWatchCancellationWhileReplaying(t *testing.T) {
+	c := writeWatchFixture(t, false)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	out := &cancelOnWrite{cancel: cancel}
+	if err := Watch(ctx, c, "", WatchOptions{FromStart: true, Raw: true, Out: out}); err != nil {
+		t.Fatal(err)
+	}
+	if out.writes != 1 {
+		t.Fatalf("continued replay after cancellation: writes=%d", out.writes)
+	}
+}
+
+func TestWatchPreservesRecordsAcrossSequenceGenerations(t *testing.T) {
+	c := writeWatchFixture(t, true)
+	path := filepath.Join(c.RunDir, "runs", "abc", "activity.jsonl")
+	body := "{\"seq\":10,\"kind\":\"old-generation\"}\n{\"seq\":1,\"kind\":\"new-generation\"}\n"
+	if err := os.WriteFile(path, []byte(body), 0600); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	if err := Watch(context.Background(), c, "", WatchOptions{FromStart: true, JSON: true, Out: &out}); err != nil {
+		t.Fatal(err)
+	}
+	if out.String() != body {
+		t.Fatalf("logical reset lost valid replay records: %q", out.String())
+	}
+}
+
+func TestWatchRawPreservesCRLF(t *testing.T) {
+	c := writeWatchFixture(t, false)
+	path := filepath.Join(c.RunDir, "runs", "abc", "events.jsonl")
+	body := "first\r\n雪\r\nlast\n"
+	if err := os.WriteFile(path, []byte(body), 0600); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	if err := Watch(context.Background(), c, "", WatchOptions{FromStart: true, Raw: true, Out: &out}); err != nil {
+		t.Fatal(err)
+	}
+	if out.String() != body {
+		t.Fatalf("raw output changed line bytes: %q", out.String())
+	}
+}

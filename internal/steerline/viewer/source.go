@@ -106,6 +106,7 @@ func (f *FileSource) ReadLog(logPath string, cursor steerline.JournalCursor, raw
 	framed, err := steerline.ReadJournalBatch(path, cursor, steerline.JournalOptions{
 		FromStart: !cursor.Initialized,
 		Activity:  activityFile,
+		KeepCR:    raw,
 	})
 	if err != nil {
 		return LogBatch{}, err
@@ -132,7 +133,7 @@ func (f *FileSource) ReadLog(logPath string, cursor steerline.JournalCursor, raw
 	if len(framed.Lines) > 0 {
 		firstLine = framed.Lines[0]
 	}
-	normalizer := f.normalizerFor(path, framed.Cursor, firstLine)
+	normalizer := f.normalizerFor(path, framed.Cursor, firstLine, framed.Reset)
 	for _, line := range framed.Lines {
 		if normalizer == nil {
 			normalizer = steerline.DetectNormalizer(line)
@@ -144,10 +145,13 @@ func (f *FileSource) ReadLog(logPath string, cursor steerline.JournalCursor, raw
 	return batch, nil
 }
 
-func (f *FileSource) normalizerFor(path string, cursor steerline.JournalCursor, firstRecord []byte) steerline.Normalizer {
+func (f *FileSource) normalizerFor(path string, cursor steerline.JournalCursor, firstRecord []byte, reset bool) steerline.Normalizer {
 	key := fmt.Sprintf("%s|%s|%d", path, cursor.FileID, cursor.Generation)
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if reset {
+		delete(f.normalizers, key)
+	}
 	if n := f.normalizers[key]; n != nil {
 		return n
 	}

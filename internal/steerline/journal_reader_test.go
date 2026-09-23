@@ -117,24 +117,31 @@ func TestJournalDeduplicatesSeqAndResetsAtRollback(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !batch.Reset || batch.Cursor.Generation < 2 || len(batch.Lines) != 1 {
-		t.Fatalf("seq rollback should reset the logical generation and discard prior batch records: %+v", batch)
-	}
-	var got struct {
-		Seq uint64 `json:"seq"`
-	}
-	if err := json.Unmarshal(batch.Lines[0], &got); err != nil || got.Seq != 2 {
-		t.Fatalf("rollback line=%q err=%v", batch.Lines[0], err)
-	}
-	if batch.Cursor.Offset != int64(len(strings.Join(rows, "\n")+"\n")) {
-		t.Fatalf("rollback moved physical offset backwards: %+v", batch.Cursor)
+	if !batch.Reset || batch.Cursor.Generation != 1 || len(batch.Lines) != 2 {
+		t.Fatalf("records preceding a rollback must be delivered before reset: %+v", batch)
 	}
 	next, err := ReadJournalBatch(path, batch.Cursor, JournalOptions{Activity: true})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(next.Lines) != 0 {
-		t.Fatalf("rollback prefix was revisited: %q", next.Lines)
+	if !next.Reset || next.Cursor.Generation != 2 || len(next.Lines) != 1 {
+		t.Fatalf("rollback must start a separate generation batch: %+v", next)
+	}
+	var got struct {
+		Seq uint64 `json:"seq"`
+	}
+	if err := json.Unmarshal(next.Lines[0], &got); err != nil || got.Seq != 2 {
+		t.Fatalf("rollback line=%q err=%v", next.Lines[0], err)
+	}
+	if next.Cursor.Offset != int64(len(strings.Join(rows, "\n")+"\n")) {
+		t.Fatalf("rollback moved physical offset backwards: %+v", next.Cursor)
+	}
+	tail, err := ReadJournalBatch(path, next.Cursor, JournalOptions{Activity: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tail.Lines) != 0 {
+		t.Fatalf("rollback prefix was revisited: %q", tail.Lines)
 	}
 }
 
@@ -205,5 +212,46 @@ func TestJournalFromStartFalseSkipsOldPartialRecord(t *testing.T) {
 	}
 	if len(second.Lines) != 1 || string(second.Lines[0]) != "new-line" {
 		t.Fatalf("from-start=false must not emit half of an old partial line: %+v", second)
+	}
+}
+
+func TestJournalByteBudgetIsolatesLargeRecords(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "events.jsonl")
+	want := []string{"first", strings.Repeat("x", JournalMaxBytes+20), "last"}
+	writeJournal(t, path, strings.Join(want, "\n")+"\n")
+	cursor := JournalCursor{}
+	var got []string
+	for i := 0; i < 10; i++ {
+		batch, err := ReadJournalBatch(path, cursor, JournalOptions{FromStart: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		n := 0
+		for _, line := range batch.Lines {
+			n += len(line)
+			got = append(got, string(line))
+		}
+		if n > JournalMaxBytes && len(batch.Lines) != 1 {
+			t.Fatalf("oversize record must own its batch: records=%d bytes=%d", len(batch.Lines), n)
+		}
+		cursor = batch.Cursor
+		if !batch.More {
+			break
+		}
+	}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("batch boundaries lost records: got %d records", len(got))
+	}
+}
+
+func TestJournalBoundsUnterminatedOversizeScan(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "events.jsonl")
+	writeJournal(t, path, strings.Repeat("x", 3*JournalMaxRecord))
+	batch, err := ReadJournalBatch(path, JournalCursor{}, JournalOptions{FromStart: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if batch.Cursor.ScanOffset > JournalMaxRecord+JournalMaxBytes+1 || !batch.More || !batch.Cursor.Dropping {
+		t.Fatalf("oversize scan was not bounded: offset=%d more=%v dropping=%v", batch.Cursor.ScanOffset, batch.More, batch.Cursor.Dropping)
 	}
 }

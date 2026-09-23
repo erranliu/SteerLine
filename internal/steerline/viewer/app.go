@@ -69,24 +69,26 @@ type Model struct {
 	rows          []runRow
 	rt            *steerline.Runtime
 	observation   steerline.ObservationSnapshot
+	runsInFlight  bool
 	sel           int
 	offset        int
 	focus         string
 	selectedRunID string
 
-	logRunID     string
-	logPath      string
-	logCursor    steerline.JournalCursor
-	activeLogKey string
-	logRequestID uint64
-	inFlightLogs map[string]uint64
-	logError     string
-	log          []steerline.ActivityEvent
-	logScroll    int
-	follow       bool
-	autoScroll   bool
-	mode         logMode
-	raw          []string
+	logRunID      string
+	logPath       string
+	logCursor     steerline.JournalCursor
+	activeLogKey  string
+	logRequestID  uint64
+	logGeneration uint64
+	inFlightLogs  map[string]uint64
+	logError      string
+	log           []steerline.ActivityEvent
+	logScroll     int
+	follow        bool
+	autoScroll    bool
+	mode          logMode
+	raw           []string
 
 	modal  *modal
 	status string
@@ -151,7 +153,7 @@ func Run(ctx context.Context, c steerline.Config, o Options) error {
 }
 
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(m.loadRuns(), tickCmd())
+	return tea.Batch(func() tea.Msg { return refreshRunsMsg{} }, tickCmd())
 }
 
 func tickCmd() tea.Cmd {
@@ -166,11 +168,20 @@ func (m Model) loadRuns() tea.Cmd {
 	}
 }
 
+func (m Model) startRunsRead() (Model, tea.Cmd) {
+	if m.runsInFlight {
+		return m, nil
+	}
+	m.runsInFlight = true
+	return m, m.loadRuns()
+}
+
 func (m Model) readLog(logPath, runID string, key string, requestID uint64, cursor steerline.JournalCursor, raw bool) tea.Cmd {
 	src := m.src
+	generation := m.logGeneration
 	return func() tea.Msg {
 		batch, err := src.ReadLog(logPath, cursor, raw)
-		return logMsg{runID: runID, logPath: logPath, key: key, requestID: requestID, base: cursor, batch: batch, err: err}
+		return logMsg{runID: runID, logPath: logPath, key: key, requestID: requestID, generation: generation, base: cursor, batch: batch, err: err}
 	}
 }
 
@@ -183,6 +194,7 @@ func logKey(runID, path string, raw bool) string {
 }
 
 func (m Model) clearLog() Model {
+	m.logGeneration++
 	m.logRunID, m.logPath, m.activeLogKey = "", "", ""
 	m.logCursor = steerline.JournalCursor{}
 	m.log, m.raw = nil, nil
@@ -257,7 +269,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width, m.height = msg.Width, msg.Height
 		return m, nil
 	case tickMsg:
-		cmds := []tea.Cmd{m.loadRuns(), tickCmd()}
+		m, runsCmd := m.startRunsRead()
+		cmds := []tea.Cmd{runsCmd, tickCmd()}
 		if m.follow {
 			var cmd tea.Cmd
 			m, cmd = m.startLogRead()
@@ -266,7 +279,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		return m, tea.Batch(cmds...)
+	case refreshRunsMsg:
+		return m.startRunsRead()
 	case runsMsg:
+		m.runsInFlight = false
 		previousID, previousIndex := m.selectedRunID, m.sel
 		m.observation = msg.observation
 		if msg.observation.Runtime != nil || msg.observation.State == steerline.SnapshotNone {
@@ -351,15 +367,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if expected && id == msg.requestID {
 			delete(m.inFlightLogs, msg.key)
 		}
+		if expected && id == msg.requestID && msg.key == m.activeLogKey && msg.generation != m.logGeneration {
+			// A previous visit still held this stream's in-flight slot. Discard
+			// its result and only now start the newly selected visit's read.
+			return m.startLogRead()
+		}
 		if !expected || id != msg.requestID || msg.key != m.activeLogKey || msg.runID != m.logRunID || msg.logPath != m.logPath || !sameCursor(msg.base, m.logCursor) {
 			return m, nil
 		}
 		if msg.err != nil {
-			if !os.IsNotExist(msg.err) {
-				m.logError = msg.err.Error()
-			}
+			m.logError = msg.err.Error()
 			return m, nil
 		}
+		anchor, anchored := m.scrollAnchor()
 		before := m.renderedLogLineCount()
 		if msg.batch.Reset {
 			m.log, m.raw = nil, nil
@@ -379,8 +399,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.logError = strings.Join(msg.batch.Diagnostics, "; ")
 		if m.autoScroll {
 			m.logScroll = 0
-		} else if unboundedAfter > before {
-			m.logScroll += unboundedAfter - before
+		} else if !anchored || !m.restoreScrollAnchor(anchor) {
+			if unboundedAfter > before {
+				m.logScroll += unboundedAfter - before
+			}
+			if count := m.renderedLogLineCount(); m.logScroll > count {
+				m.logScroll = count
+			}
 		}
 		return m, nil
 	case answerMsg:
@@ -392,7 +417,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.modal = nil
 		m.status = "answer submitted; the service will resume the run"
-		return m, m.loadRuns()
+		return m.startRunsRead()
 	case tea.KeyMsg:
 		return m.handleKey(msg)
 	}
@@ -495,7 +520,7 @@ func (m Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.autoScroll = m.logScroll == 0
 		return m, nil
 	case "r":
-		return m, m.loadRuns()
+		return m.startRunsRead()
 	case "[":
 		if m.detailTab > 0 {
 			m.detailTab--
@@ -618,17 +643,19 @@ func (m Model) move(d int) (tea.Model, tea.Cmd) {
 // --- messages ---
 
 type tickMsg time.Time
+type refreshRunsMsg struct{}
 type runsMsg struct {
 	observation steerline.ObservationSnapshot
 }
 type logMsg struct {
-	runID     string
-	logPath   string
-	key       string
-	requestID uint64
-	base      steerline.JournalCursor
-	batch     LogBatch
-	err       error
+	runID      string
+	logPath    string
+	key        string
+	requestID  uint64
+	generation uint64
+	base       steerline.JournalCursor
+	batch      LogBatch
+	err        error
 }
 type answerMsg struct{ err error }
 type taskDetailMsg struct {

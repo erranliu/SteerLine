@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"crypto/sha256"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -46,6 +45,7 @@ type JournalCursor struct {
 type JournalOptions struct {
 	FromStart  bool
 	Activity   bool
+	KeepCR     bool // Raw exports preserve CRLF bytes; normalized consumers omit CR.
 	MaxRecords int
 	MaxBytes   int
 }
@@ -126,7 +126,10 @@ func ReadJournalBatch(path string, cursor JournalCursor, opts JournalOptions) (J
 	if _, err := f.Seek(cursor.ScanOffset, io.SeekStart); err != nil {
 		return JournalBatch{}, err
 	}
-	reader := bufio.NewReaderSize(f, journalBufferSize)
+	// Bound physical work even when a record is huge and never terminates.
+	// The extra record allowance permits one legal large line to own a batch.
+	readBudget := int64(JournalMaxRecord + opts.MaxBytes + 1)
+	reader := bufio.NewReaderSize(io.LimitReader(f, readBudget), journalBufferSize)
 	line := append([]byte(nil), cursor.Pending...)
 	cursor.Pending = nil
 	batchBytes := 0
@@ -135,6 +138,7 @@ func ReadJournalBatch(path string, cursor JournalCursor, opts JournalOptions) (J
 		if len(batch.Lines) > 0 && batchBytes >= opts.MaxBytes {
 			break
 		}
+		lineStart := cursor.ScanOffset
 		completed, tooLong, scanned, lineBytes, readErr := readJournalLine(reader, line, cursor.ScanOffset)
 		cursor.ScanOffset = scanned
 		line = nil
@@ -166,26 +170,36 @@ func ReadJournalBatch(path string, cursor JournalCursor, opts JournalOptions) (J
 			continue
 		}
 		rawLine := lineBytes
-		lineBytes = bytes.TrimSuffix(lineBytes, []byte{'\r'})
+		if !opts.KeepCR {
+			lineBytes = bytes.TrimSuffix(lineBytes, []byte{'\r'})
+		}
+		if len(batch.Lines) > 0 && batchBytes+len(lineBytes) > opts.MaxBytes {
+			// Leave this complete line for the next call, including oversized
+			// legal records that must not share a batch with preceding records.
+			cursor.ScanOffset = lineStart
+			break
+		}
 		if opts.Activity {
-			var record struct {
-				Seq uint64 `json:"seq"`
-			}
-			if json.Unmarshal(lineBytes, &record) == nil && record.Seq > 0 {
+			// Malformed activity is diagnosed by the consumer. Its apparent seq
+			// must not erase valid history or advance the sequence cursor.
+			if record, err := DecodeActivityLine(lineBytes); err == nil {
 				if cursor.HaveSeq && record.Seq == cursor.LastSeq {
 					cursor.Offset = end
 					captureLineAnchor(&cursor, rawLine, end-int64(len(rawLine))-1)
 					continue
 				}
 				if cursor.HaveSeq && record.Seq < cursor.LastSeq {
+					if len(batch.Lines) > 0 {
+						// Expose the generation boundary between batches. Viewers
+						// can reset, while streaming exports retain every record.
+						cursor.ScanOffset = lineStart
+						break
+					}
 					cursor.Generation++
 					if cursor.Generation == 0 {
 						cursor.Generation = 1
 					}
 					batch.Reset = true
-					batch.Lines = nil
-					batch.Diagnostics = nil
-					batchBytes = 0
 					cursor.LastSeq, cursor.HaveSeq = 0, false
 				}
 				cursor.LastSeq, cursor.HaveSeq = record.Seq, true
@@ -317,16 +331,16 @@ func FirstJournalLine(path string) ([]byte, error) {
 		return nil, err
 	}
 	defer f.Close()
-	reader := bufio.NewReaderSize(f, journalBufferSize)
+	reader := bufio.NewReaderSize(io.LimitReader(f, JournalMaxRecord+2), journalBufferSize)
 	complete, tooLong, _, line, err := readJournalLine(reader, nil, 0)
 	if err != nil && err != io.EOF {
 		return nil, err
 	}
-	if !complete {
-		return nil, io.EOF
-	}
 	if tooLong {
 		return nil, fmt.Errorf("first journal record exceeds %d bytes", JournalMaxRecord)
+	}
+	if !complete {
+		return nil, io.EOF
 	}
 	return bytes.TrimSuffix(line, []byte{'\r'}), nil
 }

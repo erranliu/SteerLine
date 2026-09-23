@@ -66,9 +66,13 @@ func Watch(ctx context.Context, c Config, runID string, o WatchOptions) error {
 		return line
 	}
 	for {
+		if ctx.Err() != nil {
+			return nil
+		}
 		batch, readErr := ReadJournalBatch(path, cursor, JournalOptions{
 			FromStart: o.FromStart,
 			Activity:  !o.Raw && path == r.Activity,
+			KeepCR:    o.Raw,
 		})
 		if readErr != nil {
 			if o.Follow && os.IsNotExist(readErr) {
@@ -92,6 +96,9 @@ func Watch(ctx context.Context, c Config, runID string, o WatchOptions) error {
 			}
 		}
 		for _, line := range batch.Lines {
+			if ctx.Err() != nil {
+				return nil
+			}
 			if o.Raw {
 				if _, err = out.Write(append(append([]byte(nil), line...), '\n')); err != nil {
 					return err

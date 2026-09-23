@@ -1,6 +1,6 @@
 # PR 1 Spec：统一观察层与读取一致性
 
-状态：待实现。依赖：无。对应 [Plan](pr-01-observation.plan.md)。
+状态：已实现，完成协调审核修复与 Windows 本机验收（[PR #12](https://github.com/erranliu/SteerLine/pull/12)）。Linux 仅做编译检查。依赖：无。对应 [Plan](pr-01-observation.plan.md)。
 
 ## 目标
 

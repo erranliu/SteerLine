@@ -1,6 +1,8 @@
 package viewer
 
 import (
+	"fmt"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -98,7 +100,7 @@ func newTestModel(f *fakeSource) Model {
 
 func pendingLogMessage(m Model, batch LogBatch) logMsg {
 	r := m.current()
-	return logMsg{runID: r.RunID, logPath: *r.LogPath, key: m.activeLogKey, requestID: m.inFlightLogs[m.activeLogKey], base: m.logCursor, batch: batch}
+	return logMsg{runID: r.RunID, logPath: *r.LogPath, key: m.activeLogKey, requestID: m.inFlightLogs[m.activeLogKey], generation: m.logGeneration, base: m.logCursor, batch: batch}
 }
 
 func observationFor(runs ...*steerline.Run) steerline.ObservationSnapshot {
@@ -375,6 +377,7 @@ func TestViewerDropsOutOfOrderRunResponsesAndOnlyOneReadPerStream(t *testing.T) 
 	mm, _ := m.Update(runsMsg{observation: observationFor(runA, runB)})
 	m = mm.(Model)
 	keyA, idA := m.activeLogKey, m.inFlightLogs[m.activeLogKey]
+	generationA := m.logGeneration
 	mm, _ = m.move(1)
 	m = mm.(Model)
 	keyB, idB := m.activeLogKey, m.inFlightLogs[m.activeLogKey]
@@ -392,8 +395,14 @@ func TestViewerDropsOutOfOrderRunResponsesAndOnlyOneReadPerStream(t *testing.T) 
 	if len(m.log) != 0 {
 		t.Fatalf("late B response appeared in A: %+v", m.log)
 	}
-	validA := logMsg{runID: "A", logPath: "log-A", key: keyA, requestID: idA, base: steerline.JournalCursor{}, batch: LogBatch{Activity: []steerline.ActivityEvent{{Kind: "message", Detail: "A current"}}, Cursor: steerline.JournalCursor{Path: "log-A", FileID: "a", Generation: 1, Offset: 1, Initialized: true}}}
-	mm, _ = m.Update(validA)
+	oldA := logMsg{runID: "A", logPath: "log-A", key: keyA, requestID: idA, generation: generationA, base: steerline.JournalCursor{}, batch: LogBatch{Activity: []steerline.ActivityEvent{{Kind: "message", Detail: "A old visit"}}, Cursor: steerline.JournalCursor{Path: "log-A", FileID: "a", Generation: 1, Offset: 1, Initialized: true}}}
+	mm, cmd = m.Update(oldA)
+	m = mm.(Model)
+	if len(m.log) != 0 || cmd == nil || m.inFlightLogs[keyA] == idA {
+		t.Fatal("returning to A must discard the old visit then schedule a fresh read")
+	}
+	freshA := pendingLogMessage(m, LogBatch{Activity: []steerline.ActivityEvent{{Kind: "message", Detail: "A current"}}, Cursor: steerline.JournalCursor{Path: "log-A", FileID: "a", Generation: 1, Offset: 1, Initialized: true}})
+	mm, _ = m.Update(freshA)
 	m = mm.(Model)
 	if len(m.log) != 1 || m.log[0].Detail != "A current" {
 		t.Fatalf("valid A response lost or mismatched: %+v", m.log)
@@ -460,10 +469,76 @@ func TestViewerBoundsHistoryAndKeepsScrolledAnchorWhileFollowing(t *testing.T) {
 	base := m.logCursor
 	nextCursor := base
 	nextCursor.Offset++
-	msg := logMsg{runID: "R", logPath: "log", key: m.activeLogKey, requestID: 2, base: base, batch: LogBatch{Activity: []steerline.ActivityEvent{{Kind: "note", Title: "new line", Seq: uint64(len(events) + 1)}}, Cursor: nextCursor}}
+	msg := logMsg{runID: "R", logPath: "log", key: m.activeLogKey, requestID: 2, generation: m.logGeneration, base: base, batch: LogBatch{Activity: []steerline.ActivityEvent{{Kind: "note", Title: "new line", Seq: uint64(len(events) + 1)}}, Cursor: nextCursor}}
 	mm, _ = m.Update(msg)
 	m = mm.(Model)
 	if m.logScroll != 6 || m.autoScroll {
 		t.Fatalf("new events moved a scrolled view instead of preserving its anchor: scroll=%d follow=%v", m.logScroll, m.autoScroll)
+	}
+}
+
+func TestViewerRevisitRejectsResponseFromEarlierVisit(t *testing.T) {
+	a := &steerline.Run{RunID: "A", TaskID: "A", LogPath: strptr("A.log")}
+	b := &steerline.Run{RunID: "B", TaskID: "B", LogPath: strptr("B.log")}
+	m := newTestModel(&fakeSource{runs: []*steerline.Run{a, b}})
+	old := pendingLogMessage(m, LogBatch{Activity: []steerline.ActivityEvent{{Kind: "note", Title: "old visit"}}})
+	mm, _ := m.move(1)
+	m = mm.(Model)
+	mm, _ = m.move(-1)
+	m = mm.(Model)
+	mm, cmd := m.Update(old)
+	m = mm.(Model)
+	if len(m.log) != 0 || cmd == nil {
+		t.Fatal("old visit response was accepted or replacement read was not scheduled")
+	}
+}
+
+func TestViewerScrollAnchorSurvivesUpdateAboveViewport(t *testing.T) {
+	m := newTestModel(&fakeSource{runs: []*steerline.Run{{RunID: "R", TaskID: "R", LogPath: strptr("R.log")}}})
+	m.log = []steerline.ActivityEvent{{Seq: 1, Kind: "command", ItemID: "cmd", Status: "running", Title: "build", Detail: "one"}}
+	for i := 2; i < 25; i++ {
+		m.log = append(m.log, steerline.ActivityEvent{Seq: uint64(i), Kind: "note", Title: fmt.Sprintf("note-%d", i)})
+	}
+	m.autoScroll, m.logScroll = false, 5
+	_, width := paneWidths(m.width)
+	before := m.viewLog(width, 8)
+	msg := pendingLogMessage(m, LogBatch{Activity: []steerline.ActivityEvent{{Seq: 25, Kind: "command", ItemID: "cmd", Status: "completed", Title: "build", Detail: "one\ntwo\nthree"}}})
+	mm, _ := m.Update(msg)
+	m = mm.(Model)
+	after := m.viewLog(width, 8)
+	if before[len(before)-1] != after[len(after)-1] {
+		t.Fatalf("folded update above viewport moved anchor: before=%q after=%q", before, after)
+	}
+}
+
+func TestViewerMarksMissingLogAsReadFailure(t *testing.T) {
+	m := newTestModel(&fakeSource{runs: []*steerline.Run{{RunID: "R", TaskID: "R", LogPath: strptr("R.log")}}})
+	m.log = []steerline.ActivityEvent{{Seq: 1, Kind: "note", Title: "cached"}}
+	msg := pendingLogMessage(m, LogBatch{})
+	msg.err = os.ErrNotExist
+	mm, _ := m.Update(msg)
+	m = mm.(Model)
+	if m.logError == "" || len(m.log) != 1 {
+		t.Fatal("missing source must label the cached log as unreadable")
+	}
+}
+
+func TestViewerSerializesSnapshotReloads(t *testing.T) {
+	m := newTestModel(&fakeSource{})
+	mm, first := m.Update(key('r'))
+	m = mm.(Model)
+	if first == nil {
+		t.Fatal("first reload was not scheduled")
+	}
+	mm, second := m.Update(key('r'))
+	m = mm.(Model)
+	if second != nil {
+		t.Fatal("a second snapshot read could finish before and be overwritten by the first")
+	}
+	mm, _ = m.Update(first())
+	m = mm.(Model)
+	_, next := m.Update(key('r'))
+	if next == nil {
+		t.Fatal("completed snapshot read did not release its slot")
 	}
 }
