@@ -2,6 +2,7 @@ package viewer
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"io"
 	"os"
@@ -14,8 +15,15 @@ import (
 // writes only the immutable decision answer file; runtime.json is never touched
 // from here. A fake implementation makes the UI fully testable.
 type Source interface {
-	Runs() ([]*steerline.Run, error)
+	// Snapshot returns the last runtime snapshot (runs + service/heartbeat
+	// state for the status bar), or nil when no snapshot exists yet.
+	Snapshot() (*steerline.Runtime, error)
 	Activity(logPath string, from int64) ([]steerline.ActivityEvent, int64, error)
+	// Events reads raw agent stream lines from events.jsonl for the raw view.
+	Events(logPath string, from int64) ([]string, int64, error)
+	// TaskDetail reads provider metadata (type/priority/description/labels)
+	// that runtime.json does not keep. It must stay read-only.
+	TaskDetail(taskID string) (steerline.TaskDetail, error)
 	Answer(run *steerline.Run, optionID, note, by string) error
 }
 
@@ -24,15 +32,12 @@ type FileSource struct{ cfg steerline.Config }
 
 func NewFileSource(c steerline.Config) *FileSource { return &FileSource{cfg: c} }
 
-func (f *FileSource) Runs() ([]*steerline.Run, error) {
-	rt, e := steerline.LoadRuntime(filepath.Join(f.cfg.RunDir, f.cfg.RuntimeFile))
-	if e != nil {
-		return nil, e
-	}
-	if rt == nil {
-		return nil, nil
-	}
-	return rt.Runs, nil
+func (f *FileSource) Snapshot() (*steerline.Runtime, error) {
+	return steerline.LoadRuntime(filepath.Join(f.cfg.RunDir, f.cfg.RuntimeFile))
+}
+
+func (f *FileSource) TaskDetail(taskID string) (steerline.TaskDetail, error) {
+	return steerline.LoadTaskDetail(context.Background(), f.cfg, taskID)
 }
 
 // Activity reads the run's normalized journal from a byte offset and returns the
@@ -61,6 +66,30 @@ func (f *FileSource) Activity(logPath string, from int64) ([]steerline.ActivityE
 		}
 	}
 	return events, off, sc.Err()
+}
+
+// Events reads events.jsonl verbatim (one line per record) from a byte offset.
+func (f *FileSource) Events(logPath string, from int64) ([]string, int64, error) {
+	file, e := os.Open(logPath)
+	if e != nil {
+		return nil, from, e
+	}
+	defer file.Close()
+	if from > 0 {
+		if _, e := file.Seek(from, io.SeekStart); e != nil {
+			return nil, from, e
+		}
+	}
+	sc := bufio.NewScanner(file)
+	sc.Buffer(make([]byte, 0, 64*1024), 8*1024*1024)
+	var lines []string
+	off := from
+	for sc.Scan() {
+		line := sc.Bytes()
+		off += int64(len(line)) + 1
+		lines = append(lines, string(line))
+	}
+	return lines, off, sc.Err()
 }
 
 func (f *FileSource) Answer(run *steerline.Run, optionID, note, by string) error {
