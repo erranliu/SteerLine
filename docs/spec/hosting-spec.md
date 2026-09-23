@@ -1,6 +1,6 @@
 # Hosting 规范 v2：Orca 驱动执行
 
-边界见 [hosting](hosting.md)。本文是实现规范。v2 起执行模型为 **Orca 建 worktree + Orca 启 agent**；Steerline 只做调度与完成。
+边界见 [hosting](../hosting.md)。本文是实现规范。v2 起执行模型为 **Orca 建 worktree + Orca 启 agent**；Steerline 只做调度与完成。
 
 ## 配置轴
 
