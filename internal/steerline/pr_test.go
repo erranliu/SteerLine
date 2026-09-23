@@ -53,6 +53,18 @@ func TestPRURLsAndRemotes(t *testing.T) {
 		}
 	}
 }
+func TestReadResultToleratesUTF8BOM(t *testing.T) {
+	f := newFixture(t)
+	r := &Run{TaskID: "t-1", RunID: "run-1"}
+	path := filepath.Join(f.c.RunDir, "bom-result.json")
+	body := `{"task_id":"t-1","run_id":"run-1","outcome":"blocked","pr_url":null,"worktree_path":null,"base_commit":null,"summary":null,"error":null}`
+	require(t, os.WriteFile(path, append([]byte{0xef, 0xbb, 0xbf}, []byte(body)...), 0600))
+	result, e := ReadResult(path, r)
+	require(t, e)
+	if result.Outcome != "blocked" || result.TaskID != "t-1" || result.RunID != "run-1" {
+		t.Fatalf("unexpected result %+v", result)
+	}
+}
 func TestResultRequiredFieldsAndDuplicatePR(t *testing.T) {
 	f := newFixture(t)
 	s := f.service(t)
