@@ -173,7 +173,7 @@ func inspectProcess(old *ProcessIdentity) string {
 }
 
 func probeProcess(old *ProcessIdentity) ProcessProbe {
-	if old == nil || old.PID <= 0 || old.Kind != "os" {
+	if old == nil || old.PID <= 0 || old.Kind != "os" || old.Created == "" || old.Executable == "" {
 		return ProcessProbe{State: ProcessUnknown, Reason: "process identity is missing or unsupported"}
 	}
 	id, err := linuxIdentity(old.PID)

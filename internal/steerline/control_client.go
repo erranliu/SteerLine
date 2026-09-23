@@ -87,6 +87,12 @@ func SubmitControl(c Config, action string, payload any, requestedBy string) (Co
 	if err != nil {
 		return ControlRequest{}, err
 	}
+	return submitControlSnapshot(c, rt, action, payload, requestedBy)
+}
+
+// The caller has validated this snapshot. Keep its instance/revision unchanged:
+// a restart between observation and publication must reject, never retarget.
+func submitControlSnapshot(c Config, rt *Runtime, action string, payload any, requestedBy string) (ControlRequest, error) {
 	if !validControlAction(action) {
 		return ControlRequest{}, errors.New("unsupported control action")
 	}
@@ -106,13 +112,13 @@ func SubmitControl(c Config, action string, payload any, requestedBy string) (Co
 	}
 	created := now()
 	req := ControlRequest{ProtocolVersion: ControlProtocolVersion, RequestID: newID(), RepositoryIdentity: rt.Repository.Identity, InstanceID: rt.Service.InstanceID, Action: action, Payload: raw, RequestedBy: requestedBy, CreatedAt: created, ExpiresAt: created.Add(2 * time.Minute)}
-	if _, err = decodeControlPayload(req); err != nil {
+	if _, err := decodeControlPayload(req); err != nil {
 		return ControlRequest{}, err
 	}
 	if action != "stop_service" {
 		req.ExpectedControlRevision = rt.Control.Revision
 	}
-	if err = publishControlRequest(c.RunDir, req); err != nil {
+	if err := publishControlRequest(c.RunDir, req); err != nil {
 		return ControlRequest{}, err
 	}
 	return req, nil

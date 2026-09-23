@@ -33,6 +33,24 @@
 - L-A6 的新鲜度、ready、协议不兼容、配置摘要变化、仓库身份不匹配、PID 已复用和确定不存在分类已由原生定向测试覆盖；访问拒绝仍未实测。
 - Linux 未在主机实测会话分离。
 
+## 协调审核修复与外部复测
+
+协调审核补充了启动握手并发、多个/损坏的启动记录、失败记录身份、取消、已退出进程、停服实例固定、锁释放以及已有服务不依赖安装文件的回归。修复 Windows 隔离核验前执行服务代码的问题，改为挂起创建并在核验后恢复；父进程身份记录拆为 `process.json`，避免覆盖子进程握手。Windows 已退出但仍有句柄的进程明确判定为已退出；Linux 由异步 Wait 回收子进程。停服超时保留 request_id，缺少回执时仍报告进程退出证据。
+
+协调工作区验证：`go test ./... -count=1 -timeout 10m` 通过（服务包 332.457 秒）；13 个新增审核回归通过（最后补充的无回执进程退出场景另做定向验证）；Linux amd64 测试二进制与 CLI 交叉编译通过。整仓测试中依赖成功脱离宿主的用例仍跳过，不能据此判定 L-A1～L-A5、L-A7 或真实 TTY 门槛通过。
+
+后台存活测试现在强制终止启动父进程并比较前后的 service/worker 身份；提前退出替身不会递归运行 Go 测试；允许成功 breakaway 的 Windows 环境不会因诊断测试而误报失败。以下命令必须在允许脱离所有祖先 Job 的 Windows 会话、PR 最终 head 对应的检出目录运行：
+
+```powershell
+$env:STEERLINE_REQUIRE_DETACHED_TESTS = '1'
+go test ./internal/steerline -run 'TestDetachedService|TestStartServiceSerializesSameConfigAndRepositoryLockRejectsOtherRunDir|TestStartServiceReportsPreflightFailureAndPendingHandshake' -count=1 -v -timeout 5m
+Remove-Item Env:STEERLINE_REQUIRE_DETACHED_TESTS
+```
+
+该开关使不能脱离宿主的情况成为失败，而非 skip。本协调宿主运行严格模式仍失败，报告 `parent_job_limit_flags=0x2800` 且子进程仍在 Job 内；这不是成功后台存活的证据。上述命令也不等于真实 TTY 窗口关闭验收：还需要用同类临时 Git/fake 工具夹具，在关闭启动窗口后记录服务与 worker 身份不变，再显式停服并确认回执、两个进程退出和两把锁释放。保留最终 commit、命令输出、startup/runtime 身份及时间；不操作生产服务。
+
+未获得这些 Windows 成功路径与真实 TTY 证据前，PR 保持 draft，不合并，也不启动 PR 4。
+
 ## 完成条件
 
 - L-A1～L-A8 完成，尤其具备真实 Windows 父进程退出后的存活证据。

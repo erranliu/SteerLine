@@ -85,6 +85,8 @@ PR 已合并 + 结项命令 + bd close:  finish=completed   beads=closed
 
 `start-service` 的启动尝试记录保存在 `run_dir/service/startups/<startup_id>/startup.json`，独立日志为同目录的 `service.log`。记录绑定 repository identity/path、run_dir、remote、branch、claimant、配置摘要、startup_id、实例 ID 和 OS 进程身份；它只用于识别启动尝试，不代替 runtime。startup_id 只接受 32 位小写十六进制，输出文件路径必须留在本次启动目录中。
 
+父进程只在创建子进程前初始化 `startup.json`，创建后将 OS 身份写入独立的 v1 `process.json`；子进程在 preflight 前发布自己的身份，之后独占生命周期记录的更新。父进程不会用旧的 `starting` 记录覆盖子进程已发布的 `started` 或 `failed`。客户端确认进程已退出时可将未确认的启动标记为失败；损坏或多个仍存活的启动记录会阻止新的启动。
+
 对于 PR 2 的 v4 服务（没有 `startup_id`），配置摘要变化时，连接端还要求匹配的 OS 身份及 repository/run_dir 两把锁，才能保留显式 stop 能力。停服客户端确认 `stop_service=applied`、原进程退出和两把锁释放后，会在 `service/stops/<instance_id>.json` 写入版本化停服观察记录，证明该旧实例原本属于此 run_dir；这使已停服务在修改配置摘要后仍可显式重新启动，不改 runtime v4。
 
 连接读取 runtime 快照、新鲜度、进程探测、配置摘要和控制协议能力，并单独呈现。进程探测区分匹配、确定不存在、PID 已复用和无法核验；权限不足及身份不明不等于离线。过期 heartbeat、ready=false 和协议不兼容均保留旧实例，不自动另起服务。配置摘要变化时保留观察与显式停服能力，并禁用其他控制动作。控制台退出、连接断开和等待超时都不会停止服务。
@@ -92,6 +94,8 @@ PR 已合并 + 结项命令 + bd close:  finish=completed   beads=closed
 `service/launch.lock` 只串行化同一 run_dir 下的启动客户端；服务仍分别持有 Git common-dir 仓库锁和 run_dir 锁。两配置指向同仓库但使用不同 run_dir 时，仓库锁拒绝第二个服务。启动请求返回成功只代表子进程已创建；客户端须收到同一 startup_id、身份匹配且 ready=true 的 runtime 握手。30 秒超时会保留该 ID；后续启动调用观察原尝试，不会因为超时重复启动或杀掉它。
 
 Windows 后台启动要求服务进程离开启动它的 Job Object，并脱离父控制台；创建后还会核验 Job Object 隔离。若宿主不允许 breakaway，明确返回错误。Linux 服务以新会话启动，不使用 worker 的父死亡信号。新启动使用 manual 派发；兼容服务连接时保留它的 mode/pause。
+
+Windows 子进程先以挂起状态创建，完成 Job 隔离和 OS 身份核验后才恢复执行；隔离失败不会先执行服务恢复或 worker 逻辑。停服请求固定指向连接时观察到的实例，结果始终包含 request_id 和 instance_id。即使没有回执，也独立报告原进程是否退出；只有 applied、进程退出和两把锁释放均确认后才报告 stopped。历史快照中的进程已退出但服务锁尚未释放时，不开放重新启动。
 
 ## 多项目
 

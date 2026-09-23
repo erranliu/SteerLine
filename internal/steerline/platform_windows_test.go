@@ -33,20 +33,6 @@ func TestWindowsReplaceFailurePreservesSnapshot(t *testing.T) {
 	require(t, AtomicWrite(path, []byte(`{"version":2}`)))
 }
 
-func TestWindowsExplorerJobDiagnostic(t *testing.T) {
-	cmd := exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-Command", "(Get-Process -Name explorer | Select-Object -First 1 -ExpandProperty Id)")
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Skipf("Explorer process unavailable: %v (%s)", err, output)
-	}
-	var pid int
-	if _, err = fmt.Sscanf(string(output), "%d", &pid); err != nil {
-		t.Fatalf("parse Explorer PID %q: %v", output, err)
-	}
-	inJob, err := processInJobByPID(pid)
-	t.Logf("Explorer pid=%d in_job=%t query_error=%v", pid, inJob, err)
-}
-
 func TestJobDiagnosticChildHelper(t *testing.T) {
 	if os.Getenv("STEERLINE_JOB_DIAGNOSTIC_CHILD") != "1" {
 		return
@@ -71,4 +57,23 @@ func jobDiagnosticChildOutput() ([]byte, error) {
 		HideWindow:    true,
 	}
 	return cmd.CombinedOutput()
+}
+
+func TestLifecycleReviewExitedProcessWithRetainedHandle(t *testing.T) {
+	exe, err := os.Executable()
+	require(t, err)
+	cmd := exec.Command(exe, "--fake", "sleep")
+	require(t, cmd.Start())
+	defer func() { _ = cmd.Process.Kill(); _ = cmd.Wait() }()
+	handle, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION|windows.SYNCHRONIZE, false, uint32(cmd.Process.Pid))
+	require(t, err)
+	defer windows.CloseHandle(handle)
+	identity, err := identityFromHandle(handle, cmd.Process.Pid)
+	require(t, err)
+	require(t, cmd.Process.Kill())
+	_, err = windows.WaitForSingleObject(handle, 5000)
+	require(t, err)
+	if probe := probeProcess(&identity); probe.State != ProcessAbsent {
+		t.Fatalf("retained exited process handle reported alive: %+v", probe)
+	}
 }

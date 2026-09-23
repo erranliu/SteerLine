@@ -35,6 +35,9 @@ type fakeDB struct {
 }
 
 func TestMain(m *testing.M) {
+	if os.Getenv("STEERLINE_LIFECYCLE_EXIT_EARLY") == "1" {
+		os.Exit(23)
+	}
 	for i, a := range os.Args {
 		if a == "--fake" {
 			os.Exit(fakeMain(os.Args[i+1:]))

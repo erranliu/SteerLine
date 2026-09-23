@@ -27,6 +27,7 @@ type ProcessProbe struct {
 }
 
 var errLockBusy = errors.New("service lock is held")
+var errDetachUnsupported = errors.New("host Job Object prevents independent service lifetime")
 
 type ServiceConnectionState string
 
@@ -117,6 +118,8 @@ type ServiceStartResult struct {
 
 type ServiceStopResult struct {
 	Status        string          `json:"status"` // stopped, stopping, pending, rejected, failed
+	RequestID     string          `json:"request_id"`
+	InstanceID    string          `json:"instance_id"`
 	Receipt       *ControlReceipt `json:"receipt,omitempty"`
 	ProcessExited bool            `json:"process_exited"`
 	LocksReleased bool            `json:"locks_released"`
@@ -265,7 +268,39 @@ func readStartupRecord(c Config, id string) (*StartupRecord, error) {
 	if record.Version != 1 || record.StartupID != id || (record.Status != "starting" && record.Status != "started" && record.Status != "failed") {
 		return nil, errors.New("invalid startup record version, ID or status")
 	}
+	if record.ProcessIdentity == nil {
+		// The launcher owns a separate immutable process record. It never edits
+		// the child's lifecycle record after process creation.
+		b, e := readBoundedFile(filepath.Join(filepath.Dir(path), "process.json"), 1<<20)
+		if e == nil {
+			var process startupProcessRecord
+			if e = decode(b, &process); e != nil || process.Version != 1 || process.StartupID != id {
+				return nil, errors.New("invalid startup process record")
+			}
+			record.ProcessIdentity = &process.ProcessIdentity
+		} else if !os.IsNotExist(e) {
+			return nil, e
+		}
+	}
 	return &record, nil
+}
+
+type startupProcessRecord struct {
+	Version         int             `json:"version"`
+	StartupID       string          `json:"startup_id"`
+	ProcessIdentity ProcessIdentity `json:"process_identity"`
+}
+
+func recordStartupProcess(c Config, id string, identity ProcessIdentity) error {
+	path, err := startupPath(c.RunDir, id)
+	if err != nil {
+		return err
+	}
+	b, err := json.Marshal(startupProcessRecord{Version: 1, StartupID: id, ProcessIdentity: identity})
+	if err != nil {
+		return err
+	}
+	return AtomicWrite(filepath.Join(filepath.Dir(path), "process.json"), append(b, '\n'))
 }
 
 func stopObservationPath(c Config, instanceID string) (string, error) {
@@ -391,7 +426,10 @@ func findLiveStartupAttempt(c Config) (*StartupRecord, ProcessProbe, string, err
 			continue
 		}
 		record, e := readStartupRecord(c, entry.Name())
-		if e != nil || record.Status != "starting" && record.Status != "started" {
+		if e != nil {
+			return nil, ProcessProbe{}, "", fmt.Errorf("read startup %s: %w", entry.Name(), e)
+		}
+		if record.Status != "starting" && record.Status != "started" {
 			continue
 		}
 		if canonical(record.RunDir) != canonical(runDir) {
@@ -414,7 +452,7 @@ func findLiveStartupAttempt(c Config) (*StartupRecord, ProcessProbe, string, err
 			diagnostic = "a live startup attempt uses an older configuration digest; do not launch a replacement"
 		}
 		if found != nil {
-			return nil, ProcessProbe{State: ProcessUnknown, Reason: "multiple live startup attempts claim the same run_dir"}, "multiple live startup attempts claim the same run_dir", nil
+			return nil, ProcessProbe{State: ProcessUnknown}, "", errors.New("multiple live startup attempts claim the same run_dir")
 		}
 		found, foundProbe, foundDiagnostic = record, probe, diagnostic
 	}
@@ -427,6 +465,12 @@ func validateRecordForRuntime(c Config, rt *Runtime, record *StartupRecord, repo
 		record.Remote != c.Remote || record.Branch != c.Branch || record.Claimant != expectedClaimant(c) ||
 		record.ConfigDigest != rt.Service.ConfigDigest {
 		return errors.New("startup record target identity does not match configuration and runtime")
+	}
+	if record.ProcessIdentity == nil || rt.Service.ProcessIdentity == nil || *record.ProcessIdentity != *rt.Service.ProcessIdentity {
+		return errors.New("startup record process identity does not match runtime")
+	}
+	if record.InstanceID != "" && record.InstanceID != rt.Service.InstanceID {
+		return errors.New("startup record belongs to another runtime instance")
 	}
 	if record.Status == "started" {
 		if record.InstanceID == "" || record.InstanceID != rt.Service.InstanceID {
@@ -525,6 +569,17 @@ func ConnectService(ctx context.Context, c Config) ServiceConnection {
 		connection.State = ConnectionOffline
 		connection.Diagnostic = connection.Process.Reason
 		connection.CanStart = true
+		for _, path := range []string{filepath.Join(c.identity, "steerline.lock"), filepath.Join(c.RunDir, "steerline.lock")} {
+			held, e := probeLockFile(path)
+			if e != nil || held {
+				connection.CanStart = false
+				connection.Diagnostic = "original process exited, but service lock release is not confirmed"
+				if e != nil {
+					connection.Diagnostic += ": " + e.Error()
+				}
+				break
+			}
+		}
 		return connection
 	}
 	if connection.Process.State == ProcessUnknown {
@@ -533,7 +588,6 @@ func ConnectService(ctx context.Context, c Config) ServiceConnection {
 		connection.CanStart = false
 		return connection
 	}
-	connection.IdentityMatched = true
 	// PR 2 v4 runtimes did not publish startup records. If their config digest
 	// has since changed, require both service locks plus the matching OS process
 	// identity before allowing the explicit stop exception. This ties the live
@@ -547,6 +601,7 @@ func ConnectService(ctx context.Context, c Config) ServiceConnection {
 		connection.CanStart = false
 		return connection
 	}
+	connection.IdentityMatched = true
 	connection.CanStop = rt.Service.ControlProtocol == ControlProtocolVersion && serviceHasCapability(rt, "stop_service")
 	if !connection.ConfigMatched {
 		connection.State = ConnectionConfigChanged
@@ -673,6 +728,9 @@ func failStartup(c Config, id string, cause error) error {
 }
 
 func StartService(ctx context.Context, configPath string, opts StartServiceOptions) (ServiceStartResult, error) {
+	if err := ctx.Err(); err != nil {
+		return ServiceStartResult{}, err
+	}
 	c, err := LoadConfig(configPath)
 	if err != nil {
 		return ServiceStartResult{}, err
@@ -715,12 +773,6 @@ func StartService(ctx context.Context, configPath string, opts StartServiceOptio
 	if err != nil {
 		return ServiceStartResult{}, err
 	}
-	if info, e := os.Stat(executable); e != nil || info.IsDir() {
-		if e == nil {
-			e = errors.New("path is a directory")
-		}
-		return ServiceStartResult{}, fmt.Errorf("installed service executable %s is unavailable: %w; run steerline install", executable, e)
-	}
 	if inside(c.Repository, c.RunDir) {
 		return ServiceStartResult{}, errors.New("run_dir must be outside the configured repository")
 	}
@@ -759,6 +811,9 @@ func StartService(ctx context.Context, configPath string, opts StartServiceOptio
 	case ConnectionStale, ConnectionUnknown, ConnectionIdentityError, ConnectionCorrupt, ConnectionLegacy, ConnectionIncompatible, ConnectionConfigChanged:
 		return ServiceStartResult{}, fmt.Errorf("refusing to start a replacement service: %s: %s", connection.State, connection.Diagnostic)
 	case ConnectionOffline, ConnectionNoRecord:
+		if !connection.CanStart {
+			return ServiceStartResult{Status: "pending", Connection: connection, Error: connection.Diagnostic}, nil
+		}
 	default:
 		return ServiceStartResult{}, fmt.Errorf("cannot start service from connection state %q", connection.State)
 	}
@@ -793,6 +848,15 @@ func StartService(ctx context.Context, configPath string, opts StartServiceOptio
 			return waitForStartup(ctx, c, pending.StartupID, logPath, opts)
 		}
 	}
+	if err = ctx.Err(); err != nil {
+		return ServiceStartResult{}, err
+	}
+	if info, e := os.Stat(executable); e != nil || info.IsDir() {
+		if e == nil {
+			e = errors.New("path is a directory")
+		}
+		return ServiceStartResult{}, fmt.Errorf("installed service executable %s is unavailable: %w; run steerline install", executable, e)
+	}
 	startupID := newID()
 	_, logPath, err := createStartupAttempt(c, startupID, true)
 	if err != nil {
@@ -816,27 +880,34 @@ func StartService(ctx context.Context, configPath string, opts StartServiceOptio
 	cmd := exec.Command(executable, "run", "-config", absoluteConfig, "-dispatch", "manual", "-console", "off", "-startup-id", startupID)
 	cmd.Dir = c.Repository
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = stdin, logFile, logFile
+	if err = ctx.Err(); err != nil {
+		_ = failStartup(c, startupID, err)
+		return ServiceStartResult{Status: "failed", StartupID: startupID, LogPath: logPath, Error: err.Error()}, nil
+	}
 	identity, err := startDetachedProcess(cmd)
 	if err != nil {
 		_ = failStartup(c, startupID, err)
 		return ServiceStartResult{Status: "failed", StartupID: startupID, LogPath: logPath, Error: err.Error()}, nil
 	}
-	if record, e := readStartupRecord(c, startupID); e == nil {
-		record.ProcessIdentity = &identity
-		if e = writeStartupRecord(c, *record); e != nil {
-			return ServiceStartResult{}, fmt.Errorf("record detached startup identity: %w", e)
-		}
+	err = recordStartupProcess(c, startupID, identity)
+	// Reap a child that exits while this UI remains open (notably on Linux).
+	// Waiting does not bind its lifetime to ours or kill it when this UI exits.
+	go func() { _ = cmd.Wait() }()
+	if err != nil {
+		return ServiceStartResult{Status: "pending", StartupID: startupID, LogPath: logPath, Error: "process created, but recording its identity failed: " + err.Error()}, nil
 	}
-	// The process handle is not our lifecycle authority. The runtime identity,
-	// startup record and service locks are used for every later observation.
-	_ = identity
-	_ = cmd.Process.Release()
 	return waitForStartup(ctx, c, startupID, logPath, opts)
 }
 
 func waitForStartup(ctx context.Context, c Config, id, logPath string, opts StartServiceOptions) (ServiceStartResult, error) {
-	deadline := time.NewTimer(opts.WaitTimeout)
-	defer deadline.Stop()
+	if opts.WaitTimeout <= 0 || opts.WaitTimeout > 30*time.Second {
+		opts.WaitTimeout = 30 * time.Second
+	}
+	if opts.PollInterval <= 0 {
+		opts.PollInterval = 100 * time.Millisecond
+	}
+	ctx, cancel := context.WithTimeout(ctx, opts.WaitTimeout)
+	defer cancel()
 	tick := time.NewTicker(opts.PollInterval)
 	defer tick.Stop()
 	result := ServiceStartResult{Status: "starting", StartupID: id, LogPath: logPath}
@@ -853,11 +924,11 @@ func waitForStartup(ctx context.Context, c Config, id, logPath string, opts Star
 				result.Error = "service startup failed; see startup log"
 			}
 			return result, nil
-		} else if err == nil && record.Status == "starting" && record.ProcessIdentity != nil {
+		} else if err == nil && record.ProcessIdentity != nil {
 			probe := probeProcess(record.ProcessIdentity)
 			if probe.State == ProcessAbsent || probe.State == ProcessReused {
 				record.Status = "failed"
-				record.Error = "service process exited before the ready handshake; see startup log"
+				record.Error = "service process exited before the client confirmed the ready handshake; see startup log"
 				_ = writeStartupRecord(c, *record)
 				result.Status, result.Error = "failed", record.Error
 				return result, nil
@@ -867,12 +938,8 @@ func waitForStartup(ctx context.Context, c Config, id, logPath string, opts Star
 		case <-ctx.Done():
 			result.Status = "pending"
 			if result.Error == "" {
-				result.Error = "startup result is pending; observe this startup_id before requesting another start"
+				result.Error = "startup result is pending after cancellation or wait timeout; observe this startup_id before requesting another start"
 			}
-			return result, nil
-		case <-deadline.C:
-			result.Status = "pending"
-			result.Error = "startup result is pending after 30 seconds; observe this startup_id before requesting another start"
 			return result, nil
 		case <-tick.C:
 		}
@@ -899,11 +966,14 @@ func StopService(ctx context.Context, c Config, requestedBy string, timeout time
 	if !connection.CanStop {
 		return ServiceStopResult{}, fmt.Errorf("cannot stop service in state %q: %s", connection.State, connection.Diagnostic)
 	}
-	request, err := SubmitControl(c, "stop_service", nil, requestedBy)
+	if err := ctx.Err(); err != nil {
+		return ServiceStopResult{}, err
+	}
+	request, err := submitControlSnapshot(c, connection.Snapshot.Runtime, "stop_service", nil, requestedBy)
 	if err != nil {
 		return ServiceStopResult{}, err
 	}
-	result := ServiceStopResult{Status: "stopping"}
+	result := ServiceStopResult{Status: "stopping", RequestID: request.RequestID, InstanceID: request.InstanceID}
 	deadline := time.NewTimer(timeout)
 	defer deadline.Stop()
 	tick := time.NewTicker(100 * time.Millisecond)
@@ -934,7 +1004,7 @@ func StopService(ctx context.Context, c Config, requestedBy string, timeout time
 		} else if !os.IsNotExist(e) {
 			result.Diagnostic = e.Error()
 		}
-		if result.Receipt != nil && result.Receipt.Status == "applied" {
+		{
 			probe := probeProcess(connection.Snapshot.Runtime.Service.ProcessIdentity)
 			if probe.State == ProcessAbsent || probe.State == ProcessReused {
 				result.ProcessExited = true
@@ -943,7 +1013,7 @@ func StopService(ctx context.Context, c Config, requestedBy string, timeout time
 				if lockErr != nil {
 					result.Diagnostic = lockErr.Error()
 				}
-				if result.LocksReleased {
+				if result.LocksReleased && result.Receipt != nil && result.Receipt.Status == "applied" {
 					if connection.Snapshot.Runtime.Service.StartupID == nil {
 						if recordErr := writeStopObservation(c, connection.Snapshot.Runtime, request.RequestID); recordErr != nil {
 							result.Diagnostic = "service stopped, but legacy instance identity could not be retained: " + recordErr.Error()
@@ -952,6 +1022,11 @@ func StopService(ctx context.Context, c Config, requestedBy string, timeout time
 					result.Status = "stopped"
 					return result, nil
 				}
+				if result.Receipt == nil || result.Receipt.Status != "applied" {
+					result.Diagnostic = "original service process exited; stop receipt is not confirmed"
+				}
+			} else if probe.State == ProcessUnknown {
+				result.Diagnostic = "original service process exit is unverifiable: " + probe.Reason
 			}
 		}
 		select {
@@ -1006,6 +1081,9 @@ func acquireLaunchLock(ctx context.Context, path string) (*RepoLock, error) {
 	tick := time.NewTicker(25 * time.Millisecond)
 	defer tick.Stop()
 	for {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		lock, err := lockPath(path)
 		if err == nil {
 			return lock, nil
@@ -1076,6 +1154,11 @@ func RunConfiguredService(ctx context.Context, c Config, mode, startupID, consol
 			return err
 		}
 	} else {
+		return err
+	}
+	// Publish the child's identity before slow preflight. The launcher only
+	// writes process.json, so it cannot roll back a later started/failed state.
+	if err := writeStartupRecord(c, record); err != nil {
 		return err
 	}
 	fail := func(err error) error {
