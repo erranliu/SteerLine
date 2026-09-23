@@ -138,7 +138,7 @@ func TestViewerShowsTaskDetailAndTabs(t *testing.T) {
 	if !strings.Contains(ws, "worktree") {
 		t.Fatalf("workspace tab missing workspace fields:\n%s", ws)
 	}
-	if strings.Contains(ws, "delivery") {
+	if strings.Contains(ws, "waiting_decision") {
 		t.Fatalf("workspace tab must replace summary content")
 	}
 }

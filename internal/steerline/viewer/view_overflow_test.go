@@ -40,14 +40,7 @@ func TestViewerLinesFitPaneWidth(t *testing.T) {
 		m = mm.(Model)
 		mm, _ = m.Update(activityMsg{logPath: "log-overflow", events: f.activity["log-overflow"], from: 2})
 		m = mm.(Model)
-		leftW := m.width / 3
-		if leftW < 30 {
-			leftW = 30
-		}
-		if leftW > 50 {
-			leftW = 50
-		}
-		rightW := m.width - leftW - 1
+		leftW, rightW := paneWidths(m.width)
 		check := func(name string, lines []string, limit int) {
 			for i, ln := range lines {
 				if strings.Contains(ln, "\n") {
@@ -60,5 +53,19 @@ func TestViewerLinesFitPaneWidth(t *testing.T) {
 		}
 		check("runs", m.viewRuns(leftW, 49), leftW)
 		check("right", m.viewRight(rightW, 49), rightW)
+	}
+}
+
+func TestViewerDetailHeaderShowsTitle(t *testing.T) {
+	run := pendingRun()
+	run.Title = "DigHoleManager 存档兼容迁移与反序列化容错处理"
+	f := &fakeSource{runs: []*steerline.Run{run}}
+	m := NewModel(steerline.Config{}, f, Options{})
+	m.width, m.height = 170, 40
+	rt, _ := f.Snapshot()
+	mm, _ := m.Update(runsMsg{runs: f.runs, rt: rt})
+	m = mm.(Model)
+	if view := m.View(); !strings.Contains(view, "存档兼容迁移") {
+		t.Fatalf("detail header should show the task title:\n%s", view)
 	}
 }

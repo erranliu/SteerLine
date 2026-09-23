@@ -26,14 +26,7 @@ func (m Model) View() string {
 	if bodyH < 3 {
 		bodyH = 3
 	}
-	leftW := m.width / 3
-	if leftW < 30 {
-		leftW = 30
-	}
-	if leftW > 50 {
-		leftW = 50
-	}
-	rightW := m.width - leftW - 1
+	leftW, rightW := paneWidths(m.width)
 	if m.width < 64 || rightW < 12 {
 		body := strings.Join(pane(m.viewRuns(m.width, bodyH), m.width, bodyH), "\n")
 		return header + "\n" + status + "\n" + body + "\n" + m.viewFooter(m.width)
@@ -47,6 +40,19 @@ func (m Model) View() string {
 const detailTabCount = 5
 
 var detailTabs = []string{"Summary", "Workspace", "PR", "Decision", "Result"}
+
+// paneWidths splits the terminal into the run-list and detail/activity columns.
+// The list gets 40% so task titles stay readable; the detail pane keeps the rest.
+func paneWidths(width int) (left, right int) {
+	left = width * 2 / 5
+	if left < 34 {
+		left = 34
+	}
+	if left > 76 {
+		left = 76
+	}
+	return left, width - left - 1
+}
 
 // viewRight stacks the detail pane above the activity pane in the right column.
 func (m Model) viewRight(w, h int) []string {
@@ -81,7 +87,16 @@ func (m Model) viewDetail(w, h int) []string {
 			bar.WriteString(" " + name)
 		}
 	}
-	lines := []string{styleLabel.Render(truncate("Detail · "+r.TaskID+bar.String(), w))}
+	tabBar := bar.String()
+	prefix := "Detail · " + r.TaskID
+	if r.Title != "" {
+		// Reserve room for the tab bar; only show the title when it fits.
+		budget := w - lipgloss.Width(prefix) - lipgloss.Width(tabBar) - 3
+		if budget >= 8 {
+			prefix += " · " + truncate(r.Title, budget)
+		}
+	}
+	lines := []string{styleLabel.Render(truncate(prefix+tabBar, w))}
 	content := m.detailContent(r, w)
 	body := h - 1
 	if body < 1 {
@@ -456,7 +471,7 @@ func elapsedShort(r *steerline.Run) string {
 }
 
 func (m Model) viewRuns(w, h int) []string {
-	body := h - 1
+	body := h - 2
 	if body < 1 {
 		body = 1
 	}
@@ -464,7 +479,10 @@ func (m Model) viewRuns(w, h int) []string {
 	if m.sel >= body {
 		start = m.sel - body + 1
 	}
-	lines := []string{styleLabel.Render(fmt.Sprintf("Runs · %d", len(m.rows)))}
+	lines := []string{
+		styleLabel.Render(fmt.Sprintf("Runs · %d", len(m.rows))),
+		styleFaint.Render(truncate("! needs you · STAGE delivery · EXEC ok/fail · TIME worker run", w)),
+	}
 	if len(m.rows) == 0 {
 		lines = append(lines, styleFaint.Render("(no runs)"))
 	}
