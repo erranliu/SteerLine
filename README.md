@@ -174,6 +174,8 @@ Agent 需要人工决策时（`outcome=needs_decision`），运行进入 `finish
 
 执行在 Orca：`host: "orca"` 时由 Orca 创建 worktree 并启动 agent（`events.jsonl` 不再产生，改用 R-a 结果文件）。执行事实（worktree、分支、agent 存活、终端）以 Orca 为准；调度、编排、完成与恢复仍属 SteerLine。红线与规范见 [hosting](docs/hosting.md)、[hosting 规范](docs/hosting-spec.md)。
 
+后续方向已确认：中心 SteerLine 状态机、远端仅 Orca 执行器、桌面与移动端统一接入，并为同任务多 agent 独立 worktree 并行预留模型。详见[架构决策](docs/architecture-direction.md)；这些是目标约束，当前尚未实现。
+
 ```json
 "agent": "codex",
 "host": "orca",
