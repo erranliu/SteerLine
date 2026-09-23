@@ -5,6 +5,8 @@ import (
 	"os"
 	"sort"
 	"strings"
+
+	"github.com/mattn/go-runewidth"
 )
 
 // RenderOptions controls human rendering of activity records. Rendering never
@@ -84,6 +86,31 @@ func paint(s, color string, on bool) string {
 	return color + s + ansiReset
 }
 
+// clipWidth truncates plain (uncolored) text to a display width, counting wide
+// runes like CJK as two columns, so a rendered line can never overflow its pane.
+func clipWidth(s string, max int) string {
+	if max <= 0 {
+		return ""
+	}
+	if runewidth.StringWidth(s) <= max {
+		return s
+	}
+	var b strings.Builder
+	w := 0
+	for _, r := range s {
+		rw := runewidth.RuneWidth(r)
+		if w+rw > max-1 {
+			break
+		}
+		b.WriteRune(r)
+		w += rw
+	}
+	return b.String() + "…"
+}
+
+// activityIndent is the fixed indent used for detail lines under a head line.
+const activityIndent = "           "
+
 // RenderActivity renders one record as a compact human line plus bounded detail.
 func RenderActivity(ev ActivityEvent, o RenderOptions) string {
 	maxLines := o.MaxLines
@@ -104,19 +131,23 @@ func RenderActivity(ev ActivityEvent, o RenderOptions) string {
 	if suffix := activitySuffix(ev); suffix != "" {
 		head += "  " + suffix
 	}
-	b.WriteString(paint(head, kindColor(ev.Kind), o.Color))
+	b.WriteString(paint(clipWidth(head, maxColumns), kindColor(ev.Kind), o.Color))
 	if ev.Detail != "" {
+		detailWidth := maxColumns - len(activityIndent)
+		if detailWidth < 8 {
+			detailWidth = 8
+		}
 		lines := strings.Split(strings.ReplaceAll(ev.Detail, "\r\n", "\n"), "\n")
 		for i, line := range lines {
 			if i >= maxLines {
-				b.WriteString("\n" + paint(fmt.Sprintf("           … (%d more lines)", len(lines)-i), ansiDim, o.Color))
+				b.WriteString("\n" + paint(fmt.Sprintf(activityIndent+"… (%d more lines)", len(lines)-i), ansiDim, o.Color))
 				break
 			}
 			trimmed := strings.TrimRight(line, " \t")
 			if trimmed == "" {
 				continue
 			}
-			b.WriteString("\n           " + clip(trimmed, maxColumns))
+			b.WriteString("\n" + activityIndent + clipWidth(trimmed, detailWidth))
 		}
 	}
 	return b.String()

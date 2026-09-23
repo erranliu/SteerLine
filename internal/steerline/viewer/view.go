@@ -36,10 +36,10 @@ func (m Model) View() string {
 	rightW := m.width - leftW - 1
 	if m.width < 64 || rightW < 12 {
 		body := strings.Join(pane(m.viewRuns(m.width, bodyH), m.width, bodyH), "\n")
-		return header + "\n" + status + "\n" + body + "\n" + m.viewFooter()
+		return header + "\n" + status + "\n" + body + "\n" + m.viewFooter(m.width)
 	}
 	body := joinPanes(bodyH, pane(m.viewRuns(leftW, bodyH), leftW, bodyH), pane(m.viewRight(rightW, bodyH), rightW, bodyH))
-	return header + "\n" + status + "\n" + body + "\n" + m.viewFooter()
+	return header + "\n" + status + "\n" + body + "\n" + m.viewFooter(m.width)
 }
 
 // --- L2 run detail ---
@@ -76,12 +76,12 @@ func (m Model) viewDetail(w, h int) []string {
 	var bar strings.Builder
 	for i, name := range detailTabs {
 		if i == m.detailTab {
-			bar.WriteString(" " + styleSel.Render(" "+name+" "))
+			bar.WriteString(" [" + name + "]")
 		} else {
-			bar.WriteString(" " + styleFaint.Render(name))
+			bar.WriteString(" " + name)
 		}
 	}
-	lines := []string{styleLabel.Render("Detail · "+r.TaskID) + "  " + bar.String()}
+	lines := []string{styleLabel.Render(truncate("Detail · "+r.TaskID+bar.String(), w))}
 	content := m.detailContent(r, w)
 	body := h - 1
 	if body < 1 {
@@ -113,8 +113,9 @@ func (m Model) detailContent(r *steerline.Run, w int) []string {
 type detailKV struct{ k, v string }
 
 func detailFields(kvs []detailKV, w int) []string {
+	// " " + label(labelW) + " " + value == labelW+2+valW columns.
 	labelW := 13
-	valW := w - 1 - labelW
+	valW := w - labelW - 2
 	if valW < 6 {
 		valW = 6
 	}
@@ -478,16 +479,23 @@ func (m Model) viewRuns(w, h int) []string {
 		el := elapsedShort(r.run)
 		// mark(1)+sp+task(9)+sp+badge(6)+sp+exec(4)+sp+elapsed(5)+sp
 		prefixW := 1 + 1 + 9 + 1 + 6 + 1 + 4 + 1 + 5 + 1
+		title := ""
 		titleBudget := w - prefixW
-		if titleBudget < 4 {
-			titleBudget = 4
+		if titleBudget >= 4 {
+			title = truncate(r.run.Title, titleBudget)
 		}
-		title := truncate(r.run.Title, titleBudget)
+		plain := fmt.Sprintf("%s %-9s %-6s %-4s %5s %s", mark, truncate(r.run.TaskID, 9), badge, exec, el, title)
+		if lipgloss.Width(plain) > w {
+			plain = truncate(plain, w)
+		}
 		var line string
-		if i == m.sel {
-			line = styleSel.Render(fmt.Sprintf("%s %-9s %-6s %-4s %5s %s", mark, truncate(r.run.TaskID, 9), badge, exec, el, title))
-		} else {
+		switch {
+		case i == m.sel:
+			line = styleSel.Render(plain)
+		case titleBudget >= 4:
 			line = fmt.Sprintf("%s %-9s %s %-4s %5s %s", mark, truncate(r.run.TaskID, 9), badgeColor(badge).Render(fmt.Sprintf("%-6s", badge)), truncate(exec, 4), el, title)
+		default:
+			line = plain
 		}
 		lines = append(lines, line)
 	}
@@ -609,14 +617,14 @@ func foldEvents(events []steerline.ActivityEvent, conversation bool) []steerline
 	return out
 }
 
-func (m Model) viewFooter() string {
+func (m Model) viewFooter(w int) string {
 	if r := m.current(); isPending(r) {
-		return stylePending.Render("! decision pending for "+r.TaskID+" — press a to answer") + "  " + styleFaint.Render(helpKeys)
+		return stylePending.Render(truncate("! decision pending for "+r.TaskID+" — press a to answer  "+helpKeys, w))
 	}
 	if m.status != "" {
-		return styleFaint.Render(m.status) + "  " + styleFaint.Render(helpKeys)
+		return styleFaint.Render(truncate(m.status+"  "+helpKeys, w))
 	}
-	return styleFaint.Render(helpKeys)
+	return styleFaint.Render(truncate(helpKeys, w))
 }
 
 func (m Model) viewModal() string {
