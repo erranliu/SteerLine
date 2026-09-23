@@ -35,6 +35,8 @@ func statusMark(status string) string {
 		return "+"
 	case "failed":
 		return "!"
+	case "pending":
+		return "*"
 	case "info", "":
 		return "."
 	}
@@ -47,6 +49,8 @@ func statusColor(status string) string {
 		return ansiGreen
 	case "failed":
 		return ansiRed
+	case "pending":
+		return ansiMagenta
 	case "started", "running":
 		return ansiYellow
 	}
@@ -62,6 +66,8 @@ func kindColor(kind string) string {
 	case "command":
 		return ansiYellow
 	case "file_change":
+		return ansiMagenta
+	case "decision":
 		return ansiMagenta
 	case "error":
 		return ansiRed

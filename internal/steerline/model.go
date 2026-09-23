@@ -64,6 +64,52 @@ type Run struct {
 	ResultPath       *string           `json:"result_path"`
 	Summary          *string           `json:"summary"`
 	Error            *string           `json:"error"`
+	// Decision is set when the agent raised a structured question and the run is
+	// paused as finish_task_status=waiting_decision until a human answers.
+	Decision *DecisionState `json:"decision,omitempty"`
+}
+
+// DecisionOption is one choice an agent offers when it needs a human decision.
+type DecisionOption struct {
+	ID     string `json:"id"`
+	Label  string `json:"label"`
+	Detail string `json:"detail,omitempty"`
+}
+
+// DecisionRequest is the structured question carried in an R-a result.
+type DecisionRequest struct {
+	Question      string           `json:"question"`
+	Context       string           `json:"context,omitempty"`
+	Options       []DecisionOption `json:"options"`
+	Recommended   string           `json:"recommended,omitempty"`
+	AllowFreeText bool             `json:"allow_free_text,omitempty"`
+}
+
+// DecisionState is the durable scheduler record of one decision. RequestPath and
+// AnswerPath are absolute so the CLI/viewer can answer without the service.
+// Status moves pending -> resuming -> applied; a restart never auto-resumes.
+type DecisionState struct {
+	ID          string          `json:"id"`
+	Request     DecisionRequest `json:"request"`
+	Status      string          `json:"status"`
+	OptionID    string          `json:"option_id,omitempty"`
+	Note        string          `json:"note,omitempty"`
+	AnsweredBy  string          `json:"answered_by,omitempty"`
+	AnsweredAt  *time.Time      `json:"answered_at,omitempty"`
+	AppliedAt   *time.Time      `json:"applied_at,omitempty"`
+	RequestPath string          `json:"request_path"`
+	AnswerPath  string          `json:"answer_path"`
+}
+
+// DecisionAnswer is written by a human (via `steerline answer` or the viewer).
+// The service is the only component that applies it.
+type DecisionAnswer struct {
+	DecisionID string    `json:"decision_id"`
+	RunID      string    `json:"run_id"`
+	OptionID   string    `json:"option_id,omitempty"`
+	Note       string    `json:"note,omitempty"`
+	AnsweredBy string    `json:"answered_by"`
+	AnsweredAt time.Time `json:"answered_at"`
 }
 
 // Intent is durable before Git creates anything; actual workspace fields stay null
@@ -90,6 +136,8 @@ type Result struct {
 	BaseCommit   *string `json:"base_commit"`
 	Summary      *string `json:"summary"`
 	Error        *string `json:"error"`
+	// Decision is present only when Outcome is "needs_decision".
+	Decision *DecisionRequest `json:"decision"`
 }
 
 func ptr[T any](v T) *T { return &v }

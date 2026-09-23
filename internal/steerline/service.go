@@ -66,12 +66,24 @@ func NewService(c Config) (*Service, error) {
 				return nil, errors.New("invalid saved execution_status")
 			}
 			switch r.FinishTaskStatus {
-			case "pending", "waiting_pr_merge", "completed", "blocked":
+			case "pending", "waiting_pr_merge", "waiting_decision", "completed", "blocked":
 			default:
 				return nil, errors.New("invalid saved finish_task_status")
 			}
 			if r.FinishTaskStatus == "waiting_pr_merge" && r.PR.URL == nil {
 				return nil, errors.New("waiting run lacks PR binding")
+			}
+			// A decision is never auto-resumed on restart; an interrupted resume is
+			// uncertain and must go through manual recovery.
+			if r.FinishTaskStatus == "waiting_decision" {
+				switch {
+				case r.Decision == nil:
+					r.FinishTaskStatus = "blocked"
+					r.Error = ptr("waiting_decision run lacks decision state; manual recovery required")
+				case r.Decision.Status == "resuming":
+					r.FinishTaskStatus = "blocked"
+					r.Error = ptr("Interrupted while resuming a decision; manual recovery required; never auto-resumed")
+				}
 			}
 			if r.ExecutionStatus == "pending" || r.ExecutionStatus == "running" {
 				r.ExecutionStatus = "unknown"
@@ -220,6 +232,13 @@ func (s *Service) dispatch(ctx context.Context) error {
 		if r.ExecutionStatus == "unknown" {
 			s.State.SlotOccupied = true
 			return errors.New("unresolved unknown execution; dispatch paused until manual recovery")
+		}
+	}
+	// A pending decision holds the single execution slot until it is answered and
+	// resumed, so new work cannot run ahead of the human's decision.
+	for _, r := range s.State.Runs {
+		if r.FinishTaskStatus == "waiting_decision" {
+			return nil
 		}
 	}
 	s.State.SlotOccupied = false
@@ -374,7 +393,10 @@ func (s *Service) preparationFailed(r *Run, reason string) error {
 	s.closeActivity(r)
 	return s.save()
 }
-func (s *Service) bind(r *Run, result Result) error {
+
+// verifyHandoff checks the result's workspace/base claims against the scheduler
+// record. It applies to every outcome that carries workspace facts.
+func verifyHandoff(r *Run, result Result) error {
 	if r.WorkspaceIntent == nil || r.WorktreePath == nil || r.WorktreeBranch == nil || r.BaseCommit == nil {
 		return errors.New("run has no verified scheduler-prepared workspace; legacy/orphan result requires manual recovery")
 	}
@@ -384,17 +406,48 @@ func (s *Service) bind(r *Run, result Result) error {
 	if result.Outcome == "pr_submitted" && (result.WorktreePath == nil || result.BaseCommit == nil) {
 		return errors.New("handoff missing prepared workspace facts")
 	}
-	r.Summary = result.Summary
-	if r.Summary != nil {
-		r.Summary = ptr(clip(*r.Summary, 4096))
+	return nil
+}
+
+func blockedResultMessage(result Result) string {
+	msg := "Repository workflow reported blocked"
+	if result.Error != nil {
+		msg += ": " + *result.Error
 	}
-	if result.Outcome == "blocked" {
-		msg := "Repository workflow reported blocked"
-		if result.Error != nil {
-			msg += ": " + *result.Error
-		}
-		s.blocked(r, msg)
+	return msg
+}
+
+// awaitDecision persists the structured request and pauses the run. It keeps the
+// worktree, terminal and Beads claim so a human answer can resume the same run.
+func (s *Service) awaitDecision(r *Run, result Result) error {
+	st, e := WriteDecisionRequest(r, *result.Decision)
+	if e != nil {
+		return e
+	}
+	r.Decision = st
+	r.FinishTaskStatus = "waiting_decision"
+	r.Error = nil
+	return nil
+}
+
+func decisionMeta(r *Run) map[string]any {
+	if r.Decision == nil {
 		return nil
+	}
+	opts := make([]map[string]string, 0, len(r.Decision.Request.Options))
+	for _, o := range r.Decision.Request.Options {
+		opts = append(opts, map[string]string{"id": o.ID, "label": o.Label})
+	}
+	m := map[string]any{"decision_id": r.Decision.ID, "options": opts}
+	if r.Decision.Request.Recommended != "" {
+		m["recommended"] = r.Decision.Request.Recommended
+	}
+	return m
+}
+
+func (s *Service) bind(r *Run, result Result) error {
+	if e := verifyHandoff(r, result); e != nil {
+		return e
 	}
 	if _, e := s.Config.PR.PRNumber(*result.PRURL); e != nil {
 		return e
@@ -439,18 +492,34 @@ func (s *Service) finished(err error) error {
 	if e == nil {
 		e = verifyRunWorkspace(context.Background(), s.Config, r)
 	}
-	if e == nil {
-		e = s.bind(r, result)
+	if e == nil && result.Summary != nil {
+		r.Summary = ptr(clip(*result.Summary, 4096))
 	}
-	if e != nil {
+	switch {
+	case e != nil:
 		s.blocked(r, "Invalid handoff: "+e.Error())
 		s.note(r, "steer", "result", "failed", "invalid handoff", e.Error(), nil)
 		s.closeActivity(r)
-	} else if r.PR.URL != nil {
-		s.note(r, "steer", "result", "completed", "pr submitted", *r.PR.URL, nil)
-	} else {
+	case result.Outcome == "needs_decision":
+		if de := s.awaitDecision(r, result); de != nil {
+			s.blocked(r, "Invalid decision request: "+de.Error())
+			s.note(r, "steer", "result", "failed", "invalid decision request", de.Error(), nil)
+			s.closeActivity(r)
+		} else {
+			s.note(r, "steer", "decision", "pending", "decision requested", r.Decision.Request.Question, decisionMeta(r))
+		}
+	case result.Outcome == "blocked":
+		s.blocked(r, blockedResultMessage(result))
 		s.note(r, "steer", "result", "completed", "blocked by workflow", deref(r.Error), nil)
 		s.closeActivity(r)
+	default:
+		if be := s.bind(r, result); be != nil {
+			s.blocked(r, "Invalid handoff: "+be.Error())
+			s.note(r, "steer", "result", "failed", "invalid handoff", be.Error(), nil)
+			s.closeActivity(r)
+		} else {
+			s.note(r, "steer", "result", "completed", "pr submitted", *r.PR.URL, nil)
+		}
 	}
 	return s.save()
 }
@@ -617,6 +686,8 @@ func (s *Service) run(ctx context.Context, retryRunID string) (retErr error) {
 	defer taskTick.Stop()
 	prTick := time.NewTicker(duration(s.Config.PRPoll))
 	defer prTick.Stop()
+	decisionTick := time.NewTicker(2 * time.Second)
+	defer decisionTick.Stop()
 	step := func(fn func(context.Context) error) error {
 		e := fn(ctx)
 		if s.store.Err() != nil {
@@ -630,9 +701,13 @@ func (s *Service) run(ctx context.Context, retryRunID string) (retErr error) {
 		}
 		return s.save()
 	}
-	// On startup query saved PRs first, then reconcile claims before any new dispatch.
+	// On startup query saved PRs, apply any already-answered decisions, then
+	// reconcile claims before any new dispatch.
 	if retryRunID == "" {
 		if e := step(s.pollPRs); e != nil {
+			return e
+		}
+		if e := step(s.applyDecisions); e != nil {
 			return e
 		}
 		if e := step(s.dispatch); e != nil {
@@ -665,6 +740,10 @@ func (s *Service) run(ctx context.Context, retryRunID string) (retErr error) {
 			}
 			if retryRunID != "" && !s.retryWaiting(retryRunID) {
 				return nil
+			}
+		case <-decisionTick.C:
+			if e := step(s.applyDecisions); e != nil {
+				return e
 			}
 		case <-taskTick.C:
 			if retryRunID != "" {

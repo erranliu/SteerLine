@@ -63,6 +63,10 @@ func activityPath(logPath string) string {
 	return filepath.Join(filepath.Dir(logPath), "activity.jsonl")
 }
 
+// ActivityPath is the exported form of activityPath for the viewer and other
+// read-only consumers that hold only a run's events.jsonl path.
+func ActivityPath(logPath string) string { return activityPath(logPath) }
+
 // ActivityWriter appends normalized records as JSONL, one open/append/close per
 // record, so no file handle outlives a write and Windows directory cleanup and
 // service restarts are never blocked. It keeps only the last seq in memory. The

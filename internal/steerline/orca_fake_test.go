@@ -21,6 +21,7 @@ type fakeOrcaState struct {
 	Worktree    string `json:"worktree,omitempty"`
 	Branch      string `json:"branch,omitempty"`
 	Prompt      string `json:"prompt,omitempty"`
+	Answered    bool   `json:"answered,omitempty"`
 }
 
 func fakeOrcaStatePath(dir, handle string) string { return filepath.Join(dir, handle+".json") }
@@ -134,8 +135,18 @@ func fakeOrcaSend(stateDir string, argv []string) int {
 	if e != nil {
 		return fakeOrcaErr("terminal_handle_stale", e.Error())
 	}
-	if e := fakeWriteResult(st.Worktree, fakePromptPath(arg(argv, "--text"))); e != nil {
+	src := fakePromptPath(arg(argv, "--text"))
+	if src == "" {
+		// Continuation sends reference continue.txt, not the dispatch pointer; the
+		// stored dispatch prompt still carries task_id/run_id/base_commit.
+		src = st.Prompt
+	}
+	if e := fakeWriteResult(st.Worktree, src, false); e != nil {
 		return fakeOrcaErr("prompt", e.Error())
+	}
+	st.Answered = true
+	if e := writeFakeOrcaState(stateDir, st); e != nil {
+		return fakeOrcaErr("state", e.Error())
 	}
 	return fakeOrcaOK(map[string]any{"send": map[string]any{"accepted": true}})
 }
@@ -152,7 +163,7 @@ func fakePromptPath(text string) string {
 	return ""
 }
 
-func fakeWriteResult(worktree, promptPath string) error {
+func fakeWriteResult(worktree, promptPath string, decision bool) error {
 	raw, e := os.ReadFile(promptPath)
 	if e != nil {
 		return e
@@ -167,11 +178,20 @@ func fakeWriteResult(worktree, promptPath string) error {
 	result := Result{
 		TaskID:       get("task_id"),
 		RunID:        get("run_id"),
-		Outcome:      "pr_submitted",
-		PRURL:        ptr(os.Getenv("STEERLINE_FAKE_ORCA_PR_BASE") + "/owner/repo/pulls/1"),
 		WorktreePath: ptr(worktree),
 		BaseCommit:   ptr(get("base_commit")),
 		Summary:      ptr("orca hosted done"),
+	}
+	if decision {
+		result.Outcome = "needs_decision"
+		result.Decision = &DecisionRequest{
+			Question:    "Which option should the migration take?",
+			Options:     []DecisionOption{{ID: "a", Label: "Keep a data-only compat type"}, {ID: "b", Label: "Relax the persistence layer"}},
+			Recommended: "a",
+		}
+	} else {
+		result.Outcome = "pr_submitted"
+		result.PRURL = ptr(os.Getenv("STEERLINE_FAKE_ORCA_PR_BASE") + "/owner/repo/pulls/1")
 	}
 	b, _ := json.Marshal(result)
 	return os.WriteFile(filepath.Join(worktree, orcaResultFile), b, 0600)
@@ -184,9 +204,11 @@ func fakeOrcaShow(stateDir string, argv []string) int {
 	}
 	// Model the agent answering once its prompt exists: Steerline calls show
 	// right after writing prompt.txt, so the R-a result lands deterministically.
-	if st.Prompt != "" {
+	// With STEERLINE_FAKE_ORCA_DECISION the first answer is a decision request; the
+	// decision is only satisfied once Steerline sends the continuation.
+	if st.Prompt != "" && !st.Answered {
 		if _, e := os.Stat(st.Prompt); e == nil {
-			_ = fakeWriteResult(st.Worktree, st.Prompt)
+			_ = fakeWriteResult(st.Worktree, st.Prompt, os.Getenv("STEERLINE_FAKE_ORCA_DECISION") != "")
 		}
 	}
 	inc := st.Incarnation
