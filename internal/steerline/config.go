@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"time"
 )
@@ -114,6 +115,104 @@ func decode(data []byte, v any) error {
 	}
 	return nil
 }
+
+// SteerlineHome is the machine-level SteerLine home shared by every source
+// worktree. STEERLINE_HOME overrides the default (C:\SteerlineRuntime on
+// Windows). Binaries, configs and per-repo state live under it, so "what is this
+// machine running" has one answer regardless of which checkout built it.
+func SteerlineHome() string {
+	if v := strings.TrimSpace(os.Getenv("STEERLINE_HOME")); v != "" {
+		return filepath.Clean(v)
+	}
+	if runtime.GOOS == "windows" {
+		return `C:\SteerlineRuntime`
+	}
+	if home, e := os.UserHomeDir(); e == nil {
+		return filepath.Join(home, ".steerline")
+	}
+	return filepath.Join(os.TempDir(), "steerline")
+}
+
+func SteerlineBinDir() string    { return filepath.Join(SteerlineHome(), "bin") }
+func SteerlineEtcDir() string    { return filepath.Join(SteerlineHome(), "etc") }
+func SteerlineStateRoot() string { return filepath.Join(SteerlineHome(), "state") }
+
+// repoStateKey derives a worktree-independent key for a repository from its Git
+// common dir, so every worktree and clone of the same repository maps to one
+// state directory.
+func repoStateKey(c Config) (string, error) {
+	r := Runner{Dir: c.Repository, Timeout: duration(c.CommandTimeout)}
+	out, e := r.Output(context.Background(), c.Git, "rev-parse", "--path-format=absolute", "--git-common-dir")
+	if e != nil {
+		return "", e
+	}
+	common := strings.TrimSpace(string(out))
+	if common == "" {
+		return "", errors.New("git returned an empty common dir")
+	}
+	if resolved, e := filepath.EvalSymlinks(common); e == nil {
+		common = resolved
+	}
+	name := filepath.Base(common)
+	if strings.EqualFold(name, ".git") {
+		name = filepath.Base(filepath.Dir(common))
+	}
+	name = sanitizeName(name)
+	if name == "" {
+		name = "repo"
+	}
+	return name + "-" + shortHash(canonical(common))[:12], nil
+}
+
+func sanitizeName(s string) string {
+	return strings.Trim(regexp.MustCompile(`[^a-zA-Z0-9._-]+`).ReplaceAllString(s, "-"), "-.")
+}
+
+// InstallExecutable copies a built binary into <STEERLINE_HOME>\bin so the
+// service and viewer always run one stable binary regardless of which source
+// worktree built it.
+func InstallExecutable(src string) (string, error) {
+	if resolved, e := filepath.EvalSymlinks(src); e == nil {
+		src = resolved
+	}
+	info, e := os.Stat(src)
+	if e != nil {
+		return "", e
+	}
+	if info.IsDir() {
+		return "", fmt.Errorf("%s is a directory", src)
+	}
+	name := "steerline"
+	if runtime.GOOS == "windows" {
+		name = "steerline.exe"
+	}
+	dir := SteerlineBinDir()
+	if e := os.MkdirAll(dir, 0700); e != nil {
+		return "", e
+	}
+	dst := filepath.Join(dir, name)
+	if canonical(src) == canonical(dst) {
+		return dst, nil
+	}
+	b, e := os.ReadFile(src)
+	if e != nil {
+		return "", e
+	}
+	if e := AtomicWrite(dst, b); e != nil {
+		return "", fmt.Errorf("install %s: %w (stop a running service using it first)", dst, e)
+	}
+	return dst, nil
+}
+
+// InstallSelf installs the currently running executable.
+func InstallSelf() (string, error) {
+	exe, e := os.Executable()
+	if e != nil {
+		return "", e
+	}
+	return InstallExecutable(exe)
+}
+
 func LoadConfig(path string) (Config, error) {
 	c := Config{Remote: "origin", RuntimeFile: "runtime.json", TaskPoll: "10s", PRPoll: "30s", Heartbeat: "5s", CommandTimeout: "30s", ShutdownGrace: "10s", Sandbox: "workspace-write", Git: Command{Executable: "git"}, BD: Command{Executable: "bd"}, Codex: Command{Executable: "codex"}, ExecutableTypes: []string{"task", "bug", "feature", "chore"}, Agent: "codex", Host: "orca", StallTimeout: "5m", Orca: OrcaConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "15m", Fallback: "local"}}
 	b, err := os.ReadFile(path)
@@ -127,13 +226,21 @@ func LoadConfig(path string) (Config, error) {
 	if err != nil {
 		return c, err
 	}
-	if c.Repository == "" || c.RunDir == "" || c.Branch == "" {
-		return c, errors.New("repository, branch and run_dir are required")
+	if c.Repository == "" || c.Branch == "" {
+		return c, errors.New("repository and branch are required")
 	}
-	for _, p := range []*string{&c.Repository, &c.RunDir} {
-		if !filepath.IsAbs(*p) {
-			*p = filepath.Join(base, *p)
+	if !filepath.IsAbs(c.Repository) {
+		c.Repository = filepath.Join(base, c.Repository)
+	}
+	if c.RunDir == "" {
+		// Derive a worktree-independent state dir under STEERLINE_HOME.
+		key, e := repoStateKey(c)
+		if e != nil {
+			return c, fmt.Errorf("run_dir is required (cannot derive from repository identity: %w)", e)
 		}
+		c.RunDir = filepath.Join(SteerlineStateRoot(), key)
+	} else if !filepath.IsAbs(c.RunDir) {
+		c.RunDir = filepath.Join(base, c.RunDir)
 	}
 	if c.WorktreeRoot == "" {
 		c.WorktreeRoot = filepath.Join(c.RunDir, "worktrees")

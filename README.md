@@ -17,6 +17,17 @@ Copy-Item .\examples\config.json .\steerline.local.json
 .\bin\steerline.exe run -config .\steerline.local.json
 ```
 
+### 机器级目录（跨 worktree 稳定）
+
+`STEERLINE_HOME`（默认 `C:\SteerlineRuntime`，可用同名环境变量覆盖）是本机共享的稳定目录：`bin\` 存二进制、`etc\` 存配置、`state\<repo>\` 存该仓库的 `runtime.json` 与 `runs\`。状态目录按仓库 Git common-dir 派生，**同一仓库的所有 worktree/clone 落到同一处**。
+
+```powershell
+.\bin\steerline.exe home                       # 打印 home / bin / etc / state / run_dir
+.\bin\steerline.exe install                    # 把当前二进制装到 %STEERLINE_HOME%\bin\steerline.exe
+```
+
+之后服务、查看器和 `viewer.bat` 都跑 `%STEERLINE_HOME%\bin\steerline.exe`；源码换哪个 worktree 都不影响本机状态。详见 [状态模型](docs/state-model.md)。
+
 `check` 只执行工具帮助、Git/Beads 读取、技能契约和 Gitea 仓库查询，可创建指定运行目录，不领取任务或调用模型。`run` 会真正领取任务并调用模型。目标仓库缺少 Beads 时直接报错，不执行 init 或迁移。
 
 `merge-h-308-code` 已新增两个专用技能和合并后结项适配脚本，[接入配置](examples/merge-h-308-code.json) 已更新，既有手动技能保留原用途。真实启动前需将新文件合入 AIRefactor 并完成认证、执行权限及工具配置，见 [接入说明](docs/merge-h-308-integration.md)。本地 check 不会替代远端主线文件的发布。

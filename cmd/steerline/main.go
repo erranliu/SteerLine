@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 
 	"github.com/erranliu/SteerLine/internal/steerline"
@@ -20,7 +21,7 @@ func main() {
 }
 func run() error {
 	if len(os.Args) < 2 {
-		return fmt.Errorf("usage: steerline <run|retry|check|stop|watch|answer|accept-result|mark-stopped> -config config.json")
+		return fmt.Errorf("usage: steerline <run|retry|check|stop|watch|answer|accept-result|mark-stopped|home|install> -config config.json")
 	}
 	command := os.Args[1]
 	fs := flag.NewFlagSet(command, flag.ContinueOnError)
@@ -44,11 +45,23 @@ func run() error {
 	if fs.NArg() != 0 {
 		return fmt.Errorf("unexpected positional arguments")
 	}
-	if command != "run" && command != "retry" && command != "check" && command != "stop" && command != "answer" && command != "accept-result" && command != "mark-stopped" && command != "watch" {
+	if command != "run" && command != "retry" && command != "check" && command != "stop" && command != "answer" && command != "accept-result" && command != "mark-stopped" && command != "watch" && command != "home" && command != "install" {
 		return fmt.Errorf("unknown command %q", command)
 	}
 	if command == "retry" && (!*confirmed || *runID == "") {
 		return fmt.Errorf("retry requires -run-id and -confirm-process-stopped")
+	}
+	if command == "install" {
+		dst, e := steerline.InstallSelf()
+		if e != nil {
+			return e
+		}
+		fmt.Println("installed", dst)
+		return nil
+	}
+	if command == "home" {
+		printHome(*config)
+		return nil
 	}
 	c, e := steerline.LoadConfig(*config)
 	if e != nil {
@@ -112,4 +125,23 @@ func run() error {
 	}
 	fmt.Printf("Steerline M0 running: %s -> %s/%s; Ctrl+C or steerline stop to exit\n", c.Repository, c.Remote, c.Branch)
 	return s.Run(ctx)
+}
+
+// printHome shows where this machine keeps the shared SteerLine binary, configs
+// and per-repo state, resolved independently of the current source worktree.
+func printHome(configPath string) {
+	fmt.Println("STEERLINE_HOME", steerline.SteerlineHome())
+	fmt.Println("bin           ", steerline.SteerlineBinDir())
+	fmt.Println("etc           ", steerline.SteerlineEtcDir())
+	fmt.Println("state root    ", steerline.SteerlineStateRoot())
+	c, e := steerline.LoadConfig(configPath)
+	if e != nil {
+		fmt.Println("config        ", "(not loaded:", e.Error()+")")
+		return
+	}
+	abs, _ := filepath.Abs(configPath)
+	fmt.Println("config        ", abs)
+	fmt.Println("repository    ", c.Repository)
+	fmt.Println("run_dir       ", c.RunDir)
+	fmt.Println("worktree_root ", c.WorktreeRoot)
 }
