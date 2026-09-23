@@ -138,16 +138,22 @@ retry 复用同一个任务、领取和 worktree，使用当前配置的模型�
 .\bin\steerline.exe run -config .\steerline.local.json
 .\bin\steerline.exe run -config .\steerline.local.json -console summary|json|off
 
-# 第二终端或事后：跟随某次运行的完整生命周期
+# 第二终端或事后：TTY 下进入全屏查看器（run 列表 + activity + 决策面板）
 .\bin\steerline.exe watch -config .\steerline.local.json
+.\bin\steerline.exe watch -config .\steerline.local.json --no-tui   # 强制流式（管道/CI 自动如此）
 .\bin\steerline.exe watch -config .\steerline.local.json -run-id <run-id|task-id> --follow=false
 .\bin\steerline.exe watch -config .\steerline.local.json --json   # 稳定 JSONL
 .\bin\steerline.exe watch -config .\steerline.local.json --raw    # 原始事件流
+
+# 回答 agent 提出的人工决策（只写答案文件，不干扰运行中的服务）
+.\bin\steerline.exe answer -config .\steerline.local.json -run-id <run-id|task-id> -option <option-id> [-note "..."] [-by "<name>"]
 ```
 
 `watch` 只读 `runtime.json` 和运行文件，不需要服务在跑，也不改任何状态。若 `activity.jsonl` 不存在（旧运行或原始宿主采集），会回退到现场归一化 `events.jsonl`。
 
-执行宿主可配置为 Orca（仅作可见终端/远程宿主；调度、编排、恢复仍在服务）。`host: "orca"` 时 worker 在 Orca 终端里运行，`events.jsonl` / `result.json` / 退出码仍是权威；Orca 不可用按 `fallback` 回退本地或失败。红线与规范见 [hosting](docs/hosting.md)、[hosting 规范](docs/hosting-spec.md)。
+Agent 需要人工决策时（`outcome=needs_decision`），运行进入 `finish_task_status=waiting_decision`：服务保留 claim/worktree/终端、暂停新派发并等待。`steerline answer` 原子写入答案文件，服务读回后在同一终端续跑。协议见 [decisions](docs/decisions.md)；Beads 与 SteerLine 三个状态轴的关系见 [状态模型](docs/state-model.md)。
+
+执行在 Orca：`host: "orca"` 时由 Orca 创建 worktree 并启动 agent（`events.jsonl` 不再产生，改用 R-a 结果文件）。执行事实（worktree、分支、agent 存活、终端）以 Orca 为准；调度、编排、完成与恢复仍属 SteerLine。红线与规范见 [hosting](docs/hosting.md)、[hosting 规范](docs/hosting-spec.md)。
 
 ```json
 "agent": "codex",
@@ -159,7 +165,7 @@ retry 复用同一个任务、领取和 worktree，使用当前配置的模型�
 
 ## 数据与保留
 
-见 [数据契约](docs/data-contract.md)、[完整 runtime 示例](examples/runtime.json)、[结果示例](examples/result.json)。运行快照现在为 schema_version=2，可读取 v1 的等待合并记录继续查询，不自动将旧技能自报目录当作已核验工作环境。所有时间 UTC，未知值 null。runtime.json 只由服务写，Codex 仅写自己这次运行的结果文件；其回传的目录和起点必须与调度器记录一致。
+见 [数据契约](docs/data-contract.md)、[完整 runtime 示例](examples/runtime.json)、[结果示例](examples/result.json)。运行快照现在为 schema_version=3，可读取 v1/v2/v3 历史快照（v1/v2 视为 local），不自动将旧技能自报目录当作已核验工作环境。所有时间 UTC，未知值 null。runtime.json 只由服务写，Codex 仅写自己这次运行的结果文件；其回传的目录和起点必须与调度器记录一致。
 
 同目录临时文件写完并 Sync 后，以 Windows MoveFileEx 原子替换发布；短暂 sharing violation 有限重试。替换失败保留旧快照并报错，不先删目标。读取器可能收到短暂共享冲突，应重试打开；一旦读到内容必须是完整 JSON。根据 heartbeat_at 判断是否过期，建议阈值至少为心跳间隔三倍并包含存储抖动余量。不要仅凭 service.status 推断进程还活着。
 

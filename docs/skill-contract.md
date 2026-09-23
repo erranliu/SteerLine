@@ -26,7 +26,7 @@ Steerline 只配置两个技能入口。入口文件必须真实存在于目标�
 
 技能必须存在于被获取的目标主线提交内；配置的仓库内路径映射到新 worktree 后再次读取、检查。原 checkout 中未提交或尚未合入目标主线的技能不会自动复制过去。worker 显式继承调度器设置的 `BEADS_DIR` 和 `BEADS_ACTOR`；调度器已经从新 worktree 核对 Beads project_id、database、backend、目录及当前任务领取，技能继续复用它们，不新建或复制数据库。
 
-本次职责调整详见 [worktree 准备与恢复](worktree-preparation.md)。v1 接入标记仍用于两个技能入口；运行快照已升级为 schema_version=2。
+本次职责调整详见 [worktree 准备与恢复](worktree-preparation.md)。v1 接入标记仍用于两个技能入口；运行快照已升级为 schema_version=3。
 
 ## 合并后的 Beads 语义
 

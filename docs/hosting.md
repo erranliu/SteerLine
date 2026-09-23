@@ -38,6 +38,7 @@ Orca 启动的是 TUI agent，没有 `--output-schema` / 进程退出码。因�
 - prompt 用 Orca 原生 `--prompt` prefill 下发（pointer→`prompt.txt`），不用启动后再按键。
 - agent 按 prompt/skill 在 worktree 内写结果文件（`<worktree>/.steerline-result.json`，prompt 里给的是相对 CWD 路径）。
 - Steerline 读取、用内嵌 `result.schema.json` 校验，再落到权威 `runs/<run_id>/result.json`。
+- `outcome=needs_decision`：agent 无法继续、需要人工决策时，带 `decision{question,options[],recommended,allow_free_text}`；Steerline 置 `finish_task_status=waiting_decision`，保留 claim/worktree/终端并暂停新派发，等人回答后续跑。详见 [decisions](decisions.md)。
 - **结果文件不是完成**：仍需 Steerline 核实 PR 已合入目标主线并确认 Beads closed。
 
 ## fallback 边界
