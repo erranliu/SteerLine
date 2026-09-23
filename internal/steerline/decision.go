@@ -302,8 +302,14 @@ func decisionContinuation(r *Run) string {
 // applyDecisions resumes runs whose decision a human answered. It runs on a tick
 // and never runs alongside a worker: the single execution slot must be free.
 func (s *Service) applyDecisions(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if s.worker != nil {
 		return nil
+	}
+	if reason := s.executionSlotReason("", true); reason != "" {
+		return errors.New(reason)
 	}
 	for _, r := range s.State.Runs {
 		if s.worker != nil {
@@ -323,6 +329,14 @@ func (s *Service) applyDecisions(ctx context.Context) error {
 				return se
 			}
 			continue
+		}
+		// Reconcile before consuming an answer so a newly discovered orphaned
+		// claim cannot remain invisible until after a terminal was resumed.
+		if e := s.reconcile(ctx); e != nil {
+			return e
+		}
+		if reason := s.executionSlotReason("", true); reason != "" {
+			return errors.New(reason)
 		}
 		r.Decision.Status = "resuming"
 		r.Decision.OptionID = a.OptionID

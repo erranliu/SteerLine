@@ -186,6 +186,18 @@ func identityFromHandle(h windows.Handle, pid int) (ProcessIdentity, error) {
 	}
 	return ProcessIdentity{Kind: "os", PID: pid, Created: fmt.Sprintf("%08x%08x", created.HighDateTime, created.LowDateTime), Executable: canonical(windows.UTF16ToString(b[:n]))}, nil
 }
+func currentProcessIdentity() (*ProcessIdentity, error) {
+	h, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, uint32(os.Getpid()))
+	if err != nil {
+		return nil, err
+	}
+	defer windows.CloseHandle(h)
+	id, err := identityFromHandle(h, os.Getpid())
+	if err != nil {
+		return nil, err
+	}
+	return &id, nil
+}
 func inspectProcess(old *ProcessIdentity) string {
 	if old == nil {
 		return "identity unavailable"

@@ -1,6 +1,9 @@
 package steerline
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 type Repository struct {
 	Path     string `json:"path"`
@@ -17,14 +20,70 @@ type Runtime struct {
 	CurrentTask   *string      `json:"current_task"`
 	SlotOccupied  bool         `json:"slot_occupied"`
 	Runs          []*Run       `json:"runs"`
+	Control       ControlState `json:"control"`
 }
 type ServiceState struct {
-	Mode       string  `json:"mode"`
-	InstanceID string  `json:"instance_id"`
-	PID        int     `json:"pid"`
-	Status     string  `json:"status"`
-	Claimant   string  `json:"claimant"`
-	Error      *string `json:"error"`
+	Mode                string           `json:"mode"`
+	InstanceID          string           `json:"instance_id"`
+	PID                 int              `json:"pid"`
+	Status              string           `json:"status"`
+	Claimant            string           `json:"claimant"`
+	Error               *string          `json:"error"`
+	ProcessIdentity     *ProcessIdentity `json:"process_identity"`
+	StartupID           *string          `json:"startup_id"`
+	ConfigDigest        string           `json:"config_digest"`
+	Ready               bool             `json:"ready"`
+	ControlProtocol     int              `json:"control_protocol"`
+	Capabilities        []string         `json:"capabilities"`
+	HeartbeatIntervalMS int64            `json:"heartbeat_interval_ms"`
+}
+
+type ControlState struct {
+	DispatchMode   string            `json:"dispatch_mode"`
+	DispatchPaused bool              `json:"dispatch_paused"`
+	Revision       uint64            `json:"revision"`
+	Operation      *ControlOperation `json:"operation"`
+	Blockers       []ControlBlocker  `json:"blockers"`
+}
+
+type ControlOperation struct {
+	RequestID     string          `json:"request_id"`
+	Action        string          `json:"action"`
+	TaskID        string          `json:"task_id,omitempty"`
+	Payload       json.RawMessage `json:"payload,omitempty"`
+	Phase         string          `json:"phase"`
+	RunID         string          `json:"run_id,omitempty"`
+	AttemptID     string          `json:"attempt_id,omitempty"`
+	DecisionID    string          `json:"decision_id,omitempty"`
+	RequestDigest string          `json:"request_digest"`
+	Result        *ControlReceipt `json:"result,omitempty"`
+}
+
+type ControlBlocker struct {
+	RequestID  string `json:"request_id"`
+	Action     string `json:"action"`
+	TaskID     string `json:"task_id,omitempty"`
+	RunID      string `json:"run_id,omitempty"`
+	AttemptID  string `json:"attempt_id,omitempty"`
+	DecisionID string `json:"decision_id,omitempty"`
+	Reason     string `json:"reason"`
+}
+
+type TaskSnapshot struct {
+	Version            int             `json:"version"`
+	InstanceID         string          `json:"instance_id"`
+	RepositoryIdentity string          `json:"repository_identity"`
+	QueriedAt          time.Time       `json:"queried_at"`
+	LastSuccessAt      *time.Time      `json:"last_success_at"`
+	Error              *string         `json:"error"`
+	BlockReason        string          `json:"block_reason,omitempty"`
+	Tasks              []TaskCandidate `json:"tasks"`
+}
+type TaskCandidate struct {
+	TaskID  string `json:"task_id"`
+	Title   string `json:"title"`
+	Type    string `json:"type"`
+	Summary string `json:"summary,omitempty"`
 }
 
 // ProcessIdentity is the host-neutral identity of a running worker. OS hosts use
@@ -43,6 +102,8 @@ type Run struct {
 	TaskID           string            `json:"task_id"`
 	Title            string            `json:"title"`
 	RunID            string            `json:"run_id"`
+	AttemptID        string            `json:"attempt_id,omitempty"`
+	ControlRevision  uint64            `json:"control_revision,omitempty"`
 	Claimant         string            `json:"claimant"`
 	Host             string            `json:"host,omitempty"`
 	BeadsStatus      string            `json:"beads_status"`

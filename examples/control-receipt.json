@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "request_id": "a89f381766614a169c9cbb2994cc63a9",
+  "request_digest": "89abcdef0123456789abcdef0123456789abcdef0123456789abcdef01234567",
+  "instance_id": "fd054ee51ff2431a8025a63b015f3229",
+  "action": "start_task",
+  "status": "applied",
+  "code": "applied",
+  "message": "target task claimed, prepared and worker started",
+  "requested_by": "alice",
+  "submitted_at": "2026-09-23T08:30:00Z",
+  "accepted_at": "2026-09-23T08:30:01Z",
+  "completed_at": "2026-09-23T08:30:18Z",
+  "run_id": "64f36c8449324eecb4223b8a28ac90c2",
+  "attempt_id": "64f36c8449324eecb4223b8a28ac90c2",
+  "control_revision": 9,
+  "run_revision": 2
+}

@@ -98,7 +98,7 @@ func LoadRuntime(path string) (*Runtime, error) {
 	if e = decode(b, &v); e != nil {
 		return nil, fmt.Errorf("invalid runtime; preserve it for manual recovery: %w", e)
 	}
-	if v.SchemaVersion != 1 && v.SchemaVersion != 2 && v.SchemaVersion != 3 {
+	if v.SchemaVersion != 1 && v.SchemaVersion != 2 && v.SchemaVersion != 3 && v.SchemaVersion != 4 {
 		return nil, fmt.Errorf("unsupported runtime schema %d", v.SchemaVersion)
 	}
 	return &v, nil

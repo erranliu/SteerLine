@@ -39,7 +39,7 @@ func TestObservationClassifiesMissingFreshStaleFutureAndUnknownRuntime(t *testin
 	if got.State != SnapshotStale || !got.ClockSkew {
 		t.Fatalf("future timestamp should report clock skew and stale: %+v", got)
 	}
-	writeRuntimeForObservation(t, path, 4, now)
+	writeRuntimeForObservation(t, path, 99, now)
 	if got := ReadObservationSnapshot(path, "2s", clock); got.State != SnapshotUnknownVersion {
 		t.Fatalf("unknown version classification: %+v", got)
 	}

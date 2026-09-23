@@ -1,6 +1,14 @@
 # PR 2 Plan：服务控制协议与定向执行
 
+实施状态：已实现，完成协调审核修复。Windows 最终验证：`go test ./... -count=1 -timeout 10m` 通过（steerline 306.106s）。
+
+当前实现已增加 runtime v4、控制协议/客户端/回执、候选快照、定向执行、manual/auto、暂停/恢复、停服取消和 v1–v3 迁移。定向证据位于 `internal/steerline/control_test.go`、`service_test.go`、`workspace_test.go` 与 `cli_test.go`。
+
+控制专项证据覆盖：真实子进程竞争同一 request ID 且不同内容不可覆盖；fake Beads claim/start 计数；manual 多 tick、仅启动 B、同 ID 重扫及不同请求抢槽；心跳与候选刷新不推进 revision；checkpoint、claim、worktree、worker、终态 checkpoint/receipt 崩溃恢复；applied-receipt 写失败不派发、终态回执失败阻塞并从 checkpoint 重建；stop 取消长准备命令；旧实例/过期/旧 revision/错误仓库拒绝；v1–v3 只读不迁移与持锁保存迁移；原生 CLI 候选、控制回执、stop_service 和旧 stop 路径。
+
 依据：[Spec](pr-02-control.spec.md)。依赖：PR 1。
+
+协调审核补充了 `control_review_test.go` 中的 21 个回归场景，覆盖请求路径与 payload、准入过期、停服受理事实、回执故障保持可控、执行槽/决策/重试守卫、恢复证据和版本范围。修复后 `go test ./... -count=1 -timeout 10m` 全量通过（Windows 服务包 306.106 秒）；Linux amd64 编译、文档链接和 JSON 样例检查通过。未操作真实 Beads/Orca 或生产状态目录。
 
 ## 实施步骤
 

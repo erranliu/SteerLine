@@ -1,0 +1,12 @@
+{
+  "protocol_version": 1,
+  "request_id": "a89f381766614a169c9cbb2994cc63a9",
+  "repository_identity": "c:\\projects\\repo\\.git",
+  "instance_id": "fd054ee51ff2431a8025a63b015f3229",
+  "action": "start_task",
+  "expected_control_revision": 7,
+  "payload": {"task_id": "demo-2"},
+  "requested_by": "alice",
+  "created_at": "2026-09-23T08:30:00Z",
+  "expires_at": "2026-09-23T08:32:00Z"
+}

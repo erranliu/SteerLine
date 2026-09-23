@@ -12,6 +12,8 @@
 
 另有独立的 `pr.state`（open / merged / closed_unmerged / unknown，平台权威）与 `decision.status`（pending / resuming / applied，见 [decisions](decisions.md)）。
 
+服务还有独立的控制轴 `control.dispatch_mode`（manual/auto）、`dispatch_paused` 和 `revision`。它们控制将来是否领取新任务，不改变执行、交付或 Beads 认领事实。`control.operation` 和 `control.blockers` 是控制协议的持久检查点/不确定副作用保留，不是任务队列；服务是 runtime 的唯一写者，CLI 仅提交文件请求并读取回执。
+
 **关键**：`execution_status=running`（进程在跑）与 Beads `IN_PROGRESS`（任务被认领）是两件不同的事，同时成立是正常的，不是冲突。查看器里的 `RUN`/`BLOCK`/`DECIDE`/`MERGE`/`DONE` 徽标取的是 SteerLine 的**执行/交付**轴，**不是** Beads 状态。
 
 ## 权威归属
@@ -19,6 +21,7 @@
 - **执行态与交付态**：SteerLine 唯一权威（`runtime.json`）。
 - **任务认领与关闭**：当前由 Beads 权威；SteerLine 通过 `bd claim` / `bd close` **写入**，并在完成后以 `bd show` 回读核实（不以本地预测替代 `closed`）。
 - **PR 合并**：外部平台权威；SteerLine 查询核实后才推进交付态。
+- **派发控制**：当前 runtime v4 的服务主状态机权威。manual 不自动 claim；pause 只挡新派发；停止服务与关闭查看器分开。控制请求的 `applied` 只说明指令完成，不代替 run 的执行或交付状态。
 
 ## 生命周期（一次运行）
 

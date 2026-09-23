@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -22,7 +23,17 @@ type Service struct {
 	// their own run's file, even after the worker exited.
 	activities map[string]*ActivityWriter
 	// Console selects service-side rendering: "", "off", "pretty", "summary" or "json".
-	Console string
+	Console           string
+	versionPrevious   *Runtime
+	controlSeen       map[string]string
+	stopControl       *ControlRequest
+	stopAcceptedAt    *time.Time
+	targetTask        string
+	lastDispatched    string
+	reservedRunID     string
+	candidateSnapshot *TaskSnapshot
+	explicitDispatch  bool
+	controlFault      func(string)
 }
 
 func NewService(c Config) (*Service, error) {
@@ -38,18 +49,54 @@ func NewService(c Config) (*Service, error) {
 	if e != nil {
 		return nil, e
 	}
-	s.State = Runtime{SchemaVersion: 3, Repository: Repository{Path: c.Repository, Remote: c.Remote, Branch: c.Branch, Identity: c.identity}, Runs: []*Run{}}
+	s.State = Runtime{SchemaVersion: 4, Repository: Repository{Path: c.Repository, Remote: c.Remote, Branch: c.Branch, Identity: c.identity}, Runs: []*Run{}, Control: ControlState{DispatchMode: "auto", Revision: 1, Blockers: []ControlBlocker{}}}
 	if old != nil {
 		if old.Repository.Identity != c.identity || old.Repository.Remote != c.Remote || old.Repository.Branch != c.Branch || old.Service.Claimant != c.Claimant {
 			return nil, errors.New("runtime repository/branch/claimant mismatch; preserve state and use the original configuration")
 		}
+		baselineBytes, _ := json.Marshal(old)
+		var baseline Runtime
+		_ = json.Unmarshal(baselineBytes, &baseline)
+		if baseline.Control.DispatchMode == "" {
+			baseline.Control.DispatchMode = "auto"
+		}
+		baseline.Control.Revision = 1
+		if baseline.Control.Blockers == nil {
+			baseline.Control.Blockers = []ControlBlocker{}
+		}
+		s.versionPrevious = &baseline
 		s.State.Runs = old.Runs
+		s.State.Control = old.Control
+		if old.SchemaVersion == 4 && (s.State.Control.DispatchMode != "manual" && s.State.Control.DispatchMode != "auto" || s.State.Control.Revision == 0) {
+			return nil, errors.New("invalid runtime v4 control state; preserve the snapshot for recovery")
+		}
+		if s.State.Control.DispatchMode == "" {
+			s.State.Control.DispatchMode = "auto"
+		}
+		s.State.Control.Revision = 1 // A control revision is scoped to its instance.
+		if s.State.Control.Blockers == nil {
+			s.State.Control.Blockers = []ControlBlocker{}
+		}
+		if op := s.State.Control.Operation; op != nil {
+			if !controlIDPattern.MatchString(op.RequestID) || !validControlAction(op.Action) || (op.Phase != "applying" && op.Phase != "completed") || len(op.RequestDigest) != 64 || op.Action == "start_task" && (!controlIDPattern.MatchString(op.RunID) || op.TaskID == "") || op.Phase == "completed" && op.Result == nil {
+				return nil, errors.New("invalid runtime control operation; preserve the snapshot for recovery")
+			}
+			if op.Phase == "completed" && (op.Result.Version != ControlProtocolVersion || op.Result.RequestID != op.RequestID || op.Result.RequestDigest != op.RequestDigest || op.Result.Action != op.Action || !terminalControlStatus(op.Result.Status)) {
+				return nil, errors.New("completed control receipt does not match its operation")
+			}
+		}
 		seen := map[string]bool{}
 		for _, r := range s.State.Runs {
 			if r == nil || r.TaskID == "" || r.RunID == "" || seen[r.TaskID] || r.Claimant != c.Claimant {
 				return nil, errors.New("invalid or duplicate saved run")
 			}
 			seen[r.TaskID] = true
+			if r.AttemptID == "" {
+				r.AttemptID = runAttemptID(r)
+			}
+			if r.ControlRevision == 0 {
+				r.ControlRevision = 1
+			}
 			if e := r.Completion.validate(); e != nil {
 				return nil, e
 			}
@@ -81,6 +128,7 @@ func NewService(c Config) (*Service, error) {
 					r.FinishTaskStatus = "blocked"
 					r.Error = ptr("waiting_decision run lacks decision state; manual recovery required")
 				case r.Decision.Status == "resuming":
+					r.ExecutionStatus = "unknown"
 					r.FinishTaskStatus = "blocked"
 					r.Error = ptr("Interrupted while resuming a decision; manual recovery required; never auto-resumed")
 				}
@@ -105,11 +153,131 @@ func NewService(c Config) (*Service, error) {
 				}
 			}
 		}
+		if s.State.Control.Operation == nil && s.State.CurrentTask != nil && s.find(*s.State.CurrentTask) == nil {
+			// Automatic dispatch persists the reservation before fetch. With no run
+			// record there has been no claim; clear only this pre-claim reservation.
+			s.State.CurrentTask = nil
+			s.State.SlotOccupied = false
+		}
 	}
-	s.State.Service = ServiceState{InstanceID: newID(), PID: os.Getpid(), Status: "running", Claimant: c.Claimant, Mode: "maintenance"}
+	s.State.SchemaVersion = 4
+	s.State.Service = ServiceState{InstanceID: newID(), PID: os.Getpid(), Status: "running", Claimant: c.Claimant, Mode: "maintenance", Ready: false, ControlProtocol: ControlProtocolVersion, Capabilities: []string{"start_task", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "stop_service"}, ConfigDigest: c.configDigest, HeartbeatIntervalMS: duration(c.Heartbeat).Milliseconds()}
+	identity, err := currentProcessIdentity()
+	if err != nil {
+		return nil, fmt.Errorf("identify service process: %w", err)
+	}
+	s.State.Service.ProcessIdentity = identity
 	return s, nil
 }
-func (s *Service) save() error { return s.store.Publish(s.State) }
+func runAttemptID(r *Run) string {
+	if r.LogPath != nil {
+		p := filepath.Clean(*r.LogPath)
+		parts := strings.Split(filepath.ToSlash(p), "/")
+		for i := 0; i+1 < len(parts); i++ {
+			if parts[i] == "attempts" && parts[i+1] != "" {
+				return parts[i+1]
+			}
+		}
+	}
+	return r.RunID
+}
+
+func runVersionShape(r *Run) any {
+	if r == nil {
+		return nil
+	}
+	decisionID, decisionStatus := "", ""
+	if r.Decision != nil {
+		decisionID, decisionStatus = r.Decision.ID, r.Decision.Status
+	}
+	prURL := ""
+	if r.PR.URL != nil {
+		prURL = *r.PR.URL
+	}
+	return struct {
+		TaskID, RunID, AttemptID, Execution, Finish, DecisionID, DecisionStatus, PRURL, Host, BeadsStatus string
+		WorktreePath, WorktreeBranch, BaseCommit                                                          *string
+		Process                                                                                           *ProcessIdentity
+		WorkspaceIntent                                                                                   *WorkspaceIntent
+	}{r.TaskID, r.RunID, r.AttemptID, r.ExecutionStatus, r.FinishTaskStatus, decisionID, decisionStatus, prURL, r.Host, r.BeadsStatus, r.WorktreePath, r.WorktreeBranch, r.BaseCommit, r.Process, r.WorkspaceIntent}
+}
+func controlVersionShape(r Runtime) any {
+	type runShape struct{ TaskID, RunID, Execution, Finish, Decision string }
+	runs := make([]runShape, 0, len(r.Runs))
+	for _, run := range r.Runs {
+		if run != nil {
+			if run.ExecutionStatus != "pending" && run.ExecutionStatus != "running" && run.ExecutionStatus != "unknown" && run.FinishTaskStatus != "waiting_decision" {
+				continue // Delivery progress without a slot reservation is unrelated.
+			}
+			d := ""
+			if run.Decision != nil {
+				d = run.Decision.Status
+			}
+			runs = append(runs, runShape{run.TaskID, run.RunID, run.ExecutionStatus, run.FinishTaskStatus, d})
+		}
+	}
+	return struct {
+		Slot, Paused bool
+		Mode         string
+		Current      *string
+		Operation    *ControlOperation
+		Blockers     []ControlBlocker
+		Runs         []runShape
+	}{r.SlotOccupied, r.Control.DispatchPaused, r.Control.DispatchMode, r.CurrentTask, r.Control.Operation, r.Control.Blockers, runs}
+}
+func jsonShape(v any) string { b, _ := json.Marshal(v); return string(b) }
+func (s *Service) save() error {
+	s.refreshSlotOccupancy()
+	if s.versionPrevious != nil {
+		prev := *s.versionPrevious
+		if jsonShape(controlVersionShape(prev)) != jsonShape(controlVersionShape(s.State)) {
+			n := prev.Control.Revision + 1
+			if n == 0 {
+				n = 1
+			}
+			s.State.Control.Revision = n
+		}
+		oldRuns := map[string]*Run{}
+		for _, r := range prev.Runs {
+			if r != nil {
+				oldRuns[r.RunID] = r
+			}
+		}
+		for _, r := range s.State.Runs {
+			if r == nil {
+				continue
+			}
+			if before := oldRuns[r.RunID]; before == nil {
+				if r.ControlRevision == 0 {
+					r.ControlRevision = 1
+				}
+			} else if jsonShape(runVersionShape(before)) != jsonShape(runVersionShape(r)) {
+				r.ControlRevision = before.ControlRevision + 1
+				if r.ControlRevision == 0 {
+					r.ControlRevision = 1
+				}
+			}
+		}
+	} else {
+		if s.State.Control.Revision == 0 {
+			s.State.Control.Revision = 1
+		}
+		for _, r := range s.State.Runs {
+			if r != nil && r.ControlRevision == 0 {
+				r.ControlRevision = 1
+			}
+		}
+	}
+	if err := s.store.Publish(s.State); err != nil {
+		return err
+	}
+	b, _ := json.Marshal(s.State)
+	var prev Runtime
+	if json.Unmarshal(b, &prev) == nil {
+		s.versionPrevious = &prev
+	}
+	return nil
+}
 
 // activityWriter returns the lazily-opened journal for one run. Opening is
 // idempotent and append-only, so a run keeps accumulating lifecycle events after
@@ -222,30 +390,36 @@ func (s *Service) blocked(r *Run, msg string) {
 	r.Error = ptr(clip(msg, 2000))
 }
 func (s *Service) dispatch(ctx context.Context) error {
-	if e := s.reconcile(ctx); e != nil {
-		return e
+	reconcileErr := s.reconcile(ctx)
+	candidateErr := s.refreshCandidates(ctx)
+	if reconcileErr != nil {
+		return errors.Join(reconcileErr, candidateErr)
+	}
+	if candidateErr != nil {
+		return candidateErr
+	}
+	if s.State.Service.Mode == "scheduler" && ctx.Err() == nil {
+		s.State.Service.Ready = true
+	}
+	if (!s.explicitDispatch && s.State.Control.DispatchMode != "auto") || s.State.Control.DispatchPaused {
+		return nil
 	}
 	if s.worker != nil {
 		return nil
 	}
-	for _, r := range s.State.Runs {
-		if r.ExecutionStatus == "unknown" {
-			s.State.SlotOccupied = true
-			return errors.New("unresolved unknown execution; dispatch paused until manual recovery")
+	if reason := s.slotReason(s.activeControlRequestID()); reason != "" {
+		s.State.SlotOccupied = true
+		if reason != "waiting for a human decision" {
+			return errors.New(reason)
 		}
-	}
-	// A pending decision holds the single execution slot until it is answered and
-	// resumed, so new work cannot run ahead of the human's decision.
-	for _, r := range s.State.Runs {
-		if r.FinishTaskStatus == "waiting_decision" {
-			return nil
-		}
+		return nil
 	}
 	s.State.SlotOccupied = false
 	tasks, e := s.beads.Ready(ctx)
 	if e != nil {
 		return e
 	}
+	targetFound := s.targetTask == ""
 	for _, t := range tasks {
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -253,7 +427,14 @@ func (s *Service) dispatch(ctx context.Context) error {
 		if !executable(t, s.Config.ExecutableTypes) || s.find(t.ID) != nil {
 			continue
 		}
+		if s.targetTask != "" && t.ID != s.targetTask {
+			continue
+		}
+		targetFound = true
 		id := newID()
+		if s.reservedRunID != "" {
+			id = s.reservedRunID
+		}
 		s.State.SlotOccupied = true
 		s.State.CurrentTask = ptr(t.ID)
 		if e = s.save(); e != nil {
@@ -274,7 +455,7 @@ func (s *Service) dispatch(ctx context.Context) error {
 			return errors.Join(err, s.save())
 		}
 		dir := filepath.Join(s.Config.RunDir, "runs", id)
-		r := &Run{TaskID: t.ID, Title: t.Title, RunID: id, Claimant: s.Config.Claimant, Host: s.Config.hostName(), BeadsStatus: t.Status, ExecutionStatus: "pending", FinishTaskStatus: "pending", PR: PRState{State: "unknown"}, LogPath: ptr(filepath.Join(dir, "events.jsonl")), ResultPath: ptr(filepath.Join(dir, "result.json"))}
+		r := &Run{TaskID: t.ID, Title: t.Title, RunID: id, AttemptID: id, Claimant: s.Config.Claimant, Host: s.Config.hostName(), BeadsStatus: t.Status, ExecutionStatus: "pending", FinishTaskStatus: "pending", PR: PRState{State: "unknown"}, LogPath: ptr(filepath.Join(dir, "events.jsonl")), ResultPath: ptr(filepath.Join(dir, "result.json"))}
 		r.WorkspaceIntent = intent
 		r.BeadsContext = &source
 		if s.Config.Completion != nil {
@@ -304,7 +485,13 @@ func (s *Service) dispatch(ctx context.Context) error {
 			if e = s.save(); e != nil {
 				return e
 			}
+			if s.targetTask != "" {
+				return errClaimConflict
+			}
 			continue
+		}
+		if s.State.Control.Operation != nil {
+			s.injectControlFault("after_claim")
 		}
 		r.BeadsStatus = "in_progress"
 		s.State.SlotOccupied = true
@@ -334,13 +521,22 @@ func (s *Service) dispatch(ctx context.Context) error {
 				return s.save()
 			}
 			s.worker = w
+			if s.State.Control.Operation != nil {
+				s.injectControlFault("after_worktree")
+				s.injectControlFault("after_worker_start")
+			}
 			s.active = r
 			r.ExecutionStatus = "running"
 			r.StartedAt = ptr(now())
 			procID := w.proc.Identity()
 			r.Process = &procID
+			r.AttemptID = id
+			s.lastDispatched = t.ID
 			if e = s.save(); e != nil {
 				return e
+			}
+			if s.State.Control.Operation != nil {
+				s.injectControlFault("worker_persisted")
 			}
 			s.note(r, "steer", "worker_start", "started", "orca agent started", deref(r.WorktreePath), map[string]any{"terminal": procID.Terminal, "agent": s.Config.agentName()})
 			return s.save()
@@ -349,6 +545,9 @@ func (s *Service) dispatch(ctx context.Context) error {
 		workerConfig, err := prepareWorkspace(ctx, s.Config, r, source)
 		if err != nil {
 			return s.preparationFailed(r, "Worktree preparation failed: "+err.Error())
+		}
+		if s.State.Control.Operation != nil {
+			s.injectControlFault("after_worktree")
 		}
 		r.WorktreePath = ptr(intent.Path)
 		r.WorktreeBranch = ptr(intent.Branch)
@@ -373,14 +572,132 @@ func (s *Service) dispatch(ctx context.Context) error {
 		}
 		s.worker = w
 		s.active = r
+		if s.State.Control.Operation != nil {
+			s.injectControlFault("after_worker_start")
+		}
 		r.ExecutionStatus = "running"
 		r.StartedAt = ptr(now())
 		procID := w.proc.Identity()
 		r.Process = &procID
+		r.AttemptID = id
+		s.lastDispatched = t.ID
 		s.note(r, "steer", "worker_start", "started", "worker started", intent.Path, map[string]any{"pid": procID.PID})
-		return s.save()
+		if err = s.save(); err != nil {
+			return err
+		}
+		if s.State.Control.Operation != nil {
+			s.injectControlFault("worker_persisted")
+		}
+		return nil
+	}
+	if !targetFound {
+		return errTaskNotReady
 	}
 	return nil
+}
+
+func (s *Service) injectControlFault(point string) {
+	if s.controlFault != nil {
+		s.controlFault(point)
+	}
+}
+
+func (s *Service) activeControlRequestID() string {
+	if s.explicitDispatch && s.State.Control.Operation != nil {
+		return s.State.Control.Operation.RequestID
+	}
+	return ""
+}
+func (s *Service) slotReason(ignoreRequestID string) string {
+	return s.executionSlotReason(ignoreRequestID, false)
+}
+
+func (s *Service) executionSlotReason(ignoreRequestID string, resumingDecision bool) string {
+	if s.worker != nil {
+		return "worker is running"
+	}
+	if op := s.State.Control.Operation; op != nil && op.RequestID != ignoreRequestID {
+		if op.Phase == "completed" {
+			return "terminal control receipt is pending publication"
+		}
+		return "control operation is applying"
+	}
+	if len(s.State.Control.Blockers) > 0 {
+		return s.State.Control.Blockers[0].Reason
+	}
+	for _, r := range s.State.Runs {
+		if r == nil {
+			continue
+		}
+		if r.ExecutionStatus == "unknown" {
+			return "unresolved unknown execution; manual recovery required"
+		}
+		if r.ExecutionStatus == "pending" || r.ExecutionStatus == "running" {
+			return "execution preparation or supervision is still active"
+		}
+	}
+	for _, r := range s.State.Runs {
+		if r != nil && !resumingDecision && r.FinishTaskStatus == "waiting_decision" {
+			return "waiting for a human decision"
+		}
+	}
+	if s.State.SlotOccupied && s.State.CurrentTask != nil && s.find(*s.State.CurrentTask) == nil {
+		return "execution preparation is still active"
+	}
+	return ""
+}
+
+// Exported occupancy is derived from reservations; it is not itself proof of a
+// worker and must not bypass pending decisions or persistent control blockers.
+func (s *Service) refreshSlotOccupancy() {
+	occupied := s.worker != nil || s.State.Control.Operation != nil || len(s.State.Control.Blockers) > 0
+	for _, r := range s.State.Runs {
+		if r != nil && (r.ExecutionStatus == "unknown" || r.ExecutionStatus == "pending" || r.ExecutionStatus == "running" || r.FinishTaskStatus == "waiting_decision") {
+			occupied = true
+		}
+	}
+	if s.State.SlotOccupied && s.State.CurrentTask != nil && s.find(*s.State.CurrentTask) == nil {
+		occupied = true // Reservation saved before the first run/claim exists.
+	}
+	s.State.SlotOccupied = occupied
+}
+func (s *Service) refreshCandidates(ctx context.Context) error {
+	queried := now()
+	old := s.candidateSnapshot
+	if old == nil {
+		if b, err := os.ReadFile(filepath.Join(s.Config.RunDir, "tasks.json")); err == nil {
+			var previous TaskSnapshot
+			if decode(b, &previous) == nil {
+				old = &previous
+			}
+		}
+	}
+	tasks, err := s.beads.Ready(ctx)
+	if err != nil {
+		if old == nil {
+			old = &TaskSnapshot{Tasks: []TaskCandidate{}}
+		}
+		snapshot := &TaskSnapshot{Version: 1, InstanceID: s.State.Service.InstanceID, RepositoryIdentity: s.State.Repository.Identity, QueriedAt: queried, LastSuccessAt: old.LastSuccessAt, Error: ptr(clip(err.Error(), 1000)), BlockReason: s.slotReason(s.activeControlRequestID()), Tasks: old.Tasks}
+		s.candidateSnapshot = snapshot
+		return s.writeTaskSnapshot(snapshot)
+	}
+	candidates := make([]TaskCandidate, 0, len(tasks))
+	for _, task := range tasks {
+		if !executable(task, s.Config.ExecutableTypes) || s.find(task.ID) != nil {
+			continue
+		}
+		candidates = append(candidates, TaskCandidate{TaskID: task.ID, Title: task.Title, Type: task.Type, Summary: clip(task.Description, 500)})
+	}
+	snapshot := &TaskSnapshot{Version: 1, InstanceID: s.State.Service.InstanceID, RepositoryIdentity: s.State.Repository.Identity, QueriedAt: queried, LastSuccessAt: &queried, BlockReason: s.slotReason(s.activeControlRequestID()), Tasks: candidates}
+	s.candidateSnapshot = snapshot
+	return s.writeTaskSnapshot(snapshot)
+}
+func (s *Service) writeTaskSnapshot(snapshot *TaskSnapshot) error {
+	b, err := json.MarshalIndent(snapshot, "", "  ")
+	if err != nil {
+		return err
+	}
+	return AtomicWrite(filepath.Join(s.Config.RunDir, "tasks.json"), append(b, '\n'))
 }
 
 func (s *Service) preparationFailed(r *Run, reason string) error {
@@ -619,7 +936,13 @@ func (s *Service) event(ev WorkerEvent) error {
 	return s.save()
 }
 func (s *Service) Run(ctx context.Context) (retErr error) {
-	return s.run(ctx, "")
+	return s.RunWithDispatch(ctx, "auto")
+}
+func (s *Service) RunWithDispatch(ctx context.Context, mode string) error {
+	if mode != "manual" && mode != "auto" {
+		return errors.New("dispatch mode must be manual or auto")
+	}
+	return s.run(ctx, "", mode)
 }
 
 // RetryOne is a bounded operator action. It never selects or claims another task.
@@ -627,13 +950,23 @@ func (s *Service) RetryOne(ctx context.Context, runID string) error {
 	if runID == "" {
 		return errors.New("retry requires a run ID")
 	}
-	return s.run(ctx, runID)
+	if s.State.Control.DispatchPaused {
+		return errors.New("dispatch is paused; explicit retry is refused")
+	}
+	if reason := s.slotReason(""); reason != "" {
+		return errors.New(reason)
+	}
+	return s.run(ctx, runID, "manual")
 }
-func (s *Service) run(ctx context.Context, retryRunID string) (retErr error) {
+func (s *Service) run(ctx context.Context, retryRunID, dispatchMode string) (retErr error) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	defer s.closeAllActivities()
 	s.State.Service.Mode = "scheduler"
+	s.State.Control.DispatchMode = dispatchMode
+	s.State.Service.Ready = false
+	s.State.Service.Status = "running"
+	s.State.Service.HeartbeatIntervalMS = duration(s.Config.Heartbeat).Milliseconds()
 	if retryRunID != "" {
 		s.State.Service.Mode = "retry-one"
 	}
@@ -641,19 +974,25 @@ func (s *Service) run(ctx context.Context, retryRunID string) (retErr error) {
 		return e
 	}
 	heartDone := make(chan struct{})
+	acceptedStops := make(chan stopAcceptance, 1)
 	instanceID := s.State.Service.InstanceID
 	go func() {
 		defer close(heartDone)
 		t := time.NewTicker(duration(s.Config.Heartbeat))
 		defer t.Stop()
-		stopTick := time.NewTicker(200 * time.Millisecond)
+		stopTick := time.NewTicker(100 * time.Millisecond)
 		defer stopTick.Stop()
+		stopSeen := map[string]bool{}
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case <-stopTick.C:
-				if stopRequested(s.Config, instanceID) {
+				stopReq, _, checkedAt := findStopRequestCached(s.Config, instanceID, stopSeen)
+				if stopRequested(s.Config, instanceID) || stopReq != nil {
+					if stopReq != nil {
+						acceptedStops <- stopAcceptance{Request: *stopReq, At: checkedAt}
+					}
 					cancel()
 					return
 				}
@@ -668,9 +1007,26 @@ func (s *Service) run(ctx context.Context, retryRunID string) (retErr error) {
 	defer func() {
 		cancel()
 		<-heartDone
+		if s.stopControl == nil {
+			select {
+			case accepted := <-acceptedStops:
+				s.stopControl = &accepted.Request
+				s.stopAcceptedAt = &accepted.At
+			default:
+			}
+		}
 		s.State.Service.Status = "stopping"
+		s.State.Service.Ready = false
 		s.save()
+		if e := s.ensureStopApplyingReceipt(); e != nil {
+			retErr = errors.Join(retErr, e)
+		}
 		s.shutdown()
+		if s.State.Control.Operation != nil {
+			if e := s.recoverControlOperation(); e != nil {
+				retErr = errors.Join(retErr, e)
+			}
+		}
 		s.State.Service.Status = "stopped"
 		if e := s.store.Err(); e != nil {
 			retErr = e
@@ -681,6 +1037,9 @@ func (s *Service) run(ctx context.Context, retryRunID string) (retErr error) {
 		if e := s.save(); e != nil {
 			retErr = e
 		}
+		if e := s.finalizeStopControl(); e != nil {
+			retErr = errors.Join(retErr, e)
+		}
 	}()
 	taskTick := time.NewTicker(duration(s.Config.TaskPoll))
 	defer taskTick.Stop()
@@ -688,6 +1047,8 @@ func (s *Service) run(ctx context.Context, retryRunID string) (retErr error) {
 	defer prTick.Stop()
 	decisionTick := time.NewTicker(2 * time.Second)
 	defer decisionTick.Stop()
+	controlTick := time.NewTicker(100 * time.Millisecond)
+	defer controlTick.Stop()
 	step := func(fn func(context.Context) error) error {
 		e := fn(ctx)
 		if s.store.Err() != nil {
@@ -701,6 +1062,20 @@ func (s *Service) run(ctx context.Context, retryRunID string) (retErr error) {
 		}
 		return s.save()
 	}
+	if retryRunID == "" {
+		for s.State.Control.Operation != nil {
+			if e := s.recoverControlOperation(); e != nil {
+				if e = s.retainControlPublicationFailure(e); e != nil {
+					return e
+				}
+				select {
+				case <-ctx.Done():
+					return nil
+				case <-controlTick.C:
+				}
+			}
+		}
+	}
 	// On startup query saved PRs, apply any already-answered decisions, then
 	// reconcile claims before any new dispatch.
 	if retryRunID == "" {
@@ -710,8 +1085,30 @@ func (s *Service) run(ctx context.Context, retryRunID string) (retErr error) {
 		if e := step(s.applyDecisions); e != nil {
 			return e
 		}
-		if e := step(s.dispatch); e != nil {
+		if e := s.reconcile(ctx); e != nil {
+			s.setError(e)
+			if saveErr := s.save(); saveErr != nil {
+				return saveErr
+			}
+		}
+		candidateErr := s.refreshCandidates(ctx)
+		if candidateErr != nil {
+			s.setError(candidateErr)
+			if saveErr := s.save(); saveErr != nil {
+				return saveErr
+			}
+		}
+		s.State.Service.Ready = candidateErr == nil && ctx.Err() == nil
+		if e := s.save(); e != nil {
 			return e
+		}
+		if e := s.pollControl(ctx, cancel); e != nil {
+			return e
+		}
+		if s.State.Control.Operation == nil {
+			if e := step(s.dispatch); e != nil {
+				return e
+			}
 		}
 	} else {
 		if e := s.startRetry(ctx, retryRunID); e != nil {
@@ -742,6 +1139,9 @@ func (s *Service) run(ctx context.Context, retryRunID string) (retErr error) {
 				return nil
 			}
 		case <-decisionTick.C:
+			if s.State.Control.Operation != nil {
+				continue
+			}
 			if e := step(s.applyDecisions); e != nil {
 				return e
 			}
@@ -749,10 +1149,25 @@ func (s *Service) run(ctx context.Context, retryRunID string) (retErr error) {
 			if retryRunID != "" {
 				continue
 			}
+			if e := s.pollControl(ctx, cancel); e != nil {
+				return e
+			}
+			if s.State.Control.Operation != nil {
+				continue
+			}
 			if e := step(s.dispatch); e != nil {
 				return e
 			}
+		case <-controlTick.C:
+			if retryRunID == "" {
+				if e := s.pollControl(ctx, cancel); e != nil {
+					return e
+				}
+			}
 		case <-prTick.C:
+			if s.State.Control.Operation != nil {
+				continue
+			}
 			if e := step(func(ctx context.Context) error { return s.pollPRsFor(ctx, retryRunID) }); e != nil {
 				return e
 			}
