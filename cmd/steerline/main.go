@@ -156,6 +156,10 @@ func runProjects(project, action string) error {
 	if len(projects) == 0 {
 		return fmt.Errorf("no project configs under %s", steerline.SteerlineEtcDir())
 	}
+	if strings.EqualFold(action, "list") {
+		printProjects(projects)
+		return nil
+	}
 	chosen, e := pickProject(projects, project)
 	if e != nil {
 		return e
@@ -166,10 +170,6 @@ func runProjects(project, action string) error {
 	act, e := pickAction(action)
 	if e != nil {
 		return e
-	}
-	if act == "list" {
-		printProjects(projects)
-		return nil
 	}
 	exe, e := os.Executable()
 	if e != nil {
