@@ -18,12 +18,15 @@ func (s *Service) startRetry(ctx context.Context, id string) error {
 	if s.worker != nil {
 		return errors.New("execution slot occupied")
 	}
+	if s.Config.hostName() == "orca" {
+		return errors.New("retry is not supported for the orca host yet; use manual recovery")
+	}
 	var selected *Run
 	for _, r := range s.State.Runs {
 		if r.ExecutionStatus == "unknown" || r.ExecutionStatus == "running" || r.ExecutionStatus == "pending" {
 			return errors.New("resolve uncertain executions before retry")
 		}
-		if inspectProcess(r.Process) == "matching process still exists" {
+		if inspectProcessWithConfig(s.Config, r.Process) == "matching process still exists" {
 			return errors.New("recorded worker is still alive")
 		}
 		if r.RunID == id {
@@ -98,6 +101,7 @@ func (s *Service) startRetry(ctx context.Context, id string) error {
 	if err = s.save(); err != nil {
 		return err
 	}
+	s.note(r, "steer", "retry", "started", "retry attempt started", r.TaskID, nil)
 	if err = ctx.Err(); err != nil {
 		return s.preparationFailed(r, err.Error())
 	}
@@ -109,6 +113,8 @@ func (s *Service) startRetry(ctx context.Context, id string) error {
 	s.active = r
 	r.ExecutionStatus = "running"
 	r.StartedAt = ptr(now())
-	r.Process = &worker.process.identity
+	procID := worker.proc.Identity()
+	r.Process = &procID
+	s.note(r, "steer", "worker_start", "started", "worker started", "", map[string]any{"pid": procID.PID, "retry": true})
 	return s.save()
 }

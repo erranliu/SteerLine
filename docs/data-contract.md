@@ -6,7 +6,7 @@
 
 | 字段 | 类型 | 含义 |
 | --- | --- | --- |
-| schema_version | integer | 当前 2；可读取 v1 历史快照，下一次保存为 v2，拒绝其他未知版本 |
+| schema_version | integer | 当前 3；可读取 v1/v2/v3 历史快照，下一次保存为 v3，拒绝其他未知版本 |
 | updated_at | timestamp | 最近一次成功发布快照的时间，含心跳写入 |
 | heartbeat_at | timestamp | 最近成功发布的活跃时间；读者用于判断过期 |
 | service.instance_id | string | 每次启动新的随机实例 ID，不等于 claimant |
@@ -28,13 +28,14 @@
 | --- | --- | --- |
 | task_id / title | string | Beads 任务身份和领取时标题 |
 | run_id / claimant | string | 本次随机运行 ID / 固定领取者 |
+| host | string | `local` 或 `orca`；v1/v2 记录视为 local |
 | completion | object/null | 派发时固定的 `{command:{executable,args},timeout}`；null 使用原生 close。重启按该记录继续，配置变更不能跳过旧运行的结项尾部 |
 | beads_context | object/null | 派发时的 beads_dir、project_id、database、backend；回调前再次核对。旧记录可能为 null，不包含认证信息 |
 | beads_status | string | 最近核实的 Beads 状态，不以本地预测替代 closed |
 | execution_status | string | pending / running / succeeded / failed / unknown |
 | finish_task_status | string | pending / waiting_pr_merge / completed / blocked |
 | codex_session_id | string/null | 从 thread.started.thread_id 得到，不从日志文字猜测 |
-| process | object/null | PID、创建时间标识 created、executable 完整路径；均来自 OS |
+| process | object/null | 宿主无关身份：kind（os/orca）、PID/Created/Executable（os）或 Terminal/RuntimeID/Incarnation（orca）；kind 为空视为 os |
 | started_at / ended_at | timestamp/null | 服务记录的执行起止时间；崩溃导致终止时间未知时仍为 null |
 | workspace_intent | object/null | 创建前持久化的 path、branch、base_commit；只表示计划创建，不证明目录已就绪。旧记录或领取孤儿可能为 null |
 | worktree_path / worktree_branch / base_commit | string/null | 调度器创建并核验的隔离目录、实现分支及起点 Git hash；准备成功前均为 null，不由 Codex 结果覆盖 |
@@ -43,7 +44,7 @@
 | pr.merged_at / merge_commit | timestamp/string/null | 平台核实的合并证据 |
 | pr.queried_at / query_error | timestamp/string/null | 最近查询时间和错误；失败时 state=unknown |
 | last_event | string/null | 最近 JSON 事件的类型摘要，最多 512 字符，不存完整对话 |
-| log_path / result_path | string/null | 每次运行独立的事件和结果文件；恢复孤儿记录时可能为 null |
+| log_path / result_path | string/null | 每次运行独立的事件和结果文件；`activity.jsonl` 为 log_path 同目录的归一化派生物，不参与恢复；恢复孤儿记录时可能为 null |
 | summary / error | string/null | 技能结果摘要（最多 4096 字符）/ 当前阻塞或失败原因 |
 
 `process.created` 在 Windows 为进程创建 FILETIME 的十六进制标识，Linux 为 boot ID 和 /proc starttime。PID 可复用，读取器不能仅凭 PID 判定存活。遗留进程的核验结论写入 error；unknown 不代表服务已接管或恢复该会话。

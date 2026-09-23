@@ -19,21 +19,26 @@ func main() {
 }
 func run() error {
 	if len(os.Args) < 2 {
-		return fmt.Errorf("usage: steerline <run|retry|check|stop|accept-result|mark-stopped> -config config.json")
+		return fmt.Errorf("usage: steerline <run|retry|check|stop|watch|accept-result|mark-stopped> -config config.json")
 	}
 	command := os.Args[1]
 	fs := flag.NewFlagSet(command, flag.ContinueOnError)
 	config := fs.String("config", "steerline.local.json", "configuration JSON")
-	runID := fs.String("run-id", "", "manual recovery run ID")
+	runID := fs.String("run-id", "", "manual recovery run ID, or run to watch")
 	result := fs.String("result", "", "manual recovery result file")
 	confirmed := fs.Bool("confirm-process-stopped", false, "operator verified that the old process tree is stopped")
+	console := fs.String("console", "", "service console rendering: pretty|summary|json|off (default pretty on a terminal)")
+	follow := fs.Bool("follow", true, "watch: keep following new activity")
+	fromStart := fs.Bool("from-start", true, "watch: replay existing activity before following")
+	jsonOut := fs.Bool("json", false, "watch: emit stable activity JSONL")
+	rawEvents := fs.Bool("raw", false, "watch: emit the raw agent event stream")
 	if e := fs.Parse(os.Args[2:]); e != nil {
 		return e
 	}
 	if fs.NArg() != 0 {
 		return fmt.Errorf("unexpected positional arguments")
 	}
-	if command != "run" && command != "retry" && command != "check" && command != "stop" && command != "accept-result" && command != "mark-stopped" {
+	if command != "run" && command != "retry" && command != "check" && command != "stop" && command != "accept-result" && command != "mark-stopped" && command != "watch" {
 		return fmt.Errorf("unknown command %q", command)
 	}
 	if command == "retry" && (!*confirmed || *runID == "") {
@@ -48,6 +53,9 @@ func run() error {
 	}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
+	if command == "watch" {
+		return steerline.Watch(ctx, c, *runID, steerline.WatchOptions{Follow: *follow, FromStart: *fromStart, JSON: *jsonOut, Raw: *rawEvents, Color: steerline.ColorEnabled()})
+	}
 	if e = c.Preflight(ctx, command == "run" || command == "retry" || command == "check"); e != nil {
 		return e
 	}
@@ -68,6 +76,11 @@ func run() error {
 	s, e := steerline.NewService(c)
 	if e != nil {
 		return e
+	}
+	if *console != "" {
+		s.Console = *console
+	} else if steerline.ConsoleDefault() != "" {
+		s.Console = steerline.ConsoleDefault()
 	}
 	if command == "retry" {
 		fmt.Printf("Steerline retry-one: %s; no new tasks will be claimed\n", *runID)
