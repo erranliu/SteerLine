@@ -160,6 +160,11 @@ func recoverActivitySeq(path string) (uint64, error) {
 }
 
 func (w *ActivityWriter) Write(ev ActivityEvent) error {
+	_, err := w.WriteEvent(ev)
+	return err
+}
+
+func (w *ActivityWriter) WriteEvent(ev ActivityEvent) (ActivityEvent, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.seq++
@@ -184,18 +189,21 @@ func (w *ActivityWriter) Write(ev ActivityEvent) error {
 	}
 	b, e := json.Marshal(ev)
 	if e != nil {
-		return e
+		return ActivityEvent{}, e
 	}
 	f, e := os.OpenFile(w.path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
 	if e != nil {
-		return e
+		return ActivityEvent{}, e
 	}
 	_, e = f.Write(append(b, '\n'))
 	ce := f.Close()
 	if e == nil {
 		e = ce
 	}
-	return e
+	if e != nil {
+		return ActivityEvent{}, e
+	}
+	return ev, nil
 }
 
 // Close is a no-op: writes never retain a handle.

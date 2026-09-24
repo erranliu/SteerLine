@@ -85,6 +85,7 @@ func WriteDecisionRequest(r *Run, req DecisionRequest) (*DecisionState, error) {
 	}
 	st := &DecisionState{
 		ID:          newID(),
+		Version:     1,
 		Request:     req,
 		Status:      "pending",
 		RequestPath: decisionRequestPath(r),
@@ -167,6 +168,16 @@ func ReadDecisionAnswer(r *Run) (DecisionAnswer, error) {
 	if r.Decision == nil {
 		return DecisionAnswer{}, errors.New("run has no decision")
 	}
+	if r.Decision.Status != "pending" {
+		a := DecisionAnswer{DecisionID: r.Decision.ID, RunID: r.RunID, OptionID: r.Decision.OptionID, Note: r.Decision.Note, AnsweredBy: r.Decision.AnsweredBy}
+		if r.Decision.AnsweredAt != nil {
+			a.AnsweredAt = *r.Decision.AnsweredAt
+		}
+		if err := validateDecisionAnswer(&r.Decision.Request, &a); err != nil {
+			return a, err
+		}
+		return a, nil
+	}
 	b, e := os.ReadFile(r.Decision.AnswerPath)
 	if e != nil {
 		return DecisionAnswer{}, e
@@ -189,11 +200,12 @@ func ReadDecisionAnswer(r *Run) (DecisionAnswer, error) {
 
 // AnswerOptions is the CLI/viewer entry point for answering a pending decision.
 type AnswerOptions struct {
-	RunID      string
-	DecisionID string
-	Option     string
-	Note       string
-	By         string
+	RunID           string
+	DecisionID      string
+	Option          string
+	Note            string
+	By              string
+	ExpectedVersion uint64
 }
 
 // AnswerDecision finds a run waiting for a decision and writes its answer file.
@@ -202,7 +214,13 @@ func AnswerDecision(c Config, o AnswerOptions) error {
 	if strings.TrimSpace(o.RunID) == "" {
 		return errors.New("answer requires a run id or task id")
 	}
-	snapshot, e := LoadRuntime(filepath.Join(c.RunDir, c.RuntimeFile))
+	if err := preflightExistingState(c.RunDir, c.RuntimeFile); err != nil {
+		return err
+	}
+	if err := c.ResolveIdentity(context.Background()); err != nil {
+		return err
+	}
+	snapshot, e := LoadDatabaseRuntime(c)
 	if e != nil {
 		return e
 	}
@@ -225,14 +243,67 @@ func AnswerDecision(c Config, o AnswerOptions) error {
 	if o.By == "" {
 		o.By = answererName()
 	}
-	return WriteAnswer(run, DecisionAnswer{
-		DecisionID: o.DecisionID,
-		RunID:      run.RunID,
-		OptionID:   strings.TrimSpace(o.Option),
-		Note:       o.Note,
-		AnsweredBy: o.By,
-		AnsweredAt: now(),
-	})
+	decisionID := o.DecisionID
+	if decisionID == "" {
+		decisionID = run.Decision.ID
+	}
+	if decisionID != run.Decision.ID {
+		return errors.New("answer does not match the pending decision id")
+	}
+	if o.ExpectedVersion != 0 && o.ExpectedVersion != run.Decision.Version {
+		return errors.New("decision version changed; refresh before answering")
+	}
+	answer := DecisionAnswer{DecisionID: decisionID, RunID: run.RunID, OptionID: strings.TrimSpace(o.Option), Note: o.Note, AnsweredBy: o.By}
+	if run.Decision.Status == "answer_saved" {
+		saved, err := ReadDecisionAnswer(run)
+		if err != nil {
+			return err
+		}
+		if saved.OptionID == answer.OptionID && saved.Note == answer.Note && saved.AnsweredBy == answer.AnsweredBy {
+			return nil
+		}
+		return errors.New("decision already has a saved answer")
+	}
+	if run.Decision.Status != "pending" {
+		return fmt.Errorf("decision is already %s", run.Decision.Status)
+	}
+	if err := validateDecisionAnswer(&run.Decision.Request, &answer); err != nil {
+		return err
+	}
+	db, err := OpenSQLiteStore(filepath.Join(c.RunDir, "steerline.db"))
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	domain, err := db.Query(context.Background(), c.Identity())
+	if err != nil {
+		return err
+	}
+	var version uint64
+	found := false
+	for _, record := range domain.Decisions {
+		if record.DecisionID == decisionID {
+			version = record.Version
+			found = true
+			break
+		}
+	}
+	if !found {
+		return errors.New("decision is missing from the authoritative SQLite store")
+	}
+	if version == 0 {
+		version = run.Decision.Version
+	}
+	if version == 0 {
+		return errors.New("decision version is unavailable")
+	}
+	payload, err := json.Marshal(answer)
+	if err != nil {
+		return err
+	}
+	key := fmt.Sprintf("answer:%s:%d:%s", decisionID, version, operationDigest(payload))
+	_, _, err = (CommandService{Store: db, Project: c.Identity()}).AnswerDecision(context.Background(), decisionID, version, key, answer.AnsweredBy, payload)
+	return err
 }
 
 // AnswererName resolves the default "answered by" identity from the environment.
@@ -317,7 +388,7 @@ func (s *Service) applyDecisions(ctx context.Context) error {
 			// Single execution slot: one resumed decision at a time.
 			break
 		}
-		if r.FinishTaskStatus != "waiting_decision" || r.Decision == nil || r.Decision.Status != "pending" {
+		if r.FinishTaskStatus != "waiting_decision" || r.Decision == nil || r.Decision.Status != "answer_saved" {
 			continue
 		}
 		a, e := ReadDecisionAnswer(r)
@@ -339,7 +410,22 @@ func (s *Service) applyDecisions(ctx context.Context) error {
 		if reason := s.executionSlotReason("", true); reason != "" {
 			return errors.New(reason)
 		}
+		if r.WorkflowVersion == MinimalWorkflowVersion {
+			if e := s.resumeMinimalAfterDecision(ctx, r, a); e != nil {
+				s.blocked(r, "Decision resume failed: "+e.Error())
+				s.note(r, "steer", "decision", "failed", "decision resume failed", e.Error(), nil)
+				s.State.SlotOccupied = false
+				s.State.CurrentTask = nil
+				s.closeActivity(r)
+				if se := s.save(); se != nil {
+					return se
+				}
+				continue
+			}
+			continue
+		}
 		r.Decision.Status = "resuming"
+		r.Decision.Version++
 		r.Decision.OptionID = a.OptionID
 		r.Decision.Note = a.Note
 		r.Decision.AnsweredBy = a.AnsweredBy
@@ -363,15 +449,15 @@ func (s *Service) applyDecisions(ctx context.Context) error {
 			}
 			continue
 		}
-		r.Decision.Status = "applied"
-		r.Decision.AppliedAt = ptr(now())
+		r.Decision.Status = "reply_accepted"
+		r.Decision.Version++
 		r.ExecutionStatus = "running"
 		r.EndedAt = nil
 		r.Error = nil
 		if e := s.save(); e != nil {
 			return e
 		}
-		s.note(r, "steer", "decision", "applied", "decision applied", decisionAnswerSummary(r), nil)
+		s.note(r, "steer", "decision", "reply_accepted", "decision reply accepted", decisionAnswerSummary(r), nil)
 		if e := s.save(); e != nil {
 			return e
 		}

@@ -30,7 +30,7 @@ Orca 的 Run/Task/Dispatch 是执行身份，不等同于 SteerLine 的业务 Ta
 
 ## 当前 PR 4A 执行后端
 
-当前 PR 4A 的本机执行接入：local Codex 和 Orca terminal v2 共用 Service 派发与业务状态机，分别通过适配器提供固定执行身份、工作区事实、原始输出、观察与停止。runtime v5 是唯一当前格式；`execution/v1/` 保存不可变 binding、Operation 和能力证据，v1–v4 不自动迁移。Orca agent 先等待派发，适配器取得真实 worktree/terminal 身份并写好提示文件后才向同一 terminal 发送正式指令。精确 PTY 停止证明必须先落盘，才能释放执行槽。
+当前 PR 4A 的本机执行接入：local Codex 和 Orca terminal v2 共用 Service 派发与业务状态机，分别通过适配器提供固定执行身份、工作区事实、原始输出、观察与停止。runtime v5 是当前 SQLite 数据库的读投影；不可变 binding 和后端 Operation 保存在 `steerline.db`，`execution/v1/` 只保存能力证据。v1–v4 与旧文件式执行状态不自动迁移。Orca agent 先等待派发，适配器取得真实 worktree/terminal 身份并写好提示文件后才向同一 terminal 发送正式指令。精确 PTY 停止证明必须先落盘，才能释放执行槽。
 
 领取前按目标、agent、协议及 CLI 版本核对已验证能力。隔离原生验收后停服运行 `steerline certify-backend -config <config.json> -evidence <evidence.json>` 导入证据；未验证能力不可用于副作用。具体结果和仍 unsupported 的能力见 [PR 4A 验证报告](validation/pr-04a-execution-backends.md)。
 

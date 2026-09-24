@@ -1,8 +1,10 @@
 package viewer
 
 import (
+	"context"
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -11,10 +13,54 @@ import (
 	"github.com/erranliu/SteerLine/internal/steerline"
 )
 
+func TestFileSourceResolvesIdentityForDatabaseRecovery(t *testing.T) {
+	repo, dir := t.TempDir(), t.TempDir()
+	git, err := exec.LookPath("git")
+	if err != nil {
+		t.Skip(err)
+	}
+	if out, err := exec.Command(git, "init", "--quiet", repo).CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v %s", err, out)
+	}
+	c := steerline.Config{Repository: repo, RunDir: dir, RuntimeFile: "runtime.json", Git: steerline.Command{Executable: git}, CommandTimeout: "5s"}
+	resolved := c
+	if err = resolved.ResolveIdentity(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	db, err := steerline.OpenSQLiteStore(filepath.Join(dir, "steerline.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	state := steerline.Runtime{SchemaVersion: 5, Repository: steerline.Repository{Identity: resolved.Identity()}, HeartbeatAt: time.Now().UTC()}
+	state, err = db.SaveRuntime(context.Background(), state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := NewFileSource(c) // same unresolved Config supplied by the CLI
+	obs := source.Snapshot()
+	if obs.Runtime == nil || obs.Runtime.Revision != state.Revision || obs.Runtime.ProjectionError == "" {
+		t.Fatalf("viewer did not recover from database: %+v", obs)
+	}
+	old := state
+	old.HeartbeatAt = old.HeartbeatAt.Add(-time.Minute)
+	bytes, err := json.Marshal(old)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(filepath.Join(dir, c.RuntimeFile), bytes, 0600); err != nil {
+		t.Fatal(err)
+	}
+	obs = source.Snapshot()
+	if obs.Runtime == nil || !obs.Runtime.HeartbeatAt.Equal(state.HeartbeatAt) {
+		t.Fatal("equal-revision stale file masked fresh database heartbeat")
+	}
+}
+
 func TestFileSourceRetainsLastGoodSnapshotWithFailureTimestamp(t *testing.T) {
 	dir := t.TempDir()
 	runtimePath := filepath.Join(dir, "runtime.json")
-	rt := steerline.Runtime{SchemaVersion: steerline.CurrentRuntimeSchema, HeartbeatAt: time.Now().UTC(), Runs: []*steerline.Run{{RunID: "r", TaskID: "t"}}}
+	rt := steerline.Runtime{SchemaVersion: 5, HeartbeatAt: time.Now().UTC(), Runs: []*steerline.Run{{RunID: "r", TaskID: "t"}}}
 	b, err := json.Marshal(rt)
 	if err != nil {
 		t.Fatal(err)
@@ -27,7 +73,7 @@ func TestFileSourceRetainsLastGoodSnapshotWithFailureTimestamp(t *testing.T) {
 	if first.Runtime == nil || first.State != steerline.SnapshotValid {
 		t.Fatalf("initial snapshot: %+v", first)
 	}
-	if err = os.WriteFile(runtimePath, []byte(`{"schema_version":3,`), 0600); err != nil {
+	if err = os.WriteFile(runtimePath, []byte(`{"schema_version":5,`), 0600); err != nil {
 		t.Fatal(err)
 	}
 	failed := source.Snapshot()

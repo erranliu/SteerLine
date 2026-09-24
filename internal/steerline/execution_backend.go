@@ -33,9 +33,6 @@ const (
 type AgentSpec struct {
 	Name string `json:"name"`
 }
-type ExecutionTarget struct {
-	ID string `json:"id"`
-}
 
 // AttemptSpec is a value snapshot passed across the platform boundary. Legacy
 // Run and Task values are copies used only to render today's dispatch format;
@@ -284,12 +281,6 @@ func stableOperationID(value string) bool {
 	return true
 }
 
-func (r executionRecords) bindingPath(run, attempt string) string {
-	return filepath.Join(r.root, "execution", "v1", "bindings", run, attempt+".json")
-}
-func (r executionRecords) operationPath(run, attempt, id string) string {
-	return filepath.Join(r.root, "execution", "v1", "operations", run, attempt, id+".json")
-}
 func (r executionRecords) saveCapabilityReport(report CapabilityReport) error {
 	if report.Version != 1 || report.Backend == "" || report.Protocol == "" || report.Target.ID == "" || report.Agent.Name == "" || report.PlatformVersion == "" || report.CheckedAt.IsZero() {
 		return errors.New("incomplete capability report")
@@ -408,7 +399,6 @@ func (r executionRecords) saveBinding(ref ExecutionRef) error {
 	if err := validateExecutionRef(ref); err != nil {
 		return err
 	}
-	p := r.bindingPath(ref.RunID, ref.AttemptID)
 	if old, err := r.loadBinding(ref.RunID, ref.AttemptID); err == nil {
 		if digestValue(old) != digestValue(ref) {
 			return errors.New("execution binding is immutable and conflicts with existing record")
@@ -421,16 +411,13 @@ func (r executionRecords) saveBinding(ref ExecutionRef) error {
 	if err != nil {
 		return err
 	}
-	if err = os.MkdirAll(filepath.Dir(p), 0700); err != nil {
-		return err
-	}
-	return AtomicWrite(p, append(b, '\n'))
+	return r.writeRecord("execution_bindings", ref.RunID, ref.AttemptID, "binding", b)
 }
 func (r executionRecords) loadBinding(run, attempt string) (ExecutionRef, error) {
 	if !stableExecutionID(run) || !stableExecutionID(attempt) {
 		return ExecutionRef{}, errors.New("invalid execution binding path identity")
 	}
-	b, err := os.ReadFile(r.bindingPath(run, attempt))
+	b, err := r.readRecord("execution_bindings", run, attempt, "binding")
 	if err != nil {
 		return ExecutionRef{}, err
 	}
@@ -476,7 +463,6 @@ func (r executionRecords) saveOperation(op Operation) error {
 	if err := validateExecutionOperation(op); err != nil {
 		return err
 	}
-	p := r.operationPath(op.RunID, op.AttemptID, op.ID)
 	if old, err := r.loadOperation(op.RunID, op.AttemptID, op.ID); err == nil {
 		if old.PayloadDigest != op.PayloadDigest || old.Action != op.Action || old.Backend != op.Backend || old.Protocol != op.Protocol || old.Target != op.Target {
 			return errors.New("operation id reused with different fixed payload")
@@ -488,16 +474,13 @@ func (r executionRecords) saveOperation(op Operation) error {
 	if err != nil {
 		return err
 	}
-	if err = os.MkdirAll(filepath.Dir(p), 0700); err != nil {
-		return err
-	}
-	return AtomicWrite(p, append(b, '\n'))
+	return r.writeRecord("execution_operations", op.RunID, op.AttemptID, op.ID, b)
 }
 func (r executionRecords) loadOperation(run, attempt, id string) (Operation, error) {
 	if !stableExecutionID(run) || !stableExecutionID(attempt) || !stableOperationID(id) {
 		return Operation{}, errors.New("invalid operation path identity")
 	}
-	b, err := os.ReadFile(r.operationPath(run, attempt, id))
+	b, err := r.readRecord("execution_operations", run, attempt, id)
 	if err != nil {
 		return Operation{}, err
 	}
@@ -1136,6 +1119,10 @@ func targetFor(c Config) ExecutionTarget {
 }
 func attemptOperationID(run, attempt string) string { return "start-" + run + "-" + attempt }
 func (s *Service) readRunWorkspace(ctx context.Context, run *Run) (WorkspaceInspection, error) {
+	if run != nil && run.WorkflowVersion == MinimalWorkflowVersion {
+		w, err := s.inspectMinimalWorkspace(ctx, run)
+		return WorkspaceInspection{Repository: w.Repository, Worktree: w.Worktree, Branch: w.Branch, Base: w.Base, Head: w.Head, Dirty: w.Dirty, CheckedAt: w.VerifiedAt}, err
+	}
 	if run == nil || run.WorktreePath == nil || run.WorktreeBranch == nil || run.BaseCommit == nil || run.WorkspaceIntent == nil {
 		return WorkspaceInspection{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "run has no verified workspace fields"}
 	}

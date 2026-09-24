@@ -15,15 +15,25 @@ type Repository struct {
 const CurrentRuntimeSchema = 5
 
 type Runtime struct {
-	SchemaVersion int          `json:"schema_version"`
-	UpdatedAt     time.Time    `json:"updated_at"`
-	HeartbeatAt   time.Time    `json:"heartbeat_at"`
-	Service       ServiceState `json:"service"`
-	Repository    Repository   `json:"repository"`
-	CurrentTask   *string      `json:"current_task"`
-	SlotOccupied  bool         `json:"slot_occupied"`
-	Runs          []*Run       `json:"runs"`
-	Control       ControlState `json:"control"`
+	SchemaVersion     int                 `json:"schema_version"`
+	Revision          uint64              `json:"revision"`
+	UpdatedAt         time.Time           `json:"updated_at"`
+	HeartbeatAt       time.Time           `json:"heartbeat_at"`
+	Service           ServiceState        `json:"service"`
+	Repository        Repository          `json:"repository"`
+	Tasks             []TaskRecord        `json:"tasks,omitempty"`
+	WorkflowRuns      []WorkflowRunRecord `json:"workflow_runs,omitempty"`
+	Executions        []ExecutionRecord   `json:"executions,omitempty"`
+	Attempts          []StepAttemptRecord `json:"attempts,omitempty"`
+	Decisions         []DecisionRecord    `json:"decisions,omitempty"`
+	Operations        []OperationRecord   `json:"operations,omitempty"`
+	PendingEvents     []DomainEvent       `json:"-"`
+	RejectedClaimRuns []string            `json:"-"`
+	ProjectionError   string              `json:"projection_error,omitempty"`
+	CurrentTask       *string             `json:"current_task"`
+	SlotOccupied      bool                `json:"slot_occupied"`
+	Runs              []*Run              `json:"runs"`
+	Control           ControlState        `json:"control"`
 }
 type ServiceState struct {
 	Mode                string           `json:"mode"`
@@ -102,33 +112,44 @@ type ProcessIdentity struct {
 	Incarnation string `json:"incarnation,omitempty"`
 }
 type Run struct {
-	ManualStop       *ManualStopConfirmation `json:"manual_stop,omitempty"`
-	TaskID           string                  `json:"task_id"`
-	Title            string                  `json:"title"`
-	RunID            string                  `json:"run_id"`
-	AttemptID        string                  `json:"attempt_id,omitempty"`
-	ControlRevision  uint64                  `json:"control_revision,omitempty"`
-	Claimant         string                  `json:"claimant"`
-	Host             string                  `json:"host,omitempty"`
-	BeadsStatus      string                  `json:"beads_status"`
-	ExecutionStatus  string                  `json:"execution_status"`
-	FinishTaskStatus string                  `json:"finish_task_status"`
-	SessionID        *string                 `json:"codex_session_id"`
-	Process          *ProcessIdentity        `json:"process"`
-	StartedAt        *time.Time              `json:"started_at"`
-	EndedAt          *time.Time              `json:"ended_at"`
-	WorktreePath     *string                 `json:"worktree_path"`
-	WorktreeBranch   *string                 `json:"worktree_branch"`
-	WorkspaceIntent  *WorkspaceIntent        `json:"workspace_intent"`
-	Completion       *CompletionConfig       `json:"completion"`
-	BeadsContext     *BeadsContext           `json:"beads_context"`
-	BaseCommit       *string                 `json:"base_commit"`
-	PR               PRState                 `json:"pr"`
-	LastEvent        *string                 `json:"last_event"`
-	LogPath          *string                 `json:"log_path"`
-	ResultPath       *string                 `json:"result_path"`
-	Summary          *string                 `json:"summary"`
-	Error            *string                 `json:"error"`
+	ManualStop           *ManualStopConfirmation `json:"manual_stop,omitempty"`
+	TaskID               string                  `json:"task_id"`
+	DomainTaskID         string                  `json:"domain_task_id,omitempty"`
+	IdentityMapDigest    string                  `json:"identity_map_digest,omitempty"`
+	DomainAttemptNumber  int                     `json:"domain_attempt_number,omitempty"`
+	WorkflowVersion      string                  `json:"workflow_version,omitempty"`
+	WorkflowConfigDigest string                  `json:"workflow_config_digest,omitempty"`
+	ExecutionID          string                  `json:"execution_id,omitempty"`
+	StepResultPath       *string                 `json:"step_result_path,omitempty"`
+	Title                string                  `json:"title"`
+	RunID                string                  `json:"run_id"`
+	AttemptID            string                  `json:"attempt_id,omitempty"`
+	ControlRevision      uint64                  `json:"control_revision,omitempty"`
+	Claimant             string                  `json:"claimant"`
+	Host                 string                  `json:"host,omitempty"`
+	Backend              string                  `json:"backend,omitempty"`
+	Protocol             string                  `json:"protocol,omitempty"`
+	Agent                string                  `json:"agent,omitempty"`
+	Target               ExecutionTarget         `json:"target,omitempty"`
+	BeadsStatus          string                  `json:"beads_status"`
+	ExecutionStatus      string                  `json:"execution_status"`
+	FinishTaskStatus     string                  `json:"finish_task_status"`
+	SessionID            *string                 `json:"codex_session_id"`
+	Process              *ProcessIdentity        `json:"process"`
+	StartedAt            *time.Time              `json:"started_at"`
+	EndedAt              *time.Time              `json:"ended_at"`
+	WorktreePath         *string                 `json:"worktree_path"`
+	WorktreeBranch       *string                 `json:"worktree_branch"`
+	WorkspaceIntent      *WorkspaceIntent        `json:"workspace_intent"`
+	Completion           *CompletionConfig       `json:"completion"`
+	BeadsContext         *BeadsContext           `json:"beads_context"`
+	BaseCommit           *string                 `json:"base_commit"`
+	PR                   PRState                 `json:"pr"`
+	LastEvent            *string                 `json:"last_event"`
+	LogPath              *string                 `json:"log_path"`
+	ResultPath           *string                 `json:"result_path"`
+	Summary              *string                 `json:"summary"`
+	Error                *string                 `json:"error"`
 	// Decision is set when the agent raised a structured question and the run is
 	// paused as finish_task_status=waiting_decision until a human answers.
 	Decision *DecisionState `json:"decision,omitempty"`
@@ -162,6 +183,8 @@ type DecisionRequest struct {
 // Status moves pending -> resuming -> applied; a restart never auto-resumes.
 type DecisionState struct {
 	ID          string          `json:"id"`
+	AttemptID   string          `json:"attempt_id,omitempty"`
+	Version     uint64          `json:"version"`
 	Request     DecisionRequest `json:"request"`
 	Status      string          `json:"status"`
 	OptionID    string          `json:"option_id,omitempty"`

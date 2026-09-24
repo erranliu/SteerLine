@@ -35,7 +35,6 @@ type ServiceConnectionState string
 const (
 	ConnectionNoRecord      ServiceConnectionState = "no-record"
 	ConnectionCorrupt       ServiceConnectionState = "corrupt"
-	ConnectionLegacy        ServiceConnectionState = "legacy"
 	ConnectionOffline       ServiceConnectionState = "offline"
 	ConnectionUnknown       ServiceConnectionState = "alive-unknown"
 	ConnectionIdentityError ServiceConnectionState = "identity-error"
@@ -81,24 +80,6 @@ type StartupRecord struct {
 	InstanceID         string           `json:"instance_id,omitempty"`
 	ProcessIdentity    *ProcessIdentity `json:"process_identity,omitempty"`
 	Error              string           `json:"error,omitempty"`
-}
-
-// StopObservationRecord preserves run_dir proof for a stopped PR 2 v4 service,
-// whose runtime predates startup_id. It is written only after an applied stop,
-// verified process exit and release of both service locks.
-type StopObservationRecord struct {
-	Version            int              `json:"version"`
-	InstanceID         string           `json:"instance_id"`
-	StopRequestID      string           `json:"stop_request_id"`
-	ObservedAt         time.Time        `json:"observed_at"`
-	RepositoryIdentity string           `json:"repository_identity"`
-	RepositoryPath     string           `json:"repository_path"`
-	RunDir             string           `json:"run_dir"`
-	Remote             string           `json:"remote"`
-	Branch             string           `json:"branch"`
-	Claimant           string           `json:"claimant"`
-	ConfigDigest       string           `json:"config_digest"`
-	ProcessIdentity    *ProcessIdentity `json:"process_identity"`
 }
 
 type StartServiceOptions struct {
@@ -306,101 +287,6 @@ func recordStartupProcess(c Config, id string, identity ProcessIdentity) error {
 	return AtomicWrite(filepath.Join(filepath.Dir(path), "process.json"), append(b, '\n'))
 }
 
-func stopObservationPath(c Config, instanceID string) (string, error) {
-	if !controlIDPattern.MatchString(instanceID) {
-		return "", errors.New("service instance ID is invalid")
-	}
-	serviceDir, err := managedServiceDir(c.RunDir)
-	if err != nil {
-		return "", err
-	}
-	root := filepath.Join(serviceDir, "stops")
-	resolvedRoot, err := resolveProspectivePath(filepath.Join(c.RunDir, "service", "stops"))
-	if err != nil {
-		return "", err
-	}
-	if canonical(root) != canonical(resolvedRoot) {
-		return "", errors.New("service stop-record directory resolves outside run_dir")
-	}
-	path := filepath.Join(root, instanceID+".json")
-	if !inside(serviceDir, path) {
-		return "", errors.New("service stop-record path escapes its managed directory")
-	}
-	if resolved, e := filepath.EvalSymlinks(path); e == nil {
-		if canonical(resolved) != canonical(path) {
-			return "", errors.New("service stop-record path is a symbolic link")
-		}
-	} else if !os.IsNotExist(e) {
-		return "", e
-	}
-	return path, nil
-}
-
-func readStopObservation(c Config, rt *Runtime, repositoryPath, runDir string) bool {
-	if rt == nil || rt.Service.StartupID != nil || rt.Service.ProcessIdentity == nil {
-		return false
-	}
-	path, err := stopObservationPath(c, rt.Service.InstanceID)
-	if err != nil {
-		return false
-	}
-	b, err := readBoundedFile(path, 1<<20)
-	if err != nil {
-		return false
-	}
-	var record StopObservationRecord
-	if decode(b, &record) != nil || record.Version != 1 || record.InstanceID != rt.Service.InstanceID || !controlIDPattern.MatchString(record.StopRequestID) || record.ObservedAt.IsZero() || record.ObservedAt.After(time.Now().Add(30*time.Second)) {
-		return false
-	}
-	requestPath := controlRequestPath(c.RunDir, record.StopRequestID)
-	request, err := readControlRequest(requestPath)
-	if err != nil || request.RequestID != record.StopRequestID || request.Action != "stop_service" || request.InstanceID != record.InstanceID {
-		return false
-	}
-	receipt, err := ReadControlReceipt(c, record.StopRequestID)
-	if err != nil || receipt.Status != "applied" || receipt.InstanceID != record.InstanceID || receipt.Action != "stop_service" || receipt.RequestDigest != rawRequestDigest(requestPath) {
-		return false
-	}
-	return record.ProcessIdentity != nil && *record.ProcessIdentity == *rt.Service.ProcessIdentity &&
-		canonical(record.RepositoryIdentity) == canonical(c.identity) && canonical(record.RepositoryIdentity) == canonical(rt.Repository.Identity) &&
-		canonical(record.RepositoryPath) == canonical(repositoryPath) && canonical(record.RunDir) == canonical(runDir) &&
-		record.Remote == c.Remote && record.Branch == c.Branch && record.Claimant == expectedClaimant(c) &&
-		record.ConfigDigest == rt.Service.ConfigDigest
-}
-
-func writeStopObservation(c Config, rt *Runtime, requestID string) error {
-	if rt == nil || rt.Service.StartupID != nil || rt.Service.ProcessIdentity == nil || !controlIDPattern.MatchString(requestID) {
-		return errors.New("stop observation requires a legacy v4 instance and an applied stop request")
-	}
-	path, err := stopObservationPath(c, rt.Service.InstanceID)
-	if err != nil {
-		return err
-	}
-	if err = os.MkdirAll(filepath.Dir(path), 0700); err != nil {
-		return err
-	}
-	if resolved, e := filepath.EvalSymlinks(filepath.Dir(path)); e != nil || canonical(resolved) != canonical(filepath.Dir(path)) {
-		if e != nil {
-			return e
-		}
-		return errors.New("service stop-record directory changed during publication")
-	}
-	repositoryPath, err := resolveRepositoryPath(context.Background(), c)
-	if err != nil {
-		return err
-	}
-	runDir, err := expectedRunDir(c)
-	if err != nil {
-		return err
-	}
-	record := StopObservationRecord{Version: 1, InstanceID: rt.Service.InstanceID, StopRequestID: requestID, ObservedAt: now(), RepositoryIdentity: rt.Repository.Identity, RepositoryPath: repositoryPath, RunDir: runDir, Remote: c.Remote, Branch: c.Branch, Claimant: rt.Service.Claimant, ConfigDigest: rt.Service.ConfigDigest, ProcessIdentity: rt.Service.ProcessIdentity}
-	b, err := json.MarshalIndent(record, "", "  ")
-	if err != nil {
-		return err
-	}
-	return AtomicWrite(path, append(b, '\n'))
-}
-
 func findLiveStartupAttempt(c Config) (*StartupRecord, ProcessProbe, string, error) {
 	root, err := resolveProspectivePath(filepath.Join(c.RunDir, "service", "startups"))
 	if err != nil {
@@ -492,15 +378,6 @@ func validateRecordForRuntime(c Config, rt *Runtime, record *StartupRecord, repo
 	return nil
 }
 
-func legacyServiceLocksHeld(c Config) bool {
-	repositoryLocked, err := probeLockFile(filepath.Join(c.identity, "steerline.lock"))
-	if err != nil || !repositoryLocked {
-		return false
-	}
-	runDirLocked, err := probeLockFile(filepath.Join(c.RunDir, "steerline.lock"))
-	return err == nil && runDirLocked
-}
-
 func ConnectService(ctx context.Context, c Config) ServiceConnection {
 	return connectServiceWithProbe(ctx, c, probeProcess)
 }
@@ -553,8 +430,7 @@ func connectServiceWithProbe(ctx context.Context, c Config, probe func(*ProcessI
 			recordTargetsRuntime = true
 		}
 	}
-	stopObserved := readStopObservation(c, rt, repositoryPath, runDir)
-	instanceBound := (rt.Service.StartupID != nil && recordTargetsRuntime) || (rt.Service.StartupID == nil && (connection.ConfigMatched || stopObserved))
+	instanceBound := (rt.Service.StartupID != nil && recordTargetsRuntime) || (rt.Service.StartupID == nil && connection.ConfigMatched)
 	if rt.Service.ProcessIdentity == nil || rt.Service.PID <= 0 || rt.Service.ProcessIdentity.PID != rt.Service.PID {
 		connection.Process = ProcessProbe{State: ProcessUnknown, Reason: "runtime has no internally consistent service process identity"}
 	} else {
@@ -588,13 +464,6 @@ func connectServiceWithProbe(ctx context.Context, c Config, probe func(*ProcessI
 		connection.Diagnostic = connection.Process.Reason
 		connection.CanStart = false
 		return connection
-	}
-	// PR 2 v4 runtimes did not publish startup records. If their config digest
-	// has since changed, require both service locks plus the matching OS process
-	// identity before allowing the explicit stop exception. This ties the live
-	// process to this run_dir without trusting a copied runtime file alone.
-	if !instanceBound && rt.Service.StartupID == nil && !connection.ConfigMatched && legacyServiceLocksHeld(c) {
-		instanceBound = true
 	}
 	if !instanceBound {
 		connection.State = ConnectionIdentityError
@@ -736,7 +605,7 @@ func windowsServiceWindowStart(ctx context.Context, c Config, absoluteConfig str
 	case ConnectionInitializing:
 		logPath, _ := startupLogPath(c.RunDir, connection.StartupID)
 		return ServiceStartResult{Status: "pending", StartupID: connection.StartupID, LogPath: logPath, Connection: connection, Error: connection.Diagnostic}, nil
-	case ConnectionStale, ConnectionUnknown, ConnectionIdentityError, ConnectionCorrupt, ConnectionLegacy, ConnectionIncompatible, ConnectionConfigChanged:
+	case ConnectionStale, ConnectionUnknown, ConnectionIdentityError, ConnectionCorrupt, ConnectionIncompatible, ConnectionConfigChanged:
 		return ServiceStartResult{}, fmt.Errorf("refusing to replace a service with uncertain or incompatible state: %s: %s", connection.State, connection.Diagnostic)
 	case ConnectionOffline, ConnectionNoRecord:
 		if !connection.CanStart {
@@ -882,7 +751,7 @@ func StartService(ctx context.Context, configPath string, opts StartServiceOptio
 		}
 		logPath, _ := startupLogPath(c.RunDir, connection.StartupID)
 		return waitForStartup(ctx, c, connection.StartupID, logPath, opts)
-	case ConnectionStale, ConnectionUnknown, ConnectionIdentityError, ConnectionCorrupt, ConnectionLegacy, ConnectionIncompatible, ConnectionConfigChanged:
+	case ConnectionStale, ConnectionUnknown, ConnectionIdentityError, ConnectionCorrupt, ConnectionIncompatible, ConnectionConfigChanged:
 		return ServiceStartResult{}, fmt.Errorf("refusing to start a replacement service: %s: %s", connection.State, connection.Diagnostic)
 	case ConnectionOffline, ConnectionNoRecord:
 		if !connection.CanStart {
@@ -1088,11 +957,6 @@ func StopService(ctx context.Context, c Config, requestedBy string, timeout time
 					result.Diagnostic = lockErr.Error()
 				}
 				if result.LocksReleased && result.Receipt != nil && result.Receipt.Status == "applied" {
-					if connection.Snapshot.Runtime.Service.StartupID == nil {
-						if recordErr := writeStopObservation(c, connection.Snapshot.Runtime, request.RequestID); recordErr != nil {
-							result.Diagnostic = "service stopped, but legacy instance identity could not be retained: " + recordErr.Error()
-						}
-					}
 					result.Status = "stopped"
 					return result, nil
 				}

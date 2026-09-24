@@ -660,32 +660,25 @@ func TestControlStopCancelsLongPreparationAndPublishesOnlyAfterStopped(t *testin
 	}
 }
 
-func TestRuntimeV1ToV4RejectedWithoutMigration(t *testing.T) {
+func TestServiceRejectsRuntimeV1ThroughV4WithoutDeletingThem(t *testing.T) {
 	for _, version := range []int{1, 2, 3, 4} {
 		t.Run(string(rune('0'+version)), func(t *testing.T) {
 			f := newFixture(t)
-			legacy := map[string]any{"schema_version": version, "repository": map[string]any{"path": f.c.Repository, "remote": f.c.Remote, "branch": f.c.Branch, "identity": f.c.identity}, "service": map[string]any{"status": "stopped", "claimant": f.c.Claimant}, "runs": []any{map[string]any{"task_id": "old-task", "title": "old task", "run_id": "0123456789abcdef0123456789abcdef", "claimant": f.c.Claimant, "beads_status": "in_progress", "execution_status": "succeeded", "finish_task_status": "waiting_pr_merge", "pr": map[string]any{"url": "https://gitea.example/owner/repo/pulls/42", "state": "open"}}}}
+			legacy := map[string]any{"schema_version": version, "repository": map[string]any{"path": f.c.Repository, "remote": f.c.Remote, "branch": f.c.Branch, "identity": f.c.identity}, "service": map[string]any{"status": "stopped", "claimant": f.c.Claimant}, "runs": []any{}}
 			b, err := json.Marshal(legacy)
 			require(t, err)
 			path := filepath.Join(f.c.RunDir, f.c.RuntimeFile)
 			require(t, os.WriteFile(path, b, 0600))
-			if _, err := LoadRuntime(path); err == nil || !strings.Contains(err.Error(), "unsupported runtime schema") {
-				t.Fatalf("old runtime was accepted: %v", err)
-			}
-			onDisk, err := os.ReadFile(path)
-			require(t, err)
-			var disk Runtime
-			require(t, json.Unmarshal(onDisk, &disk))
-			if disk.SchemaVersion != version {
-				t.Fatal("read-only load migrated the file")
-			}
-			if _, err := NewService(f.c); err == nil || !strings.Contains(err.Error(), "unsupported runtime schema") {
-				t.Fatalf("service accepted old runtime: %v", err)
+			if _, err = NewService(f.c); err == nil || !strings.Contains(err.Error(), "unsupported runtime schema") {
+				t.Fatalf("v%d was accepted: %v", version, err)
 			}
 			after, err := os.ReadFile(path)
 			require(t, err)
-			if !bytes.Equal(b, after) {
-				t.Fatal("old runtime changed during rejection")
+			if !bytes.Equal(after, b) {
+				t.Fatalf("v%d runtime was modified", version)
+			}
+			if _, err = os.Stat(filepath.Join(f.c.RunDir, "steerline.db")); !os.IsNotExist(err) {
+				t.Fatalf("v%d rejection created a database: %v", version, err)
 			}
 		})
 	}

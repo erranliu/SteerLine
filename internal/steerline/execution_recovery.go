@@ -3,8 +3,6 @@ package steerline
 import (
 	"fmt"
 	"os"
-	"path/filepath"
-	"strings"
 )
 
 func manuallyStopped(run *Run) bool {
@@ -98,26 +96,12 @@ func (s *Service) reconcileRunExecutionRecord(run *Run) error {
 // An older runtime projection cannot erase a sent reply or an uncertain stop.
 func (s *Service) reconcileAttemptOperations(run *Run, ref *ExecutionRef) error {
 	records := executionRecords{root: s.Config.RunDir}
-	dir := filepath.Dir(records.operationPath(run.RunID, run.AttemptID, attemptOperationID(run.RunID, run.AttemptID)))
-	entries, err := os.ReadDir(dir)
-	if os.IsNotExist(err) {
-		return nil
-	}
+	ops, err := records.attemptOperations(run.RunID, run.AttemptID)
 	if err != nil {
 		return err
 	}
-	for _, entry := range entries {
-		if strings.HasPrefix(entry.Name(), ".steerline-") && strings.HasSuffix(entry.Name(), ".tmp") && !entry.IsDir() {
-			continue // Incomplete atomic replacements are never operation authority.
-		}
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
-			return fmt.Errorf("invalid execution operation entry for run %s: %s", run.RunID, entry.Name())
-		}
-		id := strings.TrimSuffix(entry.Name(), ".json")
-		op, err := records.loadOperation(run.RunID, run.AttemptID, id)
-		if err != nil {
-			return fmt.Errorf("invalid execution operation for run %s: %w", run.RunID, err)
-		}
+	for _, op := range ops {
+		id := op.ID
 		if op.Action == "start" {
 			if id != attemptOperationID(run.RunID, run.AttemptID) {
 				return fmt.Errorf("run %s has a conflicting start operation", run.RunID)

@@ -16,13 +16,14 @@ import (
 )
 
 type PRInfo struct {
-	URL         string     `json:"url"`
-	Repository  string     `json:"repository"`
-	BaseBranch  string     `json:"base_branch"`
-	State       string     `json:"state"`
-	Merged      bool       `json:"merged"`
-	MergedAt    *time.Time `json:"merged_at"`
-	MergeCommit *string    `json:"merge_commit"`
+	URL          string     `json:"url"`
+	Repository   string     `json:"repository"`
+	BaseBranch   string     `json:"base_branch"`
+	HeadRevision string     `json:"head_revision,omitempty"`
+	State        string     `json:"state"`
+	Merged       bool       `json:"merged"`
+	MergedAt     *time.Time `json:"merged_at"`
+	MergeCommit  *string    `json:"merge_commit"`
 }
 type PRClient struct {
 	Config PRConfig
@@ -166,6 +167,9 @@ func (c *PRClient) Query(ctx context.Context, raw string) (PRInfo, error) {
 					FullName string `json:"full_name"`
 				} `json:"repo"`
 			} `json:"base"`
+			Head struct {
+				SHA string `json:"sha"`
+			} `json:"head"`
 		}
 		if e = c.get(ctx, fmt.Sprintf("repos/%s/pulls/%d", c.Config.Repository, n), &pr); e != nil {
 			return info, e
@@ -176,7 +180,7 @@ func (c *PRClient) Query(ctx context.Context, raw string) (PRInfo, error) {
 		if *pr.Merged && pr.State != "closed" {
 			return info, errors.New("inconsistent Gitea merged/open state")
 		}
-		info = PRInfo{URL: pr.URL, Repository: pr.Base.Repo.FullName, BaseBranch: pr.Base.Ref, State: pr.State, Merged: *pr.Merged, MergedAt: pr.MergedAt, MergeCommit: pr.MergeCommit}
+		info = PRInfo{URL: pr.URL, Repository: pr.Base.Repo.FullName, BaseBranch: pr.Base.Ref, HeadRevision: pr.Head.SHA, State: pr.State, Merged: *pr.Merged, MergedAt: pr.MergedAt, MergeCommit: pr.MergeCommit}
 		if info.Merged {
 			info.State = "merged"
 		} else if info.State == "closed" {

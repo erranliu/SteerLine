@@ -6,7 +6,10 @@
 
 | 字段 | 类型 | 含义 |
 | --- | --- | --- |
-| schema_version | integer | 当前仅接受 5；v1–v4 及未知版本明确拒绝，不迁移 |
+| schema_version | integer | 当前投影版本 5；只接受 v5。v1–v4 明确拒绝，不读取、不转换，也不删除原文件 |
+| revision | integer | SQLite 业务数据库 revision；投影落后时由 QueryService 查询数据库 |
+| tasks / workflow_runs / executions / attempts / decisions | arrays | 任务、流程、执行、尝试及决策的稳定 ID 关联读模型；旧 `runs` 保留为兼容展示摘要 |
+| projection_error | string | 最近一次可见读投影导出错误；SQLite 已提交状态不会因投影写失败回滚 |
 | updated_at | timestamp | 最近一次成功发布快照的时间，含心跳写入 |
 | heartbeat_at | timestamp | 最近成功发布的活跃时间；读者用于判断过期 |
 | service.instance_id | string | 每次启动新的随机实例 ID，不等于 claimant |
@@ -38,17 +41,17 @@
 
 | 字段 | 类型 | 含义 |
 | --- | --- | --- |
-| task_id / title | string | Beads 任务身份和领取时标题 |
+| task_id / title | string | 外部来源任务身份和领取时标题；`domain_task_id` 是本地稳定 Task 身份，`identity_map_digest` 记录采用的身份映射 |
 | run_id / claimant | string | 本次随机运行 ID / 固定领取者 |
 | attempt_id | string | 此运行当前日志代次；首次执行等于 run_id，后续 retry 使用新 ID |
 | control_revision | integer | 该运行最近一次操作相关状态变更的版本 |
-| host | string | `local` 或 `orca`；缺失时保留 unknown/blocked 并阻止该运行副作用 |
+| host | string | `local` 或 `orca`，与 backend/protocol 固定身份并存 |
 | completion | object/null | 派发时固定的 `{command:{executable,args},timeout}`；null 使用原生 close。重启按该记录继续，配置变更不能跳过旧运行的结项尾部 |
 | beads_context | object/null | 派发时的 beads_dir、project_id、database、backend；回调前再次核对。旧记录可能为 null，不包含认证信息 |
 | beads_status | string | 最近核实的 Beads 状态，不以本地预测替代 closed。这是过渡期的外部任务态镜像，见 [状态模型](state-model.md) |
 | execution_status | string | pending / running / succeeded / failed / unknown |
 | finish_task_status | string | pending / waiting_decision / waiting_pr_merge / completed / blocked |
-| decision | object/null | 仅 outcome=needs_decision 时存在：{id, request, status(pending/resuming/applied), option_id, note, answered_by, answered_at, applied_at, request_path, answer_path}。见 [decisions](decisions.md) |
+| decision | object/null | 当前问题和答案的展示摘要；权威版本与状态保存在 SQLite。主要状态为 pending、answer_saved、reply_accepted、applied。见 [decisions](decisions.md) |
 | codex_session_id | string/null | 从 thread.started.thread_id 得到，不从日志文字猜测 |
 | process | object/null | 宿主无关身份：kind（os/orca）、PID/Created/Executable（os）或 Terminal/RuntimeID/Incarnation（orca）；缺少 kind 的执行绑定拒绝使用 |
 | manual_stop | object/null | 人工停止确认：固定 attempt_id 与 confirmed_at；仅结算该 attempt 的资源不确定性，不改写原 Operation 的未知结果。retry 创建新 attempt 时清除 |
@@ -67,15 +70,13 @@
 
 execution_status=succeeded 仅表示进程正常退出，仍可能 finish_task_status=blocked（结果缺失/无效）、waiting_decision（等待人工决策）或 waiting_pr_merge。只有重新核实对应 PR 确实合入目标主线、配置的结项命令成功返回匹配回执（若有），且 Beads show 返回 closed，才写 completed。任务已 closed 但回调失败时仍 waiting_pr_merge，重启后重跑幂等回调。finish_task_status 不是“finish 技能函数是否返回”。
 
-PR 4A 使用 runtime v5 当前格式。新执行身份、能力检查和外部动作回执保存在 `execution/v1/`：binding 路径为 `bindings/<run_id>/<attempt_id>.json`，Operation 路径为 `operations/<run_id>/<attempt_id>/<operation_id>.json`，能力报告在 `capabilities/`，内容寻址的原生证据副本在 `evidence/`。binding 不可变；Operation ID 绑定固定负载摘要，同 ID 异负载拒绝。持锁 Service 写执行记录；停服后的 `certify-backend` 维护入口取得同一仓库/run_dir 锁后才能导入能力报告。runtime 保留业务权威与执行投影；未知或矛盾状态保留槽位，不自动重发副作用。
+PR 4A 的执行后端复用 Spec 02 的 SQLite 权威存储：`execution_bindings` 保存不可变 ExecutionRef，`execution_operations` 保存后端动作的固定输入摘要和回执，与领域 `operations` 一起保存在 `steerline.db`。`execution/v1/` 只保留 `capabilities/` 能力报告及 `evidence/` 原生证据副本；不再读取文件式 binding/Operation。检测到旧文件式执行状态时拒绝启动并保留现场。持锁 Service 写执行记录，停服后的 `certify-backend` 取得同一仓库/run_dir 锁后维护能力报告。runtime v5 是数据库投影；未知或矛盾状态保留槽位，不自动重发副作用。
 
 能力报告的 `platform_version` 固定平台 CLI 版本。Orca 使用本地 Codex CLI 覆盖启动时，还保存 `agent_version` 并纳入报告键和证据校验；原生 agent 模式的报告不能复用到该路径。
 
 准备 worktree 时 execution_status=pending；创建或接入检查失败为 failed/blocked；遗留 pending/running 为 unknown/blocked。重启只核对目录、共享 Git 元数据、分支和起点祖先关系，不重建、不重跑。实际工作目录等字段只在创建及技能/Beads 核验全部通过后写入；创建后检查失败时，目录可能已存在，应查看 workspace_intent 和 error。
 
-缺少当前执行绑定、调度器准备记录或身份不完整的运行不能通过 accept-result 补造工作区事实，需保留原状态并人工核对；程序不生成虚构的准备证据。
-
-local 启动在创建进程前明确失败时没有进程绑定。受限 retry 可使用同一 attempt 已持久化的 rejected start Operation 与 workspace_intent，重新检查 Git 工作区、干净 HEAD/base 和领取；不能用这个路径重试 in_flight/outcome_unknown。回复 Operation 的负载摘要同时固定 continuation 文件路径和完整答案内容，回执中的输入接受与 turn_started 分别记录，均不等同于应用证明。
+v5 中未带 workspace 准备证据的 Run 不能通过 accept-result 冒充已核验的运行；需要人工处理，并保留原有外部任务和执行证据。
 
 PR 查询失败会清除 state 的可信结论并写 unknown，但保留过去读到的合并字段用于诊断；读者必须同时看 state、queried_at 和 query_error。程序不会仅凭缓存的 merged_at 关闭任务。
 
@@ -113,11 +114,23 @@ runtime 中的 `control.operation` 先于副作用保存；完成时把业务结
 
 持锁服务在每个 task tick 发布 `tasks.json`，版本为 1，包含服务 instance、repository identity、查询时间、最近成功时间、错误、阻塞原因及候选列表。候选来自 Beads ready，排除不支持类型、aggregate 和已有本地 run；候选只用于展示，不作为授权或 claim 保证。provider 查询失败保留旧列表并记录错误，定向启动总会重新读取并核验 provider。CLI `steerline tasks` 只读取当前实例快照。
 
-## runtime 版本拒绝
+## runtime 版本守卫
 
-读取 v1–v4 时明确返回不支持，不改写文件。当前格式缺少 attempt_id、host 或固定执行身份时拒绝副作用，不从配置或日志路径补造。停服并核实执行身份后才能更换状态目录；不能用旧快照覆盖已经产生外部动作的当前状态。
+新服务只从 当前 SQLite 数据库恢复，并将 `runtime.json` v5 用作可重建观察投影。v1–v4 文件保持原样，`LoadRuntime` 和服务启动均返回 `unsupported runtime schema`；不会尝试从这些文件恢复、迁移或清理数据。v5 投影缺少 SQLite 数据库时也会拒绝恢复。已有规划数字 ID 的新任务通过 `run_dir/task-identity-map.json` 中经过项目、来源三元组和一对一校验的 `task-identity-map/v1` 映射取得稳定身份；不能按标题猜测。未映射的 Beads 任务使用不占数字规划号的 `legacy:<hash>` 身份。
 
 ## 执行结果
+
+### minimal-v1 步骤结果
+
+`project_steps.verify` 必须是带 `required_checks` 的确定性 command provider。命令从 stdin 读取版本化输入，通过 stdout 返回唯一 JSON 回执；检查失败可作为结构化检查结果返回，包装程序退出 0 表示回执完整，非零退出按步骤基础设施失败处理。步骤入口必须是固定 base 提交中的普通文件。内置 agent 入口只提供 implement/review 提示，publish_pr 须显式配置项目入口或命令。
+
+WorkflowRun 保存步骤定义及 Codex executable/args、sandbox、model、reasoning_effort、profile。配置变更不改变已创建流程的执行参数。输入包含工作区证据、前置结果 ID 和正文，修复步骤能够读取实际失败检查或审查结果。
+
+步骤回执包含 schema_version、project_identity、task_id、workflow_run_id、execution_id、attempt_id 与 result。中心逐项核验身份、输入 revision、真实 Git common-dir/分支/base、前置结果和步骤门槛。无效结果将尝试记为 failed；通过门槛后才提交 succeeded 与下一步意图。publish_pr 的前置验证/审查在启动发布器之前检查，PR head 在关闭外部任务之前核验。
+
+决策续跑的结果必须返回 `result.applied_decision_id`；后端接受输入只算 reply_accepted。单段 accept-result/retry/mark-stopped 入口不能用于 minimal-v1；不确定步骤必须按原尝试和 Operation 对账。
+
+### 单次入口结果
 
 八个基础键都必须出现，不允许额外键：task_id、run_id、outcome、pr_url、worktree_path、base_commit、summary、error；此外 `decision` 是可选键（仅 outcome=needs_decision 时使用）。
 
@@ -140,6 +153,6 @@ completion-request.json 与 completion-result.json 是每次运行目录下的�
 
 ## 历史与读取规则
 
-运行记录不自动删除；日志保留策略见 README。外部读取器只能读 runtime，不写回；不能把这个文件当作队列或任务数据库。整个快照原子替换，不支持增量读取半个文件。
+运行记录不自动删除。外部读取器不写回 runtime；查询与答案从当前数据库读取，runtime 导出损坏或失败可以重建。SQLite 同时限制每个 Task 的活动 WorkflowRun、每个 WorkflowRun 的活动 Execution，以及同一 Execution 的活动 StepAttempt。缺少这些当前约束的数据库明确拒绝，不自动升级。
 
 Windows 打开文件时建议允许 FILE_SHARE_DELETE；无法控制的读取库应重试短暂共享冲突。过期 heartbeat 意味着服务/磁盘可能异常，须显示状态过期，不能把最后一次 running 当成当前事实。重大版本改变通过 schema_version 区分。

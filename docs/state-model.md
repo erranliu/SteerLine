@@ -14,16 +14,16 @@
 
 服务还有独立的控制轴 `control.dispatch_mode`（manual/auto）、`dispatch_paused` 和 `revision`。它们控制将来是否领取新任务，不改变执行、交付或 Beads 认领事实。`control.operation` 和 `control.blockers` 是控制协议的持久检查点/不确定副作用保留，不是任务队列；服务是 runtime 的唯一写者，CLI 仅提交文件请求并读取回执。
 
-PR 4A 增加独立的 `execution/v1/` 版本化记录：`ExecutionRef` 固定 backend/protocol/target/agent/workspace 和外部身份，`Operation` 固定动作负载摘要及 pending/in_flight/accepted/confirmed/rejected/outcome_unknown 结果。运行身份在 runtime v5 的 `Run` 投影中，绑定文件必须与它的 PID/创建身份或 Orca runtime/terminal/incarnation 一致；未知、损坏或冲突记录阻止有副作用的恢复。配置摘要改变不会重路由历史记录。
+PR 4A 的 `ExecutionRef` 和后端 `Operation` 纳入同一个 `steerline.db`：ExecutionRef 固定 backend/protocol/target/agent/workspace 和外部身份，Operation 固定动作负载摘要及 pending/in_flight/accepted/confirmed/rejected/outcome_unknown 结果。运行身份在 runtime v5 的 `Run` 投影中，数据库绑定必须与它的 PID/创建身份或 Orca runtime/terminal/incarnation 一致；未知、损坏或冲突记录阻止有副作用的恢复。配置摘要改变不会重路由历史记录。`execution/v1/` 仅保存能力报告和原生证据，不作为执行状态恢复源。
 
 **关键**：`execution_status=running`（进程在跑）与 Beads `IN_PROGRESS`（任务被认领）是两件不同的事，同时成立是正常的，不是冲突。查看器里的 `RUN`/`BLOCK`/`DECIDE`/`MERGE`/`DONE` 徽标取的是 SteerLine 的**执行/交付**轴，**不是** Beads 状态。
 
 ## 权威归属
 
-- **执行态与交付态**：SteerLine 唯一权威（`runtime.json`）。
+- **执行态与交付态**：SteerLine 唯一权威（`run_dir/steerline.db`）；`runtime.json` v5 是可重建的观察投影。v1–v4 runtime 不兼容，服务拒绝恢复且保留原文件。
 - **任务认领与关闭**：当前由 Beads 权威；SteerLine 通过 `bd claim` / `bd close` **写入**，并在完成后以 `bd show` 回读核实（不以本地预测替代 `closed`）。
 - **PR 合并**：外部平台权威；SteerLine 查询核实后才推进交付态。
-- **派发控制**：当前 runtime v5 的服务主状态机权威。manual 不自动 claim；pause 只挡新派发；停止服务与关闭查看器分开。控制请求的 `applied` 只说明指令完成，不代替 run 的执行或交付状态。
+- **派发控制**：SQLite 中的服务状态与控制检查点权威。manual 不自动 claim；pause 只挡新派发；停止服务与关闭查看器分开。控制请求的 `applied` 只说明指令完成，不代替 run 的执行或交付状态。
 
 ## 生命周期（一次运行）
 
@@ -89,7 +89,7 @@ PR 已合并 + 结项命令 + bd close:  finish=completed   beads=closed
 
 Windows 服务窗口没有另外的服务启动父进程；窗口中的服务在 preflight 前发布自己的身份，之后独占 `startup.json` 生命周期记录。Linux 独立启动路径的父进程仍将 OS 身份写入 v1 `process.json`，不能覆盖子进程已发布的 `started` 或 `failed`。客户端确认进程已退出时可将未确认的启动标记为失败；损坏或多个仍存活的启动记录会阻止新的启动。
 
-runtime v1–v4 快照不由当前客户端或服务读取。停服并核实旧执行身份后，才能为当前格式使用新的状态目录；旧快照不自动转成 v5。
+服务连接只接受 runtime v5。控制协议仍独立使用 v1；不兼容 runtime 版本不能提交控制请求，也不会因进程探测或旧停服记录而升级为受支持状态。
 
 连接读取 runtime 快照、新鲜度、进程探测、配置摘要和控制协议能力，并单独呈现。进程探测区分匹配、确定不存在、PID 已复用和无法核验；权限不足及身份不明不等于离线。过期 heartbeat、ready=false 和协议不兼容均保留旧实例，不自动另起服务。配置摘要变化时保留观察与显式停服能力，并禁用其他控制动作。控制台退出、连接断开和等待超时都不会停止服务。
 

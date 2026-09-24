@@ -37,6 +37,6 @@ fetch 或源 Beads context 失败时没有任务被领取，后续轮询可重�
 
 等待 PR 时保留 worktree，释放执行槽供其他独立任务使用。完成后本阶段也不自动删除目录、分支或基线引用；清理应停机后人工确认无未完成任务、无未保存改动，再使用 Git worktree 管理命令处理。不要把整个 worktree_root 当作普通日志目录批量删除。
 
-运行快照写 schema_version=3，可读 v1/v2/v3 历史快照并继续查询（v1/v2 视为 local）。旧格式没有调度器准备证据的运行不会被当作新版已核验 worktree，具体字段与兼容边界见 [数据契约](data-contract.md)。
+运行观察投影写 schema_version=5。v1–v4 快照不兼容，读取器拒绝且保持原文件不变；执行状态从 `run_dir/steerline.db` 恢复。具体字段见 [数据契约](data-contract.md)。
 
 共享 Beads 的定位使用其公开环境变量接口：[Beads worktree 共享数据库说明](https://github.com/gastownhall/beads/discussions/1233)。启动仍以本机 `bd context --json` 的实际返回值和两端身份比较为准。

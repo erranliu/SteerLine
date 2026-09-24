@@ -9,15 +9,52 @@
   "git": {"executable": "git.exe", "args": []},
   "bd": {"executable": "bd.exe", "args": []},
   "codex": {"executable": "C:/Tools/codex/codex.exe", "args": []},
-  "start_skill": {
-    "path": ".agents/skills/steerline-start/SKILL.md",
-    "invocation": "Read and execute the configured start entry with the supplied dispatch context."
+  "workflow_definition": {
+    "id": "minimal-v1",
+    "version": "minimal-v1",
+    "review_required": true,
+    "max_repair_rounds": 2
   },
-  "finish_skill": {
-    "path": ".agents/skills/steerline-finish/SKILL.md",
-    "invocation": "Read and execute the configured finish entry, stopping after PR publication."
+  "project_steps": {
+    "implement": {
+      "provider": "agent_skill",
+      "entry": "builtin:implement",
+      "version": "minimal-v1",
+      "input_schema": "steerline/minimal-step-input/v1",
+      "output_schema": "steerline/minimal-step-result/v1",
+      "execution_site": "local",
+      "timeout": "30m"
+    },
+    "verify": {
+      "provider": "command",
+      "entry": "scripts/steerline-verify.py",
+      "command": ["python.exe", "scripts/steerline-verify.py"],
+      "version": "minimal-v1",
+      "input_schema": "steerline/minimal-step-input/v1",
+      "output_schema": "steerline/minimal-step-result/v1",
+      "execution_site": "local",
+      "timeout": "15m",
+      "required_checks": ["unit", "lint"]
+    },
+    "review": {
+      "provider": "agent_skill",
+      "entry": "builtin:review",
+      "version": "minimal-v1",
+      "input_schema": "steerline/minimal-step-input/v1",
+      "output_schema": "steerline/minimal-step-result/v1",
+      "execution_site": "local",
+      "timeout": "15m"
+    },
+    "publish_pr": {
+      "provider": "agent_skill",
+      "entry": ".agents/skills/steerline-publish-pr/SKILL.md",
+      "version": "minimal-v1",
+      "input_schema": "steerline/minimal-step-input/v1",
+      "output_schema": "steerline/minimal-step-result/v1",
+      "execution_site": "local",
+      "timeout": "15m"
+    }
   },
-  "workflow": "Follow the established repository workflow between these two entries.",
   "executable_types": ["task", "bug", "feature", "chore"],
   "task_poll": "10s",
   "pr_poll": "30s",
@@ -29,16 +66,8 @@
   "reasoning_effort": "",
   "profile": "",
   "agent": "codex",
-  "host": "orca",
+  "host": "local",
   "stall_timeout": "5m",
-  "orca": {
-    "executable": "orca",
-    "args": [],
-    "shell": "cmd.exe",
-    "wait_timeout": "15m",
-    "keep_terminal": false,
-    "activate": false
-  },
   "completion": null,
   "pr": {
     "kind": "gitea",

@@ -100,7 +100,7 @@ func TestFreeTextDecisionRequiresNote(t *testing.T) {
 	}
 }
 
-func TestAnswerDecisionFindsRunByTask(t *testing.T) {
+func TestAnswerDecisionRejectsV3RuntimeWithoutMutatingIt(t *testing.T) {
 	dir := t.TempDir()
 	run := decisionRun(t)
 	st, e := WriteDecisionRequest(run, DecisionRequest{Question: "q", Options: []DecisionOption{{ID: "a", Label: "A"}}})
@@ -108,7 +108,7 @@ func TestAnswerDecisionFindsRunByTask(t *testing.T) {
 		t.Fatal(e)
 	}
 	run.Decision = st
-	b, e := json.Marshal(&Runtime{SchemaVersion: CurrentRuntimeSchema, Runs: []*Run{run}})
+	b, e := json.Marshal(&Runtime{SchemaVersion: 3, Runs: []*Run{run}})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -116,12 +116,14 @@ func TestAnswerDecisionFindsRunByTask(t *testing.T) {
 		t.Fatal(e)
 	}
 	c := Config{RunDir: dir, RuntimeFile: "runtime.json"}
-	if e := AnswerDecision(c, AnswerOptions{RunID: run.TaskID, Option: "a", By: "bob"}); e != nil {
-		t.Fatal(e)
+	if e := AnswerDecision(c, AnswerOptions{RunID: run.TaskID, Option: "a", By: "bob"}); e == nil || !strings.Contains(e.Error(), "unsupported runtime schema 3") {
+		t.Fatalf("v3 answer was accepted: %v", e)
 	}
-	a, e := ReadDecisionAnswer(run)
-	if e != nil || a.OptionID != "a" || a.AnsweredBy != "bob" {
-		t.Fatalf("answer not applied: %+v %v", a, e)
+	if _, e = os.Stat(run.Decision.AnswerPath); !os.IsNotExist(e) {
+		t.Fatalf("rejected old runtime was mutated: %v", e)
+	}
+	if _, e = LoadRuntime(filepath.Join(dir, "runtime.json")); e == nil {
+		t.Fatal("v3 runtime was readable")
 	}
 }
 
@@ -163,15 +165,13 @@ func TestOrcaDecisionResumesRun(t *testing.T) {
 		t.Fatalf("decision run must not bind a PR: %v", *run.PR.URL)
 	}
 
-	// Answering pauses nothing else: the answer file is the only write.
-	if e := WriteAnswer(run, DecisionAnswer{OptionID: "a", Note: "keep compat", AnsweredBy: "tester"}); e != nil {
-		t.Fatal(e)
-	}
+	_, _, e = (CommandService{Store: s.domainStore, Project: s.Config.identity}).AnswerDecision(ctx, run.Decision.ID, run.Decision.Version, "orca-answer", "tester", mustJSON(DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, OptionID: "a", Note: "keep compat", AnsweredBy: "tester"}))
+	require(t, e)
 	if run.Decision.Status != "pending" {
 		t.Fatalf("answer must not mutate run state: %s", run.Decision.Status)
 	}
-	require(t, s.applyDecisions(ctx))
-	if run.Decision.Status != "applied" {
+	require(t, s.processCommandsAndDecisions(ctx))
+	if run.Decision.Status != "reply_accepted" {
 		t.Fatalf("decision not applied: %+v", run.Decision)
 	}
 	if s.worker == nil {
@@ -185,7 +185,7 @@ func TestOrcaDecisionResumesRun(t *testing.T) {
 	}
 	act, e := os.ReadFile(filepath.Join(f.c.RunDir, "runs", run.RunID, "activity.jsonl"))
 	require(t, e)
-	for _, want := range []string{"decision", "answered", "applied", "pr submitted"} {
+	for _, want := range []string{"decision", "answered", "reply_accepted", "pr submitted"} {
 		if !strings.Contains(string(act), want) {
 			t.Fatalf("activity journal missing %q: %s", want, act)
 		}
@@ -216,9 +216,10 @@ func TestOrcaLostReplyReceiptKeepsOriginalExecutionUnknown(t *testing.T) {
 	}
 	before, err := readFakeOrcaState(stateDir, run.Process.Terminal)
 	require(t, err)
-	require(t, WriteAnswer(run, DecisionAnswer{OptionID: "a", Note: "fixed answer", AnsweredBy: "tester"}))
+	_, _, err = (CommandService{Store: s.domainStore, Project: s.Config.identity}).AnswerDecision(ctx, run.Decision.ID, run.Decision.Version, "lost-reply-answer", "tester", mustJSON(DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, OptionID: "a", Note: "fixed answer", AnsweredBy: "tester"}))
+	require(t, err)
 	t.Setenv("STEERLINE_FAKE_ORCA_SEND_RESPONSE_LOST", "1")
-	require(t, s.applyDecisions(ctx))
+	require(t, s.processCommandsAndDecisions(ctx))
 	if run.ExecutionStatus != "unknown" || run.FinishTaskStatus != "blocked" || !s.State.SlotOccupied {
 		t.Fatalf("lost reply response released original execution: %+v slot=%v", run, s.State.SlotOccupied)
 	}

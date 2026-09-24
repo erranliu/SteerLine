@@ -109,12 +109,16 @@ func fakeOrca(stateDir string, argv []string) int {
 				}
 			}
 			if path := os.Getenv("STEERLINE_FAKE_ORCA_BREAK_STOP_RECEIPT"); path != "" {
-				if err = os.Remove(path); err != nil {
-					return fakeOrcaErr("receipt_fault", err.Error())
+				db, err := OpenSQLiteStore(filepath.Join(filepath.Dir(path), "steerline.db"))
+				if err != nil {
+					return 2
 				}
-				if err = os.Mkdir(path, 0700); err != nil {
-					return fakeOrcaErr("receipt_fault", err.Error())
+				_, err = db.db.Exec(`CREATE TRIGGER reject_stop_receipt BEFORE UPDATE ON execution_operations BEGIN SELECT RAISE(ABORT, 'injected receipt persistence failure'); END`)
+				db.Close()
+				if err != nil {
+					return 2
 				}
+				_ = os.Mkdir(path, 0700)
 			}
 			return fakeOrcaOK(map[string]any{"close": map[string]any{"handle": st.Handle, "ptyKilled": st.Closed}})
 		}
@@ -657,7 +661,7 @@ func TestServiceShutdownRetainsSlotWhenExactStopReceiptCannotPersist(t *testing.
 	go func() { <-ctx.Done(); close(w.Events); w.Done <- ctx.Err() }()
 	r := &Run{TaskID: "t-stop-receipt-fault", RunID: runID, AttemptID: attemptID, Claimant: cfg.Claimant, Host: "orca", ExecutionStatus: "running", FinishTaskStatus: "pending", Process: &identity, LogPath: ptr(filepath.Join(dir, "events.jsonl"))}
 	s := &Service{Config: cfg, State: Runtime{SchemaVersion: CurrentRuntimeSchema, Runs: []*Run{r}, SlotOccupied: true, CurrentTask: ptr(r.TaskID)}, store: &Store{Path: filepath.Join(dir, "runtime.json")}, worker: w, active: r, activities: map[string]*ActivityWriter{}}
-	operationPath := records.operationPath(runID, attemptID, "stop-"+attemptID)
+	operationPath := filepath.Join(dir, "stop-receipt-fault-injected")
 	t.Setenv("STEERLINE_FAKE_ORCA_BREAK_STOP_RECEIPT", operationPath)
 	s.shutdown()
 	if !s.State.SlotOccupied || r.ExecutionStatus != "unknown" || r.FinishTaskStatus != "blocked" {

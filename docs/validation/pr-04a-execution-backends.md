@@ -35,7 +35,7 @@
 
 ## 本轮命令结果
 
-后续质量审计发现并修复：Orca 非 live 终端仍可续跑、发送回执缺少身份/accepted 校验、答案摘要未包含文件内容、结果监督绕过 incarnation 检查、观察结束误释放槽位、重启忽略 stop/reply 记录，以及未启动进程的 local 准备失败无法 retry。人工停止确认现绑定原 attempt，重启不会重新施加已人工结算的资源占用，也不伪造平台 Operation 成功；原生 Orca 与 Codex 覆盖启动的能力证据已隔离。新增 `execution_audit_test.go` 对以上路径逐项复现，详见 [质量审计记录](pr-04a-quality-audit.md)。
+后续质量审计发现并修复：Orca 非 live 终端仍可续跑、发送回执缺少身份/accepted 校验、答案摘要未包含文件内容、结果监督绕过 incarnation 检查、观察结束误释放槽位、重启忽略 stop/reply 记录，以及未启动进程的 local 准备失败无法 retry。人工停止确认现绑定原 attempt，重启不会重新施加已人工结算的资源占用，也不伪造平台 Operation 成功；原生 Orca 与 Codex 覆盖启动的能力证据已隔离。新增 `backend_audit_test.go` 对以上路径逐项复现，详见 [质量审计记录](pr-04a-quality-audit.md)。
 
 审计后的真实 Orca Service 复验见 [回执与工作区核验后的原生证据](pr-04a-orca-service-audit-2026-09-24.json)。
 
@@ -48,3 +48,7 @@
 - Windows 原生 local 验收在 v5 代码上重新运行真实 `codex-cli 0.156.1`；真实服务窗口分别通过 Ctrl+C、控制 stop 和关窗场景。Orca `1.4.209` 经 Service 创建独立测试 worktree 与 Codex agent，读取原始输出并以精确 terminal 停止回执收尾。证据文件不保存认证信息。
 
 当前 B-A1～B-A10 的 Windows 与公共契约证据齐备。`SettleResources` 的资源释放能力明确 unsupported，工作区和产物默认保留；没有平台请求查询能力的在途动作继续保持 unknown。Linux 不在 4A 验收内；race 检查按 Plan 记录工具链阻塞。
+
+## Spec 02 衔接
+
+PR #26 复用上述具体后端，执行 binding/Operation 已改为同一 SQLite 数据库中的记录。本文原生证据记录 PR 4A 当时的验证结果；当前存储格式与恢复规则以 [数据契约](../data-contract.md) 为准。旧文件式执行记录不导入，检测到时保留现场并拒绝有副作用的启动。

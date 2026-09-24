@@ -27,40 +27,42 @@ type Skill struct {
 	Invocation string `json:"invocation"`
 }
 type Config struct {
-	Repository      string            `json:"repository"`
-	Remote          string            `json:"remote"`
-	Branch          string            `json:"branch"`
-	RunDir          string            `json:"run_dir"`
-	WorktreeRoot    string            `json:"worktree_root"`
-	RuntimeFile     string            `json:"runtime_file"`
-	Claimant        string            `json:"claimant"`
-	BD              Command           `json:"bd"`
-	Git             Command           `json:"git"`
-	Codex           Command           `json:"codex"`
-	StartSkill      Skill             `json:"start_skill"`
-	FinishSkill     Skill             `json:"finish_skill"`
-	Workflow        string            `json:"workflow"`
-	ExecutableTypes []string          `json:"executable_types"`
-	TaskPoll        string            `json:"task_poll"`
-	PRPoll          string            `json:"pr_poll"`
-	Heartbeat       string            `json:"heartbeat"`
-	CommandTimeout  string            `json:"command_timeout"`
-	ShutdownGrace   string            `json:"shutdown_grace"`
-	Model           string            `json:"model"`
-	ReasoningEffort string            `json:"reasoning_effort"`
-	Sandbox         string            `json:"sandbox"`
-	Profile         string            `json:"profile"`
-	Agent           string            `json:"agent"`
-	Host            string            `json:"host"`
-	StallTimeout    string            `json:"stall_timeout"`
-	Orca            OrcaConfig        `json:"orca"`
-	PR              PRConfig          `json:"pr"`
-	Completion      *CompletionConfig `json:"completion"`
-	identity        string
-	startText       string
-	finishText      string
-	workerEnv       map[string]string
-	configDigest    string
+	Repository         string              `json:"repository"`
+	Remote             string              `json:"remote"`
+	Branch             string              `json:"branch"`
+	RunDir             string              `json:"run_dir"`
+	WorktreeRoot       string              `json:"worktree_root"`
+	RuntimeFile        string              `json:"runtime_file"`
+	Claimant           string              `json:"claimant"`
+	BD                 Command             `json:"bd"`
+	Git                Command             `json:"git"`
+	Codex              Command             `json:"codex"`
+	StartSkill         Skill               `json:"start_skill"`
+	FinishSkill        Skill               `json:"finish_skill"`
+	Workflow           string              `json:"workflow"`
+	WorkflowDefinition *WorkflowDefinition `json:"workflow_definition,omitempty"`
+	ProjectSteps       *ProjectSteps       `json:"project_steps,omitempty"`
+	ExecutableTypes    []string            `json:"executable_types"`
+	TaskPoll           string              `json:"task_poll"`
+	PRPoll             string              `json:"pr_poll"`
+	Heartbeat          string              `json:"heartbeat"`
+	CommandTimeout     string              `json:"command_timeout"`
+	ShutdownGrace      string              `json:"shutdown_grace"`
+	Model              string              `json:"model"`
+	ReasoningEffort    string              `json:"reasoning_effort"`
+	Sandbox            string              `json:"sandbox"`
+	Profile            string              `json:"profile"`
+	Agent              string              `json:"agent"`
+	Host               string              `json:"host"`
+	StallTimeout       string              `json:"stall_timeout"`
+	Orca               OrcaConfig          `json:"orca"`
+	PR                 PRConfig            `json:"pr"`
+	Completion         *CompletionConfig   `json:"completion"`
+	identity           string
+	startText          string
+	finishText         string
+	workerEnv          map[string]string
+	configDigest       string
 }
 
 type OrcaConfig struct {
@@ -227,6 +229,13 @@ func LoadConfig(path string) (Config, error) {
 	if err = decode(b, &c); err != nil {
 		return c, err
 	}
+	var configFields map[string]json.RawMessage
+	_ = json.Unmarshal(b, &configFields)
+	if c.WorkflowDefinition != nil {
+		if _, explicit := configFields["host"]; !explicit {
+			c.Host = "local"
+		}
+	}
 	if c.hostName() == "local" && c.agentName() == "codex" && c.ReasoningEffort == "" {
 		c.ReasoningEffort = "high"
 	}
@@ -250,14 +259,17 @@ func LoadConfig(path string) (Config, error) {
 	} else if !filepath.IsAbs(c.RunDir) {
 		c.RunDir = filepath.Join(base, c.RunDir)
 	}
+	if filepath.Base(c.RuntimeFile) != c.RuntimeFile || c.RuntimeFile == "." {
+		return c, errors.New("runtime_file must be a filename inside run_dir")
+	}
+	if err = preflightExistingState(c.RunDir, c.RuntimeFile); err != nil {
+		return c, err
+	}
 	if c.WorktreeRoot == "" {
 		c.WorktreeRoot = filepath.Join(c.RunDir, "worktrees")
 	}
 	if !filepath.IsAbs(c.WorktreeRoot) {
 		c.WorktreeRoot = filepath.Join(base, c.WorktreeRoot)
-	}
-	if filepath.Base(c.RuntimeFile) != c.RuntimeFile || c.RuntimeFile == "." {
-		return c, errors.New("runtime_file must be a filename inside run_dir")
 	}
 	for _, v := range []string{c.TaskPoll, c.PRPoll, c.Heartbeat, c.CommandTimeout, c.ShutdownGrace} {
 		d, e := time.ParseDuration(v)
@@ -306,7 +318,57 @@ func LoadConfig(path string) (Config, error) {
 			return c, fmt.Errorf("invalid executable type %q", s)
 		}
 	}
+	if err = validateWorkflowConfig(&c, b); err != nil {
+		return c, err
+	}
 	return c, nil
+}
+
+func validateWorkflowConfig(c *Config, raw []byte) error {
+	if c.WorkflowDefinition == nil && c.ProjectSteps == nil {
+		return nil
+	}
+	if c.WorkflowDefinition == nil || c.ProjectSteps == nil {
+		return errors.New("workflow_definition and project_steps must be configured together")
+	}
+	var root map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &root); err != nil {
+		return err
+	}
+	var definition map[string]json.RawMessage
+	if err := json.Unmarshal(root["workflow_definition"], &definition); err != nil {
+		return errors.New("workflow_definition must be an object")
+	}
+	if _, ok := definition["review_required"]; !ok {
+		return errors.New("workflow_definition.review_required must be fixed explicitly before dispatch")
+	}
+	if _, ok := definition["max_repair_rounds"]; !ok {
+		c.WorkflowDefinition.MaxRepairRounds = 2
+	}
+	config := MinimalWorkflowConfig{Definition: *c.WorkflowDefinition, Steps: *c.ProjectSteps}
+	if err := config.Validate(); err != nil {
+		return err
+	}
+	for name, contract := range map[string]StepContract{"implement": config.Steps.Implement, "verify": config.Steps.Verify, "review": config.Steps.Review, "publish_pr": config.Steps.PublishPR} {
+		if !config.Definition.ReviewRequired && name == "review" {
+			continue
+		}
+		if strings.HasPrefix(contract.Entry, "builtin:") {
+			continue
+		}
+		entry := filepath.Clean(filepath.Join(c.Repository, filepath.FromSlash(contract.Entry)))
+		if !inside(c.Repository, entry) {
+			return fmt.Errorf("%s entry escapes the repository", name)
+		}
+		info, err := os.Stat(entry)
+		if err != nil {
+			return fmt.Errorf("%s entry %q: %w", name, contract.Entry, err)
+		}
+		if info.IsDir() {
+			return fmt.Errorf("%s entry must be a file", name)
+		}
+	}
+	return nil
 }
 func duration(s string) time.Duration { d, _ := time.ParseDuration(s); return d }
 func (c Config) Identity() string     { return c.identity }
@@ -355,7 +417,7 @@ func (c Config) agentName() string {
 	return c.Agent
 }
 func (c Config) needsCodexExecutable() bool {
-	return c.hostName() == "local" || c.hostName() == "orca" && c.agentName() == "codex" && (c.Model != "" || c.ReasoningEffort != "" || c.Profile != "")
+	return c.requiresLocalCodex() || c.hostName() == "orca" && c.agentName() == "codex" && (c.Model != "" || c.ReasoningEffort != "" || c.Profile != "")
 }
 func resolveCommand(c *Command) error {
 	p, e := exec.LookPath(c.Executable)
@@ -370,6 +432,11 @@ func resolveCommand(c *Command) error {
 	return nil
 }
 func (c *Config) Preflight(ctx context.Context, checkSkills bool) error {
+	if c.RuntimeFile != "" {
+		if err := preflightExistingState(c.RunDir, c.RuntimeFile); err != nil {
+			return err
+		}
+	}
 	if c.hostName() == "local" && c.agentName() != "codex" {
 		return errors.New("local_process currently supports only agent=codex")
 	}
@@ -502,8 +569,16 @@ func (c *Config) Preflight(ctx context.Context, checkSkills bool) error {
 	if !checkSkills {
 		return nil
 	}
-	if e = c.validateSkills(); e != nil {
-		return e
+	if workflow, workflowErr := c.minimalConfig(); workflowErr != nil {
+		return workflowErr
+	} else if workflow != nil {
+		if e = c.validateMinimalPreflight(*workflow); e != nil {
+			return e
+		}
+	} else {
+		if e = c.validateSkills(); e != nil {
+			return e
+		}
 	}
 	if c.PR.Kind == "gitea" {
 		if e = (&PRClient{Config: c.PR, Runner: r}).Check(ctx); e != nil {
@@ -511,6 +586,25 @@ func (c *Config) Preflight(ctx context.Context, checkSkills bool) error {
 		}
 	}
 	return nil
+}
+
+func (c Config) requiresLocalCodex() bool {
+	if c.hostName() != "local" {
+		return false
+	}
+	if c.ProjectSteps == nil || c.WorkflowDefinition == nil {
+		return true
+	}
+	steps := []StepContract{c.ProjectSteps.Implement, c.ProjectSteps.Verify, c.ProjectSteps.PublishPR}
+	if c.WorkflowDefinition.ReviewRequired {
+		steps = append(steps, c.ProjectSteps.Review)
+	}
+	for _, step := range steps {
+		if step.Provider == "agent_skill" {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *Config) validateSkills() error {

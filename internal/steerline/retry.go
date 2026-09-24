@@ -36,6 +36,9 @@ func (s *Service) startRetry(ctx context.Context, id string) error {
 		return fmt.Errorf("run %s not found", id)
 	}
 	r := selected
+	if r.WorkflowVersion == MinimalWorkflowVersion {
+		return errors.New("minimal-v1 cannot use the single-workflow retry path; reconcile its current step attempt")
+	}
 	if r.FinishTaskStatus != "blocked" || (r.ExecutionStatus != "failed" && r.ExecutionStatus != "succeeded") || r.PR.URL != nil {
 		return errors.New("retry requires a blocked run without a bound PR")
 	}
@@ -84,6 +87,10 @@ func (s *Service) startRetry(ctx context.Context, id string) error {
 	r.LogPath = ptr(filepath.Join(dir, "events.jsonl"))
 	r.ResultPath = ptr(filepath.Join(dir, "result.json"))
 	r.AttemptID = attemptID
+	r.DomainAttemptNumber++
+	if r.DomainAttemptNumber < 1 {
+		r.DomainAttemptNumber = 1
+	}
 	r.ManualStop = nil
 	r.ExecutionStatus = "pending"
 	r.FinishTaskStatus = "pending"

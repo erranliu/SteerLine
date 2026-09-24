@@ -2,266 +2,340 @@ package steerline
 
 import (
 	"context"
-	"errors"
+	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
 )
 
-func auditOrcaRef(t *testing.T) (Config, ExecutionRef) {
-	t.Helper()
-	dir := t.TempDir()
-	c := orcaTestConfig(t, dir, "")
-	runID := newID()
-	identity := ProcessIdentity{Kind: "orca", RuntimeID: "fake-runtime", Terminal: "audit-terminal", Incarnation: "audit-generation", Executable: c.Orca.Executable}
-	require(t, writeFakeOrcaState(dir, fakeOrcaState{Handle: identity.Terminal, Incarnation: identity.Incarnation}))
-	ref := ExecutionRef{Version: 1, Backend: BackendOrca, Protocol: ProtocolOrcaTerminalV2, Target: targetFor(c), Agent: AgentSpec{Name: "codex"}, RunID: runID, AttemptID: runID, WorkspacePath: dir, WorkspaceBranch: "audit/branch", BaseCommit: strings.Repeat("a", 40), External: identity}
-	require(t, os.MkdirAll(filepath.Join(dir, "runs", runID), 0700))
-	return c, ref
-}
-
-func TestAuditOrcaReplyRequiresLiveOriginalTerminal(t *testing.T) {
-	for _, mode := range []string{"exited", "disconnected"} {
-		t.Run(mode, func(t *testing.T) {
-			c, ref := auditOrcaRef(t)
-			if mode == "exited" {
-				state, err := readFakeOrcaState(c.RunDir, ref.External.Terminal)
-				require(t, err)
-				state.Closed = true
-				require(t, writeFakeOrcaState(c.RunDir, state))
-			} else {
-				t.Setenv("STEERLINE_FAKE_ORCA_DISCONNECTED", "1")
+func TestAuditInvalidGatesDoNotMutateExecution(t *testing.T) {
+	base, head := strings.Repeat("a", 40), strings.Repeat("b", 40)
+	workspace := WorkspaceEvidence{Repository: "repo", Worktree: "tree", Branch: "branch", Base: base, Head: head, VerifiedAt: now()}
+	for _, name := range []string{"missing_workspace_receipt", "stale_review_changes", "unverified_review", "empty_candidate_publication", "early_publication"} {
+		t.Run(name, func(t *testing.T) {
+			wf := WorkflowRunRecord{WorkflowVersion: MinimalWorkflowVersion, Definition: DefaultMinimalWorkflowDefinition(true), Phase: "executing"}
+			execution := ExecutionRecord{Status: "active", CurrentStep: "review", Workspace: workspace, CandidateRevision: head, VerifiedRevision: head}
+			result := StepGateResult{StepID: "review", Succeeded: true, ResultID: "result", Revision: head, Workspace: workspace, ReviewVerdict: "changes_requested"}
+			switch name {
+			case "missing_workspace_receipt":
+				execution.CurrentStep = "implement"
+				result.StepID = "implement"
+				result.InputRevision = head
+				result.Workspace.VerifiedAt = execution.CreatedAt
+			case "stale_review_changes":
+				result.Revision = base
+			case "unverified_review":
+				execution.VerifiedRevision = ""
+			case "empty_candidate_publication":
+				execution.CurrentStep = "publish_pr"
+				execution.CandidateRevision = ""
+				execution.VerifiedRevision = ""
+				execution.Workspace.Head = ""
+				result = StepGateResult{StepID: "publish_pr", Succeeded: true, PRURL: "https://example.invalid/pr/1"}
+			case "early_publication":
+				result.PRURL = "https://example.invalid/pr/1"
 			}
-			result := filepath.Join(ref.WorkspacePath, orcaResultFile)
-			require(t, os.WriteFile(result, []byte("preserve original result"), 0600))
-			_, err := (orcaTerminalBackend{config: c}).Reply(context.Background(), ref, "continue", Operation{}, filepath.Join(c.RunDir, "runs", ref.RunID, "result.json"))
-			var typed *BackendError
-			if !errors.As(err, &typed) || typed.Code != BackendIdentityMismatch {
-				t.Fatalf("non-live continuation accepted: %v", err)
+			beforeExecution, beforeWorkflow := execution, wf
+			if _, err := AdvanceMinimalExecution(&wf, &execution, result, []string{"unit"}); err == nil {
+				t.Fatal("invalid gate was accepted")
 			}
-			data, err := os.ReadFile(result)
-			require(t, err)
-			if string(data) != "preserve original result" {
-				t.Fatal("rejected continuation removed prior output")
-			}
-			state, err := readFakeOrcaState(c.RunDir, ref.External.Terminal)
-			require(t, err)
-			if state.Sends != 0 {
-				t.Fatal("input was sent to a non-live terminal")
+			if !reflect.DeepEqual(beforeExecution, execution) || !reflect.DeepEqual(beforeWorkflow, wf) {
+				t.Fatal("rejected gate mutated domain state")
 			}
 		})
 	}
 }
 
-func TestAuditOrcaSendValidatesReceipt(t *testing.T) {
-	for _, mode := range []string{"reject", "missing", "wrong_handle", "wrong_incarnation", "exit_error", "accepted"} {
-		t.Run(mode, func(t *testing.T) {
-			c, ref := auditOrcaRef(t)
-			prompt := filepath.Join(c.RunDir, "prompt.txt")
-			require(t, os.WriteFile(prompt, []byte("probe"), 0600))
-			t.Setenv("STEERLINE_FAKE_ORCA_SEND_RECEIPT", mode)
-			receipt, err := (orcaClient{cfg: c}).terminalSend(context.Background(), ref.External, "Read and execute "+prompt+" now. Follow it exactly.")
-			if mode == "accepted" {
-				require(t, err)
-				if !receipt.InputAccepted || !receipt.TurnStarted || receipt.Applied {
-					t.Fatalf("receipt conflates input, turn and application: %+v", receipt)
-				}
-				return
-			}
-			want := BackendOutcomeUnknown
-			if mode == "reject" {
-				want = BackendRejected
-			}
-			var typed *BackendError
-			if !errors.As(err, &typed) || typed.Code != want || receipt.InputAccepted {
-				t.Fatalf("bad send receipt was accepted: %+v %v", receipt, err)
-			}
-		})
-	}
-}
-
-func TestAuditOrcaObserverCannotSettleReplacedOrLiveUnknownExecution(t *testing.T) {
-	for _, mode := range []string{"replaced", "disconnected", "oversized", "stalled"} {
-		t.Run(mode, func(t *testing.T) {
-			c, ref := auditOrcaRef(t)
-			c.StallTimeout = "1ms"
-			input := filepath.Join(c.RunDir, orcaResultFile)
-			output := filepath.Join(c.RunDir, "runs", ref.RunID, "result.json")
-			switch mode {
-			case "replaced":
-				t.Setenv("STEERLINE_FAKE_ORCA_INCARNATION", "new-generation")
-				require(t, os.WriteFile(input, []byte("foreign result"), 0600))
-			case "disconnected":
-				t.Setenv("STEERLINE_FAKE_ORCA_DISCONNECTED", "1")
-				require(t, os.WriteFile(input, []byte("unverified result"), 0600))
-			case "oversized":
-				require(t, os.WriteFile(input, make([]byte, (2<<20)+1), 0600))
-			}
-			proc := &orcaProcess{cfg: c, term: orcaTerminal{Handle: ref.External.Terminal, RuntimeID: ref.External.RuntimeID, IncarnationID: ref.External.Incarnation}}
-			w := superviseOrcaResult(c, proc, input, output)
-			defer proc.Close()
-			var resultErr error
-			select {
-			case resultErr = <-w.Done:
-			case <-time.After(6 * time.Second):
-				t.Fatal("observer failed to terminate")
-			}
-			var typed *BackendError
-			if !errors.As(resultErr, &typed) {
-				t.Fatalf("uncertain observation was reported as an ordinary exit: %v", resultErr)
-			}
-			if _, err := os.Stat(output); !os.IsNotExist(err) {
-				t.Fatalf("unverified output was published: %v", err)
-			}
-			run := &Run{TaskID: "audit", RunID: ref.RunID, AttemptID: ref.AttemptID, Host: "orca", Process: &ref.External, ExecutionStatus: "running", FinishTaskStatus: "pending"}
-			s := &Service{Config: c, State: Runtime{SchemaVersion: CurrentRuntimeSchema, Runs: []*Run{run}, SlotOccupied: true}, worker: w, active: run, store: &Store{Path: filepath.Join(c.RunDir, "runtime.json")}, activities: map[string]*ActivityWriter{}}
-			require(t, s.finished(resultErr))
-			if run.ExecutionStatus != "unknown" || run.EndedAt != nil || !s.State.SlotOccupied {
-				t.Fatalf("observer failure released a potentially active execution: %+v", run)
-			}
-		})
-	}
-}
-
-func TestAuditRecoveryIncludesStopAndReplyOperations(t *testing.T) {
-	for _, action := range []string{"stop", "reply"} {
-		t.Run(action, func(t *testing.T) {
-			f := newFixture(t, task("audit"))
-			s := f.service(t)
-			require(t, s.dispatch(context.Background()))
-			finishWorker(t, s)
-			run := s.State.Runs[0]
-			records := executionRecords{root: f.c.RunDir}
-			ref, err := records.loadBinding(run.RunID, run.AttemptID)
-			require(t, err)
-			op := Operation{Version: 1, ID: action + "-audit", RunID: run.RunID, AttemptID: run.AttemptID, Backend: ref.Backend, Protocol: ref.Protocol, Target: ref.Target, Action: action, PayloadDigest: digestValue("fixed payload"), Status: OperationUnknown, Ref: &ref}
-			require(t, records.saveOperation(op))
-			restarted, err := NewService(f.c)
-			require(t, err)
-			if restarted.State.Runs[0].ExecutionStatus != "unknown" || !restarted.State.SlotOccupied {
-				t.Fatal("runtime projection hid an unresolved external operation")
-			}
-			require(t, os.WriteFile(records.operationPath(run.RunID, run.AttemptID, op.ID), []byte("{broken"), 0600))
-			if _, err := NewService(f.c); err == nil {
-				t.Fatal("corrupt non-start operation was ignored during recovery")
-			}
-		})
-	}
-}
-
-func TestAuditLocalCancellationAfterPrepareDoesNotLaunch(t *testing.T) {
-	f := newFixture(t, task("audit"))
-	require(t, f.c.prepareWorktreeRoot())
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	runID := newID()
-	base, err := fetchBase(ctx, f.c, runID)
-	require(t, err)
-	intent, err := planWorkspace(f.c, "audit", runID, base)
-	require(t, err)
-	s := f.service(t)
-	claimed, err := s.beads.Claim(ctx, "audit")
-	require(t, err)
-	if !claimed {
-		t.Fatal("fixture claim failed")
-	}
-	source, err := s.beads.Context(ctx)
-	require(t, err)
-	dir := filepath.Join(f.c.RunDir, "runs", runID)
-	run := Run{TaskID: "audit", RunID: runID, AttemptID: runID, Claimant: f.c.Claimant, WorkspaceIntent: intent, ResultPath: ptr(filepath.Join(dir, "result.json")), LogPath: ptr(filepath.Join(dir, "events.jsonl"))}
-	backend := localExecutionBackend{config: f.c, source: source, afterPrepare: cancel}
-	_, err = backend.Start(ctx, AttemptSpec{Run: run, Task: task("audit"), RunID: runID, AttemptID: runID, Workspace: *intent, Beads: source, Target: targetFor(f.c), Agent: agentFor(f.c)})
-	if !errors.Is(err, context.Canceled) {
-		t.Fatalf("cancellation after prepare was ignored: %v", err)
-	}
-	if len(readFake(f.db).Starts) != 0 {
-		t.Fatal("a worker launched after cancellation")
-	}
-}
-
-func TestAuditOrcaWorkspaceMustBeVerifiedBeforeDispatch(t *testing.T) {
-	f := newFixture(t, task("audit"))
-	cfg := orcaTestConfig(t, f.c.RunDir, "")
-	f.c.Host, f.c.Orca = "orca", cfg.Orca
-	t.Setenv("STEERLINE_FAKE_ORCA_WRONG_WORKSPACE_BRANCH", "1")
-	s := f.service(t)
-	if err := s.dispatch(context.Background()); err == nil {
-		t.Fatal("Orca workspace claims were trusted without Git verification")
-	}
-	run := s.State.Runs[0]
-	state, err := readFakeOrcaState(f.c.RunDir, "term_fake_"+orcaSafeName(run.TaskID, run.RunID))
-	require(t, err)
-	if state.Sends != 0 || run.ExecutionStatus != "unknown" || !s.State.SlotOccupied {
-		t.Fatalf("unverified workspace received task instructions: sends=%d run=%+v", state.Sends, run)
-	}
-}
-
-func TestAuditLocalRejectedLaunchCanRetryPreparedWorkspace(t *testing.T) {
+func TestAuditPRHeadCheckedBeforeExternalTaskClosure(t *testing.T) {
 	f := newFixture(t, task("t-1"))
+	db := readFake(f.db)
+	db.Tasks[0].Status = "in_progress"
+	db.Tasks[0].Assignee = f.c.Claimant
+	writeFake(f.db, db)
+	f.pr("1", "merged") // Fake platform omits head evidence: completion must refuse.
 	s := f.service(t)
-	runID := newID()
-	s.reservedRunID = runID
-	// Fail before spawning: stderr cannot be created over this directory.
-	fault := filepath.Join(f.c.RunDir, "runs", runID, "stderr.log")
-	require(t, os.MkdirAll(fault, 0700))
-	require(t, s.dispatch(context.Background()))
-	run := s.State.Runs[0]
-	if run.Process != nil || run.ExecutionStatus != "failed" || run.FinishTaskStatus != "blocked" {
-		t.Fatalf("fixture did not reject launch before creating a process: %+v", run)
+	defer s.Close()
+	project, runID, executionID := f.c.identity, newID(), newID()
+	head := strings.Repeat("a", 40)
+	s.State.Runs = []*Run{{TaskID: "t-1", DomainTaskID: "1", RunID: runID, ExecutionID: executionID, WorkflowVersion: MinimalWorkflowVersion, Claimant: f.c.Claimant, ExecutionStatus: "succeeded", FinishTaskStatus: "waiting_pr_merge", PR: PRState{URL: ptr(f.server.URL + "/owner/repo/pulls/1")}}}
+	s.State.Tasks = []TaskRecord{{ProjectIdentity: project, TaskID: "1", Status: "in_progress", Version: 1}}
+	s.State.WorkflowRuns = []WorkflowRunRecord{{ProjectIdentity: project, TaskID: "1", WorkflowRunID: runID, WorkflowVersion: MinimalWorkflowVersion, Definition: DefaultMinimalWorkflowDefinition(true), Phase: "waiting_pr_merge", SelectedResult: executionID}}
+	s.State.Executions = []ExecutionRecord{{ProjectIdentity: project, ExecutionID: executionID, WorkflowRunID: runID, Status: "succeeded", CurrentStep: "waiting_pr_merge", CandidateRevision: head, VerifiedRevision: head, ReviewedRevision: head}}
+	require(t, s.pollPRs(context.Background()))
+	if readFake(f.db).Tasks[0].Status != "in_progress" {
+		t.Fatal("task was closed before checking PR head")
 	}
-	op, err := (executionRecords{root: f.c.RunDir}).loadOperation(runID, runID, attemptOperationID(runID, runID))
-	require(t, err)
-	if len(op.ResidualResources) != 1 || op.ResidualResources[0] != run.WorkspaceIntent.Path {
-		t.Fatal("rejected launch lost its prepared workspace residual")
-	}
-	require(t, os.Remove(fault))
-	restarted := f.service(t)
-	require(t, restarted.startRetry(context.Background(), runID))
-	finishWorker(t, restarted)
-	if restarted.State.Runs[0].FinishTaskStatus != "waiting_pr_merge" || readFake(f.db).Claims["t-1"] != 1 {
-		t.Fatalf("prepared launch retry lost workspace or re-claimed task: %+v", restarted.State.Runs[0])
+	if s.State.Runs[0].FinishTaskStatus != "blocked" {
+		t.Fatal("mismatched publication did not block the workflow")
 	}
 }
 
-func TestAuditManualStopSurvivesRecoveryWithoutRewritingUnknownOutcome(t *testing.T) {
-	f, s, run := failedStartup(t)
-	records := executionRecords{root: f.c.RunDir}
-	op, err := records.loadOperation(run.RunID, run.AttemptID, attemptOperationID(run.RunID, run.AttemptID))
+func TestAuditManualRecoveryCannotBypassMinimalGates(t *testing.T) {
+	run := &Run{RunID: newID(), WorkflowVersion: MinimalWorkflowVersion, ExecutionStatus: "failed", FinishTaskStatus: "blocked"}
+	s := &Service{State: Runtime{Runs: []*Run{run}}}
+	if err := s.startRetry(context.Background(), run.RunID); err == nil || !strings.Contains(err.Error(), "minimal-v1") {
+		t.Fatalf("retry bypass: %v", err)
+	}
+	if err := s.AcceptResult(context.Background(), run.RunID, "nonexistent"); err == nil || !strings.Contains(err.Error(), "minimal-v1") {
+		t.Fatalf("accept-result bypass: %v", err)
+	}
+	if err := s.MarkStopped(run.RunID); err == nil || !strings.Contains(err.Error(), "minimal-v1") {
+		t.Fatalf("mark-stopped bypass: %v", err)
+	}
+}
+
+func TestAuditProjectionFailureRetainsDetachedCommittedSnapshot(t *testing.T) {
+	db := openDomainTestStore(t)
+	dir := t.TempDir()
+	path := filepath.Join(dir, "runtime.json")
+	require(t, os.Mkdir(path, 0700)) // export fails while SQLite commit succeeds
+	state := Runtime{SchemaVersion: 5, Repository: Repository{Identity: "repo"}, Runs: []*Run{{TaskID: "task", DomainTaskID: "1", RunID: newID(), Title: "committed", ExecutionStatus: "succeeded", FinishTaskStatus: "completed"}}}
+	store := Store{Path: path, Domain: db, Project: "repo"}
+	require(t, store.Publish(&state))
+	if store.ProjectionErr() == nil {
+		t.Fatal("test did not induce an export failure")
+	}
+	state.Runs[0].Title = "uncommitted"
+	state.Tasks[0].Status = "discarded"
+	require(t, store.Heartbeat())
+	data, _, err := db.LoadProjection(context.Background(), "repo")
 	require(t, err)
-	op.Status = OperationUnknown
-	require(t, records.saveOperation(op))
-	run.ExecutionStatus = "unknown"
+	var committed Runtime
+	require(t, json.Unmarshal(data, &committed))
+	if committed.Runs[0].Title != "committed" || committed.Tasks[0].Status == "discarded" {
+		t.Fatal("heartbeat published scheduler mutations without a domain transaction")
+	}
+}
+
+func TestAuditCorruptFileProjectionRebuildsFromDatabase(t *testing.T) {
+	f := newFixture(t)
+	s := f.service(t)
+	s.State.Control.DispatchPaused = true
 	require(t, s.save())
-	require(t, s.MarkStopped(run.RunID))
+	require(t, s.Close())
+	require(t, os.WriteFile(filepath.Join(f.c.RunDir, f.c.RuntimeFile), []byte(`{"schema_version":5,`), 0600))
 	restarted, err := NewService(f.c)
 	require(t, err)
-	if restarted.State.Runs[0].ExecutionStatus != "failed" || restarted.State.SlotOccupied {
-		t.Fatal("recovery erased the operator's explicit stop confirmation")
+	defer restarted.Close()
+	if !restarted.State.Control.DispatchPaused {
+		t.Fatal("recovery discarded committed state")
 	}
-	stored, err := records.loadOperation(run.RunID, run.AttemptID, op.ID)
-	require(t, err)
-	if stored.Status != OperationUnknown {
-		t.Fatal("operator stop invented a successful platform operation outcome")
-	}
-	require(t, restarted.startRetry(context.Background(), run.RunID))
-	finishWorker(t, restarted)
-	if restarted.State.Runs[0].ManualStop != nil {
-		t.Fatal("manual stop confirmation leaked to the new attempt")
+	require(t, restarted.save())
+	if _, err = LoadRuntime(filepath.Join(f.c.RunDir, f.c.RuntimeFile)); err != nil {
+		t.Fatal(err)
 	}
 }
 
-func TestAuditOrcaNativeEvidenceCannotEnableCodexOverride(t *testing.T) {
-	f := newFixture(t)
-	cfg := orcaTestConfig(t, f.c.RunDir, "")
-	f.c.Host, f.c.Orca = "orca", cfg.Orca
-	s := f.service(t)
-	_, err := s.requireBackendCapabilities(context.Background(), backendFor(s.Config, BeadsContext{}), "start")
+func TestAuditAnswerFileCannotAuthorizeResume(t *testing.T) {
+	run := decisionRun(t)
+	decision, err := WriteDecisionRequest(run, DecisionRequest{Question: "choose", Options: []DecisionOption{{ID: "yes", Label: "Yes"}}})
 	require(t, err)
-	s.Config.Model = "different-launch-path"
-	report, err := s.requireBackendCapabilities(context.Background(), backendFor(s.Config, BeadsContext{}), "start")
-	if err == nil || report.AgentVersion != "fake-codex/1" || capabilityStatus(report, "start") != CapabilityNotTested {
-		t.Fatalf("native agent verification enabled an unverified CLI override: %+v %v", report, err)
+	run.Decision = decision
+	run.ExecutionStatus = "succeeded"
+	run.FinishTaskStatus = "waiting_decision"
+	require(t, WriteAnswer(run, DecisionAnswer{OptionID: "yes", AnsweredBy: "outside-client"}))
+	s := Service{State: Runtime{SchemaVersion: 5, Runs: []*Run{run}}}
+	require(t, s.applyDecisions(context.Background()))
+	if run.Decision.Status != "pending" || s.worker != nil {
+		t.Fatal("a file bypassed command arbitration")
+	}
+}
+
+func TestAuditInvalidAnswerDoesNotReserveDecisionVersion(t *testing.T) {
+	db := openDomainTestStore(t)
+	ctx := context.Background()
+	project := "repo:answer-validation"
+	require(t, db.Transact(ctx, func(tx DomainTx) error {
+		if err := tx.PutTask(TaskRecord{ProjectIdentity: project, TaskID: "1", Status: "open"}); err != nil {
+			return err
+		}
+		if err := tx.PutWorkflowRun(WorkflowRunRecord{ProjectIdentity: project, TaskID: "1", WorkflowRunID: "wf", Phase: "waiting_decision"}); err != nil {
+			return err
+		}
+		return tx.PutDecision(DecisionRecord{ProjectIdentity: project, DecisionID: "decision", WorkflowRunID: "wf", Scope: "workflow", QuestionID: "q", Status: "pending", Version: 1, Request: mustJSON(DecisionRequest{Question: "choose", Options: []DecisionOption{{ID: "yes", Label: "Yes"}}})})
+	}))
+	commands := CommandService{Store: db, Project: project}
+	answer := DecisionAnswer{DecisionID: "decision", RunID: "wf", OptionID: "invalid", AnsweredBy: "alice"}
+	if _, _, err := commands.AnswerDecision(ctx, "decision", 1, "invalid", "alice", mustJSON(answer)); err == nil {
+		t.Fatal("invalid option was queued")
+	}
+	answer.OptionID = "yes"
+	if _, created, err := commands.AnswerDecision(ctx, "decision", 1, "valid", "alice", mustJSON(answer)); err != nil || !created {
+		t.Fatalf("invalid request consumed version reservation: %v", err)
+	}
+}
+
+func TestAuditSingleExecutionAlsoSerializesDifferentSteps(t *testing.T) {
+	db := openDomainTestStore(t)
+	ctx := context.Background()
+	project := "repo:active"
+	require(t, db.Transact(ctx, func(tx DomainTx) error {
+		for _, id := range []string{"1", "2"} {
+			if err := tx.PutTask(TaskRecord{ProjectIdentity: project, TaskID: id, Status: "open"}); err != nil {
+				return err
+			}
+		}
+		if err := tx.PutWorkflowRun(WorkflowRunRecord{ProjectIdentity: project, TaskID: "1", WorkflowRunID: "wf", Phase: "executing"}); err != nil {
+			return err
+		}
+		if err := tx.PutExecution(ExecutionRecord{ProjectIdentity: project, ExecutionID: "exec", WorkflowRunID: "wf", Status: "active"}); err != nil {
+			return err
+		}
+		return tx.PutStepAttempt(StepAttemptRecord{ProjectIdentity: project, AttemptID: "implement", ExecutionID: "exec", StepID: "implement", AttemptNumber: 1, Status: "running"})
+	}))
+	if err := db.Transact(ctx, func(tx DomainTx) error {
+		return tx.PutStepAttempt(StepAttemptRecord{ProjectIdentity: project, AttemptID: "verify", ExecutionID: "exec", StepID: "verify", AttemptNumber: 1, Status: "planned"})
+	}); err == nil {
+		t.Fatal("concurrent steps in the same workspace were allowed")
+	}
+	if err := db.Transact(ctx, func(tx DomainTx) error {
+		return tx.PutWorkflowRun(WorkflowRunRecord{ProjectIdentity: project, TaskID: "1", WorkflowRunID: "another", Phase: "queued"})
+	}); err == nil {
+		t.Fatal("second active workflow was allowed for the same task")
+	}
+}
+
+func TestAuditRejectedVerificationIsFailedAndCannotPublish(t *testing.T) {
+	f := newFixture(t, task("t-19"))
+	exe, err := os.Executable()
+	require(t, err)
+	git, err := exec.LookPath("git")
+	require(t, err)
+	contract := func(step string) StepContract {
+		return StepContract{Provider: "command", Entry: "builtin:" + step, Version: "test-v1", InputSchema: MinimalStepInputSchema, OutputSchema: MinimalStepOutputSchema, ExecutionSite: "local", Timeout: 10 * time.Second, Command: []string{exe, "--fake", "minimal-step", f.db, git}}
+	}
+	f.c.WorkflowDefinition = ptr(DefaultMinimalWorkflowDefinition(true))
+	f.c.ProjectSteps = &ProjectSteps{Implement: contract("implement"), Verify: contract("verify"), Review: contract("review"), PublishPR: contract("publish_pr")}
+	f.c.ProjectSteps.Verify.RequiredChecks = []string{"unit"}
+	s := f.service(t)
+	defer s.Close()
+	ctx := context.Background()
+	require(t, s.dispatch(ctx))
+	finishWorker(t, s)
+	db := readFake(f.db)
+	db.Behavior = "minimal-no-checks"
+	writeFake(f.db, db)
+	require(t, s.resumeMinimalSteps(ctx))
+	for ev := range s.worker.Events {
+		require(t, s.event(ev))
+	}
+	if err = s.finished(<-s.worker.Done); err == nil {
+		t.Fatal("verification without check receipts was accepted")
+	}
+	run := s.State.Runs[0]
+	if s.minimalAttempt(run, run.AttemptID).Status != "failed" || run.FinishTaskStatus != "blocked" {
+		t.Fatal("rejected gate was reported as succeeded")
+	}
+	for _, attempt := range s.State.Attempts {
+		if attempt.StepID == "publish_pr" {
+			t.Fatal("invalid verification generated a publication intent")
+		}
+	}
+}
+
+func TestAuditEventsAreDurableWithoutDisplayJournal(t *testing.T) {
+	db := openDomainTestStore(t)
+	dir := t.TempDir()
+	run := &Run{TaskID: "task", DomainTaskID: "1", RunID: newID(), AttemptID: "attempt-one", ExecutionStatus: "running", FinishTaskStatus: "pending"}
+	s := Service{Config: Config{identity: "repo"}, State: Runtime{SchemaVersion: 5, Repository: Repository{Identity: "repo"}, Runs: []*Run{run}}, store: &Store{Path: filepath.Join(dir, "runtime.json"), Domain: db, Project: "repo"}, domainStore: db, active: run}
+	s.note(run, "steer", "gate", "pending", "gate pending", "", nil)
+	require(t, s.event(WorkerEvent{Activity: ActivityEvent{Source: "codex", Kind: "message", Detail: "worker message"}}))
+	events, err := db.Events(context.Background(), "repo", run.ExecutionID, "attempt-one", 0, 10)
+	require(t, err)
+	if len(events) != 2 {
+		t.Fatalf("canonical events depended on display journal: %d", len(events))
+	}
+	if events[1].AttemptID != "attempt-one" || events[1].Type != "activity.message" {
+		t.Fatalf("worker event binding lost: %+v", events[1])
+	}
+}
+
+func TestAuditDecisionRequiresApplicationEvidence(t *testing.T) {
+	db := openDomainTestStore(t)
+	dir := t.TempDir()
+	project := "repo:proof"
+	run := &Run{RunID: newID(), TaskID: "task", DomainTaskID: "1", ExecutionID: "execution", AttemptID: "attempt", WorkflowVersion: MinimalWorkflowVersion, ExecutionStatus: "running", FinishTaskStatus: "pending", StepResultPath: ptr(filepath.Join(dir, "result.json")), Decision: &DecisionState{ID: "decision", AttemptID: "attempt", Status: "reply_accepted", Version: 2, Request: DecisionRequest{Question: "choose", AllowFreeText: true}, Note: "yes", AnsweredBy: "alice"}}
+	wf := WorkflowRunRecord{ProjectIdentity: project, TaskID: "1", WorkflowRunID: run.RunID, WorkflowVersion: MinimalWorkflowVersion, Definition: DefaultMinimalWorkflowDefinition(true), Phase: "executing"}
+	execution := ExecutionRecord{ProjectIdentity: project, ExecutionID: "execution", WorkflowRunID: run.RunID, Status: "active", CurrentStep: "implement"}
+	attempt := StepAttemptRecord{ProjectIdentity: project, AttemptID: "attempt", ExecutionID: "execution", StepID: "implement", AttemptNumber: 1, Status: "running"}
+	s := Service{Config: Config{identity: project}, State: Runtime{SchemaVersion: 5, Repository: Repository{Identity: project}, Runs: []*Run{run}, Tasks: []TaskRecord{{ProjectIdentity: project, TaskID: "1", Status: "in_progress"}}, WorkflowRuns: []WorkflowRunRecord{wf}, Executions: []ExecutionRecord{execution}, Attempts: []StepAttemptRecord{attempt}}, store: &Store{Path: filepath.Join(dir, "runtime.json"), Domain: db, Project: project}, domainStore: db, active: run}
+	result := MinimalStepResultEnvelope{SchemaVersion: 1, ProjectIdentity: project, TaskID: "1", WorkflowRunID: run.RunID, ExecutionID: "execution", AttemptID: "attempt", Result: StepGateResult{StepID: "implement", Succeeded: true, ResultID: "result"}}
+	require(t, os.WriteFile(*run.StepResultPath, mustJSON(result), 0600))
+	if err := s.finishMinimalStep(nil); err == nil || !strings.Contains(err.Error(), "application evidence") {
+		t.Fatalf("missing application proof accepted: %v", err)
+	}
+	if run.Decision.Status != "reply_accepted" || run.Decision.AppliedAt != nil {
+		t.Fatal("worker start was treated as decision application")
+	}
+}
+
+func TestAuditCommandOnlyAndOrcaDoNotRequireLocalCodex(t *testing.T) {
+	if (Config{Host: "orca"}).requiresLocalCodex() {
+		t.Fatal("Orca requires an unused local Codex")
+	}
+	c := Config{Host: "local", WorkflowDefinition: ptr(DefaultMinimalWorkflowDefinition(false)), ProjectSteps: &ProjectSteps{Implement: StepContract{Provider: "command"}, Verify: StepContract{Provider: "command"}, PublishPR: StepContract{Provider: "command"}}}
+	if c.requiresLocalCodex() {
+		t.Fatal("command-only workflow requires an unused local Codex")
+	}
+}
+
+func TestAuditTaskNumberCannotBeRebound(t *testing.T) {
+	db := openDomainTestStore(t)
+	ctx := context.Background()
+	task := TaskRecord{ProjectIdentity: "repo", TaskID: "17", Status: "open", ExternalProvider: "beads", ExternalProject: "source", ExternalID: "task-a"}
+	require(t, db.Transact(ctx, func(tx DomainTx) error { return tx.PutTask(task) }))
+	task.ExternalID = "task-b"
+	if err := db.Transact(ctx, func(tx DomainTx) error { return tx.PutTask(task) }); err == nil {
+		t.Fatal("same task number was rebound to a different external task")
+	}
+}
+
+func TestAuditEntryMustExistAtPinnedBase(t *testing.T) {
+	f := newFixture(t)
+	require(t, os.WriteFile(filepath.Join(f.c.Repository, "uncommitted-step.py"), []byte("print('not in base')"), 0600))
+	out, err := gitRunner(f.c, f.c.Repository).Output(context.Background(), f.c.Git, "rev-parse", "HEAD")
+	require(t, err)
+	contract := StepContract{Entry: "builtin:command"}
+	workflow := MinimalWorkflowConfig{Definition: DefaultMinimalWorkflowDefinition(false), Steps: ProjectSteps{Implement: contract, Verify: contract, PublishPR: contract}}
+	workflow.Steps.Verify.Entry = "uncommitted-step.py"
+	if err = f.c.validateMinimalEntriesAtBase(context.Background(), workflow, strings.TrimSpace(string(out))); err == nil {
+		t.Fatal("uncommitted entry passed pre-claim validation")
+	}
+}
+
+func TestAuditStepInputIncludesFailureBodiesAndApplicationSchema(t *testing.T) {
+	run := &Run{RunID: "wf", DomainTaskID: "1"}
+	execution := &ExecutionRecord{ExecutionID: "exec"}
+	result := mustJSON(StepGateResult{StepID: "verify", ResultID: "failed-check", Checks: []CheckEvidence{{Name: "unit", Status: "failed", Revision: strings.Repeat("a", 40)}}})
+	input := buildMinimalStepInput("repo", Task{}, run, &WorkflowRunRecord{}, execution, &StepAttemptRecord{PrerequisiteIDs: []string{"failed-check"}}, StepAttemptRecord{ExecutionID: "exec", ResultID: "failed-check", Result: result})
+	if len(input.PrerequisiteResults) != 1 || string(input.PrerequisiteResults[0]) != string(result) {
+		t.Fatal("repair input omitted failure details")
+	}
+	var schema map[string]any
+	require(t, json.Unmarshal(MinimalStepResultSchema, &schema))
+	properties := schema["properties"].(map[string]any)["result"].(map[string]any)["properties"].(map[string]any)
+	if properties["applied_decision_id"] == nil || properties["workspace"].(map[string]any)["properties"] == nil {
+		t.Fatal("result schema omits application or workspace evidence")
+	}
+}
+
+func TestAuditExistingOperationCannotBeDispatchedAgain(t *testing.T) {
+	payload := map[string]string{"attempt_id": "attempt"}
+	data := mustJSON(payload)
+	for _, status := range []string{"in_flight", "accepted", "confirmed", "outcome_unknown", "rejected"} {
+		s := Service{State: Runtime{Operations: []OperationRecord{{OperationID: "original", IdempotencyKey: "same-key", Kind: "start", Status: status, Request: data, PayloadDigest: operationDigest(data)}}}}
+		if _, err := s.startOperation("start", "same-key", payload); err == nil {
+			t.Fatalf("%s operation was resent", status)
+		}
+		if _, err := s.minimalOperation(nil, nil, "start", "same-key", payload); err == nil {
+			t.Fatalf("%s step operation was resent", status)
+		}
+		if len(s.State.Operations) != 1 || s.State.Operations[0].OperationID != "original" {
+			t.Fatal("retry invented another operation identity")
+		}
 	}
 }

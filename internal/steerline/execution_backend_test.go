@@ -143,8 +143,8 @@ func TestChangedDefaultBackendCannotStopFixedLocalExecution(t *testing.T) {
 	if got := inspectProcess(run.Process); got != "matching process still exists" {
 		t.Fatalf("changed default backend affected old process: %s", got)
 	}
-	path := (executionRecords{root: f.c.RunDir}).operationPath(run.RunID, run.AttemptID, "stop-"+run.AttemptID)
-	if _, err := os.Stat(path); !os.IsNotExist(err) {
+	_, err = (executionRecords{root: f.c.RunDir}).loadOperation(run.RunID, run.AttemptID, "stop-"+run.AttemptID)
+	if !os.IsNotExist(err) {
 		t.Fatalf("rejected cross-backend stop persisted an operation: %v", err)
 	}
 }
@@ -192,7 +192,7 @@ func TestLocalReadOutputUsesBoundedExecutionCursor(t *testing.T) {
 func TestOperationRecordRejectsCorruptionBeforeUse(t *testing.T) {
 	r := executionRecords{root: t.TempDir()}
 	run, attempt := newID(), newID()
-	if err := os.MkdirAll(r.operationPath(run, attempt, "op"), 0700); err != nil {
+	if err := r.writeRecord("execution_operations", run, attempt, "op", []byte("{broken")); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := r.loadOperation(run, attempt, "op"); err == nil {
@@ -267,7 +267,7 @@ func TestRecoveryRebuildsProjectionAndRejectsCorruptBinding(t *testing.T) {
 	if !bytes.Equal(before, after) {
 		t.Fatal("read-only recovery rewrote runtime")
 	}
-	if err := os.WriteFile(records.bindingPath(runID, runID), []byte("{invalid"), 0600); err != nil {
+	if err := records.writeRecord("execution_bindings", runID, runID, "binding", []byte("{invalid")); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := NewService(f.c); err == nil {
@@ -398,7 +398,7 @@ func TestStartBindingFailureRetainsUnknownWorkerAndBlocksRestart(t *testing.T) {
 	runID := newID()
 	s.reservedRunID = runID
 	records := executionRecords{root: f.c.RunDir}
-	if err := os.MkdirAll(records.bindingPath(runID, runID), 0700); err != nil {
+	if err := records.writeRecord("execution_bindings", runID, runID, "binding", []byte("{invalid")); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.dispatch(context.Background()); err == nil {
@@ -429,8 +429,9 @@ func TestProjectionWriteFailureRebuildsBindingWithoutSecondStart(t *testing.T) {
 			s.store.Path = filepath.Join(f.c.RunDir, "missing-directory", "runtime.json")
 		}
 	}
-	if err := s.dispatch(context.Background()); err == nil {
-		t.Fatal("runtime projection failure was ignored")
+	require(t, s.dispatch(context.Background()))
+	if s.State.ProjectionError == "" {
+		t.Fatal("stale file projection was not reported")
 	}
 	if s.worker == nil {
 		t.Fatal("started worker was abandoned after projection failure")
@@ -441,7 +442,7 @@ func TestProjectionWriteFailureRebuildsBindingWithoutSecondStart(t *testing.T) {
 		t.Fatal(err)
 	}
 	op, err := records.loadOperation(runID, runID, attemptOperationID(runID, runID))
-	if err != nil || op.Status != OperationAccepted {
+	if err != nil || op.Status != OperationConfirmed {
 		t.Fatalf("fixed start receipt missing after projection failure: %#v, %v", op, err)
 	}
 	s.worker.Kill()
