@@ -1,68 +1,36 @@
-# Hosting 红线 v2：执行交给 Orca，调度与完成留在 Steerline
+# Hosting 红线：中心管业务，执行端管现场
 
-v1 的红线是按"Orca 只当哑终端宿主"写的；目标改为**把执行切到 Orca** 后，第 2、4 条（以及第 3、5 条）必须修正。本文记录当前 v2 实现的边界。
+SteerLine 同时支持本机 Codex 和 Orca 执行。当前 Orca terminal v2 实现使用 worktree、终端和结果文件；目标远程路径使用受监管 worker、Dispatch 和消息协议，按 [执行架构 Spec](spec/execution-architecture.spec.md)、[远程协议 Spec](spec/01-orca-remote-protocol.md)与[远程闭环 Spec](spec/03-remote-execution-and-viewer.md)实施。当前实现的细节见 [Hosting v2 规范](spec/hosting-spec.md)，不作为目标远程路径的限制。
 
-后续远程接入遵循已确认的[执行架构共同约束](spec/execution-architecture.spec.md)：远端仅运行 Orca，允许接入其受监管 worker 与消息协议，并保留同任务多 agent 独立 worktree 并行的模型。下文的 orchestration 全面禁用及本地文件契约需随该迁移替换，不是目标远程架构的约束。
+原生任务接入前，现有 Beads 任务源与 Orca terminal v2 可以作为过渡实现和验证路径；这不形成长期的双任务权威或旧数据兼容要求。以下红线描述目标架构及过渡中不能破坏的执行安全边界。
 
-## 职责划分
+## 权威边界
 
-**Orca 负责执行**：创建 worktree、启动 agent（codex/claude/pi/…）、跑 agent、提供实时终端/输出、agent 存活与终端状态。
-
-**Steerline 负责调度与完成**：Beads 领取与状态、任务选择、DAG/编排、PR 合并核实、Beads close、恢复策略。
-
-| 事实 | 归属 |
+| 事实或动作 | 权威 |
 | --- | --- |
-| 任务领取 / Beads 状态 | Steerline |
-| worktree 路径 / 分支 / agent 存活 / 终端 | **Orca**（Steerline 只读校验 branch、HEAD、base 祖先） |
-| PR 是否合入目标主线 | 外部平台（Steerline 核实） |
-| 最终完成 / Beads close | Steerline |
-| 编排 / DAG / 人机消息 | Steerline |
+| 业务 Task、固定 DAG、领取、步骤顺序、决策状态、恢复、交付和结项 | SteerLine 中心服务 |
+| worktree、agent、Orca Run/Task/Dispatch、平台消息和执行存活事实 | 对应的本机或 Orca 执行后端；中心按固定身份核验并保存事实 |
+| PR 身份、head、目标分支与合并事实 | PR 平台；中心重新查询并核验 |
+| PR 审阅与合并、越权或证据不足时的取舍 | 人 |
 
-原则：**执行事实以 Orca 为准，任务与完成事实以 Steerline 为准。** v1 的"Orca 不是任何事实源"不再适用。
+Orca 的 Run/Task/Dispatch 是执行身份，不等同于 SteerLine 的业务 Task、WorkflowRun 或 DAG。可以通过 Orca 的受监管 worker 和 ask/reply 协议执行固定意图；不能让 Orca 的 gate 或任务状态替代中心的业务门槛、决策与结项。UI、CLI 和 agent 均不能绕过中心命令直接写业务状态。
 
-## 允许的 Orca 命令
+## 派发与结果
 
-- `status`
-- `repo list|show`
-- `worktree list|show|ps|create|rm|set`
-- `terminal create|show|read|wait|send|switch|close`
-- `agent hooks status`
+- 中心先持久化任务/步骤身份、固定仓库与 base、执行目标和外部动作意图，再调用后端；实际 worktree、Dispatch 和回执由执行端提供。远端路径属于远端，中心不能按本机路径读取远端文件或默认共享磁盘，远端也无需部署 SteerLine 服务。
+- 后端失联、请求响应丢失或执行可能仍活跃时保留原身份与资源占用，先对账，不盲目重派，也不自动切到另一后端。后端适配器只返回平台事实，不领取或关闭业务任务。
+- 中心按 implement、verify、按配置 review、publish_pr 的固定顺序推进。agent、技能和脚本只完成被派发步骤；自然语言总结、worker_done 或结果文件本身均不能证明验证通过或任务完成。验证回执、代码 revision、PR head 和真实合并事实须由中心分别核验。
+- worker 的业务问题绑定原 Execution、Attempt 和 decision ID；答案保存、平台接受和实际应用分别记录。登录、信任目录与宿主权限提示交人处理，不伪装成业务问题。
 
-## 禁止的 Orca 命令
+## 生命周期与能力
 
-- `orca orchestration *`（`run-create`、`task-create`、`worker-start`、`dispatch`、`send`、`check`、`ask/reply`、`gate-*`）。Run/Task/Dispatch 概念不进入 Steerline；编排/DAG 留在 Steerline。
-- `automations`、`browser`、`computer`、`artifacts`、`publishing`、emulator。
+- 关闭 viewer 只结束观察。关闭 Windows 服务窗口会停止中心监督；远端 worker 可能继续，不能因此断言已停止或释放资源。
+- 当前受监管远程路径不提供生产取消；取消请求明确返回不支持并提示人工处理，不发送未经验证的 stop，也不凭 terminal handle 兜底关闭。已结算执行按后端协议释放资源，默认保留工作区与产物。
+- 仅启用对应目标与版本组合已实测的能力。首版远程版本、消息上限和剩余验收以远程 Spec 为准；未知能力保持不可用，不用提示词补足平台证据。
 
-## 结果契约（R-a）
+## 审查红线
 
-Orca 启动的是 TUI agent，没有 `--output-schema` / 进程退出码。因此：
-
-- prompt 用 Orca 原生 `--prompt` prefill 下发（pointer→`prompt.txt`），不用启动后再按键。
-- agent 按 prompt/skill 在 worktree 内写结果文件（`<worktree>/.steerline-result.json`，prompt 里给的是相对 CWD 路径）。
-- Steerline 读取、用内嵌 `result.schema.json` 校验，再落到权威 `runs/<run_id>/result.json`。
-- `outcome=needs_decision`：agent 无法继续、需要人工决策时，带 `decision{question,options[],recommended,allow_free_text}`；Steerline 置 `finish_task_status=waiting_decision`，保留 claim/worktree/终端并暂停新派发，等人回答后续跑。详见 [decisions](decisions.md)。
-- **结果文件不是完成**：仍需 Steerline 核实 PR 已合入目标主线并确认 Beads closed。
-
-## fallback 边界
-
-- 只有在**尚未让 Orca 创建 worktree** 之前，Orca 不可用才可按 `fallback` 回退本地或失败。
-- 一旦 Orca 建了 worktree，Orca 不可达就是 `unknown/blocked`，**不本地重造、不自动续跑**。
-
-## 交互纪律
-
-- TUI agent 可能停在需要人工的提示；用 `terminal show` 的 `agentWait` 检测，判为 `blocked` 并保留终端，**不代答**。
-- 需要人工处理走 Steerline 恢复命令（`stop`/`mark-stopped`/`accept-result`/`retry`），不在 agent 终端里回答。
-- 手动 `terminal send` 属于 out-of-band，该运行确定性视为失效。
-- pi 前置：pi 首次进入未信任目录会弹 `Trust project folder?`，截获 prefill 提交键。预先在 `~/.pi/agent/trust.json` 信任 `<orca>/workspaces/<repo>`（pi 向上查找父目录），否则该次 dispatch 收不到 prompt。
-
-## 活动流说明
-
-Orca TUI 没有结构化事件流，`activity.jsonl` 退化为：Steerline 生命周期事件 + 从 `terminal read` 尽力归一化的文本；它不再是完整逐项事件。这是把执行交给 Orca 的代价。
-
-## 评审检查清单
-
-- [ ] 是否调用了 `orca orchestration *`？（禁止）
-- [ ] 是否把 worktree/agent 存活当成 Steerline 的判定？（应读 Orca）
-- [ ] 是否把结果文件当成了"完成"？（应再验 PR + Beads）
-- [ ] Orca 建了 worktree 后是否错误地回退本地？
-- [ ] `activity.jsonl` 是否仍只有服务一个写者？
+- 业务 DAG、步骤门槛、Decision 或交付事实是否被 Orca、agent、技能、UI 或脚本直接推进？
+- 外部动作不确定时，是否启动了替代 worker、切换后端或释放了可能仍活跃的资源？
+- 是否把结果文件、worker_done、PR 已创建或 PR closed 当成已核验交付？
+- 是否把远端路径当成本机文件，或把服务/界面关闭当成远端执行停止？

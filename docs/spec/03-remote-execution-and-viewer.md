@@ -14,7 +14,7 @@
 
 ## 2. 配置与接入前置
 
-新增显式的受监管远程配置，至少包含固定 connection ID、home Orca runtime/协调者绑定、environment ID、远端 repo selector、agent、输出/状态轮询参数和能力报告版本。具体配置字段由实施确定并更新示例；旧本机 Orca 配置继续采用原模式。
+新增显式的受监管远程配置，至少包含固定 connection ID、home Orca runtime/协调者绑定、environment ID、远端 repo selector、agent、输出/状态轮询参数和能力报告版本。具体配置字段由实施确定并更新示例；本机 Orca terminal v2 与受监管远端是不同协议实现，不从前者的配置隐式切换。
 
 Windows 中心服务从 [PR 3 固定入口](pr-03-service-lifecycle.spec.md) 由用户独立打开可见服务窗口；viewer 退出不停止仍开着的中心服务，关窗则结束中心监督。本阶段不得让 viewer 在后台代启中心服务，也不得把关窗当成远端 worker 的停止证明。用户重新打开服务窗口后，中心按持久身份和 Operation 对账，再恢复消息读取和派发判断；Linux detached 路径按其平台能力运行。
 
@@ -28,9 +28,9 @@ Windows 中心服务从 [PR 3 固定入口](pr-03-service-lifecycle.spec.md) 由
 
 任务来源与结项的权威留在中心。远端技能获得任务内容与已领取事实，不调用 `bd claim/close`，不复制数据库。若既有 start/finish 技能强制要求本机 Beads 访问，必须先提供并验证远程接入契约；不能只在提示词里宣布该依赖不存在。
 
-Beads 来源项目的初版结项支持中心能执行的 Beads close，以及明确声明 `execution_location=controller`、不依赖远端 worktree 的 completion 适配器。旧 `{worktree_path}` completion 和必须访问远端现场的适配器在远程配置预检时拒绝。其后续支持需 Spec 01 的脚本能力通过验证，不能把未支持的配置带入等待合并后才失败。
+过渡期的 Beads 来源仅用于原生接入前的执行验证：中心可执行已有 Beads close 或明确在中心运行、无需远端 worktree 的 completion 适配器。这不构成长期任务权威或旧数据兼容要求。需要直接访问远端现场的 completion 在预检时拒绝，不能等到 PR 合并后才发现不可执行。
 
-已按 [Beads 退出 Spec B3](beads-exit.spec.md) 切换的 native 项目复用其 B2 任务上下文和本 Spec 的步骤/结果通道，由 [固定 DAG Spec D3](task-dag.spec.md) 的中心事务核验交付并关闭任务，不调用 Beads 或旧 completion。任务源不是后端类型，不能因接入远端自动切换权威；原生任务接入也不扩大本 Spec 的版本、消息大小或取消能力。
+原生项目复用 [原生接入 Spec B2](beads-exit.spec.md) 的任务上下文和本 Spec 的步骤/结果通道，由 [固定 DAG Spec D3](task-dag.spec.md) 的中心事务核验交付并关闭任务，不调用 Beads 或旧 completion。任务源不是后端类型，不能因接入远端自动切换权威；原生任务接入也不扩大本 Spec 的版本、消息大小或取消能力。
 
 ## 3. workspace 与派发
 
@@ -83,7 +83,7 @@ worker-read 优先可用的 transcript，回退时明确标记 terminal。source
 
 回答走 Spec 02 的 SubmitAnswer 命令：精确 decision ID、attempt、expected_version、选择/备注及幂等键。服务事务检查问题仍有效、答案符合请求、目标尝试仍权威，然后保存答案和 reply Operation。重复同一提交返回原结果；不同答案竞争时返回冲突并展示已接受答案。
 
-离线时允许保存有效答案，viewer 显示“已保存，待远端送达”。同一业务问题的回答不因重连再次生成新消息。若旧问题或 Dispatch 已失效，答案记录保留并标记 failed/superseded，不发送给替代 worker。
+服务离线时 viewer 只显示问题和恢复服务入口，不写答案；恢复后经同一 SubmitAnswer 命令提交。同一业务问题的回答不因重连再次生成新消息。若原问题或 Dispatch 已失效，答案记录保留并标记 failed/superseded，不发送给替代 worker。
 
 业务自由文本答案与 Orca 终端按键输入分开。登录、信任目录和宿主权限提示展示明确处理原因；本阶段不通过 viewer 自动回答这些提示，也不把其处理后果伪装成业务决策已应用。
 
@@ -99,13 +99,13 @@ publish_pr 成功结果包含精确 PR URL、实现 head commit、目标分支�
 
 等待 PR 合并时释放执行槽，保留任务领取、选用结果和 PR 绑定。worker 资源按 Orca 规则完成 release/明确的保留处理；释放 agent 终端不等于删除 worktree，远端产物默认保留，不触发公开发布。
 
-合并后在中心执行已固定的结项适配，并回读任务来源确认 closed 后才 completed。结项的外部副作用采用同一业务幂等键，部分失败继续 completing 并对账，不重复开发、不绕过自定义结项回调。PR 未合并关闭或绑定漂移则 blocked，不能关闭任务。
+PR 合并后，原生来源由中心按固定 DAG D3 提交 TaskDelivery 与 closed；过渡 Beads 来源由中心调用已固定的结项适配并回读 closed。部分失败继续 completing 并按原操作身份对账，不重复开发或跳过结项事实。PR 未合并关闭或绑定漂移则 blocked，不能关闭任务。
 
 停止整个服务仅停止中心监督并保存状态；Windows 关服务窗口也会停止中心监督，远端 worker 可以继续，中心不得据此释放其活跃资源许可。当前生产远程取消不可用，相关命令返回明确的不支持并要求人工处理，不发送 Stop mutation。支持停止的本机适配器仍使用独立、持久化且可追踪的 Stop 操作。Windows 由用户重新打开固定服务窗口入口；启动恢复先处理已有消息、动作和执行身份，再考虑派发新任务。
 
 ## 7. viewer 与命令行
 
-现有 TUI 通过 QueryService 和 CommandService 读取/操作新记录，旧快照仍可只读查看。CLI watch/answer 使用相同入口；选择 task ID 存在多个目标时必须要求 execution/decision ID，不能默认选第一项。
+控制台通过 QueryService 和 CommandService 读取/操作当前格式记录；CLI 使用相同入口，不读取旧快照。选择 task ID 存在多个目标时必须要求 execution/decision ID，不能默认选第一项。
 
 界面至少显示：
 
