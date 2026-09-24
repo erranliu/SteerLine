@@ -26,6 +26,13 @@
 2. [任务、执行模型、最小状态机与执行适配器](02-execution-model-and-adapter.md)
 3. [最小状态机的分阶段远程闭环与 viewer 人工决策](03-remote-execution-and-viewer.md)
 
+## 原生任务与固定 DAG
+
+- [Spec：原生任务、固定 DAG 与 Beads 退出](native-task-dag.spec.md)
+- [Plan：分阶段实现与验证](native-task-dag.plan.md)
+
+按 TASK-CORE → TASK-DAG → BEADS-EXIT → DAG-VIEW 交付，复用中心执行模型的事务与身份，不等待整个远程闭环完成。系统不提供拆分或回退流程，两者由用户人工处置；具体范围、来源权威接替、接口与验收以该 Spec 为准。
+
 ## 现有 Hosting 实现
 
 - [Hosting 规范 v2：Orca 驱动执行](hosting-spec.md)
