@@ -30,7 +30,7 @@ Task、WorkflowRun、Execution、StepAttempt、Decision 和外部平台身份分
 
 用户可通过 Codex 分析并人工实施拆分或回退，系统不承诺自动修复相关状态。重启恢复、对账与原契约下的重试继续支持。图算法、布局和 UI 均不成为业务写者。
 
-落地规格：[原生任务 Spec](../spec/native-task-dag.spec.md) · [Plan](../spec/native-task-dag.plan.md)。Beads 路径在对应项目按规格切换前继续有效，不据规划摘要修改当前任务权威。
+共同要求：[原生任务共同约束](../spec/native-task-constraints.md)。独立执行规格：[任务模型](../spec/task-core.spec.md)、[固定 DAG](../spec/task-dag.spec.md)、[Beads 退出](../spec/beads-exit.spec.md)、[关系视图](../spec/dag-view.spec.md)；各有同名配套 Plan，每任务一个独立实现 PR。Beads 路径在对应项目按规格切换前继续有效，不据规划摘要修改当前任务权威。
 
 ## 证据、恢复与迁移
 

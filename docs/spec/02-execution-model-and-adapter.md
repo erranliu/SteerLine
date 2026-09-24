@@ -14,7 +14,7 @@ Spec 01 的逻辑接口可用于本阶段设计和替身测试。真实 remote a
 
 local Codex 与 Orca 是长期正式后端。[控制台 4A](pr-04a-execution-backends.spec.md) 定义共同操作/身份/能力，[4B](pr-04b-conversation-events.spec.md) 定义会话和全文查询。本阶段复用先落地的这些契约与测试，负责领域模型、事务和旧状态迁移；若本阶段先落地，4A/4B 直接扩展本阶段权威接口。不得建立平行 adapter、另一会话模型或双重业务写者；不改变控制台 PR 3 的本机生命周期。
 
-后续原生任务扩展由 [原生任务 Spec](native-task-dag.spec.md) 和 [Plan](native-task-dag.plan.md) 承担，不增加本阶段的 DAG 交付范围。未切换项目继续由 Beads 提供任务事实；已按该 Spec 切换的 native 项目以中心任务/交付事务为权威。原生 Task ID 与可选外部任务 ID 分开，后续扩展复用本阶段身份、数据库和命令服务，不再迁移一套执行模型。
+后续原生任务扩展分别由 [任务模型](task-core.spec.md)、[固定 DAG](task-dag.spec.md)、[Beads 退出](beads-exit.spec.md) 和 [关系视图](dag-view.spec.md) 四个独立任务承担，各有同名配套 Plan 和独立实现 PR，不增加本阶段的 DAG 交付范围。未切换项目继续由 Beads 提供任务事实；已按 Beads 退出 Spec 切换的 native 项目以固定 DAG Spec D3 的中心任务/交付事务为权威。原生 Task ID 与可选外部任务 ID 分开，后续扩展复用本阶段身份、数据库和命令服务，不再迁移一套执行模型。
 
 ## 2. 实体与身份
 
@@ -42,7 +42,7 @@ ID 为不透明稳定标识，不由终端标题、远端路径或显示名称�
 
 | 字段 | 允许值 |
 | --- | --- |
-| Task.status | open、in_progress、closed；本阶段 Beads 路径由任务提供方回读核实，后续 native 路径按原生任务 Spec 的中心事务核实 |
+| Task.status | open、in_progress、closed；本阶段 Beads 路径由任务提供方回读核实，后续 native 路径按固定 DAG Spec D3 的中心事务核实 |
 | WorkflowRun.phase | queued、executing、waiting_decision、waiting_pr_merge、completing、completed、blocked |
 | Execution.status | pending、active、waiting_decision、succeeded、failed、blocked、stopped |
 | StepAttempt.status | planned、dispatching、dispatched、running、waiting_decision、succeeded、failed、stopping、stopped、outcome_unknown |

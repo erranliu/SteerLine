@@ -8,7 +8,7 @@
 
 下列是后续产品设想，颗粒度可以继续细化。选定具体范围时移入主 roadmap，建立执行关系并转成 Spec；这里不重复维护已经进入主 roadmap 的控制台、中心状态机、远程接入和原生任务 DAG 交付清单。
 
-任务与依赖将由 SteerLine 自主管理，逐步解除 Beads 必需依赖；具体推进见 [主 roadmap](roadmap.md)，执行要求见 [原生任务 Spec](../spec/native-task-dag.spec.md) 与 [Plan](../spec/native-task-dag.plan.md)。发布后的执行图固定依赖与交付契约，系统不提供拆分、回退或动态依赖修改流程。拆分和回退由用户通过 Codex 分析并人工处置，系统不承担自动修复；故障恢复与原契约下的执行重试继续保留。
+任务与依赖将由 SteerLine 自主管理，逐步解除 Beads 必需依赖；具体推进见 [主 roadmap](roadmap.md)，各任务独立 Spec/Plan 的入口见 [规格索引](../spec/README.md)，共同要求见 [原生任务共同约束](../spec/native-task-constraints.md)。发布后的执行图固定依赖与交付契约，系统不提供拆分、回退或动态依赖修改流程。拆分和回退由用户通过 Codex 分析并人工处置，系统不承担自动修复；故障恢复与原契约下的执行重试继续保留。
 
 ## 1. 从产品目标生成可管理的规划
 

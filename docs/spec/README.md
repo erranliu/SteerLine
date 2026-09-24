@@ -28,10 +28,16 @@
 
 ## 原生任务与固定 DAG
 
-- [Spec：原生任务、固定 DAG 与 Beads 退出](native-task-dag.spec.md)
-- [Plan：分阶段实现与验证](native-task-dag.plan.md)
+共同要求见 [原生任务共同约束](native-task-constraints.md)。每个任务对应一个独立 Spec、配套 Plan 和一个独立实现 PR，不把多个任务藏在同一总文件的章节中。
 
-按 TASK-CORE → TASK-DAG → BEADS-EXIT → DAG-VIEW 交付，复用中心执行模型的事务与身份，不等待整个远程闭环完成。系统不提供拆分或回退流程，两者由用户人工处置；具体范围、来源权威接替、接口与验收以该 Spec 为准。
+| 任务 | Spec | Plan |
+| --- | --- | --- |
+| TASK-CORE：原生任务模型 | [Spec](task-core.spec.md) | [Plan](task-core.plan.md) |
+| TASK-DAG：固定依赖调度 | [Spec](task-dag.spec.md) | [Plan](task-dag.plan.md) |
+| BEADS-EXIT：解除 Beads 依赖与项目迁移 | [Spec](beads-exit.spec.md) | [Plan](beads-exit.plan.md) |
+| DAG-VIEW：任务关系视图与只读导出 | [Spec](dag-view.spec.md) | [Plan](dag-view.plan.md) |
+
+按表中顺序分别交付，复用中心执行模型，不等待整个远程闭环。系统不提供任务拆分或回退流程，两者由用户人工处置；共同文档不代替各任务的执行范围与验收。
 
 ## 现有 Hosting 实现
 

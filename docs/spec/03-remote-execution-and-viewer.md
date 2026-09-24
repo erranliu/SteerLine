@@ -26,12 +26,12 @@
 
 Beads 来源项目的初版结项支持中心能执行的 Beads close，以及明确声明 `execution_location=controller`、不依赖远端 worktree 的 completion 适配器。旧 `{worktree_path}` completion 和必须访问远端现场的适配器在远程配置预检时拒绝。其后续支持需 Spec 01 的脚本能力通过验证，不能把未支持的配置带入等待合并后才失败。
 
-已按 [原生任务 Spec](native-task-dag.spec.md) 切换的 native 项目复用该 Spec N6 的任务上下文和本 Spec 的步骤/结果通道，由 N4 的中心事务核验交付并关闭任务，不调用 Beads 或旧 completion。任务源不是后端类型，不能因接入远端自动切换权威；原生任务接入也不扩大本 Spec 的版本、消息大小或取消能力。
+已按 [Beads 退出 Spec B3](beads-exit.spec.md) 切换的 native 项目复用其 B2 任务上下文和本 Spec 的步骤/结果通道，由 [固定 DAG Spec D3](task-dag.spec.md) 的中心事务核验交付并关闭任务，不调用 Beads 或旧 completion。任务源不是后端类型，不能因接入远端自动切换权威；原生任务接入也不扩大本 Spec 的版本、消息大小或取消能力。
 
 ## 3. workspace 与派发
 
 1. 中心完成配置预检，固定目标仓库/分支、技能协议版本及 base commit。Beads 来源先持久化 WorkflowRun、Execution、StepAttempt 和任务领取意图；native 来源按下一步与 claim 在同一中心事务提交这些记录。
-2. 由中心领取任务并核实身份与领取者，之后才允许派发 agent。Beads 来源回读提供方，native 来源按原生任务 Spec 事务保存 claim、运行和意图，不重复创建本步骤记录。claim 响应不确定时保持待核实并读取对应权威，不能直接再次 claim 或派发；被他人领取时记录冲突并结束本次准备，不改写对方领取。
+2. 由中心领取任务并核实身份与领取者，之后才允许派发 agent。Beads 来源回读提供方，native 来源按固定 DAG Spec D3 事务保存 claim、运行和意图，不重复创建本步骤记录。claim 响应不确定时保持待核实并读取对应权威，不能直接再次 claim 或派发；被他人领取时记录冲突并结束本次准备，不改写对方领取。
 3. 验证或通过 Orca 执行已验证的准备操作，使远端能够取得该固定 commit。远端不能解析中心私有 ref；分支名不能替代固定 SHA。
 4. 保存派发 Operation 后，通过受监管 worker 创建远端独立 worktree，获取平台身份。Orca 返回的 ready 只证明启动协议到达相应阶段；取得运行/进度证据后再显示运行中。
 5. worktree 分支、初始 HEAD、仓库身份和 base 必须在改动前核验。使用 Spec 01 验证的 Orca 元数据或远端确定性检查回执；不足时停止开发推进并标记准备失败，不能填入期望值冒充实际值。
