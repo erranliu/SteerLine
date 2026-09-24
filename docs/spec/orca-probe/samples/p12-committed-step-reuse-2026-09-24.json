@@ -1,0 +1,32 @@
+{
+  "schema_version": "steerline.orca-probe.observation.v1",
+  "captured_at": "2026-09-24T02:09:46Z",
+  "operation": "committed_code_across_sequential_remote_steps",
+  "initial_invalid_attempt": {
+    "orca_assigned_worktree": "<worktree-assigned-1>",
+    "worker_reported_worktree": "<worktree-offtarget-1>",
+    "worker_done_platform_outcome": "succeeded",
+    "business_result_valid": false,
+    "reason": "The worker independently created a second worktree and committed there; the assigned worktree stayed at the base commit.",
+    "offtarget_commit_preserved_for_probe": true,
+    "agent_terminal_released": true
+  },
+  "controlled_pair": {
+    "worktree": "<worktree-assigned-1>",
+    "first_dispatch": "<dispatch-commit-1>",
+    "first_action": "cherry-pick the test artifact commit into the assigned worktree",
+    "first_result": "succeeded",
+    "first_terminal_released": true,
+    "committed_head": "<commit-assigned-1>",
+    "second_dispatch": "<dispatch-verify-1>",
+    "second_action": "read-only verify assigned worktree, branch, HEAD, artifact and clean status",
+    "second_result": "succeeded",
+    "same_worktree_identity": true,
+    "distinct_task_and_dispatch_ids": true,
+    "head_preserved_after_release": true,
+    "artifact_preserved_after_release": true,
+    "clean_worktree": true,
+    "second_terminal_released": true
+  },
+  "conclusion": "The successful pair proves committed code survives release and is visible to a distinct supervised step in the exact same Orca worktree. The first invalid attempt shows that Orca settlement alone does not guarantee the agent used the assigned worktree; the center must compare reported and observed workspace identity before advancing."
+}

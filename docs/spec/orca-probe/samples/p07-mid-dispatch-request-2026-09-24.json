@@ -1,0 +1,29 @@
+{
+  "captured_at": "2026-09-24T01:06:42Z",
+  "evidence_class": "captured_cli_response",
+  "exit_code": 0,
+  "operation": "request-show",
+  "response": {
+    "_meta": {
+      "runtimeId": "\u003cID-001\u003e"
+    },
+    "id": "\u003cID-002\u003e",
+    "ok": true,
+    "result": {
+      "createdAt": "[TEXT REDACTED]",
+      "interpretation": "[TEXT REDACTED]",
+      "method": "[TEXT REDACTED]",
+      "receipt": {
+        "accepted": {
+          "dispatchId": "\u003cID-003\u003e",
+          "taskId": "\u003cID-004\u003e"
+        }
+      },
+      "requestId": "\u003cID-005\u003e",
+      "state": "pending",
+      "updatedAt": "[TEXT REDACTED]"
+    }
+  },
+  "schema_version": "steerline.orca-probe-sample.v1",
+  "scope": "home mutation request"
+}

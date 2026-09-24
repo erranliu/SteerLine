@@ -110,7 +110,7 @@ implement 可使用中心提供的通用开发指令并加载项目基础技能�
 | ReadOutput | ExecutionRef + opaque cursor → 有界内容、来源、下个 cursor、缺口 |
 | Receive / Ack | 控制端 inbox 身份 → Delivery；确认遵循平台要求，与读取分离 |
 | Reply | DecisionRef + 固定答案 + Operation → 平台接受/拒绝/不确定；不自行标记 applied |
-| StopExecution | ExecutionRef + Operation → 停止回执，不把发出请求当成已退出；下游文档中的 Stop 指此操作 |
+| StopExecution | ExecutionRef + Operation → 停止回执，不把发出请求当成已退出；当前生产远程目标返回明确的 `capability_unsupported`，不发 Orca stop 变更；下游文档中的 Stop 指此操作 |
 | DetachObservation | 仅结束中心监听，不取消 worker、不隐式删除工作区；服务生命周期按明确策略调用 |
 | SettleResources | 已结算执行的 release/已明确选择的 retain → 回执或不确定状态 |
 | ReconcileOperation | 已有平台 request ID 和原请求 → 只读查询或平台允许的同请求恢复 |
@@ -122,6 +122,8 @@ ExecutionRef 保存 backend/protocol/agent、固定 target/连接 ID、worktree 
 `local_process` 与 Orca 后端族都作为长期正式适配维护；`orca_terminal_v2` 保留现有协议，新增 `orca_supervised` 由 Spec 03 完成。原 `host=local|orca` 配置继续可读；新增远程目标必须显式选择受监管模式，不能改变现有 Orca 配置默认行为。backend 与 agent/target 分开，预检不能让未使用的本机 Codex 成为 Orca 的无条件依赖。能力使用 verified/unsupported/not_tested 及版本/目标/证据，不允许隐式 fallback。
 
 沿用 4A 参数化契约套件，业务状态机不依赖具体平台类型；沿用 4B 的 session/turn/item/phase、来源 cursor、正文引用和缺口语义。轮次结束不驱动 Task 完成，后端接受 reply 不证明 Decision.applied。当前本机停服策略与未来远端只分离监督策略显式区分，不藏在 Close/析构中。
+
+当前受监管远程目标不提供生产取消操作。状态模型和 StopExecution 接口保留给本机适配器及未来经验证的平台版本；远程命令入口应明确返回不支持并展示人工处理原因，不能把服务停机或断线当作远端停止。
 
 ## 5. 持久化与命令入口
 

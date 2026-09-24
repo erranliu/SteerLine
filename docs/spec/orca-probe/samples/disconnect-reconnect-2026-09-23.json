@@ -1,0 +1,93 @@
+{
+  "schema_version": "steerline.orca-probe-sample.v1",
+  "captured_at": "2026-09-23T09:45:26Z",
+  "evidence_class": "captured_cli_response_curated_sanitized",
+  "operation": "paired_environment_disconnect_reconnect",
+  "target": {
+    "center_runtime": "<home-runtime-1>",
+    "environment": "<remote-env-1>",
+    "remote_runtime_before": "<remote-runtime-1>",
+    "remote_runtime_after": "<remote-runtime-1>",
+    "run": "<run-1>",
+    "task": "<task-reconnect-1>",
+    "dispatch": "<dispatch-reconnect-1>",
+    "worktree": "<remote-worktree-1>",
+    "remote_terminal": "<remote-terminal-1>"
+  },
+  "before_disconnect": {
+    "worker_start": {
+      "state": "ready",
+      "stage": "input_accepted",
+      "request_id": "<platform-request-1>"
+    },
+    "worker_show": {
+      "dispatch": "dispatched",
+      "liveness": "live",
+      "source": "execution_host"
+    },
+    "inbox": {
+      "delivery_id": "<delivery-question-1>",
+      "message_id": "<question-1>",
+      "type": "question",
+      "acknowledged": false
+    }
+  },
+  "ui_disconnect": {
+    "control": "Disconnect this paired server",
+    "observed_status": "Disconnected",
+    "duration_at_least_seconds": 14
+  },
+  "during_or_after_disconnect": {
+    "home_worker_show": {
+      "ok": false,
+      "error_code": "runtime_error",
+      "error_message": "Runtime environment was disconnected or replaced."
+    },
+    "home_worker_list": {
+      "dispatch": "dispatched",
+      "liveness": "unverifiable",
+      "reason": "host_unavailable"
+    },
+    "new_worker_or_worktree_created": false
+  },
+  "ui_reconnect": {
+    "control": "Connect this paired server",
+    "observed_status": "Connected",
+    "remote_runtime_id_unchanged": true
+  },
+  "after_reconnect": {
+    "remote_status": {
+      "reachable": true,
+      "connection_state": "connected"
+    },
+    "home_worker_show": {
+      "ok": false,
+      "error_code": "runtime_error",
+      "error_message": "Runtime environment was disconnected or replaced."
+    },
+    "home_worker_list": {
+      "dispatch": "dispatched",
+      "liveness": "unverifiable",
+      "reason": "host_unavailable"
+    },
+    "home_inbox": {
+      "delivery_id": "<delivery-question-1>",
+      "message_id": "<question-1>",
+      "type": "question",
+      "replayed": true,
+      "acknowledged": false
+    },
+    "remote_runtime_worker_show": {
+      "ok": false,
+      "error_code": "dispatch_not_found"
+    },
+    "remote_terminal_show": {
+      "handle": "<remote-terminal-1>",
+      "worktree": "<remote-worktree-1>",
+      "connected": true,
+      "orphaned": true,
+      "agent_identity": "codex"
+    }
+  },
+  "conclusion": "The installed Orca version retires the old runtime binding on explicit UI disconnect. The home Run preserved the Delivery and avoided duplicate dispatch, but the existing remote Dispatch did not become verifiable after UI reconnect. This manual-disconnect control does not test P06's transient transport outage. No reply, stop, retry or release was sent while liveness was unverifiable."
+}

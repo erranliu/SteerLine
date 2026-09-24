@@ -1,0 +1,44 @@
+{
+  "captured_at": "2026-09-24T00:47:56Z",
+  "evidence_class": "captured_cli_response",
+  "exit_code": 0,
+  "operation": "worker-read",
+  "response": {
+    "_meta": {
+      "runtimeId": "\u003cID-001\u003e"
+    },
+    "id": "\u003cID-002\u003e",
+    "ok": true,
+    "result": {
+      "archived": true,
+      "clipping": [
+        "[TEXT REDACTED]"
+      ],
+      "contentComplete": false,
+      "cursor": "\u003cID-003\u003e",
+      "dispatchId": "\u003cID-004\u003e",
+      "fallbackReason": null,
+      "provider": "[TEXT REDACTED]",
+      "remoteRuntimeEpoch": "[TEXT REDACTED]",
+      "server": {
+        "environmentId": "\u003cID-005\u003e",
+        "name": "[TEXT REDACTED]"
+      },
+      "source": "transcript",
+      "sourceExact": true,
+      "sourceIdentity": "\u003cID-006\u003e",
+      "status": {
+        "liveness": "[TEXT REDACTED]",
+        "terminal": "[TEXT REDACTED]",
+        "worker": "[TEXT REDACTED]"
+      },
+      "transcript": "[TEXT REDACTED]",
+      "warnings": [
+        "[TEXT REDACTED]",
+        "[TEXT REDACTED]"
+      ]
+    }
+  },
+  "schema_version": "steerline.orca-probe-sample.v1",
+  "scope": "home Run Dispatch"
+}

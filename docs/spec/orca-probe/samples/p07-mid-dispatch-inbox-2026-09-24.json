@@ -1,0 +1,67 @@
+{
+  "captured_at": "2026-09-24T01:06:42Z",
+  "evidence_class": "captured_cli_response",
+  "exit_code": 0,
+  "operation": "check-all",
+  "response": {
+    "_meta": {
+      "runtimeId": "\u003cID-001\u003e"
+    },
+    "id": "\u003cID-002\u003e",
+    "ok": true,
+    "result": {
+      "acknowledged": null,
+      "count": 3,
+      "messages": [
+        {
+          "body": "[TEXT REDACTED]",
+          "created_at": "2026-09-24T01:06:09Z",
+          "delivered_at": null,
+          "delivery_contract": "[TEXT REDACTED]",
+          "from_handle": "dispatch:\u003cID-003\u003e",
+          "id": "\u003cID-004\u003e",
+          "payload": "{\"dispatchId\":\"\\u003cID-003\\u003e\",\"outcome\":\"succeeded\",\"taskId\":\"\\u003cID-005\\u003e\"}",
+          "priority": "[TEXT REDACTED]",
+          "run_id": "\u003cID-006\u003e",
+          "subject": "[TEXT REDACTED]",
+          "thread_id": null,
+          "to_handle": "run:\u003cID-006\u003e",
+          "type": "worker_done"
+        },
+        {
+          "body": "[TEXT REDACTED]",
+          "created_at": "2026-09-24T01:05:30Z",
+          "delivered_at": null,
+          "delivery_contract": "[TEXT REDACTED]",
+          "from_handle": "dispatch:\u003cID-003\u003e",
+          "id": "\u003cID-007\u003e",
+          "payload": "{\"dispatchId\":\"\\u003cID-003\\u003e\",\"options\":[\"[TEXT REDACTED]\",\"[TEXT REDACTED]\"],\"question\":\"[TEXT REDACTED]\",\"taskId\":\"\\u003cID-005\\u003e\"}",
+          "priority": "[TEXT REDACTED]",
+          "run_id": "\u003cID-006\u003e",
+          "subject": "[TEXT REDACTED]",
+          "thread_id": null,
+          "to_handle": "run:\u003cID-006\u003e",
+          "type": "question"
+        },
+        {
+          "body": "[TEXT REDACTED]",
+          "created_at": "2026-09-24T01:05:20Z",
+          "delivered_at": null,
+          "delivery_contract": "[TEXT REDACTED]",
+          "from_handle": "dispatch:\u003cID-003\u003e",
+          "id": "\u003cID-008\u003e",
+          "payload": "{\"dispatchId\":\"\\u003cID-003\\u003e\",\"taskId\":\"\\u003cID-005\\u003e\"}",
+          "priority": "[TEXT REDACTED]",
+          "run_id": "\u003cID-006\u003e",
+          "subject": "[TEXT REDACTED]",
+          "thread_id": null,
+          "to_handle": "run:\u003cID-006\u003e",
+          "type": "status"
+        }
+      ],
+      "runId": "\u003cID-006\u003e"
+    }
+  },
+  "schema_version": "steerline.orca-probe-sample.v1",
+  "scope": "home Run inbox history (non-consuming all)"
+}

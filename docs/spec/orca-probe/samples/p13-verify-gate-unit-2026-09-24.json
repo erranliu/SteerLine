@@ -1,0 +1,30 @@
+{
+  "schema_version": "steerline.orca-probe.observation.v1",
+  "captured_at": "2026-09-24T01:37:20Z",
+  "evidence_class": "local_unit_test",
+  "operation": "pure_verify_result_gate",
+  "source": "internal/steerline/remoteprotocol/verify_result.go",
+  "fixtures": [
+    {"name": "verify-valid.json", "expected": "accepted", "observed": "accepted"},
+    {"name": "verify-missing-check.json", "expected": "rejected_missing_required_receipt", "observed": "rejected_missing_required_receipt"},
+    {"name": "verify-nonzero.json", "expected": "rejected_nonzero_exit", "observed": "rejected_nonzero_exit"},
+    {"name": "verify-wrong-commit.json", "expected": "rejected_candidate_commit_mismatch", "observed": "rejected_candidate_commit_mismatch"}
+  ],
+  "additional_guards_tested": [
+    "worker_done task and dispatch identity",
+    "worker_done failed outcome",
+    "execution-host observed HEAD",
+    "required check contract",
+    "missing explicit result field",
+    "missing check exit code or evidence",
+    "check executed on another commit",
+    "unknown future field ignored"
+  ],
+  "test_commands": [
+    "go test ./internal/steerline/remoteprotocol -count=1",
+    "go test ./..."
+  ],
+  "test_result": "passed",
+  "production_adapter_integrated": false,
+  "conclusion": "The standalone verify gate rejects misleading succeeded summaries when a required receipt is absent, a check exits nonzero, or the candidate commit differs. P13 end-to-end center gating remains not_tested until Spec 03 connects this guard to accepted Orca worker_done events and workflow advancement."
+}

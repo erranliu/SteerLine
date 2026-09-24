@@ -1,0 +1,32 @@
+{
+  "example_only": true,
+  "evidence_class": "synthetic_protocol_draft",
+  "protocol_version": 1,
+  "project_id": "<project-id>",
+  "task_id": "<business-task-id>",
+  "workflow_run_id": "<business-workflow-run-id>",
+  "execution_id": "<business-execution-id>",
+  "step_id": "implement",
+  "attempt_id": "<business-attempt-id>",
+  "operation_id": "<center-operation-id>",
+  "external_message_id": "<orca-message-id-or-observation-source>",
+  "orca": {
+    "home_runtime_id": "<home-runtime-id>",
+    "run_id": "<orca-run-id>",
+    "task_id": "<orca-task-id>",
+    "dispatch_id": "<orca-dispatch-id>",
+    "execution_host": "<remote-host-id>",
+    "worktree_id": "<remote-worktree-id>"
+  },
+  "kind": "result",
+  "received_at": "<center-receive-time-utc>",
+  "payload": {
+    "outcome": "succeeded",
+    "result_version": 1,
+    "input_revision": "<base-commit>",
+    "output_revision": "<candidate-commit>",
+    "applied_decision_ids": [],
+    "summary": "<redacted-summary>",
+    "error": null
+  }
+}
