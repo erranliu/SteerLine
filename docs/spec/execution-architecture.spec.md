@@ -1,10 +1,10 @@
-# 架构决策：中心状态机与 Orca 远程执行
+# 执行架构 Spec：共同约束
 
-确认日期：2026-09-23。状态：目标架构已确认，尚未实现。
+本 Spec 固定执行后端、中心状态机与远程接入的共同执行约束，由各阶段 Spec/Plan 引用和验收；它不单独启动一个实现阶段。
 
-实施分为三个 Spec：[01 Orca 远程协议验证](spec/01-orca-remote-protocol.md) → [02 执行模型、最小状态机与适配器](spec/02-execution-model-and-adapter.md) → [03 分阶段远程执行与 viewer 闭环](spec/03-remote-execution-and-viewer.md)。
+远程执行分为三个 Spec：[01 Orca 远程协议验证](01-orca-remote-protocol.md) → [02 执行模型、最小状态机与适配器](02-execution-model-and-adapter.md) → [03 分阶段远程执行与 viewer 闭环](03-remote-execution-and-viewer.md)。本机双链路接口与会话契约由 [4A](pr-04a-execution-backends.spec.md)、[4B](pr-04b-conversation-events.spec.md) 定义，先落地的权威接口由后续阶段复用。
 
-本文约束后续设计。现有单执行槽、文件结果协议和技能流程仍是当前实现；远程接入、共享服务、移动端和同任务多 agent 并行需分别实施。
+本文与具体阶段 Spec 共同构成执行依据。单执行槽是调度策略；共享部署、移动端和多 agent 并行不因本 Spec 被隐式纳入当前阶段范围。
 
 ## 实施顺序与依赖
 
@@ -22,9 +22,17 @@
 - 远端仅需 Orca、agent 和仓库所需工具及脚本，不要求部署 SteerLine 服务。
 - Orca 管理执行现场：worktree、分支、agent、执行身份、输出和跨机消息。SteerLine 通过执行适配器接入 Orca；产物可以保留在远端，仅回传状态、决策和必要结果元数据。
 - 桌面 viewer 和未来移动端通过同一服务接口查看状态、提交人工操作。业务状态切换由中心服务持久化；共享部署时按用户或组织隔离项目、权限及 Orca 连接。
-- 本轮即实现最小中心流程：准备、实现、验证、按配置审查、发布 PR、等待合并、结项。SteerLine 决定步骤顺序、通过条件和修复回路；目标项目提供步骤内的基础技能或脚本，例如特殊测试与 PR 流程。技能不能自行推进中心流程。脚本可以在 Orca 管理的远端 worktree 内运行，无需常驻 SteerLine 服务。
+- Spec 02/03 实现最小中心流程（不扩入控制台 4A/4B 的交付范围）：准备、实现、验证、按配置审查、发布 PR、等待合并、结项。SteerLine 决定步骤顺序、通过条件和修复回路；目标项目提供步骤内的基础技能或脚本，例如特殊测试与 PR 流程。技能不能自行推进中心流程。脚本可以在 Orca 管理的远端 worktree 内运行，无需常驻 SteerLine 服务。
 
 目标远程适配允许使用 Orca 的受监管 worker、Dispatch、消息和 ask/reply。Orca 执行记录与 SteerLine 业务任务建立映射，业务 DAG 和完成判定仍归 SteerLine。当前 hosting v2 对 `orca orchestration *` 的全面禁用不作为目标远程架构的约束；迁移时应明确替换其结果、交互和恢复契约。
+
+## 长期支持的执行路径
+
+local Codex 与 Orca 均为正式、长期维护的执行后端。backend、agent、execution target 和协议版本分开；Orca terminal v2 与未来 supervised 属于同一后端族的不同协议实现。远程演进不移除 local，不提供不确定情况下的跨后端自动 fallback。
+
+Service 持有唯一业务状态机和存储写入权；后端适配器只执行固定意图并返回事实。启动、观察、输出、回答、停止执行、分离观察和资源结算使用共同契约，能力差异有版本与原生证据。UI/CLI 共用 Query/Command 和会话模型，不直接操作平台终端或 OS 进程。接口与验收见 [控制台 4A](pr-04a-execution-backends.spec.md)、[4B](pr-04b-conversation-events.spec.md)；后续 SQLite 与 remote 复用它们，不建立第二套抽象。
+
+进度消息、最终回复、轮次结束与业务完成分开；过程折叠属于 UI 视图状态。完整输出先持久化再推进来源游标，缺口与未解决问题始终可见。单纯输入接受不能作为决策已应用的证明。
 
 ## 为同任务多 agent 保留的模型
 
