@@ -10,7 +10,7 @@
 | --- | --- | --- | --- |
 | 1 | 统一观察层与读取一致性 | [Spec](pr-01-observation.spec.md) | [Plan](pr-01-observation.plan.md) |
 | 2 | 服务控制协议与定向执行 | [Spec](pr-02-control.spec.md) | [Plan](pr-02-control.plan.md) |
-| 3 | 后台服务生命周期 | [Spec](pr-03-service-lifecycle.spec.md) | [Plan](pr-03-service-lifecycle.plan.md) |
+| 3 | 服务窗口生命周期与连接 | [Spec](pr-03-service-lifecycle.spec.md) | [Plan](pr-03-service-lifecycle.plan.md) |
 | 4 | 执行控制台 TUI | [Spec](pr-04-console.spec.md) | [Plan](pr-04-console.plan.md) |
 | 5 | 人工决策与恢复闭环 | [Spec](pr-05-intervention.spec.md) | [Plan](pr-05-intervention.plan.md) |
 
