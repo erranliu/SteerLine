@@ -26,9 +26,28 @@ product-vision.md
 - 产品计划持续以当前版本为起点；不是固定不变的远期宣言，也不积累已经完成的版本历史。
 - 选定推进范围时，将其具体内容移入 roadmap，避免两处维护相同交付清单。较大目标只移出选中的部分，产品文档保留剩余范围；后续仍需依赖的总目标可以保留必要概述。
 - Roadmap 中的目标使用稳定标识；execution-map 以当前未完成的独立执行 Spec 为条目，并保留其目标标识。一个目标需要多个 PR 交付时，先规划为多个独立任务，每个任务分别对应自己的 Spec 和 PR；保留目标到任务的可追踪映射，不因文件改名重建目标身份。
+- 每个选入 roadmap 的执行任务在形成 Spec 之前就取得仓库内唯一的非负整数规划 ID 和任务名称。数字从 0 起递增，仅表示身份，不表示优先级、依赖或实际执行顺序；目标标识可覆盖多个任务，不能代替任务 ID。任务完成后可从主 roadmap 和 execution-map 移除，但 [task-ids/](task-ids/) 中的身份记录保留；弃用的 ID 也不复用。拆成两个交付任务时，新任务分别申请新 ID，不把原 ID 同时赋给两个任务。
 - 关系表中区分“Spec 已固定的要求”和“规划假设/待确定项”；有 Spec 时链接相关章节，没有 Spec 时直接表达待确定的边界，不维护文档形成状态。
 - 关系至少区分硬前置、接口前置和共享修改冲突，并分别说明开工条件、合并/集成条件。未知依赖不代表允许并行；代码文件不重叠也不能证明协议、业务状态或平台资源互不影响。
 - 关系表中的并行建议不自动改变既有 Spec 的串行要求。决定调整执行安排时，将职责、接口、前置和验收条件落实到所有受影响 Spec，再按新契约执行。
+
+### 规划任务 ID 的分配
+
+使用 Python 3.10+，从仓库任一 worktree 执行以下命令；新 clone 首次分配前先运行 `init`，将已提交的 `task-ids/*.json` 身份装入共享计数器：
+
+```text
+python scripts/roadmap_task_id.py init
+python scripts/roadmap_task_id.py reserve "任务名称"
+python scripts/roadmap_task_id.py check
+```
+
+`reserve` 原子占用下一个数字，并创建 `docs/roadmap/task-ids/<ID>.json`。随后将相同 ID 和名称写入 `roadmap.md`、`execution-map.md`，在提交前运行 `check`。现有任务首次按主 roadmap 的展示顺序分配 0–10；以后只使用脚本产生的新 ID，不补洞、不手工改号。名称是该 ID 的稳定标签；确需更名时应单独审阅其语义并同步修改身份记录、两个规划表和共享计数器，不能把原 ID 改指另一个任务。
+
+仅修正名称而不改变交付身份时运行 `python scripts/roadmap_task_id.py rename <ID> "新名称"`，再同步两份规划表并运行 `check`。改成另一项交付任务则申请新 ID，原号码弃用。
+
+计数器保存在 Git 共享目录的 `refs/steerline/roadmap-task-ids`，各 worktree 共用；脚本用 `git update-ref` 的旧值校验原子更新，竞争者读取新值后重试。即使分配后放弃任务，计数器仍前进，ID 不再发放。`task-ids/` 每 ID 一个文件，保存已分配的最小身份记录，避免不同 worktree 的新增任务修改同一清单文件。此机制保证**同一 Git 仓库的 worktree** 不重复分配；独立 clone 不共享本地 ref，应先同步已合入的身份文件并在同一分配仓库占号。若以后需要多 clone 同时分配，须改用远端原子计数器或统一分配服务，不能假设本地 ref 能跨 clone 仲裁。
+
+规划 ID 与未来原生模型的 `Task.task_id` 分层：前者在规划时分配、对仓库全局唯一；后者按 [原生任务模型 Spec](../spec/task-core.spec.md) 由中心在任务发布时生成，为项目内不透明身份。原生发布可将规划数字作为外部追踪引用绑定到 Task，不能把它当成 `Task.task_id`、Beads ID 或 DAG 边 ID。规划文档不成为运行时任务状态或发布契约的权威。
 
 ## 与 Spec 的关系
 

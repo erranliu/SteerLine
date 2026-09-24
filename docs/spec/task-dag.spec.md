@@ -18,10 +18,12 @@
 | --- | --- |
 | schema_version | 固定 `task-batch/v1`，独立于 runtime 和控制协议版本 |
 | project_id | 已注册目标项目，必须与配置及命令目标一致 |
-| tasks[] | 非空；每项包含唯一局部 key、title、type、priority、contract 和可选 goal_ids |
+| tasks[] | 非空；每项包含唯一局部 key、title、type、priority、contract、可选 goal_ids 和可选非负整数 roadmap_id |
 | dependencies[] | 每项含 predecessor、successor；前置是 `{local_key}` 或 `{task_id}` 二选一，后继只能是本批次 `{local_key}` |
 
-title 非空；type 限 task/bug/feature/chore 并受项目 executable_types 限制；priority 为 0–4 的整数，越小优先，省略为 2。contract 使用 [原生任务模型 Spec C2](task-core.spec.md) 的单 Spec/可选 Plan 字段，goal_ids 仅为追踪字符串，不自动引用或解析任何规划文档。
+title 非空；type 限 task/bug/feature/chore 并受项目 executable_types 限制；priority 为 0–4 的整数，越小优先，省略为 2。contract 使用 [原生任务模型 Spec C2](task-core.spec.md) 的单 Spec/可选 Plan 字段，goal_ids 仅为追踪字符串，不承载 roadmap_id 的唯一身份，也不自动引用或解析任何规划文档。
+
+`roadmap_id` 仅用于将已在规划阶段取得的数字身份关联到原生 Task，不参与 native task_id 分配、优先级或依赖判定。发布事务用项目绑定的仓库身份构造 `ExternalTaskRef(source=roadmap, source_project_identity=<仓库身份>, external_id=<十进制 roadmap_id>)`；同批次或库内已绑定另一 Task 的同一引用必须拒绝，幂等重放原发布请求仍返回原映射。中心不读取规划文档或代为分配规划 ID；没有该字段的任务照常发布。
 
 在原生任务模型已提供的 `task` 子命令下新增以下入口，保留既有 `tasks` 候选快照命令的用途：
 
@@ -34,7 +36,7 @@ title 非空；type 限 task/bug/feature/chore 并受项目 executable_types 限
 
 payload_digest 复用共同约束及前置原生任务模型实现的规范化规则。命令幂等比较包含类型、项目和规范 payload。相同 ID/内容先返回已保存结果，不因成功后 authority_version 变化而重新准入；不同内容返回 idempotency_conflict。不同 request_id 是不同创建请求，系统不依据相似标题或相同任务正文自行去重。
 
-发布前在事务外读取固定 Git 对象并核验规格，事务内确认核验输入摘要与命令一致；目标 repository/remote/branch 必须匹配该项目绑定，配置漂移时拒绝，不把同项目不同目标分支混成一张可调度图。发布事务另核验：项目为 native、authority_version 匹配；全部前置引用存在且属于 published 集合；后继仅为新任务；项目与类型有效；无自环、重复边和环。任务、契约、边、批次映射、graph_revision、事件及命令成功回执同事务提交。失败无部分任务/可领取节点；提交后回执丢失可按原命令身份恢复。
+发布前在事务外读取固定 Git 对象并核验规格，事务内确认核验输入摘要与命令一致；目标 repository/remote/branch 必须匹配该项目绑定，配置漂移时拒绝，不把同项目不同目标分支混成一张可调度图。发布事务另核验：项目为 native、authority_version 匹配；全部前置引用存在且属于 published 集合；后继仅为新任务；项目与类型有效；无自环、重复边和环。任务、契约、可选规划引用、边、批次映射、graph_revision、事件及命令成功回执同事务提交。失败无部分任务/可领取节点；提交后回执丢失可按原命令身份恢复。
 
 发布不改变 dispatch_mode/pause。项目已经 auto 且未暂停时，新任务可以在下一次正常轮询成为候选；CLI 成功输出必须说明这一点。新建 native 项目初始为 manual 且暂停，用户通过既有命令显式开启派发。
 
@@ -81,7 +83,7 @@ payload_digest 复用共同约束及前置原生任务模型实现的规范化�
 | 编号 | 场景与通过条件 |
 | --- | --- |
 | NT04 | A → B → C、分支汇合、不连通任务就绪正确；部分前置完成不放行；稳定优先级顺序 |
-| NT05 | 自环、循环、悬空、重复、跨项目边、旧后继新增前置和已发布契约编辑均拒绝，无局部写入 |
+| NT05 | 自环、循环、悬空、重复、跨项目边、重复 roadmap_id 绑定、旧后继新增前置和已发布契约编辑均拒绝，无局部写入 |
 | NT06 | 同 request_id 重发只创建一次；异内容拒绝；事务写入任一步失败全部回滚，提交后丢回执可查回 |
 | NT07 | 两客户端竞争只一个领取；原 ready 过期、暂停、槽被占、前置未交付分别正确拒绝 |
 | NT08 | 领取提交前后、准备/启动响应前后重启；无重复 claim/worker，不确定动作保留原身份与资源 |

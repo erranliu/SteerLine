@@ -22,9 +22,11 @@
 | TaskDependency | project_id、predecessor_id、successor_id | 外键必须同项目、无自环/重复/环；业务 API 只在后继初次发布时添加 |
 | TaskBatch | batch_id、project_id、schema_version、payload_digest、published_at、command_id | 一次发布的边界；不是可回退的整图版本；批次内局部 ID 到 task_id 的映射持久保存 |
 | TaskDelivery | task_id、kind=verified_pr/imported_baseline、selected_workflow_run_id、evidence、recorded_at | 每任务一份权威交付；原生执行仅用 verified_pr；imported_baseline 仅由后续 [Beads 退出 Spec](beads-exit.spec.md) 的导入行为创建，缺真实历史运行时 selected_workflow_run_id 可空 |
-| ExternalTaskRef | source、source_project_identity、external_id、task_id | 外部身份三元组唯一；同外部任务的多次历史运行关联一个 Task |
+| ExternalTaskRef | source、source_project_identity、external_id、task_id | 外部身份三元组唯一；同外部任务的多次历史运行关联一个 Task；预先规划的仓库数字 ID 可由 `source=roadmap`、仓库身份和十进制 external_id 映射到原生 Task，不替代不透明 task_id |
 
 Task 状态仅有 open、in_progress、closed：发布为 open，领取为 in_progress，交付事务变为 closed。claimant 发布时为空，领取后保留作审计。没有 closed → open、in_progress → open 或直接关闭未领取原生任务的普通命令；导入历史基线由 [Beads 退出 Spec](beads-exit.spec.md) 单独定义，本任务只建模，不实现导入。
+
+规划数字 ID 在原生任务发布前即可存在；本任务只提供 ExternalTaskRef 的存储与唯一约束，不负责分配规划 ID，也不读取规划文件。后继 [固定 DAG Spec](task-dag.spec.md) 可在发布事务中绑定该外部引用。同一 Task 可同时保留不同来源的外部引用，Beads 外部 ID 与规划数字 ID 不互相覆盖；没有规划引用的原生任务仍可按原契约发布。
 
 一个 Task 只允许一个权威活动 WorkflowRun，沿用执行模型的重试资格。不同尝试/候选的身份与任务分开，不能添加限制未来多个 Execution 的 `UNIQUE(workflow_run_id)`。任务重试不改 TaskContract、不重新领取同一任务；不存在领取的新任务通道与重试通道同时派发的情况。
 
@@ -56,7 +58,7 @@ Task 状态仅有 open、in_progress、closed：发布为 open，领取为 in_pr
 
 | 编号 | 场景与通过条件 |
 | --- | --- |
-| NT01 | 无外部 ID 的 Task 可存取；project 隔离；多历史运行关联不丢；Task/Execution 身份分离 |
+| NT01 | 无外部 ID 的 Task 可存取；project 隔离；多历史运行关联不丢；Task/Execution 身份分离；仓库规划数字 ID 与 Beads 外部引用可分别映射到同一 Task，重复外部三元组被拒绝 |
 | NT02 | 原生/Beads 权威持久化；改配置不能绕过迁移；旧投影与历史来源语义正确 |
 | NT03 | 单 Spec/可选单 Plan 与共同引用校验；多个任务 Spec/Plan 不可装入同一契约；revision、摘要、验收引用、越界/缺文件检查正确，CRLF checkout 不误报 |
 | NT21-CORE | 旧身份/运行/PR 关联、Beads 兼容查询和数据投影回归通过；无第二任务权威，重复迁移不重复创建 Task。 |

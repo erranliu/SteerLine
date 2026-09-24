@@ -14,7 +14,7 @@
 
 ## 实施步骤
 
-1. 在中心领域层定义 Spec C2 的原生 Task、TaskContract、ProjectTaskAuthority、TaskBatch、TaskDependency、TaskDelivery 和 ExternalTaskRef。先建立模型及外键/唯一性约束；DAG 的业务写入由后继 TASK-DAG 实现。不要把 Beads DTO 直接重命名成原生模型。
+1. 在中心领域层定义 Spec C2 的原生 Task、TaskContract、ProjectTaskAuthority、TaskBatch、TaskDependency、TaskDelivery 和 ExternalTaskRef。先建立模型及外键/唯一性约束；ExternalTaskRef 可保存仓库级预规划数字 ID，但原生 task_id 仍由中心生成。DAG 的业务写入由后继 TASK-DAG 实现。不要把 Beads DTO 直接重命名成原生模型。
 2. 复用原数据库迁移框架，加入权威和契约记录；已经有内部 Task ID 的历史按来源映射复用。无数据库旧 runtime 的导入仍走 Spec 02，不新增另一种恢复路径。
 3. 实现 task_source 配置分流、authority_version 匹配及新原生空项目初始化。默认旧配置保持 beads，新项目显式 native；原生执行生产入口暂不启用，初始化为 manual/paused。记录 membership，历史只读对象不得进入原生 ready。
 4. 实现单 Spec、可选单 Plan 和共同文档引用校验；按共同约束固定契约序列化和 canonical JSON/digest，核对 Git blob、验收章节与仓库边界，覆盖重复键、多 Spec/Plan 拒绝和 CRLF checkout。文件系统读取不得超出绑定仓库，远端工作区读取保留在执行适配器。
@@ -23,7 +23,7 @@
 
 ## 验证与完成
 
-本任务验收：NT01–NT03、NT21-CORE。重点验证单一任务权威、旧身份/运行映射、重复迁移与故障原子性、规格文件摘要/路径/换行、配置不能绕过迁移和只读查询版本；先运行针对性测试，再按 [共同约束](native-task-constraints.md) 的验证原则运行完整 Go 测试、静态检查及差异检查。
+本任务验收：NT01–NT03、NT21-CORE。重点验证单一任务权威、规划数字 ID 与 Beads 外部身份可共存且不替代原生 task_id、旧身份/运行映射、重复迁移与故障原子性、规格文件摘要/路径/换行、配置不能绕过迁移和只读查询版本；先运行针对性测试，再按 [共同约束](native-task-constraints.md) 的验证原则运行完整 Go 测试、静态检查及差异检查。
 
 证据保存在 `docs/validation/task-core/`，逐项列出验收编号、输入摘要、工具/协议版本、命令、实际结果与证据位置。未运行项不得以 skipped/fake 记为完成。当前文档调整不代表实现验收通过。
 

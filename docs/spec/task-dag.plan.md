@@ -8,9 +8,9 @@
 
 ## 实施步骤
 
-1. 实现 task-batch/v1 严格解码和引用校验。固化 A → B → C、菱形汇合、断开组件、循环/悬空/重复/跨项目边和规格错误的样本；不引入父子节点、自动拆分或修图算法。
+1. 实现 task-batch/v1 严格解码和引用校验。可选 roadmap_id 只作为 ExternalTaskRef 的外部身份，同批次和已有 Task 不得重复绑定；不读取规划文档或改变原生 task_id。固化 A → B → C、菱形汇合、断开组件、循环/悬空/重复/跨项目边和规格错误的样本；不引入父子节点、自动拆分或修图算法。
 2. 接入内部 GraphAlgorithms 适配层。核验 dominikbraun/graph 的发布版本和必要 API，固定 go.mod/go.sum 与版本证据；封装环路径、稳定遍历/拓扑行为，不将库类型写入数据库或 DTO。不因第三方排序不稳定改变候选优先级。
-3. 增加 ValidateTaskBatch 和 PublishTaskBatch，CLI 使用中心命令通道传入固定 payload。批次映射、任务、契约、边、事件、revision 和命令回执同事务提交；实现同 request_id 同 payload 复用及异 payload 冲突。
+3. 增加 ValidateTaskBatch 和 PublishTaskBatch，CLI 使用中心命令通道传入固定 payload。批次映射、任务、契约、可选规划引用、边、事件、revision 和命令回执同事务提交；实现同 request_id 同 payload 复用及异 payload 冲突。
 4. 实现同项目硬前置查询和稳定候选顺序。把 dependency_ready 与资源/暂停/能力阻塞分开，并返回具体前置。发布成功不主动启动 worker；明确 auto 模式下正常轮询可开始领取。
 5. 将 ready/claim 准入接到既有 start_task 与自动派发路径，复用槽位与命令生命周期。固定主线 base、核验前置成果可达后，事务保存领取、运行和外部意图；提交后走原工作区/启动操作。不得把 claim 提交当作 start_task applied。
 6. 增加中心原生交付事务：选用结果和固定门槛、精确 PR/merge 核验 → TaskDelivery/closed/WorkflowRun completed/事件提交。取消原生路径对 Beads close 的依赖；不要把完成写成后继状态批量更新。
