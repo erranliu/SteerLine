@@ -13,7 +13,7 @@
 
 手动 start-sl-task、finish-beads-task、start-bd-task 和既有生命周期脚本保留原用途。新 start/finish 在一次 codex exec 中串行执行；只有服务的 PR 轮询确认合并后才调用 completion。
 
-`examples/merge-h-308-code.json` 已指向这些新文件，并启用 completion 命令。并发执行固定为 1。工作目录和实现分支由调度器准备，不调用默认 AIRefactor_5 的手动 worktree 技能。
+`examples/merge-h-308-code.json` 已指向这些新文件，并启用 completion 命令。Orca 执行使用 Codex agent、GPT-6 Luna 与 xHigh 推理强度。并发执行固定为 1。工作目录和实现分支由调度器准备，不调用默认 AIRefactor_5 的手动 worktree 技能。
 
 ## 真实启动前
 

@@ -79,6 +79,9 @@ func StartWorker(c Config, t Task, r *Run) (*Worker, error) {
 	if c.Model != "" {
 		args = append(args, "--model", c.Model)
 	}
+	if c.ReasoningEffort != "" {
+		args = append(args, "--config", "model_reasoning_effort="+c.ReasoningEffort)
+	}
 	if c.Profile != "" {
 		args = append(args, "--profile", c.Profile)
 	}
