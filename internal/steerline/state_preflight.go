@@ -2,11 +2,13 @@ package steerline
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // preflightExistingState rejects obsolete or unknown state before config loading
@@ -82,45 +84,66 @@ func preflightExistingState(runDir, runtimeFile string) error {
 func validateExistingDatabase(databasePath string) error {
 	reader, err := OpenSQLiteReader(databasePath)
 	if err != nil {
-		return fmt.Errorf("cannot inspect existing SQLite state without mutation: %w", err)
+		return nativeErr("unsupported_schema", fmt.Sprintf("cannot inspect existing SQLite state without mutation: %v", err))
 	}
 	defer reader.Close()
+	return validateDatabaseSchema(context.Background(), reader.db)
+}
+
+type schemaQuery interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+}
+
+// Check definitions as well as the version stamp before writing existing state.
+func validateDatabaseSchema(ctx context.Context, db schemaQuery) error {
 	var version int
-	if err = reader.db.QueryRowContext(context.Background(), `SELECT COALESCE(MAX(version),0) FROM schema_migrations`).Scan(&version); err != nil {
-		return fmt.Errorf("existing SQLite database has an unknown schema; preserve it for manual recovery: %w", err)
+	if err := db.QueryRowContext(ctx, `SELECT COALESCE(MAX(version),0) FROM schema_migrations`).Scan(&version); err != nil {
+		return nativeErr("unsupported_schema", "existing SQLite database has an unknown schema; preserve it for manual recovery")
 	}
-	if version < 1 || version > domainSchemaVersion {
-		return fmt.Errorf("unsupported SQLite schema %d; supported schema versions are 1 through %d", version, domainSchemaVersion)
+	if version != domainSchemaVersion {
+		return nativeErr("unsupported_schema", fmt.Sprintf("unsupported SQLite schema %d; only schema %d is accepted", version, domainSchemaVersion))
 	}
-	var tables int
-	if err = reader.db.QueryRowContext(context.Background(), `SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('tasks','workflow_runs','executions','step_attempts','decisions','decision_answers','events','operations','commands','projection','execution_bindings','execution_operations')`).Scan(&tables); err != nil {
-		return fmt.Errorf("cannot validate SQLite schema: %w", err)
-	}
-	if tables != 12 {
-		return fmt.Errorf("existing SQLite database schema %d is incomplete; preserve it for manual recovery", version)
-	}
-	if version >= 2 {
-		var nativeTables int
-		if err = reader.db.QueryRowContext(context.Background(), `SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('project_task_authorities','database_state','task_contracts','task_batches','task_dependencies','task_deliveries')`).Scan(&nativeTables); err != nil {
-			return err
+	expected := map[string]string{}
+	for _, stmt := range append(append([]string{}, domainExecutionSchema...), nativeTaskSchema...) {
+		fields := strings.Fields(stmt)
+		if len(fields) < 3 || fields[0] != "CREATE" {
+			continue
 		}
-		if nativeTables != 6 {
-			return fmt.Errorf("existing SQLite database schema %d is incomplete; preserve it for manual recovery", version)
+		index := 2
+		if fields[1] == "UNIQUE" {
+			index = 3
 		}
-		var nativeIndexes int
-		if err = reader.db.QueryRowContext(context.Background(), `SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name IN ('task_dependencies_successor_idx','workflow_run_task_identity')`).Scan(&nativeIndexes); err != nil {
-			return err
-		}
-		if nativeIndexes != 2 {
-			return errors.New("existing SQLite database lacks native task relational constraints; preserve it for manual recovery")
-		}
+		expected[fields[index]] = strings.Join(fields, " ")
 	}
-	var indexes int
-	if err = reader.db.QueryRowContext(context.Background(), `SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name IN ('task_external_identity','one_active_workflow_per_task','one_active_execution_per_workflow','one_active_attempt_per_execution')`).Scan(&indexes); err != nil {
+	rows, err := db.QueryContext(ctx, `SELECT name,sql FROM sqlite_master WHERE type IN ('table','index','trigger') AND sql IS NOT NULL`)
+	if err != nil {
 		return err
 	}
-	if indexes != 4 {
-		return errors.New("existing SQLite database lacks current identity and execution constraints; preserve it for manual recovery")
+	defer rows.Close()
+	for rows.Next() {
+		var name, definition string
+		if err = rows.Scan(&name, &definition); err != nil {
+			return err
+		}
+		if want, ok := expected[name]; ok {
+			if strings.Join(strings.Fields(definition), " ") != want {
+				return nativeErr("unsupported_schema", "SQLite definition differs from the current schema: "+name)
+			}
+			delete(expected, name)
+		}
+	}
+	if err = rows.Err(); err != nil {
+		return err
+	}
+	rows.Close()
+	if len(expected) != 0 {
+		return nativeErr("unsupported_schema", "SQLite database lacks current tables, indexes or constraints")
+	}
+	var databaseID string
+	var revision uint64
+	if err = db.QueryRowContext(ctx, `SELECT database_id,revision FROM database_state WHERE singleton=1`).Scan(&databaseID, &revision); err != nil || len(databaseID) != 32 {
+		return nativeErr("unsupported_schema", "SQLite database sampling identity is missing or invalid")
 	}
 	return nil
 }

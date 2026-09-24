@@ -19,7 +19,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const domainSchemaVersion = 2
+const domainSchemaVersion = 3
 
 type DomainTx interface {
 	PutTask(TaskRecord) error
@@ -51,7 +51,7 @@ type DomainStore interface {
 	Events(context.Context, string, string, string, int64, int) ([]DomainEvent, error)
 	EventPayload(context.Context, string, int64, int64, int) ([]byte, int64, string, error)
 	Commands(context.Context, string, string, int) ([]CommandRecord, error)
-	NativeTaskPage(context.Context, string, string, uint64, int, int) (NativeTaskPage, error)
+	NativeTaskPage(context.Context, string, string, string, uint64, int, int) (NativeTaskPage, error)
 }
 
 type DomainSnapshot struct {
@@ -64,8 +64,9 @@ type DomainSnapshot struct {
 }
 
 type SQLiteStore struct {
-	db       *sql.DB
-	readOnly bool
+	db            *sql.DB
+	readOnly      bool
+	nativeBinding *ProjectTaskAuthority
 }
 
 func OpenSQLiteStore(path string) (*SQLiteStore, error) {
@@ -141,46 +142,45 @@ func (s *SQLiteStore) migrate(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if version > domainSchemaVersion {
-		return fmt.Errorf("SQLite schema %d is newer than supported schema %d", version, domainSchemaVersion)
+	if version != 0 && version != domainSchemaVersion {
+		return nativeErr("unsupported_schema", fmt.Sprintf("unsupported SQLite schema %d; preserve existing state", version))
 	}
-	if version < 1 {
-		for _, stmt := range domainSchemaV1 {
+	if version == 0 {
+		for _, stmt := range append(append([]string{}, domainExecutionSchema...), nativeTaskSchema...) {
 			if _, err = tx.ExecContext(ctx, stmt); err != nil {
 				return fmt.Errorf("create domain schema: %w", err)
 			}
 		}
-		if _, err = tx.ExecContext(ctx, `INSERT INTO schema_migrations(version, applied_at) VALUES(1, ?)`, now().Format(time.RFC3339Nano)); err != nil {
-			return err
-		}
-		version = 1
-	}
-	if version < 2 {
-		for _, stmt := range domainSchemaV2 {
-			if _, err = tx.ExecContext(ctx, stmt); err != nil {
-				return fmt.Errorf("create native task schema: %w", err)
-			}
-		}
-		if _, err = tx.ExecContext(ctx, `INSERT INTO schema_migrations(version, applied_at) VALUES(2, ?)`, now().Format(time.RFC3339Nano)); err != nil {
+		if _, err = tx.ExecContext(ctx, `INSERT INTO schema_migrations(version, applied_at) VALUES(?, ?)`, domainSchemaVersion, now().Format(time.RFC3339Nano)); err != nil {
 			return err
 		}
 	}
 	return tx.Commit()
 }
 
-var domainSchemaV2 = []string{
+var nativeTaskSchema = []string{
 	`CREATE TABLE project_task_authorities (project_identity TEXT PRIMARY KEY, authority TEXT NOT NULL CHECK(authority='native'), authority_version INTEGER NOT NULL CHECK(authority_version>0), graph_revision INTEGER NOT NULL CHECK(graph_revision>=0), repository TEXT NOT NULL, remote TEXT NOT NULL, branch TEXT NOT NULL, dispatch_mode TEXT NOT NULL CHECK(dispatch_mode IN ('manual','auto')), dispatch_paused INTEGER NOT NULL CHECK(dispatch_paused IN (0,1)), created_at TEXT NOT NULL, updated_at TEXT NOT NULL)`,
-	`CREATE TABLE database_state (singleton INTEGER PRIMARY KEY CHECK(singleton=1), revision INTEGER NOT NULL CHECK(revision>=0))`,
-	`INSERT INTO database_state(singleton,revision) VALUES(1,0)`,
+	`CREATE TABLE database_state (singleton INTEGER PRIMARY KEY CHECK(singleton=1), database_id TEXT NOT NULL CHECK(length(database_id)=32), revision INTEGER NOT NULL CHECK(revision>=0))`,
+	`INSERT INTO database_state(singleton,database_id,revision) VALUES(1,lower(hex(randomblob(16))),0)`,
+	`CREATE INDEX tasks_decimal_order ON tasks(project_identity,length(task_id),task_id)`,
 	`CREATE TABLE task_contracts (project_identity TEXT NOT NULL, contract_id TEXT NOT NULL, task_id TEXT NOT NULL, digest TEXT NOT NULL, payload BLOB NOT NULL, PRIMARY KEY(project_identity,contract_id), UNIQUE(project_identity,task_id), FOREIGN KEY(project_identity,task_id) REFERENCES tasks(project_identity,task_id))`,
 	`CREATE TABLE task_batches (project_identity TEXT NOT NULL, batch_id TEXT NOT NULL, schema_version TEXT NOT NULL, payload_digest TEXT NOT NULL, created_at TEXT NOT NULL, command_id TEXT NOT NULL, task_ids BLOB NOT NULL, PRIMARY KEY(project_identity,batch_id), UNIQUE(project_identity,command_id))`,
 	`CREATE TABLE task_dependencies (project_identity TEXT NOT NULL, predecessor_id TEXT NOT NULL, successor_id TEXT NOT NULL, PRIMARY KEY(project_identity,predecessor_id,successor_id), CHECK(predecessor_id<>successor_id), FOREIGN KEY(project_identity,predecessor_id) REFERENCES tasks(project_identity,task_id), FOREIGN KEY(project_identity,successor_id) REFERENCES tasks(project_identity,task_id))`,
 	`CREATE INDEX task_dependencies_successor_idx ON task_dependencies(project_identity,successor_id,predecessor_id)`,
+	`CREATE TRIGGER task_dependencies_no_cycle BEFORE INSERT ON task_dependencies BEGIN
+		SELECT RAISE(ABORT,'dependency_cycle') WHERE NEW.predecessor_id=NEW.successor_id OR EXISTS (
+			WITH RECURSIVE reachable(task_id) AS (
+				SELECT successor_id FROM task_dependencies WHERE project_identity=NEW.project_identity AND predecessor_id=NEW.successor_id
+				UNION SELECT d.successor_id FROM task_dependencies d JOIN reachable r ON d.predecessor_id=r.task_id WHERE d.project_identity=NEW.project_identity
+			) SELECT 1 FROM reachable WHERE task_id=NEW.predecessor_id);
+	END`,
+	`CREATE TRIGGER task_dependencies_no_update BEFORE UPDATE ON task_dependencies BEGIN SELECT RAISE(ABORT,'immutable_dependency'); END`,
+	`CREATE TRIGGER task_dependencies_no_delete BEFORE DELETE ON task_dependencies BEGIN SELECT RAISE(ABORT,'immutable_dependency'); END`,
 	`CREATE UNIQUE INDEX workflow_run_task_identity ON workflow_runs(project_identity,workflow_run_id,task_id)`,
 	`CREATE TABLE task_deliveries (project_identity TEXT NOT NULL, task_id TEXT NOT NULL, selected_workflow_run_id TEXT NOT NULL, pr_instance TEXT NOT NULL, pr_repository TEXT NOT NULL, pr_number INTEGER NOT NULL CHECK(pr_number>0), pr_url TEXT NOT NULL, merge_commit TEXT NOT NULL, merged_at TEXT NOT NULL, recorded_at TEXT NOT NULL, evidence BLOB NOT NULL, PRIMARY KEY(project_identity,task_id), UNIQUE(pr_instance,pr_repository,pr_number), FOREIGN KEY(project_identity,task_id) REFERENCES tasks(project_identity,task_id), FOREIGN KEY(project_identity,selected_workflow_run_id,task_id) REFERENCES workflow_runs(project_identity,workflow_run_id,task_id))`,
 }
 
-var domainSchemaV1 = []string{
+var domainExecutionSchema = []string{
 	`CREATE TABLE execution_bindings (run_id TEXT NOT NULL, attempt_id TEXT NOT NULL, record_id TEXT NOT NULL, payload BLOB NOT NULL, PRIMARY KEY(run_id,attempt_id,record_id))`,
 	`CREATE TABLE execution_operations (run_id TEXT NOT NULL, attempt_id TEXT NOT NULL, record_id TEXT NOT NULL, payload BLOB NOT NULL, PRIMARY KEY(run_id,attempt_id,record_id))`,
 	`CREATE TABLE tasks (project_identity TEXT NOT NULL, task_id TEXT NOT NULL, external_provider TEXT NOT NULL DEFAULT '', external_project TEXT NOT NULL DEFAULT '', external_id TEXT NOT NULL DEFAULT '', status TEXT NOT NULL, version INTEGER NOT NULL, payload BLOB NOT NULL, PRIMARY KEY(project_identity, task_id))`,
@@ -554,7 +554,7 @@ func (t *sqliteTx) UpdateNativeTaskCAS(v TaskRecord, expectedVersion uint64) err
 	if old.Version != expectedVersion {
 		return nativeErr("stale_version", fmt.Sprintf("expected version %d, found %d", expectedVersion, old.Version))
 	}
-	if v.ProjectIdentity != old.ProjectIdentity || v.TaskID != old.TaskID || v.BatchID != old.BatchID || v.ContractID != old.ContractID || v.Type != old.Type || v.Priority != old.Priority || v.Title != old.Title || v.Source != "native" || v.Version != expectedVersion+1 || v.CreatedAt != old.CreatedAt || v.ExternalProvider != "" || v.ExternalProject != "" || v.ExternalID != "" {
+	if v.ProjectIdentity != old.ProjectIdentity || v.TaskID != old.TaskID || v.BatchID != old.BatchID || v.ContractID != old.ContractID || v.Type != old.Type || v.Priority != old.Priority || v.Title != old.Title || v.Source != "native" || v.Version != expectedVersion+1 || !v.CreatedAt.Equal(old.CreatedAt) || v.ExternalProvider != "" || v.ExternalProject != "" || v.ExternalID != "" {
 		return nativeErr("contract_mismatch", "native task update cannot change its identity, scope, contract, or fixed fields")
 	}
 	allowed := map[string]map[string]bool{"open": {"in_progress": true, "discarded": true}, "in_progress": {"discarded": true, "closed": true}}

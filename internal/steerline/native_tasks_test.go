@@ -1,6 +1,7 @@
 package steerline
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"database/sql"
@@ -459,10 +460,10 @@ func TestTaskContractPinsCommittedBlobsAndRejectsInvalidReferences(t *testing.T)
 		t.Fatal("task-specific spec was accepted as a common reference")
 	}
 	v = contract
-	v.PlanRef.Path = "docs/spec/other-task.plan.md"
+	v.PlanRef = FileReference{}
 	v.Digest, _ = TaskContractDigest(v)
 	if err = ValidateTaskContract(v); err == nil {
-		t.Fatal("unpaired plan was accepted")
+		t.Fatal("missing plan was accepted")
 	}
 	v = contract
 	v.AcceptanceRefs = []FileReference{contract.PlanRef}
@@ -517,7 +518,7 @@ func TestTaskContractRejectsCommittedSymlinkReferences(t *testing.T) {
 	contract := nativeContract(t, c, strings.TrimSpace(string(head)), "contract-link")
 	contract.SpecRef = nativeRef(t, c, contract.SpecRef.Commit, "docs/spec/linked.spec.md")
 	contract.PlanRef = nativeRef(t, c, contract.PlanRef.Commit, "docs/spec/linked.plan.md")
-	contract.AcceptanceRefs = []FileReference{nativeRef(t, c, contract.SpecRef.Commit, "docs/spec/task-core.spec.md")}
+	contract.AcceptanceRefs = []FileReference{contract.SpecRef}
 	contract.Digest, err = TaskContractDigest(contract)
 	if err != nil {
 		t.Fatal(err)
@@ -580,9 +581,9 @@ func TestNativeInitializationRefusesExistingBeadsTaskDatabase(t *testing.T) {
 	}
 }
 
-func TestNativeDatabaseMigrationExtendsCurrentCenterSchema(t *testing.T) {
+func TestNativeDatabaseInitializesCurrentSchema(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "steerline.db")
-	// Start at the delivered center schema and verify its additive native extension.
+	// A fresh database contains the center model and native record constraints.
 	db, err := OpenSQLiteStore(path)
 	if err != nil {
 		t.Fatal(err)
@@ -607,8 +608,7 @@ func TestNativeDatabaseMigrationExtendsCurrentCenterSchema(t *testing.T) {
 	}
 }
 
-func TestSchemaOneCenterDatabaseUpgradesAdditivelyAndPreservesTasks(t *testing.T) {
-	ctx := context.Background()
+func TestSchemaOneCenterDatabaseIsRejectedWithoutMutation(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "center-v1.db")
 	raw, err := sql.Open("sqlite", path)
 	if err != nil {
@@ -621,7 +621,7 @@ func TestSchemaOneCenterDatabaseUpgradesAdditivelyAndPreservesTasks(t *testing.T
 	if _, err = tx.Exec(`CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)`); err != nil {
 		t.Fatal(err)
 	}
-	for _, stmt := range domainSchemaV1 {
+	for _, stmt := range domainExecutionSchema {
 		if _, err = tx.Exec(stmt); err != nil {
 			t.Fatalf("create center schema: %v: %s", err, stmt)
 		}
@@ -644,21 +644,19 @@ func TestSchemaOneCenterDatabaseUpgradesAdditivelyAndPreservesTasks(t *testing.T
 	if err = raw.Close(); err != nil {
 		t.Fatal(err)
 	}
-	store, err := OpenSQLiteStore(path)
+	before, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer store.Close()
-	var version int
-	if err = store.db.QueryRow(`SELECT MAX(version) FROM schema_migrations`).Scan(&version); err != nil || version != domainSchemaVersion {
-		t.Fatalf("migration version=%d err=%v", version, err)
+	if store, err := OpenSQLiteStore(path); err == nil {
+		store.Close()
+		t.Fatal("previous database was automatically upgraded")
+	} else {
+		requireNativeAuditCode(t, err, "unsupported_schema")
 	}
-	snapshot, err := store.Query(ctx, old.ProjectIdentity)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(snapshot.Tasks) != 1 || snapshot.Tasks[0].TaskID != old.TaskID || snapshot.Tasks[0].Status != "in_progress" {
-		t.Fatalf("current center task was lost during additive schema extension: %+v", snapshot.Tasks)
+	after, err := os.ReadFile(path)
+	if err != nil || !bytes.Equal(before, after) {
+		t.Fatalf("rejected database was modified: %v", err)
 	}
 }
 

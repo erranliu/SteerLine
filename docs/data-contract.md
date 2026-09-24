@@ -10,9 +10,11 @@
 
 native 状态目录必须使用仓库唯一派生的 `STEERLINE_HOME/state/<repoKey>`，不得为同一仓库配置另一条 `run_dir`。目录首次初始化前必须为空，仓库不得含 Beads 状态。SQLite 会把 Git common-dir、目标远端 URL、remote 名称和 branch 固定到项目权威；状态、仓库或配置不匹配时以 `authority_mismatch` / `unsupported_schema` 拒绝，不创建第二份数据库。
 
-查询响应头含 `protocol`、`project_id`、`authority_version`、`graph_revision`、`database_revision`、`sampled_at` 和 `capabilities`。任务详情含原数字 `task_id`、fixed contract 与验收引用、状态/claim/priority/version、丢弃审计、相关运行和交付证据。列表默认 100、最多 500 条；`next_cursor` 固定项目、authority/graph/database 修订和 offset。任何已提交数据库写入都会推进 `database_revision`，续页发现修订变化、游标版本不可读或项目绑定变化时返回 `cursor_invalidated`。`dependency_readiness` 和 `dependency_blockers` 能力值在此版本为 `not_provided`，任务对象不会伪造 `dependency_ready` 或空阻塞列表。
+查询响应头含 `protocol`、`project_id`、`authority_version`、`graph_revision`、`database_id`、`database_revision`、`sampled_at` 和 `capabilities`。任务详情含原数字 `task_id`、固定契约与验收引用、状态/claim/priority/version、丢弃审计、相关运行和交付证据。列表默认 100、最多 500 条，数据库内按数字 ID 排序分页；`next_cursor` 固定数据库身份、项目、authority/graph/database 修订和 offset。续页发现数据库被替换、修订变化或版本不可读时返回 `cursor_invalidated`。`dependency_readiness`、`dependency_blockers` 和 `startup_blockers` 能力值均为 `not_provided`。已有项目查询不竞争仓库写锁，仍在每个读取快照中核对配置绑定。
 
-TaskContract 使用单个 `.spec.md`、与其同前缀配套的 `.plan.md`、至少一个含验收章节的 Markdown 引用，以及只指向共享 constraint/protocol 文件的 `common_refs`。每个引用固定仓库相对路径、同一个完整 commit 和该提交中普通文件 blob 字节的 SHA-256。路径不能越界或是符号链接。规范摘要是 UTF-8、对象键排序、数组顺序不变、无多余空白的 JSON SHA-256；重复 JSON 键拒绝。契约内容从 Git commit blob 读取，工作区 CRLF 转换不改变核验结果。
+TaskContract 使用单个 Spec、单个配套 Plan、至少一个含验收章节的 Markdown 引用，以及只指向共享 constraint/protocol 文件的 `common_refs`。文件名不要求具有同一前缀，每个引用分别固定仓库相对路径、完整 commit 和该提交中普通文件 blob 字节的 SHA-256。验收引用不能再加入其他任务的 `.spec.md` / `.plan.md` 或固定文件的另一版本；配套关系和语义充分性由规格审阅负责。路径不能越界或是符号链接。规范摘要是 UTF-8、对象键排序、数组顺序不变、无多余空白的 JSON SHA-256；重复 JSON 键拒绝。契约内容从 Git commit blob 读取，工作区 CRLF 转换不改变核验结果。
+
+数据库当前 schema 为 3，复用中心表与 Task 身份建立新库。已有 schema 1/2 或未知格式不自动迁移；版本号及表、索引、触发器定义都必须匹配当前格式。依赖表约束拒绝环和修改/删除已有边。任务业务命令及真实平台交付核验仍由 TASK-DAG / BEADS-EXIT 接入。
 
 协议样例见 [native-tasks-v1.sample.json](validation/task-core/native-tasks-v1.sample.json)。
 

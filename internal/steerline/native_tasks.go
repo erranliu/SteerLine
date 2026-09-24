@@ -11,15 +11,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math/big"
 	"net/url"
 	"os"
 	"path"
 	"path/filepath"
 	"regexp"
-	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 const nativeTaskProtocol = "native-tasks/v1"
@@ -27,6 +26,7 @@ const nativeTaskProtocol = "native-tasks/v1"
 type NativeTaskCapabilities struct {
 	DependencyReadiness string `json:"dependency_readiness"`
 	DependencyBlockers  string `json:"dependency_blockers"`
+	StartupBlockers     string `json:"startup_blockers"`
 }
 
 type NativeTaskDetail struct {
@@ -44,6 +44,7 @@ type NativeTaskPage struct {
 	AuthorityVersion uint64                 `json:"authority_version"`
 	GraphRevision    uint64                 `json:"graph_revision"`
 	DatabaseRevision uint64                 `json:"database_revision"`
+	DatabaseID       string                 `json:"database_id"`
 	SampledAt        time.Time              `json:"sampled_at"`
 	Capabilities     NativeTaskCapabilities `json:"capabilities"`
 	Tasks            []NativeTaskDetail     `json:"tasks"`
@@ -57,10 +58,14 @@ type nativeTaskCursor struct {
 	AuthorityVersion uint64 `json:"a"`
 	GraphRevision    uint64 `json:"g"`
 	DatabaseRevision uint64 `json:"d"`
+	DatabaseID       string `json:"i"`
 	Offset           int    `json:"o"`
 }
 
-type NativeTaskError struct{ Code, Message string }
+type NativeTaskError struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
 
 func (e *NativeTaskError) Error() string   { return e.Code + ": " + e.Message }
 func nativeErr(code, message string) error { return &NativeTaskError{Code: code, Message: message} }
@@ -84,6 +89,7 @@ func (q QueryService) ListNativeTasks(ctx context.Context, cursor string, limit 
 	}
 	offset := 0
 	expectedDB := uint64(0)
+	expectedDatabaseID := ""
 	expectedAuthority, expectedGraph := uint64(0), uint64(0)
 	if cursor != "" {
 		raw, err := base64.RawURLEncoding.DecodeString(cursor)
@@ -91,13 +97,14 @@ func (q QueryService) ListNativeTasks(ctx context.Context, cursor string, limit 
 			return NativeTaskPage{}, nativeErr("cursor_invalidated", "cursor encoding is invalid")
 		}
 		var c nativeTaskCursor
-		if json.Unmarshal(raw, &c) != nil || c.Version != 1 || c.ProjectID != q.Project || c.Offset < 0 || c.DatabaseRevision == 0 {
+		if decode(raw, &c) != nil || c.Version != 1 || c.ProjectID != q.Project || c.Offset < 0 || c.DatabaseRevision == 0 || len(c.DatabaseID) != 32 {
 			return NativeTaskPage{}, nativeErr("cursor_invalidated", "cursor identity or sampling revision is invalid")
 		}
 		offset, expectedDB = c.Offset, c.DatabaseRevision
+		expectedDatabaseID = c.DatabaseID
 		expectedAuthority, expectedGraph = c.AuthorityVersion, c.GraphRevision
 	}
-	page, err := q.Store.NativeTaskPage(ctx, q.Project, "", expectedDB, offset, limit)
+	page, err := q.Store.NativeTaskPage(ctx, q.Project, "", expectedDatabaseID, expectedDB, offset, limit)
 	if err != nil {
 		return NativeTaskPage{}, err
 	}
@@ -105,7 +112,7 @@ func (q QueryService) ListNativeTasks(ctx context.Context, cursor string, limit 
 		return NativeTaskPage{}, nativeErr("cursor_invalidated", "project authority changed between pages")
 	}
 	if page.HasMore {
-		c := nativeTaskCursor{Version: 1, ProjectID: page.ProjectID, AuthorityVersion: page.AuthorityVersion, GraphRevision: page.GraphRevision, DatabaseRevision: page.DatabaseRevision, Offset: offset + len(page.Tasks)}
+		c := nativeTaskCursor{Version: 1, ProjectID: page.ProjectID, AuthorityVersion: page.AuthorityVersion, GraphRevision: page.GraphRevision, DatabaseID: page.DatabaseID, DatabaseRevision: page.DatabaseRevision, Offset: offset + len(page.Tasks)}
 		b, _ := json.Marshal(c)
 		page.NextCursor = base64.RawURLEncoding.EncodeToString(b)
 	}
@@ -119,7 +126,7 @@ func (q QueryService) ShowNativeTask(ctx context.Context, id string) (NativeTask
 	if err := ValidateNativeTaskID(id); err != nil {
 		return NativeTaskPage{}, err
 	}
-	page, err := q.Store.NativeTaskPage(ctx, q.Project, id, 0, 0, 1)
+	page, err := q.Store.NativeTaskPage(ctx, q.Project, id, "", 0, 0, 1)
 	if err != nil {
 		return NativeTaskPage{}, err
 	}
@@ -129,8 +136,11 @@ func (q QueryService) ShowNativeTask(ctx context.Context, id string) (NativeTask
 	return page, nil
 }
 
-func (s *SQLiteStore) NativeTaskPage(ctx context.Context, project, taskID string, expectedDB uint64, offset, limit int) (NativeTaskPage, error) {
-	page := NativeTaskPage{Protocol: nativeTaskProtocol, ProjectID: project, Tasks: []NativeTaskDetail{}, Capabilities: NativeTaskCapabilities{DependencyReadiness: "not_provided", DependencyBlockers: "not_provided"}}
+func (s *SQLiteStore) NativeTaskPage(ctx context.Context, project, taskID, expectedDatabaseID string, expectedDB uint64, offset, limit int) (NativeTaskPage, error) {
+	page := NativeTaskPage{Protocol: nativeTaskProtocol, ProjectID: project, Tasks: []NativeTaskDetail{}, Capabilities: NativeTaskCapabilities{DependencyReadiness: "not_provided", DependencyBlockers: "not_provided", StartupBlockers: "not_provided"}}
+	if offset < 0 {
+		return page, nativeErr("cursor_invalidated", "negative page offset")
+	}
 	if project == "" {
 		return page, nativeErr("authority_mismatch", "project identity is required")
 	}
@@ -139,6 +149,13 @@ func (s *SQLiteStore) NativeTaskPage(ctx context.Context, project, taskID string
 		return page, err
 	}
 	defer tx.Rollback()
+	var schemaVersion int
+	if err = tx.QueryRowContext(ctx, `SELECT COALESCE(MAX(version),0) FROM schema_migrations`).Scan(&schemaVersion); err != nil || schemaVersion != domainSchemaVersion {
+		if expectedDB != 0 {
+			return page, nativeErr("cursor_invalidated", "cursor database schema is unavailable")
+		}
+		return page, nativeErr("unsupported_schema", "native task query requires the current database schema")
+	}
 	var targetRepository, targetRemote, targetBranch string
 	err = tx.QueryRowContext(ctx, `SELECT authority_version,graph_revision,repository,remote,branch FROM project_task_authorities WHERE project_identity=? AND authority='native'`, project).Scan(&page.AuthorityVersion, &page.GraphRevision, &targetRepository, &targetRemote, &targetBranch)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -154,16 +171,19 @@ func (s *SQLiteStore) NativeTaskPage(ctx context.Context, project, taskID string
 		return page, nativeErr("unsupported_schema", "native project authority schema is unavailable")
 	}
 	var dbRevision uint64
-	if err = tx.QueryRowContext(ctx, `SELECT revision FROM database_state WHERE singleton=1`).Scan(&dbRevision); err != nil {
+	if err = tx.QueryRowContext(ctx, `SELECT database_id,revision FROM database_state WHERE singleton=1`).Scan(&page.DatabaseID, &dbRevision); err != nil {
 		if expectedDB != 0 {
 			return page, nativeErr("cursor_invalidated", "database sampling revision is unavailable")
 		}
 		return page, nativeErr("unsupported_schema", "database sampling revision is unavailable")
 	}
-	if expectedDB != 0 && expectedDB != dbRevision {
+	if expectedDB != 0 && (expectedDB != dbRevision || expectedDatabaseID != page.DatabaseID) {
 		return page, nativeErr("cursor_invalidated", "database revision changed between pages")
 	}
 	page.DatabaseRevision = dbRevision
+	if binding := s.nativeBinding; binding != nil && (binding.ProjectIdentity != project || binding.Repository != targetRepository || binding.Remote != targetRemote || binding.Branch != targetBranch) {
+		return page, nativeErr("authority_mismatch", "project binding changed after opening the query reader")
+	}
 	page.SampledAt = time.Now().UTC()
 	if limit < 1 {
 		limit = 100
@@ -171,13 +191,16 @@ func (s *SQLiteStore) NativeTaskPage(ctx context.Context, project, taskID string
 	if limit > 500 {
 		limit = 500
 	}
-	query := `SELECT task_id,payload FROM tasks WHERE project_identity=?`
+	query := `SELECT task_id,status,version,payload FROM tasks WHERE project_identity=?`
 	args := []any{project}
 	if taskID != "" {
 		query += ` AND task_id=?`
 		args = append(args, taskID)
 	}
-	query += ` ORDER BY task_id`
+	// Canonical decimal IDs sort numerically by length then text, without casts
+	// or loading and sorting the entire project in memory.
+	query += ` ORDER BY length(task_id),task_id LIMIT ? OFFSET ?`
+	args = append(args, limit+1, offset)
 	rows, err := tx.QueryContext(ctx, query, args...)
 	if err != nil {
 		return page, err
@@ -185,8 +208,10 @@ func (s *SQLiteStore) NativeTaskPage(ctx context.Context, project, taskID string
 	var all []TaskRecord
 	for rows.Next() {
 		var id string
+		var status string
+		var version uint64
 		var payload []byte
-		if err = rows.Scan(&id, &payload); err != nil {
+		if err = rows.Scan(&id, &status, &version, &payload); err != nil {
 			rows.Close()
 			return page, err
 		}
@@ -199,11 +224,11 @@ func (s *SQLiteStore) NativeTaskPage(ctx context.Context, project, taskID string
 			rows.Close()
 			return page, nativeErr("authority_mismatch", "native authority contains a non-native task record")
 		}
-		if record.TaskID != id || !canonicalDecimalID(record.TaskID) {
+		if record.ProjectIdentity != project || record.TaskID != id || !canonicalDecimalID(record.TaskID) {
 			rows.Close()
 			return page, nativeErr("contract_mismatch", "native task ID is not canonical")
 		}
-		if !validTaskStatus(record.Status) || record.Version == 0 || record.Type == "" || record.Priority < 0 || record.Priority > 4 {
+		if record.Status != status || record.Version != version || !validTaskStatus(record.Status) || record.Version == 0 || record.Type == "" || record.Priority < 0 || record.Priority > 4 {
 			rows.Close()
 			return page, nativeErr("contract_mismatch", "native task record has invalid status, type, priority or version")
 		}
@@ -222,26 +247,18 @@ func (s *SQLiteStore) NativeTaskPage(ctx context.Context, project, taskID string
 		return page, err
 	}
 	rows.Close()
-	sort.Slice(all, func(i, j int) bool {
-		a, _ := new(big.Int).SetString(all[i].TaskID, 10)
-		b, _ := new(big.Int).SetString(all[j].TaskID, 10)
-		return a.Cmp(b) < 0
-	})
-	if taskID == "" {
-		if offset > len(all) {
-			return page, nativeErr("cursor_invalidated", "cursor offset is outside the current snapshot")
-		}
-		end := offset + limit
-		if end > len(all) {
-			end = len(all)
-		}
-		page.HasMore = end < len(all)
-		all = all[offset:end]
+	if offset > 0 && len(all) == 0 {
+		return page, nativeErr("cursor_invalidated", "cursor offset is outside the current snapshot")
+	}
+	page.HasMore = len(all) > limit
+	if page.HasMore {
+		all = all[:limit]
 	}
 	for _, record := range all {
 		detail := NativeTaskDetail{TaskRecord: record, ProjectID: project, Priority: record.Priority, WorkflowRuns: []WorkflowRunRecord{}}
 		var contractPayload []byte
-		err = tx.QueryRowContext(ctx, `SELECT payload FROM task_contracts WHERE project_identity=? AND contract_id=? AND task_id=?`, project, record.ContractID, record.TaskID).Scan(&contractPayload)
+		var contractDigest string
+		err = tx.QueryRowContext(ctx, `SELECT digest,payload FROM task_contracts WHERE project_identity=? AND contract_id=? AND task_id=?`, project, record.ContractID, record.TaskID).Scan(&contractDigest, &contractPayload)
 		if errors.Is(err, sql.ErrNoRows) {
 			return page, nativeErr("contract_mismatch", "native task has no matching fixed contract")
 		}
@@ -251,7 +268,7 @@ func (s *SQLiteStore) NativeTaskPage(ctx context.Context, project, taskID string
 		if err = json.Unmarshal(contractPayload, &detail.Contract); err != nil {
 			return page, err
 		}
-		if detail.Contract.ContractID != record.ContractID {
+		if detail.Contract.ContractID != record.ContractID || detail.Contract.Digest != contractDigest {
 			return page, nativeErr("contract_mismatch", "task contract identity differs from task record")
 		}
 		if err = ValidateTaskContract(detail.Contract); err != nil {
@@ -260,20 +277,25 @@ func (s *SQLiteStore) NativeTaskPage(ctx context.Context, project, taskID string
 		if !sameRepositoryTarget(detail.Contract.Repository, targetRepository) || detail.Contract.Remote != targetRemote || detail.Contract.Branch != targetBranch {
 			return page, nativeErr("contract_mismatch", "task contract target differs from persisted project authority")
 		}
-		runRows, e := tx.QueryContext(ctx, `SELECT payload FROM workflow_runs WHERE project_identity=? AND task_id=? ORDER BY workflow_run_id`, project, record.TaskID)
+		runRows, e := tx.QueryContext(ctx, `SELECT workflow_run_id,phase,payload FROM workflow_runs WHERE project_identity=? AND task_id=? ORDER BY workflow_run_id`, project, record.TaskID)
 		if e != nil {
 			return page, e
 		}
 		for runRows.Next() {
 			var b []byte
+			var runID, phase string
 			var run WorkflowRunRecord
-			if e = runRows.Scan(&b); e != nil {
+			if e = runRows.Scan(&runID, &phase, &b); e != nil {
 				runRows.Close()
 				return page, e
 			}
 			if e = json.Unmarshal(b, &run); e != nil {
 				runRows.Close()
 				return page, e
+			}
+			if run.ProjectIdentity != project || run.TaskID != record.TaskID || run.WorkflowRunID != runID || run.Phase != phase {
+				runRows.Close()
+				return page, nativeErr("contract_mismatch", "workflow payload differs from its stored task binding")
 			}
 			detail.WorkflowRuns = append(detail.WorkflowRuns, run)
 		}
@@ -287,8 +309,14 @@ func (s *SQLiteStore) NativeTaskPage(ctx context.Context, project, taskID string
 		e = tx.QueryRowContext(ctx, `SELECT task_id,selected_workflow_run_id,pr_instance,pr_repository,pr_number,pr_url,merge_commit,merged_at,recorded_at,evidence FROM task_deliveries WHERE project_identity=? AND task_id=?`, project, record.TaskID).Scan(&delivery.TaskID, &delivery.SelectedWorkflowRunID, &delivery.PRInstance, &delivery.PRRepository, &delivery.PRNumber, &delivery.PRURL, &delivery.MergeCommit, &merged, &recorded, &delivery.Evidence)
 		if e == nil {
 			delivery.ProjectIdentity = project
-			delivery.MergedAt, _ = time.Parse(time.RFC3339Nano, merged)
-			delivery.RecordedAt, _ = time.Parse(time.RFC3339Nano, recorded)
+			delivery.MergedAt, err = time.Parse(time.RFC3339Nano, merged)
+			if err != nil {
+				return page, nativeErr("contract_mismatch", "invalid delivery merge timestamp")
+			}
+			delivery.RecordedAt, err = time.Parse(time.RFC3339Nano, recorded)
+			if err != nil {
+				return page, nativeErr("contract_mismatch", "invalid delivery recording timestamp")
+			}
 			detail.Delivery = &delivery
 		} else if !errors.Is(e, sql.ErrNoRows) {
 			return page, e
@@ -322,12 +350,21 @@ func OpenNativeTaskProject(ctx context.Context, c *Config) (*SQLiteStore, error)
 	if err := preflightNativeStatePath(*c); err != nil {
 		return nil, err
 	}
+	path := filepath.Join(c.RunDir, "steerline.db")
+	if _, err := os.Stat(path); err == nil {
+		// Existing readers must coexist with the repository's single writer.
+		return openBoundNativeStore(ctx, *c, path)
+	} else if !os.IsNotExist(err) {
+		return nil, err
+	}
 	lock, err := LockRepository(c.Identity())
 	if err != nil {
 		return nil, err
 	}
 	defer lock.Close()
-	path := filepath.Join(c.RunDir, "steerline.db")
+	if err := preflightNativeStatePath(*c); err != nil {
+		return nil, err
+	}
 	if _, statErr := os.Stat(path); statErr == nil {
 		return openBoundNativeStore(ctx, *c, path)
 	} else if !os.IsNotExist(statErr) {
@@ -367,7 +404,7 @@ func OpenNativeTaskProject(ctx context.Context, c *Config) (*SQLiteStore, error)
 	if err = db.Close(); err != nil {
 		return nil, err
 	}
-	return OpenSQLiteReader(path)
+	return openBoundNativeStore(ctx, *c, path)
 }
 
 func validateNativeStateLocation(c Config) error {
@@ -388,15 +425,20 @@ func cleanupNewNativeDB(path string) {
 	}
 }
 
-func openBoundNativeStore(ctx context.Context, c Config, path string) (*SQLiteStore, error) {
+func openBoundNativeStore(ctx context.Context, c Config, path string) (_ *SQLiteStore, retErr error) {
 	db, err := OpenSQLiteReader(path)
 	if err != nil {
 		return nil, nativeErr("unsupported_schema", "existing database is not a readable current SQLite database")
 	}
-	defer db.Close()
-	var authority ProjectTaskAuthority
-	var paused int
-	err = db.db.QueryRowContext(ctx, `SELECT authority,authority_version,graph_revision,repository,remote,branch,dispatch_mode,dispatch_paused,created_at,updated_at FROM project_task_authorities WHERE project_identity=?`, c.Identity()).Scan(&authority.Authority, &authority.AuthorityVersion, &authority.GraphRevision, &authority.Repository, &authority.Remote, &authority.Branch, &authority.DispatchMode, &paused, new(string), new(string))
+	defer func() {
+		if retErr != nil {
+			_ = db.Close()
+		}
+	}()
+	if err = validateDatabaseSchema(ctx, db.db); err != nil {
+		return nil, err
+	}
+	authority, err := db.nativeAuthority(ctx, c.Identity())
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nativeErr("authority_mismatch", "database has no native authority for this project; preserve existing state")
 	}
@@ -410,7 +452,8 @@ func openBoundNativeStore(ctx context.Context, c Config, path string) (*SQLiteSt
 	if authority.Authority != "native" || authority.Repository != target || authority.Remote != c.Remote || authority.Branch != c.Branch {
 		return nil, nativeErr("authority_mismatch", "configuration repository, remote or branch differs from persisted native authority")
 	}
-	return OpenSQLiteReader(path)
+	db.nativeBinding = &authority
+	return db, nil
 }
 
 func preflightNativeStatePath(c Config) error {
@@ -431,11 +474,7 @@ func preflightNativeStatePath(c Config) error {
 			return nativeErr("unsupported_schema", "existing native state database is unreadable")
 		}
 		defer reader.Close()
-		var version int
-		if e = reader.db.QueryRow(`SELECT COALESCE(MAX(version),0) FROM schema_migrations`).Scan(&version); e != nil || version != domainSchemaVersion {
-			return nativeErr("unsupported_schema", "existing native state uses an unknown database schema")
-		}
-		return nil
+		return validateDatabaseSchema(context.Background(), reader.db)
 	} else if !os.IsNotExist(err) {
 		return err
 	}
@@ -543,7 +582,9 @@ func configuredRepositoryTarget(ctx context.Context, c Config) (string, error) {
 	return target, nil
 }
 func sameRepositoryTarget(a, b string) bool {
-	return strings.TrimSuffix(strings.TrimSpace(a), ".git") == strings.TrimSuffix(strings.TrimSpace(b), ".git") || canonical(a) == canonical(b)
+	// A remote URL is not a Windows filesystem path: its repository component
+	// may be case sensitive and must never be folded with canonical().
+	return a == b
 }
 
 func validSHA256(s string) bool {
@@ -579,11 +620,8 @@ func ValidateTaskContract(v TaskContract) error {
 	if v.ContractID == "" || v.Repository == "" || v.Remote == "" || v.Branch == "" {
 		return nativeErr("contract_mismatch", "contract ID and repository target are required")
 	}
-	if !strings.HasSuffix(strings.ToLower(v.SpecRef.Path), ".spec.md") || !strings.HasSuffix(strings.ToLower(v.PlanRef.Path), ".plan.md") || v.SpecRef.Path == v.PlanRef.Path {
+	if v.SpecRef.Path == v.PlanRef.Path {
 		return nativeErr("contract_mismatch", "contract must pin exactly one independent Spec and one distinct Plan")
-	}
-	if strings.TrimSuffix(v.SpecRef.Path, ".spec.md") != strings.TrimSuffix(v.PlanRef.Path, ".plan.md") {
-		return nativeErr("contract_mismatch", "contract Plan must be paired with its single Spec")
 	}
 	if len(v.AcceptanceRefs) == 0 {
 		return nativeErr("contract_mismatch", "contract requires at least one acceptance reference")
@@ -595,23 +633,21 @@ func ValidateTaskContract(v TaskContract) error {
 		if err := validateFileReferenceShape(ref); err != nil {
 			return err
 		}
-		if ref.Commit != v.SpecRef.Commit {
-			return nativeErr("contract_mismatch", "all contract references must pin the same full Git commit")
-		}
 	}
 	for _, ref := range v.CommonRefs {
-		p := strings.ToLower(ref.Path)
-		base := path.Base(p)
-		if strings.HasSuffix(base, ".plan.md") || strings.HasSuffix(base, ".spec.md") && base != "execution-architecture.spec.md" || strings.Contains(base, "task-core") || strings.Contains(base, "task-dag") || strings.Contains(base, "beads-exit") {
-			return nativeErr("contract_mismatch", "common_refs cannot contain another task's Spec or Plan")
-		}
-		if !strings.Contains(p, "constraint") && !strings.Contains(p, "protocol") {
+		if ref.Path == v.SpecRef.Path || ref.Path == v.PlanRef.Path || !sharedContractPath(ref.Path) {
 			return nativeErr("contract_mismatch", "common_refs may contain only shared constraints or protocols")
 		}
 	}
 	for _, ref := range v.AcceptanceRefs {
-		if !strings.HasSuffix(strings.ToLower(ref.Path), ".spec.md") && !strings.HasSuffix(strings.ToLower(ref.Path), ".md") {
+		if !strings.HasSuffix(strings.ToLower(ref.Path), ".md") {
 			return nativeErr("contract_mismatch", "acceptance reference must point to a Markdown document")
+		}
+		if ref == v.SpecRef || ref == v.PlanRef {
+			continue
+		}
+		if ref.Path == v.SpecRef.Path || ref.Path == v.PlanRef.Path || (taskDocumentPath(ref.Path) && !sharedContractPath(ref.Path)) {
+			return nativeErr("contract_mismatch", "acceptance_refs cannot add another task's Spec/Plan or another version of the fixed documents")
 		}
 	}
 	digest, err := TaskContractDigest(v)
@@ -624,6 +660,30 @@ func ValidateTaskContract(v TaskContract) error {
 	return nil
 }
 
+func taskDocumentPath(name string) bool {
+	name = strings.ToLower(name)
+	return strings.HasSuffix(name, ".spec.md") || strings.HasSuffix(name, ".plan.md")
+}
+
+// Shared documentation uses constraint/protocol paths; the execution
+// architecture is the repository's established shared .spec.md document.
+// This structural convention does not prove semantic specification quality.
+func sharedContractPath(name string) bool {
+	name = strings.ToLower(name)
+	if path.Base(name) == "execution-architecture.spec.md" {
+		return true
+	}
+	if taskDocumentPath(name) {
+		return false
+	}
+	for _, part := range strings.FieldsFunc(name, func(r rune) bool { return r == '/' || r == '-' || r == '_' || r == '.' }) {
+		if part == "constraint" || part == "constraints" || part == "protocol" || part == "protocols" {
+			return true
+		}
+	}
+	return false
+}
+
 func validateFileReferenceShape(ref FileReference) error {
 	if ref.Path == "" || strings.Contains(ref.Path, "\\") || path.IsAbs(ref.Path) || filepath.IsAbs(ref.Path) || regexp.MustCompile(`^[A-Za-z]:`).MatchString(ref.Path) || path.Clean(ref.Path) != ref.Path || ref.Path == "." || strings.HasPrefix(ref.Path, "../") || ref.Path == ".." {
 		return nativeErr("contract_mismatch", "specification path must be a normalized repository-relative path")
@@ -634,6 +694,9 @@ func validateFileReferenceShape(ref FileReference) error {
 	return nil
 }
 
+// VerifyTaskContractFiles validates pinned committed blobs. TASK-DAG must also
+// check the actual execution workspace before claim/implementation; this check
+// alone is never a startup permission.
 func VerifyTaskContractFiles(ctx context.Context, c Config, v TaskContract) error {
 	if err := ValidateTaskContract(v); err != nil {
 		return err
@@ -731,6 +794,9 @@ func ValidateTaskContractJSON(data []byte) (TaskContract, error) {
 // CanonicalJSON rejects duplicate object keys and emits sorted-key, UTF-8 JSON
 // with no insignificant whitespace. Array order is preserved.
 func CanonicalJSON(data []byte) ([]byte, error) {
+	if !utf8.Valid(data) {
+		return nil, errors.New("canonical JSON input must be valid UTF-8")
+	}
 	d := json.NewDecoder(bytes.NewReader(data))
 	d.UseNumber()
 	v, err := readJSONValue(d)

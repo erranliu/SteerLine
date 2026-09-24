@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"time"
 )
 
 type Task struct {
@@ -35,9 +36,24 @@ type TaskDetail struct {
 	Labels      []string
 }
 
-// LoadTaskDetail reads one task's metadata with `bd show`. It is read-only and
-// is used by the viewer to surface task fields that runtime.json does not keep.
+// LoadTaskDetail uses the configured task authority for the viewer's detail pane.
 func LoadTaskDetail(ctx context.Context, c Config, id string) (TaskDetail, error) {
+	if c.taskAuthority() == "native" {
+		if err := ValidateNativeTaskID(id); err != nil {
+			return TaskDetail{}, err
+		}
+		store, err := OpenNativeTaskProject(ctx, &c)
+		if err != nil {
+			return TaskDetail{}, err
+		}
+		defer store.Close()
+		page, err := (QueryService{Store: store, Project: c.Identity()}).ShowNativeTask(ctx, id)
+		if err != nil {
+			return TaskDetail{}, err
+		}
+		task := page.Tasks[0]
+		return TaskDetail{ID: task.TaskID, Title: task.Title, Type: task.Type, Status: task.Status, Assignee: task.Claimant, Priority: &task.Priority, SpecID: task.Contract.SpecRef.Path, Description: fmt.Sprintf("Spec: %s @ %s\nPlan: %s @ %s\nSampled: %s", task.Contract.SpecRef.Path, task.Contract.SpecRef.Commit, task.Contract.PlanRef.Path, task.Contract.PlanRef.Commit, page.SampledAt.Format(time.RFC3339Nano))}, nil
+	}
 	r := Runner{Dir: c.Repository, Timeout: duration(c.CommandTimeout)}
 	b := Beads{Runner: r, Command: c.BD, Claimant: c.Claimant}
 	t, e := b.Show(ctx, id)

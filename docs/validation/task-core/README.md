@@ -1,5 +1,7 @@
 # TASK-CORE verification record
 
+This records the original implementation validation. The quality audit, corrections to schema/contract behavior, and current verification results are recorded in [audit.md](audit.md). PR merge/worker execution is not verified by these storage fixtures; actual platform delivery remains a downstream acceptance requirement.
+
 Date: 2026-09-24 (Asia/Shanghai)
 
 Repository baseline: `e9ba8051740be640945c6854c2a3da602ab27e39`

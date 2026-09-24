@@ -1,0 +1,117 @@
+{
+  "schema": "task-core-audit-validation/v1",
+  "date": "2026-09-25",
+  "toolchain": "go1.26.4 windows/amd64",
+  "base_commit": "6295105e2ee02003862b719a8ae7a58a07357b4e",
+  "internal_tests": {
+    "registered": 249,
+    "passed": 240,
+    "skipped": 9,
+    "unaccounted": []
+  },
+  "phases": [
+    {
+      "name": "full",
+      "command": "go test ./... -json -count=1 -timeout 15m",
+      "log_sha256": "5c95a0ae71d7e350687ebc8cbc4b71f5489c62cc5b6e9e86bcb43ca8dd3cdbb6",
+      "timed_out": true,
+      "packages": [
+        {
+          "Package": "github.com/erranliu/SteerLine/cmd/orca-probe",
+          "Action": "skip",
+          "Elapsed": 0.015
+        },
+        {
+          "Package": "github.com/erranliu/SteerLine/internal/steerline/remoteprotocol",
+          "Action": "pass",
+          "Elapsed": 0.843
+        },
+        {
+          "Package": "github.com/erranliu/SteerLine/internal/steerline/viewer",
+          "Action": "pass",
+          "Elapsed": 2.424
+        },
+        {
+          "Package": "github.com/erranliu/SteerLine/cmd/steerline",
+          "Action": "pass",
+          "Elapsed": 3.142
+        },
+        {
+          "Package": "github.com/erranliu/SteerLine/internal/steerline",
+          "Action": "fail",
+          "Elapsed": 900.365
+        }
+      ],
+      "skipped_tests": [
+        "TestNativeLocalCodexStartOutputStop",
+        "TestNativeOrcaTerminalReadReconnectStop",
+        "TestNativeOrcaWorkspaceInspection",
+        "TestNativeLocalRetryKeepsRunWorkspaceAndClaim",
+        "TestNativeOrcaServiceStartOutputStop",
+        "TestDetachedServiceLaunchReportsJobRestriction",
+        "TestDetachedServiceSurvivesStarterExitAndStopsWorker",
+        "TestStartServiceSerializesSameConfigAndRepositoryLockRejectsOtherRunDir",
+        "TestStartServiceReportsPreflightFailureAndPendingHandshake"
+      ],
+      "failed_tests": [
+        "TestOrcaDecisionResumesRun"
+      ],
+      "failure_diagnostics": [
+        "decision_test.go:159: run did not pause for a decision: status=blocked execution=succeeded error=Invalid handoff: C:\\Program Files\\Git\\cmd\\git.exe failed: context deadline exceeded ()"
+      ],
+      "passed_count": 232
+    },
+    {
+      "name": "orca_retry",
+      "command": "go test ./internal/steerline -run '^TestOrcaDecisionResumesRun$' -count=3 -timeout 3m -json",
+      "log_sha256": "14aa343d1c5499b0f9edd173f3a0728c8f102a511a08f2684133e45234947d8b",
+      "timed_out": false,
+      "packages": [
+        {
+          "Package": "github.com/erranliu/SteerLine/internal/steerline",
+          "Action": "pass",
+          "Elapsed": 41.175
+        }
+      ],
+      "passed_tests": [
+        "TestOrcaDecisionResumesRun",
+        "TestOrcaDecisionResumesRun",
+        "TestOrcaDecisionResumesRun"
+      ],
+      "skipped_tests": [],
+      "failed_tests": [],
+      "failure_diagnostics": [],
+      "passed_count": 3
+    },
+    {
+      "name": "remaining",
+      "command": "go test ./internal/steerline -run '^(TestWorkspaceTracksFreshRemoteWithoutChangingSource|TestFetchFailureLeavesTaskUnclaimed|TestPreparationFailurePreservesClaimAndContents|TestWorkspaceBranchCollisionIsNotReset|TestInterruptedPreparationNeverCreatesOrRelaunches|TestWorkspaceRecoveryRejectsChangedBranch|TestWorktreeRootConfigurationAndOldSnapshotRejection)$' -count=1 -timeout 4m -json",
+      "log_sha256": "1fafad38b2ab7dbddbffe08a7195364b5828186e56bdb4f14acdadac61e11151",
+      "timed_out": false,
+      "packages": [
+        {
+          "Package": "github.com/erranliu/SteerLine/internal/steerline",
+          "Action": "pass",
+          "Elapsed": 62.409
+        }
+      ],
+      "passed_tests": [
+        "TestWorkspaceTracksFreshRemoteWithoutChangingSource",
+        "TestFetchFailureLeavesTaskUnclaimed",
+        "TestPreparationFailurePreservesClaimAndContents",
+        "TestWorkspaceBranchCollisionIsNotReset",
+        "TestInterruptedPreparationNeverCreatesOrRelaunches",
+        "TestWorkspaceRecoveryRejectsChangedBranch",
+        "TestWorktreeRootConfigurationAndOldSnapshotRejection"
+      ],
+      "skipped_tests": [],
+      "failed_tests": [],
+      "failure_diagnostics": [],
+      "passed_count": 7
+    }
+  ],
+  "other_checks": {
+    "go vet ./...": "passed",
+    "git diff --cached --check": "passed"
+  }
+}
