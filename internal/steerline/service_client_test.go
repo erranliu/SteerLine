@@ -44,6 +44,12 @@ func TestConnectionClassifiesProcessAndSnapshotIndependently(t *testing.T) {
 	if connected.State != ConnectionConnected || !connected.CanControl || !connected.IdentityMatched {
 		t.Fatalf("connected process classified as %+v", connected)
 	}
+	denied := connectServiceWithProbe(context.Background(), c, func(*ProcessIdentity) ProcessProbe {
+		return ProcessProbe{State: ProcessUnknown, Reason: "access denied"}
+	})
+	if denied.State != ConnectionUnknown || denied.CanStart || denied.CanControl || denied.CanStop || !strings.Contains(denied.Diagnostic, "access denied") {
+		t.Fatalf("inaccessible process was treated as a controllable or replaceable service: %+v", denied)
+	}
 
 	stale := rt
 	stale.HeartbeatAt = now().Add(-time.Minute)

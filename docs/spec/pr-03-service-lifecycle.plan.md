@@ -2,7 +2,7 @@
 
 依据：[Spec](pr-03-service-lifecycle.spec.md)。依赖：PR 2。
 
-实现状态：2026-09-24 调整 Windows 产品方案。当前分支已加入服务窗口入口、Windows `window-required` 结果、启动状态/日志和窗口消失监测；真实窗口 Ctrl+C、X/重启及全仓回归已通过，两个窗口从零并发等门槛尚待完成。PR 保持 draft，不把旧 detached 方案的测试结果视为新 Spec 完成。
+实现状态：2026-09-24 调整 Windows 产品方案。当前分支已加入服务窗口入口、Windows `window-required` 结果、启动状态/日志和窗口消失监测；真实窗口 Ctrl+C、X/重启及两个窗口从零并发均已在当前宿主通过。合并主线后的全仓回归、静态检查和交叉编译也已通过，PR 可转为正式待审。
 
 ## 实施步骤
 
@@ -22,20 +22,32 @@
 - 复核 PID 复用、权限不足、stale heartbeat、配置/协议冲突和旧快照的只读路径。Linux 至少交叉编译；若无原生会话测试，明确标注验证边界。
 - 旧的 Windows `STEERLINE_REQUIRE_DETACHED_TESTS=1` 和“成功脱离所有祖先 Job”的验收命令不再是合并门槛；旧用例改为覆盖 Windows 返回窗口入口及不误报托管。不得靠跳过新的服务窗口用例宣布通过。
 
-## 现有证据与未完成项
+## 验证证据与边界
 
 - 旧实现的 `go test ./... -count=1 -timeout 10m` 已在 Windows 通过（服务包 373.271 秒）；Linux amd64 测试二进制和 CLI 曾交叉编译通过。这些结果只证明旧代码回归，不证明新的服务窗口目标。
 - 当前主机中的直接启动、管理员进程和临时系统服务都处于 Job；带 `CREATE_BREAKAWAY_FROM_JOB` 的子进程仍在 Job 或创建被拒。原 Windows detached 路径因此按设计拒绝，并未取得成功后台存活证据。
 - 旧的临时 `/IT` Task Scheduler TTY 测试已证明真实 stdin/console 窗口可用，以及旧 detached 启动的失败记录；它没有运行成功的服务/worker。另一个短暂的本机计划任务原型证明任务进程可在发起命令结束后继续运行，但本 Spec 选择服务窗口，不依赖计划任务。
-- 新增 `service-window.bat` 保留旧 `run.bat` auto 行为。当前宿主的定向测试已通过：前台 manual/ready、显式 worker、独立客户端退出/重连、同配置与同仓库不同 run_dir 锁竞争、preflight 失败记录、控制 stop；opt-in 真实 TTY 测试验证了可见窗口、Ctrl+C 和窗口 X 后的服务/worker 退出与锁释放，以及重新打开。测试只操作临时仓库与假工具；两个窗口从零并发及部分故障分类仍待验收。
+- 新增 `service-window.bat` 保留旧 `run.bat` auto 行为。当前宿主的定向测试已通过：前台 manual/ready、显式 worker、独立客户端退出/重连、preflight 失败记录、控制 stop；opt-in 真实 TTY 测试验证了可见窗口、Ctrl+C 和窗口 X 后的服务/worker 退出与锁释放，以及重新打开。两个可见窗口从零并发的同配置和同仓库不同 run_dir 子场景均通过：一个 ready，另一个因仓库锁退出。测试只操作临时仓库与假工具。
 - 首轮全仓回归在旧控制测试 `TestControlStartsOnlySelectedReadyTask` 上发现时序竞争：服务已 claim，假 worker 的启动计数尚未写回。该测试改为有界等待后，第二次 `go test ./... -count=1 -timeout 10m` 通过（服务包 435.547 秒）。最后的小改动只收紧窗口句柄检查并精简一条重复测试；针对最终代码的真实窗口 X/重启定向验收通过。
 - 连接分类、启动锁、pending startup_id、preflight 失败记录和 StopService 回执已有原生测试。保留可复用部分；对 Windows 启动结果和窗口生命周期补充真实验收。
+- 合入 `origin/main` 的 `69407b0` 后，`go test ./... -count=1 -timeout 10m` 通过（服务包 498.703 秒），`go vet ./...` 通过；Linux amd64 服务测试二进制与 CLI 交叉编译通过。Linux 原生会话生命周期未实测。
+- `TestWindowsConcurrentVisibleServiceWindows` 的同配置及同仓库不同 run_dir 两个子场景均通过，分别只有一个窗口 ready，另一个报告锁冲突。合并后真实可见窗口 Ctrl+C 与 X/重启定向测试通过；临时计划任务已清理。权限不足分类通过注入 `ProcessUnknown(access denied)` 的客户端定向测试，未依赖当前账户访问受保护生产进程。
+
+| 验收 | 对应证据 |
+| --- | --- |
+| L-A1～L-A3 | `TestWindowsVisibleServiceWindowAcceptance`：manual/ready、显式 worker、独立客户端退出与重连、身份不变 |
+| L-A4 | `TestWindowsConcurrentVisibleServiceWindows`：两个可见窗口从零并发、同仓库两种配置形态 |
+| L-A5 | `TestRunCommandRecordsPreflightFailureAndLog`、`TestWaitForStartupMarksConfirmedEarlyExit`、`TestStartServiceReobservesExistingPendingAttempt` |
+| L-A6 | `TestConnectionClassifiesProcessAndSnapshotIndependently`、`TestProcessProbeSeparatesMatchReuseAndAbsent` |
+| L-A7 | `TestWindowsForegroundServiceWindowLifecycle` 的 stop 回执/进程/锁；可见窗口 Ctrl+C 与 X 路径 |
+| L-A8 | 连接分类测试及服务生命周期审核回归中的旧快照、配置与协议冲突 |
+| L-A9 | `TestWindowsVisibleServiceWindowCloseAndRestart`：新实例、旧 worker 不重复、可再次正常停服 |
 
 ## 完成条件
 
 - L-A1～L-A9 在当前 Windows 主机取得真实服务窗口、worker、viewer 退出/重连、正常停服与异常关窗证据，尤其比较 service/worker 身份并核验锁与回执。
 - Windows 离线客户端明确指向固定服务窗口入口；不再尝试旧 detached 启动或把 Job 内子进程误报为托管成功。
-- Spec、Plan、README、状态模型及 PR 描述与最终行为一致；旧后台测试已更新到新目标。PR 审核通过前保持 draft，不合并，也不启动 PR 4。
+- Spec、Plan、README、状态模型及 PR 描述与最终行为一致；旧后台测试已更新到新目标。验收通过后标记 PR 待审；合并由协调审核流程负责，合并前不启动后续阶段。
 
 ## 风险与回退
 

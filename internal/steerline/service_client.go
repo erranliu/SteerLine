@@ -502,6 +502,10 @@ func legacyServiceLocksHeld(c Config) bool {
 }
 
 func ConnectService(ctx context.Context, c Config) ServiceConnection {
+	return connectServiceWithProbe(ctx, c, probeProcess)
+}
+
+func connectServiceWithProbe(ctx context.Context, c Config, probe func(*ProcessIdentity) ProcessProbe) ServiceConnection {
 	connection := ServiceConnection{State: ConnectionNoRecord, Capabilities: []string{}, CanStart: true}
 	if err := c.ResolveIdentity(ctx); err != nil {
 		connection.State, connection.Diagnostic, connection.CanStart = ConnectionIdentityError, "resolve repository identity: "+err.Error(), false
@@ -560,7 +564,7 @@ func ConnectService(ctx context.Context, c Config) ServiceConnection {
 	if rt.Service.ProcessIdentity == nil || rt.Service.PID <= 0 || rt.Service.ProcessIdentity.PID != rt.Service.PID {
 		connection.Process = ProcessProbe{State: ProcessUnknown, Reason: "runtime has no internally consistent service process identity"}
 	} else {
-		connection.Process = probeProcess(rt.Service.ProcessIdentity)
+		connection.Process = probe(rt.Service.ProcessIdentity)
 	}
 	if connection.Process.State == ProcessAbsent || connection.Process.State == ProcessReused {
 		if !instanceBound {

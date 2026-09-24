@@ -635,3 +635,131 @@ func TestWindowsVisibleServiceWindowCloseAndRestart(t *testing.T) {
 	}
 	require(t, closeConsoleWindowForTests(newWindow))
 }
+
+func TestWindowsConcurrentVisibleServiceWindows(t *testing.T) {
+	if os.Getenv("STEERLINE_RUN_WINDOW_ACCEPTANCE") != "1" {
+		return
+	}
+	for _, differentRunDir := range []bool{false, true} {
+		name := "same-config"
+		if differentRunDir {
+			name = "same-repository-different-run-dir"
+		}
+		t.Run(name, func(t *testing.T) {
+			f := newFixture(t)
+			config, configPath := windowsForegroundLifecycleConfig(t, f)
+			otherConfig, otherPath := config, configPath
+			if differentRunDir {
+				otherConfig.RunDir = filepath.Join(t.TempDir(), "other-runtime")
+				otherPath = filepath.Join(t.TempDir(), "other-config.json")
+				data, err := json.Marshal(otherConfig)
+				require(t, err)
+				require(t, os.WriteFile(otherPath, data, 0600))
+				otherConfig, err = LoadConfig(otherPath)
+				require(t, err)
+				require(t, otherConfig.ResolveIdentity(context.Background()))
+			}
+			serviceExe := buildServiceLifecycleCLI(t)
+			paths := []string{configPath, otherPath}
+			commands := make([]*exec.Cmd, 2)
+			logs := make([]string, 2)
+			reaped := make([]bool, 2)
+			for i := range commands {
+				logs[i] = filepath.Join(t.TempDir(), fmt.Sprintf("service-%d.log", i))
+				logFile, err := os.Create(logs[i])
+				require(t, err)
+				defer logFile.Close()
+				commands[i] = exec.Command(serviceExe, "run", "-config", paths[i], "-dispatch", "manual", "-console", "summary", "-service-window")
+				commands[i].SysProcAttr = &syscall.SysProcAttr{CreationFlags: windows.CREATE_NEW_CONSOLE}
+				commands[i].Stdout, commands[i].Stderr = logFile, logFile
+			}
+			t.Cleanup(func() {
+				for i, command := range commands {
+					if command.Process != nil && !reaped[i] {
+						_ = command.Process.Kill()
+						_ = command.Wait()
+					}
+				}
+			})
+			start := make(chan struct{})
+			type startResult struct {
+				index int
+				err   error
+			}
+			started := make(chan startResult, 2)
+			for i, command := range commands {
+				go func(index int, cmd *exec.Cmd) {
+					<-start
+					started <- startResult{index: index, err: cmd.Start()}
+				}(i, command)
+			}
+			close(start)
+			for range 2 {
+				result := <-started
+				if result.err != nil {
+					t.Fatalf("start visible service window %d: %v", result.index, result.err)
+				}
+			}
+			deadline := time.Now().Add(30 * time.Second)
+			var winner ServiceConnection
+			var winnerConfig Config
+			for time.Now().Before(deadline) {
+				winner = ConnectService(context.Background(), config)
+				winnerConfig = config
+				if winner.State != ConnectionConnected && differentRunDir {
+					winner = ConnectService(context.Background(), otherConfig)
+					winnerConfig = otherConfig
+				}
+				if winner.State == ConnectionConnected {
+					break
+				}
+				time.Sleep(50 * time.Millisecond)
+			}
+			if winner.State != ConnectionConnected {
+				firstLog, _ := os.ReadFile(logs[0])
+				secondLog, _ := os.ReadFile(logs[1])
+				t.Fatalf("no concurrent service window became ready: first=%s\nsecond=%s", firstLog, secondLog)
+			}
+			winnerIndex := -1
+			for i, command := range commands {
+				if command.Process.Pid == winner.Snapshot.Runtime.Service.PID {
+					winnerIndex = i
+				}
+			}
+			if winnerIndex < 0 {
+				t.Fatalf("ready service PID %d belongs to neither window", winner.Snapshot.Runtime.Service.PID)
+			}
+			loserIndex := 1 - winnerIndex
+			loserDone := make(chan error, 1)
+			go func() { loserDone <- commands[loserIndex].Wait() }()
+			select {
+			case exitErr := <-loserDone:
+				reaped[loserIndex] = true
+				loserLog, _ := os.ReadFile(logs[loserIndex])
+				if exitErr == nil || !strings.Contains(strings.ToLower(string(loserLog)), "lock") {
+					t.Fatalf("competing window did not fail on the service lock: %v\n%s", exitErr, loserLog)
+				}
+			case <-time.After(15 * time.Second):
+				_ = commands[loserIndex].Process.Kill()
+				<-loserDone
+				reaped[loserIndex] = true
+				t.Fatal("competing service window did not exit")
+			}
+			if differentRunDir {
+				other := ConnectService(context.Background(), otherConfig)
+				first := ConnectService(context.Background(), config)
+				if (first.State == ConnectionConnected) == (other.State == ConnectionConnected) {
+					t.Fatalf("same repository has zero or two connected services: first=%s second=%s", first.State, other.State)
+				}
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+			stopped, err := StopService(ctx, winnerConfig, "concurrent-window-test", 15*time.Second)
+			cancel()
+			if err != nil || stopped.Status != "stopped" || !stopped.ProcessExited || !stopped.LocksReleased {
+				t.Fatalf("winner did not stop cleanly: %+v err=%v", stopped, err)
+			}
+			_ = commands[winnerIndex].Wait()
+			reaped[winnerIndex] = true
+		})
+	}
+}
