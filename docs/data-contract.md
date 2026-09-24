@@ -2,6 +2,20 @@
 
 编码为 UTF-8，时间为 RFC3339 UTC。完整例子：[runtime](../examples/runtime.json)、[result](../examples/result.json)。结果的可执行 JSON Schema 与程序一起嵌入：[result.schema.json](../internal/steerline/result.schema.json)。
 
+## Native task query `native-tasks/v1`
+
+配置显式设为 `"task_authority":"native"` 后，`steerline task list -config <file>` 和 `steerline task show -task-id <decimal-id> -config <file>` 只读取中心 SQLite 中的 native Task、固定契约、WorkflowRun 和已记录交付。CLI 不调用 `bd show`，也不提供创建、领取、丢弃或交付写入口。新项目首次查询时初始化 native 项目权威，初始 `dispatch_mode=manual`、`dispatch_paused=true`；生产执行接入由 [Beads 退出 Spec](spec/beads-exit.spec.md) 承担。
+
+只读 native 查询配置示例：[native-tasks.config.json](../examples/native-tasks.config.json)。省略 `run_dir`，让它按 Git common-dir 派生为本仓库唯一状态目录。
+
+native 状态目录必须使用仓库唯一派生的 `STEERLINE_HOME/state/<repoKey>`，不得为同一仓库配置另一条 `run_dir`。目录首次初始化前必须为空，仓库不得含 Beads 状态。SQLite 会把 Git common-dir、目标远端 URL、remote 名称和 branch 固定到项目权威；状态、仓库或配置不匹配时以 `authority_mismatch` / `unsupported_schema` 拒绝，不创建第二份数据库。
+
+查询响应头含 `protocol`、`project_id`、`authority_version`、`graph_revision`、`database_revision`、`sampled_at` 和 `capabilities`。任务详情含原数字 `task_id`、fixed contract 与验收引用、状态/claim/priority/version、丢弃审计、相关运行和交付证据。列表默认 100、最多 500 条；`next_cursor` 固定项目、authority/graph/database 修订和 offset。任何已提交数据库写入都会推进 `database_revision`，续页发现修订变化、游标版本不可读或项目绑定变化时返回 `cursor_invalidated`。`dependency_readiness` 和 `dependency_blockers` 能力值在此版本为 `not_provided`，任务对象不会伪造 `dependency_ready` 或空阻塞列表。
+
+TaskContract 使用单个 `.spec.md`、与其同前缀配套的 `.plan.md`、至少一个含验收章节的 Markdown 引用，以及只指向共享 constraint/protocol 文件的 `common_refs`。每个引用固定仓库相对路径、同一个完整 commit 和该提交中普通文件 blob 字节的 SHA-256。路径不能越界或是符号链接。规范摘要是 UTF-8、对象键排序、数组顺序不变、无多余空白的 JSON SHA-256；重复 JSON 键拒绝。契约内容从 Git commit blob 读取，工作区 CRLF 转换不改变核验结果。
+
+协议样例见 [native-tasks-v1.sample.json](validation/task-core/native-tasks-v1.sample.json)。
+
 ## 顶层
 
 | 字段 | 类型 | 含义 |

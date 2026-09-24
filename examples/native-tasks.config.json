@@ -1,0 +1,9 @@
+{
+  "repository": "/absolute/path/to/repository",
+  "remote": "origin",
+  "branch": "main",
+  "task_authority": "native",
+  "git": {
+    "executable": "git"
+  }
+}

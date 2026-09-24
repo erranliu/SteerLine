@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -26,7 +27,10 @@ func main() {
 }
 func run() error {
 	if len(os.Args) < 2 {
-		return fmt.Errorf("usage: steerline <run|start-service|stop-service|retry|check|control|tasks|stop|watch|answer|accept-result|mark-stopped|certify-backend|home|install|launchers|projects> -config config.json")
+		return fmt.Errorf("usage: steerline <run|start-service|stop-service|retry|check|control|tasks|task|stop|watch|answer|accept-result|mark-stopped|certify-backend|home|install|launchers|projects> -config config.json")
+	}
+	if os.Args[1] == "task" {
+		return runNativeTaskCommand(os.Args[2:])
 	}
 	command := os.Args[1]
 	fs := flag.NewFlagSet(command, flag.ContinueOnError)
@@ -291,6 +295,63 @@ func run() error {
 	}
 	fmt.Printf("Steerline M0 running: %s -> %s/%s; Ctrl+C or steerline stop to exit\n", c.Repository, c.Remote, c.Branch)
 	return s.RunWithDispatch(ctx, *dispatchMode)
+}
+
+func runNativeTaskCommand(args []string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("usage: steerline task <show|list> -config config.json")
+	}
+	subcommand := args[0]
+	fs := flag.NewFlagSet("task "+subcommand, flag.ContinueOnError)
+	config := fs.String("config", "steerline.local.json", "configuration JSON")
+	taskID := fs.String("task-id", "", "native task ID")
+	cursor := fs.String("cursor", "", "native task list cursor")
+	limit := fs.Int("limit", 100, "native task page size (default 100, maximum 500)")
+	if subcommand != "show" && subcommand != "list" {
+		return fmt.Errorf("unsupported task command %q", subcommand)
+	}
+	if err := fs.Parse(args[1:]); err != nil {
+		return err
+	}
+	if fs.NArg() != 0 {
+		return errors.New("unexpected positional arguments")
+	}
+	if subcommand == "show" {
+		if *taskID == "" {
+			return errors.New("task show requires -task-id")
+		}
+		if err := steerline.ValidateNativeTaskID(*taskID); err != nil {
+			return err
+		}
+		if *cursor != "" {
+			return errors.New("task show does not accept -cursor")
+		}
+	} else if *taskID != "" {
+		return errors.New("task list does not accept -task-id")
+	}
+	c, err := steerline.LoadConfig(*config)
+	if err != nil {
+		return err
+	}
+	if c.TaskAuthority != "native" {
+		return errors.New("authority_mismatch: task show/list require task_authority=native in the configuration")
+	}
+	store, err := steerline.OpenNativeTaskProject(context.Background(), &c)
+	if err != nil {
+		return err
+	}
+	defer store.Close()
+	query := steerline.QueryService{Store: store, Project: c.Identity()}
+	var result steerline.NativeTaskPage
+	if subcommand == "show" {
+		result, err = query.ShowNativeTask(context.Background(), *taskID)
+	} else {
+		result, err = query.ListNativeTasks(context.Background(), *cursor, *limit)
+	}
+	if err != nil {
+		return err
+	}
+	return json.NewEncoder(os.Stdout).Encode(result)
 }
 
 func useWatchTUI(tty, jsonOut, raw, noTUI, follow, fromStart bool) bool {
