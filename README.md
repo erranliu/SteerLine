@@ -15,6 +15,8 @@ Copy-Item .\examples\config.json .\steerline.local.json
 # 编辑 steerline.local.json，填写实际仓库、技能、主线、运行目录、工具和 PR 查询配置。
 .\bin\steerline.exe check -config .\steerline.local.json
 .\bin\steerline.exe run -config .\steerline.local.json
+# 手动派发：服务启动并刷新候选，但不会自动领取 ready 任务
+.\bin\steerline.exe run -config .\steerline.local.json -dispatch manual
 ```
 
 ### 机器级目录（跨 worktree 稳定）
@@ -109,6 +111,29 @@ bd 1.1.2 在领取冲突时可能退出 0 却不返回领取 JSON，因此会同
 .\bin\steerline.exe stop -config .\steerline.local.json
 ```
 
+`run` 每次启动默认 `-dispatch auto`，保持既有自动调度；`-dispatch manual` 会刷新候选并继续处理当前运行、决策和 PR，但不自动领取新任务。控制客户端读取 runtime v4 后发布带实例 ID 和控制版本的不可变请求，服务完成后写持久回执：
+
+```powershell
+# 读取本服务最新 ready 候选
+.\bin\steerline.exe tasks -config .\steerline.local.json
+
+# 只启动指定任务；手动模式下重新核验 ready 后领取
+.\bin\steerline.exe control -config .\steerline.local.json -action start_task -task-id <task-id> -wait
+
+# 模式切换、暂停/恢复派发
+.\bin\steerline.exe control -config .\steerline.local.json -action set_dispatch_mode -mode manual -wait
+.\bin\steerline.exe control -config .\steerline.local.json -action pause_dispatch -wait
+.\bin\steerline.exe control -config .\steerline.local.json -action resume_dispatch -wait
+
+# 以控制协议停服；steerline stop 仍保留 stop.json 兼容入口
+.\bin\steerline.exe control -config .\steerline.local.json -action stop_service -wait
+
+# 用回执中的 request_id 再次查询原操作结果
+.\bin\steerline.exe control -config .\steerline.local.json -request-id <request-id>
+```
+
+`start_task` 只领取所选任务；模式不符、暂停、占槽、任务失去 ready 或 claim 冲突会返回明确拒绝原因。暂停不冻结已启动 worker。`applied` 表示该指令定义的完成条件已持久化，任务是否交付仍查看 run 状态。控制请求和回执保存在 `control/`，不写入 activity 日志。
+
 停止新派发，等待当前 worker 最多 shutdown_grace，超时则终止它的整棵进程树，保留领取并记录 failed/blocked。Windows 使用“挂起启动 → Job Object → 恢复线程”，避免进程在纳入 Job 前派生子进程；服务崩溃时 Job 句柄关闭也会清理后代。短命令同样有超时及进程树清理。Linux 提供进程组实现，但本次未实机验证 Linux，Windows 才是本次验收平台。
 
 恢复规则：
@@ -151,6 +176,8 @@ retry 复用同一个任务、领取和 worktree，使用当前配置的模型�
 
 ## 查看运行
 
+规格与实施计划统一见 [Spec + Plan 索引](docs/spec/README.md)；本轮设计见 [控制台升级总览](docs/spec/console-upgrade.md)。以下描述当前已实现行为。
+
 每个运行有两份日志：`events.jsonl` 是 codex/pi 的原始事件流（取证，永不改动）；`activity.jsonl` 是归一化后的稳定记录，与 codex/pi 的 schema 解耦。两者都在 `runs/<run_id>/`（retry 在 `attempts/<attempt_id>/`）。契约见 [activity](docs/activity.md)。
 
 ```powershell
@@ -162,6 +189,7 @@ retry 复用同一个任务、领取和 worktree，使用当前配置的模型�
 .\bin\steerline.exe watch -config .\steerline.local.json
 .\bin\steerline.exe watch -config .\steerline.local.json --no-tui   # 强制流式（管道/CI 自动如此）
 .\bin\steerline.exe watch -config .\steerline.local.json -run-id <run-id|task-id> --follow=false
+.\bin\steerline.exe watch -config .\steerline.local.json -run-id <run-id|task-id> --from-start=false
 .\bin\steerline.exe watch -config .\steerline.local.json --json   # 稳定 JSONL
 .\bin\steerline.exe watch -config .\steerline.local.json --raw    # 原始事件流
 
@@ -169,11 +197,13 @@ retry 复用同一个任务、领取和 worktree，使用当前配置的模型�
 .\bin\steerline.exe answer -config .\steerline.local.json -run-id <run-id|task-id> -option <option-id> [-note "..."] [-by "<name>"]
 ```
 
-`watch` 只读 `runtime.json` 和运行文件，不需要服务在跑，也不改任何状态。若 `activity.jsonl` 不存在（旧运行或原始宿主采集），会回退到现场归一化 `events.jsonl`。
+`watch` 只读 `runtime.json` 和运行文件，不需要服务在跑，也不改任何状态。单次调用固定开始时选中的 run 和日志路径；retry 会显示为新的 attempt，不会跟着 runtime 中的当前任务切换。读取器只提交换行结束的完整记录，支持 UTF-8 与 CRLF，遇到截断、文件替换或 activity `seq` 回退会清空旧代次后继续读。每批最多 256 行或约 1 MiB，单行上限 8 MiB；坏行诊断写入 stderr，JSON/raw stdout 不混入状态文字。若启动 watch 时 `activity.jsonl` 不存在（旧运行或原始宿主采集），会固定使用并归一化 `events.jsonl`；再次启动时会重新选择来源。TTY 下 `--follow=false` 或 `--from-start=false` 会使用流式输出，让这两个参数按请求生效。
+
+查看器按 `run_id` 保持选中项，列表排序变化不会悄悄切换任务；切换 attempt、日志文件代次或读取源时会清空旧日志。runtime 读取失败会保留最后一次成功快照，并显示采样时间与错误；heartbeat 新鲜度独立于 runtime 中服务上次报告的状态。
 
 Agent 需要人工决策时（`outcome=needs_decision`），运行进入 `finish_task_status=waiting_decision`：服务保留 claim/worktree/终端、暂停新派发并等待。`steerline answer` 原子写入答案文件，服务读回后在同一终端续跑。协议见 [decisions](docs/decisions.md)；Beads 与 SteerLine 三个状态轴的关系见 [状态模型](docs/state-model.md)。
 
-执行在 Orca：`host: "orca"` 时由 Orca 创建 worktree 并启动 agent（`events.jsonl` 不再产生，改用 R-a 结果文件）。Codex 可配置 `model`、`profile` 和 `reasoning_effort`；SteerLine 在 Orca 创建 worktree 后通过自定义 Codex CLI 命令启动 agent，并在启动时预填任务提示。其他 agent 仍由 Orca 的 agent selector 启动。执行事实（worktree、分支、agent 存活、终端）以 Orca 为准；调度、编排、完成与恢复仍属 SteerLine。红线与规范见 [hosting](docs/hosting.md)、[hosting 规范](docs/hosting-spec.md)。
+执行在 Orca：`host: "orca"` 时由 Orca 创建 worktree 并启动 agent（`events.jsonl` 不再产生，改用 R-a 结果文件）。Codex 可配置 `model`、`profile` 和 `reasoning_effort`；SteerLine 在 Orca 创建 worktree 后通过自定义 Codex CLI 命令启动 agent，并在启动时预填任务提示。其他 agent 仍由 Orca 的 agent selector 启动。执行事实（worktree、分支、agent 存活、终端）以 Orca 为准；调度、编排、完成与恢复仍属 SteerLine。红线与规范见 [hosting](docs/hosting.md)、[hosting 规范](docs/spec/hosting-spec.md)。
 
 后续方向已确认：中心 SteerLine 状态机、远端仅 Orca 执行器、桌面与移动端统一接入，并为同任务多 agent 独立 worktree 并行预留模型。详见[架构决策](docs/architecture-direction.md)；这些是目标约束，当前尚未实现。
 
@@ -187,7 +217,7 @@ Agent 需要人工决策时（`outcome=needs_decision`），运行进入 `finish
 
 ## 数据与保留
 
-见 [数据契约](docs/data-contract.md)、[完整 runtime 示例](examples/runtime.json)、[结果示例](examples/result.json)。运行快照现在为 schema_version=3，可读取 v1/v2/v3 历史快照（v1/v2 视为 local），不自动将旧技能自报目录当作已核验工作环境。所有时间 UTC，未知值 null。runtime.json 只由服务写，Codex 仅写自己这次运行的结果文件；其回传的目录和起点必须与调度器记录一致。
+见 [数据契约](docs/data-contract.md)、[runtime 示例](examples/runtime.json)、[候选快照](examples/tasks.json)、[控制请求](examples/control-request.json)、[控制回执](examples/control-receipt.json) 和 [结果示例](examples/result.json)。运行快照现在为 schema_version=4，可读取 v1–v4；只有持锁服务保存时迁移旧快照。控制协议为 v1，候选任务快照为 v1。所有时间 UTC，未知值 null。runtime.json 只由服务写，控制客户端仅发布不可变请求并读取回执，Codex 仅写自己这次运行的结果文件。
 
 同目录临时文件写完并 Sync 后，以 Windows MoveFileEx 原子替换发布；短暂 sharing violation 有限重试。替换失败保留旧快照并报错，不先删目标。读取器可能收到短暂共享冲突，应重试打开；一旦读到内容必须是完整 JSON。根据 heartbeat_at 判断是否过期，建议阈值至少为心跳间隔三倍并包含存储抖动余量。不要仅凭 service.status 推断进程还活着。
 
@@ -198,7 +228,7 @@ worktrees/<run_id>、任务分支和 refs/steerline/bases/<run_id> 同样保留�
 ## 验证
 
 ```powershell
-go test ./... -count=1 -timeout 360s
+go test ./... -count=1 -timeout 10m
 go vet ./...
 ```
 

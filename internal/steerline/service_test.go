@@ -101,6 +101,23 @@ func fakeMain(args []string) int {
 		fmt.Println(count)
 		return 0
 	}
+	if mode == "publish-control" {
+		b, e := os.ReadFile(args[2])
+		if e != nil {
+			fmt.Fprintln(os.Stderr, e)
+			return 7
+		}
+		var req ControlRequest
+		if e = json.Unmarshal(b, &req); e != nil {
+			fmt.Fprintln(os.Stderr, e)
+			return 7
+		}
+		if e = publishControlRequest(args[1], req); e != nil {
+			fmt.Fprintln(os.Stderr, e)
+			return 8
+		}
+		return 0
+	}
 	path := args[1]
 	argv := args[2:]
 	if arg(argv, "--help") != "" || strings.Contains(strings.Join(argv, " "), "--help") {
@@ -239,6 +256,9 @@ func fakeMain(args []string) int {
 		json.NewEncoder(os.Stdout).Encode(BeadsContext{Directory: dir, ProjectID: project, Database: "fixture-db", Backend: "dolt"})
 		return 0
 	case "ready":
+		if db.Behavior == "slow-ready-control" {
+			time.Sleep(time.Second)
+		}
 		for _, task := range db.Tasks {
 			if task.Status != "open" || task.Assignee != "" {
 				continue

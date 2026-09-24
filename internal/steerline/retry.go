@@ -73,7 +73,8 @@ func (s *Service) startRetry(ctx context.Context, id string) error {
 	}
 	// Keep all old files at their original paths. The snapshot links to the previous
 	// attempt; a crash after the pending save is recovered as unknown, never rerun.
-	dir := filepath.Join(s.Config.RunDir, "runs", r.RunID, "attempts", newID())
+	attemptID := newID()
+	dir := filepath.Join(s.Config.RunDir, "runs", r.RunID, "attempts", attemptID)
 	if err = os.MkdirAll(dir, 0700); err != nil {
 		return err
 	}
@@ -86,6 +87,7 @@ func (s *Service) startRetry(ctx context.Context, id string) error {
 	}
 	r.LogPath = ptr(filepath.Join(dir, "events.jsonl"))
 	r.ResultPath = ptr(filepath.Join(dir, "result.json"))
+	r.AttemptID = attemptID
 	r.ExecutionStatus = "pending"
 	r.FinishTaskStatus = "pending"
 	r.BeadsStatus = task.Status

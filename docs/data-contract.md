@@ -1,4 +1,4 @@
-# runtime v3 / result v1 数据契约
+# runtime v4 / control protocol v1 / result v1 数据契约
 
 编码为 UTF-8，时间为 RFC3339 UTC。完整例子：[runtime](../examples/runtime.json)、[result](../examples/result.json)。结果的可执行 JSON Schema 与程序一起嵌入：[result.schema.json](../internal/steerline/result.schema.json)。
 
@@ -6,7 +6,7 @@
 
 | 字段 | 类型 | 含义 |
 | --- | --- | --- |
-| schema_version | integer | 当前 3；可读取 v1/v2/v3 历史快照，下一次保存为 v3，拒绝其他未知版本 |
+| schema_version | integer | 当前 4；可读取 v1–v4，只有持锁服务写入时把旧快照迁移为 v4，拒绝其他未知版本 |
 | updated_at | timestamp | 最近一次成功发布快照的时间，含心跳写入 |
 | heartbeat_at | timestamp | 最近成功发布的活跃时间；读者用于判断过期 |
 | service.instance_id | string | 每次启动新的随机实例 ID，不等于 claimant |
@@ -15,12 +15,24 @@
 | service.mode | string | scheduler（正常轮询派发）/ retry-one（仅重试指定已有运行）/ maintenance（人工恢复命令） |
 | service.claimant | string | 稳定 Beads 领取者，用于恢复不完整记录 |
 | service.error | string/null | 最近服务级错误，查询恢复后可能清除 |
+| service.process_identity | object/null | 服务 OS 进程身份；含 PID、创建时间和可执行文件，供连接器核验实例 |
+| service.startup_id | string/null | 后台启动握手 ID；前台运行为空 |
+| service.config_digest | string | 实际加载的配置文件原始字节 SHA-256，不含环境变量凭据 |
+| service.ready | boolean | 已完成初始化、持有仓库和运行目录锁并可受理控制指令；停服时为 false |
+| service.control_protocol | integer | 当前支持的控制协议版本，本版为 1 |
+| service.capabilities | string[] | 当前二进制已实现并可受理的动作，不代表后续阶段能力 |
+| service.heartbeat_interval_ms | integer | 服务实际心跳间隔；观察端据此计算新鲜度 |
 | repository.path | string | 解析后的仓库绝对路径 |
 | repository.remote / branch | string | 明确的目标远端和主线 |
 | repository.identity | string | 规范化 Git common-dir，用于跨 worktree 锁与恢复校验 |
 | current_task | string/null | 当前准备或执行的候选任务；fetch 阶段可能尚未领取，没有则 null |
-| slot_occupied | boolean | 主线获取/worktree 准备/worker 占用，或因 unknown 旧执行而保守保留 |
+| slot_occupied | boolean | 主线获取/worktree 准备/worker 占用，或为待决策、unknown 旧执行、未结算控制操作及副作用 blocker 保留；保存时从这些事实重算 |
 | runs | array | 本服务管理的全部运行概要，初始为空数组 |
+| control | object | 派发模式、暂停、控制版本、单条 operation checkpoint 和未决副作用阻塞 |
+
+`control.dispatch_mode` 为 `manual` 或 `auto`。每次 `run` 默认 auto，也可用 `-dispatch manual` 显式启动手动模式；启动参数生效，不隐式恢复上次模式。`dispatch_paused` 只阻止新派发，当前 worker、决策续跑和 PR 核验继续。`revision` 随模式/暂停、执行槽或执行阻塞变化；心跳、日志和重复 PR 轮询不推进。`control.operation` 是服务主状态机正在执行或等待发布终态回执的 checkpoint。`control.blockers` 保留不确定的 claim/worktree/worker 等执行副作用，阻止新任务派发，直到后续人工恢复动作解除。
+
+控制 revision 按 service.instance_id 隔离，每个新实例从 1 开始；不占执行槽的其他 PR 完成不会使派发版本失效。run.control_revision 跨实例保存，并覆盖工作目录、base、进程身份等恢复证据的变化。自动派发、显式启动、旧 retry 和决策续跑共用执行守卫；决策续跑可以使用为待决策预留的槽，但不能绕过 unknown、控制 checkpoint 或 blocker。
 
 ## 每项运行
 
@@ -28,6 +40,8 @@
 | --- | --- | --- |
 | task_id / title | string | Beads 任务身份和领取时标题 |
 | run_id / claimant | string | 本次随机运行 ID / 固定领取者 |
+| attempt_id | string | 此运行当前日志代次；首次执行等于 run_id，后续 retry 使用新 ID |
+| control_revision | integer | 该运行最近一次操作相关状态变更的版本 |
 | host | string | `local` 或 `orca`；v1/v2 记录视为 local |
 | completion | object/null | 派发时固定的 `{command:{executable,args},timeout}`；null 使用原生 close。重启按该记录继续，配置变更不能跳过旧运行的结项尾部 |
 | beads_context | object/null | 派发时的 beads_dir、project_id、database、backend；回调前再次核对。旧记录可能为 null，不包含认证信息 |
@@ -57,6 +71,44 @@ execution_status=succeeded 仅表示进程正常退出，仍可能 finish_task_s
 兼容 v1 的等待合并记录：保留其 PR 查询，不把旧的技能自报工作目录升级为调度器核验事实，workspace_intent/worktree_branch 保持 null。旧 blocked/unknown 或孤儿运行缺少调度器准备记录，不能通过新版 accept-result 冒充已核验的运行，需人工处理原任务；程序不生成虚构的准备证据。
 
 PR 查询失败会清除 state 的可信结论并写 unknown，但保留过去读到的合并字段用于诊断；读者必须同时看 state、queried_at 和 query_error。程序不会仅凭缓存的 merged_at 关闭任务。
+
+## 控制请求与回执
+
+控制文件位于同一 `run_dir`：
+
+```text
+control/requests/<request_id>/request.json
+control/receipts/<request_id>.json
+tasks.json
+```
+
+客户端使用完整 32 位小写十六进制 request ID，通过同目录临时文件加原子 create-if-absent 发布 request.json。相同 ID、相同内容再次发布只查询原回执；同 ID 不同内容冲突，不覆盖原请求。空目录和临时文件不会被服务消费。服务只处理完整请求，并以经过校验的请求目录 ID 推导回执路径；请求正文中的错误 ID 不能指定另一个输出文件。单请求上限 3 MiB。
+
+请求协议固定 `protocol_version=1`，包含 `repository_identity`、精确的 `instance_id`、`action`、`expected_control_revision`、严格动作 payload、`requested_by`、`created_at` 和 `expires_at`。客户端默认两分钟有效期；服务在受理前核验仓库、实例、版本和期限。`stop_service` 仍核验协议、实例、仓库、payload 与受理期限，但不依赖 ready 或易变化的控制 revision。停止请求可以取消初始化，受理后也不会因清理期间超过 expires_at 而丢弃。未知字段、缺失必需 payload 或不匹配的路径 ID 均拒绝；无参数动作允许省略 payload 或使用空对象。
+
+本阶段支持的动作和 payload：
+
+| action | payload | 条件与完成含义 |
+| --- | --- | --- |
+| `start_task` | `{"task_id":"..."}` | 仅 manual/未暂停/空槽；重新读取 ready 与详情后领取该任务，定向 worker 启动并身份落盘后为 applied |
+| `set_dispatch_mode` | `{"mode":"manual"}` 或 `{"mode":"auto"}` | 切换之后的新任务选择方式；不会自动解除暂停 |
+| `pause_dispatch` | 无 | 阻止自动领取和显式新启动，不暂停已有 worker、决策或 PR 查询 |
+| `resume_dispatch` | 无 | 解除暂停并按当前 manual/auto 模式继续 |
+| `stop_service` | 无 | 停止派发，等待 shutdown_grace 并收尾当前 worker；只有 stopped 状态保存后回执才为 applied |
+
+回执状态：`applying` 表示服务已持久化 checkpoint 并开始动作；`applied` 表示动作完成条件已落盘；`rejected` 表示前提不符、没有任务副作用；`failed` 表示动作失败且已知副作用已记录；`indeterminate` 表示重启或通信中断后无法证明结果。常用 `code` 包括 `stale_instance`、`stale_revision`、`expired`、`slot_busy`、`dispatch_paused`、`wrong_mode`、`task_not_ready`、`already_managed`、`claim_conflict`、`host_unsupported`、`invalid_request`、`persistence_failed`。客户端按 code 分支，不解析 message。
+
+runtime 中的 `control.operation` 先于副作用保存；完成时把业务结果和终态 receipt 一起保存为 completed checkpoint，再原子发布 receipt，最后清除 checkpoint。发布 applying receipt 失败时不派发。重启可重建 completed 回执；applying 操作不会重放 claim、worktree create、worker start 或 terminal send，不确定副作用进入 blockers。停服不能覆盖未结算操作的 evidence。控制历史不会自动清理，日志删除不影响指令次数。
+
+终态回执暂时无法发布时，服务保留 completed checkpoint 并重试发布，继续监督已有 worker、响应停服；后续变更、决策续跑和 PR 结项先等待该 checkpoint 结算。runtime 自身持久化失败仍按既有规则停止服务。恢复时，缺失 applying 回执不能否认已保存的 run/领取证据；这种情况保留 indeterminate 与执行阻塞。完整历史请求只索引一次，既有终态回执不会因归档请求后来损坏而被重写。
+
+## 候选任务快照
+
+持锁服务在每个 task tick 发布 `tasks.json`，版本为 1，包含服务 instance、repository identity、查询时间、最近成功时间、错误、阻塞原因及候选列表。候选来自 Beads ready，排除不支持类型、aggregate 和已有本地 run；候选只用于展示，不作为授权或 claim 保证。provider 查询失败保留旧列表并记录错误，定向启动总会重新读取并核验 provider。CLI `steerline tasks` 只读取当前实例快照。
+
+## runtime 版本迁移
+
+只读读取 v1–v3 不改写文件。持有仓库和 run_dir 锁的服务下次保存时迁移到 v4：缺失 control revision 从 1 开始，缺失 attempt_id 从 `runs/<run_id>/attempts/<attempt_id>` 日志路径推导，否则回退到 run_id。恢复时发生的状态转换会推进相应 revision。v4 不兼容旧二进制写入；升级前显式停服，不能用旧版本覆盖新快照。
 
 ## 执行结果
 

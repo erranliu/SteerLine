@@ -2,7 +2,7 @@
 
 确认日期：2026-09-23。状态：目标架构已确认，尚未实现。
 
-实施分为三个 Spec：[01 Orca 远程协议验证](specs/01-orca-remote-protocol.md) → [02 执行模型、最小状态机与适配器](specs/02-execution-model-and-adapter.md) → [03 分阶段远程执行与 viewer 闭环](specs/03-remote-execution-and-viewer.md)。
+实施分为三个 Spec：[01 Orca 远程协议验证](spec/01-orca-remote-protocol.md) → [02 执行模型、最小状态机与适配器](spec/02-execution-model-and-adapter.md) → [03 分阶段远程执行与 viewer 闭环](spec/03-remote-execution-and-viewer.md)。
 
 本文约束后续设计。现有单执行槽、文件结果协议和技能流程仍是当前实现；远程接入、共享服务、移动端和同任务多 agent 并行需分别实施。
 

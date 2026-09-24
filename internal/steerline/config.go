@@ -3,6 +3,8 @@ package steerline
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -58,6 +60,7 @@ type Config struct {
 	startText       string
 	finishText      string
 	workerEnv       map[string]string
+	configDigest    string
 }
 
 type OrcaConfig struct {
@@ -220,6 +223,8 @@ func LoadConfig(path string) (Config, error) {
 	if err != nil {
 		return c, err
 	}
+	digest := sha256.Sum256(b)
+	c.configDigest = hex.EncodeToString(digest[:])
 	if err = decode(b, &c); err != nil {
 		return c, err
 	}
@@ -309,6 +314,34 @@ func LoadConfig(path string) (Config, error) {
 }
 func duration(s string) time.Duration { d, _ := time.ParseDuration(s); return d }
 func (c Config) Identity() string     { return c.identity }
+
+// ResolveIdentity reads only Git metadata and does not run task-provider probes
+// or create runtime directories. Control clients use it without constructing a
+// Service or taking ownership of scheduler state.
+func (c *Config) ResolveIdentity(ctx context.Context) error {
+	if c.identity != "" {
+		return nil
+	}
+	timeout := duration(c.CommandTimeout)
+	if timeout <= 0 {
+		timeout = 30 * time.Second
+	}
+	r := Runner{Dir: c.Repository, Timeout: timeout}
+	common, err := r.Output(ctx, c.Git, "rev-parse", "--path-format=absolute", "--git-common-dir")
+	if err != nil {
+		return err
+	}
+	path := strings.TrimSpace(string(common))
+	if path == "" {
+		return errors.New("git returned an empty common dir")
+	}
+	resolved, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		return err
+	}
+	c.identity = canonical(resolved)
+	return nil
+}
 
 // hostName, agentName and fallbackMode apply the documented defaults for
 // programmatic Configs that do not go through LoadConfig.

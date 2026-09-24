@@ -3,6 +3,7 @@ package steerline
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -39,6 +40,29 @@ type ActivityEvent struct {
 	ElapsedMS int64           `json:"elapsed_ms,omitempty"`
 	Meta      map[string]any  `json:"meta,omitempty"`
 	Raw       json.RawMessage `json:"raw,omitempty"`
+}
+
+// DecodeActivityLine validates one normalized journal object while tolerating
+// unknown fields and unknown kind values for forward compatibility.
+func DecodeActivityLine(line []byte) (ActivityEvent, error) {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(line, &fields); err != nil {
+		return ActivityEvent{}, err
+	}
+	if fields == nil {
+		return ActivityEvent{}, errors.New("activity record must be a JSON object")
+	}
+	var ev ActivityEvent
+	if err := json.Unmarshal(line, &ev); err != nil {
+		return ActivityEvent{}, err
+	}
+	if ev.Seq == 0 {
+		return ActivityEvent{}, errors.New("activity record is missing a positive seq")
+	}
+	if ev.Kind == "" {
+		return ActivityEvent{}, errors.New("activity record is missing kind")
+	}
+	return ev, nil
 }
 
 // Normalizer converts one raw agent stdout line into zero or more activity
@@ -181,6 +205,10 @@ func cloneRaw(line []byte) json.RawMessage {
 	if len(line) == 0 {
 		return nil
 	}
+	if !json.Valid(line) {
+		b, _ := json.Marshal(string(line))
+		return b
+	}
 	return append(json.RawMessage(nil), line...)
 }
 
@@ -249,7 +277,7 @@ func (n *codexNormalizer) Detect(line []byte) bool {
 func (n *codexNormalizer) Normalize(line []byte) []ActivityEvent {
 	var e codexExecEvent
 	if json.Unmarshal(line, &e) != nil {
-		return nil
+		return []ActivityEvent{{Source: "codex", Kind: "unknown", Title: "unparsed raw event", Raw: cloneRaw(line)}}
 	}
 	raw := cloneRaw(line)
 	switch e.Type {
@@ -396,7 +424,7 @@ func (n *piNormalizer) Detect(line []byte) bool {
 func (n *piNormalizer) Normalize(line []byte) []ActivityEvent {
 	var e piEvent
 	if json.Unmarshal(line, &e) != nil {
-		return nil
+		return []ActivityEvent{{Source: "pi", Kind: "unknown", Title: "unparsed raw event", Raw: cloneRaw(line)}}
 	}
 	raw := cloneRaw(line)
 	switch e.Type {

@@ -80,7 +80,7 @@ TTY 下 `steerline watch` 直接进入全屏查看器（`internal/steerline/view
 ## 服务侧流转与续跑
 
 1. 收到 `needs_decision` → `awaitDecision` 写 `decision.request.json`，状态 `waiting_decision`，`Decision.Status=pending`。
-2. 轮询（2s）`applyDecisions`：发现合法答案 → `Decision.Status=resuming`（先持久化）→ 事件 `decision/answered`。
+2. 轮询（2s）`applyDecisions`：发现合法答案 → 认领对账并核验统一执行守卫 → `Decision.Status=resuming`（先持久化）→ 事件 `decision/answered`。存在其他 unknown 执行或未结算控制副作用时保留答案等待。
 3. **Tier-1 同终端续跑**：校验 `terminal show` 的 `connected/orphaned/incarnationId` 与记录一致 → 删掉旧的 worktree 结果文件 → 写 `continue.txt` → `terminal send "Read <continue.txt> and continue."` → 重新武装结果监督。
 4. 成功 → `Decision.Status=applied`，`execution_status=running`，事件 `decision/applied`，Run 回到正常监督。
 5. 失败 → `blocked`，事件 `decision/failed`，保留现场人工处理。
@@ -88,7 +88,7 @@ TTY 下 `steerline watch` 直接进入全屏查看器（`internal/steerline/view
 ## 恢复规则（保守）
 
 - `waiting_decision` 重启后**不自动续跑**。若已有答案文件，`applyDecisions` 会照常应用（这是人工指令，不是自动）。
-- 中断在 `Decision.Status=resuming`：不确定 → 直接 `blocked`。
+- 中断在 `Decision.Status=resuming`：续跑是否发生不确定 → `unknown/blocked`，继续保留执行槽，不能直接派发替代任务。
 - worktree 校验失败 → `blocked`。
 - 续跑前若终端 `incarnationId` 变化或 `orphaned` → 拒绝续跑，`blocked`。
 

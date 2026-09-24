@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/erranliu/SteerLine/internal/steerline"
 	"github.com/erranliu/SteerLine/internal/steerline/viewer"
@@ -24,12 +26,17 @@ func main() {
 }
 func run() error {
 	if len(os.Args) < 2 {
-		return fmt.Errorf("usage: steerline <run|retry|check|stop|watch|answer|accept-result|mark-stopped|home|install|launchers|projects> -config config.json")
+		return fmt.Errorf("usage: steerline <run|retry|check|control|tasks|stop|watch|answer|accept-result|mark-stopped|home|install|launchers|projects> -config config.json")
 	}
 	command := os.Args[1]
 	fs := flag.NewFlagSet(command, flag.ContinueOnError)
 	config := fs.String("config", "steerline.local.json", "configuration JSON")
 	runID := fs.String("run-id", "", "manual recovery run ID, run to watch, or run to answer")
+	dispatchMode := fs.String("dispatch", "auto", "run dispatch mode: auto|manual")
+	taskID := fs.String("task-id", "", "control start_task target")
+	controlMode := fs.String("mode", "", "control set_dispatch_mode value: auto|manual")
+	requestID := fs.String("request-id", "", "control request to query")
+	waitReceipt := fs.Bool("wait", false, "control: wait for a terminal receipt")
 	result := fs.String("result", "", "manual recovery result file")
 	confirmed := fs.Bool("confirm-process-stopped", false, "operator verified that the old process tree is stopped")
 	option := fs.String("option", "", "answer: chosen decision option id")
@@ -37,7 +44,7 @@ func run() error {
 	note := fs.String("note", "", "answer: optional human note")
 	by := fs.String("by", "", "answer: who answered (defaults to the OS user)")
 	proj := fs.String("project", "", "projects: project name or number")
-	action := fs.String("action", "", "projects: watch|run|stop|home|list")
+	action := fs.String("action", "", "control action or projects: watch|run|stop|home|list")
 	console := fs.String("console", "", "service console rendering: pretty|summary|json|off (default pretty on a terminal)")
 	follow := fs.Bool("follow", true, "watch: keep following new activity")
 	fromStart := fs.Bool("from-start", true, "watch: replay existing activity before following")
@@ -50,8 +57,11 @@ func run() error {
 	if fs.NArg() != 0 {
 		return fmt.Errorf("unexpected positional arguments")
 	}
-	if command != "run" && command != "retry" && command != "check" && command != "stop" && command != "answer" && command != "accept-result" && command != "mark-stopped" && command != "watch" && command != "home" && command != "install" && command != "launchers" && command != "projects" {
+	if command != "run" && command != "retry" && command != "check" && command != "stop" && command != "control" && command != "tasks" && command != "answer" && command != "accept-result" && command != "mark-stopped" && command != "watch" && command != "home" && command != "install" && command != "launchers" && command != "projects" {
 		return fmt.Errorf("unknown command %q", command)
+	}
+	if command == "run" && *dispatchMode != "manual" && *dispatchMode != "auto" {
+		return fmt.Errorf("-dispatch must be manual or auto")
 	}
 	if command == "retry" && (!*confirmed || *runID == "") {
 		return fmt.Errorf("retry requires -run-id and -confirm-process-stopped")
@@ -88,13 +98,94 @@ func run() error {
 	if command == "stop" {
 		return steerline.RequestStop(c)
 	}
+	if command == "control" {
+		if *requestID != "" {
+			if *action != "" || *taskID != "" || *controlMode != "" {
+				return fmt.Errorf("-request-id cannot be combined with a new action or action parameters")
+			}
+			var r *steerline.ControlReceipt
+			var err error
+			if *waitReceipt {
+				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+				defer cancel()
+				r, err = steerline.WaitControlReceipt(ctx, c, *requestID, 100*time.Millisecond)
+			} else {
+				r, err = steerline.ReadControlReceipt(c, *requestID)
+			}
+			if err != nil {
+				return err
+			}
+			b, _ := json.Marshal(r)
+			fmt.Println(string(b))
+			return nil
+		}
+		if *action == "" {
+			return fmt.Errorf("control requires -action or -request-id")
+		}
+		var payload any
+		switch *action {
+		case "start_task":
+			if *taskID == "" {
+				return fmt.Errorf("start_task requires -task-id")
+			}
+			if *controlMode != "" {
+				return fmt.Errorf("start_task does not accept -mode")
+			}
+			payload = map[string]string{"task_id": *taskID}
+		case "set_dispatch_mode":
+			if *controlMode == "" {
+				return fmt.Errorf("set_dispatch_mode requires -mode auto|manual")
+			}
+			if *controlMode != "auto" && *controlMode != "manual" {
+				return fmt.Errorf("-mode must be auto or manual")
+			}
+			if *taskID != "" {
+				return fmt.Errorf("set_dispatch_mode does not accept -task-id")
+			}
+			payload = map[string]string{"mode": *controlMode}
+		case "pause_dispatch", "resume_dispatch", "stop_service":
+			if *taskID != "" || *controlMode != "" {
+				return fmt.Errorf("%s does not accept task or mode parameters", *action)
+			}
+		default:
+			return fmt.Errorf("unsupported control action %q", *action)
+		}
+		req, err := steerline.SubmitControl(c, *action, payload, *by)
+		if err != nil {
+			return err
+		}
+		fmt.Println("request_id", req.RequestID)
+		if *waitReceipt {
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+			defer cancel()
+			r, err := steerline.WaitControlReceipt(ctx, c, req.RequestID, 100*time.Millisecond)
+			if err != nil {
+				return err
+			}
+			b, _ := json.Marshal(r)
+			fmt.Println(string(b))
+		}
+		return nil
+	}
+	if command == "tasks" {
+		snapshot, err := steerline.ReadTaskSnapshot(c)
+		if err != nil {
+			return err
+		}
+		b, err := json.Marshal(snapshot)
+		if err != nil {
+			return err
+		}
+		fmt.Println(string(b))
+		return nil
+	}
 	if command == "answer" {
 		return steerline.AnswerDecision(c, steerline.AnswerOptions{RunID: *runID, DecisionID: *decisionID, Option: *option, Note: *note, By: *by})
 	}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 	if command == "watch" {
-		if !*jsonOut && !*rawEvents && !*noTUI && viewer.IsInteractive() {
+		if useWatchTUI(viewer.IsInteractive(), *jsonOut, *rawEvents, *noTUI, *follow, *fromStart) {
 			return viewer.Run(ctx, c, viewer.Options{RunID: *runID, Color: steerline.ColorEnabled()})
 		}
 		return steerline.Watch(ctx, c, *runID, steerline.WatchOptions{Follow: *follow, FromStart: *fromStart, JSON: *jsonOut, Raw: *rawEvents, Color: steerline.ColorEnabled()})
@@ -142,7 +233,11 @@ func run() error {
 		return s.AcceptResult(ctx, *runID, *result)
 	}
 	fmt.Printf("Steerline M0 running: %s -> %s/%s; Ctrl+C or steerline stop to exit\n", c.Repository, c.Remote, c.Branch)
-	return s.Run(ctx)
+	return s.RunWithDispatch(ctx, *dispatchMode)
+}
+
+func useWatchTUI(tty, jsonOut, raw, noTUI, follow, fromStart bool) bool {
+	return tty && !jsonOut && !raw && !noTUI && follow && fromStart
 }
 
 // runProjects picks a project under <STEERLINE_HOME>\etc and re-execs this

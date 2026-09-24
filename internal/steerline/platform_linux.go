@@ -69,6 +69,13 @@ func linuxIdentity(pid int) (ProcessIdentity, error) {
 	}
 	return ProcessIdentity{Kind: "os", PID: pid, Created: strings.TrimSpace(string(boot)) + ":" + fields[19], Executable: exe}, nil
 }
+func currentProcessIdentity() (*ProcessIdentity, error) {
+	id, err := linuxIdentity(os.Getpid())
+	if err != nil {
+		return nil, err
+	}
+	return &id, nil
+}
 func inspectProcess(old *ProcessIdentity) string {
 	if old == nil {
 		return "identity unavailable"
