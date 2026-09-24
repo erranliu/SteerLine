@@ -41,6 +41,9 @@ type Service struct {
 }
 
 func NewService(c Config) (_ *Service, retErr error) {
+	if c.taskAuthority() == "native" {
+		return nil, errors.New("native task execution is not available in this release")
+	}
 	if e := c.Completion.validate(); e != nil {
 		return nil, e
 	}

@@ -19,7 +19,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const domainSchemaVersion = 1
+const domainSchemaVersion = 3
 
 type DomainTx interface {
 	PutTask(TaskRecord) error
@@ -33,6 +33,14 @@ type DomainTx interface {
 	EnqueueCommand(CommandRecord) (CommandRecord, bool, error)
 	UpdateCommand(CommandRecord) error
 	PutProjection(project string, revision uint64, payload []byte) error
+	PutProjectTaskAuthority(ProjectTaskAuthority) error
+	UpdateProjectTaskAuthorityCAS(ProjectTaskAuthority, uint64) error
+	PutTaskContract(string, string, TaskContract) error
+	PutTaskBatch(TaskBatchRecord, uint64, uint64) error
+	PutTaskDependency(TaskDependencyRecord) error
+	PutTaskDelivery(TaskDeliveryRecord) error
+	UpdateNativeTaskCAS(TaskRecord, uint64) error
+	AdvanceTaskGraphRevision(string, uint64, uint64) (uint64, error)
 }
 
 type DomainStore interface {
@@ -43,6 +51,7 @@ type DomainStore interface {
 	Events(context.Context, string, string, string, int64, int) ([]DomainEvent, error)
 	EventPayload(context.Context, string, int64, int64, int) ([]byte, int64, string, error)
 	Commands(context.Context, string, string, int) ([]CommandRecord, error)
+	NativeTaskPage(context.Context, string, string, string, uint64, int, int) (NativeTaskPage, error)
 }
 
 type DomainSnapshot struct {
@@ -55,8 +64,9 @@ type DomainSnapshot struct {
 }
 
 type SQLiteStore struct {
-	db       *sql.DB
-	readOnly bool
+	db            *sql.DB
+	readOnly      bool
+	nativeBinding *ProjectTaskAuthority
 }
 
 func OpenSQLiteStore(path string) (*SQLiteStore, error) {
@@ -132,23 +142,45 @@ func (s *SQLiteStore) migrate(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if version > domainSchemaVersion {
-		return fmt.Errorf("SQLite schema %d is newer than supported schema %d", version, domainSchemaVersion)
+	if version != 0 && version != domainSchemaVersion {
+		return nativeErr("unsupported_schema", fmt.Sprintf("unsupported SQLite schema %d; preserve existing state", version))
 	}
-	if version < 1 {
-		for _, stmt := range domainSchemaV1 {
+	if version == 0 {
+		for _, stmt := range append(append([]string{}, domainExecutionSchema...), nativeTaskSchema...) {
 			if _, err = tx.ExecContext(ctx, stmt); err != nil {
 				return fmt.Errorf("create domain schema: %w", err)
 			}
 		}
-		if _, err = tx.ExecContext(ctx, `INSERT INTO schema_migrations(version, applied_at) VALUES(1, ?)`, now().Format(time.RFC3339Nano)); err != nil {
+		if _, err = tx.ExecContext(ctx, `INSERT INTO schema_migrations(version, applied_at) VALUES(?, ?)`, domainSchemaVersion, now().Format(time.RFC3339Nano)); err != nil {
 			return err
 		}
 	}
 	return tx.Commit()
 }
 
-var domainSchemaV1 = []string{
+var nativeTaskSchema = []string{
+	`CREATE TABLE project_task_authorities (project_identity TEXT PRIMARY KEY, authority TEXT NOT NULL CHECK(authority='native'), authority_version INTEGER NOT NULL CHECK(authority_version>0), graph_revision INTEGER NOT NULL CHECK(graph_revision>=0), repository TEXT NOT NULL, remote TEXT NOT NULL, branch TEXT NOT NULL, dispatch_mode TEXT NOT NULL CHECK(dispatch_mode IN ('manual','auto')), dispatch_paused INTEGER NOT NULL CHECK(dispatch_paused IN (0,1)), created_at TEXT NOT NULL, updated_at TEXT NOT NULL)`,
+	`CREATE TABLE database_state (singleton INTEGER PRIMARY KEY CHECK(singleton=1), database_id TEXT NOT NULL CHECK(length(database_id)=32), revision INTEGER NOT NULL CHECK(revision>=0))`,
+	`INSERT INTO database_state(singleton,database_id,revision) VALUES(1,lower(hex(randomblob(16))),0)`,
+	`CREATE INDEX tasks_decimal_order ON tasks(project_identity,length(task_id),task_id)`,
+	`CREATE TABLE task_contracts (project_identity TEXT NOT NULL, contract_id TEXT NOT NULL, task_id TEXT NOT NULL, digest TEXT NOT NULL, payload BLOB NOT NULL, PRIMARY KEY(project_identity,contract_id), UNIQUE(project_identity,task_id), FOREIGN KEY(project_identity,task_id) REFERENCES tasks(project_identity,task_id))`,
+	`CREATE TABLE task_batches (project_identity TEXT NOT NULL, batch_id TEXT NOT NULL, schema_version TEXT NOT NULL, payload_digest TEXT NOT NULL, created_at TEXT NOT NULL, command_id TEXT NOT NULL, task_ids BLOB NOT NULL, PRIMARY KEY(project_identity,batch_id), UNIQUE(project_identity,command_id))`,
+	`CREATE TABLE task_dependencies (project_identity TEXT NOT NULL, predecessor_id TEXT NOT NULL, successor_id TEXT NOT NULL, PRIMARY KEY(project_identity,predecessor_id,successor_id), CHECK(predecessor_id<>successor_id), FOREIGN KEY(project_identity,predecessor_id) REFERENCES tasks(project_identity,task_id), FOREIGN KEY(project_identity,successor_id) REFERENCES tasks(project_identity,task_id))`,
+	`CREATE INDEX task_dependencies_successor_idx ON task_dependencies(project_identity,successor_id,predecessor_id)`,
+	`CREATE TRIGGER task_dependencies_no_cycle BEFORE INSERT ON task_dependencies BEGIN
+		SELECT RAISE(ABORT,'dependency_cycle') WHERE NEW.predecessor_id=NEW.successor_id OR EXISTS (
+			WITH RECURSIVE reachable(task_id) AS (
+				SELECT successor_id FROM task_dependencies WHERE project_identity=NEW.project_identity AND predecessor_id=NEW.successor_id
+				UNION SELECT d.successor_id FROM task_dependencies d JOIN reachable r ON d.predecessor_id=r.task_id WHERE d.project_identity=NEW.project_identity
+			) SELECT 1 FROM reachable WHERE task_id=NEW.predecessor_id);
+	END`,
+	`CREATE TRIGGER task_dependencies_no_update BEFORE UPDATE ON task_dependencies BEGIN SELECT RAISE(ABORT,'immutable_dependency'); END`,
+	`CREATE TRIGGER task_dependencies_no_delete BEFORE DELETE ON task_dependencies BEGIN SELECT RAISE(ABORT,'immutable_dependency'); END`,
+	`CREATE UNIQUE INDEX workflow_run_task_identity ON workflow_runs(project_identity,workflow_run_id,task_id)`,
+	`CREATE TABLE task_deliveries (project_identity TEXT NOT NULL, task_id TEXT NOT NULL, selected_workflow_run_id TEXT NOT NULL, pr_instance TEXT NOT NULL, pr_repository TEXT NOT NULL, pr_number INTEGER NOT NULL CHECK(pr_number>0), pr_url TEXT NOT NULL, merge_commit TEXT NOT NULL, merged_at TEXT NOT NULL, recorded_at TEXT NOT NULL, evidence BLOB NOT NULL, PRIMARY KEY(project_identity,task_id), UNIQUE(pr_instance,pr_repository,pr_number), FOREIGN KEY(project_identity,task_id) REFERENCES tasks(project_identity,task_id), FOREIGN KEY(project_identity,selected_workflow_run_id,task_id) REFERENCES workflow_runs(project_identity,workflow_run_id,task_id))`,
+}
+
+var domainExecutionSchema = []string{
 	`CREATE TABLE execution_bindings (run_id TEXT NOT NULL, attempt_id TEXT NOT NULL, record_id TEXT NOT NULL, payload BLOB NOT NULL, PRIMARY KEY(run_id,attempt_id,record_id))`,
 	`CREATE TABLE execution_operations (run_id TEXT NOT NULL, attempt_id TEXT NOT NULL, record_id TEXT NOT NULL, payload BLOB NOT NULL, PRIMARY KEY(run_id,attempt_id,record_id))`,
 	`CREATE TABLE tasks (project_identity TEXT NOT NULL, task_id TEXT NOT NULL, external_provider TEXT NOT NULL DEFAULT '', external_project TEXT NOT NULL DEFAULT '', external_id TEXT NOT NULL DEFAULT '', status TEXT NOT NULL, version INTEGER NOT NULL, payload BLOB NOT NULL, PRIMARY KEY(project_identity, task_id))`,
@@ -189,12 +221,258 @@ func (s *SQLiteStore) Transact(ctx context.Context, fn func(DomainTx) error) err
 	if err = fn(&sqliteTx{ctx: ctx, tx: tx}); err != nil {
 		return err
 	}
+	if err = validateNativeTaskStructure(ctx, tx); err != nil {
+		return err
+	}
+	if _, err = tx.ExecContext(ctx, `UPDATE database_state SET revision=revision+1 WHERE singleton=1`); err != nil {
+		return err
+	}
 	return tx.Commit()
+}
+
+func validateNativeTaskStructure(ctx context.Context, tx *sql.Tx) error {
+	var invalidTasks, invalidBatches, invalidDeliveries int
+	err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM tasks t JOIN project_task_authorities p ON p.project_identity=t.project_identity AND p.authority='native'
+		WHERE COALESCE(json_extract(t.payload,'$.source'),'')<>'native'
+		OR COALESCE(json_extract(t.payload,'$.task_id'),'')<>t.task_id
+		OR COALESCE(json_extract(t.payload,'$.status'),'')<>t.status
+		OR t.status NOT IN ('open','in_progress','discarded','closed') OR t.version<1
+		OR COALESCE(json_extract(t.payload,'$.title'),'')='' OR COALESCE(json_extract(t.payload,'$.type'),'')=''
+		OR COALESCE(json_extract(t.payload,'$.priority'),0)<0 OR COALESCE(json_extract(t.payload,'$.priority'),0)>4
+		OR COALESCE(json_extract(t.payload,'$.created_at'),'')=''
+		OR COALESCE(json_extract(t.payload,'$.batch_id'),'')='' OR COALESCE(json_extract(t.payload,'$.contract_id'),'')=''
+		OR NOT EXISTS (SELECT 1 FROM task_contracts c WHERE c.project_identity=t.project_identity AND c.task_id=t.task_id AND c.contract_id=json_extract(t.payload,'$.contract_id'))
+		OR NOT EXISTS (SELECT 1 FROM task_batches b JOIN json_each(b.task_ids) m WHERE b.project_identity=t.project_identity AND b.batch_id=json_extract(t.payload,'$.batch_id') AND m.value=t.task_id)
+		OR (t.status='open' AND COALESCE(json_extract(t.payload,'$.claimant'),'')<>'')
+		OR (t.status IN ('in_progress','closed') AND COALESCE(json_extract(t.payload,'$.claimant'),'')='')
+		OR (t.status='discarded' AND (json_extract(t.payload,'$.discarded_at') IS NULL OR trim(COALESCE(json_extract(t.payload,'$.discard_reason'),''))=''))
+		OR (t.status<>'discarded' AND (json_extract(t.payload,'$.discarded_at') IS NOT NULL OR COALESCE(json_extract(t.payload,'$.discard_reason'),'')<>''))
+		OR (t.status='closed' AND NOT EXISTS (SELECT 1 FROM task_deliveries d WHERE d.project_identity=t.project_identity AND d.task_id=t.task_id))
+		OR (t.status='discarded' AND EXISTS (SELECT 1 FROM task_deliveries d WHERE d.project_identity=t.project_identity AND d.task_id=t.task_id))`).Scan(&invalidTasks)
+	if err != nil {
+		return err
+	}
+	err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM task_batches b JOIN project_task_authorities p ON p.project_identity=b.project_identity AND p.authority='native' JOIN json_each(b.task_ids) m WHERE NOT EXISTS (SELECT 1 FROM tasks t WHERE t.project_identity=b.project_identity AND t.task_id=m.value AND json_extract(t.payload,'$.batch_id')=b.batch_id)`).Scan(&invalidBatches)
+	if err != nil {
+		return err
+	}
+	err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM task_deliveries d JOIN project_task_authorities p ON p.project_identity=d.project_identity AND p.authority='native' JOIN tasks t ON t.project_identity=d.project_identity AND t.task_id=d.task_id WHERE t.status<>'closed' OR NOT EXISTS (SELECT 1 FROM workflow_runs w JOIN executions e ON e.project_identity=w.project_identity AND e.workflow_run_id=w.workflow_run_id WHERE w.project_identity=d.project_identity AND w.workflow_run_id=d.selected_workflow_run_id AND w.task_id=d.task_id AND w.phase='completed' AND e.execution_id=json_extract(w.payload,'$.selected_result_id') AND e.status='succeeded' AND e.current_step='completed')`).Scan(&invalidDeliveries)
+	if err != nil {
+		return err
+	}
+	if invalidTasks != 0 || invalidBatches != 0 || invalidDeliveries != 0 {
+		return nativeErr("contract_mismatch", "native task, batch, contract and delivery records must commit as one consistent transaction")
+	}
+	return nil
 }
 
 type sqliteTx struct {
 	ctx context.Context
 	tx  *sql.Tx
+}
+
+func (t *sqliteTx) PutProjectTaskAuthority(v ProjectTaskAuthority) error {
+	if v.ProjectIdentity == "" || v.Authority != "native" || v.AuthorityVersion == 0 || v.DispatchMode != "manual" || !v.DispatchPaused || v.Repository == "" || v.Remote == "" || v.Branch == "" {
+		return errors.New("native project authority requires identity, target, version and initial manual/paused dispatch")
+	}
+	if v.CreatedAt.IsZero() {
+		v.CreatedAt = now()
+	}
+	if v.UpdatedAt.IsZero() {
+		v.UpdatedAt = v.CreatedAt
+	}
+	result, err := t.tx.ExecContext(t.ctx, `INSERT INTO project_task_authorities(project_identity,authority,authority_version,graph_revision,repository,remote,branch,dispatch_mode,dispatch_paused,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(project_identity) DO UPDATE SET updated_at=excluded.updated_at WHERE project_task_authorities.authority=excluded.authority AND project_task_authorities.authority_version=excluded.authority_version AND project_task_authorities.graph_revision=excluded.graph_revision AND project_task_authorities.repository=excluded.repository AND project_task_authorities.remote=excluded.remote AND project_task_authorities.branch=excluded.branch AND project_task_authorities.dispatch_mode=excluded.dispatch_mode AND project_task_authorities.dispatch_paused=excluded.dispatch_paused`, v.ProjectIdentity, v.Authority, v.AuthorityVersion, v.GraphRevision, v.Repository, v.Remote, v.Branch, v.DispatchMode, boolInt(v.DispatchPaused), v.CreatedAt.UTC().Format(time.RFC3339Nano), v.UpdatedAt.UTC().Format(time.RFC3339Nano))
+	return requireIdentityWrite(result, err, "authority_mismatch: native project authority is immutable without a compare-and-swap")
+}
+
+func (t *sqliteTx) UpdateProjectTaskAuthorityCAS(v ProjectTaskAuthority, expectedVersion uint64) error {
+	if v.ProjectIdentity == "" || expectedVersion == 0 || v.AuthorityVersion != expectedVersion+1 || v.Authority != "native" || v.DispatchMode != "manual" && v.DispatchMode != "auto" {
+		return nativeErr("authority_mismatch", "project authority update requires a valid next version and dispatch mode")
+	}
+	var old ProjectTaskAuthority
+	var paused int
+	var created, updated string
+	err := t.tx.QueryRowContext(t.ctx, `SELECT authority,authority_version,graph_revision,repository,remote,branch,dispatch_mode,dispatch_paused,created_at,updated_at FROM project_task_authorities WHERE project_identity=?`, v.ProjectIdentity).Scan(&old.Authority, &old.AuthorityVersion, &old.GraphRevision, &old.Repository, &old.Remote, &old.Branch, &old.DispatchMode, &paused, &created, &updated)
+	if err != nil {
+		return nativeErr("authority_mismatch", "native project authority was not found")
+	}
+	old.ProjectIdentity = v.ProjectIdentity
+	old.DispatchPaused = paused != 0
+	old.CreatedAt, _ = time.Parse(time.RFC3339Nano, created)
+	old.UpdatedAt, _ = time.Parse(time.RFC3339Nano, updated)
+	if old.AuthorityVersion != expectedVersion {
+		return nativeErr("stale_version", fmt.Sprintf("expected authority version %d, found %d", expectedVersion, old.AuthorityVersion))
+	}
+	if v.GraphRevision != old.GraphRevision || v.Repository != old.Repository || v.Remote != old.Remote || v.Branch != old.Branch || !v.CreatedAt.Equal(old.CreatedAt) {
+		return nativeErr("authority_mismatch", "project identity, target or graph revision cannot change through authority CAS")
+	}
+	if v.UpdatedAt.IsZero() {
+		v.UpdatedAt = now()
+	}
+	result, err := t.tx.ExecContext(t.ctx, `UPDATE project_task_authorities SET authority_version=?,dispatch_mode=?,dispatch_paused=?,updated_at=? WHERE project_identity=? AND authority_version=? AND graph_revision=?`, v.AuthorityVersion, v.DispatchMode, boolInt(v.DispatchPaused), v.UpdatedAt.UTC().Format(time.RFC3339Nano), v.ProjectIdentity, expectedVersion, v.GraphRevision)
+	return requireIdentityWrite(result, err, "stale_version: project authority changed during compare-and-swap")
+}
+
+func (t *sqliteTx) AdvanceTaskGraphRevision(project string, expectedAuthorityVersion, expectedGraphRevision uint64) (uint64, error) {
+	if project == "" || expectedAuthorityVersion == 0 {
+		return 0, nativeErr("authority_mismatch", "graph revision update requires a project and authority version")
+	}
+	result, err := t.tx.ExecContext(t.ctx, `UPDATE project_task_authorities SET graph_revision=graph_revision+1,updated_at=? WHERE project_identity=? AND authority='native' AND authority_version=? AND graph_revision=?`, now().Format(time.RFC3339Nano), project, expectedAuthorityVersion, expectedGraphRevision)
+	if err != nil {
+		return 0, err
+	}
+	changed, err := result.RowsAffected()
+	if err != nil {
+		return 0, err
+	}
+	if changed != 1 {
+		return 0, nativeErr("stale_version", "project authority or graph revision changed")
+	}
+	return expectedGraphRevision + 1, nil
+}
+
+func boolInt(v bool) int {
+	if v {
+		return 1
+	}
+	return 0
+}
+
+func (t *sqliteTx) PutTaskContract(project, taskID string, v TaskContract) error {
+	if project == "" || taskID == "" || v.ContractID == "" || !validSHA256(v.Digest) {
+		return errors.New("contract_mismatch: contract identity and digest are required")
+	}
+	if err := ValidateTaskContract(v); err != nil {
+		return err
+	}
+	var repository, remote, branch string
+	if err := t.tx.QueryRowContext(t.ctx, `SELECT repository,remote,branch FROM project_task_authorities WHERE project_identity=? AND authority='native'`, project).Scan(&repository, &remote, &branch); err != nil {
+		return nativeErr("authority_mismatch", "task contract project has no native authority")
+	}
+	if !sameRepositoryTarget(v.Repository, repository) || v.Remote != remote || v.Branch != branch {
+		return nativeErr("contract_mismatch", "task contract target differs from persisted project authority")
+	}
+	b, err := encodePayload(v)
+	if err != nil {
+		return err
+	}
+	res, err := t.tx.ExecContext(t.ctx, `INSERT INTO task_contracts(project_identity,contract_id,task_id,digest,payload) VALUES(?,?,?,?,?) ON CONFLICT(project_identity,contract_id) DO UPDATE SET digest=excluded.digest,payload=excluded.payload WHERE task_contracts.task_id=excluded.task_id AND task_contracts.digest=excluded.digest AND task_contracts.payload=excluded.payload`, project, v.ContractID, taskID, v.Digest, b)
+	return requireIdentityWrite(res, err, "contract_mismatch: task contract is immutable or bound to another task")
+}
+
+func (t *sqliteTx) PutTaskBatch(v TaskBatchRecord, expectedAuthorityVersion, expectedGraphRevision uint64) error {
+	if v.ProjectIdentity == "" || v.BatchID == "" || v.SchemaVersion != "task-batch/v1" || v.CommandID == "" || len(v.TaskIDs) == 0 || !validSHA256(v.PayloadDigest) {
+		return errors.New("invalid task batch record")
+	}
+	if expectedAuthorityVersion == 0 {
+		return nativeErr("authority_mismatch", "task batch requires an expected project authority version")
+	}
+	if v.CreatedAt.IsZero() {
+		v.CreatedAt = now()
+	}
+	var authority string
+	if err := t.tx.QueryRowContext(t.ctx, `SELECT authority FROM project_task_authorities WHERE project_identity=?`, v.ProjectIdentity).Scan(&authority); err != nil || authority != "native" {
+		return nativeErr("authority_mismatch", "task batch requires a registered native project")
+	}
+	seen := map[string]bool{}
+	for localID, taskID := range v.TaskIDs {
+		if strings.TrimSpace(localID) == "" || !canonicalDecimalID(taskID) || seen[taskID] {
+			return nativeErr("contract_mismatch", "task batch mapping must contain unique canonical task IDs and nonempty local keys")
+		}
+		seen[taskID] = true
+	}
+	b, err := encodePayload(v.TaskIDs)
+	if err != nil {
+		return err
+	}
+	var oldSchema, oldDigest, oldCommand string
+	var oldMapping []byte
+	err = t.tx.QueryRowContext(t.ctx, `SELECT schema_version,payload_digest,command_id,task_ids FROM task_batches WHERE project_identity=? AND batch_id=?`, v.ProjectIdentity, v.BatchID).Scan(&oldSchema, &oldDigest, &oldCommand, &oldMapping)
+	if err == nil {
+		if oldSchema != v.SchemaVersion || oldDigest != v.PayloadDigest || oldCommand != v.CommandID || !bytes.Equal(oldMapping, b) {
+			return nativeErr("contract_mismatch", "task batch identity is already bound to different content")
+		}
+		return nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return err
+	}
+	if _, err = t.tx.ExecContext(t.ctx, `INSERT INTO task_batches(project_identity,batch_id,schema_version,payload_digest,created_at,command_id,task_ids) VALUES(?,?,?,?,?,?,?)`, v.ProjectIdentity, v.BatchID, v.SchemaVersion, v.PayloadDigest, v.CreatedAt.UTC().Format(time.RFC3339Nano), v.CommandID, b); err != nil {
+		return err
+	}
+	_, err = t.AdvanceTaskGraphRevision(v.ProjectIdentity, expectedAuthorityVersion, expectedGraphRevision)
+	return err
+}
+
+func (t *sqliteTx) PutTaskDependency(v TaskDependencyRecord) error {
+	if v.ProjectIdentity == "" || v.PredecessorID == "" || v.SuccessorID == "" || v.PredecessorID == v.SuccessorID {
+		return errors.New("invalid task dependency")
+	}
+	var authority string
+	if err := t.tx.QueryRowContext(t.ctx, `SELECT authority FROM project_task_authorities WHERE project_identity=?`, v.ProjectIdentity).Scan(&authority); err != nil || authority != "native" {
+		return nativeErr("authority_mismatch", "task dependency requires a registered native project")
+	}
+	_, err := t.tx.ExecContext(t.ctx, `INSERT INTO task_dependencies(project_identity,predecessor_id,successor_id) VALUES(?,?,?)`, v.ProjectIdentity, v.PredecessorID, v.SuccessorID)
+	return err
+}
+
+func (t *sqliteTx) PutTaskDelivery(v TaskDeliveryRecord) error {
+	if v.ProjectIdentity == "" || v.TaskID == "" || v.SelectedWorkflowRunID == "" || v.PRInstance == "" || v.PRRepository == "" || v.PRNumber <= 0 || v.PRURL == "" || !validCommit(v.MergeCommit) || v.MergedAt.IsZero() {
+		return errors.New("invalid verified task delivery")
+	}
+	if v.RecordedAt.IsZero() {
+		v.RecordedAt = now()
+	}
+	if len(v.Evidence) == 0 || !json.Valid(v.Evidence) {
+		return errors.New("verified task delivery requires persisted PR merge evidence")
+	}
+	var evidence TaskDeliveryEvidence
+	if err := json.Unmarshal(v.Evidence, &evidence); err != nil {
+		return nativeErr("contract_mismatch", "PR merge evidence has an invalid shape")
+	}
+	if !evidence.Merged || evidence.State != "merged" || evidence.PRInstance != v.PRInstance || evidence.URL != v.PRURL || evidence.Repository != v.PRRepository || evidence.PRNumber != v.PRNumber || evidence.MergeCommit != v.MergeCommit || !evidence.MergedAt.Equal(v.MergedAt) || evidence.BaseBranch == "" {
+		return nativeErr("contract_mismatch", "PR merge evidence does not match the recorded delivery identity")
+	}
+	var targetBranch string
+	if err := t.tx.QueryRowContext(t.ctx, `SELECT branch FROM project_task_authorities WHERE project_identity=? AND authority='native'`, v.ProjectIdentity).Scan(&targetBranch); err != nil {
+		return nativeErr("authority_mismatch", "task delivery project has no native authority")
+	}
+	if evidence.BaseBranch != targetBranch {
+		return nativeErr("contract_mismatch", "merged PR targets a different project branch")
+	}
+	var oldWorkflow, oldInstance, oldRepository, oldURL, oldMerge, oldMerged string
+	var oldNumber int64
+	var oldEvidence []byte
+	err := t.tx.QueryRowContext(t.ctx, `SELECT selected_workflow_run_id,pr_instance,pr_repository,pr_number,pr_url,merge_commit,merged_at,evidence FROM task_deliveries WHERE project_identity=? AND task_id=?`, v.ProjectIdentity, v.TaskID).Scan(&oldWorkflow, &oldInstance, &oldRepository, &oldNumber, &oldURL, &oldMerge, &oldMerged, &oldEvidence)
+	if err == nil {
+		if oldWorkflow == v.SelectedWorkflowRunID && oldInstance == v.PRInstance && oldRepository == v.PRRepository && oldNumber == v.PRNumber && oldURL == v.PRURL && oldMerge == v.MergeCommit && oldMerged == v.MergedAt.UTC().Format(time.RFC3339Nano) && bytes.Equal(oldEvidence, v.Evidence) {
+			return nil
+		}
+		return nativeErr("contract_mismatch", "task already has a different authoritative delivery")
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return err
+	}
+	var runPayload []byte
+	if err := t.tx.QueryRowContext(t.ctx, `SELECT payload FROM workflow_runs WHERE project_identity=? AND workflow_run_id=? AND task_id=?`, v.ProjectIdentity, v.SelectedWorkflowRunID, v.TaskID).Scan(&runPayload); err != nil {
+		return nativeErr("contract_mismatch", "delivery must reference a workflow run belonging to the task")
+	}
+	var run WorkflowRunRecord
+	if err := json.Unmarshal(runPayload, &run); err != nil {
+		return err
+	}
+	if run.Phase != "waiting_pr_merge" || run.SelectedResult == "" {
+		return nativeErr("stale_version", "delivery requires the selected workflow run awaiting PR merge")
+	}
+	var selected int
+	if err := t.tx.QueryRowContext(t.ctx, `SELECT COUNT(*) FROM executions WHERE project_identity=? AND workflow_run_id=? AND execution_id=? AND status='succeeded' AND current_step='waiting_pr_merge'`, v.ProjectIdentity, v.SelectedWorkflowRunID, run.SelectedResult).Scan(&selected); err != nil {
+		return err
+	}
+	if selected != 1 {
+		return nativeErr("contract_mismatch", "delivery has no selected successful execution")
+	}
+	_, err = t.tx.ExecContext(t.ctx, `INSERT INTO task_deliveries(project_identity,task_id,selected_workflow_run_id,pr_instance,pr_repository,pr_number,pr_url,merge_commit,merged_at,recorded_at,evidence) VALUES(?,?,?,?,?,?,?,?,?,?,?)`, v.ProjectIdentity, v.TaskID, v.SelectedWorkflowRunID, v.PRInstance, v.PRRepository, v.PRNumber, v.PRURL, v.MergeCommit, v.MergedAt.UTC().Format(time.RFC3339Nano), v.RecordedAt.UTC().Format(time.RFC3339Nano), []byte(v.Evidence))
+	return err
 }
 
 func encodePayload(v any) ([]byte, error) { return json.Marshal(v) }
@@ -210,9 +488,175 @@ func (t *sqliteTx) PutTask(v TaskRecord) error {
 	if err != nil {
 		return err
 	}
+	var nativeAuthority string
+	authorityErr := t.tx.QueryRowContext(t.ctx, `SELECT authority FROM project_task_authorities WHERE project_identity=?`, v.ProjectIdentity).Scan(&nativeAuthority)
+	if authorityErr != nil && !errors.Is(authorityErr, sql.ErrNoRows) {
+		return authorityErr
+	}
+	if errors.Is(authorityErr, sql.ErrNoRows) && v.Source == "native" {
+		return nativeErr("authority_mismatch", "native task cannot be stored without a registered native project")
+	}
+	if authorityErr == nil {
+		if nativeAuthority != "native" || v.Source != "native" || !canonicalDecimalID(v.TaskID) || v.BatchID == "" || v.Title == "" || v.Type == "" || v.Priority < 0 || v.Priority > 4 || v.ContractID == "" || v.Version == 0 || v.CreatedAt.IsZero() || v.ExternalProvider != "" || v.ExternalProject != "" || v.ExternalID != "" {
+			return nativeErr("contract_mismatch", "native Task requires its original numeric ID, batch, type, priority and fixed contract")
+		}
+		if v.Status == "discarded" {
+			if v.DiscardedAt == nil || strings.TrimSpace(v.DiscardReason) == "" {
+				return errors.New("discarded native task requires timestamp and reason")
+			}
+		} else if v.DiscardedAt != nil || v.DiscardReason != "" {
+			return errors.New("discard audit fields are valid only for discarded native tasks")
+		}
+		if v.Status == "closed" {
+			var deliveries int
+			if err := t.tx.QueryRowContext(t.ctx, `SELECT COUNT(*) FROM task_deliveries WHERE project_identity=? AND task_id=?`, v.ProjectIdentity, v.TaskID).Scan(&deliveries); err != nil {
+				return err
+			}
+			if deliveries != 1 {
+				return errors.New("native task cannot close without its authoritative delivery evidence")
+			}
+		}
+		var previous []byte
+		previousErr := t.tx.QueryRowContext(t.ctx, `SELECT payload FROM tasks WHERE project_identity=? AND task_id=?`, v.ProjectIdentity, v.TaskID).Scan(&previous)
+		if previousErr == nil {
+			if bytes.Equal(previous, b) {
+				return nil
+			}
+			return nativeErr("stale_version", "native task identity already exists; updates require an expected-version transaction")
+		}
+		if !errors.Is(previousErr, sql.ErrNoRows) {
+			return previousErr
+		}
+	}
 	result, err := t.tx.ExecContext(t.ctx, `INSERT INTO tasks(project_identity,task_id,external_provider,external_project,external_id,status,version,payload) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(project_identity,task_id) DO UPDATE SET status=excluded.status,version=excluded.version,payload=excluded.payload WHERE tasks.external_provider=excluded.external_provider AND tasks.external_project=excluded.external_project AND tasks.external_id=excluded.external_id`, v.ProjectIdentity, v.TaskID, v.ExternalProvider, v.ExternalProject, v.ExternalID, v.Status, v.Version, b)
 	return requireIdentityWrite(result, err, "task ID belongs to another external identity")
 }
+
+func (t *sqliteTx) UpdateNativeTaskCAS(v TaskRecord, expectedVersion uint64) error {
+	if v.ProjectIdentity == "" || !canonicalDecimalID(v.TaskID) || expectedVersion == 0 {
+		return nativeErr("contract_mismatch", "native task update requires project, canonical task ID and expected version")
+	}
+	var payload []byte
+	var authority string
+	if err := t.tx.QueryRowContext(t.ctx, `SELECT authority FROM project_task_authorities WHERE project_identity=?`, v.ProjectIdentity).Scan(&authority); err != nil || authority != "native" {
+		return nativeErr("authority_mismatch", "task update requires a registered native project")
+	}
+	if err := t.tx.QueryRowContext(t.ctx, `SELECT payload FROM tasks WHERE project_identity=? AND task_id=?`, v.ProjectIdentity, v.TaskID).Scan(&payload); err != nil {
+		return err
+	}
+	var old TaskRecord
+	if err := json.Unmarshal(payload, &old); err != nil {
+		return err
+	}
+	if old.Source != "native" {
+		return nativeErr("authority_mismatch", "task is not owned by the native authority")
+	}
+	if old.Version != expectedVersion {
+		return nativeErr("stale_version", fmt.Sprintf("expected version %d, found %d", expectedVersion, old.Version))
+	}
+	if v.ProjectIdentity != old.ProjectIdentity || v.TaskID != old.TaskID || v.BatchID != old.BatchID || v.ContractID != old.ContractID || v.Type != old.Type || v.Priority != old.Priority || v.Title != old.Title || v.Source != "native" || v.Version != expectedVersion+1 || !v.CreatedAt.Equal(old.CreatedAt) || v.ExternalProvider != "" || v.ExternalProject != "" || v.ExternalID != "" {
+		return nativeErr("contract_mismatch", "native task update cannot change its identity, scope, contract, or fixed fields")
+	}
+	allowed := map[string]map[string]bool{"open": {"in_progress": true, "discarded": true}, "in_progress": {"discarded": true, "closed": true}}
+	if !allowed[old.Status][v.Status] {
+		return nativeErr("stale_version", "native task status transition is not permitted")
+	}
+	if v.Status == "in_progress" {
+		if old.Status != "open" || old.Claimant != "" || v.Claimant == "" {
+			return nativeErr("stale_version", "claim requires an open task and a new claimant")
+		}
+	} else if v.Claimant != old.Claimant {
+		return nativeErr("contract_mismatch", "claimant is preserved after claim")
+	}
+	if v.Status == "discarded" {
+		if v.DiscardedAt == nil || strings.TrimSpace(v.DiscardReason) == "" {
+			return nativeErr("contract_mismatch", "discard requires timestamp and reason")
+		}
+		var count int
+		if err := t.tx.QueryRowContext(t.ctx, `SELECT COUNT(*) FROM task_deliveries WHERE project_identity=? AND task_id=?`, v.ProjectIdentity, v.TaskID).Scan(&count); err != nil {
+			return err
+		}
+		if count != 0 {
+			return nativeErr("stale_version", "task with a delivery cannot be discarded")
+		}
+	} else if v.DiscardedAt != nil || v.DiscardReason != "" {
+		return nativeErr("contract_mismatch", "discard audit fields are valid only for discarded tasks")
+	}
+	if v.Status == "closed" {
+		if old.Claimant == "" || v.Claimant != old.Claimant {
+			return nativeErr("stale_version", "unclaimed task cannot be closed")
+		}
+	}
+	if v.UpdatedAt.IsZero() {
+		v.UpdatedAt = now()
+	}
+	b, err := encodePayload(v)
+	if err != nil {
+		return err
+	}
+	res, err := t.tx.ExecContext(t.ctx, `UPDATE tasks SET status=?,version=?,payload=? WHERE project_identity=? AND task_id=? AND version=?`, v.Status, v.Version, b, v.ProjectIdentity, v.TaskID, expectedVersion)
+	if err != nil {
+		return err
+	}
+	if err = requireIdentityWrite(res, err, "stale_version: native task changed during update"); err != nil {
+		return err
+	}
+	if v.Status == "closed" {
+		if err = t.completeNativeDeliveryWorkflow(v.ProjectIdentity, v.TaskID); err != nil {
+			return err
+		}
+	}
+	if v.Status == "discarded" || v.Status == "closed" {
+		var authorityVersion, graphRevision uint64
+		if err = t.tx.QueryRowContext(t.ctx, `SELECT authority_version,graph_revision FROM project_task_authorities WHERE project_identity=? AND authority='native'`, v.ProjectIdentity).Scan(&authorityVersion, &graphRevision); err != nil {
+			return nativeErr("authority_mismatch", "native task graph authority is unavailable")
+		}
+		_, err = t.AdvanceTaskGraphRevision(v.ProjectIdentity, authorityVersion, graphRevision)
+		return err
+	}
+	return nil
+}
+
+func (t *sqliteTx) completeNativeDeliveryWorkflow(project, taskID string) error {
+	var runID string
+	var runPayload []byte
+	err := t.tx.QueryRowContext(t.ctx, `SELECT d.selected_workflow_run_id,w.payload FROM task_deliveries d JOIN workflow_runs w ON w.project_identity=d.project_identity AND w.workflow_run_id=d.selected_workflow_run_id AND w.task_id=d.task_id WHERE d.project_identity=? AND d.task_id=?`, project, taskID).Scan(&runID, &runPayload)
+	if err != nil {
+		return nativeErr("contract_mismatch", "task cannot close without its authoritative selected delivery")
+	}
+	var run WorkflowRunRecord
+	if err = json.Unmarshal(runPayload, &run); err != nil {
+		return err
+	}
+	if run.Phase != "waiting_pr_merge" || run.SelectedResult == "" {
+		return nativeErr("stale_version", "selected workflow is no longer waiting for its PR delivery")
+	}
+	var executionPayload []byte
+	if err = t.tx.QueryRowContext(t.ctx, `SELECT payload FROM executions WHERE project_identity=? AND workflow_run_id=? AND execution_id=? AND status='succeeded' AND current_step='waiting_pr_merge'`, project, runID, run.SelectedResult).Scan(&executionPayload); err != nil {
+		return nativeErr("contract_mismatch", "selected workflow has no successful PR-ready execution")
+	}
+	var execution ExecutionRecord
+	if err = json.Unmarshal(executionPayload, &execution); err != nil {
+		return err
+	}
+	run.Phase, run.UpdatedAt = "completed", now()
+	runPayload, err = encodePayload(run)
+	if err != nil {
+		return err
+	}
+	result, err := t.tx.ExecContext(t.ctx, `UPDATE workflow_runs SET phase='completed',payload=? WHERE project_identity=? AND workflow_run_id=? AND task_id=? AND phase='waiting_pr_merge'`, runPayload, project, runID, taskID)
+	if err = requireIdentityWrite(result, err, "stale_version: selected workflow changed during delivery"); err != nil {
+		return err
+	}
+	execution.CurrentStep, execution.UpdatedAt = "completed", now()
+	executionPayload, err = encodePayload(execution)
+	if err != nil {
+		return err
+	}
+	result, err = t.tx.ExecContext(t.ctx, `UPDATE executions SET current_step='completed',payload=? WHERE project_identity=? AND execution_id=? AND workflow_run_id=? AND status='succeeded' AND current_step='waiting_pr_merge'`, executionPayload, project, execution.ExecutionID, runID)
+	return requireIdentityWrite(result, err, "stale_version: selected execution changed during delivery")
+}
+
 func (t *sqliteTx) PutWorkflowRun(v WorkflowRunRecord) error {
 	if v.ProjectIdentity == "" || v.WorkflowRunID == "" || v.TaskID == "" || v.Phase == "" {
 		return errors.New("workflow run identity, task and phase are required")

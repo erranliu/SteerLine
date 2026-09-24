@@ -28,6 +28,7 @@ type Skill struct {
 }
 type Config struct {
 	Repository         string              `json:"repository"`
+	TaskAuthority      string              `json:"task_authority,omitempty"`
 	Remote             string              `json:"remote"`
 	Branch             string              `json:"branch"`
 	RunDir             string              `json:"run_dir"`
@@ -219,7 +220,7 @@ func InstallSelf() (string, error) {
 }
 
 func LoadConfig(path string) (Config, error) {
-	c := Config{Remote: "origin", RuntimeFile: "runtime.json", TaskPoll: "10s", PRPoll: "30s", Heartbeat: "5s", CommandTimeout: "30s", ShutdownGrace: "10s", Sandbox: "workspace-write", Git: Command{Executable: "git"}, BD: Command{Executable: "bd"}, Codex: Command{Executable: "codex"}, ExecutableTypes: []string{"task", "bug", "feature", "chore"}, Agent: "codex", Host: "orca", StallTimeout: "5m", Orca: OrcaConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "15m"}}
+	c := Config{TaskAuthority: "beads", Remote: "origin", RuntimeFile: "runtime.json", TaskPoll: "10s", PRPoll: "30s", Heartbeat: "5s", CommandTimeout: "30s", ShutdownGrace: "10s", Sandbox: "workspace-write", Git: Command{Executable: "git"}, BD: Command{Executable: "bd"}, Codex: Command{Executable: "codex"}, ExecutableTypes: []string{"task", "bug", "feature", "chore"}, Agent: "codex", Host: "orca", StallTimeout: "5m", Orca: OrcaConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "15m"}}
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return c, err
@@ -228,6 +229,12 @@ func LoadConfig(path string) (Config, error) {
 	c.configDigest = hex.EncodeToString(digest[:])
 	if err = decode(b, &c); err != nil {
 		return c, err
+	}
+	if c.TaskAuthority == "" {
+		c.TaskAuthority = "beads"
+	}
+	if c.TaskAuthority != "beads" && c.TaskAuthority != "native" {
+		return c, errors.New("task_authority must be beads or native")
 	}
 	var configFields map[string]json.RawMessage
 	_ = json.Unmarshal(b, &configFields)
@@ -262,7 +269,12 @@ func LoadConfig(path string) (Config, error) {
 	if filepath.Base(c.RuntimeFile) != c.RuntimeFile || c.RuntimeFile == "." {
 		return c, errors.New("runtime_file must be a filename inside run_dir")
 	}
-	if err = preflightExistingState(c.RunDir, c.RuntimeFile); err != nil {
+	if c.TaskAuthority == "native" {
+		err = preflightNativeStatePath(c)
+	} else {
+		err = preflightExistingState(c.RunDir, c.RuntimeFile)
+	}
+	if err != nil {
 		return c, err
 	}
 	if c.WorktreeRoot == "" {
@@ -270,6 +282,11 @@ func LoadConfig(path string) (Config, error) {
 	}
 	if !filepath.IsAbs(c.WorktreeRoot) {
 		c.WorktreeRoot = filepath.Join(base, c.WorktreeRoot)
+	}
+	if c.TaskAuthority == "native" {
+		if err := validateNativeStateLocation(c); err != nil {
+			return c, err
+		}
 	}
 	for _, v := range []string{c.TaskPoll, c.PRPoll, c.Heartbeat, c.CommandTimeout, c.ShutdownGrace} {
 		d, e := time.ParseDuration(v)
@@ -432,6 +449,9 @@ func resolveCommand(c *Command) error {
 	return nil
 }
 func (c *Config) Preflight(ctx context.Context, checkSkills bool) error {
+	if c.taskAuthority() == "native" {
+		return errors.New("native tasks are read-only in this release; production execution is gated on the Beads exit task")
+	}
 	if c.RuntimeFile != "" {
 		if err := preflightExistingState(c.RunDir, c.RuntimeFile); err != nil {
 			return err
@@ -586,6 +606,13 @@ func (c *Config) Preflight(ctx context.Context, checkSkills bool) error {
 		}
 	}
 	return nil
+}
+
+func (c Config) taskAuthority() string {
+	if c.TaskAuthority == "" {
+		return "beads"
+	}
+	return c.TaskAuthority
 }
 
 func (c Config) requiresLocalCodex() bool {

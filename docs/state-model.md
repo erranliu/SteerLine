@@ -1,6 +1,6 @@
 # 状态模型：SteerLine 三个轴与 Beads 的关系
 
-同一任务在 SteerLine 和 Beads 里各有一份"状态"，容易被误读成"两套矛盾的状态"。它们其实是**不同轴**：一个是进程/交付生命周期，一个是任务认领工作流。本文固化这套模型，并说明 Beads 的定位（过渡性任务提供方）。
+同一任务在 SteerLine 和 Beads 里各有一份"状态"，容易被误读成"两套矛盾的状态"。它们其实是**不同轴**：一个是进程/交付生命周期，一个是任务认领工作流。本文固化这套模型，并说明 Beads 的定位（过渡性任务提供方）。原生 Task 模型已经加入同一个中心 SQLite；本阶段只允许 native 权威初始化和只读查询，生产领取/执行仍由后续 Beads 退出任务接入。
 
 ## 三个正交轴
 
@@ -21,7 +21,7 @@ PR 4A 的 `ExecutionRef` 和后端 `Operation` 纳入同一个 `steerline.db`：
 ## 权威归属
 
 - **执行态与交付态**：SteerLine 唯一权威（`run_dir/steerline.db`）；`runtime.json` v5 是可重建的观察投影。v1–v4 runtime 不兼容，服务拒绝恢复且保留原文件。
-- **任务认领与关闭**：当前由 Beads 权威；SteerLine 通过 `bd claim` / `bd close` **写入**，并在完成后以 `bd show` 回读核实（不以本地预测替代 `closed`）。
+- **任务认领与关闭**：Beads 项目仍由 Beads 权威；native 项目的 Task、claim 和 delivery 记录由中心 SQLite 权威。当前 native 项目默认 manual/paused，`steerline task show/list` 只读查询，尚未开放创建、领取、丢弃或交付命令。
 - **PR 合并**：外部平台权威；SteerLine 查询核实后才推进交付态。
 - **派发控制**：SQLite 中的服务状态与控制检查点权威。manual 不自动 claim；pause 只挡新派发；停止服务与关闭查看器分开。控制请求的 `applied` 只说明指令完成，不代替 run 的执行或交付状态。
 
@@ -73,6 +73,8 @@ PR 已合并 + 结项命令 + bd close:  finish=completed   beads=closed
 
 - 从任何 worktree 运行，`run_dir` 都解析到同一个 `state\<repoKey>`；
 - 配置可省略 `run_dir`，自动派生（`worktree_root` 缺省为 `<run_dir>\worktrees`）；显式写 `run_dir` 仍然生效，向后兼容。
+
+`task_authority=native` 配置必须省略 `run_dir` 并使用仓库派生的唯一状态目录，防止同一仓库通过不同配置分叉任务权威。该目录首次初始化时必须为空，仓库不得含 Beads 状态；已有数据库中的 authority 与 repository/remote/branch 必须匹配配置。Beads 配置不受这一 native 初始化规则影响。
 
 命令：
 

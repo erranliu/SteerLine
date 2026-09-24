@@ -1,0 +1,16 @@
+{
+  "protocol": "native-tasks/v1",
+  "project_id": "<canonical-git-common-dir>",
+  "authority_version": 1,
+  "graph_revision": 0,
+  "database_revision": 1,
+  "database_id": "0123456789abcdef0123456789abcdef",
+  "sampled_at": "2026-09-24T00:00:00Z",
+  "capabilities": {
+    "dependency_readiness": "not_provided",
+    "dependency_blockers": "not_provided",
+    "startup_blockers": "not_provided"
+  },
+  "tasks": [],
+  "has_more": false
+}
