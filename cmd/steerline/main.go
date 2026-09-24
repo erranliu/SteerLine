@@ -26,7 +26,7 @@ func main() {
 }
 func run() error {
 	if len(os.Args) < 2 {
-		return fmt.Errorf("usage: steerline <run|start-service|stop-service|retry|check|control|tasks|stop|watch|answer|accept-result|mark-stopped|home|install|launchers|projects> -config config.json")
+		return fmt.Errorf("usage: steerline <run|start-service|stop-service|retry|check|control|tasks|stop|watch|answer|accept-result|mark-stopped|certify-backend|home|install|launchers|projects> -config config.json")
 	}
 	command := os.Args[1]
 	fs := flag.NewFlagSet(command, flag.ContinueOnError)
@@ -39,6 +39,7 @@ func run() error {
 	requestID := fs.String("request-id", "", "control request to query")
 	waitReceipt := fs.Bool("wait", false, "control: wait for a terminal receipt")
 	result := fs.String("result", "", "manual recovery result file")
+	evidence := fs.String("evidence", "", "certify-backend: comma-separated Windows native evidence JSON files")
 	confirmed := fs.Bool("confirm-process-stopped", false, "operator verified that the old process tree is stopped")
 	option := fs.String("option", "", "answer: chosen decision option id")
 	decisionID := fs.String("decision-id", "", "answer: pending decision id (defaults to the run's pending decision)")
@@ -59,7 +60,7 @@ func run() error {
 	if fs.NArg() != 0 {
 		return fmt.Errorf("unexpected positional arguments")
 	}
-	if command != "run" && command != "start-service" && command != "stop-service" && command != "retry" && command != "check" && command != "stop" && command != "control" && command != "tasks" && command != "answer" && command != "accept-result" && command != "mark-stopped" && command != "watch" && command != "home" && command != "install" && command != "launchers" && command != "projects" {
+	if command != "run" && command != "start-service" && command != "stop-service" && command != "retry" && command != "check" && command != "stop" && command != "control" && command != "tasks" && command != "answer" && command != "accept-result" && command != "mark-stopped" && command != "watch" && command != "certify-backend" && command != "home" && command != "install" && command != "launchers" && command != "projects" {
 		return fmt.Errorf("unknown command %q", command)
 	}
 	if command == "run" && *dispatchMode != "manual" && *dispatchMode != "auto" {
@@ -102,6 +103,22 @@ func run() error {
 	}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
+	if command == "certify-backend" {
+		if strings.TrimSpace(*evidence) == "" {
+			return fmt.Errorf("certify-backend requires -evidence")
+		}
+		paths := make([]string, 0)
+		for _, raw := range strings.Split(*evidence, ",") {
+			if value := strings.TrimSpace(raw); value != "" {
+				paths = append(paths, value)
+			}
+		}
+		report, err := steerline.CertifyExecutionBackend(ctx, c, paths)
+		if err != nil {
+			return err
+		}
+		return json.NewEncoder(os.Stdout).Encode(report)
+	}
 	if command == "start-service" {
 		result, err := steerline.StartService(ctx, *config, steerline.StartServiceOptions{})
 		if err != nil {

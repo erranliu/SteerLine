@@ -150,7 +150,7 @@ func TestControlReviewPublishedSlotReflectsWaitingDecision(t *testing.T) {
 	}
 }
 
-func TestControlReviewPrepareFailureIsNotClaimConflict(t *testing.T) {
+func TestControlReviewPreflightFailureDoesNotClaimTask(t *testing.T) {
 	f := newFixture(t, task("target"))
 	s := f.service(t)
 	readyControlService(t, s, "manual")
@@ -159,8 +159,8 @@ func TestControlReviewPrepareFailureIsNotClaimConflict(t *testing.T) {
 	require(t, processOneControl(t, s, req))
 	r, err := ReadControlReceipt(f.c, req.RequestID)
 	require(t, err)
-	if r.Status != "failed" || r.Code == "claim_conflict" || readFake(f.db).Claims["target"] != 1 {
-		t.Fatalf("post-claim startup failure was mislabeled: %+v", r)
+	if r.Status != "failed" || r.Code == "claim_conflict" || readFake(f.db).Claims["target"] != 0 || len(s.State.Runs) != 0 {
+		t.Fatalf("unavailable backend passed pre-claim guard: %+v", r)
 	}
 }
 

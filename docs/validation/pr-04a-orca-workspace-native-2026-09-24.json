@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "captured_at": "2026-09-24T07:45:10.3172003Z",
+  "platform": "windows/amd64",
+  "orca_version": "1.4.209",
+  "backend": "orca",
+  "protocol": "orca_terminal_v2",
+  "target_id": "orca:f6912f0cd2ce941964b60190",
+  "agent": "codex",
+  "workspace_inspected": true,
+  "base_ancestor": true,
+  "git_clean": true,
+  "head": "0028407ffbbcf9ad4139ff63720311a6e3fd0a1f"
+}

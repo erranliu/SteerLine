@@ -149,6 +149,8 @@ func (s *SQLiteStore) migrate(ctx context.Context) error {
 }
 
 var domainSchemaV1 = []string{
+	`CREATE TABLE execution_bindings (run_id TEXT NOT NULL, attempt_id TEXT NOT NULL, record_id TEXT NOT NULL, payload BLOB NOT NULL, PRIMARY KEY(run_id,attempt_id,record_id))`,
+	`CREATE TABLE execution_operations (run_id TEXT NOT NULL, attempt_id TEXT NOT NULL, record_id TEXT NOT NULL, payload BLOB NOT NULL, PRIMARY KEY(run_id,attempt_id,record_id))`,
 	`CREATE TABLE tasks (project_identity TEXT NOT NULL, task_id TEXT NOT NULL, external_provider TEXT NOT NULL DEFAULT '', external_project TEXT NOT NULL DEFAULT '', external_id TEXT NOT NULL DEFAULT '', status TEXT NOT NULL, version INTEGER NOT NULL, payload BLOB NOT NULL, PRIMARY KEY(project_identity, task_id))`,
 	`CREATE UNIQUE INDEX task_external_identity ON tasks(project_identity,external_provider,external_project,external_id) WHERE external_id <> ''`,
 	`CREATE TABLE workflow_runs (project_identity TEXT NOT NULL, workflow_run_id TEXT NOT NULL, task_id TEXT NOT NULL, phase TEXT NOT NULL, payload BLOB NOT NULL, PRIMARY KEY(project_identity, workflow_run_id), FOREIGN KEY(project_identity, task_id) REFERENCES tasks(project_identity, task_id))`,
@@ -977,11 +979,7 @@ func persistLegacyRun(tx DomainTx, project string, run *Run) error {
 	}
 	target := run.Target
 	if target.ID == "" {
-		if run.Host == "orca" {
-			target.ID = "local-orca"
-		} else {
-			target.ID = "local"
-		}
+		target.ID = targetFor(Config{Host: run.Host}).ID
 	}
 	if target.Branch == "" {
 		target.Branch = run.WorktreeBranchValue()
@@ -1008,11 +1006,6 @@ func persistLegacyRun(tx DomainTx, project string, run *Run) error {
 	backend := run.Backend
 	if backend == "" {
 		backend = run.Host
-		if backend == "local" {
-			backend = "local_process"
-		} else if backend == "orca" {
-			backend = "orca"
-		}
 	}
 	run.Backend = backend
 	protocol := run.Protocol

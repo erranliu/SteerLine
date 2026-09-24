@@ -1,0 +1,15 @@
+{
+  "backend": "local",
+  "captured_at": "2026-09-24T09:17:01.1558926Z",
+  "locks_released": true,
+  "output_bytes": 77,
+  "platform": "windows/amd64",
+  "protocol": "local_process",
+  "runtime_schema": 5,
+  "service_and_worker_exited_after_ctrl_c": true,
+  "service_identity_sha256": "97356ff9984da0eda477c2dff5056080646bebba5c5a0c72895499b6712c2761",
+  "version": 1,
+  "viewer_reconnected_same_instance": true,
+  "worker_executable": "c:\\program files\\nodejs\\node.exe",
+  "worker_identity_sha256": "81aefcf3fec6c56823bb44da697c0014bc9420c8b8b67df9f1318a58bb467969"
+}

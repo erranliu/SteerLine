@@ -53,7 +53,8 @@
 | finish_task_status | string | pending / waiting_decision / waiting_pr_merge / completed / blocked |
 | decision | object/null | 当前问题和答案的展示摘要；权威版本与状态保存在 SQLite。主要状态为 pending、answer_saved、reply_accepted、applied。见 [decisions](decisions.md) |
 | codex_session_id | string/null | 从 thread.started.thread_id 得到，不从日志文字猜测 |
-| process | object/null | 宿主无关身份：kind（os/orca）、PID/Created/Executable（os）或 Terminal/RuntimeID/Incarnation（orca）；kind 为空视为 os |
+| process | object/null | 宿主无关身份：kind（os/orca）、PID/Created/Executable（os）或 Terminal/RuntimeID/Incarnation（orca）；缺少 kind 的执行绑定拒绝使用 |
+| manual_stop | object/null | 人工停止确认：固定 attempt_id 与 confirmed_at；仅结算该 attempt 的资源不确定性，不改写原 Operation 的未知结果。retry 创建新 attempt 时清除 |
 | started_at / ended_at | timestamp/null | 服务记录的执行起止时间；崩溃导致终止时间未知时仍为 null |
 | workspace_intent | object/null | 创建前持久化的 path、branch、base_commit；只表示计划创建，不证明目录已就绪。旧记录或领取孤儿可能为 null |
 | worktree_path / worktree_branch / base_commit | string/null | 调度器创建并核验的隔离目录、实现分支及起点 Git hash；准备成功前均为 null，不由 Codex 结果覆盖 |
@@ -68,6 +69,10 @@
 `process.created` 在 Windows 为进程创建 FILETIME 的十六进制标识，Linux 为 boot ID 和 /proc starttime。PID 可复用，读取器不能仅凭 PID 判定存活。遗留进程的核验结论写入 error；unknown 不代表服务已接管或恢复该会话。
 
 execution_status=succeeded 仅表示进程正常退出，仍可能 finish_task_status=blocked（结果缺失/无效）、waiting_decision（等待人工决策）或 waiting_pr_merge。只有重新核实对应 PR 确实合入目标主线、配置的结项命令成功返回匹配回执（若有），且 Beads show 返回 closed，才写 completed。任务已 closed 但回调失败时仍 waiting_pr_merge，重启后重跑幂等回调。finish_task_status 不是“finish 技能函数是否返回”。
+
+PR 4A 的执行后端复用 Spec 02 的 SQLite 权威存储：`execution_bindings` 保存不可变 ExecutionRef，`execution_operations` 保存后端动作的固定输入摘要和回执，与领域 `operations` 一起保存在 `steerline.db`。`execution/v1/` 只保留 `capabilities/` 能力报告及 `evidence/` 原生证据副本；不再读取文件式 binding/Operation。检测到旧文件式执行状态时拒绝启动并保留现场。持锁 Service 写执行记录，停服后的 `certify-backend` 取得同一仓库/run_dir 锁后维护能力报告。runtime v5 是数据库投影；未知或矛盾状态保留槽位，不自动重发副作用。
+
+能力报告的 `platform_version` 固定平台 CLI 版本。Orca 使用本地 Codex CLI 覆盖启动时，还保存 `agent_version` 并纳入报告键和证据校验；原生 agent 模式的报告不能复用到该路径。
 
 准备 worktree 时 execution_status=pending；创建或接入检查失败为 failed/blocked；遗留 pending/running 为 unknown/blocked。重启只核对目录、共享 Git 元数据、分支和起点祖先关系，不重建、不重跑。实际工作目录等字段只在创建及技能/Beads 核验全部通过后写入；创建后检查失败时，目录可能已存在，应查看 workspace_intent 和 error。
 
@@ -111,7 +116,7 @@ runtime 中的 `control.operation` 先于副作用保存；完成时把业务结
 
 ## runtime 版本守卫
 
-新服务只从 SQLite v5 数据库恢复，并将 `runtime.json` v5 用作可重建观察投影。v1–v4 文件保持原样，`LoadRuntime` 和服务启动均返回 `unsupported runtime schema`；不会尝试从这些文件恢复、迁移或清理数据。v5 投影缺少 SQLite 数据库时也会拒绝恢复。已有规划数字 ID 的新任务通过 `run_dir/task-identity-map.json` 中经过项目、来源三元组和一对一校验的 `task-identity-map/v1` 映射取得稳定身份；不能按标题猜测。未映射的 Beads 任务使用不占数字规划号的 `legacy:<hash>` 身份。
+新服务只从 当前 SQLite 数据库恢复，并将 `runtime.json` v5 用作可重建观察投影。v1–v4 文件保持原样，`LoadRuntime` 和服务启动均返回 `unsupported runtime schema`；不会尝试从这些文件恢复、迁移或清理数据。v5 投影缺少 SQLite 数据库时也会拒绝恢复。已有规划数字 ID 的新任务通过 `run_dir/task-identity-map.json` 中经过项目、来源三元组和一对一校验的 `task-identity-map/v1` 映射取得稳定身份；不能按标题猜测。未映射的 Beads 任务使用不占数字规划号的 `legacy:<hash>` 身份。
 
 ## 执行结果
 

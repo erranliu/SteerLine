@@ -28,6 +28,12 @@ Orca 的 Run/Task/Dispatch 是执行身份，不等同于 SteerLine 的业务 Ta
 - 当前受监管远程路径不提供生产取消；取消请求明确返回不支持并提示人工处理，不发送未经验证的 stop，也不凭 terminal handle 兜底关闭。已结算执行按后端协议释放资源，默认保留工作区与产物。
 - 仅启用对应目标与版本组合已实测的能力。首版远程版本、消息上限和剩余验收以远程 Spec 为准；未知能力保持不可用，不用提示词补足平台证据。
 
+## 当前 PR 4A 执行后端
+
+当前 PR 4A 的本机执行接入：local Codex 和 Orca terminal v2 共用 Service 派发与业务状态机，分别通过适配器提供固定执行身份、工作区事实、原始输出、观察与停止。runtime v5 是当前 SQLite 数据库的读投影；不可变 binding 和后端 Operation 保存在 `steerline.db`，`execution/v1/` 只保存能力证据。v1–v4 与旧文件式执行状态不自动迁移。Orca agent 先等待派发，适配器取得真实 worktree/terminal 身份并写好提示文件后才向同一 terminal 发送正式指令。精确 PTY 停止证明必须先落盘，才能释放执行槽。
+
+领取前按目标、agent、协议及 CLI 版本核对已验证能力。隔离原生验收后停服运行 `steerline certify-backend -config <config.json> -evidence <evidence.json>` 导入证据；未验证能力不可用于副作用。具体结果和仍 unsupported 的能力见 [PR 4A 验证报告](validation/pr-04a-execution-backends.md)。
+
 ## 审查红线
 
 - 业务 DAG、步骤门槛、Decision 或交付事实是否被 Orca、agent、技能、UI 或脚本直接推进？

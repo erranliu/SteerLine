@@ -14,6 +14,8 @@
 
 服务还有独立的控制轴 `control.dispatch_mode`（manual/auto）、`dispatch_paused` 和 `revision`。它们控制将来是否领取新任务，不改变执行、交付或 Beads 认领事实。`control.operation` 和 `control.blockers` 是控制协议的持久检查点/不确定副作用保留，不是任务队列；服务是 runtime 的唯一写者，CLI 仅提交文件请求并读取回执。
 
+PR 4A 的 `ExecutionRef` 和后端 `Operation` 纳入同一个 `steerline.db`：ExecutionRef 固定 backend/protocol/target/agent/workspace 和外部身份，Operation 固定动作负载摘要及 pending/in_flight/accepted/confirmed/rejected/outcome_unknown 结果。运行身份在 runtime v5 的 `Run` 投影中，数据库绑定必须与它的 PID/创建身份或 Orca runtime/terminal/incarnation 一致；未知、损坏或冲突记录阻止有副作用的恢复。配置摘要改变不会重路由历史记录。`execution/v1/` 仅保存能力报告和原生证据，不作为执行状态恢复源。
+
 **关键**：`execution_status=running`（进程在跑）与 Beads `IN_PROGRESS`（任务被认领）是两件不同的事，同时成立是正常的，不是冲突。查看器里的 `RUN`/`BLOCK`/`DECIDE`/`MERGE`/`DONE` 徽标取的是 SteerLine 的**执行/交付**轴，**不是** Beads 状态。
 
 ## 权威归属
@@ -93,7 +95,7 @@ Windows 服务窗口没有另外的服务启动父进程；窗口中的服务在
 
 Windows 的服务窗口直接竞争 Git common-dir 仓库锁和 run_dir 锁；两配置指向同仓库但使用不同 run_dir 时，仓库锁拒绝第二个窗口。客户端只在同一 startup_id、进程身份匹配且 ready=true 的 runtime 快照出现后显示已连接；初始化超时保留待确认状态，不自动打开替代窗口。`service/launch.lock` 仅供仍使用独立启动的 Linux 客户端串行化同一 run_dir。
 
-Windows 的 `service-window.bat` 从稳定安装 exe 以 manual/summary 模式运行。服务必须有可见 console 窗口，运行时监测其窗口句柄；窗口消失时取消服务上下文并清理 worker。该模式不要求从祖先 Job Object 脱离，关闭独立 viewer/TUI 也不会关闭服务窗口。Linux 服务以新会话启动，不使用 worker 的父死亡信号；兼容服务连接时保留原 mode/pause。
+Windows 的 `service-window.bat` 从稳定安装 exe 以 manual/summary 模式运行。服务必须有可见 console 窗口，运行时监测其窗口句柄；窗口消失时取消服务上下文并清理 worker。该模式不要求从祖先 Job Object 脱离，关闭独立 viewer/TUI 也不会关闭服务窗口。Linux 服务以新会话启动，不使用 worker 的父死亡信号；同版本服务连接时保留原 mode/pause。
 
 Windows worker 子进程仍先以挂起状态创建，纳入 kill-on-close Job 并核验身份后才恢复执行；该 Job 在服务窗口异常退出时清理 worker。停服请求固定指向连接时观察到的实例，结果始终包含 request_id 和 instance_id。即使没有回执，也独立报告原进程是否退出；只有 applied、进程退出和两把锁释放均确认后才报告 stopped。历史快照中的进程已退出但服务锁尚未释放时，不开放重新启动。
 

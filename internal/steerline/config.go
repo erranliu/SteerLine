@@ -72,7 +72,6 @@ type OrcaConfig struct {
 	WaitTimeout  string   `json:"wait_timeout"`
 	KeepTerminal bool     `json:"keep_terminal"`
 	Activate     bool     `json:"activate"`
-	Fallback     string   `json:"fallback"`
 }
 
 type CompletionConfig struct {
@@ -220,7 +219,7 @@ func InstallSelf() (string, error) {
 }
 
 func LoadConfig(path string) (Config, error) {
-	c := Config{Remote: "origin", RuntimeFile: "runtime.json", TaskPoll: "10s", PRPoll: "30s", Heartbeat: "5s", CommandTimeout: "30s", ShutdownGrace: "10s", Sandbox: "workspace-write", Git: Command{Executable: "git"}, BD: Command{Executable: "bd"}, Codex: Command{Executable: "codex"}, ExecutableTypes: []string{"task", "bug", "feature", "chore"}, Agent: "codex", Host: "orca", StallTimeout: "5m", Orca: OrcaConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "15m", Fallback: "local"}}
+	c := Config{Remote: "origin", RuntimeFile: "runtime.json", TaskPoll: "10s", PRPoll: "30s", Heartbeat: "5s", CommandTimeout: "30s", ShutdownGrace: "10s", Sandbox: "workspace-write", Git: Command{Executable: "git"}, BD: Command{Executable: "bd"}, Codex: Command{Executable: "codex"}, ExecutableTypes: []string{"task", "bug", "feature", "chore"}, Agent: "codex", Host: "orca", StallTimeout: "5m", Orca: OrcaConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "15m"}}
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return c, err
@@ -237,7 +236,7 @@ func LoadConfig(path string) (Config, error) {
 			c.Host = "local"
 		}
 	}
-	if c.agentName() == "codex" && c.ReasoningEffort == "" {
+	if c.hostName() == "local" && c.agentName() == "codex" && c.ReasoningEffort == "" {
 		c.ReasoningEffort = "high"
 	}
 	base, err := filepath.Abs(filepath.Dir(path))
@@ -272,9 +271,6 @@ func LoadConfig(path string) (Config, error) {
 	if !filepath.IsAbs(c.WorktreeRoot) {
 		c.WorktreeRoot = filepath.Join(base, c.WorktreeRoot)
 	}
-	if filepath.Base(c.RuntimeFile) != c.RuntimeFile || c.RuntimeFile == "." {
-		return c, errors.New("runtime_file must be a filename inside run_dir")
-	}
 	for _, v := range []string{c.TaskPoll, c.PRPoll, c.Heartbeat, c.CommandTimeout, c.ShutdownGrace} {
 		d, e := time.ParseDuration(v)
 		if e != nil || d <= 0 {
@@ -306,9 +302,6 @@ func LoadConfig(path string) (Config, error) {
 		}
 		if c.Orca.Executable == "" || c.Orca.Shell == "" {
 			return c, errors.New("orca.executable and orca.shell are required")
-		}
-		if c.Orca.Fallback != "" && c.Orca.Fallback != "local" && c.Orca.Fallback != "fail" {
-			return c, errors.New("orca.fallback must be local or fail")
 		}
 		if d, e := time.ParseDuration(c.Orca.WaitTimeout); e != nil || d <= 0 {
 			return c, errors.New("orca.wait_timeout must be a positive duration")
@@ -409,7 +402,7 @@ func (c *Config) ResolveIdentity(ctx context.Context) error {
 	return nil
 }
 
-// hostName, agentName and fallbackMode apply the documented defaults for
+// hostName and agentName apply the documented defaults for
 // programmatic Configs that do not go through LoadConfig.
 func (c Config) hostName() string {
 	if c.Host == "" {
@@ -423,11 +416,8 @@ func (c Config) agentName() string {
 	}
 	return c.Agent
 }
-func (c Config) fallbackMode() string {
-	if c.Orca.Fallback == "" {
-		return "local"
-	}
-	return c.Orca.Fallback
+func (c Config) needsCodexExecutable() bool {
+	return c.requiresLocalCodex() || c.hostName() == "orca" && c.agentName() == "codex" && (c.Model != "" || c.ReasoningEffort != "" || c.Profile != "")
 }
 func resolveCommand(c *Command) error {
 	p, e := exec.LookPath(c.Executable)
@@ -447,6 +437,9 @@ func (c *Config) Preflight(ctx context.Context, checkSkills bool) error {
 			return err
 		}
 	}
+	if c.hostName() == "local" && c.agentName() != "codex" {
+		return errors.New("local_process currently supports only agent=codex")
+	}
 	if e := c.Completion.validate(); e != nil {
 		return e
 	}
@@ -456,7 +449,7 @@ func (c *Config) Preflight(ctx context.Context, checkSkills bool) error {
 		}
 	}
 	commands := []*Command{&c.Git, &c.BD}
-	if c.requiresLocalCodex() {
+	if c.needsCodexExecutable() {
 		commands = append(commands, &c.Codex)
 	}
 	for _, cmd := range commands {
@@ -466,7 +459,7 @@ func (c *Config) Preflight(ctx context.Context, checkSkills bool) error {
 	}
 	r := Runner{Dir: c.Repository, Timeout: duration(c.CommandTimeout)}
 	if c.hostName() == "orca" {
-		if _, e := r.Output(ctx, Command{Executable: c.Orca.Executable}, "status", "--json"); e != nil {
+		if _, e := r.Output(ctx, Command{Executable: c.Orca.Executable, Args: c.Orca.Args}, "status", "--json"); e != nil {
 			return fmt.Errorf("orca host is not reachable: %w", e)
 		}
 	}
@@ -535,7 +528,7 @@ func (c *Config) Preflight(ctx context.Context, checkSkills bool) error {
 			return errors.New("worktree_root must be outside all existing checkouts")
 		}
 	}
-	for index, probe := range []struct {
+	probes := []struct {
 		cmd   Command
 		args  []string
 		flags []string
@@ -544,11 +537,15 @@ func (c *Config) Preflight(ctx context.Context, checkSkills bool) error {
 		{c.BD, []string{"update", "--help"}, []string{"--claim", "--actor"}},
 		{c.BD, []string{"list", "--help"}, []string{"--assignee", "--limit", "--all"}},
 		{c.BD, []string{"close", "--help"}, []string{"--reason"}},
-		{c.Codex, []string{"exec", "--help"}, []string{"--json", "--output-schema", "--output-last-message", "--sandbox"}},
-	} {
-		if index == 4 && !c.requiresLocalCodex() {
-			continue
-		}
+	}
+	if c.needsCodexExecutable() {
+		probes = append(probes, struct {
+			cmd   Command
+			args  []string
+			flags []string
+		}{c.Codex, []string{"exec", "--help"}, []string{"--json", "--output-schema", "--output-last-message", "--sandbox"}})
+	}
+	for _, probe := range probes {
 		b, e := r.Output(ctx, probe.cmd, probe.args...)
 		if e != nil {
 			return e

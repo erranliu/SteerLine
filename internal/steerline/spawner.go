@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -23,6 +24,8 @@ type process interface {
 // SpawnSpec is everything a host needs to run one worker. It contains no
 // scheduling or recovery authority: the scheduler keeps ownership.
 type SpawnSpec struct {
+	RunID      string
+	AttemptID  string
 	Dir        string
 	EventsPath string
 	StderrPath string
@@ -116,19 +119,47 @@ func (LocalSpawner) Start(ctx context.Context, spec SpawnSpec) (*Worker, error) 
 		}
 		return nil, e
 	}
-	w := &Worker{proc: p, Events: make(chan WorkerEvent, 64), Done: make(chan error, 1)}
+	observeCtx, cancelObservation := context.WithCancel(context.Background())
+	w := &Worker{proc: p, Events: make(chan WorkerEvent, 64), Done: make(chan error, 1), cancelObservation: cancelObservation, observationDone: make(chan struct{})}
+	parsed := make(chan WorkerEvent, 128)
+	go func() {
+		defer close(w.observationDone)
+		defer close(w.Events)
+		for {
+			select {
+			case <-observeCtx.Done():
+				return
+			case ev, ok := <-parsed:
+				if !ok {
+					return
+				}
+				// events.jsonl remains complete even when the observation queue is full.
+				select {
+				case w.Events <- ev:
+				default:
+				}
+			}
+		}
+	}()
 	go func() {
 		var wg sync.WaitGroup
 		var scanErr error
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
+			defer close(parsed)
 			defer reader.Close()
 			writer := io.Writer(logFile)
 			if outputFile != nil {
 				writer = io.MultiWriter(logFile, &maxOutputWriter{writer: outputFile, remaining: minimalStepOutputMax})
 			}
-			scanErr = streamWorkerEvents(io.TeeReader(reader, writer), NewCodexNormalizer(), w.Events)
+			scanErr = streamWorkerEventsWithEmit(io.TeeReader(reader, writer), NewCodexNormalizer(), func(ev WorkerEvent) {
+				ev.RunID, ev.AttemptID = spec.RunID, spec.AttemptID
+				select {
+				case parsed <- ev:
+				default:
+				}
+			})
 			if scanErr != nil {
 				p.Kill()
 			}
@@ -153,6 +184,7 @@ func (LocalSpawner) Start(ctx context.Context, spec SpawnSpec) (*Worker, error) 
 		}
 		p.Close()
 		wg.Wait()
+		<-w.observationDone
 		if scanErr != nil {
 			err = scanErr
 		}
@@ -173,7 +205,6 @@ func (LocalSpawner) Start(ctx context.Context, spec SpawnSpec) (*Worker, error) 
 				err = e
 			}
 		}
-		close(w.Events)
 		w.Done <- err
 	}()
 	return w, nil
@@ -182,32 +213,69 @@ func (LocalSpawner) Start(ctx context.Context, spec SpawnSpec) (*Worker, error) 
 // streamWorkerEvents parses one worker event stream, normalizes each line and
 // emits one WorkerEvent per activity record. It is shared by every host.
 func streamWorkerEvents(reader io.Reader, normalizer Normalizer, events chan<- WorkerEvent) error {
-	s := bufio.NewScanner(reader)
-	s.Buffer(make([]byte, 64<<10), 4<<20)
-	for s.Scan() {
-		line := s.Bytes()
-		var event struct {
-			Type     string `json:"type"`
-			ThreadID string `json:"thread_id"`
-			Item     struct {
-				Type string `json:"type"`
-			} `json:"item"`
+	return streamWorkerEventsWithEmit(reader, normalizer, func(ev WorkerEvent) { events <- ev })
+}
+
+func streamWorkerEventsWithEmit(reader io.Reader, normalizer Normalizer, emit func(WorkerEvent)) error {
+	const maxEventLine = 4 << 20
+	r := bufio.NewReaderSize(reader, 64<<10)
+	line := make([]byte, 0, 64<<10)
+	tooLong := false
+	for {
+		fragment, err := r.ReadSlice('\n')
+		if !tooLong {
+			if len(line)+len(fragment) > maxEventLine {
+				line = line[:0]
+				tooLong = true
+			} else {
+				line = append(line, fragment...)
+			}
 		}
-		if e := json.Unmarshal(line, &event); e != nil {
+		if errors.Is(err, bufio.ErrBufferFull) {
 			continue
 		}
-		summary := clip(event.Type+" "+event.Item.Type, 512)
-		session := ""
-		if event.Type == "thread.started" {
-			session = event.ThreadID
+		if err != nil && !errors.Is(err, io.EOF) {
+			return err
 		}
-		activities := normalizer.Normalize(line)
-		if len(activities) == 0 {
-			activities = []ActivityEvent{{Source: normalizer.Name(), Kind: "unknown", Title: event.Type, Raw: cloneRaw(line)}}
+		if !tooLong && len(line) > 0 {
+			content := line
+			if content[len(content)-1] == '\n' {
+				content = content[:len(content)-1]
+			}
+			if len(content) > 0 && content[len(content)-1] == '\r' {
+				content = content[:len(content)-1]
+			}
+			emitWorkerLine(content, normalizer, emit)
 		}
-		for _, activity := range activities {
-			events <- WorkerEvent{Session: session, Summary: summary, Activity: activity}
+		line = line[:0]
+		tooLong = false
+		if errors.Is(err, io.EOF) {
+			return nil
 		}
 	}
-	return s.Err()
+}
+
+func emitWorkerLine(line []byte, normalizer Normalizer, emit func(WorkerEvent)) {
+	var event struct {
+		Type     string `json:"type"`
+		ThreadID string `json:"thread_id"`
+		Item     struct {
+			Type string `json:"type"`
+		} `json:"item"`
+	}
+	if e := json.Unmarshal(line, &event); e != nil {
+		return
+	}
+	summary := clip(event.Type+" "+event.Item.Type, 512)
+	session := ""
+	if event.Type == "thread.started" {
+		session = event.ThreadID
+	}
+	activities := normalizer.Normalize(line)
+	if len(activities) == 0 {
+		activities = []ActivityEvent{{Source: normalizer.Name(), Kind: "unknown", Title: event.Type, Raw: cloneRaw(line)}}
+	}
+	for _, activity := range activities {
+		emit(WorkerEvent{Session: session, Summary: summary, Activity: activity})
+	}
 }

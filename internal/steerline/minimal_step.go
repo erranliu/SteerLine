@@ -258,7 +258,7 @@ func (s *Service) inspectMinimalWorkspace(ctx context.Context, run *Run) (Worksp
 		return WorkspaceEvidence{}, errors.New("minimal execution has no recorded workspace")
 	}
 	worktree := *run.WorktreePath
-	if run.Backend != "local_process" || run.Protocol != "local_process" {
+	if run.Backend != string(BackendLocal) || run.Protocol != string(ProtocolLocalProcess) || run.Target.ID != targetFor(s.Config).ID {
 		return WorkspaceEvidence{}, UnsupportedAdapterOperation("InspectWorkspace", "local inspection cannot inspect another execution target")
 	}
 	if err := verifyRunWorkspace(ctx, s.Config, run); err != nil {
@@ -452,7 +452,7 @@ func (s *Service) startMinimalStepWorker(ctx context.Context, task Task, run *Ru
 		}
 		workerConfig := workConfig
 		workerConfig.Repository = *run.WorktreePath
-		return SpawnerFor(workerConfig).Start(ctx, SpawnSpec{Dir: workerConfig.Repository, EventsPath: events, StderrPath: stderr, OutputPath: result, Command: Command{Executable: executable, Args: args}, Stdin: strings.NewReader(string(payload)), Env: mergeStepEnv(env, contract.Environment), Timeout: contract.Timeout})
+		return SpawnerFor(workerConfig).Start(ctx, SpawnSpec{RunID: run.RunID, AttemptID: attempt.AttemptID, Dir: workerConfig.Repository, EventsPath: events, StderrPath: stderr, OutputPath: result, Command: Command{Executable: executable, Args: args}, Stdin: strings.NewReader(string(payload)), Env: mergeStepEnv(env, contract.Environment), Timeout: contract.Timeout})
 	}
 	if contract.Provider != "agent_skill" {
 		return nil, fmt.Errorf("unsupported step provider %q", contract.Provider)
@@ -481,7 +481,7 @@ func (s *Service) startMinimalStepWorker(ctx context.Context, task Task, run *Ru
 		args = append(args, "--profile", workConfig.Profile)
 	}
 	args = append(args, "-")
-	return SpawnerFor(workConfig).Start(ctx, SpawnSpec{Dir: workConfig.Repository, EventsPath: events, StderrPath: stderr, Command: Command{Executable: workConfig.Codex.Executable, Args: args}, Stdin: strings.NewReader(string(prompt)), Env: mergeStepEnv(env, contract.Environment), Timeout: contract.Timeout})
+	return SpawnerFor(workConfig).Start(ctx, SpawnSpec{RunID: run.RunID, AttemptID: attempt.AttemptID, Dir: workConfig.Repository, EventsPath: events, StderrPath: stderr, Command: Command{Executable: workConfig.Codex.Executable, Args: args}, Stdin: strings.NewReader(string(prompt)), Env: mergeStepEnv(env, contract.Environment), Timeout: contract.Timeout})
 }
 
 func mergeStepEnv(base, extra map[string]string) map[string]string {
@@ -1148,6 +1148,13 @@ func (s *Service) startMinimalStep(ctx context.Context, task Task, run *Run, sou
 	}
 	if err != nil {
 		return err
+	}
+	ref := ExecutionRef{Version: ExecutionRecordVersion, Backend: BackendLocal, Protocol: ProtocolLocalProcess, Target: targetFor(s.Config), Agent: agentFor(s.Config), RunID: run.RunID, AttemptID: attempt.AttemptID, WorkspacePath: deref(run.WorktreePath), WorkspaceBranch: deref(run.WorktreeBranch), BaseCommit: deref(run.BaseCommit), External: identity, Generation: identity.Created}
+	if err = (executionRecords{root: s.Config.RunDir}).saveBinding(ref); err != nil {
+		run.ExecutionStatus = "unknown"
+		s.blocked(run, "Step started but its binding could not be persisted: "+err.Error())
+		s.State.SlotOccupied, s.State.CurrentTask = true, ptr(run.TaskID)
+		return errors.Join(err, s.save())
 	}
 	if err = s.setOperationState(opID, "confirmed", "", mustJSON(identity), ""); err != nil {
 		return err

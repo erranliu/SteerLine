@@ -12,6 +12,15 @@ import (
 // preflightExistingState rejects obsolete or unknown state before config loading
 // creates directories, probes task providers, or opens SQLite for writing.
 func preflightExistingState(runDir, runtimeFile string) error {
+	for _, name := range []string{"bindings", "operations"} {
+		entries, err := os.ReadDir(filepath.Join(runDir, "execution", "v1", name))
+		if err != nil && !os.IsNotExist(err) {
+			return err
+		}
+		if len(entries) != 0 {
+			return errors.New("file-based execution state is unsupported; preserve external executions for manual recovery")
+		}
+	}
 	runtimePath := filepath.Join(runDir, runtimeFile)
 	databasePath := filepath.Join(runDir, "steerline.db")
 	_, dbErr := os.Stat(databasePath)
@@ -63,10 +72,10 @@ func validateExistingDatabase(databasePath string) error {
 		return fmt.Errorf("unsupported SQLite schema %d; only schema %d is accepted", version, domainSchemaVersion)
 	}
 	var tables int
-	if err = reader.db.QueryRowContext(context.Background(), `SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('tasks','workflow_runs','executions','step_attempts','decisions','decision_answers','events','operations','commands','projection')`).Scan(&tables); err != nil {
+	if err = reader.db.QueryRowContext(context.Background(), `SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('tasks','workflow_runs','executions','step_attempts','decisions','decision_answers','events','operations','commands','projection','execution_bindings','execution_operations')`).Scan(&tables); err != nil {
 		return fmt.Errorf("cannot validate SQLite schema: %w", err)
 	}
-	if tables != 10 {
+	if tables != 12 {
 		return fmt.Errorf("existing SQLite database schema %d is incomplete; preserve it for manual recovery", version)
 	}
 	var indexes int

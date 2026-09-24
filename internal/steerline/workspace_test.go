@@ -271,7 +271,7 @@ func TestWorkspaceRecoveryRejectsChangedBranch(t *testing.T) {
 	}
 }
 
-func TestWorktreeRootConfigurationAndLegacySnapshot(t *testing.T) {
+func TestWorktreeRootConfigurationAndOldSnapshotRejection(t *testing.T) {
 	f := newFixture(t)
 	configPath := filepath.Join(f.c.RunDir, "config.json")
 	data, _ := json.Marshal(f.c)
@@ -289,11 +289,11 @@ func TestWorktreeRootConfigurationAndLegacySnapshot(t *testing.T) {
 		}
 	}
 	s := f.service(t)
-	legacyRun := &Run{TaskID: "old-1", DomainTaskID: "legacy:" + shortHash(f.c.identity+"\x00beads\x00\x00old-1"), DomainAttemptNumber: 1, Title: "legacy", RunID: "legacy", AttemptID: "legacy-attempt", ControlRevision: 1, Claimant: f.c.Claimant, Host: "local", Backend: "local_process", Protocol: "local_process", Target: ExecutionTarget{ID: "local"}, ExecutionStatus: "succeeded", FinishTaskStatus: "waiting_pr_merge", PR: PRState{URL: ptr(f.server.URL + "/owner/repo/pulls/1"), State: "open"}}
+	legacyRun := &Run{TaskID: "old-1", DomainTaskID: "legacy:" + shortHash(f.c.identity+"\x00beads\x00\x00old-1"), DomainAttemptNumber: 1, Title: "legacy", RunID: "legacy", AttemptID: "legacy-attempt", ControlRevision: 1, Claimant: f.c.Claimant, Host: "local", Backend: string(BackendLocal), Protocol: "local_process", Target: ExecutionTarget{ID: "local"}, ExecutionStatus: "succeeded", FinishTaskStatus: "waiting_pr_merge", PR: PRState{URL: ptr(f.server.URL + "/owner/repo/pulls/1"), State: "open"}}
 	s.State.Runs = []*Run{legacyRun}
 	require(t, s.save())
 	restarted := f.service(t)
-	if restarted.State.SchemaVersion != 5 || restarted.State.Runs[0].FinishTaskStatus != "waiting_pr_merge" {
-		t.Fatal("legacy PR polling was not preserved")
+	if restarted.State.SchemaVersion != CurrentRuntimeSchema || restarted.State.Runs[0].FinishTaskStatus != "blocked" || restarted.State.Runs[0].ExecutionStatus != "unknown" || !restarted.State.SlotOccupied {
+		t.Fatal("an unbound legacy execution was allowed to poll or release its slot")
 	}
 }
