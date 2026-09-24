@@ -1,6 +1,6 @@
 # Hosting 规范 v2：Orca 驱动执行
 
-边界见 [hosting](../hosting.md)。本文是实现规范。v2 起执行模型为 **Orca 建 worktree + Orca 启 agent**；Steerline 只做调度与完成。
+本文记录当前 Orca terminal v2 适配器的实现，不定义受监管远程路径的目标架构。业务权威和远程红线见 [hosting](../hosting.md)；目标接入按 [远程闭环 Spec](03-remote-execution-and-viewer.md) 实施。当前 v2 路径由 Orca 建 worktree 并启动 agent，SteerLine 负责调度与完成核验。
 
 ## 配置轴
 

@@ -24,7 +24,7 @@
 - 桌面 viewer 和未来移动端通过同一服务接口查看状态、提交人工操作。业务状态切换由中心服务持久化；共享部署时按用户或组织隔离项目、权限及 Orca 连接。
 - Spec 02/03 实现最小中心流程（不扩入控制台 4A/4B 的交付范围）：准备、实现、验证、按配置审查、发布 PR、等待合并、结项。SteerLine 决定步骤顺序、通过条件和修复回路；目标项目提供步骤内的基础技能或脚本，例如特殊测试与 PR 流程。技能不能自行推进中心流程。脚本可以在 Orca 管理的远端 worktree 内运行，无需常驻 SteerLine 服务。
 
-目标远程适配允许使用 Orca 的受监管 worker、Dispatch、消息和 ask/reply。Orca 执行记录与 SteerLine 业务任务建立映射，业务 DAG 和完成判定仍归 SteerLine。当前 hosting v2 对 `orca orchestration *` 的全面禁用不作为目标远程架构的约束；实现时明确结果、交互和恢复契约。
+目标远程适配允许使用 Orca 的受监管 worker、Dispatch、消息和 ask/reply。Orca 执行记录与 SteerLine 业务任务建立映射，业务 DAG 和完成判定仍归 SteerLine；具体权威与生命周期边界见 [Hosting 红线](../hosting.md)。
 
 ## 长期支持的执行路径
 
