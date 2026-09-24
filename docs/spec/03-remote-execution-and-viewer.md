@@ -67,6 +67,8 @@ verify 使用固定的检查命令和清单，回传实际脚本回执；review 
 
 worker-read 优先可用的 transcript，回退时明确标记 terminal。source/cursor 一起持久化；只有内容写入成功后推进 cursor。截断、历史淘汰和 source_changed 写入显式 gap 事件，不以“无输出”掩盖。展示输出不参与决定任务完成。
 
+远端接入复用 [控制台 4A](pr-04a-execution-backends.spec.md) 与 [4B](pr-04b-conversation-events.spec.md) 的执行/会话契约及同一 UI，不新建远端专属消息模型。分别验证远端 agent/协议版本的 turn、phase、final、历史与等待能力；本机证据不能代验。精确折叠遵循 [4C](pr-04-console.spec.md)，缺能力采用明确的执行级展示并保留未验收项，不能因 worker_done 或 terminal 静默而制造 final。完整正文、晚到回复、source segment、去重和游标恢复沿用同一存储契约。
+
 回答走 Spec 02 的 SubmitAnswer 命令：精确 decision ID、attempt、expected_version、选择/备注及幂等键。服务事务检查问题仍有效、答案符合请求、目标尝试仍权威，然后保存答案和 reply Operation。重复同一提交返回原结果；不同答案竞争时返回冲突并展示已接受答案。
 
 离线时允许保存有效答案，viewer 显示“已保存，待远端送达”。同一业务问题的回答不因重连再次生成新消息。若旧问题或 Dispatch 已失效，答案记录保留并标记 failed/superseded，不发送给替代 worker。

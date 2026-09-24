@@ -26,6 +26,14 @@
 
 目标远程适配允许使用 Orca 的受监管 worker、Dispatch、消息和 ask/reply。Orca 执行记录与 SteerLine 业务任务建立映射，业务 DAG 和完成判定仍归 SteerLine。当前 hosting v2 对 `orca orchestration *` 的全面禁用不作为目标远程架构的约束；迁移时应明确替换其结果、交互和恢复契约。
 
+## 长期支持的执行路径
+
+local Codex 与 Orca 均为正式、长期维护的执行后端。backend、agent、execution target 和协议版本分开；Orca terminal v2 与未来 supervised 属于同一后端族的不同协议实现。远程演进不移除 local，不提供不确定情况下的跨后端自动 fallback。
+
+Service 持有唯一业务状态机和存储写入权；后端适配器只执行固定意图并返回事实。启动、观察、输出、回答、停止执行、分离观察和资源结算使用共同契约，能力差异有版本与原生证据。UI/CLI 共用 Query/Command 和会话模型，不直接操作平台终端或 OS 进程。接口与验收见 [控制台 4A](spec/pr-04a-execution-backends.spec.md)、[4B](spec/pr-04b-conversation-events.spec.md)；后续 SQLite 与 remote 复用它们，不建立第二套抽象。
+
+进度消息、最终回复、轮次结束与业务完成分开；过程折叠属于 UI 视图状态。完整输出先持久化再推进来源游标，缺口与未解决问题始终可见。单纯输入接受不能作为决策已应用的证明。
+
 ## 为同任务多 agent 保留的模型
 
 必须允许同一个业务任务由不同 agent 在独立 worktree 上并行执行。当前不实现并行调度，但后续远程协议和状态机不能固化任务与 agent、worktree 或 Dispatch 的一对一关系。
