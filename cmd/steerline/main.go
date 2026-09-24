@@ -299,7 +299,7 @@ func run() error {
 
 func runNativeTaskCommand(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: steerline task <show|list> -config config.json")
+		return fmt.Errorf("usage: steerline task <validate|create|discard|graph|show|list> -config config.json")
 	}
 	subcommand := args[0]
 	fs := flag.NewFlagSet("task "+subcommand, flag.ContinueOnError)
@@ -307,16 +307,40 @@ func runNativeTaskCommand(args []string) error {
 	taskID := fs.String("task-id", "", "native task ID")
 	cursor := fs.String("cursor", "", "native task list cursor")
 	limit := fs.Int("limit", 100, "native task page size (default 100, maximum 500)")
-	if subcommand != "show" && subcommand != "list" {
+	file := fs.String("file", "", "task-batch/v1 JSON file")
+	requestID := fs.String("request-id", "", "stable idempotency key for this task command")
+	expectedAuthority := fs.Uint64("expected-authority-version", 0, "sampled native project authority version")
+	expectedVersion := fs.Uint64("expected-version", 0, "expected native task version")
+	reason := fs.String("reason", "", "reason for discarding the task")
+	by := fs.String("by", "", "task command requester")
+	if subcommand != "show" && subcommand != "list" && subcommand != "validate" && subcommand != "create" && subcommand != "discard" && subcommand != "graph" {
 		return fmt.Errorf("unsupported task command %q", subcommand)
 	}
 	if err := fs.Parse(args[1:]); err != nil {
 		return err
 	}
+	allowedFlags := map[string]map[string]bool{
+		"show":     {"config": true, "task-id": true},
+		"list":     {"config": true, "cursor": true, "limit": true},
+		"validate": {"config": true, "file": true},
+		"create":   {"config": true, "file": true, "request-id": true, "expected-authority-version": true, "by": true},
+		"discard":  {"config": true, "task-id": true, "request-id": true, "expected-version": true, "reason": true, "by": true},
+		"graph":    {"config": true, "cursor": true, "limit": true},
+	}
+	var unexpectedFlag string
+	fs.Visit(func(f *flag.Flag) {
+		if !allowedFlags[subcommand][f.Name] && unexpectedFlag == "" {
+			unexpectedFlag = f.Name
+		}
+	})
+	if unexpectedFlag != "" {
+		return fmt.Errorf("task %s does not accept -%s", subcommand, unexpectedFlag)
+	}
 	if fs.NArg() != 0 {
 		return errors.New("unexpected positional arguments")
 	}
-	if subcommand == "show" {
+	switch subcommand {
+	case "show":
 		if *taskID == "" {
 			return errors.New("task show requires -task-id")
 		}
@@ -326,7 +350,42 @@ func runNativeTaskCommand(args []string) error {
 		if *cursor != "" {
 			return errors.New("task show does not accept -cursor")
 		}
-	} else if *taskID != "" {
+	case "list":
+		if *taskID != "" {
+			return errors.New("task list does not accept -task-id")
+		}
+	case "validate":
+		if *file == "" {
+			return errors.New("task validate requires -file")
+		}
+		if *taskID != "" || *cursor != "" || *requestID != "" || *expectedAuthority != 0 {
+			return errors.New("task validate accepts only -file and -config")
+		}
+	case "create":
+		if *file == "" || *requestID == "" || *expectedAuthority == 0 {
+			return errors.New("task create requires -file, -request-id and -expected-authority-version")
+		}
+		if *taskID != "" || *cursor != "" {
+			return errors.New("task create does not accept -task-id or -cursor")
+		}
+	case "discard":
+		if *taskID == "" || *requestID == "" || *expectedVersion == 0 || strings.TrimSpace(*reason) == "" {
+			return errors.New("task discard requires -task-id, -request-id, -expected-version and -reason")
+		}
+		if err := steerline.ValidateNativeTaskID(*taskID); err != nil {
+			return err
+		}
+		if *file != "" || *cursor != "" || *expectedAuthority != 0 {
+			return errors.New("task discard does not accept -file, -cursor or -expected-authority-version")
+		}
+	case "graph":
+		if *taskID != "" || *file != "" || *requestID != "" || *expectedAuthority != 0 {
+			return errors.New("task graph does not accept task mutation flags")
+		}
+	default:
+		return fmt.Errorf("unsupported task command %q", subcommand)
+	}
+	if subcommand == "list" && *taskID != "" {
 		return errors.New("task list does not accept -task-id")
 	}
 	c, err := steerline.LoadConfig(*config)
@@ -340,13 +399,66 @@ func runNativeTaskCommand(args []string) error {
 	if err != nil {
 		return err
 	}
+	if subcommand == "create" || subcommand == "discard" {
+		if err = store.Close(); err != nil {
+			return err
+		}
+		lock, lockErr := steerline.LockRepository(c.Identity())
+		if lockErr != nil {
+			return lockErr
+		}
+		defer lock.Close()
+		store, err = steerline.OpenNativeTaskCommandStore(context.Background(), &c)
+		if err != nil {
+			return err
+		}
+	}
 	defer store.Close()
 	query := steerline.QueryService{Store: store, Project: c.Identity()}
 	var result steerline.NativeTaskPage
-	if subcommand == "show" {
+	switch subcommand {
+	case "show":
 		result, err = query.ShowNativeTask(context.Background(), *taskID)
-	} else {
+	case "list":
 		result, err = query.ListNativeTasks(context.Background(), *cursor, *limit)
+	case "validate":
+		payload, readErr := os.ReadFile(*file)
+		if readErr != nil {
+			return readErr
+		}
+		validation, validateErr := (steerline.CommandService{Store: store, Project: c.Identity()}).ValidateTaskBatch(context.Background(), c, payload)
+		if validateErr != nil {
+			return validateErr
+		}
+		if encodeErr := json.NewEncoder(os.Stdout).Encode(validation); encodeErr != nil {
+			return encodeErr
+		}
+		if !validation.Valid {
+			return errors.New("invalid_batch: validation failed; see reported issues")
+		}
+		return nil
+	case "create":
+		payload, readErr := os.ReadFile(*file)
+		if readErr != nil {
+			return readErr
+		}
+		receipt, createErr := (steerline.CommandService{Store: store, Project: c.Identity()}).CreateTaskBatch(context.Background(), c, payload, *requestID, *expectedAuthority, *by)
+		if createErr != nil {
+			return createErr
+		}
+		return json.NewEncoder(os.Stdout).Encode(receipt)
+	case "discard":
+		receipt, discardErr := (steerline.CommandService{Store: store, Project: c.Identity()}).DiscardNativeTask(context.Background(), c, *taskID, *requestID, *expectedVersion, *reason, *by)
+		if discardErr != nil {
+			return discardErr
+		}
+		return json.NewEncoder(os.Stdout).Encode(receipt)
+	case "graph":
+		graph, graphErr := query.TaskGraph(context.Background(), *cursor, *limit)
+		if graphErr != nil {
+			return graphErr
+		}
+		return json.NewEncoder(os.Stdout).Encode(graph)
 	}
 	if err != nil {
 		return err

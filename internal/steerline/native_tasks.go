@@ -31,11 +31,23 @@ type NativeTaskCapabilities struct {
 
 type NativeTaskDetail struct {
 	TaskRecord
-	ProjectID    string              `json:"project_id"`
-	Priority     int                 `json:"priority"`
-	Contract     TaskContract        `json:"contract"`
-	WorkflowRuns []WorkflowRunRecord `json:"workflow_runs"`
-	Delivery     *TaskDeliveryRecord `json:"delivery,omitempty"`
+	ProjectID         string                 `json:"project_id"`
+	Priority          int                    `json:"priority"`
+	Contract          TaskContract           `json:"contract"`
+	WorkflowRuns      []WorkflowRunRecord    `json:"workflow_runs"`
+	Delivery          *TaskDeliveryRecord    `json:"delivery,omitempty"`
+	Predecessors      []TaskDependencyStatus `json:"predecessors"`
+	Successors        []string               `json:"successors"`
+	DependencyReady   bool                   `json:"dependency_ready"`
+	UnmetPredecessors []TaskDependencyStatus `json:"unmet_predecessors"`
+	StartupBlockers   []string               `json:"startup_blockers"`
+}
+
+type TaskDependencyStatus struct {
+	TaskID    string `json:"task_id"`
+	Status    string `json:"status"`
+	Delivered bool   `json:"delivered"`
+	Blocker   string `json:"blocker,omitempty"`
 }
 
 type NativeTaskPage struct {
@@ -137,7 +149,7 @@ func (q QueryService) ShowNativeTask(ctx context.Context, id string) (NativeTask
 }
 
 func (s *SQLiteStore) NativeTaskPage(ctx context.Context, project, taskID, expectedDatabaseID string, expectedDB uint64, offset, limit int) (NativeTaskPage, error) {
-	page := NativeTaskPage{Protocol: nativeTaskProtocol, ProjectID: project, Tasks: []NativeTaskDetail{}, Capabilities: NativeTaskCapabilities{DependencyReadiness: "not_provided", DependencyBlockers: "not_provided", StartupBlockers: "not_provided"}}
+	page := NativeTaskPage{Protocol: nativeTaskProtocol, ProjectID: project, Tasks: []NativeTaskDetail{}, Capabilities: NativeTaskCapabilities{DependencyReadiness: "provided", DependencyBlockers: "provided", StartupBlockers: "provided"}}
 	if offset < 0 {
 		return page, nativeErr("cursor_invalidated", "negative page offset")
 	}
@@ -156,8 +168,9 @@ func (s *SQLiteStore) NativeTaskPage(ctx context.Context, project, taskID, expec
 		}
 		return page, nativeErr("unsupported_schema", "native task query requires the current database schema")
 	}
-	var targetRepository, targetRemote, targetBranch string
-	err = tx.QueryRowContext(ctx, `SELECT authority_version,graph_revision,repository,remote,branch FROM project_task_authorities WHERE project_identity=? AND authority='native'`, project).Scan(&page.AuthorityVersion, &page.GraphRevision, &targetRepository, &targetRemote, &targetBranch)
+	var targetRepository, targetRemote, targetBranch, dispatchMode string
+	var dispatchPaused int
+	err = tx.QueryRowContext(ctx, `SELECT authority_version,graph_revision,repository,remote,branch,dispatch_mode,dispatch_paused FROM project_task_authorities WHERE project_identity=? AND authority='native'`, project).Scan(&page.AuthorityVersion, &page.GraphRevision, &targetRepository, &targetRemote, &targetBranch, &dispatchMode, &dispatchPaused)
 	if errors.Is(err, sql.ErrNoRows) {
 		if expectedDB != 0 {
 			return page, nativeErr("cursor_invalidated", "project authority could not be read for this cursor")
@@ -232,9 +245,9 @@ func (s *SQLiteStore) NativeTaskPage(ctx context.Context, project, taskID, expec
 			rows.Close()
 			return page, nativeErr("contract_mismatch", "native task record has invalid status, type, priority or version")
 		}
-		if record.Status == "discarded" && (record.DiscardedAt == nil || strings.TrimSpace(record.DiscardReason) == "") || record.Status != "discarded" && (record.DiscardedAt != nil || record.DiscardReason != "") {
+		if record.Status == "discarded" && (record.DiscardedAt == nil || strings.TrimSpace(record.DiscardReason) == "" || strings.TrimSpace(record.DiscardedBy) == "" || !controlIDPattern.MatchString(record.DiscardRequestID)) || record.Status != "discarded" && (record.DiscardedAt != nil || record.DiscardReason != "" || record.DiscardedBy != "" || record.DiscardRequestID != "" || len(record.CleanupPending) > 0) {
 			rows.Close()
-			return page, nativeErr("contract_mismatch", "native discard audit fields do not match task status")
+			return page, nativeErr("contract_mismatch", "native discard identity and cleanup fields do not match task status")
 		}
 		if record.Status == "open" && record.Claimant != "" || (record.Status == "in_progress" || record.Status == "closed") && record.Claimant == "" {
 			rows.Close()
@@ -247,6 +260,67 @@ func (s *SQLiteStore) NativeTaskPage(ctx context.Context, project, taskID, expec
 		return page, err
 	}
 	rows.Close()
+	// Read every task, edge and delivery in this same snapshot so a detail page
+	// never treats a missing page-local predecessor as delivered or ready.
+	statuses := map[string]string{}
+	rows, err = tx.QueryContext(ctx, `SELECT task_id,status FROM tasks WHERE project_identity=?`, project)
+	if err != nil {
+		return page, err
+	}
+	for rows.Next() {
+		var id, status string
+		if err = rows.Scan(&id, &status); err != nil {
+			rows.Close()
+			return page, err
+		}
+		statuses[id] = status
+	}
+	if err = rows.Err(); err != nil {
+		rows.Close()
+		return page, err
+	}
+	rows.Close()
+	edges := []TaskDependencyRecord{}
+	rows, err = tx.QueryContext(ctx, `SELECT predecessor_id,successor_id FROM task_dependencies WHERE project_identity=? ORDER BY length(predecessor_id),predecessor_id,length(successor_id),successor_id`, project)
+	if err != nil {
+		return page, err
+	}
+	for rows.Next() {
+		var edge TaskDependencyRecord
+		edge.ProjectIdentity = project
+		if err = rows.Scan(&edge.PredecessorID, &edge.SuccessorID); err != nil {
+			rows.Close()
+			return page, err
+		}
+		edges = append(edges, edge)
+	}
+	if err = rows.Err(); err != nil {
+		rows.Close()
+		return page, err
+	}
+	rows.Close()
+	delivered := map[string]bool{}
+	rows, err = tx.QueryContext(ctx, `SELECT task_id FROM task_deliveries WHERE project_identity=?`, project)
+	if err != nil {
+		return page, err
+	}
+	for rows.Next() {
+		var id string
+		if err = rows.Scan(&id); err != nil {
+			rows.Close()
+			return page, err
+		}
+		delivered[id] = true
+	}
+	if err = rows.Err(); err != nil {
+		rows.Close()
+		return page, err
+	}
+	rows.Close()
+	var executionSlotBusy int
+	if err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM executions WHERE project_identity=? AND status IN ('pending','active','waiting_decision','blocked')`, project).Scan(&executionSlotBusy); err != nil {
+		return page, err
+	}
 	if offset > 0 && len(all) == 0 {
 		return page, nativeErr("cursor_invalidated", "cursor offset is outside the current snapshot")
 	}
@@ -255,7 +329,46 @@ func (s *SQLiteStore) NativeTaskPage(ctx context.Context, project, taskID, expec
 		all = all[:limit]
 	}
 	for _, record := range all {
-		detail := NativeTaskDetail{TaskRecord: record, ProjectID: project, Priority: record.Priority, WorkflowRuns: []WorkflowRunRecord{}}
+		detail := NativeTaskDetail{TaskRecord: record, ProjectID: project, Priority: record.Priority, WorkflowRuns: []WorkflowRunRecord{}, Predecessors: []TaskDependencyStatus{}, Successors: []string{}, UnmetPredecessors: []TaskDependencyStatus{}, StartupBlockers: []string{}}
+		dependencyReady := record.Status == "open"
+		for _, edge := range edges {
+			if edge.PredecessorID == record.TaskID {
+				detail.Successors = append(detail.Successors, edge.SuccessorID)
+			}
+			if edge.SuccessorID != record.TaskID {
+				continue
+			}
+			predecessor := TaskDependencyStatus{TaskID: edge.PredecessorID, Status: statuses[edge.PredecessorID], Delivered: delivered[edge.PredecessorID]}
+			if predecessor.Status == "" {
+				predecessor.Blocker = "inconsistent_delivery"
+			} else if predecessor.Status == "discarded" {
+				predecessor.Blocker = "discarded_predecessor"
+			} else if predecessor.Status == "closed" && !predecessor.Delivered {
+				predecessor.Blocker = "inconsistent_delivery"
+			} else if predecessor.Delivered && predecessor.Status != "closed" {
+				predecessor.Blocker = "inconsistent_delivery"
+			} else if !predecessor.Delivered {
+				predecessor.Blocker = "predecessor_not_delivered"
+			}
+			detail.Predecessors = append(detail.Predecessors, predecessor)
+			if predecessor.Blocker != "" {
+				detail.UnmetPredecessors = append(detail.UnmetPredecessors, predecessor)
+				dependencyReady = false
+			}
+		}
+		detail.DependencyReady = dependencyReady
+		if record.Status != "open" {
+			detail.StartupBlockers = append(detail.StartupBlockers, "task_not_open")
+		}
+		if dispatchPaused != 0 {
+			detail.StartupBlockers = append(detail.StartupBlockers, "dispatch_paused")
+		}
+		if executionSlotBusy > 0 {
+			detail.StartupBlockers = append(detail.StartupBlockers, "execution_slot_busy")
+		}
+		if record.Status == "open" {
+			detail.StartupBlockers = append(detail.StartupBlockers, "native_execution_unavailable")
+		}
 		var contractPayload []byte
 		var contractDigest string
 		err = tx.QueryRowContext(ctx, `SELECT digest,payload FROM task_contracts WHERE project_identity=? AND contract_id=? AND task_id=?`, project, record.ContractID, record.TaskID).Scan(&contractDigest, &contractPayload)
@@ -405,6 +518,43 @@ func OpenNativeTaskProject(ctx context.Context, c *Config) (*SQLiteStore, error)
 		return nil, err
 	}
 	return openBoundNativeStore(ctx, *c, path)
+}
+
+// OpenNativeTaskCommandStore opens the repository's existing native database
+// for a bounded command. The caller must hold the repository identity lock,
+// and the project must already have been initialized and bound.
+func OpenNativeTaskCommandStore(ctx context.Context, c *Config) (*SQLiteStore, error) {
+	if c == nil || c.taskAuthority() != "native" {
+		return nil, nativeErr("authority_mismatch", "native task command requires task_authority=native")
+	}
+	if err := validateNativeStateLocation(*c); err != nil {
+		return nil, err
+	}
+	if err := c.ResolveIdentity(ctx); err != nil {
+		return nil, err
+	}
+	path := filepath.Join(c.RunDir, "steerline.db")
+	reader, err := openBoundNativeStore(ctx, *c, path)
+	if err != nil {
+		return nil, err
+	}
+	_ = reader.Close()
+	writer, err := OpenSQLiteStore(path)
+	if err != nil {
+		return nil, err
+	}
+	authority, err := writer.nativeAuthority(ctx, c.Identity())
+	if err != nil || authority.Authority != "native" || authority.Remote != c.Remote || authority.Branch != c.Branch {
+		_ = writer.Close()
+		return nil, nativeErr("authority_mismatch", "native project binding changed before command admission")
+	}
+	target, err := configuredRepositoryTarget(ctx, *c)
+	if err != nil || !sameRepositoryTarget(authority.Repository, target) {
+		_ = writer.Close()
+		return nil, nativeErr("authority_mismatch", "repository target differs from the persisted native project")
+	}
+	writer.nativeBinding = &authority
+	return writer, nil
 }
 
 func validateNativeStateLocation(c Config) error {

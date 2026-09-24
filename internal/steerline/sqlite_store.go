@@ -245,8 +245,8 @@ func validateNativeTaskStructure(ctx context.Context, tx *sql.Tx) error {
 		OR NOT EXISTS (SELECT 1 FROM task_batches b JOIN json_each(b.task_ids) m WHERE b.project_identity=t.project_identity AND b.batch_id=json_extract(t.payload,'$.batch_id') AND m.value=t.task_id)
 		OR (t.status='open' AND COALESCE(json_extract(t.payload,'$.claimant'),'')<>'')
 		OR (t.status IN ('in_progress','closed') AND COALESCE(json_extract(t.payload,'$.claimant'),'')='')
-		OR (t.status='discarded' AND (json_extract(t.payload,'$.discarded_at') IS NULL OR trim(COALESCE(json_extract(t.payload,'$.discard_reason'),''))=''))
-		OR (t.status<>'discarded' AND (json_extract(t.payload,'$.discarded_at') IS NOT NULL OR COALESCE(json_extract(t.payload,'$.discard_reason'),'')<>''))
+		OR (t.status='discarded' AND (json_extract(t.payload,'$.discarded_at') IS NULL OR trim(COALESCE(json_extract(t.payload,'$.discard_reason'),''))='' OR trim(COALESCE(json_extract(t.payload,'$.discarded_by'),''))='' OR trim(COALESCE(json_extract(t.payload,'$.discard_request_id'),''))=''))
+		OR (t.status<>'discarded' AND (json_extract(t.payload,'$.discarded_at') IS NOT NULL OR COALESCE(json_extract(t.payload,'$.discard_reason'),'')<>'' OR COALESCE(json_extract(t.payload,'$.discarded_by'),'')<>'' OR COALESCE(json_extract(t.payload,'$.discard_request_id'),'')<>'' OR COALESCE(json_array_length(json_extract(t.payload,'$.cleanup_pending')),0)<>0))
 		OR (t.status='closed' AND NOT EXISTS (SELECT 1 FROM task_deliveries d WHERE d.project_identity=t.project_identity AND d.task_id=t.task_id))
 		OR (t.status='discarded' AND EXISTS (SELECT 1 FROM task_deliveries d WHERE d.project_identity=t.project_identity AND d.task_id=t.task_id))`).Scan(&invalidTasks)
 	if err != nil {
@@ -500,11 +500,22 @@ func (t *sqliteTx) PutTask(v TaskRecord) error {
 		if nativeAuthority != "native" || v.Source != "native" || !canonicalDecimalID(v.TaskID) || v.BatchID == "" || v.Title == "" || v.Type == "" || v.Priority < 0 || v.Priority > 4 || v.ContractID == "" || v.Version == 0 || v.CreatedAt.IsZero() || v.ExternalProvider != "" || v.ExternalProject != "" || v.ExternalID != "" {
 			return nativeErr("contract_mismatch", "native Task requires its original numeric ID, batch, type, priority and fixed contract")
 		}
+		var repository string
+		if err = t.tx.QueryRowContext(t.ctx, `SELECT repository FROM project_task_authorities WHERE project_identity=? AND authority='native'`, v.ProjectIdentity).Scan(&repository); err != nil {
+			return nativeErr("authority_mismatch", "native task project binding is unavailable")
+		}
+		var reused int
+		if err = t.tx.QueryRowContext(t.ctx, `SELECT COUNT(*) FROM tasks old JOIN project_task_authorities p ON p.project_identity=old.project_identity WHERE p.authority='native' AND p.repository=? AND old.task_id=? AND old.project_identity<>?`, repository, v.TaskID, v.ProjectIdentity).Scan(&reused); err != nil {
+			return err
+		}
+		if reused > 0 {
+			return nativeErr("immutable_task", "task ID is already used in the same repository identity")
+		}
 		if v.Status == "discarded" {
-			if v.DiscardedAt == nil || strings.TrimSpace(v.DiscardReason) == "" {
-				return errors.New("discarded native task requires timestamp and reason")
+			if v.DiscardedAt == nil || strings.TrimSpace(v.DiscardReason) == "" || strings.TrimSpace(v.DiscardedBy) == "" || !controlIDPattern.MatchString(v.DiscardRequestID) {
+				return errors.New("discarded native task requires timestamp, reason, requester and request ID")
 			}
-		} else if v.DiscardedAt != nil || v.DiscardReason != "" {
+		} else if v.DiscardedAt != nil || v.DiscardReason != "" || v.DiscardedBy != "" || v.DiscardRequestID != "" || len(v.CleanupPending) > 0 {
 			return errors.New("discard audit fields are valid only for discarded native tasks")
 		}
 		if v.Status == "closed" {
@@ -569,8 +580,8 @@ func (t *sqliteTx) UpdateNativeTaskCAS(v TaskRecord, expectedVersion uint64) err
 		return nativeErr("contract_mismatch", "claimant is preserved after claim")
 	}
 	if v.Status == "discarded" {
-		if v.DiscardedAt == nil || strings.TrimSpace(v.DiscardReason) == "" {
-			return nativeErr("contract_mismatch", "discard requires timestamp and reason")
+		if v.DiscardedAt == nil || strings.TrimSpace(v.DiscardReason) == "" || strings.TrimSpace(v.DiscardedBy) == "" || !controlIDPattern.MatchString(v.DiscardRequestID) {
+			return nativeErr("contract_mismatch", "discard requires timestamp, reason, requester and request ID")
 		}
 		var count int
 		if err := t.tx.QueryRowContext(t.ctx, `SELECT COUNT(*) FROM task_deliveries WHERE project_identity=? AND task_id=?`, v.ProjectIdentity, v.TaskID).Scan(&count); err != nil {
@@ -579,7 +590,7 @@ func (t *sqliteTx) UpdateNativeTaskCAS(v TaskRecord, expectedVersion uint64) err
 		if count != 0 {
 			return nativeErr("stale_version", "task with a delivery cannot be discarded")
 		}
-	} else if v.DiscardedAt != nil || v.DiscardReason != "" {
+	} else if v.DiscardedAt != nil || v.DiscardReason != "" || v.DiscardedBy != "" || v.DiscardRequestID != "" || len(v.CleanupPending) > 0 {
 		return nativeErr("contract_mismatch", "discard audit fields are valid only for discarded tasks")
 	}
 	if v.Status == "closed" {

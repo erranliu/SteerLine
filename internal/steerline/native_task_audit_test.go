@@ -66,7 +66,7 @@ func TestNativeAuditPaginationBoundsAndDatabaseIdentity(t *testing.T) {
 	q := QueryService{Store: s, Project: project}
 	first, err := q.ListNativeTasks(ctx, "", 1)
 	require(t, err)
-	if first.Tasks[0].TaskID != "2" || first.NextCursor == "" || first.Capabilities.StartupBlockers != "not_provided" {
+	if first.Tasks[0].TaskID != "2" || first.NextCursor == "" || first.Capabilities.StartupBlockers != "provided" {
 		t.Fatalf("invalid page: %+v", first)
 	}
 	second, err := q.ListNativeTasks(ctx, first.NextCursor, 1)
