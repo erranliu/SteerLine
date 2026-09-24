@@ -1,6 +1,8 @@
 # Spec 01：Orca 远程能力验证与执行协议
 
-状态：已完成部分真实远端探测；必需故障场景仍待验收。更新：2026-09-24。
+任务 ID：4；任务名称：Orca 远程协议验证。
+
+状态：已完成部分真实远端探测；必需故障场景仍待验收。配套 [Plan](01-orca-remote-protocol.plan.md)。更新：2026-09-24。
 
 依据：[执行架构共同约束](execution-architecture.spec.md)。后续：[Spec 02](02-execution-model-and-adapter.md)、[Spec 03](03-remote-execution-and-viewer.md)。
 
@@ -58,7 +60,7 @@ SteerLine 持有业务任务、执行身份、决策和完成规则；Orca 持�
 
 ### 5.1 身份与请求
 
-每个请求绑定 `project_id、task_id、workflow_run_id、execution_id、step_id、attempt_id、operation_id`。中心生成这些 ID，并在外部调用前持久化。Orca 返回的 home runtime/Run/Task/Dispatch、execution host 和 worktree 身份另行记录，不与业务 ID 混用。
+每个请求绑定 `project_id、task_id、workflow_run_id、execution_id、step_id、attempt_id、operation_id`。已规划任务的 task_id 沿用预分配数字，旧历史使用明确的 legacy 身份；其他执行/请求 ID 由中心生成，并在外部调用前持久化。Orca 返回的 home runtime/Run/Task/Dispatch、execution host 和 worktree 身份另行记录，不与业务 ID 混用。
 
 `operation_id` 是中心去重键；只有经验证的 Orca 请求映射才具有远端重放语义。不得假设将该值放进 prompt 就能防止重复启动。
 

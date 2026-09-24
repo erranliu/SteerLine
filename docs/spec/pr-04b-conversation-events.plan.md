@@ -1,5 +1,7 @@
 # PR 4B Plan：统一会话事件与完整回复
 
+任务 ID：1；任务名称：统一会话事件与完整回复。
+
 依据：[Spec](pr-04b-conversation-events.spec.md)。依赖：PR 4A 审核合并。
 
 ## 实施步骤

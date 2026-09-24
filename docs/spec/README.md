@@ -22,9 +22,9 @@
 
 共同执行约束见 [执行架构 Spec](execution-architecture.spec.md)。
 
-1. [Orca 远程能力验证与执行协议](01-orca-remote-protocol.md)
-2. [任务、执行模型、最小状态机与执行适配器](02-execution-model-and-adapter.md)
-3. [最小状态机的分阶段远程闭环与 viewer 人工决策](03-remote-execution-and-viewer.md)
+1. [Orca 远程能力验证与执行协议](01-orca-remote-protocol.md) · [Plan](01-orca-remote-protocol.plan.md)
+2. [任务、执行模型、最小状态机与执行适配器](02-execution-model-and-adapter.md) · [Plan](02-execution-model-and-adapter.plan.md)
+3. [最小状态机的分阶段远程闭环与 viewer 人工决策](03-remote-execution-and-viewer.md) · [Plan](03-remote-execution-and-viewer.plan.md)
 
 ## 原生任务与固定 DAG
 

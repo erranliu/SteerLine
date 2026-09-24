@@ -1,5 +1,7 @@
 # PR 4C Spec：执行控制台与轮次折叠
 
+任务 ID：2；任务名称：执行控制台与轮次折叠。
+
 状态：待实现。依赖：PR 1–3、[4A](pr-04a-execution-backends.spec.md)、[4B](pr-04b-conversation-events.spec.md)。对应 [Plan](pr-04-console.plan.md)。保留原 PR4 文件路径；本文件现在对应交付阶段 4C。
 
 ## 目标

@@ -1,5 +1,7 @@
 # PR 5 Plan：人工决策与恢复闭环
 
+任务 ID：3；任务名称：人工决策与恢复闭环。
+
 依据：[Spec](pr-05-intervention.spec.md)。依赖：PR 2、4A、4B、4C 审核合并；从最新 origin/main 实施，复用已落地的权威存储与接口。
 
 ## 实施步骤

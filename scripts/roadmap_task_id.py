@@ -12,6 +12,9 @@ from pathlib import Path
 REF = "refs/steerline/roadmap-task-ids"
 ZERO_OID = "0" * 40
 ROW = re.compile(r"^\|\s*(\d+)\s*\|\s*([^|]+?)\s*\|", re.MULTILINE)
+SPEC_LINK = re.compile(r"\[Spec\]\(([^)]+)\)")
+PLAN_LINK = re.compile(r"\[Plan\]\(([^)]+)\)")
+TASK_HEADER = re.compile(r"任务 ID：(\d+)；任务名称：([^。；\r\n]+)")
 
 
 def git(root: Path, *args: str, input_text: str | None = None, check: bool = True):
@@ -123,14 +126,25 @@ def rename_task(root: Path, records: dict[int, str], task_id: int, name: str) ->
     raise RuntimeError("could not rename task after concurrent ref updates")
 
 
-def document_tasks(path: Path) -> dict[int, str]:
+def document_tasks(path: Path) -> dict[int, tuple[str, str, str]]:
     found = {}
-    for raw_id, raw_name in ROW.findall(path.read_text(encoding="utf-8")):
+    for line in path.read_text(encoding="utf-8").splitlines():
+        match = ROW.match(line)
+        if match is None:
+            continue
+        raw_id, raw_name = match.groups()
         task_id = int(raw_id)
         name = raw_name.strip()
         if task_id in found:
             raise ValueError(f"duplicate task ID {task_id} in {path}")
-        found[task_id] = name
+        spec = SPEC_LINK.search(line)
+        plan = PLAN_LINK.search(line)
+        if spec is None or plan is None:
+            raise ValueError(f"task {task_id} in {path} requires its own Spec and Plan links")
+        for target in (spec.group(1), plan.group(1)):
+            if not (path.parent / target).is_file():
+                raise ValueError(f"task {task_id} in {path} links to missing file {target}")
+        found[task_id] = (name, spec.group(1), plan.group(1))
     return found
 
 
@@ -138,10 +152,19 @@ def check_documents(root: Path, records: dict[int, str]) -> None:
     roadmap = document_tasks(root / "docs" / "roadmap" / "roadmap.md")
     execution_map = document_tasks(root / "docs" / "roadmap" / "execution-map.md")
     if roadmap != execution_map:
-        raise ValueError("roadmap.md and execution-map.md have different active task IDs/names")
-    for task_id, name in roadmap.items():
+        raise ValueError("roadmap.md and execution-map.md have different active IDs, names, or Spec/Plan links")
+    specs = [spec for _, spec, _ in roadmap.values()]
+    plans = [plan for _, _, plan in roadmap.values()]
+    if len(specs) != len(set(specs)) or len(plans) != len(set(plans)):
+        raise ValueError("multiple active tasks share the same Spec or Plan")
+    for task_id, (name, spec, plan) in roadmap.items():
         if records.get(task_id) != name:
             raise ValueError(f"active task {task_id} differs from task-ids/{task_id}.json")
+        for target in (spec, plan):
+            file = root / "docs" / "roadmap" / target
+            header = TASK_HEADER.search(file.read_text(encoding="utf-8")[:2000])
+            if header is None or int(header.group(1)) != task_id or header.group(2) != name:
+                raise ValueError(f"task {task_id} identity differs from {file}")
 
 
 def main() -> None:
@@ -174,7 +197,7 @@ def main() -> None:
         print(f"reserved {task_id}: {name} ({path.relative_to(root)})")
     elif args.command == "rename":
         rename_task(root, records, args.id, name)
-        print(f"renamed {args.id}: {name}; update both roadmap tables before check")
+        print(f"renamed {args.id}: {name}; update roadmap tables and Spec/Plan headers before check")
     elif args.command == "init":
         initialize_or_reserve(root, records, None)
         print(f"shared Git ref initialized; next ID: {load_state(root, ref_oid(root), records)['next_id']}")

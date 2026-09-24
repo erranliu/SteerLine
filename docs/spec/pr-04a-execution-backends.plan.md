@@ -1,5 +1,7 @@
 # PR 4A Plan：长期双执行后端契约
 
+任务 ID：0；任务名称：双执行后端。
+
 依据：[Spec](pr-04a-execution-backends.spec.md)。前置 PR 3 已验收并合并。
 
 ## 实施顺序

@@ -1,5 +1,7 @@
 # PR 4A Spec：长期双执行后端契约
 
+任务 ID：0；任务名称：双执行后端。
+
 状态：待实现。前置 PR 3 已验收并合并。对应 [Plan](pr-04a-execution-backends.plan.md)。依据：[总览](console-upgrade.md)、[执行架构共同约束](execution-architecture.spec.md)。
 
 ## B1：职责与长期支持边界

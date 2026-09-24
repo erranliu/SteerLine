@@ -1,5 +1,7 @@
 # PR 4B Spec：统一会话事件与完整回复
 
+任务 ID：1；任务名称：统一会话事件与完整回复。
+
 状态：待实现。依赖：PR 4A。对应 [Plan](pr-04b-conversation-events.plan.md)。下游：[4C 控制台](pr-04-console.spec.md)。
 
 ## E1：语义与身份
