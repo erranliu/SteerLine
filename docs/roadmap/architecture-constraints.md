@@ -24,6 +24,14 @@ Task、WorkflowRun、Execution、StepAttempt、Decision 和外部平台身份分
 
 落地规格：[执行模型](../spec/02-execution-model-and-adapter.md)、[远程协议](../spec/01-orca-remote-protocol.md)。
 
+## 原生任务与人工处置边界
+
+原生任务复用中心状态机与 SQLite，任务 DAG 决定任务间的执行资格，WorkflowRun/Execution/StepAttempt 承担任务内部执行。发布后的任务固定依赖和交付契约；系统不提供任务拆分、回退、重新打开、动态依赖修改或级联补偿流程，也不引入父子聚合来承担人工拆分。
+
+用户可通过 Codex 分析并人工实施拆分或回退，系统不承诺自动修复相关状态。重启恢复、对账与原契约下的重试继续支持。图算法、布局和 UI 均不成为业务写者。
+
+共同要求：[原生任务共同约束](../spec/native-task-constraints.md)。独立执行规格：[任务模型](../spec/task-core.spec.md)、[固定 DAG](../spec/task-dag.spec.md)、[Beads 退出](../spec/beads-exit.spec.md)、[关系视图](../spec/dag-view.spec.md)；各有同名配套 Plan，每任务一个独立实现 PR。Beads 路径在对应项目按规格切换前继续有效，不据规划摘要修改当前任务权威。
+
 ## 证据、恢复与迁移
 
 外部动作的意图、回执和不确定性可恢复；超时不能证明没有副作用，不能盲目重派。消息内容先持久化，再推进游标或确认接收。平台能力以具体版本/目标的原生证据为准。

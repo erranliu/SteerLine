@@ -26,6 +26,19 @@
 2. [任务、执行模型、最小状态机与执行适配器](02-execution-model-and-adapter.md)
 3. [最小状态机的分阶段远程闭环与 viewer 人工决策](03-remote-execution-and-viewer.md)
 
+## 原生任务与固定 DAG
+
+共同要求见 [原生任务共同约束](native-task-constraints.md)。每个任务对应一个独立 Spec、配套 Plan 和一个独立实现 PR，不把多个任务藏在同一总文件的章节中。
+
+| 任务 | Spec | Plan |
+| --- | --- | --- |
+| TASK-CORE：原生任务模型 | [Spec](task-core.spec.md) | [Plan](task-core.plan.md) |
+| TASK-DAG：固定依赖调度 | [Spec](task-dag.spec.md) | [Plan](task-dag.plan.md) |
+| BEADS-EXIT：解除 Beads 依赖与项目迁移 | [Spec](beads-exit.spec.md) | [Plan](beads-exit.plan.md) |
+| DAG-VIEW：任务关系视图与只读导出 | [Spec](dag-view.spec.md) | [Plan](dag-view.plan.md) |
+
+按表中顺序分别交付，复用中心执行模型，不等待整个远程闭环。系统不提供任务拆分或回退流程，两者由用户人工处置；共同文档不代替各任务的执行范围与验收。
+
 ## 现有 Hosting 实现
 
 - [Hosting 规范 v2：Orca 驱动执行](hosting-spec.md)

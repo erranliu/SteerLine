@@ -38,6 +38,19 @@
 - [真实远端能力报告](../spec/orca-probe/remote-capability-report-2026-09-23.json)与[字段映射](../spec/orca-probe/field-mapping.md)：供中心模型和远程闭环复用派发、身份、输出、问答、同工作区跨步骤与故障恢复证据；会话目标可复用输出来源与缺口映射，仍须单独验证精确 turn/phase 能力。
 - [verify 结果校验器](../../internal/steerline/remoteprotocol/verify_result.go)：供远程闭环接入已接受的 worker_done 身份、预期检查清单和执行端 HEAD，阻止缺回执、非零退出、身份或候选 commit 不符的结果推进审查/发布。
 
+## 后续：原生任务与固定 DAG
+
+SteerLine 自主管理任务和依赖，解除 Beads 必需依赖。发布后的任务固定交付契约与外部依赖；拆分与回退由用户通过 Codex 分析并人工处理，系统不提供对应流程。按下列顺序交付，每个任务各有独立 Spec、配套 Plan 和一个独立实现 PR；共同要求见 [原生任务共同约束](../spec/native-task-constraints.md)。
+
+| 目标 | 剩余交付范围 | 关键前置 | 执行规格 |
+| --- | --- | --- | --- |
+| 原生任务模型（`TASK-CORE`） | 独立任务身份、固定规格契约、来源映射、SQLite 存储与中心查询 | EXEC-MODEL 的身份、事务和 Query/Command 权威 | [Spec](../spec/task-core.spec.md) · [Plan](../spec/task-core.plan.md) |
+| 固定依赖调度（`TASK-DAG`） | 草稿校验、批次原子发布、硬前置、事务领取、交付释放和重启恢复 | TASK-CORE 验收并合入；复用既有执行与 PR 核验 | [Spec](../spec/task-dag.spec.md) · [Plan](../spec/task-dag.plan.md) |
+| 解除 Beads 依赖（`BEADS-EXIT`） | 原生配置/技能/worker/结项路径，无 Beads 新项目闭环及旧项目一次性迁移 | TASK-DAG 验收并合入；项目接入契约；活动旧任务结清 | [Spec](../spec/beads-exit.spec.md) · [Plan](../spec/beads-exit.plan.md) |
+| 任务关系视图（`DAG-VIEW`） | 任务上下游与阻塞说明、DOT/JSON 导出和可选 SVG 展示 | TASK-DAG 的图查询与 CONSOLE 查询边界；BEADS-EXIT 验收并合入后实施 | [Spec](../spec/dag-view.spec.md) · [Plan](../spec/dag-view.plan.md) |
+
+首版只提供同项目的“前置交付后开工”依赖，沿用现有执行槽策略，不引入父子聚合、条件边或复杂并行调度。图算法与布局复用开源组件，任务权威保持在中心服务。图形展示先以只读导出交付，交互式 Web 视图另行规划；原生任务不等待远程闭环全部完成，也不扩大远端能力。
+
 ## 规划约束
 
 - [架构约束](architecture-constraints.md)

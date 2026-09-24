@@ -14,13 +14,15 @@ Spec 01 的逻辑接口可用于本阶段设计和替身测试。真实 remote a
 
 local Codex 与 Orca 是长期正式后端。[控制台 4A](pr-04a-execution-backends.spec.md) 定义共同操作/身份/能力，[4B](pr-04b-conversation-events.spec.md) 定义会话和全文查询。本阶段复用先落地的这些契约与测试，负责领域模型、事务和旧状态迁移；若本阶段先落地，4A/4B 直接扩展本阶段权威接口。不得建立平行 adapter、另一会话模型或双重业务写者；不改变控制台 PR 3 的本机生命周期。
 
+后续原生任务扩展分别由 [任务模型](task-core.spec.md)、[固定 DAG](task-dag.spec.md)、[Beads 退出](beads-exit.spec.md) 和 [关系视图](dag-view.spec.md) 四个独立任务承担，各有同名配套 Plan 和独立实现 PR，不增加本阶段的 DAG 交付范围。未切换项目继续由 Beads 提供任务事实；已按 Beads 退出 Spec 切换的 native 项目以固定 DAG Spec D3 的中心任务/交付事务为权威。原生 Task ID 与可选外部任务 ID 分开，后续扩展复用本阶段身份、数据库和命令服务，不再迁移一套执行模型。
+
 ## 2. 实体与身份
 
 ID 为不透明稳定标识，不由终端标题、远端路径或显示名称承担。业务身份至少按 project 隔离；预留 namespace，单机固定为 `local`，本阶段不实现多租户认证。
 
 | 实体 | 必需信息与关系 |
 | --- | --- |
-| Task | project、外部 task ID、标题、领取者、任务来源、最终任务状态 |
+| Task | 内部稳定 task ID、project、外部 task ID（原生扩展可空）、标题、领取者、任务来源、最终任务状态 |
 | WorkflowRun | Task、workflow_version、阶段、目标仓库/分支、固定配置、选用结果的关联 |
 | Execution | WorkflowRun、agent、execution target、worktree 身份/分支/base、执行状态、current_step、候选 revision、修复轮数 |
 | StepAttempt | Execution、step_id、尝试序号、operation_id、状态、输入 revision、契约摘要、前置结果 ID、结果、外部执行绑定 |
@@ -40,7 +42,7 @@ ID 为不透明稳定标识，不由终端标题、远端路径或显示名称�
 
 | 字段 | 允许值 |
 | --- | --- |
-| Task.status | open、in_progress、closed；当前由任务提供方回读核实 |
+| Task.status | open、in_progress、closed；本阶段 Beads 路径由任务提供方回读核实，后续 native 路径按固定 DAG Spec D3 的中心事务核实 |
 | WorkflowRun.phase | queued、executing、waiting_decision、waiting_pr_merge、completing、completed、blocked |
 | Execution.status | pending、active、waiting_decision、succeeded、failed、blocked、stopped |
 | StepAttempt.status | planned、dispatching、dispatched、running、waiting_decision、succeeded、failed、stopping、stopped、outcome_unknown |
@@ -51,7 +53,7 @@ ID 为不透明稳定标识，不由终端标题、远端路径或显示名称�
 
 unknown 连接只降低事实新鲜度，不覆盖最后已知业务阶段。StepAttempt.outcome_unknown 用于外部动作是否生效不明，不因每次观察超时而写入。未获执行来源支持的状态迁移拒绝；原始平台状态与中心验证后的步骤状态分别保留，例如 Orca 成功结算但结果无效时，中心步骤仍可 failed。
 
-agent 完成仅终止对应步骤；Execution 成功只表示该执行的流程已完成。WorkflowRun 必须显式选用结果并核验交付，Task 关闭仍由中心执行和回读。首版单 Execution 可以自动选用其唯一有效结果；以后多个结果不能沿用“首个成功即完成”的隐式规则。
+agent 完成仅终止对应步骤；Execution 成功只表示该执行的流程已完成。WorkflowRun 必须显式选用结果并核验交付，Task 关闭仍由中心执行：Beads 路径回读提供方，后续 native 路径同事务记录交付与关闭。首版单 Execution 可以自动选用其唯一有效结果；以后多个结果不能沿用“首个成功即完成”的隐式规则。
 
 Execution 的问题只暂停自身。流程级决策必须显式声明作用域。WorkflowRun 的等待态是聚合结果：有其他可运行 Execution 时仍可 executing，并额外暴露待决策数量。
 
@@ -155,7 +157,7 @@ runtime.json 改为使用新 schema_version 的可重建读模型，标记 datab
 - 缺少历史字段的记录标注 legacy/incomplete，不猜测 agent、Dispatch 或已完成阶段。旧文件损坏或身份冲突使迁移失败，事务回滚，原目录不受影响。
 - 旧 pending/running 或 resuming 的不确定恢复规则保持保守，不因迁移自动接管或续跑。旧 completed、等待 PR 和等待决策状态不得丢失。
 - 数据库提交后若新版本投影写入失败，下次启动重新导出，不再次导入旧快照；来源摘要和迁移标记防止重复记录。
-- 新二进制支持读取无数据库的旧快照作只读查看。完成迁移后的目录不得用旧二进制恢复运行；回退只能在所有执行已核实停止、尚未产生新的外部业务动作时由显式恢复流程完成，不能让旧快照覆盖新数据库。
+- 新二进制支持读取无数据库的旧快照作只读查看。完成迁移后的目录不得用旧二进制自动恢复运行，也不能让旧快照自动覆盖新数据库。系统不提供迁移完成后的回退流程；用户需要回退时自行分析执行现场、新外部动作和数据差异，并人工决定处置方式，系统不承诺自动修复。
 
 新版本导出顶层至少包括 project/service、revision、tasks、workflow_runs、executions、attempts 和 decisions；各集合使用 ID 关联。旧 `current_task/slot_occupied` 仅可作为兼容展示摘要，不再是身份或并行能力的权威。
 
