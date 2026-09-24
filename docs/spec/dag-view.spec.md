@@ -6,7 +6,7 @@
 
 前置：[Beads 退出 Spec](beads-exit.spec.md) 已验收并合入，底层 [固定 DAG Spec](task-dag.spec.md) D4 关系读模型与 [控制台 Spec](pr-04-console.spec.md) 查询边界均已交付。引用 [原生任务共同约束](native-task-constraints.md) 全部条款及 [原生任务模型](task-core.spec.md) C3 的查询版本约定。
 
-本任务交付图查询筛选、TUI 上下游/阻塞详情、DOT/JSON 和可选 SVG 导出。只消费前置任务权威，不实现任务创建、丢弃、迁移或状态转换；不增加拆分、回退、拖线编辑、Web 服务或交互式 Web 图。图展示失败不能影响调度。
+本任务交付图查询筛选、TUI 上下游/阻塞详情、DOT/JSON 和可选 SVG 导出。只消费前置任务权威，不实现任务创建、丢弃或状态转换；不增加拆分、回退、拖线编辑、Web 服务或交互式 Web 图。图展示失败不能影响调度。
 
 ## V2：查询、导出与布局
 

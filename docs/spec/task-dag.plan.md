@@ -1,6 +1,6 @@
 # Plan：固定依赖 DAG 调度
 
-任务 ID：8；任务名称：固定依赖调度；目标：`TASK-DAG`。唯一执行依据：[Spec](task-dag.spec.md)，共同要求见 [原生任务共同约束](native-task-constraints.md)。前置 [原生任务模型](task-core.spec.md) 已验收并合入；本任务只实现创建入图、丢弃、依赖、领取和交付，不承担生产接入、迁移或展示。
+任务 ID：8；任务名称：固定依赖调度；目标：`TASK-DAG`。唯一执行依据：[Spec](task-dag.spec.md)，共同要求见 [原生任务共同约束](native-task-constraints.md)。前置 [原生任务模型](task-core.spec.md) 已验收并合入；本任务只实现创建入图、丢弃、依赖、领取和交付，不承担生产接入或展示。
 
 ## 基线确认
 

@@ -7,11 +7,11 @@
 ## 实施步骤
 
 1. **先验证来源。** 在隔离仓库采集真实 local Codex、本机 Orca 各至少两轮的进度、工具、最终回复、失败/取消、等待与重放样本。分别记录 backend/protocol/agent/版本/OS/目标及实际字段，脱敏后存为 fixtures；沿用 Spec 01 探测格式。不得将 API 文档或 CLI help 当成原生证据。若公开出口不支持精确阶段，列出协议补齐依赖与未验收能力，再实现诚实的基础降级。
-2. **定义事件和读接口。** 建立 envelope、身份质量、事件类型、phase、final availability、正文引用、能力报告及 Query cursor。ReadConversation/ReadMessageBody/ReadRaw 不暴露宿主响应类型或任意路径；确定旧 activity 到 legacy DTO 的规则。与 Spec 02 的 Event/QueryService 共用类型和演进映射。
+2. **定义事件和读接口。** 建立 envelope、身份质量、事件类型、phase、final availability、正文引用、能力报告及 Query cursor。ReadConversation/ReadMessageBody/ReadRaw 不暴露宿主响应类型或任意路径；与 Spec 02 的 Event/QueryService 共用类型。
 3. **实现可靠存储。** 新记录版本、正文写入、去重、批次提交、checkpoint、崩溃重放与缺口先通过故障测试，再接上游。SQLite 存在则复用事务；否则使用唯一持锁写者的版本化日志。记录正文页与修订的一致性、坏尾部处置和磁盘满后的恢复算法。
 4. **接入输出适配。** local 解码器保留真实 phase/turn 与 unknown；Orca 优先公开结构化出口、精确绑定 ref/source，terminal 降级独立 segment。相同消息的 delta/snapshot 使用来源修订去重；业务 result 的 summary 独立记录为执行摘要。将旧只按 item ID 合并的显示逻辑移至公共身份模型。
 5. **解耦采集与 UI。** Service 运行时在没有客户端的情况下仍采集，客户端只读本地 Query；Windows 服务窗口关闭后采集随服务停止，再从固定入口启动时按持久 checkpoint 对账。每源单次在途读取，有界批次、取消和公平调度。客户端断连与服务重启均保留最后 checkpoint；采集不能阻塞控制或 PR 核验。
-6. **完成兼容与证据。** 保留 watch JSON/raw 格式和原始字节语义、旧日志查看，记录版本迁移和上下游映射。更新 activity/data-contract/hosting 说明；提供 docs/validation/ 下的能力矩阵和按 E-A ID 的验证报告，交接 4C 可直接消费的样本与 DTO。
+6. **完成证据。** 固定当前查询与原始字节读取语义，不建设旧 watch/activity 读取器。更新 activity/data-contract/hosting 说明；提供 docs/validation/ 下的能力矩阵和按 E-A ID 的验证报告，交接 4C 可直接消费的样本与 DTO。
 
 ## 验证
 
@@ -26,4 +26,4 @@
 
 每项验收有证据，精确双链路能力达到约定门槛才宣告目标完成；若只能完成基础输出，则 PR/报告明确列出阻塞与剩余依赖，协调任务不得擅自当作整阶段完成并启动下一阶段。上游补齐后复用同一接口与回放测试。
 
-原始日志保留，新增版本记录不覆写旧证据。只读客户端版本不足时显示“不支持的会话版本”并可读 raw；服务回退必须验证外部执行已停止及记录兼容性，不能删除 checkpoint 后盲目重新执行。
+当前格式的原始日志保留；不支持的旧客户端或状态格式明确拒绝。更换状态目录前须核实外部执行已停止，不能删除 checkpoint 后盲目重新执行。

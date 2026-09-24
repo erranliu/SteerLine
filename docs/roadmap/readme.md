@@ -50,7 +50,7 @@ python scripts/roadmap_task_id.py check
 
 计数器保存在 Git 共享目录的 `refs/steerline/roadmap-task-ids`，各 worktree 共用；脚本用 `git update-ref` 的旧值校验原子更新，竞争者读取新值后重试。即使分配后放弃任务，计数器仍前进，ID 不再发放。`task-ids/` 每 ID 一个文件，保存已分配的最小身份记录，避免不同 worktree 的新增任务修改同一清单文件。此机制保证**同一 Git 仓库的 worktree** 不重复分配；独立 clone 不共享本地 ref，应先同步已合入的身份文件并在同一分配仓库占号。若以后需要多 clone 同时分配，须改用远端原子计数器或统一分配服务，不能假设本地 ref 能跨 clone 仲裁。
 
-同一任务只有一个对外 task ID：本目录分配的非负整数也是以后原生 `Task.task_id` 使用的值，原生创建不得再为它另造一个对外任务号。中心可使用内部数据库键，并继续保存 Beads 等外部来源 ID，但它们不是第二个任务 ID。原生创建以固定输入携带已分配号码，中心核验唯一性，不以规划文档作为运行时状态权威；详见 [原生任务模型 Spec](../spec/task-core.spec.md) 和 [固定 DAG Spec](../spec/task-dag.spec.md)。旧历史没有规划号码时保留明确的 legacy 身份，不占用或重写非负整数规划号。
+同一任务只有一个对外 task ID：本目录分配的非负整数也是原生 `Task.task_id` 使用的值，原生创建不得再为它另造一个对外任务号。中心可使用内部数据库键；原生创建以固定输入携带已分配号码，中心核验唯一性，不以规划文档作为运行时状态权威。旧 Beads 历史不导入；详见 [原生任务模型 Spec](../spec/task-core.spec.md) 和 [固定 DAG Spec](../spec/task-dag.spec.md)。
 
 ## 与 Spec 的关系
 

@@ -8,7 +8,7 @@
 
 所有后端向一个会话读模型提供事实。Session 是持续 agent 会话；Turn 是一轮交互；AssistantMessage 有 commentary / final_answer / unknown 阶段；ExecutionResult 是 SteerLine 业务核验的结构化结果。轮次结束、消息完成、步骤结束、业务任务完成分别记录，不能互相代替。
 
-规范事件使用版本化 envelope，至少保留 project、run 或 workflow/execution、attempt、backend/protocol、外部 ref、source segment、session/turn/item/source event 身份、本地序号、原始顺序/修订号（若有）、发生与接收时间及来源证据。未知 ID 允许为空并声明身份质量，不用标题/文本/时间猜测。当前旧 Run 到 execution 的映射必须稳定并与 4A 共用。
+规范事件使用当前 envelope，至少保留 project、workflow/execution、attempt、backend/protocol、外部 ref、source segment、session/turn/item/source event 身份、本地序号、原始顺序/修订号（若有）、发生与接收时间及来源证据。未知 ID 允许为空并声明身份质量，不用标题/文本/时间猜测。身份与 4A 共用。
 
 有可靠 turn 边界但无原生 turn ID 时，可按已持久化来源起点/边界键派生；记录 native/derived 与派生规则版本，重启/分页必须得到同一个键。无法判定边界则使用执行级来源区段，不伪造轮次。item key 至少包含项目、execution、attempt、source segment、session、turn、item；不能跨轮复用仅 item_id 的索引。迟到旧 attempt 事件保留在原历史。
 
@@ -51,7 +51,7 @@ ReadConversation、ReadMessageBody、ReadRaw 共享取消和资源上限：事�
 
 最终回复完整持久保存，不沿用 activity Detail 的 4096 字符裁剪当作全文；受管正文引用包含版本、摘要、字节数、来源和 completeness（complete/partial/truncated/missing）。读取按正文 revision 分页，更新中不能把两个版本拼成同一正文。终态提交前收到的原始全文与规范正文应可比对；缺页、磁盘满、来源已截断明确报告，不能显示完整。外部绝对路径不得作为客户端任意文件读取入口，远端路径不由本机 os.ReadFile 访问。
 
-本阶段不自动删除规范事件/最终正文；来源历史淘汰仍保留中心已采集内容。磁盘配额/写失败保留旧 checkpoint 并发布可见采集错误，恢复后从原 cursor 对账；源已淘汰部分记 gap。后续若增加保留策略，须显式版本化并留下可读缺失标记。旧 activity/raw 以 legacy 模型读取，不能倒推不存在的 turn/phase，watch JSON/raw 接口保持兼容。
+本阶段不自动删除规范事件/最终正文；来源历史淘汰仍保留中心已采集内容。磁盘配额/写失败保留上次 checkpoint 并发布可见采集错误，恢复后从原 cursor 对账；源已淘汰部分记 gap。后续若增加保留策略，须留下可读缺失标记。不导入旧 activity 或维持旧 watch 协议格式。
 
 ## 验收
 
@@ -64,7 +64,7 @@ ReadConversation、ReadMessageBody、ReadRaw 共享取消和资源上限：事�
 | E-A5 | 内容/checkpoint 每个故障边界重启不丢已提交消息、不重复增量，Query 游标不能跨对象使用 |
 | E-A6 | source_changed、重复事件、历史淘汰、部分行/大单条记录有界且缺口可见；真实重复文字不误删 |
 | E-A7 | 超过 4096 字符及多页 Unicode final 可完整复原、摘要匹配；缺正文/磁盘满/版本变更不伪完整 |
-| E-A8 | 多 UI、Windows 服务窗口保持打开时 viewer 关闭重开、服务窗口关闭后重新启动及离线阅读均不竞争采集；服务停机期间的来源缺口与恢复对账准确，watch JSON/raw 与旧 activity 回归通过 |
+| E-A8 | 多 UI、Windows 服务窗口保持打开时 viewer 关闭重开、服务窗口关闭后重新启动及离线阅读均不竞争采集；服务停机期间的来源缺口与恢复对账准确 |
 | E-A9 | local 与 Orca 各有真实多轮样本及准确能力报告；精确能力缺失时标未验收并给出上游依赖，禁止静默降级通过 |
 
 本阶段不新增终端自由输入和自动宿主授权；不把会话输出当作业务恢复日志的替代。
