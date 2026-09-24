@@ -4,7 +4,7 @@
 
 状态：待实施。配套 [Plan](03-remote-execution-and-viewer.plan.md)。日期：2026-09-23。
 
-开发前置：[Spec 01](01-orca-remote-protocol.md) 的真实远端证据与明确限制；[Spec 02](02-execution-model-and-adapter.md) 的模型、存储、迁移和执行接口。可先开发受限的远程适配器；生产启用仍须满足本 Spec 的剩余门槛。依据：[执行架构共同约束](execution-architecture.spec.md)。
+开发前置：[Spec 01](01-orca-remote-protocol.md) 的真实远端证据与明确限制；[Spec 02](02-execution-model-and-adapter.md) 的模型、存储和执行接口。可先开发受限的远程适配器；生产启用仍须满足本 Spec 的剩余门槛。依据：[执行架构共同约束](execution-architecture.spec.md)。
 
 ## 1. 目标与范围
 
@@ -20,7 +20,7 @@ Windows 中心服务从 [PR 3 固定入口](pr-03-service-lifecycle.spec.md) 由
 
 首版生产远程配置固定 `remote_cancel_available=false`。预检和 viewer 必须显示远程取消不可用；不能展示可操作的取消按钮、自动调用 Orca worker-stop，或在失败后按远端 terminal handle 兜底关闭。用户需要中止活跃远端 worker 时，中心保留身份与资源占用，提示人工处理。正常结算后的 release 不受此限制。
 
-仅声明已实测的 Windows Orca 1.4.209 中心/远端组合；其他版本在预检中明确拒绝，不能以旧版兼容推测放行。首版适配器对结构化消息采用不高于已验证 8 KiB 的序列化大小上限，超限在发送前拒绝。宿主权限提示不自动回答，无法可靠分类时显示待人工核实，不伪造业务 ask 或执行成功。
+仅声明已实测的 Windows Orca 1.4.209 中心/远端组合；其他版本在预检中明确拒绝。首版适配器对结构化消息采用不高于已验证 8 KiB 的序列化大小上限，超限在发送前拒绝。宿主权限提示不自动回答，无法可靠分类时显示待人工核实，不伪造业务 ask 或执行成功。
 
 配置目标是远端时，fallback 固定为 fail。任何创建前后的错误都不得改在中心执行。能力缺失、连接身份失效、仓库不可访问等问题在任务领取前尽可能发现；领取后发生的问题必须保留任务与执行记录。
 

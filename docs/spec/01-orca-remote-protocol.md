@@ -20,7 +20,7 @@
 - 使用显式 environment ID、远端 repo selector 和 agent 配置。凭据由连接配置提供，不能写入任务提示、协议样本或结果。
 - 没有真实远端时，只能交付探测工具及协议草案，能力报告标记 `not_tested`；不能把 Spec 标为验收通过。
 - 能力结论采用 `verified / unsupported / not_tested`，并记录证据。必需能力存在后两种结果时，Spec 03 的对应生产路径不得启用。
-- 能力按中心与远端的版本组合判断；升级后至少重跑派发、决策、结果和恢复兼容性探测。未识别字段保留或忽略，不能当作已支持某项能力。
+- 只支持已实测的中心与远端版本组合；版本变化后重新验证派发、决策、结果和恢复能力，未经验证的组合预检拒绝。不建设旧版或混合版本兼容层。
 
 ## 3. 职责和寻址
 
@@ -60,7 +60,7 @@ SteerLine 持有业务任务、执行身份、决策和完成规则；Orca 持�
 
 ### 5.1 身份与请求
 
-每个请求绑定 `project_id、task_id、workflow_run_id、execution_id、step_id、attempt_id、operation_id`。已规划任务的 task_id 沿用预分配数字，旧历史使用明确的 legacy 身份；其他执行/请求 ID 由中心生成，并在外部调用前持久化。Orca 返回的 home runtime/Run/Task/Dispatch、execution host 和 worktree 身份另行记录，不与业务 ID 混用。
+每个请求绑定 `project_id、task_id、workflow_run_id、execution_id、step_id、attempt_id、operation_id`。task_id 沿用规划时预分配的数字；其他执行/请求 ID 由中心生成，并在外部调用前持久化。Orca 返回的 home runtime/Run/Task/Dispatch、execution host 和 worktree 身份另行记录，不与业务 ID 混用。
 
 `operation_id` 是中心去重键；只有经验证的 Orca 请求映射才具有远端重放语义。不得假设将该值放进 prompt 就能防止重复启动。
 
@@ -132,11 +132,11 @@ Orca 自身的登录、信任目录和权限提示可能只有 agentWait 观察�
 | P07 | 中心进程在派发、收消息、回答期间退出；重启后可恢复或明确人工核实，不静默重发 |
 | P08 | request ID 已取得和未取得两种响应丢失情况分别按恢复规则处理 |
 | P09 | 资源释放只作用于已结算目标；worktree 和所需报告保留，不清理其他终端 |
-| P10 | 旧版本缺失字段、未知 payload、超限消息、权限提示均有明确失败/降级，不伪造成功 |
+| P10 | 当前支持版本的载荷边界、超限消息与宿主权限提示有明确拒绝或人工处理路径，不伪造成功 |
 | P11 | 直接脚本执行的输入、结果、退出和重连行为均有实测结论；失败项明确列为后续门槛 |
 | P12 | 同一 worktree 先后执行至少两个受监管步骤，前一步释放不删除代码，下一步有新身份且无法误接旧结果 |
 | P13 | 验证脚本返回非零、检查回执缺失或 commit 不符时，中心可识别未通过，不能仅凭 agent 摘要认定通过 |
 
-探测工具、[真实远端能力报告](orca-probe/remote-capability-report-2026-09-23.json)、[字段映射](orca-probe/field-mapping.md)及脱敏样本位于 [Orca probe evidence](orca-probe/README.md)。本轮中心与远端 Orca 均为 1.4.209，远端 Windows 上使用 Codex CLI 0.156.1 和独立测试仓库。P01、P02、P03、P04、P05、P06、P07、P08、P09、P11、P12 已获得对应正向证据；P13 的非零脚本退出路径获得证据。显式 UI 断开/重连会退役旧连接，不能作为 P06 测试。独立的 30 秒传输阻断使原 Dispatch 从 `live` 变为 `unverifiable/host_unavailable`，恢复后同一执行端确认其为 `live`，原问题 Delivery 重放且无第二个 worker。中心 Orca 在消息、回答及一次进行中的 worker-start 附近退出后，原 Run/Task/Dispatch 均可查；进行中请求保持 `pending`，精确重试指向原 Dispatch，执行端核验后原 worker 完成并释放。调用者丢失完整回应而无 request ID 时，也能通过只读 Run/Task 对账找到唯一原尝试，没有盲目重发。无 agent 直接终端脚本可回传退出码，但退出后读不到先前 stdout；使用远端文件回执和重启后的新无 agent 终端可恢复结构化结果，后续适配器必须实现这一组合路径。同版本跨机结构化消息已实测到 30 KiB；旧版兼容已按用户要求放弃，真实超限/权限提示仍未实测，后续适配器需保守限制和人工提示。P13 的纯校验器已实现，但尚未接入中心调度。原逻辑协议样本仍是合成示例，不能替代真实 Orca CLI 样本。
+探测工具、[真实远端能力报告](orca-probe/remote-capability-report-2026-09-23.json)、[字段映射](orca-probe/field-mapping.md)及脱敏样本位于 [Orca probe evidence](orca-probe/README.md)。本轮中心与远端 Orca 均为 1.4.209，远端 Windows 上使用 Codex CLI 0.156.1 和独立测试仓库。P01、P02、P03、P04、P05、P06、P07、P08、P09、P11、P12 已获得对应正向证据；P13 的非零脚本退出路径获得证据。显式 UI 断开/重连会退役旧连接，不能作为 P06 测试。独立的 30 秒传输阻断使原 Dispatch 从 `live` 变为 `unverifiable/host_unavailable`，恢复后同一执行端确认其为 `live`，原问题 Delivery 重放且无第二个 worker。中心 Orca 在消息、回答及一次进行中的 worker-start 附近退出后，原 Run/Task/Dispatch 均可查；进行中请求保持 `pending`，精确重试指向原 Dispatch，执行端核验后原 worker 完成并释放。调用者丢失完整回应而无 request ID 时，也能通过只读 Run/Task 对账找到唯一原尝试，没有盲目重发。无 agent 直接终端脚本可回传退出码，但退出后读不到先前 stdout；使用远端文件回执和重启后的新无 agent 终端可恢复结构化结果，后续适配器必须实现这一组合路径。同版本跨机结构化消息已实测到 30 KiB；首版仅支持已实测版本组合，真实超限/权限提示仍未实测，后续适配器需保守限制和人工提示。P13 的纯校验器已实现，但尚未接入中心调度。原逻辑协议样本仍是合成示例，不能替代真实 Orca CLI 样本。
 
-用户明确暂缓旧版 Orca 兼容测试；本报告不声明混合版本支持，P10 仍为 `not_tested`。为 P13 新增了独立的 `verify` 步骤结果校验函数及缺回执、非零退出、commit 不符等样本测试；它尚未接入中心调度流程，因此 P13 的端到端门槛仍为 `not_tested`。后续又验证了真实 commit 在同一远端 worktree 的跨步骤保留，以及远端 runtime 重启后的原 Dispatch 恢复；同时发现断线 `worker-stop` 可留下仍然存活的 `stop_unknown` worker，Orca 随后拒绝精确停止与跟进消息。用户据此决定将**生产远程取消标记为不可用**：远程适配器不能自动调用 Stop 或按终端句柄兜底关闭；运行中的远端 worker 需要取消时，保持已知身份并要求人工处理。已结算目标的正常 release 仍可用。Spec 03 可以实现这一受限路径，但启用前仍须通过其余必需门槛。[剩余故障探测](orca-probe/remaining-gates.md)已列出；当前 Spec 01 尚未验收通过。
+本报告仅声明已实测的同版本组合；载荷超限和权限提示尚缺证据，P10 仍为 `not_tested`。为 P13 新增了独立的 `verify` 步骤结果校验函数及缺回执、非零退出、commit 不符等样本测试；它尚未接入中心调度流程，因此 P13 的端到端门槛仍为 `not_tested`。后续又验证了真实 commit 在同一远端 worktree 的跨步骤保留，以及远端 runtime 重启后的原 Dispatch 恢复；同时发现断线 `worker-stop` 可留下仍然存活的 `stop_unknown` worker，Orca 随后拒绝精确停止与跟进消息。用户据此决定将**生产远程取消标记为不可用**：远程适配器不能自动调用 Stop 或按终端句柄兜底关闭；运行中的远端 worker 需要取消时，保持已知身份并要求人工处理。已结算目标的正常 release 仍可用。Spec 03 可以实现这一受限路径，但启用前仍须通过其余必需门槛。[剩余故障探测](orca-probe/remaining-gates.md)已列出；当前 Spec 01 尚未验收通过。
