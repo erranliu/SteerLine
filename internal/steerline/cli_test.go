@@ -1,6 +1,9 @@
 package steerline
 
 import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"os"
 	"os/exec"
@@ -21,10 +24,12 @@ func TestNativeCLIStartSecondInstanceAndStop(t *testing.T) {
 	configPath := filepath.Join(f.c.RunDir, "config.json")
 	data, _ := json.Marshal(f.c)
 	require(t, os.WriteFile(configPath, data, 0600))
+	digest := sha256.Sum256(data)
+	f.c.configDigest = hex.EncodeToString(digest[:])
 	log, e := os.Create(filepath.Join(f.c.RunDir, "cli.log"))
 	require(t, e)
 	defer log.Close()
-	cmd := exec.Command(exe, "run", "-config", configPath)
+	cmd := exec.Command(exe, "run", "-config", configPath, "-console", "json")
 	cmd.Stdout = log
 	cmd.Stderr = log
 	require(t, cmd.Start())
@@ -54,7 +59,9 @@ func TestNativeCLIStartSecondInstanceAndStop(t *testing.T) {
 			break
 		}
 		if time.Now().After(readyDeadline) {
-			t.Fatal("CLI runtime did not become control-ready")
+			connection := ConnectService(context.Background(), f.c)
+			b, _ := os.ReadFile(log.Name())
+			t.Fatalf("CLI runtime did not become control-ready: state=%s diagnostic=%q runtime=%+v log=%s", connection.State, connection.Diagnostic, connection.Snapshot.Runtime, b)
 		}
 		time.Sleep(25 * time.Millisecond)
 	}
@@ -133,6 +140,17 @@ func TestNativeCLIStartSecondInstanceAndStop(t *testing.T) {
 		require(t, e)
 	case <-time.After(10 * time.Second):
 		t.Fatal("control stop did not exit the native CLI")
+	}
+	jsonOutput, e := os.ReadFile(log.Name())
+	require(t, e)
+	for _, line := range strings.Split(strings.TrimSpace(string(jsonOutput)), "\n") {
+		if !json.Valid([]byte(line)) {
+			t.Fatalf("JSON console emitted a non-JSON line: %q", line)
+		}
+		event, err := DecodeActivityLine([]byte(line))
+		if err != nil || event.V != ActivityVersion || event.TS.IsZero() {
+			t.Fatalf("JSON console emitted an invalid activity record: %s (%v)", line, err)
+		}
 	}
 	secondCmd := exec.Command(exe, "run", "-config", configPath)
 	secondCmd.Stdout, secondCmd.Stderr = log, log

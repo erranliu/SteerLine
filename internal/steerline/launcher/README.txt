@@ -6,10 +6,14 @@ Double-click entries
   projects.bat   pick a project and an action (viewer / run / stop / home)
   viewer.bat     viewer for one project (default etc\merge-h-308-code.json)
   run.bat        run one project's scheduler in this window (Ctrl+C to stop)
+  service-window.bat  start manual service in a visible window; keep it open
   stop.bat       ask one project's service to stop
   home.bat       print the resolved paths
 
 Any launcher accepts a config path, e.g.  viewer.bat etc\other-repo.json
+Use service-window.bat for the console upgrade's manual service mode.
+The service window may be minimized. Closing it ends the service; Ctrl+C
+requests a normal shutdown. The original run.bat retains automatic dispatch.
 
 Multiple projects
 -----------------

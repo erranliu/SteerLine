@@ -10,13 +10,13 @@
 | --- | --- | --- | --- |
 | 1 | 统一观察层与读取一致性 | [Spec](pr-01-observation.spec.md) | [Plan](pr-01-observation.plan.md) |
 | 2 | 服务控制协议与定向执行 | [Spec](pr-02-control.spec.md) | [Plan](pr-02-control.plan.md) |
-| 3 | 后台服务生命周期 | [Spec](pr-03-service-lifecycle.spec.md) | [Plan](pr-03-service-lifecycle.plan.md) |
+| 3 | 服务窗口生命周期与连接 | [Spec](pr-03-service-lifecycle.spec.md) | [Plan](pr-03-service-lifecycle.plan.md) |
 | 4A | 长期双执行后端契约 | [Spec](pr-04a-execution-backends.spec.md) | [Plan](pr-04a-execution-backends.plan.md) |
 | 4B | 统一会话事件与完整回复 | [Spec](pr-04b-conversation-events.spec.md) | [Plan](pr-04b-conversation-events.plan.md) |
 | 4C | 执行控制台与轮次折叠 | [Spec](pr-04-console.spec.md) | [Plan](pr-04-console.plan.md) |
 | 5 | 人工决策与恢复闭环 | [Spec](pr-05-intervention.spec.md) | [Plan](pr-05-intervention.plan.md) |
 
-共七个串行交付阶段，阶段名不是 GitHub PR 编号。PR 3 内容与验收不变；原 PR4 路径保留为 4C。架构衔接见 [共同约束 Spec](execution-architecture.spec.md) 和各阶段 Spec。本次文档更新不启动实现，定时协调保持暂停。
+共七个串行交付阶段，阶段名不是 GitHub PR 编号。PR 3 已调整为 Windows 服务窗口方案；原 PR4 路径保留为 4C。架构衔接见 [共同约束 Spec](execution-architecture.spec.md) 和各阶段 Spec。后续阶段须等 PR 3 验收与合并。
 
 ## 中心状态机与远程执行
 

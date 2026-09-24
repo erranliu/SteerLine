@@ -2,6 +2,8 @@ package steerline
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -33,6 +35,9 @@ type fakeDB struct {
 }
 
 func TestMain(m *testing.M) {
+	if os.Getenv("STEERLINE_LIFECYCLE_EXIT_EARLY") == "1" {
+		os.Exit(23)
+	}
 	for i, a := range os.Args {
 		if a == "--fake" {
 			os.Exit(fakeMain(os.Args[i+1:]))
@@ -67,6 +72,27 @@ func arg(args []string, key string) string {
 }
 func fakeMain(args []string) int {
 	mode := args[0]
+	if mode == "git-proxy" {
+		gitArgs := append([]string(nil), args[2:]...)
+		if len(gitArgs) > 0 && gitArgs[0] == "fetch" {
+			for i := range gitArgs {
+				if gitArgs[i] == "web" {
+					gitArgs[i] = "origin"
+					break
+				}
+			}
+		}
+		cmd := exec.Command(args[1], gitArgs...)
+		cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+		if err := cmd.Run(); err != nil {
+			if exitErr, ok := err.(*exec.ExitError); ok {
+				return exitErr.ExitCode()
+			}
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+		return 0
+	}
 	if mode == "sleep" {
 		time.Sleep(time.Hour)
 		return 0
@@ -398,6 +424,9 @@ func newFixture(t *testing.T, tasks ...Task) *fixture {
 		}
 	}
 	f.c = Config{Repository: repo, Remote: "origin", Branch: "main", RunDir: runs, RuntimeFile: "runtime.json", Claimant: "test-claimant", Git: Command{Executable: git}, BD: Command{Executable: exe, Args: []string{"--fake", "bd", f.db}}, Codex: Command{Executable: exe, Args: []string{"--fake", "codex", f.db}}, StartSkill: Skill{Path: "start.md", Invocation: "Read start.md"}, FinishSkill: Skill{Path: "finish.md", Invocation: "Read finish.md"}, ExecutableTypes: []string{"task", "bug", "feature", "chore"}, TaskPoll: "100ms", PRPoll: "100ms", Heartbeat: "20ms", CommandTimeout: "5s", ShutdownGrace: "80ms", Sandbox: "workspace-write", PR: PRConfig{Kind: "gitea", BaseURL: f.server.URL, Repository: "owner/repo"}, identity: canonical(filepath.Join(repo, ".git"))}
+	configBytes, _ := json.Marshal(f.c)
+	configDigest := sha256.Sum256(configBytes)
+	f.c.configDigest = hex.EncodeToString(configDigest[:])
 	if tasks == nil {
 		tasks = []Task{}
 	}

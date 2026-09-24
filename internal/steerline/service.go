@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -24,6 +25,8 @@ type Service struct {
 	activities map[string]*ActivityWriter
 	// Console selects service-side rendering: "", "off", "pretty", "summary" or "json".
 	Console           string
+	consoleOut        io.Writer
+	consoleSequence   uint64
 	versionPrevious   *Runtime
 	controlSeen       map[string]string
 	stopControl       *ControlRequest
@@ -34,6 +37,7 @@ type Service struct {
 	candidateSnapshot *TaskSnapshot
 	explicitDispatch  bool
 	controlFault      func(string)
+	startupID         string
 }
 
 func NewService(c Config) (*Service, error) {
@@ -342,18 +346,29 @@ func (s *Service) emitConsole(ev ActivityEvent) {
 	if s.Console == "" || s.Console == "off" {
 		return
 	}
+	out := s.consoleOut
+	if out == nil {
+		out = os.Stdout
+	}
 	switch s.Console {
 	case "json":
+		// The console combines service events with several per-run journals.
+		// Give that output stream its own sequence without changing the journals.
+		s.consoleSequence++
+		ev.V, ev.Seq = ActivityVersion, s.consoleSequence
+		if ev.TS.IsZero() {
+			ev.TS = now()
+		}
 		b, e := json.Marshal(ev)
 		if e == nil {
-			fmt.Fprintln(os.Stdout, string(b))
+			fmt.Fprintln(out, string(b))
 		}
 	case "summary":
 		if ev.Source == "steer" {
-			fmt.Fprintln(os.Stdout, RenderActivity(ev, RenderOptions{Color: false}))
+			fmt.Fprintln(out, RenderActivity(ev, RenderOptions{Color: false}))
 		}
 	default:
-		fmt.Fprintln(os.Stdout, RenderActivity(ev, RenderOptions{Color: stdoutColor()}))
+		fmt.Fprintln(out, RenderActivity(ev, RenderOptions{Color: stdoutColor()}))
 	}
 }
 func (s *Service) find(id string) *Run {
@@ -1060,7 +1075,13 @@ func (s *Service) run(ctx context.Context, retryRunID, dispatchMode string) (ret
 			s.State.Service.Status = "running"
 			s.State.Service.Error = nil
 		}
-		return s.save()
+		if e := s.save(); e != nil {
+			return e
+		}
+		if s.State.Service.Ready {
+			return s.publishStartupReady()
+		}
+		return nil
 	}
 	if retryRunID == "" {
 		for s.State.Control.Operation != nil {
@@ -1098,11 +1119,18 @@ func (s *Service) run(ctx context.Context, retryRunID, dispatchMode string) (ret
 				return saveErr
 			}
 		}
-		s.State.Service.Ready = candidateErr == nil && ctx.Err() == nil
+		s.State.Service.Ready = false
 		if e := s.save(); e != nil {
 			return e
 		}
 		if e := s.pollControl(ctx, cancel); e != nil {
+			return e
+		}
+		s.State.Service.Ready = candidateErr == nil && ctx.Err() == nil && s.State.Control.Operation == nil
+		if e := s.save(); e != nil {
+			return e
+		}
+		if e := s.publishStartupReady(); e != nil {
 			return e
 		}
 		if s.State.Control.Operation == nil {

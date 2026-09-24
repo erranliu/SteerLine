@@ -17,6 +17,10 @@ Copy-Item .\examples\config.json .\steerline.local.json
 .\bin\steerline.exe run -config .\steerline.local.json
 # 手动派发：服务启动并刷新候选，但不会自动领取 ready 任务
 .\bin\steerline.exe run -config .\steerline.local.json -dispatch manual
+# 安装当前构建与双击入口；Windows 用户独立打开可见服务窗口（manual）
+.\bin\steerline.exe install
+.\bin\steerline.exe launchers
+& "C:\SteerlineRuntime\service-window.bat" (Resolve-Path .\steerline.local.json).Path
 ```
 
 ### 机器级目录（跨 worktree 稳定）
@@ -111,6 +115,17 @@ bd 1.1.2 在领取冲突时可能退出 0 却不返回领取 JSON，因此会同
 .\bin\steerline.exe stop -config .\steerline.local.json
 ```
 
+Windows 的 `service-window.bat` 从稳定安装目录运行 `bin\steerline.exe run -dispatch manual -console summary -service-window`。服务窗口可最小化，需在服务运行期间保持打开；窗口展示启动、ready、worker 与错误，状态摘要也写入 `run_dir\service\startups\<startup_id>\service.log`。服务进程生成 startup_id；只有匹配的 OS 身份和 `ready=true` 快照才算已连接。启动失败的原因写入同目录的 `startup.json` 与日志。旧 `run.bat` 和 CLI `run` 仍默认 auto。
+
+Windows 的 `start-service -config ...` 在离线时返回 `window-required`、固定 launcher 和配置绝对路径；它不会从当前 UI/CLI 的 Job 中启动子服务。已有兼容服务时连接原实例，保留其派发与暂停状态。Linux 仍使用独立进程启动路径。
+
+```powershell
+# 明确停止服务，等待 stop 回执、原服务进程退出和仓库/run_dir 锁释放
+.\bin\steerline.exe stop-service -config .\steerline.local.json
+```
+
+关闭 `watch` 或独立控制台不会发送停止请求；只要服务窗口仍开着，服务和 worker 继续运行。Ctrl+C 或 `stop-service` 请求正常退出；关闭服务窗口的 X 会终止本次服务，重新打开固定入口才会重启。连接会分别报告心跳过期、ready=false、PID 已复用、进程访问受限、配置摘要变化和协议不兼容，不会将未知进程当作已退出。
+
 `run` 每次启动默认 `-dispatch auto`，保持既有自动调度；`-dispatch manual` 会刷新候选并继续处理当前运行、决策和 PR，但不自动领取新任务。控制客户端读取 runtime v4 后发布带实例 ID 和控制版本的不可变请求，服务完成后写持久回执：
 
 ```powershell
@@ -125,8 +140,11 @@ bd 1.1.2 在领取冲突时可能退出 0 却不返回领取 JSON，因此会同
 .\bin\steerline.exe control -config .\steerline.local.json -action pause_dispatch -wait
 .\bin\steerline.exe control -config .\steerline.local.json -action resume_dispatch -wait
 
-# 以控制协议停服；steerline stop 仍保留 stop.json 兼容入口
+# 提交停服请求并等待控制回执（不等同于进程退出确认）
 .\bin\steerline.exe control -config .\steerline.local.json -action stop_service -wait
+
+# 一步提交并核验停服、原进程退出和两把服务锁释放
+.\bin\steerline.exe stop-service -config .\steerline.local.json
 
 # 用回执中的 request_id 再次查询原操作结果
 .\bin\steerline.exe control -config .\steerline.local.json -request-id <request-id>
@@ -233,6 +251,8 @@ go vet ./...
 ```
 
 测试使用原生替身命令和本地 HTTP Gitea 替身，不调用真实模型，不领取业务任务，不创建或合并业务 PR。覆盖空闲心跳、跨进程并发 JSON 读取、同仓库锁、领取冲突、单次执行、等待合并释放执行槽、合并结项、依赖释放、查询失败、错误关联、缺失/无效结果、重启防重、关闭重试、Beads 不可用、持久化失败及进程树退出。另有构建并启动真正 CLI 可执行文件、第二实例拒绝和 stop 正常退出的集成测试；临时仓库路径包含空格和中文。
+
+PR 3 的 Windows 服务窗口路径已在当前宿主使用临时仓库、假 Beads/worker 和独立可见 console 定向验证：manual/ready、显式 worker、独立客户端退出后重连、控制 stop、Ctrl+C、窗口 X 关闭后的进程/worker 退出与重新打开，以及两个窗口从零并发时的同配置/同仓库不同 run_dir 锁竞争。窗口模式不要求服务脱离祖先 Job；服务进程监测其 console 窗口，窗口消失时请求停服。合并主线后的全仓 `go test ./... -count=1 -timeout 10m`、`go vet ./...` 与 Linux amd64 交叉编译已通过；Linux 原生生命周期尚未实测。
 
 worktree 测试使用真实的临时 Git 仓库与本地 bare 远端，验证远端主线更新后新任务使用新提交、原 checkout 的分支/HEAD/文件保持不变、目录与分支冲突不覆盖、共享 Beads 身份错误或技能缺失时不启动、准备前后崩溃不重建不重跑，以及结构化结果不能改写工作环境事实。
 

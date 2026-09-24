@@ -12,8 +12,8 @@ import (
 var launcherFS embed.FS
 
 // InstallLaunchers writes the double-click entry points (projects/viewer/run/
-// stop/home + README) into STEERLINE_HOME. Templates are stored LF and written
-// CRLF so they behave as native .bat files.
+// service-window/stop/home + README) into STEERLINE_HOME. Templates are stored
+// LF and written CRLF so they behave as native .bat files.
 func InstallLaunchers() ([]string, error) {
 	dir := SteerlineHome()
 	if e := os.MkdirAll(dir, 0700); e != nil {

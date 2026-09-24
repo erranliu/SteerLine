@@ -78,6 +78,8 @@ steerline watch -config <config.json> [--run-id <id|task-id>] [--follow=true] [-
 
 `steerline run -console pretty|summary|json|off`。TTY 下默认 `pretty`；`summary` 只打生命周期；`json` 打稳定 schema；`off` 静默。控制台输出是**视图**，不是契约。
 
+`json` 模式的 stdout 只含 JSONL，不混入人类可读的启动提示。每行包含活动版本、时间和当前服务输出流内递增的 `seq`；此序号独立于各 run 的 `activity.jsonl`，不会改写日志中的序号。
+
 ## 示例
 
 codex 原始行 → activity：

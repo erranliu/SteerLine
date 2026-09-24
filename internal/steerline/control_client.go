@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -14,32 +15,40 @@ func ControlSnapshot(c Config) (*Runtime, error) {
 }
 
 func controlSnapshot(c Config, allowInitializing bool) (*Runtime, error) {
-	if err := c.ResolveIdentity(context.Background()); err != nil {
-		return nil, err
-	}
-	rt, err := LoadRuntime(filepath.Join(c.RunDir, c.RuntimeFile))
-	if err != nil {
-		return nil, err
-	}
-	if rt == nil {
+	connection := ConnectService(context.Background(), c)
+	if connection.Snapshot.Runtime == nil {
+		if connection.Diagnostic != "" {
+			return nil, errors.New(connection.Diagnostic)
+		}
 		return nil, errors.New("no runtime snapshot")
 	}
-	if rt.SchemaVersion != 4 {
-		return nil, errors.New("service runtime does not support control protocol v1")
+	if allowInitializing {
+		if !connection.CanStop {
+			return nil, fmt.Errorf("service cannot accept an explicit stop in state %q: %s", connection.State, connection.Diagnostic)
+		}
+	} else if !connection.CanControl {
+		return nil, fmt.Errorf("service is not ready for control in state %q: %s", connection.State, connection.Diagnostic)
 	}
-	if canonical(rt.Repository.Identity) != canonical(c.identity) {
-		return nil, errors.New("runtime repository identity does not match configuration")
-	}
-	if rt.Repository.Remote != c.Remote || rt.Repository.Branch != c.Branch {
-		return nil, errors.New("runtime remote/branch does not match configuration")
-	}
-	if (rt.Service.Status != "running" && rt.Service.Status != "error") || (!allowInitializing && !rt.Service.Ready) {
-		return nil, errors.New("service is not ready for control requests")
-	}
+	rt := connection.Snapshot.Runtime
 	if rt.Service.ControlProtocol != ControlProtocolVersion {
 		return nil, errors.New("service does not support control protocol v1")
 	}
+	if allowInitializing && !serviceHasCapability(rt, "stop_service") {
+		return nil, errors.New("service does not advertise stop_service capability")
+	}
 	return rt, nil
+}
+
+func serviceHasCapability(rt *Runtime, action string) bool {
+	if rt == nil {
+		return false
+	}
+	for _, capability := range rt.Service.Capabilities {
+		if capability == action {
+			return true
+		}
+	}
+	return false
 }
 
 func ReadTaskSnapshot(c Config) (*TaskSnapshot, error) {
@@ -78,8 +87,17 @@ func SubmitControl(c Config, action string, payload any, requestedBy string) (Co
 	if err != nil {
 		return ControlRequest{}, err
 	}
+	return submitControlSnapshot(c, rt, action, payload, requestedBy)
+}
+
+// The caller has validated this snapshot. Keep its instance/revision unchanged:
+// a restart between observation and publication must reject, never retarget.
+func submitControlSnapshot(c Config, rt *Runtime, action string, payload any, requestedBy string) (ControlRequest, error) {
 	if !validControlAction(action) {
 		return ControlRequest{}, errors.New("unsupported control action")
+	}
+	if !serviceHasCapability(rt, action) {
+		return ControlRequest{}, fmt.Errorf("service does not advertise %s capability", action)
 	}
 	var raw json.RawMessage
 	if payload != nil {
@@ -94,13 +112,13 @@ func SubmitControl(c Config, action string, payload any, requestedBy string) (Co
 	}
 	created := now()
 	req := ControlRequest{ProtocolVersion: ControlProtocolVersion, RequestID: newID(), RepositoryIdentity: rt.Repository.Identity, InstanceID: rt.Service.InstanceID, Action: action, Payload: raw, RequestedBy: requestedBy, CreatedAt: created, ExpiresAt: created.Add(2 * time.Minute)}
-	if _, err = decodeControlPayload(req); err != nil {
+	if _, err := decodeControlPayload(req); err != nil {
 		return ControlRequest{}, err
 	}
 	if action != "stop_service" {
 		req.ExpectedControlRevision = rt.Control.Revision
 	}
-	if err = publishControlRequest(c.RunDir, req); err != nil {
+	if err := publishControlRequest(c.RunDir, req); err != nil {
 		return ControlRequest{}, err
 	}
 	return req, nil
