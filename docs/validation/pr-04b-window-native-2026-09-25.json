@@ -1,0 +1,23 @@
+{
+  "backend": "local",
+  "captured_at": "2026-09-24T23:15:04.2669516Z",
+  "events_collected_while_viewer_closed": 4,
+  "full_message_bytes": 22000,
+  "full_message_sha256": "408560f18fe61fefbf760682a8cde6bd0b7e2e27586aefeba151acbfbb227b13",
+  "initial_events": 1,
+  "new_source_checkpoint_seq": 1,
+  "offline_query_retained_events": 4,
+  "platform": "windows/amd64",
+  "protocol": "local_process",
+  "restart_replayed_without_duplicate_events": true,
+  "service_identity_sha256": "51840f779bc81dd011cd7ae47a199bdcda2bfdd74fcd7b9c1715b00b6e3b1151",
+  "source_changed_gap_visible": true,
+  "source_changed_injected_after_stop": true,
+  "source_checkpoint_seq_before_close": 4,
+  "version": 1,
+  "viewer_reconnected_same_instance": true,
+  "visible_console": true,
+  "window_close_stopped_service_and_worker": true,
+  "worker_identity_sha256": "fb167aed3f2616394669680eb296596b577b35d20388a79596d3119290b7e5ff",
+  "worker_starts": 1
+}

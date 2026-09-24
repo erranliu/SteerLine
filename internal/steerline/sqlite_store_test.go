@@ -24,6 +24,47 @@ func openDomainTestStore(t *testing.T) *SQLiteStore {
 	return s
 }
 
+func TestConversationSchemaUpgradesCurrentCenterDatabase(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "steerline.db")
+	raw, err := sql.Open("sqlite", path)
+	require(t, err)
+	tx, err := raw.Begin()
+	require(t, err)
+	_, err = tx.Exec(`CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)`)
+	require(t, err)
+	for _, stmt := range append(append([]string{}, domainExecutionSchema...), nativeTaskSchema...) {
+		_, err = tx.Exec(stmt)
+		require(t, err)
+	}
+	_, err = tx.Exec(`INSERT INTO schema_migrations(version,applied_at) VALUES(3,?)`, time.Now().UTC().Format(time.RFC3339Nano))
+	require(t, err)
+	require(t, tx.Commit())
+	require(t, raw.Close())
+	require(t, validateExistingDatabase(path))
+	reader, err := OpenSQLiteReader(path)
+	require(t, err)
+	if err = validateDatabaseSchema(context.Background(), reader.db); err == nil {
+		t.Fatal("schema 3 was exposed as the current native task schema before upgrade")
+	}
+	require(t, reader.Close())
+	store, err := OpenSQLiteStore(path)
+	require(t, err)
+	defer store.Close()
+	var version int
+	require(t, store.db.QueryRow(`SELECT MAX(version) FROM schema_migrations`).Scan(&version))
+	if version != domainSchemaVersion {
+		t.Fatalf("conversation upgrade wrote schema %d", version)
+	}
+	for _, name := range []string{"conversation_events", "conversation_bodies", "conversation_source_cursors", "conversation_native_source_idx"} {
+		var count int
+		require(t, store.db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE name=?`, name).Scan(&count))
+		if count != 1 {
+			t.Fatalf("conversation upgrade lacks %s", name)
+		}
+	}
+	require(t, validateDatabaseSchema(context.Background(), store.db))
+}
+
 func TestSQLiteRejectsParallelExecutionsInOneWorkflow(t *testing.T) {
 	ctx := context.Background()
 	s := openDomainTestStore(t)

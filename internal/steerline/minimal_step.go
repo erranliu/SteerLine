@@ -481,7 +481,8 @@ func (s *Service) startMinimalStepWorker(ctx context.Context, task Task, run *Ru
 		args = append(args, "--profile", workConfig.Profile)
 	}
 	args = append(args, "-")
-	return SpawnerFor(workConfig).Start(ctx, SpawnSpec{RunID: run.RunID, AttemptID: attempt.AttemptID, Dir: workConfig.Repository, EventsPath: events, StderrPath: stderr, Command: Command{Executable: workConfig.Codex.Executable, Args: args}, Stdin: strings.NewReader(string(prompt)), Env: mergeStepEnv(env, contract.Environment), Timeout: contract.Timeout})
+	spec := SpawnSpec{RunID: run.RunID, AttemptID: attempt.AttemptID, ProjectID: input.ProjectIdentity, WorkflowID: input.WorkflowRunID, ExecutionID: input.ExecutionID, Agent: workConfig.agentName(), TargetID: run.Target.ID, ConversationJSONL: true, ConversationReader: codexReaderCommand(workConfig), Dir: workConfig.Repository, EventsPath: events, StderrPath: stderr, Command: Command{Executable: workConfig.Codex.Executable, Args: args}, Stdin: strings.NewReader(string(prompt)), Env: mergeStepEnv(env, contract.Environment), Timeout: contract.Timeout}
+	return SpawnerFor(workConfig).Start(ctx, spec)
 }
 
 func mergeStepEnv(base, extra map[string]string) map[string]string {
@@ -661,6 +662,9 @@ func (s *Service) finishMinimalStep(exitErr error) error {
 	}
 	if envelope.ProjectIdentity != s.Config.identity || envelope.TaskID != run.DomainTaskID || envelope.WorkflowRunID != run.RunID || envelope.ExecutionID != execution.ExecutionID || envelope.AttemptID != attempt.AttemptID || envelope.Result.StepID != attempt.StepID {
 		return s.failMinimalStep(run, workflow, execution, attempt, errors.New("step result identity does not match the dispatched attempt"), attempt.StepID == "publish_pr")
+	}
+	if persistErr := s.recordMinimalExecutionResult(run, envelope, deref(run.StepResultPath)); persistErr != nil {
+		s.setError(fmt.Errorf("structured step result conversation persistence failed: %w", persistErr))
 	}
 	for _, old := range s.State.Attempts {
 		if old.ExecutionID == attempt.ExecutionID && old.ResultID == envelope.Result.ResultID && old.AttemptID != attempt.AttemptID {

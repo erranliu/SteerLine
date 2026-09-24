@@ -12,6 +12,8 @@
 - **追加、不截断**：worker 退出后 writer 不关闭，重启后按需重开并续写；`seq` 从文件里已存在的最大值继续，末尾半行会在重开时修复。
 - **每行 flush**，读者可近实时跟随。
 
+PR 4B 增加了单独的 `ConversationEvent` 读模型，保存在当前 `steerline.db` 中，完整消息正文与 raw 行按摘要/修订引用读取。`activity.jsonl` 继续服务于人类活动视图，其 4096 字符 detail 上限不作为会话正文上限。两者不互相导入或重建。
+
 ## 记录 schema（v1）
 
 每行一个 JSON 对象：

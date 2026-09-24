@@ -1,0 +1,16 @@
+{
+  "backend": "orca",
+  "native_session_matches_prepared_binding": true,
+  "version": 1,
+  "commentary_messages": 2,
+  "final_messages": 2,
+  "protocol": "orca_terminal_v2",
+  "completed_turns": 2,
+  "launcher_sha256": "89756e204adcb22bf3ffe676d75b08f295b1498e5607e225f4751fd523311af5",
+  "captured_at": "2026-09-24T22:05:59.4539746Z",
+  "orca_codex_home_preserved": true,
+  "codex_version": "0.156.1",
+  "orca_version": "1.4.209",
+  "note": "The first read-only shell probe was blocked and then explicitly steered to finish; this evidence certifies launcher/session/phase binding, not shell tool success.",
+  "launcher": "steerline codex-session-launch"
+}

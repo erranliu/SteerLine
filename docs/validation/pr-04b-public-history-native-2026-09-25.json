@@ -1,0 +1,189 @@
+{
+  "version": 1,
+  "codex_version": "0.156.1",
+  "orca_version": "1.4.209",
+  "capture": "public thread/read with includeTurns; production collector uses bounded thread/turns/list",
+  "redactions": [
+    "session, turn and item identifiers are consistently pseudonymized",
+    "local path prefixes are redacted",
+    "reasoning item contents and unrelated metadata are omitted"
+  ],
+  "samples": [
+    {
+      "backend": "local",
+      "protocol": "local_process",
+      "source": "codex-app-server",
+      "thread": {
+        "id": "local-session",
+        "cwd": "C:/native-probe/local",
+        "turns": [
+          {
+            "id": "local-turn-1",
+            "status": "completed",
+            "itemsView": "full",
+            "startedAt": 1790284913,
+            "completedAt": 1790284926,
+            "durationMs": 12539,
+            "error": null,
+            "items": [
+              {
+                "id": "local-item-1",
+                "type": "userMessage",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Read probe.txt with a read-only command. Reply with its exact contents in one short sentence. Do not modify files.",
+                    "text_elements": []
+                  }
+                ]
+              },
+              {
+                "id": "local-item-2",
+                "type": "agentMessage",
+                "phase": "commentary",
+                "text": "I’ll read `probe.txt` with a read-only command.\n"
+              },
+              {
+                "id": "local-item-3",
+                "type": "agentMessage",
+                "phase": "final_answer",
+                "text": "I couldn’t read `probe.txt` because the read-only command was blocked by policy; no files were modified."
+              }
+            ]
+          },
+          {
+            "id": "local-turn-2",
+            "status": "completed",
+            "itemsView": "full",
+            "startedAt": 1790285017,
+            "completedAt": 1790285025,
+            "durationMs": 7733,
+            "error": null,
+            "items": [
+              {
+                "id": "local-item-4",
+                "type": "userMessage",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Answer with this exact sentence: The second turn is complete.",
+                    "text_elements": []
+                  }
+                ]
+              },
+              {
+                "id": "local-item-5",
+                "type": "agentMessage",
+                "phase": "final_answer",
+                "text": "The second turn is complete."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "backend": "orca",
+      "protocol": "orca_terminal_v2",
+      "source": "codex-app-server",
+      "thread": {
+        "id": "orca-session",
+        "cwd": "C:/native-probe/orca",
+        "turns": [
+          {
+            "id": "orca-turn-1",
+            "status": "completed",
+            "itemsView": "full",
+            "startedAt": 1790286266,
+            "completedAt": 1790286286,
+            "durationMs": 20032,
+            "error": null,
+            "items": [
+              {
+                "id": "orca-item-1",
+                "type": "userMessage",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Read probe.txt and state the marker. Do not modify files.",
+                    "text_elements": []
+                  }
+                ]
+              },
+              {
+                "id": "orca-item-2",
+                "type": "reasoning"
+              },
+              {
+                "id": "orca-item-3",
+                "type": "agentMessage",
+                "phase": "commentary",
+                "text": "I’ll read `probe.txt` and report its marker without changing any files."
+              },
+              {
+                "id": "orca-item-4",
+                "type": "commandExecution",
+                "status": "completed",
+                "aggregatedOutput": "PR04B_NATIVE_PROBE_ALPHA\r\n",
+                "command": "\"C:\\\\Windows\\\\System32\\\\WindowsPowerShell\\\\v1.0\\\\powershell.exe\" -Command \"Get-Content -Raw -LiteralPath 'probe.txt'\"",
+                "exitCode": 0
+              },
+              {
+                "id": "orca-item-5",
+                "type": "agentMessage",
+                "phase": "final_answer",
+                "text": "The marker is `PR04B_NATIVE_PROBE_ALPHA`."
+              }
+            ]
+          },
+          {
+            "id": "orca-turn-2",
+            "status": "completed",
+            "itemsView": "full",
+            "startedAt": 1790286300,
+            "completedAt": 1790286315,
+            "durationMs": 15017,
+            "error": null,
+            "items": [
+              {
+                "id": "orca-item-6",
+                "type": "userMessage",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "For the second turn, read probe.txt again and answer with its marker plus the words second turn complete. Do not modify files.",
+                    "text_elements": []
+                  }
+                ]
+              },
+              {
+                "id": "orca-item-7",
+                "type": "reasoning"
+              },
+              {
+                "id": "orca-item-8",
+                "type": "agentMessage",
+                "phase": "commentary",
+                "text": "I’ll reread `probe.txt` and report the marker with the requested words."
+              },
+              {
+                "id": "orca-item-9",
+                "type": "commandExecution",
+                "status": "completed",
+                "aggregatedOutput": "PR04B_NATIVE_PROBE_ALPHA\r\n",
+                "command": "\"C:\\\\Windows\\\\System32\\\\WindowsPowerShell\\\\v1.0\\\\powershell.exe\" -Command \"Get-Content -Raw -LiteralPath 'probe.txt'\"",
+                "exitCode": 0
+              },
+              {
+                "id": "orca-item-10",
+                "type": "agentMessage",
+                "phase": "final_answer",
+                "text": "PR04B_NATIVE_PROBE_ALPHA — second turn complete."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -87,7 +87,7 @@ func validateExistingDatabase(databasePath string) error {
 		return nativeErr("unsupported_schema", fmt.Sprintf("cannot inspect existing SQLite state without mutation: %v", err))
 	}
 	defer reader.Close()
-	return validateDatabaseSchema(context.Background(), reader.db)
+	return validateDatabaseSchemaVersion(context.Background(), reader.db, true)
 }
 
 type schemaQuery interface {
@@ -97,15 +97,23 @@ type schemaQuery interface {
 
 // Check definitions as well as the version stamp before writing existing state.
 func validateDatabaseSchema(ctx context.Context, db schemaQuery) error {
+	return validateDatabaseSchemaVersion(ctx, db, false)
+}
+
+func validateDatabaseSchemaVersion(ctx context.Context, db schemaQuery, allowCurrentUpgrade bool) error {
 	var version int
 	if err := db.QueryRowContext(ctx, `SELECT COALESCE(MAX(version),0) FROM schema_migrations`).Scan(&version); err != nil {
 		return nativeErr("unsupported_schema", "existing SQLite database has an unknown schema; preserve it for manual recovery")
 	}
-	if version != domainSchemaVersion {
+	if version != domainSchemaVersion && !(allowCurrentUpgrade && version == 3) {
 		return nativeErr("unsupported_schema", fmt.Sprintf("unsupported SQLite schema %d; only schema %d is accepted", version, domainSchemaVersion))
 	}
 	expected := map[string]string{}
-	for _, stmt := range append(append([]string{}, domainExecutionSchema...), nativeTaskSchema...) {
+	definitions := append(append([]string{}, domainExecutionSchema...), nativeTaskSchema...)
+	if version == domainSchemaVersion {
+		definitions = append(definitions, conversationSchemaV4...)
+	}
+	for _, stmt := range definitions {
 		fields := strings.Fields(stmt)
 		if len(fields) < 3 || fields[0] != "CREATE" {
 			continue

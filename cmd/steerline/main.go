@@ -64,6 +64,9 @@ func run() error {
 	if fs.NArg() != 0 {
 		return fmt.Errorf("unexpected positional arguments")
 	}
+	if command == "codex-session-launch" {
+		return steerline.RunCodexSessionLauncher(context.Background(), *config)
+	}
 	if command != "run" && command != "start-service" && command != "stop-service" && command != "retry" && command != "check" && command != "stop" && command != "control" && command != "tasks" && command != "answer" && command != "accept-result" && command != "mark-stopped" && command != "watch" && command != "certify-backend" && command != "home" && command != "install" && command != "launchers" && command != "projects" {
 		return fmt.Errorf("unknown command %q", command)
 	}

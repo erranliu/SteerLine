@@ -255,6 +255,10 @@ func fakeMain(args []string) int {
 	}
 	path := args[1]
 	argv := args[2:]
+	if mode == "codex" && len(argv) > 0 && argv[0] == "app-server" {
+		fmt.Fprintln(os.Stderr, "fake Codex does not support public history")
+		return 1
+	}
 	if arg(argv, "--help") != "" || strings.Contains(strings.Join(argv, " "), "--help") {
 		fmt.Println("--unassigned --limit --claim --actor --assignee --all --reason --json --output-schema --output-last-message --sandbox")
 		return 0
@@ -331,6 +335,27 @@ func fakeMain(args []string) int {
 		db.Starts[id]++
 		writeFake(path, db)
 		fmt.Println(`{"type":"thread.started","thread_id":"test-session"}`)
+		if db.Behavior == "conversation-stream" {
+			trigger := path + ".conversation-trigger"
+			deadline := time.Now().Add(90 * time.Second)
+			for time.Now().Before(deadline) {
+				if _, err := os.Stat(trigger); err == nil {
+					break
+				}
+				time.Sleep(25 * time.Millisecond)
+			}
+			if _, err := os.Stat(trigger); err != nil {
+				fmt.Fprintln(os.Stderr, "conversation trigger was not delivered")
+				return 7
+			}
+			fmt.Println(`{"type":"turn.started"}`)
+			message := map[string]any{"type": "item.completed", "item": map[string]any{"id": "stream-message", "type": "agent_message", "phase": "commentary", "text": strings.Repeat("窗口仍在采集🙂", 1000)}}
+			if err := json.NewEncoder(os.Stdout).Encode(message); err != nil {
+				return 8
+			}
+			fmt.Println(`{"type":"turn.completed"}`)
+			time.Sleep(time.Hour)
+		}
 		if db.Behavior == "sleep" {
 			exe, _ := os.Executable()
 			child := exec.Command(exe, "--fake", "sleep")

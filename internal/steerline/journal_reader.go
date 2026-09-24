@@ -30,6 +30,7 @@ type JournalCursor struct {
 	ScanOffset       int64  `json:"scan_offset,omitempty"`
 	Pending          []byte `json:"pending,omitempty"`
 	Dropping         bool   `json:"dropping,omitempty"`
+	DroppingStart    int64  `json:"dropping_start,omitempty"`
 	SkipUntilNewline bool   `json:"skip_until_newline,omitempty"`
 	LastSeq          uint64 `json:"last_seq,omitempty"`
 	HaveSeq          bool   `json:"have_seq,omitempty"`
@@ -52,10 +53,18 @@ type JournalOptions struct {
 
 type JournalBatch struct {
 	Lines       [][]byte
+	Records     []JournalRecord
 	Cursor      JournalCursor
 	Reset       bool
 	More        bool
 	Diagnostics []string
+}
+
+type JournalRecord struct {
+	Offset    int64
+	Length    int64
+	Data      []byte
+	Oversized bool
 }
 
 // ReadJournalBatch reads at most one bounded batch of complete UTF-8/byte
@@ -131,6 +140,7 @@ func ReadJournalBatch(path string, cursor JournalCursor, opts JournalOptions) (J
 	readBudget := int64(JournalMaxRecord + opts.MaxBytes + 1)
 	reader := bufio.NewReaderSize(io.LimitReader(f, readBudget), journalBufferSize)
 	line := append([]byte(nil), cursor.Pending...)
+	pendingLength := len(cursor.Pending)
 	cursor.Pending = nil
 	batchBytes := 0
 	processedRecords := 0
@@ -139,6 +149,13 @@ func ReadJournalBatch(path string, cursor JournalCursor, opts JournalOptions) (J
 			break
 		}
 		lineStart := cursor.ScanOffset
+		if processedRecords == 0 && pendingLength > 0 {
+			lineStart -= int64(pendingLength)
+		}
+		recordStart := lineStart
+		if cursor.Dropping {
+			recordStart = cursor.DroppingStart
+		}
 		completed, tooLong, scanned, lineBytes, readErr := readJournalLine(reader, line, cursor.ScanOffset)
 		cursor.ScanOffset = scanned
 		line = nil
@@ -147,6 +164,9 @@ func ReadJournalBatch(path string, cursor JournalCursor, opts JournalOptions) (J
 				// Keep only a flag while waiting for a terminator; the oversized
 				// prefix is never retained in memory.
 				line = nil
+				if !cursor.Dropping {
+					cursor.DroppingStart = recordStart
+				}
 				cursor.Dropping = true
 			} else {
 				cursor.Pending = lineBytes
@@ -164,7 +184,9 @@ func ReadJournalBatch(path string, cursor JournalCursor, opts JournalOptions) (J
 			continue
 		}
 		if cursor.Dropping || tooLong {
+			batch.Records = append(batch.Records, JournalRecord{Offset: recordStart, Length: end - recordStart, Oversized: true})
 			cursor.Dropping = false
+			cursor.DroppingStart = 0
 			cursor.Offset = end
 			batch.Diagnostics = append(batch.Diagnostics, fmt.Sprintf("skipped journal record exceeding %d bytes", JournalMaxRecord))
 			continue
@@ -206,6 +228,7 @@ func ReadJournalBatch(path string, cursor JournalCursor, opts JournalOptions) (J
 			}
 		}
 		batch.Lines = append(batch.Lines, append([]byte(nil), lineBytes...))
+		batch.Records = append(batch.Records, JournalRecord{Offset: recordStart, Length: end - recordStart, Data: append([]byte(nil), rawLine...)})
 		batchBytes += len(lineBytes)
 		cursor.Offset = end
 		captureLineAnchor(&cursor, rawLine, end-int64(len(rawLine))-1)

@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -776,6 +777,220 @@ func TestWindowsVisibleServiceWindowCloseAndRestart(t *testing.T) {
 		data, marshalErr := json.MarshalIndent(evidence, "", "  ")
 		require(t, marshalErr)
 		require(t, AtomicWrite(outputPath, append(data, '\n')))
+	}
+}
+
+func TestWindowsVisibleConversationCollectionAcrossViewerRestart(t *testing.T) {
+	if os.Getenv("STEERLINE_RUN_WINDOW_ACCEPTANCE") != "1" {
+		return
+	}
+	f := newFixture(t, task("t-1"))
+	db := readFake(f.db)
+	db.Behavior = "conversation-stream"
+	writeFake(f.db, db)
+	config, configPath := windowsForegroundLifecycleConfig(t, f)
+	window, testExe, connected := launchWindowsVisibleServiceWindow(t, config, configPath)
+	request, err := SubmitControl(config, "start_task", map[string]string{"task_id": "t-1"}, "conversation-window-test")
+	require(t, err)
+	controlCtx, cancelControl := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancelControl()
+	receipt, err := WaitControlReceipt(controlCtx, config, request.RequestID, 50*time.Millisecond)
+	if err != nil || receipt.Status != "applied" {
+		t.Fatalf("conversation worker start receipt=%+v err=%v", receipt, err)
+	}
+	var running *Runtime
+	deadline := time.Now().Add(15 * time.Second)
+	for time.Now().Before(deadline) {
+		running, err = LoadRuntime(filepath.Join(config.RunDir, config.RuntimeFile))
+		if err == nil && running != nil && len(running.Runs) == 1 && running.Runs[0].ExecutionStatus == "running" && running.Runs[0].Process != nil {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if err != nil || running == nil || len(running.Runs) != 1 || running.Runs[0].Process == nil {
+		t.Fatalf("conversation worker did not become running: runtime=%+v err=%v", running, err)
+	}
+	run := running.Runs[0]
+	serviceIdentity, workerIdentity := *running.Service.ProcessIdentity, *run.Process
+	executionID := nonEmpty(run.ExecutionID, legacyExecutionID(run.RunID))
+	reader, err := OpenSQLiteReader(filepath.Join(config.RunDir, "steerline.db"))
+	require(t, err)
+	defer reader.Close()
+	query := ConversationQueryService{Store: reader, Project: config.Identity()}
+	filter := ConversationFilter{ExecutionID: executionID, AttemptID: run.AttemptID}
+	var before ConversationPage
+	for time.Now().Before(deadline) {
+		before, err = query.ReadConversation(context.Background(), filter, "", 20)
+		if err == nil && len(before.Events) >= 1 && before.Events[0].Type == ConversationSession {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if err != nil || len(before.Events) != 1 || before.Events[0].Type != ConversationSession {
+		state, stateErr := LoadRuntime(filepath.Join(config.RunDir, config.RuntimeFile))
+		if stateErr == nil && state != nil {
+			t.Fatalf("initial session source was not committed: page=%+v err=%v service_error=%v", before, err, state.Service.Error)
+		}
+		t.Fatalf("initial session source was not committed: page=%+v err=%v runtime_error=%v", before, err, stateErr)
+	}
+	segment := before.Events[0].SourceSegment
+	launchViewer := func(name string) *exec.Cmd {
+		readyPath := filepath.Join(t.TempDir(), name+"-ready")
+		viewer := exec.Command(testExe, "-test.run=^TestWindowsForegroundViewerHelper$")
+		viewer.Env = append(os.Environ(), "STEERLINE_FOREGROUND_VIEWER_CONFIG="+configPath, "STEERLINE_FOREGROUND_VIEWER_READY="+readyPath)
+		require(t, viewer.Start())
+		t.Cleanup(func() {
+			if viewer.ProcessState == nil {
+				_ = viewer.Process.Kill()
+				_ = viewer.Wait()
+			}
+		})
+		viewerDeadline := time.Now().Add(8 * time.Second)
+		for time.Now().Before(viewerDeadline) {
+			if _, statErr := os.Stat(readyPath); statErr == nil {
+				return viewer
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+		t.Fatalf("%s did not connect to the visible service", name)
+		return nil
+	}
+	firstViewer := launchViewer("first-viewer")
+	require(t, firstViewer.Process.Kill())
+	_ = firstViewer.Wait()
+	if afterViewer := ConnectService(context.Background(), config); afterViewer.State != ConnectionConnected || afterViewer.Snapshot.Runtime.Service.InstanceID != connected.Snapshot.Runtime.Service.InstanceID || probeProcess(&workerIdentity).State != ProcessMatches {
+		t.Fatalf("viewer exit changed service or worker: %+v", afterViewer)
+	}
+	require(t, os.WriteFile(f.db+".conversation-trigger", []byte("emit"), 0600))
+	expectedBody := strings.Repeat("窗口仍在采集🙂", 1000)
+	var collected ConversationPage
+	outputDeadline := time.Now().Add(15 * time.Second)
+	var bodyRef *ConversationBodyRef
+	for time.Now().Before(outputDeadline) {
+		collected, err = query.ReadConversation(context.Background(), filter, "", 20)
+		if err == nil {
+			for i := range collected.Events {
+				if collected.Events[i].Type == ConversationMessageComplete {
+					bodyRef = collected.Events[i].Body
+				}
+			}
+			if len(collected.Events) == 4 && bodyRef != nil {
+				break
+			}
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if err != nil || len(collected.Events) != 4 || bodyRef == nil || bodyRef.Bytes != int64(len(expectedBody)) {
+		t.Fatalf("service did not collect full output while viewer was closed: page=%+v body=%+v err=%v", collected, bodyRef, err)
+	}
+	bodyPage, err := query.ReadMessageBody(context.Background(), *bodyRef, 0, 256<<10)
+	if err != nil || string(bodyPage.Data) != expectedBody || !bodyPage.Complete {
+		t.Fatalf("offline-ready message body differs from source: page=%+v err=%v", bodyPage, err)
+	}
+	checkpoint, err := reader.ConversationCheckpoint(context.Background(), config.Identity(), executionID, run.AttemptID, "codex-jsonl", segment)
+	if err != nil || checkpoint.LocalSeq != 4 {
+		t.Fatalf("conversation cursor did not advance with persisted output: checkpoint=%+v err=%v", checkpoint, err)
+	}
+	secondViewer := launchViewer("second-viewer")
+	if reconnected := ConnectService(context.Background(), config); reconnected.State != ConnectionConnected || reconnected.Snapshot.Runtime.Service.InstanceID != connected.Snapshot.Runtime.Service.InstanceID || probeProcess(&serviceIdentity).State != ProcessMatches || probeProcess(&workerIdentity).State != ProcessMatches {
+		t.Fatalf("viewer reopen changed service or worker: %+v", reconnected)
+	}
+	require(t, secondViewer.Process.Kill())
+	_ = secondViewer.Wait()
+	require(t, closeConsoleWindowForTests(window))
+	exitDeadline := time.Now().Add(15 * time.Second)
+	for time.Now().Before(exitDeadline) {
+		if !windowExistsForTests(window) && probeProcess(&serviceIdentity).State != ProcessMatches && probeProcess(&workerIdentity).State != ProcessMatches {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	if windowExistsForTests(window) || probeProcess(&serviceIdentity).State == ProcessMatches || probeProcess(&workerIdentity).State == ProcessMatches {
+		t.Fatal("closing the service window left the service or worker running")
+	}
+	if offline := ConnectService(context.Background(), config); offline.State != ConnectionOffline {
+		t.Fatalf("closed service window was not offline: %+v", offline)
+	}
+	offlinePage, err := query.ReadConversation(context.Background(), filter, "", 20)
+	if err != nil || len(offlinePage.Events) != 4 || offlinePage.Events[2].Body == nil || offlinePage.Events[2].Body.SHA256 != bodyRef.SHA256 {
+		t.Fatalf("offline conversation history changed: page=%+v err=%v", offlinePage, err)
+	}
+	newWindow, _, restarted := launchWindowsVisibleServiceWindow(t, config, configPath)
+	if restarted.Snapshot.Runtime.Service.InstanceID == connected.Snapshot.Runtime.Service.InstanceID {
+		t.Fatal("service window restart reused the old service instance")
+	}
+	var replayed ConversationPage
+	replayDeadline := time.Now().Add(12 * time.Second)
+	for time.Now().Before(replayDeadline) {
+		replayed, err = query.ReadConversation(context.Background(), filter, "", 20)
+		if err == nil && len(replayed.Events) == 4 {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if err != nil || len(replayed.Events) != 4 || readFake(f.db).Starts["t-1"] != 1 || readFake(f.db).Claims["t-1"] != 1 {
+		t.Fatalf("restart replay duplicated conversation or worker: page=%+v err=%v", replayed, err)
+	}
+	restoredCheckpoint, err := reader.ConversationCheckpoint(context.Background(), config.Identity(), executionID, run.AttemptID, "codex-jsonl", segment)
+	if err != nil || restoredCheckpoint.LocalSeq != checkpoint.LocalSeq {
+		t.Fatalf("restart changed the committed source position: before=%+v after=%+v err=%v", checkpoint, restoredCheckpoint, err)
+	}
+	stopCtx, stopCancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer stopCancel()
+	stopped, err := StopService(stopCtx, config, "conversation-window-test", 15*time.Second)
+	if err != nil || stopped.Status != "stopped" || !stopped.ProcessExited || !stopped.LocksReleased || stopped.Receipt == nil || stopped.Receipt.Status != "applied" {
+		t.Fatalf("restarted service did not stop cleanly: %+v err=%v", stopped, err)
+	}
+	require(t, closeConsoleWindowForTests(newWindow))
+	originalLog := deref(run.LogPath)
+	if originalLog == "" {
+		t.Fatal("original conversation source path is unavailable")
+	}
+	require(t, os.Rename(originalLog, originalLog+".before-source-change"))
+	require(t, os.WriteFile(originalLog, []byte(`{"type":"thread.started","thread_id":"replacement-session"}`+"\n"), 0600))
+	sourceChangedWindow, _, sourceChangedService := launchWindowsVisibleServiceWindow(t, config, configPath)
+	if sourceChangedService.Snapshot.Runtime.Service.InstanceID == restarted.Snapshot.Runtime.Service.InstanceID {
+		t.Fatal("source changed restart reused the previous service instance")
+	}
+	var changedPage ConversationPage
+	gapDeadline := time.Now().Add(12 * time.Second)
+	for time.Now().Before(gapDeadline) {
+		changedPage, err = query.ReadConversation(context.Background(), filter, "", 20)
+		if err == nil && len(changedPage.Events) == 6 {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if err != nil || len(changedPage.Events) != 6 || changedPage.Events[4].Type != ConversationGap || changedPage.Events[4].Status != "source_changed" || changedPage.Events[5].Type != ConversationSession || changedPage.Events[4].SourceSegment == segment || changedPage.Events[2].Body == nil || changedPage.Events[2].Body.SHA256 != bodyRef.SHA256 {
+		t.Fatalf("source replacement lost old history or hid the gap: page=%+v err=%v", changedPage, err)
+	}
+	newCheckpoint, err := reader.ConversationCheckpoint(context.Background(), config.Identity(), executionID, run.AttemptID, "codex-jsonl", changedPage.Events[5].SourceSegment)
+	if err != nil || newCheckpoint.LocalSeq != 1 || readFake(f.db).Starts["t-1"] != 1 {
+		t.Fatalf("source change did not start a separate checkpoint: checkpoint=%+v err=%v", newCheckpoint, err)
+	}
+	finalStopCtx, finalCancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer finalCancel()
+	finalStop, err := StopService(finalStopCtx, config, "conversation-source-changed-test", 15*time.Second)
+	if err != nil || finalStop.Status != "stopped" || !finalStop.ProcessExited || !finalStop.LocksReleased {
+		t.Fatalf("source changed service did not stop cleanly: %+v err=%v", finalStop, err)
+	}
+	require(t, closeConsoleWindowForTests(sourceChangedWindow))
+	if evidencePath := os.Getenv("STEERLINE_PR04B_WINDOW_EVIDENCE_OUT"); evidencePath != "" {
+		evidence := map[string]any{
+			"version": 1, "captured_at": now(), "platform": runtime.GOOS + "/" + runtime.GOARCH,
+			"backend": "local", "protocol": "local_process", "visible_console": true,
+			"service_identity_sha256": digestValue(serviceIdentity), "worker_identity_sha256": digestValue(workerIdentity),
+			"initial_events": len(before.Events), "events_collected_while_viewer_closed": len(collected.Events),
+			"full_message_bytes": bodyRef.Bytes, "full_message_sha256": bodyRef.SHA256,
+			"source_checkpoint_seq_before_close": checkpoint.LocalSeq,
+			"viewer_reconnected_same_instance":   true, "window_close_stopped_service_and_worker": true,
+			"offline_query_retained_events": len(offlinePage.Events), "restart_replayed_without_duplicate_events": len(replayed.Events) == len(collected.Events),
+			"source_changed_injected_after_stop": true, "source_changed_gap_visible": changedPage.Events[4].Type == ConversationGap,
+			"new_source_checkpoint_seq": newCheckpoint.LocalSeq, "worker_starts": readFake(f.db).Starts["t-1"],
+		}
+		data, marshalErr := json.MarshalIndent(evidence, "", "  ")
+		require(t, marshalErr)
+		require(t, AtomicWrite(evidencePath, append(data, '\n')))
 	}
 }
 

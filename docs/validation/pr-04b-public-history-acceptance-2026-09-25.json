@@ -1,0 +1,49 @@
+{
+  "captured_at": "2026-09-24T23:25:44.8821365Z",
+  "samples": [
+    {
+      "backend": "local",
+      "body_sha256": [
+        "60aa52cc46da3413174175cc5be37ffc438d4a0a82fa4bfd3b2f2bb33ba01afe",
+        "0cdad8765c7b9bbec42508948c940f25394e72a16cc04a93bfb870f852f06124",
+        "57579cd53938f2692e4f632768f82670123af96fe46cca7fd50364704ff4a7a3"
+      ],
+      "capabilities_persisted_by_target_and_version": true,
+      "commentary_messages": 1,
+      "cursor_persisted": true,
+      "events": 11,
+      "final_messages": 2,
+      "native_turn_completions": 2,
+      "native_turn_starts": 2,
+      "protocol": "local_process",
+      "reopen_replay_without_cursor_advance": true,
+      "reopen_replay_without_duplicates": true,
+      "session_sha256": "968751cf24de93888b37f5206309d479729fad003db32703bdd40c10df623639",
+      "tool_completions": 0,
+      "wrong_workspace_rejected": true
+    },
+    {
+      "backend": "orca",
+      "body_sha256": [
+        "5af46cb29d384a1c6209a35e32d3955fd4dd6a0d147e50613750c6ec1fe0ba49",
+        "28f5b275fce96b2660a112eb414b0c33f81ea2b0ff880121188c2ffd462ef185",
+        "2990c85dfad84129c32610291415f524248d7fec7f05a4f5e1bab77f20796dd1",
+        "7f133a856b1d6f49fee2206077344328334cfb4370ca3719c222a7c3b85327f3"
+      ],
+      "capabilities_persisted_by_target_and_version": true,
+      "commentary_messages": 2,
+      "cursor_persisted": true,
+      "events": 16,
+      "final_messages": 2,
+      "native_turn_completions": 2,
+      "native_turn_starts": 2,
+      "protocol": "orca_terminal_v2",
+      "reopen_replay_without_cursor_advance": true,
+      "reopen_replay_without_duplicates": true,
+      "session_sha256": "3521519b9c9e6b49f26bff13e783798e3d1187a58514a5cb9c56737c37bad0dd",
+      "tool_completions": 2,
+      "wrong_workspace_rejected": true
+    }
+  ],
+  "version": 1
+}

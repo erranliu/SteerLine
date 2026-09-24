@@ -1,0 +1,60 @@
+# PR 4B conversation events validation
+
+Updated 2026-09-25; native capability evidence was captured 2026-09-24.
+
+Status: partial implementation with E-A8 and E-A9 accepted for the measured local Windows/Codex targets. Exact native turn/phase/final/replay evidence is now present for both local process and local Orca terminal v2 with an explicitly bound Codex session. Other fault-injection gaps remain listed below; this is not blanket acceptance of all 4B scenarios or remote/other-agent targets.
+
+## E-A results
+
+| ID | Result | Evidence and remaining gap |
+| --- | --- | --- |
+| E-A1 | Accepted for measured targets | Both real native histories map through the same `ConversationEvent` DTO; sanitized native IDs/phase/status and version-scoped capabilities are traceable. Raw JSONL and terminal evidence retain their explicit limitations. |
+| E-A2 | Partial | Local mapping keeps turn completion separate from message completion and leaves an absent phase unknown. Delta/snapshot/completed bodies are revisioned and source-event deduped. Real interleaved local commentary/tool/final samples are missing. |
+| E-A3 | Partial | Item keys include project/execution/attempt/segment/session/turn/item; same item IDs in distinct derived turns are covered by replay tests. Old-attempt late arrival and real source replacement probes remain open. |
+| E-A4 | Partial | Explicit local turn completed/failed/cancelled types, Orca host input wait, gaps and execution results are modeled. A real live public-history read reported `interrupted` with `completedAt:null`; the mapper now refuses to treat that synthesized status as cancellation. Real terminal failure/cancellation, late-final and wait-object source samples are still missing. |
+| E-A5 | Partial | SQLite commits event, raw bytes, body revision and cursor atomically. The current local byte cursor restores the mapper and resumes after committed content; unchanged native history leaves its cursor stable. Conflicting raw bytes under one event identity cannot advance the checkpoint. Disk-full and arbitrary process-crash fault injection remain open. |
+| E-A6 | Partial | Local source byte ranges, file identity, short anchors and same-size modification time bind replay; in-place rewrite opens a visible new segment. Orca cursors bind runtime/terminal/incarnation. A real raw line beyond 8 MiB emits a bounded gap while later events remain readable. External retention eviction remains unprobed. |
+| E-A7 | Partial | Tests cover Unicode text above 4096 bytes, immutable body revisions, pagination and SHA-256. Missing/corrupt body and disk-full behavior lack injected evidence. |
+| E-A8 | Accepted on local Windows | A real visible service window and separate viewer processes collected a 22,000-byte message while the viewer was closed, retained the same service and worker on viewer reconnect, stopped both on window close, served the full body offline, and restarted without duplicate events or worker starts. Replacing the isolated raw source after shutdown produced a visible `source_changed` gap, new segment and checkpoint while preserving the old body. [Sanitized evidence](pr-04b-window-native-2026-09-25.json). The worker/source content in this lifecycle test is controlled fake Codex output. |
+| E-A9 | Accepted for measured targets | The [native public-history fixture](pr-04b-public-history-native-2026-09-25.json) contains two real turns from each backend with native turn/item IDs, explicit `commentary`/`final_answer`, completed status and completion timestamps. The production collector passed [native acceptance](pr-04b-public-history-acceptance-2026-09-25.json): local 11 events and Orca 16 events, two finals each, exact body hashes, persisted opaque page cursors, separate reader processes and SQLite reopen without duplicates. Orca also has two real tool records. The [Go launcher evidence](pr-04b-orca-bound-launcher-2026-09-25.json) verifies exact session binding in Orca's inherited Codex environment. The [capability matrix](pr-04b-conversation-capabilities-2026-09-24.json) distinguishes this public provider-history source from raw terminal capabilities. |
+
+## Why the E-A9 blocker is resolved
+
+The earlier conclusion was too narrow: absence of phase in `codex exec --json` and `orca terminal read` did not establish absence from every public source. The [official Codex app-server protocol](https://learn.chatgpt.com/docs/app-server) documents structured history reads; actual reads of the same probe sessions supplied the missing native fields. No phase is inferred from words or the last terminal line.
+
+The service now binds local session IDs from raw `thread.started`, and the Orca launcher explicitly creates/persists the session inside the terminal's environment before resuming that exact ID. Orca uses a separate `CODEX_HOME`, so using the service's default home would address the wrong source. The collector verifies session/workspace identity and uses bounded full-turn pages. A native source-selection event replaces the lossy projection in default queries; explicit source filters retain raw evidence. Business completion and structured result summaries remain separate.
+
+Scope: Windows, Codex 0.156.1, Orca 1.4.209, configured native Codex command (or Node with its entry script), and verified local Orca execution host. Raw terminal mode without this binding, remote Orca, other agents and unsupported app-server versions are not certified by these samples.
+
+## Audit repairs
+
+- Restored local replay from the persisted anchored byte cursor. It no longer scans all prior records on an unchanged restart. In-place same-size rewrites open a new segment, and an unanchored development checkpoint blocks service startup before dispatch.
+- Bounded the native collector to one active and one ended source per pass. A final-less earlier turn retains its own cursor for late final reconciliation; repeated identical reads preserve the source sequence. Opaque turn cursors above 4 KiB are rejected before checkpointing. Runtime capability reports use the observed Codex user agent and the actual Orca CLI version for Orca targets.
+- Required Orca to reconfirm the same live Codex agent after the session binding appears. An uncertain start retains the exact worktree and terminal identity for recovery.
+- Replaced silent local observation-queue drops with bounded backpressure. Oversized raw rows create visible gaps; malformed rows keep their raw reference without inflating or invalidating `activity.jsonl`. A source-read failure restores the in-memory mapper and stores a gap without moving its checkpoint. Reuse of one source event identity with different raw bytes is rejected in SQLite.
+- Local source replacements can keep the previous and replacement native session bindings in the same attempt. Invalid binding files produce a durable gap; the history reader verifies the Codex home reported by the public server before reading any turn.
+- The first window rerun found an empty attempt event path hiding `thread.started`. The path selection was corrected and the subsequent visible-window test passed.
+
+## Verification performed
+
+- The pre-history-integration baseline `go test ./... -count=1 -timeout 15m` passed in 617.672s. Earlier runs with the Spec Plan's 10-minute cap expired while the final Windows workspace test was starting; increasing the overall cap allowed the full suite to finish.
+- The native-history integration full suite `go test ./... -count=1 -timeout 15m` passed: core package 735.753s, remote protocol 0.387s, viewer 1.778s. After the main audit repairs, another full run passed: core 749.775s, remote protocol 0.645s, viewer 1.941s. Later narrow bounds and report-identity fixes passed focused and real-session reruns.
+- `TestCodexHistoryNativeAcceptance` passed against both exact real sessions; the final repeat passed in 5.55s, including bounded pages, full bodies, database reopen, duplicate replay and wrong-workspace refusal.
+- `go test ./internal/steerline -run 'TestCodexHistory|TestConversation|TestOrca' -count=1 -timeout 4m` passed in 50.706s after source-selection and binding validation fixes. Gaps and host waits remain visible after selecting native history; changed-workspace bindings are rejected with a diagnostic.
+- `go test ./internal/steerline -run 'TestConversation' -count=1` passed, including mapper identity, long Unicode body pages, repeated identical text preservation, revision conflicts, transaction rollback and bounded raw journal replay.
+- `go test ./internal/steerline -run 'TestConversation|TestOversizedWorkerLinePreservesRawOutputAndLaterEvents' -count=1 -timeout 60s` passed.
+- After adding the initial Orca retention-boundary diagnostic, `go test ./internal/steerline -run 'TestConversation|TestOrcaReadOutputBindsCursorToExactSource|TestOrcaReadOutputReportsRetentionGapOnInitialRead' -count=1 -timeout 60s` passed.
+- Gated real Windows tests `TestWindowsVisibleServiceWindowAcceptance`, `TestWindowsVisibleServiceWindowCloseAndRestart`, and `TestWindowsVisibleConversationCollectionAcrossViewerRestart` passed. The new conversation test passed twice, including the source replacement check, and wrote the E-A8 evidence file.
+- After integrating native history, `TestWindowsVisibleConversationCollectionAcrossViewerRestart` passed again in 50.46s and refreshed the E-A8 evidence.
+- Real Codex CLI 0.156.1 `exec --json` and `exec resume --json` produced two turns in the same session. The sanitized fixture is exercised by `TestConversationMapperNativeCodexTwoTurnFixture`, which passed. A separate attempt to obtain a native shell/tool event was blocked by host policy; this is not presented as tool-event coverage.
+- Real Orca 1.4.209 launched Codex in an isolated Git worktree, showed two assistant turns, produced a second-turn `input_accepted`/`turn_started` receipt, advanced terminal cursor 24 to 32, and replayed 32 retained rows from cursor 0. `orca search --scope conversation` returned `unavailable/disabled`; `terminal show` returned `agentWait:null`.
+- Native history integration passed `go vet ./...`, Windows/Linux builds and `git diff --check`. Race checks were not available in this environment (`CGO_ENABLED=0`, no `gcc`).
+- Isolated Orca probe terminals were closed with the runtime's bulk-close receipt, and the exact probe worktree was removed after recording evidence.
+- The native acceptance rerun after worktree removal passed for both local and Orca sessions. It also checked that an unchanged replay preserves the checkpoint, and that the persisted capability report never claims an unobserved Orca host wait.
+- Final audit checks passed: native real-session replay, late-final and active-source fairness tests, current checkpoint preflight, same-size source rewrite, changed raw/semantic identity rejection, oversized raw and opaque-cursor limits, Windows visible-window restart, `go vet ./...`, Windows/Linux builds and `git diff --check`.
+- After updating the PR branch to the current main, `TestConversationSchemaUpgradesCurrentCenterDatabase` confirmed schema 3 → 4 creates the conversation tables and native-source index while preserving the native task schema; the schema 1 rejection test still passed.
+- On main `696406f`, `go test ./... -count=1 -timeout 20m` passed: core package 661.572s, remote protocol 0.753s, viewer 1.974s. The gated Windows visible conversation-window test passed in 46.46s; the two real-session native-history acceptance checks passed again. `go vet ./...`, Windows/Linux builds and staged diff checks passed after the schema integration.
+
+## Delivery boundary
+
+The console can read exact turns and finals for verified native-history bindings. Missing or unverified phases remain `unknown`, and raw Orca text remains observation-only. Structured result summaries remain `execution.result`. E-A9 is accepted for the stated targets; 4C must consult capability/source evidence rather than assuming every backend or agent has exact parity. Remaining E-A2–E-A7 fault/source gaps still prevent declaring the whole stage universally accepted.

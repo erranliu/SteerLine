@@ -314,7 +314,24 @@ func fakeOrcaShow(stateDir string, argv []string) int {
 			status, orphaned = "running", true
 		}
 	}
-	return fakeOrcaOK(map[string]any{"terminal": map[string]any{"handle": st.Handle, "incarnationId": inc, "status": status, "connected": connected, "orphaned": orphaned}})
+	return fakeOrcaOK(map[string]any{"terminal": map[string]any{"handle": st.Handle, "incarnationId": inc, "status": status, "connected": connected, "orphaned": orphaned, "executionHostId": "local", "agentIdentity": os.Getenv("STEERLINE_FAKE_ORCA_AGENT_IDENTITY")}})
+}
+
+func TestOrcaHistoryLaunchRequiresSameLiveCodexAgent(t *testing.T) {
+	dir := t.TempDir()
+	cfg := orcaTestConfig(t, dir, "local")
+	state := fakeOrcaState{Handle: "bound-agent", Incarnation: "inc-bound"}
+	require(t, writeFakeOrcaState(dir, state))
+	fixed := orcaTerminal{Handle: state.Handle, RuntimeID: "fake-runtime", IncarnationID: state.Incarnation, ExecutionHostID: "local"}
+	t.Setenv("STEERLINE_FAKE_ORCA_AGENT_IDENTITY", "codex")
+	term, err := waitOrcaCodexHistoryAgent(context.Background(), orcaClient{cfg: cfg}, fixed)
+	if err != nil || term.AgentIdentity != "codex" {
+		t.Fatalf("live Codex binding was rejected: term=%+v err=%v", term, err)
+	}
+	t.Setenv("STEERLINE_FAKE_ORCA_INCARNATION", "replacement-incarnation")
+	if _, err = waitOrcaCodexHistoryAgent(context.Background(), orcaClient{cfg: cfg}, fixed); err == nil {
+		t.Fatal("replaced terminal was accepted as the bound agent")
+	}
 }
 
 func fakeOrcaRead(stateDir string, argv []string) int {
@@ -386,6 +403,24 @@ func TestOrcaReadOutputBindsCursorToExactSource(t *testing.T) {
 	changed, err := backend.ReadOutput(context.Background(), ref, first.NextCursor, 1)
 	if err != nil || !changed.SourceChanged || changed.Source != "screen" {
 		t.Fatalf("source change=%#v err=%v", changed, err)
+	}
+}
+
+func TestOrcaReadOutputReportsRetentionGapOnInitialRead(t *testing.T) {
+	dir := t.TempDir()
+	cfg := orcaTestConfig(t, dir, "fail")
+	handle := "terminal-initial-gap-test"
+	state := fakeOrcaState{Handle: handle, Incarnation: "inc-initial-gap", OutputLines: []string{"retained-one", "retained-two", "retained-three"}, OldestCursor: 2}
+	if err := writeFakeOrcaState(dir, state); err != nil {
+		t.Fatal(err)
+	}
+	ref := ExecutionRef{Version: 1, Backend: BackendOrca, Protocol: ProtocolOrcaTerminalV2, Target: targetFor(cfg), Agent: AgentSpec{Name: "codex"}, RunID: newID(), AttemptID: newID(), External: ProcessIdentity{Kind: "orca", Terminal: handle, RuntimeID: "fake-runtime", Incarnation: state.Incarnation, Executable: cfg.Orca.Executable}}
+	batch, err := (orcaTerminalBackend{config: cfg}).ReadOutput(context.Background(), ref, "", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !batch.Gap || batch.RetainedFrom != "2" || string(batch.Data) != "retained-three" {
+		t.Fatalf("initial retention boundary was hidden: %+v", batch)
 	}
 }
 

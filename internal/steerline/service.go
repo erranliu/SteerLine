@@ -22,7 +22,10 @@ type Service struct {
 	active      *Run
 	// activities holds one journal per run so PR/completion events always land in
 	// their own run's file, even after the worker exited.
-	activities map[string]*ActivityWriter
+	activities                 map[string]*ActivityWriter
+	conversationMappers        map[string]*ConversationMapper
+	conversationReplayRequests chan []conversationJournalSource
+	conversationReplayErrors   chan error
 	// Console selects service-side rendering: "", "off", "pretty", "summary" or "json".
 	Console           string
 	consoleOut        io.Writer
@@ -73,7 +76,7 @@ func NewService(c Config) (_ *Service, retErr error) {
 			_ = db.Close()
 		}
 	}()
-	s := &Service{Config: c, domainStore: db, store: &Store{Path: filepath.Join(c.RunDir, c.RuntimeFile), Domain: db, Project: c.identity}, beads: Beads{Runner: r, Command: c.BD, Claimant: c.Claimant}, prs: &PRClient{Config: c.PR, Runner: r}, activities: map[string]*ActivityWriter{}}
+	s := &Service{Config: c, domainStore: db, store: &Store{Path: filepath.Join(c.RunDir, c.RuntimeFile), Domain: db, Project: c.identity}, beads: Beads{Runner: r, Command: c.BD, Claimant: c.Claimant}, prs: &PRClient{Config: c.PR, Runner: r}, activities: map[string]*ActivityWriter{}, conversationMappers: map[string]*ConversationMapper{}}
 	projection, _, e := db.LoadProjection(context.Background(), c.identity)
 	if e != nil {
 		return nil, e
@@ -288,6 +291,9 @@ func NewService(c Config) (_ *Service, retErr error) {
 		return nil, fmt.Errorf("identify service process: %w", err)
 	}
 	s.State.Service.ProcessIdentity = identity
+	if err := db.ValidateConversationCheckpointFormat(context.Background(), c.identity); err != nil {
+		return nil, err
+	}
 	s.reconcileOperationsAfterRestart()
 	return s, nil
 }
@@ -1098,6 +1104,11 @@ func (s *Service) finished(err error) error {
 			}
 		}
 	}
+	if r != nil {
+		if replayErr := s.reconcileConversationRun(r); replayErr != nil {
+			s.setError(fmt.Errorf("completed conversation source replay failed: %w", replayErr))
+		}
+	}
 	if r != nil && r.WorkflowVersion == MinimalWorkflowVersion {
 		return s.finishMinimalStep(err)
 	}
@@ -1126,6 +1137,11 @@ func (s *Service) finished(err error) error {
 	r.ExecutionStatus = "succeeded"
 	s.note(r, "steer", "worker_exit", "completed", "worker exited", "", map[string]any{"exit_code": 0})
 	result, e := ReadResult(*r.ResultPath, r)
+	if e == nil {
+		if persistErr := s.recordExecutionResult(r, result, *r.ResultPath); persistErr != nil {
+			s.setError(fmt.Errorf("execution result conversation persistence failed: %w", persistErr))
+		}
+	}
 	if e == nil {
 		e = s.inspectRunWorkspace(context.Background(), r)
 	}
@@ -1272,24 +1288,56 @@ func (s *Service) pollPRsFor(ctx context.Context, runID string) error {
 }
 func (s *Service) event(ev WorkerEvent) error {
 	if ev.RunID != "" && ev.AttemptID != "" && (s.active == nil || s.active.RunID != ev.RunID || s.active.AttemptID != ev.AttemptID) {
-		return s.recordHistoricalWorkerEvent(ev)
+		err := s.recordHistoricalWorkerEvent(ev)
+		ackWorkerEventPersistence(ev, err)
+		return err
 	}
 	if s.active == nil {
+		if ev.Persisted != nil {
+			err := errors.New("conversation source event has no active run binding")
+			ackWorkerEventPersistence(ev, err)
+			return err
+		}
 		return nil
 	}
 	s.active.LastEvent = ptr(ev.Summary)
-	if ev.Session != "" {
+	if ev.Session != "" && ev.Source != "orca-terminal-v2" {
 		s.active.SessionID = ptr(ev.Session)
 	}
 	if ev.Activity.Kind != "" {
+		conversationErr := s.recordConversationEvent(s.active, ev)
+		if conversationErr != nil {
+			s.setError(fmt.Errorf("conversation event persistence failed: %w", conversationErr))
+		}
+		ackWorkerEventPersistence(ev, conversationErr)
+		if ev.Persisted != nil && conversationErr != nil {
+			return s.save()
+		}
 		s.recordActivity(s.active, ev.Activity)
 		s.emitConsole(ev.Activity)
+	} else if ev.Persisted != nil {
+		err := errors.New("conversation source event has no activity classification")
+		ackWorkerEventPersistence(ev, err)
+		return err
 	}
 	return s.save()
 }
 
+func ackWorkerEventPersistence(ev WorkerEvent, err error) {
+	if ev.Persisted == nil {
+		return
+	}
+	select {
+	case ev.Persisted <- err:
+	default:
+	}
+}
+
 func (s *Service) recordHistoricalWorkerEvent(ev WorkerEvent) error {
 	if !stableExecutionID(ev.RunID) || !stableExecutionID(ev.AttemptID) || ev.Activity.Kind == "" {
+		if ev.Persisted != nil {
+			return errors.New("conversation source identity is incomplete")
+		}
 		return nil
 	}
 	var run *Run
@@ -1300,6 +1348,9 @@ func (s *Service) recordHistoricalWorkerEvent(ev WorkerEvent) error {
 		}
 	}
 	if run == nil {
+		if ev.Persisted != nil {
+			return errors.New("conversation source run binding is unavailable")
+		}
 		return nil
 	}
 	// Keep late facts attached to their original attempt in the domain journal.
@@ -1311,7 +1362,13 @@ func (s *Service) recordHistoricalWorkerEvent(ev WorkerEvent) error {
 		}
 	}
 	if attempt == nil {
+		if ev.Persisted != nil {
+			return errors.New("conversation source attempt binding is unavailable")
+		}
 		return nil
+	}
+	if err := s.recordConversationEvent(run, ev); err != nil {
+		return err
 	}
 	dir := filepath.Join(s.Config.RunDir, "runs", ev.RunID)
 	if run.WorkflowVersion == MinimalWorkflowVersion {
@@ -1362,7 +1419,19 @@ func (s *Service) RetryOne(ctx context.Context, runID string) error {
 }
 func (s *Service) run(ctx context.Context, retryRunID, dispatchMode string) (retErr error) {
 	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
+	var conversationReplayDone <-chan struct{}
+	var codexHistoryDone <-chan struct{}
+	defer func() {
+		cancel()
+		if conversationReplayDone != nil {
+			<-conversationReplayDone
+		}
+		if codexHistoryDone != nil {
+			<-codexHistoryDone
+		}
+		s.conversationReplayRequests = nil
+		s.conversationReplayErrors = nil
+	}()
 	defer s.closeAllActivities()
 	s.State.Service.Mode = "scheduler"
 	s.State.Control.DispatchMode = dispatchMode
@@ -1375,6 +1444,28 @@ func (s *Service) run(ctx context.Context, retryRunID, dispatchMode string) (ret
 	if e := s.save(); e != nil {
 		return e
 	}
+	s.conversationReplayRequests = make(chan []conversationJournalSource, 16)
+	s.conversationReplayErrors = make(chan error, 16)
+	replayDone := make(chan struct{})
+	conversationReplayDone = replayDone
+	replaySources := s.conversationJournalSources()
+	go func() {
+		defer close(replayDone)
+		s.runConversationReplayQueue(ctx, s.conversationReplayRequests, s.conversationReplayErrors)
+	}()
+	if len(replaySources) > 0 {
+		s.conversationReplayRequests <- replaySources
+	}
+	historyRequests := make(chan []codexHistoryBinding, 1)
+	historyDone := make(chan struct{})
+	codexHistoryDone = historyDone
+	go func() {
+		defer close(historyDone)
+		s.runCodexHistoryCollector(ctx, historyRequests, s.conversationReplayErrors)
+	}()
+	historyRequests <- s.codexHistorySources()
+	historyTick := time.NewTicker(2 * time.Second)
+	defer historyTick.Stop()
 	heartDone := make(chan struct{})
 	acceptedStops := make(chan stopAcceptance, 1)
 	instanceID := s.State.Service.InstanceID
@@ -1550,6 +1641,17 @@ func (s *Service) run(ctx context.Context, retryRunID, dispatchMode string) (ret
 		select {
 		case <-ctx.Done():
 			return nil
+		case <-historyTick.C:
+			select {
+			case historyRequests <- s.codexHistorySources():
+			default:
+			}
+		case replayErr := <-s.conversationReplayErrors:
+			if replayErr != nil {
+				if e := step(func(context.Context) error { return replayErr }); e != nil {
+					return e
+				}
+			}
 		case ev, ok := <-events:
 			if !ok {
 				events = nil

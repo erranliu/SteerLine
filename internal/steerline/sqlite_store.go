@@ -19,7 +19,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const domainSchemaVersion = 3
+const domainSchemaVersion = 4
 
 type DomainTx interface {
 	PutTask(TaskRecord) error
@@ -142,13 +142,24 @@ func (s *SQLiteStore) migrate(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if version != 0 && version != domainSchemaVersion {
+	if version != 0 && version != 3 && version != domainSchemaVersion {
 		return nativeErr("unsupported_schema", fmt.Sprintf("unsupported SQLite schema %d; preserve existing state", version))
 	}
 	if version == 0 {
-		for _, stmt := range append(append([]string{}, domainExecutionSchema...), nativeTaskSchema...) {
+		for _, stmt := range append(append(append([]string{}, domainExecutionSchema...), nativeTaskSchema...), conversationSchemaV4...) {
 			if _, err = tx.ExecContext(ctx, stmt); err != nil {
 				return fmt.Errorf("create domain schema: %w", err)
+			}
+		}
+		if _, err = tx.ExecContext(ctx, `INSERT INTO schema_migrations(version, applied_at) VALUES(?, ?)`, domainSchemaVersion, now().Format(time.RFC3339Nano)); err != nil {
+			return err
+		}
+		version = domainSchemaVersion
+	}
+	if version == 3 {
+		for _, stmt := range conversationSchemaV4 {
+			if _, err = tx.ExecContext(ctx, stmt); err != nil {
+				return fmt.Errorf("create conversation schema: %w", err)
 			}
 		}
 		if _, err = tx.ExecContext(ctx, `INSERT INTO schema_migrations(version, applied_at) VALUES(?, ?)`, domainSchemaVersion, now().Format(time.RFC3339Nano)); err != nil {
@@ -204,6 +215,19 @@ var domainExecutionSchema = []string{
 	`CREATE TABLE commands (project_identity TEXT NOT NULL, command_id TEXT NOT NULL, kind TEXT NOT NULL, target_id TEXT NOT NULL, expected_version INTEGER NOT NULL, idempotency_key TEXT NOT NULL, requested_by TEXT NOT NULL, payload BLOB NOT NULL, status TEXT NOT NULL, result BLOB, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY(project_identity, command_id), UNIQUE(project_identity, idempotency_key))`,
 	`CREATE INDEX commands_status_idx ON commands(project_identity, status, created_at)`,
 	`CREATE TABLE projection (project_identity TEXT PRIMARY KEY, revision INTEGER NOT NULL, payload BLOB NOT NULL, updated_at TEXT NOT NULL)`,
+}
+
+var conversationSchemaV4 = []string{
+	`CREATE TABLE conversation_events (event_id INTEGER PRIMARY KEY AUTOINCREMENT, project_identity TEXT NOT NULL, task_id TEXT NOT NULL DEFAULT '', workflow_run_id TEXT NOT NULL DEFAULT '', execution_id TEXT NOT NULL, attempt_id TEXT NOT NULL, source_event_key TEXT NOT NULL, source TEXT NOT NULL, source_segment TEXT NOT NULL, session_id TEXT NOT NULL DEFAULT '', turn_id TEXT NOT NULL DEFAULT '', item_key TEXT NOT NULL DEFAULT '', event_type TEXT NOT NULL, phase TEXT NOT NULL DEFAULT 'unknown', final_availability TEXT NOT NULL DEFAULT '', received_at TEXT NOT NULL, payload_bytes INTEGER NOT NULL, payload BLOB NOT NULL, UNIQUE(project_identity,source_event_key))`,
+	`CREATE INDEX conversation_execution_idx ON conversation_events(project_identity,execution_id,attempt_id,event_id)`,
+	`CREATE INDEX conversation_turn_idx ON conversation_events(project_identity,execution_id,attempt_id,session_id,turn_id,event_id)`,
+	`CREATE TABLE conversation_bodies (project_identity TEXT NOT NULL, execution_id TEXT NOT NULL, attempt_id TEXT NOT NULL, item_key TEXT NOT NULL, revision INTEGER NOT NULL, body BLOB NOT NULL, sha256 TEXT NOT NULL, byte_count INTEGER NOT NULL, source TEXT NOT NULL, completeness TEXT NOT NULL, created_at TEXT NOT NULL, PRIMARY KEY(project_identity,execution_id,attempt_id,item_key,revision))`,
+	`CREATE TABLE conversation_current_messages (project_identity TEXT NOT NULL, execution_id TEXT NOT NULL, attempt_id TEXT NOT NULL, item_key TEXT NOT NULL, revision INTEGER NOT NULL, source_seq INTEGER NOT NULL, body BLOB NOT NULL, completeness TEXT NOT NULL, PRIMARY KEY(project_identity,execution_id,attempt_id,item_key))`,
+	`CREATE TABLE conversation_raw (project_identity TEXT NOT NULL, execution_id TEXT NOT NULL, attempt_id TEXT NOT NULL, raw_id TEXT NOT NULL, source_event_key TEXT NOT NULL, payload BLOB NOT NULL, sha256 TEXT NOT NULL, byte_count INTEGER NOT NULL, created_at TEXT NOT NULL, PRIMARY KEY(project_identity,execution_id,attempt_id,raw_id), UNIQUE(project_identity,source_event_key))`,
+	`CREATE TABLE conversation_source_cursors (project_identity TEXT NOT NULL, execution_id TEXT NOT NULL, attempt_id TEXT NOT NULL, source TEXT NOT NULL, source_segment TEXT NOT NULL, source_identity TEXT NOT NULL DEFAULT '', generation TEXT NOT NULL DEFAULT '', cursor TEXT NOT NULL DEFAULT '', local_seq INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL, PRIMARY KEY(project_identity,execution_id,attempt_id,source,source_segment))`,
+	`CREATE TABLE conversation_capability_reports (report_id INTEGER PRIMARY KEY AUTOINCREMENT, backend TEXT NOT NULL, protocol TEXT NOT NULL, agent TEXT NOT NULL, agent_version TEXT NOT NULL DEFAULT '', platform_version TEXT NOT NULL DEFAULT '', target_id TEXT NOT NULL DEFAULT '', checked_at TEXT NOT NULL, payload BLOB NOT NULL)`,
+	`CREATE INDEX conversation_capability_lookup_idx ON conversation_capability_reports(backend,protocol,agent,target_id,checked_at)`,
+	`CREATE INDEX conversation_native_source_idx ON conversation_events(project_identity,execution_id,attempt_id,source,event_type)`,
 }
 
 func (s *SQLiteStore) Transact(ctx context.Context, fn func(DomainTx) error) error {

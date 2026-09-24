@@ -22,6 +22,7 @@ type orcaTerminal struct {
 	Orphaned        bool             `json:"orphaned"`
 	IncarnationID   string           `json:"incarnationId"`
 	ExecutionHostID string           `json:"executionHostId"`
+	AgentIdentity   string           `json:"agentIdentity"`
 	LastOutputAt    int64            `json:"lastOutputAt"`
 	AgentWait       *json.RawMessage `json:"agentWait"`
 	RuntimeID       string           `json:"-"`
@@ -184,10 +185,12 @@ func (c orcaClient) showTerminal(ctx context.Context, handle string) (orcaTermin
 // orcaProcess is the host handle for an Orca-launched agent. Kill closes the
 // terminal (which ends the agent tree); Close only releases the local context.
 type orcaProcess struct {
-	cfg    Config
-	term   orcaTerminal
-	cancel context.CancelFunc
-	once   sync.Once
+	cfg           Config
+	term          orcaTerminal
+	ref           ExecutionRef
+	outputSegment string
+	cancel        context.CancelFunc
+	once          sync.Once
 }
 
 func (p *orcaProcess) client() orcaClient { return orcaClient{cfg: p.cfg} }
