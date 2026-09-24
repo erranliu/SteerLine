@@ -289,11 +289,11 @@ func TestWorktreeRootConfigurationAndLegacySnapshot(t *testing.T) {
 		}
 	}
 	s := f.service(t)
-	s.State.SchemaVersion = 1
-	s.State.Runs = []*Run{{TaskID: "old-1", RunID: "legacy", Claimant: f.c.Claimant, ExecutionStatus: "succeeded", FinishTaskStatus: "waiting_pr_merge", PR: PRState{URL: ptr(f.server.URL + "/owner/repo/pulls/1"), State: "open"}}}
+	legacyRun := &Run{TaskID: "old-1", DomainTaskID: "legacy:" + shortHash(f.c.identity+"\x00beads\x00\x00old-1"), DomainAttemptNumber: 1, Title: "legacy", RunID: "legacy", AttemptID: "legacy-attempt", ControlRevision: 1, Claimant: f.c.Claimant, Host: "local", Backend: "local_process", Protocol: "local_process", Target: ExecutionTarget{ID: "local"}, ExecutionStatus: "succeeded", FinishTaskStatus: "waiting_pr_merge", PR: PRState{URL: ptr(f.server.URL + "/owner/repo/pulls/1"), State: "open"}}
+	s.State.Runs = []*Run{legacyRun}
 	require(t, s.save())
 	restarted := f.service(t)
-	if restarted.State.SchemaVersion != 4 || restarted.State.Runs[0].FinishTaskStatus != "waiting_pr_merge" {
+	if restarted.State.SchemaVersion != 5 || restarted.State.Runs[0].FinishTaskStatus != "waiting_pr_merge" {
 		t.Fatal("legacy PR polling was not preserved")
 	}
 }

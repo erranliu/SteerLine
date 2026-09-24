@@ -29,6 +29,7 @@ type fakeDB struct {
 	FailClose       int
 	Behavior        string
 	PRBase          string
+	PRHeadRevision  string
 	CompletionCalls int
 	FailCompletion  int
 	CompletionMode  string
@@ -56,6 +57,100 @@ func readFake(path string) fakeDB {
 	}
 	return db
 }
+
+func fakeMinimalStep(path string, db fakeDB, argv []string) int {
+	if len(argv) != 1 {
+		return 20
+	}
+	var input MinimalStepInput
+	if err := json.NewDecoder(os.Stdin).Decode(&input); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 21
+	}
+	worktree, err := os.Getwd()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 22
+	}
+	git := func(args ...string) (string, error) {
+		cmd := exec.Command(argv[0], args...)
+		cmd.Dir = worktree
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			return "", fmt.Errorf("git %v: %w: %s", args, err, out)
+		}
+		return strings.TrimSpace(string(out)), nil
+	}
+	if input.StepID == "implement" {
+		if err = os.WriteFile(filepath.Join(worktree, "minimal-step-test.txt"), []byte(input.TaskID+" "+input.AttemptID+"\n"), 0600); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 23
+		}
+		if _, err = git("add", "--all"); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 24
+		}
+		cmd := exec.Command(argv[0], "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "minimal test implementation")
+		cmd.Dir = worktree
+		if out, e := cmd.CombinedOutput(); e != nil {
+			fmt.Fprintf(os.Stderr, "git commit: %v: %s", e, out)
+			return 25
+		}
+	}
+	head, err := git("rev-parse", "HEAD")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 26
+	}
+	branch, err := git("branch", "--show-current")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 27
+	}
+	dirty, err := git("status", "--porcelain")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 28
+	}
+	base := input.Workspace.Base
+	workspace := WorkspaceEvidence{Repository: input.ProjectIdentity, Worktree: canonical(worktree), Branch: branch, Base: base, Head: head, Dirty: dirty != ""}
+	if db.Behavior == "minimal-decision" && input.StepID == "implement" && input.Decision == nil {
+		result := StepGateResult{StepID: input.StepID, ResultID: newID(), Workspace: workspace, PrerequisiteIDs: append([]string(nil), input.PrerequisiteResultIDs...), Decision: &DecisionRequest{Question: "Which implementation should be used?", Options: []DecisionOption{{ID: "keep", Label: "Keep the current design"}}}}
+		envelope := MinimalStepResultEnvelope{SchemaVersion: 1, ProjectIdentity: input.ProjectIdentity, TaskID: input.TaskID, WorkflowRunID: input.WorkflowRunID, ExecutionID: input.ExecutionID, AttemptID: input.AttemptID, Result: result}
+		if err = json.NewEncoder(os.Stdout).Encode(envelope); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 29
+		}
+		return 0
+	}
+	revision := input.CandidateRevision
+	if input.StepID == "implement" {
+		revision = head
+	}
+	result := StepGateResult{StepID: input.StepID, Succeeded: true, InputRevision: input.InputRevision, Revision: revision, Workspace: workspace, ResultID: newID(), PrerequisiteIDs: append([]string(nil), input.PrerequisiteResultIDs...)}
+	switch input.StepID {
+	case "verify":
+		for _, name := range input.ProjectSteps.Verify.RequiredChecks {
+			result.Checks = append(result.Checks, CheckEvidence{Name: name, Status: "passed", Revision: revision})
+		}
+	case "review":
+		result.ReviewVerdict = "passed"
+	case "publish_pr":
+		result.PRURL = db.PRBase + "/owner/repo/pulls/9"
+		result.PublishedHead = revision
+	}
+	if input.StepID == "implement" {
+		db.PRHeadRevision = head
+		writeFake(path, db)
+	}
+	envelope := MinimalStepResultEnvelope{SchemaVersion: 1, ProjectIdentity: input.ProjectIdentity, TaskID: input.TaskID, WorkflowRunID: input.WorkflowRunID, ExecutionID: input.ExecutionID, AttemptID: input.AttemptID, Result: result}
+	if err = json.NewEncoder(os.Stdout).Encode(envelope); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 29
+	}
+	return 0
+}
+
 func writeFake(path string, db fakeDB) {
 	b, _ := json.Marshal(db)
 	if e := AtomicWrite(path, b); e != nil {
@@ -151,6 +246,14 @@ func fakeMain(args []string) int {
 		return 0
 	}
 	db := readFake(path)
+	if mode == "minimal-step" {
+		return fakeMinimalStep(path, db, argv)
+	}
+	if mode == "pr-query" {
+		info := PRInfo{URL: argv[0], Repository: argv[1], BaseBranch: "main", HeadRevision: db.PRHeadRevision, State: "open"}
+		_ = json.NewEncoder(os.Stdout).Encode(info)
+		return 0
+	}
 	if mode == "completion" {
 		var request CompletionRequest
 		if e := json.NewDecoder(os.Stdin).Decode(&request); e != nil {
@@ -589,7 +692,7 @@ func TestRecoverOrphanAndRunningWithoutRestart(t *testing.T) {
 		t.Fatal("orphan relaunched")
 	}
 	r.ExecutionStatus = "running"
-	r.Process = &ProcessIdentity{PID: os.Getpid(), Created: "wrong identity", Executable: "wrong"}
+	r.Process = &ProcessIdentity{Kind: "os", PID: os.Getpid(), Created: "wrong identity", Executable: "wrong"}
 	require(t, s.save())
 	s = f.service(t)
 	if s.State.Runs[0].ExecutionStatus != "unknown" || !strings.Contains(*s.State.Runs[0].Error, "different process") {
@@ -680,24 +783,32 @@ func TestHeartbeatAndConcurrentReader(t *testing.T) {
 		t.Fatal("stop status missing")
 	}
 }
-func TestPersistenceFailureStopsNewWork(t *testing.T) {
+func TestProjectionFailureDoesNotRollbackSQLiteState(t *testing.T) {
 	f := newFixture(t, task("t-1"))
 	s := f.service(t)
 	require(t, s.save())
-	original, e := os.ReadFile(s.store.Path)
+	before, _, e := s.domainStore.LoadProjection(context.Background(), f.c.identity)
 	require(t, e)
+	if len(before) == 0 {
+		t.Fatal("initial database projection missing")
+	}
 	s.store.Path = filepath.Join(f.c.RunDir, "missing-directory", "runtime.json")
-	if s.dispatch(context.Background()) == nil {
-		t.Fatal("expected persistence failure")
+	s.State.Service.Status = "maintenance"
+	if e = s.save(); e != nil {
+		t.Fatalf("projection failure rolled back committed database state: %v", e)
 	}
-	db := readFake(f.db)
-	if len(db.Claims) != 0 || len(db.Starts) != 0 {
-		t.Fatal("side effects after persistence failure")
+	if s.store.Err() != nil || s.store.ProjectionErr() == nil {
+		t.Fatal("projection failure was not reported separately from database persistence")
 	}
-	current, e := os.ReadFile(filepath.Join(f.c.RunDir, f.c.RuntimeFile))
+	after, revision, e := s.domainStore.LoadProjection(context.Background(), f.c.identity)
 	require(t, e)
-	if string(current) != string(original) {
-		t.Fatal("previous snapshot destroyed")
+	if revision <= s.State.Revision-1 || len(after) == 0 {
+		t.Fatal("SQLite projection did not commit before export failed")
+	}
+	var projected Runtime
+	require(t, json.Unmarshal(after, &projected))
+	if projected.Service.Status != "maintenance" {
+		t.Fatalf("committed state missing from database: %+v", projected.Service)
 	}
 }
 func TestShutdownKillsProcessTree(t *testing.T) {

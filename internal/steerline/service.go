@@ -13,13 +13,15 @@ import (
 )
 
 type Service struct {
-	Config Config
-	State  Runtime
-	store  *Store
-	beads  Beads
-	prs    *PRClient
-	worker *Worker
-	active *Run
+	Config         Config
+	State          Runtime
+	store          *Store
+	domainStore    *SQLiteStore
+	beads          Beads
+	prs            *PRClient
+	worker         *Worker
+	legacyAdapters *legacyAdapterRegistry
+	active         *Run
 	// activities holds one journal per run so PR/completion events always land in
 	// their own run's file, even after the worker exited.
 	activities map[string]*ActivityWriter
@@ -40,20 +42,62 @@ type Service struct {
 	startupID         string
 }
 
-func NewService(c Config) (*Service, error) {
+func NewService(c Config) (_ *Service, retErr error) {
 	if e := c.Completion.validate(); e != nil {
+		return nil, e
+	}
+	if e := preflightExistingState(c.RunDir, c.RuntimeFile); e != nil {
 		return nil, e
 	}
 	if e := c.prepareWorktreeRoot(); e != nil {
 		return nil, e
 	}
+	databasePath := filepath.Join(c.RunDir, "steerline.db")
+	if _, statErr := os.Stat(databasePath); os.IsNotExist(statErr) {
+		old, loadErr := LoadRuntime(filepath.Join(c.RunDir, c.RuntimeFile))
+		if loadErr != nil {
+			return nil, loadErr
+		}
+		if old != nil {
+			return nil, errors.New("runtime v5 projection exists without its authoritative SQLite database; restore the database before starting")
+		}
+	}
 	r := Runner{Dir: c.Repository, Timeout: duration(c.CommandTimeout)}
-	s := &Service{Config: c, store: &Store{Path: filepath.Join(c.RunDir, c.RuntimeFile)}, beads: Beads{Runner: r, Command: c.BD, Claimant: c.Claimant}, prs: &PRClient{Config: c.PR, Runner: r}, activities: map[string]*ActivityWriter{}}
-	old, e := LoadRuntime(s.store.Path)
+	db, e := OpenSQLiteStore(databasePath)
 	if e != nil {
 		return nil, e
 	}
-	s.State = Runtime{SchemaVersion: 4, Repository: Repository{Path: c.Repository, Remote: c.Remote, Branch: c.Branch, Identity: c.identity}, Runs: []*Run{}, Control: ControlState{DispatchMode: "auto", Revision: 1, Blockers: []ControlBlocker{}}}
+	defer func() {
+		if retErr != nil {
+			_ = db.Close()
+		}
+	}()
+	s := &Service{Config: c, domainStore: db, store: &Store{Path: filepath.Join(c.RunDir, c.RuntimeFile), Domain: db, Project: c.identity}, beads: Beads{Runner: r, Command: c.BD, Claimant: c.Claimant}, prs: &PRClient{Config: c.PR, Runner: r}, activities: map[string]*ActivityWriter{}, legacyAdapters: newLegacyAdapterRegistry()}
+	projection, _, e := db.LoadProjection(context.Background(), c.identity)
+	if e != nil {
+		return nil, e
+	}
+	var old *Runtime
+	if len(projection) > 0 {
+		var projected Runtime
+		if e = decode(projection, &projected); e != nil {
+			return nil, fmt.Errorf("invalid SQLite runtime projection: %w", e)
+		}
+		if projected.SchemaVersion != 5 {
+			return nil, fmt.Errorf("unsupported SQLite runtime projection schema %d", projected.SchemaVersion)
+		}
+		old = &projected
+	} else {
+		path := filepath.Join(c.RunDir, c.RuntimeFile)
+		old, e = LoadRuntime(path)
+		if e != nil {
+			return nil, e
+		}
+		if old != nil {
+			return nil, errors.New("runtime v5 projection exists without its authoritative SQLite database; restore the database before starting")
+		}
+	}
+	s.State = Runtime{SchemaVersion: 5, Repository: Repository{Path: c.Repository, Remote: c.Remote, Branch: c.Branch, Identity: c.identity}, Tasks: []TaskRecord{}, WorkflowRuns: []WorkflowRunRecord{}, Executions: []ExecutionRecord{}, Attempts: []StepAttemptRecord{}, Decisions: []DecisionRecord{}, Runs: []*Run{}, Control: ControlState{DispatchMode: "auto", Revision: 1, Blockers: []ControlBlocker{}}}
 	if old != nil {
 		if old.Repository.Identity != c.identity || old.Repository.Remote != c.Remote || old.Repository.Branch != c.Branch || old.Service.Claimant != c.Claimant {
 			return nil, errors.New("runtime repository/branch/claimant mismatch; preserve state and use the original configuration")
@@ -71,11 +115,15 @@ func NewService(c Config) (*Service, error) {
 		s.versionPrevious = &baseline
 		s.State.Runs = old.Runs
 		s.State.Control = old.Control
-		if old.SchemaVersion == 4 && (s.State.Control.DispatchMode != "manual" && s.State.Control.DispatchMode != "auto" || s.State.Control.Revision == 0) {
-			return nil, errors.New("invalid runtime v4 control state; preserve the snapshot for recovery")
-		}
-		if s.State.Control.DispatchMode == "" {
-			s.State.Control.DispatchMode = "auto"
+		s.State.Revision = old.Revision
+		s.State.Tasks = old.Tasks
+		s.State.WorkflowRuns = old.WorkflowRuns
+		s.State.Executions = old.Executions
+		s.State.Attempts = old.Attempts
+		s.State.Decisions = old.Decisions
+		s.State.Operations = old.Operations
+		if old.SchemaVersion != 5 || s.State.Control.DispatchMode != "manual" && s.State.Control.DispatchMode != "auto" || s.State.Control.Revision == 0 {
+			return nil, errors.New("invalid runtime v5 control state; preserve the snapshot for recovery")
 		}
 		s.State.Control.Revision = 1 // A control revision is scoped to its instance.
 		if s.State.Control.Blockers == nil {
@@ -95,21 +143,52 @@ func NewService(c Config) (*Service, error) {
 				return nil, errors.New("invalid or duplicate saved run")
 			}
 			seen[r.TaskID] = true
-			if r.AttemptID == "" {
-				r.AttemptID = runAttemptID(r)
+			if r.DomainTaskID == "" {
+				for _, task := range s.State.Tasks {
+					if task.ExternalID == r.TaskID {
+						r.DomainTaskID = task.TaskID
+						break
+					}
+				}
 			}
-			if r.ControlRevision == 0 {
-				r.ControlRevision = 1
+			if r.Backend == "" || r.Protocol == "" || r.ExecutionID == "" {
+				for _, execution := range s.State.Executions {
+					if execution.WorkflowRunID == r.RunID {
+						if r.ExecutionID == "" {
+							r.ExecutionID = execution.ExecutionID
+						}
+						if r.Backend == "" {
+							r.Backend = execution.Backend
+						}
+						if r.Protocol == "" {
+							r.Protocol = execution.Protocol
+						}
+						if r.Agent == "" {
+							r.Agent = execution.Agent
+						}
+						if r.Target.ID == "" {
+							r.Target = execution.Target
+						}
+						break
+					}
+				}
+			}
+			if r.WorkflowVersion == "" {
+				for _, workflow := range s.State.WorkflowRuns {
+					if workflow.WorkflowRunID == r.RunID {
+						r.WorkflowVersion = workflow.WorkflowVersion
+						break
+					}
+				}
+			}
+			if r.AttemptID == "" || r.ControlRevision == 0 || r.DomainTaskID == "" || r.Backend == "" || r.Protocol == "" || r.WorkflowVersion == "" || r.ExecutionID == "" {
+				return nil, errors.New("runtime v5 run is missing required execution identity fields")
+			}
+			if r.Decision != nil && r.Decision.Version == 0 {
+				return nil, errors.New("runtime v5 decision is missing its version")
 			}
 			if e := r.Completion.validate(); e != nil {
 				return nil, e
-			}
-			// v1/v2 runs predate hosting; they are local by definition.
-			if r.Host == "" {
-				r.Host = "local"
-			}
-			if r.Process != nil && r.Process.Kind == "" {
-				r.Process.Kind = "os"
 			}
 			switch r.ExecutionStatus {
 			case "pending", "running", "succeeded", "failed", "unknown":
@@ -138,9 +217,30 @@ func NewService(c Config) (*Service, error) {
 				}
 			}
 			if r.ExecutionStatus == "pending" || r.ExecutionStatus == "running" {
-				r.ExecutionStatus = "unknown"
-				r.FinishTaskStatus = "blocked"
-				r.Error = ptr("Interrupted execution: " + inspectProcessWithConfig(c, r.Process) + "; manual recovery required; never auto-resumed")
+				recoverPlannedStep := false
+				if r.WorkflowVersion == MinimalWorkflowVersion && r.ExecutionStatus == "pending" && r.FinishTaskStatus == "pending" {
+					for _, workflow := range s.State.WorkflowRuns {
+						if workflow.WorkflowRunID != r.RunID || workflow.Phase != "executing" {
+							continue
+						}
+						for _, execution := range s.State.Executions {
+							if execution.ExecutionID != r.ExecutionID || execution.CurrentStep == "" {
+								continue
+							}
+							for _, attempt := range s.State.Attempts {
+								if attempt.ExecutionID == execution.ExecutionID && attempt.AttemptID == r.AttemptID && attempt.StepID == execution.CurrentStep && attempt.Status == "planned" {
+									recoverPlannedStep = true
+									break
+								}
+							}
+						}
+					}
+				}
+				if !recoverPlannedStep {
+					r.ExecutionStatus = "unknown"
+					r.FinishTaskStatus = "blocked"
+					r.Error = ptr("Interrupted execution: " + inspectProcessWithConfig(c, r.Process) + "; manual recovery required; never auto-resumed")
+				}
 			}
 			if r.WorkspaceIntent != nil && r.FinishTaskStatus != "completed" {
 				err := verifyWorkspace(context.Background(), c, r.WorkspaceIntent, false)
@@ -164,14 +264,25 @@ func NewService(c Config) (*Service, error) {
 			s.State.SlotOccupied = false
 		}
 	}
-	s.State.SchemaVersion = 4
+	s.State.SchemaVersion = 5
 	s.State.Service = ServiceState{InstanceID: newID(), PID: os.Getpid(), Status: "running", Claimant: c.Claimant, Mode: "maintenance", Ready: false, ControlProtocol: ControlProtocolVersion, Capabilities: []string{"start_task", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "stop_service"}, ConfigDigest: c.configDigest, HeartbeatIntervalMS: duration(c.Heartbeat).Milliseconds()}
 	identity, err := currentProcessIdentity()
 	if err != nil {
 		return nil, fmt.Errorf("identify service process: %w", err)
 	}
 	s.State.Service.ProcessIdentity = identity
+	s.reconcileOperationsAfterRestart()
+	if err := db.ReconcileActivity(context.Background(), c.RunDir, s.State); err != nil {
+		return nil, fmt.Errorf("reconcile persisted activity into SQLite events: %w", err)
+	}
 	return s, nil
+}
+
+func (s *Service) Close() error {
+	if s == nil || s.domainStore == nil {
+		return nil
+	}
+	return s.domainStore.Close()
 }
 func runAttemptID(r *Run) string {
 	if r.LogPath != nil {
@@ -272,7 +383,7 @@ func (s *Service) save() error {
 			}
 		}
 	}
-	if err := s.store.Publish(s.State); err != nil {
+	if err := s.store.Publish(&s.State); err != nil {
 		return err
 	}
 	b, _ := json.Marshal(s.State)
@@ -289,6 +400,9 @@ func (s *Service) save() error {
 func (s *Service) activityWriter(r *Run) *ActivityWriter {
 	if r == nil || r.LogPath == nil || r.RunID == "" {
 		return nil
+	}
+	if s.activities == nil {
+		s.activities = map[string]*ActivityWriter{}
 	}
 	if w, ok := s.activities[r.RunID]; ok {
 		return w
@@ -335,8 +449,20 @@ func (s *Service) closeAllActivities() {
 func (s *Service) note(r *Run, source, kind, status, title, detail string, meta map[string]any) {
 	ev := ActivityEvent{Source: source, Kind: kind, Status: status, Title: title, Detail: detail, Meta: meta}
 	if w := s.activityWriter(r); w != nil {
-		if e := w.Write(ev); e != nil {
+		written, e := w.WriteEvent(ev)
+		if e != nil {
 			s.setError(e)
+		} else {
+			payload, _ := json.Marshal(written)
+			domainTask := r.DomainTaskID
+			if domainTask == "" {
+				domainTask = legacyTaskID(s.Config.identity, r)
+			}
+			executionID := r.ExecutionID
+			if executionID == "" {
+				executionID = legacyExecutionID(r.RunID)
+			}
+			s.State.PendingEvents = append(s.State.PendingEvents, DomainEvent{ProjectIdentity: s.Config.identity, TaskID: domainTask, WorkflowRunID: r.RunID, ExecutionID: executionID, AttemptID: r.AttemptID, ExternalSource: "activity:" + r.RunID, ExternalID: fmt.Sprint(written.Seq), Type: "activity." + written.Kind, ReceivedAt: written.TS, Payload: payload})
 		}
 	}
 	s.emitConsole(ev)
@@ -430,6 +556,22 @@ func (s *Service) dispatch(ctx context.Context) error {
 		return nil
 	}
 	s.State.SlotOccupied = false
+	backendName, protocolName, backendErr := ExecutionBackendKind(s.Config.hostName())
+	if backendErr != nil {
+		return backendErr
+	}
+	minimalConfig, minimalErr := s.Config.minimalConfig()
+	if minimalErr != nil {
+		return minimalErr
+	}
+	if minimalConfig != nil && backendName != "local_process" {
+		return UnsupportedAdapterOperation("minimal-v1", "target-side step execution is not verified for this backend")
+	}
+	if minimalConfig != nil {
+		if err := s.Config.validateMinimalPreflight(*minimalConfig); err != nil {
+			return err
+		}
+	}
 	tasks, e := s.beads.Ready(ctx)
 	if e != nil {
 		return e
@@ -456,6 +598,17 @@ func (s *Service) dispatch(ctx context.Context) error {
 			return e
 		}
 		source, err := s.beads.Context(ctx)
+		domainTaskID, identityMapDigest := "", ""
+		if err == nil {
+			domainTaskID, identityMapDigest, err = resolveDomainTaskIdentity(s.Config.Repository, s.Config.RunDir, s.Config.identity, source.ProjectID, t.ID)
+		}
+		if err == nil {
+			for _, savedTask := range s.State.Tasks {
+				if savedTask.TaskID == domainTaskID && savedTask.ExternalID != t.ID {
+					return fmt.Errorf("business task %q is already bound to a different Beads source ID", domainTaskID)
+				}
+			}
+		}
 		base := ""
 		if err == nil {
 			base, err = fetchBase(ctx, s.Config, id)
@@ -470,9 +623,26 @@ func (s *Service) dispatch(ctx context.Context) error {
 			return errors.Join(err, s.save())
 		}
 		dir := filepath.Join(s.Config.RunDir, "runs", id)
-		r := &Run{TaskID: t.ID, Title: t.Title, RunID: id, AttemptID: id, Claimant: s.Config.Claimant, Host: s.Config.hostName(), BeadsStatus: t.Status, ExecutionStatus: "pending", FinishTaskStatus: "pending", PR: PRState{State: "unknown"}, LogPath: ptr(filepath.Join(dir, "events.jsonl")), ResultPath: ptr(filepath.Join(dir, "result.json"))}
+		target := ExecutionTarget{ID: "local"}
+		if backendName == "orca" {
+			target = ExecutionTarget{ID: "local-orca", ConnectionID: "local-orca"}
+		}
+		r := &Run{TaskID: t.ID, DomainTaskID: domainTaskID, IdentityMapDigest: identityMapDigest, Title: t.Title, RunID: id, AttemptID: id, DomainAttemptNumber: 1, Claimant: s.Config.Claimant, Host: s.Config.hostName(), Backend: backendName, Protocol: protocolName, Agent: s.Config.agentName(), Target: target, BeadsStatus: t.Status, ExecutionStatus: "pending", FinishTaskStatus: "pending", PR: PRState{State: "unknown"}, LogPath: ptr(filepath.Join(dir, "events.jsonl")), ResultPath: ptr(filepath.Join(dir, "result.json"))}
 		r.WorkspaceIntent = intent
 		r.BeadsContext = &source
+		if minimalConfig != nil {
+			taskRecord, workflowRecord, executionRecord, prepareAttempt, initErr := InitializeMinimalWorkflow(s.Config.identity, s.Config, t, source, r)
+			if initErr != nil {
+				return initErr
+			}
+			r.WorkflowVersion = MinimalWorkflowVersion
+			s.State.Tasks = append(s.State.Tasks, taskRecord)
+			s.State.WorkflowRuns = append(s.State.WorkflowRuns, workflowRecord)
+			s.State.Executions = append(s.State.Executions, executionRecord)
+			s.State.Attempts = append(s.State.Attempts, prepareAttempt)
+		} else {
+			r.WorkflowVersion = "legacy-v1"
+		}
 		if s.Config.Completion != nil {
 			copy := *s.Config.Completion
 			copy.Command.Args = append([]string{}, copy.Command.Args...)
@@ -483,8 +653,13 @@ func (s *Service) dispatch(ctx context.Context) error {
 		if e = s.save(); e != nil {
 			return e
 		}
+		claimOperationID, opErr := s.startOperation("claim_task", "claim:"+s.Config.identity+":"+t.ID+":"+id, map[string]any{"task_id": t.ID, "run_id": id, "claimant": s.Config.Claimant, "source_project": source.ProjectID})
+		if opErr != nil {
+			return opErr
+		}
 		ok, err := s.beads.Claim(ctx, t.ID)
 		if err != nil {
+			_ = s.setOperationState(claimOperationID, "outcome_unknown", "", nil, err.Error())
 			r.ExecutionStatus = "unknown"
 			s.State.SlotOccupied = true
 			s.blocked(r, "Claim uncertain: "+err.Error())
@@ -494,6 +669,7 @@ func (s *Service) dispatch(ctx context.Context) error {
 			return err
 		}
 		if !ok {
+			_ = s.setOperationState(claimOperationID, "rejected", "", []byte(`{"claimed":false}`), "claim conflict")
 			s.State.SlotOccupied = false
 			s.State.CurrentTask = nil
 			s.State.Runs = s.State.Runs[:len(s.State.Runs)-1]
@@ -507,6 +683,10 @@ func (s *Service) dispatch(ctx context.Context) error {
 		}
 		if s.State.Control.Operation != nil {
 			s.injectControlFault("after_claim")
+		}
+		claimReceipt, _ := json.Marshal(map[string]any{"claimed": true, "task_id": t.ID, "claimant": s.Config.Claimant})
+		if err = s.setOperationState(claimOperationID, "confirmed", "", claimReceipt, ""); err != nil {
+			return err
 		}
 		r.BeadsStatus = "in_progress"
 		s.State.SlotOccupied = true
@@ -522,88 +702,114 @@ func (s *Service) dispatch(ctx context.Context) error {
 			s.closeActivity(r)
 			return s.save()
 		}
-		if s.Config.hostName() == "orca" {
-			s.note(r, "steer", "prepare", "started", "orca worktree create", intent.Branch, map[string]any{"base_commit": intent.BaseCommit, "agent": s.Config.agentName()})
-			w, err := startOrcaRun(ctx, s.Config, t, r, source, intent, dir)
-			if err != nil {
-				r.ExecutionStatus = "failed"
-				r.EndedAt = ptr(now())
-				s.blocked(r, "Orca execution failed to start: "+err.Error())
-				s.State.SlotOccupied = false
-				s.State.CurrentTask = nil
-				s.note(r, "steer", "error", "failed", "orca start failed", err.Error(), nil)
-				s.closeActivity(r)
-				return s.save()
+		if r.WorkflowVersion == MinimalWorkflowVersion {
+			if err = s.setTaskStatus(r.DomainTaskID, "in_progress"); err != nil {
+				return err
 			}
-			s.worker = w
+			workflow, execution := s.minimalRecords(r)
+			workflow.Phase = "executing"
+			workflow.UpdatedAt = now()
+			execution.Status = "active"
+			execution.UpdatedAt = now()
+			prepareAttempt := s.minimalAttempt(r, r.AttemptID)
+			if prepareAttempt == nil {
+				return errors.New("minimal workflow is missing its prepare attempt")
+			}
+			if err = s.save(); err != nil {
+				return err
+			}
+			s.note(r, "steer", "prepare", "started", "preparing minimal-v1 workspace", intent.Path, map[string]any{"base_commit": intent.BaseCommit})
+			return s.prepareMinimalExecution(ctx, t, r, source)
+		}
+		adapter, err := s.legacyAdapters.Resolve(backendName, protocolName)
+		if err != nil {
+			return err
+		}
+		startOperationID, opErr := s.startOperation("start_execution", "start:"+s.Config.identity+":"+r.RunID+":"+r.AttemptID, map[string]any{"task_id": t.ID, "workflow_run_id": r.RunID, "execution_id": legacyExecutionID(r.RunID), "attempt_id": r.AttemptID, "backend": backendName, "protocol": protocolName, "agent": r.Agent, "target": r.Target, "workspace_intent": r.WorkspaceIntent})
+		if opErr != nil {
+			return opErr
+		}
+		if backendName == "orca" {
+			s.note(r, "steer", "prepare", "started", "orca worktree create", intent.Branch, map[string]any{"base_commit": intent.BaseCommit, "agent": s.Config.agentName()})
+		} else {
+			s.note(r, "steer", "prepare", "started", "preparing worktree", intent.Path, map[string]any{"branch": intent.Branch, "base_commit": intent.BaseCommit})
+		}
+		checkpoint := func(path, branch, base string) error {
 			if s.State.Control.Operation != nil {
 				s.injectControlFault("after_worktree")
-				s.injectControlFault("after_worker_start")
 			}
-			s.active = r
-			r.ExecutionStatus = "running"
-			r.StartedAt = ptr(now())
-			procID := w.proc.Identity()
-			r.Process = &procID
-			r.AttemptID = id
-			s.lastDispatched = t.ID
-			if e = s.save(); e != nil {
-				return e
+			r.WorkspaceIntent.Path, r.WorkspaceIntent.Branch, r.WorkspaceIntent.BaseCommit = path, branch, base
+			r.WorktreePath, r.WorktreeBranch, r.BaseCommit = ptr(path), ptr(branch), ptr(base)
+			if saveErr := s.save(); saveErr != nil {
+				return saveErr
 			}
-			if s.State.Control.Operation != nil {
-				s.injectControlFault("worker_persisted")
+			title := "worktree ready"
+			if backendName == "orca" {
+				title = "orca worktree ready"
 			}
-			s.note(r, "steer", "worker_start", "started", "orca agent started", deref(r.WorktreePath), map[string]any{"terminal": procID.Terminal, "agent": s.Config.agentName()})
-			return s.save()
+			s.note(r, "steer", "prepare", "completed", title, path, map[string]any{"branch": branch, "base_commit": base, "backend": backendName, "protocol": protocolName})
+			return nil
 		}
-		s.note(r, "steer", "prepare", "started", "preparing worktree", intent.Path, map[string]any{"branch": intent.Branch, "base_commit": intent.BaseCommit})
-		workerConfig, err := prepareWorkspace(ctx, s.Config, r, source)
-		if err != nil {
-			return s.preparationFailed(r, "Worktree preparation failed: "+err.Error())
+		started, startErr := adapter.Start(ctx, s.Config, t, r, source, intent, dir, checkpoint)
+		if started.Worker != nil {
+			s.worker, s.active = started.Worker, r
 		}
-		if s.State.Control.Operation != nil {
-			s.injectControlFault("after_worktree")
-		}
-		r.WorktreePath = ptr(intent.Path)
-		r.WorktreeBranch = ptr(intent.Branch)
-		r.BaseCommit = ptr(intent.BaseCommit)
-		if e = s.save(); e != nil {
-			return e
-		}
-		s.note(r, "steer", "prepare", "completed", "worktree ready", intent.Path, map[string]any{"branch": intent.Branch, "base_commit": intent.BaseCommit})
-		if ctx.Err() != nil {
-			return s.preparationFailed(r, "Stopped after worktree preparation, before worker launch")
-		}
-		w, err := StartWorker(workerConfig, t, r)
-		if err != nil {
+		if startErr != nil {
+			if s.store.Err() != nil || started.Worker != nil {
+				return startErr
+			}
+			if started.Uncertain {
+				_ = s.setOperationState(startOperationID, "outcome_unknown", "", nil, startErr.Error())
+				r.ExecutionStatus = "unknown"
+				s.blocked(r, "Execution start outcome is uncertain: "+startErr.Error())
+				s.State.SlotOccupied, s.State.CurrentTask = true, ptr(t.ID)
+				s.note(r, "steer", "error", "unknown", "execution start outcome unknown", startErr.Error(), map[string]any{"backend": backendName, "protocol": protocolName})
+				return errors.Join(startErr, s.save())
+			}
+			if !started.Prepared {
+				_ = s.setOperationState(startOperationID, "rejected", "", nil, startErr.Error())
+				return s.preparationFailed(r, "Worktree preparation failed: "+startErr.Error())
+			}
+			_ = s.setOperationState(startOperationID, "rejected", "", nil, startErr.Error())
 			r.ExecutionStatus = "failed"
 			r.EndedAt = ptr(now())
-			s.blocked(r, "Worker startup failed: "+err.Error())
-			s.State.SlotOccupied = false
-			s.State.CurrentTask = nil
-			s.note(r, "steer", "error", "failed", "worker startup failed", err.Error(), nil)
+			s.blocked(r, "Worker startup failed: "+startErr.Error())
+			s.State.SlotOccupied, s.State.CurrentTask = false, nil
+			s.note(r, "steer", "error", "failed", "worker startup failed", startErr.Error(), nil)
 			s.closeActivity(r)
 			return s.save()
 		}
-		s.worker = w
-		s.active = r
+		if started.Worker == nil {
+			return errors.New("legacy adapter accepted start without returning a worker handle")
+		}
 		if s.State.Control.Operation != nil {
 			s.injectControlFault("after_worker_start")
 		}
-		r.ExecutionStatus = "running"
-		r.StartedAt = ptr(now())
-		procID := w.proc.Identity()
-		r.Process = &procID
-		r.AttemptID = id
+		r.ExecutionStatus, r.StartedAt, r.Process, r.AttemptID = "running", ptr(now()), &started.Process, id
 		s.lastDispatched = t.ID
-		s.note(r, "steer", "worker_start", "started", "worker started", intent.Path, map[string]any{"pid": procID.PID})
-		if err = s.save(); err != nil {
+		startReceipt, _ := json.Marshal(started.Process)
+		if err = s.setOperationState(startOperationID, "confirmed", "", startReceipt, ""); err != nil {
 			return err
+		}
+		if e = s.save(); e != nil {
+			return e
 		}
 		if s.State.Control.Operation != nil {
 			s.injectControlFault("worker_persisted")
 		}
-		return nil
+		metadata := map[string]any{"backend": backendName, "protocol": protocolName, "agent": s.Config.agentName()}
+		if started.Process.PID > 0 {
+			metadata["pid"] = started.Process.PID
+		}
+		if started.Process.Terminal != "" {
+			metadata["terminal"] = started.Process.Terminal
+		}
+		startedTitle := "worker started"
+		if backendName == "orca" {
+			startedTitle = "orca agent started"
+		}
+		s.note(r, "steer", "worker_start", "started", startedTitle, deref(r.WorktreePath), metadata)
+		return s.save()
 	}
 	if !targetFound {
 		return errTaskNotReady
@@ -806,6 +1012,9 @@ func (s *Service) finished(err error) error {
 			}
 		}
 	}
+	if r != nil && r.WorkflowVersion == MinimalWorkflowVersion {
+		return s.finishMinimalStep(err)
+	}
 	s.worker = nil
 	s.active = nil
 	s.State.CurrentTask = nil
@@ -919,11 +1128,31 @@ func (s *Service) pollPRsFor(ctx context.Context, runID string) error {
 				r.Error = ptr("PR merged; completion will retry: " + clip(e.Error(), 1000))
 				operationErr = e
 			} else {
-				r.BeadsStatus = "closed"
-				r.FinishTaskStatus = "completed"
-				r.Error = nil
-				s.note(r, "steer", "completion", "completed", "task closed", r.TaskID, nil)
-				s.closeActivity(r)
+				if r.WorkflowVersion == MinimalWorkflowVersion {
+					workflow, execution := s.minimalRecords(r)
+					var task *TaskRecord
+					for i := range s.State.Tasks {
+						if s.State.Tasks[i].TaskID == r.DomainTaskID {
+							task = &s.State.Tasks[i]
+							break
+						}
+					}
+					if workflow == nil || execution == nil || task == nil || info.HeadRevision != execution.CandidateRevision {
+						e = errors.New("merged PR delivery evidence does not match the selected candidate")
+					} else {
+						e = CompleteMergedDelivery(task, workflow, execution, DeliveryEvidence{PRURL: info.URL, PublishedHead: info.HeadRevision, MergeCommit: deref(info.MergeCommit), TargetBranch: info.BaseBranch, Merged: info.Merged, ProviderTaskStatus: "closed", ObservedAt: now()})
+					}
+				}
+				if e != nil {
+					r.Error = ptr("PR merged; completion will retry: " + clip(e.Error(), 1000))
+					operationErr = e
+				} else {
+					r.BeadsStatus = "closed"
+					r.FinishTaskStatus = "completed"
+					r.Error = nil
+					s.note(r, "steer", "completion", "completed", "task closed", r.TaskID, nil)
+					s.closeActivity(r)
+				}
 			}
 			if e = s.save(); e != nil {
 				return e
@@ -1103,7 +1332,7 @@ func (s *Service) run(ctx context.Context, retryRunID, dispatchMode string) (ret
 		if e := step(s.pollPRs); e != nil {
 			return e
 		}
-		if e := step(s.applyDecisions); e != nil {
+		if e := step(s.processCommandsAndDecisions); e != nil {
 			return e
 		}
 		if e := s.reconcile(ctx); e != nil {
@@ -1111,6 +1340,9 @@ func (s *Service) run(ctx context.Context, retryRunID, dispatchMode string) (ret
 			if saveErr := s.save(); saveErr != nil {
 				return saveErr
 			}
+		}
+		if e := step(s.resumeMinimalSteps); e != nil {
+			return e
 		}
 		candidateErr := s.refreshCandidates(ctx)
 		if candidateErr != nil {
@@ -1170,12 +1402,15 @@ func (s *Service) run(ctx context.Context, retryRunID, dispatchMode string) (ret
 			if s.State.Control.Operation != nil {
 				continue
 			}
-			if e := step(s.applyDecisions); e != nil {
+			if e := step(s.processCommandsAndDecisions); e != nil {
 				return e
 			}
 		case <-taskTick.C:
 			if retryRunID != "" {
 				continue
+			}
+			if e := step(s.processCommandsAndDecisions); e != nil {
+				return e
 			}
 			if e := s.pollControl(ctx, cancel); e != nil {
 				return e
@@ -1183,10 +1418,19 @@ func (s *Service) run(ctx context.Context, retryRunID, dispatchMode string) (ret
 			if s.State.Control.Operation != nil {
 				continue
 			}
+			if e := step(s.resumeMinimalSteps); e != nil {
+				return e
+			}
+			if s.worker != nil {
+				continue
+			}
 			if e := step(s.dispatch); e != nil {
 				return e
 			}
 		case <-controlTick.C:
+			if e := step(s.processPendingCommands); e != nil {
+				return e
+			}
 			if retryRunID == "" {
 				if e := s.pollControl(ctx, cancel); e != nil {
 					return e

@@ -88,6 +88,10 @@ func (s *Service) startRetry(ctx context.Context, id string) error {
 	r.LogPath = ptr(filepath.Join(dir, "events.jsonl"))
 	r.ResultPath = ptr(filepath.Join(dir, "result.json"))
 	r.AttemptID = attemptID
+	r.DomainAttemptNumber++
+	if r.DomainAttemptNumber < 1 {
+		r.DomainAttemptNumber = 1
+	}
 	r.ExecutionStatus = "pending"
 	r.FinishTaskStatus = "pending"
 	r.BeadsStatus = task.Status

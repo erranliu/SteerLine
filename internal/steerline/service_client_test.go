@@ -20,7 +20,7 @@ func TestConnectionClassifiesProcessAndSnapshotIndependently(t *testing.T) {
 	id, err := currentProcessIdentity()
 	require(t, err)
 	rt := Runtime{
-		SchemaVersion: 4,
+		SchemaVersion: 5,
 		UpdatedAt:     now(),
 		HeartbeatAt:   now(),
 		Service: ServiceState{
@@ -92,11 +92,11 @@ func TestConnectionClassifiesProcessAndSnapshotIndependently(t *testing.T) {
 	if configChanged.State != ConnectionConfigChanged || configChanged.CanControl || !configChanged.CanStop {
 		t.Fatalf("config change classification=%+v; expected run_dir=%s", configChanged, oldRunDir)
 	}
-	legacyChanged := rt
-	legacyChanged.Service.ConfigDigest = strings.Repeat("e", 64)
-	write(legacyChanged)
+	unboundRuntime := rt
+	unboundRuntime.Service.ConfigDigest = strings.Repeat("e", 64)
+	write(unboundRuntime)
 	if got := ConnectService(context.Background(), c); got.State != ConnectionIdentityError || got.CanStop {
-		t.Fatalf("legacy digest mismatch without live service locks must remain unbound: %+v", got)
+		t.Fatalf("runtime without a startup binding must remain unbound: %+v", got)
 	}
 	repoLock, err := LockRepository(c.Identity())
 	require(t, err)
@@ -112,30 +112,11 @@ func TestConnectionClassifiesProcessAndSnapshotIndependently(t *testing.T) {
 			runLock.Close()
 		}
 	})
-	if got := ConnectService(context.Background(), c); got.State != ConnectionConfigChanged || !got.CanStop || got.CanControl {
-		t.Fatalf("legacy digest mismatch with both live service locks=%+v", got)
+	if got := ConnectService(context.Background(), c); got.State != ConnectionIdentityError || got.CanStop || got.CanControl {
+		t.Fatalf("unbound runtime must not gain identity from service locks=%+v", got)
 	}
-	stopRequest, err := SubmitControl(c, "stop_service", nil, "identity-test")
-	require(t, err)
-	requestPath := controlRequestPath(c.RunDir, stopRequest.RequestID)
-	receipt := ControlReceipt{Version: ControlProtocolVersion, RequestID: stopRequest.RequestID, RequestDigest: rawRequestDigest(requestPath), InstanceID: rt.Service.InstanceID, Action: "stop_service", Status: "applied", RequestedBy: stopRequest.RequestedBy, SubmittedAt: stopRequest.CreatedAt, CompletedAt: ptr(now())}
-	receiptBytes, err := json.Marshal(receipt)
-	require(t, err)
-	receiptPath := controlReceiptPath(c.RunDir, stopRequest.RequestID)
-	require(t, os.MkdirAll(filepath.Dir(receiptPath), 0700))
-	require(t, AtomicWrite(receiptPath, receiptBytes))
 	repoLock.Close()
 	runLock.Close()
-	repoLock, runLock = nil, nil
-	stoppedLegacy := rt
-	stoppedLegacy.Service.ConfigDigest = strings.Repeat("e", 64)
-	stoppedLegacy.Service.ProcessIdentity = &ProcessIdentity{Kind: "os", PID: 2_000_000_000, Created: "old-process", Executable: "old-executable"}
-	stoppedLegacy.Service.PID = stoppedLegacy.Service.ProcessIdentity.PID
-	require(t, writeStopObservation(c, &stoppedLegacy, stopRequest.RequestID))
-	write(stoppedLegacy)
-	if got := ConnectService(context.Background(), c); got.State != ConnectionOffline || !got.CanStart {
-		t.Fatalf("stopped legacy service should allow explicit restart after the saved stop proof: %+v", got)
-	}
 
 	wrongRepo := rt
 	wrongRepo.Repository.Identity = filepath.Join(filepath.Dir(c.Repository), "other.git")

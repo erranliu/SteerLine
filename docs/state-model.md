@@ -18,10 +18,10 @@
 
 ## 权威归属
 
-- **执行态与交付态**：SteerLine 唯一权威（`runtime.json`）。
+- **执行态与交付态**：SteerLine 唯一权威（`run_dir/steerline.db`）；`runtime.json` v5 是可重建的观察投影。v1–v4 runtime 不兼容，服务拒绝恢复且保留原文件。
 - **任务认领与关闭**：当前由 Beads 权威；SteerLine 通过 `bd claim` / `bd close` **写入**，并在完成后以 `bd show` 回读核实（不以本地预测替代 `closed`）。
 - **PR 合并**：外部平台权威；SteerLine 查询核实后才推进交付态。
-- **派发控制**：当前 runtime v4 的服务主状态机权威。manual 不自动 claim；pause 只挡新派发；停止服务与关闭查看器分开。控制请求的 `applied` 只说明指令完成，不代替 run 的执行或交付状态。
+- **派发控制**：SQLite 中的服务状态与控制检查点权威。manual 不自动 claim；pause 只挡新派发；停止服务与关闭查看器分开。控制请求的 `applied` 只说明指令完成，不代替 run 的执行或交付状态。
 
 ## 生命周期（一次运行）
 
@@ -87,7 +87,7 @@ PR 已合并 + 结项命令 + bd close:  finish=completed   beads=closed
 
 Windows 服务窗口没有另外的服务启动父进程；窗口中的服务在 preflight 前发布自己的身份，之后独占 `startup.json` 生命周期记录。Linux 独立启动路径的父进程仍将 OS 身份写入 v1 `process.json`，不能覆盖子进程已发布的 `started` 或 `failed`。客户端确认进程已退出时可将未确认的启动标记为失败；损坏或多个仍存活的启动记录会阻止新的启动。
 
-对于 PR 2 的 v4 服务（没有 `startup_id`），配置摘要变化时，连接端还要求匹配的 OS 身份及 repository/run_dir 两把锁，才能保留显式 stop 能力。停服客户端确认 `stop_service=applied`、原进程退出和两把锁释放后，会在 `service/stops/<instance_id>.json` 写入版本化停服观察记录，证明该旧实例原本属于此 run_dir；这使已停服务在修改配置摘要后仍可显式重新启动，不改 runtime v4。
+服务连接只接受 runtime v5。控制协议仍独立使用 v1；不兼容 runtime 版本不能提交控制请求，也不会因进程探测或旧停服记录而升级为受支持状态。
 
 连接读取 runtime 快照、新鲜度、进程探测、配置摘要和控制协议能力，并单独呈现。进程探测区分匹配、确定不存在、PID 已复用和无法核验；权限不足及身份不明不等于离线。过期 heartbeat、ready=false 和协议不兼容均保留旧实例，不自动另起服务。配置摘要变化时保留观察与显式停服能力，并禁用其他控制动作。控制台退出、连接断开和等待超时都不会停止服务。
 

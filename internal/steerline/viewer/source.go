@@ -3,17 +3,19 @@ package viewer
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/erranliu/SteerLine/internal/steerline"
 )
 
-// Source is the read-mostly data the viewer needs. Only Answer writes, and it
-// writes only the immutable decision answer file; runtime.json is never touched.
+// Source is the read-mostly data the viewer needs. Answers go through the
+// versioned command queue for v5 projects, with legacy answer-file support.
 type Source interface {
 	Snapshot() steerline.ObservationSnapshot
 	ReadLog(logPath string, cursor steerline.JournalCursor, raw bool) (LogBatch, error)
@@ -44,6 +46,13 @@ func NewFileSource(c steerline.Config) *FileSource {
 
 func (f *FileSource) Snapshot() steerline.ObservationSnapshot {
 	obs := steerline.ReadObservationSnapshot(filepath.Join(f.cfg.RunDir, f.cfg.RuntimeFile), f.cfg.Heartbeat, nil)
+	if f.cfg.Identity() != "" {
+		if databaseObs, err := f.readDatabaseProjection(); err == nil && databaseObs.Runtime != nil {
+			if obs.Runtime == nil || obs.Runtime.SchemaVersion < 5 || databaseObs.Runtime.Revision > obs.Runtime.Revision {
+				obs = databaseObs
+			}
+		}
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if obs.Runtime != nil && (obs.State == steerline.SnapshotValid || obs.State == steerline.SnapshotStale) {
@@ -70,6 +79,52 @@ func (f *FileSource) Snapshot() steerline.ObservationSnapshot {
 		}
 	}
 	return obs
+}
+
+func (f *FileSource) readDatabaseProjection() (steerline.ObservationSnapshot, error) {
+	path := filepath.Join(f.cfg.RunDir, "steerline.db")
+	if _, err := os.Stat(path); err != nil {
+		return steerline.ObservationSnapshot{}, err
+	}
+	store, err := steerline.OpenSQLiteReader(path)
+	if err != nil {
+		return steerline.ObservationSnapshot{}, err
+	}
+	defer store.Close()
+	payload, _, err := store.LoadProjection(context.Background(), f.cfg.Identity())
+	if err != nil {
+		return steerline.ObservationSnapshot{}, err
+	}
+	if len(payload) == 0 {
+		return steerline.ObservationSnapshot{}, errors.New("SQLite projection is missing")
+	}
+	var runtime steerline.Runtime
+	if err = json.Unmarshal(payload, &runtime); err != nil {
+		return steerline.ObservationSnapshot{}, err
+	}
+	if runtime.SchemaVersion != 5 {
+		return steerline.ObservationSnapshot{}, fmt.Errorf("unsupported database projection schema %d", runtime.SchemaVersion)
+	}
+	now := time.Now().UTC()
+	limit := 15 * time.Second
+	if duration, parseErr := time.ParseDuration(f.cfg.Heartbeat); parseErr == nil && duration > 0 && 3*duration > limit {
+		limit = 3 * duration
+	}
+	obs := steerline.ObservationSnapshot{Runtime: &runtime, State: steerline.SnapshotValid, SampledAt: now, FreshnessLimit: limit}
+	if runtime.HeartbeatAt.IsZero() {
+		obs.State = steerline.SnapshotStale
+		return obs, nil
+	}
+	obs.HeartbeatAge = now.Sub(runtime.HeartbeatAt.UTC())
+	if obs.HeartbeatAge < 0 {
+		obs.ClockSkew = true
+		obs.State = steerline.SnapshotStale
+		return obs, nil
+	}
+	if obs.HeartbeatAge > limit {
+		obs.State = steerline.SnapshotStale
+	}
+	return obs, nil
 }
 
 func cloneRuntime(rt *steerline.Runtime) *steerline.Runtime {
@@ -190,8 +245,15 @@ func (f *FileSource) storeNormalizer(path string, cursor steerline.JournalCursor
 }
 
 func (f *FileSource) Answer(run *steerline.Run, optionID, note, by string) error {
+	if run == nil {
+		return fmt.Errorf("run is required")
+	}
 	if by == "" {
 		by = steerline.AnswererName()
 	}
-	return steerline.WriteAnswer(run, steerline.DecisionAnswer{OptionID: optionID, Note: note, AnsweredBy: by})
+	decisionID := ""
+	if run.Decision != nil {
+		decisionID = run.Decision.ID
+	}
+	return steerline.AnswerDecision(f.cfg, steerline.AnswerOptions{RunID: run.RunID, DecisionID: decisionID, Option: optionID, Note: note, By: by})
 }

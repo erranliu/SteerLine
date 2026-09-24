@@ -32,7 +32,7 @@ func writeWatchFixture(t *testing.T, withActivity bool) Config {
 			t.Fatal(e)
 		}
 	}
-	rt := Runtime{SchemaVersion: 2, Runs: []*Run{{TaskID: "t1", RunID: "abc", Title: "x", ExecutionStatus: "running", FinishTaskStatus: "pending", LogPath: &events, ResultPath: &result}}}
+	rt := Runtime{SchemaVersion: 5, Runs: []*Run{{TaskID: "t1", RunID: "abc", Title: "x", ExecutionStatus: "running", FinishTaskStatus: "pending", LogPath: &events, ResultPath: &result}}}
 	b, e := json.Marshal(rt)
 	if e != nil {
 		t.Fatal(e)

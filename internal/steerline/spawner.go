@@ -4,10 +4,12 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"sync"
+	"time"
 )
 
 // process is the host-neutral handle for a running worker. Local uses an OS
@@ -24,9 +26,11 @@ type SpawnSpec struct {
 	Dir        string
 	EventsPath string
 	StderrPath string
+	OutputPath string
 	Command    Command
 	Stdin      io.Reader
 	Env        map[string]string
+	Timeout    time.Duration
 }
 
 // Spawner starts and supervises one worker. Implementations must not mutate
@@ -47,6 +51,20 @@ func SpawnerFor(c Config) Spawner {
 // or process group (Linux). This preserves the pre-P1 behavior exactly.
 type LocalSpawner struct{}
 
+type maxOutputWriter struct {
+	writer    io.Writer
+	remaining int64
+}
+
+func (w *maxOutputWriter) Write(data []byte) (int, error) {
+	if int64(len(data)) > w.remaining {
+		return 0, fmt.Errorf("minimal step output exceeds %d bytes", minimalStepOutputMax)
+	}
+	n, err := w.writer.Write(data)
+	w.remaining -= int64(n)
+	return n, err
+}
+
 func (LocalSpawner) Host() string { return "local" }
 
 func (LocalSpawner) Start(ctx context.Context, spec SpawnSpec) (*Worker, error) {
@@ -62,6 +80,15 @@ func (LocalSpawner) Start(ctx context.Context, spec SpawnSpec) (*Worker, error) 
 		logFile.Close()
 		return nil, e
 	}
+	var outputFile *os.File
+	if spec.OutputPath != "" {
+		outputFile, e = os.OpenFile(spec.OutputPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+		if e != nil {
+			logFile.Close()
+			errFile.Close()
+			return nil, e
+		}
+	}
 	cmd := exec.Command(spec.Command.Executable, spec.Command.Args...)
 	cmd.Dir = spec.Dir
 	cmd.Env = overrideEnv(cmd.Environ(), spec.Env)
@@ -72,6 +99,9 @@ func (LocalSpawner) Start(ctx context.Context, spec SpawnSpec) (*Worker, error) 
 	if e != nil {
 		logFile.Close()
 		errFile.Close()
+		if outputFile != nil {
+			outputFile.Close()
+		}
 		return nil, e
 	}
 	cmd.Stdout = writer
@@ -81,6 +111,9 @@ func (LocalSpawner) Start(ctx context.Context, spec SpawnSpec) (*Worker, error) 
 		reader.Close()
 		logFile.Close()
 		errFile.Close()
+		if outputFile != nil {
+			outputFile.Close()
+		}
 		return nil, e
 	}
 	w := &Worker{proc: p, Events: make(chan WorkerEvent, 64), Done: make(chan error, 1)}
@@ -91,12 +124,33 @@ func (LocalSpawner) Start(ctx context.Context, spec SpawnSpec) (*Worker, error) 
 		go func() {
 			defer wg.Done()
 			defer reader.Close()
-			scanErr = streamWorkerEvents(io.TeeReader(reader, logFile), NewCodexNormalizer(), w.Events)
+			writer := io.Writer(logFile)
+			if outputFile != nil {
+				writer = io.MultiWriter(logFile, &maxOutputWriter{writer: outputFile, remaining: minimalStepOutputMax})
+			}
+			scanErr = streamWorkerEvents(io.TeeReader(reader, writer), NewCodexNormalizer(), w.Events)
 			if scanErr != nil {
 				p.Kill()
 			}
 		}()
-		err := cmd.Wait()
+		waited := make(chan error, 1)
+		go func() { waited <- cmd.Wait() }()
+		var err error
+		if spec.Timeout > 0 {
+			timer := time.NewTimer(spec.Timeout)
+			select {
+			case err = <-waited:
+			case <-timer.C:
+				p.Kill()
+				err = <-waited
+				if err == nil {
+					err = fmt.Errorf("worker step timed out after %s", spec.Timeout)
+				}
+			}
+			timer.Stop()
+		} else {
+			err = <-waited
+		}
 		p.Close()
 		wg.Wait()
 		if scanErr != nil {
@@ -110,6 +164,14 @@ func (LocalSpawner) Start(ctx context.Context, spec SpawnSpec) (*Worker, error) 
 		}
 		if e := errFile.Close(); err == nil {
 			err = e
+		}
+		if outputFile != nil {
+			if e := outputFile.Sync(); err == nil {
+				err = e
+			}
+			if e := outputFile.Close(); err == nil {
+				err = e
+			}
 		}
 		close(w.Events)
 		w.Done <- err

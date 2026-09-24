@@ -1,4 +1,4 @@
-# runtime v4 / control protocol v1 / result v1 数据契约
+# runtime v5 / control protocol v1 / result v1 数据契约
 
 编码为 UTF-8，时间为 RFC3339 UTC。完整例子：[runtime](../examples/runtime.json)、[result](../examples/result.json)。结果的可执行 JSON Schema 与程序一起嵌入：[result.schema.json](../internal/steerline/result.schema.json)。
 
@@ -6,7 +6,10 @@
 
 | 字段 | 类型 | 含义 |
 | --- | --- | --- |
-| schema_version | integer | 当前 4；可读取 v1–v4，只有持锁服务写入时把旧快照迁移为 v4，拒绝其他未知版本 |
+| schema_version | integer | 当前投影版本 5；只接受 v5。v1–v4 明确拒绝，不读取、不转换，也不删除原文件 |
+| revision | integer | SQLite 业务数据库 revision；投影落后时由 QueryService 查询数据库 |
+| tasks / workflow_runs / executions / attempts / decisions | arrays | 任务、流程、执行、尝试及决策的稳定 ID 关联读模型；旧 `runs` 保留为兼容展示摘要 |
+| projection_error | string | 最近一次可见读投影导出错误；SQLite 已提交状态不会因投影写失败回滚 |
 | updated_at | timestamp | 最近一次成功发布快照的时间，含心跳写入 |
 | heartbeat_at | timestamp | 最近成功发布的活跃时间；读者用于判断过期 |
 | service.instance_id | string | 每次启动新的随机实例 ID，不等于 claimant |
@@ -38,11 +41,11 @@
 
 | 字段 | 类型 | 含义 |
 | --- | --- | --- |
-| task_id / title | string | Beads 任务身份和领取时标题 |
+| task_id / title | string | 外部来源任务身份和领取时标题；`domain_task_id` 是本地稳定 Task 身份，`identity_map_digest` 记录采用的身份映射 |
 | run_id / claimant | string | 本次随机运行 ID / 固定领取者 |
 | attempt_id | string | 此运行当前日志代次；首次执行等于 run_id，后续 retry 使用新 ID |
 | control_revision | integer | 该运行最近一次操作相关状态变更的版本 |
-| host | string | `local` 或 `orca`；v1/v2 记录视为 local |
+| host | string | `local` 或 `orca`，与 backend/protocol 固定身份并存 |
 | completion | object/null | 派发时固定的 `{command:{executable,args},timeout}`；null 使用原生 close。重启按该记录继续，配置变更不能跳过旧运行的结项尾部 |
 | beads_context | object/null | 派发时的 beads_dir、project_id、database、backend；回调前再次核对。旧记录可能为 null，不包含认证信息 |
 | beads_status | string | 最近核实的 Beads 状态，不以本地预测替代 closed。这是过渡期的外部任务态镜像，见 [状态模型](state-model.md) |
@@ -68,7 +71,7 @@ execution_status=succeeded 仅表示进程正常退出，仍可能 finish_task_s
 
 准备 worktree 时 execution_status=pending；创建或接入检查失败为 failed/blocked；遗留 pending/running 为 unknown/blocked。重启只核对目录、共享 Git 元数据、分支和起点祖先关系，不重建、不重跑。实际工作目录等字段只在创建及技能/Beads 核验全部通过后写入；创建后检查失败时，目录可能已存在，应查看 workspace_intent 和 error。
 
-兼容 v1 的等待合并记录：保留其 PR 查询，不把旧的技能自报工作目录升级为调度器核验事实，workspace_intent/worktree_branch 保持 null。旧 blocked/unknown 或孤儿运行缺少调度器准备记录，不能通过新版 accept-result 冒充已核验的运行，需人工处理原任务；程序不生成虚构的准备证据。
+v5 中未带 workspace 准备证据的 Run 不能通过 accept-result 冒充已核验的运行；需要人工处理，并保留原有外部任务和执行证据。
 
 PR 查询失败会清除 state 的可信结论并写 unknown，但保留过去读到的合并字段用于诊断；读者必须同时看 state、queried_at 和 query_error。程序不会仅凭缓存的 merged_at 关闭任务。
 
@@ -106,9 +109,9 @@ runtime 中的 `control.operation` 先于副作用保存；完成时把业务结
 
 持锁服务在每个 task tick 发布 `tasks.json`，版本为 1，包含服务 instance、repository identity、查询时间、最近成功时间、错误、阻塞原因及候选列表。候选来自 Beads ready，排除不支持类型、aggregate 和已有本地 run；候选只用于展示，不作为授权或 claim 保证。provider 查询失败保留旧列表并记录错误，定向启动总会重新读取并核验 provider。CLI `steerline tasks` 只读取当前实例快照。
 
-## runtime 版本迁移
+## runtime 版本守卫
 
-只读读取 v1–v3 不改写文件。持有仓库和 run_dir 锁的服务下次保存时迁移到 v4：缺失 control revision 从 1 开始，缺失 attempt_id 从 `runs/<run_id>/attempts/<attempt_id>` 日志路径推导，否则回退到 run_id。恢复时发生的状态转换会推进相应 revision。v4 不兼容旧二进制写入；升级前显式停服，不能用旧版本覆盖新快照。
+新服务只从 SQLite v5 数据库恢复，并将 `runtime.json` v5 用作可重建观察投影。v1–v4 文件保持原样，`LoadRuntime` 和服务启动均返回 `unsupported runtime schema`；不会尝试从这些文件恢复、迁移或清理数据。v5 投影缺少 SQLite 数据库时也会拒绝恢复。已有规划数字 ID 的新任务通过 `run_dir/task-identity-map.json` 中经过项目、来源三元组和一对一校验的 `task-identity-map/v1` 映射取得稳定身份；不能按标题猜测。未映射的 Beads 任务使用不占数字规划号的 `legacy:<hash>` 身份。
 
 ## 执行结果
 

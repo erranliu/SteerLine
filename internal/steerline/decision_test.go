@@ -100,7 +100,7 @@ func TestFreeTextDecisionRequiresNote(t *testing.T) {
 	}
 }
 
-func TestAnswerDecisionFindsRunByTask(t *testing.T) {
+func TestAnswerDecisionRejectsV3RuntimeWithoutMutatingIt(t *testing.T) {
 	dir := t.TempDir()
 	run := decisionRun(t)
 	st, e := WriteDecisionRequest(run, DecisionRequest{Question: "q", Options: []DecisionOption{{ID: "a", Label: "A"}}})
@@ -116,12 +116,14 @@ func TestAnswerDecisionFindsRunByTask(t *testing.T) {
 		t.Fatal(e)
 	}
 	c := Config{RunDir: dir, RuntimeFile: "runtime.json"}
-	if e := AnswerDecision(c, AnswerOptions{RunID: run.TaskID, Option: "a", By: "bob"}); e != nil {
-		t.Fatal(e)
+	if e := AnswerDecision(c, AnswerOptions{RunID: run.TaskID, Option: "a", By: "bob"}); e == nil || !strings.Contains(e.Error(), "unsupported runtime schema 3") {
+		t.Fatalf("v3 answer was accepted: %v", e)
 	}
-	a, e := ReadDecisionAnswer(run)
-	if e != nil || a.OptionID != "a" || a.AnsweredBy != "bob" {
-		t.Fatalf("answer not applied: %+v %v", a, e)
+	if _, e = os.Stat(run.Decision.AnswerPath); !os.IsNotExist(e) {
+		t.Fatalf("rejected old runtime was mutated: %v", e)
+	}
+	if _, e = LoadRuntime(filepath.Join(dir, "runtime.json")); e == nil {
+		t.Fatal("v3 runtime was readable")
 	}
 }
 
