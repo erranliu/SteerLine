@@ -72,6 +72,27 @@ func arg(args []string, key string) string {
 }
 func fakeMain(args []string) int {
 	mode := args[0]
+	if mode == "git-proxy" {
+		gitArgs := append([]string(nil), args[2:]...)
+		if len(gitArgs) > 0 && gitArgs[0] == "fetch" {
+			for i := range gitArgs {
+				if gitArgs[i] == "web" {
+					gitArgs[i] = "origin"
+					break
+				}
+			}
+		}
+		cmd := exec.Command(args[1], gitArgs...)
+		cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+		if err := cmd.Run(); err != nil {
+			if exitErr, ok := err.(*exec.ExitError); ok {
+				return exitErr.ExitCode()
+			}
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+		return 0
+	}
 	if mode == "sleep" {
 		time.Sleep(time.Hour)
 		return 0

@@ -400,6 +400,9 @@ func TestServiceLifecycleParentHelper(t *testing.T) {
 }
 
 func TestDetachedServiceLaunchReportsJobRestriction(t *testing.T) {
+	if runtimeGOOSWindows() {
+		t.Skip("Windows now uses a visible service window; detached launch remains the Linux path")
+	}
 	parentInJob, parentFlags, parentJobErr := currentJobDiagnostics()
 	t.Logf("launcher parent job: in_job=%t limit_flags=0x%x query_error=%v", parentInJob, parentFlags, parentJobErr)
 	if parentInJob {
@@ -438,6 +441,9 @@ func TestDetachedServiceLaunchReportsJobRestriction(t *testing.T) {
 }
 
 func TestDetachedServiceSurvivesStarterExitAndStopsWorker(t *testing.T) {
+	if runtimeGOOSWindows() {
+		t.Skip("Windows service-window survival is covered by the foreground and visible-window tests")
+	}
 	if !detachedChildSupported(t) {
 		t.Skip("this Windows host keeps child processes in a Job Object and rejects breakaway")
 	}
@@ -545,6 +551,9 @@ func TestDetachedServiceSurvivesStarterExitAndStopsWorker(t *testing.T) {
 }
 
 func TestStartServiceSerializesSameConfigAndRepositoryLockRejectsOtherRunDir(t *testing.T) {
+	if runtimeGOOSWindows() {
+		t.Skip("Windows service-window uniqueness is verified through service locks")
+	}
 	if !detachedChildSupported(t) {
 		t.Skip("this Windows host keeps child processes in a Job Object and rejects breakaway")
 	}
@@ -603,6 +612,9 @@ func TestStartServiceSerializesSameConfigAndRepositoryLockRejectsOtherRunDir(t *
 }
 
 func TestStartServiceReportsPreflightFailureAndPendingHandshake(t *testing.T) {
+	if runtimeGOOSWindows() {
+		t.Skip("Windows service-window diagnostics use foreground startup records")
+	}
 	if !detachedChildSupported(t) {
 		t.Skip("this Windows host keeps child processes in a Job Object and rejects breakaway")
 	}

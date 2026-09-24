@@ -194,6 +194,11 @@ func TestControlStartsOnlySelectedReadyTask(t *testing.T) {
 	req := controlRequestFor(s, "start_task", map[string]string{"task_id": "t-B"})
 	require(t, processOneControl(t, s, req))
 	db := readFake(f.db)
+	startDeadline := time.Now().Add(5 * time.Second)
+	for db.Starts["t-B"] == 0 && time.Now().Before(startDeadline) {
+		time.Sleep(10 * time.Millisecond)
+		db = readFake(f.db)
+	}
 	if db.Claims["t-B"] != 1 || db.Starts["t-B"] != 1 || db.Claims["t-A"] != 0 || db.Starts["t-A"] != 0 {
 		t.Fatalf("selected B was not the only dispatched task: claims=%v starts=%v", db.Claims, db.Starts)
 	}

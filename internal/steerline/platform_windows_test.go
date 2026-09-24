@@ -114,147 +114,494 @@ func closeConsoleWindowForTests(hwnd uint64) error {
 	return nil
 }
 
-func TestWindowsScheduledTTYParentExitAcceptance(t *testing.T) {
-	if os.Getenv("STEERLINE_RUN_TTY_ACCEPTANCE") != "1" {
+func TestWindowsForegroundViewerHelper(t *testing.T) {
+	configPath := os.Getenv("STEERLINE_FOREGROUND_VIEWER_CONFIG")
+	if configPath == "" {
+		return
+	}
+	config, err := LoadConfig(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	connection := ConnectService(context.Background(), config)
+	if connection.State != ConnectionConnected {
+		t.Fatalf("viewer could not connect: %+v", connection)
+	}
+	if err := os.WriteFile(os.Getenv("STEERLINE_FOREGROUND_VIEWER_READY"), []byte("connected"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	for {
+		time.Sleep(time.Second)
+	}
+}
+
+func TestWindowsStartServiceRequiresVisibleWindow(t *testing.T) {
+	f := newFixture(t)
+	_, configPath := lifecycleConfigFile(t, f, f.c.RunDir)
+	home := t.TempDir()
+	t.Setenv("STEERLINE_HOME", home)
+	_, err := InstallLaunchers()
+	require(t, err)
+	result, err := StartService(context.Background(), configPath, StartServiceOptions{Executable: f.c.BD.Executable})
+	require(t, err)
+	if result.Status != "failed" || !strings.Contains(result.Error, "steerline install") {
+		t.Fatalf("missing installed binary was not explained: %+v", result)
+	}
+	require(t, os.MkdirAll(filepath.Join(home, "bin"), 0700))
+	require(t, os.WriteFile(filepath.Join(home, "bin", "steerline.exe"), []byte("test-only installed path"), 0600))
+	result, err = StartService(context.Background(), configPath, StartServiceOptions{Executable: f.c.BD.Executable})
+	require(t, err)
+	configAbsolute, err := filepath.Abs(configPath)
+	require(t, err)
+	if result.Status != "window-required" || result.LauncherPath != filepath.Join(home, "service-window.bat") ||
+		result.ConfigPath != configAbsolute || result.StartupID != "" || result.Connection.State != ConnectionNoRecord {
+		t.Fatalf("Windows StartService did not return the fixed visible-window entry: %+v", result)
+	}
+	if _, err := os.Stat(filepath.Join(f.c.RunDir, "service")); !os.IsNotExist(err) {
+		t.Fatalf("Windows StartService wrote service state without opening a window: %v", err)
+	}
+}
+
+func TestWindowsServiceWindowRejectsMissingConsole(t *testing.T) {
+	f := newFixture(t)
+	config, configPath := lifecycleConfigFile(t, f, f.c.RunDir)
+	serviceExe := buildServiceLifecycleCLI(t)
+	cmd := exec.Command(serviceExe, "run", "-config", configPath, "-dispatch", "manual", "-console", "summary", "-service-window")
+	cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: windows.CREATE_NO_WINDOW, HideWindow: true}
+	output, err := cmd.CombinedOutput()
+	if err == nil || !strings.Contains(string(output), "requires a visible Windows console") {
+		t.Fatalf("service-window accepted a hidden process: %v\n%s", err, output)
+	}
+	if _, err := os.Stat(filepath.Join(config.RunDir, "service")); !os.IsNotExist(err) {
+		t.Fatalf("hidden service-window wrote startup state: %v", err)
+	}
+}
+
+func windowsForegroundLifecycleConfig(t *testing.T, f *fixture) (Config, string) {
+	t.Helper()
+	config, configPath := lifecycleConfigFile(t, f, f.c.RunDir)
+	config.Git = Command{Executable: f.c.BD.Executable, Args: []string{"--fake", "git-proxy", f.c.Git.Executable}}
+	configData, err := json.Marshal(config)
+	require(t, err)
+	require(t, os.WriteFile(configPath, configData, 0600))
+	config, err = LoadConfig(configPath)
+	require(t, err)
+	require(t, config.ResolveIdentity(context.Background()))
+	return config, configPath
+}
+
+func TestWindowsForegroundServiceWindowLifecycle(t *testing.T) {
+	f := newFixture(t, task("t-1"))
+	db := readFake(f.db)
+	db.Behavior = "sleep"
+	writeFake(f.db, db)
+	config, configPath := windowsForegroundLifecycleConfig(t, f)
+	serviceExe := buildServiceLifecycleCLI(t)
+	serviceLogPath := filepath.Join(t.TempDir(), "foreground-service.log")
+	serviceLog, err := os.Create(serviceLogPath)
+	require(t, err)
+	defer serviceLog.Close()
+	service := exec.Command(serviceExe, "run", "-config", configPath, "-dispatch", "manual", "-console", "summary")
+	service.Stdout, service.Stderr = serviceLog, serviceLog
+	require(t, service.Start())
+	reaped := false
+	defer func() {
+		if !reaped {
+			_ = service.Process.Kill()
+			_ = service.Wait()
+		}
+	}()
+	deadline := time.Now().Add(25 * time.Second)
+	var connection ServiceConnection
+	for time.Now().Before(deadline) {
+		connection = ConnectService(context.Background(), config)
+		if connection.State == ConnectionConnected {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if connection.State != ConnectionConnected {
+		output, _ := os.ReadFile(serviceLogPath)
+		t.Fatalf("foreground service did not connect: %+v\n%s", connection, output)
+	}
+	connected, err := StartService(context.Background(), configPath, StartServiceOptions{})
+	require(t, err)
+	if connected.Status != "connected" || connected.Connection.Snapshot.Runtime.Service.InstanceID != connection.Snapshot.Runtime.Service.InstanceID {
+		t.Fatalf("StartService did not connect the existing foreground service: %+v", connected)
+	}
+	otherConfig := config
+	otherConfig.RunDir = filepath.Join(t.TempDir(), "competing-runtime")
+	otherConfigPath := filepath.Join(t.TempDir(), "other-service-config.json")
+	otherConfigData, err := json.Marshal(otherConfig)
+	require(t, err)
+	require(t, os.WriteFile(otherConfigPath, otherConfigData, 0600))
+	for _, competingConfig := range []string{configPath, otherConfigPath} {
+		competing := exec.Command(serviceExe, "run", "-config", competingConfig, "-dispatch", "manual", "-console", "summary")
+		output, startErr := competing.CombinedOutput()
+		if startErr == nil || !strings.Contains(strings.ToLower(string(output)), "lock") {
+			t.Fatalf("second foreground service did not report the repository lock for %s: %v\n%s", competingConfig, startErr, output)
+		}
+	}
+	if again := ConnectService(context.Background(), config); again.State != ConnectionConnected ||
+		again.Snapshot.Runtime.Service.InstanceID != connection.Snapshot.Runtime.Service.InstanceID {
+		t.Fatalf("competing service changed the foreground winner: %+v", again)
+	}
+	runtimeBefore := connection.Snapshot.Runtime
+	if runtimeBefore.Service.StartupID == nil || runtimeBefore.Control.DispatchMode != "manual" || !runtimeBefore.Service.Ready {
+		t.Fatalf("foreground startup missed identity/manual readiness: %+v", runtimeBefore.Service)
+	}
+	if db := readFake(f.db); len(db.Claims) != 0 || len(db.Starts) != 0 {
+		t.Fatalf("manual foreground service claimed work before an explicit request: %+v", db)
+	}
+	request, err := SubmitControl(config, "start_task", map[string]string{"task_id": "t-1"}, "foreground-window-test")
+	require(t, err)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	receipt, err := WaitControlReceipt(ctx, config, request.RequestID, 50*time.Millisecond)
+	if err != nil || receipt.Status != "applied" {
+		t.Fatalf("start_task receipt=%+v err=%v", receipt, err)
+	}
+	var running *Runtime
+	for time.Now().Before(deadline.Add(10 * time.Second)) {
+		running, err = LoadRuntime(filepath.Join(config.RunDir, config.RuntimeFile))
+		if err == nil && running != nil && len(running.Runs) == 1 && running.Runs[0].ExecutionStatus == "running" && running.Runs[0].Process != nil {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if err != nil || running == nil || len(running.Runs) != 1 || running.Runs[0].Process == nil {
+		output, _ := os.ReadFile(serviceLogPath)
+		t.Fatalf("foreground worker did not run: runtime=%+v err=%v\n%s", running, err, output)
+	}
+	serviceIdentity := *running.Service.ProcessIdentity
+	workerIdentity := *running.Runs[0].Process
+	if probeProcess(&serviceIdentity).State != ProcessMatches || probeProcess(&workerIdentity).State != ProcessMatches {
+		t.Fatalf("foreground identities are not live: service=%+v worker=%+v", serviceIdentity, workerIdentity)
+	}
+	if starts := readFake(f.db).Starts["t-1"]; starts != 1 {
+		t.Fatalf("explicit worker starts=%d, want 1", starts)
+	}
+	startupLog, err := startupLogPath(config.RunDir, *running.Service.StartupID)
+	require(t, err)
+	startupOutput, err := os.ReadFile(startupLog)
+	require(t, err)
+	if !strings.Contains(string(startupOutput), "service ready") || !strings.Contains(string(startupOutput), "worker started") {
+		t.Fatalf("foreground summary missing from startup log:\n%s", startupOutput)
+	}
+	testExe, err := os.Executable()
+	require(t, err)
+	viewerReady := filepath.Join(t.TempDir(), "viewer-ready")
+	viewerLog, err := os.Create(filepath.Join(t.TempDir(), "viewer.log"))
+	require(t, err)
+	defer viewerLog.Close()
+	viewer := exec.Command(testExe, "-test.run=^TestWindowsForegroundViewerHelper$")
+	viewer.Env = append(os.Environ(), "STEERLINE_FOREGROUND_VIEWER_CONFIG="+configPath, "STEERLINE_FOREGROUND_VIEWER_READY="+viewerReady)
+	viewer.Stdout, viewer.Stderr = viewerLog, viewerLog
+	require(t, viewer.Start())
+	viewerReaped := false
+	defer func() {
+		if !viewerReaped {
+			_ = viewer.Process.Kill()
+			_ = viewer.Wait()
+		}
+	}()
+	viewerDeadline := time.Now().Add(8 * time.Second)
+	for time.Now().Before(viewerDeadline) {
+		if _, err := os.Stat(viewerReady); err == nil {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if _, err := os.Stat(viewerReady); err != nil {
+		output, _ := os.ReadFile(viewerLog.Name())
+		t.Fatalf("independent viewer did not connect: %v\n%s", err, output)
+	}
+	require(t, viewer.Process.Kill())
+	_ = viewer.Wait()
+	viewerReaped = true
+	reconnected := ConnectService(context.Background(), config)
+	if reconnected.State != ConnectionConnected || reconnected.Snapshot.Runtime.Service.InstanceID != running.Service.InstanceID ||
+		probeProcess(&serviceIdentity).State != ProcessMatches || probeProcess(&workerIdentity).State != ProcessMatches {
+		t.Fatalf("viewer exit changed foreground service or worker: %+v", reconnected)
+	}
+	stopCtx, stopCancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer stopCancel()
+	stopped, err := StopService(stopCtx, config, "foreground-window-test", 15*time.Second)
+	if err != nil || stopped.Status != "stopped" || !stopped.ProcessExited || !stopped.LocksReleased || stopped.Receipt == nil || stopped.Receipt.Status != "applied" {
+		t.Fatalf("foreground stop result=%+v err=%v", stopped, err)
+	}
+	_ = service.Wait()
+	reaped = true
+	if probeProcess(&serviceIdentity).State == ProcessMatches || probeProcess(&workerIdentity).State == ProcessMatches {
+		t.Fatalf("foreground service or worker survived explicit stop: service=%+v worker=%+v", probeProcess(&serviceIdentity), probeProcess(&workerIdentity))
+	}
+}
+
+type windowsServiceWindowProbe struct {
+	TTY           bool
+	ConsoleWindow uint64
+}
+
+func TestWindowsServiceWindowProbeHelper(t *testing.T) {
+	reportPath := os.Getenv("STEERLINE_WINDOW_PROBE_PATH")
+	if reportPath == "" {
+		return
+	}
+	info, err := os.Stdin.Stat()
+	require(t, err)
+	report := windowsServiceWindowProbe{
+		TTY:           info.Mode()&os.ModeCharDevice != 0,
+		ConsoleWindow: uint64(currentConsoleWindowForTests()),
+	}
+	data, err := json.Marshal(report)
+	require(t, err)
+	require(t, AtomicWrite(reportPath, append(data, '\n')))
+}
+
+func launchWindowsVisibleServiceWindow(t *testing.T, config Config, configPath string) (uint64, string, ServiceConnection) {
+	t.Helper()
+	serviceExe := buildServiceLifecycleCLI(t)
+	home := t.TempDir()
+	require(t, os.MkdirAll(filepath.Join(home, "bin"), 0700))
+	data, err := os.ReadFile(serviceExe)
+	require(t, err)
+	require(t, os.WriteFile(filepath.Join(home, "bin", "steerline.exe"), data, 0700))
+	t.Setenv("STEERLINE_HOME", home)
+	_, err = InstallLaunchers()
+	require(t, err)
+	testExe, err := os.Executable()
+	require(t, err)
+	probePath := filepath.Join(t.TempDir(), "console-probe.json")
+	scriptPath := filepath.Join(t.TempDir(), "open-service-window.cmd")
+	script := fmt.Sprintf("@echo off\r\nchcp 65001 >nul 2>&1\r\nset \"STEERLINE_WINDOW_PROBE_PATH=%s\"\r\n\"%s\" -test.run=TestWindowsServiceWindowProbeHelper >nul 2>&1\r\ncall \"%s\" \"%s\"\r\n", probePath, testExe, filepath.Join(home, "service-window.bat"), configPath)
+	require(t, os.WriteFile(scriptPath, []byte(script), 0600))
+	taskName := "SteerLineWindowAcceptance-" + newID()
+	var window uint64
+	t.Cleanup(func() {
+		connection := ConnectService(context.Background(), config)
+		if connection.CanStop {
+			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			_, _ = StopService(ctx, config, "window-test-cleanup", 12*time.Second)
+			cancel()
+		}
+		if window != 0 && windowExistsForTests(window) {
+			_ = closeConsoleWindowForTests(window)
+		}
+		_ = exec.Command("schtasks.exe", "/End", "/TN", taskName).Run()
+		_ = exec.Command("schtasks.exe", "/Delete", "/TN", taskName, "/F").Run()
+	})
+	cmdExe, err := exec.LookPath("cmd.exe")
+	require(t, err)
+	launchDate := time.Date(2099, time.December, 31, 23, 59, 0, 0, time.Local)
+	action := fmt.Sprintf("\"%s\" /d /c \"%s\"", cmdExe, scriptPath)
+	createOutput, err := exec.Command("schtasks.exe", "/Create", "/TN", taskName, "/TR", action, "/SC", "ONCE", "/SD", launchDate.Format("2006/01/02"), "/ST", launchDate.Format("15:04"), "/IT", "/F").CombinedOutput()
+	if err != nil {
+		t.Skipf("cannot create temporary interactive service-window task: %v (%s)", err, createOutput)
+	}
+	runOutput, err := exec.Command("schtasks.exe", "/Run", "/TN", taskName).CombinedOutput()
+	if err != nil {
+		t.Fatalf("run temporary service-window task: %v (%s)", err, runOutput)
+	}
+	deadline := time.Now().Add(35 * time.Second)
+	var probe windowsServiceWindowProbe
+	for time.Now().Before(deadline) {
+		if b, e := os.ReadFile(probePath); e == nil && json.Unmarshal(b, &probe) == nil {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	window = probe.ConsoleWindow
+	if !probe.TTY || window == 0 || !windowExistsForTests(window) || !windowVisibleForTests(window) {
+		t.Fatalf("launcher did not open a real visible TTY: %+v", probe)
+	}
+	var connection ServiceConnection
+	for time.Now().Before(deadline) {
+		connection = ConnectService(context.Background(), config)
+		if connection.State == ConnectionConnected {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	if connection.State != ConnectionConnected {
+		taskOutput, _ := exec.Command("schtasks.exe", "/Query", "/TN", taskName, "/FO", "LIST", "/V").CombinedOutput()
+		t.Fatalf("visible service window did not connect: %+v\ntask:\n%s", connection, taskOutput)
+	}
+	return window, testExe, connection
+}
+
+func TestWindowsVisibleServiceWindowAcceptance(t *testing.T) {
+	if os.Getenv("STEERLINE_RUN_WINDOW_ACCEPTANCE") != "1" {
 		return
 	}
 	f := newFixture(t, task("t-1"))
 	db := readFake(f.db)
 	db.Behavior = "sleep"
 	writeFake(f.db, db)
-	tempDir := t.TempDir()
-	c := f.c
-	c.Remote = "web"
-	c.WorktreeRoot = ""
-	configBytes, err := json.Marshal(c)
-	require(t, err)
-	configPath := filepath.Join(tempDir, "tty-service-config.json")
-	require(t, os.WriteFile(configPath, configBytes, 0600))
-	config, err := LoadConfig(configPath)
-	require(t, err)
-	serviceExe := buildServiceLifecycleCLI(t)
-	testExe, err := os.Executable()
-	require(t, err)
-	reportPath := filepath.Join(tempDir, "lifecycle-report.json")
-	logPath := filepath.Join(tempDir, "lifecycle-parent.log")
-	scriptPath := filepath.Join(tempDir, "run-lifecycle-parent.cmd")
-	cmdExe, err := exec.LookPath("cmd.exe")
-	require(t, err)
-	script := fmt.Sprintf("@echo off\r\necho SteerLine isolated TTY lifecycle acceptance\r\nset \"STEERLINE_LIFECYCLE_PARENT=1\"\r\nset \"STEERLINE_LIFECYCLE_REQUIRE_TTY=1\"\r\nset \"STEERLINE_LIFECYCLE_HOLD=1\"\r\nset \"STEERLINE_LIFECYCLE_CONFIG=%s\"\r\nset \"STEERLINE_LIFECYCLE_EXE=%s\"\r\nset \"STEERLINE_LIFECYCLE_REPORT=%s\"\r\n\"%s\" -test.run=TestServiceLifecycleParentHelper > \"%s\" 2>&1\r\nexit /b %%ERRORLEVEL%%\r\n", configPath, serviceExe, reportPath, testExe, logPath)
-	require(t, os.WriteFile(scriptPath, []byte(script), 0600))
-	taskName := "SteerLineTTYAcceptance-" + newID()
-	t.Cleanup(func() {
-		_ = exec.Command("schtasks.exe", "/End", "/TN", taskName).Run()
-		_ = exec.Command("schtasks.exe", "/Delete", "/TN", taskName, "/F").Run()
-		connection := ConnectService(context.Background(), config)
-		if connection.CanStop {
-			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-			defer cancel()
-			_, _ = StopService(ctx, config, "tty-test-cleanup", 12*time.Second)
-		}
-	})
-	launchDate := time.Date(2099, time.December, 31, 23, 59, 0, 0, time.Local)
-	action := fmt.Sprintf("\"%s\" /d /c \"%s\"", cmdExe, scriptPath)
-	create := exec.Command("schtasks.exe", "/Create", "/TN", taskName, "/TR", action, "/SC", "ONCE", "/SD", launchDate.Format("2006/01/02"), "/ST", launchDate.Format("15:04"), "/IT", "/F")
-	createOutput, err := create.CombinedOutput()
-	if err != nil {
-		t.Skipf("cannot create temporary interactive acceptance task: %v (%s)", err, createOutput)
+	config, configPath := windowsForegroundLifecycleConfig(t, f)
+	window, testExe, connection := launchWindowsVisibleServiceWindow(t, config, configPath)
+	var err error
+	rt := connection.Snapshot.Runtime
+	if rt.Service.StartupID == nil || !rt.Service.Ready || rt.Control.DispatchMode != "manual" {
+		t.Fatalf("visible service did not start manual and ready: %+v", rt.Service)
 	}
-	runOutput, err := exec.Command("schtasks.exe", "/Run", "/TN", taskName).CombinedOutput()
-	if err != nil {
-		t.Fatalf("run temporary interactive acceptance task: %v (%s)", err, runOutput)
+	if db := readFake(f.db); len(db.Claims) != 0 || len(db.Starts) != 0 {
+		t.Fatalf("visible manual service claimed work before explicit action: %+v", db)
 	}
-	deadline := time.Now().Add(45 * time.Second)
-	var report lifecycleParentReport
-	for time.Now().Before(deadline) {
-		if data, readErr := os.ReadFile(reportPath); readErr == nil {
-			if jsonErr := json.Unmarshal(data, &report); jsonErr == nil {
-				break
-			}
+	request, err := SubmitControl(config, "start_task", map[string]string{"task_id": "t-1"}, "visible-window-test")
+	require(t, err)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	receipt, err := WaitControlReceipt(ctx, config, request.RequestID, 50*time.Millisecond)
+	if err != nil || receipt.Status != "applied" {
+		t.Fatalf("visible start_task receipt=%+v err=%v", receipt, err)
+	}
+	var running *Runtime
+	workerDeadline := time.Now().Add(15 * time.Second)
+	for time.Now().Before(workerDeadline) {
+		running, err = LoadRuntime(filepath.Join(config.RunDir, config.RuntimeFile))
+		if err == nil && running != nil && len(running.Runs) == 1 && running.Runs[0].ExecutionStatus == "running" && running.Runs[0].Process != nil {
+			break
 		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if err != nil || running == nil || len(running.Runs) != 1 || running.Runs[0].Process == nil {
+		t.Fatalf("visible window did not start worker: runtime=%+v err=%v", running, err)
+	}
+	serviceIdentity := *running.Service.ProcessIdentity
+	workerIdentity := *running.Runs[0].Process
+	startupLog, err := startupLogPath(config.RunDir, *running.Service.StartupID)
+	require(t, err)
+	startupOutput, err := os.ReadFile(startupLog)
+	require(t, err)
+	if !strings.Contains(string(startupOutput), "service ready") || !strings.Contains(string(startupOutput), "worker started") {
+		t.Fatalf("visible window summary missing from startup log:\n%s", startupOutput)
+	}
+	viewerReady := filepath.Join(t.TempDir(), "viewer-ready")
+	viewerLog, err := os.Create(filepath.Join(t.TempDir(), "viewer.log"))
+	require(t, err)
+	defer viewerLog.Close()
+	viewer := exec.Command(testExe, "-test.run=^TestWindowsForegroundViewerHelper$")
+	viewer.Env = append(os.Environ(), "STEERLINE_FOREGROUND_VIEWER_CONFIG="+configPath, "STEERLINE_FOREGROUND_VIEWER_READY="+viewerReady)
+	viewer.Stdout, viewer.Stderr = viewerLog, viewerLog
+	require(t, viewer.Start())
+	viewerReaped := false
+	defer func() {
+		if !viewerReaped {
+			_ = viewer.Process.Kill()
+			_ = viewer.Wait()
+		}
+	}()
+	viewerDeadline := time.Now().Add(8 * time.Second)
+	for time.Now().Before(viewerDeadline) {
+		if _, e := os.Stat(viewerReady); e == nil {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if _, err := os.Stat(viewerReady); err != nil {
+		output, _ := os.ReadFile(viewerLog.Name())
+		t.Fatalf("independent viewer did not connect to visible window: %v\n%s", err, output)
+	}
+	require(t, viewer.Process.Kill())
+	_ = viewer.Wait()
+	viewerReaped = true
+	reconnected := ConnectService(context.Background(), config)
+	if reconnected.State != ConnectionConnected || reconnected.Snapshot.Runtime.Service.InstanceID != running.Service.InstanceID ||
+		probeProcess(&serviceIdentity).State != ProcessMatches || probeProcess(&workerIdentity).State != ProcessMatches {
+		t.Fatalf("viewer exit changed visible service or worker: %+v", reconnected)
+	}
+	stopCtx, stopCancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer stopCancel()
+	stopped, err := StopService(stopCtx, config, "visible-window-test", 15*time.Second)
+	if err != nil || stopped.Status != "stopped" || !stopped.ProcessExited || !stopped.LocksReleased || stopped.Receipt == nil || stopped.Receipt.Status != "applied" {
+		t.Fatalf("visible service stop=%+v err=%v", stopped, err)
+	}
+	if probeProcess(&serviceIdentity).State == ProcessMatches || probeProcess(&workerIdentity).State == ProcessMatches {
+		t.Fatalf("visible service or worker survived stop: service=%+v worker=%+v", probeProcess(&serviceIdentity), probeProcess(&workerIdentity))
+	}
+	if !windowExistsForTests(window) {
+		t.Fatal("launcher did not leave its window open to show the exit result")
+	}
+	require(t, closeConsoleWindowForTests(window))
+	closeDeadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(closeDeadline) && windowExistsForTests(window) {
 		time.Sleep(100 * time.Millisecond)
 	}
-	if report.Status != "worker-running" {
-		log, _ := os.ReadFile(logPath)
-		if report.Status == "start-failed" && (strings.Contains(strings.ToLower(report.Error), "detach") || strings.Contains(strings.ToLower(report.Error), "access is denied")) && report.TTY && report.ConsoleWindow != 0 && report.ParentIdentity != nil {
-			root := filepath.Join(config.RunDir, "service", "startups")
-			entries, _ := os.ReadDir(root)
-			var failedAttempt *StartupRecord
-			for _, entry := range entries {
-				if !entry.IsDir() || !controlIDPattern.MatchString(entry.Name()) {
-					continue
-				}
-				if candidate, readErr := readStartupRecord(config, entry.Name()); readErr == nil && candidate.Status == "failed" {
-					failedAttempt = candidate
-				}
-			}
-			if failedAttempt == nil || !strings.Contains(strings.ToLower(failedAttempt.Error), "detach") && !strings.Contains(strings.ToLower(failedAttempt.Error), "access is denied") {
-				t.Fatalf("real TTY detachment failure was not recorded: attempt=%+v error=%q tasklog=%s", failedAttempt, report.Error, log)
-			}
-			closeDeadline := time.Now().Add(15 * time.Second)
-			for time.Now().Before(closeDeadline) && (probeProcess(report.ParentIdentity).State == ProcessMatches || windowExistsForTests(report.ConsoleWindow)) {
-				time.Sleep(100 * time.Millisecond)
-			}
-			if probeProcess(report.ParentIdentity).State == ProcessMatches || windowExistsForTests(report.ConsoleWindow) {
-				_ = exec.Command("schtasks.exe", "/End", "/TN", taskName).Run()
-				t.Fatalf("failed start did not close its real TTY parent: console_window=%x", report.ConsoleWindow)
-			}
-			if _, statErr := os.Stat(filepath.Join(config.RunDir, config.RuntimeFile)); statErr == nil {
-				t.Fatal("rejected TTY launch published a runtime snapshot")
-			}
-			t.Skipf("real TTY parent exited and its window closed; service correctly rejected the inherited non-breakaway Job Object: %s", failedAttempt.Error)
-		}
-		if report.Status == "not-tty" || report.Status == "no-console-window" {
-			t.Skipf("interactive task did not provide a detachable TTY: status=%s error=%q tasklog=%s", report.Status, report.Error, log)
-		}
-		t.Fatalf("TTY lifecycle parent did not start service/worker: report=%+v tasklog=%s", report, log)
+	if windowExistsForTests(window) {
+		t.Fatal("service window did not close after the maintenance prompt")
 	}
-	if !report.TTY || report.ConsoleWindow == 0 || report.ParentPID <= 0 || report.ParentIdentity == nil || report.ServiceIdentity == nil || report.WorkerIdentity == nil {
-		t.Fatalf("TTY helper omitted console or process identities: %+v", report)
+}
+
+func TestWindowsVisibleServiceWindowCloseAndRestart(t *testing.T) {
+	if os.Getenv("STEERLINE_RUN_WINDOW_ACCEPTANCE") != "1" {
+		return
 	}
-	if !windowExistsForTests(report.ConsoleWindow) || !windowVisibleForTests(report.ConsoleWindow) {
-		t.Fatalf("reported console window %x is not visible before close", report.ConsoleWindow)
-	}
-	runtimeBefore, err := LoadRuntime(filepath.Join(config.RunDir, config.RuntimeFile))
+	f := newFixture(t, task("t-1"))
+	db := readFake(f.db)
+	db.Behavior = "sleep"
+	writeFake(f.db, db)
+	config, configPath := windowsForegroundLifecycleConfig(t, f)
+	window, _, connected := launchWindowsVisibleServiceWindow(t, config, configPath)
+	request, err := SubmitControl(config, "start_task", map[string]string{"task_id": "t-1"}, "visible-close-test")
 	require(t, err)
-	if runtimeBefore == nil || len(runtimeBefore.Runs) != 1 || runtimeBefore.Service.InstanceID != report.InstanceID || probeProcess(runtimeBefore.Service.ProcessIdentity).State != ProcessMatches || probeProcess(runtimeBefore.Runs[0].Process).State != ProcessMatches {
-		t.Fatalf("service and worker are not live before console close: %+v", runtimeBefore)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	receipt, err := WaitControlReceipt(ctx, config, request.RequestID, 50*time.Millisecond)
+	if err != nil || receipt.Status != "applied" {
+		t.Fatalf("worker did not start before window close: receipt=%+v err=%v", receipt, err)
 	}
-	if started := readFake(f.db).Starts["t-1"]; started != 1 {
-		t.Fatalf("manual service worker starts=%d, want one explicit start", started)
+	var running *Runtime
+	workerDeadline := time.Now().Add(15 * time.Second)
+	for time.Now().Before(workerDeadline) {
+		running, err = LoadRuntime(filepath.Join(config.RunDir, config.RuntimeFile))
+		if err == nil && running != nil && len(running.Runs) == 1 && running.Runs[0].Process != nil &&
+			running.Runs[0].ExecutionStatus == "running" {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
 	}
-	if err = closeConsoleWindowForTests(report.ConsoleWindow); err != nil {
-		t.Fatalf("close isolated TTY window: %v", err)
+	if err != nil || running == nil || len(running.Runs) != 1 || running.Runs[0].Process == nil {
+		t.Fatalf("worker did not become running before window close: runtime=%+v err=%v", running, err)
 	}
-	closeDeadline := time.Now().Add(15 * time.Second)
-	parentExited, consoleClosed := false, false
-	for time.Now().Before(closeDeadline) {
-		parentProbe := probeProcess(report.ParentIdentity)
-		parentExited = parentProbe.State == ProcessAbsent || parentProbe.State == ProcessReused
-		consoleClosed = !windowExistsForTests(report.ConsoleWindow) && !windowVisibleForTests(report.ConsoleWindow)
-		if parentExited && consoleClosed {
+	serviceID := *running.Service.ProcessIdentity
+	workerID := *running.Runs[0].Process
+	require(t, closeConsoleWindowForTests(window))
+	exitDeadline := time.Now().Add(15 * time.Second)
+	for time.Now().Before(exitDeadline) {
+		if !windowExistsForTests(window) && probeProcess(&serviceID).State != ProcessMatches &&
+			probeProcess(&workerID).State != ProcessMatches {
 			break
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	if !parentExited || !consoleClosed {
-		_ = exec.Command("schtasks.exe", "/End", "/TN", taskName).Run()
-		t.Fatalf("TTY close did not exit the parent and window: parent_exited=%t console_closed=%t", parentExited, consoleClosed)
+	if windowExistsForTests(window) || probeProcess(&serviceID).State == ProcessMatches ||
+		probeProcess(&workerID).State == ProcessMatches {
+		t.Fatalf("closing service window left process or worker alive: window=%t service=%+v worker=%+v",
+			windowExistsForTests(window), probeProcess(&serviceID), probeProcess(&workerID))
 	}
-	connection := ConnectService(context.Background(), config)
-	if connection.State != ConnectionConnected || connection.Snapshot.Runtime.Service.InstanceID != report.InstanceID || probeProcess(report.ServiceIdentity).State != ProcessMatches || probeProcess(report.WorkerIdentity).State != ProcessMatches {
-		t.Fatalf("service or worker identity changed after real TTY close: %+v", connection)
+	repoLock, err := LockRepository(config.Identity())
+	require(t, err)
+	repoLock.Close()
+	runLock, err := LockRepository(config.RunDir)
+	require(t, err)
+	runLock.Close()
+	if observed := ConnectService(context.Background(), config); observed.State != ConnectionOffline {
+		t.Fatalf("closed service window was not classified offline: %+v", observed)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-	stopped, err := StopService(ctx, config, "tty-lifecycle-acceptance", 12*time.Second)
-	if err != nil || stopped.Status != "stopped" || !stopped.ProcessExited || !stopped.LocksReleased || stopped.Receipt == nil || stopped.Receipt.Status != "applied" {
-		t.Fatalf("explicit stop after TTY close: result=%+v err=%v", stopped, err)
+	newWindow, _, restarted := launchWindowsVisibleServiceWindow(t, config, configPath)
+	if restarted.Snapshot.Runtime.Service.InstanceID == connected.Snapshot.Runtime.Service.InstanceID ||
+		restarted.Snapshot.Runtime.Control.DispatchMode != "manual" {
+		t.Fatalf("reopened service window did not create a manual new instance: %+v", restarted)
 	}
-	if probeProcess(report.ServiceIdentity).State != ProcessAbsent && probeProcess(report.ServiceIdentity).State != ProcessReused {
-		t.Fatal("service process survived explicit stop")
+	if starts := readFake(f.db).Starts["t-1"]; starts != 1 {
+		t.Fatalf("reopened window duplicated old worker: starts=%d", starts)
 	}
-	if probeProcess(report.WorkerIdentity).State != ProcessAbsent && probeProcess(report.WorkerIdentity).State != ProcessReused {
-		t.Fatal("worker process survived explicit stop")
+	stopCtx, stopCancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer stopCancel()
+	stopped, err := StopService(stopCtx, config, "visible-close-restart-test", 15*time.Second)
+	if err != nil || stopped.Status != "stopped" || !stopped.ProcessExited || !stopped.LocksReleased ||
+		stopped.Receipt == nil || stopped.Receipt.Status != "applied" {
+		t.Fatalf("reopened service window did not stop: %+v err=%v", stopped, err)
 	}
+	require(t, closeConsoleWindowForTests(newWindow))
 }

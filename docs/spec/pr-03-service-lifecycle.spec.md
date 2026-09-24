@@ -1,6 +1,6 @@
 # PR 3 Spec：服务窗口生命周期与连接
 
-状态：2026-09-24 调整 Windows 产品方案；本分支现有的 Windows detached 启动代码尚不符合本 Spec，PR 保持 draft。依赖：PR 2。对应 [Plan](pr-03-service-lifecycle.plan.md)。
+状态：2026-09-24 调整 Windows 产品方案；本分支正在实现服务窗口路径，尚未完成全部验收，PR 保持 draft。依赖：PR 2。对应 [Plan](pr-03-service-lifecycle.plan.md)。
 
 ## 目标与生命周期边界
 
@@ -25,7 +25,7 @@ Windows 使用用户主动打开的可见“SteerLine 服务窗口”运行服�
 
 ## L2：Windows 服务窗口启动
 
-- 稳定入口为新增的 `<STEERLINE_HOME>/service-window.bat <配置路径>` 或指向它的快捷方式。它使用安装目录中的 `bin/steerline.exe`，以绝对配置路径运行 `run -config <路径> -dispatch manual -console summary`；用户可选择更详细的 `pretty` 输出。缺少安装文件或配置时，窗口显示明确错误并留给用户查看。既有 `run.bat` 和 CLI `run` 的 auto 默认行为保持兼容。
+- 稳定入口为新增的 `<STEERLINE_HOME>/service-window.bat <配置路径>` 或指向它的快捷方式。它使用安装目录中的 `bin/steerline.exe`，以绝对配置路径运行 `run -config <路径> -dispatch manual -console summary -service-window`；用户可选择更详细的 `pretty` 输出。缺少安装文件或配置时，窗口显示明确错误并留给用户查看。既有 `run.bat` 和 CLI `run` 的 auto 默认行为保持兼容。
 - 服务进程在该窗口前台运行。窗口显示初始化、ready、派发/暂停模式、活动 worker、停止结果和最近错误；详细诊断写入运行目录的启动日志。窗口不争用 viewer 的 TUI 屏幕。
 - 通过新入口启动的实例默认 manual，不自动领取新 ready 任务；连接已存在服务时保留其实际 manual/auto 和暂停状态。服务从固定入口启动，不能静默挑选工作目录里的旧 exe。
 - Windows 的 `StartService` / `start-service` 对离线实例返回明确的“需要打开服务窗口”结果及固定入口，不从调用它的 UI/CLI 中创建 detached 子进程；若已有兼容实例则连接它。`ConnectService` / `StopService` 继续作为共享客户端能力。Linux 已有 detached 启动路径可保留，按平台分别展示能力。
@@ -44,7 +44,7 @@ Windows 使用用户主动打开的可见“SteerLine 服务窗口”运行服�
 - `StopService` 提交 PR 2 的 stop_service。只有 applied 回执、原进程退出及两把锁释放都核验后，才显示可重新启动；短暂收尾显示“停止收尾中”。
 - 退出 viewer、watch、控制台 TUI、换项目或读取超时都不发送 stop；服务窗口与 worker 保持原身份运行。
 - 在服务窗口按 Ctrl+C 应走可观察的正常退出路径，等待当前 worker 按 `shutdown_grace` 收尾并保存状态。固定启动器在服务退出后显示退出原因和再次运行方式，便于维护。
-- 点击窗口的关闭按钮或强制结束进程属于异常退出：不得伪造 stop applied。下次打开通过真实进程身份、锁和 runtime 进行恢复/诊断；worker 不得成为无人管理的遗留进程。
+- `-service-window` 要求可见 console 并监测其窗口句柄；点击窗口的关闭按钮使窗口消失后，服务请求退出并清理 worker。强制结束进程也属于异常退出：两者都不得伪造 stop applied。下次打开通过真实进程身份、锁和 runtime 进行恢复/诊断；worker 不得成为无人管理的遗留进程。
 - 服务窗口退出后由用户重新打开固定入口才重启；新实例重新加载配置，不自动重复执行旧实例的控制请求或新领任务。对停服造成的 worker 终止继续保留原有 failed/blocked、claim 与 worktree 语义。
 
 ## L5：兼容与范围

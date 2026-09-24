@@ -3,6 +3,7 @@
 package steerline
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -17,6 +18,47 @@ import (
 
 	"golang.org/x/sys/windows"
 )
+
+func serviceConsoleWindow() uint64 {
+	hwnd, _, _ := windows.NewLazySystemDLL("kernel32.dll").NewProc("GetConsoleWindow").Call()
+	return uint64(hwnd)
+}
+
+// ServiceWindowContext ends a foreground service when its required console
+// window is destroyed. A Windows host may close the window without terminating
+// every process that used it, especially when a Job Object owns the process.
+func ServiceWindowContext(parent context.Context) (context.Context, context.CancelFunc, error) {
+	hwnd := serviceConsoleWindow()
+	if hwnd == 0 {
+		return nil, nil, errors.New("service-window requires a visible Windows console")
+	}
+	user32 := windows.NewLazySystemDLL("user32.dll")
+	isWindow := user32.NewProc("IsWindow")
+	isVisible := user32.NewProc("IsWindowVisible")
+	exists, _, _ := isWindow.Call(uintptr(hwnd))
+	visible, _, _ := isVisible.Call(uintptr(hwnd))
+	if exists == 0 || visible == 0 {
+		return nil, nil, errors.New("service-window console is not visible")
+	}
+	ctx, cancel := context.WithCancel(parent)
+	go func() {
+		tick := time.NewTicker(100 * time.Millisecond)
+		defer tick.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-tick.C:
+				exists, _, _ := isWindow.Call(uintptr(hwnd))
+				if exists == 0 || serviceConsoleWindow() != hwnd {
+					cancel()
+					return
+				}
+			}
+		}
+	}()
+	return ctx, cancel, nil
+}
 
 func canonical(s string) string { return strings.ToLower(filepath.Clean(s)) }
 

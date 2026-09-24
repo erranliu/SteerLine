@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -109,11 +110,13 @@ type StartServiceOptions struct {
 }
 
 type ServiceStartResult struct {
-	Status     string            `json:"status"` // connected, starting, pending, failed
-	StartupID  string            `json:"startup_id,omitempty"`
-	LogPath    string            `json:"log_path,omitempty"`
-	Connection ServiceConnection `json:"connection"`
-	Error      string            `json:"error,omitempty"`
+	Status       string            `json:"status"` // connected, starting, pending, window-required, failed
+	StartupID    string            `json:"startup_id,omitempty"`
+	LogPath      string            `json:"log_path,omitempty"`
+	LauncherPath string            `json:"launcher_path,omitempty"`
+	ConfigPath   string            `json:"config_path,omitempty"`
+	Connection   ServiceConnection `json:"connection"`
+	Error        string            `json:"error,omitempty"`
 }
 
 type ServiceStopResult struct {
@@ -727,6 +730,69 @@ func failStartup(c Config, id string, cause error) error {
 	return errors.Join(cause, writeStartupRecord(c, record))
 }
 
+func windowsServiceWindowStart(ctx context.Context, c Config, absoluteConfig string) (ServiceStartResult, error) {
+	connection := ConnectService(ctx, c)
+	switch connection.State {
+	case ConnectionConnected:
+		return ServiceStartResult{Status: "connected", Connection: connection}, nil
+	case ConnectionInitializing:
+		logPath, _ := startupLogPath(c.RunDir, connection.StartupID)
+		return ServiceStartResult{Status: "pending", StartupID: connection.StartupID, LogPath: logPath, Connection: connection, Error: connection.Diagnostic}, nil
+	case ConnectionStale, ConnectionUnknown, ConnectionIdentityError, ConnectionCorrupt, ConnectionLegacy, ConnectionIncompatible, ConnectionConfigChanged:
+		return ServiceStartResult{}, fmt.Errorf("refusing to replace a service with uncertain or incompatible state: %s: %s", connection.State, connection.Diagnostic)
+	case ConnectionOffline, ConnectionNoRecord:
+		if !connection.CanStart {
+			return ServiceStartResult{Status: "pending", Connection: connection, Error: connection.Diagnostic}, nil
+		}
+	default:
+		return ServiceStartResult{}, fmt.Errorf("cannot offer service window from connection state %q", connection.State)
+	}
+	pending, probe, diagnostic, err := findLiveStartupAttempt(c)
+	if err != nil {
+		return ServiceStartResult{}, fmt.Errorf("inspect prior service startup attempts: %w", err)
+	}
+	if pending != nil {
+		logPath, _ := startupLogPath(c.RunDir, pending.StartupID)
+		connection.CanStart = false
+		connection.Process = probe
+		connection.Diagnostic = diagnostic
+		if probe.State == ProcessMatches && pending.ConfigDigest == c.configDigest &&
+			canonical(pending.RepositoryIdentity) == canonical(c.identity) &&
+			pending.Remote == c.Remote && pending.Branch == c.Branch &&
+			pending.Claimant == expectedClaimant(c) {
+			connection.State = ConnectionInitializing
+			connection.StartupID = pending.StartupID
+		} else {
+			connection.State = ConnectionUnknown
+		}
+		return ServiceStartResult{Status: "pending", StartupID: pending.StartupID, LogPath: logPath, Connection: connection, Error: diagnostic}, nil
+	}
+	result := ServiceStartResult{
+		Status:       "window-required",
+		LauncherPath: filepath.Join(SteerlineHome(), "service-window.bat"),
+		ConfigPath:   absoluteConfig,
+		Connection:   connection,
+	}
+	for _, candidate := range []struct {
+		path    string
+		install string
+	}{
+		{result.LauncherPath, "steerline launchers"},
+		{filepath.Join(SteerlineBinDir(), "steerline.exe"), "steerline install"},
+	} {
+		info, statErr := os.Stat(candidate.path)
+		if statErr != nil || info.IsDir() {
+			if statErr == nil {
+				statErr = errors.New("path is a directory")
+			}
+			result.Status = "failed"
+			result.Error = fmt.Sprintf("service window installation is unavailable at %s: %v; run %s", candidate.path, statErr, candidate.install)
+			return result, nil
+		}
+	}
+	return result, nil
+}
+
 func StartService(ctx context.Context, configPath string, opts StartServiceOptions) (ServiceStartResult, error) {
 	if err := ctx.Err(); err != nil {
 		return ServiceStartResult{}, err
@@ -756,6 +822,12 @@ func StartService(ctx context.Context, configPath string, opts StartServiceOptio
 	if err != nil {
 		return ServiceStartResult{}, err
 	}
+	if inside(c.Repository, c.RunDir) {
+		return ServiceStartResult{}, errors.New("run_dir must be outside the configured repository")
+	}
+	if runtimeGOOSWindows() {
+		return windowsServiceWindowStart(ctx, c, absoluteConfig)
+	}
 	if opts.WaitTimeout <= 0 || opts.WaitTimeout > 30*time.Second {
 		opts.WaitTimeout = 30 * time.Second
 	}
@@ -772,9 +844,6 @@ func StartService(ctx context.Context, configPath string, opts StartServiceOptio
 	executable, err = filepath.Abs(executable)
 	if err != nil {
 		return ServiceStartResult{}, err
-	}
-	if inside(c.Repository, c.RunDir) {
-		return ServiceStartResult{}, errors.New("run_dir must be outside the configured repository")
 	}
 	serviceDir, err := managedServiceDir(c.RunDir)
 	if err != nil {
@@ -1107,6 +1176,7 @@ func RunConfiguredService(ctx context.Context, c Config, mode, startupID, consol
 	if mode != "manual" && mode != "auto" {
 		return errors.New("dispatch mode must be manual or auto")
 	}
+	windowGeneratedID := startupID == ""
 	if startupID == "" {
 		startupID = newID()
 	}
@@ -1130,12 +1200,22 @@ func RunConfiguredService(ctx context.Context, c Config, mode, startupID, consol
 	if inside(c.Repository, c.RunDir) {
 		return errors.New("run_dir must be outside the configured repository")
 	}
-	_, _, retErr = createStartupAttempt(c, startupID, false)
+	_, logPath, retErr := createStartupAttempt(c, startupID, windowGeneratedID)
 	if retErr != nil {
 		return retErr
 	}
+	logFile, retErr := os.OpenFile(logPath, os.O_WRONLY|os.O_APPEND, 0600)
+	if retErr != nil {
+		return failStartup(c, startupID, fmt.Errorf("open service startup log: %w", retErr))
+	}
+	defer logFile.Close()
+	fmt.Fprintf(logFile, "startup_id=%s dispatch=%s pid=%d console_window=0x%x\n", startupID, mode, os.Getpid(), serviceConsoleWindow())
+	if console != "off" && (console != "" || ConsoleDefault() != "") {
+		fmt.Fprintf(os.Stdout, "SteerLine starting · dispatch %s · startup %s\n", mode, startupID)
+	}
 	processIdentity, retErr := currentProcessIdentity()
 	if retErr != nil {
+		fmt.Fprintf(logFile, "startup failed: identify service process: %v\n", retErr)
 		return failStartup(c, startupID, fmt.Errorf("identify service process: %w", retErr))
 	}
 	record := initialStartupRecord(c, startupID)
@@ -1162,6 +1242,7 @@ func RunConfiguredService(ctx context.Context, c Config, mode, startupID, consol
 		return err
 	}
 	fail := func(err error) error {
+		fmt.Fprintf(logFile, "startup failed: %v\n", err)
 		failed := record
 		failed.Status = "failed"
 		failed.Error = clip(err.Error(), 4000)
@@ -1202,7 +1283,15 @@ func RunConfiguredService(ctx context.Context, c Config, mode, startupID, consol
 	} else if ConsoleDefault() != "" {
 		s.Console = ConsoleDefault()
 	}
+	if s.Console != "" && s.Console != "off" {
+		s.consoleOut = io.MultiWriter(logFile, os.Stdout)
+	}
 	retErr = s.RunWithDispatch(ctx, mode)
+	if retErr != nil {
+		fmt.Fprintf(logFile, "service exited: %v\n", retErr)
+	} else {
+		fmt.Fprintln(logFile, "service exited")
+	}
 	if rec, e := readStartupRecord(c, startupID); e == nil && rec.Status == "starting" {
 		rec.Status = "failed"
 		if retErr != nil {
@@ -1242,5 +1331,9 @@ func (s *Service) publishStartupReady() error {
 	if err = writeStartupRecord(s.Config, *record); err != nil {
 		return fmt.Errorf("publish startup readiness record: %w", err)
 	}
+	s.emitConsole(ActivityEvent{
+		Source: "steer", Kind: "service", Status: "ready",
+		Title: "service ready", Detail: "dispatch " + s.State.Control.DispatchMode,
+	})
 	return nil
 }

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -24,6 +25,7 @@ type Service struct {
 	activities map[string]*ActivityWriter
 	// Console selects service-side rendering: "", "off", "pretty", "summary" or "json".
 	Console           string
+	consoleOut        io.Writer
 	versionPrevious   *Runtime
 	controlSeen       map[string]string
 	stopControl       *ControlRequest
@@ -343,18 +345,22 @@ func (s *Service) emitConsole(ev ActivityEvent) {
 	if s.Console == "" || s.Console == "off" {
 		return
 	}
+	out := s.consoleOut
+	if out == nil {
+		out = os.Stdout
+	}
 	switch s.Console {
 	case "json":
 		b, e := json.Marshal(ev)
 		if e == nil {
-			fmt.Fprintln(os.Stdout, string(b))
+			fmt.Fprintln(out, string(b))
 		}
 	case "summary":
 		if ev.Source == "steer" {
-			fmt.Fprintln(os.Stdout, RenderActivity(ev, RenderOptions{Color: false}))
+			fmt.Fprintln(out, RenderActivity(ev, RenderOptions{Color: false}))
 		}
 	default:
-		fmt.Fprintln(os.Stdout, RenderActivity(ev, RenderOptions{Color: stdoutColor()}))
+		fmt.Fprintln(out, RenderActivity(ev, RenderOptions{Color: stdoutColor()}))
 	}
 }
 func (s *Service) find(id string) *Run {

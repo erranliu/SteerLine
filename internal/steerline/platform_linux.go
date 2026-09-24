@@ -3,6 +3,7 @@
 package steerline
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -12,6 +13,12 @@ import (
 	"strings"
 	"syscall"
 )
+
+func serviceConsoleWindow() uint64 { return 0 }
+
+func ServiceWindowContext(context.Context) (context.Context, context.CancelFunc, error) {
+	return nil, nil, errors.New("service-window requires Windows")
+}
 
 func canonical(s string) string                { return filepath.Clean(s) }
 func readSnapshot(path string) ([]byte, error) { return os.ReadFile(path) }

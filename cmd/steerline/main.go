@@ -47,6 +47,7 @@ func run() error {
 	proj := fs.String("project", "", "projects: project name or number")
 	action := fs.String("action", "", "control action or projects: watch|run|stop|home|list")
 	console := fs.String("console", "", "service console rendering: pretty|summary|json|off (default pretty on a terminal)")
+	serviceWindow := fs.Bool("service-window", false, "run inside a required visible Windows service window")
 	follow := fs.Bool("follow", true, "watch: keep following new activity")
 	fromStart := fs.Bool("from-start", true, "watch: replay existing activity before following")
 	jsonOut := fs.Bool("json", false, "watch: emit stable activity JSONL")
@@ -63,6 +64,9 @@ func run() error {
 	}
 	if command == "run" && *dispatchMode != "manual" && *dispatchMode != "auto" {
 		return fmt.Errorf("-dispatch must be manual or auto")
+	}
+	if *serviceWindow && command != "run" {
+		return fmt.Errorf("-service-window is only valid with run")
 	}
 	if command == "retry" && (!*confirmed || *runID == "") {
 		return fmt.Errorf("retry requires -run-id and -confirm-process-stopped")
@@ -216,6 +220,14 @@ func run() error {
 		return steerline.Watch(ctx, c, *runID, steerline.WatchOptions{Follow: *follow, FromStart: *fromStart, JSON: *jsonOut, Raw: *rawEvents, Color: steerline.ColorEnabled()})
 	}
 	if command == "run" {
+		if *serviceWindow {
+			windowCtx, windowCancel, err := steerline.ServiceWindowContext(ctx)
+			if err != nil {
+				return err
+			}
+			defer windowCancel()
+			ctx = windowCtx
+		}
 		return steerline.RunConfiguredService(ctx, c, *dispatchMode, *startupID, *console)
 	}
 	if e = c.Preflight(ctx, command == "retry" || command == "check"); e != nil {
