@@ -8,8 +8,7 @@
 
 | 步骤 | 剩余目标 | 依赖 | 执行规格 |
 | --- | --- | --- | --- |
-| 后台服务生命周期（`SERVICE-LIFECYCLE`） | 完成独立启动、连接、停止与恢复的交付；补齐原生 Windows 下关闭启动端/真实终端后服务和 worker 存活、并发启动及显式停止的验证 | 服务控制协议 | [Spec](../spec/pr-03-service-lifecycle.spec.md) · [Plan](../spec/pr-03-service-lifecycle.plan.md) |
-| 4A 双执行后端（`EXEC-BACKENDS`） | 将 local Codex 与 Orca 接入共同操作、固定身份、能力与故障恢复契约，保持长期支持 | 后台服务生命周期 | [Spec](../spec/pr-04a-execution-backends.spec.md) · [Plan](../spec/pr-04a-execution-backends.plan.md) |
+| 4A 双执行后端（`EXEC-BACKENDS`） | 将 local Codex 与 Orca 接入共同操作、固定身份、能力与故障恢复契约，保持长期支持 | 已交付的服务窗口生命周期与服务控制协议 | [Spec](../spec/pr-04a-execution-backends.spec.md) · [Plan](../spec/pr-04a-execution-backends.plan.md) |
 | 4B 会话事件（`CONVERSATION`） | 统一会话/轮次/消息、完整回复、持久读取与重放；验证两条链路真实的轮次和阶段能力 | 4A | [Spec](../spec/pr-04b-conversation-events.spec.md) · [Plan](../spec/pr-04b-conversation-events.plan.md) |
 | 4C 执行控制台（`CONSOLE`） | 多项目操作与运行详情；轮次结束自动折叠过程，保留最终回复、未解决问题和阅读位置 | 4B | [Spec](../spec/pr-04-console.spec.md) · [Plan](../spec/pr-04-console.plan.md) |
 | 5 人工介入（`INTERVENTION`） | 决策提交、答案应用证明、在线恢复与审计闭环，共用双后端接口 | 4C | [Spec](../spec/pr-05-intervention.spec.md) · [Plan](../spec/pr-05-intervention.plan.md) |
@@ -19,7 +18,8 @@
 ### 后续仍依赖的已有基础
 
 - [统一观察契约](../spec/pr-01-observation.spec.md)：供 4B/4C 复用选择、游标、来源换代及原始输出读取规则。
-- [服务控制协议](../spec/pr-02-control.spec.md)：供后台生命周期、4A、4C 和人工介入复用请求身份、回执、准入及不确定动作守卫。
+- [服务控制协议](../spec/pr-02-control.spec.md)：供 4A、4C 和人工介入复用请求身份、回执、准入及不确定动作守卫。
+- [服务窗口生命周期](../spec/pr-03-service-lifecycle.spec.md)：供 4A/4C 复用连接分类、startup/instance 身份和停止确认；Windows 离线时提示用户从固定入口打开可见服务窗口，默认 manual，关闭 viewer 不停服，关闭服务窗口则结束服务。Linux detached 路径保留，原生会话生命周期尚未实测。
 
 ## 后续：中心状态机与远程执行
 

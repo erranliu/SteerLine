@@ -6,6 +6,8 @@
 
 UI 生命周期与服务、worker 分离；浏览和关闭 UI 不启动或取消任务。任务操作由服务核验，界面显示准确目标、请求身份和真实结果；已提交、已接受、已执行不混同。后端能力和业务资格同时满足时才允许操作。
 
+Windows 服务由用户从固定入口打开的可见服务窗口承载，窗口可最小化；viewer/TUI 只是独立客户端。离线时显示 `window-required` 和固定入口，不由客户端代启后台进程；服务窗口关闭会结束服务。连接异常或存活未知时保留原实例并显示诊断，显式停服须核验 applied 回执、原进程退出和锁释放。Linux detached 路径按其平台能力展示。
+
 落地规格：[服务生命周期](../spec/pr-03-service-lifecycle.spec.md)、[双后端契约](../spec/pr-04a-execution-backends.spec.md)、[控制台](../spec/pr-04-console.spec.md)。
 
 ## 会话与折叠

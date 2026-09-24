@@ -1,6 +1,6 @@
 # PR 4A Spec：长期双执行后端契约
 
-状态：待实现。依赖：PR 3 审核、验证并合并。对应 [Plan](pr-04a-execution-backends.plan.md)。依据：[总览](console-upgrade.md)、[执行架构共同约束](execution-architecture.spec.md)。
+状态：待实现。前置 PR 3 已验收并合并。对应 [Plan](pr-04a-execution-backends.plan.md)。依据：[总览](console-upgrade.md)、[执行架构共同约束](execution-architecture.spec.md)。
 
 ## B1：职责与长期支持边界
 
@@ -50,7 +50,7 @@ Service 唯一决定任务领取、准入、执行槽、业务状态转换、重
 
 既有能力范围保持：local 受限 retry；Orca 原终端/同 incarnation continuation；local continuation、Orca retry 首版 unsupported。能力为 verified 也不能绕过 dirty/base/claim/PR/unknown 等业务守卫。决定补齐可选能力时，必须增加对应原生验收，不能把新起 agent 当作恢复原会话。
 
-生命周期策略在 Service 明确选择并随执行绑定：当前本机服务遵守 PR 3 停服等待、超时终止 worker 的规则；UI 退出只结束观察。未来远端遵守中心停止观察、执行可继续的策略。StopExecution、DetachObservation、SettleResources 分开调用，不能把 local Job 的 kill-on-close 或 Orca Close 的监听取消包装成相同的“释放即成功”。Stop 出错不得吞掉，未确认退出继续保留不确定性和槽约束。
+生命周期策略在 Service 明确选择并随执行绑定：当前本机服务遵守 PR 3 停服等待、超时终止 worker 的规则。Windows 的服务由独立可见窗口承载；关闭 viewer/TUI 只结束客户端观察，窗口保持打开时服务和 worker 继续运行，关闭服务窗口则触发服务退出与本机 worker 清理。控制 stop、Ctrl+C 和关窗不能共用伪造的 applied 证明；离线 `StartService` 返回 `window-required` 与固定入口，不从客户端创建后台子进程。Linux detached 路径保持平台独立。未来远端遵守中心停止观察、执行可继续的策略。StopExecution、DetachObservation、SettleResources 分开调用，不能把 local Job 的 kill-on-close 或 Orca Close 的监听取消包装成相同的“释放即成功”。Stop 出错不得吞掉，未确认退出继续保留不确定性和槽约束。
 
 ## B5：存储与兼容
 
@@ -73,6 +73,6 @@ Service 唯一决定任务领取、准入、执行槽、业务状态转换、重
 | B-A7 | local retry 与 Orca 同会话续跑已有安全资格保持；无跨后端 fallback 或未知执行自动替换 |
 | B-A8 | 意图/绑定/投影各持久化边界故障后可对账；损坏记录阻止副作用；旧记录只读打开不迁移 |
 | B-A9 | 取消、慢观察、大输出不阻塞停止与控制；观察任务结束后无泄漏或跨 ref 取消 |
-| B-A10 | 真实 local Codex 和本机 Orca 的启动、输出、停止、重连证据归档；Windows/Linux 行为分别记录；PR 3 生命周期回归通过 |
+| B-A10 | 真实 local Codex 和本机 Orca 的启动、输出、停止、重连证据归档；Windows 在真实服务窗口中验证客户端退出/重连时身份不变、关窗后本机 worker 清理及控制 stop 的原实例证明，Linux 行为另行记录；PR 3 生命周期回归通过 |
 
 必需验收不能以 skipped 计为通过。平台能力缺口记录为阻塞或明确的可选 unsupported；不能以“接口已经统一”宣告未验证的路径稳定。

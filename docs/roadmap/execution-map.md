@@ -9,13 +9,12 @@
 - **共享冲突**：双方修改同一业务权威、公共接口、schema 或平台资源，必须先指定修改职责与集成顺序。
 - **规划假设**：并行机会或未确定的分工，不改变已有 Spec。没有明确接口/职责时，只能推进不依赖它的独立研究，不能据此启动冲突实现。
 
-当前控制台 Spec/Plan 的交付顺序仍为生命周期 → 4A → 4B → 4C → 5，前一阶段验证并合入后才开始下一阶段。下文的接口并行机会供后续重规划使用；采用前必须修订受影响的 Spec/Plan。
+当前控制台剩余 Spec/Plan 的交付顺序为 4A → 4B → 4C → 5，前一阶段验证并合入后才开始下一阶段。下文的接口并行机会供后续重规划使用；采用前必须修订受影响的 Spec/Plan。
 
 ## 目标与契约入口
 
 | 稳定标识 | 目标 | Spec / Plan |
 | --- | --- | --- |
-| SERVICE-LIFECYCLE | 后台服务生命周期 | [Spec](../spec/pr-03-service-lifecycle.spec.md) · [Plan](../spec/pr-03-service-lifecycle.plan.md) |
 | EXEC-BACKENDS | 4A 双执行后端 | [Spec](../spec/pr-04a-execution-backends.spec.md) · [Plan](../spec/pr-04a-execution-backends.plan.md) |
 | CONVERSATION | 4B 会话事件 | [Spec](../spec/pr-04b-conversation-events.spec.md) · [Plan](../spec/pr-04b-conversation-events.plan.md) |
 | CONSOLE | 4C 执行控制台 | [Spec](../spec/pr-04-console.spec.md) · [Plan](../spec/pr-04-console.plan.md) |
@@ -32,7 +31,6 @@
 
 | 目标关系 | 类型与关键交接 | 并行判断及集成条件 |
 | --- | --- | --- |
-| SERVICE-LIFECYCLE → EXEC-BACKENDS | 硬前置：实例身份、启动/停止行为及原生平台验证 | 按现有顺序完成；抽象重构不能同时改写未经验证的生命周期语义 |
 | EXEC-BACKENDS → CONVERSATION | 接口前置：ExecutionRef、能力、ReadOutput、取消与来源身份 | 规划机会：接口固定后可独立准备解码/重放样本；真实输出接入需适配器，当前阶段仍串行 |
 | CONVERSATION → CONSOLE | 接口前置：会话 DTO、正文分页、游标、完整性与 gap | 规划机会：契约固定后 UI 可基于样本开发；精确折叠的集成验收必须使用两来源真实证据，当前阶段仍串行 |
 | EXEC-BACKENDS + CONVERSATION + CONSOLE → INTERVENTION | 接口及集成前置：Reply/Continue、固定 Operation、应用证明与问题展示 | 业务恢复和 UI 不能各自解释“已应用”；当前按控制台完成后实施 |
@@ -50,17 +48,10 @@
 
 ## 关键链路卡片
 
-### SERVICE-LIFECYCLE
-
-- **范围与修改面**：后台服务客户端、进程启动、startup/instance 身份和平台生命周期；不引入新 UI。
-- **输入 → 输出**：既有控制协议与锁 → 可复用的连接、启动、停止结果及验证证据。
-- **关键约束**：关闭 UI 不停止 worker；显式停服核验原实例；未知存活不能启动替代服务。依据 Spec 的 L1 及生命周期验收。
-- **交接门槛**：Windows Job/真实终端与其他支持平台行为可核验；EXEC-BACKENDS 接入时保持这些语义。与进程所有权、Stop/Close 改动视为共享冲突。
-
 ### EXEC-BACKENDS
 
 - **范围与修改面**：Service、local/Orca 适配器、ExecutionRef、Operation、能力、观察/停止/恢复及版本化绑定。
-- **输入 → 输出**：生命周期与原执行路径 → 公共后端契约、固定身份、类型化事实/回执和能力报告。
+- **输入 → 输出**：已交付的服务窗口生命周期与原执行路径 → 公共后端契约、固定身份、类型化事实/回执和能力报告。
 - **关键约束**：唯一业务写者；历史目标不可随配置漂移；Detach 不取消；未知外部动作不盲目重发。依据 Spec B1～B5。
 - **交接门槛**：向 CONVERSATION 固定 ReadOutput/ref/来源语义，向 INTERVENTION 固定 Reply/Continue 和 Operation；向 EXEC-MODEL 交接实际记录版本与迁移边界。
 
@@ -148,7 +139,8 @@
 ## 后续仍依赖的已有交接信息
 
 - [统一观察契约](../spec/pr-01-observation.spec.md)：CONVERSATION、CONSOLE 使用选择/cursor/generation 与 raw 兼容语义；两个消费者不再依赖该阶段交接信息后移除此项。
-- [服务控制协议](../spec/pr-02-control.spec.md)：SERVICE-LIFECYCLE、EXEC-BACKENDS、CONSOLE、INTERVENTION 使用请求/实例身份、准入、回执和 blocker 语义；相关交接依赖结束后移除此项。
+- [服务控制协议](../spec/pr-02-control.spec.md)：EXEC-BACKENDS、CONSOLE、INTERVENTION 使用请求/实例身份、准入、回执和 blocker 语义；相关交接依赖结束后移除此项。
+- [服务窗口生命周期](../spec/pr-03-service-lifecycle.spec.md)：EXEC-BACKENDS 与 CONSOLE 复用连接分类、startup/instance 身份、Windows `window-required` 离线结果和固定启动入口；Windows 服务窗口默认 manual，关闭 viewer 不停服，控制 stop、Ctrl+C 与关窗各有不同的结果证明。Linux detached 路径尚无原生会话生命周期实测；涉及进程所有权、Stop/Close 的改动需保持已验收的 Windows 行为。
 - [真实远端能力报告](../spec/orca-probe/remote-capability-report-2026-09-23.json)与[字段映射](../spec/orca-probe/field-mapping.md)：EXEC-MODEL、REMOTE-WORKFLOW 复用固定身份、请求对账、同工作区跨步骤和重启恢复语义；CONVERSATION 复用 source_changed 与历史缺口映射，精确会话能力另行验证。
 - [verify 结果校验器](../../internal/steerline/remoteprotocol/verify_result.go)：REMOTE-WORKFLOW 复用身份、检查回执、退出码和候选 commit 的校验规则；P13 仍需中心接入后的端到端证据。
 

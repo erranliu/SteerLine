@@ -8,7 +8,7 @@
 2. **定义事件和读接口。** 建立 envelope、身份质量、事件类型、phase、final availability、正文引用、能力报告及 Query cursor。ReadConversation/ReadMessageBody/ReadRaw 不暴露宿主响应类型或任意路径；确定旧 activity 到 legacy DTO 的规则。与 Spec 02 的 Event/QueryService 共用类型和演进映射。
 3. **实现可靠存储。** 新记录版本、正文写入、去重、批次提交、checkpoint、崩溃重放与缺口先通过故障测试，再接上游。SQLite 存在则复用事务；否则使用唯一持锁写者的版本化日志。记录正文页与修订的一致性、坏尾部处置和磁盘满后的恢复算法。
 4. **接入输出适配。** local 解码器保留真实 phase/turn 与 unknown；Orca 优先公开结构化出口、精确绑定 ref/source，terminal 降级独立 segment。相同消息的 delta/snapshot 使用来源修订去重；业务 result 的 summary 独立记录为执行摘要。将旧只按 item ID 合并的显示逻辑移至公共身份模型。
-5. **解耦采集与 UI。** Service 在没有客户端时仍采集，客户端只读本地 Query；每源单次在途读取，有界批次、取消和公平调度。断连保留最后 checkpoint，重连对账；后台采集不能阻塞控制或 PR 核验。
+5. **解耦采集与 UI。** Service 运行时在没有客户端的情况下仍采集，客户端只读本地 Query；Windows 服务窗口关闭后采集随服务停止，再从固定入口启动时按持久 checkpoint 对账。每源单次在途读取，有界批次、取消和公平调度。客户端断连与服务重启均保留最后 checkpoint；采集不能阻塞控制或 PR 核验。
 6. **完成兼容与证据。** 保留 watch JSON/raw 格式和原始字节语义、旧日志查看，记录版本迁移和上下游映射。更新 activity/data-contract/hosting 说明；提供 docs/validation/ 下的能力矩阵和按 E-A ID 的验证报告，交接 4C 可直接消费的样本与 DTO。
 
 ## 验证
@@ -16,7 +16,7 @@
 - E-A1～E-A9 使用同一公共回放套件运行两来源，断言精确身份、正文哈希、事件数量和 checkpoint；相同文本的真实不同消息不得被误删。
 - 注入内容写入前后、事件提交前后、cursor 保存和重启故障；用来源已淘汰、游标非法、source_changed、乱序/重复 delta、快照晚到和终态冲突验证边界。
 - 长 final 测试超过 4096 字符、跨多页中文/emoji，完整拼接与源字节/摘要核对；正文在分页中更新返回明确修订变化，损坏/丢失/超额正文有可见错误。
-- 有界性测试大文件、单条超限、持续输出与慢读；断言页预算、取消响应和停止命令仍可处理。UI 重开不需要向原平台重新读取全部历史。
+- 有界性测试大文件、单条超限、持续输出与慢读；断言页预算、取消响应和停止命令仍可处理。Windows 真实服务窗口保持打开时关闭/重开 viewer，确认持续采集且不重读全部历史；关窗后重新打开固定入口，确认 checkpoint 对账，并在来源确有缺失时显示缺口。
 - 实际 Codex/Orca 样本分别确认精确 turn/phase 或明确缺口；terminal v2、supervised、本机、远端不能互相代验。上游缺必需能力时将该项保存为未验收，不用替身把 E-A9 改为通过。
 - 执行 `go test ./... -count=1 -timeout 10m`、`go vet ./...`、watch/viewer/normalizer 回归、支持平台构建及 `git diff --check`；并发采集在支持环境执行 race 检查。
 

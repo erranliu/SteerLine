@@ -16,7 +16,7 @@
 | 4C | 执行控制台与轮次折叠 | [Spec](pr-04-console.spec.md) | [Plan](pr-04-console.plan.md) |
 | 5 | 人工决策与恢复闭环 | [Spec](pr-05-intervention.spec.md) | [Plan](pr-05-intervention.plan.md) |
 
-共七个串行交付阶段，阶段名不是 GitHub PR 编号。PR 3 已调整为 Windows 服务窗口方案；原 PR4 路径保留为 4C。架构衔接见 [共同约束 Spec](execution-architecture.spec.md) 和各阶段 Spec。后续阶段须等 PR 3 验收与合并。
+共七个串行交付阶段，阶段名不是 GitHub PR 编号。PR 3 已以 Windows 可见服务窗口方案交付；原 PR4 路径保留为 4C。架构衔接见 [共同约束 Spec](execution-architecture.spec.md) 和各阶段 Spec。后续阶段按 4A → 4B → 4C → 5 推进。
 
 ## 中心状态机与远程执行
 

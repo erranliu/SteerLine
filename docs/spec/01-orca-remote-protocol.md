@@ -28,13 +28,15 @@ SteerLine 持有业务任务、执行身份、决策和完成规则；Orca 持�
 
 派发后通过 Run 所在 Orca runtime 按 Dispatch ID 调用 worker 操作和消息操作。不能把 `--on` 机械地加到所有后续命令，也不能把远端 terminal handle 当作中心 handle。终端可能不存在；正常监督必须能使用 worker 接口。
 
-必须验证中心服务在普通后台进程中如何建立、持久保存、恢复协调者身份。若需要 Orca 管理的协调终端，应使用明确的配置和身份校验；不得依赖当前活动窗口。中心 SteerLine 重启、Orca 重启及终端身份失效需分别验证，不能承诺失效身份可自动重新绑定。
+必须验证中心服务如何在不依赖 viewer/TUI 会话的情况下建立、持久保存和恢复协调者身份。Windows 中心服务按 [PR 3 服务窗口契约](pr-03-service-lifecycle.spec.md) 从固定入口独立打开可见窗口；关闭 viewer 不停服，关闭服务窗口则结束中心服务。Linux 可沿用 detached 路径，不能把 Windows 窗口方案当作无窗口后台存活能力。若需要 Orca 管理的协调终端，应使用明确的配置和身份校验；不得依赖当前活动 viewer 窗口。中心 SteerLine 重启、Orca 重启及终端身份失效需分别验证，不能承诺失效身份可自动重新绑定。
+
+本阶段已有的 Orca 非交互探测只证明协议能力，不等于中心 SteerLine 已在可见服务窗口中完成远程闭环；窗口关闭后的中心恢复由 [Spec 03](03-remote-execution-and-viewer.md) 集成验收。
 
 ## 4. 能力矩阵
 
 | 能力 | 需要验证的内容 | 门槛 |
 | --- | --- | --- |
-| 后台协调者 | 非交互调用、Run 绑定、重启后的读取/回答权限、失效身份诊断 | 必需 |
+| 非交互协调者 | 不依赖 viewer 的调用、Run 绑定、重启后的读取/回答权限、失效身份诊断 | 必需 |
 | 远程派发 | worker-start 返回身份、ready/failed/outcome_unknown、残留资源、精确 host/repo | 必需 |
 | 同工作区分阶段执行 | 前一步结算后在精确远端 worktree 派发下一步；新 Task/Dispatch 身份、原分支/代码保留、无两个步骤同时修改 | 必需 |
 | workspace 准备 | 远端可获取固定 base commit；实际 branch/HEAD 可核验；提示可在远端读取 | 必需 |
@@ -119,7 +121,7 @@ Orca 自身的登录、信任目录和权限提示可能只有 agentWait 观察�
 
 | 编号 | 场景与通过条件 |
 | --- | --- |
-| P01 | 后台协调者启动远端 worker，返回实际远端身份；远端不存在 SteerLine 常驻进程 |
+| P01 | 中心协调者不依赖 viewer 启动远端 worker，返回实际远端身份；远端不存在 SteerLine 常驻进程 |
 | P02 | 固定 base 在远端可解析并核验；中心私有 ref 和本机路径均未成为远端依赖 |
 | P03 | worker 输出能增量读取；分页不漏已保留内容；缺口/source_changed 被显式报告 |
 | P04 | ask 显示完整问题，超时恢复同一问题，reply 后取得应用证据，不产生第二次提问 |
