@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 // fakeOrca is a protocol-level stand-in for the Orca CLI. `worktree create`
@@ -24,6 +25,7 @@ type fakeOrcaState struct {
 	Branch       string   `json:"branch,omitempty"`
 	Prompt       string   `json:"prompt,omitempty"`
 	Answered     bool     `json:"answered,omitempty"`
+	Sends        int      `json:"sends,omitempty"`
 	Closed       bool     `json:"closed,omitempty"`
 	OutputLines  []string `json:"output_lines,omitempty"`
 	OldestCursor int      `json:"oldest_cursor,omitempty"`
@@ -106,6 +108,14 @@ func fakeOrca(stateDir string, argv []string) int {
 					return fakeOrcaErr("state", err.Error())
 				}
 			}
+			if path := os.Getenv("STEERLINE_FAKE_ORCA_BREAK_STOP_RECEIPT"); path != "" {
+				if err = os.Remove(path); err != nil {
+					return fakeOrcaErr("receipt_fault", err.Error())
+				}
+				if err = os.Mkdir(path, 0700); err != nil {
+					return fakeOrcaErr("receipt_fault", err.Error())
+				}
+			}
 			return fakeOrcaOK(map[string]any{"close": map[string]any{"handle": st.Handle, "ptyKilled": st.Closed}})
 		}
 	}
@@ -163,17 +173,26 @@ func fakeOrcaSend(stateDir string, argv []string) int {
 		return fakeOrcaErr("terminal_handle_stale", e.Error())
 	}
 	src := fakePromptPath(arg(argv, "--text"))
-	if src == "" {
+	if src != "" {
+		if _, e := os.Stat(src); e != nil {
+			return fakeOrcaErr("prompt_missing", e.Error())
+		}
+		st.Prompt = src
+		st.Answered = false
+	} else {
 		// Continuation sends reference continue.txt, not the dispatch pointer; the
 		// stored dispatch prompt still carries task_id/run_id/base_commit.
-		src = st.Prompt
+		if e := fakeWriteResult(st.Worktree, st.Prompt, false); e != nil {
+			return fakeOrcaErr("prompt", e.Error())
+		}
+		st.Answered = true
 	}
-	if e := fakeWriteResult(st.Worktree, src, false); e != nil {
-		return fakeOrcaErr("prompt", e.Error())
-	}
-	st.Answered = true
+	st.Sends++
 	if e := writeFakeOrcaState(stateDir, st); e != nil {
 		return fakeOrcaErr("state", e.Error())
+	}
+	if os.Getenv("STEERLINE_FAKE_ORCA_SEND_RESPONSE_LOST") == "1" {
+		return 2 // The terminal accepted input, but its response was lost.
 	}
 	return fakeOrcaOK(map[string]any{"send": map[string]any{"accepted": true}})
 }
@@ -229,6 +248,22 @@ func fakeOrcaShow(stateDir string, argv []string) int {
 	if e != nil {
 		return fakeOrcaErr("terminal_handle_stale", "terminal handle stale")
 	}
+	if st.Handle == os.Getenv("STEERLINE_FAKE_ORCA_SLOW_SHOW_HANDLE") {
+		if lockPath := os.Getenv("STEERLINE_FAKE_ORCA_SHOW_EXCLUSIVE"); lockPath != "" {
+			lock, lockErr := os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+			if lockErr != nil {
+				return fakeOrcaErr("overlapping_observation", lockErr.Error())
+			}
+			lock.Close()
+			defer os.Remove(lockPath)
+		}
+		if marker := os.Getenv("STEERLINE_FAKE_ORCA_SLOW_SHOW_STARTED"); marker != "" {
+			_ = os.WriteFile(marker, []byte("started"), 0600)
+		}
+		if delay, err := strconv.Atoi(os.Getenv("STEERLINE_FAKE_ORCA_SLOW_SHOW_MS")); err == nil && delay > 0 {
+			time.Sleep(time.Duration(delay) * time.Millisecond)
+		}
+	}
 	// Model the agent answering once its prompt exists: Steerline calls show
 	// right after writing prompt.txt, so the R-a result lands deterministically.
 	// With STEERLINE_FAKE_ORCA_DECISION the first answer is a decision request; the
@@ -244,11 +279,15 @@ func fakeOrcaShow(stateDir string, argv []string) int {
 	}
 	status := "running"
 	connected := true
+	orphaned := false
 	if st.Closed {
 		status = "exited"
 		connected = false
+		if os.Getenv("STEERLINE_FAKE_ORCA_CLOSE_SHOW_UNCERTAIN") == "1" {
+			status, orphaned = "running", true
+		}
 	}
-	return fakeOrcaOK(map[string]any{"terminal": map[string]any{"handle": st.Handle, "incarnationId": inc, "status": status, "connected": connected, "orphaned": false}})
+	return fakeOrcaOK(map[string]any{"terminal": map[string]any{"handle": st.Handle, "incarnationId": inc, "status": status, "connected": connected, "orphaned": orphaned}})
 }
 
 func fakeOrcaRead(stateDir string, argv []string) int {
@@ -415,7 +454,136 @@ func TestOrcaStopFailureDoesNotConfirmExit(t *testing.T) {
 	}
 }
 
+func TestOrcaDetachObservationIsRepeatableAndRefLocal(t *testing.T) {
+	dir := t.TempDir()
+	cfg := orcaTestConfig(t, dir, "")
+	backend := orcaTerminalBackend{config: cfg}
+	workers := make([]*Worker, 0, 2)
+	refs := make([]ExecutionRef, 0, 2)
+	for _, handle := range []string{"detach-one", "detach-two"} {
+		state := fakeOrcaState{Handle: handle, Incarnation: "inc-" + handle}
+		if err := writeFakeOrcaState(dir, state); err != nil {
+			t.Fatal(err)
+		}
+		proc := &orcaProcess{cfg: cfg, term: orcaTerminal{Handle: handle, RuntimeID: "fake-runtime", IncarnationID: state.Incarnation}}
+		workers = append(workers, superviseOrcaResult(cfg, proc, filepath.Join(dir, handle+"-missing-result"), filepath.Join(dir, handle+"-result.json")))
+		refs = append(refs, ExecutionRef{Backend: BackendOrca, Protocol: ProtocolOrcaTerminalV2, Target: targetFor(cfg), External: proc.Identity()})
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := backend.DetachObservation(ctx, workers[0]); err != nil {
+		t.Fatal(err)
+	}
+	if err := backend.DetachObservation(ctx, workers[0]); err != nil {
+		t.Fatalf("repeated detach blocked: %v", err)
+	}
+	for i, ref := range refs {
+		obs, err := backend.Observe(ctx, ref)
+		if err != nil || obs.Liveness != "live" {
+			t.Fatalf("detach canceled terminal %d: %+v %v", i, obs, err)
+		}
+	}
+	if err := backend.DetachObservation(ctx, workers[1]); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSlowOrcaObservationDoesNotBlockOtherRefStop(t *testing.T) {
+	dir := t.TempDir()
+	cfg := orcaTestConfig(t, dir, "")
+	cfg.CommandTimeout = "10s"
+	backend := orcaTerminalBackend{config: cfg}
+	refFor := func(handle string) ExecutionRef {
+		t.Helper()
+		identity := ProcessIdentity{Kind: "orca", RuntimeID: "fake-runtime", Terminal: handle, Incarnation: "inc-" + handle}
+		if err := writeFakeOrcaState(dir, fakeOrcaState{Handle: handle, Incarnation: identity.Incarnation}); err != nil {
+			t.Fatal(err)
+		}
+		return ExecutionRef{Backend: BackendOrca, Protocol: ProtocolOrcaTerminalV2, Target: targetFor(cfg), External: identity}
+	}
+	slow, stopped := refFor("slow-observe"), refFor("quick-stop")
+	marker := filepath.Join(dir, "slow-show-started")
+	t.Setenv("STEERLINE_FAKE_ORCA_SLOW_SHOW_HANDLE", slow.External.Terminal)
+	t.Setenv("STEERLINE_FAKE_ORCA_SLOW_SHOW_STARTED", marker)
+	t.Setenv("STEERLINE_FAKE_ORCA_SLOW_SHOW_MS", "5000")
+	slowCtx, cancelSlow := context.WithCancel(context.Background())
+	defer cancelSlow()
+	slowDone := make(chan error, 1)
+	go func() { _, err := backend.Observe(slowCtx, slow); slowDone <- err }()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if _, err := os.Stat(marker); err == nil {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if _, err := os.Stat(marker); err != nil {
+		t.Fatal("slow observation did not start")
+	}
+	stopCtx, cancelStop := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancelStop()
+	started := time.Now()
+	receipt, err := backend.StopExecution(stopCtx, stopped, Operation{}, nil)
+	if err != nil || receipt.Disposition != "confirmed" || time.Since(started) >= 3*time.Second {
+		t.Fatalf("other ref stop waited for slow observation: %#v %v", receipt, err)
+	}
+	cancelSlow()
+	select {
+	case <-slowDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("canceled slow observation leaked")
+	}
+	state, err := readFakeOrcaState(dir, slow.External.Terminal)
+	if err != nil || state.Closed {
+		t.Fatalf("canceling observation closed another terminal: %+v %v", state, err)
+	}
+}
+
+func TestOrcaSameRefObservationsDoNotOverlapOrLeakGate(t *testing.T) {
+	dir := t.TempDir()
+	cfg := orcaTestConfig(t, dir, "")
+	backend := orcaTerminalBackend{config: cfg}
+	handle := "same-ref-observe"
+	identity := ProcessIdentity{Kind: "orca", RuntimeID: "fake-runtime", Terminal: handle, Incarnation: "inc-same-ref"}
+	if err := writeFakeOrcaState(dir, fakeOrcaState{Handle: handle, Incarnation: identity.Incarnation}); err != nil {
+		t.Fatal(err)
+	}
+	ref := ExecutionRef{Backend: BackendOrca, Protocol: ProtocolOrcaTerminalV2, Target: targetFor(cfg), External: identity}
+	marker := filepath.Join(dir, "first-show-started")
+	t.Setenv("STEERLINE_FAKE_ORCA_SLOW_SHOW_HANDLE", handle)
+	t.Setenv("STEERLINE_FAKE_ORCA_SLOW_SHOW_STARTED", marker)
+	t.Setenv("STEERLINE_FAKE_ORCA_SLOW_SHOW_MS", "500")
+	t.Setenv("STEERLINE_FAKE_ORCA_SHOW_EXCLUSIVE", filepath.Join(dir, "active-show"))
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	results := make(chan error, 2)
+	go func() { _, err := backend.Observe(ctx, ref); results <- err }()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if _, err := os.Stat(marker); err == nil {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if _, err := os.Stat(marker); err != nil {
+		t.Fatal("first observation did not enter the fake platform")
+	}
+	go func() { _, err := backend.Observe(ctx, ref); results <- err }()
+	for i := 0; i < 2; i++ {
+		if err := <-results; err != nil {
+			t.Fatalf("same-ref observation overlapped or failed: %v", err)
+		}
+	}
+	orcaObservationGates.Lock()
+	remaining := len(orcaObservationGates.byIdentity)
+	orcaObservationGates.Unlock()
+	if remaining != 0 {
+		t.Fatalf("observation gates leaked: %d", remaining)
+	}
+}
+
 func TestServiceShutdownPersistsOrcaStopEvidence(t *testing.T) {
+	t.Setenv("STEERLINE_FAKE_ORCA_CLOSE_SHOW_UNCERTAIN", "1")
 	dir := t.TempDir()
 	cfg := orcaTestConfig(t, dir, "fail")
 	cfg.ShutdownGrace = "20ms"
@@ -442,6 +610,38 @@ func TestServiceShutdownPersistsOrcaStopEvidence(t *testing.T) {
 	}
 	if s.State.SlotOccupied || s.worker != nil {
 		t.Fatalf("confirmed stop retained slot/worker: slot=%v worker=%v", s.State.SlotOccupied, s.worker)
+	}
+}
+
+func TestServiceShutdownRetainsSlotWhenExactStopReceiptCannotPersist(t *testing.T) {
+	dir := t.TempDir()
+	cfg := orcaTestConfig(t, dir, "")
+	cfg.ShutdownGrace = "20ms"
+	handle := "terminal-stop-receipt-fault"
+	if err := writeFakeOrcaState(dir, fakeOrcaState{Handle: handle, Incarnation: "inc-receipt-fault"}); err != nil {
+		t.Fatal(err)
+	}
+	runID, attemptID := newID(), newID()
+	identity := ProcessIdentity{Kind: "orca", Terminal: handle, RuntimeID: "fake-runtime", Incarnation: "inc-receipt-fault", Executable: cfg.Orca.Executable}
+	ref := ExecutionRef{Version: 1, Backend: BackendOrca, Protocol: ProtocolOrcaTerminalV2, Target: targetFor(cfg), Agent: AgentSpec{Name: "codex"}, RunID: runID, AttemptID: attemptID, WorkspacePath: dir, WorkspaceBranch: "orca/test", BaseCommit: strings.Repeat("a", 40), External: identity, Generation: identity.Incarnation}
+	records := executionRecords{root: dir}
+	if err := records.saveBinding(ref); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	proc := &orcaProcess{cfg: cfg, term: orcaTerminal{Handle: handle, RuntimeID: identity.RuntimeID, IncarnationID: identity.Incarnation}, cancel: cancel}
+	w := &Worker{proc: proc, Events: make(chan WorkerEvent), Done: make(chan error, 1)}
+	go func() { <-ctx.Done(); close(w.Events); w.Done <- ctx.Err() }()
+	r := &Run{TaskID: "t-stop-receipt-fault", RunID: runID, AttemptID: attemptID, Claimant: cfg.Claimant, Host: "orca", ExecutionStatus: "running", FinishTaskStatus: "pending", Process: &identity, LogPath: ptr(filepath.Join(dir, "events.jsonl"))}
+	s := &Service{Config: cfg, State: Runtime{SchemaVersion: CurrentRuntimeSchema, Runs: []*Run{r}, SlotOccupied: true, CurrentTask: ptr(r.TaskID)}, store: &Store{Path: filepath.Join(dir, "runtime.json")}, worker: w, active: r, activities: map[string]*ActivityWriter{}}
+	operationPath := records.operationPath(runID, attemptID, "stop-"+attemptID)
+	t.Setenv("STEERLINE_FAKE_ORCA_BREAK_STOP_RECEIPT", operationPath)
+	s.shutdown()
+	if !s.State.SlotOccupied || r.ExecutionStatus != "unknown" || r.FinishTaskStatus != "blocked" {
+		t.Fatalf("unpersisted close receipt released execution: slot=%v run=%#v", s.State.SlotOccupied, r)
+	}
+	if info, err := os.Stat(operationPath); err != nil || !info.IsDir() {
+		t.Fatalf("stop receipt fault was not injected: %v", err)
 	}
 }
 

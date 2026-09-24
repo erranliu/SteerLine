@@ -146,11 +146,12 @@ func NewService(c Config) (*Service, error) {
 				r.FinishTaskStatus = "blocked"
 				r.Error = ptr("Interrupted execution: " + s.inspectRunProcess(r) + "; manual recovery required; never auto-resumed")
 			}
-			if r.WorkspaceIntent != nil && r.FinishTaskStatus != "completed" {
-				err := verifyWorkspace(context.Background(), c, r.WorkspaceIntent, false)
-				if err == nil && (r.WorktreePath != nil || r.WorktreeBranch != nil || r.BaseCommit != nil) {
-					err = verifyRunWorkspace(context.Background(), c, r)
-				}
+			if r.ExecutionStatus == "unknown" {
+				s.State.SlotOccupied = true
+				s.State.CurrentTask = ptr(r.TaskID)
+			}
+			if r.WorkspaceIntent != nil && r.Process != nil && r.FinishTaskStatus != "completed" {
+				err := s.inspectRunWorkspace(context.Background(), r)
 				if err != nil {
 					r.FinishTaskStatus = "blocked"
 					previous := ""
@@ -1434,6 +1435,20 @@ func (s *Service) confirmExecutionStop(op Operation) (bool, error) {
 	if op.ID == "" {
 		return false, errors.New("stop operation is missing")
 	}
+	records := executionRecords{root: s.Config.RunDir}
+	// The adapter already persisted an exact stop receipt. Orca's terminal show
+	// may later report an orphaned/disconnected tab even after ptyKilled=true;
+	// that weaker observation must not erase the durable close evidence.
+	if op.Status == OperationConfirmed {
+		persisted, err := records.loadOperation(op.RunID, op.AttemptID, op.ID)
+		if err != nil {
+			return false, err
+		}
+		if persisted.Status != OperationConfirmed || persisted.PayloadDigest != op.PayloadDigest || persisted.Target != op.Target || persisted.Ref == nil || op.Ref == nil || digestValue(*persisted.Ref) != digestValue(*op.Ref) {
+			return false, &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "exact stop confirmation was not durably saved"}
+		}
+		return true, nil
+	}
 	ref := op.Ref
 	if ref == nil {
 		loaded, err := (executionRecords{root: s.Config.RunDir}).loadBinding(op.RunID, op.AttemptID)
@@ -1444,7 +1459,6 @@ func (s *Service) confirmExecutionStop(op Operation) (bool, error) {
 	}
 	backend := backendFor(s.Config, BeadsContext{})
 	obs, err := backend.Observe(context.Background(), *ref)
-	records := executionRecords{root: s.Config.RunDir}
 	if err != nil {
 		op.Status, op.Diagnostic, op.UpdatedAt = OperationUnknown, err.Error(), now()
 		saveErr := records.saveOperation(op)

@@ -178,12 +178,13 @@ func startOrcaRun(ctx context.Context, c Config, t Task, r *Run, source BeadsCon
 	customCodex := c.needsCodexExecutable()
 	promptPath := filepath.Join(dir, "prompt.txt")
 	pointer := "Read and execute " + promptPath + " now. Follow it exactly."
+	bootstrap := "SteerLine is preparing the dispatch. Wait for a follow-up message in this terminal. Do not edit files or act on a task yet."
 	var created orcaWorktreeCreated
 	var e error
 	if customCodex {
 		created, e = client.worktreeCreate(ctx, name, "", baseRef, "", c.Orca.Activate)
 	} else {
-		created, e = client.worktreeCreate(ctx, name, c.agentName(), baseRef, pointer, c.Orca.Activate)
+		created, e = client.worktreeCreate(ctx, name, c.agentName(), baseRef, bootstrap, c.Orca.Activate)
 	}
 	if e != nil {
 		return nil, e
@@ -227,6 +228,11 @@ func startOrcaRun(ctx context.Context, c Config, t Task, r *Run, source BeadsCon
 	if e := AtomicWrite(promptPath, []byte(prompt)); e != nil {
 		return nil, e
 	}
+	if !customCodex {
+		if e := client.terminalSend(ctx, handle, pointer); e != nil {
+			return nil, e
+		}
+	}
 	if customCodex {
 		command, ce := orcaCodexLaunchCommand(c, pointer)
 		if ce != nil {
@@ -247,7 +253,7 @@ func startOrcaRun(ctx context.Context, c Config, t Task, r *Run, source BeadsCon
 	term, _ := client.showTerminal(ctx, handle)
 	proc := &orcaProcess{cfg: c, term: term}
 	proc.term.Handle = handle
-	return superviseOrcaResult(c, client, proc, resultInWorktree, *r.ResultPath), nil
+	return superviseOrcaResult(c, proc, resultInWorktree, *r.ResultPath), nil
 }
 
 func orcaCodexLaunchCommand(c Config, prompt string) (string, error) {
@@ -309,13 +315,14 @@ func orcaPromptAddendum(promptPath, beadsDir, claimant string) string {
 // superviseOrcaResult watches for the R-a result file and terminal state. It
 // never treats a result file as task completion: the service still verifies the
 // PR merge and Beads close.
-func superviseOrcaResult(c Config, client orcaClient, proc *orcaProcess, resultInWorktree, resultOut string) *Worker {
+func superviseOrcaResult(c Config, proc *orcaProcess, resultInWorktree, resultOut string) *Worker {
 	ctx, cancel := context.WithCancel(context.Background())
 	proc.cancel = cancel
-	w := &Worker{proc: proc, Events: make(chan WorkerEvent), Done: make(chan error, 1)}
+	w := &Worker{proc: proc, Events: make(chan WorkerEvent), Done: make(chan error, 1), observationDone: make(chan struct{})}
 	stall := positiveDuration(c.StallTimeout, 5*time.Minute)
 	go func() {
 		defer close(w.Events)
+		defer close(w.observationDone)
 		var lastOutput int64
 		lastProgress := time.Now()
 		ticker := time.NewTicker(2 * time.Second)
@@ -335,7 +342,7 @@ func superviseOrcaResult(c Config, client orcaClient, proc *orcaProcess, resultI
 				w.Done <- nil
 				return
 			}
-			term, e := client.showTerminal(ctx, proc.term.Handle)
+			term, e := showBoundOrcaTerminal(ctx, c, proc.Identity())
 			if e == nil {
 				if term.AgentWait != nil {
 					w.Done <- errors.New("orca agent is waiting for human input; manual recovery required")

@@ -383,12 +383,11 @@ func (s *Service) applyDecisions(ctx context.Context) error {
 	return nil
 }
 
-// resumeAfterDecision re-arms supervision of the same Orca terminal and sends the
-// continuation. It refuses to act unless the terminal is the same live
-// incarnation, so a restart or a replaced terminal never silently resumes.
+// resumeAfterDecision re-arms supervision of the fixed execution and sends a
+// continuation only when the selected backend has verified support.
 func (s *Service) resumeAfterDecision(ctx context.Context, r *Run) error {
-	if r.Process == nil || r.Process.Kind != "orca" || r.Process.Terminal == "" || r.Decision == nil {
-		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "run has no complete Orca decision/terminal identity"}
+	if r.Process == nil || r.Decision == nil {
+		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "run has no complete decision/execution identity"}
 	}
 	if r.ResultPath == nil {
 		return errors.New("run has no worktree or result path")
@@ -397,20 +396,21 @@ func (s *Service) resumeAfterDecision(ctx context.Context, r *Run) error {
 	ref, e := records.loadBinding(r.RunID, r.AttemptID)
 	if e != nil {
 		if os.IsNotExist(e) {
-			return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "legacy Orca execution has no fixed target binding; manual recovery required"}
+			return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "execution has no fixed target binding; manual recovery required"}
 		}
 		return e
 	}
-	backend := orcaTerminalBackend{config: s.Config}
-	if ref.Backend != BackendOrca || ref.Protocol != ProtocolOrcaTerminalV2 || ref.Target != targetFor(s.Config) {
-		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "fixed execution backend/protocol/target no longer matches the configured Orca connection"}
+	backend := backendFor(s.Config, BeadsContext{})
+	kind, protocol := backend.Identity()
+	if ref.Backend != kind || ref.Protocol != protocol || ref.Target != targetFor(s.Config) || ref.External != *r.Process {
+		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "fixed execution backend/protocol/target no longer matches the run"}
 	}
-	if _, e := s.requireBackendCapabilities(ctx, backend, "reply_continue", "observe", "output_reading"); e != nil {
+	if _, e := s.requireBackendCapabilitiesFor(ctx, backend, ref.Target, ref.Agent, "reply_continue", "observe", "output_reading"); e != nil {
 		return e
 	}
 	contPath := decisionContinuePath(r)
 	if ref.WorkspacePath == "" || !filepath.IsAbs(ref.WorkspacePath) {
-		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "fixed Orca workspace identity is incomplete"}
+		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "fixed workspace identity is incomplete"}
 	}
 	opID := "reply-" + r.Decision.ID
 	answer := "Read " + contPath + " and continue. Follow it exactly."

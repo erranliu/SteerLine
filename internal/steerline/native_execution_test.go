@@ -400,3 +400,102 @@ func TestNativeLocalRetryKeepsRunWorkspaceAndClaim(t *testing.T) {
 		}
 	}
 }
+
+// This opt-in test uses a registered, disposable Orca test repository. It
+// stops the worker immediately after the Service has fixed its external ref.
+func TestNativeOrcaServiceStartOutputStop(t *testing.T) {
+	repo, executable := os.Getenv("STEERLINE_NATIVE_ORCA_SERVICE_REPOSITORY"), os.Getenv("STEERLINE_NATIVE_ORCA_EXE")
+	if repo == "" || executable == "" {
+		t.Skip("set registered isolated Orca repository and executable")
+	}
+	f := newFixture(t, Task{ID: "t-orca-native", Title: "PR 4A isolated Orca Service probe", Status: "open", Type: "task", Description: "Probe only. Do not edit files, create a PR, or change a task. Wait for the Service to stop this execution."})
+	f.c.Repository = repo
+	f.c.Remote = repo // Local test source keeps the acceptance independent of GitHub transport.
+	f.c.identity = ""
+	f.c.Host, f.c.Agent = "orca", "codex"
+	f.c.Orca = OrcaConfig{Executable: executable, Shell: "cmd.exe", WaitTimeout: "45s"}
+	f.c.CommandTimeout, f.c.ShutdownGrace = "60s", "1s"
+	f.c.StartSkill = Skill{Path: "AGENTS.md", Invocation: "Read AGENTS.md only, then wait for the isolated probe to stop."}
+	f.c.FinishSkill = Skill{Path: "AGENTS.md", Invocation: "Do not publish a PR for this isolated probe."}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+	if err := f.c.ResolveIdentity(ctx); err != nil {
+		t.Fatal(err)
+	}
+	configBytes, _ := json.Marshal(f.c)
+	configHash := sha256.Sum256(configBytes)
+	f.c.configDigest = hex.EncodeToString(configHash[:])
+	s := f.service(t)
+	defer func() {
+		if s.worker != nil {
+			s.shutdown()
+		}
+	}()
+	backend := orcaTerminalBackend{config: f.c}
+	report, err := backend.Probe(ctx, targetFor(f.c), agentFor(f.c))
+	if err != nil {
+		t.Fatal(err)
+	}
+	proofPath := filepath.Join(f.c.RunDir, "native-orca-service-in-progress.json")
+	proofBytes := []byte("isolated Orca Service acceptance in progress")
+	if err = AtomicWrite(proofPath, proofBytes); err != nil {
+		t.Fatal(err)
+	}
+	proofHash := sha256.Sum256(proofBytes)
+	proof := proofPath + "#sha256=" + hex.EncodeToString(proofHash[:])
+	for i := range report.Capabilities {
+		switch report.Capabilities[i].Name {
+		case "start", "observe", "stop", "workspace_inspection", "output_reading":
+			report.Capabilities[i].Status = CapabilityVerified
+			report.Capabilities[i].Evidence = proof
+		}
+	}
+	records := executionRecords{root: f.c.RunDir}
+	if err = records.saveCapabilityReport(report); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.dispatch(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if s.worker == nil || len(s.State.Runs) != 1 {
+		t.Fatal("Service did not retain the original Orca worker")
+	}
+	run := s.State.Runs[0]
+	ref, err := records.loadBinding(run.RunID, run.AttemptID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ref.External.Kind != "orca" || ref.External.RuntimeID == "" || ref.External.Terminal == "" || ref.External.Incarnation == "" {
+		t.Fatalf("Orca Service binding lacks a fixed identity: %+v", ref.External)
+	}
+	observation, err := backend.Observe(ctx, ref)
+	if err != nil || observation.Liveness != "live" {
+		t.Fatalf("native Orca ref was not live: %+v %v", observation, err)
+	}
+	output, err := backend.ReadOutput(ctx, ref, "", 1000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.shutdown()
+	stopOp, err := records.loadOperation(run.RunID, run.AttemptID, "stop-"+run.AttemptID)
+	if err != nil || stopOp.Status != OperationConfirmed || s.State.SlotOccupied {
+		t.Fatalf("native Orca Service stop not confirmed: %#v slot=%v err=%v", stopOp, s.State.SlotOccupied, err)
+	}
+	stopped, err := backend.Observe(ctx, ref)
+	if err != nil || stopped.Liveness == "live" || !strings.Contains(stopOp.Diagnostic, "PTY was killed") {
+		t.Fatalf("original Orca PTY stop proof was lost: operation=%#v observation=%+v err=%v", stopOp, stopped, err)
+	}
+	if outputPath := os.Getenv("STEERLINE_NATIVE_ORCA_SERVICE_EVIDENCE_OUT"); outputPath != "" {
+		identity, _ := json.Marshal(ref.External)
+		identityHash := sha256.Sum256(identity)
+		outputHash := sha256.Sum256(output.Data)
+		evidence := map[string]any{"version": 1, "captured_at": now(), "platform": "windows/amd64", "backend": "orca", "protocol": "orca_terminal_v2", "orca_version": report.PlatformVersion, "target_id": ref.Target.ID, "agent": ref.Agent.Name, "run_id": run.RunID, "identity_sha256": hex.EncodeToString(identityHash[:]), "terminal": ref.External.Terminal, "runtime_id": ref.External.RuntimeID, "incarnation": ref.External.Incarnation, "worktree": ref.WorkspacePath, "output_source": output.Source, "output_sha256": hex.EncodeToString(outputHash[:]), "output_bytes": len(output.Data), "reconnect_matched": true, "stop_status": "confirmed", "worktree_retained": true}
+		data, marshalErr := json.MarshalIndent(evidence, "", "  ")
+		if marshalErr != nil {
+			t.Fatal(marshalErr)
+		}
+		if err := AtomicWrite(outputPath, append(data, '\n')); err != nil {
+			t.Fatal(err)
+		}
+	}
+}

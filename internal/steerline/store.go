@@ -20,13 +20,20 @@ func newID() string {
 }
 func shortHash(s string) string { h := sha256.Sum256([]byte(s)); return hex.EncodeToString(h[:12]) }
 func AtomicWrite(path string, data []byte) error {
+	return atomicWriteWith(path, data, func(f *os.File, data []byte) error {
+		_, err := f.Write(data)
+		return err
+	})
+}
+
+func atomicWriteWith(path string, data []byte, write func(*os.File, []byte) error) error {
 	f, e := os.CreateTemp(filepath.Dir(path), ".steerline-*.tmp")
 	if e != nil {
 		return e
 	}
 	name := f.Name()
 	defer os.Remove(name)
-	if _, e = f.Write(data); e == nil {
+	if e = write(f, data); e == nil {
 		e = f.Sync()
 	}
 	ce := f.Close()

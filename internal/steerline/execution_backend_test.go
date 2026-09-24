@@ -77,6 +77,78 @@ func TestExecutionBackendCommonCapabilityContract(t *testing.T) {
 	}
 }
 
+func TestHistoricalCapabilityCheckKeepsFixedAgent(t *testing.T) {
+	f := newFixture(t)
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.c.Host = "orca"
+	f.c.Agent = "codex"
+	f.c.Orca = OrcaConfig{Executable: exe, Args: []string{"--fake", "orca", f.c.RunDir}, Shell: "cmd.exe", WaitTimeout: "5s"}
+	seedFakeCapabilities(t, f.c)
+	fixedTarget, fixedAgent := targetFor(f.c), agentFor(f.c)
+	f.c.Agent = "pi"
+	s := &Service{Config: f.c}
+	backend := backendFor(f.c, BeadsContext{})
+	if _, err := s.requireBackendCapabilitiesFor(context.Background(), backend, fixedTarget, fixedAgent, "reply_continue"); err != nil {
+		t.Fatalf("historical Codex capability was lost after changing the default agent: %v", err)
+	}
+	if _, err := s.requireBackendCapabilities(context.Background(), backend, "reply_continue"); err == nil {
+		t.Fatal("new default agent reused historical Codex verification")
+	}
+}
+
+func TestLocalObservationRejectsReusedPIDIdentity(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("Windows process creation identity")
+	}
+	identity, err := currentProcessIdentity()
+	if err != nil {
+		t.Fatal(err)
+	}
+	identity.Created = "different-process-generation"
+	cfg := Config{Host: "local"}
+	ref := ExecutionRef{Backend: BackendLocal, Protocol: ProtocolLocalProcess, Target: targetFor(cfg), External: *identity}
+	_, err = (localExecutionBackend{config: cfg}).Observe(context.Background(), ref)
+	var backendErr *BackendError
+	if !errors.As(err, &backendErr) || backendErr.Code != BackendIdentityMismatch {
+		t.Fatalf("reused PID identity was accepted: %v", err)
+	}
+}
+
+func TestChangedDefaultBackendCannotStopFixedLocalExecution(t *testing.T) {
+	f := newFixture(t, task("t-fixed-backend"))
+	db := readFake(f.db)
+	db.Behavior = "sleep"
+	writeFake(f.db, db)
+	s := f.service(t)
+	if err := s.dispatch(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		s.Config.Host = "local"
+		s.shutdown()
+	}()
+	run := s.State.Runs[0]
+	if run.Process == nil {
+		t.Fatal("local worker identity missing")
+	}
+	s.Config.Host = "orca"
+	_, err := s.stopActiveExecution(context.Background())
+	var backendErr *BackendError
+	if !errors.As(err, &backendErr) || backendErr.Code != BackendIdentityMismatch {
+		t.Fatalf("changed default backend targeted old run: %v", err)
+	}
+	if got := inspectProcess(run.Process); got != "matching process still exists" {
+		t.Fatalf("changed default backend affected old process: %s", got)
+	}
+	path := (executionRecords{root: f.c.RunDir}).operationPath(run.RunID, run.AttemptID, "stop-"+run.AttemptID)
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("rejected cross-backend stop persisted an operation: %v", err)
+	}
+}
+
 func TestLocalReadOutputUsesBoundedExecutionCursor(t *testing.T) {
 	runID := newID()
 	attemptID := runID

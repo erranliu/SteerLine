@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "captured_at": "2026-09-24T08:59:00Z",
+  "platform": "windows/amd64",
+  "orca_version": "1.4.209",
+  "repo_id": "faae3ad4-da24-4d6d-9698-d8931b893789",
+  "worktree": "C:/Users/lmas1/orca/workspaces/SteerlineTest/pr04a-staged-1543d5ca",
+  "terminal": "term_9aef5c41-3c65-4571-894a-b1d823df1a89",
+  "runtime_id": "30538bda-6d43-4df3-b799-924b7cd887ef",
+  "incarnation": "7edadf5e-8ad4-4f88-b261-1f75d0f82a30",
+  "bootstrap_waited_for_dispatch": true,
+  "prompt_file_written_before_send": true,
+  "send_request_id": "2608e3af-41cf-4bfd-9a1a-a1aab1f486f0",
+  "send_stages": ["input_accepted", "turn_started"],
+  "output_token_observed_before_close": "PR4A_STAGED_OK",
+  "stop_status": "confirmed",
+  "pty_killed": true,
+  "worktree_retained": true,
+  "worktree_clean": true
+}

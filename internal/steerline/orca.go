@@ -27,6 +27,53 @@ type orcaTerminal struct {
 	RuntimeID       string           `json:"-"`
 }
 
+type orcaObservationGate struct {
+	token chan struct{}
+	users int
+}
+
+var orcaObservationGates = struct {
+	sync.Mutex
+	byIdentity map[string]*orcaObservationGate
+}{byIdentity: map[string]*orcaObservationGate{}}
+
+// Show calls for one fixed terminal are serialized across Service, output
+// readers and its observer. Other terminal identities have independent gates.
+func showBoundOrcaTerminal(ctx context.Context, c Config, identity ProcessIdentity) (orcaTerminal, error) {
+	key := digestValue(struct {
+		Target   ExecutionTarget
+		Identity ProcessIdentity
+	}{targetFor(c), identity})
+	orcaObservationGates.Lock()
+	gate := orcaObservationGates.byIdentity[key]
+	if gate == nil {
+		gate = &orcaObservationGate{token: make(chan struct{}, 1)}
+		gate.token <- struct{}{}
+		orcaObservationGates.byIdentity[key] = gate
+	}
+	gate.users++
+	orcaObservationGates.Unlock()
+	releaseUser := func() {
+		orcaObservationGates.Lock()
+		gate.users--
+		if gate.users == 0 {
+			delete(orcaObservationGates.byIdentity, key)
+		}
+		orcaObservationGates.Unlock()
+	}
+	select {
+	case <-ctx.Done():
+		releaseUser()
+		return orcaTerminal{}, ctx.Err()
+	case <-gate.token:
+	}
+	defer func() {
+		gate.token <- struct{}{}
+		releaseUser()
+	}()
+	return (orcaClient{cfg: c}).showTerminal(ctx, identity.Terminal)
+}
+
 type orcaEnvelope struct {
 	OK     bool            `json:"ok"`
 	Result json.RawMessage `json:"result"`

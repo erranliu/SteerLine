@@ -355,7 +355,10 @@ func capabilityStatus(report CapabilityReport, name string) CapabilityStatus {
 }
 
 func (s *Service) requireBackendCapabilities(ctx context.Context, backend ExecutionBackend, names ...string) (CapabilityReport, error) {
-	target, agent := targetFor(s.Config), agentFor(s.Config)
+	return s.requireBackendCapabilitiesFor(ctx, backend, targetFor(s.Config), agentFor(s.Config), names...)
+}
+
+func (s *Service) requireBackendCapabilitiesFor(ctx context.Context, backend ExecutionBackend, target ExecutionTarget, agent AgentSpec, names ...string) (CapabilityReport, error) {
 	probe, err := backend.Probe(ctx, target, agent)
 	if err != nil {
 		return CapabilityReport{}, err
@@ -838,7 +841,7 @@ func (b orcaTerminalBackend) Observe(ctx context.Context, ref ExecutionRef) (Obs
 	if err := ctx.Err(); err != nil {
 		return Observation{}, err
 	}
-	term, e := orcaClient{cfg: b.config}.showTerminal(ctx, old.Terminal)
+	term, e := showBoundOrcaTerminal(ctx, b.config, old)
 	if e != nil {
 		return Observation{}, &BackendError{Code: BackendUnreachable, Diagnostic: "could not inspect fixed Orca terminal", Cause: e}
 	}
@@ -1021,9 +1024,8 @@ func (b orcaTerminalBackend) Reply(ctx context.Context, ref ExecutionRef, text s
 	if err := (orcaClient{cfg: b.config}).terminalSend(ctx, ref.External.Terminal, text); err != nil {
 		return ReplyReceipt{}, &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "Orca may have accepted the continuation before the response failed", Cause: err}
 	}
-	client := orcaClient{cfg: b.config}
 	proc := &orcaProcess{cfg: b.config, term: orcaTerminal{Handle: ref.External.Terminal, RuntimeID: ref.External.RuntimeID, IncarnationID: ref.External.Incarnation}}
-	worker := superviseOrcaResult(b.config, client, proc, resultInWorktree, resultOut)
+	worker := superviseOrcaResult(b.config, proc, resultInWorktree, resultOut)
 	return ReplyReceipt{InputAccepted: true, Worker: worker}, nil
 }
 func (b orcaTerminalBackend) StopExecution(ctx context.Context, ref ExecutionRef, _ Operation, worker *Worker) (StopReceipt, error) {
@@ -1070,8 +1072,11 @@ func (b orcaTerminalBackend) DetachObservation(ctx context.Context, w *Worker) e
 		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "worker does not belong to Orca terminal v2"}
 	}
 	proc.Close() // cancels only the local observer; it does not close the Orca terminal.
+	if w.observationDone == nil {
+		return unsupported("Orca observation completion signal")
+	}
 	select {
-	case <-w.Done:
+	case <-w.observationDone:
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
@@ -1168,20 +1173,25 @@ func (s *Service) inspectRunProcess(run *Run) string {
 		if ref.Target != targetFor(s.Config) {
 			return "execution target changed; refusing to inspect through a replacement backend connection"
 		}
-		if ref.Backend == BackendLocal {
-			return inspectProcess(&ref.External)
+		backend := backendFor(s.Config, BeadsContext{})
+		kind, protocol := backend.Identity()
+		if kind != ref.Backend || protocol != ref.Protocol {
+			return "execution backend or protocol differs from the fixed binding"
 		}
-		obs, observeErr := (orcaTerminalBackend{config: s.Config}).Observe(context.Background(), ref)
+		obs, observeErr := backend.Observe(context.Background(), ref)
 		if observeErr != nil {
-			return "orca execution identity unverifiable: " + observeErr.Error()
+			return "execution identity unverifiable: " + observeErr.Error()
 		}
 		if obs.Liveness == "live" {
 			return "matching process still exists"
 		}
 		if obs.Liveness == "exited" {
+			if ref.Backend == BackendLocal {
+				return "process absent"
+			}
 			return "orca terminal exited"
 		}
-		return "orca terminal unverifiable: " + obs.Diagnostic
+		return "execution identity unverifiable: " + obs.Diagnostic
 	}
 	if !os.IsNotExist(err) {
 		return "execution binding invalid: " + err.Error()

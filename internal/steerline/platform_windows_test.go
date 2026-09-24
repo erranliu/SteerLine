@@ -4,6 +4,8 @@ package steerline
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -34,6 +36,13 @@ func TestWindowsReplaceFailurePreservesSnapshot(t *testing.T) {
 	require(t, e)
 	if string(b) != `{"version":1}` {
 		t.Fatal("failed replacement destroyed prior snapshot")
+	}
+	entries, e := os.ReadDir(filepath.Dir(path))
+	require(t, e)
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), ".steerline-") && strings.HasSuffix(entry.Name(), ".tmp") {
+			t.Fatalf("failed replacement left a temporary snapshot: %s", entry.Name())
+		}
 	}
 	require(t, AtomicWrite(path, []byte(`{"version":2}`)))
 }
@@ -244,6 +253,38 @@ func windowsForegroundLifecycleConfig(t *testing.T, f *fixture) (Config, string)
 	require(t, err)
 	require(t, config.ResolveIdentity(context.Background()))
 	return config, configPath
+}
+
+func nativeWindowCodexConfig(t *testing.T, config Config, configPath string) Config {
+	t.Helper()
+	node, script := os.Getenv("STEERLINE_NATIVE_CODEX_NODE"), os.Getenv("STEERLINE_NATIVE_CODEX_SCRIPT")
+	if node == "" || script == "" {
+		return config
+	}
+	config.Codex = Command{Executable: node, Args: []string{script}}
+	data, err := json.Marshal(config)
+	require(t, err)
+	require(t, os.WriteFile(configPath, data, 0600))
+	config, err = LoadConfig(configPath)
+	require(t, err)
+	require(t, config.ResolveIdentity(context.Background()))
+	backend := localExecutionBackend{config: config}
+	report, err := backend.Probe(context.Background(), targetFor(config), agentFor(config))
+	require(t, err)
+	proofPath := filepath.Join(config.RunDir, "native-window-acceptance-in-progress.json")
+	proofBytes := []byte("isolated visible-window native Codex acceptance in progress")
+	require(t, AtomicWrite(proofPath, proofBytes))
+	proofHash := sha256.Sum256(proofBytes)
+	proof := proofPath + "#sha256=" + hex.EncodeToString(proofHash[:])
+	for i := range report.Capabilities {
+		switch report.Capabilities[i].Name {
+		case "start", "observe", "stop", "workspace_inspection", "output_reading":
+			report.Capabilities[i].Status = CapabilityVerified
+			report.Capabilities[i].Evidence = proof
+		}
+	}
+	require(t, (executionRecords{root: config.RunDir}).saveCapabilityReport(report))
+	return config
 }
 
 func TestWindowsForegroundServiceWindowLifecycle(t *testing.T) {
@@ -518,6 +559,7 @@ func TestWindowsVisibleServiceWindowAcceptance(t *testing.T) {
 	db.Behavior = "sleep"
 	writeFake(f.db, db)
 	config, configPath := windowsForegroundLifecycleConfig(t, f)
+	config = nativeWindowCodexConfig(t, config, configPath)
 	window, testExe, connection := launchWindowsVisibleServiceWindow(t, config, configPath)
 	var err error
 	rt := connection.Snapshot.Runtime
@@ -590,10 +632,39 @@ func TestWindowsVisibleServiceWindowAcceptance(t *testing.T) {
 		probeProcess(&serviceIdentity).State != ProcessMatches || probeProcess(&workerIdentity).State != ProcessMatches {
 		t.Fatalf("viewer exit changed visible service or worker: %+v", reconnected)
 	}
-	signal := exec.Command(testExe, "-test.run=^TestWindowsConsoleCtrlCHelper$")
-	signal.Env = append(os.Environ(), "STEERLINE_CTRL_C_TARGET="+strconv.Itoa(serviceIdentity.PID))
-	if output, err := signal.CombinedOutput(); err != nil {
-		t.Fatalf("send Ctrl+C to visible service window: %v\n%s", err, output)
+	nativeOutputBytes := 0
+	if os.Getenv("STEERLINE_NATIVE_CODEX_NODE") != "" {
+		ref, refErr := (executionRecords{root: config.RunDir}).loadBinding(running.Runs[0].RunID, running.Runs[0].AttemptID)
+		require(t, refErr)
+		backend := localExecutionBackend{config: config}
+		outputDeadline := time.Now().Add(45 * time.Second)
+		for time.Now().Before(outputDeadline) {
+			batch, readErr := backend.ReadOutput(context.Background(), ref, "", 1<<20)
+			if readErr == nil && strings.Contains(string(batch.Data), `"thread.started"`) {
+				nativeOutputBytes = len(batch.Data)
+				break
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+		if nativeOutputBytes == 0 {
+			t.Fatal("visible native Codex worker did not emit thread.started")
+		}
+	}
+	stopMode := "ctrl_c"
+	if os.Getenv("STEERLINE_NATIVE_WINDOW_STOP_MODE") == "control" {
+		stopMode = "control"
+		stopCtx, stopCancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer stopCancel()
+		stopped, stopErr := StopService(stopCtx, config, "visible-native-control-stop", 15*time.Second)
+		if stopErr != nil || stopped.Status != "stopped" || !stopped.ProcessExited || !stopped.LocksReleased || stopped.Receipt == nil || stopped.Receipt.Status != "applied" {
+			t.Fatalf("control stop did not confirm the original visible service: %+v %v", stopped, stopErr)
+		}
+	} else {
+		signal := exec.Command(testExe, "-test.run=^TestWindowsConsoleCtrlCHelper$")
+		signal.Env = append(os.Environ(), "STEERLINE_CTRL_C_TARGET="+strconv.Itoa(serviceIdentity.PID))
+		if output, err := signal.CombinedOutput(); err != nil {
+			t.Fatalf("send Ctrl+C to visible service window: %v\n%s", err, output)
+		}
 	}
 	stopDeadline := time.Now().Add(15 * time.Second)
 	for time.Now().Before(stopDeadline) &&
@@ -601,7 +672,7 @@ func TestWindowsVisibleServiceWindowAcceptance(t *testing.T) {
 		time.Sleep(100 * time.Millisecond)
 	}
 	if probeProcess(&serviceIdentity).State == ProcessMatches || probeProcess(&workerIdentity).State == ProcessMatches {
-		t.Fatalf("visible service or worker survived Ctrl+C: service=%+v worker=%+v", probeProcess(&serviceIdentity), probeProcess(&workerIdentity))
+		t.Fatalf("visible service or worker survived %s: service=%+v worker=%+v", stopMode, probeProcess(&serviceIdentity), probeProcess(&workerIdentity))
 	}
 	repoLock, err := LockRepository(config.Identity())
 	require(t, err)
@@ -610,10 +681,16 @@ func TestWindowsVisibleServiceWindowAcceptance(t *testing.T) {
 	require(t, err)
 	runLock.Close()
 	if observed := ConnectService(context.Background(), config); observed.State != ConnectionOffline {
-		t.Fatalf("Ctrl+C did not leave the service offline: %+v", observed)
+		t.Fatalf("%s did not leave the service offline: %+v", stopMode, observed)
 	}
 	if windowExistsForTests(window) {
 		require(t, closeConsoleWindowForTests(window))
+	}
+	if outputPath := os.Getenv("STEERLINE_NATIVE_WINDOW_EVIDENCE_OUT"); outputPath != "" && nativeOutputBytes > 0 {
+		evidence := map[string]any{"version": 1, "captured_at": now(), "platform": "windows/amd64", "runtime_schema": CurrentRuntimeSchema, "backend": "local", "protocol": "local_process", "service_identity_sha256": digestValue(serviceIdentity), "worker_identity_sha256": digestValue(workerIdentity), "worker_executable": workerIdentity.Executable, "output_bytes": nativeOutputBytes, "viewer_reconnected_same_instance": true, "stop_mode": stopMode, "service_and_worker_exited": true, "locks_released": true}
+		data, marshalErr := json.MarshalIndent(evidence, "", "  ")
+		require(t, marshalErr)
+		require(t, AtomicWrite(outputPath, append(data, '\n')))
 	}
 }
 
@@ -626,6 +703,7 @@ func TestWindowsVisibleServiceWindowCloseAndRestart(t *testing.T) {
 	db.Behavior = "sleep"
 	writeFake(f.db, db)
 	config, configPath := windowsForegroundLifecycleConfig(t, f)
+	config = nativeWindowCodexConfig(t, config, configPath)
 	window, _, connected := launchWindowsVisibleServiceWindow(t, config, configPath)
 	request, err := SubmitControl(config, "start_task", map[string]string{"task_id": "t-1"}, "visible-close-test")
 	require(t, err)
@@ -678,7 +756,11 @@ func TestWindowsVisibleServiceWindowCloseAndRestart(t *testing.T) {
 		restarted.Snapshot.Runtime.Control.DispatchMode != "manual" {
 		t.Fatalf("reopened service window did not create a manual new instance: %+v", restarted)
 	}
-	if starts := readFake(f.db).Starts["t-1"]; starts != 1 {
+	if os.Getenv("STEERLINE_NATIVE_CODEX_NODE") != "" {
+		if claims := readFake(f.db).Claims["t-1"]; claims != 1 {
+			t.Fatalf("reopened window duplicated native claim: claims=%d", claims)
+		}
+	} else if starts := readFake(f.db).Starts["t-1"]; starts != 1 {
 		t.Fatalf("reopened window duplicated old worker: starts=%d", starts)
 	}
 	stopCtx, stopCancel := context.WithTimeout(context.Background(), 20*time.Second)
@@ -689,6 +771,12 @@ func TestWindowsVisibleServiceWindowCloseAndRestart(t *testing.T) {
 		t.Fatalf("reopened service window did not stop: %+v err=%v", stopped, err)
 	}
 	require(t, closeConsoleWindowForTests(newWindow))
+	if outputPath := os.Getenv("STEERLINE_NATIVE_WINDOW_CLOSE_EVIDENCE_OUT"); outputPath != "" && os.Getenv("STEERLINE_NATIVE_CODEX_NODE") != "" {
+		evidence := map[string]any{"version": 1, "captured_at": now(), "platform": "windows/amd64", "runtime_schema": CurrentRuntimeSchema, "backend": "local", "protocol": "local_process", "service_identity_sha256": digestValue(serviceID), "worker_identity_sha256": digestValue(workerID), "worker_executable": workerID.Executable, "window_close_stopped_original_service_and_worker": true, "locks_released": true, "restart_kept_old_worker_stopped": true, "restart_new_instance": restarted.Snapshot.Runtime.Service.InstanceID != connected.Snapshot.Runtime.Service.InstanceID}
+		data, marshalErr := json.MarshalIndent(evidence, "", "  ")
+		require(t, marshalErr)
+		require(t, AtomicWrite(outputPath, append(data, '\n')))
+	}
 }
 
 func TestWindowsConcurrentVisibleServiceWindows(t *testing.T) {
