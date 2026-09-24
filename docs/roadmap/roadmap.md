@@ -23,13 +23,20 @@
 
 ## 后续：中心状态机与远程执行
 
-| 步骤 | 目标 | 依赖 | 执行规格 |
+| 步骤 | 剩余目标 | 依赖 | 执行规格 |
 | --- | --- | --- | --- |
-| 远程协议验证（`REMOTE-PROTOCOL`） | 验证 Orca 真实远端派发、身份、输出、问答、结果及恢复边界，形成可复现证据 | 隔离远端环境和明确的能力门槛 | [Spec 01](../spec/01-orca-remote-protocol.md) |
-| 中心执行模型（`EXEC-MODEL`） | 引入 WorkflowRun/Execution/StepAttempt、最小流程状态机、SQLite 事务与旧记录迁移 | 实测协议映射；复用共同后端与会话契约 | [Spec 02](../spec/02-execution-model-and-adapter.md) |
-| 分阶段远程闭环（`REMOTE-WORKFLOW`） | 中心逐步派发实现、验证、审查与发布；完成远程观察、人工决策、断线对账及结项 | 远程必需能力验证通过、中心执行模型 | [Spec 03](../spec/03-remote-execution-and-viewer.md) |
+| 远程协议验证（`REMOTE-PROTOCOL`） | 收口 P10 消息大小与宿主权限提示的未测边界；结合 Spec 03 接入完成 P13 中心拒绝无效验证结果的端到端验收 | 复用真实远端证据；补测使用隔离环境；旧版兼容暂缓 | [Spec 01](../spec/01-orca-remote-protocol.md) · [剩余门槛](../spec/orca-probe/remaining-gates.md) |
+| 中心执行模型（`EXEC-MODEL`） | 引入 WorkflowRun/Execution/StepAttempt、最小流程状态机、SQLite 事务与旧记录迁移；远程停止入口明确返回不支持 | 实测协议映射及能力限制；复用共同后端与会话契约 | [Spec 02](../spec/02-execution-model-and-adapter.md) |
+| 分阶段远程闭环（`REMOTE-WORKFLOW`） | 中心逐步派发实现、验证、审查与发布；接入已有 verify 校验器，完成远程观察、人工决策、断线对账及结项 | 开发使用实测协议及中心模型接口；生产启用前通过剩余协议门槛、模型交付与远程闭环验收 | [Spec 03](../spec/03-remote-execution-and-viewer.md) |
 
-远程协议探测可与不依赖其结果的本机工作并行；中心模型的独立设计与本地存储测试不必等待远端环境，但生产远程路径必须满足前置门槛。控制台与中心模型交叉使用同一执行/会话契约，后落地的工作扩展已有权威实现，避免形成两套适配器或业务写者。
+可依据实测证据开发受限远程适配器，协议目标保留剩余验收；P13 需要在中心接入后验证，不能将纯校验器测试视为端到端通过。剩余远端探测可与不依赖其结果的本机工作并行；中心模型的独立设计与本地存储测试不必等待远端环境。控制台与中心模型交叉使用同一执行/会话契约，后落地的工作扩展已有权威实现，避免形成两套适配器或业务写者。
+
+首版远程范围仅支持已测 Windows Orca 1.4.209 中心/远端组合，其他版本预检拒绝；结构化消息采用不高于 8 KiB 的序列化大小上限，超限发送前拒绝，宿主权限提示无法可靠分类时交人工核实。生产远程取消不可用，中心保留活跃执行身份与资源占用并要求人工处理，不自动发送 stop 或按终端句柄兜底关闭；已结算目标的正常 release 仍可用。
+
+### 后续仍依赖的已有基础
+
+- [真实远端能力报告](../spec/orca-probe/remote-capability-report-2026-09-23.json)与[字段映射](../spec/orca-probe/field-mapping.md)：供中心模型和远程闭环复用派发、身份、输出、问答、同工作区跨步骤与故障恢复证据；会话目标可复用输出来源与缺口映射，仍须单独验证精确 turn/phase 能力。
+- [verify 结果校验器](../../internal/steerline/remoteprotocol/verify_result.go)：供远程闭环接入已接受的 worker_done 身份、预期检查清单和执行端 HEAD，阻止缺回执、非零退出、身份或候选 commit 不符的结果推进审查/发布。
 
 ## 规划约束
 
