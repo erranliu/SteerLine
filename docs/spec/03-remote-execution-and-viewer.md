@@ -10,7 +10,7 @@
 
 中心 SteerLine 领取一个业务任务，通过 Orca 在远端独立 worktree 中逐步执行 implement、verify、review、publish_pr，viewer 显示阶段、输出和人工问题；用户回答后同一权威步骤尝试继续，经中心核实各门槛、PR 合并及结项后任务完成。中心重启或网络暂断不会重复派发。
 
-生产调度保持一个活动 Execution，运行 Spec 02 的 `minimal-v1`；每个步骤可以使用项目基础技能或脚本，由中心控制顺序和门槛。本阶段不实现任意流程/DAG 编辑器、多 agent 并行、移动端、多租户或公开 HTTP 服务。数据与命令接口必须沿用 Spec 02，便于后续接入这些能力。
+生产调度保持一个活动 Execution，运行 Spec 02 的 `minimal-v1`；每个步骤可以使用项目基础技能或脚本，由中心控制顺序和门槛。本阶段不实现任意流程/DAG 编辑器、多 agent 并行、移动端、多租户或公开 HTTP 服务。数据与命令接口沿用 Spec 02。
 
 ## 2. 配置与接入前置
 
@@ -133,7 +133,7 @@ publish_pr 成功结果包含精确 PR URL、实现 head commit、目标分支�
 | R08 | 网络中断、remote runtime 重启、身份替换 | 显示 unverifiable/身份变化；不操作替代终端，不把未验证退出算完成 |
 | R09 | worker 退出却无结果；结果身份错误；重复 worker_done | blocked 或去重，不错误关闭任务 |
 | R10 | 输出分页/source_changed/历史淘汰 | 已保留内容可读，缺失被标记，不影响持久业务消息 |
-| R11 | task 的另一 Execution/旧 attempt 消息到达 | 仅进入对应历史；不改变当前 agent 的状态或回答目标 |
+| R11 | 较早 attempt 的消息迟到 | 仅进入原尝试记录；不改变当前执行状态或回答目标 |
 | R12 | PR 实际合并、PR 未合并关闭、结项部分成功 | 分别完成/阻塞/继续对账；task close 不重复产生副作用 |
 | R13 | local 路径或远端 completion 不支持 | 在预检拒绝或明确阻塞，不以本机同名路径替代 |
 | R14 | Windows viewer 退出、服务窗口关闭与远程取消不可用 | viewer 退出而窗口仍开时中心继续监督；关窗只结束中心监督，不取消远端；远程取消入口明确不可用、不发送 Orca stop、不释放可能仍活跃的资源许可；本机 worker 按 PR 3 清理，本机 Stop 仍需确认退出证据 |
@@ -149,4 +149,4 @@ publish_pr 成功结果包含精确 PR URL、实现 head commit、目标分支�
 
 远程配置有可复现样例；上述必需验收通过；旧 local/本机 Orca 行为回归通过；hosting、state-model、activity、decisions、skill-contract、completion 和 data-contract 文档按实际实现更新。
 
-完成后中心状态机实际控制准备、实现、验证、审查、发布、等待合并和结项；用户能在现有 viewer 看见各阶段、回答业务问题并恢复监督。项目基础技能/脚本只完成被派发步骤。并行 agent 和移动端尚未上线，但无需改变身份归属或消息寻址即可继续实现。
+完成后中心状态机实际控制准备、实现、验证、审查、发布、等待合并和结项；用户能在控制台看见各阶段、回答业务问题并恢复监督。项目基础技能/脚本只完成被派发步骤。并行 agent 与移动端不在本任务范围。

@@ -8,7 +8,7 @@
 
 本任务交付输入校验、批次原子创建并入 DAG、显式丢弃、硬依赖/ready、事务领取、交付释放、恢复及关系读模型。不交付生产 worker/技能接入、TUI 关系页或渲染导出。使用隔离项目与替身验证业务规则；生产原生接入仍等待 [Beads 退出 Spec](beads-exit.spec.md)。
 
-依赖只有同项目 AND 硬前置；创建后固定边和契约，不提供改边入口。PR 合并前可丢弃任务，即使它已入 DAG 或开始执行；丢弃不删除依赖边，不等于 split/rollback/reopen 或自动修图。重试与多候选模型保留既有职责，不在本任务增加并行调度。
+依赖只有同项目 AND 硬前置；创建后固定边和契约，不提供改边入口。PR 合并前可丢弃任务，即使它已入 DAG 或开始执行；丢弃不删除依赖边，不等于 split/rollback/reopen 或自动修图。本任务不增加并行调度。
 
 ## D2：输入与原子创建
 
@@ -80,7 +80,7 @@ payload_digest 复用共同约束及前置原生任务模型实现的规范化�
 
 新增错误至少包括 invalid_batch、missing_predecessor、cross_project_dependency、dependency_cycle、duplicate_dependency、immutable_task、idempotency_conflict、task_not_ready、task_discarded、discarded_predecessor、merge_state_unknown、already_merged、base_missing_delivery、inconsistent_delivery，沿用前置的 schema/版本/权威与既有控制错误。
 
-图算法采用 Go 内部窄接口封装环检测、稳定遍历和拓扑顺序；优先接入 [dominikbraun/graph](https://github.com/dominikbraun/graph)，选定发布版本并锁定 go.mod/go.sum，验证其错误与排序语义。库的内存存储不代替 SQLite，库类型不进入公共 DTO，调度顺序不由可视化位置决定。
+在中心服务内实现固定 DAG 所需的环检测和稳定遍历；以已提交的 SQLite 任务与依赖为权威，不引入额外图存储或第三方图框架。调度顺序由任务规则决定，不由图展示位置决定。
 
 ## D5：恢复与交接
 

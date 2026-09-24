@@ -9,7 +9,7 @@
 ## 实施步骤
 
 1. 实现 task-batch/v1 严格解码和引用校验。每项必须携带预分配的非负整数 task_id，创建时原值保存并立即入 DAG，同批次和已有 Task 不得重复；中心不读取规划文档或再分配一个 task_id。固化 A → B → C、菱形汇合、断开组件、循环/悬空/重复/跨项目边和规格错误的样本；不引入父子节点、自动拆分或修图算法。
-2. 接入内部 GraphAlgorithms 适配层。核验 dominikbraun/graph 的发布版本和必要 API，固定 go.mod/go.sum 与版本证据；封装环路径、稳定遍历/拓扑行为，不将库类型写入数据库或 DTO。不因第三方排序不稳定改变候选优先级。
+2. 实现固定 DAG 的环检测和稳定遍历，在隔离任务图上验证环路径、确定性顺序与边界；SQLite 仍是唯一图权威，不建立第二套图存储。
 3. 增加 ValidateTaskBatch 和 CreateTaskBatch，CLI 使用中心命令通道传入固定 payload 与已提交的 Spec/Plan Git 引用。局部 key 到原输入 task_id 的映射、任务、契约、边、事件、revision 和命令回执同事务提交；实现同 request_id 同 payload 复用及异 payload 冲突。规划器跨 Git/SQLite 的部分失败按原 ID、commit 和请求对账，不另造发布步骤或第二 ID。
 4. 实现同项目硬前置查询和稳定候选顺序。把 dependency_ready 与资源/暂停/能力阻塞分开，丢弃前置明确阻塞。创建成功不主动启动 worker；明确 auto 模式下正常轮询可开始领取。
 5. 将 ready/claim 准入接到既有 start_task 与自动派发路径，复用槽位与命令生命周期。固定主线 base、核验前置成果可达后，事务保存领取、运行和外部意图；提交后走原工作区/启动操作。不得把 claim 提交当作 start_task applied。

@@ -18,7 +18,7 @@ SteerLine 负责任务领取、流程、决策、恢复、PR 核验和结项；�
 
 ## 身份与扩展
 
-Task、WorkflowRun、Execution、StepAttempt、Decision 和外部平台身份分开。任务领取与结项属于任务级；agent、工作区、输出和问题属于具体执行/尝试。单执行槽属于当前调度策略，不限制未来一个任务多个独立执行；并行执行与重试不混同。
+Task、WorkflowRun、Execution、StepAttempt、Decision 和外部平台身份分开。任务领取与结项属于任务级；agent、工作区、输出和问题属于具体执行/尝试。当前每个流程只有一个活动 Execution；重试产生新的尝试，不提前实现同任务多候选并行。
 
 历史操作固定到派发时的目标及代次，配置变化和迟到消息不能重定向原执行。远端路径属于其目标，不默认为本机文件。完成由中心按选用结果和真实交付核验。
 
@@ -28,7 +28,7 @@ Task、WorkflowRun、Execution、StepAttempt、Decision 和外部平台身份分
 
 原生任务复用中心状态机与 SQLite，任务 DAG 决定任务间的执行资格，WorkflowRun/Execution/StepAttempt 承担任务内部执行。创建任务与加入 DAG 为同一事务，依赖和交付契约随创建固定；PR 合并前可受控丢弃，即使任务已执行，丢弃也不释放后继或抹去执行事实。已合并 PR 的任务不可丢弃。系统不提供任务拆分、回退、重新打开、动态依赖修改或级联补偿流程，也不引入父子聚合来承担人工拆分。
 
-用户可通过 Codex 分析并人工实施拆分或回退，系统不承诺自动修复相关状态。重启恢复、对账与原契约下的重试继续支持。图算法、布局和 UI 均不成为业务写者。
+用户可通过 Codex 分析并人工实施拆分或回退，系统不承诺自动修复相关状态。重启恢复、对账与原契约下的重试继续支持。关系视图和 UI 均不成为业务写者。
 
 共同要求：[原生任务共同约束](../spec/native-task-constraints.md)。独立执行规格：[任务模型](../spec/task-core.spec.md)、[固定 DAG](../spec/task-dag.spec.md)、[原生接入](../spec/beads-exit.spec.md)、[关系视图](../spec/dag-view.spec.md)；各有同名配套 Plan，每任务一个独立实现 PR。现有 Beads 代码只作为重构输入，不形成需要长期维护的生产兼容路径。
 

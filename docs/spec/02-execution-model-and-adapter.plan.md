@@ -4,7 +4,7 @@
 
 ## 实施顺序
 
-1. 从最新主线确认已落地的 4A/4B/5 执行、会话、决策与存储契约，列出权威写者和消费者。先落地者提供共同接口，本任务不得平行实现另一套 adapter、会话模型或业务状态写者。
+1. 从最新主线确认已落地的 4A/4B 与人工介入阶段的执行、会话、决策和存储契约，列出权威写者和消费者。先落地者提供共同接口，本任务不得平行实现另一套 adapter、会话模型或业务状态写者。
 2. 定义 Task、WorkflowRun、Execution、StepAttempt、Decision、Event 和 Operation 的稳定身份及状态转换。已分配规划数字 ID 的 Task 使用同一 task_id，不从标题或外部工具 ID 推断身份。
 3. 在干净状态目录内实现 SQLite 事务 Store、命令/outbox、事件和读模型；数据库成为单一业务权威。旧 runtime、旧数据库或未知 schema 明确拒绝有副作用启动，不实现导入。
 4. 接入共同 ExecutionBackend/会话接口，按 `minimal-v1` 逐步派发 prepare、implement、verify、review、publish_pr。远程停止明确不支持，中心停机不能推断远端已停。
