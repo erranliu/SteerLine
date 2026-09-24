@@ -1,6 +1,6 @@
 # SteerLine Roadmap
 
-产品目标是以 roadmap 为核心的自动化软件开发系统。这里组织选定推进的目标；更广的后续产品计划见 [product-vision.md](product-vision.md)，目标的接口、冲突和并行条件见 [execution-map.md](execution-map.md)。
+产品目标是以 roadmap 为核心的自动化软件开发系统。这里组织选定推进的目标；更广的后续产品计划见 [product-vision.md](product-vision.md)，已规划 Spec 的执行依赖、接口和并行条件见 [execution-map.md](execution-map.md)。
 
 ## 近期：稳定的双链路执行控制台
 
