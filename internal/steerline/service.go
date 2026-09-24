@@ -272,9 +272,6 @@ func NewService(c Config) (_ *Service, retErr error) {
 	}
 	s.State.Service.ProcessIdentity = identity
 	s.reconcileOperationsAfterRestart()
-	if err := db.ReconcileActivity(context.Background(), c.RunDir, s.State); err != nil {
-		return nil, fmt.Errorf("reconcile persisted activity into SQLite events: %w", err)
-	}
 	return s, nil
 }
 
@@ -444,28 +441,49 @@ func (s *Service) closeAllActivities() {
 	}
 }
 
-// note records a scheduler lifecycle event on that run's own journal. Activity
-// failures are diagnostic: runtime.json and the per-run files stay authoritative.
+// note queues a canonical event for the next domain transaction and mirrors it
+// to the optional display journal.
 func (s *Service) note(r *Run, source, kind, status, title, detail string, meta map[string]any) {
 	ev := ActivityEvent{Source: source, Kind: kind, Status: status, Title: title, Detail: detail, Meta: meta}
+	s.recordActivity(r, ev)
+	s.emitConsole(ev)
+}
+
+func (s *Service) recordActivity(r *Run, ev ActivityEvent) {
+	if r == nil {
+		return
+	}
+	ev.V, ev.RunID, ev.TaskID = ActivityVersion, r.RunID, r.TaskID
+	if ev.TS.IsZero() {
+		ev.TS = now()
+	}
+	metadata := map[string]any{}
+	for key, value := range ev.Meta {
+		metadata[key] = value
+	}
+	metadata["attempt_id"], metadata["execution_id"] = r.AttemptID, r.ExecutionID
+	ev.Meta = metadata
 	if w := s.activityWriter(r); w != nil {
 		written, e := w.WriteEvent(ev)
 		if e != nil {
 			s.setError(e)
 		} else {
-			payload, _ := json.Marshal(written)
-			domainTask := r.DomainTaskID
-			if domainTask == "" {
-				domainTask = legacyTaskID(s.Config.identity, r)
-			}
-			executionID := r.ExecutionID
-			if executionID == "" {
-				executionID = legacyExecutionID(r.RunID)
-			}
-			s.State.PendingEvents = append(s.State.PendingEvents, DomainEvent{ProjectIdentity: s.Config.identity, TaskID: domainTask, WorkflowRunID: r.RunID, ExecutionID: executionID, AttemptID: r.AttemptID, ExternalSource: "activity:" + r.RunID, ExternalID: fmt.Sprint(written.Seq), Type: "activity." + written.Kind, ReceivedAt: written.TS, Payload: payload})
+			ev.Seq = written.Seq
 		}
 	}
-	s.emitConsole(ev)
+	payload, err := json.Marshal(ev)
+	if err != nil {
+		s.setError(err)
+		return
+	}
+	domainTask, executionID := r.DomainTaskID, r.ExecutionID
+	if domainTask == "" {
+		domainTask = legacyTaskID(s.Config.identity, r)
+	}
+	if executionID == "" {
+		executionID = legacyExecutionID(r.RunID)
+	}
+	s.State.PendingEvents = append(s.State.PendingEvents, DomainEvent{ProjectIdentity: s.Config.identity, TaskID: domainTask, WorkflowRunID: r.RunID, ExecutionID: executionID, AttemptID: r.AttemptID, ExternalSource: "center:" + r.RunID, ExternalID: newID(), Type: "activity." + ev.Kind, ReceivedAt: ev.TS, Payload: payload})
 }
 
 func (s *Service) emitConsole(ev ActivityEvent) {
@@ -613,6 +631,9 @@ func (s *Service) dispatch(ctx context.Context) error {
 		if err == nil {
 			base, err = fetchBase(ctx, s.Config, id)
 		}
+		if err == nil && minimalConfig != nil {
+			err = s.Config.validateMinimalEntriesAtBase(ctx, *minimalConfig, base)
+		}
 		var intent *WorkspaceIntent
 		if err == nil {
 			intent, err = planWorkspace(s.Config, t.ID, id, base)
@@ -670,6 +691,7 @@ func (s *Service) dispatch(ctx context.Context) error {
 		}
 		if !ok {
 			_ = s.setOperationState(claimOperationID, "rejected", "", []byte(`{"claimed":false}`), "claim conflict")
+			s.State.RejectedClaimRuns = append(s.State.RejectedClaimRuns, r.RunID)
 			s.State.SlotOccupied = false
 			s.State.CurrentTask = nil
 			s.State.Runs = s.State.Runs[:len(s.State.Runs)-1]
@@ -1119,6 +1141,19 @@ func (s *Service) pollPRsFor(ctx context.Context, runID string) error {
 			s.blocked(r, "PR closed without merge; manual recovery required")
 			s.note(r, "steer", "pr", "failed", "pr closed unmerged", *r.PR.URL, nil)
 		}
+		if r.WorkflowVersion == MinimalWorkflowVersion && info.State != "closed_unmerged" {
+			workflow, execution := s.minimalRecords(r)
+			if workflow == nil || execution == nil || workflow.SelectedResult != execution.ExecutionID ||
+				execution.Status != "succeeded" || execution.CurrentStep != "waiting_pr_merge" ||
+				!revisionPattern.MatchString(execution.CandidateRevision) || info.HeadRevision != execution.CandidateRevision ||
+				execution.VerifiedRevision != execution.CandidateRevision || (workflow.Definition.ReviewRequired && execution.ReviewedRevision != execution.CandidateRevision) {
+				s.blocked(r, "PR head or selected execution no longer matches the verified candidate; completion refused")
+				if e = s.save(); e != nil {
+					return e
+				}
+				continue
+			}
+		}
 		// Persist authoritative merge evidence before attempting an external close.
 		if e = s.save(); e != nil {
 			return e
@@ -1170,11 +1205,7 @@ func (s *Service) event(ev WorkerEvent) error {
 		s.active.SessionID = ptr(ev.Session)
 	}
 	if ev.Activity.Kind != "" {
-		if w := s.activityWriter(s.active); w != nil {
-			if e := w.Write(ev.Activity); e != nil {
-				s.setError(e)
-			}
-		}
+		s.recordActivity(s.active, ev.Activity)
 		s.emitConsole(ev.Activity)
 	}
 	return s.save()
@@ -1512,6 +1543,9 @@ func (s *Service) AcceptResult(ctx context.Context, runID, path string) error {
 		if r.RunID != runID {
 			continue
 		}
+		if r.WorkflowVersion == MinimalWorkflowVersion {
+			return errors.New("minimal-v1 results must pass their current step gates; single-workflow accept-result is unsupported")
+		}
 		if r.FinishTaskStatus == "completed" {
 			return errors.New("completed runs cannot be changed")
 		}
@@ -1553,6 +1587,9 @@ func (s *Service) MarkStopped(runID string) error {
 	for _, r := range s.State.Runs {
 		if r.RunID != runID {
 			continue
+		}
+		if r.WorkflowVersion == MinimalWorkflowVersion {
+			return errors.New("minimal-v1 requires reconciliation of the recorded attempt and operation; mark-stopped cannot settle step side effects")
 		}
 		if r.ExecutionStatus != "unknown" {
 			return errors.New("mark-stopped only applies to unknown execution")

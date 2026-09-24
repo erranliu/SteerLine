@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -197,6 +198,20 @@ func (c CommandService) Submit(ctx context.Context, command CommandRecord) (Comm
 func (c CommandService) AnswerDecision(ctx context.Context, decisionID string, expectedVersion uint64, idempotencyKey, requestedBy string, answer []byte) (CommandRecord, bool, error) {
 	if decisionID == "" || expectedVersion == 0 || idempotencyKey == "" || requestedBy == "" {
 		return CommandRecord{}, false, errors.New("decision answer requires decision ID, expected version, idempotency key and requester")
+	}
+	var value DecisionAnswer
+	if err := decode(answer, &value); err != nil {
+		return CommandRecord{}, false, err
+	}
+	value.OptionID = strings.TrimSpace(value.OptionID)
+	value.Note = clip(strings.TrimSpace(value.Note), 4000)
+	value.AnsweredBy = clip(strings.TrimSpace(value.AnsweredBy), 200)
+	if value.DecisionID != decisionID || value.RunID == "" || value.AnsweredBy != requestedBy {
+		return CommandRecord{}, false, errors.New("answer identity must match the command target and requester")
+	}
+	answer, err := json.Marshal(value)
+	if err != nil {
+		return CommandRecord{}, false, err
 	}
 	return c.Submit(ctx, CommandRecord{CommandID: newID(), Kind: "answer_decision", TargetID: decisionID, ExpectedVersion: expectedVersion, IdempotencyKey: idempotencyKey, RequestedBy: requestedBy, Payload: append([]byte(nil), answer...), Status: "pending", CreatedAt: time.Now().UTC()})
 }

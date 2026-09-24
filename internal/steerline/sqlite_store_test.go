@@ -24,7 +24,7 @@ func openDomainTestStore(t *testing.T) *SQLiteStore {
 	return s
 }
 
-func TestSQLiteAllowsParallelExecutionsInOneWorkflow(t *testing.T) {
+func TestSQLiteRejectsParallelExecutionsInOneWorkflow(t *testing.T) {
 	ctx := context.Background()
 	s := openDomainTestStore(t)
 	project := "repo:test"
@@ -35,7 +35,7 @@ func TestSQLiteAllowsParallelExecutionsInOneWorkflow(t *testing.T) {
 		if err := tx.PutWorkflowRun(WorkflowRunRecord{ProjectIdentity: project, WorkflowRunID: "wf-1", TaskID: "17", WorkflowVersion: MinimalWorkflowVersion, Phase: "executing"}); err != nil {
 			return err
 		}
-		for _, id := range []string{"exec-a", "exec-b"} {
+		for _, id := range []string{"exec-a"} {
 			if err := tx.PutExecution(ExecutionRecord{ProjectIdentity: project, ExecutionID: id, WorkflowRunID: "wf-1", Agent: id, Status: "active", CurrentStep: "implement", Target: ExecutionTarget{WorktreeID: "worktree-" + id, Branch: "branch-" + id, Dispatch: "dispatch-" + id}}); err != nil {
 				return err
 			}
@@ -48,11 +48,17 @@ func TestSQLiteAllowsParallelExecutionsInOneWorkflow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	err = s.Transact(ctx, func(tx DomainTx) error {
+		return tx.PutExecution(ExecutionRecord{ProjectIdentity: project, ExecutionID: "exec-b", WorkflowRunID: "wf-1", Status: "active", CurrentStep: "verify"})
+	})
+	if err == nil {
+		t.Fatal("second active execution was accepted")
+	}
 	snapshot, err := s.Query(ctx, project)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(snapshot.WorkflowRuns) != 1 || len(snapshot.Executions) != 2 || len(snapshot.Attempts) != 2 {
+	if len(snapshot.WorkflowRuns) != 1 || len(snapshot.Executions) != 1 || len(snapshot.Attempts) != 1 {
 		t.Fatalf("unexpected snapshot: %+v", snapshot)
 	}
 }
@@ -96,27 +102,27 @@ func TestCommandIdempotencyAndDecisionVersionArbitration(t *testing.T) {
 		if err := tx.PutStepAttempt(StepAttemptRecord{ProjectIdentity: project, AttemptID: "attempt", ExecutionID: "exec", StepID: "implement", AttemptNumber: 1, Status: "waiting_decision"}); err != nil {
 			return err
 		}
-		return tx.PutDecision(DecisionRecord{ProjectIdentity: project, DecisionID: "decision", Scope: "execution", WorkflowRunID: "wf", ExecutionID: "exec", AttemptID: "attempt", QuestionID: "q1", Status: "pending", Version: 1})
+		return tx.PutDecision(DecisionRecord{ProjectIdentity: project, DecisionID: "decision", Scope: "execution", WorkflowRunID: "wf", ExecutionID: "exec", AttemptID: "attempt", QuestionID: "q1", Status: "pending", Version: 1, Request: mustJSON(DecisionRequest{Question: "choose", AllowFreeText: true})})
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	commands := CommandService{Store: s, Project: project}
-	first, created, err := commands.AnswerDecision(ctx, "decision", 1, "answer-key-a", "alice", []byte(`{"choice":"yes"}`))
+	first, created, err := commands.AnswerDecision(ctx, "decision", 1, "answer-key-a", "alice", mustJSON(DecisionAnswer{DecisionID: "decision", RunID: "wf", Note: "yes", AnsweredBy: "alice"}))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !created {
 		t.Fatal("first answer was not enqueued")
 	}
-	retry, created, err := commands.AnswerDecision(ctx, "decision", 1, "answer-key-a", "alice", []byte(`{"choice":"yes"}`))
+	retry, created, err := commands.AnswerDecision(ctx, "decision", 1, "answer-key-a", "alice", mustJSON(DecisionAnswer{DecisionID: "decision", RunID: "wf", Note: "yes", AnsweredBy: "alice"}))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if created || retry.CommandID != first.CommandID {
 		t.Fatalf("idempotent retry changed command: %+v %+v", first, retry)
 	}
-	if _, _, err = commands.AnswerDecision(ctx, "decision", 1, "answer-key-b", "bob", []byte(`{"choice":"no"}`)); err == nil || !strings.Contains(err.Error(), "already has an accepted answer") {
+	if _, _, err = commands.AnswerDecision(ctx, "decision", 1, "answer-key-b", "bob", mustJSON(DecisionAnswer{DecisionID: "decision", RunID: "wf", Note: "no", AnsweredBy: "bob"})); err == nil || !strings.Contains(err.Error(), "already has an accepted answer") {
 		t.Fatalf("second answer should lose version arbitration, got %v", err)
 	}
 	pending, err := commands.Pending(ctx, 10)
@@ -292,7 +298,7 @@ func TestMinimalDecisionAnswerResumesTheSameStepAsANewAttempt(t *testing.T) {
 	if err = s.applyDecisions(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if s.worker == nil || s.State.Runs[0].Decision.Status != "applied" {
+	if s.worker == nil || s.State.Runs[0].Decision.Status != "reply_accepted" || s.State.Runs[0].Decision.AppliedAt != nil {
 		t.Fatalf("minimal step was not resumed: worker=%v decision=%+v run_error=%s", s.worker != nil, s.State.Runs[0].Decision, deref(s.State.Runs[0].Error))
 	}
 	var resumed, prior *StepAttemptRecord
@@ -316,6 +322,9 @@ func TestMinimalDecisionAnswerResumesTheSameStepAsANewAttempt(t *testing.T) {
 	finishWorker(t, s)
 	if s.State.Executions[0].CurrentStep != "verify" || s.State.Executions[0].CandidateRevision == "" {
 		t.Fatalf("decision continuation did not finish implement: %+v", s.State.Executions[0])
+	}
+	if s.State.Runs[0].Decision.Status != "applied" {
+		t.Fatal("matching result did not prove decision application")
 	}
 }
 

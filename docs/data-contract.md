@@ -51,7 +51,7 @@
 | beads_status | string | 最近核实的 Beads 状态，不以本地预测替代 closed。这是过渡期的外部任务态镜像，见 [状态模型](state-model.md) |
 | execution_status | string | pending / running / succeeded / failed / unknown |
 | finish_task_status | string | pending / waiting_decision / waiting_pr_merge / completed / blocked |
-| decision | object/null | 仅 outcome=needs_decision 时存在：{id, request, status(pending/resuming/applied), option_id, note, answered_by, answered_at, applied_at, request_path, answer_path}。见 [decisions](decisions.md) |
+| decision | object/null | 当前问题和答案的展示摘要；权威版本与状态保存在 SQLite。主要状态为 pending、answer_saved、reply_accepted、applied。见 [decisions](decisions.md) |
 | codex_session_id | string/null | 从 thread.started.thread_id 得到，不从日志文字猜测 |
 | process | object/null | 宿主无关身份：kind（os/orca）、PID/Created/Executable（os）或 Terminal/RuntimeID/Incarnation（orca）；kind 为空视为 os |
 | started_at / ended_at | timestamp/null | 服务记录的执行起止时间；崩溃导致终止时间未知时仍为 null |
@@ -115,6 +115,18 @@ runtime 中的 `control.operation` 先于副作用保存；完成时把业务结
 
 ## 执行结果
 
+### minimal-v1 步骤结果
+
+`project_steps.verify` 必须是带 `required_checks` 的确定性 command provider。命令从 stdin 读取版本化输入，通过 stdout 返回唯一 JSON 回执；检查失败可作为结构化检查结果返回，包装程序退出 0 表示回执完整，非零退出按步骤基础设施失败处理。步骤入口必须是固定 base 提交中的普通文件。内置 agent 入口只提供 implement/review 提示，publish_pr 须显式配置项目入口或命令。
+
+WorkflowRun 保存步骤定义及 Codex executable/args、sandbox、model、reasoning_effort、profile。配置变更不改变已创建流程的执行参数。输入包含工作区证据、前置结果 ID 和正文，修复步骤能够读取实际失败检查或审查结果。
+
+步骤回执包含 schema_version、project_identity、task_id、workflow_run_id、execution_id、attempt_id 与 result。中心逐项核验身份、输入 revision、真实 Git common-dir/分支/base、前置结果和步骤门槛。无效结果将尝试记为 failed；通过门槛后才提交 succeeded 与下一步意图。publish_pr 的前置验证/审查在启动发布器之前检查，PR head 在关闭外部任务之前核验。
+
+决策续跑的结果必须返回 `result.applied_decision_id`；后端接受输入只算 reply_accepted。单段 accept-result/retry/mark-stopped 入口不能用于 minimal-v1；不确定步骤必须按原尝试和 Operation 对账。
+
+### 单次入口结果
+
 八个基础键都必须出现，不允许额外键：task_id、run_id、outcome、pr_url、worktree_path、base_commit、summary、error；此外 `decision` 是可选键（仅 outcome=needs_decision 时使用）。
 
 - task_id/run_id 必须与此次派发精确匹配。
@@ -136,6 +148,6 @@ completion-request.json 与 completion-result.json 是每次运行目录下的�
 
 ## 历史与读取规则
 
-运行记录不自动删除；日志保留策略见 README。外部读取器只能读 runtime，不写回；不能把这个文件当作队列或任务数据库。整个快照原子替换，不支持增量读取半个文件。
+运行记录不自动删除。外部读取器不写回 runtime；查询与答案从当前数据库读取，runtime 导出损坏或失败可以重建。SQLite 同时限制每个 Task 的活动 WorkflowRun、每个 WorkflowRun 的活动 Execution，以及同一 Execution 的活动 StepAttempt。缺少这些当前约束的数据库明确拒绝，不自动升级。
 
 Windows 打开文件时建议允许 FILE_SHARE_DELETE；无法控制的读取库应重试短暂共享冲突。过期 heartbeat 意味着服务/磁盘可能异常，须显示状态过期，不能把最后一次 running 当成当前事实。重大版本改变通过 schema_version 区分。

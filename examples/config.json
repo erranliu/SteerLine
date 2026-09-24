@@ -26,8 +26,9 @@
       "timeout": "30m"
     },
     "verify": {
-      "provider": "agent_skill",
-      "entry": "builtin:verify",
+      "provider": "command",
+      "entry": "scripts/steerline-verify.py",
+      "command": ["python.exe", "scripts/steerline-verify.py"],
       "version": "minimal-v1",
       "input_schema": "steerline/minimal-step-input/v1",
       "output_schema": "steerline/minimal-step-result/v1",
@@ -46,7 +47,7 @@
     },
     "publish_pr": {
       "provider": "agent_skill",
-      "entry": "builtin:publish_pr",
+      "entry": ".agents/skills/steerline-publish-pr/SKILL.md",
       "version": "minimal-v1",
       "input_schema": "steerline/minimal-step-input/v1",
       "output_schema": "steerline/minimal-step-result/v1",

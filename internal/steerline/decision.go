@@ -167,6 +167,16 @@ func ReadDecisionAnswer(r *Run) (DecisionAnswer, error) {
 	if r.Decision == nil {
 		return DecisionAnswer{}, errors.New("run has no decision")
 	}
+	if r.Decision.Status != "pending" {
+		a := DecisionAnswer{DecisionID: r.Decision.ID, RunID: r.RunID, OptionID: r.Decision.OptionID, Note: r.Decision.Note, AnsweredBy: r.Decision.AnsweredBy}
+		if r.Decision.AnsweredAt != nil {
+			a.AnsweredAt = *r.Decision.AnsweredAt
+		}
+		if err := validateDecisionAnswer(&r.Decision.Request, &a); err != nil {
+			return a, err
+		}
+		return a, nil
+	}
 	b, e := os.ReadFile(r.Decision.AnswerPath)
 	if e != nil {
 		return DecisionAnswer{}, e
@@ -189,11 +199,12 @@ func ReadDecisionAnswer(r *Run) (DecisionAnswer, error) {
 
 // AnswerOptions is the CLI/viewer entry point for answering a pending decision.
 type AnswerOptions struct {
-	RunID      string
-	DecisionID string
-	Option     string
-	Note       string
-	By         string
+	RunID           string
+	DecisionID      string
+	Option          string
+	Note            string
+	By              string
+	ExpectedVersion uint64
 }
 
 // AnswerDecision finds a run waiting for a decision and writes its answer file.
@@ -202,7 +213,13 @@ func AnswerDecision(c Config, o AnswerOptions) error {
 	if strings.TrimSpace(o.RunID) == "" {
 		return errors.New("answer requires a run id or task id")
 	}
-	snapshot, e := LoadRuntime(filepath.Join(c.RunDir, c.RuntimeFile))
+	if err := preflightExistingState(c.RunDir, c.RuntimeFile); err != nil {
+		return err
+	}
+	if err := c.ResolveIdentity(context.Background()); err != nil {
+		return err
+	}
+	snapshot, e := LoadDatabaseRuntime(c)
 	if e != nil {
 		return e
 	}
@@ -232,6 +249,9 @@ func AnswerDecision(c Config, o AnswerOptions) error {
 	if decisionID != run.Decision.ID {
 		return errors.New("answer does not match the pending decision id")
 	}
+	if o.ExpectedVersion != 0 && o.ExpectedVersion != run.Decision.Version {
+		return errors.New("decision version changed; refresh before answering")
+	}
 	answer := DecisionAnswer{DecisionID: decisionID, RunID: run.RunID, OptionID: strings.TrimSpace(o.Option), Note: o.Note, AnsweredBy: o.By}
 	if run.Decision.Status == "answer_saved" {
 		saved, err := ReadDecisionAnswer(run)
@@ -247,12 +267,6 @@ func AnswerDecision(c Config, o AnswerOptions) error {
 		return fmt.Errorf("decision is already %s", run.Decision.Status)
 	}
 	if err := validateDecisionAnswer(&run.Decision.Request, &answer); err != nil {
-		return err
-	}
-	if snapshot.SchemaVersion < 5 {
-		return WriteAnswer(run, answer)
-	}
-	if err := c.ResolveIdentity(context.Background()); err != nil {
 		return err
 	}
 	db, err := OpenSQLiteStore(filepath.Join(c.RunDir, "steerline.db"))
@@ -373,7 +387,7 @@ func (s *Service) applyDecisions(ctx context.Context) error {
 			// Single execution slot: one resumed decision at a time.
 			break
 		}
-		if r.FinishTaskStatus != "waiting_decision" || r.Decision == nil || r.Decision.Status != "pending" && r.Decision.Status != "answer_saved" {
+		if r.FinishTaskStatus != "waiting_decision" || r.Decision == nil || r.Decision.Status != "answer_saved" {
 			continue
 		}
 		a, e := ReadDecisionAnswer(r)
@@ -420,7 +434,13 @@ func (s *Service) applyDecisions(ctx context.Context) error {
 		if e := s.save(); e != nil {
 			return e
 		}
+		replyOperation, e := s.startOperation("reply_decision", "reply:"+r.Decision.ID, map[string]any{"run_id": r.RunID, "attempt_id": r.AttemptID, "process": r.Process, "answer": a})
+		if e != nil {
+			return e
+		}
 		if e := s.resumeAfterDecision(ctx, r); e != nil {
+			_ = s.setOperationState(replyOperation, "outcome_unknown", "", nil, e.Error())
+			r.ExecutionStatus = "unknown"
 			s.blocked(r, "Decision resume failed: "+e.Error())
 			s.note(r, "steer", "decision", "failed", "decision resume failed", e.Error(), nil)
 			s.State.SlotOccupied = false
@@ -431,16 +451,18 @@ func (s *Service) applyDecisions(ctx context.Context) error {
 			}
 			continue
 		}
-		r.Decision.Status = "applied"
+		if e = s.setOperationState(replyOperation, "confirmed", "", mustJSON(map[string]bool{"accepted": true}), ""); e != nil {
+			return e
+		}
+		r.Decision.Status = "reply_accepted"
 		r.Decision.Version++
-		r.Decision.AppliedAt = ptr(now())
 		r.ExecutionStatus = "running"
 		r.EndedAt = nil
 		r.Error = nil
 		if e := s.save(); e != nil {
 			return e
 		}
-		s.note(r, "steer", "decision", "applied", "decision applied", decisionAnswerSummary(r), nil)
+		s.note(r, "steer", "decision", "reply_accepted", "decision reply accepted", decisionAnswerSummary(r), nil)
 		if e := s.save(); e != nil {
 			return e
 		}

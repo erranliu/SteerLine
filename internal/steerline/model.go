@@ -12,24 +12,25 @@ type Repository struct {
 	Identity string `json:"identity"`
 }
 type Runtime struct {
-	SchemaVersion   int                 `json:"schema_version"`
-	Revision        uint64              `json:"revision"`
-	UpdatedAt       time.Time           `json:"updated_at"`
-	HeartbeatAt     time.Time           `json:"heartbeat_at"`
-	Service         ServiceState        `json:"service"`
-	Repository      Repository          `json:"repository"`
-	Tasks           []TaskRecord        `json:"tasks,omitempty"`
-	WorkflowRuns    []WorkflowRunRecord `json:"workflow_runs,omitempty"`
-	Executions      []ExecutionRecord   `json:"executions,omitempty"`
-	Attempts        []StepAttemptRecord `json:"attempts,omitempty"`
-	Decisions       []DecisionRecord    `json:"decisions,omitempty"`
-	Operations      []OperationRecord   `json:"operations,omitempty"`
-	PendingEvents   []DomainEvent       `json:"-"`
-	ProjectionError string              `json:"projection_error,omitempty"`
-	CurrentTask     *string             `json:"current_task"`
-	SlotOccupied    bool                `json:"slot_occupied"`
-	Runs            []*Run              `json:"runs"`
-	Control         ControlState        `json:"control"`
+	SchemaVersion     int                 `json:"schema_version"`
+	Revision          uint64              `json:"revision"`
+	UpdatedAt         time.Time           `json:"updated_at"`
+	HeartbeatAt       time.Time           `json:"heartbeat_at"`
+	Service           ServiceState        `json:"service"`
+	Repository        Repository          `json:"repository"`
+	Tasks             []TaskRecord        `json:"tasks,omitempty"`
+	WorkflowRuns      []WorkflowRunRecord `json:"workflow_runs,omitempty"`
+	Executions        []ExecutionRecord   `json:"executions,omitempty"`
+	Attempts          []StepAttemptRecord `json:"attempts,omitempty"`
+	Decisions         []DecisionRecord    `json:"decisions,omitempty"`
+	Operations        []OperationRecord   `json:"operations,omitempty"`
+	PendingEvents     []DomainEvent       `json:"-"`
+	RejectedClaimRuns []string            `json:"-"`
+	ProjectionError   string              `json:"projection_error,omitempty"`
+	CurrentTask       *string             `json:"current_task"`
+	SlotOccupied      bool                `json:"slot_occupied"`
+	Runs              []*Run              `json:"runs"`
+	Control           ControlState        `json:"control"`
 }
 type ServiceState struct {
 	Mode                string           `json:"mode"`

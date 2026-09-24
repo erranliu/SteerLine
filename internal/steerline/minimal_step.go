@@ -2,9 +2,11 @@ package steerline
 
 import (
 	"context"
+	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -28,6 +30,7 @@ type MinimalStepInput struct {
 	InputRevision         string                       `json:"input_revision,omitempty"`
 	CandidateRevision     string                       `json:"candidate_revision,omitempty"`
 	PrerequisiteResultIDs []string                     `json:"prerequisite_result_ids,omitempty"`
+	PrerequisiteResults   []json.RawMessage            `json:"prerequisite_results,omitempty"`
 	WorkflowDefinition    WorkflowDefinition           `json:"workflow_definition"`
 	ProjectSteps          ProjectSteps                 `json:"project_steps"`
 	Workspace             WorkspaceEvidence            `json:"workspace"`
@@ -50,7 +53,8 @@ type MinimalStepResultEnvelope struct {
 	Result          StepGateResult `json:"result"`
 }
 
-var MinimalStepResultSchema = []byte(`{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","additionalProperties":false,"required":["schema_version","project_identity","task_id","workflow_run_id","execution_id","attempt_id","result"],"properties":{"schema_version":{"const":1},"project_identity":{"type":"string","minLength":1},"task_id":{"type":"string","minLength":1},"workflow_run_id":{"type":"string","minLength":1},"execution_id":{"type":"string","minLength":1},"attempt_id":{"type":"string","minLength":1},"result":{"type":"object","additionalProperties":false,"required":["step_id","succeeded","result_id"],"properties":{"step_id":{"type":"string"},"succeeded":{"type":"boolean"},"input_revision":{"type":"string"},"revision":{"type":"string"},"workspace":{"type":"object"},"checks":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["name","status","revision"],"properties":{"name":{"type":"string"},"status":{"enum":["passed","failed","not_run","unknown"]},"revision":{"type":"string"}}}},"review_verdict":{"enum":["passed","changes_requested","blocked"]},"pr_url":{"type":"string"},"published_head":{"type":"string"},"result_id":{"type":"string","minLength":1},"failure_kind":{"type":"string"},"prerequisite_result_ids":{"type":"array","items":{"type":"string"}},"decision":{"type":"object"}}}}}`)
+//go:embed minimal-step-result.schema.json
+var MinimalStepResultSchema []byte
 
 func (c Config) minimalConfig() (*MinimalWorkflowConfig, error) {
 	if c.WorkflowDefinition == nil && c.ProjectSteps == nil {
@@ -72,7 +76,13 @@ func (c Config) validateMinimalPreflight(workflow MinimalWorkflowConfig) error {
 		contracts["review"] = workflow.Steps.Review
 	}
 	for name, contract := range contracts {
+		if err := validateMinimalEntry(c.Repository, contract); err != nil {
+			return fmt.Errorf("%s: %w", name, err)
+		}
 		if contract.Provider == "agent_skill" {
+			if c.agentName() != "codex" {
+				return UnsupportedAdapterOperation("Preflight", "local agent_skill steps currently require agent=codex")
+			}
 			if strings.TrimSpace(c.Codex.Executable) == "" {
 				return fmt.Errorf("%s requires a configured Codex executable", name)
 			}
@@ -113,6 +123,48 @@ func (c Config) validateMinimalPreflight(workflow MinimalWorkflowConfig) error {
 	return nil
 }
 
+func validateMinimalEntry(root string, contract StepContract) error {
+	if strings.HasPrefix(contract.Entry, "builtin:") {
+		return nil
+	}
+	entry, err := filepath.EvalSymlinks(filepath.Join(root, filepath.FromSlash(contract.Entry)))
+	if err != nil {
+		return err
+	}
+	if !inside(root, entry) {
+		return errors.New("step entry resolves outside its repository")
+	}
+	info, err := os.Stat(entry)
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() {
+		return errors.New("step entry must be a regular file")
+	}
+	return nil
+}
+
+func (c Config) validateMinimalEntriesAtBase(ctx context.Context, workflow MinimalWorkflowConfig, base string) error {
+	steps := []StepContract{workflow.Steps.Implement, workflow.Steps.Verify, workflow.Steps.PublishPR}
+	if workflow.Definition.ReviewRequired {
+		steps = append(steps, workflow.Steps.Review)
+	}
+	for _, step := range steps {
+		if strings.HasPrefix(step.Entry, "builtin:") {
+			continue
+		}
+		output, err := gitRunner(c, c.Repository).Output(ctx, c.Git, "ls-tree", base, "--", filepath.ToSlash(step.Entry))
+		if err != nil {
+			return err
+		}
+		fields := strings.Fields(string(output))
+		if len(fields) < 3 || (fields[0] != "100644" && fields[0] != "100755") || fields[1] != "blob" {
+			return fmt.Errorf("step entry %q must be a committed regular file at the pinned base", step.Entry)
+		}
+	}
+	return nil
+}
+
 func InitializeMinimalWorkflow(project string, c Config, task Task, source BeadsContext, run *Run) (TaskRecord, WorkflowRunRecord, ExecutionRecord, StepAttemptRecord, error) {
 	workflow, err := c.minimalConfig()
 	if err != nil {
@@ -124,7 +176,12 @@ func InitializeMinimalWorkflow(project string, c Config, task Task, source Beads
 	if run == nil || run.DomainTaskID == "" || run.RunID == "" || run.Backend == "" || run.Protocol == "" {
 		return TaskRecord{}, WorkflowRunRecord{}, ExecutionRecord{}, StepAttemptRecord{}, errors.New("minimal workflow requires stable task, run, backend and protocol identities")
 	}
-	definitionBytes, err := json.Marshal(workflow)
+	runner := StepRunnerSettings{Codex: c.Codex, Sandbox: c.Sandbox, Model: c.Model, ReasoningEffort: c.ReasoningEffort, Profile: c.Profile}
+	runner.Codex.Args = append([]string(nil), c.Codex.Args...)
+	definitionBytes, err := json.Marshal(struct {
+		Workflow *MinimalWorkflowConfig
+		Runner   StepRunnerSettings
+	}{workflow, runner})
 	if err != nil {
 		return TaskRecord{}, WorkflowRunRecord{}, ExecutionRecord{}, StepAttemptRecord{}, err
 	}
@@ -132,6 +189,7 @@ func InitializeMinimalWorkflow(project string, c Config, task Task, source Beads
 	created := now()
 	taskRecord := TaskRecord{ProjectIdentity: project, TaskID: run.DomainTaskID, ExternalProvider: "beads", ExternalProject: source.ProjectID, ExternalID: task.ID, IdentityMapDigest: run.IdentityMapDigest, Title: task.Title, Claimant: run.Claimant, Source: "beads", Status: "open", Version: 1, CreatedAt: created, UpdatedAt: created}
 	wfr := WorkflowRunRecord{ProjectIdentity: project, WorkflowRunID: run.RunID, TaskID: taskRecord.TaskID, WorkflowVersion: MinimalWorkflowVersion, ConfigDigest: digest, Definition: workflow.Definition, ProjectSteps: workflow.Steps, Phase: "queued", Repository: c.Repository, Branch: c.Branch, CreatedAt: created, UpdatedAt: created}
+	wfr.Runner = runner
 	executionID := newID()
 	run.ExecutionID = executionID
 	run.WorkflowVersion = MinimalWorkflowVersion
@@ -178,7 +236,7 @@ func (s *Service) minimalRecords(run *Run) (*WorkflowRunRecord, *ExecutionRecord
 	}
 	var execution *ExecutionRecord
 	for i := range s.State.Executions {
-		if s.State.Executions[i].ExecutionID == run.ExecutionID {
+		if s.State.Executions[i].ExecutionID == run.ExecutionID && s.State.Executions[i].WorkflowRunID == run.RunID {
 			execution = &s.State.Executions[i]
 			break
 		}
@@ -200,6 +258,12 @@ func (s *Service) inspectMinimalWorkspace(ctx context.Context, run *Run) (Worksp
 		return WorkspaceEvidence{}, errors.New("minimal execution has no recorded workspace")
 	}
 	worktree := *run.WorktreePath
+	if run.Backend != "local_process" || run.Protocol != "local_process" {
+		return WorkspaceEvidence{}, UnsupportedAdapterOperation("InspectWorkspace", "local inspection cannot inspect another execution target")
+	}
+	if err := verifyRunWorkspace(ctx, s.Config, run); err != nil {
+		return WorkspaceEvidence{}, err
+	}
 	git := gitRunner(s.Config, worktree)
 	head, err := git.Output(ctx, s.Config.Git, "rev-parse", "HEAD")
 	if err != nil {
@@ -229,9 +293,17 @@ func minimalAttemptPaths(c Config, run *Run, attempt *StepAttemptRecord) (dir, e
 	return dir, filepath.Join(dir, "events.jsonl"), filepath.Join(dir, "stderr.log"), filepath.Join(dir, "result.json")
 }
 
-func buildMinimalStepInput(project string, task Task, run *Run, workflow *WorkflowRunRecord, execution *ExecutionRecord, attempt *StepAttemptRecord) MinimalStepInput {
+func buildMinimalStepInput(project string, task Task, run *Run, workflow *WorkflowRunRecord, execution *ExecutionRecord, attempt *StepAttemptRecord, history ...StepAttemptRecord) MinimalStepInput {
 	input := MinimalStepInput{SchemaVersion: 1, ProjectIdentity: project, TaskID: run.DomainTaskID, WorkflowRunID: workflow.WorkflowRunID, ExecutionID: execution.ExecutionID, AttemptID: attempt.AttemptID, StepID: attempt.StepID, InputRevision: attempt.InputRevision, CandidateRevision: execution.CandidateRevision, PrerequisiteResultIDs: append([]string(nil), attempt.PrerequisiteIDs...), WorkflowDefinition: workflow.Definition, ProjectSteps: workflow.ProjectSteps, Workspace: execution.Workspace, Task: task}
-	if run.Decision != nil && run.Decision.Status == "answer_saved" {
+	for _, id := range attempt.PrerequisiteIDs {
+		for _, prior := range history {
+			if prior.ExecutionID == execution.ExecutionID && prior.ResultID == id && len(prior.Result) > 0 {
+				input.PrerequisiteResults = append(input.PrerequisiteResults, append(json.RawMessage(nil), prior.Result...))
+				break
+			}
+		}
+	}
+	if run.Decision != nil && (run.Decision.Status == "answer_saved" || run.Decision.Status == "reply_accepted") {
 		answer := DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, OptionID: run.Decision.OptionID, Note: run.Decision.Note, AnsweredBy: run.Decision.AnsweredBy}
 		if run.Decision.AnsweredAt != nil {
 			answer.AnsweredAt = *run.Decision.AnsweredAt
@@ -251,6 +323,15 @@ func writeMinimalPrompt(path string, input MinimalStepInput, contract StepContra
 		prompt = fmt.Sprintf("A human answered the blocking decision. Continue the same workflow step using the supplied request and answer. Load and follow project entry %q at version %q. Input is the following JSON. Return one JSON object matching the supplied output schema, without Markdown or extra text. Do not dispatch another step or write center state.\n\n%s\n", contract.Entry, contract.Version, string(data))
 	} else {
 		prompt = fmt.Sprintf("Execute only step %q for this task. Load and follow project entry %q at version %q. Input is the following JSON. Return one JSON object matching the supplied output schema, without Markdown or extra text. Do not dispatch another step or write center state.\n\n%s\n", input.StepID, contract.Entry, contract.Version, string(data))
+	}
+	boundaries := map[string]string{
+		"implement":  "Read the specification and project instructions. Implement and test the change, then commit a clean local candidate. Do not push, publish a PR, merge or close the task.",
+		"review":     "Review the verified candidate without changing code or publishing. Return passed, changes_requested or blocked with concrete evidence.",
+		"publish_pr": "Publish only the verified candidate and return its precise PR URL and published head. Do not merge or close the task.",
+	}
+	prompt = boundaries[input.StepID] + "\n" + prompt
+	if input.Decision != nil {
+		prompt += "\nAfter applying the provided answer, return result.applied_decision_id equal to decision.answer.decision_id as application evidence.\n"
 	}
 	return AtomicWrite(path, []byte(prompt))
 }
@@ -346,7 +427,10 @@ func (s *Service) startMinimalStepWorker(ctx context.Context, task Task, run *Ru
 		return nil, errors.New("minimal step has no worktree")
 	}
 	contract := minimalStepContract(workflow.ProjectSteps, attempt.StepID)
-	input := buildMinimalStepInput(s.Config.identity, task, run, workflow, execution, attempt)
+	if err := validateMinimalEntry(*run.WorktreePath, contract); err != nil {
+		return nil, err
+	}
+	input := buildMinimalStepInput(s.Config.identity, task, run, workflow, execution, attempt, s.State.Attempts...)
 	dir, events, stderr, result := minimalAttemptPaths(s.Config, run, attempt)
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return nil, err
@@ -354,6 +438,7 @@ func (s *Service) startMinimalStepWorker(ctx context.Context, task Task, run *Ru
 	run.StepResultPath = ptr(result)
 	env := minimalStepEnv(s.Config, source, run, attempt, input)
 	workConfig := s.Config
+	workConfig.Codex, workConfig.Sandbox, workConfig.Model, workConfig.ReasoningEffort, workConfig.Profile = workflow.Runner.Codex, workflow.Runner.Sandbox, workflow.Runner.Model, workflow.Runner.ReasoningEffort, workflow.Runner.Profile
 	workConfig.Repository = *run.WorktreePath
 	workConfig.workerEnv = env
 	if contract.Provider == "command" {
@@ -380,6 +465,10 @@ func (s *Service) startMinimalStepWorker(ctx context.Context, task Task, run *Ru
 	if err := writeMinimalPrompt(promptPath, input, contract); err != nil {
 		return nil, err
 	}
+	prompt, err := os.ReadFile(promptPath)
+	if err != nil {
+		return nil, err
+	}
 	args := append([]string{}, workConfig.Codex.Args...)
 	args = append(args, "exec", "--json", "--output-schema", schema, "--output-last-message", result, "--sandbox", workConfig.Sandbox)
 	if workConfig.Model != "" {
@@ -392,7 +481,7 @@ func (s *Service) startMinimalStepWorker(ctx context.Context, task Task, run *Ru
 		args = append(args, "--profile", workConfig.Profile)
 	}
 	args = append(args, "-")
-	return SpawnerFor(workConfig).Start(ctx, SpawnSpec{Dir: workConfig.Repository, EventsPath: events, StderrPath: stderr, Command: Command{Executable: workConfig.Codex.Executable, Args: args}, Stdin: strings.NewReader("Read and execute the step instructions in " + promptPath + " now. Return only the required structured JSON.\n"), Env: env, Timeout: contract.Timeout})
+	return SpawnerFor(workConfig).Start(ctx, SpawnSpec{Dir: workConfig.Repository, EventsPath: events, StderrPath: stderr, Command: Command{Executable: workConfig.Codex.Executable, Args: args}, Stdin: strings.NewReader(string(prompt)), Env: mergeStepEnv(env, contract.Environment), Timeout: contract.Timeout})
 }
 
 func mergeStepEnv(base, extra map[string]string) map[string]string {
@@ -407,20 +496,30 @@ func mergeStepEnv(base, extra map[string]string) map[string]string {
 }
 
 func readMinimalStepResult(path string) (MinimalStepResultEnvelope, error) {
-	info, err := os.Stat(path)
+	file, err := os.Open(path)
 	if err != nil {
 		return MinimalStepResultEnvelope{}, err
 	}
-	if info.Size() > minimalStepOutputMax {
+	defer file.Close()
+	data, err := io.ReadAll(io.LimitReader(file, minimalStepOutputMax+1))
+	if err != nil {
+		return MinimalStepResultEnvelope{}, err
+	}
+	if len(data) > minimalStepOutputMax {
 		return MinimalStepResultEnvelope{}, errors.New("minimal step output exceeds 2 MiB")
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return MinimalStepResultEnvelope{}, err
 	}
 	var result MinimalStepResultEnvelope
 	if err = decode(data, &result); err != nil {
 		return result, err
+	}
+	var fields struct {
+		Result map[string]json.RawMessage `json:"result"`
+	}
+	if err = json.Unmarshal(data, &fields); err != nil {
+		return result, err
+	}
+	if value := strings.TrimSpace(string(fields.Result["succeeded"])); value != "true" && value != "false" {
+		return result, errors.New("minimal step result requires an explicit succeeded boolean")
 	}
 	if result.SchemaVersion != 1 || result.Result.StepID == "" || result.Result.ResultID == "" {
 		return result, errors.New("minimal step result identity or result ID is incomplete")
@@ -442,6 +541,11 @@ func (s *Service) minimalOperation(run *Run, attempt *StepAttemptRecord, kind, k
 	data, err := json.Marshal(payload)
 	if err != nil {
 		return "", err
+	}
+	for _, existing := range s.State.Operations {
+		if existing.IdempotencyKey == key {
+			return "", fmt.Errorf("step operation %s already exists; reconcile it before dispatch", existing.OperationID)
+		}
 	}
 	id := newID()
 	op := OperationRecord{ProjectIdentity: s.Config.identity, OperationID: id, IdempotencyKey: key, Kind: kind, Status: "in_flight", PayloadDigest: operationDigest(data), Request: data, CreatedAt: now(), UpdatedAt: now()}
@@ -498,6 +602,7 @@ func (s *Service) prepareMinimalExecution(ctx context.Context, task Task, run *R
 	}
 	resultID := "prepare:" + attempt.AttemptID
 	attempt.ResultID = resultID
+	attempt.Result = mustJSON(StepGateResult{StepID: "prepare", Succeeded: true, ResultID: resultID, Workspace: workspace})
 	attempt.UpdatedAt = now()
 	execution.Workspace = workspace
 	execution.Target.WorktreeID = workspace.Worktree
@@ -565,7 +670,16 @@ func (s *Service) finishMinimalStep(exitErr error) error {
 	if len(attempt.PrerequisiteIDs) > 0 && !sameStrings(attempt.PrerequisiteIDs, envelope.Result.PrerequisiteIDs) {
 		return s.failMinimalStep(run, workflow, execution, attempt, errors.New("step result prerequisite IDs differ from the fixed attempt input"), false)
 	}
+	if envelope.Result.StepID != "publish_pr" && (envelope.Result.PRURL != "" || envelope.Result.PublishedHead != "") {
+		return s.failMinimalStep(run, workflow, execution, attempt, errors.New("step published before publish_pr; manual reconciliation required"), true)
+	}
+	if run.Decision != nil && run.Decision.Status == "reply_accepted" && envelope.Result.AppliedDecisionID != run.Decision.ID {
+		return s.failMinimalStep(run, workflow, execution, attempt, errors.New("step result lacks matching decision application evidence"), attempt.StepID == "publish_pr")
+	}
 	if envelope.Result.Decision != nil {
+		if err = s.recordMinimalDecisionApplied(run, envelope.Result); err != nil {
+			return err
+		}
 		if err = s.waitMinimalDecision(run, workflow, execution, attempt, envelope.Result); err != nil {
 			return s.failMinimalStep(run, workflow, execution, attempt, err, false)
 		}
@@ -579,6 +693,9 @@ func (s *Service) finishMinimalStep(exitErr error) error {
 		return s.failMinimalStep(run, workflow, execution, attempt, err, attempt.StepID == "publish_pr")
 	}
 	result := envelope.Result
+	if result.InputRevision != attempt.InputRevision {
+		return s.failMinimalStep(run, workflow, execution, attempt, errors.New("result input revision differs from the fixed attempt input"), attempt.StepID == "publish_pr")
+	}
 	if result.StepID == "implement" {
 		if result.Revision != workspace.Head || workspace.Dirty {
 			return s.failMinimalStep(run, workflow, execution, attempt, errors.New("implement must leave a clean workspace at its candidate commit"), false)
@@ -611,15 +728,15 @@ func (s *Service) finishMinimalStep(exitErr error) error {
 	if attempt.Status != "running" {
 		return s.failMinimalStep(run, workflow, execution, attempt, fmt.Errorf("finished attempt has unexpected status %q", attempt.Status), false)
 	}
+	next, gateErr := AdvanceMinimalExecution(workflow, execution, result, workflow.ProjectSteps.Verify.RequiredChecks)
+	if gateErr != nil {
+		return s.failMinimalStep(run, workflow, execution, attempt, gateErr, false)
+	}
 	if err = TransitionStepAttempt(attempt, "succeeded"); err != nil {
 		return err
 	}
-	next, gateErr := AdvanceMinimalExecution(workflow, execution, result, workflow.ProjectSteps.Verify.RequiredChecks)
-	if gateErr != nil {
-		if workflow.Phase == "blocked" || execution.Status == "blocked" {
-			return s.failMinimalStep(run, workflow, execution, attempt, gateErr, false)
-		}
-		return s.failMinimalStep(run, workflow, execution, attempt, gateErr, false)
+	if err = s.recordMinimalDecisionApplied(run, result); err != nil {
+		return err
 	}
 	if next != "waiting_pr_merge" {
 		execution.CurrentStep = next
@@ -724,6 +841,9 @@ func (s *Service) waitMinimalDecision(run *Run, workflow *WorkflowRunRecord, exe
 	if workspace.Repository != execution.Workspace.Repository || workspace.Worktree != execution.Workspace.Worktree || workspace.Base != execution.Workspace.Base || workspace.Branch != execution.Workspace.Branch {
 		return errors.New("workspace identity changed before waiting for decision")
 	}
+	if attempt.StepID != "implement" && (workspace.Dirty || workspace.Head != execution.CandidateRevision) {
+		return errors.New("step changed the verified workspace before requesting a decision")
+	}
 	execution.Workspace = workspace
 	state, err := WriteDecisionRequest(run, *result.Decision)
 	if err != nil {
@@ -810,6 +930,9 @@ func (s *Service) resumeMinimalAfterDecision(ctx context.Context, run *Run, answ
 	if err != nil {
 		return err
 	}
+	if task.Status != "in_progress" || task.Assignee != run.Claimant {
+		return errors.New("task ownership changed before decision continuation")
+	}
 	source, err := s.beads.Context(ctx)
 	if err != nil {
 		return err
@@ -830,20 +953,24 @@ func (s *Service) resumeMinimalAfterDecision(ctx context.Context, run *Run, answ
 	if workflow == nil || execution == nil || resumedAttempt == nil {
 		return errors.New("minimal decision resume records disappeared after worker start")
 	}
-	if err = SetWorkflowDecision(workflow, execution, resumedAttempt, "applied"); err != nil {
-		return err
+	return nil
+}
+
+func (s *Service) recordMinimalDecisionApplied(run *Run, result StepGateResult) error {
+	if run.Decision == nil || run.Decision.Status != "reply_accepted" {
+		return nil
+	}
+	if result.AppliedDecisionID != run.Decision.ID {
+		return errors.New("decision application evidence does not match the pending reply")
 	}
 	run.Decision.Status = "applied"
 	run.Decision.Version++
 	run.Decision.AppliedAt = ptr(now())
-	run.ExecutionStatus = "running"
-	run.EndedAt = nil
-	run.Error = nil
-	if err = s.syncMinimalDecision(run); err != nil {
+	if err := s.syncMinimalDecision(run); err != nil {
 		return err
 	}
 	s.note(run, "steer", "decision", "applied", "decision applied", decisionAnswerSummary(run), nil)
-	return s.save()
+	return nil
 }
 
 func (s *Service) syncMinimalDecision(run *Run) error {
@@ -855,7 +982,7 @@ func (s *Service) syncMinimalDecision(run *Run) error {
 		return err
 	}
 	var answer []byte
-	if run.Decision.Status == "answer_saved" || run.Decision.Status == "applied" || run.Decision.Status == "failed" {
+	if run.Decision.Status == "answer_saved" || run.Decision.Status == "reply_accepted" || run.Decision.Status == "applied" || run.Decision.Status == "failed" {
 		value := DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, OptionID: run.Decision.OptionID, Note: run.Decision.Note, AnsweredBy: run.Decision.AnsweredBy}
 		if run.Decision.AnsweredAt != nil {
 			value.AnsweredAt = *run.Decision.AnsweredAt
@@ -930,8 +1057,23 @@ func (s *Service) startMinimalStep(ctx context.Context, task Task, run *Run, sou
 	if attempt.Status != "planned" {
 		return fmt.Errorf("step attempt %s is not planned", attempt.AttemptID)
 	}
+	contractBytes, err := json.Marshal(minimalStepContract(workflow.ProjectSteps, attempt.StepID))
+	if err != nil {
+		return err
+	}
+	if workflow.ConfigDigest == "" || workflow.ConfigDigest != run.WorkflowConfigDigest || operationDigest(contractBytes) != attempt.ContractDigest {
+		return errors.New("step contract differs from the pinned workflow or attempt")
+	}
 	if execution.CurrentStep != attempt.StepID {
 		return fmt.Errorf("planned attempt %s for %s does not match execution current step %s", attempt.AttemptID, attempt.StepID, execution.CurrentStep)
+	}
+	if attempt.StepID == "review" || attempt.StepID == "publish_pr" {
+		if !revisionPattern.MatchString(execution.CandidateRevision) || execution.VerifiedRevision != execution.CandidateRevision {
+			return errors.New("step requires verification of the pinned candidate before dispatch")
+		}
+		if attempt.StepID == "publish_pr" && workflow.Definition.ReviewRequired && execution.ReviewedRevision != execution.CandidateRevision {
+			return errors.New("publish_pr requires review of the pinned candidate before dispatch")
+		}
 	}
 	workspace, err := s.inspectMinimalWorkspace(ctx, run)
 	if err != nil {
@@ -960,7 +1102,10 @@ func (s *Service) startMinimalStep(ctx context.Context, task Task, run *Run, sou
 	run.EndedAt = nil
 	run.Error = nil
 	run.FinishTaskStatus = "pending"
-	input := buildMinimalStepInput(s.Config.identity, task, run, workflow, execution, attempt)
+	input := buildMinimalStepInput(s.Config.identity, task, run, workflow, execution, attempt, s.State.Attempts...)
+	if len(input.PrerequisiteResults) != len(attempt.PrerequisiteIDs) {
+		return errors.New("step is missing its pinned prerequisite result bodies")
+	}
 	opID, err := s.minimalOperation(run, attempt, "dispatch_step", "step:"+execution.ExecutionID+":"+attempt.AttemptID, map[string]any{"task_id": run.DomainTaskID, "workflow_run_id": run.RunID, "execution_id": execution.ExecutionID, "attempt_id": attempt.AttemptID, "step_id": attempt.StepID, "input": input, "contract_digest": attempt.ContractDigest})
 	if err != nil {
 		return err
@@ -1010,6 +1155,14 @@ func (s *Service) startMinimalStep(ctx context.Context, task Task, run *Run, sou
 	s.State.CurrentTask = ptr(run.TaskID)
 	s.State.SlotOccupied = true
 	s.note(run, "steer", "step_start", "started", "minimal-v1 step started", attempt.StepID, map[string]any{"step": attempt.StepID, "attempt_id": attempt.AttemptID, "backend": run.Backend, "protocol": run.Protocol})
+	if input.Decision != nil && run.Decision.Status == "answer_saved" {
+		run.Decision.Status = "reply_accepted"
+		run.Decision.Version++
+		if err = s.syncMinimalDecision(run); err != nil {
+			return err
+		}
+		s.note(run, "steer", "decision", "reply_accepted", "decision reply accepted", decisionAnswerSummary(run), nil)
+	}
 	if err = s.save(); err != nil {
 		return err
 	}
@@ -1018,6 +1171,9 @@ func (s *Service) startMinimalStep(ctx context.Context, task Task, run *Run, sou
 
 func (s *Service) resumeMinimalSteps(ctx context.Context) error {
 	if s.worker != nil {
+		return nil
+	}
+	if s.State.Control.Operation != nil || len(s.State.Control.Blockers) != 0 {
 		return nil
 	}
 	for _, run := range s.State.Runs {
@@ -1038,9 +1194,17 @@ func (s *Service) resumeMinimalSteps(ctx context.Context) error {
 		if current == nil {
 			continue
 		}
+		for _, other := range s.State.Runs {
+			if other != nil && other.RunID != run.RunID && (other.ExecutionStatus == "unknown" || other.ExecutionStatus == "pending" || other.ExecutionStatus == "running" || other.FinishTaskStatus == "waiting_decision") {
+				return errors.New("another execution still holds the execution slot")
+			}
+		}
 		task, err := s.beads.Show(ctx, run.TaskID)
 		if err != nil {
 			return err
+		}
+		if task.Status != "in_progress" || task.Assignee != run.Claimant {
+			return errors.New("task ownership changed before planned step dispatch")
 		}
 		source, err := s.beads.Context(ctx)
 		if err != nil {

@@ -128,10 +128,16 @@ func fakeMinimalStep(path string, db fakeDB, argv []string) int {
 		revision = head
 	}
 	result := StepGateResult{StepID: input.StepID, Succeeded: true, InputRevision: input.InputRevision, Revision: revision, Workspace: workspace, ResultID: newID(), PrerequisiteIDs: append([]string(nil), input.PrerequisiteResultIDs...)}
+	if input.Decision != nil {
+		result.AppliedDecisionID = input.Decision.Answer.DecisionID
+	}
 	switch input.StepID {
 	case "verify":
 		for _, name := range input.ProjectSteps.Verify.RequiredChecks {
 			result.Checks = append(result.Checks, CheckEvidence{Name: name, Status: "passed", Revision: revision})
+		}
+		if db.Behavior == "minimal-no-checks" {
+			result.Checks = nil
 		}
 	case "review":
 		result.ReviewVerdict = "passed"
@@ -709,6 +715,11 @@ func TestClaimConflictAndGrouping(t *testing.T) {
 	if s.worker != nil || len(s.State.Runs) != 0 {
 		t.Fatal("lost claim started worker")
 	}
+	snapshot, err := s.domainStore.Query(context.Background(), f.c.identity)
+	require(t, err)
+	if len(snapshot.WorkflowRuns) != 0 || len(snapshot.Executions) != 0 || len(snapshot.Attempts) != 0 || len(snapshot.Tasks) != 0 {
+		t.Fatalf("rejected claim left a ghost workflow: %+v", snapshot)
+	}
 	aggregate := task("group")
 	aggregate.Metadata = map[string]any{"split.role": "aggregate", "split.registered": "1"}
 	if executable(aggregate, f.c.ExecutableTypes) {
@@ -764,11 +775,17 @@ func TestHeartbeatAndConcurrentReader(t *testing.T) {
 	}
 	first, e := LoadRuntime(filepath.Join(f.c.RunDir, f.c.RuntimeFile))
 	require(t, e)
-	time.Sleep(60 * time.Millisecond)
-	second, e := LoadRuntime(filepath.Join(f.c.RunDir, f.c.RuntimeFile))
-	require(t, e)
-	if !second.HeartbeatAt.After(first.HeartbeatAt) {
-		t.Fatal("idle heartbeat stalled")
+	deadline := time.Now().Add(time.Second)
+	for {
+		second, e := LoadRuntime(filepath.Join(f.c.RunDir, f.c.RuntimeFile))
+		require(t, e)
+		if second != nil && second.HeartbeatAt.After(first.HeartbeatAt) {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("idle heartbeat stalled")
+		}
+		time.Sleep(20 * time.Millisecond)
 	}
 	require(t, RequestStop(f.c))
 	select {

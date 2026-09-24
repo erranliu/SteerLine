@@ -61,6 +61,8 @@
 
 ## 稳定入口：steerline watch
 
+中心生命周期与 worker 活动先随业务状态写入 SQLite events；QueryService 可在服务运行时按 Execution/Attempt 查询。`activity.jsonl` 是展示副本，写入失败不丢弃规范事件，重启不会把日志文件重新导入业务数据库。
+
 ```
 steerline watch -config <config.json> [--run-id <id|task-id>] [--follow=true] [--from-start=true] [--json] [--raw]
 ```

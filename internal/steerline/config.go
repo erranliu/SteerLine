@@ -442,6 +442,11 @@ func resolveCommand(c *Command) error {
 	return nil
 }
 func (c *Config) Preflight(ctx context.Context, checkSkills bool) error {
+	if c.RuntimeFile != "" {
+		if err := preflightExistingState(c.RunDir, c.RuntimeFile); err != nil {
+			return err
+		}
+	}
 	if e := c.Completion.validate(); e != nil {
 		return e
 	}
@@ -450,7 +455,11 @@ func (c *Config) Preflight(ctx context.Context, checkSkills bool) error {
 			return e
 		}
 	}
-	for _, cmd := range []*Command{&c.Git, &c.BD, &c.Codex} {
+	commands := []*Command{&c.Git, &c.BD}
+	if c.requiresLocalCodex() {
+		commands = append(commands, &c.Codex)
+	}
+	for _, cmd := range commands {
 		if e := resolveCommand(cmd); e != nil {
 			return e
 		}
@@ -526,7 +535,7 @@ func (c *Config) Preflight(ctx context.Context, checkSkills bool) error {
 			return errors.New("worktree_root must be outside all existing checkouts")
 		}
 	}
-	for _, probe := range []struct {
+	for index, probe := range []struct {
 		cmd   Command
 		args  []string
 		flags []string
@@ -537,6 +546,9 @@ func (c *Config) Preflight(ctx context.Context, checkSkills bool) error {
 		{c.BD, []string{"close", "--help"}, []string{"--reason"}},
 		{c.Codex, []string{"exec", "--help"}, []string{"--json", "--output-schema", "--output-last-message", "--sandbox"}},
 	} {
+		if index == 4 && !c.requiresLocalCodex() {
+			continue
+		}
 		b, e := r.Output(ctx, probe.cmd, probe.args...)
 		if e != nil {
 			return e
@@ -577,6 +589,25 @@ func (c *Config) Preflight(ctx context.Context, checkSkills bool) error {
 		}
 	}
 	return nil
+}
+
+func (c Config) requiresLocalCodex() bool {
+	if c.hostName() != "local" {
+		return false
+	}
+	if c.ProjectSteps == nil || c.WorkflowDefinition == nil {
+		return true
+	}
+	steps := []StepContract{c.ProjectSteps.Implement, c.ProjectSteps.Verify, c.ProjectSteps.PublishPR}
+	if c.WorkflowDefinition.ReviewRequired {
+		steps = append(steps, c.ProjectSteps.Review)
+	}
+	for _, step := range steps {
+		if step.Provider == "agent_skill" {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *Config) validateSkills() error {

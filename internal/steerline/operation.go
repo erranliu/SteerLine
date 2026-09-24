@@ -39,6 +39,21 @@ func (s *Service) startOperation(kind, key string, payload any) (string, error) 
 	if err != nil {
 		return "", err
 	}
+	for _, existing := range s.State.Operations {
+		if existing.IdempotencyKey != key {
+			continue
+		}
+		if existing.Kind != kind || existing.PayloadDigest != operationDigest(b) || string(existing.Request) != string(b) {
+			return "", errors.New("operation idempotency key conflicts with the original request")
+		}
+		if existing.Status != "pending" {
+			return "", fmt.Errorf("operation %s is already %s; reconcile the original operation before another action", existing.OperationID, existing.Status)
+		}
+		if err = s.changeOperation(existing.OperationID, "in_flight", "", nil, ""); err != nil {
+			return "", err
+		}
+		return existing.OperationID, nil
+	}
 	operation := OperationRecord{ProjectIdentity: s.Config.identity, OperationID: newID(), IdempotencyKey: key, Kind: kind, Status: "pending", PayloadDigest: operationDigest(b), Request: b, CreatedAt: now(), UpdatedAt: now()}
 	s.State.Operations = append(s.State.Operations, operation)
 	if err = s.save(); err != nil {

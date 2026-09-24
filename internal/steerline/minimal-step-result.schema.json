@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "project_identity", "task_id", "workflow_run_id", "execution_id", "attempt_id", "result"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "project_identity": {"type": "string", "minLength": 1},
+    "task_id": {"type": "string", "minLength": 1},
+    "workflow_run_id": {"type": "string", "minLength": 1},
+    "execution_id": {"type": "string", "minLength": 1},
+    "attempt_id": {"type": "string", "minLength": 1},
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["step_id", "succeeded", "result_id"],
+      "properties": {
+        "step_id": {"enum": ["implement", "verify", "review", "publish_pr"]},
+        "succeeded": {"type": "boolean"},
+        "result_id": {"type": "string", "minLength": 1},
+        "input_revision": {"type": "string"},
+        "revision": {"type": "string"},
+        "workspace": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["repository", "worktree", "branch", "base", "head", "dirty"],
+          "properties": {
+            "repository": {"type": "string"},
+            "worktree": {"type": "string"},
+            "branch": {"type": "string"},
+            "base": {"type": "string"},
+            "head": {"type": "string"},
+            "dirty": {"type": "boolean"},
+            "verified_at": {"type": "string", "format": "date-time"}
+          }
+        },
+        "checks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "status", "revision"],
+            "properties": {
+              "name": {"type": "string"},
+              "status": {"enum": ["passed", "failed", "not_run", "unknown"]},
+              "revision": {"type": "string"}
+            }
+          }
+        },
+        "review_verdict": {"enum": ["passed", "changes_requested", "blocked"]},
+        "pr_url": {"type": "string"},
+        "published_head": {"type": "string"},
+        "failure_kind": {"type": "string"},
+        "prerequisite_result_ids": {"type": "array", "items": {"type": "string"}},
+        "applied_decision_id": {"type": "string"},
+        "decision": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "required": ["question", "options"],
+          "properties": {
+            "question": {"type": "string"},
+            "context": {"type": "string"},
+            "options": {
+              "type": "array",
+              "maxItems": 12,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["id", "label"],
+                "properties": {"id": {"type": "string"}, "label": {"type": "string"}, "detail": {"type": "string"}}
+              }
+            },
+            "recommended": {"type": "string"},
+            "allow_free_text": {"type": "boolean"}
+          }
+        }
+      }
+    }
+  }
+}

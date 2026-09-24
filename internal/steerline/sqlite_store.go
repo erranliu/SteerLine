@@ -1,6 +1,7 @@
 package steerline
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"database/sql"
@@ -61,6 +62,13 @@ type SQLiteStore struct {
 func OpenSQLiteStore(path string) (*SQLiteStore, error) {
 	if path == "" {
 		return nil, errors.New("sqlite path is required")
+	}
+	if _, err := os.Stat(path); err == nil {
+		if err = validateExistingDatabase(path); err != nil {
+			return nil, err
+		}
+	} else if !os.IsNotExist(err) {
+		return nil, err
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		return nil, err
@@ -141,13 +149,17 @@ func (s *SQLiteStore) migrate(ctx context.Context) error {
 }
 
 var domainSchemaV1 = []string{
-	`CREATE TABLE tasks (project_identity TEXT NOT NULL, task_id TEXT NOT NULL, external_provider TEXT NOT NULL DEFAULT '', external_project TEXT NOT NULL DEFAULT '', external_id TEXT NOT NULL DEFAULT '', status TEXT NOT NULL, version INTEGER NOT NULL, payload BLOB NOT NULL, PRIMARY KEY(project_identity, task_id), UNIQUE(project_identity, external_provider, external_project, external_id))`,
+	`CREATE TABLE tasks (project_identity TEXT NOT NULL, task_id TEXT NOT NULL, external_provider TEXT NOT NULL DEFAULT '', external_project TEXT NOT NULL DEFAULT '', external_id TEXT NOT NULL DEFAULT '', status TEXT NOT NULL, version INTEGER NOT NULL, payload BLOB NOT NULL, PRIMARY KEY(project_identity, task_id))`,
+	`CREATE UNIQUE INDEX task_external_identity ON tasks(project_identity,external_provider,external_project,external_id) WHERE external_id <> ''`,
 	`CREATE TABLE workflow_runs (project_identity TEXT NOT NULL, workflow_run_id TEXT NOT NULL, task_id TEXT NOT NULL, phase TEXT NOT NULL, payload BLOB NOT NULL, PRIMARY KEY(project_identity, workflow_run_id), FOREIGN KEY(project_identity, task_id) REFERENCES tasks(project_identity, task_id))`,
 	`CREATE INDEX workflow_runs_task_idx ON workflow_runs(project_identity, task_id)`,
+	`CREATE UNIQUE INDEX one_active_workflow_per_task ON workflow_runs(project_identity,task_id) WHERE phase <> 'completed'`,
 	`CREATE TABLE executions (project_identity TEXT NOT NULL, execution_id TEXT NOT NULL, workflow_run_id TEXT NOT NULL, status TEXT NOT NULL, current_step TEXT NOT NULL DEFAULT '', target_json BLOB NOT NULL, payload BLOB NOT NULL, PRIMARY KEY(project_identity, execution_id), FOREIGN KEY(project_identity, workflow_run_id) REFERENCES workflow_runs(project_identity, workflow_run_id))`,
 	`CREATE INDEX executions_workflow_idx ON executions(project_identity, workflow_run_id)`,
+	`CREATE UNIQUE INDEX one_active_execution_per_workflow ON executions(project_identity,workflow_run_id) WHERE status IN ('pending','active','waiting_decision','blocked')`,
 	`CREATE TABLE step_attempts (project_identity TEXT NOT NULL, attempt_id TEXT NOT NULL, execution_id TEXT NOT NULL, step_id TEXT NOT NULL, attempt_number INTEGER NOT NULL, operation_id TEXT NOT NULL DEFAULT '', status TEXT NOT NULL, payload BLOB NOT NULL, PRIMARY KEY(project_identity, attempt_id), UNIQUE(project_identity, execution_id, step_id, attempt_number), FOREIGN KEY(project_identity, execution_id) REFERENCES executions(project_identity, execution_id))`,
 	`CREATE UNIQUE INDEX one_active_attempt_per_step ON step_attempts(project_identity, execution_id, step_id) WHERE status IN ('planned','dispatching','dispatched','running','waiting_decision','stopping','outcome_unknown')`,
+	`CREATE UNIQUE INDEX one_active_attempt_per_execution ON step_attempts(project_identity,execution_id) WHERE status IN ('planned','dispatching','dispatched','running','waiting_decision','stopping','outcome_unknown')`,
 	`CREATE TABLE decisions (project_identity TEXT NOT NULL, decision_id TEXT NOT NULL, scope TEXT NOT NULL, workflow_run_id TEXT, execution_id TEXT, attempt_id TEXT, question_id TEXT NOT NULL, status TEXT NOT NULL, version INTEGER NOT NULL, payload BLOB NOT NULL, PRIMARY KEY(project_identity, decision_id), FOREIGN KEY(project_identity, workflow_run_id) REFERENCES workflow_runs(project_identity, workflow_run_id), FOREIGN KEY(project_identity, execution_id) REFERENCES executions(project_identity, execution_id), FOREIGN KEY(project_identity, attempt_id) REFERENCES step_attempts(project_identity, attempt_id))`,
 	`CREATE INDEX decisions_scope_idx ON decisions(project_identity, workflow_run_id, execution_id, status)`,
 	`CREATE TABLE decision_answers (project_identity TEXT NOT NULL, decision_id TEXT NOT NULL, decision_version INTEGER NOT NULL, command_id TEXT NOT NULL, payload_digest TEXT NOT NULL, created_at TEXT NOT NULL, PRIMARY KEY(project_identity,decision_id,decision_version), FOREIGN KEY(project_identity,decision_id) REFERENCES decisions(project_identity,decision_id))`,
@@ -196,8 +208,8 @@ func (t *sqliteTx) PutTask(v TaskRecord) error {
 	if err != nil {
 		return err
 	}
-	_, err = t.tx.ExecContext(t.ctx, `INSERT INTO tasks(project_identity,task_id,external_provider,external_project,external_id,status,version,payload) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(project_identity,task_id) DO UPDATE SET external_provider=excluded.external_provider,external_project=excluded.external_project,external_id=excluded.external_id,status=excluded.status,version=excluded.version,payload=excluded.payload`, v.ProjectIdentity, v.TaskID, v.ExternalProvider, v.ExternalProject, v.ExternalID, v.Status, v.Version, b)
-	return err
+	result, err := t.tx.ExecContext(t.ctx, `INSERT INTO tasks(project_identity,task_id,external_provider,external_project,external_id,status,version,payload) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(project_identity,task_id) DO UPDATE SET status=excluded.status,version=excluded.version,payload=excluded.payload WHERE tasks.external_provider=excluded.external_provider AND tasks.external_project=excluded.external_project AND tasks.external_id=excluded.external_id`, v.ProjectIdentity, v.TaskID, v.ExternalProvider, v.ExternalProject, v.ExternalID, v.Status, v.Version, b)
+	return requireIdentityWrite(result, err, "task ID belongs to another external identity")
 }
 func (t *sqliteTx) PutWorkflowRun(v WorkflowRunRecord) error {
 	if v.ProjectIdentity == "" || v.WorkflowRunID == "" || v.TaskID == "" || v.Phase == "" {
@@ -210,8 +222,8 @@ func (t *sqliteTx) PutWorkflowRun(v WorkflowRunRecord) error {
 	if err != nil {
 		return err
 	}
-	_, err = t.tx.ExecContext(t.ctx, `INSERT INTO workflow_runs(project_identity,workflow_run_id,task_id,phase,payload) VALUES(?,?,?,?,?) ON CONFLICT(project_identity,workflow_run_id) DO UPDATE SET task_id=excluded.task_id,phase=excluded.phase,payload=excluded.payload`, v.ProjectIdentity, v.WorkflowRunID, v.TaskID, v.Phase, b)
-	return err
+	result, err := t.tx.ExecContext(t.ctx, `INSERT INTO workflow_runs(project_identity,workflow_run_id,task_id,phase,payload) VALUES(?,?,?,?,?) ON CONFLICT(project_identity,workflow_run_id) DO UPDATE SET phase=excluded.phase,payload=excluded.payload WHERE workflow_runs.task_id=excluded.task_id`, v.ProjectIdentity, v.WorkflowRunID, v.TaskID, v.Phase, b)
+	return requireIdentityWrite(result, err, "workflow identity cannot be rebound to another task")
 }
 func (t *sqliteTx) PutExecution(v ExecutionRecord) error {
 	if v.ProjectIdentity == "" || v.ExecutionID == "" || v.WorkflowRunID == "" || v.Status == "" {
@@ -228,8 +240,8 @@ func (t *sqliteTx) PutExecution(v ExecutionRecord) error {
 	if err != nil {
 		return err
 	}
-	_, err = t.tx.ExecContext(t.ctx, `INSERT INTO executions(project_identity,execution_id,workflow_run_id,status,current_step,target_json,payload) VALUES(?,?,?,?,?,?,?) ON CONFLICT(project_identity,execution_id) DO UPDATE SET workflow_run_id=excluded.workflow_run_id,status=excluded.status,current_step=excluded.current_step,target_json=excluded.target_json,payload=excluded.payload`, v.ProjectIdentity, v.ExecutionID, v.WorkflowRunID, v.Status, v.CurrentStep, target, b)
-	return err
+	result, err := t.tx.ExecContext(t.ctx, `INSERT INTO executions(project_identity,execution_id,workflow_run_id,status,current_step,target_json,payload) VALUES(?,?,?,?,?,?,?) ON CONFLICT(project_identity,execution_id) DO UPDATE SET status=excluded.status,current_step=excluded.current_step,target_json=excluded.target_json,payload=excluded.payload WHERE executions.workflow_run_id=excluded.workflow_run_id`, v.ProjectIdentity, v.ExecutionID, v.WorkflowRunID, v.Status, v.CurrentStep, target, b)
+	return requireIdentityWrite(result, err, "execution identity cannot be rebound to another workflow")
 }
 func (t *sqliteTx) PutStepAttempt(v StepAttemptRecord) error {
 	if v.ProjectIdentity == "" || v.AttemptID == "" || v.ExecutionID == "" || v.StepID == "" || v.AttemptNumber < 1 || v.Status == "" {
@@ -242,8 +254,22 @@ func (t *sqliteTx) PutStepAttempt(v StepAttemptRecord) error {
 	if err != nil {
 		return err
 	}
-	_, err = t.tx.ExecContext(t.ctx, `INSERT INTO step_attempts(project_identity,attempt_id,execution_id,step_id,attempt_number,operation_id,status,payload) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(project_identity,attempt_id) DO UPDATE SET execution_id=excluded.execution_id,step_id=excluded.step_id,attempt_number=excluded.attempt_number,operation_id=excluded.operation_id,status=excluded.status,payload=excluded.payload`, v.ProjectIdentity, v.AttemptID, v.ExecutionID, v.StepID, v.AttemptNumber, v.OperationID, v.Status, b)
-	return err
+	result, err := t.tx.ExecContext(t.ctx, `INSERT INTO step_attempts(project_identity,attempt_id,execution_id,step_id,attempt_number,operation_id,status,payload) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(project_identity,attempt_id) DO UPDATE SET operation_id=excluded.operation_id,status=excluded.status,payload=excluded.payload WHERE step_attempts.execution_id=excluded.execution_id AND step_attempts.step_id=excluded.step_id AND step_attempts.attempt_number=excluded.attempt_number`, v.ProjectIdentity, v.AttemptID, v.ExecutionID, v.StepID, v.AttemptNumber, v.OperationID, v.Status, b)
+	return requireIdentityWrite(result, err, "attempt identity cannot be rebound to another execution or step")
+}
+
+func requireIdentityWrite(result sql.Result, err error, message string) error {
+	if err != nil {
+		return err
+	}
+	count, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if count != 1 {
+		return errors.New(message)
+	}
+	return nil
 }
 func (t *sqliteTx) PutDecision(v DecisionRecord) error {
 	if v.ProjectIdentity == "" || v.DecisionID == "" || v.QuestionID == "" || v.Status == "" || v.Scope == "" {
@@ -299,6 +325,9 @@ func (t *sqliteTx) PutOperation(v OperationRecord) (OperationRecord, bool, error
 		var existing OperationRecord
 		if err = json.Unmarshal([]byte(payload), &existing); err != nil {
 			return v, false, err
+		}
+		if existing.Kind != v.Kind || !sameOperationRequest(existing.Request, v.Request) {
+			return v, false, errors.New("operation request content cannot change")
 		}
 		if oldID == v.OperationID {
 			b, marshalErr := encodePayload(v)
@@ -371,7 +400,26 @@ func (t *sqliteTx) EnqueueCommand(v CommandRecord) (CommandRecord, bool, error) 
 	if v.Kind == "answer_decision" {
 		var version uint64
 		var status string
-		if err := t.tx.QueryRowContext(t.ctx, `SELECT version,status FROM decisions WHERE project_identity=? AND decision_id=?`, v.ProjectIdentity, v.TargetID).Scan(&version, &status); err != nil {
+		var recordBytes []byte
+		if err := t.tx.QueryRowContext(t.ctx, `SELECT version,status,payload FROM decisions WHERE project_identity=? AND decision_id=?`, v.ProjectIdentity, v.TargetID).Scan(&version, &status, &recordBytes); err != nil {
+			return v, false, err
+		}
+		var record DecisionRecord
+		var answer DecisionAnswer
+		var request DecisionRequest
+		if err := decode(recordBytes, &record); err != nil {
+			return v, false, err
+		}
+		if err := decode(v.Payload, &answer); err != nil {
+			return v, false, err
+		}
+		if err := decode(record.Request, &request); err != nil {
+			return v, false, err
+		}
+		if answer.DecisionID != v.TargetID || answer.RunID != record.WorkflowRunID || answer.AnsweredBy != v.RequestedBy {
+			return v, false, errors.New("answer target or requester mismatch")
+		}
+		if err := validateDecisionAnswer(&request, &answer); err != nil {
 			return v, false, err
 		}
 		if version != v.ExpectedVersion || status != "pending" {
@@ -435,7 +483,16 @@ func (s *SQLiteStore) LoadProjection(ctx context.Context, project string) ([]byt
 }
 
 func (s *SQLiteStore) Query(ctx context.Context, project string) (DomainSnapshot, error) {
-	return querySnapshot(ctx, s.db, project)
+	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return DomainSnapshot{}, err
+	}
+	defer tx.Rollback()
+	snapshot, err := querySnapshot(ctx, tx, project)
+	if err != nil {
+		return snapshot, err
+	}
+	return snapshot, tx.Commit()
 }
 
 type queryContext interface {
@@ -635,7 +692,29 @@ func (s *SQLiteStore) SaveRuntime(ctx context.Context, runtime Runtime) (Runtime
 			}
 		}
 		for _, operation := range runtime.Operations {
-			if _, _, err := tx.PutOperation(operation); err != nil {
+			persisted, _, err := tx.PutOperation(operation)
+			if err != nil {
+				return err
+			}
+			if persisted.OperationID != operation.OperationID {
+				return errors.New("runtime contains a second identity for an existing operation intent")
+			}
+		}
+		for _, runID := range runtime.RejectedClaimRuns {
+			confirmed := false
+			for _, operation := range runtime.Operations {
+				var claim struct {
+					RunID string `json:"run_id"`
+				}
+				if operation.Kind == "claim_task" && operation.Status == "rejected" && json.Unmarshal(operation.Request, &claim) == nil && claim.RunID == runID {
+					confirmed = true
+					break
+				}
+			}
+			if !confirmed {
+				return errors.New("cannot discard workflow without a rejected claim receipt")
+			}
+			if err := tx.(*sqliteTx).discardUnclaimedWorkflow(project, runID); err != nil {
 				return err
 			}
 		}
@@ -665,8 +744,34 @@ func (s *SQLiteStore) SaveRuntime(ctx context.Context, runtime Runtime) (Runtime
 	})
 	if err == nil {
 		runtime.PendingEvents = nil
+		runtime.RejectedClaimRuns = nil
 	}
 	return runtime, err
+}
+
+func (t *sqliteTx) discardUnclaimedWorkflow(project, runID string) error {
+	var taskID string
+	if err := t.tx.QueryRowContext(t.ctx, `SELECT task_id FROM workflow_runs WHERE project_identity=? AND workflow_run_id=? AND phase IN ('queued','executing')`, project, runID).Scan(&taskID); err != nil {
+		return err
+	}
+	var effects int
+	if err := t.tx.QueryRowContext(t.ctx, `SELECT COUNT(*) FROM executions e LEFT JOIN step_attempts a ON a.project_identity=e.project_identity AND a.execution_id=e.execution_id WHERE e.project_identity=? AND e.workflow_run_id=? AND (e.status <> 'pending' OR a.status <> 'planned')`, project, runID).Scan(&effects); err != nil {
+		return err
+	}
+	if effects != 0 {
+		return errors.New("cannot discard a workflow whose execution may have started")
+	}
+	if _, err := t.tx.ExecContext(t.ctx, `DELETE FROM step_attempts WHERE project_identity=? AND execution_id IN (SELECT execution_id FROM executions WHERE project_identity=? AND workflow_run_id=?)`, project, project, runID); err != nil {
+		return err
+	}
+	if _, err := t.tx.ExecContext(t.ctx, `DELETE FROM executions WHERE project_identity=? AND workflow_run_id=?`, project, runID); err != nil {
+		return err
+	}
+	if _, err := t.tx.ExecContext(t.ctx, `DELETE FROM workflow_runs WHERE project_identity=? AND workflow_run_id=?`, project, runID); err != nil {
+		return err
+	}
+	_, err := t.tx.ExecContext(t.ctx, `DELETE FROM tasks WHERE project_identity=? AND task_id=? AND NOT EXISTS (SELECT 1 FROM workflow_runs WHERE project_identity=? AND task_id=?)`, project, taskID, project, taskID)
+	return err
 }
 
 func persistNormalizedWorkflow(tx DomainTx, project string, runtime Runtime, run *Run) error {
@@ -773,7 +878,7 @@ func persistNormalizedWorkflow(tx DomainTx, project string, runtime Runtime, run
 			return err
 		}
 		var answer []byte
-		if run.Decision.Status == "answer_saved" || run.Decision.Status == "applied" || run.Decision.Status == "failed" {
+		if run.Decision.Status == "answer_saved" || run.Decision.Status == "reply_accepted" || run.Decision.Status == "applied" || run.Decision.Status == "failed" {
 			value := DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, OptionID: run.Decision.OptionID, Note: run.Decision.Note, AnsweredBy: run.Decision.AnsweredBy}
 			if run.Decision.AnsweredAt != nil {
 				value.AnsweredAt = *run.Decision.AnsweredAt
@@ -956,9 +1061,9 @@ func persistLegacyRun(tx DomainTx, project string, run *Run) error {
 		decision := DecisionRecord{ProjectIdentity: project, DecisionID: d.ID, Scope: "execution", WorkflowRunID: run.RunID, ExecutionID: executionID, AttemptID: attemptID, QuestionID: d.ID, Status: legacyDecisionStatus(d.Status), Version: version, UpdatedAt: n, CreatedAt: created}
 		payload, _ := json.Marshal(d.Request)
 		decision.Request = payload
-		if d.AnswerPath != "" {
-			if answer, e := os.ReadFile(d.AnswerPath); e == nil {
-				decision.Answer = answer
+		if d.Status != "pending" {
+			if answer, e := ReadDecisionAnswer(run); e == nil {
+				decision.Answer = mustJSON(answer)
 			}
 		}
 		decision.AnsweredBy = d.AnsweredBy
@@ -1017,8 +1122,10 @@ func legacyDecisionStatus(v string) string {
 		return "pending"
 	case "answer_saved":
 		return "answer_saved"
-	case "resuming":
+	case "reply_accepted":
 		return "reply_accepted"
+	case "resuming":
+		return "answer_saved"
 	case "applied":
 		return "applied"
 	case "superseded":
@@ -1068,6 +1175,17 @@ func runtimeOperations(runtime Runtime) []OperationRecord {
 func operationDigest(payload []byte) string {
 	h := sha256.Sum256(payload)
 	return hex.EncodeToString(h[:])
+}
+
+func sameOperationRequest(a, b []byte) bool {
+	if bytes.Equal(a, b) {
+		return true
+	}
+	var compactA, compactB bytes.Buffer
+	if json.Compact(&compactA, a) != nil || json.Compact(&compactB, b) != nil {
+		return false
+	}
+	return bytes.Equal(compactA.Bytes(), compactB.Bytes())
 }
 func isConstraintError(err error) bool {
 	return err != nil && strings.Contains(strings.ToLower(err.Error()), "constraint")

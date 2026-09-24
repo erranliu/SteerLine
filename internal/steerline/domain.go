@@ -45,6 +45,7 @@ type WorkflowRunRecord struct {
 	ConfigDigest     string             `json:"config_digest,omitempty"`
 	Definition       WorkflowDefinition `json:"workflow_definition"`
 	ProjectSteps     ProjectSteps       `json:"project_steps,omitempty"`
+	Runner           StepRunnerSettings `json:"runner"`
 	Phase            string             `json:"phase"`
 	Repository       string             `json:"repository,omitempty"`
 	Branch           string             `json:"branch,omitempty"`
@@ -52,6 +53,14 @@ type WorkflowRunRecord struct {
 	PendingDecisions int                `json:"pending_decisions,omitempty"`
 	CreatedAt        time.Time          `json:"created_at"`
 	UpdatedAt        time.Time          `json:"updated_at"`
+}
+
+type StepRunnerSettings struct {
+	Codex           Command `json:"codex"`
+	Sandbox         string  `json:"sandbox"`
+	Model           string  `json:"model,omitempty"`
+	ReasoningEffort string  `json:"reasoning_effort,omitempty"`
+	Profile         string  `json:"profile,omitempty"`
 }
 
 type ExecutionRecord struct {
@@ -274,6 +283,9 @@ func (c MinimalWorkflowConfig) Validate() error {
 	if len(c.Steps.Verify.RequiredChecks) == 0 {
 		return errors.New("verify contract requires a fixed nonempty required_checks list")
 	}
+	if c.Steps.Verify.Provider != "command" {
+		return errors.New("verify requires a deterministic command provider")
+	}
 	seen := map[string]bool{}
 	for _, check := range c.Steps.Verify.RequiredChecks {
 		if strings.TrimSpace(check) == "" || seen[check] {
@@ -314,25 +326,29 @@ func validateStepContract(id string, c StepContract) error {
 	if c.Provider == "agent_skill" && len(c.Command) != 0 {
 		return fmt.Errorf("%s agent_skill cannot carry a command", id)
 	}
+	if c.Provider == "agent_skill" && strings.HasPrefix(c.Entry, "builtin:") && (c.Entry != "builtin:"+id || (id != "implement" && id != "review") || c.Version != MinimalWorkflowVersion) {
+		return fmt.Errorf("%s has no built-in agent entry %q; configure a repository entry", id, c.Entry)
+	}
 	return nil
 }
 
 var revisionPattern = regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`)
 
 type StepGateResult struct {
-	StepID          string            `json:"step_id"`
-	Succeeded       bool              `json:"succeeded"`
-	InputRevision   string            `json:"input_revision,omitempty"`
-	Revision        string            `json:"revision,omitempty"`
-	Workspace       WorkspaceEvidence `json:"workspace,omitempty"`
-	Checks          []CheckEvidence   `json:"checks,omitempty"`
-	ReviewVerdict   string            `json:"review_verdict,omitempty"`
-	PRURL           string            `json:"pr_url,omitempty"`
-	PublishedHead   string            `json:"published_head,omitempty"`
-	ResultID        string            `json:"result_id,omitempty"`
-	FailureKind     string            `json:"failure_kind,omitempty"`
-	PrerequisiteIDs []string          `json:"prerequisite_result_ids,omitempty"`
-	Decision        *DecisionRequest  `json:"decision,omitempty"`
+	StepID            string            `json:"step_id"`
+	Succeeded         bool              `json:"succeeded"`
+	InputRevision     string            `json:"input_revision,omitempty"`
+	Revision          string            `json:"revision,omitempty"`
+	Workspace         WorkspaceEvidence `json:"workspace,omitempty"`
+	Checks            []CheckEvidence   `json:"checks,omitempty"`
+	ReviewVerdict     string            `json:"review_verdict,omitempty"`
+	PRURL             string            `json:"pr_url,omitempty"`
+	PublishedHead     string            `json:"published_head,omitempty"`
+	ResultID          string            `json:"result_id,omitempty"`
+	FailureKind       string            `json:"failure_kind,omitempty"`
+	PrerequisiteIDs   []string          `json:"prerequisite_result_ids,omitempty"`
+	Decision          *DecisionRequest  `json:"decision,omitempty"`
+	AppliedDecisionID string            `json:"applied_decision_id,omitempty"`
 }
 
 type CheckEvidence struct {
@@ -344,11 +360,30 @@ type CheckEvidence struct {
 // AdvanceMinimalExecution validates one committed step result and computes the
 // next center-owned step. It never treats a worker's success as task completion.
 func AdvanceMinimalExecution(run *WorkflowRunRecord, exec *ExecutionRecord, result StepGateResult, requiredChecks []string) (string, error) {
+	if run == nil || exec == nil {
+		return "", errors.New("minimal-v1 workflow binding is incomplete")
+	}
+	nextRun, nextExecution := *run, *exec
+	nextExecution.RepairPrerequisiteIDs = append([]string(nil), exec.RepairPrerequisiteIDs...)
+	next, err := advanceMinimalExecution(&nextRun, &nextExecution, result, requiredChecks)
+	if err == nil || next == "blocked" {
+		*run, *exec = nextRun, nextExecution
+	}
+	return next, err
+}
+
+func advanceMinimalExecution(run *WorkflowRunRecord, exec *ExecutionRecord, result StepGateResult, requiredChecks []string) (string, error) {
 	if run == nil || exec == nil || run.WorkflowVersion != MinimalWorkflowVersion || run.Definition.ID != MinimalWorkflowVersion || run.Definition.Version != MinimalWorkflowVersion {
 		return "", errors.New("minimal-v1 workflow binding is incomplete")
 	}
 	if result.StepID == "" || result.StepID != exec.CurrentStep {
 		return "", errors.New("step result does not match the active step")
+	}
+	if exec.Status != "active" {
+		return "", errors.New("execution is not active")
+	}
+	if result.StepID != "publish_pr" && (result.PRURL != "" || result.PublishedHead != "") {
+		return "", errors.New("publication evidence is only allowed in publish_pr")
 	}
 	if !exec.Workspace.Dirty && result.Workspace.Dirty {
 		return "", errors.New("step result reports uncommitted workspace changes")
@@ -377,6 +412,9 @@ func AdvanceMinimalExecution(run *WorkflowRunRecord, exec *ExecutionRecord, resu
 		exec.Workspace = result.Workspace
 		return "implement", nil
 	case "implement":
+		if result.FailureKind != "" {
+			return "", errors.New("implement returned a failure receipt")
+		}
 		if !result.Succeeded {
 			return "", errors.New("implement step did not succeed")
 		}
@@ -449,6 +487,9 @@ func AdvanceMinimalExecution(run *WorkflowRunRecord, exec *ExecutionRecord, resu
 		if !run.Definition.ReviewRequired {
 			return "", errors.New("review was disabled in the pinned workflow definition")
 		}
+		if !revisionPattern.MatchString(exec.CandidateRevision) || exec.VerifiedRevision != exec.CandidateRevision || result.Revision != exec.CandidateRevision || result.Workspace.Dirty || result.Workspace.Head != exec.CandidateRevision {
+			return "", errors.New("review requires evidence for the verified clean candidate")
+		}
 		if result.ReviewVerdict == "changes_requested" {
 			return repairOrBlock(run, exec, result, "review requested changes")
 		}
@@ -467,6 +508,9 @@ func AdvanceMinimalExecution(run *WorkflowRunRecord, exec *ExecutionRecord, resu
 		exec.ReviewedRevision = result.Revision
 		return "publish_pr", nil
 	case "publish_pr":
+		if !revisionPattern.MatchString(exec.CandidateRevision) {
+			return "", errors.New("publish_pr requires a valid candidate revision")
+		}
 		if !result.Succeeded {
 			return "", errors.New("publish_pr step did not succeed")
 		}

@@ -81,6 +81,8 @@ func (s *Store) Publish(v *Runtime) error {
 		return errors.New("runtime projection is required")
 	}
 	value := *v
+	value.UpdatedAt = now()
+	value.HeartbeatAt = value.UpdatedAt
 	if s.Domain != nil {
 		writer, ok := s.Domain.(interface {
 			SaveRuntime(context.Context, Runtime) (Runtime, error)
@@ -95,10 +97,14 @@ func (s *Store) Publish(v *Runtime) error {
 		}
 		value = persisted
 	}
-	value.UpdatedAt = now()
-	value.HeartbeatAt = value.UpdatedAt
 	*v = value
 	b, e := json.MarshalIndent(value, "", "  ")
+	// Even a failed file export must retain a detached committed snapshot.
+	// Heartbeat runs concurrently with scheduler mutations.
+	var snapshot Runtime
+	if e == nil {
+		e = json.Unmarshal(b, &snapshot)
+	}
 	if e == nil {
 		e = AtomicWrite(s.Path, append(b, '\n'))
 	}
@@ -109,16 +115,15 @@ func (s *Store) Publish(v *Runtime) error {
 		if s.Domain != nil {
 			value.ProjectionError = s.projectionFailure.Error()
 			*v = value
-			s.last = value
+			snapshot.ProjectionError = value.ProjectionError
+			s.last = snapshot
 			s.ready = true
 			return nil
 		}
 		s.failure = fmt.Errorf("critical runtime persistence: %w", e)
 		return s.failure
 	}
-	if e = json.Unmarshal(b, &s.last); e != nil {
-		return e
-	}
+	s.last = snapshot
 	s.projectionFailure = nil
 	s.ready = true
 	return nil
@@ -143,7 +148,8 @@ func (s *Store) Heartbeat() error {
 		}
 		databaseErr := s.Domain.Transact(context.Background(), func(tx DomainTx) error { return tx.PutProjection(s.Project, v.Revision, b) })
 		if databaseErr != nil {
-			s.projectionFailure = fmt.Errorf("database projection heartbeat failed: %w", databaseErr)
+			s.failure = fmt.Errorf("database projection heartbeat failed: %w", databaseErr)
+			return s.failure
 		}
 		if err := AtomicWrite(s.Path, append(b, '\n')); err != nil {
 			s.projectionFailure = fmt.Errorf("runtime projection is stale: %w", err)
@@ -152,9 +158,7 @@ func (s *Store) Heartbeat() error {
 		if err := json.Unmarshal(b, &s.last); err != nil {
 			return err
 		}
-		if databaseErr == nil {
-			s.projectionFailure = nil
-		}
+		s.projectionFailure = nil
 		return nil
 	}
 	return s.write(s.last)
@@ -177,4 +181,29 @@ func LoadRuntime(path string) (*Runtime, error) {
 		return nil, fmt.Errorf("unsupported runtime schema %d", v.SchemaVersion)
 	}
 	return &v, nil
+}
+
+// LoadDatabaseRuntime reads the committed service read model, even if exporting
+// runtime.json failed. It never creates a database or trusts a file projection.
+func LoadDatabaseRuntime(c Config) (*Runtime, error) {
+	db, err := OpenSQLiteReader(filepath.Join(c.RunDir, "steerline.db"))
+	if err != nil {
+		return nil, err
+	}
+	defer db.Close()
+	payload, _, err := db.LoadProjection(context.Background(), c.Identity())
+	if err != nil {
+		return nil, err
+	}
+	if len(payload) == 0 {
+		return nil, errors.New("database runtime projection is missing")
+	}
+	var state Runtime
+	if err = decode(payload, &state); err != nil {
+		return nil, err
+	}
+	if state.SchemaVersion != 5 || state.Repository.Identity != c.Identity() {
+		return nil, errors.New("database runtime schema or repository identity mismatch")
+	}
+	return &state, nil
 }

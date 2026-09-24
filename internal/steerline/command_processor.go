@@ -59,7 +59,7 @@ func (s *Service) processPendingCommands(ctx context.Context) error {
 				if answer.AnsweredAt.IsZero() {
 					answer.AnsweredAt = now()
 				}
-				if err = WriteAnswer(run, answer); err != nil {
+				if err = validateDecisionAnswer(&run.Decision.Request, &answer); err != nil {
 					result, _ := json.Marshal(map[string]string{"error": err.Error()})
 					if e := service.SetStatus(ctx, command, "rejected", result); e != nil {
 						return e

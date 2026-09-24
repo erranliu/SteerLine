@@ -165,15 +165,13 @@ func TestOrcaDecisionResumesRun(t *testing.T) {
 		t.Fatalf("decision run must not bind a PR: %v", *run.PR.URL)
 	}
 
-	// Answering pauses nothing else: the answer file is the only write.
-	if e := WriteAnswer(run, DecisionAnswer{OptionID: "a", Note: "keep compat", AnsweredBy: "tester"}); e != nil {
-		t.Fatal(e)
-	}
+	_, _, e = (CommandService{Store: s.domainStore, Project: s.Config.identity}).AnswerDecision(ctx, run.Decision.ID, run.Decision.Version, "orca-answer", "tester", mustJSON(DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, OptionID: "a", Note: "keep compat", AnsweredBy: "tester"}))
+	require(t, e)
 	if run.Decision.Status != "pending" {
 		t.Fatalf("answer must not mutate run state: %s", run.Decision.Status)
 	}
-	require(t, s.applyDecisions(ctx))
-	if run.Decision.Status != "applied" {
+	require(t, s.processCommandsAndDecisions(ctx))
+	if run.Decision.Status != "reply_accepted" {
 		t.Fatalf("decision not applied: %+v", run.Decision)
 	}
 	if s.worker == nil {
@@ -187,7 +185,7 @@ func TestOrcaDecisionResumesRun(t *testing.T) {
 	}
 	act, e := os.ReadFile(filepath.Join(f.c.RunDir, "runs", run.RunID, "activity.jsonl"))
 	require(t, e)
-	for _, want := range []string{"decision", "answered", "applied", "pr submitted"} {
+	for _, want := range []string{"decision", "answered", "reply_accepted", "pr submitted"} {
 		if !strings.Contains(string(act), want) {
 			t.Fatalf("activity journal missing %q: %s", want, act)
 		}
