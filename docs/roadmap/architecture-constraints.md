@@ -32,10 +32,14 @@ Task、WorkflowRun、Execution、StepAttempt、Decision 和外部平台身份分
 
 共同要求：[原生任务共同约束](../spec/native-task-constraints.md)。独立执行规格：[任务模型](../spec/task-core.spec.md)、[固定 DAG](../spec/task-dag.spec.md)、[原生接入](../spec/beads-exit.spec.md)、[关系视图](../spec/dag-view.spec.md)；各有同名配套 Plan，每任务一个独立实现 PR。现有 Beads 代码只作为重构输入，不形成需要长期维护的生产兼容路径。
 
+## 未发布版本的兼容策略
+
+SteerLine 目前是未发布版本。默认不要求兼容先前开发版本的数据、数据库结构、配置或 SteerLine 自身协议；只有具体 Spec 明确列为交付要求时才保留兼容。上线前不为旧 runtime、旧数据库或 Beads 历史建设迁移和回退流程。检测到不支持的旧状态时阻止有副作用操作，不能通过静默重建掩盖可能仍在运行的外部执行。Orca 等外部平台只启用已实测的版本与能力。
+
 ## 证据与恢复
 
 外部动作的意图、回执和不确定性可恢复；超时不能证明没有副作用，不能盲目重派。消息内容先持久化，再推进游标或确认接收。平台能力以具体版本/目标的原生证据为准。
 
-上线前不迁移旧 runtime、旧数据库或 Beads 历史；不支持的状态须阻止有副作用操作，不能通过静默重建掩盖可能仍在运行的外部执行。新格式内的重启、故障对账和数据完整性仍需验证。共享部署与多进程演进继续保持事务或等价并发控制。具体边界见[执行架构共同约束](../spec/execution-architecture.spec.md)。
+当前格式内的重启、故障对账和数据完整性仍需验证。共享部署与多进程演进继续保持事务或等价并发控制。具体边界见[执行架构共同约束](../spec/execution-architecture.spec.md)。
 
 落地规格：[双后端契约](../spec/pr-04a-execution-backends.spec.md)、[会话事件](../spec/pr-04b-conversation-events.spec.md)、[执行模型](../spec/02-execution-model-and-adapter.md)。
