@@ -114,7 +114,7 @@ SteerLine  项目 A | 服务已连接 | 手动 | 派发正常 | 最近更新 1s
 | U-A3 | start 提交后连按按键、超时、刷新和重开 UI，都不会重复提交新执行 |
 | U-A4 | 多项目快速切换和乱序响应不串日志、不串回执、不向错项目发动作 |
 | U-A5 | 分别展示 waiting_decision、waiting_pr_merge、unknown、failed/blocked 和 completed |
-| U-A6 | pause 不停当前 worker，stop 有明确后果；服务窗口保持打开时，q 退出控制台不停止服务 |
+| U-A6 | pause 不停当前 worker，stop 有明确后果；服务窗口保持打开时，q 退出控制台不停止服务；关窗后 UI 不显示假在线，并给出固定重启入口 |
 | U-A7 | 大小终端、Unicode 标题与长错误下，详情和所有动作可通过键盘到达 |
 | U-A8 | watch 管道/JSON/raw/显式流式参数保持兼容；旧 launcher 别名进入新控制台 |
 | U-A9 | 离线日志可看，候选缓存不被显示为实时 ready，答案保存与续跑区分 |

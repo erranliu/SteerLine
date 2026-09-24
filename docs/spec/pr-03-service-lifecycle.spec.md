@@ -1,6 +1,6 @@
 # PR 3 Spec：服务窗口生命周期与连接
 
-状态：2026-09-24 调整 Windows 产品方案；本分支的服务窗口路径已在当前 Windows 宿主通过本 Spec 验收，待 PR 审核。Linux 已交叉编译，原生会话生命周期尚未实测。依赖：PR 2。对应 [Plan](pr-03-service-lifecycle.plan.md)。
+状态：PR #14 已合并；Windows 可见服务窗口路径已在当前宿主通过本 Spec 验收。Linux 已交叉编译，原生会话生命周期尚未实测。依赖：PR 2。对应 [Plan](pr-03-service-lifecycle.plan.md)。
 
 ## 目标与生命周期边界
 

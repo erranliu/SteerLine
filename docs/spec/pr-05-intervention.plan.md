@@ -17,6 +17,7 @@
 
 - 决策协议单测覆盖 free-text 组合、精确 decision 身份、同义重复、冲突及旧路径。用两个真实客户端进程争写答案，验证文件层 first-wins。
 - 扩展 fake Orca 测试：两轮决策、incarnation 改变、离线答案后启动、resuming 故障。断言 terminal send 次数，不能只验证最终 View 中出现“成功”。
+- Windows 离线答案场景使用真实服务窗口入口：回答客户端只保存答案，不代启服务；由用户重新打开窗口后核验接受与应用状态。
 - 用同一参数化后端契约验证 H-A13～H-A15：平台接受无证明、turn.started 无证明、错误 decision/attempt/答案摘要、迟到应用事件、无去重能力时响应丢失、同 Operation 恢复。断言无重复外部调用、问题仍保留、槽未错误释放。local unsupported 与 Orca 支持范围分别使用真实能力报告。
 - 扩展 retry/manual recovery fixtures，覆盖在线服务保持 running、其他 PR 继续跟踪、另一 unknown 继续保留槽、dirty/advanced/foreign claim/unsupported host 拒绝。
 - 接回结果测试在 UI 读取后替换原文件，确认服务处理冻结字节；再覆盖 digest 错误、超限、错误 PR 目标、重复 PR 和缺失 workspace 证据。

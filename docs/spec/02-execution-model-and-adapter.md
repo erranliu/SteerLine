@@ -123,7 +123,7 @@ ExecutionRef 保存 backend/protocol/agent、固定 target/连接 ID、worktree 
 
 `local_process` 与 Orca 后端族都作为长期正式适配维护；`orca_terminal_v2` 保留现有协议，新增 `orca_supervised` 由 Spec 03 完成。原 `host=local|orca` 配置继续可读；新增远程目标必须显式选择受监管模式，不能改变现有 Orca 配置默认行为。backend 与 agent/target 分开，预检不能让未使用的本机 Codex 成为 Orca 的无条件依赖。能力使用 verified/unsupported/not_tested 及版本/目标/证据，不允许隐式 fallback。
 
-沿用 4A 参数化契约套件，业务状态机不依赖具体平台类型；沿用 4B 的 session/turn/item/phase、来源 cursor、正文引用和缺口语义。轮次结束不驱动 Task 完成，后端接受 reply 不证明 Decision.applied。当前本机停服策略与未来远端只分离监督策略显式区分，不藏在 Close/析构中。
+沿用 4A 参数化契约套件，业务状态机不依赖具体平台类型；沿用 4B 的 session/turn/item/phase、来源 cursor、正文引用和缺口语义。轮次结束不驱动 Task 完成，后端接受 reply 不证明 Decision.applied。Windows 中心服务按 [PR 3](pr-03-service-lifecycle.spec.md) 由独立可见服务窗口承载：关闭 viewer 不停服，关窗使中心服务退出并清理本机 worker；Linux detached 路径按平台契约运行。当前本机停服策略与远端仅分离监督的策略显式区分，不藏在 Close/析构中；关窗或中心重启不证明远端 worker 已停止。
 
 当前受监管远程目标不提供生产取消操作。状态模型和 StopExecution 接口保留给本机适配器及未来经验证的平台版本；远程命令入口应明确返回不支持并展示人工处理原因，不能把服务停机或断线当作远端停止。
 
