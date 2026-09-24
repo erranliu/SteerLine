@@ -260,49 +260,142 @@ func TestStartupIDAndOutputPathValidation(t *testing.T) {
 	}
 }
 
+type lifecycleParentReport struct {
+	Status          string           `json:"status"`
+	Error           string           `json:"error,omitempty"`
+	TTY             bool             `json:"tty"`
+	ParentPID       int              `json:"parent_pid"`
+	ParentInJob     bool             `json:"parent_in_job"`
+	ParentJobFlags  uint32           `json:"parent_job_limit_flags"`
+	ParentIdentity  *ProcessIdentity `json:"parent_identity,omitempty"`
+	ConsoleWindow   uint64           `json:"console_window,omitempty"`
+	ServiceIdentity *ProcessIdentity `json:"service_identity,omitempty"`
+	WorkerIdentity  *ProcessIdentity `json:"worker_identity,omitempty"`
+	InstanceID      string           `json:"instance_id,omitempty"`
+	StartupID       string           `json:"startup_id,omitempty"`
+}
+
 func TestServiceLifecycleParentHelper(t *testing.T) {
 	if os.Getenv("STEERLINE_LIFECYCLE_PARENT") != "1" {
 		return
+	}
+	reportPath := os.Getenv("STEERLINE_LIFECYCLE_REPORT")
+	stdinInfo, stdinErr := os.Stdin.Stat()
+	tty := stdinErr == nil && stdinInfo.Mode()&os.ModeCharDevice != 0
+	parentIdentity, identityErr := currentProcessIdentity()
+	parentInJob, parentJobFlags, jobErr := currentJobDiagnostics()
+	report := lifecycleParentReport{TTY: tty, ParentPID: os.Getpid(), ParentInJob: parentInJob, ParentJobFlags: parentJobFlags, ParentIdentity: parentIdentity, ConsoleWindow: uint64(currentConsoleWindowForTests())}
+	writeReport := func() error {
+		if reportPath == "" {
+			return nil
+		}
+		b, err := json.MarshalIndent(report, "", "  ")
+		if err != nil {
+			return err
+		}
+		return AtomicWrite(reportPath, append(b, '\n'))
+	}
+	if os.Getenv("STEERLINE_LIFECYCLE_REQUIRE_TTY") == "1" && !tty {
+		report.Status, report.Error = "not-tty", "parent process stdin is not a character device"
+		if err := writeReport(); err != nil {
+			t.Fatal(err)
+		}
+		t.Fatal(report.Error)
+	}
+	if os.Getenv("STEERLINE_LIFECYCLE_REQUIRE_TTY") == "1" && report.ConsoleWindow == 0 {
+		report.Status, report.Error = "no-console-window", "parent process has no visible console window"
+		if err := writeReport(); err != nil {
+			t.Fatal(err)
+		}
+		t.Fatal(report.Error)
+	}
+	if identityErr != nil || jobErr != nil {
+		report.Status = "parent-probe-failed"
+		report.Error = fmt.Sprint(errors.Join(identityErr, jobErr))
+		_ = writeReport()
+		t.Fatal(report.Error)
 	}
 	configPath := os.Getenv("STEERLINE_LIFECYCLE_CONFIG")
 	executable := os.Getenv("STEERLINE_LIFECYCLE_EXE")
 	c, err := LoadConfig(configPath)
 	if err != nil {
+		report.Status, report.Error = "config-failed", err.Error()
+		_ = writeReport()
 		t.Fatal(err)
 	}
 	start, err := StartService(context.Background(), configPath, StartServiceOptions{Executable: executable, WaitTimeout: 20 * time.Second})
 	if err != nil || start.Status != "connected" {
+		report.Status = "start-failed"
+		if err != nil {
+			report.Error = err.Error()
+		} else {
+			report.Error = start.Error
+		}
+		_ = writeReport()
 		t.Fatalf("StartService result=%+v err=%v", start, err)
 	}
 	rt := start.Connection.Snapshot.Runtime
 	if rt.Control.DispatchMode != "manual" {
 		t.Fatalf("new service dispatch mode=%q", rt.Control.DispatchMode)
 	}
-	if db := readFake(os.Getenv("STEERLINE_LIFECYCLE_DB")); len(db.Claims) != 0 || len(db.Starts) != 0 {
+	dbPath := os.Getenv("STEERLINE_LIFECYCLE_DB")
+	if dbPath == "" && len(c.BD.Args) != 0 {
+		dbPath = c.BD.Args[len(c.BD.Args)-1]
+	}
+	if db := readFake(dbPath); len(db.Claims) != 0 || len(db.Starts) != 0 {
 		t.Fatalf("manual service claimed work before explicit request: %+v", db)
 	}
 	request, err := SubmitControl(c, "start_task", map[string]string{"task_id": "t-1"}, "lifecycle-test")
 	if err != nil {
+		report.Status, report.Error = "control-failed", err.Error()
+		_ = writeReport()
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	receipt, err := WaitControlReceipt(ctx, c, request.RequestID, 50*time.Millisecond)
 	if err != nil || receipt.Status != "applied" {
+		report.Status = "control-failed"
+		if err != nil {
+			report.Error = err.Error()
+		} else {
+			report.Error = "start_task was not applied"
+		}
+		_ = writeReport()
 		t.Fatalf("start_task receipt=%+v err=%v", receipt, err)
 	}
 	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
 		current, e := LoadRuntime(filepath.Join(c.RunDir, c.RuntimeFile))
 		if e == nil && current != nil && len(current.Runs) == 1 && current.Runs[0].ExecutionStatus == "running" && current.Runs[0].Process != nil {
-			if err := os.WriteFile(os.Getenv("STEERLINE_LIFECYCLE_READY"), []byte("ready"), 0600); err != nil {
-				t.Fatal(err)
+			report.Status = "worker-running"
+			report.ServiceIdentity = current.Service.ProcessIdentity
+			report.WorkerIdentity = current.Runs[0].Process
+			report.InstanceID = current.Service.InstanceID
+			if current.Service.StartupID != nil {
+				report.StartupID = *current.Service.StartupID
 			}
-			// The outer test forcefully terminates this starter with a live worker.
-			select {}
+			if e = writeReport(); e != nil {
+				t.Fatal(e)
+			}
+			if os.Getenv("STEERLINE_LIFECYCLE_HOLD") == "1" {
+				for {
+					time.Sleep(time.Second)
+				}
+			}
+			if readyPath := os.Getenv("STEERLINE_LIFECYCLE_READY"); readyPath != "" {
+				if err := os.WriteFile(readyPath, []byte("ready"), 0600); err != nil {
+					t.Fatal(err)
+				}
+				// The outer test forcefully terminates this starter with a live worker.
+				select {}
+			}
+			return
 		}
 		time.Sleep(25 * time.Millisecond)
 	}
+	report.Status, report.Error = "worker-timeout", "explicit worker did not become running"
+	_ = writeReport()
 	t.Fatal("explicit worker did not become running")
 }
 

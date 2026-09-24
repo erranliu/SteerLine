@@ -2,7 +2,7 @@
 
 状态：本分支已实现，待协调审核。依赖：PR 2。对应 [Plan](pr-03-service-lifecycle.plan.md)。
 
-当前 Windows 宿主中的测试进程处于不允许脱离的 Job Object 环境。实现会检测并明确拒绝这种启动；因此本分支尚未取得“启动父进程退出后服务与 worker 仍存活”的成功实测证据。该验收门槛保留给协调审核/合并前在允许 breakaway 的 Windows 会话复测。
+当前 Windows 宿主中的测试进程处于不允许脱离的 Job Object 环境。真实临时 TTY 测试确认 stdin/console 窗口有效，但其 Task Scheduler 父进程所在 Job flags 为 0，服务 `CreateProcess` 返回 `Access is denied`；失败记录写入后父进程和 console 关闭，未发布 runtime。实现会明确拒绝这种启动。本分支尚未取得“服务 ready 后关闭父进程/TTY，服务与 worker 仍存活”的成功实测证据；该验收门槛保留给协调审核/合并前在允许 breakaway 的 Windows 会话复测。
 
 ## 目标
 

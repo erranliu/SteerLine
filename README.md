@@ -248,7 +248,7 @@ go vet ./...
 
 测试使用原生替身命令和本地 HTTP Gitea 替身，不调用真实模型，不领取业务任务，不创建或合并业务 PR。覆盖空闲心跳、跨进程并发 JSON 读取、同仓库锁、领取冲突、单次执行、等待合并释放执行槽、合并结项、依赖释放、查询失败、错误关联、缺失/无效结果、重启防重、关闭重试、Beads 不可用、持久化失败及进程树退出。另有构建并启动真正 CLI 可执行文件、第二实例拒绝和 stop 正常退出的集成测试；临时仓库路径包含空格和中文。
 
-PR 3 新增了真实 OS 进程身份、启动锁、pending startup ID、preflight 诊断和旧 runtime 分类测试。当前 Windows 宿主中，启动父进程位于嵌套 Job Object；其直接 Job 允许 breakaway，但外层 Job 不允许。启动器检测到新进程仍在 Job 内后会拒绝托管。本宿主尚未验证允许 breakaway 的环境下，后台服务/worker 在父进程退出后的存活，以及关闭真实 TTY 窗口后的行为。
+PR 3 新增了真实 OS 进程身份、启动锁、pending startup ID、preflight 诊断和旧 runtime 分类测试。当前 Windows 宿主中，启动父进程位于嵌套 Job Object；其直接 Job 允许 breakaway，但外层 Job 不允许。另一次临时交互式 console 验收确认了真实 TTY 输入和可见窗口，但该父进程的 Job flags 为 0，服务创建被 Windows 拒绝；失败记录写入后父进程和窗口关闭，没有发布 runtime。启动器检测不安全的 Job 归属后会拒绝托管。本宿主尚未验证允许 breakaway 的环境下，后台服务/worker 在父进程退出后的存活和成功 TTY 关闭路径。
 
 worktree 测试使用真实的临时 Git 仓库与本地 bare 远端，验证远端主线更新后新任务使用新提交、原 checkout 的分支/HEAD/文件保持不变、目录与分支冲突不覆盖、共享 Beads 身份错误或技能缺失时不启动、准备前后崩溃不重建不重跑，以及结构化结果不能改写工作环境事实。
 

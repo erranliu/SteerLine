@@ -25,10 +25,10 @@
 ### 本分支实际结果
 
 - 新增连接组合、进程匹配/PID 复用/确定不存在分类的原生测试；这些定向测试通过。
-- `go test ./... -timeout 10m` 通过（Windows，327.702 秒）；Linux amd64 的 `internal/steerline` 测试二进制和 CLI 均交叉编译通过。
-- 原生 Windows 上，`CreateProcess` 使用 `CREATE_BREAKAWAY_FROM_JOB | DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP` 成功；父测试进程的直接 Job flags 为 `0x2800`，但隔离子进程仍通过 `IsProcessInJob` 报告属于一个 flags 为 `0x2000` 的 Job。启动器据此终止该启动尝试、返回明确错误并写入失败 startup 记录。隔离子进程复测确认不是 `IsProcessInJob` 的误判。
-- Explorer PID 40708 也处于 Job Object。经 WMI 创建独立 console 的验收探针被本地执行策略拒绝，命令没有执行；本次没有可用的独立真实 TTY 窗口，故未运行 TTY 关闭验收。
-- 依赖成功脱离的真实后台 ready/worker 存活、关闭父 TTY 后身份不变、后台 stop 的进程退出、同配置竞争启动及不同 run_dir 锁竞争集成用例按 Job 能力检查跳过，尚无成功脱离结论。需要在允许该子进程链离开所有祖先 Job 的 Windows 会话补跑，尤其 L-A1～L-A5 与 L-A7。
+- 合入协调审核修复及 opt-in TTY harness 后，`go test ./... -count=1 -timeout 10m` 通过（Windows，373.271 秒）；Linux amd64 的 `internal/steerline` 测试二进制和 CLI 均交叉编译通过。
+- 当前桌面进程直接 Job flags 为 `0x2800`，但带 breakaway 标志创建的隔离子进程仍属于 flags 为 `0x2000` 的祖先 Job。审核修复将服务进程挂起创建，在核验脱离前不执行服务代码；当前桌面路径的子进程仍被判为不安全并清理。
+- 通过随机命名、未来日期的一次性 `/IT` Task Scheduler 任务实际打开了可见 console；helper 确认 stdin 是字符设备且有可见 console HWND。该父进程处于 flags 为 `0` 的 Job，`CreateProcess` 对服务返回 `Access is denied`，失败 startup 记录写入；未发布 runtime。关闭该真实 console 后，helper 父进程和 console 窗口均退出，临时任务删除。这验证了真实 TTY 下的失败关闭路径，不证明服务/worker 在成功脱离后的存活。
+- `STEERLINE_REQUIRE_DETACHED_TESTS=1` 严格模式按预期失败：同配置存活、启动竞争、preflight/握手集成均因当前祖先 Job 拒绝 breakaway 而报告失败，不会静默 skip。成功后台 ready/worker 存活、TTY 关闭后服务身份不变、后台 stop 后 worker 退出仍需在允许脱离所有祖先 Job 的 Windows 会话补测，尤其 L-A1～L-A5 与 L-A7。
 - 原生测试覆盖了启动锁互斥、pending startup_id 重观测、preflight 失败记录与日志、PID 复用/不存在及连接分类；完整套件内前台 CLI 的实例锁和停服回归通过。
 - L-A6 的新鲜度、ready、协议不兼容、配置摘要变化、仓库身份不匹配、PID 已复用和确定不存在分类已由原生定向测试覆盖；访问拒绝仍未实测。
 - Linux 未在主机实测会话分离。
@@ -47,7 +47,7 @@ go test ./internal/steerline -run 'TestDetachedService|TestStartServiceSerialize
 Remove-Item Env:STEERLINE_REQUIRE_DETACHED_TESTS
 ```
 
-该开关使不能脱离宿主的情况成为失败，而非 skip。本协调宿主运行严格模式仍失败，报告 `parent_job_limit_flags=0x2800` 且子进程仍在 Job 内；这不是成功后台存活的证据。上述命令也不等于真实 TTY 窗口关闭验收：还需要用同类临时 Git/fake 工具夹具，在关闭启动窗口后记录服务与 worker 身份不变，再显式停服并确认回执、两个进程退出和两把锁释放。保留最终 commit、命令输出、startup/runtime 身份及时间；不操作生产服务。
+该开关使不能脱离宿主的情况成为失败，而非 skip。本协调宿主运行严格模式失败，报告 `parent_job_limit_flags=0x2800` 且子进程仍在 Job 内；临时真实 TTY 验收还证明另一父 Job flags 为 `0` 时 CreateProcess 直接返回拒绝。均不是成功后台存活的证据。合并前还需要用同类临时 Git/fake 工具夹具，在允许脱离所有祖先 Job 的 Windows 会话中关闭启动 TTY，记录服务与 worker 身份不变，再显式停服并确认回执、两个进程退出和两把锁释放。保留最终 commit、命令输出、startup/runtime 身份及时间；不操作生产服务。
 
 未获得这些 Windows 成功路径与真实 TTY 证据前，PR 保持 draft，不合并，也不启动 PR 4。
 
