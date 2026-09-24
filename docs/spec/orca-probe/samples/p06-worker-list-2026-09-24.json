@@ -1,0 +1,87 @@
+{
+  "captured_at": "2026-09-24T00:35:58Z",
+  "evidence_class": "captured_cli_response",
+  "exit_code": 0,
+  "operation": "worker-list",
+  "response": {
+    "_meta": {
+      "runtimeId": "\u003cID-001\u003e"
+    },
+    "id": "\u003cID-002\u003e",
+    "ok": true,
+    "result": {
+      "counts": {},
+      "page": {
+        "hasMore": false,
+        "limit": 100,
+        "nextCursor": null,
+        "total": 1
+      },
+      "scope": {
+        "run": "[TEXT REDACTED]",
+        "source": "flag"
+      },
+      "workers": [
+        {
+          "agentTerminalHandle": null,
+          "dispatchId": "\u003cID-003\u003e",
+          "dispatchStatus": "[TEXT REDACTED]",
+          "projection": {
+            "attention": {
+              "categories": [
+                "[TEXT REDACTED]"
+              ],
+              "requiresAction": false
+            },
+            "dispatchId": "\u003cID-003\u003e",
+            "evidence": {
+              "durable": true,
+              "lastObservedAt": 1790210158322,
+              "liveStatus": "[TEXT REDACTED]"
+            },
+            "host": {
+              "id": "\u003cID-004\u003e",
+              "kind": "remote"
+            },
+            "id": "\u003cID-003\u003e",
+            "liveness": {
+              "source": "execution_host",
+              "verdict": "[TEXT REDACTED]"
+            },
+            "nextAction": {
+              "argv": [],
+              "kind": "none"
+            },
+            "outcome": "succeeded",
+            "parent": null,
+            "provider": null,
+            "resource": {
+              "reason": "[TEXT REDACTED]",
+              "state": "absent"
+            },
+            "role": "[TEXT REDACTED]",
+            "runId": "\u003cID-005\u003e",
+            "stage": {
+              "activity": "[TEXT REDACTED]",
+              "detail": "[TEXT REDACTED]",
+              "dispatch": "\u003cID-006\u003e",
+              "worker": "[TEXT REDACTED]"
+            },
+            "taskId": "\u003cID-007\u003e",
+            "workspace": {
+              "id": "\u003cID-008\u003e",
+              "kind": "folder_or_worktree"
+            }
+          },
+          "resource": null,
+          "runId": "\u003cID-005\u003e",
+          "taskId": "\u003cID-007\u003e",
+          "terminalState": null,
+          "workerState": "[TEXT REDACTED]"
+        }
+      ]
+    }
+  },
+  "schema_version": "steerline.orca-probe-sample.v1",
+  "scope": "home Run"
+}

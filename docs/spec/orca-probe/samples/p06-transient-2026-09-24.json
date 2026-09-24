@@ -1,0 +1,48 @@
+{
+  "schema_version": "steerline.orca-probe.observation.v1",
+  "captured_at": "2026-09-24T00:36:17Z",
+  "operation": "temporary_remote_orca_transport_outage",
+  "target": {
+    "home_run": "<run-p06-1>",
+    "task": "<task-p06-1>",
+    "dispatch": "<dispatch-p06-1>",
+    "worktree": "<remote-worktree-p06-1>",
+    "head": "<commit-p06-1>"
+  },
+  "before_fault": {
+    "remote_runtime": "<runtime-remote-1>",
+    "worker_count_in_run": 1,
+    "liveness": "live",
+    "question_message": "<question-p06-1>",
+    "delivery": "<delivery-p06-1>",
+    "acknowledged": false
+  },
+  "fault": {
+    "mechanism": "temporary remote Windows firewall block on the Orca inbound TCP port",
+    "watchdog": "independent hidden PowerShell process removes the rule after 30 seconds",
+    "during_remote_status_error": "remote_runtime_unavailable",
+    "during_fleet_liveness": "unverifiable",
+    "during_fleet_reason": "host_unavailable",
+    "during_inbox_delivery": "<delivery-p06-1>",
+    "during_inbox_question": "<question-p06-1>",
+    "during_inbox_replayed": true
+  },
+  "after_restore": {
+    "remote_connection": "connected",
+    "remote_runtime": "<runtime-remote-1>",
+    "same_dispatch_liveness": "live",
+    "same_dispatch_exact_worker": true,
+    "worker_count_in_run": 1,
+    "firewall_rule_count": 0,
+    "answer": "continue",
+    "question_status": "answered",
+    "worker_done_outcome": "succeeded",
+    "worker_done_task": "<task-p06-1>",
+    "worker_done_dispatch": "<dispatch-p06-1>",
+    "agent_terminal_release": "closed_agent_terminal",
+    "transcript_archive": "captured",
+    "worktree_head_unchanged": true,
+    "reclaimable_worker_count": 0
+  },
+  "conclusion": "The transient transport outage degraded the original Dispatch to unverifiable without retry. Automatic restoration reattached the same exact worker, preserved the original question Delivery, and completed one Task and Dispatch without a second worker or worktree in the Run. P06 passed on this version pair."
+}

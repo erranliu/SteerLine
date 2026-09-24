@@ -1,0 +1,72 @@
+{
+  "captured_at": "2026-09-24T00:35:49Z",
+  "evidence_class": "captured_cli_response",
+  "exit_code": 0,
+  "operation": "worktree-show",
+  "response": {
+    "_meta": {
+      "runtimeId": "\u003cID-001\u003e"
+    },
+    "id": "\u003cID-002\u003e",
+    "ok": true,
+    "result": {
+      "worktree": {
+        "baseRef": "[TEXT REDACTED]",
+        "branch": "\u003cID-003\u003e",
+        "childWorktreeIds": [],
+        "comment": "[TEXT REDACTED]",
+        "createdAt": 1790209699414,
+        "createdWithAgent": "[TEXT REDACTED]",
+        "creatorProvenance": {
+          "kind": "host"
+        },
+        "displayName": "[TEXT REDACTED]",
+        "displayNameMode": "[TEXT REDACTED]",
+        "git": {
+          "branch": "\u003cID-003\u003e",
+          "head": "\u003cID-004\u003e",
+          "isBare": false,
+          "isMainWorktree": "\u003cID-005\u003e",
+          "path": "\u003cPATH-006\u003e"
+        },
+        "head": "\u003cID-004\u003e",
+        "hostId": "\u003cID-007\u003e",
+        "id": "\u003cID-008\u003e",
+        "identity": {
+          "executionHostId": "\u003cID-007\u003e",
+          "instanceId": "\u003cID-009\u003e",
+          "key": "[TEXT REDACTED]"
+        },
+        "instanceId": "\u003cID-009\u003e",
+        "isArchived": false,
+        "isBare": false,
+        "isMainWorktree": "\u003cID-005\u003e",
+        "isPinned": false,
+        "isUnread": false,
+        "lastActivityAt": 1790209699414,
+        "lineage": null,
+        "linkedAzureDevOpsPR": null,
+        "linkedBitbucketPR": null,
+        "linkedGitLabIssue": null,
+        "linkedGitLabMR": null,
+        "linkedGiteaPR": null,
+        "linkedIssue": null,
+        "linkedLinearIssue": null,
+        "linkedLinearIssueOrganizationUrlKey": null,
+        "linkedLinearIssueWorkspaceId": null,
+        "linkedPR": null,
+        "linkedTaskSourceContext": null,
+        "linkedWorkItem": null,
+        "parentWorktreeId": null,
+        "path": "\u003cPATH-006\u003e",
+        "projectHostSetupId": "\u003cID-010\u003e",
+        "projectId": "\u003cID-011\u003e",
+        "repoId": "\u003cID-010\u003e",
+        "sortOrder": 1790209699414,
+        "workspaceStatus": "[TEXT REDACTED]"
+      }
+    }
+  },
+  "schema_version": "steerline.orca-probe-sample.v1",
+  "scope": "selected environment and worktree"
+}

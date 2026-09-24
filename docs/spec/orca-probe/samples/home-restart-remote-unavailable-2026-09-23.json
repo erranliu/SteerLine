@@ -1,0 +1,21 @@
+{
+  "schema_version": "steerline.orca-probe.observation.v1",
+  "captured_at": "2026-09-23T10:15:30Z",
+  "operation": "home_orca_runtime_restart",
+  "before": {
+    "home_runtime": "<runtime-home-1>",
+    "remote_endpoint_subnet": "<private-subnet-A>",
+    "original_dispatch_liveness": "unverifiable"
+  },
+  "after": {
+    "home_runtime": "<runtime-home-2>",
+    "same_run_task_dispatch_record": true,
+    "original_dispatch_liveness": "unverifiable",
+    "liveness_reason": "host_unavailable",
+    "remote_ui_status": "Offline",
+    "remote_status_error": "remote_runtime_unavailable",
+    "home_lan_subnet": "<private-subnet-B>",
+    "saved_remote_endpoint_direct_connection": "timed_out"
+  },
+  "conclusion": "The home runtime preserved accounting records across restart, but execution-host recovery could not be verified because the saved remote endpoint was unreachable. P06 and full P07 remain untested."
+}

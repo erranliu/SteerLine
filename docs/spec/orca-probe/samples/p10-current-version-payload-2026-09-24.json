@@ -1,0 +1,27 @@
+{
+  "schema_version": "steerline.orca-probe.observation.v1",
+  "captured_at": "2026-09-24T01:20:16Z",
+  "operation": "current_version_cross_runtime_payload_lower_bound",
+  "versions": {
+    "home_orca": "1.4.209",
+    "remote_orca": "1.4.209"
+  },
+  "messages": [
+    {"blob_bytes": 16384, "unknown_field": "preserved-16k", "accepted": true, "remote_decoded_length_matched": true, "remote_unknown_field_matched": true},
+    {"blob_bytes": 24576, "unknown_field": "preserved-24k", "accepted": true, "remote_decoded_length_matched": true, "remote_unknown_field_matched": true},
+    {"blob_bytes": 30720, "unknown_field": "preserved-30k", "accepted": true, "remote_decoded_length_matched": true, "remote_unknown_field_matched": true}
+  ],
+  "larger_attempt": {
+    "blob_bytes": 33000,
+    "orca_invocation_started": false,
+    "failure_layer": "local Windows PowerShell process launch",
+    "orca_message_limit_inferred": false
+  },
+  "worker": {
+    "same_original_dispatch": true,
+    "reported_all_three_message_ids": true,
+    "outcome": "succeeded",
+    "terminal_released": true
+  },
+  "conclusion": "The tested same-version cross-runtime path preserved at least a 30 KiB blob and an unknown JSON field. The next larger attempt failed before Orca started, so no Orca upper bound was measured. Older-version and host-permission behavior remain untested."
+}

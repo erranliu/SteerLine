@@ -1,0 +1,37 @@
+{
+  "schema_version": "steerline.orca-probe.observation.v1",
+  "captured_at": "2026-09-24T01:07:10Z",
+  "operation": "home_orca_exit_at_dispatch_message_and_answer_checkpoints",
+  "after_ready_before_message": {
+    "home_runtime_changed": true,
+    "same_run_task_dispatch_records": true,
+    "execution_host_liveness": "live",
+    "worker_count_in_run": 1,
+    "status_and_question_arrived_on_original_dispatch": true
+  },
+  "after_answer_before_completion": {
+    "home_runtime_changed_again": true,
+    "same_delivery_replayed": true,
+    "reply_request_state": "completed",
+    "exact_retry_replayed": true,
+    "answer_message_id_unchanged": true,
+    "worker_done_original_dispatch": true,
+    "terminal_released": true
+  },
+  "during_worker_start": {
+    "home_runtime_exited_before_cli_response": true,
+    "cli_error": "runtime_unavailable",
+    "disposition": "outcome_unknown",
+    "request_id_available": true,
+    "request_show_state_after_restart": "pending",
+    "request_show_accepted_original_task_and_dispatch": true,
+    "exact_retry_error": "operation_unknown",
+    "exact_retry_named_original_dispatch": true,
+    "execution_host_verified_original_worker_live": true,
+    "worker_count_in_run": 1,
+    "question_and_worker_done_original_dispatch": true,
+    "terminal_released": true,
+    "request_show_state_after_settlement": "pending"
+  },
+  "conclusion": "The home Run and exact remote Dispatch were recovered after coordinator exits at these checkpoints. The in-flight worker-start request remained pending even after settlement, but its accepted Task/Dispatch IDs plus execution-host observation provided positive reconciliation; no blind second start was issued. P07 passed with explicit reconciliation on the tested version pair."
+}

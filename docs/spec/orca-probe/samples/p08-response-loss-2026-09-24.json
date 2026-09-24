@@ -1,0 +1,31 @@
+{
+  "schema_version": "steerline.orca-probe.observation.v1",
+  "captured_at": "2026-09-24T01:07:10Z",
+  "operation": "orchestration_mutation_response_loss_recovery",
+  "known_request_id": {
+    "reply_receipt_discarded_after_request_id_saved": true,
+    "request_show_state": "completed",
+    "request_show_original_answer_message": true,
+    "exact_retry_replayed": true,
+    "same_answer_message_id": true,
+    "mid_worker_start_transport_loss": {
+      "request_id_reported": true,
+      "request_show_state": "pending",
+      "accepted_task_and_dispatch_recorded": true,
+      "exact_retry_returned": "operation_unknown",
+      "original_dispatch_verified_live": true,
+      "request_remained_pending_after_worker_settlement": true
+    }
+  },
+  "missing_request_id": {
+    "remote_worker_start_cli_response_discarded_at_caller": true,
+    "outcome_initially": "unknown",
+    "read_only_run_worker_count": 1,
+    "read_only_run_task_count": 1,
+    "task_spec_matched_probe": true,
+    "dispatch_liveness": "live",
+    "blind_retry_issued": false,
+    "original_worker_settled_and_released": true
+  },
+  "conclusion": "A saved request ID recovered a completed reply or explicitly identified the original pending Dispatch. When the entire worker-start response was lost at the CLI caller boundary, read-only Run and Task enumeration positively identified one exact remote worker before further action. P08 passed for these mutation types; a pending request ID is not itself proof of completion."
+}

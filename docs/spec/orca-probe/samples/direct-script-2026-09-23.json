@@ -1,0 +1,75 @@
+{
+  "schema_version": "steerline.orca-probe-sample.v1",
+  "captured_at": "2026-09-23T09:03:17Z",
+  "evidence_class": "captured_cli_response_curated_sanitized",
+  "operation": "direct_script_no_agent",
+  "target": {
+    "environment": "<remote-env-1>",
+    "worktree": "<remote-worktree-1>",
+    "shell": "pwsh.exe"
+  },
+  "observations": [
+    {
+      "scenario": "immediate_exit_7",
+      "create": {
+        "terminal": {
+          "handle": "<direct-terminal-1>",
+          "hostPlatform": "win32"
+        }
+      },
+      "wait": {
+        "condition": "exit",
+        "satisfied": true,
+        "status": "exited",
+        "exitCode": 7,
+        "exitCause": {
+          "kind": "exited",
+          "exitCode": 7
+        }
+      },
+      "read_after_exit": {
+        "status": "exited",
+        "tail": [],
+        "nextCursor": "0"
+      }
+    },
+    {
+      "scenario": "delayed_exit_7",
+      "command": "Write-Output SPEC01_DIRECT_SCRIPT_DELAYED; Start-Sleep -Seconds 3; exit 7",
+      "create": {
+        "terminal": {
+          "handle": "<direct-terminal-2>",
+          "hostPlatform": "win32"
+        }
+      },
+      "read_while_running": {
+        "status": "running",
+        "tail": [
+          "SPEC01_DIRECT_SCRIPT_DELAYED"
+        ],
+        "nextCursor": "1"
+      },
+      "wait": {
+        "condition": "exit",
+        "satisfied": true,
+        "status": "exited",
+        "exitCode": 7,
+        "exitCause": {
+          "kind": "exited",
+          "exitCode": 7
+        }
+      },
+      "read_after_exit": {
+        "status": "exited",
+        "tail": [],
+        "nextCursor": "0"
+      },
+      "read_after_exit_from_cursor_zero": {
+        "status": "exited",
+        "tail": [],
+        "nextCursor": "0"
+      }
+    }
+  ],
+  "conclusion": "The tested direct terminal path exposed a process exit code but did not retain stdout after exit. Restart recovery and a durable structured script receipt remain unverified."
+}

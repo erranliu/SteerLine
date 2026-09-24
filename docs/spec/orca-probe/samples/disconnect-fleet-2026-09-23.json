@@ -1,0 +1,514 @@
+{
+  "captured_at": "2026-09-23T09:44:55Z",
+  "evidence_class": "captured_cli_response",
+  "exit_code": 0,
+  "operation": "worker-list",
+  "response": {
+    "_meta": {
+      "runtimeId": "\u003cID-001\u003e"
+    },
+    "id": "\u003cID-002\u003e",
+    "ok": true,
+    "result": {
+      "counts": {
+        "retained": 2
+      },
+      "page": {
+        "hasMore": false,
+        "limit": 100,
+        "nextCursor": null,
+        "total": 8
+      },
+      "partialHostErrors": [
+        {
+          "code": "host_unavailable",
+          "dispatchIds": [
+            "\u003cID-003\u003e",
+            "\u003cID-004\u003e",
+            "\u003cID-005\u003e",
+            "\u003cID-006\u003e",
+            "\u003cID-007\u003e",
+            "\u003cID-008\u003e",
+            "\u003cID-009\u003e",
+            "\u003cID-010\u003e"
+          ],
+          "environmentId": "\u003cID-011\u003e",
+          "name": "[TEXT REDACTED]"
+        }
+      ],
+      "scope": {
+        "run": "[TEXT REDACTED]",
+        "source": "flag"
+      },
+      "workers": [
+        {
+          "agentTerminalHandle": "\u003cID-012\u003e",
+          "dispatchId": "\u003cID-003\u003e",
+          "dispatchStatus": "[TEXT REDACTED]",
+          "projection": {
+            "attention": {
+              "categories": [
+                "[TEXT REDACTED]",
+                "[TEXT REDACTED]"
+              ],
+              "requiresAction": true
+            },
+            "dispatchId": "\u003cID-003\u003e",
+            "evidence": {
+              "durable": true,
+              "lastObservedAt": null,
+              "liveStatus": "[TEXT REDACTED]"
+            },
+            "host": {
+              "id": "\u003cID-011\u003e",
+              "kind": "remote"
+            },
+            "id": "\u003cID-003\u003e",
+            "liveness": {
+              "reason": "[TEXT REDACTED]",
+              "verdict": "[TEXT REDACTED]"
+            },
+            "nextAction": {
+              "argv": [
+                "[TEXT REDACTED]",
+                "[TEXT REDACTED]",
+                "[TEXT REDACTED]",
+                "[TEXT REDACTED]"
+              ],
+              "kind": "inspect"
+            },
+            "outcome": "in_progress",
+            "parent": null,
+            "provider": null,
+            "resource": {
+              "reason": "[TEXT REDACTED]",
+              "state": "absent"
+            },
+            "role": "[TEXT REDACTED]",
+            "runId": "\u003cID-013\u003e",
+            "stage": {
+              "activity": "[TEXT REDACTED]",
+              "detail": "[TEXT REDACTED]",
+              "dispatch": "\u003cID-014\u003e",
+              "worker": "[TEXT REDACTED]"
+            },
+            "taskId": "\u003cID-015\u003e",
+            "workspace": {
+              "id": "\u003cID-016\u003e",
+              "kind": "folder_or_worktree"
+            }
+          },
+          "resource": null,
+          "runId": "\u003cID-013\u003e",
+          "taskId": "\u003cID-015\u003e",
+          "terminalState": "[TEXT REDACTED]",
+          "workerState": "[TEXT REDACTED]"
+        },
+        {
+          "agentTerminalHandle": null,
+          "dispatchId": "\u003cID-004\u003e",
+          "dispatchStatus": "[TEXT REDACTED]",
+          "projection": {
+            "attention": {
+              "categories": [
+                "[TEXT REDACTED]"
+              ],
+              "requiresAction": false
+            },
+            "dispatchId": "\u003cID-004\u003e",
+            "evidence": {
+              "durable": true,
+              "lastObservedAt": null,
+              "liveStatus": "[TEXT REDACTED]"
+            },
+            "host": {
+              "id": "\u003cID-011\u003e",
+              "kind": "remote"
+            },
+            "id": "\u003cID-004\u003e",
+            "liveness": {
+              "source": "execution_host",
+              "verdict": "[TEXT REDACTED]"
+            },
+            "nextAction": {
+              "argv": [],
+              "kind": "none"
+            },
+            "outcome": "succeeded",
+            "parent": null,
+            "provider": null,
+            "resource": {
+              "reason": "[TEXT REDACTED]",
+              "state": "absent"
+            },
+            "role": "[TEXT REDACTED]",
+            "runId": "\u003cID-013\u003e",
+            "stage": {
+              "activity": "[TEXT REDACTED]",
+              "detail": "[TEXT REDACTED]",
+              "dispatch": "\u003cID-017\u003e",
+              "worker": "[TEXT REDACTED]"
+            },
+            "taskId": "\u003cID-018\u003e",
+            "workspace": {
+              "id": "\u003cID-016\u003e",
+              "kind": "folder_or_worktree"
+            }
+          },
+          "resource": null,
+          "runId": "\u003cID-013\u003e",
+          "taskId": "\u003cID-018\u003e",
+          "terminalState": null,
+          "workerState": "[TEXT REDACTED]"
+        },
+        {
+          "agentTerminalHandle": null,
+          "dispatchId": "\u003cID-005\u003e",
+          "dispatchStatus": "[TEXT REDACTED]",
+          "projection": {
+            "attention": {
+              "categories": [
+                "[TEXT REDACTED]"
+              ],
+              "requiresAction": true
+            },
+            "dispatchId": "\u003cID-005\u003e",
+            "evidence": {
+              "durable": true,
+              "lastObservedAt": null,
+              "liveStatus": "[TEXT REDACTED]"
+            },
+            "host": {
+              "id": "\u003cID-011\u003e",
+              "kind": "remote"
+            },
+            "id": "\u003cID-005\u003e",
+            "liveness": {
+              "source": "execution_host",
+              "verdict": "[TEXT REDACTED]"
+            },
+            "nextAction": {
+              "argv": [],
+              "kind": "none"
+            },
+            "outcome": "failed",
+            "parent": null,
+            "provider": null,
+            "resource": {
+              "reason": "[TEXT REDACTED]",
+              "state": "absent"
+            },
+            "role": "[TEXT REDACTED]",
+            "runId": "\u003cID-013\u003e",
+            "stage": {
+              "activity": "[TEXT REDACTED]",
+              "detail": "[TEXT REDACTED]",
+              "dispatch": "\u003cID-019\u003e",
+              "worker": "[TEXT REDACTED]"
+            },
+            "taskId": "\u003cID-020\u003e",
+            "workspace": {
+              "id": "\u003cID-016\u003e",
+              "kind": "folder_or_worktree"
+            }
+          },
+          "resource": null,
+          "runId": "\u003cID-013\u003e",
+          "taskId": "\u003cID-020\u003e",
+          "terminalState": null,
+          "workerState": "[TEXT REDACTED]"
+        },
+        {
+          "agentTerminalHandle": null,
+          "dispatchId": "\u003cID-006\u003e",
+          "dispatchStatus": "[TEXT REDACTED]",
+          "projection": {
+            "attention": {
+              "categories": [
+                "[TEXT REDACTED]"
+              ],
+              "requiresAction": false
+            },
+            "dispatchId": "\u003cID-006\u003e",
+            "evidence": {
+              "durable": true,
+              "lastObservedAt": null,
+              "liveStatus": "[TEXT REDACTED]"
+            },
+            "host": {
+              "id": "\u003cID-011\u003e",
+              "kind": "remote"
+            },
+            "id": "\u003cID-006\u003e",
+            "liveness": {
+              "source": "execution_host",
+              "verdict": "[TEXT REDACTED]"
+            },
+            "nextAction": {
+              "argv": [],
+              "kind": "none"
+            },
+            "outcome": "succeeded",
+            "parent": null,
+            "provider": null,
+            "resource": {
+              "reason": "[TEXT REDACTED]",
+              "state": "absent"
+            },
+            "role": "[TEXT REDACTED]",
+            "runId": "\u003cID-013\u003e",
+            "stage": {
+              "activity": "[TEXT REDACTED]",
+              "detail": "[TEXT REDACTED]",
+              "dispatch": "\u003cID-017\u003e",
+              "worker": "[TEXT REDACTED]"
+            },
+            "taskId": "\u003cID-021\u003e",
+            "workspace": {
+              "id": "\u003cID-016\u003e",
+              "kind": "folder_or_worktree"
+            }
+          },
+          "resource": null,
+          "runId": "\u003cID-013\u003e",
+          "taskId": "\u003cID-021\u003e",
+          "terminalState": null,
+          "workerState": "[TEXT REDACTED]"
+        },
+        {
+          "agentTerminalHandle": "\u003cID-022\u003e",
+          "dispatchId": "\u003cID-007\u003e",
+          "dispatchStatus": "[TEXT REDACTED]",
+          "projection": {
+            "attention": {
+              "categories": [
+                "[TEXT REDACTED]"
+              ],
+              "requiresAction": true
+            },
+            "dispatchId": "\u003cID-007\u003e",
+            "evidence": {
+              "durable": true,
+              "lastObservedAt": null,
+              "liveStatus": "[TEXT REDACTED]"
+            },
+            "host": {
+              "id": "\u003cID-011\u003e",
+              "kind": "remote"
+            },
+            "id": "\u003cID-007\u003e",
+            "liveness": {
+              "source": "worker_stop",
+              "verdict": "[TEXT REDACTED]"
+            },
+            "nextAction": {
+              "argv": [
+                "[TEXT REDACTED]",
+                "[TEXT REDACTED]",
+                "[TEXT REDACTED]",
+                "[TEXT REDACTED]"
+              ],
+              "kind": "inspect"
+            },
+            "outcome": "failed",
+            "parent": null,
+            "provider": null,
+            "resource": {
+              "reason": "[TEXT REDACTED]",
+              "state": "absent"
+            },
+            "role": "[TEXT REDACTED]",
+            "runId": "\u003cID-013\u003e",
+            "stage": {
+              "activity": "[TEXT REDACTED]",
+              "detail": "[TEXT REDACTED]",
+              "dispatch": "\u003cID-019\u003e",
+              "worker": "[TEXT REDACTED]"
+            },
+            "taskId": "\u003cID-023\u003e",
+            "workspace": {
+              "id": "\u003cID-016\u003e",
+              "kind": "folder_or_worktree"
+            }
+          },
+          "resource": null,
+          "runId": "\u003cID-013\u003e",
+          "taskId": "\u003cID-023\u003e",
+          "terminalState": "[TEXT REDACTED]",
+          "workerState": "[TEXT REDACTED]"
+        },
+        {
+          "agentTerminalHandle": null,
+          "dispatchId": "\u003cID-008\u003e",
+          "dispatchStatus": "[TEXT REDACTED]",
+          "projection": {
+            "attention": {
+              "categories": [
+                "[TEXT REDACTED]"
+              ],
+              "requiresAction": true
+            },
+            "dispatchId": "\u003cID-008\u003e",
+            "evidence": {
+              "durable": true,
+              "lastObservedAt": null,
+              "liveStatus": "[TEXT REDACTED]"
+            },
+            "host": {
+              "id": "\u003cID-011\u003e",
+              "kind": "remote"
+            },
+            "id": "\u003cID-008\u003e",
+            "liveness": {
+              "source": "execution_host",
+              "verdict": "[TEXT REDACTED]"
+            },
+            "nextAction": {
+              "argv": [],
+              "kind": "none"
+            },
+            "outcome": "failed",
+            "parent": null,
+            "provider": null,
+            "resource": {
+              "reason": "[TEXT REDACTED]",
+              "state": "absent"
+            },
+            "role": "[TEXT REDACTED]",
+            "runId": "\u003cID-013\u003e",
+            "stage": {
+              "activity": "[TEXT REDACTED]",
+              "detail": "[TEXT REDACTED]",
+              "dispatch": "\u003cID-019\u003e",
+              "worker": "[TEXT REDACTED]"
+            },
+            "taskId": "\u003cID-024\u003e",
+            "workspace": {
+              "id": "\u003cID-016\u003e",
+              "kind": "folder_or_worktree"
+            }
+          },
+          "resource": null,
+          "runId": "\u003cID-013\u003e",
+          "taskId": "\u003cID-024\u003e",
+          "terminalState": null,
+          "workerState": "[TEXT REDACTED]"
+        },
+        {
+          "agentTerminalHandle": null,
+          "dispatchId": "\u003cID-009\u003e",
+          "dispatchStatus": "[TEXT REDACTED]",
+          "projection": {
+            "attention": {
+              "categories": [
+                "[TEXT REDACTED]"
+              ],
+              "requiresAction": false
+            },
+            "dispatchId": "\u003cID-009\u003e",
+            "evidence": {
+              "durable": true,
+              "lastObservedAt": null,
+              "liveStatus": "[TEXT REDACTED]"
+            },
+            "host": {
+              "id": "\u003cID-011\u003e",
+              "kind": "remote"
+            },
+            "id": "\u003cID-009\u003e",
+            "liveness": {
+              "source": "execution_host",
+              "verdict": "[TEXT REDACTED]"
+            },
+            "nextAction": {
+              "argv": [],
+              "kind": "none"
+            },
+            "outcome": "succeeded",
+            "parent": null,
+            "provider": null,
+            "resource": {
+              "reason": "[TEXT REDACTED]",
+              "state": "absent"
+            },
+            "role": "[TEXT REDACTED]",
+            "runId": "\u003cID-013\u003e",
+            "stage": {
+              "activity": "[TEXT REDACTED]",
+              "detail": "[TEXT REDACTED]",
+              "dispatch": "\u003cID-017\u003e",
+              "worker": "[TEXT REDACTED]"
+            },
+            "taskId": "\u003cID-025\u003e",
+            "workspace": {
+              "id": "\u003cID-016\u003e",
+              "kind": "folder_or_worktree"
+            }
+          },
+          "resource": null,
+          "runId": "\u003cID-013\u003e",
+          "taskId": "\u003cID-025\u003e",
+          "terminalState": null,
+          "workerState": "[TEXT REDACTED]"
+        },
+        {
+          "agentTerminalHandle": null,
+          "dispatchId": "\u003cID-010\u003e",
+          "dispatchStatus": "[TEXT REDACTED]",
+          "projection": {
+            "attention": {
+              "categories": [
+                "[TEXT REDACTED]",
+                "[TEXT REDACTED]"
+              ],
+              "requiresAction": true
+            },
+            "dispatchId": "\u003cID-010\u003e",
+            "evidence": {
+              "durable": true,
+              "lastObservedAt": null,
+              "liveStatus": "[TEXT REDACTED]"
+            },
+            "host": {
+              "id": "\u003cID-011\u003e",
+              "kind": "remote"
+            },
+            "id": "\u003cID-010\u003e",
+            "liveness": {
+              "reason": "[TEXT REDACTED]",
+              "verdict": "[TEXT REDACTED]"
+            },
+            "nextAction": {
+              "argv": [],
+              "kind": "none"
+            },
+            "outcome": "failed",
+            "parent": null,
+            "provider": null,
+            "resource": {
+              "reason": "[TEXT REDACTED]",
+              "state": "absent"
+            },
+            "role": "[TEXT REDACTED]",
+            "runId": "\u003cID-013\u003e",
+            "stage": {
+              "activity": "[TEXT REDACTED]",
+              "detail": "[TEXT REDACTED]",
+              "dispatch": "\u003cID-019\u003e",
+              "worker": "[TEXT REDACTED]"
+            },
+            "taskId": "\u003cID-025\u003e",
+            "workspace": null
+          },
+          "resource": null,
+          "runId": "\u003cID-013\u003e",
+          "taskId": "\u003cID-025\u003e",
+          "terminalState": null,
+          "workerState": "[TEXT REDACTED]"
+        }
+      ]
+    }
+  },
+  "schema_version": "steerline.orca-probe-sample.v1",
+  "scope": "home Run"
+}

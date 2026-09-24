@@ -1,0 +1,317 @@
+{
+  "schema_version": "steerline.orca-remote-capability-report.v1",
+  "captured_at": "2026-09-24T02:30:56Z",
+  "evidence_class": "real_remote",
+  "target": {
+    "center": {
+      "orca_cli": "1.4.209",
+      "orca_runtime": "1.4.209",
+      "os": "Windows"
+    },
+    "remote": {
+      "environment_alias": "remote-1",
+      "orca_runtime": "1.4.209",
+      "os": "Windows 10.0.26200",
+      "agent": "Codex CLI 0.156.1",
+      "repository_alias": "test-repo-1",
+      "base_commit": "0028407ffbbcf9ad4139ff63720311a6e3fd0a1f"
+    },
+    "run_alias": "run-1"
+  },
+  "boundaries": {
+    "test_repository_only": true,
+    "production_beads_claimed": false,
+    "production_pr_created": false,
+    "shared_disk_assumed": false,
+    "older_orca_compatibility_deferred_by_user": true,
+    "production_remote_cancel_available": false
+  },
+  "evidence_files": [
+    "samples/remote-status-2026-09-23.json",
+    "samples/remote-worktree-2026-09-23.json",
+    "samples/remote-inbox-2026-09-23.json",
+    "samples/worker-completed-2026-09-23.json",
+    "samples/request-completed-2026-09-23.json",
+    "samples/output-archive-2026-09-23.json",
+    "samples/direct-script-2026-09-23.json",
+    "samples/fifo-size-2026-09-23.json",
+    "samples/disconnect-reconnect-2026-09-23.json",
+    "samples/disconnect-worker-show-2026-09-23.json",
+    "samples/disconnect-fleet-2026-09-23.json",
+    "samples/reconnected-status-2026-09-23.json",
+    "samples/inbox-after-reconnect-2026-09-23.json",
+    "samples/manual-disconnect-start-blocked-2026-09-23.json",
+    "samples/home-restart-remote-unavailable-2026-09-23.json",
+    "samples/restart-recovery-settled-2026-09-24.json",
+    "samples/restart-worker-settled-2026-09-24.json",
+    "samples/restart-inbox-history-2026-09-24.json",
+    "samples/p06-transient-2026-09-24.json",
+    "samples/p06-worker-settled-2026-09-24.json",
+    "samples/p06-inbox-history-2026-09-24.json",
+    "samples/p06-worktree-2026-09-24.json",
+    "samples/p06-worker-list-2026-09-24.json",
+    "samples/p01-background-2026-09-24.json",
+    "samples/p03-output-2026-09-24.json",
+    "samples/p03-archive-2026-09-24.json",
+    "samples/p03-worker-settled-2026-09-24.json",
+    "samples/p07-center-restarts-2026-09-24.json",
+    "samples/p07-mid-dispatch-request-2026-09-24.json",
+    "samples/p07-mid-dispatch-worker-2026-09-24.json",
+    "samples/p07-mid-dispatch-inbox-2026-09-24.json",
+    "samples/p08-response-loss-2026-09-24.json",
+    "samples/p08-missing-id-worker-2026-09-24.json",
+    "samples/p08-known-id-request-2026-09-24.json",
+    "samples/p11-file-receipt-2026-09-24.json",
+    "samples/p10-current-version-payload-2026-09-24.json",
+    "samples/p10-worker-settled-2026-09-24.json",
+    "samples/p10-worker-read-2026-09-24.json",
+    "samples/p13-verify-gate-unit-2026-09-24.json",
+    "samples/p12-committed-step-reuse-2026-09-24.json",
+    "samples/p12-wrong-worktree-worker-2026-09-24.json",
+    "samples/p12-assigned-worktree-2026-09-24.json",
+    "samples/p12-offtarget-worktree-2026-09-24.json",
+    "samples/p12-commit-step-worker-2026-09-24.json",
+    "samples/p12-verify-step-worker-2026-09-24.json",
+    "samples/p12-committed-worktree-2026-09-24.json",
+    "samples/p12-run-inbox-2026-09-24.json",
+    "samples/remote-runtime-restart-2026-09-24.json",
+    "samples/remote-runtime-restarted-status-2026-09-24.json",
+    "samples/remote-runtime-restarted-worker-2026-09-24.json",
+    "samples/remote-runtime-restarted-inbox-2026-09-24.json",
+    "samples/disconnected-stop-2026-09-24.json",
+    "samples/disconnected-stop-request-2026-09-24.json",
+    "samples/disconnected-stop-worker-2026-09-24.json",
+    "samples/disconnected-stop-fleet-2026-09-24.json",
+    "samples/disconnected-stop-inbox-2026-09-24.json",
+    "samples/disconnected-stop-final-worker-2026-09-24.json",
+    "samples/disconnected-stop-final-fleet-2026-09-24.json",
+    "samples/disconnected-stop-final-request-2026-09-24.json"
+  ],
+  "observed": [
+    {
+      "id": "coordinator_identity",
+      "fact": "An ordinary background shell received no_active_sender_terminal; a dedicated local Orca terminal plus --from created and retained the Run."
+    },
+    {
+      "id": "remote_start",
+      "fact": "worker-start --on returned a ready Dispatch on the specified remote repo and worktree. A prior attempt failed at agent_readiness while Codex CLI was unavailable, with explicit effects and residual resource receipt. That failed attempt left an orphaned remote terminal outside proven Dispatch ownership."
+    },
+    {
+      "id": "base_commit",
+      "fact": "The remote worktree and worker both reported the same fixed base commit, branch and clean worktree."
+    },
+    {
+      "id": "same_worktree",
+      "fact": "Subsequent steps used the exact existing worktree after predecessor settlement and release, with new Task and Dispatch IDs and no setup rerun."
+    },
+    {
+      "id": "question_resume",
+      "fact": "A remote ask timed out twice, resumed the same message ID, received one reply, and the final structured result carried that question ID in applied_decision_ids."
+    },
+    {
+      "id": "payload_fidelity",
+      "fact": "Remote PowerShell 7 calls preserved custom JSON in status and worker_done. Windows PowerShell 5.1 damaged the JSON argument; mixing --payload with structured payload flags was rejected."
+    },
+    {
+      "id": "successful_and_failed_completion",
+      "fact": "Accepted worker_done messages settled one Task succeeded and another failed; both carried exact Task/Dispatch IDs and a result ID."
+    },
+    {
+      "id": "script_receipt",
+      "fact": "The agent executed deterministic commands with actual exit codes 0 and 7, returned script version, per-check passed flags, unchanged commit and outcome=failed."
+    },
+    {
+      "id": "resource_settlement",
+      "fact": "worker-release closed only the settled agent terminal and archived its transcript; worker-read remained available after release. A separate target worker-stop returned ptyKilled=true."
+    },
+    {
+      "id": "request_receipt",
+      "fact": "request-show returned completed and the original worker-start receipt from a separate CLI invocation. Replaying an answered reply with its original request ID returned replayed=true and the original answer message ID."
+    },
+    {
+      "id": "duplicate_answer",
+      "fact": "Repeating the same answer returned duplicate=true and the original answer message; a different answer returned answer_conflict without changing it."
+    },
+    {
+      "id": "fifo_replay_and_payload_size",
+      "fact": "A remote status carried exactly 8192 A characters plus an unknown field. Two reads before ack returned the same Delivery and message ID; the second returned replayed=true. After ack, the pending question was delivered."
+    },
+    {
+      "id": "manual_disconnect_reconnect_control",
+      "fact": "A live remote worker's question Delivery stayed unacked while the paired environment was explicitly disconnected through Orca UI. The installed Orca version retires the old runtime binding on manual disconnect. The home fleet verdict became unverifiable/host_unavailable. After UI reconnect, the environment reported connected with the same runtime ID and the original Delivery replayed, but worker-show still returned 'Runtime environment was disconnected or replaced' for the original Dispatch. This does not exercise a transient transport outage. No substitute worker, reply or cleanup action was issued."
+    },
+    {
+      "id": "new_start_blocked_after_manual_disconnect",
+      "fact": "A separate home Run attempted a fresh remote worktree and worker after UI reconnect. worker-start failed before recording a Task with runtime_error 'Runtime environment is manually disconnected', while remote status still reported connected. request-show found no receipt and the new Run's worker-list was empty. No transient transport fault was injected."
+    },
+    {
+      "id": "home_runtime_restart_remote_unavailable",
+      "fact": "After an authorized home Orca restart, the home runtime ID changed and the original Run/Task/Dispatch record was still enumerable with liveness unverifiable/host_unavailable. The saved remote endpoint was on a different private subnet than the home's current LAN; the UI reported Offline and a direct connection to the saved endpoint timed out. The remote worker's actual state could not be verified."
+    },
+    {
+      "id": "previous_dispatch_recovered_after_remote_power_on",
+      "fact": "When the remote machine powered on, the saved environment connected again. The original Dispatch was verified live by the execution host, its same-ID question Delivery replayed, reply continue was accepted, and the worker sent succeeded with the original Task/Dispatch IDs and applied question ID. worker-release closed its exact terminal and archived the transcript."
+    },
+    {
+      "id": "transient_transport_outage_recovery",
+      "fact": "A fresh one-worker remote Run waited on a question while a remote firewall blocked the Orca inbound TCP port for 30 seconds with automatic rule removal. During the outage, remote status was unavailable and fleet liveness was unverifiable/host_unavailable; the same unacknowledged Delivery replayed. After restoration, the same remote runtime and exact Dispatch were live, the Run still had one worker, and the firewall rule count was zero. Reply continue led to succeeded worker_done; exact release archived output and left the worktree at the same HEAD."
+    },
+    {
+      "id": "background_coordinator_without_remote_steerline_process",
+      "fact": "A durable home Orca coordinator Run launched a supervised worker on the named remote server and received the actual Task, Dispatch and worktree identities. After worker settlement, the remote Windows process inventory contained zero SteerLine-named processes."
+    },
+    {
+      "id": "incremental_output_source_change",
+      "fact": "An archived transcript yielded five consecutive 10-message pages with 50 unique message IDs; its bounded-history omission and contentComplete=false were explicit. A fresh worker emitted 100 distinct numbered lines and yielded advancing live terminal cursors. After accepted completion and release, the old terminal cursor returned source_changed; a fresh read used transcript source and retained all 100 numbered outputs while reporting transcript_payload clipping."
+    },
+    {
+      "id": "center_restart_and_mid_dispatch_recovery",
+      "fact": "The home Orca runtime was restarted after dispatch readiness and after an accepted answer; the same Run/Dispatch, question Delivery, reply request receipt, exact remote worker and final settlement survived. In a separate fault, the home runtime exited while worker-start was in progress; CLI reported outcome_unknown with a request ID. After restart request-show was pending with accepted Task/Dispatch IDs, exact retry returned operation_unknown pointing to that Dispatch, and execution-host worker-show verified it live. The original worker then settled and released; the Run never had a second worker."
+    },
+    {
+      "id": "mutation_response_loss_known_and_missing_id",
+      "fact": "When a reply receipt was discarded after retaining its request ID, request-show returned completed and exact retry replayed the same answer ID. When the entire remote worker-start CLI response was discarded, read-only Run worker/task lists found one matching live Dispatch, which settled without a blind retry. The true in-flight worker-start interruption left a pending request receipt even after settlement, requiring Dispatch-based reconciliation."
+    },
+    {
+      "id": "agentless_file_backed_script_receipt",
+      "fact": "An Orca pwsh terminal ran a deterministic script with encoded input, wrote a versioned JSON receipt to a remote temp file and exited 7. terminal wait returned exitCode 7, while terminal read after exit had no stdout. After a home Orca restart, a new no-agent terminal read and base64-framed the file; the caller decoded its nonce, commit, stdout, exit code and passed=false. The temp file and both terminals were removed."
+    },
+    {
+      "id": "same_version_payload_30k_lower_bound",
+      "fact": "Three home-to-remote structured follow-ups carried 16, 24 and 30 KiB blobs with unknownField values. The worker decoded and reported all three exact lengths and fields. A 33 KiB attempt failed at local PowerShell process launch before Orca handled it, so no Orca upper bound or oversized rejection was established."
+    },
+    {
+      "id": "local_verify_result_guard",
+      "evidence_class": "local_unit_test",
+      "fact": "A pure Go verifier under internal/steerline/remoteprotocol accepted a complete verify result and rejected missing required check receipts, nonzero check exit, candidate-commit mismatch, wrong worker_done identity, changed execution-host HEAD, missing evidence and missing required fields. Targeted and full Go test suites passed. The guard is not wired into the current scheduler."
+    },
+    {
+      "id": "committed_code_step_reuse_and_offtarget_attempt",
+      "fact": "An initial probe worker wrongly created another remote worktree and committed there while Orca had assigned a different worktree; Orca accepted its worker_done succeeded, so that business result was rejected as off-target. A later supervised Dispatch cherry-picked the artifact into the assigned worktree, settled and released; a distinct supervised Dispatch on that same worktree verified the new HEAD, artifact, branch and clean status. Both later terminals were released and code remained."
+    },
+    {
+      "id": "remote_runtime_restart_exact_dispatch_recovery",
+      "fact": "The remote Orca main process was stopped while one worker waited on an unacknowledged question; an independent delayed helper reopened Orca with a new runtime ID. Home worker-show verified the same exact Dispatch live from the execution host, the original Delivery replayed, the worker reported an ask-disconnect escalation, and the coordinator answered the original question. The worker resumed that question, sent succeeded worker_done with original IDs, and was released without replacement."
+    },
+    {
+      "id": "disconnected_stop_unknown_cannot_recover_via_dispatch",
+      "fact": "A stop call during a 35-second remote transport block completed with state stop_unknown and processAction unknown. After automatic reconnection, execution-host worker-show verified the exact original worker still live. request-show and exact retry replayed stop_unknown; a new worker-stop and coordinator follow-up to that Dispatch both returned dispatch_inactive. After explicit user authorization, the exact matching test terminal was manually closed, exit was verified, and worker-abandon fenced the failed Dispatch while retaining the worktree."
+    },
+    {
+      "id": "direct_script_gap",
+      "fact": "A no-agent pwsh terminal returned exitCode=7 and showed stdout while running, but terminal read returned no stdout after exit, including with cursor 0."
+    }
+  ],
+  "capabilities": [
+    {
+      "id": "background_coordinator",
+      "status": "verified",
+      "verified": "An explicit --from home coordinator Run started a named remote worker with actual identities, the Run survived a home Orca restart, and the remote process inventory had zero SteerLine-named processes after settlement."
+    },
+    {
+      "id": "remote_dispatch",
+      "status": "not_tested",
+      "verified": "Exact --on/repo/new-top-level ready and agent_readiness failed receipts were observed. A home-runtime exit mid worker-start yielded outcome_unknown with one accepted Task/Dispatch; exact retry pointed to the original live worker without duplicate start.",
+      "remaining": "The first agent_readiness failure still has an orphaned terminal whose cleanup ownership was not proven by worker-release."
+    },
+    {
+      "id": "staged_same_workspace",
+      "status": "verified",
+      "verified": "Distinct sequential Task/Dispatch IDs reused the exact assigned worktree after settlement and release; an actual committed artifact, branch and HEAD survived into a read-only verification step.",
+      "remaining": "One earlier worker created an off-target worktree despite its assigned binding and reported succeeded. Spec 03 must reject such results by comparing reported and observed workspace identities."
+    },
+    {
+      "id": "workspace_preparation",
+      "status": "verified",
+      "verified": "Remote worker and worktree reported the fixed base commit, branch and clean status; prompt was read on the execution host."
+    },
+    {
+      "id": "state_observation",
+      "status": "not_tested",
+      "verified": "Live, exited and startup identity_changed/unverifiable observations were seen. A transient transport outage degraded the original Dispatch to unverifiable/host_unavailable without inventing an exit. After a remote Orca runtime restart changed its runtime ID, the same exact worker was again verified live.",
+      "remaining": "agentWait object and old-host absent-field semantics."
+    },
+    {
+      "id": "transient_reconnect_recovery",
+      "status": "verified",
+      "verified": "A 30-second remote Orca transport block produced host_unavailable without a replacement attempt. The original question Delivery replayed, then the same exact Dispatch became live, settled succeeded, and released; the Run contained one worker and the worktree HEAD was unchanged."
+    },
+    {
+      "id": "incremental_output",
+      "status": "verified",
+      "verified": "Live terminal cursors advanced; an archived transcript paged through 50 unique message IDs and explicitly marked omitted older history. After release, the old terminal cursor returned source_changed; a fresh transcript read retained all 100 distinct numbered outputs and reported payload clipping."
+    },
+    {
+      "id": "structured_messages",
+      "status": "not_tested",
+      "verified": "Cross-runtime status, question and worker_done retained Dispatch IDs and JSON payloads; one unacked remote Delivery replayed with the same IDs, then ack advanced FIFO. The same question Delivery replayed through a transient transport outage and a separate remote-runtime restart. Unknown fields and payloads through 30 KiB were preserved on the tested paths.",
+      "remaining": "Replay after center crash, deliberate ordering fault and the upper payload-size boundary."
+    },
+    {
+      "id": "human_decisions",
+      "status": "verified",
+      "verified": "ask timeout and same-ID resume, reply acceptance, final applied_decision_ids, same-answer duplicate and different-answer conflict were observed. A saved reply request ID recovered the original answer after its receipt was discarded."
+    },
+    {
+      "id": "completion_report",
+      "status": "verified",
+      "verified": "Accepted succeeded and failed worker_done payloads preserved custom result JSON and settled the matching Dispatch."
+    },
+    {
+      "id": "mutation_recovery",
+      "status": "verified",
+      "verified": "A completed reply request replayed its original answer. A home-runtime exit mid worker-start yielded a known pending request and exact original Dispatch for manual reconciliation. A response discarded before its request ID reached the caller was reconciled by read-only Run/Task/Dispatch enumeration without blind retry."
+    },
+    {
+      "id": "stop_and_release",
+      "status": "unsupported",
+      "verified": "Normal exact target stop and settled release were observed; transcript archived and worktree retained. A disconnected stop produced an exact unknown receipt and the execution host later verified the worker live.",
+      "remaining": "Orca refused both another stop and a follow-up once the worker entered stop_unknown, despite exact live observation. Safe platform cleanup is unavailable on this tested path; disconnected release and unrelated-terminal isolation remain untested."
+    },
+    {
+      "id": "step_script_receipt",
+      "status": "verified",
+      "verified": "Agent-wrapped deterministic checks returned actual exits 0 and 7, script version, result ID, commit and failed outcome."
+    },
+    {
+      "id": "direct_script_execution",
+      "status": "verified",
+      "verified": "terminal create/wait returned exitCode=7. A script-written versioned JSON receipt preserved input nonce, commit, stdout and failed result; a new agentless terminal decoded it after a home Orca restart.",
+      "remaining": "The original terminal still loses stdout after exit. A production adapter must use the file-backed receipt and separate readback terminal; remote-runtime restart has not been injected."
+    },
+    {
+      "id": "compatibility_and_limits",
+      "status": "not_tested",
+      "verified": "Center and remote both ran Orca 1.4.209; unknown fields and 8 KiB remote-to-home plus 30 KiB home-to-remote payloads survived cross-runtime delivery.",
+      "remaining": "Older-version compatibility was explicitly deferred by the user. The true Orca payload-size limit, oversized rejection and host permission prompt handling remain untested; conclusions apply only to the tested 1.4.209 pair."
+    }
+  ],
+  "acceptance": {
+    "P01": "verified",
+    "P02": "verified",
+    "P03": "verified",
+    "P04": "verified",
+    "P05": "verified",
+    "P06": "verified",
+    "P07": "verified",
+    "P08": "verified",
+    "P09": "verified",
+    "P10": "not_tested",
+    "P11": "verified",
+    "P12": "verified",
+    "P13": "not_tested"
+  },
+  "limitations": [
+    "P13's nonzero exit path was verified on the remote host, and missing-receipt/commit-mismatch rules passed local unit tests; accepted Orca worker_done to center workflow gating remains untested.",
+    "A temporary transport fault during worker-stop left one test Dispatch in stop_unknown while its exact remote worker remained live. The original request replayed the unknown result; new stop and follow-up calls were refused. After explicit user authorization, the exact test terminal was manually closed, execution-host exit verified and the Dispatch abandoned as failed; no production-safe automated cleanup route was found.",
+    "PowerShell 7.6.6 was installed on the remote host to pass JSON arguments directly to Orca CLI; PowerShell 5.1 did not preserve the tested JSON arguments.",
+    "One stopped test Dispatch remains as a retained accounting row with exited liveness and no materialized terminal resource.",
+    "The first agent_readiness failure left an orphaned remote terminal and its test worktree. worker-release reported no_owned_resource; it was not force-closed because the failed Dispatch no longer proves ownership.",
+    "The manual UI disconnect/reconnect temporarily left a test terminal connected on the remote host while the home Dispatch stayed unverifiable. After a home runtime restart and remote power-on, the original Dispatch recovered, its question was answered, and the settled terminal was released. This was separate from the later P06 transient transport fault.",
+    "Before the home restart, a new remote worker-start was refused as manually disconnected despite connected remote status. Its separate Run has no workers.",
+    "Home Orca restart and mid-dispatch interruption probes recovered their original Run/Task/Dispatch identities. An in-flight worker-start request remained pending after the worker settled; request-show plus exact Dispatch inspection were required for reconciliation.",
+    "P10 same-version delivery is verified through a 30 KiB blob. The user explicitly deferred older-version compatibility; no mixed-version support is claimed. No host permission prompt was observed. A larger local CLI invocation failed before reaching Orca, so no Orca upper bound was measured.",
+    "P13's verify-step rules now have a pure Go validator with passing local tests, but the current center scheduler still uses the legacy PR handoff schema. End-to-end gating on accepted Orca worker_done events remains untested until Spec 03 integrates the validator.",
+    "The user chose a production remote path with cancellation explicitly unavailable. This report alone does not enable that path; Spec 03 must enforce the disabled cancel entry and pass its remaining gates before any production rollout."
+  ]
+}

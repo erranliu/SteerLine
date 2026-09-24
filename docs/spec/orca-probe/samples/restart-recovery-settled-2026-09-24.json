@@ -1,0 +1,21 @@
+{
+  "schema_version": "steerline.orca-probe.observation.v1",
+  "captured_at": "2026-09-24T00:36:17Z",
+  "operation": "previous_dispatch_recovered_after_home_restart_and_remote_power_cycle",
+  "home_runtime_changed": true,
+  "same_run_task_dispatch_records": true,
+  "remote_unavailable_until_power_on": true,
+  "after_remote_return": {
+    "original_dispatch_liveness": "live",
+    "source": "execution_host",
+    "exact_worker": true,
+    "original_question_delivery_replayed": true,
+    "answer": "continue",
+    "worker_done_outcome": "succeeded",
+    "worker_done_bound_to_original_dispatch": true,
+    "applied_decision_id_matches_original_question": true,
+    "agent_terminal_release": "closed_agent_terminal",
+    "transcript_archive": "captured"
+  },
+  "conclusion": "The original Dispatch resumed and settled after both outages. This demonstrates recovery for one pending-question timing, but does not exercise every center-process exit phase required by P07."
+}

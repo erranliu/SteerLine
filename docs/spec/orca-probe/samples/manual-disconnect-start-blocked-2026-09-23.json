@@ -1,0 +1,26 @@
+{
+  "schema_version": "steerline.orca-probe.observation.v1",
+  "captured_at": "2026-09-23T09:54:04Z",
+  "operation": "new_remote_worker_start_after_manual_ui_reconnect",
+  "home_run": "<run-fresh-1>",
+  "remote_status": {
+    "connectionState": "connected",
+    "runtimeId": "<runtime-remote-1>"
+  },
+  "worker_start": {
+    "ok": false,
+    "error": {
+      "code": "runtime_error",
+      "message": "Runtime environment is manually disconnected."
+    }
+  },
+  "request_show": {
+    "state": "absent",
+    "interpretation": "No receipt under this caller identity; absence alone is not proof of non-application."
+  },
+  "new_run_worker_list": {
+    "workers": [],
+    "total": 0
+  },
+  "conclusion": "No new Task or Dispatch was observed. The current home runtime refused a fresh remote start before a transient transport outage could be tested."
+}

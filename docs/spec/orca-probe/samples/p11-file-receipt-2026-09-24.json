@@ -1,0 +1,37 @@
+{
+  "schema_version": "steerline.orca-probe.observation.v1",
+  "captured_at": "2026-09-24T01:14:24Z",
+  "operation": "agentless_direct_script_with_durable_file_receipt",
+  "input": {
+    "transport": "PowerShell EncodedCommand passed through Orca terminal create",
+    "nonce": "spec01-p11-20260924",
+    "expected_exit": 7
+  },
+  "direct_terminal": {
+    "shell": "pwsh.exe",
+    "wait_condition": "exit",
+    "wait_satisfied": true,
+    "exit_code": 7,
+    "read_after_exit_tail_count": 0
+  },
+  "durable_receipt": {
+    "location": "remote user temp file, removed after verification",
+    "schema_version": 1,
+    "script_version": "p11-v1",
+    "nonce_matched_input": true,
+    "actual_commit_length": 40,
+    "stdout": "P11_DIRECT_SIGNAL",
+    "exit_code": 7,
+    "passed": false
+  },
+  "recovery": {
+    "home_orca_runtime_restarted": true,
+    "remote_reconnected": true,
+    "new_agentless_terminal_read_file": true,
+    "encoded_receipt_marker_count": 1,
+    "structured_json_decoded_and_checked": true,
+    "temp_file_removed": true,
+    "both_test_terminals_closed": true
+  },
+  "conclusion": "The direct terminal alone lost stdout after exit, but a script-written JSON file supplied a durable structured receipt. A fresh agentless terminal retrieved and decoded that receipt after a home Orca restart. P11's test obligation passed for this file-backed composition; a production adapter would have to implement and validate this two-terminal recovery path."
+}

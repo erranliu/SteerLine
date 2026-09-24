@@ -1,0 +1,92 @@
+{
+  "schema_version": "steerline.orca-probe-sample.v1",
+  "captured_at": "2026-09-23T09:09:55Z",
+  "evidence_class": "captured_cli_response_curated_sanitized",
+  "operation": "remote_fifo_replay_and_payload_size",
+  "target": {
+    "environment": "<remote-env-1>",
+    "run": "<run-1>",
+    "task": "<task-fifo>",
+    "dispatch": "<dispatch-fifo>"
+  },
+  "first_check": {
+    "deliveryId": "<delivery-fifo-1>",
+    "replayed": false,
+    "messages": [
+      {
+        "id": "<message-status-1>",
+        "type": "status",
+        "payloadBytes": 8389,
+        "parsedPayload": {
+          "taskId": "<task-fifo>",
+          "dispatchId": "<dispatch-fifo>",
+          "probeId": "<probe-fifo>",
+          "protocol_version": 1,
+          "blobLength": 8192,
+          "observedBlobLength": 8192,
+          "futureUnknownField": "UNKNOWN_FIELD_PRESERVED"
+        }
+      }
+    ]
+  },
+  "repeated_check_before_ack": {
+    "deliveryId": "<delivery-fifo-1>",
+    "replayed": true,
+    "messages": [
+      {
+        "id": "<message-status-1>",
+        "type": "status",
+        "payloadBytes": 8389
+      }
+    ]
+  },
+  "check_after_ack": {
+    "acknowledged": "<delivery-fifo-1>",
+    "deliveryId": "<delivery-fifo-2>",
+    "messages": [
+      {
+        "id": "<question-fifo-1>",
+        "type": "question",
+        "parsedPayload": {
+          "taskId": "<task-fifo>",
+          "dispatchId": "<dispatch-fifo>",
+          "options": [
+            "continue",
+            "stop"
+          ]
+        }
+      }
+    ]
+  },
+  "reply": {
+    "questionId": "<question-fifo-1>",
+    "answer": "continue",
+    "status": "answered"
+  },
+  "worker_done": {
+    "id": "<message-result-1>",
+    "type": "worker_done",
+    "parsedPayload": {
+      "taskId": "<task-fifo>",
+      "dispatchId": "<dispatch-fifo>",
+      "outcome": "succeeded",
+      "resultId": "<result-fifo-1>",
+      "result": {
+        "protocol_version": 1,
+        "blobLength": 8192,
+        "futureUnknownField": "UNKNOWN_FIELD_PRESERVED",
+        "applied_decision_ids": [
+          "<question-fifo-1>"
+        ],
+        "expectedCommit": "<base-commit-1>",
+        "actualCommit": "<base-commit-1>"
+      }
+    }
+  },
+  "release": {
+    "state": "released",
+    "processAction": "closed_agent_terminal",
+    "archiveStatus": "captured"
+  },
+  "note": "The full 8192-character blob is omitted from this curated sample; the live CLI receipt was measured before sanitization. The inbox capture preserves the wire field layout with text redacted."
+}

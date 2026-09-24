@@ -2,7 +2,7 @@
 
 状态：待实施。日期：2026-09-23。
 
-前置：[Spec 01](01-orca-remote-protocol.md) 必需能力通过真实远端验证；[Spec 02](02-execution-model-and-adapter.md) 模型、存储、迁移和执行接口完成。依据：[执行架构共同约束](execution-architecture.spec.md)。
+开发前置：[Spec 01](01-orca-remote-protocol.md) 的真实远端证据与明确限制；[Spec 02](02-execution-model-and-adapter.md) 的模型、存储、迁移和执行接口。可先开发受限的远程适配器；生产启用仍须满足本 Spec 的剩余门槛。依据：[执行架构共同约束](execution-architecture.spec.md)。
 
 ## 1. 目标与范围
 
@@ -13,6 +13,10 @@
 ## 2. 配置与接入前置
 
 新增显式的受监管远程配置，至少包含固定 connection ID、home Orca runtime/协调者绑定、environment ID、远端 repo selector、agent、输出/状态轮询参数和能力报告版本。具体配置字段由实施确定并更新示例；旧本机 Orca 配置继续采用原模式。
+
+首版生产远程配置固定 `remote_cancel_available=false`。预检和 viewer 必须显示远程取消不可用；不能展示可操作的取消按钮、自动调用 Orca worker-stop，或在失败后按远端 terminal handle 兜底关闭。用户需要中止活跃远端 worker 时，中心保留身份与资源占用，提示人工处理。正常结算后的 release 不受此限制。
+
+仅声明已实测的 Windows Orca 1.4.209 中心/远端组合；其他版本在预检中明确拒绝，不能以旧版兼容推测放行。首版适配器对结构化消息采用不高于已验证 8 KiB 的序列化大小上限，超限在发送前拒绝。宿主权限提示不自动回答，无法可靠分类时显示待人工核实，不伪造业务 ask 或执行成功。
 
 配置目标是远端时，fallback 固定为 fail。任何创建前后的错误都不得改在中心执行。能力缺失、连接身份失效、仓库不可访问等问题在任务领取前尽可能发现；领取后发生的问题必须保留任务与执行记录。
 
@@ -53,7 +57,7 @@ verify 使用固定的检查命令和清单，回传实际脚本回执；review 
 | 明确失败报告或 review 请求改动 | 记录结果；确定性检查失败/审查改动请求按固定修复预算回到 implement，其他失败或预算耗尽进入 failed/blocked |
 | 已确认退出且无有效结果 | Attempt=failed，Execution/WorkflowRun=blocked，记录 result_missing；不生成成功结果 |
 | 网络中断或观察过期 | 更新 connection/liveness 及 freshness，保留已知业务阶段 |
-| 明确停止操作得到平台停止证据 | Attempt/Execution=stopped；记录谁请求以及停止结果 |
+| 支持 Stop 的本机适配器取得平台停止证据 | Attempt/Execution=stopped；记录谁请求以及停止结果；当前远程适配器不提供此操作 |
 
 所有非法转换、身份不匹配和旧尝试消息保留诊断证据，不推进当前流程。输出文字、TUI idle、进程退出码或心跳单独都不能替代业务结果。
 
@@ -89,7 +93,7 @@ publish_pr 成功结果包含精确 PR URL、实现 head commit、目标分支�
 
 合并后在中心执行已固定的结项适配，并回读任务来源确认 closed 后才 completed。结项的外部副作用采用同一业务幂等键，部分失败继续 completing 并对账，不重复开发、不绕过自定义结项回调。PR 未合并关闭或绑定漂移则 blocked，不能关闭任务。
 
-停止整个服务仅停止中心监督并保存状态；远端 worker 可以继续。取消某次执行是独立、持久化且可追踪的 Stop 操作。启动恢复先处理已有消息、动作和执行身份，再考虑派发新任务。
+停止整个服务仅停止中心监督并保存状态；远端 worker 可以继续。当前生产远程取消不可用，相关命令返回明确的不支持并要求人工处理，不发送 Stop mutation。支持停止的本机适配器仍使用独立、持久化且可追踪的 Stop 操作。启动恢复先处理已有消息、动作和执行身份，再考虑派发新任务。
 
 ## 7. viewer 与命令行
 
@@ -124,7 +128,7 @@ publish_pr 成功结果包含精确 PR URL、实现 head commit、目标分支�
 | R11 | task 的另一 Execution/旧 attempt 消息到达 | 仅进入对应历史；不改变当前 agent 的状态或回答目标 |
 | R12 | PR 实际合并、PR 未合并关闭、结项部分成功 | 分别完成/阻塞/继续对账；task close 不重复产生副作用 |
 | R13 | local 路径或远端 completion 不支持 | 在预检拒绝或明确阻塞，不以本机同名路径替代 |
-| R14 | 服务停机与显式 Stop | 前者不取消远端；后者确认目标停止后才释放相应许可 |
+| R14 | 服务停机与远程取消不可用 | 前者不取消远端；远程取消入口明确不可用、不发送 Orca stop、不释放可能仍活跃的资源许可；本机 Stop 仍需确认退出证据 |
 | R15 | claim 成功但回执丢失、领取者发生变化 | 中心回读核实后才能派发；不存在双重领取或对错误所有者启动执行 |
 | R16 | 验证失败、审查请求改动、修复预算耗尽 | 前两者由中心安排有限修复并重新检查，耗尽后等待人工处理，期间不发布 PR |
 | R17 | 验证通过后代码改变或旧 verify 结果迟到 | 发布门槛不通过；正确关联当前 revision/attempt，重跑已失效检查 |

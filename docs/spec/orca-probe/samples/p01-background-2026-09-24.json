@@ -1,0 +1,23 @@
+{
+  "schema_version": "steerline.orca-probe.observation.v1",
+  "captured_at": "2026-09-24T00:42:01Z",
+  "operation": "background_coordinator_remote_worker_start",
+  "coordinator": {
+    "location": "home Orca terminal in isolated local test repository",
+    "run_recorded": true,
+    "run_persisted_across_home_runtime_restart": true
+  },
+  "remote_start": {
+    "server_identity_returned": true,
+    "task_identity_returned": true,
+    "dispatch_identity_returned": true,
+    "remote_worktree_identity_returned": true,
+    "exact_remote_worker_verified_live": true
+  },
+  "remote_process_inventory": {
+    "matching_process_name": "SteerLine",
+    "count": 0,
+    "checked_after_worker_settlement": true
+  },
+  "conclusion": "A background home coordinator started a supervised worker on the named remote Orca server and received its actual execution identities. No SteerLine-named resident process was present on the remote host at the inventory checkpoint. P01 passed for the tested configuration."
+}
