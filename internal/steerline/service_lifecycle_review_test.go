@@ -1,7 +1,9 @@
 package steerline
 
 import (
+	"bytes"
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -9,6 +11,46 @@ import (
 	"testing"
 	"time"
 )
+
+func TestLifecycleAuditRejectedStartupPreservesOwnerFiles(t *testing.T) {
+	for _, missingLog := range []bool{false, true} {
+		t.Run(fmt.Sprint("missing-log=", missingLog), func(t *testing.T) {
+			f := newFixture(t)
+			c, _ := lifecycleConfigFile(t, f, f.c.RunDir)
+			identity, err := currentProcessIdentity()
+			require(t, err)
+			record := reviewStartup(t, c, "started", identity)
+			record.InstanceID = newID()
+			require(t, writeStartupRecord(c, record))
+			recordPath, err := startupPath(c.RunDir, record.StartupID)
+			require(t, err)
+			logPath, err := startupLogPath(c.RunDir, record.StartupID)
+			require(t, err)
+			originalLog := []byte("original service diagnostic\n")
+			require(t, os.WriteFile(logPath, originalLog, 0600))
+			if missingLog {
+				require(t, os.Remove(logPath))
+			}
+			before, err := os.ReadFile(recordPath)
+			require(t, err)
+			if err := RunConfiguredService(context.Background(), c, "manual", record.StartupID, "off"); err == nil {
+				t.Fatal("a completed startup ID was reused")
+			}
+			after, err := os.ReadFile(recordPath)
+			require(t, err)
+			if !bytes.Equal(before, after) {
+				t.Fatalf("rejected startup overwrote the owner's record:\n%s", after)
+			}
+			if !missingLog {
+				afterLog, err := os.ReadFile(logPath)
+				require(t, err)
+				if !bytes.Equal(originalLog, afterLog) {
+					t.Fatalf("rejected startup wrote to the owner's log:\n%s", afterLog)
+				}
+			}
+		})
+	}
+}
 
 func reviewStartup(t *testing.T, c Config, status string, identity *ProcessIdentity) StartupRecord {
 	t.Helper()

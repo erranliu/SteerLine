@@ -1,5 +1,5 @@
 @echo off
-setlocal EnableExtensions
+setlocal EnableExtensions DisableDelayedExpansion
 chcp 65001 >nul 2>&1
 
 rem Keep this window open while the service runs. Ctrl+C requests shutdown.
@@ -14,8 +14,8 @@ if "%~1"=="" (
   set "CFG=%~f1"
 )
 
-if not exist "%BIN%" ( echo [service-window] missing %BIN% & pause & exit /b 1 )
-if not exist "%CFG%" ( echo [service-window] missing config %CFG% & pause & exit /b 1 )
+if not exist "%BIN%" ( echo [service-window] missing "%BIN%" & pause & exit /b 1 )
+if not exist "%CFG%" ( echo [service-window] missing config "%CFG%" & pause & exit /b 1 )
 
 mode con: cols=150 lines=44 >nul 2>&1
 title SteerLine service window

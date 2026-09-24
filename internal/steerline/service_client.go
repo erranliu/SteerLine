@@ -760,16 +760,23 @@ func windowsServiceWindowStart(ctx context.Context, c Config, absoluteConfig str
 		connection.CanStart = false
 		connection.Process = probe
 		connection.Diagnostic = diagnostic
-		if probe.State == ProcessMatches && pending.ConfigDigest == c.configDigest &&
-			canonical(pending.RepositoryIdentity) == canonical(c.identity) &&
-			pending.Remote == c.Remote && pending.Branch == c.Branch &&
-			pending.Claimant == expectedClaimant(c) {
-			connection.State = ConnectionInitializing
-			connection.StartupID = pending.StartupID
-		} else {
+		connection.StartupID = pending.StartupID
+		connection.ConfigMatched = pending.ConfigDigest == c.configDigest
+		switch {
+		case probe.State == ProcessUnknown:
 			connection.State = ConnectionUnknown
+			connection.Diagnostic += ": " + probe.Reason
+		case canonical(pending.RepositoryIdentity) != canonical(c.identity) ||
+			canonical(pending.RepositoryPath) != canonical(c.Repository) ||
+			pending.Remote != c.Remote || pending.Branch != c.Branch ||
+			pending.Claimant != expectedClaimant(c):
+			connection.State = ConnectionIdentityError
+		case !connection.ConfigMatched:
+			connection.State = ConnectionConfigChanged
+		default:
+			connection.State = ConnectionInitializing
 		}
-		return ServiceStartResult{Status: "pending", StartupID: pending.StartupID, LogPath: logPath, Connection: connection, Error: diagnostic}, nil
+		return ServiceStartResult{Status: "pending", StartupID: pending.StartupID, LogPath: logPath, Connection: connection, Error: connection.Diagnostic}, nil
 	}
 	result := ServiceStartResult{
 		Status:       "window-required",
@@ -1208,19 +1215,10 @@ func RunConfiguredService(ctx context.Context, c Config, mode, startupID, consol
 	if retErr != nil {
 		return retErr
 	}
-	logFile, retErr := os.OpenFile(logPath, os.O_WRONLY|os.O_APPEND, 0600)
-	if retErr != nil {
-		return failStartup(c, startupID, fmt.Errorf("open service startup log: %w", retErr))
-	}
-	defer logFile.Close()
-	fmt.Fprintf(logFile, "startup_id=%s dispatch=%s pid=%d console_window=0x%x\n", startupID, mode, os.Getpid(), serviceConsoleWindow())
-	if console != "off" && (console != "" || ConsoleDefault() != "") {
-		fmt.Fprintf(os.Stdout, "SteerLine starting · dispatch %s · startup %s\n", mode, startupID)
-	}
 	processIdentity, retErr := currentProcessIdentity()
 	if retErr != nil {
-		fmt.Fprintf(logFile, "startup failed: identify service process: %v\n", retErr)
-		return failStartup(c, startupID, fmt.Errorf("identify service process: %w", retErr))
+		// Without our own identity, we cannot claim or modify an existing attempt.
+		return fmt.Errorf("identify service process: %w", retErr)
 	}
 	record := initialStartupRecord(c, startupID)
 	record.ProcessIdentity = processIdentity
@@ -1233,17 +1231,27 @@ func RunConfiguredService(ctx context.Context, c Config, mode, startupID, consol
 			return errors.New("startup record is bound to a different OS process")
 		}
 		record.ProcessIdentity = processIdentity
-	} else if os.IsNotExist(err) {
-		if err = writeStartupRecord(c, record); err != nil {
-			return err
-		}
-	} else {
+	} else if !os.IsNotExist(err) {
 		return err
 	}
 	// Publish the child's identity before slow preflight. The launcher only
 	// writes process.json, so it cannot roll back a later started/failed state.
 	if err := writeStartupRecord(c, record); err != nil {
 		return err
+	}
+	// Only an attempt bound to this process may append diagnostics or be marked
+	// failed. Opening the log earlier could corrupt another instance's evidence.
+	if err := rejectSymlink(logPath); err != nil {
+		return failStartup(c, startupID, err)
+	}
+	logFile, retErr := os.OpenFile(logPath, os.O_WRONLY|os.O_APPEND, 0600)
+	if retErr != nil {
+		return failStartup(c, startupID, fmt.Errorf("open service startup log: %w", retErr))
+	}
+	defer logFile.Close()
+	fmt.Fprintf(logFile, "startup_id=%s dispatch=%s pid=%d console_window=0x%x\n", startupID, mode, os.Getpid(), serviceConsoleWindow())
+	if console != "off" && console != "json" && (console != "" || ConsoleDefault() != "") {
+		fmt.Fprintf(os.Stdout, "SteerLine starting · dispatch %s · startup %s\n", mode, startupID)
 	}
 	fail := func(err error) error {
 		fmt.Fprintf(logFile, "startup failed: %v\n", err)

@@ -2,7 +2,7 @@
 
 依据：[Spec](pr-03-service-lifecycle.spec.md)。依赖：PR 2。
 
-实现状态：2026-09-24 调整 Windows 产品方案。当前分支已加入服务窗口入口、Windows `window-required` 结果、启动状态/日志和窗口消失监测；真实窗口 Ctrl+C、X/重启及两个窗口从零并发均已在当前宿主通过。合并主线后的全仓回归、静态检查和交叉编译也已通过，PR 可转为正式待审。
+实现状态：2026-09-24 调整 Windows 产品方案。当前分支已加入服务窗口入口、Windows `window-required` 结果、启动状态/日志和窗口消失监测；真实窗口 Ctrl+C、X/重启及两个窗口从零并发均已在当前宿主通过。合并主线后的全仓回归通过，后续质量审计修复已通过定向回归、静态检查和交叉编译，PR 已为正式待审。
 
 ## 实施步骤
 
@@ -42,6 +42,12 @@
 | L-A7 | `TestWindowsForegroundServiceWindowLifecycle` 的 stop 回执/进程/锁；可见窗口 Ctrl+C 与 X 路径 |
 | L-A8 | 连接分类测试及服务生命周期审核回归中的旧快照、配置与协议冲突 |
 | L-A9 | `TestWindowsVisibleServiceWindowCloseAndRestart`：新实例、旧 worker 不重复、可再次正常停服 |
+
+### 质量审计修复验证
+
+- 修复 JSON 控制台混入普通启动提示及活动字段不完整、复用已归属 startup_id 时污染原实例记录/日志、启动器错误提示将路径中的 `&` 解释为命令、Windows pending 启动丢失配置/仓库冲突分类四项问题。各问题先由定向测试复现，再验证修复。
+- 复用原生 CLI 测试覆盖 JSONL；启动记录保护、路径字面量、pending 分类、已有生命周期审核及 preflight 测试通过。再次运行真实窗口 Ctrl+C、X/重启验收；本轮定向回归共 104.364 秒，临时计划任务已清理。
+- 修正 Linux detached 测试夹具：PR API 的 HTTP stub 不提供 Git fetch，改用既有 git-proxy 从本地裸仓库获取。最终 `go vet ./...`、Linux amd64 服务测试二进制与 CLI 交叉编译、`git diff --check` 通过。Linux 原生生命周期仍未实测；本轮未重复约八分钟的全仓测试，上述全仓结果属于审计修复前的合并版本。
 
 ## 完成条件
 

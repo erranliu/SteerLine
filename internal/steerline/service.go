@@ -26,6 +26,7 @@ type Service struct {
 	// Console selects service-side rendering: "", "off", "pretty", "summary" or "json".
 	Console           string
 	consoleOut        io.Writer
+	consoleSequence   uint64
 	versionPrevious   *Runtime
 	controlSeen       map[string]string
 	stopControl       *ControlRequest
@@ -351,6 +352,13 @@ func (s *Service) emitConsole(ev ActivityEvent) {
 	}
 	switch s.Console {
 	case "json":
+		// The console combines service events with several per-run journals.
+		// Give that output stream its own sequence without changing the journals.
+		s.consoleSequence++
+		ev.V, ev.Seq = ActivityVersion, s.consoleSequence
+		if ev.TS.IsZero() {
+			ev.TS = now()
+		}
 		b, e := json.Marshal(ev)
 		if e == nil {
 			fmt.Fprintln(out, string(b))

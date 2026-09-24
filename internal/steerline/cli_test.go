@@ -29,7 +29,7 @@ func TestNativeCLIStartSecondInstanceAndStop(t *testing.T) {
 	log, e := os.Create(filepath.Join(f.c.RunDir, "cli.log"))
 	require(t, e)
 	defer log.Close()
-	cmd := exec.Command(exe, "run", "-config", configPath)
+	cmd := exec.Command(exe, "run", "-config", configPath, "-console", "json")
 	cmd.Stdout = log
 	cmd.Stderr = log
 	require(t, cmd.Start())
@@ -140,6 +140,17 @@ func TestNativeCLIStartSecondInstanceAndStop(t *testing.T) {
 		require(t, e)
 	case <-time.After(10 * time.Second):
 		t.Fatal("control stop did not exit the native CLI")
+	}
+	jsonOutput, e := os.ReadFile(log.Name())
+	require(t, e)
+	for _, line := range strings.Split(strings.TrimSpace(string(jsonOutput)), "\n") {
+		if !json.Valid([]byte(line)) {
+			t.Fatalf("JSON console emitted a non-JSON line: %q", line)
+		}
+		event, err := DecodeActivityLine([]byte(line))
+		if err != nil || event.V != ActivityVersion || event.TS.IsZero() {
+			t.Fatalf("JSON console emitted an invalid activity record: %s (%v)", line, err)
+		}
 	}
 	secondCmd := exec.Command(exe, "run", "-config", configPath)
 	secondCmd.Stdout, secondCmd.Stderr = log, log

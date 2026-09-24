@@ -457,6 +457,9 @@ func TestDetachedServiceSurvivesStarterExitAndStopsWorker(t *testing.T) {
 	db := readFake(f.db)
 	db.Behavior = "sleep"
 	writeFake(f.db, db)
+	// The web endpoint supplies PR responses, not Git smart HTTP. Keep remote
+	// identity validation, but fetch the fixture's real local bare repository.
+	f.c.Git = Command{Executable: f.c.BD.Executable, Args: []string{"--fake", "git-proxy", f.c.Git.Executable}}
 	config, configPath := lifecycleConfigFile(t, f, f.c.RunDir)
 	serviceExe := buildServiceLifecycleCLI(t)
 	t.Cleanup(func() {

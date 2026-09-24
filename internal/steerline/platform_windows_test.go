@@ -163,6 +163,34 @@ func TestWindowsStartServiceRequiresVisibleWindow(t *testing.T) {
 	}
 }
 
+func TestWindowsServiceWindowMissingConfigIsLiteral(t *testing.T) {
+	installDir := filepath.Join(t.TempDir(), "home with spaces")
+	t.Setenv("STEERLINE_HOME", installDir)
+	_, err := InstallLaunchers()
+	require(t, err)
+	require(t, os.MkdirAll(filepath.Join(installDir, "bin"), 0700))
+	require(t, os.WriteFile(filepath.Join(installDir, "bin", "steerline.exe"), []byte("not executed"), 0600))
+	launcher := filepath.Join(installDir, "service-window.bat")
+	missingConfig := filepath.Join(t.TempDir(), "missing & echo unexpected-launcher-command")
+	cmd := exec.Command("cmd.exe")
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		CmdLine: fmt.Sprintf("cmd.exe /d /c \"\"%s\" \"%s\"\"", launcher, missingConfig),
+	}
+	cmd.Stdin = strings.NewReader("\n")
+	output, runErr := cmd.CombinedOutput()
+	if runErr == nil {
+		t.Fatal("missing configuration returned success")
+	}
+	for _, line := range strings.Split(string(output), "\n") {
+		if strings.TrimSpace(line) == "unexpected-launcher-command" {
+			t.Fatalf("configuration path was executed as a command:\n%s", output)
+		}
+	}
+	if !strings.Contains(string(output), missingConfig) {
+		t.Fatalf("missing configuration path was not printed literally:\n%s", output)
+	}
+}
+
 func TestWindowsServiceWindowRejectsMissingConsole(t *testing.T) {
 	f := newFixture(t)
 	config, configPath := lifecycleConfigFile(t, f, f.c.RunDir)
@@ -175,6 +203,33 @@ func TestWindowsServiceWindowRejectsMissingConsole(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(config.RunDir, "service")); !os.IsNotExist(err) {
 		t.Fatalf("hidden service-window wrote startup state: %v", err)
+	}
+}
+
+func TestWindowsPendingStartupPreservesMismatchClassification(t *testing.T) {
+	for _, kind := range []string{"config", "repository-path"} {
+		t.Run(kind, func(t *testing.T) {
+			f := newFixture(t)
+			c, configPath := lifecycleConfigFile(t, f, f.c.RunDir)
+			identity, err := currentProcessIdentity()
+			require(t, err)
+			record := reviewStartup(t, c, "starting", identity)
+			expected := ConnectionConfigChanged
+			if kind == "config" {
+				record.ConfigDigest = strings.Repeat("f", 64)
+			} else {
+				record.RepositoryPath = filepath.Join(t.TempDir(), "another-worktree")
+				expected = ConnectionIdentityError
+			}
+			require(t, writeStartupRecord(c, record))
+			result, err := StartService(context.Background(), configPath, StartServiceOptions{})
+			require(t, err)
+			if result.Status != "pending" || result.Connection.State != expected ||
+				result.Connection.Process.State != ProcessMatches || result.Connection.CanStart ||
+				result.Connection.StartupID != record.StartupID {
+				t.Fatalf("pending %s mismatch lost known identity or classification: %+v", kind, result)
+			}
+		})
 	}
 }
 
