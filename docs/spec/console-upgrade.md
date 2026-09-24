@@ -9,7 +9,7 @@
 ## 与最新主线的集成约束
 
 - PR #8 已提供任务详情、完整 Runtime 读取、activity/conversation/raw 三种日志视图和布局修复。实施本组计划时在这些功能上增量修改，不能以旧基线文件覆盖它们；Plan 中已经完成的接口提取步骤转为核对与复用。
-- PR #9 的 [目标架构](../architecture-direction.md) 约束新的中心状态机与远程执行。本组文件协议和 runtime v4 是现有 local/Orca terminal v2 的本机控制适配，不把当前单 Run/单执行槽固化为未来 QueryService/CommandService 的业务唯一性约束。
+- [执行架构共同约束](execution-architecture.spec.md) 约束新的中心状态机与远程执行。本组文件协议和 runtime v4 是现有 local/Orca terminal v2 的本机控制适配，不把当前单 Run/单执行槽固化为未来 QueryService/CommandService 的业务唯一性约束。
 - 控制台通过观察/命令接口访问状态，文件是当前传输/存储实现。若目标架构的 SQLite 权威存储与执行模型在某一后续 PR 开始前已经合入，该 PR 必须复用已落地的权威接口并同步调整其 Spec/Plan，不能再建立竞争的业务状态写者。
 - 本组停服终止 worker 的规则适用于现有本机执行路径；未来受监管远端执行遵循目标架构中“中心停机与取消远端 worker 分开”的规则。
 
@@ -31,7 +31,7 @@
 | 4C | 多项目控制台、任务启动与按轮次折叠 | [Spec](pr-04-console.spec.md) · [Plan](pr-04-console.plan.md) | PR 4B |
 | 5 | 完整决策交互、在线恢复与应用证明 | [Spec](pr-05-intervention.spec.md) · [Plan](pr-05-intervention.plan.md) | PR 4C |
 
-按 1 → 2 → 3 → 4A → 4B → 4C → 5 串行审核合并，共七个交付阶段。原 PR4 文件路径保留，但对应 4C；4A/4B 是新增前置。这里的阶段名不是 GitHub PR 编号，不能用“已合并五个 PR”判断整批完成。[设计决策](console-followup-design.md) 解释拆分缘由；各阶段 Spec 是行为契约、Plan 是实施与验证要求。
+按 1 → 2 → 3 → 4A → 4B → 4C → 5 串行审核合并，共七个交付阶段。原 PR4 文件路径保留，但对应 4C；4A/4B 是新增前置。这里的阶段名不是 GitHub PR 编号，不能用“已合并五个 PR”判断整批完成。各阶段 Spec 是行为契约、Plan 是实施与验证要求；架构衔接要求在本总览及对应阶段 Spec 内明确。
 
 ## 已选定的产品行为
 

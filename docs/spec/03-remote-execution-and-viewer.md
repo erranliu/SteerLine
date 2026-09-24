@@ -2,7 +2,7 @@
 
 状态：待实施。日期：2026-09-23。
 
-前置：[Spec 01](01-orca-remote-protocol.md) 必需能力通过真实远端验证；[Spec 02](02-execution-model-and-adapter.md) 模型、存储、迁移和执行接口完成。依据：[架构决策](../architecture-direction.md)。
+前置：[Spec 01](01-orca-remote-protocol.md) 必需能力通过真实远端验证；[Spec 02](02-execution-model-and-adapter.md) 模型、存储、迁移和执行接口完成。依据：[执行架构共同约束](execution-architecture.spec.md)。
 
 ## 1. 目标与范围
 

@@ -2,7 +2,7 @@
 
 状态：待实施。日期：2026-09-24（双后端衔接修订）。
 
-依据：[架构决策](../architecture-direction.md)。协议依赖：[Spec 01](01-orca-remote-protocol.md)。下游：[Spec 03](03-remote-execution-and-viewer.md)。
+依据：[执行架构共同约束](execution-architecture.spec.md)。协议依赖：[Spec 01](01-orca-remote-protocol.md)。下游：[Spec 03](03-remote-execution-and-viewer.md)。
 
 ## 1. 目标与范围
 

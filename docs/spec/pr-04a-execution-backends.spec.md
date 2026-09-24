@@ -1,6 +1,6 @@
 # PR 4A Spec：长期双执行后端契约
 
-状态：待实现。依赖：PR 3 审核、验证并合并。对应 [Plan](pr-04a-execution-backends.plan.md)。依据：[总览](console-upgrade.md)、[架构决策](../architecture-direction.md)。
+状态：待实现。依赖：PR 3 审核、验证并合并。对应 [Plan](pr-04a-execution-backends.plan.md)。依据：[总览](console-upgrade.md)、[执行架构共同约束](execution-architecture.spec.md)。
 
 ## B1：职责与长期支持边界
 

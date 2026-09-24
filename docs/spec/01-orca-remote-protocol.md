@@ -2,7 +2,7 @@
 
 状态：待实施；本文不代表已完成真实远端验证。日期：2026-09-23。
 
-依据：[架构决策](../architecture-direction.md)。后续：[Spec 02](02-execution-model-and-adapter.md)、[Spec 03](03-remote-execution-and-viewer.md)。
+依据：[执行架构共同约束](execution-architecture.spec.md)。后续：[Spec 02](02-execution-model-and-adapter.md)、[Spec 03](03-remote-execution-and-viewer.md)。
 
 ## 1. 目标与交付
 
