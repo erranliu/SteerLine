@@ -2,7 +2,7 @@
 
 依据：[Spec](pr-03-service-lifecycle.spec.md)。依赖：PR 2。
 
-实现状态：2026-09-24 调整 Windows 产品方案。当前分支已加入服务窗口入口、Windows `window-required` 结果、启动状态/日志和窗口消失监测；部分真实 Windows 验收通过，Ctrl+C、并发窗口和全仓回归等门槛尚待完成。PR 保持 draft，不把旧 detached 方案的测试结果视为新 Spec 完成。
+实现状态：2026-09-24 调整 Windows 产品方案。当前分支已加入服务窗口入口、Windows `window-required` 结果、启动状态/日志和窗口消失监测；真实窗口 X/重启及全仓回归已通过，Ctrl+C 和两个窗口从零并发等门槛尚待完成。PR 保持 draft，不把旧 detached 方案的测试结果视为新 Spec 完成。
 
 ## 实施步骤
 
@@ -28,7 +28,7 @@
 - 当前主机中的直接启动、管理员进程和临时系统服务都处于 Job；带 `CREATE_BREAKAWAY_FROM_JOB` 的子进程仍在 Job 或创建被拒。原 Windows detached 路径因此按设计拒绝，并未取得成功后台存活证据。
 - 旧的临时 `/IT` Task Scheduler TTY 测试已证明真实 stdin/console 窗口可用，以及旧 detached 启动的失败记录；它没有运行成功的服务/worker。另一个短暂的本机计划任务原型证明任务进程可在发起命令结束后继续运行，但本 Spec 选择服务窗口，不依赖计划任务。
 - 新增 `service-window.bat` 保留旧 `run.bat` auto 行为。当前宿主的定向测试已通过：前台 manual/ready、显式 worker、独立客户端退出/重连、同配置与同仓库不同 run_dir 锁竞争、preflight 失败记录、控制 stop、强制结束后的 worker 清理与恢复；opt-in 真实 TTY 测试还验证了可见窗口、窗口 X 后服务/worker 退出、锁释放和重新打开。测试只操作临时仓库与假工具；尚未覆盖 Ctrl+C、两个窗口从零并发和全部 L-A1～L-A9。
-- 首轮全仓回归在旧控制测试 `TestControlStartsOnlySelectedReadyTask` 上发现时序竞争：服务已 claim，假 worker 的启动计数尚未写回。该测试已改为有界等待；定向重复运行通过，全仓回归仍需重跑。
+- 首轮全仓回归在旧控制测试 `TestControlStartsOnlySelectedReadyTask` 上发现时序竞争：服务已 claim，假 worker 的启动计数尚未写回。该测试改为有界等待后，第二次 `go test ./... -count=1 -timeout 10m` 通过（服务包 435.547 秒）。最后的小改动只收紧窗口句柄检查并精简一条重复测试；针对最终代码的真实窗口 X/重启定向验收通过。
 - 连接分类、启动锁、pending startup_id、preflight 失败记录和 StopService 回执已有原生测试。保留可复用部分；对 Windows 启动结果和窗口生命周期补充真实验收。
 
 ## 完成条件
