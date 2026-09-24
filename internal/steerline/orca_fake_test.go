@@ -22,6 +22,7 @@ type fakeOrcaState struct {
 	Branch      string `json:"branch,omitempty"`
 	Prompt      string `json:"prompt,omitempty"`
 	Answered    bool   `json:"answered,omitempty"`
+	Closed      bool   `json:"closed,omitempty"`
 }
 
 func fakeOrcaStatePath(dir, handle string) string { return filepath.Join(dir, handle+".json") }
@@ -82,6 +83,16 @@ func fakeOrca(stateDir string, argv []string) int {
 		case "show":
 			return fakeOrcaShow(stateDir, argv[2:])
 		case "close":
+			st, err := readFakeOrcaState(stateDir, arg(argv, "--terminal"))
+			if err != nil {
+				return fakeOrcaErr("terminal_handle_stale", err.Error())
+			}
+			if os.Getenv("STEERLINE_FAKE_ORCA_CLOSE_STAYS_LIVE") != "1" {
+				st.Closed = true
+				if err = writeFakeOrcaState(stateDir, st); err != nil {
+					return fakeOrcaErr("state", err.Error())
+				}
+			}
 			return fakeOrcaOK(map[string]any{"close": map[string]any{"ptyKilled": true}})
 		}
 	}
@@ -215,7 +226,13 @@ func fakeOrcaShow(stateDir string, argv []string) int {
 	if o := os.Getenv("STEERLINE_FAKE_ORCA_INCARNATION"); o != "" {
 		inc = o
 	}
-	return fakeOrcaOK(map[string]any{"terminal": map[string]any{"handle": st.Handle, "incarnationId": inc, "status": "running", "connected": true, "orphaned": false}})
+	status := "running"
+	connected := true
+	if st.Closed {
+		status = "exited"
+		connected = false
+	}
+	return fakeOrcaOK(map[string]any{"terminal": map[string]any{"handle": st.Handle, "incarnationId": inc, "status": status, "connected": connected, "orphaned": false}})
 }
 
 func orcaTestConfig(t *testing.T, dir, fallback string) Config {
@@ -244,6 +261,87 @@ func TestInspectOrcaTerminal(t *testing.T) {
 	missing := &ProcessIdentity{Kind: "orca", Terminal: "nope"}
 	if got := inspectProcessWithConfig(c, missing); !strings.Contains(got, "unverifiable") {
 		t.Fatalf("missing terminal: %q", got)
+	}
+}
+
+func TestOrcaStopExecutionConfirmsFixedTerminalExit(t *testing.T) {
+	dir := t.TempDir()
+	cfg := orcaTestConfig(t, dir, "fail")
+	handle := "terminal-stop-test"
+	if err := writeFakeOrcaState(dir, fakeOrcaState{Handle: handle, Incarnation: "inc-stop"}); err != nil {
+		t.Fatal(err)
+	}
+	runID, attemptID := newID(), newID()
+	ref := ExecutionRef{Version: 1, Backend: BackendOrca, Protocol: ProtocolOrcaTerminalV2, Target: targetFor(cfg), Agent: AgentSpec{Name: "codex"}, RunID: runID, AttemptID: attemptID, External: ProcessIdentity{Kind: "orca", Terminal: handle, RuntimeID: "fake-runtime", Incarnation: "inc-stop", Executable: cfg.Orca.Executable}}
+	backend := orcaTerminalBackend{config: cfg}
+	receipt, err := backend.StopExecution(context.Background(), ref, Operation{ID: "stop-" + attemptID}, nil)
+	if err != nil || receipt.Disposition != "confirmed" {
+		t.Fatalf("stop receipt=%#v err=%v", receipt, err)
+	}
+	obs, err := backend.Observe(context.Background(), ref)
+	if err != nil || obs.Liveness != "exited" {
+		t.Fatalf("stop evidence=%#v err=%v", obs, err)
+	}
+}
+
+func TestServiceShutdownPersistsOrcaStopEvidence(t *testing.T) {
+	dir := t.TempDir()
+	cfg := orcaTestConfig(t, dir, "fail")
+	cfg.ShutdownGrace = "20ms"
+	handle := "terminal-service-stop"
+	if err := writeFakeOrcaState(dir, fakeOrcaState{Handle: handle, Incarnation: "inc-service-stop"}); err != nil {
+		t.Fatal(err)
+	}
+	runID, attemptID := newID(), newID()
+	identity := ProcessIdentity{Kind: "orca", Terminal: handle, RuntimeID: "fake-runtime", Incarnation: "inc-service-stop", Executable: cfg.Orca.Executable}
+	ref := ExecutionRef{Version: 1, Backend: BackendOrca, Protocol: ProtocolOrcaTerminalV2, Target: targetFor(cfg), Agent: AgentSpec{Name: "codex"}, RunID: runID, AttemptID: attemptID, WorkspacePath: dir, WorkspaceBranch: "orca/test", BaseCommit: strings.Repeat("a", 40), External: identity, Generation: identity.Incarnation}
+	if err := (executionRecords{root: dir}).saveBinding(ref); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	proc := &orcaProcess{cfg: cfg, term: orcaTerminal{Handle: handle, RuntimeID: identity.RuntimeID, IncarnationID: identity.Incarnation}, cancel: cancel}
+	w := &Worker{proc: proc, Events: make(chan WorkerEvent), Done: make(chan error, 1)}
+	go func() { <-ctx.Done(); close(w.Events); w.Done <- ctx.Err() }()
+	r := &Run{TaskID: "t-stop", RunID: runID, AttemptID: attemptID, Claimant: cfg.Claimant, Host: "orca", ExecutionStatus: "running", FinishTaskStatus: "pending", Process: &identity, LogPath: ptr(filepath.Join(dir, "events.jsonl"))}
+	s := &Service{Config: cfg, State: Runtime{SchemaVersion: 4, Runs: []*Run{r}, SlotOccupied: true, CurrentTask: ptr(r.TaskID)}, store: &Store{Path: filepath.Join(dir, "runtime.json")}, worker: w, active: r, activities: map[string]*ActivityWriter{}}
+	s.shutdown()
+	op, err := (executionRecords{root: dir}).loadOperation(runID, attemptID, "stop-"+attemptID)
+	if err != nil || op.Status != OperationConfirmed {
+		t.Fatalf("stop operation=%#v err=%v", op, err)
+	}
+	if s.State.SlotOccupied || s.worker != nil {
+		t.Fatalf("confirmed stop retained slot/worker: slot=%v worker=%v", s.State.SlotOccupied, s.worker)
+	}
+}
+
+func TestServiceShutdownRetainsSlotWhenOrcaStopLacksExitEvidence(t *testing.T) {
+	dir := t.TempDir()
+	cfg := orcaTestConfig(t, dir, "fail")
+	cfg.ShutdownGrace = "20ms"
+	handle := "terminal-service-stop-unknown"
+	if err := writeFakeOrcaState(dir, fakeOrcaState{Handle: handle, Incarnation: "inc-service-unknown"}); err != nil {
+		t.Fatal(err)
+	}
+	runID, attemptID := newID(), newID()
+	identity := ProcessIdentity{Kind: "orca", Terminal: handle, RuntimeID: "fake-runtime", Incarnation: "inc-service-unknown", Executable: cfg.Orca.Executable}
+	ref := ExecutionRef{Version: 1, Backend: BackendOrca, Protocol: ProtocolOrcaTerminalV2, Target: targetFor(cfg), Agent: AgentSpec{Name: "codex"}, RunID: runID, AttemptID: attemptID, WorkspacePath: dir, WorkspaceBranch: "orca/test", BaseCommit: strings.Repeat("a", 40), External: identity, Generation: identity.Incarnation}
+	if err := (executionRecords{root: dir}).saveBinding(ref); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	proc := &orcaProcess{cfg: cfg, term: orcaTerminal{Handle: handle, RuntimeID: identity.RuntimeID, IncarnationID: identity.Incarnation}, cancel: cancel}
+	w := &Worker{proc: proc, Events: make(chan WorkerEvent), Done: make(chan error, 1)}
+	go func() { <-ctx.Done(); close(w.Events); w.Done <- ctx.Err() }()
+	r := &Run{TaskID: "t-stop-unknown", RunID: runID, AttemptID: attemptID, Claimant: cfg.Claimant, Host: "orca", ExecutionStatus: "running", FinishTaskStatus: "pending", Process: &identity, LogPath: ptr(filepath.Join(dir, "events.jsonl"))}
+	s := &Service{Config: cfg, State: Runtime{SchemaVersion: 4, Runs: []*Run{r}, SlotOccupied: true, CurrentTask: ptr(r.TaskID)}, store: &Store{Path: filepath.Join(dir, "runtime.json")}, worker: w, active: r, activities: map[string]*ActivityWriter{}}
+	t.Setenv("STEERLINE_FAKE_ORCA_CLOSE_STAYS_LIVE", "1")
+	s.shutdown()
+	op, err := (executionRecords{root: dir}).loadOperation(runID, attemptID, "stop-"+attemptID)
+	if err != nil || op.Status != OperationUnknown {
+		t.Fatalf("stop operation=%#v err=%v", op, err)
+	}
+	if !s.State.SlotOccupied || r.ExecutionStatus != "unknown" || r.FinishTaskStatus != "blocked" {
+		t.Fatalf("unconfirmed stop released execution: slot=%v run=%#v", s.State.SlotOccupied, r)
 	}
 }
 

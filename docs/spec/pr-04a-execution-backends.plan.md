@@ -18,7 +18,7 @@
 
 实现分支从更新后的 `origin/main` 创建。第一轮已添加 AttemptSpec/ExecutionRef/Operation/Observation/Capability DTO、local 与 Orca terminal-v2 启动适配器、`execution/v1` 文件记录和启动/Orca 决策续跑接入；runtime v4 保持不变。详见 [验证报告](../validation/pr-04a-execution-backends.md)。
 
-此进度不代表本 Plan 已完成：StopExecution 尚未接入 Service 契约（当前停服仍走 PR 3 worker 生命周期）；local 独立 DetachObservation、资源结算、Orca 输出读取、全部恢复边界、verified 能力副作用守卫、真实 local Codex/Orca 原生证据及 Linux 原生生命周期尚未完成。报告会按真实结果列出当前阻塞项；fake 平台测试不替代这些门槛。
+此进度不代表本 Plan 已完成：Service 停服现经 ExecutionBackend.StopExecution 写入独立 Operation 并观察原身份退出，但尚无单独的执行停止控制指令；local 独立 DetachObservation、资源结算、Orca 输出读取、全部恢复边界、verified 能力副作用守卫、真实 local Codex/Orca 原生证据及 Linux 原生生命周期尚未完成。报告会按真实结果列出当前阻塞项；fake 平台测试不替代这些门槛。
 
 ## 验证矩阵
 

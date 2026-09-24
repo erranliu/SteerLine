@@ -1286,6 +1286,7 @@ func (s *Service) shutdown() {
 	t := time.NewTimer(duration(s.Config.ShutdownGrace))
 	defer t.Stop()
 	killed := false
+	var stopOp Operation
 	for {
 		select {
 		case ev, ok := <-s.worker.Events:
@@ -1294,14 +1295,153 @@ func (s *Service) shutdown() {
 			}
 		case e := <-s.worker.Done:
 			if killed {
+				confirmed, confirmErr := s.confirmExecutionStop(stopOp)
+				if !confirmed {
+					s.worker = nil // the observer ended; the execution slot remains reserved.
+					s.preserveUnknownStop("worker observer ended without proof that the original execution stopped", confirmErr)
+					return
+				}
 				e = errors.New("worker process tree terminated during shutdown")
 			}
 			s.finished(e)
 			return
 		case <-t.C:
-			s.worker.Kill()
-			killed = true
+			if !killed {
+				var stopErr error
+				stopOp, stopErr = s.stopActiveExecution(context.Background())
+				if stopErr != nil {
+					s.setError(stopErr)
+				}
+				killed = true
+				t.Reset(duration(s.Config.ShutdownGrace))
+				continue
+			}
+			s.preserveUnknownStop("execution stop was not confirmed before shutdown timeout", nil)
+			return
 		}
+	}
+}
+
+func (s *Service) stopActiveExecution(ctx context.Context) (Operation, error) {
+	r := s.active
+	if r == nil || s.worker == nil {
+		return Operation{}, errors.New("there is no active execution to stop")
+	}
+	records := executionRecords{root: s.Config.RunDir}
+	ref, err := records.loadBinding(r.RunID, r.AttemptID)
+	if err != nil {
+		return Operation{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "active execution has no valid fixed binding", Cause: err}
+	}
+	if ref.RunID != r.RunID || ref.AttemptID != r.AttemptID || r.Process == nil || ref.External != *r.Process {
+		return Operation{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "active execution binding does not match runtime identity"}
+	}
+	backend := backendFor(s.Config, BeadsContext{})
+	kind, protocol := backend.Identity()
+	if kind != ref.Backend || protocol != ref.Protocol {
+		return Operation{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "configured backend/protocol differs from fixed execution"}
+	}
+	opID := "stop-" + r.AttemptID
+	payload := struct {
+		Policy string
+		Grace  string
+	}{"local_service_shutdown", s.Config.ShutdownGrace}
+	op := Operation{Version: ExecutionRecordVersion, ID: opID, RunID: r.RunID, AttemptID: r.AttemptID, Backend: ref.Backend, Protocol: ref.Protocol, Target: ref.Target, Action: "stop", PayloadDigest: digestValue(payload), Status: OperationPending, StartedAt: now(), UpdatedAt: now(), Ref: &ref}
+	if old, loadErr := records.loadOperation(r.RunID, r.AttemptID, opID); loadErr == nil {
+		if old.Action != op.Action || old.PayloadDigest != op.PayloadDigest || old.Target != op.Target {
+			return Operation{}, errors.New("stop operation id conflicts with its fixed target/policy")
+		}
+		return old, nil // Never resend a persisted stop operation.
+	} else if !os.IsNotExist(loadErr) {
+		return Operation{}, loadErr
+	}
+	if err = records.saveOperation(op); err != nil {
+		return Operation{}, err
+	}
+	op.Status, op.UpdatedAt = OperationInFlight, now()
+	if err = records.saveOperation(op); err != nil {
+		return Operation{}, err
+	}
+	receipt, stopErr := backend.StopExecution(ctx, ref, op, s.worker)
+	if stopErr != nil {
+		var be *BackendError
+		if errors.As(stopErr, &be) && (be.Code == BackendOutcomeUnknown || be.Code == BackendUnreachable || be.Code == BackendIdentityMismatch) {
+			op.Status = OperationUnknown
+		} else {
+			op.Status = OperationRejected
+		}
+		op.Diagnostic, op.UpdatedAt = stopErr.Error(), now()
+		if saveErr := records.saveOperation(op); saveErr != nil {
+			return op, errors.Join(stopErr, saveErr)
+		}
+		return op, stopErr
+	}
+	switch receipt.Disposition {
+	case "confirmed":
+		op.Status = OperationConfirmed
+	case "accepted":
+		op.Status = OperationAccepted
+	case "rejected":
+		op.Status = OperationRejected
+	default:
+		op.Status = OperationUnknown
+	}
+	op.Diagnostic, op.UpdatedAt = receipt.Diagnostic, now()
+	if err = records.saveOperation(op); err != nil {
+		return op, err
+	}
+	if op.Status == OperationUnknown || op.Status == OperationRejected {
+		return op, &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "stop request did not confirm an accepted stop"}
+	}
+	return op, nil
+}
+
+func (s *Service) confirmExecutionStop(op Operation) (bool, error) {
+	if op.ID == "" {
+		return false, errors.New("stop operation is missing")
+	}
+	ref := op.Ref
+	if ref == nil {
+		loaded, err := (executionRecords{root: s.Config.RunDir}).loadBinding(op.RunID, op.AttemptID)
+		if err != nil {
+			return false, err
+		}
+		ref = &loaded
+	}
+	backend := backendFor(s.Config, BeadsContext{})
+	obs, err := backend.Observe(context.Background(), *ref)
+	records := executionRecords{root: s.Config.RunDir}
+	if err != nil {
+		op.Status, op.Diagnostic, op.UpdatedAt = OperationUnknown, err.Error(), now()
+		saveErr := records.saveOperation(op)
+		return false, errors.Join(err, saveErr)
+	}
+	if obs.Liveness != "exited" {
+		op.Status, op.Diagnostic, op.UpdatedAt = OperationUnknown, "original execution has not produced stopped evidence: "+obs.Diagnostic, now()
+		saveErr := records.saveOperation(op)
+		return false, errors.Join(&BackendError{Code: BackendOutcomeUnknown, Diagnostic: op.Diagnostic}, saveErr)
+	}
+	op.Status, op.Diagnostic, op.UpdatedAt = OperationConfirmed, obs.Diagnostic, now()
+	if err = records.saveOperation(op); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func (s *Service) preserveUnknownStop(reason string, cause error) {
+	if s.active == nil {
+		return
+	}
+	r := s.active
+	r.ExecutionStatus = "unknown"
+	s.blocked(r, reason)
+	if cause != nil {
+		r.Error = ptr(clip(reason+": "+cause.Error(), 1000))
+	}
+	s.State.SlotOccupied, s.State.CurrentTask = true, ptr(r.TaskID)
+	s.note(r, "steer", "stop", "unknown", "execution stop unconfirmed", reason, nil)
+	s.closeActivity(r)
+	if err := s.save(); err != nil {
+		s.setError(err)
 	}
 }
 func RequestStop(c Config) error {

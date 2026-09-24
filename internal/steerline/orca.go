@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"sync"
 	"time"
 )
@@ -70,6 +71,21 @@ func parseEnvelope(b []byte) (orcaEnvelope, error) {
 
 func (c orcaClient) closeTerminal(ctx context.Context, handle string) {
 	_, _ = c.call(ctx, positiveDuration(c.cfg.CommandTimeout, 30*time.Second), "terminal", "close", "--terminal", handle, "--json")
+}
+
+func (c orcaClient) closeTerminalChecked(ctx context.Context, handle string) error {
+	if strings.TrimSpace(handle) == "" {
+		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "cannot close an empty terminal handle"}
+	}
+	out, callErr := c.call(ctx, positiveDuration(c.cfg.CommandTimeout, 30*time.Second), "terminal", "close", "--terminal", handle, "--json")
+	_, parseErr := parseEnvelope(out)
+	if callErr != nil {
+		return &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "Orca terminal close response is uncertain", Cause: errors.Join(callErr, parseErr)}
+	}
+	if parseErr != nil {
+		return &BackendError{Code: BackendRejected, Diagnostic: "Orca rejected terminal close", Cause: parseErr}
+	}
+	return nil
 }
 
 func (c orcaClient) showTerminal(ctx context.Context, handle string) (orcaTerminal, error) {

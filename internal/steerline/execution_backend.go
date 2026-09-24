@@ -187,7 +187,7 @@ type ExecutionBackend interface {
 	InspectWorkspace(context.Context, ExecutionRef) (WorkspaceInspection, error)
 	ReadOutput(context.Context, ExecutionRef, string, int) (OutputBatch, error)
 	Reply(context.Context, ExecutionRef, string, Operation) (ReplyReceipt, error)
-	StopExecution(context.Context, ExecutionRef, Operation) (StopReceipt, error)
+	StopExecution(context.Context, ExecutionRef, Operation, *Worker) (StopReceipt, error)
 	DetachObservation(context.Context, *Worker) error
 	SettleResources(context.Context, ExecutionRef, string) ([]string, error)
 	ReconcileOperation(context.Context, Operation) (Operation, error)
@@ -564,8 +564,28 @@ func readOutputPrefix(f *os.File, offset int64) (string, error) {
 func (b localExecutionBackend) Reply(context.Context, ExecutionRef, string, Operation) (ReplyReceipt, error) {
 	return ReplyReceipt{}, unsupported("Reply")
 }
-func (b localExecutionBackend) StopExecution(context.Context, ExecutionRef, Operation) (StopReceipt, error) {
-	return StopReceipt{}, unsupported("StopExecution requires service shutdown policy")
+func (b localExecutionBackend) StopExecution(ctx context.Context, ref ExecutionRef, _ Operation, worker *Worker) (StopReceipt, error) {
+	if ref.Backend != BackendLocal || ref.Protocol != ProtocolLocalProcess || ref.Target != targetFor(b.config) {
+		return StopReceipt{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "fixed local process target changed"}
+	}
+	if worker == nil || worker.proc == nil || worker.proc.Identity() != ref.External {
+		return StopReceipt{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "local stop handle does not match the fixed process identity"}
+	}
+	if err := ctx.Err(); err != nil {
+		return StopReceipt{}, err
+	}
+	obs, err := b.Observe(ctx, ref)
+	if err != nil {
+		return StopReceipt{}, err
+	}
+	if obs.Liveness == "exited" {
+		return StopReceipt{Disposition: "confirmed", Diagnostic: obs.Diagnostic}, nil
+	}
+	if obs.Liveness != "live" {
+		return StopReceipt{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "local process liveness cannot be verified"}
+	}
+	worker.Kill()
+	return StopReceipt{Disposition: "accepted"}, nil
 }
 func (b localExecutionBackend) DetachObservation(context.Context, *Worker) error {
 	// Local stdout supervision owns the worker pipe. Closing it can signal the
@@ -649,8 +669,36 @@ func (b orcaTerminalBackend) Reply(ctx context.Context, ref ExecutionRef, text s
 	}
 	return ReplyReceipt{InputAccepted: true}, nil
 }
-func (b orcaTerminalBackend) StopExecution(context.Context, ExecutionRef, Operation) (StopReceipt, error) {
-	return StopReceipt{Disposition: "rejected", Diagnostic: "Orca terminal v2 stop behavior is not verified; use explicit service shutdown/manual recovery"}, unsupported("StopExecution")
+func (b orcaTerminalBackend) StopExecution(ctx context.Context, ref ExecutionRef, _ Operation, worker *Worker) (StopReceipt, error) {
+	obs, err := b.Observe(ctx, ref)
+	if err != nil {
+		return StopReceipt{}, err
+	}
+	if obs.Liveness == "exited" {
+		return StopReceipt{Disposition: "confirmed", Diagnostic: obs.Diagnostic}, nil
+	}
+	if obs.Liveness != "live" {
+		return StopReceipt{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "Orca terminal is not verifiably live"}
+	}
+	if worker != nil && (worker.proc == nil || worker.proc.Identity() != ref.External) {
+		return StopReceipt{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "Orca observer handle does not match the fixed terminal identity"}
+	}
+	if err := (orcaClient{cfg: b.config}).closeTerminalChecked(ctx, ref.External.Terminal); err != nil {
+		return StopReceipt{}, err
+	}
+	if worker != nil {
+		if proc, ok := worker.proc.(*orcaProcess); ok {
+			proc.Close()
+		}
+	}
+	obs, err = b.Observe(ctx, ref)
+	if err != nil {
+		return StopReceipt{}, &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "terminal close was accepted but stop could not be confirmed", Cause: err}
+	}
+	if obs.Liveness == "exited" {
+		return StopReceipt{Disposition: "confirmed", Diagnostic: obs.Diagnostic}, nil
+	}
+	return StopReceipt{Disposition: "accepted", Diagnostic: "close accepted; terminal exit is not yet confirmed"}, nil
 }
 func (b orcaTerminalBackend) DetachObservation(ctx context.Context, w *Worker) error {
 	if w == nil {
