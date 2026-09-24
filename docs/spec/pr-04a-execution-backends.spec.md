@@ -14,6 +14,8 @@ Service 唯一决定任务领取、准入、执行槽、业务状态转换、重
 
 本阶段接入本机 local / Orca terminal v2；不增加 SQLite、minimal-v1、多执行调度或受监管远端生产支持。[Spec 02](02-execution-model-and-adapter.md) 负责中心模型/存储，[Spec 03](03-remote-execution-and-viewer.md) 负责远端接入；若这些已先落地，复用其权威接口，禁止平行实现另一套 adapter 或业务写者。
 
+架构继续保持 Linux 兼容：公共契约不依赖 Windows 进程或窗口类型，平台特定的进程/服务实现继续隔离。PR 4A 的验收在 Windows 本机完成；Linux 原生运行、生命周期测试和交叉构建均不作为本阶段通过或转正式 PR 的条件。
+
 ## B2：固定输入与身份
 
 - AttemptSpec 是不可变输入，至少含 project/task/run 或 workflow/execution/attempt 身份、操作 ID、固定配置摘要、仓库/base、工作区要求、agent、协议和目标。当前 Run 映射单个 execution，不在公共接口固化一个 Task 只能有一个 execution。
@@ -75,6 +77,6 @@ Service 唯一决定任务领取、准入、执行槽、业务状态转换、重
 | B-A7 | local retry 与 Orca 同会话续跑已有安全资格保持；无跨后端 fallback 或未知执行自动替换 |
 | B-A8 | 意图/绑定/投影各持久化边界故障后可对账；损坏或不支持的旧状态阻止副作用，不自动迁移 |
 | B-A9 | 取消、慢观察、大输出不阻塞停止与控制；观察任务结束后无泄漏或跨 ref 取消 |
-| B-A10 | 真实 local Codex 和本机 Orca 的启动、输出、停止、重连证据归档；Windows 在真实服务窗口中验证客户端退出/重连时身份不变、关窗后本机 worker 清理及控制 stop 的原实例证明，Linux 行为另行记录；PR 3 生命周期回归通过 |
+| B-A10 | 在 Windows 隔离测试仓库中归档真实 local Codex 和本机 Orca 的启动、输出、停止、重连证据；在真实服务窗口中验证客户端退出/重连时身份不变、关窗后本机 worker 清理及控制 stop 的原实例证明；PR 3 生命周期回归通过 |
 
 必需验收不能以 skipped 计为通过。平台能力缺口记录为阻塞或明确的可选 unsupported；不能以“接口已经统一”宣告未验证的路径稳定。

@@ -18,7 +18,7 @@
 
 实现分支从更新后的 `origin/main` 创建。第一轮已添加 AttemptSpec/ExecutionRef/Operation/Observation/Capability DTO、local 与 Orca terminal-v2 启动适配器、`execution/v1` 文件记录和启动/Orca 决策续跑接入；runtime v4 保持不变。详见 [验证报告](../validation/pr-04a-execution-backends.md)。
 
-此进度不代表本 Plan 已完成：Service 停服现经 ExecutionBackend.StopExecution 写入独立 Operation 并观察原身份退出，但尚无单独的执行停止控制指令；local 独立 DetachObservation、资源结算、Orca 输出读取、全部恢复边界、verified 能力副作用守卫、真实 local Codex/Orca 原生证据及 Linux 原生生命周期尚未完成。报告会按真实结果列出当前阻塞项；fake 平台测试不替代这些门槛。
+此进度不代表本 Plan 已完成：Service 停服现经 ExecutionBackend.StopExecution 写入独立 Operation 并观察原身份退出，但尚无单独的执行停止控制指令；local 独立 DetachObservation、资源结算、Orca 输出读取、全部恢复边界、verified 能力副作用守卫及 Windows 上真实 local Codex/Orca 证据尚未完成。报告会按真实结果列出当前阻塞项；fake 平台测试不替代这些门槛。Linux 仅要求架构保持兼容，不纳入本阶段验收。
 
 ## 验证矩阵
 
@@ -27,10 +27,10 @@
 | 公共契约 | B-A1～B-A9 对两个适配器运行同一场景；断言平台调用次数/精确 ref/状态与资源保留，不仅断言返回文本 |
 | 故障与恢复 | start/stop/reply 响应丢失、磁盘写失败、重启、重复 operation、同 ID 异负载、身份替换、慢观察/取消；未知结果不得重发 |
 | 回归 | 当前格式的执行、观察、answer、local retry、PR 核验和 PR 3 生命周期相关测试；旧格式明确拒绝 |
-| 原生 local | 隔离测试仓库中真实 Codex 启动/输出/停止；Windows 从固定入口打开真实服务窗口，在窗口仍开时关闭/重连客户端核验 service/worker 身份，并分别核验控制 stop、Ctrl+C 与关窗后的 worker 和锁；离线 `StartService` 只返回 `window-required`，不创建后台进程。Linux 原生退出/回收/分离观察单独验证；仅交叉编译不能代替原生证据 |
+| 原生 local | Windows 隔离测试仓库中真实 Codex 启动/输出/停止；从固定入口打开真实服务窗口，在窗口仍开时关闭/重连客户端核验 service/worker 身份，并分别核验控制 stop、Ctrl+C 与关窗后的 worker 和锁；离线 `StartService` 只返回 `window-required`，不创建后台进程 |
 | 原生 Orca | 隔离测试 worktree/terminal 中启动/观察/停止/重连、同会话定位；记录版本、ref、残留资源和能力证据。不得操作生产任务 |
 
-运行 `go test ./... -count=1 -timeout 10m`、`go vet ./...`、支持平台构建及 `git diff --check`。针对并发观察/取消/事实应用运行 race 检查（在支持工具链的平台），不可执行时记录环境阻塞。真实平台缺失是相关必需验收未完成，不能把 fake 或 skipped 当成替代。
+在 Windows 运行 `go test ./... -count=1 -timeout 10m`、`go vet ./...`、Windows 构建及 `git diff --check`。针对并发观察/取消/事实应用运行 race 检查（在支持工具链时）；不可执行时记录环境阻塞。Linux 的公共接口与平台实现继续保持隔离，可做非门槛构建检查，但本阶段不要求 Linux 原生测试或交叉构建。Windows 真实平台缺失是相关必需验收未完成，不能把 fake 或 skipped 当成替代。
 
 ## 完成与交接
 
