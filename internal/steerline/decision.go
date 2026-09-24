@@ -351,8 +351,15 @@ func (s *Service) applyDecisions(ctx context.Context) error {
 		if e := s.resumeAfterDecision(ctx, r); e != nil {
 			s.blocked(r, "Decision resume failed: "+e.Error())
 			s.note(r, "steer", "decision", "failed", "decision resume failed", e.Error(), nil)
-			s.State.SlotOccupied = false
-			s.State.CurrentTask = nil
+			var backendErr *BackendError
+			if errors.As(e, &backendErr) && (backendErr.Code == BackendOutcomeUnknown || backendErr.Code == BackendIdentityMismatch || backendErr.Code == BackendUnreachable || backendErr.Code == BackendProtocolInvalid) {
+				r.ExecutionStatus = "unknown"
+				s.State.SlotOccupied = true
+				s.State.CurrentTask = ptr(r.TaskID)
+			} else {
+				s.State.SlotOccupied = false
+				s.State.CurrentTask = nil
+			}
 			s.closeActivity(r)
 			if se := s.save(); se != nil {
 				return se
@@ -379,38 +386,86 @@ func (s *Service) applyDecisions(ctx context.Context) error {
 // continuation. It refuses to act unless the terminal is the same live
 // incarnation, so a restart or a replaced terminal never silently resumes.
 func (s *Service) resumeAfterDecision(ctx context.Context, r *Run) error {
-	if s.Config.hostName() != "orca" {
-		return errors.New("decision resume is only supported for the orca host")
+	if r.Process == nil || r.Process.Kind != "orca" || r.Process.Terminal == "" || r.Decision == nil {
+		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "run has no complete Orca decision/terminal identity"}
 	}
-	if r.Process == nil || r.Process.Kind != "orca" || r.Process.Terminal == "" {
-		return errors.New("run has no recorded orca terminal")
-	}
-	if r.WorktreePath == nil || r.ResultPath == nil {
+	if r.ResultPath == nil {
 		return errors.New("run has no worktree or result path")
 	}
-	client := orcaClient{cfg: s.Config}
-	term, e := client.showTerminal(ctx, r.Process.Terminal)
+	records := executionRecords{root: s.Config.RunDir}
+	ref, e := records.loadBinding(r.RunID, r.AttemptID)
 	if e != nil {
-		return e
+		if !os.IsNotExist(e) {
+			return e
+		}
+		// Old runtime records are observed in place. Only the identity already
+		// persisted in runtime is mapped; missing external fields remain incomplete.
+		ref = executionRefFor(s.Config, r)
+		if ref.Incomplete || ref.Backend != BackendOrca || ref.External.Incarnation == "" || ref.External.RuntimeID == "" {
+			return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "legacy Orca binding lacks runtime/incarnation identity"}
+		}
 	}
-	if term.Orphaned || !term.Connected {
-		return errors.New("orca terminal is not live")
-	}
-	if term.IncarnationID != "" && r.Process.Incarnation != "" && term.IncarnationID != r.Process.Incarnation {
-		return errors.New("orca terminal incarnation changed; refusing to resume")
+	backend := orcaTerminalBackend{config: s.Config}
+	if ref.Backend != BackendOrca || ref.Protocol != ProtocolOrcaTerminalV2 || ref.Target != targetFor(s.Config) {
+		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "fixed execution backend/protocol/target no longer matches the configured Orca connection"}
 	}
 	contPath := decisionContinuePath(r)
+	resultInWorktree := filepath.Join(ref.WorkspacePath, orcaResultFile)
+	if ref.WorkspacePath == "" || !filepath.IsAbs(ref.WorkspacePath) {
+		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "fixed Orca workspace identity is incomplete"}
+	}
+	opID := "reply-" + r.Decision.ID
+	answer := "Read " + contPath + " and continue. Follow it exactly."
+	op := Operation{Version: ExecutionRecordVersion, ID: opID, RunID: r.RunID, AttemptID: r.AttemptID, Backend: ref.Backend, Protocol: ref.Protocol, Target: ref.Target, Action: "reply", PayloadDigest: digestValue(struct{ DecisionID, Answer string }{r.Decision.ID, answer}), Status: OperationPending, StartedAt: now(), UpdatedAt: now()}
+	if old, loadErr := records.loadOperation(r.RunID, r.AttemptID, opID); loadErr == nil {
+		if old.PayloadDigest != op.PayloadDigest {
+			return errors.New("reply operation id conflicts with its fixed answer")
+		}
+		return fmt.Errorf("reply operation is already %s; refusing duplicate continuation", old.Status)
+	} else if !os.IsNotExist(loadErr) {
+		return loadErr
+	}
+	if e := records.saveOperation(op); e != nil {
+		return e
+	}
+	op.Status, op.UpdatedAt = OperationInFlight, now()
+	if e := records.saveOperation(op); e != nil {
+		return e
+	}
 	if e := AtomicWrite(contPath, []byte(decisionContinuation(r))); e != nil {
+		op.Status, op.Diagnostic, op.UpdatedAt = OperationRejected, e.Error(), now()
+		if saveErr := records.saveOperation(op); saveErr != nil {
+			return errors.Join(e, saveErr)
+		}
 		return e
 	}
-	resultInWorktree := filepath.Join(*r.WorktreePath, orcaResultFile)
 	// Drop the answered result so supervision cannot mistake it for the new one.
-	_ = os.Remove(resultInWorktree)
-	if e := client.terminalSend(ctx, r.Process.Terminal, "Read "+contPath+" and continue. Follow it exactly."); e != nil {
+	if e := os.Remove(resultInWorktree); e != nil && !os.IsNotExist(e) {
 		return e
 	}
-	proc := &orcaProcess{cfg: s.Config, term: term}
-	proc.term.Handle = r.Process.Terminal
+	reply, e := backend.Reply(ctx, ref, answer, op)
+	if e != nil {
+		var backendErr *BackendError
+		if errors.As(e, &backendErr) && backendErr.Code == BackendOutcomeUnknown {
+			op.Status = OperationUnknown
+		} else {
+			op.Status = OperationRejected
+		}
+		op.Diagnostic, op.UpdatedAt = e.Error(), now()
+		if saveErr := records.saveOperation(op); saveErr != nil {
+			return errors.Join(e, saveErr)
+		}
+		return e
+	}
+	if !reply.InputAccepted {
+		return &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "Orca reply did not confirm input acceptance"}
+	}
+	op.Status, op.UpdatedAt = OperationAccepted, now()
+	if e := records.saveOperation(op); e != nil {
+		return &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "reply was accepted but its durable receipt could not be saved", Cause: e}
+	}
+	client := orcaClient{cfg: s.Config}
+	proc := &orcaProcess{cfg: s.Config, term: orcaTerminal{Handle: ref.External.Terminal, RuntimeID: ref.External.RuntimeID, IncarnationID: ref.External.Incarnation}}
 	s.worker = superviseOrcaResult(s.Config, r, client, proc, resultInWorktree, *r.ResultPath)
 	s.active = r
 	s.State.SlotOccupied = true

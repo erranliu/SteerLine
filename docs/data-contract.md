@@ -66,6 +66,8 @@
 
 execution_status=succeeded 仅表示进程正常退出，仍可能 finish_task_status=blocked（结果缺失/无效）、waiting_decision（等待人工决策）或 waiting_pr_merge。只有重新核实对应 PR 确实合入目标主线、配置的结项命令成功返回匹配回执（若有），且 Beads show 返回 closed，才写 completed。任务已 closed 但回调失败时仍 waiting_pr_merge，重启后重跑幂等回调。finish_task_status 不是“finish 技能函数是否返回”。
 
+PR 4A 不扩展严格 runtime v4。新执行身份、能力检查和外部动作回执保存在 `execution/v1/`：binding 路径为 `bindings/<run_id>/<attempt_id>.json`，Operation 路径为 `operations/<run_id>/<attempt_id>/<operation_id>.json`，能力快照在 `capabilities/`。binding 不可变；Operation ID 绑定固定负载摘要，同 ID 异负载拒绝。该记录目录由持锁服务单写，runtime 只作兼容投影；未知或矛盾状态保留槽位，不自动重发副作用。
+
 准备 worktree 时 execution_status=pending；创建或接入检查失败为 failed/blocked；遗留 pending/running 为 unknown/blocked。重启只核对目录、共享 Git 元数据、分支和起点祖先关系，不重建、不重跑。实际工作目录等字段只在创建及技能/Beads 核验全部通过后写入；创建后检查失败时，目录可能已存在，应查看 workspace_intent 和 error。
 
 兼容 v1 的等待合并记录：保留其 PR 查询，不把旧的技能自报工作目录升级为调度器核验事实，workspace_intent/worktree_branch 保持 null。旧 blocked/unknown 或孤儿运行缺少调度器准备记录，不能通过新版 accept-result 冒充已核验的运行，需人工处理原任务；程序不生成虚构的准备证据。

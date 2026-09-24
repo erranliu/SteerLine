@@ -154,7 +154,7 @@ func TestOrcaDecisionResumesRun(t *testing.T) {
 
 	run := s.State.Runs[0]
 	if run.FinishTaskStatus != "waiting_decision" || run.Decision == nil {
-		t.Fatalf("run did not pause for a decision: %+v", run)
+		t.Fatalf("run did not pause for a decision: status=%s execution=%s error=%s", run.FinishTaskStatus, run.ExecutionStatus, deref(run.Error))
 	}
 	if !fileExists(run.Decision.RequestPath) {
 		t.Fatalf("decision request file missing: %s", run.Decision.RequestPath)
