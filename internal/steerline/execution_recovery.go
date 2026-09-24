@@ -3,7 +3,13 @@ package steerline
 import (
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 )
+
+func manuallyStopped(run *Run) bool {
+	return run.ManualStop != nil && run.ManualStop.AttemptID == run.AttemptID && !run.ManualStop.ConfirmedAt.IsZero()
+}
 
 // reconcileRunExecutionRecord compares the two durable execution records with
 // the runtime projection. It never queries or restarts an external worker.
@@ -23,11 +29,18 @@ func (s *Service) reconcileRunExecutionRecord(run *Run) error {
 	if refErr != nil && !os.IsNotExist(refErr) {
 		return fmt.Errorf("invalid execution binding for run %s: %w", run.RunID, refErr)
 	}
+	var bound *ExecutionRef
+	if refErr == nil {
+		bound = &ref
+	}
+	if err := s.reconcileAttemptOperations(run, bound); err != nil {
+		return err
+	}
 	if os.IsNotExist(opErr) {
 		if refErr == nil {
 			return fmt.Errorf("run %s has an execution binding without its start operation", run.RunID)
 		}
-		if run.Process != nil || run.ExecutionStatus != "pending" || run.WorkspaceIntent != nil {
+		if !manuallyStopped(run) && (run.Process != nil || run.ExecutionStatus != "pending" || run.WorkspaceIntent != nil) {
 			run.ExecutionStatus = "unknown"
 			s.blocked(run, "Run lacks a current start operation; preserve state without migration")
 			s.State.SlotOccupied = true
@@ -41,7 +54,7 @@ func (s *Service) reconcileRunExecutionRecord(run *Run) error {
 		if op.Ref != nil || op.Status == OperationAccepted || op.Status == OperationConfirmed {
 			return fmt.Errorf("run %s has an accepted start without its execution binding", run.RunID)
 		}
-		if op.Status == OperationInFlight || op.Status == OperationUnknown {
+		if !manuallyStopped(run) && (op.Status == OperationInFlight || op.Status == OperationUnknown) {
 			run.ExecutionStatus = "unknown"
 			s.blocked(run, "Start operation has no binding; outcome remains unknown and cannot be replayed")
 			s.State.SlotOccupied = true
@@ -73,10 +86,52 @@ func (s *Service) reconcileRunExecutionRecord(run *Run) error {
 		s.blocked(run, "Runtime projection rebuilt from the fixed execution binding; manual recovery required")
 		s.State.SlotOccupied = true
 	}
-	if op.Status == OperationInFlight || op.Status == OperationUnknown {
+	if !manuallyStopped(run) && (op.Status == OperationInFlight || op.Status == OperationUnknown) {
 		run.ExecutionStatus = "unknown"
 		s.blocked(run, "Start operation remains outcome_unknown; no replacement worker will be started")
 		s.State.SlotOccupied = true
+	}
+	return nil
+}
+
+// Reconcile every side effect for the current attempt, not just its launch.
+// An older runtime projection cannot erase a sent reply or an uncertain stop.
+func (s *Service) reconcileAttemptOperations(run *Run, ref *ExecutionRef) error {
+	records := executionRecords{root: s.Config.RunDir}
+	dir := filepath.Dir(records.operationPath(run.RunID, run.AttemptID, attemptOperationID(run.RunID, run.AttemptID)))
+	entries, err := os.ReadDir(dir)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), ".steerline-") && strings.HasSuffix(entry.Name(), ".tmp") && !entry.IsDir() {
+			continue // Incomplete atomic replacements are never operation authority.
+		}
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
+			return fmt.Errorf("invalid execution operation entry for run %s: %s", run.RunID, entry.Name())
+		}
+		id := strings.TrimSuffix(entry.Name(), ".json")
+		op, err := records.loadOperation(run.RunID, run.AttemptID, id)
+		if err != nil {
+			return fmt.Errorf("invalid execution operation for run %s: %w", run.RunID, err)
+		}
+		if op.Action == "start" {
+			if id != attemptOperationID(run.RunID, run.AttemptID) {
+				return fmt.Errorf("run %s has a conflicting start operation", run.RunID)
+			}
+			continue
+		}
+		if ref == nil || op.Ref == nil || digestValue(*op.Ref) != digestValue(*ref) {
+			return fmt.Errorf("run %s operation %s lacks its matching fixed binding", run.RunID, id)
+		}
+		if !manuallyStopped(run) && (op.Status == OperationInFlight || op.Status == OperationUnknown || op.Action == "stop" && op.Status == OperationAccepted) {
+			run.ExecutionStatus = "unknown"
+			s.blocked(run, "Execution operation "+id+" remains unresolved; no replacement execution or replay is allowed")
+			s.State.SlotOccupied = true
+		}
 	}
 	return nil
 }

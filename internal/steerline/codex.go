@@ -65,7 +65,10 @@ func Prompt(c Config, t Task, r *Run) (string, error) {
 
 // StartWorker prepares the per-run files and hands the actual process launch to
 // the configured host. Scheduling, recovery and result authority stay here.
-func StartWorker(c Config, t Task, r *Run) (*Worker, error) {
+func StartWorker(ctx context.Context, c Config, t Task, r *Run) (*Worker, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if r.WorktreePath == nil || r.BaseCommit == nil || r.WorktreeBranch == nil || canonical(c.Repository) != canonical(*r.WorktreePath) || c.workerEnv["BEADS_DIR"] == "" || c.workerEnv["BEADS_ACTOR"] != r.Claimant {
 		return nil, errors.New("worker requires verified workspace and shared Beads environment")
 	}
@@ -112,7 +115,7 @@ func StartWorker(c Config, t Task, r *Run) (*Worker, error) {
 		Stdin:      bytes.NewReader([]byte(prompt)),
 		Env:        c.workerEnv,
 	}
-	return SpawnerFor(c).Start(context.Background(), spec)
+	return SpawnerFor(c).Start(ctx, spec)
 }
 
 func ReadResult(path string, r *Run) (Result, error) {

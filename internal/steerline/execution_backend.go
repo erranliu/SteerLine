@@ -124,6 +124,7 @@ type CapabilityReport struct {
 	Target          ExecutionTarget   `json:"target"`
 	CheckedAt       time.Time         `json:"checked_at"`
 	PlatformVersion string            `json:"platform_version,omitempty"`
+	AgentVersion    string            `json:"agent_version,omitempty"`
 	Capabilities    []Capability      `json:"capabilities"`
 }
 
@@ -225,12 +226,13 @@ type executionRecords struct{ root string }
 
 func capabilityReportKey(report CapabilityReport) string {
 	return digestValue(struct {
-		Backend  BackendKind
-		Protocol ExecutionProtocol
-		Target   ExecutionTarget
-		Agent    AgentSpec
-		Version  string
-	}{report.Backend, report.Protocol, report.Target, report.Agent, report.PlatformVersion})
+		Backend      BackendKind
+		Protocol     ExecutionProtocol
+		Target       ExecutionTarget
+		Agent        AgentSpec
+		Version      string
+		AgentVersion string
+	}{report.Backend, report.Protocol, report.Target, report.Agent, report.PlatformVersion, report.AgentVersion})
 }
 
 func verifyCapabilityEvidence(value string) error {
@@ -324,7 +326,7 @@ func (r executionRecords) loadCapabilityReport(key CapabilityReport) (Capability
 	if err = decode(b, &report); err != nil {
 		return report, fmt.Errorf("invalid capability report; preserve it: %w", err)
 	}
-	if report.Version != 1 || report.Backend != key.Backend || report.Protocol != key.Protocol || report.Target != key.Target || report.Agent != key.Agent || report.PlatformVersion != key.PlatformVersion || report.CheckedAt.IsZero() {
+	if report.Version != 1 || report.Backend != key.Backend || report.Protocol != key.Protocol || report.Target != key.Target || report.Agent != key.Agent || report.PlatformVersion != key.PlatformVersion || report.AgentVersion != key.AgentVersion || report.CheckedAt.IsZero() {
 		return report, errors.New("capability report identity/version mismatch")
 	}
 	if len(report.Capabilities) == 0 {
@@ -433,7 +435,7 @@ func (r executionRecords) loadBinding(run, attempt string) (ExecutionRef, error)
 		return ExecutionRef{}, err
 	}
 	var ref ExecutionRef
-	if err = json.Unmarshal(b, &ref); err != nil {
+	if err = decode(b, &ref); err != nil {
 		return ref, fmt.Errorf("invalid execution binding; preserve it: %w", err)
 	}
 	if ref.Version != ExecutionRecordVersion || ref.RunID != run || ref.AttemptID != attempt {
@@ -450,6 +452,9 @@ func validateExecutionOperation(op Operation) error {
 	}
 	if _, err := hex.DecodeString(op.PayloadDigest); err != nil {
 		return errors.New("invalid operation payload digest")
+	}
+	if op.Action != "start" && op.Action != "stop" && op.Action != "reply" {
+		return errors.New("unsupported execution operation action")
 	}
 	switch op.Status {
 	case OperationPending, OperationInFlight, OperationAccepted, OperationConfirmed, OperationRejected, OperationUnknown:
@@ -497,7 +502,7 @@ func (r executionRecords) loadOperation(run, attempt, id string) (Operation, err
 		return Operation{}, err
 	}
 	var op Operation
-	if err = json.Unmarshal(b, &op); err != nil {
+	if err = decode(b, &op); err != nil {
 		return op, fmt.Errorf("invalid operation record; preserve it: %w", err)
 	}
 	if op.Version != ExecutionRecordVersion || op.RunID != run || op.AttemptID != attempt || op.ID != id {
@@ -565,9 +570,9 @@ func (b localExecutionBackend) Start(ctx context.Context, s AttemptSpec) (StartR
 	r.WorktreePath = &path
 	r.WorktreeBranch = &branch
 	r.BaseCommit = &base
-	w, err := StartWorker(c, s.Task, &r)
+	w, err := StartWorker(ctx, c, s.Task, &r)
 	if err != nil {
-		return StartReceipt{}, &BackendError{Code: BackendRejected, Diagnostic: "local process launch failed", Cause: err}
+		return StartReceipt{Disposition: "rejected", Run: r, ResidualResources: []string{path}}, &BackendError{Code: BackendRejected, Diagnostic: "local process launch failed", Cause: err}
 	}
 	id := w.proc.Identity()
 	ref := ExecutionRef{Version: 1, Backend: BackendLocal, Protocol: ProtocolLocalProcess, Target: s.Target, Agent: s.Agent, RunID: s.RunID, AttemptID: s.AttemptID, WorkspacePath: path, WorkspaceBranch: branch, BaseCommit: base, External: id, Generation: id.Created}
@@ -816,7 +821,15 @@ func (b orcaTerminalBackend) Probe(ctx context.Context, target ExecutionTarget, 
 	if version == "" {
 		return CapabilityReport{}, &BackendError{Code: BackendProtocolInvalid, Diagnostic: "Orca version probe returned no version"}
 	}
-	return capabilityReport(BackendOrca, ProtocolOrcaTerminalV2, target, agent, version), nil
+	report := capabilityReport(BackendOrca, ProtocolOrcaTerminalV2, target, agent, version)
+	if b.config.needsCodexExecutable() {
+		out, err := (Runner{Dir: b.config.Repository, Timeout: positiveDuration(b.config.CommandTimeout, 30*time.Second)}).Output(ctx, b.config.Codex, "--version")
+		if err != nil || strings.TrimSpace(string(out)) == "" {
+			return CapabilityReport{}, &BackendError{Code: BackendUnreachable, Diagnostic: "Orca Codex override version probe failed", Cause: err}
+		}
+		report.AgentVersion = strings.TrimSpace(string(out))
+	}
+	return report, nil
 }
 func (b orcaTerminalBackend) Start(ctx context.Context, s AttemptSpec) (StartReceipt, error) {
 	r := cloneRun(s.Run)
@@ -841,15 +854,9 @@ func (b orcaTerminalBackend) Observe(ctx context.Context, ref ExecutionRef) (Obs
 	if err := ctx.Err(); err != nil {
 		return Observation{}, err
 	}
-	term, e := showBoundOrcaTerminal(ctx, b.config, old)
+	term, e := inspectBoundOrcaTerminal(ctx, b.config, old)
 	if e != nil {
-		return Observation{}, &BackendError{Code: BackendUnreachable, Diagnostic: "could not inspect fixed Orca terminal", Cause: e}
-	}
-	if old.RuntimeID == "" || old.Incarnation == "" || term.RuntimeID == "" || term.IncarnationID == "" {
-		return Observation{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "Orca runtime/incarnation evidence is incomplete"}
-	}
-	if old.RuntimeID != term.RuntimeID || old.Incarnation != term.IncarnationID {
-		return Observation{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "Orca terminal runtime/incarnation changed"}
+		return Observation{}, e
 	}
 	life := "live"
 	if term.Status == "exited" {
@@ -1004,8 +1011,12 @@ func (b orcaTerminalBackend) Reply(ctx context.Context, ref ExecutionRef, text s
 	if targetFor(b.config) != ref.Target {
 		return ReplyReceipt{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "configured Orca connection differs from the fixed execution target"}
 	}
-	if _, err := (orcaTerminalBackend{config: b.config}).Observe(ctx, ref); err != nil {
+	obs, err := b.Observe(ctx, ref)
+	if err != nil {
 		return ReplyReceipt{}, err
+	}
+	if obs.Liveness != "live" {
+		return ReplyReceipt{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "continuation requires the original live terminal"}
 	}
 	if !stableExecutionID(ref.RunID) || !stableExecutionID(ref.AttemptID) || !filepath.IsAbs(ref.WorkspacePath) {
 		return ReplyReceipt{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "Orca continuation lacks fixed attempt/workspace identity"}
@@ -1021,12 +1032,14 @@ func (b orcaTerminalBackend) Reply(ctx context.Context, ref ExecutionRef, text s
 	if err := os.Remove(resultInWorktree); err != nil && !os.IsNotExist(err) {
 		return ReplyReceipt{}, &BackendError{Code: BackendRejected, Diagnostic: "previous Orca result could not be cleared before continuation", Cause: err}
 	}
-	if err := (orcaClient{cfg: b.config}).terminalSend(ctx, ref.External.Terminal, text); err != nil {
-		return ReplyReceipt{}, &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "Orca may have accepted the continuation before the response failed", Cause: err}
+	receipt, err := (orcaClient{cfg: b.config}).terminalSend(ctx, ref.External, text)
+	if err != nil {
+		return ReplyReceipt{}, err
 	}
 	proc := &orcaProcess{cfg: b.config, term: orcaTerminal{Handle: ref.External.Terminal, RuntimeID: ref.External.RuntimeID, IncarnationID: ref.External.Incarnation}}
 	worker := superviseOrcaResult(b.config, proc, resultInWorktree, resultOut)
-	return ReplyReceipt{InputAccepted: true, Worker: worker}, nil
+	receipt.Worker = worker
+	return receipt, nil
 }
 func (b orcaTerminalBackend) StopExecution(ctx context.Context, ref ExecutionRef, _ Operation, worker *Worker) (StopReceipt, error) {
 	obs, err := b.Observe(ctx, ref)

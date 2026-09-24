@@ -86,6 +86,18 @@ type orcaEnvelope struct {
 	} `json:"_meta"`
 }
 
+func inspectBoundOrcaTerminal(ctx context.Context, c Config, identity ProcessIdentity) (orcaTerminal, error) {
+	term, err := showBoundOrcaTerminal(ctx, c, identity)
+	if err != nil {
+		return term, &BackendError{Code: BackendUnreachable, Diagnostic: "could not inspect fixed Orca terminal", Cause: err}
+	}
+	if identity.RuntimeID == "" || identity.Incarnation == "" || term.Handle != identity.Terminal ||
+		term.RuntimeID != identity.RuntimeID || term.IncarnationID != identity.Incarnation {
+		return term, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "Orca terminal runtime/handle/incarnation changed or is incomplete"}
+	}
+	return term, nil
+}
+
 type orcaClient struct{ cfg Config }
 
 func positiveDuration(s string, def time.Duration) time.Duration {

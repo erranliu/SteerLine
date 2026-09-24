@@ -39,11 +39,11 @@ func (s *Service) startRetry(ctx context.Context, id string) error {
 	if r.FinishTaskStatus != "blocked" || (r.ExecutionStatus != "failed" && r.ExecutionStatus != "succeeded") || r.PR.URL != nil {
 		return errors.New("retry requires a blocked run without a bound PR")
 	}
-	inspection, err := s.readRunWorkspace(ctx, r)
+	inspection, err := s.inspectRetryWorkspace(ctx, r)
 	if err != nil {
 		return err
 	}
-	if inspection.Head != *r.BaseCommit {
+	if inspection.Head != inspection.Base {
 		return errors.New("retry is limited to startup failures; worktree HEAD must still equal base_commit")
 	}
 	if inspection.Dirty {
@@ -80,9 +80,11 @@ func (s *Service) startRetry(ctx context.Context, id string) error {
 	if err = AtomicWrite(filepath.Join(dir, "previous-run.json"), previous); err != nil {
 		return err
 	}
+	r.WorktreePath, r.WorktreeBranch, r.BaseCommit = ptr(inspection.Worktree), ptr(inspection.Branch), ptr(inspection.Base)
 	r.LogPath = ptr(filepath.Join(dir, "events.jsonl"))
 	r.ResultPath = ptr(filepath.Join(dir, "result.json"))
 	r.AttemptID = attemptID
+	r.ManualStop = nil
 	r.ExecutionStatus = "pending"
 	r.FinishTaskStatus = "pending"
 	r.BeadsStatus = task.Status
@@ -215,4 +217,29 @@ func (s *Service) startRetry(ctx context.Context, id string) error {
 		return err
 	}
 	return s.save()
+}
+
+// A local launch rejected before a process existed has no ExecutionRef. Its
+// durable start intent and rejected receipt can still identify the prepared
+// workspace; verify it afresh without inventing a process identity.
+func (s *Service) inspectRetryWorkspace(ctx context.Context, r *Run) (WorkspaceInspection, error) {
+	if r.Process != nil {
+		return s.readRunWorkspace(ctx, r)
+	}
+	if r.Host != "local" || r.WorkspaceIntent == nil {
+		return WorkspaceInspection{}, errors.New("retry lacks a settled local preparation intent")
+	}
+	records := executionRecords{root: s.Config.RunDir}
+	if _, err := records.loadBinding(r.RunID, r.AttemptID); !os.IsNotExist(err) {
+		return WorkspaceInspection{}, errors.New("retry process projection conflicts with an existing or invalid binding")
+	}
+	op, err := records.loadOperation(r.RunID, r.AttemptID, attemptOperationID(r.RunID, r.AttemptID))
+	if err != nil {
+		return WorkspaceInspection{}, err
+	}
+	if op.Action != "start" || op.Status != OperationRejected || op.Ref != nil || op.Backend != BackendLocal || op.Protocol != ProtocolLocalProcess || op.Target != targetFor(s.Config) {
+		return WorkspaceInspection{}, errors.New("retry requires durable proof that local launch was rejected without an execution")
+	}
+	i := r.WorkspaceIntent
+	return (localExecutionBackend{config: s.Config}).InspectWorkspace(ctx, ExecutionRef{Backend: op.Backend, Protocol: op.Protocol, Target: op.Target, WorkspacePath: i.Path, WorkspaceBranch: i.Branch, BaseCommit: i.BaseCommit})
 }

@@ -1,0 +1,22 @@
+{
+  "agent": "codex",
+  "backend": "orca",
+  "captured_at": "2026-09-24T10:36:54.9297221Z",
+  "identity_sha256": "26da066304b0aa759db4545467a7ad2c7bf1796e7b67c3a7c7a8ffdd7fc19b9c",
+  "incarnation": "e6ceda45-4bc5-45a3-a8fc-d329f3b90b4e",
+  "orca_version": "1.4.209",
+  "output_bytes": 2005,
+  "output_sha256": "24f092d729100b30e67064ff0a6118b1c1f3afae9e747ec9c5f4a886b1d60b77",
+  "output_source": "stream",
+  "platform": "windows/amd64",
+  "protocol": "orca_terminal_v2",
+  "reconnect_matched": true,
+  "run_id": "75c2424b6bd18ac63c4967e0b5530df3",
+  "runtime_id": "30538bda-6d43-4df3-b799-924b7cd887ef",
+  "stop_status": "confirmed",
+  "target_id": "orca:f6912f0cd2ce941964b60190",
+  "terminal": "term_64308614-890b-426e-89ae-d4f5f7143dc7",
+  "version": 1,
+  "worktree": "C:\\Users\\lmas1\\orca\\workspaces\\SteerlineTest\\t-orca-native-75c2424b",
+  "worktree_retained": true
+}

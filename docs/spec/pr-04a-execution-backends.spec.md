@@ -14,8 +14,6 @@ Service 唯一决定任务领取、准入、执行槽、业务状态转换、重
 
 本阶段接入本机 local / Orca terminal v2；不增加 SQLite、minimal-v1、多执行调度或受监管远端生产支持。[Spec 02](02-execution-model-and-adapter.md) 负责中心模型/存储，[Spec 03](03-remote-execution-and-viewer.md) 负责远端接入；若这些已先落地，复用其权威接口，禁止平行实现另一套 adapter 或业务写者。
 
-公共契约与平台实现保持 Linux 架构兼容；PR 4A 仅在 Windows 本机验收。Linux 原生运行、生命周期测试和交叉构建不作为本阶段通过或转正式 PR 的条件。
-
 架构继续保持 Linux 兼容：公共契约不依赖 Windows 进程或窗口类型，平台特定的进程/服务实现继续隔离。PR 4A 的验收在 Windows 本机完成；Linux 原生运行、生命周期测试和交叉构建均不作为本阶段通过或转正式 PR 的条件。
 
 ## B2：固定输入与身份

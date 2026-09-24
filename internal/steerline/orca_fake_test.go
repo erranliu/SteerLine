@@ -146,8 +146,12 @@ func fakeOrcaCreate(stateDir string, argv []string) int {
 	if os.Getenv("STEERLINE_FAKE_ORCA_CREATE_RESPONSE_LOST") == "1" {
 		return 2 // External worktree/terminal exist, but the caller got no identity.
 	}
+	reportedBranch := branch
+	if os.Getenv("STEERLINE_FAKE_ORCA_WRONG_WORKSPACE_BRANCH") == "1" {
+		reportedBranch = "orca/unverified-branch"
+	}
 	return fakeOrcaOK(map[string]any{
-		"worktree":            map[string]any{"id": "fake::" + filepath.ToSlash(wt), "path": filepath.ToSlash(wt), "branch": "refs/heads/" + branch, "head": strings.TrimSpace(string(head))},
+		"worktree":            map[string]any{"id": "fake::" + filepath.ToSlash(wt), "path": filepath.ToSlash(wt), "branch": "refs/heads/" + reportedBranch, "head": strings.TrimSpace(string(head))},
 		"agentTerminalHandle": handle,
 	})
 }
@@ -172,6 +176,9 @@ func fakeOrcaSend(stateDir string, argv []string) int {
 	if e != nil {
 		return fakeOrcaErr("terminal_handle_stale", e.Error())
 	}
+	if os.Getenv("STEERLINE_FAKE_ORCA_SEND_RECEIPT") == "reject" {
+		return fakeOrcaOK(map[string]any{"send": map[string]any{"handle": st.Handle, "accepted": false}})
+	}
 	src := fakePromptPath(arg(argv, "--text"))
 	if src != "" {
 		if _, e := os.Stat(src); e != nil {
@@ -194,7 +201,20 @@ func fakeOrcaSend(stateDir string, argv []string) int {
 	if os.Getenv("STEERLINE_FAKE_ORCA_SEND_RESPONSE_LOST") == "1" {
 		return 2 // The terminal accepted input, but its response was lost.
 	}
-	return fakeOrcaOK(map[string]any{"send": map[string]any{"accepted": true}})
+	handle, incarnation := st.Handle, st.Incarnation
+	switch os.Getenv("STEERLINE_FAKE_ORCA_SEND_RECEIPT") {
+	case "wrong_handle":
+		handle = "replacement-handle"
+	case "wrong_incarnation":
+		incarnation = "replacement-incarnation"
+	case "missing":
+		return fakeOrcaOK(map[string]any{})
+	}
+	code := fakeOrcaOK(map[string]any{"send": map[string]any{"handle": handle, "accepted": true, "prompt": map[string]any{"processIncarnation": incarnation, "stages": []string{"input_accepted", "turn_started"}}}})
+	if os.Getenv("STEERLINE_FAKE_ORCA_SEND_RECEIPT") == "exit_error" {
+		return 2
+	}
+	return code
 }
 
 // fakePromptPath extracts the absolute prompt path from the pointer text
@@ -280,6 +300,9 @@ func fakeOrcaShow(stateDir string, argv []string) int {
 	status := "running"
 	connected := true
 	orphaned := false
+	if os.Getenv("STEERLINE_FAKE_ORCA_DISCONNECTED") == "1" {
+		connected = false
+	}
 	if st.Closed {
 		status = "exited"
 		connected = false

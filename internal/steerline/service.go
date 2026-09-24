@@ -94,6 +94,9 @@ func NewService(c Config) (*Service, error) {
 				return nil, errors.New("invalid or duplicate saved run")
 			}
 			seen[r.TaskID] = true
+			if r.ManualStop != nil && (!manuallyStopped(r) || r.ExecutionStatus != "failed" && r.ExecutionStatus != "succeeded") {
+				return nil, errors.New("invalid manual stop confirmation for current attempt")
+			}
 			if r.AttemptID == "" {
 				r.ExecutionStatus = "unknown"
 				s.blocked(r, "Run lacks current attempt identity; preserve state without migration")
@@ -195,7 +198,8 @@ func runVersionShape(r *Run) any {
 		WorktreePath, WorktreeBranch, BaseCommit                                                          *string
 		Process                                                                                           *ProcessIdentity
 		WorkspaceIntent                                                                                   *WorkspaceIntent
-	}{r.TaskID, r.RunID, r.AttemptID, r.ExecutionStatus, r.FinishTaskStatus, decisionID, decisionStatus, prURL, r.Host, r.BeadsStatus, r.WorktreePath, r.WorktreeBranch, r.BaseCommit, r.Process, r.WorkspaceIntent}
+		ManualStop                                                                                        *ManualStopConfirmation
+	}{r.TaskID, r.RunID, r.AttemptID, r.ExecutionStatus, r.FinishTaskStatus, decisionID, decisionStatus, prURL, r.Host, r.BeadsStatus, r.WorktreePath, r.WorktreeBranch, r.BaseCommit, r.Process, r.WorkspaceIntent, r.ManualStop}
 }
 func controlVersionShape(r Runtime) any {
 	type runShape struct{ TaskID, RunID, Execution, Finish, Decision string }
@@ -384,7 +388,8 @@ func (s *Service) reconcile(ctx context.Context) error {
 		if t.Status == "closed" {
 			continue
 		}
-		s.State.Runs = append(s.State.Runs, &Run{TaskID: t.ID, Title: t.Title, RunID: newID(), Claimant: s.Config.Claimant, BeadsStatus: t.Status, ExecutionStatus: "unknown", FinishTaskStatus: "blocked", PR: PRState{State: "unknown"}, Error: ptr("Claim found without local run record; manual recovery required; execution not restarted")})
+		id := newID()
+		s.State.Runs = append(s.State.Runs, &Run{TaskID: t.ID, Title: t.Title, RunID: id, AttemptID: id, Host: s.Config.hostName(), Claimant: s.Config.Claimant, BeadsStatus: t.Status, ExecutionStatus: "unknown", FinishTaskStatus: "blocked", PR: PRState{State: "unknown"}, Error: ptr("Claim found without local run record; manual recovery required; execution not restarted")})
 	}
 	return s.save()
 }
@@ -604,7 +609,7 @@ func (s *Service) dispatch(ctx context.Context) error {
 			return s.save()
 		}
 		ref := started.Ref
-		if ref.RunID != r.RunID || ref.AttemptID != r.AttemptID || ref.Backend != backendKind || ref.Protocol != protocol {
+		if ref.RunID != r.RunID || ref.AttemptID != r.AttemptID || ref.Backend != backendKind || ref.Protocol != protocol || ref.Target != target || ref.Agent != agent || ref.External != started.Worker.proc.Identity() {
 			identity := started.Worker.proc.Identity()
 			r.Process = &identity
 			r.ExecutionStatus = "unknown"
@@ -870,6 +875,16 @@ func (s *Service) finished(err error) error {
 	s.State.SlotOccupied = false
 	r.EndedAt = ptr(now())
 	if err != nil {
+		var backendErr *BackendError
+		if errors.As(err, &backendErr) && (backendErr.Code == BackendOutcomeUnknown || backendErr.Code == BackendUnreachable || backendErr.Code == BackendIdentityMismatch) {
+			r.ExecutionStatus = "unknown"
+			r.EndedAt = nil
+			s.State.SlotOccupied, s.State.CurrentTask = true, ptr(r.TaskID)
+			s.blocked(r, "Execution observation ended without settlement: "+err.Error())
+			s.note(r, "steer", "error", "unknown", "execution observation ended", err.Error(), nil)
+			s.closeActivity(r)
+			return s.save()
+		}
 		r.ExecutionStatus = "failed"
 		s.blocked(r, "Codex execution failed: "+err.Error())
 		s.note(r, "steer", "error", "failed", "worker exited", err.Error(), map[string]any{"execution_status": "failed"})
@@ -1550,6 +1565,7 @@ func (s *Service) AcceptResult(ctx context.Context, runID, path string) error {
 		}
 		r.ExecutionStatus = "succeeded"
 		r.ResultPath = ptr(path)
+		r.ManualStop = &ManualStopConfirmation{AttemptID: r.AttemptID, ConfirmedAt: now()}
 		r.EndedAt = ptr(now())
 		s.State.SlotOccupied = false
 		s.State.CurrentTask = nil
@@ -1572,6 +1588,7 @@ func (s *Service) MarkStopped(runID string) error {
 		}
 		r.ExecutionStatus = "failed"
 		r.EndedAt = ptr(now())
+		r.ManualStop = &ManualStopConfirmation{AttemptID: r.AttemptID, ConfirmedAt: now()}
 		s.blocked(r, "Operator confirmed old process tree stopped; task remains claimed for manual repair")
 		s.State.SlotOccupied = false
 		s.State.CurrentTask = nil

@@ -112,6 +112,9 @@ func CertifyExecutionBackend(ctx context.Context, c Config, paths []string) (Cap
 		if evidence.Version != 1 || evidence.CapturedAt.IsZero() || evidence.Platform != runtime.GOOS+"/"+runtime.GOARCH || evidence.Backend != probe.Backend || evidence.Protocol != probe.Protocol || evidence.TargetID != probe.Target.ID || evidence.Agent != probe.Agent.Name || version != probe.PlatformVersion {
 			return CapabilityReport{}, fmt.Errorf("native evidence identity, target, platform or version differs from current backend: %s", path)
 		}
+		if probe.Backend == BackendOrca && evidence.CodexVersion != probe.AgentVersion {
+			return CapabilityReport{}, fmt.Errorf("native evidence does not match Orca's native/override agent launch mode and version: %s", path)
+		}
 		sum := sha256.Sum256(b)
 		stablePath := filepath.Join(c.RunDir, "execution", "v1", "evidence", hex.EncodeToString(sum[:])+".json")
 		copies[stablePath] = b

@@ -24,7 +24,7 @@
 | 原生 local | Windows 隔离测试仓库中真实 Codex 启动/输出/停止；从固定入口打开真实服务窗口，在窗口仍开时关闭/重连客户端核验 service/worker 身份，并分别核验控制 stop、Ctrl+C 与关窗后的 worker 和锁；离线 `StartService` 只返回 `window-required`，不创建后台进程 |
 | 原生 Orca | 隔离测试 worktree/terminal 中启动/观察/停止/重连、同会话定位；记录版本、ref、残留资源和能力证据。不得操作生产任务 |
 
-在 Windows 运行 `go test ./... -count=1 -timeout 10m`、`go vet ./...`、Windows 构建及 `git diff --check`。针对并发观察/取消/事实应用运行 race 检查（在支持工具链时）；不可执行时记录环境阻塞。Linux 的公共接口与平台实现继续保持隔离，可做非门槛构建检查，但本阶段不要求 Linux 原生测试或交叉构建。Windows 真实平台缺失是相关必需验收未完成，不能把 fake 或 skipped 当成替代。
+在 Windows 运行 `go test ./... -count=1 -timeout 15m`、`go vet ./...`、Windows 构建及 `git diff --check`。质量审计新增进程与恢复故障用例后，包级总时限由 10 分钟调整为 15 分钟；单次平台调用及各场景的超时不变。针对并发观察/取消/事实应用运行 race 检查（在支持工具链时）；不可执行时记录环境阻塞。Linux 的公共接口与平台实现继续保持隔离，可做非门槛构建检查，但本阶段不要求 Linux 原生测试或交叉构建。Windows 真实平台缺失是相关必需验收未完成，不能把 fake 或 skipped 当成替代。
 
 ## 完成与交接
 

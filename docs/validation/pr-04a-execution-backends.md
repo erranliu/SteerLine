@@ -35,7 +35,11 @@
 
 ## 本轮命令结果
 
-- `go test ./... -count=1 -timeout 10m`：加入同 ref 观察串行化后的完整回归通过；`internal/steerline` 578.665 秒，remoteprotocol 与 viewer 通过。此前一次与原生验收并行的运行中，候选发布失败后的清理测试超时；该测试独立连续 3 次通过，无并行负载的完整重跑通过。
+后续质量审计发现并修复：Orca 非 live 终端仍可续跑、发送回执缺少身份/accepted 校验、答案摘要未包含文件内容、结果监督绕过 incarnation 检查、观察结束误释放槽位、重启忽略 stop/reply 记录，以及未启动进程的 local 准备失败无法 retry。人工停止确认现绑定原 attempt，重启不会重新施加已人工结算的资源占用，也不伪造平台 Operation 成功；原生 Orca 与 Codex 覆盖启动的能力证据已隔离。新增 `execution_audit_test.go` 对以上路径逐项复现，详见 [质量审计记录](pr-04a-quality-audit.md)。
+
+审计后的真实 Orca Service 复验见 [回执与工作区核验后的原生证据](pr-04a-orca-service-audit-2026-09-24.json)。
+
+- 审计修复后的 `go test ./... -count=1 -timeout 15m`：通过；`internal/steerline` 568.162 秒，remoteprotocol 与 viewer 通过。此前的 10 分钟运行因测试进程与运行中重新构建的 CLI 使用不同能力报告键出现一次窗口用例失败，并触及包级时限；冻结代码后该用例独立通过，随后完整回归通过。15 分钟仅为测试包总时限，平台调用和场景超时没有放宽。
 - 定向契约/输出/决策/control-crash/workspace 回归：通过。
 - `go vet ./...`：通过。
 - `go build ./...`：Windows/amd64 通过。Linux 仅保留架构兼容要求，本轮不把原生或交叉构建列入验收。

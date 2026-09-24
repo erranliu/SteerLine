@@ -352,15 +352,11 @@ func (s *Service) applyDecisions(ctx context.Context) error {
 		if e := s.resumeAfterDecision(ctx, r); e != nil {
 			s.blocked(r, "Decision resume failed: "+e.Error())
 			s.note(r, "steer", "decision", "failed", "decision resume failed", e.Error(), nil)
-			var backendErr *BackendError
-			if errors.As(e, &backendErr) && (backendErr.Code == BackendOutcomeUnknown || backendErr.Code == BackendIdentityMismatch || backendErr.Code == BackendUnreachable || backendErr.Code == BackendProtocolInvalid) {
-				r.ExecutionStatus = "unknown"
-				s.State.SlotOccupied = true
-				s.State.CurrentTask = ptr(r.TaskID)
-			} else {
-				s.State.SlotOccupied = false
-				s.State.CurrentTask = nil
-			}
+			// A failed resume does not prove that the original session exited.
+			// Persistence/capability failures must retain its reservation too.
+			r.ExecutionStatus = "unknown"
+			s.State.SlotOccupied = true
+			s.State.CurrentTask = ptr(r.TaskID)
 			s.closeActivity(r)
 			if se := s.save(); se != nil {
 				return se
@@ -414,7 +410,8 @@ func (s *Service) resumeAfterDecision(ctx context.Context, r *Run) error {
 	}
 	opID := "reply-" + r.Decision.ID
 	answer := "Read " + contPath + " and continue. Follow it exactly."
-	op := Operation{Version: ExecutionRecordVersion, ID: opID, RunID: r.RunID, AttemptID: r.AttemptID, Backend: ref.Backend, Protocol: ref.Protocol, Target: ref.Target, Action: "reply", PayloadDigest: digestValue(struct{ DecisionID, Answer string }{r.Decision.ID, answer}), Status: OperationPending, StartedAt: now(), UpdatedAt: now()}
+	continuation := decisionContinuation(r)
+	op := Operation{Version: ExecutionRecordVersion, ID: opID, RunID: r.RunID, AttemptID: r.AttemptID, Backend: ref.Backend, Protocol: ref.Protocol, Target: ref.Target, Action: "reply", PayloadDigest: digestValue(struct{ DecisionID, Pointer, Content string }{r.Decision.ID, answer, continuation}), Status: OperationPending, StartedAt: now(), UpdatedAt: now(), Ref: &ref}
 	if old, loadErr := records.loadOperation(r.RunID, r.AttemptID, opID); loadErr == nil {
 		if old.PayloadDigest != op.PayloadDigest {
 			return errors.New("reply operation id conflicts with its fixed answer")
@@ -426,15 +423,15 @@ func (s *Service) resumeAfterDecision(ctx context.Context, r *Run) error {
 	if e := records.saveOperation(op); e != nil {
 		return e
 	}
-	op.Status, op.UpdatedAt = OperationInFlight, now()
-	if e := records.saveOperation(op); e != nil {
-		return e
-	}
-	if e := AtomicWrite(contPath, []byte(decisionContinuation(r))); e != nil {
+	if e := AtomicWrite(contPath, []byte(continuation)); e != nil {
 		op.Status, op.Diagnostic, op.UpdatedAt = OperationRejected, e.Error(), now()
 		if saveErr := records.saveOperation(op); saveErr != nil {
 			return errors.Join(e, saveErr)
 		}
+		return e
+	}
+	op.Status, op.UpdatedAt = OperationInFlight, now()
+	if e := records.saveOperation(op); e != nil {
 		return e
 	}
 	reply, e := backend.Reply(ctx, ref, answer, op, *r.ResultPath)

@@ -231,6 +231,10 @@ func TestOrcaLostReplyReceiptKeepsOriginalExecutionUnknown(t *testing.T) {
 	if after.Sends != before.Sends+1 {
 		t.Fatalf("reply was not sent exactly once: before=%d after=%d", before.Sends, after.Sends)
 	}
+	run.Decision.Note = "changed answer at the same continuation path"
+	if err := s.resumeAfterDecision(ctx, run); err == nil || !strings.Contains(err.Error(), "conflicts with its fixed answer") {
+		t.Fatalf("reply digest did not bind answer content: %v", err)
+	}
 	t.Setenv("STEERLINE_FAKE_ORCA_SEND_RESPONSE_LOST", "")
 	restarted := f.service(t)
 	_ = restarted.applyDecisions(ctx)
