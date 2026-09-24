@@ -22,18 +22,34 @@ var promptTemplate string
 var commitHash = regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`)
 
 type WorkerEvent struct {
-	Session  string
-	Summary  string
-	Activity ActivityEvent
+	RunID     string
+	AttemptID string
+	Session   string
+	Summary   string
+	Activity  ActivityEvent
 }
 type Worker struct {
-	proc   process
-	Events chan WorkerEvent
-	Done   chan error
+	proc              process
+	Events            chan WorkerEvent
+	Done              chan error
+	cancelObservation context.CancelFunc
+	observationDone   chan struct{}
 }
 
 func (w *Worker) Kill()  { w.proc.Kill() }
 func (w *Worker) Close() { w.proc.Close() }
+func (w *Worker) detachLocalObservation(ctx context.Context) error {
+	if w == nil || w.cancelObservation == nil || w.observationDone == nil {
+		return unsupported("local observation detach")
+	}
+	w.cancelObservation()
+	select {
+	case <-w.observationDone:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
 func Prompt(c Config, t Task, r *Run) (string, error) {
 	contextJSON, _ := json.MarshalIndent(map[string]any{"task_id": t.ID, "run_id": r.RunID, "claimant": r.Claimant, "remote": c.Remote, "branch": c.Branch, "worktree_path": r.WorktreePath, "worktree_branch": r.WorktreeBranch, "base_commit": r.BaseCommit, "beads_directory": c.workerEnv["BEADS_DIR"], "beads_context": r.BeadsContext}, "", "  ")
 	taskJSON, _ := json.MarshalIndent(t, "", "  ")
@@ -49,7 +65,10 @@ func Prompt(c Config, t Task, r *Run) (string, error) {
 
 // StartWorker prepares the per-run files and hands the actual process launch to
 // the configured host. Scheduling, recovery and result authority stay here.
-func StartWorker(c Config, t Task, r *Run) (*Worker, error) {
+func StartWorker(ctx context.Context, c Config, t Task, r *Run) (*Worker, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if r.WorktreePath == nil || r.BaseCommit == nil || r.WorktreeBranch == nil || canonical(c.Repository) != canonical(*r.WorktreePath) || c.workerEnv["BEADS_DIR"] == "" || c.workerEnv["BEADS_ACTOR"] != r.Claimant {
 		return nil, errors.New("worker requires verified workspace and shared Beads environment")
 	}
@@ -87,6 +106,8 @@ func StartWorker(c Config, t Task, r *Run) (*Worker, error) {
 	}
 	args = append(args, "-")
 	spec := SpawnSpec{
+		RunID:      r.RunID,
+		AttemptID:  r.AttemptID,
 		Dir:        c.Repository,
 		EventsPath: *r.LogPath,
 		StderrPath: filepath.Join(dir, "stderr.log"),
@@ -94,7 +115,7 @@ func StartWorker(c Config, t Task, r *Run) (*Worker, error) {
 		Stdin:      bytes.NewReader([]byte(prompt)),
 		Env:        c.workerEnv,
 	}
-	return SpawnerFor(c).Start(context.Background(), spec)
+	return SpawnerFor(c).Start(ctx, spec)
 }
 
 func ReadResult(path string, r *Run) (Result, error) {

@@ -14,7 +14,7 @@ import (
 func TestFileSourceRetainsLastGoodSnapshotWithFailureTimestamp(t *testing.T) {
 	dir := t.TempDir()
 	runtimePath := filepath.Join(dir, "runtime.json")
-	rt := steerline.Runtime{SchemaVersion: 3, HeartbeatAt: time.Now().UTC(), Runs: []*steerline.Run{{RunID: "r", TaskID: "t"}}}
+	rt := steerline.Runtime{SchemaVersion: steerline.CurrentRuntimeSchema, HeartbeatAt: time.Now().UTC(), Runs: []*steerline.Run{{RunID: "r", TaskID: "t"}}}
 	b, err := json.Marshal(rt)
 	if err != nil {
 		t.Fatal(err)

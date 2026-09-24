@@ -8,7 +8,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 )
 
@@ -53,7 +52,7 @@ func NewService(c Config) (*Service, error) {
 	if e != nil {
 		return nil, e
 	}
-	s.State = Runtime{SchemaVersion: 4, Repository: Repository{Path: c.Repository, Remote: c.Remote, Branch: c.Branch, Identity: c.identity}, Runs: []*Run{}, Control: ControlState{DispatchMode: "auto", Revision: 1, Blockers: []ControlBlocker{}}}
+	s.State = Runtime{SchemaVersion: CurrentRuntimeSchema, Repository: Repository{Path: c.Repository, Remote: c.Remote, Branch: c.Branch, Identity: c.identity}, Runs: []*Run{}, Control: ControlState{DispatchMode: "auto", Revision: 1, Blockers: []ControlBlocker{}}}
 	if old != nil {
 		if old.Repository.Identity != c.identity || old.Repository.Remote != c.Remote || old.Repository.Branch != c.Branch || old.Service.Claimant != c.Claimant {
 			return nil, errors.New("runtime repository/branch/claimant mismatch; preserve state and use the original configuration")
@@ -71,8 +70,8 @@ func NewService(c Config) (*Service, error) {
 		s.versionPrevious = &baseline
 		s.State.Runs = old.Runs
 		s.State.Control = old.Control
-		if old.SchemaVersion == 4 && (s.State.Control.DispatchMode != "manual" && s.State.Control.DispatchMode != "auto" || s.State.Control.Revision == 0) {
-			return nil, errors.New("invalid runtime v4 control state; preserve the snapshot for recovery")
+		if s.State.Control.DispatchMode != "manual" && s.State.Control.DispatchMode != "auto" || s.State.Control.Revision == 0 {
+			return nil, errors.New("invalid current runtime control state; preserve the snapshot for recovery")
 		}
 		if s.State.Control.DispatchMode == "" {
 			s.State.Control.DispatchMode = "auto"
@@ -95,8 +94,14 @@ func NewService(c Config) (*Service, error) {
 				return nil, errors.New("invalid or duplicate saved run")
 			}
 			seen[r.TaskID] = true
+			if r.ManualStop != nil && (!manuallyStopped(r) || r.ExecutionStatus != "failed" && r.ExecutionStatus != "succeeded") {
+				return nil, errors.New("invalid manual stop confirmation for current attempt")
+			}
 			if r.AttemptID == "" {
-				r.AttemptID = runAttemptID(r)
+				r.ExecutionStatus = "unknown"
+				s.blocked(r, "Run lacks current attempt identity; preserve state without migration")
+				s.State.SlotOccupied = true
+				continue
 			}
 			if r.ControlRevision == 0 {
 				r.ControlRevision = 1
@@ -104,12 +109,14 @@ func NewService(c Config) (*Service, error) {
 			if e := r.Completion.validate(); e != nil {
 				return nil, e
 			}
-			// v1/v2 runs predate hosting; they are local by definition.
-			if r.Host == "" {
-				r.Host = "local"
+			if r.Host != "local" && r.Host != "orca" {
+				r.ExecutionStatus = "unknown"
+				s.blocked(r, "Run lacks current backend identity; preserve state without migration")
+				s.State.SlotOccupied = true
+				continue
 			}
-			if r.Process != nil && r.Process.Kind == "" {
-				r.Process.Kind = "os"
+			if err := s.reconcileRunExecutionRecord(r); err != nil {
+				return nil, err
 			}
 			switch r.ExecutionStatus {
 			case "pending", "running", "succeeded", "failed", "unknown":
@@ -140,13 +147,14 @@ func NewService(c Config) (*Service, error) {
 			if r.ExecutionStatus == "pending" || r.ExecutionStatus == "running" {
 				r.ExecutionStatus = "unknown"
 				r.FinishTaskStatus = "blocked"
-				r.Error = ptr("Interrupted execution: " + inspectProcessWithConfig(c, r.Process) + "; manual recovery required; never auto-resumed")
+				r.Error = ptr("Interrupted execution: " + s.inspectRunProcess(r) + "; manual recovery required; never auto-resumed")
 			}
-			if r.WorkspaceIntent != nil && r.FinishTaskStatus != "completed" {
-				err := verifyWorkspace(context.Background(), c, r.WorkspaceIntent, false)
-				if err == nil && (r.WorktreePath != nil || r.WorktreeBranch != nil || r.BaseCommit != nil) {
-					err = verifyRunWorkspace(context.Background(), c, r)
-				}
+			if r.ExecutionStatus == "unknown" {
+				s.State.SlotOccupied = true
+				s.State.CurrentTask = ptr(r.TaskID)
+			}
+			if r.WorkspaceIntent != nil && r.Process != nil && r.FinishTaskStatus != "completed" {
+				err := s.inspectRunWorkspace(context.Background(), r)
 				if err != nil {
 					r.FinishTaskStatus = "blocked"
 					previous := ""
@@ -164,7 +172,7 @@ func NewService(c Config) (*Service, error) {
 			s.State.SlotOccupied = false
 		}
 	}
-	s.State.SchemaVersion = 4
+	s.State.SchemaVersion = CurrentRuntimeSchema
 	s.State.Service = ServiceState{InstanceID: newID(), PID: os.Getpid(), Status: "running", Claimant: c.Claimant, Mode: "maintenance", Ready: false, ControlProtocol: ControlProtocolVersion, Capabilities: []string{"start_task", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "stop_service"}, ConfigDigest: c.configDigest, HeartbeatIntervalMS: duration(c.Heartbeat).Milliseconds()}
 	identity, err := currentProcessIdentity()
 	if err != nil {
@@ -173,19 +181,6 @@ func NewService(c Config) (*Service, error) {
 	s.State.Service.ProcessIdentity = identity
 	return s, nil
 }
-func runAttemptID(r *Run) string {
-	if r.LogPath != nil {
-		p := filepath.Clean(*r.LogPath)
-		parts := strings.Split(filepath.ToSlash(p), "/")
-		for i := 0; i+1 < len(parts); i++ {
-			if parts[i] == "attempts" && parts[i+1] != "" {
-				return parts[i+1]
-			}
-		}
-	}
-	return r.RunID
-}
-
 func runVersionShape(r *Run) any {
 	if r == nil {
 		return nil
@@ -203,7 +198,8 @@ func runVersionShape(r *Run) any {
 		WorktreePath, WorktreeBranch, BaseCommit                                                          *string
 		Process                                                                                           *ProcessIdentity
 		WorkspaceIntent                                                                                   *WorkspaceIntent
-	}{r.TaskID, r.RunID, r.AttemptID, r.ExecutionStatus, r.FinishTaskStatus, decisionID, decisionStatus, prURL, r.Host, r.BeadsStatus, r.WorktreePath, r.WorktreeBranch, r.BaseCommit, r.Process, r.WorkspaceIntent}
+		ManualStop                                                                                        *ManualStopConfirmation
+	}{r.TaskID, r.RunID, r.AttemptID, r.ExecutionStatus, r.FinishTaskStatus, decisionID, decisionStatus, prURL, r.Host, r.BeadsStatus, r.WorktreePath, r.WorktreeBranch, r.BaseCommit, r.Process, r.WorkspaceIntent, r.ManualStop}
 }
 func controlVersionShape(r Runtime) any {
 	type runShape struct{ TaskID, RunID, Execution, Finish, Decision string }
@@ -392,7 +388,8 @@ func (s *Service) reconcile(ctx context.Context) error {
 		if t.Status == "closed" {
 			continue
 		}
-		s.State.Runs = append(s.State.Runs, &Run{TaskID: t.ID, Title: t.Title, RunID: newID(), Claimant: s.Config.Claimant, BeadsStatus: t.Status, ExecutionStatus: "unknown", FinishTaskStatus: "blocked", PR: PRState{State: "unknown"}, Error: ptr("Claim found without local run record; manual recovery required; execution not restarted")})
+		id := newID()
+		s.State.Runs = append(s.State.Runs, &Run{TaskID: t.ID, Title: t.Title, RunID: id, AttemptID: id, Host: s.Config.hostName(), Claimant: s.Config.Claimant, BeadsStatus: t.Status, ExecutionStatus: "unknown", FinishTaskStatus: "blocked", PR: PRState{State: "unknown"}, Error: ptr("Claim found without local run record; manual recovery required; execution not restarted")})
 	}
 	return s.save()
 }
@@ -446,6 +443,9 @@ func (s *Service) dispatch(ctx context.Context) error {
 			continue
 		}
 		targetFound = true
+		if _, err := s.requireBackendCapabilities(ctx, backendFor(s.Config, BeadsContext{}), "start", "observe", "stop", "workspace_inspection", "output_reading"); err != nil {
+			return err
+		}
 		id := newID()
 		if s.reservedRunID != "" {
 			id = s.reservedRunID
@@ -522,88 +522,151 @@ func (s *Service) dispatch(ctx context.Context) error {
 			s.closeActivity(r)
 			return s.save()
 		}
-		if s.Config.hostName() == "orca" {
-			s.note(r, "steer", "prepare", "started", "orca worktree create", intent.Branch, map[string]any{"base_commit": intent.BaseCommit, "agent": s.Config.agentName()})
-			w, err := startOrcaRun(ctx, s.Config, t, r, source, intent, dir)
-			if err != nil {
-				r.ExecutionStatus = "failed"
-				r.EndedAt = ptr(now())
-				s.blocked(r, "Orca execution failed to start: "+err.Error())
-				s.State.SlotOccupied = false
-				s.State.CurrentTask = nil
-				s.note(r, "steer", "error", "failed", "orca start failed", err.Error(), nil)
-				s.closeActivity(r)
-				return s.save()
+		backend := backendFor(s.Config, source)
+		if local, ok := backend.(localExecutionBackend); ok && s.State.Control.Operation != nil {
+			local.afterPrepare = func() { s.injectControlFault("after_worktree") }
+			backend = local
+		}
+		backendKind, protocol := backend.Identity()
+		opID := attemptOperationID(r.RunID, r.AttemptID)
+		target, agent := targetFor(s.Config), agentFor(s.Config)
+		spec := AttemptSpec{ProjectID: s.Config.identity, TaskID: t.ID, RunID: r.RunID, AttemptID: r.AttemptID, OperationID: opID, ConfigDigest: s.Config.configDigest, Repository: s.Config.Repository, BaseCommit: intent.BaseCommit, Workspace: *intent, Agent: agent, Protocol: protocol, Target: target, Task: t, Run: cloneRun(*r), Beads: source}
+		records := executionRecords{root: s.Config.RunDir}
+		payloadDigest := digestValue(spec)
+		op := Operation{Version: ExecutionRecordVersion, ID: opID, RunID: r.RunID, AttemptID: r.AttemptID, Backend: backendKind, Protocol: protocol, Target: target, Action: "start", PayloadDigest: payloadDigest, Status: OperationPending, StartedAt: now(), UpdatedAt: now()}
+		if previous, loadErr := records.loadOperation(r.RunID, r.AttemptID, opID); loadErr == nil {
+			if previous.PayloadDigest != payloadDigest || previous.Backend != backendKind || previous.Protocol != protocol || previous.Target != target {
+				return errors.New("start operation identity conflicts with its persisted fixed input")
 			}
-			s.worker = w
-			if s.State.Control.Operation != nil {
-				s.injectControlFault("after_worktree")
-				s.injectControlFault("after_worker_start")
-			}
-			s.active = r
-			r.ExecutionStatus = "running"
-			r.StartedAt = ptr(now())
-			procID := w.proc.Identity()
-			r.Process = &procID
-			r.AttemptID = id
-			s.lastDispatched = t.ID
-			if e = s.save(); e != nil {
-				return e
-			}
-			if s.State.Control.Operation != nil {
-				s.injectControlFault("worker_persisted")
-			}
-			s.note(r, "steer", "worker_start", "started", "orca agent started", deref(r.WorktreePath), map[string]any{"terminal": procID.Terminal, "agent": s.Config.agentName()})
-			return s.save()
+			return fmt.Errorf("start operation is already %s; manual reconciliation required, refusing a second start", previous.Status)
+		} else if !os.IsNotExist(loadErr) {
+			return loadErr
 		}
-		s.note(r, "steer", "prepare", "started", "preparing worktree", intent.Path, map[string]any{"branch": intent.Branch, "base_commit": intent.BaseCommit})
-		workerConfig, err := prepareWorkspace(ctx, s.Config, r, source)
-		if err != nil {
-			return s.preparationFailed(r, "Worktree preparation failed: "+err.Error())
+		// Persist the fixed input before any backend may create a workspace or process.
+		if err := records.saveOperation(op); err != nil {
+			return err
 		}
-		if s.State.Control.Operation != nil {
-			s.injectControlFault("after_worktree")
+		if err := s.save(); err != nil {
+			return err
 		}
-		r.WorktreePath = ptr(intent.Path)
-		r.WorktreeBranch = ptr(intent.Branch)
-		r.BaseCommit = ptr(intent.BaseCommit)
-		if e = s.save(); e != nil {
-			return e
+		if backendKind == BackendOrca {
+			s.note(r, "steer", "prepare", "started", "orca worktree/terminal start", intent.Branch, map[string]any{"base_commit": intent.BaseCommit, "agent": agent.Name})
+		} else {
+			s.note(r, "steer", "prepare", "started", "preparing local workspace and process", intent.Path, map[string]any{"branch": intent.Branch, "base_commit": intent.BaseCommit})
 		}
-		s.note(r, "steer", "prepare", "completed", "worktree ready", intent.Path, map[string]any{"branch": intent.Branch, "base_commit": intent.BaseCommit})
-		if ctx.Err() != nil {
-			return s.preparationFailed(r, "Stopped after worktree preparation, before worker launch")
+		op.Status = OperationInFlight
+		op.UpdatedAt = now()
+		if err := records.saveOperation(op); err != nil {
+			return err
 		}
-		w, err := StartWorker(workerConfig, t, r)
-		if err != nil {
-			r.ExecutionStatus = "failed"
-			r.EndedAt = ptr(now())
-			s.blocked(r, "Worker startup failed: "+err.Error())
-			s.State.SlotOccupied = false
-			s.State.CurrentTask = nil
-			s.note(r, "steer", "error", "failed", "worker startup failed", err.Error(), nil)
-			s.closeActivity(r)
-			return s.save()
+		started, startErr := backend.Start(ctx, spec)
+		if startErr == nil {
+			s.injectControlFault("backend_started")
 		}
-		s.worker = w
-		s.active = r
-		if s.State.Control.Operation != nil {
+		if startErr == nil && s.State.Control.Operation != nil {
 			s.injectControlFault("after_worker_start")
 		}
+		if startErr != nil {
+			op.ResidualResources = append([]string(nil), started.ResidualResources...)
+			var backendErr *BackendError
+			unknown := errors.As(startErr, &backendErr) && backendErr.Code == BackendOutcomeUnknown
+			if unknown {
+				op.Status, op.Diagnostic = OperationUnknown, startErr.Error()
+				r.ExecutionStatus = "unknown"
+				s.blocked(r, "Execution start outcome unknown; no replacement start will be attempted: "+startErr.Error())
+				s.State.SlotOccupied = true
+				s.State.CurrentTask = ptr(t.ID)
+			} else {
+				op.Status, op.Diagnostic = OperationRejected, startErr.Error()
+				r.ExecutionStatus = "failed"
+				r.EndedAt = ptr(now())
+				s.blocked(r, "Execution backend rejected start: "+startErr.Error())
+				s.State.SlotOccupied = false
+				s.State.CurrentTask = nil
+			}
+			op.UpdatedAt = now()
+			if err := records.saveOperation(op); err != nil {
+				return errors.Join(startErr, err)
+			}
+			if backendKind == BackendLocal {
+				return s.preparationFailed(r, "Local execution start failed: "+startErr.Error())
+			}
+			s.note(r, "steer", "error", "failed", "execution backend start failed", startErr.Error(), nil)
+			s.closeActivity(r)
+			return errors.Join(startErr, s.save())
+		}
+		if started.Disposition != "accepted" || started.Worker == nil {
+			op.Status, op.Diagnostic = OperationUnknown, "backend returned no verifiable accepted worker"
+			op.ResidualResources = append([]string(nil), started.ResidualResources...)
+			op.UpdatedAt = now()
+			if err := records.saveOperation(op); err != nil {
+				return err
+			}
+			r.ExecutionStatus = "unknown"
+			s.blocked(r, "Backend start receipt is incomplete; refusing replacement execution")
+			s.State.SlotOccupied = true
+			s.State.CurrentTask = ptr(t.ID)
+			return s.save()
+		}
+		ref := started.Ref
+		if ref.RunID != r.RunID || ref.AttemptID != r.AttemptID || ref.Backend != backendKind || ref.Protocol != protocol || ref.Target != target || ref.Agent != agent || ref.External != started.Worker.proc.Identity() {
+			identity := started.Worker.proc.Identity()
+			r.Process = &identity
+			r.ExecutionStatus = "unknown"
+			s.worker, s.active = started.Worker, r
+			s.State.SlotOccupied, s.State.CurrentTask = true, ptr(t.ID)
+			op.Status, op.Diagnostic, op.UpdatedAt = OperationUnknown, "backend returned an execution ref that does not match the fixed attempt identity", now()
+			opSaveErr := records.saveOperation(op)
+			s.blocked(r, "Backend returned a mismatched execution identity; execution retained as unknown")
+			return errors.Join(errors.New(op.Diagnostic), opSaveErr, s.save())
+		}
+		r.WorktreePath = started.Run.WorktreePath
+		r.WorktreeBranch = started.Run.WorktreeBranch
+		r.BaseCommit = started.Run.BaseCommit
+		r.WorkspaceIntent = started.Run.WorkspaceIntent
+		r.Process = &ref.External
 		r.ExecutionStatus = "running"
 		r.StartedAt = ptr(now())
-		procID := w.proc.Identity()
-		r.Process = &procID
-		r.AttemptID = id
+		s.worker, s.active = started.Worker, r
 		s.lastDispatched = t.ID
-		s.note(r, "steer", "worker_start", "started", "worker started", intent.Path, map[string]any{"pid": procID.PID})
+		if err := records.saveBinding(ref); err != nil {
+			op.Status, op.Diagnostic = OperationUnknown, "binding persistence failed: "+err.Error()
+			op.UpdatedAt = now()
+			opSaveErr := records.saveOperation(op)
+			r.ExecutionStatus = "unknown"
+			s.blocked(r, "Execution started but its binding could not be persisted; execution retained as unknown")
+			s.State.SlotOccupied, s.State.CurrentTask = true, ptr(t.ID)
+			return errors.Join(err, opSaveErr, s.save())
+		}
+		s.injectControlFault("binding_persisted")
+		op.Status, op.Ref, op.UpdatedAt = OperationAccepted, &ref, now()
+		if err := records.saveOperation(op); err != nil {
+			op.Status, op.Diagnostic, op.UpdatedAt = OperationUnknown, "accepted operation receipt persistence failed: "+err.Error(), now()
+			opSaveErr := records.saveOperation(op)
+			r.ExecutionStatus = "unknown"
+			s.blocked(r, "Execution started but its operation receipt could not be persisted; execution retained as unknown")
+			s.State.SlotOccupied, s.State.CurrentTask = true, ptr(t.ID)
+			return errors.Join(err, opSaveErr, s.save())
+		}
+		s.injectControlFault("operation_accepted_persisted")
+		// Apply only adapter-observed execution facts to the single service-owned Run.
 		if err = s.save(); err != nil {
 			return err
 		}
 		if s.State.Control.Operation != nil {
 			s.injectControlFault("worker_persisted")
 		}
-		return nil
+		if backendKind == BackendOrca {
+			s.note(r, "steer", "worker_start", "started", "orca agent started", deref(r.WorktreePath), map[string]any{"terminal": ref.External.Terminal, "agent": agent.Name})
+		} else {
+			s.note(r, "steer", "prepare", "completed", "local workspace ready", deref(r.WorktreePath), map[string]any{"branch": deref(r.WorktreeBranch), "base_commit": deref(r.BaseCommit)})
+			s.note(r, "steer", "worker_start", "started", "local worker started", deref(r.WorktreePath), map[string]any{"pid": ref.External.PID})
+		}
+		op.Status, op.UpdatedAt = OperationConfirmed, now()
+		if err = records.saveOperation(op); err != nil {
+			return err
+		}
+		return s.save()
 	}
 	if !targetFound {
 		return errTaskNotReady
@@ -812,6 +875,16 @@ func (s *Service) finished(err error) error {
 	s.State.SlotOccupied = false
 	r.EndedAt = ptr(now())
 	if err != nil {
+		var backendErr *BackendError
+		if errors.As(err, &backendErr) && (backendErr.Code == BackendOutcomeUnknown || backendErr.Code == BackendUnreachable || backendErr.Code == BackendIdentityMismatch) {
+			r.ExecutionStatus = "unknown"
+			r.EndedAt = nil
+			s.State.SlotOccupied, s.State.CurrentTask = true, ptr(r.TaskID)
+			s.blocked(r, "Execution observation ended without settlement: "+err.Error())
+			s.note(r, "steer", "error", "unknown", "execution observation ended", err.Error(), nil)
+			s.closeActivity(r)
+			return s.save()
+		}
 		r.ExecutionStatus = "failed"
 		s.blocked(r, "Codex execution failed: "+err.Error())
 		s.note(r, "steer", "error", "failed", "worker exited", err.Error(), map[string]any{"execution_status": "failed"})
@@ -822,7 +895,7 @@ func (s *Service) finished(err error) error {
 	s.note(r, "steer", "worker_exit", "completed", "worker exited", "", map[string]any{"exit_code": 0})
 	result, e := ReadResult(*r.ResultPath, r)
 	if e == nil {
-		e = verifyRunWorkspace(context.Background(), s.Config, r)
+		e = s.inspectRunWorkspace(context.Background(), r)
 	}
 	if e == nil && result.Summary != nil {
 		r.Summary = ptr(clip(*result.Summary, 4096))
@@ -933,6 +1006,9 @@ func (s *Service) pollPRsFor(ctx context.Context, runID string) error {
 	return operationErr
 }
 func (s *Service) event(ev WorkerEvent) error {
+	if ev.RunID != "" && ev.AttemptID != "" && (s.active == nil || s.active.RunID != ev.RunID || s.active.AttemptID != ev.AttemptID) {
+		return s.recordHistoricalWorkerEvent(ev)
+	}
 	if s.active == nil {
 		return nil
 	}
@@ -949,6 +1025,34 @@ func (s *Service) event(ev WorkerEvent) error {
 		s.emitConsole(ev.Activity)
 	}
 	return s.save()
+}
+
+func (s *Service) recordHistoricalWorkerEvent(ev WorkerEvent) error {
+	if !stableExecutionID(ev.RunID) || !stableExecutionID(ev.AttemptID) || ev.Activity.Kind == "" {
+		return nil
+	}
+	var run *Run
+	for _, candidate := range s.State.Runs {
+		if candidate != nil && candidate.RunID == ev.RunID {
+			run = candidate
+			break
+		}
+	}
+	if run == nil {
+		return nil
+	}
+	dir := filepath.Join(s.Config.RunDir, "runs", ev.RunID)
+	if ev.AttemptID != ev.RunID {
+		dir = filepath.Join(dir, "attempts", ev.AttemptID)
+	}
+	if info, err := os.Stat(dir); err != nil || !info.IsDir() {
+		return nil
+	}
+	w, err := OpenActivity(filepath.Join(dir, "activity.jsonl"), ev.RunID, run.TaskID)
+	if err != nil {
+		return err
+	}
+	return w.Write(ev.Activity)
 }
 func (s *Service) Run(ctx context.Context) (retErr error) {
 	return s.RunWithDispatch(ctx, "auto")
@@ -1143,21 +1247,30 @@ func (s *Service) run(ctx context.Context, retryRunID, dispatchMode string) (ret
 			return e
 		}
 	}
+	var observedWorker *Worker
+	var events <-chan WorkerEvent
 	for {
-		var events <-chan WorkerEvent
+		if s.worker != observedWorker {
+			observedWorker = s.worker
+			events = nil
+			if s.worker != nil {
+				events = s.worker.Events
+			}
+		}
 		var done <-chan error
 		if s.worker != nil {
-			events = s.worker.Events
 			done = s.worker.Done
 		}
 		select {
 		case <-ctx.Done():
 			return nil
 		case ev, ok := <-events:
-			if ok {
-				if e := s.event(ev); e != nil {
-					return e
-				}
+			if !ok {
+				events = nil
+				continue
+			}
+			if e := s.event(ev); e != nil {
+				return e
 			}
 		case e := <-done:
 			if err := s.finished(e); err != nil {
@@ -1221,22 +1334,178 @@ func (s *Service) shutdown() {
 	t := time.NewTimer(duration(s.Config.ShutdownGrace))
 	defer t.Stop()
 	killed := false
+	var stopOp Operation
+	events := (<-chan WorkerEvent)(s.worker.Events)
 	for {
 		select {
-		case ev, ok := <-s.worker.Events:
-			if ok {
-				s.event(ev)
+		case ev, ok := <-events:
+			if !ok {
+				events = nil
+				continue
 			}
+			s.event(ev)
 		case e := <-s.worker.Done:
 			if killed {
+				confirmed, confirmErr := s.confirmExecutionStop(stopOp)
+				if !confirmed {
+					s.worker = nil // the observer ended; the execution slot remains reserved.
+					s.preserveUnknownStop("worker observer ended without proof that the original execution stopped", confirmErr)
+					return
+				}
 				e = errors.New("worker process tree terminated during shutdown")
 			}
 			s.finished(e)
 			return
 		case <-t.C:
-			s.worker.Kill()
-			killed = true
+			if !killed {
+				var stopErr error
+				stopOp, stopErr = s.stopActiveExecution(context.Background())
+				if stopErr != nil {
+					s.setError(stopErr)
+				}
+				killed = true
+				t.Reset(duration(s.Config.ShutdownGrace))
+				continue
+			}
+			s.preserveUnknownStop("execution stop was not confirmed before shutdown timeout", nil)
+			return
 		}
+	}
+}
+
+func (s *Service) stopActiveExecution(ctx context.Context) (Operation, error) {
+	r := s.active
+	if r == nil || s.worker == nil {
+		return Operation{}, errors.New("there is no active execution to stop")
+	}
+	records := executionRecords{root: s.Config.RunDir}
+	ref, err := records.loadBinding(r.RunID, r.AttemptID)
+	if err != nil {
+		return Operation{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "active execution has no valid fixed binding", Cause: err}
+	}
+	if ref.RunID != r.RunID || ref.AttemptID != r.AttemptID || r.Process == nil || ref.External != *r.Process {
+		return Operation{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "active execution binding does not match runtime identity"}
+	}
+	backend := backendFor(s.Config, BeadsContext{})
+	kind, protocol := backend.Identity()
+	if kind != ref.Backend || protocol != ref.Protocol {
+		return Operation{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "configured backend/protocol differs from fixed execution"}
+	}
+	opID := "stop-" + r.AttemptID
+	payload := struct {
+		Policy string
+		Grace  string
+	}{"local_service_shutdown", s.Config.ShutdownGrace}
+	op := Operation{Version: ExecutionRecordVersion, ID: opID, RunID: r.RunID, AttemptID: r.AttemptID, Backend: ref.Backend, Protocol: ref.Protocol, Target: ref.Target, Action: "stop", PayloadDigest: digestValue(payload), Status: OperationPending, StartedAt: now(), UpdatedAt: now(), Ref: &ref}
+	if old, loadErr := records.loadOperation(r.RunID, r.AttemptID, opID); loadErr == nil {
+		if old.Action != op.Action || old.PayloadDigest != op.PayloadDigest || old.Target != op.Target {
+			return Operation{}, errors.New("stop operation id conflicts with its fixed target/policy")
+		}
+		return old, nil // Never resend a persisted stop operation.
+	} else if !os.IsNotExist(loadErr) {
+		return Operation{}, loadErr
+	}
+	if err = records.saveOperation(op); err != nil {
+		return Operation{}, err
+	}
+	op.Status, op.UpdatedAt = OperationInFlight, now()
+	if err = records.saveOperation(op); err != nil {
+		return Operation{}, err
+	}
+	receipt, stopErr := backend.StopExecution(ctx, ref, op, s.worker)
+	if stopErr != nil {
+		var be *BackendError
+		if errors.As(stopErr, &be) && (be.Code == BackendOutcomeUnknown || be.Code == BackendUnreachable || be.Code == BackendIdentityMismatch) {
+			op.Status = OperationUnknown
+		} else {
+			op.Status = OperationRejected
+		}
+		op.Diagnostic, op.UpdatedAt = stopErr.Error(), now()
+		if saveErr := records.saveOperation(op); saveErr != nil {
+			return op, errors.Join(stopErr, saveErr)
+		}
+		return op, stopErr
+	}
+	switch receipt.Disposition {
+	case "confirmed":
+		op.Status = OperationConfirmed
+	case "accepted":
+		op.Status = OperationAccepted
+	case "rejected":
+		op.Status = OperationRejected
+	default:
+		op.Status = OperationUnknown
+	}
+	op.Diagnostic, op.UpdatedAt = receipt.Diagnostic, now()
+	if err = records.saveOperation(op); err != nil {
+		return op, err
+	}
+	if op.Status == OperationUnknown || op.Status == OperationRejected {
+		return op, &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "stop request did not confirm an accepted stop"}
+	}
+	return op, nil
+}
+
+func (s *Service) confirmExecutionStop(op Operation) (bool, error) {
+	if op.ID == "" {
+		return false, errors.New("stop operation is missing")
+	}
+	records := executionRecords{root: s.Config.RunDir}
+	// The adapter already persisted an exact stop receipt. Orca's terminal show
+	// may later report an orphaned/disconnected tab even after ptyKilled=true;
+	// that weaker observation must not erase the durable close evidence.
+	if op.Status == OperationConfirmed {
+		persisted, err := records.loadOperation(op.RunID, op.AttemptID, op.ID)
+		if err != nil {
+			return false, err
+		}
+		if persisted.Status != OperationConfirmed || persisted.PayloadDigest != op.PayloadDigest || persisted.Target != op.Target || persisted.Ref == nil || op.Ref == nil || digestValue(*persisted.Ref) != digestValue(*op.Ref) {
+			return false, &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "exact stop confirmation was not durably saved"}
+		}
+		return true, nil
+	}
+	ref := op.Ref
+	if ref == nil {
+		loaded, err := (executionRecords{root: s.Config.RunDir}).loadBinding(op.RunID, op.AttemptID)
+		if err != nil {
+			return false, err
+		}
+		ref = &loaded
+	}
+	backend := backendFor(s.Config, BeadsContext{})
+	obs, err := backend.Observe(context.Background(), *ref)
+	if err != nil {
+		op.Status, op.Diagnostic, op.UpdatedAt = OperationUnknown, err.Error(), now()
+		saveErr := records.saveOperation(op)
+		return false, errors.Join(err, saveErr)
+	}
+	if obs.Liveness != "exited" {
+		op.Status, op.Diagnostic, op.UpdatedAt = OperationUnknown, "original execution has not produced stopped evidence: "+obs.Diagnostic, now()
+		saveErr := records.saveOperation(op)
+		return false, errors.Join(&BackendError{Code: BackendOutcomeUnknown, Diagnostic: op.Diagnostic}, saveErr)
+	}
+	op.Status, op.Diagnostic, op.UpdatedAt = OperationConfirmed, obs.Diagnostic, now()
+	if err = records.saveOperation(op); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func (s *Service) preserveUnknownStop(reason string, cause error) {
+	if s.active == nil {
+		return
+	}
+	r := s.active
+	r.ExecutionStatus = "unknown"
+	s.blocked(r, reason)
+	if cause != nil {
+		r.Error = ptr(clip(reason+": "+cause.Error(), 1000))
+	}
+	s.State.SlotOccupied, s.State.CurrentTask = true, ptr(r.TaskID)
+	s.note(r, "steer", "stop", "unknown", "execution stop unconfirmed", reason, nil)
+	s.closeActivity(r)
+	if err := s.save(); err != nil {
+		s.setError(err)
 	}
 }
 func RequestStop(c Config) error {
@@ -1271,14 +1540,14 @@ func (s *Service) AcceptResult(ctx context.Context, runID, path string) error {
 		if r.FinishTaskStatus == "completed" {
 			return errors.New("completed runs cannot be changed")
 		}
-		if inspectProcessWithConfig(s.Config, r.Process) == "matching process still exists" {
+		if s.inspectRunProcess(r) == "matching process still exists" {
 			return errors.New("original process still exists; stop it first")
 		}
 		result, e := ReadResult(path, r)
 		if e != nil {
 			return e
 		}
-		if e = verifyRunWorkspace(ctx, s.Config, r); e != nil {
+		if e = s.inspectRunWorkspace(ctx, r); e != nil {
 			return e
 		}
 		if result.Outcome != "pr_submitted" {
@@ -1296,6 +1565,7 @@ func (s *Service) AcceptResult(ctx context.Context, runID, path string) error {
 		}
 		r.ExecutionStatus = "succeeded"
 		r.ResultPath = ptr(path)
+		r.ManualStop = &ManualStopConfirmation{AttemptID: r.AttemptID, ConfirmedAt: now()}
 		r.EndedAt = ptr(now())
 		s.State.SlotOccupied = false
 		s.State.CurrentTask = nil
@@ -1313,11 +1583,12 @@ func (s *Service) MarkStopped(runID string) error {
 		if r.ExecutionStatus != "unknown" {
 			return errors.New("mark-stopped only applies to unknown execution")
 		}
-		if inspectProcessWithConfig(s.Config, r.Process) == "matching process still exists" {
+		if s.inspectRunProcess(r) == "matching process still exists" {
 			return errors.New("original process still exists; stop it first")
 		}
 		r.ExecutionStatus = "failed"
 		r.EndedAt = ptr(now())
+		r.ManualStop = &ManualStopConfirmation{AttemptID: r.AttemptID, ConfirmedAt: now()}
 		s.blocked(r, "Operator confirmed old process tree stopped; task remains claimed for manual repair")
 		s.State.SlotOccupied = false
 		s.State.CurrentTask = nil

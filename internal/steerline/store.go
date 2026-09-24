@@ -20,13 +20,20 @@ func newID() string {
 }
 func shortHash(s string) string { h := sha256.Sum256([]byte(s)); return hex.EncodeToString(h[:12]) }
 func AtomicWrite(path string, data []byte) error {
+	return atomicWriteWith(path, data, func(f *os.File, data []byte) error {
+		_, err := f.Write(data)
+		return err
+	})
+}
+
+func atomicWriteWith(path string, data []byte, write func(*os.File, []byte) error) error {
 	f, e := os.CreateTemp(filepath.Dir(path), ".steerline-*.tmp")
 	if e != nil {
 		return e
 	}
 	name := f.Name()
 	defer os.Remove(name)
-	if _, e = f.Write(data); e == nil {
+	if e = write(f, data); e == nil {
 		e = f.Sync()
 	}
 	ce := f.Close()
@@ -98,8 +105,8 @@ func LoadRuntime(path string) (*Runtime, error) {
 	if e = decode(b, &v); e != nil {
 		return nil, fmt.Errorf("invalid runtime; preserve it for manual recovery: %w", e)
 	}
-	if v.SchemaVersion != 1 && v.SchemaVersion != 2 && v.SchemaVersion != 3 && v.SchemaVersion != 4 {
-		return nil, fmt.Errorf("unsupported runtime schema %d", v.SchemaVersion)
+	if v.SchemaVersion != CurrentRuntimeSchema {
+		return nil, fmt.Errorf("unsupported runtime schema %d; current format is v%d and no migration is performed", v.SchemaVersion, CurrentRuntimeSchema)
 	}
 	return &v, nil
 }

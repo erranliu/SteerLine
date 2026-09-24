@@ -1,4 +1,4 @@
-# runtime v4 / control protocol v1 / result v1 数据契约
+# runtime v5 / control protocol v1 / result v1 数据契约
 
 编码为 UTF-8，时间为 RFC3339 UTC。完整例子：[runtime](../examples/runtime.json)、[result](../examples/result.json)。结果的可执行 JSON Schema 与程序一起嵌入：[result.schema.json](../internal/steerline/result.schema.json)。
 
@@ -6,7 +6,7 @@
 
 | 字段 | 类型 | 含义 |
 | --- | --- | --- |
-| schema_version | integer | 当前 4；可读取 v1–v4，只有持锁服务写入时把旧快照迁移为 v4，拒绝其他未知版本 |
+| schema_version | integer | 当前仅接受 5；v1–v4 及未知版本明确拒绝，不迁移 |
 | updated_at | timestamp | 最近一次成功发布快照的时间，含心跳写入 |
 | heartbeat_at | timestamp | 最近成功发布的活跃时间；读者用于判断过期 |
 | service.instance_id | string | 每次启动新的随机实例 ID，不等于 claimant |
@@ -42,7 +42,7 @@
 | run_id / claimant | string | 本次随机运行 ID / 固定领取者 |
 | attempt_id | string | 此运行当前日志代次；首次执行等于 run_id，后续 retry 使用新 ID |
 | control_revision | integer | 该运行最近一次操作相关状态变更的版本 |
-| host | string | `local` 或 `orca`；v1/v2 记录视为 local |
+| host | string | `local` 或 `orca`；缺失时保留 unknown/blocked 并阻止该运行副作用 |
 | completion | object/null | 派发时固定的 `{command:{executable,args},timeout}`；null 使用原生 close。重启按该记录继续，配置变更不能跳过旧运行的结项尾部 |
 | beads_context | object/null | 派发时的 beads_dir、project_id、database、backend；回调前再次核对。旧记录可能为 null，不包含认证信息 |
 | beads_status | string | 最近核实的 Beads 状态，不以本地预测替代 closed。这是过渡期的外部任务态镜像，见 [状态模型](state-model.md) |
@@ -50,7 +50,8 @@
 | finish_task_status | string | pending / waiting_decision / waiting_pr_merge / completed / blocked |
 | decision | object/null | 仅 outcome=needs_decision 时存在：{id, request, status(pending/resuming/applied), option_id, note, answered_by, answered_at, applied_at, request_path, answer_path}。见 [decisions](decisions.md) |
 | codex_session_id | string/null | 从 thread.started.thread_id 得到，不从日志文字猜测 |
-| process | object/null | 宿主无关身份：kind（os/orca）、PID/Created/Executable（os）或 Terminal/RuntimeID/Incarnation（orca）；kind 为空视为 os |
+| process | object/null | 宿主无关身份：kind（os/orca）、PID/Created/Executable（os）或 Terminal/RuntimeID/Incarnation（orca）；缺少 kind 的执行绑定拒绝使用 |
+| manual_stop | object/null | 人工停止确认：固定 attempt_id 与 confirmed_at；仅结算该 attempt 的资源不确定性，不改写原 Operation 的未知结果。retry 创建新 attempt 时清除 |
 | started_at / ended_at | timestamp/null | 服务记录的执行起止时间；崩溃导致终止时间未知时仍为 null |
 | workspace_intent | object/null | 创建前持久化的 path、branch、base_commit；只表示计划创建，不证明目录已就绪。旧记录或领取孤儿可能为 null |
 | worktree_path / worktree_branch / base_commit | string/null | 调度器创建并核验的隔离目录、实现分支及起点 Git hash；准备成功前均为 null，不由 Codex 结果覆盖 |
@@ -66,9 +67,15 @@
 
 execution_status=succeeded 仅表示进程正常退出，仍可能 finish_task_status=blocked（结果缺失/无效）、waiting_decision（等待人工决策）或 waiting_pr_merge。只有重新核实对应 PR 确实合入目标主线、配置的结项命令成功返回匹配回执（若有），且 Beads show 返回 closed，才写 completed。任务已 closed 但回调失败时仍 waiting_pr_merge，重启后重跑幂等回调。finish_task_status 不是“finish 技能函数是否返回”。
 
+PR 4A 使用 runtime v5 当前格式。新执行身份、能力检查和外部动作回执保存在 `execution/v1/`：binding 路径为 `bindings/<run_id>/<attempt_id>.json`，Operation 路径为 `operations/<run_id>/<attempt_id>/<operation_id>.json`，能力报告在 `capabilities/`，内容寻址的原生证据副本在 `evidence/`。binding 不可变；Operation ID 绑定固定负载摘要，同 ID 异负载拒绝。持锁 Service 写执行记录；停服后的 `certify-backend` 维护入口取得同一仓库/run_dir 锁后才能导入能力报告。runtime 保留业务权威与执行投影；未知或矛盾状态保留槽位，不自动重发副作用。
+
+能力报告的 `platform_version` 固定平台 CLI 版本。Orca 使用本地 Codex CLI 覆盖启动时，还保存 `agent_version` 并纳入报告键和证据校验；原生 agent 模式的报告不能复用到该路径。
+
 准备 worktree 时 execution_status=pending；创建或接入检查失败为 failed/blocked；遗留 pending/running 为 unknown/blocked。重启只核对目录、共享 Git 元数据、分支和起点祖先关系，不重建、不重跑。实际工作目录等字段只在创建及技能/Beads 核验全部通过后写入；创建后检查失败时，目录可能已存在，应查看 workspace_intent 和 error。
 
-兼容 v1 的等待合并记录：保留其 PR 查询，不把旧的技能自报工作目录升级为调度器核验事实，workspace_intent/worktree_branch 保持 null。旧 blocked/unknown 或孤儿运行缺少调度器准备记录，不能通过新版 accept-result 冒充已核验的运行，需人工处理原任务；程序不生成虚构的准备证据。
+缺少当前执行绑定、调度器准备记录或身份不完整的运行不能通过 accept-result 补造工作区事实，需保留原状态并人工核对；程序不生成虚构的准备证据。
+
+local 启动在创建进程前明确失败时没有进程绑定。受限 retry 可使用同一 attempt 已持久化的 rejected start Operation 与 workspace_intent，重新检查 Git 工作区、干净 HEAD/base 和领取；不能用这个路径重试 in_flight/outcome_unknown。回复 Operation 的负载摘要同时固定 continuation 文件路径和完整答案内容，回执中的输入接受与 turn_started 分别记录，均不等同于应用证明。
 
 PR 查询失败会清除 state 的可信结论并写 unknown，但保留过去读到的合并字段用于诊断；读者必须同时看 state、queried_at 和 query_error。程序不会仅凭缓存的 merged_at 关闭任务。
 
@@ -106,9 +113,9 @@ runtime 中的 `control.operation` 先于副作用保存；完成时把业务结
 
 持锁服务在每个 task tick 发布 `tasks.json`，版本为 1，包含服务 instance、repository identity、查询时间、最近成功时间、错误、阻塞原因及候选列表。候选来自 Beads ready，排除不支持类型、aggregate 和已有本地 run；候选只用于展示，不作为授权或 claim 保证。provider 查询失败保留旧列表并记录错误，定向启动总会重新读取并核验 provider。CLI `steerline tasks` 只读取当前实例快照。
 
-## runtime 版本迁移
+## runtime 版本拒绝
 
-只读读取 v1–v3 不改写文件。持有仓库和 run_dir 锁的服务下次保存时迁移到 v4：缺失 control revision 从 1 开始，缺失 attempt_id 从 `runs/<run_id>/attempts/<attempt_id>` 日志路径推导，否则回退到 run_id。恢复时发生的状态转换会推进相应 revision。v4 不兼容旧二进制写入；升级前显式停服，不能用旧版本覆盖新快照。
+读取 v1–v4 时明确返回不支持，不改写文件。当前格式缺少 attempt_id、host 或固定执行身份时拒绝副作用，不从配置或日志路径补造。停服并核实执行身份后才能更换状态目录；不能用旧快照覆盖已经产生外部动作的当前状态。
 
 ## 执行结果
 

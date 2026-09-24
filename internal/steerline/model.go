@@ -11,6 +11,9 @@ type Repository struct {
 	Branch   string `json:"branch"`
 	Identity string `json:"identity"`
 }
+
+const CurrentRuntimeSchema = 5
+
 type Runtime struct {
 	SchemaVersion int          `json:"schema_version"`
 	UpdatedAt     time.Time    `json:"updated_at"`
@@ -99,35 +102,43 @@ type ProcessIdentity struct {
 	Incarnation string `json:"incarnation,omitempty"`
 }
 type Run struct {
-	TaskID           string            `json:"task_id"`
-	Title            string            `json:"title"`
-	RunID            string            `json:"run_id"`
-	AttemptID        string            `json:"attempt_id,omitempty"`
-	ControlRevision  uint64            `json:"control_revision,omitempty"`
-	Claimant         string            `json:"claimant"`
-	Host             string            `json:"host,omitempty"`
-	BeadsStatus      string            `json:"beads_status"`
-	ExecutionStatus  string            `json:"execution_status"`
-	FinishTaskStatus string            `json:"finish_task_status"`
-	SessionID        *string           `json:"codex_session_id"`
-	Process          *ProcessIdentity  `json:"process"`
-	StartedAt        *time.Time        `json:"started_at"`
-	EndedAt          *time.Time        `json:"ended_at"`
-	WorktreePath     *string           `json:"worktree_path"`
-	WorktreeBranch   *string           `json:"worktree_branch"`
-	WorkspaceIntent  *WorkspaceIntent  `json:"workspace_intent"`
-	Completion       *CompletionConfig `json:"completion"`
-	BeadsContext     *BeadsContext     `json:"beads_context"`
-	BaseCommit       *string           `json:"base_commit"`
-	PR               PRState           `json:"pr"`
-	LastEvent        *string           `json:"last_event"`
-	LogPath          *string           `json:"log_path"`
-	ResultPath       *string           `json:"result_path"`
-	Summary          *string           `json:"summary"`
-	Error            *string           `json:"error"`
+	ManualStop       *ManualStopConfirmation `json:"manual_stop,omitempty"`
+	TaskID           string                  `json:"task_id"`
+	Title            string                  `json:"title"`
+	RunID            string                  `json:"run_id"`
+	AttemptID        string                  `json:"attempt_id,omitempty"`
+	ControlRevision  uint64                  `json:"control_revision,omitempty"`
+	Claimant         string                  `json:"claimant"`
+	Host             string                  `json:"host,omitempty"`
+	BeadsStatus      string                  `json:"beads_status"`
+	ExecutionStatus  string                  `json:"execution_status"`
+	FinishTaskStatus string                  `json:"finish_task_status"`
+	SessionID        *string                 `json:"codex_session_id"`
+	Process          *ProcessIdentity        `json:"process"`
+	StartedAt        *time.Time              `json:"started_at"`
+	EndedAt          *time.Time              `json:"ended_at"`
+	WorktreePath     *string                 `json:"worktree_path"`
+	WorktreeBranch   *string                 `json:"worktree_branch"`
+	WorkspaceIntent  *WorkspaceIntent        `json:"workspace_intent"`
+	Completion       *CompletionConfig       `json:"completion"`
+	BeadsContext     *BeadsContext           `json:"beads_context"`
+	BaseCommit       *string                 `json:"base_commit"`
+	PR               PRState                 `json:"pr"`
+	LastEvent        *string                 `json:"last_event"`
+	LogPath          *string                 `json:"log_path"`
+	ResultPath       *string                 `json:"result_path"`
+	Summary          *string                 `json:"summary"`
+	Error            *string                 `json:"error"`
 	// Decision is set when the agent raised a structured question and the run is
 	// paused as finish_task_status=waiting_decision until a human answers.
 	Decision *DecisionState `json:"decision,omitempty"`
+}
+
+// A human-confirmed stop settles the resource uncertainty, not the outcome of
+// any previously sent operation. It applies only to this exact attempt.
+type ManualStopConfirmation struct {
+	AttemptID   string    `json:"attempt_id"`
+	ConfirmedAt time.Time `json:"confirmed_at"`
 }
 
 // DecisionOption is one choice an agent offers when it needs a human decision.

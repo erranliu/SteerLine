@@ -48,7 +48,7 @@ func (s *Service) complete(ctx context.Context, r *Run, pr PRInfo) error {
 	if !regexp.MustCompile(`^[0-9a-f]{32}$`).MatchString(r.RunID) {
 		return errors.New("invalid completion run ID")
 	}
-	if err := verifyRunWorkspace(ctx, s.Config, r); err != nil {
+	if err := s.inspectRunWorkspace(ctx, r); err != nil {
 		return err
 	}
 	if r.BeadsContext == nil {

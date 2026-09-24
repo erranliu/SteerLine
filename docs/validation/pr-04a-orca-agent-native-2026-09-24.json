@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "captured_at": "2026-09-24T07:08:42.000Z",
+  "platform": "windows/amd64",
+  "orca_version": "1.4.209",
+  "backend": "orca",
+  "protocol": "orca_terminal_v2",
+  "target_id": "orca:f6912f0cd2ce941964b60190",
+  "agent": "codex",
+  "worktree_created": true,
+  "agent_terminal_bound": true,
+  "initial_output_observed": true,
+  "output_evidence": "terminal read cursor 16→20 contained PR4A_ORCA_NATIVE_OK",
+  "stop_status": "confirmed",
+  "worktree_retained": true,
+  "git_clean": true
+}

@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "captured_at": "2026-09-24T08:27:44.5897445Z",
+  "platform": "windows/amd64",
+  "codex_version": "codex-cli 0.156.1",
+  "backend": "local",
+  "protocol": "local_process",
+  "target_id": "local:windows:liuming-asus",
+  "agent": "codex",
+  "run_id": "51043aa8491a8aff6041c4d6fc3e9652",
+  "output_sha256": "e653d0fc7dcde94ad07ec88b7601a994c3295c1f910e9d155569ce9a079b45f8",
+  "output_bytes": 77,
+  "stop_status": "confirmed",
+  "process_absent": true
+}

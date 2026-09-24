@@ -108,7 +108,7 @@ func TestAnswerDecisionFindsRunByTask(t *testing.T) {
 		t.Fatal(e)
 	}
 	run.Decision = st
-	b, e := json.Marshal(&Runtime{SchemaVersion: 3, Runs: []*Run{run}})
+	b, e := json.Marshal(&Runtime{SchemaVersion: CurrentRuntimeSchema, Runs: []*Run{run}})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -140,7 +140,7 @@ func TestOrcaDecisionResumesRun(t *testing.T) {
 	}
 	f.c.Host = "orca"
 	f.c.Agent = "codex"
-	f.c.Orca = OrcaConfig{Executable: exe, Args: []string{"--fake", "orca", stateDir}, Shell: "cmd.exe", WaitTimeout: "5s", Fallback: "fail"}
+	f.c.Orca = OrcaConfig{Executable: exe, Args: []string{"--fake", "orca", stateDir}, Shell: "cmd.exe", WaitTimeout: "5s"}
 	t.Setenv("STEERLINE_FAKE_ORCA_PR_BASE", f.server.URL)
 	t.Setenv("STEERLINE_FAKE_ORCA_DECISION", "1")
 
@@ -154,7 +154,7 @@ func TestOrcaDecisionResumesRun(t *testing.T) {
 
 	run := s.State.Runs[0]
 	if run.FinishTaskStatus != "waiting_decision" || run.Decision == nil {
-		t.Fatalf("run did not pause for a decision: %+v", run)
+		t.Fatalf("run did not pause for a decision: status=%s execution=%s error=%s", run.FinishTaskStatus, run.ExecutionStatus, deref(run.Error))
 	}
 	if !fileExists(run.Decision.RequestPath) {
 		t.Fatalf("decision request file missing: %s", run.Decision.RequestPath)
@@ -189,5 +189,58 @@ func TestOrcaDecisionResumesRun(t *testing.T) {
 		if !strings.Contains(string(act), want) {
 			t.Fatalf("activity journal missing %q: %s", want, act)
 		}
+	}
+}
+
+func TestOrcaLostReplyReceiptKeepsOriginalExecutionUnknown(t *testing.T) {
+	f := newFixture(t, task("t-1"))
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	stateDir := filepath.Join(filepath.Dir(f.c.RunDir), "orca-lost-reply")
+	if err := os.MkdirAll(stateDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	f.c.Host, f.c.Agent = "orca", "codex"
+	f.c.Orca = OrcaConfig{Executable: exe, Args: []string{"--fake", "orca", stateDir}, Shell: "cmd.exe", WaitTimeout: "5s"}
+	t.Setenv("STEERLINE_FAKE_ORCA_PR_BASE", f.server.URL)
+	t.Setenv("STEERLINE_FAKE_ORCA_DECISION", "1")
+	s := f.service(t)
+	ctx := context.Background()
+	require(t, s.dispatch(ctx))
+	finishWorker(t, s)
+	run := s.State.Runs[0]
+	if run.Decision == nil || run.Process == nil || run.FinishTaskStatus != "waiting_decision" {
+		t.Fatalf("initial decision not retained: %+v", run)
+	}
+	before, err := readFakeOrcaState(stateDir, run.Process.Terminal)
+	require(t, err)
+	require(t, WriteAnswer(run, DecisionAnswer{OptionID: "a", Note: "fixed answer", AnsweredBy: "tester"}))
+	t.Setenv("STEERLINE_FAKE_ORCA_SEND_RESPONSE_LOST", "1")
+	require(t, s.applyDecisions(ctx))
+	if run.ExecutionStatus != "unknown" || run.FinishTaskStatus != "blocked" || !s.State.SlotOccupied {
+		t.Fatalf("lost reply response released original execution: %+v slot=%v", run, s.State.SlotOccupied)
+	}
+	op, err := (executionRecords{root: f.c.RunDir}).loadOperation(run.RunID, run.AttemptID, "reply-"+run.Decision.ID)
+	if err != nil || op.Status != OperationUnknown {
+		t.Fatalf("lost reply result was not persisted unknown: %#v %v", op, err)
+	}
+	after, err := readFakeOrcaState(stateDir, run.Process.Terminal)
+	require(t, err)
+	if after.Sends != before.Sends+1 {
+		t.Fatalf("reply was not sent exactly once: before=%d after=%d", before.Sends, after.Sends)
+	}
+	run.Decision.Note = "changed answer at the same continuation path"
+	if err := s.resumeAfterDecision(ctx, run); err == nil || !strings.Contains(err.Error(), "conflicts with its fixed answer") {
+		t.Fatalf("reply digest did not bind answer content: %v", err)
+	}
+	t.Setenv("STEERLINE_FAKE_ORCA_SEND_RESPONSE_LOST", "")
+	restarted := f.service(t)
+	_ = restarted.applyDecisions(ctx)
+	afterRestart, err := readFakeOrcaState(stateDir, run.Process.Terminal)
+	require(t, err)
+	if afterRestart.Sends != after.Sends || !restarted.State.SlotOccupied {
+		t.Fatalf("restart resent uncertain reply or released slot: before=%d after=%d slot=%v", after.Sends, afterRestart.Sends, restarted.State.SlotOccupied)
 	}
 }

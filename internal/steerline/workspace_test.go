@@ -271,7 +271,7 @@ func TestWorkspaceRecoveryRejectsChangedBranch(t *testing.T) {
 	}
 }
 
-func TestWorktreeRootConfigurationAndLegacySnapshot(t *testing.T) {
+func TestWorktreeRootConfigurationAndOldSnapshotRejection(t *testing.T) {
 	f := newFixture(t)
 	configPath := filepath.Join(f.c.RunDir, "config.json")
 	data, _ := json.Marshal(f.c)
@@ -292,8 +292,7 @@ func TestWorktreeRootConfigurationAndLegacySnapshot(t *testing.T) {
 	s.State.SchemaVersion = 1
 	s.State.Runs = []*Run{{TaskID: "old-1", RunID: "legacy", Claimant: f.c.Claimant, ExecutionStatus: "succeeded", FinishTaskStatus: "waiting_pr_merge", PR: PRState{URL: ptr(f.server.URL + "/owner/repo/pulls/1"), State: "open"}}}
 	require(t, s.save())
-	restarted := f.service(t)
-	if restarted.State.SchemaVersion != 4 || restarted.State.Runs[0].FinishTaskStatus != "waiting_pr_merge" {
-		t.Fatal("legacy PR polling was not preserved")
+	if _, err := NewService(f.c); err == nil || !strings.Contains(err.Error(), "unsupported runtime schema") {
+		t.Fatalf("old snapshot was accepted: %v", err)
 	}
 }

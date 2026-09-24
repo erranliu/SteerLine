@@ -20,7 +20,7 @@ func TestConnectionClassifiesProcessAndSnapshotIndependently(t *testing.T) {
 	id, err := currentProcessIdentity()
 	require(t, err)
 	rt := Runtime{
-		SchemaVersion: 4,
+		SchemaVersion: CurrentRuntimeSchema,
 		UpdatedAt:     now(),
 		HeartbeatAt:   now(),
 		Service: ServiceState{
