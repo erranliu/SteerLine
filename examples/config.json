@@ -37,8 +37,7 @@
     "shell": "cmd.exe",
     "wait_timeout": "15m",
     "keep_terminal": false,
-    "activate": false,
-    "fallback": "local"
+    "activate": false
   },
   "completion": null,
   "pr": {

@@ -144,6 +144,14 @@ func fakeMain(args []string) int {
 		}
 		return 0
 	}
+	if mode == "codex" && len(args) >= 3 && args[2] == "--version" {
+		version := os.Getenv("STEERLINE_FAKE_CODEX_VERSION")
+		if version == "" {
+			version = "fake-codex/1"
+		}
+		fmt.Println(version)
+		return 0
+	}
 	path := args[1]
 	argv := args[2:]
 	if arg(argv, "--help") != "" || strings.Contains(strings.Join(argv, " "), "--help") {
@@ -431,7 +439,43 @@ func newFixture(t *testing.T, tasks ...Task) *fixture {
 		tasks = []Task{}
 	}
 	writeFake(f.db, fakeDB{Tasks: tasks, Dependencies: map[string]string{}, Claims: map[string]int{}, Starts: map[string]int{}, PRBase: f.server.URL})
+	seedFakeCapabilities(t, f.c)
 	return f
+}
+
+func seedFakeCapabilities(t *testing.T, c Config) {
+	t.Helper()
+	if err := os.MkdirAll(c.RunDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(c.RunDir, "fake-native-evidence.json")
+	data := []byte("fake platform fixture: " + t.Name())
+	if err := AtomicWrite(path, data); err != nil {
+		t.Fatal(err)
+	}
+	sum := sha256.Sum256(data)
+	evidence := path + "#sha256=" + hex.EncodeToString(sum[:])
+	backend, protocol := backendFor(c, BeadsContext{}).Identity()
+	version := "fake-codex/1"
+	if backend == BackendOrca {
+		version = "fake-orca/1"
+	}
+	report := capabilityReport(backend, protocol, targetFor(c), agentFor(c), version)
+	for i := range report.Capabilities {
+		name := report.Capabilities[i].Name
+		if name == "output_turns" || name == "output_final_answer" {
+			continue
+		}
+		if backend == BackendLocal && name == "reply_continue" || backend == BackendOrca && name == "retry" || name == "resource_settlement" {
+			report.Capabilities[i].Status = CapabilityUnsupported
+			continue
+		}
+		report.Capabilities[i].Status = CapabilityVerified
+		report.Capabilities[i].Evidence = evidence
+	}
+	if err := (executionRecords{root: c.RunDir}).saveCapabilityReport(report); err != nil {
+		t.Fatal(err)
+	}
 }
 func mustInt(s string) int { n, _ := strconv.Atoi(s); return n }
 func task(id string) Task {
@@ -440,6 +484,7 @@ func task(id string) Task {
 func (f *fixture) pr(n, state string) { f.mu.Lock(); defer f.mu.Unlock(); f.states[n] = state }
 func (f *fixture) service(t *testing.T) *Service {
 	t.Helper()
+	seedFakeCapabilities(t, f.c)
 	s, e := NewService(f.c)
 	if e != nil {
 		t.Fatal(e)
@@ -592,8 +637,8 @@ func TestRecoverOrphanAndRunningWithoutRestart(t *testing.T) {
 	r.Process = &ProcessIdentity{PID: os.Getpid(), Created: "wrong identity", Executable: "wrong"}
 	require(t, s.save())
 	s = f.service(t)
-	if s.State.Runs[0].ExecutionStatus != "unknown" || !strings.Contains(*s.State.Runs[0].Error, "different process") {
-		t.Fatal("PID identity not checked")
+	if s.State.Runs[0].ExecutionStatus != "unknown" || s.State.Runs[0].FinishTaskStatus != "blocked" || !s.State.SlotOccupied {
+		t.Fatal("orphan with no fixed binding was not blocked")
 	}
 }
 func TestClaimConflictAndGrouping(t *testing.T) {
@@ -700,6 +745,51 @@ func TestPersistenceFailureStopsNewWork(t *testing.T) {
 		t.Fatal("previous snapshot destroyed")
 	}
 }
+
+func TestUnverifiedBackendCannotClaimOrStart(t *testing.T) {
+	f := newFixture(t, task("t-1"))
+	records := executionRecords{root: f.c.RunDir}
+	key := capabilityReport(BackendLocal, ProtocolLocalProcess, targetFor(f.c), agentFor(f.c), "fake-codex/1")
+	if err := os.Remove(records.capabilityPath(key)); err != nil {
+		t.Fatal(err)
+	}
+	s, err := NewService(f.c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = s.dispatch(context.Background()); err == nil {
+		t.Fatal("unverified start capability was accepted")
+	}
+	if len(s.State.Runs) != 0 || len(readFake(f.db).Claims) != 0 || len(readFake(f.db).Starts) != 0 {
+		t.Fatal("unverified backend caused task side effects")
+	}
+	report, err := records.loadCapabilityReport(key)
+	if err != nil || capabilityStatus(report, "start") != CapabilityNotTested {
+		t.Fatalf("missing not_tested report: %#v, %v", report, err)
+	}
+	seedFakeCapabilities(t, f.c)
+	t.Setenv("STEERLINE_FAKE_CODEX_VERSION", "fake-codex/2")
+	if err = s.dispatch(context.Background()); err == nil {
+		t.Fatal("changed backend version reused prior verification")
+	}
+	if len(readFake(f.db).Claims) != 0 {
+		t.Fatal("version change claimed a task")
+	}
+}
+
+func TestChangedCapabilityEvidenceBlocksClaim(t *testing.T) {
+	f := newFixture(t, task("t-1"))
+	s := f.service(t)
+	if err := os.WriteFile(filepath.Join(f.c.RunDir, "fake-native-evidence.json"), []byte("changed after verification"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.dispatch(context.Background()); err == nil {
+		t.Fatal("tampered capability evidence was accepted")
+	}
+	if len(readFake(f.db).Claims) != 0 || len(s.State.Runs) != 0 {
+		t.Fatal("tampered evidence caused a task side effect")
+	}
+}
 func TestShutdownKillsProcessTree(t *testing.T) {
 	f := newFixture(t, task("t-1"))
 	db := readFake(f.db)
@@ -729,6 +819,77 @@ func TestShutdownKillsProcessTree(t *testing.T) {
 	check := &ProcessIdentity{PID: childPID, Created: "", Executable: exe}
 	if result := inspectProcess(check); result == "PID belongs to a different process" {
 		t.Fatal("descendant still exists after job termination")
+	}
+}
+
+func TestLocalDetachObservationKeepsWorkerAlive(t *testing.T) {
+	f := newFixture(t, task("t-1"))
+	db := readFake(f.db)
+	db.Behavior = "sleep"
+	writeFake(f.db, db)
+	s := f.service(t)
+	require(t, s.dispatch(context.Background()))
+	w := s.worker
+	if w == nil {
+		t.Fatal("worker did not start")
+	}
+	defer w.Kill()
+	backend := localExecutionBackend{config: f.c}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	require(t, backend.DetachObservation(ctx, w))
+	require(t, backend.DetachObservation(ctx, w))
+	for {
+		select {
+		case _, ok := <-w.Events:
+			if !ok {
+				goto observerClosed
+			}
+		case <-ctx.Done():
+			t.Fatal("local observer did not close after detach")
+		}
+	}
+observerClosed:
+	identity := w.proc.Identity()
+	if got := inspectProcess(&identity); got != "matching process still exists" {
+		t.Fatalf("detach changed worker liveness: %s", got)
+	}
+	s.shutdown()
+	if s.State.SlotOccupied || s.worker != nil {
+		t.Fatal("confirmed shutdown retained local execution")
+	}
+}
+
+func TestLateAttemptEventOnlyEntersItsHistory(t *testing.T) {
+	f := newFixture(t)
+	s := f.service(t)
+	runID, currentAttempt := newID(), newID()
+	r := &Run{TaskID: "t-history", RunID: runID, AttemptID: currentAttempt, Claimant: f.c.Claimant, Host: "local", BeadsStatus: "in_progress", ExecutionStatus: "running", FinishTaskStatus: "pending"}
+	s.State.Runs = []*Run{r}
+	s.State.CurrentTask = ptr(r.TaskID)
+	s.State.SlotOccupied = true
+	s.active = r
+	if err := os.MkdirAll(filepath.Join(f.c.RunDir, "runs", runID), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.event(WorkerEvent{RunID: runID, AttemptID: runID, Session: "old-session", Summary: "old fact", Activity: ActivityEvent{Source: "codex", Kind: "note", Title: "late-old-attempt"}}); err != nil {
+		t.Fatal(err)
+	}
+	if r.SessionID != nil || r.LastEvent != nil || r.ExecutionStatus != "running" || r.FinishTaskStatus != "pending" || r.BeadsStatus != "in_progress" || !s.State.SlotOccupied || deref(s.State.CurrentTask) != r.TaskID {
+		t.Fatalf("late fact changed current execution: %+v", r)
+	}
+	history, err := os.ReadFile(filepath.Join(f.c.RunDir, "runs", runID, "activity.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(history), "late-old-attempt") {
+		t.Fatal("late fact was not retained with its original attempt")
+	}
+	if err = s.event(WorkerEvent{RunID: newID(), AttemptID: newID(), Summary: "foreign", Activity: ActivityEvent{Kind: "note", Title: "foreign"}}); err != nil {
+		t.Fatal(err)
+	}
+	if r.LastEvent != nil || !s.State.SlotOccupied {
+		t.Fatal("foreign fact changed the active run or slot")
 	}
 }
 

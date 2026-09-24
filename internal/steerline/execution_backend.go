@@ -13,12 +13,12 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 )
 
-// Backend and protocol are deliberately independent. A host setting is only a
-// compatibility input; persisted refs always carry both values.
+// Backend and protocol are deliberately independent; persisted refs carry both.
 type BackendKind string
 type ExecutionProtocol string
 
@@ -71,7 +71,6 @@ type ExecutionRef struct {
 	BaseCommit      string            `json:"base_commit,omitempty"`
 	External        ProcessIdentity   `json:"external"`
 	Generation      string            `json:"generation,omitempty"`
-	Legacy          bool              `json:"legacy,omitempty"`
 	Incomplete      bool              `json:"incomplete,omitempty"`
 }
 
@@ -147,10 +146,13 @@ type StopReceipt struct {
 	Diagnostic  string `json:"diagnostic,omitempty"`
 }
 type OutputBatch struct {
-	Data          []byte `json:"data"`
-	NextCursor    string `json:"next_cursor,omitempty"`
-	Gap           bool   `json:"gap,omitempty"`
-	SourceChanged bool   `json:"source_changed,omitempty"`
+	Data          []byte    `json:"data"`
+	Source        string    `json:"source"`
+	RetainedFrom  string    `json:"retained_from,omitempty"`
+	ObservedAt    time.Time `json:"observed_at"`
+	NextCursor    string    `json:"next_cursor,omitempty"`
+	Gap           bool      `json:"gap,omitempty"`
+	SourceChanged bool      `json:"source_changed,omitempty"`
 }
 type BackendErrorCode string
 
@@ -186,7 +188,7 @@ type ExecutionBackend interface {
 	Observe(context.Context, ExecutionRef) (Observation, error)
 	InspectWorkspace(context.Context, ExecutionRef) (WorkspaceInspection, error)
 	ReadOutput(context.Context, ExecutionRef, string, int) (OutputBatch, error)
-	Reply(context.Context, ExecutionRef, string, Operation) (ReplyReceipt, error)
+	Reply(context.Context, ExecutionRef, string, Operation, string) (ReplyReceipt, error)
 	StopExecution(context.Context, ExecutionRef, Operation, *Worker) (StopReceipt, error)
 	DetachObservation(context.Context, *Worker) error
 	SettleResources(context.Context, ExecutionRef, string) ([]string, error)
@@ -196,16 +198,18 @@ type ExecutionBackend interface {
 type WorkspaceInspection struct {
 	Repository string    `json:"repository"`
 	Worktree   string    `json:"worktree"`
+	Branch     string    `json:"branch"`
 	Base       string    `json:"base"`
 	Head       string    `json:"head"`
 	Dirty      bool      `json:"dirty"`
 	CheckedAt  time.Time `json:"checked_at"`
 }
 type ReplyReceipt struct {
-	InputAccepted bool   `json:"input_accepted"`
-	TurnStarted   bool   `json:"turn_started"`
-	Applied       bool   `json:"applied"`
-	Diagnostic    string `json:"diagnostic,omitempty"`
+	InputAccepted bool    `json:"input_accepted"`
+	TurnStarted   bool    `json:"turn_started"`
+	Applied       bool    `json:"applied"`
+	Diagnostic    string  `json:"diagnostic,omitempty"`
+	Worker        *Worker `json:"-"`
 }
 
 func unsupported(name string) error {
@@ -218,6 +222,42 @@ func digestValue(v any) string {
 }
 
 type executionRecords struct{ root string }
+
+func capabilityReportKey(report CapabilityReport) string {
+	return digestValue(struct {
+		Backend  BackendKind
+		Protocol ExecutionProtocol
+		Target   ExecutionTarget
+		Agent    AgentSpec
+		Version  string
+	}{report.Backend, report.Protocol, report.Target, report.Agent, report.PlatformVersion})
+}
+
+func verifyCapabilityEvidence(value string) error {
+	path, digest, found := strings.Cut(value, "#sha256=")
+	if !found || !filepath.IsAbs(path) || len(digest) != 64 {
+		return errors.New("verified capability lacks an absolute content-bound evidence reference")
+	}
+	if _, err := hex.DecodeString(digest); err != nil {
+		return errors.New("verified capability evidence digest is invalid")
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("capability evidence is unavailable: %w", err)
+	}
+	if len(data) == 0 || len(data) > 64<<10 {
+		return errors.New("capability evidence size is invalid")
+	}
+	sum := sha256.Sum256(data)
+	if hex.EncodeToString(sum[:]) != digest {
+		return errors.New("capability evidence content changed")
+	}
+	return nil
+}
+
+func (r executionRecords) capabilityPath(report CapabilityReport) string {
+	return filepath.Join(r.root, "execution", "v1", "capabilities", capabilityReportKey(report)+".json")
+}
 
 func stableExecutionID(value string) bool {
 	if len(value) != 32 {
@@ -249,17 +289,22 @@ func (r executionRecords) operationPath(run, attempt, id string) string {
 	return filepath.Join(r.root, "execution", "v1", "operations", run, attempt, id+".json")
 }
 func (r executionRecords) saveCapabilityReport(report CapabilityReport) error {
-	if report.Version != 1 || report.Backend == "" || report.Protocol == "" || report.Target.ID == "" || report.Agent.Name == "" || report.CheckedAt.IsZero() {
+	if report.Version != 1 || report.Backend == "" || report.Protocol == "" || report.Target.ID == "" || report.Agent.Name == "" || report.PlatformVersion == "" || report.CheckedAt.IsZero() {
 		return errors.New("incomplete capability report")
 	}
-	key := digestValue(struct {
-		Backend  BackendKind
-		Protocol ExecutionProtocol
-		Target   ExecutionTarget
-		Agent    AgentSpec
-		Version  string
-	}{report.Backend, report.Protocol, report.Target, report.Agent, report.PlatformVersion})
-	p := filepath.Join(r.root, "execution", "v1", "capabilities", key+".json")
+	seen := map[string]bool{}
+	for _, cap := range report.Capabilities {
+		if cap.Name == "" || seen[cap.Name] || cap.Status != CapabilityVerified && cap.Status != CapabilityUnsupported && cap.Status != CapabilityNotTested || cap.Status == CapabilityVerified && cap.Evidence == "" {
+			return errors.New("capability report has invalid or unevidenced status")
+		}
+		if cap.Status == CapabilityVerified {
+			if err := verifyCapabilityEvidence(cap.Evidence); err != nil {
+				return err
+			}
+		}
+		seen[cap.Name] = true
+	}
+	p := r.capabilityPath(report)
 	b, err := json.MarshalIndent(report, "", "  ")
 	if err != nil {
 		return err
@@ -269,7 +314,70 @@ func (r executionRecords) saveCapabilityReport(report CapabilityReport) error {
 	}
 	return AtomicWrite(p, append(b, '\n'))
 }
-func (r executionRecords) saveBinding(ref ExecutionRef) error {
+
+func (r executionRecords) loadCapabilityReport(key CapabilityReport) (CapabilityReport, error) {
+	b, err := os.ReadFile(r.capabilityPath(key))
+	if err != nil {
+		return CapabilityReport{}, err
+	}
+	var report CapabilityReport
+	if err = decode(b, &report); err != nil {
+		return report, fmt.Errorf("invalid capability report; preserve it: %w", err)
+	}
+	if report.Version != 1 || report.Backend != key.Backend || report.Protocol != key.Protocol || report.Target != key.Target || report.Agent != key.Agent || report.PlatformVersion != key.PlatformVersion || report.CheckedAt.IsZero() {
+		return report, errors.New("capability report identity/version mismatch")
+	}
+	if len(report.Capabilities) == 0 {
+		return report, errors.New("capability report has no checked capabilities")
+	}
+	seen := map[string]bool{}
+	for _, cap := range report.Capabilities {
+		if cap.Name == "" || seen[cap.Name] || cap.Status != CapabilityVerified && cap.Status != CapabilityUnsupported && cap.Status != CapabilityNotTested || cap.Status == CapabilityVerified && cap.Evidence == "" {
+			return report, errors.New("capability report contains invalid or unevidenced status")
+		}
+		if cap.Status == CapabilityVerified {
+			if err := verifyCapabilityEvidence(cap.Evidence); err != nil {
+				return report, err
+			}
+		}
+		seen[cap.Name] = true
+	}
+	return report, nil
+}
+
+func capabilityStatus(report CapabilityReport, name string) CapabilityStatus {
+	for _, cap := range report.Capabilities {
+		if cap.Name == name {
+			return cap.Status
+		}
+	}
+	return CapabilityNotTested
+}
+
+func (s *Service) requireBackendCapabilities(ctx context.Context, backend ExecutionBackend, names ...string) (CapabilityReport, error) {
+	target, agent := targetFor(s.Config), agentFor(s.Config)
+	probe, err := backend.Probe(ctx, target, agent)
+	if err != nil {
+		return CapabilityReport{}, err
+	}
+	records := executionRecords{root: s.Config.RunDir}
+	report, err := records.loadCapabilityReport(probe)
+	if os.IsNotExist(err) {
+		if saveErr := records.saveCapabilityReport(probe); saveErr != nil {
+			return CapabilityReport{}, saveErr
+		}
+		report = probe
+	} else if err != nil {
+		return CapabilityReport{}, err
+	}
+	for _, name := range names {
+		if capabilityStatus(report, name) != CapabilityVerified {
+			return report, &BackendError{Code: BackendUnsupported, Diagnostic: fmt.Sprintf("%s capability is %s for %s/%s target %s version %s", name, capabilityStatus(report, name), report.Backend, report.Protocol, report.Target.ID, report.PlatformVersion)}
+		}
+	}
+	return report, nil
+}
+func validateExecutionRef(ref ExecutionRef) error {
 	if ref.Version != ExecutionRecordVersion || !stableExecutionID(ref.RunID) || !stableExecutionID(ref.AttemptID) || ref.Backend == "" || ref.Protocol == "" {
 		return errors.New("incomplete execution binding")
 	}
@@ -287,6 +395,13 @@ func (r executionRecords) saveBinding(ref ExecutionRef) error {
 		}
 	default:
 		return errors.New("unsupported backend/protocol binding")
+	}
+	return nil
+}
+
+func (r executionRecords) saveBinding(ref ExecutionRef) error {
+	if err := validateExecutionRef(ref); err != nil {
+		return err
 	}
 	p := r.bindingPath(ref.RunID, ref.AttemptID)
 	if old, err := r.loadBinding(ref.RunID, ref.AttemptID); err == nil {
@@ -321,11 +436,37 @@ func (r executionRecords) loadBinding(run, attempt string) (ExecutionRef, error)
 	if ref.Version != ExecutionRecordVersion || ref.RunID != run || ref.AttemptID != attempt {
 		return ref, errors.New("execution binding identity/version mismatch")
 	}
+	if err := validateExecutionRef(ref); err != nil {
+		return ref, fmt.Errorf("invalid execution binding; preserve it: %w", err)
+	}
 	return ref, nil
 }
-func (r executionRecords) saveOperation(op Operation) error {
-	if op.Version != ExecutionRecordVersion || !stableOperationID(op.ID) || !stableExecutionID(op.RunID) || !stableExecutionID(op.AttemptID) || len(op.PayloadDigest) != 64 {
+func validateExecutionOperation(op Operation) error {
+	if op.Version != ExecutionRecordVersion || !stableOperationID(op.ID) || !stableExecutionID(op.RunID) || !stableExecutionID(op.AttemptID) || len(op.PayloadDigest) != 64 || op.Action == "" || op.Backend == "" || op.Protocol == "" || op.Target.ID == "" {
 		return errors.New("incomplete operation record")
+	}
+	if _, err := hex.DecodeString(op.PayloadDigest); err != nil {
+		return errors.New("invalid operation payload digest")
+	}
+	switch op.Status {
+	case OperationPending, OperationInFlight, OperationAccepted, OperationConfirmed, OperationRejected, OperationUnknown:
+	default:
+		return errors.New("invalid operation status")
+	}
+	if op.Ref != nil {
+		if err := validateExecutionRef(*op.Ref); err != nil {
+			return err
+		}
+		if op.Ref.RunID != op.RunID || op.Ref.AttemptID != op.AttemptID || op.Ref.Backend != op.Backend || op.Ref.Protocol != op.Protocol || op.Ref.Target != op.Target {
+			return errors.New("operation ref conflicts with fixed identity")
+		}
+	}
+	return nil
+}
+
+func (r executionRecords) saveOperation(op Operation) error {
+	if err := validateExecutionOperation(op); err != nil {
+		return err
 	}
 	p := r.operationPath(op.RunID, op.AttemptID, op.ID)
 	if old, err := r.loadOperation(op.RunID, op.AttemptID, op.ID); err == nil {
@@ -359,6 +500,9 @@ func (r executionRecords) loadOperation(run, attempt, id string) (Operation, err
 	if op.Version != ExecutionRecordVersion || op.RunID != run || op.AttemptID != attempt || op.ID != id {
 		return op, errors.New("operation identity/version mismatch")
 	}
+	if err := validateExecutionOperation(op); err != nil {
+		return op, fmt.Errorf("invalid operation record; preserve it: %w", err)
+	}
 	return op, nil
 }
 
@@ -371,8 +515,19 @@ type localExecutionBackend struct {
 func (b localExecutionBackend) Identity() (BackendKind, ExecutionProtocol) {
 	return BackendLocal, ProtocolLocalProcess
 }
-func (b localExecutionBackend) Probe(_ context.Context, target ExecutionTarget, agent AgentSpec) (CapabilityReport, error) {
-	return capabilityReport(BackendLocal, ProtocolLocalProcess, target, agent, ""), nil
+func (b localExecutionBackend) Probe(ctx context.Context, target ExecutionTarget, agent AgentSpec) (CapabilityReport, error) {
+	if agent.Name != "codex" {
+		return CapabilityReport{}, unsupported("local_process agent " + agent.Name)
+	}
+	out, err := (Runner{Dir: b.config.Repository, Timeout: positiveDuration(b.config.CommandTimeout, 30*time.Second)}).Output(ctx, b.config.Codex, "--version")
+	if err != nil {
+		return CapabilityReport{}, &BackendError{Code: BackendUnreachable, Diagnostic: "local Codex version probe failed", Cause: err}
+	}
+	version := strings.TrimSpace(string(out))
+	if version == "" {
+		return CapabilityReport{}, &BackendError{Code: BackendProtocolInvalid, Diagnostic: "local Codex version probe returned no version"}
+	}
+	return capabilityReport(BackendLocal, ProtocolLocalProcess, target, agent, version), nil
 }
 func (b localExecutionBackend) Start(ctx context.Context, s AttemptSpec) (StartReceipt, error) {
 	r := cloneRun(s.Run)
@@ -434,18 +589,35 @@ func (b localExecutionBackend) Observe(ctx context.Context, ref ExecutionRef) (O
 	return Observation{Liveness: liveness, Connection: "connected", ObservedAt: now(), Source: "os-process-probe", Diagnostic: label}, nil
 }
 func (b localExecutionBackend) InspectWorkspace(ctx context.Context, ref ExecutionRef) (WorkspaceInspection, error) {
-	if ref.Incomplete || ref.WorkspacePath == "" {
-		return WorkspaceInspection{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "workspace identity is incomplete"}
+	if ref.Backend != BackendLocal || ref.Protocol != ProtocolLocalProcess || ref.Target != targetFor(b.config) {
+		return WorkspaceInspection{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "local workspace target differs from the fixed execution"}
 	}
-	head, e := gitRunner(b.config, ref.WorkspacePath).Output(ctx, b.config.Git, "rev-parse", "HEAD")
-	if e != nil {
-		return WorkspaceInspection{}, e
+	return inspectBoundWorkspace(ctx, b.config, ref)
+}
+
+func inspectBoundWorkspace(ctx context.Context, c Config, ref ExecutionRef) (WorkspaceInspection, error) {
+	if ref.Incomplete || ref.WorkspacePath == "" || ref.WorkspaceBranch == "" || !commitHash.MatchString(ref.BaseCommit) {
+		return WorkspaceInspection{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "workspace ref is incomplete"}
 	}
-	dirty, e := gitRunner(b.config, ref.WorkspacePath).Output(ctx, b.config.Git, "status", "--porcelain")
-	if e != nil {
-		return WorkspaceInspection{}, e
+	if c.identity == "" {
+		if err := c.ResolveIdentity(ctx); err != nil {
+			return WorkspaceInspection{}, err
+		}
 	}
-	return WorkspaceInspection{Repository: b.config.Repository, Worktree: ref.WorkspacePath, Base: ref.BaseCommit, Head: strings.TrimSpace(string(head)), Dirty: strings.TrimSpace(string(dirty)) != "", CheckedAt: now()}, nil
+	intent := &WorkspaceIntent{Path: ref.WorkspacePath, Branch: ref.WorkspaceBranch, BaseCommit: ref.BaseCommit}
+	if err := verifyWorkspace(ctx, c, intent, false); err != nil {
+		return WorkspaceInspection{}, err
+	}
+	runner := gitRunner(c, ref.WorkspacePath)
+	head, err := runner.Output(ctx, c.Git, "rev-parse", "HEAD")
+	if err != nil {
+		return WorkspaceInspection{}, err
+	}
+	dirty, err := runner.Output(ctx, c.Git, "status", "--porcelain")
+	if err != nil {
+		return WorkspaceInspection{}, err
+	}
+	return WorkspaceInspection{Repository: c.Repository, Worktree: ref.WorkspacePath, Branch: ref.WorkspaceBranch, Base: ref.BaseCommit, Head: strings.TrimSpace(string(head)), Dirty: strings.TrimSpace(string(dirty)) != "", CheckedAt: now()}, nil
 }
 
 type localOutputCursor struct {
@@ -495,7 +667,7 @@ func (b localExecutionBackend) ReadOutput(ctx context.Context, ref ExecutionRef,
 	if err != nil {
 		return OutputBatch{}, err
 	}
-	batch := OutputBatch{}
+	batch := OutputBatch{Source: "local-jsonl", RetainedFrom: "0", ObservedAt: now()}
 	if offset > info.Size() {
 		batch.Gap = true
 		offset = info.Size()
@@ -561,7 +733,7 @@ func readOutputPrefix(f *os.File, offset int64) (string, error) {
 	_, _ = hash.Write(last)
 	return hex.EncodeToString(hash.Sum(nil)), nil
 }
-func (b localExecutionBackend) Reply(context.Context, ExecutionRef, string, Operation) (ReplyReceipt, error) {
+func (b localExecutionBackend) Reply(context.Context, ExecutionRef, string, Operation, string) (ReplyReceipt, error) {
 	return ReplyReceipt{}, unsupported("Reply")
 }
 func (b localExecutionBackend) StopExecution(ctx context.Context, ref ExecutionRef, _ Operation, worker *Worker) (StopReceipt, error) {
@@ -587,16 +759,41 @@ func (b localExecutionBackend) StopExecution(ctx context.Context, ref ExecutionR
 	worker.Kill()
 	return StopReceipt{Disposition: "accepted"}, nil
 }
-func (b localExecutionBackend) DetachObservation(context.Context, *Worker) error {
-	// Local stdout supervision owns the worker pipe. Closing it can signal the
-	// child and is not equivalent to detaching observation.
-	return unsupported("DetachObservation while a local process is running")
+func (b localExecutionBackend) DetachObservation(ctx context.Context, w *Worker) error {
+	return w.detachLocalObservation(ctx)
 }
 func (b localExecutionBackend) SettleResources(context.Context, ExecutionRef, string) ([]string, error) {
 	return nil, unsupported("SettleResources")
 }
-func (b localExecutionBackend) ReconcileOperation(context.Context, Operation) (Operation, error) {
-	return Operation{}, unsupported("local operation reconciliation")
+func reconcileRecordedOperation(ctx context.Context, root string, expected Operation) (Operation, error) {
+	if err := ctx.Err(); err != nil {
+		return Operation{}, err
+	}
+	records := executionRecords{root: root}
+	old, err := records.loadOperation(expected.RunID, expected.AttemptID, expected.ID)
+	if err != nil {
+		return Operation{}, err
+	}
+	if old.PayloadDigest != expected.PayloadDigest || old.Action != expected.Action || old.Backend != expected.Backend || old.Protocol != expected.Protocol || old.Target != expected.Target {
+		return Operation{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "operation identity or fixed payload changed"}
+	}
+	if old.Ref != nil {
+		bound, bindErr := records.loadBinding(old.RunID, old.AttemptID)
+		if bindErr != nil {
+			return Operation{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "operation ref has no valid execution binding", Cause: bindErr}
+		}
+		if digestValue(bound) != digestValue(*old.Ref) {
+			return Operation{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "operation ref conflicts with the persisted binding"}
+		}
+	}
+	if old.Status == OperationInFlight || old.Status == OperationUnknown {
+		return old, &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "platform request has no verified query/replay capability; original outcome remains unknown"}
+	}
+	return old, nil
+}
+
+func (b localExecutionBackend) ReconcileOperation(ctx context.Context, op Operation) (Operation, error) {
+	return reconcileRecordedOperation(ctx, b.config.RunDir, op)
 }
 
 type orcaTerminalBackend struct{ config Config }
@@ -604,8 +801,19 @@ type orcaTerminalBackend struct{ config Config }
 func (b orcaTerminalBackend) Identity() (BackendKind, ExecutionProtocol) {
 	return BackendOrca, ProtocolOrcaTerminalV2
 }
-func (b orcaTerminalBackend) Probe(_ context.Context, target ExecutionTarget, agent AgentSpec) (CapabilityReport, error) {
-	return capabilityReport(BackendOrca, ProtocolOrcaTerminalV2, target, agent, ""), nil
+func (b orcaTerminalBackend) Probe(ctx context.Context, target ExecutionTarget, agent AgentSpec) (CapabilityReport, error) {
+	if agent.Name == "" {
+		return CapabilityReport{}, &BackendError{Code: BackendRejected, Diagnostic: "Orca agent is required"}
+	}
+	out, err := (orcaClient{cfg: b.config}).call(ctx, positiveDuration(b.config.CommandTimeout, 30*time.Second), "--version")
+	if err != nil {
+		return CapabilityReport{}, &BackendError{Code: BackendUnreachable, Diagnostic: "Orca version probe failed", Cause: err}
+	}
+	version := strings.TrimSpace(string(out))
+	if version == "" {
+		return CapabilityReport{}, &BackendError{Code: BackendProtocolInvalid, Diagnostic: "Orca version probe returned no version"}
+	}
+	return capabilityReport(BackendOrca, ProtocolOrcaTerminalV2, target, agent, version), nil
 }
 func (b orcaTerminalBackend) Start(ctx context.Context, s AttemptSpec) (StartReceipt, error) {
 	r := cloneRun(s.Run)
@@ -648,13 +856,145 @@ func (b orcaTerminalBackend) Observe(ctx context.Context, ref ExecutionRef) (Obs
 	}
 	return Observation{Liveness: life, Connection: map[bool]string{true: "connected", false: "unreachable"}[term.Connected], ObservedAt: now(), Source: "orca-terminal-v2", Diagnostic: term.Status}, nil
 }
-func (b orcaTerminalBackend) InspectWorkspace(context.Context, ExecutionRef) (WorkspaceInspection, error) {
-	return WorkspaceInspection{}, unsupported("Orca remote workspace inspection has not been natively verified")
+func (b orcaTerminalBackend) InspectWorkspace(ctx context.Context, ref ExecutionRef) (WorkspaceInspection, error) {
+	if ref.Backend != BackendOrca || ref.Protocol != ProtocolOrcaTerminalV2 || ref.Target != targetFor(b.config) {
+		return WorkspaceInspection{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "Orca workspace target differs from the fixed execution"}
+	}
+	// terminal-v2 worktrees live on this configured host. Future supervised
+	// targets must implement their own remote inspection instead of using Git here.
+	return inspectBoundWorkspace(ctx, b.config, ref)
 }
-func (b orcaTerminalBackend) ReadOutput(context.Context, ExecutionRef, string, int) (OutputBatch, error) {
-	return OutputBatch{}, unsupported("ReadOutput (4B source cursor is not implemented)")
+
+type orcaOutputCursor struct {
+	Version     int    `json:"v"`
+	RunID       string `json:"r"`
+	AttemptID   string `json:"a"`
+	Target      string `json:"t"`
+	Runtime     string `json:"u"`
+	Terminal    string `json:"h"`
+	Incarnation string `json:"i"`
+	Source      string `json:"s"`
+	Position    string `json:"p"`
 }
-func (b orcaTerminalBackend) Reply(ctx context.Context, ref ExecutionRef, text string, _ Operation) (ReplyReceipt, error) {
+
+func platformCursor(raw json.RawMessage) (string, error) {
+	if len(raw) == 0 || string(raw) == "null" {
+		return "", nil
+	}
+	var value string
+	if err := json.Unmarshal(raw, &value); err == nil {
+		return value, nil
+	}
+	var number int64
+	if err := json.Unmarshal(raw, &number); err == nil && number >= 0 {
+		return strconv.FormatInt(number, 10), nil
+	}
+	return "", &BackendError{Code: BackendProtocolInvalid, Diagnostic: "Orca returned an invalid output cursor"}
+}
+
+func (b orcaTerminalBackend) ReadOutput(ctx context.Context, ref ExecutionRef, cursor string, limit int) (OutputBatch, error) {
+	if ref.Backend != BackendOrca || ref.Protocol != ProtocolOrcaTerminalV2 || ref.Target != targetFor(b.config) || ref.External.Kind != "orca" || ref.External.Terminal == "" || ref.External.RuntimeID == "" || ref.External.Incarnation == "" {
+		return OutputBatch{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "output ref lacks the fixed Orca terminal identity"}
+	}
+	if limit <= 0 || limit > 1000 {
+		return OutputBatch{}, &BackendError{Code: BackendProtocolInvalid, Diagnostic: "Orca output limit must be 1–1000 rows"}
+	}
+	position := ""
+	previousSource := ""
+	if cursor != "" {
+		token, err := base64.RawURLEncoding.DecodeString(cursor)
+		if err != nil {
+			return OutputBatch{}, &BackendError{Code: BackendProtocolInvalid, Diagnostic: "invalid Orca output cursor", Cause: err}
+		}
+		var saved orcaOutputCursor
+		if err = json.Unmarshal(token, &saved); err != nil || saved.Version != 1 || saved.RunID != ref.RunID || saved.AttemptID != ref.AttemptID || saved.Target != ref.Target.ID || saved.Runtime != ref.External.RuntimeID || saved.Terminal != ref.External.Terminal || saved.Incarnation != ref.External.Incarnation || saved.Source == "" {
+			return OutputBatch{}, &BackendError{Code: BackendProtocolInvalid, Diagnostic: "Orca output cursor is malformed or belongs to another source"}
+		}
+		position, previousSource = saved.Position, saved.Source
+	}
+	if _, err := b.Observe(ctx, ref); err != nil {
+		return OutputBatch{}, err
+	}
+	changed := false
+	for attempt := 0; attempt < 2; attempt++ {
+		args := []string{"terminal", "read", "--terminal", ref.External.Terminal, "--limit", strconv.Itoa(limit), "--json"}
+		if position != "" {
+			args = append(args, "--cursor", position)
+		}
+		out, callErr := (orcaClient{cfg: b.config}).call(ctx, positiveDuration(b.config.CommandTimeout, 30*time.Second), args...)
+		env, err := parseEnvelope(out)
+		if callErr != nil {
+			return OutputBatch{}, &BackendError{Code: BackendUnreachable, Diagnostic: "Orca terminal output could not be read", Cause: errors.Join(callErr, err)}
+		}
+		if err != nil {
+			return OutputBatch{}, &BackendError{Code: BackendProtocolInvalid, Diagnostic: "Orca terminal output response is invalid", Cause: err}
+		}
+		if env.Meta.RuntimeID == "" || env.Meta.RuntimeID != ref.External.RuntimeID {
+			return OutputBatch{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "Orca output came from a different runtime"}
+		}
+		var result struct {
+			Source       string          `json:"source"`
+			Tail         []string        `json:"tail"`
+			NextCursor   json.RawMessage `json:"nextCursor"`
+			OldestCursor json.RawMessage `json:"oldestCursor"`
+		}
+		var wrapped struct {
+			Terminal json.RawMessage `json:"terminal"`
+		}
+		if err = json.Unmarshal(env.Result, &wrapped); err != nil {
+			return OutputBatch{}, &BackendError{Code: BackendProtocolInvalid, Diagnostic: "Orca terminal output envelope is invalid", Cause: err}
+		}
+		payload := env.Result
+		if len(wrapped.Terminal) != 0 {
+			payload = wrapped.Terminal
+		}
+		if err = json.Unmarshal(payload, &result); err != nil {
+			return OutputBatch{}, &BackendError{Code: BackendProtocolInvalid, Diagnostic: "Orca terminal output payload is invalid", Cause: err}
+		}
+		if result.Source == "" {
+			return OutputBatch{}, &BackendError{Code: BackendProtocolInvalid, Diagnostic: "Orca output source is unavailable; source-bound paging cannot be verified"}
+		}
+		if previousSource != "" && previousSource != result.Source {
+			changed = true
+			position = ""
+			previousSource = result.Source
+			continue
+		}
+		if len(result.Tail) > limit {
+			return OutputBatch{}, &BackendError{Code: BackendProtocolInvalid, Diagnostic: "Orca output exceeded the requested row bound"}
+		}
+		data := []byte(strings.Join(result.Tail, "\n"))
+		if len(data) > 1<<20 {
+			return OutputBatch{}, &BackendError{Code: BackendProtocolInvalid, Diagnostic: "Orca output exceeded the 1 MiB batch bound"}
+		}
+		next, err := platformCursor(result.NextCursor)
+		if err != nil {
+			return OutputBatch{}, err
+		}
+		oldest, err := platformCursor(result.OldestCursor)
+		if err != nil {
+			return OutputBatch{}, err
+		}
+		if next == "" {
+			return OutputBatch{}, &BackendError{Code: BackendProtocolInvalid, Diagnostic: "Orca output omitted nextCursor"}
+		}
+		gap := false
+		if position != "" && oldest != "" {
+			want, werr := strconv.ParseInt(position, 10, 64)
+			have, herr := strconv.ParseInt(oldest, 10, 64)
+			if werr == nil && herr == nil && want < have {
+				gap = true
+			}
+		}
+		if _, err = b.Observe(ctx, ref); err != nil {
+			return OutputBatch{}, err
+		}
+		token, _ := json.Marshal(orcaOutputCursor{Version: 1, RunID: ref.RunID, AttemptID: ref.AttemptID, Target: ref.Target.ID, Runtime: ref.External.RuntimeID, Terminal: ref.External.Terminal, Incarnation: ref.External.Incarnation, Source: result.Source, Position: next})
+		return OutputBatch{Data: data, Source: result.Source, RetainedFrom: oldest, ObservedAt: now(), NextCursor: base64.RawURLEncoding.EncodeToString(token), Gap: gap, SourceChanged: changed}, nil
+	}
+	return OutputBatch{}, &BackendError{Code: BackendProtocolInvalid, Diagnostic: "Orca output source changed repeatedly during one read"}
+}
+func (b orcaTerminalBackend) Reply(ctx context.Context, ref ExecutionRef, text string, _ Operation, resultOut string) (ReplyReceipt, error) {
 	if ref.Backend != BackendOrca || ref.Protocol != ProtocolOrcaTerminalV2 || ref.External.Terminal == "" {
 		return ReplyReceipt{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "Orca terminal binding is incomplete"}
 	}
@@ -664,10 +1004,27 @@ func (b orcaTerminalBackend) Reply(ctx context.Context, ref ExecutionRef, text s
 	if _, err := (orcaTerminalBackend{config: b.config}).Observe(ctx, ref); err != nil {
 		return ReplyReceipt{}, err
 	}
+	if !stableExecutionID(ref.RunID) || !stableExecutionID(ref.AttemptID) || !filepath.IsAbs(ref.WorkspacePath) {
+		return ReplyReceipt{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "Orca continuation lacks fixed attempt/workspace identity"}
+	}
+	expectedDir := filepath.Join(b.config.RunDir, "runs", ref.RunID)
+	if ref.AttemptID != ref.RunID {
+		expectedDir = filepath.Join(expectedDir, "attempts", ref.AttemptID)
+	}
+	if canonical(resultOut) != canonical(filepath.Join(expectedDir, "result.json")) {
+		return ReplyReceipt{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "continuation result path differs from the fixed attempt"}
+	}
+	resultInWorktree := filepath.Join(ref.WorkspacePath, orcaResultFile)
+	if err := os.Remove(resultInWorktree); err != nil && !os.IsNotExist(err) {
+		return ReplyReceipt{}, &BackendError{Code: BackendRejected, Diagnostic: "previous Orca result could not be cleared before continuation", Cause: err}
+	}
 	if err := (orcaClient{cfg: b.config}).terminalSend(ctx, ref.External.Terminal, text); err != nil {
 		return ReplyReceipt{}, &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "Orca may have accepted the continuation before the response failed", Cause: err}
 	}
-	return ReplyReceipt{InputAccepted: true}, nil
+	client := orcaClient{cfg: b.config}
+	proc := &orcaProcess{cfg: b.config, term: orcaTerminal{Handle: ref.External.Terminal, RuntimeID: ref.External.RuntimeID, IncarnationID: ref.External.Incarnation}}
+	worker := superviseOrcaResult(b.config, client, proc, resultInWorktree, resultOut)
+	return ReplyReceipt{InputAccepted: true, Worker: worker}, nil
 }
 func (b orcaTerminalBackend) StopExecution(ctx context.Context, ref ExecutionRef, _ Operation, worker *Worker) (StopReceipt, error) {
 	obs, err := b.Observe(ctx, ref)
@@ -683,13 +1040,17 @@ func (b orcaTerminalBackend) StopExecution(ctx context.Context, ref ExecutionRef
 	if worker != nil && (worker.proc == nil || worker.proc.Identity() != ref.External) {
 		return StopReceipt{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "Orca observer handle does not match the fixed terminal identity"}
 	}
-	if err := (orcaClient{cfg: b.config}).closeTerminalChecked(ctx, ref.External.Terminal); err != nil {
+	closeReceipt, err := (orcaClient{cfg: b.config}).closeTerminalChecked(ctx, ref.External.Terminal, ref.External.RuntimeID)
+	if err != nil {
 		return StopReceipt{}, err
 	}
 	if worker != nil {
 		if proc, ok := worker.proc.(*orcaProcess); ok {
 			proc.Close()
 		}
+	}
+	if closeReceipt.Disposition == "confirmed" {
+		return closeReceipt, nil
 	}
 	obs, err = b.Observe(ctx, ref)
 	if err != nil {
@@ -719,12 +1080,18 @@ func (b orcaTerminalBackend) DetachObservation(ctx context.Context, w *Worker) e
 func (b orcaTerminalBackend) SettleResources(context.Context, ExecutionRef, string) ([]string, error) {
 	return nil, unsupported("SettleResources")
 }
-func (b orcaTerminalBackend) ReconcileOperation(context.Context, Operation) (Operation, error) {
-	return Operation{}, unsupported("Orca terminal v2 operation reconciliation")
+func (b orcaTerminalBackend) ReconcileOperation(ctx context.Context, op Operation) (Operation, error) {
+	return reconcileRecordedOperation(ctx, b.config.RunDir, op)
 }
 
 func capabilityReport(backend BackendKind, protocol ExecutionProtocol, target ExecutionTarget, agent AgentSpec, version string) CapabilityReport {
-	return CapabilityReport{Version: 1, Backend: backend, Protocol: protocol, Target: target, Agent: agent, PlatformVersion: version, CheckedAt: now(), Capabilities: []Capability{{Name: "start", Status: CapabilityNotTested}, {Name: "observe", Status: CapabilityNotTested}, {Name: "stop", Status: CapabilityNotTested}, {Name: "reply_continue", Status: CapabilityNotTested}, {Name: "retry", Status: CapabilityNotTested}, {Name: "operation_reconciliation", Status: CapabilityNotTested}, {Name: "workspace_inspection", Status: CapabilityNotTested}, {Name: "output_reading", Status: CapabilityNotTested}}}
+	caps := []Capability{{Name: "start", Status: CapabilityNotTested}, {Name: "observe", Status: CapabilityNotTested}, {Name: "stop", Status: CapabilityNotTested}, {Name: "detach_observation", Status: CapabilityNotTested}, {Name: "reply_continue", Status: CapabilityNotTested}, {Name: "retry", Status: CapabilityNotTested}, {Name: "operation_reconciliation", Status: CapabilityNotTested}, {Name: "workspace_inspection", Status: CapabilityNotTested}, {Name: "output_reading", Status: CapabilityNotTested}, {Name: "output_turns", Status: CapabilityNotTested}, {Name: "output_final_answer", Status: CapabilityNotTested}, {Name: "resource_settlement", Status: CapabilityUnsupported}}
+	for i := range caps {
+		if backend == BackendLocal && caps[i].Name == "reply_continue" || backend == BackendOrca && caps[i].Name == "retry" {
+			caps[i].Status = CapabilityUnsupported
+		}
+	}
+	return CapabilityReport{Version: 1, Backend: backend, Protocol: protocol, Target: target, Agent: agent, PlatformVersion: version, CheckedAt: now(), Capabilities: caps}
 }
 func backendFor(c Config, source BeadsContext) ExecutionBackend {
 	if c.hostName() == "orca" {
@@ -750,18 +1117,42 @@ func targetFor(c Config) ExecutionTarget {
 	return ExecutionTarget{ID: "local:" + runtime.GOOS + ":" + name}
 }
 func attemptOperationID(run, attempt string) string { return "start-" + run + "-" + attempt }
-func executionRefFor(c Config, run *Run) ExecutionRef {
-	if run == nil {
-		return ExecutionRef{Version: 1, Legacy: true, Incomplete: true}
+func (s *Service) readRunWorkspace(ctx context.Context, run *Run) (WorkspaceInspection, error) {
+	if run == nil || run.WorktreePath == nil || run.WorktreeBranch == nil || run.BaseCommit == nil || run.WorkspaceIntent == nil {
+		return WorkspaceInspection{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "run has no verified workspace fields"}
 	}
-	if run.Process == nil {
-		return ExecutionRef{Version: 1, RunID: run.RunID, AttemptID: run.AttemptID, Legacy: true, Incomplete: true}
+	if canonical(*run.WorktreePath) != canonical(run.WorkspaceIntent.Path) || *run.WorktreeBranch != run.WorkspaceIntent.Branch || *run.BaseCommit != run.WorkspaceIntent.BaseCommit {
+		return WorkspaceInspection{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "runtime workspace differs from durable intent"}
 	}
-	b, p := BackendLocal, ProtocolLocalProcess
-	if run.Process.Kind == "orca" {
-		b, p = BackendOrca, ProtocolOrcaTerminalV2
+	if !stableExecutionID(run.RunID) || !stableExecutionID(run.AttemptID) {
+		return WorkspaceInspection{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "run has no current execution identity"}
 	}
-	return ExecutionRef{Version: 1, Backend: b, Protocol: p, Target: targetFor(c), Agent: agentFor(c), RunID: run.RunID, AttemptID: run.AttemptID, WorkspacePath: deref(run.WorktreePath), WorkspaceBranch: deref(run.WorktreeBranch), BaseCommit: deref(run.BaseCommit), External: *run.Process, Generation: run.Process.Created, Legacy: true}
+	records := executionRecords{root: s.Config.RunDir}
+	ref, err := records.loadBinding(run.RunID, run.AttemptID)
+	if err != nil {
+		return WorkspaceInspection{}, err
+	}
+	if ref.RunID != run.RunID || ref.AttemptID != run.AttemptID || canonical(ref.WorkspacePath) != canonical(*run.WorktreePath) || ref.WorkspaceBranch != *run.WorktreeBranch || ref.BaseCommit != *run.BaseCommit {
+		return WorkspaceInspection{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "execution binding and runtime workspace disagree"}
+	}
+	backend := backendFor(s.Config, BeadsContext{})
+	kind, protocol := backend.Identity()
+	if kind != ref.Backend || protocol != ref.Protocol {
+		return WorkspaceInspection{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "configured backend differs from the fixed workspace protocol"}
+	}
+	inspection, err := backend.InspectWorkspace(ctx, ref)
+	if err != nil {
+		return WorkspaceInspection{}, err
+	}
+	if canonical(inspection.Worktree) != canonical(ref.WorkspacePath) || inspection.Branch != ref.WorkspaceBranch || inspection.Base != ref.BaseCommit || canonical(inspection.Repository) != canonical(s.Config.Repository) {
+		return WorkspaceInspection{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "workspace inspection returned a different repository or ref"}
+	}
+	return inspection, nil
+}
+
+func (s *Service) inspectRunWorkspace(ctx context.Context, run *Run) error {
+	_, err := s.readRunWorkspace(ctx, run)
+	return err
 }
 
 func (s *Service) inspectRunProcess(run *Run) string {
@@ -795,10 +1186,5 @@ func (s *Service) inspectRunProcess(run *Run) string {
 	if !os.IsNotExist(err) {
 		return "execution binding invalid: " + err.Error()
 	}
-	// Legacy records are inspected only through their recorded identity. The
-	// current Orca executable must match the executable recorded with the ref.
-	if run.Process.Kind == "orca" && run.Process.Executable != "" && run.Process.Executable != s.Config.Orca.Executable {
-		return "legacy Orca connection changed; refusing to route an old terminal through it"
-	}
-	return inspectProcessWithConfig(s.Config, run.Process)
+	return "execution binding unavailable; refusing to inspect through current configuration"
 }

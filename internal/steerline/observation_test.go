@@ -26,18 +26,22 @@ func TestObservationClassifiesMissingFreshStaleFutureAndUnknownRuntime(t *testin
 	if got := ReadObservationSnapshot(path, "2s", clock); got.State != SnapshotNone {
 		t.Fatalf("missing state=%s", got.State)
 	}
-	writeRuntimeForObservation(t, path, 3, now.Add(-5*time.Second))
+	writeRuntimeForObservation(t, path, CurrentRuntimeSchema, now.Add(-5*time.Second))
 	if got := ReadObservationSnapshot(path, "2s", clock); got.State != SnapshotValid || got.FreshnessLimit != 15*time.Second {
 		t.Fatalf("fresh heartbeat classification: %+v", got)
 	}
-	writeRuntimeForObservation(t, path, 3, now.Add(-16*time.Second))
+	writeRuntimeForObservation(t, path, CurrentRuntimeSchema, now.Add(-16*time.Second))
 	if got := ReadObservationSnapshot(path, "2s", clock); got.State != SnapshotStale {
 		t.Fatalf("stale heartbeat classification: %+v", got)
 	}
-	writeRuntimeForObservation(t, path, 3, now.Add(time.Second))
+	writeRuntimeForObservation(t, path, CurrentRuntimeSchema, now.Add(time.Second))
 	got := ReadObservationSnapshot(path, "2s", clock)
 	if got.State != SnapshotStale || !got.ClockSkew {
 		t.Fatalf("future timestamp should report clock skew and stale: %+v", got)
+	}
+	writeRuntimeForObservation(t, path, 4, now)
+	if got := ReadObservationSnapshot(path, "2s", clock); got.State != SnapshotUnknownVersion {
+		t.Fatalf("old version classification: %+v", got)
 	}
 	writeRuntimeForObservation(t, path, 99, now)
 	if got := ReadObservationSnapshot(path, "2s", clock); got.State != SnapshotUnknownVersion {

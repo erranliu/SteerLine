@@ -523,12 +523,6 @@ func connectServiceWithProbe(ctx context.Context, c Config, probe func(*ProcessI
 		return connection
 	}
 	rt := obs.Runtime
-	if rt.SchemaVersion != 4 {
-		connection.State = ConnectionLegacy
-		connection.Diagnostic = fmt.Sprintf("runtime schema v%d is readable but lacks v4 service identity and control capability", rt.SchemaVersion)
-		connection.CanStart = false
-		return connection
-	}
 	connection.Protocol = rt.Service.ControlProtocol
 	connection.Capabilities = append(connection.Capabilities, rt.Service.Capabilities...)
 	if rt.Service.StartupID != nil {

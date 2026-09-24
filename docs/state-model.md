@@ -14,7 +14,7 @@
 
 服务还有独立的控制轴 `control.dispatch_mode`（manual/auto）、`dispatch_paused` 和 `revision`。它们控制将来是否领取新任务，不改变执行、交付或 Beads 认领事实。`control.operation` 和 `control.blockers` 是控制协议的持久检查点/不确定副作用保留，不是任务队列；服务是 runtime 的唯一写者，CLI 仅提交文件请求并读取回执。
 
-PR 4A 增加独立的 `execution/v1/` 版本化记录：`ExecutionRef` 固定 backend/protocol/target/agent/workspace 和外部身份，`Operation` 固定动作负载摘要及 pending/in_flight/accepted/confirmed/rejected/outcome_unknown 结果。运行身份仍在 runtime v4 的 `Run` 投影中，绑定文件必须与它的 PID/创建身份或 Orca runtime/terminal/incarnation 一致；未知、损坏或冲突记录阻止有副作用的恢复。配置摘要改变不会重路由历史记录。
+PR 4A 增加独立的 `execution/v1/` 版本化记录：`ExecutionRef` 固定 backend/protocol/target/agent/workspace 和外部身份，`Operation` 固定动作负载摘要及 pending/in_flight/accepted/confirmed/rejected/outcome_unknown 结果。运行身份在 runtime v5 的 `Run` 投影中，绑定文件必须与它的 PID/创建身份或 Orca runtime/terminal/incarnation 一致；未知、损坏或冲突记录阻止有副作用的恢复。配置摘要改变不会重路由历史记录。
 
 **关键**：`execution_status=running`（进程在跑）与 Beads `IN_PROGRESS`（任务被认领）是两件不同的事，同时成立是正常的，不是冲突。查看器里的 `RUN`/`BLOCK`/`DECIDE`/`MERGE`/`DONE` 徽标取的是 SteerLine 的**执行/交付**轴，**不是** Beads 状态。
 
@@ -23,7 +23,7 @@ PR 4A 增加独立的 `execution/v1/` 版本化记录：`ExecutionRef` 固定 ba
 - **执行态与交付态**：SteerLine 唯一权威（`runtime.json`）。
 - **任务认领与关闭**：当前由 Beads 权威；SteerLine 通过 `bd claim` / `bd close` **写入**，并在完成后以 `bd show` 回读核实（不以本地预测替代 `closed`）。
 - **PR 合并**：外部平台权威；SteerLine 查询核实后才推进交付态。
-- **派发控制**：当前 runtime v4 的服务主状态机权威。manual 不自动 claim；pause 只挡新派发；停止服务与关闭查看器分开。控制请求的 `applied` 只说明指令完成，不代替 run 的执行或交付状态。
+- **派发控制**：当前 runtime v5 的服务主状态机权威。manual 不自动 claim；pause 只挡新派发；停止服务与关闭查看器分开。控制请求的 `applied` 只说明指令完成，不代替 run 的执行或交付状态。
 
 ## 生命周期（一次运行）
 
@@ -89,13 +89,13 @@ PR 已合并 + 结项命令 + bd close:  finish=completed   beads=closed
 
 Windows 服务窗口没有另外的服务启动父进程；窗口中的服务在 preflight 前发布自己的身份，之后独占 `startup.json` 生命周期记录。Linux 独立启动路径的父进程仍将 OS 身份写入 v1 `process.json`，不能覆盖子进程已发布的 `started` 或 `failed`。客户端确认进程已退出时可将未确认的启动标记为失败；损坏或多个仍存活的启动记录会阻止新的启动。
 
-对于 PR 2 的 v4 服务（没有 `startup_id`），配置摘要变化时，连接端还要求匹配的 OS 身份及 repository/run_dir 两把锁，才能保留显式 stop 能力。停服客户端确认 `stop_service=applied`、原进程退出和两把锁释放后，会在 `service/stops/<instance_id>.json` 写入版本化停服观察记录，证明该旧实例原本属于此 run_dir；这使已停服务在修改配置摘要后仍可显式重新启动，不改 runtime v4。
+runtime v1–v4 快照不由当前客户端或服务读取。停服并核实旧执行身份后，才能为当前格式使用新的状态目录；旧快照不自动转成 v5。
 
 连接读取 runtime 快照、新鲜度、进程探测、配置摘要和控制协议能力，并单独呈现。进程探测区分匹配、确定不存在、PID 已复用和无法核验；权限不足及身份不明不等于离线。过期 heartbeat、ready=false 和协议不兼容均保留旧实例，不自动另起服务。配置摘要变化时保留观察与显式停服能力，并禁用其他控制动作。控制台退出、连接断开和等待超时都不会停止服务。
 
 Windows 的服务窗口直接竞争 Git common-dir 仓库锁和 run_dir 锁；两配置指向同仓库但使用不同 run_dir 时，仓库锁拒绝第二个窗口。客户端只在同一 startup_id、进程身份匹配且 ready=true 的 runtime 快照出现后显示已连接；初始化超时保留待确认状态，不自动打开替代窗口。`service/launch.lock` 仅供仍使用独立启动的 Linux 客户端串行化同一 run_dir。
 
-Windows 的 `service-window.bat` 从稳定安装 exe 以 manual/summary 模式运行。服务必须有可见 console 窗口，运行时监测其窗口句柄；窗口消失时取消服务上下文并清理 worker。该模式不要求从祖先 Job Object 脱离，关闭独立 viewer/TUI 也不会关闭服务窗口。Linux 服务以新会话启动，不使用 worker 的父死亡信号；兼容服务连接时保留原 mode/pause。
+Windows 的 `service-window.bat` 从稳定安装 exe 以 manual/summary 模式运行。服务必须有可见 console 窗口，运行时监测其窗口句柄；窗口消失时取消服务上下文并清理 worker。该模式不要求从祖先 Job Object 脱离，关闭独立 viewer/TUI 也不会关闭服务窗口。Linux 服务以新会话启动，不使用 worker 的父死亡信号；同版本服务连接时保留原 mode/pause。
 
 Windows worker 子进程仍先以挂起状态创建，纳入 kill-on-close Job 并核验身份后才恢复执行；该 Job 在服务窗口异常退出时清理 worker。停服请求固定指向连接时观察到的实例，结果始终包含 request_id 和 instance_id。即使没有回执，也独立报告原进程是否退出；只有 applied、进程退出和两把锁释放均确认后才报告 stopped。历史快照中的进程已退出但服务锁尚未释放时，不开放重新启动。
 

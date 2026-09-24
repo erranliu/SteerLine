@@ -8,7 +8,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 )
 
@@ -53,7 +52,7 @@ func NewService(c Config) (*Service, error) {
 	if e != nil {
 		return nil, e
 	}
-	s.State = Runtime{SchemaVersion: 4, Repository: Repository{Path: c.Repository, Remote: c.Remote, Branch: c.Branch, Identity: c.identity}, Runs: []*Run{}, Control: ControlState{DispatchMode: "auto", Revision: 1, Blockers: []ControlBlocker{}}}
+	s.State = Runtime{SchemaVersion: CurrentRuntimeSchema, Repository: Repository{Path: c.Repository, Remote: c.Remote, Branch: c.Branch, Identity: c.identity}, Runs: []*Run{}, Control: ControlState{DispatchMode: "auto", Revision: 1, Blockers: []ControlBlocker{}}}
 	if old != nil {
 		if old.Repository.Identity != c.identity || old.Repository.Remote != c.Remote || old.Repository.Branch != c.Branch || old.Service.Claimant != c.Claimant {
 			return nil, errors.New("runtime repository/branch/claimant mismatch; preserve state and use the original configuration")
@@ -71,8 +70,8 @@ func NewService(c Config) (*Service, error) {
 		s.versionPrevious = &baseline
 		s.State.Runs = old.Runs
 		s.State.Control = old.Control
-		if old.SchemaVersion == 4 && (s.State.Control.DispatchMode != "manual" && s.State.Control.DispatchMode != "auto" || s.State.Control.Revision == 0) {
-			return nil, errors.New("invalid runtime v4 control state; preserve the snapshot for recovery")
+		if s.State.Control.DispatchMode != "manual" && s.State.Control.DispatchMode != "auto" || s.State.Control.Revision == 0 {
+			return nil, errors.New("invalid current runtime control state; preserve the snapshot for recovery")
 		}
 		if s.State.Control.DispatchMode == "" {
 			s.State.Control.DispatchMode = "auto"
@@ -96,7 +95,10 @@ func NewService(c Config) (*Service, error) {
 			}
 			seen[r.TaskID] = true
 			if r.AttemptID == "" {
-				r.AttemptID = runAttemptID(r)
+				r.ExecutionStatus = "unknown"
+				s.blocked(r, "Run lacks current attempt identity; preserve state without migration")
+				s.State.SlotOccupied = true
+				continue
 			}
 			if r.ControlRevision == 0 {
 				r.ControlRevision = 1
@@ -104,12 +106,14 @@ func NewService(c Config) (*Service, error) {
 			if e := r.Completion.validate(); e != nil {
 				return nil, e
 			}
-			// v1/v2 runs predate hosting; they are local by definition.
-			if r.Host == "" {
-				r.Host = "local"
+			if r.Host != "local" && r.Host != "orca" {
+				r.ExecutionStatus = "unknown"
+				s.blocked(r, "Run lacks current backend identity; preserve state without migration")
+				s.State.SlotOccupied = true
+				continue
 			}
-			if r.Process != nil && r.Process.Kind == "" {
-				r.Process.Kind = "os"
+			if err := s.reconcileRunExecutionRecord(r); err != nil {
+				return nil, err
 			}
 			switch r.ExecutionStatus {
 			case "pending", "running", "succeeded", "failed", "unknown":
@@ -164,7 +168,7 @@ func NewService(c Config) (*Service, error) {
 			s.State.SlotOccupied = false
 		}
 	}
-	s.State.SchemaVersion = 4
+	s.State.SchemaVersion = CurrentRuntimeSchema
 	s.State.Service = ServiceState{InstanceID: newID(), PID: os.Getpid(), Status: "running", Claimant: c.Claimant, Mode: "maintenance", Ready: false, ControlProtocol: ControlProtocolVersion, Capabilities: []string{"start_task", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "stop_service"}, ConfigDigest: c.configDigest, HeartbeatIntervalMS: duration(c.Heartbeat).Milliseconds()}
 	identity, err := currentProcessIdentity()
 	if err != nil {
@@ -173,19 +177,6 @@ func NewService(c Config) (*Service, error) {
 	s.State.Service.ProcessIdentity = identity
 	return s, nil
 }
-func runAttemptID(r *Run) string {
-	if r.LogPath != nil {
-		p := filepath.Clean(*r.LogPath)
-		parts := strings.Split(filepath.ToSlash(p), "/")
-		for i := 0; i+1 < len(parts); i++ {
-			if parts[i] == "attempts" && parts[i+1] != "" {
-				return parts[i+1]
-			}
-		}
-	}
-	return r.RunID
-}
-
 func runVersionShape(r *Run) any {
 	if r == nil {
 		return nil
@@ -446,6 +437,9 @@ func (s *Service) dispatch(ctx context.Context) error {
 			continue
 		}
 		targetFound = true
+		if _, err := s.requireBackendCapabilities(ctx, backendFor(s.Config, BeadsContext{}), "start", "observe", "stop", "workspace_inspection", "output_reading"); err != nil {
+			return err
+		}
 		id := newID()
 		if s.reservedRunID != "" {
 			id = s.reservedRunID
@@ -534,13 +528,6 @@ func (s *Service) dispatch(ctx context.Context) error {
 		records := executionRecords{root: s.Config.RunDir}
 		payloadDigest := digestValue(spec)
 		op := Operation{Version: ExecutionRecordVersion, ID: opID, RunID: r.RunID, AttemptID: r.AttemptID, Backend: backendKind, Protocol: protocol, Target: target, Action: "start", PayloadDigest: payloadDigest, Status: OperationPending, StartedAt: now(), UpdatedAt: now()}
-		capabilities, probeErr := backend.Probe(ctx, target, agent)
-		if probeErr != nil {
-			return probeErr
-		}
-		if err := records.saveCapabilityReport(capabilities); err != nil {
-			return err
-		}
 		if previous, loadErr := records.loadOperation(r.RunID, r.AttemptID, opID); loadErr == nil {
 			if previous.PayloadDigest != payloadDigest || previous.Backend != backendKind || previous.Protocol != protocol || previous.Target != target {
 				return errors.New("start operation identity conflicts with its persisted fixed input")
@@ -567,6 +554,9 @@ func (s *Service) dispatch(ctx context.Context) error {
 			return err
 		}
 		started, startErr := backend.Start(ctx, spec)
+		if startErr == nil {
+			s.injectControlFault("backend_started")
+		}
 		if startErr == nil && s.State.Control.Operation != nil {
 			s.injectControlFault("after_worker_start")
 		}
@@ -642,6 +632,7 @@ func (s *Service) dispatch(ctx context.Context) error {
 			s.State.SlotOccupied, s.State.CurrentTask = true, ptr(t.ID)
 			return errors.Join(err, opSaveErr, s.save())
 		}
+		s.injectControlFault("binding_persisted")
 		op.Status, op.Ref, op.UpdatedAt = OperationAccepted, &ref, now()
 		if err := records.saveOperation(op); err != nil {
 			op.Status, op.Diagnostic, op.UpdatedAt = OperationUnknown, "accepted operation receipt persistence failed: "+err.Error(), now()
@@ -651,6 +642,7 @@ func (s *Service) dispatch(ctx context.Context) error {
 			s.State.SlotOccupied, s.State.CurrentTask = true, ptr(t.ID)
 			return errors.Join(err, opSaveErr, s.save())
 		}
+		s.injectControlFault("operation_accepted_persisted")
 		// Apply only adapter-observed execution facts to the single service-owned Run.
 		if err = s.save(); err != nil {
 			return err
@@ -887,7 +879,7 @@ func (s *Service) finished(err error) error {
 	s.note(r, "steer", "worker_exit", "completed", "worker exited", "", map[string]any{"exit_code": 0})
 	result, e := ReadResult(*r.ResultPath, r)
 	if e == nil {
-		e = verifyRunWorkspace(context.Background(), s.Config, r)
+		e = s.inspectRunWorkspace(context.Background(), r)
 	}
 	if e == nil && result.Summary != nil {
 		r.Summary = ptr(clip(*result.Summary, 4096))
@@ -998,6 +990,9 @@ func (s *Service) pollPRsFor(ctx context.Context, runID string) error {
 	return operationErr
 }
 func (s *Service) event(ev WorkerEvent) error {
+	if ev.RunID != "" && ev.AttemptID != "" && (s.active == nil || s.active.RunID != ev.RunID || s.active.AttemptID != ev.AttemptID) {
+		return s.recordHistoricalWorkerEvent(ev)
+	}
 	if s.active == nil {
 		return nil
 	}
@@ -1014,6 +1009,34 @@ func (s *Service) event(ev WorkerEvent) error {
 		s.emitConsole(ev.Activity)
 	}
 	return s.save()
+}
+
+func (s *Service) recordHistoricalWorkerEvent(ev WorkerEvent) error {
+	if !stableExecutionID(ev.RunID) || !stableExecutionID(ev.AttemptID) || ev.Activity.Kind == "" {
+		return nil
+	}
+	var run *Run
+	for _, candidate := range s.State.Runs {
+		if candidate != nil && candidate.RunID == ev.RunID {
+			run = candidate
+			break
+		}
+	}
+	if run == nil {
+		return nil
+	}
+	dir := filepath.Join(s.Config.RunDir, "runs", ev.RunID)
+	if ev.AttemptID != ev.RunID {
+		dir = filepath.Join(dir, "attempts", ev.AttemptID)
+	}
+	if info, err := os.Stat(dir); err != nil || !info.IsDir() {
+		return nil
+	}
+	w, err := OpenActivity(filepath.Join(dir, "activity.jsonl"), ev.RunID, run.TaskID)
+	if err != nil {
+		return err
+	}
+	return w.Write(ev.Activity)
 }
 func (s *Service) Run(ctx context.Context) (retErr error) {
 	return s.RunWithDispatch(ctx, "auto")
@@ -1208,21 +1231,30 @@ func (s *Service) run(ctx context.Context, retryRunID, dispatchMode string) (ret
 			return e
 		}
 	}
+	var observedWorker *Worker
+	var events <-chan WorkerEvent
 	for {
-		var events <-chan WorkerEvent
+		if s.worker != observedWorker {
+			observedWorker = s.worker
+			events = nil
+			if s.worker != nil {
+				events = s.worker.Events
+			}
+		}
 		var done <-chan error
 		if s.worker != nil {
-			events = s.worker.Events
 			done = s.worker.Done
 		}
 		select {
 		case <-ctx.Done():
 			return nil
 		case ev, ok := <-events:
-			if ok {
-				if e := s.event(ev); e != nil {
-					return e
-				}
+			if !ok {
+				events = nil
+				continue
+			}
+			if e := s.event(ev); e != nil {
+				return e
 			}
 		case e := <-done:
 			if err := s.finished(e); err != nil {
@@ -1287,12 +1319,15 @@ func (s *Service) shutdown() {
 	defer t.Stop()
 	killed := false
 	var stopOp Operation
+	events := (<-chan WorkerEvent)(s.worker.Events)
 	for {
 		select {
-		case ev, ok := <-s.worker.Events:
-			if ok {
-				s.event(ev)
+		case ev, ok := <-events:
+			if !ok {
+				events = nil
+				continue
 			}
+			s.event(ev)
 		case e := <-s.worker.Done:
 			if killed {
 				confirmed, confirmErr := s.confirmExecutionStop(stopOp)
@@ -1483,7 +1518,7 @@ func (s *Service) AcceptResult(ctx context.Context, runID, path string) error {
 		if e != nil {
 			return e
 		}
-		if e = verifyRunWorkspace(ctx, s.Config, r); e != nil {
+		if e = s.inspectRunWorkspace(ctx, r); e != nil {
 			return e
 		}
 		if result.Outcome != "pr_submitted" {

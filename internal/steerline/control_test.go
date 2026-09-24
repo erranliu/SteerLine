@@ -1,12 +1,14 @@
 package steerline
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -658,8 +660,8 @@ func TestControlStopCancelsLongPreparationAndPublishesOnlyAfterStopped(t *testin
 	}
 }
 
-func TestRuntimeV1ToV3UpgradeOccursOnlyOnServiceSave(t *testing.T) {
-	for _, version := range []int{1, 2, 3} {
+func TestRuntimeV1ToV4RejectedWithoutMigration(t *testing.T) {
+	for _, version := range []int{1, 2, 3, 4} {
 		t.Run(string(rune('0'+version)), func(t *testing.T) {
 			f := newFixture(t)
 			legacy := map[string]any{"schema_version": version, "repository": map[string]any{"path": f.c.Repository, "remote": f.c.Remote, "branch": f.c.Branch, "identity": f.c.identity}, "service": map[string]any{"status": "stopped", "claimant": f.c.Claimant}, "runs": []any{map[string]any{"task_id": "old-task", "title": "old task", "run_id": "0123456789abcdef0123456789abcdef", "claimant": f.c.Claimant, "beads_status": "in_progress", "execution_status": "succeeded", "finish_task_status": "waiting_pr_merge", "pr": map[string]any{"url": "https://gitea.example/owner/repo/pulls/42", "state": "open"}}}}
@@ -667,10 +669,8 @@ func TestRuntimeV1ToV3UpgradeOccursOnlyOnServiceSave(t *testing.T) {
 			require(t, err)
 			path := filepath.Join(f.c.RunDir, f.c.RuntimeFile)
 			require(t, os.WriteFile(path, b, 0600))
-			loaded, err := LoadRuntime(path)
-			require(t, err)
-			if loaded.SchemaVersion != version {
-				t.Fatal("read-only load changed the version")
+			if _, err := LoadRuntime(path); err == nil || !strings.Contains(err.Error(), "unsupported runtime schema") {
+				t.Fatalf("old runtime was accepted: %v", err)
 			}
 			onDisk, err := os.ReadFile(path)
 			require(t, err)
@@ -679,15 +679,13 @@ func TestRuntimeV1ToV3UpgradeOccursOnlyOnServiceSave(t *testing.T) {
 			if disk.SchemaVersion != version {
 				t.Fatal("read-only load migrated the file")
 			}
-			s := f.service(t)
-			if s.State.SchemaVersion != 4 || s.State.Runs[0].AttemptID != "0123456789abcdef0123456789abcdef" || s.State.Runs[0].BeadsStatus != "in_progress" || s.State.Runs[0].PR.URL == nil {
-				t.Fatalf("migrated runtime: %+v", s.State)
+			if _, err := NewService(f.c); err == nil || !strings.Contains(err.Error(), "unsupported runtime schema") {
+				t.Fatalf("service accepted old runtime: %v", err)
 			}
-			require(t, s.save())
-			loaded, err = LoadRuntime(path)
+			after, err := os.ReadFile(path)
 			require(t, err)
-			if loaded.SchemaVersion != 4 || loaded.Runs[0].RunID != "0123456789abcdef0123456789abcdef" || loaded.Runs[0].AttemptID != "0123456789abcdef0123456789abcdef" || loaded.Runs[0].PR.URL == nil {
-				t.Fatalf("saved v4 runtime lost run evidence: %+v", loaded)
+			if !bytes.Equal(b, after) {
+				t.Fatal("old runtime changed during rejection")
 			}
 		})
 	}

@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // Decision protocol: when an agent cannot continue without a human decision it
@@ -395,22 +396,19 @@ func (s *Service) resumeAfterDecision(ctx context.Context, r *Run) error {
 	records := executionRecords{root: s.Config.RunDir}
 	ref, e := records.loadBinding(r.RunID, r.AttemptID)
 	if e != nil {
-		if !os.IsNotExist(e) {
-			return e
+		if os.IsNotExist(e) {
+			return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "legacy Orca execution has no fixed target binding; manual recovery required"}
 		}
-		// Old runtime records are observed in place. Only the identity already
-		// persisted in runtime is mapped; missing external fields remain incomplete.
-		ref = executionRefFor(s.Config, r)
-		if ref.Incomplete || ref.Backend != BackendOrca || ref.External.Incarnation == "" || ref.External.RuntimeID == "" {
-			return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "legacy Orca binding lacks runtime/incarnation identity"}
-		}
+		return e
 	}
 	backend := orcaTerminalBackend{config: s.Config}
 	if ref.Backend != BackendOrca || ref.Protocol != ProtocolOrcaTerminalV2 || ref.Target != targetFor(s.Config) {
 		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "fixed execution backend/protocol/target no longer matches the configured Orca connection"}
 	}
+	if _, e := s.requireBackendCapabilities(ctx, backend, "reply_continue", "observe", "output_reading"); e != nil {
+		return e
+	}
 	contPath := decisionContinuePath(r)
-	resultInWorktree := filepath.Join(ref.WorkspacePath, orcaResultFile)
 	if ref.WorkspacePath == "" || !filepath.IsAbs(ref.WorkspacePath) {
 		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "fixed Orca workspace identity is incomplete"}
 	}
@@ -439,11 +437,7 @@ func (s *Service) resumeAfterDecision(ctx context.Context, r *Run) error {
 		}
 		return e
 	}
-	// Drop the answered result so supervision cannot mistake it for the new one.
-	if e := os.Remove(resultInWorktree); e != nil && !os.IsNotExist(e) {
-		return e
-	}
-	reply, e := backend.Reply(ctx, ref, answer, op)
+	reply, e := backend.Reply(ctx, ref, answer, op, *r.ResultPath)
 	if e != nil {
 		var backendErr *BackendError
 		if errors.As(e, &backendErr) && backendErr.Code == BackendOutcomeUnknown {
@@ -457,19 +451,21 @@ func (s *Service) resumeAfterDecision(ctx context.Context, r *Run) error {
 		}
 		return e
 	}
-	if !reply.InputAccepted {
-		return &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "Orca reply did not confirm input acceptance"}
+	if !reply.InputAccepted || reply.Worker == nil {
+		return &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "Orca reply did not return an accepted input and observer"}
 	}
+	s.worker, s.active = reply.Worker, r
+	s.State.SlotOccupied, s.State.CurrentTask = true, ptr(r.TaskID)
+	r.StartedAt = ptr(now())
 	op.Status, op.UpdatedAt = OperationAccepted, now()
 	if e := records.saveOperation(op); e != nil {
+		// Preserve the external session, but detach its local observer so an
+		// unrecorded reply cannot silently advance business state.
+		detachCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		_ = backend.DetachObservation(detachCtx, reply.Worker)
+		cancel()
+		s.worker, s.active = nil, nil
 		return &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "reply was accepted but its durable receipt could not be saved", Cause: e}
 	}
-	client := orcaClient{cfg: s.Config}
-	proc := &orcaProcess{cfg: s.Config, term: orcaTerminal{Handle: ref.External.Terminal, RuntimeID: ref.External.RuntimeID, IncarnationID: ref.External.Incarnation}}
-	s.worker = superviseOrcaResult(s.Config, r, client, proc, resultInWorktree, *r.ResultPath)
-	s.active = r
-	s.State.SlotOccupied = true
-	s.State.CurrentTask = ptr(r.TaskID)
-	r.StartedAt = ptr(now())
 	return nil
 }

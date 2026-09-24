@@ -1,11 +1,16 @@
 package steerline
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestExecutionRecordsPinBindingsAndOperations(t *testing.T) {
@@ -49,7 +54,11 @@ func TestExecutionRecordsPinBindingsAndOperations(t *testing.T) {
 }
 
 func TestExecutionBackendCommonCapabilityContract(t *testing.T) {
-	c := Config{Host: "local", Codex: Command{Executable: "codex"}, Orca: OrcaConfig{Executable: "orca"}}
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := Config{Host: "local", Repository: t.TempDir(), CommandTimeout: "5s", Codex: Command{Executable: exe, Args: []string{"--fake", "codex", "unused"}}, Orca: OrcaConfig{Executable: exe, Args: []string{"--fake", "orca", t.TempDir()}}}
 	backends := []ExecutionBackend{localExecutionBackend{config: c}, orcaTerminalBackend{config: c}}
 	for _, backend := range backends {
 		kind, protocol := backend.Identity()
@@ -61,7 +70,7 @@ func TestExecutionBackendCommonCapabilityContract(t *testing.T) {
 			t.Fatalf("probe lost fixed backend identity: %#v", report)
 		}
 		for _, capability := range report.Capabilities {
-			if capability.Status != CapabilityNotTested {
+			if capability.Status == CapabilityVerified {
 				t.Fatalf("static declaration claimed verification: %#v", capability)
 			}
 		}
@@ -116,5 +125,266 @@ func TestOperationRecordRejectsCorruptionBeforeUse(t *testing.T) {
 	}
 	if _, err := r.loadOperation(run, attempt, "op"); err == nil {
 		t.Fatal("expected operation path conflict to be reported")
+	}
+}
+
+func TestBothBackendsReconcileOnlyRecordedOperationResult(t *testing.T) {
+	for _, kind := range []BackendKind{BackendLocal, BackendOrca} {
+		t.Run(string(kind), func(t *testing.T) {
+			root := t.TempDir()
+			cfg := Config{RunDir: root, Host: string(kind)}
+			backend := backendFor(cfg, BeadsContext{})
+			selected, protocol := backend.Identity()
+			op := Operation{Version: 1, ID: "reply-" + newID(), RunID: newID(), AttemptID: newID(), Backend: selected, Protocol: protocol, Target: targetFor(cfg), Action: "reply", PayloadDigest: digestValue("fixed-answer"), Status: OperationPending}
+			records := executionRecords{root: root}
+			if err := records.saveOperation(op); err != nil {
+				t.Fatal(err)
+			}
+			got, err := backend.ReconcileOperation(context.Background(), op)
+			if err != nil || got.Status != OperationPending {
+				t.Fatalf("pending recorded operation=%#v err=%v", got, err)
+			}
+			op.Status = OperationAccepted
+			if err = records.saveOperation(op); err != nil {
+				t.Fatal(err)
+			}
+			got, err = backend.ReconcileOperation(context.Background(), op)
+			if err != nil || got.Status != OperationAccepted {
+				t.Fatalf("accepted recorded operation=%#v err=%v", got, err)
+			}
+			op.Status = OperationInFlight
+			if err = records.saveOperation(op); err != nil {
+				t.Fatal(err)
+			}
+			got, err = backend.ReconcileOperation(context.Background(), op)
+			var backendErr *BackendError
+			if !errors.As(err, &backendErr) || backendErr.Code != BackendOutcomeUnknown || got.Status != OperationInFlight {
+				t.Fatalf("in-flight operation was replayed or hidden: %#v, %v", got, err)
+			}
+			changed := op
+			changed.PayloadDigest = digestValue("different-answer")
+			if _, err = backend.ReconcileOperation(context.Background(), changed); !errors.As(err, &backendErr) || backendErr.Code != BackendIdentityMismatch {
+				t.Fatalf("changed payload accepted: %v", err)
+			}
+		})
+	}
+}
+
+func TestRecoveryRebuildsProjectionAndRejectsCorruptBinding(t *testing.T) {
+	f := newFixture(t)
+	s := f.service(t)
+	runID := newID()
+	r := &Run{TaskID: "projection-gap", RunID: runID, AttemptID: runID, Claimant: f.c.Claimant, Host: "local", ExecutionStatus: "pending", FinishTaskStatus: "pending", PR: PRState{State: "unknown"}}
+	s.State.Runs = append(s.State.Runs, r)
+	require(t, s.save())
+	ref := ExecutionRef{Version: 1, Backend: BackendLocal, Protocol: ProtocolLocalProcess, Target: targetFor(f.c), Agent: agentFor(f.c), RunID: runID, AttemptID: runID, WorkspacePath: filepath.Join(f.c.RunDir, "worktrees", runID), WorkspaceBranch: "codex/projection-gap", BaseCommit: strings.Repeat("a", 40), External: ProcessIdentity{Kind: "os", PID: 42000, Created: "creation-proof", Executable: "fake-codex"}, Generation: "creation-proof"}
+	records := executionRecords{root: f.c.RunDir}
+	require(t, records.saveBinding(ref))
+	op := Operation{Version: 1, ID: attemptOperationID(runID, runID), RunID: runID, AttemptID: runID, Backend: ref.Backend, Protocol: ref.Protocol, Target: ref.Target, Action: "start", PayloadDigest: digestValue("fixed-dispatch"), Status: OperationAccepted, Ref: &ref}
+	require(t, records.saveOperation(op))
+	before, err := os.ReadFile(s.store.Path)
+	require(t, err)
+	recovered, err := NewService(f.c)
+	require(t, err)
+	got := recovered.State.Runs[0]
+	if got.Process == nil || *got.Process != ref.External || got.WorktreePath == nil || *got.WorktreePath != ref.WorkspacePath || got.ExecutionStatus != "unknown" || !recovered.State.SlotOccupied {
+		t.Fatalf("binding did not conservatively rebuild runtime projection: %+v", got)
+	}
+	after, err := os.ReadFile(s.store.Path)
+	require(t, err)
+	if !bytes.Equal(before, after) {
+		t.Fatal("read-only recovery rewrote runtime")
+	}
+	if err := os.WriteFile(records.bindingPath(runID, runID), []byte("{invalid"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := NewService(f.c); err == nil {
+		t.Fatal("corrupt execution binding did not block service startup")
+	}
+}
+
+func TestNativeEvidenceCertificationRequiresFixedTargetAndVersion(t *testing.T) {
+	f := newFixture(t)
+	path := filepath.Join(t.TempDir(), "local-native.json")
+	evidence := map[string]any{"version": 1, "captured_at": time.Now().UTC(), "platform": runtime.GOOS + "/" + runtime.GOARCH, "backend": "local", "protocol": "local_process", "target_id": targetFor(f.c).ID, "agent": "codex", "codex_version": "fake-codex/1", "output_sha256": strings.Repeat("a", 64), "output_bytes": 77, "stop_status": "confirmed", "process_absent": true}
+	write := func() {
+		t.Helper()
+		data, err := json.Marshal(evidence)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = os.WriteFile(path, data, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write()
+	retry := map[string]any{}
+	for key, value := range evidence {
+		retry[key] = value
+	}
+	retry["retry_same_run"], retry["retry_new_attempt"], retry["claim_count"], retry["workspace_reused"], retry["previous_run_preserved"] = true, true, 1, true, true
+	retryBytes, err := json.Marshal(retry)
+	if err != nil {
+		t.Fatal(err)
+	}
+	retryPath := filepath.Join(t.TempDir(), "local-retry-native.json")
+	if err = os.WriteFile(retryPath, retryBytes, 0600); err != nil {
+		t.Fatal(err)
+	}
+	report, err := CertifyExecutionBackend(context.Background(), f.c, []string{path, retryPath})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"start", "observe", "stop", "output_reading", "retry"} {
+		if capabilityStatus(report, name) != CapabilityVerified {
+			t.Fatalf("%s not verified from native evidence: %#v", name, report)
+		}
+	}
+	evidence["target_id"] = "different-target"
+	write()
+	if _, err = CertifyExecutionBackend(context.Background(), f.c, []string{path}); err == nil {
+		t.Fatal("foreign target evidence certified")
+	}
+	if _, err = (executionRecords{root: f.c.RunDir}).loadCapabilityReport(report); err != nil {
+		t.Fatalf("certified evidence did not survive source artifact change: %v", err)
+	}
+}
+
+func TestOrcaCertificationRequiresAgentAndTerminalEvidence(t *testing.T) {
+	f := newFixture(t)
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.c.Host = "orca"
+	f.c.Agent = "codex"
+	f.c.Orca = OrcaConfig{Executable: exe, Args: []string{"--fake", "orca", t.TempDir()}, Shell: "cmd.exe", WaitTimeout: "5s"}
+	common := map[string]any{"version": 1, "captured_at": time.Now().UTC(), "platform": runtime.GOOS + "/" + runtime.GOARCH, "backend": "orca", "protocol": "orca_terminal_v2", "target_id": targetFor(f.c).ID, "agent": "codex", "orca_version": "fake-orca/1", "stop_status": "confirmed"}
+	write := func(name string, fields map[string]any) string {
+		t.Helper()
+		copy := map[string]any{}
+		for key, value := range common {
+			copy[key] = value
+		}
+		for key, value := range fields {
+			copy[key] = value
+		}
+		data, err := json.Marshal(copy)
+		if err != nil {
+			t.Fatal(err)
+		}
+		path := filepath.Join(t.TempDir(), name+".json")
+		if err = os.WriteFile(path, data, 0600); err != nil {
+			t.Fatal(err)
+		}
+		return path
+	}
+	agent := write("agent", map[string]any{"worktree_created": true, "agent_terminal_bound": true, "initial_output_observed": true, "git_clean": true})
+	adapter := write("adapter", map[string]any{"reconnect_matched": true, "worktree_retained": true, "output_bytes": 22, "output_sha256": strings.Repeat("b", 64), "output_source": "stream"})
+	continuation := write("continuation", map[string]any{"first_input_accepted": true, "first_turn_started": true, "second_input_accepted": true, "second_turn_started": true, "same_terminal": true, "same_incarnation": true, "same_runtime": true, "first_output_observed": true, "second_output_observed": true, "stop_confirmed": true, "git_clean": true})
+	workspace := write("workspace", map[string]any{"workspace_inspected": true, "base_ancestor": true, "git_clean": true})
+	if _, err = CertifyExecutionBackend(context.Background(), f.c, []string{adapter}); err == nil {
+		t.Fatal("Orca start was certified without agent evidence")
+	}
+	report, err := CertifyExecutionBackend(context.Background(), f.c, []string{agent, adapter, continuation, workspace})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"start", "observe", "stop", "output_reading", "reply_continue", "workspace_inspection"} {
+		if capabilityStatus(report, name) != CapabilityVerified {
+			t.Fatalf("%s not verified: %#v", name, report)
+		}
+	}
+}
+
+func TestOrcaObservationRejectsReplacedIncarnationAndConnection(t *testing.T) {
+	dir := t.TempDir()
+	cfg := orcaTestConfig(t, dir, "fail")
+	if err := writeFakeOrcaState(dir, fakeOrcaState{Handle: "term-fixed", Incarnation: "inc-original"}); err != nil {
+		t.Fatal(err)
+	}
+	ref := ExecutionRef{Backend: BackendOrca, Protocol: ProtocolOrcaTerminalV2, Target: targetFor(cfg), Agent: AgentSpec{Name: "codex"}, External: ProcessIdentity{Kind: "orca", Terminal: "term-fixed", RuntimeID: "fake-runtime", Incarnation: "inc-original"}}
+	backend := orcaTerminalBackend{config: cfg}
+	if obs, err := backend.Observe(context.Background(), ref); err != nil || obs.Liveness != "live" {
+		t.Fatalf("fixed terminal was not live: %#v, %v", obs, err)
+	}
+	t.Setenv("STEERLINE_FAKE_ORCA_INCARNATION", "inc-replacement")
+	var mismatch *BackendError
+	if _, err := backend.Observe(context.Background(), ref); !errors.As(err, &mismatch) || mismatch.Code != BackendIdentityMismatch {
+		t.Fatalf("replacement incarnation was accepted: %v", err)
+	}
+	t.Setenv("STEERLINE_FAKE_ORCA_INCARNATION", "")
+	cfg.Orca.Args = append(cfg.Orca.Args, "different-connection")
+	if _, err := (orcaTerminalBackend{config: cfg}).Observe(context.Background(), ref); !errors.As(err, &mismatch) || mismatch.Code != BackendIdentityMismatch {
+		t.Fatalf("changed connection was accepted: %v", err)
+	}
+}
+
+func TestStartBindingFailureRetainsUnknownWorkerAndBlocksRestart(t *testing.T) {
+	f := newFixture(t, task("t-1"))
+	s := f.service(t)
+	runID := newID()
+	s.reservedRunID = runID
+	records := executionRecords{root: f.c.RunDir}
+	if err := os.MkdirAll(records.bindingPath(runID, runID), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.dispatch(context.Background()); err == nil {
+		t.Fatal("binding failure was ignored")
+	}
+	if s.worker == nil || !s.State.SlotOccupied || s.State.Runs[0].ExecutionStatus != "unknown" {
+		t.Fatalf("launched worker was not retained as unknown: %+v", s.State)
+	}
+	s.worker.Kill()
+	select {
+	case <-s.worker.Done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("worker cleanup timed out")
+	}
+	if _, err := NewService(f.c); err == nil {
+		t.Fatal("corrupt binding path did not block restart")
+	}
+	if starts := readFake(f.db).Starts["t-1"]; starts != 1 {
+		t.Fatalf("worker was started %d times", starts)
+	}
+}
+
+func TestProjectionWriteFailureRebuildsBindingWithoutSecondStart(t *testing.T) {
+	f := newFixture(t, task("t-1"))
+	s := f.service(t)
+	s.controlFault = func(point string) {
+		if point == "operation_accepted_persisted" {
+			s.store.Path = filepath.Join(f.c.RunDir, "missing-directory", "runtime.json")
+		}
+	}
+	if err := s.dispatch(context.Background()); err == nil {
+		t.Fatal("runtime projection failure was ignored")
+	}
+	if s.worker == nil {
+		t.Fatal("started worker was abandoned after projection failure")
+	}
+	runID := s.State.Runs[0].RunID
+	records := executionRecords{root: f.c.RunDir}
+	if _, err := records.loadBinding(runID, runID); err != nil {
+		t.Fatal(err)
+	}
+	op, err := records.loadOperation(runID, runID, attemptOperationID(runID, runID))
+	if err != nil || op.Status != OperationAccepted {
+		t.Fatalf("fixed start receipt missing after projection failure: %#v, %v", op, err)
+	}
+	s.worker.Kill()
+	select {
+	case <-s.worker.Done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("worker cleanup timed out")
+	}
+	restarted := f.service(t)
+	got := restarted.State.Runs[0]
+	if got.ExecutionStatus != "unknown" || got.Process == nil || got.WorktreePath == nil || !restarted.State.SlotOccupied {
+		t.Fatalf("restart lost fixed execution binding: %+v", got)
+	}
+	_ = restarted.dispatch(context.Background())
+	if starts := readFake(f.db).Starts["t-1"]; starts != 1 {
+		t.Fatalf("restart launched a replacement worker: starts=%d", starts)
 	}
 }

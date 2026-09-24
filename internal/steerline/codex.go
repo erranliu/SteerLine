@@ -22,18 +22,34 @@ var promptTemplate string
 var commitHash = regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`)
 
 type WorkerEvent struct {
-	Session  string
-	Summary  string
-	Activity ActivityEvent
+	RunID     string
+	AttemptID string
+	Session   string
+	Summary   string
+	Activity  ActivityEvent
 }
 type Worker struct {
-	proc   process
-	Events chan WorkerEvent
-	Done   chan error
+	proc              process
+	Events            chan WorkerEvent
+	Done              chan error
+	cancelObservation context.CancelFunc
+	observationDone   chan struct{}
 }
 
 func (w *Worker) Kill()  { w.proc.Kill() }
 func (w *Worker) Close() { w.proc.Close() }
+func (w *Worker) detachLocalObservation(ctx context.Context) error {
+	if w == nil || w.cancelObservation == nil || w.observationDone == nil {
+		return unsupported("local observation detach")
+	}
+	w.cancelObservation()
+	select {
+	case <-w.observationDone:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
 func Prompt(c Config, t Task, r *Run) (string, error) {
 	contextJSON, _ := json.MarshalIndent(map[string]any{"task_id": t.ID, "run_id": r.RunID, "claimant": r.Claimant, "remote": c.Remote, "branch": c.Branch, "worktree_path": r.WorktreePath, "worktree_branch": r.WorktreeBranch, "base_commit": r.BaseCommit, "beads_directory": c.workerEnv["BEADS_DIR"], "beads_context": r.BeadsContext}, "", "  ")
 	taskJSON, _ := json.MarshalIndent(t, "", "  ")
@@ -87,6 +103,8 @@ func StartWorker(c Config, t Task, r *Run) (*Worker, error) {
 	}
 	args = append(args, "-")
 	spec := SpawnSpec{
+		RunID:      r.RunID,
+		AttemptID:  r.AttemptID,
 		Dir:        c.Repository,
 		EventsPath: *r.LogPath,
 		StderrPath: filepath.Join(dir, "stderr.log"),

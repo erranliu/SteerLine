@@ -27,7 +27,7 @@ func controlReviewService(t *testing.T) *Service {
 	require(t, err)
 	c := Config{RunDir: runDir, RuntimeFile: "runtime.json", Repository: repo, Remote: "origin", Branch: "main", Claimant: "review", Heartbeat: "5s", Git: Command{Executable: git}, identity: canonical(identity), configDigest: strings.Repeat("a", 64)}
 	s := &Service{Config: c, store: &Store{Path: filepath.Join(runDir, c.RuntimeFile)}, activities: map[string]*ActivityWriter{}, State: Runtime{
-		SchemaVersion: 4, Repository: Repository{Path: c.Repository, Identity: c.identity, Remote: c.Remote, Branch: c.Branch},
+		SchemaVersion: CurrentRuntimeSchema, Repository: Repository{Path: c.Repository, Identity: c.identity, Remote: c.Remote, Branch: c.Branch},
 		Service: ServiceState{Status: "running", Ready: true, InstanceID: newID(), PID: processIdentity.PID, Claimant: c.Claimant, ProcessIdentity: processIdentity, ConfigDigest: c.configDigest, ControlProtocol: 1, Capabilities: []string{"start_task", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "stop_service"}},
 		Control: ControlState{DispatchMode: "manual", Revision: 1, Blockers: []ControlBlocker{}}, Runs: []*Run{},
 	}}
@@ -150,7 +150,7 @@ func TestControlReviewPublishedSlotReflectsWaitingDecision(t *testing.T) {
 	}
 }
 
-func TestControlReviewPrepareFailureIsNotClaimConflict(t *testing.T) {
+func TestControlReviewPreflightFailureDoesNotClaimTask(t *testing.T) {
 	f := newFixture(t, task("target"))
 	s := f.service(t)
 	readyControlService(t, s, "manual")
@@ -159,8 +159,8 @@ func TestControlReviewPrepareFailureIsNotClaimConflict(t *testing.T) {
 	require(t, processOneControl(t, s, req))
 	r, err := ReadControlReceipt(f.c, req.RequestID)
 	require(t, err)
-	if r.Status != "failed" || r.Code == "claim_conflict" || readFake(f.db).Claims["target"] != 1 {
-		t.Fatalf("post-claim startup failure was mislabeled: %+v", r)
+	if r.Status != "failed" || r.Code == "claim_conflict" || readFake(f.db).Claims["target"] != 0 || len(s.State.Runs) != 0 {
+		t.Fatalf("unavailable backend passed pre-claim guard: %+v", r)
 	}
 }
 

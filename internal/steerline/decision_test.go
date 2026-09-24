@@ -108,7 +108,7 @@ func TestAnswerDecisionFindsRunByTask(t *testing.T) {
 		t.Fatal(e)
 	}
 	run.Decision = st
-	b, e := json.Marshal(&Runtime{SchemaVersion: 3, Runs: []*Run{run}})
+	b, e := json.Marshal(&Runtime{SchemaVersion: CurrentRuntimeSchema, Runs: []*Run{run}})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -140,7 +140,7 @@ func TestOrcaDecisionResumesRun(t *testing.T) {
 	}
 	f.c.Host = "orca"
 	f.c.Agent = "codex"
-	f.c.Orca = OrcaConfig{Executable: exe, Args: []string{"--fake", "orca", stateDir}, Shell: "cmd.exe", WaitTimeout: "5s", Fallback: "fail"}
+	f.c.Orca = OrcaConfig{Executable: exe, Args: []string{"--fake", "orca", stateDir}, Shell: "cmd.exe", WaitTimeout: "5s"}
 	t.Setenv("STEERLINE_FAKE_ORCA_PR_BASE", f.server.URL)
 	t.Setenv("STEERLINE_FAKE_ORCA_DECISION", "1")
 

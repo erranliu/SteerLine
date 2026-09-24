@@ -14,12 +14,6 @@
 6. **收拢业务入口。** Start/Observe/Stop、决策发送、retry、手工恢复的宿主事实均走公共契约；只保留一套准入、领取、槽和业务状态转换。按能力选择支持范围，PR 5 再完善答案应用证据/交互。确认 UI/CLI 不引用具体后端类型。
 7. **更新实现文档。** 随实际行为更新 hosting、state-model、data-contract、配置示例与开发说明；提供能力矩阵、生命周期调用图和旧状态拒绝案例。证据放 docs/validation/ 下并由本阶段验证报告链接，平台版本和未执行项必须列出。
 
-## 当前实现进度
-
-实现分支从更新后的 `origin/main` 创建。第一轮已添加 AttemptSpec/ExecutionRef/Operation/Observation/Capability DTO、local 与 Orca terminal-v2 启动适配器、`execution/v1` 文件记录和启动/Orca 决策续跑接入；runtime v4 保持不变。详见 [验证报告](../validation/pr-04a-execution-backends.md)。
-
-此进度不代表本 Plan 已完成：Service 停服现经 ExecutionBackend.StopExecution 写入独立 Operation 并观察原身份退出，但尚无单独的执行停止控制指令；local 独立 DetachObservation、资源结算、Orca 输出读取、全部恢复边界、verified 能力副作用守卫及 Windows 上真实 local Codex/Orca 证据尚未完成。报告会按真实结果列出当前阻塞项；fake 平台测试不替代这些门槛。Linux 仅要求架构保持兼容，不纳入本阶段验收。
-
 ## 验证矩阵
 
 | 层次 | 检查与证据 |

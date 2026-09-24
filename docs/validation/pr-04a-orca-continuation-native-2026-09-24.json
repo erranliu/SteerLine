@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "captured_at": "2026-09-24T07:06:47Z",
+  "platform": "windows/amd64",
+  "orca_version": "1.4.209",
+  "backend": "orca",
+  "protocol": "orca_terminal_v2",
+  "target_id": "orca:f6912f0cd2ce941964b60190",
+  "agent": "codex",
+  "first_input_accepted": true,
+  "first_turn_started": true,
+  "second_input_accepted": true,
+  "second_turn_started": true,
+  "same_terminal": true,
+  "same_incarnation": true,
+  "same_runtime": true,
+  "first_output_observed": true,
+  "second_output_observed": true,
+  "stop_confirmed": true,
+  "git_clean": true,
+  "worktree_retained": true
+}

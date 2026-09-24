@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"strings"
 )
 
 func (s *Service) startRetry(ctx context.Context, id string) error {
@@ -40,17 +39,14 @@ func (s *Service) startRetry(ctx context.Context, id string) error {
 	if r.FinishTaskStatus != "blocked" || (r.ExecutionStatus != "failed" && r.ExecutionStatus != "succeeded") || r.PR.URL != nil {
 		return errors.New("retry requires a blocked run without a bound PR")
 	}
-	if err := verifyRunWorkspace(ctx, s.Config, r); err != nil {
-		return err
-	}
-	if err := verifyWorkspace(ctx, s.Config, r.WorkspaceIntent, true); err != nil {
-		return errors.New("retry is limited to startup failures; worktree HEAD must still equal base_commit")
-	}
-	out, err := gitRunner(s.Config, *r.WorktreePath).Output(ctx, s.Config.Git, "status", "--porcelain")
+	inspection, err := s.readRunWorkspace(ctx, r)
 	if err != nil {
 		return err
 	}
-	if strings.TrimSpace(string(out)) != "" {
+	if inspection.Head != *r.BaseCommit {
+		return errors.New("retry is limited to startup failures; worktree HEAD must still equal base_commit")
+	}
+	if inspection.Dirty {
 		return errors.New("worktree has changes; preserve and repair the existing work manually")
 	}
 	source, err := s.beads.Context(ctx)
@@ -66,6 +62,9 @@ func (s *Service) startRetry(ctx context.Context, id string) error {
 	}
 	if task.Status != "in_progress" || task.Assignee != r.Claimant {
 		return errors.New("retry task claim is no longer owned by this service")
+	}
+	if _, err := s.requireBackendCapabilities(ctx, backendFor(s.Config, source), "start", "observe", "stop", "workspace_inspection", "output_reading", "retry"); err != nil {
+		return err
 	}
 	// Keep all old files at their original paths. The snapshot links to the previous
 	// attempt; a crash after the pending save is recovered as unknown, never rerun.
@@ -117,13 +116,6 @@ func (s *Service) startRetry(ctx context.Context, id string) error {
 	spec := AttemptSpec{ProjectID: s.Config.identity, TaskID: task.ID, RunID: r.RunID, AttemptID: r.AttemptID, OperationID: opID, ConfigDigest: s.Config.configDigest, Repository: s.Config.Repository, BaseCommit: intent.BaseCommit, Workspace: intent, Agent: agent, Protocol: protocol, Target: target, Task: task, Run: cloneRun(*r), Beads: source}
 	records := executionRecords{root: s.Config.RunDir}
 	op := Operation{Version: 1, ID: opID, RunID: r.RunID, AttemptID: r.AttemptID, Backend: kind, Protocol: protocol, Target: target, Action: "start", PayloadDigest: digestValue(spec), Status: OperationPending, StartedAt: now(), UpdatedAt: now()}
-	capabilities, probeErr := backend.Probe(ctx, target, agent)
-	if probeErr != nil {
-		return probeErr
-	}
-	if err = records.saveCapabilityReport(capabilities); err != nil {
-		return err
-	}
 	if old, loadErr := records.loadOperation(r.RunID, r.AttemptID, opID); loadErr == nil {
 		if old.PayloadDigest != op.PayloadDigest {
 			return errors.New("retry start operation conflicts with its fixed input")

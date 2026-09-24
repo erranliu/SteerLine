@@ -11,6 +11,9 @@ type Repository struct {
 	Branch   string `json:"branch"`
 	Identity string `json:"identity"`
 }
+
+const CurrentRuntimeSchema = 5
+
 type Runtime struct {
 	SchemaVersion int          `json:"schema_version"`
 	UpdatedAt     time.Time    `json:"updated_at"`

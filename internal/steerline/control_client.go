@@ -59,8 +59,8 @@ func ReadTaskSnapshot(c Config) (*TaskSnapshot, error) {
 	if err != nil {
 		return nil, err
 	}
-	if rt == nil || rt.SchemaVersion != 4 {
-		return nil, errors.New("no runtime v4 snapshot for task candidates")
+	if rt == nil || rt.SchemaVersion != CurrentRuntimeSchema {
+		return nil, errors.New("no current runtime snapshot for task candidates")
 	}
 	if canonical(rt.Repository.Identity) != canonical(c.identity) {
 		return nil, errors.New("runtime repository identity does not match configuration")

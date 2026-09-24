@@ -175,7 +175,7 @@ func startOrcaRun(ctx context.Context, c Config, t Task, r *Run, source BeadsCon
 	// configured Codex model, create the worktree first, write the dispatch, then
 	// start Codex in a fresh terminal with CLI overrides and the pointer as its
 	// initial prompt. Other Orca agents retain the native --agent/--prompt path.
-	customCodex := c.agentName() == "codex" && (c.Model != "" || c.ReasoningEffort != "" || c.Profile != "")
+	customCodex := c.needsCodexExecutable()
 	promptPath := filepath.Join(dir, "prompt.txt")
 	pointer := "Read and execute " + promptPath + " now. Follow it exactly."
 	var created orcaWorktreeCreated
@@ -247,7 +247,7 @@ func startOrcaRun(ctx context.Context, c Config, t Task, r *Run, source BeadsCon
 	term, _ := client.showTerminal(ctx, handle)
 	proc := &orcaProcess{cfg: c, term: term}
 	proc.term.Handle = handle
-	return superviseOrcaResult(c, r, client, proc, resultInWorktree, *r.ResultPath), nil
+	return superviseOrcaResult(c, client, proc, resultInWorktree, *r.ResultPath), nil
 }
 
 func orcaCodexLaunchCommand(c Config, prompt string) (string, error) {
@@ -309,7 +309,7 @@ func orcaPromptAddendum(promptPath, beadsDir, claimant string) string {
 // superviseOrcaResult watches for the R-a result file and terminal state. It
 // never treats a result file as task completion: the service still verifies the
 // PR merge and Beads close.
-func superviseOrcaResult(c Config, r *Run, client orcaClient, proc *orcaProcess, resultInWorktree, resultOut string) *Worker {
+func superviseOrcaResult(c Config, client orcaClient, proc *orcaProcess, resultInWorktree, resultOut string) *Worker {
 	ctx, cancel := context.WithCancel(context.Background())
 	proc.cancel = cancel
 	w := &Worker{proc: proc, Events: make(chan WorkerEvent), Done: make(chan error, 1)}

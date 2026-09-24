@@ -73,19 +73,34 @@ func (c orcaClient) closeTerminal(ctx context.Context, handle string) {
 	_, _ = c.call(ctx, positiveDuration(c.cfg.CommandTimeout, 30*time.Second), "terminal", "close", "--terminal", handle, "--json")
 }
 
-func (c orcaClient) closeTerminalChecked(ctx context.Context, handle string) error {
+func (c orcaClient) closeTerminalChecked(ctx context.Context, handle, runtimeID string) (StopReceipt, error) {
 	if strings.TrimSpace(handle) == "" {
-		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "cannot close an empty terminal handle"}
+		return StopReceipt{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "cannot close an empty terminal handle"}
 	}
 	out, callErr := c.call(ctx, positiveDuration(c.cfg.CommandTimeout, 30*time.Second), "terminal", "close", "--terminal", handle, "--json")
-	_, parseErr := parseEnvelope(out)
+	env, parseErr := parseEnvelope(out)
 	if callErr != nil {
-		return &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "Orca terminal close response is uncertain", Cause: errors.Join(callErr, parseErr)}
+		return StopReceipt{}, &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "Orca terminal close response is uncertain", Cause: errors.Join(callErr, parseErr)}
 	}
 	if parseErr != nil {
-		return &BackendError{Code: BackendRejected, Diagnostic: "Orca rejected terminal close", Cause: parseErr}
+		return StopReceipt{}, &BackendError{Code: BackendRejected, Diagnostic: "Orca rejected terminal close", Cause: parseErr}
 	}
-	return nil
+	if runtimeID == "" || env.Meta.RuntimeID != runtimeID {
+		return StopReceipt{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "Orca terminal close receipt came from a different runtime"}
+	}
+	var result struct {
+		Close struct {
+			Handle    string `json:"handle"`
+			PtyKilled bool   `json:"ptyKilled"`
+		} `json:"close"`
+	}
+	if err := json.Unmarshal(env.Result, &result); err != nil || result.Close.Handle != handle {
+		return StopReceipt{}, &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "Orca terminal close receipt omitted the exact stopped handle", Cause: err}
+	}
+	if result.Close.PtyKilled {
+		return StopReceipt{Disposition: "confirmed", Diagnostic: "Orca confirmed the fixed terminal PTY was killed"}, nil
+	}
+	return StopReceipt{Disposition: "accepted", Diagnostic: "Orca accepted close without original PTY exit proof"}, nil
 }
 
 func (c orcaClient) showTerminal(ctx context.Context, handle string) (orcaTerminal, error) {
