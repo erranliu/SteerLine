@@ -1,5 +1,7 @@
 # PR 5 Spec：人工决策与恢复闭环
 
+任务 ID：3；任务名称：人工决策与恢复闭环。
+
 状态：待实现。依赖：PR 2、4A、4B、4C。对应 [Plan](pr-05-intervention.plan.md)。
 
 ## 目标

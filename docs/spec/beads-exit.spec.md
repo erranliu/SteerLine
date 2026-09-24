@@ -1,12 +1,12 @@
 # Spec：解除 Beads 依赖与项目迁移
 
-任务：`BEADS-EXIT`。状态：待实施。配套 [Plan](beads-exit.plan.md)。本文件只定义该任务，由一个独立实现 PR 交付；新项目接入和旧项目迁移是同一任务的两个验收场景，不分设任务或 PR。
+任务 ID：9；任务名称：解除 Beads 依赖与项目迁移；目标：`BEADS-EXIT`。状态：待实施。配套 [Plan](beads-exit.plan.md)。本文件只定义该任务，由一个独立实现 PR 交付；新项目接入和旧项目迁移是同一任务的两个验收场景，不分设任务或 PR。
 
 ## B1：范围与前置
 
 前置：[固定 DAG Spec](task-dag.spec.md) 完整验收并合入，复用其 D2–D5 及 [原生任务模型](task-core.spec.md) C2/C3。引用 [原生任务共同约束](native-task-constraints.md) 全部条款；本任务负责让已实现的原生权威成为可用的项目执行来源。
 
-交付原生配置/check、worker/技能上下文、worktree 核验和结项路径去耦，以及 Beads 导出、预演、一次性导入切换。不再实现发布/ready/claim/close 算法，不实现图形展示、人工拆分/回退流程或长期双向同步。
+交付原生配置/check、worker/技能上下文、worktree 核验和结项路径去耦，以及 Beads 导出、预演、一次性导入切换。不再实现创建/丢弃/ready/claim/close 算法，不实现图形展示、人工拆分/回退流程或长期双向同步。
 
 无 bd/bv、无 Beads 环境的新项目必须完成创建到真实 PR 合并核验及后继就绪。任务源和 backend 分离；不等待整个远程闭环，已启用的受监管远程则必须遵守其已有能力门槛。项目接入、迁移与生产启用都属于本任务的验收范围。
 
@@ -17,7 +17,7 @@
 | 修改面 | 原生模式要求 |
 | --- | --- |
 | 配置/check | 不执行 bd/bv help、ready、context，不要求 Beads 目录或数据库；原生配置若仍设置旧 completion 则拒绝并解释不兼容 |
-| service/控制入口 | ready、claim、详情、恢复与关闭使用同一中心任务服务；旧 Beads 查询隔离在兼容实现中 |
+| service/控制入口 | 创建、丢弃、ready、claim、详情、恢复与关闭使用同一中心任务服务；旧 Beads 查询隔离在兼容实现中 |
 | workspace/worker | 核对 task_id、contract digest、run/attempt 和实际 workspace/base；清除注入给 worker 的 BEADS_DIR/BEADS_ACTOR，不从它们推断身份 |
 | prompt/Schema | 原生上下文版本 `native-task/v1`；包含项目/任务/契约、claim、运行/执行/尝试、固定仓库/分支/base 和对应步骤输入 |
 | 技能入口 | 遵循 [中心执行模型](02-execution-model-and-adapter.md) 的 minimal-v1/project_steps；不再次领取、不写中心表、不调用 bd/bv、拆分或后继解锁脚本，只返回本步骤事实 |
@@ -45,7 +45,7 @@
 1. dry-run 核对源/目标身份、闭包、原生约束、规格与历史证据，以及项目接入能力；只生成包含 snapshot_digest、authority_version、预期图/ready、原 ready 差异及阻塞项的报告，不改任务与权威。
 2. 正式导入通过 `-report <report.json>` 携带预演报告和摘要；存在 ready 差异时还必须指定 `-accept-differences`，确认绑定到该报告摘要。中心重新读取并比较源的任务/依赖/状态摘要、目标权威版本及执行静默条件；不同则 snapshot_changed/stale_version，要求重新预演。前后两次一致检查不宣称能阻止外部并发写，操作期间仍由用户保证源冻结。客户端声明的报告不能替代中心重算，含任何阻塞项的报告即使确认也拒绝。
 3. 规格/平台/基线等外部读取完成后，在单个事务再次核验中心状态，导入任务、契约、全部边、交付基线、来源映射、迁移摘要与事件，并把权威切为 native、递增版本；暂停状态保留。命令参数中的 expected-authority-version 与该事务 CAS 一致。
-4. 已由中心执行模型建立的同来源 Task 必须复用其内部 ID，既有运行/PR/消息引用不重建。未建立者分配新 ID；冲突、历史 PR 重复绑定或身份不符使整个导入失败。历史非闭包任务保留 legacy_history 只读来源标记，不成为原生候选，不为它们虚构交付。
+4. 已由中心执行模型建立的同来源 Task 必须复用同一 task_id，既有运行/PR/消息引用不重建。已有明确规划数字 ID 的任务继续使用该数字；无规划 ID 的旧来源取得非数字 legacy ID，不占用规划号码。冲突、历史 PR 重复绑定或身份不符使整个导入失败。历史非闭包任务保留 legacy_history 只读来源标记，不成为原生候选，不为它们虚构交付。
 5. 事务失败保持旧权威；提交后响应丢失按原 request_id/snapshot_digest 查回原映射，不再导入。投影/配置文件更新失败不回滚数据库，查询显示实际 native 权威；旧配置不能启动 Beads 路径。
 6. 切换后把配置声明更新为 native，再通过既有命令显式恢复派发；该配置更新是接入步骤，不是第二权威。此后正常读写不得访问 Beads；旧快照供追踪，不双写、不自动切回。
 

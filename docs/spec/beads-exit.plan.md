@@ -1,10 +1,10 @@
 # Plan：解除 Beads 依赖与项目迁移
 
-任务：`BEADS-EXIT`。唯一执行依据：[Spec](beads-exit.spec.md)，共同要求见 [原生任务共同约束](native-task-constraints.md)。前置 [固定 DAG](task-dag.spec.md) 已验收并合入；新项目接入与旧项目迁移均属于本任务，在同一实现 PR 中完成。
+任务 ID：9；任务名称：解除 Beads 依赖与项目迁移；目标：`BEADS-EXIT`。唯一执行依据：[Spec](beads-exit.spec.md)，共同要求见 [原生任务共同约束](native-task-constraints.md)。前置 [固定 DAG](task-dag.spec.md) 已验收并合入；新项目接入与旧项目迁移均属于本任务，在同一实现 PR 中完成。
 
 ## 基线确认
 
-核对前置发布/领取/交付服务、旧 Beads DTO 与权威路由、project_steps 和已支持的执行后端。列清配置/check、workspace、worker 环境、提示词/Schema、技能、completion、恢复及 viewer 的所有原生路径耦合。沿用中心 Task ID 和公共执行接口，不重新实现 DAG 算法。
+核对前置创建/丢弃/领取/交付服务、旧 Beads DTO 与权威路由、project_steps 和已支持的执行后端。列清配置/check、workspace、worker 环境、提示词/Schema、技能、completion、恢复及 viewer 的所有原生路径耦合。沿用中心 Task ID 和公共执行接口，不重新实现 DAG 算法。
 
 受监管远端不是本任务开工前置；若已启用，回归其真实能力；若尚未交付，则不启用、不把未测写为通过。迁移真实项目之前用隔离副本验证源冻结、旧运行/回调结清及一次性事务切换。
 

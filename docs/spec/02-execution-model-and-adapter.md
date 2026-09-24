@@ -1,6 +1,8 @@
 # Spec 02：任务、执行模型、最小状态机与执行适配器
 
-状态：待实施。日期：2026-09-24（双后端衔接修订）。
+任务 ID：5；任务名称：中心执行模型。
+
+状态：待实施。配套 [Plan](02-execution-model-and-adapter.plan.md)。日期：2026-09-24（双后端衔接修订）。
 
 依据：[执行架构共同约束](execution-architecture.spec.md)。协议依赖：[Spec 01](01-orca-remote-protocol.md)。下游：[Spec 03](03-remote-execution-and-viewer.md)。
 
@@ -14,15 +16,15 @@ Spec 01 的逻辑接口可用于本阶段设计和替身测试。真实 remote a
 
 local Codex 与 Orca 是长期正式后端。[控制台 4A](pr-04a-execution-backends.spec.md) 定义共同操作/身份/能力，[4B](pr-04b-conversation-events.spec.md) 定义会话和全文查询。本阶段复用先落地的这些契约与测试，负责领域模型、事务和旧状态迁移；若本阶段先落地，4A/4B 直接扩展本阶段权威接口。不得建立平行 adapter、另一会话模型或双重业务写者；不改变控制台 PR 3 的本机生命周期。
 
-后续原生任务扩展分别由 [任务模型](task-core.spec.md)、[固定 DAG](task-dag.spec.md)、[Beads 退出](beads-exit.spec.md) 和 [关系视图](dag-view.spec.md) 四个独立任务承担，各有同名配套 Plan 和独立实现 PR，不增加本阶段的 DAG 交付范围。未切换项目继续由 Beads 提供任务事实；已按 Beads 退出 Spec 切换的 native 项目以固定 DAG Spec D3 的中心任务/交付事务为权威。原生 Task ID 与可选外部任务 ID 分开，后续扩展复用本阶段身份、数据库和命令服务，不再迁移一套执行模型。
+后续原生任务扩展分别由 [任务模型](task-core.spec.md)、[固定 DAG](task-dag.spec.md)、[Beads 退出](beads-exit.spec.md) 和 [关系视图](dag-view.spec.md) 四个独立任务承担，各有同名配套 Plan 和独立实现 PR，不增加本阶段的 DAG 交付范围。未切换项目继续由 Beads 提供任务事实；已按 Beads 退出 Spec 切换的 native 项目以固定 DAG Spec D3 的中心任务/交付事务为权威。已预分配的非负整数任务 ID 是同一任务后续原生 Task 的 ID，不再生成第二个对外任务号；Beads ID 等外部来源身份另存。后续扩展复用本阶段身份、数据库和命令服务，不再迁移一套执行模型。
 
 ## 2. 实体与身份
 
-ID 为不透明稳定标识，不由终端标题、远端路径或显示名称承担。业务身份至少按 project 隔离；预留 namespace，单机固定为 `local`，本阶段不实现多租户认证。
+WorkflowRun、Execution、StepAttempt 等 ID 为不透明稳定标识，不由终端标题、远端路径或显示名称承担。Task 的对外 ID 对已规划任务使用预先分配的非负整数，以规范仓库身份为唯一性作用域；指向同一仓库的不同项目配置不能重复使用该数字。未映射规划 ID 的旧 Beads 历史使用明确的非数字 legacy 身份，不能占用规划号。业务身份至少按 project 隔离；预留 namespace，单机固定为 `local`，本阶段不实现多租户认证。
 
 | 实体 | 必需信息与关系 |
 | --- | --- |
-| Task | 内部稳定 task ID、project、外部 task ID（原生扩展可空）、标题、领取者、任务来源、最终任务状态 |
+| Task | 稳定 task_id、project、外部来源 ID、标题、领取者、任务来源、最终任务状态；已有规划 ID 的任务沿用同一数字 task_id，不另造对外 ID |
 | WorkflowRun | Task、workflow_version、阶段、目标仓库/分支、固定配置、选用结果的关联 |
 | Execution | WorkflowRun、agent、execution target、worktree 身份/分支/base、执行状态、current_step、候选 revision、修复轮数 |
 | StepAttempt | Execution、step_id、尝试序号、operation_id、状态、输入 revision、契约摘要、前置结果 ID、结果、外部执行绑定 |
@@ -42,7 +44,7 @@ ID 为不透明稳定标识，不由终端标题、远端路径或显示名称�
 
 | 字段 | 允许值 |
 | --- | --- |
-| Task.status | open、in_progress、closed；本阶段 Beads 路径由任务提供方回读核实，后续 native 路径按固定 DAG Spec D3 的中心事务核实 |
+| Task.status | open、in_progress、discarded、closed；本阶段 Beads 路径由任务提供方回读核实，后续 native 路径由固定 DAG Spec D3 的中心事务处理丢弃与交付；已合并 PR 不得转 discarded |
 | WorkflowRun.phase | queued、executing、waiting_decision、waiting_pr_merge、completing、completed、blocked |
 | Execution.status | pending、active、waiting_decision、succeeded、failed、blocked、stopped |
 | StepAttempt.status | planned、dispatching、dispatched、running、waiting_decision、succeeded、failed、stopping、stopped、outcome_unknown |
@@ -151,6 +153,8 @@ runtime.json 改为使用新 schema_version 的可重建读模型，标记 datab
 
 迁移输入覆盖 runtime v1/v2/v3/v4，以及当时已落地的 4A/4B/5 版本化绑定、Operation、会话/正文/checkpoint 与决策应用记录。记录来源格式版本，不仅迁移 Run；控制请求/回执、dispatch mode/pause、实例身份及 indeterminate blockers 不得丢失或重放。已消费请求保留历史结果，旧实例未处理命令不在新实例自动执行，源 cursor 与去重事实成组迁移。源文件/正文保留且摘要校验，不从当前配置猜路由。
 
+迁移前对已知有规划数字 ID 的旧任务必须提供显式、版本化的 `task-identity-map/v1` 输入，列出项目/仓库身份、无前导零的数字 task_id、以及已核实的旧来源三元组；输入摘要和核验结果随迁移事务保存。同一数字不能映射两个业务任务，同一旧来源不能映射两个数字，映射中的旧来源必须在实际旧状态中核对存在且身份一致。无法核实的对应关系不得按标题、Spec 文件名或相近文本猜测。未映射的旧任务取得非数字 legacy task_id，并保留外部来源 ID；后续发现它与规划数字其实是同一任务时阻止再发布新 Task，待独立身份迁移方案处理，不能自动创建第二个 Task 或改写已有运行的 task_id。迁移后的投影和命令只对同一 Task 返回一个稳定对外 ID。
+
 - 每个旧 Run 映射为一个 WorkflowRun，其 ID 保留旧 run_id，workflow_version 标为 `legacy-v1`；同业务任务的历史记录关联同一 Task。不为旧的整段技能执行补造逐阶段验证/审查成功记录。
 - 为旧 Run 建立一个 Execution；现有 Process、Host、worktree、PR、Decision、配置和 Beads 身份均保留来源。历史 v1/v2 的 local 解释保持原规则。
 - 为每个可确证的 retry 历史及当前执行建立 StepAttempt，保留 attempts 目录 ID、previous-run.json 与原日志/结果路径。映射稳定且可重复；不移动或覆盖旧文件。
@@ -190,5 +194,6 @@ local、现有本机 Orca、watch、answer、retry、accept-result 和合并后 
 | M15 | 旧 Run 标为 legacy-v1，无虚构细分阶段；新流程缺必需步骤入口时在领取前拒绝 |
 | M16 | 同一双后端/会话契约套件在新 Store 上通过；迁移不变更原执行路由，不丢正文、源 checkpoint、去重或应用证明 |
 | M17 | 新投影不复用已有 v4；旧只读客户端明确拒绝不兼容格式，失效 Query cursor 可按稳定消息重定位，无双写权威 |
+| M18 | 预分配数字 task_id 与已知旧来源在迁移后指向同一 Task；重复数字、冲突映射或不明来源被拒绝；未映射 legacy 任务不占数字号，不能为同一业务任务再建第二个对外 ID |
 
 实施需运行相关迁移、存储故障、身份隔离、决策竞争及现有执行回归测试，再执行仓库要求的 Go 测试和静态检查。此 Spec 完成不等于远程执行已上线。
