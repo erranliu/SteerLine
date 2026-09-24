@@ -34,7 +34,7 @@
 
 ### 后续仍依赖的已有基础
 
-- [中心执行模型](../spec/02-execution-model-and-adapter.md)：`#6`/`#7` 复用 WorkflowRun/Execution/StepAttempt、SQLite 单写者、Query/Command、Operation 和本地 minimal-v1 流程；远程生产执行仍由 `#6` 交付。
+- [中心执行模型](../spec/02-execution-model-and-adapter.md)：`#6` 复用 WorkflowRun/Execution/StepAttempt、SQLite 单写者、Query/Command、Operation 和本地 minimal-v1 流程；远程生产执行仍由 `#6` 交付。
 - [真实远端能力报告](../spec/orca-probe/remote-capability-report-2026-09-23.json)与[字段映射](../spec/orca-probe/field-mapping.md)：供远程闭环复用派发、身份、输出、问答、同工作区跨步骤与故障恢复证据；会话目标可复用输出来源与缺口映射，仍须单独验证精确 turn/phase 能力。
 - [verify 结果校验器](../../internal/steerline/remoteprotocol/verify_result.go)：供远程闭环接入已接受的 worker_done 身份、预期检查清单和执行端 HEAD，阻止缺回执、非零退出、身份或候选 commit 不符的结果推进审查/发布。
 
@@ -44,12 +44,15 @@ SteerLine 自主管理任务和依赖，解除 Beads 必需依赖。原生任务
 
 | 任务 ID | 任务名称 | 目标标识 | 剩余交付范围 | 关键前置 | 执行规格 |
 | --- | --- | --- | --- | --- | --- |
-| 7 | 原生任务模型 | `TASK-CORE` | 复用已分配任务 ID，交付固定规格契约、SQLite 扩展与中心查询 | 已交付的 `#5` 身份、事务和 Query/Command 权威 | [Spec](../spec/task-core.spec.md) · [Plan](../spec/task-core.plan.md) |
-| 8 | 固定依赖调度 | `TASK-DAG` | 批次原子创建入图、未合并任务丢弃、硬前置、事务领取、交付释放和重启恢复 | `#7` 验收并合入；复用既有执行与 PR 核验 | [Spec](../spec/task-dag.spec.md) · [Plan](../spec/task-dag.plan.md) |
+| 8 | 固定依赖调度 | `TASK-DAG` | 批次原子创建入图、未合并任务丢弃、硬前置、事务领取、交付释放和重启恢复 | 已交付的 `#7` 原生任务模型；复用既有执行接口并接入原生 PR 合并核验 | [Spec](../spec/task-dag.spec.md) · [Plan](../spec/task-dag.plan.md) |
 | 9 | 解除 Beads 依赖与原生接入 | `BEADS-EXIT` | 原生配置/技能/worker/结项路径，交付无 Beads 新项目闭环；不导入旧项目数据 | `#8` 验收并合入；项目接入契约 | [Spec](../spec/beads-exit.spec.md) · [Plan](../spec/beads-exit.plan.md) |
 | 10 | 任务关系视图 | `DAG-VIEW` | 任务上下游与阻塞说明、只读 JSON 导出 | `#8` 的图查询与 `#2` 查询边界；`#9` 验收并合入后实施 | [Spec](../spec/dag-view.spec.md) · [Plan](../spec/dag-view.plan.md) |
 
 首版只提供同项目的“前置交付后开工”依赖，沿用现有执行槽策略，不引入父子聚合、条件边或复杂并行调度。中心服务用简单的确定性算法核验依赖并保有任务权威；关系视图只读。原生任务不等待远程闭环全部完成，也不扩大远端能力。
+
+### 后续仍依赖的已有基础
+
+- [原生任务模型](../spec/task-core.spec.md)与[验收记录](../validation/task-core/audit.md)：`#8`/`#9`/`#10` 复用固定任务身份与契约、SQLite schema 3、中心只读查询和交付证据存储；任务创建、依赖调度及真实 PR 合并核验仍由后续任务交付。
 
 ## 规划约束
 
