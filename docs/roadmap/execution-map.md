@@ -12,13 +12,13 @@
 | 1 | 统一会话事件与完整回复 | `CONVERSATION` · [Spec](../spec/pr-04b-conversation-events.spec.md) · [Plan](../spec/pr-04b-conversation-events.plan.md) | `#0` 验收并合入 | 复用固定 ExecutionRef、ReadOutput 和能力报告；取得两来源真实 turn/phase/final 证据，缺口按 Spec 保留，不能用执行级展示宣告精确体验完成。 |
 | 2 | 执行控制台与轮次折叠 | `CONSOLE` · [Spec](../spec/pr-04-console.spec.md) · [Plan](../spec/pr-04-console.plan.md) | `#1` 验收并合入 | 复用会话 DTO、分页、缺口和晚到 final 语义；真实 UI 集成后交付给 `#3`，Windows 离线时显示固定服务窗口入口。 |
 | 3 | 人工决策与恢复闭环 | `INTERVENTION` · [Spec](../spec/pr-05-intervention.spec.md) · [Plan](../spec/pr-05-intervention.plan.md) | `#2` 验收并合入；同时复用 `#0`/`#1` 契约 | 决策、续跑、恢复与 UI 共用固定身份和应用证明；若 `#5` 已先合入，复用其 SQLite/CommandService 权威。 |
-| 4 | Orca 远程协议验证 | `REMOTE-PROTOCOL` · [Spec](../spec/01-orca-remote-protocol.md) · [Plan](../spec/01-orca-remote-protocol.plan.md) · [剩余门槛](../spec/orca-probe/remaining-gates.md) | 无未完成任务前置；复用已有真实远端报告与字段映射，剩余探测使用隔离环境 | 补测 P10 消息大小/宿主权限边界；P13 必须在 `#6` 接入中心校验器后作端到端验收。P13 不构成 `#6` 开发前的循环前置。 |
+| 4 | Orca 远程协议验证 | `REMOTE-PROTOCOL` · [Spec](../spec/01-orca-remote-protocol.md) · [Plan](../spec/01-orca-remote-protocol.plan.md) · [剩余门槛](../spec/orca-probe/remaining-gates.md) | 无未完成任务前置；复用已有真实远端报告与字段映射，权限提示探测使用隔离环境 | 验证固定 8 KiB 上限的发送前拒绝和宿主权限提示人工处置；P13 必须在 `#6` 接入中心校验器后作端到端验收。P13 不构成 `#6` 开发前的循环前置。 |
 | 5 | 中心执行模型 | `EXEC-MODEL` · [Spec](../spec/02-execution-model-and-adapter.md) · [Plan](../spec/02-execution-model-and-adapter.plan.md) | `#4` 已有的真实协议映射和明确能力限制，足以设计模型与受限适配器；剩余 P10/P13 不阻止独立模型开发 | Task 使用已分配的同一数字 ID；交付 WorkflowRun/Execution/StepAttempt、SQLite 和共同接口后供 `#6` 与 `#7` 使用。旧状态明确拒绝，不做迁移。与 `#0`/`#1`/`#3` 重叠的接口或存储按先落地的权威实现扩展。 |
 | 6 | 分阶段远程闭环 | `REMOTE-WORKFLOW` · [Spec](../spec/03-remote-execution-and-viewer.md) · [Plan](../spec/03-remote-execution-and-viewer.plan.md) | `#5` 的模型、存储和执行接口；`#4` 已实测协议及限制 | 受限适配器可据已有证据开发；启用前须完成 `#4` 剩余必需门槛、P13 中心端到端验证及本任务验收。与 `#0`/`#1` 共用执行和会话契约、与 `#2`/`#3` 共用 UI 和决策边界；后落地者扩展先落地的权威实现。远程取消保持不可用。 |
 | 7 | 原生任务模型 | `TASK-CORE` · [Spec](../spec/task-core.spec.md) · [Plan](../spec/task-core.plan.md) | `#5` 的 Task/WorkflowRun 身份、SQLite、单写者、Query/Command 与 Operation/outbox 已交付 | 在中心权威上扩展原生 Task/契约，沿用 `#5` 的 task_id 与已分配数字，不重新编号；向 `#8` 交接身份、事务和查询。不要求 `#6` 或独立 `#0`/`#1` 先于 `#5` 落地。 |
 | 8 | 固定依赖调度 | `TASK-DAG` · [Spec](../spec/task-dag.spec.md) · [Plan](../spec/task-dag.plan.md) | `#7` 完整验收并合入 | 交付创建即入图、未合并任务丢弃、依赖、ready/claim、交付释放与图查询；生产无 Beads 项目接入仍待 `#9`。 |
 | 9 | 解除 Beads 依赖与原生接入 | `BEADS-EXIT` · [Spec](../spec/beads-exit.spec.md) · [Plan](../spec/beads-exit.plan.md) | `#8` 完整验收并合入；项目接入契约可用 | 完成新项目无 Beads 闭环；旧项目状态拒绝自动导入。复用 `#5` 的中心模型和已支持执行后端；不等待 `#6` 整体完成。 |
-| 10 | 任务关系视图 | `DAG-VIEW` · [Spec](../spec/dag-view.spec.md) · [Plan](../spec/dag-view.plan.md) | `#9` 验收并合入；`#8` 的图查询及 `#2` 的控制台查询边界已交付 | 用同一版本任务快照完成关系页和只读 DOT/JSON、可选 SVG；不增加任务修改入口。 |
+| 10 | 任务关系视图 | `DAG-VIEW` · [Spec](../spec/dag-view.spec.md) · [Plan](../spec/dag-view.plan.md) | `#9` 验收并合入；`#8` 的图查询及 `#2` 的控制台查询边界已交付 | 用同一版本任务快照完成关系页和只读 JSON 导出；不增加任务修改入口。 |
 
 控制台链按 **#0 → #1 → #2 → #3** 串行交付；原生任务链按 **#5 → #7 → #8 → #9 → #10** 串行交付。`#6` 在 `#5` 之后接入远程执行，但不是 `#7` 的前置。`#10` 还需要 `#2` 的查询边界。每个原生任务使用自己的 Spec、Plan 和实现 PR，不能将几项合在一个交付中。
 

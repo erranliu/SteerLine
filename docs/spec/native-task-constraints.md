@@ -17,11 +17,11 @@
 
 复用 [中心执行模型](02-execution-model-and-adapter.md) 的 SQLite、项目身份、仓库锁、QueryService/CommandService、事件及 Operation/outbox；[共同执行约束](execution-architecture.spec.md)、[双后端](pr-04a-execution-backends.spec.md) 与 [会话契约](pr-04b-conversation-events.spec.md) 继续适用。不得建立第二个 TaskStore、状态机、会话模型或业务写者。
 
-任务、WorkflowRun、Execution、StepAttempt、Decision 和外部身份分开。一个任务可以有重试及历史运行，但只有一个权威活动 WorkflowRun；同任务候选与重试不混同，不增加限制未来多个 Execution 的唯一键。旧尝试的迟到消息不推进新尝试。
+任务、WorkflowRun、Execution、StepAttempt、Decision 和外部身份分开。一个任务可以有重试及历史运行，但只有一个权威活动 WorkflowRun；当前每个流程只有一个活动 Execution。较早尝试的迟到消息不推进新尝试。
 
 任务在规划阶段取得的仓库非负整数 ID 是后续同一原生 Task 的对外 task_id；创建入图时沿用该数字，不另生成第二个对外任务号。项目/仓库身份界定其作用域，执行、尝试及数据库内部键各有独立身份。中心从固定创建输入读取 task_id 并核验唯一性，不读取规划文档作为任务契约或状态权威；数字大小不参与 DAG 依赖判定、调度排序或业务状态。
 
-任务级别的范围、唯一 Spec 和配套 Plan 固定在契约中；可另外引用共同约束或协议，但不能以 common_refs 夹带其他任务的执行 Spec 或计划。UI/CLI/worker 只使用查询、受控命令或既有结果通道，不直接写业务表。图算法和渲染器均不是权威来源。
+任务级别的范围、唯一 Spec 和配套 Plan 固定在契约中；可另外引用共同约束或协议，但不能以 common_refs 夹带其他任务的执行 Spec 或计划。UI/CLI/worker 只使用查询、受控命令或既有结果通道，不直接写业务表；关系视图不是权威来源。
 
 新项目由中心任务/交付事务维护唯一原生权威。任务源与 backend、工作流版本分开，不因 local/Orca 或 UI 入口改变任务身份。中心模型已建立的 Task.task_id 直接复用，不再建立第二套执行模型。
 

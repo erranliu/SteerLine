@@ -12,7 +12,7 @@
 
 ## C2：模型与契约
 
-复用中心执行模型的数据库、项目身份、仓库锁、事件、命令队列及 Operation/outbox。CLI/UI 只查询或提交命令，不直接改业务表；图算法库和渲染器均不是写者。
+复用中心执行模型的数据库、项目身份、仓库锁、事件、命令队列及 Operation/outbox。CLI/UI 只查询或提交命令，不直接改业务表。
 
 | 记录 | 必需字段/关系 | 不变量 |
 | --- | --- | --- |
@@ -27,7 +27,7 @@ Task 状态为 open、in_progress、discarded、closed：创建并入 DAG 时为
 
 规划数字 ID 在原生任务创建入图前即可存在；本任务复用 [中心执行模型](02-execution-model-and-adapter.md) 的 Task 身份，不负责分配规划 ID，也不读取规划文件。task_id 的规范值是无前导零的十进制数字，不加来源前缀、不重新编号。后继 [固定 DAG Spec](task-dag.spec.md) 在创建事务中使用固定输入提供的同一 task_id；重复数字拒绝。
 
-一个 Task 只允许一个权威活动 WorkflowRun，沿用执行模型的重试资格。不同尝试/候选的身份与任务分开，不能添加限制未来多个 Execution 的 `UNIQUE(workflow_run_id)`。任务重试不改 TaskContract、不重新领取同一任务；不存在领取的新任务通道与重试通道同时派发的情况。
+一个 Task 只允许一个权威活动 WorkflowRun，沿用执行模型的重试资格。任务重试不改 TaskContract、不重新领取同一任务；不存在领取的新任务通道与重试通道同时派发的情况。
 
 [固定 DAG Spec](task-dag.spec.md) 实现 `ready` 派生查询，满足：已创建入图、open、未领取、类型允许、全部前置有有效 TaskDelivery 且 closed。丢弃的前置使后继保持阻塞，不自动删边或视为交付。槽位、派发暂停、预检失败分别是启动资格，不伪装为依赖边或任务状态。失败、未知结果、等待决策/合并由执行模型呈现。
 

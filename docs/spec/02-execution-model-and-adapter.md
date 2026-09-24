@@ -8,9 +8,9 @@
 
 ## 1. 目标与范围
 
-解除当前 `Run` 对业务任务、agent、worktree、步骤尝试、决策和 PR 的混合表达。引入持久化领域模型与统一执行接口，使单 Execution 路径可以迁移到远程，同时允许未来一个任务有多个 agent 在独立 worktree 上并行执行。
+解除当前 `Run` 对业务任务、agent、worktree、步骤尝试、决策和 PR 的混合表达。引入持久化领域模型与统一执行接口，使单 Execution 路径可以接入远端。
 
-本阶段完成模型、最小流程状态机、项目步骤契约、事务存储、local/Orca 执行包装及客户端数据接口调整。生产调度仍只有一个活动 Execution；通过模型级测试证明能表达并行关系，不实现并行选择器、候选比较或结果整合，也不实现任意 DAG/流程编辑器。
+本阶段完成模型、最小流程状态机、项目步骤契约、事务存储、local/Orca 执行包装及客户端数据接口调整。每个 WorkflowRun 只允许一个活动 Execution；不实现同任务候选并行、比较、结果整合或任意 DAG/流程编辑器。
 
 Spec 01 的逻辑接口可用于本阶段设计和替身测试。真实 remote adapter 的启用受 Spec 01 能力门槛和 Spec 03 约束。
 
@@ -32,9 +32,7 @@ WorkflowRun、Execution、StepAttempt 等 ID 为不透明稳定标识，不由�
 | Event | 本地递增 event ID、业务身份、外部来源 ID、类型、接收时间、payload |
 | Operation | 外部动作意图、幂等键、负载摘要、平台 request ID、回执及不确定原因 |
 
-一个 Task 可保留多个历史 WorkflowRun；首版只允许一个活动 WorkflowRun，这是调度策略。一个 WorkflowRun 可以拥有多个 Execution，不能增加 `UNIQUE(workflow_run_id)` 限制。一个 Execution 包含顺序步骤及每步的历史尝试，同一步只允许一个权威活动尝试。
-
-并行 Execution 使用不同 worktree/分支。Orca Task/Dispatch 是外部绑定；业务 Task 与 Orca Task 不一一对应。未来并行 Execution 不能争用同一个只能保有一个权威 Dispatch 的 Orca Task。是否复用某个 worktree/agent 的新步骤，由显式操作和平台能力决定，不能隐式从路径推断。
+一个 Task 可保留多次 WorkflowRun，但只有一个权威活动 WorkflowRun。每次 WorkflowRun 当前只有一个活动 Execution；一个 Execution 包含顺序步骤及每步的历史尝试，同一步只有一个权威活动尝试。Orca Task/Dispatch 是外部绑定，不代替业务 Task 或 Execution 身份。
 
 重试生成新的 attempt ID；同一外部请求的恢复继续使用原 attempt/operation ID。消息先匹配外部 Dispatch，再校验业务 ID。旧尝试的迟到消息保留为历史，不推进新尝试。
 
@@ -55,9 +53,9 @@ WorkflowRun、Execution、StepAttempt 等 ID 为不透明稳定标识，不由�
 
 unknown 连接只降低事实新鲜度，不覆盖最后已知业务阶段。StepAttempt.outcome_unknown 用于外部动作是否生效不明，不因每次观察超时而写入。未获执行来源支持的状态迁移拒绝；原始平台状态与中心验证后的步骤状态分别保留，例如 Orca 成功结算但结果无效时，中心步骤仍可 failed。
 
-agent 完成仅终止对应步骤；Execution 成功只表示该执行的流程已完成。WorkflowRun 必须显式选用结果并核验交付；Task 关闭由后续固定 DAG 事务记录交付与关闭。首版单 Execution 可以自动选用其唯一有效结果；以后多个结果不能沿用“首个成功即完成”的隐式规则。
+agent 完成仅终止对应步骤；Execution 成功只表示流程步骤完成。中心核验唯一有效结果和真实交付后，后续固定 DAG 事务才能关闭 Task。
 
-Execution 的问题只暂停自身。流程级决策必须显式声明作用域。WorkflowRun 的等待态是聚合结果：有其他可运行 Execution 时仍可 executing，并额外暴露待决策数量。
+Execution 的问题暂停当前执行；流程级决策须显式声明作用域。WorkflowRun 如实展示等待决策，不把该状态当作执行完成。
 
 不确定且可能仍在执行的尝试继续占用相应资源许可；不能因为暂时失联而释放许可并启动替代执行。停止必须取得目标退出/停止证据；中心服务退出与取消远端 worker 是不同操作。
 
@@ -159,8 +157,8 @@ runtime.json 作为当前数据库的可重建读模型，标记 database revisi
 
 | 编号 | 场景与通过条件 |
 | --- | --- |
-| M01 | 同一 Task/WorkflowRun 存入两个 agent Execution，各自 worktree/Dispatch/日志/问题独立，无唯一键冲突 |
-| M02 | 旧尝试的成功或回答迟到，只更新历史，不能推进当前尝试或其他 Execution |
+| M01 | Task、WorkflowRun、Execution、StepAttempt 身份互不混用；同一 WorkflowRun 不启动第二个活动 Execution |
+| M02 | 较早尝试的成功或回答迟到，只更新原尝试记录，不能推进当前尝试或流程 |
 | M03 | 单个 Execution 完成、失败或等待决策，均不错误关闭整个业务任务 |
 | M04 | 两个客户端并发回答同一版本的问题，仅一个不同答案有效；同内容重试返回同一命令结果 |
 | M05 | 状态、事件、outbox 任一写入失败，事务全部回滚，不发外部动作 |
