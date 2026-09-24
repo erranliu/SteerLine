@@ -1,16 +1,19 @@
-# PR 4 Plan：执行控制台 TUI
+# PR 4C Plan：执行控制台与轮次折叠
 
-依据：[Spec](pr-04-console.spec.md)。依赖：PR 1–3。
+依据：[Spec](pr-04-console.spec.md)。依赖：PR 1–3、4A、4B 审核合并。保留原 PR4 文件路径，本阶段为 4C。
 
 ## 实施步骤
 
-1. **整理 UI 依赖。** 将现有 viewer 主模型迁入 `internal/steerline/console`，拆成观察接口和控制接口；前者读 DTO，后者返回 request_id/回执。保留小型 viewer 兼容包装或直接调整 CLI 路由，避免复制两套 UI。
+1. **整理 UI 依赖。** 从最新 origin/main 开始，将现有 viewer 主模型迁入 `internal/steerline/console`，拆成观察接口和控制接口；前者读 4A/4B 的执行、会话、能力 DTO，后者返回 request_id/回执。复用已落地 Query/Command 接口，不新增宿主分支或文件权威。保留小型 viewer 兼容包装或直接调整 CLI 路由，避免复制两套 UI。
 2. **加入多项目模型。** 复用 `ListProjects`，维护项目独立的选择、筛选、错误、日志 cursor 和在途请求。所有 tea.Msg 带项目身份与 generation。读取配置错误成为项目行状态，不阻断其他项目。
 3. **实现主页面。** 顶部服务/模式/新鲜度，项目导航，ready/runs 筛选列表，详情与 activity/attempt 切页。按稳定 ID 保存选择，窄屏改用单面板切页。
 4. **接入服务生命周期。** 把 PR 3 连接/停止结果和 Windows“需要服务窗口”入口变成明确 UI 状态；窗口初始化期间显示日志入口和 startup_id；退出只结束 tea.Program，不创建或关闭服务窗口。
 5. **接入任务与派发动作。** 用 PR 2 client 提交 start/mode/pause/resume/stop。操作键和文本输入焦点分离；跟踪同一 request_id，独立呈现请求状态与 run 状态。服务条件变化时刷新并显示拒绝原因。
 6. **保留决策能力。** 现有弹窗改用重新读取 + 指定 decision_id 的回答入口，成功文案改成答案已保存。新决策页与并发冲突不在本 PR 重复实现。
 7. **修改入口与说明。** `main.go` 增 console 子命令及配置选择逻辑；修改嵌入式 launchers、仓库根 viewer.bat、projects 菜单和 launcher README，加入 console.bat；调整 launcher 测试和用户 README。
+8. **实现统一会话页。** 使用稳定复合身份分组，区分过程/最终回复/执行摘要；处理 turn 终态、late final、final_absent/unknown、宿主等待和 gap。复用 4B 事件与正文分页，不在 View 中解析平台字符串或修改业务状态。
+9. **实现折叠状态。** 使用独立 reducer 管理 auto/manual、保持展开和终态已处理标记；新增 UI 私有偏好文件、各窗口视图身份及版本/损坏恢复。后台刷新不能覆盖手动意图；按 U8 维护正文/组锚点、历史阅读和显式跟随。
+10. **完成可见性与兼容。** 错误、问题和缺口置于折叠区外；加入正文完整性、分页失败与能力降级提示。普通正文安全处理终端控制字符，watch raw 保持原样；更新用户文档中的 commentary/final、turn 与业务完成说明。
 
 ## 验证
 
@@ -20,10 +23,14 @@
 - 真实 Windows TTY 冒烟覆盖多项目、固定入口提示、用户独立打开服务窗口、选择执行、暂停、退出重开、停止；使用测试项目和协议替身，避免消耗真实任务。
 - 查看 80×24 与宽屏，验证中文、长问题、长路径、错误换行和焦点；记录交互结果，不能仅凭静态字符串单测确认可用。
 - 运行 console/viewer、projects/launchers、watch 与 CLI 路由相关测试；无需再次做没有受影响的全套宿主审计。
+- 折叠 reducer 用 4B 两来源真实 fixtures 跑同一脚本，断言组身份、终态仅处理一次、手动覆盖、late final、无 final/未知、等待与 gap 可见。折叠动作不得发控制指令；测试断言实际调用数为零。
+- 多项目/同 session 多轮/多窗口/重连重开测试同时验证消息、回执、折叠偏好和阅读锚点隔离；大正文分页校验完整文本与 UTF-8 边界，不只做快照字符串匹配。
+- 真实 Windows TTY 的 80×24 和宽屏分别运行 local 与 Orca 已验证输出路径：结束收起、手动展开、保留阅读位置、完整 final、失败和等待提示；保存版本、交互步骤与结果。协议缺口仍按 4B 报告，不能由 UI 静态样例代验。
+- 运行 `go test ./... -count=1 -timeout 10m`、`go vet ./...`、平台构建和 `git diff --check`；在 docs/validation/ 下按 U-A ID 记录证据与未验证项。
 
 ## 完成条件
 
-- U-A1～U-A9 全部满足，控制台可引导打开服务窗口，并完成日常“连接服务 → 指定任务执行 → 状态查看 → 停服”。
+- U-A1～U-A15 全部满足；Windows 控制台可引导用户独立打开服务窗口，再完成“连接服务 → 指定任务执行 → 状态查看 → 停服”，双链路共用消息折叠与完整回复页。
 - UI 不直接写 runtime、不通过 shell 拼接任务 ID，也不引入第二套业务守卫。
 - 原 watch 的流式接口与 viewer/project 批处理别名有回归验证。
 

@@ -1,0 +1,90 @@
+{
+  "captured_at": "2026-09-23T08:59:42Z",
+  "evidence_class": "captured_cli_response",
+  "exit_code": 0,
+  "operation": "request-show",
+  "response": {
+    "_meta": {
+      "runtimeId": "\u003cID-001\u003e"
+    },
+    "id": "\u003cID-002\u003e",
+    "ok": true,
+    "result": {
+      "createdAt": "[TEXT REDACTED]",
+      "interpretation": "[TEXT REDACTED]",
+      "method": "[TEXT REDACTED]",
+      "receipt": {
+        "dispatchId": "\u003cID-003\u003e",
+        "effects": [
+          {
+            "action": "[TEXT REDACTED]",
+            "id": "\u003cID-004\u003e",
+            "kind": "worktree"
+          },
+          {
+            "action": "[TEXT REDACTED]",
+            "kind": "setup",
+            "state": "not_applicable"
+          },
+          {
+            "action": "[TEXT REDACTED]",
+            "id": "\u003cID-005\u003e",
+            "kind": "terminal",
+            "role": "[TEXT REDACTED]"
+          },
+          {
+            "id": "\u003cID-005\u003e",
+            "kind": "dispatch_input",
+            "role": "[TEXT REDACTED]",
+            "state": "accepted"
+          }
+        ],
+        "launch": {
+          "effective": {
+            "agent": "[TEXT REDACTED]",
+            "effort": null,
+            "model": null
+          },
+          "requested": {
+            "agent": "[TEXT REDACTED]",
+            "effort": null,
+            "model": null
+          }
+        },
+        "mode": {
+          "detail": "[TEXT REDACTED]",
+          "mode": "[TEXT REDACTED]",
+          "preferred": "[TEXT REDACTED]",
+          "reason": "[TEXT REDACTED]"
+        },
+        "mutation": {
+          "replayed": false,
+          "requestId": "\u003cID-006\u003e"
+        },
+        "residualResources": [],
+        "runId": "\u003cID-007\u003e",
+        "server": {
+          "environmentId": "\u003cID-008\u003e",
+          "name": "[TEXT REDACTED]"
+        },
+        "setup": {
+          "effective": "[TEXT REDACTED]",
+          "hookFound": false,
+          "requested": "[TEXT REDACTED]",
+          "source": "existing_worktree",
+          "startupPolicy": "[TEXT REDACTED]",
+          "state": "not_applicable"
+        },
+        "stage": "input_accepted",
+        "state": "ready",
+        "taskId": "\u003cID-009\u003e",
+        "timeoutMs": 120000
+      },
+      "requestId": "\u003cID-006\u003e",
+      "state": "completed",
+      "updatedAt": "[TEXT REDACTED]"
+    }
+  },
+  "schema_version": "steerline.orca-probe-sample.v1",
+  "scope": "home mutation request"
+}

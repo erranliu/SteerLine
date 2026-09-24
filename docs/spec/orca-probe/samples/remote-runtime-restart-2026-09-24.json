@@ -1,0 +1,38 @@
+{
+  "schema_version": "steerline.orca-probe.observation.v1",
+  "captured_at": "2026-09-24T02:17:25Z",
+  "operation": "remote_orca_runtime_restart_with_active_dispatch",
+  "before": {
+    "home_run": "<run-remote-restart-1>",
+    "task": "<task-remote-restart-1>",
+    "dispatch": "<dispatch-remote-restart-1>",
+    "remote_runtime": "<runtime-remote-before>",
+    "worker_liveness": "live",
+    "question_message": "<question-remote-restart-1>",
+    "question_delivery": "<delivery-remote-restart-1>",
+    "question_unacknowledged": true
+  },
+  "fault": {
+    "mechanism": "stop the exact remote Orca main process with an independent restart helper and delayed backup helper",
+    "main_process_stopped": true,
+    "restart_backup_open_exit": 0,
+    "primary_restart_helper_stopped_after_recovery": true
+  },
+  "after": {
+    "remote_runtime": "<runtime-remote-after>",
+    "runtime_id_changed": true,
+    "same_dispatch_liveness": "live",
+    "same_dispatch_exact_worker": true,
+    "worker_count_in_run": 1,
+    "same_question_delivery_replayed": true,
+    "worker_escalation_on_ask_disconnect": true,
+    "original_question_answered": true,
+    "original_question_resumed": true,
+    "worker_done_original_task_and_dispatch": true,
+    "worker_outcome": "succeeded",
+    "agent_terminal_released": true,
+    "restart_log_removed": true,
+    "helper_terminal_closed": true
+  },
+  "conclusion": "The remote Orca runtime restarted with a new runtime ID while a worker waited on an unacknowledged question. The home Run retained one original Dispatch, the execution host verified that exact worker live, the same Delivery replayed, and the worker resumed its original question and settled after an explicit coordinator follow-up. No replacement worker was started."
+}

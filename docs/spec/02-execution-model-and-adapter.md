@@ -1,8 +1,8 @@
 # Spec 02：任务、执行模型、最小状态机与执行适配器
 
-状态：待实施。日期：2026-09-23。
+状态：待实施。日期：2026-09-24（双后端衔接修订）。
 
-依据：[架构决策](../architecture-direction.md)。协议依赖：[Spec 01](01-orca-remote-protocol.md)。下游：[Spec 03](03-remote-execution-and-viewer.md)。
+依据：[执行架构共同约束](execution-architecture.spec.md)。协议依赖：[Spec 01](01-orca-remote-protocol.md)。下游：[Spec 03](03-remote-execution-and-viewer.md)。
 
 ## 1. 目标与范围
 
@@ -11,6 +11,8 @@
 本阶段完成模型、最小流程状态机、项目步骤契约、事务存储、旧记录迁移、local/现有 Orca 执行包装及客户端数据接口调整。生产调度仍只有一个活动 Execution；通过模型级测试证明能表达并行关系，不实现并行选择器、候选比较或结果整合，也不实现任意 DAG/流程编辑器。
 
 Spec 01 的逻辑接口可用于本阶段设计和替身测试。真实 remote adapter 的启用受 Spec 01 能力门槛和 Spec 03 约束。
+
+local Codex 与 Orca 是长期正式后端。[控制台 4A](pr-04a-execution-backends.spec.md) 定义共同操作/身份/能力，[4B](pr-04b-conversation-events.spec.md) 定义会话和全文查询。本阶段复用先落地的这些契约与测试，负责领域模型、事务和旧状态迁移；若本阶段先落地，4A/4B 直接扩展本阶段权威接口。不得建立平行 adapter、另一会话模型或双重业务写者；不改变控制台 PR 3 的本机生命周期。
 
 ## 2. 实体与身份
 
@@ -101,20 +103,27 @@ implement 可使用中心提供的通用开发指令并加载项目基础技能�
 | 操作 | 输入与输出 |
 | --- | --- |
 | Probe | target → 已验证/不支持/未知的能力及版本信息 |
+| Preflight / Prepare | 按固定 backend/protocol/agent/target 检查依赖、准备或通过组合启动取得真实 workspace；缺能力在领取前尽可能拒绝 |
 | Start | 固定的 AttemptSpec + Operation → accepted、rejected 或 outcome_unknown，以及外部身份/残留资源 |
 | Observe | 已持久化的 ExecutionRef → 带时间和来源的观察事实 |
+| InspectWorkspace | 固定 ExecutionRef → 目标仓库/worktree/base/HEAD/dirty 证据；由适配器按执行位置核验 |
 | ReadOutput | ExecutionRef + opaque cursor → 有界内容、来源、下个 cursor、缺口 |
 | Receive / Ack | 控制端 inbox 身份 → Delivery；确认遵循平台要求，与读取分离 |
 | Reply | DecisionRef + 固定答案 + Operation → 平台接受/拒绝/不确定；不自行标记 applied |
-| Stop | ExecutionRef + Operation → 停止回执，不把发出请求当成已退出 |
+| StopExecution | ExecutionRef + Operation → 停止回执，不把发出请求当成已退出；当前生产远程目标返回明确的 `capability_unsupported`，不发 Orca stop 变更；下游文档中的 Stop 指此操作 |
+| DetachObservation | 仅结束中心监听，不取消 worker、不隐式删除工作区；服务生命周期按明确策略调用 |
 | SettleResources | 已结算执行的 release/已明确选择的 retain → 回执或不确定状态 |
 | ReconcileOperation | 已有平台 request ID 和原请求 → 只读查询或平台允许的同请求恢复 |
 
-ExecutionRef 保存 adapter kind、固定连接 ID、home runtime/Run、Task/Dispatch、execution host、可选 terminal/incarnation、worktree 身份。历史尝试使用派发时绑定，配置默认目标改变不能把旧动作路由到新机器。
+ExecutionRef 保存 backend/protocol/agent、固定 target/连接 ID、worktree 身份及协议专属绑定：local 的 PID/创建身份，Orca terminal v2 的 runtime/terminal/incarnation，supervised 的 home runtime/Run/Task/Dispatch/execution host。不能要求 local 或 terminal v2 虚构 Dispatch。历史尝试使用派发时绑定，配置默认目标改变不能把旧动作路由到新机器。Reply/Continue 共用固定 Operation；Receive/Ack 为支持 inbox 的协议的可选接口，不支持须显式报告。
 
 适配器不能写业务状态、领取任务或自行决定重试。所有返回由中心状态机在事务内校验并应用。错误区分能力不支持、明确拒绝、暂时不可达、身份不符、协议无效和动作结果不确定；禁止用单个 error 字符串决定是否重发。
 
-保留 `local_process` 与 `orca_terminal_v2` 兼容适配，新增 `orca_supervised` 接口实现由 Spec 03 完成。原 `host=local|orca` 配置继续可读；新增远程目标必须显式选择受监管模式，不能改变现有 Orca 配置的默认行为。
+`local_process` 与 Orca 后端族都作为长期正式适配维护；`orca_terminal_v2` 保留现有协议，新增 `orca_supervised` 由 Spec 03 完成。原 `host=local|orca` 配置继续可读；新增远程目标必须显式选择受监管模式，不能改变现有 Orca 配置默认行为。backend 与 agent/target 分开，预检不能让未使用的本机 Codex 成为 Orca 的无条件依赖。能力使用 verified/unsupported/not_tested 及版本/目标/证据，不允许隐式 fallback。
+
+沿用 4A 参数化契约套件，业务状态机不依赖具体平台类型；沿用 4B 的 session/turn/item/phase、来源 cursor、正文引用和缺口语义。轮次结束不驱动 Task 完成，后端接受 reply 不证明 Decision.applied。当前本机停服策略与未来远端只分离监督策略显式区分，不藏在 Close/析构中。
+
+当前受监管远程目标不提供生产取消操作。状态模型和 StopExecution 接口保留给本机适配器及未来经验证的平台版本；远程命令入口应明确返回不支持并展示人工处理原因，不能把服务停机或断线当作远端停止。
 
 ## 5. 持久化与命令入口
 
@@ -130,21 +139,25 @@ ExecutionRef 保存 adapter kind、固定连接 ID、home runtime/Run、Task/Dis
 
 新增 QueryService 返回 WorkflowRun 与 executions 数组、决策列表，以及按 Execution/Attempt 筛选的事件分页。事件 cursor 是服务逻辑位置，不暴露文件字节偏移。兼容 watch 的原始日志入口仍可使用文件读取。
 
-runtime.json 改为 schema_version=4 的可重建读模型，标记 database revision、生成时间及导出错误。它不再参与业务恢复；导出失败不回滚已提交状态，客户端必须能显示投影过期并从 QueryService 读取。activity.jsonl 继续作为可重建的展示日志，不能作为唯一 inbox 或恢复日志。
+会话/正文查询直接复用 4B 的 DTO、分页上限、完整性和稳定 ID；迁移不得使已保存的 turn/item/正文修订变成全新消息，UI 私有折叠状态不迁入业务表。源 cursor 与 Query cursor 分开；如果存储迁移必须使旧 Query cursor 失效，返回明确 cursor_invalidated 并支持按稳定消息 ID 重定位，不静默跳过内容。
 
-## 6. v1/v2/v3 迁移
+runtime.json 改为使用新 schema_version 的可重建读模型，标记 database revision、生成时间及导出错误。已合并控制协议占用 v4，不可复用；新投影版本至少为 5，实施时若已被其他不兼容结构占用则分配下一未使用版本，并提交精确版本/兼容矩阵。它不再参与业务恢复；导出失败不回滚已提交状态，客户端必须能显示投影过期并从 QueryService 读取。activity.jsonl 继续作为可重建展示日志，不能作为唯一 inbox 或恢复日志。
+
+## 6. 既有版本与控制台扩展记录迁移
 
 迁移持有仓库锁，拒绝与旧调度服务同时运行。先检查现有 repository/claimant/记录完整性，再保存原 runtime 的不可变备份和摘要；迁移在数据库事务中完成，并写入来源摘要与迁移版本。
+
+迁移输入覆盖 runtime v1/v2/v3/v4，以及当时已落地的 4A/4B/5 版本化绑定、Operation、会话/正文/checkpoint 与决策应用记录。记录来源格式版本，不仅迁移 Run；控制请求/回执、dispatch mode/pause、实例身份及 indeterminate blockers 不得丢失或重放。已消费请求保留历史结果，旧实例未处理命令不在新实例自动执行，源 cursor 与去重事实成组迁移。源文件/正文保留且摘要校验，不从当前配置猜路由。
 
 - 每个旧 Run 映射为一个 WorkflowRun，其 ID 保留旧 run_id，workflow_version 标为 `legacy-v1`；同业务任务的历史记录关联同一 Task。不为旧的整段技能执行补造逐阶段验证/审查成功记录。
 - 为旧 Run 建立一个 Execution；现有 Process、Host、worktree、PR、Decision、配置和 Beads 身份均保留来源。历史 v1/v2 的 local 解释保持原规则。
 - 为每个可确证的 retry 历史及当前执行建立 StepAttempt，保留 attempts 目录 ID、previous-run.json 与原日志/结果路径。映射稳定且可重复；不移动或覆盖旧文件。
 - 缺少历史字段的记录标注 legacy/incomplete，不猜测 agent、Dispatch 或已完成阶段。旧文件损坏或身份冲突使迁移失败，事务回滚，原目录不受影响。
 - 旧 pending/running 或 resuming 的不确定恢复规则保持保守，不因迁移自动接管或续跑。旧 completed、等待 PR 和等待决策状态不得丢失。
-- 数据库提交后若 v4 投影写入失败，下次启动重新导出，不再次导入旧快照；来源摘要和迁移标记防止重复记录。
+- 数据库提交后若新版本投影写入失败，下次启动重新导出，不再次导入旧快照；来源摘要和迁移标记防止重复记录。
 - 新二进制支持读取无数据库的旧快照作只读查看。完成迁移后的目录不得用旧二进制恢复运行；回退只能在所有执行已核实停止、尚未产生新的外部业务动作时由显式恢复流程完成，不能让旧快照覆盖新数据库。
 
-v4 导出顶层至少包括 project/service、revision、tasks、workflow_runs、executions、attempts 和 decisions；各集合使用 ID 关联。旧 `current_task/slot_occupied` 仅可作为兼容展示摘要，不再是身份或并行能力的权威。
+新版本导出顶层至少包括 project/service、revision、tasks、workflow_runs、executions、attempts 和 decisions；各集合使用 ID 关联。旧 `current_task/slot_occupied` 仅可作为兼容展示摘要，不再是身份或并行能力的权威。
 
 ## 7. 现有路径回归要求
 
@@ -164,7 +177,7 @@ local、现有本机 Orca、watch、answer、retry、accept-result 和合并后 
 | M04 | 两个客户端并发回答同一版本的问题，仅一个不同答案有效；同内容重试返回同一命令结果 |
 | M05 | 状态、事件、outbox 任一写入失败，事务全部回滚，不发外部动作 |
 | M06 | 事务提交后进程退出，重启仍找到待发送动作；响应丢失时进入可核实的不确定状态 |
-| M07 | v1/v2/v3 各状态及 retry 历史迁移后关联完整，重复启动不重复导入，损坏输入不部分迁移 |
+| M07 | v1–v4 各状态、retry、控制 blocker/回执及已落地 4A/4B/5 扩展记录迁移后关联完整，重复启动不重复导入，损坏输入不部分迁移 |
 | M08 | 数据库已迁移而投影未导出时重启，使用数据库恢复，原历史文件保持可读 |
 | M09 | local 与现有 Orca 路径的相关测试通过；新模型不自动续跑旧 unknown/resuming |
 | M10 | 查询接口按任务聚合、按执行过滤；新增远端路径不会进入本机文件/Git操作 |
@@ -173,5 +186,7 @@ local、现有本机 Orca、watch、answer、retry、accept-result 和合并后 
 | M13 | 在每一步结果提交及下一步派发之间重启，只恢复正确步骤；已通过且 revision 未变化的步骤不重复执行 |
 | M14 | 特殊 PR provider 能被替换而不改状态机；越步结果/未匹配前置结果不能推进流程 |
 | M15 | 旧 Run 标为 legacy-v1，无虚构细分阶段；新流程缺必需步骤入口时在领取前拒绝 |
+| M16 | 同一双后端/会话契约套件在新 Store 上通过；迁移不变更原执行路由，不丢正文、源 checkpoint、去重或应用证明 |
+| M17 | 新投影不复用已有 v4；旧只读客户端明确拒绝不兼容格式，失效 Query cursor 可按稳定消息重定位，无双写权威 |
 
 实施需运行相关迁移、存储故障、身份隔离、决策竞争及现有执行回归测试，再执行仓库要求的 Go 测试和静态检查。此 Spec 完成不等于远程执行已上线。

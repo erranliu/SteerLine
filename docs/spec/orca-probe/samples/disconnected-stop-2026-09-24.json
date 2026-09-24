@@ -1,0 +1,48 @@
+{
+  "schema_version": "steerline.orca-probe.observation.v1",
+  "captured_at": "2026-09-24T02:29:53Z",
+  "operation": "worker_stop_during_temporary_transport_loss",
+  "before": {
+    "run": "<run-stop-1>",
+    "task": "<task-stop-1>",
+    "dispatch": "<dispatch-stop-1>",
+    "exact_worker_liveness": "live",
+    "question_delivery_unacknowledged": true
+  },
+  "fault": {
+    "mechanism": "temporary inbound Orca port block on remote Windows host",
+    "automatic_rule_removal_seconds": 35,
+    "rule_count_after_restore": 0,
+    "helper_terminal_closed": true
+  },
+  "stop_attempt": {
+    "request_id_known_after_call": true,
+    "request_show_state": "completed",
+    "receipt_state": "stop_unknown",
+    "process_action": "unknown",
+    "exact_retry_replayed": true,
+    "exact_retry_state": "stop_unknown"
+  },
+  "after_restore": {
+    "same_dispatch_execution_host_liveness": "live",
+    "same_dispatch_exact_worker": true,
+    "worker_state": "stop_unknown",
+    "new_exact_stop_error": "dispatch_inactive",
+    "followup_to_exact_dispatch_error": "dispatch_inactive",
+    "question_delivery_preserved": true,
+    "worker_released": false,
+    "terminal_manually_closed": false
+  },
+  "manual_cleanup_after_user_authorization": {
+    "dispatch_to_terminal_handle_and_incarnation_match_reverified": true,
+    "exact_test_terminal_close_pty_killed": true,
+    "execution_host_liveness_after_close": "exited",
+    "worker_done_available": false,
+    "worker_abandon_state": "abandoned",
+    "task_status": "blocked",
+    "question_delivery_acknowledged_after_abandon": true,
+    "reclaimable_worker_count": 0,
+    "test_worktree_deleted": false
+  },
+  "conclusion": "The stop result remained unknown even after exact request replay and a fresh execution-host observation proved the original worker live. Orca refused a new stop and follow-up in stop_unknown state. After explicit user authorization, the exact matching test terminal was manually closed, execution-host exit was verified, and the Dispatch was abandoned without claiming success. Platform-managed recovery remains unsupported on the tested version pair."
+}

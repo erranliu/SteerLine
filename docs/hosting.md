@@ -2,7 +2,7 @@
 
 v1 的红线是按"Orca 只当哑终端宿主"写的；目标改为**把执行切到 Orca** 后，第 2、4 条（以及第 3、5 条）必须修正。本文记录当前 v2 实现的边界。
 
-后续远程接入遵循已确认的[中心状态机架构决策](architecture-direction.md)：远端仅运行 Orca，允许接入其受监管 worker 与消息协议，并保留同任务多 agent 独立 worktree 并行的模型。下文的 orchestration 全面禁用及本地文件契约需随该迁移替换，不是目标远程架构的约束。
+后续远程接入遵循已确认的[执行架构共同约束](spec/execution-architecture.spec.md)：远端仅运行 Orca，允许接入其受监管 worker 与消息协议，并保留同任务多 agent 独立 worktree 并行的模型。下文的 orchestration 全面禁用及本地文件契约需随该迁移替换，不是目标远程架构的约束。
 
 ## 职责划分
 

@@ -1,0 +1,33 @@
+{
+  "schema_version": "steerline.orca-probe.observation.v1",
+  "captured_at": "2026-09-24T00:48:00Z",
+  "operation": "incremental_output_cursor_and_source_change",
+  "archived_pagination": {
+    "dispatch": "<older-settled-dispatch-1>",
+    "source": "transcript",
+    "source_identity_stable_across_pages": true,
+    "page_message_counts": [10, 10, 10, 10, 10, 0],
+    "total_message_ids": 50,
+    "unique_message_ids": 50,
+    "contentComplete": false,
+    "clipping": ["message_limit", "message_limit_or_scan_window"],
+    "warning": "Older transcript messages were omitted from the bounded archive."
+  },
+  "live_to_archive": {
+    "dispatch": "<new-dispatch-1>",
+    "live_source": "terminal",
+    "live_page_line_counts": [8, 6],
+    "live_cursor_advanced": true,
+    "after_release_old_cursor_error": "source_changed",
+    "fresh_read_source": "transcript",
+    "fresh_read_message_count": 12,
+    "numbered_output_distinct": 100,
+    "numbered_output_first": "P03-001",
+    "numbered_output_last": "P03-100",
+    "fresh_read_contentComplete": false,
+    "fresh_read_clipping": ["transcript_payload"],
+    "worker_done_outcome": "succeeded",
+    "terminal_release": "closed_agent_terminal"
+  },
+  "conclusion": "Opaque cursors advanced without repeated retained message IDs, omitted history was explicitly marked, and an old terminal cursor was rejected with source_changed after output switched to the archived transcript. P03 passed for the tested version pair."
+}

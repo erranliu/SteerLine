@@ -1,0 +1,184 @@
+{
+  "captured_at": "2026-09-24T00:35:49Z",
+  "evidence_class": "captured_cli_response",
+  "exit_code": 0,
+  "operation": "worker-show",
+  "response": {
+    "_meta": {
+      "runtimeId": "\u003cID-001\u003e"
+    },
+    "id": "\u003cID-002\u003e",
+    "ok": true,
+    "result": {
+      "dispatch": {
+        "assigneeHandle": null,
+        "assigneePaneKey": null,
+        "capabilityRevokedAt": "[REDACTED]",
+        "completedAt": "2026-09-24T00:35:05.273Z",
+        "contractVersion": 1,
+        "createdAt": "[TEXT REDACTED]",
+        "creatorDispatchId": null,
+        "depth": 1,
+        "dispatchedAt": "[TEXT REDACTED]",
+        "failureCount": 0,
+        "hostScope": null,
+        "id": "\u003cID-003\u003e",
+        "lastFailure": null,
+        "lastHeartbeatAt": null,
+        "processIncarnation": null,
+        "retryOfDispatchId": null,
+        "runId": "\u003cID-004\u003e",
+        "status": "completed",
+        "taskId": "\u003cID-005\u003e",
+        "task_id": "\u003cID-005\u003e",
+        "terminationReason": null
+      },
+      "observation": {
+        "exactWorker": true,
+        "status": "exited"
+      },
+      "projection": {
+        "attention": {
+          "categories": [
+            "[TEXT REDACTED]"
+          ],
+          "requiresAction": false
+        },
+        "dispatchId": "\u003cID-003\u003e",
+        "evidence": {
+          "durable": true,
+          "lastObservedAt": 1790210149020,
+          "liveStatus": "[TEXT REDACTED]"
+        },
+        "host": {
+          "id": "\u003cID-006\u003e",
+          "kind": "remote"
+        },
+        "id": "\u003cID-003\u003e",
+        "liveness": {
+          "source": "execution_host",
+          "verdict": "[TEXT REDACTED]"
+        },
+        "nextAction": {
+          "argv": [],
+          "kind": "none"
+        },
+        "outcome": "succeeded",
+        "parent": null,
+        "provider": null,
+        "resource": {
+          "reason": "[TEXT REDACTED]",
+          "state": "absent"
+        },
+        "role": "[TEXT REDACTED]",
+        "runId": "\u003cID-004\u003e",
+        "stage": {
+          "activity": "[TEXT REDACTED]",
+          "detail": "[TEXT REDACTED]",
+          "dispatch": "\u003cID-007\u003e",
+          "worker": "[TEXT REDACTED]"
+        },
+        "taskId": "\u003cID-005\u003e",
+        "workspace": {
+          "id": "\u003cID-008\u003e",
+          "kind": "folder_or_worktree"
+        }
+      },
+      "remoteRuntimeEpoch": "[TEXT REDACTED]",
+      "server": {
+        "environmentId": "\u003cID-006\u003e",
+        "name": "[TEXT REDACTED]"
+      },
+      "terminal": {
+        "branch": "\u003cID-009\u003e",
+        "connected": false,
+        "executionHostId": "\u003cID-010\u003e",
+        "exitCause": {
+          "kind": "unknown",
+          "reason": "[TEXT REDACTED]"
+        },
+        "handle": "\u003cID-011\u003e",
+        "incarnationId": "\u003cID-012\u003e",
+        "lastOutputAt": 1790210111616,
+        "leafId": "\u003cID-013\u003e",
+        "orphaned": true,
+        "paneRuntimeId": "\u003cID-014\u003e",
+        "preview": "[TEXT REDACTED]",
+        "ptyId": "\u003cID-015\u003e",
+        "rendererGraphEpoch": 0,
+        "tabId": "\u003cID-016\u003e",
+        "title": "[TEXT REDACTED]",
+        "worktreeId": "\u003cID-008\u003e",
+        "worktreePath": "\u003cPATH-017\u003e",
+        "writable": false
+      },
+      "worker": {
+        "agentTerminalHandle": null,
+        "createdAt": "[TEXT REDACTED]",
+        "dispatchId": "\u003cID-003\u003e",
+        "effects": [
+          {
+            "action": "[TEXT REDACTED]",
+            "id": "\u003cID-008\u003e",
+            "kind": "worktree"
+          },
+          {
+            "action": "[TEXT REDACTED]",
+            "id": "\u003cID-011\u003e",
+            "kind": "terminal",
+            "leafId": "\u003cID-013\u003e",
+            "role": "[TEXT REDACTED]",
+            "tabId": "\u003cID-016\u003e"
+          },
+          {
+            "action": "[TEXT REDACTED]",
+            "effective": "[TEXT REDACTED]",
+            "hookFound": false,
+            "kind": "setup",
+            "requested": "[TEXT REDACTED]",
+            "source": "explicit_request",
+            "startupPolicy": "[TEXT REDACTED]",
+            "state": "not_configured"
+          },
+          {
+            "id": "\u003cID-011\u003e",
+            "kind": "dispatch_input",
+            "role": "[TEXT REDACTED]",
+            "state": "accepted"
+          }
+        ],
+        "lastError": null,
+        "residualResources": [],
+        "runtimeEpoch": "[TEXT REDACTED]",
+        "setupState": "[TEXT REDACTED]",
+        "stage": "released",
+        "startOptions": {
+          "agent": "[TEXT REDACTED]",
+          "baseBranch": "\u003cID-018\u003e",
+          "launch": {
+            "effective": null,
+            "requested": {
+              "agent": "[TEXT REDACTED]",
+              "effort": null,
+              "model": null
+            }
+          },
+          "name": "[TEXT REDACTED]",
+          "on": "[TEXT REDACTED]",
+          "repo": "\u003cID-019\u003e",
+          "serverName": "[TEXT REDACTED]",
+          "setup": "[TEXT REDACTED]",
+          "setupSource": "[TEXT REDACTED]",
+          "terminal": null,
+          "timeoutMs": 60000,
+          "worktree": "\u003cID-020\u003e"
+        },
+        "state": "succeeded",
+        "updatedAt": "2026-09-24T00:35:11.665Z",
+        "worktreeId": "\u003cID-008\u003e"
+      }
+    }
+  },
+  "schema_version": "steerline.orca-probe-sample.v1",
+  "scope": "home Run Dispatch"
+}

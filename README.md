@@ -65,7 +65,8 @@ Windows 的 npm `codex.cmd`/`codex.ps1` 不是原生可执行文件。配置应�
 | executable_types | 默认 task、bug、feature、chore；仍排除已分配及 split aggregate |
 | task_poll / pr_poll / heartbeat | `10s` / `30s` / `5s`，必须为正时长 |
 | command_timeout / shutdown_grace | 短命令和 API 的超时 `30s` / 正常退出等待 worker `10s` |
-| model / profile | 可选 Codex 模型和已有 profile，空值沿用本机设置 |
+| agent / host | Orca 执行时选择 agent；可为 `codex`、`pi` 等。`host` 选择 Orca 或本地执行 |
+| model / profile / reasoning_effort | Codex 模型、profile 和推理强度；未指定推理强度时默认为 `high`，Orca + Codex 会通过 Codex CLI 显式传入 |
 | sandbox | 默认 workspace-write；允许 read-only，以及用户明确授权后显式配置的 danger-full-access |
 | pr | Gitea 原生只读 API，或可配置的规范化查询命令，见下文 |
 | completion | 可选 `{command:{executable,args},timeout}`；默认 null 使用原生 close，自定义仓库通过它完成合并后的结项，详见 [命令协议](docs/completion-command.md) |
@@ -193,7 +194,7 @@ retry 复用同一个任务、领取和 worktree，使用当前配置的模型�
 
 ## 查看运行
 
-规格与实施计划统一见 [Spec + Plan 索引](docs/spec/README.md)；本轮设计见 [控制台升级总览](docs/spec/console-upgrade.md)。以下描述当前已实现行为。
+后续规划见 [Roadmap](docs/roadmap/roadmap.md)，目录规则见 [说明](docs/roadmap/readme.md)。执行须依据 [Spec + Plan](docs/spec/README.md)；控制台执行契约见 [总览](docs/spec/console-upgrade.md)。以下描述当前已实现行为。
 
 每个运行有两份日志：`events.jsonl` 是 codex/pi 的原始事件流（取证，永不改动）；`activity.jsonl` 是归一化后的稳定记录，与 codex/pi 的 schema 解耦。两者都在 `runs/<run_id>/`（retry 在 `attempts/<attempt_id>/`）。契约见 [activity](docs/activity.md)。
 
@@ -220,9 +221,9 @@ retry 复用同一个任务、领取和 worktree，使用当前配置的模型�
 
 Agent 需要人工决策时（`outcome=needs_decision`），运行进入 `finish_task_status=waiting_decision`：服务保留 claim/worktree/终端、暂停新派发并等待。`steerline answer` 原子写入答案文件，服务读回后在同一终端续跑。协议见 [decisions](docs/decisions.md)；Beads 与 SteerLine 三个状态轴的关系见 [状态模型](docs/state-model.md)。
 
-执行在 Orca：`host: "orca"` 时由 Orca 创建 worktree 并启动 agent（`events.jsonl` 不再产生，改用 R-a 结果文件）。执行事实（worktree、分支、agent 存活、终端）以 Orca 为准；调度、编排、完成与恢复仍属 SteerLine。红线与规范见 [hosting](docs/hosting.md)、[hosting 规范](docs/spec/hosting-spec.md)。
+执行在 Orca：`host: "orca"` 时由 Orca 创建 worktree 并启动 agent（`events.jsonl` 不再产生，改用 R-a 结果文件）。Codex 可配置 `model`、`profile` 和 `reasoning_effort`；SteerLine 在 Orca 创建 worktree 后通过自定义 Codex CLI 命令启动 agent，并在启动时预填任务提示。其他 agent 仍由 Orca 的 agent selector 启动。执行事实（worktree、分支、agent 存活、终端）以 Orca 为准；调度、编排、完成与恢复仍属 SteerLine。红线与规范见 [hosting](docs/hosting.md)、[hosting 规范](docs/spec/hosting-spec.md)。
 
-后续方向已确认：中心 SteerLine 状态机、远端仅 Orca 执行器、桌面与移动端统一接入，并为同任务多 agent 独立 worktree 并行预留模型。详见[架构决策](docs/architecture-direction.md)；这些是目标约束，当前尚未实现。
+后续方向已确认：中心 SteerLine 状态机、远端仅 Orca 执行器、桌面与移动端统一接入，并为同任务多 agent 独立 worktree 并行预留模型。后续步骤见 [Roadmap](docs/roadmap/roadmap.md)，规划约束见 [架构约束](docs/roadmap/architecture-constraints.md)；执行要求以对应 Spec 为准。
 
 ```json
 "agent": "codex",

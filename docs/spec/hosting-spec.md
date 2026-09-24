@@ -7,6 +7,7 @@
 ```
 host  = local | orca     在哪执行（默认 orca）
 agent = codex | pi | ... 交给 Orca 的 --agent id（默认 codex，仅 orca host）
+model / profile / reasoning_effort = Codex agent 的 CLI 选项；仅 Codex agent 可指定
 ```
 
 `runner` 轴已删除：选择哪个 agent 由 Orca 的 `--agent` 决定，Steerline 不再拼 agent 命令、不再有 pi runner。
@@ -16,21 +17,20 @@ agent = codex | pi | ... 交给 Orca 的 --agent id（默认 codex，仅 orca ho
 ```
 1. Steerline 领取 Beads 任务，fetch 主线，得到 base
 2. 持久化运行与意图（branch/base；worktree 路径由 Orca 决定，创建后回填）
-3. orca worktree create --name <task> --agent <agent> --base-branch <baseRef> \
-     --prompt "读取并执行 <run_dir>/prompt.txt" --json   # Orca prefill 提交，不用启动后按键
-   → worktreePath / worktree branch / agent terminal handle
-4. 回填并持久化 worktree_path / worktree_branch / base_commit / process(orca)
-5. 写 <run_dir>/prompt.txt（含 worktree 事实）与 result.schema.json
-   —— 只把 pointer 交给 --prompt；prompt 正文在 create 返回后写，远早于 agent TUI 就绪
-6. 监管：轮询结果文件 + terminal show(agentWait)
-7. 结果文件出现 → 校验 schema → 落 runs/<run_id>/result.json
-8. Steerline 核验 PR 合入 + Beads closed（既有逻辑）
+3. 默认路径：`orca worktree create --agent <agent> --base-branch <baseRef> --prompt <pointer>`；Orca 在 agent 就绪后 prefill 并提交
+4. Codex override 路径（`agent=codex` 且指定 model/profile/reasoning_effort）：先让 Orca 创建不带 agent 的 worktree
+5. 回填并持久化 worktree_path / worktree_branch / base_commit；写 prompt 与 result.schema.json
+6. override 路径通过 `orca terminal create --worktree path:<path> --command <codex-cli-command>` 启动 Codex；例如 `codex --model gpt-6-luna --config model_reasoning_effort=xhigh`，pointer 作为启动 prompt
+7. 监管：轮询结果文件 + terminal show(agentWait)
+8. 结果文件出现 → 校验 schema → 落 runs/<run_id>/result.json
+9. Steerline 核验 PR 合入 + Beads closed（既有逻辑）
 ```
 
 ### 为什么不 `terminal send`
 
 - `terminal wait --for tui-idle` 会在 agent **启动菜单**阶段就返回，随后的 `terminal send` 会被启动界面吞掉（实测 pi：pointer 从未送达，agent 空转）。
 - 改用 Orca 原生 `--prompt`：Orca 在 agent 就绪后 prefill 并提交，无竞态。pointer 只引用 `prompt.txt`，正文如常在 create 之后写。
+- Codex override 路径不通过 `terminal send` 注入任务提示；Codex 在 terminal 创建时直接收到 pointer 参数，避免启动菜单时序竞态。
 
 ### pi 前置：信任目录
 
@@ -68,6 +68,8 @@ agent = codex | pi | ... 交给 Orca 的 --agent id（默认 codex，仅 orca ho
 ```json
 "host": "orca",
 "agent": "codex",
+"model": "gpt-6-luna",
+"reasoning_effort": "xhigh",
 "stall_timeout": "5m",
 "orca": {
   "executable": "orca",
@@ -79,7 +81,7 @@ agent = codex | pi | ... 交给 Orca 的 --agent id（默认 codex，仅 orca ho
 }
 ```
 
-- `runner`、`model`、`profile`、`sandbox`、`codex` 命令对 orca host 不再使用（agent 的模型/权限由 Orca 自身配置）。
+- 非 Codex agent 的模型选择与启动方式仍由 Orca 管理。对 `host=orca, agent=codex`，`model`、`profile`、`reasoning_effort` 和 `codex` executable/args 由 SteerLine 通过 Codex CLI 传入；`sandbox` 同样作为 Codex CLI 参数传入。
 - 默认值 `host=orca`、`agent=codex`。
 
 ## runtime v3

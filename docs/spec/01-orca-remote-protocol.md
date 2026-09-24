@@ -1,8 +1,8 @@
 # Spec 01：Orca 远程能力验证与执行协议
 
-状态：待实施；本文不代表已完成真实远端验证。日期：2026-09-23。
+状态：已完成部分真实远端探测；必需故障场景仍待验收。更新：2026-09-24。
 
-依据：[架构决策](../architecture-direction.md)。后续：[Spec 02](02-execution-model-and-adapter.md)、[Spec 03](03-remote-execution-and-viewer.md)。
+依据：[执行架构共同约束](execution-architecture.spec.md)。后续：[Spec 02](02-execution-model-and-adapter.md)、[Spec 03](03-remote-execution-and-viewer.md)。
 
 ## 1. 目标与交付
 
@@ -44,7 +44,7 @@ SteerLine 持有业务任务、执行身份、决策和完成规则；Orca 持�
 | 人工决策 | ask 超时后同 ID 恢复；reply 的接收语义、重复回答及响应丢失恢复 | 必需 |
 | 完成报告 | worker_done 的接受条件、payload 保真、失败结果、资源结算 | 必需 |
 | mutation 恢复 | request ID 何时可取得、retry-request/request-show 适用范围、无回执时的边界 | 必需验证；自动恢复可降级为人工核实 |
-| 停止和释放 | stop 与 release 的区别、断线时的 unknown、仅操作目标执行 | 必需 |
+| 停止和释放 | 已结算目标的 release、stop 与 release 的区别、断线时的 unknown | release 必需；生产远程取消不可用 |
 | 步骤脚本回执 | 受监管步骤调用仓库脚本，回传命令/脚本版本、退出码、检查结果和对应 commit；失败不能变成自然语言成功 | 必需 |
 | 无 agent 的脚本步骤 | Orca 启动确定性脚本、输入传递、退出/结构化回执、重启后取证 | 探测必做；能力不足不阻塞首版 agent 步骤 |
 
@@ -133,4 +133,6 @@ Orca 自身的登录、信任目录和权限提示可能只有 agentWait 观察�
 | P12 | 同一 worktree 先后执行至少两个受监管步骤，前一步释放不删除代码，下一步有新身份且无法误接旧结果 |
 | P13 | 验证脚本返回非零、检查回执缺失或 commit 不符时，中心可识别未通过，不能仅凭 agent 摘要认定通过 |
 
-必需能力的正向场景和故障场景全部有可核对证据，才能宣布远程 agent 协议可用于 Spec 03。当前对话中只检查过本机 CLI/指南，没有已配对的真实远端，此项状态保持待验证。
+探测工具、[真实远端能力报告](orca-probe/remote-capability-report-2026-09-23.json)、[字段映射](orca-probe/field-mapping.md)及脱敏样本位于 [Orca probe evidence](orca-probe/README.md)。本轮中心与远端 Orca 均为 1.4.209，远端 Windows 上使用 Codex CLI 0.156.1 和独立测试仓库。P01、P02、P03、P04、P05、P06、P07、P08、P09、P11、P12 已获得对应正向证据；P13 的非零脚本退出路径获得证据。显式 UI 断开/重连会退役旧连接，不能作为 P06 测试。独立的 30 秒传输阻断使原 Dispatch 从 `live` 变为 `unverifiable/host_unavailable`，恢复后同一执行端确认其为 `live`，原问题 Delivery 重放且无第二个 worker。中心 Orca 在消息、回答及一次进行中的 worker-start 附近退出后，原 Run/Task/Dispatch 均可查；进行中请求保持 `pending`，精确重试指向原 Dispatch，执行端核验后原 worker 完成并释放。调用者丢失完整回应而无 request ID 时，也能通过只读 Run/Task 对账找到唯一原尝试，没有盲目重发。无 agent 直接终端脚本可回传退出码，但退出后读不到先前 stdout；使用远端文件回执和重启后的新无 agent 终端可恢复结构化结果，后续适配器必须实现这一组合路径。同版本跨机结构化消息已实测到 30 KiB；旧版兼容已按用户要求放弃，真实超限/权限提示仍未实测，后续适配器需保守限制和人工提示。P13 的纯校验器已实现，但尚未接入中心调度。原逻辑协议样本仍是合成示例，不能替代真实 Orca CLI 样本。
+
+用户明确暂缓旧版 Orca 兼容测试；本报告不声明混合版本支持，P10 仍为 `not_tested`。为 P13 新增了独立的 `verify` 步骤结果校验函数及缺回执、非零退出、commit 不符等样本测试；它尚未接入中心调度流程，因此 P13 的端到端门槛仍为 `not_tested`。后续又验证了真实 commit 在同一远端 worktree 的跨步骤保留，以及远端 runtime 重启后的原 Dispatch 恢复；同时发现断线 `worker-stop` 可留下仍然存活的 `stop_unknown` worker，Orca 随后拒绝精确停止与跟进消息。用户据此决定将**生产远程取消标记为不可用**：远程适配器不能自动调用 Stop 或按终端句柄兜底关闭；运行中的远端 worker 需要取消时，保持已知身份并要求人工处理。已结算目标的正常 release 仍可用。Spec 03 可以实现这一受限路径，但启用前仍须通过其余必需门槛。[剩余故障探测](orca-probe/remaining-gates.md)已列出；当前 Spec 01 尚未验收通过。

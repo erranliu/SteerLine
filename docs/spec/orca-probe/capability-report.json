@@ -1,0 +1,777 @@
+{
+  "schema_version": "steerline.orca-capability-report.v1",
+  "captured_at": "2026-09-23T08:58:42Z",
+  "probe_tool": "cmd/orca-probe",
+  "evidence_classes": {
+    "cli_schema": "captured",
+    "center_runtime": "captured",
+    "remote_runtime": "not_tested",
+    "protocol_wire": "not_tested"
+  },
+  "center": {
+    "cli_version": "1.4.209",
+    "runtime_version": "1.4.209",
+    "runtime_state": "ready",
+    "runtime_reachable": true,
+    "platform": "windows",
+    "capabilities": [
+      "accounts.codex-reset-credit.v1",
+      "accounts.import-host-credentials.v1",
+      "agent-session.background-task-row-stop.v1",
+      "agent-session.background-task-stop.v1",
+      "agent-session.host-authority.v1",
+      "agent-session.keyboard.v1",
+      "agent-session.kimi-resume.v1",
+      "agent-session.omp-resume-path.v1",
+      "agent-session.opencode2-resume.v1",
+      "agent-session.pending-send-result.v1",
+      "agent-session.prompt-cancel.v1",
+      "agent-session.rewind.v1",
+      "agent-session.session-boundary.v1",
+      "agent-session.status-feed.v1",
+      "agent-session.structured.hold.v1",
+      "agent-session.structured.resume-history.v1",
+      "agent-session.structured.reveal.v1",
+      "agent-session.structured.v1",
+      "agent-session.turn-item.v1",
+      "agent.launch.replay-required.v1",
+      "agent.launch.replay.v1",
+      "agent.launch.v2",
+      "aiVault.session-titles.v1",
+      "aiVault.v1",
+      "automation.create-idempotency.v1",
+      "automation.list-host-scope.v1",
+      "automation.owner-fencing.v1",
+      "browser.certificate-trust.v1",
+      "browser.clientHost.automation.v1",
+      "browser.clientHost.fileChannel.v1",
+      "browser.clientHost.pageMetadata.v1",
+      "browser.clientHost.v1",
+      "browser.identity.v1",
+      "browser.screencast.v1",
+      "browser.tab-create-known-id.v1",
+      "files.mutation-ownership.v1",
+      "files.pathsExist",
+      "folder-workspace.path-status.v1",
+      "git.antigravity-configured-model.v1",
+      "github.markPRReadyForReview",
+      "gitlab.updateMR.readyForReview.v1",
+      "jira.user-fields.v1",
+      "linear.issue-attribute-filter.v1",
+      "mobile.tasks.v1",
+      "mobileWeb.bundle.v1",
+      "network.browserTunnel.executionHosts.v1",
+      "network.browserTunnel.v1",
+      "notifications.remote-push.v1",
+      "orchestration.contract.v1",
+      "orchestration.federation-control-mail.v1",
+      "orchestration.federation-fleet-snapshot.v1",
+      "orchestration.federation-lifecycle-settlement.v1",
+      "orchestration.federation-release-archive.v1",
+      "orchestration.federation-structured-read.v1",
+      "orchestration.federation.v1",
+      "orchestration.worker-launch-preferences.v1",
+      "orchestration.worker-stop-verdict.v1",
+      "project-host-setup.v1",
+      "remote-runtime.shared-control.v1",
+      "runtime.environments.v1",
+      "runtime.status.compat.v1",
+      "session-tabs.authoritative-inventory.v1",
+      "session-tabs.close-intent.v1",
+      "session-tabs.split-group-placement.v1",
+      "skills.delete.v1",
+      "skills.install-cancel.v1",
+      "skills.install-progress.v1",
+      "skills.install-providers.v1",
+      "skills.install-result.v2",
+      "skills.install.bundle.v1",
+      "skills.install.v1",
+      "skills.manage.v1",
+      "skills.upload.v1",
+      "task-source-context.v1",
+      "terminal.binary-stream.v1",
+      "terminal.create-idempotency.v2",
+      "terminal.create-shell-selection.v1",
+      "terminal.multiplex.v1",
+      "terminal.paired-parking.v1",
+      "terminal.prompt-delivery.v1",
+      "terminal.query-reply-input.v1",
+      "terminal.quick-commands.v1",
+      "updater.remote-control.v1",
+      "workspace-ports.v1",
+      "workspace-run-context.v1",
+      "worktree.archive-failure-blocking.v1",
+      "worktree.create-idempotency.v1",
+      "worktree.github-pr-suppression.v1",
+      "worktree.linked-work-item-context.v1",
+      "worktree.visibility-defaults.v1",
+      "worktree.visibility-source-defaults.v1"
+    ],
+    "saved_remote_environment_count": 1
+  },
+  "remote": {
+    "status": "not_tested",
+    "reason": "No remote runtime version or remote execution evidence was captured.",
+    "runtime_version": "not_tested",
+    "agent": "not_tested",
+    "platform": "not_tested"
+  },
+  "cli_commands": [
+    {
+      "command": "environment show",
+      "usage": "orca environment show --environment \u003cselector\u003e [--json]",
+      "flags": [
+        "help",
+        "json",
+        "pairing-code",
+        "environment",
+        "page"
+      ]
+    },
+    {
+      "command": "orchestration ask",
+      "usage": "orca orchestration ask (--question \u003ctext\u003e | --resume \u003cmessage_id\u003e) [--to \u003crun:id\u003e] [--run \u003crun_id\u003e] [--options \u003ccsv\u003e] [--timeout-ms \u003cn\u003e] [--from \u003chandle\u003e] [--retry-request \u003cid\u003e] [--json]",
+      "flags": [
+        "help",
+        "json",
+        "pairing-code",
+        "environment",
+        "to",
+        "run",
+        "question",
+        "resume",
+        "dispatch-capability",
+        "options",
+        "timeout-ms",
+        "from",
+        "retry-request"
+      ],
+      "notes": [
+        "From an active Dispatch, a new question defaults to its owning Run mailbox.",
+        "Timeout leaves the question pending; resume with the original message ID."
+      ]
+    },
+    {
+      "command": "orchestration check",
+      "usage": "orca orchestration check [--terminal \u003chandle\u003e] [--run \u003crun_id\u003e] [--ack \u003cdelivery_id\u003e] [--unread | --peek | --all] [--types \u003ctype,...\u003e] [--format] [--wait] [--timeout-ms \u003cn\u003e] [--retry-request \u003cid\u003e] [--json]\n  default: return the bound Run's oldest unacknowledged FIFO batch.\n  --ack: acknowledge the prior whole batch before checking/waiting.\n  --peek: return only unread messages without marking them read.\n  --all: return every message for the handle; does not mark read.\n  --wait: block until a matching message arrives or --timeout-ms expires.\n          Emits JSON keepalive lines to stderr every 15s so the caller can\n          tell the process is alive. `_keepalive` is unrelated to heartbeat\n          messages; `_heartbeat` remains as a deprecated compatibility alias.\n          Filter with `jq \"select(._keepalive|not)\"` when merging streams.",
+      "flags": [
+        "help",
+        "json",
+        "pairing-code",
+        "environment",
+        "terminal",
+        "run",
+        "ack",
+        "unread",
+        "peek",
+        "all",
+        "types",
+        "format",
+        "wait",
+        "timeout-ms",
+        "retry-request"
+      ],
+      "notes": [
+        "On Windows PowerShell, quote comma-separated type filters, e.g. --types \"worker_done,escalation\".",
+        "--types is the wake condition for --wait; a returned Delivery is always the whole FIFO batch, so it is never filtered by type. Without --wait it has no effect on consuming checks. Only --peek and --all filter their rows.",
+        "--format renders the returned rows as local text only; it never writes to another terminal.",
+        "A bound Run replays the same Delivery until --ack or all its messages are marked read, even with --types; process every message before acknowledging."
+      ]
+    },
+    {
+      "command": "orchestration dispatch-show",
+      "usage": "orca orchestration dispatch-show --task \u003ctask_id\u003e [--preamble] [--from \u003chandle\u003e] [--json]",
+      "flags": [
+        "help",
+        "json",
+        "pairing-code",
+        "environment",
+        "task",
+        "preamble",
+        "from"
+      ]
+    },
+    {
+      "command": "orchestration reply",
+      "usage": "orca orchestration reply --id \u003cmsg_id\u003e --body \u003ctext\u003e [--run \u003crun_id\u003e] [--from \u003chandle\u003e] [--retry-request \u003cid\u003e] [--json]",
+      "flags": [
+        "help",
+        "json",
+        "pairing-code",
+        "environment",
+        "id",
+        "body",
+        "run",
+        "from",
+        "retry-request"
+      ]
+    },
+    {
+      "command": "orchestration request-show",
+      "usage": "orca orchestration request-show --request \u003crequest_id\u003e [--json]",
+      "flags": [
+        "help",
+        "json",
+        "pairing-code",
+        "environment",
+        "request"
+      ],
+      "notes": [
+        "Read-only: it never starts, retries, or settles anything, so it is safe to run after any lost response.",
+        "completed means the mutation landed and --retry-request replays the recorded outcome instead of starting a second one. pending means the original mutation is still running or Orca restarted before recording its outcome; wait for a live original command, otherwise replay with --retry-request.",
+        "absent means this runtime holds no receipt for that request under your caller identity: it never arrived, it failed before recording anything, or the receipt was pruned. Absent is not proof that nothing happened."
+      ]
+    },
+    {
+      "command": "orchestration run-create",
+      "usage": "orca orchestration run-create --objective \u003ctext\u003e [--from \u003chandle\u003e] [--retry-request \u003cid\u003e] [--json]",
+      "flags": [
+        "help",
+        "json",
+        "pairing-code",
+        "environment",
+        "objective",
+        "from",
+        "retry-request"
+      ],
+      "notes": [
+        "A Run is a namespace and home inbox. It never schedules or places workers.",
+        "--retry-request is only for exact recovery after an unknown mutation result."
+      ]
+    },
+    {
+      "command": "orchestration run-show",
+      "usage": "orca orchestration run-show --id \u003crun_id\u003e [--json]",
+      "flags": [
+        "help",
+        "json",
+        "pairing-code",
+        "environment",
+        "id"
+      ]
+    },
+    {
+      "command": "orchestration send",
+      "usage": "orca orchestration send --subject \u003ctext\u003e [--to \u003crun:id|dispatch:id|legacy_handle\u003e] [--run \u003crun_id\u003e] [--from \u003chandle\u003e] [--body \u003ctext\u003e] [--type \u003ctype\u003e] [--priority \u003clevel\u003e] [--thread-id \u003cid\u003e] [--payload \u003cjson\u003e] [--task-id \u003cid\u003e] [--dispatch-id \u003cid\u003e] [--outcome \u003csucceeded|failed\u003e] [--files-modified \u003ccsv\u003e] [--report-path \u003cpath\u003e] [--phase \u003ctext\u003e] [--retry-request \u003cid\u003e] [--json]",
+      "flags": [
+        "help",
+        "json",
+        "pairing-code",
+        "environment",
+        "to",
+        "run",
+        "from",
+        "subject",
+        "body",
+        "type",
+        "priority",
+        "thread-id",
+        "payload",
+        "task-id",
+        "dispatch-id",
+        "dispatch-capability",
+        "retry-request",
+        "outcome",
+        "files-modified",
+        "report-path",
+        "phase"
+      ],
+      "notes": [
+        "Valid --type values: status, dispatch, worker_done, merge_ready, escalation, handoff, decision_gate, question, heartbeat.",
+        "To answer a worker question, use orchestration reply --id \u003cmsg_id\u003e --body \u003ctext\u003e with the same Orca CLI executable.",
+        "Group addresses (@all, @idle, @codex, ...) reach the live Dispatches of your own Run; a sender in no Run must use run:\u003cid\u003e or dispatch:\u003cid\u003e. @worktree:\u003cid\u003e names one workspace.",
+        "Run groups exclude their owning coordinator; send to run:\u003cid\u003e to raise something with yours. Nested coordinators receive group mail in their child Run mailbox; @worktree:\u003cid\u003e includes workspace coordinators.",
+        "On Windows PowerShell, quote group addresses such as --to \"@all\" or --to \"@worktree:\u003cid\u003e\".",
+        "worker_done and heartbeat are exact-Dispatch signals and cannot target groups; omit --to to use the Dispatch's Run mailbox.",
+        "worker_done requires --outcome succeeded or --outcome failed.",
+        "From an active Dispatch, an omitted recipient defaults to its owning Run mailbox.",
+        "Use --to dispatch:\u003cid\u003e for attempt-specific coordinator guidance; Orca durably relays it to a connected worker server.",
+        "A worker_done with the active task/dispatch IDs completes that task only from the dispatched pane. When stable pane identity is unavailable, the sender handle must exactly match the dispatch assignee; injected preambles include the correct --from value.",
+        "Prefer --task-id/--dispatch-id/etc. over raw --payload JSON in worker commands; PowerShell strips JSON quotes easily."
+      ]
+    },
+    {
+      "command": "orchestration task-list",
+      "usage": "orca orchestration task-list [--status \u003cstatus\u003e] [--ready] [--brief] [--run \u003crun_id\u003e] [--from \u003chandle\u003e] [--json]",
+      "flags": [
+        "help",
+        "json",
+        "pairing-code",
+        "environment",
+        "status",
+        "ready",
+        "brief",
+        "run",
+        "from"
+      ],
+      "notes": [
+        "--brief collapses whitespace and caps each spec at 160 characters."
+      ]
+    },
+    {
+      "command": "orchestration task-update",
+      "usage": "orca orchestration task-update --id \u003ctask_id\u003e --status \u003cstatus\u003e [--result \u003cjson\u003e] [--run \u003crun_id\u003e] [--from \u003chandle\u003e] [--retry-request \u003cid\u003e] [--json]",
+      "flags": [
+        "help",
+        "json",
+        "pairing-code",
+        "environment",
+        "id",
+        "status",
+        "result",
+        "run",
+        "from",
+        "retry-request"
+      ],
+      "notes": [
+        "Valid --status values: pending, ready, dispatched, completed, failed, blocked."
+      ]
+    },
+    {
+      "command": "orchestration worker-abandon",
+      "usage": "orca orchestration worker-abandon --dispatch \u003cdispatch_id\u003e [--retry-request \u003cid\u003e] [--json]",
+      "flags": [
+        "help",
+        "json",
+        "pairing-code",
+        "environment",
+        "dispatch",
+        "retry-request"
+      ],
+      "notes": [
+        "Retains all possibly-live resources and performs no process or filesystem action."
+      ]
+    },
+    {
+      "command": "orchestration worker-list",
+      "usage": "orca orchestration worker-list [--run \u003crun_id\u003e] [--terminal-state \u003cactive|reclaimable|retained|release_pending|release_unknown|released\u003e] [--include-remote] [--cursor \u003ccursor\u003e] [--limit \u003c1-100\u003e] [--json]",
+      "flags": [
+        "help",
+        "json",
+        "pairing-code",
+        "environment",
+        "run",
+        "terminal-state",
+        "include-remote",
+        "cursor",
+        "limit"
+      ],
+      "notes": [
+        "Terminal state is process accounting and is reported separately from Task status; a completed Task can still own a live terminal.",
+        "Context-only Dispatches created by orchestration dispatch are included as unsupervised with terminal state retained.",
+        "Returns at most 100 local rows, newest first, by default; --include-remote adds connected-server observations when the host supports fleet listing. Continue with the opaque page.nextCursor value unchanged.",
+        "Without --run the list is scoped to the Run bound to the calling terminal, and to every Run when there is no binding; the receipt reports which in scope.source (flag, bound, or all)."
+      ]
+    },
+    {
+      "command": "orchestration worker-read",
+      "usage": "orca orchestration worker-read --dispatch \u003cdispatch_id\u003e [--source \u003cauto|transcript|terminal\u003e] [--cursor \u003ccursor\u003e] [--limit \u003cn\u003e] [--json]",
+      "flags": [
+        "help",
+        "json",
+        "pairing-code",
+        "environment",
+        "dispatch",
+        "source",
+        "cursor",
+        "limit"
+      ],
+      "notes": [
+        "The default auto source uses an exact hook-reported transcript when available and otherwise returns labeled terminal output.",
+        "A Dispatch created by orchestration dispatch reads from its adopted terminal with worker status unsupervised.",
+        "A returned cursor is pinned to the exact source; start a fresh read if Orca reports source_changed."
+      ]
+    },
+    {
+      "command": "orchestration worker-release",
+      "usage": "orca orchestration worker-release --dispatch \u003cdispatch_id\u003e [--retry-request \u003cid\u003e] [--json]",
+      "flags": [
+        "help",
+        "json",
+        "pairing-code",
+        "environment",
+        "dispatch",
+        "retry-request"
+      ],
+      "notes": [
+        "Post-completion cleanup for a settled (succeeded or failed) worker; closes only the exact coordinator-owned agent terminal of that worker.",
+        "A settled Dispatch created by orchestration dispatch has no owned terminal resource and is reported retained without process action.",
+        "An inspectable output archive is preserved before the terminal closes, so worker-read still returns output afterwards.",
+        "Never closes setup terminals, configured tabs, reused or pre-existing terminals, user-taken-over terminals, or unproven identities.",
+        "Idempotent: repeating the call reports already_released. Only release_unknown exits 1; retained, release_pending, and already_released exit 0."
+      ]
+    },
+    {
+      "command": "orchestration worker-retain",
+      "usage": "orca orchestration worker-retain --dispatch \u003cdispatch_id\u003e [--retry-request \u003cid\u003e] [--json]",
+      "flags": [
+        "help",
+        "json",
+        "pairing-code",
+        "environment",
+        "dispatch",
+        "retry-request"
+      ],
+      "notes": [
+        "Records a durable user-requested exception; a later explicit worker-release clears it and releases the terminal.",
+        "A settled Dispatch created by orchestration dispatch has no owned terminal resource and is reported retained without process action.",
+        "Performs no process or filesystem action."
+      ]
+    },
+    {
+      "command": "orchestration worker-show",
+      "usage": "orca orchestration worker-show --dispatch \u003cdispatch_id\u003e [--json]",
+      "flags": [
+        "help",
+        "json",
+        "pairing-code",
+        "environment",
+        "dispatch"
+      ],
+      "notes": [
+        "A Dispatch created by orchestration dispatch is shown as unsupervised and reports the exact adopted terminal when its identity is still provable.",
+        "observation.agentWait names a worker parked on a prompt only a human can answer, with the evidence that proved it (hook, prompt-text, or title). Null means Orca looked and found no wait. An absent field means it never looked — an older host, an unverifiable worker identity, an unreadable pane, or an agent probe that did not answer in time — and never means the worker is not waiting. A waiting worker is healthy, not failed."
+      ]
+    },
+    {
+      "command": "orchestration worker-start",
+      "usage": "orca orchestration worker-start (--task \u003ctask_id\u003e | --spec \u003ctext\u003e) [--on \u003csaved-environment\u003e] [--worktree \u003ccurrent|selector|new-child|new-top-level\u003e] (--agent \u003cagent\u003e | --terminal \u003chandle\u003e) [--task-title \u003ctext\u003e] [--deps \u003cjson_array\u003e] [--parent \u003ctask_id\u003e] [--model \u003cid\u003e] [--effort \u003clevel\u003e] [--name \u003cname\u003e] [--repo \u003cselector\u003e] [--base-branch \u003cref\u003e] [--display-name \u003ctext\u003e] [--comment \u003ctext\u003e] [--setup \u003crun|skip|inherit\u003e] [--retry-of \u003cdispatch_id\u003e] [--timeout-ms \u003cn\u003e] [--run \u003crun_id\u003e] [--from \u003chandle\u003e] [--retry-request \u003cid\u003e] [--json]",
+      "flags": [
+        "help",
+        "json",
+        "pairing-code",
+        "environment",
+        "task",
+        "spec",
+        "task-title",
+        "deps",
+        "parent",
+        "on",
+        "worktree",
+        "name",
+        "repo",
+        "base-branch",
+        "display-name",
+        "comment",
+        "setup",
+        "agent",
+        "model",
+        "effort",
+        "terminal",
+        "retry-of",
+        "timeout-ms",
+        "run",
+        "from",
+        "retry-request"
+      ],
+      "notes": [
+        "Current and existing worktrees never rerun setup; a fresh agent terminal is created unless --terminal is explicit.",
+        "When reusing --terminal, pass --worktree for that terminal; current means the coordinator worktree.",
+        "--model supports Claude, Codex, and Cursor opaque provider model ids; --effort requires --model. Neither can combine with --terminal.",
+        "New worktrees use agent-first creation and default --setup to run. Repository start-immediately runs setup beside the agent; wait-for-setup gates agent readiness and task input.",
+        "Creation flags (--name, --repo, --base-branch, --display-name, --comment, --setup) are rejected for current/existing worktrees. Use exact --repo on the selected server; project/host convenience routing remains on worktree create.",
+        "How the worker runs follows the user's own setting for new agent tabs; there is no flag for it and no caller needs to ask. A dispatch the setting cannot apply to still starts, so the placement, agent, and launch options passed here are always the ones honoured.",
+        "Drive every worker the same way whichever way it was started: the same orchestration verbs, the same handle. Mail, dispatch, worker-show, worker-read and the whole lifecycle behave identically. The start receipt records which one ran, for operators and telemetry.",
+        "Not every worker has a terminal. Read output with worker-read --source auto or --source transcript, which always work; --source terminal is refused when there is none, and orca terminal verbs do not accept every worker handle. Nothing above needs you to know which kind you have — the orchestration verbs cover all of them.",
+        "--on selects only the worker server; the Run and this command remain on the current Orca server.",
+        "Remote current and new-child are invalid; discover an exact remote selector or use new-top-level.",
+        "--retry-of needs --task naming the failed Task (--spec creates a new one) and does not inherit placement; repeat the intended --on/worktree and --agent/terminal choices.",
+        "The call exits 0 only for ready. Failed or outcome_unknown exits 1 and JSON includes stage/failedStage, setup, effects, residualResources, and recovery commands when needed."
+      ]
+    },
+    {
+      "command": "orchestration worker-stop",
+      "usage": "orca orchestration worker-stop --dispatch \u003cdispatch_id\u003e [--retry-request \u003cid\u003e] [--json]",
+      "flags": [
+        "help",
+        "json",
+        "pairing-code",
+        "environment",
+        "dispatch",
+        "retry-request"
+      ],
+      "notes": [
+        "A Dispatch created by orchestration dispatch is fenced without closing its unsupervised terminal process.",
+        "Never deletes the worktree, setup terminal, configured tabs, or unrelated processes."
+      ]
+    },
+    {
+      "command": "repo show",
+      "usage": "orca repo show --repo \u003cselector\u003e [--json]",
+      "flags": [
+        "help",
+        "json",
+        "pairing-code",
+        "environment",
+        "repo"
+      ]
+    },
+    {
+      "command": "terminal create",
+      "usage": "orca terminal create [--worktree \u003cselector\u003e] [--title \u003cname\u003e] [--command \u003ctext\u003e] [--shell \u003cshell\u003e] [--focus] [--json]",
+      "flags": [
+        "help",
+        "json",
+        "pairing-code",
+        "environment",
+        "worktree",
+        "command",
+        "shell",
+        "title",
+        "focus"
+      ],
+      "notes": [
+        "Creates a visible terminal tab without switching focus when possible; falls back to a background handle if the UI cannot adopt it. Pass --focus to switch to it.",
+        "Use this, not worktree create, for a fresh agent in the current checkout.",
+        "--shell picks the shell the terminal IS on a Windows host (cmd.exe, powershell.exe, pwsh.exe, wsl.exe, bash.exe, git-bash); --command is typed into whatever shell the host started, so `--command cmd.exe` leaves a cmd running INSIDE the default shell and exiting it drops back to that shell.",
+        "A host that cannot apply --shell refuses the create rather than quietly spawning its default shell: macOS and Linux execution hosts spawn the login shell, terminals routed over SSH resolve their shell on the SSH host, a --shell that contradicts the project execution runtime (WSL vs Windows host) is refused, and an Orca host older than --shell is refused by the CLI."
+      ]
+    },
+    {
+      "command": "terminal read",
+      "usage": "orca terminal read [--terminal \u003chandle\u003e] [--cursor \u003cn\u003e] [--limit \u003cn\u003e] [--screen] [--json]",
+      "flags": [
+        "help",
+        "json",
+        "pairing-code",
+        "environment",
+        "terminal",
+        "cursor",
+        "limit",
+        "screen"
+      ],
+      "notes": [
+        "Omit --terminal to target the active terminal in the current worktree.",
+        "By default this returns accumulated terminal output with escape sequences stripped, not the rendered screen. Any program that repaints a line — shells, progress bars, TUIs — comes back as stacked fragments, so one `clear` keystroke by keystroke reads as `cclclecleaclear`, and spaces a prompt draws by moving the cursor are absent.",
+        "Use --screen to read what the terminal actually renders. Prefer it whenever the answer depends on how output looks rather than what was emitted over time; the default is unsuitable for verifying rendered output.",
+        "The result reports source: stream when it is accumulated output, screen when it is the rendered screen, and screen-unavailable when a screen was asked for but none could be rendered and the accumulated output is being returned instead. An absent source means the host predates the field.",
+        "When present, draft is UI-only composer text excluded from tail; never treat it as terminal output or a submitted instruction.",
+        "--screen and --cursor are mutually exclusive: a screen read is the current frame and has no history to page.",
+        "Use --cursor with the nextCursor value from a previous read to get only new output since that read.",
+        "Use --limit to request more retained lines for long agent responses; output reports oldestCursor when older lines were dropped.",
+        "Useful for capturing the response to a command: read before sending, then read --cursor \u003cprev\u003e after waiting."
+      ]
+    },
+    {
+      "command": "terminal wait",
+      "usage": "orca terminal wait [--terminal \u003chandle\u003e] --for exit|tui-idle [--timeout-ms \u003cms\u003e] [--json]",
+      "flags": [
+        "help",
+        "json",
+        "pairing-code",
+        "environment",
+        "terminal",
+        "for",
+        "timeout-ms"
+      ]
+    }
+  ],
+  "capabilities": [
+    {
+      "id": "background_coordinator",
+      "status": "not_tested",
+      "reason": "Requires a persistent coordinator Run on the selected home runtime.",
+      "cli_evidence": [
+        "orchestration run-create",
+        "orchestration run-show"
+      ]
+    },
+    {
+      "id": "remote_dispatch",
+      "status": "not_tested",
+      "reason": "Requires worker-start against an explicit disposable remote repo.",
+      "cli_evidence": [
+        "orchestration worker-start"
+      ]
+    },
+    {
+      "id": "staged_same_workspace",
+      "status": "not_tested",
+      "reason": "Requires at least two sequential Dispatches on one remote worktree.",
+      "cli_evidence": [
+        "orchestration worker-start",
+        "orchestration worker-show"
+      ]
+    },
+    {
+      "id": "workspace_preparation",
+      "status": "not_tested",
+      "reason": "Remote base commit, branch, worktree and prompt access need live evidence.",
+      "cli_evidence": [
+        "orchestration worker-start",
+        "repo show"
+      ]
+    },
+    {
+      "id": "state_observation",
+      "status": "not_tested",
+      "reason": "Requires live, unverifiable and exited observations from a remote Dispatch.",
+      "cli_evidence": [
+        "orchestration worker-show",
+        "orchestration worker-list"
+      ]
+    },
+    {
+      "id": "incremental_output",
+      "status": "not_tested",
+      "reason": "Requires paged reads, cursor replay and source-change observations.",
+      "cli_evidence": [
+        "orchestration worker-read"
+      ]
+    },
+    {
+      "id": "structured_messages",
+      "status": "not_tested",
+      "reason": "Requires cross-runtime status, question and worker_done round trips.",
+      "cli_evidence": [
+        "orchestration send",
+        "orchestration check"
+      ]
+    },
+    {
+      "id": "human_decisions",
+      "status": "not_tested",
+      "reason": "Requires ask timeout/resume, reply and worker-applied evidence.",
+      "cli_evidence": [
+        "orchestration ask",
+        "orchestration reply"
+      ]
+    },
+    {
+      "id": "completion_report",
+      "status": "not_tested",
+      "reason": "Requires accepted success/failure settlements and payload fidelity checks.",
+      "cli_evidence": [
+        "orchestration send",
+        "orchestration task-update"
+      ]
+    },
+    {
+      "id": "mutation_recovery",
+      "status": "not_tested",
+      "reason": "Requires controlled response-loss injections and request-ID recovery.",
+      "cli_evidence": [
+        "orchestration worker-start",
+        "orchestration ask",
+        "orchestration reply"
+      ]
+    },
+    {
+      "id": "stop_and_release",
+      "status": "not_tested",
+      "reason": "Requires target-only stop, settled release and disconnected outcomes.",
+      "cli_evidence": [
+        "orchestration worker-stop",
+        "orchestration worker-release"
+      ]
+    },
+    {
+      "id": "step_script_receipt",
+      "status": "not_tested",
+      "reason": "Requires a deterministic remote script and its structured exit receipt.",
+      "cli_evidence": [
+        "orchestration worker-start",
+        "orchestration send"
+      ]
+    },
+    {
+      "id": "direct_script_execution",
+      "status": "not_tested",
+      "reason": "Requires a no-agent script launch, input/output and restart probe.",
+      "cli_evidence": [
+        "terminal create",
+        "terminal read",
+        "terminal wait"
+      ]
+    },
+    {
+      "id": "compatibility_and_limits",
+      "status": "not_tested",
+      "reason": "Requires old/new runtime, unknown-field, payload-size and replay tests.",
+      "cli_evidence": [
+        "orca agent-context",
+        "orchestration check"
+      ]
+    }
+  ],
+  "field_mappings": [
+    {
+      "logical_field": "workflow_run_id",
+      "orca_surface": "--run \u003crun_id\u003e",
+      "wire_field": "unknown",
+      "status": "not_tested",
+      "evidence": "CLI schema only"
+    },
+    {
+      "logical_field": "task_id",
+      "orca_surface": "--task \u003ctask_id\u003e / task-create receipt",
+      "wire_field": "unknown",
+      "status": "not_tested",
+      "evidence": "CLI schema only"
+    },
+    {
+      "logical_field": "execution_id",
+      "orca_surface": "worker-start Dispatch receipt",
+      "wire_field": "unknown",
+      "status": "not_tested",
+      "evidence": "CLI help describes Dispatch identity; no receipt captured"
+    },
+    {
+      "logical_field": "operation_id",
+      "orca_surface": "--retry-request \u003crequest_id\u003e",
+      "wire_field": "unknown",
+      "status": "not_tested",
+      "evidence": "CLI schema exposes retry flag; durable ID lifetime unverified"
+    },
+    {
+      "logical_field": "observation",
+      "orca_surface": "worker-show / worker-list",
+      "wire_field": "unknown",
+      "status": "not_tested",
+      "evidence": "CLI schema only"
+    },
+    {
+      "logical_field": "output_cursor",
+      "orca_surface": "worker-read --cursor \u003ccursor\u003e",
+      "wire_field": "unknown",
+      "status": "not_tested",
+      "evidence": "CLI help documents opaque cursor/source behavior"
+    },
+    {
+      "logical_field": "delivery",
+      "orca_surface": "orchestration check --peek / --ack \u003cdelivery_id\u003e",
+      "wire_field": "unknown",
+      "status": "not_tested",
+      "evidence": "CLI help documents FIFO batch and acknowledgement interface"
+    },
+    {
+      "logical_field": "question",
+      "orca_surface": "ask --question / --resume; reply --id",
+      "wire_field": "unknown",
+      "status": "not_tested",
+      "evidence": "CLI schema only"
+    },
+    {
+      "logical_field": "decision_applied",
+      "orca_surface": "custom message payload",
+      "wire_field": "unknown",
+      "status": "not_tested",
+      "evidence": "No cross-runtime payload captured"
+    },
+    {
+      "logical_field": "step_result",
+      "orca_surface": "worker_done message and task settlement",
+      "wire_field": "unknown",
+      "status": "not_tested",
+      "evidence": "CLI exposes outcome succeeded|failed; payload fidelity unverified"
+    },
+    {
+      "logical_field": "resource_settlement",
+      "orca_surface": "worker-stop / worker-release / worker-retain",
+      "wire_field": "unknown",
+      "status": "not_tested",
+      "evidence": "CLI help only"
+    }
+  ],
+  "limitations": []
+}
