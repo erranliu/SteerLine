@@ -223,6 +223,9 @@ func LoadConfig(path string) (Config, error) {
 	if err = decode(b, &c); err != nil {
 		return c, err
 	}
+	if c.agentName() == "codex" && c.ReasoningEffort == "" {
+		c.ReasoningEffort = "high"
+	}
 	base, err := filepath.Abs(filepath.Dir(path))
 	if err != nil {
 		return c, err

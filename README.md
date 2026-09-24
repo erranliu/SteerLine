@@ -60,7 +60,7 @@ Windows 的 npm `codex.cmd`/`codex.ps1` 不是原生可执行文件。配置应�
 | task_poll / pr_poll / heartbeat | `10s` / `30s` / `5s`，必须为正时长 |
 | command_timeout / shutdown_grace | 短命令和 API 的超时 `30s` / 正常退出等待 worker `10s` |
 | agent / host | Orca 执行时选择 agent；可为 `codex`、`pi` 等。`host` 选择 Orca 或本地执行 |
-| model / profile / reasoning_effort | Codex 模型、profile 和推理强度；Orca + Codex 会通过 Codex CLI 显式传入 |
+| model / profile / reasoning_effort | Codex 模型、profile 和推理强度；未指定推理强度时默认为 `high`，Orca + Codex 会通过 Codex CLI 显式传入 |
 | sandbox | 默认 workspace-write；允许 read-only，以及用户明确授权后显式配置的 danger-full-access |
 | pr | Gitea 原生只读 API，或可配置的规范化查询命令，见下文 |
 | completion | 可选 `{command:{executable,args},timeout}`；默认 null 使用原生 close，自定义仓库通过它完成合并后的结项，详见 [命令协议](docs/completion-command.md) |
