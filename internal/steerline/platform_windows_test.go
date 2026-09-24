@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"testing"
@@ -358,6 +359,30 @@ func TestWindowsServiceWindowProbeHelper(t *testing.T) {
 	require(t, AtomicWrite(reportPath, append(data, '\n')))
 }
 
+func TestWindowsConsoleCtrlCHelper(t *testing.T) {
+	target := os.Getenv("STEERLINE_CTRL_C_TARGET")
+	if target == "" {
+		return
+	}
+	pid, err := strconv.Atoi(target)
+	require(t, err)
+	kernel32 := windows.NewLazySystemDLL("kernel32.dll")
+	_, _, _ = kernel32.NewProc("FreeConsole").Call()
+	if ok, _, callErr := kernel32.NewProc("AttachConsole").Call(uintptr(pid)); ok == 0 {
+		t.Fatalf("attach to service console %d: %v", pid, callErr)
+	}
+	defer kernel32.NewProc("FreeConsole").Call()
+	setHandler := kernel32.NewProc("SetConsoleCtrlHandler")
+	if ok, _, callErr := setHandler.Call(0, 1); ok == 0 {
+		t.Fatalf("ignore Ctrl+C in signal helper: %v", callErr)
+	}
+	defer setHandler.Call(0, 0)
+	if ok, _, callErr := kernel32.NewProc("GenerateConsoleCtrlEvent").Call(0, 0); ok == 0 {
+		t.Fatalf("send Ctrl+C to service console: %v", callErr)
+	}
+	time.Sleep(300 * time.Millisecond)
+}
+
 func launchWindowsVisibleServiceWindow(t *testing.T, config Config, configPath string) (uint64, string, ServiceConnection) {
 	t.Helper()
 	serviceExe := buildServiceLifecycleCLI(t)
@@ -510,25 +535,30 @@ func TestWindowsVisibleServiceWindowAcceptance(t *testing.T) {
 		probeProcess(&serviceIdentity).State != ProcessMatches || probeProcess(&workerIdentity).State != ProcessMatches {
 		t.Fatalf("viewer exit changed visible service or worker: %+v", reconnected)
 	}
-	stopCtx, stopCancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer stopCancel()
-	stopped, err := StopService(stopCtx, config, "visible-window-test", 15*time.Second)
-	if err != nil || stopped.Status != "stopped" || !stopped.ProcessExited || !stopped.LocksReleased || stopped.Receipt == nil || stopped.Receipt.Status != "applied" {
-		t.Fatalf("visible service stop=%+v err=%v", stopped, err)
+	signal := exec.Command(testExe, "-test.run=^TestWindowsConsoleCtrlCHelper$")
+	signal.Env = append(os.Environ(), "STEERLINE_CTRL_C_TARGET="+strconv.Itoa(serviceIdentity.PID))
+	if output, err := signal.CombinedOutput(); err != nil {
+		t.Fatalf("send Ctrl+C to visible service window: %v\n%s", err, output)
 	}
-	if probeProcess(&serviceIdentity).State == ProcessMatches || probeProcess(&workerIdentity).State == ProcessMatches {
-		t.Fatalf("visible service or worker survived stop: service=%+v worker=%+v", probeProcess(&serviceIdentity), probeProcess(&workerIdentity))
-	}
-	if !windowExistsForTests(window) {
-		t.Fatal("launcher did not leave its window open to show the exit result")
-	}
-	require(t, closeConsoleWindowForTests(window))
-	closeDeadline := time.Now().Add(10 * time.Second)
-	for time.Now().Before(closeDeadline) && windowExistsForTests(window) {
+	stopDeadline := time.Now().Add(15 * time.Second)
+	for time.Now().Before(stopDeadline) &&
+		(probeProcess(&serviceIdentity).State == ProcessMatches || probeProcess(&workerIdentity).State == ProcessMatches) {
 		time.Sleep(100 * time.Millisecond)
 	}
+	if probeProcess(&serviceIdentity).State == ProcessMatches || probeProcess(&workerIdentity).State == ProcessMatches {
+		t.Fatalf("visible service or worker survived Ctrl+C: service=%+v worker=%+v", probeProcess(&serviceIdentity), probeProcess(&workerIdentity))
+	}
+	repoLock, err := LockRepository(config.Identity())
+	require(t, err)
+	repoLock.Close()
+	runLock, err := LockRepository(config.RunDir)
+	require(t, err)
+	runLock.Close()
+	if observed := ConnectService(context.Background(), config); observed.State != ConnectionOffline {
+		t.Fatalf("Ctrl+C did not leave the service offline: %+v", observed)
+	}
 	if windowExistsForTests(window) {
-		t.Fatal("service window did not close after the maintenance prompt")
+		require(t, closeConsoleWindowForTests(window))
 	}
 }
 
