@@ -4,15 +4,14 @@
 
 ## 近期：模块解耦与测试反馈提速
 
-按“先测量并精简夹具 → 删除旧执行路径 → 拆分规则包与集成测试”的顺序推进，每项由独立实现 PR 交付。优先缩短日常局部修改的反馈，同时保留合入前的完整无缓存回归、当前格式恢复和真实交付核验。
+测试耗时基线、报告入口和夹具精简已交付。后续按“删除旧执行路径 → 拆分规则包与集成测试”的顺序推进，每项由独立实现 PR 交付。优先缩短日常局部修改的反馈，同时保留合入前的完整无缓存回归、当前格式恢复和真实交付核验。
 
 | 任务 ID | 任务名称 | 目标标识 | 剩余目标 | 前置条件 | 执行规格 |
 | --- | --- | --- | --- | --- | --- |
-| 11 | 测试耗时基线与夹具精简 | `REFACTOR` | 逐用例耗时报告、可复现测试入口、精简实际慢夹具与重复覆盖 | 已实现的决策、原生任务及关系视图；无未完成任务硬前置 | [Spec](../spec/test-feedback.spec.md) · [Plan](../spec/test-feedback.plan.md) |
-| 12 | 移除 Beads 旧执行路径 | `REFACTOR` | 删除 Beads/旧 start-finish/completion 分支及专属测试，将当前不变量测试迁到原生路径 | `#11` 的耗时和覆盖基线 | [Spec](../spec/beads-path-removal.spec.md) · [Plan](../spec/beads-path-removal.plan.md) |
+| 12 | 移除 Beads 旧执行路径 | `REFACTOR` | 删除 Beads/旧 start-finish/completion 分支及专属测试，将当前不变量测试迁到原生路径 | 已交付的 `#11` 耗时和覆盖基线 | [Spec](../spec/beads-path-removal.spec.md) · [Plan](../spec/beads-path-removal.plan.md) |
 | 13 | 任务图规则拆包与测试分层 | `REFACTOR` | 独立 taskgraph 规则包、CLI 黑盒集成包和按模块测试入口；按隔离条件评估并行 | `#12` 收敛后的原生代码；沿用 `#11` 测量工具 | [Spec](../spec/taskgraph-modules.spec.md) · [Plan](../spec/taskgraph-modules.plan.md) |
 
-`#3` 的剩余原生验收、`#4` 的远端探测可在固定版本和隔离资源上继续。`#6` 可准备独立协议适配，涉及 Service、Query/Command、配置和同一夹具时与 `#11`～`#13` 串行集成；后集成方核对接口并补受影响回归。具体交接见 [execution-map](execution-map.md)。
+[测试反馈验证记录](../validation/test-feedback/README.md)与[行为映射](../validation/test-feedback/coverage-map.md)供 `#12`/`#13` 复用。`#3` 的剩余原生验收、`#4` 的远端探测可在固定版本和隔离资源上继续。`#6` 可准备独立协议适配，涉及 Service、Query/Command、配置和同一夹具时与 `#12`/`#13` 串行集成；后集成方核对接口并补受影响回归。具体交接见 [execution-map](execution-map.md)。
 
 ## 近期：人工决策与恢复的剩余验收
 

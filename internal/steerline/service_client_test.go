@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -753,17 +754,33 @@ func lifecycleConfigFile(t *testing.T, f *fixture, runDir string) (Config, strin
 
 func buildServiceLifecycleCLI(t *testing.T) string {
 	t.Helper()
-	name := "steerline-lifecycle"
-	if runtime.GOOS == "windows" {
-		name += ".exe"
+	lifecycleCLIBuildOnce.Do(func() {
+		root, err := sharedTestArtifactsDir()
+		if err != nil {
+			lifecycleCLIBuildErr = err
+			return
+		}
+		name := "steerline-lifecycle"
+		if runtime.GOOS == "windows" {
+			name += ".exe"
+		}
+		lifecycleCLIPath = filepath.Join(root, name)
+		cmd := exec.Command("go", "build", "-o", lifecycleCLIPath, "../../cmd/steerline")
+		if output, buildErr := cmd.CombinedOutput(); buildErr != nil {
+			lifecycleCLIBuildErr = fmt.Errorf("%w: %s", buildErr, output)
+		}
+	})
+	if lifecycleCLIBuildErr != nil {
+		t.Fatalf("build shared service lifecycle CLI: %v", lifecycleCLIBuildErr)
 	}
-	path := filepath.Join(t.TempDir(), name)
-	cmd := exec.Command("go", "build", "-o", path, "../../cmd/steerline")
-	if output, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("build service lifecycle CLI: %v\n%s", err, output)
-	}
-	return path
+	return lifecycleCLIPath
 }
+
+var (
+	lifecycleCLIBuildOnce sync.Once
+	lifecycleCLIPath      string
+	lifecycleCLIBuildErr  error
+)
 
 func terminatePendingTestProcess(identity *ProcessIdentity) error {
 	if identity == nil || probeProcess(identity).State != ProcessMatches {

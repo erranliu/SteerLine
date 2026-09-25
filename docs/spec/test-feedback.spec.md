@@ -1,6 +1,6 @@
 # Spec：测试耗时基线与夹具精简
 
-任务 ID：11；任务名称：测试耗时基线与夹具精简；目标：`REFACTOR`。状态：待实施。配套 [Plan](test-feedback.plan.md)。本任务由一个独立实现 PR 交付。
+任务 ID：11；任务名称：测试耗时基线与夹具精简；目标：`REFACTOR`。状态：实现与验证完成，待 PR 评审。配套 [Plan](test-feedback.plan.md)。本任务由一个独立实现 PR 交付。
 
 ## T1：目标、前置与边界
 

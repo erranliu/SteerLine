@@ -11,11 +11,7 @@ import (
 
 func TestCLIRejectsBeadsExecutionSource(t *testing.T) {
 	f := newFixture(t)
-	exe := filepath.Join(t.TempDir(), "steerline.exe")
-	build := exec.Command("go", "build", "-o", exe, "../../cmd/steerline")
-	if output, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("build: %v %s", err, output)
-	}
+	exe := buildServiceLifecycleCLI(t)
 	configPath := filepath.Join(f.c.RunDir, "config.json")
 	data, err := json.Marshal(f.c)
 	require(t, err)

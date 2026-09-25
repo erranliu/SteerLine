@@ -1,0 +1,294 @@
+{
+  "schema_version": 1,
+  "source_json_log": "docs/validation/test-feedback/fixture-before-1.jsonl",
+  "summarized_at": "2026-09-25T18:21:45.6020233Z",
+  "command_exit_code": 0,
+  "summary": {
+    "status": "passed",
+    "passed": true,
+    "complete": true,
+    "command_exit_code": 0,
+    "package_count": 1,
+    "passed_packages": 1,
+    "failed_packages": [],
+    "skipped_packages": [],
+    "test_count": 23,
+    "passed_tests": 23,
+    "failed_tests": 0,
+    "skipped_tests": 0,
+    "packages": [
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline",
+        "status": "pass",
+        "elapsed_seconds": 103.474
+      }
+    ],
+    "tests": [
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline",
+        "name": "TestInvalidCompletionReceiptsNeverComplete",
+        "status": "pass",
+        "elapsed_seconds": 36.1
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline",
+        "name": "TestControlCrashBoundariesNeverReplayClaimWorktreeOrWorker",
+        "status": "pass",
+        "elapsed_seconds": 35.23
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline",
+        "name": "TestBadHandoffsNeverClose",
+        "status": "pass",
+        "elapsed_seconds": 31.9
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline",
+        "name": "TestInvalidCompletionReceiptsNeverComplete/wrong-pr",
+        "status": "pass",
+        "elapsed_seconds": 7.57
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline",
+        "name": "TestInvalidCompletionReceiptsNeverComplete/wrong-run",
+        "status": "pass",
+        "elapsed_seconds": 7.53
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline",
+        "name": "TestInvalidCompletionReceiptsNeverComplete/no-close",
+        "status": "pass",
+        "elapsed_seconds": 7.16
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline",
+        "name": "TestInvalidCompletionReceiptsNeverComplete/wrong-task",
+        "status": "pass",
+        "elapsed_seconds": 6.98
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline",
+        "name": "TestInvalidCompletionReceiptsNeverComplete/malformed",
+        "status": "pass",
+        "elapsed_seconds": 6.85
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline",
+        "name": "TestControlCrashBoundariesNeverReplayClaimWorktreeOrWorker/worker_persisted",
+        "status": "pass",
+        "elapsed_seconds": 6.09
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline",
+        "name": "TestControlCrashBoundariesNeverReplayClaimWorktreeOrWorker/terminal_checkpoint",
+        "status": "pass",
+        "elapsed_seconds": 5.98
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline",
+        "name": "TestControlCrashBoundariesNeverReplayClaimWorktreeOrWorker/after_terminal_receipt",
+        "status": "pass",
+        "elapsed_seconds": 5.67
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline",
+        "name": "TestControlCrashBoundariesNeverReplayClaimWorktreeOrWorker/after_worker_start",
+        "status": "pass",
+        "elapsed_seconds": 5.31
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline",
+        "name": "TestControlCrashBoundariesNeverReplayClaimWorktreeOrWorker/after_worktree",
+        "status": "pass",
+        "elapsed_seconds": 5.19
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline",
+        "name": "TestBadHandoffsNeverClose/wrong-worktree",
+        "status": "pass",
+        "elapsed_seconds": 5.12
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline",
+        "name": "TestBadHandoffsNeverClose/wrong-url",
+        "status": "pass",
+        "elapsed_seconds": 4.7
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline",
+        "name": "TestBadHandoffsNeverClose/malformed",
+        "status": "pass",
+        "elapsed_seconds": 4.66
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline",
+        "name": "TestBadHandoffsNeverClose/wrong-id",
+        "status": "pass",
+        "elapsed_seconds": 4.54
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline",
+        "name": "TestBadHandoffsNeverClose/wrong-commit",
+        "status": "pass",
+        "elapsed_seconds": 4.52
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline",
+        "name": "TestBadHandoffsNeverClose/exit",
+        "status": "pass",
+        "elapsed_seconds": 4.18
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline",
+        "name": "TestBadHandoffsNeverClose/missing",
+        "status": "pass",
+        "elapsed_seconds": 4.18
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline",
+        "name": "TestControlCrashBoundariesNeverReplayClaimWorktreeOrWorker/after_claim",
+        "status": "pass",
+        "elapsed_seconds": 3.52
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline",
+        "name": "TestControlCrashBoundariesNeverReplayClaimWorktreeOrWorker/after_applying_receipt",
+        "status": "pass",
+        "elapsed_seconds": 1.8
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline",
+        "name": "TestControlCrashBoundariesNeverReplayClaimWorktreeOrWorker/after_checkpoint",
+        "status": "pass",
+        "elapsed_seconds": 1.67
+      }
+    ],
+    "slowest_tests": [
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline",
+        "name": "TestInvalidCompletionReceiptsNeverComplete",
+        "status": "pass",
+        "elapsed_seconds": 36.1
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline",
+        "name": "TestControlCrashBoundariesNeverReplayClaimWorktreeOrWorker",
+        "status": "pass",
+        "elapsed_seconds": 35.23
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline",
+        "name": "TestBadHandoffsNeverClose",
+        "status": "pass",
+        "elapsed_seconds": 31.9
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline",
+        "name": "TestInvalidCompletionReceiptsNeverComplete/wrong-pr",
+        "status": "pass",
+        "elapsed_seconds": 7.57
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline",
+        "name": "TestInvalidCompletionReceiptsNeverComplete/wrong-run",
+        "status": "pass",
+        "elapsed_seconds": 7.53
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline",
+        "name": "TestInvalidCompletionReceiptsNeverComplete/no-close",
+        "status": "pass",
+        "elapsed_seconds": 7.16
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline",
+        "name": "TestInvalidCompletionReceiptsNeverComplete/wrong-task",
+        "status": "pass",
+        "elapsed_seconds": 6.98
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline",
+        "name": "TestInvalidCompletionReceiptsNeverComplete/malformed",
+        "status": "pass",
+        "elapsed_seconds": 6.85
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline",
+        "name": "TestControlCrashBoundariesNeverReplayClaimWorktreeOrWorker/worker_persisted",
+        "status": "pass",
+        "elapsed_seconds": 6.09
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline",
+        "name": "TestControlCrashBoundariesNeverReplayClaimWorktreeOrWorker/terminal_checkpoint",
+        "status": "pass",
+        "elapsed_seconds": 5.98
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline",
+        "name": "TestControlCrashBoundariesNeverReplayClaimWorktreeOrWorker/after_terminal_receipt",
+        "status": "pass",
+        "elapsed_seconds": 5.67
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline",
+        "name": "TestControlCrashBoundariesNeverReplayClaimWorktreeOrWorker/after_worker_start",
+        "status": "pass",
+        "elapsed_seconds": 5.31
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline",
+        "name": "TestControlCrashBoundariesNeverReplayClaimWorktreeOrWorker/after_worktree",
+        "status": "pass",
+        "elapsed_seconds": 5.19
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline",
+        "name": "TestBadHandoffsNeverClose/wrong-worktree",
+        "status": "pass",
+        "elapsed_seconds": 5.12
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline",
+        "name": "TestBadHandoffsNeverClose/wrong-url",
+        "status": "pass",
+        "elapsed_seconds": 4.7
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline",
+        "name": "TestBadHandoffsNeverClose/malformed",
+        "status": "pass",
+        "elapsed_seconds": 4.66
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline",
+        "name": "TestBadHandoffsNeverClose/wrong-id",
+        "status": "pass",
+        "elapsed_seconds": 4.54
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline",
+        "name": "TestBadHandoffsNeverClose/wrong-commit",
+        "status": "pass",
+        "elapsed_seconds": 4.52
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline",
+        "name": "TestBadHandoffsNeverClose/exit",
+        "status": "pass",
+        "elapsed_seconds": 4.18
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline",
+        "name": "TestBadHandoffsNeverClose/missing",
+        "status": "pass",
+        "elapsed_seconds": 4.18
+      }
+    ],
+    "failures": [],
+    "skipped": [],
+    "incomplete_reasons": [],
+    "test_event_wall_seconds": 103.4739531,
+    "has_test_event_wall": true
+  }
+}

@@ -1,0 +1,101 @@
+{
+  "schema_version": 1,
+  "phase": "status-filter-review",
+  "mode": "tests",
+  "command": [
+    "go",
+    "test",
+    "./cmd/test-feedback",
+    "-count=1",
+    "-timeout",
+    "2m",
+    "-json"
+  ],
+  "started_at": "2026-09-25T19:15:22.6434031Z",
+  "finished_at": "2026-09-25T19:15:23.8397663Z",
+  "wall_seconds": 1.1963632,
+  "environment": {
+    "source_commit": "f363c427638de5ddee2711fe2a155cc5017484fb",
+    "worktree_status": " M internal/steerline/cli_test.go\n M internal/steerline/service_client_test.go\n M internal/steerline/service_test.go\n?? cmd/test-feedback/main.go\n?? cmd/test-feedback/main_test.go\n?? docs/validation/test-feedback/README.md\n?? docs/validation/test-feedback/baseline-before-summary/summary.json\n?? docs/validation/test-feedback/baseline-before.jsonl\n?? docs/validation/test-feedback/baseline-before.meta.json\n?? docs/validation/test-feedback/build-probe-after/go-test.jsonl\n?? docs/validation/test-feedback/build-probe-after/go-test.stderr.txt\n?? docs/validation/test-feedback/build-probe-after/summary.json\n?? docs/validation/test-feedback/build-probe-before-summary/summary.json\n?? docs/validation/test-feedback/build-probe-before.jsonl\n?? docs/validation/test-feedback/build-probe-before.meta.json\n?? docs/validation/test-feedback/build-probe-copy/go-test.jsonl\n?? docs/validation/test-feedback/build-probe-copy/go-test.stderr.txt\n?? docs/validation/test-feedback/build-probe-copy/summary.json\n?? docs/validation/test-feedback/build-probe-final/go-test.jsonl\n?? docs/validation/test-feedback/build-probe-final/go-test.stderr.txt\n?? docs/validation/test-feedback/build-probe-final/summary.json\n?? docs/validation/test-feedback/coverage-map.md\n?? docs/validation/test-feedback/final-full/go-test.jsonl\n?? docs/validation/test-feedback/final-full/go-test.stderr.txt\n?? docs/validation/test-feedback/final-full/summary.json\n?? docs/validation/test-feedback/fixture-after-1/go-test.jsonl\n?? docs/validation/test-feedback/fixture-after-1/go-test.stderr.txt\n?? docs/validation/test-feedback/fixture-after-1/summary.json\n?? docs/validation/test-feedback/fixture-after-2/go-test.jsonl\n?? docs/validation/test-feedback/fixture-after-2/go-test.stderr.txt\n?? docs/validation/test-feedback/fixture-after-2/summary.json\n?? docs/validation/test-feedback/fixture-after-3/go-test.jsonl\n?? docs/validation/test-feedback/fixture-after-3/go-test.stderr.txt\n?? docs/validation/test-feedback/fixture-after-3/summary.json\n?? docs/validation/test-feedback/fixture-before-1-summary/summary.json\n?? docs/validation/test-feedback/fixture-before-1.jsonl\n?? docs/validation/test-feedback/fixture-before-1.meta.json\n?? docs/validation/test-feedback/fixture-before-2-summary/summary.json\n?? docs/validation/test-feedback/fixture-before-2.jsonl\n?? docs/validation/test-feedback/fixture-before-2.meta.json\n?? docs/validation/test-feedback/fixture-before-3-summary/summary.json\n?? docs/validation/test-feedback/fixture-before-3.jsonl\n?? docs/validation/test-feedback/fixture-before-3.meta.json\n?? docs/validation/test-feedback/fixture-copy-after-1/go-test.jsonl\n?? docs/validation/test-feedback/fixture-copy-after-1/go-test.stderr.txt\n?? docs/validation/test-feedback/fixture-copy-after-1/summary.json\n?? docs/validation/test-feedback/fixture-copy-after-2/go-test.jsonl\n?? docs/validation/test-feedback/fixture-copy-after-2/go-test.stderr.txt\n?? docs/validation/test-feedback/fixture-copy-after-2/summary.json\n?? docs/validation/test-feedback/fixture-copy-after-3/go-test.jsonl\n?? docs/validation/test-feedback/fixture-copy-after-3/go-test.stderr.txt\n?? docs/validation/test-feedback/fixture-copy-after-3/summary.json\n?? docs/validation/test-feedback/results.md\n?? docs/validation/test-feedback/tool-smoke/go-test.jsonl\n?? docs/validation/test-feedback/tool-smoke/go-test.stderr.txt\n?? docs/validation/test-feedback/tool-smoke/summary.json\n?? internal/testfeedback/summary.go\n?? internal/testfeedback/summary_test.go",
+    "go_version": "go version go1.26.4 windows/amd64",
+    "go_env": {
+      "GOARCH": "amd64",
+      "GOCACHE": "C:\\Users\\lmas1\\AppData\\Local\\go-build",
+      "GOFLAGS": "",
+      "GOOS": "windows",
+      "GOTOOLCHAIN": "auto"
+    },
+    "os": "windows",
+    "architecture": "amd64",
+    "machine": {
+      "host_name": "liuming-asus",
+      "logical_cpu_count": 20,
+      "processor_identifier": "AMD64 Family 26 Model 36 Stepping 0, AuthenticAMD"
+    },
+    "concurrency": {
+      "GOMAXPROCS_environment": "unset",
+      "go_build_package_parallel": "Go default",
+      "go_test_parallel": "default 20",
+      "runtime_GOMAXPROCS": "20"
+    },
+    "build_cache_condition": "Go build cache as found; -count=1",
+    "enabled_native_acceptance_switches": [],
+    "native_acceptance_note": "No live native acceptance switches enabled"
+  },
+  "summary": {
+    "status": "passed",
+    "passed": true,
+    "complete": true,
+    "command_exit_code": 0,
+    "package_count": 1,
+    "passed_packages": 1,
+    "failed_packages": [],
+    "skipped_packages": [],
+    "test_count": 2,
+    "passed_tests": 2,
+    "failed_tests": 0,
+    "skipped_tests": 0,
+    "packages": [
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/test-feedback",
+        "status": "pass",
+        "elapsed_seconds": 0.455
+      }
+    ],
+    "tests": [
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/test-feedback",
+        "name": "TestFilterGeneratedRunOutputPreservesOtherValidationChanges",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/test-feedback",
+        "name": "TestGeneratedRunOutputPathsOutsideRepositoryExcludeNothing",
+        "status": "pass",
+        "elapsed_seconds": 0
+      }
+    ],
+    "slowest_tests": [
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/test-feedback",
+        "name": "TestFilterGeneratedRunOutputPreservesOtherValidationChanges",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/test-feedback",
+        "name": "TestGeneratedRunOutputPathsOutsideRepositoryExcludeNothing",
+        "status": "pass",
+        "elapsed_seconds": 0
+      }
+    ],
+    "failures": [],
+    "skipped": [],
+    "incomplete_reasons": [],
+    "test_event_wall_seconds": 0.4554568,
+    "has_test_event_wall": true
+  },
+  "stdout_json_log": "docs/validation/test-feedback/status-filter-review/go-test.jsonl",
+  "stderr_log": "docs/validation/test-feedback/status-filter-review/go-test.stderr.txt"
+}
