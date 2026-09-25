@@ -358,10 +358,13 @@ func (b orcaSupervisedBackend) startWorker(ctx context.Context, workflowRunID, a
 	default:
 		return supervisedStartReceipt{}, &BackendError{Code: BackendRejected, Diagnostic: "supervised worktree must be new-top-level or an exact id:<repo-id>::<path> selector"}
 	}
-	out, callErr := (orcaClient{cfg: b.config}).call(ctx, positiveDuration(b.config.CommandTimeout, 30*time.Second), args...)
+	// Orca may spend its full 60-second worker setup window creating the
+	// remote worktree before returning the mutation receipt. Keep the CLI
+	// alive long enough to receive that identity on a healthy connection.
+	out, callErr := (orcaClient{cfg: b.config}).call(ctx, max(positiveDuration(b.config.CommandTimeout, 30*time.Second), 2*time.Minute), args...)
 	env, parseErr := parseEnvelope(out)
 	if callErr != nil || parseErr != nil {
-		return supervisedStartReceipt{}, &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "supervised worker start may have been applied; reconcile using its exact retry request", Cause: errors.Join(callErr, parseErr)}
+		return supervisedStartReceipt{}, &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "supervised worker start may have been applied; inspect the exact Run and do not issue another start without a platform request UUID", Cause: errors.Join(callErr, parseErr)}
 	}
 	var result struct {
 		RunID      string `json:"runId"`
@@ -699,13 +702,14 @@ func supervisedStepTaskSpec(c Config, task Task, run Run, workflow WorkflowRunRe
 		WorkflowRunID     string `json:"workflow_run_id"`
 		ExecutionID       string `json:"execution_id"`
 		AttemptID         string `json:"attempt_id"`
+		StepID            string `json:"step_id"`
 		InputRevision     string `json:"input_revision"`
 		CandidateRevision string `json:"candidate_revision"`
-	}{input.ProjectIdentity, input.TaskID, input.WorkflowRunID, input.ExecutionID, input.AttemptID, input.InputRevision, input.CandidateRevision})
+	}{input.ProjectIdentity, input.TaskID, input.WorkflowRunID, input.ExecutionID, input.AttemptID, input.StepID, input.InputRevision, input.CandidateRevision})
 	if err != nil {
 		return "", err
 	}
-	fmt.Fprintf(&b, "To avoid hand-transcription errors in local IDs and commit hashes, decode this exact UTF-8 base64 input object in pwsh.exe and use its properties when building step_result: $ids = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('%s')) | ConvertFrom-Json. Use $ids.input_revision for result.input_revision and, for verify/review/publish_pr, $ids.candidate_revision for result.revision, check.revision and the ancestry command. Do not type project_identity, attempt_id or candidate_revision by hand; the center rejects even one altered character. Before verify, review, or publish_pr, compare `git rev-parse HEAD` with $ids.candidate_revision and report a failed step if they differ; prepare has no candidate revision and instead compares HEAD to the fixed base.\n", base64.StdEncoding.EncodeToString(identityJSON))
+	fmt.Fprintf(&b, "To avoid hand-transcription errors in local IDs and commit hashes, decode this exact UTF-8 base64 input object in pwsh.exe and use its properties when building step_result: $ids = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('%s')) | ConvertFrom-Json. Use $ids.project_identity, $ids.task_id, $ids.workflow_run_id, $ids.execution_id and $ids.attempt_id directly for the envelope's matching fields; never assemble any ID from a title, prefix or Orca ID. Use $ids.step_id for result.step_id and $ids.input_revision for result.input_revision; for verify/review/publish_pr, use $ids.candidate_revision for result.revision, check.revision and the ancestry command. Immediately before sending status, parse the generated JSON and assert step_result.task_id equals $ids.task_id and step_result.result.step_id equals $ids.step_id; never use the Orca task ID for the inner task_id or the local task ID for step_id. Do not type project_identity, attempt_id or candidate_revision by hand; the center rejects even one altered character. Before verify, review, or publish_pr, compare `git rev-parse HEAD` with $ids.candidate_revision and report a failed step if they differ; prepare has no candidate revision and instead compares HEAD to the fixed base.\n", base64.StdEncoding.EncodeToString(identityJSON))
 	if run.Target.WorktreeID != "" {
 		fmt.Fprintf(&b, "Existing exact worktree_id=%s path=%s branch=%s; verify these facts through Orca and Git before editing.\n", run.Target.WorktreeID, deref(run.WorktreePath), deref(run.WorktreeBranch))
 	} else {

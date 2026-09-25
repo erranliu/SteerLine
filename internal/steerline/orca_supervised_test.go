@@ -2,6 +2,8 @@ package steerline
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -827,7 +829,7 @@ func TestSupervisedStartMinimalStepBindsRemoteRunAndWorktree(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(reviewSpec, "Review the already verified candidate "+reviewRevision) || !strings.Contains(reviewSpec, `"review_verdict":`) || !strings.Contains(reviewSpec, "let the center decide repair or budget exhaustion") || !strings.Contains(reviewSpec, "Use $ids.input_revision") || !strings.Contains(reviewSpec, "$ids.candidate_revision for result.revision") || !strings.Contains(reviewSpec, "Federated Dispatch messages must omit --run and --to") {
+	if !strings.Contains(reviewSpec, "Review the already verified candidate "+reviewRevision) || !strings.Contains(reviewSpec, `"review_verdict":`) || !strings.Contains(reviewSpec, "let the center decide repair or budget exhaustion") || !strings.Contains(reviewSpec, "$ids.step_id for result.step_id") || !strings.Contains(reviewSpec, "$ids.input_revision for result.input_revision") || !strings.Contains(reviewSpec, "$ids.candidate_revision for result.revision") || !strings.Contains(reviewSpec, "Federated Dispatch messages must omit --run and --to") {
 		t.Fatal("supervised review task spec lacks a pinned verdict and center-owned repair boundary")
 	}
 	resultPath := filepath.Join(t.TempDir(), "result.json")
@@ -972,13 +974,20 @@ func TestSupervisedOrcaRealPrepareRoundtrip(t *testing.T) {
 	stageFile := "steerline-spec03-supervised-stage.txt"
 	if fullProbe {
 		stageFile = "steerline-spec03-full-stage.txt"
+		if chosen := strings.TrimSpace(os.Getenv("STEERLINE_REAL_SUPERVISED_FULL_STAGE_FILE")); chosen != "" {
+			if filepath.Base(chosen) != chosen || !strings.HasPrefix(chosen, "steerline-spec03-") || !strings.HasSuffix(chosen, ".txt") || strings.Contains(chosen, "..") {
+				t.Fatalf("invalid isolated full-probe file %q", chosen)
+			}
+			stageFile = chosen
+		}
 	}
 	if stagedProbe {
-		verifyScript := fmt.Sprintf("$actual = git show HEAD:%s; if ($LASTEXITCODE -ne 0 -or $actual.Trim() -ne 'spec03-supervised-stage-v1') { exit 7 }; exit 0", stageFile)
+		// Compare the committed blob object, including its final LF byte.
+		verifyScript := fmt.Sprintf("$actual = git rev-parse HEAD:%s; if ($LASTEXITCODE -ne 0 -or $actual.Trim() -ne 'a7890c716cc3ad0cca79f8d7b68cffe125e6b106') { exit 7 }; exit 0", stageFile)
 		if negativeVerifyProbe {
 			verifyScript = "$actual = git show HEAD:steerline-spec03-supervised-stage.txt; if ($LASTEXITCODE -ne 0 -or $actual.Trim() -ne 'deliberately-wrong-content') { exit 7 }; exit 0"
 		}
-		steps.Verify = contract("command", "spec03-content-smoke-v1", []string{"pwsh.exe", "-NoProfile", "-Command", verifyScript})
+		steps.Verify = contract("command", "spec03-content-smoke-v2", []string{"pwsh.exe", "-NoProfile", "-Command", verifyScript})
 		steps.Verify.RequiredChecks = []string{"content-smoke"}
 	}
 	if publishProbe {
@@ -987,6 +996,12 @@ func TestSupervisedOrcaRealPrepareRoundtrip(t *testing.T) {
 		c.PR = PRConfig{Kind: "command", BaseURL: "https://github.com", Repository: "erranliu/SteerlineTest", Query: Command{Executable: "gh", Args: []string{"api", "repos/{repository}/pulls/{number}", "--jq", `{url:.html_url,repository:.base.repo.full_name,base_branch:.base.ref,head_revision:.head.sha,state:(if .merged then "merged" elif .state=="closed" then "closed_unmerged" else .state end),merged:.merged,merged_at:.merged_at,merge_commit:.merge_commit_sha}`}}}
 	}
 	c.WorkflowDefinition, c.ProjectSteps = &definition, &steps
+	configBytes, err := json.Marshal(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	configHash := sha256.Sum256(configBytes)
+	c.configDigest = hex.EncodeToString(configHash[:])
 	service, err := NewService(c)
 	if err != nil {
 		t.Fatal(err)
@@ -1046,10 +1061,70 @@ func TestSupervisedOrcaRealPrepareRoundtrip(t *testing.T) {
 	service.State.Runs = append(service.State.Runs, run)
 	service.State.CurrentTask = ptr(taskID)
 	service.State.SlotOccupied = true
+	service.State.Service.Ready = true // This test process owns and services the command queue.
 	if err = service.save(); err != nil {
 		t.Fatal(err)
 	}
 	activeAttempt := service.minimalAttempt(run, attempt.AttemptID)
+	if os.Getenv("STEERLINE_REAL_SUPERVISED_START_RESPONSE_LOSS") == "1" {
+		pwshPath, lookupErr := exec.LookPath("pwsh.exe")
+		if lookupErr != nil {
+			t.Fatal(lookupErr)
+		}
+		orcaPath := need("STEERLINE_REAL_SUPERVISED_ORCA_EXE")
+		wrapperPath := filepath.Join(root, "worker-start-response-loss.ps1")
+		wrapper := `param([string]$OrcaPath, [Parameter(ValueFromRemainingArguments=$true)][string[]]$Rest)
+if ($Rest.Count -ge 2 -and $Rest[0] -eq 'orchestration' -and $Rest[1] -eq 'worker-start') {
+  & $OrcaPath @Rest | Out-Null
+  if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+  exit 75
+}
+& $OrcaPath @Rest
+exit $LASTEXITCODE
+`
+		if writeErr := os.WriteFile(wrapperPath, []byte(wrapper), 0600); writeErr != nil {
+			t.Fatal(writeErr)
+		}
+		originalOrca := service.Config.Orca
+		service.Config.Orca.Executable = pwshPath
+		service.Config.Orca.Args = []string{"-NoProfile", "-File", wrapperPath, orcaPath}
+		startErr := service.startMinimalStep(context.Background(), task, run, source, activeAttempt)
+		service.Config.Orca = originalOrca
+		unknownAttempt := service.minimalAttempt(run, attempt.AttemptID)
+		if startErr == nil || !isBackendError(startErr, BackendOutcomeUnknown) || unknownAttempt == nil || unknownAttempt.Status != "outcome_unknown" || run.ExecutionStatus != "unknown" || !service.State.SlotOccupied || service.worker != nil {
+			t.Fatalf("lost real worker-start response did not hold original attempt: err=%v run=%+v attempt=%+v", startErr, run, unknownAttempt)
+		}
+		out, readErr := exec.Command(orcaPath, "orchestration", "worker-list", "--run", externalRunID, "--json").CombinedOutput()
+		if readErr != nil {
+			t.Fatalf("read original real Run after start response loss: %v %s", readErr, out)
+		}
+		platform, parseErr := parseEnvelope(out)
+		if parseErr != nil {
+			t.Fatal(parseErr)
+		}
+		var workers struct {
+			Workers []struct {
+				DispatchID string `json:"dispatchId"`
+				TaskID     string `json:"taskId"`
+				RunID      string `json:"runId"`
+				State      string `json:"workerState"`
+			} `json:"workers"`
+		}
+		if decodeErr := json.Unmarshal(platform.Result, &workers); decodeErr != nil || len(workers.Workers) != 1 || workers.Workers[0].DispatchID == "" || workers.Workers[0].RunID != externalRunID {
+			t.Fatalf("original Run did not contain exactly one started worker: %+v %v", workers, decodeErr)
+		}
+		if outputPath := strings.TrimSpace(os.Getenv("STEERLINE_REAL_SUPERVISED_START_LOSS_EVIDENCE_PATH")); outputPath != "" {
+			evidence := map[string]any{"captured_at": now(), "fault": "worker-start applied by Orca then CLI response discarded", "center_run": run, "center_attempt": unknownAttempt, "operations": service.State.Operations, "platform_workers": workers.Workers, "platform_runtime": platform.Meta.RuntimeID, "no_second_start": true, "remote_resource_retained_for_exact_settlement": true}
+			if writeErr := os.MkdirAll(filepath.Dir(outputPath), 0700); writeErr != nil {
+				t.Fatal(writeErr)
+			}
+			if writeErr := AtomicWrite(outputPath, append(mustJSON(evidence), '\n')); writeErr != nil {
+				t.Fatal(writeErr)
+			}
+		}
+		t.Logf("worker-start response lost after original Dispatch %s; center kept outcome_unknown without a second worker", workers.Workers[0].DispatchID)
+		return
+	}
 	if err = service.startMinimalStep(context.Background(), task, run, source, activeAttempt); err != nil {
 		t.Fatalf("supervised prepare dispatch: %v", err)
 	}
@@ -1318,16 +1393,43 @@ exit $LASTEXITCODE
 	if stagedProbe {
 		prepareDispatch := run.Target.Dispatch
 		fixedWorktree := run.Target.WorktreeID
+		completionWindowRestartStep := ""
 		driveStage := func(step string) {
 			t.Helper()
 			stageDeadline := time.NewTimer(15 * time.Minute)
 			defer stageDeadline.Stop()
+			restartAfterStatus := os.Getenv("STEERLINE_REAL_SUPERVISED_RESTART_AFTER_STEP_STATUS") == step
+			restarted := false
 			for service.worker != nil {
 				select {
 				case event := <-service.worker.Events:
 					if event.RunID != "" {
 						if eventErr := service.event(event); eventErr != nil {
 							t.Fatalf("%s Delivery persistence/ack: %v", step, eventErr)
+						}
+						if restartAfterStatus && !restarted && service.worker != nil && run.Process != nil {
+							currentStatus, currentDone := false, false
+							for _, message := range event.RemoteMessages {
+								if supervisedMessageMatches(message, *run.Process) {
+									currentStatus = currentStatus || message.Type == "status"
+									currentDone = currentDone || message.Type == "worker_done"
+								}
+							}
+							if currentStatus && !currentDone {
+								originalDispatch := run.Process.Dispatch
+								service.worker.Close()
+								<-service.worker.observationDone
+								if closeErr := service.Close(); closeErr != nil {
+									t.Fatal(closeErr)
+								}
+								service, err = NewService(c)
+								if err != nil || service.worker == nil || service.active == nil || service.active.Process == nil || service.active.Process.Dispatch != originalDispatch {
+									t.Fatalf("%s completion-window restart did not reattach the original Dispatch: %v", step, err)
+								}
+								run = service.active
+								restarted = true
+								completionWindowRestartStep = step
+							}
 						}
 					}
 				case workerErr := <-service.worker.Done:
@@ -1340,9 +1442,12 @@ exit $LASTEXITCODE
 					t.Fatalf("%s timed out; exact Dispatch remains for inspection", step)
 				}
 			}
+			if restartAfterStatus && !restarted {
+				t.Fatalf("%s status and worker_done were not separated for the completion-window restart", step)
+			}
 		}
 		task.Title = "isolated supervised implement probe"
-		task.Description = fmt.Sprintf("Create exactly %s containing spec03-supervised-stage-v1 followed by a newline. Commit that one file on the assigned worktree branch. Do not push, create a PR, edit another file, or run later workflow steps. Return implement result.revision as the actual full commit HEAD and include clean workspace/base ancestry evidence.", stageFile)
+		task.Description = fmt.Sprintf("Create exactly %s with the UTF-8 bytes of spec03-supervised-stage-v1 followed by one LF byte (0A), using [IO.File]::WriteAllBytes if necessary. Before and after committing, verify that git hash-object and git rev-parse HEAD:%s equal a7890c716cc3ad0cca79f8d7b68cffe125e6b106; if either differs, correct the file before reporting success. Commit that one file on the assigned worktree branch. Do not push, create a PR, edit another file, or run later workflow steps. Return implement result.revision as the actual full commit HEAD and include clean workspace/base ancestry evidence.", stageFile, stageFile)
 		implementAttempt := service.minimalAttempt(run, run.AttemptID)
 		if implementAttempt == nil || implementAttempt.StepID != "implement" {
 			t.Fatal("prepare did not plan an implement attempt")
@@ -1361,7 +1466,7 @@ exit $LASTEXITCODE
 		}
 		candidate := currentExecution.CandidateRevision
 		task.Title = "isolated supervised verify probe"
-		task.Description = "Run the pinned content-smoke command exactly against the current candidate commit. Decode candidate_revision from the task spec base64 input object into $ids.candidate_revision and use that variable for every SHA argument and result field; do not retype its hex digits. Also run git merge-base --is-ancestor <fixed_base> $ids.candidate_revision; include result.base_ancestor=true only after its exit code is zero. This key is mandatory even when content-smoke passes. Read-only verification only: do not edit, commit, push, create a PR, or run a later step. Return one check named content-smoke with the actual command, script_version spec03-content-smoke-v1, observed exit_code, passed/status, evidence_ref git:HEAD:steerline-spec03-supervised-stage.txt, and actual_commit equal to the full HEAD. Return verify result.revision equal to that same candidate commit."
+		task.Description = "Run the pinned content-smoke command exactly against the current candidate commit. Decode candidate_revision from the task spec base64 input object into $ids.candidate_revision and use that variable for every SHA argument and result field; do not retype its hex digits. Also run git merge-base --is-ancestor <fixed_base> $ids.candidate_revision; include result.base_ancestor=true only after its exit code is zero. This key is mandatory even when content-smoke passes. Read-only verification only: do not edit, commit, push, create a PR, or run a later step. Return one check named content-smoke with the actual command, script_version spec03-content-smoke-v2, observed exit_code, passed/status, evidence_ref git:HEAD:steerline-spec03-supervised-stage.txt, and actual_commit equal to the full HEAD. Return verify result.revision equal to that same candidate commit."
 		if fullProbe {
 			task.Description = strings.ReplaceAll(task.Description, "steerline-spec03-supervised-stage.txt", stageFile)
 		}
@@ -1485,7 +1590,7 @@ exit $LASTEXITCODE
 			if fullProbe {
 				dispatches["review"] = reviewDispatch
 			}
-			stagedEvidence := map[string]any{"captured_at": now(), "run": run, "workflow": workflowRecord, "execution": executionRecord, "attempts": service.State.Attempts, "operations": service.State.Operations, "dispatches": dispatches, "worktree_id": fixedWorktree, "fixed_base": base, "candidate_revision": candidate, "verified_revision": currentExecution.VerifiedRevision, "pr_created": false, "worktree_retained": true}
+			stagedEvidence := map[string]any{"captured_at": now(), "run": run, "workflow": workflowRecord, "execution": executionRecord, "attempts": service.State.Attempts, "operations": service.State.Operations, "dispatches": dispatches, "worktree_id": fixedWorktree, "fixed_base": base, "candidate_revision": candidate, "verified_revision": currentExecution.VerifiedRevision, "pr_created": false, "worktree_retained": true, "completion_window_restart_step": completionWindowRestartStep}
 			data, marshalErr := json.MarshalIndent(stagedEvidence, "", "  ")
 			if marshalErr != nil {
 				t.Fatal(marshalErr)
@@ -1646,26 +1751,26 @@ func TestSupervisedOrcaRealPublishExistingDraft(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer service.Close()
-	var verifyAttempt *StepAttemptRecord
+	var latestBoundAttempt *StepAttemptRecord
 	for i := range sourceEvidence.Attempts {
-		if sourceEvidence.Attempts[i].StepID == "verify" && sourceEvidence.Attempts[i].Status == "succeeded" {
-			verifyAttempt = &sourceEvidence.Attempts[i]
-			break
+		candidate := &sourceEvidence.Attempts[i]
+		if candidate.Status == "succeeded" && candidate.ExternalBinding.Dispatch != "" && candidate.ExternalBinding.WorktreeID == sourceEvidence.WorktreeID && (latestBoundAttempt == nil || candidate.UpdatedAt.After(latestBoundAttempt.UpdatedAt)) {
+			latestBoundAttempt = candidate
 		}
 	}
-	if verifyAttempt == nil || verifyAttempt.ExternalBinding.Dispatch == "" {
-		t.Fatal("verified source attempt lacks its exact Dispatch binding")
+	if latestBoundAttempt == nil {
+		t.Fatal("verified source attempts lack a settled exact Dispatch binding")
 	}
 	backend := orcaSupervisedBackend{config: c}
 	pair, err := probeSupervisedOrcaTarget(context.Background(), c)
 	if err != nil {
 		t.Fatal(err)
 	}
-	prior, err := backend.showWorker(context.Background(), supervisedStartReceipt{RunID: run.Target.OrchestrationRun, TaskID: verifyAttempt.ExternalBinding.ExternalTask, DispatchID: verifyAttempt.ExternalBinding.Dispatch, WorktreeID: sourceEvidence.WorktreeID, CenterRuntimeID: pair.CenterRuntime})
+	prior, err := backend.showWorker(context.Background(), supervisedStartReceipt{RunID: run.Target.OrchestrationRun, TaskID: latestBoundAttempt.ExternalBinding.ExternalTask, DispatchID: latestBoundAttempt.ExternalBinding.Dispatch, WorktreeID: sourceEvidence.WorktreeID, CenterRuntimeID: pair.CenterRuntime})
 	if err != nil {
 		t.Fatal(err)
 	}
-	ref := ExecutionRef{Version: ExecutionRecordVersion, Backend: BackendOrca, Protocol: ProtocolOrcaSupervised, Target: verifyAttempt.ExternalBinding, Agent: AgentSpec{Name: "codex"}, RunID: run.RunID, AttemptID: verifyAttempt.AttemptID, WorkspacePath: deref(run.WorktreePath), WorkspaceBranch: deref(run.WorktreeBranch), BaseCommit: deref(run.BaseCommit), External: prior.Identity, Generation: prior.Identity.RuntimeID + ":" + prior.Identity.Incarnation}
+	ref := ExecutionRef{Version: ExecutionRecordVersion, Backend: BackendOrca, Protocol: ProtocolOrcaSupervised, Target: latestBoundAttempt.ExternalBinding, Agent: AgentSpec{Name: "codex"}, RunID: run.RunID, AttemptID: latestBoundAttempt.AttemptID, WorkspacePath: deref(run.WorktreePath), WorkspaceBranch: deref(run.WorktreeBranch), BaseCommit: deref(run.BaseCommit), External: prior.Identity, Generation: prior.Identity.RuntimeID + ":" + prior.Identity.Incarnation}
 	if err := (executionRecords{root: runDir}).saveBinding(ref); err != nil {
 		t.Fatal(err)
 	}
@@ -1680,12 +1785,15 @@ func TestSupervisedOrcaRealPublishExistingDraft(t *testing.T) {
 	if err := service.save(); err != nil {
 		t.Fatal(err)
 	}
-	prURL := "https://github.com/erranliu/SteerlineTest/pull/4"
+	prURL := strings.TrimSpace(os.Getenv("STEERLINE_REAL_SUPERVISED_PUBLISH_RECONCILE_PR_URL"))
+	if prURL == "" {
+		t.Fatal("set the exact existing draft PR URL for publication reconciliation")
+	}
 	prInfo, err := service.prs.Query(context.Background(), prURL)
 	if err != nil || prInfo.HeadRevision != sourceEvidence.Candidate || prInfo.BaseBranch != "main" || prInfo.Merged {
 		t.Fatalf("existing draft PR cannot be uniquely reconciled to the verified candidate: %+v %v", prInfo, err)
 	}
-	task := Task{ID: run.DomainTaskID, Title: "reconcile original supervised draft PR", Description: "The prior publish Dispatch created draft PR #4 but its worker_done reported failure after an ambiguous command output. Use the pinned publish command once; if it reports the unique existing PR for this exact source branch, candidate head and main base, return that exact URL as reconciliation. Do not create another PR, edit files, merge or close the task. Return a strict publish_pr step_result with revision and published_head equal to the verified candidate, clean workspace, exact prerequisite result IDs and base_ancestor=true.", Status: "open", Type: "task"}
+	task := Task{ID: run.DomainTaskID, Title: "reconcile original supervised draft PR", Description: fmt.Sprintf("The prior publish Dispatch created draft PR %s but its step_result had an invalid task identity. Use the pinned publish command once; if it reports the unique existing PR for this exact source branch, candidate head and main base, return that exact URL as reconciliation. Do not create another PR, edit files, merge or close the task. Build step_result.task_id from $ids.task_id, never from the Orca task ID, and validate it before sending. Return a strict publish_pr step_result with revision and published_head equal to the verified candidate, clean workspace, exact prerequisite result IDs and base_ancestor=true.", prURL), Status: "open", Type: "task"}
 	attempt := service.minimalAttempt(run, run.AttemptID)
 	if attempt == nil || attempt.StepID != "publish_pr" || attempt.Status != "planned" {
 		t.Fatal("saved publish_pr attempt is no longer planned")
@@ -1737,12 +1845,18 @@ func TestSupervisedOrcaRealMergedPRQuery(t *testing.T) {
 	if os.Getenv("STEERLINE_REAL_SUPERVISED_MERGED_PR_QUERY") != "1" {
 		t.Skip("set STEERLINE_REAL_SUPERVISED_MERGED_PR_QUERY=1 after the isolated test PR is actually merged")
 	}
+	prURL := strings.TrimSpace(os.Getenv("STEERLINE_REAL_SUPERVISED_MERGED_PR_URL"))
+	expectedHead := strings.TrimSpace(os.Getenv("STEERLINE_REAL_SUPERVISED_MERGED_PR_HEAD"))
+	expectedMerge := strings.TrimSpace(os.Getenv("STEERLINE_REAL_SUPERVISED_MERGED_PR_COMMIT"))
+	if prURL == "" || !commitHash.MatchString(expectedHead) || !commitHash.MatchString(expectedMerge) {
+		t.Fatal("merged PR query requires the exact URL, head and merge commit")
+	}
 	client := PRClient{Config: PRConfig{Kind: "command", BaseURL: "https://github.com", Repository: "erranliu/SteerlineTest", Query: Command{Executable: "gh", Args: []string{"api", "repos/{repository}/pulls/{number}", "--jq", `{url:.html_url,repository:.base.repo.full_name,base_branch:.base.ref,head_revision:.head.sha,state:(if .merged then "merged" elif .state=="closed" then "closed_unmerged" else .state end),merged:.merged,merged_at:.merged_at,merge_commit:.merge_commit_sha}`}}}, Runner: Runner{Timeout: 30 * time.Second}}
-	info, err := client.Query(context.Background(), "https://github.com/erranliu/SteerlineTest/pull/4")
+	info, err := client.Query(context.Background(), prURL)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info.State != "merged" || !info.Merged || info.MergedAt == nil || info.MergeCommit == nil || *info.MergeCommit != "fbf236e85f0fbeadc38a6e58d424bbf51c3330f0" || info.HeadRevision != "344614147480d0fcf591cf2882210bb7785c6f87" || info.BaseBranch != "main" {
+	if info.State != "merged" || !info.Merged || info.MergedAt == nil || info.MergeCommit == nil || *info.MergeCommit != expectedMerge || info.HeadRevision != expectedHead || info.BaseBranch != "main" {
 		t.Fatalf("center PR adapter did not read the exact merged test PR: %+v", info)
 	}
 	t.Logf("merged PR evidence: head=%s merge=%s at=%s", info.HeadRevision, *info.MergeCommit, info.MergedAt.UTC().Format(time.RFC3339))

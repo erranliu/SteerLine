@@ -91,6 +91,26 @@ func TestDecisionReplyEligibilityRejectsLocalContinuationAndMissingFixedBinding(
 	}
 }
 
+func TestDecisionReplyEligibilityAllowsExactSupervisedBinding(t *testing.T) {
+	c := Config{Host: "orca_supervised", RunDir: t.TempDir(), Orca: OrcaConfig{Supervised: &SupervisedOrcaConfig{ConnectionID: "connection-home", EnvironmentID: "environment-home"}}}
+	target := ExecutionTarget{ID: "orca-supervised:connection-home", ConnectionID: "connection-home", ExternalRuntime: "environment-home", WorktreeID: "repo::C:/probe", Branch: "probe", BaseRevision: strings.Repeat("a", 40), OrchestrationRun: "run-probe", ExternalTask: "task-probe", Dispatch: "dispatch-probe", ExecutionHost: "remote-host"}
+	process := ProcessIdentity{Kind: "orca_supervised", RuntimeID: "remote-runtime", CoordinatorRuntimeID: "center-runtime", OrchestrationRun: target.OrchestrationRun, Task: target.ExternalTask, Dispatch: target.Dispatch, ExecutionHost: target.ExecutionHost, WorktreeID: target.WorktreeID}
+	path, branch, base := "C:/probe", target.Branch, target.BaseRevision
+	run := &Run{RunID: newID(), AttemptID: newID(), Backend: string(BackendOrca), Protocol: string(ProtocolOrcaSupervised), Agent: "codex", Target: target, Process: &process, WorktreePath: &path, WorktreeBranch: &branch, BaseCommit: &base}
+	run.Decision = &DecisionState{ID: newID(), AttemptID: run.AttemptID, Status: "pending"}
+	ref := ExecutionRef{Version: ExecutionRecordVersion, Backend: BackendOrca, Protocol: ProtocolOrcaSupervised, Target: target, Agent: AgentSpec{Name: "codex"}, RunID: run.RunID, AttemptID: run.AttemptID, WorkspacePath: path, WorkspaceBranch: branch, BaseCommit: base, External: process}
+	if err := (executionRecords{root: c.RunDir}).saveBinding(ref); err != nil {
+		t.Fatal(err)
+	}
+	if err := DecisionReplyEligibility(context.Background(), c, run); err != nil {
+		t.Fatalf("exact supervised decision was rejected: %v", err)
+	}
+	run.Target.Dispatch = "different-dispatch"
+	if err := DecisionReplyEligibility(context.Background(), c, run); err == nil {
+		t.Fatal("supervised decision with a changed Dispatch was accepted")
+	}
+}
+
 func TestDecisionRequestValidation(t *testing.T) {
 	cases := map[string]DecisionRequest{
 		"empty":           {},

@@ -501,7 +501,7 @@ func DecisionReplyEligibility(ctx context.Context, c Config, run *Run) error {
 	if run.AttemptID == "" || run.Decision.AttemptID != run.AttemptID {
 		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "decision belongs to a different execution attempt"}
 	}
-	if run.Backend != string(BackendOrca) || run.Protocol != string(ProtocolOrcaTerminalV2) {
+	if run.Backend != string(BackendOrca) || run.Protocol != string(ProtocolOrcaTerminalV2) && run.Protocol != string(ProtocolOrcaSupervised) {
 		return &BackendError{Code: BackendUnsupported, Diagnostic: "local continuation is unsupported; this decision cannot be answered and resumed on the local backend"}
 	}
 	records := executionRecords{root: c.RunDir}
@@ -509,13 +509,24 @@ func DecisionReplyEligibility(ctx context.Context, c Config, run *Run) error {
 	if err != nil {
 		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "decision execution has no valid fixed backend binding", Cause: err}
 	}
-	if ref.RunID != run.RunID || ref.AttemptID != run.AttemptID || ref.Backend != BackendOrca || ref.Protocol != ProtocolOrcaTerminalV2 || ref.Target.ID != run.Target.ID || ref.Target.ConnectionID != run.Target.ConnectionID || ref.Agent != (AgentSpec{Name: run.Agent}) || run.Process == nil || *run.Process != ref.External || ref.WorkspacePath != deref(run.WorktreePath) || ref.WorkspaceBranch != deref(run.WorktreeBranch) || ref.BaseCommit != deref(run.BaseCommit) {
+	if ref.RunID != run.RunID || ref.AttemptID != run.AttemptID || ref.Backend != BackendOrca || ref.Protocol != ExecutionProtocol(run.Protocol) || ref.Target.ID != run.Target.ID || ref.Target.ConnectionID != run.Target.ConnectionID || ref.Agent != (AgentSpec{Name: run.Agent}) || run.Process == nil || *run.Process != ref.External || ref.WorkspacePath != deref(run.WorktreePath) || ref.WorkspaceBranch != deref(run.WorktreeBranch) || ref.BaseCommit != deref(run.BaseCommit) {
 		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "decision execution binding differs from the original run, attempt, target, workspace or process identity"}
+	}
+	if ref.Protocol == ProtocolOrcaSupervised && (ref.Incomplete || ref.Target != run.Target || ref.External.Dispatch == "" || ref.External.OrchestrationRun == "") {
+		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "supervised decision lacks its complete original Run, Dispatch and target binding"}
 	}
 	backend := backendFor(c, BeadsContext{})
 	kind, protocol := backend.Identity()
 	if kind != ref.Backend || protocol != ref.Protocol {
 		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "configured backend differs from the fixed decision execution"}
+	}
+	if ref.Protocol == ProtocolOrcaSupervised {
+		if !sameSupervisedBaseTarget(ref.Target, targetFor(c)) {
+			return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "configured supervised target differs from the fixed decision execution"}
+		}
+		// The answer can be saved while the remote host is temporarily offline.
+		// The active observer rechecks the exact Dispatch before sending it.
+		return nil
 	}
 	probe, err := backend.Probe(ctx, ref.Target, ref.Agent)
 	if err != nil {
