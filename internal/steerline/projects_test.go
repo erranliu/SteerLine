@@ -78,7 +78,7 @@ func TestInstallLaunchersWritesCRLF(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	must := []string{"projects.bat", "viewer.bat", "run.bat", "service-window.bat", "stop.bat", "home.bat", "README.txt"}
+	must := []string{"projects.bat", "console.bat", "viewer.bat", "run.bat", "service-window.bat", "stop.bat", "home.bat", "README.txt"}
 	got := map[string]bool{}
 	for _, p := range written {
 		got[filepath.Base(p)] = true
@@ -94,6 +94,13 @@ func TestInstallLaunchersWritesCRLF(t *testing.T) {
 	}
 	if !strings.Contains(string(b), "bin\\steerline.exe") || !strings.Contains(string(b), "\r\n") {
 		t.Fatalf("projects.bat not CRLF/expected content:\n%s", b)
+	}
+	console, e := os.ReadFile(filepath.Join(home, "console.bat"))
+	if e != nil {
+		t.Fatal(e)
+	}
+	if !strings.Contains(string(console), "console -config") || !strings.Contains(string(console), "\r\n") {
+		t.Fatalf("console.bat missing current console entry or CRLF:\n%s", console)
 	}
 	window, e := os.ReadFile(filepath.Join(home, "service-window.bat"))
 	if e != nil {

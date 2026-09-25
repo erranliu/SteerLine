@@ -252,6 +252,18 @@ func TestConversationSQLiteDedupesBodiesAndPagesUnicodeByRevision(t *testing.T) 
 	if _, err = query.ReadConversation(ctx, ConversationFilter{ExecutionID: "other", AttemptID: "attempt"}, page.NextCursor, 2); err == nil {
 		t.Fatal("query cursor crossed execution filters")
 	}
+	remainder, err := query.ReadConversation(ctx, ConversationFilter{ExecutionID: "execution", AttemptID: "attempt"}, page.NextCursor, 10)
+	if err != nil || len(remainder.Events) == 0 {
+		t.Fatalf("could not read the remaining conversation page: %+v %v", remainder, err)
+	}
+	tailCursor, err := ConversationCursorAfter("project", ConversationFilter{ExecutionID: "execution", AttemptID: "attempt"}, remainder.Events[len(remainder.Events)-1].EventID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tail, err := query.ReadConversation(ctx, ConversationFilter{ExecutionID: "execution", AttemptID: "attempt"}, tailCursor, 10)
+	if err != nil || len(tail.Events) != 0 {
+		t.Fatalf("tail cursor did not resume after the latest event: %+v %v", tail, err)
+	}
 	if _, err = query.ReadRaw(ctx, ConversationRawRef{ExecutionID: "other", AttemptID: "attempt", ID: committed[0].Raw.ID}, 0, 10); err == nil {
 		t.Fatal("raw reference crossed execution identity")
 	}

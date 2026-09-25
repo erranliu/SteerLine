@@ -290,6 +290,20 @@ type ConversationQueryService struct {
 	Project string
 }
 
+// ConversationCursorAfter creates the same opaque, filter-bound cursor returned
+// by ReadConversation. It lets a reader resume observation after its newest
+// event without inventing a second cursor format.
+func ConversationCursorAfter(project string, filter ConversationFilter, after int64) (string, error) {
+	if project == "" || after < 0 {
+		return "", errors.New("conversation cursor requires a project and non-negative event ID")
+	}
+	raw, err := json.Marshal(conversationQueryCursor{Version: 1, Project: project, Filter: filter, After: after})
+	if err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(raw), nil
+}
+
 func (q ConversationQueryService) ReadConversation(ctx context.Context, filter ConversationFilter, cursor string, limit int) (ConversationPage, error) {
 	if q.Store == nil || q.Project == "" {
 		return ConversationPage{}, errors.New("conversation query requires a store and project identity")
@@ -371,8 +385,7 @@ func (q ConversationQueryService) ReadConversation(ctx context.Context, filter C
 			page.HasMore = probe != nil
 		}
 		if page.HasMore {
-			raw, _ := json.Marshal(conversationQueryCursor{Version: 1, Project: q.Project, Filter: filter, After: page.Events[len(page.Events)-1].EventID})
-			page.NextCursor = base64.RawURLEncoding.EncodeToString(raw)
+			page.NextCursor, _ = ConversationCursorAfter(q.Project, filter, page.Events[len(page.Events)-1].EventID)
 		}
 	}
 	return page, nil

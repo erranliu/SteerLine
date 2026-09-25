@@ -45,6 +45,14 @@ The current local checkpoint records an anchored byte position. Startup verifies
 
 The existing `activity.jsonl` remains the clipped display derivative described by [Activity contract](activity.md). Conversation history and full result summaries have separate bodies and revisions; deleting or rebuilding an activity view does not change them.
 
+## Console presentation
+
+`steerline console` groups records by project, execution, attempt, source segment, session and turn IDs. It treats `commentary`, tool activity and `unknown` phase as process; only an explicit `final_answer` phase is shown as a final reply. A completed message does not close or collapse its turn. An explicit completed, failed or cancelled turn is handled once by the UI fold reducer; the final reply, terminal reason, gaps, host waits and diagnostics stay visible outside the process fold.
+
+Fold choices and reading anchors live in a versioned UI-owned file under `<STEERLINE_HOME>/ui/views/`. The file contains identities and view choices only. Two active console windows acquire separate view profiles; a later launch reuses an available profile. Corrupt preferences reset the view and leave the business database untouched. Message body pages are read from the exact execution, attempt, item key and body revision; the renderer escapes terminal control characters before displaying text.
+
+When verified turn/phase capability is unavailable, the console identifies the source and uses the `执行过程 / 执行摘要` fallback labels. It does not infer a final reply from the last visible text or infer turn boundaries from quiet time. A turn end does not change waiting-decision, waiting-PR-merge or task completion state.
+
 ## Verified scope and remaining gates
 
 E-A9 is accepted for the measured Windows local Codex 0.156.1 and local Orca 1.4.209 Codex targets. Both real two-turn histories passed the same mapper, body-hash and persisted-cursor replay checks; Orca history also contains real tool events. The internal Orca launcher was exercised with two real turns and retained Orca's own Codex environment. The raw `exec --json` and terminal streams retain their original limitations; the verified public history source supplies the missing fields. Remote Orca, other agents and actual host wait/failure/cancellation source samples remain untested. Other fault-injection gaps are listed in the acceptance report.

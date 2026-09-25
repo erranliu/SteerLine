@@ -2,6 +2,15 @@ package main
 
 import "testing"
 
+func TestProjectsMenuCanOpenCurrentConsole(t *testing.T) {
+	for _, action := range []string{"console", "1"} {
+		got, err := pickAction(action)
+		if err != nil || got != "console" {
+			t.Fatalf("pickAction(%q) = %q, %v; want console", action, got, err)
+		}
+	}
+}
+
 func TestWatchFlagsRouteTTYToStreamingMode(t *testing.T) {
 	cases := []struct {
 		name                                string
