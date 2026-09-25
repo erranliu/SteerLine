@@ -1,0 +1,6 @@
+=== RUN   TestLiveNativeTaskDeliveryProbe
+    live_pr_delivery_probe_test.go:60: head revision verification: ok  	github.com/erranliu/SteerLine/cmd/steerline	2.087s
+    live_pr_delivery_probe_test.go:149: LIVE DELIVERY PASS: PR=https://github.com/erranliu/SteerLine/pull/30 head=91c933a92d669993787813c5c66fda8570b06e75 merge=696406f006f905ddbc494f09b3915d9c1a0295fb task=300 successor=301 graph_revision=2
+--- PASS: TestLiveNativeTaskDeliveryProbe (15.67s)
+PASS
+ok  	github.com/erranliu/SteerLine/internal/steerline	15.896s
