@@ -274,6 +274,9 @@ func (s *Service) startNativeRetry(ctx context.Context, runID string) error {
 	if run == nil {
 		return nativeErr("inconsistent_delivery", "retried native task disappeared from the center projection")
 	}
+	if run.Process != nil {
+		return nativeErr("inconsistent_delivery", "planned native retry still carries the settled worker identity")
+	}
 	workflow, execution = s.minimalRecords(run)
 	attempt := s.minimalAttempt(run, receipt.AttemptID)
 	if workflow == nil || execution == nil || attempt == nil || attempt.Status != "planned" || execution.CurrentStep != receipt.StepID {

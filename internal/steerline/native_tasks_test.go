@@ -700,6 +700,40 @@ func TestNativeLocalProjectStepsDeliverTaskAndReleaseSuccessor(t *testing.T) {
 	if err != nil || closeErr != nil || discardedPR.Status != "discarded" || !hasString(discardedPR.CleanupPending, "pull_request_close:"+*runB.PR.URL) {
 		t.Fatalf("published native discard did not retain its exact PR cleanup identity: %+v err=%v close=%v", discardedPR, err, closeErr)
 	}
+	bDetail, err = (QueryService{Store: s.domainStore, Project: c.Identity()}).ShowNativeTask(context.Background(), "102")
+	if err != nil || len(bDetail.Tasks) != 1 {
+		t.Fatalf("discarded native task could not be read for cleanup validation: %+v %v", bDetail, err)
+	}
+	discardedVersion := bDetail.Tasks[0].Version
+	workspaceItem := ""
+	for _, pending := range discardedPR.CleanupPending {
+		if strings.HasPrefix(pending, "workspace_cleanup:") {
+			workspaceItem = pending
+			break
+		}
+	}
+	if workspaceItem == "" {
+		t.Fatalf("discarded native task has no fixed workspace cleanup identity: %+v", discardedPR)
+	}
+	if _, badReceiptErr := (CommandService{Store: s.domainStore, Project: c.Identity()}).RecordNativeCleanupReceipt(context.Background(), "102", strings.Repeat("9", 32), discardedVersion, workspaceItem, "operator", json.RawMessage(`{}`)); !isNativeErrorCode(badReceiptErr, "contract_mismatch") {
+		t.Fatalf("unverified workspace cleanup receipt was accepted: %v", badReceiptErr)
+	}
+	cleanupWorkflow, cleanupExecution := s.minimalRecords(runB)
+	if cleanupWorkflow == nil || cleanupExecution == nil {
+		t.Fatal("discarded workspace lost its fixed execution identity")
+	}
+	forged := NativeWorkspaceCleanupReceipt{WorkflowRunID: cleanupWorkflow.WorkflowRunID, ExecutionID: cleanupExecution.ExecutionID, Repository: cleanupExecution.Target.ID, Worktree: strings.TrimPrefix(workspaceItem, "workspace_cleanup:"), Branch: cleanupExecution.Target.Branch, BaseCommit: cleanupExecution.Target.BaseRevision, WorktreeGone: true, BranchGone: true, ObservedAt: now()}
+	forgedBytes, err := json.Marshal(forged)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, badReceiptErr := (CommandService{Store: s.domainStore, Project: c.Identity()}).RecordNativeCleanupReceipt(context.Background(), "102", strings.Repeat("8", 32), discardedVersion, workspaceItem, "operator", forgedBytes); !isNativeErrorCode(badReceiptErr, "outcome_unknown") {
+		t.Fatalf("workspace cleanup was settled while its fixed worktree still existed: %v", badReceiptErr)
+	}
+	bDetail, err = (QueryService{Store: s.domainStore, Project: c.Identity()}).ShowNativeTask(context.Background(), "102")
+	if err != nil || bDetail.Tasks[0].Version != discardedVersion || !hasString(bDetail.Tasks[0].CleanupPending, workspaceItem) {
+		t.Fatalf("rejected workspace receipt changed the discarded task: %+v %v", bDetail, err)
+	}
 	if _, err = s.domainStore.db.Exec(`CREATE TRIGGER fail_native_cleanup_receipt BEFORE UPDATE OF version,payload ON tasks WHEN OLD.status='discarded' AND json_array_length(json_extract(OLD.payload,'$.cleanup_pending')) > 0 BEGIN SELECT RAISE(ABORT,'injected native cleanup receipt failure'); END`); err != nil {
 		t.Fatal(err)
 	}
@@ -714,8 +748,8 @@ func TestNativeLocalProjectStepsDeliverTaskAndReleaseSuccessor(t *testing.T) {
 	if db.PRState != "closed_unmerged" || db.PRMerged {
 		t.Fatalf("cleanup receipt failure lost the external closed-PR fact: %+v", db)
 	}
-	if _, statErr := os.Stat(*runB.WorktreePath); statErr != nil {
-		t.Fatalf("PR receipt failure proceeded to the separate workspace cleanup: %v", statErr)
+	if _, statErr := os.Lstat(*runB.WorktreePath); !os.IsNotExist(statErr) {
+		t.Fatalf("independent workspace cleanup did not run after PR receipt failure: %v", statErr)
 	}
 	if _, err = s.domainStore.db.Exec(`DROP TRIGGER fail_native_cleanup_receipt`); err != nil {
 		t.Fatal(err)
@@ -724,10 +758,26 @@ func TestNativeLocalProjectStepsDeliverTaskAndReleaseSuccessor(t *testing.T) {
 		t.Fatal(err)
 	}
 	s = nil
+	db = readFake(fakePRPath)
+	db.PRState = "unknown"
+	writeFake(fakePRPath, db)
 	s, err = NewService(c)
 	if err != nil {
 		t.Fatalf("native service did not recover a failed cleanup receipt: %v", err)
 	}
+	if err = s.reconcile(context.Background()); err != nil {
+		t.Fatalf("workspace cleanup could not proceed while PR state was unknown: %v", err)
+	}
+	bDetail, err = (QueryService{Store: s.domainStore, Project: c.Identity()}).ShowNativeTask(context.Background(), "102")
+	if err != nil || !hasString(bDetail.Tasks[0].CleanupPending, "pull_request_close:"+*runB.PR.URL) || hasString(bDetail.Tasks[0].CleanupPending, workspaceItem) {
+		t.Fatalf("PR uncertainty did not leave only its own cleanup pending: %+v %v", bDetail, err)
+	}
+	if _, statErr := os.Lstat(*runB.WorktreePath); !os.IsNotExist(statErr) {
+		t.Fatalf("independent workspace cleanup retained the discarded worktree: %v", statErr)
+	}
+	db = readFake(fakePRPath)
+	db.PRState = "closed_unmerged"
+	writeFake(fakePRPath, db)
 	deadline := time.Now().Add(8 * time.Second)
 	for time.Now().Before(deadline) {
 		if err = s.reconcile(context.Background()); err != nil {

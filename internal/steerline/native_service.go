@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 )
 
 func (s *Service) refreshNativeSnapshot(ctx context.Context, reconstruct bool) error {
@@ -94,10 +93,12 @@ func (s *Service) refreshNativeSnapshot(ctx context.Context, reconstruct bool) e
 			run.WorkspaceIntent = intent
 			run.WorktreePath, run.WorktreeBranch, run.BaseCommit = ptr(intent.Path), ptr(intent.Branch), ptr(intent.BaseCommit)
 		}
+		workerActive := s.worker != nil && s.active == run
 		if execution.Process != nil {
 			run.Process = execution.Process
+		} else if !workerActive {
+			run.Process = nil
 		}
-		workerActive := s.worker != nil && s.active == run
 		if workerActive && task.Status != "discarded" {
 			run.ExecutionStatus, run.FinishTaskStatus = "running", "pending"
 		} else {
@@ -256,6 +257,7 @@ func (s *Service) reconcileNativeCleanup(ctx context.Context) error {
 	if !s.native {
 		return nil
 	}
+	var cleanupErr error
 	for i := range s.State.Tasks {
 		task := s.State.Tasks[i]
 		if task.Status != "discarded" || len(task.CleanupPending) == 0 {
@@ -267,7 +269,8 @@ func (s *Service) reconcileNativeCleanup(ctx context.Context) error {
 					if run := s.find(task.TaskID); run != nil {
 						run.Error = ptr("discarded PR cleanup requires reconciliation: " + clip(err.Error(), 1000))
 					}
-					return err
+					cleanupErr = errors.Join(cleanupErr, err)
+					continue
 				}
 				if err := s.refreshNativeSnapshot(ctx, true); err != nil {
 					return err
@@ -294,7 +297,8 @@ func (s *Service) reconcileNativeCleanup(ctx context.Context) error {
 					if run := s.find(task.TaskID); run != nil {
 						run.Error = ptr("discarded workspace cleanup requires reconciliation: " + clip(err.Error(), 1000))
 					}
-					return err
+					cleanupErr = errors.Join(cleanupErr, err)
+					continue
 				}
 			}
 			if !strings.HasPrefix(item, "execution_stop_manual:") {
@@ -352,7 +356,7 @@ func (s *Service) reconcileNativeCleanup(ctx context.Context) error {
 			return nil
 		}
 	}
-	return nil
+	return cleanupErr
 }
 
 func (s *Service) reconcileNativePRCleanup(ctx context.Context, task TaskRecord, cleanupItem string) error {
@@ -498,15 +502,7 @@ func (s *Service) reconcileNativeWorkspaceCleanup(ctx context.Context, task Task
 	if err != nil || strings.TrimSpace(string(refs)) != "" {
 		return nativeErr("outcome_unknown", "discarded workspace branch remains after cleanup")
 	}
-	receipt := struct {
-		Repository   string    `json:"repository"`
-		Worktree     string    `json:"worktree"`
-		Branch       string    `json:"branch"`
-		BaseCommit   string    `json:"base_commit"`
-		WorktreeGone bool      `json:"worktree_absent"`
-		BranchGone   bool      `json:"branch_absent"`
-		ObservedAt   time.Time `json:"observed_at"`
-	}{execution.Target.ID, resolved, branch, execution.Target.BaseRevision, true, true, now()}
+	receipt := NativeWorkspaceCleanupReceipt{WorkflowRunID: workflow.WorkflowRunID, ExecutionID: execution.ExecutionID, Repository: execution.Target.ID, Worktree: resolved, Branch: branch, BaseCommit: execution.Target.BaseRevision, WorktreeGone: true, BranchGone: true, ObservedAt: now()}
 	data, _ := json.Marshal(receipt)
 	requestID := digestValue(struct{ TaskID, Item string }{task.TaskID, cleanupItem})[:32]
 	_, err = (CommandService{Store: s.domainStore, Project: s.Config.identity}).RecordNativeCleanupReceipt(ctx, task.TaskID, requestID, task.Version, cleanupItem, s.Config.Claimant, data)

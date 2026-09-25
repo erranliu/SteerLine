@@ -6,6 +6,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -28,6 +30,18 @@ type NativePRCleanupReceipt struct {
 	HeadRevision  string    `json:"head_revision"`
 	State         string    `json:"state"`
 	Merged        bool      `json:"merged"`
+	ObservedAt    time.Time `json:"observed_at"`
+}
+
+type NativeWorkspaceCleanupReceipt struct {
+	WorkflowRunID string    `json:"workflow_run_id"`
+	ExecutionID   string    `json:"execution_id"`
+	Repository    string    `json:"repository"`
+	Worktree      string    `json:"worktree"`
+	Branch        string    `json:"branch"`
+	BaseCommit    string    `json:"base_commit"`
+	WorktreeGone  bool      `json:"worktree_absent"`
+	BranchGone    bool      `json:"branch_absent"`
 	ObservedAt    time.Time `json:"observed_at"`
 }
 
@@ -86,7 +100,7 @@ func (c CommandService) RecordNativeCleanupReceipt(ctx context.Context, taskID, 
 		if err := json.Unmarshal(oldPayload, &oldTask); err != nil {
 			return err
 		}
-		if oldTask.Status != "discarded" || oldTask.Version != expectedVersion {
+		if oldTask.Source != "native" || oldTask.Status != "discarded" || oldTask.Version != expectedVersion {
 			return nativeErr("stale_version", "cleanup receipt requires the current discarded task version")
 		}
 		index := -1
@@ -107,6 +121,17 @@ func (c CommandService) RecordNativeCleanupReceipt(ctx context.Context, taskID, 
 			if err := commitNativePRCleanupReceipt(ctx, tx, c.Project, oldTask, cleanupItem, receipt); err != nil {
 				return err
 			}
+		} else if strings.HasPrefix(cleanupItem, "workspace_cleanup:") {
+			for _, pending := range oldTask.CleanupPending {
+				if strings.HasPrefix(pending, "execution_stop_manual:") {
+					return nativeErr("slot_busy", "workspace cleanup cannot settle while worker stop is pending")
+				}
+			}
+			if err := commitNativeWorkspaceCleanupReceipt(ctx, tx, c.Project, oldTask, cleanupItem, receipt); err != nil {
+				return err
+			}
+		} else {
+			return nativeErr("contract_mismatch", "unsupported native cleanup item")
 		}
 		var authority ProjectTaskAuthority
 		var paused int
@@ -115,6 +140,9 @@ func (c CommandService) RecordNativeCleanupReceipt(ctx context.Context, taskID, 
 			return nativeErr("authority_mismatch", "native project authority is unavailable during cleanup")
 		}
 		authority.ProjectIdentity = c.Project
+		if authority.Authority != "native" {
+			return nativeErr("authority_mismatch", "cleanup receipt requires the native project authority")
+		}
 		authority.DispatchPaused = paused != 0
 		authority.CreatedAt, _ = time.Parse(time.RFC3339Nano, created)
 		authority.UpdatedAt, _ = time.Parse(time.RFC3339Nano, updatedAt)
@@ -195,6 +223,39 @@ func commitNativePRCleanupReceipt(ctx context.Context, tx *sqliteTx, project str
 	var authorityBranch string
 	if err := tx.tx.QueryRowContext(ctx, `SELECT branch FROM project_task_authorities WHERE project_identity=? AND authority='native'`, project).Scan(&authorityBranch); err != nil || authorityBranch != evidence.BaseBranch {
 		return nativeErr("authority_mismatch", "native PR cleanup branch differs from the registered project")
+	}
+	return nil
+}
+
+func commitNativeWorkspaceCleanupReceipt(ctx context.Context, tx *sqliteTx, project string, task TaskRecord, cleanupItem string, receipt json.RawMessage) error {
+	var evidence NativeWorkspaceCleanupReceipt
+	if err := decode(receipt, &evidence); err != nil || evidence.WorkflowRunID == "" || evidence.ExecutionID == "" || evidence.Repository == "" || evidence.Branch == "" || !filepath.IsAbs(evidence.Worktree) || !strings.HasPrefix(cleanupItem, "workspace_cleanup:") || canonical(strings.TrimPrefix(cleanupItem, "workspace_cleanup:")) != canonical(evidence.Worktree) || !validCommit(evidence.BaseCommit) || !evidence.WorktreeGone || !evidence.BranchGone || evidence.ObservedAt.IsZero() {
+		return nativeErr("contract_mismatch", "native workspace cleanup receipt lacks the exact absent worktree and branch identities")
+	}
+	var workflowPayload, executionPayload []byte
+	if err := tx.tx.QueryRowContext(ctx, `SELECT payload FROM workflow_runs WHERE project_identity=? AND workflow_run_id=? AND task_id=?`, project, evidence.WorkflowRunID, task.TaskID).Scan(&workflowPayload); err != nil {
+		return nativeErr("contract_mismatch", "native workspace cleanup workflow does not belong to the discarded task")
+	}
+	if err := tx.tx.QueryRowContext(ctx, `SELECT payload FROM executions WHERE project_identity=? AND execution_id=? AND workflow_run_id=?`, project, evidence.ExecutionID, evidence.WorkflowRunID).Scan(&executionPayload); err != nil {
+		return nativeErr("contract_mismatch", "native workspace cleanup execution is not bound to the fixed workflow")
+	}
+	var workflow WorkflowRunRecord
+	var execution ExecutionRecord
+	if err := json.Unmarshal(workflowPayload, &workflow); err != nil {
+		return err
+	}
+	if err := json.Unmarshal(executionPayload, &execution); err != nil {
+		return err
+	}
+	fixedWorktree := execution.Target.WorktreeID
+	if fixedWorktree == "" {
+		fixedWorktree = execution.Workspace.Worktree
+	}
+	if workflow.TaskID != task.TaskID || execution.WorkflowRunID != evidence.WorkflowRunID || execution.Backend != string(BackendLocal) || execution.Target.ID != evidence.Repository || fixedWorktree == "" || canonical(fixedWorktree) != canonical(evidence.Worktree) || execution.Workspace.Worktree != "" && canonical(execution.Workspace.Worktree) != canonical(evidence.Worktree) || execution.Target.Branch != evidence.Branch || execution.Target.BaseRevision != evidence.BaseCommit {
+		return nativeErr("authority_mismatch", "native workspace cleanup receipt differs from the fixed local execution")
+	}
+	if _, err := os.Lstat(evidence.Worktree); !os.IsNotExist(err) {
+		return nativeErr("outcome_unknown", "native workspace cleanup cannot confirm the fixed worktree is absent")
 	}
 	return nil
 }

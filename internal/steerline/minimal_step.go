@@ -325,6 +325,9 @@ func (s *Service) minimalRecords(run *Run) (*WorkflowRunRecord, *ExecutionRecord
 }
 
 func (s *Service) minimalAttempt(run *Run, attemptID string) *StepAttemptRecord {
+	if run == nil {
+		return nil
+	}
 	for i := range s.State.Attempts {
 		if s.State.Attempts[i].AttemptID == attemptID && s.State.Attempts[i].ExecutionID == run.ExecutionID {
 			return &s.State.Attempts[i]
