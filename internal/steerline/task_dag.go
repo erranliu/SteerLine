@@ -451,6 +451,9 @@ func (q QueryService) TaskGraph(ctx context.Context, cursor string, limit int) (
 
 func nativeStartupBlockers(task TaskRecord, graph taskGraphSnapshot) []string {
 	blockers := []string{}
+	if nativeDeliveryInconsistent(task, graph) {
+		blockers = append(blockers, "inconsistent_delivery")
+	}
 	if task.Status != "open" {
 		blockers = append(blockers, "task_not_open")
 	}
@@ -466,8 +469,13 @@ func nativeStartupBlockers(task TaskRecord, graph taskGraphSnapshot) []string {
 	return blockers
 }
 
+func nativeDeliveryInconsistent(task TaskRecord, graph taskGraphSnapshot) bool {
+	_, delivered := graph.Deliveries[task.TaskID]
+	return (task.Status == "closed") != delivered
+}
+
 func taskDependencyState(task TaskRecord, graph taskGraphSnapshot) (bool, []TaskDependencyStatus) {
-	ready := task.Status == "open"
+	ready := task.Status == "open" && !nativeDeliveryInconsistent(task, graph)
 	blockers := []TaskDependencyStatus{}
 	for _, edge := range graph.Edges {
 		if edge.SuccessorID != task.TaskID {
@@ -1182,11 +1190,12 @@ func (c CommandService) DiscardNativeTask(ctx context.Context, config Config, ta
 	if intent.PRURL != "" && currentPlan.PRURL != intent.PRURL {
 		return persistDiscardPending(ctx, sqlite, c.Project, requestID, staged, intent, "merge_state_unknown", "the fixed PR binding no longer matches the task's recorded publication")
 	}
-	if intent.PRURL == "" || intent.UncertainPR {
+	currentCleanup := uniqueSorted(currentPlan.CleanupPending)
+	if intent.PRURL != currentPlan.PRURL || intent.UncertainPR != currentPlan.UncertainPR || !sameStrings(intent.CleanupPending, currentCleanup) {
 		intent.PRURL = currentPlan.PRURL
 		intent.UncertainPR = currentPlan.UncertainPR
-		intent.CleanupPending = uniqueSorted(currentPlan.CleanupPending)
-		if err = updateDiscardIntentReceipt(ctx, sqlite, staged, intent); err != nil {
+		intent.CleanupPending = currentCleanup
+		if err = updateDiscardIntentReceipt(ctx, sqlite, &staged, intent); err != nil {
 			return TaskDiscardReceipt{}, err
 		}
 	}
@@ -1214,15 +1223,20 @@ func (c CommandService) DiscardNativeTask(ctx context.Context, config Config, ta
 	return c.commitDiscard(ctx, sqlite, requestID, staged, intent, prInfo, config.PR.Repository)
 }
 
-func updateDiscardIntentReceipt(ctx context.Context, s *SQLiteStore, op OperationRecord, intent taskDiscardIntent) error {
+func updateDiscardIntentReceipt(ctx context.Context, s *SQLiteStore, op *OperationRecord, intent taskDiscardIntent) error {
 	data, err := json.Marshal(intent)
 	if err != nil {
 		return err
 	}
-	op.Receipt = data
-	op.Status = "pending"
-	op.UpdatedAt = time.Now().UTC()
-	return s.Transact(ctx, func(domainTx DomainTx) error { return domainTx.UpdateOperation(op) })
+	next := *op
+	next.Receipt = data
+	next.Status = "pending"
+	next.UpdatedAt = time.Now().UTC()
+	if err = s.Transact(ctx, func(domainTx DomainTx) error { return domainTx.UpdateOperation(next) }); err != nil {
+		return err
+	}
+	*op = next
+	return nil
 }
 
 func taskDiscardPlanFromStore(ctx context.Context, s *SQLiteStore, project, taskID string) (taskDiscardPlan, TaskRecord, error) {
@@ -1260,6 +1274,8 @@ func taskDiscardPlanFromSnapshot(snapshot DomainSnapshot, taskID string) (taskDi
 	}
 	plan := taskDiscardPlan{CleanupPending: []string{}}
 	prs := map[string]bool{}
+	acceptedPR := map[string]bool{}
+	plannedWithoutAction := map[string]bool{}
 	for _, execution := range executions {
 		if execution.Workspace.Worktree != "" || execution.Target.WorktreeID != "" {
 			id := execution.Target.WorktreeID
@@ -1271,32 +1287,45 @@ func taskDiscardPlanFromSnapshot(snapshot DomainSnapshot, taskID string) (taskDi
 		if execution.Status == "active" || execution.Status == "waiting_decision" || execution.Status == "blocked" || execution.Status == "pending" {
 			plan.CleanupPending = append(plan.CleanupPending, "execution_stop_manual:"+execution.ExecutionID)
 		}
-		if execution.CurrentStep == "publish_pr" || execution.CurrentStep == "waiting_pr_merge" {
+	}
+	for _, attempt := range snapshot.Attempts {
+		if _, owned := executions[attempt.ExecutionID]; !owned {
+			continue
+		}
+		var result StepGateResult
+		resultValid := len(attempt.Result) > 0 && json.Unmarshal(attempt.Result, &result) == nil
+		if attempt.StepID != "publish_pr" {
+			if resultValid && result.PRURL != "" {
+				plan.UncertainPR = true
+			}
+			continue
+		}
+		if attempt.Status == "planned" && attempt.OperationID == "" && len(attempt.Result) == 0 {
+			plannedWithoutAction[attempt.ExecutionID] = true
+		}
+		if resultValid && result.PRURL != "" {
+			prs[result.PRURL] = true
+			if attempt.Status == "succeeded" && result.Succeeded && result.StepID == "publish_pr" {
+				acceptedPR[attempt.ExecutionID] = true
+			} else {
+				plan.UncertainPR = true
+			}
+		}
+		switch attempt.Status {
+		case "dispatching", "dispatched", "running", "stopping", "outcome_unknown":
+			plan.UncertainPR = true
+		case "succeeded":
+			if !resultValid || !result.Succeeded || result.StepID != "publish_pr" || result.PRURL == "" {
+				plan.UncertainPR = true
+			}
+		}
+		if attempt.OperationID != "" && len(attempt.Result) == 0 || len(attempt.Result) > 0 && !resultValid {
 			plan.UncertainPR = true
 		}
 	}
-	for _, attempt := range snapshot.Attempts {
-		if !executions[attempt.ExecutionID].ExecutionIDIsSet() {
-			continue
-		}
-		if len(attempt.Result) > 0 {
-			var result StepGateResult
-			if json.Unmarshal(attempt.Result, &result) == nil && result.PRURL != "" {
-				prs[result.PRURL] = true
-			}
-		}
-		if attempt.StepID == "publish_pr" {
-			switch attempt.Status {
-			case "dispatching", "dispatched", "running", "stopping", "outcome_unknown":
-				plan.UncertainPR = true
-			case "succeeded":
-				if len(attempt.Result) == 0 {
-					plan.UncertainPR = true
-				}
-			}
-			if attempt.OperationID != "" && len(attempt.Result) == 0 {
-				plan.UncertainPR = true
-			}
+	for id, execution := range executions {
+		if execution.CurrentStep == "waiting_pr_merge" && !acceptedPR[id] || execution.CurrentStep == "publish_pr" && !acceptedPR[id] && !plannedWithoutAction[id] {
+			plan.UncertainPR = true
 		}
 	}
 	if len(prs) > 1 {
@@ -1305,14 +1334,9 @@ func taskDiscardPlanFromSnapshot(snapshot DomainSnapshot, taskID string) (taskDi
 	for url := range prs {
 		plan.PRURL = url
 	}
-	if plan.PRURL != "" {
-		plan.UncertainPR = false
-	}
 	plan.CleanupPending = uniqueSorted(plan.CleanupPending)
 	return plan, task, nil
 }
-
-func (e ExecutionRecord) ExecutionIDIsSet() bool { return e.ExecutionID != "" }
 
 func uniqueSorted(values []string) []string {
 	seen := map[string]bool{}
@@ -1342,9 +1366,14 @@ func lookupOperation(ctx context.Context, s *SQLiteStore, project, id string) (O
 
 func persistDiscardPending(ctx context.Context, s *SQLiteStore, project, requestID string, op OperationRecord, intent taskDiscardIntent, code, message string) (TaskDiscardReceipt, error) {
 	receipt := TaskDiscardReceipt{RequestID: requestID, TaskID: intent.TaskID, Status: "pending_verification", Code: code, Message: message, CleanupPending: uniqueSorted(intent.CleanupPending)}
-	err := s.Transact(ctx, func(domainTx DomainTx) error {
+	checkpoint, err := json.Marshal(intent)
+	if err != nil {
+		return TaskDiscardReceipt{}, err
+	}
+	err = s.Transact(ctx, func(domainTx DomainTx) error {
 		tx := domainTx.(*sqliteTx)
 		op.Status = "outcome_unknown"
+		op.Receipt = checkpoint
 		op.UnknownReason = message
 		op.UpdatedAt = time.Now().UTC()
 		if e := tx.UpdateOperation(op); e != nil {
@@ -1459,85 +1488,11 @@ func finishDiscardCommand(tx *sqliteTx, op OperationRecord, requestID string, re
 }
 
 func taskDiscardPlanTx(ctx context.Context, tx *sqliteTx, project, taskID string) (taskDiscardPlan, TaskRecord, error) {
-	graph, err := taskGraphSnapshotTx(ctx, tx, project)
+	snapshot, err := querySnapshot(ctx, tx.tx, project)
 	if err != nil {
 		return taskDiscardPlan{}, TaskRecord{}, err
 	}
-	task, ok := graph.ByID[taskID]
-	if !ok {
-		return taskDiscardPlan{}, task, nativeErr("task_not_found", "native task was not found")
-	}
-	rows, err := tx.tx.QueryContext(ctx, `SELECT e.payload,a.payload FROM workflow_runs w JOIN executions e ON e.project_identity=w.project_identity AND e.workflow_run_id=w.workflow_run_id LEFT JOIN step_attempts a ON a.project_identity=e.project_identity AND a.execution_id=e.execution_id WHERE w.project_identity=? AND w.task_id=?`, project, taskID)
-	if err != nil {
-		return taskDiscardPlan{}, task, err
-	}
-	defer rows.Close()
-	plan := taskDiscardPlan{CleanupPending: []string{}}
-	prs := map[string]bool{}
-	for rows.Next() {
-		var execBody []byte
-		var attemptBody []byte
-		if err = rows.Scan(&execBody, &attemptBody); err != nil {
-			return plan, task, err
-		}
-		var exec ExecutionRecord
-		if err = json.Unmarshal(execBody, &exec); err != nil {
-			return plan, task, err
-		}
-		if exec.Workspace.Worktree != "" || exec.Target.WorktreeID != "" {
-			id := exec.Target.WorktreeID
-			if id == "" {
-				id = exec.Workspace.Worktree
-			}
-			plan.CleanupPending = append(plan.CleanupPending, "workspace_cleanup:"+id)
-		}
-		if exec.Status == "active" || exec.Status == "waiting_decision" || exec.Status == "blocked" || exec.Status == "pending" {
-			plan.CleanupPending = append(plan.CleanupPending, "execution_stop_manual:"+exec.ExecutionID)
-		}
-		if exec.CurrentStep == "publish_pr" || exec.CurrentStep == "waiting_pr_merge" {
-			plan.UncertainPR = true
-		}
-		if len(attemptBody) == 0 {
-			continue
-		}
-		var attempt StepAttemptRecord
-		if err = json.Unmarshal(attemptBody, &attempt); err != nil {
-			return plan, task, err
-		}
-		if len(attempt.Result) > 0 {
-			var result StepGateResult
-			if json.Unmarshal(attempt.Result, &result) == nil && result.PRURL != "" {
-				prs[result.PRURL] = true
-			}
-		}
-		if attempt.StepID == "publish_pr" {
-			switch attempt.Status {
-			case "dispatching", "dispatched", "running", "stopping", "outcome_unknown":
-				plan.UncertainPR = true
-			case "succeeded":
-				if len(attempt.Result) == 0 {
-					plan.UncertainPR = true
-				}
-			}
-			if attempt.OperationID != "" && len(attempt.Result) == 0 {
-				plan.UncertainPR = true
-			}
-		}
-	}
-	if err = rows.Err(); err != nil {
-		return plan, task, err
-	}
-	if len(prs) > 1 {
-		return plan, task, nativeErr("immutable_task", "multiple PR identities are bound to this task; manual reconciliation is required")
-	}
-	for url := range prs {
-		plan.PRURL = url
-	}
-	if plan.PRURL != "" {
-		plan.UncertainPR = false
-	}
-	plan.CleanupPending = uniqueSorted(plan.CleanupPending)
-	return plan, task, nil
+	return taskDiscardPlanFromSnapshot(snapshot, taskID)
 }
 
 func dependencyCycle(edges []TaskDependencyRecord) []string {

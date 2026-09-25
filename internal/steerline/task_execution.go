@@ -84,6 +84,9 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 	if task.Status != "open" || task.Version != options.ExpectedTaskVersion {
 		return TaskClaimReceipt{}, nativeErr("stale_version", fmt.Sprintf("task is %s at version %d", task.Status, task.Version))
 	}
+	if nativeDeliveryInconsistent(task, graph) {
+		return TaskClaimReceipt{}, nativeErr("inconsistent_delivery", "task state conflicts with its delivery record")
+	}
 	if graph.Authority.DispatchPaused {
 		return TaskClaimReceipt{}, nativeErr("dispatch_paused", "dispatch is paused")
 	}
@@ -91,12 +94,7 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 		return TaskClaimReceipt{}, nativeErr("wrong_mode", "claim mode does not match project dispatch mode")
 	}
 	if ready, blockers := taskDependencyState(task, graph); !ready {
-		for _, blocker := range blockers {
-			if blocker.Blocker == "discarded_predecessor" {
-				return TaskClaimReceipt{}, nativeErr("discarded_predecessor", "a discarded predecessor blocks this task")
-			}
-		}
-		return TaskClaimReceipt{}, nativeErr("task_not_ready", "one or more predecessors lack verified delivery")
+		return TaskClaimReceipt{}, nativeDependencyClaimError(blockers)
 	}
 	allowed := map[string]bool{}
 	types := config.ExecutableTypes
@@ -193,6 +191,9 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 		if current.Authority.AuthorityVersion != options.ExpectedAuthorityVersion || currentTask.Version != options.ExpectedTaskVersion || currentTask.Status != "open" {
 			return nativeErr("stale_version", "task or project authority changed during claim preflight")
 		}
+		if nativeDeliveryInconsistent(currentTask, current) {
+			return nativeErr("inconsistent_delivery", "task state conflicts with its delivery record")
+		}
 		if current.Authority.DispatchPaused {
 			return nativeErr("dispatch_paused", "dispatch was paused before claim")
 		}
@@ -201,12 +202,7 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 		}
 		ready, blockers := taskDependencyState(currentTask, current)
 		if !ready {
-			for _, blocker := range blockers {
-				if blocker.Blocker == "discarded_predecessor" {
-					return nativeErr("discarded_predecessor", "a discarded predecessor blocks this task")
-				}
-			}
-			return nativeErr("task_not_ready", "a predecessor is no longer delivered")
+			return nativeDependencyClaimError(blockers)
 		}
 		for pred, merge := range predecessorMerges {
 			if current.Deliveries[pred].MergeCommit != merge {
@@ -262,6 +258,18 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 		return receipt, nil
 	}
 	return receipt, err
+}
+
+func nativeDependencyClaimError(blockers []TaskDependencyStatus) error {
+	for _, blocker := range blockers {
+		switch blocker.Blocker {
+		case "discarded_predecessor":
+			return nativeErr("discarded_predecessor", "a discarded predecessor blocks this task")
+		case "inconsistent_delivery":
+			return nativeErr("inconsistent_delivery", "a predecessor's state conflicts with its delivery record")
+		}
+	}
+	return nativeErr("task_not_ready", "one or more predecessors lack verified delivery")
 }
 
 func replayTaskClaim(old CommandRecord, payload []byte, taskID string, requestedBy string) (TaskClaimReceipt, error) {
@@ -355,10 +363,16 @@ func (c CommandService) CompleteNativeTask(ctx context.Context, config Config, t
 		return TaskDeliveryReceipt{}, nativeErr("task_not_found", "native task was not found")
 	}
 	if existing, ok := graph.Deliveries[taskID]; ok {
+		if task.Status != "closed" {
+			return TaskDeliveryReceipt{}, nativeErr("inconsistent_delivery", "task has a delivery without closed state")
+		}
 		if existing.SelectedWorkflowRunID != workflowRunID {
 			return TaskDeliveryReceipt{}, nativeErr("inconsistent_delivery", "task is already delivered by a different workflow")
 		}
 		return TaskDeliveryReceipt{TaskID: taskID, TaskVersion: task.Version, WorkflowRunID: workflowRunID, GraphRevision: graph.Authority.GraphRevision, Status: "closed", Delivery: existing}, nil
+	}
+	if task.Status == "closed" {
+		return TaskDeliveryReceipt{}, nativeErr("inconsistent_delivery", "closed task has no delivery record")
 	}
 	if task.Status == "discarded" {
 		return TaskDeliveryReceipt{}, nativeErr("task_discarded", "discarded task cannot be completed")
@@ -461,6 +475,9 @@ func latestDeliveryAttempt(attempts []StepAttemptRecord, step string) (StepAttem
 }
 
 func validateNativeDeliveryGates(task TaskRecord, contract TaskContract, workflow WorkflowRunRecord, execution ExecutionRecord, attempts []StepAttemptRecord) (StepGateResult, error) {
+	if err := (MinimalWorkflowConfig{Definition: workflow.Definition, Steps: workflow.ProjectSteps}).Validate(); err != nil {
+		return StepGateResult{}, nativeErr("task_not_ready", "selected workflow definition or fixed steps are invalid: "+err.Error())
+	}
 	if workflow.WorkflowVersion != MinimalWorkflowVersion || workflow.Phase != "waiting_pr_merge" || workflow.SelectedResult != execution.ExecutionID || execution.WorkflowRunID != workflow.WorkflowRunID || execution.Status != "succeeded" || execution.CurrentStep != "waiting_pr_merge" {
 		return StepGateResult{}, nativeErr("task_not_ready", "selected workflow result is not awaiting verified PR merge")
 	}
@@ -505,7 +522,9 @@ func (c CommandService) commitNativeDelivery(ctx context.Context, s *SQLiteStore
 		if err != nil {
 			return err
 		}
-		if graph.Authority.AuthorityVersion!=expectedAuthorityVersion{return nativeErr("stale_version","native project authority changed during PR verification")}
+		if graph.Authority.AuthorityVersion != expectedAuthorityVersion {
+			return nativeErr("stale_version", "native project authority changed during PR verification")
+		}
 		current, ok := graph.ByID[task.TaskID]
 		if !ok {
 			return nativeErr("task_not_found", "native task was not found")
@@ -514,6 +533,9 @@ func (c CommandService) commitNativeDelivery(ctx context.Context, s *SQLiteStore
 		var existingMerge string
 		err = tx.tx.QueryRowContext(ctx, `SELECT selected_workflow_run_id,merge_commit FROM task_deliveries WHERE project_identity=? AND task_id=?`, c.Project, task.TaskID).Scan(&existingRun, &existingMerge)
 		if err == nil {
+			if current.Status != "closed" {
+				return nativeErr("inconsistent_delivery", "task has a delivery without closed state")
+			}
 			if existingRun == workflow.WorkflowRunID && existingMerge == delivery.MergeCommit {
 				var record TaskDeliveryRecord
 				if e := scanTaskDelivery(tx.tx, c.Project, task.TaskID, &record); e != nil {
@@ -526,6 +548,9 @@ func (c CommandService) commitNativeDelivery(ctx context.Context, s *SQLiteStore
 		}
 		if !errors.Is(err, sql.ErrNoRows) {
 			return err
+		}
+		if current.Status == "closed" {
+			return nativeErr("inconsistent_delivery", "closed task has no delivery record")
 		}
 		if current.Status == "discarded" {
 			return nativeErr("task_discarded", "discarded task cannot be completed")

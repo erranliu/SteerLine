@@ -172,6 +172,17 @@ func TestCreateTaskBatchAtomicIdempotentAndQueryable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	for _, mutate := range []func(*TaskRecord){
+		func(task *TaskRecord) { task.GoalIDs = []string{"unapproved-goal"} },
+		func(task *TaskRecord) { task.IdentityMapDigest = "unapproved-digest" },
+	} {
+		task := rootPage.Tasks[0].TaskRecord
+		task.Status, task.Claimant, task.Version = "in_progress", "worker", task.Version+1
+		mutate(&task)
+		if err = store.Transact(ctx, func(tx DomainTx) error { return tx.UpdateNativeTaskCAS(task, rootPage.Tasks[0].Version) }); err == nil || !strings.Contains(err.Error(), "contract_mismatch") {
+			t.Fatalf("native status update changed fixed task fields: %v", err)
+		}
+	}
 	discard, err := commands.DiscardNativeTask(ctx, c, "20", strings.Repeat("2", 32), rootPage.Tasks[0].Version, "root abandoned", "operator")
 	if err != nil || discard.Status != "discarded" {
 		t.Fatalf("root discard failed: %+v / %v", discard, err)
@@ -390,6 +401,11 @@ func TestNativeClaimRechecksReadySlotAndPersistsReservationWithoutAppliedReceipt
 	}
 	if page.Tasks[0].Status != "in_progress" || len(page.Tasks[0].WorkflowRuns) != 1 || page.Tasks[0].WorkflowRuns[0].Phase != "queued" {
 		t.Fatalf("claim identities were not persisted together: %+v", page.Tasks[0])
+	}
+	alteredWorkflow := page.Tasks[0].WorkflowRuns[0]
+	alteredWorkflow.Definition.ReviewRequired = true
+	if err = store.Transact(ctx, func(tx DomainTx) error { return tx.PutWorkflowRun(alteredWorkflow) }); err == nil || !strings.Contains(err.Error(), "immutable_task") {
+		t.Fatalf("claim workflow gates were edited after reservation: %v", err)
 	}
 	other, err := (QueryService{Store: store, Project: c.Identity()}).ShowNativeTask(ctx, "81")
 	if err != nil {
@@ -700,6 +716,57 @@ func deliveryStepContract() StepContract {
 	return StepContract{Provider: "command", Entry: "builtin:verify", Version: MinimalWorkflowVersion, InputSchema: MinimalStepInputSchema, OutputSchema: MinimalStepOutputSchema, ExecutionSite: "local", Timeout: time.Minute, Command: []string{"git", "--version"}}
 }
 
+func TestInconsistentDeliveryStaysVisibleAndBlocksSuccessorClaim(t *testing.T) {
+	ctx := context.Background()
+	c, commit, store := openDAGFixture(t)
+	commands := CommandService{Store: store, Project: c.Identity()}
+	batch := taskBatchFixture(t, c, commit, batchTasks(200, 201), []TaskBatchEdge{{Predecessor: TaskBatchReference{LocalKey: "k200"}, Successor: TaskBatchReference{LocalKey: "k201"}}})
+	if _, err := commands.CreateTaskBatch(ctx, c, batch, strings.Repeat("e", 32), 1, "planner"); err != nil {
+		t.Fatal(err)
+	}
+	authority, err := store.nativeAuthority(ctx, c.Identity())
+	if err != nil {
+		t.Fatal(err)
+	}
+	authority.AuthorityVersion++
+	authority.DispatchPaused = false
+	if err = store.Transact(ctx, func(tx DomainTx) error {
+		return tx.UpdateProjectTaskAuthorityCAS(authority, authority.AuthorityVersion-1)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	root, err := (QueryService{Store: store, Project: c.Identity()}).ShowNativeTask(ctx, "200")
+	if err != nil {
+		t.Fatal(err)
+	}
+	corrupt := root.Tasks[0].TaskRecord
+	corrupt.Status, corrupt.Claimant, corrupt.Version, corrupt.UpdatedAt = "closed", "worker", 2, time.Now().UTC()
+	body, _ := json.Marshal(corrupt)
+	if _, err = store.db.ExecContext(ctx, `UPDATE tasks SET status=?,version=?,payload=? WHERE project_identity=? AND task_id=?`, corrupt.Status, corrupt.Version, body, c.Identity(), corrupt.TaskID); err != nil {
+		t.Fatal(err)
+	}
+	root, err = (QueryService{Store: store, Project: c.Identity()}).ShowNativeTask(ctx, "200")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !hasString(root.Tasks[0].StartupBlockers, "inconsistent_delivery") || root.Tasks[0].Delivery != nil {
+		t.Fatalf("closed task without delivery was hidden: %+v", root.Tasks[0])
+	}
+	successor, err := (QueryService{Store: store, Project: c.Identity()}).ShowNativeTask(ctx, "201")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if successor.Tasks[0].DependencyReady || len(successor.Tasks[0].UnmetPredecessors) != 1 || successor.Tasks[0].UnmetPredecessors[0].Blocker != "inconsistent_delivery" {
+		t.Fatalf("missing predecessor delivery released successor: %+v", successor.Tasks[0])
+	}
+	if _, err = commands.ClaimNativeTask(ctx, c, TaskClaimOptions{TaskID: "201", RequestID: strings.Repeat("f", 32), ExpectedTaskVersion: 1, ExpectedAuthorityVersion: 2, RequestedBy: "operator", Explicit: true}); err == nil || !strings.Contains(err.Error(), "inconsistent_delivery") {
+		t.Fatalf("inconsistent predecessor entered claim: %v", err)
+	}
+	if _, err = commands.CompleteNativeTask(ctx, c, "200", 2, "missing-run", &fixedTaskDeliveryVerifier{}); err == nil || !strings.Contains(err.Error(), "inconsistent_delivery") {
+		t.Fatalf("closed task without delivery was reported complete: %v", err)
+	}
+}
+
 func TestTaskDiscardRequestPersistsUnknownAndThenDiscardsOnlyAfterUnmergedProof(t *testing.T) {
 	ctx := context.Background()
 	c, commit, store := openDAGFixture(t)
@@ -790,7 +857,7 @@ func TestTaskDiscardRequestPersistsUnknownAndThenDiscardsOnlyAfterUnmergedProof(
 }
 
 func TestTaskDiscardRequiresPreciseUnmergedPRAndRetainsUnknownIntent(t *testing.T) {
-	states := map[string]string{"90": "open", "91": "merged", "92": "unknown"}
+	states := map[string]string{"90": "open", "91": "merged", "92": "unknown", "94": "open"}
 	var server *httptest.Server
 	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		number := filepath.Base(r.URL.Path)
@@ -829,12 +896,17 @@ func TestTaskDiscardRequiresPreciseUnmergedPRAndRetainsUnknownIntent(t *testing.
 	defer store.Close()
 	c.PR = PRConfig{Kind: "gitea", BaseURL: server.URL, Repository: "org/repo"}
 	commands := CommandService{Store: store, Project: c.Identity()}
-	payload := taskBatchFixture(t, c, commit, batchTasks(90, 91, 92), nil)
+	payload := taskBatchFixture(t, c, commit, batchTasks(90, 91, 92, 94), nil)
 	if _, err = commands.CreateTaskBatch(ctx, c, payload, strings.Repeat("f", 32), 1, "planner"); err != nil {
 		t.Fatal(err)
 	}
-	for _, id := range []string{"90", "91", "92"} {
+	for _, id := range []string{"90", "91", "92", "94"} {
 		seedPublishedForDiscard(t, ctx, c, store, id, commit, server.URL+"/org/repo/pulls/"+id)
+	}
+	// The first PR URL cannot settle a later publish attempt whose outcome is unknown.
+	unknownAttempt := StepAttemptRecord{ProjectIdentity: c.Identity(), AttemptID: "publish-unknown-94", ExecutionID: "exec-94", StepID: "publish_pr", AttemptNumber: 2, OperationID: "publish-op-unknown-94", Status: "outcome_unknown", CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}
+	if err = store.Transact(ctx, func(tx DomainTx) error { return tx.PutStepAttempt(unknownAttempt) }); err != nil {
+		t.Fatal(err)
 	}
 	open, err := commands.DiscardNativeTask(ctx, c, "90", strings.Repeat("1", 32), 2, "discard open PR", "operator")
 	if err != nil {
@@ -842,6 +914,14 @@ func TestTaskDiscardRequiresPreciseUnmergedPRAndRetainsUnknownIntent(t *testing.
 	}
 	if open.Status != "discarded" || !hasString(open.CleanupPending, "pull_request_close:"+server.URL+"/org/repo/pulls/90") || !hasString(open.CleanupPending, "workspace_cleanup:tree-90") {
 		t.Fatalf("open PR and workspace cleanup were hidden: %+v", open)
+	}
+	mergedAt := time.Now().UTC()
+	lateURL := server.URL + "/org/repo/pulls/90"
+	lateMerge := strings.Repeat("a", 40)
+	lateEvidence, _ := json.Marshal(TaskDeliveryEvidence{PRInstance: server.URL, URL: lateURL, Repository: "org/repo", PRNumber: 90, BaseBranch: c.Branch, State: "merged", Merged: true, MergedAt: mergedAt, MergeCommit: lateMerge})
+	lateDelivery := TaskDeliveryRecord{ProjectIdentity: c.Identity(), TaskID: "90", SelectedWorkflowRunID: "wf-90", PRInstance: server.URL, PRRepository: "org/repo", PRNumber: 90, PRURL: lateURL, MergeCommit: lateMerge, MergedAt: mergedAt, Evidence: lateEvidence}
+	if err = store.Transact(ctx, func(tx DomainTx) error { return tx.PutTaskDelivery(lateDelivery) }); err == nil || !strings.Contains(err.Error(), "task_discarded") {
+		t.Fatalf("late merge created a normal delivery for discarded task: %v", err)
 	}
 	merged, err := commands.DiscardNativeTask(ctx, c, "91", strings.Repeat("2", 32), 2, "discard merged PR", "operator")
 	if err != nil {
@@ -857,6 +937,18 @@ func TestTaskDiscardRequiresPreciseUnmergedPRAndRetainsUnknownIntent(t *testing.
 	if unknown.Status != "pending_verification" || unknown.Code != "merge_state_unknown" {
 		t.Fatalf("unknown PR state was called unmerged: %+v", unknown)
 	}
+	secondUnknown, err := commands.DiscardNativeTask(ctx, c, "94", strings.Repeat("4", 32), 2, "another publication is unresolved", "operator")
+	if err != nil || secondUnknown.Status != "pending_verification" || secondUnknown.Code != "merge_state_unknown" {
+		t.Fatalf("known PR URL cleared a separate unknown publication: %+v / %v", secondUnknown, err)
+	}
+	operation, err := lookupOperation(ctx, store, c.Identity(), strings.Repeat("4", 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var checkpoint taskDiscardIntent
+	if err = json.Unmarshal(operation.Receipt, &checkpoint); err != nil || checkpoint.PRURL != server.URL+"/org/repo/pulls/94" || !checkpoint.UncertainPR {
+		t.Fatalf("discard intent lost its PR binding or uncertain attempt: %+v / %v", checkpoint, err)
+	}
 	page, err := (QueryService{Store: store, Project: c.Identity()}).ListNativeTasks(ctx, "", 100)
 	if err != nil {
 		t.Fatal(err)
@@ -865,7 +957,7 @@ func TestTaskDiscardRequiresPreciseUnmergedPRAndRetainsUnknownIntent(t *testing.
 	for _, task := range page.Tasks {
 		statuses[task.TaskID] = task.Status
 	}
-	if statuses["90"] != "discarded" || statuses["91"] != "in_progress" || statuses["92"] != "in_progress" {
+	if statuses["90"] != "discarded" || statuses["91"] != "in_progress" || statuses["92"] != "in_progress" || statuses["94"] != "in_progress" {
 		t.Fatalf("discarded/merged/unknown PR results changed wrong task states: %v", statuses)
 	}
 }

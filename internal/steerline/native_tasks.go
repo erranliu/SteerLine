@@ -434,8 +434,9 @@ func (s *SQLiteStore) NativeTaskPage(ctx context.Context, project, taskID, expec
 		} else if !errors.Is(e, sql.ErrNoRows) {
 			return page, e
 		}
-		if record.Status == "closed" && detail.Delivery == nil || record.Status == "discarded" && detail.Delivery != nil {
-			return page, nativeErr("contract_mismatch", "task delivery evidence conflicts with native task status")
+		if (record.Status == "closed") != (detail.Delivery != nil) {
+			detail.DependencyReady = false
+			detail.StartupBlockers = append(detail.StartupBlockers, "inconsistent_delivery")
 		}
 		page.Tasks = append(page.Tasks, detail)
 	}

@@ -32,7 +32,18 @@ go vet ./...
 git diff --check
 ```
 
-The focused internal tests passed in 111.232 seconds on the final tree; the focused CLI tests passed in 12.599 seconds. The first full `go test ./... -count=1 -timeout 10m` timed out in the pre-existing `TestPRFailuresNeverClose/failure` workspace-preparation path, matching the long-running regression recorded by TASK-CORE. The repeat `go test ./... -count=1 -timeout 15m` passed; the `internal/steerline` package completed in 870.344 seconds, and command, remote-protocol and viewer packages passed. `go vet ./...` and `git diff --check` passed on the final tree.
+The focused internal tests passed in 111.232 seconds on the initial PR tree; the focused CLI tests passed in 12.599 seconds. The first full `go test ./... -count=1 -timeout 10m` timed out in the pre-existing `TestPRFailuresNeverClose/failure` workspace-preparation path, matching the long-running regression recorded by TASK-CORE. The repeat `go test ./... -count=1 -timeout 15m` passed; the `internal/steerline` package completed in 870.344 seconds, and command, remote-protocol and viewer packages passed. `go vet ./...` and `git diff --check` passed on that tree.
+
+## Quality audit follow-up
+
+The PR review found and fixed these center invariants:
+
+- A known PR URL no longer clears uncertainty from another publish attempt. The preflight and transactional discard checks now share one plan, and the reconciled PR/cleanup checkpoint remains durable across a pending result.
+- A closed task without delivery remains visible with `inconsistent_delivery`; successor queries and claims stay blocked. Duplicate completion also rejects an open task with a stray delivery.
+- Native workflow definition, step contracts, runner settings, repository, and branch are fixed after reservation. Delivery validates the selected gate structure. Task status updates preserve `goal_ids` and the identity-map digest.
+- The storage writer rejects normal delivery for a discarded task, including a late merged PR result.
+
+Regression cases cover a known PR plus an unknown second publication, the saved discard checkpoint, inconsistent predecessor delivery, fixed task/workflow fields, and delivery arriving after discard. The original full-suite result above precedes these audit fixes. The eight focused internal audit tests passed in 75.695 seconds; the two native CLI tests passed in 15.315 seconds. After the final publish-result guard, its focused discard test passed in 13.205 seconds. `go vet ./...` and `git diff --check` passed on the audit tree. The full suite was not rerun after these fixes.
 
 ## Completion gate
 

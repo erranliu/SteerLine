@@ -385,15 +385,12 @@ func runNativeTaskCommand(args []string) error {
 	default:
 		return fmt.Errorf("unsupported task command %q", subcommand)
 	}
-	if subcommand == "list" && *taskID != "" {
-		return errors.New("task list does not accept -task-id")
-	}
 	c, err := steerline.LoadConfig(*config)
 	if err != nil {
 		return err
 	}
 	if c.TaskAuthority != "native" {
-		return errors.New("authority_mismatch: task show/list require task_authority=native in the configuration")
+		return errors.New("authority_mismatch: task commands require task_authority=native in the configuration")
 	}
 	store, err := steerline.OpenNativeTaskProject(context.Background(), &c)
 	if err != nil {
