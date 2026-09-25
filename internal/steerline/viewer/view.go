@@ -187,8 +187,12 @@ func detailSummary(r *steerline.Run, td steerline.TaskDetail, hasTD bool, errMsg
 	default:
 		kvs = append(kvs, detailKV{"task", "loading…"})
 	}
+	taskStatusLabel, taskStatus := "beads", r.BeadsStatus
+	if r.TaskStatus != "" {
+		taskStatusLabel, taskStatus = "task", r.TaskStatus
+	}
 	kvs = append(kvs,
-		detailKV{"beads", r.BeadsStatus},
+		detailKV{taskStatusLabel, taskStatus},
 		detailKV{"started", ptrTime(r.StartedAt)},
 		detailKV{"ended", ptrTime(r.EndedAt)},
 		detailKV{"elapsed", elapsedShort(r)},

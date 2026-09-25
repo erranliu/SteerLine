@@ -37,6 +37,7 @@ type RecoveryInspection struct {
 	Workspace              *WorkspaceInspection `json:"workspace,omitempty"`
 	WorkspaceError         string               `json:"workspace_error,omitempty"`
 	Claim                  *Task                `json:"claim,omitempty"`
+	NativeClaim            *TaskRecord          `json:"native_claim,omitempty"`
 	ClaimError             string               `json:"claim_error,omitempty"`
 	PR                     *PRInfo              `json:"pr,omitempty"`
 	PRError                string               `json:"pr_error,omitempty"`
@@ -100,17 +101,7 @@ func InspectRecovery(ctx context.Context, c Config, runID string) (RecoveryInspe
 	} else {
 		inspection.WorkspaceError = workspaceErr.Error()
 	}
-	if run.BeadsContext == nil {
-		inspection.ClaimError = "dispatch-time task provider identity is missing"
-	} else if source, contextErr := service.beads.Context(ctx); contextErr != nil {
-		inspection.ClaimError = contextErr.Error()
-	} else if !source.Same(*run.BeadsContext) {
-		inspection.ClaimError = "task provider identity differs from the dispatch-time identity"
-	} else if task, showErr := service.beads.Show(ctx, run.TaskID); showErr != nil {
-		inspection.ClaimError = showErr.Error()
-	} else {
-		inspection.Claim = &task
-	}
+	service.inspectRecoveryClaim(ctx, run, &inspection)
 	if run.PR.URL != nil {
 		if info, queryErr := service.prs.Query(ctx, *run.PR.URL); queryErr == nil {
 			inspection.PR = &info
@@ -139,7 +130,7 @@ func InspectRecovery(ctx context.Context, c Config, runID string) (RecoveryInspe
 			break
 		}
 	}
-	inspection.RetryReason = inspectRetryReason(&service, run, &inspection)
+	inspection.RetryReason = inspectRetryReason(ctx, &service, run, &inspection)
 	inspection.MarkStoppedReason = inspectMarkStoppedReason(run, &inspection)
 	inspection.AcceptResultReason = inspectAcceptResultReason(&service, run, &inspection)
 	return inspection, nil
@@ -147,7 +138,32 @@ func InspectRecovery(ctx context.Context, c Config, runID string) (RecoveryInspe
 
 func recoveryService(c Config, runtimeState Runtime) Service {
 	runner := Runner{Dir: c.Repository, Timeout: duration(c.CommandTimeout)}
-	return Service{Config: c, State: runtimeState, beads: Beads{Runner: runner, Command: c.BD, Claimant: c.Claimant}, prs: &PRClient{Config: c.PR, Runner: runner}}
+	return Service{Config: c, State: runtimeState, native: c.taskAuthority() == "native", beads: Beads{Runner: runner, Command: c.BD, Claimant: c.Claimant}, prs: &PRClient{Config: c.PR, Runner: runner}}
+}
+
+func (s *Service) inspectRecoveryClaim(ctx context.Context, run *Run, report *RecoveryInspection) {
+	if s.native {
+		for i := range s.State.Tasks {
+			task := &s.State.Tasks[i]
+			if task.TaskID == run.DomainTaskID && task.ProjectIdentity == s.Config.identity {
+				report.NativeClaim = task
+				return
+			}
+		}
+		report.ClaimError = "center Task claim is missing from the current SQLite projection"
+		return
+	}
+	if run.BeadsContext == nil {
+		report.ClaimError = "dispatch-time task provider identity is missing"
+	} else if source, err := s.beads.Context(ctx); err != nil {
+		report.ClaimError = err.Error()
+	} else if !source.Same(*run.BeadsContext) {
+		report.ClaimError = "task provider identity differs from the dispatch-time identity"
+	} else if task, err := s.beads.Show(ctx, run.TaskID); err != nil {
+		report.ClaimError = err.Error()
+	} else {
+		report.Claim = &task
+	}
 }
 
 func hasOtherRecoveryReservation(runtimeState Runtime, runID string) bool {
@@ -159,7 +175,10 @@ func hasOtherRecoveryReservation(runtimeState Runtime, runID string) bool {
 	return false
 }
 
-func inspectRetryReason(service *Service, run *Run, report *RecoveryInspection) string {
+func inspectRetryReason(ctx context.Context, service *Service, run *Run, report *RecoveryInspection) string {
+	if service.native {
+		return inspectNativeRetryReason(ctx, service, run, report)
+	}
 	switch {
 	case service.State.Service.Status != "running" || !service.State.Service.Ready:
 		return "service is not ready"
@@ -200,6 +219,36 @@ func inspectRetryReason(service *Service, run *Run, report *RecoveryInspection) 
 	default:
 		return ""
 	}
+}
+
+func inspectNativeRetryReason(ctx context.Context, service *Service, run *Run, report *RecoveryInspection) string {
+	switch {
+	case service.State.Service.Status != "running" || !service.State.Service.Ready:
+		return "service is not ready"
+	case service.State.Control.DispatchMode != "manual" || service.State.Control.DispatchPaused:
+		return "native retry requires unpaused manual dispatch"
+	case service.State.Control.Operation != nil || len(service.State.Control.Blockers) > 0 || report.ConcurrentActionReason != "":
+		return "another control action or blocker prevents retry"
+	case service.State.SlotOccupied || service.worker != nil:
+		return "execution slot occupied"
+	case run.WorkflowVersion != MinimalWorkflowVersion || run.ExecutionStatus != "failed" || run.FinishTaskStatus != "blocked" || run.PR.URL != nil:
+		return "retry requires a settled failed native workflow without a bound PR"
+	case report.NativeClaim == nil || report.NativeClaim.Status != "in_progress" || report.NativeClaim.Claimant != run.Claimant:
+		return nonEmpty(report.ClaimError, "current native task claim does not match the run")
+	}
+	workflow, execution := service.minimalRecords(run)
+	failed := service.minimalAttempt(run, run.AttemptID)
+	if workflow == nil || execution == nil || failed == nil || execution.Status != "failed" || workflow.Phase != "blocked" || failed.StepID != execution.CurrentStep || failed.Status != "failed" && failed.Status != "rejected" {
+		return "current native workflow, execution or failed attempt changed"
+	}
+	workspace, err := service.inspectMinimalWorkspace(ctx, run)
+	if err != nil {
+		return "native retry workspace could not be verified: " + err.Error()
+	}
+	if workspace.Dirty || workspace.Head != failed.InputRevision {
+		return "native retry requires a clean workspace at the failed attempt input revision"
+	}
+	return ""
 }
 
 func inspectMarkStoppedReason(run *Run, report *RecoveryInspection) string {
@@ -511,6 +560,9 @@ func (s *Service) resolveControlBlocker(ctx context.Context, blockerID, requeste
 		if !errors.Is(commandErr, sql.ErrNoRows) {
 			return nil, commandErr
 		}
+	}
+	if s.native {
+		return nil, errors.New("native start_task blocker requires reconciliation of its center task, workflow and step operations")
 	}
 	req, err := ReadControlRequest(s.Config, blockerID)
 	if err != nil {

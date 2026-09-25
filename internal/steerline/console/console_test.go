@@ -1230,7 +1230,7 @@ func TestLoadProjectsSupportsZeroPartialAndExplicitConfigs(t *testing.T) {
 
 func writeConsoleTestConfig(t *testing.T, path, repository, runDir string) {
 	t.Helper()
-	data, err := json.Marshal(map[string]string{"repository": repository, "branch": "main", "run_dir": runDir})
+	data, err := json.Marshal(map[string]string{"task_authority": "beads", "repository": repository, "branch": "main", "run_dir": runDir})
 	if err != nil {
 		t.Fatal(err)
 	}

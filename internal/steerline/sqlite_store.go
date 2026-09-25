@@ -1359,6 +1359,14 @@ func (s *SQLiteStore) EventPayload(ctx context.Context, project string, eventID 
 }
 
 func (s *SQLiteStore) Commands(ctx context.Context, project, status string, limit int) ([]CommandRecord, error) {
+	return s.commandsFiltered(ctx, project, status, limit, nil)
+}
+
+func (s *SQLiteStore) serviceCommands(ctx context.Context, project, status string, limit int) ([]CommandRecord, error) {
+	return s.commandsFiltered(ctx, project, status, limit, []string{"answer_decision", "retry_run", "mark_stopped", "accept_result", "resolve_command"})
+}
+
+func (s *SQLiteStore) commandsFiltered(ctx context.Context, project, status string, limit int, kinds []string) ([]CommandRecord, error) {
 	if limit < 1 {
 		limit = 200
 	}
@@ -1370,6 +1378,12 @@ func (s *SQLiteStore) Commands(ctx context.Context, project, status string, limi
 	if status != "" {
 		q += ` AND status=?`
 		args = append(args, status)
+	}
+	if len(kinds) > 0 {
+		q += ` AND kind IN (` + strings.TrimSuffix(strings.Repeat("?,", len(kinds)), ",") + `)`
+		for _, kind := range kinds {
+			args = append(args, kind)
+		}
 	}
 	q += ` ORDER BY created_at LIMIT ?`
 	args = append(args, limit)
@@ -1434,11 +1448,16 @@ func (s *SQLiteStore) SaveRuntime(ctx context.Context, runtime Runtime) (Runtime
 		if err := tx.(*sqliteTx).tx.QueryRowContext(ctx, `SELECT COALESCE(MAX(revision),0) FROM projection WHERE project_identity=?`, project).Scan(&revision); err != nil {
 			return err
 		}
+		var authority string
+		authorityErr := tx.(*sqliteTx).tx.QueryRowContext(ctx, `SELECT authority FROM project_task_authorities WHERE project_identity=?`, project).Scan(&authority)
+		if authorityErr != nil && !errors.Is(authorityErr, sql.ErrNoRows) {
+			return authorityErr
+		}
 		runtime.Revision = revision + 1
 		if runtime.SchemaVersion != 5 {
 			return fmt.Errorf("unsupported runtime schema %d; only schema 5 is accepted", runtime.SchemaVersion)
 		}
-		runtime.Operations = runtimeOperations(runtime)
+		runtime.Operations = runtimeOperations(runtime, authority == "native")
 		for _, run := range runtime.Runs {
 			if run == nil {
 				continue
@@ -1557,6 +1576,15 @@ func persistNormalizedWorkflow(tx DomainTx, project string, runtime Runtime, run
 	if workflow == nil {
 		return fmt.Errorf("minimal-v1 run %s lacks its WorkflowRun record", run.RunID)
 	}
+	var authority string
+	if err := tx.(*sqliteTx).tx.QueryRowContext(tx.(*sqliteTx).ctx, `SELECT authority FROM project_task_authorities WHERE project_identity=?`, project).Scan(&authority); err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return err
+	}
+	if authority == "native" && task.Status == "closed" && workflow.Phase == "completed" && run.FinishTaskStatus == "completed" {
+		// CompleteNativeTask already committed the selected delivery, closed task,
+		// and immutable completed workflow in its center transaction.
+		return nil
+	}
 	var executionIDs = map[string]bool{}
 	for i := range runtime.Executions {
 		execution := &runtime.Executions[i]
@@ -1578,7 +1606,10 @@ func persistNormalizedWorkflow(tx DomainTx, project string, runtime Runtime, run
 			workflow.Phase = "completed"
 		}
 		if run.FinishTaskStatus == "blocked" {
-			if run.ExecutionStatus == "unknown" {
+			if authority == "native" && task.Status == "discarded" && execution.Status == "stopped" {
+				// A confirmed native discard stop has already settled the fixed
+				// execution resource; the task remains discarded and blocked.
+			} else if run.ExecutionStatus == "unknown" {
 				execution.Status = "blocked"
 			} else {
 				execution.Status = "failed"
@@ -1606,8 +1637,10 @@ func persistNormalizedWorkflow(tx DomainTx, project string, runtime Runtime, run
 		}
 	}
 	workflow.UpdatedAt = now()
-	if err := tx.PutTask(*task); err != nil {
-		return err
+	if authority != "native" {
+		if err := tx.PutTask(*task); err != nil {
+			return err
+		}
 	}
 	if err := tx.PutWorkflowRun(*workflow); err != nil {
 		return err
@@ -1890,14 +1923,14 @@ func legacyDecisionStatus(v string) string {
 	}
 }
 
-func runtimeOperations(runtime Runtime) []OperationRecord {
+func runtimeOperations(runtime Runtime, native bool) []OperationRecord {
 	project := runtime.Repository.Identity
 	out := append([]OperationRecord(nil), runtime.Operations...)
 	indices := map[string]int{}
 	for i, op := range out {
 		indices[op.OperationID] = i
 	}
-	if op := runtime.Control.Operation; op != nil {
+	if op := runtime.Control.Operation; op != nil && !(native && centerOwnedNativeControlAction(op.Action)) {
 		status := "outcome_unknown"
 		if op.Phase == "applying" {
 			status = "in_flight"
@@ -1925,6 +1958,15 @@ func runtimeOperations(runtime Runtime) []OperationRecord {
 		}
 	}
 	return out
+}
+
+func centerOwnedNativeControlAction(action string) bool {
+	switch action {
+	case "start_task", "set_dispatch_mode", "pause_dispatch", "resume_dispatch":
+		return true
+	default:
+		return false
+	}
 }
 
 func operationDigest(payload []byte) string {

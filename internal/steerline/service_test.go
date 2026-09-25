@@ -33,6 +33,10 @@ type fakeDB struct {
 	CompletionCalls int
 	FailCompletion  int
 	CompletionMode  string
+	PRState         string
+	PRMerged        bool
+	PRMergedAt      *time.Time
+	PRMergeCommit   string
 }
 
 func TestMain(m *testing.M) {
@@ -160,6 +164,76 @@ func fakeMinimalStep(path string, db fakeDB, argv []string) int {
 	return 0
 }
 
+func fakeNativeMinimalStep() int {
+	if _, ok := os.LookupEnv("BEADS_DIR"); ok {
+		fmt.Fprintln(os.Stderr, "native worker inherited BEADS_DIR")
+		return 31
+	}
+	if _, ok := os.LookupEnv("BEADS_ACTOR"); ok {
+		fmt.Fprintln(os.Stderr, "native worker inherited BEADS_ACTOR")
+		return 32
+	}
+	var input NativeTaskWorkerContext
+	rawInput, err := io.ReadAll(io.LimitReader(os.Stdin, 1<<20))
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 33
+	}
+	if err = json.Unmarshal(rawInput, &input); err != nil {
+		prefix := rawInput
+		if len(prefix) > 12 {
+			prefix = prefix[:12]
+		}
+		fmt.Fprintf(os.Stderr, "%v (stdin prefix %x)", err, prefix)
+		return 33
+	}
+	if input.SchemaVersion != NativeTaskInputSchema || input.ProjectID == "" || input.TaskID == "" || input.Contract.Digest != input.ContractDigest || input.CurrentStep == "" || input.StepInput.TaskID != input.TaskID {
+		fmt.Fprintln(os.Stderr, "native-task/v1 context is incomplete")
+		return 34
+	}
+	if os.Getenv("STEERLINE_FAKE_NATIVE_STEP_FAIL") == input.CurrentStep {
+		marker := os.Getenv("STEERLINE_FAKE_NATIVE_STEP_FAIL_MARKER")
+		if marker != "" {
+			if _, err := os.Stat(marker); os.IsNotExist(err) {
+				if err = os.WriteFile(marker, []byte(input.AttemptID), 0600); err != nil {
+					fmt.Fprintln(os.Stderr, err)
+					return 37
+				}
+				fmt.Fprintln(os.Stderr, "injected settled native step failure")
+				return 38
+			}
+		}
+	}
+	if delay := os.Getenv("STEERLINE_FAKE_NATIVE_STEP_WAIT"); delay != "" {
+		if duration, err := time.ParseDuration(delay); err == nil && duration > 0 {
+			time.Sleep(duration)
+		}
+	}
+	result := StepGateResult{StepID: input.CurrentStep, Succeeded: true, InputRevision: input.StepInput.InputRevision, Workspace: input.StepInput.Workspace, ResultID: newID(), PrerequisiteIDs: append([]string(nil), input.StepInput.PrerequisiteResultIDs...)}
+	switch input.CurrentStep {
+	case "implement":
+		result.Revision = input.StepInput.Workspace.Head
+	case "verify":
+		result.Revision = input.StepInput.CandidateRevision
+		for _, name := range input.StepInput.ProjectSteps.Verify.RequiredChecks {
+			result.Checks = append(result.Checks, CheckEvidence{Name: name, Status: "passed", Revision: result.Revision})
+		}
+	case "publish_pr":
+		result.Revision = input.StepInput.CandidateRevision
+		result.PublishedHead = result.Revision
+		result.PRURL = "https://forge.invalid/org/repo/pulls/" + input.TaskID
+	default:
+		fmt.Fprintln(os.Stderr, "unsupported native test step", input.CurrentStep)
+		return 35
+	}
+	envelope := MinimalStepResultEnvelope{SchemaVersion: 1, ProjectIdentity: input.ProjectID, TaskID: input.TaskID, WorkflowRunID: input.WorkflowRunID, ExecutionID: input.ExecutionID, AttemptID: input.AttemptID, Result: result}
+	if err := json.NewEncoder(os.Stdout).Encode(envelope); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 36
+	}
+	return 0
+}
+
 func writeFake(path string, db fakeDB) {
 	b, _ := json.Marshal(db)
 	if e := AtomicWrite(path, b); e != nil {
@@ -179,6 +253,14 @@ func fakeMain(args []string) int {
 	if mode == "git-proxy" {
 		gitArgs := append([]string(nil), args[2:]...)
 		if len(gitArgs) > 0 && gitArgs[0] == "fetch" {
+			if remote := os.Getenv("STEERLINE_FAKE_GIT_FETCH_REMOTE"); remote != "" {
+				for i := 1; i < len(gitArgs); i++ {
+					if gitArgs[i] == "origin" {
+						gitArgs[i] = remote
+						break
+					}
+				}
+			}
 			for i := range gitArgs {
 				if gitArgs[i] == "web" {
 					gitArgs[i] = "origin"
@@ -203,6 +285,9 @@ func fakeMain(args []string) int {
 	}
 	if mode == "orca" {
 		return fakeOrca(args[1], args[2:])
+	}
+	if mode == "native-step" {
+		return fakeNativeMinimalStep()
 	}
 	if mode == "lock" {
 		l, e := LockRepository(args[1])
@@ -271,7 +356,22 @@ func fakeMain(args []string) int {
 		return fakeMinimalStep(path, db, argv)
 	}
 	if mode == "pr-query" {
-		info := PRInfo{URL: argv[0], Repository: argv[1], BaseBranch: "main", HeadRevision: db.PRHeadRevision, State: "open"}
+		state := db.PRState
+		if state == "" {
+			state = "open"
+		}
+		info := PRInfo{URL: argv[0], Repository: argv[1], BaseBranch: "main", HeadRevision: db.PRHeadRevision, State: state, Merged: db.PRMerged, MergedAt: db.PRMergedAt}
+		if db.PRMergeCommit != "" {
+			info.MergeCommit = ptr(db.PRMergeCommit)
+		}
+		_ = json.NewEncoder(os.Stdout).Encode(info)
+		return 0
+	}
+	if mode == "pr-close" {
+		db.PRState, db.PRMerged = "closed_unmerged", false
+		db.PRMergedAt, db.PRMergeCommit = nil, ""
+		writeFake(path, db)
+		info := PRInfo{URL: argv[0], Repository: argv[1], BaseBranch: "main", HeadRevision: db.PRHeadRevision, State: "closed_unmerged"}
 		_ = json.NewEncoder(os.Stdout).Encode(info)
 		return 0
 	}
@@ -569,7 +669,7 @@ func newFixture(t *testing.T, tasks ...Task) *fixture {
 			t.Fatalf("git fixture: %v %s", e, out)
 		}
 	}
-	f.c = Config{Repository: repo, Remote: "origin", Branch: "main", RunDir: runs, RuntimeFile: "runtime.json", Claimant: "test-claimant", Git: Command{Executable: git}, BD: Command{Executable: exe, Args: []string{"--fake", "bd", f.db}}, Codex: Command{Executable: exe, Args: []string{"--fake", "codex", f.db}}, StartSkill: Skill{Path: "start.md", Invocation: "Read start.md"}, FinishSkill: Skill{Path: "finish.md", Invocation: "Read finish.md"}, ExecutableTypes: []string{"task", "bug", "feature", "chore"}, TaskPoll: "100ms", PRPoll: "100ms", Heartbeat: "20ms", CommandTimeout: "5s", ShutdownGrace: "80ms", Sandbox: "workspace-write", PR: PRConfig{Kind: "gitea", BaseURL: f.server.URL, Repository: "owner/repo"}, identity: canonical(filepath.Join(repo, ".git"))}
+	f.c = Config{TaskAuthority: "beads", Repository: repo, Remote: "origin", Branch: "main", RunDir: runs, RuntimeFile: "runtime.json", Claimant: "test-claimant", Git: Command{Executable: git}, BD: Command{Executable: exe, Args: []string{"--fake", "bd", f.db}}, Codex: Command{Executable: exe, Args: []string{"--fake", "codex", f.db}}, StartSkill: Skill{Path: "start.md", Invocation: "Read start.md"}, FinishSkill: Skill{Path: "finish.md", Invocation: "Read finish.md"}, ExecutableTypes: []string{"task", "bug", "feature", "chore"}, TaskPoll: "100ms", PRPoll: "100ms", Heartbeat: "20ms", CommandTimeout: "5s", ShutdownGrace: "80ms", Sandbox: "workspace-write", PR: PRConfig{Kind: "gitea", BaseURL: f.server.URL, Repository: "owner/repo"}, identity: canonical(filepath.Join(repo, ".git"))}
 	configBytes, _ := json.Marshal(f.c)
 	configDigest := sha256.Sum256(configBytes)
 	f.c.configDigest = hex.EncodeToString(configDigest[:])

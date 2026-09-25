@@ -43,16 +43,17 @@
 
 | 动作 | 前提与效果 | 成功回执的含义 |
 | --- | --- | --- |
-| retry_run | manual、未暂停、无执行/决策/unknown/控制阻塞；仅 local 的 blocked failed/succeeded，无 PR，工作目录干净且 HEAD=base，任务领取身份不变；保留 task/run/worktree，新建 attempt | 新 attempt 的 worker 已启动并保存身份 |
+| retry_run | manual、未暂停、无执行/决策/unknown/控制阻塞。原生 minimal-v1 要求中心任务仍被原 claimant 领取、当前步骤失败且已结算、无 PR、固定工作目录干净且 HEAD 等于失败步骤的 input revision；通过中心 RetryNativeStep 事务保留 task/run/worktree 并新建 step attempt。非原生 local 单步执行沿用 blocked failed/succeeded、HEAD=base 的门槛 | 新 attempt 的 worker 已启动并保存身份；服务重启后以中心步骤回执和 attempt 对账 |
 | mark_stopped | 对 unknown run，操作者明确确认旧执行已停止；已知仍活着的原进程/终端一律拒绝；设置 failed/blocked，保留 claim/工作目录 | 不确定执行被明确标记为停止，未启动 worker |
 | accept_result | 对待恢复的 blocked/unknown run，无当前 worker/准备动作，显式确认原执行已停止；已有完整受核验 workspace 证据；校验指定结果和真实 PR | 原任务接回 waiting_pr_merge；完成仍待 PR/结项核实 |
 | resolve_command | 对 control.blockers 中的 indeterminate 指令逐项核验，按下面规则解除这一条阻塞 | 该指令的不确定副作用已被记录为已核验/停止；没有重放原指令 |
 
 补充规则：
 
-- retry 不重新 claim、不另选任务、不清理旧日志。在线 retry 使用当前服务启动时的配置；修改配置需先停服再启动。Orca retry 始终返回明确不支持原因，不能暗中回退 local。
+- retry 不重新 claim、不另选任务、不清理旧日志。在线 retry 使用当前服务启动时的配置；修改配置需先停服再启动。原生 Orca 步骤沿用固定的 Orca 目标和中心步骤身份；非原生 Orca 单段 retry 返回明确不支持原因，不能暗中回退 local。
 - 宿主资格以 4A 固定 ExecutionRef 和能力证据为准；修改默认 host 不能把原 Orca run 变成可 local retry 的运行。缺少匹配适配配置或原目标无法验证时拒绝，不能借当前默认值改写活动执行身份。业务层通过公共 Observe/Inspect/Reconcile 操作核验。
 - 在线 retry 后服务保持运行，并继续跟踪本项目其他 PR；不保留旧离线 RetryOne 的第二套变更入口。
+- 原生 minimal-v1 的 mark_stopped/accept_result 仍由步骤 attempt 与 Operation 对账，不能绕过当前步骤门槛。
 - mark_stopped/accept_result 不能把活跃服务标成 stopped，不能无条件清空其他 run 的 current_task/slot。动作完成后重新计算全部执行阻塞。
 - 存在其他 worker/准备动作时拒绝恢复变更；其他 unknown 可以保留，但解除一个 unknown 不能释放另一个 unknown 的槽保留。
 - waiting_decision 正在等待/续跑的记录先走决策流程；不能用结果接回按钮悄悄覆盖尚未处理的决策。续跑失败已变 blocked 时才进入恢复入口。

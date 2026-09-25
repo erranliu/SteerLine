@@ -43,6 +43,7 @@ type SpawnSpec struct {
 	Command            Command
 	Stdin              io.Reader
 	Env                map[string]string
+	UnsetEnv           []string
 	Timeout            time.Duration
 }
 
@@ -134,7 +135,7 @@ func (LocalSpawner) Start(ctx context.Context, spec SpawnSpec) (*Worker, error) 
 	}
 	cmd := exec.Command(spec.Command.Executable, spec.Command.Args...)
 	cmd.Dir = spec.Dir
-	cmd.Env = overrideEnv(cmd.Environ(), spec.Env)
+	cmd.Env = unsetEnv(overrideEnv(cmd.Environ(), spec.Env), spec.UnsetEnv)
 	cmd.Stdin = spec.Stdin
 	cmd.Stderr = errFile
 	// An explicit pipe lets the event reader finish before Wait, avoiding StdoutPipe races.

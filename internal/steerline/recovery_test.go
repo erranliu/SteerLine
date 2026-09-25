@@ -9,6 +9,59 @@ import (
 	"testing"
 )
 
+func TestInterventionProcessorPreservesNativeCommandOwnership(t *testing.T) {
+	db := openDomainTestStore(t)
+	project := "repo:native-command-ownership"
+	service := Service{Config: Config{identity: project}, native: true, domainStore: db}
+	commands := CommandService{Store: db, Project: project}
+	for _, kind := range []string{"claim_task", "discard_task", "create_task_batch", "set_dispatch_state"} {
+		id := newID()
+		if _, created, err := commands.Submit(context.Background(), CommandRecord{CommandID: id, Kind: kind, TargetID: "task", IdempotencyKey: id, RequestedBy: "operator", Payload: []byte("{}"), Status: "in_flight", CreatedAt: now()}); err != nil || !created {
+			t.Fatalf("seed native %s command: created=%v err=%v", kind, created, err)
+		}
+	}
+	for range 205 {
+		id := newID()
+		if _, created, err := commands.Submit(context.Background(), CommandRecord{CommandID: id, Kind: "retry_step", TargetID: "task", IdempotencyKey: id, RequestedBy: "operator", Payload: []byte("{}"), Status: "in_flight", CreatedAt: now()}); err != nil || !created {
+			t.Fatalf("seed native retry command: created=%v err=%v", created, err)
+		}
+	}
+	serviceID := newID()
+	if _, created, err := commands.Submit(context.Background(), CommandRecord{CommandID: serviceID, Kind: "mark_stopped", TargetID: "run", IdempotencyKey: serviceID, RequestedBy: "operator", Payload: []byte("{}"), Status: "pending", CreatedAt: now()}); err != nil || !created {
+		t.Fatalf("seed online recovery command: created=%v err=%v", created, err)
+	}
+	require(t, service.processPendingCommands(context.Background()))
+	remaining, err := db.Commands(context.Background(), project, "in_flight", 220)
+	require(t, err)
+	if len(remaining) != 209 {
+		t.Fatalf("intervention processor rewrote native command receipts: %+v", remaining)
+	}
+	processed, err := db.Command(context.Background(), project, serviceID)
+	require(t, err)
+	if processed.Status != "rejected" {
+		t.Fatalf("native commands starved the online recovery queue: %+v", processed)
+	}
+}
+
+func TestRecoveryInspectionReadsNativeClaimFromCenter(t *testing.T) {
+	project := "repo:native-recovery"
+	task := TaskRecord{ProjectIdentity: project, TaskID: "7", Claimant: "native-claimant", Status: "in_progress"}
+	service := Service{Config: Config{identity: project}, native: true, State: Runtime{Tasks: []TaskRecord{task}}}
+	report := RecoveryInspection{}
+	service.inspectRecoveryClaim(context.Background(), &Run{TaskID: "7", DomainTaskID: "7"}, &report)
+	if report.NativeClaim == nil || report.NativeClaim.TaskID != task.TaskID || report.NativeClaim.Claimant != task.Claimant || report.Claim != nil || report.ClaimError != "" {
+		t.Fatalf("native recovery claim used the Beads path or lost center evidence: %+v", report)
+	}
+}
+
+func TestNativeStartBlockerDoesNotUseBeadsClaim(t *testing.T) {
+	s := &Service{native: true, State: Runtime{Control: ControlState{Blockers: []ControlBlocker{{RequestID: "native-start", Action: "start_task"}}}}}
+	_, err := s.resolveControlBlocker(context.Background(), "native-start", "operator", "checked the center records")
+	if err == nil || !strings.Contains(err.Error(), "center task, workflow and step operations") {
+		t.Fatalf("native start blocker must remain for center reconciliation: %v", err)
+	}
+}
+
 func TestMarkStoppedKeepsServiceRunningAndRetainsOtherUnknownSlot(t *testing.T) {
 	f, service, run := failedStartup(t)
 	defer service.Close()

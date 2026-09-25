@@ -32,6 +32,132 @@ type TaskClaimOptions struct {
 	ExpectedAuthorityVersion uint64
 	RequestedBy              string
 	Explicit                 bool
+	WorkflowRunID            string
+}
+
+type NativeDispatchUpdate struct {
+	RequestID                string
+	ExpectedAuthorityVersion uint64
+	Mode                     *string
+	Paused                   *bool
+	RequestedBy              string
+}
+
+func (c CommandService) SetNativeDispatchState(ctx context.Context, update NativeDispatchUpdate) (ProjectTaskAuthority, error) {
+	sqlite, ok := c.Store.(*SQLiteStore)
+	if !ok || c.Project == "" {
+		return ProjectTaskAuthority{}, nativeErr("authority_mismatch", "dispatch control requires the center SQLite project")
+	}
+	if !controlIDPattern.MatchString(update.RequestID) || update.ExpectedAuthorityVersion == 0 {
+		return ProjectTaskAuthority{}, nativeErr("invalid_batch", "dispatch control requires request ID and sampled authority version")
+	}
+	if update.Mode == nil && update.Paused == nil {
+		return ProjectTaskAuthority{}, nativeErr("invalid_batch", "dispatch control must change mode or pause state")
+	}
+	if update.Mode != nil && *update.Mode != "manual" && *update.Mode != "auto" {
+		return ProjectTaskAuthority{}, nativeErr("invalid_batch", "dispatch mode must be auto or manual")
+	}
+	if strings.TrimSpace(update.RequestedBy) == "" {
+		update.RequestedBy = DefaultRequestedBy()
+	}
+	requestBytes, err := json.Marshal(struct {
+		Mode        *string `json:"mode,omitempty"`
+		Paused      *bool   `json:"paused,omitempty"`
+		RequestedBy string  `json:"requested_by"`
+	}{update.Mode, update.Paused, update.RequestedBy})
+	if err != nil {
+		return ProjectTaskAuthority{}, err
+	}
+	requestPayload, err := CanonicalJSON(requestBytes)
+	if err != nil {
+		return ProjectTaskAuthority{}, err
+	}
+	if old, found, lookupErr := lookupTaskBatchCommand(ctx, sqlite, c.Project, update.RequestID); lookupErr != nil {
+		return ProjectTaskAuthority{}, lookupErr
+	} else if found {
+		return replayNativeDispatchState(old, requestPayload, c.Project, update.RequestedBy)
+	}
+	graph, err := sqlite.taskGraphSnapshot(ctx, c.Project)
+	if err != nil {
+		return ProjectTaskAuthority{}, err
+	}
+	if graph.Authority.AuthorityVersion != update.ExpectedAuthorityVersion {
+		return ProjectTaskAuthority{}, nativeErr("stale_version", fmt.Sprintf("expected authority version %d, found %d", update.ExpectedAuthorityVersion, graph.Authority.AuthorityVersion))
+	}
+	next := graph.Authority
+	next.AuthorityVersion++
+	if update.Mode != nil {
+		next.DispatchMode = *update.Mode
+	}
+	if update.Paused != nil {
+		next.DispatchPaused = *update.Paused
+	}
+	next.UpdatedAt = time.Now().UTC()
+	var result ProjectTaskAuthority
+	err = sqlite.Transact(ctx, func(domainTx DomainTx) error {
+		tx, ok := domainTx.(*sqliteTx)
+		if !ok {
+			return nativeErr("authority_mismatch", "dispatch control requires a center SQLite transaction")
+		}
+		if old, found, lookupErr := lookupTaskBatchCommandTx(ctx, tx, c.Project, update.RequestID); lookupErr != nil {
+			return lookupErr
+		} else if found {
+			value, replayErr := replayNativeDispatchState(old, requestPayload, c.Project, update.RequestedBy)
+			if replayErr != nil {
+				return replayErr
+			}
+			result = value
+			return taskBatchReplay{Receipt: TaskBatchReceipt{RequestID: update.RequestID, Status: "accepted"}}
+		}
+		current, readErr := taskGraphSnapshotTx(ctx, tx, c.Project)
+		if readErr != nil {
+			return readErr
+		}
+		if current.Authority.AuthorityVersion != update.ExpectedAuthorityVersion {
+			return nativeErr("stale_version", "native dispatch authority changed during control preflight")
+		}
+		command := CommandRecord{ProjectIdentity: c.Project, CommandID: update.RequestID, Kind: "set_dispatch_state", TargetID: c.Project, ExpectedVersion: update.ExpectedAuthorityVersion, IdempotencyKey: update.RequestID, RequestedBy: update.RequestedBy, Payload: requestPayload, Status: "in_flight", CreatedAt: next.UpdatedAt}
+		if _, made, enqueueErr := tx.EnqueueCommand(command); enqueueErr != nil {
+			return nativeErr("idempotency_conflict", enqueueErr.Error())
+		} else if !made {
+			return nativeErr("idempotency_conflict", "dispatch request ID is already in use")
+		}
+		operation := OperationRecord{ProjectIdentity: c.Project, OperationID: update.RequestID, IdempotencyKey: update.RequestID, Kind: "set_dispatch_state", Status: "confirmed", PayloadDigest: digestCanonical(requestPayload), Request: requestPayload, CreatedAt: next.UpdatedAt, UpdatedAt: next.UpdatedAt}
+		if _, made, putErr := tx.PutOperation(operation); putErr != nil {
+			return putErr
+		} else if !made {
+			return nativeErr("idempotency_conflict", "dispatch operation request ID is already in use")
+		}
+		if writeErr := tx.UpdateProjectTaskAuthorityCAS(next, update.ExpectedAuthorityVersion); writeErr != nil {
+			return writeErr
+		}
+		command.Status = "accepted"
+		command.Result, _ = json.Marshal(next)
+		command.UpdatedAt = next.UpdatedAt
+		if writeErr := tx.UpdateCommand(command); writeErr != nil {
+			return writeErr
+		}
+		result = next
+		body, _ := json.Marshal(next)
+		_, writeErr := tx.AppendEvent(DomainEvent{ProjectIdentity: c.Project, ExternalSource: "native-task-command", ExternalID: update.RequestID, Type: "project.dispatch.updated", ReceivedAt: next.UpdatedAt, Payload: body})
+		return writeErr
+	})
+	var replay taskBatchReplay
+	if errors.As(err, &replay) {
+		return result, nil
+	}
+	return result, err
+}
+
+func replayNativeDispatchState(old CommandRecord, requestPayload []byte, project, requestedBy string) (ProjectTaskAuthority, error) {
+	if old.ProjectIdentity != project || old.Kind != "set_dispatch_state" || old.IdempotencyKey == "" || old.RequestedBy != requestedBy || !bytes.Equal(old.Payload, requestPayload) || old.Status != "accepted" || len(old.Result) == 0 {
+		return ProjectTaskAuthority{}, nativeErr("idempotency_conflict", "dispatch request ID was used for a different command")
+	}
+	var result ProjectTaskAuthority
+	if err := decode(old.Result, &result); err != nil || result.ProjectIdentity != project {
+		return ProjectTaskAuthority{}, nativeErr("unsupported_schema", "saved dispatch command receipt is invalid")
+	}
+	return result, nil
 }
 
 // ClaimNativeTask reserves one ready task after verifying the pinned contract,
@@ -45,17 +171,18 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 	if err := ValidateNativeTaskID(options.TaskID); err != nil {
 		return TaskClaimReceipt{}, err
 	}
-	if !controlIDPattern.MatchString(options.RequestID) || options.ExpectedTaskVersion == 0 || options.ExpectedAuthorityVersion == 0 {
+	if !controlIDPattern.MatchString(options.RequestID) || options.ExpectedTaskVersion == 0 || options.ExpectedAuthorityVersion == 0 || options.WorkflowRunID != "" && !stableExecutionID(options.WorkflowRunID) {
 		return TaskClaimReceipt{}, nativeErr("invalid_batch", "claim requires request ID and current task/project versions")
 	}
 	if strings.TrimSpace(options.RequestedBy) == "" {
 		options.RequestedBy = DefaultRequestedBy()
 	}
 	requestBody := struct {
-		TaskID      string `json:"task_id"`
-		RequestedBy string `json:"requested_by"`
-		Explicit    bool   `json:"explicit"`
-	}{options.TaskID, options.RequestedBy, options.Explicit}
+		TaskID        string `json:"task_id"`
+		RequestedBy   string `json:"requested_by"`
+		Explicit      bool   `json:"explicit"`
+		WorkflowRunID string `json:"workflow_run_id,omitempty"`
+	}{options.TaskID, options.RequestedBy, options.Explicit, options.WorkflowRunID}
 	requestRaw, _ := json.Marshal(requestBody)
 	requestPayload, err := CanonicalJSON(requestRaw)
 	if err != nil {
@@ -117,9 +244,9 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 	if err = VerifyTaskContractFiles(ctx, config, contract); err != nil {
 		return TaskClaimReceipt{}, err
 	}
-	workflow, err := config.minimalConfig()
+	workflow, err := config.validateNativeWorkflow()
 	if err != nil || workflow == nil {
-		return TaskClaimReceipt{}, nativeErr("task_not_ready", "native claim requires a fixed minimal-v1 workflow and step contracts")
+		return TaskClaimReceipt{}, nativeErr("task_not_ready", "native claim requires project_steps with the native-task/v1 worker context")
 	}
 	if err = config.validateMinimalPreflight(*workflow); err != nil {
 		return TaskClaimReceipt{}, nativeErr("task_not_ready", "fixed workflow capability preflight failed: "+err.Error())
@@ -158,7 +285,10 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 		claimant = options.RequestedBy
 	}
 	created := time.Now().UTC()
-	workflowRunID, executionID, attemptID := newID(), newID(), newID()
+	workflowRunID, executionID, attemptID := options.WorkflowRunID, newID(), newID()
+	if workflowRunID == "" {
+		workflowRunID = newID()
+	}
 	runner := StepRunnerSettings{Codex: config.Codex, Sandbox: config.Sandbox, Model: config.Model, ReasoningEffort: config.ReasoningEffort, Profile: config.Profile}
 	runner.Codex.Args = append([]string(nil), config.Codex.Args...)
 	wfr := WorkflowRunRecord{ProjectIdentity: c.Project, WorkflowRunID: workflowRunID, TaskID: task.TaskID, WorkflowVersion: MinimalWorkflowVersion, ConfigDigest: config.configDigest, Definition: workflow.Definition, ProjectSteps: workflow.Steps, Runner: runner, Phase: "queued", Repository: config.Repository, Branch: config.Branch, CreatedAt: created, UpdatedAt: created}
@@ -575,7 +705,7 @@ func validateNativeDeliveryGates(task TaskRecord, contract TaskContract, workflo
 		return StepGateResult{}, nativeErr("task_not_ready", "selected execution lacks clean verification evidence for its candidate")
 	}
 	verifyAttempt, verify, ok := latestDeliveryAttempt(attempts, "verify")
-	if !ok || verifyAttempt.ContractDigest != contract.Digest || !verify.Succeeded || verify.ResultID == "" || verify.Revision != execution.CandidateRevision || verify.Workspace.Dirty || verify.Workspace.Head != execution.CandidateRevision || verify.Workspace.VerifiedAt.IsZero() {
+	if !ok || verifyAttempt.ContractDigest != nativeStepContractDigest(workflow.ProjectSteps, "verify") || !verify.Succeeded || verify.ResultID == "" || verify.Revision != execution.CandidateRevision || verify.Workspace.Dirty || verify.Workspace.Head != execution.CandidateRevision || verify.Workspace.VerifiedAt.IsZero() {
 		return StepGateResult{}, nativeErr("task_not_ready", "required verification result is missing or for a different revision")
 	}
 	if len(workflow.ProjectSteps.Verify.RequiredChecks) == 0 {
@@ -587,18 +717,26 @@ func validateNativeDeliveryGates(task TaskRecord, contract TaskContract, workflo
 	}
 	if workflow.Definition.ReviewRequired {
 		reviewAttempt, review, ok := latestDeliveryAttempt(attempts, "review")
-		if !ok || reviewAttempt.ContractDigest != contract.Digest || !review.Succeeded || review.ResultID == "" || review.ReviewVerdict != "passed" || review.Revision != execution.CandidateRevision || review.Workspace.Dirty || review.Workspace.Head != execution.CandidateRevision || execution.ReviewedRevision != execution.CandidateRevision {
+		if !ok || reviewAttempt.ContractDigest != nativeStepContractDigest(workflow.ProjectSteps, "review") || !review.Succeeded || review.ResultID == "" || review.ReviewVerdict != "passed" || review.Revision != execution.CandidateRevision || review.Workspace.Dirty || review.Workspace.Head != execution.CandidateRevision || execution.ReviewedRevision != execution.CandidateRevision {
 			return StepGateResult{}, nativeErr("task_not_ready", "required review is not passed for the published revision")
 		}
 	}
 	publishAttempt, publish, ok := latestDeliveryAttempt(attempts, "publish_pr")
-	if !ok || publishAttempt.ContractDigest != contract.Digest || !publish.Succeeded || publish.ResultID == "" || publish.Workspace.Dirty || publish.Workspace.Head != execution.CandidateRevision || publish.PRURL == "" || publish.PublishedHead != execution.CandidateRevision || publish.Revision != execution.CandidateRevision {
+	if !ok || publishAttempt.ContractDigest != nativeStepContractDigest(workflow.ProjectSteps, "publish_pr") || !publish.Succeeded || publish.ResultID == "" || publish.Workspace.Dirty || publish.Workspace.Head != execution.CandidateRevision || publish.PRURL == "" || publish.PublishedHead != execution.CandidateRevision || publish.Revision != execution.CandidateRevision {
 		return StepGateResult{}, nativeErr("task_not_ready", "selected workflow has no fixed PR publication result")
 	}
 	if contract.Digest == "" || task.ContractID != contract.ContractID {
 		return StepGateResult{}, nativeErr("contract_mismatch", "selected task contract is unavailable")
 	}
 	return publish, nil
+}
+
+func nativeStepContractDigest(steps ProjectSteps, step string) string {
+	data, err := json.Marshal(minimalStepContract(steps, step))
+	if err != nil {
+		return ""
+	}
+	return operationDigest(data)
 }
 
 func (c CommandService) commitNativeDelivery(ctx context.Context, s *SQLiteStore, expectedAuthorityVersion uint64, task TaskRecord, workflow WorkflowRunRecord, execution ExecutionRecord, attempts []StepAttemptRecord, contract TaskContract, publish StepGateResult, delivery TaskDeliveryRecord) (TaskDeliveryReceipt, error) {

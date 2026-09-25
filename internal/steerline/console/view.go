@@ -785,7 +785,9 @@ func renderRecoveryInspection(m Model, state projectState, width, height int) []
 	} else {
 		lines = append(lines, "worktree 核验失败："+safeTerminalText(report.WorkspaceError))
 	}
-	if report.Claim != nil {
+	if report.NativeClaim != nil {
+		lines = append(lines, "center claim：task "+safeTerminalText(report.NativeClaim.TaskID)+" · "+safeTerminalText(report.NativeClaim.Status)+" · claimant "+safeTerminalText(report.NativeClaim.Claimant))
+	} else if report.Claim != nil {
 		lines = append(lines, "claim：task "+safeTerminalText(report.Claim.ID)+" · "+safeTerminalText(report.Claim.Status)+" · assignee "+safeTerminalText(report.Claim.Assignee))
 	} else {
 		lines = append(lines, "claim 核验失败："+safeTerminalText(report.ClaimError))

@@ -1,6 +1,6 @@
 # Spec：解除 Beads 依赖与原生接入
 
-任务 ID：9；任务名称：解除 Beads 依赖与原生接入；目标：`BEADS-EXIT`。状态：待实施。配套 [Plan](beads-exit.plan.md)。本任务由一个独立实现 PR 交付。
+任务 ID：9；任务名称：解除 Beads 依赖与原生接入；目标：`BEADS-EXIT`。状态：实现与验收完成，等待实现 PR 审阅。配套 [Plan](beads-exit.plan.md)。本任务由一个独立实现 PR 交付。
 
 ## B1：范围与前置
 

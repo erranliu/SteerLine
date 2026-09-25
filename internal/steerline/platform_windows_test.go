@@ -289,149 +289,24 @@ func nativeWindowCodexConfig(t *testing.T, config Config, configPath string) Con
 }
 
 func TestWindowsForegroundServiceWindowLifecycle(t *testing.T) {
-	f := newFixture(t, task("t-1"))
-	db := readFake(f.db)
-	db.Behavior = "sleep"
-	writeFake(f.db, db)
-	config, configPath := windowsForegroundLifecycleConfig(t, f)
+	f := newFixture(t)
+	lifecycleConfig, configPath := lifecycleConfigFile(t, f, f.c.RunDir)
 	serviceExe := buildServiceLifecycleCLI(t)
-	serviceLogPath := filepath.Join(t.TempDir(), "foreground-service.log")
-	serviceLog, err := os.Create(serviceLogPath)
-	require(t, err)
-	defer serviceLog.Close()
-	service := exec.Command(serviceExe, "run", "-config", configPath, "-dispatch", "manual", "-console", "summary")
-	service.Stdout, service.Stderr = serviceLog, serviceLog
-	require(t, service.Start())
-	reaped := false
-	defer func() {
-		if !reaped {
-			_ = service.Process.Kill()
-			_ = service.Wait()
-		}
-	}()
-	deadline := time.Now().Add(25 * time.Second)
-	var connection ServiceConnection
-	for time.Now().Before(deadline) {
-		connection = ConnectService(context.Background(), config)
-		if connection.State == ConnectionConnected {
-			break
-		}
-		time.Sleep(50 * time.Millisecond)
+	cmd := exec.Command(serviceExe, "run", "-config", configPath, "-dispatch", "manual", "-console", "summary")
+	output, err := cmd.CombinedOutput()
+	if err == nil || !strings.Contains(string(output), "task_authority=native") {
+		t.Fatalf("foreground service accepted the inactive Beads source: %v\n%s", err, output)
 	}
-	if connection.State != ConnectionConnected {
-		output, _ := os.ReadFile(serviceLogPath)
-		t.Fatalf("foreground service did not connect: %+v\n%s", connection, output)
+	if _, err := os.Stat(filepath.Join(f.c.RunDir, f.c.RuntimeFile)); !os.IsNotExist(err) {
+		t.Fatalf("rejected Beads service wrote runtime state: %v", err)
 	}
-	connected, err := StartService(context.Background(), configPath, StartServiceOptions{})
-	require(t, err)
-	if connected.Status != "connected" || connected.Connection.Snapshot.Runtime.Service.InstanceID != connection.Snapshot.Runtime.Service.InstanceID {
-		t.Fatalf("StartService did not connect the existing foreground service: %+v", connected)
+	starts, err := os.ReadDir(filepath.Join(f.c.RunDir, "service", "startups"))
+	if err != nil || len(starts) != 1 {
+		t.Fatalf("rejected Beads service did not preserve one startup diagnostic: %v %v", starts, err)
 	}
-	otherConfig := config
-	otherConfig.RunDir = filepath.Join(t.TempDir(), "competing-runtime")
-	otherConfigPath := filepath.Join(t.TempDir(), "other-service-config.json")
-	otherConfigData, err := json.Marshal(otherConfig)
-	require(t, err)
-	require(t, os.WriteFile(otherConfigPath, otherConfigData, 0600))
-	for _, competingConfig := range []string{configPath, otherConfigPath} {
-		competing := exec.Command(serviceExe, "run", "-config", competingConfig, "-dispatch", "manual", "-console", "summary")
-		output, startErr := competing.CombinedOutput()
-		if startErr == nil || !strings.Contains(strings.ToLower(string(output)), "lock") {
-			t.Fatalf("second foreground service did not report the repository lock for %s: %v\n%s", competingConfig, startErr, output)
-		}
-	}
-	if again := ConnectService(context.Background(), config); again.State != ConnectionConnected ||
-		again.Snapshot.Runtime.Service.InstanceID != connection.Snapshot.Runtime.Service.InstanceID {
-		t.Fatalf("competing service changed the foreground winner: %+v", again)
-	}
-	runtimeBefore := connection.Snapshot.Runtime
-	if runtimeBefore.Service.StartupID == nil || runtimeBefore.Control.DispatchMode != "manual" || !runtimeBefore.Service.Ready {
-		t.Fatalf("foreground startup missed identity/manual readiness: %+v", runtimeBefore.Service)
-	}
-	if db := readFake(f.db); len(db.Claims) != 0 || len(db.Starts) != 0 {
-		t.Fatalf("manual foreground service claimed work before an explicit request: %+v", db)
-	}
-	request, err := SubmitControl(config, "start_task", map[string]string{"task_id": "t-1"}, "foreground-window-test")
-	require(t, err)
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
-	receipt, err := WaitControlReceipt(ctx, config, request.RequestID, 50*time.Millisecond)
-	if err != nil || receipt.Status != "applied" {
-		t.Fatalf("start_task receipt=%+v err=%v", receipt, err)
-	}
-	var running *Runtime
-	for time.Now().Before(deadline.Add(10 * time.Second)) {
-		running, err = LoadRuntime(filepath.Join(config.RunDir, config.RuntimeFile))
-		if err == nil && running != nil && len(running.Runs) == 1 && running.Runs[0].ExecutionStatus == "running" && running.Runs[0].Process != nil {
-			break
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
-	if err != nil || running == nil || len(running.Runs) != 1 || running.Runs[0].Process == nil {
-		output, _ := os.ReadFile(serviceLogPath)
-		t.Fatalf("foreground worker did not run: runtime=%+v err=%v\n%s", running, err, output)
-	}
-	serviceIdentity := *running.Service.ProcessIdentity
-	workerIdentity := *running.Runs[0].Process
-	if probeProcess(&serviceIdentity).State != ProcessMatches || probeProcess(&workerIdentity).State != ProcessMatches {
-		t.Fatalf("foreground identities are not live: service=%+v worker=%+v", serviceIdentity, workerIdentity)
-	}
-	if starts := readFake(f.db).Starts["t-1"]; starts != 1 {
-		t.Fatalf("explicit worker starts=%d, want 1", starts)
-	}
-	startupLog, err := startupLogPath(config.RunDir, *running.Service.StartupID)
-	require(t, err)
-	startupOutput, err := os.ReadFile(startupLog)
-	require(t, err)
-	if !strings.Contains(string(startupOutput), "service ready") || !strings.Contains(string(startupOutput), "worker started") {
-		t.Fatalf("foreground summary missing from startup log:\n%s", startupOutput)
-	}
-	testExe, err := os.Executable()
-	require(t, err)
-	viewerReady := filepath.Join(t.TempDir(), "viewer-ready")
-	viewerLog, err := os.Create(filepath.Join(t.TempDir(), "viewer.log"))
-	require(t, err)
-	defer viewerLog.Close()
-	viewer := exec.Command(testExe, "-test.run=^TestWindowsForegroundViewerHelper$")
-	viewer.Env = append(os.Environ(), "STEERLINE_FOREGROUND_VIEWER_CONFIG="+configPath, "STEERLINE_FOREGROUND_VIEWER_READY="+viewerReady)
-	viewer.Stdout, viewer.Stderr = viewerLog, viewerLog
-	require(t, viewer.Start())
-	viewerReaped := false
-	defer func() {
-		if !viewerReaped {
-			_ = viewer.Process.Kill()
-			_ = viewer.Wait()
-		}
-	}()
-	viewerDeadline := time.Now().Add(8 * time.Second)
-	for time.Now().Before(viewerDeadline) {
-		if _, err := os.Stat(viewerReady); err == nil {
-			break
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
-	if _, err := os.Stat(viewerReady); err != nil {
-		output, _ := os.ReadFile(viewerLog.Name())
-		t.Fatalf("independent viewer did not connect: %v\n%s", err, output)
-	}
-	require(t, viewer.Process.Kill())
-	_ = viewer.Wait()
-	viewerReaped = true
-	reconnected := ConnectService(context.Background(), config)
-	if reconnected.State != ConnectionConnected || reconnected.Snapshot.Runtime.Service.InstanceID != running.Service.InstanceID ||
-		probeProcess(&serviceIdentity).State != ProcessMatches || probeProcess(&workerIdentity).State != ProcessMatches {
-		t.Fatalf("viewer exit changed foreground service or worker: %+v", reconnected)
-	}
-	stopCtx, stopCancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer stopCancel()
-	stopped, err := StopService(stopCtx, config, "foreground-window-test", 15*time.Second)
-	if err != nil || stopped.Status != "stopped" || !stopped.ProcessExited || !stopped.LocksReleased || stopped.Receipt == nil || stopped.Receipt.Status != "applied" {
-		t.Fatalf("foreground stop result=%+v err=%v", stopped, err)
-	}
-	_ = service.Wait()
-	reaped = true
-	if probeProcess(&serviceIdentity).State == ProcessMatches || probeProcess(&workerIdentity).State == ProcessMatches {
-		t.Fatalf("foreground service or worker survived explicit stop: service=%+v worker=%+v", probeProcess(&serviceIdentity), probeProcess(&workerIdentity))
+	record, err := readStartupRecord(lifecycleConfig, starts[0].Name())
+	if err != nil || record.Status != "failed" || !strings.Contains(record.Error, "task_authority=native") {
+		t.Fatalf("rejected Beads service startup receipt=%+v err=%v", record, err)
 	}
 }
 
@@ -555,6 +430,7 @@ func TestWindowsVisibleServiceWindowAcceptance(t *testing.T) {
 	if os.Getenv("STEERLINE_RUN_WINDOW_ACCEPTANCE") != "1" {
 		return
 	}
+	t.Skip("legacy Beads window acceptance was retired; native window acceptance needs a real native project and merged PR")
 	f := newFixture(t, task("t-1"))
 	db := readFake(f.db)
 	db.Behavior = "sleep"
@@ -699,6 +575,7 @@ func TestWindowsVisibleServiceWindowCloseAndRestart(t *testing.T) {
 	if os.Getenv("STEERLINE_RUN_WINDOW_ACCEPTANCE") != "1" {
 		return
 	}
+	t.Skip("legacy Beads window acceptance was retired; native window acceptance needs a real native project and merged PR")
 	f := newFixture(t, task("t-1"))
 	db := readFake(f.db)
 	db.Behavior = "sleep"
@@ -784,6 +661,7 @@ func TestWindowsVisibleConversationCollectionAcrossViewerRestart(t *testing.T) {
 	if os.Getenv("STEERLINE_RUN_WINDOW_ACCEPTANCE") != "1" {
 		return
 	}
+	t.Skip("legacy Beads window acceptance was retired; native window acceptance needs a real native project and merged PR")
 	f := newFixture(t, task("t-1"))
 	db := readFake(f.db)
 	db.Behavior = "conversation-stream"
@@ -998,6 +876,7 @@ func TestWindowsConcurrentVisibleServiceWindows(t *testing.T) {
 	if os.Getenv("STEERLINE_RUN_WINDOW_ACCEPTANCE") != "1" {
 		return
 	}
+	t.Skip("legacy Beads window acceptance was retired; native window acceptance needs a real native project and merged PR")
 	for _, differentRunDir := range []bool{false, true} {
 		name := "same-config"
 		if differentRunDir {
