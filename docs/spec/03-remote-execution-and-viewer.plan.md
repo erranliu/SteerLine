@@ -60,6 +60,8 @@
 
 - 整合当前主线 PR5 人工决策恢复后，远端问答继续只使用 SQLite 当前格式，不写旧 sidecar。原 `question` message ID、Attempt/Execution 与答案由中心固定；worker 的 `decision_applied` status 现在还必须逐字回传应用的答案正文和原 Attempt/Execution ID，中心比对后核算固定答案摘要。历史单问题真机回执只包含 question ID，证明了当时的收发与原 Dispatch 绑定，**不再满足当前 PR5 应用证明门槛**。选项附备注在现有 Orca reply body 只传选项的路径会丢备注，中心现在保持 `answer_saved` 并在外部 mutation 前明确阻断；待远端工具恢复后再探测同时传递选项与备注的协议。定向测试覆盖仅 question ID 被拒绝、完整证明幂等及附备注阻断。
 
+- 整合主线 PR5 后的最终本地回归 `go test ./... -count=1 -timeout 20m` 退出码 0：`internal/steerline` 1147.971 秒，console 1.117 秒，remoteprotocol 0.374 秒，viewer 1.525 秒。`gofmt`、`git diff --check` 与 37 份 Spec 03 JSON 样本解析通过。当前分支以 `a8aca9769a4687501a94718480c212b70c268592` 为主线祖先，原生任务的 native 检查与精确 Target 回归均通过；远端完整能力认证和 Windows 主机命令启动仍保持未验收、领取前阻断。
+
 ## 验证与交接
 
 - 用协议替身和存储故障覆盖 Spec R01–R19；真机至少完成 Spec 要求的 R01、R02、R06、R07、R08、R16、R18 及测试 PR 合并/结项路径。
