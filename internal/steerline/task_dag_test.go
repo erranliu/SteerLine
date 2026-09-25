@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -902,17 +903,25 @@ func TestTaskDiscardRequestPersistsUnknownAndThenDiscardsOnlyAfterUnmergedProof(
 
 func TestTaskDiscardRequiresPreciseUnmergedPRAndRetainsUnknownIntent(t *testing.T) {
 	states := map[string]string{"90": "open", "91": "merged", "92": "unknown", "94": "open"}
+	var statesMu sync.RWMutex
+	var lateMergedAt time.Time
 	var server *httptest.Server
 	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		number := filepath.Base(r.URL.Path)
 		numberValue, _ := strconv.Atoi(number)
+		statesMu.RLock()
 		state := states[number]
+		mergedAt := lateMergedAt
+		statesMu.RUnlock()
 		body := map[string]any{"html_url": server.URL + "/org/repo/pulls/" + number, "number": numberValue, "state": "open", "merged": false, "base": map[string]any{"ref": "main", "repo": map[string]string{"full_name": "org/repo"}}, "head": map[string]string{"sha": strings.Repeat("a", 40)}}
 		switch state {
 		case "merged":
 			body["state"] = "closed"
 			body["merged"] = true
 			body["merged_at"] = "2026-09-25T01:00:00Z"
+			if number == "90" && !mergedAt.IsZero() {
+				body["merged_at"] = mergedAt.Format(time.RFC3339Nano)
+			}
 			body["merge_commit_sha"] = strings.Repeat("b", 40)
 		case "unknown":
 			delete(body, "merged")
@@ -966,6 +975,42 @@ func TestTaskDiscardRequiresPreciseUnmergedPRAndRetainsUnknownIntent(t *testing.
 	lateDelivery := TaskDeliveryRecord{ProjectIdentity: c.Identity(), TaskID: "90", SelectedWorkflowRunID: "wf-90", PRInstance: server.URL, PRRepository: "org/repo", PRNumber: 90, PRURL: lateURL, MergeCommit: lateMerge, MergedAt: mergedAt, Evidence: lateEvidence}
 	if err = store.Transact(ctx, func(tx DomainTx) error { return tx.PutTaskDelivery(lateDelivery) }); err == nil || !strings.Contains(err.Error(), "task_discarded") {
 		t.Fatalf("late merge created a normal delivery for discarded task: %v", err)
+	}
+	verifier := &PRClient{Config: c.PR, Runner: Runner{Dir: c.Repository, Timeout: duration(c.CommandTimeout)}}
+	statesMu.Lock()
+	states["90"] = "unknown"
+	statesMu.Unlock()
+	if _, err = commands.CompleteNativeTask(ctx, c, "90", 3, "wf-90", verifier); err == nil || !strings.Contains(err.Error(), "merge_state_unknown") {
+		t.Fatalf("unknown late PR state was reported as a confirmed conflict: %v", err)
+	}
+	statesMu.Lock()
+	states["90"] = "merged"
+	lateMergedAt = time.Now().UTC()
+	statesMu.Unlock()
+	for attempt := 0; attempt < 2; attempt++ {
+		if _, err = commands.CompleteNativeTask(ctx, c, "90", 3, "wf-90", verifier); err == nil || !strings.Contains(err.Error(), "inconsistent_delivery") {
+			t.Fatalf("late PR merge was not reported as a discarded-task conflict: %v", err)
+		}
+	}
+	var conflicts int
+	if err = store.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM events WHERE project_identity=? AND task_id=? AND type='task.delivery.conflict'`, c.Identity(), "90").Scan(&conflicts); err != nil || conflicts != 1 {
+		t.Fatalf("late merge conflict was not recorded idempotently: count=%d err=%v", conflicts, err)
+	}
+	var conflictBody []byte
+	if err = store.db.QueryRowContext(ctx, `SELECT payload FROM events WHERE project_identity=? AND task_id=? AND type='task.delivery.conflict'`, c.Identity(), "90").Scan(&conflictBody); err != nil {
+		t.Fatal(err)
+	}
+	var conflict struct {
+		PRURL       string    `json:"pr_url"`
+		DiscardedAt time.Time `json:"discarded_at"`
+		MergedAt    time.Time `json:"merged_at"`
+	}
+	if err = json.Unmarshal(conflictBody, &conflict); err != nil || conflict.PRURL != server.URL+"/org/repo/pulls/90" || !conflict.MergedAt.After(conflict.DiscardedAt) {
+		t.Fatalf("late merge conflict lacks fixed PR or chronological proof: %+v / %v", conflict, err)
+	}
+	conflicted, err := (QueryService{Store: store, Project: c.Identity()}).ShowNativeTask(ctx, "90")
+	if err != nil || conflicted.Tasks[0].Status != "discarded" || conflicted.Tasks[0].Delivery != nil {
+		t.Fatalf("late merge changed discarded task into normal delivery: %+v / %v", conflicted, err)
 	}
 	merged, err := commands.DiscardNativeTask(ctx, c, "91", strings.Repeat("2", 32), 2, "discard merged PR", "operator")
 	if err != nil {

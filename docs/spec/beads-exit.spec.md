@@ -14,6 +14,7 @@
 - 创建、丢弃、ready、claim、详情、恢复和关闭复用中心任务服务。worker 只接收 `native-task/v1` 固定上下文：project/task/contract、run/execution/attempt、仓库/分支/base 与当前步骤输入。执行端核对真实工作区与契约摘要，不从 Beads 环境变量推断身份。
 - 项目提供已提交的 `project_steps`，分别实现 implement、verify、按配置 review 和 publish_pr；技能或脚本只返回本步事实，不领取任务、不写中心数据库、不调用 bd/bv 或额外结项回调。预检须发现仍依赖旧 start/finish、completion 或 Beads 的入口并拒绝执行。
 - PR 由人合并。中心按[固定 DAG Spec D3](task-dag.spec.md)核验平台事实并在事务中记录 TaskDelivery、关闭任务和释放后继，不运行 Beads close、BV 刷新或旧 completion。
+- 对已丢弃任务，生产接线按中心保存的固定执行、PR 和工作区身份处理 `cleanup_pending`：本机仅使用已验证的 Stop 能力，远端不支持取消时保留资源并交人工；开放 PR 与工作区分别清理并持久化回执，结果未知不伪称完成。若丢弃后的 PR 仍合并，复用中心冲突对账，不补写正常 TaskDelivery。
 - 本机 Codex 与已支持的 Orca 后端共用执行契约。远端 worker 不安装 SteerLine 服务、不访问中心 SQLite；版本、消息上限和取消限制沿用[远程闭环 Spec](03-remote-execution-and-viewer.md)，不能因原生接入放宽。
 
 ## B3：启动与恢复
@@ -32,6 +33,7 @@
 | NT15 | 旧 Beads 状态、未知 schema、仍活跃或不明的外部执行不被自动导入、转换或清理，诊断保留现场 |
 | NT16 | 当前格式内事务提交后响应丢失、配置写失败或投影失败时从中心事实恢复，不重复 claim、worker 或交付 |
 | NT17 | local 与已支持 Orca 的原生路径各自通过；已启用 supervised 时追加真实远端回归，不扩大版本/取消能力 |
+| NT22-EXIT | 丢弃执行中的原生任务后，以固定身份停止可核实的本机 worker；远端取消不可用或回执不明时保留身份和占用。开放 PR 与工作区单独清理并记录真实回执，失败/未知保留待办；丢弃后合并只留下中心冲突证据，不关闭任务或释放后继 |
 | NT21-EXIT | 原生正常路径没有 Beads 调用或第二任务权威；会话、人工决策、控制和 PR 核验在新格式下回归通过 |
 
 最终用隔离项目 A → B 验证：无 Beads 安装，B 起初阻塞；A 执行并提 PR，人合并后中心核验交付，B 就绪。中途重启保持身份和执行资格；真实证据不足不得完成本任务。

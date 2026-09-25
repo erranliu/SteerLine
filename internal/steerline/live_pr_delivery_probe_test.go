@@ -148,3 +148,57 @@ func TestLiveNativeTaskDeliveryProbe(t *testing.T) {
 	}
 	t.Logf("LIVE DELIVERY PASS: PR=%s head=%s merge=%s task=300 successor=301 graph_revision=%d", prURL, live.HeadRevision, expectedMerge, receipt.GraphRevision)
 }
+
+func TestLiveNativeTaskDiscardProbe(t *testing.T) {
+	if os.Getenv("STEERLINE_LIVE_PR_ACCEPTANCE") != "1" {
+		t.Skip("set STEERLINE_LIVE_PR_ACCEPTANCE=1 to query the fixed open GitHub PR")
+	}
+	const prURL = "https://github.com/erranliu/SteerLine/pull/31"
+	ctx := context.Background()
+	c, commit := nativeTaskFixture(t)
+	git := exec.Command("git", "-C", c.Repository, "remote", "set-url", "origin", "https://github.com/erranliu/SteerLine.git")
+	if out, err := git.CombinedOutput(); err != nil {
+		t.Fatalf("set fixture remote: %v: %s", err, out)
+	}
+	const jq = `{url: .html_url, repository: .base.repo.full_name, base_branch: .base.ref, head_revision: .head.sha, state: (if .merged then "merged" elif .state == "closed" then "closed_unmerged" else .state end), merged: .merged, merged_at: .merged_at, merge_commit: .merge_commit_sha}`
+	c.PR = PRConfig{Kind: "command", BaseURL: "https://github.com", Repository: "erranliu/SteerLine", Query: Command{Executable: "gh", Args: []string{"api", "repos/erranliu/SteerLine/pulls/{number}", "--jq", jq}}}
+	verifier := &PRClient{Config: c.PR, Runner: Runner{Dir: c.Repository, Timeout: 30 * time.Second}}
+	info, err := verifier.Query(ctx, prURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.State != "open" || info.Merged {
+		t.Skip("PR #31 is no longer open; the dated acceptance output retains its earlier result")
+	}
+	opened, err := OpenNativeTaskProject(ctx, &c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = opened.Close(); err != nil {
+		t.Fatal(err)
+	}
+	store, err := OpenSQLiteStore(filepath.Join(c.RunDir, "steerline.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	commands := CommandService{Store: store, Project: c.Identity()}
+	batch := taskBatchFixture(t, c, commit, batchTasks(400), nil)
+	if _, err = commands.CreateTaskBatch(ctx, c, batch, strings.Repeat("b", 32), 1, "live-probe"); err != nil {
+		t.Fatal(err)
+	}
+	seedPublishedForDiscard(t, ctx, c, store, "400", commit, prURL)
+	receipt, err := commands.DiscardNativeTask(ctx, c, "400", strings.Repeat("c", 32), 2, "verify live unmerged PR guard", "live-probe")
+	if err != nil || receipt.Status != "discarded" || !hasString(receipt.CleanupPending, "pull_request_close:"+prURL) || !hasString(receipt.CleanupPending, "workspace_cleanup:tree-400") {
+		t.Fatalf("live open PR was not discarded with exact cleanup identities: %+v / %v", receipt, err)
+	}
+	page, err := (QueryService{Store: store, Project: c.Identity()}).ShowNativeTask(ctx, "400")
+	if err != nil || len(page.Tasks) != 1 || page.Tasks[0].Status != "discarded" || page.Tasks[0].Delivery != nil {
+		t.Fatalf("live open PR discard produced normal delivery or lost state: %+v / %v", page, err)
+	}
+	replayed, err := commands.DiscardNativeTask(ctx, c, "400", strings.Repeat("c", 32), 2, "verify live unmerged PR guard", "live-probe")
+	if err != nil || replayed.Status != "discarded" || replayed.GraphRevision != receipt.GraphRevision {
+		t.Fatalf("live discard did not replay idempotently: %+v / %v", replayed, err)
+	}
+	t.Logf("LIVE DISCARD PASS: PR=%s state=%s merged=%t task=400 cleanup_pending=%v graph_revision=%d", prURL, info.State, info.Merged, receipt.CleanupPending, receipt.GraphRevision)
+}

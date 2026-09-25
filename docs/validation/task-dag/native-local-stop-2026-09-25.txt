@@ -1,0 +1,4 @@
+=== RUN   TestNativeLocalCodexStartOutputStop
+--- PASS: TestNativeLocalCodexStartOutputStop (11.14s)
+PASS
+ok  	github.com/erranliu/SteerLine/internal/steerline	11.383s
