@@ -53,6 +53,9 @@
         "failure_kind": {"type": "string"},
         "prerequisite_result_ids": {"type": "array", "items": {"type": "string"}},
         "applied_decision_id": {"type": "string"},
+        "applied_decision_attempt_id": {"type": "string"},
+        "applied_decision_execution_id": {"type": "string"},
+        "applied_answer_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
         "decision": {
           "type": ["object", "null"],
           "additionalProperties": false,

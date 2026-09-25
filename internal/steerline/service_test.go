@@ -134,6 +134,9 @@ func fakeMinimalStep(path string, db fakeDB, argv []string) int {
 	result := StepGateResult{StepID: input.StepID, Succeeded: true, InputRevision: input.InputRevision, Revision: revision, Workspace: workspace, ResultID: newID(), PrerequisiteIDs: append([]string(nil), input.PrerequisiteResultIDs...)}
 	if input.Decision != nil {
 		result.AppliedDecisionID = input.Decision.Answer.DecisionID
+		result.AppliedDecisionAttemptID = input.Decision.AttemptID
+		result.AppliedDecisionExecutionID = input.Decision.ExecutionID
+		result.AppliedAnswerSHA256 = input.Decision.AnswerSHA256
 	}
 	switch input.StepID {
 	case "verify":
@@ -590,11 +593,12 @@ func fakeMain(args []string) int {
 }
 
 type fixture struct {
-	c      Config
-	db     string
-	mu     sync.Mutex
-	states map[string]string
-	server *httptest.Server
+	c              Config
+	db             string
+	mu             sync.Mutex
+	states         map[string]string
+	prHeadRevision string
+	server         *httptest.Server
 }
 
 func newFixture(t *testing.T, tasks ...Task) *fixture {
@@ -635,7 +639,7 @@ func newFixture(t *testing.T, tasks ...Task) *fixture {
 		if merged || state == "closed_unmerged" {
 			rawState = "closed"
 		}
-		payload := map[string]any{"number": mustInt(n), "html_url": f.server.URL + "/owner/repo/pulls/" + n, "state": rawState, "merged": merged, "merged_at": nil, "merge_commit_sha": nil, "base": map[string]any{"ref": branch, "repo": map[string]string{"full_name": "owner/repo"}}}
+		payload := map[string]any{"number": mustInt(n), "html_url": f.server.URL + "/owner/repo/pulls/" + n, "state": rawState, "merged": merged, "merged_at": nil, "merge_commit_sha": nil, "base": map[string]any{"ref": branch, "repo": map[string]string{"full_name": "owner/repo"}}, "head": map[string]string{"sha": f.prHeadRevision}}
 		if merged {
 			payload["merged_at"] = now()
 			payload["merge_commit_sha"] = strings.Repeat("b", 40)
@@ -1152,22 +1156,38 @@ func TestLateAttemptEventOnlyEntersItsHistory(t *testing.T) {
 }
 
 func TestManualRecoveryDoesNotLaunchWorker(t *testing.T) {
-	f := newFixture(t, task("t-1"))
-	s := f.service(t)
-	require(t, s.dispatch(context.Background()))
-	finishWorker(t, s)
-	r := s.State.Runs[0]
+	f, s, r := failedStartup(t)
+	result := Result{TaskID: r.TaskID, RunID: r.RunID, Outcome: "pr_submitted", PRURL: ptr(f.server.URL + "/owner/repo/pulls/1"), WorktreePath: r.WorktreePath, BaseCommit: r.BaseCommit, Summary: ptr("recovered result")}
+	resultBytes, err := json.Marshal(result)
+	require(t, err)
+	head, err := gitRunner(f.c, *r.WorktreePath).Output(context.Background(), f.c.Git, "rev-parse", "HEAD")
+	require(t, err)
+	fake := readFake(f.db)
+	fake.PRHeadRevision = strings.TrimSpace(string(head))
+	writeFake(f.db, fake)
+	f.mu.Lock()
+	f.prHeadRevision = fake.PRHeadRevision
+	f.mu.Unlock()
+	sourceResultPath := *r.ResultPath
+	require(t, os.WriteFile(sourceResultPath, resultBytes, 0600))
 	r.ExecutionStatus = "unknown"
 	r.FinishTaskStatus = "blocked"
 	require(t, s.save())
-	s = f.service(t)
-	require(t, s.MarkStopped(r.RunID))
+	require(t, s.markStoppedCore(r.RunID, "test-operator", "I verified the original worker has stopped"))
 	if s.State.Runs[0].ExecutionStatus != "failed" {
 		t.Fatal("manual stop not recorded")
 	}
-	require(t, s.AcceptResult(context.Background(), r.RunID, *r.ResultPath))
+	resultDigest := sha256.Sum256(resultBytes)
+	require(t, os.WriteFile(sourceResultPath, []byte(`{"task_id":"replacement","run_id":"replacement","outcome":"blocked","pr_url":null,"worktree_path":null,"base_commit":null,"summary":"replacement","error":null}`), 0600))
+	require(t, s.acceptResultBytes(context.Background(), r.RunID, newID(), "test-operator", "I verified the original worker has stopped", resultBytes, hex.EncodeToString(resultDigest[:])))
 	if s.State.Runs[0].FinishTaskStatus != "waiting_pr_merge" || readFake(f.db).Starts["t-1"] != 1 {
 		t.Fatal("manual acceptance started another worker")
+	}
+	acceptedPath := *s.State.Runs[0].ResultPath
+	acceptedBytes, err := os.ReadFile(acceptedPath)
+	require(t, err)
+	if string(acceptedBytes) != string(resultBytes) || acceptedPath == sourceResultPath || s.State.Service.Status == "stopped" {
+		t.Fatal("accept-result did not preserve the frozen bytes or stopped the online service")
 	}
 	f.pr("1", "merged")
 	require(t, s.pollPRs(context.Background()))

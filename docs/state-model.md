@@ -10,9 +10,9 @@
 | 交付 | `finish_task_status` | pending / waiting_decision / waiting_pr_merge / completed / blocked | SteerLine | 这次运行在等决策、等合并，还是已完成/阻塞？ |
 | 任务/认领 | 当前 `beads_status`（镜像），将来 SteerLine 任务态 | open / in_progress / closed | 外部任务提供方（当前 Beads） | 任务被认领了吗？谁认领？关闭了吗？ |
 
-另有独立的 `pr.state`（open / merged / closed_unmerged / unknown，平台权威）与 `decision.status`（pending / resuming / applied，见 [decisions](decisions.md)）。
+另有独立的 `pr.state`（open / merged / closed_unmerged / unknown，平台权威）与 `decision.status`（pending / answer_saved / resuming / reply_accepted / applied / failed / superseded，见 [decisions](decisions.md)）。
 
-服务还有独立的控制轴 `control.dispatch_mode`（manual/auto）、`dispatch_paused` 和 `revision`。它们控制将来是否领取新任务，不改变执行、交付或 Beads 认领事实。`control.operation` 和 `control.blockers` 是控制协议的持久检查点/不确定副作用保留，不是任务队列；服务是 runtime 的唯一写者，CLI 仅提交文件请求并读取回执。
+服务还有独立的控制轴 `control.dispatch_mode`（manual/auto）、`dispatch_paused` 和 `revision`。它们控制将来是否领取新任务，不改变执行、交付或 Beads 认领事实。`control.operation` 和 `control.blockers` 是控制协议的持久检查点/不确定副作用保留，不是任务队列；服务是 runtime 的唯一写者，客户端通过文件协议或 SQLite `CommandService` 提交当前实例绑定的命令。
 
 PR 4A 的 `ExecutionRef` 和后端 `Operation` 纳入同一个 `steerline.db`：ExecutionRef 固定 backend/protocol/target/agent/workspace 和外部身份，Operation 固定动作负载摘要及 pending/in_flight/accepted/confirmed/rejected/outcome_unknown 结果。运行身份在 runtime v5 的 `Run` 投影中，数据库绑定必须与它的 PID/创建身份或 Orca runtime/terminal/incarnation 一致；未知、损坏或冲突记录阻止有副作用的恢复。配置摘要改变不会重路由历史记录。`execution/v1/` 仅保存能力报告和原生证据，不作为执行状态恢复源。
 
@@ -23,7 +23,7 @@ PR 4A 的 `ExecutionRef` 和后端 `Operation` 纳入同一个 `steerline.db`：
 - **执行态与交付态**：SteerLine 唯一权威（`run_dir/steerline.db`）；`runtime.json` v5 是可重建的观察投影。v1–v4 runtime 不兼容，服务拒绝恢复且保留原文件。
 - **任务认领与关闭**：Beads 项目仍由 Beads 权威；native 项目的 Task、claim 和 delivery 记录由中心 SQLite 权威。native 项目默认 manual/paused；`task validate/create/discard` 使用中心命令事务创建入图和显式丢弃，`task show/list/graph/export` 从同一数据库读取依赖与阻塞。关系视图最多返回 500 个节点并明确标记边界；JSON 导出是只读快照，不能作为批量创建输入。领取只建立固定 WorkflowRun/Execution/Attempt 和准备意图，仍需生产原生执行接入后才能启动 worker；delivery 只有在固定门槛通过且平台确认真实 merged PR 后提交。
 - **PR 合并**：外部平台权威；SteerLine 查询核实后才推进交付态。
-- **派发控制**：SQLite 中的服务状态与控制检查点权威。manual 不自动 claim；pause 只挡新派发；停止服务与关闭查看器分开。控制请求的 `applied` 只说明指令完成，不代替 run 的执行或交付状态。
+- **派发与服务命令**：SQLite 中的服务状态、CommandService 回执与控制检查点权威。manual 不自动 claim；pause 只挡新派发；停止服务与关闭查看器分开。控制请求 `applied` 只说明指令完成；`answer_decision` 的 `accepted` 只说明答案已保存。两者都不代替 run 的执行或交付状态。
 
 ## 生命周期（一次运行）
 
@@ -33,7 +33,10 @@ claim ok:                                               beads=in_progress
 worker 起:   execution=running    finish=pending
 正常退出 + pr_submitted:  execution=succeeded  finish=waiting_pr_merge
 正常退出 + needs_decision: execution=succeeded finish=waiting_decision  decision.pending
-  人工回答 → 续跑:        execution=running    finish=waiting_decision  decision.applied
+  命令接受:               decision.answer_saved (答案已固定，尚未续跑)
+  续跑准备:               decision.resuming → reply_accepted (后端已接受)
+  匹配原问题与固定答案证明: decision.applied
+  执行结束但缺证明:        execution=failed    finish=blocked  decision.failed
   （再到 pr_submitted / blocked）
 正常退出 + blocked/无效结果: execution=succeeded/failed  finish=blocked
 PR 已合并 + 结项命令 + bd close:  finish=completed   beads=closed

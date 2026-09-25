@@ -161,6 +161,8 @@ type Run struct {
 type ManualStopConfirmation struct {
 	AttemptID   string    `json:"attempt_id"`
 	ConfirmedAt time.Time `json:"confirmed_at"`
+	ConfirmedBy string    `json:"confirmed_by,omitempty"`
+	Basis       string    `json:"basis,omitempty"`
 }
 
 // DecisionOption is one choice an agent offers when it needs a human decision.
@@ -179,33 +181,36 @@ type DecisionRequest struct {
 	AllowFreeText bool             `json:"allow_free_text,omitempty"`
 }
 
-// DecisionState is the durable scheduler record of one decision. RequestPath and
-// AnswerPath are absolute so the CLI/viewer can answer without the service.
-// Status moves pending -> resuming -> applied; a restart never auto-resumes.
+// DecisionState is the runtime projection of one decision. SQLite owns the
+// accepted request and answer; callers submit answers through CommandService.
 type DecisionState struct {
-	ID          string          `json:"id"`
-	AttemptID   string          `json:"attempt_id,omitempty"`
-	Version     uint64          `json:"version"`
-	Request     DecisionRequest `json:"request"`
-	Status      string          `json:"status"`
-	OptionID    string          `json:"option_id,omitempty"`
-	Note        string          `json:"note,omitempty"`
-	AnsweredBy  string          `json:"answered_by,omitempty"`
-	AnsweredAt  *time.Time      `json:"answered_at,omitempty"`
-	AppliedAt   *time.Time      `json:"applied_at,omitempty"`
-	RequestPath string          `json:"request_path"`
-	AnswerPath  string          `json:"answer_path"`
+	ID         string          `json:"id"`
+	AttemptID  string          `json:"attempt_id,omitempty"`
+	Version    uint64          `json:"version"`
+	Request    DecisionRequest `json:"request"`
+	Status     string          `json:"status"`
+	OptionID   string          `json:"option_id,omitempty"`
+	Note       string          `json:"note,omitempty"`
+	AnsweredBy string          `json:"answered_by,omitempty"`
+	AnsweredAt *time.Time      `json:"answered_at,omitempty"`
+	AppliedAt  *time.Time      `json:"applied_at,omitempty"`
+	// Decoded only to reject projections written by the old sidecar-answer
+	// implementation. These paths are never read as answer authority.
+	RequestPath string `json:"request_path,omitempty"`
+	AnswerPath  string `json:"answer_path,omitempty"`
 }
 
-// DecisionAnswer is written by a human (via `steerline answer` or the viewer).
-// The service is the only component that applies it.
+// DecisionAnswer is an immutable human answer submitted to CommandService.
 type DecisionAnswer struct {
-	DecisionID string    `json:"decision_id"`
-	RunID      string    `json:"run_id"`
-	OptionID   string    `json:"option_id,omitempty"`
-	Note       string    `json:"note,omitempty"`
-	AnsweredBy string    `json:"answered_by"`
-	AnsweredAt time.Time `json:"answered_at"`
+	DecisionID              string    `json:"decision_id"`
+	RunID                   string    `json:"run_id"`
+	OptionID                string    `json:"option_id,omitempty"`
+	Note                    string    `json:"note,omitempty"`
+	AnsweredBy              string    `json:"answered_by"`
+	AnsweredAt              time.Time `json:"answered_at"`
+	ExpectedDecisionVersion uint64    `json:"expected_decision_version,omitempty"`
+	ExpectedRunRevision     uint64    `json:"expected_run_revision,omitempty"`
+	ServiceInstanceID       string    `json:"service_instance_id,omitempty"`
 }
 
 // Intent is durable before Git creates anything; actual workspace fields stay null
@@ -216,12 +221,13 @@ type WorkspaceIntent struct {
 	BaseCommit string `json:"base_commit"`
 }
 type PRState struct {
-	URL         *string    `json:"url"`
-	State       string     `json:"state"`
-	MergedAt    *time.Time `json:"merged_at"`
-	MergeCommit *string    `json:"merge_commit"`
-	QueriedAt   *time.Time `json:"queried_at"`
-	QueryError  *string    `json:"query_error"`
+	URL          *string    `json:"url"`
+	HeadRevision *string    `json:"head_revision,omitempty"`
+	State        string     `json:"state"`
+	MergedAt     *time.Time `json:"merged_at"`
+	MergeCommit  *string    `json:"merge_commit"`
+	QueriedAt    *time.Time `json:"queried_at"`
+	QueryError   *string    `json:"query_error"`
 }
 type Result struct {
 	TaskID       string  `json:"task_id"`
@@ -233,7 +239,16 @@ type Result struct {
 	Summary      *string `json:"summary"`
 	Error        *string `json:"error"`
 	// Decision is present only when Outcome is "needs_decision".
-	Decision *DecisionRequest `json:"decision"`
+	Decision            *DecisionRequest             `json:"decision"`
+	DecisionApplication *DecisionApplicationEvidence `json:"decision_application,omitempty"`
+}
+
+type DecisionApplicationEvidence struct {
+	DecisionID       string `json:"decision_id"`
+	AttemptID        string `json:"attempt_id"`
+	ExecutionID      string `json:"execution_id"`
+	ExecutionRefHash string `json:"execution_ref_sha256"`
+	AnswerHash       string `json:"answer_sha256"`
 }
 
 func ptr[T any](v T) *T { return &v }

@@ -216,8 +216,16 @@ func isActiveStepAttempt(status string) bool {
 }
 
 func (s *Service) startNativeRetry(ctx context.Context, runID string) error {
+	return s.startNativeRetryFor(ctx, runID, s.Config.Claimant)
+}
+
+func (s *Service) startNativeRetryFor(ctx context.Context, runID, requestedBy string) error {
 	if !stableExecutionID(runID) {
 		return errors.New("invalid native workflow run ID")
+	}
+	requestedBy = strings.TrimSpace(requestedBy)
+	if requestedBy == "" {
+		return errors.New("native retry requires the operator identity")
 	}
 	if s.worker != nil || s.State.SlotOccupied {
 		return errors.New("execution slot occupied")
@@ -258,7 +266,6 @@ func (s *Service) startNativeRetry(ctx context.Context, runID string) error {
 	if len(page.Tasks) != 1 || page.Tasks[0].Delivery != nil || page.Tasks[0].TaskRecord.Version != task.Version {
 		return nativeErr("stale_version", "native task delivery or version changed before retry")
 	}
-	requestedBy := strings.TrimSpace(s.Config.Claimant)
 	requestID := nativeRetryRequestID(task.TaskID, workflow.WorkflowRunID, execution.ExecutionID, failed.AttemptID)
 	receipt, err := (CommandService{Store: s.domainStore, Project: s.Config.identity}).RetryNativeStep(ctx, NativeStepRetryOptions{RequestID: requestID, TaskID: task.TaskID, ExpectedTaskVersion: task.Version, WorkflowRunID: workflow.WorkflowRunID, ExecutionID: execution.ExecutionID, FailedAttemptID: failed.AttemptID, RequestedBy: requestedBy})
 	if err != nil {

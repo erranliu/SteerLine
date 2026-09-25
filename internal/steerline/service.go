@@ -1,6 +1,7 @@
 package steerline
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -161,6 +162,9 @@ func NewService(c Config) (_ *Service, retErr error) {
 		if s.State.Control.Blockers == nil {
 			s.State.Control.Blockers = []ControlBlocker{}
 		}
+		if err := s.hydrateDecisionProjection(context.Background()); err != nil {
+			return nil, fmt.Errorf("read authoritative decision state: %w", err)
+		}
 		if op := s.State.Control.Operation; op != nil && !native {
 			if !controlIDPattern.MatchString(op.RequestID) || !validControlAction(op.Action) || (op.Phase != "applying" && op.Phase != "completed") || len(op.RequestDigest) != 64 || op.Action == "start_task" && (!controlIDPattern.MatchString(op.RunID) || op.TaskID == "") || op.Phase == "completed" && op.Result == nil {
 				return nil, errors.New("invalid runtime control operation; preserve the snapshot for recovery")
@@ -223,6 +227,9 @@ func NewService(c Config) (_ *Service, retErr error) {
 			if r.Decision != nil && r.Decision.Version == 0 {
 				return nil, errors.New("runtime v5 decision is missing its version")
 			}
+			if r.Decision != nil && (r.Decision.RequestPath != "" || r.Decision.AnswerPath != "") {
+				return nil, errors.New("decision state uses the removed sidecar-answer format; preserve it for manual recovery, no answer file will be imported")
+			}
 			if e := r.Completion.validate(); e != nil {
 				return nil, e
 			}
@@ -250,17 +257,19 @@ func NewService(c Config) (_ *Service, retErr error) {
 			if r.FinishTaskStatus == "waiting_pr_merge" && r.PR.URL == nil {
 				return nil, errors.New("waiting run lacks PR binding")
 			}
-			// A decision is never auto-resumed on restart; an interrupted resume is
-			// uncertain and must go through manual recovery.
-			if r.FinishTaskStatus == "waiting_decision" {
+			// A decision is never auto-resumed on restart after its resuming
+			// checkpoint. The fixed Operation and external target need reconciliation.
+			if r.Decision != nil && r.Decision.Status == "resuming" {
+				r.ExecutionStatus = "unknown"
+				r.FinishTaskStatus = "blocked"
+				r.Error = ptr("Interrupted while resuming a decision; manual recovery required; never auto-resumed")
+				s.State.SlotOccupied = true
+				s.State.CurrentTask = ptr(r.TaskID)
+			} else if r.FinishTaskStatus == "waiting_decision" {
 				switch {
 				case r.Decision == nil:
 					r.FinishTaskStatus = "blocked"
 					r.Error = ptr("waiting_decision run lacks decision state; manual recovery required")
-				case r.Decision.Status == "resuming":
-					r.ExecutionStatus = "unknown"
-					r.FinishTaskStatus = "blocked"
-					r.Error = ptr("Interrupted while resuming a decision; manual recovery required; never auto-resumed")
 				}
 			}
 			if r.ExecutionStatus == "pending" || r.ExecutionStatus == "running" {
@@ -318,7 +327,7 @@ func NewService(c Config) (_ *Service, retErr error) {
 		}
 	}
 	s.State.SchemaVersion = 5
-	s.State.Service = ServiceState{InstanceID: newID(), PID: os.Getpid(), Status: "running", Claimant: c.Claimant, Mode: "maintenance", Ready: false, ControlProtocol: ControlProtocolVersion, Capabilities: []string{"start_task", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "stop_service"}, ConfigDigest: c.configDigest, HeartbeatIntervalMS: duration(c.Heartbeat).Milliseconds()}
+	s.State.Service = ServiceState{InstanceID: newID(), PID: os.Getpid(), Status: "running", Claimant: c.Claimant, Mode: "maintenance", Ready: false, ControlProtocol: ControlProtocolVersion, Capabilities: []string{"answer_decision", "retry_run", "mark_stopped", "accept_result", "resolve_command", "start_task", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "stop_service"}, ConfigDigest: c.configDigest, HeartbeatIntervalMS: duration(c.Heartbeat).Milliseconds()}
 	identity, err := currentProcessIdentity()
 	if err != nil {
 		return nil, fmt.Errorf("identify service process: %w", err)
@@ -339,6 +348,57 @@ func (s *Service) Close() error {
 	}
 	return s.domainStore.Close()
 }
+
+func (s *Service) hydrateDecisionProjection(ctx context.Context) error {
+	snapshot, err := s.domainStore.Query(ctx, s.Config.identity)
+	if err != nil {
+		return err
+	}
+	s.State.Decisions = snapshot.Decisions
+	records := make(map[string]DecisionRecord, len(snapshot.Decisions))
+	for _, record := range snapshot.Decisions {
+		records[record.DecisionID] = record
+	}
+	for _, run := range s.State.Runs {
+		if run == nil || run.Decision == nil {
+			continue
+		}
+		record, ok := records[run.Decision.ID]
+		if !ok {
+			continue
+		}
+		request, marshalErr := json.Marshal(run.Decision.Request)
+		if marshalErr != nil {
+			return marshalErr
+		}
+		if record.WorkflowRunID != run.RunID || record.ExecutionID != run.ExecutionID || run.Decision.AttemptID != run.AttemptID || record.AttemptID != run.Decision.AttemptID || !bytes.Equal(bytes.TrimSpace(record.Request), bytes.TrimSpace(request)) {
+			return fmt.Errorf("decision %s conflicts with the runtime execution, attempt or question identity", run.Decision.ID)
+		}
+		if record.Version == 0 || !validDecisionStatus(record.Status) {
+			return fmt.Errorf("decision %s has invalid authoritative version or status", run.Decision.ID)
+		}
+		run.Decision.Version = record.Version
+		run.Decision.Status = record.Status
+		if len(record.Answer) > 0 {
+			var answer DecisionAnswer
+			if err = decode(record.Answer, &answer); err != nil {
+				return fmt.Errorf("decision %s has an invalid saved answer: %w", record.DecisionID, err)
+			}
+			if answer.DecisionID != record.DecisionID || answer.RunID != run.RunID || validateDecisionAnswer(&run.Decision.Request, &answer) != nil {
+				return fmt.Errorf("decision %s saved answer does not match its fixed identity or question", record.DecisionID)
+			}
+			run.Decision.OptionID = answer.OptionID
+			run.Decision.Note = answer.Note
+			run.Decision.AnsweredBy = answer.AnsweredBy
+			if !answer.AnsweredAt.IsZero() {
+				answeredAt := answer.AnsweredAt
+				run.Decision.AnsweredAt = &answeredAt
+			}
+		}
+	}
+	return nil
+}
+
 func runVersionShape(r *Run) any {
 	if r == nil {
 		return nil
@@ -618,7 +678,14 @@ func (s *Service) reconcile(ctx context.Context) error {
 			continue
 		}
 		id := newID()
-		s.State.Runs = append(s.State.Runs, &Run{TaskID: t.ID, Title: t.Title, RunID: id, AttemptID: id, Host: s.Config.hostName(), Claimant: s.Config.Claimant, BeadsStatus: t.Status, ExecutionStatus: "unknown", FinishTaskStatus: "blocked", PR: PRState{State: "unknown"}, Error: ptr("Claim found without local run record; manual recovery required; execution not restarted")})
+		attemptID := id
+		for _, blocker := range s.State.Control.Blockers {
+			if blocker.TaskID == t.ID && stableExecutionID(blocker.RunID) && stableExecutionID(blocker.AttemptID) {
+				id, attemptID = blocker.RunID, blocker.AttemptID
+				break
+			}
+		}
+		s.State.Runs = append(s.State.Runs, &Run{TaskID: t.ID, Title: t.Title, RunID: id, AttemptID: attemptID, Host: s.Config.hostName(), Claimant: s.Config.Claimant, BeadsStatus: t.Status, ExecutionStatus: "unknown", FinishTaskStatus: "blocked", PR: PRState{State: "unknown"}, Error: ptr("Claim found without complete run record; manual recovery required; execution not restarted")})
 	}
 	return s.save()
 }
@@ -1218,6 +1285,9 @@ func (s *Service) finished(err error) error {
 			return s.save()
 		}
 		r.ExecutionStatus = "failed"
+		if r.Decision != nil && r.Decision.Status == "reply_accepted" {
+			return s.failUnverifiedDecisionApplication(r, "the original execution terminated without matching application evidence: "+err.Error())
+		}
 		s.blocked(r, "Codex execution failed: "+err.Error())
 		s.note(r, "steer", "error", "failed", "worker exited", err.Error(), map[string]any{"execution_status": "failed"})
 		s.closeActivity(r)
@@ -1226,6 +1296,26 @@ func (s *Service) finished(err error) error {
 	r.ExecutionStatus = "succeeded"
 	s.note(r, "steer", "worker_exit", "completed", "worker exited", "", map[string]any{"exit_code": 0})
 	result, e := ReadResult(*r.ResultPath, r)
+	if r.Decision != nil && r.Decision.Status == "reply_accepted" {
+		proofErr := e
+		var ref ExecutionRef
+		if proofErr == nil {
+			ref, proofErr = (executionRecords{root: s.Config.RunDir}).loadBinding(r.RunID, r.Decision.AttemptID)
+		}
+		if proofErr == nil {
+			proofErr = validateDecisionApplication(r, result, ref)
+		}
+		if proofErr != nil {
+			return s.failUnverifiedDecisionApplication(r, proofErr.Error())
+		}
+		r.Decision.Status = "applied"
+		r.Decision.Version++
+		r.Decision.AppliedAt = ptr(now())
+		s.note(r, "steer", "decision", "applied", "decision applied", decisionAnswerSummary(r), decisionAnswerMeta(r))
+		if e = s.save(); e != nil {
+			return e
+		}
+	}
 	if e == nil {
 		if persistErr := s.recordExecutionResult(r, result, *r.ResultPath); persistErr != nil {
 			s.setError(fmt.Errorf("execution result conversation persistence failed: %w", persistErr))
@@ -1281,9 +1371,6 @@ func (s *Service) pollPRsFor(ctx context.Context, runID string) error {
 	}
 	var operationErr error
 	for _, r := range s.State.Runs {
-		if runID != "" && r.RunID != runID {
-			continue
-		}
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
@@ -1314,6 +1401,14 @@ func (s *Service) pollPRsFor(ctx context.Context, runID string) error {
 		if info.BaseBranch != s.Config.Branch {
 			s.blocked(r, "PR target branch mismatch: "+info.BaseBranch)
 			s.note(r, "steer", "pr", "failed", "pr target mismatch", info.BaseBranch, nil)
+			if e = s.save(); e != nil {
+				return e
+			}
+			continue
+		}
+		if r.PR.HeadRevision != nil && info.HeadRevision != *r.PR.HeadRevision {
+			s.blocked(r, "PR head changed after the recovery result was accepted; completion refused")
+			s.note(r, "steer", "pr", "failed", "accepted result PR head mismatch", info.HeadRevision, map[string]any{"accepted_head": *r.PR.HeadRevision})
 			if e = s.save(); e != nil {
 				return e
 			}
@@ -1493,23 +1588,10 @@ func (s *Service) RunWithDispatch(ctx context.Context, mode string) error {
 	if mode != "manual" && mode != "auto" {
 		return errors.New("dispatch mode must be manual or auto")
 	}
-	return s.run(ctx, "", mode)
+	return s.run(ctx, mode)
 }
 
-// RetryOne is a bounded operator action. It never selects or claims another task.
-func (s *Service) RetryOne(ctx context.Context, runID string) error {
-	if runID == "" {
-		return errors.New("retry requires a run ID")
-	}
-	if s.State.Control.DispatchPaused {
-		return errors.New("dispatch is paused; explicit retry is refused")
-	}
-	if reason := s.slotReason(""); reason != "" {
-		return errors.New(reason)
-	}
-	return s.run(ctx, runID, "manual")
-}
-func (s *Service) run(ctx context.Context, retryRunID, dispatchMode string) (retErr error) {
+func (s *Service) run(ctx context.Context, dispatchMode string) (retErr error) {
 	ctx, cancel := context.WithCancel(ctx)
 	var conversationReplayDone <-chan struct{}
 	var codexHistoryDone <-chan struct{}
@@ -1534,9 +1616,6 @@ func (s *Service) run(ctx context.Context, retryRunID, dispatchMode string) (ret
 	s.State.Service.Ready = false
 	s.State.Service.Status = "running"
 	s.State.Service.HeartbeatIntervalMS = duration(s.Config.Heartbeat).Milliseconds()
-	if retryRunID != "" {
-		s.State.Service.Mode = "retry-one"
-	}
 	if e := s.save(); e != nil {
 		return e
 	}
@@ -1657,72 +1736,58 @@ func (s *Service) run(ctx context.Context, retryRunID, dispatchMode string) (ret
 		}
 		return nil
 	}
-	if retryRunID == "" {
-		for s.State.Control.Operation != nil {
-			if e := s.recoverControlOperation(); e != nil {
-				if e = s.retainControlPublicationFailure(e); e != nil {
-					return e
-				}
-				select {
-				case <-ctx.Done():
-					return nil
-				case <-controlTick.C:
-				}
+	for s.State.Control.Operation != nil {
+		if e := s.recoverControlOperation(); e != nil {
+			if e = s.retainControlPublicationFailure(e); e != nil {
+				return e
+			}
+			select {
+			case <-ctx.Done():
+				return nil
+			case <-controlTick.C:
 			}
 		}
 	}
 	// On startup query saved PRs, apply any already-answered decisions, then
 	// reconcile claims before any new dispatch.
-	if retryRunID == "" {
-		if e := step(s.pollPRs); e != nil {
-			return e
+	if e := step(s.pollPRs); e != nil {
+		return e
+	}
+	if e := step(s.processCommandsAndDecisions); e != nil {
+		return e
+	}
+	if e := s.reconcile(ctx); e != nil {
+		s.setError(e)
+		if saveErr := s.save(); saveErr != nil {
+			return saveErr
 		}
-		if e := step(s.processCommandsAndDecisions); e != nil {
-			return e
+	}
+	if e := step(s.resumeMinimalSteps); e != nil {
+		return e
+	}
+	candidateErr := s.refreshCandidates(ctx)
+	if candidateErr != nil {
+		s.setError(candidateErr)
+		if saveErr := s.save(); saveErr != nil {
+			return saveErr
 		}
-		if e := s.reconcile(ctx); e != nil {
-			s.setError(e)
-			if saveErr := s.save(); saveErr != nil {
-				return saveErr
-			}
-		}
-		if e := step(s.resumeMinimalSteps); e != nil {
-			return e
-		}
-		candidateErr := s.refreshCandidates(ctx)
-		if candidateErr != nil {
-			s.setError(candidateErr)
-			if saveErr := s.save(); saveErr != nil {
-				return saveErr
-			}
-		}
-		s.State.Service.Ready = false
-		if e := s.save(); e != nil {
-			return e
-		}
-		if e := s.pollControl(ctx, cancel); e != nil {
-			return e
-		}
-		s.State.Service.Ready = candidateErr == nil && ctx.Err() == nil && s.State.Control.Operation == nil
-		if e := s.save(); e != nil {
-			return e
-		}
-		if e := s.publishStartupReady(); e != nil {
-			return e
-		}
-		if s.State.Control.Operation == nil {
-			if e := step(s.dispatch); e != nil {
-				return e
-			}
-		}
-	} else {
-		var e error
-		if s.native {
-			e = s.startNativeRetry(ctx, retryRunID)
-		} else {
-			e = s.startRetry(ctx, retryRunID)
-		}
-		if e != nil {
+	}
+	s.State.Service.Ready = false
+	if e := s.save(); e != nil {
+		return e
+	}
+	if e := s.pollControl(ctx, cancel); e != nil {
+		return e
+	}
+	s.State.Service.Ready = candidateErr == nil && ctx.Err() == nil && s.State.Control.Operation == nil
+	if e := s.save(); e != nil {
+		return e
+	}
+	if e := s.publishStartupReady(); e != nil {
+		return e
+	}
+	if s.State.Control.Operation == nil {
+		if e := step(s.dispatch); e != nil {
 			return e
 		}
 	}
@@ -1766,9 +1831,6 @@ func (s *Service) run(ctx context.Context, retryRunID, dispatchMode string) (ret
 			if err := s.finished(e); err != nil {
 				return err
 			}
-			if retryRunID != "" && !s.retryWaiting(retryRunID) {
-				return nil
-			}
 		case <-decisionTick.C:
 			if s.State.Control.Operation != nil {
 				continue
@@ -1777,9 +1839,6 @@ func (s *Service) run(ctx context.Context, retryRunID, dispatchMode string) (ret
 				return e
 			}
 		case <-taskTick.C:
-			if retryRunID != "" {
-				continue
-			}
 			if e := step(s.processCommandsAndDecisions); e != nil {
 				return e
 			}
@@ -1807,33 +1866,20 @@ func (s *Service) run(ctx context.Context, retryRunID, dispatchMode string) (ret
 			if e := step(s.processPendingCommands); e != nil {
 				return e
 			}
-			if retryRunID == "" {
-				if e := s.pollControl(ctx, cancel); e != nil {
-					return e
-				}
+			if e := s.pollControl(ctx, cancel); e != nil {
+				return e
 			}
 		case <-prTick.C:
 			if s.State.Control.Operation != nil {
 				continue
 			}
-			if e := step(func(ctx context.Context) error { return s.pollPRsFor(ctx, retryRunID) }); e != nil {
+			if e := step(s.pollPRs); e != nil {
 				return e
-			}
-			if retryRunID != "" && s.worker == nil && !s.retryWaiting(retryRunID) {
-				return nil
 			}
 		}
 	}
 }
 
-func (s *Service) retryWaiting(id string) bool {
-	for _, r := range s.State.Runs {
-		if r.RunID == id {
-			return r.FinishTaskStatus == "waiting_pr_merge"
-		}
-	}
-	return false
-}
 func (s *Service) shutdown() {
 	if s.worker == nil {
 		return
@@ -2036,77 +2082,4 @@ func stopRequested(c Config, instanceID string) bool {
 		InstanceID string `json:"instance_id"`
 	}
 	return json.Unmarshal(b, &request) == nil && request.InstanceID == instanceID
-}
-
-// AcceptResult is an explicit operator action, never an automatic retry/resume.
-func (s *Service) AcceptResult(ctx context.Context, runID, path string) error {
-	for _, r := range s.State.Runs {
-		if r.RunID != runID {
-			continue
-		}
-		if r.WorkflowVersion == MinimalWorkflowVersion {
-			return errors.New("minimal-v1 results must pass their current step gates; single-workflow accept-result is unsupported")
-		}
-		if r.FinishTaskStatus == "completed" {
-			return errors.New("completed runs cannot be changed")
-		}
-		if s.inspectRunProcess(r) == "matching process still exists" {
-			return errors.New("original process still exists; stop it first")
-		}
-		result, e := ReadResult(path, r)
-		if e != nil {
-			return e
-		}
-		if e = s.inspectRunWorkspace(ctx, r); e != nil {
-			return e
-		}
-		if result.Outcome != "pr_submitted" {
-			return errors.New("manual acceptance requires a submitted PR")
-		}
-		info, e := s.prs.Query(ctx, *result.PRURL)
-		if e != nil {
-			return e
-		}
-		if info.BaseBranch != s.Config.Branch || info.State == "closed_unmerged" {
-			return errors.New("PR must target configured branch and be open or merged")
-		}
-		if e = s.bind(r, result); e != nil {
-			return e
-		}
-		r.ExecutionStatus = "succeeded"
-		r.ResultPath = ptr(path)
-		r.ManualStop = &ManualStopConfirmation{AttemptID: r.AttemptID, ConfirmedAt: now()}
-		r.EndedAt = ptr(now())
-		s.State.SlotOccupied = false
-		s.State.CurrentTask = nil
-		s.State.Service.Status = "stopped"
-		return s.save()
-	}
-	return fmt.Errorf("run %s not found", runID)
-}
-
-func (s *Service) MarkStopped(runID string) error {
-	for _, r := range s.State.Runs {
-		if r.RunID != runID {
-			continue
-		}
-		if r.WorkflowVersion == MinimalWorkflowVersion {
-			return errors.New("minimal-v1 requires reconciliation of the recorded attempt and operation; mark-stopped cannot settle step side effects")
-		}
-		if r.ExecutionStatus != "unknown" {
-			return errors.New("mark-stopped only applies to unknown execution")
-		}
-		if s.inspectRunProcess(r) == "matching process still exists" {
-			return errors.New("original process still exists; stop it first")
-		}
-		r.ExecutionStatus = "failed"
-		r.EndedAt = ptr(now())
-		r.ManualStop = &ManualStopConfirmation{AttemptID: r.AttemptID, ConfirmedAt: now()}
-		s.blocked(r, "Operator confirmed old process tree stopped; task remains claimed for manual repair")
-		s.State.SlotOccupied = false
-		s.State.CurrentTask = nil
-		s.State.Service.Status = "stopped"
-		return s.save()
-	}
-	return fmt.Errorf("run %s not found", runID)
 }

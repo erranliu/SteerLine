@@ -165,11 +165,11 @@ func TestControlReviewSubmittedAnswerWaitsForUnknownExecution(t *testing.T) {
 	decision, err := WriteDecisionRequest(r, DecisionRequest{Question: "choose", Options: []DecisionOption{{ID: "a", Label: "A"}}})
 	require(t, err)
 	r.Decision = decision
+	r.Decision.Status, r.Decision.OptionID, r.Decision.AnsweredBy = "answer_saved", "a", "review"
 	r.ExecutionStatus = "succeeded"
-	require(t, WriteAnswer(r, DecisionAnswer{OptionID: "a", AnsweredBy: "review"}))
 	s.State.Runs = []*Run{r, {TaskID: "other", RunID: newID(), ExecutionStatus: "unknown", FinishTaskStatus: "blocked"}}
 	_ = s.applyDecisions(context.Background())
-	if r.Decision.Status != "pending" || r.FinishTaskStatus != "waiting_decision" {
+	if r.Decision.Status != "answer_saved" || r.FinishTaskStatus != "waiting_decision" {
 		t.Fatal("answer was consumed despite another unresolved execution")
 	}
 }
@@ -220,7 +220,7 @@ func TestControlReviewRetryHonorsPersistentBlocker(t *testing.T) {
 	oldLog := r.LogPath
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-	err := s.RetryOne(ctx, r.RunID)
+	err := s.startRetry(ctx, r.RunID)
 	if err == nil || readFake(f.db).Starts[r.TaskID] != 1 || r.LogPath != oldLog {
 		t.Fatalf("retry bypassed the persistent execution blocker: err=%v", err)
 	}
@@ -416,7 +416,8 @@ func TestControlReviewTerminalReceiptFailureKeepsServiceControllable(t *testing.
 func TestControlReviewInterruptedDecisionRetainsUnknownReservation(t *testing.T) {
 	f := newFixture(t)
 	s := f.service(t)
-	s.State.Runs = []*Run{{RunID: newID(), TaskID: "waiting", Claimant: f.c.Claimant, ExecutionStatus: "succeeded", FinishTaskStatus: "waiting_decision", Decision: &DecisionState{ID: newID(), Status: "resuming"}}}
+	runID, attemptID := newID(), newID()
+	s.State.Runs = []*Run{{RunID: runID, AttemptID: attemptID, TaskID: "waiting", Claimant: f.c.Claimant, ExecutionStatus: "succeeded", FinishTaskStatus: "waiting_decision", Decision: &DecisionState{ID: newID(), AttemptID: attemptID, Version: 1, Request: DecisionRequest{Question: "continue?"}, Status: "resuming"}}}
 	require(t, s.save())
 	restarted := f.service(t)
 	require(t, restarted.save())

@@ -577,15 +577,51 @@ func TestNativeLocalProjectStepsDeliverTaskAndReleaseSuccessor(t *testing.T) {
 	if s.find("101").ExecutionStatus != "failed" || s.find("101").FinishTaskStatus != "blocked" || !strings.Contains(deref(s.find("101").Error), "exit status 38") {
 		t.Fatalf("failed native step did not settle with its execution blocked: %+v", s.find("101"))
 	}
-	if err = s.startNativeRetry(context.Background(), failedRunID); err != nil {
-		t.Fatalf("center-admitted native retry did not start: %v", err)
+	authority, err = s.domainStore.nativeAuthority(context.Background(), c.Identity())
+	if err != nil {
+		t.Fatal(err)
+	}
+	manual = "manual"
+	if _, err = (CommandService{Store: s.domainStore, Project: c.Identity()}).SetNativeDispatchState(context.Background(), NativeDispatchUpdate{RequestID: newID(), ExpectedAuthorityVersion: authority.AuthorityVersion, Mode: &manual, RequestedBy: "operator"}); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.refreshNativeSnapshot(context.Background(), true); err != nil {
+		t.Fatal(err)
+	}
+	s.State.Service.Status, s.State.Service.Ready = "running", true
+	failedRun := s.find("101")
+	serviceCommand := CommandRecord{CommandID: newID(), Kind: "retry_run", TargetID: failedRunID, ExpectedVersion: failedRun.ControlRevision, RequestedBy: "operator", Payload: mustJSON(ServiceCommandPayload{ServiceInstanceID: s.State.Service.InstanceID, ExpectedRevision: failedRun.ControlRevision, RunAttemptID: failedAttemptID, Body: mustJSON(RecoveryCommandBody{ConfirmedProcessStopped: true})})}
+	status, result := s.applyServiceCommand(context.Background(), serviceCommand)
+	if status != "accepted" {
+		t.Fatalf("online native retry was not admitted: %s %s", status, result)
 	}
 	if s.worker == nil || s.find("101").AttemptID == failedAttemptID {
 		t.Fatal("native retry did not create a new step attempt on the same workflow")
 	}
+	if receipt, applied, proofErr := s.nativeRetryProof(context.Background(), s.find("101"), failedAttemptID, "operator"); proofErr != nil || !applied || receipt.AttemptID != s.find("101").AttemptID {
+		t.Fatalf("online native retry has no durable center proof: %+v %t %v", receipt, applied, proofErr)
+	}
+	recoveryCommands := CommandService{Store: s.domainStore, Project: c.Identity()}
+	serviceCommand.CommandID, serviceCommand.IdempotencyKey, serviceCommand.Status, serviceCommand.CreatedAt = newID(), "", "pending", now()
+	serviceCommand.IdempotencyKey = serviceCommand.CommandID
+	queued, _, queueErr := recoveryCommands.Submit(context.Background(), serviceCommand)
+	if queueErr != nil {
+		t.Fatal(queueErr)
+	}
+	if err = recoveryCommands.SetStatus(context.Background(), queued, "in_flight", nil); err != nil {
+		t.Fatal(err)
+	}
+	queued.Status = "in_flight"
+	if err = s.recoverInFlightServiceCommand(context.Background(), recoveryCommands, queued); err != nil {
+		t.Fatal(err)
+	}
+	reconciled, err := s.domainStore.Command(context.Background(), c.Identity(), queued.CommandID)
+	if err != nil || reconciled.Status != "accepted" {
+		t.Fatalf("in-flight online native retry was not reconciled from its center attempt: %+v %v", reconciled, err)
+	}
 	retryTask := nativeTaskRecord(s.State.Tasks, "101")
 	retryWorkflow, _ := s.minimalRecords(s.find("101"))
-	replay, replayErr := (CommandService{Store: s.domainStore, Project: c.Identity()}).RetryNativeStep(context.Background(), NativeStepRetryOptions{RequestID: nativeRetryRequestID("101", failedRunID, failedExecutionID, failedAttemptID), TaskID: "101", ExpectedTaskVersion: retryTask.Version, WorkflowRunID: failedRunID, ExecutionID: failedExecutionID, FailedAttemptID: failedAttemptID, RequestedBy: "native-test"})
+	replay, replayErr := (CommandService{Store: s.domainStore, Project: c.Identity()}).RetryNativeStep(context.Background(), NativeStepRetryOptions{RequestID: nativeRetryRequestID("101", failedRunID, failedExecutionID, failedAttemptID), TaskID: "101", ExpectedTaskVersion: retryTask.Version, WorkflowRunID: failedRunID, ExecutionID: failedExecutionID, FailedAttemptID: failedAttemptID, RequestedBy: "operator"})
 	if replayErr != nil || retryWorkflow == nil || replay.AttemptID != s.find("101").AttemptID || replay.PreviousAttempt != failedAttemptID {
 		t.Fatalf("center retry command did not replay its fixed receipt: %+v %v", replay, replayErr)
 	}
@@ -659,6 +695,17 @@ func TestNativeLocalProjectStepsDeliverTaskAndReleaseSuccessor(t *testing.T) {
 	db = readFake(fakePRPath)
 	db.PRState, db.PRMerged, db.PRMergedAt, db.PRMergeCommit = "open", false, nil, ""
 	writeFake(fakePRPath, db)
+	authority, err = s.domainStore.nativeAuthority(context.Background(), c.Identity())
+	if err != nil {
+		t.Fatal(err)
+	}
+	auto = "auto"
+	if _, err = (CommandService{Store: s.domainStore, Project: c.Identity()}).SetNativeDispatchState(context.Background(), NativeDispatchUpdate{RequestID: newID(), ExpectedAuthorityVersion: authority.AuthorityVersion, Mode: &auto, RequestedBy: "operator"}); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.refreshNativeSnapshot(context.Background(), true); err != nil {
+		t.Fatal(err)
+	}
 	if err = s.dispatch(context.Background()); err != nil {
 		t.Fatal(err)
 	}

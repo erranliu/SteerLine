@@ -3,10 +3,11 @@ package steerline
 import (
 	"fmt"
 	"os"
+	"strings"
 )
 
 func manuallyStopped(run *Run) bool {
-	return run.ManualStop != nil && run.ManualStop.AttemptID == run.AttemptID && !run.ManualStop.ConfirmedAt.IsZero()
+	return run.ManualStop != nil && run.ManualStop.AttemptID == run.AttemptID && !run.ManualStop.ConfirmedAt.IsZero() && strings.TrimSpace(run.ManualStop.ConfirmedBy) != "" && strings.TrimSpace(run.ManualStop.Basis) != ""
 }
 
 // reconcileRunExecutionRecord compares the two durable execution records with

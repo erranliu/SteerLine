@@ -8,4 +8,4 @@ Each worker performs only its assigned step and returns one `steerline/minimal-s
 
 New native projects start in `manual` mode and paused. The user explicitly resumes dispatch through the service control protocol; the center then uses the same transactional claim path for automatic and manual execution. Human PR merge remains the delivery gate.
 
-The local worker path is implemented and exercised with isolated tasks. Native Orca project-step launch remains blocked until Orca can receive and execute the same fixed step context on the target workspace. The legacy start/finish and Beads interfaces are not native project steps.
+Local and Orca native project steps use the same fixed task and step context on their target workspaces. The legacy start/finish and Beads interfaces are not native project steps.

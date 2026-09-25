@@ -17,7 +17,7 @@
 
 ## 验证
 
-- 决策协议单测覆盖 free-text 组合、精确 decision 身份、同义重复和冲突。用两个真实客户端进程争写答案，验证当前权威 first-wins。
+- 决策协议单测覆盖 free-text 组合、精确 decision 身份、Unicode 长度拒绝、同义重复和冲突。用两个独立真实 OS 客户端进程同时争写答案，验证当前权威 first-wins。
 - 扩展 fake Orca 测试：两轮决策、incarnation 改变、服务重启和 resuming 故障。断言 terminal send 次数，不能只验证最终 View 中出现“成功”。
 - Windows 服务离线时只展示固定入口、不提交答案；用户打开服务窗口后再通过同一命令回答。
 - 用同一参数化后端契约验证 H-A13～H-A15：平台接受无证明、turn.started 无证明、错误 decision/attempt/答案摘要、迟到应用事件、无去重能力时响应丢失、同 Operation 恢复。断言无重复外部调用、问题仍保留、槽未错误释放。local unsupported 与 Orca 支持范围分别使用真实能力报告。
@@ -25,7 +25,7 @@
 - 接回结果测试在 UI 读取后替换原文件，确认服务处理冻结字节；再覆盖 digest 错误、超限、错误 PR 目标、重复 PR 和缺失 workspace 证据。
 - 对 resolve_command 覆盖副作用前中断、已有 unknown run、只有 claim 的孤儿状态、已知进程存活和无法查询外部事实。
 - 延续 PR 2 故障注入，在答案发布、resuming 保存、terminal send、worker start、结果绑定、blocker 解除与回执发布之间中断，断言没有第二次执行或伪造完成。
-- 运行 `go test ./... -timeout 10m`，完整回归为合并条件。用 Windows TTY 对长问题、中文多行、12 选项、冲突与恢复确认做交互冒烟；执行对象使用测试 fixture。
+- 运行 `go test ./... -count=1 -timeout 20m`，完整回归为合并条件。用 Windows TTY 对长问题、中文多行、12 选项、冲突与恢复确认做交互冒烟；执行对象使用测试 fixture。
 - 在隔离真实 Orca 路径验证同会话回答与实际应用证明；仅有 send 回执时如实记录能力不足，不能宣称 applied 验收成功。H-A16 的等待/折叠/新轮切换用真实 TTY 验证；运行 `go vet ./...`、平台构建、`git diff --check`，按验收 ID 归档版本与证据。
 
 ## 完成条件

@@ -32,6 +32,7 @@ type DomainTx interface {
 	UpdateOperation(OperationRecord) error
 	EnqueueCommand(CommandRecord) (CommandRecord, bool, error)
 	UpdateCommand(CommandRecord) error
+	AcceptDecisionAnswer(CommandRecord, DecisionAnswer) (DecisionRecord, bool, error)
 	PutProjection(project string, revision uint64, payload []byte) error
 	PutProjectTaskAuthority(ProjectTaskAuthority) error
 	UpdateProjectTaskAuthorityCAS(ProjectTaskAuthority, uint64) error
@@ -51,6 +52,8 @@ type DomainStore interface {
 	Events(context.Context, string, string, string, int64, int) ([]DomainEvent, error)
 	EventPayload(context.Context, string, int64, int64, int) ([]byte, int64, string, error)
 	Commands(context.Context, string, string, int) ([]CommandRecord, error)
+	Command(context.Context, string, string) (CommandRecord, error)
+	CommandByIdempotency(context.Context, string, string) (CommandRecord, error)
 	NativeTaskPage(context.Context, string, string, string, uint64, int, int) (NativeTaskPage, error)
 }
 
@@ -83,7 +86,7 @@ func OpenSQLiteStore(path string) (*SQLiteStore, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		return nil, err
 	}
-	dsn := path + "?_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=synchronous(FULL)"
+	dsn := path + "?_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=synchronous(FULL)&_txlock=immediate"
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("open SQLite store: %w", err)
@@ -993,7 +996,15 @@ func (t *sqliteTx) EnqueueCommand(v CommandRecord) (CommandRecord, bool, error) 
 	var created, updated string
 	err := t.tx.QueryRowContext(t.ctx, `SELECT command_id,kind,target_id,expected_version,idempotency_key,requested_by,payload,status,result,created_at,updated_at FROM commands WHERE project_identity=? AND idempotency_key=?`, v.ProjectIdentity, v.IdempotencyKey).Scan(&old.CommandID, &old.Kind, &old.TargetID, &old.ExpectedVersion, &old.IdempotencyKey, &old.RequestedBy, &payload, &old.Status, &old.Result, &created, &updated)
 	if err == nil {
-		if old.Kind != v.Kind || old.TargetID != v.TargetID || old.ExpectedVersion != v.ExpectedVersion || old.RequestedBy != v.RequestedBy || string(payload) != string(v.Payload) {
+		if old.Kind != v.Kind || old.TargetID != v.TargetID {
+			return v, false, errors.New("idempotency key reused with different command content")
+		}
+		if old.Kind == "answer_decision" {
+			var oldAnswer, newAnswer DecisionAnswer
+			if decode(payload, &oldAnswer) != nil || decode(v.Payload, &newAnswer) != nil || !sameDecisionAnswer(oldAnswer, newAnswer) {
+				return v, false, errors.New("idempotency key reused with a different decision answer")
+			}
+		} else if old.ExpectedVersion != v.ExpectedVersion || old.RequestedBy != v.RequestedBy || string(payload) != string(v.Payload) {
 			return v, false, errors.New("idempotency key reused with different command content")
 		}
 		old.ProjectIdentity = v.ProjectIdentity
@@ -1030,14 +1041,32 @@ func (t *sqliteTx) EnqueueCommand(v CommandRecord) (CommandRecord, bool, error) 
 		if err := validateDecisionAnswer(&request, &answer); err != nil {
 			return v, false, err
 		}
-		if version != v.ExpectedVersion || status != "pending" {
-			return v, false, fmt.Errorf("decision version conflict: expected %d, current %d, status %s", v.ExpectedVersion, version, status)
-		}
-		if _, err := t.tx.ExecContext(t.ctx, `INSERT INTO decision_answers(project_identity,decision_id,decision_version,command_id,payload_digest,created_at) VALUES(?,?,?,?,?,?)`, v.ProjectIdentity, v.TargetID, v.ExpectedVersion, v.CommandID, operationDigest(v.Payload), now().Format(time.RFC3339Nano)); err != nil {
-			if isConstraintError(err) {
-				return v, false, errors.New("decision version already has an accepted answer command")
+		var acceptedCommandID string
+		acceptedErr := t.tx.QueryRowContext(t.ctx, `SELECT command_id FROM decision_answers WHERE project_identity=? AND decision_id=? ORDER BY decision_version LIMIT 1`, v.ProjectIdentity, v.TargetID).Scan(&acceptedCommandID)
+		if acceptedErr == nil {
+			var first CommandRecord
+			var firstPayload, firstResult []byte
+			var firstCreated, firstUpdated string
+			if err := t.tx.QueryRowContext(t.ctx, `SELECT command_id,kind,target_id,expected_version,idempotency_key,requested_by,payload,status,result,created_at,updated_at FROM commands WHERE project_identity=? AND command_id=?`, v.ProjectIdentity, acceptedCommandID).Scan(&first.CommandID, &first.Kind, &first.TargetID, &first.ExpectedVersion, &first.IdempotencyKey, &first.RequestedBy, &firstPayload, &first.Status, &firstResult, &firstCreated, &firstUpdated); err != nil {
+				return v, false, err
 			}
-			return v, false, err
+			var firstAnswer DecisionAnswer
+			if err := decode(firstPayload, &firstAnswer); err != nil {
+				return v, false, err
+			}
+			if !sameDecisionAnswer(firstAnswer, answer) {
+				return v, false, ErrAnswerConflict
+			}
+			first.ProjectIdentity, first.Payload, first.Result = v.ProjectIdentity, firstPayload, firstResult
+			first.CreatedAt, _ = time.Parse(time.RFC3339Nano, firstCreated)
+			first.UpdatedAt, _ = time.Parse(time.RFC3339Nano, firstUpdated)
+			return first, false, nil
+		}
+		if !errors.Is(acceptedErr, sql.ErrNoRows) {
+			return v, false, acceptedErr
+		}
+		if version != v.ExpectedVersion && !(status == "answer_saved" && version == v.ExpectedVersion+1) {
+			return v, false, fmt.Errorf("decision version conflict: expected %d, current %d, status %s", v.ExpectedVersion, version, status)
 		}
 	}
 	if v.Status == "" {
@@ -1049,6 +1078,101 @@ func (t *sqliteTx) EnqueueCommand(v CommandRecord) (CommandRecord, bool, error) 
 	v.UpdatedAt = v.CreatedAt
 	_, err = t.tx.ExecContext(t.ctx, `INSERT INTO commands(project_identity,command_id,kind,target_id,expected_version,idempotency_key,requested_by,payload,status,result,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`, v.ProjectIdentity, v.CommandID, v.Kind, v.TargetID, v.ExpectedVersion, v.IdempotencyKey, v.RequestedBy, v.Payload, v.Status, v.Result, v.CreatedAt.UTC().Format(time.RFC3339Nano), v.UpdatedAt.UTC().Format(time.RFC3339Nano))
 	return v, err == nil, err
+}
+
+func (t *sqliteTx) AcceptDecisionAnswer(command CommandRecord, answer DecisionAnswer) (DecisionRecord, bool, error) {
+	var record DecisionRecord
+	var version uint64
+	var status string
+	var recordBytes []byte
+	if err := t.tx.QueryRowContext(t.ctx, `SELECT version,status,payload FROM decisions WHERE project_identity=? AND decision_id=?`, command.ProjectIdentity, command.TargetID).Scan(&version, &status, &recordBytes); err != nil {
+		return record, false, err
+	}
+	if err := decode(recordBytes, &record); err != nil {
+		return record, false, err
+	}
+	if answer.DecisionID != command.TargetID || answer.RunID == "" || answer.AnsweredBy != command.RequestedBy || answer.RunID != record.WorkflowRunID || answer.ExpectedDecisionVersion != 0 && answer.ExpectedDecisionVersion != command.ExpectedVersion {
+		return record, false, errors.New("answer target or requester mismatch")
+	}
+	var previousCommandID string
+	var previousPayload []byte
+	err := t.tx.QueryRowContext(t.ctx, `SELECT da.command_id,c.payload FROM decision_answers da JOIN commands c ON c.project_identity=da.project_identity AND c.command_id=da.command_id WHERE da.project_identity=? AND da.decision_id=? ORDER BY da.decision_version LIMIT 1`, command.ProjectIdentity, command.TargetID).Scan(&previousCommandID, &previousPayload)
+	if err == nil {
+		if status == "pending" {
+			return record, false, errors.New("unsupported prior answer reservation exists while this decision remains pending; preserve the state without importing it")
+		}
+		var previous DecisionAnswer
+		if err = decode(previousPayload, &previous); err != nil {
+			return record, false, err
+		}
+		if !sameDecisionAnswer(previous, answer) {
+			return record, false, ErrAnswerConflict
+		}
+		result := mustJSON(map[string]any{"decision_id": command.TargetID, "status": record.Status, "version": record.Version, "original_command_id": previousCommandID, "idempotent": true})
+		command.Status, command.Result = "accepted", result
+		if err = t.UpdateCommand(command); err != nil {
+			return record, false, err
+		}
+		return record, true, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return record, false, err
+	}
+	if version != command.ExpectedVersion || status != "pending" {
+		return record, false, fmt.Errorf("decision version conflict: expected %d, current %d, status %s", command.ExpectedVersion, version, status)
+	}
+	if answer.ExpectedRunRevision == 0 || answer.ServiceInstanceID == "" {
+		return record, false, errors.New("decision answer lacks its displayed service instance and run revision")
+	}
+	var projectionBytes []byte
+	if err = t.tx.QueryRowContext(t.ctx, `SELECT payload FROM projection WHERE project_identity=?`, command.ProjectIdentity).Scan(&projectionBytes); err != nil {
+		return record, false, fmt.Errorf("load current service projection: %w", err)
+	}
+	var projection Runtime
+	if err = decode(projectionBytes, &projection); err != nil {
+		return record, false, fmt.Errorf("decode current service projection: %w", err)
+	}
+	if projection.Service.InstanceID != answer.ServiceInstanceID || projection.Service.Status != "running" || !projection.Service.Ready {
+		return record, false, errors.New("stale_instance: answer targets a service instance that is no longer ready")
+	}
+	var target *Run
+	for _, run := range projection.Runs {
+		if run != nil && run.RunID == answer.RunID {
+			target = run
+			break
+		}
+	}
+	if target == nil || target.ControlRevision != answer.ExpectedRunRevision || target.FinishTaskStatus != "waiting_decision" || target.Decision == nil || target.Decision.ID != command.TargetID || target.Decision.Status != "pending" || target.Decision.Version != command.ExpectedVersion || target.AttemptID == "" || target.Decision.AttemptID != target.AttemptID || target.Decision.AttemptID != record.AttemptID || target.ExecutionID != record.ExecutionID {
+		return record, false, errors.New("stale_revision: decision or run identity changed; refresh before answering")
+	}
+	var request DecisionRequest
+	if err = decode(record.Request, &request); err != nil {
+		return record, false, err
+	}
+	if err = validateDecisionAnswer(&request, &answer); err != nil {
+		return record, false, err
+	}
+	answer.AnsweredAt = now()
+	record.Answer, err = json.Marshal(answer)
+	if err != nil {
+		return record, false, err
+	}
+	record.AnsweredBy = answer.AnsweredBy
+	record.Status = "answer_saved"
+	record.Version++
+	record.UpdatedAt = now()
+	if err = t.PutDecision(record); err != nil {
+		return record, false, err
+	}
+	if _, err = t.tx.ExecContext(t.ctx, `INSERT INTO decision_answers(project_identity,decision_id,decision_version,command_id,payload_digest,created_at) VALUES(?,?,?,?,?,?)`, command.ProjectIdentity, command.TargetID, command.ExpectedVersion, command.CommandID, operationDigest(mustJSON(struct{ OptionID, Note string }{answer.OptionID, answer.Note})), now().Format(time.RFC3339Nano)); err != nil {
+		return record, false, err
+	}
+	command.Status = "accepted"
+	command.Result = mustJSON(map[string]any{"decision_id": command.TargetID, "status": record.Status, "version": record.Version, "idempotent": false})
+	if err = t.UpdateCommand(command); err != nil {
+		return record, false, err
+	}
+	return record, false, nil
 }
 func (t *sqliteTx) UpdateCommand(v CommandRecord) error {
 	if v.Status == "" {
@@ -1235,6 +1359,14 @@ func (s *SQLiteStore) EventPayload(ctx context.Context, project string, eventID 
 }
 
 func (s *SQLiteStore) Commands(ctx context.Context, project, status string, limit int) ([]CommandRecord, error) {
+	return s.commandsFiltered(ctx, project, status, limit, nil)
+}
+
+func (s *SQLiteStore) serviceCommands(ctx context.Context, project, status string, limit int) ([]CommandRecord, error) {
+	return s.commandsFiltered(ctx, project, status, limit, []string{"answer_decision", "retry_run", "mark_stopped", "accept_result", "resolve_command"})
+}
+
+func (s *SQLiteStore) commandsFiltered(ctx context.Context, project, status string, limit int, kinds []string) ([]CommandRecord, error) {
 	if limit < 1 {
 		limit = 200
 	}
@@ -1246,6 +1378,12 @@ func (s *SQLiteStore) Commands(ctx context.Context, project, status string, limi
 	if status != "" {
 		q += ` AND status=?`
 		args = append(args, status)
+	}
+	if len(kinds) > 0 {
+		q += ` AND kind IN (` + strings.TrimSuffix(strings.Repeat("?,", len(kinds)), ",") + `)`
+		for _, kind := range kinds {
+			args = append(args, kind)
+		}
 	}
 	q += ` ORDER BY created_at LIMIT ?`
 	args = append(args, limit)
@@ -1267,6 +1405,36 @@ func (s *SQLiteStore) Commands(ctx context.Context, project, status string, limi
 		out = append(out, v)
 	}
 	return out, rows.Err()
+}
+
+func (s *SQLiteStore) Command(ctx context.Context, project, commandID string) (CommandRecord, error) {
+	var command CommandRecord
+	var created, updated string
+	err := s.db.QueryRowContext(ctx, `SELECT project_identity,command_id,kind,target_id,expected_version,idempotency_key,requested_by,payload,status,result,created_at,updated_at FROM commands WHERE project_identity=? AND command_id=?`, project, commandID).Scan(&command.ProjectIdentity, &command.CommandID, &command.Kind, &command.TargetID, &command.ExpectedVersion, &command.IdempotencyKey, &command.RequestedBy, &command.Payload, &command.Status, &command.Result, &created, &updated)
+	if err != nil {
+		return command, err
+	}
+	command.CreatedAt, err = time.Parse(time.RFC3339Nano, created)
+	if err != nil {
+		return command, err
+	}
+	command.UpdatedAt, err = time.Parse(time.RFC3339Nano, updated)
+	return command, err
+}
+
+func (s *SQLiteStore) CommandByIdempotency(ctx context.Context, project, idempotencyKey string) (CommandRecord, error) {
+	var command CommandRecord
+	var created, updated string
+	err := s.db.QueryRowContext(ctx, `SELECT project_identity,command_id,kind,target_id,expected_version,idempotency_key,requested_by,payload,status,result,created_at,updated_at FROM commands WHERE project_identity=? AND idempotency_key=?`, project, idempotencyKey).Scan(&command.ProjectIdentity, &command.CommandID, &command.Kind, &command.TargetID, &command.ExpectedVersion, &command.IdempotencyKey, &command.RequestedBy, &command.Payload, &command.Status, &command.Result, &created, &updated)
+	if err != nil {
+		return command, err
+	}
+	command.CreatedAt, err = time.Parse(time.RFC3339Nano, created)
+	if err != nil {
+		return command, err
+	}
+	command.UpdatedAt, err = time.Parse(time.RFC3339Nano, updated)
+	return command, err
 }
 
 func (s *SQLiteStore) SaveRuntime(ctx context.Context, runtime Runtime) (Runtime, error) {
@@ -1743,9 +1911,11 @@ func legacyDecisionStatus(v string) string {
 	case "reply_accepted":
 		return "reply_accepted"
 	case "resuming":
-		return "answer_saved"
+		return "resuming"
 	case "applied":
 		return "applied"
+	case "failed":
+		return "failed"
 	case "superseded":
 		return "superseded"
 	default:

@@ -77,13 +77,14 @@ func TestAuditPRHeadCheckedBeforeExternalTaskClosure(t *testing.T) {
 func TestAuditManualRecoveryCannotBypassMinimalGates(t *testing.T) {
 	run := &Run{RunID: newID(), WorkflowVersion: MinimalWorkflowVersion, ExecutionStatus: "failed", FinishTaskStatus: "blocked"}
 	s := &Service{State: Runtime{Runs: []*Run{run}}}
+	s.State.Control.DispatchMode = "manual"
 	if err := s.startRetry(context.Background(), run.RunID); err == nil || !strings.Contains(err.Error(), "minimal-v1") {
 		t.Fatalf("retry bypass: %v", err)
 	}
-	if err := s.AcceptResult(context.Background(), run.RunID, "nonexistent"); err == nil || !strings.Contains(err.Error(), "minimal-v1") {
+	if err := s.acceptResultBytes(context.Background(), run.RunID, newID(), "audit", "confirmed", []byte("{}"), operationDigest([]byte("{}"))); err == nil || !strings.Contains(err.Error(), "minimal-v1") {
 		t.Fatalf("accept-result bypass: %v", err)
 	}
-	if err := s.MarkStopped(run.RunID); err == nil || !strings.Contains(err.Error(), "minimal-v1") {
+	if err := s.markStoppedCore(run.RunID, "audit", "confirmed"); err == nil || !strings.Contains(err.Error(), "minimal-v1") {
 		t.Fatalf("mark-stopped bypass: %v", err)
 	}
 }
@@ -137,7 +138,8 @@ func TestAuditAnswerFileCannotAuthorizeResume(t *testing.T) {
 	run.Decision = decision
 	run.ExecutionStatus = "succeeded"
 	run.FinishTaskStatus = "waiting_decision"
-	require(t, WriteAnswer(run, DecisionAnswer{OptionID: "yes", AnsweredBy: "outside-client"}))
+	answerPath := filepath.Join(filepath.Dir(*run.ResultPath), "decision.answer.json")
+	require(t, os.WriteFile(answerPath, []byte(`{"decision_id":"`+decision.ID+`","run_id":"`+run.RunID+`","option_id":"yes","answered_by":"outside-client"}`), 0600))
 	s := Service{State: Runtime{SchemaVersion: 5, Runs: []*Run{run}}}
 	require(t, s.applyDecisions(context.Background()))
 	if run.Decision.Status != "pending" || s.worker != nil {
@@ -149,6 +151,9 @@ func TestAuditInvalidAnswerDoesNotReserveDecisionVersion(t *testing.T) {
 	db := openDomainTestStore(t)
 	ctx := context.Background()
 	project := "repo:answer-validation"
+	request := DecisionRequest{Question: "choose", Options: []DecisionOption{{ID: "yes", Label: "Yes"}}}
+	run := &Run{TaskID: "1", RunID: "wf", DomainTaskID: "1", ExecutionID: "exec", AttemptID: "attempt", ControlRevision: 5, Host: "orca", Backend: string(BackendOrca), Protocol: string(ProtocolOrcaTerminalV2), WorkflowVersion: "legacy-v1", ExecutionStatus: "succeeded", FinishTaskStatus: "waiting_decision", Decision: &DecisionState{ID: "decision", AttemptID: "attempt", Version: 1, Status: "pending", Request: request}}
+	projection := Runtime{SchemaVersion: 5, Revision: 1, Repository: Repository{Identity: project}, Service: ServiceState{InstanceID: "service", Status: "running", Ready: true}, Runs: []*Run{run}}
 	require(t, db.Transact(ctx, func(tx DomainTx) error {
 		if err := tx.PutTask(TaskRecord{ProjectIdentity: project, TaskID: "1", Status: "open"}); err != nil {
 			return err
@@ -156,16 +161,42 @@ func TestAuditInvalidAnswerDoesNotReserveDecisionVersion(t *testing.T) {
 		if err := tx.PutWorkflowRun(WorkflowRunRecord{ProjectIdentity: project, TaskID: "1", WorkflowRunID: "wf", Phase: "waiting_decision"}); err != nil {
 			return err
 		}
-		return tx.PutDecision(DecisionRecord{ProjectIdentity: project, DecisionID: "decision", WorkflowRunID: "wf", Scope: "workflow", QuestionID: "q", Status: "pending", Version: 1, Request: mustJSON(DecisionRequest{Question: "choose", Options: []DecisionOption{{ID: "yes", Label: "Yes"}}})})
+		if err := tx.PutExecution(ExecutionRecord{ProjectIdentity: project, ExecutionID: "exec", WorkflowRunID: "wf", Status: "waiting_decision"}); err != nil {
+			return err
+		}
+		if err := tx.PutStepAttempt(StepAttemptRecord{ProjectIdentity: project, AttemptID: "attempt", ExecutionID: "exec", StepID: "implement", AttemptNumber: 1, Status: "waiting_decision"}); err != nil {
+			return err
+		}
+		if err := tx.PutDecision(DecisionRecord{ProjectIdentity: project, DecisionID: "decision", WorkflowRunID: "wf", ExecutionID: "exec", AttemptID: "attempt", Scope: "execution", QuestionID: "q", Status: "pending", Version: 1, Request: mustJSON(request)}); err != nil {
+			return err
+		}
+		return tx.PutProjection(project, projection.Revision, mustJSON(projection))
 	}))
 	commands := CommandService{Store: db, Project: project}
-	answer := DecisionAnswer{DecisionID: "decision", RunID: "wf", OptionID: "invalid", AnsweredBy: "alice"}
+	answer := DecisionAnswer{DecisionID: "decision", RunID: "wf", OptionID: "invalid", AnsweredBy: "alice", ExpectedDecisionVersion: 1, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: projection.Service.InstanceID}
 	if _, _, err := commands.AnswerDecision(ctx, "decision", 1, "invalid", "alice", mustJSON(answer)); err == nil {
 		t.Fatal("invalid option was queued")
 	}
 	answer.OptionID = "yes"
-	if _, created, err := commands.AnswerDecision(ctx, "decision", 1, "valid", "alice", mustJSON(answer)); err != nil || !created {
+	unbound := answer
+	unbound.ExpectedRunRevision = 0
+	if _, _, err := commands.AnswerDecision(ctx, "decision", 1, "unbound", "alice", mustJSON(unbound)); err == nil || !strings.Contains(err.Error(), "displayed run revision") {
+		t.Fatalf("command client silently filled a missing displayed revision: %v", err)
+	}
+	validCommand, created, err := commands.AnswerDecision(ctx, "decision", 1, "valid", "alice", mustJSON(answer))
+	if err != nil || !created {
 		t.Fatalf("invalid request consumed version reservation: %v", err)
+	}
+	run.AttemptID = "new-attempt"
+	if err := db.Transact(ctx, func(tx DomainTx) error { return tx.PutProjection(project, 2, mustJSON(projection)) }); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := commands.AcceptAnswer(ctx, validCommand, answer); err == nil || !strings.Contains(err.Error(), "stale_revision") {
+		t.Fatalf("old decision answer was accepted on a new attempt: %v", err)
+	}
+	snapshot, err := db.Query(ctx, project)
+	if err != nil || len(snapshot.Decisions) != 1 || snapshot.Decisions[0].Status != "pending" || snapshot.Decisions[0].Version != 1 {
+		t.Fatalf("invalid answer changed the authoritative decision: %+v err=%v", snapshot.Decisions, err)
 	}
 }
 
@@ -268,8 +299,8 @@ func TestAuditDecisionRequiresApplicationEvidence(t *testing.T) {
 	if err := s.finishMinimalStep(nil); err == nil || !strings.Contains(err.Error(), "application evidence") {
 		t.Fatalf("missing application proof accepted: %v", err)
 	}
-	if run.Decision.Status != "reply_accepted" || run.Decision.AppliedAt != nil {
-		t.Fatal("worker start was treated as decision application")
+	if run.Decision.Status != "failed" || run.Decision.AppliedAt != nil || run.ExecutionStatus != "failed" || run.FinishTaskStatus != "blocked" {
+		t.Fatalf("missing application evidence was not recorded as failed/blocked: decision=%+v execution=%s finish=%s", run.Decision, run.ExecutionStatus, run.FinishTaskStatus)
 	}
 }
 
@@ -318,8 +349,21 @@ func TestAuditStepInputIncludesFailureBodiesAndApplicationSchema(t *testing.T) {
 	var schema map[string]any
 	require(t, json.Unmarshal(MinimalStepResultSchema, &schema))
 	properties := schema["properties"].(map[string]any)["result"].(map[string]any)["properties"].(map[string]any)
-	if properties["applied_decision_id"] == nil || properties["workspace"].(map[string]any)["properties"] == nil {
+	if properties["applied_decision_id"] == nil || properties["applied_decision_attempt_id"] == nil || properties["applied_decision_execution_id"] == nil || properties["applied_answer_sha256"] == nil || properties["workspace"].(map[string]any)["properties"] == nil {
 		t.Fatal("result schema omits application or workspace evidence")
+	}
+}
+
+func TestMinimalDecisionApplicationEvidenceBindsOriginalAttemptExecutionAndAnswer(t *testing.T) {
+	run := &Run{RunID: "workflow", ExecutionID: "execution", Decision: &DecisionState{ID: "decision", AttemptID: "decision-attempt", Status: "reply_accepted", Request: DecisionRequest{Question: "choose", Options: []DecisionOption{{ID: "a", Label: "A"}}}, OptionID: "a", Note: "keep", AnsweredBy: "alice"}}
+	answer := DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, OptionID: run.Decision.OptionID, Note: run.Decision.Note, AnsweredBy: run.Decision.AnsweredBy}
+	result := StepGateResult{AppliedDecisionID: run.Decision.ID, AppliedDecisionAttemptID: run.Decision.AttemptID, AppliedDecisionExecutionID: run.ExecutionID, AppliedAnswerSHA256: decisionAnswerDigest(answer)}
+	if !minimalDecisionApplicationMatches(run, result) {
+		t.Fatal("strictly bound application evidence was rejected")
+	}
+	result.AppliedDecisionAttemptID = "late-attempt"
+	if minimalDecisionApplicationMatches(run, result) {
+		t.Fatal("late attempt evidence unlocked the pending decision")
 	}
 }
 

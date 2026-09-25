@@ -96,7 +96,7 @@ model / profile / reasoning_effort = Codex agent 的 CLI 选项；仅 Codex agen
 | --- | --- | --- |
 | P0 | `activity.jsonl` + normalizer + `steerline watch` + `run -console` | 已实现 |
 | P1 | `Spawner`/`Worker` 抽象 + `LocalSpawner` | 已实现（保留给 local host） |
-| P1-decision | 人工决策通道：`needs_decision` + `waiting_decision` + request/answer 文件 + `steerline answer` + 同终端续跑 | 已实现（含集成测试） |
+| P1-decision | 人工决策通过当前 SQLite `CommandService` first-wins；Orca 只续跑固定 terminal/incarnation；仅严格绑定原 decision、attempt、execution 和答案摘要的证明可标 applied；不导入 request/answer sidecar | 见 [PR 5 Spec](pr-05-intervention.spec.md) 与 [决策契约](../decisions.md) |
 | P2-v1 | Orca 当可见终端宿主（headless worker） | 已被 v2 取代 |
 | P2-v2 | Orca 建 worktree + `--agent` 启 agent + R-a 结果 | 已实现（含集成测试） |
 | P2-viewer | 全屏交互查看器（`steerline watch`，run 列表 + activity + 决策面板，bubbletea） | 已实现（teatest 风格单测 + 真实 TTY 冒烟） |

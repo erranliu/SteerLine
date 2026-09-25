@@ -1,36 +1,41 @@
-# 人工决策通道
+# 人工决策与应用证明
 
-SQLite 是请求、答案和决策状态的权威来源。CLI 与 viewer 通过 `CommandService` 追加答案命令，服务校验并应用；`runtime.json` 和决策文件仅用于展示或诊断。手工写入 `decision.answer.json` 不会授权续跑。
+SQLite 是当前问题、答案、命令和决策状态的唯一业务权威。控制台与 CLI 都向当前 `CommandService` 提交 `answer_decision`；服务离线时只提供读取与诊断，不写答案文件或维护路径。写入 `decision.answer.json` 不会授权续跑，旧 sidecar 决策投影会被服务明确拒绝且不会导入。
 
-## 提问与回答
+## 问题与回答
 
-`minimal-v1` 的步骤结果可携带 `result.decision`：必须有 `question`，以及最多 12 个选项或 `allow_free_text`。结果须匹配本次 WorkflowRun、Execution、Attempt 和前置结果身份。服务保存问题与工作区证据，将流程置为 `waiting_decision`，保留任务领取和工作区。
+每个问题有新的 `decision_id`，绑定原 workflow run、execution、attempt 和问题版本。问题正文、上下文、最多 12 个选项、选项详情和推荐项完整保存在 `DecisionRecord`。同一问题的答案 first-wins：相同 option/note 重交返回原命令结果；内容不同返回 `answer_conflict`。答案不允许覆盖，重新提问必须使用新的 `decision_id`。
 
 ```powershell
 steerline answer -config .\service.json `
-  -run-id <run-id|task-id> -option <option-id> [-note "..."] [-decision-id <id>] [-by "<name>"]
+  -run-id <run-id|task-id> -decision-id <decision-id> `
+  [-option <option-id>] [-note "多行补充说明"] [-by "<name>"] [-wait]
 ```
 
-回答入口从当前数据库读取问题，提交包含目标 ID、expected_version、idempotency_key、回答者与答案的命令。服务暂停时仍可排队。无效选项或身份不匹配会在占用版本前拒绝；同版本只有一个答案命令，同幂等键同内容重试复用原命令。viewer 携带用户看到的问题版本，版本变化后必须刷新。
+有声明选项且 `allow_free_text=false` 时必须选择一个选项；`note` 可补充说明。有选项且 `allow_free_text=true` 时还可提交自定义答复，此时 `option_id` 为空且 `note` 非空。没有选项的问题也要求非空说明。问题文本与答案说明按协议长度校验；超限会拒绝，绝不静默截短。
 
-## 状态含义
+命令目标绑定服务实例、`decision_id`、显示的 decision version 和 `run.control_revision`。服务在 SQLite 事务中重新核对 pending 状态、问题/attempt/execution 身份、实例与运行 revision，再同时保存 first-wins 答案和命令接受事实。旧草稿冲突时保留给操作者检查，不把答案应用到后续问题。
 
-| 状态 | 证据 |
+local `local_process` continuation 当前不受支持。服务会以相同能力规则拒绝它；不能通过重新启动另一执行伪装成续跑。Orca terminal v2 只对固定 terminal/incarnation 核验 `reply_continue`；发送前提示应用状态仍需证明，服务不会因终端接受输入就显示答案已应用。
+
+## 持久状态与证明
+
+| 状态 | 可核验含义 |
 | --- | --- |
-| `pending` | 问题已持久化，尚无已保存答案 |
-| `answer_saved` | 服务已通过命令校验并将答案写入数据库 |
-| `reply_accepted` | 后端已接受续跑输入；尚无答案应用证明 |
-| `applied` | 当前尝试返回匹配的 `result.applied_decision_id`，证明已应用该答案 |
-| `failed` / `superseded` | 续跑失败或问题已被取代 |
+| `pending` | 问题已保存在 SQLite，尚无被服务接受的答案 |
+| `answer_saved` | 当前 `CommandService` 已接受固定答案；不代表后端已收到 |
+| `resuming` | 服务已保存续跑/worker 准备意图；重启后不自动重发 |
+| `reply_accepted` | 后端接受了输入；决策仍待应用证明 |
+| `applied` | 验证了绑定原 decision、原 decision attempt、execution 和固定答案摘要的证明 |
+| `failed` | 原执行结束但无有效应用证明，或续跑明确失败；原问题、答案和 Operation 留档 |
+| `superseded` | 历史问题由新的 decision_id 取代；旧答案不变 |
 
-本地 minimal-v1 回答后为同一步建立新的尝试，固定输入包含原问题、数据库中的答案和前置结果正文；原尝试保留为历史，不推进到下一步。返回结果必须携带 `applied_decision_id`，且值等于输入的 `decision.answer.decision_id`。worker 启动和正常退出都不能单独证明决策已应用。
+单次结果的 `decision_application` 要与 `decision_id`、原 `attempt_id`、`execution_id`、固定 `ExecutionRef` SHA-256 和答案摘要 SHA-256 相同。`turn.started`、进程存活、final 消息、PR 结果或单独的 reply receipt 都不足以证明应用。当前结果未提供匹配证明时，已结束的 run 进入 `blocked`，decision 进入 `failed`，不能补写 `applied`，也不能盲目重发 continuation。
 
-现有 Orca terminal v2 续跑继续核验原终端与 incarnation；terminal send 成功只记录 `reply_accepted`。协议没有提供应用证明时不升级为 `applied`。
+minimal-v1 步骤结果要求 `applied_decision_id`、`applied_decision_attempt_id`、`applied_decision_execution_id` 和 `applied_answer_sha256` 同时匹配。步骤 envelope 自身还必须绑定本次 workflow/execution/resumed step attempt。旧 attempt 的迟到结果不会解锁新的决策。
 
-## 恢复与交付
+## 历史与恢复
 
-已保存但未派发的步骤意图在重启后从原步骤继续；已开始但结果不明的外部动作进入阻塞，不盲目重发。续跑重新核验任务领取、工作区身份和执行槽。implement 可以继续决策暂停时保存的代码现场；verify/review/publish_pr 必须保持固定的干净 revision。
+历史页按 `decision_id` 展示本轮所有问题和已接受答案；折叠、展开、session/turn 结束只改变视图，不消费问题或修改决策。当前问题卡片留在折叠区外，UI 还分别呈现答案已保存、后端已接受、轮次已开始、已应用、失败与待核实。
 
-步骤完成不关闭 Task。发布与合并核验先检查精确 PR、目标分支、head 和对应验证/审查证据，通过后才能执行外部任务结项。
-
-请求文件和 `continue.txt` 可保留供诊断或作为执行输入，但不能替代数据库中的版本、答案与应用状态。事件与领域状态在同一事务提交，展示日志不参与恢复。
+retry、mark-stopped、accept-result 和 resolve-command 也通过同一 SQLite `CommandService` 在线提交。执行结果不确定时保留原 command/request id、回执和 blocker；重启不重放 worker start 或 terminal send。见 [PR 5 Spec](spec/pr-05-intervention.spec.md) 与 [验证报告](validation/pr-05-intervention.md)。

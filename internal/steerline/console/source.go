@@ -53,6 +53,13 @@ type ControlClient interface {
 	Request(context.Context, ProjectRef, string) (*steerline.ControlRequest, error)
 }
 
+type DecisionCommandClient interface {
+	DecisionEligibility(context.Context, ProjectRef, *steerline.Run) error
+	SubmitDecision(context.Context, ProjectRef, steerline.DecisionAnswer, string, string) (steerline.CommandRecord, bool, error)
+	DecisionCommand(context.Context, ProjectRef, string) (steerline.CommandRecord, error)
+	SubmitServiceAction(context.Context, ProjectRef, string, string, string, uint64, string, any) (steerline.CommandRecord, bool, error)
+}
+
 type FileQuerySource struct{}
 
 func (FileQuerySource) ReadProject(ctx context.Context, ref ProjectRef, selectedTaskID string) ProjectSnapshot {
@@ -272,6 +279,16 @@ func (FileQuerySource) ReadCapabilities(ctx context.Context, ref ProjectRef, bac
 
 type FileControlClient struct{}
 
+func (FileControlClient) DecisionEligibility(ctx context.Context, ref ProjectRef, run *steerline.Run) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if ref.Error != "" {
+		return errors.New(ref.Error)
+	}
+	return steerline.DecisionReplyEligibility(ctx, ref.Config, run)
+}
+
 func (FileControlClient) Submit(ctx context.Context, ref ProjectRef, action string, payload any, requestID, instance string, revision *uint64) (steerline.ControlRequest, error) {
 	if err := ctx.Err(); err != nil {
 		return steerline.ControlRequest{}, err
@@ -294,6 +311,38 @@ func (FileControlClient) Request(ctx context.Context, ref ProjectRef, requestID 
 		return nil, err
 	}
 	return steerline.ReadControlRequest(ref.Config, requestID)
+}
+
+func (FileControlClient) SubmitDecision(ctx context.Context, ref ProjectRef, answer steerline.DecisionAnswer, requestedBy, commandID string) (steerline.CommandRecord, bool, error) {
+	if err := ctx.Err(); err != nil {
+		return steerline.CommandRecord{}, false, err
+	}
+	if ref.Error != "" {
+		return steerline.CommandRecord{}, false, errors.New(ref.Error)
+	}
+	return steerline.SubmitAnswerDecision(ctx, ref.Config, answer.RunID, answer.DecisionID, answer.OptionID, answer.Note, requestedBy, answer.ExpectedDecisionVersion, answer.ExpectedRunRevision, answer.ServiceInstanceID, commandID)
+}
+
+func (FileControlClient) DecisionCommand(ctx context.Context, ref ProjectRef, commandID string) (steerline.CommandRecord, error) {
+	if err := ctx.Err(); err != nil {
+		return steerline.CommandRecord{}, err
+	}
+	db, err := steerline.OpenSQLiteReader(filepath.Join(ref.RunDir, "steerline.db"))
+	if err != nil {
+		return steerline.CommandRecord{}, err
+	}
+	defer db.Close()
+	return db.Command(ctx, ref.Identity, commandID)
+}
+
+func (FileControlClient) SubmitServiceAction(ctx context.Context, ref ProjectRef, kind, targetID, requestedBy string, expectedRevision uint64, commandID string, payload any) (steerline.CommandRecord, bool, error) {
+	if err := ctx.Err(); err != nil {
+		return steerline.CommandRecord{}, false, err
+	}
+	if ref.Error != "" {
+		return steerline.CommandRecord{}, false, errors.New(ref.Error)
+	}
+	return steerline.SubmitServiceCommand(ctx, ref.Config, kind, targetID, requestedBy, commandID, expectedRevision, payload)
 }
 
 func candidateFreshness(ref ProjectRef, snapshot ProjectSnapshot, now time.Time) (bool, string) {
