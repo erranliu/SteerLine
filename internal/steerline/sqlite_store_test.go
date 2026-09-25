@@ -14,6 +14,20 @@ import (
 	"time"
 )
 
+func TestNativeRuntimeProjectionDoesNotShadowCenterOwnedControlCommands(t *testing.T) {
+	runtime := Runtime{Repository: Repository{Identity: "native-project"}, Control: ControlState{Operation: &ControlOperation{RequestID: strings.Repeat("a", 32), Action: "set_dispatch_mode", Phase: "applying", RequestDigest: strings.Repeat("b", 64)}}}
+	if operations := runtimeOperations(runtime, true); len(operations) != 0 {
+		t.Fatalf("native center control was projected as a second operation: %+v", operations)
+	}
+	if operations := runtimeOperations(runtime, false); len(operations) != 1 || operations[0].Kind != "set_dispatch_mode" {
+		t.Fatalf("Beads-era control projection behavior changed: %+v", operations)
+	}
+	runtime.Control.Operation.Action = "stop_service"
+	if operations := runtimeOperations(runtime, true); len(operations) != 1 || operations[0].Kind != "stop_service" {
+		t.Fatalf("service stop operation was omitted from the native runtime projection: %+v", operations)
+	}
+}
+
 func openDomainTestStore(t *testing.T) *SQLiteStore {
 	t.Helper()
 	s, err := OpenSQLiteStore(filepath.Join(t.TempDir(), "steerline.db"))

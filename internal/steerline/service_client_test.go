@@ -690,10 +690,9 @@ func TestStartServiceReportsPreflightFailureAndPendingHandshake(t *testing.T) {
 	})
 }
 
-func TestRunCommandRecordsPreflightFailureAndLog(t *testing.T) {
+func TestRunCommandRecordsInactiveBeadsSourceFailureAndLog(t *testing.T) {
 	f := newFixture(t)
 	config, configPath := lifecycleConfigFile(t, f, f.c.RunDir)
-	config.StartSkill.Path = "missing-start.md"
 	data, err := json.Marshal(config)
 	require(t, err)
 	require(t, os.WriteFile(configPath, data, 0600))
@@ -723,13 +722,13 @@ func TestRunCommandRecordsPreflightFailureAndLog(t *testing.T) {
 		t.Fatal("preflight failure returned success")
 	}
 	record, err := readStartupRecord(config, id)
-	if err != nil || record.Status != "failed" || !strings.Contains(record.Error, "missing skill") {
-		t.Fatalf("preflight startup record=%+v err=%v", record, err)
+	if err != nil || record.Status != "failed" || !strings.Contains(record.Error, "task_authority=native") {
+		t.Fatalf("inactive-Beads startup record=%+v err=%v", record, err)
 	}
 	log, err := os.ReadFile(logPath)
 	require(t, err)
-	if !strings.Contains(string(log), "missing skill") {
-		t.Fatalf("preflight error missing from startup log: %s", log)
+	if !strings.Contains(string(log), "task_authority=native") {
+		t.Fatalf("authority error missing from startup log: %s", log)
 	}
 }
 

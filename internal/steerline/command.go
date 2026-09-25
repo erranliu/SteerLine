@@ -84,6 +84,38 @@ func overrideEnv(base []string, values map[string]string) []string {
 	}
 	return out
 }
+
+func unsetEnv(base []string, names []string) []string {
+	if len(names) == 0 {
+		return base
+	}
+	blocked := make(map[string]bool, len(names))
+	prefixes := []string{}
+	for _, name := range names {
+		upper := strings.ToUpper(name)
+		if strings.HasSuffix(upper, "*") {
+			prefixes = append(prefixes, strings.TrimSuffix(upper, "*"))
+		} else {
+			blocked[upper] = true
+		}
+	}
+	out := make([]string, 0, len(base))
+	for _, entry := range base {
+		key, _, _ := strings.Cut(entry, "=")
+		upperKey := strings.ToUpper(key)
+		remove := blocked[upperKey]
+		for _, prefix := range prefixes {
+			if strings.HasPrefix(upperKey, prefix) {
+				remove = true
+				break
+			}
+		}
+		if !remove {
+			out = append(out, entry)
+		}
+	}
+	return out
+}
 func clip(s string, n int) string {
 	r := []rune(s)
 	if len(r) > n {

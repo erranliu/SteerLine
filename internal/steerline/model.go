@@ -131,7 +131,8 @@ type Run struct {
 	Protocol             string                  `json:"protocol,omitempty"`
 	Agent                string                  `json:"agent,omitempty"`
 	Target               ExecutionTarget         `json:"target,omitempty"`
-	BeadsStatus          string                  `json:"beads_status"`
+	TaskStatus           string                  `json:"task_status,omitempty"`
+	BeadsStatus          string                  `json:"beads_status,omitempty"`
 	ExecutionStatus      string                  `json:"execution_status"`
 	FinishTaskStatus     string                  `json:"finish_task_status"`
 	SessionID            *string                 `json:"codex_session_id"`
@@ -141,8 +142,8 @@ type Run struct {
 	WorktreePath         *string                 `json:"worktree_path"`
 	WorktreeBranch       *string                 `json:"worktree_branch"`
 	WorkspaceIntent      *WorkspaceIntent        `json:"workspace_intent"`
-	Completion           *CompletionConfig       `json:"completion"`
-	BeadsContext         *BeadsContext           `json:"beads_context"`
+	Completion           *CompletionConfig       `json:"completion,omitempty"`
+	BeadsContext         *BeadsContext           `json:"beads_context,omitempty"`
 	BaseCommit           *string                 `json:"base_commit"`
 	PR                   PRState                 `json:"pr"`
 	LastEvent            *string                 `json:"last_event"`

@@ -193,24 +193,26 @@ type WorkspaceEvidence struct {
 }
 
 type StepAttemptRecord struct {
-	ProjectIdentity string          `json:"project_identity"`
-	AttemptID       string          `json:"attempt_id"`
-	ExecutionID     string          `json:"execution_id"`
-	StepID          string          `json:"step_id"`
-	AttemptNumber   int             `json:"attempt_number"`
-	OperationID     string          `json:"operation_id,omitempty"`
-	EventPath       string          `json:"event_path,omitempty"`
-	ResultPath      string          `json:"result_path,omitempty"`
-	Status          string          `json:"status"`
-	InputRevision   string          `json:"input_revision,omitempty"`
-	ContractDigest  string          `json:"contract_digest,omitempty"`
-	PrerequisiteIDs []string        `json:"prerequisite_result_ids,omitempty"`
-	ResultID        string          `json:"result_id,omitempty"`
-	Result          json.RawMessage `json:"result,omitempty"`
-	ExternalBinding ExecutionTarget `json:"external_binding,omitempty"`
-	Legacy          bool            `json:"legacy,omitempty"`
-	CreatedAt       time.Time       `json:"created_at"`
-	UpdatedAt       time.Time       `json:"updated_at"`
+	ProjectIdentity      string          `json:"project_identity"`
+	AttemptID            string          `json:"attempt_id"`
+	ExecutionID          string          `json:"execution_id"`
+	StepID               string          `json:"step_id"`
+	AttemptNumber        int             `json:"attempt_number"`
+	OperationID          string          `json:"operation_id,omitempty"`
+	EventPath            string          `json:"event_path,omitempty"`
+	ResultPath           string          `json:"result_path,omitempty"`
+	Status               string          `json:"status"`
+	InputRevision        string          `json:"input_revision,omitempty"`
+	ContractDigest       string          `json:"contract_digest,omitempty"`
+	PrerequisiteIDs      []string        `json:"prerequisite_result_ids,omitempty"`
+	ResultID             string          `json:"result_id,omitempty"`
+	Result               json.RawMessage `json:"result,omitempty"`
+	ExternalBinding      ExecutionTarget `json:"external_binding,omitempty"`
+	NativeLauncherPath   string          `json:"native_launcher_path,omitempty"`
+	NativeLauncherDigest string          `json:"native_launcher_digest,omitempty"`
+	Legacy               bool            `json:"legacy,omitempty"`
+	CreatedAt            time.Time       `json:"created_at"`
+	UpdatedAt            time.Time       `json:"updated_at"`
 }
 
 type DecisionRecord struct {
@@ -354,7 +356,7 @@ func (c MinimalWorkflowConfig) Validate() error {
 		if err := validateStepContract(id, step); err != nil {
 			return err
 		}
-		if step.InputSchema != MinimalStepInputSchema || step.OutputSchema != MinimalStepOutputSchema {
+		if step.InputSchema != MinimalStepInputSchema && step.InputSchema != NativeTaskInputSchema || step.OutputSchema != MinimalStepOutputSchema {
 			return fmt.Errorf("%s must use the minimal-v1 input/output schemas", id)
 		}
 	}
@@ -362,7 +364,7 @@ func (c MinimalWorkflowConfig) Validate() error {
 		if err := validateStepContract("review", c.Steps.Review); err != nil {
 			return err
 		}
-		if c.Steps.Review.InputSchema != MinimalStepInputSchema || c.Steps.Review.OutputSchema != MinimalStepOutputSchema {
+		if c.Steps.Review.InputSchema != MinimalStepInputSchema && c.Steps.Review.InputSchema != NativeTaskInputSchema || c.Steps.Review.OutputSchema != MinimalStepOutputSchema {
 			return errors.New("review must use the minimal-v1 input/output schemas")
 		}
 	}

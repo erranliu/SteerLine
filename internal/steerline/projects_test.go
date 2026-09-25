@@ -10,6 +10,7 @@ import (
 
 func minimalConfig(repo, runDir string) Config {
 	return Config{
+		TaskAuthority:   "beads",
 		Repository:      repo,
 		Remote:          "origin",
 		Branch:          "main",
