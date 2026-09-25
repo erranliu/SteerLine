@@ -64,6 +64,15 @@ type NativeTaskPage struct {
 	HasMore          bool                   `json:"has_more"`
 }
 
+func (p NativeTaskPage) MarshalJSON() ([]byte, error) {
+	type plain NativeTaskPage
+	body, err := json.Marshal(plain(p))
+	if err != nil {
+		return nil, err
+	}
+	return escapeBidiJSON(body), nil
+}
+
 type nativeTaskCursor struct {
 	Version          int    `json:"v"`
 	ProjectID        string `json:"p"`
@@ -544,6 +553,25 @@ func OpenNativeTaskProject(ctx context.Context, c *Config) (*SQLiteStore, error)
 		return nil, err
 	}
 	if err = db.Close(); err != nil {
+		return nil, err
+	}
+	return openBoundNativeStore(ctx, *c, path)
+}
+
+// OpenNativeTaskReader opens an existing native authority without creating
+// project state. Every read is bound to the configured repository and target.
+func OpenNativeTaskReader(ctx context.Context, c *Config) (*SQLiteStore, error) {
+	if c == nil || c.taskAuthority() != "native" {
+		return nil, nativeErr("authority_mismatch", "native task reader requires task_authority=native")
+	}
+	if err := validateNativeStateLocation(*c); err != nil {
+		return nil, err
+	}
+	if err := c.ResolveIdentity(ctx); err != nil {
+		return nil, err
+	}
+	path := filepath.Join(c.RunDir, "steerline.db")
+	if _, err := os.Stat(path); err != nil {
 		return nil, err
 	}
 	return openBoundNativeStore(ctx, *c, path)

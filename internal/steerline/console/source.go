@@ -28,16 +28,19 @@ type ProjectRef struct {
 }
 
 type ProjectSnapshot struct {
-	Connection  steerline.ServiceConnection
-	Observation steerline.ObservationSnapshot
-	Tasks       *steerline.TaskSnapshot
-	TaskError   string
-	Domain      *steerline.DomainSnapshot
-	DomainError string
+	Connection      steerline.ServiceConnection
+	Observation     steerline.ObservationSnapshot
+	Tasks           *steerline.TaskSnapshot
+	TaskError       string
+	NativeTasks     *steerline.NativeTaskPage
+	SelectedNative  *steerline.NativeTaskDetail
+	NativeTaskError string
+	Domain          *steerline.DomainSnapshot
+	DomainError     string
 }
 
 type QuerySource interface {
-	ReadProject(context.Context, ProjectRef) ProjectSnapshot
+	ReadProject(context.Context, ProjectRef, string) ProjectSnapshot
 	ReadActivity(context.Context, ProjectRef, string, string, string, string, steerline.JournalCursor) (viewer.LogBatch, error)
 	ReadConversation(context.Context, ProjectRef, steerline.ConversationFilter, string) (steerline.ConversationPage, error)
 	ReadBody(context.Context, ProjectRef, steerline.ConversationBodyRef, int64, int) (steerline.ConversationBodyPage, error)
@@ -52,7 +55,7 @@ type ControlClient interface {
 
 type FileQuerySource struct{}
 
-func (FileQuerySource) ReadProject(ctx context.Context, ref ProjectRef) ProjectSnapshot {
+func (FileQuerySource) ReadProject(ctx context.Context, ref ProjectRef, selectedTaskID string) ProjectSnapshot {
 	result := ProjectSnapshot{}
 	if ref.Error != "" {
 		result.TaskError, result.DomainError = ref.Error, ref.Error
@@ -75,20 +78,71 @@ func (FileQuerySource) ReadProject(ctx context.Context, ref ProjectRef) ProjectS
 	} else if result.Observation.Runtime == nil && result.Observation.State == steerline.SnapshotNone {
 		result.Observation = steerline.ReadObservationSnapshot(filepath.Join(c.RunDir, c.RuntimeFile), c.Heartbeat, nil)
 	}
-	if snapshot, err := steerline.ReadTaskSnapshot(c); err != nil {
-		result.TaskError = err.Error()
-	} else {
-		result.Tasks = snapshot
-		if snapshot.Error != nil && strings.TrimSpace(*snapshot.Error) != "" {
-			result.TaskError = *snapshot.Error
+	if c.TaskAuthority != "native" {
+		if snapshot, err := steerline.ReadTaskSnapshot(c); err != nil {
+			result.TaskError = err.Error()
+		} else {
+			result.Tasks = snapshot
+			if snapshot.Error != nil && strings.TrimSpace(*snapshot.Error) != "" {
+				result.TaskError = *snapshot.Error
+			}
 		}
 	}
 	dbPath := filepath.Join(c.RunDir, "steerline.db")
 	if _, err := os.Stat(dbPath); err == nil {
-		store, openErr := steerline.OpenSQLiteReader(dbPath)
+		var store *steerline.SQLiteStore
+		var openErr error
+		if c.TaskAuthority == "native" {
+			store, openErr = steerline.OpenNativeTaskReader(ctx, &c)
+		} else {
+			store, openErr = steerline.OpenSQLiteReader(dbPath)
+		}
 		if openErr != nil {
 			result.DomainError = openErr.Error()
+			if c.TaskAuthority == "native" {
+				result.NativeTaskError = openErr.Error()
+				result.TaskError = openErr.Error()
+			}
 		} else {
+			if c.TaskAuthority == "native" {
+				query := steerline.QueryService{Store: store, Project: c.Identity()}
+				nativeTasks, nativeErr := query.ListNativeTasks(ctx, "", 500)
+				if nativeErr != nil {
+					result.NativeTaskError = nativeErr.Error()
+					result.TaskError = nativeErr.Error()
+				} else {
+					result.NativeTasks = &nativeTasks
+					ready, readyErr := query.ReadyNativeTaskSnapshot(ctx)
+					if readyErr != nil {
+						result.TaskError = readyErr.Error()
+					} else if ready.ProjectID != nativeTasks.ProjectID || ready.AuthorityVersion != nativeTasks.AuthorityVersion || ready.GraphRevision != nativeTasks.GraphRevision || ready.DatabaseID != nativeTasks.DatabaseID || ready.DatabaseRevision != nativeTasks.DatabaseRevision {
+						result.TaskError = "cursor_invalidated: 任务详情与 Ready 候选采样版本不同；禁止开始"
+					} else {
+						result.Tasks = nativeCandidateSnapshot(ref, result.Connection, ready)
+					}
+					if selectedTaskID != "" && steerline.ValidateNativeTaskID(selectedTaskID) == nil {
+						found := false
+						for i := range nativeTasks.Tasks {
+							if nativeTasks.Tasks[i].TaskID == selectedTaskID {
+								found = true
+								break
+							}
+						}
+						if !found {
+							selected, showErr := query.ShowNativeTask(ctx, selectedTaskID)
+							if showErr == nil && selected.AuthorityVersion == nativeTasks.AuthorityVersion && selected.DatabaseID == nativeTasks.DatabaseID && selected.DatabaseRevision == nativeTasks.DatabaseRevision && selected.GraphRevision == nativeTasks.GraphRevision {
+								result.SelectedNative = &selected.Tasks[0]
+							} else if showErr == nil {
+								result.NativeTaskError = "cursor_invalidated: 所选任务与列表采样版本不同"
+								result.TaskError = result.NativeTaskError
+							} else {
+								result.NativeTaskError = showErr.Error()
+								result.TaskError = result.NativeTaskError
+							}
+						}
+					}
+				}
+			}
 			domain, queryErr := store.Query(ctx, c.Identity())
 			_ = store.Close()
 			if queryErr != nil {
@@ -99,8 +153,39 @@ func (FileQuerySource) ReadProject(ctx context.Context, ref ProjectRef) ProjectS
 		}
 	} else if !os.IsNotExist(err) {
 		result.DomainError = err.Error()
+		if c.TaskAuthority == "native" {
+			result.NativeTaskError = err.Error()
+			result.TaskError = err.Error()
+		}
+	} else if c.TaskAuthority == "native" {
+		result.NativeTaskError = "当前原生任务数据库不存在；控制台保持只读，不会初始化任务状态"
+		result.TaskError = result.NativeTaskError
 	}
 	return result
+}
+
+func nativeCandidateSnapshot(ref ProjectRef, connection steerline.ServiceConnection, page steerline.NativeReadyTaskSnapshot) *steerline.TaskSnapshot {
+	queried := page.SampledAt
+	snapshot := &steerline.TaskSnapshot{Version: 1, RepositoryIdentity: ref.Identity, QueriedAt: queried, LastSuccessAt: &queried, Tasks: []steerline.TaskCandidate{}}
+	if connection.State == steerline.ConnectionConnected && connection.CanControl && connection.Snapshot.Runtime != nil {
+		snapshot.InstanceID = connection.Snapshot.Runtime.Service.InstanceID
+	}
+	for _, task := range page.Tasks {
+		if task.Status != "open" || !nativeTaskTypeExecutable(ref.Config.ExecutableTypes, task.Type) {
+			continue
+		}
+		snapshot.Tasks = append(snapshot.Tasks, steerline.TaskCandidate{TaskID: task.TaskID, Title: task.Title, Type: task.Type})
+	}
+	return snapshot
+}
+
+func nativeTaskTypeExecutable(types []string, taskType string) bool {
+	for _, candidate := range types {
+		if candidate == taskType {
+			return true
+		}
+	}
+	return false
 }
 
 func (FileQuerySource) ReadActivity(ctx context.Context, ref ProjectRef, runID, executionID, attemptID, currentPath string, cursor steerline.JournalCursor) (viewer.LogBatch, error) {
@@ -221,6 +306,9 @@ func candidateFreshness(ref ProjectRef, snapshot ProjectSnapshot, now time.Time)
 	if snapshot.TaskError != "" {
 		return false, snapshot.TaskError
 	}
+	if snapshot.Connection.State != steerline.ConnectionConnected || !snapshot.Connection.CanControl {
+		return false, firstText(snapshot.Connection.Diagnostic, "服务未连接；缓存任务不能作为启动许可")
+	}
 	controlRuntime := snapshot.Connection.Snapshot.Runtime
 	if controlRuntime == nil || controlRuntime.Service.InstanceID == "" {
 		return false, "缺少当前服务实例身份"
@@ -244,9 +332,6 @@ func candidateFreshness(ref ProjectRef, snapshot ProjectSnapshot, now time.Time)
 	}
 	if now.Sub(snapshot.Tasks.LastSuccessAt.UTC()) > limit {
 		return false, fmt.Sprintf("候选缓存已过期（上次成功 %s）", snapshot.Tasks.LastSuccessAt.Local().Format("15:04:05"))
-	}
-	if snapshot.Connection.State != steerline.ConnectionConnected {
-		return false, "服务未就绪：" + string(snapshot.Connection.State)
 	}
 	return true, ""
 }
