@@ -25,6 +25,7 @@ type TaskRecord struct {
 	Title             string     `json:"title"`
 	Type              string     `json:"type,omitempty"`
 	Priority          int        `json:"priority,omitempty"`
+	GoalIDs           []string   `json:"goal_ids,omitempty"`
 	ContractID        string     `json:"contract_id,omitempty"`
 	Claimant          string     `json:"claimant,omitempty"`
 	Source            string     `json:"source"`
@@ -34,6 +35,9 @@ type TaskRecord struct {
 	UpdatedAt         time.Time  `json:"updated_at"`
 	DiscardedAt       *time.Time `json:"discarded_at,omitempty"`
 	DiscardReason     string     `json:"discard_reason,omitempty"`
+	DiscardedBy       string     `json:"discarded_by,omitempty"`
+	DiscardRequestID  string     `json:"discard_request_id,omitempty"`
+	CleanupPending    []string   `json:"cleanup_pending,omitempty"`
 }
 
 // FileReference pins a contract document to an immutable commit and the
@@ -850,7 +854,7 @@ func SetTaskStatus(task *TaskRecord, next string, mergedPR bool) error {
 	if !validTaskStatus(next) {
 		return fmt.Errorf("invalid task status %q", next)
 	}
-	allowed := map[string]map[string]bool{"open": {"in_progress": true, "discarded": true}, "in_progress": {"open": true, "discarded": true, "closed": true}, "discarded": {"open": true}, "closed": {}}
+	allowed := map[string]map[string]bool{"open": {"in_progress": true, "discarded": true}, "in_progress": {"discarded": true, "closed": true}, "discarded": {}, "closed": {}}
 	if task.Status == next {
 		return nil
 	}

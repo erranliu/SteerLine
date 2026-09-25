@@ -66,7 +66,7 @@ func TestNativeAuditPaginationBoundsAndDatabaseIdentity(t *testing.T) {
 	q := QueryService{Store: s, Project: project}
 	first, err := q.ListNativeTasks(ctx, "", 1)
 	require(t, err)
-	if first.Tasks[0].TaskID != "2" || first.NextCursor == "" || first.Capabilities.StartupBlockers != "not_provided" {
+	if first.Tasks[0].TaskID != "2" || first.NextCursor == "" || first.Capabilities.StartupBlockers != "provided" {
 		t.Fatalf("invalid page: %+v", first)
 	}
 	second, err := q.ListNativeTasks(ctx, first.NextCursor, 1)
@@ -92,6 +92,11 @@ func TestNativeAuditPaginationBoundsAndDatabaseIdentity(t *testing.T) {
 	requireNativeAuditCode(t, err, "cursor_invalidated")
 	// Corruption outside the requested page must not cause a full-project decode.
 	_, err = s.db.Exec(`UPDATE tasks SET payload='invalid JSON' WHERE task_id='99'`)
+	require(t, err)
+	_, err = q.ListNativeTasks(ctx, "", 1)
+	require(t, err)
+	// The extra row used only to detect a next page must remain undecoded too.
+	_, err = s.db.Exec(`UPDATE tasks SET payload='invalid JSON' WHERE task_id='10'`)
 	require(t, err)
 	_, err = q.ListNativeTasks(ctx, "", 1)
 	require(t, err)

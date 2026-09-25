@@ -156,6 +156,11 @@ func TestNativeTaskQuerySnapshotPagingPersistenceAndIsolation(t *testing.T) {
 	contract2 := nativeContract(t, c, commit, "contract-2")
 	contract10 := nativeContract(t, c, commit, "contract-10")
 	foreignContract := nativeContract(t, c, commit, "foreign-contract")
+	foreignContract.Repository = "https://example.invalid/Other/Repo.git"
+	foreignContract.Digest, err = TaskContractDigest(foreignContract)
+	if err != nil {
+		t.Fatal(err)
+	}
 	batchDigest := strings.Repeat("a", 64)
 	created := time.Date(2026, 9, 24, 0, 0, 0, 0, time.UTC)
 	staleBatch := TaskBatchRecord{BatchID: "stale-batch", ProjectIdentity: project, SchemaVersion: "task-batch/v1", PayloadDigest: strings.Repeat("f", 64), CreatedAt: created, CommandID: "stale-command", TaskIDs: map[string]string{"stale": "99"}}
@@ -215,8 +220,8 @@ func TestNativeTaskQuerySnapshotPagingPersistenceAndIsolation(t *testing.T) {
 	if first.Protocol != "native-tasks/v1" || first.ProjectID != project || first.AuthorityVersion != 1 || first.GraphRevision != 1 || first.DatabaseRevision == 0 || first.SampledAt.IsZero() || len(first.Tasks) != 1 || first.Tasks[0].TaskID != "2" || !first.HasMore || first.NextCursor == "" {
 		t.Fatalf("bad first page: %+v", first)
 	}
-	if first.Capabilities.DependencyReadiness != "not_provided" || first.Capabilities.DependencyBlockers != "not_provided" {
-		t.Fatalf("dependency capability was fabricated: %+v", first.Capabilities)
+	if first.Capabilities.DependencyReadiness != "provided" || first.Capabilities.DependencyBlockers != "provided" {
+		t.Fatalf("DAG query capability was not provided: %+v", first.Capabilities)
 	}
 	second, err := query.ListNativeTasks(ctx, first.NextCursor, 1)
 	if err != nil {
@@ -394,6 +399,8 @@ func TestNativeDiscardCASKeepsAuditAndNeverReusesID(t *testing.T) {
 	discarded.Version = 2
 	discarded.DiscardedAt = &created
 	discarded.DiscardReason = "superseded by explicit follow-up"
+	discarded.DiscardedBy = "fixture"
+	discarded.DiscardRequestID = strings.Repeat("a", 32)
 	if err = store.Transact(ctx, func(tx DomainTx) error { return tx.UpdateNativeTaskCAS(discarded, 1) }); err != nil {
 		t.Fatal(err)
 	}
@@ -402,6 +409,9 @@ func TestNativeDiscardCASKeepsAuditAndNeverReusesID(t *testing.T) {
 	reopened.Version = 3
 	reopened.DiscardedAt = nil
 	reopened.DiscardReason = ""
+	reopened.DiscardedBy = ""
+	reopened.DiscardRequestID = ""
+	reopened.CleanupPending = nil
 	if err = store.Transact(ctx, func(tx DomainTx) error { return tx.UpdateNativeTaskCAS(reopened, 2) }); err == nil || !strings.Contains(err.Error(), "stale_version") {
 		t.Fatalf("discarded task was reopened: %v", err)
 	}

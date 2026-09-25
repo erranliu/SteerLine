@@ -31,11 +31,23 @@ type NativeTaskCapabilities struct {
 
 type NativeTaskDetail struct {
 	TaskRecord
-	ProjectID    string              `json:"project_id"`
-	Priority     int                 `json:"priority"`
-	Contract     TaskContract        `json:"contract"`
-	WorkflowRuns []WorkflowRunRecord `json:"workflow_runs"`
-	Delivery     *TaskDeliveryRecord `json:"delivery,omitempty"`
+	ProjectID         string                 `json:"project_id"`
+	Priority          int                    `json:"priority"`
+	Contract          TaskContract           `json:"contract"`
+	WorkflowRuns      []WorkflowRunRecord    `json:"workflow_runs"`
+	Delivery          *TaskDeliveryRecord    `json:"delivery,omitempty"`
+	Predecessors      []TaskDependencyStatus `json:"predecessors"`
+	Successors        []string               `json:"successors"`
+	DependencyReady   bool                   `json:"dependency_ready"`
+	UnmetPredecessors []TaskDependencyStatus `json:"unmet_predecessors"`
+	StartupBlockers   []string               `json:"startup_blockers"`
+}
+
+type TaskDependencyStatus struct {
+	TaskID    string `json:"task_id"`
+	Status    string `json:"status"`
+	Delivered bool   `json:"delivered"`
+	Blocker   string `json:"blocker,omitempty"`
 }
 
 type NativeTaskPage struct {
@@ -137,7 +149,7 @@ func (q QueryService) ShowNativeTask(ctx context.Context, id string) (NativeTask
 }
 
 func (s *SQLiteStore) NativeTaskPage(ctx context.Context, project, taskID, expectedDatabaseID string, expectedDB uint64, offset, limit int) (NativeTaskPage, error) {
-	page := NativeTaskPage{Protocol: nativeTaskProtocol, ProjectID: project, Tasks: []NativeTaskDetail{}, Capabilities: NativeTaskCapabilities{DependencyReadiness: "not_provided", DependencyBlockers: "not_provided", StartupBlockers: "not_provided"}}
+	page := NativeTaskPage{Protocol: nativeTaskProtocol, ProjectID: project, Tasks: []NativeTaskDetail{}, Capabilities: NativeTaskCapabilities{DependencyReadiness: "provided", DependencyBlockers: "provided", StartupBlockers: "provided"}}
 	if offset < 0 {
 		return page, nativeErr("cursor_invalidated", "negative page offset")
 	}
@@ -156,8 +168,9 @@ func (s *SQLiteStore) NativeTaskPage(ctx context.Context, project, taskID, expec
 		}
 		return page, nativeErr("unsupported_schema", "native task query requires the current database schema")
 	}
-	var targetRepository, targetRemote, targetBranch string
-	err = tx.QueryRowContext(ctx, `SELECT authority_version,graph_revision,repository,remote,branch FROM project_task_authorities WHERE project_identity=? AND authority='native'`, project).Scan(&page.AuthorityVersion, &page.GraphRevision, &targetRepository, &targetRemote, &targetBranch)
+	var targetRepository, targetRemote, targetBranch, dispatchMode string
+	var dispatchPaused int
+	err = tx.QueryRowContext(ctx, `SELECT authority_version,graph_revision,repository,remote,branch,dispatch_mode,dispatch_paused FROM project_task_authorities WHERE project_identity=? AND authority='native'`, project).Scan(&page.AuthorityVersion, &page.GraphRevision, &targetRepository, &targetRemote, &targetBranch, &dispatchMode, &dispatchPaused)
 	if errors.Is(err, sql.ErrNoRows) {
 		if expectedDB != 0 {
 			return page, nativeErr("cursor_invalidated", "project authority could not be read for this cursor")
@@ -215,6 +228,10 @@ func (s *SQLiteStore) NativeTaskPage(ctx context.Context, project, taskID, expec
 			rows.Close()
 			return page, err
 		}
+		if len(all) == limit {
+			page.HasMore = true
+			continue
+		}
 		var record TaskRecord
 		if err = json.Unmarshal(payload, &record); err != nil {
 			rows.Close()
@@ -232,9 +249,9 @@ func (s *SQLiteStore) NativeTaskPage(ctx context.Context, project, taskID, expec
 			rows.Close()
 			return page, nativeErr("contract_mismatch", "native task record has invalid status, type, priority or version")
 		}
-		if record.Status == "discarded" && (record.DiscardedAt == nil || strings.TrimSpace(record.DiscardReason) == "") || record.Status != "discarded" && (record.DiscardedAt != nil || record.DiscardReason != "") {
+		if record.Status == "discarded" && (record.DiscardedAt == nil || strings.TrimSpace(record.DiscardReason) == "" || strings.TrimSpace(record.DiscardedBy) == "" || !controlIDPattern.MatchString(record.DiscardRequestID)) || record.Status != "discarded" && (record.DiscardedAt != nil || record.DiscardReason != "" || record.DiscardedBy != "" || record.DiscardRequestID != "" || len(record.CleanupPending) > 0) {
 			rows.Close()
-			return page, nativeErr("contract_mismatch", "native discard audit fields do not match task status")
+			return page, nativeErr("contract_mismatch", "native discard identity and cleanup fields do not match task status")
 		}
 		if record.Status == "open" && record.Claimant != "" || (record.Status == "in_progress" || record.Status == "closed") && record.Claimant == "" {
 			rows.Close()
@@ -250,12 +267,139 @@ func (s *SQLiteStore) NativeTaskPage(ctx context.Context, project, taskID, expec
 	if offset > 0 && len(all) == 0 {
 		return page, nativeErr("cursor_invalidated", "cursor offset is outside the current snapshot")
 	}
-	page.HasMore = len(all) > limit
-	if page.HasMore {
-		all = all[:limit]
+	// Keep the whole relation snapshot, but decode only paged tasks and their
+	// predecessors so an unrelated damaged task cannot break this page.
+	statuses := map[string]string{}
+	selected := map[string]bool{}
+	relevant := []string{}
+	for _, record := range all {
+		statuses[record.TaskID] = record.Status
+		selected[record.TaskID] = true
+		relevant = append(relevant, record.TaskID)
+	}
+	edges := []TaskDependencyRecord{}
+	rows, err = tx.QueryContext(ctx, `SELECT predecessor_id,successor_id FROM task_dependencies WHERE project_identity=? ORDER BY length(predecessor_id),predecessor_id,length(successor_id),successor_id`, project)
+	if err != nil {
+		return page, err
+	}
+	for rows.Next() {
+		var edge TaskDependencyRecord
+		edge.ProjectIdentity = project
+		if err = rows.Scan(&edge.PredecessorID, &edge.SuccessorID); err != nil {
+			rows.Close()
+			return page, err
+		}
+		edges = append(edges, edge)
+	}
+	if err = rows.Err(); err != nil {
+		rows.Close()
+		return page, err
+	}
+	rows.Close()
+	relevantSeen := map[string]bool{}
+	for _, id := range relevant {
+		relevantSeen[id] = true
+	}
+	for _, edge := range edges {
+		if selected[edge.SuccessorID] && !relevantSeen[edge.PredecessorID] {
+			relevant = append(relevant, edge.PredecessorID)
+			relevantSeen[edge.PredecessorID] = true
+		}
+	}
+	for _, id := range relevant {
+		if selected[id] {
+			continue
+		}
+		var status string
+		var version uint64
+		var body []byte
+		e := tx.QueryRowContext(ctx, `SELECT status,version,payload FROM tasks WHERE project_identity=? AND task_id=?`, project, id).Scan(&status, &version, &body)
+		if errors.Is(e, sql.ErrNoRows) {
+			continue
+		}
+		if e != nil {
+			return page, e
+		}
+		var record TaskRecord
+		if e = json.Unmarshal(body, &record); e != nil {
+			return page, e
+		}
+		if record.ProjectIdentity != project || record.TaskID != id || record.Source != "native" || !canonicalDecimalID(id) || record.Status != status || record.Version != version || !validTaskStatus(status) || version == 0 {
+			return page, nativeErr("contract_mismatch", "predecessor task identity or status differs from its stored row")
+		}
+		statuses[id] = status
+	}
+	delivered := map[string]bool{}
+	for _, id := range relevant {
+		var delivery TaskDeliveryRecord
+		var merged, recorded string
+		delivery.ProjectIdentity = project
+		delivery.TaskID = id
+		e := tx.QueryRowContext(ctx, `SELECT selected_workflow_run_id,pr_instance,pr_repository,pr_number,pr_url,merge_commit,merged_at,recorded_at,evidence FROM task_deliveries WHERE project_identity=? AND task_id=?`, project, id).Scan(&delivery.SelectedWorkflowRunID, &delivery.PRInstance, &delivery.PRRepository, &delivery.PRNumber, &delivery.PRURL, &delivery.MergeCommit, &merged, &recorded, &delivery.Evidence)
+		if errors.Is(e, sql.ErrNoRows) {
+			continue
+		}
+		if e != nil {
+			return page, e
+		}
+		delivery.MergedAt, err = time.Parse(time.RFC3339Nano, merged)
+		if err != nil {
+			return page, nativeErr("inconsistent_delivery", "native task delivery merge time is invalid")
+		}
+		delivery.RecordedAt, err = time.Parse(time.RFC3339Nano, recorded)
+		if err != nil {
+			return page, nativeErr("inconsistent_delivery", "native task delivery recording time is invalid")
+		}
+		if err = validateNativeTaskDelivery(delivery, targetBranch); err != nil {
+			return page, err
+		}
+		delivered[delivery.TaskID] = true
+	}
+	var executionSlotBusy int
+	if err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM executions WHERE project_identity=? AND status IN ('pending','active','waiting_decision','blocked')`, project).Scan(&executionSlotBusy); err != nil {
+		return page, err
 	}
 	for _, record := range all {
-		detail := NativeTaskDetail{TaskRecord: record, ProjectID: project, Priority: record.Priority, WorkflowRuns: []WorkflowRunRecord{}}
+		detail := NativeTaskDetail{TaskRecord: record, ProjectID: project, Priority: record.Priority, WorkflowRuns: []WorkflowRunRecord{}, Predecessors: []TaskDependencyStatus{}, Successors: []string{}, UnmetPredecessors: []TaskDependencyStatus{}, StartupBlockers: []string{}}
+		dependencyReady := record.Status == "open"
+		for _, edge := range edges {
+			if edge.PredecessorID == record.TaskID {
+				detail.Successors = append(detail.Successors, edge.SuccessorID)
+			}
+			if edge.SuccessorID != record.TaskID {
+				continue
+			}
+			predecessor := TaskDependencyStatus{TaskID: edge.PredecessorID, Status: statuses[edge.PredecessorID], Delivered: delivered[edge.PredecessorID]}
+			if predecessor.Status == "" {
+				predecessor.Blocker = "inconsistent_delivery"
+			} else if predecessor.Status == "discarded" {
+				predecessor.Blocker = "discarded_predecessor"
+			} else if predecessor.Status == "closed" && !predecessor.Delivered {
+				predecessor.Blocker = "inconsistent_delivery"
+			} else if predecessor.Delivered && predecessor.Status != "closed" {
+				predecessor.Blocker = "inconsistent_delivery"
+			} else if !predecessor.Delivered {
+				predecessor.Blocker = "predecessor_not_delivered"
+			}
+			detail.Predecessors = append(detail.Predecessors, predecessor)
+			if predecessor.Blocker != "" {
+				detail.UnmetPredecessors = append(detail.UnmetPredecessors, predecessor)
+				dependencyReady = false
+			}
+		}
+		detail.DependencyReady = dependencyReady
+		if record.Status != "open" {
+			detail.StartupBlockers = append(detail.StartupBlockers, "task_not_open")
+		}
+		if dispatchPaused != 0 {
+			detail.StartupBlockers = append(detail.StartupBlockers, "dispatch_paused")
+		}
+		if executionSlotBusy > 0 {
+			detail.StartupBlockers = append(detail.StartupBlockers, "execution_slot_busy")
+		}
+		if record.Status == "open" {
+			detail.StartupBlockers = append(detail.StartupBlockers, "native_execution_unavailable")
+		}
 		var contractPayload []byte
 		var contractDigest string
 		err = tx.QueryRowContext(ctx, `SELECT digest,payload FROM task_contracts WHERE project_identity=? AND contract_id=? AND task_id=?`, project, record.ContractID, record.TaskID).Scan(&contractDigest, &contractPayload)
@@ -321,8 +465,9 @@ func (s *SQLiteStore) NativeTaskPage(ctx context.Context, project, taskID, expec
 		} else if !errors.Is(e, sql.ErrNoRows) {
 			return page, e
 		}
-		if record.Status == "closed" && detail.Delivery == nil || record.Status == "discarded" && detail.Delivery != nil {
-			return page, nativeErr("contract_mismatch", "task delivery evidence conflicts with native task status")
+		if (record.Status == "closed") != (detail.Delivery != nil) {
+			detail.DependencyReady = false
+			detail.StartupBlockers = append(detail.StartupBlockers, "inconsistent_delivery")
 		}
 		page.Tasks = append(page.Tasks, detail)
 	}
@@ -405,6 +550,43 @@ func OpenNativeTaskProject(ctx context.Context, c *Config) (*SQLiteStore, error)
 		return nil, err
 	}
 	return openBoundNativeStore(ctx, *c, path)
+}
+
+// OpenNativeTaskCommandStore opens the repository's existing native database
+// for a bounded command. The caller must hold the repository identity lock,
+// and the project must already have been initialized and bound.
+func OpenNativeTaskCommandStore(ctx context.Context, c *Config) (*SQLiteStore, error) {
+	if c == nil || c.taskAuthority() != "native" {
+		return nil, nativeErr("authority_mismatch", "native task command requires task_authority=native")
+	}
+	if err := validateNativeStateLocation(*c); err != nil {
+		return nil, err
+	}
+	if err := c.ResolveIdentity(ctx); err != nil {
+		return nil, err
+	}
+	path := filepath.Join(c.RunDir, "steerline.db")
+	reader, err := openBoundNativeStore(ctx, *c, path)
+	if err != nil {
+		return nil, err
+	}
+	_ = reader.Close()
+	writer, err := OpenSQLiteStore(path)
+	if err != nil {
+		return nil, err
+	}
+	authority, err := writer.nativeAuthority(ctx, c.Identity())
+	if err != nil || authority.Authority != "native" || authority.Remote != c.Remote || authority.Branch != c.Branch {
+		_ = writer.Close()
+		return nil, nativeErr("authority_mismatch", "native project binding changed before command admission")
+	}
+	target, err := configuredRepositoryTarget(ctx, *c)
+	if err != nil || !sameRepositoryTarget(authority.Repository, target) {
+		_ = writer.Close()
+		return nil, nativeErr("authority_mismatch", "repository target differs from the persisted native project")
+	}
+	writer.nativeBinding = &authority
+	return writer, nil
 }
 
 func validateNativeStateLocation(c Config) error {
@@ -581,6 +763,21 @@ func configuredRepositoryTarget(ctx context.Context, c Config) (string, error) {
 	}
 	return target, nil
 }
+
+func validateNativeConfiguredTarget(ctx context.Context, c Config, authority ProjectTaskAuthority) error {
+	if c.Remote != authority.Remote || c.Branch != authority.Branch {
+		return nativeErr("authority_mismatch", "configured remote or branch differs from the registered native project")
+	}
+	target, err := configuredRepositoryTarget(ctx, c)
+	if err != nil {
+		return err
+	}
+	if !sameRepositoryTarget(target, authority.Repository) {
+		return nativeErr("authority_mismatch", "configured Git repository differs from the registered native project")
+	}
+	return nil
+}
+
 func sameRepositoryTarget(a, b string) bool {
 	// A remote URL is not a Windows filesystem path: its repository component
 	// may be case sensitive and must never be folded with canonical().

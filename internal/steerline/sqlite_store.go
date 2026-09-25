@@ -269,8 +269,8 @@ func validateNativeTaskStructure(ctx context.Context, tx *sql.Tx) error {
 		OR NOT EXISTS (SELECT 1 FROM task_batches b JOIN json_each(b.task_ids) m WHERE b.project_identity=t.project_identity AND b.batch_id=json_extract(t.payload,'$.batch_id') AND m.value=t.task_id)
 		OR (t.status='open' AND COALESCE(json_extract(t.payload,'$.claimant'),'')<>'')
 		OR (t.status IN ('in_progress','closed') AND COALESCE(json_extract(t.payload,'$.claimant'),'')='')
-		OR (t.status='discarded' AND (json_extract(t.payload,'$.discarded_at') IS NULL OR trim(COALESCE(json_extract(t.payload,'$.discard_reason'),''))=''))
-		OR (t.status<>'discarded' AND (json_extract(t.payload,'$.discarded_at') IS NOT NULL OR COALESCE(json_extract(t.payload,'$.discard_reason'),'')<>''))
+		OR (t.status='discarded' AND (json_extract(t.payload,'$.discarded_at') IS NULL OR trim(COALESCE(json_extract(t.payload,'$.discard_reason'),''))='' OR trim(COALESCE(json_extract(t.payload,'$.discarded_by'),''))='' OR trim(COALESCE(json_extract(t.payload,'$.discard_request_id'),''))=''))
+		OR (t.status<>'discarded' AND (json_extract(t.payload,'$.discarded_at') IS NOT NULL OR COALESCE(json_extract(t.payload,'$.discard_reason'),'')<>'' OR COALESCE(json_extract(t.payload,'$.discarded_by'),'')<>'' OR COALESCE(json_extract(t.payload,'$.discard_request_id'),'')<>'' OR COALESCE(json_array_length(json_extract(t.payload,'$.cleanup_pending')),0)<>0))
 		OR (t.status='closed' AND NOT EXISTS (SELECT 1 FROM task_deliveries d WHERE d.project_identity=t.project_identity AND d.task_id=t.task_id))
 		OR (t.status='discarded' AND EXISTS (SELECT 1 FROM task_deliveries d WHERE d.project_identity=t.project_identity AND d.task_id=t.task_id))`).Scan(&invalidTasks)
 	if err != nil {
@@ -441,28 +441,15 @@ func (t *sqliteTx) PutTaskDependency(v TaskDependencyRecord) error {
 }
 
 func (t *sqliteTx) PutTaskDelivery(v TaskDeliveryRecord) error {
-	if v.ProjectIdentity == "" || v.TaskID == "" || v.SelectedWorkflowRunID == "" || v.PRInstance == "" || v.PRRepository == "" || v.PRNumber <= 0 || v.PRURL == "" || !validCommit(v.MergeCommit) || v.MergedAt.IsZero() {
-		return errors.New("invalid verified task delivery")
-	}
 	if v.RecordedAt.IsZero() {
 		v.RecordedAt = now()
-	}
-	if len(v.Evidence) == 0 || !json.Valid(v.Evidence) {
-		return errors.New("verified task delivery requires persisted PR merge evidence")
-	}
-	var evidence TaskDeliveryEvidence
-	if err := json.Unmarshal(v.Evidence, &evidence); err != nil {
-		return nativeErr("contract_mismatch", "PR merge evidence has an invalid shape")
-	}
-	if !evidence.Merged || evidence.State != "merged" || evidence.PRInstance != v.PRInstance || evidence.URL != v.PRURL || evidence.Repository != v.PRRepository || evidence.PRNumber != v.PRNumber || evidence.MergeCommit != v.MergeCommit || !evidence.MergedAt.Equal(v.MergedAt) || evidence.BaseBranch == "" {
-		return nativeErr("contract_mismatch", "PR merge evidence does not match the recorded delivery identity")
 	}
 	var targetBranch string
 	if err := t.tx.QueryRowContext(t.ctx, `SELECT branch FROM project_task_authorities WHERE project_identity=? AND authority='native'`, v.ProjectIdentity).Scan(&targetBranch); err != nil {
 		return nativeErr("authority_mismatch", "task delivery project has no native authority")
 	}
-	if evidence.BaseBranch != targetBranch {
-		return nativeErr("contract_mismatch", "merged PR targets a different project branch")
+	if err := validateNativeTaskDelivery(v, targetBranch); err != nil {
+		return err
 	}
 	var oldWorkflow, oldInstance, oldRepository, oldURL, oldMerge, oldMerged string
 	var oldNumber int64
@@ -476,6 +463,19 @@ func (t *sqliteTx) PutTaskDelivery(v TaskDeliveryRecord) error {
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
 		return err
+	}
+	var taskStatus string
+	if err := t.tx.QueryRowContext(t.ctx, `SELECT status FROM tasks WHERE project_identity=? AND task_id=?`, v.ProjectIdentity, v.TaskID).Scan(&taskStatus); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nativeErr("task_not_found", "delivery requires an existing native task")
+		}
+		return err
+	}
+	if taskStatus == "discarded" {
+		return nativeErr("task_discarded", "discarded task cannot receive a normal delivery")
+	}
+	if taskStatus != "in_progress" {
+		return nativeErr("stale_version", "delivery requires the claimed task to be in progress")
 	}
 	var runPayload []byte
 	if err := t.tx.QueryRowContext(t.ctx, `SELECT payload FROM workflow_runs WHERE project_identity=? AND workflow_run_id=? AND task_id=?`, v.ProjectIdentity, v.SelectedWorkflowRunID, v.TaskID).Scan(&runPayload); err != nil {
@@ -497,6 +497,23 @@ func (t *sqliteTx) PutTaskDelivery(v TaskDeliveryRecord) error {
 	}
 	_, err = t.tx.ExecContext(t.ctx, `INSERT INTO task_deliveries(project_identity,task_id,selected_workflow_run_id,pr_instance,pr_repository,pr_number,pr_url,merge_commit,merged_at,recorded_at,evidence) VALUES(?,?,?,?,?,?,?,?,?,?,?)`, v.ProjectIdentity, v.TaskID, v.SelectedWorkflowRunID, v.PRInstance, v.PRRepository, v.PRNumber, v.PRURL, v.MergeCommit, v.MergedAt.UTC().Format(time.RFC3339Nano), v.RecordedAt.UTC().Format(time.RFC3339Nano), []byte(v.Evidence))
 	return err
+}
+
+func validateNativeTaskDelivery(v TaskDeliveryRecord, targetBranch string) error {
+	if v.ProjectIdentity == "" || v.TaskID == "" || v.SelectedWorkflowRunID == "" || v.PRInstance == "" || v.PRRepository == "" || v.PRNumber <= 0 || v.PRURL == "" || !validCommit(v.MergeCommit) || v.MergedAt.IsZero() || v.RecordedAt.IsZero() {
+		return nativeErr("inconsistent_delivery", "native task delivery has incomplete fixed identity")
+	}
+	if len(v.Evidence) == 0 || !json.Valid(v.Evidence) {
+		return nativeErr("inconsistent_delivery", "native task delivery has no readable PR merge evidence")
+	}
+	var evidence TaskDeliveryEvidence
+	if err := json.Unmarshal(v.Evidence, &evidence); err != nil {
+		return nativeErr("inconsistent_delivery", "native task delivery PR merge evidence has an invalid shape")
+	}
+	if !evidence.Merged || evidence.State != "merged" || evidence.PRInstance != v.PRInstance || evidence.URL != v.PRURL || evidence.Repository != v.PRRepository || evidence.PRNumber != v.PRNumber || evidence.MergeCommit != v.MergeCommit || !evidence.MergedAt.Equal(v.MergedAt) || evidence.BaseBranch != targetBranch {
+		return nativeErr("inconsistent_delivery", "native task delivery PR evidence differs from its fixed identity")
+	}
+	return nil
 }
 
 func encodePayload(v any) ([]byte, error) { return json.Marshal(v) }
@@ -524,11 +541,22 @@ func (t *sqliteTx) PutTask(v TaskRecord) error {
 		if nativeAuthority != "native" || v.Source != "native" || !canonicalDecimalID(v.TaskID) || v.BatchID == "" || v.Title == "" || v.Type == "" || v.Priority < 0 || v.Priority > 4 || v.ContractID == "" || v.Version == 0 || v.CreatedAt.IsZero() || v.ExternalProvider != "" || v.ExternalProject != "" || v.ExternalID != "" {
 			return nativeErr("contract_mismatch", "native Task requires its original numeric ID, batch, type, priority and fixed contract")
 		}
+		var repository string
+		if err = t.tx.QueryRowContext(t.ctx, `SELECT repository FROM project_task_authorities WHERE project_identity=? AND authority='native'`, v.ProjectIdentity).Scan(&repository); err != nil {
+			return nativeErr("authority_mismatch", "native task project binding is unavailable")
+		}
+		var reused int
+		if err = t.tx.QueryRowContext(t.ctx, `SELECT COUNT(*) FROM tasks old JOIN project_task_authorities p ON p.project_identity=old.project_identity WHERE p.authority='native' AND p.repository=? AND old.task_id=? AND old.project_identity<>?`, repository, v.TaskID, v.ProjectIdentity).Scan(&reused); err != nil {
+			return err
+		}
+		if reused > 0 {
+			return nativeErr("immutable_task", "task ID is already used in the same repository identity")
+		}
 		if v.Status == "discarded" {
-			if v.DiscardedAt == nil || strings.TrimSpace(v.DiscardReason) == "" {
-				return errors.New("discarded native task requires timestamp and reason")
+			if v.DiscardedAt == nil || strings.TrimSpace(v.DiscardReason) == "" || strings.TrimSpace(v.DiscardedBy) == "" || !controlIDPattern.MatchString(v.DiscardRequestID) {
+				return errors.New("discarded native task requires timestamp, reason, requester and request ID")
 			}
-		} else if v.DiscardedAt != nil || v.DiscardReason != "" {
+		} else if v.DiscardedAt != nil || v.DiscardReason != "" || v.DiscardedBy != "" || v.DiscardRequestID != "" || len(v.CleanupPending) > 0 {
 			return errors.New("discard audit fields are valid only for discarded native tasks")
 		}
 		if v.Status == "closed" {
@@ -578,7 +606,7 @@ func (t *sqliteTx) UpdateNativeTaskCAS(v TaskRecord, expectedVersion uint64) err
 	if old.Version != expectedVersion {
 		return nativeErr("stale_version", fmt.Sprintf("expected version %d, found %d", expectedVersion, old.Version))
 	}
-	if v.ProjectIdentity != old.ProjectIdentity || v.TaskID != old.TaskID || v.BatchID != old.BatchID || v.ContractID != old.ContractID || v.Type != old.Type || v.Priority != old.Priority || v.Title != old.Title || v.Source != "native" || v.Version != expectedVersion+1 || !v.CreatedAt.Equal(old.CreatedAt) || v.ExternalProvider != "" || v.ExternalProject != "" || v.ExternalID != "" {
+	if v.ProjectIdentity != old.ProjectIdentity || v.TaskID != old.TaskID || v.BatchID != old.BatchID || v.ContractID != old.ContractID || v.Type != old.Type || v.Priority != old.Priority || v.Title != old.Title || !sameStrings(v.GoalIDs, old.GoalIDs) || v.IdentityMapDigest != old.IdentityMapDigest || v.Source != "native" || v.Version != expectedVersion+1 || !v.CreatedAt.Equal(old.CreatedAt) || v.ExternalProvider != "" || v.ExternalProject != "" || v.ExternalID != "" {
 		return nativeErr("contract_mismatch", "native task update cannot change its identity, scope, contract, or fixed fields")
 	}
 	allowed := map[string]map[string]bool{"open": {"in_progress": true, "discarded": true}, "in_progress": {"discarded": true, "closed": true}}
@@ -593,8 +621,8 @@ func (t *sqliteTx) UpdateNativeTaskCAS(v TaskRecord, expectedVersion uint64) err
 		return nativeErr("contract_mismatch", "claimant is preserved after claim")
 	}
 	if v.Status == "discarded" {
-		if v.DiscardedAt == nil || strings.TrimSpace(v.DiscardReason) == "" {
-			return nativeErr("contract_mismatch", "discard requires timestamp and reason")
+		if v.DiscardedAt == nil || strings.TrimSpace(v.DiscardReason) == "" || strings.TrimSpace(v.DiscardedBy) == "" || !controlIDPattern.MatchString(v.DiscardRequestID) {
+			return nativeErr("contract_mismatch", "discard requires timestamp, reason, requester and request ID")
 		}
 		var count int
 		if err := t.tx.QueryRowContext(t.ctx, `SELECT COUNT(*) FROM task_deliveries WHERE project_identity=? AND task_id=?`, v.ProjectIdentity, v.TaskID).Scan(&count); err != nil {
@@ -603,7 +631,7 @@ func (t *sqliteTx) UpdateNativeTaskCAS(v TaskRecord, expectedVersion uint64) err
 		if count != 0 {
 			return nativeErr("stale_version", "task with a delivery cannot be discarded")
 		}
-	} else if v.DiscardedAt != nil || v.DiscardReason != "" {
+	} else if v.DiscardedAt != nil || v.DiscardReason != "" || v.DiscardedBy != "" || v.DiscardRequestID != "" || len(v.CleanupPending) > 0 {
 		return nativeErr("contract_mismatch", "discard audit fields are valid only for discarded tasks")
 	}
 	if v.Status == "closed" {
@@ -688,12 +716,64 @@ func (t *sqliteTx) PutWorkflowRun(v WorkflowRunRecord) error {
 	if !validWorkflowPhase(v.Phase) {
 		return fmt.Errorf("invalid workflow run phase %q", v.Phase)
 	}
+	var authority string
+	authorityErr := t.tx.QueryRowContext(t.ctx, `SELECT authority FROM project_task_authorities WHERE project_identity=?`, v.ProjectIdentity).Scan(&authority)
+	if authorityErr != nil && !errors.Is(authorityErr, sql.ErrNoRows) {
+		return authorityErr
+	}
+	if authorityErr == nil && authority == "native" {
+		var previous []byte
+		err := t.tx.QueryRowContext(t.ctx, `SELECT payload FROM workflow_runs WHERE project_identity=? AND workflow_run_id=?`, v.ProjectIdentity, v.WorkflowRunID).Scan(&previous)
+		if err == nil {
+			var old WorkflowRunRecord
+			if err = json.Unmarshal(previous, &old); err != nil {
+				return err
+			}
+			oldPin, pinErr := nativeWorkflowPin(old)
+			if pinErr != nil {
+				return pinErr
+			}
+			newPin, pinErr := nativeWorkflowPin(v)
+			if pinErr != nil {
+				return pinErr
+			}
+			if old.ProjectIdentity != v.ProjectIdentity || old.WorkflowRunID != v.WorkflowRunID || old.TaskID != v.TaskID || !old.CreatedAt.Equal(v.CreatedAt) || !bytes.Equal(oldPin, newPin) || old.SelectedResult != "" && old.SelectedResult != v.SelectedResult {
+				return nativeErr("immutable_task", "native workflow identity, definition, runner and selected result are fixed")
+			}
+			if old.Phase == "completed" && (v.Phase != old.Phase || v.PendingDecisions != old.PendingDecisions || !v.UpdatedAt.Equal(old.UpdatedAt)) {
+				return nativeErr("immutable_task", "completed native workflow history cannot be changed")
+			}
+		} else if !errors.Is(err, sql.ErrNoRows) {
+			return err
+		}
+		if v.Phase == "completed" {
+			var deliveries int
+			if err := t.tx.QueryRowContext(t.ctx, `SELECT COUNT(*) FROM task_deliveries WHERE project_identity=? AND task_id=? AND selected_workflow_run_id=?`, v.ProjectIdentity, v.TaskID, v.WorkflowRunID).Scan(&deliveries); err != nil {
+				return err
+			}
+			if deliveries != 1 {
+				return nativeErr("inconsistent_delivery", "native workflow cannot complete without its selected delivery")
+			}
+		}
+	}
 	b, err := encodePayload(v)
 	if err != nil {
 		return err
 	}
 	result, err := t.tx.ExecContext(t.ctx, `INSERT INTO workflow_runs(project_identity,workflow_run_id,task_id,phase,payload) VALUES(?,?,?,?,?) ON CONFLICT(project_identity,workflow_run_id) DO UPDATE SET phase=excluded.phase,payload=excluded.payload WHERE workflow_runs.task_id=excluded.task_id`, v.ProjectIdentity, v.WorkflowRunID, v.TaskID, v.Phase, b)
 	return requireIdentityWrite(result, err, "workflow identity cannot be rebound to another task")
+}
+
+func nativeWorkflowPin(v WorkflowRunRecord) ([]byte, error) {
+	return encodePayload(struct {
+		WorkflowVersion string
+		ConfigDigest    string
+		Definition      WorkflowDefinition
+		ProjectSteps    ProjectSteps
+		Runner          StepRunnerSettings
+		Repository      string
+		Branch          string
+	}{v.WorkflowVersion, v.ConfigDigest, v.Definition, v.ProjectSteps, v.Runner, v.Repository, v.Branch})
 }
 func (t *sqliteTx) PutExecution(v ExecutionRecord) error {
 	if v.ProjectIdentity == "" || v.ExecutionID == "" || v.WorkflowRunID == "" || v.Status == "" {
@@ -704,6 +784,19 @@ func (t *sqliteTx) PutExecution(v ExecutionRecord) error {
 	}
 	b, err := encodePayload(v)
 	if err != nil {
+		return err
+	}
+	var previous []byte
+	err = t.tx.QueryRowContext(t.ctx, `SELECT payload FROM executions WHERE project_identity=? AND execution_id=?`, v.ProjectIdentity, v.ExecutionID).Scan(&previous)
+	if err == nil && !bytes.Equal(previous, b) {
+		delivered, e := t.selectedNativeDeliveryExecution(v.ProjectIdentity, v.ExecutionID)
+		if e != nil {
+			return e
+		}
+		if delivered {
+			return nativeErr("immutable_task", "selected delivered execution history cannot be changed")
+		}
+	} else if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return err
 	}
 	target, err := encodePayload(v.Target)
@@ -724,8 +817,53 @@ func (t *sqliteTx) PutStepAttempt(v StepAttemptRecord) error {
 	if err != nil {
 		return err
 	}
+	var previous []byte
+	err = t.tx.QueryRowContext(t.ctx, `SELECT payload FROM step_attempts WHERE project_identity=? AND attempt_id=?`, v.ProjectIdentity, v.AttemptID).Scan(&previous)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return err
+	}
+	if err == nil && !bytes.Equal(previous, b) {
+		delivered, e := t.selectedNativeDeliveryExecution(v.ProjectIdentity, v.ExecutionID)
+		if e != nil {
+			return e
+		}
+		if delivered {
+			return nativeErr("immutable_task", "selected delivered attempt history cannot be changed")
+		}
+	}
 	result, err := t.tx.ExecContext(t.ctx, `INSERT INTO step_attempts(project_identity,attempt_id,execution_id,step_id,attempt_number,operation_id,status,payload) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(project_identity,attempt_id) DO UPDATE SET operation_id=excluded.operation_id,status=excluded.status,payload=excluded.payload WHERE step_attempts.execution_id=excluded.execution_id AND step_attempts.step_id=excluded.step_id AND step_attempts.attempt_number=excluded.attempt_number`, v.ProjectIdentity, v.AttemptID, v.ExecutionID, v.StepID, v.AttemptNumber, v.OperationID, v.Status, b)
 	return requireIdentityWrite(result, err, "attempt identity cannot be rebound to another execution or step")
+}
+
+func (t *sqliteTx) selectedNativeDeliveryExecution(project, executionID string) (bool, error) {
+	var runID string
+	err := t.tx.QueryRowContext(t.ctx, `SELECT workflow_run_id FROM executions WHERE project_identity=? AND execution_id=?`, project, executionID).Scan(&runID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	var taskID string
+	var body []byte
+	if err = t.tx.QueryRowContext(t.ctx, `SELECT task_id,payload FROM workflow_runs WHERE project_identity=? AND workflow_run_id=?`, project, runID).Scan(&taskID, &body); err != nil {
+		return false, nativeErr("inconsistent_delivery", "selected execution has no matching workflow")
+	}
+	var workflow WorkflowRunRecord
+	if err = json.Unmarshal(body, &workflow); err != nil {
+		return false, err
+	}
+	if workflow.ProjectIdentity != project || workflow.WorkflowRunID != runID || workflow.TaskID != taskID {
+		return false, nativeErr("inconsistent_delivery", "selected workflow payload differs from its stored identity")
+	}
+	if workflow.SelectedResult != executionID {
+		return false, nil
+	}
+	var deliveries int
+	if err = t.tx.QueryRowContext(t.ctx, `SELECT COUNT(*) FROM task_deliveries WHERE project_identity=? AND task_id=? AND selected_workflow_run_id=?`, project, taskID, runID).Scan(&deliveries); err != nil {
+		return false, err
+	}
+	return deliveries == 1, nil
 }
 
 func requireIdentityWrite(result sql.Result, err error, message string) error {

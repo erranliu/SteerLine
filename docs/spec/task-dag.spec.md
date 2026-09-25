@@ -1,12 +1,12 @@
 # Spec：固定依赖 DAG 调度
 
-任务 ID：8；任务名称：固定依赖调度；目标：`TASK-DAG`。状态：待实施。配套 [Plan](task-dag.plan.md)。本文件只定义该任务，由一个独立实现 PR 交付。
+任务 ID：8；任务名称：固定依赖调度；目标：`TASK-DAG`。状态：D1 中心范围已实现并通过验收，[PR #31](https://github.com/erranliu/SteerLine/pull/31) 待合入；生产动作按本 Spec 的边界由 BEADS-EXIT 验收。配套 [Plan](task-dag.plan.md) 与[验证记录](../validation/task-dag/README.md)。本文件只定义该任务，由一个独立实现 PR 交付。
 
 ## D1：范围与前置
 
 前置：[原生任务模型 Spec](task-core.spec.md) 已完整验收并合入。引用 [原生任务共同约束](native-task-constraints.md) 全部条款，使用前置 C2/C3 的身份、存储和基础查询，不重建 TaskStore。
 
-本任务交付输入校验、批次原子创建并入 DAG、显式丢弃、硬依赖/ready、事务领取、交付释放、恢复及关系读模型。不交付生产 worker/技能接入、TUI 关系页或渲染导出。使用隔离项目与替身验证业务规则；生产原生接入仍等待 [Beads 退出 Spec](beads-exit.spec.md)。
+本任务交付输入校验、批次原子创建并入 DAG、显式丢弃、硬依赖/ready、事务领取、交付释放、恢复及关系读模型。不交付生产 worker/技能接入、TUI 关系页或渲染导出。使用隔离项目与替身验证业务规则；生产原生接入仍等待 [Beads 退出 Spec](beads-exit.spec.md)。本任务保存固定外部动作身份、意图与清理待办；真实 worker 启停、执行端检查及外部清理回执由 BEADS-EXIT 接线并验收，不能用本任务的替身结果宣称那些生产动作已完成。
 
 依赖只有同项目 AND 硬前置；创建后固定边和契约，不提供改边入口。PR 合并前可丢弃任务，即使它已入 DAG 或开始执行；丢弃不删除依赖边，不等于 split/rollback/reopen 或自动修图。本任务不增加并行调度。
 
@@ -32,7 +32,7 @@ title 非空；type 限 task/bug/feature/chore 并受项目 executable_types 限
 | `task validate -file <json>` | ValidateTaskBatch，返回摘要、错误节点/环路径及采样版本 | 只读校验，无任务/派发写入 |
 | `task create -file <json> -request-id <id> -expected-authority-version <n>` | CreateTaskBatch，返回 batch_id、局部 key 到原输入 task_id 的确认映射、graph_revision 和回执 | 中心原子创建并入 DAG，不自动提交 start_task |
 
-上述入口均接受 `-config`；创建和候选启动通过已有命令服务，身份、版本、幂等键、发起者、期限和回执遵循中心命令契约。命令传入实际 payload，不让服务稍后重新读取一个可变化的客户端路径。validate 不是锁或授权，create 必须重新校验。客户端超时按原 request_id 查询，不换 ID 重发。
+上述入口均接受 `-config`；创建和候选领取通过已有中心命令服务，身份、版本、幂等键、发起者、期限和回执遵循中心命令契约。命令传入实际 payload，不让服务稍后重新读取一个可变化的客户端路径。validate 不是锁或授权，create 必须重新校验。客户端超时按原 request_id 查询，不换 ID 重发。
 
 规划器以同一次用户操作形成任务身份、已提交的 Spec/Plan 和 roadmap 关系，再以该固定 Git commit 与同一 task_id 调用 CreateTaskBatch。Git 提交与中心 SQLite 不构成跨系统原子事务；只有两侧均确认后才报告任务创建完成。任一侧失败或回执不明时保留原 ID、commit 和 request_id 对账，不另分配 ID，也不暴露“先建后发布”的任务状态。
 
@@ -48,9 +48,9 @@ payload_digest 复用共同约束及前置原生任务模型实现的规范化�
 
 候选按 priority、created_at、task_id 稳定排序。两名客户端选择同一任务时，领取事务最多让一个成功，其余返回 claim_conflict/stale_version；ready 缓存不构成领取许可。
 
-领取前先获取目标主线固定 base，完成可在副作用前执行的配置、规格和能力预检；不能在数据库事务中等待网络或启动 worker。随后在中心事务中重核项目权威/任务版本、未丢弃状态、前置交付、claim 和执行槽，保存 claim、WorkflowRun、所需 Execution/Attempt、准备/派发意图、事件和命令检查点。提交后才进行相应外部工作区/启动动作，并按实际接口分步保存回执；原控制命令 start_task 的 applied 门槛仍以启动身份已持久化为准。
+领取前先获取目标主线固定 base，完成可在副作用前执行的配置、规格和能力预检；不能在数据库事务中等待网络或启动 worker。随后在中心事务中重核项目权威/任务版本、未丢弃状态、前置交付、claim 和执行槽，保存 claim、WorkflowRun、所需 Execution/Attempt、准备/派发意图、事件和命令检查点。本任务的 claim 回执只表示预留，不报告 worker 已启动；BEADS-EXIT 在提交后按固定身份执行外部工作区/启动动作并分步保存回执。原控制命令 start_task 的 applied 门槛仍以启动身份已持久化为准。
 
-领取 base 必须包含全部前置已核验 PR 的 merge commit；获取主线后进行祖先核验。平台查询已合并但目标分支不包含交付成果时不启动后继，返回 base_missing_delivery。领取后实际执行端仍需证明仓库/base 和契约一致；失败保留 claim/现场并阻塞，不释放后再从新任务路径重领。
+领取 base 必须包含全部前置已核验 PR 的 merge commit；获取主线后进行祖先核验。平台查询已合并但目标分支不包含交付成果时不启动后继，返回 base_missing_delivery。领取后实际执行端仍需证明仓库/base 和契约一致；BEADS-EXIT 验收这一执行端门槛。失败保留 claim/现场并阻塞，不释放后再从新任务路径重领。
 
 远端路径、workspace/base 证据、未知派发与取消行为服从已有后端 Spec；本 Spec 不增加本机访问远端目录或跨后端 fallback。重试和恢复不得绕过原始固定契约、结果身份及副作用不确定性守卫。
 
@@ -70,7 +70,7 @@ payload_digest 复用共同约束及前置原生任务模型实现的规范化�
 
 核验后中心事务重查任务版本、PR 绑定与交付状态，将 open 或 in_progress 改为 discarded，保存原因、操作者、时间、请求结果和 graph_revision。丢弃不删除任务、契约、边、运行、PR 或身份记录，不生成 TaskDelivery，也不释放任何后继；其他任务若依赖它，查询返回 `discarded_predecessor` 并继续阻塞。已丢弃任务不再被领取、重试、派发后续步骤、发布新 PR 或正常结项；迟到结果只留作历史。
 
-丢弃资格不受执行是否已开始影响。若原执行仍活跃或停止结果未知，保持 Execution/Attempt 身份与资源占用，按本机已验证的 Stop 能力请求停止；远程取消不可用时明确要求人工处理，不能发送未经验证的停止变更。已存在的开放 PR 及工作区按固定身份单独清理并记录回执，未知清理结果不伪称完成；丢弃状态可伴随 `cleanup_pending` 诊断。丢弃后外部 PR 仍发生合并时记录交付冲突并要求人工核实，不把 discarded 自动改成 closed 或给后继放行。相同请求幂等返回原结果，不能通过另一请求复用该 task_id。
+丢弃资格不受执行是否已开始影响。本任务在原执行仍活跃或停止结果未知时保留 Execution/Attempt 身份、资源占用和精确 `cleanup_pending`，不把待办伪称为已停止或已清理；远程取消不可用时明确要求人工处理。BEADS-EXIT 接线后须按本机已验证的 Stop 能力请求停止，并对固定身份的开放 PR 和工作区分别清理、保存回执；未知结果继续占用资源。丢弃后若通过固定 PR 绑定核实外部合并，中心幂等记录交付冲突并要求人工核实，不把 discarded 自动改成 closed 或给后继放行。相同请求幂等返回原结果，不能通过另一请求复用该 task_id。
 
 ## D4：依赖查询与算法
 
@@ -96,11 +96,11 @@ payload_digest 复用共同约束及前置原生任务模型实现的规范化�
 | NT05 | 自环、循环、悬空、重复、跨项目边、重复或已占用 task_id、旧后继新增前置和已创建契约编辑均拒绝，无局部写入 |
 | NT06 | 同 request_id 重发只创建一次；异内容拒绝；事务写入任一步失败全部回滚，提交后丢回执可查回；规划 Git 提交/中心创建部分失败沿用原 ID 与请求对账，不出现独立待发布状态或第二 Task |
 | NT07 | 两客户端竞争只一个领取；原 ready 过期、暂停、槽被占、前置未交付分别正确拒绝 |
-| NT08 | 领取提交前后、准备/启动响应前后重启；无重复 claim/worker，不确定动作保留原身份与资源 |
+| NT08 | 领取事务提交前后与回执丢失后重启，同请求只返回原 claim、WorkflowRun、Execution、Attempt 和外部意图；不把预留报告为 worker 已启动，不确定动作保留原身份与资源。实际准备/启动响应及 worker 去重由 BEADS-EXIT NT16/NT17 验收 |
 | NT09 | PR 未合并、closed_unmerged、错仓库/主线/身份、无验证证据不关闭；真实交付事务关闭且释放后继 |
 | NT10 | 交付事务失败/成功但投影失败/响应丢失时后继资格准确；重复关闭、迟到结果和重复 PR 无二次释放 |
-| NT11 | 获取的 base 缺前置 merge/baseline commit 或执行端规格不符时不开发；重试不改变固定任务契约 |
-| NT22-DAG | 未领取、运行中、等待 PR 的任务在 PR 未合并时均可丢弃；已合并拒绝，合并状态未知待核实；丢弃不释放后继、不复用 ID，活跃/远端 unknown 保留资源和清理待办，迟到结果及丢弃后合并不伪造正常交付 |
-| NT21-DAG | 当前格式的 start_task、自动派发、retry/accept-result 与控制守卫回归通过；原生查询和状态转换只有一个权威实现。 |
+| NT11 | 获取的 base 缺前置 merge/baseline commit 或固定规格在领取前不符时不预留；原契约摘要/base 随运行固定，中心结果门槛拒绝变化的契约证据。实际执行端工作区/规格核验和原契约下重试由 BEADS-EXIT NT12/NT13 验收 |
+| NT22-DAG | 未领取、运行中、等待 PR 的任务在 PR 未合并时均可丢弃；已合并拒绝，合并状态未知待核实；丢弃不释放后继、不复用 ID，活跃/远端 unknown 保留资源和精确清理待办；迟到结果及核实的丢弃后合并只记录冲突，不伪造正常交付。外部停止/PR/工作区清理回执由 BEADS-EXIT NT22-EXIT 验收 |
+| NT21-DAG | 既有 start_task、自动派发、retry/accept-result 与控制守卫回归通过；原生中心查询和状态转换只有一个权威实现。原生生产接线由 BEADS-EXIT NT21-EXIT 验收 |
 
 本任务的全部验收必须在一个独立实现 PR 内完成；配套 Plan 只负责本任务。证据不足不得标为完成。
