@@ -111,6 +111,41 @@ func TestControlReviewCanStopInitializingService(t *testing.T) {
 	}
 }
 
+func TestControlReviewClientBindsDisplayedInstanceAndRevision(t *testing.T) {
+	s := controlReviewService(t)
+	requestID := newID()
+	if _, err := SubmitControlTargeted(s.Config, "pause_dispatch", nil, "review", requestID, "another-instance", ptr(uint64(1))); err == nil || !strings.Contains(err.Error(), "stale_instance") {
+		t.Fatalf("client retargeted a request to a different service: %v", err)
+	}
+	if _, err := os.Stat(controlRequestPath(s.Config.RunDir, requestID)); !os.IsNotExist(err) {
+		t.Fatalf("stale instance request was published: %v", err)
+	}
+	if _, err := SubmitControlTargeted(s.Config, "pause_dispatch", nil, "review", requestID, s.State.Service.InstanceID, ptr(uint64(2))); err == nil || !strings.Contains(err.Error(), "stale_revision") {
+		t.Fatalf("client accepted a stale displayed control revision: %v", err)
+	}
+	if _, err := os.Stat(controlRequestPath(s.Config.RunDir, requestID)); !os.IsNotExist(err) {
+		t.Fatalf("stale revision request was published: %v", err)
+	}
+}
+
+func TestControlReviewVerifiedReceiptRejectsWrongAction(t *testing.T) {
+	s := controlReviewService(t)
+	req := controlRequestFor(s, "pause_dispatch", nil)
+	require(t, processOneControl(t, s, req))
+	if _, err := ReadVerifiedControlReceipt(s.Config, req.RequestID); err != nil {
+		t.Fatalf("valid receipt was rejected: %v", err)
+	}
+	receipt, err := ReadControlReceipt(s.Config, req.RequestID)
+	require(t, err)
+	receipt.Action = "resume_dispatch"
+	raw, err := json.Marshal(receipt)
+	require(t, err)
+	require(t, AtomicWrite(controlReceiptPath(s.Config.RunDir, req.RequestID), raw))
+	if _, err = ReadVerifiedControlReceipt(s.Config, req.RequestID); err == nil || !strings.Contains(err.Error(), "does not match") {
+		t.Fatalf("wrong-action receipt was accepted: %v", err)
+	}
+}
+
 func TestControlReviewCompletedHistoryIsNotReparsedOrOverwritten(t *testing.T) {
 	s := controlReviewService(t)
 	req := controlRequestFor(s, "pause_dispatch", nil)

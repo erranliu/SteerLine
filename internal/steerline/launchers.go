@@ -11,8 +11,8 @@ import (
 //go:embed launcher/*
 var launcherFS embed.FS
 
-// InstallLaunchers writes the double-click entry points (projects/viewer/run/
-// service-window/stop/home + README) into STEERLINE_HOME. Templates are stored
+// InstallLaunchers writes the double-click entry points (projects/console/
+// viewer/run/service-window/stop/home + README) into STEERLINE_HOME. Templates are stored
 // LF and written CRLF so they behave as native .bat files.
 func InstallLaunchers() ([]string, error) {
 	dir := SteerlineHome()

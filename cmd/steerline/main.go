@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/steerline"
+	consoleui "github.com/erranliu/SteerLine/internal/steerline/console"
 	"github.com/erranliu/SteerLine/internal/steerline/viewer"
 )
 
@@ -27,10 +28,13 @@ func main() {
 }
 func run() error {
 	if len(os.Args) < 2 {
-		return fmt.Errorf("usage: steerline <run|start-service|stop-service|retry|check|control|tasks|task|stop|watch|answer|accept-result|mark-stopped|certify-backend|home|install|launchers|projects> -config config.json")
+		return fmt.Errorf("usage: steerline <console|run|start-service|stop-service|retry|check|control|tasks|task|stop|watch|answer|accept-result|mark-stopped|certify-backend|home|install|launchers|projects> [-config config.json]")
 	}
 	if os.Args[1] == "task" {
 		return runNativeTaskCommand(os.Args[2:])
+	}
+	if os.Args[1] == "console" {
+		return runConsoleCommand(os.Args[2:])
 	}
 	command := os.Args[1]
 	fs := flag.NewFlagSet(command, flag.ContinueOnError)
@@ -165,7 +169,7 @@ func run() error {
 				defer cancel()
 				r, err = steerline.WaitControlReceipt(ctx, c, *requestID, 100*time.Millisecond)
 			} else {
-				r, err = steerline.ReadControlReceipt(c, *requestID)
+				r, err = steerline.ReadVerifiedControlReceipt(c, *requestID)
 			}
 			if err != nil {
 				return err
@@ -298,6 +302,28 @@ func run() error {
 	}
 	fmt.Printf("Steerline M0 running: %s -> %s/%s; Ctrl+C or steerline stop to exit\n", c.Repository, c.Remote, c.Branch)
 	return s.RunWithDispatch(ctx, *dispatchMode)
+}
+
+func runConsoleCommand(args []string) error {
+	fs := flag.NewFlagSet("console", flag.ContinueOnError)
+	config := fs.String("config", "", "open one project config; default enumerates STEERLINE_HOME/etc/*.json")
+	runID := fs.String("run-id", "", "focus an existing run ID or task ID in the selected project")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() != 0 {
+		return errors.New("unexpected positional arguments")
+	}
+	if !viewer.IsInteractive() {
+		return errors.New("console requires an interactive terminal")
+	}
+	projects, err := consoleui.LoadProjects(*config)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+	return consoleui.Run(ctx, projects, consoleui.Options{RunID: *runID})
 }
 
 func runNativeTaskCommand(args []string) error {
@@ -474,6 +500,24 @@ func useWatchTUI(tty, jsonOut, raw, noTUI, follow, fromStart bool) bool {
 // binary with the chosen action, so run/watch reuse their normal code paths
 // while several projects can be launched side by side.
 func runProjects(project, action string) error {
+	act, e := pickAction(action)
+	if e != nil {
+		return e
+	}
+	if act == "console" {
+		if project != "" {
+			projects, listErr := steerline.ListProjects()
+			if listErr != nil {
+				return listErr
+			}
+			chosen, resolveErr := steerline.ResolveProject(projects, project)
+			if resolveErr != nil {
+				return resolveErr
+			}
+			return runConsoleCommand([]string{"-config", chosen.ConfigPath})
+		}
+		return runConsoleCommand(nil)
+	}
 	projects, e := steerline.ListProjects()
 	if e != nil {
 		return e
@@ -481,7 +525,7 @@ func runProjects(project, action string) error {
 	if len(projects) == 0 {
 		return fmt.Errorf("no project configs under %s", steerline.SteerlineEtcDir())
 	}
-	if strings.EqualFold(action, "list") {
+	if strings.EqualFold(act, "list") {
 		printProjects(projects)
 		return nil
 	}
@@ -491,10 +535,6 @@ func runProjects(project, action string) error {
 	}
 	if chosen.Err != nil {
 		return fmt.Errorf("config %s is invalid: %w", chosen.ConfigPath, chosen.Err)
-	}
-	act, e := pickAction(action)
-	if e != nil {
-		return e
 	}
 	exe, e := os.Executable()
 	if e != nil {
@@ -529,30 +569,34 @@ func pickProject(projects []steerline.ProjectInfo, sel string) (steerline.Projec
 
 func pickAction(action string) (string, error) {
 	switch action {
+	case "console", "1":
+		return "console", nil
 	case "watch", "run", "stop", "home", "list":
 		return action, nil
 	case "":
 	default:
-		return "", fmt.Errorf("unknown action %q (watch|run|stop|home|list)", action)
+		return "", fmt.Errorf("unknown action %q (console|watch|run|stop|home|list)", action)
 	}
 	if !stdinIsTTY() {
-		return "watch", nil
+		return "console", nil
 	}
-	fmt.Println("Actions:  1) viewer   2) run service   3) stop service   4) home   5) list")
-	line, e := readLine("action (1-5): ")
+	fmt.Println("Actions:  1) console   2) watch logs   3) run service   4) stop service   5) home   6) list")
+	line, e := readLine("action (1-6): ")
 	if e != nil {
 		return "", e
 	}
 	switch strings.TrimSpace(line) {
-	case "1", "viewer", "watch":
+	case "1", "console":
+		return "console", nil
+	case "2", "viewer", "watch":
 		return "watch", nil
-	case "2", "run":
+	case "3", "run":
 		return "run", nil
-	case "3", "stop":
+	case "4", "stop":
 		return "stop", nil
-	case "4", "home":
+	case "5", "home":
 		return "home", nil
-	case "5", "list":
+	case "6", "list":
 		return "list", nil
 	}
 	return "", fmt.Errorf("invalid action %q", line)

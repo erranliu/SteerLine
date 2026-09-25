@@ -2,9 +2,7 @@
 setlocal EnableExtensions
 chcp 65001 >nul 2>&1
 
-rem Double-click: pick one of the projects under etc\ and an action
-rem (viewer / run service / stop / home). Multiple projects can run at once,
-rem each with its own config and its own state\<repo> directory.
+rem Double-click: open the multi-project console or choose a project action.
 
 set "SHOME=%~dp0"
 if "%SHOME:~-1%"=="\" set "SHOME=%SHOME:~0,-1%"

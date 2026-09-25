@@ -4,6 +4,8 @@
 
 依据：[Spec](pr-04-console.spec.md)。依赖：PR 1–3、4A、4B 审核合并。保留原 PR4 文件路径，本阶段为 4C。
 
+本次实现与验收记录：[PR 4C 控制台验证](../validation/pr-04c-console.md)。
+
 ## 实施步骤
 
 1. **整理 UI 依赖。** 从最新 origin/main 开始，将现有 viewer 主模型迁入 `internal/steerline/console`，拆成观察接口和控制接口；前者读 4A/4B 的执行、会话、能力 DTO，后者返回 request_id/回执。复用已落地 Query/Command 接口，不新增宿主分支或文件权威。提供一个当前格式的 UI 入口。
