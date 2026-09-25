@@ -141,7 +141,9 @@ func fakeMinimalStep(path string, db fakeDB, argv []string) int {
 	switch input.StepID {
 	case "verify":
 		for _, name := range input.ProjectSteps.Verify.RequiredChecks {
-			result.Checks = append(result.Checks, CheckEvidence{Name: name, Status: "passed", Revision: revision})
+			code := 0
+			passed := true
+			result.Checks = append(result.Checks, CheckEvidence{Name: name, Status: "passed", Revision: revision, Command: "go test ./...", ScriptVersion: "fixture/v1", ExitCode: &code, Passed: &passed, EvidenceRef: "fixture:" + name, ActualCommit: revision})
 		}
 		if db.Behavior == "minimal-no-checks" {
 			result.Checks = nil
@@ -288,6 +290,9 @@ func fakeMain(args []string) int {
 	}
 	if mode == "native-step" {
 		return fakeNativeMinimalStep()
+	}
+	if mode == "orca-supervised" {
+		return fakeSupervisedOrca(args[1:])
 	}
 	if mode == "lock" {
 		l, e := LockRepository(args[1])
@@ -694,6 +699,11 @@ func seedFakeCapabilities(t *testing.T, c Config) {
 	sum := sha256.Sum256(data)
 	evidence := path + "#sha256=" + hex.EncodeToString(sum[:])
 	backend, protocol := backendFor(c, BeadsContext{}).Identity()
+	if backend == BackendOrca && protocol == ProtocolOrcaSupervised {
+		// A supervised capability fixture must come from the real probe path;
+		// never seed verified evidence for untested remote mutations.
+		return
+	}
 	version := "fake-codex/1"
 	if backend == BackendOrca {
 		version = "fake-orca/1"
@@ -727,6 +737,7 @@ func (f *fixture) service(t *testing.T) *Service {
 	if e != nil {
 		t.Fatal(e)
 	}
+	t.Cleanup(func() { _ = s.Close() })
 	return s
 }
 func finishWorker(t *testing.T, s *Service) {
@@ -1014,6 +1025,7 @@ func TestUnverifiedBackendCannotClaimOrStart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = s.Close() })
 	if err = s.dispatch(context.Background()); err == nil {
 		t.Fatal("unverified start capability was accepted")
 	}

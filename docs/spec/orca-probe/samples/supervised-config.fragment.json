@@ -1,0 +1,22 @@
+{
+  "host": "orca_supervised",
+  "agent": "codex",
+  "model": "gpt-6-luna",
+  "reasoning_effort": "high",
+  "orca": {
+    "executable": "orca",
+    "args": [],
+    "shell": "powershell",
+    "wait_timeout": "15m",
+    "supervised": {
+      "connection_id": "<paired-device-id>",
+      "environment_id": "<saved-environment-id>",
+      "repository_selector": "id:<remote-repo-id>",
+      "coordinator_terminal": "<center-terminal-handle>",
+      "expected_codex_version": "codex-cli 0.156.1",
+      "poll_interval": "2s",
+      "capability_report_version": 1,
+      "remote_cancel_available": false
+    }
+  }
+}

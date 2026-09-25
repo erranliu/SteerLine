@@ -100,7 +100,9 @@ execution_status=succeeded 仅表示进程正常退出，仍可能 finish_task_s
 
 PR 4A 的执行后端复用 Spec 02 的 SQLite 权威存储：`execution_bindings` 保存不可变 ExecutionRef，`execution_operations` 保存后端动作的固定输入摘要和回执，与领域 `operations` 一起保存在 `steerline.db`。`execution/v1/` 只保留 `capabilities/` 能力报告及 `evidence/` 原生证据副本；不再读取文件式 binding/Operation。检测到旧文件式执行状态时拒绝启动并保留现场。持锁 Service 写执行记录，停服后的 `certify-backend` 取得同一仓库/run_dir 锁后维护能力报告。runtime v5 是数据库投影；未知或矛盾状态保留槽位，不自动重发副作用。
 
-能力报告的 `platform_version` 固定平台 CLI 版本。Orca 使用本地 Codex CLI 覆盖启动时，还保存 `agent_version` 并纳入报告键和证据校验；原生 agent 模式的报告不能复用到该路径。
+受监管 Orca 的 inbox Delivery 先按 Run/Message 外部 ID 写入领域事件，再创建稳定 `ack_orca_delivery` Operation 并落库，最后用精确 Delivery ID 调用 `check --ack`。Operation 回执保存 Orca 返回的 platform request ID；ack 响应不确定时，重放同一 Delivery ID，已确认 Operation 不会重复 ack，也不会重复追加规范事件。
+
+能力报告的 `platform_version` 固定执行端平台版本。受监管 Orca 同时记录 `center_version` 与远端 `platform_version` 的完整版本号，按用户选定的 `major.minor` 键比较；版本族匹配不代表操作能力已验证。`expected_agent_version` 是固定远端 CLI 期望值，只有实际观察相符后才记录为 `agent_version`，绝不从远端用户默认模型推断。Orca terminal v2 使用本地 Codex CLI 覆盖启动时，`agent_version` 仍记录本地覆盖 CLI；两条协议的报告键互不复用。
 
 ## 会话事件与正文读取
 
@@ -180,9 +182,11 @@ native 服务的候选来自中心 `ReadyNativeTasks` 快照，并由事务领�
 
 WorkflowRun 保存步骤定义及 Codex executable/args、sandbox、model、reasoning_effort、profile。配置变更不改变已创建流程的执行参数。输入包含工作区证据、前置结果 ID 和正文，修复步骤能够读取实际失败检查或审查结果。
 
-步骤回执包含 schema_version、project_identity、task_id、workflow_run_id、execution_id、attempt_id 与 result。中心逐项核验身份、输入 revision、真实 Git common-dir/分支/base、前置结果和步骤门槛。无效结果将尝试记为 failed；通过门槛后才提交 succeeded 与下一步意图。publish_pr 的前置验证/审查在启动发布器之前检查，PR head 在关闭外部任务之前核验。
+步骤回执包含 schema_version、project_identity、task_id、workflow_run_id、execution_id、attempt_id 与 result。中心逐项核验身份、输入 revision、真实 Git common-dir/分支/base、前置结果和步骤门槛。每项必需 verify 检查还必须返回实际命令、脚本版本、退出码、passed 值、证据引用及执行时的 commit；缺字段、结论与退出码矛盾或 commit 不同都不能通过。无效结果将尝试记为 failed；通过门槛后才提交 succeeded 与下一步意图。publish_pr 的前置验证/审查在启动发布器之前检查，PR head 在关闭外部任务之前核验。
 
 minimal-v1 当前拒绝本地决策续跑：answer_decision 在接受前核验固定执行能力，不支持的 local continuation 会被拒绝并保留 pending 问题，不启动新步骤。若执行状态已有 `reply_accepted` 决策，结果仍须同时返回 `result.applied_decision_id`、`applied_decision_attempt_id`、`applied_decision_execution_id` 和 `applied_answer_sha256`，分别匹配原问题、decision attempt、Workflow Execution 和固定答案摘要；后端接受输入只算 reply_accepted，缺少证明时决策失败且 run 阻塞。单段 accept-result/mark-stopped 入口不能用于 minimal-v1；retry 只针对已结算的失败步骤经中心事务预留新 attempt，不确定步骤仍须按原尝试和 Operation 对账。
+
+`orca_supervised` 的业务问题使用 Orca 原 `question` message ID 作为 Decision ID，并绑定原 Run/Task/Dispatch/Attempt。问题先入 SQLite，再 ack Delivery；保存答案生成独立 `reply_orca_question` Operation。Orca `reply` 的嵌套 question/message 回执与平台 request ID 只证明 `reply_accepted`；同一 Dispatch 的 `decision_applied` status 或步骤结果内相应应用 ID 才推进 `applied`。reply 回执不确定时，按原 question thread 从 Orca inbox 只读核对唯一答案消息，不向替代 Dispatch 重发。
 
 ### 单次入口结果
 

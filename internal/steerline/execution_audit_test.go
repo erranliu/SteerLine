@@ -341,7 +341,9 @@ func TestAuditEntryMustExistAtPinnedBase(t *testing.T) {
 func TestAuditStepInputIncludesFailureBodiesAndApplicationSchema(t *testing.T) {
 	run := &Run{RunID: "wf", DomainTaskID: "1"}
 	execution := &ExecutionRecord{ExecutionID: "exec"}
-	result := mustJSON(StepGateResult{StepID: "verify", ResultID: "failed-check", Checks: []CheckEvidence{{Name: "unit", Status: "failed", Revision: strings.Repeat("a", 40)}}})
+	failedExit := 1
+	failedPassed := false
+	result := mustJSON(StepGateResult{StepID: "verify", ResultID: "failed-check", Checks: []CheckEvidence{{Name: "unit", Status: "failed", Revision: strings.Repeat("a", 40), Command: "go test ./...", ScriptVersion: "fixture/v1", ExitCode: &failedExit, Passed: &failedPassed, EvidenceRef: "fixture:unit", ActualCommit: strings.Repeat("a", 40)}}})
 	input := buildMinimalStepInput("repo", Task{}, run, &WorkflowRunRecord{}, execution, &StepAttemptRecord{PrerequisiteIDs: []string{"failed-check"}}, StepAttemptRecord{ExecutionID: "exec", ResultID: "failed-check", Result: result})
 	if len(input.PrerequisiteResults) != 1 || string(input.PrerequisiteResults[0]) != string(result) {
 		t.Fatal("repair input omitted failure details")
@@ -351,6 +353,17 @@ func TestAuditStepInputIncludesFailureBodiesAndApplicationSchema(t *testing.T) {
 	properties := schema["properties"].(map[string]any)["result"].(map[string]any)["properties"].(map[string]any)
 	if properties["applied_decision_id"] == nil || properties["applied_decision_attempt_id"] == nil || properties["applied_decision_execution_id"] == nil || properties["applied_answer_sha256"] == nil || properties["workspace"].(map[string]any)["properties"] == nil {
 		t.Fatal("result schema omits application or workspace evidence")
+	}
+	steps := properties["step_id"].(map[string]any)["enum"].([]any)
+	hasPrepare := false
+	for _, step := range steps {
+		if step == "prepare" {
+			hasPrepare = true
+			break
+		}
+	}
+	if !hasPrepare {
+		t.Fatal("result schema omits the supervised prepare step")
 	}
 }
 

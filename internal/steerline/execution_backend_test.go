@@ -258,6 +258,7 @@ func TestRecoveryRebuildsProjectionAndRejectsCorruptBinding(t *testing.T) {
 	require(t, err)
 	recovered, err := NewService(f.c)
 	require(t, err)
+	t.Cleanup(func() { _ = recovered.Close() })
 	got := recovered.State.Runs[0]
 	if got.Process == nil || *got.Process != ref.External || got.WorktreePath == nil || *got.WorktreePath != ref.WorkspacePath || got.ExecutionStatus != "unknown" || !recovered.State.SlotOccupied {
 		t.Fatalf("binding did not conservatively rebuild runtime projection: %+v", got)

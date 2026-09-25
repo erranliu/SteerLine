@@ -103,6 +103,7 @@ func TestLifecycleReviewExistingServiceDoesNotNeedInstalledBinary(t *testing.T) 
 	c, configPath := lifecycleConfigFile(t, f, f.c.RunDir)
 	s, err := NewService(c)
 	require(t, err)
+	t.Cleanup(func() { _ = s.Close() })
 	s.State.Service.Ready = true
 	s.State.Service.Status = "running"
 	require(t, s.save())

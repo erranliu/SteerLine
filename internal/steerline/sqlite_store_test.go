@@ -226,11 +226,35 @@ func TestMinimalWorkflowRevisionGatesAndRepairLimit(t *testing.T) {
 		t.Fatalf("implement gate: %q %v", step, err)
 	}
 	exec.CurrentStep = "verify"
-	verify := StepGateResult{StepID: "verify", Succeeded: true, Revision: commit, Workspace: implement.Workspace, ResultID: "verify-1", Checks: []CheckEvidence{{Name: "unit", Status: "failed", Revision: commit}}}
+	failedExit := 1
+	failedPassed := false
+	verify := StepGateResult{StepID: "verify", Succeeded: true, Revision: commit, Workspace: implement.Workspace, ResultID: "verify-1", Checks: []CheckEvidence{{Name: "unit", Status: "failed", Revision: commit, Command: "go test ./...", ScriptVersion: "fixture/v1", ExitCode: &failedExit, Passed: &failedPassed, EvidenceRef: "fixture:unit", ActualCommit: commit}}}
+	badVerify := verify
+	badVerify.Checks = append([]CheckEvidence(nil), verify.Checks...)
+	badVerify.Checks[0].EvidenceRef = ""
+	if _, err := AdvanceMinimalExecution(run, exec, badVerify, []string{"unit"}); err == nil {
+		t.Fatal("verify passed without a script evidence reference")
+	}
+	badVerify = verify
+	badVerify.Checks = append([]CheckEvidence(nil), verify.Checks...)
+	badVerify.Checks[0].ActualCommit = base
+	if _, err := AdvanceMinimalExecution(run, exec, badVerify, []string{"unit"}); err == nil {
+		t.Fatal("verify passed with check evidence from another commit")
+	}
+	badVerify = verify
+	badVerify.Checks = append([]CheckEvidence(nil), verify.Checks...)
+	badVerify.Checks[0].Status = "passed"
+	if _, err := AdvanceMinimalExecution(run, exec, badVerify, []string{"unit"}); err == nil {
+		t.Fatal("verify passed with a failed exit code")
+	}
 	if step, err := AdvanceMinimalExecution(run, exec, verify, []string{"unit"}); err != nil || step != "implement" || exec.RepairRounds != 1 {
 		t.Fatalf("failed deterministic check did not enter repair: step=%q err=%v rounds=%d", step, err, exec.RepairRounds)
 	}
 	verify.Checks[0].Status = "passed"
+	passedExit := 0
+	passed := true
+	verify.Checks[0].ExitCode = &passedExit
+	verify.Checks[0].Passed = &passed
 	exec.CurrentStep = "verify"
 	if step, err := AdvanceMinimalExecution(run, exec, verify, []string{"unit"}); err != nil || step != "review" {
 		t.Fatalf("verify gate: %q %v", step, err)

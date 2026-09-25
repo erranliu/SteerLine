@@ -9,6 +9,41 @@ import (
 	"time"
 )
 
+func TestActivityWriterDeduplicatesItemAcrossReopen(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "activity.jsonl")
+	writer, err := OpenActivity(path, "run", "task")
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, err := writer.WriteEvent(ActivityEvent{Kind: "message", ItemID: "source-cursor-1", Detail: "first delivery"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	writer, err = OpenActivity(path, "run", "task")
+	if err != nil {
+		t.Fatal(err)
+	}
+	duplicate, err := writer.WriteEvent(ActivityEvent{Kind: "message", ItemID: "source-cursor-1", Detail: "replayed delivery"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if duplicate.Seq != first.Seq {
+		t.Fatalf("duplicate sequence = %d, want %d", duplicate.Seq, first.Seq)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	if len(lines) != 1 {
+		t.Fatalf("activity line count = %d, want 1: %s", len(lines), data)
+	}
+	var event ActivityEvent
+	if err = json.Unmarshal([]byte(lines[0]), &event); err != nil || event.Seq != first.Seq {
+		t.Fatalf("persisted activity = %+v, error=%v", event, err)
+	}
+}
+
 func TestDetectNormalizer(t *testing.T) {
 	if got := DetectNormalizer([]byte(`{"type":"session","version":3,"id":"x"}`)); got.Name() != "pi" {
 		t.Fatalf("pi session header detected as %s", got.Name())

@@ -343,6 +343,39 @@ func (s *Service) inspectMinimalWorkspace(ctx context.Context, run *Run) (Worksp
 	if run == nil || run.WorktreePath == nil || run.WorktreeBranch == nil || run.BaseCommit == nil || run.WorkspaceIntent == nil {
 		return WorkspaceEvidence{}, errors.New("minimal execution has no recorded workspace")
 	}
+	if run.Backend == string(BackendOrca) && run.Protocol == string(ProtocolOrcaSupervised) {
+		if run.Target.ID != targetFor(s.Config).ID || run.Target.WorktreeID == "" || run.Target.OrchestrationRun == "" {
+			return WorkspaceEvidence{}, UnsupportedAdapterOperation("InspectWorkspace", "supervised execution lacks its exact fixed Run/worktree identity")
+		}
+		records := executionRecords{root: s.Config.RunDir}
+		bindingAttemptID := run.AttemptID
+		ref, err := records.loadBinding(run.RunID, bindingAttemptID)
+		if os.IsNotExist(err) {
+			// A newly planned step has no binding yet. Reuse the most recent
+			// settled attempt's exact Dispatch only for read-only workspace facts.
+			var latest StepAttemptRecord
+			for _, candidate := range s.State.Attempts {
+				if candidate.ExecutionID == run.ExecutionID && candidate.ExternalBinding.WorktreeID == run.Target.WorktreeID && candidate.ExternalBinding.Dispatch != "" && (latest.UpdatedAt.IsZero() || candidate.UpdatedAt.After(latest.UpdatedAt)) {
+					latest = candidate
+				}
+			}
+			if latest.AttemptID != "" {
+				bindingAttemptID = latest.AttemptID
+				ref, err = records.loadBinding(run.RunID, bindingAttemptID)
+			}
+		}
+		if err != nil {
+			return WorkspaceEvidence{}, err
+		}
+		inspection, err := (orcaSupervisedBackend{config: s.Config}).InspectWorkspace(ctx, ref)
+		if err != nil {
+			return WorkspaceEvidence{}, err
+		}
+		if execution := s.executionRecord(run); execution != nil {
+			inspection.Dirty = execution.Workspace.Dirty
+		}
+		return WorkspaceEvidence{Repository: inspection.Repository, Worktree: canonical(inspection.Worktree), Branch: inspection.Branch, Base: inspection.Base, Head: inspection.Head, Dirty: inspection.Dirty, VerifiedAt: inspection.CheckedAt}, nil
+	}
 	worktree := *run.WorktreePath
 	if canonical(worktree) != canonical(run.WorkspaceIntent.Path) || *run.WorktreeBranch != run.WorkspaceIntent.Branch || *run.BaseCommit != run.WorkspaceIntent.BaseCommit {
 		return WorkspaceEvidence{}, nativeErr("authority_mismatch", "minimal workspace differs from its fixed durable intent")
@@ -709,11 +742,46 @@ func (s *Service) minimalOperation(run *Run, attempt *StepAttemptRecord, kind, k
 	return id, nil
 }
 
+// ensureSupervisedRun records the Run-create intent before the remote mutation.
+// A lost response stays outcome_unknown; the caller must not create another Run.
+func (s *Service) ensureSupervisedRun(ctx context.Context, run *Run) error {
+	if run.Target.OrchestrationRun != "" {
+		return nil
+	}
+	objective := "SteerLine workflow " + run.RunID + " on " + s.Config.Orca.Supervised.RepositorySelector
+	opID, err := s.startOperation("create_orca_run", "orca-run:"+run.RunID, map[string]string{
+		"workflow_run_id": run.RunID,
+		"coordinator":     s.Config.Orca.Supervised.CoordinatorTerminal,
+		"objective":       objective,
+	})
+	if err != nil {
+		return err
+	}
+	runID, requestID, createErr := (orcaSupervisedBackend{config: s.Config}).createOrchestrationRun(ctx, run.RunID, objective)
+	if runID != "" {
+		run.Target.OrchestrationRun = runID
+		run.Target.OrchestrationRunRequestID = requestID
+	}
+	status := "confirmed"
+	reason := ""
+	if createErr != nil {
+		status, reason = "outcome_unknown", createErr.Error()
+	}
+	receipt := mustJSON(map[string]string{"run_id": runID, "platform_request_id": requestID})
+	if err := s.changeOperation(opID, status, requestID, receipt, reason); err != nil {
+		return errors.Join(createErr, err)
+	}
+	return createErr
+}
+
 func (s *Service) prepareMinimalExecution(ctx context.Context, task Task, run *Run, source BeadsContext) error {
 	workflow, execution := s.minimalRecords(run)
 	attempt := s.minimalAttempt(run, run.AttemptID)
 	if workflow == nil || execution == nil || attempt == nil {
 		return errors.New("minimal prepare records are incomplete")
+	}
+	if s.Config.hostName() == "orca_supervised" {
+		return s.startMinimalStep(ctx, task, run, source, attempt)
 	}
 	opID, err := s.minimalOperation(run, attempt, "prepare_workspace", "prepare:"+run.ExecutionID+":"+attempt.AttemptID, map[string]any{"task_id": run.DomainTaskID, "workflow_run_id": run.RunID, "execution_id": run.ExecutionID, "attempt_id": attempt.AttemptID, "workspace_intent": run.WorkspaceIntent, "backend": run.Backend, "protocol": run.Protocol})
 	if err != nil {
@@ -836,7 +904,11 @@ func (s *Service) finishMinimalStep(exitErr error) error {
 	run.EndedAt = ptr(now())
 	if exitErr != nil {
 		unknown := uncertain || attempt.StepID == "publish_pr"
-		if run.Decision != nil && run.Decision.Status == "reply_accepted" {
+		var backendErr *BackendError
+		if run.Protocol == string(ProtocolOrcaSupervised) && errors.As(exitErr, &backendErr) && backendErr.Code == BackendUnsupported {
+			unknown = true
+		}
+		if run.Decision != nil && run.Decision.Status == "reply_accepted" && (run.Protocol != string(ProtocolOrcaSupervised) || !unknown) {
 			if err := s.failMinimalDecisionApplication(run, "resumed step terminated without application evidence: "+exitErr.Error()); err != nil {
 				return err
 			}
@@ -862,6 +934,9 @@ func (s *Service) finishMinimalStep(exitErr error) error {
 	}
 	if persistErr := s.recordMinimalExecutionResult(run, envelope, deref(run.StepResultPath)); persistErr != nil {
 		s.setError(fmt.Errorf("structured step result conversation persistence failed: %w", persistErr))
+	}
+	if run.Protocol == string(ProtocolOrcaSupervised) && (envelope.Result.BaseAncestor == nil || !*envelope.Result.BaseAncestor) {
+		return s.failMinimalStep(run, workflow, execution, attempt, errors.New("supervised result lacks positive fixed-base ancestry evidence"), attempt.StepID == "publish_pr")
 	}
 	for _, old := range s.State.Attempts {
 		if old.ExecutionID == attempt.ExecutionID && old.ResultID == envelope.Result.ResultID && old.AttemptID != attempt.AttemptID {
@@ -907,8 +982,10 @@ func (s *Service) finishMinimalStep(exitErr error) error {
 		if result.Revision != workspace.Head || workspace.Dirty {
 			return s.failMinimalStep(run, workflow, execution, attempt, errors.New("implement must leave a clean workspace at its candidate commit"), false)
 		}
-		if _, err = gitRunner(s.Config, *run.WorktreePath).Output(context.Background(), s.Config.Git, "merge-base", "--is-ancestor", workspace.Base, workspace.Head); err != nil {
-			return s.failMinimalStep(run, workflow, execution, attempt, fmt.Errorf("candidate commit is not based on the pinned workspace base: %w", err), false)
+		if run.Protocol != string(ProtocolOrcaSupervised) {
+			if _, err = gitRunner(s.Config, *run.WorktreePath).Output(context.Background(), s.Config.Git, "merge-base", "--is-ancestor", workspace.Base, workspace.Head); err != nil {
+				return s.failMinimalStep(run, workflow, execution, attempt, fmt.Errorf("candidate commit is not based on the pinned workspace base: %w", err), false)
+			}
 		}
 	}
 	var publishedInfo *PRInfo
@@ -1008,7 +1085,11 @@ func (s *Service) failMinimalStep(run *Run, workflow *WorkflowRunRecord, executi
 	workflow.Phase = "blocked"
 	workflow.UpdatedAt = now()
 	run.FinishTaskStatus = "blocked"
-	run.EndedAt = ptr(now())
+	if unknown {
+		run.EndedAt = nil
+	} else {
+		run.EndedAt = ptr(now())
+	}
 	run.Error = ptr(clip(cause.Error(), 2000))
 	if !unknown {
 		run.Process = nil
@@ -1027,8 +1108,23 @@ func (s *Service) failMinimalStep(run *Run, workflow *WorkflowRunRecord, executi
 }
 
 func validateMinimalWorkspaceReceipt(receipt, actual WorkspaceEvidence) error {
-	if receipt.Repository != actual.Repository || canonical(receipt.Worktree) != actual.Worktree || receipt.Branch != actual.Branch || receipt.Base != actual.Base || receipt.Head != actual.Head || receipt.Dirty != actual.Dirty {
-		return errors.New("step workspace receipt differs from center inspection")
+	if receipt.Repository != actual.Repository {
+		return fmt.Errorf("step workspace repository %q differs from center inspection %q", receipt.Repository, actual.Repository)
+	}
+	if canonical(receipt.Worktree) != canonical(actual.Worktree) {
+		return fmt.Errorf("step workspace path %q differs from center inspection %q", receipt.Worktree, actual.Worktree)
+	}
+	if receipt.Branch != actual.Branch {
+		return fmt.Errorf("step workspace branch %q differs from center inspection %q", receipt.Branch, actual.Branch)
+	}
+	if receipt.Base != actual.Base {
+		return fmt.Errorf("step workspace base %q differs from center inspection %q", receipt.Base, actual.Base)
+	}
+	if receipt.Head != actual.Head {
+		return fmt.Errorf("step workspace HEAD %q differs from center inspection %q", receipt.Head, actual.Head)
+	}
+	if receipt.Dirty != actual.Dirty {
+		return fmt.Errorf("step workspace dirty=%t differs from center inspection dirty=%t", receipt.Dirty, actual.Dirty)
 	}
 	return nil
 }
@@ -1247,6 +1343,10 @@ func (s *Service) syncMinimalDecision(run *Run) error {
 }
 
 func (s *Service) blockMinimalPreparation(run *Run, attempt *StepAttemptRecord, operationID string, cause error) error {
+	return s.blockMinimalPreparationWithReceipt(run, attempt, operationID, "", nil, cause)
+}
+
+func (s *Service) blockMinimalPreparationWithReceipt(run *Run, attempt *StepAttemptRecord, operationID, platformRequestID string, receipt []byte, cause error) error {
 	if attempt.Status == "running" || attempt.Status == "dispatched" || attempt.Status == "dispatching" {
 		_ = TransitionStepAttempt(attempt, "outcome_unknown")
 	}
@@ -1263,7 +1363,7 @@ func (s *Service) blockMinimalPreparation(run *Run, attempt *StepAttemptRecord, 
 	run.Error = ptr(clip("workspace preparation outcome requires reconciliation: "+cause.Error(), 2000))
 	s.State.CurrentTask = ptr(run.TaskID)
 	s.State.SlotOccupied = true
-	_ = s.setOperationState(operationID, "outcome_unknown", "", nil, cause.Error())
+	_ = s.setOperationState(operationID, "outcome_unknown", platformRequestID, receipt, cause.Error())
 	s.note(run, "steer", "prepare", "unknown", "minimal-v1 preparation requires reconciliation", cause.Error(), nil)
 	return errors.Join(cause, s.save())
 }
@@ -1295,9 +1395,13 @@ func (s *Service) startMinimalStep(ctx context.Context, task Task, run *Run, sou
 	if attempt.Status != "planned" {
 		return fmt.Errorf("step attempt %s is not planned", attempt.AttemptID)
 	}
-	contractBytes, err := json.Marshal(minimalStepContract(workflow.ProjectSteps, attempt.StepID))
-	if err != nil {
-		return err
+	var err error
+	contractBytes := []byte("prepare/v1")
+	if attempt.StepID != "prepare" {
+		contractBytes, err = json.Marshal(minimalStepContract(workflow.ProjectSteps, attempt.StepID))
+		if err != nil {
+			return err
+		}
 	}
 	if workflow.ConfigDigest == "" || workflow.ConfigDigest != run.WorkflowConfigDigest || operationDigest(contractBytes) != attempt.ContractDigest {
 		return errors.New("step contract differs from the pinned workflow or attempt")
@@ -1313,20 +1417,24 @@ func (s *Service) startMinimalStep(ctx context.Context, task Task, run *Run, sou
 			return errors.New("publish_pr requires review of the pinned candidate before dispatch")
 		}
 	}
-	workspace, err := s.inspectMinimalWorkspace(ctx, run)
-	if err != nil {
-		return err
-	}
-	expectedRevision := execution.CandidateRevision
-	allowDirtyResume := run.Decision != nil && (run.Decision.Status == "answer_saved" || run.Decision.Status == "resuming") && attempt.StepID == "implement"
-	if attempt.StepID == "implement" {
-		expectedRevision = execution.Workspace.Head
-		if expectedRevision == "" {
-			expectedRevision = execution.Workspace.Base
+	workspace := WorkspaceEvidence{}
+	remotePrepare := s.Config.hostName() == "orca_supervised" && attempt.StepID == "prepare"
+	if !remotePrepare {
+		workspace, err = s.inspectMinimalWorkspace(ctx, run)
+		if err != nil {
+			return err
 		}
-	}
-	if workspace.Head != expectedRevision || (workspace.Dirty && !allowDirtyResume) {
-		return fmt.Errorf("step %s preflight requires clean revision %s, found head=%s dirty=%t", attempt.StepID, expectedRevision, workspace.Head, workspace.Dirty)
+		expectedRevision := execution.CandidateRevision
+		allowDirtyResume := run.Decision != nil && (run.Decision.Status == "answer_saved" || run.Decision.Status == "resuming") && attempt.StepID == "implement"
+		if attempt.StepID == "implement" {
+			expectedRevision = execution.Workspace.Head
+			if expectedRevision == "" {
+				expectedRevision = execution.Workspace.Base
+			}
+		}
+		if workspace.Head != expectedRevision || (workspace.Dirty && !allowDirtyResume) {
+			return fmt.Errorf("step %s preflight requires clean revision %s, found head=%s dirty=%t", attempt.StepID, expectedRevision, workspace.Head, workspace.Dirty)
+		}
 	}
 	dir, events, _, resultPath := minimalAttemptPaths(s.Config, run, attempt)
 	if err := os.MkdirAll(dir, 0700); err != nil {
@@ -1362,33 +1470,91 @@ func (s *Service) startMinimalStep(ctx context.Context, task Task, run *Run, sou
 	if attempt.Status != "dispatching" {
 		return fmt.Errorf("minimal step attempt %s changed to %q after dispatch intent persistence", attempt.AttemptID, attempt.Status)
 	}
-	worker, err := s.startMinimalStepWorker(ctx, task, run, workflow, execution, attempt, source, workerInput)
-	workflow, execution = s.minimalRecords(run)
-	attempt = s.minimalAttempt(run, run.AttemptID)
-	if workflow == nil || execution == nil || attempt == nil {
-		return nativeErr("inconsistent_delivery", "minimal step records disappeared after worker admission")
+	var worker *Worker
+	var ref ExecutionRef
+	platformRequestID := ""
+	if s.Config.hostName() == "orca_supervised" {
+		if createErr := s.ensureSupervisedRun(ctx, run); createErr != nil {
+			receipt := mustJSON(map[string]any{"target": run.Target, "operation": "create_orca_run"})
+			blockErr := s.blockMinimalPreparationWithReceipt(run, attempt, opID, run.Target.OrchestrationRunRequestID, receipt, createErr)
+			return errors.Join(blockErr, createErr)
+		}
+	}
+	if s.Config.hostName() == "orca_supervised" {
+		started, startErr := (orcaSupervisedBackend{config: s.Config}).StartMinimalStep(ctx, task, *run, *workflow, *execution, *attempt, input, resultPath)
+		platformRequestID = started.PlatformRequestID
+		if startErr != nil {
+			var backendErr *BackendError
+			if errors.As(startErr, &backendErr) && (backendErr.Code == BackendOutcomeUnknown || backendErr.Code == BackendUnreachable || backendErr.Code == BackendIdentityMismatch || backendErr.Code == BackendProtocolInvalid) {
+				if started.Run.RunID == run.RunID {
+					*run = started.Run
+				}
+				if started.Ref.External.Kind == "orca_supervised" {
+					run.Process = &started.Ref.External
+					execution.Process = &started.Ref.External
+					execution.Target = started.Ref.Target
+					attempt.ExternalBinding = started.Ref.Target
+					if bindErr := (executionRecords{root: s.Config.RunDir}).saveBinding(started.Ref); bindErr != nil {
+						startErr = errors.Join(startErr, bindErr)
+					}
+				}
+				receipt := mustJSON(map[string]any{"ref": started.Ref, "target": run.Target, "residual_resources": started.ResidualResources})
+				blockErr := s.blockMinimalPreparationWithReceipt(run, attempt, opID, platformRequestID, receipt, startErr)
+				return errors.Join(blockErr, startErr)
+			}
+			err = startErr
+		} else if started.Disposition != "accepted" || started.Worker == nil {
+			return s.blockMinimalPreparation(run, attempt, opID, errors.New("supervised worker start returned no accepted worker"))
+		} else {
+			*run = started.Run
+			worker, ref = started.Worker, started.Ref
+			verifiedHead := attempt.InputRevision
+			if attempt.StepID == "prepare" {
+				verifiedHead = deref(run.BaseCommit)
+			}
+			workspace = WorkspaceEvidence{Repository: s.Config.identity, Worktree: canonical(deref(run.WorktreePath)), Branch: deref(run.WorktreeBranch), Base: deref(run.BaseCommit), Head: verifiedHead, Dirty: false, VerifiedAt: now()}
+			execution.Target = ref.Target
+			execution.Workspace = workspace
+			attempt.ExternalBinding = ref.Target
+		}
+	} else {
+		worker, err = s.startMinimalStepWorker(ctx, task, run, workflow, execution, attempt, source, workerInput)
+		workflow, execution = s.minimalRecords(run)
+		attempt = s.minimalAttempt(run, run.AttemptID)
+		if workflow == nil || execution == nil || attempt == nil {
+			return nativeErr("inconsistent_delivery", "minimal step records disappeared after worker admission")
+		}
+		if err != nil {
+			var backendErr *BackendError
+			if errors.As(err, &backendErr) && (backendErr.Code == BackendOutcomeUnknown || backendErr.Code == BackendUnreachable || backendErr.Code == BackendIdentityMismatch) {
+				_ = s.setOperationState(opID, "outcome_unknown", "", nil, err.Error())
+				if attempt.Status == "dispatching" {
+					_ = TransitionStepAttempt(attempt, "outcome_unknown")
+				}
+				execution.Status = "blocked"
+				execution.CurrentStep = attempt.StepID
+				execution.UpdatedAt = now()
+				workflow.Phase = "blocked"
+				run.ExecutionStatus = "unknown"
+				run.FinishTaskStatus = "blocked"
+				run.EndedAt = nil
+				run.Error = ptr(clip("step start outcome requires reconciliation: "+err.Error(), 2000))
+				s.State.CurrentTask = ptr(run.TaskID)
+				s.State.SlotOccupied = true
+				s.note(run, "steer", "step_start", "unknown", "native step start requires reconciliation", attempt.AttemptID, map[string]any{"step": attempt.StepID, "backend": run.Backend, "protocol": run.Protocol})
+				return errors.Join(err, s.save())
+			}
+		} else {
+			identity := worker.proc.Identity()
+			generation := identity.Created
+			if identity.Kind == "orca" {
+				generation = identity.Incarnation
+			}
+			ref = ExecutionRef{Version: ExecutionRecordVersion, Backend: BackendKind(run.Backend), Protocol: ExecutionProtocol(run.Protocol), Target: targetFor(s.Config), Agent: agentFor(s.Config), RunID: run.RunID, AttemptID: attempt.AttemptID, WorkspacePath: deref(run.WorktreePath), WorkspaceBranch: deref(run.WorktreeBranch), BaseCommit: deref(run.BaseCommit), External: identity, Generation: generation}
+		}
 	}
 	if err != nil {
-		var backendErr *BackendError
-		if errors.As(err, &backendErr) && (backendErr.Code == BackendOutcomeUnknown || backendErr.Code == BackendUnreachable || backendErr.Code == BackendIdentityMismatch) {
-			_ = s.setOperationState(opID, "outcome_unknown", "", nil, err.Error())
-			if attempt.Status == "dispatching" {
-				_ = TransitionStepAttempt(attempt, "outcome_unknown")
-			}
-			execution.Status = "blocked"
-			execution.CurrentStep = attempt.StepID
-			execution.UpdatedAt = now()
-			workflow.Phase = "blocked"
-			run.ExecutionStatus = "unknown"
-			run.FinishTaskStatus = "blocked"
-			run.EndedAt = nil
-			run.Error = ptr(clip("step start outcome requires reconciliation: "+err.Error(), 2000))
-			s.State.CurrentTask = ptr(run.TaskID)
-			s.State.SlotOccupied = true
-			s.note(run, "steer", "step_start", "unknown", "native step start requires reconciliation", attempt.AttemptID, map[string]any{"step": attempt.StepID, "backend": run.Backend, "protocol": run.Protocol})
-			return errors.Join(err, s.save())
-		}
-		_ = s.setOperationState(opID, "rejected", "", nil, err.Error())
+		_ = s.setOperationState(opID, "rejected", platformRequestID, nil, err.Error())
 		_ = TransitionStepAttempt(attempt, "rejected")
 		execution.Status = "failed"
 		execution.CurrentStep = attempt.StepID
@@ -1416,29 +1582,31 @@ func (s *Service) startMinimalStep(ctx context.Context, task Task, run *Run, sou
 	execution.Status = "active"
 	execution.CurrentStep = attempt.StepID
 	execution.UpdatedAt = now()
-	if err = TransitionStepAttempt(attempt, "dispatched"); err == nil {
+	if err = TransitionStepAttempt(attempt, "dispatched"); err == nil && s.Config.hostName() != "orca_supervised" {
 		err = TransitionStepAttempt(attempt, "running")
 	}
 	if err != nil {
 		return err
 	}
-	generation := identity.Created
-	if identity.Kind == "orca" {
-		generation = identity.Incarnation
+	if s.Config.hostName() != "orca_supervised" {
+		execution.Target = ref.Target
 	}
-	ref := ExecutionRef{Version: ExecutionRecordVersion, Backend: BackendKind(run.Backend), Protocol: ExecutionProtocol(run.Protocol), Target: targetFor(s.Config), Agent: agentFor(s.Config), RunID: run.RunID, AttemptID: attempt.AttemptID, WorkspacePath: deref(run.WorktreePath), WorkspaceBranch: deref(run.WorktreeBranch), BaseCommit: deref(run.BaseCommit), External: identity, Generation: generation}
 	if err = (executionRecords{root: s.Config.RunDir}).saveBinding(ref); err != nil {
 		run.ExecutionStatus = "unknown"
 		s.blocked(run, "Step started but its binding could not be persisted: "+err.Error())
 		s.State.SlotOccupied, s.State.CurrentTask = true, ptr(run.TaskID)
 		return errors.Join(err, s.save())
 	}
-	if err = s.setOperationState(opID, "confirmed", "", mustJSON(identity), ""); err != nil {
+	if err = s.setOperationState(opID, "confirmed", platformRequestID, mustJSON(identity), ""); err != nil {
 		return err
 	}
 	s.State.CurrentTask = ptr(run.TaskID)
 	s.State.SlotOccupied = true
-	s.note(run, "steer", "step_start", "started", "minimal-v1 step started", attempt.StepID, map[string]any{"step": attempt.StepID, "attempt_id": attempt.AttemptID, "backend": run.Backend, "protocol": run.Protocol})
+	startStatus, startTitle := "started", "minimal-v1 step started"
+	if s.Config.hostName() == "orca_supervised" {
+		startStatus, startTitle = "info", "minimal-v1 step input accepted"
+	}
+	s.note(run, "steer", "step_start", startStatus, startTitle, attempt.StepID, map[string]any{"step": attempt.StepID, "attempt_id": attempt.AttemptID, "backend": run.Backend, "protocol": run.Protocol})
 	if input.Decision != nil && (run.Decision.Status == "answer_saved" || run.Decision.Status == "resuming") {
 		run.Decision.Status = "reply_accepted"
 		run.Decision.Version++

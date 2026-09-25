@@ -1,0 +1,24 @@
+{
+  "schema_version": "steerline.spec03-review-budget-probe.v1",
+  "evidence_class": "real_remote_failure",
+  "orca_run_id": "run_27b254892811",
+  "worktree_id": "09e35751-6517-4e7c-ae20-178ed0e90000::C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-85858497bc07",
+  "dispatches": {
+    "prepare": "ctx_6847a978571e",
+    "implement": "ctx_cfde3a85ae89",
+    "verify": "ctx_857f44468d64"
+  },
+  "actual_candidate_revision": "cea372f5f27fa588bdbb7987f1e86f80063e9eb4",
+  "verify_reported_input_revision": "cea372f5f27fa588bdbb7987f1f86f80063e9eb4",
+  "verify_reported_workspace_head": "cea372f5f27fa588bdbb7987f1e86f80063e9eb4",
+  "verify_check_observation": "worker used the mistyped input revision in git merge-base; command exit 128, so positive base_ancestor evidence was unavailable",
+  "center_result": "verify remote result rejected: supervised result lacks positive fixed-base ancestry evidence",
+  "review_dispatched": false,
+  "pr_created": false,
+  "resource_observation": {
+    "prepare": "succeeded/completed/released/exited/exact/no residual resources",
+    "implement": "succeeded/completed/released/exited/exact/no residual resources",
+    "verify": "succeeded/completed/released/exited/exact/no residual resources"
+  },
+  "acceptance": "not_passed"
+}

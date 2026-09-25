@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"text/template"
+	"time"
 )
 
 //go:embed result.schema.json
@@ -22,25 +23,44 @@ var promptTemplate string
 var commitHash = regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`)
 
 type WorkerEvent struct {
-	RunID          string
-	AttemptID      string
-	Source         string
-	SourceEventID  string
-	SourceIdentity string
-	SourceCursor   string
-	Session        string
-	Summary        string
-	Activity       ActivityEvent
-	Raw            []byte
-	SourceSeq      uint64
-	SourceOffset   int64
-	SourceLength   int64
-	SourceSegment  string
-	SourceGap      bool
-	SourceChanged  bool
-	InputWait      bool
-	Diagnostic     string
-	Persisted      chan error
+	RunID            string
+	AttemptID        string
+	Source           string
+	SourceEventID    string
+	SourceIdentity   string
+	SourceCursor     string
+	Session          string
+	Summary          string
+	Activity         ActivityEvent
+	Raw              []byte
+	SourceSeq        uint64
+	SourceOffset     int64
+	SourceLength     int64
+	SourceSegment    string
+	SourceGap        bool
+	SourceChanged    bool
+	InputWait        bool
+	Diagnostic       string
+	Persisted        chan error
+	OutputSource     string
+	OutputCursor     string
+	OutputGap        bool
+	TurnStarted      bool
+	RemoteRunID      string
+	RemoteDeliveryID string
+	RemoteMessages   []OrcaInboxMessage
+	Acknowledge      func() (string, error) `json:"-"`
+	Processed        chan error             `json:"-"`
+}
+
+type OrcaInboxMessage struct {
+	ID         string          `json:"id"`
+	FromHandle string          `json:"from_handle,omitempty"`
+	Type       string          `json:"type"`
+	Subject    string          `json:"subject"`
+	Body       string          `json:"body"`
+	Payload    json.RawMessage `json:"payload,omitempty"`
+	CreatedAt  time.Time       `json:"created_at,omitempty"`
 }
 type Worker struct {
 	proc              process
@@ -48,6 +68,8 @@ type Worker struct {
 	Done              chan error
 	cancelObservation context.CancelFunc
 	observationDone   chan struct{}
+	completionAck     func() error
+	RemoteOutcome     string
 }
 
 func (w *Worker) Kill()  { w.proc.Kill() }

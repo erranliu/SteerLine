@@ -171,15 +171,17 @@ type ExecutionRecord struct {
 }
 
 type ExecutionTarget struct {
-	ID              string `json:"id,omitempty"`
-	ConnectionID    string `json:"connection_id,omitempty"`
-	WorktreeID      string `json:"worktree_id,omitempty"`
-	Branch          string `json:"branch,omitempty"`
-	BaseRevision    string `json:"base_revision,omitempty"`
-	ExternalRuntime string `json:"external_runtime,omitempty"`
-	ExternalTask    string `json:"external_task,omitempty"`
-	Dispatch        string `json:"dispatch,omitempty"`
-	ExecutionHost   string `json:"execution_host,omitempty"`
+	ID                        string `json:"id,omitempty"`
+	ConnectionID              string `json:"connection_id,omitempty"`
+	WorktreeID                string `json:"worktree_id,omitempty"`
+	Branch                    string `json:"branch,omitempty"`
+	BaseRevision              string `json:"base_revision,omitempty"`
+	ExternalRuntime           string `json:"external_runtime,omitempty"`
+	OrchestrationRun          string `json:"orchestration_run,omitempty"`
+	OrchestrationRunRequestID string `json:"orchestration_run_request_id,omitempty"`
+	ExternalTask              string `json:"external_task,omitempty"`
+	Dispatch                  string `json:"dispatch,omitempty"`
+	ExecutionHost             string `json:"execution_host,omitempty"`
 }
 
 type WorkspaceEvidence struct {
@@ -201,6 +203,8 @@ type StepAttemptRecord struct {
 	OperationID          string          `json:"operation_id,omitempty"`
 	EventPath            string          `json:"event_path,omitempty"`
 	ResultPath           string          `json:"result_path,omitempty"`
+	OutputSource         string          `json:"output_source,omitempty"`
+	OutputCursor         string          `json:"output_cursor,omitempty"`
 	Status               string          `json:"status"`
 	InputRevision        string          `json:"input_revision,omitempty"`
 	ContractDigest       string          `json:"contract_digest,omitempty"`
@@ -427,6 +431,7 @@ type StepGateResult struct {
 	Succeeded                  bool              `json:"succeeded"`
 	InputRevision              string            `json:"input_revision,omitempty"`
 	Revision                   string            `json:"revision,omitempty"`
+	BaseAncestor               *bool             `json:"base_ancestor,omitempty"`
 	Workspace                  WorkspaceEvidence `json:"workspace,omitempty"`
 	Checks                     []CheckEvidence   `json:"checks,omitempty"`
 	ReviewVerdict              string            `json:"review_verdict,omitempty"`
@@ -443,9 +448,15 @@ type StepGateResult struct {
 }
 
 type CheckEvidence struct {
-	Name     string `json:"name"`
-	Status   string `json:"status"`
-	Revision string `json:"revision"`
+	Name          string `json:"name"`
+	Status        string `json:"status"`
+	Revision      string `json:"revision"`
+	Command       string `json:"command"`
+	ScriptVersion string `json:"script_version"`
+	ExitCode      *int   `json:"exit_code"`
+	Passed        *bool  `json:"passed"`
+	EvidenceRef   string `json:"evidence_ref"`
+	ActualCommit  string `json:"actual_commit"`
 }
 
 // AdvanceMinimalExecution validates one committed step result and computes the
@@ -519,7 +530,7 @@ func advanceMinimalExecution(run *WorkflowRunRecord, exec *ExecutionRecord, resu
 		if expectedInput == "" {
 			expectedInput = exec.Workspace.Base
 		}
-		if !revisionPattern.MatchString(exec.Workspace.Base) || result.InputRevision != expectedInput || result.Workspace.Repository != exec.Workspace.Repository || result.Workspace.Worktree != exec.Workspace.Worktree || result.Workspace.Base != exec.Workspace.Base || result.Workspace.Branch != exec.Workspace.Branch {
+		if !revisionPattern.MatchString(exec.Workspace.Base) || result.InputRevision != expectedInput || result.Workspace.Repository != exec.Workspace.Repository || canonical(result.Workspace.Worktree) != canonical(exec.Workspace.Worktree) || result.Workspace.Base != exec.Workspace.Base || result.Workspace.Branch != exec.Workspace.Branch {
 			return "", errors.New("implement workspace does not match the prepared repository, worktree, branch and base revision")
 		}
 		exec.CandidateRevision = result.Revision
@@ -648,6 +659,27 @@ func validateChecks(required []string, checks []CheckEvidence, revision string) 
 		}
 		if _, exists := seen[check.Name]; exists {
 			return false, fmt.Errorf("duplicate check receipt %q", check.Name)
+		}
+		if strings.TrimSpace(check.Command) == "" || strings.TrimSpace(check.ScriptVersion) == "" || strings.TrimSpace(check.EvidenceRef) == "" {
+			return false, fmt.Errorf("check %q lacks command, script version or evidence reference", check.Name)
+		}
+		if check.ExitCode == nil || check.Passed == nil {
+			return false, fmt.Errorf("check %q lacks an explicit exit code or passed value", check.Name)
+		}
+		if !revisionPattern.MatchString(check.ActualCommit) || !strings.EqualFold(check.ActualCommit, revision) {
+			return false, fmt.Errorf("check %q actual commit differs from the pinned revision", check.Name)
+		}
+		switch check.Status {
+		case "passed":
+			if *check.ExitCode != 0 || !*check.Passed {
+				return false, fmt.Errorf("check %q reports passed without exit code zero and passed=true", check.Name)
+			}
+		case "failed":
+			if *check.ExitCode == 0 || *check.Passed {
+				return false, fmt.Errorf("check %q reports failed without a nonzero exit code and passed=false", check.Name)
+			}
+		default:
+			return false, fmt.Errorf("check %q has inconclusive status %q", check.Name, check.Status)
 		}
 		seen[check.Name] = check
 	}

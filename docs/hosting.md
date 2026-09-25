@@ -1,6 +1,6 @@
 # Hosting 红线：中心管业务，执行端管现场
 
-SteerLine 同时支持本机 Codex 和 Orca 执行。当前 Orca terminal v2 实现使用 worktree、终端和结果文件；目标远程路径使用受监管 worker、Dispatch 和消息协议，按 [执行架构 Spec](spec/execution-architecture.spec.md)、[远程协议 Spec](spec/01-orca-remote-protocol.md)与[远程闭环 Spec](spec/03-remote-execution-and-viewer.md)实施。当前实现的细节见 [Hosting v2 规范](spec/hosting-spec.md)，不作为目标远程路径的限制。
+SteerLine 同时支持本机 Codex 和 Orca 执行。当前 Orca terminal v2 实现使用 worktree、终端和结果文件；受监管远程路径使用精确 Run/Task/Dispatch/host/worktree、消息 Delivery 与 worker_done，按 [执行架构 Spec](spec/execution-architecture.spec.md)、[远程协议 Spec](spec/01-orca-remote-protocol.md)与[远程闭环 Spec](spec/03-remote-execution-and-viewer.md)实施。隔离真机已验证 prepare/implement/verify、单问题问答、R06 双故障、若干中心重启窗口及 PR/合并的独立对账；生产能力报告仍保持未验证，claim 前拒绝。当前实现的细节见 [Hosting v2 规范](spec/hosting-spec.md)，不作为目标远程路径的限制。
 
 原生任务接入前，现有 Beads 任务源与 Orca terminal v2 可以作为过渡实现和验证路径；这不形成长期的双任务权威或旧数据兼容要求。以下红线描述目标架构及过渡中不能破坏的执行安全边界。
 

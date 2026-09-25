@@ -1,0 +1,28 @@
+{
+  "schema_version": "steerline.spec03-explicit-run-probe.v1",
+  "evidence_class": "real_remote_failure",
+  "orca_run_id": "run_27b254892811",
+  "dispatch_id": "ctx_51611ea23c6d",
+  "assigned_worktree_id": "09e35751-6517-4e7c-ae20-178ed0e90000::C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-340bc5abf668",
+  "agent_created_extra_worktree_id": "09e35751-6517-4e7c-ae20-178ed0e90000::C:/Users/liuming/orca/workspaces/SteerlineTest/remote-probe-340bc5abf6-prepare",
+  "extra_worktree_head": "0028407ffbbcf9ad4139ff63720311a6e3fd0a1f",
+  "extra_worktree_retained": true,
+  "status_send": {
+    "accepted": false,
+    "error_code": "invalid_argument",
+    "orchestration_request_id": "77ea4939-a7cb-4feb-9045-3fb9f489113b",
+    "reason": "Federated Dispatch messages route to their Run home; omit --to and --run."
+  },
+  "center_result": "prepare timed out; no accepted step result or later stage",
+  "resource_action": {
+    "exact_terminal": "term_93c4ffd1-5b61-4898-979f-d8c5d59a2dc5",
+    "terminal_close_request_id": "f873946e-a5ba-40b6-bba2-fac58be484cc",
+    "pty_killed": true,
+    "post_close_exact_worker": true,
+    "post_close_liveness": "exited",
+    "worker_abandon_request_id": "6fffae08-ec4d-494a-aeed-bf7d3474382a",
+    "worker_state": "abandoned",
+    "residual_resources": []
+  },
+  "acceptance": "not_passed"
+}

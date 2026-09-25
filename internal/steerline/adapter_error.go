@@ -44,6 +44,8 @@ func ExecutionBackendKind(host string) (backend, protocol string, err error) {
 		return string(BackendLocal), string(ProtocolLocalProcess), nil
 	case "orca":
 		return string(BackendOrca), string(ProtocolOrcaTerminalV2), nil
+	case "orca_supervised":
+		return string(BackendOrca), string(ProtocolOrcaSupervised), nil
 	default:
 		return "", "", fmt.Errorf("unsupported execution host %q; fallback is disabled", host)
 	}

@@ -1,0 +1,40 @@
+{
+  "schema_version": "steerline.spec03-review-budget-probe.v1",
+  "evidence_class": "real_remote_failure",
+  "orca_run_id": "run_27b254892811",
+  "worktree_id": "09e35751-6517-4e7c-ae20-178ed0e90000::C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-d33f48329341",
+  "dispatches": {
+    "prepare": "ctx_2fc319a4ca5b",
+    "implement": "ctx_3d44bcb695f0",
+    "verify": "ctx_4c4cd48f08df"
+  },
+  "prepare_implement": "accepted and released",
+  "verify_command_observation": "candidate matched actual HEAD; content-smoke and fixed-base ancestry checks passed",
+  "verify_status_send": {
+    "accepted": false,
+    "error_code": "run_required",
+    "effects_applied": false
+  },
+  "verify_worker_done_send": {
+    "accepted": false,
+    "error_code": "stable_pane_required"
+  },
+  "manual_guidance": {
+    "relay_message_id": "relay_0f8f84a52add",
+    "orchestration_request_id": "8611a8cb-82b6-4df5-9e7c-363a04fc1862",
+    "intent": "ask original Dispatch to retry with explicit Run ID",
+    "observed_follow_up_turn": false
+  },
+  "center_result": "verify timed out; no accepted result, review or PR",
+  "resource_action": {
+    "exact_terminal": "term_14cae79a-96f6-4b79-ac92-e565e8e94c65",
+    "terminal_close_request_id": "03a72a95-f496-46fa-a680-f35f1761f290",
+    "pty_killed": true,
+    "post_close_exact_worker": true,
+    "post_close_liveness": "exited",
+    "worker_abandon_request_id": "b89dc5e9-369f-4346-bbd9-b46e95974650",
+    "worker_state": "abandoned",
+    "residual_resources": []
+  },
+  "acceptance": "not_passed"
+}

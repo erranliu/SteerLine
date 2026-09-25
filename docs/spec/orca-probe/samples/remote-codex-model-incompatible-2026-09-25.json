@@ -1,0 +1,67 @@
+{
+  "schema_version": "steerline.orca-probe.observation.v1",
+  "captured_at": "2026-09-24T21:44:30Z",
+  "evidence_class": "real_remote",
+  "operation": "same-major-minor remote worker startup on Orca 1.4.210",
+  "target": {
+    "center": {
+      "orca_cli": "1.4.209",
+      "os": "Windows"
+    },
+    "remote": {
+      "environment_alias": "home",
+      "orca_runtime": "1.4.210",
+      "os": "Windows",
+      "codex_cli_at_worker_start": "0.149.0",
+      "codex_cli_after_update": "0.156.1",
+      "repository_alias": "SteerlineTest"
+    },
+    "run_alias": "run-2",
+    "task_alias": "task-1",
+    "dispatch_alias": "dispatch-1"
+  },
+  "workspace": {
+    "repository_id_alias": "test-repo-1",
+    "worktree_id_alias": "worktree-1",
+    "branch": "erranliu/spec03-probe-1-4-family-run27b254",
+    "base_ref": "refs/remotes/origin/main",
+    "base_commit": "0028407ffbbcf9ad4139ff63720311a6e3fd0a1f",
+    "head_after_probe": "0028407ffbbcf9ad4139ff63720311a6e3fd0a1f",
+    "clean_after_probe": true
+  },
+  "observed": {
+    "worker_start_disposition": "ready",
+    "worker_start_stage": "input_accepted",
+    "execution_host_liveness": "live",
+    "worker_done_received": false,
+    "model": "gpt-6-astra",
+    "model_source": "remote_user_default_because_worker_start_omitted_model_and_effort",
+    "reasoning_effort": "high",
+    "model_error": "The 'gpt-6-astra' model requires a newer version of Codex. Please upgrade to the latest app or CLI and try again.",
+    "coordinator_followup_accepted": true,
+    "code_committed": false,
+    "main_branch_changed": false,
+    "pr_created": false,
+    "remote_stop_requested": false,
+    "worker_released": false
+  },
+  "update": {
+    "command": "codex update",
+    "reported_success": true,
+    "installed_version_after_update": "0.156.1",
+    "warning": "Windows npm cleanup could not unlink the old codex.exe because it was still locked by the live worker process."
+  },
+  "post_update_observation": {
+    "remote_runtime_epoch_changed": true,
+    "old_dispatch_liveness": "unverifiable/host_indeterminate",
+    "old_terminal_lookup": "terminal_handle_stale",
+    "new_terminal_on_same_worktree": {
+      "terminal_alias": "terminal-2",
+      "agent": "codex",
+      "preview_model": "gpt-6-luna/high"
+    },
+    "worktree_head_unchanged": true,
+    "worker_done_received": false
+  },
+  "conclusion": "The 1.4.209 center / 1.4.210 home pair satisfies the user-selected major.minor compatibility key and created one exact remote worktree and Dispatch. The worker was launched with Codex CLI 0.149.0 and rejected gpt-6-astra; no implementation or completion result was produced. The Codex installation was upgraded to 0.156.1, after which the home runtime epoch changed. The original terminal handle is stale and the exact Dispatch is now unverifiable; a different Codex terminal is visible on the same unchanged worktree but is not bound to that Dispatch. Production remote cancellation is unavailable, so no replacement may start until the original process exit or settlement is positively confirmed. This probe does not verify staged execution or worker_done handling."
+}

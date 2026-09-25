@@ -140,6 +140,7 @@ func TestAuditRecoveryIncludesStopAndReplyOperations(t *testing.T) {
 			require(t, records.saveOperation(op))
 			restarted, err := NewService(f.c)
 			require(t, err)
+			t.Cleanup(func() { _ = restarted.Close() })
 			if restarted.State.Runs[0].ExecutionStatus != "unknown" || !restarted.State.SlotOccupied {
 				t.Fatal("runtime projection hid an unresolved external operation")
 			}
@@ -241,6 +242,7 @@ func TestAuditManualStopSurvivesRecoveryWithoutRewritingUnknownOutcome(t *testin
 	require(t, err)
 	restarted.State.Control.DispatchMode = "manual"
 	require(t, restarted.save())
+	t.Cleanup(func() { _ = restarted.Close() })
 	if restarted.State.Runs[0].ExecutionStatus != "failed" || restarted.State.SlotOccupied {
 		t.Fatal("recovery erased the operator's explicit stop confirmation")
 	}

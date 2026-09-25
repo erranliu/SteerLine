@@ -1,6 +1,7 @@
 package viewer
 
 import (
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -121,15 +122,15 @@ func (m Model) detailContent(r *steerline.Run, w int) []string {
 	errMsg := m.taskErr[r.TaskID]
 	switch m.detailTab {
 	case 0:
-		return detailSummary(r, td, hasTD, errMsg, w)
+		return m.detailSummary(r, td, hasTD, errMsg, w)
 	case 1:
-		return detailWorkspace(r, w)
+		return m.detailWorkspace(r, w)
 	case 2:
 		return detailPR(r, w)
 	case 3:
 		return detailDecision(r, w)
 	default:
-		return detailResult(r, w)
+		return m.detailResult(r, w)
 	}
 }
 
@@ -163,15 +164,33 @@ func detailFields(kvs []detailKV, w int) []string {
 	return out
 }
 
-func detailSummary(r *steerline.Run, td steerline.TaskDetail, hasTD bool, errMsg string, w int) []string {
+func (m Model) detailSummary(r *steerline.Run, td steerline.TaskDetail, hasTD bool, errMsg string, w int) []string {
 	// Key lifecycle facts first, so they survive a short pane; task metadata
 	// next; long free text last.
 	kvs := []detailKV{
 		{"delivery", r.FinishTaskStatus},
 		{"execution", r.ExecutionStatus},
-		{"error", ptrStr(r.Error)},
-		{"summary", ptrStr(r.Summary)},
+		{"workflow_run", r.RunID},
+		{"execution_id", r.ExecutionID},
+		{"agent", r.Agent},
+		{"backend", r.Backend + "/" + r.Protocol},
 	}
+	if exec := m.executionForRun(r); exec != nil {
+		kvs = append(kvs,
+			detailKV{"workflow_phase", m.workflowPhase(r.RunID)},
+			detailKV{"current_step", exec.CurrentStep},
+			detailKV{"execution_target", exec.Target.ID},
+			detailKV{"connection", exec.Target.ConnectionID},
+			detailKV{"orchestration_run", exec.Target.OrchestrationRun},
+			detailKV{"dispatch", exec.Target.Dispatch},
+			detailKV{"step_attempts", m.stepAttemptSummary(exec.ExecutionID)},
+			detailKV{"repair_rounds", fmt.Sprintf("%d", exec.RepairRounds)},
+		)
+		if exec.Protocol == string(steerline.ProtocolOrcaSupervised) || r.Protocol == string(steerline.ProtocolOrcaSupervised) {
+			kvs = append(kvs, detailKV{"remote_cancellation", "unavailable"})
+		}
+	}
+	kvs = append(kvs, detailKV{"error", ptrStr(r.Error)}, detailKV{"summary", ptrStr(r.Summary)})
 	switch {
 	case hasTD:
 		kvs = append(kvs,
@@ -207,11 +226,70 @@ func detailSummary(r *steerline.Run, td steerline.TaskDetail, hasTD bool, errMsg
 	return detailFields(kvs, w)
 }
 
-func detailWorkspace(r *steerline.Run, w int) []string {
+func (m Model) executionForRun(run *steerline.Run) *steerline.ExecutionRecord {
+	if m.rt == nil || run == nil {
+		return nil
+	}
+	for i := range m.rt.Executions {
+		exec := &m.rt.Executions[i]
+		if exec.ExecutionID == run.ExecutionID || exec.WorkflowRunID == run.RunID {
+			return exec
+		}
+	}
+	return nil
+}
+
+func (m Model) workflowPhase(runID string) string {
+	if m.rt == nil {
+		return ""
+	}
+	for i := range m.rt.WorkflowRuns {
+		if m.rt.WorkflowRuns[i].WorkflowRunID == runID {
+			return m.rt.WorkflowRuns[i].Phase
+		}
+	}
+	return ""
+}
+
+func (m Model) stepAttemptSummary(executionID string) string {
+	if m.rt == nil {
+		return ""
+	}
+	parts := make([]string, 0)
+	for _, attempt := range m.rt.Attempts {
+		if attempt.ExecutionID != executionID {
+			continue
+		}
+		part := fmt.Sprintf("%s#%d=%s", attempt.StepID, attempt.AttemptNumber, attempt.Status)
+		if attempt.ResultID != "" {
+			part += ":" + clipText(attempt.ResultID, 12)
+		}
+		var result steerline.StepGateResult
+		if len(attempt.Result) > 0 && json.Unmarshal(attempt.Result, &result) == nil && result.Revision != "" {
+			part += "@" + clipText(result.Revision, 12)
+		}
+		parts = append(parts, part)
+	}
+	return strings.Join(parts, ", ")
+}
+
+func (m Model) detailWorkspace(r *steerline.Run, w int) []string {
 	kvs := []detailKV{
 		{"worktree", ptrStr(r.WorktreePath)},
 		{"branch", ptrStr(r.WorktreeBranch)},
 		{"base", ptrStr(r.BaseCommit)},
+	}
+	if exec := m.executionForRun(r); exec != nil {
+		kvs = append(kvs,
+			detailKV{"repository_identity", exec.Workspace.Repository},
+			detailKV{"worktree_identity", exec.Workspace.Worktree},
+			detailKV{"worktree_id", exec.Target.WorktreeID},
+			detailKV{"observed_branch", exec.Workspace.Branch},
+			detailKV{"observed_base", exec.Workspace.Base},
+			detailKV{"observed_head", exec.Workspace.Head},
+			detailKV{"dirty", fmt.Sprintf("%t", exec.Workspace.Dirty)},
+			detailKV{"workspace_verified", ptrTime(&exec.Workspace.VerifiedAt)},
+		)
 	}
 	if wi := r.WorkspaceIntent; wi != nil {
 		kvs = append(kvs,
@@ -268,12 +346,32 @@ func detailDecision(r *steerline.Run, w int) []string {
 	return detailFields(kvs, w)
 }
 
-func detailResult(r *steerline.Run, w int) []string {
+func (m Model) detailResult(r *steerline.Run, w int) []string {
 	kvs := []detailKV{
+		{"execution_id", r.ExecutionID},
 		{"result", ptrStr(r.ResultPath)},
 		{"session", ptrStr(r.SessionID)},
 		{"summary", ptrStr(r.Summary)},
 		{"error", ptrStr(r.Error)},
+	}
+	if exec := m.executionForRun(r); exec != nil {
+		kvs = append(kvs,
+			detailKV{"target_id", exec.Target.ID},
+			detailKV{"connection_id", exec.Target.ConnectionID},
+			detailKV{"external_runtime", exec.Target.ExternalRuntime},
+			detailKV{"orchestration_run", exec.Target.OrchestrationRun},
+			detailKV{"external_task", exec.Target.ExternalTask},
+			detailKV{"dispatch", exec.Target.Dispatch},
+			detailKV{"execution_host", exec.Target.ExecutionHost},
+			detailKV{"workspace_id", exec.Target.WorktreeID},
+			detailKV{"candidate", exec.CandidateRevision},
+			detailKV{"verified", exec.VerifiedRevision},
+			detailKV{"reviewed", exec.ReviewedRevision},
+			detailKV{"state_updated", ptrTime(&exec.UpdatedAt)},
+		)
+		if exec.Protocol == string(steerline.ProtocolOrcaSupervised) || r.Protocol == string(steerline.ProtocolOrcaSupervised) {
+			kvs = append(kvs, detailKV{"remote_cancellation", "unavailable"})
+		}
 	}
 	if p := r.Process; p != nil {
 		kvs = append(kvs,

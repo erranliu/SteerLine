@@ -2,7 +2,13 @@
 
 任务 ID：6；任务名称：分阶段远程闭环。
 
-状态：待实施。配套 [Plan](03-remote-execution-and-viewer.plan.md)。日期：2026-09-23。
+状态：部分实现，Spec 03 尚未验收。2026-09-25 的隔离真机 probe 验证了 1.4.209/1.4.210 版本族下的远端执行；受监管[prepare 回执](orca-probe/samples/spec03-supervised-pwsh7-direct-prepare-2026-09-25.json)确认启动、结构化结果、workspace/base、Delivery ack 和 release。[派发后](orca-probe/samples/spec03-supervised-center-restart-2026-09-25.json)、[status ack 后](orca-probe/samples/spec03-supervised-status-restart-2026-09-25.json)与[答案保存后](orca-probe/samples/spec03-supervised-answer-restart-2026-09-25.json)的中心重启验证精确重接原 Dispatch。[正常问答](orca-probe/samples/spec03-supervised-ask-reply-2026-09-25.json)、[reply 响应丢失](orca-probe/samples/spec03-supervised-reply-loss-2026-09-25.json)及[答案保存后离线](orca-probe/samples/spec03-supervised-answer-offline-2026-09-25.json)验证原 question/Attempt 绑定、平台回执或精确答案消息对账和独立应用证明。[三阶段受监管回执](orca-probe/samples/spec03-supervised-staged-implement-verify-2026-09-25.json)证明同 worktree 的 prepare→implement→verify 独立派发、候选 commit 固定及真实 content-smoke/祖先检查回执。[PR #4 精确对账回执](orca-probe/samples/spec03-supervised-publish-pr-reconciled-2026-09-25.json)在由三阶段证据重建的独立临时中心投影中绑定唯一 Draft PR、已验证 head 与 main；随后真实 PR 按固定 head 合并，中心[合并与隔离 Beads 结项回执](orca-probe/samples/spec03-supervised-merged-task-close-2026-09-25.json)核验 merge commit 并关闭临时提供方 task。原发布失败 Attempt 的生产恢复、远端真实 Task 结项以及其余故障矩阵仍未满足完成定义。配套 [Plan](03-remote-execution-and-viewer.plan.md)保留失败探测与资源记录。
+
+当前实现加强了 minimal-v1 verify 检查回执门槛、viewer 阶段展示，以及 `orca_supervised` 的显式配置与 claim 前远端身份/版本族/能力预检；受监管 minimal-v1 路径已有独立持久 Run-create Operation、worker 启动、精确 workspace 观察、结构化消息入库与 ack、worker 结算释放实现。prepare/implement/verify 回执、严格 schema、Windows 路径规范化、本地/Orca 身份检查及直接 PowerShell 7 发送已有代码与真机证据。正在运行的原 Dispatch 在中心重启后可按持久 start Operation 和 binding 精确重接 observer；prepare 的派发后、status ack 后重启已通过。单个远端业务问题的保存、回答、回执丢失只读对账和应用证明也已通过真机。隔离重建投影还验证了精确既有 PR 绑定、真实合并回执和临时 Beads 结项；这些不代替原 Run 的失败发布恢复与真实来源 Task close。能力报告仍将 start/output/message/resource settlement 标记为未验证，scheduler 继续在 claim 前拒绝生产派发；review、生产 publish_pr 恢复、原生来源结项和完整 R01/R16/R19 验收仍未交付。Spec 01 的 P10 宿主权限分支及其余真机验收仍是启用门槛。执行记录见配套 Plan。
+
+[负向 verify 真机回执](orca-probe/samples/spec03-supervised-negative-verify-retry-2026-09-25.json)现已证明固定内容检查实际 exit 7、Orca 接受失败检查的结构化 status/worker_done、中心只规划第 1 轮 implement 修复且不发布 PR；prepare、implement、verify 三个独立 Dispatch 均已 release/exited。此前 `run_required` 失败注入按用户授权关闭了精确测试终端并封存原 Dispatch。R16 的审查请求改动、修复预算耗尽仍未验收；这次回执不表示整项 R16 完成。
+
+[预启动 TUI 宿主探测](orca-probe/samples/spec03-prelaunched-host-helper-cancelled-2026-09-25.json)确认复用已就绪终端可启动 assistant turn，但远端 Codex 工具的 helper 在执行前被 Windows 以 1223 拒绝，因而没有受接受的业务回执。`agentWait` 为 null，不能推断已出现可操作的权限提示；中心现在把显式 `agentWait` 或该 helper 错误显示为待人工核实，不自动回答或重派。P10 的真实权限弹窗处置与稳定消息路由仍是启用门槛。
 
 开发前置：[Spec 01](01-orca-remote-protocol.md) 的真实远端证据与明确限制；[Spec 02](02-execution-model-and-adapter.md) 的模型、存储和执行接口。可先开发受限的远程适配器；生产启用仍须满足本 Spec 的剩余门槛。依据：[执行架构共同约束](execution-architecture.spec.md)。
 
@@ -14,13 +20,13 @@
 
 ## 2. 配置与接入前置
 
-新增显式的受监管远程配置，至少包含固定 connection ID、home Orca runtime/协调者绑定、environment ID、远端 repo selector、agent、输出/状态轮询参数和能力报告版本。具体配置字段由实施确定并更新示例；本机 Orca terminal v2 与受监管远端是不同协议实现，不从前者的配置隐式切换。
+新增显式的受监管远程配置，至少包含固定 connection ID、home Orca runtime/协调者绑定、environment ID、远端 repo selector、agent、固定 model/reasoning_effort、输出/状态轮询参数和能力报告版本。当前配置字段见[配置片段](orca-probe/samples/supervised-config.fragment.json)；它仍不能启用实际派发，因为 worker start 和消息等能力尚未实现。本机 Orca terminal v2 与受监管远端是不同协议实现，不从前者的配置隐式切换。远端 worker-start 显式传递已固定的 model/reasoning_effort；若缺少必需值，领取前拒绝，不继承远端用户的 Orca 默认模型。
 
 Windows 中心服务从 [PR 3 固定入口](pr-03-service-lifecycle.spec.md) 由用户独立打开可见服务窗口；viewer 退出不停止仍开着的中心服务，关窗则结束中心监督。本阶段不得让 viewer 在后台代启中心服务，也不得把关窗当成远端 worker 的停止证明。用户重新打开服务窗口后，中心按持久身份和 Operation 对账，再恢复消息读取和派发判断；Linux detached 路径按其平台能力运行。
 
 首版生产远程配置固定 `remote_cancel_available=false`。预检和 viewer 必须显示远程取消不可用；不能展示可操作的取消按钮、自动调用 Orca worker-stop，或在失败后按远端 terminal handle 兜底关闭。用户需要中止活跃远端 worker 时，中心保留身份与资源占用，提示人工处理。正常结算后的 release 不受此限制。
 
-仅声明已实测的 Windows Orca 1.4.209 中心/远端组合；其他版本在预检中明确拒绝。首版适配器对结构化消息采用不高于已验证 8 KiB 的序列化大小上限，超限在发送前拒绝。宿主权限提示不自动回答，无法可靠分类时显示待人工核实，不伪造业务 ask 或执行成功。
+Orca 版本兼容键按 Spec 01 及用户于 2026-09-25 选择的 `major.minor` 比较：当前 1.4.209 中心与 1.4.210 home 可在 1.4 版本族内验收；跨版本族在预检中明确拒绝。能力报告保存两端完整版本，版本族匹配不替代本 Spec 的能力门槛。首版适配器对结构化消息采用不高于已验证 8 KiB 的序列化大小上限，超限在发送前拒绝。宿主权限提示不自动回答，无法可靠分类时显示待人工核实，不伪造业务 ask 或执行成功。
 
 配置目标是远端时，fallback 固定为 fail。任何创建前后的错误都不得改在中心执行。能力缺失、连接身份失效、仓库不可访问等问题在任务领取前尽可能发现；领取后发生的问题必须保留任务与执行记录。
 

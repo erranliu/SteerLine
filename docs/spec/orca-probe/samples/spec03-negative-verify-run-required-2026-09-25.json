@@ -1,0 +1,44 @@
+{
+  "schema_version": "steerline.spec03-negative-verify-probe.v1",
+  "evidence_class": "real_remote_failure",
+  "orca_run_id": "run_27b254892811",
+  "dispatch_id": "ctx_e40cec388760",
+  "task_id": "task_eee0de7a2397",
+  "terminal_handle": "term_bff9eda6-7420-45dc-a537-92b8a310f56f",
+  "worktree_id": "09e35751-6517-4e7c-ae20-178ed0e90000::C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-0b914d77e59b",
+  "candidate_revision": "ceebf46b3ed466074e176cda4740e255d074230a",
+  "fixed_base": "0028407ffbbcf9ad4139ff63720311a6e3fd0a1f",
+  "worker_start_stage": "input_accepted",
+  "manual_terminal_enter": true,
+  "manual_enter_reason": "Codex TUI remained idle with pasted task text and no transcript; the accepted input had not begun a turn",
+  "observed_check_exit_code": 7,
+  "observed_base_ancestry_exit_code": 0,
+  "status_send": {
+    "accepted": false,
+    "error_code": "run_required",
+    "effects_applied": false,
+    "orchestration_request_id": "e0f9ac1a-4f21-4c3a-a6fd-897d7fbc3e45"
+  },
+  "worker_done_send": {
+    "accepted": false,
+    "error_code": "run_required",
+    "effects_applied": false,
+    "orchestration_request_id": "bf89af31-71fe-4ec4-85af-0a5bdba8f28c"
+  },
+  "center_result": "verify probe timed out; no accepted result or worker_done; no repair attempt dispatched",
+  "last_verified_orca_state": "abandoned/failed/exited/terminal-disconnected",
+  "resource_action": {
+    "authorization": "user authorized manual closure of this exact test worker terminal",
+    "terminal_close_request_id": "e23b5022-6fa0-4bd4-b781-ef7b1debcc05",
+    "closed_terminal_handle": "term_bff9eda6-7420-45dc-a537-92b8a310f56f",
+    "pty_killed": true,
+    "observed_exit_cause": "operator_close",
+    "exact_worker": true,
+    "post_close_liveness": "exited",
+    "worker_abandon_request_id": "58b9067d-cfd7-4c19-8aee-36a513c39480",
+    "worker_abandon_state": "abandoned",
+    "worker_abandon_process_action": "none",
+    "residual_resources": []
+  },
+  "acceptance": "not_passed"
+}

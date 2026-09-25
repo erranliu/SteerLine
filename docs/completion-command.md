@@ -60,3 +60,5 @@ details 为可选的适配器证据。失败应非零退出、stderr 输出简�
 PR/run 绑定冲突、前缀错误或领取者不符时停止，不覆盖。任务关闭后 BV 失败，或生命周期只应用部分操作时，保留证据并重跑该幂等流程；不删除绑定、不重新领取、不回滚。适配器假定请求来自服务已验证的本轮 PR 查询，不单独持有 PR 凭据。
 
 技能不会调用该脚本。人工 PR 合并后的轮询才会触发它。真实接入前先将技能和脚本合入配置的目标主线，使新 worktree 包含对应文件。
+
+受监管 Orca worker 的 `worker_done` 与 terminal release 不执行任务结项。中心在 `waiting_pr_merge` 回读精确 PR 的 head、目标分支、merged、merge commit 和时间，并先保存合并证据，才调用本机配置的 Beads/仓库 completion 适配器并回读 `closed`。测试仓库 PR #4 的真实合并与临时 Beads fixture close 已分别验收；原远端任务没有可用的 Beads 来源，fixture 不能代替其生产结项验收，见 [Spec 03 记录](spec/03-remote-execution-and-viewer.plan.md)。

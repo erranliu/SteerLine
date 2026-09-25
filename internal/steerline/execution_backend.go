@@ -27,6 +27,7 @@ const (
 	BackendOrca            BackendKind       = "orca"
 	ProtocolLocalProcess   ExecutionProtocol = "local_process"
 	ProtocolOrcaTerminalV2 ExecutionProtocol = "orca_terminal_v2"
+	ProtocolOrcaSupervised ExecutionProtocol = "orca_supervised"
 	ExecutionRecordVersion                   = 1
 )
 
@@ -114,15 +115,17 @@ type Capability struct {
 	Evidence string           `json:"evidence,omitempty"`
 }
 type CapabilityReport struct {
-	Version         int               `json:"version"`
-	Backend         BackendKind       `json:"backend"`
-	Protocol        ExecutionProtocol `json:"protocol"`
-	Agent           AgentSpec         `json:"agent"`
-	Target          ExecutionTarget   `json:"target"`
-	CheckedAt       time.Time         `json:"checked_at"`
-	PlatformVersion string            `json:"platform_version,omitempty"`
-	AgentVersion    string            `json:"agent_version,omitempty"`
-	Capabilities    []Capability      `json:"capabilities"`
+	Version              int               `json:"version"`
+	Backend              BackendKind       `json:"backend"`
+	Protocol             ExecutionProtocol `json:"protocol"`
+	Agent                AgentSpec         `json:"agent"`
+	Target               ExecutionTarget   `json:"target"`
+	CheckedAt            time.Time         `json:"checked_at"`
+	CenterVersion        string            `json:"center_version,omitempty"`
+	PlatformVersion      string            `json:"platform_version,omitempty"`
+	ExpectedAgentVersion string            `json:"expected_agent_version,omitempty"`
+	AgentVersion         string            `json:"agent_version,omitempty"`
+	Capabilities         []Capability      `json:"capabilities"`
 }
 
 type Observation struct {
@@ -134,6 +137,7 @@ type Observation struct {
 }
 type StartReceipt struct {
 	Disposition       string       `json:"disposition"` // accepted, rejected, or outcome_unknown
+	PlatformRequestID string       `json:"platform_request_id,omitempty"`
 	Worker            *Worker      `json:"-"`
 	Ref               ExecutionRef `json:"ref"`
 	Run               Run          `json:"run"`
@@ -142,6 +146,12 @@ type StartReceipt struct {
 type StopReceipt struct {
 	Disposition string `json:"disposition"`
 	Diagnostic  string `json:"diagnostic,omitempty"`
+}
+type SettlementReceipt struct {
+	Disposition       string   `json:"disposition"`
+	PlatformRequestID string   `json:"platform_request_id,omitempty"`
+	ResidualResources []string `json:"residual_resources,omitempty"`
+	Diagnostic        string   `json:"diagnostic,omitempty"`
 }
 type OutputBatch struct {
 	Data          []byte    `json:"data"`
@@ -189,7 +199,7 @@ type ExecutionBackend interface {
 	Reply(context.Context, ExecutionRef, string, Operation, string) (ReplyReceipt, error)
 	StopExecution(context.Context, ExecutionRef, Operation, *Worker) (StopReceipt, error)
 	DetachObservation(context.Context, *Worker) error
-	SettleResources(context.Context, ExecutionRef, string) ([]string, error)
+	SettleResources(context.Context, ExecutionRef, string) (SettlementReceipt, error)
 	ReconcileOperation(context.Context, Operation) (Operation, error)
 }
 
@@ -223,13 +233,15 @@ type executionRecords struct{ root string }
 
 func capabilityReportKey(report CapabilityReport) string {
 	return digestValue(struct {
-		Backend      BackendKind
-		Protocol     ExecutionProtocol
-		Target       ExecutionTarget
-		Agent        AgentSpec
-		Version      string
-		AgentVersion string
-	}{report.Backend, report.Protocol, report.Target, report.Agent, report.PlatformVersion, report.AgentVersion})
+		Backend              BackendKind
+		Protocol             ExecutionProtocol
+		Target               ExecutionTarget
+		Agent                AgentSpec
+		CenterVersion        string
+		Version              string
+		ExpectedAgentVersion string
+		AgentVersion         string
+	}{report.Backend, report.Protocol, report.Target, report.Agent, report.CenterVersion, report.PlatformVersion, report.ExpectedAgentVersion, report.AgentVersion})
 }
 
 func verifyCapabilityEvidence(value string) error {
@@ -282,7 +294,7 @@ func stableOperationID(value string) bool {
 }
 
 func (r executionRecords) saveCapabilityReport(report CapabilityReport) error {
-	if report.Version != 1 || report.Backend == "" || report.Protocol == "" || report.Target.ID == "" || report.Agent.Name == "" || report.PlatformVersion == "" || report.CheckedAt.IsZero() {
+	if report.Version != 1 || report.Backend == "" || report.Protocol == "" || report.Target.ID == "" || report.Agent.Name == "" || report.PlatformVersion == "" || report.CheckedAt.IsZero() || report.Protocol == ProtocolOrcaSupervised && (report.CenterVersion == "" || report.ExpectedAgentVersion == "") {
 		return errors.New("incomplete capability report")
 	}
 	seen := map[string]bool{}
@@ -317,7 +329,7 @@ func (r executionRecords) loadCapabilityReport(key CapabilityReport) (Capability
 	if err = decode(b, &report); err != nil {
 		return report, fmt.Errorf("invalid capability report; preserve it: %w", err)
 	}
-	if report.Version != 1 || report.Backend != key.Backend || report.Protocol != key.Protocol || report.Target != key.Target || report.Agent != key.Agent || report.PlatformVersion != key.PlatformVersion || report.AgentVersion != key.AgentVersion || report.CheckedAt.IsZero() {
+	if report.Version != 1 || report.Backend != key.Backend || report.Protocol != key.Protocol || report.Target != key.Target || report.Agent != key.Agent || report.CenterVersion != key.CenterVersion || report.PlatformVersion != key.PlatformVersion || report.ExpectedAgentVersion != key.ExpectedAgentVersion || report.AgentVersion != key.AgentVersion || report.CheckedAt.IsZero() {
 		return report, errors.New("capability report identity/version mismatch")
 	}
 	if len(report.Capabilities) == 0 {
@@ -377,17 +389,21 @@ func validateExecutionRef(ref ExecutionRef) error {
 	if ref.Version != ExecutionRecordVersion || !stableExecutionID(ref.RunID) || !stableExecutionID(ref.AttemptID) || ref.Backend == "" || ref.Protocol == "" {
 		return errors.New("incomplete execution binding")
 	}
-	if ref.Target.ID == "" || ref.Agent.Name == "" || ref.WorkspacePath == "" || ref.WorkspaceBranch == "" || !commitHash.MatchString(ref.BaseCommit) {
+	if ref.Target.ID == "" || ref.Agent.Name == "" || !commitHash.MatchString(ref.BaseCommit) {
 		return errors.New("execution binding lacks a verified target, agent or workspace")
 	}
 	switch {
 	case ref.Backend == BackendLocal && ref.Protocol == ProtocolLocalProcess:
-		if ref.External.Kind != "os" || ref.External.PID <= 0 || ref.External.Created == "" || ref.External.Executable == "" {
+		if ref.WorkspacePath == "" || ref.WorkspaceBranch == "" || ref.External.Kind != "os" || ref.External.PID <= 0 || ref.External.Created == "" || ref.External.Executable == "" {
 			return errors.New("local execution binding lacks a verified process identity")
 		}
 	case ref.Backend == BackendOrca && ref.Protocol == ProtocolOrcaTerminalV2:
-		if ref.External.Kind != "orca" || ref.External.Terminal == "" || ref.External.RuntimeID == "" || ref.External.Incarnation == "" {
+		if ref.WorkspacePath == "" || ref.WorkspaceBranch == "" || ref.External.Kind != "orca" || ref.External.Terminal == "" || ref.External.RuntimeID == "" || ref.External.Incarnation == "" {
 			return errors.New("Orca execution binding lacks runtime/terminal/incarnation identity")
+		}
+	case ref.Backend == BackendOrca && ref.Protocol == ProtocolOrcaSupervised:
+		if ref.WorkspacePath == "" || ref.WorkspaceBranch == "" || ref.External.Kind != "orca_supervised" || ref.External.RuntimeID == "" || ref.External.OrchestrationRun == "" || ref.External.Task == "" || ref.External.Dispatch == "" || ref.External.ExecutionHost == "" || ref.External.WorktreeID == "" {
+			return errors.New("supervised Orca execution binding lacks exact runtime/Run/Task/Dispatch/host/worktree identity")
 		}
 	default:
 		return errors.New("unsupported backend/protocol binding")
@@ -753,8 +769,8 @@ func (b localExecutionBackend) StopExecution(ctx context.Context, ref ExecutionR
 func (b localExecutionBackend) DetachObservation(ctx context.Context, w *Worker) error {
 	return w.detachLocalObservation(ctx)
 }
-func (b localExecutionBackend) SettleResources(context.Context, ExecutionRef, string) ([]string, error) {
-	return nil, unsupported("SettleResources")
+func (b localExecutionBackend) SettleResources(context.Context, ExecutionRef, string) (SettlementReceipt, error) {
+	return SettlementReceipt{}, unsupported("SettleResources")
 }
 func reconcileRecordedOperation(ctx context.Context, root string, expected Operation) (Operation, error) {
 	if err := ctx.Err(); err != nil {
@@ -1090,8 +1106,8 @@ func (b orcaTerminalBackend) DetachObservation(ctx context.Context, w *Worker) e
 		return ctx.Err()
 	}
 }
-func (b orcaTerminalBackend) SettleResources(context.Context, ExecutionRef, string) ([]string, error) {
-	return nil, unsupported("SettleResources")
+func (b orcaTerminalBackend) SettleResources(context.Context, ExecutionRef, string) (SettlementReceipt, error) {
+	return SettlementReceipt{}, unsupported("SettleResources")
 }
 func (b orcaTerminalBackend) ReconcileOperation(ctx context.Context, op Operation) (Operation, error) {
 	return reconcileRecordedOperation(ctx, b.config.RunDir, op)
@@ -1107,6 +1123,9 @@ func capabilityReport(backend BackendKind, protocol ExecutionProtocol, target Ex
 	return CapabilityReport{Version: 1, Backend: backend, Protocol: protocol, Target: target, Agent: agent, PlatformVersion: version, CheckedAt: now(), Capabilities: caps}
 }
 func backendFor(c Config, source BeadsContext) ExecutionBackend {
+	if c.hostName() == "orca_supervised" {
+		return orcaSupervisedBackend{config: c}
+	}
 	if c.hostName() == "orca" {
 		return orcaTerminalBackend{config: c}
 	}
@@ -1120,6 +1139,13 @@ func cloneRun(r Run) Run {
 }
 func agentFor(c Config) AgentSpec { return AgentSpec{Name: c.agentName()} }
 func targetFor(c Config) ExecutionTarget {
+	if c.hostName() == "orca_supervised" {
+		supervised := c.Orca.Supervised
+		if supervised == nil {
+			return ExecutionTarget{}
+		}
+		return ExecutionTarget{ID: "orca-supervised:" + supervised.ConnectionID, ConnectionID: supervised.ConnectionID, ExternalRuntime: supervised.EnvironmentID}
+	}
 	if c.hostName() == "orca" {
 		return ExecutionTarget{ID: "orca:" + digestValue(struct {
 			Executable string
@@ -1182,7 +1208,7 @@ func (s *Service) inspectRunProcess(run *Run) string {
 		if ref.External != *run.Process || ref.Backend == "" || ref.Protocol == "" || ref.Target.ID == "" {
 			return "execution binding conflicts with runtime identity"
 		}
-		if ref.Target != targetFor(s.Config) {
+		if ref.Protocol == ProtocolOrcaSupervised && !sameSupervisedBaseTarget(ref.Target, targetFor(s.Config)) || ref.Protocol != ProtocolOrcaSupervised && ref.Target != targetFor(s.Config) {
 			return "execution target changed; refusing to inspect through a replacement backend connection"
 		}
 		backend := backendFor(s.Config, BeadsContext{})

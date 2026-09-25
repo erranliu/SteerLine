@@ -1,0 +1,439 @@
+{
+  "captured_at": "2026-09-25T02:12:00Z",
+  "run_id": "run_27b254892811",
+  "task_id": "task_8b8d3383dfb8",
+  "dispatch_id": "ctx_86305e9f0e43",
+  "check_all": {
+    "id": "88effb74-75de-46c0-a9fa-750bd9394133",
+    "ok": true,
+    "result": {
+      "messages": [
+        {
+          "id": "relay_2d42f17831fa",
+          "run_id": "run_27b254892811",
+          "delivery_contract": "current_delivery",
+          "from_handle": "dispatch:ctx_86305e9f0e43",
+          "to_handle": "run:run_27b254892811",
+          "subject": "Prepare evidence submitted",
+          "body": "Verified the prepare worktree and submitted its MinimalStepResultEnvelope as an accepted status payload. It is clean at the fixed base on the expected origin and branch, with the base confirmed as an ancestor. No edits or further prepare work remain; implementation and later workflow steps remain outside this dispatch.",
+          "type": "worker_done",
+          "priority": "normal",
+          "thread_id": null,
+          "payload": "{\"taskId\":\"task_8b8d3383dfb8\",\"dispatchId\":\"ctx_86305e9f0e43\",\"outcome\":\"succeeded\"}",
+          "created_at": "2026-09-25T02:11:42Z",
+          "delivered_at": null
+        },
+        {
+          "id": "relay_a73b032a6505",
+          "run_id": "run_27b254892811",
+          "delivery_contract": "current_delivery",
+          "from_handle": "dispatch:ctx_86305e9f0e43",
+          "to_handle": "run:run_27b254892811",
+          "subject": "prepare evidence",
+          "body": "",
+          "type": "status",
+          "priority": "normal",
+          "thread_id": null,
+          "payload": "{\"taskId\":\"task_8b8d3383dfb8\",\"dispatchId\":\"ctx_86305e9f0e43\",\"remote_codex_version\":\"codex-cli 0.156.1\",\"step_result\":{\"schema_version\":1,\"project_identity\":\"c:\\\\users\\\\lmas1\\\\appdata\\\\local\\\\temp\\\\testsupervisedorcarealprepareroundtrip2635824080\\\\001\\\\local-identity\\\\.git\",\"task_id\":\"remote-probe-b556ff7aee\",\"workflow_run_id\":\"b556ff7aeea76e1703cdac9367088d7a\",\"execution_id\":\"a4045812e221ad7baae75a57d485a841\",\"attempt_id\":\"f3344ff626a94b877a289accb64afad2\",\"result\":{\"step_id\":\"prepare\",\"succeeded\":true,\"input_revision\":\"0028407ffbbcf9ad4139ff63720311a6e3fd0a1f\",\"result_id\":\"prepare-294f2bcb766e45f79c8c856a7a7b32a4\",\"prerequisite_result_ids\":[],\"workspace\":{\"repository\":\"c:\\\\users\\\\lmas1\\\\appdata\\\\local\\\\temp\\\\testsupervisedorcarealprepareroundtrip2635824080\\\\001\\\\local-identity\\\\.git\",\"worktree\":\"C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-b556ff7aeea7\",\"branch\":\"erranliu/steerline-b556ff7aeea7\",\"base\":\"0028407ffbbcf9ad4139ff63720311a6e3fd0a1f\",\"head\":\"0028407ffbbcf9ad4139ff63720311a6e3fd0a1f\",\"dirty\":false,\"verified_at\":\"2026-09-25T02:09:12Z\"},\"base_ancestor\":true}}}",
+          "created_at": "2026-09-25T02:11:27Z",
+          "delivered_at": null
+        },
+        {
+          "id": "relay_47d5be98d502",
+          "run_id": "run_27b254892811",
+          "delivery_contract": "current_delivery",
+          "from_handle": "dispatch:ctx_f5d73a1390b9",
+          "to_handle": "run:run_27b254892811",
+          "subject": "prepare verified",
+          "body": "I verified the isolated worktree and sent the prepare status payload with the required workspace evidence. It is clean at the fixed base commit, with the expected origin and ancestry, and codex-cli is exactly 0.156.1. No edits were made; no further prepare work remains.",
+          "type": "worker_done",
+          "priority": "normal",
+          "thread_id": null,
+          "payload": "{\"taskId\":\"task_1e04521e91de\",\"dispatchId\":\"ctx_f5d73a1390b9\",\"outcome\":\"succeeded\"}",
+          "created_at": "2026-09-25T02:03:08Z",
+          "delivered_at": null
+        },
+        {
+          "id": "relay_5712f1d8fe7d",
+          "run_id": "run_27b254892811",
+          "delivery_contract": "current_delivery",
+          "from_handle": "dispatch:ctx_f5d73a1390b9",
+          "to_handle": "run:run_27b254892811",
+          "subject": "prepare evidence verified",
+          "body": "",
+          "type": "status",
+          "priority": "normal",
+          "thread_id": null,
+          "payload": "{\"taskId\":\"task_1e04521e91de\",\"dispatchId\":\"ctx_f5d73a1390b9\",\"remote_codex_version\":\"codex-cli 0.156.1\",\"step_result\":{\"schema_version\":1,\"project_identity\":\"c:\\\\users\\\\lmas1\\\\appdata\\\\local\\\\temp\\\\testsupervisedorcarealprepareroundtrip709232613\\\\001\\\\local-identity\\\\.git\",\"task_id\":\"remote-probe-2fe57d67e6\",\"workflow_run_id\":\"2fe57d67e6b36cf7e718db6344295cb6\",\"execution_id\":\"6f573e1e7060a18b20b91acde673d2e8\",\"attempt_id\":\"79a487197c8031329af9cdf1d46ec914\",\"result\":{\"step_id\":\"prepare\",\"succeeded\":true,\"input_revision\":\"0028407ffbbcf9ad4139ff63720311a6e3fd0a1f\",\"result_id\":\"b01aac8e-59b5-4848-b8be-31610bc7f820\",\"prerequisite_result_ids\":[],\"workspace\":{\"repository\":\"c:\\\\users\\\\lmas1\\\\appdata\\\\local\\\\temp\\\\testsupervisedorcarealprepareroundtrip709232613\\\\001\\\\local-identity\\\\.git\",\"worktree\":\"C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-2fe57d67e6b3\",\"branch\":\"erranliu/steerline-2fe57d67e6b3\",\"base\":\"0028407ffbbcf9ad4139ff63720311a6e3fd0a1f\",\"head\":\"0028407ffbbcf9ad4139ff63720311a6e3fd0a1f\",\"dirty\":false,\"verified_at\":\"2026-09-25T02:02:06Z\"},\"worktree_id\":\"09e35751-6517-4e7c-ae20-178ed0e90000::C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-2fe57d67e6b3\",\"new_top_level_worktree\":true,\"remote_repository_selector\":\"id:09e35751-6517-4e7c-ae20-178ed0e90000\",\"repository_id\":\"09e35751-6517-4e7c-ae20-178ed0e90000\",\"origin\":\"https://github.com/erranliu/SteerlineTest.git\",\"origin_verified\":true,\"initial_head_verified\":true,\"clean_status_verified\":true,\"base_ancestor\":true}}}",
+          "created_at": "2026-09-25T02:02:34Z",
+          "delivered_at": null
+        },
+        {
+          "id": "relay_0fd4735497d3",
+          "run_id": "run_27b254892811",
+          "delivery_contract": "current_delivery",
+          "from_handle": "dispatch:ctx_7a542352e61e",
+          "to_handle": "run:run_27b254892811",
+          "subject": "Prepare verified",
+          "body": "I verified the new top-level worktree against the fixed remote and base commit. Its origin matches, HEAD equals the base, its status is clean, and the base is an ancestor; the required status payload was accepted by Orca. No files were changed, and no further prepare work remains.",
+          "type": "worker_done",
+          "priority": "normal",
+          "thread_id": null,
+          "payload": "{\"taskId\":\"task_365b68f08464\",\"dispatchId\":\"ctx_7a542352e61e\",\"outcome\":\"succeeded\"}",
+          "created_at": "2026-09-25T01:51:48Z",
+          "delivered_at": null
+        },
+        {
+          "id": "relay_1b7db747a041",
+          "run_id": "run_27b254892811",
+          "delivery_contract": "current_delivery",
+          "from_handle": "dispatch:ctx_7a542352e61e",
+          "to_handle": "run:run_27b254892811",
+          "subject": "Prepare evidence: clean remote worktree",
+          "body": "{\"taskId\":\"task_365b68f08464\",\"dispatchId\":\"ctx_7a542352e61e\",\"remote_codex_version\":\"codex-cli 0.156.1\",\"step_result\":{\"schema_version\":1,\"project_identity\":\"c:\\\\users\\\\lmas1\\\\appdata\\\\local\\\\temp\\\\testsupervisedorcarealprepareroundtrip26854654\\\\001\\\\local-identity\\\\.git\",\"task_id\":\"remote-probe-20c94afe46\",\"workflow_run_id\":\"20c94afe46708e262b93c2f52369aafb\",\"execution_id\":\"d29e59d8d98e861f329bcd9040645fbc\",\"attempt_id\":\"e2271775f31ac3da9377d952a34ddfc0\",\"result\":{\"step_id\":\"prepare\",\"succeeded\":true,\"input_revision\":\"0028407ffbbcf9ad4139ff63720311a6e3fd0a1f\",\"result_id\":\"38185284-3bb1-4d0f-8373-777914952a2f\",\"prerequisite_result_ids\":[],\"workspace\":{\"repository\":\"c:\\\\users\\\\lmas1\\\\appdata\\\\local\\\\temp\\\\testsupervisedorcarealprepareroundtrip26854654\\\\001\\\\local-identity\\\\.git\",\"worktree\":\"C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-20c94afe4670\",\"branch\":\"erranliu/steerline-20c94afe4670\",\"base\":\"0028407ffbbcf9ad4139ff63720311a6e3fd0a1f\",\"head\":\"0028407ffbbcf9ad4139ff63720311a6e3fd0a1f\",\"dirty\":false,\"verified_at\":\"2026-09-25T01:51:21Z\"},\"worktree_id\":\"09e35751-6517-4e7c-ae20-178ed0e90000::C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-20c94afe4670\",\"origin\":\"https://github.com/erranliu/SteerlineTest.git\",\"origin_verified\":true,\"head_matches_base\":true,\"clean_status\":true,\"base_ancestor\":true}}}",
+          "type": "status",
+          "priority": "normal",
+          "thread_id": null,
+          "payload": "{\"taskId\":\"task_365b68f08464\",\"dispatchId\":\"ctx_7a542352e61e\"}",
+          "created_at": "2026-09-25T01:51:28Z",
+          "delivered_at": null
+        },
+        {
+          "id": "relay_533a2a8a04b4",
+          "run_id": "run_27b254892811",
+          "delivery_contract": "current_delivery",
+          "from_handle": "dispatch:ctx_06aa1ed609b9",
+          "to_handle": "run:run_27b254892811",
+          "subject": "Prepare probe failed: pwsh unavailable",
+          "body": "I verified the assigned worktree at C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-d03357b77d2c: origin matches the fixed remote, HEAD equals the fixed base, status is clean, and the base is an ancestor. The prepare evidence was accepted in the status payload and no repository files were changed. PowerShell 7.6.6 (pwsh.exe) is unavailable in this environment, so I am reporting the dispatch as failed per the coordinator's instruction.",
+          "type": "worker_done",
+          "priority": "normal",
+          "thread_id": null,
+          "payload": "{\"taskId\":\"task_085d121bfb32\",\"dispatchId\":\"ctx_06aa1ed609b9\",\"outcome\":\"failed\"}",
+          "created_at": "2026-09-25T01:28:26Z",
+          "delivered_at": null
+        },
+        {
+          "id": "relay_9778d87343ca",
+          "run_id": "run_27b254892811",
+          "delivery_contract": "current_delivery",
+          "from_handle": "dispatch:ctx_06aa1ed609b9",
+          "to_handle": "run:run_27b254892811",
+          "subject": "prepare evidence",
+          "body": "",
+          "type": "status",
+          "priority": "normal",
+          "thread_id": null,
+          "payload": "{\"taskId\":\"task_085d121bfb32\",\"dispatchId\":\"ctx_06aa1ed609b9\",\"remote_codex_version\":\"codex-cli\\u00200.156.1\",\"step_result\":{\"schema_version\":1,\"project_identity\":\"c:\\\\users\\\\lmas1\\\\appdata\\\\local\\\\temp\\\\testsupervisoredcarealprepareroundtrip2013139722\\\\001\\\\local-identity\\\\.git\",\"task_id\":\"remote-probe-d03357b77d\",\"workflow_run_id\":\"d03357b77d2cb62ea2caa41275047d7f\",\"execution_id\":\"9871c152d7a8e3c02c3e2440c7a3bf55\",\"attempt_id\":\"06c1ef519838d0e985579b84bb49fd92\",\"result\":{\"step_id\":\"prepare\",\"succeeded\":true,\"input_revision\":\"0028407ffbbcf9ad4139ff63720311a6e3fd0a1f\",\"result_id\":\"c44cd8a1-1c78-492a-a04f-55c93a11d17e\",\"prerequisite_result_ids\":[],\"workspace\":{\"repository\":\"c:\\\\users\\\\lmas1\\\\appdata\\\\local\\\\temp\\\\testsupervisoredcarealprepareroundtrip2013139722\\\\001\\\\local-identity\\\\.git\",\"worktree\":\"C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-d03357b77d2c\",\"branch\":\"erranliu/steerline-d03357b77d2c\",\"base\":\"0028407ffbbcf9ad4139ff63720311a6e3fd0a1f\",\"head\":\"0028407ffbbcf9ad4139ff63720311a6e3fd0a1f\",\"dirty\":false,\"verified_at\":\"2026-09-25T01:18:03Z\"},\"worktree_id\":\"09e35751-6517-4e7c-ae20-178ed0e90000::C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-d03357b77d2c\",\"worktree_is_new_top_level\":true,\"origin\":\"https://github.com/erranliu/SteerlineTest.git\",\"origin_verified\":true,\"initial_head_matches_base\":true,\"clean\":true,\"base_ancestor\":true}}}",
+          "created_at": "2026-09-25T01:27:02Z",
+          "delivered_at": null
+        },
+        {
+          "id": "relay_1b580d692d16",
+          "run_id": "run_27b254892811",
+          "delivery_contract": "current_delivery",
+          "from_handle": "dispatch:ctx_ab202aad8f4f",
+          "to_handle": "run:run_27b254892811",
+          "subject": "R18 verify succeeded",
+          "body": "I verified the exact assigned worktree, origin, branch, initial and final HEAD, fixed-base ancestry, clean status, marker content, and commit file list without changing files. Every read-only identity check passed, the output revision is unchanged at 04ad46d30a156e81ad2d48fa522e8fb57eb6a558, and the actual Codex CLI version is 0.156.1. Nothing remains for this verify step; this reports protocol identity only and makes no claim of SteerLine Spec03 completion.",
+          "type": "worker_done",
+          "priority": "normal",
+          "thread_id": null,
+          "payload": "{\"taskId\":\"task_1816b63dd3ab\",\"dispatchId\":\"ctx_ab202aad8f4f\",\"outcome\":\"succeeded\"}",
+          "created_at": "2026-09-24T23:13:48Z",
+          "delivered_at": null
+        },
+        {
+          "id": "relay_dae93d153776",
+          "run_id": "run_27b254892811",
+          "delivery_contract": "current_delivery",
+          "from_handle": "dispatch:ctx_ab202aad8f4f",
+          "to_handle": "run:run_27b254892811",
+          "subject": "R18 verify passed",
+          "body": "{step_id:verify,input_revision:04ad46d30a156e81ad2d48fa522e8fb57eb6a558,output_revision:04ad46d30a156e81ad2d48fa522e8fb57eb6a558,taskId:task_1816b63dd3ab,dispatchId:ctx_ab202aad8f4f,repository:https://github.com/erranliu/SteerlineTest.git,worktree_id:09e35751-6517-4e7c-ae20-178ed0e90000::C:/Users/liuming/orca/workspaces/SteerlineTest/spec03-probe-1-4-family-run27b254,worktree_identity:wt2:local:1c534912-2935-4c0d-ad4f-b384c63f29dd,worktree_path:C:/Users/liuming/orca/workspaces/SteerlineTest/spec03-probe-1-4-family-run27b254,branch:erranliu/spec03-probe-1-4-family-run27b254,fixed_base:0028407ffbbcf9ad4139ff63720311a6e3fd0a1f,initial_head:04ad46d30a156e81ad2d48fa522e8fb57eb6a558,final_head:04ad46d30a156e81ad2d48fa522e8fb57eb6a558,initial_dirty:false,initial_dirty_facts:git status porcelain empty,final_dirty:false,final_dirty_facts:git status porcelain empty,fixed_base_ancestor:true,marker_file:steerline-spec03-probe.txt,marker_content:steerline-1.4-family-2026-09-25-run27b254892811,commit_file_list:[steerline-spec03-probe.txt],result_id:r18-verify-task_1816b63dd3ab-04ad46d3,codex_version:codex-cli 0.156.1,files_modified:[],files_changed:false,protocol_identity_only:true,claims_spec03_completion:false,result:passed}",
+          "type": "status",
+          "priority": "normal",
+          "thread_id": null,
+          "payload": "{\"taskId\":\"task_1816b63dd3ab\",\"dispatchId\":\"ctx_ab202aad8f4f\"}",
+          "created_at": "2026-09-24T23:13:39Z",
+          "delivered_at": null
+        },
+        {
+          "id": "relay_afb6055196e4",
+          "run_id": "run_27b254892811",
+          "delivery_contract": "current_delivery",
+          "from_handle": "dispatch:ctx_ab944e79255b",
+          "to_handle": "run:run_27b254892811",
+          "subject": "Spec03 protocol acceptance probe succeeded",
+          "body": "Implemented step_id=implement for taskId=task_bef3d6929fa4 and dispatchId=ctx_ab944e79255b in repository origin=https://github.com/erranliu/SteerlineTest.git, repo_id=09e35751-6517-4e7c-ae20-178ed0e90000, worktree_id=09e35751-6517-4e7c-ae20-178ed0e90000::C:/Users/liuming/orca/workspaces/SteerlineTest/spec03-probe-1-4-family-run27b254, path=C:/Users/liuming/orca/workspaces/SteerlineTest/spec03-probe-1-4-family-run27b254, branch=erranliu/spec03-probe-1-4-family-run27b254, with fixed_base=0028407ffbbcf9ad4139ff63720311a6e3fd0a1f, input_revision=initial_head=0028407ffbbcf9ad4139ff63720311a6e3fd0a1f, initial_dirty=false, and codex-cli 0.156.1. Created and committed only steerline-spec03-probe.txt containing exactly steerline-1.4-family-2026-09-25-run27b254892811 as commit output_revision=final_head=04ad46d30a156e81ad2d48fa522e8fb57eb6a558 with parent=fixed_base, final_dirty=false, base_is_ancestor=true, result_id=run_27b254892811, and files_modified=steerline-spec03-probe.txt. All requested verifications passed, and no work remains for this protocol probe, which does not complete Steerline implementation.",
+          "type": "worker_done",
+          "priority": "normal",
+          "thread_id": null,
+          "payload": "{\"taskId\":\"task_bef3d6929fa4\",\"dispatchId\":\"ctx_ab944e79255b\",\"outcome\":\"succeeded\",\"filesModified\":[\"steerline-spec03-probe.txt\"]}",
+          "created_at": "2026-09-24T23:04:37Z",
+          "delivered_at": null
+        },
+        {
+          "id": "relay_69d2e117fc12",
+          "run_id": "run_27b254892811",
+          "delivery_contract": "current_delivery",
+          "from_handle": "dispatch:ctx_ab944e79255b",
+          "to_handle": "run:run_27b254892811",
+          "subject": "Spec03 protocol probe committed and verified",
+          "body": "{step_id:implement,input_revision:0028407ffbbcf9ad4139ff63720311a6e3fd0a1f,output_revision:04ad46d30a156e81ad2d48fa522e8fb57eb6a558,taskId:task_bef3d6929fa4,dispatchId:ctx_ab944e79255b,result_id:run_27b254892811,repository:{origin:https://github.com/erranliu/SteerlineTest.git,repo_id:09e35751-6517-4e7c-ae20-178ed0e90000},worktree_id:09e35751-6517-4e7c-ae20-178ed0e90000::C:/Users/liuming/orca/workspaces/SteerlineTest/spec03-probe-1-4-family-run27b254,worktree_path:C:/Users/liuming/orca/workspaces/SteerlineTest/spec03-probe-1-4-family-run27b254,branch:erranliu/spec03-probe-1-4-family-run27b254,fixed_base:0028407ffbbcf9ad4139ff63720311a6e3fd0a1f,initial_head:0028407ffbbcf9ad4139ff63720311a6e3fd0a1f,initial_dirty:false,final_head:04ad46d30a156e81ad2d48fa522e8fb57eb6a558,final_dirty:false,base_is_ancestor:true,codex_cli_version:codex-cli 0.156.1,files_modified:[steerline-spec03-probe.txt],file_content:steerline-1.4-family-2026-09-25-run27b254892811,commit_files:[steerline-spec03-probe.txt]}",
+          "type": "status",
+          "priority": "normal",
+          "thread_id": null,
+          "payload": "{\"taskId\":\"task_bef3d6929fa4\",\"dispatchId\":\"ctx_ab944e79255b\",\"filesModified\":[\"steerline-spec03-probe.txt\"]}",
+          "created_at": "2026-09-24T23:03:51Z",
+          "delivered_at": null
+        },
+        {
+          "id": "relay_a2dec1d3c107",
+          "run_id": "run_27b254892811",
+          "delivery_contract": "current_delivery",
+          "from_handle": "dispatch:ctx_2c01b18f72df",
+          "to_handle": "run:run_27b254892811",
+          "subject": "Failed pre-edit verification: fixed base missing",
+          "body": "I inspected the assigned worktree and recorded its ID, repository identity, branch, initial HEAD, clean state, and Codex CLI version 0.156.1 without changing files. The fixed base was not present in the Dispatch context or available via Orca lookup, so the required pre-edit verification failed. No marker file was created or commit made; HEAD remains 0028407ffbbcf9ad4139ff63720311a6e3fd0a1f and the worktree remains clean.",
+          "type": "worker_done",
+          "priority": "normal",
+          "thread_id": null,
+          "payload": "{\"taskId\":\"task_fcba288b591e\",\"dispatchId\":\"ctx_2c01b18f72df\",\"outcome\":\"failed\"}",
+          "created_at": "2026-09-24T22:55:39Z",
+          "delivered_at": null
+        },
+        {
+          "id": "relay_9f6b5c4fcf35",
+          "run_id": "run_27b254892811",
+          "delivery_contract": "current_delivery",
+          "from_handle": "dispatch:ctx_2c01b18f72df",
+          "to_handle": "run:run_27b254892811",
+          "subject": "implement verification failed: fixed base missing",
+          "body": "{step_id:implement,input_revision:0028407ffbbcf9ad4139ff63720311a6e3fd0a1f,output_revision:0028407ffbbcf9ad4139ff63720311a6e3fd0a1f,result_id:task_fcba288b591e-ctx_2c01b18f72df,worktree_id:09e35751-6517-4e7c-ae20-178ed0e90000::C:/Users/liuming/orca/workspaces/SteerlineTest/spec03-probe-1-4-family-run27b254,worktree_path:C:/Users/liuming/orca/workspaces/SteerlineTest/spec03-probe-1-4-family-run27b254,repository_identity:{git_root:C:/Users/liuming/orca/workspaces/SteerlineTest/spec03-probe-1-4-family-run27b254,origin:https://github.com/erranliu/SteerlineTest.git,git_directory:erranliu/spec03-probe-1-4-family-run27b254},branch:erranliu/spec03-probe-1-4-family-run27b254,fixed_base:null,initial_head:0028407ffbbcf9ad4139ff63720311a6e3fd0a1f,final_head:0028407ffbbcf9ad4139ff63720311a6e3fd0a1f,initial_dirty:false,final_dirty:false,codex_cli_version:codex-cli 0.156.1,files_modified:[],outcome:failed,error:Fixed base was not supplied and was not available from Orca dispatch context; no edits made.}",
+          "type": "status",
+          "priority": "normal",
+          "thread_id": null,
+          "payload": "{\"taskId\":\"task_fcba288b591e\",\"dispatchId\":\"ctx_2c01b18f72df\",\"phase\":\"verification-failed\"}",
+          "created_at": "2026-09-24T22:55:20Z",
+          "delivered_at": null
+        }
+      ],
+      "count": 14,
+      "acknowledged": null,
+      "runId": "run_27b254892811"
+    },
+    "_meta": {
+      "runtimeId": "7ccb02b0-aef2-4124-8db8-0ec063155b12"
+    }
+  },
+  "worker_show": {
+    "id": "a5394cba-b75e-4d3b-a2f3-d9fe503e415b",
+    "ok": true,
+    "result": {
+      "dispatch": {
+        "id": "ctx_86305e9f0e43",
+        "runId": "run_27b254892811",
+        "taskId": "task_8b8d3383dfb8",
+        "task_id": "task_8b8d3383dfb8",
+        "contractVersion": 1,
+        "assigneeHandle": null,
+        "assigneePaneKey": null,
+        "processIncarnation": null,
+        "capabilityRevokedAt": "2026-09-25T02:11:42.514Z",
+        "retryOfDispatchId": null,
+        "creatorDispatchId": null,
+        "hostScope": null,
+        "status": "completed",
+        "failureCount": 0,
+        "lastFailure": null,
+        "terminationReason": null,
+        "depth": 1,
+        "dispatchedAt": "2026-09-25 02:07:00",
+        "completedAt": "2026-09-25T02:11:42.514Z",
+        "createdAt": "2026-09-25 02:07:00",
+        "lastHeartbeatAt": null
+      },
+      "worker": {
+        "dispatchId": "ctx_86305e9f0e43",
+        "runtimeEpoch": "7ccb02b0-aef2-4124-8db8-0ec063155b12",
+        "state": "succeeded",
+        "stage": "released",
+        "worktreeId": "09e35751-6517-4e7c-ae20-178ed0e90000::C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-b556ff7aeea7",
+        "agentTerminalHandle": null,
+        "setupState": "not_configured",
+        "effects": [
+          {
+            "kind": "worktree",
+            "action": "created_top_level",
+            "id": "09e35751-6517-4e7c-ae20-178ed0e90000::C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-b556ff7aeea7"
+          },
+          {
+            "kind": "terminal",
+            "role": "agent",
+            "action": "created",
+            "id": "term_ac637180-c3ed-4ce9-8814-091f833b13ea",
+            "tabId": "54d0d370-8494-4979-897b-4de5dcd7e214",
+            "leafId": "0f25ebc7-dc2f-4bbc-a664-90af46ae197a"
+          },
+          {
+            "kind": "setup",
+            "action": "run",
+            "requested": "run",
+            "effective": "run",
+            "source": "orchestration_default",
+            "hookFound": false,
+            "startupPolicy": "start-immediately",
+            "state": "not_configured"
+          },
+          {
+            "kind": "dispatch_input",
+            "role": "agent",
+            "id": "term_ac637180-c3ed-4ce9-8814-091f833b13ea",
+            "state": "accepted"
+          }
+        ],
+        "residualResources": [],
+        "startOptions": {
+          "on": "bed55de0-6d7d-497e-b1d5-3abab256b2ee",
+          "serverName": "home",
+          "worktree": "new-top-level",
+          "name": "steerline-b556ff7aeea7",
+          "repo": "id:09e35751-6517-4e7c-ae20-178ed0e90000",
+          "baseBranch": "0028407ffbbcf9ad4139ff63720311a6e3fd0a1f",
+          "terminal": null,
+          "agent": "codex",
+          "launch": {
+            "requested": {
+              "agent": "codex",
+              "model": "gpt-6-luna",
+              "effort": "high"
+            },
+            "effective": null
+          },
+          "timeoutMs": 60000,
+          "setup": "run",
+          "setupSource": "orchestration_default"
+        },
+        "lastError": null,
+        "createdAt": "2026-09-25 02:07:00",
+        "updatedAt": "2026-09-25T02:11:48.222Z"
+      },
+      "projection": {
+        "id": "ctx_86305e9f0e43",
+        "dispatchId": "ctx_86305e9f0e43",
+        "taskId": "task_8b8d3383dfb8",
+        "runId": "run_27b254892811",
+        "role": "worker",
+        "parent": null,
+        "provider": null,
+        "host": {
+          "kind": "remote",
+          "id": "bed55de0-6d7d-497e-b1d5-3abab256b2ee"
+        },
+        "workspace": {
+          "id": "09e35751-6517-4e7c-ae20-178ed0e90000::C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-b556ff7aeea7",
+          "kind": "folder_or_worktree"
+        },
+        "stage": {
+          "worker": "succeeded",
+          "dispatch": "completed",
+          "detail": "released",
+          "activity": "unknown"
+        },
+        "outcome": "succeeded",
+        "liveness": {
+          "verdict": "exited",
+          "source": "execution_host"
+        },
+        "evidence": {
+          "durable": true,
+          "liveStatus": "unavailable",
+          "lastObservedAt": 1790302448667
+        },
+        "resource": {
+          "state": "absent",
+          "reason": "not_materialized"
+        },
+        "nextAction": {
+          "kind": "none",
+          "argv": []
+        },
+        "attention": {
+          "categories": [
+            "root_completion"
+          ],
+          "requiresAction": false
+        }
+      },
+      "server": {
+        "environmentId": "bed55de0-6d7d-497e-b1d5-3abab256b2ee",
+        "name": "home"
+      },
+      "remoteRuntimeEpoch": "d05f52b9-4dbd-4656-a01b-000a9f266b84",
+      "terminal": {
+        "handle": "term_ac637180-c3ed-4ce9-8814-091f833b13ea",
+        "ptyId": "09e35751-6517-4e7c-ae20-178ed0e90000::C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-b556ff7aeea7@@6aee713b",
+        "incarnationId": "4051cd21-604c-427f-a114-6cf74d4cb94a",
+        "orphaned": true,
+        "worktreeId": "09e35751-6517-4e7c-ae20-178ed0e90000::C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-b556ff7aeea7",
+        "worktreePath": "C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-b556ff7aeea7",
+        "branch": "refs/heads/erranliu/steerline-b556ff7aeea7",
+        "tabId": "54d0d370-8494-4979-897b-4de5dcd7e214",
+        "leafId": "0f25ebc7-dc2f-4bbc-a664-90af46ae197a",
+        "title": "⠦ steerline-b556ff7aeea7",
+        "connected": false,
+        "writable": false,
+        "lastOutputAt": 1790302301906,
+        "preview": " payload was accepted. The worktree was clean at the fixed base, on the\nexpected origin and branch, with base ancestry confirmed. No files were changed.  › Ask Codex to do anything   GPT-6-Luna high · ~\\orca\\workspaces\\SteerlineTest\\steerline-b556ff7aeea7                     ⚠ 1 warning · f2 to view",
+        "exitCause": {
+          "kind": "operator_close"
+        },
+        "executionHostId": "local",
+        "paneRuntimeId": -1,
+        "rendererGraphEpoch": 0
+      },
+      "observation": {
+        "status": "exited",
+        "exactWorker": true
+      }
+    },
+    "_meta": {
+      "runtimeId": "7ccb02b0-aef2-4124-8db8-0ec063155b12"
+    }
+  },
+  "dispatch_messages": [
+    {
+      "id": "relay_2d42f17831fa",
+      "run_id": "run_27b254892811",
+      "delivery_contract": "current_delivery",
+      "from_handle": "dispatch:ctx_86305e9f0e43",
+      "to_handle": "run:run_27b254892811",
+      "subject": "Prepare evidence submitted",
+      "body": "Verified the prepare worktree and submitted its MinimalStepResultEnvelope as an accepted status payload. It is clean at the fixed base on the expected origin and branch, with the base confirmed as an ancestor. No edits or further prepare work remain; implementation and later workflow steps remain outside this dispatch.",
+      "type": "worker_done",
+      "priority": "normal",
+      "thread_id": null,
+      "payload": "{\"taskId\":\"task_8b8d3383dfb8\",\"dispatchId\":\"ctx_86305e9f0e43\",\"outcome\":\"succeeded\"}",
+      "created_at": "2026-09-25T02:11:42Z",
+      "delivered_at": null
+    },
+    {
+      "id": "relay_a73b032a6505",
+      "run_id": "run_27b254892811",
+      "delivery_contract": "current_delivery",
+      "from_handle": "dispatch:ctx_86305e9f0e43",
+      "to_handle": "run:run_27b254892811",
+      "subject": "prepare evidence",
+      "body": "",
+      "type": "status",
+      "priority": "normal",
+      "thread_id": null,
+      "payload": "{\"taskId\":\"task_8b8d3383dfb8\",\"dispatchId\":\"ctx_86305e9f0e43\",\"remote_codex_version\":\"codex-cli 0.156.1\",\"step_result\":{\"schema_version\":1,\"project_identity\":\"c:\\\\users\\\\lmas1\\\\appdata\\\\local\\\\temp\\\\testsupervisedorcarealprepareroundtrip2635824080\\\\001\\\\local-identity\\\\.git\",\"task_id\":\"remote-probe-b556ff7aee\",\"workflow_run_id\":\"b556ff7aeea76e1703cdac9367088d7a\",\"execution_id\":\"a4045812e221ad7baae75a57d485a841\",\"attempt_id\":\"f3344ff626a94b877a289accb64afad2\",\"result\":{\"step_id\":\"prepare\",\"succeeded\":true,\"input_revision\":\"0028407ffbbcf9ad4139ff63720311a6e3fd0a1f\",\"result_id\":\"prepare-294f2bcb766e45f79c8c856a7a7b32a4\",\"prerequisite_result_ids\":[],\"workspace\":{\"repository\":\"c:\\\\users\\\\lmas1\\\\appdata\\\\local\\\\temp\\\\testsupervisedorcarealprepareroundtrip2635824080\\\\001\\\\local-identity\\\\.git\",\"worktree\":\"C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-b556ff7aeea7\",\"branch\":\"erranliu/steerline-b556ff7aeea7\",\"base\":\"0028407ffbbcf9ad4139ff63720311a6e3fd0a1f\",\"head\":\"0028407ffbbcf9ad4139ff63720311a6e3fd0a1f\",\"dirty\":false,\"verified_at\":\"2026-09-25T02:09:12Z\"},\"base_ancestor\":true}}}",
+      "created_at": "2026-09-25T02:11:27Z",
+      "delivered_at": null
+    }
+  ],
+  "local_test_error": "step workspace receipt differs from center inspection",
+  "finding": "Structured status payload and strict step schema were accepted; remote worker_done succeeded and the exact Dispatch was released, but local path comparison used canonical(receipt) against a non-canonical Orca inspection path. Local comparison now canonicalizes both paths."
+}

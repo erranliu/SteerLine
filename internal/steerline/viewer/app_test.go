@@ -161,6 +161,35 @@ func TestViewerShowsTaskDetailAndTabs(t *testing.T) {
 	}
 }
 
+func TestViewerShowsMinimalWorkflowStageAndGateEvidence(t *testing.T) {
+	run := pendingRun()
+	run.WorkflowVersion = steerline.MinimalWorkflowVersion
+	run.ExecutionID = "execution-1"
+	run.Agent = "codex"
+	run.Backend = "orca"
+	run.Protocol = "orca_supervised"
+	rt := &steerline.Runtime{
+		Runs:         []*steerline.Run{run},
+		WorkflowRuns: []steerline.WorkflowRunRecord{{WorkflowRunID: run.RunID, Phase: "executing"}},
+		Executions:   []steerline.ExecutionRecord{{WorkflowRunID: run.RunID, ExecutionID: run.ExecutionID, CurrentStep: "verify", Status: "active", RepairRounds: 1, Target: steerline.ExecutionTarget{ID: "target-1", ConnectionID: "test-connection", OrchestrationRun: "orca-run-1", Dispatch: "dispatch-verify"}}},
+		Attempts: []steerline.StepAttemptRecord{
+			{ExecutionID: run.ExecutionID, StepID: "implement", AttemptNumber: 1, Status: "succeeded", ResultID: "implement-result"},
+			{ExecutionID: run.ExecutionID, StepID: "verify", AttemptNumber: 1, Status: "running"},
+		},
+	}
+	f := &fakeSource{runs: []*steerline.Run{run}, observations: []steerline.ObservationSnapshot{{State: steerline.SnapshotValid, SampledAt: time.Now(), Runtime: rt}}}
+	m := NewModel(steerline.Config{}, f, Options{})
+	m.width, m.height = 170, 50
+	obs := f.Snapshot()
+	updated, _ := m.Update(runsMsg{observation: obs})
+	view := updated.(Model).View()
+	for _, want := range []string{"workflow_phase", "executing", "current_step", "verify", "step_attempts", "implement#1=succeeded", "verify#1=running", "orchestration_run", "orca-run-1", "remote_cancellation", "unavailable"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("workflow stage or attempt evidence missing %q:\n%s", want, view)
+		}
+	}
+}
+
 func TestViewerLazyLoadsTaskDetailOnce(t *testing.T) {
 	f := &fakeSource{runs: []*steerline.Run{pendingRun()}}
 	m := newTestModel(f)
