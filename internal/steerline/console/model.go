@@ -45,6 +45,7 @@ type rowKind int
 const (
 	rowReady rowKind = iota
 	rowRun
+	rowNative
 )
 
 type consoleRow struct {
@@ -54,6 +55,7 @@ type consoleRow struct {
 	title     string
 	run       *steerline.Run
 	candidate *steerline.TaskCandidate
+	native    *steerline.NativeTaskDetail
 }
 
 type actionState struct {
@@ -378,6 +380,7 @@ func (m Model) readProject(index int) tea.Cmd {
 		return nil
 	}
 	ref := m.projects[index].ref
+	selectedTaskID := selectedNativeTaskID(m.projects[index])
 	generation := m.generation
 	m.projects[index].refreshID++
 	id := m.projects[index].refreshID
@@ -385,7 +388,7 @@ func (m Model) readProject(index int) tea.Cmd {
 	query := m.query
 	ctx := m.ctx
 	return func() tea.Msg {
-		return projectMsg{key: ref.Key, identity: ref.Identity, generation: generation, requestID: id, snapshot: query.ReadProject(ctx, ref)}
+		return projectMsg{key: ref.Key, identity: ref.Identity, generation: generation, requestID: id, snapshot: query.ReadProject(ctx, ref, selectedTaskID)}
 	}
 }
 
@@ -403,6 +406,24 @@ func (m Model) readActivity(index int, runID, executionID, attemptID, path, key 
 		batch, err := query.ReadActivity(ctx, ref, runID, executionID, attemptID, path, base)
 		return activityResultMsg{projectKey: ref.Key, identity: ref.Identity, key: key, generation: generation, base: base, batchActivity: batch.Activity, raw: batch.Raw, next: batch.Cursor, reset: batch.Reset, diagnostics: batch.Diagnostics, err: err}
 	}
+}
+
+func selectedNativeTaskID(state projectState) string {
+	if state.ref.Config.TaskAuthority != "native" {
+		return ""
+	}
+	if strings.HasPrefix(state.selectedKey, "task:") {
+		return strings.TrimPrefix(state.selectedKey, "task:")
+	}
+	if strings.HasPrefix(state.selectedKey, "run:") && state.snapshot.Observation.Runtime != nil {
+		runID := strings.TrimPrefix(state.selectedKey, "run:")
+		for _, run := range state.snapshot.Observation.Runtime.Runs {
+			if run != nil && run.RunID == runID {
+				return firstText(run.DomainTaskID, run.TaskID)
+			}
+		}
+	}
+	return ""
 }
 
 func (m Model) readConversation(index int, cursor, key, mode string) tea.Cmd {
@@ -910,6 +931,13 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		previousSelection := state.selectedKey
+		selectedTaskID := selectedNativeTaskID(*state)
+		if msg.snapshot.SelectedNative != nil && selectedTaskID != msg.snapshot.SelectedNative.TaskID {
+			msg.snapshot.SelectedNative = nil
+		}
+		if msg.snapshot.NativeTasks == nil && msg.snapshot.SelectedNative == nil && state.snapshot.SelectedNative != nil && selectedTaskID == state.snapshot.SelectedNative.TaskID {
+			msg.snapshot.SelectedNative = state.snapshot.SelectedNative
+		}
 		state.snapshot, state.snapshotLoaded = preserveLastGood(state.snapshot, msg.snapshot), true
 		state.lastRefresh = m.clock.Now()
 		rows := m.rows(index)
@@ -1358,6 +1386,12 @@ func preserveLastGood(previous, next ProjectSnapshot) ProjectSnapshot {
 	if next.Tasks == nil && previous.Tasks != nil {
 		next.Tasks = previous.Tasks
 	}
+	if next.NativeTasks == nil && previous.NativeTasks != nil {
+		next.NativeTasks = previous.NativeTasks
+		if next.NativeTaskError == "" {
+			next.NativeTaskError = "当前原生任务查询不可用；保留最近成功的只读快照"
+		}
+	}
 	if next.Domain == nil && previous.Domain != nil {
 		next.Domain = previous.Domain
 		if next.DomainError == "" {
@@ -1373,14 +1407,41 @@ func (m Model) rows(index int) []consoleRow {
 	}
 	state := &m.projects[index]
 	var rows []consoleRow
+	nativeByID := map[string]*steerline.NativeTaskDetail{}
+	if state.snapshot.NativeTasks != nil {
+		for i := range state.snapshot.NativeTasks.Tasks {
+			detail := &state.snapshot.NativeTasks.Tasks[i]
+			nativeByID[detail.TaskID] = detail
+		}
+	}
+	if state.snapshot.SelectedNative != nil {
+		detail := state.snapshot.SelectedNative
+		nativeByID[detail.TaskID] = detail
+	}
+	seenTasks := map[string]bool{}
 	if state.snapshot.Tasks != nil {
 		if filterAllows(state.filter, rowReady, nil) {
 			for i := range state.snapshot.Tasks.Tasks {
 				candidate := &state.snapshot.Tasks.Tasks[i]
-				row := consoleRow{key: "task:" + candidate.TaskID, kind: rowReady, taskID: candidate.TaskID, title: candidate.Title, candidate: candidate}
+				row := consoleRow{key: "task:" + candidate.TaskID, kind: rowReady, taskID: candidate.TaskID, title: candidate.Title, candidate: candidate, native: nativeByID[candidate.TaskID]}
 				rows = append(rows, row)
+				seenTasks[candidate.TaskID] = true
 			}
 		}
+	}
+	if state.filter == 0 && state.snapshot.NativeTasks != nil {
+		for i := range state.snapshot.NativeTasks.Tasks {
+			detail := &state.snapshot.NativeTasks.Tasks[i]
+			if seenTasks[detail.TaskID] {
+				continue
+			}
+			rows = append(rows, consoleRow{key: "task:" + detail.TaskID, kind: rowNative, taskID: detail.TaskID, title: detail.Title, native: detail})
+			seenTasks[detail.TaskID] = true
+		}
+	}
+	if state.filter == 0 && state.snapshot.SelectedNative != nil && state.selectedKey == "task:"+state.snapshot.SelectedNative.TaskID && !seenTasks[state.snapshot.SelectedNative.TaskID] {
+		detail := state.snapshot.SelectedNative
+		rows = append(rows, consoleRow{key: "task:" + detail.TaskID, kind: rowNative, taskID: detail.TaskID, title: detail.Title, native: detail})
 	}
 	if runtime := state.snapshot.Observation.Runtime; runtime != nil {
 		for _, run := range runtime.Runs {
@@ -1400,6 +1461,9 @@ func filterAllows(filter int, kind rowKind, run *steerline.Run) bool {
 	}
 	if kind == rowReady {
 		return filter == 1
+	}
+	if kind == rowNative {
+		return filter == 0
 	}
 	switch filter {
 	case 2:

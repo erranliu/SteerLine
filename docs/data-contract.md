@@ -4,7 +4,7 @@
 
 ## Native task query `native-tasks/v1`
 
-配置必须显式设为 `"task_authority":"native"`。`steerline task list/show/graph` 读取中心 SQLite 中的 native Task、固定契约、依赖、WorkflowRun 和交付；`task validate/create/discard` 与领取、派发控制、交付都通过中心命令事务完成。原生 worker 只收到 `native-task/v1` 固定上下文和当前步骤输入。新项目首次使用时初始化 native 项目权威，初始 `dispatch_mode=manual`、`dispatch_paused=true`；用户显式恢复派发后，local `project_steps` 才能领取任务。
+配置必须显式设为 `"task_authority":"native"`。`steerline task list/show/graph/export` 读取中心 SQLite 中的 native Task、固定契约、依赖、WorkflowRun 和交付；`task validate/create/discard` 与领取、派发控制、交付都通过中心命令事务完成。原生 worker 只收到 `native-task/v1` 固定上下文和当前步骤输入。新项目首次使用时初始化 native 项目权威，初始 `dispatch_mode=manual`、`dispatch_paused=true`；用户显式恢复派发后，配置的 `project_steps` 才能领取任务。
 
 只读 native 查询配置示例：[native-tasks.config.json](../examples/native-tasks.config.json)。省略 `run_dir`，让它按 Git common-dir 派生为本仓库唯一状态目录。
 
@@ -16,7 +16,11 @@ native 状态目录必须使用仓库唯一派生的 `STEERLINE_HOME/state/<repo
 
 `task discard -task-id <id> -request-id <id> -expected-version <n> -reason <text>` 先持久化绑定任务/运行/PR 的意图，再在数据库事务外核验精确 PR。合并状态不明或发布结果身份不完整时返回 `pending_verification` 并保留 Operation；真实未合并后才 CAS 为 discarded。已合并任务拒绝丢弃。依赖边、claim、运行和 task_id 保留；被丢弃的前置不会放行后继。本机仅使用已核验的固定 Stop 能力停止原 worker；停止后工作区通过精确 worktree/branch 身份单独清理。Gitea PR 使用固定 API 身份关闭；command provider 必须配置 `pr.close` 并返回 `closed_unmerged` 事实。每项清理回执在中心事务内持久化并移除对应 `cleanup_pending` 项。远端取消、停止回执不明或外部清理失败保留原身份和人工待办。已丢弃任务的精确 PR 后来确认合并时，只追加幂等的 `task.delivery.conflict` 事件，不生成 TaskDelivery。
 
-`task graph` 返回带相同数据库及 graph revision 的节点、边、交付来源、阻塞原因和一致性游标。关系读取只投影中心 SQLite 状态，不维护第二套图或复制依赖判定。
+`task graph` 返回 `native-task-graph/v1`，包含同一 SQLite 只读快照的任务标题/状态、前置方向边、阻塞、采样版本、过滤条件与边界。可用 `-status` 筛选状态，也可用 `-task-id <id> -direction upstream|downstream|both -depth <1..10>` 查询邻域；方向默认 `both`，深度默认 1，单次最多 500 个节点。中心任务始终作为锚点保留；状态筛选作用于显示集合，不会切断邻域遍历。截断结果在 `boundary.truncated`、`omitted_node_count`、`reasons` 和跨边界 `edges` 中说明省略部分；跨边界边最多列出 500 条，余量由 `omitted_boundary_edge_count` 标明。中心查询的省略节点数计算整个所选方向可达范围，不包含不连通的其他任务。丢弃任务仍在图中，其后继保留 `discarded_predecessor` 阻塞。
+
+未筛选的 `task graph -limit <n>` 或显式 `-cursor ""` 使用一致性分页；将返回的 `next_cursor` 传入下一次 `-cursor <token>`。游标绑定项目、数据库身份和采样版本，版本变化返回 `cursor_invalidated`。状态或邻域筛选使用单次有界结果和边界字段，不混用分页游标。
+
+`task export -format json -output <path>` 写入同一格式的单次关系快照；可用与 `task graph` 相同的状态和邻域筛选参数。完整图超过 500 个节点返回 `export_limit_exceeded`，筛选结果保留边界。JSON 使用 `native-task-graph/v1`，不是 `task-batch/v1` 创建输入。文件在目标目录原子发布；目标已存在时必须传 `-overwrite`，输出路径不能位于 native 状态目录。图查询和导出只打开已有数据库；输出失败不会修改任务数据库或既有导出文件。控制台从 QueryService 读取原生任务关系、固定规格引用和交付证据；离线视图显示采样时间，旧 Ready 候选仍不能作为开始许可。
 
 TaskContract 使用单个 Spec、单个配套 Plan、至少一个含验收章节的 Markdown 引用，以及只指向共享 constraint/protocol 文件的 `common_refs`。文件名不要求具有同一前缀，每个引用分别固定仓库相对路径、完整 commit 和该提交中普通文件 blob 字节的 SHA-256。验收引用不能再加入其他任务的 `.spec.md` / `.plan.md` 或固定文件的另一版本；配套关系和语义充分性由规格审阅负责。路径不能越界或是符号链接。规范摘要是 UTF-8、对象键排序、数组顺序不变、无多余空白的 JSON SHA-256；重复 JSON 键拒绝。契约内容从 Git commit blob 读取，工作区 CRLF 转换不改变核验结果。
 

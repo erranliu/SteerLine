@@ -31,9 +31,13 @@ type testQuerySource struct {
 	activity viewer.LogBatch
 	page     steerline.ConversationPage
 	body     steerline.ConversationBodyPage
+	selected string
 }
 
-func (q *testQuerySource) ReadProject(context.Context, ProjectRef) ProjectSnapshot { return q.snapshot }
+func (q *testQuerySource) ReadProject(_ context.Context, _ ProjectRef, selected string) ProjectSnapshot {
+	q.selected = selected
+	return q.snapshot
+}
 func (q *testQuerySource) ReadActivity(context.Context, ProjectRef, string, string, string, string, steerline.JournalCursor) (viewer.LogBatch, error) {
 	return q.activity, nil
 }
@@ -1230,7 +1234,7 @@ func TestLoadProjectsSupportsZeroPartialAndExplicitConfigs(t *testing.T) {
 
 func writeConsoleTestConfig(t *testing.T, path, repository, runDir string) {
 	t.Helper()
-	data, err := json.Marshal(map[string]string{"task_authority": "beads", "repository": repository, "branch": "main", "run_dir": runDir})
+	data, err := json.Marshal(map[string]string{"repository": repository, "branch": "main", "run_dir": runDir, "task_authority": "beads"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1303,6 +1307,95 @@ func TestLongTaskListKeepsSelectedRowInsideViewport(t *testing.T) {
 	lines := renderRows(m, m.projects[0], 80, 8)
 	if len(lines) > 8 || !strings.Contains(strings.Join(lines, "\n"), "task-40") {
 		t.Fatalf("selected task fell outside the visible list: %q", strings.Join(lines, "\n"))
+	}
+}
+
+func TestNativeTaskViewKeepsOffPageSelectionAndEscapesText(t *testing.T) {
+	now := time.Date(2026, 9, 25, 1, 0, 0, 0, time.UTC)
+	ref := testProject("native")
+	ref.Config.TaskAuthority = "native"
+	ref.Config.ExecutableTypes = []string{"task"}
+	snapshot := readySnapshot(ref, now)
+	snapshot.Tasks.Tasks = nil
+	for i := 1; i <= 501; i++ {
+		snapshot.Tasks.Tasks = append(snapshot.Tasks.Tasks, steerline.TaskCandidate{TaskID: fmt.Sprint(i), Title: "candidate"})
+	}
+	snapshot.NativeTasks = &steerline.NativeTaskPage{SampledAt: now, HasMore: true, Tasks: []steerline.NativeTaskDetail{{TaskRecord: steerline.TaskRecord{TaskID: "1", Title: "first", Status: "open"}}}}
+	snapshot.SelectedNative = &steerline.NativeTaskDetail{TaskRecord: steerline.TaskRecord{TaskID: "501", Title: "中文标题\x1b[2J\n伪造按钮\u202e<script>", Status: "open"}, Predecessors: []steerline.TaskDependencyStatus{{TaskID: "1", Status: "discarded", Blocker: "discarded_predecessor"}}}
+	snapshot.NativeTaskError = "只读取前 500 个任务；剩余任务不在此快照中"
+	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, &testControlClient{}, now)
+	m.projects[0].selectedKey = "task:501"
+	rows := m.rows(0)
+	if !rowExists(rows, "task:501") || m.selectedRow(0).native == nil {
+		t.Fatal("selected Ready task beyond the detail page lost its native detail")
+	}
+	lines := renderRows(m, m.projects[0], 80, 8)
+	if len(lines) > 8 || !strings.Contains(strings.Join(lines, "\n"), "501") {
+		t.Fatalf("selected task was hidden by truncation notices: %q", lines)
+	}
+	compact := renderRows(m, m.projects[0], 80, 3)
+	if len(compact) > 3 || !strings.Contains(strings.Join(compact, "\n"), "501") {
+		t.Fatalf("selected task was hidden in a small viewport: %q", compact)
+	}
+	detail := strings.Join(renderNativeTaskDetail(m.projects[0], *snapshot.SelectedNative), "\n")
+	if strings.ContainsRune(detail, '\x1b') || strings.ContainsRune(detail, '\u202e') || !strings.Contains(detail, "␛[2J\\n伪造按钮\\u202e") || !strings.Contains(detail, "discarded_predecessor") {
+		t.Fatalf("native detail rendered unsafe or incomplete text: %q", detail)
+	}
+	m.projects[0].refreshID = 1
+	updated, _ := m.Update(projectMsg{key: ref.Key, identity: ref.Identity, requestID: 1, snapshot: snapshot})
+	m = updated.(Model)
+	if m.projects[0].selectedKey != "task:501" {
+		t.Fatalf("refresh lost the stable task selection: %q", m.projects[0].selectedKey)
+	}
+	m.projects[0].refreshID = 2
+	updated, _ = m.Update(projectMsg{key: ref.Key, identity: ref.Identity, requestID: 2, snapshot: ProjectSnapshot{Connection: steerline.ServiceConnection{State: steerline.ConnectionOffline}, NativeTaskError: "database unavailable"}})
+	m = updated.(Model)
+	if m.projects[0].selectedKey != "task:501" || m.selectedRow(0) == nil || m.selectedRow(0).native == nil {
+		t.Fatal("offline refresh lost the selected task's last readable detail")
+	}
+	up := m.projects[0]
+	if valid, _ := candidateFreshness(ref, up.snapshot, now); valid {
+		t.Fatal("offline Ready data became a start permit")
+	}
+	if !strings.Contains(strings.Join(renderNativeTaskDetail(up, *snapshot.SelectedNative), "\n"), "离线只读快照") {
+		t.Fatal("offline native detail lost its sample label")
+	}
+	runSnapshot := snapshot
+	runSnapshot.Observation.Runtime.Runs = []*steerline.Run{{RunID: "run-501", TaskID: "501", DomainTaskID: "501", TaskStatus: "open", ExecutionStatus: "running"}}
+	m.projects[0].snapshot = runSnapshot
+	m.projects[0].selectedKey = "run:run-501"
+	if selectedNativeTaskID(m.projects[0]) != "501" {
+		t.Fatal("selected native run did not retain its task identity")
+	}
+	runDetail := strings.Join(renderDetail(m, m.projects[0], m.selectedRow(0), 120, 200), "\n")
+	if !strings.Contains(runDetail, "任务关系 · 中心只读快照") || !strings.Contains(runDetail, "discarded_predecessor") || !strings.Contains(runDetail, "任务状态：open") {
+		t.Fatalf("selected native run lost its task relationship: %q", runDetail)
+	}
+	querySource := &testQuerySource{snapshot: runSnapshot}
+	m.query = querySource
+	if cmd := m.readProject(0); cmd == nil {
+		t.Fatal("native run refresh did not request its task detail")
+	} else {
+		_ = cmd()
+	}
+	if querySource.selected != "501" {
+		t.Fatalf("native run detail query used task %q", querySource.selected)
+	}
+}
+
+func TestNativeCandidateSnapshotKeepsDispatchOrderBeyondDetailPage(t *testing.T) {
+	now := time.Now().UTC()
+	ref := testProject("native")
+	ref.Config.TaskAuthority = "native"
+	ref.Config.ExecutableTypes = []string{"task"}
+	connection := readySnapshot(ref, now).Connection
+	ready := steerline.NativeReadyTaskSnapshot{SampledAt: now}
+	for i := 501; i >= 1; i-- {
+		ready.Tasks = append(ready.Tasks, steerline.TaskRecord{TaskID: fmt.Sprint(i), Title: "ready", Type: "task", Status: "open"})
+	}
+	snapshot := nativeCandidateSnapshot(ref, connection, ready)
+	if len(snapshot.Tasks) != 501 || snapshot.Tasks[0].TaskID != "501" || snapshot.Tasks[500].TaskID != "1" {
+		t.Fatalf("ready candidates were truncated or reordered by task ID: %d", len(snapshot.Tasks))
 	}
 }
 

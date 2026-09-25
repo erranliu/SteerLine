@@ -21,7 +21,7 @@ PR 4A 的 `ExecutionRef` 和后端 `Operation` 纳入同一个 `steerline.db`：
 ## 权威归属
 
 - **执行态与交付态**：SteerLine 唯一权威（`run_dir/steerline.db`）；`runtime.json` v5 是可重建的观察投影。v1–v4 runtime 不兼容，服务拒绝恢复且保留原文件。
-- **任务认领与关闭**：Beads 项目仍由 Beads 权威；native 项目的 Task、claim 和 delivery 记录由中心 SQLite 权威。native 项目默认 manual/paused；`task validate/create/discard` 使用中心命令事务创建入图和显式丢弃，`task show/list/graph` 从同一数据库读取依赖与阻塞。领取只建立固定 WorkflowRun/Execution/Attempt 和准备意图，仍需生产原生执行接入后才能启动 worker；delivery 只有在固定门槛通过且平台确认真实 merged PR 后提交。
+- **任务认领与关闭**：Beads 项目仍由 Beads 权威；native 项目的 Task、claim 和 delivery 记录由中心 SQLite 权威。native 项目默认 manual/paused；`task validate/create/discard` 使用中心命令事务创建入图和显式丢弃，`task show/list/graph/export` 从同一数据库读取依赖与阻塞。关系视图最多返回 500 个节点并明确标记边界；JSON 导出是只读快照，不能作为批量创建输入。领取只建立固定 WorkflowRun/Execution/Attempt 和准备意图，仍需生产原生执行接入后才能启动 worker；delivery 只有在固定门槛通过且平台确认真实 merged PR 后提交。
 - **PR 合并**：外部平台权威；SteerLine 查询核实后才推进交付态。
 - **派发与服务命令**：SQLite 中的服务状态、CommandService 回执与控制检查点权威。manual 不自动 claim；pause 只挡新派发；停止服务与关闭查看器分开。控制请求 `applied` 只说明指令完成；`answer_decision` 的 `accepted` 只说明答案已保存。两者都不代替 run 的执行或交付状态。
 

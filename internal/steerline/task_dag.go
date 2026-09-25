@@ -100,6 +100,7 @@ type taskDiscardIntent struct {
 
 type TaskGraphNode struct {
 	TaskID          string                 `json:"task_id"`
+	Title           string                 `json:"title"`
 	Status          string                 `json:"status"`
 	Priority        int                    `json:"priority"`
 	DependencyReady bool                   `json:"dependency_ready"`
@@ -114,17 +115,37 @@ type TaskGraphEdge struct {
 }
 
 type TaskGraphPage struct {
-	Protocol         string          `json:"protocol"`
-	ProjectID        string          `json:"project_id"`
-	AuthorityVersion uint64          `json:"authority_version"`
-	GraphRevision    uint64          `json:"graph_revision"`
-	DatabaseRevision uint64          `json:"database_revision"`
-	DatabaseID       string          `json:"database_id"`
-	SampledAt        time.Time       `json:"sampled_at"`
-	Nodes            []TaskGraphNode `json:"nodes"`
-	Edges            []TaskGraphEdge `json:"edges"`
-	NextCursor       string          `json:"next_cursor,omitempty"`
-	HasMore          bool            `json:"has_more"`
+	Protocol         string            `json:"protocol"`
+	ProjectID        string            `json:"project_id"`
+	AuthorityVersion uint64            `json:"authority_version"`
+	GraphRevision    uint64            `json:"graph_revision"`
+	DatabaseRevision uint64            `json:"database_revision"`
+	DatabaseID       string            `json:"database_id"`
+	SampledAt        time.Time         `json:"sampled_at"`
+	Nodes            []TaskGraphNode   `json:"nodes"`
+	Edges            []TaskGraphEdge   `json:"edges"`
+	NextCursor       string            `json:"next_cursor,omitempty"`
+	HasMore          bool              `json:"has_more,omitempty"`
+	Filters          TaskGraphFilter   `json:"filters"`
+	Boundary         TaskGraphBoundary `json:"boundary"`
+}
+
+// MarshalJSON keeps source text intact as JSON data while rendering Unicode
+// bidirectional controls as escape sequences in terminal and file output.
+func (p TaskGraphPage) MarshalJSON() ([]byte, error) {
+	type plain TaskGraphPage
+	body, err := json.Marshal(plain(p))
+	if err != nil {
+		return nil, err
+	}
+	return escapeBidiJSON(body), nil
+}
+
+func escapeBidiJSON(body []byte) []byte {
+	for _, control := range []rune{'\u061c', '\u200e', '\u200f', '\u202a', '\u202b', '\u202c', '\u202d', '\u202e', '\u2066', '\u2067', '\u2068', '\u2069'} {
+		body = bytes.ReplaceAll(body, []byte(string(control)), []byte(fmt.Sprintf("\\u%04x", control)))
+	}
+	return body
 }
 
 type taskGraphCursor struct {
@@ -423,7 +444,14 @@ func (q QueryService) TaskGraph(ctx context.Context, cursor string, limit int) (
 	if cursor != "" && (expected.AuthorityVersion != snapshot.Authority.AuthorityVersion || expected.GraphRevision != snapshot.Authority.GraphRevision || expected.DatabaseRevision != snapshot.DatabaseRevision || expected.DatabaseID != snapshot.DatabaseID) {
 		return TaskGraphPage{}, nativeErr("cursor_invalidated", "database or project graph changed between pages")
 	}
-	page := TaskGraphPage{Protocol: nativeTaskProtocol, ProjectID: q.Project, AuthorityVersion: snapshot.Authority.AuthorityVersion, GraphRevision: snapshot.Authority.GraphRevision, DatabaseRevision: snapshot.DatabaseRevision, DatabaseID: snapshot.DatabaseID, SampledAt: snapshot.SampledAt, Nodes: []TaskGraphNode{}, Edges: []TaskGraphEdge{}}
+	page := TaskGraphPage{
+		Protocol: nativeTaskGraphProtocol, ProjectID: q.Project,
+		AuthorityVersion: snapshot.Authority.AuthorityVersion, GraphRevision: snapshot.Authority.GraphRevision,
+		DatabaseRevision: snapshot.DatabaseRevision, DatabaseID: snapshot.DatabaseID, SampledAt: snapshot.SampledAt,
+		Nodes: []TaskGraphNode{}, Edges: []TaskGraphEdge{},
+		Filters:  TaskGraphFilter{ProjectID: q.Project, Depth: 1, Limit: limit},
+		Boundary: TaskGraphBoundary{MaxDepth: 1, MaxNodes: limit, Reasons: []string{}, Edges: []TaskGraphBoundaryEdge{}},
+	}
 	if offset > len(snapshot.Tasks) || offset == len(snapshot.Tasks) && offset > 0 {
 		return page, nativeErr("cursor_invalidated", "cursor offset is outside the current snapshot")
 	}
@@ -436,7 +464,7 @@ func (q QueryService) TaskGraph(ctx context.Context, cursor string, limit int) (
 	for _, task := range snapshot.Tasks[offset:end] {
 		selected[task.TaskID] = true
 		ready, blockers := taskDependencyState(task, snapshot)
-		node := TaskGraphNode{TaskID: task.TaskID, Status: task.Status, Priority: task.Priority, DependencyReady: ready, Blockers: blockers, StartupBlockers: nativeStartupBlockers(task, snapshot)}
+		node := TaskGraphNode{TaskID: task.TaskID, Title: task.Title, Status: task.Status, Priority: task.Priority, DependencyReady: ready, Blockers: blockers, StartupBlockers: nativeStartupBlockers(task, snapshot)}
 		if delivery, ok := snapshot.Deliveries[task.TaskID]; ok {
 			copy := delivery
 			node.Delivery = &copy
@@ -444,9 +472,24 @@ func (q QueryService) TaskGraph(ctx context.Context, cursor string, limit int) (
 		page.Nodes = append(page.Nodes, node)
 	}
 	for _, edge := range snapshot.Edges {
-		if selected[edge.SuccessorID] {
+		pred, succ := selected[edge.PredecessorID], selected[edge.SuccessorID]
+		if pred && succ {
 			page.Edges = append(page.Edges, TaskGraphEdge{Predecessor: edge.PredecessorID, Successor: edge.SuccessorID})
+		} else if pred || succ {
+			if len(page.Boundary.Edges) < maxTaskGraphBoundaryEdges {
+				page.Boundary.Edges = append(page.Boundary.Edges, TaskGraphBoundaryEdge{Predecessor: edge.PredecessorID, Successor: edge.SuccessorID, Reason: "page_limit"})
+			} else {
+				page.Boundary.OmittedBoundaryEdgeCount++
+			}
 		}
+	}
+	page.Boundary.OmittedNodeCount = len(snapshot.Tasks) - len(page.Nodes)
+	page.Boundary.Truncated = page.Boundary.OmittedNodeCount > 0
+	if page.Boundary.Truncated {
+		page.Boundary.Reasons = append(page.Boundary.Reasons, "page_limit")
+	}
+	if page.Boundary.OmittedBoundaryEdgeCount > 0 {
+		page.Boundary.Reasons = append(page.Boundary.Reasons, "boundary_edge_limit")
 	}
 	if page.HasMore {
 		c := taskGraphCursor{Version: 1, ProjectID: q.Project, AuthorityVersion: page.AuthorityVersion, GraphRevision: page.GraphRevision, DatabaseRevision: page.DatabaseRevision, DatabaseID: page.DatabaseID, Offset: end}
@@ -511,12 +554,22 @@ func taskDependencyState(task TaskRecord, graph taskGraphSnapshot) (bool, []Task
 	return ready, blockers
 }
 
-// ReadyNativeTasks returns a read-only candidate snapshot in dispatch order.
-// Callers must still claim inside a transaction; this snapshot is not a permit.
-func (q QueryService) ReadyNativeTasks(ctx context.Context) ([]TaskRecord, error) {
+type NativeReadyTaskSnapshot struct {
+	ProjectID        string       `json:"project_id"`
+	AuthorityVersion uint64       `json:"authority_version"`
+	GraphRevision    uint64       `json:"graph_revision"`
+	DatabaseID       string       `json:"database_id"`
+	DatabaseRevision uint64       `json:"database_revision"`
+	SampledAt        time.Time    `json:"sampled_at"`
+	Tasks            []TaskRecord `json:"tasks"`
+}
+
+// ReadyNativeTaskSnapshot returns the center's dispatch-order candidates and
+// the database version sampled with them. The result is never a claim permit.
+func (q QueryService) ReadyNativeTaskSnapshot(ctx context.Context) (NativeReadyTaskSnapshot, error) {
 	graph, err := taskGraphFromStore(ctx, q.Store, q.Project)
 	if err != nil {
-		return nil, err
+		return NativeReadyTaskSnapshot{}, err
 	}
 	ready := []TaskRecord{}
 	for _, task := range graph.Tasks {
@@ -536,7 +589,16 @@ func (q QueryService) ReadyNativeTasks(ctx context.Context) ([]TaskRecord, error
 		}
 		return decimalIDLess(ready[i].TaskID, ready[j].TaskID)
 	})
-	return ready, nil
+	return NativeReadyTaskSnapshot{ProjectID: q.Project, AuthorityVersion: graph.Authority.AuthorityVersion, GraphRevision: graph.Authority.GraphRevision, DatabaseID: graph.DatabaseID, DatabaseRevision: graph.DatabaseRevision, SampledAt: graph.SampledAt, Tasks: ready}, nil
+}
+
+// ReadyNativeTasks preserves the candidate API used by dispatch and control.
+func (q QueryService) ReadyNativeTasks(ctx context.Context) ([]TaskRecord, error) {
+	snapshot, err := q.ReadyNativeTaskSnapshot(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return snapshot.Tasks, nil
 }
 
 func validateTaskBatchAgainstGraph(ctx context.Context, config Config, batch TaskBatchInput, graph taskGraphSnapshot, verifyFiles bool) ([]TaskBatchIssue, []string) {
