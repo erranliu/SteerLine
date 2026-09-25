@@ -2,24 +2,24 @@
 
 产品目标是以 roadmap 为核心的自动化软件开发系统。这里组织选定推进的目标；更广的后续产品计划见 [product-vision.md](product-vision.md)，已规划 Spec 的执行依赖、接口和并行条件见 [execution-map.md](execution-map.md)。
 
-## 近期：稳定的双链路执行控制台
+## 近期：人工决策与恢复闭环
 
-按以下依赖顺序推进，先完成前置能力与验证，再进入下一步。
+执行控制台与轮次折叠已经交付。下一步在同一控制台、控制协议和会话读模型上完成决策提交、答案应用证明、在线恢复与审计闭环。
 
 | 任务 ID | 任务名称 | 目标标识 | 剩余目标 | 依赖 | 执行规格 |
 | --- | --- | --- | --- | --- | --- |
-| 2 | 执行控制台与轮次折叠 | `CONSOLE` | 多项目操作与运行详情；轮次结束自动折叠过程，保留最终回复、未解决问题和阅读位置 | 已交付的 `#1` 会话读模型 | [Spec](../spec/pr-04-console.spec.md) · [Plan](../spec/pr-04-console.plan.md) |
-| 3 | 人工决策与恢复闭环 | `INTERVENTION` | 决策提交、答案应用证明、在线恢复与审计闭环，共用双后端接口 | `#2` | [Spec](../spec/pr-05-intervention.spec.md) · [Plan](../spec/pr-05-intervention.plan.md) |
+| 3 | 人工决策与恢复闭环 | `INTERVENTION` | 决策提交、答案应用证明、在线恢复与审计闭环，共用双后端接口 | 已交付的 `#2` 执行控制台 | [Spec](../spec/pr-05-intervention.spec.md) · [Plan](../spec/pr-05-intervention.plan.md) |
 
-控制台复用已交付的会话事件、完整正文、分页和来源缺口语义；折叠与阅读位置仍由 `#2` 的真实 UI 集成验收。已测本机链路的精确能力不外推到远端、其他 agent 或未测版本。
+已交付控制台具备多项目查询与控制、固定 request_id 对账、运行详情、只读决策展示、轮次折叠、完整正文分页和阅读位置恢复；[验收报告](../validation/pr-04c-console.md)记录 U-A1～U-A15 的自动化、Windows 服务窗口及本机 Codex/Orca 证据。`#3` 扩展同一身份和状态边界，不另建答案文件、业务状态来源或后端专用 UI。已测本机链路的精确能力不外推到远端、其他 agent 或未测版本。
 
 ### 后续仍依赖的已有基础
 
-- [双执行后端](../spec/pr-04a-execution-backends.spec.md)：`#2`/`#3`/`#6` 复用固定 ExecutionRef、Operation、能力报告和双后端操作边界；[Windows 验收报告](../validation/pr-04a-execution-backends.md)记录已验证范围及未支持能力。
-- [会话事件](../spec/pr-04b-conversation-events.spec.md)与[本机验收报告](../validation/pr-04b-conversation-events-2026-09-24.md)：`#2`/`#3`/`#6` 复用统一会话 DTO、完整正文、分页、来源缺口与版本化能力报告；精确 turn/phase/final 仅在报告列明的本机 Codex/Orca 范围内通过。
-- [统一观察契约](../spec/pr-01-observation.spec.md)：供 `#2` 复用选择、游标、来源换代及原始输出读取规则。
-- [服务控制协议](../spec/pr-02-control.spec.md)：供 `#2`/`#3` 复用请求身份、回执、准入及不确定动作守卫。
-- [服务窗口生命周期](../spec/pr-03-service-lifecycle.spec.md)：供 `#2` 复用连接分类、startup/instance 身份和停止确认；Windows 离线时提示用户从固定入口打开可见服务窗口，默认 manual，关闭 viewer 不停服，关闭服务窗口则结束服务。Linux detached 路径保留，原生会话生命周期尚未实测。
+- [执行控制台与轮次折叠](../spec/pr-04-console.spec.md)及[验收报告](../validation/pr-04c-console.md)：`#3` 复用项目、run/attempt、request_id、决策只读卡片和 UI 视图状态；`#6`/`#10` 复用同一查询与能力展示边界。
+- [双执行后端](../spec/pr-04a-execution-backends.spec.md)：`#3`/`#6` 复用固定 ExecutionRef、Operation、能力报告和双后端操作边界；[Windows 验收报告](../validation/pr-04a-execution-backends.md)记录已验证范围及未支持能力。
+- [会话事件](../spec/pr-04b-conversation-events.spec.md)与[本机验收报告](../validation/pr-04b-conversation-events-2026-09-24.md)：`#3`/`#6` 复用统一会话 DTO、完整正文、分页、来源缺口与版本化能力报告；精确 turn/phase/final 仅在报告列明的本机 Codex/Orca 范围内通过。
+- [统一观察契约](../spec/pr-01-observation.spec.md)：供 `#3` 继续复用选择、游标、来源换代及原始输出读取规则。
+- [服务控制协议](../spec/pr-02-control.spec.md)：供 `#3` 复用请求身份、回执、准入及不确定动作守卫。
+- [服务窗口生命周期](../spec/pr-03-service-lifecycle.spec.md)：供 `#3` 复用连接分类、startup/instance 身份和停止确认；Windows 可见窗口、manual 默认模式及 UI/服务退出隔离已在 `#2` 验收，Linux detached 路径的原生会话生命周期尚未实测。
 
 ## 后续：中心状态机与远程执行
 
