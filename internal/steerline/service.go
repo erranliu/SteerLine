@@ -389,11 +389,24 @@ func (s *Service) hydrateDecisionProjection(ctx context.Context) error {
 		if marshalErr != nil {
 			return marshalErr
 		}
-		if record.WorkflowRunID != run.RunID || record.ExecutionID != run.ExecutionID || run.Decision.AttemptID != run.AttemptID || record.AttemptID != run.Decision.AttemptID || !bytes.Equal(bytes.TrimSpace(record.Request), bytes.TrimSpace(request)) {
-			return fmt.Errorf("decision %s conflicts with the runtime execution, attempt or question identity", run.Decision.ID)
-		}
 		if record.Version == 0 || !validDecisionStatus(record.Status) {
 			return fmt.Errorf("decision %s has invalid authoritative version or status", run.Decision.ID)
+		}
+		if record.WorkflowRunID != run.RunID || record.ExecutionID != run.ExecutionID || record.AttemptID != run.Decision.AttemptID || !bytes.Equal(bytes.TrimSpace(record.Request), bytes.TrimSpace(request)) {
+			return fmt.Errorf("decision %s conflicts with the runtime execution, attempt or question identity", run.Decision.ID)
+		}
+		if run.Decision.AttemptID != run.AttemptID {
+			historical := run.WorkflowVersion == MinimalWorkflowVersion && (record.Status == "applied" || record.Status == "failed" || record.Status == "superseded")
+			boundToOriginalAttempt := false
+			for _, attempt := range s.State.Attempts {
+				if attempt.AttemptID == record.AttemptID && attempt.ExecutionID == record.ExecutionID {
+					boundToOriginalAttempt = true
+					break
+				}
+			}
+			if !historical || !boundToOriginalAttempt {
+				return fmt.Errorf("decision %s conflicts with the runtime execution, attempt or question identity", run.Decision.ID)
+			}
 		}
 		run.Decision.Version = record.Version
 		run.Decision.Status = record.Status

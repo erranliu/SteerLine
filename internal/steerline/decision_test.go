@@ -111,6 +111,45 @@ func TestDecisionReplyEligibilityAllowsExactSupervisedBinding(t *testing.T) {
 	}
 }
 
+func TestHydrateDecisionAllowsAppliedPriorMinimalAttempt(t *testing.T) {
+	ctx := context.Background()
+	store := openDomainTestStore(t)
+	project, runID, executionID := "repo:historical-decision", newID(), newID()
+	prepareID, publishID, decisionID := newID(), newID(), newID()
+	request := DecisionRequest{Question: "Proceed?", Options: []DecisionOption{{ID: "yes", Label: "Yes"}}}
+	answer := DecisionAnswer{DecisionID: decisionID, RunID: runID, OptionID: "yes", AnsweredBy: "tester", AnsweredAt: now()}
+	err := store.Transact(ctx, func(tx DomainTx) error {
+		if err := tx.PutTask(TaskRecord{ProjectIdentity: project, TaskID: "task", Status: "in_progress", Version: 1}); err != nil {
+			return err
+		}
+		if err := tx.PutWorkflowRun(WorkflowRunRecord{ProjectIdentity: project, WorkflowRunID: runID, TaskID: "task", Phase: "waiting_pr_merge"}); err != nil {
+			return err
+		}
+		if err := tx.PutExecution(ExecutionRecord{ProjectIdentity: project, ExecutionID: executionID, WorkflowRunID: runID, Status: "active", CurrentStep: "publish_pr"}); err != nil {
+			return err
+		}
+		if err := tx.PutStepAttempt(StepAttemptRecord{ProjectIdentity: project, AttemptID: prepareID, ExecutionID: executionID, StepID: "prepare", AttemptNumber: 1, Status: "succeeded"}); err != nil {
+			return err
+		}
+		if err := tx.PutStepAttempt(StepAttemptRecord{ProjectIdentity: project, AttemptID: publishID, ExecutionID: executionID, StepID: "publish_pr", AttemptNumber: 1, Status: "succeeded"}); err != nil {
+			return err
+		}
+		return tx.PutDecision(DecisionRecord{ProjectIdentity: project, DecisionID: decisionID, Scope: "execution", WorkflowRunID: runID, ExecutionID: executionID, AttemptID: prepareID, QuestionID: decisionID, Request: mustJSON(request), Answer: mustJSON(answer), Status: "applied", Version: 2})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	run := &Run{RunID: runID, ExecutionID: executionID, AttemptID: publishID, WorkflowVersion: MinimalWorkflowVersion, Decision: &DecisionState{ID: decisionID, AttemptID: prepareID, Request: request, Status: "applied", Version: 1}}
+	service := &Service{Config: Config{identity: project}, domainStore: store, State: Runtime{Runs: []*Run{run}, Attempts: []StepAttemptRecord{{ProjectIdentity: project, AttemptID: prepareID, ExecutionID: executionID, StepID: "prepare", Status: "succeeded"}, {ProjectIdentity: project, AttemptID: publishID, ExecutionID: executionID, StepID: "publish_pr", Status: "succeeded"}}}}
+	if err := service.hydrateDecisionProjection(ctx); err != nil || run.Decision.Status != "applied" || run.Decision.Version != 2 {
+		t.Fatalf("historical applied decision was rejected after a later step: decision=%+v err=%v", run.Decision, err)
+	}
+	run.Decision.AttemptID = newID()
+	if err := service.hydrateDecisionProjection(ctx); err == nil {
+		t.Fatal("decision rebound to an unknown historical attempt was accepted")
+	}
+}
+
 func TestDecisionRequestValidation(t *testing.T) {
 	cases := map[string]DecisionRequest{
 		"empty":           {},

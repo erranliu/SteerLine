@@ -703,13 +703,15 @@ func supervisedStepTaskSpec(c Config, task Task, run Run, workflow WorkflowRunRe
 		ExecutionID       string `json:"execution_id"`
 		AttemptID         string `json:"attempt_id"`
 		StepID            string `json:"step_id"`
+		ResultID          string `json:"result_id"`
 		InputRevision     string `json:"input_revision"`
 		CandidateRevision string `json:"candidate_revision"`
-	}{input.ProjectIdentity, input.TaskID, input.WorkflowRunID, input.ExecutionID, input.AttemptID, input.StepID, input.InputRevision, input.CandidateRevision})
+	}{input.ProjectIdentity, input.TaskID, input.WorkflowRunID, input.ExecutionID, input.AttemptID, input.StepID, input.AttemptID, input.InputRevision, input.CandidateRevision})
 	if err != nil {
 		return "", err
 	}
 	fmt.Fprintf(&b, "To avoid hand-transcription errors in local IDs and commit hashes, decode this exact UTF-8 base64 input object in pwsh.exe and use its properties when building step_result: $ids = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('%s')) | ConvertFrom-Json. Use $ids.project_identity, $ids.task_id, $ids.workflow_run_id, $ids.execution_id and $ids.attempt_id directly for the envelope's matching fields; never assemble any ID from a title, prefix or Orca ID. Use $ids.step_id for result.step_id and $ids.input_revision for result.input_revision; for verify/review/publish_pr, use $ids.candidate_revision for result.revision, check.revision and the ancestry command. Immediately before sending status, parse the generated JSON and assert step_result.task_id equals $ids.task_id and step_result.result.step_id equals $ids.step_id; never use the Orca task ID for the inner task_id or the local task ID for step_id. Do not type project_identity, attempt_id or candidate_revision by hand; the center rejects even one altered character. Before verify, review, or publish_pr, compare `git rev-parse HEAD` with $ids.candidate_revision and report a failed step if they differ; prepare has no candidate revision and instead compares HEAD to the fixed base.\n", base64.StdEncoding.EncodeToString(identityJSON))
+	b.WriteString("In the final PowerShell 7 sender, construct the envelope identity with this code, then add observed result fields to $envelope.result: $envelope = [ordered]@{ schema_version=1; project_identity=$ids.project_identity; task_id=$ids.task_id; workflow_run_id=$ids.workflow_run_id; execution_id=$ids.execution_id; attempt_id=$ids.attempt_id; result=[ordered]@{ step_id=$ids.step_id; result_id=$ids.result_id; input_revision=$ids.input_revision } }. The result_id is fixed from this Attempt ID so replay cannot create a different result. Do not replace any $ids property with a typed or interpolated string. After ConvertTo-Json and before Orca send, parse it again and compare all five envelope ID fields, result.step_id and result.result_id to $ids with -cne; throw before sending on any difference. The outer Orca taskId and dispatchId are separate platform IDs from the Dispatch preamble.\n")
 	if run.Target.WorktreeID != "" {
 		fmt.Fprintf(&b, "Existing exact worktree_id=%s path=%s branch=%s; verify these facts through Orca and Git before editing.\n", run.Target.WorktreeID, deref(run.WorktreePath), deref(run.WorktreeBranch))
 	} else {
@@ -726,12 +728,18 @@ func supervisedStepTaskSpec(c Config, task Task, run Run, workflow WorkflowRunRe
 		fmt.Fprintf(&b, "Review the already verified candidate %s read-only. Inspect the actual diff and report review_verdict=passed or review_verdict=changes_requested; describe concrete findings in the status body. Do not edit, commit, push, create a PR, or run a later step. The review result must keep revision, input_revision and workspace.head at that same candidate, keep the worktree clean, and report the actual base ancestry check. A changes_requested verdict is a conclusive review result: set succeeded=true, send worker_done outcome succeeded after Orca accepts its structured status, and let the center decide repair or budget exhaustion. Use failure_kind only if no valid review verdict could be produced.\n", input.CandidateRevision)
 		b.WriteString("For review, use only these result keys: step_id, succeeded, input_revision, revision, result_id, prerequisite_result_ids, workspace, base_ancestor, and review_verdict. Do not report checks, pr_url, published_head, or a replacement revision.\n")
 	}
+	if attempt.StepID == "prepare" {
+		template := map[string]any{"schema_version": 1, "project_identity": input.ProjectIdentity, "task_id": input.TaskID, "workflow_run_id": input.WorkflowRunID, "execution_id": input.ExecutionID, "attempt_id": input.AttemptID, "result": map[string]any{"step_id": "prepare", "succeeded": true, "input_revision": input.InputRevision, "result_id": input.AttemptID, "workspace": map[string]any{"repository": input.ProjectIdentity, "worktree": "<actual Orca absolute worktree path>", "branch": "<actual Git branch>", "base": base, "head": base, "dirty": false, "verified_at": "<actual RFC3339 UTC observation time>"}, "base_ancestor": true}}
+		if templateBytes, marshalErr := json.Marshal(template); marshalErr == nil {
+			b.WriteString("Exact prepare step_result object template; replace only observed workspace placeholders, and do not remove result_id or alter identity fields: " + string(templateBytes) + "\n")
+		}
+	}
 	if attempt.StepID == "implement" || attempt.StepID == "verify" || attempt.StepID == "review" || attempt.StepID == "publish_pr" {
 		revision := "<actual full committed HEAD>"
 		if attempt.StepID == "verify" || attempt.StepID == "review" || attempt.StepID == "publish_pr" {
 			revision = input.CandidateRevision
 		}
-		resultTemplate := map[string]any{"step_id": attempt.StepID, "succeeded": true, "input_revision": input.InputRevision, "revision": revision, "result_id": "<new unique result ID>", "prerequisite_result_ids": input.PrerequisiteResultIDs, "workspace": map[string]any{"repository": input.ProjectIdentity, "worktree": "<actual Orca absolute worktree path>", "branch": "<actual Git branch>", "base": base, "head": revision, "dirty": false, "verified_at": "<actual RFC3339 UTC observation time>"}, "base_ancestor": true}
+		resultTemplate := map[string]any{"step_id": attempt.StepID, "succeeded": true, "input_revision": input.InputRevision, "revision": revision, "result_id": input.AttemptID, "prerequisite_result_ids": input.PrerequisiteResultIDs, "workspace": map[string]any{"repository": input.ProjectIdentity, "worktree": "<actual Orca absolute worktree path>", "branch": "<actual Git branch>", "base": base, "head": revision, "dirty": false, "verified_at": "<actual RFC3339 UTC observation time>"}, "base_ancestor": true}
 		if attempt.StepID == "verify" {
 			checks := make([]map[string]any, 0, len(workflow.ProjectSteps.Verify.RequiredChecks))
 			for _, name := range workflow.ProjectSteps.Verify.RequiredChecks {

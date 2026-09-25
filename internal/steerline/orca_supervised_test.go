@@ -816,7 +816,7 @@ func TestSupervisedStartMinimalStepBindsRemoteRunAndWorktree(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(taskSpec, "shell set to pwsh.exe") || !strings.Contains(taskSpec, "FromBase64String") || !strings.Contains(taskSpec, "Do not append --task-id, --dispatch-id") || strings.Contains(taskSpec, "ProcessStartInfo") || strings.Contains(taskSpec, "spawnSync") {
+	if !strings.Contains(taskSpec, "shell set to pwsh.exe") || !strings.Contains(taskSpec, "FromBase64String") || !strings.Contains(taskSpec, "Exact prepare step_result object template") || !strings.Contains(taskSpec, `"result_id":"`+attemptID+`"`) || !strings.Contains(taskSpec, "Do not append --task-id, --dispatch-id") || strings.Contains(taskSpec, "ProcessStartInfo") || strings.Contains(taskSpec, "spawnSync") {
 		t.Fatalf("supervised task spec lacks direct PowerShell 7 status sender")
 	}
 	reviewRevision := strings.Repeat("b", 40)
@@ -829,7 +829,7 @@ func TestSupervisedStartMinimalStepBindsRemoteRunAndWorktree(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(reviewSpec, "Review the already verified candidate "+reviewRevision) || !strings.Contains(reviewSpec, `"review_verdict":`) || !strings.Contains(reviewSpec, "let the center decide repair or budget exhaustion") || !strings.Contains(reviewSpec, "$ids.step_id for result.step_id") || !strings.Contains(reviewSpec, "$ids.input_revision for result.input_revision") || !strings.Contains(reviewSpec, "$ids.candidate_revision for result.revision") || !strings.Contains(reviewSpec, "Federated Dispatch messages must omit --run and --to") {
+	if !strings.Contains(reviewSpec, "Review the already verified candidate "+reviewRevision) || !strings.Contains(reviewSpec, `"review_verdict":`) || !strings.Contains(reviewSpec, "let the center decide repair or budget exhaustion") || !strings.Contains(reviewSpec, "$ids.step_id for result.step_id") || !strings.Contains(reviewSpec, "$ids.input_revision for result.input_revision") || !strings.Contains(reviewSpec, "$ids.candidate_revision for result.revision") || !strings.Contains(reviewSpec, "task_id=$ids.task_id") || !strings.Contains(reviewSpec, "Federated Dispatch messages must omit --run and --to") {
 		t.Fatal("supervised review task spec lacks a pinned verdict and center-owned repair boundary")
 	}
 	resultPath := filepath.Join(t.TempDir(), "result.json")
@@ -908,6 +908,10 @@ func TestSupervisedOrcaRealPrepareRoundtrip(t *testing.T) {
 	base := need("STEERLINE_REAL_SUPERVISED_BASE")
 	fullProbe := os.Getenv("STEERLINE_REAL_SUPERVISED_FULL_PROBE") == "1"
 	publishProbe := os.Getenv("STEERLINE_REAL_SUPERVISED_PUBLISH_PROBE") == "1" || fullProbe
+	directCloseProbe := os.Getenv("STEERLINE_REAL_SUPERVISED_DIRECT_CLOSE_PROBE") == "1"
+	if directCloseProbe && !fullProbe {
+		t.Fatal("direct merged-close probe requires the full original-center path")
+	}
 	if !commitHash.MatchString(base) {
 		t.Fatalf("invalid fixed base %q", base)
 	}
@@ -995,6 +999,22 @@ func TestSupervisedOrcaRealPrepareRoundtrip(t *testing.T) {
 		steps.PublishPR = contract("command", "README.md", []string{"pwsh.exe", "-NoProfile", "-Command", publishScript})
 		c.PR = PRConfig{Kind: "command", BaseURL: "https://github.com", Repository: "erranliu/SteerlineTest", Query: Command{Executable: "gh", Args: []string{"api", "repos/{repository}/pulls/{number}", "--jq", `{url:.html_url,repository:.base.repo.full_name,base_branch:.base.ref,head_revision:.head.sha,state:(if .merged then "merged" elif .state=="closed" then "closed_unmerged" else .state end),merged:.merged,merged_at:.merged_at,merge_commit:.merge_commit_sha}`}}}
 	}
+	runID := newID()
+	taskID := "remote-probe-" + runID[:10]
+	if directCloseProbe {
+		providerRepo := filepath.Join(root, "provider-project")
+		if output, gitErr := exec.Command(git, "init", "--quiet", "-b", "main", providerRepo).CombinedOutput(); gitErr != nil {
+			t.Fatalf("initialize isolated provider repository: %v %s", gitErr, output)
+		}
+		c.BD.Args = []string{"-C", providerRepo}
+		for _, args := range [][]string{{"init", "--prefix", "remote-probe", "--quiet"}, {"create", "--id", taskID, "--title", "Spec 03 original-center completion probe", "--type", "task", "--json"}, {"update", taskID, "--assignee", c.Claimant, "--status", "in_progress", "--json"}} {
+			cmd := exec.Command("bd", args...)
+			cmd.Dir = providerRepo
+			if output, runErr := cmd.CombinedOutput(); runErr != nil {
+				t.Fatalf("prepare isolated provider task with bd %v: %v %s", args, runErr, output)
+			}
+		}
+	}
 	c.WorkflowDefinition, c.ProjectSteps = &definition, &steps
 	configBytes, err := json.Marshal(c)
 	if err != nil {
@@ -1007,8 +1027,6 @@ func TestSupervisedOrcaRealPrepareRoundtrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = service.Close() })
-	runID := newID()
-	taskID := "remote-probe-" + runID[:10]
 	intent, err := planWorkspace(c, taskID, runID, base)
 	if err != nil {
 		t.Fatal(err)
@@ -1644,6 +1662,57 @@ exit $LASTEXITCODE
 				}
 			}
 			t.Logf("supervised draft PR accepted: %s head=%s dispatch=%s", *run.PR.URL, candidate, publishDispatch)
+			if directCloseProbe {
+				prURL := *run.PR.URL
+				if closeErr := service.Close(); closeErr != nil {
+					t.Fatal(closeErr)
+				}
+				service, err = NewService(c)
+				if err != nil {
+					t.Fatalf("reopen original SQLite center after publication: %v", err)
+				}
+				run = runtimeRunByID(&service.State, runID)
+				if run == nil || run.FinishTaskStatus != "waiting_pr_merge" || run.PR.URL == nil || *run.PR.URL != prURL || service.worker != nil {
+					t.Fatal("original center did not recover its selected waiting PR without a new worker")
+				}
+				for _, args := range [][]string{{"pr", "ready", prURL, "--repo", "erranliu/SteerlineTest"}, {"pr", "merge", prURL, "--repo", "erranliu/SteerlineTest", "--merge", "--match-head-commit", candidate}} {
+					if output, ghErr := exec.Command("gh", args...).CombinedOutput(); ghErr != nil {
+						t.Fatalf("merge exact isolated test PR with gh %v: %v %s", args, ghErr, output)
+					}
+				}
+				merged, queryErr := service.prs.Query(context.Background(), prURL)
+				if queryErr != nil || !merged.Merged || merged.HeadRevision != candidate || merged.BaseBranch != "main" || merged.MergeCommit == nil {
+					t.Fatalf("merged original test PR identity was not verified: %+v %v", merged, queryErr)
+				}
+				if err = service.pollPRsFor(context.Background(), runID); err != nil {
+					t.Fatalf("original center did not complete merged test PR: %v", err)
+				}
+				providerTask, showErr := service.beads.Show(context.Background(), taskID)
+				if showErr != nil {
+					t.Fatal(showErr)
+				}
+				workflowRecord, executionRecord = service.minimalRecords(run)
+				if run.FinishTaskStatus != "completed" || run.PR.State != "merged" || workflowRecord == nil || workflowRecord.Phase != "completed" || executionRecord == nil || executionRecord.CurrentStep != "completed" || providerTask.Status != "closed" || providerTask.Assignee != c.Claimant {
+					t.Fatalf("original Run did not close the exact provider task: run=%+v workflow=%+v execution=%+v provider=%+v", run, workflowRecord, executionRecord, providerTask)
+				}
+				if err = service.pollPRsFor(context.Background(), runID); err != nil {
+					t.Fatalf("original completed Run was not idempotent: %v", err)
+				}
+				if outputPath := strings.TrimSpace(os.Getenv("STEERLINE_REAL_SUPERVISED_DIRECT_CLOSE_EVIDENCE_PATH")); outputPath != "" {
+					evidence := map[string]any{"captured_at": now(), "run": run, "workflow": workflowRecord, "execution": executionRecord, "attempts": service.State.Attempts, "operations": service.State.Operations, "pr": merged, "provider_task_status": providerTask.Status, "provider_task_assignee": providerTask.Assignee, "original_sqlite_reopened": true, "merge_commit_verified": true, "idempotent_second_poll": true}
+					encoded, marshalErr := json.MarshalIndent(evidence, "", "  ")
+					if marshalErr != nil {
+						t.Fatal(marshalErr)
+					}
+					if err = os.MkdirAll(filepath.Dir(outputPath), 0700); err != nil {
+						t.Fatal(err)
+					}
+					if err = AtomicWrite(outputPath, append(encoded, '\n')); err != nil {
+						t.Fatal(err)
+					}
+				}
+				t.Logf("original SQLite Run completed after exact merged PR %s and provider close", prURL)
+			}
 		}
 	}
 	t.Logf("supervised prepare accepted: run=%s task=%s dispatch=%s worktree=%s", run.Target.OrchestrationRun, run.Target.ExternalTask, run.Target.Dispatch, run.Target.WorktreeID)
@@ -1935,7 +2004,7 @@ func TestSupervisedOrcaRealMergedTaskClose(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer service.Close()
+	defer func() { _ = service.Close() }()
 	taskRecord := TaskRecord{ProjectIdentity: c.identity, TaskID: run.DomainTaskID, ExternalProvider: "beads", ExternalProject: "isolated-merged-close-probe", ExternalID: run.TaskID, Title: run.Title, Claimant: run.Claimant, Source: "beads", Status: "in_progress", Version: 1, CreatedAt: now(), UpdatedAt: now()}
 	service.State.Tasks = append(service.State.Tasks, taskRecord)
 	service.State.WorkflowRuns = append(service.State.WorkflowRuns, evidence.Workflow)
@@ -1944,6 +2013,17 @@ func TestSupervisedOrcaRealMergedTaskClose(t *testing.T) {
 	service.State.Runs = append(service.State.Runs, run)
 	if err := service.save(); err != nil {
 		t.Fatal(err)
+	}
+	if err := service.Close(); err != nil {
+		t.Fatal(err)
+	}
+	service, err = NewService(c)
+	if err != nil {
+		t.Fatalf("reopen selected merged-PR projection with historical decisions: %v", err)
+	}
+	run = runtimeRunByID(&service.State, run.RunID)
+	if run == nil || run.PR.URL == nil || *run.PR.URL != evidence.PR.URL {
+		t.Fatal("reopened merged-PR projection lost its selected Run or PR")
 	}
 	if err := service.pollPRsFor(context.Background(), run.RunID); err != nil {
 		t.Fatalf("merged PR completion did not close the isolated Beads task: %v", err)
