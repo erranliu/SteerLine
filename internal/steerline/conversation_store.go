@@ -430,19 +430,28 @@ func (q ConversationQueryService) ReadMessageBody(ctx context.Context, ref Conve
 	if limit < utf8.UTFMax {
 		limit = utf8.UTFMax
 	}
-	var data []byte
+	var body []byte
 	var total int64
 	var digest, complete string
-	err := q.Store.db.QueryRowContext(ctx, `SELECT substr(body,?,?),byte_count,sha256,completeness FROM conversation_bodies WHERE project_identity=? AND execution_id=? AND attempt_id=? AND item_key=? AND revision=?`, offset+1, limit, q.Project, ref.ExecutionID, ref.AttemptID, ref.ItemKey, ref.Revision).Scan(&data, &total, &digest, &complete)
+	err := q.Store.db.QueryRowContext(ctx, `SELECT body,byte_count,sha256,completeness FROM conversation_bodies WHERE project_identity=? AND execution_id=? AND attempt_id=? AND item_key=? AND revision=?`, q.Project, ref.ExecutionID, ref.AttemptID, ref.ItemKey, ref.Revision).Scan(&body, &total, &digest, &complete)
 	if err != nil {
 		return ConversationBodyPage{}, err
+	}
+	actual := sha256.Sum256(body)
+	if total != int64(len(body)) || digest != hex.EncodeToString(actual[:]) || !utf8.Valid(body) {
+		return ConversationBodyPage{}, errors.New("message body revision is corrupt")
 	}
 	if offset > total {
 		return ConversationBodyPage{}, &CursorError{Code: "cursor_invalidated"}
 	}
-	if digest != ref.SHA256 || total != ref.Bytes {
+	if digest != ref.SHA256 || total != ref.Bytes || BodyCompleteness(complete) != ref.Completeness {
 		return ConversationBodyPage{}, errors.New("message body revision does not match the supplied reference")
 	}
+	end := offset + int64(limit)
+	if end > total {
+		end = total
+	}
+	data := body[offset:end]
 	if len(data) > 0 && data[0]&0xC0 == 0x80 {
 		return ConversationBodyPage{}, &CursorError{Code: "cursor_invalidated"}
 	}
@@ -460,12 +469,16 @@ func (q ConversationQueryService) ReadRaw(ctx context.Context, ref ConversationR
 	if limit > MaxEventPageBytes {
 		limit = MaxEventPageBytes
 	}
-	var data []byte
+	var body []byte
 	var total int64
 	var digest string
-	err := q.Store.db.QueryRowContext(ctx, `SELECT substr(payload,?,?),byte_count,sha256 FROM conversation_raw WHERE project_identity=? AND execution_id=? AND attempt_id=? AND raw_id=?`, offset+1, limit, q.Project, ref.ExecutionID, ref.AttemptID, ref.ID).Scan(&data, &total, &digest)
+	err := q.Store.db.QueryRowContext(ctx, `SELECT payload,byte_count,sha256 FROM conversation_raw WHERE project_identity=? AND execution_id=? AND attempt_id=? AND raw_id=?`, q.Project, ref.ExecutionID, ref.AttemptID, ref.ID).Scan(&body, &total, &digest)
 	if err != nil {
 		return ConversationRawPage{}, err
+	}
+	actual := sha256.Sum256(body)
+	if total != int64(len(body)) || digest != hex.EncodeToString(actual[:]) {
+		return ConversationRawPage{}, errors.New("raw conversation record is corrupt")
 	}
 	if offset > total {
 		return ConversationRawPage{}, &CursorError{Code: "cursor_invalidated"}
@@ -473,7 +486,12 @@ func (q ConversationQueryService) ReadRaw(ctx context.Context, ref ConversationR
 	if ref.SHA256 != "" && (digest != ref.SHA256 || total != ref.Bytes) {
 		return ConversationRawPage{}, errors.New("raw body does not match the supplied reference")
 	}
-	return ConversationRawPage{RawID: ref.ID, Offset: offset, NextOffset: offset + int64(len(data)), TotalBytes: total, SHA256: digest, Complete: offset+int64(len(data)) >= total, Data: data}, nil
+	end := offset + int64(limit)
+	if end > total {
+		end = total
+	}
+	data := body[offset:end]
+	return ConversationRawPage{RawID: ref.ID, Offset: offset, NextOffset: end, TotalBytes: total, SHA256: digest, Complete: end >= total, Data: data}, nil
 }
 
 func (s *SQLiteStore) ConversationCheckpoint(ctx context.Context, project, execution, attempt, source, segment string) (ConversationCheckpoint, error) {
