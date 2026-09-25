@@ -1,6 +1,6 @@
 # Spec：固定依赖 DAG 调度
 
-任务 ID：8；任务名称：固定依赖调度；目标：`TASK-DAG`。状态：待实施。配套 [Plan](task-dag.plan.md)。本文件只定义该任务，由一个独立实现 PR 交付。
+任务 ID：8；任务名称：固定依赖调度；目标：`TASK-DAG`。状态：D1 中心范围已实现并通过验收，[PR #31](https://github.com/erranliu/SteerLine/pull/31) 待合入；生产动作按本 Spec 的边界由 BEADS-EXIT 验收。配套 [Plan](task-dag.plan.md) 与[验证记录](../validation/task-dag/README.md)。本文件只定义该任务，由一个独立实现 PR 交付。
 
 ## D1：范围与前置
 

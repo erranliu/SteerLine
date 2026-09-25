@@ -1,6 +1,6 @@
-# TASK-DAG acceptance boundary proposal
+# TASK-DAG acceptance boundary
 
-The TASK-DAG Spec D1 excludes production worker/skill integration and directs this task to use isolated projects and substitutes. BEADS-EXIT B1 depends on TASK-DAG being accepted and merged, then owns native production integration. The current NT08, NT11 and NT22-DAG rows combine center rules with those downstream external actions, so taking every word as a TASK-DAG release gate makes the dependency circular.
+The user confirmed this boundary on 2026-09-25. TASK-DAG Spec D1 excludes production worker/skill integration and directs this task to use isolated projects and substitutes. BEADS-EXIT B1 depends on TASK-DAG being accepted and merged, then owns native production integration. NT08, NT11 and NT22-DAG separate center rules from those downstream external actions so the dependency remains executable.
 
 | Current row | TASK-DAG gate in this PR | BEADS-EXIT gate retained for production |
 | --- | --- | --- |
@@ -8,4 +8,4 @@ The TASK-DAG Spec D1 excludes production worker/skill integration and directs th
 | NT11 | Verify pinned committed contract blobs, fixed base and every predecessor merge before claim. Persist the original contract digest/base with the selected attempt; reject changed contract evidence. | BEADS-EXIT NT12/NT13: the native worker verifies the actual workspace/base and supplied contract digest before executing; retry retains the same task contract. |
 | NT22-DAG | Discard open/in-progress tasks only after exact unmerged-PR proof, retain unknown attempts and active resources, preserve cleanup identities, block successors, and record a confirmed late-merge conflict without TaskDelivery. | Add an explicit BEADS-EXIT acceptance row for a verified Stop on a live local worker, remote cancellation limits, exact open-PR/workspace cleanup, durable external receipts or unknown outcomes, and retention of unresolved resources. |
 
-No requirement is dropped. The downstream column must become explicit BEADS-EXIT acceptance criteria, and TASK-DAG's own acceptance language must name only its center gate. The live GitHub delivery transaction already proves NT09's platform gate with isolated SQLite; the current backend acceptance probe confirms that local Codex Stop itself is available, but native DAG wiring remains downstream.
+No requirement is dropped. The downstream column is explicit in BEADS-EXIT's Spec and Plan, while TASK-DAG's acceptance names its center gate. The live GitHub delivery transaction proves NT09's platform gate with isolated SQLite; the backend acceptance probe confirms that local Codex Stop itself is available, but native DAG wiring remains downstream.

@@ -92,7 +92,7 @@ go test -race ./internal/steerline -run '^TestNativeClaimCompetitionCreatesOnlyO
   UNAVAILABLE: this Windows Go toolchain has CGO_ENABLED=0 and no gcc; -race requires cgo
 ```
 
-The full Go suite, NT04–NT11/NT21-DAG/NT22-DAG center gates under the proposed D1-aligned scope, and an isolated NT09 live-platform delivery transaction pass. Production native worker-start/restart, execution-side contract proof, and actual stop/PR/workspace cleanup receipts remain explicit BEADS-EXIT gates. Formal TASK-DAG acceptance awaits review of the scope correction in the Spec/Plan; PR #31 remains Draft until then.
+On 2026-09-25 the user confirmed the [D1 acceptance boundary](acceptance-boundary.md). The full Go suite, NT04–NT11/NT21-DAG/NT22-DAG center gates and an isolated NT09 live-platform delivery transaction pass. TASK-DAG is accepted within that confirmed scope. Production native worker-start/restart, execution-side contract proof, and actual stop/PR/workspace cleanup receipts remain explicit BEADS-EXIT gates and are not claimed here.
 
 The opt-in local Stop test was run with `STEERLINE_NATIVE_CODEX_NODE` and `STEERLINE_NATIVE_CODEX_SCRIPT` set to installed Node/Codex CLI paths; the raw machine-specific identity file was not committed.
 
@@ -102,4 +102,4 @@ The opt-in live discard output is in [live-pr-discard-2026-09-25.txt](live-pr-di
 
 ## Completion gate
 
-The local TASK-DAG implementation and verification record are ready for review. TASK-DAG deliberately does not ship production worker/skill integration or relationship UI; those remain the separate BEADS-EXIT and DAG-VIEW tasks. The isolated live GitHub delivery proves the center's merge gate and transaction with real platform evidence. The late-merge regression proves the center conflict record. Neither proves production worker behavior or external cleanup receipts.
+The TASK-DAG center implementation has passed its confirmed acceptance boundary and is ready for PR review. TASK-DAG deliberately does not ship production worker/skill integration or relationship UI; those remain the separate BEADS-EXIT and DAG-VIEW tasks. The isolated live GitHub delivery proves the center's merge gate and transaction with real platform evidence. The late-merge regression proves the center conflict record. Neither proves production worker behavior or external cleanup receipts.
