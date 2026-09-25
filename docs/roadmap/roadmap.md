@@ -2,57 +2,45 @@
 
 产品目标是以 roadmap 为核心的自动化软件开发系统。这里组织选定推进的目标；更广的后续产品计划见 [product-vision.md](product-vision.md)，已规划 Spec 的执行依赖、接口和并行条件见 [execution-map.md](execution-map.md)。
 
-## 近期：人工决策与恢复闭环
+## 近期：模块解耦与测试反馈提速
 
-执行控制台与轮次折叠已经交付。下一步在同一控制台、控制协议和会话读模型上完成决策提交、答案应用证明、在线恢复与审计闭环。
+按“先测量并精简夹具 → 删除旧执行路径 → 拆分规则包与集成测试”的顺序推进，每项由独立实现 PR 交付。优先缩短日常局部修改的反馈，同时保留合入前的完整无缓存回归、当前格式恢复和真实交付核验。
 
-| 任务 ID | 任务名称 | 目标标识 | 剩余目标 | 依赖 | 执行规格 |
+| 任务 ID | 任务名称 | 目标标识 | 剩余目标 | 前置条件 | 执行规格 |
 | --- | --- | --- | --- | --- | --- |
-| 3 | 人工决策与恢复闭环 | `INTERVENTION` | 决策提交、答案应用证明、在线恢复与审计闭环，共用双后端接口 | 已交付的 `#2` 执行控制台 | [Spec](../spec/pr-05-intervention.spec.md) · [Plan](../spec/pr-05-intervention.plan.md) |
+| 11 | 测试耗时基线与夹具精简 | `REFACTOR` | 逐用例耗时报告、可复现测试入口、精简实际慢夹具与重复覆盖 | 已实现的决策、原生任务及关系视图；无未完成任务硬前置 | [Spec](../spec/test-feedback.spec.md) · [Plan](../spec/test-feedback.plan.md) |
+| 12 | 移除 Beads 旧执行路径 | `REFACTOR` | 删除 Beads/旧 start-finish/completion 分支及专属测试，将当前不变量测试迁到原生路径 | `#11` 的耗时和覆盖基线 | [Spec](../spec/beads-path-removal.spec.md) · [Plan](../spec/beads-path-removal.plan.md) |
+| 13 | 任务图规则拆包与测试分层 | `REFACTOR` | 独立 taskgraph 规则包、CLI 黑盒集成包和按模块测试入口；按隔离条件评估并行 | `#12` 收敛后的原生代码；沿用 `#11` 测量工具 | [Spec](../spec/taskgraph-modules.spec.md) · [Plan](../spec/taskgraph-modules.plan.md) |
 
-已交付控制台具备多项目查询与控制、固定 request_id 对账、运行详情、只读决策展示、轮次折叠、完整正文分页和阅读位置恢复；[验收报告](../validation/pr-04c-console.md)记录 U-A1～U-A15 的自动化、Windows 服务窗口及本机 Codex/Orca 证据。`#3` 扩展同一身份和状态边界，不另建答案文件、业务状态来源或后端专用 UI。已测本机链路的精确能力不外推到远端、其他 agent 或未测版本。
+`#3` 的剩余原生验收、`#4` 的远端探测可在固定版本和隔离资源上继续。`#6` 可准备独立协议适配，涉及 Service、Query/Command、配置和同一夹具时与 `#11`～`#13` 串行集成；后集成方核对接口并补受影响回归。具体交接见 [execution-map](execution-map.md)。
 
-### 后续仍依赖的已有基础
+## 近期：人工决策与恢复的剩余验收
 
-- [执行控制台与轮次折叠](../spec/pr-04-console.spec.md)及[验收报告](../validation/pr-04c-console.md)：`#3` 复用项目、run/attempt、request_id、决策只读卡片和 UI 视图状态；`#6`/`#10` 复用同一查询与能力展示边界。
-- [双执行后端](../spec/pr-04a-execution-backends.spec.md)：`#3`/`#6` 复用固定 ExecutionRef、Operation、能力报告和双后端操作边界；[Windows 验收报告](../validation/pr-04a-execution-backends.md)记录已验证范围及未支持能力。
-- [会话事件](../spec/pr-04b-conversation-events.spec.md)与[本机验收报告](../validation/pr-04b-conversation-events-2026-09-24.md)：`#3`/`#6` 复用统一会话 DTO、完整正文、分页、来源缺口与版本化能力报告；精确 turn/phase/final 仅在报告列明的本机 Codex/Orca 范围内通过。
-- [统一观察契约](../spec/pr-01-observation.spec.md)：供 `#3` 继续复用选择、游标、来源换代及原始输出读取规则。
-- [服务控制协议](../spec/pr-02-control.spec.md)：供 `#3` 复用请求身份、回执、准入及不确定动作守卫。
-- [服务窗口生命周期](../spec/pr-03-service-lifecycle.spec.md)：供 `#3` 复用连接分类、startup/instance 身份和停止确认；Windows 可见窗口、manual 默认模式及 UI/服务退出隔离已在 `#2` 验收，Linux detached 路径的原生会话生命周期尚未实测。
+`#3` 已实现 SQLite 中的答案仲裁、固定执行续跑、在线恢复与审计命令，以及控制台决策历史和恢复操作；自动化回归已通过。完整 H-A1～H-A16 验收仍缺真实交互与应用证明，范围见[验证记录](../validation/pr-05-intervention.md)。
+
+| 任务 ID | 任务名称 | 目标标识 | 剩余目标 | 前置条件 | 执行规格 |
+| --- | --- | --- | --- | --- | --- |
+| 3 | 人工决策与恢复闭环 | `INTERVENTION` | Windows TTY 验证长问题、12 个选项、中文多行答案、旧版本冲突、折叠导航与恢复确认；在隔离注册仓库验证本机 Orca 同会话续跑、原操作恢复及答案应用证明 | 可复现的 Windows TTY 样例与隔离注册的 Orca 测试仓库 | [Spec](../spec/pr-05-intervention.spec.md) · [Plan](../spec/pr-05-intervention.plan.md) · [剩余门槛](../validation/pr-05-intervention.md) |
+
+只有发送或回复回执时，答案仍不能标记为已应用；本机 Codex 续跑仍是不支持能力。验收结果须按真实平台证据记录，不把模拟后端测试外推到本机 Orca，也不外推到远端执行。
 
 ## 后续：中心状态机与远程执行
 
 | 任务 ID | 任务名称 | 目标标识 | 剩余目标 | 依赖 | 执行规格 |
 | --- | --- | --- | --- | --- | --- |
 | 4 | Orca 远程协议验证 | `REMOTE-PROTOCOL` | 验证固定消息上限和宿主权限提示的人工处置；结合 `#6` 完成 P13 中心拒绝无效结果的端到端验收 | 复用真实远端证据；不测平台最大载荷；仅支持已验证版本组合 | [Spec](../spec/01-orca-remote-protocol.md) · [Plan](../spec/01-orca-remote-protocol.plan.md) · [剩余门槛](../spec/orca-probe/remaining-gates.md) |
-| 6 | 分阶段远程闭环 | `REMOTE-WORKFLOW` | 中心逐步派发实现、验证、审查与发布；接入已有 verify 校验器，完成远程观察、人工决策、断线对账及结项 | 开发使用 `#4` 已实测协议及已交付的 `#5` 中心模型；生产启用前通过 `#4` 剩余门槛及本任务验收 | [Spec](../spec/03-remote-execution-and-viewer.md) · [Plan](../spec/03-remote-execution-and-viewer.plan.md) |
+| 6 | 分阶段远程闭环 | `REMOTE-WORKFLOW` | 中心逐步派发实现、验证、审查与发布；接入已有 verify 校验器，完成远程观察、人工决策、断线对账及结项 | 开发使用 `#4` 已实测协议、已交付的 `#3` 决策接口与 `#5` 中心模型；生产启用前通过 `#4` 剩余门槛及本任务验收 | [Spec](../spec/03-remote-execution-and-viewer.md) · [Plan](../spec/03-remote-execution-and-viewer.plan.md) |
 
-可依据实测证据开发受限远程适配器，协议目标保留剩余验收；P13 需要在中心接入后验证，不能将纯校验器测试视为端到端通过。剩余远端探测可与不依赖其结果的本机工作并行。远程闭环和控制台后续功能复用已交付的执行后端、会话读模型与 SQLite 中心权威，扩展同一执行/会话契约，避免形成两套适配器或业务写者。
+可依据实测证据开发受限远程适配器，协议目标保留剩余验收；P13 需要在中心接入后验证，不能将纯校验器测试视为端到端通过。剩余远端探测可与 `#3` 的本机验收并行，但各自保留独立的真实平台证据。远程闭环复用已交付的执行后端、会话读模型、决策与恢复命令以及 SQLite 中心权威，扩展同一执行/会话契约，避免形成两套适配器或业务写者。
 
 首版远程范围仅支持已测 Windows Orca 1.4.209 中心/远端组合，其他版本预检拒绝；结构化消息采用不高于 8 KiB 的序列化大小上限，超限发送前拒绝，宿主权限提示无法可靠分类时交人工核实。生产远程取消不可用，中心保留活跃执行身份与资源占用并要求人工处理，不自动发送 stop 或按终端句柄兜底关闭；已结算目标的正常 release 仍可用。
 
 ### 后续仍依赖的已有基础
 
 - [中心执行模型](../spec/02-execution-model-and-adapter.md)：`#6` 复用 WorkflowRun/Execution/StepAttempt、SQLite 单写者、Query/Command、Operation 和本地 minimal-v1 流程；远程生产执行仍由 `#6` 交付。
+- [人工决策与恢复](../spec/pr-05-intervention.spec.md)与[验证记录](../validation/pr-05-intervention.md)：`#6` 复用已实现的答案仲裁、应用证明门槛和在线恢复入口；`#3` 的本机 TTY/Orca 原生验收仍单独完成，远端能力由 `#6` 独立验证。
 - [真实远端能力报告](../spec/orca-probe/remote-capability-report-2026-09-23.json)与[字段映射](../spec/orca-probe/field-mapping.md)：供远程闭环复用派发、身份、输出、问答、同工作区跨步骤与故障恢复证据；远端执行目标仍须按版本独立验证精确 turn/phase 能力，不能借用本机 `#1` 的验收。
 - [verify 结果校验器](../../internal/steerline/remoteprotocol/verify_result.go)：供远程闭环接入已接受的 worker_done 身份、预期检查清单和执行端 HEAD，阻止缺回执、非零退出、身份或候选 commit 不符的结果推进审查/发布。
-
-## 后续：任务关系视图
-
-原生任务模型、固定 DAG 与无 Beads 项目接入已形成同一中心任务权威。任务创建时固定契约与依赖；中心核验人工合并的 PR 后记录交付并释放后继，未交付任务可受控丢弃。剩余工作是用已有查询构建只读关系视图，不增加任务修改入口。共同要求见 [原生任务共同约束](../spec/native-task-constraints.md)。
-
-| 任务 ID | 任务名称 | 目标标识 | 剩余交付范围 | 关键前置 | 执行规格 |
-| --- | --- | --- | --- | --- | --- |
-| 10 | 任务关系视图 | `DAG-VIEW` | 任务上下游与阻塞说明、只读 JSON 导出 | 已交付的 `#8` 图查询、`#9` 原生接入与 `#2` 控制台查询边界 | [Spec](../spec/dag-view.spec.md) · [Plan](../spec/dag-view.plan.md) |
-
-首版只提供同项目的“前置交付后开工”依赖，沿用现有执行槽策略，不引入父子聚合、条件边或复杂并行调度。中心服务用简单的确定性算法核验依赖并保有任务权威；关系视图只读。原生任务不等待远程闭环全部完成，也不扩大远端能力。
-
-### 后续仍依赖的已有基础
-
-- [原生任务模型](../spec/task-core.spec.md)与[验收记录](../validation/task-core/audit.md)：`#10` 沿用固定任务身份、契约和 SQLite 中心查询。
-- [固定依赖调度](../spec/task-dag.spec.md)与[验收记录](../validation/task-dag/README.md)：`#10` 复用版本化关系查询及任务阻塞、交付事实。
-- [原生项目接入](../spec/beads-exit.spec.md)与[验收记录](../validation/beads-exit/README.md)：`#10` 在已验证的原生任务及真实 TaskDelivery 之上展示关系，保持只读；已支持的本机与 Orca 范围不扩展到未验收的远端能力。
 
 ## 规划约束
 
