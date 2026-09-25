@@ -381,7 +381,7 @@ func (s *Service) collectCodexHistoryPage(ctx context.Context, b codexHistoryBin
 	}
 	base := b.event()
 	var writes []ConversationWrite
-	if cursor.Sequence == 0 {
+	if cursor.Sequence == 0 && len(page.Data) > 0 {
 		e := base
 		e.Type = ConversationGap
 		e.Status = "source_changed"
@@ -407,13 +407,14 @@ func (s *Service) collectCodexHistoryPage(ctx context.Context, b codexHistoryBin
 		hasFinal := false
 		for _, raw := range turn.Items {
 			var item struct {
-				Type  string `json:"type"`
-				Phase string `json:"phase"`
+				Type  string  `json:"type"`
+				Phase string  `json:"phase"`
+				Text  *string `json:"text"`
 			}
 			if err := json.Unmarshal(raw, &item); err != nil {
 				return false, err
 			}
-			if item.Type == "agentMessage" && item.Phase == string(MessagePhaseFinalAnswer) {
+			if item.Type == "agentMessage" && item.Phase == string(MessagePhaseFinalAnswer) && item.Text != nil {
 				hasFinal = true
 				break
 			}
@@ -501,15 +502,16 @@ func (s *Service) recordCodexHistoryCapabilities(ctx context.Context, b codexHis
 		}
 		for _, raw := range turn.Items {
 			var item struct {
-				Type  string `json:"type"`
-				Phase string `json:"phase"`
+				Type  string  `json:"type"`
+				Phase string  `json:"phase"`
+				Text  *string `json:"text"`
 			}
 			if err := json.Unmarshal(raw, &item); err != nil {
 				return err
 			}
 			if item.Type == "agentMessage" && (item.Phase == string(MessagePhaseCommentary) || item.Phase == string(MessagePhaseFinalAnswer)) {
 				values["message_phase"] = ConversationCapability{Name: "message_phase", Status: CapabilityVerified, Evidence: "Native agentMessage.phase was observed through full turn history"}
-				if item.Phase == string(MessagePhaseFinalAnswer) && turn.CompletedAt != nil {
+				if item.Phase == string(MessagePhaseFinalAnswer) && turn.CompletedAt != nil && item.Text != nil {
 					values["final_content"] = ConversationCapability{Name: "final_content", Status: CapabilityVerified, Evidence: "A completed native final_answer item has a persisted full body reference"}
 				}
 			}

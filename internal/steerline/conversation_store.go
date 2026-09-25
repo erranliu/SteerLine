@@ -201,6 +201,9 @@ func commitConversationBody(ctx context.Context, tx *sql.Tx, write ConversationW
 	default:
 		return nil, "", fmt.Errorf("unsupported conversation body update %q", write.BodyMode)
 	}
+	if next == nil {
+		next = []byte{}
+	}
 	revision := currentRevision + 1
 	sum := sha256.Sum256(next)
 	digest := hex.EncodeToString(sum[:])
@@ -433,12 +436,12 @@ func (q ConversationQueryService) ReadMessageBody(ctx context.Context, ref Conve
 	var body []byte
 	var total int64
 	var digest, complete string
-	err := q.Store.db.QueryRowContext(ctx, `SELECT body,byte_count,sha256,completeness FROM conversation_bodies WHERE project_identity=? AND execution_id=? AND attempt_id=? AND item_key=? AND revision=?`, q.Project, ref.ExecutionID, ref.AttemptID, ref.ItemKey, ref.Revision).Scan(&body, &total, &digest, &complete)
+	err := q.Store.db.QueryRowContext(ctx, `SELECT substr(body,1,?),byte_count,sha256,completeness FROM conversation_bodies WHERE project_identity=? AND execution_id=? AND attempt_id=? AND item_key=? AND revision=?`, maxConversationBodyBytes+1, q.Project, ref.ExecutionID, ref.AttemptID, ref.ItemKey, ref.Revision).Scan(&body, &total, &digest, &complete)
 	if err != nil {
 		return ConversationBodyPage{}, err
 	}
 	actual := sha256.Sum256(body)
-	if total != int64(len(body)) || digest != hex.EncodeToString(actual[:]) || !utf8.Valid(body) {
+	if len(body) > maxConversationBodyBytes || total != int64(len(body)) || digest != hex.EncodeToString(actual[:]) || !utf8.Valid(body) {
 		return ConversationBodyPage{}, errors.New("message body revision is corrupt")
 	}
 	if offset > total {
@@ -472,12 +475,12 @@ func (q ConversationQueryService) ReadRaw(ctx context.Context, ref ConversationR
 	var body []byte
 	var total int64
 	var digest string
-	err := q.Store.db.QueryRowContext(ctx, `SELECT payload,byte_count,sha256 FROM conversation_raw WHERE project_identity=? AND execution_id=? AND attempt_id=? AND raw_id=?`, q.Project, ref.ExecutionID, ref.AttemptID, ref.ID).Scan(&body, &total, &digest)
+	err := q.Store.db.QueryRowContext(ctx, `SELECT substr(payload,1,?),byte_count,sha256 FROM conversation_raw WHERE project_identity=? AND execution_id=? AND attempt_id=? AND raw_id=?`, maxConversationBodyBytes+1, q.Project, ref.ExecutionID, ref.AttemptID, ref.ID).Scan(&body, &total, &digest)
 	if err != nil {
 		return ConversationRawPage{}, err
 	}
 	actual := sha256.Sum256(body)
-	if total != int64(len(body)) || digest != hex.EncodeToString(actual[:]) {
+	if len(body) > maxConversationBodyBytes || total != int64(len(body)) || digest != hex.EncodeToString(actual[:]) {
 		return ConversationRawPage{}, errors.New("raw conversation record is corrupt")
 	}
 	if offset > total {

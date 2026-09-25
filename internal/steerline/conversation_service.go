@@ -1,6 +1,7 @@
 package steerline
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -16,9 +17,6 @@ func (s *Service) recordConversationEvent(run *Run, source WorkerEvent) (retErr 
 	}
 	if source.Source == "orca-terminal-v2" {
 		return s.recordOrcaTerminalEvent(run, source)
-	}
-	if err := s.bindLocalCodexHistory(run, source); err != nil {
-		return err
 	}
 	if source.Source != "" && source.Source != "codex-jsonl" {
 		return nil
@@ -111,6 +109,9 @@ func (s *Service) recordConversationEvent(run *Run, source WorkerEvent) (retErr 
 			return errors.New("Codex conversation source path is unavailable")
 		}
 		position, positionErr := currentConversationJournalPosition(context.Background(), s.domainStore, s.Config.identity, executionID, attemptID, event.Source, segment, path, source.SourceIdentity, source.SourceOffset+source.SourceLength, source.SourceSeq)
+		if positionErr == nil && !source.SourceGap && len(source.Raw) > 0 {
+			positionErr = verifyConversationSourceBytes(path, source.SourceIdentity, source.SourceOffset, source.SourceLength, source.Raw)
+		}
 		if positionErr != nil {
 			gap := event
 			gap.Type, gap.Phase, gap.Status = ConversationGap, MessagePhaseUnknown, "source_unavailable"
@@ -127,8 +128,33 @@ func (s *Service) recordConversationEvent(run *Run, source WorkerEvent) (retErr 
 			return positionErr
 		}
 	}
+	if err := s.bindLocalCodexHistory(run, source); err != nil {
+		return err
+	}
 	_, err = s.domainStore.CommitConversation(context.Background(), []ConversationWrite{write}, checkpoint)
 	return err
+}
+
+func verifyConversationSourceBytes(path, expectedFileID string, offset, length int64, raw []byte) error {
+	if offset < 0 || length != int64(len(raw)) {
+		return errors.New("conversation source byte range is invalid")
+	}
+	f, fileID, err := openJournal(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	if fileID != expectedFileID {
+		return errors.New("conversation source file changed before committing its record")
+	}
+	stored := make([]byte, len(raw))
+	if _, err = f.ReadAt(stored, offset); err != nil {
+		return err
+	}
+	if !bytes.Equal(stored, raw) {
+		return errors.New("conversation source bytes changed before committing their checkpoint")
+	}
+	return nil
 }
 
 func (s *Service) recordOrcaTerminalEvent(run *Run, source WorkerEvent) error {

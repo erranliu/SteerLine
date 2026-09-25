@@ -51,6 +51,54 @@ func TestConversationMapperKeepsTurnAndPhaseEvidenceExplicit(t *testing.T) {
 	}
 }
 
+func TestConversationMissingTextPreservesSnapshotAndEmptyFinal(t *testing.T) {
+	if _, present := stringFieldPresent(map[string]json.RawMessage{"text": json.RawMessage(" null ")}, "text"); present {
+		t.Fatal("JSON null was treated as explicit empty message text")
+	}
+	if text, present := stringFieldPresent(map[string]json.RawMessage{"text": json.RawMessage(`""`)}, "text"); !present || text != "" {
+		t.Fatal("explicit empty message text was treated as missing")
+	}
+	ctx := context.Background()
+	store, err := OpenSQLiteStore(filepath.Join(t.TempDir(), "conversation.db"))
+	require(t, err)
+	defer store.Close()
+	mapper := &ConversationMapper{}
+	lines := []string{
+		`{"type":"turn.started"}`,
+		`{"type":"item.updated","item":{"id":"message","type":"agent_message","text":"kept"}}`,
+		`{"type":"item.updated","item":{"id":"message","type":"agent_message","status":"in_progress"}}`,
+		`{"type":"item.completed","item":{"id":"message","type":"agent_message","phase":"final_answer"}}`,
+		`{"type":"turn.completed"}`,
+		`{"type":"turn.started"}`,
+		`{"type":"item.completed","item":{"id":"empty","type":"agent_message","phase":"final_answer","text":""}}`,
+	}
+	var events []ConversationEvent
+	for i, line := range lines {
+		base := ConversationEvent{ProjectID: "project", WorkflowID: "workflow", ExecutionID: "execution", AttemptID: "attempt", SourceSegment: "segment", SourceEventID: fmt.Sprintf("seq:%d", i+1), SourceSeq: uint64(i + 1)}
+		write := mapper.MapCodexJSONL(base, []byte(line+"\n"))
+		committed, commitErr := store.CommitConversation(ctx, []ConversationWrite{write}, ConversationCheckpoint{})
+		require(t, commitErr)
+		events = append(events, committed[0])
+	}
+	if events[1].Body == nil || events[2].Body != nil || events[3].Body != nil || events[3].FinalAvailability != FinalUnknown || events[4].FinalAvailability != FinalUnknown {
+		t.Fatalf("missing text erased a snapshot or claimed a final: %+v", events)
+	}
+	query := ConversationQueryService{Store: store, Project: "project"}
+	kept, err := query.ReadMessageBody(ctx, *events[1].Body, 0, 100)
+	require(t, err)
+	if string(kept.Data) != "kept" || !kept.Complete {
+		t.Fatalf("missing text changed the previous snapshot: %+v", kept)
+	}
+	if events[6].Body == nil || events[6].Body.Completeness != BodyComplete || events[6].Body.Bytes != 0 || events[6].FinalAvailability != FinalAvailable {
+		t.Fatalf("explicit empty final was not preserved as complete: %+v", events[6])
+	}
+	empty, err := query.ReadMessageBody(ctx, *events[6].Body, 0, 100)
+	require(t, err)
+	if !empty.Complete || len(empty.Data) != 0 {
+		t.Fatalf("explicit empty final was not readable: %+v", empty)
+	}
+}
+
 func TestConversationMapperNativeCodexTwoTurnFixture(t *testing.T) {
 	raw, err := os.ReadFile(filepath.Join("..", "..", "docs", "validation", "pr-04b-local-codex-native-2026-09-25.jsonl"))
 	if err != nil {
@@ -249,10 +297,20 @@ func TestConversationBodyAndRawCorruptionCannotReadAsComplete(t *testing.T) {
 	if page, err := query.ReadMessageBody(ctx, *events[0].Body, 0, 64); err == nil || page.Complete {
 		t.Fatalf("modified body was reported complete: page=%+v err=%v", page, err)
 	}
+	_, err = store.db.ExecContext(ctx, `UPDATE conversation_bodies SET body=zeroblob(?) WHERE project_identity=? AND execution_id=? AND attempt_id=? AND item_key=? AND revision=?`, maxConversationBodyBytes+1, "project", "execution", "attempt", events[0].Body.ItemKey, events[0].Body.Revision)
+	require(t, err)
+	if page, err := query.ReadMessageBody(ctx, *events[0].Body, 0, 64); err == nil || page.Complete {
+		t.Fatalf("oversized corrupt body was reported complete: page=%+v err=%v", page, err)
+	}
 	_, err = store.db.ExecContext(ctx, `UPDATE conversation_raw SET payload=? WHERE project_identity=? AND execution_id=? AND attempt_id=? AND raw_id=?`, []byte("RAW-record"), "project", "execution", "attempt", events[0].Raw.ID)
 	require(t, err)
 	if page, err := query.ReadRaw(ctx, *events[0].Raw, 0, 64); err == nil || page.Complete {
 		t.Fatalf("modified raw record was reported complete: page=%+v err=%v", page, err)
+	}
+	_, err = store.db.ExecContext(ctx, `UPDATE conversation_raw SET payload=zeroblob(?) WHERE project_identity=? AND execution_id=? AND attempt_id=? AND raw_id=?`, maxConversationBodyBytes+1, "project", "execution", "attempt", events[0].Raw.ID)
+	require(t, err)
+	if page, err := query.ReadRaw(ctx, *events[0].Raw, 0, 64); err == nil || page.Complete {
+		t.Fatalf("oversized corrupt raw record was reported complete: page=%+v err=%v", page, err)
 	}
 	_, err = store.db.ExecContext(ctx, `DELETE FROM conversation_bodies WHERE project_identity=? AND execution_id=? AND attempt_id=? AND item_key=? AND revision=?`, "project", "execution", "attempt", events[0].Body.ItemKey, events[0].Body.Revision)
 	require(t, err)
@@ -561,6 +619,50 @@ func TestConversationLiveSourceFailureKeepsGapAndMapperPosition(t *testing.T) {
 	require(t, err)
 	if len(page.Events) != 2 || page.Events[1].Type != ConversationGap || page.Events[1].Status != "source_unavailable" || page.Events[1].Raw == nil {
 		t.Fatalf("failed source was not visible with raw evidence: %+v", page.Events)
+	}
+}
+
+func TestConversationChangedLiveBytesCannotBindOrCheckpoint(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	runID := newID()
+	path := filepath.Join(root, "runs", runID, "events.jsonl")
+	require(t, os.MkdirAll(filepath.Dir(path), 0700))
+	actualSession := "00000000-0000-0000-0000-000000000001"
+	forgedSession := "00000000-0000-0000-0000-000000000002"
+	actual := []byte(`{"type":"thread.started","thread_id":"` + actualSession + `"}` + "\n")
+	forged := []byte(`{"type":"thread.started","thread_id":"` + forgedSession + `"}` + "\n")
+	if len(actual) != len(forged) {
+		t.Fatal("same-length source rewrite fixture is invalid")
+	}
+	require(t, os.WriteFile(path, actual, 0600))
+	file, fileID, err := openJournal(path)
+	require(t, err)
+	require(t, file.Close())
+	segment := "local-jsonl-v1:" + fileID
+	marker := ConversationSourceMarker{Version: 1, ProjectID: "project", WorkflowID: runID, ExecutionID: "execution", AttemptID: runID, Backend: BackendLocal, Protocol: ProtocolLocalProcess, Agent: "codex", TargetID: "local", Source: "codex-jsonl", SourceSegment: segment, SourceIdentity: fileID, RecordName: "events.jsonl", CreatedAt: time.Now().UTC(), ReaderCommand: Command{Executable: "codex"}}
+	markerBytes, err := json.Marshal(marker)
+	require(t, err)
+	require(t, AtomicWrite(filepath.Join(filepath.Dir(path), ConversationSourceMarkerName), markerBytes))
+	store, err := OpenSQLiteStore(filepath.Join(root, "steerline.db"))
+	require(t, err)
+	defer store.Close()
+	run := &Run{RunID: runID, AttemptID: runID, ExecutionID: "execution", Backend: string(BackendLocal), Protocol: string(ProtocolLocalProcess), Agent: "codex", Target: ExecutionTarget{ID: "local"}, WorktreePath: &root, LogPath: &path}
+	service := &Service{Config: Config{RunDir: root, identity: "project", Codex: Command{Executable: "codex"}}, domainStore: store}
+	source := WorkerEvent{RunID: runID, AttemptID: runID, Source: "codex-jsonl", SourceSegment: segment, SourceIdentity: fileID, SourceSeq: 1, SourceOffset: 0, SourceLength: int64(len(forged)), Raw: forged, Session: forgedSession}
+	if err = service.recordConversationEvent(run, source); err == nil || !strings.Contains(err.Error(), "source bytes changed") {
+		t.Fatalf("rewritten source bytes were accepted: %v", err)
+	}
+	if _, err = os.Stat(localCodexHistoryBindingPath(filepath.Dir(path), forgedSession)); !os.IsNotExist(err) {
+		t.Fatalf("undurable session was bound before source verification: %v", err)
+	}
+	if _, err = store.ConversationCheckpoint(ctx, "project", "execution", runID, "codex-jsonl", segment); err == nil {
+		t.Fatal("rewritten source advanced the checkpoint")
+	}
+	page, err := (ConversationQueryService{Store: store, Project: "project"}).ReadConversation(ctx, ConversationFilter{ExecutionID: "execution", AttemptID: runID, Source: "codex-jsonl"}, "", 10)
+	require(t, err)
+	if len(page.Events) != 1 || page.Events[0].Type != ConversationGap || page.Events[0].Status != "source_unavailable" {
+		t.Fatalf("rewritten source did not leave a visible gap: %+v", page.Events)
 	}
 }
 

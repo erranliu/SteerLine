@@ -44,6 +44,10 @@ func TestCodexHistoryServerHelper(t *testing.T) {
 			if strings.TrimSpace(string(stage)) == "disconnect" {
 				os.Exit(8)
 			}
+			if strings.TrimSpace(string(stage)) == "empty" {
+				result = map[string]any{"data": []any{}, "nextCursor": nil, "backwardsCursor": nil}
+				break
+			}
 			if path := os.Getenv("STEERLINE_CODEX_HISTORY_MOCK_CALLS"); path != "" {
 				f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
 				if err != nil {
@@ -56,6 +60,9 @@ func TestCodexHistoryServerHelper(t *testing.T) {
 				}
 			}
 			first := map[string]any{"id": "first-turn", "itemsView": "full", "status": "completed", "completedAt": 1, "items": []any{map[string]any{"id": "first-message", "type": "agentMessage", "phase": "commentary", "text": "progress"}}}
+			if strings.TrimSpace(string(stage)) == "missing-final-text" {
+				first["items"] = append(first["items"].([]any), map[string]any{"id": "late-final", "type": "agentMessage", "phase": "final_answer"})
+			}
 			if strings.TrimSpace(string(stage)) == "late" {
 				first["items"] = append(first["items"].([]any), map[string]any{"id": "late-final", "type": "agentMessage", "phase": "final_answer", "text": "late complete"})
 			}
@@ -146,6 +153,143 @@ func TestCodexHistoryReconcilesLateFinalInEarlierTurn(t *testing.T) {
 		if statuses[name] != CapabilityVerified {
 			t.Fatalf("native capability %s was not reported: %+v", name, statuses)
 		}
+	}
+}
+
+func TestCodexHistoryReconcilesFinalTextArrivingAfterTerminalStatus(t *testing.T) {
+	workspace, root := t.TempDir(), t.TempDir()
+	stage := filepath.Join(root, "stage")
+	require(t, os.WriteFile(stage, []byte("missing-final-text"), 0600))
+	t.Setenv("STEERLINE_CODEX_HISTORY_MOCK", "1")
+	t.Setenv("STEERLINE_CODEX_HISTORY_MOCK_WORKSPACE", workspace)
+	t.Setenv("STEERLINE_CODEX_HISTORY_MOCK_STATE", stage)
+	store, err := OpenSQLiteStore(filepath.Join(root, "history.db"))
+	require(t, err)
+	defer store.Close()
+	binding := codexHistoryBinding{Version: 1, ProjectID: "project", WorkflowID: "workflow", ExecutionID: "execution", AttemptID: "attempt", Backend: BackendLocal, Protocol: ProtocolLocalProcess, TargetID: "local", Workspace: workspace, SessionID: "00000000-0000-0000-0000-000000000001", Command: Command{Executable: os.Args[0], Args: []string{"-test.run=^TestCodexHistoryServerHelper$"}}}
+	service := &Service{domainStore: store}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	_, err = service.collectCodexHistoryPage(ctx, binding)
+	require(t, err)
+	checkpoint, err := store.ConversationCheckpoint(ctx, binding.ProjectID, binding.ExecutionID, binding.AttemptID, "codex-app-server", binding.identity())
+	require(t, err)
+	var saved codexHistoryCursor
+	require(t, json.Unmarshal([]byte(checkpoint.Cursor), &saved))
+	if len(saved.Pending) != 1 || saved.Pending[0].ID != "first-turn" {
+		t.Fatalf("final without text was dropped from reconciliation: %+v", saved)
+	}
+	reports, err := store.ConversationCapabilityReports(ctx, BackendLocal, ProtocolLocalProcess, "local", 1)
+	require(t, err)
+	if len(reports) != 1 {
+		t.Fatal("missing-text source has no capability report")
+	}
+	for _, capability := range reports[0].Capabilities {
+		if capability.Name == "final_content" && capability.Status != CapabilityNotTested {
+			t.Fatalf("missing text falsely verified final content: %+v", capability)
+		}
+	}
+	query := ConversationQueryService{Store: store, Project: "project"}
+	filter := ConversationFilter{ExecutionID: binding.ExecutionID, AttemptID: binding.AttemptID}
+	page, err := query.ReadConversation(ctx, filter, "", 100)
+	require(t, err)
+	for _, event := range page.Events {
+		if event.Phase == MessagePhaseFinalAnswer && (event.Body != nil || event.FinalAvailability == FinalAvailable) {
+			t.Fatalf("missing final text was presented as complete: %+v", event)
+		}
+	}
+	require(t, os.WriteFile(stage, []byte("late"), 0600))
+	for i := 0; i < 4; i++ {
+		_, err = service.collectCodexHistoryPage(ctx, binding)
+		require(t, err)
+	}
+	checkpoint, err = store.ConversationCheckpoint(ctx, binding.ProjectID, binding.ExecutionID, binding.AttemptID, "codex-app-server", binding.identity())
+	require(t, err)
+	saved = codexHistoryCursor{}
+	require(t, json.Unmarshal([]byte(checkpoint.Cursor), &saved))
+	if len(saved.Pending) != 0 {
+		t.Fatalf("late final text left a pending turn: %+v", saved)
+	}
+	page, err = query.ReadConversation(ctx, filter, "", 100)
+	require(t, err)
+	finals := 0
+	for _, event := range page.Events {
+		if event.TurnID == "first-turn" && event.Phase == MessagePhaseFinalAnswer && event.FinalAvailability == FinalAvailable {
+			finals++
+			if event.Body == nil {
+				t.Fatal("reconciled final has no full body reference")
+			}
+		}
+	}
+	if finals != 1 {
+		t.Fatalf("late final text was not reconciled exactly once: %+v", page.Events)
+	}
+	reports, err = store.ConversationCapabilityReports(ctx, BackendLocal, ProtocolLocalProcess, "local", 1)
+	require(t, err)
+	if len(reports) != 1 {
+		t.Fatal("reconciled source lost its capability report")
+	}
+	verified := false
+	for _, capability := range reports[0].Capabilities {
+		if capability.Name == "final_content" && capability.Status == CapabilityVerified {
+			verified = true
+		}
+	}
+	if !verified {
+		t.Fatal("reconciled final text did not verify source capability")
+	}
+}
+
+func TestCodexHistoryEmptyPageDoesNotHideRawProgress(t *testing.T) {
+	workspace, root := t.TempDir(), t.TempDir()
+	stage := filepath.Join(root, "stage")
+	require(t, os.WriteFile(stage, []byte("empty"), 0600))
+	t.Setenv("STEERLINE_CODEX_HISTORY_MOCK", "1")
+	t.Setenv("STEERLINE_CODEX_HISTORY_MOCK_WORKSPACE", workspace)
+	t.Setenv("STEERLINE_CODEX_HISTORY_MOCK_STATE", stage)
+	store, err := OpenSQLiteStore(filepath.Join(root, "history.db"))
+	require(t, err)
+	defer store.Close()
+	raw := conversationTestWrite("raw-progress", 1, "complete", []byte("progress before native history"), []byte("raw-progress"))
+	_, err = store.CommitConversation(context.Background(), []ConversationWrite{raw}, ConversationCheckpoint{})
+	require(t, err)
+	binding := codexHistoryBinding{Version: 1, ProjectID: "project", WorkflowID: "workflow", ExecutionID: "execution", AttemptID: "attempt", Backend: BackendLocal, Protocol: ProtocolLocalProcess, TargetID: "local", Workspace: workspace, SessionID: "00000000-0000-0000-0000-000000000001", Command: Command{Executable: os.Args[0], Args: []string{"-test.run=^TestCodexHistoryServerHelper$"}}}
+	service := &Service{domainStore: store}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	_, err = service.collectCodexHistoryPage(ctx, binding)
+	require(t, err)
+	query := ConversationQueryService{Store: store, Project: "project"}
+	filter := ConversationFilter{ExecutionID: binding.ExecutionID, AttemptID: binding.AttemptID}
+	page, err := query.ReadConversation(ctx, filter, "", 100)
+	require(t, err)
+	if len(page.Events) != 1 || page.Events[0].Source != "codex-jsonl" {
+		t.Fatalf("empty native history hid existing raw progress: %+v", page.Events)
+	}
+	require(t, os.WriteFile(stage, []byte("late"), 0600))
+	_, err = service.collectCodexHistoryPage(ctx, binding)
+	require(t, err)
+	page, err = query.ReadConversation(ctx, filter, "", 100)
+	require(t, err)
+	sessions, changed, rawShown := 0, 0, 0
+	for _, event := range page.Events {
+		if event.Source == "codex-jsonl" {
+			rawShown++
+		}
+		if event.Source == "codex-app-server" && event.Type == ConversationSession {
+			sessions++
+		}
+		if event.Source == "codex-app-server" && event.Type == ConversationGap && event.Status == "source_changed" {
+			changed++
+		}
+	}
+	if sessions != 1 || changed != 1 || rawShown != 0 {
+		t.Fatalf("first native turn did not switch projections exactly once: %+v", page.Events)
+	}
+	rawPage, err := query.ReadConversation(ctx, ConversationFilter{ExecutionID: binding.ExecutionID, AttemptID: binding.AttemptID, Source: "codex-jsonl"}, "", 100)
+	require(t, err)
+	if len(rawPage.Events) != 1 {
+		t.Fatal("explicit raw source history disappeared after native selection")
 	}
 }
 
@@ -604,6 +748,31 @@ func TestCodexHistoryTurnCompletionAndLateFinal(t *testing.T) {
 		if write.Event.Type == ConversationTurnCancelled || write.Event.Type == ConversationTurnCompleted {
 			t.Fatal("offline history's synthetic interrupted status became a terminal event")
 		}
+	}
+}
+
+func TestCodexHistoryMissingTextDoesNotClaimFinalBody(t *testing.T) {
+	base := ConversationEvent{ProjectID: "project", ExecutionID: "execution", AttemptID: "attempt", SourceSegment: "native", SessionID: "session"}
+	completedAt := int64(1)
+	missing := codexHistoryTurn{ID: "missing-turn", Status: "completed", CompletedAt: &completedAt, Items: []json.RawMessage{json.RawMessage(`{"id":"missing-final","type":"agentMessage","phase":"final_answer"}`)}}
+	writes, err := mapCodexHistoryTurn(base, missing, 1)
+	require(t, err)
+	if len(writes) != 3 || writes[1].BodyMode != "" || writes[1].Event.FinalAvailability != FinalUnknown || writes[2].Event.FinalAvailability != FinalUnknown {
+		t.Fatalf("native final without text was claimed as complete: %+v", writes)
+	}
+	empty := codexHistoryTurn{ID: "empty-turn", Status: "completed", CompletedAt: &completedAt, Items: []json.RawMessage{json.RawMessage(`{"id":"empty-final","type":"agentMessage","phase":"final_answer","text":""}`)}}
+	writes, err = mapCodexHistoryTurn(base, empty, 10)
+	require(t, err)
+	if len(writes) != 3 || writes[1].BodyMode != "complete" || writes[1].Event.FinalAvailability != FinalAvailable || writes[2].Event.FinalAvailability != FinalAvailable {
+		t.Fatalf("explicit empty native final was not complete: %+v", writes)
+	}
+	store, err := OpenSQLiteStore(filepath.Join(t.TempDir(), "history.db"))
+	require(t, err)
+	defer store.Close()
+	events, err := store.CommitConversation(context.Background(), writes, ConversationCheckpoint{})
+	require(t, err)
+	if events[1].Body == nil || events[1].Body.Bytes != 0 || events[1].Body.Completeness != BodyComplete {
+		t.Fatalf("explicit empty native final lacks a readable body reference: %+v", events[1])
 	}
 }
 

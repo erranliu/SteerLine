@@ -231,14 +231,15 @@ func mapCodexHistoryTurn(base ConversationEvent, turn codexHistoryTurn, sequence
 	terminal := turn.CompletedAt != nil && (turn.Status == "completed" || turn.Status == "failed" || turn.Status == "interrupted")
 	finalSeen := false
 	unknownPhase := false
+	missingFinalContent := false
 	for _, raw := range turn.Items {
 		var item struct {
-			ID     string `json:"id"`
-			Type   string `json:"type"`
-			Text   string `json:"text"`
-			Phase  string `json:"phase"`
-			Status string `json:"status"`
-			Output string `json:"aggregatedOutput"`
+			ID     string  `json:"id"`
+			Type   string  `json:"type"`
+			Text   *string `json:"text"`
+			Phase  string  `json:"phase"`
+			Status string  `json:"status"`
+			Output string  `json:"aggregatedOutput"`
 		}
 		if err := json.Unmarshal(raw, &item); err != nil {
 			return nil, err
@@ -259,7 +260,9 @@ func mapCodexHistoryTurn(base ConversationEvent, turn codexHistoryTurn, sequence
 		switch item.Type {
 		case "agentMessage":
 			e.Type = ConversationMessageSnapshot
-			write.Body, write.BodyMode = []byte(item.Text), "snapshot"
+			if item.Text != nil {
+				write.Body, write.BodyMode = []byte(*item.Text), "snapshot"
+			}
 			if item.Phase == string(MessagePhaseCommentary) || item.Phase == string(MessagePhaseFinalAnswer) {
 				e.Phase = MessagePhase(item.Phase)
 			} else {
@@ -267,14 +270,21 @@ func mapCodexHistoryTurn(base ConversationEvent, turn codexHistoryTurn, sequence
 			}
 			if terminal {
 				e.Type = ConversationMessageComplete
-				write.BodyMode = "complete"
+				if item.Text != nil {
+					write.BodyMode = "complete"
+				}
 			}
 			if e.Phase == MessagePhaseFinalAnswer {
-				finalSeen = true
-				if terminal {
-					e.FinalAvailability = FinalAvailable
+				if item.Text == nil {
+					missingFinalContent = true
+					e.FinalAvailability = FinalUnknown
 				} else {
-					e.FinalAvailability = FinalPending
+					finalSeen = true
+					if terminal {
+						e.FinalAvailability = FinalAvailable
+					} else {
+						e.FinalAvailability = FinalPending
+					}
 				}
 			}
 		case "commandExecution", "mcpToolCall", "dynamicToolCall", "fileChange", "webSearch":
@@ -312,7 +322,7 @@ func mapCodexHistoryTurn(base ConversationEvent, turn codexHistoryTurn, sequence
 		end.FinalAvailability = FinalAbsent
 		if finalSeen {
 			end.FinalAvailability = FinalAvailable
-		} else if unknownPhase {
+		} else if unknownPhase || missingFinalContent {
 			end.FinalAvailability = FinalUnknown
 		}
 		end.SourceEventID += ":final:" + string(end.FinalAvailability)

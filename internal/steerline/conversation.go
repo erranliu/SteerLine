@@ -315,26 +315,32 @@ func (m *ConversationMapper) MapCodexJSONL(ctx ConversationEvent, raw []byte) Co
 	case "item.started", "item.updated", "item.completed":
 		switch itemType {
 		case "agent_message":
-			text := stringField(item, "text")
-			if text == "" {
-				text = stringField(item, "message")
+			text, textPresent := stringFieldPresent(item, "text")
+			if !textPresent {
+				text, textPresent = stringFieldPresent(item, "message")
 			}
 			body = []byte(text)
 			switch eventType {
 			case "item.completed":
 				ctx.Type, ctx.Status = ConversationMessageComplete, "completed"
 				if ctx.Phase == MessagePhaseFinalAnswer {
-					ctx.FinalAvailability = FinalAvailable
-					if m.turnFinalSeen == nil {
-						m.turnFinalSeen = map[string]bool{}
+					ctx.FinalAvailability = FinalUnknown
+					if textPresent {
+						ctx.FinalAvailability = FinalAvailable
+						if m.turnFinalSeen == nil {
+							m.turnFinalSeen = map[string]bool{}
+						}
+						m.turnFinalSeen[ctx.TurnID] = true
 					}
-					m.turnFinalSeen[ctx.TurnID] = true
 				}
-				if text != "" {
+				if textPresent {
 					bodyMode = "complete"
 				}
 			case "item.updated":
-				ctx.Type, ctx.Status, bodyMode = ConversationMessageSnapshot, "updated", "snapshot"
+				ctx.Type, ctx.Status = ConversationMessageSnapshot, "updated"
+				if textPresent {
+					bodyMode = "snapshot"
+				}
 			default:
 				ctx.Type, ctx.Status = ConversationObservation, "started"
 			}
@@ -510,6 +516,18 @@ func stringField(fields map[string]json.RawMessage, name string) string {
 	var value string
 	_ = json.Unmarshal(fields[name], &value)
 	return value
+}
+
+func stringFieldPresent(fields map[string]json.RawMessage, name string) (string, bool) {
+	raw, ok := fields[name]
+	if !ok {
+		return "", false
+	}
+	var value *string
+	if json.Unmarshal(raw, &value) != nil || value == nil {
+		return "", false
+	}
+	return *value, true
 }
 
 func uintField(fields map[string]json.RawMessage, name string) uint64 {
