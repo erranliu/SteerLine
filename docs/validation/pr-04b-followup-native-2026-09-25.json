@@ -34,6 +34,21 @@
     "mapped_as": "turn.cancelled with final absent",
     "source_fixture": "pr-04b-native-cancelled-2026-09-25.json"
   },
+  "real_local_failed_turn": {
+    "source": "public Codex app-server thread/read from an isolated unauthenticated Codex home",
+    "session_sha256": "b6540f3182f07479c07fb38f3abdf0143c82b667c83c7e970e7f3654c6e14512",
+    "status": "failed",
+    "completed_at_present": true,
+    "error_class": "401 Unauthorized, missing authentication header",
+    "mapped_as": "turn.failed with final absent and a readable raw error reference",
+    "production_collector_replay_without_duplicates": true,
+    "source_fixture": "pr-04b-native-failed-2026-09-25.json"
+  },
+  "remaining_e_a4_probes": {
+    "host_wait": "Isolated Orca Codex TUI accepted an outside-worktree write prompt, but terminal/show continued to report agentWait:null; no write occurred and the terminal was stopped.",
+    "late_final": "A public thread/inject_items assistant item was accepted after thread/resume but did not appear in the completed turn; this is not native late-final evidence.",
+    "disconnect": "A real active-host disconnect was not induced because it would interrupt the shared Orca runtime; existing protocol fault tests cover source_unavailable without certifying a native disconnect sample."
+  },
   "real_orca_retention": {
     "source": "Orca terminal v2 stream in isolated shell terminal",
     "emitted_rows": 20000,

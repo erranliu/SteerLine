@@ -426,6 +426,87 @@ func TestCodexHistoryRealCancelledTurnFixture(t *testing.T) {
 	}
 }
 
+func TestCodexHistoryRealFailedTurnFixture(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", "docs", "validation", "pr-04b-native-failed-2026-09-25.json"))
+	require(t, err)
+	var fixture struct {
+		Thread codexHistoryThread `json:"thread"`
+	}
+	require(t, json.Unmarshal(raw, &fixture))
+	if len(fixture.Thread.Turns) != 1 || fixture.Thread.Turns[0].CompletedAt == nil || fixture.Thread.Turns[0].Status != "failed" {
+		t.Fatal("real failed turn lacks native terminal evidence")
+	}
+	base := ConversationEvent{ProjectID: "project", ExecutionID: "execution", AttemptID: "attempt", Backend: BackendLocal, Protocol: ProtocolLocalProcess, Agent: "codex", SourceSegment: "native", SourceIdentity: "native", SessionID: fixture.Thread.ID}
+	writes, err := mapCodexHistoryTurn(base, fixture.Thread.Turns[0], 1)
+	require(t, err)
+	if len(writes) != 3 || writes[0].Event.Type != ConversationTurnStarted || writes[1].Event.Type != ConversationObservation || writes[2].Event.Type != ConversationTurnFailed || writes[2].Event.Status != "failed" || writes[2].Event.FinalAvailability != FinalAbsent {
+		t.Fatalf("real native failure or missing final was misrepresented: %+v", writes)
+	}
+	store, err := OpenSQLiteStore(filepath.Join(t.TempDir(), "failure.db"))
+	require(t, err)
+	defer store.Close()
+	events, err := store.CommitConversation(context.Background(), writes, ConversationCheckpoint{})
+	require(t, err)
+	if events[2].Raw == nil {
+		t.Fatal("real failure lost its raw error evidence")
+	}
+	page, err := (ConversationQueryService{Store: store, Project: "project"}).ReadRaw(context.Background(), *events[2].Raw, 0, 4096)
+	require(t, err)
+	if !page.Complete || !strings.Contains(string(page.Data), "401 Unauthorized") {
+		t.Fatalf("real failure error evidence changed: %+v", page)
+	}
+}
+
+// TestCodexHistoryRealFailedAcceptance reads an exact isolated unauthenticated
+// session through the production public-history collector.
+func TestCodexHistoryRealFailedAcceptance(t *testing.T) {
+	path := os.Getenv("STEERLINE_CODEX_HISTORY_FAILED_BINDING")
+	if path == "" {
+		t.Skip("set an exact isolated failed-turn binding to run acceptance")
+	}
+	raw, err := os.ReadFile(path)
+	require(t, err)
+	var binding codexHistoryBinding
+	require(t, json.Unmarshal(raw, &binding))
+	if binding.Backend != BackendLocal || binding.Home == "" {
+		t.Fatal("failed-turn acceptance requires an isolated local Codex home")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+	store, err := OpenSQLiteStore(filepath.Join(t.TempDir(), "failed.db"))
+	require(t, err)
+	defer store.Close()
+	service := &Service{domainStore: store}
+	_, err = service.collectCodexHistoryPage(ctx, binding)
+	require(t, err)
+	query := ConversationQueryService{Store: store, Project: binding.ProjectID}
+	filter := ConversationFilter{ExecutionID: binding.ExecutionID, AttemptID: binding.AttemptID, Source: "codex-app-server"}
+	page, err := query.ReadConversation(ctx, filter, "", 100)
+	require(t, err)
+	failures := 0
+	for _, event := range page.Events {
+		if event.Type == ConversationTurnFailed {
+			failures++
+			if event.Status != "failed" || event.FinalAvailability != FinalAbsent || event.Raw == nil {
+				t.Fatalf("real failed turn lost native status or error reference: %+v", event)
+			}
+		}
+		if event.Type == ConversationTurnCancelled || event.Type == ConversationMessageComplete {
+			t.Fatalf("real failed turn was confused with cancellation or final: %+v", event)
+		}
+	}
+	if failures != 1 {
+		t.Fatalf("real failed turn was not collected once: %+v", page.Events)
+	}
+	_, err = service.collectCodexHistoryPage(ctx, binding)
+	require(t, err)
+	replayed, err := query.ReadConversation(ctx, filter, "", 100)
+	require(t, err)
+	if len(replayed.Events) != len(page.Events) {
+		t.Fatalf("real failed-turn replay duplicated events: %d -> %d", len(page.Events), len(replayed.Events))
+	}
+}
+
 func TestCodexHistoryTurnCompletionAndLateFinal(t *testing.T) {
 	base := ConversationEvent{ProjectID: "p", ExecutionID: "e", AttemptID: "a", SourceSegment: "s", SessionID: "session"}
 	completedAt := int64(1)
