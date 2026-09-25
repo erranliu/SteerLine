@@ -336,7 +336,7 @@ func TestMinimalLocalDecisionAnswerIsRejectedWithoutContinuation(t *testing.T) {
 	if decision == nil || decision.Status != "pending" || len(s.State.Decisions) != 1 {
 		t.Fatalf("decision was not persisted: run=%+v records=%+v", decision, s.State.Decisions)
 	}
-	answer, err := json.Marshal(DecisionAnswer{DecisionID: decision.ID, RunID: s.State.Runs[0].RunID, OptionID: "keep", AnsweredBy: "tester"})
+	answer, err := json.Marshal(DecisionAnswer{DecisionID: decision.ID, RunID: s.State.Runs[0].RunID, OptionID: "keep", AnsweredBy: "tester", ExpectedDecisionVersion: decision.Version, ExpectedRunRevision: s.State.Runs[0].ControlRevision, ServiceInstanceID: s.State.Service.InstanceID})
 	require(t, err)
 	commands := CommandService{Store: s.domainStore, Project: s.Config.identity}
 	if _, _, err = commands.AnswerDecision(ctx, decision.ID, decision.Version, "answer-once", "tester", answer); err != nil {
@@ -577,12 +577,12 @@ func TestQueuedLocalDecisionAnswerIsRejectedWithoutAContinuationCapability(t *te
 	logPath := filepath.Join(dir, "runs", runID, "events.jsonl")
 	decision := &DecisionState{ID: "decision-1", AttemptID: runID, Version: 1, Request: DecisionRequest{Question: "Choose", Options: []DecisionOption{{ID: "yes", Label: "Yes"}}}, Status: "pending"}
 	run := &Run{TaskID: "beads-1", Title: "question", RunID: runID, AttemptID: runID, Claimant: "center", Host: "local", Backend: string(BackendLocal), Protocol: "local_process", BeadsStatus: "in_progress", ExecutionStatus: "succeeded", FinishTaskStatus: "waiting_decision", Decision: decision, LogPath: &logPath}
-	runtime := Runtime{SchemaVersion: 5, Repository: Repository{Identity: project, Path: "repo", Remote: "origin", Branch: "main"}, Service: ServiceState{Claimant: "center"}, Runs: []*Run{run}, Control: ControlState{DispatchMode: "auto", Revision: 1}}
+	runtime := Runtime{SchemaVersion: 5, Repository: Repository{Identity: project, Path: "repo", Remote: "origin", Branch: "main"}, Service: ServiceState{InstanceID: "service-instance", Claimant: "center"}, Runs: []*Run{run}, Control: ControlState{DispatchMode: "auto", Revision: 1}}
 	service := &Service{Config: Config{RunDir: dir, RuntimeFile: "runtime.json", Claimant: "center", identity: project}, State: runtime, domainStore: db, store: &Store{Path: filepath.Join(dir, "runtime.json"), Domain: db, Project: project}}
 	if err = service.save(); err != nil {
 		t.Fatal(err)
 	}
-	answer := DecisionAnswer{DecisionID: decision.ID, RunID: runID, OptionID: "yes", AnsweredBy: "alice"}
+	answer := DecisionAnswer{DecisionID: decision.ID, RunID: runID, OptionID: "yes", AnsweredBy: "alice", ExpectedDecisionVersion: decision.Version, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: runtime.Service.InstanceID}
 	payload, _ := json.Marshal(answer)
 	commandService := CommandService{Store: db, Project: project}
 	_, created, err := commandService.AnswerDecision(ctx, decision.ID, 1, "answer:decision-1:v1", "alice", payload)

@@ -173,13 +173,26 @@ func TestAuditInvalidAnswerDoesNotReserveDecisionVersion(t *testing.T) {
 		return tx.PutProjection(project, projection.Revision, mustJSON(projection))
 	}))
 	commands := CommandService{Store: db, Project: project}
-	answer := DecisionAnswer{DecisionID: "decision", RunID: "wf", OptionID: "invalid", AnsweredBy: "alice"}
+	answer := DecisionAnswer{DecisionID: "decision", RunID: "wf", OptionID: "invalid", AnsweredBy: "alice", ExpectedDecisionVersion: 1, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: projection.Service.InstanceID}
 	if _, _, err := commands.AnswerDecision(ctx, "decision", 1, "invalid", "alice", mustJSON(answer)); err == nil {
 		t.Fatal("invalid option was queued")
 	}
 	answer.OptionID = "yes"
-	if _, created, err := commands.AnswerDecision(ctx, "decision", 1, "valid", "alice", mustJSON(answer)); err != nil || !created {
+	unbound := answer
+	unbound.ExpectedRunRevision = 0
+	if _, _, err := commands.AnswerDecision(ctx, "decision", 1, "unbound", "alice", mustJSON(unbound)); err == nil || !strings.Contains(err.Error(), "displayed run revision") {
+		t.Fatalf("command client silently filled a missing displayed revision: %v", err)
+	}
+	validCommand, created, err := commands.AnswerDecision(ctx, "decision", 1, "valid", "alice", mustJSON(answer))
+	if err != nil || !created {
 		t.Fatalf("invalid request consumed version reservation: %v", err)
+	}
+	run.AttemptID = "new-attempt"
+	if err := db.Transact(ctx, func(tx DomainTx) error { return tx.PutProjection(project, 2, mustJSON(projection)) }); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := commands.AcceptAnswer(ctx, validCommand, answer); err == nil || !strings.Contains(err.Error(), "stale_revision") {
+		t.Fatalf("old decision answer was accepted on a new attempt: %v", err)
 	}
 	snapshot, err := db.Query(ctx, project)
 	if err != nil || len(snapshot.Decisions) != 1 || snapshot.Decisions[0].Status != "pending" || snapshot.Decisions[0].Version != 1 {

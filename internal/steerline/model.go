@@ -220,12 +220,13 @@ type WorkspaceIntent struct {
 	BaseCommit string `json:"base_commit"`
 }
 type PRState struct {
-	URL         *string    `json:"url"`
-	State       string     `json:"state"`
-	MergedAt    *time.Time `json:"merged_at"`
-	MergeCommit *string    `json:"merge_commit"`
-	QueriedAt   *time.Time `json:"queried_at"`
-	QueryError  *string    `json:"query_error"`
+	URL          *string    `json:"url"`
+	HeadRevision *string    `json:"head_revision,omitempty"`
+	State        string     `json:"state"`
+	MergedAt     *time.Time `json:"merged_at"`
+	MergeCommit  *string    `json:"merge_commit"`
+	QueriedAt    *time.Time `json:"queried_at"`
+	QueryError   *string    `json:"query_error"`
 }
 type Result struct {
 	TaskID       string  `json:"task_id"`

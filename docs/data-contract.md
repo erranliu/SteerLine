@@ -82,6 +82,7 @@ TASK-DAG 更新后的协议样例见 [native-tasks-v1.sample.json](validation/ta
 | worktree_path / worktree_branch / base_commit | string/null | 调度器创建并核验的隔离目录、实现分支及起点 Git hash；准备成功前均为 null，不由 Codex 结果覆盖 |
 | pr.url | string/null | 当前运行的精确 PR 关联 |
 | pr.state | string | open / merged / closed_unmerged / unknown |
+| pr.head_revision | string/null | `accept_result` 接回时经真实提供方核验并固定的 PR head；后续 merged 查询必须仍匹配，变化时拒绝结项 |
 | pr.merged_at / merge_commit | timestamp/string/null | 平台核实的合并证据 |
 | pr.queried_at / query_error | timestamp/string/null | 最近查询时间和错误；失败时 state=unknown |
 | last_event | string/null | 最近 JSON 事件的类型摘要，最多 512 字符，不存完整对话 |
@@ -145,12 +146,12 @@ runtime 中的 `control.operation` 先于副作用保存；完成时把业务结
 | command.kind | body 主要字段 | accepted 的持久事实 |
 | --- | --- | --- |
 | `answer_decision` | decision_id、run_id、option_id、note、expected_run_revision、expected_decision_version、service_instance_id | SQLite 的 DecisionRecord 与 command 回执同事务记录固定答案；`accepted` 只表示答案已保存 |
-| `retry_run` | 操作者确认与依据 | 同 task/run/worktree 的新 attempt worker 已启动且固定身份已保存 |
+| `retry_run` | 操作者显式确认原执行已停止 | 同 task/run/worktree 的新 attempt worker 已启动且固定身份已保存 |
 | `mark_stopped` | `confirmed_process_stopped`、`confirmation_basis` | 精确 unknown attempt 已标为 failed/blocked；Service 仍运行，旧 Operation 仍保留未知 |
 | `accept_result` | 原结果字节 base64、SHA-256、停止确认依据 | SHA-256 匹配的原字节被保存到 `runs/<run_id>/recovery/<command_id>/result.json`，真实 PR 查询通过并进入 waiting_pr_merge |
 | `resolve_command` | 指定 blocker 的人工核验依据 | 只解除该 blocker 并记录原 request_id / resolved_by；不会重放原指令 |
 
-恢复命令先持久化为 `in_flight`。重启后绝不自动执行第二次；若结果未能通过保存的事实对账，则命令变为 `indeterminate` 并保留 control blocker，由后续 resolve_command 逐条处理。结果接回以 command payload 携带的冻结字节为准，不在服务执行时重读任意客户端路径。命令 `accepted` 不代表 PR 已合并或任务已完成。
+恢复命令先持久化为 `in_flight`；重启时先对账它们，再处理新的 pending 命令。没有与同一 command_id 精确关联的完成证据时，原命令为 `indeterminate`，执行副作用以 control blocker 保留，后续由 resolve_command 逐条核验。结果接回以 command payload 携带的冻结字节为准，不在服务执行时重读任意客户端路径；受管结果与同一 command_id、真实 PR 及固定 head 均通过核验后才可补回 accepted。人工停止或恢复依据必须是非空 UTF-8 且不超过 2000 字符，超限拒绝而不截断。命令 `accepted` 不代表 PR 已合并或任务已完成。
 
 上表 `start_task` 描述现有 Beads 控制生命周期。原生 `CommandService.ClaimNativeTask` 在中心事务中预留 Task claim、WorkflowRun、Execution、prepare Attempt、命令回执和 Operation；其响应为 `claim_reserved` 且 `start_task_applied=false`。只有生产原生接入完成工作区准备并持久化实际启动身份后，才能把控制命令标为 applied。原生 delivery 由 `CompleteNativeTask` 在事务外查询精确 PR，并在事务内重核 task version、所选运行、步骤门槛和整任务的 PR 发布绑定后写 TaskDelivery/closed；另一笔发布结果未知时即使选用的 PR 已合并也不关闭任务。
 

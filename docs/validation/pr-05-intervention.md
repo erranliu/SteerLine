@@ -4,7 +4,7 @@ Date: 2026-09-25 (Asia/Shanghai)
 Base: `7b2706f` (`origin/main` at implementation start)
 Environment: Windows amd64, Go 1.26.4
 
-Status: implementation is complete and automated checks pass. Full H-A1–H-A16 acceptance is still pending the detailed Windows TTY cases and a live same-session Orca decision-application proof; those native gates are listed below.
+Status: PR #39 quality audit corrections are implemented and the post-audit full regression passes. Full H-A1–H-A16 acceptance remains pending the detailed Windows TTY cases and a live same-session Orca decision-application proof; those native gates are listed below.
 
 ## Checks completed
 
@@ -15,13 +15,26 @@ Status: implementation is complete and automated checks pass. Full H-A1–H-A16 
 - `GOOS=linux GOARCH=amd64 go build ./...` — passed.
 - `git diff --check` — passed; Git reported only its configured LF-to-CRLF working-copy notices.
 - Windows interactive TTY smoke: launched `steerline console -config <temporary offline fixture>`, confirmed the offline view, config path and fixed service-window guidance, then exited with `q`. No service was started and no answer/recovery command was submitted.
-- Final `go test ./... -count=1 -timeout 20m` — passed: CLI 21.594s, core 914.057s, console 1.339s, remoteprotocol 0.871s, viewer 2.170s; `cmd/orca-probe` has no test files.
+- Pre-audit `go test ./... -count=1 -timeout 20m` — passed: CLI 21.594s, core 914.057s, console 1.339s, remoteprotocol 0.871s, viewer 2.170s; `cmd/orca-probe` has no test files.
 - PR5-focused console/recovery/decision/command/storage tests — passed; console 1.013s, core selection 17.791s.
 - `go test ./internal/steerline -run '^TestOrcaDecisionResumesRun$' -count=1 -timeout 3m -v` — passed in 13.55s; answer acceptance survived service restart and issued one continuation.
+- Post-audit `go test ./... -count=1 -timeout 20m` — passed: CLI 19.817s, core 979.060s, console 1.562s, remoteprotocol 0.763s, viewer 2.004s. The core source was unchanged after this run started; the final console evidence editor and `F2` changes were then checked with `go test ./internal/steerline/console -count=1 -timeout 3m`, which passed in 1.453s.
+- Post-audit `go vet ./...`, Windows and Linux amd64 builds, `gofmt` and `git diff --check` — passed after the final console changes.
 
 ## Full-suite correction history
 
 The first complete run exposed six failures before the final run. The fixtures and assertions were corrected to bind decisions to their current execution, attempt, service projection and run revision; assert that missing application evidence records a failed/blocked decision; expect unsupported minimal-v1 local continuation to remain stopped; and provide a real PR head SHA in the recovery provider fixture. The focused rerun passed all six cases, and the final full run above passed.
+
+## PR #39 quality audit corrections
+
+- Reconcile in-flight service commands before pending commands, so a new retry cannot start ahead of an unresolved earlier retry.
+- Require the file request, verified receipt, blocker, current claim, run and attempt to agree before resolving a control blocker. Reconstruct only the targeted claimed orphan. A saved stop on that attempt can finish blocker resolution after a crash between the two saves.
+- Reuse full workspace and provider PR verification when reconciling an accepted result after restart. Pin the verified PR head at manual acceptance and refuse completion if the provider head later changes.
+- Keep an in-flight retry, mark-stopped or resolve command indeterminate when only generic run/blocker state is available; that state cannot prove which command caused it.
+- Require explicit displayed run revision and service instance in low-level decision commands, and reject an old-attempt decision at eligibility, SQLite acceptance and continuation.
+- Enforce retry stop confirmation in the service handler; reject overlong recovery evidence intact. Require operator-written evidence for mark-stopped, accept-result and resolve-command. The console confirmation scrolls through the full frozen preview and uses Bubble Tea's supported `F2` key for explicit submission.
+
+Focused regression tests for these paths passed. The post-audit full run and final console package run above also passed. The original command receipt stays indeterminate when its effect lacks same-command proof; an exact managed result path plus frozen bytes and fresh provider checks can be reconciled without replaying external execution.
 
 ## Acceptance evidence
 

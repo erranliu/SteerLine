@@ -198,7 +198,7 @@ func TestDecisionAnswerEditorHandlesTwelveOptionsUnicodePasteAndStableCommandID(
 	if cmd != nil {
 		t.Fatal("numeric option shortcut submitted without explicit confirmation")
 	}
-	updated, cmd = m.submitDecisionAnswer()
+	updated, cmd = m.handleDecisionAnswerKey(tea.KeyMsg{Type: tea.KeyF2})
 	m = updated.(Model)
 	if cmd == nil || m.answer != nil || control.decisionCalls != 0 {
 		t.Fatalf("submission did not first persist and defer the command: cmd=%v dialog=%+v calls=%d", cmd, m.answer, control.decisionCalls)
@@ -322,7 +322,14 @@ func TestAcceptResultPreviewFreezesBytesBeforeRecoveryCommandPublication(t *test
 	if err := os.WriteFile(resultPath, []byte("source changed after preview"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	updated, cmd = m.handleConfirm(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+	updated, cmd = m.handleConfirm(tea.KeyMsg{Type: tea.KeyF2})
+	m = updated.(Model)
+	if cmd != nil || m.confirm == nil || m.confirm.basisError == "" {
+		t.Fatal("accept-result submitted without operator-written stop evidence")
+	}
+	updated, _ = m.handleConfirm(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("I inspected the original process and confirmed it stopped")})
+	m = updated.(Model)
+	updated, cmd = m.handleConfirm(tea.KeyMsg{Type: tea.KeyF2})
 	m = updated.(Model)
 	if cmd == nil || control.decisionCalls != 0 {
 		t.Fatalf("result command published before its stable ID could be inspected: cmd=%v calls=%d", cmd, control.decisionCalls)
@@ -347,6 +354,37 @@ func TestAcceptResultPreviewFreezesBytesBeforeRecoveryCommandPublication(t *test
 	frozen, err := base64.StdEncoding.DecodeString(body.ResultBase64)
 	if err != nil || string(frozen) != string(original) || body.ResultSHA256 != originalDigest {
 		t.Fatalf("submitted result differed from the previewed bytes: bytes=%q digest=%s err=%v", frozen, body.ResultSHA256, err)
+	}
+}
+
+func TestRecoveryConfirmationCanScrollTheFullFrozenPreview(t *testing.T) {
+	now := time.Now().UTC()
+	ref := testProject("long-recovery-preview")
+	snapshot := readySnapshot(ref, now)
+	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, &testControlClient{}, now)
+	m.width, m.height = 80, 24
+	m.projects[0].panel = 6
+	m.confirm = &confirmAction{action: "accept_result", requireBasis: true, runID: "run", requestID: "command", revision: 9, resultPath: `C:\fixture\result.json`, resultTaskID: "task", resultRunID: "run", resultSummary: strings.Repeat("完整证据🙂", 100) + "尾部证据", resultPRURL: "https://example.invalid/pulls/1", resultWorktree: `C:\fixture\worktree`, resultBase: strings.Repeat("a", 40), basis: "the original execution stopped"}
+	if strings.Contains(renderStopConfirmation(m, m.projects[0], 8), "尾部证据") {
+		t.Fatal("long confirmation unexpectedly fit without scrolling")
+	}
+	seenTail := false
+	for i := 0; i < 100; i++ {
+		if strings.Contains(renderStopConfirmation(m, m.projects[0], 8), "尾部证据") {
+			seenTail = true
+			break
+		}
+		updated, cmd := m.handleConfirm(tea.KeyMsg{Type: tea.KeyPgDown})
+		m = updated.(Model)
+		if cmd != nil || m.confirm == nil {
+			t.Fatal("scrolling the preview submitted or closed the confirmation")
+		}
+	}
+	if !seenTail || !strings.Contains(renderFooter(m, m.projects[0]), "F2 确认") {
+		t.Fatalf("confirmation hid frozen evidence or confirmation keys: seen_tail=%t footer=%q", seenTail, renderFooter(m, m.projects[0]))
+	}
+	if lines := strings.Count(render(m), "\n") + 1; lines > m.height {
+		t.Fatalf("confirmation exceeded the %d-line terminal: %d", m.height, lines)
 	}
 }
 
@@ -747,6 +785,63 @@ func TestSessionScrollAnchorMovesToGroupHeaderWhenAutoFoldHidesItem(t *testing.T
 	}
 	if headerLine < 0 || state.detailScroll != headerLine {
 		t.Fatalf("scroll anchor missed the folded turn header: scroll=%d header=%d", state.detailScroll, headerLine)
+	}
+}
+
+func TestRecoveryStopAndResolveRequireWrittenOperatorEvidence(t *testing.T) {
+	now := time.Now().UTC()
+	ref := testProject("recovery-evidence")
+	snapshot, run := decisionSnapshot(ref, now)
+	runtimeState := snapshot.Connection.Snapshot.Runtime
+	runtimeState.Service.Capabilities = append(runtimeState.Service.Capabilities, "mark_stopped", "resolve_command")
+	run.Decision, run.ExecutionStatus, run.FinishTaskStatus = nil, "unknown", "blocked"
+	control := &testControlClient{}
+	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, control, now)
+	m.projects[0].selectedKey = "run:" + run.RunID
+	m.projects[0].panel = 6
+	m.projects[0].recoveryRunID = run.RunID
+	blockerID := steerline.NewControlRequestID()
+	m.projects[0].recoveryReport = &steerline.RecoveryInspection{RunID: run.RunID, TaskID: run.TaskID, RunRevision: run.ControlRevision, ServiceInstanceID: runtimeState.Service.InstanceID, MarkStoppedReason: "confirm that the original execution stopped", Blockers: []steerline.ControlBlocker{{RequestID: blockerID, Action: "start_task", TaskID: run.TaskID, RunID: run.RunID, AttemptID: run.AttemptID}}}
+	updated, cmd := m.prepareRecoveryAction("mark_stopped")
+	m = updated.(Model)
+	if cmd != nil || m.confirm == nil || !m.confirm.requireBasis || m.confirm.basis != "" {
+		t.Fatalf("mark-stopped supplied fabricated operator evidence: confirm=%+v cmd=%v", m.confirm, cmd)
+	}
+	updated, cmd = m.handleConfirm(tea.KeyMsg{Type: tea.KeyF2})
+	m = updated.(Model)
+	if cmd != nil || m.confirm == nil || m.confirm.basisError == "" {
+		t.Fatal("mark-stopped submitted without written evidence")
+	}
+	m.confirm.basis = strings.Repeat("界", 2001)
+	m.confirm.basisCursor = 2001
+	updated, cmd = m.handleConfirm(tea.KeyMsg{Type: tea.KeyF2})
+	m = updated.(Model)
+	if cmd != nil || m.confirm == nil || len([]rune(m.confirm.basis)) != 2001 || !strings.Contains(m.confirm.basisError, "2000") {
+		t.Fatal("overlong recovery evidence was clipped or submitted")
+	}
+	m.confirm.basis, m.confirm.basisCursor = "", 0
+	basis := "我核对原执行进程已停止，终端句柄不可再观察。"
+	updated, _ = m.handleConfirm(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(basis)})
+	m = updated.(Model)
+	updated, cmd = m.handleConfirm(tea.KeyMsg{Type: tea.KeyF2})
+	m = updated.(Model)
+	if cmd == nil || m.confirm != nil {
+		t.Fatal("written stop evidence did not reach the explicit submit action")
+	}
+	_ = cmd()
+	var body steerline.RecoveryCommandBody
+	if err := json.Unmarshal(control.decisionCommand.Payload, &body); err != nil || body.ConfirmationBasis != basis || !body.ConfirmedProcessStopped {
+		t.Fatalf("submitted stop evidence differs from the operator text: body=%+v err=%v", body, err)
+	}
+	updated, cmd = m.prepareRecoveryAction("resolve_command")
+	m = updated.(Model)
+	if cmd != nil || m.confirm == nil || !m.confirm.requireBasis || m.confirm.basis != "" {
+		t.Fatalf("resolve-command supplied fabricated operator evidence: confirm=%+v cmd=%v", m.confirm, cmd)
+	}
+	updated, cmd = m.handleConfirm(tea.KeyMsg{Type: tea.KeyF2})
+	m = updated.(Model)
+	if cmd != nil || m.confirm == nil || m.confirm.basisError == "" {
+		t.Fatal("resolve-command submitted without written evidence")
 	}
 }
 

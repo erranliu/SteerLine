@@ -491,6 +491,9 @@ func DecisionReplyEligibility(ctx context.Context, c Config, run *Run) error {
 	if run == nil || run.Decision == nil || run.Decision.Status != "pending" {
 		return errors.New("decision is not pending on the current run")
 	}
+	if run.AttemptID == "" || run.Decision.AttemptID != run.AttemptID {
+		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "decision belongs to a different execution attempt"}
+	}
 	if run.Backend != string(BackendOrca) || run.Protocol != string(ProtocolOrcaTerminalV2) {
 		return &BackendError{Code: BackendUnsupported, Diagnostic: "local continuation is unsupported; this decision cannot be answered and resumed on the local backend"}
 	}
@@ -546,6 +549,9 @@ func (s *Service) applyDecisions(ctx context.Context) error {
 		}
 		if r.FinishTaskStatus != "waiting_decision" || r.Decision == nil || r.Decision.Status != "answer_saved" {
 			continue
+		}
+		if r.AttemptID == "" || r.Decision.AttemptID != r.AttemptID {
+			return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "saved decision belongs to a different execution attempt; continuation refused"}
 		}
 		a, e := ReadDecisionAnswer(r)
 		if e != nil {
@@ -671,6 +677,9 @@ func (s *Service) decisionResumeDefinitelyRejected(run *Run) bool {
 func (s *Service) resumeAfterDecision(ctx context.Context, r *Run) error {
 	if r.Process == nil || r.Decision == nil {
 		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "run has no complete decision/execution identity"}
+	}
+	if r.AttemptID == "" || r.Decision.AttemptID != r.AttemptID {
+		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "decision belongs to a different execution attempt"}
 	}
 	if r.ResultPath == nil {
 		return errors.New("run has no worktree or result path")

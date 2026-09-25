@@ -223,25 +223,7 @@ func (c CommandService) AnswerDecisionWithID(ctx context.Context, commandID, dec
 		return CommandRecord{}, false, errors.New("answer payload decision version differs from its command revision")
 	}
 	if value.ExpectedRunRevision == 0 || value.ServiceInstanceID == "" {
-		projection, _, err := c.Store.LoadProjection(ctx, c.Project)
-		if err != nil {
-			return CommandRecord{}, false, err
-		}
-		var runtimeState Runtime
-		if err = decode(projection, &runtimeState); err != nil {
-			return CommandRecord{}, false, errors.New("decision answer cannot bind to the current service projection")
-		}
-		for _, run := range runtimeState.Runs {
-			if run != nil && run.RunID == value.RunID && run.Decision != nil && run.Decision.ID == decisionID {
-				if value.ExpectedRunRevision == 0 {
-					value.ExpectedRunRevision = run.ControlRevision
-				}
-				if value.ServiceInstanceID == "" {
-					value.ServiceInstanceID = runtimeState.Service.InstanceID
-				}
-				break
-			}
-		}
+		return CommandRecord{}, false, errors.New("decision answer requires the displayed run revision and service instance")
 	}
 	if value.DecisionID != decisionID || value.RunID == "" || value.AnsweredBy != requestedBy {
 		return CommandRecord{}, false, errors.New("answer identity must match the command target and requester")

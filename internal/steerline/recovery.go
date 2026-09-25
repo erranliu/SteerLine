@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 type RecoveryInspection struct {
@@ -286,8 +287,13 @@ func (s *Service) requireRecoveryIdle(targetRunID string) error {
 }
 
 func (s *Service) markStoppedCore(runID, requestedBy, basis string) error {
-	if requestedBy == "" || strings.TrimSpace(basis) == "" {
-		return errors.New("mark-stopped requires the operator and confirmation evidence")
+	if requestedBy == "" {
+		return errors.New("mark-stopped requires the operator")
+	}
+	var err error
+	basis, err = validateConfirmationBasis(basis)
+	if err != nil {
+		return err
 	}
 	if err := s.requireRecoveryIdle(runID); err != nil {
 		return err
@@ -311,7 +317,7 @@ func (s *Service) markStoppedCore(runID, requestedBy, basis string) error {
 	}
 	run.ExecutionStatus = "failed"
 	run.EndedAt = ptr(now())
-	run.ManualStop = &ManualStopConfirmation{AttemptID: run.AttemptID, ConfirmedAt: now(), ConfirmedBy: requestedBy, Basis: clip(strings.TrimSpace(basis), 2000)}
+	run.ManualStop = &ManualStopConfirmation{AttemptID: run.AttemptID, ConfirmedAt: now(), ConfirmedBy: requestedBy, Basis: basis}
 	s.blocked(run, "Operator confirmed the original execution stopped; task and workspace remain for manual repair")
 	if run.Decision != nil && run.Decision.Status != "failed" && run.Decision.Status != "applied" && run.Decision.Status != "superseded" {
 		run.Decision.Status = "failed"
@@ -339,6 +345,17 @@ func stoppedEvidenceAcceptable(state, basis string) bool {
 	}
 }
 
+func validateConfirmationBasis(basis string) (string, error) {
+	basis = strings.TrimSpace(basis)
+	if basis == "" || !utf8.ValidString(basis) {
+		return "", errors.New("recovery confirmation requires a nonempty UTF-8 evidence basis")
+	}
+	if utf8.RuneCountInString(basis) > 2000 {
+		return "", errors.New("recovery confirmation exceeds the 2000 character audit limit; the basis was not truncated")
+	}
+	return basis, nil
+}
+
 func (s *Service) recalculateCurrentReservation(settledRunID string) {
 	if s.State.CurrentTask != nil {
 		if current := s.find(*s.State.CurrentTask); current != nil && current.RunID == settledRunID {
@@ -356,8 +373,13 @@ func (s *Service) recalculateCurrentReservation(settledRunID string) {
 }
 
 func (s *Service) acceptResultBytes(ctx context.Context, runID, commandID, requestedBy, basis string, data []byte, expectedDigest string) error {
-	if requestedBy == "" || strings.TrimSpace(basis) == "" || !controlIDPattern.MatchString(commandID) {
-		return errors.New("accept-result requires operator, confirmation evidence and request identity")
+	if requestedBy == "" || !controlIDPattern.MatchString(commandID) {
+		return errors.New("accept-result requires operator and request identity")
+	}
+	var err error
+	basis, err = validateConfirmationBasis(basis)
+	if err != nil {
+		return err
 	}
 	if len(data) == 0 || len(data) > 2<<20 {
 		return errors.New("recovery result must be between 1 byte and 2 MiB")
@@ -399,27 +421,9 @@ func (s *Service) acceptResultBytes(ctx context.Context, runID, commandID, reque
 	if result.Outcome != "pr_submitted" || result.PRURL == nil {
 		return errors.New("manual acceptance requires a submitted PR result")
 	}
-	workspace, err := s.readRunWorkspace(ctx, run)
+	info, err := s.verifyRecoveryPR(ctx, run, result)
 	if err != nil {
-		return fmt.Errorf("workspace identity verification failed: %w", err)
-	}
-	if err = verifyHandoff(run, result); err != nil {
 		return err
-	}
-	info, err := s.prs.Query(ctx, *result.PRURL)
-	if err != nil {
-		return fmt.Errorf("real PR verification failed: %w", err)
-	}
-	if info.Repository != s.Config.PR.Repository || info.URL != *result.PRURL || info.BaseBranch != s.Config.Branch || info.State != "open" && info.State != "merged" {
-		return errors.New("PR repository, URL, base branch or open/merged state does not match the configured delivery target")
-	}
-	if info.HeadRevision == "" || info.HeadRevision != workspace.Head {
-		return errors.New("verified PR head does not match the inspected worktree HEAD")
-	}
-	for _, other := range s.State.Runs {
-		if other != nil && other.RunID != run.RunID && other.PR.URL != nil && *other.PR.URL == *result.PRURL {
-			return errors.New("PR is already bound to another run")
-		}
 	}
 	managedPath := filepath.Join(s.Config.RunDir, "runs", run.RunID, "recovery", commandID, "result.json")
 	if err = os.MkdirAll(filepath.Dir(managedPath), 0700); err != nil {
@@ -433,7 +437,8 @@ func (s *Service) acceptResultBytes(ctx context.Context, runID, commandID, reque
 	}
 	run.ExecutionStatus = "succeeded"
 	run.ResultPath = ptr(managedPath)
-	run.ManualStop = &ManualStopConfirmation{AttemptID: run.AttemptID, ConfirmedAt: now(), ConfirmedBy: requestedBy, Basis: clip(strings.TrimSpace(basis), 2000)}
+	run.PR.HeadRevision = ptr(info.HeadRevision)
+	run.ManualStop = &ManualStopConfirmation{AttemptID: run.AttemptID, ConfirmedAt: now(), ConfirmedBy: requestedBy, Basis: basis}
 	run.EndedAt = ptr(now())
 	run.PR.State = info.State
 	run.PR.QueriedAt = ptr(now())
@@ -443,9 +448,46 @@ func (s *Service) acceptResultBytes(ctx context.Context, runID, commandID, reque
 	return s.save()
 }
 
+func (s *Service) verifyRecoveryPR(ctx context.Context, run *Run, result Result) (PRInfo, error) {
+	if run == nil || result.Outcome != "pr_submitted" || result.PRURL == nil || run.PR.URL != nil && *run.PR.URL != *result.PRURL {
+		return PRInfo{}, errors.New("recovery result and saved PR identity conflict")
+	}
+	workspace, err := s.readRunWorkspace(ctx, run)
+	if err != nil {
+		return PRInfo{}, fmt.Errorf("workspace identity verification failed: %w", err)
+	}
+	if err = verifyHandoff(run, result); err != nil {
+		return PRInfo{}, err
+	}
+	info, err := s.prs.Query(ctx, *result.PRURL)
+	if err != nil {
+		return PRInfo{}, fmt.Errorf("real PR verification failed: %w", err)
+	}
+	if info.Repository != s.Config.PR.Repository || info.URL != *result.PRURL || info.BaseBranch != s.Config.Branch || info.State != "open" && info.State != "merged" {
+		return PRInfo{}, errors.New("PR repository, URL, base branch or open/merged state does not match the configured delivery target")
+	}
+	if info.HeadRevision == "" || info.HeadRevision != workspace.Head {
+		return PRInfo{}, errors.New("verified PR head does not match the inspected worktree HEAD")
+	}
+	if run.PR.HeadRevision != nil && info.HeadRevision != *run.PR.HeadRevision {
+		return PRInfo{}, errors.New("verified PR head changed after the recovery result was bound")
+	}
+	for _, other := range s.State.Runs {
+		if other != nil && other.RunID != run.RunID && other.PR.URL != nil && *other.PR.URL == *result.PRURL {
+			return PRInfo{}, errors.New("PR is already bound to another run")
+		}
+	}
+	return info, nil
+}
+
 func (s *Service) resolveControlBlocker(ctx context.Context, blockerID, requestedBy, basis string) (map[string]any, error) {
-	if requestedBy == "" || strings.TrimSpace(basis) == "" {
-		return nil, errors.New("resolve-command requires operator and evidence")
+	if requestedBy == "" {
+		return nil, errors.New("resolve-command requires operator")
+	}
+	var err error
+	basis, err = validateConfirmationBasis(basis)
+	if err != nil {
+		return nil, err
 	}
 	if err := s.requireRecoveryIdle(""); err != nil {
 		return nil, err
@@ -478,57 +520,65 @@ func (s *Service) resolveControlBlocker(ctx context.Context, blockerID, requeste
 	if err != nil || receipt.Status != "indeterminate" || receipt.Action != blocker.Action {
 		return nil, errors.New("original indeterminate receipt is missing or conflicts with its blocker")
 	}
-	taskID := blocker.TaskID
-	if taskID == "" {
-		payload, decodeErr := decodeControlPayload(*req)
-		if decodeErr == nil {
-			taskID = payload.TaskID
+	payload, err := decodeControlPayload(*req)
+	if err != nil {
+		return nil, err
+	}
+	if req.RepositoryIdentity != s.Config.identity || req.Action != "start_task" || blocker.Action != req.Action || payload.TaskID == "" || blocker.TaskID != payload.TaskID || !stableExecutionID(blocker.RunID) || !stableExecutionID(blocker.AttemptID) {
+		return nil, errors.New("original start request, blocker and preallocated task/run/attempt identity conflict")
+	}
+	for _, other := range s.State.Control.Blockers {
+		if other.RequestID != blockerID && other.TaskID == payload.TaskID && (other.RunID != blocker.RunID || other.AttemptID != blocker.AttemptID) {
+			return nil, errors.New("the task has conflicting preallocated blocker identities")
 		}
+	}
+	taskID := payload.TaskID
+	source, err := s.beads.Context(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("task provider identity verification failed: %w", err)
+	}
+	owned, err := s.beads.Owned(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("owned-task verification failed: %w", err)
+	}
+	ownedByService := false
+	for _, candidate := range owned {
+		if candidate.ID == taskID {
+			ownedByService = true
+			break
+		}
+	}
+	task, err := s.beads.Show(ctx, taskID)
+	if err != nil {
+		return nil, fmt.Errorf("task claim verification failed: %w", err)
 	}
 	var resolution string
 	if run := s.recoveryTarget(blocker.RunID); run != nil {
-		if err = s.markStoppedCore(run.RunID, requestedBy, basis); err != nil {
-			return nil, err
+		if run.TaskID != taskID || run.AttemptID != blocker.AttemptID || run.Claimant != s.Config.Claimant {
+			return nil, errors.New("saved run identity conflicts with the original blocked start")
 		}
-		resolution = "execution marked failed/blocked after explicit stop confirmation"
-	} else {
-		if taskID == "" {
-			return nil, errors.New("original request has no task identity")
+		if run.BeadsContext != nil && !source.Same(*run.BeadsContext) || task.Status != "in_progress" || task.Assignee != run.Claimant || !ownedByService {
+			return nil, errors.New("current task claim or provider identity conflicts with the saved run")
 		}
-		source, contextErr := s.beads.Context(ctx)
-		if contextErr != nil {
-			return nil, fmt.Errorf("task claim verification failed: %w", contextErr)
-		}
-		owned, ownedErr := s.beads.Owned(ctx)
-		if ownedErr != nil {
-			return nil, fmt.Errorf("owned-task verification failed: %w", ownedErr)
-		}
-		ownedByService := false
-		for _, candidate := range owned {
-			if candidate.ID == taskID {
-				ownedByService = true
-				break
+		if run.ExecutionStatus == "failed" && run.FinishTaskStatus == "blocked" && manuallyStopped(run) {
+			resolution = "durable manual stop for the original attempt was reconciled"
+		} else {
+			if err = s.markStoppedCore(run.RunID, requestedBy, basis); err != nil {
+				return nil, err
 			}
+			resolution = "execution marked failed/blocked after explicit stop confirmation"
 		}
-		task, showErr := s.beads.Show(ctx, taskID)
-		if showErr != nil {
-			return nil, fmt.Errorf("task claim verification failed: %w", showErr)
-		}
+	} else {
 		if task.Status == "open" && task.Assignee == "" && !ownedByService {
 			resolution = "verified no current claim or run exists; original start was not replayed"
 		} else if task.Status == "in_progress" && task.Assignee == s.Config.Claimant && ownedByService {
-			if err = s.reconcile(ctx); err != nil {
+			if existing := s.find(taskID); existing != nil {
+				return nil, errors.New("claimed task already has a different run identity")
+			}
+			run := &Run{TaskID: task.ID, Title: task.Title, RunID: blocker.RunID, AttemptID: blocker.AttemptID, Host: s.Config.hostName(), Claimant: s.Config.Claimant, BeadsStatus: task.Status, ExecutionStatus: "unknown", FinishTaskStatus: "blocked", PR: PRState{State: "unknown"}, Error: ptr("Claim found without complete run record; manual recovery required; execution not restarted")}
+			s.State.Runs = append(s.State.Runs, run)
+			if err = s.save(); err != nil {
 				return nil, err
-			}
-			run := s.find(taskID)
-			if run == nil {
-				return nil, errors.New("owned task could not be reconstructed as an orphan recovery record")
-			}
-			if run.BeadsContext != nil && !source.Same(*run.BeadsContext) {
-				return nil, errors.New("orphan task provider identity differs from the original run evidence")
-			}
-			if blocker.RunID != "" && run.RunID != blocker.RunID {
-				return nil, errors.New("orphan recovery identity differs from the preallocated run ID")
 			}
 			if err = s.markStoppedCore(run.RunID, requestedBy, basis); err != nil {
 				return nil, err
@@ -545,7 +595,7 @@ func (s *Service) resolveControlBlocker(ctx context.Context, blockerID, requeste
 			s.State.Control.Blockers = append(s.State.Control.Blockers, candidate)
 		}
 	}
-	receiptResult := map[string]any{"original_request_id": blockerID, "resolved_by_request_id": "", "resolved_by": requestedBy, "resolution": resolution, "basis": clip(strings.TrimSpace(basis), 2000)}
+	receiptResult := map[string]any{"original_request_id": blockerID, "resolved_by": requestedBy, "resolution": resolution, "basis": basis}
 	s.recalculateCurrentReservation("")
 	if err = s.save(); err != nil {
 		return nil, err
@@ -554,8 +604,8 @@ func (s *Service) resolveControlBlocker(ctx context.Context, blockerID, requeste
 }
 
 func (s *Service) resolveServiceCommandBlocker(ctx context.Context, blocker ControlBlocker, command CommandRecord, requestedBy, basis string) (map[string]any, error) {
-	if command.Status != "indeterminate" {
-		return nil, errors.New("service command blocker does not refer to an indeterminate command")
+	if command.Status != "indeterminate" || command.CommandID != blocker.RequestID || command.Kind != blocker.Action || command.TargetID != blocker.RunID || command.ProjectIdentity != s.Config.identity || !stableExecutionID(blocker.RunID) || !stableExecutionID(blocker.AttemptID) {
+		return nil, errors.New("service command blocker does not match an indeterminate request and fixed run/attempt identity")
 	}
 	var envelope ServiceCommandPayload
 	var body RecoveryCommandBody
@@ -566,8 +616,8 @@ func (s *Service) resolveServiceCommandBlocker(ctx context.Context, blocker Cont
 		return nil, err
 	}
 	run := s.recoveryTarget(command.TargetID)
-	if run == nil || run.FinishTaskStatus == "completed" {
-		return nil, errors.New("in-flight recovery command target is missing or already completed")
+	if run == nil || run.FinishTaskStatus == "completed" || run.TaskID != blocker.TaskID || run.AttemptID != blocker.AttemptID || envelope.ExpectedRevision != command.ExpectedVersion || !stableExecutionID(envelope.RunAttemptID) {
+		return nil, errors.New("in-flight recovery command target or saved attempt identity is missing, completed or conflicting")
 	}
 	resolution := ""
 	switch command.Kind {
@@ -587,9 +637,8 @@ func (s *Service) resolveServiceCommandBlocker(ctx context.Context, blocker Cont
 			if parseErr != nil || result.PRURL == nil {
 				return nil, errors.New("already accepted managed result no longer validates")
 			}
-			info, queryErr := s.prs.Query(ctx, *result.PRURL)
-			if queryErr != nil || info.State != "open" && info.State != "merged" || info.BaseBranch != s.Config.Branch {
-				return nil, errors.New("accepted result PR could not be freshly verified")
+			if _, verifyErr := s.verifyRecoveryPR(ctx, run, result); verifyErr != nil {
+				return nil, fmt.Errorf("accepted result PR could not be freshly verified: %w", verifyErr)
 			}
 			resolution = "reconciled durable managed result and current PR state without rereading the source path"
 		} else {

@@ -49,7 +49,7 @@ func render(m Model) string {
 	}
 	var body string
 	if m.confirm != nil {
-		body = renderStopConfirmation(m, *state)
+		body = renderStopConfirmation(m, *state, contentHeight)
 	} else if m.resultPicker != nil {
 		body = renderResultPathPicker(m, *state, contentHeight)
 	} else if m.answer != nil {
@@ -1097,25 +1097,47 @@ func renderFinal(state projectState, row *consoleRow, width, height int) []strin
 	return scrollLines(wrapLines(lines, width), state.detailScroll, height)
 }
 
-func renderStopConfirmation(m Model, state projectState) string {
+func renderStopConfirmation(m Model, state projectState, height int) string {
 	if m.confirm == nil {
 		return ""
 	}
+	var lines []string
 	if m.confirm.action != "stop_service" {
-		lines := []string{"恢复动作确认", "run_id：" + safeTerminalText(m.confirm.runID), "command_id：" + safeTerminalText(m.confirm.requestID), "revision：" + strconv.FormatUint(m.confirm.revision, 10), "动作：" + safeTerminalText(m.confirm.action)}
+		lines = []string{"恢复动作确认", "run_id：" + safeTerminalText(m.confirm.runID), "command_id：" + safeTerminalText(m.confirm.requestID), "revision：" + strconv.FormatUint(m.confirm.revision, 10), "动作：" + safeTerminalText(m.confirm.action)}
 		if m.confirm.action == "resolve_command" {
-			lines = append(lines, "原 request_id："+safeTerminalText(m.confirm.decisionID), "确认依据："+safeTerminalText(m.confirm.basis), "服务只解除这一条 indeterminate blocker，不会重放原指令。")
+			lines = append(lines, "原 request_id："+safeTerminalText(m.confirm.decisionID), "服务只核验并解除这一条 indeterminate blocker，不会重放原指令；若对应不确定执行，还会记录已核实的停止事实。")
 		} else {
-			lines = append(lines, "目标服务实例："+safeTerminalText(m.confirm.instance), "确认依据："+safeTerminalText(m.confirm.basis))
+			lines = append(lines, "目标服务实例："+safeTerminalText(m.confirm.instance))
 		}
 		if m.confirm.action == "accept_result" {
 			lines = append(lines, "result 文件："+safeTerminalText(m.confirm.resultPath), fmt.Sprintf("冻结结果字节：%d · SHA-256：%s", len(m.confirm.resultBytes), m.confirm.resultSHA256), "task/run："+safeTerminalText(m.confirm.resultTaskID+" / "+m.confirm.resultRunID), "摘要："+safeTerminalText(m.confirm.resultSummary), "PR："+safeTerminalText(m.confirm.resultPRURL), "worktree："+safeTerminalText(m.confirm.resultWorktree)+" · base："+safeTerminalText(m.confirm.resultBase), "服务会核验工作目录、base、仓库、目标分支和真实 PR 状态。")
 		}
-		lines = append(lines, "Enter/y 确认 · Esc/n 取消")
-		return strings.Join(lines, "\n")
+		if m.confirm.requireBasis {
+			lines = append(lines, "", "请填写亲自核验的停止或解除依据（最多 2000 字符）：")
+			evidence := []rune(m.confirm.basis)
+			if m.confirm.basisCursor >= 0 && m.confirm.basisCursor <= len(evidence) {
+				evidence = append(evidence, 0)
+				copy(evidence[m.confirm.basisCursor+1:], evidence[m.confirm.basisCursor:])
+				evidence[m.confirm.basisCursor] = '│'
+			}
+			for _, line := range strings.Split(safeTerminalText(string(evidence)), "\n") {
+				lines = append(lines, line)
+			}
+			lines = append(lines, fmt.Sprintf("依据字符：%d / 2000", len([]rune(m.confirm.basis))))
+			if m.confirm.basisError != "" {
+				lines = append(lines, styleAlert.Render(safeTerminalText(m.confirm.basisError)))
+			}
+			lines = append(lines, "Enter 换行 · F2 明确确认并提交 · Esc 取消")
+		} else {
+			lines = append(lines, "Enter/y 确认 · Esc/n 取消")
+		}
+	} else {
+		grace := safeTerminalText(state.ref.Config.ShutdownGrace)
+		lines = []string{"停止服务确认", "", "目标实例：" + safeTerminalText(m.confirm.instance), "这会停止新派发，并等待当前 worker 最长 " + grace + " 后按服务策略结束；工作现场会保留。", "request_id：" + m.confirm.requestID, "", "Enter/y 确认停止 · Esc/n 取消"}
 	}
-	grace := safeTerminalText(state.ref.Config.ShutdownGrace)
-	return strings.Join([]string{"停止服务确认", "", "目标实例：" + safeTerminalText(m.confirm.instance), "这会停止新派发，并等待当前 worker 最长 " + grace + " 后按服务策略结束；工作现场会保留。", "request_id：" + m.confirm.requestID, "", "Enter/y 确认停止 · Esc/n 取消"}, "\n")
+	width := max(1, m.width-2)
+	visible := fitLines(scrollLines(wrapLines(lines, width), max(0, m.confirm.scroll), height), m.width, height)
+	return strings.Join(visible, "\n")
 }
 
 func renderResultPathPicker(m Model, state projectState, height int) string {
@@ -1216,14 +1238,20 @@ func (m Model) answerRunTask(state projectState, dialog *decisionAnswerDialog) s
 }
 
 func renderFooter(m Model, state projectState) string {
-	if state.panel == 6 {
-		return "r 重新核验 · R retry · m mark-stopped · z accept-result · [/]选择 blocker · v resolve-command · Enter/ Esc 返回"
+	if m.confirm != nil {
+		if m.confirm.requireBasis {
+			return "PgUp/PgDn 阅读完整结果 · 输入亲自核验的依据 · F2 确认提交 · Esc 取消"
+		}
+		return "↑↓/PgUp/PgDn 阅读完整确认内容 · Enter/y 确认 · Esc/n 取消"
 	}
 	if m.resultPicker != nil {
 		return "输入完整 result 文件路径 · ←→移动光标 · Backspace/Delete 编辑 · Enter 读取固定字节并预览 · Esc 取消"
 	}
 	if m.answer != nil {
-		return "↑↓ 选择声明选项/移动光标 · Tab 切换选项与说明 · Enter 换到说明/插入换行 · Ctrl+Enter 明确提交 · PgUp/PgDn 浏览完整问题 · Esc 丢弃草稿"
+		return "↑↓ 选择声明选项/移动光标 · Tab 切换选项与说明 · Enter 换到说明/插入换行 · F2 明确提交 · PgUp/PgDn 浏览完整问题 · Esc 丢弃草稿"
+	}
+	if state.panel == 6 {
+		return "r 重新核验 · R retry · m mark-stopped · z accept-result · [/]选择 blocker · v resolve-command · Enter/ Esc 返回"
 	}
 	if m.width < 100 {
 		return "↑↓选择/滚动 · ←→项目 · t列表 · d详情 · a回答/活动 · c会话 · f正文 · v历史 · u恢复核验\n" + "s开始 · m模式 · p暂停/恢复 · x停服 · i查request · q退出\n" + ",/.轮次 · e折叠 · =保持展开 · o过程正文 · n最终回复 · y更多"

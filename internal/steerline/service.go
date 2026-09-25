@@ -336,7 +336,7 @@ func (s *Service) hydrateDecisionProjection(ctx context.Context) error {
 		if marshalErr != nil {
 			return marshalErr
 		}
-		if record.WorkflowRunID != run.RunID || record.ExecutionID != run.ExecutionID || record.AttemptID != run.Decision.AttemptID || !bytes.Equal(bytes.TrimSpace(record.Request), bytes.TrimSpace(request)) {
+		if record.WorkflowRunID != run.RunID || record.ExecutionID != run.ExecutionID || run.Decision.AttemptID != run.AttemptID || record.AttemptID != run.Decision.AttemptID || !bytes.Equal(bytes.TrimSpace(record.Request), bytes.TrimSpace(request)) {
 			return fmt.Errorf("decision %s conflicts with the runtime execution, attempt or question identity", run.Decision.ID)
 		}
 		if record.Version == 0 || !validDecisionStatus(record.Status) {
@@ -1306,6 +1306,14 @@ func (s *Service) pollPRs(ctx context.Context) error {
 		if info.BaseBranch != s.Config.Branch {
 			s.blocked(r, "PR target branch mismatch: "+info.BaseBranch)
 			s.note(r, "steer", "pr", "failed", "pr target mismatch", info.BaseBranch, nil)
+			if e = s.save(); e != nil {
+				return e
+			}
+			continue
+		}
+		if r.PR.HeadRevision != nil && info.HeadRevision != *r.PR.HeadRevision {
+			s.blocked(r, "PR head changed after the recovery result was accepted; completion refused")
+			s.note(r, "steer", "pr", "failed", "accepted result PR head mismatch", info.HeadRevision, map[string]any{"accepted_head": *r.PR.HeadRevision})
 			if e = s.save(); e != nil {
 				return e
 			}

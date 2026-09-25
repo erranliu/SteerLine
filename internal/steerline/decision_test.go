@@ -72,13 +72,19 @@ func TestDecisionAnswerRejectsBadInput(t *testing.T) {
 }
 
 func TestDecisionReplyEligibilityRejectsLocalContinuationAndMissingFixedBinding(t *testing.T) {
-	local := &Run{RunID: newID(), AttemptID: newID(), Backend: string(BackendLocal), Protocol: string(ProtocolLocalProcess), Decision: &DecisionState{ID: newID(), Status: "pending"}}
+	localAttempt := newID()
+	local := &Run{RunID: newID(), AttemptID: localAttempt, Backend: string(BackendLocal), Protocol: string(ProtocolLocalProcess), Decision: &DecisionState{ID: newID(), AttemptID: localAttempt, Status: "pending"}}
 	err := DecisionReplyEligibility(context.Background(), Config{}, local)
 	var backendErr *BackendError
 	if !errors.As(err, &backendErr) || backendErr.Code != BackendUnsupported {
 		t.Fatalf("local continuation did not report unsupported: %v", err)
 	}
-	orca := &Run{RunID: newID(), AttemptID: newID(), Backend: string(BackendOrca), Protocol: string(ProtocolOrcaTerminalV2), Decision: &DecisionState{ID: newID(), Status: "pending"}}
+	orca := &Run{RunID: newID(), AttemptID: newID(), Backend: string(BackendOrca), Protocol: string(ProtocolOrcaTerminalV2), Decision: &DecisionState{ID: newID(), AttemptID: newID(), Status: "pending"}}
+	err = DecisionReplyEligibility(context.Background(), Config{RunDir: t.TempDir()}, orca)
+	if !errors.As(err, &backendErr) || backendErr.Code != BackendIdentityMismatch || !strings.Contains(err.Error(), "different execution attempt") {
+		t.Fatalf("old-attempt decision was eligible for a new execution: %v", err)
+	}
+	orca.Decision.AttemptID = orca.AttemptID
 	err = DecisionReplyEligibility(context.Background(), Config{RunDir: t.TempDir()}, orca)
 	if !errors.As(err, &backendErr) || backendErr.Code != BackendIdentityMismatch {
 		t.Fatalf("unbound Orca decision did not fail closed: %v", err)
@@ -239,7 +245,7 @@ func TestOrcaDecisionResumesRun(t *testing.T) {
 
 	s.State.Service.Status, s.State.Service.Ready = "running", true
 	require(t, s.save())
-	_, _, e = (CommandService{Store: s.domainStore, Project: s.Config.identity}).AnswerDecision(ctx, run.Decision.ID, run.Decision.Version, "orca-answer", "tester", mustJSON(DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, OptionID: "a", Note: "keep compat", AnsweredBy: "tester"}))
+	_, _, e = (CommandService{Store: s.domainStore, Project: s.Config.identity}).AnswerDecision(ctx, run.Decision.ID, run.Decision.Version, "orca-answer", "tester", mustJSON(DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, OptionID: "a", Note: "keep compat", AnsweredBy: "tester", ExpectedDecisionVersion: run.Decision.Version, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: s.State.Service.InstanceID}))
 	require(t, e)
 	if run.Decision.Status != "pending" {
 		t.Fatalf("answer must not mutate run state: %s", run.Decision.Status)
@@ -310,7 +316,7 @@ func TestOrcaLostReplyReceiptKeepsOriginalExecutionUnknown(t *testing.T) {
 	require(t, err)
 	s.State.Service.Status, s.State.Service.Ready = "running", true
 	require(t, s.save())
-	_, _, err = (CommandService{Store: s.domainStore, Project: s.Config.identity}).AnswerDecision(ctx, run.Decision.ID, run.Decision.Version, "lost-reply-answer", "tester", mustJSON(DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, OptionID: "a", Note: "fixed answer", AnsweredBy: "tester"}))
+	_, _, err = (CommandService{Store: s.domainStore, Project: s.Config.identity}).AnswerDecision(ctx, run.Decision.ID, run.Decision.Version, "lost-reply-answer", "tester", mustJSON(DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, OptionID: "a", Note: "fixed answer", AnsweredBy: "tester", ExpectedDecisionVersion: run.Decision.Version, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: s.State.Service.InstanceID}))
 	require(t, err)
 	t.Setenv("STEERLINE_FAKE_ORCA_SEND_RESPONSE_LOST", "1")
 	require(t, s.processCommandsAndDecisions(ctx))

@@ -165,6 +165,10 @@ type projectState struct {
 }
 
 type confirmAction struct {
+	scroll         int
+	requireBasis   bool
+	basisCursor    int
+	basisError     string
 	projectKey     string
 	instance       string
 	revision       uint64
@@ -1956,7 +1960,7 @@ func (m Model) handleDecisionAnswerKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.answer = nil
 		m.status = "已关闭答案草稿；答案未提交"
 		return m, nil
-	case "ctrl+enter":
+	case "f2":
 		return m.submitDecisionAnswer()
 	case "tab":
 		dialog.noteFocus = !dialog.noteFocus
@@ -2115,7 +2119,85 @@ func moveRuneCursorVertical(text []rune, cursor int, down bool) int {
 
 func (m Model) handleConfirm(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	confirm := m.confirm
+	if confirm.requireBasis {
+		switch key.String() {
+		case "esc", "ctrl+c":
+			m.confirm = nil
+			return m, nil
+		case "f2":
+			basis := strings.TrimSpace(confirm.basis)
+			if basis == "" {
+				confirm.basisError = "请填写亲自核验的停止或解除依据；未提交命令"
+				return m, nil
+			}
+			if len([]rune(basis)) > 2000 {
+				confirm.basisError = "依据超过 2000 字符；内容未截断，请编辑后再提交"
+				return m, nil
+			}
+			confirm.basis = basis
+			m.confirm = nil
+			return m.beginRecoveryAction(confirm)
+		case "pgup":
+			confirm.scroll = max(0, confirm.scroll-8)
+			return m, nil
+		case "pgdown":
+			confirm.scroll += 8
+			return m, nil
+		case "up", "down":
+			confirm.basisCursor = moveRuneCursorVertical([]rune(confirm.basis), confirm.basisCursor, key.String() == "down")
+			confirm.scroll = 1 << 20
+			return m, nil
+		case "left":
+			confirm.basisCursor = max(0, confirm.basisCursor-1)
+			return m, nil
+		case "right":
+			confirm.basisCursor = min(len([]rune(confirm.basis)), confirm.basisCursor+1)
+			return m, nil
+		case "home":
+			confirm.basisCursor = runeLineStart([]rune(confirm.basis), confirm.basisCursor)
+			return m, nil
+		case "end":
+			confirm.basisCursor = runeLineEnd([]rune(confirm.basis), confirm.basisCursor)
+			return m, nil
+		case "backspace":
+			if confirm.basisCursor > 0 {
+				text := []rune(confirm.basis)
+				confirm.basis = string(append(text[:confirm.basisCursor-1], text[confirm.basisCursor:]...))
+				confirm.basisCursor--
+			}
+			confirm.basisError = ""
+			confirm.scroll = 1 << 20
+			return m, nil
+		case "delete":
+			text := []rune(confirm.basis)
+			if confirm.basisCursor < len(text) {
+				confirm.basis = string(append(text[:confirm.basisCursor], text[confirm.basisCursor+1:]...))
+			}
+			confirm.basisError = ""
+			confirm.scroll = 1 << 20
+			return m, nil
+		case "enter":
+			insertRecoveryBasisRunes(confirm, []rune{'\n'})
+			return m, nil
+		}
+		if key.Type == tea.KeyRunes {
+			insertRecoveryBasisRunes(confirm, key.Runes)
+		}
+		return m, nil
+	}
 	switch key.String() {
+	case "up":
+		confirm.scroll = max(0, confirm.scroll-1)
+		return m, nil
+	case "down":
+		confirm.scroll++
+		return m, nil
+	case "pgup":
+		confirm.scroll = max(0, confirm.scroll-8)
+		return m, nil
+	case "pgdown":
+		confirm.scroll += 8
+		return m, nil
 	case "esc", "n":
 		m.confirm = nil
 		return m, nil
@@ -2128,6 +2210,33 @@ func (m Model) handleConfirm(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	default:
 		return m, nil
 	}
+}
+
+func insertRecoveryBasisRunes(confirm *confirmAction, input []rune) {
+	if confirm == nil || len(input) == 0 {
+		return
+	}
+	filtered := make([]rune, 0, len(input))
+	for _, r := range input {
+		if r == '\r' {
+			r = '\n'
+		}
+		if r == '\n' || r == '\t' || r >= 0x20 && r != 0x7f {
+			filtered = append(filtered, r)
+		}
+	}
+	if len(filtered) == 0 {
+		return
+	}
+	text := []rune(confirm.basis)
+	confirm.basisCursor = min(max(0, confirm.basisCursor), len(text))
+	joined := make([]rune, 0, len(text)+len(filtered))
+	joined = append(joined, text[:confirm.basisCursor]...)
+	joined = append(joined, filtered...)
+	joined = append(joined, text[confirm.basisCursor:]...)
+	confirm.basis, confirm.basisCursor = string(joined), confirm.basisCursor+len(filtered)
+	confirm.basisError = ""
+	confirm.scroll = 1 << 20
 }
 
 func (m Model) startSelected() (tea.Model, tea.Cmd) {
@@ -2285,7 +2394,6 @@ func (m Model) prepareRecoveryAction(action string) (tea.Model, tea.Cmd) {
 	}
 	requestID := steerline.NewControlRequestID()
 	confirm := &confirmAction{projectKey: state.ref.Key, instance: runtimeState.Service.InstanceID, action: action, taskID: report.TaskID, runID: report.RunID, requestID: requestID}
-	basis := fmt.Sprintf("操作人在控制台查看 run %s revision %d 的恢复报告后明确确认原执行已停止。", report.RunID, report.RunRevision)
 	switch action {
 	case "retry_run":
 		if report.RetryReason != "" {
@@ -2296,7 +2404,7 @@ func (m Model) prepareRecoveryAction(action string) (tea.Model, tea.Cmd) {
 			m.status = "服务未声明 retry_run 能力"
 			return m, nil
 		}
-		confirm.revision, confirm.basis = report.RunRevision, basis
+		confirm.revision = report.RunRevision
 	case "mark_stopped":
 		if !strings.HasPrefix(report.MarkStoppedReason, "confirm") {
 			m.status = "mark_stopped 不可用：" + report.MarkStoppedReason
@@ -2306,7 +2414,7 @@ func (m Model) prepareRecoveryAction(action string) (tea.Model, tea.Cmd) {
 			m.status = "服务未声明 mark_stopped 能力"
 			return m, nil
 		}
-		confirm.revision, confirm.basis = report.RunRevision, basis
+		confirm.revision, confirm.requireBasis = report.RunRevision, true
 	case "accept_result":
 		if !strings.HasPrefix(report.AcceptResultReason, "confirm") {
 			m.status = "accept_result 不可用：" + report.AcceptResultReason
@@ -2333,7 +2441,7 @@ func (m Model) prepareRecoveryAction(action string) (tea.Model, tea.Cmd) {
 		confirm.taskID, confirm.runID = blocker.TaskID, blocker.RunID
 		confirm.decisionID = blocker.RequestID
 		confirm.revision = runtimeState.Control.Revision
-		confirm.basis = "仅核验并解除此原始 indeterminate blocker；不重放原指令。"
+		confirm.requireBasis = true
 	default:
 		m.status = "不支持的恢复动作：" + action
 		return m, nil
@@ -2344,6 +2452,11 @@ func (m Model) prepareRecoveryAction(action string) (tea.Model, tea.Cmd) {
 
 func (m Model) beginRecoveryAction(confirm *confirmAction) (tea.Model, tea.Cmd) {
 	if confirm == nil {
+		return m, nil
+	}
+	if confirm.requireBasis && (strings.TrimSpace(confirm.basis) == "" || len([]rune(strings.TrimSpace(confirm.basis))) > 2000) {
+		confirm.basisError = "恢复依据必须由操作者填写，且不超过 2000 字符；未提交命令"
+		m.confirm = confirm
 		return m, nil
 	}
 	index := m.projectIndex(confirm.projectKey)
@@ -2531,8 +2644,7 @@ func (m Model) freezeAcceptResultPreview() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	sum := sha256.Sum256(data)
-	basis := fmt.Sprintf("Console operator confirmed the original execution stopped after reviewing run %s revision %d.", dialog.runID, dialog.revision)
-	m.confirm = &confirmAction{projectKey: state.ref.Key, instance: dialog.instance, revision: dialog.revision, action: "accept_result", taskID: selectedRun.TaskID, runID: selectedRun.RunID, requestID: dialog.requestID, resultBytes: append([]byte(nil), data...), resultSHA256: hex.EncodeToString(sum[:]), resultSummary: ptrString(result.Summary), resultPRURL: *result.PRURL, resultPath: path, resultWorktree: ptrString(result.WorktreePath), resultBase: ptrString(result.BaseCommit), resultTaskID: result.TaskID, resultRunID: result.RunID, basis: basis}
+	m.confirm = &confirmAction{projectKey: state.ref.Key, instance: dialog.instance, revision: dialog.revision, action: "accept_result", requireBasis: true, taskID: selectedRun.TaskID, runID: selectedRun.RunID, requestID: dialog.requestID, resultBytes: append([]byte(nil), data...), resultSHA256: hex.EncodeToString(sum[:]), resultSummary: ptrString(result.Summary), resultPRURL: *result.PRURL, resultPath: path, resultWorktree: ptrString(result.WorktreePath), resultBase: ptrString(result.BaseCommit), resultTaskID: result.TaskID, resultRunID: result.RunID}
 	m.resultPicker = nil
 	return m, nil
 }

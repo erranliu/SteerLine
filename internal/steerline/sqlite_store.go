@@ -1142,7 +1142,7 @@ func (t *sqliteTx) AcceptDecisionAnswer(command CommandRecord, answer DecisionAn
 			break
 		}
 	}
-	if target == nil || target.ControlRevision != answer.ExpectedRunRevision || target.FinishTaskStatus != "waiting_decision" || target.Decision == nil || target.Decision.ID != command.TargetID || target.Decision.Status != "pending" || target.Decision.Version != command.ExpectedVersion || target.Decision.AttemptID != record.AttemptID || target.ExecutionID != record.ExecutionID {
+	if target == nil || target.ControlRevision != answer.ExpectedRunRevision || target.FinishTaskStatus != "waiting_decision" || target.Decision == nil || target.Decision.ID != command.TargetID || target.Decision.Status != "pending" || target.Decision.Version != command.ExpectedVersion || target.AttemptID == "" || target.Decision.AttemptID != target.AttemptID || target.Decision.AttemptID != record.AttemptID || target.ExecutionID != record.ExecutionID {
 		return record, false, errors.New("stale_revision: decision or run identity changed; refresh before answering")
 	}
 	var request DecisionRequest
