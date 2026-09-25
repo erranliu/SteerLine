@@ -564,6 +564,11 @@ func advanceMinimalExecution(run *WorkflowRunRecord, exec *ExecutionRecord, resu
 		if len(requiredChecks) == 0 {
 			return "", errors.New("verify requires a nonempty fixed required-check list")
 		}
+		if exec.Protocol == string(ProtocolOrcaSupervised) {
+			if err := validateSupervisedChecks(result.Checks, exec.CandidateRevision); err != nil {
+				return "", err
+			}
+		}
 		failed, err := validateChecks(requiredChecks, result.Checks, exec.CandidateRevision)
 		if err != nil {
 			return "", err
@@ -660,27 +665,6 @@ func validateChecks(required []string, checks []CheckEvidence, revision string) 
 		if _, exists := seen[check.Name]; exists {
 			return false, fmt.Errorf("duplicate check receipt %q", check.Name)
 		}
-		if strings.TrimSpace(check.Command) == "" || strings.TrimSpace(check.ScriptVersion) == "" || strings.TrimSpace(check.EvidenceRef) == "" {
-			return false, fmt.Errorf("check %q lacks command, script version or evidence reference", check.Name)
-		}
-		if check.ExitCode == nil || check.Passed == nil {
-			return false, fmt.Errorf("check %q lacks an explicit exit code or passed value", check.Name)
-		}
-		if !revisionPattern.MatchString(check.ActualCommit) || !strings.EqualFold(check.ActualCommit, revision) {
-			return false, fmt.Errorf("check %q actual commit differs from the pinned revision", check.Name)
-		}
-		switch check.Status {
-		case "passed":
-			if *check.ExitCode != 0 || !*check.Passed {
-				return false, fmt.Errorf("check %q reports passed without exit code zero and passed=true", check.Name)
-			}
-		case "failed":
-			if *check.ExitCode == 0 || *check.Passed {
-				return false, fmt.Errorf("check %q reports failed without a nonzero exit code and passed=false", check.Name)
-			}
-		default:
-			return false, fmt.Errorf("check %q has inconclusive status %q", check.Name, check.Status)
-		}
 		seen[check.Name] = check
 	}
 	failed := false
@@ -701,6 +685,33 @@ func validateChecks(required []string, checks []CheckEvidence, revision string) 
 		}
 	}
 	return failed, nil
+}
+
+func validateSupervisedChecks(checks []CheckEvidence, revision string) error {
+	for _, check := range checks {
+		if strings.TrimSpace(check.Command) == "" || strings.TrimSpace(check.ScriptVersion) == "" || strings.TrimSpace(check.EvidenceRef) == "" {
+			return fmt.Errorf("check %q lacks command, script version or evidence reference", check.Name)
+		}
+		if check.ExitCode == nil || check.Passed == nil {
+			return fmt.Errorf("check %q lacks an explicit exit code or passed value", check.Name)
+		}
+		if !revisionPattern.MatchString(check.ActualCommit) || !strings.EqualFold(check.ActualCommit, revision) {
+			return fmt.Errorf("check %q actual commit differs from the pinned revision", check.Name)
+		}
+		switch check.Status {
+		case "passed":
+			if *check.ExitCode != 0 || !*check.Passed {
+				return fmt.Errorf("check %q reports passed without exit code zero and passed=true", check.Name)
+			}
+		case "failed":
+			if *check.ExitCode == 0 || *check.Passed {
+				return fmt.Errorf("check %q reports failed without a nonzero exit code and passed=false", check.Name)
+			}
+		default:
+			return fmt.Errorf("check %q has inconclusive status %q", check.Name, check.Status)
+		}
+	}
+	return nil
 }
 
 func repairOrBlock(run *WorkflowRunRecord, exec *ExecutionRecord, result StepGateResult, reason string) (string, error) {

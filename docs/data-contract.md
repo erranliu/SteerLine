@@ -182,7 +182,7 @@ native 服务的候选来自中心 `ReadyNativeTasks` 快照，并由事务领�
 
 WorkflowRun 保存步骤定义及 Codex executable/args、sandbox、model、reasoning_effort、profile。配置变更不改变已创建流程的执行参数。输入包含工作区证据、前置结果 ID 和正文，修复步骤能够读取实际失败检查或审查结果。
 
-步骤回执包含 schema_version、project_identity、task_id、workflow_run_id、execution_id、attempt_id 与 result。中心逐项核验身份、输入 revision、真实 Git common-dir/分支/base、前置结果和步骤门槛。每项必需 verify 检查还必须返回实际命令、脚本版本、退出码、passed 值、证据引用及执行时的 commit；缺字段、结论与退出码矛盾或 commit 不同都不能通过。无效结果将尝试记为 failed；通过门槛后才提交 succeeded 与下一步意图。publish_pr 的前置验证/审查在启动发布器之前检查，PR head 在关闭外部任务之前核验。
+步骤回执包含 schema_version、project_identity、task_id、workflow_run_id、execution_id、attempt_id 与 result。中心逐项核验身份、输入 revision、真实 Git common-dir/分支/base、前置结果和步骤门槛。受监管 Orca 的每项必需 verify 检查还必须返回实际命令、脚本版本、退出码、passed 值、证据引用及执行时的 commit；缺字段、结论与退出码矛盾或 commit 不同都不能通过。原生本机任务的确定性检查继续按其已提交步骤契约和中心执行回执核验，不套用远端消息字段格式。无效结果将尝试记为 failed；通过门槛后才提交 succeeded 与下一步意图。publish_pr 的前置验证/审查在启动发布器之前检查，PR head 在关闭外部任务之前核验。
 
 minimal-v1 当前拒绝本地决策续跑：answer_decision 在接受前核验固定执行能力，不支持的 local continuation 会被拒绝并保留 pending 问题，不启动新步骤。若执行状态已有 `reply_accepted` 决策，结果仍须同时返回 `result.applied_decision_id`、`applied_decision_attempt_id`、`applied_decision_execution_id` 和 `applied_answer_sha256`，分别匹配原问题、decision attempt、Workflow Execution 和固定答案摘要；后端接受输入只算 reply_accepted，缺少证明时决策失败且 run 阻塞。单段 accept-result/mark-stopped 入口不能用于 minimal-v1；retry 只针对已结算的失败步骤经中心事务预留新 attempt，不确定步骤仍须按原尝试和 Operation 对账。
 

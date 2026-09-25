@@ -214,7 +214,7 @@ func TestMinimalWorkflowRevisionGatesAndRepairLimit(t *testing.T) {
 	run := &WorkflowRunRecord{WorkflowVersion: MinimalWorkflowVersion, Definition: WorkflowDefinition{ID: MinimalWorkflowVersion, Version: MinimalWorkflowVersion, ReviewRequired: true, MaxRepairRounds: 1}, Phase: "executing"}
 	base := strings.Repeat("a", 40)
 	prepared := WorkspaceEvidence{Repository: "repo", Worktree: "tree", Branch: "codex/test", Base: base, Head: base, VerifiedAt: time.Now().UTC()}
-	exec := &ExecutionRecord{Status: "active", CurrentStep: "prepare", Workspace: WorkspaceEvidence{Repository: "repo", Worktree: "tree", Branch: "codex/test", Base: base}}
+	exec := &ExecutionRecord{Status: "active", Protocol: string(ProtocolOrcaSupervised), CurrentStep: "prepare", Workspace: WorkspaceEvidence{Repository: "repo", Worktree: "tree", Branch: "codex/test", Base: base}}
 	if step, err := AdvanceMinimalExecution(run, exec, StepGateResult{StepID: "prepare", Succeeded: true, Workspace: prepared}, nil); err != nil || step != "implement" {
 		t.Fatalf("prepare gate: %q %v", step, err)
 	}

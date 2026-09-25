@@ -1591,9 +1591,6 @@ func (s *Service) startMinimalStep(ctx context.Context, task Task, run *Run, sou
 	if err != nil {
 		return err
 	}
-	if s.Config.hostName() != "orca_supervised" {
-		execution.Target = ref.Target
-	}
 	if err = (executionRecords{root: s.Config.RunDir}).saveBinding(ref); err != nil {
 		run.ExecutionStatus = "unknown"
 		s.blocked(run, "Step started but its binding could not be persisted: "+err.Error())

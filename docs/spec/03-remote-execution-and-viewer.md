@@ -20,7 +20,7 @@
 
 ## 2. 配置与接入前置
 
-新增显式的受监管远程配置，至少包含固定 connection ID、home Orca runtime/协调者绑定、environment ID、远端 repo selector、agent、固定 model/reasoning_effort、输出/状态轮询参数和能力报告版本。当前配置字段见[配置片段](orca-probe/samples/supervised-config.fragment.json)；它仍不能启用实际派发，因为 worker start 和消息等能力尚未实现。本机 Orca terminal v2 与受监管远端是不同协议实现，不从前者的配置隐式切换。远端 worker-start 显式传递已固定的 model/reasoning_effort；若缺少必需值，领取前拒绝，不继承远端用户的 Orca 默认模型。
+新增显式的受监管远程配置，至少包含固定 connection ID、home Orca runtime/协调者绑定、environment ID、远端 repo selector、agent、固定 model/reasoning_effort、输出/状态轮询参数和能力报告版本。当前配置字段见[配置片段](orca-probe/samples/supervised-config.fragment.json)；它仍不能启用生产派发：worker start、消息、输出和结算已有受限实现与局部真机回执，完整能力认证仍未通过。本机 Orca terminal v2 与受监管远端是不同协议实现，不从前者的配置隐式切换。远端 worker-start 显式传递已固定的 model/reasoning_effort；若缺少必需值，领取前拒绝，不继承远端用户的 Orca 默认模型。
 
 Windows 中心服务从 [PR 3 固定入口](pr-03-service-lifecycle.spec.md) 由用户独立打开可见服务窗口；viewer 退出不停止仍开着的中心服务，关窗则结束中心监督。本阶段不得让 viewer 在后台代启中心服务，也不得把关窗当成远端 worker 的停止证明。用户重新打开服务窗口后，中心按持久身份和 Operation 对账，再恢复消息读取和派发判断；Linux detached 路径按其平台能力运行。
 

@@ -1,0 +1,39 @@
+{
+  "schema_version": "steerline.spec03-windows-sandbox-fallback.v1",
+  "evidence_class": "real_remote_failure",
+  "remote_codex_cli_version": "codex-cli 0.156.1",
+  "remote_config": {
+    "sandbox_mode": "workspace-write",
+    "windows_sandbox": "elevated"
+  },
+  "scoped_fallback": {
+    "override": "windows.sandbox=unelevated",
+    "global_config_changed": false,
+    "worktree_id": "09e35751-6517-4e7c-ae20-178ed0e90000::C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-20c94afe4670",
+    "terminal_handle": "term_7f379521-4313-4423-a1f2-b8b0190a4de2",
+    "terminal_incarnation": "310b1e88-f4b8-473c-90cc-406aa0c791fa",
+    "tui_idle_confirmed": true,
+    "orca_run_id": "run_27b254892811",
+    "dispatch_id": "ctx_2ea2726bebd7",
+    "worker_start_request_id": "0b4b09fb-0f1f-4d56-9233-dbe7452091d1",
+    "turn_started": true,
+    "git_command_launched": false,
+    "error": "CreateProcessAsUserW failed: -1073283067 while launching the user-scope WindowsApps pwsh.exe",
+    "accepted_status": false,
+    "accepted_worker_done": false,
+    "terminal_close_request_id": "b26af706-cbff-448c-9f4e-416d009dc74a",
+    "exact_worker_exited": true,
+    "worker_abandon_request_id": "965897bf-3508-4b5a-9cda-6cb9e9efb0f4"
+  },
+  "ordinary_codex_probe": {
+    "terminal_handle": "term_f6be09b5-4d97-4955-9a6d-fcf3e5c2a66d",
+    "prompt_turn_started": true,
+    "request_timed_out_then_reconnected": true,
+    "tool_shell_requested": "powershell.exe",
+    "tool_executable_observed": "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.6.6.0_x64__8wekyb3d8bbwe/pwsh.exe",
+    "tool_error": "CreateProcessAsUserW failed: -1073283067",
+    "command_output_observed": false,
+    "terminal_close_request_id": "1406481b-1e47-4d4d-8fd5-4187e6867a5c"
+  },
+  "acceptance": "not_passed"
+}

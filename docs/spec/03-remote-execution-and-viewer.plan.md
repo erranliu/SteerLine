@@ -54,6 +54,10 @@
 
 - 独立中心 [Run-create 响应丢失探测](orca-probe/samples/spec03-supervised-run-create-response-loss-2026-09-25.json)：在全新的 Orca 协调终端创建唯一 objective 时丢弃 CLI 正文，随后只读 `run-current`/`run-show` 与 `run-list` 找到唯一原 Run `run_300746ff8f5e`，没有第二次 run-create，也没有 worker；测试终端已关闭。这验证平台的可对账事实，适配器缺 request UUID 时仍保持 `outcome_unknown`；它不代替 R02 的 worker-start 回执丢失真机验收。
 
+- 远端 Codex 用户配置只读检查为 `sandbox_mode=workspace-write`、Windows `elevated`。按[官方 Windows sandbox 指南](https://learn.chatgpt.com/docs/windows/windows-sandbox)的单次 CLI 覆盖路径，在隔离测试 worktree 预启动 `windows.sandbox=unelevated` TUI，Orca 确认 `tui-idle` 且受监管 turn 已启动；但首次 `exec_command` 在受限用户启动用户范围 WindowsApps `pwsh.exe` 前报 `CreateProcessAsUserW -1073283067`，status 与 worker_done 均未接受。再用普通非 Dispatch Codex TUI 请求 `shell=powershell.exe` 时，实际仍解析为 WindowsApps `pwsh.exe`，同一错误，期间一次模型请求超时后重连。两个测试终端均按精确身份关闭；受监管 Dispatch 在正向退出回读后 abandon。回执见[Windows sandbox fallback 失败记录](orca-probe/samples/spec03-windows-sandbox-fallback-failed-2026-09-25.json)。用户全局 Codex 配置未改；P10 与端到端 R01 仍阻断。
+
+- 基于当前主线 `e923d9282b537221181583c6e0e766a8ed73c477` 重放 Spec 03 分支后，全仓回归暴露三个 native 路径冲突。严格的命令/脚本/退出码/commit 检查现仅施加给 `orca_supervised`，原生本机确定性检查沿其现有中心回执；启动步骤不再把 native Execution 的精确 worktree/branch/base Target 覆盖为通用本机 Target。相关四项定向 native/remote 门槛测试已通过；全仓回归仍在运行。远端用户配置为 Windows `elevated` sandbox，单次 `unelevated` 降级和普通 Codex 工具调用仍无法启动 WindowsApps `pwsh.exe`；详见[回执](orca-probe/samples/spec03-windows-sandbox-fallback-failed-2026-09-25.json)。
+
 ## 验证与交接
 
 - 用协议替身和存储故障覆盖 Spec R01–R19；真机至少完成 Spec 要求的 R01、R02、R06、R07、R08、R16、R18 及测试 PR 合并/结项路径。
