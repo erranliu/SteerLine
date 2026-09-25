@@ -1578,6 +1578,9 @@ func (s *Service) startMinimalStep(ctx context.Context, task Task, run *Run, sou
 	run.Process = &identity
 	run.StartedAt = ptr(now())
 	run.ExecutionStatus = "running"
+	if s.Config.hostName() == "orca_supervised" {
+		run.ExecutionStatus = "pending"
+	}
 	execution.Process = &identity
 	execution.Status = "active"
 	execution.CurrentStep = attempt.StepID

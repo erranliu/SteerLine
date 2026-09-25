@@ -608,12 +608,12 @@ func TestSupervisedSettlementPersistsReleaseRequestReceipt(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(runResultPath), 0700); err != nil {
 		t.Fatal(err)
 	}
-	run := &Run{TaskID: taskValue.ID, DomainTaskID: "business-task", RunID: runID, Claimant: f.c.Claimant, Host: f.c.Host, Backend: string(BackendOrca), Protocol: string(ProtocolOrcaSupervised), Agent: "codex", Target: target, BeadsContext: &source, PR: PRState{State: "unknown"}, ExecutionStatus: "running", FinishTaskStatus: "pending", ResultPath: &runResultPath, WorkspaceIntent: &WorkspaceIntent{Path: remotePath, Branch: target.Branch, BaseCommit: base}, WorktreePath: &remotePath, WorktreeBranch: &target.Branch, BaseCommit: &base}
+	run := &Run{TaskID: taskValue.ID, DomainTaskID: "business-task", RunID: runID, Claimant: f.c.Claimant, Host: f.c.Host, Backend: string(BackendOrca), Protocol: string(ProtocolOrcaSupervised), Agent: "codex", Target: target, BeadsContext: &source, PR: PRState{State: "unknown"}, ExecutionStatus: "pending", FinishTaskStatus: "pending", ResultPath: &runResultPath, WorkspaceIntent: &WorkspaceIntent{Path: remotePath, Branch: target.Branch, BaseCommit: base}, WorktreePath: &remotePath, WorktreeBranch: &target.Branch, BaseCommit: &base}
 	taskRecord, workflow, execution, attempt, err := InitializeMinimalWorkflow(f.c.identity, f.c, taskValue, source, run)
 	if err != nil {
 		t.Fatal(err)
 	}
-	run.ExecutionStatus = "running"
+	run.ExecutionStatus = "pending"
 	run.FinishTaskStatus = "pending"
 	run.DomainAttemptNumber = attempt.AttemptNumber
 	workflow.Phase = "executing"
@@ -662,8 +662,11 @@ func TestSupervisedSettlementPersistsReleaseRequestReceipt(t *testing.T) {
 		t.Fatal("restart did not reattach the original supervised Dispatch")
 	}
 	run = s.active
-	if err := s.event(WorkerEvent{RunID: runID, AttemptID: attempt.AttemptID, TurnStarted: true}); err != nil || s.State.Attempts[0].Status != "running" {
-		t.Fatalf("same-Dispatch turn evidence did not advance the attempt from dispatched: status=%s err=%v", s.State.Attempts[0].Status, err)
+	if err := s.event(WorkerEvent{RunID: runID, AttemptID: attempt.AttemptID}); err != nil || s.State.Attempts[0].Status != "dispatched" || run.ExecutionStatus != "pending" {
+		t.Fatalf("input acceptance prematurely marked the step running: run=%s attempt=%s err=%v", run.ExecutionStatus, s.State.Attempts[0].Status, err)
+	}
+	if err := s.event(WorkerEvent{RunID: runID, AttemptID: attempt.AttemptID, TurnStarted: true}); err != nil || s.State.Attempts[0].Status != "running" || run.ExecutionStatus != "running" {
+		t.Fatalf("same-Dispatch turn evidence did not advance the step from dispatched: run=%s attempt=%s err=%v", run.ExecutionStatus, s.State.Attempts[0].Status, err)
 	}
 	question := OrcaInboxMessage{ID: "relay-answer-test", Type: "question", FromHandle: "dispatch:dispatch-test", Payload: json.RawMessage(`{"taskId":"task-test","dispatchId":"dispatch-test","question":"Choose a route","options":["left","right"]}`)}
 	if err := s.applySupervisedQuestions(run, WorkerEvent{AttemptID: attempt.AttemptID, RemoteRunID: target.OrchestrationRun, RemoteMessages: []OrcaInboxMessage{question}}); err != nil {

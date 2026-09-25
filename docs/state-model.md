@@ -16,6 +16,8 @@
 
 Orca `worker-start` 的 `input_accepted` 只使 Attempt 到 `dispatched`。同一 Dispatch 的 assistant transcript 或业务消息被服务持久化后才转 `running`；terminal ready、idle、输出沉默或存活事实不证明 turn 开始。`dispatched` 的固定绑定也可在中心重启后重接并继续观察。
 
+受监管远端 Run 的 `execution_status` 在 `input_accepted` 后也保持 `pending`，直到同一 Attempt 的 turn 证据到达才记为 `running`。这条业务阶段与 Orca 报告的进程 `live` 分开；中心重启时，已有精确 Process/Dispatch/Operation 绑定的 `pending/dispatched` 仍只读重接原 worker。
+
 服务还有独立的控制轴 `control.dispatch_mode`（manual/auto）、`dispatch_paused` 和 `revision`。它们控制将来是否领取新任务，不改变执行、交付或 Beads 认领事实。`control.operation` 和 `control.blockers` 是控制协议的持久检查点/不确定副作用保留，不是任务队列；服务是 runtime 的唯一写者，客户端通过文件协议或 SQLite `CommandService` 提交当前实例绑定的命令。
 
 PR 4A 的 `ExecutionRef` 和后端 `Operation` 纳入同一个 `steerline.db`：ExecutionRef 固定 backend/protocol/target/agent/workspace 和外部身份，Operation 固定动作负载摘要及 pending/in_flight/accepted/confirmed/rejected/outcome_unknown 结果。运行身份在 runtime v5 的 `Run` 投影中，数据库绑定必须与它的 PID/创建身份或 Orca runtime/terminal/incarnation 一致；未知、损坏或冲突记录阻止有副作用的恢复。配置摘要改变不会重路由历史记录。`execution/v1/` 仅保存能力报告和原生证据，不作为执行状态恢复源。

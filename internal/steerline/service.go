@@ -295,7 +295,7 @@ func NewService(c Config) (_ *Service, retErr error) {
 				}
 				if !recoverPlannedStep {
 					recovered := false
-					if r.Host == "orca_supervised" && r.WorkflowVersion == MinimalWorkflowVersion && r.ExecutionStatus == "running" {
+					if r.Host == "orca_supervised" && r.WorkflowVersion == MinimalWorkflowVersion && (r.ExecutionStatus == "running" || r.ExecutionStatus == "pending" && r.Process != nil) {
 						if recoverErr := s.reattachSupervisedWorker(r); recoverErr == nil {
 							recovered = true
 						} else {
@@ -1664,6 +1664,7 @@ func (s *Service) event(ev WorkerEvent) error {
 				if err := TransitionStepAttempt(attempt, "running"); err != nil {
 					return ack(err)
 				}
+				s.active.ExecutionStatus = "running"
 				s.note(s.active, "steer", "step_start", "running", "supervised step turn started", attempt.StepID, map[string]any{"attempt_id": attempt.AttemptID, "dispatch_id": s.active.Process.Dispatch})
 			}
 		}
