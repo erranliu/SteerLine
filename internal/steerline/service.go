@@ -1782,22 +1782,35 @@ func (s *Service) applySupervisedDecisionProof(run *Run, ev WorkerEvent) error {
 			continue // The normal step-result parser handles malformed status.
 		}
 		var proof struct {
-			TaskID             string `json:"taskId"`
-			DispatchID         string `json:"dispatchId"`
-			RemoteCodexVersion string `json:"remote_codex_version"`
-			DecisionAppliedID  string `json:"decision_applied"`
+			TaskID                     string `json:"taskId"`
+			DispatchID                 string `json:"dispatchId"`
+			RemoteCodexVersion         string `json:"remote_codex_version"`
+			DecisionAppliedID          string `json:"decision_applied"`
+			AppliedDecisionAttemptID   string `json:"applied_decision_attempt_id"`
+			AppliedDecisionExecutionID string `json:"applied_decision_execution_id"`
+			AppliedAnswerBody          string `json:"applied_answer_body"`
 		}
 		if json.Unmarshal(payload, &proof) != nil || proof.DecisionAppliedID == "" {
 			continue
 		}
-		if proof.TaskID != run.Process.Task || proof.DispatchID != run.Process.Dispatch || proof.RemoteCodexVersion != s.Config.Orca.Supervised.ExpectedCodexVersion || run.Decision == nil || proof.DecisionAppliedID != run.Decision.ID || run.Decision.AttemptID != ev.AttemptID {
-			return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "remote decision application proof conflicts with its exact question and Dispatch"}
+		answerBody := ""
+		if run.Decision != nil {
+			answerBody = run.Decision.OptionID
+			if answerBody == "" {
+				answerBody = run.Decision.Note
+			}
+		}
+		if proof.TaskID != run.Process.Task || proof.DispatchID != run.Process.Dispatch || proof.RemoteCodexVersion != s.Config.Orca.Supervised.ExpectedCodexVersion || run.Decision == nil || proof.DecisionAppliedID != run.Decision.ID || run.Decision.AttemptID != ev.AttemptID || proof.AppliedDecisionAttemptID != run.Decision.AttemptID || proof.AppliedDecisionExecutionID != run.ExecutionID || answerBody == "" || proof.AppliedAnswerBody != answerBody {
+			return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "remote decision application proof conflicts with the fixed decision, attempt, execution or answer"}
 		}
 		if run.Decision.Status == "applied" {
 			continue
 		}
 		if run.Decision.Status != "reply_accepted" {
 			return &BackendError{Code: BackendRejected, Diagnostic: "remote decision application arrived before the original reply was accepted"}
+		}
+		if !minimalDecisionApplicationMatches(run, StepGateResult{AppliedDecisionID: proof.DecisionAppliedID, AppliedDecisionAttemptID: proof.AppliedDecisionAttemptID, AppliedDecisionExecutionID: proof.AppliedDecisionExecutionID, AppliedAnswerSHA256: decisionAnswerDigest(DecisionAnswer{OptionID: run.Decision.OptionID, Note: run.Decision.Note})}) {
+			return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "remote decision application does not bind the fixed answer digest"}
 		}
 		workflow, execution := s.minimalRecords(run)
 		attempt := s.minimalAttempt(run, ev.AttemptID)

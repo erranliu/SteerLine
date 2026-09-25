@@ -58,6 +58,8 @@
 
 - 基于当前主线 `e923d9282b537221181583c6e0e766a8ed73c477` 重放 Spec 03 分支后，全仓回归暴露三个 native 路径冲突。严格的命令/脚本/退出码/commit 检查现仅施加给 `orca_supervised`，原生本机确定性检查沿其现有中心回执；启动步骤不再把 native Execution 的精确 worktree/branch/base Target 覆盖为通用本机 Target。相关四项定向 native/remote 门槛测试已通过；全仓回归仍在运行。远端用户配置为 Windows `elevated` sandbox，单次 `unelevated` 降级和普通 Codex 工具调用仍无法启动 WindowsApps `pwsh.exe`；详见[回执](orca-probe/samples/spec03-windows-sandbox-fallback-failed-2026-09-25.json)。
 
+- 整合当前主线 PR5 人工决策恢复后，远端问答继续只使用 SQLite 当前格式，不写旧 sidecar。原 `question` message ID、Attempt/Execution 与答案由中心固定；worker 的 `decision_applied` status 现在还必须逐字回传应用的答案正文和原 Attempt/Execution ID，中心比对后核算固定答案摘要。历史单问题真机回执只包含 question ID，证明了当时的收发与原 Dispatch 绑定，**不再满足当前 PR5 应用证明门槛**。选项附备注在现有 Orca reply body 只传选项的路径会丢备注，中心现在保持 `answer_saved` 并在外部 mutation 前明确阻断；待远端工具恢复后再探测同时传递选项与备注的协议。定向测试覆盖仅 question ID 被拒绝、完整证明幂等及附备注阻断。
+
 ## 验证与交接
 
 - 用协议替身和存储故障覆盖 Spec R01–R19；真机至少完成 Spec 要求的 R01、R02、R06、R07、R08、R16、R18 及测试 PR 合并/结项路径。

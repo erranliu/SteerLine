@@ -684,6 +684,25 @@ func TestSupervisedSettlementPersistsReleaseRequestReceipt(t *testing.T) {
 	if err := s.save(); err != nil {
 		t.Fatal(err)
 	}
+	run.Decision.Note = "keep this note"
+	if err := s.syncMinimalDecision(run); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.applyDecisions(context.Background()); err != nil || run.Decision.Status != "answer_saved" || run.Error == nil || !strings.Contains(*run.Error, "cannot deliver an option and note together") {
+		t.Fatalf("supervised reply lost an option note or started a side effect: status=%s error=%v call=%v", run.Decision.Status, run.Error, err)
+	}
+	for _, op := range s.State.Operations {
+		if op.Kind == "reply_orca_question" {
+			t.Fatal("supervised reply operation started while the saved option note was unsupported")
+		}
+	}
+	run.Decision.Note = ""
+	if err := s.syncMinimalDecision(run); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.save(); err != nil {
+		t.Fatal(err)
+	}
 	t.Setenv("STEERLINE_FAKE_SUPERVISED_OBSERVE_UNAVAILABLE", "1")
 	if err := s.applyDecisions(context.Background()); err != nil {
 		t.Fatal(err)
@@ -738,7 +757,11 @@ func TestSupervisedSettlementPersistsReleaseRequestReceipt(t *testing.T) {
 		t.Fatalf("uncertain reply did not reconcile from the exact answer message: status=%s request=%q receipt=%s decision=%s", replyOperation.Status, replyOperation.PlatformRequestID, replyOperation.Receipt, run.Decision.Status)
 	}
 	t.Setenv("STEERLINE_FAKE_SUPERVISED_DENY_REPLY", "")
-	proof := OrcaInboxMessage{ID: "relay-applied-test", Type: "status", FromHandle: "dispatch:dispatch-test", Payload: json.RawMessage(`{"taskId":"task-test","dispatchId":"dispatch-test","remote_codex_version":"codex-cli 0.156.1","decision_applied":"relay-answer-test"}`)}
+	bareProof := OrcaInboxMessage{ID: "relay-bare-proof-test", Type: "status", FromHandle: "dispatch:dispatch-test", Payload: json.RawMessage(`{"taskId":"task-test","dispatchId":"dispatch-test","remote_codex_version":"codex-cli 0.156.1","decision_applied":"relay-answer-test"}`)}
+	if err := s.applySupervisedDecisionProof(run, WorkerEvent{AttemptID: attempt.AttemptID, RemoteRunID: target.OrchestrationRun, RemoteMessages: []OrcaInboxMessage{bareProof}}); err == nil || run.Decision.Status != "reply_accepted" {
+		t.Fatalf("bare question ID was accepted as decision application proof: status=%s err=%v", run.Decision.Status, err)
+	}
+	proof := OrcaInboxMessage{ID: "relay-applied-test", Type: "status", FromHandle: "dispatch:dispatch-test", Payload: mustJSON(map[string]any{"taskId": "task-test", "dispatchId": "dispatch-test", "remote_codex_version": "codex-cli 0.156.1", "decision_applied": "relay-answer-test", "applied_decision_attempt_id": attempt.AttemptID, "applied_decision_execution_id": execution.ExecutionID, "applied_answer_body": "left"})}
 	proofEvent := WorkerEvent{AttemptID: attempt.AttemptID, RemoteRunID: target.OrchestrationRun, RemoteMessages: []OrcaInboxMessage{proof}}
 	if err := s.applySupervisedDecisionProof(run, proofEvent); err != nil {
 		t.Fatal(err)
@@ -1003,7 +1026,7 @@ func TestSupervisedOrcaRealPrepareRoundtrip(t *testing.T) {
 	}
 	description := "No Beads access. Verify a clean remote worktree and return prepare evidence only."
 	if askProbe {
-		description += " Before reporting prepare, use Orca ask to request the business decision 'Proceed with read-only prepare?' with exact options yes,no. Wait for the coordinator's answer, report decision_applied for that original question, then finish the same prepare attempt without editing files."
+		description += " Before reporting prepare, use Orca ask to request the business decision 'Proceed with read-only prepare?' with exact options yes,no. Wait for the coordinator's answer, report decision_applied with the original question ID, original Attempt/Execution IDs and exact applied_answer_body, then finish the same prepare attempt without editing files."
 	}
 	task := Task{ID: taskID, Title: run.Title, Description: description, Status: "open", Type: "task"}
 	source := *run.BeadsContext

@@ -702,6 +702,10 @@ func (s *Service) replySupervisedDecision(ctx context.Context, run *Run) error {
 	if err := validateDecisionAnswer(&run.Decision.Request, &answer); err != nil {
 		return err
 	}
+	if answer.OptionID != "" && answer.Note != "" {
+		run.Error = ptr("Answer saved; the supervised Orca reply contract cannot deliver an option and note together without losing the note")
+		return s.save()
+	}
 	ref, err := (executionRecords{root: s.Config.RunDir}).loadBinding(run.RunID, run.AttemptID)
 	if err != nil {
 		return err
