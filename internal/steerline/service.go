@@ -14,6 +14,7 @@ import (
 type Service struct {
 	Config      Config
 	State       Runtime
+	native      bool
 	store       *Store
 	domainStore *SQLiteStore
 	beads       Beads
@@ -44,30 +45,40 @@ type Service struct {
 }
 
 func NewService(c Config) (_ *Service, retErr error) {
-	if c.taskAuthority() == "native" {
-		return nil, errors.New("native task execution is not available in this release")
-	}
-	if e := c.Completion.validate(); e != nil {
-		return nil, e
-	}
-	if e := preflightExistingState(c.RunDir, c.RuntimeFile); e != nil {
-		return nil, e
+	native := c.taskAuthority() == "native"
+	if !native {
+		if e := c.Completion.validate(); e != nil {
+			return nil, e
+		}
+		if e := preflightExistingState(c.RunDir, c.RuntimeFile); e != nil {
+			return nil, e
+		}
 	}
 	if e := c.prepareWorktreeRoot(); e != nil {
 		return nil, e
 	}
 	databasePath := filepath.Join(c.RunDir, "steerline.db")
-	if _, statErr := os.Stat(databasePath); os.IsNotExist(statErr) {
-		old, loadErr := LoadRuntime(filepath.Join(c.RunDir, c.RuntimeFile))
-		if loadErr != nil {
-			return nil, loadErr
+	if !native {
+		if _, statErr := os.Stat(databasePath); os.IsNotExist(statErr) {
+			old, loadErr := LoadRuntime(filepath.Join(c.RunDir, c.RuntimeFile))
+			if loadErr != nil {
+				return nil, loadErr
+			}
+			if old != nil {
+				return nil, errors.New("runtime v5 projection exists without its authoritative SQLite database; restore the database before starting")
+			}
 		}
-		if old != nil {
-			return nil, errors.New("runtime v5 projection exists without its authoritative SQLite database; restore the database before starting")
-		}
+	} else if err := preflightNativeStatePath(c); err != nil {
+		return nil, err
 	}
 	r := Runner{Dir: c.Repository, Timeout: duration(c.CommandTimeout)}
-	db, e := OpenSQLiteStore(databasePath)
+	var db *SQLiteStore
+	var e error
+	if native {
+		db, e = OpenNativeTaskCommandStore(context.Background(), &c)
+	} else {
+		db, e = OpenSQLiteStore(databasePath)
+	}
 	if e != nil {
 		return nil, e
 	}
@@ -76,7 +87,7 @@ func NewService(c Config) (_ *Service, retErr error) {
 			_ = db.Close()
 		}
 	}()
-	s := &Service{Config: c, domainStore: db, store: &Store{Path: filepath.Join(c.RunDir, c.RuntimeFile), Domain: db, Project: c.identity}, beads: Beads{Runner: r, Command: c.BD, Claimant: c.Claimant}, prs: &PRClient{Config: c.PR, Runner: r}, activities: map[string]*ActivityWriter{}, conversationMappers: map[string]*ConversationMapper{}}
+	s := &Service{Config: c, native: native, domainStore: db, store: &Store{Path: filepath.Join(c.RunDir, c.RuntimeFile), Domain: db, Project: c.identity}, beads: Beads{Runner: r, Command: c.BD, Claimant: c.Claimant}, prs: &PRClient{Config: c.PR, Runner: r}, activities: map[string]*ActivityWriter{}, conversationMappers: map[string]*ConversationMapper{}}
 	projection, _, e := db.LoadProjection(context.Background(), c.identity)
 	if e != nil {
 		return nil, e
@@ -91,7 +102,7 @@ func NewService(c Config) (_ *Service, retErr error) {
 			return nil, fmt.Errorf("unsupported SQLite runtime projection schema %d", projected.SchemaVersion)
 		}
 		old = &projected
-	} else {
+	} else if !native {
 		path := filepath.Join(c.RunDir, c.RuntimeFile)
 		old, e = LoadRuntime(path)
 		if e != nil {
@@ -102,8 +113,15 @@ func NewService(c Config) (_ *Service, retErr error) {
 		}
 	}
 	s.State = Runtime{SchemaVersion: 5, Repository: Repository{Path: c.Repository, Remote: c.Remote, Branch: c.Branch, Identity: c.identity}, Tasks: []TaskRecord{}, WorkflowRuns: []WorkflowRunRecord{}, Executions: []ExecutionRecord{}, Attempts: []StepAttemptRecord{}, Decisions: []DecisionRecord{}, Runs: []*Run{}, Control: ControlState{DispatchMode: "auto", Revision: 1, Blockers: []ControlBlocker{}}}
+	if native {
+		authority, authErr := db.nativeAuthority(context.Background(), c.identity)
+		if authErr != nil {
+			return nil, authErr
+		}
+		s.State.Control = ControlState{DispatchMode: authority.DispatchMode, DispatchPaused: authority.DispatchPaused, Revision: authority.AuthorityVersion, Blockers: []ControlBlocker{}}
+	}
 	if old != nil {
-		if old.Repository.Identity != c.identity || old.Repository.Remote != c.Remote || old.Repository.Branch != c.Branch || old.Service.Claimant != c.Claimant {
+		if old.Repository.Identity != c.identity || old.Repository.Remote != c.Remote || old.Repository.Branch != c.Branch || (!native && old.Service.Claimant != c.Claimant) {
 			return nil, errors.New("runtime repository/branch/claimant mismatch; preserve state and use the original configuration")
 		}
 		baselineBytes, _ := json.Marshal(old)
@@ -126,14 +144,24 @@ func NewService(c Config) (_ *Service, retErr error) {
 		s.State.Attempts = old.Attempts
 		s.State.Decisions = old.Decisions
 		s.State.Operations = old.Operations
-		if old.SchemaVersion != 5 || s.State.Control.DispatchMode != "manual" && s.State.Control.DispatchMode != "auto" || s.State.Control.Revision == 0 {
+		if !native && (old.SchemaVersion != 5 || s.State.Control.DispatchMode != "manual" && s.State.Control.DispatchMode != "auto" || s.State.Control.Revision == 0) {
 			return nil, errors.New("invalid runtime v5 control state; preserve the snapshot for recovery")
 		}
-		s.State.Control.Revision = 1 // A control revision is scoped to its instance.
+		if native {
+			authority, authErr := db.nativeAuthority(context.Background(), c.identity)
+			if authErr != nil {
+				return nil, authErr
+			}
+			s.State.Control.DispatchMode = authority.DispatchMode
+			s.State.Control.DispatchPaused = authority.DispatchPaused
+			s.State.Control.Revision = authority.AuthorityVersion
+		} else {
+			s.State.Control.Revision = 1 // A control revision is scoped to its instance.
+		}
 		if s.State.Control.Blockers == nil {
 			s.State.Control.Blockers = []ControlBlocker{}
 		}
-		if op := s.State.Control.Operation; op != nil {
+		if op := s.State.Control.Operation; op != nil && !native {
 			if !controlIDPattern.MatchString(op.RequestID) || !validControlAction(op.Action) || (op.Phase != "applying" && op.Phase != "completed") || len(op.RequestDigest) != 64 || op.Action == "start_task" && (!controlIDPattern.MatchString(op.RunID) || op.TaskID == "") || op.Phase == "completed" && op.Result == nil {
 				return nil, errors.New("invalid runtime control operation; preserve the snapshot for recovery")
 			}
@@ -190,7 +218,7 @@ func NewService(c Config) (_ *Service, retErr error) {
 				}
 			}
 			if r.AttemptID == "" || r.ControlRevision == 0 || r.DomainTaskID == "" || r.Backend == "" || r.Protocol == "" || r.WorkflowVersion == "" || r.ExecutionID == "" {
-				return nil, errors.New("runtime v5 run is missing required execution identity fields")
+				return nil, fmt.Errorf("runtime v5 run %s is missing execution identity fields: attempt_id=%t control_revision=%t task_id=%t backend=%t protocol=%t workflow_version=%t execution_id=%t", r.RunID, r.AttemptID != "", r.ControlRevision != 0, r.DomainTaskID != "", r.Backend != "", r.Protocol != "", r.WorkflowVersion != "", r.ExecutionID != "")
 			}
 			if r.Decision != nil && r.Decision.Version == 0 {
 				return nil, errors.New("runtime v5 decision is missing its version")
@@ -284,6 +312,11 @@ func NewService(c Config) (_ *Service, retErr error) {
 			s.State.SlotOccupied = false
 		}
 	}
+	if native {
+		if err := s.refreshNativeSnapshot(context.Background(), false); err != nil {
+			return nil, err
+		}
+	}
 	s.State.SchemaVersion = 5
 	s.State.Service = ServiceState{InstanceID: newID(), PID: os.Getpid(), Status: "running", Claimant: c.Claimant, Mode: "maintenance", Ready: false, ControlProtocol: ControlProtocolVersion, Capabilities: []string{"start_task", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "stop_service"}, ConfigDigest: c.configDigest, HeartbeatIntervalMS: duration(c.Heartbeat).Milliseconds()}
 	identity, err := currentProcessIdentity()
@@ -294,7 +327,9 @@ func NewService(c Config) (_ *Service, retErr error) {
 	if err := db.ValidateConversationCheckpointFormat(context.Background(), c.identity); err != nil {
 		return nil, err
 	}
-	s.reconcileOperationsAfterRestart()
+	if !native {
+		s.reconcileOperationsAfterRestart()
+	}
 	return s, nil
 }
 
@@ -351,7 +386,33 @@ func controlVersionShape(r Runtime) any {
 func jsonShape(v any) string { b, _ := json.Marshal(v); return string(b) }
 func (s *Service) save() error {
 	s.refreshSlotOccupancy()
-	if s.versionPrevious != nil {
+	if s.native {
+		authority, err := s.domainStore.nativeAuthority(context.Background(), s.Config.identity)
+		if err != nil {
+			return err
+		}
+		s.State.Control.DispatchMode, s.State.Control.DispatchPaused, s.State.Control.Revision = authority.DispatchMode, authority.DispatchPaused, authority.AuthorityVersion
+		oldRuns := map[string]*Run{}
+		if s.versionPrevious != nil {
+			for _, run := range s.versionPrevious.Runs {
+				if run != nil {
+					oldRuns[run.RunID] = run
+				}
+			}
+		}
+		for _, run := range s.State.Runs {
+			if run == nil {
+				continue
+			}
+			if before := oldRuns[run.RunID]; before == nil {
+				if run.ControlRevision == 0 {
+					run.ControlRevision = 1
+				}
+			} else if jsonShape(runVersionShape(before)) != jsonShape(runVersionShape(run)) {
+				run.ControlRevision = before.ControlRevision + 1
+			}
+		}
+	} else if s.versionPrevious != nil {
 		prev := *s.versionPrevious
 		if jsonShape(controlVersionShape(prev)) != jsonShape(controlVersionShape(s.State)) {
 			n := prev.Control.Revision + 1
@@ -535,6 +596,15 @@ func (s *Service) find(id string) *Run {
 	return nil
 }
 func (s *Service) reconcile(ctx context.Context) error {
+	if s.native {
+		if err := s.refreshNativeSnapshot(ctx, true); err != nil {
+			return err
+		}
+		if err := s.reconcileNativeCleanup(ctx); err != nil {
+			return err
+		}
+		return s.reconcileExitedNativeStep(ctx)
+	}
 	owned, e := s.beads.Owned(ctx)
 	if e != nil {
 		return e
@@ -561,6 +631,9 @@ func (s *Service) blocked(r *Run, msg string) {
 	r.Error = ptr(clip(msg, 2000))
 }
 func (s *Service) dispatch(ctx context.Context) error {
+	if s.native {
+		return s.dispatchNative(ctx)
+	}
 	reconcileErr := s.reconcile(ctx)
 	candidateErr := s.refreshCandidates(ctx)
 	if reconcileErr != nil {
@@ -975,6 +1048,22 @@ func (s *Service) refreshSlotOccupancy() {
 	s.State.SlotOccupied = occupied
 }
 func (s *Service) refreshCandidates(ctx context.Context) error {
+	if s.native {
+		queried := now()
+		tasks, err := (QueryService{Store: s.domainStore, Project: s.Config.identity}).ReadyNativeTasks(ctx)
+		if err != nil {
+			return err
+		}
+		candidates := make([]TaskCandidate, 0, len(tasks))
+		for _, task := range tasks {
+			if !contains(s.Config.ExecutableTypes, task.Type) || s.find(task.TaskID) != nil {
+				continue
+			}
+			candidates = append(candidates, TaskCandidate{TaskID: task.TaskID, Title: task.Title, Type: task.Type})
+		}
+		s.candidateSnapshot = &TaskSnapshot{Version: 1, InstanceID: s.State.Service.InstanceID, RepositoryIdentity: s.State.Repository.Identity, QueriedAt: queried, LastSuccessAt: &queried, BlockReason: s.slotReason(s.activeControlRequestID()), Tasks: candidates}
+		return nil
+	}
 	queried := now()
 	old := s.candidateSnapshot
 	if old == nil {
@@ -1187,6 +1276,9 @@ func (s *Service) pollPRs(ctx context.Context) error {
 	return s.pollPRsFor(ctx, "")
 }
 func (s *Service) pollPRsFor(ctx context.Context, runID string) error {
+	if s.native {
+		return s.pollNativePRs(ctx, runID)
+	}
 	var operationErr error
 	for _, r := range s.State.Runs {
 		if runID != "" && r.RunID != runID {
@@ -1434,7 +1526,11 @@ func (s *Service) run(ctx context.Context, retryRunID, dispatchMode string) (ret
 	}()
 	defer s.closeAllActivities()
 	s.State.Service.Mode = "scheduler"
-	s.State.Control.DispatchMode = dispatchMode
+	if !s.native {
+		s.State.Control.DispatchMode = dispatchMode
+	} else if err := s.refreshNativeSnapshot(ctx, true); err != nil {
+		return err
+	}
 	s.State.Service.Ready = false
 	s.State.Service.Status = "running"
 	s.State.Service.HeartbeatIntervalMS = duration(s.Config.Heartbeat).Milliseconds()
@@ -1620,7 +1716,13 @@ func (s *Service) run(ctx context.Context, retryRunID, dispatchMode string) (ret
 			}
 		}
 	} else {
-		if e := s.startRetry(ctx, retryRunID); e != nil {
+		var e error
+		if s.native {
+			e = s.startNativeRetry(ctx, retryRunID)
+		} else {
+			e = s.startRetry(ctx, retryRunID)
+		}
+		if e != nil {
 			return e
 		}
 	}
@@ -1680,6 +1782,11 @@ func (s *Service) run(ctx context.Context, retryRunID, dispatchMode string) (ret
 			}
 			if e := step(s.processCommandsAndDecisions); e != nil {
 				return e
+			}
+			if s.native {
+				if e := step(s.reconcile); e != nil {
+					return e
+				}
 			}
 			if e := s.pollControl(ctx, cancel); e != nil {
 				return e
@@ -1795,7 +1902,7 @@ func (s *Service) stopActiveExecution(ctx context.Context) (Operation, error) {
 	payload := struct {
 		Policy string
 		Grace  string
-	}{"local_service_shutdown", s.Config.ShutdownGrace}
+	}{"fixed_local_execution_stop", s.Config.ShutdownGrace}
 	op := Operation{Version: ExecutionRecordVersion, ID: opID, RunID: r.RunID, AttemptID: r.AttemptID, Backend: ref.Backend, Protocol: ref.Protocol, Target: ref.Target, Action: "stop", PayloadDigest: digestValue(payload), Status: OperationPending, StartedAt: now(), UpdatedAt: now(), Ref: &ref}
 	if old, loadErr := records.loadOperation(r.RunID, r.AttemptID, opID); loadErr == nil {
 		if old.Action != op.Action || old.PayloadDigest != op.PayloadDigest || old.Target != op.Target {

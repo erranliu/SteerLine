@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -25,6 +26,7 @@ type fakeOrcaState struct {
 	Branch       string   `json:"branch,omitempty"`
 	Prompt       string   `json:"prompt,omitempty"`
 	Answered     bool     `json:"answered,omitempty"`
+	Exited       bool     `json:"exited,omitempty"`
 	Sends        int      `json:"sends,omitempty"`
 	Closed       bool     `json:"closed,omitempty"`
 	OutputLines  []string `json:"output_lines,omitempty"`
@@ -71,6 +73,11 @@ func fakeOrca(stateDir string, argv []string) int {
 	switch argv[0] {
 	case "status":
 		return fakeOrcaOK(map[string]any{})
+	case "repo":
+		if len(argv) > 1 && argv[1] == "list" {
+			cwd, _ := os.Getwd()
+			return fakeOrcaOK(map[string]any{"repos": []any{map[string]any{"id": "fake-repo", "path": filepath.ToSlash(cwd), "kind": "git"}}})
+		}
 	case "worktree":
 		if len(argv) < 2 {
 			return 1
@@ -86,6 +93,8 @@ func fakeOrca(stateDir string, argv []string) int {
 			return 1
 		}
 		switch argv[1] {
+		case "create":
+			return fakeOrcaTerminalCreate(stateDir, argv[2:])
 		case "wait":
 			return fakeOrcaWait()
 		case "send":
@@ -124,6 +133,45 @@ func fakeOrca(stateDir string, argv []string) int {
 		}
 	}
 	return fakeOrcaErr("unknown", "unknown orca command")
+}
+
+func fakeOrcaTerminalCreate(stateDir string, argv []string) int {
+	selector := strings.TrimPrefix(arg(argv, "--worktree"), "path:")
+	title := arg(argv, "--title")
+	command := arg(argv, "--command")
+	if selector == "" || title == "" || command == "" {
+		return fakeOrcaErr("terminal_create", "native step terminal requires exact worktree, title and command")
+	}
+	if err := os.MkdirAll(stateDir, 0700); err != nil {
+		return fakeOrcaErr("terminal_create", err.Error())
+	}
+	branchBytes, err := exec.Command("git", "-C", selector, "branch", "--show-current").Output()
+	if err != nil {
+		return fakeOrcaErr("terminal_create", err.Error())
+	}
+	handle := "term_fake_" + regexp.MustCompile(`[^a-zA-Z0-9_-]+`).ReplaceAllString(title, "_")
+	state := fakeOrcaState{Handle: handle, Incarnation: "inc_" + handle, Worktree: selector, Branch: strings.TrimSpace(string(branchBytes))}
+	if err = writeFakeOrcaState(stateDir, state); err != nil {
+		return fakeOrcaErr("terminal_create", err.Error())
+	}
+	if runtime.GOOS != "windows" {
+		return fakeOrcaErr("terminal_create", "fake Orca native step execution requires Windows PowerShell")
+	}
+	proc := exec.Command("cmd.exe", "/c", command)
+	proc.Dir = selector
+	output, runErr := proc.CombinedOutput()
+	state.OutputLines = strings.Split(strings.TrimRight(string(output), "\r\n"), "\n")
+	state.Exited = true
+	if err = writeFakeOrcaState(stateDir, state); err != nil {
+		return fakeOrcaErr("terminal_create", err.Error())
+	}
+	if os.Getenv("STEERLINE_FAKE_ORCA_TERMINAL_CREATE_RESPONSE_LOST") == "1" {
+		return 2 // The worker and terminal settled, but the create receipt was lost.
+	}
+	if runErr != nil {
+		return fakeOrcaErr("terminal_create", fmt.Sprintf("command failed: %v: %s", runErr, output))
+	}
+	return fakeOrcaOK(map[string]any{"terminal": map[string]any{"handle": handle, "worktreePath": filepath.ToSlash(selector), "branch": "refs/heads/" + state.Branch}})
 }
 
 func fakeOrcaCreate(stateDir string, argv []string) int {
@@ -307,14 +355,14 @@ func fakeOrcaShow(stateDir string, argv []string) int {
 	if os.Getenv("STEERLINE_FAKE_ORCA_DISCONNECTED") == "1" {
 		connected = false
 	}
-	if st.Closed {
+	if st.Closed || st.Exited {
 		status = "exited"
 		connected = false
 		if os.Getenv("STEERLINE_FAKE_ORCA_CLOSE_SHOW_UNCERTAIN") == "1" {
 			status, orphaned = "running", true
 		}
 	}
-	return fakeOrcaOK(map[string]any{"terminal": map[string]any{"handle": st.Handle, "incarnationId": inc, "status": status, "connected": connected, "orphaned": orphaned, "executionHostId": "local", "agentIdentity": os.Getenv("STEERLINE_FAKE_ORCA_AGENT_IDENTITY")}})
+	return fakeOrcaOK(map[string]any{"terminal": map[string]any{"handle": st.Handle, "incarnationId": inc, "status": status, "connected": connected, "orphaned": orphaned, "worktreePath": filepath.ToSlash(st.Worktree), "branch": "refs/heads/" + st.Branch, "executionHostId": "local", "agentIdentity": os.Getenv("STEERLINE_FAKE_ORCA_AGENT_IDENTITY")}})
 }
 
 func TestOrcaHistoryLaunchRequiresSameLiveCodexAgent(t *testing.T) {
@@ -331,6 +379,20 @@ func TestOrcaHistoryLaunchRequiresSameLiveCodexAgent(t *testing.T) {
 	t.Setenv("STEERLINE_FAKE_ORCA_INCARNATION", "replacement-incarnation")
 	if _, err = waitOrcaCodexHistoryAgent(context.Background(), orcaClient{cfg: cfg}, fixed); err == nil {
 		t.Fatal("replaced terminal was accepted as the bound agent")
+	}
+}
+
+func TestOrcaTerminalExitCauseConfirmsCommandExit(t *testing.T) {
+	var term orcaTerminal
+	if err := json.Unmarshal([]byte(`{"handle":"term-exit","connected":false,"exitCause":{"kind":"exited","exitCode":0}}`), &term); err != nil {
+		t.Fatal(err)
+	}
+	if !term.exited() {
+		t.Fatalf("Orca exitCause was not treated as terminal exit evidence: %+v", term)
+	}
+	term = orcaTerminal{Status: "running", Connected: true}
+	if term.exited() {
+		t.Fatal("live Orca terminal was misclassified as exited")
 	}
 }
 

@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -85,6 +86,746 @@ func nativeContract(t *testing.T, c Config, commit, id string) TaskContract {
 	return v
 }
 
+func TestNativePreflightDoesNotRequireBeadsAndRejectsLegacyStepEntrypoints(t *testing.T) {
+	t.Setenv("STEERLINE_HOME", t.TempDir())
+	c, _ := nativeTaskFixture(t)
+	if out, err := exec.Command("git", "-C", c.Repository, "remote", "set-url", "origin", "https://example.com/owner/repo.git").CombinedOutput(); err != nil {
+		t.Fatalf("set fixture remote: %v: %s", err, out)
+	}
+	steps := map[string]string{
+		"implement":  "package main\nfunc main() {}\n",
+		"verify":     "package main\nfunc main() {}\n",
+		"publish_pr": "package main\nfunc main() {}\n",
+	}
+	for name, content := range steps {
+		path := filepath.Join(c.Repository, "steps", name+".go")
+		if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if out, err := exec.Command("git", "-C", c.Repository, "add", "steps").CombinedOutput(); err != nil {
+		t.Fatalf("stage fixture steps: %v: %s", err, out)
+	}
+	if out, err := exec.Command("git", "-C", c.Repository, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "native project steps").CombinedOutput(); err != nil {
+		t.Fatalf("commit fixture steps: %v: %s", err, out)
+	}
+	c.BD = Command{Executable: "bd-and-bv-are-not-installed"}
+	c.PR = PRConfig{Kind: "command", BaseURL: "https://example.com", Repository: "owner/repo", Query: Command{Executable: "git"}, Close: Command{Executable: "git"}}
+	c.WorkflowDefinition = &WorkflowDefinition{ID: MinimalWorkflowVersion, Version: MinimalWorkflowVersion, ReviewRequired: false, MaxRepairRounds: 1}
+	contract := func(name string) StepContract {
+		return StepContract{Provider: "command", Entry: "steps/" + name + ".go", Version: "v1", InputSchema: NativeTaskInputSchema, OutputSchema: MinimalStepOutputSchema, ExecutionSite: "local", Timeout: time.Minute, Command: []string{"git"}}
+	}
+	c.ProjectSteps = &ProjectSteps{
+		Implement: contract("implement"),
+		Verify:    contract("verify"),
+		PublishPR: contract("publish_pr"),
+	}
+	c.ProjectSteps.Verify.RequiredChecks = []string{"unit"}
+	if err := c.Preflight(context.Background(), true); err != nil {
+		t.Fatalf("native preflight required Beads or rejected valid project steps: %v", err)
+	}
+	legacy := []byte("#!/bin/sh\nbd ready --json\n")
+	if err := os.WriteFile(filepath.Join(c.Repository, "steps", "implement.go"), legacy, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := exec.Command("git", "-C", c.Repository, "add", "steps/implement.go").CombinedOutput(); err != nil {
+		t.Fatalf("stage legacy fixture step: %v: %s", err, out)
+	}
+	if out, err := exec.Command("git", "-C", c.Repository, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "legacy project step").CombinedOutput(); err != nil {
+		t.Fatalf("commit legacy fixture step: %v: %s", err, out)
+	}
+	if err := c.Preflight(context.Background(), true); err == nil || !strings.Contains(err.Error(), "legacy Beads") {
+		t.Fatalf("native preflight accepted a Beads-dependent project step: %v", err)
+	}
+}
+
+func TestNativeOrcaProjectStepsUseFixedTaskContextAndCenterDelivery(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("fake Orca target step launches use Windows PowerShell")
+	}
+	t.Setenv("STEERLINE_HOME", t.TempDir())
+	c, _ := nativeTaskFixture(t)
+	localRemote, err := exec.Command("git", "-C", c.Repository, "remote", "get-url", "origin").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	remotePath := strings.TrimSpace(string(localRemote))
+	for name, content := range map[string]string{"implement": "package steps\n", "verify": "package steps\n", "publish_pr": "package steps\n"} {
+		path := filepath.Join(c.Repository, "steps", name+".go")
+		if err = os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err = os.WriteFile(path, []byte(content), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, args := range [][]string{{"-C", c.Repository, "add", "steps"}, {"-C", c.Repository, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "native Orca project steps"}} {
+		if out, runErr := exec.Command("git", args...).CombinedOutput(); runErr != nil {
+			t.Fatalf("git %v: %v: %s", args, runErr, out)
+		}
+	}
+	if out, runErr := exec.Command("git", "-C", c.Repository, "push", remotePath, "main").CombinedOutput(); runErr != nil {
+		t.Fatalf("push native Orca base: %v: %s", runErr, out)
+	}
+	if out, runErr := exec.Command("git", "-C", c.Repository, "remote", "set-url", "origin", "https://forge.invalid/org/repo.git").CombinedOutput(); runErr != nil {
+		t.Fatalf("configure native Orca PR remote: %v: %s", runErr, out)
+	}
+	commitBytes, err := exec.Command("git", "-C", c.Repository, "rev-parse", "HEAD").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	commit := strings.TrimSpace(string(commitBytes))
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	gitExecutable, err := exec.LookPath("git")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("STEERLINE_FAKE_GIT_FETCH_REMOTE", remotePath)
+	c.Git = Command{Executable: executable, Args: []string{"--fake", "git-proxy", gitExecutable}}
+	c.BD = Command{Executable: "bd-and-bv-are-not-installed"}
+	c.Host, c.Agent = "orca", "codex"
+	c.Orca = OrcaConfig{Executable: executable, Args: []string{"--fake", "orca", filepath.Join(t.TempDir(), "orca-state")}, Shell: "cmd.exe", WaitTimeout: "10s"}
+	c.PR = PRConfig{Kind: "command", BaseURL: "https://forge.invalid", Repository: "org/repo", Query: Command{Executable: executable, Args: []string{"--fake", "pr-query", filepath.Join(t.TempDir(), "native-orca-pr.json"), "{pr_url}", "{repository}"}}, Close: Command{Executable: executable, Args: []string{"--fake", "pr-close", filepath.Join(t.TempDir(), "native-orca-pr.json"), "{pr_url}", "{repository}"}}}
+	prPath := c.PR.Query.Args[2]
+	c.PR.Query.Args[2], c.PR.Close.Args[2] = prPath, prPath
+	if err = c.ResolveIdentity(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	c.Claimant = "native-orca-test"
+	c.configDigest = strings.Repeat("e", 64)
+	c.ExecutableTypes = []string{"task", "bug", "feature", "chore"}
+	c.CommandTimeout, c.ShutdownGrace = "10s", "1s"
+	c.WorkflowDefinition = &WorkflowDefinition{ID: MinimalWorkflowVersion, Version: MinimalWorkflowVersion, ReviewRequired: false, MaxRepairRounds: 1}
+	step := func(name string) StepContract {
+		return StepContract{Provider: "command", Entry: "steps/" + name + ".go", Version: "v1", InputSchema: NativeTaskInputSchema, OutputSchema: MinimalStepOutputSchema, ExecutionSite: "target", Timeout: time.Minute, Command: []string{executable, "--fake", "native-step"}}
+	}
+	c.ProjectSteps = &ProjectSteps{Implement: step("implement"), Verify: step("verify"), PublishPR: step("publish_pr")}
+	c.ProjectSteps.Verify.RequiredChecks = []string{"unit"}
+	if _, err = c.validateNativeWorkflow(); err != nil {
+		t.Fatalf("native Orca workflow did not accept target-side project steps: %v", err)
+	}
+	localSite := *c.ProjectSteps
+	localSite.Implement.ExecutionSite = "local"
+	invalid := c
+	invalid.ProjectSteps = &localSite
+	if _, err = invalid.validateNativeWorkflow(); err == nil || !strings.Contains(err.Error(), "execution_site=target") {
+		t.Fatalf("native Orca accepted a local-only project step: %v", err)
+	}
+	writeFake(prPath, fakeDB{PRHeadRevision: commit})
+	reader, err := OpenNativeTaskProject(context.Background(), &c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = reader.Close(); err != nil {
+		t.Fatal(err)
+	}
+	lock, err := LockRepository(c.Identity())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if lock != nil {
+			lock.Close()
+		}
+	}()
+	store, err := OpenNativeTaskCommandStore(context.Background(), &c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if store != nil {
+			_ = store.Close()
+		}
+	}()
+	commands := CommandService{Store: store, Project: c.Identity()}
+	contract := nativeContract(t, c, commit, "contract-orca-201")
+	contractB := nativeContract(t, c, commit, "contract-orca-202")
+	batchBytes, err := json.Marshal(TaskBatchInput{SchemaVersion: "task-batch/v1", ProjectID: c.Identity(), Tasks: []TaskBatchTask{{LocalKey: "orca", TaskID: 201, Title: "Native Orca A", Type: "task", Contract: contract}, {LocalKey: "dependent", TaskID: 202, Title: "Native Orca B", Type: "task", Contract: contractB}}, Dependencies: []TaskBatchEdge{{Predecessor: TaskBatchReference{LocalKey: "orca"}, Successor: TaskBatchReference{LocalKey: "dependent"}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = commands.CreateTaskBatch(context.Background(), c, batchBytes, strings.Repeat("1", 32), 1, "planner"); err != nil {
+		t.Fatal(err)
+	}
+	authority, err := store.nativeAuthority(context.Background(), c.Identity())
+	if err != nil {
+		t.Fatal(err)
+	}
+	auto, unpaused := "auto", false
+	if _, err = commands.SetNativeDispatchState(context.Background(), NativeDispatchUpdate{RequestID: strings.Repeat("2", 32), ExpectedAuthorityVersion: authority.AuthorityVersion, Mode: &auto, Paused: &unpaused, RequestedBy: "operator"}); err != nil {
+		t.Fatal(err)
+	}
+	proof := []byte("fake Orca native terminal protocol acceptance")
+	proofHash := sha256.Sum256(proof)
+	proofPath := filepath.Join(c.RunDir, "execution", "v1", "evidence", hex.EncodeToString(proofHash[:])+".json")
+	if err = os.MkdirAll(filepath.Dir(proofPath), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err = AtomicWrite(proofPath, proof); err != nil {
+		t.Fatal(err)
+	}
+	report, err := (orcaTerminalBackend{config: c}).Probe(context.Background(), targetFor(c), agentFor(c))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := range report.Capabilities {
+		switch report.Capabilities[i].Name {
+		case "start", "observe", "stop", "workspace_inspection", "output_reading":
+			report.Capabilities[i].Status = CapabilityVerified
+			report.Capabilities[i].Evidence = proofPath + "#sha256=" + hex.EncodeToString(proofHash[:])
+		}
+	}
+	if err = (executionRecords{root: c.RunDir}).saveCapabilityReport(report); err != nil {
+		t.Fatal(err)
+	}
+	if err = store.Close(); err != nil {
+		t.Fatal(err)
+	}
+	store = nil
+	lock.Close()
+	lock = nil
+	s, err := NewService(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if s != nil {
+			_ = s.Close()
+		}
+	}()
+	if err = s.dispatch(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	for range 3 {
+		if s.worker == nil {
+			t.Fatal("native Orca project step did not start")
+		}
+		worker := s.worker
+		if err = s.finished(<-worker.Done); err != nil {
+			t.Fatal(err)
+		}
+		if s.find("201").FinishTaskStatus == "waiting_pr_merge" {
+			break
+		}
+		if err = s.resumeMinimalSteps(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if run := s.find("201"); run == nil || run.FinishTaskStatus != "waiting_pr_merge" || run.PR.URL == nil {
+		t.Fatalf("native Orca did not reach the center merge gate: %+v", run)
+	} else {
+		attempt := s.minimalAttempt(run, run.AttemptID)
+		binding, bindErr := (executionRecords{root: c.RunDir}).loadBinding(run.RunID, attempt.AttemptID)
+		if bindErr != nil || binding.Backend != BackendOrca || binding.Protocol != ProtocolOrcaTerminalV2 || binding.External.Terminal == "" {
+			t.Fatalf("native Orca terminal identity was not bound to the fixed step: %+v %v", binding, bindErr)
+		}
+	}
+	db := readFake(prPath)
+	db.PRState, db.PRMerged, db.PRMergedAt, db.PRMergeCommit = "merged", true, ptr(time.Now().UTC()), commit
+	writeFake(prPath, db)
+	if err = s.pollPRs(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	page, err := (QueryService{Store: s.domainStore, Project: c.Identity()}).ShowNativeTask(context.Background(), "201")
+	if err != nil || len(page.Tasks) != 1 || page.Tasks[0].Status != "closed" || page.Tasks[0].Delivery == nil {
+		t.Fatalf("native Orca merge did not produce center TaskDelivery: %+v %v", page, err)
+	}
+	blocked, err := (QueryService{Store: s.domainStore, Project: c.Identity()}).ShowNativeTask(context.Background(), "202")
+	if err != nil || len(blocked.Tasks) != 1 || !blocked.Tasks[0].DependencyReady {
+		t.Fatalf("native Orca delivery did not release the dependent task: %+v %v", blocked, err)
+	}
+	t.Setenv("STEERLINE_FAKE_ORCA_TERMINAL_CREATE_RESPONSE_LOST", "1")
+	if err = s.dispatch(context.Background()); err == nil {
+		t.Fatal("lost Orca native step-start receipt was treated as a rejected start")
+	}
+	runB := s.find("202")
+	if runB == nil || runB.ExecutionStatus != "unknown" || !s.State.SlotOccupied || runB.Process != nil {
+		t.Fatalf("lost Orca step-start receipt did not preserve the unknown fixed attempt: %+v", runB)
+	}
+	unknownAttempt := s.minimalAttempt(runB, runB.AttemptID)
+	if unknownAttempt == nil || unknownAttempt.Status != "outcome_unknown" {
+		t.Fatalf("lost Orca step-start receipt did not retain the exact attempt state: %+v", unknownAttempt)
+	}
+	projection, _, projectionErr := s.domainStore.LoadProjection(context.Background(), c.Identity())
+	if projectionErr != nil {
+		t.Fatal(projectionErr)
+	}
+	var savedRuntime Runtime
+	if err = json.Unmarshal(projection, &savedRuntime); err != nil {
+		t.Fatal(err)
+	}
+	for _, savedRun := range savedRuntime.Runs {
+		if savedRun.TaskID == "202" && savedRun.AttemptID == "" {
+			var step string
+			for _, savedExecution := range savedRuntime.Executions {
+				if savedExecution.ExecutionID == savedRun.ExecutionID {
+					step = savedExecution.CurrentStep
+				}
+			}
+			t.Fatalf("persisted unknown native run lost its attempt ID before restart: run=%+v current_step=%q attempts=%+v", savedRun, step, savedRuntime.Attempts)
+		}
+	}
+	stateEntries, err := os.ReadDir(c.Orca.Args[2])
+	if err != nil {
+		t.Fatal(err)
+	}
+	terminalCount := len(stateEntries)
+	if err = s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	s = nil
+	s, err = NewService(c)
+	if err != nil {
+		t.Fatalf("native Orca service did not recover the unknown step-start state: %v", err)
+	}
+	if s.worker != nil || !s.State.SlotOccupied || s.find("202") == nil || s.find("202").ExecutionStatus != "unknown" {
+		t.Fatalf("native Orca restart changed the unknown worker identity or released its slot: %+v", s.State.Runs)
+	}
+	if err = s.dispatch(context.Background()); err != nil || s.worker != nil {
+		t.Fatalf("native Orca restart attempted a replacement worker: worker=%v err=%v", s.worker, err)
+	}
+	stateEntries, err = os.ReadDir(c.Orca.Args[2])
+	if err != nil || len(stateEntries) != terminalCount {
+		t.Fatalf("native Orca restart created a duplicate terminal: before=%d after=%d err=%v", terminalCount, len(stateEntries), err)
+	}
+}
+
+func TestNativeLocalProjectStepsDeliverTaskAndReleaseSuccessor(t *testing.T) {
+	t.Setenv("STEERLINE_HOME", t.TempDir())
+	t.Setenv("BEADS_DIR", filepath.Join(t.TempDir(), "old-beads"))
+	t.Setenv("BEADS_ACTOR", "legacy-agent")
+	c, _ := nativeTaskFixture(t)
+	remoteURL, err := exec.Command("git", "-C", c.Repository, "remote", "get-url", "origin").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	remotePath := strings.TrimSpace(string(remoteURL))
+	for _, args := range [][]string{
+		{"-C", c.Repository, "remote", "set-url", "origin", "https://forge.invalid/org/repo.git"},
+	} {
+		if out, err := exec.Command("git", args...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v: %s", args, err, out)
+		}
+	}
+	for name, content := range map[string]string{"implement": "package steps\n", "verify": "package steps\n", "publish_pr": "package steps\n"} {
+		path := filepath.Join(c.Repository, "steps", name+".go")
+		if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if out, err := exec.Command("git", "-C", c.Repository, "add", "steps").CombinedOutput(); err != nil {
+		t.Fatalf("stage project steps: %v: %s", err, out)
+	}
+	if out, err := exec.Command("git", "-C", c.Repository, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "native workflow steps").CombinedOutput(); err != nil {
+		t.Fatalf("commit project steps: %v: %s", err, out)
+	}
+	pushOut, pushErr := exec.Command("git", "-C", c.Repository, "push", remotePath, "main").CombinedOutput()
+	if pushErr != nil {
+		t.Fatalf("push fixture base: %v: %s", pushErr, pushOut)
+	}
+	commitBytes, err := exec.Command("git", "-C", c.Repository, "rev-parse", "HEAD").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	commit := strings.TrimSpace(string(commitBytes))
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	gitExecutable, err := exec.LookPath("git")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("STEERLINE_FAKE_GIT_FETCH_REMOTE", remotePath)
+	c.Git = Command{Executable: executable, Args: []string{"--fake", "git-proxy", gitExecutable}}
+	c.Codex = Command{Executable: executable, Args: []string{"--fake", "codex", "unused"}}
+	fakePRPath := filepath.Join(t.TempDir(), "native-pr.json")
+	c.PR = PRConfig{Kind: "command", BaseURL: "https://forge.invalid", Repository: "org/repo", Query: Command{Executable: executable, Args: []string{"--fake", "pr-query", fakePRPath, "{pr_url}", "{repository}"}}, Close: Command{Executable: executable, Args: []string{"--fake", "pr-close", fakePRPath, "{pr_url}", "{repository}"}}}
+	if err := c.ResolveIdentity(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	c.Claimant = "native-test"
+	c.configDigest = strings.Repeat("d", 64)
+	c.ExecutableTypes = []string{"task", "bug", "feature", "chore"}
+	c.Host, c.Agent = "local", "codex"
+	c.BD = Command{Executable: "bd-and-bv-are-not-installed"}
+	c.CommandTimeout, c.ShutdownGrace = "10s", "1s"
+	c.WorkflowDefinition = &WorkflowDefinition{ID: MinimalWorkflowVersion, Version: MinimalWorkflowVersion, ReviewRequired: false, MaxRepairRounds: 1}
+	step := func(name string) StepContract {
+		return StepContract{Provider: "command", Entry: "steps/" + name + ".go", Version: "v1", InputSchema: NativeTaskInputSchema, OutputSchema: MinimalStepOutputSchema, ExecutionSite: "local", Timeout: 20 * time.Second, Command: []string{executable, "--fake", "native-step"}}
+	}
+	c.ProjectSteps = &ProjectSteps{Implement: step("implement"), Verify: step("verify"), PublishPR: step("publish_pr")}
+	c.ProjectSteps.Verify.RequiredChecks = []string{"unit"}
+	writeFake(fakePRPath, fakeDB{PRHeadRevision: commit})
+	reader, err := OpenNativeTaskProject(context.Background(), &c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = reader.Close(); err != nil {
+		t.Fatal(err)
+	}
+	lock, err := LockRepository(c.Identity())
+	if err != nil {
+		t.Fatal(err)
+	}
+	store, err := OpenNativeTaskCommandStore(context.Background(), &c)
+	if err != nil {
+		lock.Close()
+		t.Fatal(err)
+	}
+	contractA := nativeContract(t, c, commit, "contract-101")
+	contractB := nativeContract(t, c, commit, "contract-102")
+	contractC := nativeContract(t, c, commit, "contract-103")
+	batchBytes, err := json.Marshal(TaskBatchInput{SchemaVersion: "task-batch/v1", ProjectID: c.Identity(), Tasks: []TaskBatchTask{{LocalKey: "a", TaskID: 101, Title: "Deliver A", Type: "task", Contract: contractA}, {LocalKey: "b", TaskID: 102, Title: "Wait for A", Type: "task", Contract: contractB}, {LocalKey: "c", TaskID: 103, Title: "Active discard probe", Type: "task", Contract: contractC}}, Dependencies: []TaskBatchEdge{{Predecessor: TaskBatchReference{LocalKey: "a"}, Successor: TaskBatchReference{LocalKey: "b"}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	commands := CommandService{Store: store, Project: c.Identity()}
+	if _, err = commands.CreateTaskBatch(context.Background(), c, batchBytes, strings.Repeat("a", 32), 1, "planner"); err != nil {
+		store.Close()
+		lock.Close()
+		t.Fatal(err)
+	}
+	authority, err := store.nativeAuthority(context.Background(), c.Identity())
+	if err != nil {
+		t.Fatal(err)
+	}
+	auto, unpaused, by := "auto", false, "operator"
+	update := NativeDispatchUpdate{RequestID: strings.Repeat("b", 32), ExpectedAuthorityVersion: authority.AuthorityVersion, Mode: &auto, Paused: &unpaused, RequestedBy: by}
+	updated, updateErr := commands.SetNativeDispatchState(context.Background(), update)
+	if updateErr != nil {
+		store.Close()
+		lock.Close()
+		t.Fatal(updateErr)
+	}
+	replayed, replayErr := commands.SetNativeDispatchState(context.Background(), update)
+	if replayErr != nil || replayed.AuthorityVersion != updated.AuthorityVersion || replayed.DispatchMode != "auto" || replayed.DispatchPaused {
+		store.Close()
+		lock.Close()
+		t.Fatalf("native dispatch control did not replay its center receipt: %+v %v", replayed, replayErr)
+	}
+	conflict := update
+	manual := "manual"
+	conflict.Mode = &manual
+	if _, conflictErr := commands.SetNativeDispatchState(context.Background(), conflict); conflictErr == nil || !strings.Contains(conflictErr.Error(), "idempotency_conflict") {
+		store.Close()
+		lock.Close()
+		t.Fatalf("native dispatch request ID was reused with different content: %v", conflictErr)
+	}
+	proof := []byte("isolated native local worker capability evidence")
+	proofHash := sha256.Sum256(proof)
+	proofPath := filepath.Join(c.RunDir, "execution", "v1", "evidence", hex.EncodeToString(proofHash[:])+".json")
+	if err = os.MkdirAll(filepath.Dir(proofPath), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err = AtomicWrite(proofPath, proof); err != nil {
+		t.Fatal(err)
+	}
+	backend := backendFor(c, BeadsContext{})
+	report, err := backend.Probe(context.Background(), targetFor(c), agentFor(c))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := range report.Capabilities {
+		switch report.Capabilities[i].Name {
+		case "start", "observe", "stop", "workspace_inspection", "output_reading":
+			report.Capabilities[i].Status = CapabilityVerified
+			report.Capabilities[i].Evidence = proofPath + "#sha256=" + hex.EncodeToString(proofHash[:])
+		}
+	}
+	if err = (executionRecords{root: c.RunDir}).saveCapabilityReport(report); err != nil {
+		t.Fatal(err)
+	}
+	if err = store.Close(); err != nil {
+		t.Fatal(err)
+	}
+	lock.Close()
+	s, err := NewService(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if s != nil {
+			_ = s.Close()
+		}
+	}()
+	retryMarker := filepath.Join(t.TempDir(), "fail-first-native-implement")
+	t.Setenv("STEERLINE_FAKE_NATIVE_STEP_FAIL", "implement")
+	t.Setenv("STEERLINE_FAKE_NATIVE_STEP_FAIL_MARKER", retryMarker)
+	if err = s.dispatch(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if s.worker == nil {
+		t.Fatal("native implement attempt did not start")
+	}
+	failedWorker := s.worker
+	failedRunID := s.find("101").RunID
+	failedExecutionID := s.find("101").ExecutionID
+	if finishErr := s.finished(<-failedWorker.Done); finishErr == nil {
+		t.Fatal("injected implement failure did not settle as failed")
+	}
+	failedAttemptID := s.find("101").AttemptID
+	if s.find("101").ExecutionStatus != "failed" || s.find("101").FinishTaskStatus != "blocked" || !strings.Contains(deref(s.find("101").Error), "exit status 38") {
+		t.Fatalf("failed native step did not settle with its execution blocked: %+v", s.find("101"))
+	}
+	if err = s.startNativeRetry(context.Background(), failedRunID); err != nil {
+		t.Fatalf("center-admitted native retry did not start: %v", err)
+	}
+	if s.worker == nil || s.find("101").AttemptID == failedAttemptID {
+		t.Fatal("native retry did not create a new step attempt on the same workflow")
+	}
+	retryTask := nativeTaskRecord(s.State.Tasks, "101")
+	retryWorkflow, _ := s.minimalRecords(s.find("101"))
+	replay, replayErr := (CommandService{Store: s.domainStore, Project: c.Identity()}).RetryNativeStep(context.Background(), NativeStepRetryOptions{RequestID: nativeRetryRequestID("101", failedRunID, failedExecutionID, failedAttemptID), TaskID: "101", ExpectedTaskVersion: retryTask.Version, WorkflowRunID: failedRunID, ExecutionID: failedExecutionID, FailedAttemptID: failedAttemptID, RequestedBy: "native-test"})
+	if replayErr != nil || retryWorkflow == nil || replay.AttemptID != s.find("101").AttemptID || replay.PreviousAttempt != failedAttemptID {
+		t.Fatalf("center retry command did not replay its fixed receipt: %+v %v", replay, replayErr)
+	}
+	for range 3 {
+		if s.worker == nil {
+			t.Fatal("native project step did not start a worker")
+		}
+		worker := s.worker
+		finishErr := <-worker.Done
+		if err = s.finished(finishErr); err != nil {
+			t.Fatal(err)
+		}
+		if s.find("101").FinishTaskStatus == "waiting_pr_merge" {
+			break
+		}
+		if err = s.resumeMinimalSteps(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	detail, err := (QueryService{Store: s.domainStore, Project: c.Identity()}).ShowNativeTask(context.Background(), "101")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if detail.Tasks[0].Status != "in_progress" || len(detail.Tasks[0].WorkflowRuns) != 1 || detail.Tasks[0].WorkflowRuns[0].Phase != "waiting_pr_merge" {
+		t.Fatalf("native steps did not reach the human merge gate: %+v", detail.Tasks[0])
+	}
+	if err = s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	s = nil
+	s, err = NewService(c)
+	if err != nil {
+		t.Fatalf("native service restart did not recover the center workflow: %v", err)
+	}
+	if s.worker != nil || s.find("101") == nil || s.find("101").FinishTaskStatus != "waiting_pr_merge" {
+		t.Fatalf("native service restart changed worker or PR-wait identity: %+v", s.State.Runs)
+	}
+	blocked, err := (QueryService{Store: s.domainStore, Project: c.Identity()}).ShowNativeTask(context.Background(), "102")
+	if err != nil || blocked.Tasks[0].DependencyReady || len(blocked.Tasks[0].UnmetPredecessors) != 1 {
+		t.Fatalf("successor was not blocked before A delivery: %+v %v", blocked, err)
+	}
+	db := readFake(fakePRPath)
+	db.PRState, db.PRMerged, db.PRMergedAt, db.PRMergeCommit = "merged", true, ptr(time.Now().UTC()), commit
+	writeFake(fakePRPath, db)
+	if err = s.pollPRs(context.Background()); err != nil {
+		snapshot, _ := s.domainStore.Query(context.Background(), c.Identity())
+		t.Fatalf("native delivery failed: %v; workflows=%+v executions=%+v attempts=%+v", err, snapshot.WorkflowRuns, snapshot.Executions, snapshot.Attempts)
+	}
+	delivered, err := (QueryService{Store: s.domainStore, Project: c.Identity()}).ShowNativeTask(context.Background(), "101")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if delivered.Tasks[0].Status != "closed" || delivered.Tasks[0].Delivery == nil || delivered.Tasks[0].Delivery.MergeCommit != commit {
+		t.Fatalf("native merge verification did not commit TaskDelivery: %+v", delivered.Tasks[0])
+	}
+	if err = s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	s = nil
+	s, err = NewService(c)
+	if err != nil {
+		t.Fatalf("native service restart lost completed execution identity: %v", err)
+	}
+	if s.find("101") == nil || s.find("101").AttemptID == "" || s.find("101").FinishTaskStatus != "completed" {
+		t.Fatalf("completed native workflow did not retain its latest attempt identity: %+v", s.State.Runs)
+	}
+	ready, err := (QueryService{Store: s.domainStore, Project: c.Identity()}).ShowNativeTask(context.Background(), "102")
+	if err != nil || !ready.Tasks[0].DependencyReady {
+		t.Fatalf("successor did not become ready after center delivery: %+v %v", ready, err)
+	}
+	db = readFake(fakePRPath)
+	db.PRState, db.PRMerged, db.PRMergedAt, db.PRMergeCommit = "open", false, nil, ""
+	writeFake(fakePRPath, db)
+	if err = s.dispatch(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	for range 3 {
+		if s.worker == nil {
+			t.Fatal("ready dependent task did not start its native worker")
+		}
+		worker := s.worker
+		if err = s.finished(<-worker.Done); err != nil {
+			t.Fatal(err)
+		}
+		if s.find("102").FinishTaskStatus == "waiting_pr_merge" {
+			break
+		}
+		if err = s.resumeMinimalSteps(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	runB := s.find("102")
+	if runB == nil || runB.FinishTaskStatus != "waiting_pr_merge" || runB.PR.URL == nil {
+		t.Fatalf("dependent native task did not reach its fixed PR wait: %+v", runB)
+	}
+	bDetail, err := (QueryService{Store: s.domainStore, Project: c.Identity()}).ShowNativeTask(context.Background(), "102")
+	if err != nil {
+		t.Fatal(err)
+	}
+	stopLock, err := LockRepository(c.Identity())
+	if err != nil {
+		t.Fatal(err)
+	}
+	commandStore, err := OpenNativeTaskCommandStore(context.Background(), &c)
+	if err != nil {
+		stopLock.Close()
+		t.Fatal(err)
+	}
+	discardedPR, err := (CommandService{Store: commandStore, Project: c.Identity()}).DiscardNativeTask(context.Background(), c, "102", strings.Repeat("c", 32), bDetail.Tasks[0].Version, "operator discarded published work", "operator")
+	closeErr := commandStore.Close()
+	stopLock.Close()
+	if err != nil || closeErr != nil || discardedPR.Status != "discarded" || !hasString(discardedPR.CleanupPending, "pull_request_close:"+*runB.PR.URL) {
+		t.Fatalf("published native discard did not retain its exact PR cleanup identity: %+v err=%v close=%v", discardedPR, err, closeErr)
+	}
+	if _, err = s.domainStore.db.Exec(`CREATE TRIGGER fail_native_cleanup_receipt BEFORE UPDATE OF version,payload ON tasks WHEN OLD.status='discarded' AND json_array_length(json_extract(OLD.payload,'$.cleanup_pending')) > 0 BEGIN SELECT RAISE(ABORT,'injected native cleanup receipt failure'); END`); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.reconcile(context.Background()); err == nil || !strings.Contains(err.Error(), "injected native cleanup receipt failure") {
+		t.Fatalf("native cleanup receipt failure was not injected: %v", err)
+	}
+	bDetail, err = (QueryService{Store: s.domainStore, Project: c.Identity()}).ShowNativeTask(context.Background(), "102")
+	if err != nil || !hasString(bDetail.Tasks[0].CleanupPending, "pull_request_close:"+*runB.PR.URL) || !hasString(bDetail.Tasks[0].CleanupPending, "workspace_cleanup:"+deref(runB.WorktreePath)) {
+		t.Fatalf("failed cleanup receipt erased the pending cleanup identities: %+v %v", bDetail.Tasks[0], err)
+	}
+	db = readFake(fakePRPath)
+	if db.PRState != "closed_unmerged" || db.PRMerged {
+		t.Fatalf("cleanup receipt failure lost the external closed-PR fact: %+v", db)
+	}
+	if _, statErr := os.Stat(*runB.WorktreePath); statErr != nil {
+		t.Fatalf("PR receipt failure proceeded to the separate workspace cleanup: %v", statErr)
+	}
+	if _, err = s.domainStore.db.Exec(`DROP TRIGGER fail_native_cleanup_receipt`); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	s = nil
+	s, err = NewService(c)
+	if err != nil {
+		t.Fatalf("native service did not recover a failed cleanup receipt: %v", err)
+	}
+	deadline := time.Now().Add(8 * time.Second)
+	for time.Now().Before(deadline) {
+		if err = s.reconcile(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		bDetail, err = (QueryService{Store: s.domainStore, Project: c.Identity()}).ShowNativeTask(context.Background(), "102")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(bDetail.Tasks[0].CleanupPending) == 0 {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if bDetail.Tasks[0].Status != "discarded" || bDetail.Tasks[0].Delivery != nil || len(bDetail.Tasks[0].CleanupPending) != 0 || runB.WorktreePath == nil {
+		t.Fatalf("native PR/workspace cleanup did not settle independently: %+v", bDetail.Tasks[0])
+	}
+	if _, statErr := os.Lstat(*runB.WorktreePath); !os.IsNotExist(statErr) {
+		t.Fatalf("discarded PR task worktree was not removed: %v", statErr)
+	}
+	db = readFake(fakePRPath)
+	if db.PRState != "closed_unmerged" || db.PRMerged {
+		t.Fatalf("native PR close command did not persist the platform's unmerged close: %+v", db)
+	}
+	t.Setenv("STEERLINE_FAKE_NATIVE_STEP_WAIT", "30s")
+	if err = s.dispatch(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	stopWorker := s.worker
+	runC := s.find("103")
+	if stopWorker == nil || runC == nil {
+		t.Fatal("disconnected native task did not start its worker")
+	}
+	cDetail, err := (QueryService{Store: s.domainStore, Project: c.Identity()}).ShowNativeTask(context.Background(), "103")
+	if err != nil {
+		t.Fatal(err)
+	}
+	stopLock, err = LockRepository(c.Identity())
+	if err != nil {
+		t.Fatal(err)
+	}
+	commandStore, err = OpenNativeTaskCommandStore(context.Background(), &c)
+	if err != nil {
+		stopLock.Close()
+		t.Fatal(err)
+	}
+	discarded, err := (CommandService{Store: commandStore, Project: c.Identity()}).DiscardNativeTask(context.Background(), c, "103", strings.Repeat("d", 32), cDetail.Tasks[0].Version, "operator discarded active work", "operator")
+	closeErr = commandStore.Close()
+	stopLock.Close()
+	if err != nil || closeErr != nil || discarded.Status != "discarded" || !hasString(discarded.CleanupPending, "execution_stop_manual:"+runC.ExecutionID) {
+		t.Fatalf("active native discard did not preserve its stop identity: %+v err=%v close=%v", discarded, err, closeErr)
+	}
+	deadline = time.Now().Add(8 * time.Second)
+	for time.Now().Before(deadline) {
+		if err = s.reconcile(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		cDetail, err = (QueryService{Store: s.domainStore, Project: c.Identity()}).ShowNativeTask(context.Background(), "103")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !hasString(cDetail.Tasks[0].CleanupPending, "execution_stop_manual:"+runC.ExecutionID) && !hasString(cDetail.Tasks[0].CleanupPending, "workspace_cleanup:"+deref(runC.WorktreePath)) {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if hasString(cDetail.Tasks[0].CleanupPending, "execution_stop_manual:"+runC.ExecutionID) || cDetail.Tasks[0].Status != "discarded" || cDetail.Tasks[0].Delivery != nil || hasString(cDetail.Tasks[0].CleanupPending, "workspace_cleanup:"+deref(runC.WorktreePath)) {
+		t.Fatalf("confirmed local stop/workspace cleanup changed discard identity or remained pending: %+v", cDetail.Tasks[0])
+	}
+	if _, statErr := os.Lstat(deref(runC.WorktreePath)); !os.IsNotExist(statErr) {
+		t.Fatalf("discarded native worktree was not removed after its exact stop receipt: %v", statErr)
+	}
+	stoppedSnapshot, err := s.domainStore.Query(context.Background(), c.Identity())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var foundStoppedExecution, foundStoppedAttempt bool
+	for _, execution := range stoppedSnapshot.Executions {
+		if execution.ExecutionID == runC.ExecutionID {
+			foundStoppedExecution = execution.Status == "stopped"
+		}
+	}
+	for _, attempt := range stoppedSnapshot.Attempts {
+		if attempt.AttemptID == runC.AttemptID {
+			foundStoppedAttempt = attempt.Status == "stopped"
+		}
+	}
+	stopOperation, err := (executionRecords{root: c.RunDir}).loadOperation(runC.RunID, runC.AttemptID, "stop-"+runC.AttemptID)
+	if err != nil || stopOperation.Status != OperationConfirmed || !foundStoppedExecution || !foundStoppedAttempt {
+		t.Fatalf("local discard stop lacked center and backend receipts: op=%+v execution_stopped=%t attempt_stopped=%t err=%v", stopOperation, foundStoppedExecution, foundStoppedAttempt, err)
+	}
+	select {
+	case <-stopWorker.Done:
+	default:
+		t.Fatal("confirmed native stop did not settle the original worker observer")
+	}
+}
+
 func TestNativeProjectInitializesOnceAndRejectsMismatchedBinding(t *testing.T) {
 	c, _ := nativeTaskFixture(t)
 	db, err := OpenNativeTaskProject(context.Background(), &c)
@@ -134,6 +875,30 @@ func TestNativeProjectInitializesOnceAndRejectsMismatchedBinding(t *testing.T) {
 	beadsConfig.TaskAuthority = "beads"
 	if err = preflightExistingState(beadsConfig.RunDir, beadsConfig.RuntimeFile); err == nil || !strings.Contains(err.Error(), "authority_mismatch") {
 		t.Fatalf("Beads config opened native task authority: %v", err)
+	}
+}
+
+func TestNativePreflightAllowsItsEmptyRunLockFile(t *testing.T) {
+	c, _ := nativeTaskFixture(t)
+	store, err := OpenNativeTaskProject(context.Background(), &c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = store.Close(); err != nil {
+		t.Fatal(err)
+	}
+	lockPath := filepath.Join(c.RunDir, "steerline.lock")
+	if err = os.WriteFile(lockPath, nil, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err = preflightNativeStatePath(c); err != nil {
+		t.Fatalf("native preflight rejected its own empty OS lock file: %v", err)
+	}
+	if err = os.WriteFile(lockPath, []byte("unknown"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err = preflightNativeStatePath(c); err == nil || !strings.Contains(err.Error(), "native service lock path is not an empty regular file") {
+		t.Fatalf("native preflight accepted a nonempty lock path: %v", err)
 	}
 }
 

@@ -108,6 +108,9 @@ func run() error {
 	if e != nil {
 		return e
 	}
+	if c.TaskAuthority != "native" && command != "run" && command != "start-service" {
+		return errors.New("SteerLine commands require task_authority=native; Beads is not an active product task source")
+	}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 	if command == "certify-backend" {
@@ -151,7 +154,19 @@ func run() error {
 		return nil
 	}
 	if command == "stop" {
-		return steerline.RequestStop(c)
+		request, err := steerline.SubmitControl(c, "stop_service", nil, *by)
+		if err != nil {
+			return err
+		}
+		fmt.Println("request_id", request.RequestID)
+		if *waitReceipt {
+			receipt, waitErr := steerline.WaitControlReceipt(ctx, c, request.RequestID, 100*time.Millisecond)
+			if waitErr != nil {
+				return waitErr
+			}
+			return json.NewEncoder(os.Stdout).Encode(receipt)
+		}
+		return nil
 	}
 	if command == "control" {
 		if *requestID != "" {
@@ -258,7 +273,11 @@ func run() error {
 		return e
 	}
 	if command == "check" {
-		fmt.Println("Configuration, tools, Beads, PR provider and skill contracts verified; no task claimed.")
+		if c.TaskAuthority == "native" {
+			fmt.Println("Configuration, native authority binding, Git, PR provider and project step contracts verified; no task claimed.")
+		} else {
+			fmt.Println("Configuration, tools, Beads, PR provider and skill contracts verified; no task claimed.")
+		}
 		return nil
 	}
 	lock, e := steerline.LockRepository(c.Identity())

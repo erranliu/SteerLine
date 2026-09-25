@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -25,7 +27,17 @@ type orcaTerminal struct {
 	AgentIdentity   string           `json:"agentIdentity"`
 	LastOutputAt    int64            `json:"lastOutputAt"`
 	AgentWait       *json.RawMessage `json:"agentWait"`
+	ExitCause       *orcaTerminalExitCause `json:"exitCause,omitempty"`
 	RuntimeID       string           `json:"-"`
+}
+
+type orcaTerminalExitCause struct {
+	Kind     string `json:"kind"`
+	ExitCode *int   `json:"exitCode,omitempty"`
+}
+
+func (t orcaTerminal) exited() bool {
+	return t.Status == "exited" || t.ExitCause != nil && t.ExitCause.Kind == "exited"
 }
 
 type orcaObservationGate struct {
@@ -100,6 +112,33 @@ func inspectBoundOrcaTerminal(ctx context.Context, c Config, identity ProcessIde
 }
 
 type orcaClient struct{ cfg Config }
+
+func validateOrcaRepositoryRegistration(ctx context.Context, config Config) error {
+	out, err := (orcaClient{cfg: config}).call(ctx, positiveDuration(config.CommandTimeout, 30*time.Second), "repo", "list", "--json")
+	if err != nil {
+		return fmt.Errorf("Orca repository registration could not be verified: %w", err)
+	}
+	envelope, err := parseEnvelope(out)
+	if err != nil {
+		return fmt.Errorf("Orca repository list response is invalid: %w", err)
+	}
+	var response struct {
+		Repos []struct {
+			ID   string `json:"id"`
+			Path string `json:"path"`
+			Kind string `json:"kind"`
+		} `json:"repos"`
+	}
+	if err = json.Unmarshal(envelope.Result, &response); err != nil {
+		return fmt.Errorf("Orca repository list payload is invalid: %w", err)
+	}
+	for _, repo := range response.Repos {
+		if repo.ID != "" && repo.Kind == "git" && canonical(filepath.FromSlash(repo.Path)) == canonical(config.Repository) {
+			return nil
+		}
+	}
+	return UnsupportedAdapterOperation("Preflight", "native Orca project repository is not registered on the local Orca host; register the fixed repository before claim")
+}
 
 func positiveDuration(s string, def time.Duration) time.Duration {
 	if d, e := time.ParseDuration(s); e == nil && d > 0 {
@@ -189,6 +228,7 @@ type orcaProcess struct {
 	term          orcaTerminal
 	ref           ExecutionRef
 	outputSegment string
+	launcher      *orcaStepLauncher
 	cancel        context.CancelFunc
 	once          sync.Once
 }
@@ -241,7 +281,7 @@ func inspectOrcaTerminal(c Config, old *ProcessIdentity) string {
 	if term.Orphaned {
 		return "orca terminal orphaned"
 	}
-	if term.Status == "exited" {
+	if term.exited() {
 		return "orca terminal exited"
 	}
 	if !term.Connected {

@@ -470,9 +470,6 @@ func nativeStartupBlockers(task TaskRecord, graph taskGraphSnapshot) []string {
 	if graph.ExecutionSlotBusy {
 		blockers = append(blockers, "execution_slot_busy")
 	}
-	if task.Status == "open" {
-		blockers = append(blockers, "native_execution_unavailable")
-	}
 	return blockers
 }
 

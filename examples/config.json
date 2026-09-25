@@ -2,13 +2,10 @@
   "repository": "C:/Projects/my-existing-repo",
   "remote": "origin",
   "branch": "main",
-  "run_dir": "C:/SteerlineRuntime/my-existing-repo",
-  "worktree_root": "C:/SteerlineRuntime/my-existing-repo/worktrees",
+  "task_authority": "native",
   "runtime_file": "runtime.json",
-  "claimant": "",
-  "git": {"executable": "git.exe", "args": []},
-  "bd": {"executable": "bd.exe", "args": []},
-  "codex": {"executable": "C:/Tools/codex/codex.exe", "args": []},
+  "git": { "executable": "git.exe", "args": [] },
+  "codex": { "executable": "C:/Tools/codex/codex.exe", "args": [] },
   "workflow_definition": {
     "id": "minimal-v1",
     "version": "minimal-v1",
@@ -20,7 +17,7 @@
       "provider": "agent_skill",
       "entry": "builtin:implement",
       "version": "minimal-v1",
-      "input_schema": "steerline/minimal-step-input/v1",
+      "input_schema": "native-task/v1",
       "output_schema": "steerline/minimal-step-result/v1",
       "execution_site": "local",
       "timeout": "30m"
@@ -30,7 +27,7 @@
       "entry": "scripts/steerline-verify.py",
       "command": ["python.exe", "scripts/steerline-verify.py"],
       "version": "minimal-v1",
-      "input_schema": "steerline/minimal-step-input/v1",
+      "input_schema": "native-task/v1",
       "output_schema": "steerline/minimal-step-result/v1",
       "execution_site": "local",
       "timeout": "15m",
@@ -40,7 +37,7 @@
       "provider": "agent_skill",
       "entry": "builtin:review",
       "version": "minimal-v1",
-      "input_schema": "steerline/minimal-step-input/v1",
+      "input_schema": "native-task/v1",
       "output_schema": "steerline/minimal-step-result/v1",
       "execution_site": "local",
       "timeout": "15m"
@@ -49,7 +46,7 @@
       "provider": "agent_skill",
       "entry": ".agents/skills/steerline-publish-pr/SKILL.md",
       "version": "minimal-v1",
-      "input_schema": "steerline/minimal-step-input/v1",
+      "input_schema": "native-task/v1",
       "output_schema": "steerline/minimal-step-result/v1",
       "execution_site": "local",
       "timeout": "15m"
@@ -62,18 +59,13 @@
   "command_timeout": "30s",
   "shutdown_grace": "10s",
   "sandbox": "workspace-write",
-  "model": "",
-  "reasoning_effort": "",
-  "profile": "",
   "agent": "codex",
   "host": "local",
   "stall_timeout": "5m",
-  "completion": null,
   "pr": {
     "kind": "gitea",
     "base_url": "https://gitea.example.com",
     "repository": "owner/my-existing-repo",
-    "token_env": "STEERLINE_GITEA_TOKEN",
-    "query": {"executable": "", "args": []}
+    "token_env": "GITEA_TOKEN"
   }
 }

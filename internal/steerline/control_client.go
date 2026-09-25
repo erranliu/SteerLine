@@ -55,6 +55,33 @@ func ReadTaskSnapshot(c Config) (*TaskSnapshot, error) {
 	if err := c.ResolveIdentity(context.Background()); err != nil {
 		return nil, err
 	}
+	if c.taskAuthority() == "native" {
+		store, err := OpenNativeTaskProject(context.Background(), &c)
+		if err != nil {
+			return nil, err
+		}
+		defer store.Close()
+		authority, err := store.nativeAuthority(context.Background(), c.identity)
+		if err != nil {
+			return nil, err
+		}
+		ready, err := (QueryService{Store: store, Project: c.identity}).ReadyNativeTasks(context.Background())
+		if err != nil {
+			return nil, err
+		}
+		queried := now()
+		snapshot := &TaskSnapshot{Version: 1, RepositoryIdentity: c.identity, QueriedAt: queried, LastSuccessAt: &queried, Tasks: []TaskCandidate{}}
+		if authority.DispatchPaused {
+			snapshot.BlockReason = "dispatch is paused"
+		}
+		for _, task := range ready {
+			if !contains(c.ExecutableTypes, task.Type) {
+				continue
+			}
+			snapshot.Tasks = append(snapshot.Tasks, TaskCandidate{TaskID: task.TaskID, Title: task.Title, Type: task.Type})
+		}
+		return snapshot, nil
+	}
 	rt, err := LoadRuntime(filepath.Join(c.RunDir, c.RuntimeFile))
 	if err != nil {
 		return nil, err

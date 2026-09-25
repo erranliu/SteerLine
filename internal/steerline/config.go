@@ -102,6 +102,7 @@ type PRConfig struct {
 	Repository string  `json:"repository"`
 	TokenEnv   string  `json:"token_env"`
 	Query      Command `json:"query"`
+	Close      Command `json:"close,omitempty"`
 }
 
 // trimBOM removes a leading UTF-8 byte-order mark. Windows tooling (notably
@@ -220,7 +221,7 @@ func InstallSelf() (string, error) {
 }
 
 func LoadConfig(path string) (Config, error) {
-	c := Config{TaskAuthority: "beads", Remote: "origin", RuntimeFile: "runtime.json", TaskPoll: "10s", PRPoll: "30s", Heartbeat: "5s", CommandTimeout: "30s", ShutdownGrace: "10s", Sandbox: "workspace-write", Git: Command{Executable: "git"}, BD: Command{Executable: "bd"}, Codex: Command{Executable: "codex"}, ExecutableTypes: []string{"task", "bug", "feature", "chore"}, Agent: "codex", Host: "orca", StallTimeout: "5m", Orca: OrcaConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "15m"}}
+	c := Config{Remote: "origin", RuntimeFile: "runtime.json", TaskPoll: "10s", PRPoll: "30s", Heartbeat: "5s", CommandTimeout: "30s", ShutdownGrace: "10s", Sandbox: "workspace-write", Git: Command{Executable: "git"}, BD: Command{Executable: "bd"}, Codex: Command{Executable: "codex"}, ExecutableTypes: []string{"task", "bug", "feature", "chore"}, Agent: "codex", Host: "orca", StallTimeout: "5m", Orca: OrcaConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "15m"}}
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return c, err
@@ -231,7 +232,7 @@ func LoadConfig(path string) (Config, error) {
 		return c, err
 	}
 	if c.TaskAuthority == "" {
-		c.TaskAuthority = "beads"
+		return c, errors.New("task_authority must be set explicitly to native or beads; Beads is not an implicit task source")
 	}
 	if c.TaskAuthority != "beads" && c.TaskAuthority != "native" {
 		return c, errors.New("task_authority must be beads or native")
@@ -270,6 +271,10 @@ func LoadConfig(path string) (Config, error) {
 		return c, errors.New("runtime_file must be a filename inside run_dir")
 	}
 	if c.TaskAuthority == "native" {
+		switch c.RuntimeFile {
+		case "steerline.db", "steerline.db-wal", "steerline.db-shm", "service", "execution", "runs", "worktrees":
+			return c, errors.New("runtime_file conflicts with native authority or execution state")
+		}
 		err = preflightNativeStatePath(c)
 	} else {
 		err = preflightExistingState(c.RunDir, c.RuntimeFile)
@@ -450,7 +455,7 @@ func resolveCommand(c *Command) error {
 }
 func (c *Config) Preflight(ctx context.Context, checkSkills bool) error {
 	if c.taskAuthority() == "native" {
-		return errors.New("native tasks are read-only in this release; production execution is gated on the Beads exit task")
+		return c.preflightNative(ctx, checkSkills)
 	}
 	if c.RuntimeFile != "" {
 		if err := preflightExistingState(c.RunDir, c.RuntimeFile); err != nil {
@@ -604,6 +609,182 @@ func (c *Config) Preflight(ctx context.Context, checkSkills bool) error {
 		if e = (&PRClient{Config: c.PR, Runner: r}).Check(ctx); e != nil {
 			return e
 		}
+	}
+	return nil
+}
+
+// preflightNative validates a native project without resolving or invoking a
+// Beads executable. The native SQLite authority is inspected when present, but
+// a check never initializes a database or adopts an existing state directory.
+func (c *Config) preflightNative(ctx context.Context, checkSteps bool) error {
+	if c.Completion != nil || c.StartSkill.Path != "" || c.FinishSkill.Path != "" {
+		return errors.New("native projects use project_steps; completion, start_skill and finish_skill are unsupported")
+	}
+	if c.hostName() == "local" && c.agentName() != "codex" {
+		return errors.New("local_process currently supports only agent=codex")
+	}
+	if err := c.Completion.validate(); err != nil {
+		return err
+	}
+	commands := []*Command{&c.Git}
+	var workflow *MinimalWorkflowConfig
+	var err error
+	if checkSteps {
+		workflow, err = c.validateNativeWorkflow()
+	} else {
+		workflow, err = c.minimalConfig()
+	}
+	if err != nil {
+		return err
+	}
+	if c.needsCodexExecutable() {
+		commands = append(commands, &c.Codex)
+	}
+	for _, command := range commands {
+		if err := resolveCommand(command); err != nil {
+			return err
+		}
+	}
+	git := Runner{Dir: c.Repository, Timeout: duration(c.CommandTimeout)}
+	if c.hostName() == "orca" {
+		if _, err := (Runner{Dir: c.Repository, Timeout: duration(c.CommandTimeout)}).Output(ctx, Command{Executable: c.Orca.Executable, Args: c.Orca.Args}, "status", "--json"); err != nil {
+			return fmt.Errorf("orca host is not reachable: %w", err)
+		}
+	}
+	root, err := git.Output(ctx, c.Git, "rev-parse", "--show-toplevel")
+	if err != nil {
+		return err
+	}
+	c.Repository, err = filepath.EvalSymlinks(strings.TrimSpace(string(root)))
+	if err != nil {
+		return err
+	}
+	git.Dir = c.Repository
+	common, err := git.Output(ctx, c.Git, "rev-parse", "--path-format=absolute", "--git-common-dir")
+	if err != nil {
+		return err
+	}
+	c.identity, err = filepath.EvalSymlinks(strings.TrimSpace(string(common)))
+	if err != nil {
+		return err
+	}
+	c.identity = canonical(c.identity)
+	if c.hostName() == "orca" {
+		if err = validateOrcaRepositoryRegistration(ctx, *c); err != nil {
+			return err
+		}
+	}
+	if c.Claimant == "" {
+		c.Claimant = "steerline-" + shortHash(c.identity)
+	}
+	if _, err = git.Output(ctx, c.Git, "check-ref-format", "refs/heads/"+c.Branch); err != nil {
+		return err
+	}
+	remote, err := git.Output(ctx, c.Git, "remote", "get-url", c.Remote)
+	if err != nil {
+		return err
+	}
+	if err = c.PR.ValidateRemote(strings.TrimSpace(string(remote))); err != nil {
+		return err
+	}
+	if c.PR.Kind == "command" {
+		if err = resolveCommand(&c.PR.Query); err != nil {
+			return err
+		}
+		if c.PR.Close.Executable == "" {
+			return errors.New("native command PR provider requires a close command for discarded task cleanup")
+		}
+		if err = resolveCommand(&c.PR.Close); err != nil {
+			return err
+		}
+	}
+	if err = ensureRunDirOutsideRepository(*c); err != nil {
+		return err
+	}
+	if _, err = os.Stat(filepath.Join(c.RunDir, "steerline.db")); err == nil {
+		reader, openErr := openBoundNativeStore(ctx, *c, filepath.Join(c.RunDir, "steerline.db"))
+		if openErr != nil {
+			return openErr
+		}
+		if closeErr := reader.Close(); closeErr != nil {
+			return closeErr
+		}
+		if err = validateNativeRuntimeBinding(*c); err != nil {
+			return err
+		}
+	} else if !os.IsNotExist(err) {
+		return err
+	} else if err = ensureNativeStateClean(c.RunDir, c.Repository); err != nil {
+		return err
+	}
+	if !checkSteps {
+		return nil
+	}
+	if err = c.validateMinimalPreflight(*workflow); err != nil {
+		return err
+	}
+	base, err := git.Output(ctx, c.Git, "rev-parse", "HEAD^{commit}")
+	if err != nil {
+		return err
+	}
+	baseCommit := strings.TrimSpace(string(base))
+	if err = c.validateMinimalEntriesAtBase(ctx, *workflow, baseCommit); err != nil {
+		return err
+	}
+	steps := []struct {
+		name     string
+		contract StepContract
+	}{
+		{"implement", workflow.Steps.Implement},
+		{"verify", workflow.Steps.Verify},
+		{"publish_pr", workflow.Steps.PublishPR},
+	}
+	if workflow.Definition.ReviewRequired {
+		steps = append(steps, struct {
+			name     string
+			contract StepContract
+		}{"review", workflow.Steps.Review})
+	}
+	for _, step := range steps {
+		if strings.HasPrefix(step.contract.Entry, "builtin:") {
+			continue
+		}
+		content, readErr := git.Output(ctx, c.Git, "show", baseCommit+":"+filepath.ToSlash(step.contract.Entry))
+		if readErr != nil {
+			return fmt.Errorf("%s entry %q cannot be read from pinned base: %w", step.name, step.contract.Entry, readErr)
+		}
+		if err = rejectLegacyStepDependencies(step.name, content); err != nil {
+			return err
+		}
+	}
+	if c.PR.Kind == "gitea" {
+		if err = (&PRClient{Config: c.PR, Runner: git}).Check(ctx); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateNativeRuntimeBinding(c Config) error {
+	path := filepath.Join(c.RunDir, c.RuntimeFile)
+	runtime, err := LoadRuntime(path)
+	if os.IsNotExist(err) || err == nil && runtime == nil {
+		return nil
+	}
+	if err != nil {
+		return nativeErr("unsupported_schema", "native runtime projection cannot be read")
+	}
+	if runtime.SchemaVersion != CurrentRuntimeSchema || canonical(runtime.Repository.Identity) != canonical(c.identity) || canonical(runtime.Repository.Path) != canonical(c.Repository) || runtime.Repository.Remote != c.Remote || runtime.Repository.Branch != c.Branch {
+		return nativeErr("authority_mismatch", "native runtime projection does not match the configured repository authority")
+	}
+	return nil
+}
+
+var legacyStepDependency = regexp.MustCompile(`(?im)(?:\bBEADS_(?:DIR|ACTOR)\b|\b(?:bd|bv)\s+(?:ready|list|show|update|close|ready|dep|sync|refresh)\b|steerline:(?:start|finish)-v1|\bcompletion-(?:request|result)\b|\b(?:invoke|run|call)\s+(?:the\s+)?(?:old\s+)?completion\b)`)
+
+func rejectLegacyStepDependencies(step string, content []byte) error {
+	if match := legacyStepDependency.Find(content); match != nil {
+		return fmt.Errorf("%s step entry depends on a legacy Beads/start-finish/completion interface (%q); native project_steps must return only this step's facts", step, strings.TrimSpace(string(match)))
 	}
 	return nil
 }

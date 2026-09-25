@@ -842,7 +842,7 @@ func (b orcaTerminalBackend) Observe(ctx context.Context, ref ExecutionRef) (Obs
 		return Observation{}, e
 	}
 	life := "live"
-	if term.Status == "exited" {
+	if term.exited() {
 		life = "exited"
 	} else if term.Orphaned || !term.Connected {
 		life = "unverifiable"

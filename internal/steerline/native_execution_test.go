@@ -14,6 +14,13 @@ import (
 	"time"
 )
 
+func TestNativeRetryRequiresNativeWorkflowIdentity(t *testing.T) {
+	s := &Service{native: true}
+	if err := s.startNativeRetry(context.Background(), "not-a-run-id"); err == nil || !strings.Contains(err.Error(), "invalid native workflow run ID") {
+		t.Fatalf("native retry did not validate the fixed workflow identity first: %v", err)
+	}
+}
+
 // This opt-in acceptance runs the actual Codex CLI against only a disposable
 // fixture repository. Fake Beads provides the isolated task; no PR is published.
 func TestNativeLocalCodexStartOutputStop(t *testing.T) {
@@ -468,6 +475,9 @@ func TestNativeOrcaServiceStartOutputStop(t *testing.T) {
 	if ref.External.Kind != "orca" || ref.External.RuntimeID == "" || ref.External.Terminal == "" || ref.External.Incarnation == "" {
 		t.Fatalf("Orca Service binding lacks a fixed identity: %+v", ref.External)
 	}
+	if run.WorktreePath == nil || run.WorktreeBranch == nil || run.BaseCommit == nil || run.WorkspaceIntent == nil || canonical(*run.WorktreePath) != canonical(run.WorkspaceIntent.Path) || *run.WorktreeBranch != run.WorkspaceIntent.Branch || *run.BaseCommit != run.WorkspaceIntent.BaseCommit {
+		t.Fatalf("Orca Service did not persist its exact created worktree: %+v", run)
+	}
 	observation, err := backend.Observe(ctx, ref)
 	if err != nil || observation.Liveness != "live" {
 		t.Fatalf("native Orca ref was not live: %+v %v", observation, err)
@@ -475,6 +485,13 @@ func TestNativeOrcaServiceStartOutputStop(t *testing.T) {
 	output, err := backend.ReadOutput(ctx, ref, "", 1000)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if len(output.Data) == 0 {
+		t.Fatal("Orca Service output probe returned no initial terminal output")
+	}
+	workspace, err := backend.InspectWorkspace(ctx, ref)
+	if err != nil || workspace.Dirty || workspace.Branch != ref.WorkspaceBranch || workspace.Base != ref.BaseCommit {
+		t.Fatalf("Orca Service worktree was not clean at the fixed base: %+v %v", workspace, err)
 	}
 	s.shutdown()
 	stopOp, err := records.loadOperation(run.RunID, run.AttemptID, "stop-"+run.AttemptID)
@@ -489,7 +506,7 @@ func TestNativeOrcaServiceStartOutputStop(t *testing.T) {
 		identity, _ := json.Marshal(ref.External)
 		identityHash := sha256.Sum256(identity)
 		outputHash := sha256.Sum256(output.Data)
-		evidence := map[string]any{"version": 1, "captured_at": now(), "platform": "windows/amd64", "backend": "orca", "protocol": "orca_terminal_v2", "orca_version": report.PlatformVersion, "target_id": ref.Target.ID, "agent": ref.Agent.Name, "run_id": run.RunID, "identity_sha256": hex.EncodeToString(identityHash[:]), "terminal": ref.External.Terminal, "runtime_id": ref.External.RuntimeID, "incarnation": ref.External.Incarnation, "worktree": ref.WorkspacePath, "output_source": output.Source, "output_sha256": hex.EncodeToString(outputHash[:]), "output_bytes": len(output.Data), "reconnect_matched": true, "stop_status": "confirmed", "worktree_retained": true}
+		evidence := map[string]any{"version": 1, "captured_at": now(), "platform": "windows/amd64", "backend": "orca", "protocol": "orca_terminal_v2", "orca_version": report.PlatformVersion, "target_id": ref.Target.ID, "agent": ref.Agent.Name, "run_id": run.RunID, "identity_sha256": hex.EncodeToString(identityHash[:]), "terminal": ref.External.Terminal, "runtime_id": ref.External.RuntimeID, "incarnation": ref.External.Incarnation, "worktree": ref.WorkspacePath, "worktree_created": true, "agent_terminal_bound": true, "initial_output_observed": len(output.Data) > 0, "git_clean": !workspace.Dirty, "output_source": output.Source, "output_sha256": hex.EncodeToString(outputHash[:]), "output_bytes": len(output.Data), "reconnect_matched": true, "stop_status": "confirmed", "worktree_retained": true}
 		data, marshalErr := json.MarshalIndent(evidence, "", "  ")
 		if marshalErr != nil {
 			t.Fatal(marshalErr)

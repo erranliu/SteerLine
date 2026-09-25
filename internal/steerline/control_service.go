@@ -282,7 +282,7 @@ func (s *Service) processNextControl(ctx context.Context, cancel context.CancelF
 	result.AcceptedAt = &accepted
 	if err = s.applyControlAction(ctx, *req, payload, op, &result); err != nil {
 		if errors.Is(err, errClaimConflict) {
-			result.Status, result.Code, result.Message = "rejected", "claim_conflict", "task was claimed by another actor; no other task was selected"
+			result.Status, result.Code, result.Message = "rejected", "claim_conflict", err.Error()
 		} else if errors.Is(err, errAlreadyManaged) {
 			result.Status, result.Code, result.Message = "rejected", "already_managed", err.Error()
 		} else if errors.Is(err, errTaskNotReady) {
@@ -360,6 +360,18 @@ func (s *Service) validateReadyTarget(ctx context.Context, taskID string) error 
 	if s.find(taskID) != nil {
 		return errAlreadyManaged
 	}
+	if s.native {
+		ready, err := (QueryService{Store: s.domainStore, Project: s.Config.identity}).ReadyNativeTasks(ctx)
+		if err != nil {
+			return fmt.Errorf("native task readiness could not be verified: %w", err)
+		}
+		for _, task := range ready {
+			if task.TaskID == taskID && contains(s.Config.ExecutableTypes, task.Type) {
+				return nil
+			}
+		}
+		return fmt.Errorf("%w: %s is not in the current ready native task set", errTaskNotReady, taskID)
+	}
 	ready, err := s.beads.Ready(ctx)
 	if err != nil {
 		return fmt.Errorf("task readiness could not be verified: %w", err)
@@ -390,12 +402,85 @@ func (s *Service) applyControlAction(ctx context.Context, req ControlRequest, pa
 	}
 	switch req.Action {
 	case "set_dispatch_mode":
+		if s.native {
+			authority, err := s.domainStore.nativeAuthority(ctx, s.Config.identity)
+			if err != nil {
+				return err
+			}
+			mode := payload.Mode
+			updated, err := (CommandService{Store: s.domainStore, Project: s.Config.identity}).SetNativeDispatchState(ctx, NativeDispatchUpdate{RequestID: req.RequestID, ExpectedAuthorityVersion: authority.AuthorityVersion, Mode: &mode, RequestedBy: req.RequestedBy})
+			if err != nil {
+				return err
+			}
+			s.State.Control.DispatchMode, s.State.Control.DispatchPaused, s.State.Control.Revision = updated.DispatchMode, updated.DispatchPaused, updated.AuthorityVersion
+			return nil
+		}
 		s.State.Control.DispatchMode = payload.Mode
 	case "pause_dispatch":
+		if s.native {
+			authority, err := s.domainStore.nativeAuthority(ctx, s.Config.identity)
+			if err != nil {
+				return err
+			}
+			paused := true
+			updated, err := (CommandService{Store: s.domainStore, Project: s.Config.identity}).SetNativeDispatchState(ctx, NativeDispatchUpdate{RequestID: req.RequestID, ExpectedAuthorityVersion: authority.AuthorityVersion, Paused: &paused, RequestedBy: req.RequestedBy})
+			if err != nil {
+				return err
+			}
+			s.State.Control.DispatchMode, s.State.Control.DispatchPaused, s.State.Control.Revision = updated.DispatchMode, updated.DispatchPaused, updated.AuthorityVersion
+			return nil
+		}
 		s.State.Control.DispatchPaused = true
 	case "resume_dispatch":
+		if s.native {
+			authority, err := s.domainStore.nativeAuthority(ctx, s.Config.identity)
+			if err != nil {
+				return err
+			}
+			paused := false
+			updated, err := (CommandService{Store: s.domainStore, Project: s.Config.identity}).SetNativeDispatchState(ctx, NativeDispatchUpdate{RequestID: req.RequestID, ExpectedAuthorityVersion: authority.AuthorityVersion, Paused: &paused, RequestedBy: req.RequestedBy})
+			if err != nil {
+				return err
+			}
+			s.State.Control.DispatchMode, s.State.Control.DispatchPaused, s.State.Control.Revision = updated.DispatchMode, updated.DispatchPaused, updated.AuthorityVersion
+			return nil
+		}
 		s.State.Control.DispatchPaused = false
 	case "start_task":
+		if s.native {
+			if run := s.find(payload.TaskID); run != nil {
+				if run.RunID != op.RunID {
+					return errAlreadyManaged
+				}
+				if s.worker != nil && s.active == run {
+					result.Message = "native task worker identity is persisted and running"
+					return nil
+				}
+				task := nativeTaskRecord(s.State.Tasks, payload.TaskID)
+				workflow, execution := s.minimalRecords(run)
+				attempt := s.minimalAttempt(run, run.AttemptID)
+				if task == nil || workflow == nil || execution == nil || attempt == nil {
+					return nativeErr("inconsistent_delivery", "reserved native start request cannot be recovered from center records")
+				}
+				if attempt.Status != "planned" {
+					return nativeErr("outcome_unknown", "reserved native start request has no replayable planned attempt; fixed worker identity is retained")
+				}
+				var err error
+				if attempt.StepID == "prepare" {
+					err = s.prepareMinimalExecution(ctx, nativeTaskModel(*task), run, BeadsContext{})
+				} else {
+					err = s.startMinimalStep(ctx, nativeTaskModel(*task), run, BeadsContext{}, attempt)
+				}
+				if err != nil {
+					return err
+				}
+				if s.worker == nil || s.active != run || run.Process == nil {
+					return nativeErr("outcome_unknown", "native start did not retain a verifiable worker identity")
+				}
+				result.Message = "native task worker identity is persisted and running"
+				return nil
+			}
+		}
 		if err := s.validateReadyTarget(ctx, payload.TaskID); err != nil {
 			return err
 		}
@@ -408,7 +493,11 @@ func (s *Service) applyControlAction(ctx context.Context, req ControlRequest, pa
 			if r := s.find(payload.TaskID); r != nil && r.RunID == op.RunID {
 				return fmt.Errorf("target execution failed after reservation: %s", deref(r.Error))
 			}
-			return errClaimConflict
+			observedRun := ""
+			if r := s.find(payload.TaskID); r != nil {
+				observedRun = r.RunID
+			}
+			return fmt.Errorf("%w: requested task %s was not dispatched (last_dispatched=%q observed_run=%q reserved_run=%q slot_occupied=%t)", errClaimConflict, payload.TaskID, s.lastDispatched, observedRun, op.RunID, s.State.SlotOccupied)
 		}
 		result.Message = "target task claimed, prepared and worker started"
 	default:

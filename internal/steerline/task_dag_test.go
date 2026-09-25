@@ -132,7 +132,7 @@ func TestCreateTaskBatchAtomicIdempotentAndQueryable(t *testing.T) {
 	ready := map[string]bool{}
 	for _, task := range page.Tasks {
 		ready[task.TaskID] = task.DependencyReady
-		if task.TaskID == "24" && (!hasString(task.StartupBlockers, "dispatch_paused") || !hasString(task.StartupBlockers, "native_execution_unavailable")) {
+		if task.TaskID == "24" && !hasString(task.StartupBlockers, "dispatch_paused") {
 			t.Fatalf("startup blockers were not separated from dependency readiness: %+v", task.StartupBlockers)
 		}
 		if task.TaskID == "23" && (len(task.Predecessors) != 2 || len(task.UnmetPredecessors) != 2) {
@@ -391,7 +391,7 @@ func TestNativeClaimRechecksReadySlotAndPersistsReservationWithoutAppliedReceipt
 	}
 	defer store.Close()
 	step := func() StepContract {
-		return StepContract{Provider: "command", Entry: "builtin:verify", Version: MinimalWorkflowVersion, InputSchema: MinimalStepInputSchema, OutputSchema: MinimalStepOutputSchema, ExecutionSite: "local", Timeout: time.Minute, Command: []string{"git", "--version"}}
+		return StepContract{Provider: "command", Entry: "builtin:verify", Version: MinimalWorkflowVersion, InputSchema: NativeTaskInputSchema, OutputSchema: MinimalStepOutputSchema, ExecutionSite: "local", Timeout: time.Minute, Command: []string{"git", "--version"}}
 	}
 	c.WorkflowDefinition = ptr(DefaultMinimalWorkflowDefinition(false))
 	c.ProjectSteps = &ProjectSteps{Implement: step(), Verify: step(), PublishPR: step()}
@@ -681,7 +681,6 @@ func TestNativeDeliveryNeedsExactMergedPRAndReleasesSuccessorOnce(t *testing.T) 
 		t.Fatal(err)
 	}
 	task := page.Tasks[0].TaskRecord
-	contract := page.Tasks[0].Contract
 	nowAt := time.Now().UTC()
 	workspace := WorkspaceEvidence{Repository: c.Repository, Worktree: filepath.Join(c.RunDir, "worktrees", "native-90"), Branch: "codex/90", Base: commit, Head: commit, Dirty: false, VerifiedAt: nowAt}
 	wfr := WorkflowRunRecord{ProjectIdentity: c.Identity(), WorkflowRunID: "wf-90", TaskID: "90", WorkflowVersion: MinimalWorkflowVersion, Definition: definition, ProjectSteps: steps, Phase: "waiting_pr_merge", Repository: c.Repository, Branch: c.Branch, SelectedResult: "exec-90", CreatedAt: nowAt, UpdatedAt: nowAt}
@@ -689,8 +688,8 @@ func TestNativeDeliveryNeedsExactMergedPRAndReleasesSuccessorOnce(t *testing.T) 
 	url := "https://forge.invalid/org/repo/pulls/90"
 	verifyResult, _ := json.Marshal(StepGateResult{StepID: "verify", Succeeded: true, Revision: commit, ResultID: "verify-90", Checks: []CheckEvidence{{Name: "unit", Status: "passed", Revision: commit}}, Workspace: workspace})
 	publishResult, _ := json.Marshal(StepGateResult{StepID: "publish_pr", Succeeded: true, Revision: commit, PublishedHead: commit, PRURL: url, ResultID: "publish-90", Workspace: workspace})
-	verifyAttempt := StepAttemptRecord{ProjectIdentity: c.Identity(), AttemptID: "verify-attempt-90", ExecutionID: execution.ExecutionID, StepID: "verify", AttemptNumber: 1, Status: "succeeded", ContractDigest: contract.Digest, ResultID: "verify-90", Result: verifyResult, CreatedAt: nowAt, UpdatedAt: nowAt}
-	publishAttempt := StepAttemptRecord{ProjectIdentity: c.Identity(), AttemptID: "publish-attempt-90", ExecutionID: execution.ExecutionID, StepID: "publish_pr", AttemptNumber: 1, Status: "succeeded", ContractDigest: contract.Digest, ResultID: "publish-90", Result: publishResult, CreatedAt: nowAt, UpdatedAt: nowAt}
+	verifyAttempt := StepAttemptRecord{ProjectIdentity: c.Identity(), AttemptID: "verify-attempt-90", ExecutionID: execution.ExecutionID, StepID: "verify", AttemptNumber: 1, Status: "succeeded", ContractDigest: nativeStepContractDigest(steps, "verify"), ResultID: "verify-90", Result: verifyResult, CreatedAt: nowAt, UpdatedAt: nowAt}
+	publishAttempt := StepAttemptRecord{ProjectIdentity: c.Identity(), AttemptID: "publish-attempt-90", ExecutionID: execution.ExecutionID, StepID: "publish_pr", AttemptNumber: 1, Status: "succeeded", ContractDigest: nativeStepContractDigest(steps, "publish_pr"), ResultID: "publish-90", Result: publishResult, CreatedAt: nowAt, UpdatedAt: nowAt}
 	task.Status = "in_progress"
 	task.Claimant = "worker"
 	task.Version++
@@ -868,7 +867,7 @@ func TestNativeDeliveryNeedsExactMergedPRAndReleasesSuccessorOnce(t *testing.T) 
 }
 
 func deliveryStepContract() StepContract {
-	return StepContract{Provider: "command", Entry: "builtin:verify", Version: MinimalWorkflowVersion, InputSchema: MinimalStepInputSchema, OutputSchema: MinimalStepOutputSchema, ExecutionSite: "local", Timeout: time.Minute, Command: []string{"git", "--version"}}
+	return StepContract{Provider: "command", Entry: "builtin:verify", Version: MinimalWorkflowVersion, InputSchema: NativeTaskInputSchema, OutputSchema: MinimalStepOutputSchema, ExecutionSite: "local", Timeout: time.Minute, Command: []string{"git", "--version"}}
 }
 
 func TestInconsistentDeliveryStaysVisibleAndBlocksSuccessorClaim(t *testing.T) {

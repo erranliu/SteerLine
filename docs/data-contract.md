@@ -4,23 +4,23 @@
 
 ## Native task query `native-tasks/v1`
 
-配置显式设为 `"task_authority":"native"` 后，`steerline task list/show/graph` 读取中心 SQLite 中的 native Task、固定契约、依赖、WorkflowRun 和已记录交付；`task validate/create/discard` 通过中心命令服务处理固定批次、原子入图和显式丢弃。所有入口接受 `-config`，不调用 `bd show`。新项目首次使用时初始化 native 项目权威，初始 `dispatch_mode=manual`、`dispatch_paused=true`。本阶段没有生产 worker/技能接入，原生领取服务只预留 workflow/执行身份并将 `start_task_applied=false`；真实工作区启动仍等待 [Beads 退出 Spec](spec/beads-exit.spec.md) 的生产接入验收。
+配置必须显式设为 `"task_authority":"native"`。`steerline task list/show/graph` 读取中心 SQLite 中的 native Task、固定契约、依赖、WorkflowRun 和交付；`task validate/create/discard` 与领取、派发控制、交付都通过中心命令事务完成。原生 worker 只收到 `native-task/v1` 固定上下文和当前步骤输入。新项目首次使用时初始化 native 项目权威，初始 `dispatch_mode=manual`、`dispatch_paused=true`；用户显式恢复派发后，local `project_steps` 才能领取任务。
 
 只读 native 查询配置示例：[native-tasks.config.json](../examples/native-tasks.config.json)。省略 `run_dir`，让它按 Git common-dir 派生为本仓库唯一状态目录。
 
-native 状态目录必须使用仓库唯一派生的 `STEERLINE_HOME/state/<repoKey>`，不得为同一仓库配置另一条 `run_dir`。目录首次初始化前必须为空，仓库不得含 Beads 状态。SQLite 会把 Git common-dir、目标远端 URL、remote 名称和 branch 固定到项目权威；状态、仓库或配置不匹配时以 `authority_mismatch` / `unsupported_schema` 拒绝，不创建第二份数据库。
+native 状态目录必须使用仓库唯一派生的 `STEERLINE_HOME/state/<repoKey>`，不得为同一仓库配置另一条 `run_dir`。目录首次初始化前不得含数据库、运行记录或外部执行身份；已提交的当前格式 startup、execution capability 证据可以保留。仓库含 Beads 状态、数据库 schema 不明、状态目录有不支持文件或配置身份不匹配时以 `authority_mismatch` / `unsupported_schema` 拒绝，不创建第二份任务权威。SQLite 会把 Git common-dir、目标远端 URL、remote 名称和 branch 固定到项目权威；`runtime.json` 只作可重建运行投影，查询和领取仍以 SQLite 为准。
 
-查询响应头含 `protocol`、`project_id`、`authority_version`、`graph_revision`、`database_id`、`database_revision`、`sampled_at` 和 `capabilities`。任务详情含原数字 `task_id`、固定契约与验收引用、状态/claim/priority/version、前置/后继、`dependency_ready`、未满足前置状态、`startup_blockers`、丢弃审计/清理待办、相关运行和交付证据。依赖和启动阻塞在同一 SQLite 读取快照内计算；`discarded_predecessor` 与 `inconsistent_delivery` 保持阻塞。读取前会核对交付行与合并证据、离页前置的 payload 与状态列；损坏记录不成为 ready 或领取许可。暂停、占槽和本阶段尚无生产执行接入分别报告为 `dispatch_paused`、`execution_slot_busy` 和 `native_execution_unavailable`，不混入依赖状态。列表默认 100、最多 500 条，数据库内按数字 ID 排序分页；`next_cursor` 固定数据库身份、项目、authority/graph/database 修订和 offset。续页发现数据库被替换、修订变化或版本不可读时返回 `cursor_invalidated`。依赖就绪、依赖阻塞和启动阻塞能力均为 `provided`。已有项目查询不竞争仓库写锁，仍在每个读取快照中核对配置绑定。
+查询响应头含 `protocol`、`project_id`、`authority_version`、`graph_revision`、`database_id`、`database_revision`、`sampled_at` 和 `capabilities`。任务详情含原数字 `task_id`、固定契约与验收引用、状态/claim/priority/version、前置/后继、`dependency_ready`、未满足前置状态、`startup_blockers`、丢弃审计/清理待办、相关运行和交付证据。依赖和启动阻塞在同一 SQLite 读取快照内计算；`discarded_predecessor` 与 `inconsistent_delivery` 保持阻塞。读取前会核对交付行与合并证据、离页前置的 payload 与状态列；损坏记录不成为 ready 或领取许可。暂停和占槽分别报告为 `dispatch_paused`、`execution_slot_busy`，不混入依赖状态。列表默认 100、最多 500 条，数据库内按数字 ID 排序分页；`next_cursor` 固定数据库身份、项目、authority/graph/database 修订和 offset。续页发现数据库被替换、修订变化或版本不可读时返回 `cursor_invalidated`。依赖就绪、依赖阻塞和启动阻塞能力均为 `provided`。已有项目查询不竞争仓库写锁，仍在每个读取快照中核对配置绑定。
 
 `task-batch/v1` 是创建命令 payload，未知字段、缺 task_id 的任务、非法类型/优先级、无效固定契约及重复/悬空/跨项目/成环依赖均拒绝。`task validate -file <json>` 只读验证并返回 authority/graph/database 采样版本、节点错误和环路径；`task create -file <json> -request-id <id> -expected-authority-version <n>` 将批次、Task、契约、依赖、事件、graph_revision 和成功回执在同一事务提交。任务 ID 沿用输入整数；同 request_id 同内容返回原回执，不同内容返回 `idempotency_conflict`。创建不启动任务，回执说明 auto 且未暂停时后续正常轮询可以选择新任务。
 
-`task discard -task-id <id> -request-id <id> -expected-version <n> -reason <text>` 先持久化绑定任务/运行/PR 的意图，再在数据库事务外核验精确 PR。合并状态不明或发布结果身份不完整时返回 `pending_verification` 并保留 Operation；真实未合并后才 CAS 为 discarded。已合并任务拒绝丢弃。依赖边、claim、运行和 task_id 保留；被丢弃的前置不会放行后继。活动执行、开放 PR 或工作区未清理时，详情保留 `cleanup_pending` 并显示人工待办。已丢弃任务的精确 PR 后来确认合并时，只追加幂等的 `task.delivery.conflict` 事件，不生成 TaskDelivery。
+`task discard -task-id <id> -request-id <id> -expected-version <n> -reason <text>` 先持久化绑定任务/运行/PR 的意图，再在数据库事务外核验精确 PR。合并状态不明或发布结果身份不完整时返回 `pending_verification` 并保留 Operation；真实未合并后才 CAS 为 discarded。已合并任务拒绝丢弃。依赖边、claim、运行和 task_id 保留；被丢弃的前置不会放行后继。本机仅使用已核验的固定 Stop 能力停止原 worker；停止后工作区通过精确 worktree/branch 身份单独清理。Gitea PR 使用固定 API 身份关闭；command provider 必须配置 `pr.close` 并返回 `closed_unmerged` 事实。每项清理回执在中心事务内持久化并移除对应 `cleanup_pending` 项。远端取消、停止回执不明或外部清理失败保留原身份和人工待办。已丢弃任务的精确 PR 后来确认合并时，只追加幂等的 `task.delivery.conflict` 事件，不生成 TaskDelivery。
 
 `task graph` 返回带相同数据库及 graph revision 的节点、边、交付来源、阻塞原因和一致性游标。关系读取只投影中心 SQLite 状态，不维护第二套图或复制依赖判定。
 
 TaskContract 使用单个 Spec、单个配套 Plan、至少一个含验收章节的 Markdown 引用，以及只指向共享 constraint/protocol 文件的 `common_refs`。文件名不要求具有同一前缀，每个引用分别固定仓库相对路径、完整 commit 和该提交中普通文件 blob 字节的 SHA-256。验收引用不能再加入其他任务的 `.spec.md` / `.plan.md` 或固定文件的另一版本；配套关系和语义充分性由规格审阅负责。路径不能越界或是符号链接。规范摘要是 UTF-8、对象键排序、数组顺序不变、无多余空白的 JSON SHA-256；重复 JSON 键拒绝。契约内容从 Git commit blob 读取，工作区 CRLF 转换不改变核验结果。
 
-数据库当前 schema 为 3，复用中心表与 Task 身份建立新库。已有 schema 1/2 或未知格式不自动迁移；版本号及表、索引、触发器定义都必须匹配当前格式。依赖表约束拒绝环和修改/删除已有边。TASK-DAG 负责原生入图、ready/claim、discard 和 delivery 事务；BEADS-EXIT 仍负责把这些事务接入生产原生 worker 与真实平台生命周期。
+数据库当前 schema 为 3，复用中心表与 Task 身份建立新库。已有 schema 1/2 或未知格式不自动迁移；版本号及表、索引、触发器定义都必须匹配当前格式。依赖表约束拒绝环和修改/删除已有边。执行步骤输入是 `native-task/v1` JSON，包含 project/task/contract、workflow/execution/attempt、仓库与工作分支/base、当前 step 和步骤输入；native worker 不继承 Beads 路径或 actor 环境变量。步骤只返回当前尝试的事实，领取、交付、关闭和释放后继仍由中心事务完成。当前生产执行验收只覆盖 local；Orca 原生步骤接入和中心原生重试入口仍有阻塞记录。
 
 TASK-DAG 更新后的协议样例见 [native-tasks-v1.sample.json](validation/task-dag/native-tasks-v1.sample.json)；TASK-CORE 原始基线样例与验收记录保留在 [task-core validation](validation/task-core/README.md)。
 
@@ -55,7 +55,7 @@ TASK-DAG 更新后的协议样例见 [native-tasks-v1.sample.json](validation/ta
 | runs | array | 本服务管理的全部运行概要，初始为空数组 |
 | control | object | 派发模式、暂停、控制版本、单条 operation checkpoint 和未决副作用阻塞 |
 
-`control.dispatch_mode` 为 `manual` 或 `auto`。每次 `run` 默认 auto，也可用 `-dispatch manual` 显式启动手动模式；启动参数生效，不隐式恢复上次模式。`dispatch_paused` 只阻止新派发，当前 worker、决策续跑和 PR 核验继续。`revision` 随模式/暂停、执行槽或执行阻塞变化；心跳、日志和重复 PR 轮询不推进。`control.operation` 是服务主状态机正在执行或等待发布终态回执的 checkpoint。`control.blockers` 保留不确定的 claim/worktree/worker 等执行副作用，阻止新任务派发，直到后续人工恢复动作解除。
+`control.dispatch_mode` 为 `manual` 或 `auto`。native 项目从中心 `ProjectTaskAuthority` 读取模式、暂停位和 authority version；新项目为 manual/paused，`run -dispatch` 不覆盖中心设置。`dispatch_paused` 只阻止新派发，当前 worker、决策续跑和 PR 核验继续。native `control.revision` 显示中心 authority version；旧执行投影的 revision 按 service instance 隔离。心跳、日志和重复 PR 轮询不推进 authority version。`control.operation` 是服务主状态机正在执行或等待发布终态回执的 checkpoint。`control.blockers` 保留不确定的 claim/worktree/worker 等执行副作用，阻止新任务派发，直到后续人工恢复动作解除。
 
 控制 revision 按 service.instance_id 隔离，每个新实例从 1 开始；不占执行槽的其他 PR 完成不会使派发版本失效。run.control_revision 跨实例保存，并覆盖工作目录、base、进程身份等恢复证据的变化。自动派发、显式启动、旧 retry 和决策续跑共用执行守卫；决策续跑可以使用为待决策预留的槽，但不能绕过 unknown、控制 checkpoint 或 blocker。
 
@@ -65,12 +65,13 @@ TASK-DAG 更新后的协议样例见 [native-tasks-v1.sample.json](validation/ta
 | --- | --- | --- |
 | task_id / title | string | 外部来源任务身份和领取时标题；`domain_task_id` 是本地稳定 Task 身份，`identity_map_digest` 记录采用的身份映射 |
 | run_id / claimant | string | 本次随机运行 ID / 固定领取者 |
+| task_status | string | native 运行的中心任务状态；此字段出现时不写 Beads 字段 |
 | attempt_id | string | 此运行当前日志代次；首次执行等于 run_id，后续 retry 使用新 ID |
 | control_revision | integer | 该运行最近一次操作相关状态变更的版本 |
 | host | string | `local` 或 `orca`，与 backend/protocol 固定身份并存 |
-| completion | object/null | 派发时固定的 `{command:{executable,args},timeout}`；null 使用原生 close。重启按该记录继续，配置变更不能跳过旧运行的结项尾部 |
-| beads_context | object/null | 派发时的 beads_dir、project_id、database、backend；回调前再次核对。旧记录可能为 null，不包含认证信息 |
-| beads_status | string | 最近核实的 Beads 状态，不以本地预测替代 closed。这是过渡期的外部任务态镜像，见 [状态模型](state-model.md) |
+| completion | object/null | 仅旧 Beads 运行有此结项配置；native 运行省略 |
+| beads_context | object/null | 仅旧 Beads 运行保存的 provider 身份；native worker 上下文和投影不包含它 |
+| beads_status | string | 仅旧 Beads 运行显示的最近核实 provider 状态；native 运行改用 `task_status` |
 | execution_status | string | pending / running / succeeded / failed / unknown |
 | finish_task_status | string | pending / waiting_decision / waiting_pr_merge / completed / blocked |
 | decision | object/null | 当前问题和答案的展示摘要；权威版本与状态保存在 SQLite。主要状态为 pending、answer_saved、reply_accepted、applied。见 [decisions](decisions.md) |
@@ -138,13 +139,13 @@ tasks.json
 
 runtime 中的 `control.operation` 先于副作用保存；完成时把业务结果和终态 receipt 一起保存为 completed checkpoint，再原子发布 receipt，最后清除 checkpoint。发布 applying receipt 失败时不派发。重启可重建 completed 回执；applying 操作不会重放 claim、worktree create、worker start 或 terminal send，不确定副作用进入 blockers。停服不能覆盖未结算操作的 evidence。控制历史不会自动清理，日志删除不影响指令次数。
 
-上表 `start_task` 描述现有 Beads 控制生命周期。原生 `CommandService.ClaimNativeTask` 在中心事务中预留 Task claim、WorkflowRun、Execution、prepare Attempt、命令回执和 Operation；其响应为 `claim_reserved` 且 `start_task_applied=false`。只有生产原生接入完成工作区准备并持久化实际启动身份后，才能把控制命令标为 applied。原生 delivery 由 `CompleteNativeTask` 在事务外查询精确 PR，并在事务内重核 task version、所选运行、步骤门槛和整任务的 PR 发布绑定后写 TaskDelivery/closed；另一笔发布结果未知时即使选用的 PR 已合并也不关闭任务。
+上表 `start_task` 对 native 项目通过 `ClaimNativeTask` 在中心事务中预留 Task claim、WorkflowRun、Execution、prepare Attempt、命令回执和 Operation；响应起初为 `claim_reserved` 且 `start_task_applied=false`。只有准备工作区并将当前 worker 身份持久化后，服务控制回执才报告 applied。native delivery 由 `CompleteNativeTask` 在事务外查询精确 PR，并在事务内重核 task version、所选运行、步骤门槛和整任务的 PR 发布绑定后写 TaskDelivery/closed；另一笔发布结果未知时，即使选用的 PR 已合并也不关闭任务。
 
 终态回执暂时无法发布时，服务保留 completed checkpoint 并重试发布，继续监督已有 worker、响应停服；后续变更、决策续跑和 PR 结项先等待该 checkpoint 结算。runtime 自身持久化失败仍按既有规则停止服务。恢复时，缺失 applying 回执不能否认已保存的 run/领取证据；这种情况保留 indeterminate 与执行阻塞。完整历史请求只索引一次，既有终态回执不会因归档请求后来损坏而被重写。
 
 ## 候选任务快照
 
-持锁服务在每个 task tick 发布 `tasks.json`，版本为 1，包含服务 instance、repository identity、查询时间、最近成功时间、错误、阻塞原因及候选列表。候选来自 Beads ready，排除不支持类型、aggregate 和已有本地 run；候选只用于展示，不作为授权或 claim 保证。provider 查询失败保留旧列表并记录错误，定向启动总会重新读取并核验 provider。CLI `steerline tasks` 只读取当前实例快照。
+native 服务的候选来自中心 `ReadyNativeTasks` 快照，并由事务领取重新验证；CLI `steerline task list` 读取中心分页协议。旧 Beads `tasks.json` 候选投影仅属于显式 Beads 测试/旧模式，不作为 native 许可或任务来源。
 
 ## runtime 版本守卫
 
