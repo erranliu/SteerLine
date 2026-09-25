@@ -38,21 +38,21 @@
 - [真实远端能力报告](../spec/orca-probe/remote-capability-report-2026-09-23.json)与[字段映射](../spec/orca-probe/field-mapping.md)：供远程闭环复用派发、身份、输出、问答、同工作区跨步骤与故障恢复证据；远端执行目标仍须按版本独立验证精确 turn/phase 能力，不能借用本机 `#1` 的验收。
 - [verify 结果校验器](../../internal/steerline/remoteprotocol/verify_result.go)：供远程闭环接入已接受的 worker_done 身份、预期检查清单和执行端 HEAD，阻止缺回执、非零退出、身份或候选 commit 不符的结果推进审查/发布。
 
-## 后续：原生项目接入与任务关系视图
+## 后续：任务关系视图
 
-固定 DAG 的中心事务已作为后续基础；剩余工作是将原生任务接入无 Beads 的生产执行与清理闭环，再提供只读关系视图。原生任务创建时即入 DAG 并固定交付契约与外部依赖；PR 合并前可受控丢弃，已合并后不可丢弃。拆分与回退由用户通过 Codex 分析并人工处理，系统不提供对应流程。按下列顺序交付，每个任务各有独立 Spec、配套 Plan 和一个独立实现 PR；共同要求见 [原生任务共同约束](../spec/native-task-constraints.md)。
+原生任务模型、固定 DAG 与无 Beads 项目接入已形成同一中心任务权威。任务创建时固定契约与依赖；中心核验人工合并的 PR 后记录交付并释放后继，未交付任务可受控丢弃。剩余工作是用已有查询构建只读关系视图，不增加任务修改入口。共同要求见 [原生任务共同约束](../spec/native-task-constraints.md)。
 
 | 任务 ID | 任务名称 | 目标标识 | 剩余交付范围 | 关键前置 | 执行规格 |
 | --- | --- | --- | --- | --- | --- |
-| 9 | 解除 Beads 依赖与原生接入 | `BEADS-EXIT` | 接通原生配置、技能、worker 和结项，验证实际启动/恢复、执行端固定契约与停止、PR、工作区清理回执，交付无 Beads 新项目闭环；不导入旧项目数据 | 已交付的 `#7` 原生任务模型与 `#8` 中心 DAG 事务 | [Spec](../spec/beads-exit.spec.md) · [Plan](../spec/beads-exit.plan.md) |
-| 10 | 任务关系视图 | `DAG-VIEW` | 任务上下游与阻塞说明、只读 JSON 导出 | 已交付的 `#8` 图查询与 `#2` 查询边界；`#9` 验收并合入后实施 | [Spec](../spec/dag-view.spec.md) · [Plan](../spec/dag-view.plan.md) |
+| 10 | 任务关系视图 | `DAG-VIEW` | 任务上下游与阻塞说明、只读 JSON 导出 | 已交付的 `#8` 图查询、`#9` 原生接入与 `#2` 控制台查询边界 | [Spec](../spec/dag-view.spec.md) · [Plan](../spec/dag-view.plan.md) |
 
 首版只提供同项目的“前置交付后开工”依赖，沿用现有执行槽策略，不引入父子聚合、条件边或复杂并行调度。中心服务用简单的确定性算法核验依赖并保有任务权威；关系视图只读。原生任务不等待远程闭环全部完成，也不扩大远端能力。
 
 ### 后续仍依赖的已有基础
 
-- [原生任务模型](../spec/task-core.spec.md)与[验收记录](../validation/task-core/audit.md)：`#9`/`#10` 复用固定任务身份与契约、当前 SQLite 中心数据库的只读查询和交付证据存储。
-- [固定依赖调度](../spec/task-dag.spec.md)与[验收记录](../validation/task-dag/README.md)：`#9` 复用批次入图、硬前置、claim 预留、精确 PR 交付与丢弃、重启对账和图查询；`#10` 复用同一关系读模型。生产 worker、执行端核验与外部清理回执仍由 `#9` 交付。
+- [原生任务模型](../spec/task-core.spec.md)与[验收记录](../validation/task-core/audit.md)：`#10` 沿用固定任务身份、契约和 SQLite 中心查询。
+- [固定依赖调度](../spec/task-dag.spec.md)与[验收记录](../validation/task-dag/README.md)：`#10` 复用版本化关系查询及任务阻塞、交付事实。
+- [原生项目接入](../spec/beads-exit.spec.md)与[验收记录](../validation/beads-exit/README.md)：`#10` 在已验证的原生任务及真实 TaskDelivery 之上展示关系，保持只读；已支持的本机与 Orca 范围不扩展到未验收的远端能力。
 
 ## 规划约束
 
