@@ -39,8 +39,11 @@ type MinimalStepInput struct {
 }
 
 type MinimalDecisionContinuation struct {
-	Request DecisionRequest `json:"request"`
-	Answer  DecisionAnswer  `json:"answer"`
+	Request      DecisionRequest `json:"request"`
+	Answer       DecisionAnswer  `json:"answer"`
+	AttemptID    string          `json:"attempt_id"`
+	ExecutionID  string          `json:"execution_id"`
+	AnswerSHA256 string          `json:"answer_sha256"`
 }
 
 type MinimalStepResultEnvelope struct {
@@ -303,12 +306,12 @@ func buildMinimalStepInput(project string, task Task, run *Run, workflow *Workfl
 			}
 		}
 	}
-	if run.Decision != nil && (run.Decision.Status == "answer_saved" || run.Decision.Status == "reply_accepted") {
+	if run.Decision != nil && (run.Decision.Status == "answer_saved" || run.Decision.Status == "resuming" || run.Decision.Status == "reply_accepted") {
 		answer := DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, OptionID: run.Decision.OptionID, Note: run.Decision.Note, AnsweredBy: run.Decision.AnsweredBy}
 		if run.Decision.AnsweredAt != nil {
 			answer.AnsweredAt = *run.Decision.AnsweredAt
 		}
-		input.Decision = &MinimalDecisionContinuation{Request: run.Decision.Request, Answer: answer}
+		input.Decision = &MinimalDecisionContinuation{Request: run.Decision.Request, Answer: answer, AttemptID: run.Decision.AttemptID, ExecutionID: run.ExecutionID, AnswerSHA256: decisionAnswerDigest(answer)}
 	}
 	return input
 }
@@ -331,7 +334,7 @@ func writeMinimalPrompt(path string, input MinimalStepInput, contract StepContra
 	}
 	prompt = boundaries[input.StepID] + "\n" + prompt
 	if input.Decision != nil {
-		prompt += "\nAfter applying the provided answer, return result.applied_decision_id equal to decision.answer.decision_id as application evidence.\n"
+		prompt += "\nAfter applying the provided answer, return result.applied_decision_id, applied_decision_attempt_id, applied_decision_execution_id and applied_answer_sha256 using the exact bound values in decision. A matching decision ID alone is not application evidence.\n"
 	}
 	return AtomicWrite(path, []byte(prompt))
 }
@@ -654,13 +657,28 @@ func (s *Service) finishMinimalStep(exitErr error) error {
 	run.EndedAt = ptr(now())
 	if exitErr != nil {
 		unknown := attempt.StepID == "publish_pr"
+		if run.Decision != nil && run.Decision.Status == "reply_accepted" {
+			if err := s.failMinimalDecisionApplication(run, "resumed step terminated without application evidence: "+exitErr.Error()); err != nil {
+				return err
+			}
+		}
 		return s.failMinimalStep(run, workflow, execution, attempt, fmt.Errorf("worker exited: %w", exitErr), unknown)
 	}
 	envelope, err := readMinimalStepResult(deref(run.StepResultPath))
 	if err != nil {
+		if run.Decision != nil && run.Decision.Status == "reply_accepted" {
+			if failErr := s.failMinimalDecisionApplication(run, "resumed step produced no verifiable result: "+err.Error()); failErr != nil {
+				return failErr
+			}
+		}
 		return s.failMinimalStep(run, workflow, execution, attempt, fmt.Errorf("invalid step result: %w", err), attempt.StepID == "publish_pr")
 	}
 	if envelope.ProjectIdentity != s.Config.identity || envelope.TaskID != run.DomainTaskID || envelope.WorkflowRunID != run.RunID || envelope.ExecutionID != execution.ExecutionID || envelope.AttemptID != attempt.AttemptID || envelope.Result.StepID != attempt.StepID {
+		if run.Decision != nil && run.Decision.Status == "reply_accepted" {
+			if err := s.failMinimalDecisionApplication(run, "resumed step result identity did not match"); err != nil {
+				return err
+			}
+		}
 		return s.failMinimalStep(run, workflow, execution, attempt, errors.New("step result identity does not match the dispatched attempt"), attempt.StepID == "publish_pr")
 	}
 	if persistErr := s.recordMinimalExecutionResult(run, envelope, deref(run.StepResultPath)); persistErr != nil {
@@ -677,8 +695,14 @@ func (s *Service) finishMinimalStep(exitErr error) error {
 	if envelope.Result.StepID != "publish_pr" && (envelope.Result.PRURL != "" || envelope.Result.PublishedHead != "") {
 		return s.failMinimalStep(run, workflow, execution, attempt, errors.New("step published before publish_pr; manual reconciliation required"), true)
 	}
-	if run.Decision != nil && run.Decision.Status == "reply_accepted" && envelope.Result.AppliedDecisionID != run.Decision.ID {
-		return s.failMinimalStep(run, workflow, execution, attempt, errors.New("step result lacks matching decision application evidence"), attempt.StepID == "publish_pr")
+	if run.Decision != nil && run.Decision.Status == "reply_accepted" && !minimalDecisionApplicationMatches(run, envelope.Result) {
+		if err = s.failMinimalDecisionApplication(run, "step result lacks decision/attempt/execution/answer-bound application evidence"); err != nil {
+			return err
+		}
+		return s.failMinimalStep(run, workflow, execution, attempt, errors.New("step result lacks decision/attempt/execution/answer-bound application evidence"), attempt.StepID == "publish_pr")
+	}
+	if err = s.recordMinimalDecisionApplied(run, envelope.Result); err != nil {
+		return err
 	}
 	if envelope.Result.Decision != nil {
 		if err = s.recordMinimalDecisionApplied(run, envelope.Result); err != nil {
@@ -876,7 +900,7 @@ func (s *Service) waitMinimalDecision(run *Run, workflow *WorkflowRunRecord, exe
 
 func (s *Service) resumeMinimalAfterDecision(ctx context.Context, run *Run, answer DecisionAnswer) error {
 	workflow, execution := s.minimalRecords(run)
-	if workflow == nil || execution == nil || run.Decision == nil || workflow.Phase != "waiting_decision" || execution.Status != "waiting_decision" || run.Decision.Status != "answer_saved" {
+	if workflow == nil || execution == nil || run.Decision == nil || workflow.Phase != "waiting_decision" || execution.Status != "waiting_decision" || run.Decision.Status != "resuming" {
 		return errors.New("minimal decision is not durably answerable")
 	}
 	if answer.DecisionID != run.Decision.ID || answer.RunID != run.RunID {
@@ -946,8 +970,10 @@ func (s *Service) resumeMinimalAfterDecision(ctx context.Context, run *Run, answ
 	}
 	resumedAttempt := s.minimalAttempt(run, resumed.AttemptID)
 	if err = s.startMinimalStep(ctx, task, run, source, resumedAttempt); err != nil {
-		run.Decision.Status = "failed"
-		run.Decision.Version++
+		if run.ExecutionStatus != "unknown" {
+			run.Decision.Status = "failed"
+			run.Decision.Version++
+		}
 		_ = s.syncMinimalDecision(run)
 		_ = s.save()
 		return err
@@ -964,8 +990,8 @@ func (s *Service) recordMinimalDecisionApplied(run *Run, result StepGateResult) 
 	if run.Decision == nil || run.Decision.Status != "reply_accepted" {
 		return nil
 	}
-	if result.AppliedDecisionID != run.Decision.ID {
-		return errors.New("decision application evidence does not match the pending reply")
+	if !minimalDecisionApplicationMatches(run, result) {
+		return errors.New("decision application evidence does not match the fixed decision, attempt, execution and answer")
 	}
 	run.Decision.Status = "applied"
 	run.Decision.Version++
@@ -977,6 +1003,27 @@ func (s *Service) recordMinimalDecisionApplied(run *Run, result StepGateResult) 
 	return nil
 }
 
+func (s *Service) failMinimalDecisionApplication(run *Run, reason string) error {
+	if run == nil || run.Decision == nil || run.Decision.Status != "reply_accepted" {
+		return nil
+	}
+	run.Decision.Status = "failed"
+	run.Decision.Version++
+	if err := s.syncMinimalDecision(run); err != nil {
+		return err
+	}
+	s.note(run, "steer", "decision", "failed", "decision application was not verified", reason, decisionAnswerMeta(run))
+	return nil
+}
+
+func minimalDecisionApplicationMatches(run *Run, result StepGateResult) bool {
+	if run == nil || run.Decision == nil || run.Decision.Status != "reply_accepted" {
+		return false
+	}
+	answer := DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, OptionID: run.Decision.OptionID, Note: run.Decision.Note, AnsweredBy: run.Decision.AnsweredBy}
+	return result.AppliedDecisionID == run.Decision.ID && result.AppliedDecisionAttemptID == run.Decision.AttemptID && result.AppliedDecisionExecutionID == run.ExecutionID && result.AppliedAnswerSHA256 == decisionAnswerDigest(answer)
+}
+
 func (s *Service) syncMinimalDecision(run *Run) error {
 	if run == nil || run.Decision == nil {
 		return errors.New("minimal decision record is required")
@@ -986,7 +1033,7 @@ func (s *Service) syncMinimalDecision(run *Run) error {
 		return err
 	}
 	var answer []byte
-	if run.Decision.Status == "answer_saved" || run.Decision.Status == "reply_accepted" || run.Decision.Status == "applied" || run.Decision.Status == "failed" {
+	if run.Decision.Status == "answer_saved" || run.Decision.Status == "resuming" || run.Decision.Status == "reply_accepted" || run.Decision.Status == "applied" || run.Decision.Status == "failed" {
 		value := DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, OptionID: run.Decision.OptionID, Note: run.Decision.Note, AnsweredBy: run.Decision.AnsweredBy}
 		if run.Decision.AnsweredAt != nil {
 			value.AnsweredAt = *run.Decision.AnsweredAt
@@ -997,9 +1044,6 @@ func (s *Service) syncMinimalDecision(run *Run) error {
 		}
 	}
 	status := run.Decision.Status
-	if status == "resuming" {
-		status = "answer_saved"
-	}
 	created := now()
 	for i := range s.State.Decisions {
 		if s.State.Decisions[i].DecisionID == run.Decision.ID {
@@ -1084,7 +1128,7 @@ func (s *Service) startMinimalStep(ctx context.Context, task Task, run *Run, sou
 		return err
 	}
 	expectedRevision := execution.CandidateRevision
-	allowDirtyResume := run.Decision != nil && run.Decision.Status == "answer_saved" && attempt.StepID == "implement"
+	allowDirtyResume := run.Decision != nil && (run.Decision.Status == "answer_saved" || run.Decision.Status == "resuming") && attempt.StepID == "implement"
 	if attempt.StepID == "implement" {
 		expectedRevision = execution.Workspace.Head
 		if expectedRevision == "" {
@@ -1166,7 +1210,7 @@ func (s *Service) startMinimalStep(ctx context.Context, task Task, run *Run, sou
 	s.State.CurrentTask = ptr(run.TaskID)
 	s.State.SlotOccupied = true
 	s.note(run, "steer", "step_start", "started", "minimal-v1 step started", attempt.StepID, map[string]any{"step": attempt.StepID, "attempt_id": attempt.AttemptID, "backend": run.Backend, "protocol": run.Protocol})
-	if input.Decision != nil && run.Decision.Status == "answer_saved" {
+	if input.Decision != nil && (run.Decision.Status == "answer_saved" || run.Decision.Status == "resuming") {
 		run.Decision.Status = "reply_accepted"
 		run.Decision.Version++
 		if err = s.syncMinimalDecision(run); err != nil {

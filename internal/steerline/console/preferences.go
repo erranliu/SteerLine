@@ -28,6 +28,7 @@ type FoldChoice struct {
 type SavedAction struct {
 	Action         string    `json:"action,omitempty"`
 	TaskID         string    `json:"task_id,omitempty"`
+	DecisionID     string    `json:"decision_id,omitempty"`
 	Status         string    `json:"status"`
 	RunID          string    `json:"run_id,omitempty"`
 	TargetInstance string    `json:"target_instance,omitempty"`
@@ -243,7 +244,7 @@ func validSavedFilter(value string) bool {
 }
 func validSavedPanel(value string) bool {
 	switch value {
-	case "", "detail", "activity", "session", "final", "list":
+	case "", "detail", "activity", "session", "final", "list", "decisions", "recovery":
 		return true
 	}
 	return false
@@ -269,14 +270,14 @@ func validBodyPages(values []int64, current int64) bool {
 }
 func validSavedAction(value string) bool {
 	switch value {
-	case "start_task", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "stop_service":
+	case "start_task", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "stop_service", "answer_decision":
 		return true
 	}
 	return false
 }
 func validSavedActionStatus(value string) bool {
 	switch value {
-	case "submitted", "applying", "applied", "rejected", "failed", "indeterminate", "submitting":
+	case "submitted", "pending", "in_flight", "applying", "applied", "accepted", "rejected", "failed", "indeterminate", "submitting":
 		return true
 	}
 	return false

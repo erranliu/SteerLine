@@ -11,6 +11,18 @@
     "base_commit": {"type": ["string", "null"]},
     "summary": {"type": ["string", "null"]},
     "error": {"type": ["string", "null"]},
+    "decision_application": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["decision_id", "attempt_id", "execution_id", "execution_ref_sha256", "answer_sha256"],
+      "properties": {
+        "decision_id": {"type": "string"},
+        "attempt_id": {"type": "string"},
+        "execution_id": {"type": "string"},
+        "execution_ref_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "answer_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
     "decision": {
       "type": ["object", "null"],
       "additionalProperties": false,

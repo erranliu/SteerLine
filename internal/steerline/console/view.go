@@ -3,11 +3,13 @@ package console
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -48,6 +50,10 @@ func render(m Model) string {
 	var body string
 	if m.confirm != nil {
 		body = renderStopConfirmation(m, *state)
+	} else if m.resultPicker != nil {
+		body = renderResultPathPicker(m, *state, contentHeight)
+	} else if m.answer != nil {
+		body = renderAnswerDialog(m, *state, contentHeight)
 	} else if m.width < 100 {
 		panel := renderNarrowPanel(m, *state, contentHeight)
 		body = strings.Join(fitLines(panel, m.width, contentHeight), "\n")
@@ -300,9 +306,13 @@ func renderPanel(m Model, state projectState, width, height int) []string {
 	case 1:
 		return renderActivity(state, row, width, height)
 	case 2:
-		return renderSession(state, row, width, height)
+		return renderSession(state, row, width, height, m.clock.Now())
 	case 3:
 		return renderFinal(state, row, width, height)
+	case 5:
+		return renderDecisionHistory(state, row, width, height, m.clock.Now())
+	case 6:
+		return renderRecoveryInspection(m, state, width, height)
 	default:
 		return renderDetail(m, state, row, width, height)
 	}
@@ -312,7 +322,7 @@ func renderNarrowPanel(m Model, state projectState, height int) []string {
 	if state.panel == 4 {
 		return renderRows(m, state, m.width, height)
 	}
-	lines := []string{"窄屏面板 · " + panelName(state.panel) + "  [t]列表 [d]详情 [a]活动 [c]会话 [f]最终回复"}
+	lines := []string{"窄屏面板 · " + panelName(state.panel) + "  [t]列表 [d]详情 [a]回答/活动 [c]会话 [f]最终回复 [v]历史 [u]恢复核验"}
 	return append(lines, renderPanel(m, state, m.width, height-1)...)
 }
 
@@ -385,11 +395,18 @@ func renderDetail(m Model, state projectState, row *consoleRow, width, height in
 	}
 	lines = append(lines, renderControlAvailability(state, row, m.clock.Now())...)
 	if run.Decision != nil && run.Decision.Status == "pending" {
-		lines = append(lines, "", "待决策 · 只读展示", "decision_id："+safeTerminalText(run.Decision.ID), "attempt_id："+safeTerminalText(run.Decision.AttemptID), "问题："+safeTerminalText(run.Decision.Request.Question), "上下文："+safeTerminalText(run.Decision.Request.Context))
+		lines = append(lines, "")
+		lines = append(lines, renderDecisionIdentity(state, run, m.clock.Now())...)
+		lines = append(lines, "问题："+safeTerminalText(run.Decision.Request.Question), "上下文："+safeTerminalText(run.Decision.Request.Context))
 		for i, option := range run.Decision.Request.Options {
-			lines = append(lines, fmt.Sprintf("选项 %d · %s：%s %s", i+1, safeTerminalText(option.ID), safeTerminalText(option.Label), safeTerminalText(option.Detail)))
+			lines = append(lines, fmt.Sprintf("选项 %d · %s：%s", i+1, safeTerminalText(option.ID), safeTerminalText(option.Label)))
+			lines = append(lines, "  详情："+safeTerminalText(option.Detail))
 		}
-		lines = append(lines, "本阶段不会从控制台提交答案。")
+		lines = append(lines, decisionAnswerStatusLines(state, row)...)
+	} else if run.Decision != nil {
+		lines = append(lines, "")
+		lines = append(lines, renderDecisionIdentity(state, run, m.clock.Now())...)
+		lines = append(lines, "决策阶段："+decisionStatusLabel(run.Decision.Status), "当前答案："+safeTerminalText(steerline.DecisionSummary(run)))
 	} else if run.FinishTaskStatus == "waiting_decision" {
 		lines = append(lines, "待决策状态存在，但当前 decision_id/问题记录缺失或尚未同步；答案通道未启用。")
 	}
@@ -436,6 +453,14 @@ func renderControlAvailability(state projectState, row *consoleRow, now time.Tim
 		}
 	} else {
 		lines = append(lines, "s 开始不可用：请先选择 Ready 候选")
+	}
+	if row != nil && row.kind == rowRun && row.run != nil && row.run.Decision != nil && row.run.Decision.Status == "pending" {
+		reason := decisionAnswerAvailability(state, row)
+		if strings.HasPrefix(reason, "提交后") {
+			lines = append(lines, "a 核验资格并回答当前决策")
+		} else {
+			lines = append(lines, "a 回答不可用："+safeTerminalText(reason))
+		}
 	}
 	if connected {
 		if hasCapability(runtimeState, "set_dispatch_mode") {
@@ -543,7 +568,7 @@ func safeActivityValue(value any) any {
 	}
 }
 
-func renderSession(state projectState, row *consoleRow, width, height int) []string {
+func renderSession(state projectState, row *consoleRow, width, height int, now time.Time) []string {
 	lines := []string{styleLabel.Render("会话 · Turn / Session")}
 	if row == nil || row.run == nil {
 		return append(lines, "选择一个 run 后查看会话。")
@@ -605,11 +630,15 @@ func renderSession(state projectState, row *consoleRow, width, height int) []str
 		lines = append(lines, styleAlert.Render("轮次外提示 · "+safeTerminalText(firstText(warning.Diagnostic, warning.Status, string(warning.Type)))))
 	}
 	if row.run.Decision != nil && row.run.Decision.Status == "pending" {
-		lines = append(lines, "业务待决策 · 折叠区外保留", "decision_id："+safeTerminalText(row.run.Decision.ID), "attempt_id："+safeTerminalText(row.run.Decision.AttemptID), "问题："+safeTerminalText(row.run.Decision.Request.Question), "上下文："+safeTerminalText(row.run.Decision.Request.Context))
+		lines = append(lines, renderDecisionIdentity(state, row.run, now)...)
+		lines = append(lines, "业务待决策 · 折叠区外保留", "问题："+safeTerminalText(row.run.Decision.Request.Question), "上下文："+safeTerminalText(row.run.Decision.Request.Context))
 		for i, option := range row.run.Decision.Request.Options {
-			lines = append(lines, fmt.Sprintf("选项 %d · %s：%s %s", i+1, safeTerminalText(option.ID), safeTerminalText(option.Label), safeTerminalText(option.Detail)))
+			lines = append(lines, fmt.Sprintf("选项 %d · %s：%s", i+1, safeTerminalText(option.ID), safeTerminalText(option.Label)), "  详情："+safeTerminalText(option.Detail))
 		}
-		lines = append(lines, "本阶段只读展示，不提交答案。")
+		lines = append(lines, decisionAnswerStatusLines(state, row)...)
+	} else if row.run.Decision != nil {
+		lines = append(lines, renderDecisionIdentity(state, row.run, now)...)
+		lines = append(lines, "决策阶段："+decisionStatusLabel(row.run.Decision.Status), "当前答案："+safeTerminalText(steerline.DecisionSummary(row.run)))
 	}
 	if state.conversationMore {
 		lines = append(lines, "还有更多会话记录 · 按 y 加载下一页")
@@ -647,9 +676,219 @@ func renderSession(state projectState, row *consoleRow, width, height int) []str
 	return scrollLines(wrapLines(lines, width), state.detailScroll, height)
 }
 
+func decisionStatusLabel(status string) string {
+	switch status {
+	case "pending":
+		return "未提交"
+	case "answer_saved":
+		return "答案已保存，等待服务处理"
+	case "resuming":
+		return "服务正在核验原执行并尝试续跑"
+	case "reply_accepted":
+		return "后端已接受，答案应用待核实"
+	case "applied":
+		return "答案已应用"
+	case "failed":
+		return "明确失败，应用未核实"
+	case "superseded":
+		return "历史问题已被新问题替代"
+	default:
+		return "状态未知：" + status
+	}
+}
+
+func renderDecisionHistory(state projectState, row *consoleRow, width, height int, now time.Time) []string {
+	lines := []string{styleLabel.Render("决策历史 · 按 decision_id 留档")}
+	if row == nil || row.run == nil {
+		return append(lines, "选择一个 run 后查看其全部决策。")
+	}
+	run := row.run
+	lines = append(lines, "项目："+safeTerminalText(state.ref.Name), "task_id："+safeTerminalText(run.TaskID), "run_id："+safeTerminalText(run.RunID))
+	if state.snapshot.Domain == nil {
+		lines = append(lines, "SQLite 决策历史不可用："+safeTerminalText(state.snapshot.DomainError))
+		return scrollLines(wrapLines(lines, width), state.detailScroll, height)
+	}
+	records := make([]steerline.DecisionRecord, 0)
+	for _, record := range state.snapshot.Domain.Decisions {
+		if record.WorkflowRunID == run.RunID {
+			records = append(records, record)
+		}
+	}
+	sort.SliceStable(records, func(i, j int) bool {
+		if records[i].CreatedAt.Equal(records[j].CreatedAt) {
+			return records[i].DecisionID < records[j].DecisionID
+		}
+		return records[i].CreatedAt.Before(records[j].CreatedAt)
+	})
+	if len(records) == 0 {
+		lines = append(lines, "当前 run 没有持久化决策记录。")
+	}
+	for _, record := range records {
+		var request steerline.DecisionRequest
+		if err := json.Unmarshal(record.Request, &request); err != nil {
+			lines = append(lines, "", "decision_id："+safeTerminalText(record.DecisionID), "问题记录格式未知；原记录保留，未猜测或导入。")
+			continue
+		}
+		lines = append(lines, "", "decision_id："+safeTerminalText(record.DecisionID), "execution_id："+safeTerminalText(displayDash(record.ExecutionID))+" · attempt_id："+safeTerminalText(displayDash(record.AttemptID)), "状态："+safeTerminalText(record.Status)+" · version："+strconv.FormatUint(record.Version, 10))
+		if !record.CreatedAt.IsZero() {
+			age := now.Sub(record.CreatedAt)
+			if age < 0 {
+				age = 0
+			}
+			lines = append(lines, "提问时间："+record.CreatedAt.Local().Format(timeLayout)+" · 经时："+age.Round(time.Second).String())
+		}
+		lines = append(lines, "问题："+safeTerminalText(request.Question), "上下文："+safeTerminalText(request.Context))
+		for i, option := range request.Options {
+			recommended := ""
+			if request.Recommended == option.ID {
+				recommended = " · 推荐"
+			}
+			lines = append(lines, fmt.Sprintf("选项 %d · %s：%s%s", i+1, safeTerminalText(option.ID), safeTerminalText(option.Label), recommended), "  详情："+safeTerminalText(option.Detail))
+		}
+		if len(record.Answer) > 0 {
+			var answer steerline.DecisionAnswer
+			if err := json.Unmarshal(record.Answer, &answer); err == nil {
+				lines = append(lines, "答案 · option_id："+safeTerminalText(displayDash(answer.OptionID))+" · by："+safeTerminalText(answer.AnsweredBy), "补充说明："+safeTerminalText(answer.Note))
+			}
+		} else {
+			lines = append(lines, "答案：尚未接受")
+		}
+	}
+	return scrollLines(wrapLines(lines, width), state.detailScroll, height)
+}
+
+func renderRecoveryInspection(m Model, state projectState, width, height int) []string {
+	lines := []string{styleLabel.Render("恢复核验报告 · 只读")}
+	if state.recoveryBusy {
+		return append(lines, "正在核对执行身份、工作目录、领取和 PR 状态…")
+	}
+	if state.recoveryError != "" {
+		return append(lines, "核验失败："+safeTerminalText(state.recoveryError), "r 重新读取 · Enter 返回")
+	}
+	report := state.recoveryReport
+	if report == nil {
+		return append(lines, "没有当前恢复报告。按 u 读取所选 run。")
+	}
+	lines = append(lines,
+		"项目："+safeTerminalText(state.ref.Name),
+		"task_id："+safeTerminalText(report.TaskID)+" · run_id："+safeTerminalText(report.RunID),
+		"run revision："+strconv.FormatUint(report.RunRevision, 10)+" · 采样时间："+report.SampledAt.Local().Format(timeLayout),
+		"service instance/status："+safeTerminalText(report.ServiceInstanceID)+" / "+safeTerminalText(report.ServiceStatus),
+		"dispatch："+safeTerminalText(report.DispatchMode)+" · paused："+fmt.Sprint(report.DispatchPaused)+" · slot occupied："+fmt.Sprint(report.SlotOccupied),
+		"执行/交付："+safeTerminalText(report.ExecutionStatus)+" / "+safeTerminalText(report.DeliveryStatus),
+		"decision："+safeTerminalText(displayDash(report.DecisionID))+" · "+safeTerminalText(displayDash(report.DecisionStatus)),
+		"后端/协议/目标："+safeTerminalText(report.Backend+" / "+report.Protocol+" / "+report.Target.ID),
+		"宿主/终端核验："+safeTerminalText(report.ProcessCheck),
+	)
+	if report.Workspace != nil {
+		lines = append(lines, "worktree："+safeTerminalText(report.Workspace.Worktree), "base / HEAD："+safeTerminalText(report.Workspace.Base+" / "+report.Workspace.Head), fmt.Sprintf("dirty：%t · 采样：%s", report.Workspace.Dirty, report.Workspace.CheckedAt.Local().Format(timeLayout)))
+	} else {
+		lines = append(lines, "worktree 核验失败："+safeTerminalText(report.WorkspaceError))
+	}
+	if report.Claim != nil {
+		lines = append(lines, "claim：task "+safeTerminalText(report.Claim.ID)+" · "+safeTerminalText(report.Claim.Status)+" · assignee "+safeTerminalText(report.Claim.Assignee))
+	} else {
+		lines = append(lines, "claim 核验失败："+safeTerminalText(report.ClaimError))
+	}
+	if report.PR != nil {
+		lines = append(lines, "PR："+safeTerminalText(report.PR.URL)+" · "+safeTerminalText(report.PR.State)+" · repository "+safeTerminalText(report.PR.Repository)+" · base "+safeTerminalText(report.PR.BaseBranch))
+	} else if report.PRError != "" {
+		lines = append(lines, "PR 核验："+safeTerminalText(report.PRError))
+	} else {
+		lines = append(lines, "PR：未绑定")
+	}
+	if report.ResultPath != "" {
+		lines = append(lines, "候选结果文件："+safeTerminalText(report.ResultPath))
+	}
+	lines = append(lines, "", "可恢复动作 · 服务执行前会重新核验")
+	if report.RetryReason == "" {
+		lines = append(lines, "R retry_run · 可用 · 保留 task/run/worktree，创建新 attempt")
+	} else {
+		lines = append(lines, "R retry_run · 不可用："+safeTerminalText(report.RetryReason))
+	}
+	if strings.HasPrefix(report.MarkStoppedReason, "confirm") {
+		lines = append(lines, "M mark_stopped · 确认旧执行已停止并记录依据")
+	} else {
+		lines = append(lines, "M mark_stopped · 不可用："+safeTerminalText(report.MarkStoppedReason))
+	}
+	if strings.HasPrefix(report.AcceptResultReason, "confirm") {
+		lines = append(lines, "Z accept_result · 预览固定结果字节、核验 PR 并接回")
+	} else {
+		lines = append(lines, "Z accept_result · 不可用："+safeTerminalText(report.AcceptResultReason))
+	}
+	if len(report.Blockers) == 0 {
+		lines = append(lines, "v resolve_command · 没有 indeterminate blocker")
+	} else {
+		lines = append(lines, "Indeterminate control blockers：")
+		for i, blocker := range report.Blockers {
+			marker := "  "
+			if i == state.recoveryBlockerIndex {
+				marker = "› "
+			}
+			lines = append(lines, marker+blocker.RequestID+" · "+blocker.Action+" · "+safeTerminalText(blocker.Reason))
+		}
+		lines = append(lines, "[ / ] 选择 blocker · v 按证据解除这一条；原指令不会重放")
+	}
+	lines = append(lines, "采样报告不是通行证；revision 变化后动作会被拒绝并要求重新读取。")
+	return scrollLines(wrapLines(lines, width), state.detailScroll, height)
+}
+
+func renderDecisionIdentity(state projectState, run *steerline.Run, now time.Time) []string {
+	if run == nil || run.Decision == nil {
+		return nil
+	}
+	waiting := "等待时长：未知"
+	if state.snapshot.Domain != nil {
+		for _, record := range state.snapshot.Domain.Decisions {
+			if record.DecisionID == run.Decision.ID && !record.CreatedAt.IsZero() {
+				duration := now.Sub(record.CreatedAt)
+				if duration < 0 {
+					duration = 0
+				}
+				waiting = "等待时长：" + duration.Round(time.Second).String()
+				break
+			}
+		}
+	}
+	return []string{"项目：" + safeTerminalText(state.ref.Name), "task_id：" + safeTerminalText(run.TaskID), "run_id：" + safeTerminalText(run.RunID), "decision_id：" + safeTerminalText(run.Decision.ID), "attempt_id：" + safeTerminalText(run.Decision.AttemptID), waiting}
+}
+
+func decisionAnswerAvailability(state projectState, row *consoleRow) string {
+	if row == nil || row.run == nil || row.run.Decision == nil || row.run.Decision.Status != "pending" {
+		return "当前没有待回答的问题"
+	}
+	run := row.run
+	if run.Decision.RequestPath != "" || run.Decision.AnswerPath != "" {
+		return "问题绑定了已移除的 sidecar-answer 格式；保留状态并转入人工恢复，不导入答案文件"
+	}
+	if run.Backend == "local" || run.Protocol == "local_process" {
+		return "local continuation 当前不受支持；保留原问题，通过服务恢复入口继续核验"
+	}
+	if run.Backend != "orca" || run.Protocol != "orca_terminal_v2" {
+		return "原执行后端/协议不支持决策续跑"
+	}
+	connection := state.snapshot.Connection
+	if connection.State != steerline.ConnectionConnected || !connection.CanControl {
+		return "服务离线或未就绪；答案不会写入，恢复服务后再通过同一命令提交"
+	}
+	runtimeState := connection.Snapshot.Runtime
+	if !hasCapability(runtimeState, "answer_decision") {
+		return "服务未声明 answer_decision 能力"
+	}
+	return "提交后先确认答案送达；应用状态仍须等待原执行的绑定证明核验"
+}
+
+func decisionAnswerStatusLines(state projectState, row *consoleRow) []string {
+	reason := decisionAnswerAvailability(state, row)
+	if strings.HasPrefix(reason, "提交后") {
+		return []string{"a 核验固定后端能力并打开回答草稿 · " + reason, "显式提交后仍分别核验答案接受、后端送达、轮次启动和答案应用。"}
+	}
+	return []string{"a 不可用 · " + safeTerminalText(reason)}
+}
+
 func allSessionLines(state projectState, row *consoleRow, width int) []string {
 	state.detailScroll = 0
-	return renderSession(state, row, width, 1<<20)
+	return renderSession(state, row, width, 1<<20, time.Now())
 }
 
 func captureSessionAnchor(state *projectState, row *consoleRow, width int) {
@@ -862,15 +1101,134 @@ func renderStopConfirmation(m Model, state projectState) string {
 	if m.confirm == nil {
 		return ""
 	}
+	if m.confirm.action != "stop_service" {
+		lines := []string{"恢复动作确认", "run_id：" + safeTerminalText(m.confirm.runID), "command_id：" + safeTerminalText(m.confirm.requestID), "revision：" + strconv.FormatUint(m.confirm.revision, 10), "动作：" + safeTerminalText(m.confirm.action)}
+		if m.confirm.action == "resolve_command" {
+			lines = append(lines, "原 request_id："+safeTerminalText(m.confirm.decisionID), "确认依据："+safeTerminalText(m.confirm.basis), "服务只解除这一条 indeterminate blocker，不会重放原指令。")
+		} else {
+			lines = append(lines, "目标服务实例："+safeTerminalText(m.confirm.instance), "确认依据："+safeTerminalText(m.confirm.basis))
+		}
+		if m.confirm.action == "accept_result" {
+			lines = append(lines, "result 文件："+safeTerminalText(m.confirm.resultPath), fmt.Sprintf("冻结结果字节：%d · SHA-256：%s", len(m.confirm.resultBytes), m.confirm.resultSHA256), "task/run："+safeTerminalText(m.confirm.resultTaskID+" / "+m.confirm.resultRunID), "摘要："+safeTerminalText(m.confirm.resultSummary), "PR："+safeTerminalText(m.confirm.resultPRURL), "worktree："+safeTerminalText(m.confirm.resultWorktree)+" · base："+safeTerminalText(m.confirm.resultBase), "服务会核验工作目录、base、仓库、目标分支和真实 PR 状态。")
+		}
+		lines = append(lines, "Enter/y 确认 · Esc/n 取消")
+		return strings.Join(lines, "\n")
+	}
 	grace := safeTerminalText(state.ref.Config.ShutdownGrace)
 	return strings.Join([]string{"停止服务确认", "", "目标实例：" + safeTerminalText(m.confirm.instance), "这会停止新派发，并等待当前 worker 最长 " + grace + " 后按服务策略结束；工作现场会保留。", "request_id：" + m.confirm.requestID, "", "Enter/y 确认停止 · Esc/n 取消"}, "\n")
 }
 
-func renderFooter(m Model, state projectState) string {
-	if m.width < 100 {
-		return "↑↓选择/滚动 · ←→项目 · t列表 · d详情 · a活动 · c会话 · f正文\n" + "s开始 · m模式 · p暂停/恢复 · x停服 · i查request · q退出\n" + ",/.轮次 · e折叠 · =保持展开 · o过程正文 · n最终回复 · y更多"
+func renderResultPathPicker(m Model, state projectState, height int) string {
+	dialog := m.resultPicker
+	if dialog == nil {
+		return ""
 	}
-	return "↑↓ 选择/滚动 · PgUp/PgDn 阅读 · ←→ 项目 · 1-7 筛选 · Enter 详情 · s 开始 · m 手动/自动 · p 暂停/恢复 · x 停止 · i 查询 request · d/a/c/f 面板 · ,/. 轮次 · e 折叠 · = 保持展开 · o 正文 · n final · q 退出"
+	path := append([]rune(nil), dialog.path...)
+	if dialog.cursor >= 0 && dialog.cursor <= len(path) {
+		path = append(path, 0)
+		copy(path[dialog.cursor+1:], path[dialog.cursor:])
+		path[dialog.cursor] = '│'
+	}
+	lines := []string{"选择 recovery result 文件", "项目：" + safeTerminalText(state.ref.Name), "run_id：" + safeTerminalText(dialog.runID), "run revision：" + strconv.FormatUint(dialog.revision, 10), "输入已有文件的完整路径：", safeTerminalText(string(path)), "服务将冻结最多 2 MiB 原始字节，显示 task/run、PR、worktree、base 与摘要供最终确认。"}
+	if dialog.error != "" {
+		lines = append(lines, styleAlert.Render(safeTerminalText(dialog.error)))
+	}
+	lines = append(lines, "Enter 读取并预览 · Esc 取消")
+	return strings.Join(fitLines(wrapLines(lines, m.width), m.width, height), "\n")
+}
+
+func renderAnswerDialog(m Model, state projectState, height int) string {
+	dialog := m.answer
+	if dialog == nil {
+		return ""
+	}
+	request, ok := decisionRequestFor(state, dialog.runID, dialog.decisionID)
+	lines := []string{"人工决策 · 显式提交", "项目：" + safeTerminalText(state.ref.Name), "task_id：" + safeTerminalText(displayDash(m.answerRunTask(state, dialog))), "run_id：" + safeTerminalText(dialog.runID), "decision_id：" + safeTerminalText(dialog.decisionID), fmt.Sprintf("运行版本：%d · 问题版本：%d · 目标服务：%s", dialog.runRevision, dialog.decisionVersion, safeTerminalText(dialog.instance))}
+	if !ok {
+		lines = append(lines, "原问题正文暂不可读；保留的草稿不会提交。")
+	} else {
+		lines = append(lines, "", "问题："+safeTerminalText(request.Question), "上下文："+safeTerminalText(request.Context), "")
+		for i, option := range request.Options {
+			marker := "  "
+			if !dialog.noteFocus && dialog.optionIndex == i {
+				marker = "› "
+			}
+			recommendation := ""
+			if request.Recommended == option.ID {
+				recommendation = " · 推荐"
+			}
+			lines = append(lines, marker+fmt.Sprintf("%d. %s · %s%s", i+1, safeTerminalText(option.ID), safeTerminalText(option.Label), recommendation), "    详情："+safeTerminalText(option.Detail))
+		}
+		if request.AllowFreeText {
+			marker := "  "
+			if !dialog.noteFocus && dialog.optionIndex == len(request.Options) {
+				marker = "› "
+			}
+			lines = append(lines, marker+"自定义答复 · option_id 留空，必须填写说明")
+		}
+	}
+	lines = append(lines, "", "补充说明：")
+	note := append([]rune(nil), dialog.note...)
+	if dialog.noteFocus && dialog.cursor >= 0 && dialog.cursor <= len(note) {
+		note = append(note, 0)
+		copy(note[dialog.cursor+1:], note[dialog.cursor:])
+		note[dialog.cursor] = '│'
+	}
+	if len(note) == 0 {
+		lines = append(lines, "│")
+	} else {
+		for _, line := range strings.Split(string(note), "\n") {
+			lines = append(lines, safeTerminalText(line))
+		}
+	}
+	length := len(dialog.note)
+	lines = append(lines, fmt.Sprintf("字符：%d / 4000", length))
+	if length > 4000 {
+		lines = append(lines, styleAlert.Render("超过协议上限；未截断，需编辑至 4000 字符以内"))
+	}
+	lines = append(lines, "发送后可确认答案送达；应用状态仍须由原执行绑定证明。")
+	if dialog.error != "" {
+		lines = append(lines, styleAlert.Render(safeTerminalText(dialog.error)))
+	}
+	if dialog.scroll < 0 {
+		dialog.scroll = 0
+	}
+	wrapped := wrapLines(lines, m.width-2)
+	if height < 1 {
+		height = 1
+	}
+	visible := fitLines(scrollLines(wrapped, dialog.scroll, height), m.width, height)
+	return strings.Join(visible, "\n")
+}
+
+func (m Model) answerRunTask(state projectState, dialog *decisionAnswerDialog) string {
+	if dialog == nil {
+		return ""
+	}
+	if runtimeState := state.snapshot.Connection.Snapshot.Runtime; runtimeState != nil {
+		for _, run := range runtimeState.Runs {
+			if run != nil && run.RunID == dialog.runID {
+				return run.TaskID
+			}
+		}
+	}
+	return ""
+}
+
+func renderFooter(m Model, state projectState) string {
+	if state.panel == 6 {
+		return "r 重新核验 · R retry · m mark-stopped · z accept-result · [/]选择 blocker · v resolve-command · Enter/ Esc 返回"
+	}
+	if m.resultPicker != nil {
+		return "输入完整 result 文件路径 · ←→移动光标 · Backspace/Delete 编辑 · Enter 读取固定字节并预览 · Esc 取消"
+	}
+	if m.answer != nil {
+		return "↑↓ 选择声明选项/移动光标 · Tab 切换选项与说明 · Enter 换到说明/插入换行 · Ctrl+Enter 明确提交 · PgUp/PgDn 浏览完整问题 · Esc 丢弃草稿"
+	}
+	if m.width < 100 {
+		return "↑↓选择/滚动 · ←→项目 · t列表 · d详情 · a回答/活动 · c会话 · f正文 · v历史 · u恢复核验\n" + "s开始 · m模式 · p暂停/恢复 · x停服 · i查request · q退出\n" + ",/.轮次 · e折叠 · =保持展开 · o过程正文 · n最终回复 · y更多"
+	}
+	return "↑↓ 选择/滚动 · PgUp/PgDn 阅读 · ←→ 项目 · 1-7 筛选 · Enter 详情 · s 开始 · a 回答/活动 · m 手动/自动 · p 暂停/恢复 · x 停止 · i 查询 request · d/c/f 面板 · v 决策历史 · u 恢复核验 · ,/. 轮次 · e 折叠 · = 保持展开 · o 正文 · n final · q 退出"
 }
 
 func joinLines(left, right []string, height int) string {

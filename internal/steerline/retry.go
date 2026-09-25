@@ -17,6 +17,18 @@ func (s *Service) startRetry(ctx context.Context, id string) error {
 	if s.worker != nil {
 		return errors.New("execution slot occupied")
 	}
+	if s.State.Control.Operation != nil || len(s.State.Control.Blockers) > 0 {
+		return errors.New("an unresolved control operation or blocker prevents retry")
+	}
+	if s.State.Control.DispatchMode != "manual" {
+		return errors.New("retry requires manual dispatch mode")
+	}
+	if s.State.Control.DispatchPaused {
+		return errors.New("dispatch is paused; explicit retry is refused")
+	}
+	if reason := s.slotReason(""); reason != "" {
+		return errors.New(reason)
+	}
 	if s.Config.hostName() == "orca" {
 		return errors.New("retry is not supported for the orca host yet; use manual recovery")
 	}
@@ -25,8 +37,11 @@ func (s *Service) startRetry(ctx context.Context, id string) error {
 		if r.ExecutionStatus == "unknown" || r.ExecutionStatus == "running" || r.ExecutionStatus == "pending" {
 			return errors.New("resolve uncertain executions before retry")
 		}
-		if s.inspectRunProcess(r) == "matching process still exists" {
-			return errors.New("recorded worker is still alive")
+		if r.Process != nil {
+			processState := s.inspectRunProcess(r)
+			if processState != "process absent" && processState != "orca terminal exited" {
+				return errors.New("recorded execution is live or cannot be verified stopped: " + processState)
+			}
 		}
 		if r.RunID == id {
 			selected = r
@@ -39,8 +54,14 @@ func (s *Service) startRetry(ctx context.Context, id string) error {
 	if r.WorkflowVersion == MinimalWorkflowVersion {
 		return errors.New("minimal-v1 cannot use the single-workflow retry path; reconcile its current step attempt")
 	}
+	if r.Host != "local" || r.Backend != string(BackendLocal) || r.Protocol != string(ProtocolLocalProcess) {
+		return errors.New("retry is supported only for the original local_process execution")
+	}
 	if r.FinishTaskStatus != "blocked" || (r.ExecutionStatus != "failed" && r.ExecutionStatus != "succeeded") || r.PR.URL != nil {
 		return errors.New("retry requires a blocked run without a bound PR")
+	}
+	if r.Decision != nil && r.Decision.Status != "failed" && r.Decision.Status != "applied" && r.Decision.Status != "superseded" {
+		return errors.New("an unresolved decision must be settled before retry")
 	}
 	inspection, err := s.inspectRetryWorkspace(ctx, r)
 	if err != nil {

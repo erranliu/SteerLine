@@ -421,20 +421,23 @@ func validateStepContract(id string, c StepContract) error {
 var revisionPattern = regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`)
 
 type StepGateResult struct {
-	StepID            string            `json:"step_id"`
-	Succeeded         bool              `json:"succeeded"`
-	InputRevision     string            `json:"input_revision,omitempty"`
-	Revision          string            `json:"revision,omitempty"`
-	Workspace         WorkspaceEvidence `json:"workspace,omitempty"`
-	Checks            []CheckEvidence   `json:"checks,omitempty"`
-	ReviewVerdict     string            `json:"review_verdict,omitempty"`
-	PRURL             string            `json:"pr_url,omitempty"`
-	PublishedHead     string            `json:"published_head,omitempty"`
-	ResultID          string            `json:"result_id,omitempty"`
-	FailureKind       string            `json:"failure_kind,omitempty"`
-	PrerequisiteIDs   []string          `json:"prerequisite_result_ids,omitempty"`
-	Decision          *DecisionRequest  `json:"decision,omitempty"`
-	AppliedDecisionID string            `json:"applied_decision_id,omitempty"`
+	StepID                     string            `json:"step_id"`
+	Succeeded                  bool              `json:"succeeded"`
+	InputRevision              string            `json:"input_revision,omitempty"`
+	Revision                   string            `json:"revision,omitempty"`
+	Workspace                  WorkspaceEvidence `json:"workspace,omitempty"`
+	Checks                     []CheckEvidence   `json:"checks,omitempty"`
+	ReviewVerdict              string            `json:"review_verdict,omitempty"`
+	PRURL                      string            `json:"pr_url,omitempty"`
+	PublishedHead              string            `json:"published_head,omitempty"`
+	ResultID                   string            `json:"result_id,omitempty"`
+	FailureKind                string            `json:"failure_kind,omitempty"`
+	PrerequisiteIDs            []string          `json:"prerequisite_result_ids,omitempty"`
+	Decision                   *DecisionRequest  `json:"decision,omitempty"`
+	AppliedDecisionID          string            `json:"applied_decision_id,omitempty"`
+	AppliedDecisionAttemptID   string            `json:"applied_decision_attempt_id,omitempty"`
+	AppliedDecisionExecutionID string            `json:"applied_decision_execution_id,omitempty"`
+	AppliedAnswerSHA256        string            `json:"applied_answer_sha256,omitempty"`
 }
 
 type CheckEvidence struct {
@@ -769,7 +772,7 @@ func validExecutionStatus(v string) bool {
 }
 func validDecisionStatus(v string) bool {
 	switch v {
-	case "pending", "answer_saved", "reply_accepted", "applied", "failed", "superseded":
+	case "pending", "answer_saved", "resuming", "reply_accepted", "applied", "failed", "superseded":
 		return true
 	}
 	return false

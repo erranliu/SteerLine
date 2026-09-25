@@ -218,6 +218,8 @@ func TestAuditLocalRejectedLaunchCanRetryPreparedWorkspace(t *testing.T) {
 	}
 	require(t, os.Remove(fault))
 	restarted := f.service(t)
+	restarted.State.Control.DispatchMode = "manual"
+	require(t, restarted.save())
 	require(t, restarted.startRetry(context.Background(), runID))
 	finishWorker(t, restarted)
 	if restarted.State.Runs[0].FinishTaskStatus != "waiting_pr_merge" || readFake(f.db).Claims["t-1"] != 1 {
@@ -234,9 +236,11 @@ func TestAuditManualStopSurvivesRecoveryWithoutRewritingUnknownOutcome(t *testin
 	require(t, records.saveOperation(op))
 	run.ExecutionStatus = "unknown"
 	require(t, s.save())
-	require(t, s.MarkStopped(run.RunID))
+	require(t, s.markStoppedCore(run.RunID, "audit", "operator verified no matching execution remains"))
 	restarted, err := NewService(f.c)
 	require(t, err)
+	restarted.State.Control.DispatchMode = "manual"
+	require(t, restarted.save())
 	if restarted.State.Runs[0].ExecutionStatus != "failed" || restarted.State.SlotOccupied {
 		t.Fatal("recovery erased the operator's explicit stop confirmation")
 	}

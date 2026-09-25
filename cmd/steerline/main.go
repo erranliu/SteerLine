@@ -3,10 +3,14 @@ package main
 import (
 	"bufio"
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -53,6 +57,7 @@ func run() error {
 	decisionID := fs.String("decision-id", "", "answer: pending decision id (defaults to the run's pending decision)")
 	note := fs.String("note", "", "answer: optional human note")
 	by := fs.String("by", "", "answer: who answered (defaults to the OS user)")
+	reason := fs.String("reason", "", "recovery: explicit evidence or basis for the operator confirmation")
 	proj := fs.String("project", "", "projects: project name or number")
 	action := fs.String("action", "", "control action or projects: watch|run|stop|home|list")
 	console := fs.String("console", "", "service console rendering: pretty|summary|json|off (default pretty on a terminal)")
@@ -114,6 +119,15 @@ func run() error {
 	}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
+	if command == "retry" || command == "mark-stopped" || command == "accept-result" {
+		if command == "mark-stopped" && (!*confirmed || *runID == "" || strings.TrimSpace(*reason) == "") {
+			return fmt.Errorf("mark-stopped requires -run-id, -confirm-process-stopped and -reason")
+		}
+		if command == "accept-result" && (!*confirmed || *runID == "" || *result == "" || strings.TrimSpace(*reason) == "") {
+			return fmt.Errorf("accept-result requires -run-id, -result, -confirm-process-stopped and -reason")
+		}
+		return submitRecoveryCommand(ctx, c, command, *runID, *result, *confirmed, *reason, *by, *waitReceipt)
+	}
 	if command == "certify-backend" {
 		if strings.TrimSpace(*evidence) == "" {
 			return fmt.Errorf("certify-backend requires -evidence")
@@ -239,7 +253,23 @@ func run() error {
 		return nil
 	}
 	if command == "answer" {
-		return steerline.AnswerDecision(c, steerline.AnswerOptions{RunID: *runID, DecisionID: *decisionID, Option: *option, Note: *note, By: *by})
+		request, _, err := steerline.SubmitDecisionAnswer(ctx, c, steerline.AnswerOptions{RunID: *runID, DecisionID: *decisionID, Option: *option, Note: *note, By: *by})
+		if err != nil {
+			return err
+		}
+		fmt.Println("command_id", request.CommandID)
+		if *waitReceipt {
+			result, err := waitServiceCommand(ctx, c, request.CommandID, 2*time.Minute)
+			if err != nil {
+				return err
+			}
+			data, _ := json.Marshal(result)
+			fmt.Println(string(data))
+			if result.Status != "accepted" {
+				return fmt.Errorf("decision command is %s: %s", result.Status, strings.TrimSpace(string(result.Result)))
+			}
+		}
+		return nil
 	}
 	if command == "watch" {
 		if useWatchTUI(viewer.IsInteractive(), *jsonOut, *rawEvents, *noTUI, *follow, *fromStart) {
@@ -284,24 +314,119 @@ func run() error {
 	} else if steerline.ConsoleDefault() != "" {
 		s.Console = steerline.ConsoleDefault()
 	}
-	if command == "retry" {
-		fmt.Printf("Steerline retry-one: %s; no new tasks will be claimed\n", *runID)
-		return s.RetryOne(ctx, *runID)
-	}
-	if command == "mark-stopped" {
-		if !*confirmed || *runID == "" {
-			return fmt.Errorf("mark-stopped requires -run-id and -confirm-process-stopped")
-		}
-		return s.MarkStopped(*runID)
-	}
-	if command == "accept-result" {
-		if !*confirmed || *runID == "" || *result == "" {
-			return fmt.Errorf("accept-result requires -run-id, -result and -confirm-process-stopped")
-		}
-		return s.AcceptResult(ctx, *runID, *result)
-	}
 	fmt.Printf("Steerline M0 running: %s -> %s/%s; Ctrl+C or steerline stop to exit\n", c.Repository, c.Remote, c.Branch)
 	return s.RunWithDispatch(ctx, *dispatchMode)
+}
+
+func submitRecoveryCommand(ctx context.Context, c steerline.Config, command, runID, resultPath string, confirmed bool, reason, requestedBy string, wait bool) error {
+	if err := c.ResolveIdentity(ctx); err != nil {
+		return err
+	}
+	runtimeState, err := steerline.LoadDatabaseRuntime(c)
+	if err != nil {
+		return err
+	}
+	if runtimeState == nil {
+		return errors.New("no current runtime projection; recovery commands require the live service")
+	}
+	var target *steerline.Run
+	for _, run := range runtimeState.Runs {
+		if run != nil && run.RunID == runID {
+			target = run
+			break
+		}
+	}
+	if target == nil {
+		return fmt.Errorf("run %s not found", runID)
+	}
+	kind := ""
+	var body any
+	switch command {
+	case "retry":
+		kind = "retry_run"
+		body = map[string]any{"confirmed_process_stopped": confirmed}
+	case "mark-stopped":
+		kind = "mark_stopped"
+		body = map[string]any{"confirmed_process_stopped": true, "confirmation_basis": strings.TrimSpace(reason)}
+	case "accept-result":
+		file, readErr := os.Open(resultPath)
+		if readErr != nil {
+			return readErr
+		}
+		info, statErr := file.Stat()
+		if statErr != nil {
+			_ = file.Close()
+			return statErr
+		}
+		if info.Size() > 2<<20 {
+			_ = file.Close()
+			return errors.New("recovery result exceeds 2 MiB")
+		}
+		data, readErr := io.ReadAll(io.LimitReader(file, (2<<20)+1))
+		closeErr := file.Close()
+		if readErr != nil {
+			return readErr
+		}
+		if closeErr != nil {
+			return closeErr
+		}
+		if len(data) == 0 || len(data) > 2<<20 {
+			return errors.New("recovery result must be between 1 byte and 2 MiB")
+		}
+		sum := sha256.Sum256(data)
+		kind = "accept_result"
+		body = map[string]any{"confirmed_process_stopped": true, "confirmation_basis": strings.TrimSpace(reason), "result_base64": base64.StdEncoding.EncodeToString(data), "result_sha256": hex.EncodeToString(sum[:])}
+	default:
+		return fmt.Errorf("unsupported recovery command %q", command)
+	}
+	if requestedBy == "" {
+		requestedBy = steerline.DefaultRequestedBy()
+	}
+	commandID := steerline.NewControlRequestID()
+	queued, _, err := steerline.SubmitServiceCommand(ctx, c, kind, runID, requestedBy, commandID, target.ControlRevision, body)
+	if err != nil {
+		return err
+	}
+	fmt.Println("command_id", queued.CommandID)
+	if !wait {
+		return nil
+	}
+	result, err := waitServiceCommand(ctx, c, queued.CommandID, 2*time.Minute)
+	if err != nil {
+		return err
+	}
+	data, _ := json.Marshal(result)
+	fmt.Println(string(data))
+	if result.Status != "accepted" {
+		return fmt.Errorf("recovery command is %s: %s", result.Status, strings.TrimSpace(string(result.Result)))
+	}
+	return nil
+}
+
+func waitServiceCommand(ctx context.Context, c steerline.Config, commandID string, timeout time.Duration) (steerline.CommandRecord, error) {
+	waitCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	ticker := time.NewTicker(150 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		reader, openErr := steerline.OpenSQLiteReader(filepath.Join(c.RunDir, "steerline.db"))
+		if openErr != nil {
+			return steerline.CommandRecord{}, openErr
+		}
+		current, readErr := reader.Command(waitCtx, c.Identity(), commandID)
+		_ = reader.Close()
+		if readErr == nil && (current.Status == "accepted" || current.Status == "rejected" || current.Status == "failed" || current.Status == "indeterminate") {
+			return current, nil
+		}
+		if readErr != nil && !os.IsNotExist(readErr) {
+			return steerline.CommandRecord{}, readErr
+		}
+		select {
+		case <-waitCtx.Done():
+			return steerline.CommandRecord{}, fmt.Errorf("command %s remains unconfirmed; query this same command ID later", commandID)
+		case <-ticker.C:
+		}
+	}
 }
 
 func runConsoleCommand(args []string) error {

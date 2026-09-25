@@ -18,10 +18,12 @@ func failedStartup(t *testing.T) (*fixture, *Service, *Run) {
 	s := f.service(t)
 	require(t, s.dispatch(context.Background()))
 	finishWorker(t, s)
+	s.State.Control.DispatchMode = "manual"
+	require(t, s.save())
 	return f, s, s.State.Runs[0]
 }
 
-func TestRetryOnePreservesHistoryAndNeverClaimsAnotherTask(t *testing.T) {
+func TestOnlineRetryPreservesHistoryAndNeverClaimsAnotherTask(t *testing.T) {
 	f, s, r := failedStartup(t)
 	oldLog := *r.LogPath
 	oldResult := *r.ResultPath
@@ -29,16 +31,17 @@ func TestRetryOnePreservesHistoryAndNeverClaimsAnotherTask(t *testing.T) {
 	require(t, e)
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-	require(t, s.RetryOne(ctx, r.RunID))
+	require(t, s.startRetry(ctx, r.RunID))
+	finishWorker(t, s)
 	if ctx.Err() != nil {
-		t.Fatal("retry did not stop after blocked result")
+		t.Fatal("retry exceeded the test deadline")
 	}
 	db := readFake(f.db)
 	if db.Claims["t-1"] != 1 || db.Starts["t-1"] != 2 || db.Claims["t-2"] != 0 || db.Claims["t-3"] != 0 {
 		t.Fatalf("retry claimed new work: %+v", db.Claims)
 	}
-	if s.State.Service.Mode != "retry-one" || s.State.Service.Status != "stopped" || r.FinishTaskStatus != "blocked" {
-		t.Fatal("retry mode or terminal state incorrect")
+	if s.State.Service.Status == "stopped" || r.FinishTaskStatus != "blocked" {
+		t.Fatal("online retry stopped the service or lost its result state")
 	}
 	current, e := os.ReadFile(oldLog)
 	require(t, e)
@@ -57,24 +60,30 @@ func TestRetryOnePreservesHistoryAndNeverClaimsAnotherTask(t *testing.T) {
 	}
 }
 
-func TestRetryOnePollsOnlySelectedRun(t *testing.T) {
+func TestOnlineRetryContinuesTrackingOtherPRs(t *testing.T) {
 	f, s, r := failedStartup(t)
 	db := readFake(f.db)
 	db.Behavior = ""
 	writeFake(f.db, db)
+	s.State.Control.DispatchMode = "auto"
+	require(t, s.save())
 	require(t, s.dispatch(context.Background()))
 	finishWorker(t, s)
 	f.pr("1", "merged")
 	f.pr("2", "merged")
+	s.State.Control.DispatchMode = "manual"
+	require(t, s.save())
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	require(t, s.RetryOne(ctx, r.RunID))
+	require(t, s.startRetry(ctx, r.RunID))
+	finishWorker(t, s)
+	require(t, s.pollPRs(context.Background()))
 	if ctx.Err() != nil || r.FinishTaskStatus != "completed" {
 		t.Fatal("selected retry did not complete")
 	}
 	db = readFake(f.db)
-	if db.Claims["t-1"] != 1 || db.Claims["t-2"] != 1 || db.Claims["t-3"] != 0 || db.Tasks[1].Status != "in_progress" || s.State.Runs[1].FinishTaskStatus != "waiting_pr_merge" {
-		t.Fatal("retry dispatched or finalized another task")
+	if db.Claims["t-1"] != 1 || db.Claims["t-2"] != 1 || db.Claims["t-3"] != 0 || db.Tasks[1].Status != "closed" || s.State.Runs[1].FinishTaskStatus != "completed" {
+		t.Fatal("online retry did not continue PR tracking for another run")
 	}
 }
 
@@ -97,7 +106,7 @@ func TestRetryRejectsDirtyAdvancedUnknownAndForeignRuns(t *testing.T) {
 			case "bound-pr":
 				r.PR.URL = ptr(f.server.URL + "/owner/repo/pulls/1")
 			}
-			if e := s.RetryOne(context.Background(), r.RunID); e == nil {
+			if e := s.startRetry(context.Background(), r.RunID); e == nil {
 				t.Fatal("unsafe retry accepted")
 			}
 			if readFake(f.db).Starts["t-1"] != 1 || *r.LogPath != oldLog {

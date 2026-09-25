@@ -2,6 +2,9 @@ package console
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -45,13 +48,18 @@ func (q *testQuerySource) ReadCapabilities(context.Context, ProjectRef, steerlin
 }
 
 type testControlClient struct {
-	calls    int
-	receipts int
-	requests int
-	request  steerline.ControlRequest
-	err      error
-	instance string
-	revision *uint64
+	calls           int
+	receipts        int
+	requests        int
+	request         steerline.ControlRequest
+	err             error
+	instance        string
+	revision        *uint64
+	decisionCalls   int
+	decisionAnswer  steerline.DecisionAnswer
+	decisionCommand steerline.CommandRecord
+	decisionErr     error
+	eligibilityErr  error
 }
 
 func (c *testControlClient) Submit(_ context.Context, _ ProjectRef, action string, payload any, requestID, instance string, revision *uint64) (steerline.ControlRequest, error) {
@@ -74,6 +82,31 @@ func (c *testControlClient) Receipt(context.Context, ProjectRef, string) (*steer
 func (c *testControlClient) Request(context.Context, ProjectRef, string) (*steerline.ControlRequest, error) {
 	c.requests++
 	return nil, os.ErrNotExist
+}
+func (c *testControlClient) SubmitDecision(_ context.Context, ref ProjectRef, answer steerline.DecisionAnswer, requestedBy, commandID string) (steerline.CommandRecord, bool, error) {
+	c.decisionCalls++
+	c.decisionAnswer = answer
+	if c.decisionErr != nil {
+		return steerline.CommandRecord{}, false, c.decisionErr
+	}
+	c.decisionCommand = steerline.CommandRecord{ProjectIdentity: ref.Identity, CommandID: commandID, Kind: "answer_decision", TargetID: answer.DecisionID, RequestedBy: requestedBy, Status: "pending"}
+	return c.decisionCommand, true, nil
+}
+func (c *testControlClient) DecisionCommand(context.Context, ProjectRef, string) (steerline.CommandRecord, error) {
+	c.receipts++
+	return c.decisionCommand, nil
+}
+func (c *testControlClient) SubmitServiceAction(_ context.Context, ref ProjectRef, kind, targetID, requestedBy string, revision uint64, commandID string, payload any) (steerline.CommandRecord, bool, error) {
+	c.decisionCalls++
+	if c.decisionErr != nil {
+		return steerline.CommandRecord{}, false, c.decisionErr
+	}
+	data, _ := json.Marshal(payload)
+	c.decisionCommand = steerline.CommandRecord{ProjectIdentity: ref.Identity, CommandID: commandID, Kind: kind, TargetID: targetID, RequestedBy: requestedBy, ExpectedVersion: revision, Payload: data, Status: "pending"}
+	return c.decisionCommand, true, nil
+}
+func (c *testControlClient) DecisionEligibility(context.Context, ProjectRef, *steerline.Run) error {
+	return c.eligibilityErr
 }
 
 func testProject(key string) ProjectRef {
@@ -104,6 +137,261 @@ func modelForTest(refs []ProjectRef, snapshots []ProjectSnapshot, control *testC
 		m.projects = append(m.projects, projectState{ref: ref, snapshot: snapshots[i], snapshotLoaded: true, selectedKey: "task:task-B", view: ProjectView{Follow: true, Groups: map[string]FoldChoice{}, Outstanding: map[string]string{}, Actions: map[string]SavedAction{}}, actions: map[string]*actionState{}})
 	}
 	return m
+}
+
+func decisionSnapshot(ref ProjectRef, now time.Time) (ProjectSnapshot, *steerline.Run) {
+	snapshot := readySnapshot(ref, now)
+	runtime := snapshot.Connection.Snapshot.Runtime
+	runtime.Service.Capabilities = append(runtime.Service.Capabilities, "answer_decision")
+	options := make([]steerline.DecisionOption, 12)
+	for i := range options {
+		options[i] = steerline.DecisionOption{ID: fmt.Sprintf("o%d", i), Label: fmt.Sprintf("选项 %d", i+1), Detail: fmt.Sprintf("详细说明 %02d：完整内容", i+1)}
+	}
+	run := &steerline.Run{TaskID: "task-decision", RunID: "0123456789abcdef0123456789abcdef", AttemptID: "fedcba9876543210fedcba9876543210", ControlRevision: 9, Host: "orca", Backend: "orca", Protocol: "orca_terminal_v2", FinishTaskStatus: "waiting_decision", ExecutionStatus: "succeeded", Decision: &steerline.DecisionState{ID: "decision-0123456789abcdef0123456789ab", AttemptID: "fedcba9876543210fedcba9876543210", Version: 3, Status: "pending", Request: steerline.DecisionRequest{Question: strings.Repeat("问题", 24), Context: "背景第一行\n背景第二行", Options: options, Recommended: "o10", AllowFreeText: true}}}
+	runtime.Runs = []*steerline.Run{run}
+	snapshot.Connection.Snapshot.Runtime = runtime
+	snapshot.Observation.Runtime = runtime
+	return snapshot, run
+}
+
+func TestDecisionAnswerEditorHandlesTwelveOptionsUnicodePasteAndStableCommandID(t *testing.T) {
+	now := time.Date(2026, 9, 25, 1, 0, 0, 0, time.UTC)
+	ref := testProject("decisions")
+	snapshot, run := decisionSnapshot(ref, now)
+	control := &testControlClient{}
+	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, control, now)
+	m.profile = &viewProfile{dir: t.TempDir()}
+	m.projects[0].selectedKey = "run:" + run.RunID
+	updated, cmd := m.answerSelectedDecision()
+	m = updated.(Model)
+	if cmd != nil || m.answer == nil || m.answer.optionIndex != 10 {
+		t.Fatalf("recommended option was not only preselected: dialog=%+v cmd=%v", m.answer, cmd)
+	}
+	all := renderAnswerDialog(m, m.projects[0], 200)
+	for _, want := range []string{"详细说明 12：完整内容", "背景第二行", run.Decision.ID} {
+		if !strings.Contains(all, want) {
+			t.Fatalf("full decision evidence missing %q", want)
+		}
+	}
+	for i := 0; i < 13; i++ {
+		updated, _ = m.handleDecisionAnswerKey(tea.KeyMsg{Type: tea.KeyDown})
+		m = updated.(Model)
+	}
+	if m.answer.optionIndex != 10 {
+		t.Fatalf("arrow navigation did not cycle all twelve declared options and custom answer: %d", m.answer.optionIndex)
+	}
+	updated, _ = m.handleDecisionAnswerKey(tea.KeyMsg{Type: tea.KeyTab})
+	m = updated.(Model)
+	updated, _ = m.handleDecisionAnswerKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("漢字\n第二行")})
+	m = updated.(Model)
+	updated, _ = m.handleDecisionAnswerKey(tea.KeyMsg{Type: tea.KeyLeft})
+	m = updated.(Model)
+	updated, _ = m.handleDecisionAnswerKey(tea.KeyMsg{Type: tea.KeyBackspace})
+	m = updated.(Model)
+	if got := string(m.answer.note); got != "漢字\n第行" {
+		t.Fatalf("Unicode multi-line editing lost the cursor or pasted text: %q", got)
+	}
+	updated, _ = m.handleDecisionAnswerKey(tea.KeyMsg{Type: tea.KeyTab})
+	m = updated.(Model)
+	updated, cmd = m.handleDecisionAnswerKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'1'}})
+	m = updated.(Model)
+	if cmd != nil {
+		t.Fatal("numeric option shortcut submitted without explicit confirmation")
+	}
+	updated, cmd = m.submitDecisionAnswer()
+	m = updated.(Model)
+	if cmd == nil || m.answer != nil || control.decisionCalls != 0 {
+		t.Fatalf("submission did not first persist and defer the command: cmd=%v dialog=%+v calls=%d", cmd, m.answer, control.decisionCalls)
+	}
+	var requestID string
+	for id, action := range m.projects[0].actions {
+		if action.Action == "answer_decision" {
+			requestID = id
+			break
+		}
+	}
+	if requestID == "" || m.projects[0].view.Outstanding[requestID] == "" {
+		t.Fatal("stable answer command ID was not retained before publishing")
+	}
+	persisted, err := readViewFile(m.profile.path())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := persisted.Projects[ref.Key].Actions[requestID]; !ok {
+		t.Fatal("answer command ID was not persisted before publication")
+	}
+	if strings.Contains(string(m.profileViewBytes(t)), "漢字") {
+		t.Fatal("UI view preferences stored the answer body")
+	}
+	message := cmd()
+	updated, _ = m.Update(message)
+	m = updated.(Model)
+	if control.decisionCalls != 1 || control.decisionAnswer.OptionID != "o0" || control.decisionAnswer.Note != "漢字\n第行" || control.decisionAnswer.ExpectedRunRevision != run.ControlRevision || control.decisionAnswer.ExpectedDecisionVersion != run.Decision.Version {
+		t.Fatalf("submitted answer did not bind the selected option, Unicode note and displayed identity: %+v", control.decisionAnswer)
+	}
+	if m.projects[0].actions[requestID].Status != "pending" {
+		t.Fatalf("pending command was not tracked by its stable ID: %+v", m.projects[0].actions[requestID])
+	}
+}
+
+func (m *Model) profileViewBytes(t *testing.T) []byte {
+	t.Helper()
+	data, err := os.ReadFile(m.profile.path())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return data
+}
+
+func TestDecisionAnswerDraftSurvivesStaleRevisionAndLengthRejection(t *testing.T) {
+	now := time.Now().UTC()
+	ref := testProject("decision-conflict")
+	snapshot, run := decisionSnapshot(ref, now)
+	control := &testControlClient{}
+	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, control, now)
+	m.projects[0].selectedKey = "run:" + run.RunID
+	updated, _ := m.answerSelectedDecision()
+	m = updated.(Model)
+	_, _ = m.handleDecisionAnswerKey(tea.KeyMsg{Type: tea.KeyTab})
+	m.answer.note = []rune("preserve this answer")
+	run.ControlRevision++
+	updated, cmd := m.submitDecisionAnswer()
+	m = updated.(Model)
+	if cmd != nil || m.answer == nil || string(m.answer.note) != "preserve this answer" || !strings.Contains(m.answer.error, "stale_revision") || control.decisionCalls != 0 {
+		t.Fatalf("stale decision lost or submitted the draft: dialog=%+v cmd=%v calls=%d", m.answer, cmd, control.decisionCalls)
+	}
+	run.ControlRevision = m.answer.runRevision
+	m.answer.note = []rune(strings.Repeat("界", 4001))
+	updated, cmd = m.submitDecisionAnswer()
+	m = updated.(Model)
+	if cmd != nil || m.answer == nil || len(m.answer.note) != 4001 || !strings.Contains(m.answer.error, "未截断") || control.decisionCalls != 0 {
+		t.Fatalf("oversized note was clipped or submitted: len=%d error=%q calls=%d", len(m.answer.note), m.answer.error, control.decisionCalls)
+	}
+}
+
+func TestConsoleDoesNotOfferLocalContinuationAsAnswerAndResume(t *testing.T) {
+	now := time.Now().UTC()
+	ref := testProject("local-decision")
+	snapshot, run := decisionSnapshot(ref, now)
+	run.Backend, run.Protocol, run.Host = "local", "local_process", "local"
+	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, &testControlClient{}, now)
+	m.projects[0].selectedKey = "run:" + run.RunID
+	updated, cmd := m.answerSelectedDecision()
+	m = updated.(Model)
+	if cmd != nil || m.answer != nil || !strings.Contains(m.status, "local continuation 当前不受支持") {
+		t.Fatalf("console offered a local fake continuation: dialog=%+v status=%q", m.answer, m.status)
+	}
+}
+
+func TestAcceptResultPreviewFreezesBytesBeforeRecoveryCommandPublication(t *testing.T) {
+	now := time.Now().UTC()
+	ref := testProject("recovery")
+	snapshot := readySnapshot(ref, now)
+	runtime := snapshot.Connection.Snapshot.Runtime
+	runtime.Service.Capabilities = append(runtime.Service.Capabilities, "accept_result")
+	runID := "0123456789abcdef0123456789abcdef"
+	worktree := t.TempDir()
+	base := strings.Repeat("a", 40)
+	prURL := "https://example.invalid/owner/repo/pulls/12"
+	run := &steerline.Run{TaskID: "task-recovery", RunID: runID, AttemptID: runID, ControlRevision: 14, Host: "local", Backend: "local", Protocol: "local_process", ExecutionStatus: "failed", FinishTaskStatus: "blocked", WorktreePath: &worktree, WorktreeBranch: stringPointer("codex/task-recovery"), BaseCommit: &base}
+	runtime.Runs = []*steerline.Run{run}
+	snapshot.Connection.Snapshot.Runtime = runtime
+	snapshot.Observation.Runtime = runtime
+	resultPath := filepath.Join(t.TempDir(), "candidate-result.json")
+	original := []byte(fmt.Sprintf(`{"task_id":%q,"run_id":%q,"outcome":"pr_submitted","pr_url":%q,"worktree_path":%q,"base_commit":%q,"summary":"frozen summary","error":null}`, run.TaskID, run.RunID, prURL, worktree, base))
+	if err := os.WriteFile(resultPath, original, 0600); err != nil {
+		t.Fatal(err)
+	}
+	originalHash := sha256.Sum256(original)
+	originalDigest := hex.EncodeToString(originalHash[:])
+	control := &testControlClient{}
+	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, control, now)
+	m.projects[0].selectedKey = "run:" + runID
+	m.projects[0].recoveryRunID = runID
+	m.projects[0].recoveryReport = &steerline.RecoveryInspection{RunID: runID, TaskID: run.TaskID, RunRevision: run.ControlRevision, ServiceInstanceID: runtime.Service.InstanceID, ResultPath: resultPath, AcceptResultReason: "confirm that the original execution stopped and verify the PR"}
+	updated, cmd := m.prepareRecoveryAction("accept_result")
+	m = updated.(Model)
+	if cmd != nil || m.resultPicker == nil {
+		t.Fatalf("accept-result did not open a result-path chooser: picker=%+v cmd=%v", m.resultPicker, cmd)
+	}
+	updated, _ = m.handleResultPickerKey(tea.KeyMsg{Type: tea.KeyEnter})
+	m = updated.(Model)
+	if m.confirm == nil || string(m.confirm.resultBytes) != string(original) || m.confirm.resultSHA256 != originalDigest {
+		t.Fatalf("result preview did not freeze source bytes and digest: %+v", m.confirm)
+	}
+	if err := os.WriteFile(resultPath, []byte("source changed after preview"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	updated, cmd = m.handleConfirm(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+	m = updated.(Model)
+	if cmd == nil || control.decisionCalls != 0 {
+		t.Fatalf("result command published before its stable ID could be inspected: cmd=%v calls=%d", cmd, control.decisionCalls)
+	}
+	var requestID string
+	for id, action := range m.projects[0].actions {
+		if action.Action == "accept_result" {
+			requestID = id
+			break
+		}
+	}
+	if requestID == "" || m.projects[0].view.Outstanding[requestID] == "" {
+		t.Fatal("accept-result command identity was not retained")
+	}
+	message := cmd()
+	updated, _ = m.Update(message)
+	m = updated.(Model)
+	var body steerline.RecoveryCommandBody
+	if err := json.Unmarshal(control.decisionCommand.Payload, &body); err != nil {
+		t.Fatal(err)
+	}
+	frozen, err := base64.StdEncoding.DecodeString(body.ResultBase64)
+	if err != nil || string(frozen) != string(original) || body.ResultSHA256 != originalDigest {
+		t.Fatalf("submitted result differed from the previewed bytes: bytes=%q digest=%s err=%v", frozen, body.ResultSHA256, err)
+	}
+}
+
+func TestRecoveryReportSubmitsRevisionBoundServiceCommand(t *testing.T) {
+	now := time.Now().UTC()
+	ref := testProject("recovery-command")
+	snapshot, run := decisionSnapshot(ref, now)
+	runtimeState := snapshot.Connection.Snapshot.Runtime
+	runtimeState.Service.Capabilities = append(runtimeState.Service.Capabilities, "retry_run")
+	run.Decision, run.FinishTaskStatus, run.ExecutionStatus = nil, "blocked", "failed"
+	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, &testControlClient{}, now)
+	m.projects[0].selectedKey = "run:" + run.RunID
+	m.projects[0].panel = 6
+	m.projects[0].recoveryRunID = run.RunID
+	m.projects[0].recoveryReport = &steerline.RecoveryInspection{RunID: run.RunID, TaskID: run.TaskID, RunRevision: run.ControlRevision, ServiceInstanceID: runtimeState.Service.InstanceID, RetryReason: ""}
+	updated, cmd := m.prepareRecoveryAction("retry_run")
+	m = updated.(Model)
+	if cmd != nil || m.confirm == nil || m.confirm.action != "retry_run" {
+		t.Fatalf("retry did not show its action confirmation: confirm=%+v cmd=%v", m.confirm, cmd)
+	}
+	updated, cmd = m.handleConfirm(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+	m = updated.(Model)
+	if cmd == nil || len(m.projects[0].actions) != 1 {
+		t.Fatalf("retry command was not staged after confirmation: cmd=%v actions=%d", cmd, len(m.projects[0].actions))
+	}
+	var commandID string
+	for id, action := range m.projects[0].actions {
+		if action.Action == "retry_run" {
+			commandID = id
+			break
+		}
+	}
+	if commandID == "" || m.projects[0].view.Outstanding[commandID] == "" {
+		t.Fatal("retry command ID was not retained before publication")
+	}
+	message := cmd()
+	updated, _ = m.Update(message)
+	m = updated.(Model)
+	if m.control.(*testControlClient).decisionCommand.CommandID != commandID || m.control.(*testControlClient).decisionCommand.Kind != "retry_run" || m.control.(*testControlClient).decisionCommand.ExpectedVersion != run.ControlRevision {
+		t.Fatalf("recovery command was not bound to its report revision: %+v", m.control.(*testControlClient).decisionCommand)
+	}
+	var body steerline.RecoveryCommandBody
+	if err := json.Unmarshal(m.control.(*testControlClient).decisionCommand.Payload, &body); err != nil || !body.ConfirmedProcessStopped {
+		t.Fatalf("explicit retry confirmation missing from service command: %+v %v", body, err)
+	}
 }
 
 func runeKey(value rune) tea.KeyMsg { return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{value}} }
@@ -560,7 +848,7 @@ func TestConsoleNativeLocalAndOrcaFixtureUseSameFoldScript(t *testing.T) {
 			run := &steerline.Run{RunID: "native-workflow", TaskID: "native-task", ExecutionID: "native-execution", AttemptID: "native-attempt", Backend: sample.Backend, Protocol: sample.Protocol}
 			row := &consoleRow{kind: rowRun, run: run}
 			for _, width := range []int{80, 170} {
-				rendered := strings.Join(renderSession(state, row, width, 24), "\n")
+				rendered := strings.Join(renderSession(state, row, width, 24, time.Now()), "\n")
 				if !strings.Contains(rendered, "final_answer") || !strings.Contains(rendered, "completed") {
 					t.Fatalf("native %s render at width %d lost final/terminal status:\n%s", sample.Backend, width, rendered)
 				}

@@ -152,16 +152,23 @@ func ReadResult(path string, r *Run) (Result, error) {
 	if stat.Size() > 2<<20 {
 		return Result{}, errors.New("result exceeds 2 MiB")
 	}
-	b, e := io.ReadAll(io.LimitReader(f, 2<<20))
+	b, e := io.ReadAll(io.LimitReader(f, (2<<20)+1))
 	if e != nil {
 		return Result{}, e
 	}
+	return ParseResultBytes(b, r)
+}
+
+func ParseResultBytes(data []byte, r *Run) (Result, error) {
+	if len(data) == 0 || len(data) > 2<<20 {
+		return Result{}, errors.New("result must be between 1 byte and 2 MiB")
+	}
 	// The result file may be written by an agent (e.g. PowerShell on Windows)
 	// with a UTF-8 BOM; strip it before the strict field check and decode.
-	b = trimBOM(b)
+	b := trimBOM(data)
 	var fields map[string]json.RawMessage
-	if e = json.Unmarshal(b, &fields); e != nil {
-		return Result{}, e
+	if err := json.Unmarshal(b, &fields); err != nil {
+		return Result{}, err
 	}
 	for _, name := range []string{"task_id", "run_id", "outcome", "pr_url", "worktree_path", "base_commit", "summary", "error"} {
 		if _, ok := fields[name]; !ok {
@@ -169,8 +176,8 @@ func ReadResult(path string, r *Run) (Result, error) {
 		}
 	}
 	var result Result
-	if e = decode(b, &result); e != nil {
-		return result, e
+	if err := decode(b, &result); err != nil {
+		return result, err
 	}
 	if result.TaskID != r.TaskID || result.RunID != r.RunID {
 		return result, errors.New("result task_id/run_id mismatch")

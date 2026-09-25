@@ -2,7 +2,7 @@
 
 任务 ID：3；任务名称：人工决策与恢复闭环。
 
-状态：待实现。依赖：PR 2、4A、4B、4C。对应 [Plan](pr-05-intervention.plan.md)。
+状态：已实现，自动化验证及限制见[验证记录](../validation/pr-05-intervention.md)。依赖：PR 2、4A、4B、4C。对应 [Plan](pr-05-intervention.plan.md)。
 
 ## 目标
 

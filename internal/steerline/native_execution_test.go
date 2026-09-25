@@ -322,6 +322,10 @@ func TestNativeLocalRetryKeepsRunWorkspaceAndClaim(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := f.service(t)
+	s.State.Control.DispatchMode = "manual"
+	if err = s.save(); err != nil {
+		t.Fatal(err)
+	}
 	if err = s.startRetry(ctx, runID); err != nil {
 		t.Fatal(err)
 	}

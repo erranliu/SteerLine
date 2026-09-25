@@ -3,12 +3,18 @@ package console
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"os"
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -51,16 +57,47 @@ type consoleRow struct {
 }
 
 type actionState struct {
-	RequestID      string
-	Action         string
-	TaskID         string
-	Status         string
-	Message        string
-	RunID          string
-	TargetInstance string
-	InFlight       bool
-	Resolved       bool
-	UpdatedAt      time.Time
+	RequestID             string
+	Action                string
+	TaskID                string
+	RunID                 string
+	DecisionID            string
+	DecisionDraftOptionID string
+	DecisionDraftNote     string
+	DecisionRevision      uint64
+	DecisionVersion       uint64
+	Status                string
+	Message               string
+	TargetInstance        string
+	InFlight              bool
+	Resolved              bool
+	UpdatedAt             time.Time
+}
+
+type decisionAnswerDialog struct {
+	projectKey      string
+	instance        string
+	runID           string
+	decisionID      string
+	runRevision     uint64
+	decisionVersion uint64
+	optionIndex     int
+	note            []rune
+	cursor          int
+	noteFocus       bool
+	scroll          int
+	error           string
+}
+
+type resultPathDialog struct {
+	projectKey string
+	instance   string
+	runID      string
+	revision   uint64
+	requestID  string
+	path       []rune
+	cursor     int
+	error      string
 }
 
 type projectState struct {
@@ -118,15 +155,34 @@ type projectState struct {
 	bodyKind           string
 	detailScroll       int
 	logScroll          int
+
+	recoveryRunID        string
+	recoveryReport       *steerline.RecoveryInspection
+	recoveryError        string
+	recoveryBusy         bool
+	recoveryGeneration   uint64
+	recoveryBlockerIndex int
 }
 
 type confirmAction struct {
-	projectKey string
-	instance   string
-	revision   uint64
-	action     string
-	taskID     string
-	requestID  string
+	projectKey     string
+	instance       string
+	revision       uint64
+	action         string
+	taskID         string
+	requestID      string
+	runID          string
+	decisionID     string
+	resultBytes    []byte
+	resultSHA256   string
+	resultSummary  string
+	resultPRURL    string
+	resultPath     string
+	resultWorktree string
+	resultBase     string
+	resultTaskID   string
+	resultRunID    string
+	basis          string
 }
 
 type Model struct {
@@ -145,9 +201,11 @@ type Model struct {
 	prefs    ViewFile
 	prefsErr string
 
-	confirm    *confirmAction
-	status     string
-	finalIndex int
+	confirm      *confirmAction
+	answer       *decisionAnswerDialog
+	resultPicker *resultPathDialog
+	status       string
+	finalIndex   int
 
 	runFocus string
 }
@@ -266,7 +324,7 @@ func NewModel(ctx context.Context, refs []ProjectRef, options Options) (Model, e
 			if outstanding {
 				message = "控制台重开后重新查询此 request_id"
 			}
-			state.actions[requestID] = &actionState{RequestID: requestID, Action: saved.Action, TaskID: saved.TaskID, Status: saved.Status, Message: message, RunID: saved.RunID, TargetInstance: saved.TargetInstance, Resolved: !outstanding, UpdatedAt: saved.UpdatedAt}
+			state.actions[requestID] = &actionState{RequestID: requestID, Action: saved.Action, TaskID: saved.TaskID, Status: saved.Status, Message: message, RunID: saved.RunID, DecisionID: saved.DecisionID, TargetInstance: saved.TargetInstance, Resolved: !outstanding, UpdatedAt: saved.UpdatedAt}
 		}
 		m.projects = append(m.projects, state)
 	}
@@ -431,6 +489,19 @@ func (m Model) pollAction(index int, action *actionState) tea.Cmd {
 	query := m.control
 	ctx := m.ctx
 	requestID := action.RequestID
+	if action.Action == "answer_decision" || validRecoveryAction(action.Action) {
+		decisionQuery, ok := query.(DecisionCommandClient)
+		return func() tea.Msg {
+			if !ok {
+				return actionReceiptMsg{projectKey: ref.Key, identity: ref.Identity, requestID: requestID, err: errors.New("decision command query is unavailable")}
+			}
+			command, err := decisionQuery.DecisionCommand(ctx, ref, requestID)
+			if err != nil {
+				return actionReceiptMsg{projectKey: ref.Key, identity: ref.Identity, requestID: requestID, err: err}
+			}
+			return actionReceiptMsg{projectKey: ref.Key, identity: ref.Identity, requestID: requestID, command: &command}
+		}
+	}
 	return func() tea.Msg {
 		receipt, err := query.Receipt(ctx, ref, requestID)
 		if err == nil {
@@ -483,13 +554,301 @@ type bodyMsg struct {
 type actionSubmittedMsg struct {
 	projectKey, identity, instance, requestID, taskID, action string
 	request                                                   steerline.ControlRequest
+	command                                                   *steerline.CommandRecord
 	err                                                       error
 }
+
+func (m Model) submitDecisionCommand(index int, answer steerline.DecisionAnswer, requestedBy, commandID string) tea.Cmd {
+	state := &m.projects[index]
+	ref := state.ref
+	query, ok := m.control.(DecisionCommandClient)
+	ctx := m.ctx
+	return func() tea.Msg {
+		if !ok {
+			return actionSubmittedMsg{projectKey: ref.Key, identity: ref.Identity, instance: answer.ServiceInstanceID, requestID: commandID, taskID: "", action: "answer_decision", err: errors.New("decision command submission is unavailable")}
+		}
+		command, _, err := query.SubmitDecision(ctx, ref, answer, requestedBy, commandID)
+		message := actionSubmittedMsg{projectKey: ref.Key, identity: ref.Identity, instance: answer.ServiceInstanceID, requestID: commandID, taskID: answer.RunID, action: "answer_decision", err: err}
+		if err == nil {
+			message.command = &command
+		}
+		return message
+	}
+}
+
+func (m Model) submitServiceAction(index int, action, targetID, requestedBy, commandID string, revision uint64, body any) tea.Cmd {
+	state := &m.projects[index]
+	ref := state.ref
+	query, ok := m.control.(DecisionCommandClient)
+	ctx := m.ctx
+	return func() tea.Msg {
+		if !ok {
+			return actionSubmittedMsg{projectKey: ref.Key, identity: ref.Identity, instance: "", requestID: commandID, taskID: targetID, action: action, err: errors.New("service command submission is unavailable")}
+		}
+		command, _, err := query.SubmitServiceAction(ctx, ref, action, targetID, requestedBy, revision, commandID, body)
+		instance := ""
+		if runtimeState := state.snapshot.Connection.Snapshot.Runtime; runtimeState != nil {
+			instance = runtimeState.Service.InstanceID
+		}
+		message := actionSubmittedMsg{projectKey: ref.Key, identity: ref.Identity, instance: instance, requestID: commandID, taskID: targetID, action: action, err: err}
+		if err == nil {
+			message.command = &command
+		}
+		return message
+	}
+}
+
+func validRecoveryAction(action string) bool {
+	switch action {
+	case "retry_run", "mark_stopped", "accept_result", "resolve_command":
+		return true
+	default:
+		return false
+	}
+}
+
+func (m Model) answerSelectedDecision() (tea.Model, tea.Cmd) {
+	if m.selected < 0 || m.selected >= len(m.projects) {
+		return m, nil
+	}
+	state := &m.projects[m.selected]
+	row := m.selectedRow(m.selected)
+	if row == nil || row.run == nil || row.run.Decision == nil || row.run.Decision.Status != "pending" {
+		m.status = "请选择带有 pending 决策的问题"
+		return m, nil
+	}
+	reason := decisionAnswerAvailability(*state, row)
+	if !strings.HasPrefix(reason, "提交后") {
+		m.status = reason
+		return m, nil
+	}
+	eligibility, ok := m.control.(DecisionCommandClient)
+	if !ok {
+		m.status = "当前控制客户端不支持决策资格核验"
+		return m, nil
+	}
+	if err := eligibility.DecisionEligibility(m.ctx, state.ref, row.run); err != nil {
+		m.status = "回答资格核验失败：" + err.Error()
+		return m, nil
+	}
+	runtimeState := state.snapshot.Connection.Snapshot.Runtime
+	if runtimeState == nil {
+		m.status = "缺少当前服务实例快照"
+		return m, nil
+	}
+	decision := row.run.Decision
+	optionIndex := 0
+	if len(decision.Request.Options) == 0 {
+		optionIndex = -1
+	} else if decision.Request.Recommended != "" {
+		for i, option := range decision.Request.Options {
+			if option.ID == decision.Request.Recommended {
+				optionIndex = i
+				break
+			}
+		}
+	}
+	m.answer = &decisionAnswerDialog{projectKey: state.ref.Key, instance: runtimeState.Service.InstanceID, runID: row.run.RunID, decisionID: decision.ID, runRevision: row.run.ControlRevision, decisionVersion: decision.Version, optionIndex: optionIndex}
+	m.status = "决策草稿已打开；推荐选项只是预选，需要显式提交"
+	return m, nil
+}
+
+func (m Model) submitDecisionAnswer() (tea.Model, tea.Cmd) {
+	dialog := m.answer
+	if dialog == nil {
+		return m, nil
+	}
+	index := m.projectIndex(dialog.projectKey)
+	if index < 0 || index != m.selected {
+		dialog.error = "项目已变化；草稿保留，请返回原项目"
+		return m, nil
+	}
+	state := &m.projects[index]
+	runtimeState := state.snapshot.Connection.Snapshot.Runtime
+	var run *steerline.Run
+	if runtimeState != nil {
+		for _, candidate := range runtimeState.Runs {
+			if candidate != nil && candidate.RunID == dialog.runID {
+				run = candidate
+				break
+			}
+		}
+	}
+	if runtimeState == nil || runtimeState.Service.InstanceID != dialog.instance || run == nil || run.ControlRevision != dialog.runRevision || run.Decision == nil || run.Decision.ID != dialog.decisionID || run.Decision.Version != dialog.decisionVersion || run.Decision.Status != "pending" {
+		dialog.error = "stale_revision：问题或运行身份已变化；草稿已保留，请刷新并核对原问题"
+		return m, nil
+	}
+	request := run.Decision.Request
+	optionID := ""
+	custom := len(request.Options) == 0
+	if len(request.Options) > 0 {
+		if dialog.optionIndex >= 0 && dialog.optionIndex < len(request.Options) {
+			optionID = request.Options[dialog.optionIndex].ID
+		} else if request.AllowFreeText && dialog.optionIndex == len(request.Options) {
+			custom = true
+		} else {
+			dialog.error = "请选择一个声明选项"
+			return m, nil
+		}
+	}
+	note := strings.TrimSpace(string(dialog.note))
+	if len([]rune(note)) > 4000 {
+		dialog.error = fmt.Sprintf("补充说明超过 4000 字符上限（当前 %d）；内容未截断，请编辑后再提交", len([]rune(note)))
+		return m, nil
+	}
+	if custom && note == "" {
+		dialog.error = "自定义答复需要填写非空说明"
+		return m, nil
+	}
+	requestID := steerline.NewControlRequestID()
+	answer := steerline.DecisionAnswer{DecisionID: dialog.decisionID, RunID: dialog.runID, OptionID: optionID, Note: note, AnsweredBy: steerline.AnswererName(), ExpectedDecisionVersion: dialog.decisionVersion, ExpectedRunRevision: dialog.runRevision, ServiceInstanceID: dialog.instance}
+	action := &actionState{RequestID: requestID, Action: "answer_decision", TaskID: run.TaskID, RunID: run.RunID, DecisionID: dialog.decisionID, DecisionDraftOptionID: optionID, DecisionDraftNote: string(dialog.note), DecisionRevision: dialog.runRevision, DecisionVersion: dialog.decisionVersion, Status: "submitting", Message: "保存 command_id 并提交答案", TargetInstance: dialog.instance, UpdatedAt: m.clock.Now()}
+	state.actions[requestID] = action
+	state.view.Outstanding[requestID] = "decision:" + run.RunID
+	if err := m.saveProjectView(index); err != nil {
+		delete(state.actions, requestID)
+		delete(state.view.Outstanding, requestID)
+		dialog.error = "未提交答案：无法先保存 command_id；请检查 UI 视图目录权限"
+		return m, nil
+	}
+	m.answer = nil
+	m.status = "答案命令已发布；command_id=" + requestID
+	return m, m.submitDecisionCommand(index, answer, answer.AnsweredBy, requestID)
+}
+
 type actionReceiptMsg struct {
 	projectKey, identity, requestID string
 	receipt                         *steerline.ControlReceipt
 	request                         *steerline.ControlRequest
+	command                         *steerline.CommandRecord
 	err                             error
+}
+type recoveryInspectionMsg struct {
+	projectKey, identity, runID string
+	generation                  uint64
+	report                      steerline.RecoveryInspection
+	err                         error
+}
+
+func remapDecisionActionID(state *projectState, action *actionState, oldID, newID string) {
+	if state == nil || action == nil || oldID == newID || newID == "" {
+		return
+	}
+	delete(state.actions, oldID)
+	delete(state.view.Outstanding, oldID)
+	action.RequestID = newID
+	state.actions[newID] = action
+	state.view.Outstanding[newID] = "decision:" + action.RunID
+}
+
+func applyDecisionCommandResult(state *projectState, action *actionState, command *steerline.CommandRecord, commandErr error) (refresh, reopen bool) {
+	if state == nil || action == nil {
+		return false, false
+	}
+	if commandErr != nil {
+		diagnostic := commandErr.Error()
+		definite := strings.Contains(diagnostic, "stale_revision") || strings.Contains(diagnostic, "stale_instance") || strings.Contains(diagnostic, "answer_conflict") || strings.Contains(diagnostic, "unsupported") || strings.Contains(diagnostic, "exceeds") || strings.Contains(diagnostic, "requires") || strings.Contains(diagnostic, "not waiting")
+		if definite {
+			action.Status, action.Message, action.Resolved = "rejected", diagnostic, true
+			return true, true
+		}
+		action.Status, action.Message, action.Resolved = "indeterminate", "答案命令结果待确认；继续核实原 command_id："+diagnostic, false
+		return false, false
+	}
+	if command == nil || command.CommandID != action.RequestID || command.Kind != action.Action || command.TargetID != action.DecisionID || viewCanonical(command.ProjectIdentity) != viewCanonical(state.ref.Identity) {
+		action.Status, action.Message, action.Resolved = "indeterminate", "决策命令回执身份不匹配；保留原 command_id 并停止自动提交", true
+		return false, false
+	}
+	action.Status = command.Status
+	switch command.Status {
+	case "pending", "in_flight":
+		action.Message, action.Resolved = "答案已提交；等待服务接受", false
+	case "accepted":
+		switch action.Action {
+		case "answer_decision":
+			action.Message = "答案已保存；服务将单独核验原执行与续跑条件"
+		case "retry_run":
+			action.Message = "新 attempt 已启动并保存执行身份"
+		case "mark_stopped":
+			action.Message = "原执行停止事实已记录；任务和工作目录保留"
+		case "accept_result":
+			action.Message = "固定结果已接回；PR 合并核验仍在进行"
+		case "resolve_command":
+			action.Message = "指定 blocker 已按证据解除；原指令未重放"
+		}
+		action.Resolved = true
+		return true, false
+	case "rejected":
+		code, reason := "rejected", "服务拒绝了这次答案"
+		var result struct {
+			Code  string `json:"code"`
+			Error string `json:"error"`
+		}
+		if json.Unmarshal(command.Result, &result) == nil {
+			if result.Code != "" {
+				code = result.Code
+			}
+			if result.Error != "" {
+				reason = result.Error
+			}
+		}
+		action.Message, action.Resolved = code+"："+reason, true
+		return true, true
+	default:
+		action.Status, action.Message, action.Resolved = "indeterminate", "决策命令状态未知；保留原 command_id", false
+	}
+	return false, false
+}
+
+func decisionRequestFor(state projectState, runID, decisionID string) (steerline.DecisionRequest, bool) {
+	if runtimeState := state.snapshot.Connection.Snapshot.Runtime; runtimeState != nil {
+		for _, run := range runtimeState.Runs {
+			if run != nil && run.RunID == runID && run.Decision != nil && run.Decision.ID == decisionID {
+				return run.Decision.Request, true
+			}
+		}
+	}
+	if runtimeState := state.snapshot.Observation.Runtime; runtimeState != nil {
+		for _, run := range runtimeState.Runs {
+			if run != nil && run.RunID == runID && run.Decision != nil && run.Decision.ID == decisionID {
+				return run.Decision.Request, true
+			}
+		}
+	}
+	if state.snapshot.Domain != nil {
+		for _, record := range state.snapshot.Domain.Decisions {
+			if record.DecisionID == decisionID && record.WorkflowRunID == runID {
+				var request steerline.DecisionRequest
+				if json.Unmarshal(record.Request, &request) == nil {
+					return request, true
+				}
+			}
+		}
+	}
+	return steerline.DecisionRequest{}, false
+}
+
+func (m *Model) reopenDecisionDraft(index int, action *actionState) {
+	if index < 0 || index >= len(m.projects) || action == nil {
+		return
+	}
+	state := &m.projects[index]
+	request, ok := decisionRequestFor(*state, action.RunID, action.DecisionID)
+	optionIndex := 0
+	if !ok || len(request.Options) == 0 {
+		optionIndex = -1
+	} else if action.DecisionDraftOptionID == "" {
+		optionIndex = len(request.Options)
+	} else {
+		for i, option := range request.Options {
+			if option.ID == action.DecisionDraftOptionID {
+				optionIndex = i
+				break
+			}
+		}
+	}
+	note := []rune(action.DecisionDraftNote)
+	m.answer = &decisionAnswerDialog{projectKey: state.ref.Key, instance: action.TargetInstance, runID: action.RunID, decisionID: action.DecisionID, runRevision: action.DecisionRevision, decisionVersion: action.DecisionVersion, optionIndex: optionIndex, note: note, cursor: len(note), noteFocus: true, error: action.Message}
 }
 
 func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
@@ -584,6 +943,26 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			m.saveProjectView(index)
 		}
 		return m, tea.Batch(cmds...)
+	case recoveryInspectionMsg:
+		index := m.projectIndex(msg.projectKey)
+		if index < 0 {
+			return m, nil
+		}
+		state := &m.projects[index]
+		if msg.identity != state.ref.Identity || msg.generation != state.recoveryGeneration || msg.runID != state.recoveryRunID {
+			return m, nil
+		}
+		state.recoveryBusy = false
+		if msg.err != nil {
+			state.recoveryError = msg.err.Error()
+			state.recoveryReport = nil
+			m.status = "恢复核验失败：" + msg.err.Error()
+			return m, nil
+		}
+		state.recoveryError = ""
+		state.recoveryReport = &msg.report
+		m.status = "恢复核验报告已刷新 · run " + msg.report.RunID + " · revision " + strconv.FormatUint(msg.report.RunRevision, 10)
+		return m, nil
 	case activityResultMsg:
 		index := m.projectIndex(msg.projectKey)
 		if index < 0 {
@@ -779,6 +1158,29 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		if action == nil {
 			return m, nil
 		}
+		if action.Action == "answer_decision" || validRecoveryAction(action.Action) {
+			action.InFlight = false
+			action.UpdatedAt = m.clock.Now()
+			if msg.command != nil && msg.command.CommandID != action.RequestID {
+				remapDecisionActionID(state, action, msg.requestID, msg.command.CommandID)
+			}
+			refreshNow, reopen := applyDecisionCommandResult(state, action, msg.command, msg.err)
+			if reopen && action.Action == "answer_decision" {
+				m.reopenDecisionDraft(index, action)
+			}
+			if action.Resolved {
+				delete(state.view.Outstanding, action.RequestID)
+			}
+			if index == m.selected {
+				m.status = action.Message
+			}
+			m.saveProjectView(index)
+			if refreshNow {
+				state.lastRefresh = time.Time{}
+				return m, m.readProject(index)
+			}
+			return m, nil
+		}
 		responseMismatch := msg.instance != action.TargetInstance
 		if responseMismatch {
 			action.Status, action.Message, action.Resolved = "indeterminate", "响应目标实例与原 request_id 不匹配；不提交替代动作并停止自动跟踪", true
@@ -826,6 +1228,26 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		action := state.actions[msg.requestID]
 		if action == nil {
+			return m, nil
+		}
+		if action.Action == "answer_decision" || validRecoveryAction(action.Action) {
+			action.InFlight = false
+			action.UpdatedAt = m.clock.Now()
+			refreshNow, reopen := applyDecisionCommandResult(state, action, msg.command, msg.err)
+			if reopen && action.Action == "answer_decision" {
+				m.reopenDecisionDraft(index, action)
+			}
+			if action.Resolved {
+				delete(state.view.Outstanding, action.RequestID)
+			}
+			if index == m.selected {
+				m.status = action.Message
+			}
+			m.saveProjectView(index)
+			if refreshNow {
+				state.lastRefresh = time.Time{}
+				return m, m.readProject(index)
+			}
 			return m, nil
 		}
 		action.InFlight = false
@@ -1036,6 +1458,10 @@ func panelIndex(name string) int {
 		return 3
 	case "list":
 		return 4
+	case "decisions":
+		return 5
+	case "recovery":
+		return 6
 	}
 	return 0
 }
@@ -1049,6 +1475,10 @@ func panelName(index int) string {
 		return "final"
 	case 4:
 		return "list"
+	case 5:
+		return "decisions"
+	case 6:
+		return "recovery"
 	}
 	return "detail"
 }
@@ -1224,13 +1654,13 @@ func savedActions(actions map[string]*actionState, limit int) map[string]SavedAc
 		if len(out) >= limit {
 			break
 		}
-		out[action.RequestID] = SavedAction{Action: action.Action, TaskID: action.TaskID, Status: action.Status, RunID: action.RunID, TargetInstance: action.TargetInstance, UpdatedAt: action.UpdatedAt}
+		out[action.RequestID] = SavedAction{Action: action.Action, TaskID: action.TaskID, Status: action.Status, RunID: action.RunID, DecisionID: action.DecisionID, TargetInstance: action.TargetInstance, UpdatedAt: action.UpdatedAt}
 	}
 	for _, action := range terminal {
 		if len(out) >= limit {
 			break
 		}
-		out[action.RequestID] = SavedAction{Action: action.Action, TaskID: action.TaskID, Status: action.Status, RunID: action.RunID, TargetInstance: action.TargetInstance, UpdatedAt: action.UpdatedAt}
+		out[action.RequestID] = SavedAction{Action: action.Action, TaskID: action.TaskID, Status: action.Status, RunID: action.RunID, DecisionID: action.DecisionID, TargetInstance: action.TargetInstance, UpdatedAt: action.UpdatedAt}
 	}
 	return out
 }
@@ -1332,6 +1762,12 @@ func (m Model) changeFilter(filter int) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.resultPicker != nil {
+		return m.handleResultPickerKey(key)
+	}
+	if m.answer != nil {
+		return m.handleDecisionAnswerKey(key)
+	}
 	if m.confirm != nil {
 		return m.handleConfirm(key)
 	}
@@ -1342,6 +1778,34 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	state := &m.projects[m.selected]
+	if state.panel == 6 {
+		switch key.String() {
+		case "esc":
+			state.panel = 0
+			m.saveProjectView(m.selected)
+			return m, nil
+		case "r":
+			return m.inspectSelectedRecovery()
+		case "R":
+			return m.prepareRecoveryAction("retry_run")
+		case "m":
+			return m.prepareRecoveryAction("mark_stopped")
+		case "z":
+			return m.prepareRecoveryAction("accept_result")
+		case "v":
+			return m.prepareRecoveryAction("resolve_command")
+		case "[", "]":
+			if state.recoveryReport != nil && len(state.recoveryReport.Blockers) > 0 {
+				count := len(state.recoveryReport.Blockers)
+				if key.String() == "]" {
+					state.recoveryBlockerIndex = (state.recoveryBlockerIndex + 1) % count
+				} else {
+					state.recoveryBlockerIndex = (state.recoveryBlockerIndex - 1 + count) % count
+				}
+			}
+			return m, nil
+		}
+	}
 	switch key.String() {
 	case "q", "ctrl+c":
 		m.saveProjectView(m.selected)
@@ -1384,6 +1848,13 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.saveProjectView(m.selected)
 		return m, nil
 	case "a":
+		if row := m.selectedRow(m.selected); row != nil && row.run != nil && row.run.Decision != nil && row.run.Decision.Status == "pending" {
+			return m.answerSelectedDecision()
+		}
+		state.panel = 1
+		m.saveProjectView(m.selected)
+		return m, nil
+	case "A":
 		state.panel = 1
 		m.saveProjectView(m.selected)
 		return m, nil
@@ -1394,6 +1865,12 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "f":
 		state.panel = 3
 		m.finalIndex = 0
+		m.saveProjectView(m.selected)
+		return m, nil
+	case "u":
+		return m.inspectSelectedRecovery()
+	case "v":
+		state.panel = 5
 		m.saveProjectView(m.selected)
 		return m, nil
 	case "1":
@@ -1468,6 +1945,174 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m Model) handleDecisionAnswerKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
+	dialog := m.answer
+	if dialog == nil {
+		return m, nil
+	}
+	keyName := key.String()
+	switch keyName {
+	case "esc", "ctrl+c":
+		m.answer = nil
+		m.status = "已关闭答案草稿；答案未提交"
+		return m, nil
+	case "ctrl+enter":
+		return m.submitDecisionAnswer()
+	case "tab":
+		dialog.noteFocus = !dialog.noteFocus
+		dialog.error = ""
+		return m, nil
+	case "pgup":
+		dialog.scroll = max(0, dialog.scroll-8)
+		return m, nil
+	case "pgdown":
+		dialog.scroll += 8
+		return m, nil
+	case "up", "down":
+		if dialog.noteFocus {
+			dialog.cursor = moveRuneCursorVertical(dialog.note, dialog.cursor, keyName == "down")
+			return m, nil
+		}
+		state := &m.projects[m.selected]
+		request, ok := decisionRequestFor(*state, dialog.runID, dialog.decisionID)
+		if !ok {
+			dialog.error = "原问题详情暂不可读；草稿保留"
+			return m, nil
+		}
+		count := len(request.Options)
+		if request.AllowFreeText {
+			count++
+		}
+		if count > 0 {
+			if keyName == "down" {
+				dialog.optionIndex = (dialog.optionIndex + 1 + count) % count
+			} else {
+				dialog.optionIndex = (dialog.optionIndex - 1 + count) % count
+			}
+		}
+		dialog.error = ""
+		return m, nil
+	case "left":
+		if dialog.noteFocus && dialog.cursor > 0 {
+			dialog.cursor--
+		}
+		return m, nil
+	case "right":
+		if dialog.noteFocus && dialog.cursor < len(dialog.note) {
+			dialog.cursor++
+		}
+		return m, nil
+	case "home":
+		if dialog.noteFocus {
+			dialog.cursor = runeLineStart(dialog.note, dialog.cursor)
+		}
+		return m, nil
+	case "end":
+		if dialog.noteFocus {
+			dialog.cursor = runeLineEnd(dialog.note, dialog.cursor)
+		}
+		return m, nil
+	case "backspace":
+		if dialog.noteFocus && dialog.cursor > 0 {
+			dialog.note = append(dialog.note[:dialog.cursor-1], dialog.note[dialog.cursor:]...)
+			dialog.cursor--
+		}
+		dialog.error = ""
+		return m, nil
+	case "delete":
+		if dialog.noteFocus && dialog.cursor < len(dialog.note) {
+			dialog.note = append(dialog.note[:dialog.cursor], dialog.note[dialog.cursor+1:]...)
+		}
+		dialog.error = ""
+		return m, nil
+	case "enter":
+		if !dialog.noteFocus {
+			dialog.noteFocus = true
+			return m, nil
+		}
+		insertAnswerRunes(dialog, []rune{'\n'})
+		dialog.error = ""
+		return m, nil
+	}
+	if !dialog.noteFocus {
+		if key.Type == tea.KeyRunes && len(key.Runes) == 1 && key.Runes[0] >= '1' && key.Runes[0] <= '9' {
+			state := &m.projects[m.selected]
+			request, ok := decisionRequestFor(*state, dialog.runID, dialog.decisionID)
+			if ok && int(key.Runes[0]-'1') < len(request.Options) {
+				dialog.optionIndex = int(key.Runes[0] - '1')
+			}
+		}
+		return m, nil
+	}
+	if key.Type == tea.KeyRunes && len(key.Runes) > 0 {
+		insertAnswerRunes(dialog, key.Runes)
+		dialog.error = ""
+	}
+	return m, nil
+}
+
+func insertAnswerRunes(dialog *decisionAnswerDialog, runes []rune) {
+	if dialog == nil || len(runes) == 0 {
+		return
+	}
+	insert := strings.ReplaceAll(string(runes), "\r\n", "\n")
+	insert = strings.ReplaceAll(insert, "\r", "\n")
+	filtered := make([]rune, 0, len(insert))
+	for _, char := range insert {
+		if char == '\n' || char == '\t' || char >= 0x20 && char != 0x7f {
+			filtered = append(filtered, char)
+		}
+	}
+	if len(filtered) == 0 {
+		return
+	}
+	joined := make([]rune, 0, len(dialog.note)+len(filtered))
+	joined = append(joined, dialog.note[:dialog.cursor]...)
+	joined = append(joined, filtered...)
+	joined = append(joined, dialog.note[dialog.cursor:]...)
+	dialog.note = joined
+	dialog.cursor += len(filtered)
+}
+
+func runeLineStart(text []rune, cursor int) int {
+	if cursor > len(text) {
+		cursor = len(text)
+	}
+	for cursor > 0 && text[cursor-1] != '\n' {
+		cursor--
+	}
+	return cursor
+}
+
+func runeLineEnd(text []rune, cursor int) int {
+	if cursor > len(text) {
+		cursor = len(text)
+	}
+	for cursor < len(text) && text[cursor] != '\n' {
+		cursor++
+	}
+	return cursor
+}
+
+func moveRuneCursorVertical(text []rune, cursor int, down bool) int {
+	start, end := runeLineStart(text, cursor), runeLineEnd(text, cursor)
+	column := cursor - start
+	if down {
+		if end >= len(text) {
+			return cursor
+		}
+		nextStart := end + 1
+		nextEnd := runeLineEnd(text, nextStart)
+		return min(nextStart+column, nextEnd)
+	}
+	if start == 0 {
+		return cursor
+	}
+	previousEnd := start - 1
+	previousStart := runeLineStart(text, previousEnd)
+	return min(previousStart+column, previousEnd)
+}
+
 func (m Model) handleConfirm(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	confirm := m.confirm
 	switch key.String() {
@@ -1476,6 +2121,9 @@ func (m Model) handleConfirm(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "enter", "y":
 		m.confirm = nil
+		if confirm.action != "stop_service" {
+			return m.beginRecoveryAction(confirm)
+		}
 		return m.beginAction(confirm.projectKey, confirm.instance, confirm.revision, confirm.action, confirm.taskID, confirm.requestID)
 	default:
 		return m, nil
@@ -1593,6 +2241,300 @@ func (m Model) reconcileLatest() (tea.Model, tea.Cmd) {
 	}
 	latest.InFlight = true
 	return m, m.pollAction(m.selected, latest)
+}
+
+func (m Model) inspectSelectedRecovery() (tea.Model, tea.Cmd) {
+	if m.selected < 0 || m.selected >= len(m.projects) {
+		return m, nil
+	}
+	state := &m.projects[m.selected]
+	row := m.selectedRow(m.selected)
+	if row == nil || row.run == nil {
+		m.status = "请选择一个 run 后查看恢复核验报告"
+		return m, nil
+	}
+	state.panel = 6
+	state.recoveryRunID = row.run.RunID
+	state.recoveryReport = nil
+	state.recoveryError = ""
+	state.recoveryBusy = true
+	state.recoveryGeneration++
+	generation := state.recoveryGeneration
+	ref, runID, ctx := state.ref, row.run.RunID, m.ctx
+	m.status = "正在只读核验运行、工作目录、领取和 PR 身份"
+	return m, func() tea.Msg {
+		report, err := steerline.InspectRecovery(ctx, ref.Config, runID)
+		return recoveryInspectionMsg{projectKey: ref.Key, identity: ref.Identity, runID: runID, generation: generation, report: report, err: err}
+	}
+}
+
+func (m Model) prepareRecoveryAction(action string) (tea.Model, tea.Cmd) {
+	if m.selected < 0 || m.selected >= len(m.projects) {
+		return m, nil
+	}
+	state := &m.projects[m.selected]
+	report := state.recoveryReport
+	if report == nil || report.RunID == "" {
+		m.status = "先读取当前只读恢复报告"
+		return m, nil
+	}
+	runtimeState := state.snapshot.Connection.Snapshot.Runtime
+	if runtimeState == nil || !state.snapshot.Connection.CanControl {
+		m.status = "服务未就绪；恢复命令不会提交"
+		return m, nil
+	}
+	requestID := steerline.NewControlRequestID()
+	confirm := &confirmAction{projectKey: state.ref.Key, instance: runtimeState.Service.InstanceID, action: action, taskID: report.TaskID, runID: report.RunID, requestID: requestID}
+	basis := fmt.Sprintf("操作人在控制台查看 run %s revision %d 的恢复报告后明确确认原执行已停止。", report.RunID, report.RunRevision)
+	switch action {
+	case "retry_run":
+		if report.RetryReason != "" {
+			m.status = "retry_run 不可用：" + report.RetryReason
+			return m, nil
+		}
+		if !hasCapability(runtimeState, action) {
+			m.status = "服务未声明 retry_run 能力"
+			return m, nil
+		}
+		confirm.revision, confirm.basis = report.RunRevision, basis
+	case "mark_stopped":
+		if !strings.HasPrefix(report.MarkStoppedReason, "confirm") {
+			m.status = "mark_stopped 不可用：" + report.MarkStoppedReason
+			return m, nil
+		}
+		if !hasCapability(runtimeState, action) {
+			m.status = "服务未声明 mark_stopped 能力"
+			return m, nil
+		}
+		confirm.revision, confirm.basis = report.RunRevision, basis
+	case "accept_result":
+		if !strings.HasPrefix(report.AcceptResultReason, "confirm") {
+			m.status = "accept_result 不可用：" + report.AcceptResultReason
+			return m, nil
+		}
+		if !hasCapability(runtimeState, action) {
+			m.status = "服务未声明 accept_result 能力"
+			return m, nil
+		}
+		m.resultPicker = &resultPathDialog{projectKey: state.ref.Key, instance: runtimeState.Service.InstanceID, runID: report.RunID, revision: report.RunRevision, requestID: requestID, path: []rune(report.ResultPath), cursor: len([]rune(report.ResultPath))}
+		m.confirm = nil
+		m.status = "选择已有 result 文件；服务只会收到后续预览锁定的字节"
+		return m, nil
+	case "resolve_command":
+		if len(report.Blockers) == 0 || state.recoveryBlockerIndex < 0 || state.recoveryBlockerIndex >= len(report.Blockers) {
+			m.status = "没有可解除的 control blocker"
+			return m, nil
+		}
+		if !hasCapability(runtimeState, action) {
+			m.status = "服务未声明 resolve_command 能力"
+			return m, nil
+		}
+		blocker := report.Blockers[state.recoveryBlockerIndex]
+		confirm.taskID, confirm.runID = blocker.TaskID, blocker.RunID
+		confirm.decisionID = blocker.RequestID
+		confirm.revision = runtimeState.Control.Revision
+		confirm.basis = "仅核验并解除此原始 indeterminate blocker；不重放原指令。"
+	default:
+		m.status = "不支持的恢复动作：" + action
+		return m, nil
+	}
+	m.confirm = confirm
+	return m, nil
+}
+
+func (m Model) beginRecoveryAction(confirm *confirmAction) (tea.Model, tea.Cmd) {
+	if confirm == nil {
+		return m, nil
+	}
+	index := m.projectIndex(confirm.projectKey)
+	if index < 0 || index != m.selected {
+		m.status = "恢复目标项目已切换；请回到该项目重新读取报告"
+		return m, nil
+	}
+	state := &m.projects[index]
+	runtimeState := state.snapshot.Connection.Snapshot.Runtime
+	if runtimeState == nil || runtimeState.Service.InstanceID != confirm.instance || !state.snapshot.Connection.CanControl {
+		m.status = "stale_instance：服务实例已变化；未提交恢复命令"
+		state.lastRefresh = time.Time{}
+		return m, m.readProject(index)
+	}
+	targetID := confirm.runID
+	if confirm.action == "resolve_command" {
+		targetID = confirm.decisionID
+		if runtimeState.Control.Revision != confirm.revision {
+			m.status = "stale_revision：control blocker 已变化；未提交恢复命令"
+			return m.inspectSelectedRecovery()
+		}
+	} else {
+		var run *steerline.Run
+		for _, candidate := range runtimeState.Runs {
+			if candidate != nil && candidate.RunID == confirm.runID {
+				run = candidate
+				break
+			}
+		}
+		if run == nil || run.ControlRevision != confirm.revision {
+			m.status = "stale_revision：run 已变化；未提交恢复命令，请重新核验"
+			return m.inspectSelectedRecovery()
+		}
+	}
+	if !hasCapability(runtimeState, confirm.action) {
+		m.status = "服务未声明 " + confirm.action + " 能力"
+		return m, nil
+	}
+	requestedBy := steerline.DefaultRequestedBy()
+	body := steerline.RecoveryCommandBody{ConfirmedProcessStopped: confirm.action == "mark_stopped" || confirm.action == "accept_result" || confirm.action == "retry_run", ConfirmationBasis: confirm.basis}
+	if confirm.action == "accept_result" {
+		body.ResultBase64 = base64.StdEncoding.EncodeToString(confirm.resultBytes)
+		body.ResultSHA256 = confirm.resultSHA256
+	}
+	if confirm.action == "resolve_command" {
+		body.ConfirmationBasis = confirm.basis
+	}
+	action := &actionState{RequestID: confirm.requestID, Action: confirm.action, TaskID: confirm.taskID, RunID: confirm.runID, DecisionID: targetID, DecisionRevision: confirm.revision, Status: "submitting", Message: "保存 command_id 并提交恢复命令", TargetInstance: confirm.instance, UpdatedAt: m.clock.Now()}
+	state.actions[confirm.requestID] = action
+	state.view.Outstanding[confirm.requestID] = "recovery:" + confirm.runID
+	if err := m.saveProjectView(index); err != nil {
+		delete(state.actions, confirm.requestID)
+		delete(state.view.Outstanding, confirm.requestID)
+		m.status = "未提交恢复命令：无法先保存 command_id"
+		return m, nil
+	}
+	m.confirm = nil
+	m.status = fmt.Sprintf("恢复命令已发布 · %s · command_id %s", confirm.action, confirm.requestID)
+	return m, m.submitServiceAction(index, confirm.action, targetID, requestedBy, confirm.requestID, confirm.revision, body)
+}
+
+func (m Model) handleResultPickerKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
+	dialog := m.resultPicker
+	if dialog == nil {
+		return m, nil
+	}
+	switch key.String() {
+	case "esc", "ctrl+c":
+		m.resultPicker = nil
+		m.status = "已取消结果选择；未提交 accept_result"
+		return m, nil
+	case "enter":
+		return m.freezeAcceptResultPreview()
+	case "left":
+		if dialog.cursor > 0 {
+			dialog.cursor--
+		}
+		return m, nil
+	case "right":
+		if dialog.cursor < len(dialog.path) {
+			dialog.cursor++
+		}
+		return m, nil
+	case "home":
+		dialog.cursor = 0
+		return m, nil
+	case "end":
+		dialog.cursor = len(dialog.path)
+		return m, nil
+	case "backspace":
+		if dialog.cursor > 0 {
+			dialog.path = append(dialog.path[:dialog.cursor-1], dialog.path[dialog.cursor:]...)
+			dialog.cursor--
+		}
+		dialog.error = ""
+		return m, nil
+	case "delete":
+		if dialog.cursor < len(dialog.path) {
+			dialog.path = append(dialog.path[:dialog.cursor], dialog.path[dialog.cursor+1:]...)
+		}
+		dialog.error = ""
+		return m, nil
+	}
+	if key.Type == tea.KeyRunes {
+		insert := make([]rune, 0, len(key.Runes))
+		for _, char := range key.Runes {
+			if char >= 0x20 && char != 0x7f && char != '\n' && char != '\r' && char != '\t' {
+				insert = append(insert, char)
+			}
+		}
+		if len(insert) > 0 {
+			joined := make([]rune, 0, len(dialog.path)+len(insert))
+			joined = append(joined, dialog.path[:dialog.cursor]...)
+			joined = append(joined, insert...)
+			joined = append(joined, dialog.path[dialog.cursor:]...)
+			dialog.path = joined
+			dialog.cursor += len(insert)
+			dialog.error = ""
+		}
+	}
+	return m, nil
+}
+
+func (m Model) freezeAcceptResultPreview() (tea.Model, tea.Cmd) {
+	dialog := m.resultPicker
+	if dialog == nil {
+		return m, nil
+	}
+	index := m.projectIndex(dialog.projectKey)
+	if index < 0 || index != m.selected {
+		dialog.error = "项目已变化；结果路径保留，请返回原项目"
+		return m, nil
+	}
+	state := &m.projects[index]
+	report := state.recoveryReport
+	runtimeState := state.snapshot.Connection.Snapshot.Runtime
+	if report == nil || runtimeState == nil || runtimeState.Service.InstanceID != dialog.instance || report.RunID != dialog.runID || report.RunRevision != dialog.revision {
+		dialog.error = "stale_revision：核验报告或服务实例已变化；请重新核验"
+		return m, nil
+	}
+	path := strings.TrimSpace(string(dialog.path))
+	if path == "" {
+		dialog.error = "请选择一个已有 result 文件"
+		return m, nil
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		dialog.error = "打开 result 文件失败：" + err.Error()
+		return m, nil
+	}
+	info, err := file.Stat()
+	if err != nil {
+		_ = file.Close()
+		dialog.error = "读取 result 文件信息失败：" + err.Error()
+		return m, nil
+	}
+	if info.Size() <= 0 || info.Size() > 2<<20 {
+		_ = file.Close()
+		dialog.error = "result 文件必须在 1 byte 到 2 MiB 之间"
+		return m, nil
+	}
+	data, err := io.ReadAll(io.LimitReader(file, (2<<20)+1))
+	closeErr := file.Close()
+	if err != nil || closeErr != nil || len(data) > 2<<20 {
+		dialog.error = "读取 result 文件失败或超过 2 MiB"
+		return m, nil
+	}
+	var selectedRun *steerline.Run
+	for _, run := range runtimeState.Runs {
+		if run != nil && run.RunID == dialog.runID {
+			selectedRun = run
+			break
+		}
+	}
+	if selectedRun == nil {
+		dialog.error = "runtime run identity disappeared"
+		return m, nil
+	}
+	result, err := steerline.ParseResultBytes(data, selectedRun)
+	if err != nil || result.Outcome != "pr_submitted" || result.PRURL == nil {
+		if err == nil {
+			err = errors.New("result must contain a submitted PR")
+		}
+		dialog.error = "结果预览拒绝：" + err.Error()
+		return m, nil
+	}
+	sum := sha256.Sum256(data)
+	basis := fmt.Sprintf("Console operator confirmed the original execution stopped after reviewing run %s revision %d.", dialog.runID, dialog.revision)
+	m.confirm = &confirmAction{projectKey: state.ref.Key, instance: dialog.instance, revision: dialog.revision, action: "accept_result", taskID: selectedRun.TaskID, runID: selectedRun.RunID, requestID: dialog.requestID, resultBytes: append([]byte(nil), data...), resultSHA256: hex.EncodeToString(sum[:]), resultSummary: ptrString(result.Summary), resultPRURL: *result.PRURL, resultPath: path, resultWorktree: ptrString(result.WorktreePath), resultBase: ptrString(result.BaseCommit), resultTaskID: result.TaskID, resultRunID: result.RunID, basis: basis}
+	m.resultPicker = nil
+	return m, nil
 }
 
 func (m *Model) readyControlTarget() (*projectState, *steerline.Runtime) {

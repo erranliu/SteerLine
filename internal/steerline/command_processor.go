@@ -2,9 +2,12 @@ package steerline
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 )
 
 func (s *Service) processPendingCommands(ctx context.Context) error {
@@ -22,8 +25,28 @@ func (s *Service) processPendingCommands(ctx context.Context) error {
 				return err
 			}
 			if command.Kind != "answer_decision" {
-				payload, _ := json.Marshal(map[string]string{"error": "unsupported command kind"})
-				if err = service.SetStatus(ctx, command, "rejected", payload); err != nil {
+				if !validServiceCommandKind(command.Kind) {
+					payload, _ := json.Marshal(map[string]string{"code": "unsupported_command", "error": "unsupported command kind"})
+					if err = service.SetStatus(ctx, command, "rejected", payload); err != nil {
+						return err
+					}
+					continue
+				}
+				if command.Status == "in_flight" {
+					if err = s.recoverInFlightServiceCommand(ctx, service, command); err != nil {
+						return err
+					}
+					continue
+				}
+				if err = service.SetStatus(ctx, command, "in_flight", nil); err != nil {
+					return err
+				}
+				command.Status = "in_flight"
+				status, result := s.applyServiceCommand(ctx, command)
+				if status == "" {
+					status = "rejected"
+				}
+				if err = service.SetStatus(ctx, command, status, result); err != nil {
 					return err
 				}
 				continue
@@ -42,62 +65,240 @@ func (s *Service) processPendingCommands(ctx context.Context) error {
 				}
 				command.Status = "in_flight"
 			}
-			run := s.findDecision(command.TargetID)
-			if run == nil || run.Decision == nil || run.FinishTaskStatus != "waiting_decision" || run.RunID != answer.RunID || run.Decision.ID != command.TargetID {
-				result, _ := json.Marshal(map[string]string{"error": "decision target no longer exists"})
-				if err = service.SetStatus(ctx, command, "rejected", result); err != nil {
-					return err
-				}
-				continue
-			}
-			switch {
-			case run.Decision.Status == "pending" && run.Decision.Version == command.ExpectedVersion:
-				answer.DecisionID = run.Decision.ID
-				answer.RunID = run.RunID
-				answer.AnsweredBy = clip(answer.AnsweredBy, 200)
-				answer.Note = clip(answer.Note, 4000)
-				if answer.AnsweredAt.IsZero() {
-					answer.AnsweredAt = now()
-				}
-				if err = validateDecisionAnswer(&run.Decision.Request, &answer); err != nil {
-					result, _ := json.Marshal(map[string]string{"error": err.Error()})
+			if run := s.findDecision(command.TargetID); run != nil && run.Decision != nil && run.Decision.Status == "pending" {
+				if err = s.requireDecisionReplyCapability(ctx, run); err != nil {
+					code := "rejected"
+					var backendErr *BackendError
+					if errors.As(err, &backendErr) {
+						code = string(backendErr.Code)
+					}
+					result, _ := json.Marshal(map[string]string{"code": code, "error": err.Error()})
 					if e := service.SetStatus(ctx, command, "rejected", result); e != nil {
 						return e
 					}
 					continue
 				}
-				run.Decision.Status = "answer_saved"
-				run.Decision.Version++
-				run.Decision.OptionID = answer.OptionID
-				run.Decision.Note = answer.Note
-				run.Decision.AnsweredBy = answer.AnsweredBy
-				run.Decision.AnsweredAt = &answer.AnsweredAt
-				s.note(run, "steer", "decision", "answer_saved", "decision answer saved", decisionAnswerSummary(run), decisionAnswerMeta(run))
-				if err = s.save(); err != nil {
-					return err
+			}
+			record, _, acceptErr := service.AcceptAnswer(ctx, command, answer)
+			if acceptErr != nil {
+				code := "rejected"
+				if errors.Is(acceptErr, ErrAnswerConflict) {
+					code = "answer_conflict"
 				}
-			case run.Decision.Status == "answer_saved" && run.Decision.Version == command.ExpectedVersion+1:
-				saved, e := ReadDecisionAnswer(run)
-				if e != nil {
-					return fmt.Errorf("recover decision answer command: %w", e)
-				}
-				if saved.OptionID != answer.OptionID || saved.Note != answer.Note || saved.AnsweredBy != answer.AnsweredBy {
-					return errors.New("persisted decision answer does not match its command")
-				}
-			default:
-				result, _ := json.Marshal(map[string]string{"error": "decision version is stale or already applied"})
+				result, _ := json.Marshal(map[string]string{"code": code, "error": acceptErr.Error()})
 				if err = service.SetStatus(ctx, command, "rejected", result); err != nil {
 					return err
 				}
 				continue
 			}
-			result, _ := json.Marshal(map[string]any{"decision_id": command.TargetID, "version": run.Decision.Version, "status": run.Decision.Status})
-			if err = service.SetStatus(ctx, command, "accepted", result); err != nil {
-				return err
+			run := s.findDecision(command.TargetID)
+			if run != nil && run.Decision != nil && run.Decision.ID == command.TargetID {
+				if record.WorkflowRunID != run.RunID || record.ExecutionID != run.ExecutionID || record.AttemptID != run.Decision.AttemptID {
+					return fmt.Errorf("accepted decision %s no longer matches the runtime identity", command.TargetID)
+				}
+				run.Decision.Version = record.Version
+				run.Decision.Status = record.Status
+				if len(record.Answer) > 0 {
+					var saved DecisionAnswer
+					if err = decode(record.Answer, &saved); err != nil {
+						return fmt.Errorf("decode accepted decision answer: %w", err)
+					}
+					run.Decision.OptionID, run.Decision.Note, run.Decision.AnsweredBy = saved.OptionID, saved.Note, saved.AnsweredBy
+					run.Decision.AnsweredAt = &saved.AnsweredAt
+				}
+				s.note(run, "steer", "decision", "answer_saved", "decision answer saved", decisionAnswerSummary(run), decisionAnswerMeta(run))
+				if err = s.save(); err != nil {
+					return err
+				}
 			}
 		}
 	}
 	return nil
+}
+
+type serviceCommandResult struct {
+	Code              string `json:"code"`
+	Message           string `json:"message"`
+	CommandID         string `json:"command_id"`
+	RunID             string `json:"run_id,omitempty"`
+	AttemptID         string `json:"attempt_id,omitempty"`
+	PreviousAttemptID string `json:"previous_attempt_id,omitempty"`
+	ExpectedRevision  uint64 `json:"expected_revision,omitempty"`
+	ResultRevision    uint64 `json:"result_revision,omitempty"`
+	ResultSHA256      string `json:"result_sha256,omitempty"`
+	Basis             string `json:"basis,omitempty"`
+	OriginalRequest   string `json:"original_request_id,omitempty"`
+	ResolvedBy        string `json:"resolved_by_request_id,omitempty"`
+	RequestedBy       string `json:"requested_by,omitempty"`
+	Resolution        string `json:"resolution,omitempty"`
+}
+
+func (s *Service) applyServiceCommand(ctx context.Context, command CommandRecord) (string, []byte) {
+	reject := func(code, message string) (string, []byte) {
+		return "rejected", mustJSON(serviceCommandResult{Code: code, Message: message, CommandID: command.CommandID, RunID: command.TargetID})
+	}
+	if s.State.Service.Status != "running" || !s.State.Service.Ready {
+		return reject("stale_instance", "service is not ready to accept recovery changes")
+	}
+	if s.State.Control.Operation != nil {
+		return reject("slot_busy", "another control operation is still applying")
+	}
+	var envelope ServiceCommandPayload
+	if err := decode(command.Payload, &envelope); err != nil {
+		return reject("invalid_request", "invalid recovery command envelope: "+err.Error())
+	}
+	if envelope.ServiceInstanceID != s.State.Service.InstanceID {
+		return reject("stale_instance", "command targets a different service instance")
+	}
+	if envelope.ExpectedRevision != command.ExpectedVersion {
+		return reject("invalid_request", "command envelope revision differs from its command row")
+	}
+	var body RecoveryCommandBody
+	if err := decode(envelope.Body, &body); err != nil {
+		return reject("invalid_request", "invalid recovery command payload: "+err.Error())
+	}
+	if command.Kind == "resolve_command" {
+		if s.State.Control.Revision != envelope.ExpectedRevision {
+			return reject("stale_revision", "control blockers changed; refresh before resolving")
+		}
+		result, err := s.resolveControlBlocker(ctx, command.TargetID, command.RequestedBy, body.ConfirmationBasis)
+		if err != nil {
+			return reject("recovery_rejected", err.Error())
+		}
+		return "accepted", mustJSON(serviceCommandResult{Code: "resolved", Message: "one indeterminate blocker was reconciled without replaying the original action", CommandID: command.CommandID, OriginalRequest: command.TargetID, ResolvedBy: command.CommandID, RequestedBy: command.RequestedBy, ExpectedRevision: envelope.ExpectedRevision, ResultRevision: s.State.Control.Revision, Resolution: fmt.Sprint(result["resolution"]), Basis: body.ConfirmationBasis})
+	}
+	run := s.recoveryTarget(command.TargetID)
+	if run == nil {
+		return reject("not_found", "target run was not found")
+	}
+	if run.ControlRevision != envelope.ExpectedRevision || run.AttemptID != envelope.RunAttemptID {
+		return reject("stale_revision", "run or attempt identity changed; refresh the recovery report")
+	}
+	beforeRevision, beforeAttempt := run.ControlRevision, run.AttemptID
+	switch command.Kind {
+	case "retry_run":
+		oldAttempt := run.AttemptID
+		if err := s.startRetry(ctx, run.RunID); err != nil {
+			if run.AttemptID != oldAttempt && run.ExecutionStatus == "unknown" {
+				blocker := ControlBlocker{RequestID: command.CommandID, Action: command.Kind, TaskID: run.TaskID, RunID: run.RunID, AttemptID: run.AttemptID, Reason: "retry start outcome is indeterminate; no worker start will be replayed"}
+				s.State.Control.Blockers = append(s.State.Control.Blockers, blocker)
+				s.recalculateCurrentReservation("")
+				if saveErr := s.save(); saveErr != nil {
+					return "indeterminate", mustJSON(serviceCommandResult{Code: "indeterminate", Message: errors.Join(err, saveErr).Error(), CommandID: command.CommandID, RunID: run.RunID, AttemptID: run.AttemptID})
+				}
+				return "indeterminate", mustJSON(serviceCommandResult{Code: "indeterminate", Message: err.Error(), CommandID: command.CommandID, RunID: run.RunID, AttemptID: run.AttemptID})
+			}
+			if run.AttemptID != oldAttempt {
+				return "failed", mustJSON(serviceCommandResult{Code: "failed", Message: err.Error(), CommandID: command.CommandID, RunID: run.RunID, AttemptID: run.AttemptID})
+			}
+			return reject("recovery_rejected", err.Error())
+		}
+		return "accepted", mustJSON(serviceCommandResult{Code: "worker_started", Message: "retry created a new attempt and saved its worker identity", CommandID: command.CommandID, RunID: run.RunID, AttemptID: run.AttemptID, PreviousAttemptID: beforeAttempt, RequestedBy: command.RequestedBy, ExpectedRevision: beforeRevision, ResultRevision: run.ControlRevision, Basis: body.ConfirmationBasis})
+	case "mark_stopped":
+		if !body.ConfirmedProcessStopped {
+			return reject("confirmation_required", "operator must explicitly confirm that the original execution stopped")
+		}
+		if err := s.markStoppedCore(run.RunID, command.RequestedBy, body.ConfirmationBasis); err != nil {
+			return reject("recovery_rejected", err.Error())
+		}
+		return "accepted", mustJSON(serviceCommandResult{Code: "stopped_confirmed", Message: "unknown execution was recorded as failed/blocked; no worker was started", CommandID: command.CommandID, RunID: run.RunID, AttemptID: run.AttemptID, RequestedBy: command.RequestedBy, ExpectedRevision: beforeRevision, ResultRevision: run.ControlRevision, Basis: body.ConfirmationBasis})
+	case "accept_result":
+		if !body.ConfirmedProcessStopped {
+			return reject("confirmation_required", "operator must explicitly confirm that the original execution stopped")
+		}
+		data, err := base64.StdEncoding.DecodeString(body.ResultBase64)
+		if err != nil {
+			return reject("invalid_result", "result bytes are not valid base64")
+		}
+		if err = s.acceptResultBytes(ctx, run.RunID, command.CommandID, command.RequestedBy, body.ConfirmationBasis, data, body.ResultSHA256); err != nil {
+			return reject("recovery_rejected", err.Error())
+		}
+		return "accepted", mustJSON(serviceCommandResult{Code: "result_accepted", Message: "frozen result and verified PR are bound to this run; PR merge verification remains pending", CommandID: command.CommandID, RunID: run.RunID, AttemptID: run.AttemptID, RequestedBy: command.RequestedBy, ExpectedRevision: beforeRevision, ResultRevision: run.ControlRevision, ResultSHA256: body.ResultSHA256, Basis: body.ConfirmationBasis})
+	default:
+		return reject("unsupported_command", "unsupported recovery command")
+	}
+}
+
+func (s *Service) recoverInFlightServiceCommand(ctx context.Context, commands CommandService, command CommandRecord) error {
+	if command.Kind == "resolve_command" {
+		var envelope ServiceCommandPayload
+		var body RecoveryCommandBody
+		if decode(command.Payload, &envelope) == nil && decode(envelope.Body, &body) == nil {
+			for _, blocker := range s.State.Control.Blockers {
+				if blocker.RequestID == command.TargetID {
+					return commands.SetStatus(ctx, command, "indeterminate", mustJSON(serviceCommandResult{Code: "indeterminate", Message: "service restarted while resolving; original blocker remains and no instruction was replayed", CommandID: command.CommandID, OriginalRequest: command.TargetID, RequestedBy: command.RequestedBy}))
+				}
+			}
+			return commands.SetStatus(ctx, command, "accepted", mustJSON(serviceCommandResult{Code: "resolved", Message: "target blocker is absent; original instruction was not replayed", CommandID: command.CommandID, OriginalRequest: command.TargetID, ResolvedBy: command.CommandID, RequestedBy: command.RequestedBy}))
+		}
+	}
+	if command.Kind == "accept_result" {
+		var envelope ServiceCommandPayload
+		var body RecoveryCommandBody
+		if decode(command.Payload, &envelope) == nil && decode(envelope.Body, &body) == nil {
+			if run := s.recoveryTarget(command.TargetID); run != nil && run.FinishTaskStatus == "waiting_pr_merge" && run.ResultPath != nil {
+				expectedPath := filepath.Join(s.Config.RunDir, "runs", run.RunID, "recovery", command.CommandID, "result.json")
+				if canonical(*run.ResultPath) == canonical(expectedPath) {
+					data, readErr := os.ReadFile(expectedPath)
+					if readErr == nil && operationDigest(data) == body.ResultSHA256 {
+						result, parseErr := ParseResultBytes(data, run)
+						if parseErr == nil && result.PRURL != nil {
+							if info, queryErr := s.prs.Query(ctx, *result.PRURL); queryErr == nil && info.State == "open" || queryErr == nil && info.State == "merged" {
+								return commands.SetStatus(ctx, command, "accepted", mustJSON(serviceCommandResult{Code: "result_accepted", Message: "reconciled the durable managed result and current provider PR", CommandID: command.CommandID, RunID: run.RunID, AttemptID: run.AttemptID, RequestedBy: command.RequestedBy}))
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	if command.Kind == "retry_run" {
+		var envelope ServiceCommandPayload
+		if decode(command.Payload, &envelope) == nil {
+			if run := s.recoveryTarget(command.TargetID); run != nil && run.AttemptID != "" && envelope.RunAttemptID != "" && run.AttemptID != envelope.RunAttemptID {
+				records := executionRecords{root: s.Config.RunDir}
+				op, opErr := records.loadOperation(run.RunID, run.AttemptID, attemptOperationID(run.RunID, run.AttemptID))
+				ref, refErr := records.loadBinding(run.RunID, run.AttemptID)
+				if opErr == nil && refErr == nil && (op.Status == OperationAccepted || op.Status == OperationConfirmed) && op.Ref != nil && digestValue(*op.Ref) == digestValue(ref) && (run.Process == nil || *run.Process == ref.External) {
+					return commands.SetStatus(ctx, command, "accepted", mustJSON(serviceCommandResult{Code: "worker_started", Message: "reconciled the durable retry attempt and original execution binding; current run state may still require recovery", CommandID: command.CommandID, RunID: run.RunID, AttemptID: run.AttemptID, RequestedBy: command.RequestedBy}))
+				}
+			}
+		}
+	}
+	if command.Kind == "mark_stopped" {
+		if run := s.recoveryTarget(command.TargetID); run != nil && manuallyStopped(run) {
+			return commands.SetStatus(ctx, command, "accepted", mustJSON(serviceCommandResult{Code: "stopped_confirmed", Message: "reconciled the durable manual stop confirmation", CommandID: command.CommandID, RunID: run.RunID, AttemptID: run.AttemptID, RequestedBy: command.RequestedBy}))
+		}
+	}
+	var envelope ServiceCommandPayload
+	if decode(command.Payload, &envelope) != nil {
+		envelope = ServiceCommandPayload{}
+	}
+	var body RecoveryCommandBody
+	_ = decode(envelope.Body, &body)
+	reason := "service restarted during an in-flight recovery command; no command was replayed"
+	if run := s.recoveryTarget(command.TargetID); run != nil && run.FinishTaskStatus != "completed" {
+		if run.ExecutionStatus == "pending" || run.ExecutionStatus == "running" || command.Kind == "retry_run" {
+			run.ExecutionStatus = "unknown"
+			s.blocked(run, reason)
+			s.State.CurrentTask = ptr(run.TaskID)
+		}
+		s.State.Control.Blockers = appendUniqueBlocker(s.State.Control.Blockers, ControlBlocker{RequestID: command.CommandID, Action: command.Kind, TaskID: run.TaskID, RunID: run.RunID, AttemptID: run.AttemptID, Reason: reason})
+	}
+	s.recalculateCurrentReservation("")
+	if err := s.save(); err != nil {
+		return err
+	}
+	return commands.SetStatus(ctx, command, "indeterminate", mustJSON(serviceCommandResult{Code: "indeterminate", Message: reason, CommandID: command.CommandID, RunID: command.TargetID, RequestedBy: command.RequestedBy}))
+}
+
+func appendUniqueBlocker(blockers []ControlBlocker, blocker ControlBlocker) []ControlBlocker {
+	for _, existing := range blockers {
+		if existing.RequestID == blocker.RequestID {
+			return blockers
+		}
+	}
+	return append(blockers, blocker)
 }
 
 func (s *Service) findDecision(id string) *Run {

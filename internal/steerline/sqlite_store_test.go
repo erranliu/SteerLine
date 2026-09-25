@@ -5,11 +5,13 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -130,6 +132,9 @@ func TestCommandIdempotencyAndDecisionVersionArbitration(t *testing.T) {
 	ctx := context.Background()
 	s := openDomainTestStore(t)
 	project := "repo:commands"
+	request := DecisionRequest{Question: "choose", AllowFreeText: true}
+	run := &Run{TaskID: "task", RunID: "wf", DomainTaskID: "task", ExecutionID: "exec", AttemptID: "attempt", ControlRevision: 5, Host: "orca", Backend: string(BackendOrca), Protocol: string(ProtocolOrcaTerminalV2), WorkflowVersion: "legacy-v1", ExecutionStatus: "succeeded", FinishTaskStatus: "waiting_decision", Decision: &DecisionState{ID: "decision", AttemptID: "attempt", Version: 1, Status: "pending", Request: request}}
+	projection := Runtime{SchemaVersion: 5, Revision: 1, Repository: Repository{Identity: project}, Service: ServiceState{InstanceID: "service", Status: "running", Ready: true}, Runs: []*Run{run}}
 	err := s.Transact(ctx, func(tx DomainTx) error {
 		if err := tx.PutTask(TaskRecord{ProjectIdentity: project, TaskID: "task", Status: "in_progress", Version: 1}); err != nil {
 			return err
@@ -143,42 +148,51 @@ func TestCommandIdempotencyAndDecisionVersionArbitration(t *testing.T) {
 		if err := tx.PutStepAttempt(StepAttemptRecord{ProjectIdentity: project, AttemptID: "attempt", ExecutionID: "exec", StepID: "implement", AttemptNumber: 1, Status: "waiting_decision"}); err != nil {
 			return err
 		}
-		return tx.PutDecision(DecisionRecord{ProjectIdentity: project, DecisionID: "decision", Scope: "execution", WorkflowRunID: "wf", ExecutionID: "exec", AttemptID: "attempt", QuestionID: "q1", Status: "pending", Version: 1, Request: mustJSON(DecisionRequest{Question: "choose", AllowFreeText: true})})
+		if err := tx.PutDecision(DecisionRecord{ProjectIdentity: project, DecisionID: "decision", Scope: "execution", WorkflowRunID: "wf", ExecutionID: "exec", AttemptID: "attempt", QuestionID: "q1", Status: "pending", Version: 1, Request: mustJSON(request)}); err != nil {
+			return err
+		}
+		return tx.PutProjection(project, projection.Revision, mustJSON(projection))
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	commands := CommandService{Store: s, Project: project}
-	first, created, err := commands.AnswerDecision(ctx, "decision", 1, "answer-key-a", "alice", mustJSON(DecisionAnswer{DecisionID: "decision", RunID: "wf", Note: "yes", AnsweredBy: "alice"}))
+	answer := DecisionAnswer{DecisionID: "decision", RunID: "wf", Note: "yes", AnsweredBy: "alice", ExpectedDecisionVersion: 1, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: projection.Service.InstanceID}
+	first, created, err := commands.AnswerDecision(ctx, "decision", 1, "answer-key-a", "alice", mustJSON(answer))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !created {
 		t.Fatal("first answer was not enqueued")
 	}
-	retry, created, err := commands.AnswerDecision(ctx, "decision", 1, "answer-key-a", "alice", mustJSON(DecisionAnswer{DecisionID: "decision", RunID: "wf", Note: "yes", AnsweredBy: "alice"}))
+	retry, created, err := commands.AnswerDecision(ctx, "decision", 1, "answer-key-a", "alice", mustJSON(answer))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if created || retry.CommandID != first.CommandID {
 		t.Fatalf("idempotent retry changed command: %+v %+v", first, retry)
 	}
-	if _, _, err = commands.AnswerDecision(ctx, "decision", 1, "answer-key-b", "bob", mustJSON(DecisionAnswer{DecisionID: "decision", RunID: "wf", Note: "no", AnsweredBy: "bob"})); err == nil || !strings.Contains(err.Error(), "already has an accepted answer") {
-		t.Fatalf("second answer should lose version arbitration, got %v", err)
+	var savedAnswer DecisionAnswer
+	require(t, decode(first.Payload, &savedAnswer))
+	if _, _, err = commands.AcceptAnswer(ctx, first, savedAnswer); err != nil {
+		t.Fatalf("first answer was not accepted against the current service projection: %v", err)
+	}
+	if _, _, err = commands.AnswerDecision(ctx, "decision", 1, "answer-key-b", "bob", mustJSON(DecisionAnswer{DecisionID: "decision", RunID: "wf", Note: "no", AnsweredBy: "bob", ExpectedDecisionVersion: 1, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: projection.Service.InstanceID})); !errors.Is(err, ErrAnswerConflict) {
+		t.Fatalf("second accepted answer should lose first-wins arbitration, got %v", err)
 	}
 	pending, err := commands.Pending(ctx, 10)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(pending) != 1 || pending[0].CommandID != first.CommandID {
+	if len(pending) != 0 {
 		t.Fatalf("unexpected pending commands: %+v", pending)
 	}
 	snapshot, err := s.Query(ctx, project)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if snapshot.Decisions[0].Status != "pending" {
-		t.Fatal("command client wrote business state instead of enqueueing an answer")
+	if snapshot.Decisions[0].Status != "answer_saved" || snapshot.Decisions[0].Version != 2 {
+		t.Fatalf("first accepted command did not persist its business fact: %+v", snapshot.Decisions[0])
 	}
 }
 
@@ -292,7 +306,7 @@ func TestMinimalWorkflowDispatchesEachStepAndPersistsPRGate(t *testing.T) {
 	}
 }
 
-func TestMinimalDecisionAnswerResumesTheSameStepAsANewAttempt(t *testing.T) {
+func TestMinimalLocalDecisionAnswerIsRejectedWithoutContinuation(t *testing.T) {
 	f := newFixture(t, task("t-18"))
 	db := readFake(f.db)
 	db.Behavior = "minimal-decision"
@@ -333,39 +347,23 @@ func TestMinimalDecisionAnswerResumesTheSameStepAsANewAttempt(t *testing.T) {
 	}
 	queued, err := s.domainStore.Commands(ctx, s.Config.identity, "", 100)
 	require(t, err)
-	if len(queued) != 1 || queued[0].Status != "accepted" {
-		t.Fatalf("decision answer command was not accepted: %+v", queued)
+	if len(queued) != 1 || queued[0].Status != "rejected" || !strings.Contains(string(queued[0].Result), "local continuation is unsupported") {
+		t.Fatalf("unsupported local decision continuation was not rejected with its reason: %+v", queued)
+	}
+	if s.worker != nil || s.State.Runs[0].Decision.Status != "pending" || s.State.Runs[0].Decision.AnsweredBy != "" {
+		t.Fatalf("unsupported continuation mutated the decision or started a worker: worker=%v decision=%+v", s.worker != nil, s.State.Runs[0].Decision)
+	}
+	attemptCount := len(s.State.Attempts)
+	decision.Status, decision.OptionID, decision.AnsweredBy = "answer_saved", "keep", "tester"
+	decision.AnsweredAt = ptr(now())
+	if err = s.save(); err != nil {
+		t.Fatal(err)
 	}
 	if err = s.applyDecisions(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if s.worker == nil || s.State.Runs[0].Decision.Status != "reply_accepted" || s.State.Runs[0].Decision.AppliedAt != nil {
-		t.Fatalf("minimal step was not resumed: worker=%v decision=%+v run_error=%s", s.worker != nil, s.State.Runs[0].Decision, deref(s.State.Runs[0].Error))
-	}
-	var resumed, prior *StepAttemptRecord
-	for i := range s.State.Attempts {
-		attempt := &s.State.Attempts[i]
-		if attempt.StepID == "implement" && attempt.AttemptNumber == 1 {
-			prior = attempt
-		}
-		if attempt.StepID == "implement" && attempt.AttemptNumber == 2 {
-			resumed = attempt
-		}
-	}
-	wantPrerequisites := []string{}
-	if prior != nil {
-		wantPrerequisites = append(wantPrerequisites, prior.PrerequisiteIDs...)
-		wantPrerequisites = append(wantPrerequisites, prior.ResultID)
-	}
-	if resumed == nil || prior == nil || resumed.Status != "running" || !sameStrings(resumed.PrerequisiteIDs, wantPrerequisites) {
-		t.Fatalf("resumed step attempt=%+v, all attempts=%+v", resumed, s.State.Attempts)
-	}
-	finishWorker(t, s)
-	if s.State.Executions[0].CurrentStep != "verify" || s.State.Executions[0].CandidateRevision == "" {
-		t.Fatalf("decision continuation did not finish implement: %+v", s.State.Executions[0])
-	}
-	if s.State.Runs[0].Decision.Status != "applied" {
-		t.Fatal("matching result did not prove decision application")
+	if s.worker != nil || decision.Status != "answer_saved" || len(s.State.Attempts) != attemptCount || s.State.Executions[0].CurrentStep != "implement" {
+		t.Fatalf("saved answer bypassed unsupported-continuation gate: worker=%v decision=%+v attempts=%d/%d execution=%+v", s.worker != nil, decision, len(s.State.Attempts), attemptCount, s.State.Executions[0])
 	}
 }
 
@@ -566,7 +564,7 @@ func TestOperationIdempotencyKeepsOneDurableIntent(t *testing.T) {
 	}
 }
 
-func TestQueuedDecisionAnswerIsAppliedByTheCenterWriter(t *testing.T) {
+func TestQueuedLocalDecisionAnswerIsRejectedWithoutAContinuationCapability(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
 	project := "repo:decision-queue"
@@ -577,7 +575,7 @@ func TestQueuedDecisionAnswerIsAppliedByTheCenterWriter(t *testing.T) {
 	defer db.Close()
 	runID := strings.Repeat("d", 32)
 	logPath := filepath.Join(dir, "runs", runID, "events.jsonl")
-	decision := &DecisionState{ID: "decision-1", Version: 1, Request: DecisionRequest{Question: "Choose", Options: []DecisionOption{{ID: "yes", Label: "Yes"}}}, Status: "pending", RequestPath: filepath.Join(dir, "runs", runID, "decision.request.json"), AnswerPath: filepath.Join(dir, "runs", runID, "decision.answer.json")}
+	decision := &DecisionState{ID: "decision-1", AttemptID: runID, Version: 1, Request: DecisionRequest{Question: "Choose", Options: []DecisionOption{{ID: "yes", Label: "Yes"}}}, Status: "pending"}
 	run := &Run{TaskID: "beads-1", Title: "question", RunID: runID, AttemptID: runID, Claimant: "center", Host: "local", Backend: string(BackendLocal), Protocol: "local_process", BeadsStatus: "in_progress", ExecutionStatus: "succeeded", FinishTaskStatus: "waiting_decision", Decision: decision, LogPath: &logPath}
 	runtime := Runtime{SchemaVersion: 5, Repository: Repository{Identity: project, Path: "repo", Remote: "origin", Branch: "main"}, Service: ServiceState{Claimant: "center"}, Runs: []*Run{run}, Control: ControlState{DispatchMode: "auto", Revision: 1}}
 	service := &Service{Config: Config{RunDir: dir, RuntimeFile: "runtime.json", Claimant: "center", identity: project}, State: runtime, domainStore: db, store: &Store{Path: filepath.Join(dir, "runtime.json"), Domain: db, Project: project}}
@@ -594,22 +592,199 @@ func TestQueuedDecisionAnswerIsAppliedByTheCenterWriter(t *testing.T) {
 	if err = service.processPendingCommands(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if run.Decision.Status != "answer_saved" || run.Decision.Version != 2 || run.Decision.AnsweredBy != "alice" {
-		t.Fatalf("center did not apply the queued answer: %+v", run.Decision)
+	if run.Decision.Status != "pending" || run.Decision.Version != 1 || run.Decision.AnsweredBy != "" {
+		t.Fatalf("unsupported local continuation accepted an answer: %+v", run.Decision)
 	}
-	saved, err := ReadDecisionAnswer(run)
-	if err != nil || saved.OptionID != "yes" {
-		t.Fatalf("answer file not materialized: %+v %v", saved, err)
-	}
-	commands, err := db.Commands(ctx, project, "accepted", 10)
-	if err != nil || len(commands) != 1 || commands[0].Kind != "answer_decision" {
-		t.Fatalf("answer command was not acknowledged: %+v %v", commands, err)
+	commands, err := db.Commands(ctx, project, "rejected", 10)
+	if err != nil || len(commands) != 1 || commands[0].Kind != "answer_decision" || !strings.Contains(string(commands[0].Result), "unsupported") {
+		t.Fatalf("unsupported answer command was not rejected with its reason: %+v %v", commands, err)
 	}
 	snapshot, err := db.Query(ctx, project)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(snapshot.Decisions) != 1 || snapshot.Decisions[0].Status != "answer_saved" || snapshot.Decisions[0].Version != 2 {
-		t.Fatalf("decision write did not commit with the runtime projection: %+v", snapshot.Decisions)
+	if len(snapshot.Decisions) != 1 || snapshot.Decisions[0].Status != "pending" || snapshot.Decisions[0].Version != 1 {
+		t.Fatalf("unsupported continuation changed authoritative decision state: %+v", snapshot.Decisions)
+	}
+}
+
+func TestDecisionAnswerFirstWinsIdempotencyAndConflictAreTransactional(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	project := "repo:decision-first-wins"
+	db, err := OpenSQLiteStore(filepath.Join(dir, "steerline.db"))
+	require(t, err)
+	defer db.Close()
+	runID := strings.Repeat("a", 32)
+	decisionID := strings.Repeat("b", 32)
+	decision := &DecisionState{ID: decisionID, AttemptID: runID, Version: 1, Request: DecisionRequest{Question: "Choose", Options: []DecisionOption{{ID: "yes", Label: "Yes"}, {ID: "no", Label: "No"}}}, Status: "pending"}
+	run := &Run{TaskID: "task-1", RunID: runID, AttemptID: runID, ControlRevision: 4, Claimant: "alice", Host: "orca", Backend: string(BackendOrca), Protocol: string(ProtocolOrcaTerminalV2), BeadsStatus: "in_progress", ExecutionStatus: "succeeded", FinishTaskStatus: "waiting_decision", Decision: decision}
+	runtimeState := Runtime{SchemaVersion: 5, Repository: Repository{Identity: project, Path: "repo", Remote: "origin", Branch: "main"}, Service: ServiceState{InstanceID: "service-instance", Status: "running", Ready: true, Claimant: "alice"}, Runs: []*Run{run}, Control: ControlState{DispatchMode: "manual", Revision: 2}}
+	store := &Store{Path: filepath.Join(dir, "runtime.json"), Domain: db, Project: project}
+	require(t, store.Publish(&runtimeState))
+	db2, err := OpenSQLiteStore(filepath.Join(dir, "steerline.db"))
+	require(t, err)
+	defer db2.Close()
+	commands1 := CommandService{Store: db, Project: project}
+	commands2 := CommandService{Store: db2, Project: project}
+	answer := DecisionAnswer{DecisionID: decisionID, RunID: runID, OptionID: "yes", Note: "same", AnsweredBy: "alice", ExpectedDecisionVersion: 1, ExpectedRunRevision: 4, ServiceInstanceID: "service-instance"}
+	answerFromSecondClient := answer
+	answerFromSecondClient.AnsweredBy = "bob"
+	type submitResult struct {
+		command CommandRecord
+		created bool
+		err     error
+	}
+	start := make(chan struct{})
+	results := make(chan submitResult, 2)
+	var wait sync.WaitGroup
+	wait.Add(2)
+	go func() {
+		defer wait.Done()
+		<-start
+		command, created, submitErr := commands1.AnswerDecisionWithID(ctx, strings.Repeat("c", 32), decisionID, 1, decisionAnswerKey(answer), "alice", mustJSON(answer))
+		results <- submitResult{command: command, created: created, err: submitErr}
+	}()
+	go func() {
+		defer wait.Done()
+		<-start
+		command, created, submitErr := commands2.AnswerDecisionWithID(ctx, strings.Repeat("d", 32), decisionID, 1, decisionAnswerKey(answerFromSecondClient), "bob", mustJSON(answerFromSecondClient))
+		results <- submitResult{command: command, created: created, err: submitErr}
+	}()
+	close(start)
+	wait.Wait()
+	firstResult, secondResult := <-results, <-results
+	if firstResult.err != nil || secondResult.err != nil {
+		t.Fatalf("concurrent answer submissions failed: first=%v second=%v", firstResult.err, secondResult.err)
+	}
+	if firstResult.command.CommandID != secondResult.command.CommandID || firstResult.created == secondResult.created {
+		t.Fatalf("two clients did not converge on one first-wins command: first=%+v second=%+v", firstResult, secondResult)
+	}
+	first := firstResult.command
+	if !firstResult.created {
+		first = secondResult.command
+	}
+	var acceptedAnswer DecisionAnswer
+	require(t, decode(first.Payload, &acceptedAnswer))
+	first.Status = "in_flight"
+	require(t, commands1.SetStatus(ctx, first, "in_flight", nil))
+	var accepted DecisionRecord
+	require(t, db.Transact(ctx, func(tx DomainTx) error {
+		var acceptErr error
+		accepted, _, acceptErr = tx.AcceptDecisionAnswer(first, acceptedAnswer)
+		return acceptErr
+	}))
+	if accepted.Status != "answer_saved" || accepted.Version != 2 {
+		t.Fatalf("answer acceptance fact was not atomically recorded: %+v", accepted)
+	}
+	repeat, created, err := commands1.AnswerDecisionWithID(ctx, strings.Repeat("e", 32), decisionID, 1, decisionAnswerKey(answer), "alice", mustJSON(answer))
+	require(t, err)
+	if created || repeat.CommandID != first.CommandID || repeat.Status != "accepted" {
+		t.Fatalf("same accepted answer did not return its original result: %+v created=%v", repeat, created)
+	}
+	different := answer
+	different.OptionID, different.Note = "no", "different"
+	if _, created, err = commands1.AnswerDecisionWithID(ctx, strings.Repeat("f", 32), decisionID, 1, decisionAnswerKey(different), "alice", mustJSON(different)); !errors.Is(err, ErrAnswerConflict) || created {
+		t.Fatalf("different answer did not return answer_conflict: created=%v err=%v", created, err)
+	}
+	projected, err := db.Query(ctx, project)
+	require(t, err)
+	if len(projected.Decisions) != 1 || projected.Decisions[0].Status != "answer_saved" || projected.Decisions[0].Version != 2 {
+		t.Fatalf("conflict overwrote the first accepted answer: %+v", projected.Decisions)
+	}
+}
+
+type decisionChildResult struct {
+	CommandID string `json:"command_id"`
+	Created   bool   `json:"created"`
+	Error     string `json:"error,omitempty"`
+}
+
+func TestDecisionAnswerCommandClientProcess(t *testing.T) {
+	if os.Getenv("STEERLINE_PR5_ANSWER_CHILD") != "1" {
+		return
+	}
+	db, err := OpenSQLiteStore(os.Getenv("STEERLINE_PR5_ANSWER_DB"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	project, decisionID, commandID, requester := os.Getenv("STEERLINE_PR5_ANSWER_PROJECT"), os.Getenv("STEERLINE_PR5_ANSWER_DECISION"), os.Getenv("STEERLINE_PR5_ANSWER_COMMAND"), os.Getenv("STEERLINE_PR5_ANSWER_BY")
+	var answer DecisionAnswer
+	if err = json.Unmarshal([]byte(os.Getenv("STEERLINE_PR5_ANSWER_PAYLOAD")), &answer); err != nil {
+		t.Fatal(err)
+	}
+	command, created, submitErr := (CommandService{Store: db, Project: project}).AnswerDecisionWithID(context.Background(), commandID, decisionID, answer.ExpectedDecisionVersion, decisionAnswerKey(answer), requester, mustJSON(answer))
+	result := decisionChildResult{CommandID: command.CommandID, Created: created}
+	if submitErr != nil {
+		result.Error = submitErr.Error()
+	}
+	data, err := json.Marshal(result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(os.Getenv("STEERLINE_PR5_ANSWER_OUTPUT"), data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	_ = db.Close()
+}
+
+func TestDecisionAnswerSeparateClientProcessesUseOneFirstWinsCommand(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	project := "repo:decision-process-race"
+	dbPath := filepath.Join(dir, "steerline.db")
+	db, err := OpenSQLiteStore(dbPath)
+	require(t, err)
+	runID, decisionID := strings.Repeat("1", 32), strings.Repeat("2", 32)
+	decision := &DecisionState{ID: decisionID, AttemptID: runID, Version: 1, Request: DecisionRequest{Question: "Choose", Options: []DecisionOption{{ID: "yes", Label: "Yes"}, {ID: "no", Label: "No"}}}, Status: "pending"}
+	run := &Run{TaskID: "task", RunID: runID, AttemptID: runID, ControlRevision: 3, Claimant: "service", Host: "orca", Backend: string(BackendOrca), Protocol: string(ProtocolOrcaTerminalV2), ExecutionStatus: "succeeded", FinishTaskStatus: "waiting_decision", Decision: decision}
+	runtimeState := Runtime{SchemaVersion: 5, Repository: Repository{Identity: project, Path: "repo", Remote: "origin", Branch: "main"}, Service: ServiceState{InstanceID: "instance", Status: "running", Ready: true, Claimant: "service"}, Runs: []*Run{run}, Control: ControlState{DispatchMode: "manual", Revision: 1}}
+	require(t, (&Store{Path: filepath.Join(dir, "runtime.json"), Domain: db, Project: project}).Publish(&runtimeState))
+	_ = db.Close()
+	by := []string{"alice", "bob"}
+	commands := []string{strings.Repeat("3", 32), strings.Repeat("4", 32)}
+	outputPaths := []string{filepath.Join(dir, "client-a.json"), filepath.Join(dir, "client-b.json")}
+	children := make([]*exec.Cmd, 2)
+	var childOutput [2]bytes.Buffer
+	for i := range children {
+		answer := DecisionAnswer{DecisionID: decisionID, RunID: runID, OptionID: "yes", Note: "same", AnsweredBy: by[i], ExpectedDecisionVersion: 1, ExpectedRunRevision: 3, ServiceInstanceID: "instance"}
+		payload, _ := json.Marshal(answer)
+		executable, execErr := os.Executable()
+		require(t, execErr)
+		children[i] = exec.Command(executable, "-test.run=^TestDecisionAnswerCommandClientProcess$")
+		children[i].Stdout, children[i].Stderr = &childOutput[i], &childOutput[i]
+		children[i].Env = append(os.Environ(), "STEERLINE_PR5_ANSWER_CHILD=1", "STEERLINE_PR5_ANSWER_DB="+dbPath, "STEERLINE_PR5_ANSWER_PROJECT="+project, "STEERLINE_PR5_ANSWER_DECISION="+decisionID, "STEERLINE_PR5_ANSWER_COMMAND="+commands[i], "STEERLINE_PR5_ANSWER_BY="+by[i], "STEERLINE_PR5_ANSWER_PAYLOAD="+string(payload), "STEERLINE_PR5_ANSWER_OUTPUT="+outputPaths[i])
+		require(t, children[i].Start())
+	}
+	for i, child := range children {
+		if waitErr := child.Wait(); waitErr != nil {
+			t.Fatalf("answer client process %d failed: %v %s", i, waitErr, childOutput[i].String())
+		}
+	}
+	var results [2]decisionChildResult
+	for i, path := range outputPaths {
+		data, readErr := os.ReadFile(path)
+		require(t, readErr)
+		require(t, json.Unmarshal(data, &results[i]))
+		if results[i].Error != "" {
+			t.Fatalf("answer client process %d returned an error: %s", i, results[i].Error)
+		}
+	}
+	created := 0
+	for _, result := range results {
+		if result.Created {
+			created++
+		}
+	}
+	if created != 1 || results[0].CommandID == "" || results[0].CommandID != results[1].CommandID {
+		t.Fatalf("two OS client processes did not converge on one first-wins command: %+v", results)
+	}
+	store, err := OpenSQLiteStore(dbPath)
+	require(t, err)
+	defer store.Close()
+	commandsPending, err := store.Commands(ctx, project, "pending", 10)
+	require(t, err)
+	if len(commandsPending) != 1 || commandsPending[0].CommandID != results[0].CommandID {
+		t.Fatalf("command history contains duplicate answer writes: %+v", commandsPending)
 	}
 }

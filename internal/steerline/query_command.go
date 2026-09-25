@@ -196,16 +196,53 @@ func (c CommandService) Submit(ctx context.Context, command CommandRecord) (Comm
 }
 
 func (c CommandService) AnswerDecision(ctx context.Context, decisionID string, expectedVersion uint64, idempotencyKey, requestedBy string, answer []byte) (CommandRecord, bool, error) {
+	return c.AnswerDecisionWithID(ctx, newID(), decisionID, expectedVersion, idempotencyKey, requestedBy, answer)
+}
+
+func (c CommandService) AnswerDecisionWithID(ctx context.Context, commandID, decisionID string, expectedVersion uint64, idempotencyKey, requestedBy string, answer []byte) (CommandRecord, bool, error) {
 	if decisionID == "" || expectedVersion == 0 || idempotencyKey == "" || requestedBy == "" {
 		return CommandRecord{}, false, errors.New("decision answer requires decision ID, expected version, idempotency key and requester")
+	}
+	if commandID == "" {
+		return CommandRecord{}, false, errors.New("decision answer requires a stable command ID")
 	}
 	var value DecisionAnswer
 	if err := decode(answer, &value); err != nil {
 		return CommandRecord{}, false, err
 	}
 	value.OptionID = strings.TrimSpace(value.OptionID)
-	value.Note = clip(strings.TrimSpace(value.Note), 4000)
-	value.AnsweredBy = clip(strings.TrimSpace(value.AnsweredBy), 200)
+	value.Note = strings.TrimSpace(value.Note)
+	value.AnsweredBy = strings.TrimSpace(value.AnsweredBy)
+	if value.AnsweredAt.IsZero() {
+		value.AnsweredAt = time.Now().UTC()
+	}
+	if value.ExpectedDecisionVersion == 0 {
+		value.ExpectedDecisionVersion = expectedVersion
+	}
+	if value.ExpectedDecisionVersion != expectedVersion {
+		return CommandRecord{}, false, errors.New("answer payload decision version differs from its command revision")
+	}
+	if value.ExpectedRunRevision == 0 || value.ServiceInstanceID == "" {
+		projection, _, err := c.Store.LoadProjection(ctx, c.Project)
+		if err != nil {
+			return CommandRecord{}, false, err
+		}
+		var runtimeState Runtime
+		if err = decode(projection, &runtimeState); err != nil {
+			return CommandRecord{}, false, errors.New("decision answer cannot bind to the current service projection")
+		}
+		for _, run := range runtimeState.Runs {
+			if run != nil && run.RunID == value.RunID && run.Decision != nil && run.Decision.ID == decisionID {
+				if value.ExpectedRunRevision == 0 {
+					value.ExpectedRunRevision = run.ControlRevision
+				}
+				if value.ServiceInstanceID == "" {
+					value.ServiceInstanceID = runtimeState.Service.InstanceID
+				}
+				break
+			}
+		}
+	}
 	if value.DecisionID != decisionID || value.RunID == "" || value.AnsweredBy != requestedBy {
 		return CommandRecord{}, false, errors.New("answer identity must match the command target and requester")
 	}
@@ -213,7 +250,26 @@ func (c CommandService) AnswerDecision(ctx context.Context, decisionID string, e
 	if err != nil {
 		return CommandRecord{}, false, err
 	}
-	return c.Submit(ctx, CommandRecord{CommandID: newID(), Kind: "answer_decision", TargetID: decisionID, ExpectedVersion: expectedVersion, IdempotencyKey: idempotencyKey, RequestedBy: requestedBy, Payload: append([]byte(nil), answer...), Status: "pending", CreatedAt: time.Now().UTC()})
+	return c.Submit(ctx, CommandRecord{CommandID: commandID, Kind: "answer_decision", TargetID: decisionID, ExpectedVersion: expectedVersion, IdempotencyKey: idempotencyKey, RequestedBy: requestedBy, Payload: append([]byte(nil), answer...), Status: "pending", CreatedAt: time.Now().UTC()})
+}
+
+func (c CommandService) AcceptAnswer(ctx context.Context, command CommandRecord, answer DecisionAnswer) (DecisionRecord, bool, error) {
+	if c.Store == nil || c.Project == "" || command.CommandID == "" || command.Kind != "answer_decision" || command.TargetID != answer.DecisionID {
+		return DecisionRecord{}, false, errors.New("accepted decision command identity is incomplete")
+	}
+	command.ProjectIdentity = c.Project
+	var record DecisionRecord
+	var alreadyAccepted bool
+	err := c.Store.Transact(ctx, func(tx DomainTx) error {
+		var err error
+		record, alreadyAccepted, err = tx.AcceptDecisionAnswer(command, answer)
+		return err
+	})
+	return record, alreadyAccepted, err
+}
+
+func decisionAnswerKey(answer DecisionAnswer) string {
+	return "answer:" + answer.DecisionID + ":" + digestValue(struct{ OptionID, Note string }{answer.OptionID, strings.TrimSpace(answer.Note)})
 }
 
 func (c CommandService) Pending(ctx context.Context, limit int) ([]CommandRecord, error) {

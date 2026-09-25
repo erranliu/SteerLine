@@ -3,6 +3,7 @@ package steerline
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -34,12 +35,13 @@ func TestDecisionRequestAndAnswerRoundTrip(t *testing.T) {
 		t.Fatal(e)
 	}
 	run.Decision = st
-	if _, e := os.Stat(st.RequestPath); e != nil {
-		t.Fatalf("request file missing: %v", e)
+	if entries, e := os.ReadDir(filepath.Dir(*run.ResultPath)); e != nil || len(entries) != 0 {
+		t.Fatalf("decision request wrote an answer/request sidecar: entries=%v err=%v", entries, e)
 	}
-	if e := WriteAnswer(run, DecisionAnswer{DecisionID: st.ID, OptionID: "b", AnsweredBy: "alice"}); e != nil {
-		t.Fatal(e)
+	if _, e := ReadDecisionAnswer(run); e == nil {
+		t.Fatal("pending decision unexpectedly had an answer")
 	}
+	run.Decision.Status, run.Decision.OptionID, run.Decision.AnsweredBy = "answer_saved", "b", "alice"
 	a, e := ReadDecisionAnswer(run)
 	if e != nil {
 		t.Fatal(e)
@@ -60,12 +62,26 @@ func TestDecisionAnswerRejectsBadInput(t *testing.T) {
 		"missing option": {AnsweredBy: "x"},
 		"unknown option": {OptionID: "z", AnsweredBy: "x"},
 		"missing by":     {OptionID: "a"},
-		"wrong id":       {DecisionID: "nope", OptionID: "a", AnsweredBy: "x"},
 	}
 	for name, a := range cases {
-		if e := WriteAnswer(run, a); e == nil {
+		a.DecisionID, a.RunID = st.ID, run.RunID
+		if e := validateDecisionAnswer(&st.Request, &a); e == nil {
 			t.Fatalf("%s: expected error", name)
 		}
+	}
+}
+
+func TestDecisionReplyEligibilityRejectsLocalContinuationAndMissingFixedBinding(t *testing.T) {
+	local := &Run{RunID: newID(), AttemptID: newID(), Backend: string(BackendLocal), Protocol: string(ProtocolLocalProcess), Decision: &DecisionState{ID: newID(), Status: "pending"}}
+	err := DecisionReplyEligibility(context.Background(), Config{}, local)
+	var backendErr *BackendError
+	if !errors.As(err, &backendErr) || backendErr.Code != BackendUnsupported {
+		t.Fatalf("local continuation did not report unsupported: %v", err)
+	}
+	orca := &Run{RunID: newID(), AttemptID: newID(), Backend: string(BackendOrca), Protocol: string(ProtocolOrcaTerminalV2), Decision: &DecisionState{ID: newID(), Status: "pending"}}
+	err = DecisionReplyEligibility(context.Background(), Config{RunDir: t.TempDir()}, orca)
+	if !errors.As(err, &backendErr) || backendErr.Code != BackendIdentityMismatch {
+		t.Fatalf("unbound Orca decision did not fail closed: %v", err)
 	}
 }
 
@@ -86,17 +102,41 @@ func TestDecisionRequestValidation(t *testing.T) {
 }
 
 func TestFreeTextDecisionRequiresNote(t *testing.T) {
-	run := decisionRun(t)
-	st, e := WriteDecisionRequest(run, DecisionRequest{Question: "explain", AllowFreeText: true})
-	if e != nil {
+	request := DecisionRequest{Question: "explain", Options: []DecisionOption{{ID: "a", Label: "A"}}, AllowFreeText: true}
+	if e := validateDecisionRequest(&request); e != nil {
 		t.Fatal(e)
 	}
-	run.Decision = st
-	if e := WriteAnswer(run, DecisionAnswer{AnsweredBy: "x"}); e == nil {
+	custom := DecisionAnswer{DecisionID: "d", RunID: "r", AnsweredBy: "x"}
+	if e := validateDecisionAnswer(&request, &custom); e == nil {
 		t.Fatal("expected an error without a note")
 	}
-	if e := WriteAnswer(run, DecisionAnswer{Note: "because", AnsweredBy: "x"}); e != nil {
+	custom.Note = "because"
+	if e := validateDecisionAnswer(&request, &custom); e != nil {
 		t.Fatal(e)
+	}
+	request.Options = nil
+	free := DecisionRequest{Question: "explain", AllowFreeText: true}
+	if e := validateDecisionRequest(&free); e != nil {
+		t.Fatal(e)
+	}
+	if e := validateDecisionAnswer(&free, &custom); e != nil {
+		t.Fatal(e)
+	}
+	long := strings.Repeat("界", 4001)
+	custom.Note = long
+	if e := validateDecisionAnswer(&free, &custom); e == nil || !strings.Contains(e.Error(), "4000 character") {
+		t.Fatalf("oversized answer was accepted or silently clipped: %v", e)
+	}
+}
+
+func TestDecisionRequestRejectsOversizedEvidenceWithoutTruncating(t *testing.T) {
+	req := DecisionRequest{Question: strings.Repeat("界", 2001), Options: []DecisionOption{{ID: "a", Label: "A"}}}
+	if err := validateDecisionRequest(&req); err == nil || len([]rune(req.Question)) != 2001 {
+		t.Fatalf("oversized question was not rejected intact: len=%d err=%v", len([]rune(req.Question)), err)
+	}
+	req = DecisionRequest{Question: "Q", Context: strings.Repeat("x", 8001), AllowFreeText: true}
+	if err := validateDecisionRequest(&req); err == nil || len(req.Context) != 8001 {
+		t.Fatalf("oversized context was not rejected intact: len=%d err=%v", len(req.Context), err)
 	}
 }
 
@@ -119,7 +159,7 @@ func TestAnswerDecisionRejectsV3RuntimeWithoutMutatingIt(t *testing.T) {
 	if e := AnswerDecision(c, AnswerOptions{RunID: run.TaskID, Option: "a", By: "bob"}); e == nil || !strings.Contains(e.Error(), "unsupported runtime schema 3") {
 		t.Fatalf("v3 answer was accepted: %v", e)
 	}
-	if _, e = os.Stat(run.Decision.AnswerPath); !os.IsNotExist(e) {
+	if _, e = os.Stat(filepath.Join(dir, "runs", run.RunID, "decision.answer.json")); !os.IsNotExist(e) {
 		t.Fatalf("rejected old runtime was mutated: %v", e)
 	}
 	if _, e = LoadRuntime(filepath.Join(dir, "runtime.json")); e == nil {
@@ -127,9 +167,35 @@ func TestAnswerDecisionRejectsV3RuntimeWithoutMutatingIt(t *testing.T) {
 	}
 }
 
-// TestOrcaDecisionResumesRun drives the full human-in-the-loop path against the
-// protocol fake: the agent asks for a decision, a human answers, the service
-// resumes the same run, and the agent then publishes the PR.
+func TestNewServiceRefusesOldDecisionSidecarWithoutImportingAnswer(t *testing.T) {
+	f := newFixture(t, task("t-1"))
+	s := f.service(t)
+	runID := newID()
+	requestPath := filepath.Join(f.c.RunDir, "runs", runID, "decision.request.json")
+	answerPath := filepath.Join(f.c.RunDir, "runs", runID, "decision.answer.json")
+	if err := os.MkdirAll(filepath.Dir(requestPath), 0700); err != nil {
+		t.Fatal(err)
+	}
+	answerBytes := []byte(`{"decision_id":"old","run_id":"old","option_id":"yes","answered_by":"legacy"}`)
+	if err := os.WriteFile(answerPath, answerBytes, 0600); err != nil {
+		t.Fatal(err)
+	}
+	run := &Run{TaskID: "t-1", Title: "legacy sidecar", RunID: runID, AttemptID: runID, Claimant: f.c.Claimant, Host: "local", Backend: string(BackendLocal), Protocol: string(ProtocolLocalProcess), ExecutionStatus: "succeeded", FinishTaskStatus: "waiting_decision", ResultPath: ptr(filepath.Join(f.c.RunDir, "runs", runID, "result.json")), Decision: &DecisionState{ID: newID(), AttemptID: runID, Version: 1, Status: "pending", Request: DecisionRequest{Question: "choose", Options: []DecisionOption{{ID: "yes", Label: "Yes"}}}, RequestPath: requestPath, AnswerPath: answerPath}}
+	s.State.Runs = append(s.State.Runs, run)
+	require(t, s.save())
+	require(t, s.Close())
+	if _, err := NewService(f.c); err == nil || !strings.Contains(err.Error(), "removed sidecar-answer format") {
+		t.Fatalf("legacy answer sidecar state was not explicitly refused: %v", err)
+	}
+	stored, err := os.ReadFile(answerPath)
+	require(t, err)
+	if string(stored) != string(answerBytes) {
+		t.Fatal("legacy answer file was imported, rewritten or deleted")
+	}
+}
+
+// TestOrcaDecisionResumesRun verifies that terminal delivery without a
+// decision-bound application receipt cannot advance the task to PR waiting.
 func TestOrcaDecisionResumesRun(t *testing.T) {
 	f := newFixture(t, task("t-1"))
 	exe, e := os.Executable()
@@ -148,6 +214,12 @@ func TestOrcaDecisionResumesRun(t *testing.T) {
 
 	ctx := context.Background()
 	s := f.service(t)
+	t.Cleanup(func() {
+		if s.worker != nil {
+			s.shutdown()
+		}
+		_ = s.Close()
+	})
 	require(t, s.dispatch(ctx))
 	if s.worker == nil {
 		t.Fatal("orca worker was not started")
@@ -158,34 +230,54 @@ func TestOrcaDecisionResumesRun(t *testing.T) {
 	if run.FinishTaskStatus != "waiting_decision" || run.Decision == nil {
 		t.Fatalf("run did not pause for a decision: status=%s execution=%s error=%s", run.FinishTaskStatus, run.ExecutionStatus, deref(run.Error))
 	}
-	if !fileExists(run.Decision.RequestPath) {
-		t.Fatalf("decision request file missing: %s", run.Decision.RequestPath)
+	if fileExists(filepath.Join(filepath.Dir(*run.ResultPath), "decision.request.json")) {
+		t.Fatal("decision request was written outside the SQLite authority")
 	}
 	if run.PR.URL != nil {
 		t.Fatalf("decision run must not bind a PR: %v", *run.PR.URL)
 	}
 
+	s.State.Service.Status, s.State.Service.Ready = "running", true
+	require(t, s.save())
 	_, _, e = (CommandService{Store: s.domainStore, Project: s.Config.identity}).AnswerDecision(ctx, run.Decision.ID, run.Decision.Version, "orca-answer", "tester", mustJSON(DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, OptionID: "a", Note: "keep compat", AnsweredBy: "tester"}))
 	require(t, e)
 	if run.Decision.Status != "pending" {
 		t.Fatalf("answer must not mutate run state: %s", run.Decision.Status)
 	}
-	require(t, s.processCommandsAndDecisions(ctx))
+	beforeReply, err := readFakeOrcaState(stateDir, run.Process.Terminal)
+	require(t, err)
+	require(t, s.processPendingCommands(ctx))
+	if run.Decision.Status != "answer_saved" || s.worker != nil {
+		t.Fatalf("answer was not durably accepted separately from continuation: decision=%+v worker=%v", run.Decision, s.worker != nil)
+	}
+	require(t, s.Close())
+	s = f.service(t)
+	restartedRun := s.State.Runs[0]
+	if restartedRun.Decision == nil || restartedRun.Decision.Status != "answer_saved" || restartedRun.Decision.OptionID != "a" {
+		t.Fatalf("service restart did not hydrate the accepted answer: %+v", restartedRun.Decision)
+	}
+	require(t, s.applyDecisions(ctx))
+	run = s.State.Runs[0]
 	if run.Decision.Status != "reply_accepted" {
-		t.Fatalf("decision not applied: %+v", run.Decision)
+		t.Fatalf("restarted service did not continue the accepted decision: %+v", run.Decision)
 	}
 	if s.worker == nil {
 		t.Fatal("decision did not resume a worker")
 	}
+	afterReply, err := readFakeOrcaState(stateDir, run.Process.Terminal)
+	require(t, err)
+	if afterReply.Sends != beforeReply.Sends+1 {
+		t.Fatalf("restart did not issue exactly one continuation: before=%d after=%d", beforeReply.Sends, afterReply.Sends)
+	}
 	finishWorker(t, s)
 
 	run = s.State.Runs[0]
-	if run.FinishTaskStatus != "waiting_pr_merge" || run.PR.URL == nil {
-		t.Fatalf("resumed run did not bind a PR: %+v", run)
+	if run.FinishTaskStatus != "blocked" || run.Decision.Status != "failed" || run.PR.URL != nil || run.Error == nil || !strings.Contains(*run.Error, "not verified") {
+		t.Fatalf("terminal send without application evidence was accepted: %+v", run)
 	}
 	act, e := os.ReadFile(filepath.Join(f.c.RunDir, "runs", run.RunID, "activity.jsonl"))
 	require(t, e)
-	for _, want := range []string{"decision", "answered", "reply_accepted", "pr submitted"} {
+	for _, want := range []string{"decision", "answered", "reply_accepted", "decision application was not verified"} {
 		if !strings.Contains(string(act), want) {
 			t.Fatalf("activity journal missing %q: %s", want, act)
 		}
@@ -216,6 +308,8 @@ func TestOrcaLostReplyReceiptKeepsOriginalExecutionUnknown(t *testing.T) {
 	}
 	before, err := readFakeOrcaState(stateDir, run.Process.Terminal)
 	require(t, err)
+	s.State.Service.Status, s.State.Service.Ready = "running", true
+	require(t, s.save())
 	_, _, err = (CommandService{Store: s.domainStore, Project: s.Config.identity}).AnswerDecision(ctx, run.Decision.ID, run.Decision.Version, "lost-reply-answer", "tester", mustJSON(DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, OptionID: "a", Note: "fixed answer", AnsweredBy: "tester"}))
 	require(t, err)
 	t.Setenv("STEERLINE_FAKE_ORCA_SEND_RESPONSE_LOST", "1")
@@ -243,5 +337,20 @@ func TestOrcaLostReplyReceiptKeepsOriginalExecutionUnknown(t *testing.T) {
 	require(t, err)
 	if afterRestart.Sends != after.Sends || !restarted.State.SlotOccupied {
 		t.Fatalf("restart resent uncertain reply or released slot: before=%d after=%d slot=%v", after.Sends, afterRestart.Sends, restarted.State.SlotOccupied)
+	}
+}
+
+func TestDecisionApplicationEvidenceBindsOriginalDecisionAndAnswer(t *testing.T) {
+	run := &Run{RunID: "run", ExecutionID: "execution", Decision: &DecisionState{ID: "decision", AttemptID: "attempt", Status: "reply_accepted", Request: DecisionRequest{Question: "choose", Options: []DecisionOption{{ID: "a", Label: "A"}}}, OptionID: "a", Note: "keep", AnsweredBy: "alice"}}
+	answer, err := ReadDecisionAnswer(run)
+	require(t, err)
+	ref := ExecutionRef{RunID: run.RunID, AttemptID: run.Decision.AttemptID, Backend: BackendOrca, Protocol: ProtocolOrcaTerminalV2, Target: ExecutionTarget{ID: "target"}, WorkspacePath: "worktree", WorkspaceBranch: "branch", BaseCommit: strings.Repeat("a", 40)}
+	result := Result{TaskID: "task", RunID: run.RunID, Outcome: "blocked", DecisionApplication: &DecisionApplicationEvidence{DecisionID: run.Decision.ID, AttemptID: run.Decision.AttemptID, ExecutionID: run.ExecutionID, ExecutionRefHash: digestValue(ref), AnswerHash: decisionAnswerDigest(answer)}}
+	if err = validateDecisionApplication(run, result, ref); err != nil {
+		t.Fatal(err)
+	}
+	result.DecisionApplication.AnswerHash = digestValue("different answer")
+	if err = validateDecisionApplication(run, result, ref); err == nil {
+		t.Fatal("evidence for a different answer was accepted")
 	}
 }

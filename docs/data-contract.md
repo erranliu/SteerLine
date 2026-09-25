@@ -37,7 +37,7 @@ TASK-DAG 更新后的协议样例见 [native-tasks-v1.sample.json](validation/ta
 | service.instance_id | string | 每次启动新的随机实例 ID，不等于 claimant |
 | service.pid | integer | 服务进程 PID |
 | service.status | string | running / stopping / stopped / error |
-| service.mode | string | scheduler（正常轮询派发）/ retry-one（仅重试指定已有运行）/ maintenance（人工恢复命令） |
+| service.mode | string | scheduler（正常轮询派发）/ maintenance（生命周期初始化或人工恢复） |
 | service.claimant | string | 稳定 Beads 领取者，用于恢复不完整记录 |
 | service.error | string/null | 最近服务级错误，查询恢复后可能清除 |
 | service.process_identity | object/null | 服务 OS 进程身份；含 PID、创建时间和可执行文件，供连接器核验实例 |
@@ -57,7 +57,7 @@ TASK-DAG 更新后的协议样例见 [native-tasks-v1.sample.json](validation/ta
 
 `control.dispatch_mode` 为 `manual` 或 `auto`。每次 `run` 默认 auto，也可用 `-dispatch manual` 显式启动手动模式；启动参数生效，不隐式恢复上次模式。`dispatch_paused` 只阻止新派发，当前 worker、决策续跑和 PR 核验继续。`revision` 随模式/暂停、执行槽或执行阻塞变化；心跳、日志和重复 PR 轮询不推进。`control.operation` 是服务主状态机正在执行或等待发布终态回执的 checkpoint。`control.blockers` 保留不确定的 claim/worktree/worker 等执行副作用，阻止新任务派发，直到后续人工恢复动作解除。
 
-控制 revision 按 service.instance_id 隔离，每个新实例从 1 开始；不占执行槽的其他 PR 完成不会使派发版本失效。run.control_revision 跨实例保存，并覆盖工作目录、base、进程身份等恢复证据的变化。自动派发、显式启动、旧 retry 和决策续跑共用执行守卫；决策续跑可以使用为待决策预留的槽，但不能绕过 unknown、控制 checkpoint 或 blocker。
+控制 revision 按 service.instance_id 隔离，每个新实例从 1 开始；不占执行槽的其他 PR 完成不会使派发版本失效。run.control_revision 跨实例保存，并覆盖工作目录、base、进程身份等恢复证据的变化。自动派发、显式启动、在线 retry 与决策续跑共用执行守卫；决策续跑可以使用为待决策预留的槽，但不能绕过 unknown、控制 checkpoint 或 blocker。
 
 ## 每项运行
 
@@ -73,10 +73,10 @@ TASK-DAG 更新后的协议样例见 [native-tasks-v1.sample.json](validation/ta
 | beads_status | string | 最近核实的 Beads 状态，不以本地预测替代 closed。这是过渡期的外部任务态镜像，见 [状态模型](state-model.md) |
 | execution_status | string | pending / running / succeeded / failed / unknown |
 | finish_task_status | string | pending / waiting_decision / waiting_pr_merge / completed / blocked |
-| decision | object/null | 当前问题和答案的展示摘要；权威版本与状态保存在 SQLite。主要状态为 pending、answer_saved、reply_accepted、applied。见 [decisions](decisions.md) |
+| decision | object/null | 当前问题和答案的展示摘要；权威版本、问题历史与答案保存在 SQLite `decisions`。状态为 pending、answer_saved、resuming、reply_accepted、applied、failed 或 superseded。见 [decisions](decisions.md) |
 | codex_session_id | string/null | 从 thread.started.thread_id 得到，不从日志文字猜测 |
 | process | object/null | 宿主无关身份：kind（os/orca）、PID/Created/Executable（os）或 Terminal/RuntimeID/Incarnation（orca）；缺少 kind 的执行绑定拒绝使用 |
-| manual_stop | object/null | 人工停止确认：固定 attempt_id 与 confirmed_at；仅结算该 attempt 的资源不确定性，不改写原 Operation 的未知结果。retry 创建新 attempt 时清除 |
+| manual_stop | object/null | 人工停止确认：固定 attempt_id、confirmed_at、操作者与确认依据；仅结算该 attempt 的资源不确定性，不改写原 Operation 的未知结果。retry 创建新 attempt 时清除 |
 | started_at / ended_at | timestamp/null | 服务记录的执行起止时间；崩溃导致终止时间未知时仍为 null |
 | workspace_intent | object/null | 创建前持久化的 path、branch、base_commit；只表示计划创建，不证明目录已就绪。旧记录或领取孤儿可能为 null |
 | worktree_path / worktree_branch / base_commit | string/null | 调度器创建并核验的隔离目录、实现分支及起点 Git hash；准备成功前均为 null，不由 Codex 结果覆盖 |
@@ -138,6 +138,20 @@ tasks.json
 
 runtime 中的 `control.operation` 先于副作用保存；完成时把业务结果和终态 receipt 一起保存为 completed checkpoint，再原子发布 receipt，最后清除 checkpoint。发布 applying receipt 失败时不派发。重启可重建 completed 回执；applying 操作不会重放 claim、worktree create、worker start 或 terminal send，不确定副作用进入 blockers。停服不能覆盖未结算操作的 evidence。控制历史不会自动清理，日志删除不影响指令次数。
 
+### SQLite service command queue
+
+人工回答与恢复动作都经当前 `CommandService` 追加到 `commands` 表；服务离线时客户端只读检查状态，不写请求文件或启动维护 Service。command payload 顶层固定包含 `service_instance_id`、`expected_revision`、`run_attempt_id`（resolve command 可省略）和动作专属 `body`。answer_decision 的 `expected_version` 绑定 DecisionRecord 版本；恢复动作的 expected revision 绑定 Run，resolve_command 绑定 control revision。新服务实例会拒绝旧实例尚未受理的 pending 命令。
+
+| command.kind | body 主要字段 | accepted 的持久事实 |
+| --- | --- | --- |
+| `answer_decision` | decision_id、run_id、option_id、note、expected_run_revision、expected_decision_version、service_instance_id | SQLite 的 DecisionRecord 与 command 回执同事务记录固定答案；`accepted` 只表示答案已保存 |
+| `retry_run` | 操作者确认与依据 | 同 task/run/worktree 的新 attempt worker 已启动且固定身份已保存 |
+| `mark_stopped` | `confirmed_process_stopped`、`confirmation_basis` | 精确 unknown attempt 已标为 failed/blocked；Service 仍运行，旧 Operation 仍保留未知 |
+| `accept_result` | 原结果字节 base64、SHA-256、停止确认依据 | SHA-256 匹配的原字节被保存到 `runs/<run_id>/recovery/<command_id>/result.json`，真实 PR 查询通过并进入 waiting_pr_merge |
+| `resolve_command` | 指定 blocker 的人工核验依据 | 只解除该 blocker 并记录原 request_id / resolved_by；不会重放原指令 |
+
+恢复命令先持久化为 `in_flight`。重启后绝不自动执行第二次；若结果未能通过保存的事实对账，则命令变为 `indeterminate` 并保留 control blocker，由后续 resolve_command 逐条处理。结果接回以 command payload 携带的冻结字节为准，不在服务执行时重读任意客户端路径。命令 `accepted` 不代表 PR 已合并或任务已完成。
+
 上表 `start_task` 描述现有 Beads 控制生命周期。原生 `CommandService.ClaimNativeTask` 在中心事务中预留 Task claim、WorkflowRun、Execution、prepare Attempt、命令回执和 Operation；其响应为 `claim_reserved` 且 `start_task_applied=false`。只有生产原生接入完成工作区准备并持久化实际启动身份后，才能把控制命令标为 applied。原生 delivery 由 `CompleteNativeTask` 在事务外查询精确 PR，并在事务内重核 task version、所选运行、步骤门槛和整任务的 PR 发布绑定后写 TaskDelivery/closed；另一笔发布结果未知时即使选用的 PR 已合并也不关闭任务。
 
 终态回执暂时无法发布时，服务保留 completed checkpoint 并重试发布，继续监督已有 worker、响应停服；后续变更、决策续跑和 PR 结项先等待该 checkpoint 结算。runtime 自身持久化失败仍按既有规则停止服务。恢复时，缺失 applying 回执不能否认已保存的 run/领取证据；这种情况保留 indeterminate 与执行阻塞。完整历史请求只索引一次，既有终态回执不会因归档请求后来损坏而被重写。
@@ -160,11 +174,11 @@ WorkflowRun 保存步骤定义及 Codex executable/args、sandbox、model、reas
 
 步骤回执包含 schema_version、project_identity、task_id、workflow_run_id、execution_id、attempt_id 与 result。中心逐项核验身份、输入 revision、真实 Git common-dir/分支/base、前置结果和步骤门槛。无效结果将尝试记为 failed；通过门槛后才提交 succeeded 与下一步意图。publish_pr 的前置验证/审查在启动发布器之前检查，PR head 在关闭外部任务之前核验。
 
-决策续跑的结果必须返回 `result.applied_decision_id`；后端接受输入只算 reply_accepted。单段 accept-result/retry/mark-stopped 入口不能用于 minimal-v1；不确定步骤必须按原尝试和 Operation 对账。
+minimal-v1 当前拒绝本地决策续跑：answer_decision 在接受前核验固定执行能力，不支持的 local continuation 会被拒绝并保留 pending 问题，不启动新步骤。若执行状态已有 `reply_accepted` 决策，结果仍须同时返回 `result.applied_decision_id`、`applied_decision_attempt_id`、`applied_decision_execution_id` 和 `applied_answer_sha256`，分别匹配原问题、decision attempt、Workflow Execution 和固定答案摘要；后端接受输入只算 reply_accepted，缺少证明时决策失败且 run 阻塞。单段 accept-result/retry/mark-stopped 入口不能用于 minimal-v1；不确定步骤必须按原尝试和 Operation 对账。
 
 ### 单次入口结果
 
-八个基础键都必须出现，不允许额外键：task_id、run_id、outcome、pr_url、worktree_path、base_commit、summary、error；此外 `decision` 是可选键（仅 outcome=needs_decision 时使用）。
+八个基础键都必须出现，不允许额外键：task_id、run_id、outcome、pr_url、worktree_path、base_commit、summary、error；此外 `decision` 和 `decision_application` 是可选键。`decision` 仅用于 outcome=needs_decision；answer_decision 的后续结果只有携带严格匹配原 decision/attempt/execution/答案摘要的 `decision_application` 才能证明应用。
 
 - task_id/run_id 必须与此次派发精确匹配。
 - outcome 允许 pr_submitted、blocked、needs_decision。
