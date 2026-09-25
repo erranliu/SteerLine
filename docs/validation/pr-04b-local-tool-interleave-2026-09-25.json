@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "source": "public Codex app-server thread/read with includeTurns after a real local codex exec --json turn",
+  "codex_version": "0.156.1",
+  "redactions": [
+    "session, turn and item identifiers are consistently pseudonymized",
+    "local workspace and executable path prefixes are omitted",
+    "reasoning item contents are omitted"
+  ],
+  "thread": {
+    "id": "local-tool-session",
+    "cwd": "C:/native-probe/local",
+    "turns": [
+      {
+        "id": "local-tool-turn-1",
+        "status": "completed",
+        "itemsView": "full",
+        "startedAt": 1790297810,
+        "completedAt": 1790297825,
+        "items": [
+          {
+            "id": "local-tool-item-user",
+            "type": "userMessage",
+            "content": [{"type": "text", "text": "Use the shell tool to read probe.txt in this workspace. Reply with the exact marker in one sentence. Do not edit any files."}]
+          },
+          {
+            "id": "local-tool-item-commentary",
+            "type": "agentMessage",
+            "phase": "commentary",
+            "text": "I’ll read `probe.txt` from the workspace and return its marker unchanged."
+          },
+          {
+            "id": "local-tool-item-command",
+            "type": "commandExecution",
+            "command": "Get-Content -Raw -LiteralPath 'probe.txt'",
+            "status": "completed",
+            "aggregatedOutput": "PR04B_NATIVE_PROBE_ALPHA\r\n",
+            "exitCode": 0
+          },
+          {
+            "id": "local-tool-item-final",
+            "type": "agentMessage",
+            "phase": "final_answer",
+            "text": "PR04B_NATIVE_PROBE_ALPHA"
+          }
+        ]
+      }
+    ]
+  }
+}

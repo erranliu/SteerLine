@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "captured_on": "2026-09-25",
+  "targets": {
+    "os": "Windows",
+    "codex": "0.156.1",
+    "orca": "1.4.209"
+  },
+  "local_interleaved_turn": {
+    "source": "public Codex app-server thread/read with includeTurns",
+    "session_sha256": "bd23870b3cd1e9420527403a9470f9829bd50d789215fcd5808a115080acf224",
+    "items_in_order": ["userMessage", "agentMessage:commentary", "commandExecution:completed", "agentMessage:final_answer"],
+    "turn_status": "completed",
+    "source_fixture": "pr-04b-local-tool-interleave-2026-09-25.json",
+    "mapper_replay_without_duplicates": true
+  },
+  "real_local_source_replacement": {
+    "source": "production Codex history collector on two isolated sessions bound to one execution attempt and workspace",
+    "session_sha256": [
+      "1c5be7449b6dac878e813861a63a927f9fc08c5db63afca26cfda4de9cab3f09",
+      "bd23870b3cd1e9420527403a9470f9829bd50d789215fcd5808a115080acf224"
+    ],
+    "events": 21,
+    "finals_by_source": [2, 1],
+    "visible_source_changed": 2,
+    "independent_checkpoints": 2,
+    "replay_without_duplicates": true
+  },
+  "real_local_cancelled_turn": {
+    "source": "public Codex app-server thread/read after turn/interrupt",
+    "status": "interrupted",
+    "completed_at_present": true,
+    "items": 0,
+    "mapped_as": "turn.cancelled with final absent",
+    "source_fixture": "pr-04b-native-cancelled-2026-09-25.json"
+  },
+  "real_orca_retention": {
+    "source": "Orca terminal v2 stream in isolated shell terminal",
+    "emitted_rows": 20000,
+    "oldest_cursor": "18001",
+    "latest_cursor": "20001",
+    "production_adapter_gap": true,
+    "first_collected_rows": ["PR04B-RETENTION-18001", "PR04B-RETENTION-18005"],
+    "next_collected_rows": ["PR04B-RETENTION-18006", "PR04B-RETENTION-18010"],
+    "initial_cursor_fix": "explicit cursor 0 is needed because an omitted cursor returns a tail preview"
+  }
+}

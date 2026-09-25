@@ -911,9 +911,13 @@ func (b orcaTerminalBackend) ReadOutput(ctx context.Context, ref ExecutionRef, c
 	changed := false
 	for attempt := 0; attempt < 2; attempt++ {
 		args := []string{"terminal", "read", "--terminal", ref.External.Terminal, "--limit", strconv.Itoa(limit), "--json"}
-		if position != "" {
-			args = append(args, "--cursor", position)
+		// Orca's omitted-cursor read is a tail preview. An initial collection
+		// must request cursor zero to page every row still retained upstream.
+		readPosition := position
+		if readPosition == "" {
+			readPosition = "0"
 		}
+		args = append(args, "--cursor", readPosition)
 		out, callErr := (orcaClient{cfg: b.config}).call(ctx, positiveDuration(b.config.CommandTimeout, 30*time.Second), args...)
 		env, err := parseEnvelope(out)
 		if callErr != nil {

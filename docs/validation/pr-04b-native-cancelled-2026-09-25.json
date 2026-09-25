@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "source": "public Codex app-server thread/read after turn/interrupt on an isolated local session",
+  "codex_version": "0.156.1",
+  "redactions": ["session and turn identifiers are pseudonymized", "workspace and user input are omitted"],
+  "thread": {
+    "id": "local-cancelled-session",
+    "cwd": "C:/native-probe/local",
+    "turns": [
+      {
+        "id": "local-cancelled-turn-1",
+        "status": "interrupted",
+        "itemsView": "full",
+        "startedAt": 1790298118,
+        "completedAt": 1790298121,
+        "error": null,
+        "items": []
+      }
+    ]
+  }
+}

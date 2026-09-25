@@ -285,6 +285,147 @@ func TestCodexHistoryNativeFixtures(t *testing.T) {
 	}
 }
 
+func TestCodexHistoryRealLocalToolInterleaveFixture(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", "docs", "validation", "pr-04b-local-tool-interleave-2026-09-25.json"))
+	require(t, err)
+	var fixture struct {
+		Thread codexHistoryThread `json:"thread"`
+	}
+	require(t, json.Unmarshal(raw, &fixture))
+	if len(fixture.Thread.Turns) != 1 {
+		t.Fatal("real local tool fixture must contain exactly one turn")
+	}
+	base := ConversationEvent{ProjectID: "project", ExecutionID: "execution", AttemptID: "attempt", Backend: BackendLocal, Protocol: ProtocolLocalProcess, Agent: "codex", SourceSegment: "native", SourceIdentity: "native", SessionID: fixture.Thread.ID}
+	writes, err := mapCodexHistoryTurn(base, fixture.Thread.Turns[0], 1)
+	require(t, err)
+	store, err := OpenSQLiteStore(filepath.Join(t.TempDir(), "history.db"))
+	require(t, err)
+	defer store.Close()
+	first, err := store.CommitConversation(context.Background(), writes, ConversationCheckpoint{})
+	require(t, err)
+	second, err := store.CommitConversation(context.Background(), writes, ConversationCheckpoint{})
+	require(t, err)
+	if len(first) != 6 || len(second) != len(first) {
+		t.Fatalf("real interleaved turn was not preserved: %+v", first)
+	}
+	for i := range first {
+		if first[i].EventID != second[i].EventID || first[i].TurnID != fixture.Thread.Turns[0].ID {
+			t.Fatalf("interleaved replay duplicated or reassigned event %d: %+v", i, first[i])
+		}
+	}
+	if first[0].Type != ConversationTurnStarted || first[2].Type != ConversationMessageComplete || first[2].Phase != MessagePhaseCommentary || first[3].Type != ConversationToolCompleted || first[3].Status != "completed" || first[4].Type != ConversationMessageComplete || first[4].Phase != MessagePhaseFinalAnswer || first[5].Type != ConversationTurnCompleted || first[5].FinalAvailability != FinalAvailable {
+		t.Fatalf("real commentary/tool/final order or turn completion was lost: %+v", first)
+	}
+	query := ConversationQueryService{Store: store, Project: "project"}
+	for _, tc := range []struct {
+		index int
+		want  string
+	}{{2, "I’ll read `probe.txt` from the workspace and return its marker unchanged."}, {3, "PR04B_NATIVE_PROBE_ALPHA\r\n"}, {4, "PR04B_NATIVE_PROBE_ALPHA"}} {
+		if first[tc.index].Body == nil || first[tc.index].Body.Completeness != BodyComplete {
+			t.Fatalf("real item %d lacks complete body: %+v", tc.index, first[tc.index])
+		}
+		body, err := query.ReadMessageBody(context.Background(), *first[tc.index].Body, 0, 1024)
+		require(t, err)
+		if string(body.Data) != tc.want || !body.Complete {
+			t.Fatalf("real item %d changed body: %+v", tc.index, body)
+		}
+	}
+}
+
+// TestCodexHistoryRealSourceReplacement uses two exact isolated local probe
+// sessions from one workspace. It is gated because CI has no such sessions.
+func TestCodexHistoryRealSourceReplacement(t *testing.T) {
+	path := os.Getenv("STEERLINE_CODEX_HISTORY_REPLACEMENT_BINDINGS")
+	if path == "" {
+		t.Skip("set exact isolated source-replacement bindings to run acceptance")
+	}
+	raw, err := os.ReadFile(path)
+	require(t, err)
+	var bindings []codexHistoryBinding
+	require(t, json.Unmarshal(raw, &bindings))
+	if len(bindings) != 2 || bindings[0].Backend != BackendLocal || bindings[1].Backend != BackendLocal || bindings[0].ProjectID != bindings[1].ProjectID || bindings[0].ExecutionID != bindings[1].ExecutionID || bindings[0].AttemptID != bindings[1].AttemptID || canonical(bindings[0].Workspace) != canonical(bindings[1].Workspace) || bindings[0].SessionID == bindings[1].SessionID {
+		t.Fatal("replacement acceptance needs two distinct real sessions bound to one local attempt and workspace")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	store, err := OpenSQLiteStore(filepath.Join(t.TempDir(), "replacement.db"))
+	require(t, err)
+	defer store.Close()
+	service := &Service{domainStore: store}
+	for _, binding := range bindings {
+		settled := false
+		for i := 0; i < 8 && !settled; i++ {
+			settled, err = service.collectCodexHistoryPage(ctx, binding)
+			require(t, err)
+		}
+		if !settled {
+			t.Fatalf("real source %s did not reach its final page", binding.SessionID)
+		}
+	}
+	query := ConversationQueryService{Store: store, Project: bindings[0].ProjectID}
+	filter := ConversationFilter{ExecutionID: bindings[0].ExecutionID, AttemptID: bindings[0].AttemptID, Source: "codex-app-server"}
+	page, err := query.ReadConversation(ctx, filter, "", 100)
+	require(t, err)
+	sessions, gaps, finals := map[string]int{}, map[string]int{}, map[string]int{}
+	for _, event := range page.Events {
+		switch {
+		case event.Type == ConversationSession:
+			sessions[event.SessionID]++
+		case event.Type == ConversationGap && event.Status == "source_changed":
+			gaps[event.SessionID]++
+		case event.Type == ConversationMessageComplete && event.Phase == MessagePhaseFinalAnswer:
+			finals[event.SessionID]++
+			if event.Body == nil {
+				t.Fatal("real replacement lost a final body")
+			}
+			body, readErr := query.ReadMessageBody(ctx, *event.Body, 0, 256<<10)
+			require(t, readErr)
+			if !body.Complete || body.SHA256 != event.Body.SHA256 {
+				t.Fatal("real replacement changed the final body")
+			}
+		}
+	}
+	for _, binding := range bindings {
+		if sessions[binding.SessionID] != 1 || gaps[binding.SessionID] != 1 || finals[binding.SessionID] < 1 {
+			t.Fatalf("real source %s was hidden or crossed: sessions=%v gaps=%v finals=%v", binding.SessionID, sessions, gaps, finals)
+		}
+		cp, cpErr := store.ConversationCheckpoint(ctx, binding.ProjectID, binding.ExecutionID, binding.AttemptID, "codex-app-server", binding.identity())
+		require(t, cpErr)
+		if cp.Cursor == "" {
+			t.Fatalf("real source %s has no own checkpoint", binding.SessionID)
+		}
+	}
+	t.Logf("real replacement: events=%d, old_finals=%d, new_finals=%d, source_changed=2, independent_checkpoints=2", len(page.Events), finals[bindings[0].SessionID], finals[bindings[1].SessionID])
+	before := len(page.Events)
+	for _, binding := range bindings {
+		_, err = service.collectCodexHistoryPage(ctx, binding)
+		require(t, err)
+	}
+	page, err = query.ReadConversation(ctx, filter, "", 100)
+	require(t, err)
+	if len(page.Events) != before {
+		t.Fatalf("real source replacement replay duplicated events: %d -> %d", before, len(page.Events))
+	}
+}
+
+func TestCodexHistoryRealCancelledTurnFixture(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", "docs", "validation", "pr-04b-native-cancelled-2026-09-25.json"))
+	require(t, err)
+	var fixture struct {
+		Thread codexHistoryThread `json:"thread"`
+	}
+	require(t, json.Unmarshal(raw, &fixture))
+	if len(fixture.Thread.Turns) != 1 || fixture.Thread.Turns[0].CompletedAt == nil {
+		t.Fatal("real cancelled turn lacks a native completion timestamp")
+	}
+	base := ConversationEvent{ProjectID: "project", ExecutionID: "execution", AttemptID: "attempt", Backend: BackendLocal, Protocol: ProtocolLocalProcess, Agent: "codex", SourceSegment: "native", SourceIdentity: "native", SessionID: fixture.Thread.ID}
+	writes, err := mapCodexHistoryTurn(base, fixture.Thread.Turns[0], 1)
+	require(t, err)
+	if len(writes) != 2 || writes[0].Event.Type != ConversationTurnStarted || writes[1].Event.Type != ConversationTurnCancelled || writes[1].Event.Status != "interrupted" || writes[1].Event.FinalAvailability != FinalAbsent || writes[1].Event.TurnID != writes[0].Event.TurnID {
+		t.Fatalf("real terminal cancellation or absent final was misrepresented: %+v", writes)
+	}
+}
+
 func TestCodexHistoryTurnCompletionAndLateFinal(t *testing.T) {
 	base := ConversationEvent{ProjectID: "p", ExecutionID: "e", AttemptID: "a", SourceSegment: "s", SessionID: "session"}
 	completedAt := int64(1)

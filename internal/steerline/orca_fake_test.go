@@ -339,9 +339,10 @@ func fakeOrcaRead(stateDir string, argv []string) int {
 	if err != nil {
 		return fakeOrcaErr("terminal_handle_stale", err.Error())
 	}
+	cursor := arg(argv, "--cursor")
 	position := 0
-	if value := arg(argv, "--cursor"); value != "" {
-		position, err = strconv.Atoi(value)
+	if cursor != "" {
+		position, err = strconv.Atoi(cursor)
 		if err != nil || position < 0 {
 			return fakeOrcaErr("cursor_invalid", "invalid cursor")
 		}
@@ -349,6 +350,13 @@ func fakeOrcaRead(stateDir string, argv []string) int {
 	limit, err := strconv.Atoi(arg(argv, "--limit"))
 	if err != nil || limit <= 0 {
 		return fakeOrcaErr("limit_invalid", "invalid limit")
+	}
+	if cursor == "" {
+		// The real Orca CLI treats an omitted cursor as a tail preview.
+		position = len(st.OutputLines) - limit
+		if position < 0 {
+			position = 0
+		}
 	}
 	if position > len(st.OutputLines) {
 		position = len(st.OutputLines)
@@ -410,18 +418,57 @@ func TestOrcaReadOutputReportsRetentionGapOnInitialRead(t *testing.T) {
 	dir := t.TempDir()
 	cfg := orcaTestConfig(t, dir, "fail")
 	handle := "terminal-initial-gap-test"
-	state := fakeOrcaState{Handle: handle, Incarnation: "inc-initial-gap", OutputLines: []string{"retained-one", "retained-two", "retained-three"}, OldestCursor: 2}
+	state := fakeOrcaState{Handle: handle, Incarnation: "inc-initial-gap", OutputLines: []string{"evicted-one", "evicted-two", "retained-three", "retained-four", "retained-five"}, OldestCursor: 2}
 	if err := writeFakeOrcaState(dir, state); err != nil {
 		t.Fatal(err)
 	}
 	ref := ExecutionRef{Version: 1, Backend: BackendOrca, Protocol: ProtocolOrcaTerminalV2, Target: targetFor(cfg), Agent: AgentSpec{Name: "codex"}, RunID: newID(), AttemptID: newID(), External: ProcessIdentity{Kind: "orca", Terminal: handle, RuntimeID: "fake-runtime", Incarnation: state.Incarnation, Executable: cfg.Orca.Executable}}
-	batch, err := (orcaTerminalBackend{config: cfg}).ReadOutput(context.Background(), ref, "", 10)
+	batch, err := (orcaTerminalBackend{config: cfg}).ReadOutput(context.Background(), ref, "", 1)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !batch.Gap || batch.RetainedFrom != "2" || string(batch.Data) != "retained-three" {
 		t.Fatalf("initial retention boundary was hidden: %+v", batch)
 	}
+}
+
+// TestOrcaNativeRetentionGap is gated to an isolated live Orca terminal whose
+// upstream history has actually evicted its earliest output rows.
+func TestOrcaNativeRetentionGap(t *testing.T) {
+	path := os.Getenv("STEERLINE_ORCA_RETENTION_PROBE")
+	if path == "" {
+		t.Skip("set an exact isolated live Orca terminal probe to run acceptance")
+	}
+	raw, err := os.ReadFile(path)
+	require(t, err)
+	var probe struct {
+		Workspace   string `json:"workspace"`
+		Terminal    string `json:"terminal"`
+		Runtime     string `json:"runtime"`
+		Incarnation string `json:"incarnation"`
+		Retained    string `json:"retained_from"`
+	}
+	require(t, json.Unmarshal(raw, &probe))
+	if !filepath.IsAbs(probe.Workspace) || probe.Terminal == "" || probe.Runtime == "" || probe.Incarnation == "" || probe.Retained == "" {
+		t.Fatal("Orca retention probe lacks an exact bound terminal")
+	}
+	exe, err := exec.LookPath("orca")
+	require(t, err)
+	config := Config{Repository: probe.Workspace, Host: "orca", CommandTimeout: "15s", Orca: OrcaConfig{Executable: exe}}
+	ref := ExecutionRef{Version: 1, Backend: BackendOrca, Protocol: ProtocolOrcaTerminalV2, Target: targetFor(config), Agent: AgentSpec{Name: "codex"}, RunID: "retention-probe-run", AttemptID: "retention-probe-attempt", WorkspacePath: probe.Workspace, External: ProcessIdentity{Kind: "orca", Terminal: probe.Terminal, RuntimeID: probe.Runtime, Incarnation: probe.Incarnation, Executable: exe}}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	first, err := (orcaTerminalBackend{config: config}).ReadOutput(ctx, ref, "", 5)
+	require(t, err)
+	if !first.Gap || first.SourceChanged || first.Source != "stream" || first.RetainedFrom != probe.Retained || !strings.HasPrefix(string(first.Data), "PR04B-RETENTION-"+probe.Retained) || first.NextCursor == "" {
+		t.Fatalf("real Orca retention loss was hidden: %+v", first)
+	}
+	second, err := (orcaTerminalBackend{config: config}).ReadOutput(ctx, ref, first.NextCursor, 5)
+	require(t, err)
+	if second.Gap || second.SourceChanged || second.Data == nil || second.NextCursor == first.NextCursor {
+		t.Fatalf("bounded continuation after real retention gap failed: %+v", second)
+	}
+	t.Logf("real Orca retention: oldest=%s, first_rows=%q, next_rows=%q", first.RetainedFrom, first.Data, second.Data)
 }
 
 func orcaTestConfig(t *testing.T, dir, _ string) Config {
