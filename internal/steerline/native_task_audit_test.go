@@ -95,6 +95,11 @@ func TestNativeAuditPaginationBoundsAndDatabaseIdentity(t *testing.T) {
 	require(t, err)
 	_, err = q.ListNativeTasks(ctx, "", 1)
 	require(t, err)
+	// The extra row used only to detect a next page must remain undecoded too.
+	_, err = s.db.Exec(`UPDATE tasks SET payload='invalid JSON' WHERE task_id='10'`)
+	require(t, err)
+	_, err = q.ListNativeTasks(ctx, "", 1)
+	require(t, err)
 }
 
 func TestNativeAuditReadersCoexistWithWriterAndViewerUsesNative(t *testing.T) {

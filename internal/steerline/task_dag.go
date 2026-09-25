@@ -262,7 +262,7 @@ func (s *SQLiteStore) taskGraphSnapshot(ctx context.Context, project string) (ta
 		return out, err
 	}
 	rows.Close()
-	rows, err = tx.QueryContext(ctx, `SELECT contract_id FROM task_contracts WHERE project_identity=?`, project)
+	rows, err = tx.QueryContext(ctx, `SELECT c.contract_id FROM task_contracts c JOIN project_task_authorities p ON p.project_identity=c.project_identity WHERE p.authority='native' AND p.repository=?`, out.Authority.Repository)
 	if err != nil {
 		return out, err
 	}
@@ -348,6 +348,10 @@ func (s *SQLiteStore) taskGraphSnapshot(ctx context.Context, project string) (ta
 			rows.Close()
 			return out, nativeErr("contract_mismatch", "invalid delivery recording timestamp")
 		}
+		if err = validateNativeTaskDelivery(d, out.Authority.Branch); err != nil {
+			rows.Close()
+			return out, err
+		}
 		out.Deliveries[d.TaskID] = d
 	}
 	if err = rows.Err(); err != nil {
@@ -371,6 +375,9 @@ func (c CommandService) ValidateTaskBatch(ctx context.Context, config Config, da
 	}
 	snapshot, err := taskGraphFromStore(ctx, c.Store, c.Project)
 	if err != nil {
+		return TaskBatchValidation{}, err
+	}
+	if err = validateNativeConfiguredTarget(ctx, config, snapshot.Authority); err != nil {
 		return TaskBatchValidation{}, err
 	}
 	result := TaskBatchValidation{ProjectID: c.Project, TaskCount: len(batch.Tasks), DependencyCount: len(batch.Dependencies), AuthorityVersion: snapshot.Authority.AuthorityVersion, GraphRevision: snapshot.Authority.GraphRevision, DatabaseRevision: snapshot.DatabaseRevision, DatabaseID: snapshot.DatabaseID, SampledAt: snapshot.SampledAt, Issues: []TaskBatchIssue{}}
@@ -1018,6 +1025,10 @@ func taskGraphSnapshotTx(ctx context.Context, t *sqliteTx, project string) (task
 			rows.Close()
 			return out, nativeErr("contract_mismatch", "invalid delivery recording timestamp")
 		}
+		if err = validateNativeTaskDelivery(delivery, out.Authority.Branch); err != nil {
+			rows.Close()
+			return out, err
+		}
 		out.Deliveries[delivery.TaskID] = delivery
 	}
 	if err = rows.Err(); err != nil {
@@ -1077,6 +1088,13 @@ func (c CommandService) DiscardNativeTask(ctx context.Context, config Config, ta
 				}
 			}
 		}
+	}
+	authority, err := sqlite.nativeAuthority(ctx, c.Project)
+	if err != nil {
+		return TaskDiscardReceipt{}, err
+	}
+	if err = validateNativeConfiguredTarget(ctx, config, authority); err != nil {
+		return TaskDiscardReceipt{}, err
 	}
 	plan, task, err := taskDiscardPlanFromStore(ctx, sqlite, c.Project, taskID)
 	if err != nil {
@@ -1303,9 +1321,10 @@ func taskDiscardPlanFromSnapshot(snapshot DomainSnapshot, taskID string) (taskDi
 		if attempt.Status == "planned" && attempt.OperationID == "" && len(attempt.Result) == 0 {
 			plannedWithoutAction[attempt.ExecutionID] = true
 		}
+		acceptedPublish := attempt.Status == "succeeded" && resultValid && result.Succeeded && result.StepID == "publish_pr" && result.PRURL != "" && result.ResultID != "" && result.ResultID == attempt.ResultID && validCommit(result.PublishedHead) && result.Revision == result.PublishedHead
 		if resultValid && result.PRURL != "" {
 			prs[result.PRURL] = true
-			if attempt.Status == "succeeded" && result.Succeeded && result.StepID == "publish_pr" {
+			if acceptedPublish {
 				acceptedPR[attempt.ExecutionID] = true
 			} else {
 				plan.UncertainPR = true
@@ -1315,7 +1334,7 @@ func taskDiscardPlanFromSnapshot(snapshot DomainSnapshot, taskID string) (taskDi
 		case "dispatching", "dispatched", "running", "stopping", "outcome_unknown":
 			plan.UncertainPR = true
 		case "succeeded":
-			if !resultValid || !result.Succeeded || result.StepID != "publish_pr" || result.PRURL == "" {
+			if !acceptedPublish {
 				plan.UncertainPR = true
 			}
 		}

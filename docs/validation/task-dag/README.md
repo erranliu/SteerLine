@@ -55,7 +55,7 @@ The opt-in `TestLiveNativeTaskDeliveryProbe` then cloned the repository into tem
 
 The opt-in `TestLiveNativeTaskDiscardProbe` queried still-open PR [#31](https://github.com/erranliu/SteerLine/pull/31) through `PRClient.Query`, then called `DiscardNativeTask` in a separate temporary native project. It committed task 400 as discarded at graph revision 2, retained `pull_request_close` for that exact URL and `workspace_cleanup:tree-400`, produced no TaskDelivery, and replayed the original discard receipt. PR #31 remained open and Draft after the test. This verifies the center's live unmerged-PR admission, not external cleanup.
 
-The live delivery probe was added after the earlier 887.459-second full run and was present, default-skipped, in the later 998.320-second full run. The live discard probe was added after that later full run; its enabled run, default skip path, `go vet ./...` and `git diff --check` passed. No production code changed after the later full run.
+The live delivery probe was added after the earlier 887.459-second full run and was present, default-skipped, in the later 998.320-second full run. The live discard probe was added after that later full run; its enabled run, default skip path, `go vet ./...` and `git diff --check` passed. The subsequent quality-audit code changes and their final full-suite result are recorded below.
 
 The call-site audit found no non-test caller of `ClaimNativeTask` or `CompleteNativeTask`. Discard currently records `execution_stop_manual`, `workspace_cleanup`, and `pull_request_close` identities in `cleanup_pending`; it does not produce external stop/close receipts. The D1-aligned Spec revision makes those native production actions explicit BEADS-EXIT gates, while retaining the TASK-DAG center invariants as release gates here.
 
@@ -63,7 +63,7 @@ The opt-in local backend test `TestNativeLocalCodexStartOutputStop` ran with Cod
 
 After discard, a late completion now uses the task's fixed PR binding to distinguish unknown merge state from a confirmed merge. A confirmed merge writes an idempotent `task.delivery.conflict` audit event with the PR URL, head, merge commit, merged time, discard request and discard time; the task stays discarded and has no TaskDelivery. `TestTaskDiscardRequiresPreciseUnmergedPRAndRetainsUnknownIntent` exercises open → unknown → merged after discard and checks the event is recorded only once. There is no background PR watcher in TASK-DAG; the reconciliation runs when a late completion is presented.
 
-Final source SHA-256 for `internal/steerline/task_dag_test.go`: `d05218ef150fc870d15894befaa69cf8b4a1b7d7569ceae18711fe9a2a510c94`. Final validation ran on Go 1.26.4, Windows/amd64:
+Current source SHA-256 for `internal/steerline/task_dag_test.go`: `e7de77ed53fd5593f8326b6cbc845cc8c078303d5dd0222e9487fd78df580602`. Validation ran on Go 1.26.4, Windows/amd64:
 
 ```text
 go test ./internal/steerline -run '^(TestNativeDeliveryNeedsExactMergedPRAndReleasesSuccessorOnce|TestNativeClaimRechecksReadySlotAndPersistsReservationWithoutAppliedReceipt)$' -count=1 -timeout 4m
@@ -73,7 +73,7 @@ go test ./internal/steerline -run '^TestNativeDeliveryNeedsExactMergedPRAndRelea
 go test ./... -count=1 -timeout 20m
   PASS on the pre-conflict audit tree: cmd/steerline 14.815s; internal/steerline 887.459s; remoteprotocol 0.691s; viewer 1.928s
 $env:STEERLINE_LIVE_PR_ACCEPTANCE = '1'; go test ./internal/steerline -run '^TestLiveNativeTaskDeliveryProbe$' -count=1 -v -timeout 5m
-  PASS, 15.896s with live PR #30 merge evidence and isolated SQLite delivery/restart replay
+  PASS after the final publication guard, 20.570s with live PR #30 merge evidence and isolated SQLite delivery/restart replay
 $env:STEERLINE_LIVE_PR_ACCEPTANCE = '1'; go test ./internal/steerline -run '^TestLiveNativeTaskDiscardProbe$' -count=1 -v -timeout 5m
   PASS, 9.701s with live open PR #31 and exact cleanup_pending; the external PR remained open
 go test ./internal/steerline -run '^(TestNativeClaimRechecksReadySlotAndPersistsReservationWithoutAppliedReceipt|TestNativeClaimCompetitionCreatesOnlyOneWorkflowReservation|TestNativeClaimBlocksWhenFetchedBaseMissesPredecessorMerge|TestTaskDiscardRequestPersistsUnknownAndThenDiscardsOnlyAfterUnmergedProof|TestTaskDiscardRequiresPreciseUnmergedPRAndRetainsUnknownIntent|TestTaskDiscardDuringActiveExecutionKeepsSlotAndCleanupIdentity|TestNativeLocalCodexStartOutputStop|TestNativeOrcaServiceStartOutputStop|TestMinimalStepUsesFixedBindingForConfirmedStop)$' -count=1 -timeout 5m
@@ -99,6 +99,20 @@ The opt-in local Stop test was run with `STEERLINE_NATIVE_CODEX_NODE` and `STEER
 The captured full-suite output is in [full-go-test-2026-09-25.txt](full-go-test-2026-09-25.txt).
 The opt-in live delivery output is in [live-pr-delivery-2026-09-25.txt](live-pr-delivery-2026-09-25.txt).
 The opt-in live discard output is in [live-pr-discard-2026-09-25.txt](live-pr-discard-2026-09-25.txt).
+
+## Post-acceptance quality audit (2026-09-25)
+
+This review found and corrected seven center inconsistencies:
+
+- `task validate` now samples contract IDs across the same registered repository identity, matching `task create` rather than reporting a cross-project collision as valid.
+- Native write commands check the configured Git target, remote and branch against the registered project before new side effects. Previously committed discard/delivery receipts remain readable by their original identity even if the configuration later drifts.
+- TaskDelivery readers verify the persisted merge evidence against the delivery row and fixed target branch before treating it as a predecessor delivery. Detail queries also validate off-page predecessor payload identity/status instead of trusting only its status column.
+- The first full rerun exposed a pagination regression from decoding every project task. Detail pages now decode only the requested page and its actual predecessors; the extra row used to set `has_more` is not decoded. Unrelated malformed records no longer break an earlier page.
+- Discard reconciliation accepts a publish result as conclusive only when its result ID matches the attempt and its published head matches the result revision. Incomplete publication evidence stays `pending_verification`.
+- Delivery now checks every publication attempt bound to the task, not only the selected successful attempt. An unknown or mismatched second PR blocks closure both before the platform query and again in the delivery transaction.
+- After TaskDelivery, the selected native WorkflowRun, Execution and existing StepAttempts cannot be rewritten. A new late Attempt can still be retained as separate history.
+
+Focused regression tests for configuration drift, cross-project contract IDs, malformed publication results, corrupt delivery evidence, pagination isolation, terminal receipt replay, delivered-history immutability, and unknown second publication before/after live PR lookup passed. `go vet ./...` and `git diff --check` passed after the final publication guard. The [first full rerun](pagination-audit-failed-run-2026-09-25.txt) failed at `TestNativeAuditPaginationBoundsAndDatabaseIdentity` and led to the pagination correction. A subsequent full run passed after that correction. The final `go test ./... -count=1 -timeout 20m`, including the task-wide publication guard, passed: `cmd/steerline` 11.754s, `internal/steerline` 726.026s, `remoteprotocol` 0.526s, `viewer` 1.506s. Its output is in [full-go-test-2026-09-25.txt](full-go-test-2026-09-25.txt).
 
 ## Completion gate
 

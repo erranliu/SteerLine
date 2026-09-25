@@ -229,6 +229,38 @@ func TestCreateTaskBatchRollsBackEveryWriteWhenEdgeInsertFails(t *testing.T) {
 	}
 }
 
+func TestNativeCommandsRejectConfigurationBindingDriftBeforeSideEffects(t *testing.T) {
+	ctx := context.Background()
+	c, commit, store := openDAGFixture(t)
+	commands := CommandService{Store: store, Project: c.Identity()}
+	if _, err := commands.CreateTaskBatch(ctx, c, taskBatchFixture(t, c, commit, batchTasks(50), nil), strings.Repeat("5", 32), 1, "planner"); err != nil {
+		t.Fatal(err)
+	}
+	drifted := c
+	drifted.Branch = "other"
+	if _, err := commands.ValidateTaskBatch(ctx, drifted, taskBatchFixture(t, c, commit, batchTasks(51), nil)); err == nil || !strings.Contains(err.Error(), "authority_mismatch") {
+		t.Fatalf("validation used a changed branch with the registered authority: %v", err)
+	}
+	if _, err := commands.CreateTaskBatch(ctx, drifted, taskBatchFixture(t, c, commit, batchTasks(51), nil), strings.Repeat("6", 32), 1, "planner"); err == nil || !strings.Contains(err.Error(), "authority_mismatch") {
+		t.Fatalf("creation used a changed branch with the registered authority: %v", err)
+	}
+	if _, err := commands.ClaimNativeTask(ctx, drifted, TaskClaimOptions{TaskID: "50", RequestID: strings.Repeat("7", 32), ExpectedTaskVersion: 1, ExpectedAuthorityVersion: 1, RequestedBy: "operator", Explicit: true}); err == nil || !strings.Contains(err.Error(), "authority_mismatch") {
+		t.Fatalf("claim used a changed branch with the registered authority: %v", err)
+	}
+	if _, err := commands.DiscardNativeTask(ctx, drifted, "50", strings.Repeat("8", 32), 1, "configuration drift", "operator"); err == nil || !strings.Contains(err.Error(), "authority_mismatch") {
+		t.Fatalf("discard used a changed branch with the registered authority: %v", err)
+	}
+	if _, err := commands.CompleteNativeTask(ctx, drifted, "50", 1, "invalid-workflow", &fixedTaskDeliveryVerifier{}); err == nil || !strings.Contains(err.Error(), "authority_mismatch") {
+		t.Fatalf("delivery used a changed branch with the registered authority: %v", err)
+	}
+	for table, want := range map[string]int{"tasks": 1, "commands": 1, "operations": 0} {
+		var got int
+		if err := store.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+table).Scan(&got); err != nil || got != want {
+			t.Fatalf("configuration drift mutated %s: got %d, want %d, err=%v", table, got, want, err)
+		}
+	}
+}
+
 func TestTaskBatchRejectsDuplicateAndCrossProjectDependencies(t *testing.T) {
 	ctx := context.Background()
 	c, commit, store := openDAGFixture(t)
@@ -263,6 +295,12 @@ func TestTaskBatchRejectsDuplicateAndCrossProjectDependencies(t *testing.T) {
 	}
 	if validation.Valid || !hasTaskIssue(validation.Issues, "cross_project_dependency") {
 		t.Fatalf("cross-project dependency was accepted: %+v", validation)
+	}
+	contractCollision := batchTasks(30)
+	contractCollision[0].Contract = nativeContract(t, c, commit, foreignContract.ContractID)
+	validation, err = commands.ValidateTaskBatch(ctx, c, taskBatchFixture(t, c, commit, contractCollision, nil))
+	if err != nil || validation.Valid || !hasTaskIssue(validation.Issues, "invalid_batch") {
+		t.Fatalf("cross-project contract ID mismatch was hidden by validation: %+v / %v", validation, err)
 	}
 	dupTasks := batchTasks(30, 31)
 	dup := []TaskBatchEdge{{Predecessor: TaskBatchReference{LocalKey: "k30"}, Successor: TaskBatchReference{LocalKey: "k31"}}, {Predecessor: TaskBatchReference{LocalKey: "k30"}, Successor: TaskBatchReference{LocalKey: "k31"}}}
@@ -591,15 +629,19 @@ func TestNativeClaimCompetitionCreatesOnlyOneWorkflowReservation(t *testing.T) {
 }
 
 type fixedTaskDeliveryVerifier struct {
-	info  PRInfo
-	calls int
-	err   error
+	info    PRInfo
+	calls   int
+	err     error
+	onQuery func()
 }
 
 func (v *fixedTaskDeliveryVerifier) Query(ctx context.Context, url string) (PRInfo, error) {
 	v.calls++
 	if url != v.info.URL {
 		return PRInfo{}, ErrPRIdentity
+	}
+	if v.onQuery != nil {
+		v.onQuery()
 	}
 	return v.info, v.err
 }
@@ -688,6 +730,31 @@ func TestNativeDeliveryNeedsExactMergedPRAndReleasesSuccessorOnce(t *testing.T) 
 	verifier.info.State = "merged"
 	verifier.info.MergedAt = &mergedAt
 	verifier.info.MergeCommit = &mergeCommit
+	unknownPublication := StepAttemptRecord{ProjectIdentity: c.Identity(), AttemptID: "unknown-publish-attempt-90", ExecutionID: execution.ExecutionID, StepID: "publish_pr", AttemptNumber: 2, OperationID: "unknown-publish-operation-90", Status: "outcome_unknown", CreatedAt: nowAt, UpdatedAt: nowAt}
+	if err = store.Transact(ctx, func(tx DomainTx) error { return tx.PutStepAttempt(unknownPublication) }); err != nil {
+		t.Fatal(err)
+	}
+	callsBeforeUnknown := verifier.calls
+	if _, err = commands.CompleteNativeTask(ctx, c, "90", task.Version, wfr.WorkflowRunID, verifier); err == nil || !strings.Contains(err.Error(), "merge_state_unknown") || verifier.calls != callsBeforeUnknown {
+		t.Fatalf("unresolved second publication entered PR delivery: calls=%d err=%v", verifier.calls, err)
+	}
+	if _, err = store.db.ExecContext(ctx, `DELETE FROM step_attempts WHERE project_identity=? AND attempt_id=?`, c.Identity(), unknownPublication.AttemptID); err != nil {
+		t.Fatal(err)
+	}
+	racePublication := unknownPublication
+	racePublication.AttemptID, racePublication.AttemptNumber = "racing-publish-attempt-90", 3
+	verifier.onQuery = func() {
+		if e := store.Transact(ctx, func(tx DomainTx) error { return tx.PutStepAttempt(racePublication) }); e != nil {
+			t.Fatal(e)
+		}
+	}
+	if _, err = commands.CompleteNativeTask(ctx, c, "90", task.Version, wfr.WorkflowRunID, verifier); err == nil || !strings.Contains(err.Error(), "merge_state_unknown") {
+		t.Fatalf("publication changed after PR lookup but before delivery transaction: %v", err)
+	}
+	verifier.onQuery = nil
+	if _, err = store.db.ExecContext(ctx, `DELETE FROM step_attempts WHERE project_identity=? AND attempt_id=?`, c.Identity(), racePublication.AttemptID); err != nil {
+		t.Fatal(err)
+	}
 	if _, err = store.db.ExecContext(ctx, `CREATE TRIGGER fail_native_delivery BEFORE INSERT ON task_deliveries BEGIN SELECT RAISE(ABORT,'injected delivery failure'); END`); err != nil {
 		t.Fatal(err)
 	}
@@ -723,6 +790,12 @@ func TestNativeDeliveryNeedsExactMergedPRAndReleasesSuccessorOnce(t *testing.T) 
 	if err != nil || again.Delivery.MergeCommit != commit || verifier.calls != beforeCalls {
 		t.Fatalf("duplicate delivery did not return saved evidence: %+v / %v", again, err)
 	}
+	drifted := c
+	drifted.Branch = "other"
+	again, err = commands.CompleteNativeTask(ctx, drifted, "90", task.Version, wfr.WorkflowRunID, nil)
+	if err != nil || again.Delivery.MergeCommit != commit || again.GraphRevision != delivery.GraphRevision {
+		t.Fatalf("configuration drift prevented reading a committed delivery: %+v / %v", again, err)
+	}
 	candidates, err := (QueryService{Store: store, Project: c.Identity()}).ReadyNativeTasks(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -754,6 +827,43 @@ func TestNativeDeliveryNeedsExactMergedPRAndReleasesSuccessorOnce(t *testing.T) 
 	page, err = (QueryService{Store: reopened, Project: c.Identity()}).ShowNativeTask(ctx, "91")
 	if err != nil || !page.Tasks[0].DependencyReady || len(page.Tasks[0].UnmetPredecessors) != 0 {
 		t.Fatalf("restarted projection lost committed delivery readiness: %+v / %v", page, err)
+	}
+	completed, err := (QueryService{Store: reopened, Project: c.Identity()}).ShowNativeTask(ctx, "90")
+	if err != nil {
+		t.Fatal(err)
+	}
+	alteredRun := completed.Tasks[0].WorkflowRuns[0]
+	alteredRun.Phase = "queued"
+	if err = reopened.Transact(ctx, func(tx DomainTx) error { return tx.PutWorkflowRun(alteredRun) }); err == nil || !strings.Contains(err.Error(), "immutable_task") {
+		t.Fatalf("delivered native workflow was reopened: %v", err)
+	}
+	alteredExecution := execution
+	alteredExecution.Status = "pending"
+	if err = reopened.Transact(ctx, func(tx DomainTx) error { return tx.PutExecution(alteredExecution) }); err == nil || !strings.Contains(err.Error(), "immutable_task") {
+		t.Fatalf("selected delivered execution was rewritten: %v", err)
+	}
+	alteredAttempt := verifyAttempt
+	alteredAttempt.Status = "failed"
+	if err = reopened.Transact(ctx, func(tx DomainTx) error { return tx.PutStepAttempt(alteredAttempt) }); err == nil || !strings.Contains(err.Error(), "immutable_task") {
+		t.Fatalf("selected delivered gate evidence was rewritten: %v", err)
+	}
+	lateAttempt := verifyAttempt
+	lateAttempt.AttemptID, lateAttempt.AttemptNumber, lateAttempt.Status = "late-verify-attempt-90", 2, "failed"
+	lateAttempt.ResultID, lateAttempt.Result = "", nil
+	if err = reopened.Transact(ctx, func(tx DomainTx) error { return tx.PutStepAttempt(lateAttempt) }); err != nil {
+		t.Fatalf("late result could not be retained as separate history: %v", err)
+	}
+	if _, err = reopened.db.ExecContext(ctx, `UPDATE task_deliveries SET evidence=? WHERE project_identity=? AND task_id=?`, []byte(`{"state":"open"}`), c.Identity(), "90"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = (QueryService{Store: reopened, Project: c.Identity()}).ShowNativeTask(ctx, "91"); err == nil || !strings.Contains(err.Error(), "inconsistent_delivery") {
+		t.Fatalf("corrupt delivery evidence was treated as successor readiness: %v", err)
+	}
+	if _, err = (QueryService{Store: reopened, Project: c.Identity()}).ReadyNativeTasks(ctx); err == nil || !strings.Contains(err.Error(), "inconsistent_delivery") {
+		t.Fatalf("ready snapshot trusted corrupt delivery evidence: %v", err)
+	}
+	if _, err = (CommandService{Store: reopened, Project: c.Identity()}).ClaimNativeTask(ctx, c, TaskClaimOptions{TaskID: "91", RequestID: strings.Repeat("9", 32), ExpectedTaskVersion: 1, ExpectedAuthorityVersion: 1, RequestedBy: "operator", Explicit: true}); err == nil || !strings.Contains(err.Error(), "inconsistent_delivery") {
+		t.Fatalf("claim admitted a predecessor with corrupt delivery evidence: %v", err)
 	}
 }
 
@@ -810,6 +920,14 @@ func TestInconsistentDeliveryStaysVisibleAndBlocksSuccessorClaim(t *testing.T) {
 	if _, err = commands.CompleteNativeTask(ctx, c, "200", 2, "missing-run", &fixedTaskDeliveryVerifier{}); err == nil || !strings.Contains(err.Error(), "inconsistent_delivery") {
 		t.Fatalf("closed task without delivery was reported complete: %v", err)
 	}
+	corrupt.Status = "open"
+	body, _ = json.Marshal(corrupt)
+	if _, err = store.db.ExecContext(ctx, `UPDATE tasks SET payload=? WHERE project_identity=? AND task_id=?`, body, c.Identity(), corrupt.TaskID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = (QueryService{Store: store, Project: c.Identity()}).ShowNativeTask(ctx, "201"); err == nil || !strings.Contains(err.Error(), "contract_mismatch") {
+		t.Fatalf("successor read trusted a predecessor whose payload disagreed with its stored status: %v", err)
+	}
 }
 
 func TestTaskDiscardRequestPersistsUnknownAndThenDiscardsOnlyAfterUnmergedProof(t *testing.T) {
@@ -835,6 +953,12 @@ func TestTaskDiscardRequestPersistsUnknownAndThenDiscardsOnlyAfterUnmergedProof(
 	replayed, err := commands.DiscardNativeTask(ctx, c, "70", strings.Repeat("8", 32), page.Tasks[0].Version, "no longer needed", "operator")
 	if err != nil || replayed.Status != "discarded" || replayed.GraphRevision != discarded.GraphRevision {
 		t.Fatalf("discard request replay changed its result: %+v / %v", replayed, err)
+	}
+	drifted := c
+	drifted.Branch = "other"
+	replayed, err = commands.DiscardNativeTask(ctx, drifted, "70", strings.Repeat("8", 32), page.Tasks[0].Version, "no longer needed", "operator")
+	if err != nil || replayed.Status != "discarded" || replayed.GraphRevision != discarded.GraphRevision {
+		t.Fatalf("configuration drift prevented reading a committed discard receipt: %+v / %v", replayed, err)
 	}
 	page, err = (QueryService{Store: store, Project: c.Identity()}).ShowNativeTask(ctx, "70")
 	if err != nil {
@@ -902,7 +1026,7 @@ func TestTaskDiscardRequestPersistsUnknownAndThenDiscardsOnlyAfterUnmergedProof(
 }
 
 func TestTaskDiscardRequiresPreciseUnmergedPRAndRetainsUnknownIntent(t *testing.T) {
-	states := map[string]string{"90": "open", "91": "merged", "92": "unknown", "94": "open"}
+	states := map[string]string{"90": "open", "91": "merged", "92": "unknown", "94": "open", "95": "open"}
 	var statesMu sync.RWMutex
 	var lateMergedAt time.Time
 	var server *httptest.Server
@@ -949,16 +1073,33 @@ func TestTaskDiscardRequiresPreciseUnmergedPRAndRetainsUnknownIntent(t *testing.
 	defer store.Close()
 	c.PR = PRConfig{Kind: "gitea", BaseURL: server.URL, Repository: "org/repo"}
 	commands := CommandService{Store: store, Project: c.Identity()}
-	payload := taskBatchFixture(t, c, commit, batchTasks(90, 91, 92, 94), nil)
+	payload := taskBatchFixture(t, c, commit, batchTasks(90, 91, 92, 94, 95), nil)
 	if _, err = commands.CreateTaskBatch(ctx, c, payload, strings.Repeat("f", 32), 1, "planner"); err != nil {
 		t.Fatal(err)
 	}
-	for _, id := range []string{"90", "91", "92", "94"} {
+	for _, id := range []string{"90", "91", "92", "94", "95"} {
 		seedPublishedForDiscard(t, ctx, c, store, id, commit, server.URL+"/org/repo/pulls/"+id)
 	}
 	// The first PR URL cannot settle a later publish attempt whose outcome is unknown.
 	unknownAttempt := StepAttemptRecord{ProjectIdentity: c.Identity(), AttemptID: "publish-unknown-94", ExecutionID: "exec-94", StepID: "publish_pr", AttemptNumber: 2, OperationID: "publish-op-unknown-94", Status: "outcome_unknown", CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}
 	if err = store.Transact(ctx, func(tx DomainTx) error { return tx.PutStepAttempt(unknownAttempt) }); err != nil {
+		t.Fatal(err)
+	}
+	var publishBody []byte
+	if err = store.db.QueryRowContext(ctx, `SELECT payload FROM step_attempts WHERE project_identity=? AND attempt_id=?`, c.Identity(), "publish-95").Scan(&publishBody); err != nil {
+		t.Fatal(err)
+	}
+	var incomplete StepAttemptRecord
+	if err = json.Unmarshal(publishBody, &incomplete); err != nil {
+		t.Fatal(err)
+	}
+	var incompleteResult StepGateResult
+	if err = json.Unmarshal(incomplete.Result, &incompleteResult); err != nil {
+		t.Fatal(err)
+	}
+	incompleteResult.ResultID = ""
+	incomplete.Result, _ = json.Marshal(incompleteResult)
+	if err = store.Transact(ctx, func(tx DomainTx) error { return tx.PutStepAttempt(incomplete) }); err != nil {
 		t.Fatal(err)
 	}
 	open, err := commands.DiscardNativeTask(ctx, c, "90", strings.Repeat("1", 32), 2, "discard open PR", "operator")
@@ -1030,6 +1171,10 @@ func TestTaskDiscardRequiresPreciseUnmergedPRAndRetainsUnknownIntent(t *testing.
 	if err != nil || secondUnknown.Status != "pending_verification" || secondUnknown.Code != "merge_state_unknown" {
 		t.Fatalf("known PR URL cleared a separate unknown publication: %+v / %v", secondUnknown, err)
 	}
+	incompleteReceipt, err := commands.DiscardNativeTask(ctx, c, "95", strings.Repeat("5", 32), 2, "publication result identity is missing", "operator")
+	if err != nil || incompleteReceipt.Status != "pending_verification" || incompleteReceipt.Code != "merge_state_unknown" {
+		t.Fatalf("incomplete published result was treated as a conclusive PR binding: %+v / %v", incompleteReceipt, err)
+	}
 	operation, err := lookupOperation(ctx, store, c.Identity(), strings.Repeat("4", 32))
 	if err != nil {
 		t.Fatal(err)
@@ -1046,7 +1191,7 @@ func TestTaskDiscardRequiresPreciseUnmergedPRAndRetainsUnknownIntent(t *testing.
 	for _, task := range page.Tasks {
 		statuses[task.TaskID] = task.Status
 	}
-	if statuses["90"] != "discarded" || statuses["91"] != "in_progress" || statuses["92"] != "in_progress" || statuses["94"] != "in_progress" {
+	if statuses["90"] != "discarded" || statuses["91"] != "in_progress" || statuses["92"] != "in_progress" || statuses["94"] != "in_progress" || statuses["95"] != "in_progress" {
 		t.Fatalf("discarded/merged/unknown PR results changed wrong task states: %v", statuses)
 	}
 }

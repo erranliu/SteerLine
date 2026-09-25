@@ -74,6 +74,9 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 	if graph.Authority.AuthorityVersion != options.ExpectedAuthorityVersion {
 		return TaskClaimReceipt{}, nativeErr("stale_version", fmt.Sprintf("expected authority version %d, found %d", options.ExpectedAuthorityVersion, graph.Authority.AuthorityVersion))
 	}
+	if err = validateNativeConfiguredTarget(ctx, config, graph.Authority); err != nil {
+		return TaskClaimReceipt{}, err
+	}
 	task, exists := graph.ByID[options.TaskID]
 	if !exists {
 		return TaskClaimReceipt{}, nativeErr("task_not_found", "native task was not found")
@@ -351,9 +354,6 @@ func (c CommandService) CompleteNativeTask(ctx context.Context, config Config, t
 	if expectedTaskVersion == 0 || workflowRunID == "" {
 		return TaskDeliveryReceipt{}, nativeErr("immutable_task", "delivery requires task version and workflow identity")
 	}
-	if verifier == nil {
-		return TaskDeliveryReceipt{}, nativeErr("merge_state_unknown", "PR verifier is required")
-	}
 	graph, err := sqlite.taskGraphSnapshot(ctx, c.Project)
 	if err != nil {
 		return TaskDeliveryReceipt{}, err
@@ -370,6 +370,12 @@ func (c CommandService) CompleteNativeTask(ctx context.Context, config Config, t
 			return TaskDeliveryReceipt{}, nativeErr("inconsistent_delivery", "task is already delivered by a different workflow")
 		}
 		return TaskDeliveryReceipt{TaskID: taskID, TaskVersion: task.Version, WorkflowRunID: workflowRunID, GraphRevision: graph.Authority.GraphRevision, Status: "closed", Delivery: existing}, nil
+	}
+	if verifier == nil {
+		return TaskDeliveryReceipt{}, nativeErr("merge_state_unknown", "PR verifier is required")
+	}
+	if err = validateNativeConfiguredTarget(ctx, config, graph.Authority); err != nil {
+		return TaskDeliveryReceipt{}, err
 	}
 	if task.Status == "closed" {
 		return TaskDeliveryReceipt{}, nativeErr("inconsistent_delivery", "closed task has no delivery record")
@@ -395,6 +401,13 @@ func (c CommandService) CompleteNativeTask(ctx context.Context, config Config, t
 	publish, err := validateNativeDeliveryGates(task, contract, workflow, execution, attempts)
 	if err != nil {
 		return TaskDeliveryReceipt{}, err
+	}
+	publication, _, err := taskDiscardPlanFromSnapshot(snapshot, taskID)
+	if err != nil {
+		return TaskDeliveryReceipt{}, err
+	}
+	if publication.UncertainPR || publication.PRURL != publish.PRURL {
+		return TaskDeliveryReceipt{}, nativeErr("merge_state_unknown", "task has another unresolved or mismatched PR publication")
 	}
 	if info, err := verifier.Query(ctx, publish.PRURL); err != nil {
 		return TaskDeliveryReceipt{}, nativeErr("merge_state_unknown", "PR merge state could not be verified: "+clip(err.Error(), 1000))
@@ -668,6 +681,13 @@ func (c CommandService) commitNativeDelivery(ctx context.Context, s *SQLiteStore
 		}
 		if currentWorkflow.WorkflowRunID != workflow.WorkflowRunID || currentWorkflow.SelectedResult != execution.ExecutionID || currentPublish.PRURL != publish.PRURL || currentExecution.CandidateRevision != execution.CandidateRevision {
 			return nativeErr("immutable_task", "selected result or PR binding changed during platform verification")
+		}
+		publication, _, err := taskDiscardPlanTx(ctx, tx, c.Project, task.TaskID)
+		if err != nil {
+			return err
+		}
+		if publication.UncertainPR || publication.PRURL != publish.PRURL {
+			return nativeErr("merge_state_unknown", "task publication became unresolved during PR verification")
 		}
 		var reused int
 		if err = tx.tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM step_attempts a JOIN executions e ON e.project_identity=a.project_identity AND e.execution_id=a.execution_id JOIN workflow_runs w ON w.project_identity=e.project_identity AND w.workflow_run_id=e.workflow_run_id WHERE a.project_identity=? AND w.task_id<>? AND json_extract(a.payload,'$.result.pr_url')=?`, c.Project, task.TaskID, delivery.PRURL).Scan(&reused); err != nil {

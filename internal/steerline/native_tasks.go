@@ -228,6 +228,10 @@ func (s *SQLiteStore) NativeTaskPage(ctx context.Context, project, taskID, expec
 			rows.Close()
 			return page, err
 		}
+		if len(all) == limit {
+			page.HasMore = true
+			continue
+		}
 		var record TaskRecord
 		if err = json.Unmarshal(payload, &record); err != nil {
 			rows.Close()
@@ -260,26 +264,19 @@ func (s *SQLiteStore) NativeTaskPage(ctx context.Context, project, taskID, expec
 		return page, err
 	}
 	rows.Close()
-	// Read every task, edge and delivery in this same snapshot so a detail page
-	// never treats a missing page-local predecessor as delivered or ready.
+	if offset > 0 && len(all) == 0 {
+		return page, nativeErr("cursor_invalidated", "cursor offset is outside the current snapshot")
+	}
+	// Keep the whole relation snapshot, but decode only paged tasks and their
+	// predecessors so an unrelated damaged task cannot break this page.
 	statuses := map[string]string{}
-	rows, err = tx.QueryContext(ctx, `SELECT task_id,status FROM tasks WHERE project_identity=?`, project)
-	if err != nil {
-		return page, err
+	selected := map[string]bool{}
+	relevant := []string{}
+	for _, record := range all {
+		statuses[record.TaskID] = record.Status
+		selected[record.TaskID] = true
+		relevant = append(relevant, record.TaskID)
 	}
-	for rows.Next() {
-		var id, status string
-		if err = rows.Scan(&id, &status); err != nil {
-			rows.Close()
-			return page, err
-		}
-		statuses[id] = status
-	}
-	if err = rows.Err(); err != nil {
-		rows.Close()
-		return page, err
-	}
-	rows.Close()
 	edges := []TaskDependencyRecord{}
 	rows, err = tx.QueryContext(ctx, `SELECT predecessor_id,successor_id FROM task_dependencies WHERE project_identity=? ORDER BY length(predecessor_id),predecessor_id,length(successor_id),successor_id`, project)
 	if err != nil {
@@ -299,34 +296,68 @@ func (s *SQLiteStore) NativeTaskPage(ctx context.Context, project, taskID, expec
 		return page, err
 	}
 	rows.Close()
-	delivered := map[string]bool{}
-	rows, err = tx.QueryContext(ctx, `SELECT task_id FROM task_deliveries WHERE project_identity=?`, project)
-	if err != nil {
-		return page, err
+	relevantSeen := map[string]bool{}
+	for _, id := range relevant {
+		relevantSeen[id] = true
 	}
-	for rows.Next() {
-		var id string
-		if err = rows.Scan(&id); err != nil {
-			rows.Close()
+	for _, edge := range edges {
+		if selected[edge.SuccessorID] && !relevantSeen[edge.PredecessorID] {
+			relevant = append(relevant, edge.PredecessorID)
+			relevantSeen[edge.PredecessorID] = true
+		}
+	}
+	for _, id := range relevant {
+		if selected[id] {
+			continue
+		}
+		var status string
+		var version uint64
+		var body []byte
+		e := tx.QueryRowContext(ctx, `SELECT status,version,payload FROM tasks WHERE project_identity=? AND task_id=?`, project, id).Scan(&status, &version, &body)
+		if errors.Is(e, sql.ErrNoRows) {
+			continue
+		}
+		if e != nil {
+			return page, e
+		}
+		var record TaskRecord
+		if e = json.Unmarshal(body, &record); e != nil {
+			return page, e
+		}
+		if record.ProjectIdentity != project || record.TaskID != id || record.Source != "native" || !canonicalDecimalID(id) || record.Status != status || record.Version != version || !validTaskStatus(status) || version == 0 {
+			return page, nativeErr("contract_mismatch", "predecessor task identity or status differs from its stored row")
+		}
+		statuses[id] = status
+	}
+	delivered := map[string]bool{}
+	for _, id := range relevant {
+		var delivery TaskDeliveryRecord
+		var merged, recorded string
+		delivery.ProjectIdentity = project
+		delivery.TaskID = id
+		e := tx.QueryRowContext(ctx, `SELECT selected_workflow_run_id,pr_instance,pr_repository,pr_number,pr_url,merge_commit,merged_at,recorded_at,evidence FROM task_deliveries WHERE project_identity=? AND task_id=?`, project, id).Scan(&delivery.SelectedWorkflowRunID, &delivery.PRInstance, &delivery.PRRepository, &delivery.PRNumber, &delivery.PRURL, &delivery.MergeCommit, &merged, &recorded, &delivery.Evidence)
+		if errors.Is(e, sql.ErrNoRows) {
+			continue
+		}
+		if e != nil {
+			return page, e
+		}
+		delivery.MergedAt, err = time.Parse(time.RFC3339Nano, merged)
+		if err != nil {
+			return page, nativeErr("inconsistent_delivery", "native task delivery merge time is invalid")
+		}
+		delivery.RecordedAt, err = time.Parse(time.RFC3339Nano, recorded)
+		if err != nil {
+			return page, nativeErr("inconsistent_delivery", "native task delivery recording time is invalid")
+		}
+		if err = validateNativeTaskDelivery(delivery, targetBranch); err != nil {
 			return page, err
 		}
-		delivered[id] = true
+		delivered[delivery.TaskID] = true
 	}
-	if err = rows.Err(); err != nil {
-		rows.Close()
-		return page, err
-	}
-	rows.Close()
 	var executionSlotBusy int
 	if err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM executions WHERE project_identity=? AND status IN ('pending','active','waiting_decision','blocked')`, project).Scan(&executionSlotBusy); err != nil {
 		return page, err
-	}
-	if offset > 0 && len(all) == 0 {
-		return page, nativeErr("cursor_invalidated", "cursor offset is outside the current snapshot")
-	}
-	page.HasMore = len(all) > limit
-	if page.HasMore {
-		all = all[:limit]
 	}
 	for _, record := range all {
 		detail := NativeTaskDetail{TaskRecord: record, ProjectID: project, Priority: record.Priority, WorkflowRuns: []WorkflowRunRecord{}, Predecessors: []TaskDependencyStatus{}, Successors: []string{}, UnmetPredecessors: []TaskDependencyStatus{}, StartupBlockers: []string{}}
@@ -732,6 +763,21 @@ func configuredRepositoryTarget(ctx context.Context, c Config) (string, error) {
 	}
 	return target, nil
 }
+
+func validateNativeConfiguredTarget(ctx context.Context, c Config, authority ProjectTaskAuthority) error {
+	if c.Remote != authority.Remote || c.Branch != authority.Branch {
+		return nativeErr("authority_mismatch", "configured remote or branch differs from the registered native project")
+	}
+	target, err := configuredRepositoryTarget(ctx, c)
+	if err != nil {
+		return err
+	}
+	if !sameRepositoryTarget(target, authority.Repository) {
+		return nativeErr("authority_mismatch", "configured Git repository differs from the registered native project")
+	}
+	return nil
+}
+
 func sameRepositoryTarget(a, b string) bool {
 	// A remote URL is not a Windows filesystem path: its repository component
 	// may be case sensitive and must never be folded with canonical().
