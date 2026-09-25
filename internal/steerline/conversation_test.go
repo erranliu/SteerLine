@@ -564,6 +564,22 @@ func TestConversationLiveSourceFailureKeepsGapAndMapperPosition(t *testing.T) {
 	}
 }
 
+func TestConversationOrcaHostWaitPersistsWithoutBusinessDecision(t *testing.T) {
+	ctx := context.Background()
+	store, err := OpenSQLiteStore(filepath.Join(t.TempDir(), "wait.db"))
+	require(t, err)
+	defer store.Close()
+	run := &Run{RunID: newID(), AttemptID: newID(), ExecutionID: "execution", Backend: string(BackendOrca), Protocol: string(ProtocolOrcaTerminalV2), Agent: "codex", Target: ExecutionTarget{ID: "orca:probe"}}
+	service := &Service{Config: Config{identity: "project"}, domainStore: store}
+	source := WorkerEvent{RunID: run.RunID, AttemptID: run.AttemptID, Source: "orca-terminal-v2", SourceSegment: "orca-host-wait-v1:probe", SourceEventID: "host-wait:probe", SourceIdentity: "terminal:runtime:handle:incarnation", SourceSeq: 1, Session: "terminal:handle:incarnation", InputWait: true}
+	require(t, service.recordConversationEvent(run, source))
+	page, err := (ConversationQueryService{Store: store, Project: "project"}).ReadConversation(ctx, ConversationFilter{ExecutionID: run.ExecutionID, AttemptID: run.AttemptID}, "", 10)
+	require(t, err)
+	if len(page.Events) != 1 || page.Events[0].Type != ConversationInputWait || page.Events[0].Status != "waiting" || page.Events[0].ItemQuality != IdentityUnknown || page.Events[0].Attributes["wait_origin"] != "host" || page.Events[0].Attributes["business_decision"] != false {
+		t.Fatalf("Orca host wait was not persisted separately from business input: %+v", page.Events)
+	}
+}
+
 func TestConversationJournalReplayIsBoundedAndIdempotent(t *testing.T) {
 	ctx := context.Background()
 	runID := "0123456789abcdef0123456789abcdef"

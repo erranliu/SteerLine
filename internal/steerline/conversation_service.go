@@ -155,7 +155,7 @@ func (s *Service) recordOrcaTerminalEvent(run *Run, source WorkerEvent) error {
 		Backend: BackendOrca, Protocol: ProtocolOrcaTerminalV2, Agent: run.Agent,
 		TargetID: run.Target.ID, ExternalRef: conversationExternalRef(run.Process),
 		Source: "orca-terminal-v2", SourceSegment: segment, SourceIdentity: source.SourceIdentity,
-		SourceCursor: source.SourceCursor, SessionID: source.Session, SessionQuality: IdentityUnknown, TurnQuality: IdentityUnknown,
+		SourceCursor: source.SourceCursor, SessionID: source.Session, SessionQuality: IdentityUnknown, TurnQuality: IdentityUnknown, ItemQuality: IdentityUnknown,
 		SourceEventID: eventID, SourceEventQuality: quality, SourceSeq: source.SourceSeq,
 		Phase: MessagePhaseUnknown, Status: "observed", ReceivedAt: now(),
 		Evidence:   map[string]string{"capture": "terminal-read", "turn_boundary": "unknown", "message_phase": "unknown", "source_changed": fmt.Sprint(source.SourceChanged)},

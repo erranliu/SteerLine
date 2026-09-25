@@ -44,10 +44,24 @@
     "production_collector_replay_without_duplicates": true,
     "source_fixture": "pr-04b-native-failed-2026-09-25.json"
   },
-  "remaining_e_a4_probes": {
-    "host_wait": "Isolated Orca Codex TUI accepted an outside-worktree write prompt, but terminal/show continued to report agentWait:null; no write occurred and the terminal was stopped.",
-    "late_final": "A public thread/inject_items assistant item was accepted after thread/resume but did not appear in the completed turn; this is not native late-final evidence.",
-    "disconnect": "A real active-host disconnect was not induced because it would interrupt the shared Orca runtime; existing protocol fault tests cover source_unavailable without certifying a native disconnect sample."
+  "real_orca_host_wait": {
+    "source": "Orca terminal/show on an isolated Codex TUI in Plan mode",
+    "agent_wait_source": "hook",
+    "agent_wait_since": 1790300209500,
+    "input_kind": "Red/Blue choice awaiting human response",
+    "persisted_event": "input.wait",
+    "wait_origin": "host",
+    "business_decision": false,
+    "probe_terminal_stopped_without_answer": true
+  },
+  "e_a4_fault_injection": {
+    "late_final": "A protocol helper first returned a completed turn without final and later appended a final to that same turn. The production collector retained its pending cursor, assigned the late final once to the original turn and cleared the pending state.",
+    "disconnect": "The protocol helper closed its stream during thread/turns/list. The production collector persisted source_unavailable without advancing the checkpoint, then recovered full turns from the same source without losing the visible gap.",
+    "scope": "These are controlled fault injections of production collection paths; spontaneous native late-final and active-host disconnect were not observed."
+  },
+  "unsuccessful_probes": {
+    "first_host_wait": "An outside-worktree write probe remained agentWait:null while a hook ran; its target file was unchanged and the terminal was stopped.",
+    "late_inject": "Public thread/inject_items did not add an assistant item to an already completed turn, so it was not used as late-final evidence."
   },
   "real_orca_retention": {
     "source": "Orca terminal v2 stream in isolated shell terminal",

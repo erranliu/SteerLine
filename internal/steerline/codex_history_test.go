@@ -40,6 +40,10 @@ func TestCodexHistoryServerHelper(t *testing.T) {
 		case "thread/read":
 			result = map[string]any{"thread": map[string]any{"id": request.Params.ThreadID, "cwd": os.Getenv("STEERLINE_CODEX_HISTORY_MOCK_WORKSPACE")}}
 		case "thread/turns/list":
+			stage, _ := os.ReadFile(os.Getenv("STEERLINE_CODEX_HISTORY_MOCK_STATE"))
+			if strings.TrimSpace(string(stage)) == "disconnect" {
+				os.Exit(8)
+			}
 			if path := os.Getenv("STEERLINE_CODEX_HISTORY_MOCK_CALLS"); path != "" {
 				f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
 				if err != nil {
@@ -51,7 +55,6 @@ func TestCodexHistoryServerHelper(t *testing.T) {
 					os.Exit(7)
 				}
 			}
-			stage, _ := os.ReadFile(os.Getenv("STEERLINE_CODEX_HISTORY_MOCK_STATE"))
 			first := map[string]any{"id": "first-turn", "itemsView": "full", "status": "completed", "completedAt": 1, "items": []any{map[string]any{"id": "first-message", "type": "agentMessage", "phase": "commentary", "text": "progress"}}}
 			if strings.TrimSpace(string(stage)) == "late" {
 				first["items"] = append(first["items"].([]any), map[string]any{"id": "late-final", "type": "agentMessage", "phase": "final_answer", "text": "late complete"})
@@ -143,6 +146,72 @@ func TestCodexHistoryReconcilesLateFinalInEarlierTurn(t *testing.T) {
 		if statuses[name] != CapabilityVerified {
 			t.Fatalf("native capability %s was not reported: %+v", name, statuses)
 		}
+	}
+}
+
+func TestCodexHistoryDisconnectKeepsVisibleGapAndCheckpoint(t *testing.T) {
+	workspace, root := t.TempDir(), t.TempDir()
+	stage := filepath.Join(root, "stage")
+	require(t, os.WriteFile(stage, []byte("disconnect"), 0600))
+	t.Setenv("STEERLINE_CODEX_HISTORY_MOCK", "1")
+	t.Setenv("STEERLINE_CODEX_HISTORY_MOCK_WORKSPACE", workspace)
+	t.Setenv("STEERLINE_CODEX_HISTORY_MOCK_STATE", stage)
+	store, err := OpenSQLiteStore(filepath.Join(root, "history.db"))
+	require(t, err)
+	defer store.Close()
+	binding := codexHistoryBinding{Version: 1, ProjectID: "project", WorkflowID: "workflow", ExecutionID: "execution", AttemptID: "attempt", Backend: BackendLocal, Protocol: ProtocolLocalProcess, TargetID: "local", Workspace: workspace, SessionID: "00000000-0000-0000-0000-000000000001", Command: Command{Executable: os.Args[0], Args: []string{"-test.run=^TestCodexHistoryServerHelper$"}}}
+	service := &Service{domainStore: store}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	requests := make(chan []codexHistoryBinding, 4)
+	errorsOut := make(chan error, 4)
+	go service.runCodexHistoryCollector(ctx, requests, errorsOut)
+	requests <- []codexHistoryBinding{binding}
+	select {
+	case err := <-errorsOut:
+		if err == nil {
+			t.Fatal("disconnected history source reported no error")
+		}
+	case <-ctx.Done():
+		t.Fatal("disconnected history source did not report failure")
+	}
+	query := ConversationQueryService{Store: store, Project: "project"}
+	filter := ConversationFilter{ExecutionID: binding.ExecutionID, AttemptID: binding.AttemptID, Source: "codex-app-server"}
+	page, err := query.ReadConversation(ctx, filter, "", 100)
+	require(t, err)
+	if len(page.Events) != 1 || page.Events[0].Type != ConversationGap || page.Events[0].Status != "source_unavailable" {
+		t.Fatalf("disconnect did not leave a visible source gap: %+v", page.Events)
+	}
+	if _, err = store.ConversationCheckpoint(ctx, binding.ProjectID, binding.ExecutionID, binding.AttemptID, "codex-app-server", binding.identity()); err == nil {
+		t.Fatal("disconnect advanced the conversation checkpoint")
+	}
+	require(t, os.WriteFile(stage, []byte("late"), 0600))
+	for i := 0; i < 3; i++ {
+		requests <- []codexHistoryBinding{binding}
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	finals := 0
+	for time.Now().Before(deadline) {
+		page, err = query.ReadConversation(ctx, filter, "", 100)
+		require(t, err)
+		finals = 0
+		for _, event := range page.Events {
+			if event.Type == ConversationMessageComplete && event.Phase == MessagePhaseFinalAnswer {
+				finals++
+			}
+		}
+		if finals == 2 {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if finals != 2 || len(page.Events) < 7 || page.Events[0].Type != ConversationGap {
+		t.Fatalf("recovered history did not preserve the old gap: %+v", page.Events)
+	}
+	checkpoint, err := store.ConversationCheckpoint(ctx, binding.ProjectID, binding.ExecutionID, binding.AttemptID, "codex-app-server", binding.identity())
+	require(t, err)
+	if checkpoint.Cursor == "" {
+		t.Fatal("recovered history did not advance its checkpoint")
 	}
 }
 

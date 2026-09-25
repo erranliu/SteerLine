@@ -4,7 +4,7 @@
 
 依据：[Spec](pr-04b-conversation-events.spec.md)。依赖：PR 4A 审核合并。
 
-执行记录（更新于 2026-09-25）：步骤 2–4 已实现基础 DTO、SQLite 事务/正文引用、local JSONL 回放与 Orca terminal observation 降级，并补入公开 Codex app-server 历史采集。local 从原生 thread.started 绑定 session；本机 Orca 通过终端环境中的启动器预建并绑定 session，保留 Orca 的 CODEX_HOME。两条真实多轮来源已验证原生 phase、turn/item ID、结束字段与重放，E-A9 在该版本/目标范围内通过。步骤 5 的真实 Windows 窗口、viewer 与来源换代验收通过（E-A8）。补充的 SQLite 满盘、进程退出、缺失/损坏正文、多页 Unicode final 验收使 E-A5、E-A7 在本机目标范围内通过。新增真实本地 commentary/tool/final、双 session 同尝试换代和 Orca 历史淘汰探针，连同 cursor-zero 修复，使 E-A2、E-A3、E-A6 在测量范围内通过。E-A4 已有真实取消和失败样本；真实迟到 final、宿主等待对象与活动宿主断连仍缺原生证据，因此不据此宣告整个 4B 阶段完成。详见 [验证报告](../validation/pr-04b-conversation-events-2026-09-24.md)。
+执行记录（更新于 2026-09-25）：步骤 2–4 已实现基础 DTO、SQLite 事务/正文引用、local JSONL 回放与 Orca terminal observation 降级，并补入公开 Codex app-server 历史采集。local 从原生 thread.started 绑定 session；本机 Orca 通过终端环境中的启动器预建并绑定 session，保留 Orca 的 CODEX_HOME。两条真实多轮来源已验证原生 phase、turn/item ID、结束字段与重放，E-A9 在该版本/目标范围内通过。步骤 5 的真实 Windows 窗口、viewer 与来源换代验收通过（E-A8）。补充的 SQLite 满盘、进程退出、缺失/损坏正文、多页 Unicode final 验收使 E-A5、E-A7 在本机目标范围内通过。新增真实本地 commentary/tool/final、双 session 同尝试换代和 Orca 历史淘汰探针，连同 cursor-zero 修复，使 E-A2、E-A3、E-A6 在测量范围内通过。E-A4 的真实取消、失败和 Orca 宿主等待样本已取得；生产采集器用受控故障注入验证迟到 final 与断连恢复，真实等待事件的持久化缺陷已修复。E-A1–E-A9 在已测本机 Windows/Codex 0.156.1/Orca 1.4.209 范围内通过，远端及其他 agent 的能力继续按报告标记，不外推验收。详见 [验证报告](../validation/pr-04b-conversation-events-2026-09-24.md)。
 
 ## 实施步骤
 

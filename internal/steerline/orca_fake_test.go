@@ -471,6 +471,60 @@ func TestOrcaNativeRetentionGap(t *testing.T) {
 	t.Logf("real Orca retention: oldest=%s, first_rows=%q, next_rows=%q", first.RetainedFrom, first.Data, second.Data)
 }
 
+// TestOrcaNativeHostWait requires an exact isolated terminal that is actively
+// waiting for a human choice through Orca's public terminal/show response.
+func TestOrcaNativeHostWait(t *testing.T) {
+	path := os.Getenv("STEERLINE_ORCA_HOST_WAIT_PROBE")
+	if path == "" {
+		t.Skip("set an exact isolated waiting Orca terminal to run acceptance")
+	}
+	raw, err := os.ReadFile(path)
+	require(t, err)
+	var probe struct {
+		Workspace   string `json:"workspace"`
+		Terminal    string `json:"terminal"`
+		Runtime     string `json:"runtime"`
+		Incarnation string `json:"incarnation"`
+	}
+	require(t, json.Unmarshal(raw, &probe))
+	if !filepath.IsAbs(probe.Workspace) || probe.Terminal == "" || probe.Runtime == "" || probe.Incarnation == "" {
+		t.Fatal("Orca host-wait probe lacks an exact bound terminal")
+	}
+	exe, err := exec.LookPath("orca")
+	require(t, err)
+	config := Config{Repository: probe.Workspace, Host: "orca", CommandTimeout: "15s", Orca: OrcaConfig{Executable: exe}}
+	identity := ProcessIdentity{Kind: "orca", Terminal: probe.Terminal, RuntimeID: probe.Runtime, Incarnation: probe.Incarnation, Executable: exe}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	term, err := inspectBoundOrcaTerminal(ctx, config, identity)
+	require(t, err)
+	if term.AgentWait == nil || term.AgentIdentity != "codex" {
+		t.Fatalf("real Orca host wait was not reported by the bound Codex terminal: %+v", term)
+	}
+	var wait struct {
+		Source string `json:"source"`
+		Since  int64  `json:"since"`
+	}
+	require(t, json.Unmarshal(*term.AgentWait, &wait))
+	if wait.Source == "" || wait.Since == 0 {
+		t.Fatalf("real Orca wait lacks source/time: %+v", wait)
+	}
+	store, err := OpenSQLiteStore(filepath.Join(t.TempDir(), "wait.db"))
+	require(t, err)
+	defer store.Close()
+	runID, attemptID := newID(), newID()
+	run := &Run{RunID: runID, AttemptID: attemptID, ExecutionID: "host-wait-execution", Backend: string(BackendOrca), Protocol: string(ProtocolOrcaTerminalV2), Agent: "codex", Target: targetFor(config), Process: &identity}
+	service := &Service{Config: Config{identity: "project"}, domainStore: store}
+	source := WorkerEvent{RunID: runID, AttemptID: attemptID, Source: "orca-terminal-v2", SourceSegment: "orca-host-wait-v1:probe", SourceEventID: "host-wait:probe", SourceIdentity: "terminal:" + probe.Runtime + ":" + probe.Terminal + ":" + probe.Incarnation, SourceSeq: 1, Session: "terminal:" + probe.Terminal + ":" + probe.Incarnation, InputWait: true, Diagnostic: "Orca reports a host-level agent wait; no SteerLine business Decision was created"}
+	require(t, service.recordConversationEvent(run, source))
+	page, err := (ConversationQueryService{Store: store, Project: "project"}).ReadConversation(ctx, ConversationFilter{ExecutionID: run.ExecutionID, AttemptID: attemptID}, "", 10)
+	require(t, err)
+	if len(page.Events) != 1 || page.Events[0].Type != ConversationInputWait || page.Events[0].Status != "waiting" || page.Events[0].Attributes["wait_origin"] != "host" || page.Events[0].Attributes["business_decision"] != false || page.Events[0].Evidence["wait_source"] != "orca-terminal-show.agentWait" {
+		t.Fatalf("real host wait was confused with a business decision: %+v", page.Events)
+	}
+	t.Logf("real Orca host wait: source=%s, reported_since=%d, conversation_event=%s", wait.Source, wait.Since, page.Events[0].Type)
+}
+
 func orcaTestConfig(t *testing.T, dir, _ string) Config {
 	t.Helper()
 	exe, e := os.Executable()
