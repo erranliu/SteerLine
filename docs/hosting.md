@@ -34,6 +34,10 @@ Orca 的 Run/Task/Dispatch 是执行身份，不等同于 SteerLine 的业务 Ta
 
 领取前按目标、agent、协议及 CLI 版本核对已验证能力。隔离原生验收后停服运行 `steerline certify-backend -config <config.json> -evidence <evidence.json>` 导入证据；未验证能力不可用于副作用。具体结果和仍 unsupported 的能力见 [PR 4A 验证报告](validation/pr-04a-execution-backends.md)。
 
+PR 4B 的会话采集由服务持有，不依赖 viewer/TUI。Local Codex 原始 JSONL 在 worker 运行时和服务重启回放时进入同一 normalizer/SQLite store。Orca terminal v2 由固定 terminal/incarnation 的观察 collector 读取有界 cursor 页；原始终端文本保存为 observation，并附来源/cursor/gap。关闭 viewer 不影响服务采集；关闭 Windows 服务窗口会停止服务。Local JSONL 可从持久来源 checkpoint 对账回放。Orca 当前不自动采用旧 terminal observer；新 continuation observer 用新 segment 并记录缺少前一 cursor 的 gap。服务停机期间无法确认的来源历史保持 gap/unknown。
+
+当前 terminal v2 文本观察不声明 turn completion 或 final phase。配置的 Codex 原生命令支持 app-server 时，本机 Orca 启动器在终端环境中显式预建、绑定 session，并保留 Orca 的 CODEX_HOME；服务通过该 session 的公开历史接口采集精确轮次、阶段与正文。该读取路径不创建 supervised Dispatch，也不读取私有数据库或远端路径。回复回执仍只证明输入接受和 turn start；结构化结果摘要单列为 `execution.result`。真实能力证据与未验收项见 [PR 4B 验证报告](validation/pr-04b-conversation-events-2026-09-24.md)。
+
 ## 审查红线
 
 - 业务 DAG、步骤门槛、Decision 或交付事实是否被 Orca、agent、技能、UI 或脚本直接推进？

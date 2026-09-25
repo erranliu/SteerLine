@@ -550,5 +550,10 @@ func (s *Service) resumeAfterDecision(ctx context.Context, r *Run) error {
 		s.worker, s.active = nil, nil
 		return &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "reply was accepted but its durable receipt could not be saved", Cause: e}
 	}
+	if reply.TurnStarted {
+		if e := s.recordOrcaTurnStarted(r, ref, op, reply); e != nil {
+			s.setError(fmt.Errorf("conversation turn receipt persistence failed: %w", e))
+		}
+	}
 	return nil
 }

@@ -911,9 +911,13 @@ func (b orcaTerminalBackend) ReadOutput(ctx context.Context, ref ExecutionRef, c
 	changed := false
 	for attempt := 0; attempt < 2; attempt++ {
 		args := []string{"terminal", "read", "--terminal", ref.External.Terminal, "--limit", strconv.Itoa(limit), "--json"}
-		if position != "" {
-			args = append(args, "--cursor", position)
+		// Orca's omitted-cursor read is a tail preview. An initial collection
+		// must request cursor zero to page every row still retained upstream.
+		readPosition := position
+		if readPosition == "" {
+			readPosition = "0"
 		}
+		args = append(args, "--cursor", readPosition)
 		out, callErr := (orcaClient{cfg: b.config}).call(ctx, positiveDuration(b.config.CommandTimeout, 30*time.Second), args...)
 		env, err := parseEnvelope(out)
 		if callErr != nil {
@@ -972,7 +976,13 @@ func (b orcaTerminalBackend) ReadOutput(ctx context.Context, ref ExecutionRef, c
 			return OutputBatch{}, &BackendError{Code: BackendProtocolInvalid, Diagnostic: "Orca output omitted nextCursor"}
 		}
 		gap := false
-		if position != "" && oldest != "" {
+		if position == "" && oldest != "" {
+			if have, parseErr := strconv.ParseInt(oldest, 10, 64); parseErr == nil {
+				gap = have > 0
+			} else {
+				gap = true
+			}
+		} else if position != "" && oldest != "" {
 			want, werr := strconv.ParseInt(position, 10, 64)
 			have, herr := strconv.ParseInt(oldest, 10, 64)
 			if werr == nil && herr == nil && want < have {
@@ -987,7 +997,7 @@ func (b orcaTerminalBackend) ReadOutput(ctx context.Context, ref ExecutionRef, c
 	}
 	return OutputBatch{}, &BackendError{Code: BackendProtocolInvalid, Diagnostic: "Orca output source changed repeatedly during one read"}
 }
-func (b orcaTerminalBackend) Reply(ctx context.Context, ref ExecutionRef, text string, _ Operation, resultOut string) (ReplyReceipt, error) {
+func (b orcaTerminalBackend) Reply(ctx context.Context, ref ExecutionRef, text string, operation Operation, resultOut string) (ReplyReceipt, error) {
 	if ref.Backend != BackendOrca || ref.Protocol != ProtocolOrcaTerminalV2 || ref.External.Terminal == "" {
 		return ReplyReceipt{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "Orca terminal binding is incomplete"}
 	}
@@ -1020,6 +1030,8 @@ func (b orcaTerminalBackend) Reply(ctx context.Context, ref ExecutionRef, text s
 		return ReplyReceipt{}, err
 	}
 	proc := &orcaProcess{cfg: b.config, term: orcaTerminal{Handle: ref.External.Terminal, RuntimeID: ref.External.RuntimeID, IncarnationID: ref.External.Incarnation}}
+	proc.ref = ref
+	proc.outputSegment = "reply:" + operation.ID
 	worker := superviseOrcaResult(b.config, proc, resultInWorktree, resultOut)
 	receipt.Worker = worker
 	return receipt, nil

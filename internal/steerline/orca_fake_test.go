@@ -314,7 +314,24 @@ func fakeOrcaShow(stateDir string, argv []string) int {
 			status, orphaned = "running", true
 		}
 	}
-	return fakeOrcaOK(map[string]any{"terminal": map[string]any{"handle": st.Handle, "incarnationId": inc, "status": status, "connected": connected, "orphaned": orphaned}})
+	return fakeOrcaOK(map[string]any{"terminal": map[string]any{"handle": st.Handle, "incarnationId": inc, "status": status, "connected": connected, "orphaned": orphaned, "executionHostId": "local", "agentIdentity": os.Getenv("STEERLINE_FAKE_ORCA_AGENT_IDENTITY")}})
+}
+
+func TestOrcaHistoryLaunchRequiresSameLiveCodexAgent(t *testing.T) {
+	dir := t.TempDir()
+	cfg := orcaTestConfig(t, dir, "local")
+	state := fakeOrcaState{Handle: "bound-agent", Incarnation: "inc-bound"}
+	require(t, writeFakeOrcaState(dir, state))
+	fixed := orcaTerminal{Handle: state.Handle, RuntimeID: "fake-runtime", IncarnationID: state.Incarnation, ExecutionHostID: "local"}
+	t.Setenv("STEERLINE_FAKE_ORCA_AGENT_IDENTITY", "codex")
+	term, err := waitOrcaCodexHistoryAgent(context.Background(), orcaClient{cfg: cfg}, fixed)
+	if err != nil || term.AgentIdentity != "codex" {
+		t.Fatalf("live Codex binding was rejected: term=%+v err=%v", term, err)
+	}
+	t.Setenv("STEERLINE_FAKE_ORCA_INCARNATION", "replacement-incarnation")
+	if _, err = waitOrcaCodexHistoryAgent(context.Background(), orcaClient{cfg: cfg}, fixed); err == nil {
+		t.Fatal("replaced terminal was accepted as the bound agent")
+	}
 }
 
 func fakeOrcaRead(stateDir string, argv []string) int {
@@ -322,9 +339,10 @@ func fakeOrcaRead(stateDir string, argv []string) int {
 	if err != nil {
 		return fakeOrcaErr("terminal_handle_stale", err.Error())
 	}
+	cursor := arg(argv, "--cursor")
 	position := 0
-	if value := arg(argv, "--cursor"); value != "" {
-		position, err = strconv.Atoi(value)
+	if cursor != "" {
+		position, err = strconv.Atoi(cursor)
 		if err != nil || position < 0 {
 			return fakeOrcaErr("cursor_invalid", "invalid cursor")
 		}
@@ -332,6 +350,13 @@ func fakeOrcaRead(stateDir string, argv []string) int {
 	limit, err := strconv.Atoi(arg(argv, "--limit"))
 	if err != nil || limit <= 0 {
 		return fakeOrcaErr("limit_invalid", "invalid limit")
+	}
+	if cursor == "" {
+		// The real Orca CLI treats an omitted cursor as a tail preview.
+		position = len(st.OutputLines) - limit
+		if position < 0 {
+			position = 0
+		}
 	}
 	if position > len(st.OutputLines) {
 		position = len(st.OutputLines)
@@ -387,6 +412,117 @@ func TestOrcaReadOutputBindsCursorToExactSource(t *testing.T) {
 	if err != nil || !changed.SourceChanged || changed.Source != "screen" {
 		t.Fatalf("source change=%#v err=%v", changed, err)
 	}
+}
+
+func TestOrcaReadOutputReportsRetentionGapOnInitialRead(t *testing.T) {
+	dir := t.TempDir()
+	cfg := orcaTestConfig(t, dir, "fail")
+	handle := "terminal-initial-gap-test"
+	state := fakeOrcaState{Handle: handle, Incarnation: "inc-initial-gap", OutputLines: []string{"evicted-one", "evicted-two", "retained-three", "retained-four", "retained-five"}, OldestCursor: 2}
+	if err := writeFakeOrcaState(dir, state); err != nil {
+		t.Fatal(err)
+	}
+	ref := ExecutionRef{Version: 1, Backend: BackendOrca, Protocol: ProtocolOrcaTerminalV2, Target: targetFor(cfg), Agent: AgentSpec{Name: "codex"}, RunID: newID(), AttemptID: newID(), External: ProcessIdentity{Kind: "orca", Terminal: handle, RuntimeID: "fake-runtime", Incarnation: state.Incarnation, Executable: cfg.Orca.Executable}}
+	batch, err := (orcaTerminalBackend{config: cfg}).ReadOutput(context.Background(), ref, "", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !batch.Gap || batch.RetainedFrom != "2" || string(batch.Data) != "retained-three" {
+		t.Fatalf("initial retention boundary was hidden: %+v", batch)
+	}
+}
+
+// TestOrcaNativeRetentionGap is gated to an isolated live Orca terminal whose
+// upstream history has actually evicted its earliest output rows.
+func TestOrcaNativeRetentionGap(t *testing.T) {
+	path := os.Getenv("STEERLINE_ORCA_RETENTION_PROBE")
+	if path == "" {
+		t.Skip("set an exact isolated live Orca terminal probe to run acceptance")
+	}
+	raw, err := os.ReadFile(path)
+	require(t, err)
+	var probe struct {
+		Workspace   string `json:"workspace"`
+		Terminal    string `json:"terminal"`
+		Runtime     string `json:"runtime"`
+		Incarnation string `json:"incarnation"`
+		Retained    string `json:"retained_from"`
+	}
+	require(t, json.Unmarshal(raw, &probe))
+	if !filepath.IsAbs(probe.Workspace) || probe.Terminal == "" || probe.Runtime == "" || probe.Incarnation == "" || probe.Retained == "" {
+		t.Fatal("Orca retention probe lacks an exact bound terminal")
+	}
+	exe, err := exec.LookPath("orca")
+	require(t, err)
+	config := Config{Repository: probe.Workspace, Host: "orca", CommandTimeout: "15s", Orca: OrcaConfig{Executable: exe}}
+	ref := ExecutionRef{Version: 1, Backend: BackendOrca, Protocol: ProtocolOrcaTerminalV2, Target: targetFor(config), Agent: AgentSpec{Name: "codex"}, RunID: "retention-probe-run", AttemptID: "retention-probe-attempt", WorkspacePath: probe.Workspace, External: ProcessIdentity{Kind: "orca", Terminal: probe.Terminal, RuntimeID: probe.Runtime, Incarnation: probe.Incarnation, Executable: exe}}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	first, err := (orcaTerminalBackend{config: config}).ReadOutput(ctx, ref, "", 5)
+	require(t, err)
+	if !first.Gap || first.SourceChanged || first.Source != "stream" || first.RetainedFrom != probe.Retained || !strings.HasPrefix(string(first.Data), "PR04B-RETENTION-"+probe.Retained) || first.NextCursor == "" {
+		t.Fatalf("real Orca retention loss was hidden: %+v", first)
+	}
+	second, err := (orcaTerminalBackend{config: config}).ReadOutput(ctx, ref, first.NextCursor, 5)
+	require(t, err)
+	if second.Gap || second.SourceChanged || second.Data == nil || second.NextCursor == first.NextCursor {
+		t.Fatalf("bounded continuation after real retention gap failed: %+v", second)
+	}
+	t.Logf("real Orca retention: oldest=%s, first_rows=%q, next_rows=%q", first.RetainedFrom, first.Data, second.Data)
+}
+
+// TestOrcaNativeHostWait requires an exact isolated terminal that is actively
+// waiting for a human choice through Orca's public terminal/show response.
+func TestOrcaNativeHostWait(t *testing.T) {
+	path := os.Getenv("STEERLINE_ORCA_HOST_WAIT_PROBE")
+	if path == "" {
+		t.Skip("set an exact isolated waiting Orca terminal to run acceptance")
+	}
+	raw, err := os.ReadFile(path)
+	require(t, err)
+	var probe struct {
+		Workspace   string `json:"workspace"`
+		Terminal    string `json:"terminal"`
+		Runtime     string `json:"runtime"`
+		Incarnation string `json:"incarnation"`
+	}
+	require(t, json.Unmarshal(raw, &probe))
+	if !filepath.IsAbs(probe.Workspace) || probe.Terminal == "" || probe.Runtime == "" || probe.Incarnation == "" {
+		t.Fatal("Orca host-wait probe lacks an exact bound terminal")
+	}
+	exe, err := exec.LookPath("orca")
+	require(t, err)
+	config := Config{Repository: probe.Workspace, Host: "orca", CommandTimeout: "15s", Orca: OrcaConfig{Executable: exe}}
+	identity := ProcessIdentity{Kind: "orca", Terminal: probe.Terminal, RuntimeID: probe.Runtime, Incarnation: probe.Incarnation, Executable: exe}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	term, err := inspectBoundOrcaTerminal(ctx, config, identity)
+	require(t, err)
+	if term.AgentWait == nil || term.AgentIdentity != "codex" {
+		t.Fatalf("real Orca host wait was not reported by the bound Codex terminal: %+v", term)
+	}
+	var wait struct {
+		Source string `json:"source"`
+		Since  int64  `json:"since"`
+	}
+	require(t, json.Unmarshal(*term.AgentWait, &wait))
+	if wait.Source == "" || wait.Since == 0 {
+		t.Fatalf("real Orca wait lacks source/time: %+v", wait)
+	}
+	store, err := OpenSQLiteStore(filepath.Join(t.TempDir(), "wait.db"))
+	require(t, err)
+	defer store.Close()
+	runID, attemptID := newID(), newID()
+	run := &Run{RunID: runID, AttemptID: attemptID, ExecutionID: "host-wait-execution", Backend: string(BackendOrca), Protocol: string(ProtocolOrcaTerminalV2), Agent: "codex", Target: targetFor(config), Process: &identity}
+	service := &Service{Config: Config{identity: "project"}, domainStore: store}
+	source := WorkerEvent{RunID: runID, AttemptID: attemptID, Source: "orca-terminal-v2", SourceSegment: "orca-host-wait-v1:probe", SourceEventID: "host-wait:probe", SourceIdentity: "terminal:" + probe.Runtime + ":" + probe.Terminal + ":" + probe.Incarnation, SourceSeq: 1, Session: "terminal:" + probe.Terminal + ":" + probe.Incarnation, InputWait: true, Diagnostic: "Orca reports a host-level agent wait; no SteerLine business Decision was created"}
+	require(t, service.recordConversationEvent(run, source))
+	page, err := (ConversationQueryService{Store: store, Project: "project"}).ReadConversation(ctx, ConversationFilter{ExecutionID: run.ExecutionID, AttemptID: attemptID}, "", 10)
+	require(t, err)
+	if len(page.Events) != 1 || page.Events[0].Type != ConversationInputWait || page.Events[0].Status != "waiting" || page.Events[0].Attributes["wait_origin"] != "host" || page.Events[0].Attributes["business_decision"] != false || page.Events[0].Evidence["wait_source"] != "orca-terminal-show.agentWait" {
+		t.Fatalf("real host wait was confused with a business decision: %+v", page.Events)
+	}
+	t.Logf("real Orca host wait: source=%s, reported_since=%d, conversation_event=%s", wait.Source, wait.Since, page.Events[0].Type)
 }
 
 func orcaTestConfig(t *testing.T, dir, _ string) Config {

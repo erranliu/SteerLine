@@ -22,11 +22,25 @@ var promptTemplate string
 var commitHash = regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`)
 
 type WorkerEvent struct {
-	RunID     string
-	AttemptID string
-	Session   string
-	Summary   string
-	Activity  ActivityEvent
+	RunID          string
+	AttemptID      string
+	Source         string
+	SourceEventID  string
+	SourceIdentity string
+	SourceCursor   string
+	Session        string
+	Summary        string
+	Activity       ActivityEvent
+	Raw            []byte
+	SourceSeq      uint64
+	SourceOffset   int64
+	SourceLength   int64
+	SourceSegment  string
+	SourceGap      bool
+	SourceChanged  bool
+	InputWait      bool
+	Diagnostic     string
+	Persisted      chan error
 }
 type Worker struct {
 	proc              process
@@ -106,14 +120,21 @@ func StartWorker(ctx context.Context, c Config, t Task, r *Run) (*Worker, error)
 	}
 	args = append(args, "-")
 	spec := SpawnSpec{
-		RunID:      r.RunID,
-		AttemptID:  r.AttemptID,
-		Dir:        c.Repository,
-		EventsPath: *r.LogPath,
-		StderrPath: filepath.Join(dir, "stderr.log"),
-		Command:    Command{Executable: c.Codex.Executable, Args: args},
-		Stdin:      bytes.NewReader([]byte(prompt)),
-		Env:        c.workerEnv,
+		RunID:              r.RunID,
+		AttemptID:          r.AttemptID,
+		ProjectID:          c.identity,
+		WorkflowID:         r.RunID,
+		ExecutionID:        nonEmpty(r.ExecutionID, legacyExecutionID(r.RunID)),
+		Agent:              c.agentName(),
+		TargetID:           r.Target.ID,
+		ConversationJSONL:  true,
+		ConversationReader: codexReaderCommand(c),
+		Dir:                c.Repository,
+		EventsPath:         *r.LogPath,
+		StderrPath:         filepath.Join(dir, "stderr.log"),
+		Command:            Command{Executable: c.Codex.Executable, Args: args},
+		Stdin:              bytes.NewReader([]byte(prompt)),
+		Env:                c.workerEnv,
 	}
 	return SpawnerFor(c).Start(ctx, spec)
 }

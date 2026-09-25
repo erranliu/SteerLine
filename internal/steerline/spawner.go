@@ -2,6 +2,7 @@ package steerline
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -9,6 +10,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"sync"
 	"time"
 )
@@ -24,16 +26,24 @@ type process interface {
 // SpawnSpec is everything a host needs to run one worker. It contains no
 // scheduling or recovery authority: the scheduler keeps ownership.
 type SpawnSpec struct {
-	RunID      string
-	AttemptID  string
-	Dir        string
-	EventsPath string
-	StderrPath string
-	OutputPath string
-	Command    Command
-	Stdin      io.Reader
-	Env        map[string]string
-	Timeout    time.Duration
+	RunID              string
+	AttemptID          string
+	ProjectID          string
+	WorkflowID         string
+	ExecutionID        string
+	Agent              string
+	TargetID           string
+	ConversationJSONL  bool
+	ConversationReader Command
+	SourceIdentity     string
+	Dir                string
+	EventsPath         string
+	StderrPath         string
+	OutputPath         string
+	Command            Command
+	Stdin              io.Reader
+	Env                map[string]string
+	Timeout            time.Duration
 }
 
 // Spawner starts and supervises one worker. Implementations must not mutate
@@ -77,6 +87,36 @@ func (LocalSpawner) Start(ctx context.Context, spec SpawnSpec) (*Worker, error) 
 	logFile, e := os.OpenFile(spec.EventsPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
 	if e != nil {
 		return nil, e
+	}
+	identityFile, sourceIdentity, identityErr := openJournal(spec.EventsPath)
+	if identityErr != nil {
+		logFile.Close()
+		return nil, identityErr
+	}
+	if closeErr := identityFile.Close(); closeErr != nil {
+		logFile.Close()
+		return nil, closeErr
+	}
+	spec.SourceIdentity = sourceIdentity
+	if spec.ConversationJSONL {
+		marker := ConversationSourceMarker{Version: 1, ProjectID: spec.ProjectID, WorkflowID: spec.WorkflowID, ExecutionID: spec.ExecutionID, AttemptID: spec.AttemptID, Backend: BackendLocal, Protocol: ProtocolLocalProcess, Agent: spec.Agent, TargetID: spec.TargetID, Source: "codex-jsonl", SourceSegment: "local-jsonl-v1:" + sourceIdentity, SourceIdentity: sourceIdentity, RecordName: "events.jsonl", CreatedAt: now()}
+		marker.ReaderCommand, marker.CodexHome = spec.ConversationReader, codexEnvironmentHome()
+		if home, ok := spec.Env["CODEX_HOME"]; ok {
+			marker.CodexHome = home
+		}
+		if err := marker.validate(); err != nil {
+			logFile.Close()
+			return nil, err
+		}
+		markerBytes, err := json.Marshal(marker)
+		if err != nil {
+			logFile.Close()
+			return nil, err
+		}
+		if err = AtomicWrite(filepath.Join(filepath.Dir(spec.EventsPath), ConversationSourceMarkerName), append(markerBytes, '\n')); err != nil {
+			logFile.Close()
+			return nil, fmt.Errorf("persist conversation source marker: %w", err)
+		}
 	}
 	errFile, e := os.OpenFile(spec.StderrPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
 	if e != nil {
@@ -133,10 +173,12 @@ func (LocalSpawner) Start(ctx context.Context, spec SpawnSpec) (*Worker, error) 
 				if !ok {
 					return
 				}
-				// events.jsonl remains complete even when the observation queue is full.
+				// Apply bounded backpressure so a busy worker cannot silently lose
+				// conversation events before their persisted cursor advances.
 				select {
 				case w.Events <- ev:
-				default:
+				case <-observeCtx.Done():
+					return
 				}
 			}
 		}
@@ -155,9 +197,15 @@ func (LocalSpawner) Start(ctx context.Context, spec SpawnSpec) (*Worker, error) 
 			}
 			scanErr = streamWorkerEventsWithEmit(io.TeeReader(reader, writer), NewCodexNormalizer(), func(ev WorkerEvent) {
 				ev.RunID, ev.AttemptID = spec.RunID, spec.AttemptID
+				ev.SourceIdentity = spec.SourceIdentity
+				if spec.ConversationJSONL {
+					ev.Source, ev.SourceSegment = "codex-jsonl", "local-jsonl-v1:"+spec.SourceIdentity
+				} else {
+					ev.Source, ev.SourceSegment = "local-command-output", "local-command-v1:"+spec.SourceIdentity
+				}
 				select {
 				case parsed <- ev:
-				default:
+				case <-observeCtx.Done():
 				}
 			})
 			if scanErr != nil {
@@ -217,12 +265,18 @@ func streamWorkerEvents(reader io.Reader, normalizer Normalizer, events chan<- W
 }
 
 func streamWorkerEventsWithEmit(reader io.Reader, normalizer Normalizer, emit func(WorkerEvent)) error {
-	const maxEventLine = 4 << 20
+	const maxEventLine = JournalMaxRecord + 1
 	r := bufio.NewReaderSize(reader, 64<<10)
 	line := make([]byte, 0, 64<<10)
 	tooLong := false
+	var sourceOffset, lineOffset int64
+	var sourceSeq uint64
 	for {
 		fragment, err := r.ReadSlice('\n')
+		if len(line) == 0 && !tooLong {
+			lineOffset = sourceOffset
+		}
+		sourceOffset += int64(len(fragment))
 		if !tooLong {
 			if len(line)+len(fragment) > maxEventLine {
 				line = line[:0]
@@ -238,14 +292,16 @@ func streamWorkerEventsWithEmit(reader io.Reader, normalizer Normalizer, emit fu
 			return err
 		}
 		if !tooLong && len(line) > 0 {
-			content := line
-			if content[len(content)-1] == '\n' {
-				content = content[:len(content)-1]
-			}
+			rawRecord := append([]byte(nil), line...)
+			content := bytes.TrimSuffix(line, []byte{'\n'})
 			if len(content) > 0 && content[len(content)-1] == '\r' {
 				content = content[:len(content)-1]
 			}
-			emitWorkerLine(content, normalizer, emit)
+			sourceSeq++
+			emitWorkerLine(content, rawRecord, normalizer, sourceSeq, lineOffset, int64(len(rawRecord)), emit)
+		} else if tooLong && (err == nil || errors.Is(err, io.EOF)) {
+			sourceSeq++
+			emit(WorkerEvent{Summary: "oversized raw event", Activity: ActivityEvent{Source: normalizer.Name(), Kind: "unknown", Title: "oversized raw event", Meta: map[string]any{"source_bytes": sourceOffset - lineOffset}}, SourceGap: true, Diagnostic: fmt.Sprintf("source record exceeds %d bytes", JournalMaxRecord), SourceSeq: sourceSeq, SourceOffset: lineOffset, SourceLength: sourceOffset - lineOffset})
 		}
 		line = line[:0]
 		tooLong = false
@@ -255,7 +311,7 @@ func streamWorkerEventsWithEmit(reader io.Reader, normalizer Normalizer, emit fu
 	}
 }
 
-func emitWorkerLine(line []byte, normalizer Normalizer, emit func(WorkerEvent)) {
+func emitWorkerLine(line, rawRecord []byte, normalizer Normalizer, sourceSeq uint64, sourceOffset, sourceLength int64, emit func(WorkerEvent)) {
 	var event struct {
 		Type     string `json:"type"`
 		ThreadID string `json:"thread_id"`
@@ -264,6 +320,7 @@ func emitWorkerLine(line []byte, normalizer Normalizer, emit func(WorkerEvent)) 
 		} `json:"item"`
 	}
 	if e := json.Unmarshal(line, &event); e != nil {
+		emit(WorkerEvent{Summary: "unparsed raw event", Activity: ActivityEvent{Source: normalizer.Name(), Kind: "unknown", Title: "unparsed raw event", Meta: map[string]any{"raw_sha256": hashJournalBytes(line), "raw_bytes": len(line)}}, Raw: append([]byte(nil), rawRecord...), SourceSeq: sourceSeq, SourceOffset: sourceOffset, SourceLength: sourceLength, SourceSegment: "local-jsonl-v1"})
 		return
 	}
 	summary := clip(event.Type+" "+event.Item.Type, 512)
@@ -276,6 +333,13 @@ func emitWorkerLine(line []byte, normalizer Normalizer, emit func(WorkerEvent)) 
 		activities = []ActivityEvent{{Source: normalizer.Name(), Kind: "unknown", Title: event.Type, Raw: cloneRaw(line)}}
 	}
 	for _, activity := range activities {
-		emit(WorkerEvent{Session: session, Summary: summary, Activity: activity})
+		if len(activity.Raw) > activityDetailMax {
+			activity.Raw = nil
+			if activity.Meta == nil {
+				activity.Meta = map[string]any{}
+			}
+			activity.Meta["raw_sha256"], activity.Meta["raw_bytes"] = hashJournalBytes(line), len(line)
+		}
+		emit(WorkerEvent{Session: session, Summary: summary, Activity: activity, Raw: append([]byte(nil), rawRecord...), SourceSeq: sourceSeq, SourceOffset: sourceOffset, SourceLength: sourceLength, SourceSegment: "local-jsonl-v1"})
 	}
 }

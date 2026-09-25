@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "captured_at": "2026-09-24T21:26:00Z",
+  "platform": "windows/amd64",
+  "orca_version": "1.4.209",
+  "codex_version": "0.156.1",
+  "protocol": "orca_terminal_v2",
+  "isolation": "new local Git repository and independent Orca-managed worktree, with no remote",
+  "native_source": "orca terminal read --json",
+  "terminal_source": "stream",
+  "first_turn": {
+    "submitted_by": "worktree create --agent codex --prompt",
+    "observed_assistant_text": "The marker is PR04B_NATIVE_PROBE_ALPHA.",
+    "observed_tool_text": "Explored; Read probe.txt",
+    "read_cursor": {
+      "oldest": "0",
+      "next": "24",
+      "returned_lines": 25
+    }
+  },
+  "second_turn": {
+    "submit_receipt_stages": ["input_accepted", "turn_started"],
+    "submit_receipt_provider": "codex",
+    "observed_assistant_text": "PR04B_NATIVE_PROBE_ALPHA — this is turn two.",
+    "read_from_cursor": "24",
+    "read_next_cursor": "32",
+    "returned_lines": 8
+  },
+  "replay_read": {
+    "from_cursor": "0",
+    "next_cursor": "32",
+    "returned_lines": 32,
+    "marker_rows": 4
+  },
+  "terminal_show_agent_wait": null,
+  "search_conversation": {
+    "kind": "unavailable",
+    "reason": "disabled"
+  },
+  "phase_field_in_terminal_read": false,
+  "message_item_id_in_terminal_read": false,
+  "turn_completion_field_in_terminal_read": false,
+  "limitations": "Selected terminal rows are quoted after removing local paths and TUI repaint noise. Terminal text and tui-idle do not prove message phase, final-answer phase, or a native turn-completed record."
+}

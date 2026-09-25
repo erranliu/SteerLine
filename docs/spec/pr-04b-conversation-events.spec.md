@@ -2,7 +2,7 @@
 
 任务 ID：1；任务名称：统一会话事件与完整回复。
 
-状态：待实现。依赖：PR 4A。对应 [Plan](pr-04b-conversation-events.plan.md)。下游：[4C 控制台](pr-04-console.spec.md)。
+状态：基础读模型与持久化已实现；E-A8 与 E-A9 已在报告限定的本机 Windows/Codex 双链路验收，其他故障场景仍有未完成项。依赖：PR 4A。对应 [Plan](pr-04b-conversation-events.plan.md)。下游：[4C 控制台](pr-04-console.spec.md)。验收状态见 [4B 验证报告](../validation/pr-04b-conversation-events-2026-09-24.md) 与[能力矩阵](../validation/pr-04b-conversation-capabilities-2026-09-24.json)。
 
 ## E1：语义与身份
 
@@ -34,6 +34,8 @@
 | 失联/历史淘汰/source_changed | 保留已有历史，显示 gap/未知；不推断已结束 |
 
 本地 Codex 以实测 JSONL 或公开记录出口映射；不能从 API 文档假定 CLI 含 phase。`--output-schema` 结果的 summary 属于执行摘要；若无独立自然语言 final，不能虚构一条。Orca 按精确 ref 使用公开且已验证的 transcript/worker output 接口，terminal 降级显式标来源；terminal v2 和 supervised 分别验证，不从可用终端推断存在 Dispatch。
+
+已验证的本机 Codex 记录出口为公开 app-server `thread/read` / `thread/turns/list`。Orca terminal v2 可在同一已核验本机执行环境中显式创建并绑定 Codex session，再读取该 session 的公开历史；绑定须保留 Orca 的 Codex 环境及 runtime/terminal/incarnation，不通过工作目录搜索或终端文字猜 session。此证据不证明 terminal 文本本身含 phase，也不覆盖远端或其他 agent。
 
 禁止通过屏幕标题、颜色、关键字、“最后一句”、静默计时或模型自报识别轮次/最终阶段；不读取私有桌面数据库。本机 Orca 的证据不覆盖远端。复用 [Spec 01](01-orca-remote-protocol.md) 的映射/探测格式，避免维护两套 Orca 输出协议。
 

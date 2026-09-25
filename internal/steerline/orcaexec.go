@@ -25,6 +25,7 @@ const orcaResultFile = ".steerline-result.json"
 
 type orcaWorktree struct {
 	ID      string `json:"id"`
+	HostID  string `json:"hostId"`
 	Path    string `json:"path"`
 	Head    string `json:"head"`
 	Branch  string `json:"branch"`
@@ -203,10 +204,10 @@ func startOrcaRun(ctx context.Context, c Config, t Task, r *Run, source BeadsCon
 	name := orcaSafeName(t.ID, r.RunID)
 	baseRef := "refs/steerline/bases/" + r.RunID
 	// Orca's built-in agent selector cannot pass model/reasoning overrides. For a
-	// configured Codex model, create the worktree first, write the dispatch, then
-	// start Codex in a fresh terminal with CLI overrides and the pointer as its
-	// initial prompt. Other Orca agents retain the native --agent/--prompt path.
-	customCodex := c.needsCodexExecutable()
+	// configured Codex model or verified public history, create the worktree first
+	// and prepare the exact session launch. Other agents retain --agent/--prompt.
+	nativeHistory := c.agentName() == "codex" && nativeCodexHistoryAvailable(ctx, c)
+	customCodex := c.needsCodexExecutable() || nativeHistory
 	promptPath := filepath.Join(dir, "prompt.txt")
 	pointer := "Read and execute " + promptPath + " now. Follow it exactly."
 	bootstrap := "SteerLine is preparing the dispatch. Wait for a follow-up message in this terminal. Do not edit files or act on a task yet."
@@ -241,6 +242,9 @@ func startOrcaRun(ctx context.Context, c Config, t Task, r *Run, source BeadsCon
 	r.BaseCommit = ptr(intent.BaseCommit)
 	intent.Path = path
 	intent.Branch = branch
+	if nativeHistory && created.Worktree.HostID != "local" {
+		return nil, unsupported("Codex history launch requires a verified local Orca execution host")
+	}
 	// The create receipt is not proof that Git actually used the pinned base.
 	// Inspect before handing the native agent any task instructions.
 	if e := verifyWorkspace(ctx, c, intent, true); e != nil {
@@ -276,6 +280,9 @@ func startOrcaRun(ctx context.Context, c Config, t Task, r *Run, source BeadsCon
 	}
 	if customCodex {
 		command, ce := orcaCodexLaunchCommand(c, pointer)
+		if nativeHistory {
+			command, ce = orcaCodexHistoryLaunchCommand(c, r, dir, path, pointer)
+		}
 		if ce != nil {
 			return nil, ce
 		}
@@ -307,9 +314,62 @@ func startOrcaRun(ctx context.Context, c Config, t Task, r *Run, source BeadsCon
 	if dispatchedIdentity != nil && term.IncarnationID != dispatchedIdentity.Incarnation {
 		return nil, errors.New("Orca terminal incarnation changed after dispatch")
 	}
+	r.Process = ptr(ProcessIdentity{Kind: "orca", Terminal: handle, RuntimeID: term.RuntimeID, Incarnation: term.IncarnationID, Executable: c.Orca.Executable})
+	if nativeHistory {
+		if term.ExecutionHostID != "local" {
+			return nil, unsupported("Codex history cannot read an unverified or remote Orca execution host")
+		}
+		binding, bindErr := waitOrcaCodexHistoryBinding(ctx, filepath.Join(dir, codexHistoryBindingFile), c, r, path)
+		if bindErr != nil {
+			return nil, bindErr
+		}
+		term, bindErr = waitOrcaCodexHistoryAgent(ctx, client, term)
+		if bindErr != nil {
+			return nil, bindErr
+		}
+		binding.ExternalRef = conversationExternalRef(&ProcessIdentity{Kind: "orca", Terminal: handle, RuntimeID: term.RuntimeID, Incarnation: term.IncarnationID})
+		data, marshalErr := json.MarshalIndent(binding, "", "  ")
+		if marshalErr != nil {
+			return nil, marshalErr
+		}
+		if e = AtomicWrite(filepath.Join(dir, codexHistoryBindingFile), append(data, '\n')); e != nil {
+			return nil, e
+		}
+		r.SessionID = ptr(binding.SessionID)
+	}
 	proc := &orcaProcess{cfg: c, term: term}
 	proc.term.Handle = handle
+	attemptID := r.AttemptID
+	if attemptID == "" {
+		attemptID = r.RunID
+	}
+	proc.ref = ExecutionRef{Version: ExecutionRecordVersion, Backend: BackendOrca, Protocol: ProtocolOrcaTerminalV2, Target: targetFor(c), Agent: agentFor(c), RunID: r.RunID, AttemptID: attemptID, WorkspacePath: path, WorkspaceBranch: branch, BaseCommit: deref(r.BaseCommit), External: proc.Identity(), Generation: proc.Identity().Incarnation}
+	proc.outputSegment = "start:" + r.RunID + ":" + attemptID
 	return superviseOrcaResult(c, proc, resultInWorktree, *r.ResultPath), nil
+}
+
+func waitOrcaCodexHistoryAgent(ctx context.Context, client orcaClient, fixed orcaTerminal) (orcaTerminal, error) {
+	ctx, cancel := context.WithTimeout(ctx, positiveDuration(client.cfg.CommandTimeout, 30*time.Second))
+	defer cancel()
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		term, err := client.showTerminal(ctx, fixed.Handle)
+		if err != nil {
+			return orcaTerminal{}, err
+		}
+		if term.Handle != fixed.Handle || term.RuntimeID != fixed.RuntimeID || term.IncarnationID != fixed.IncarnationID || term.ExecutionHostID != "local" || term.Orphaned || !term.Connected || term.Status == "exited" {
+			return orcaTerminal{}, &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "Orca terminal changed or exited during Codex session launch"}
+		}
+		if term.AgentIdentity == "codex" {
+			return term, nil
+		}
+		select {
+		case <-ctx.Done():
+			return orcaTerminal{}, &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "Orca did not prove that the bound Codex agent started", Cause: ctx.Err()}
+		case <-ticker.C:
+		}
+	}
 }
 
 func orcaCodexLaunchCommand(c Config, prompt string) (string, error) {
@@ -345,6 +405,68 @@ func orcaCodexLaunchCommand(c Config, prompt string) (string, error) {
 	return strings.Join(command, " "), nil
 }
 
+func orcaCodexHistoryLaunchCommand(c Config, run *Run, dir, workspace, prompt string) (string, error) {
+	self, err := os.Executable()
+	if err != nil {
+		return "", err
+	}
+	b := codexHistoryBinding{Version: 1, ProjectID: c.identity, TaskID: run.DomainTaskID, WorkflowID: run.RunID, ExecutionID: nonEmpty(run.ExecutionID, legacyExecutionID(run.RunID)), AttemptID: nonEmpty(run.AttemptID, run.RunID), Backend: BackendOrca, Protocol: ProtocolOrcaTerminalV2, TargetID: run.Target.ID, Workspace: workspace, Command: codexReaderCommand(c)}
+	args := []string{}
+	if c.Model != "" {
+		args = append(args, "--model", c.Model)
+	}
+	if c.ReasoningEffort != "" {
+		args = append(args, "--config", "model_reasoning_effort="+c.ReasoningEffort)
+	}
+	if c.Sandbox != "" {
+		args = append(args, "--sandbox", c.Sandbox)
+	}
+	request := codexSessionLaunch{Binding: b, BindingPath: filepath.Join(dir, codexHistoryBindingFile), Args: args, Prompt: prompt, Sandbox: c.Sandbox}
+	path := filepath.Join(dir, "codex-session-launch.json")
+	data, err := json.MarshalIndent(request, "", "  ")
+	if err != nil {
+		return "", err
+	}
+	if err = AtomicWrite(path, append(data, '\n')); err != nil {
+		return "", err
+	}
+	if runtime.GOOS == "windows" {
+		return "powershell.exe -NoLogo -NoProfile -EncodedCommand " + encodePowerShell("& "+powershellLiteral(self)+" 'codex-session-launch' '-config' "+powershellLiteral(path)), nil
+	}
+	return shellQuote(self) + " codex-session-launch -config " + shellQuote(path), nil
+}
+
+func waitOrcaCodexHistoryBinding(ctx context.Context, path string, c Config, run *Run, workspace string) (codexHistoryBinding, error) {
+	ctx, cancel := context.WithTimeout(ctx, positiveDuration(c.CommandTimeout, 30*time.Second))
+	defer cancel()
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		raw, err := os.ReadFile(path)
+		if err == nil {
+			var b codexHistoryBinding
+			if err = json.Unmarshal(raw, &b); err != nil {
+				return b, err
+			}
+			if err = b.validate(); err != nil {
+				return b, err
+			}
+			if b.ProjectID != c.identity || b.WorkflowID != run.RunID || b.ExecutionID != nonEmpty(run.ExecutionID, legacyExecutionID(run.RunID)) || b.AttemptID != nonEmpty(run.AttemptID, run.RunID) || b.TargetID != run.Target.ID || canonical(b.Workspace) != canonical(workspace) {
+				return b, errors.New("Orca Codex session binding does not match the prepared attempt")
+			}
+			return b, nil
+		}
+		if !os.IsNotExist(err) {
+			return codexHistoryBinding{}, err
+		}
+		select {
+		case <-ctx.Done():
+			return codexHistoryBinding{}, fmt.Errorf("Orca Codex session binding unavailable: %w", ctx.Err())
+		case <-ticker.C:
+		}
+	}
+}
+
 func powershellLiteral(value string) string {
 	return "'" + strings.ReplaceAll(value, "'", "''") + "'"
 }
@@ -375,10 +497,23 @@ func superviseOrcaResult(c Config, proc *orcaProcess, resultInWorktree, resultOu
 	ctx, cancel := context.WithCancel(context.Background())
 	proc.cancel = cancel
 	w := &Worker{proc: proc, Events: make(chan WorkerEvent), Done: make(chan error, 1), observationDone: make(chan struct{})}
+	outputDone := make(chan struct{})
+	if proc.ref.Backend == BackendOrca && proc.ref.External.Terminal != "" {
+		go func() {
+			defer close(outputDone)
+			collectOrcaTerminalOutput(ctx, c, proc, w.Events)
+		}()
+	} else {
+		close(outputDone)
+	}
 	stall := positiveDuration(c.StallTimeout, 5*time.Minute)
 	go func() {
-		defer close(w.Events)
-		defer close(w.observationDone)
+		defer func() {
+			cancel()
+			<-outputDone
+			close(w.Events)
+			close(w.observationDone)
+		}()
 		var lastOutput int64
 		lastProgress := time.Now()
 		ticker := time.NewTicker(2 * time.Second)
@@ -422,6 +557,14 @@ func superviseOrcaResult(c Config, proc *orcaProcess, resultInWorktree, resultOu
 				return
 			}
 			if term.AgentWait != nil {
+				if proc.ref.Backend == BackendOrca && proc.ref.RunID != "" {
+					waitSegment := "orca-host-wait-v1:" + proc.outputSegment
+					waitEvent := WorkerEvent{RunID: proc.ref.RunID, AttemptID: proc.ref.AttemptID, Source: "orca-terminal-v2", SourceEventID: "host-wait:" + proc.outputSegment, SourceIdentity: "terminal:" + proc.ref.External.RuntimeID + ":" + proc.ref.External.Terminal + ":" + proc.ref.External.Incarnation, SourceSegment: waitSegment, SourceSeq: 1, Session: "terminal:" + proc.ref.External.Terminal + ":" + proc.ref.External.Incarnation, InputWait: true, Diagnostic: "Orca reports a host-level agent wait; no SteerLine business Decision was created", Activity: ActivityEvent{Source: "orca", Kind: "note", Title: "host input wait observed"}}
+					if !sendConversationWorkerEvent(ctx, w.Events, waitEvent) {
+						w.Done <- &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "Orca observation detached without proving execution exit", Cause: ctx.Err()}
+						return
+					}
+				}
 				w.Done <- &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "Orca agent is waiting for human input"}
 				return
 			}
@@ -440,4 +583,102 @@ func superviseOrcaResult(c Config, proc *orcaProcess, resultInWorktree, resultOu
 		}
 	}()
 	return w
+}
+
+func collectOrcaTerminalOutput(ctx context.Context, c Config, proc *orcaProcess, events chan<- WorkerEvent) {
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+	cursor := ""
+	var sequence uint64
+	unavailable := false
+	continuationSegment := strings.HasPrefix(proc.outputSegment, "reply:")
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+		batch, err := (orcaTerminalBackend{config: c}).ReadOutput(ctx, proc.ref, cursor, 1000)
+		if err != nil {
+			if !unavailable {
+				sequence++
+				segment := "terminal-observation-v1:" + proc.outputSegment + ":unavailable"
+				identity := "terminal:" + proc.ref.External.RuntimeID + ":" + proc.ref.External.Terminal + ":" + proc.ref.External.Incarnation
+				event := WorkerEvent{RunID: proc.ref.RunID, AttemptID: proc.ref.AttemptID, Source: "orca-terminal-v2", SourceEventID: fmt.Sprintf("gap:%s:%d", segment, sequence), SourceIdentity: identity, SourceSegment: segment, SourceSeq: sequence, SourceCursor: cursor, SourceGap: true, Session: "terminal:" + proc.ref.External.Terminal + ":" + proc.ref.External.Incarnation, Diagnostic: err.Error(), Activity: ActivityEvent{Source: "orca", Kind: "unknown", Title: "terminal output unavailable"}}
+				if !sendConversationWorkerEvent(ctx, events, event) {
+					return
+				}
+				unavailable = true
+			}
+			continue
+		}
+		unavailable = false
+		source := nonEmpty(batch.Source, "unknown")
+		segment := "terminal-observation-v1:" + proc.outputSegment + ":" + source
+		identity := "terminal:" + proc.ref.External.RuntimeID + ":" + proc.ref.External.Terminal + ":" + proc.ref.External.Incarnation + ":" + source
+		session := "terminal:" + proc.ref.External.Terminal + ":" + proc.ref.External.Incarnation
+		gap := continuationSegment || batch.SourceChanged || batch.Gap
+		diagnostic := "terminal output is unstructured text; turn and message phase are unknown"
+		if continuationSegment {
+			diagnostic = "continuation output observer opened a new source segment without the previous persisted cursor"
+		} else if batch.SourceChanged {
+			diagnostic = "Orca terminal output source changed"
+		} else if batch.Gap {
+			diagnostic = "Orca terminal output retention gap"
+		}
+		if len(batch.Data) > 0 || gap {
+			sequence++
+			cursorDigest := digestValue(struct {
+				Source        string
+				Cursor        string
+				SourceChanged bool
+				Gap           bool
+			}{source, batch.NextCursor, batch.SourceChanged, batch.Gap})
+			eventID := "cursor:" + cursorDigest
+			if len(batch.Data) == 0 {
+				eventID = "gap:" + cursorDigest
+			}
+			title := "terminal output observed"
+			kind := "note"
+			if gap {
+				title, kind = "terminal output gap", "unknown"
+			}
+			event := WorkerEvent{RunID: proc.ref.RunID, AttemptID: proc.ref.AttemptID, Source: "orca-terminal-v2", SourceEventID: eventID, SourceIdentity: identity, SourceCursor: batch.NextCursor, SourceSeq: sequence, SourceSegment: segment, Session: session, Raw: append([]byte(nil), batch.Data...), SourceGap: gap, SourceChanged: batch.SourceChanged, Diagnostic: diagnostic, Activity: ActivityEvent{Source: "orca", Kind: kind, Title: title}}
+			if !sendConversationWorkerEvent(ctx, events, event) {
+				return
+			}
+			cursor = batch.NextCursor
+		}
+		if continuationSegment {
+			continuationSegment = false
+		}
+	}
+}
+
+func sendConversationWorkerEvent(ctx context.Context, events chan<- WorkerEvent, event WorkerEvent) bool {
+	if event.Persisted == nil {
+		event.Persisted = make(chan error, 1)
+	}
+	for {
+		select {
+		case events <- event:
+		case <-ctx.Done():
+			return false
+		}
+		select {
+		case err := <-event.Persisted:
+			if err == nil {
+				return true
+			}
+			timer := time.NewTimer(250 * time.Millisecond)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return false
+			case <-timer.C:
+			}
+		case <-ctx.Done():
+			return false
+		}
+	}
 }

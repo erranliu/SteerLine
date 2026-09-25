@@ -90,6 +90,14 @@ PR 4A 的执行后端复用 Spec 02 的 SQLite 权威存储：`execution_binding
 
 能力报告的 `platform_version` 固定平台 CLI 版本。Orca 使用本地 Codex CLI 覆盖启动时，还保存 `agent_version` 并纳入报告键和证据校验；原生 agent 模式的报告不能复用到该路径。
 
+## 会话事件与正文读取
+
+PR 4B 的 `ConversationEvent` 是 4C 控制台读取会话事实的公共 DTO。它绑定 project/workflow/execution/attempt、backend/protocol/target、source segment 与 session/turn/item/source event 身份；每种身份声明 native、derived 或 unknown。事件类型分别记录消息完成、轮次终态、宿主等待、来源缺口和结构化执行结果。`execution.result` 中的 summary 是执行摘要，正文引用不表示 assistant final。
+
+事件、source cursor、去重身份、raw 记录和不可变正文 revision 使用 `steerline.db` 的 SQLite 事务提交。`ReadConversation` 的 Query cursor 绑定项目和完整过滤条件；`ReadMessageBody` 绑定 execution、attempt、item key 和指定 revision；`ReadRaw` 接受受管 raw 引用，不接受客户端路径。事件页最多 1000 条/1 MiB，正文页最多 256 KiB 且按 UTF-8 边界分页，raw 页最多 1 MiB。详细 JSON 和相位/结束语义见[Conversation events v1](conversation-events.md)。
+
+数据库 schema 4 在当前 schema 3 的原生任务表与约束上增添会话表；升级在同一事务提交。更早的开发数据库版本仍被拒绝。
+
 准备 worktree 时 execution_status=pending；创建或接入检查失败为 failed/blocked；遗留 pending/running 为 unknown/blocked。重启只核对目录、共享 Git 元数据、分支和起点祖先关系，不重建、不重跑。实际工作目录等字段只在创建及技能/Beads 核验全部通过后写入；创建后检查失败时，目录可能已存在，应查看 workspace_intent 和 error。
 
 v5 中未带 workspace 准备证据的 Run 不能通过 accept-result 冒充已核验的运行；需要人工处理，并保留原有外部任务和执行证据。
