@@ -34,6 +34,26 @@ func TestNativeTaskListCLIInitializesReadOnlyProtocolWithoutBeads(t *testing.T) 
 	if err = os.WriteFile(configPath, data, 0600); err != nil {
 		t.Fatal(err)
 	}
+	exportPath := filepath.Join(t.TempDir(), "before-initialization.json")
+	if _, callErr := captureTaskCLI(t, []string{"graph", "-config", configPath}); callErr == nil {
+		t.Fatal("task graph initialized a missing native database")
+	}
+	if _, callErr := captureTaskCLI(t, []string{"export", "-config", configPath, "-format", "json", "-output", exportPath}); callErr == nil {
+		t.Fatal("task export initialized a missing native database")
+	}
+	if _, statErr := os.Stat(exportPath); !os.IsNotExist(statErr) {
+		t.Fatalf("failed export published a file: %v", statErr)
+	}
+	c, err := steerline.LoadConfig(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = c.ResolveIdentity(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if _, statErr := os.Stat(filepath.Join(c.RunDir, "steerline.db")); !os.IsNotExist(statErr) {
+		t.Fatalf("graph/export read created native state: %v", statErr)
+	}
 	oldStdout := os.Stdout
 	read, write, err := os.Pipe()
 	if err != nil {
@@ -152,6 +172,40 @@ func TestNativeTaskBatchCLIValidatesCreatesAndDiscardsFixedTaskIDs(t *testing.T)
 	var discard steerline.TaskDiscardReceipt
 	if err = json.Unmarshal(discardOutput, &discard); err != nil || discard.Status != "discarded" || discard.TaskID != "70" {
 		t.Fatalf("unexpected discard receipt: %v: %+v", err, discard)
+	}
+	graphOutput, callErr := captureTaskCLI(t, []string{"graph", "-config", configPath, "-task-id", "70", "-direction", "upstream"})
+	if callErr != nil {
+		t.Fatalf("task graph failed: %v", callErr)
+	}
+	var graph steerline.TaskGraphPage
+	if err = json.Unmarshal(graphOutput, &graph); err != nil || graph.Protocol != "native-task-graph/v1" || len(graph.Nodes) != 1 || graph.Nodes[0].TaskID != "70" || graph.Nodes[0].Status != "discarded" {
+		t.Fatalf("unexpected task graph: %v / %+v", err, graph)
+	}
+	if _, callErr = captureTaskCLI(t, []string{"graph", "-config", configPath, "-limit", "1"}); callErr != nil {
+		t.Fatalf("explicit graph paging failed: %v", callErr)
+	}
+	if _, callErr = captureTaskCLI(t, []string{"graph", "-config", configPath, "-cursor", "invalid"}); callErr == nil || !strings.Contains(callErr.Error(), "cursor_invalidated") {
+		t.Fatalf("invalid graph cursor was accepted: %v", callErr)
+	}
+	if _, callErr = captureTaskCLI(t, []string{"graph", "-config", configPath, "-cursor", "", "-status", "open"}); callErr == nil {
+		t.Fatal("graph cursor was mixed with status filtering")
+	}
+	exportPath := filepath.Join(t.TempDir(), "graph.json")
+	if _, callErr = captureTaskCLI(t, []string{"export", "-config", configPath, "-format", "json", "-output", exportPath}); callErr != nil {
+		t.Fatalf("task export failed: %v", callErr)
+	}
+	original, err := os.ReadFile(exportPath)
+	if err != nil || !bytes.Contains(original, []byte(`"protocol": "native-task-graph/v1"`)) {
+		t.Fatalf("export file is unreadable: %v: %s", err, original)
+	}
+	if _, callErr = captureTaskCLI(t, []string{"export", "-config", configPath, "-format", "json", "-output", exportPath}); callErr == nil || !strings.Contains(callErr.Error(), "output_exists") {
+		t.Fatalf("export replaced an existing file without permission: %v", callErr)
+	}
+	if body, readErr := os.ReadFile(exportPath); readErr != nil || !bytes.Equal(body, original) {
+		t.Fatalf("failed export changed the previous file: %v", readErr)
+	}
+	if _, callErr = captureTaskCLI(t, []string{"export", "-config", configPath, "-format", "json", "-output", filepath.Join(c.RunDir, "steerline.db-wal"), "-overwrite"}); callErr == nil || !strings.Contains(callErr.Error(), "cannot replace native task state") {
+		t.Fatalf("export targeted a SQLite state file: %v", callErr)
 	}
 }
 
