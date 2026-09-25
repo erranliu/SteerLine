@@ -600,7 +600,7 @@ func (c CommandService) commitNativeDelivery(ctx context.Context, s *SQLiteStore
 			return nativeErr("immutable_task", "PR is already bound to another native task")
 		}
 		if err = tx.PutTaskDelivery(delivery); err != nil {
-			if isConstraintError(err) {
+			if strings.Contains(strings.ToLower(err.Error()), "unique constraint failed: task_deliveries.pr_instance") {
 				return nativeErr("immutable_task", "PR delivery identity is already bound to another task")
 			}
 			return err

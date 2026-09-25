@@ -418,6 +418,22 @@ func TestNativeClaimRechecksReadySlotAndPersistsReservationWithoutAppliedReceipt
 	if err = store.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM operations WHERE project_identity=? AND idempotency_key=? AND status='pending'`, c.Identity(), options.RequestID).Scan(&operations); err != nil || operations != 1 {
 		t.Fatalf("external preparation intent was not reserved: count=%d err=%v", operations, err)
 	}
+	if err = store.Close(); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := OpenSQLiteStore(filepath.Join(c.RunDir, "steerline.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reopened.Close()
+	commands.Store = reopened
+	replayed, err = commands.ClaimNativeTask(ctx, c, changedVersion)
+	if err != nil || replayed.WorkflowRunID != receipt.WorkflowRunID || replayed.StartTaskApplied {
+		t.Fatalf("restart changed claim reservation or reported worker start: %+v / %v", replayed, err)
+	}
+	if _, err = commands.ClaimNativeTask(ctx, c, TaskClaimOptions{TaskID: "81", RequestID: strings.Repeat("d", 32), ExpectedTaskVersion: 1, ExpectedAuthorityVersion: 2, RequestedBy: "operator", Explicit: true}); err == nil || !strings.Contains(err.Error(), "slot_busy") {
+		t.Fatalf("restart released an uncertain native execution slot: %v", err)
+	}
 }
 
 func TestNativeClaimBlocksWhenFetchedBaseMissesPredecessorMerge(t *testing.T) {
@@ -671,6 +687,22 @@ func TestNativeDeliveryNeedsExactMergedPRAndReleasesSuccessorOnce(t *testing.T) 
 	verifier.info.State = "merged"
 	verifier.info.MergedAt = &mergedAt
 	verifier.info.MergeCommit = &mergeCommit
+	if _, err = store.db.ExecContext(ctx, `CREATE TRIGGER fail_native_delivery BEFORE INSERT ON task_deliveries BEGIN SELECT RAISE(ABORT,'injected delivery failure'); END`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = commands.CompleteNativeTask(ctx, c, "90", task.Version, wfr.WorkflowRunID, verifier); err == nil || !strings.Contains(err.Error(), "injected delivery failure") {
+		t.Fatalf("delivery insert failure did not roll back closure: %v", err)
+	}
+	page, err = (QueryService{Store: store, Project: c.Identity()}).ShowNativeTask(ctx, "91")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if page.Tasks[0].DependencyReady || len(page.Tasks[0].UnmetPredecessors) != 1 {
+		t.Fatalf("failed delivery released its successor: %+v", page.Tasks[0])
+	}
+	if _, err = store.db.ExecContext(ctx, `DROP TRIGGER fail_native_delivery`); err != nil {
+		t.Fatal(err)
+	}
 	delivery, err := commands.CompleteNativeTask(ctx, c, "90", task.Version, wfr.WorkflowRunID, verifier)
 	if err != nil {
 		t.Fatal(err)
@@ -709,6 +741,18 @@ func TestNativeDeliveryNeedsExactMergedPRAndReleasesSuccessorOnce(t *testing.T) 
 		return nil
 	}); err != nil {
 		t.Fatal(err)
+	}
+	if err = store.Close(); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := OpenSQLiteStore(filepath.Join(c.RunDir, "steerline.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reopened.Close()
+	page, err = (QueryService{Store: reopened, Project: c.Identity()}).ShowNativeTask(ctx, "91")
+	if err != nil || !page.Tasks[0].DependencyReady || len(page.Tasks[0].UnmetPredecessors) != 0 {
+		t.Fatalf("restarted projection lost committed delivery readiness: %+v / %v", page, err)
 	}
 }
 
