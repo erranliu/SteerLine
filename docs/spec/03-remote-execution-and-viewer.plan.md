@@ -62,6 +62,8 @@
 
 - 整合主线 PR5 后的最终本地回归 `go test ./... -count=1 -timeout 20m` 退出码 0：`internal/steerline` 1147.971 秒，console 1.117 秒，remoteprotocol 0.374 秒，viewer 1.525 秒。`gofmt`、`git diff --check` 与 37 份 Spec 03 JSON 样本解析通过。当前分支以 `a8aca9769a4687501a94718480c212b70c268592` 为主线祖先，原生任务的 native 检查与精确 Target 回归均通过；远端完整能力认证和 Windows 主机命令启动仍保持未验收、领取前阻断。
 
+- 官方文档确认 `/setup-default-sandbox` 只在降级 `unelevated` Codex 会话中提供。先前在默认 `elevated` 会话输入该命令得到 unrecognized 不代表 CLI 缺能力。随后在单次 `unelevated` 隔离会话中实际触发该入口，界面经历“Setting up sandbox / input disabled”，最后显示 “Couldn't set up your sandbox with Administrator permissions” 和“重试管理员设置 / 使用非管理员沙盒 / 退出”菜单；详见[管理员 sandbox 设置失败回执](orca-probe/samples/spec03-windows-sandbox-admin-setup-failed-2026-09-25.json)。该普通 Codex 终端已切至远端 Orca 前台并保留，供用户在远端选择重试及批准可能出现的 Windows 管理员提示；未在无人确认下重复 setup，也未改全局配置或派发业务 Dispatch。
+
 ## 验证与交接
 
 - 用协议替身和存储故障覆盖 Spec R01–R19；真机至少完成 Spec 要求的 R01、R02、R06、R07、R08、R16、R18 及测试 PR 合并/结项路径。

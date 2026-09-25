@@ -1,0 +1,24 @@
+{
+  "schema_version": "steerline.spec03-windows-admin-sandbox-setup.v1",
+  "evidence_class": "real_remote_failure",
+  "remote_codex_cli_version": "codex-cli 0.156.1",
+  "global_config_windows_sandbox": "elevated",
+  "scoped_session_override": "windows.sandbox=unelevated",
+  "global_config_changed": false,
+  "terminal_handle": "term_f47b28c3-4b35-49ad-b9c9-cb122d2b797c",
+  "terminal_incarnation": "97f244d2-8cb1-4d55-8c30-e7fc446ef926",
+  "worktree_id": "09e35751-6517-4e7c-ae20-178ed0e90000::C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-20c94afe4670",
+  "slash_command": "/setup-default-sandbox",
+  "slash_command_recognized_in_unelevated_session": true,
+  "setup_progress_observed": "Setting up sandbox; input disabled until setup completes",
+  "final_screen": "Couldn't set up your sandbox with Administrator permissions",
+  "menu_options": [
+    "Try setting up admin sandbox again",
+    "Use Codex with non-admin sandbox",
+    "Quit"
+  ],
+  "administrator_prompt_visible_to_orca_computer": false,
+  "terminal_focus_request_id": "1e9f984b-e779-48b1-ad57-110e3e2336a0",
+  "resource_action": "ordinary Codex terminal retained at failed setup menu for the authorized remote operator; no supervised Dispatch or SteerLine execution slot was created",
+  "acceptance": "not_passed"
+}
