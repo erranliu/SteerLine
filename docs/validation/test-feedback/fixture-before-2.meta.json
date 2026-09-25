@@ -1,0 +1,28 @@
+{
+  "phase": "fixture-before-2",
+  "command": "go test ./internal/steerline -run ^(TestControlCrashBoundariesNeverReplayClaimWorktreeOrWorker|TestBadHandoffsNeverClose|TestInvalidCompletionReceiptsNeverComplete)$ -json -count=1 -timeout 20m",
+  "exit_code": 0,
+  "wall_seconds": 105.02,
+  "source_commit": "f363c427638de5ddee2711fe2a155cc5017484fb",
+  "worktree_status": "clean at implementation source; generated report files excluded",
+  "go_version": "go version go1.26.4 windows/amd64",
+  "go_env": [
+    "windows",
+    "amd64",
+    "",
+    "",
+    "C:\\Users\\lmas1\\AppData\\Local\\go-build"
+  ],
+  "machine": {
+    "Manufacturer": "ASUSTeK COMPUTER INC.",
+    "Model": "ASUS Vivobook S 16 M5606WA_M5606WA",
+    "NumberOfLogicalProcessors": 20
+  },
+  "processor": {
+    "Name": "AMD Ryzen AI 9 365 w/ Radeon 880M              ",
+    "NumberOfCores": 10,
+    "NumberOfLogicalProcessors": 20
+  },
+  "cache_condition": "Go build cache warm from baseline; -count=1 disables test-result cache",
+  "native_acceptance": "not enabled"
+}

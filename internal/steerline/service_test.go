@@ -48,7 +48,24 @@ func TestMain(m *testing.M) {
 			os.Exit(fakeMain(os.Args[i+1:]))
 		}
 	}
-	os.Exit(m.Run())
+	code := m.Run()
+	if testArtifactsDir != "" {
+		_ = os.RemoveAll(testArtifactsDir)
+	}
+	os.Exit(code)
+}
+
+var (
+	testArtifactsOnce sync.Once
+	testArtifactsDir  string
+	testArtifactsErr  error
+)
+
+func sharedTestArtifactsDir() (string, error) {
+	testArtifactsOnce.Do(func() {
+		testArtifactsDir, testArtifactsErr = os.MkdirTemp("", "steerline-test-artifacts-")
+	})
+	return testArtifactsDir, testArtifactsErr
 }
 func readFake(path string) fakeDB {
 	b, e := os.ReadFile(path)
@@ -601,12 +618,72 @@ type fixture struct {
 	server         *httptest.Server
 }
 
+type gitFixtureSeed struct {
+	repository string
+	remote     string
+}
+
+var (
+	gitFixtureSeedOnce sync.Once
+	gitFixtureSeedData gitFixtureSeed
+	gitFixtureSeedErr  error
+)
+
+func sharedGitFixtureSeed() (gitFixtureSeed, error) {
+	gitFixtureSeedOnce.Do(func() {
+		root, err := sharedTestArtifactsDir()
+		if err != nil {
+			gitFixtureSeedErr = err
+			return
+		}
+		git, err := exec.LookPath("git")
+		if err != nil {
+			gitFixtureSeedErr = err
+			return
+		}
+		gitFixtureSeedData = gitFixtureSeed{
+			repository: filepath.Join(root, "git-seed-repo"),
+			remote:     filepath.Join(root, "git-seed-remote.git"),
+		}
+		commands := [][]string{
+			{"init", "--quiet", "-b", "main", gitFixtureSeedData.repository},
+			{"init", "--quiet", "--bare", gitFixtureSeedData.remote},
+			{"-C", gitFixtureSeedData.repository, "config", "core.hooksPath", filepath.Join(root, "no-hooks")},
+			{"-C", gitFixtureSeedData.repository, "remote", "add", "origin", gitFixtureSeedData.remote},
+		}
+		for _, args := range commands {
+			if output, runErr := exec.Command(git, args...).CombinedOutput(); runErr != nil {
+				gitFixtureSeedErr = fmt.Errorf("prepare immutable git fixture seed with %v: %w: %s", args, runErr, output)
+				return
+			}
+		}
+		for _, name := range []string{"start", "finish"} {
+			if err = os.WriteFile(filepath.Join(gitFixtureSeedData.repository, name+".md"), []byte("<!-- steerline:"+name+"-v1 -->\nFixture skill"), 0600); err != nil {
+				gitFixtureSeedErr = err
+				return
+			}
+		}
+		commands = [][]string{
+			{"-C", gitFixtureSeedData.repository, "add", "start.md", "finish.md"},
+			{"-C", gitFixtureSeedData.repository, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "Fixture baseline"},
+			{"-C", gitFixtureSeedData.repository, "push", "--quiet", "origin", "main"},
+			{"--git-dir", gitFixtureSeedData.remote, "symbolic-ref", "HEAD", "refs/heads/main"},
+		}
+		for _, args := range commands {
+			if output, runErr := exec.Command(git, args...).CombinedOutput(); runErr != nil {
+				gitFixtureSeedErr = fmt.Errorf("finish immutable git fixture seed with %v: %w: %s", args, runErr, output)
+				return
+			}
+		}
+	})
+	return gitFixtureSeedData, gitFixtureSeedErr
+}
+
 func newFixture(t *testing.T, tasks ...Task) *fixture {
 	t.Helper()
 	base := filepath.Join(t.TempDir(), "中文 path with spaces")
 	repo := filepath.Join(base, "repo")
 	runs := filepath.Join(base, "runtime")
-	os.MkdirAll(repo, 0700)
 	os.MkdirAll(runs, 0700)
 	os.MkdirAll(filepath.Join(base, "shared beads"), 0700)
 	f := &fixture{db: filepath.Join(base, "fake.json"), states: map[string]string{}}
@@ -655,18 +732,20 @@ func newFixture(t *testing.T, tasks ...Task) *fixture {
 	if e != nil {
 		t.Fatal(e)
 	}
+	seed, e := sharedGitFixtureSeed()
+	if e != nil {
+		t.Fatalf("git fixture seed: %v", e)
+	}
 	remote := filepath.Join(base, "remote.git")
-	for _, args := range [][]string{{"init", "--quiet", "-b", "main", repo}, {"init", "--quiet", "--bare", remote}, {"-C", repo, "config", "core.hooksPath", filepath.Join(base, "no-hooks")}, {"-C", repo, "remote", "add", "origin", remote}, {"-C", repo, "remote", "add", "web", f.server.URL + "/owner/repo.git"}} {
+	if e = os.CopyFS(remote, os.DirFS(seed.remote)); e != nil {
+		t.Fatalf("copy immutable bare git fixture seed: %v", e)
+	}
+	if e = os.CopyFS(repo, os.DirFS(seed.repository)); e != nil {
+		t.Fatalf("copy immutable worktree fixture seed: %v", e)
+	}
+	for _, args := range [][]string{{"-C", repo, "remote", "set-url", "origin", remote}, {"-C", repo, "remote", "add", "web", f.server.URL + "/owner/repo.git"}} {
 		if out, e := exec.Command(git, args...).CombinedOutput(); e != nil {
 			t.Fatalf("git: %s %v", out, e)
-		}
-	}
-	for _, name := range []string{"start", "finish"} {
-		os.WriteFile(filepath.Join(repo, name+".md"), []byte("<!-- steerline:"+name+"-v1 -->\nFixture skill"), 0600)
-	}
-	for _, args := range [][]string{{"-C", repo, "add", "start.md", "finish.md"}, {"-C", repo, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "Fixture baseline"}, {"-C", repo, "push", "--quiet", "origin", "main"}} {
-		if out, e := exec.Command(git, args...).CombinedOutput(); e != nil {
-			t.Fatalf("git fixture: %v %s", e, out)
 		}
 	}
 	f.c = Config{TaskAuthority: "beads", Repository: repo, Remote: "origin", Branch: "main", RunDir: runs, RuntimeFile: "runtime.json", Claimant: "test-claimant", Git: Command{Executable: git}, BD: Command{Executable: exe, Args: []string{"--fake", "bd", f.db}}, Codex: Command{Executable: exe, Args: []string{"--fake", "codex", f.db}}, StartSkill: Skill{Path: "start.md", Invocation: "Read start.md"}, FinishSkill: Skill{Path: "finish.md", Invocation: "Read finish.md"}, ExecutableTypes: []string{"task", "bug", "feature", "chore"}, TaskPoll: "100ms", PRPoll: "100ms", Heartbeat: "20ms", CommandTimeout: "5s", ShutdownGrace: "80ms", Sandbox: "workspace-write", PR: PRConfig{Kind: "gitea", BaseURL: f.server.URL, Repository: "owner/repo"}, identity: canonical(filepath.Join(repo, ".git"))}
@@ -679,6 +758,33 @@ func newFixture(t *testing.T, tasks ...Task) *fixture {
 	writeFake(f.db, fakeDB{Tasks: tasks, Dependencies: map[string]string{}, Claims: map[string]int{}, Starts: map[string]int{}, PRBase: f.server.URL})
 	seedFakeCapabilities(t, f.c)
 	return f
+}
+
+func TestFixtureRepositoriesReuseSeedWithIndependentWritableState(t *testing.T) {
+	first := newFixture(t)
+	second := newFixture(t)
+	if first.c.Repository == second.c.Repository || first.c.RunDir == second.c.RunDir || first.db == second.db {
+		t.Fatal("fixture writable paths were shared")
+	}
+	firstRemote := fixtureGit(t, first.c.Repository, "remote", "get-url", "origin")
+	secondRemote := fixtureGit(t, second.c.Repository, "remote", "get-url", "origin")
+	firstHead := fixtureGit(t, first.c.Repository, "rev-parse", "HEAD")
+	secondHead := fixtureGit(t, second.c.Repository, "rev-parse", "HEAD")
+	if firstHead != secondHead {
+		t.Fatalf("fixture seeds have different starting revisions: %s != %s", firstHead, secondHead)
+	}
+	if firstRemote == secondRemote {
+		t.Fatal("fixture remotes were shared")
+	}
+	if err := os.WriteFile(filepath.Join(first.c.Repository, "fixture-only.txt"), []byte("first fixture only\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if status := fixtureGit(t, second.c.Repository, "status", "--porcelain"); status != "" {
+		t.Fatalf("write in first fixture changed second fixture: %q", status)
+	}
+	if head := fixtureGit(t, second.c.Repository, "rev-parse", "HEAD"); head != secondHead {
+		t.Fatalf("write in first fixture changed second fixture head: %s != %s", head, secondHead)
+	}
 }
 
 func seedFakeCapabilities(t *testing.T, c Config) {
