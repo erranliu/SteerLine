@@ -4,11 +4,11 @@
 
 ## 近期：人工决策与恢复的剩余验收
 
-`#3` 已实现 SQLite 中的答案仲裁、固定执行续跑、在线恢复与审计命令，以及控制台决策历史和恢复操作；自动化回归已通过。完整 H-A1～H-A16 验收仍缺真实交互与应用证明，范围见[验证记录](../validation/pr-05-intervention.md)。
+`#3` 的实现已随 [PR #39](https://github.com/erranliu/SteerLine/pull/39) 合入 `main`，包括 SQLite 答案仲裁、固定执行续跑、在线恢复与审计命令，以及控制台决策历史和恢复操作；自动化回归已通过。2026-09-26 的 Windows TTY stale-revision 和 Orca command-worker 路径已取得部分实时证据；TTY bracketed-paste 事件也已输入，但实际 Windows 剪贴板仍未验证。Codex tasks 95008/95009 的终端和保存结果均已核实并结算为失败：答案证明与原 decision/attempt/execution 绑定，但 `workspace-write` 仍无法写 linked worktree 的 `.git/worktrees/<run>` 管理目录；临时 `--add-dir` common-dir 授权无效，未保留在源码中。没有遗留 `unknown` 终端；完整 H-A1～H-A16 尚未通过，见[验证记录](../validation/pr-05-intervention.md)。
 
 | 任务 ID | 任务名称 | 目标标识 | 剩余目标 | 前置条件 | 执行规格 |
 | --- | --- | --- | --- | --- | --- |
-| 3 | 人工决策与恢复闭环 | `INTERVENTION` | Windows TTY 验证长问题、12 个选项、中文多行答案、旧版本冲突、折叠导航与恢复确认；在隔离注册仓库验证本机 Orca 同会话续跑、原操作恢复及答案应用证明 | 可复现的 Windows TTY 样例与隔离注册的 Orca 测试仓库 | [Spec](../spec/pr-05-intervention.spec.md) · [Plan](../spec/pr-05-intervention.plan.md) · [剩余门槛](../validation/pr-05-intervention.md) |
+| 3 | 人工决策与恢复闭环 | `INTERVENTION` | TTY 仍缺实际 Windows 剪贴板粘贴、精确轮次折叠和可执行的恢复确认；实时 stale-revision 已通过。需解决 Codex `workspace-write` 对 linked worktree admin files 的写入限制，再取得成功的 Codex 应用证明和成功响应丢失恢复验收 | 2026-09-26 的实时终端均已结算；95008/95009 的失败结果和 proof 均留档，不重放这些 attempts | [Spec](../spec/pr-05-intervention.spec.md) · [Plan](../spec/pr-05-intervention.plan.md) · [验证记录](../validation/pr-05-intervention.md) |
 
 只有发送或回复回执时，答案仍不能标记为已应用；本机 Codex 续跑仍是不支持能力。验收结果须按真实平台证据记录，不把模拟后端测试外推到本机 Orca，也不外推到远端执行。
 

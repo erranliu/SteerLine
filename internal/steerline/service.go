@@ -317,15 +317,23 @@ func (s *Service) hydrateDecisionProjection(ctx context.Context) error {
 		if !ok {
 			continue
 		}
+		if record.Version == 0 || !validDecisionStatus(record.Status) {
+			return fmt.Errorf("decision %s has invalid authoritative version or status", run.Decision.ID)
+		}
 		request, marshalErr := json.Marshal(run.Decision.Request)
 		if marshalErr != nil {
 			return marshalErr
 		}
-		if record.WorkflowRunID != run.RunID || record.ExecutionID != run.ExecutionID || run.Decision.AttemptID != run.AttemptID || record.AttemptID != run.Decision.AttemptID || !bytes.Equal(bytes.TrimSpace(record.Request), bytes.TrimSpace(request)) {
-			return fmt.Errorf("decision %s conflicts with the runtime execution, attempt or question identity", run.Decision.ID)
+		decisionAttemptExists := false
+		for _, attempt := range s.State.Attempts {
+			if attempt.ProjectIdentity == s.Config.identity && attempt.ExecutionID == run.ExecutionID && attempt.AttemptID == run.Decision.AttemptID {
+				decisionAttemptExists = true
+				break
+			}
 		}
-		if record.Version == 0 || !validDecisionStatus(record.Status) {
-			return fmt.Errorf("decision %s has invalid authoritative version or status", run.Decision.ID)
+		waitingOnCurrentAttempt := (record.Status == "pending" || record.Status == "answer_saved") && run.Decision.AttemptID != run.AttemptID
+		if record.WorkflowRunID != run.RunID || record.ExecutionID != run.ExecutionID || record.AttemptID != run.Decision.AttemptID || !decisionAttemptExists || waitingOnCurrentAttempt || !bytes.Equal(bytes.TrimSpace(record.Request), bytes.TrimSpace(request)) {
+			return fmt.Errorf("decision %s conflicts with the runtime execution, attempt or question identity", run.Decision.ID)
 		}
 		run.Decision.Version = record.Version
 		run.Decision.Status = record.Status
