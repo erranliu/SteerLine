@@ -1,6 +1,7 @@
 package steerline
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -712,6 +713,7 @@ func supervisedStepTaskSpec(c Config, task Task, run Run, workflow WorkflowRunRe
 		return "", err
 	}
 	fmt.Fprintf(&b, "To avoid hand-transcription errors in local IDs and commit hashes, decode this exact UTF-8 base64 input object in pwsh.exe and use its properties when building step_result: $ids = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('%s')) | ConvertFrom-Json. Use $ids.project_identity, $ids.task_id, $ids.workflow_run_id, $ids.execution_id and $ids.attempt_id directly for the envelope's matching fields; never assemble any ID from a title, prefix or Orca ID. Use $ids.step_id for result.step_id and $ids.input_revision for result.input_revision; for verify/review/publish_pr, use $ids.candidate_revision for result.revision, check.revision and the ancestry command. Immediately before sending status, parse the generated JSON and assert step_result.task_id equals $ids.task_id and step_result.result.step_id equals $ids.step_id; never use the Orca task ID for the inner task_id or the local task ID for step_id. Do not type project_identity, attempt_id or candidate_revision by hand; the center rejects even one altered character. Before verify, review, or publish_pr, compare `git rev-parse HEAD` with $ids.candidate_revision and report a failed step if they differ; prepare has no candidate revision and instead compares HEAD to the fixed base.\n", base64.StdEncoding.EncodeToString(identityJSON))
+	fmt.Fprintf(&b, "The base64 literal above is immutable: do not create or re-encode another identity object. After decoding, assert `$ids.task_id -ceq %q` before any status send; this is a check only, and the payload value must still come directly from `$ids.task_id`. In particular, do not add a second `remote-probe-` prefix. If the assertion fails, stop before sending so the center can retain the original Attempt.\n", input.TaskID)
 	b.WriteString("In the final PowerShell 7 sender, construct the envelope identity with this code, then add observed result fields to $envelope.result: $envelope = [ordered]@{ schema_version=1; project_identity=$ids.project_identity; task_id=$ids.task_id; workflow_run_id=$ids.workflow_run_id; execution_id=$ids.execution_id; attempt_id=$ids.attempt_id; result=[ordered]@{ step_id=$ids.step_id; result_id=$ids.result_id; input_revision=$ids.input_revision; prerequisite_result_ids=@($ids.prerequisite_result_ids) } }. The result_id is fixed from this Attempt ID so replay cannot create a different result. Copy prerequisite_result_ids from the decoded input object exactly, including order and all prior failed-check IDs; never reconstruct it from an earlier example or omit it on repair. Do not replace any $ids property with a typed or interpolated string. After ConvertTo-Json and before Orca send, parse it again and compare all five envelope ID fields, result.step_id and result.result_id to $ids with -cne; also compare the serialized prerequisite_result_ids arrays for exact equality, and throw before sending on any difference. The outer Orca taskId and dispatchId are separate platform IDs from the Dispatch preamble.\n")
 	if run.Target.WorktreeID != "" {
 		fmt.Fprintf(&b, "Existing exact worktree_id=%s path=%s branch=%s; verify these facts through Orca and Git before editing.\n", run.Target.WorktreeID, deref(run.WorktreePath), deref(run.WorktreeBranch))
@@ -960,7 +962,7 @@ func (b orcaSupervisedBackend) stepResultFromMessages(messages []OrcaInboxMessag
 			return false, err
 		}
 		if existing, readErr := os.ReadFile(resultPath); readErr == nil {
-			if operationDigest(existing) != operationDigest(encoded) {
+			if !bytes.Equal(bytes.TrimSpace(existing), encoded) {
 				return false, &BackendError{Code: BackendProtocolInvalid, Diagnostic: "duplicate supervised result ID carried different result content"}
 			}
 		} else if !os.IsNotExist(readErr) {

@@ -1,0 +1,12 @@
+{
+  "captured_at": "2026-09-26T03:07:26Z",
+  "evidence_kind": "failed_probe_summary",
+  "orca_run_id": "run_f95ff556baee",
+  "prepare_dispatch_id": "ctx_f8caf61c864f",
+  "observed_center_error": "identity_mismatch: supervised step result identity mismatch: task_id",
+  "cause": "The worker re-encoded the fixed identity object and added a second remote-probe- prefix to the inner task ID.",
+  "center_rejected_before_implement": true,
+  "pull_request_created": false,
+  "worker_terminal_released_after_exact_settlement": true,
+  "counted_as_acceptance": false
+}

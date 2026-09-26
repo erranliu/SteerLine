@@ -1,0 +1,15 @@
+{
+  "arrival_latency_measured": true,
+  "captured_at": "2026-09-26T03:06:03.4666049Z",
+  "center_result_updated_at": "2026-09-26T03:06:03.1905515Z",
+  "center_to_render_ms": 276,
+  "pr_url_rendered": "https://github.com/erranliu/SteerlineTest/pull/12",
+  "probe_started_at": "2026-09-26T03:01:23.3497937Z",
+  "publish_attempt_id": "1cff9f64e4504491b48a8dfb039d57db",
+  "run_id": "1565c6b0beb1d7514902414bf1c7f256",
+  "snapshot_and_render_ms": 218,
+  "source": "live supervised SQLite projection",
+  "view_height": 50,
+  "view_width": 160,
+  "viewer_refresh_interval_ms": 700
+}

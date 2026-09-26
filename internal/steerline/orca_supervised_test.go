@@ -550,6 +550,28 @@ func TestSupervisedQuestionKeepsOriginalAttemptWaiting(t *testing.T) {
 	}
 }
 
+func TestSupervisedResultDeliveryReplayUsesPersistedJSONContent(t *testing.T) {
+	attempt := StepAttemptRecord{AttemptID: "attempt-1", StepID: "publish_pr"}
+	input := MinimalStepInput{ProjectIdentity: "repo", TaskID: "business-task", WorkflowRunID: "workflow-1", ExecutionID: "execution-1", AttemptID: attempt.AttemptID, StepID: attempt.StepID}
+	identity := ProcessIdentity{Task: "orca-task", Dispatch: "dispatch-1"}
+	backend := orcaSupervisedBackend{config: Config{Orca: OrcaConfig{Supervised: &SupervisedOrcaConfig{ExpectedCodexVersion: "codex-cli 0.156.1"}}}}
+	resultPath := filepath.Join(t.TempDir(), "result.json")
+	envelope := MinimalStepResultEnvelope{SchemaVersion: 1, ProjectIdentity: input.ProjectIdentity, TaskID: input.TaskID, WorkflowRunID: input.WorkflowRunID, ExecutionID: input.ExecutionID, AttemptID: input.AttemptID, Result: StepGateResult{StepID: attempt.StepID, ResultID: attempt.AttemptID, Succeeded: true, PRURL: "https://example.test/pr/1"}}
+	message := func() OrcaInboxMessage {
+		return OrcaInboxMessage{Type: "status", FromHandle: "dispatch:" + identity.Dispatch, Payload: mustJSON(map[string]any{"taskId": identity.Task, "dispatchId": identity.Dispatch, "remote_codex_version": "codex-cli 0.156.1", "step_result": envelope})}
+	}
+	if found, err := backend.stepResultFromMessages([]OrcaInboxMessage{message()}, identity, attempt, input, resultPath); err != nil || !found {
+		t.Fatalf("first Delivery result = %t, %v", found, err)
+	}
+	if found, err := backend.stepResultFromMessages([]OrcaInboxMessage{message()}, identity, attempt, input, resultPath); err != nil || !found {
+		t.Fatalf("same unacknowledged Delivery replay was not idempotent: %t, %v", found, err)
+	}
+	envelope.Result.PRURL = "https://example.test/pr/2"
+	if found, err := backend.stepResultFromMessages([]OrcaInboxMessage{message()}, identity, attempt, input, resultPath); err == nil || !isBackendError(err, BackendProtocolInvalid) || found {
+		t.Fatalf("different content under the same result ID was accepted: %t, %v", found, err)
+	}
+}
+
 func TestMinimalImplementGateAcceptsSameCanonicalRemoteWorktree(t *testing.T) {
 	base, head := strings.Repeat("a", 40), strings.Repeat("b", 40)
 	path := "C:/Users/liuming/orca/workspaces/SteerlineTest/probe"
@@ -987,6 +1009,7 @@ func TestSupervisedOrcaRealPrepareRoundtrip(t *testing.T) {
 	}
 	steps.Verify.RequiredChecks = []string{"prepare-smoke"}
 	repairCycleProbe := os.Getenv("STEERLINE_REAL_SUPERVISED_REPAIR_CYCLE_PROBE") == "1"
+	publishDeliveryLossProbe := os.Getenv("STEERLINE_REAL_SUPERVISED_PUBLISH_DELIVERY_LOSS") == "1"
 	stagedProbe := os.Getenv("STEERLINE_REAL_SUPERVISED_STAGED_PROBE") == "1" || fullProbe || repairCycleProbe
 	negativeVerifyProbe := os.Getenv("STEERLINE_REAL_SUPERVISED_NEGATIVE_VERIFY_PROBE") == "1"
 	if publishProbe && !stagedProbe {
@@ -997,6 +1020,9 @@ func TestSupervisedOrcaRealPrepareRoundtrip(t *testing.T) {
 	}
 	if repairCycleProbe && (publishProbe || negativeVerifyProbe || reviewProbe) {
 		t.Fatal("repair cycle probe requires staged execution without publication or another fault probe")
+	}
+	if publishDeliveryLossProbe && !publishProbe {
+		t.Fatal("publish Delivery response-loss probe requires the full publication path")
 	}
 	if reviewProbe && (!stagedProbe || publishProbe || negativeVerifyProbe) {
 		t.Fatal("review budget probe requires staged execution without negative verify or PR publication")
@@ -1441,6 +1467,8 @@ exit $LASTEXITCODE
 		prepareDispatch := run.Target.Dispatch
 		fixedWorktree := run.Target.WorktreeID
 		completionWindowRestartStep := ""
+		publishDeliveryLost := false
+		publishLostDeliveryID := ""
 		driveStage := func(step string) {
 			t.Helper()
 			stageDeadline := time.NewTimer(15 * time.Minute)
@@ -1451,6 +1479,28 @@ exit $LASTEXITCODE
 				select {
 				case event := <-service.worker.Events:
 					if event.RunID != "" {
+						if step == "publish_pr" && publishDeliveryLossProbe && !publishDeliveryLost && event.RemoteDeliveryID != "" && run.Process != nil {
+							containsCurrentStatus := false
+							for _, message := range event.RemoteMessages {
+								containsCurrentStatus = containsCurrentStatus || message.Type == "status" && supervisedMessageMatches(message, *run.Process)
+							}
+							if containsCurrentStatus {
+								originalDispatch := run.Process.Dispatch
+								publishLostDeliveryID = event.RemoteDeliveryID
+								service.worker.Close()
+								<-service.worker.observationDone
+								if closeErr := service.Close(); closeErr != nil {
+									t.Fatal(closeErr)
+								}
+								service, err = NewService(c)
+								if err != nil || service.worker == nil || service.active == nil || service.active.Process == nil || service.active.Process.Dispatch != originalDispatch {
+									t.Fatalf("publish Delivery loss did not reattach the original Dispatch: %v", err)
+								}
+								run = service.active
+								publishDeliveryLost = true
+								continue
+							}
+						}
 						if eventErr := service.event(event); eventErr != nil {
 							t.Fatalf("%s Delivery persistence/ack: %v", step, eventErr)
 						}
@@ -1491,6 +1541,9 @@ exit $LASTEXITCODE
 			}
 			if restartAfterStatus && !restarted {
 				t.Fatalf("%s status and worker_done were not separated for the completion-window restart", step)
+			}
+			if step == "publish_pr" && publishDeliveryLossProbe && !publishDeliveryLost {
+				t.Fatal("publish status Delivery was not dropped before center persistence")
 			}
 		}
 		task.Title = "isolated supervised implement probe"
@@ -1736,7 +1789,7 @@ exit $LASTEXITCODE
 				if fullProbe {
 					dispatches["review"] = reviewDispatch
 				}
-				publishEvidence := map[string]any{"captured_at": now(), "run": run, "workflow": workflowRecord, "execution": executionRecord, "attempts": service.State.Attempts, "operations": service.State.Operations, "dispatches": dispatches, "worktree_id": fixedWorktree, "candidate_revision": candidate, "pr": prInfo, "waiting_pr_merge": true, "merge_performed": false, "completion_window_restart_step": completionWindowRestartStep}
+				publishEvidence := map[string]any{"captured_at": now(), "run": run, "workflow": workflowRecord, "execution": executionRecord, "attempts": service.State.Attempts, "operations": service.State.Operations, "dispatches": dispatches, "worktree_id": fixedWorktree, "candidate_revision": candidate, "pr": prInfo, "waiting_pr_merge": true, "merge_performed": false, "completion_window_restart_step": completionWindowRestartStep, "publish_delivery_loss_injected": publishDeliveryLost, "lost_delivery_id": publishLostDeliveryID}
 				data, marshalErr := json.MarshalIndent(publishEvidence, "", "  ")
 				if marshalErr != nil {
 					t.Fatal(marshalErr)
@@ -1786,7 +1839,7 @@ exit $LASTEXITCODE
 					t.Fatalf("original completed Run was not idempotent: %v", err)
 				}
 				if outputPath := strings.TrimSpace(os.Getenv("STEERLINE_REAL_SUPERVISED_DIRECT_CLOSE_EVIDENCE_PATH")); outputPath != "" {
-					evidence := map[string]any{"captured_at": now(), "run": run, "workflow": workflowRecord, "execution": executionRecord, "attempts": service.State.Attempts, "operations": service.State.Operations, "pr": merged, "provider_task_status": providerTask.Status, "provider_task_assignee": providerTask.Assignee, "original_sqlite_reopened": true, "merge_commit_verified": true, "idempotent_second_poll": true, "completion_window_restart_step": completionWindowRestartStep}
+					evidence := map[string]any{"captured_at": now(), "run": run, "workflow": workflowRecord, "execution": executionRecord, "attempts": service.State.Attempts, "operations": service.State.Operations, "pr": merged, "provider_task_status": providerTask.Status, "provider_task_assignee": providerTask.Assignee, "original_sqlite_reopened": true, "merge_commit_verified": true, "idempotent_second_poll": true, "completion_window_restart_step": completionWindowRestartStep, "publish_delivery_loss_injected": publishDeliveryLost, "lost_delivery_id": publishLostDeliveryID}
 					encoded, marshalErr := json.MarshalIndent(evidence, "", "  ")
 					if marshalErr != nil {
 						t.Fatal(marshalErr)

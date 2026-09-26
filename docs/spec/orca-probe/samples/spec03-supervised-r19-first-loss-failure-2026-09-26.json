@@ -1,0 +1,14 @@
+{
+  "captured_at": "2026-09-26T03:07:26Z",
+  "evidence_kind": "failed_probe_summary",
+  "orca_run_id": "run_ac0d27d06f1c",
+  "publish_dispatch_id": "ctx_9d35e59f81fd",
+  "test_pull_request": "https://github.com/erranliu/SteerlineTest/pull/11",
+  "pull_request_state": "closed_unmerged",
+  "observed_center_error": "protocol_invalid: duplicate supervised result ID carried different result content",
+  "cause": "The persisted canonical result JSON had a trailing LF, while replay comparison used JSON bytes without that LF.",
+  "original_center_attempt_status": "outcome_unknown",
+  "duplicate_pull_request_created": false,
+  "worker_terminal_released_after_exact_settlement": true,
+  "counted_as_acceptance": false
+}
