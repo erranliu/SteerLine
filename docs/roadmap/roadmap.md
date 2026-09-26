@@ -2,17 +2,6 @@
 
 产品目标是以 roadmap 为核心的自动化软件开发系统。这里组织选定推进的目标；更广的后续产品计划见 [product-vision.md](product-vision.md)，已规划 Spec 的执行依赖、接口和并行条件见 [execution-map.md](execution-map.md)。
 
-## 近期：模块解耦与测试反馈提速
-
-测试耗时基线、报告入口和夹具精简已交付。后续按“删除旧执行路径 → 拆分规则包与集成测试”的顺序推进，每项由独立实现 PR 交付。优先缩短日常局部修改的反馈，同时保留合入前的完整无缓存回归、当前格式恢复和真实交付核验。
-
-| 任务 ID | 任务名称 | 目标标识 | 剩余目标 | 前置条件 | 执行规格 |
-| --- | --- | --- | --- | --- | --- |
-| 12 | 移除 Beads 旧执行路径 | `REFACTOR` | 实现和自动化验收已完成；[#44](https://github.com/erranliu/SteerLine/pull/44) 已合入 `main`。live Codex/Orca/PR-provider/可见窗口仍按各自门槛验收 | 已交付的 `#11` 耗时和覆盖基线 | [Spec](../spec/beads-path-removal.spec.md) · [Plan](../spec/beads-path-removal.plan.md) · [验证记录](../validation/beads-path-removal/results.md) |
-| 13 | 任务图规则拆包与测试分层 | `REFACTOR` | 独立 taskgraph 规则包、CLI 黑盒集成包和按模块测试入口；按隔离条件评估并行 | `#12` 收敛后的原生代码；沿用 `#11` 测量工具 | [Spec](../spec/taskgraph-modules.spec.md) · [Plan](../spec/taskgraph-modules.plan.md) |
-
-[测试反馈验证记录](../validation/test-feedback/README.md)与[行为映射](../validation/test-feedback/coverage-map.md)供 `#12`/`#13` 复用。`#3` 的剩余原生验收、`#4` 的远端探测可在固定版本和隔离资源上继续。`#6` 可准备独立协议适配，涉及 Service、Query/Command、配置和同一夹具时与 `#12`/`#13` 串行集成；后集成方核对接口并补受影响回归。具体交接见 [execution-map](execution-map.md)。
-
 ## 近期：人工决策与恢复的剩余验收
 
 `#3` 已实现 SQLite 中的答案仲裁、固定执行续跑、在线恢复与审计命令，以及控制台决策历史和恢复操作；自动化回归已通过。完整 H-A1～H-A16 验收仍缺真实交互与应用证明，范围见[验证记录](../validation/pr-05-intervention.md)。
