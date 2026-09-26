@@ -42,7 +42,7 @@ func TestWatchFlagsRouteTTYToStreamingMode(t *testing.T) {
 	}
 }
 
-func TestWaitServiceCommandKeepsPollingWhenCommandIsNotVisibleYet(t *testing.T) {
+func TestWaitServiceCommandResolvesIdentityAndKeepsPolling(t *testing.T) {
 	repository := t.TempDir()
 	if output, err := exec.Command("git", "init", repository).CombinedOutput(); err != nil {
 		t.Fatalf("initialize test repository: %v\n%s", err, output)
@@ -54,15 +54,45 @@ func TestWaitServiceCommandKeepsPollingWhenCommandIsNotVisibleYet(t *testing.T) 
 		RunDir:     filepath.Join(t.TempDir(), "state"),
 		Git:        steerline.Command{Executable: "git"},
 	}
-	if err := config.ResolveIdentity(context.Background()); err != nil {
+	resolvedConfig := config
+	if err := resolvedConfig.ResolveIdentity(context.Background()); err != nil {
 		t.Fatalf("resolve test repository identity: %v", err)
 	}
-	store, err := steerline.OpenSQLiteStore(filepath.Join(config.RunDir, "steerline.db"))
+	store, err := steerline.OpenSQLiteStore(filepath.Join(resolvedConfig.RunDir, "steerline.db"))
 	if err != nil {
 		t.Fatalf("create test command store: %v", err)
 	}
-	if err := store.Close(); err != nil {
-		t.Fatalf("close test command store: %v", err)
+	defer store.Close()
+
+	commands := steerline.CommandService{Store: store, Project: resolvedConfig.Identity()}
+	command := steerline.CommandRecord{
+		CommandID:       strings.Repeat("a", 32),
+		Kind:            "test_command",
+		TargetID:        "test-target",
+		ExpectedVersion: 1,
+		IdempotencyKey:  "test-command-idempotency",
+		RequestedBy:     "tester",
+		Payload:         []byte(`{}`),
+		Status:          "pending",
+		CreatedAt:       time.Now().UTC(),
+	}
+	commandWritten := make(chan error, 1)
+	go func() {
+		time.Sleep(250 * time.Millisecond)
+		queued, _, submitErr := commands.Submit(context.Background(), command)
+		if submitErr != nil {
+			commandWritten <- submitErr
+			return
+		}
+		commandWritten <- commands.SetStatus(context.Background(), queued, "accepted", []byte(`{}`))
+	}()
+
+	got, err := waitServiceCommand(context.Background(), config, command.CommandID, time.Second)
+	if err != nil || got.Status != "accepted" {
+		t.Fatalf("wait for delayed accepted command = %+v, %v; want accepted", got, err)
+	}
+	if err := <-commandWritten; err != nil {
+		t.Fatalf("write delayed command receipt: %v", err)
 	}
 
 	_, err = waitServiceCommand(context.Background(), config, "not-visible-yet", 30*time.Millisecond)

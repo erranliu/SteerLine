@@ -381,6 +381,9 @@ func submitRecoveryCommand(ctx context.Context, c steerline.Config, command, run
 }
 
 func waitServiceCommand(ctx context.Context, c steerline.Config, commandID string, timeout time.Duration) (steerline.CommandRecord, error) {
+	if err := c.ResolveIdentity(ctx); err != nil {
+		return steerline.CommandRecord{}, fmt.Errorf("resolve project identity for command receipt: %w", err)
+	}
 	waitCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	ticker := time.NewTicker(150 * time.Millisecond)
