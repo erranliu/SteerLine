@@ -1,0 +1,13 @@
+{
+  "after_remote_runtime": "66c5fc0b-b41c-4375-a003-01eba5c3b7dc",
+  "before_remote_runtime": "d05f52b9-4dbd-4656-a01b-000a9f266b84",
+  "captured_at": "2026-09-25T22:19:49.8302293Z",
+  "dispatch_id": "ctx_6fcf0b530c36",
+  "old_binding_observation": "identity_mismatch",
+  "original_worker_exact_dispatch": true,
+  "original_worker_liveness": "live",
+  "replacement_worker_created": false,
+  "run_id": "run_c74f5dcee763",
+  "task_id": "task_c529abc4c7f5",
+  "worktree_id": "09e35751-6517-4e7c-ae20-178ed0e90000::C:/Users/liuming/orca/workspaces/SteerlineTest/remote-probe-340bc5abf6-prepare"
+}

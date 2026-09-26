@@ -697,21 +697,22 @@ func supervisedStepTaskSpec(c Config, task Task, run Run, workflow WorkflowRunRe
 	fmt.Fprintf(&b, "Local identity: project=%s task=%s workflow_run=%s execution=%s attempt=%s step=%s input_revision=%s. Fixed remote repository selector=%s repository_id=%s origin=%s base_commit=%s.\n", input.ProjectIdentity, input.TaskID, input.WorkflowRunID, input.ExecutionID, input.AttemptID, input.StepID, input.InputRevision, c.Orca.Supervised.RepositorySelector, pair.RepositoryID, pair.RepositoryURL, base)
 	fmt.Fprintf(&b, "MinimalStepResultEnvelope identity fields to copy verbatim from the Step Input (do not derive, shorten, transpose, or replace them with Orca IDs): project_identity=%q; task_id=%q; workflow_run_id=%q; execution_id=%q; attempt_id=%q; result.step_id=%q. The outer status payload separately uses Orca taskId/dispatchId from the Dispatch preamble.\n", input.ProjectIdentity, input.TaskID, input.WorkflowRunID, input.ExecutionID, input.AttemptID, attempt.StepID)
 	identityJSON, err := json.Marshal(struct {
-		ProjectIdentity   string `json:"project_identity"`
-		TaskID            string `json:"task_id"`
-		WorkflowRunID     string `json:"workflow_run_id"`
-		ExecutionID       string `json:"execution_id"`
-		AttemptID         string `json:"attempt_id"`
-		StepID            string `json:"step_id"`
-		ResultID          string `json:"result_id"`
-		InputRevision     string `json:"input_revision"`
-		CandidateRevision string `json:"candidate_revision"`
-	}{input.ProjectIdentity, input.TaskID, input.WorkflowRunID, input.ExecutionID, input.AttemptID, input.StepID, input.AttemptID, input.InputRevision, input.CandidateRevision})
+		ProjectIdentity   string   `json:"project_identity"`
+		TaskID            string   `json:"task_id"`
+		WorkflowRunID     string   `json:"workflow_run_id"`
+		ExecutionID       string   `json:"execution_id"`
+		AttemptID         string   `json:"attempt_id"`
+		StepID            string   `json:"step_id"`
+		ResultID          string   `json:"result_id"`
+		InputRevision     string   `json:"input_revision"`
+		CandidateRevision string   `json:"candidate_revision"`
+		PrerequisiteIDs   []string `json:"prerequisite_result_ids"`
+	}{input.ProjectIdentity, input.TaskID, input.WorkflowRunID, input.ExecutionID, input.AttemptID, input.StepID, input.AttemptID, input.InputRevision, input.CandidateRevision, append([]string{}, input.PrerequisiteResultIDs...)})
 	if err != nil {
 		return "", err
 	}
 	fmt.Fprintf(&b, "To avoid hand-transcription errors in local IDs and commit hashes, decode this exact UTF-8 base64 input object in pwsh.exe and use its properties when building step_result: $ids = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('%s')) | ConvertFrom-Json. Use $ids.project_identity, $ids.task_id, $ids.workflow_run_id, $ids.execution_id and $ids.attempt_id directly for the envelope's matching fields; never assemble any ID from a title, prefix or Orca ID. Use $ids.step_id for result.step_id and $ids.input_revision for result.input_revision; for verify/review/publish_pr, use $ids.candidate_revision for result.revision, check.revision and the ancestry command. Immediately before sending status, parse the generated JSON and assert step_result.task_id equals $ids.task_id and step_result.result.step_id equals $ids.step_id; never use the Orca task ID for the inner task_id or the local task ID for step_id. Do not type project_identity, attempt_id or candidate_revision by hand; the center rejects even one altered character. Before verify, review, or publish_pr, compare `git rev-parse HEAD` with $ids.candidate_revision and report a failed step if they differ; prepare has no candidate revision and instead compares HEAD to the fixed base.\n", base64.StdEncoding.EncodeToString(identityJSON))
-	b.WriteString("In the final PowerShell 7 sender, construct the envelope identity with this code, then add observed result fields to $envelope.result: $envelope = [ordered]@{ schema_version=1; project_identity=$ids.project_identity; task_id=$ids.task_id; workflow_run_id=$ids.workflow_run_id; execution_id=$ids.execution_id; attempt_id=$ids.attempt_id; result=[ordered]@{ step_id=$ids.step_id; result_id=$ids.result_id; input_revision=$ids.input_revision } }. The result_id is fixed from this Attempt ID so replay cannot create a different result. Do not replace any $ids property with a typed or interpolated string. After ConvertTo-Json and before Orca send, parse it again and compare all five envelope ID fields, result.step_id and result.result_id to $ids with -cne; throw before sending on any difference. The outer Orca taskId and dispatchId are separate platform IDs from the Dispatch preamble.\n")
+	b.WriteString("In the final PowerShell 7 sender, construct the envelope identity with this code, then add observed result fields to $envelope.result: $envelope = [ordered]@{ schema_version=1; project_identity=$ids.project_identity; task_id=$ids.task_id; workflow_run_id=$ids.workflow_run_id; execution_id=$ids.execution_id; attempt_id=$ids.attempt_id; result=[ordered]@{ step_id=$ids.step_id; result_id=$ids.result_id; input_revision=$ids.input_revision; prerequisite_result_ids=@($ids.prerequisite_result_ids) } }. The result_id is fixed from this Attempt ID so replay cannot create a different result. Copy prerequisite_result_ids from the decoded input object exactly, including order and all prior failed-check IDs; never reconstruct it from an earlier example or omit it on repair. Do not replace any $ids property with a typed or interpolated string. After ConvertTo-Json and before Orca send, parse it again and compare all five envelope ID fields, result.step_id and result.result_id to $ids with -cne; also compare the serialized prerequisite_result_ids arrays for exact equality, and throw before sending on any difference. The outer Orca taskId and dispatchId are separate platform IDs from the Dispatch preamble.\n")
 	if run.Target.WorktreeID != "" {
 		fmt.Fprintf(&b, "Existing exact worktree_id=%s path=%s branch=%s; verify these facts through Orca and Git before editing.\n", run.Target.WorktreeID, deref(run.WorktreePath), deref(run.WorktreeBranch))
 	} else {

@@ -3,6 +3,7 @@ package steerline
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -825,12 +826,36 @@ func TestSupervisedStartMinimalStepBindsRemoteRunAndWorktree(t *testing.T) {
 	reviewInput := input
 	reviewInput.StepID = "review"
 	reviewInput.CandidateRevision = reviewRevision
+	reviewInput.PrerequisiteResultIDs = []string{"original-result", "failed-check-result"}
 	reviewSpec, err := supervisedStepTaskSpec(c, taskValue, run, workflow, reviewAttempt, reviewInput, pair, base)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(reviewSpec, "Review the already verified candidate "+reviewRevision) || !strings.Contains(reviewSpec, `"review_verdict":`) || !strings.Contains(reviewSpec, "let the center decide repair or budget exhaustion") || !strings.Contains(reviewSpec, "$ids.step_id for result.step_id") || !strings.Contains(reviewSpec, "$ids.input_revision for result.input_revision") || !strings.Contains(reviewSpec, "$ids.candidate_revision for result.revision") || !strings.Contains(reviewSpec, "task_id=$ids.task_id") || !strings.Contains(reviewSpec, "Federated Dispatch messages must omit --run and --to") {
 		t.Fatal("supervised review task spec lacks a pinned verdict and center-owned repair boundary")
+	}
+	identityStart := strings.Index(reviewSpec, "FromBase64String('")
+	if identityStart < 0 {
+		t.Fatal("supervised review task spec omitted the fixed identity object")
+	}
+	encodedIdentity, _ := strings.CutPrefix(reviewSpec[identityStart:], "FromBase64String('")
+	var found bool
+	encodedIdentity, _, found = strings.Cut(encodedIdentity, "')")
+	if !found {
+		t.Fatal("supervised review task spec has an incomplete identity object")
+	}
+	identityBytes, err := base64.StdEncoding.DecodeString(encodedIdentity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var identity struct {
+		PrerequisiteIDs []string `json:"prerequisite_result_ids"`
+	}
+	if err := json.Unmarshal(identityBytes, &identity); err != nil {
+		t.Fatal(err)
+	}
+	if !sameStrings(identity.PrerequisiteIDs, reviewInput.PrerequisiteResultIDs) || !strings.Contains(reviewSpec, "prerequisite_result_ids=@($ids.prerequisite_result_ids)") {
+		t.Fatal("supervised repair prerequisites were not bound to the decoded fixed input")
 	}
 	resultPath := filepath.Join(t.TempDir(), "result.json")
 	withoutRun := run
@@ -961,13 +986,17 @@ func TestSupervisedOrcaRealPrepareRoundtrip(t *testing.T) {
 		steps.Review = contract("agent_skill", "builtin:review", nil)
 	}
 	steps.Verify.RequiredChecks = []string{"prepare-smoke"}
-	stagedProbe := os.Getenv("STEERLINE_REAL_SUPERVISED_STAGED_PROBE") == "1" || fullProbe
+	repairCycleProbe := os.Getenv("STEERLINE_REAL_SUPERVISED_REPAIR_CYCLE_PROBE") == "1"
+	stagedProbe := os.Getenv("STEERLINE_REAL_SUPERVISED_STAGED_PROBE") == "1" || fullProbe || repairCycleProbe
 	negativeVerifyProbe := os.Getenv("STEERLINE_REAL_SUPERVISED_NEGATIVE_VERIFY_PROBE") == "1"
 	if publishProbe && !stagedProbe {
 		t.Fatal("publish probe requires center-accepted implement and verify stages")
 	}
 	if negativeVerifyProbe && (!stagedProbe || publishProbe) {
 		t.Fatal("negative verify probe requires staged execution without PR publication")
+	}
+	if repairCycleProbe && (publishProbe || negativeVerifyProbe || reviewProbe) {
+		t.Fatal("repair cycle probe requires staged execution without publication or another fault probe")
 	}
 	if reviewProbe && (!stagedProbe || publishProbe || negativeVerifyProbe) {
 		t.Fatal("review budget probe requires staged execution without negative verify or PR publication")
@@ -1466,6 +1495,9 @@ exit $LASTEXITCODE
 		}
 		task.Title = "isolated supervised implement probe"
 		task.Description = fmt.Sprintf("Create exactly %s with the UTF-8 bytes of spec03-supervised-stage-v1 followed by one LF byte (0A), using [IO.File]::WriteAllBytes if necessary. Before and after committing, verify that git hash-object and git rev-parse HEAD:%s equal a7890c716cc3ad0cca79f8d7b68cffe125e6b106; if either differs, correct the file before reporting success. Commit that one file on the assigned worktree branch. Do not push, create a PR, edit another file, or run later workflow steps. Return implement result.revision as the actual full commit HEAD and include clean workspace/base ancestry evidence.", stageFile, stageFile)
+		if repairCycleProbe {
+			task.Description = fmt.Sprintf("Create exactly %s containing spec03-supervised-stage-v0 followed by one LF byte and commit it cleanly. This candidate is deliberately wrong for the pinned v2 content-smoke; do not correct it in this first implement step. Do not push, create a PR, run verification or start a repair yourself. Return the actual full committed HEAD as implement revision with clean workspace and base ancestry evidence.", stageFile)
+		}
 		implementAttempt := service.minimalAttempt(run, run.AttemptID)
 		if implementAttempt == nil || implementAttempt.StepID != "implement" {
 			t.Fatal("prepare did not plan an implement attempt")
@@ -1488,8 +1520,12 @@ exit $LASTEXITCODE
 		if fullProbe {
 			task.Description = strings.ReplaceAll(task.Description, "steerline-spec03-supervised-stage.txt", stageFile)
 		}
+		positiveVerifyDescription := task.Description
 		if negativeVerifyProbe {
 			task.Description = "Run the pinned content-smoke command exactly. Its expected content is deliberately wrong, so report the actual nonzero exit code, one content-smoke check with status=failed and passed=false, and result.succeeded=false; omit failure_kind. Still report base_ancestor=true only after the actual ancestry command exits zero, and keep the worktree clean at the candidate. Deliver the valid failed-check result via type=status, then worker_done outcome succeeded because verification execution completed. Do not edit, repair, push or publish; only the center may plan the next implement repair attempt."
+		}
+		if repairCycleProbe {
+			task.Description = "Run the pinned v2 content-smoke command exactly against the current candidate. The candidate intentionally contains v0, so report its actual nonzero exit code as one failed content-smoke check with passed=false and result.succeeded=false; omit failure_kind. Report base_ancestor=true only after the actual ancestry command succeeds. Keep the worktree clean and send worker_done outcome succeeded after the valid failed-check status is accepted. Do not edit, repair, push or publish; only the center plans the next implement repair attempt."
 		}
 		verifyAttempt := service.minimalAttempt(run, run.AttemptID)
 		if verifyAttempt == nil || verifyAttempt.StepID != "verify" {
@@ -1504,7 +1540,7 @@ exit $LASTEXITCODE
 		}
 		driveStage("verify")
 		currentExecution = service.executionRecord(run)
-		if negativeVerifyProbe {
+		if negativeVerifyProbe || repairCycleProbe {
 			if currentExecution == nil || currentExecution.CurrentStep != "implement" || currentExecution.RepairRounds != 1 || currentExecution.VerifiedRevision != "" || currentExecution.CandidateRevision != candidate || run.FinishTaskStatus != "pending" || run.Target.WorktreeID != fixedWorktree {
 				t.Fatalf("failed required check did not schedule one bounded repair attempt: %+v run=%+v", currentExecution, run)
 			}
@@ -1512,21 +1548,72 @@ exit $LASTEXITCODE
 			if repairAttempt == nil || repairAttempt.StepID != "implement" || repairAttempt.Status != "planned" {
 				t.Fatalf("center did not create a planned implement repair attempt: %+v", repairAttempt)
 			}
-			if outputPath := strings.TrimSpace(os.Getenv("STEERLINE_REAL_SUPERVISED_NEGATIVE_VERIFY_EVIDENCE_PATH")); outputPath != "" {
+			if negativeVerifyProbe {
+				if outputPath := strings.TrimSpace(os.Getenv("STEERLINE_REAL_SUPERVISED_NEGATIVE_VERIFY_EVIDENCE_PATH")); outputPath != "" {
+					workflowRecord, executionRecord := service.minimalRecords(run)
+					negativeEvidence := map[string]any{"captured_at": now(), "run": run, "workflow": workflowRecord, "execution": executionRecord, "attempts": service.State.Attempts, "operations": service.State.Operations, "dispatches": map[string]string{"prepare": prepareDispatch, "implement": implementDispatch, "verify_failed_check": verifyDispatch}, "candidate_revision": candidate, "repair_planned": true, "pr_created": false}
+					data, marshalErr := json.MarshalIndent(negativeEvidence, "", "  ")
+					if marshalErr != nil {
+						t.Fatal(marshalErr)
+					}
+					if err = os.MkdirAll(filepath.Dir(outputPath), 0700); err != nil {
+						t.Fatal(err)
+					}
+					if err = AtomicWrite(outputPath, append(data, '\n')); err != nil {
+						t.Fatal(err)
+					}
+				}
+				t.Logf("failed content-smoke scheduled repair round %d on candidate %s", currentExecution.RepairRounds, candidate)
+				return
+			}
+			task.Title = "isolated supervised implement repair probe"
+			task.Description = fmt.Sprintf("Repair only %s so its UTF-8 bytes are spec03-supervised-stage-v1 followed by exactly one LF byte. Before and after committing, verify git hash-object and git rev-parse HEAD:%s both equal a7890c716cc3ad0cca79f8d7b68cffe125e6b106. Commit the correction on the same branch, keep the worktree clean, and report the actual new full HEAD; do not push, create a PR or run verify yourself.", stageFile, stageFile)
+			if err = service.startMinimalStep(context.Background(), task, run, source, repairAttempt); err != nil {
+				t.Fatalf("start center-planned implement repair: %v", err)
+			}
+			repairDispatch := run.Target.Dispatch
+			if repairDispatch == verifyDispatch || run.Target.WorktreeID != fixedWorktree {
+				t.Fatal("implement repair did not get an independent Dispatch on the same worktree")
+			}
+			driveStage("implement")
+			currentExecution = service.executionRecord(run)
+			if currentExecution == nil || currentExecution.CurrentStep != "verify" || !commitHash.MatchString(currentExecution.CandidateRevision) || currentExecution.CandidateRevision == candidate || currentExecution.RepairRounds != 1 || currentExecution.Workspace.Dirty {
+				t.Fatalf("implement repair did not produce a new clean candidate: %+v", currentExecution)
+			}
+			repairedCandidate := currentExecution.CandidateRevision
+			task.Title = "isolated supervised repair verification probe"
+			task.Description = positiveVerifyDescription
+			reverifyAttempt := service.minimalAttempt(run, run.AttemptID)
+			if reverifyAttempt == nil || reverifyAttempt.StepID != "verify" || reverifyAttempt.Status != "planned" {
+				t.Fatalf("center did not plan verification after repair: %+v", reverifyAttempt)
+			}
+			if err = service.startMinimalStep(context.Background(), task, run, source, reverifyAttempt); err != nil {
+				t.Fatalf("start verification after repair: %v", err)
+			}
+			reverifyDispatch := run.Target.Dispatch
+			if reverifyDispatch == repairDispatch || run.Target.WorktreeID != fixedWorktree {
+				t.Fatal("verification after repair did not get an independent Dispatch on the same worktree")
+			}
+			driveStage("verify")
+			currentExecution = service.executionRecord(run)
+			if currentExecution == nil || currentExecution.CurrentStep != "publish_pr" || currentExecution.VerifiedRevision != repairedCandidate || currentExecution.CandidateRevision != repairedCandidate || currentExecution.RepairRounds != 1 || run.PR.URL != nil {
+				t.Fatalf("repaired candidate did not pass a new verify gate without publication: %+v run=%+v", currentExecution, run)
+			}
+			if outputPath := strings.TrimSpace(os.Getenv("STEERLINE_REAL_SUPERVISED_REPAIR_CYCLE_EVIDENCE_PATH")); outputPath != "" {
 				workflowRecord, executionRecord := service.minimalRecords(run)
-				negativeEvidence := map[string]any{"captured_at": now(), "run": run, "workflow": workflowRecord, "execution": executionRecord, "attempts": service.State.Attempts, "operations": service.State.Operations, "dispatches": map[string]string{"prepare": prepareDispatch, "implement": implementDispatch, "verify_failed_check": verifyDispatch}, "candidate_revision": candidate, "repair_planned": true, "pr_created": false}
-				data, marshalErr := json.MarshalIndent(negativeEvidence, "", "  ")
+				result := map[string]any{"captured_at": now(), "run": run, "workflow": workflowRecord, "execution": executionRecord, "attempts": service.State.Attempts, "operations": service.State.Operations, "dispatches": map[string]string{"prepare": prepareDispatch, "implement_bad": implementDispatch, "verify_failed": verifyDispatch, "implement_repair": repairDispatch, "verify_pass": reverifyDispatch}, "original_candidate": candidate, "repaired_candidate": repairedCandidate, "repair_rounds": 1, "repair_completed": true, "pr_created": false}
+				encoded, marshalErr := json.MarshalIndent(result, "", "  ")
 				if marshalErr != nil {
 					t.Fatal(marshalErr)
 				}
 				if err = os.MkdirAll(filepath.Dir(outputPath), 0700); err != nil {
 					t.Fatal(err)
 				}
-				if err = AtomicWrite(outputPath, append(data, '\n')); err != nil {
+				if err = AtomicWrite(outputPath, append(encoded, '\n')); err != nil {
 					t.Fatal(err)
 				}
 			}
-			t.Logf("failed content-smoke scheduled repair round %d on candidate %s", currentExecution.RepairRounds, candidate)
+			t.Logf("failed check was repaired and reverified on %s without a PR", repairedCandidate)
 			return
 		}
 		reviewDispatch := ""
@@ -1649,7 +1736,7 @@ exit $LASTEXITCODE
 				if fullProbe {
 					dispatches["review"] = reviewDispatch
 				}
-				publishEvidence := map[string]any{"captured_at": now(), "run": run, "workflow": workflowRecord, "execution": executionRecord, "attempts": service.State.Attempts, "operations": service.State.Operations, "dispatches": dispatches, "worktree_id": fixedWorktree, "candidate_revision": candidate, "pr": prInfo, "waiting_pr_merge": true, "merge_performed": false}
+				publishEvidence := map[string]any{"captured_at": now(), "run": run, "workflow": workflowRecord, "execution": executionRecord, "attempts": service.State.Attempts, "operations": service.State.Operations, "dispatches": dispatches, "worktree_id": fixedWorktree, "candidate_revision": candidate, "pr": prInfo, "waiting_pr_merge": true, "merge_performed": false, "completion_window_restart_step": completionWindowRestartStep}
 				data, marshalErr := json.MarshalIndent(publishEvidence, "", "  ")
 				if marshalErr != nil {
 					t.Fatal(marshalErr)
@@ -1699,7 +1786,7 @@ exit $LASTEXITCODE
 					t.Fatalf("original completed Run was not idempotent: %v", err)
 				}
 				if outputPath := strings.TrimSpace(os.Getenv("STEERLINE_REAL_SUPERVISED_DIRECT_CLOSE_EVIDENCE_PATH")); outputPath != "" {
-					evidence := map[string]any{"captured_at": now(), "run": run, "workflow": workflowRecord, "execution": executionRecord, "attempts": service.State.Attempts, "operations": service.State.Operations, "pr": merged, "provider_task_status": providerTask.Status, "provider_task_assignee": providerTask.Assignee, "original_sqlite_reopened": true, "merge_commit_verified": true, "idempotent_second_poll": true}
+					evidence := map[string]any{"captured_at": now(), "run": run, "workflow": workflowRecord, "execution": executionRecord, "attempts": service.State.Attempts, "operations": service.State.Operations, "pr": merged, "provider_task_status": providerTask.Status, "provider_task_assignee": providerTask.Assignee, "original_sqlite_reopened": true, "merge_commit_verified": true, "idempotent_second_poll": true, "completion_window_restart_step": completionWindowRestartStep}
 					encoded, marshalErr := json.MarshalIndent(evidence, "", "  ")
 					if marshalErr != nil {
 						t.Fatal(marshalErr)
@@ -1908,6 +1995,78 @@ func TestSupervisedOrcaRealPublishExistingDraft(t *testing.T) {
 		}
 	}
 	t.Logf("original draft PR reconciled by center: %s head=%s", prURL, sourceEvidence.Candidate)
+}
+
+func TestSupervisedOrcaRealRuntimeReplacementObservation(t *testing.T) {
+	path := strings.TrimSpace(os.Getenv("STEERLINE_REAL_SUPERVISED_R08_BEFORE"))
+	if path == "" {
+		t.Skip("set STEERLINE_REAL_SUPERVISED_R08_BEFORE after the original real Dispatch's remote runtime changes")
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var evidence struct {
+		Before struct {
+			RunID           string `json:"run_id"`
+			TaskID          string `json:"task_id"`
+			DispatchID      string `json:"dispatch_id"`
+			WorktreeID      string `json:"worktree_id"`
+			RemoteRuntimeID string `json:"remote_runtime_id"`
+		} `json:"before"`
+	}
+	if err := json.Unmarshal(data, &evidence); err != nil {
+		t.Fatal(err)
+	}
+	before := evidence.Before
+	if before.RunID == "" || before.TaskID == "" || before.DispatchID == "" || before.WorktreeID == "" || before.RemoteRuntimeID == "" {
+		t.Fatal("original real Dispatch evidence lacks its fixed identity")
+	}
+	repo := strings.TrimSpace(os.Getenv("STEERLINE_REAL_SUPERVISED_R08_LOCAL_REPO"))
+	base := strings.TrimSpace(os.Getenv("STEERLINE_REAL_SUPERVISED_R08_BASE"))
+	if repo == "" || !commitHash.MatchString(base) {
+		t.Fatal("R08 observation requires a local clone of the same test repository and a fixed base")
+	}
+	c := Config{Repository: repo, Remote: "origin", Git: Command{Executable: "git"}, CommandTimeout: "30s", Agent: "codex", Host: "orca_supervised", Model: "gpt-6-luna", ReasoningEffort: "high", Orca: OrcaConfig{Executable: "orca", Shell: "powershell", WaitTimeout: "15m", Supervised: &SupervisedOrcaConfig{ConnectionID: "fe26dcce-e8f7-47dd-96c2-d611c1093733", EnvironmentID: "bed55de0-6d7d-497e-b1d5-3abab256b2ee", RepositorySelector: "id:09e35751-6517-4e7c-ae20-178ed0e90000", CoordinatorTerminal: "term_5253eb1e-0e83-409e-b1df-5c4aef4bea74", ExpectedCodexVersion: "codex-cli 0.156.1", PollInterval: "2s", CapabilityReportVersion: 1}}}
+	if err := c.ResolveIdentity(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	backend := orcaSupervisedBackend{config: c}
+	pair, err := probeSupervisedOrcaTarget(context.Background(), c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pair.RemoteRuntime == before.RemoteRuntimeID {
+		t.Fatal("remote runtime identity did not change")
+	}
+	current, err := backend.showWorker(context.Background(), supervisedStartReceipt{RunID: before.RunID, TaskID: before.TaskID, DispatchID: before.DispatchID, WorktreeID: before.WorktreeID, CenterRuntimeID: pair.CenterRuntime})
+	if err != nil || current.Identity.Dispatch != before.DispatchID || current.Identity.WorktreeID != before.WorktreeID {
+		t.Fatalf("original real Dispatch was not observed after remote runtime replacement: %+v %v", current, err)
+	}
+	target := targetFor(c)
+	target.OrchestrationRun, target.ExternalTask, target.Dispatch, target.WorktreeID, target.ExecutionHost = before.RunID, before.TaskID, before.DispatchID, before.WorktreeID, current.Identity.ExecutionHost
+	target.Branch, target.BaseRevision = current.Branch, base
+	external := current.Identity
+	external.RuntimeID = before.RemoteRuntimeID
+	ref := ExecutionRef{Version: ExecutionRecordVersion, Backend: BackendOrca, Protocol: ProtocolOrcaSupervised, Target: target, Agent: AgentSpec{Name: "codex"}, RunID: newID(), AttemptID: newID(), WorkspacePath: current.WorktreePath, WorkspaceBranch: current.Branch, BaseCommit: base, External: external}
+	_, observeErr := backend.Observe(context.Background(), ref)
+	if !isBackendError(observeErr, BackendIdentityMismatch) {
+		t.Fatalf("original-epoch binding was not refused after real remote runtime replacement: %v", observeErr)
+	}
+	if outputPath := strings.TrimSpace(os.Getenv("STEERLINE_REAL_SUPERVISED_R08_ADAPTER_OUTPUT")); outputPath != "" {
+		result := map[string]any{"captured_at": now(), "run_id": before.RunID, "task_id": before.TaskID, "dispatch_id": before.DispatchID, "worktree_id": before.WorktreeID, "before_remote_runtime": before.RemoteRuntimeID, "after_remote_runtime": pair.RemoteRuntime, "original_worker_liveness": current.Liveness, "original_worker_exact_dispatch": current.Identity.Dispatch == before.DispatchID, "old_binding_observation": "identity_mismatch", "replacement_worker_created": false}
+		encoded, marshalErr := json.MarshalIndent(result, "", "  ")
+		if marshalErr != nil {
+			t.Fatal(marshalErr)
+		}
+		if err = os.MkdirAll(filepath.Dir(outputPath), 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err = AtomicWrite(outputPath, append(encoded, '\n')); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Logf("real remote runtime changed %s -> %s; original Dispatch %s remains exact, old binding refused", before.RemoteRuntimeID, pair.RemoteRuntime, before.DispatchID)
 }
 
 func TestSupervisedOrcaRealMergedPRQuery(t *testing.T) {
