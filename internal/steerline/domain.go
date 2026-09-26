@@ -491,7 +491,7 @@ func advanceMinimalExecution(run *WorkflowRunRecord, exec *ExecutionRecord, resu
 		return "", errors.New("step result reports uncommitted workspace changes")
 	}
 	if result.Workspace.Repository != "" && exec.Workspace.Repository != "" && result.Workspace.Repository != exec.Workspace.Repository {
-		return "", errors.New("workspace repository identity mismatch")
+		return "", fmt.Errorf("%s workspace repository identity %q differs from execution identity %q", result.StepID, result.Workspace.Repository, exec.Workspace.Repository)
 	}
 	switch result.StepID {
 	case "prepare":
@@ -530,8 +530,23 @@ func advanceMinimalExecution(run *WorkflowRunRecord, exec *ExecutionRecord, resu
 		if expectedInput == "" {
 			expectedInput = exec.Workspace.Base
 		}
-		if !revisionPattern.MatchString(exec.Workspace.Base) || result.InputRevision != expectedInput || result.Workspace.Repository != exec.Workspace.Repository || canonical(result.Workspace.Worktree) != canonical(exec.Workspace.Worktree) || result.Workspace.Base != exec.Workspace.Base || result.Workspace.Branch != exec.Workspace.Branch {
-			return "", errors.New("implement workspace does not match the prepared repository, worktree, branch and base revision")
+		if !revisionPattern.MatchString(exec.Workspace.Base) {
+			return "", errors.New("implement preparation has no valid fixed base revision")
+		}
+		if result.InputRevision != expectedInput {
+			return "", fmt.Errorf("implement input revision %q differs from prepared HEAD %q", result.InputRevision, expectedInput)
+		}
+		if result.Workspace.Repository != exec.Workspace.Repository {
+			return "", fmt.Errorf("implement repository identity %q differs from prepared repository %q", result.Workspace.Repository, exec.Workspace.Repository)
+		}
+		if canonical(result.Workspace.Worktree) != canonical(exec.Workspace.Worktree) {
+			return "", fmt.Errorf("implement worktree %q differs from prepared worktree %q", result.Workspace.Worktree, exec.Workspace.Worktree)
+		}
+		if result.Workspace.Base != exec.Workspace.Base {
+			return "", fmt.Errorf("implement base revision %q differs from prepared base %q", result.Workspace.Base, exec.Workspace.Base)
+		}
+		if result.Workspace.Branch != exec.Workspace.Branch {
+			return "", fmt.Errorf("implement branch %q differs from prepared branch %q", result.Workspace.Branch, exec.Workspace.Branch)
 		}
 		exec.CandidateRevision = result.Revision
 		exec.VerifiedRevision = ""

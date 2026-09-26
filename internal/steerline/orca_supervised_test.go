@@ -76,7 +76,34 @@ func fakeSupervisedOrca(args []string) int {
 		}
 		return fakeSupervisedEnvelope("fake-remote-runtime", map[string]any{"repo": map[string]any{"id": "repo-test", "kind": "git", "gitRemoteIdentity": map[string]any{"remoteUrl": os.Getenv("STEERLINE_FAKE_SUPERVISED_REMOTE_URL")}}})
 	case "terminal":
-		if len(args) < 2 || args[1] != "show" || arg(args, "--terminal") != "term-coordinator" {
+		if len(args) < 2 {
+			return fakeOrcaErr("invalid_argument", "missing terminal verb")
+		}
+		if args[1] == "wait" {
+			if arg(args, "--terminal") != "terminal-test" || arg(args, "--for") != "tui-idle" || arg(args, "--environment") != "env-home" {
+				return fakeOrcaErr("invalid_argument", "prompt readiness wait did not target the exact remote terminal")
+			}
+			idle := os.Getenv("STEERLINE_FAKE_SUPERVISED_TUI_IDLE") != "0"
+			return fakeSupervisedEnvelope("fake-remote-runtime", map[string]any{"wait": map[string]any{"handle": "terminal-test", "condition": "tui-idle", "satisfied": idle, "status": "running"}})
+		}
+		if args[1] == "send" {
+			if arg(args, "--terminal") != "terminal-test" || arg(args, "--environment") != "env-home" || !strings.Contains(strings.Join(args, " "), "--enter") {
+				return fakeOrcaErr("invalid_argument", "prompt Enter did not target the exact remote terminal")
+			}
+			if marker := os.Getenv("STEERLINE_FAKE_SUPERVISED_ENTER_MARKER"); marker != "" {
+				file, err := os.OpenFile(marker, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+				if err != nil {
+					return fakeOrcaErr("internal", "prompt Enter marker could not be written")
+				}
+				_, err = file.WriteString("enter\n")
+				_ = file.Close()
+				if err != nil {
+					return fakeOrcaErr("internal", "prompt Enter marker could not be written")
+				}
+			}
+			return fakeSupervisedEnvelope("fake-remote-runtime", map[string]any{"send": map[string]any{"handle": "terminal-test", "accepted": true}})
+		}
+		if args[1] != "show" || arg(args, "--terminal") != "term-coordinator" {
 			return fakeOrcaErr("terminal_handle_stale", "coordinator terminal missing")
 		}
 		return fakeSupervisedEnvelope("fake-center-runtime", map[string]any{"terminal": map[string]any{"handle": "term-coordinator", "connected": true, "orphaned": false}})
@@ -146,6 +173,20 @@ func fakeSupervisedOrca(args []string) int {
 			}
 			return fakeSupervisedEnvelope("fake-center-runtime", map[string]any{"dispatch": map[string]any{"id": "dispatch-test", "runId": "orca-run-test", "taskId": "task-test", "status": dispatchState}, "worker": map[string]any{"dispatchId": "dispatch-test", "worktreeId": worktree}, "projection": map[string]any{"liveness": map[string]any{"verdict": "live"}, "host": map[string]any{"id": "env-home"}}, "server": map[string]any{"environmentId": "env-home"}, "remoteRuntimeEpoch": runtimeEpoch, "terminal": map[string]any{"handle": "terminal-test", "incarnationId": "inc-test", "worktreeId": worktree, "worktreePath": worktreePath, "branch": "refs/heads/erranliu/" + name}, "observation": observation})
 		case "worker-read":
+			state := os.Getenv("STEERLINE_FAKE_SUPERVISED_TUI_STATE")
+			if state != "" || os.Getenv("STEERLINE_FAKE_SUPERVISED_ENTER_MARKER") != "" {
+				tail := []string{"› [Pasted Content 123 chars]"}
+				if state == "active" {
+					tail = []string{"• Working (1s · esc to interrupt)"}
+				} else if state == "not-ready" {
+					tail = []string{"› Ask Codex to do anything"}
+				} else if marker := os.Getenv("STEERLINE_FAKE_SUPERVISED_ENTER_MARKER"); marker != "" {
+					if _, err := os.Stat(marker); err == nil {
+						tail = []string{"• Working (1s · esc to interrupt)"}
+					}
+				}
+				return fakeSupervisedEnvelope("fake-center-runtime", map[string]any{"dispatchId": arg(args, "--dispatch"), "source": "terminal", "cursor": "cursor-1", "nextCursor": "cursor-1", "contentComplete": true, "clipping": []string{}, "terminal": map[string]any{"status": "running", "tail": tail}, "status": map[string]any{"worker": "ready", "terminal": "running", "liveness": "live"}})
+			}
 			return fakeSupervisedEnvelope("fake-center-runtime", map[string]any{"dispatchId": arg(args, "--dispatch"), "source": "transcript", "cursor": "cursor-1", "contentComplete": true, "clipping": []string{}, "status": map[string]any{"worker": "ready", "terminal": "running", "liveness": "live"}, "transcript": map[string]any{"messages": []any{}}})
 		case "check":
 			return fakeSupervisedEnvelope("fake-center-runtime", map[string]any{"runId": arg(args, "--run"), "deliveryId": nil, "messages": []any{}, "count": 0, "timedOut": true, "connectionLost": false, "cancelled": false})
@@ -296,12 +337,23 @@ func TestSupervisedOrcaRequiresPinnedModelAndKeepsStopUnsupported(t *testing.T) 
 		t.Fatal("remote cancellation was enabled")
 	}
 	c.Orca.Supervised.RemoteCancelAvailable = false
+	c.Orca.Supervised.ExpectedCodexVersion = ""
+	if err := validateSupervisedOrcaConfig(&c); err != nil {
+		t.Fatalf("supervised config unexpectedly requires an exact Codex CLI pin: %v", err)
+	}
 	report, err := (orcaSupervisedBackend{config: c}).Probe(context.Background(), targetFor(c), agentFor(c))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if capabilityStatus(report, "stop") != CapabilityUnsupported || capabilityStatus(report, "start") != CapabilityNotTested {
 		t.Fatalf("supervised capabilities = %+v", report.Capabilities)
+	}
+	records := executionRecords{root: t.TempDir()}
+	if err = records.saveCapabilityReport(report); err != nil {
+		t.Fatalf("capability report rejected an empty optional Codex CLI pin: %v", err)
+	}
+	if _, err = records.loadCapabilityReport(report); err != nil {
+		t.Fatalf("load capability report without a Codex CLI pin: %v", err)
 	}
 	if _, err = (orcaSupervisedBackend{}).StopExecution(context.Background(), ExecutionRef{}, Operation{}, nil); err == nil || !isBackendError(err, BackendUnsupported) {
 		t.Fatalf("StopExecution error = %v", err)
@@ -554,11 +606,12 @@ func TestSupervisedResultDeliveryReplayUsesPersistedJSONContent(t *testing.T) {
 	attempt := StepAttemptRecord{AttemptID: "attempt-1", StepID: "publish_pr"}
 	input := MinimalStepInput{ProjectIdentity: "repo", TaskID: "business-task", WorkflowRunID: "workflow-1", ExecutionID: "execution-1", AttemptID: attempt.AttemptID, StepID: attempt.StepID}
 	identity := ProcessIdentity{Task: "orca-task", Dispatch: "dispatch-1"}
-	backend := orcaSupervisedBackend{config: Config{Orca: OrcaConfig{Supervised: &SupervisedOrcaConfig{ExpectedCodexVersion: "codex-cli 0.156.1"}}}}
+	backend := orcaSupervisedBackend{config: Config{Orca: OrcaConfig{Supervised: &SupervisedOrcaConfig{}}}}
 	resultPath := filepath.Join(t.TempDir(), "result.json")
 	envelope := MinimalStepResultEnvelope{SchemaVersion: 1, ProjectIdentity: input.ProjectIdentity, TaskID: input.TaskID, WorkflowRunID: input.WorkflowRunID, ExecutionID: input.ExecutionID, AttemptID: input.AttemptID, Result: StepGateResult{StepID: attempt.StepID, ResultID: attempt.AttemptID, Succeeded: true, PRURL: "https://example.test/pr/1"}}
+	version := "codex-cli 0.157.1"
 	message := func() OrcaInboxMessage {
-		return OrcaInboxMessage{Type: "status", FromHandle: "dispatch:" + identity.Dispatch, Payload: mustJSON(map[string]any{"taskId": identity.Task, "dispatchId": identity.Dispatch, "remote_codex_version": "codex-cli 0.156.1", "step_result": envelope})}
+		return OrcaInboxMessage{Type: "status", FromHandle: "dispatch:" + identity.Dispatch, Payload: mustJSON(map[string]any{"taskId": identity.Task, "dispatchId": identity.Dispatch, "remote_codex_version": version, "step_result": envelope})}
 	}
 	if found, err := backend.stepResultFromMessages([]OrcaInboxMessage{message()}, identity, attempt, input, resultPath); err != nil || !found {
 		t.Fatalf("first Delivery result = %t, %v", found, err)
@@ -566,6 +619,18 @@ func TestSupervisedResultDeliveryReplayUsesPersistedJSONContent(t *testing.T) {
 	if found, err := backend.stepResultFromMessages([]OrcaInboxMessage{message()}, identity, attempt, input, resultPath); err != nil || !found {
 		t.Fatalf("same unacknowledged Delivery replay was not idempotent: %t, %v", found, err)
 	}
+	backend.config.Orca.Supervised.ExpectedCodexVersion = "codex-cli 0.157.1"
+	version = "codex-cli 0.157.2"
+	if found, err := backend.stepResultFromMessages([]OrcaInboxMessage{message()}, identity, attempt, input, resultPath); err == nil || !isBackendError(err, BackendIdentityMismatch) || found {
+		t.Fatalf("explicit Codex CLI version pin did not reject a different version: %t, %v", found, err)
+	}
+	backend.config.Orca.Supervised.ExpectedCodexVersion = ""
+	version = ""
+	if found, err := backend.stepResultFromMessages([]OrcaInboxMessage{message()}, identity, attempt, input, resultPath); err == nil || !isBackendError(err, BackendIdentityMismatch) || found {
+		t.Fatalf("missing observed Codex CLI version was accepted: %t, %v", found, err)
+	}
+	version = "codex-cli 0.157.1"
+	backend.config.Orca.Supervised.ExpectedCodexVersion = "codex-cli 0.157.1"
 	envelope.Result.PRURL = "https://example.test/pr/2"
 	if found, err := backend.stepResultFromMessages([]OrcaInboxMessage{message()}, identity, attempt, input, resultPath); err == nil || !isBackendError(err, BackendProtocolInvalid) || found {
 		t.Fatalf("different content under the same result ID was accepted: %t, %v", found, err)
@@ -583,7 +648,7 @@ func TestMinimalImplementGateAcceptsSameCanonicalRemoteWorktree(t *testing.T) {
 	}
 }
 
-func TestSupervisedTurnRequiresAssistantTranscriptEvidence(t *testing.T) {
+func TestSupervisedTurnRequiresTranscriptOrActiveTerminalEvidence(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
 		source string
@@ -592,6 +657,9 @@ func TestSupervisedTurnRequiresAssistantTranscriptEvidence(t *testing.T) {
 	}{
 		{"input-only", "transcript", `{"transcript":{"messages":[{"role":"user"}]}}`, false},
 		{"terminal-tail", "terminal", `{"transcript":{"messages":[{"role":"assistant"}]}}`, false},
+		{"terminal-idle", "terminal", `{"terminal":{"tail":["› Ask Codex to do anything"]}}`, false},
+		{"terminal-working", "terminal", `{"terminal":{"tail":["• Working (1s · esc to interrupt)"]}}`, true},
+		{"terminal-reconnecting", "terminal", `{"terminal":{"tail":["• Reconnecting... 4/5", "└ Request timed out"]}}`, true},
 		{"assistant-turn", "transcript", `{"transcript":{"messages":[{"role":"user"},{"role":"assistant"}]}}`, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -605,6 +673,7 @@ func TestSupervisedTurnRequiresAssistantTranscriptEvidence(t *testing.T) {
 func TestSupervisedSettlementPersistsReleaseRequestReceipt(t *testing.T) {
 	f := newFixture(t)
 	f.c = supervisedConfigForFixture(t, f)
+	f.c.Orca.Supervised.ExpectedCodexVersion = ""
 	base := strings.Repeat("a", 40)
 	worktreeID := "repo-test::C:/remote/release-test"
 	t.Setenv("STEERLINE_FAKE_SUPERVISED_WORKTREE_ID", worktreeID)
@@ -641,19 +710,21 @@ func TestSupervisedSettlementPersistsReleaseRequestReceipt(t *testing.T) {
 	run.ExecutionStatus = "pending"
 	run.FinishTaskStatus = "pending"
 	run.DomainAttemptNumber = attempt.AttemptNumber
-	workflow.Phase = "executing"
-	execution.Status = "active"
+	workflow.Phase = "blocked"
+	execution.Status = "blocked"
 	execution.CurrentStep = "prepare"
 	execution.Target = target
 	attempt.ExternalBinding = target
 	external := ProcessIdentity{Kind: "orca_supervised", RuntimeID: "fake-remote-runtime", CoordinatorRuntimeID: "fake-center-runtime", Terminal: "terminal-test", Incarnation: "inc-test", OrchestrationRun: target.OrchestrationRun, Task: target.ExternalTask, Dispatch: target.Dispatch, ExecutionHost: target.ExecutionHost, WorktreeID: target.WorktreeID}
 	run.Process, execution.Process = &external, &external
 	execution.Workspace = WorkspaceEvidence{Repository: f.c.identity, Worktree: remotePath, Branch: target.Branch, Base: base, Head: base}
-	for _, status := range []string{"dispatching", "dispatched"} {
+	for _, status := range []string{"dispatching", "dispatched", "outcome_unknown"} {
 		if err = TransitionStepAttempt(&attempt, status); err != nil {
 			t.Fatal(err)
 		}
 	}
+	run.ExecutionStatus, run.FinishTaskStatus = "unknown", "blocked"
+	run.Error = ptr("workspace preparation outcome requires reconciliation: start response was lost")
 	ref := ExecutionRef{Version: ExecutionRecordVersion, Backend: BackendOrca, Protocol: ProtocolOrcaSupervised, Target: target, Agent: AgentSpec{Name: "codex"}, RunID: runID, AttemptID: attempt.AttemptID, WorkspacePath: remotePath, WorkspaceBranch: target.Branch, BaseCommit: base, External: external, Generation: external.RuntimeID + ":" + external.Incarnation}
 	if err := (executionRecords{root: f.c.RunDir}).saveBinding(ref); err != nil {
 		t.Fatal(err)
@@ -671,7 +742,7 @@ func TestSupervisedSettlementPersistsReleaseRequestReceipt(t *testing.T) {
 	request := mustJSON(map[string]any{"input": input})
 	s.State.Attempts[0].OperationID = operationID
 	s.State.Attempts[0].ResultPath = resultPath
-	s.State.Operations = append(s.State.Operations, OperationRecord{ProjectIdentity: f.c.identity, OperationID: operationID, IdempotencyKey: "step:" + execution.ExecutionID + ":" + attempt.AttemptID, Kind: "dispatch_step", Status: "confirmed", PlatformRequestID: "request-worker-start", PayloadDigest: operationDigest(request), Request: request, CreatedAt: now(), UpdatedAt: now()})
+	s.State.Operations = append(s.State.Operations, OperationRecord{ProjectIdentity: f.c.identity, OperationID: operationID, IdempotencyKey: "step:" + execution.ExecutionID + ":" + attempt.AttemptID, Kind: "dispatch_step", Status: "outcome_unknown", PlatformRequestID: "request-worker-start", Receipt: mustJSON(map[string]any{"ref": ref, "target": target, "residual_resources": []string{"exact Dispatch retained"}}), PayloadDigest: operationDigest(request), Request: request, CreatedAt: now(), UpdatedAt: now()})
 	if err = s.save(); err != nil {
 		t.Fatal(err)
 	}
@@ -687,6 +758,16 @@ func TestSupervisedSettlementPersistsReleaseRequestReceipt(t *testing.T) {
 		t.Fatal("restart did not reattach the original supervised Dispatch")
 	}
 	run = s.active
+	var recoveredStart *OperationRecord
+	for i := range s.State.Operations {
+		if s.State.Operations[i].OperationID == operationID {
+			recoveredStart = &s.State.Operations[i]
+			break
+		}
+	}
+	if s.State.Attempts[0].Status != "dispatched" || run.ExecutionStatus != "pending" || run.FinishTaskStatus != "pending" || run.Error != nil || recoveredStart == nil || recoveredStart.Status != "confirmed" || recoveredStart.PlatformRequestID != "request-worker-start" {
+		t.Fatalf("uncertain start was not reconciled to its exact Dispatch: run=%+v attempt=%+v operation=%+v", run, s.State.Attempts[0], recoveredStart)
+	}
 	if err := s.event(WorkerEvent{RunID: runID, AttemptID: attempt.AttemptID}); err != nil || s.State.Attempts[0].Status != "dispatched" || run.ExecutionStatus != "pending" {
 		t.Fatalf("input acceptance prematurely marked the step running: run=%s attempt=%s err=%v", run.ExecutionStatus, s.State.Attempts[0].Status, err)
 	}
@@ -782,11 +863,11 @@ func TestSupervisedSettlementPersistsReleaseRequestReceipt(t *testing.T) {
 		t.Fatalf("uncertain reply did not reconcile from the exact answer message: status=%s request=%q receipt=%s decision=%s", replyOperation.Status, replyOperation.PlatformRequestID, replyOperation.Receipt, run.Decision.Status)
 	}
 	t.Setenv("STEERLINE_FAKE_SUPERVISED_DENY_REPLY", "")
-	bareProof := OrcaInboxMessage{ID: "relay-bare-proof-test", Type: "status", FromHandle: "dispatch:dispatch-test", Payload: json.RawMessage(`{"taskId":"task-test","dispatchId":"dispatch-test","remote_codex_version":"codex-cli 0.156.1","decision_applied":"relay-answer-test"}`)}
+	bareProof := OrcaInboxMessage{ID: "relay-bare-proof-test", Type: "status", FromHandle: "dispatch:dispatch-test", Payload: json.RawMessage(`{"taskId":"task-test","dispatchId":"dispatch-test","remote_codex_version":"codex-cli 0.157.1","decision_applied":"relay-answer-test"}`)}
 	if err := s.applySupervisedDecisionProof(run, WorkerEvent{AttemptID: attempt.AttemptID, RemoteRunID: target.OrchestrationRun, RemoteMessages: []OrcaInboxMessage{bareProof}}); err == nil || run.Decision.Status != "reply_accepted" {
 		t.Fatalf("bare question ID was accepted as decision application proof: status=%s err=%v", run.Decision.Status, err)
 	}
-	proof := OrcaInboxMessage{ID: "relay-applied-test", Type: "status", FromHandle: "dispatch:dispatch-test", Payload: mustJSON(map[string]any{"taskId": "task-test", "dispatchId": "dispatch-test", "remote_codex_version": "codex-cli 0.156.1", "decision_applied": "relay-answer-test", "applied_decision_attempt_id": attempt.AttemptID, "applied_decision_execution_id": execution.ExecutionID, "applied_answer_body": "left"})}
+	proof := OrcaInboxMessage{ID: "relay-applied-test", Type: "status", FromHandle: "dispatch:dispatch-test", Payload: mustJSON(map[string]any{"taskId": "task-test", "dispatchId": "dispatch-test", "remote_codex_version": "codex-cli 0.157.1", "decision_applied": "relay-answer-test", "applied_decision_attempt_id": attempt.AttemptID, "applied_decision_execution_id": execution.ExecutionID, "applied_answer_body": "left"})}
 	proofEvent := WorkerEvent{AttemptID: attempt.AttemptID, RemoteRunID: target.OrchestrationRun, RemoteMessages: []OrcaInboxMessage{proof}}
 	if err := s.applySupervisedDecisionProof(run, proofEvent); err != nil {
 		t.Fatal(err)
@@ -818,9 +899,12 @@ func TestSupervisedSettlementPersistsReleaseRequestReceipt(t *testing.T) {
 
 func TestSupervisedStartMinimalStepBindsRemoteRunAndWorktree(t *testing.T) {
 	c := supervisedFixtureConfig(t)
+	c.Orca.Supervised.ExpectedCodexVersion = ""
 	base := strings.Repeat("a", 40)
 	t.Setenv("STEERLINE_FAKE_SUPERVISED_HEAD", base)
 	t.Setenv("STEERLINE_FAKE_SUPERVISED_WORKTREE_ID", "repo-test::C:/remote/steerline-run")
+	enterMarker := filepath.Join(t.TempDir(), "prompt-enter.txt")
+	t.Setenv("STEERLINE_FAKE_SUPERVISED_ENTER_MARKER", enterMarker)
 	runID, executionID, attemptID := newID(), newID(), newID()
 	taskValue := Task{ID: "business-task", Title: "prepare remote workspace", Description: "read-only prepare"}
 	definition := DefaultMinimalWorkflowDefinition(false)
@@ -839,7 +923,7 @@ func TestSupervisedStartMinimalStepBindsRemoteRunAndWorktree(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(taskSpec, "shell set to pwsh.exe") || !strings.Contains(taskSpec, "FromBase64String") || !strings.Contains(taskSpec, "Exact prepare step_result object template") || !strings.Contains(taskSpec, `"result_id":"`+attemptID+`"`) || !strings.Contains(taskSpec, "Do not append --task-id, --dispatch-id") || strings.Contains(taskSpec, "ProcessStartInfo") || strings.Contains(taskSpec, "spawnSync") {
+	if !strings.Contains(taskSpec, "shell `pwsh.exe`") || !strings.Contains(taskSpec, "FromBase64String") || !strings.Contains(taskSpec, "Exact prepare StepGateResult object template") || !strings.Contains(taskSpec, "No Codex CLI version pin is configured") || !strings.Contains(taskSpec, "remote_codex_version=$codexVersion") || !strings.Contains(taskSpec, "$payloadJson =") || !strings.Contains(taskSpec, `"result_id":"`+attemptID+`"`) || !strings.Contains(taskSpec, "& $orca @sendArgv") || !strings.Contains(taskSpec, "Omit `--run`, `--to`, and all other structured flags") || strings.Contains(taskSpec, "ProcessStartInfo") || strings.Contains(taskSpec, "spawnSync") {
 		t.Fatalf("supervised task spec lacks direct PowerShell 7 status sender")
 	}
 	reviewRevision := strings.Repeat("b", 40)
@@ -853,8 +937,24 @@ func TestSupervisedStartMinimalStepBindsRemoteRunAndWorktree(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(reviewSpec, "Review the already verified candidate "+reviewRevision) || !strings.Contains(reviewSpec, `"review_verdict":`) || !strings.Contains(reviewSpec, "let the center decide repair or budget exhaustion") || !strings.Contains(reviewSpec, "$ids.step_id for result.step_id") || !strings.Contains(reviewSpec, "$ids.input_revision for result.input_revision") || !strings.Contains(reviewSpec, "$ids.candidate_revision for result.revision") || !strings.Contains(reviewSpec, "task_id=$ids.task_id") || !strings.Contains(reviewSpec, "Federated Dispatch messages must omit --run and --to") {
-		t.Fatal("supervised review task spec lacks a pinned verdict and center-owned repair boundary")
+	requiredReviewText := []string{"Review the already verified candidate " + reviewRevision, `"review_verdict":`, "let the center decide repair or budget exhaustion", "$ids.project_identity", "$ids.task_id", "$ids.workflow_run_id", "$ids.execution_id", "$ids.attempt_id", "$ids.step_id", "$ids.result_id", "$ids.input_revision", "$ids.candidate_revision", "$identityExpected = [ordered]@{ project_identity=", "Decoded identity mismatch at ' + $identityKey", "ConvertFrom-Json -AsHashtable", "ConvertTo-Json -InputObject @($ids.prerequisite_result_ids) -Compress", "inner envelope exactly once", "The inner envelope must not contain `step_result`", "$payloadObject=[ordered]@{taskId=$orcaTaskId;dispatchId=$orcaDispatchId;remote_codex_version=$codexVersion", "require its four exact keys", "$sendArgv=@('orchestration','send'", "& $orca @sendArgv", "Keep JSON as one argv item after `--payload`", "Task Contract Branch is the future PR base", "do not require them to match", "Omit `--run`, `--to`, and all other structured flags"}
+	var missingReviewText []string
+	for _, value := range requiredReviewText {
+		if !strings.Contains(reviewSpec, value) {
+			missingReviewText = append(missingReviewText, value)
+		}
+	}
+	if len(missingReviewText) > 0 {
+		t.Fatalf("supervised review task spec omits required contract text: %q", missingReviewText)
+	}
+	windowsInput := reviewInput
+	windowsInput.ProjectIdentity = `C:\Users\tester\repo\.git`
+	windowsSpec, err := supervisedStepTaskSpec(c, taskValue, run, workflow, reviewAttempt, windowsInput, windowsInput, pair, base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(windowsSpec, `project_identity='C:\Users\tester\repo\.git'`) {
+		t.Fatal("supervised task spec did not preserve a Windows project path in its PowerShell identity assertion")
 	}
 	identityStart := strings.Index(reviewSpec, "FromBase64String('")
 	if identityStart < 0 {
@@ -886,6 +986,18 @@ func TestSupervisedStartMinimalStepBindsRemoteRunAndWorktree(t *testing.T) {
 	if nativeErr != nil || !strings.Contains(nativeSpec, `"contract_id":"native-contract-1"`) || !strings.Contains(nativeSpec, `"schema_version":"native-task/v1"`) {
 		t.Fatalf("native supervised task did not include the fixed contract context: %v", nativeErr)
 	}
+	if len(nativeSpec) > 16<<10 || strings.Contains(nativeSpec, `"step_input":`) || strings.Contains(nativeSpec, `"project_steps":`) {
+		t.Fatalf("native supervised prompt repeats full workflow input or exceeds the 16 KiB prompt budget: bytes=%d", len(nativeSpec))
+	}
+	implementationTitle := "Create steerline-spec03-native-stage.txt and commit only that file"
+	prepareTask := taskValue
+	prepareTask.Title, prepareTask.Description = implementationTitle, "Implement the pinned native acceptance artifact."
+	prepareNative := nativeInput
+	prepareNative.CurrentStep, prepareNative.StepInput = "prepare", input
+	prepareSpec, prepareErr := supervisedStepTaskSpec(nativeConfig, prepareTask, run, workflow, attempt, input, prepareNative, pair, base)
+	if prepareErr != nil || strings.Contains(prepareSpec, implementationTitle) || strings.Contains(prepareSpec, "Implement the pinned native acceptance artifact") || !strings.Contains(prepareSpec, "This prepare step is read-only") {
+		t.Fatalf("prepare prompt exposed implementation instructions or omitted its read-only boundary: %v", prepareErr)
+	}
 	nativeInput.TaskID = "other-task"
 	if _, nativeErr = supervisedStepTaskSpec(nativeConfig, taskValue, run, workflow, reviewAttempt, reviewInput, nativeInput, pair, base); nativeErr == nil || !isBackendError(nativeErr, BackendIdentityMismatch) {
 		t.Fatalf("native supervised task accepted a mismatched task context: %v", nativeErr)
@@ -906,8 +1018,193 @@ func TestSupervisedStartMinimalStepBindsRemoteRunAndWorktree(t *testing.T) {
 	if receipt.Run.Target.OrchestrationRun != "orca-run-test" || receipt.Run.Target.WorktreeID != receipt.Ref.External.WorktreeID || receipt.Run.WorktreeBranch == nil || *receipt.Run.WorktreeBranch != "erranliu/steerline-run" || receipt.Run.BaseCommit == nil || *receipt.Run.BaseCommit != base {
 		t.Fatalf("remote Run target/workspace = %+v", receipt.Run)
 	}
+	enterBytes, err := os.ReadFile(enterMarker)
+	if err != nil || string(enterBytes) != "enter\n" {
+		t.Fatalf("accepted worker prompt was not submitted exactly once after TUI readiness: %q %v", enterBytes, err)
+	}
 	receipt.Worker.Close()
 	<-receipt.Worker.observationDone
+}
+
+func TestSupervisedPromptHandshakeDoesNotEnterAnActiveTerminal(t *testing.T) {
+	c := supervisedFixtureConfig(t)
+	marker := filepath.Join(t.TempDir(), "prompt-enter.txt")
+	t.Setenv("STEERLINE_FAKE_SUPERVISED_TUI_STATE", "active")
+	t.Setenv("STEERLINE_FAKE_SUPERVISED_ENTER_MARKER", marker)
+	worktreeID := "repo-test::C:/remote/steerline-run"
+	started := supervisedStartReceipt{RunID: "orca-run-test", TaskID: "task-test", DispatchID: "dispatch-test", WorktreeID: worktreeID, CenterRuntimeID: "fake-center-runtime"}
+	observation := supervisedWorkerObservation{Identity: ProcessIdentity{Kind: "orca_supervised", RuntimeID: "fake-remote-runtime", CoordinatorRuntimeID: "fake-center-runtime", Terminal: "terminal-test", Incarnation: "inc-test", OrchestrationRun: started.RunID, Task: started.TaskID, Dispatch: started.DispatchID, ExecutionHost: "env-home", WorktreeID: worktreeID}, WorktreePath: "C:/remote/steerline-run", Branch: "erranliu/steerline-run", Liveness: "live", DispatchState: "dispatched"}
+	ref := supervisedPromptTestRef(c, started, observation)
+
+	startedTurn, err := (orcaSupervisedBackend{config: c}).submitAcceptedPrompt(context.Background(), started, observation, ref, "prepare")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !startedTurn {
+		t.Fatal("existing active turn was not recognized")
+	}
+	if _, err := os.Stat(marker); !os.IsNotExist(err) {
+		t.Fatalf("active worker terminal received Enter: %v", err)
+	}
+}
+
+func TestSupervisedPromptHandshakeLeavesUnreadyTerminalUntouched(t *testing.T) {
+	c := supervisedFixtureConfig(t)
+	marker := filepath.Join(t.TempDir(), "prompt-enter.txt")
+	t.Setenv("STEERLINE_FAKE_SUPERVISED_TUI_STATE", "not-ready")
+	t.Setenv("STEERLINE_FAKE_SUPERVISED_ENTER_MARKER", marker)
+	worktreeID := "repo-test::C:/remote/steerline-run"
+	started := supervisedStartReceipt{RunID: "orca-run-test", TaskID: "task-test", DispatchID: "dispatch-test", WorktreeID: worktreeID, CenterRuntimeID: "fake-center-runtime"}
+	observation := supervisedWorkerObservation{Identity: ProcessIdentity{Kind: "orca_supervised", RuntimeID: "fake-remote-runtime", CoordinatorRuntimeID: "fake-center-runtime", Terminal: "terminal-test", Incarnation: "inc-test", OrchestrationRun: started.RunID, Task: started.TaskID, Dispatch: started.DispatchID, ExecutionHost: "env-home", WorktreeID: worktreeID}, WorktreePath: "C:/remote/steerline-run", Branch: "erranliu/steerline-run", Liveness: "live", DispatchState: "dispatched"}
+	ref := supervisedPromptTestRef(c, started, observation)
+	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Millisecond)
+	defer cancel()
+	if _, err := (orcaSupervisedBackend{config: c}).submitAcceptedPrompt(ctx, started, observation, ref, "prepare"); err == nil || !isBackendError(err, BackendOutcomeUnknown) {
+		t.Fatalf("TUI without staged prompt was treated as ready: %v", err)
+	}
+	if _, err := os.Stat(marker); !os.IsNotExist(err) {
+		t.Fatalf("unready worker terminal received Enter: %v", err)
+	}
+}
+
+func supervisedPromptTestRef(c Config, started supervisedStartReceipt, observation supervisedWorkerObservation) ExecutionRef {
+	target := targetFor(c)
+	target.OrchestrationRun = started.RunID
+	target.ExternalTask = started.TaskID
+	target.Dispatch = started.DispatchID
+	target.ExecutionHost = observation.Identity.ExecutionHost
+	target.WorktreeID = observation.Identity.WorktreeID
+	target.Branch = observation.Branch
+	target.BaseRevision = strings.Repeat("a", 40)
+	return ExecutionRef{Version: ExecutionRecordVersion, Backend: BackendOrca, Protocol: ProtocolOrcaSupervised, Target: target, Agent: AgentSpec{Name: "codex"}, RunID: "workflow-test", AttemptID: "attempt-test", WorkspacePath: observation.WorktreePath, WorkspaceBranch: observation.Branch, BaseCommit: target.BaseRevision, External: observation.Identity, Generation: observation.Identity.RuntimeID + ":" + observation.Identity.Incarnation}
+}
+
+func TestSupervisedPrepareKeepsPlatformWorktreeIdentitySeparateFromPath(t *testing.T) {
+	const worktreeID = "repo-test::C:/remote/steerline-run"
+	run := &Run{Protocol: string(ProtocolOrcaSupervised), Target: ExecutionTarget{WorktreeID: worktreeID}}
+	execution := &ExecutionRecord{Target: run.Target}
+	workspace := WorkspaceEvidence{Worktree: "C:/remote/steerline-run", Branch: "erranliu/steerline-run", Base: strings.Repeat("a", 40), Head: strings.Repeat("a", 40)}
+
+	applyMinimalWorkspaceEvidence(run, execution, workspace)
+
+	if execution.Target.WorktreeID != worktreeID {
+		t.Fatalf("supervised target lost the exact Orca worktree ID: got %q want %q", execution.Target.WorktreeID, worktreeID)
+	}
+	if run.Target.WorktreeID != worktreeID {
+		t.Fatalf("supervised Run target was not synchronized with its Execution target: got %q want %q", run.Target.WorktreeID, worktreeID)
+	}
+	if execution.Workspace.Worktree != workspace.Worktree || execution.Target.Branch != workspace.Branch || execution.Target.BaseRevision != workspace.Base {
+		t.Fatalf("supervised workspace evidence was not persisted separately: target=%+v workspace=%+v", execution.Target, execution.Workspace)
+	}
+}
+
+func TestSupervisedCandidateWorkspaceDoesNotReplacePreparedInputBeforeGate(t *testing.T) {
+	base, candidate := strings.Repeat("a", 40), strings.Repeat("b", 40)
+	definition := DefaultMinimalWorkflowDefinition(false)
+	workflow := WorkflowRunRecord{WorkflowVersion: MinimalWorkflowVersion, Definition: definition, Phase: "executing"}
+	execution := ExecutionRecord{Protocol: string(ProtocolOrcaSupervised), Status: "active", CurrentStep: "implement", Workspace: WorkspaceEvidence{Repository: "repo", Worktree: "C:/remote/project", Branch: "erranliu/worker", Base: base, Head: base}}
+	run := &Run{Protocol: string(ProtocolOrcaSupervised), Target: ExecutionTarget{WorktreeID: "repo::C:/remote/project"}}
+	workspace := WorkspaceEvidence{Repository: "repo", Worktree: "C:/remote/project", Branch: "erranliu/worker", Base: base, Head: candidate, VerifiedAt: now()}
+
+	applyMinimalWorkspaceTarget(run, &execution, workspace)
+	if execution.Workspace.Head != base {
+		t.Fatalf("live candidate replaced prepared input before gate validation: got %q want %q", execution.Workspace.Head, base)
+	}
+	result := StepGateResult{StepID: "implement", Succeeded: true, InputRevision: base, Revision: candidate, ResultID: "implement-result", Workspace: workspace}
+	if next, err := AdvanceMinimalExecution(&workflow, &execution, result, nil); err != nil || next != "verify" {
+		t.Fatalf("valid implementation against prepared HEAD was rejected: next=%q err=%v", next, err)
+	}
+	applyMinimalWorkspaceEvidence(run, &execution, workspace)
+	if execution.Workspace.Head != candidate || execution.CandidateRevision != candidate {
+		t.Fatalf("accepted candidate evidence was not persisted after its gate: workspace=%+v candidate=%q", execution.Workspace, execution.CandidateRevision)
+	}
+}
+
+func TestSupervisedWorkspaceRestoresMissingTargetFromPrepareBinding(t *testing.T) {
+	fixed := ExecutionTarget{ID: "supervised:test", ConnectionID: "connection-test", ExternalRuntime: "environment-test"}
+	bound := fixed
+	bound.WorktreeID = "repo-test::C:/remote/steerline-run"
+	bound.OrchestrationRun, bound.ExternalTask, bound.Dispatch = "run-test", "task-test", "dispatch-test"
+	run := &Run{ExecutionID: "execution-test", Target: fixed}
+	attempts := []StepAttemptRecord{{ExecutionID: run.ExecutionID, StepID: "prepare", ExternalBinding: bound}}
+	records := executionRecords{root: t.TempDir()}
+
+	if err := restoreSupervisedTarget(run, attempts, fixed, records); err != nil {
+		t.Fatal(err)
+	}
+	if run.Target != bound {
+		t.Fatalf("fixed prepare binding was not restored: got %+v want %+v", run.Target, bound)
+	}
+	stepTarget := bound
+	stepTarget.ExternalTask, stepTarget.Dispatch = "task-implement", "dispatch-implement"
+	stepRun := &Run{ExecutionID: run.ExecutionID, Target: stepTarget}
+	if err := restoreSupervisedTarget(stepRun, attempts, fixed, records); err != nil {
+		t.Fatal(err)
+	}
+	if stepRun.Target.ExternalTask != "task-implement" || stepRun.Target.Dispatch != "dispatch-implement" {
+		t.Fatalf("later step Dispatch identity was replaced with the prepare Dispatch: %+v", stepRun.Target)
+	}
+
+	run.Target.WorktreeID = "repo-test::C:/remote/other"
+	if err := restoreSupervisedTarget(run, attempts, fixed, records); err == nil || !isNativeErrorCode(err, "authority_mismatch") {
+		t.Fatalf("conflicting runtime worktree identity was not rejected: %v", err)
+	}
+
+	workflowID, attemptID := newID(), newID()
+	ref := ExecutionRef{Version: ExecutionRecordVersion, Backend: BackendOrca, Protocol: ProtocolOrcaSupervised, Target: bound, Agent: AgentSpec{Name: "codex"}, RunID: workflowID, AttemptID: attemptID, WorkspacePath: "C:/remote/steerline-run", WorkspaceBranch: "erranliu/steerline-run", BaseCommit: strings.Repeat("a", 40), External: ProcessIdentity{Kind: "orca_supervised", RuntimeID: "remote-runtime", CoordinatorRuntimeID: "center-runtime", Terminal: "terminal-test", Incarnation: "inc-test", OrchestrationRun: bound.OrchestrationRun, Task: bound.ExternalTask, Dispatch: bound.Dispatch, ExecutionHost: "environment-test", WorktreeID: bound.WorktreeID}}
+	if err := records.saveBinding(ref); err != nil {
+		t.Fatal(err)
+	}
+	missingRuntimeBinding := StepAttemptRecord{ExecutionID: "execution-test", AttemptID: attemptID, StepID: "prepare"}
+	restoredRun := &Run{RunID: workflowID, ExecutionID: "execution-test", Protocol: string(ProtocolOrcaSupervised), Target: fixed}
+	if err := restoreSupervisedTarget(restoredRun, []StepAttemptRecord{missingRuntimeBinding}, fixed, records); err != nil {
+		t.Fatal(err)
+	}
+	if restoredRun.Target != bound {
+		t.Fatalf("exact durable binding was not restored from its record: got %+v want %+v", restoredRun.Target, bound)
+	}
+	workspace := WorkspaceEvidence{Worktree: "C:/remote/steerline-run", Branch: "erranliu/steerline-run", Base: strings.Repeat("a", 40), Head: strings.Repeat("a", 40)}
+	execution := ExecutionRecord{Target: fixed}
+	applyMinimalWorkspaceEvidence(restoredRun, &execution, workspace)
+	if execution.Target.WorktreeID != bound.WorktreeID || execution.Target.OrchestrationRun != bound.OrchestrationRun || execution.Workspace.Worktree != workspace.Worktree {
+		t.Fatalf("restored exact platform target was not persisted with workspace evidence: target=%+v workspace=%+v", execution.Target, execution.Workspace)
+	}
+}
+
+func TestConfirmMinimalAttemptRanCompletesMissingDispatchTransitions(t *testing.T) {
+	for _, start := range []string{"dispatching", "dispatched", "running"} {
+		t.Run(start, func(t *testing.T) {
+			attempt := StepAttemptRecord{Status: start}
+			if err := confirmMinimalAttemptRan(&attempt); err != nil {
+				t.Fatal(err)
+			}
+			if attempt.Status != "running" {
+				t.Fatalf("completed worker result left attempt at %q", attempt.Status)
+			}
+		})
+	}
+	attempt := StepAttemptRecord{Status: "planned"}
+	if err := confirmMinimalAttemptRan(&attempt); err == nil {
+		t.Fatal("unstarted attempt was accepted as having run")
+	}
+}
+
+func TestDecodeSupervisedStartInputRestoresNativeFixedStepInput(t *testing.T) {
+	step := MinimalStepInput{SchemaVersion: 1, ProjectIdentity: `C:\repo\.git`, TaskID: "native-task", WorkflowRunID: "workflow", ExecutionID: "execution", AttemptID: "attempt", StepID: "implement", InputRevision: strings.Repeat("a", 40), PrerequisiteResultIDs: []string{"prepare-result"}}
+	native := NativeTaskWorkerContext{SchemaVersion: NativeTaskInputSchema, ProjectID: step.ProjectIdentity, TaskID: step.TaskID, WorkflowRunID: step.WorkflowRunID, ExecutionID: step.ExecutionID, AttemptID: step.AttemptID, CurrentStep: step.StepID, Contract: TaskContract{ContractID: "contract", Digest: "digest"}, ContractDigest: "digest", StepInput: step}
+	request := mustJSON(map[string]any{"input": native})
+	decoded, err := decodeSupervisedStartInput(request, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if decoded.ProjectIdentity != step.ProjectIdentity || decoded.TaskID != step.TaskID || decoded.WorkflowRunID != step.WorkflowRunID || decoded.ExecutionID != step.ExecutionID || decoded.AttemptID != step.AttemptID || decoded.StepID != step.StepID || decoded.InputRevision != step.InputRevision || !sameStrings(decoded.PrerequisiteResultIDs, step.PrerequisiteResultIDs) {
+		t.Fatalf("native start request did not restore the exact Step Input: got %+v want %+v", decoded, step)
+	}
+
+	native.StepInput.StepID = "verify"
+	if _, err = decodeSupervisedStartInput(mustJSON(map[string]any{"input": native}), true); err == nil || !isBackendError(err, BackendIdentityMismatch) {
+		t.Fatalf("mismatched native current_step was accepted during recovery: %v", err)
+	}
 }
 
 func TestLoadConfigRequiresExplicitRemoteCancellationFalse(t *testing.T) {
@@ -998,7 +1295,7 @@ func TestSupervisedOrcaRealPrepareRoundtrip(t *testing.T) {
 			t.Fatalf("test repository main differs from fixed base: %s %v", output, runErr)
 		}
 	}
-	c := Config{Repository: repo, Remote: "origin", Branch: "main", RunDir: runDir, WorktreeRoot: filepath.Join(runDir, "worktrees"), RuntimeFile: "runtime.json", Claimant: "supervised-probe", Git: Command{Executable: git}, BD: Command{Executable: "bd"}, Codex: Command{Executable: "codex"}, TaskPoll: "2s", PRPoll: "30s", Heartbeat: "5s", CommandTimeout: "30s", ShutdownGrace: "5s", Sandbox: "workspace-write", Agent: "codex", Host: "orca_supervised", Model: "gpt-6-luna", ReasoningEffort: "high", Orca: OrcaConfig{Executable: "orca", Shell: "powershell", WaitTimeout: "15m", Supervised: &SupervisedOrcaConfig{ConnectionID: need("STEERLINE_REAL_SUPERVISED_CONNECTION_ID"), EnvironmentID: need("STEERLINE_REAL_SUPERVISED_ENVIRONMENT_ID"), RepositorySelector: need("STEERLINE_REAL_SUPERVISED_REPOSITORY_SELECTOR"), CoordinatorTerminal: need("STEERLINE_REAL_SUPERVISED_COORDINATOR_TERMINAL"), ExpectedCodexVersion: "codex-cli 0.156.1", PollInterval: "2s", CapabilityReportVersion: 1}}}
+	c := Config{Repository: repo, Remote: "origin", Branch: "main", RunDir: runDir, WorktreeRoot: filepath.Join(runDir, "worktrees"), RuntimeFile: "runtime.json", Claimant: "supervised-probe", Git: Command{Executable: git}, BD: Command{Executable: "bd"}, Codex: Command{Executable: "codex"}, TaskPoll: "2s", PRPoll: "30s", Heartbeat: "5s", CommandTimeout: "30s", ShutdownGrace: "5s", Sandbox: "workspace-write", Agent: "codex", Host: "orca_supervised", Model: "gpt-6-luna", ReasoningEffort: "high", Orca: OrcaConfig{Executable: "orca", Shell: "powershell", WaitTimeout: "15m", Supervised: &SupervisedOrcaConfig{ConnectionID: need("STEERLINE_REAL_SUPERVISED_CONNECTION_ID"), EnvironmentID: need("STEERLINE_REAL_SUPERVISED_ENVIRONMENT_ID"), RepositorySelector: need("STEERLINE_REAL_SUPERVISED_REPOSITORY_SELECTOR"), CoordinatorTerminal: need("STEERLINE_REAL_SUPERVISED_COORDINATOR_TERMINAL"), ExpectedCodexVersion: "", PollInterval: "2s", CapabilityReportVersion: 1}}}
 	if err = c.ResolveIdentity(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -1936,7 +2233,7 @@ func TestSupervisedOrcaRealPublishExistingDraft(t *testing.T) {
 		t.Fatalf("clone isolated test repository for publication reconciliation: %v %s", cloneErr, output)
 	}
 	runDir := filepath.Join(root, "runtime")
-	c := Config{Repository: repoAbs, Remote: "origin", Branch: "main", RunDir: runDir, WorktreeRoot: filepath.Join(runDir, "worktrees"), RuntimeFile: "runtime.json", Claimant: run.Claimant, Git: Command{Executable: git}, BD: Command{Executable: "bd"}, Codex: sourceEvidence.Workflow.Runner.Codex, TaskPoll: "2s", PRPoll: "30s", Heartbeat: "5s", CommandTimeout: "30s", ShutdownGrace: "5s", Sandbox: sourceEvidence.Workflow.Runner.Sandbox, Agent: "codex", Host: "orca_supervised", Model: sourceEvidence.Workflow.Runner.Model, ReasoningEffort: sourceEvidence.Workflow.Runner.ReasoningEffort, Orca: OrcaConfig{Executable: "orca", Shell: "powershell", WaitTimeout: "15m", Supervised: &SupervisedOrcaConfig{ConnectionID: run.Target.ConnectionID, EnvironmentID: run.Target.ExternalRuntime, RepositorySelector: "id:09e35751-6517-4e7c-ae20-178ed0e90000", CoordinatorTerminal: "term_5253eb1e-0e83-409e-b1df-5c4aef4bea74", ExpectedCodexVersion: "codex-cli 0.156.1", PollInterval: "2s", CapabilityReportVersion: 1}}, PR: PRConfig{Kind: "command", BaseURL: "https://github.com", Repository: "erranliu/SteerlineTest", Query: Command{Executable: "gh", Args: []string{"api", "repos/{repository}/pulls/{number}", "--jq", `{url:.html_url,repository:.base.repo.full_name,base_branch:.base.ref,head_revision:.head.sha,state:(if .merged then "merged" elif .state=="closed" then "closed_unmerged" else .state end),merged:.merged,merged_at:.merged_at,merge_commit:.merge_commit_sha}`}}}}
+	c := Config{Repository: repoAbs, Remote: "origin", Branch: "main", RunDir: runDir, WorktreeRoot: filepath.Join(runDir, "worktrees"), RuntimeFile: "runtime.json", Claimant: run.Claimant, Git: Command{Executable: git}, BD: Command{Executable: "bd"}, Codex: sourceEvidence.Workflow.Runner.Codex, TaskPoll: "2s", PRPoll: "30s", Heartbeat: "5s", CommandTimeout: "30s", ShutdownGrace: "5s", Sandbox: sourceEvidence.Workflow.Runner.Sandbox, Agent: "codex", Host: "orca_supervised", Model: sourceEvidence.Workflow.Runner.Model, ReasoningEffort: sourceEvidence.Workflow.Runner.ReasoningEffort, Orca: OrcaConfig{Executable: "orca", Shell: "powershell", WaitTimeout: "15m", Supervised: &SupervisedOrcaConfig{ConnectionID: run.Target.ConnectionID, EnvironmentID: run.Target.ExternalRuntime, RepositorySelector: "id:09e35751-6517-4e7c-ae20-178ed0e90000", CoordinatorTerminal: "term_5253eb1e-0e83-409e-b1df-5c4aef4bea74", ExpectedCodexVersion: "", PollInterval: "2s", CapabilityReportVersion: 1}}, PR: PRConfig{Kind: "command", BaseURL: "https://github.com", Repository: "erranliu/SteerlineTest", Query: Command{Executable: "gh", Args: []string{"api", "repos/{repository}/pulls/{number}", "--jq", `{url:.html_url,repository:.base.repo.full_name,base_branch:.base.ref,head_revision:.head.sha,state:(if .merged then "merged" elif .state=="closed" then "closed_unmerged" else .state end),merged:.merged,merged_at:.merged_at,merge_commit:.merge_commit_sha}`}}}}
 	c.WorkflowDefinition, c.ProjectSteps = &sourceEvidence.Workflow.Definition, &sourceEvidence.Workflow.ProjectSteps
 	if err := c.ResolveIdentity(context.Background()); err != nil {
 		t.Fatal(err)
@@ -2091,7 +2388,7 @@ func TestSupervisedOrcaRealRuntimeReplacementObservation(t *testing.T) {
 	if repo == "" || !commitHash.MatchString(base) {
 		t.Fatal("R08 observation requires a local clone of the same test repository and a fixed base")
 	}
-	c := Config{Repository: repo, Remote: "origin", Git: Command{Executable: "git"}, CommandTimeout: "30s", Agent: "codex", Host: "orca_supervised", Model: "gpt-6-luna", ReasoningEffort: "high", Orca: OrcaConfig{Executable: "orca", Shell: "powershell", WaitTimeout: "15m", Supervised: &SupervisedOrcaConfig{ConnectionID: "fe26dcce-e8f7-47dd-96c2-d611c1093733", EnvironmentID: "bed55de0-6d7d-497e-b1d5-3abab256b2ee", RepositorySelector: "id:09e35751-6517-4e7c-ae20-178ed0e90000", CoordinatorTerminal: "term_5253eb1e-0e83-409e-b1df-5c4aef4bea74", ExpectedCodexVersion: "codex-cli 0.156.1", PollInterval: "2s", CapabilityReportVersion: 1}}}
+	c := Config{Repository: repo, Remote: "origin", Git: Command{Executable: "git"}, CommandTimeout: "30s", Agent: "codex", Host: "orca_supervised", Model: "gpt-6-luna", ReasoningEffort: "high", Orca: OrcaConfig{Executable: "orca", Shell: "powershell", WaitTimeout: "15m", Supervised: &SupervisedOrcaConfig{ConnectionID: "fe26dcce-e8f7-47dd-96c2-d611c1093733", EnvironmentID: "bed55de0-6d7d-497e-b1d5-3abab256b2ee", RepositorySelector: "id:09e35751-6517-4e7c-ae20-178ed0e90000", CoordinatorTerminal: "term_5253eb1e-0e83-409e-b1df-5c4aef4bea74", ExpectedCodexVersion: "", PollInterval: "2s", CapabilityReportVersion: 1}}}
 	if err := c.ResolveIdentity(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -2200,7 +2497,7 @@ func TestSupervisedOrcaRealMergedTaskClose(t *testing.T) {
 			t.Fatalf("bd %v: %v %s", args, runErr, output)
 		}
 	}
-	c := Config{Repository: repo, Remote: "origin", Branch: "main", RunDir: runDir, WorktreeRoot: filepath.Join(runDir, "worktrees"), RuntimeFile: "runtime.json", Claimant: run.Claimant, Git: Command{Executable: git}, BD: Command{Executable: bd}, Codex: Command{Executable: "codex"}, TaskPoll: "2s", PRPoll: "30s", Heartbeat: "5s", CommandTimeout: "30s", ShutdownGrace: "5s", Sandbox: "workspace-write", Agent: "codex", Host: "orca_supervised", Model: "gpt-6-luna", ReasoningEffort: "high", Orca: OrcaConfig{Executable: "orca", Shell: "powershell", WaitTimeout: "15m", Supervised: &SupervisedOrcaConfig{ConnectionID: run.Target.ConnectionID, EnvironmentID: run.Target.ExternalRuntime, RepositorySelector: "id:09e35751-6517-4e7c-ae20-178ed0e90000", CoordinatorTerminal: "term_5253eb1e-0e83-409e-b1df-5c4aef4bea74", ExpectedCodexVersion: "codex-cli 0.156.1", PollInterval: "2s", CapabilityReportVersion: 1}}, PR: PRConfig{Kind: "command", BaseURL: "https://github.com", Repository: "erranliu/SteerlineTest", Query: Command{Executable: "gh", Args: []string{"api", "repos/{repository}/pulls/{number}", "--jq", `{url:.html_url,repository:.base.repo.full_name,base_branch:.base.ref,head_revision:.head.sha,state:(if .merged then "merged" elif .state=="closed" then "closed_unmerged" else .state end),merged:.merged,merged_at:.merged_at,merge_commit:.merge_commit_sha}`}}}}
+	c := Config{Repository: repo, Remote: "origin", Branch: "main", RunDir: runDir, WorktreeRoot: filepath.Join(runDir, "worktrees"), RuntimeFile: "runtime.json", Claimant: run.Claimant, Git: Command{Executable: git}, BD: Command{Executable: bd}, Codex: Command{Executable: "codex"}, TaskPoll: "2s", PRPoll: "30s", Heartbeat: "5s", CommandTimeout: "30s", ShutdownGrace: "5s", Sandbox: "workspace-write", Agent: "codex", Host: "orca_supervised", Model: "gpt-6-luna", ReasoningEffort: "high", Orca: OrcaConfig{Executable: "orca", Shell: "powershell", WaitTimeout: "15m", Supervised: &SupervisedOrcaConfig{ConnectionID: run.Target.ConnectionID, EnvironmentID: run.Target.ExternalRuntime, RepositorySelector: "id:09e35751-6517-4e7c-ae20-178ed0e90000", CoordinatorTerminal: "term_5253eb1e-0e83-409e-b1df-5c4aef4bea74", ExpectedCodexVersion: "", PollInterval: "2s", CapabilityReportVersion: 1}}, PR: PRConfig{Kind: "command", BaseURL: "https://github.com", Repository: "erranliu/SteerlineTest", Query: Command{Executable: "gh", Args: []string{"api", "repos/{repository}/pulls/{number}", "--jq", `{url:.html_url,repository:.base.repo.full_name,base_branch:.base.ref,head_revision:.head.sha,state:(if .merged then "merged" elif .state=="closed" then "closed_unmerged" else .state end),merged:.merged,merged_at:.merged_at,merge_commit:.merge_commit_sha}`}}}}
 	if err := c.ResolveIdentity(context.Background()); err != nil {
 		t.Fatal(err)
 	}

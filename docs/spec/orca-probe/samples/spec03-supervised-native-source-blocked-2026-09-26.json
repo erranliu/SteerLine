@@ -1,0 +1,15 @@
+{
+  "captured_at": "2026-09-26T05:46:48Z",
+  "evidence_kind": "native_source_preflight_blocked",
+  "repository": "https://github.com/erranliu/SteerlineTest.git",
+  "registered_remote_repo_id": "09e35751-6517-4e7c-ae20-178ed0e90000",
+  "observed_center_error": "authority_mismatch: native project cannot initialize while Beads state exists; preserve it for manual recovery",
+  "cause": "The isolated SteerlineTest repository contains an existing .beads authority. Native authority initialization must fail closed and must not replace or migrate it.",
+  "native_authority_created": false,
+  "task_claimed": false,
+  "orca_run_created": false,
+  "production_project_modified": false,
+  "counted_as_acceptance": false,
+  "required_input": "A dedicated remote Git project and registered Orca repo whose checkout has no Beads authority.",
+  "probe": "TestSupervisedOrcaRealNativeTaskLifecycle"
+}

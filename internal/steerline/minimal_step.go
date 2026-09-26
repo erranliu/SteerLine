@@ -346,8 +346,8 @@ func (s *Service) inspectMinimalWorkspace(ctx context.Context, run *Run) (Worksp
 		return WorkspaceEvidence{}, errors.New("minimal execution has no recorded workspace")
 	}
 	if run.Backend == string(BackendOrca) && run.Protocol == string(ProtocolOrcaSupervised) {
-		if run.Target.ID != targetFor(s.Config).ID || run.Target.WorktreeID == "" || run.Target.OrchestrationRun == "" {
-			return WorkspaceEvidence{}, UnsupportedAdapterOperation("InspectWorkspace", "supervised execution lacks its exact fixed Run/worktree identity")
+		if err := restoreSupervisedTarget(run, s.State.Attempts, targetFor(s.Config), executionRecords{root: s.Config.RunDir}); err != nil {
+			return WorkspaceEvidence{}, err
 		}
 		records := executionRecords{root: s.Config.RunDir}
 		bindingAttemptID := run.AttemptID
@@ -395,6 +395,70 @@ func (s *Service) inspectMinimalWorkspace(ctx context.Context, run *Run) (Worksp
 		return WorkspaceEvidence{}, nativeErr("contract_mismatch", "native target workspace inspection differs from its fixed identity")
 	}
 	return WorkspaceEvidence{Repository: s.Config.identity, Worktree: canonical(worktree), Branch: inspection.Branch, Base: inspection.Base, Head: inspection.Head, Dirty: inspection.Dirty, VerifiedAt: inspection.CheckedAt}, nil
+}
+
+func restoreSupervisedTarget(run *Run, attempts []StepAttemptRecord, fixedTarget ExecutionTarget, records executionRecords) error {
+	if run.Target.ID != "" && run.Target.ID != fixedTarget.ID {
+		return nativeErr("authority_mismatch", fmt.Sprintf("supervised execution target ID %q differs from configured target %q", run.Target.ID, fixedTarget.ID))
+	}
+	if run.Target.ConnectionID != "" && run.Target.ConnectionID != fixedTarget.ConnectionID || run.Target.ExternalRuntime != "" && run.Target.ExternalRuntime != fixedTarget.ExternalRuntime {
+		return nativeErr("authority_mismatch", "runtime target connection differs from the configured supervised target")
+	}
+	var recovered *ExecutionTarget
+	for i := range attempts {
+		attempt := &attempts[i]
+		binding := attempt.ExternalBinding
+		if attempt.ExecutionID != run.ExecutionID || attempt.StepID != "prepare" {
+			continue
+		}
+		if binding.WorktreeID == "" || binding.OrchestrationRun == "" || binding.Dispatch == "" {
+			ref, err := records.loadBinding(run.RunID, attempt.AttemptID)
+			if err != nil {
+				continue
+			}
+			binding = ref.Target
+		}
+		if binding.ID == "" || binding.WorktreeID == "" || binding.OrchestrationRun == "" || binding.Dispatch == "" {
+			continue
+		}
+		if binding.ID != fixedTarget.ID || binding.ConnectionID != fixedTarget.ConnectionID || binding.ExternalRuntime != fixedTarget.ExternalRuntime {
+			return nativeErr("authority_mismatch", "persisted prepare binding differs from the configured supervised target")
+		}
+		if recovered != nil && (recovered.WorktreeID != binding.WorktreeID || recovered.OrchestrationRun != binding.OrchestrationRun || recovered.Dispatch != binding.Dispatch) {
+			return nativeErr("authority_mismatch", "persisted prepare bindings disagree on the fixed supervised worktree")
+		}
+		copy := binding
+		recovered = &copy
+	}
+	if recovered == nil {
+		return UnsupportedAdapterOperation("InspectWorkspace", "supervised execution lacks its exact fixed prepare binding")
+	}
+	if run.Target.WorktreeID != "" && run.Target.WorktreeID != recovered.WorktreeID ||
+		run.Target.OrchestrationRun != "" && run.Target.OrchestrationRun != recovered.OrchestrationRun {
+		return nativeErr("authority_mismatch", "runtime target conflicts with its fixed prepare binding")
+	}
+	if run.Target.WorktreeID != "" && run.Target.OrchestrationRun != "" {
+		return nil
+	}
+	run.Target = *recovered
+	return nil
+}
+
+func applyMinimalWorkspaceEvidence(run *Run, execution *ExecutionRecord, workspace WorkspaceEvidence) {
+	applyMinimalWorkspaceTarget(run, execution, workspace)
+	execution.Workspace = workspace
+	execution.UpdatedAt = now()
+}
+
+func applyMinimalWorkspaceTarget(run *Run, execution *ExecutionRecord, workspace WorkspaceEvidence) {
+	if run.Protocol == string(ProtocolOrcaSupervised) {
+		execution.Target = run.Target
+	} else {
+		execution.Target.WorktreeID = workspace.Worktree
+	}
+	execution.Target.Branch = workspace.Branch
+	execution.Target.BaseRevision = workspace.Base
+	run.Target = execution.Target
 }
 
 func minimalAttemptPaths(c Config, run *Run, attempt *StepAttemptRecord) (dir, events, stderr, result string) {
@@ -827,17 +891,13 @@ func (s *Service) prepareMinimalExecution(ctx context.Context, task Task, run *R
 	attempt.ResultID = resultID
 	attempt.Result = mustJSON(StepGateResult{StepID: "prepare", Succeeded: true, ResultID: resultID, Workspace: workspace})
 	attempt.UpdatedAt = now()
-	execution.Workspace = workspace
-	execution.Target.WorktreeID = workspace.Worktree
-	execution.Target.Branch = workspace.Branch
-	execution.Target.BaseRevision = workspace.Base
-	execution.Workspace = workspace
-	execution.UpdatedAt = now()
+	applyMinimalWorkspaceTarget(run, execution, workspace)
 	gate := StepGateResult{StepID: "prepare", Succeeded: true, ResultID: resultID, Workspace: workspace}
 	next, err := AdvanceMinimalExecution(workflow, execution, gate, workflow.ProjectSteps.Verify.RequiredChecks)
 	if err != nil {
 		return s.blockMinimalPreparation(run, attempt, opID, err)
 	}
+	applyMinimalWorkspaceEvidence(run, execution, workspace)
 	execution.CurrentStep = next
 	workflow.Phase = "executing"
 	workflow.UpdatedAt = now()
@@ -948,6 +1008,9 @@ func (s *Service) finishMinimalStep(exitErr error) error {
 	if run.Protocol == string(ProtocolOrcaSupervised) && (envelope.Result.BaseAncestor == nil || !*envelope.Result.BaseAncestor) {
 		return s.failMinimalStep(run, workflow, execution, attempt, errors.New("supervised result lacks positive fixed-base ancestry evidence"), attempt.StepID == "publish_pr")
 	}
+	if err = confirmMinimalAttemptRan(attempt); err != nil {
+		return s.failMinimalStep(run, workflow, execution, attempt, err, false)
+	}
 	for _, old := range s.State.Attempts {
 		if old.ExecutionID == attempt.ExecutionID && old.ResultID == envelope.Result.ResultID && old.AttemptID != attempt.AttemptID {
 			return s.failMinimalStep(run, workflow, execution, attempt, fmt.Errorf("duplicate step result ID %q", envelope.Result.ResultID), false)
@@ -984,6 +1047,13 @@ func (s *Service) finishMinimalStep(exitErr error) error {
 	if err = validateMinimalWorkspaceReceipt(envelope.Result.Workspace, workspace); err != nil {
 		return s.failMinimalStep(run, workflow, execution, attempt, err, attempt.StepID == "publish_pr")
 	}
+	if run.Protocol == string(ProtocolOrcaSupervised) {
+		if err = restoreSupervisedTarget(run, s.State.Attempts, targetFor(s.Config), executionRecords{root: s.Config.RunDir}); err != nil {
+			return s.failMinimalStep(run, workflow, execution, attempt, err, attempt.StepID == "publish_pr")
+		}
+		attempt.ExternalBinding = run.Target
+	}
+	applyMinimalWorkspaceTarget(run, execution, workspace)
 	result := envelope.Result
 	if result.InputRevision != attempt.InputRevision {
 		return s.failMinimalStep(run, workflow, execution, attempt, errors.New("result input revision differs from the fixed attempt input"), attempt.StepID == "publish_pr")
@@ -1019,13 +1089,11 @@ func (s *Service) finishMinimalStep(exitErr error) error {
 	}
 	attempt.ResultID = result.ResultID
 	attempt.Result = resultBytes
-	if attempt.Status != "running" {
-		return s.failMinimalStep(run, workflow, execution, attempt, fmt.Errorf("finished attempt has unexpected status %q", attempt.Status), false)
-	}
 	next, gateErr := AdvanceMinimalExecution(workflow, execution, result, workflow.ProjectSteps.Verify.RequiredChecks)
 	if gateErr != nil {
 		return s.failMinimalStep(run, workflow, execution, attempt, gateErr, false)
 	}
+	applyMinimalWorkspaceEvidence(run, execution, workspace)
 	if err = TransitionStepAttempt(attempt, "succeeded"); err != nil {
 		return err
 	}
@@ -1149,6 +1217,26 @@ func sameStrings(a, b []string) bool {
 		}
 	}
 	return true
+}
+
+func confirmMinimalAttemptRan(attempt *StepAttemptRecord) error {
+	if attempt == nil {
+		return errors.New("minimal step attempt is missing")
+	}
+	if attempt.Status == "dispatching" {
+		if err := TransitionStepAttempt(attempt, "dispatched"); err != nil {
+			return err
+		}
+	}
+	if attempt.Status == "dispatched" {
+		if err := TransitionStepAttempt(attempt, "running"); err != nil {
+			return err
+		}
+	}
+	if attempt.Status != "running" {
+		return fmt.Errorf("finished attempt has unexpected status %q", attempt.Status)
+	}
+	return nil
 }
 
 func (s *Service) waitMinimalDecision(run *Run, workflow *WorkflowRunRecord, execution *ExecutionRecord, attempt *StepAttemptRecord, result StepGateResult) error {
@@ -1413,7 +1501,19 @@ func (s *Service) startMinimalStep(ctx context.Context, task Task, run *Run, sou
 			return err
 		}
 	}
-	if workflow.ConfigDigest == "" || workflow.ConfigDigest != run.WorkflowConfigDigest || operationDigest(contractBytes) != attempt.ContractDigest {
+	attemptContractMatches := operationDigest(contractBytes) == attempt.ContractDigest
+	if s.native && attempt.StepID == "prepare" {
+		taskRecord := nativeTaskRecord(s.State.Tasks, run.DomainTaskID)
+		if taskRecord == nil {
+			return nativeErr("contract_mismatch", "native prepare has no fixed task contract")
+		}
+		taskContract, contractErr := nativeContractForTask(ctx, s.domainStore, s.Config.identity, *taskRecord)
+		if contractErr != nil {
+			return contractErr
+		}
+		attemptContractMatches = attempt.ContractDigest == taskContract.Digest && taskRecord.ContractID == taskContract.ContractID
+	}
+	if workflow.ConfigDigest == "" || workflow.ConfigDigest != run.WorkflowConfigDigest || !attemptContractMatches {
 		return errors.New("step contract differs from the pinned workflow or attempt")
 	}
 	if execution.CurrentStep != attempt.StepID {

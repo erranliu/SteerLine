@@ -294,7 +294,7 @@ func stableOperationID(value string) bool {
 }
 
 func (r executionRecords) saveCapabilityReport(report CapabilityReport) error {
-	if report.Version != 1 || report.Backend == "" || report.Protocol == "" || report.Target.ID == "" || report.Agent.Name == "" || report.PlatformVersion == "" || report.CheckedAt.IsZero() || report.Protocol == ProtocolOrcaSupervised && (report.CenterVersion == "" || report.ExpectedAgentVersion == "") {
+	if report.Version != 1 || report.Backend == "" || report.Protocol == "" || report.Target.ID == "" || report.Agent.Name == "" || report.PlatformVersion == "" || report.CheckedAt.IsZero() || report.Protocol == ProtocolOrcaSupervised && report.CenterVersion == "" {
 		return errors.New("incomplete capability report")
 	}
 	seen := map[string]bool{}

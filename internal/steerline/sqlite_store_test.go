@@ -222,6 +222,25 @@ func TestMinimalWorkflowRevisionGatesAndRepairLimit(t *testing.T) {
 	commit := strings.Repeat("b", 40)
 	verified := time.Now().UTC()
 	implement := StepGateResult{StepID: "implement", Succeeded: true, InputRevision: base, Revision: commit, Workspace: WorkspaceEvidence{Repository: "repo", Worktree: "tree", Branch: "codex/test", Base: exec.Workspace.Base, Head: commit, VerifiedAt: verified}}
+	for _, test := range []struct {
+		name       string
+		mutate     func(*StepGateResult)
+		wantErrSub string
+	}{
+		{name: "input revision", mutate: func(v *StepGateResult) { v.InputRevision = strings.Repeat("c", 40) }, wantErrSub: "implement input revision"},
+		{name: "repository", mutate: func(v *StepGateResult) { v.Workspace.Repository = "other-repo" }, wantErrSub: "implement workspace repository"},
+		{name: "worktree", mutate: func(v *StepGateResult) { v.Workspace.Worktree = "other-tree" }, wantErrSub: "implement worktree"},
+		{name: "branch", mutate: func(v *StepGateResult) { v.Workspace.Branch = "other-branch" }, wantErrSub: "implement branch"},
+		{name: "base", mutate: func(v *StepGateResult) { v.Workspace.Base = strings.Repeat("c", 40) }, wantErrSub: "implement base revision"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			badRun, badExec, badResult := *run, *exec, implement
+			test.mutate(&badResult)
+			if _, err := AdvanceMinimalExecution(&badRun, &badExec, badResult, nil); err == nil || !strings.Contains(err.Error(), test.wantErrSub) {
+				t.Fatalf("mismatched implement %s receipt was not rejected precisely: %v", test.name, err)
+			}
+		})
+	}
 	if step, err := AdvanceMinimalExecution(run, exec, implement, nil); err != nil || step != "verify" {
 		t.Fatalf("implement gate: %q %v", step, err)
 	}

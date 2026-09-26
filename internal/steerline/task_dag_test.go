@@ -441,6 +441,13 @@ func TestNativeClaimRechecksReadySlotAndPersistsReservationWithoutAppliedReceipt
 	if page.Tasks[0].Status != "in_progress" || len(page.Tasks[0].WorkflowRuns) != 1 || page.Tasks[0].WorkflowRuns[0].Phase != "queued" {
 		t.Fatalf("claim identities were not persisted together: %+v", page.Tasks[0])
 	}
+	snapshot, err := store.Query(ctx, c.Identity())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(snapshot.Executions) != 1 || snapshot.Executions[0].Workspace.Repository != c.Identity() {
+		t.Fatalf("native claim initialized workspace repository with a non-identity path: %+v", snapshot.Executions)
+	}
 	alteredWorkflow := page.Tasks[0].WorkflowRuns[0]
 	alteredWorkflow.Definition.ReviewRequired = true
 	if err = store.Transact(ctx, func(tx DomainTx) error { return tx.PutWorkflowRun(alteredWorkflow) }); err == nil || !strings.Contains(err.Error(), "immutable_task") {

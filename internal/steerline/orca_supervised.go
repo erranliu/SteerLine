@@ -504,6 +504,140 @@ func (b orcaSupervisedBackend) showWorker(ctx context.Context, expected supervis
 	return supervisedWorkerObservation{Identity: identity, Liveness: result.Projection.Liveness.Verdict, DispatchState: result.Dispatch.Status, AgentWaitState: waitState, WorktreePath: result.Terminal.WorktreePath, Branch: strings.TrimPrefix(result.Terminal.Branch, "refs/heads/"), ObservedAt: now()}, nil
 }
 
+// submitAcceptedPrompt waits for the exact prompt to appear in the live Codex
+// composer, submits it once, then waits for explicit turn-start evidence. An
+// active or uncertain terminal is never sent another Enter.
+func (b orcaSupervisedBackend) submitAcceptedPrompt(ctx context.Context, started supervisedStartReceipt, observation supervisedWorkerObservation, ref ExecutionRef, stepID string) (bool, error) {
+	if started.RunID == "" || started.TaskID == "" || started.DispatchID == "" || observation.Identity.Terminal == "" || observation.Identity.RuntimeID == "" || stepID == "" {
+		return false, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "prompt submission requires the exact started Dispatch, terminal, and step identity"}
+	}
+	sc := b.config.Orca.Supervised
+	if sc == nil || sc.EnvironmentID == "" || observation.Identity.ExecutionHost != sc.EnvironmentID || ref.External.Dispatch != started.DispatchID || ref.External.Terminal != observation.Identity.Terminal || ref.External.Incarnation != observation.Identity.Incarnation || ref.External.RuntimeID != observation.Identity.RuntimeID {
+		return false, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "prompt submission target differs from the fixed remote Dispatch and terminal"}
+	}
+	read := func() (OutputBatch, error) { return b.readPromptOutput(ctx, ref) }
+	wait := func() error {
+		timer := time.NewTimer(500 * time.Millisecond)
+		defer timer.Stop()
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-timer.C:
+			return nil
+		}
+	}
+	readErr := func(err error) bool {
+		var backendErr *BackendError
+		return errors.As(err, &backendErr) && (backendErr.Code == BackendIdentityMismatch || backendErr.Code == BackendProtocolInvalid)
+	}
+	deadline := time.Now().Add(60 * time.Second)
+	for {
+		batch, err := read()
+		if err == nil {
+			if supervisedTranscriptTurnStarted(batch) {
+				return true, nil
+			}
+			if supervisedPromptStaged(batch, stepID) {
+				current, showErr := b.showWorker(ctx, started)
+				if showErr != nil {
+					return false, showErr
+				}
+				if current.Identity.Terminal != observation.Identity.Terminal || current.Identity.Incarnation != observation.Identity.Incarnation || current.Identity.RuntimeID != observation.Identity.RuntimeID {
+					return false, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "worker terminal changed while the prompt was staged"}
+				}
+				if current.Liveness != "live" || current.DispatchState != "dispatched" {
+					return false, &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "worker is no longer positively live and dispatched; staged prompt was left untouched"}
+				}
+				latest, latestErr := read()
+				if latestErr == nil && supervisedTranscriptTurnStarted(latest) {
+					return true, nil
+				}
+				if latestErr == nil && supervisedPromptStaged(latest, stepID) {
+					break
+				}
+			}
+		} else if readErr(err) {
+			return false, err
+		}
+		if !time.Now().Before(deadline) {
+			return false, &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "the exact live worker TUI never showed the accepted prompt in its composer"}
+		}
+		if err := wait(); err != nil {
+			return false, &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "prompt readiness observation was interrupted before submission", Cause: err}
+		}
+	}
+
+	current, err := b.showWorker(ctx, started)
+	if err != nil {
+		return false, err
+	}
+	if current.Identity.Terminal != observation.Identity.Terminal || current.Identity.Incarnation != observation.Identity.Incarnation || current.Identity.RuntimeID != observation.Identity.RuntimeID || current.Liveness != "live" || current.DispatchState != "dispatched" {
+		return false, &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "exact worker liveness or terminal identity changed before Enter; prompt was left untouched"}
+	}
+	client := orcaClient{cfg: b.config}
+	sendOut, sendErr := client.call(ctx, positiveDuration(b.config.CommandTimeout, 30*time.Second), "terminal", "send", "--terminal", observation.Identity.Terminal, "--enter", "--environment", sc.EnvironmentID, "--json")
+	sendEnvelope, sendParseErr := parseEnvelope(sendOut)
+	if sendErr != nil || sendParseErr != nil {
+		return false, &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "Enter submission is uncertain; preserve the exact Dispatch and do not resend", Cause: errors.Join(sendErr, sendParseErr)}
+	}
+	if sendEnvelope.Meta.RuntimeID != observation.Identity.RuntimeID {
+		return false, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "Enter receipt came from a different remote runtime"}
+	}
+	var sendResult struct {
+		Send struct {
+			Handle   string `json:"handle"`
+			Accepted *bool  `json:"accepted"`
+		} `json:"send"`
+	}
+	if err := json.Unmarshal(sendEnvelope.Result, &sendResult); err != nil || sendResult.Send.Handle != observation.Identity.Terminal || sendResult.Send.Accepted == nil {
+		return false, &BackendError{Code: BackendProtocolInvalid, Diagnostic: "Enter receipt omitted the exact worker terminal or acceptance", Cause: err}
+	}
+	if !*sendResult.Send.Accepted {
+		return false, &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "Orca rejected Enter after accepting the worker prompt; preserve the exact Dispatch for reconciliation"}
+	}
+	deadline = time.Now().Add(60 * time.Second)
+	for {
+		batch, err := read()
+		if err == nil && supervisedTranscriptTurnStarted(batch) {
+			return true, nil
+		}
+		if readErr(err) {
+			return false, err
+		}
+		if !time.Now().Before(deadline) {
+			return false, &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "Enter was accepted but the exact Dispatch never reported turn_started; do not send another Enter"}
+		}
+		if err := wait(); err != nil {
+			return false, &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "turn_started confirmation was interrupted after Enter acceptance", Cause: err}
+		}
+	}
+}
+
+func supervisedPromptStaged(batch OutputBatch, stepID string) bool {
+	if batch.Source != "terminal" {
+		return false
+	}
+	var result struct {
+		Terminal struct {
+			Tail []string `json:"tail"`
+		} `json:"terminal"`
+	}
+	if json.Unmarshal(batch.Data, &result) != nil {
+		return false
+	}
+	tail := strings.Join(result.Terminal.Tail, "\n")
+	if supervisedTranscriptTurnStarted(batch) {
+		return false
+	}
+	return strings.Contains(tail, "Pasted Content") || strings.Contains(tail, "Protocol: one SteerLine minimal-v1 "+stepID+" step")
+}
+
+func (b orcaSupervisedBackend) readPromptOutput(ctx context.Context, ref ExecutionRef) (OutputBatch, error) {
+	readCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	return b.ReadOutput(readCtx, ref, "", 100)
+}
+
 func (b orcaSupervisedBackend) StartMinimalStep(ctx context.Context, task Task, run Run, workflow WorkflowRunRecord, execution ExecutionRecord, attempt StepAttemptRecord, input MinimalStepInput, workerInput any, resultPath string) (StartReceipt, error) {
 	if err := validateSupervisedOrcaConfig(&b.config); err != nil {
 		return StartReceipt{}, &BackendError{Code: BackendRejected, Diagnostic: "supervised Orca configuration is invalid", Cause: err}
@@ -623,6 +757,9 @@ func (b orcaSupervisedBackend) StartMinimalStep(ctx context.Context, task Task, 
 	ref.WorkspacePath = workspace.Worktree
 	ref.WorkspaceBranch = workspace.Branch
 	ref.BaseCommit = workspace.Base
+	if _, err = b.submitAcceptedPrompt(ctx, started, observation, ref, attempt.StepID); err != nil {
+		return StartReceipt{Disposition: "outcome_unknown", PlatformRequestID: started.PlatformRequestID, Ref: ref, Run: r, ResidualResources: []string{"exact supervised Dispatch and worktree are retained; prompt submission requires reconciliation"}}, err
+	}
 	observerCtx, cancelObserver := context.WithCancel(context.Background())
 	worker := &Worker{proc: &supervisedProcess{identity: observation.Identity, cancel: cancelObserver}, Events: make(chan WorkerEvent, 16), Done: make(chan error, 1), cancelObservation: cancelObserver, observationDone: make(chan struct{})}
 	go b.observeWorker(observerCtx, worker, ref, attempt, input, resultPath)
@@ -632,12 +769,13 @@ func (b orcaSupervisedBackend) StartMinimalStep(ctx context.Context, task Task, 
 // reattachSupervisedWorker observes only the original persisted Dispatch. It
 // never creates a Run, worker, terminal, or worktree during service recovery.
 func (s *Service) reattachSupervisedWorker(run *Run) error {
-	if s.worker != nil || run == nil || run.Process == nil || run.FinishTaskStatus != "pending" && run.FinishTaskStatus != "waiting_decision" {
+	uncertainStart := run != nil && run.ExecutionStatus == "unknown" && run.FinishTaskStatus == "blocked" && run.Process != nil
+	if s.worker != nil || run == nil || run.Process == nil || run.FinishTaskStatus != "pending" && run.FinishTaskStatus != "waiting_decision" && !uncertainStart {
 		return errors.New("supervised recovery requires one active, bound execution")
 	}
 	workflow, execution := s.minimalRecords(run)
 	attempt := s.minimalAttempt(run, run.AttemptID)
-	if workflow == nil || execution == nil || attempt == nil || attempt.ResultPath == "" || attempt.OperationID == "" || attempt.Status != "dispatched" && attempt.Status != "running" && attempt.Status != "waiting_decision" {
+	if workflow == nil || execution == nil || attempt == nil || attempt.ResultPath == "" || attempt.OperationID == "" || attempt.Status != "dispatched" && attempt.Status != "running" && attempt.Status != "waiting_decision" && !(uncertainStart && attempt.Status == "outcome_unknown") {
 		return errors.New("supervised recovery lacks its current workflow, attempt, or result path")
 	}
 	var operation *OperationRecord
@@ -647,16 +785,13 @@ func (s *Service) reattachSupervisedWorker(run *Run) error {
 			break
 		}
 	}
-	if operation == nil || operation.Kind != "dispatch_step" || operation.Status != "confirmed" || operation.PlatformRequestID == "" || operation.PayloadDigest != operationDigest(operation.Request) {
+	if operation == nil || operation.Kind != "dispatch_step" || operation.Status != "confirmed" && !(uncertainStart && operation.Status == "outcome_unknown") || operation.PlatformRequestID == "" || operation.PayloadDigest != operationDigest(operation.Request) {
 		return errors.New("supervised start operation is not durably confirmed")
 	}
-	var request struct {
-		Input MinimalStepInput `json:"input"`
-	}
-	if err := json.Unmarshal(operation.Request, &request); err != nil {
+	input, err := decodeSupervisedStartInput(operation.Request, s.native)
+	if err != nil {
 		return err
 	}
-	input := request.Input
 	if input.ProjectIdentity != s.Config.identity || input.TaskID != run.DomainTaskID || input.WorkflowRunID != run.RunID || input.ExecutionID != run.ExecutionID || input.AttemptID != attempt.AttemptID || input.StepID != attempt.StepID {
 		return errors.New("supervised start operation input differs from the persisted attempt")
 	}
@@ -668,12 +803,43 @@ func (s *Service) reattachSupervisedWorker(run *Run) error {
 		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "supervised recovery binding differs from the original Run and attempt"}
 	}
 	backend := orcaSupervisedBackend{config: s.Config}
-	observation, err := backend.Observe(context.Background(), ref)
+	if operation.Status == "outcome_unknown" {
+		var receipt struct {
+			Ref ExecutionRef `json:"ref"`
+		}
+		if err := json.Unmarshal(operation.Receipt, &receipt); err != nil || !bytes.Equal(mustJSON(receipt.Ref), mustJSON(ref)) {
+			return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "uncertain start receipt differs from its durable exact Dispatch binding", Cause: err}
+		}
+	}
+	started := supervisedStartReceipt{RunID: ref.External.OrchestrationRun, TaskID: ref.External.Task, DispatchID: ref.External.Dispatch, WorktreeID: ref.Target.WorktreeID, CenterRuntimeID: ref.External.CoordinatorRuntimeID, PlatformRequestID: operation.PlatformRequestID}
+	observation, err := backend.showWorker(context.Background(), started)
 	if err != nil {
 		return err
 	}
 	if observation.Liveness != "live" && observation.Liveness != "exited" {
 		return &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "original supervised Dispatch liveness remains unverifiable"}
+	}
+	if uncertainStart {
+		if err := TransitionStepAttempt(attempt, "dispatched"); err != nil {
+			return err
+		}
+		run.ExecutionStatus, run.FinishTaskStatus, run.EndedAt, run.Error = "pending", "pending", nil, nil
+		workflow.Phase, workflow.UpdatedAt = "executing", now()
+		execution.Status, execution.CurrentStep, execution.Process, execution.UpdatedAt = "active", attempt.StepID, &observation.Identity, now()
+		run.Process = &observation.Identity
+		s.State.CurrentTask, s.State.SlotOccupied = ptr(run.TaskID), true
+		if err := s.setOperationState(attempt.OperationID, "confirmed", operation.PlatformRequestID, mustJSON(observation.Identity), ""); err != nil {
+			return err
+		}
+		s.note(run, "steer", "step_start", "reconciled", "uncertain supervised start reconciled to its original Dispatch", attempt.AttemptID, map[string]any{"dispatch_id": observation.Identity.Dispatch, "step": attempt.StepID})
+		if err := s.save(); err != nil {
+			return err
+		}
+	}
+	if attempt.Status == "dispatched" && observation.DispatchState == "dispatched" && observation.Liveness == "live" {
+		if _, err := backend.submitAcceptedPrompt(context.Background(), started, observation, ref, attempt.StepID); err != nil {
+			return err
+		}
 	}
 	observerCtx, cancelObserver := context.WithCancel(context.Background())
 	worker := &Worker{proc: &supervisedProcess{identity: ref.External, cancel: cancelObserver}, Events: make(chan WorkerEvent, 16), Done: make(chan error, 1), cancelObservation: cancelObserver, observationDone: make(chan struct{})}
@@ -682,8 +848,48 @@ func (s *Service) reattachSupervisedWorker(run *Run) error {
 	return nil
 }
 
+func decodeSupervisedStartInput(requestBytes []byte, native bool) (MinimalStepInput, error) {
+	var request struct {
+		Input json.RawMessage `json:"input"`
+	}
+	if err := json.Unmarshal(requestBytes, &request); err != nil {
+		return MinimalStepInput{}, err
+	}
+	if len(request.Input) == 0 || string(request.Input) == "null" {
+		return MinimalStepInput{}, errors.New("supervised start request omitted its fixed Step Input")
+	}
+	if !native {
+		var input MinimalStepInput
+		if err := json.Unmarshal(request.Input, &input); err != nil {
+			return MinimalStepInput{}, err
+		}
+		return input, nil
+	}
+	var input NativeTaskWorkerContext
+	if err := json.Unmarshal(request.Input, &input); err != nil {
+		return MinimalStepInput{}, err
+	}
+	if input.SchemaVersion != NativeTaskInputSchema || input.ProjectID == "" || input.TaskID == "" || input.WorkflowRunID == "" || input.ExecutionID == "" || input.AttemptID == "" || input.Contract.ContractID == "" || input.ContractDigest == "" || input.ContractDigest != input.Contract.Digest || input.CurrentStep != input.StepInput.StepID || input.ProjectID != input.StepInput.ProjectIdentity || input.TaskID != input.StepInput.TaskID || input.WorkflowRunID != input.StepInput.WorkflowRunID || input.ExecutionID != input.StepInput.ExecutionID || input.AttemptID != input.StepInput.AttemptID {
+		return MinimalStepInput{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "native supervised start request context differs from its fixed Step Input"}
+	}
+	return input.StepInput, nil
+}
+
 func supervisedStepTaskSpec(c Config, task Task, run Run, workflow WorkflowRunRecord, attempt StepAttemptRecord, input MinimalStepInput, workerInput any, pair supervisedPreflight, base string) (string, error) {
-	inputBytes, err := json.Marshal(input)
+	inputBytes, err := json.Marshal(struct {
+		ProjectIdentity       string                       `json:"project_identity"`
+		TaskID                string                       `json:"task_id"`
+		WorkflowRunID         string                       `json:"workflow_run_id"`
+		ExecutionID           string                       `json:"execution_id"`
+		AttemptID             string                       `json:"attempt_id"`
+		StepID                string                       `json:"step_id"`
+		InputRevision         string                       `json:"input_revision,omitempty"`
+		CandidateRevision     string                       `json:"candidate_revision,omitempty"`
+		PrerequisiteResultIDs []string                     `json:"prerequisite_result_ids"`
+		PrerequisiteResults   []json.RawMessage            `json:"prerequisite_results,omitempty"`
+		Workspace             WorkspaceEvidence            `json:"workspace"`
+		Decision              *MinimalDecisionContinuation `json:"decision,omitempty"`
+	}{input.ProjectIdentity, input.TaskID, input.WorkflowRunID, input.ExecutionID, input.AttemptID, input.StepID, input.InputRevision, input.CandidateRevision, append([]string{}, input.PrerequisiteResultIDs...), input.PrerequisiteResults, input.Workspace, input.Decision})
 	if err != nil {
 		return "", err
 	}
@@ -694,9 +900,13 @@ func supervisedStepTaskSpec(c Config, task Task, run Run, workflow WorkflowRunRe
 	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "Protocol: one SteerLine minimal-v1 %s step. This Dispatch does not own task claim/close and must not call Beads, start/finish all steps, push, create/merge a PR unless publish_pr is the fixed step, or edit outside the assigned Orca worktree.\n", attempt.StepID)
-	fmt.Fprintf(&b, "The center has pinned model %s at effort %s. Before any edit, run `codex --version` and require exact output %q. If it differs, stop before editing and report failure.\n", c.Model, c.ReasoningEffort, c.Orca.Supervised.ExpectedCodexVersion)
-	fmt.Fprintf(&b, "Local identity: project=%s task=%s workflow_run=%s execution=%s attempt=%s step=%s input_revision=%s. Fixed remote repository selector=%s repository_id=%s origin=%s base_commit=%s.\n", input.ProjectIdentity, input.TaskID, input.WorkflowRunID, input.ExecutionID, input.AttemptID, input.StepID, input.InputRevision, c.Orca.Supervised.RepositorySelector, pair.RepositoryID, pair.RepositoryURL, base)
-	fmt.Fprintf(&b, "MinimalStepResultEnvelope identity fields to copy verbatim from the Step Input (do not derive, shorten, transpose, or replace them with Orca IDs): project_identity=%q; task_id=%q; workflow_run_id=%q; execution_id=%q; attempt_id=%q; result.step_id=%q. The outer status payload separately uses Orca taskId/dispatchId from the Dispatch preamble.\n", input.ProjectIdentity, input.TaskID, input.WorkflowRunID, input.ExecutionID, input.AttemptID, attempt.StepID)
+	fmt.Fprintf(&b, "The center has pinned model %s at effort %s. Before any edit, run this in PowerShell: `$codexOutput = & codex --version; if ($LASTEXITCODE -ne 0) { throw 'codex --version failed' }; $codexVersion = (@($codexOutput) -join ' ').Trim(); if ([string]::IsNullOrWhiteSpace($codexVersion)) { throw 'codex --version returned no output' }`.", c.Model, c.ReasoningEffort)
+	if expected := strings.TrimSpace(c.Orca.Supervised.ExpectedCodexVersion); expected != "" {
+		fmt.Fprintf(&b, " The optional exact Codex CLI pin is %q; stop before editing if the observed value differs.\n", expected)
+	} else {
+		b.WriteString(" No Codex CLI version pin is configured; report the observed value without rejecting a version number.\n")
+	}
+	fmt.Fprintf(&b, "Remote repository selector=%s id=%s origin=%s; fixed base=%s. The Dispatch preamble owns Orca taskId/dispatchId; inner result identity comes from the decoded input below.\n", c.Orca.Supervised.RepositorySelector, pair.RepositoryID, pair.RepositoryURL, base)
 	identityJSON, err := json.Marshal(struct {
 		ProjectIdentity   string   `json:"project_identity"`
 		TaskID            string   `json:"task_id"`
@@ -712,17 +922,17 @@ func supervisedStepTaskSpec(c Config, task Task, run Run, workflow WorkflowRunRe
 	if err != nil {
 		return "", err
 	}
-	fmt.Fprintf(&b, "To avoid hand-transcription errors in local IDs and commit hashes, decode this exact UTF-8 base64 input object in pwsh.exe and use its properties when building step_result: $ids = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('%s')) | ConvertFrom-Json. Use $ids.project_identity, $ids.task_id, $ids.workflow_run_id, $ids.execution_id and $ids.attempt_id directly for the envelope's matching fields; never assemble any ID from a title, prefix or Orca ID. Use $ids.step_id for result.step_id and $ids.input_revision for result.input_revision; for verify/review/publish_pr, use $ids.candidate_revision for result.revision, check.revision and the ancestry command. Immediately before sending status, parse the generated JSON and assert step_result.task_id equals $ids.task_id and step_result.result.step_id equals $ids.step_id; never use the Orca task ID for the inner task_id or the local task ID for step_id. Do not type project_identity, attempt_id or candidate_revision by hand; the center rejects even one altered character. Before verify, review, or publish_pr, compare `git rev-parse HEAD` with $ids.candidate_revision and report a failed step if they differ; prepare has no candidate revision and instead compares HEAD to the fixed base.\n", base64.StdEncoding.EncodeToString(identityJSON))
-	fmt.Fprintf(&b, "The base64 literal above is immutable: do not create or re-encode another identity object. After decoding, assert `$ids.task_id -ceq %q` before any status send; this is a check only, and the payload value must still come directly from `$ids.task_id`. In particular, do not add a second `remote-probe-` prefix. If the assertion fails, stop before sending so the center can retain the original Attempt.\n", input.TaskID)
-	b.WriteString("In the final PowerShell 7 sender, construct the envelope identity with this code, then add observed result fields to $envelope.result: $envelope = [ordered]@{ schema_version=1; project_identity=$ids.project_identity; task_id=$ids.task_id; workflow_run_id=$ids.workflow_run_id; execution_id=$ids.execution_id; attempt_id=$ids.attempt_id; result=[ordered]@{ step_id=$ids.step_id; result_id=$ids.result_id; input_revision=$ids.input_revision; prerequisite_result_ids=@($ids.prerequisite_result_ids) } }. The result_id is fixed from this Attempt ID so replay cannot create a different result. Copy prerequisite_result_ids from the decoded input object exactly, including order and all prior failed-check IDs; never reconstruct it from an earlier example or omit it on repair. Do not replace any $ids property with a typed or interpolated string. After ConvertTo-Json and before Orca send, parse it again and compare all five envelope ID fields, result.step_id and result.result_id to $ids with -cne; also compare the serialized prerequisite_result_ids arrays for exact equality, and throw before sending on any difference. The outer Orca taskId and dispatchId are separate platform IDs from the Dispatch preamble.\n")
+	fmt.Fprintf(&b, "Decode this immutable UTF-8 base64 identity in pwsh.exe: $ids = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('%s')) | ConvertFrom-Json. Copy `$ids.project_identity`, `$ids.task_id`, `$ids.workflow_run_id`, `$ids.execution_id`, `$ids.attempt_id`, `$ids.step_id`, `$ids.result_id` and `$ids.input_revision` directly; never derive IDs from titles, prefixes or Orca IDs. Verify/review/publish_pr use `$ids.candidate_revision` for revision and ancestry and require HEAD equal candidate; prepare requires HEAD equal fixed base.\n", base64.StdEncoding.EncodeToString(identityJSON))
+	powershellString := func(value string) string { return "'" + strings.ReplaceAll(value, "'", "''") + "'" }
+	identityCheck := fmt.Sprintf("$identityExpected = [ordered]@{ project_identity=%s; task_id=%s; workflow_run_id=%s; execution_id=%s; attempt_id=%s; step_id=%s }; foreach($identityKey in $identityExpected.Keys){ if ([string]$ids.$identityKey -cne [string]$identityExpected[$identityKey]) { throw ('Decoded identity mismatch at ' + $identityKey + ': got [' + [string]$ids.$identityKey + '], expected [' + [string]$identityExpected[$identityKey] + ']') } }", powershellString(input.ProjectIdentity), powershellString(input.TaskID), powershellString(input.WorkflowRunID), powershellString(input.ExecutionID), powershellString(input.AttemptID), powershellString(input.StepID))
+	fmt.Fprintf(&b, "The base64 literal above is immutable: do not create or re-encode another identity object. Before any status send, execute this exact field-by-field identity assertion; it reports the mismatched key and both values and must pass before payload construction: %s. This is a check only; every corresponding payload field must still be assigned directly from `$ids`. In particular, do not normalize, repair, or retype the project path, and do not add a second `remote-probe-` prefix. If any assertion fails, stop before sending so the center can retain the original Attempt.\n", identityCheck)
+	b.WriteString("Build the envelope from decoded IDs; keep taskId/dispatchId out of MinimalStepResultEnvelope and set result.prerequisite_result_ids=@($ids.prerequisite_result_ids), preserving order. Parse final JSON with `$payloadObject = $json | ConvertFrom-Json -AsHashtable`; compare identity fields/result_id exactly. Compare prerequisite arrays with `ConvertTo-Json -InputObject @($ids.prerequisite_result_ids) -Compress` and the same expression for `$payloadObject.step_result.result.prerequisite_result_ids`; throw on mismatch. `-InputObject` preserves empty arrays as `[]`.\n")
 	if run.Target.WorktreeID != "" {
 		fmt.Fprintf(&b, "Existing exact worktree_id=%s path=%s branch=%s; verify these facts through Orca and Git before editing.\n", run.Target.WorktreeID, deref(run.WorktreePath), deref(run.WorktreeBranch))
 	} else {
-		b.WriteString("Orca worker-start has already created and assigned the new-top-level worktree for this prepare Dispatch. Do not call worktree create, git worktree add, or change to a second checkout. Stay in the assigned current worktree. Verify its exact ID/path via `orca worktree current --json`, then verify origin, branch, initial HEAD equal to the fixed base, clean status, and base ancestry before reporting success. Do not edit during prepare.\n")
+		b.WriteString("Orca has assigned this new-top-level prepare worktree. Stay in it; do not create another worktree or edit. Verify its Orca ID/path, origin, actual Git branch, HEAD at the fixed base, clean status, and base ancestry. Task Contract Branch is the future PR base; record the actual worker branch and do not require them to match.\n")
 	}
-	b.WriteString("For every step, inspect the current repository/worktree/branch/HEAD/status and report WorkspaceEvidence from those commands. In WorkspaceEvidence, repository must exactly echo project_identity from the input; worktree must be the absolute path returned by `orca worktree current --json`; branch must be `git branch --show-current`; base/head must be full commit hashes; dirty must reflect `git status --porcelain`; verified_at must be an RFC3339 UTC time. Do not assume that Orca ready proves the step started. Execute only the contract for this step and return one MinimalStepResultEnvelope in a status payload; include schema_version, project_identity, task_id, workflow_run_id, execution_id, attempt_id, and result. The result must use only keys allowed by the provided JSON schema (additionalProperties is false): step_id, succeeded, input_revision, result_id, prerequisite_result_ids, workspace, and step-specific gate fields. For prepare, step_id must be prepare; include workspace and base_ancestor, but do not add worktree_id, origin, origin_verified, head_matches_base, clean_status, worktree_is_new_top_level, or other undeclared fields. Orca and Git observations in this task spec are already checked independently by the center. Set base_ancestor=true only when `git merge-base --is-ancestor <fixed_base> HEAD` exits 0. For implement, leave a clean committed revision. For verify, return each required check with exact command, script_version, exit_code, passed, evidence_ref, and actual_commit.\n")
-	b.WriteString("For implement, include result.revision equal to the actual clean committed HEAD. For verify, include result.revision equal to the pinned candidate_revision, and run each required check against that exact commit. Each result.checks entry must include name, status, revision, command, script_version, exit_code, passed, evidence_ref, and actual_commit; use the observed command exit code and HEAD rather than inferring success from prose.\n")
-	b.WriteString("For implement, use only these result keys: step_id, succeeded, input_revision, revision, result_id, prerequisite_result_ids, workspace, base_ancestor. If a decision was applied, first obtain acceptance of its separate status proof; do not add a bare applied_decision_id to the final result or report success without application proof. For verify, use only those shared keys plus checks; each check uses only name, status, revision, command, script_version, exit_code, passed, evidence_ref, actual_commit. Workspace uses only repository, worktree, branch, base, head, dirty, verified_at. Never add clean_status, origin, taskId, dispatchId, or any explanatory flags inside result or workspace; the strict schema rejects extras.\n")
+	b.WriteString("For every step, report fresh WorkspaceEvidence: repository=`$ids.project_identity`; worktree=absolute path from `orca worktree current --json`; branch=`git branch --show-current`; full base/head hashes; dirty from `git status --porcelain`; verified_at in RFC3339 UTC. Set base_ancestor=true only when `git merge-base --is-ancestor <fixed_base> HEAD` exits 0. The strict schema allows only shared result keys step_id, succeeded, input_revision, result_id, prerequisite_result_ids, workspace, base_ancestor, plus: implement revision; verify revision/checks; review revision/review_verdict; publish_pr revision/pr_url/published_head. Prepare uses no revision. Workspace allows only repository, worktree, branch, base, head, dirty, verified_at. Do not add platform IDs, origin flags, clean_status, or explanatory fields. For implement, commit a clean candidate; for verify, report each required check's exact command/version/exit/evidence/commit.\n")
 	if attempt.StepID == "verify" {
 		fmt.Fprintf(&b, "Before sending verify status, set `$candidate = $ids.candidate_revision`, compare `(git rev-parse HEAD).Trim()` to `$candidate`, then run `git merge-base --is-ancestor %s $candidate` and record its actual exit code. Do not substitute a manually typed hash or run the check against a different commit. The verify result MUST contain the exact key base_ancestor=true only when this command exits zero; omitting base_ancestor rejects the result even if every required check passed.\n", base)
 		b.WriteString("If a required verify command exits nonzero, report the actual check with status=failed, passed=false, its nonzero exit_code and actual_commit, and set result.succeeded=false; omit failure_kind for a deterministic check failure. After Orca accepts that structured result, send worker_done outcome succeeded because the verify step executed and delivered a conclusive failure receipt; the center, not the worker, decides repair. Use worker_done outcome failed only when the step itself could not produce a valid receipt.\n")
@@ -732,9 +942,9 @@ func supervisedStepTaskSpec(c Config, task Task, run Run, workflow WorkflowRunRe
 		b.WriteString("For review, use only these result keys: step_id, succeeded, input_revision, revision, result_id, prerequisite_result_ids, workspace, base_ancestor, and review_verdict. Do not report checks, pr_url, published_head, or a replacement revision.\n")
 	}
 	if attempt.StepID == "prepare" {
-		template := map[string]any{"schema_version": 1, "project_identity": input.ProjectIdentity, "task_id": input.TaskID, "workflow_run_id": input.WorkflowRunID, "execution_id": input.ExecutionID, "attempt_id": input.AttemptID, "result": map[string]any{"step_id": "prepare", "succeeded": true, "input_revision": input.InputRevision, "result_id": input.AttemptID, "workspace": map[string]any{"repository": input.ProjectIdentity, "worktree": "<actual Orca absolute worktree path>", "branch": "<actual Git branch>", "base": base, "head": base, "dirty": false, "verified_at": "<actual RFC3339 UTC observation time>"}, "base_ancestor": true}}
+		template := map[string]any{"step_id": "prepare", "succeeded": true, "input_revision": input.InputRevision, "result_id": input.AttemptID, "prerequisite_result_ids": append([]string{}, input.PrerequisiteResultIDs...), "workspace": map[string]any{"repository": input.ProjectIdentity, "worktree": "<actual Orca absolute worktree path>", "branch": "<actual Git branch>", "base": base, "head": base, "dirty": false, "verified_at": "<actual RFC3339 UTC observation time>"}, "base_ancestor": true}
 		if templateBytes, marshalErr := json.Marshal(template); marshalErr == nil {
-			b.WriteString("Exact prepare step_result object template; replace only observed workspace placeholders, and do not remove result_id or alter identity fields: " + string(templateBytes) + "\n")
+			b.WriteString("Exact prepare StepGateResult object template; assign this object to `$stepResult` and replace only observed workspace placeholders: " + string(templateBytes) + "\n")
 		}
 	}
 	if attempt.StepID == "implement" || attempt.StepID == "verify" || attempt.StepID == "review" || attempt.StepID == "publish_pr" {
@@ -758,29 +968,43 @@ func supervisedStepTaskSpec(c Config, task Task, run Run, workflow WorkflowRunRe
 			resultTemplate["published_head"] = revision
 			fmt.Fprintf(&b, "Publish only this verified candidate %s from branch %s to the fixed base branch. Create a draft PR in the configured test repository, do not merge it, and return its exact URL. Before sending status, confirm actual HEAD is still the candidate, the worktree is clean, and `git merge-base --is-ancestor %s %s` exits zero; include base_ancestor=true. If the fixed source branch, exact head, and base already identify one PR, treat its URL only as a read-only reconciliation of the original publication; do not create a duplicate or search by approximate title.\n", revision, deref(run.WorktreeBranch), base, revision)
 		}
-		template := map[string]any{"schema_version": 1, "project_identity": input.ProjectIdentity, "task_id": input.TaskID, "workflow_run_id": input.WorkflowRunID, "execution_id": input.ExecutionID, "attempt_id": input.AttemptID, "result": resultTemplate}
-		if templateBytes, marshalErr := json.Marshal(template); marshalErr == nil {
-			b.WriteString("Exact step_result object template; replace placeholders with observed facts, adjust checks only from actual command receipts, and do not add any keys: " + string(templateBytes) + "\n")
+		if templateBytes, marshalErr := json.Marshal(resultTemplate); marshalErr == nil {
+			b.WriteString("Exact StepGateResult object template; assign this object to `$stepResult`, replace placeholders with observed facts, adjust checks only from actual command receipts, and do not add keys: " + string(templateBytes) + "\n")
 		}
 	}
-	b.WriteString("Use the Dispatch preamble's exact taskId and dispatchId. Send one type=status message whose JSON object has taskId, dispatchId, remote_codex_version, and step_result; put this JSON only in the CLI's --payload argument. The message body is plain prose and is not read as a structured step result. Reject the payload before sending if its UTF-8 size exceeds 8192 bytes. For the status command, call your exec_command tool with shell set to pwsh.exe and cmd set to the PowerShell script itself; verify $PSVersionTable.PSVersion.Major is 7 inside that same call. Never launch pwsh.exe -Command from a Windows PowerShell 5.1 command, because its outer shell expands the script before pwsh sees it. In that direct PowerShell 7 script, generate JSON with ConvertTo-Json -Compress -Depth 16, validate it locally, and invoke the preamble-authorized Orca executable directly with its exact --from/--dispatch-capability arguments and --payload as one string argument. Do not copy the capability into a helper process, source file, or environment variable. Do not use --body or structured task/dispatch payload flags with --payload. If direct PowerShell 7 invocation is rejected or cannot prove acceptance, report failure without another wrapper or malformed send. Then send exactly one worker_done using the preamble's --task-id/--dispatch-id and outcome flags, and its required three-sentence body. Do not report succeeded unless the status payload was accepted.\n")
-	fmt.Fprintf(&b, "For the final result status, the top-level payload MUST be {\"taskId\":<Orca task ID>,\"dispatchId\":<Orca Dispatch ID>,\"remote_codex_version\":%q,\"step_result\":<the complete MinimalStepResultEnvelope>}. Validate these four top-level keys before sending. A bare MinimalStepResultEnvelope is rejected even when its inner fields are correct.\n", c.Orca.Supervised.ExpectedCodexVersion)
-	b.WriteString("The type=status CLI argv is: orca orchestration send --from <preamble sender handle> --dispatch-capability <preamble capability> --type status --subject <short subject> --payload <one JSON argument> --json. Federated Dispatch messages must omit --run and --to; Orca routes them to the Run home from the exact preamble sender and capability. The worker_done CLI argv uses the same preamble --from/--dispatch-capability and its exact --task-id/--dispatch-id/--outcome. Parse the JSON response and require ok=true and a nonempty result.mutation.requestId; this proves Orca accepted the send. Do not require result.message.from_handle to equal dispatch:<id> in the immediate send receipt; the center verifies exact Dispatch identity when it consumes the inbox message. Plain text output is not a JSON receipt. Do not append --task-id, --dispatch-id, --outcome, --body, --phase, --files-modified, or --report-path to a status send with --payload; those separate structured flags conflict with --payload. Use --task-id/--dispatch-id/--outcome only on the later worker_done command.\n")
-	b.WriteString("If this step needs a business answer, use the Dispatch preamble's Orca ask command with --json, the question, and any exact option strings; do not settle or start a replacement step while waiting. Parse and save the original ask message ID from that JSON response, and resume that same ID after a timeout. A plain ask without --json prints only the answer text and loses the ID needed for proof; do not issue a second question to recover it. When the answer returns and has actually been applied, send a separate type=status message through the same direct pwsh.exe CLI path with taskId, dispatchId, remote_codex_version, decision_applied set to the original question message ID, applied_decision_attempt_id and applied_decision_execution_id copied from Step Input, and applied_answer_body exactly equal to the answer received from Orca; omit step_result from this proof message. The center checks the echoed answer against its saved answer and binds the fixed answer digest. A bare question ID is never application proof. Continue the same step attempt, then send its one final step_result and worker_done. Orca reply acceptance alone does not prove you applied the answer.\n")
-	fmt.Fprintf(&b, "Task title: %s\nTask description: %s\nWorkflow definition: %s\nStep contract: %s\nStep input: %s\n", task.Title, task.Description, workflow.Definition.ID, string(contractBytes), string(inputBytes))
+	b.WriteString("Set `$stepResult` to the exact per-step StepGateResult template above. Build the inner envelope exactly once: `$envelope=[ordered]@{schema_version=1;project_identity=$ids.project_identity;task_id=$ids.task_id;workflow_run_id=$ids.workflow_run_id;execution_id=$ids.execution_id;attempt_id=$ids.attempt_id;result=$stepResult}`. The inner envelope must not contain `step_result`, `taskId`, or `dispatchId`. Then build the separate outer status object exactly once: `$payloadObject=[ordered]@{taskId=$orcaTaskId;dispatchId=$orcaDispatchId;remote_codex_version=$codexVersion;step_result=$envelope}`; require its four exact keys and require `$payloadObject.step_result.task_id -ceq $ids.task_id`. Assign `$payloadJson = ConvertTo-Json -InputObject $payloadObject -Compress -Depth 16`; reject UTF-8 payloads over 8192 bytes. Run the sender via exec_command shell `pwsh.exe` (PowerShell 7). From the exact preamble set `$orca`, `$from`, `$cap`, `$orcaTaskId`, and `$orcaDispatchId`; use `$sendArgv=@('orchestration','send','--from',$from,'--dispatch-capability',$cap,'--type','status','--subject',$subject,'--payload',$payloadJson,'--json')` then invoke `& $orca @sendArgv`. Keep JSON as one argv item after `--payload`; never put it in command text or pass it positionally. Omit `--run`, `--to`, and all other structured flags. Parse JSON and require `ok=true` plus a nonempty `result.mutation.requestId` (plain text is not a receipt; the immediate `from_handle` may differ). Then send one `worker_done` with a separate splatted argv array, the same auth, and the exact preamble taskId/dispatchId/outcome.\n")
+	b.WriteString("If blocked on a business decision, use the preamble ask command with `--json`; save and resume that exact message ID, never ask twice, and do not start a replacement step. After actually applying the answer, send a separate status proof echoing the original message ID, fixed attempt/execution IDs, and exact answer body; omit step_result. Continue the same attempt and submit its one final result.\n")
+	fmt.Fprintf(&b, "Workflow definition: %s\nStep contract: %s\nStep input (fixed IDs, revisions, prerequisites, workspace, and decision only): %s\n", workflow.Definition.ID, string(contractBytes), string(inputBytes))
+	if attempt.StepID != "prepare" {
+		fmt.Fprintf(&b, "Task title: %s\n", task.Title)
+		if task.Description != "" {
+			fmt.Fprintf(&b, "Task description: %s\n", task.Description)
+		}
+	}
 	if c.TaskAuthority == "native" {
 		nativeInput, ok := workerInput.(NativeTaskWorkerContext)
 		if !ok || nativeInput.SchemaVersion != NativeTaskInputSchema || nativeInput.ProjectID != input.ProjectIdentity || nativeInput.TaskID != input.TaskID || nativeInput.WorkflowRunID != input.WorkflowRunID || nativeInput.ExecutionID != input.ExecutionID || nativeInput.AttemptID != input.AttemptID || nativeInput.CurrentStep != input.StepID || nativeInput.Contract.ContractID == "" || nativeInput.ContractDigest != nativeInput.Contract.Digest || nativeInput.StepInput.ProjectIdentity != input.ProjectIdentity || nativeInput.StepInput.AttemptID != input.AttemptID || nativeInput.StepInput.StepID != input.StepID {
 			return "", &BackendError{Code: BackendIdentityMismatch, Diagnostic: "native supervised worker context differs from the fixed step input"}
 		}
-		data, marshalErr := json.Marshal(nativeInput)
-		if marshalErr != nil {
-			return "", marshalErr
+		if attempt.StepID == "prepare" {
+			b.WriteString("Native task authority belongs to the center; do not use Beads. This prepare step is read-only and reports the project identity from the fixed Step Input.\n")
+		} else {
+			nativePromptContext := struct {
+				SchemaVersion  string       `json:"schema_version"`
+				ProjectID      string       `json:"project_id"`
+				TaskID         string       `json:"task_id"`
+				Contract       TaskContract `json:"contract"`
+				ContractDigest string       `json:"contract_digest"`
+			}{nativeInput.SchemaVersion, nativeInput.ProjectID, nativeInput.TaskID, nativeInput.Contract, nativeInput.ContractDigest}
+			data, marshalErr := json.Marshal(nativePromptContext)
+			if marshalErr != nil {
+				return "", marshalErr
+			}
+			fmt.Fprintf(&b, "Native authority is the center's fixed contract; do not use Beads. Verify immutable refs by raw Git blob bytes at their pinned commits. Native context: %s\n", data)
 		}
-		fmt.Fprintf(&b, "Native task authority is the center's fixed task contract; do not use Beads. Read and follow these immutable native-task/v1 contract references and prerequisite results for this one step. Verify each referenced file from the pinned repository commit before acting. Native worker context: %s\n", data)
 	}
-	if b.Len() > 64<<10 {
-		return "", &BackendError{Code: BackendRejected, Diagnostic: "serialized supervised step task exceeds the 64 KiB task-spec bound"}
+	if b.Len() > 16<<10 {
+		return "", &BackendError{Code: BackendRejected, Diagnostic: "serialized supervised step task exceeds the 16 KiB task-spec bound"}
 	}
 	return b.String(), nil
 }
@@ -933,8 +1157,8 @@ func (b orcaSupervisedBackend) stepResultFromMessages(messages []OrcaInboxMessag
 			}
 			continue // A late status belongs to another attempt; it cannot complete this one.
 		}
-		if status.RemoteCodexVersion != b.config.Orca.Supervised.ExpectedCodexVersion {
-			return false, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "remote Codex CLI version differs from the pinned capability configuration"}
+		if !supervisedCodexVersionAccepted(b.config.Orca.Supervised.ExpectedCodexVersion, status.RemoteCodexVersion) {
+			return false, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "remote Codex CLI version is missing or differs from the optional exact capability pin"}
 		}
 		if status.DecisionAppliedID != "" && len(status.StepResult) == 0 {
 			continue // A separate status proves answer application, not step completion.
@@ -1246,6 +1470,21 @@ func summarizeSupervisedMessages(messages []OrcaInboxMessage) string {
 }
 
 func supervisedTranscriptTurnStarted(batch OutputBatch) bool {
+	if batch.Source == "terminal" {
+		var terminal struct {
+			Terminal struct {
+				Tail []string `json:"tail"`
+			} `json:"terminal"`
+		}
+		if json.Unmarshal(batch.Data, &terminal) == nil {
+			for _, line := range terminal.Terminal.Tail {
+				if strings.Contains(line, "Working (") || strings.Contains(line, "Reconnecting") || strings.Contains(line, "Request timed out") {
+					return true
+				}
+			}
+		}
+		return false
+	}
 	if batch.Source != "transcript" {
 		return false
 	}
@@ -1339,6 +1578,12 @@ func waitContext(ctx context.Context, duration time.Duration) error {
 }
 
 type orcaSupervisedBackend struct{ config Config }
+
+func supervisedCodexVersionAccepted(expected, observed string) bool {
+	expected = strings.TrimSpace(expected)
+	observed = strings.TrimSpace(observed)
+	return observed != "" && (expected == "" || observed == expected)
+}
 
 func (b orcaSupervisedBackend) Identity() (BackendKind, ExecutionProtocol) {
 	return BackendOrca, ProtocolOrcaSupervised

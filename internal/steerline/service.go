@@ -273,7 +273,8 @@ func NewService(c Config) (_ *Service, retErr error) {
 					r.Error = ptr("waiting_decision run lacks decision state; manual recovery required")
 				}
 			}
-			if r.ExecutionStatus == "pending" || r.ExecutionStatus == "running" {
+			recoverUncertainSupervised := r.Host == "orca_supervised" && r.WorkflowVersion == MinimalWorkflowVersion && r.ExecutionStatus == "unknown" && r.FinishTaskStatus == "blocked" && r.Process != nil
+			if r.ExecutionStatus == "pending" || r.ExecutionStatus == "running" || recoverUncertainSupervised {
 				recoverPlannedStep := false
 				if r.WorkflowVersion == MinimalWorkflowVersion && r.ExecutionStatus == "pending" && r.FinishTaskStatus == "pending" {
 					for _, workflow := range s.State.WorkflowRuns {
@@ -295,7 +296,7 @@ func NewService(c Config) (_ *Service, retErr error) {
 				}
 				if !recoverPlannedStep {
 					recovered := false
-					if r.Host == "orca_supervised" && r.WorkflowVersion == MinimalWorkflowVersion && (r.ExecutionStatus == "running" || r.ExecutionStatus == "pending" && r.Process != nil) {
+					if r.Host == "orca_supervised" && r.WorkflowVersion == MinimalWorkflowVersion && (r.ExecutionStatus == "running" || r.ExecutionStatus == "pending" && r.Process != nil || recoverUncertainSupervised) {
 						if recoverErr := s.reattachSupervisedWorker(r); recoverErr == nil {
 							recovered = true
 						} else {
@@ -1813,7 +1814,7 @@ func (s *Service) applySupervisedDecisionProof(run *Run, ev WorkerEvent) error {
 				answerBody = run.Decision.Note
 			}
 		}
-		if proof.TaskID != run.Process.Task || proof.DispatchID != run.Process.Dispatch || proof.RemoteCodexVersion != s.Config.Orca.Supervised.ExpectedCodexVersion || run.Decision == nil || proof.DecisionAppliedID != run.Decision.ID || run.Decision.AttemptID != ev.AttemptID || proof.AppliedDecisionAttemptID != run.Decision.AttemptID || proof.AppliedDecisionExecutionID != run.ExecutionID || answerBody == "" || proof.AppliedAnswerBody != answerBody {
+		if proof.TaskID != run.Process.Task || proof.DispatchID != run.Process.Dispatch || !supervisedCodexVersionAccepted(s.Config.Orca.Supervised.ExpectedCodexVersion, proof.RemoteCodexVersion) || run.Decision == nil || proof.DecisionAppliedID != run.Decision.ID || run.Decision.AttemptID != ev.AttemptID || proof.AppliedDecisionAttemptID != run.Decision.AttemptID || proof.AppliedDecisionExecutionID != run.ExecutionID || answerBody == "" || proof.AppliedAnswerBody != answerBody {
 			return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "remote decision application proof conflicts with the fixed decision, attempt, execution or answer"}
 		}
 		if run.Decision.Status == "applied" {

@@ -26,6 +26,8 @@
 
 新增显式的受监管远程配置，至少包含固定 connection ID、home Orca runtime/协调者绑定、environment ID、远端 repo selector、agent、固定 model/reasoning_effort、输出/状态轮询参数和能力报告版本。当前配置字段见[配置片段](orca-probe/samples/supervised-config.fragment.json)；它仍不能启用生产派发：worker start、消息、输出和结算已有受限实现与局部真机回执，完整能力认证仍未通过。本机 Orca terminal v2 与受监管远端是不同协议实现，不从前者的配置隐式切换。远端 worker-start 显式传递已固定的 model/reasoning_effort；若缺少必需值，领取前拒绝，不继承远端用户的 Orca 默认模型。
 
+Codex CLI 版本作为执行证据记录，不作为默认兼容门槛：每个 worker 必须成功运行 `codex --version`，把非空实际输出放入受监管状态回执；配置 `expected_codex_version` 只有显式填写时才启用精确 pin，省略或留空不限制版本号。当前验收目标环境报告为 Codex CLI 0.157.1，版本号仍会随真实回执记录。
+
 Windows 中心服务从 [PR 3 固定入口](pr-03-service-lifecycle.spec.md) 由用户独立打开可见服务窗口；viewer 退出不停止仍开着的中心服务，关窗则结束中心监督。本阶段不得让 viewer 在后台代启中心服务，也不得把关窗当成远端 worker 的停止证明。用户重新打开服务窗口后，中心按持久身份和 Operation 对账，再恢复消息读取和派发判断；Linux detached 路径按其平台能力运行。
 
 首版生产远程配置固定 `remote_cancel_available=false`。预检和 viewer 必须显示远程取消不可用；不能展示可操作的取消按钮、自动调用 Orca worker-stop，或在失败后按远端 terminal handle 兜底关闭。用户需要中止活跃远端 worker 时，中心保留身份与资源占用，提示人工处理。正常结算后的 release 不受此限制。

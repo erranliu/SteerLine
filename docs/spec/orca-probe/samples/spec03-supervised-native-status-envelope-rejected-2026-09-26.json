@@ -1,0 +1,53 @@
+{
+  "kind": "spec03-supervised-native-acceptance-attempt",
+  "captured_at": "2026-09-26T13:10:37.9857832Z",
+  "run_id": "run_5a48215d6ad3",
+  "local_task_id": "91024",
+  "remote_repository_id": "09e35751-6517-4e7c-ae20-178ed0e90000",
+  "base_branch": "codex/spec03-native-acceptance-base",
+  "base_commit": "592a745f3ed8dc26ad74c4f01066d632e77bee30",
+  "remote_codex_version": "codex-cli 0.157.1",
+  "configured_codex_version_pin": "",
+  "steps": [
+    {
+      "step": "prepare",
+      "dispatch_id": "ctx_3ed69ef168ec",
+      "worker_outcome": "succeeded",
+      "status_accepted": true,
+      "resources_released": true
+    },
+    {
+      "step": "implement",
+      "dispatch_id": "ctx_b0eb696ff648",
+      "worker_outcome": "succeeded",
+      "status_accepted": true,
+      "candidate_revision": "c06dad0948ad0b8bd62c216b1b02cac364c0892a",
+      "expected_blob": "a7890c716cc3ad0cca79f8d7b68cffe125e6b106",
+      "resources_released": true
+    },
+    {
+      "step": "verify",
+      "dispatch_id": "ctx_1fad3caf9540",
+      "worker_outcome": "succeeded",
+      "remote_check_exit": 0,
+      "base_ancestor_exit": 0,
+      "status_accepted": false,
+      "adapter_error": "protocol_invalid: unknown field step_result in inner MinimalStepResultEnvelope",
+      "resources_released": true,
+      "release_request_id": "cba5c4be-695d-43b6-bab0-7b1e1f178624",
+      "transcript_archived": true,
+      "terminal_liveness_after_release": "exited"
+    }
+  ],
+  "local_acceptance": {
+    "result": "stopped_at_verify",
+    "reason": "The worker nested another step_result in the inner result envelope; strict decoding rejected it, so no Review, Publish, PR, or merge was attempted.",
+    "follow_up_fix": "Use a bare per-step StepGateResult template, wrap it once in MinimalStepResultEnvelope, and serialize the separate outer status payload once."
+  },
+  "constraints": {
+    "production_repository_used": false,
+    "review_or_publish_dispatched": false,
+    "test_pr_created": false,
+    "test_pr_merged": false
+  }
+}

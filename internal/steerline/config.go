@@ -81,7 +81,7 @@ type SupervisedOrcaConfig struct {
 	EnvironmentID           string `json:"environment_id"`
 	RepositorySelector      string `json:"repository_selector"`
 	CoordinatorTerminal     string `json:"coordinator_terminal"`
-	ExpectedCodexVersion    string `json:"expected_codex_version"`
+	ExpectedCodexVersion    string `json:"expected_codex_version,omitempty"` // Optional exact pin; empty accepts and records the observed CLI version.
 	PollInterval            string `json:"poll_interval"`
 	CapabilityReportVersion int    `json:"capability_report_version"`
 	RemoteCancelAvailable   bool   `json:"remote_cancel_available"`
@@ -382,8 +382,8 @@ func validateSupervisedOrcaConfig(c *Config) error {
 		return errors.New("orca_supervised requires an explicit orca.supervised configuration")
 	}
 	supervised := c.Orca.Supervised
-	if strings.TrimSpace(supervised.ConnectionID) == "" || strings.TrimSpace(supervised.EnvironmentID) == "" || strings.TrimSpace(supervised.RepositorySelector) == "" || strings.TrimSpace(supervised.CoordinatorTerminal) == "" || strings.TrimSpace(supervised.ExpectedCodexVersion) == "" {
-		return errors.New("orca.supervised requires fixed connection_id, environment_id, repository_selector, coordinator_terminal, and expected_codex_version")
+	if strings.TrimSpace(supervised.ConnectionID) == "" || strings.TrimSpace(supervised.EnvironmentID) == "" || strings.TrimSpace(supervised.RepositorySelector) == "" || strings.TrimSpace(supervised.CoordinatorTerminal) == "" {
+		return errors.New("orca.supervised requires fixed connection_id, environment_id, repository_selector, and coordinator_terminal")
 	}
 	if supervised.RemoteCancelAvailable {
 		return errors.New("orca_supervised remote cancellation is fixed unavailable")
