@@ -91,7 +91,7 @@ func TestInstallLaunchersWritesCRLF(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	must := []string{"projects.bat", "console.bat", "viewer.bat", "run.bat", "service-window.bat", "stop.bat", "home.bat", "README.txt"}
+	must := []string{"console.bat", "service-window.bat", "README.txt"}
 	got := map[string]bool{}
 	for _, p := range written {
 		got[filepath.Base(p)] = true
@@ -100,13 +100,6 @@ func TestInstallLaunchersWritesCRLF(t *testing.T) {
 		if !got[name] {
 			t.Fatalf("launcher %s not written (wrote %v)", name, written)
 		}
-	}
-	b, e := os.ReadFile(filepath.Join(home, "projects.bat"))
-	if e != nil {
-		t.Fatal(e)
-	}
-	if !strings.Contains(string(b), "bin\\steerline.exe") || !strings.Contains(string(b), "\r\n") {
-		t.Fatalf("projects.bat not CRLF/expected content:\n%s", b)
 	}
 	console, e := os.ReadFile(filepath.Join(home, "console.bat"))
 	if e != nil {
@@ -119,7 +112,10 @@ func TestInstallLaunchersWritesCRLF(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if !strings.Contains(string(window), "-dispatch manual -console summary -service-window") || !strings.Contains(string(window), "\r\n") {
+	if !strings.Contains(string(window), "-dispatch manual -console summary -service-window") || !strings.Contains(string(window), "etc\\SteerLine.json") || strings.Contains(string(window), "merge-h-308-code.json") || !strings.Contains(string(window), "\r\n") {
 		t.Fatalf("service-window.bat missing required window/manual/summary behavior or CRLF:\n%s", window)
+	}
+	if len(written) != len(must) {
+		t.Fatalf("unexpected launchers written: %v", written)
 	}
 }

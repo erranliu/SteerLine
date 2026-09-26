@@ -8,14 +8,13 @@ rem Closing the window with X is an abrupt exit.
 set "SHOME=%~dp0"
 if "%SHOME:~-1%"=="\" set "SHOME=%SHOME:~0,-1%"
 set "BIN=%SHOME%\bin\steerline.exe"
-if "%~1"=="" (
-  set "CFG=%SHOME%\etc\merge-h-308-code.json"
-) else (
-  set "CFG=%~f1"
-)
+set "CFG=%~1"
+if "%CFG%"=="" set "CFG=%STEERLINE_CONFIG%"
+if "%CFG%"=="" set "CFG=%SHOME%\etc\SteerLine.json"
+for %%F in ("%CFG%") do set "CFG=%%~fF"
 
 if not exist "%BIN%" ( echo [service-window] missing "%BIN%" & pause & exit /b 1 )
-if not exist "%CFG%" ( echo [service-window] missing config "%CFG%" & pause & exit /b 1 )
+if not exist "%CFG%" ( echo [service-window] missing config "%CFG%" & echo [service-window] Pass a native config path as the first argument or set STEERLINE_CONFIG. & pause & exit /b 1 )
 
 mode con: cols=150 lines=44 >nul 2>&1
 title SteerLine service window
