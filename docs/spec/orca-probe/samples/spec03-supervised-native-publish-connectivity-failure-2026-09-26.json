@@ -63,6 +63,14 @@
     "test_duration_seconds": 1636.25,
     "reason": "The center correctly stopped after the remote worker reported a conclusive publication failure; it did not merge, close the task, or create a duplicate PR."
   },
+  "network_diagnosis": {
+    "remote_git_http_proxy": "192.168.1.36:8766",
+    "remote_proxy_environment_variables": "unset",
+    "remote_direct_github_https": "timed_out",
+    "remote_to_configured_proxy_tcp": false,
+    "remote_to_local_proxy_port_7897_tcp": false,
+    "test_pr_branch_visible_on_origin": false
+  },
   "constraints": {
     "production_repository_used": false,
     "test_pr_created": false,
