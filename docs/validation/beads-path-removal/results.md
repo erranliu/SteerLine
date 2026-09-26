@@ -25,13 +25,13 @@ The fresh full suite ran on the same Windows host with `go1.26.4 windows/amd64`,
 | --- | ---: |
 | Command | `go test ./... -json -count=1 -timeout 20m` (via `cmd/test-feedback`) |
 | Process exit | 0 |
-| Outer wall time | 701.08 s |
-| `internal/steerline` package | 697.76 s |
-| Terminal test/subtest events | 341 |
-| Passed / failed / skipped | 331 / 0 / 10 |
-| Test-event span | 700.44 s |
+| Outer wall time | 616.38 s |
+| `internal/steerline` package | 614.42 s |
+| Terminal test/subtest events | 343 |
+| Passed / failed / skipped | 333 / 0 / 10 |
+| Test-event span | 615.62 s |
 
-The outer wall time is 384.64 seconds lower than #11 (35.4% lower); the `internal/steerline` package time is 386.13 seconds lower (35.6% lower). The event count is 208 lower because the Beads whole-run and result-path suites were removed; [coverage-map](coverage-map.md) lists each deleted suite and its retained native invariants. The local native A→B integration took 114.92 seconds and Orca took 69.82 seconds, compared with 131 and 76 seconds in #11. Both remain real Git/workspace/subprocess regression cases, and their timing varies between runs.
+The outer wall time is 469.34 seconds lower than #11 (43.2% lower); the `internal/steerline` package time is 469.47 seconds lower (43.3% lower). The event count is 206 lower because the Beads whole-run and result-path suites were removed; [coverage-map](coverage-map.md) lists each deleted suite and its retained native invariants. The local native A→B integration took 92.45 seconds and Orca took 56.58 seconds, compared with 131 and 76 seconds in #11. Both remain real Git/workspace/subprocess regression cases, and their timing varies between runs.
 
 The complete event stream and machine details are retained in [full-final summary](full-final/summary.json), including [`go-test.jsonl`](full-final/go-test.jsonl) and stderr. The suite skipped 10 tests according to their existing opt-in/platform conditions. Live Codex, Orca, PR-provider, and visible-window acceptance remain unverified and are not inferred from this run.
 

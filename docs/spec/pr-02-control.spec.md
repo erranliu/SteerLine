@@ -2,6 +2,8 @@
 
 状态：已实现，完成协调审核修复与 Windows 全量回归（[PR #13](https://github.com/erranliu/SteerLine/pull/13)）；Linux 仅做编译检查。依赖：PR 1（已合并）。代码包含本 Spec 的 C1–C7；自动恢复动作仍按范围限制留待后续 PR。对应 [Plan](pr-02-control.plan.md)。
 
+历史规格说明：本文记录 PR 2 当时的 Beads 控制协议，包括 `tasks.json` 与 `stop.json` 兼容路径。该任务来源和旁路已由 [Beads 路径移除 Spec](beads-path-removal.spec.md) 取代；当前 task/control authority 是显式 native SQLite 与不可变 control request，不再提供 `stop.json`。
+
 ## 目标
 
 把服务从“启动后持续自动派发”扩展为可接收明确控制指令的单写者。交付可由 CLI 验证的定向任务启动、派发模式、暂停/恢复、停止请求以及持久回执，为控制台提供统一接口。

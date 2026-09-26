@@ -50,6 +50,9 @@ type RecoveryCommandBody struct {
 // InspectRecovery reads the current SQLite projection and performs read-only
 // host, workspace, claim and PR checks. It never constructs a running Service.
 func InspectRecovery(ctx context.Context, c Config, runID string) (RecoveryInspection, error) {
+	if err := requireNativeTaskAuthority(c); err != nil {
+		return RecoveryInspection{}, err
+	}
 	if strings.TrimSpace(runID) == "" {
 		return RecoveryInspection{}, errors.New("recovery inspection requires a run ID")
 	}

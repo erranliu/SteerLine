@@ -52,6 +52,54 @@ func TestLifecycleAuditRejectedStartupPreservesOwnerFiles(t *testing.T) {
 	}
 }
 
+func TestDirectServiceAndControlEntrypointsRejectMissingNativeAuthorityBeforeEffects(t *testing.T) {
+	runDir := filepath.Join(t.TempDir(), "state")
+	c := Config{Repository: filepath.Join(t.TempDir(), "not-a-repository"), RunDir: runDir, RuntimeFile: "runtime.json"}
+	assertAuthorityError := func(name string, err error) {
+		t.Helper()
+		if err == nil || !strings.Contains(err.Error(), "task_authority=native") {
+			t.Fatalf("%s did not reject missing native authority: %v", name, err)
+		}
+	}
+	assertAuthorityError("RunConfiguredService", RunConfiguredService(context.Background(), c, "manual", "", "off"))
+	_, stopErr := StopService(context.Background(), c, "operator", time.Second)
+	assertAuthorityError("StopService", stopErr)
+	_, _, submitErr := SubmitServiceCommand(context.Background(), c, "retry_run", "run", "operator", newID(), 1, RecoveryCommandBody{})
+	assertAuthorityError("SubmitServiceCommand", submitErr)
+	if _, err := ControlSnapshot(c); err == nil || !strings.Contains(err.Error(), "task_authority=native") {
+		t.Fatalf("ControlSnapshot did not reject missing native authority: %v", err)
+	}
+	if _, err := LoadDatabaseRuntime(c); err == nil || !strings.Contains(err.Error(), "task_authority=native") {
+		t.Fatalf("LoadDatabaseRuntime did not reject missing native authority: %v", err)
+	}
+	if _, err := InspectRecovery(context.Background(), c, "run"); err == nil || !strings.Contains(err.Error(), "task_authority=native") {
+		t.Fatalf("InspectRecovery did not reject missing native authority: %v", err)
+	}
+	if _, err := CertifyExecutionBackend(context.Background(), c, []string{"missing.json"}); err == nil || !strings.Contains(err.Error(), "task_authority=native") {
+		t.Fatalf("CertifyExecutionBackend did not reject missing native authority: %v", err)
+	}
+	assertAuthorityError("VerifyTaskContractFiles", VerifyTaskContractFiles(context.Background(), c, TaskContract{}))
+	if _, err := os.Stat(runDir); !os.IsNotExist(err) {
+		t.Fatalf("rejected direct entrypoint created service state: %v", err)
+	}
+}
+
+func TestRunConfiguredServiceRejectsBeadsBeforeCreatingStartupEvidence(t *testing.T) {
+	f := newFixture(t)
+	sentinel := filepath.Join(f.c.Repository, ".beads")
+	require(t, os.Mkdir(sentinel, 0700))
+	err := RunConfiguredService(context.Background(), f.c, "manual", "", "off")
+	if err == nil || !strings.Contains(err.Error(), "Beads state exists") {
+		t.Fatalf("service did not refuse old repository state before startup: %v", err)
+	}
+	if _, err := os.Stat(f.c.RunDir); !os.IsNotExist(err) {
+		t.Fatalf("refused service startup created run state: %v", err)
+	}
+	if info, err := os.Stat(sentinel); err != nil || !info.IsDir() {
+		t.Fatalf("refused service startup changed the old state sentinel: %v", err)
+	}
+}
+
 func reviewStartup(t *testing.T, c Config, status string, identity *ProcessIdentity) StartupRecord {
 	t.Helper()
 	id := newID()

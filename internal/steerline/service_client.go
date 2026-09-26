@@ -890,6 +890,9 @@ func waitForStartup(ctx context.Context, c Config, id, logPath string, opts Star
 }
 
 func StopService(ctx context.Context, c Config, requestedBy string, timeout time.Duration) (ServiceStopResult, error) {
+	if err := requireNativeTaskAuthority(c); err != nil {
+		return ServiceStopResult{}, err
+	}
 	if timeout <= 0 {
 		timeout = 30 * time.Second
 	}
@@ -1042,6 +1045,9 @@ func acquireLaunchLock(ctx context.Context, path string) (*RepoLock, error) {
 // RunConfiguredService is the lock-owning service entry point used by the CLI.
 // It records preflight and lock failures under startup_id before returning.
 func RunConfiguredService(ctx context.Context, c Config, mode, startupID, console string) (retErr error) {
+	if err := requireNativeTaskAuthority(c); err != nil {
+		return err
+	}
 	if mode != "manual" && mode != "auto" {
 		return errors.New("dispatch mode must be manual or auto")
 	}
@@ -1068,6 +1074,9 @@ func RunConfiguredService(ctx context.Context, c Config, mode, startupID, consol
 	}
 	if inside(c.Repository, c.RunDir) {
 		return errors.New("run_dir must be outside the configured repository")
+	}
+	if err := preflightNativeStatePath(c); err != nil {
+		return fmt.Errorf("native state preflight: %w", err)
 	}
 	_, logPath, retErr := createStartupAttempt(c, startupID, windowGeneratedID)
 	if retErr != nil {

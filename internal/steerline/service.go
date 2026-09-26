@@ -903,7 +903,7 @@ func (s *Service) run(ctx context.Context, dispatchMode string) (retErr error) {
 				return
 			case <-stopTick.C:
 				stopReq, _, checkedAt := findStopRequestCached(s.Config, instanceID, stopSeen)
-				if stopRequested(s.Config, instanceID) || stopReq != nil {
+				if stopReq != nil {
 					if stopReq != nil {
 						acceptedStops <- stopAcceptance{Request: *stopReq, At: checkedAt}
 					}
@@ -1304,26 +1304,4 @@ func (s *Service) preserveUnknownStop(reason string, cause error) {
 	if err := s.save(); err != nil {
 		s.setError(err)
 	}
-}
-func RequestStop(c Config) error {
-	v, e := LoadRuntime(filepath.Join(c.RunDir, c.RuntimeFile))
-	if e != nil {
-		return e
-	}
-	if v == nil {
-		return errors.New("no runtime snapshot")
-	}
-	b, _ := json.Marshal(map[string]string{"instance_id": v.Service.InstanceID})
-	return AtomicWrite(filepath.Join(c.RunDir, "stop.json"), b)
-}
-
-func stopRequested(c Config, instanceID string) bool {
-	b, e := os.ReadFile(filepath.Join(c.RunDir, "stop.json"))
-	if e != nil {
-		return false
-	}
-	var request struct {
-		InstanceID string `json:"instance_id"`
-	}
-	return json.Unmarshal(b, &request) == nil && request.InstanceID == instanceID
 }

@@ -1296,6 +1296,9 @@ func validateFileReferenceShape(ref FileReference) error {
 // check the actual execution workspace before claim/implementation; this check
 // alone is never a startup permission.
 func VerifyTaskContractFiles(ctx context.Context, c Config, v TaskContract) error {
+	if err := requireNativeTaskAuthority(c); err != nil {
+		return err
+	}
 	if err := ValidateTaskContract(v); err != nil {
 		return err
 	}

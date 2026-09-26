@@ -16,6 +16,9 @@ func ControlSnapshot(c Config) (*Runtime, error) {
 }
 
 func controlSnapshot(c Config, allowInitializing bool) (*Runtime, error) {
+	if err := requireNativeTaskAuthority(c); err != nil {
+		return nil, err
+	}
 	connection := ConnectService(context.Background(), c)
 	if connection.Snapshot.Runtime == nil {
 		if connection.Diagnostic != "" {

@@ -61,6 +61,9 @@ func markVerified(report *CapabilityReport, name, evidence string) {
 // harness for this exact backend, agent, target, platform and CLI version.
 // Repository and run-dir locks exclude the live Service while the report is saved.
 func CertifyExecutionBackend(ctx context.Context, c Config, paths []string) (CapabilityReport, error) {
+	if err := requireNativeTaskAuthority(c); err != nil {
+		return CapabilityReport{}, err
+	}
 	if len(paths) == 0 {
 		return CapabilityReport{}, errors.New("at least one native evidence file is required")
 	}
