@@ -8,7 +8,7 @@ SteerLine 是一款面向工程 AGI 的研究型软件开发工具。它以 road
 
 ## 执行控制台
 
-运行 `steerline console` 打开控制台。默认读取 `<STEERLINE_HOME>/etc/*.json` 中的项目配置；使用 `steerline console -config <path>` 打开一份显式配置，也可用 `-run-id <run-id|task-id>` 定位当前项目中已有的运行。Windows 安装目录提供 `console.bat`；`steerline projects` 菜单也可进入同一控制台。
+运行 `steerline console` 打开控制台。默认读取 `<STEERLINE_HOME>/etc/*.json` 中的项目配置；使用 `steerline console -config <path>` 打开一份显式配置，也可用 `-run-id <run-id|task-id>` 定位当前项目中已有的运行。Windows 安装目录提供 `console.bat`；`steerline projects` 菜单也可进入同一控制台。安装目录只保留 `console.bat` 和 `service-window.bat` 两个批处理入口；后者默认使用 `etc\SteerLine.json`，其他 native 项目可传配置路径。
 
 控制台通过服务查看中心 native 任务候选、运行和回执。只有选择 Ready 候选并按 `s` 才会提交开始请求；按 Enter 只打开详情。`m` 切换手动/自动派发，`p` 暂停/恢复派发，`x` 在确认后停止服务。Windows 服务仍需用户从固定的 `service-window.bat` 独立打开；退出控制台不会停止服务。待决策问题显示完整 question/context/选项详情和 decision_id；按 `a` 后，只有当前 native WorkflowRun、Execution 和 attempt 身份有效时才打开 Unicode 答案编辑器。选项只是预选，按 `F2` 才提交；答案被服务接受不等于已应用，应用须由原执行的绑定证明。服务核对原 workspace 和等待中的步骤后，会以新 attempt 继续同一 native workflow。`u` 打开只读恢复核验面板；当前格式的恢复命令会按原 attempt、Operation 和外部身份重新核对，不确定时保留 blocker 与现场。
 
