@@ -157,9 +157,18 @@ func TestNativeDecisionAcceptanceIsSeparateFromApplication(t *testing.T) {
 	if run.Decision.Status != "reply_accepted" || service.worker == nil {
 		t.Fatalf("accepted answer did not start its fixed native continuation: decision=%+v worker=%v", run.Decision, service.worker != nil)
 	}
+	if run.Decision.AttemptID == run.AttemptID {
+		t.Fatal("native decision continuation did not advance to a new step attempt")
+	}
+	if err = service.hydrateDecisionProjection(context.Background()); err != nil {
+		t.Fatalf("reply-accepted decision could not be restored after attempt advancement: %v", err)
+	}
 	finishNativeStepForTest(t, service)
 	if run.Decision.Status != "applied" {
 		t.Fatalf("native continuation lacked application proof: %+v", run.Decision)
+	}
+	if err = service.hydrateDecisionProjection(context.Background()); err != nil {
+		t.Fatalf("applied decision could not be restored after attempt advancement: %v", err)
 	}
 }
 
