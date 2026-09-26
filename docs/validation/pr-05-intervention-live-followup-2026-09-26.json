@@ -52,12 +52,68 @@
       "slot_occupied": true
     }
   },
+  "answer_submission": {
+    "surface": "CLI",
+    "command_id": "34b2de96e1bf4283a2c4f17dd1219736",
+    "command_status": "accepted",
+    "command_result": "answer_saved",
+    "option_id": "marker-12",
+    "note": "CLI answer for live waiter acceptance",
+    "answer_sha256": "2b60be39344c5407a5c532a24cb59b53dfae076d9a3e9c27bb62896b71f92011",
+    "answer_saved_at": "2026-09-26T15:35:20.0765388Z",
+    "final_decision_status": "failed",
+    "final_decision_version": 5
+  },
+  "answer_waiter_validation": {
+    "initial_waiter_outcome": "context deadline exceeded",
+    "diagnosed_cause": "The wait helper queried with an unresolved project identity after the answer submission resolved identity only in its local config copy.",
+    "fix_source_commit": "626824a",
+    "fixed_binary_live_reread": {
+      "same_command_id": true,
+      "receipt_status": "accepted",
+      "exit_code": 0,
+      "continuation_replayed": false
+    },
+    "regression_test": "TestWaitServiceCommandResolvesIdentityAndKeepsPolling",
+    "go_test": "go test ./cmd/steerline -count=1 passed in 42.793s",
+    "go_vet": "go vet ./cmd/steerline passed",
+    "go_build": "go build -o <test-home>\\steerline-pr50-fixed.exe ./cmd/steerline passed"
+  },
+  "post_answer_continuation": {
+    "attempt_id": "a937322f3581180b8d5b9cd95a124144",
+    "attempt_number": 2,
+    "operation_id": "089d18a265d671559e9a3786a959b4b0",
+    "saved_result": {
+      "succeeded": false,
+      "failure_kind": "git_metadata_write_denied",
+      "head_remained_at_base": true,
+      "worktree_dirty": true,
+      "untracked_files": ["evidence/95010.txt"],
+      "pr_bound_or_created": false,
+      "push_occurred": false
+    },
+    "original_terminal": {
+      "handle": "term_ae107802-b8f0-421a-8c19-de6b10652cff",
+      "incarnation": "b28dd6d1-07d8-4bb0-9295-254a744e19d5",
+      "exit_code": 0
+    },
+    "first_service_exit": "worker exited: unreachable: original Orca terminal liveness is unverifiable",
+    "service_restart_reconciliation": {
+      "startup_id": "a2b4ac00ff3cda566997c81d1f15ed6c",
+      "same_attempt_reconciled": true,
+      "worker_replayed": false,
+      "run_phase": "blocked",
+      "decision_status": "failed",
+      "slot_occupied": false,
+      "service_ready": true
+    }
+  },
   "worktree": {
     "branch": "codex/95010-e563d16f43f0",
     "head": "c3f98ee644c18761f2c60c4769f822806856e7fc",
     "head_remained_at_base": true,
-    "clean": true,
-    "evidence_file_written": false,
+    "clean_before_answer": true,
+    "evidence_file_written_after_answer": true,
     "pr_bound_or_created": false,
     "push_occurred": false
   },
