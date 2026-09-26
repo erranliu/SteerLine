@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -380,6 +381,9 @@ func submitRecoveryCommand(ctx context.Context, c steerline.Config, command, run
 }
 
 func waitServiceCommand(ctx context.Context, c steerline.Config, commandID string, timeout time.Duration) (steerline.CommandRecord, error) {
+	if err := c.ResolveIdentity(ctx); err != nil {
+		return steerline.CommandRecord{}, fmt.Errorf("resolve project identity for command receipt: %w", err)
+	}
 	waitCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	ticker := time.NewTicker(150 * time.Millisecond)
@@ -394,7 +398,7 @@ func waitServiceCommand(ctx context.Context, c steerline.Config, commandID strin
 		if readErr == nil && (current.Status == "accepted" || current.Status == "rejected" || current.Status == "failed" || current.Status == "indeterminate") {
 			return current, nil
 		}
-		if readErr != nil && !os.IsNotExist(readErr) {
+		if readErr != nil && !errors.Is(readErr, sql.ErrNoRows) && !os.IsNotExist(readErr) {
 			return steerline.CommandRecord{}, readErr
 		}
 		select {
