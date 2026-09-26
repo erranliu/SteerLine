@@ -103,6 +103,7 @@
 - 新一轮隔离 native Run `run_5a48215d6ad3` 的 Prepare 和 Implement 均由中心接受；Verify 的内容检查与 base ancestry 都实际通过，候选 `c06dad0948ad0b8bd62c216b1b02cac364c0892a` 包含预期 blob `a7890c716cc3ad0cca79f8d7b68cffe125e6b106`。旧结果模板令 worker 在内层 envelope 再套一层 `step_result`，严格解码因未知字段拒绝，故本轮停在 Verify，未派 Review/Publish，也未创建 PR。全部精确 Dispatch 已结算并 release，Verify transcript 已归档、terminal 确认退出。新的 prompt 改为裸 `StepGateResult` 模板、一次构造内层 envelope 和外层 payload；完整回执见[双层结果封装失败观察](orca-probe/samples/spec03-supervised-native-status-envelope-rejected-2026-09-26.json)。远端 Codex 5 小时额度当时不足 1%，目前没有启动新的昂贵重跑；额度恢复后可用单轮全流程验证该修复。
 - 本次代码验证：版本 pin、结果重放、worker prompt、启动握手、workspace gate、原生固定输入恢复、持久化 Codex 版本读取和无 pin 决策应用证明共 15 个定向测试通过（54.745 秒），`go vet ./internal/steerline` 与 `git diff --check` 通过。完整 `go test ./... -count=1 -timeout=30m` 在 30 分钟上限退出；堆栈停在 `TestCreateTaskBatchAtomicIdempotentAndQueryable` 的 Windows `os.StartProcess`/`git cat-file`。同一测试单独运行在 59.562 秒通过，`go vet ./...` 通过。
 - 使用 `go test ./... -count=1 -timeout=30m -p 1 -parallel 1` 串行复跑仍在 30 分钟上限退出，停在 `TestTaskDiscardRequiresPreciseUnmergedPRAndRetainsUnknownIntent` 的 Windows `os/exec` 管道读取；单独运行该测试在 30.616 秒通过。`cmd/steerline`、console、remoteprotocol、viewer 包均通过。全仓长套件仍需在资源稳定的 Windows 环境完成一次无超时运行。
+- 最终提高串行回归上限后，`go test ./... -count=1 -timeout=45m -p 1 -parallel 1` 退出码 0：`internal/steerline` 2027.400 秒，cmd/steerline 38.092 秒，console 2.145 秒，remoteprotocol 0.643 秒，viewer 2.156 秒；`cmd/orca-probe` 无测试文件。`go vet ./...` 和 `git diff --check` 均通过。前两次 30 分钟长跑的进程启动超时未在这次 45 分钟串行运行中复现。
 
 ## 验证与交接
 
