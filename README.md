@@ -14,7 +14,9 @@ SteerLine 是一款面向工程 AGI 的研究型软件开发工具。它以 road
 
 保留旧执行的 Beads 项目在控制台中以只读视图显示。任务和硬前置从原 Beads 库查询，旧运行投影只供诊断；这类项目不能在新版控制台按 `s/m/p/x` 控制。旧服务结算完成后再切换到 native DAG。
 
-native 项目控制台还会显示中心任务关系、阻塞原因、固定 Spec/Plan/验收引用和交付定位；离线详情显示采样时间，Ready 缓存不会变成启动许可。命令行可用 `steerline task graph -config <path> -task-id <id> -direction upstream -depth 3` 查询关系，或用 `steerline task export -config <path> -format json -output <path>` 导出；覆盖已有导出文件需显式传 `-overwrite`。
+native 项目控制台还会显示中心任务关系、阻塞原因、Spec 路径和交付定位；离线详情显示采样时间，Ready 缓存不会变成启动许可。完整固定引用保留在中心任务契约中。命令行可用 `steerline task graph -config <path> -task-id <id> -direction upstream -depth 3` 查询关系，或用 `steerline task export -config <path> -format json -output <path>` 导出；覆盖已有导出文件需显式传 `-overwrite`。
+
+控制台首屏仅显示当前项目、服务与派发状态、任务列表、阻塞和可用操作。任务详情显示 Spec 路径，不展开 Plan、文档 SHA 或提交号；这些固定引用仍在中心任务契约中。按 `?` 查看完整快捷键。项目左右切换时，标题始终显示当前项目编号和名称，后台项目的提示不会覆盖当前项目。
 
 项目、所选 run/attempt、活动日志、控制请求以及折叠状态按各自身份隔离。活动会话只有明确的 turn 终态才自动收起过程消息；`final_answer` 正文单独分页阅读，过程完成、执行结束和业务任务完成分别展示。来源没有确认轮次或 final 时，控制台会显示能力原因和未识别状态。
 

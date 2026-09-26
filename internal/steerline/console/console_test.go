@@ -1154,7 +1154,7 @@ func TestNarrowConsoleKeepsDetailAndSelectionEntryReachable(t *testing.T) {
 	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{readySnapshot(ref, now)}, control, now)
 	m.width, m.height = 80, 24
 	view := m.View()
-	for _, want := range []string{"Task：task-B", "Build B", "t列表", "s开始"} {
+	for _, want := range []string{"Task：task-B", "Build B", "t列表", "s 开始"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("narrow console lost %q:\n%s", want, view)
 		}

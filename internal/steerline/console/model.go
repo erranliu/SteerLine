@@ -186,6 +186,7 @@ type Model struct {
 
 	confirm    *confirmAction
 	answer     *decisionAnswerDialog
+	help       bool
 	status     string
 	finalIndex int
 
@@ -928,7 +929,7 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		rows := m.rows(index)
 		if state.selectedKey == "" && !state.selectionHold {
 			state.selectedKey = firstRowKey(rows)
-		} else if len(rows) > 0 && !rowExists(rows, state.selectedKey) {
+		} else if index == m.selected && len(rows) > 0 && !rowExists(rows, state.selectedKey) {
 			m.status = "当前选择不在最新快照中；未切换到其他任务，请刷新或重新选择"
 		}
 		if index == m.selected && m.runFocus != "" {
@@ -973,12 +974,16 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			state.recoveryError = msg.err.Error()
 			state.recoveryReport = nil
-			m.status = "恢复核验失败：" + msg.err.Error()
+			if index == m.selected {
+				m.status = "恢复核验失败：" + msg.err.Error()
+			}
 			return m, nil
 		}
 		state.recoveryError = ""
 		state.recoveryReport = &msg.report
-		m.status = "恢复核验报告已刷新 · run " + msg.report.RunID + " · revision " + strconv.FormatUint(msg.report.RunRevision, 10)
+		if index == m.selected {
+			m.status = "恢复核验报告已刷新 · run " + msg.report.RunID + " · revision " + strconv.FormatUint(msg.report.RunRevision, 10)
+		}
 		return m, nil
 	case activityResultMsg:
 		index := m.projectIndex(msg.projectKey)
@@ -1182,7 +1187,7 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 				remapDecisionActionID(state, action, msg.requestID, msg.command.CommandID)
 			}
 			refreshNow, reopen := applyDecisionCommandResult(state, action, msg.command, msg.err)
-			if reopen && action.Action == "answer_decision" {
+			if reopen && action.Action == "answer_decision" && index == m.selected {
 				m.reopenDecisionDraft(index, action)
 			}
 			if action.Resolved {
@@ -1251,7 +1256,7 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			action.InFlight = false
 			action.UpdatedAt = m.clock.Now()
 			refreshNow, reopen := applyDecisionCommandResult(state, action, msg.command, msg.err)
-			if reopen && action.Action == "answer_decision" {
+			if reopen && action.Action == "answer_decision" && index == m.selected {
 				m.reopenDecisionDraft(index, action)
 			}
 			if action.Resolved {
@@ -1802,6 +1807,10 @@ func (m Model) changeFilter(filter int) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	state := &m.projects[m.selected]
+	if state.ref.Legacy != nil && filter != 0 {
+		m.status = "旧 Beads 项目仅提供只读全量任务列表"
+		return m, nil
+	}
 	if state.filter == filter {
 		return m, nil
 	}
@@ -1826,6 +1835,12 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	if m.confirm != nil {
 		return m.handleConfirm(key)
+	}
+	if m.help {
+		if key.String() == "?" || key.String() == "esc" {
+			m.help = false
+		}
+		return m, nil
 	}
 	if m.selected < 0 || m.selected >= len(m.projects) {
 		if key.String() == "q" || key.String() == "ctrl+c" {
@@ -1993,7 +2008,7 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "pgdown":
 		return m.scrollPanel(8)
 	case "?":
-		m.status = "帮助：↑↓ 选择 · ←→ 项目 · Enter 详情 · s 开始 · m 模式 · p 派发 · x 停止 · e 折叠 · = 保持展开 · y 更多 · / 筛选 · q 退出"
+		m.help = true
 		return m, nil
 	}
 	return m, nil
