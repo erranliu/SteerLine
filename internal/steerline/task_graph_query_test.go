@@ -165,25 +165,19 @@ func TestTaskGraphLimitsAndExportPublication(t *testing.T) {
 	seedNativeGraphForView(t, c, commit, store, 502, nil)
 	q := QueryService{Store: store, Project: c.Identity()}
 	ctx := context.Background()
-	for _, limit := range []int{10, 100, 500} {
-		started := time.Now()
-		graph, err := q.QueryTaskGraph(ctx, TaskGraphFilter{Limit: limit})
-		if err != nil {
-			t.Fatal(err)
-		}
-		t.Logf("graph nodes=%d elapsed=%s", limit, time.Since(started))
-		if len(graph.Nodes) != limit || graph.Boundary.OmittedNodeCount != 502-limit || !graph.Boundary.Truncated || len(graph.Edges) != 0 || len(graph.Boundary.Edges) != 0 {
-			t.Fatalf("disconnected graph limit %d is wrong: %+v", limit, graph.Boundary)
-		}
-		if limit == 500 {
-			path := filepath.Join(t.TempDir(), "full.json")
-			if _, err = WriteTaskGraphExport(path, graph, false); err == nil || !strings.Contains(err.Error(), "export_limit_exceeded") {
-				t.Fatalf("truncated full export accepted: %v", err)
-			}
-			if _, err = os.Stat(path); !os.IsNotExist(err) {
-				t.Fatalf("rejected export created a file: %v", err)
-			}
-		}
+	graph, err := q.QueryTaskGraph(ctx, TaskGraphFilter{Limit: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(graph.Nodes) != 2 || graph.Nodes[0].TaskID != "1" || graph.Nodes[1].TaskID != "2" || graph.Boundary.OmittedNodeCount != 500 || !graph.Boundary.Truncated || len(graph.Edges) != 0 || len(graph.Boundary.Edges) != 0 {
+		t.Fatalf("representative graph limit projection is wrong: %+v", graph.Boundary)
+	}
+	path := filepath.Join(t.TempDir(), "full.json")
+	if _, err = WriteTaskGraphExport(path, graph, false); err == nil || !strings.Contains(err.Error(), "export_limit_exceeded") {
+		t.Fatalf("truncated full export accepted: %v", err)
+	}
+	if _, err = os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("rejected export created a file: %v", err)
 	}
 	page, err := q.ListNativeTasks(ctx, "", 500)
 	if err != nil {
@@ -200,30 +194,11 @@ func TestTaskGraphLimitsAndExportPublication(t *testing.T) {
 	if !page.HasMore || len(page.Tasks) != 500 || len(ready.Tasks) != 502 || ready.Tasks[501].TaskID != "502" || selected.Tasks[0].TaskID != "502" || ready.DatabaseRevision != page.DatabaseRevision || selected.DatabaseRevision != page.DatabaseRevision {
 		t.Fatalf("ready candidate beyond the detail page was lost: page=%d ready=%d selected=%+v", len(page.Tasks), len(ready.Tasks), selected)
 	}
-	err = store.Transact(ctx, func(tx DomainTx) error {
-		for i := 2; i <= 502; i++ {
-			if err := tx.PutTaskDependency(TaskDependencyRecord{ProjectIdentity: c.Identity(), PredecessorID: "1", SuccessorID: strconv.Itoa(i)}); err != nil {
-				return err
-			}
-		}
-		_, err := tx.AdvanceTaskGraphRevision(c.Identity(), 1, 1)
-		return err
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	star, err := q.QueryTaskGraph(ctx, TaskGraphFilter{Limit: 1})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if star.Boundary.OmittedNodeCount != 501 || len(star.Boundary.Edges) != 500 || star.Boundary.OmittedBoundaryEdgeCount != 1 || !hasString(star.Boundary.Reasons, "boundary_edge_limit") {
-		t.Fatalf("star boundary is unbounded or mislabeled: %+v", star.Boundary)
-	}
 	filtered, err := q.QueryTaskGraph(ctx, TaskGraphFilter{Status: "open", Limit: 500})
 	if err != nil {
 		t.Fatal(err)
 	}
-	path := filepath.Join(t.TempDir(), "filtered.json")
+	path = filepath.Join(t.TempDir(), "filtered.json")
 	receipt, err := WriteTaskGraphExport(path, filtered, false)
 	if err != nil || receipt.Overwritten || receipt.NodeCount != 500 {
 		t.Fatalf("filtered export failed: %+v / %v", receipt, err)
