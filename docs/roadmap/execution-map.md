@@ -8,7 +8,7 @@
 
 | 任务 ID | 任务名称 | 目标 / 执行 Spec | 直接开工前置 | 集成与交付条件 |
 | --- | --- | --- | --- | --- |
-| 3 | 人工决策与恢复闭环 | `INTERVENTION` · [Spec](../spec/pr-05-intervention.spec.md) · [Plan](../spec/pr-05-intervention.plan.md) · [剩余门槛](../validation/pr-05-intervention.md) | 实现已随 [PR #39](https://github.com/erranliu/SteerLine/pull/39) 合入；Windows TTY 和注册测试仓库已有部分实时证据。95008/95009 的 Codex/Orca 终端已对账为失败且未重放；95010 的 12 选项结果在原终端退出后经同 attempt 重启恢复为待决策，未提交答案 | TTY 实际剪贴板、精确折叠导航及可执行恢复确认仍待验收，stale-revision 已实时通过；Codex `workspace-write` 写 linked-worktree admin files 的限制仍需解决，再完成成功应用证明；Orca 明确故障注入仍须验收。发送回执不能代替应用证明。 |
+| 3 | 人工决策与恢复闭环 | `INTERVENTION` · [Spec](../spec/pr-05-intervention.spec.md) · [Plan](../spec/pr-05-intervention.plan.md) · [剩余门槛](../validation/pr-05-intervention.md) | 实现已随 [PR #39](https://github.com/erranliu/SteerLine/pull/39) 合入；Windows TTY 和注册测试仓库已有部分实时证据。95008/95009 的 Codex/Orca 终端已对账为失败且未重放；95010 的 12 选项结果在原终端退出后经同 attempt 重启恢复为待决策，未提交答案 | 用户报告 TTY 实际系统剪贴板粘贴验收通过；精确折叠导航及可执行恢复确认仍待验收，stale-revision 已实时通过；Codex `workspace-write` 写 linked-worktree admin files 的限制仍需解决，再完成成功应用证明；Orca 明确故障注入仍须验收。发送回执不能代替应用证明。 |
 | 4 | Orca 远程协议验证 | `REMOTE-PROTOCOL` · [Spec](../spec/01-orca-remote-protocol.md) · [Plan](../spec/01-orca-remote-protocol.plan.md) · [剩余门槛](../spec/orca-probe/remaining-gates.md) | 无未完成任务前置；复用已有真实远端报告与字段映射，权限提示探测使用隔离环境 | 验证固定 8 KiB 上限的发送前拒绝和宿主权限提示人工处置；P13 必须在 `#6` 接入中心校验器后作端到端验收。P13 不构成 `#6` 开发前的循环前置。 |
 | 6 | 分阶段远程闭环 | `REMOTE-WORKFLOW` · [Spec](../spec/03-remote-execution-and-viewer.md) · [Plan](../spec/03-remote-execution-and-viewer.plan.md) | 已交付的 `#3` 决策接口与 `#5` 模型、存储和执行接口；`#4` 已实测协议及限制 | 受限适配器可据已有证据开发；启用前须完成 `#4` 剩余必需门槛、P13 中心端到端验证及本任务验收。与 `#0`/`#1` 共用执行和会话契约、与 `#2`/`#3` 共用 UI 和决策边界；扩展已有 SQLite 中心权威。远程取消保持不可用。 |
 
@@ -18,7 +18,7 @@
 
 - **#6 与当前执行接口的共享修改**：Service、配置、worker 上下文、Query/Command、Task DTO 和测试夹具存在共同修改面。独立协议样例可并行；涉及共同接口的修改串行集成，后集成方校验接口并运行受影响回归。`#6` 只接 native，不增加既有运行时任务的可变依赖。
 - **#3/#4 与 #6 的验收资源**：本机 TTY/Orca 验收与远端探测可在固定版本和独立资源上继续；共享仓库、CLI 构建产物或平台执行不能被同时改写。`#6` 改变已测调用路径时重跑受影响项，不把此前版本证据直接标为新实现通过。
-- **#3 的原生验收**：已实现的决策、续跑和恢复复用 `#0` 固定执行身份、`#1` 会话事件、`#2` 控制台与 `#5` SQLite 中心权威。2026-09-26 的实时 TTY stale-revision/Orca command-worker 样例只证明已记录范围；95008/95009 的 Codex continuation 均结算失败；95010 的 `decision_pending` 结果在原 terminal 退出后由服务重启按同一 attempt 对账，恢复为待决策且没有重放。该 run 的会话面板没有可读 session 记录，Windows sandbox 仍无法完成 linked-worktree admin 写入。精确轮次折叠、剪贴板和其余故障恢复仍须独立验收。缺少成功证明时不得标记为已应用。
+- **#3 的原生验收**：已实现的决策、续跑和恢复复用 `#0` 固定执行身份、`#1` 会话事件、`#2` 控制台与 `#5` SQLite 中心权威。2026-09-26 的实时 TTY stale-revision/Orca command-worker 样例只证明已记录范围；95008/95009 的 Codex continuation 均结算失败；95010 的 `decision_pending` 结果在原 terminal 退出后由服务重启按同一 attempt 对账，恢复为待决策且没有重放。用户报告 TTY 实际系统剪贴板粘贴已通过；精确轮次折叠和其余故障恢复仍须独立验收。该 run 的会话面板没有可读 session 记录，Windows sandbox 仍无法完成 linked-worktree admin 写入。缺少成功证明时不得标记为已应用。
 - **#4 与本机工作**：剩余远端探测可与 `#3` 的本机验收并行，探测与适配器集成不能同时占用同一真实远端测试执行资源。本机 `#1` 的精确 turn/phase 及 `#3` 的应用证明验收不代替远端能力证据；远端分页/恢复证据也不代替远端精确会话验证。
 - **#6 复用已交付的原生接入**：远程闭环沿用 `#9` 的中心任务权威、固定执行上下文和恢复接口；远端生产能力仍须按 `#4`/`#6` 的独立门槛验收，不扩大版本、消息大小或取消能力。
 - **接口前置与硬前置**：接口固定后可以准备独立样本、只读展示或测试；需要真实平台、数据库或 UI 的集成验收仍须等待对应前置实现。并行建议不改变各 Spec/Plan 明定的串行交付要求；调整顺序时先修订受影响的 Spec/Plan。

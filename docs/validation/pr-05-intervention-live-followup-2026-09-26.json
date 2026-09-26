@@ -69,7 +69,13 @@
     "selected_option": "marker-01",
     "note_length": 0,
     "answer_submitted": false,
-    "actual_system_clipboard_paste": "not_tested",
+    "actual_system_clipboard_paste": {
+      "status": "accepted_user_reported",
+      "confirmed_on": "2026-09-26",
+      "evidence": "The user reported completing the actual Windows system-clipboard paste test and requested that it be recorded as accepted.",
+      "independently_observed": false,
+      "scope_note": "This does not assert the exact pasted payload in the 95010 editor or that a decision answer was submitted."
+    },
     "session_panel": "no readable session records",
     "precise_turn_grouping": "unverified"
   },
