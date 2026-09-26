@@ -15,6 +15,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/erranliu/SteerLine/internal/steerline/taskgraph"
 )
 
 const taskBatchSchemaVersion = "task-batch/v1"
@@ -580,15 +582,15 @@ func (q QueryService) ReadyNativeTaskSnapshot(ctx context.Context) (NativeReadyT
 			ready = append(ready, task)
 		}
 	}
-	sort.Slice(ready, func(i, j int) bool {
-		if ready[i].Priority != ready[j].Priority {
-			return ready[i].Priority < ready[j].Priority
-		}
-		if !ready[i].CreatedAt.Equal(ready[j].CreatedAt) {
-			return ready[i].CreatedAt.Before(ready[j].CreatedAt)
-		}
-		return decimalIDLess(ready[i].TaskID, ready[j].TaskID)
-	})
+	orderedIDs := StableTaskOrder(ready, graph.Edges)
+	readyByID := make(map[string]TaskRecord, len(ready))
+	for _, task := range ready {
+		readyByID[task.TaskID] = task
+	}
+	ready = make([]TaskRecord, 0, len(orderedIDs))
+	for _, id := range orderedIDs {
+		ready = append(ready, readyByID[id])
+	}
 	return NativeReadyTaskSnapshot{ProjectID: q.Project, AuthorityVersion: graph.Authority.AuthorityVersion, GraphRevision: graph.Authority.GraphRevision, DatabaseID: graph.DatabaseID, DatabaseRevision: graph.DatabaseRevision, SampledAt: graph.SampledAt, Tasks: ready}, nil
 }
 
@@ -1573,110 +1575,28 @@ func taskDiscardPlanTx(ctx context.Context, tx *sqliteTx, project, taskID string
 	return taskDiscardPlanFromSnapshot(snapshot, taskID)
 }
 
-func dependencyCycle(edges []TaskDependencyRecord) []string {
-	adj := map[string][]string{}
-	for _, edge := range edges {
-		adj[edge.PredecessorID] = append(adj[edge.PredecessorID], edge.SuccessorID)
-		if _, ok := adj[edge.SuccessorID]; !ok {
-			adj[edge.SuccessorID] = nil
-		}
-	}
-	for n := range adj {
-		sort.Slice(adj[n], func(i, j int) bool { return decimalIDLess(adj[n][i], adj[n][j]) })
-	}
-	state := map[string]uint8{}
-	stack := []string{}
-	positions := map[string]int{}
-	var found []string
-	var visit func(string) bool
-	visit = func(n string) bool {
-		state[n] = 1
-		positions[n] = len(stack)
-		stack = append(stack, n)
-		for _, next := range adj[n] {
-			if state[next] == 0 {
-				if visit(next) {
-					return true
-				}
-			} else if state[next] == 1 {
-				found = append(append([]string(nil), stack[positions[next]:]...), next)
-				return true
-			}
-		}
-		stack = stack[:len(stack)-1]
-		delete(positions, n)
-		state[n] = 2
-		return false
-	}
-	nodes := make([]string, 0, len(adj))
-	for n := range adj {
-		nodes = append(nodes, n)
-	}
-	sort.Slice(nodes, func(i, j int) bool { return decimalIDLess(nodes[i], nodes[j]) })
-	for _, n := range nodes {
-		if state[n] == 0 && visit(n) {
-			return found
-		}
-	}
-	return nil
-}
-
-func decimalIDLess(a, b string) bool {
-	if len(a) != len(b) {
-		return len(a) < len(b)
-	}
-	return a < b
-}
-
 func StableTaskOrder(tasks []TaskRecord, edges []TaskDependencyRecord) []string {
-	byID := map[string]TaskRecord{}
-	indegree := map[string]int{}
-	children := map[string][]string{}
+	return taskgraph.StableTaskOrder(taskgraphNodes(tasks), taskgraphEdges(edges))
+}
+
+func dependencyCycle(edges []TaskDependencyRecord) []string {
+	return taskgraph.Cycle(taskgraphEdges(edges))
+}
+
+func taskgraphNodes(tasks []TaskRecord) []taskgraph.Node {
+	nodes := make([]taskgraph.Node, 0, len(tasks))
 	for _, task := range tasks {
-		byID[task.TaskID] = task
-		indegree[task.TaskID] = 0
+		nodes = append(nodes, taskgraph.Node{ID: task.TaskID, Status: task.Status, Priority: task.Priority, CreatedAt: task.CreatedAt})
 	}
+	return nodes
+}
+
+func taskgraphEdges(edges []TaskDependencyRecord) []taskgraph.Edge {
+	converted := make([]taskgraph.Edge, 0, len(edges))
 	for _, edge := range edges {
-		if _, ok := byID[edge.PredecessorID]; !ok {
-			continue
-		}
-		if _, ok := byID[edge.SuccessorID]; !ok {
-			continue
-		}
-		indegree[edge.SuccessorID]++
-		children[edge.PredecessorID] = append(children[edge.PredecessorID], edge.SuccessorID)
+		converted = append(converted, taskgraph.Edge{Predecessor: edge.PredecessorID, Successor: edge.SuccessorID})
 	}
-	less := func(a, b string) bool {
-		x, y := byID[a], byID[b]
-		if x.Priority != y.Priority {
-			return x.Priority < y.Priority
-		}
-		if !x.CreatedAt.Equal(y.CreatedAt) {
-			return x.CreatedAt.Before(y.CreatedAt)
-		}
-		return decimalIDLess(a, b)
-	}
-	ready := []string{}
-	for id, n := range indegree {
-		if n == 0 {
-			ready = append(ready, id)
-		}
-	}
-	sort.Slice(ready, func(i, j int) bool { return less(ready[i], ready[j]) })
-	order := make([]string, 0, len(tasks))
-	for len(ready) > 0 {
-		id := ready[0]
-		ready = ready[1:]
-		order = append(order, id)
-		for _, child := range children[id] {
-			indegree[child]--
-			if indegree[child] == 0 {
-				ready = append(ready, child)
-				sort.Slice(ready, func(i, j int) bool { return less(ready[i], ready[j]) })
-			}
-		}
-	}
-	return order
+	return converted
 }
 
 func digestCanonical(b []byte) string { sum := sha256.Sum256(b); return hex.EncodeToString(sum[:]) }
