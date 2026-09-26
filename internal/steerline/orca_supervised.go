@@ -504,7 +504,7 @@ func (b orcaSupervisedBackend) showWorker(ctx context.Context, expected supervis
 	return supervisedWorkerObservation{Identity: identity, Liveness: result.Projection.Liveness.Verdict, DispatchState: result.Dispatch.Status, AgentWaitState: waitState, WorktreePath: result.Terminal.WorktreePath, Branch: strings.TrimPrefix(result.Terminal.Branch, "refs/heads/"), ObservedAt: now()}, nil
 }
 
-func (b orcaSupervisedBackend) StartMinimalStep(ctx context.Context, task Task, run Run, workflow WorkflowRunRecord, execution ExecutionRecord, attempt StepAttemptRecord, input MinimalStepInput, resultPath string) (StartReceipt, error) {
+func (b orcaSupervisedBackend) StartMinimalStep(ctx context.Context, task Task, run Run, workflow WorkflowRunRecord, execution ExecutionRecord, attempt StepAttemptRecord, input MinimalStepInput, workerInput any, resultPath string) (StartReceipt, error) {
 	if err := validateSupervisedOrcaConfig(&b.config); err != nil {
 		return StartReceipt{}, &BackendError{Code: BackendRejected, Diagnostic: "supervised Orca configuration is invalid", Cause: err}
 	}
@@ -548,7 +548,7 @@ func (b orcaSupervisedBackend) StartMinimalStep(ctx context.Context, task Task, 
 		worktreeSelector = "id:" + r.Target.WorktreeID
 	}
 	objective := fmt.Sprintf("SteerLine %s %s", run.RunID[:12], attempt.StepID)
-	taskSpec, err := supervisedStepTaskSpec(b.config, task, r, workflow, attempt, input, pair, base)
+	taskSpec, err := supervisedStepTaskSpec(b.config, task, r, workflow, attempt, input, workerInput, pair, base)
 	if err != nil {
 		return StartReceipt{}, err
 	}
@@ -682,7 +682,7 @@ func (s *Service) reattachSupervisedWorker(run *Run) error {
 	return nil
 }
 
-func supervisedStepTaskSpec(c Config, task Task, run Run, workflow WorkflowRunRecord, attempt StepAttemptRecord, input MinimalStepInput, pair supervisedPreflight, base string) (string, error) {
+func supervisedStepTaskSpec(c Config, task Task, run Run, workflow WorkflowRunRecord, attempt StepAttemptRecord, input MinimalStepInput, workerInput any, pair supervisedPreflight, base string) (string, error) {
 	inputBytes, err := json.Marshal(input)
 	if err != nil {
 		return "", err
@@ -768,6 +768,17 @@ func supervisedStepTaskSpec(c Config, task Task, run Run, workflow WorkflowRunRe
 	b.WriteString("The type=status CLI argv is: orca orchestration send --from <preamble sender handle> --dispatch-capability <preamble capability> --type status --subject <short subject> --payload <one JSON argument> --json. Federated Dispatch messages must omit --run and --to; Orca routes them to the Run home from the exact preamble sender and capability. The worker_done CLI argv uses the same preamble --from/--dispatch-capability and its exact --task-id/--dispatch-id/--outcome. Parse the JSON response and require ok=true and a nonempty result.mutation.requestId; this proves Orca accepted the send. Do not require result.message.from_handle to equal dispatch:<id> in the immediate send receipt; the center verifies exact Dispatch identity when it consumes the inbox message. Plain text output is not a JSON receipt. Do not append --task-id, --dispatch-id, --outcome, --body, --phase, --files-modified, or --report-path to a status send with --payload; those separate structured flags conflict with --payload. Use --task-id/--dispatch-id/--outcome only on the later worker_done command.\n")
 	b.WriteString("If this step needs a business answer, use the Dispatch preamble's Orca ask command with --json, the question, and any exact option strings; do not settle or start a replacement step while waiting. Parse and save the original ask message ID from that JSON response, and resume that same ID after a timeout. A plain ask without --json prints only the answer text and loses the ID needed for proof; do not issue a second question to recover it. When the answer returns and has actually been applied, send a separate type=status message through the same direct pwsh.exe CLI path with taskId, dispatchId, remote_codex_version, decision_applied set to the original question message ID, applied_decision_attempt_id and applied_decision_execution_id copied from Step Input, and applied_answer_body exactly equal to the answer received from Orca; omit step_result from this proof message. The center checks the echoed answer against its saved answer and binds the fixed answer digest. A bare question ID is never application proof. Continue the same step attempt, then send its one final step_result and worker_done. Orca reply acceptance alone does not prove you applied the answer.\n")
 	fmt.Fprintf(&b, "Task title: %s\nTask description: %s\nWorkflow definition: %s\nStep contract: %s\nStep input: %s\n", task.Title, task.Description, workflow.Definition.ID, string(contractBytes), string(inputBytes))
+	if c.TaskAuthority == "native" {
+		nativeInput, ok := workerInput.(NativeTaskWorkerContext)
+		if !ok || nativeInput.SchemaVersion != NativeTaskInputSchema || nativeInput.ProjectID != input.ProjectIdentity || nativeInput.TaskID != input.TaskID || nativeInput.WorkflowRunID != input.WorkflowRunID || nativeInput.ExecutionID != input.ExecutionID || nativeInput.AttemptID != input.AttemptID || nativeInput.CurrentStep != input.StepID || nativeInput.Contract.ContractID == "" || nativeInput.ContractDigest != nativeInput.Contract.Digest || nativeInput.StepInput.ProjectIdentity != input.ProjectIdentity || nativeInput.StepInput.AttemptID != input.AttemptID || nativeInput.StepInput.StepID != input.StepID {
+			return "", &BackendError{Code: BackendIdentityMismatch, Diagnostic: "native supervised worker context differs from the fixed step input"}
+		}
+		data, marshalErr := json.Marshal(nativeInput)
+		if marshalErr != nil {
+			return "", marshalErr
+		}
+		fmt.Fprintf(&b, "Native task authority is the center's fixed task contract; do not use Beads. Read and follow these immutable native-task/v1 contract references and prerequisite results for this one step. Verify each referenced file from the pinned repository commit before acting. Native worker context: %s\n", data)
+	}
 	if b.Len() > 64<<10 {
 		return "", &BackendError{Code: BackendRejected, Diagnostic: "serialized supervised step task exceeds the 64 KiB task-spec bound"}
 	}

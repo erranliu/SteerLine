@@ -256,7 +256,13 @@ func (s *Service) startNativeRetryFor(ctx context.Context, runID, requestedBy st
 	if workspace.Dirty || workspace.Head != failed.InputRevision {
 		return nativeErr("contract_mismatch", "native retry requires a clean fixed workspace at the failed attempt input revision")
 	}
-	if _, err = s.requireBackendCapabilities(ctx, backendFor(s.Config, BeadsContext{}), "start", "observe", "stop", "workspace_inspection", "output_reading"); err != nil {
+	required := []string{"start", "observe", "workspace_inspection", "output_reading"}
+	if s.Config.hostName() == "orca_supervised" {
+		required = append(required, "message_inbox", "reply_continue", "resource_settlement")
+	} else {
+		required = append(required, "stop")
+	}
+	if _, err = s.requireBackendCapabilities(ctx, backendFor(s.Config, BeadsContext{}), required...); err != nil {
 		return err
 	}
 	page, err := (QueryService{Store: s.domainStore, Project: s.Config.identity}).ShowNativeTask(ctx, task.TaskID)

@@ -210,6 +210,18 @@ func TestNativeOrcaProjectStepsUseFixedTaskContextAndCenterDelivery(t *testing.T
 	if _, err = c.validateNativeWorkflow(); err != nil {
 		t.Fatalf("native Orca workflow did not accept target-side project steps: %v", err)
 	}
+	supervised := c
+	supervised.Host = "orca_supervised"
+	supervised.Orca.Shell = "powershell"
+	if _, err = supervised.validateNativeWorkflow(); err != nil {
+		t.Fatalf("native supervised workflow did not accept target-side project steps: %v", err)
+	}
+	withEnvironment := *supervised.ProjectSteps
+	withEnvironment.Implement.Environment = map[string]string{"NATIVE_STEP_MODE": "test"}
+	supervised.ProjectSteps = &withEnvironment
+	if _, err = supervised.validateNativeWorkflow(); err == nil || !strings.Contains(err.Error(), "cannot pin environment values") {
+		t.Fatalf("native supervised workflow accepted unverified remote environment injection: %v", err)
+	}
 	localSite := *c.ProjectSteps
 	localSite.Implement.ExecutionSite = "local"
 	invalid := c
@@ -301,6 +313,31 @@ func TestNativeOrcaProjectStepsUseFixedTaskContextAndCenterDelivery(t *testing.T
 	}()
 	if err = s.dispatch(context.Background()); err != nil {
 		t.Fatal(err)
+	}
+	claimed := s.find("201")
+	claimedTask := nativeTaskRecord(s.State.Tasks, "201")
+	claimedWorkflow, claimedExecution := s.minimalRecords(claimed)
+	if claimed == nil || claimedTask == nil || claimedWorkflow == nil || claimedExecution == nil {
+		t.Fatal("native claim did not retain its fixed task and workflow context")
+	}
+	remoteConfig := s.Config
+	remoteConfig.Host = "orca_supervised"
+	remoteCenter := &Service{Config: remoteConfig, native: true, domainStore: s.domainStore, State: s.State}
+	remoteRun := cloneRun(*claimed)
+	remoteRun.WorktreePath, remoteRun.WorktreeBranch = nil, nil
+	remoteRun.Target.WorktreeID = ""
+	remoteExecution := *claimedExecution
+	remoteExecution.Target.WorktreeID = ""
+	remoteExecution.Workspace.Base = commit
+	remotePrepare := StepAttemptRecord{AttemptID: "native-remote-prepare", ExecutionID: remoteExecution.ExecutionID, StepID: "prepare", InputRevision: commit}
+	remoteTask := nativeTaskModel(*claimedTask)
+	remoteInput := buildMinimalStepInput(c.Identity(), remoteTask, &remoteRun, claimedWorkflow, &remoteExecution, &remotePrepare)
+	remoteContext, contextErr := remoteCenter.minimalWorkerInput(context.Background(), remoteTask, &remoteRun, claimedWorkflow, &remoteExecution, &remotePrepare, remoteInput)
+	if contextErr != nil {
+		t.Fatalf("native supervised prepare rejected the fixed task context before Orca returned a worktree: %v", contextErr)
+	}
+	if contextValue, ok := remoteContext.(NativeTaskWorkerContext); !ok || contextValue.TaskID != "201" || contextValue.Contract.ContractID != contract.ContractID || contextValue.BaseCommit != commit || contextValue.CurrentStep != "prepare" {
+		t.Fatalf("native supervised prepare lost its fixed task contract: %+v", remoteContext)
 	}
 	for range 3 {
 		if s.worker == nil {

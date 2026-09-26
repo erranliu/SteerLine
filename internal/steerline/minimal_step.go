@@ -106,6 +106,8 @@ func (c Config) validateNativeWorkflow() (*MinimalWorkflowConfig, error) {
 			return nil, UnsupportedAdapterOperation("native-task/v1", "Orca native project steps require the supported Windows terminal v2 cmd.exe target")
 		}
 		executionSite = "target"
+	} else if c.hostName() == "orca_supervised" {
+		executionSite = "target"
 	} else if c.hostName() != "local" {
 		return nil, UnsupportedAdapterOperation("native-task/v1", "configured execution host has no native project-step adapter")
 	}
@@ -131,8 +133,8 @@ func (c Config) validateNativeWorkflow() (*MinimalWorkflowConfig, error) {
 			if upper == "STEERLINE_WORKFLOW_RUN_ID" || upper == "STEERLINE_EXECUTION_ID" || upper == "STEERLINE_ATTEMPT_ID" || upper == "STEERLINE_STEP_ID" {
 				return nil, fmt.Errorf("native project_steps cannot override execution identity environment variable %q", name)
 			}
-			if c.hostName() == "orca" {
-				return nil, errors.New("Orca native project steps cannot pin environment values in a persisted terminal command")
+			if c.hostName() == "orca" || c.hostName() == "orca_supervised" {
+				return nil, errors.New("remote native project steps cannot pin environment values in an unverified terminal command")
 			}
 		}
 	}
@@ -459,7 +461,8 @@ func (s *Service) minimalWorkerInput(ctx context.Context, task Task, run *Run, w
 	if !s.native {
 		return input, nil
 	}
-	if run == nil || workflow == nil || execution == nil || attempt == nil || run.WorktreePath == nil || run.WorktreeBranch == nil || run.BaseCommit == nil {
+	remotePrepare := s.Config.hostName() == "orca_supervised" && attempt != nil && attempt.StepID == "prepare"
+	if run == nil || workflow == nil || execution == nil || attempt == nil || run.BaseCommit == nil || !remotePrepare && (run.WorktreePath == nil || run.WorktreeBranch == nil) {
 		return nil, nativeErr("contract_mismatch", "native worker context requires a fixed task, workflow, execution, attempt and workspace")
 	}
 	taskRecord := nativeTaskRecord(s.State.Tasks, task.ID)
@@ -477,15 +480,22 @@ func (s *Service) minimalWorkerInput(ctx context.Context, task Task, run *Run, w
 	if contract.Repository != authority.Repository || contract.Remote != authority.Remote || contract.Branch != authority.Branch {
 		return nil, nativeErr("authority_mismatch", "native task contract differs from the registered repository target")
 	}
-	workspace, err := s.inspectMinimalWorkspace(ctx, run)
-	if err != nil {
-		return nil, fmt.Errorf("native execution workspace could not be verified: %w", err)
-	}
-	if canonical(workspace.Worktree) != canonical(*run.WorktreePath) || workspace.Branch != *run.WorktreeBranch || workspace.Base != *run.BaseCommit || workspace.Base != execution.Workspace.Base {
-		return nil, nativeErr("contract_mismatch", "native execution workspace identity differs from its claimed base or fixed branch")
+	workspace := WorkspaceEvidence{Repository: s.Config.identity, Branch: s.Config.Branch, Base: *run.BaseCommit, Head: *run.BaseCommit}
+	if !remotePrepare {
+		workspace, err = s.inspectMinimalWorkspace(ctx, run)
+		if err != nil {
+			return nil, fmt.Errorf("native execution workspace could not be verified: %w", err)
+		}
+		if canonical(workspace.Worktree) != canonical(*run.WorktreePath) || workspace.Branch != *run.WorktreeBranch || workspace.Base != *run.BaseCommit || workspace.Base != execution.Workspace.Base {
+			return nil, nativeErr("contract_mismatch", "native execution workspace identity differs from its claimed base or fixed branch")
+		}
+	} else if execution.Workspace.Base != workspace.Base || execution.Target.WorktreeID != "" {
+		return nil, nativeErr("contract_mismatch", "native remote prepare has a conflicting base or premature worktree identity")
 	}
 	contractConfig := s.Config
-	contractConfig.Repository = workspace.Worktree
+	if s.Config.hostName() != "orca_supervised" {
+		contractConfig.Repository = workspace.Worktree
+	}
 	if verifyErr := VerifyTaskContractFiles(ctx, contractConfig, contract); verifyErr != nil {
 		return nil, fmt.Errorf("native execution contract verification failed: %w", verifyErr)
 	}
@@ -1481,7 +1491,7 @@ func (s *Service) startMinimalStep(ctx context.Context, task Task, run *Run, sou
 		}
 	}
 	if s.Config.hostName() == "orca_supervised" {
-		started, startErr := (orcaSupervisedBackend{config: s.Config}).StartMinimalStep(ctx, task, *run, *workflow, *execution, *attempt, input, resultPath)
+		started, startErr := (orcaSupervisedBackend{config: s.Config}).StartMinimalStep(ctx, task, *run, *workflow, *execution, *attempt, input, workerInput, resultPath)
 		platformRequestID = started.PlatformRequestID
 		if startErr != nil {
 			var backendErr *BackendError

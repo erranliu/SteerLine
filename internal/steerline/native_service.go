@@ -651,7 +651,13 @@ func (s *Service) dispatchNative(ctx context.Context) error {
 		return err
 	}
 	if len(ready) > 0 {
-		if _, err = s.requireBackendCapabilities(ctx, backendFor(s.Config, BeadsContext{}), "start", "observe", "stop", "workspace_inspection", "output_reading"); err != nil {
+		required := []string{"start", "observe", "workspace_inspection", "output_reading"}
+		if s.Config.hostName() == "orca_supervised" {
+			required = append(required, "message_inbox", "reply_continue", "resource_settlement")
+		} else {
+			required = append(required, "stop")
+		}
+		if _, err = s.requireBackendCapabilities(ctx, backendFor(s.Config, BeadsContext{}), required...); err != nil {
 			return err
 		}
 	}
@@ -703,8 +709,10 @@ func (s *Service) dispatchNative(ctx context.Context) error {
 		if execution.Target.WorktreeID != "" || execution.Target.Branch != s.Config.Branch {
 			return nativeErr("authority_mismatch", "claimed execution already has a conflicting workspace identity")
 		}
-		execution.Target.WorktreeID = intent.Path
-		execution.Target.Branch = intent.Branch
+		if s.Config.hostName() != "orca_supervised" {
+			execution.Target.WorktreeID = intent.Path
+			execution.Target.Branch = intent.Branch
+		}
 		execution.Status = "active"
 		if workflow.Phase == "queued" {
 			workflow.Phase = "executing"
@@ -714,7 +722,12 @@ func (s *Service) dispatchNative(ctx context.Context) error {
 		attempt.ExternalBinding = execution.Target
 		attempt.UpdatedAt = now()
 		run.WorkspaceIntent = intent
-		run.WorktreePath, run.WorktreeBranch, run.BaseCommit = ptr(intent.Path), ptr(intent.Branch), ptr(intent.BaseCommit)
+		if s.Config.hostName() == "orca_supervised" {
+			run.WorktreePath, run.WorktreeBranch = nil, nil
+			run.BaseCommit = ptr(intent.BaseCommit)
+		} else {
+			run.WorktreePath, run.WorktreeBranch, run.BaseCommit = ptr(intent.Path), ptr(intent.Branch), ptr(intent.BaseCommit)
+		}
 		run.ExecutionStatus = "pending"
 		run.FinishTaskStatus = "pending"
 		s.State.SlotOccupied = true

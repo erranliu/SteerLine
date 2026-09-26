@@ -835,7 +835,7 @@ func TestSupervisedStartMinimalStepBindsRemoteRunAndWorktree(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	taskSpec, err := supervisedStepTaskSpec(c, taskValue, run, workflow, attempt, input, pair, base)
+	taskSpec, err := supervisedStepTaskSpec(c, taskValue, run, workflow, attempt, input, input, pair, base)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -849,7 +849,7 @@ func TestSupervisedStartMinimalStepBindsRemoteRunAndWorktree(t *testing.T) {
 	reviewInput.StepID = "review"
 	reviewInput.CandidateRevision = reviewRevision
 	reviewInput.PrerequisiteResultIDs = []string{"original-result", "failed-check-result"}
-	reviewSpec, err := supervisedStepTaskSpec(c, taskValue, run, workflow, reviewAttempt, reviewInput, pair, base)
+	reviewSpec, err := supervisedStepTaskSpec(c, taskValue, run, workflow, reviewAttempt, reviewInput, reviewInput, pair, base)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -879,13 +879,24 @@ func TestSupervisedStartMinimalStepBindsRemoteRunAndWorktree(t *testing.T) {
 	if !sameStrings(identity.PrerequisiteIDs, reviewInput.PrerequisiteResultIDs) || !strings.Contains(reviewSpec, "prerequisite_result_ids=@($ids.prerequisite_result_ids)") {
 		t.Fatal("supervised repair prerequisites were not bound to the decoded fixed input")
 	}
+	nativeConfig := c
+	nativeConfig.TaskAuthority = "native"
+	nativeInput := NativeTaskWorkerContext{SchemaVersion: NativeTaskInputSchema, ProjectID: reviewInput.ProjectIdentity, TaskID: reviewInput.TaskID, WorkflowRunID: reviewInput.WorkflowRunID, ExecutionID: reviewInput.ExecutionID, AttemptID: reviewInput.AttemptID, CurrentStep: reviewInput.StepID, Contract: TaskContract{ContractID: "native-contract-1", Digest: "native-digest"}, ContractDigest: "native-digest", StepInput: reviewInput}
+	nativeSpec, nativeErr := supervisedStepTaskSpec(nativeConfig, taskValue, run, workflow, reviewAttempt, reviewInput, nativeInput, pair, base)
+	if nativeErr != nil || !strings.Contains(nativeSpec, `"contract_id":"native-contract-1"`) || !strings.Contains(nativeSpec, `"schema_version":"native-task/v1"`) {
+		t.Fatalf("native supervised task did not include the fixed contract context: %v", nativeErr)
+	}
+	nativeInput.TaskID = "other-task"
+	if _, nativeErr = supervisedStepTaskSpec(nativeConfig, taskValue, run, workflow, reviewAttempt, reviewInput, nativeInput, pair, base); nativeErr == nil || !isBackendError(nativeErr, BackendIdentityMismatch) {
+		t.Fatalf("native supervised task accepted a mismatched task context: %v", nativeErr)
+	}
 	resultPath := filepath.Join(t.TempDir(), "result.json")
 	withoutRun := run
 	withoutRun.Target.OrchestrationRun = ""
-	if _, err := (orcaSupervisedBackend{config: c}).StartMinimalStep(context.Background(), taskValue, withoutRun, workflow, execution, attempt, input, resultPath); err == nil || !isBackendError(err, BackendRejected) {
+	if _, err := (orcaSupervisedBackend{config: c}).StartMinimalStep(context.Background(), taskValue, withoutRun, workflow, execution, attempt, input, input, resultPath); err == nil || !isBackendError(err, BackendRejected) {
 		t.Fatalf("unjournaled Run creation was allowed: %v", err)
 	}
-	receipt, err := (orcaSupervisedBackend{config: c}).StartMinimalStep(context.Background(), taskValue, run, workflow, execution, attempt, input, resultPath)
+	receipt, err := (orcaSupervisedBackend{config: c}).StartMinimalStep(context.Background(), taskValue, run, workflow, execution, attempt, input, input, resultPath)
 	if err != nil {
 		t.Fatal(err)
 	}
