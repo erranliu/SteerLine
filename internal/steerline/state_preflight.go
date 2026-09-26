@@ -49,6 +49,12 @@ func preflightExistingState(runDir, runtimeFile string) error {
 			return err
 		}
 		defer reader.Close()
+		if err = validateRetiredWholeRunResultCommands(context.Background(), reader.db); err != nil {
+			return err
+		}
+		if err = validateNativeSQLiteRuntimeProjection(context.Background(), reader.db); err != nil {
+			return err
+		}
 		var tableCount int
 		if err = reader.db.QueryRowContext(context.Background(), `SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='project_task_authorities'`).Scan(&tableCount); err != nil {
 			return err
@@ -77,6 +83,17 @@ func preflightExistingState(runDir, runtimeFile string) error {
 	}
 	if len(entries) != 0 {
 		return errors.New("run records exist without the authoritative SQLite database; preserve the state directory for manual recovery")
+	}
+	return nil
+}
+
+func validateRetiredWholeRunResultCommands(ctx context.Context, db *sql.DB) error {
+	var count int
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM commands WHERE kind='accept_result'`).Scan(&count); err != nil {
+		return nativeErr("unsupported_schema", "cannot inspect retired whole-run result commands without mutation")
+	}
+	if count > 0 {
+		return nativeErr("unsupported_schema", "database contains retired whole-run result commands; preserve it for manual recovery")
 	}
 	return nil
 }

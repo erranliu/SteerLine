@@ -49,8 +49,8 @@ type VerifyCheck struct {
 	ActualCommit  string `json:"actual_commit"`
 }
 
-// VerifyResult is the Spec 01 logical result for one verify step. It does not
-// replace the legacy one-shot PR result schema used by the current scheduler.
+// VerifyResult is the Spec 01 logical result for one verify step. It is bound
+// to the native workflow, execution, attempt and Operation identities.
 type VerifyResult struct {
 	ProtocolVersion    int           `json:"protocol_version"`
 	ProjectID          string        `json:"project_id"`

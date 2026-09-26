@@ -35,12 +35,8 @@ type Config struct {
 	WorktreeRoot       string              `json:"worktree_root"`
 	RuntimeFile        string              `json:"runtime_file"`
 	Claimant           string              `json:"claimant"`
-	BD                 Command             `json:"bd"`
 	Git                Command             `json:"git"`
 	Codex              Command             `json:"codex"`
-	StartSkill         Skill               `json:"start_skill"`
-	FinishSkill        Skill               `json:"finish_skill"`
-	Workflow           string              `json:"workflow"`
 	WorkflowDefinition *WorkflowDefinition `json:"workflow_definition,omitempty"`
 	ProjectSteps       *ProjectSteps       `json:"project_steps,omitempty"`
 	ExecutableTypes    []string            `json:"executable_types"`
@@ -58,10 +54,7 @@ type Config struct {
 	StallTimeout       string              `json:"stall_timeout"`
 	Orca               OrcaConfig          `json:"orca"`
 	PR                 PRConfig            `json:"pr"`
-	Completion         *CompletionConfig   `json:"completion"`
 	identity           string
-	startText          string
-	finishText         string
 	workerEnv          map[string]string
 	configDigest       string
 }
@@ -87,25 +80,11 @@ type SupervisedOrcaConfig struct {
 	RemoteCancelAvailable   bool   `json:"remote_cancel_available"`
 }
 
-type CompletionConfig struct {
+// LegacyCompletionConfig is decoded only as a marker for rejecting old runtime
+// projections; it is never accepted in Config or executed.
+type LegacyCompletionConfig struct {
 	Command Command `json:"command"`
 	Timeout string  `json:"timeout"`
-}
-
-func (c *CompletionConfig) validate() error {
-	if c == nil {
-		return nil
-	}
-	if c.Timeout == "" {
-		c.Timeout = "2m"
-	}
-	if d, e := time.ParseDuration(c.Timeout); e != nil || d <= 0 {
-		return errors.New("completion.timeout must be positive")
-	}
-	if c.Command.Executable == "" {
-		return errors.New("completion.command.executable is required")
-	}
-	return nil
 }
 
 type PRConfig struct {
@@ -233,7 +212,7 @@ func InstallSelf() (string, error) {
 }
 
 func LoadConfig(path string) (Config, error) {
-	c := Config{Remote: "origin", RuntimeFile: "runtime.json", TaskPoll: "10s", PRPoll: "30s", Heartbeat: "5s", CommandTimeout: "30s", ShutdownGrace: "10s", Sandbox: "workspace-write", Git: Command{Executable: "git"}, BD: Command{Executable: "bd"}, Codex: Command{Executable: "codex"}, ExecutableTypes: []string{"task", "bug", "feature", "chore"}, Agent: "codex", Host: "orca", StallTimeout: "5m", Orca: OrcaConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "15m"}}
+	c := Config{Remote: "origin", RuntimeFile: "runtime.json", TaskPoll: "10s", PRPoll: "30s", Heartbeat: "5s", CommandTimeout: "30s", ShutdownGrace: "10s", Sandbox: "workspace-write", Git: Command{Executable: "git"}, Codex: Command{Executable: "codex"}, ExecutableTypes: []string{"task", "bug", "feature", "chore"}, Agent: "codex", Host: "orca", StallTimeout: "5m", Orca: OrcaConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "15m"}}
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return c, err
@@ -243,11 +222,8 @@ func LoadConfig(path string) (Config, error) {
 	if err = decode(b, &c); err != nil {
 		return c, err
 	}
-	if c.TaskAuthority == "" {
-		return c, errors.New("task_authority must be set explicitly to native or beads; Beads is not an implicit task source")
-	}
-	if c.TaskAuthority != "beads" && c.TaskAuthority != "native" {
-		return c, errors.New("task_authority must be beads or native")
+	if c.TaskAuthority != "native" {
+		return c, errors.New("task_authority must be explicitly set to native; Beads is not supported")
 	}
 	var configFields map[string]json.RawMessage
 	_ = json.Unmarshal(b, &configFields)
@@ -282,15 +258,11 @@ func LoadConfig(path string) (Config, error) {
 	if filepath.Base(c.RuntimeFile) != c.RuntimeFile || c.RuntimeFile == "." {
 		return c, errors.New("runtime_file must be a filename inside run_dir")
 	}
-	if c.TaskAuthority == "native" {
-		switch c.RuntimeFile {
-		case "steerline.db", "steerline.db-wal", "steerline.db-shm", "service", "execution", "runs", "worktrees":
-			return c, errors.New("runtime_file conflicts with native authority or execution state")
-		}
-		err = preflightNativeStatePath(c)
-	} else {
-		err = preflightExistingState(c.RunDir, c.RuntimeFile)
+	switch c.RuntimeFile {
+	case "steerline.db", "steerline.db-wal", "steerline.db-shm", "service", "execution", "runs", "worktrees":
+		return c, errors.New("runtime_file conflicts with native authority or execution state")
 	}
+	err = preflightNativeStatePath(c)
 	if err != nil {
 		return c, err
 	}
@@ -300,10 +272,8 @@ func LoadConfig(path string) (Config, error) {
 	if !filepath.IsAbs(c.WorktreeRoot) {
 		c.WorktreeRoot = filepath.Join(base, c.WorktreeRoot)
 	}
-	if c.TaskAuthority == "native" {
-		if err := validateNativeStateLocation(c); err != nil {
-			return c, err
-		}
+	if err := validateNativeStateLocation(c); err != nil {
+		return c, err
 	}
 	for _, v := range []string{c.TaskPoll, c.PRPoll, c.Heartbeat, c.CommandTimeout, c.ShutdownGrace} {
 		d, e := time.ParseDuration(v)
@@ -356,9 +326,6 @@ func LoadConfig(path string) (Config, error) {
 	}
 	if len(c.ExecutableTypes) == 0 {
 		return c, errors.New("executable_types is empty")
-	}
-	if err = c.Completion.validate(); err != nil {
-		return c, err
 	}
 	for _, s := range c.ExecutableTypes {
 		if !regexp.MustCompile(`^[a-z][a-z0-9-]*$`).MatchString(s) || s == "epic" || s == "molecule" || s == "convoy" {
@@ -514,182 +481,21 @@ func resolveCommand(c *Command) error {
 	return nil
 }
 func (c *Config) Preflight(ctx context.Context, checkSkills bool) error {
-	if c.taskAuthority() == "native" {
-		return c.preflightNative(ctx, checkSkills)
+	if err := requireNativeTaskAuthority(*c); err != nil {
+		return err
 	}
-	if c.RuntimeFile != "" {
-		if err := preflightExistingState(c.RunDir, c.RuntimeFile); err != nil {
-			return err
-		}
-	}
-	if c.hostName() == "local" && c.agentName() != "codex" {
-		return errors.New("local_process currently supports only agent=codex")
-	}
-	if e := c.Completion.validate(); e != nil {
-		return e
-	}
-	if c.Completion != nil {
-		if e := resolveCommand(&c.Completion.Command); e != nil {
-			return e
-		}
-	}
-	commands := []*Command{&c.Git, &c.BD}
-	if c.needsCodexExecutable() {
-		commands = append(commands, &c.Codex)
-	}
-	for _, cmd := range commands {
-		if e := resolveCommand(cmd); e != nil {
-			return e
-		}
-	}
-	r := Runner{Dir: c.Repository, Timeout: duration(c.CommandTimeout)}
-	if c.hostName() == "orca" || c.hostName() == "orca_supervised" {
-		if _, e := r.Output(ctx, Command{Executable: c.Orca.Executable, Args: c.Orca.Args}, "status", "--json"); e != nil {
-			return fmt.Errorf("orca host is not reachable: %w", e)
-		}
-	}
-	if c.hostName() == "orca_supervised" {
-		if _, err := probeSupervisedOrcaTarget(ctx, *c); err != nil {
-			return fmt.Errorf("supervised Orca target preflight: %w", err)
-		}
-	}
-	root, e := r.Output(ctx, c.Git, "rev-parse", "--show-toplevel")
-	if e != nil {
-		return e
-	}
-	c.Repository, e = filepath.EvalSymlinks(strings.TrimSpace(string(root)))
-	if e != nil {
-		return e
-	}
-	r.Dir = c.Repository
-	common, e := r.Output(ctx, c.Git, "rev-parse", "--path-format=absolute", "--git-common-dir")
-	if e != nil {
-		return e
-	}
-	c.identity, e = filepath.EvalSymlinks(strings.TrimSpace(string(common)))
-	if e != nil {
-		return e
-	}
-	c.identity = canonical(c.identity)
-	if c.Claimant == "" {
-		c.Claimant = "steerline-" + shortHash(c.identity)
-	}
-	if !regexp.MustCompile(`^[a-zA-Z0-9._-]+$`).MatchString(c.Claimant) {
-		return errors.New("claimant must contain only letters, numbers, dot, underscore or hyphen")
-	}
-	if _, e = r.Output(ctx, c.Git, "check-ref-format", "refs/heads/"+c.Branch); e != nil {
-		return e
-	}
-	remote, e := r.Output(ctx, c.Git, "remote", "get-url", c.Remote)
-	if e != nil {
-		return e
-	}
-	if e = c.PR.ValidateRemote(strings.TrimSpace(string(remote))); e != nil {
-		return e
-	}
-	if c.PR.Kind == "command" {
-		if e = resolveCommand(&c.PR.Query); e != nil {
-			return e
-		}
-	}
-	// Keep runtime data outside every checkout; never edit the target's ignore rules.
-	if e = os.MkdirAll(c.RunDir, 0700); e != nil {
-		return e
-	}
-	c.RunDir, e = filepath.EvalSymlinks(c.RunDir)
-	if e != nil {
-		return e
-	}
-	if inside(c.Repository, c.RunDir) {
-		return errors.New("run_dir must be outside the target checkout")
-	}
-	wt, e := r.Output(ctx, c.Git, "worktree", "list", "--porcelain", "-z")
-	if e != nil {
-		return e
-	}
-	if e = c.prepareWorktreeRoot(); e != nil {
-		return e
-	}
-	for _, line := range strings.Split(string(wt), "\x00") {
-		if strings.HasPrefix(line, "worktree ") && inside(strings.TrimPrefix(line, "worktree "), c.RunDir) {
-			return errors.New("run_dir must be outside all linked worktrees")
-		}
-		if strings.HasPrefix(line, "worktree ") && inside(strings.TrimPrefix(line, "worktree "), c.WorktreeRoot) {
-			return errors.New("worktree_root must be outside all existing checkouts")
-		}
-	}
-	probes := []struct {
-		cmd   Command
-		args  []string
-		flags []string
-	}{
-		{c.BD, []string{"ready", "--help"}, []string{"--unassigned", "--limit"}},
-		{c.BD, []string{"update", "--help"}, []string{"--claim", "--actor"}},
-		{c.BD, []string{"list", "--help"}, []string{"--assignee", "--limit", "--all"}},
-		{c.BD, []string{"close", "--help"}, []string{"--reason"}},
-	}
-	if c.needsCodexExecutable() {
-		probes = append(probes, struct {
-			cmd   Command
-			args  []string
-			flags []string
-		}{c.Codex, []string{"exec", "--help"}, []string{"--json", "--output-schema", "--output-last-message", "--sandbox"}})
-	}
-	for _, probe := range probes {
-		b, e := r.Output(ctx, probe.cmd, probe.args...)
-		if e != nil {
-			return e
-		}
-		for _, flag := range probe.flags {
-			if !strings.Contains(string(b), flag) {
-				return fmt.Errorf("tool help missing required flag %s", flag)
-			}
-		}
-	}
-	b := Beads{Runner: r, Command: c.BD, Claimant: c.Claimant}
-	if _, e = b.Ready(ctx); e != nil {
-		return fmt.Errorf("Beads preflight (no initialization performed): %w", e)
-	}
-	if _, e = b.Owned(ctx); e != nil {
-		return e
-	}
-	if _, e = b.Context(ctx); e != nil {
-		return fmt.Errorf("shared Beads context: %w", e)
-	}
-	if !checkSkills {
-		return nil
-	}
-	if workflow, workflowErr := c.minimalConfig(); workflowErr != nil {
-		return workflowErr
-	} else if workflow != nil {
-		if e = c.validateMinimalPreflight(*workflow); e != nil {
-			return e
-		}
-	} else {
-		if e = c.validateSkills(); e != nil {
-			return e
-		}
-	}
-	if c.PR.Kind == "gitea" {
-		if e = (&PRClient{Config: c.PR, Runner: r}).Check(ctx); e != nil {
-			return e
-		}
-	}
-	return nil
+	return c.preflightNative(ctx, checkSkills)
 }
 
 // preflightNative validates a native project without resolving or invoking a
-// Beads executable. The native SQLite authority is inspected when present, but
-// a check never initializes a database or adopts an existing state directory.
+// Beads executable. A check never initializes a database or adopts an existing
+// state directory.
 func (c *Config) preflightNative(ctx context.Context, checkSteps bool) error {
-	if c.Completion != nil || c.StartSkill.Path != "" || c.FinishSkill.Path != "" {
-		return errors.New("native projects use project_steps; completion, start_skill and finish_skill are unsupported")
+	if err := requireNativeTaskAuthority(*c); err != nil {
+		return err
 	}
 	if c.hostName() == "local" && c.agentName() != "codex" {
 		return errors.New("local_process currently supports only agent=codex")
-	}
-	if err := c.Completion.validate(); err != nil {
-		return err
 	}
 	commands := []*Command{&c.Git}
 	var workflow *MinimalWorkflowConfig
@@ -751,6 +557,14 @@ func (c *Config) preflightNative(ctx context.Context, checkSteps bool) error {
 	}
 	if err = c.PR.ValidateRemote(strings.TrimSpace(string(remote))); err != nil {
 		return err
+	}
+	if c.hostName() == "orca_supervised" {
+		if err = validateSupervisedOrcaConfig(c); err != nil {
+			return err
+		}
+		if _, err = probeSupervisedOrcaTarget(ctx, *c); err != nil {
+			return fmt.Errorf("supervised Orca target preflight: %w", err)
+		}
 	}
 	if c.PR.Kind == "command" {
 		if err = resolveCommand(&c.PR.Query); err != nil {
@@ -854,11 +668,11 @@ func rejectLegacyStepDependencies(step string, content []byte) error {
 	return nil
 }
 
-func (c Config) taskAuthority() string {
-	if c.TaskAuthority == "" {
-		return "beads"
+func requireNativeTaskAuthority(c Config) error {
+	if c.TaskAuthority != "native" {
+		return errors.New("task_authority=native is required; Beads is not an active product task source")
 	}
-	return c.TaskAuthority
+	return nil
 }
 
 func (c Config) requiresLocalCodex() bool {
@@ -880,38 +694,6 @@ func (c Config) requiresLocalCodex() bool {
 	return false
 }
 
-func (c *Config) validateSkills() error {
-	for _, entry := range []struct {
-		s      *Skill
-		text   *string
-		marker string
-	}{{&c.StartSkill, &c.startText, "steerline:start-v1"}, {&c.FinishSkill, &c.finishText, "steerline:finish-v1"}} {
-		if entry.s.Path == "" || entry.s.Invocation == "" {
-			return errors.New("both skill paths and invocation instructions are required")
-		}
-		p := entry.s.Path
-		if !filepath.IsAbs(p) {
-			p = filepath.Join(c.Repository, p)
-		}
-		p, e := filepath.EvalSymlinks(p)
-		if e != nil {
-			return fmt.Errorf("missing skill: %w", e)
-		}
-		if !inside(c.Repository, p) {
-			return errors.New("skill entry must resolve inside the configured repository")
-		}
-		b, e := os.ReadFile(p)
-		if e != nil {
-			return e
-		}
-		*entry.text = string(b)
-		entry.s.Path = p
-		if !strings.Contains(*entry.text, "<!-- "+entry.marker+" -->") {
-			return fmt.Errorf("skill contract conflict: %s lacks reviewed <!-- %s --> adapter; see docs/skill-contract.md", p, entry.marker)
-		}
-	}
-	return nil
-}
 func inside(root, path string) bool {
 	rel, e := filepath.Rel(root, path)
 	return e == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && !filepath.IsAbs(rel)

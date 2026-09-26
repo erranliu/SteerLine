@@ -1,0 +1,38 @@
+{"Time":"2026-09-26T13:56:04.5847035+08:00","Action":"start","Package":"github.com/erranliu/SteerLine/cmd/orca-probe"}
+{"Time":"2026-09-26T13:56:04.5855867+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/cmd/orca-probe","Output":"?   \tgithub.com/erranliu/SteerLine/cmd/orca-probe\t[no test files]\n"}
+{"Time":"2026-09-26T13:56:04.5855867+08:00","Action":"skip","Package":"github.com/erranliu/SteerLine/cmd/orca-probe","Elapsed":0.001}
+{"Time":"2026-09-26T13:56:05.426944+08:00","Action":"start","Package":"github.com/erranliu/SteerLine/cmd/steerline"}
+{"Time":"2026-09-26T13:56:05.426944+08:00","Action":"start","Package":"github.com/erranliu/SteerLine/cmd/test-feedback"}
+{"Time":"2026-09-26T13:56:05.4362189+08:00","Action":"start","Package":"github.com/erranliu/SteerLine/internal/steerline"}
+{"Time":"2026-09-26T13:56:05.4362189+08:00","Action":"start","Package":"github.com/erranliu/SteerLine/internal/steerline/console"}
+{"Time":"2026-09-26T13:56:05.4362189+08:00","Action":"start","Package":"github.com/erranliu/SteerLine/internal/steerline/remoteprotocol"}
+{"Time":"2026-09-26T13:56:05.6914668+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerline","Output":"testing: warning: no tests to run\n"}
+{"Time":"2026-09-26T13:56:05.691996+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerline","Output":"PASS\n"}
+{"Time":"2026-09-26T13:56:05.6940736+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerline","Output":"ok  \tgithub.com/erranliu/SteerLine/internal/steerline\t0.258s [no tests to run]\n"}
+{"Time":"2026-09-26T13:56:05.6940736+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/steerline","Elapsed":0.258}
+{"Time":"2026-09-26T13:56:05.7114002+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/cmd/steerline","Output":"testing: warning: no tests to run\n"}
+{"Time":"2026-09-26T13:56:05.7114002+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/cmd/steerline","Output":"PASS\n"}
+{"Time":"2026-09-26T13:56:05.7141413+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/cmd/steerline","Output":"ok  \tgithub.com/erranliu/SteerLine/cmd/steerline\t0.287s [no tests to run]\n"}
+{"Time":"2026-09-26T13:56:05.7141413+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/cmd/steerline","Elapsed":0.287}
+{"Time":"2026-09-26T13:56:05.72214+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerline/console","Output":"testing: warning: no tests to run\n"}
+{"Time":"2026-09-26T13:56:05.7227222+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerline/console","Output":"PASS\n"}
+{"Time":"2026-09-26T13:56:05.7248805+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerline/console","Output":"ok  \tgithub.com/erranliu/SteerLine/internal/steerline/console\t0.289s [no tests to run]\n"}
+{"Time":"2026-09-26T13:56:05.7248805+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/steerline/console","Elapsed":0.289}
+{"Time":"2026-09-26T13:56:05.7940912+08:00","Action":"start","Package":"github.com/erranliu/SteerLine/internal/steerline/viewer"}
+{"Time":"2026-09-26T13:56:05.7940912+08:00","Action":"start","Package":"github.com/erranliu/SteerLine/internal/testfeedback"}
+{"Time":"2026-09-26T13:56:05.8949039+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/cmd/test-feedback","Output":"testing: warning: no tests to run\n"}
+{"Time":"2026-09-26T13:56:05.8954168+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/cmd/test-feedback","Output":"PASS\n"}
+{"Time":"2026-09-26T13:56:05.8964795+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/cmd/test-feedback","Output":"ok  \tgithub.com/erranliu/SteerLine/cmd/test-feedback\t0.468s [no tests to run]\n"}
+{"Time":"2026-09-26T13:56:05.8970096+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/cmd/test-feedback","Elapsed":0.47}
+{"Time":"2026-09-26T13:56:05.9504807+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerline/remoteprotocol","Output":"testing: warning: no tests to run\n"}
+{"Time":"2026-09-26T13:56:05.9504807+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerline/remoteprotocol","Output":"PASS\n"}
+{"Time":"2026-09-26T13:56:05.9521072+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerline/remoteprotocol","Output":"ok  \tgithub.com/erranliu/SteerLine/internal/steerline/remoteprotocol\t0.516s [no tests to run]\n"}
+{"Time":"2026-09-26T13:56:05.9521072+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/steerline/remoteprotocol","Elapsed":0.516}
+{"Time":"2026-09-26T13:56:06.2588262+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/testfeedback","Output":"testing: warning: no tests to run\n"}
+{"Time":"2026-09-26T13:56:06.2588262+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/testfeedback","Output":"PASS\n"}
+{"Time":"2026-09-26T13:56:06.2609413+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/testfeedback","Output":"ok  \tgithub.com/erranliu/SteerLine/internal/testfeedback\t0.466s [no tests to run]\n"}
+{"Time":"2026-09-26T13:56:06.2609413+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/testfeedback","Elapsed":0.467}
+{"Time":"2026-09-26T13:56:06.659834+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerline/viewer","Output":"testing: warning: no tests to run\n"}
+{"Time":"2026-09-26T13:56:06.659834+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerline/viewer","Output":"PASS\n"}
+{"Time":"2026-09-26T13:56:06.6621505+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerline/viewer","Output":"ok  \tgithub.com/erranliu/SteerLine/internal/steerline/viewer\t0.868s [no tests to run]\n"}
+{"Time":"2026-09-26T13:56:06.6621505+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/steerline/viewer","Elapsed":0.868}

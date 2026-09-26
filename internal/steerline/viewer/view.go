@@ -38,10 +38,10 @@ func (m Model) View() string {
 
 // --- L2 run detail ---
 
-const detailTabCount = 5
+const detailTabCount = 4
 
-var detailTabs = []string{"Summary", "Workspace", "PR", "Decision", "Result"}
-var detailTabsCompact = []string{"Sum", "Work", "PR", "Dec", "Res"}
+var detailTabs = []string{"Summary", "Workspace", "PR", "Decision"}
+var detailTabsCompact = []string{"Sum", "Work", "PR", "Dec"}
 
 // paneWidths splits the terminal into the run-list and detail/activity columns.
 // The list gets 46% so task titles stay readable; the detail pane keeps the rest.
@@ -206,12 +206,8 @@ func (m Model) detailSummary(r *steerline.Run, td steerline.TaskDetail, hasTD bo
 	default:
 		kvs = append(kvs, detailKV{"task", "loading…"})
 	}
-	taskStatusLabel, taskStatus := "beads", r.BeadsStatus
-	if r.TaskStatus != "" {
-		taskStatusLabel, taskStatus = "task", r.TaskStatus
-	}
 	kvs = append(kvs,
-		detailKV{taskStatusLabel, taskStatus},
+		detailKV{"task", r.TaskStatus},
 		detailKV{"started", ptrTime(r.StartedAt)},
 		detailKV{"ended", ptrTime(r.EndedAt)},
 		detailKV{"elapsed", elapsedShort(r)},
@@ -296,14 +292,6 @@ func (m Model) detailWorkspace(r *steerline.Run, w int) []string {
 			detailKV{"intent_path", wi.Path},
 			detailKV{"intent_branch", wi.Branch},
 			detailKV{"intent_base", wi.BaseCommit},
-		)
-	}
-	if bc := r.BeadsContext; bc != nil {
-		kvs = append(kvs,
-			detailKV{"beads_dir", bc.Directory},
-			detailKV{"project", bc.ProjectID},
-			detailKV{"database", bc.Database},
-			detailKV{"backend", bc.Backend},
 		)
 	}
 	return detailFields(kvs, w)

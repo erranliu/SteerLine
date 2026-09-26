@@ -186,7 +186,7 @@ func (s *Service) bindLocalCodexHistory(run *Run, source WorkerEvent) error {
 	} else if err = json.Unmarshal(raw, &marker); err != nil {
 		return err
 	}
-	if marker.validate() != nil || marker.SourceIdentity != source.SourceIdentity || marker.ProjectID != s.Config.identity || marker.WorkflowID != run.RunID || marker.ExecutionID != nonEmpty(run.ExecutionID, legacyExecutionID(run.RunID)) || marker.AttemptID != source.AttemptID || marker.Backend != BackendLocal || marker.Protocol != ProtocolLocalProcess || marker.TargetID != run.Target.ID {
+	if marker.validate() != nil || marker.SourceIdentity != source.SourceIdentity || marker.ProjectID != s.Config.identity || marker.WorkflowID != run.RunID || marker.ExecutionID != run.ExecutionID || marker.AttemptID != source.AttemptID || marker.Backend != BackendLocal || marker.Protocol != ProtocolLocalProcess || marker.TargetID != run.Target.ID {
 		return errors.New("Codex session does not match its source marker")
 	}
 	command := marker.ReaderCommand
@@ -274,7 +274,7 @@ func (s *Service) codexHistorySources() []codexHistoryBinding {
 					continue
 				}
 				var b codexHistoryBinding
-				if json.Unmarshal(raw, &b) != nil || b.validate() != nil || b.ProjectID != s.Config.identity || b.WorkflowID != run.RunID || b.ExecutionID != nonEmpty(run.ExecutionID, legacyExecutionID(run.RunID)) || b.AttemptID != attempt || b.TargetID != run.Target.ID || b.Backend != BackendKind(run.Backend) || b.Protocol != ExecutionProtocol(run.Protocol) || canonical(b.Workspace) != canonical(deref(run.WorktreePath)) || b.Backend == BackendOrca && name != codexHistoryBindingFile || b.Backend == BackendLocal && name != filepath.Base(localCodexHistoryBindingPath(dir, b.SessionID)) {
+				if json.Unmarshal(raw, &b) != nil || b.validate() != nil || b.ProjectID != s.Config.identity || b.WorkflowID != run.RunID || b.ExecutionID != run.ExecutionID || b.AttemptID != attempt || b.TargetID != run.Target.ID || b.Backend != BackendKind(run.Backend) || b.Protocol != ExecutionProtocol(run.Protocol) || canonical(b.Workspace) != canonical(deref(run.WorktreePath)) || b.Backend == BackendOrca && name != codexHistoryBindingFile || b.Backend == BackendLocal && name != filepath.Base(localCodexHistoryBindingPath(dir, b.SessionID)) {
 					s.reportInvalidCodexBinding(run, attempt, bindingPath, errors.New("binding identity differs from recorded execution"))
 					continue
 				}
@@ -285,9 +285,7 @@ func (s *Service) codexHistorySources() []codexHistoryBinding {
 				sources = append(sources, b)
 			}
 		}
-		if run.WorkflowVersion != MinimalWorkflowVersion {
-			add(deref(run.LogPath), nonEmpty(run.AttemptID, run.RunID), run.EndedAt != nil)
-		}
+
 		for _, attempt := range s.State.Attempts {
 			if attempt.ExecutionID == run.ExecutionID {
 				add(attempt.EventPath, attempt.AttemptID, attempt.AttemptID != run.AttemptID || run.EndedAt != nil)
@@ -303,7 +301,7 @@ func (s *Service) reportInvalidCodexBinding(run *Run, attempt, path string, caus
 	if s.domainStore == nil {
 		return
 	}
-	e := ConversationEvent{Version: ConversationVersion, ProjectID: s.Config.identity, TaskID: run.DomainTaskID, WorkflowID: run.RunID, ExecutionID: nonEmpty(run.ExecutionID, legacyExecutionID(run.RunID)), AttemptID: attempt, Backend: BackendKind(run.Backend), Protocol: ExecutionProtocol(run.Protocol), Agent: run.Agent, TargetID: run.Target.ID, Source: "codex-app-server", SourceSegment: "invalid-binding-v1:" + attempt, SessionQuality: IdentityUnknown, TurnQuality: IdentityUnknown, ItemQuality: IdentityUnknown, SourceEventQuality: IdentityDerived, SourceEventID: "binding:" + digestValue(struct{ Path, Reason string }{path, cause.Error()}), Type: ConversationGap, Phase: MessagePhaseUnknown, Status: "source_unavailable", Diagnostic: err.Error(), ReceivedAt: now()}
+	e := ConversationEvent{Version: ConversationVersion, ProjectID: s.Config.identity, TaskID: run.DomainTaskID, WorkflowID: run.RunID, ExecutionID: run.ExecutionID, AttemptID: attempt, Backend: BackendKind(run.Backend), Protocol: ExecutionProtocol(run.Protocol), Agent: run.Agent, TargetID: run.Target.ID, Source: "codex-app-server", SourceSegment: "invalid-binding-v1:" + attempt, SessionQuality: IdentityUnknown, TurnQuality: IdentityUnknown, ItemQuality: IdentityUnknown, SourceEventQuality: IdentityDerived, SourceEventID: "binding:" + digestValue(struct{ Path, Reason string }{path, cause.Error()}), Type: ConversationGap, Phase: MessagePhaseUnknown, Status: "source_unavailable", Diagnostic: err.Error(), ReceivedAt: now()}
 	_, _ = s.domainStore.CommitConversation(context.Background(), []ConversationWrite{{Event: e}}, ConversationCheckpoint{})
 }
 

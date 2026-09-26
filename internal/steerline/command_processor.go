@@ -3,12 +3,9 @@ package steerline
 import (
 	"context"
 	"database/sql"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 )
 
@@ -49,7 +46,7 @@ func (s *Service) processPendingCommands(ctx context.Context) error {
 				if status == "" {
 					status = "rejected"
 				}
-				if s.native && command.Kind == "retry_run" && status == "indeterminate" {
+				if command.Kind == "retry_run" && status == "indeterminate" {
 					// Keep the outer command in_flight until the center retry receipt
 					// can be read. A later pass reconciles it without starting again.
 					return fmt.Errorf("native retry outcome requires center reconciliation: %s", result)
@@ -133,7 +130,6 @@ type serviceCommandResult struct {
 	PreviousAttemptID string `json:"previous_attempt_id,omitempty"`
 	ExpectedRevision  uint64 `json:"expected_revision,omitempty"`
 	ResultRevision    uint64 `json:"result_revision,omitempty"`
-	ResultSHA256      string `json:"result_sha256,omitempty"`
 	Basis             string `json:"basis,omitempty"`
 	OriginalRequest   string `json:"original_request_id,omitempty"`
 	ResolvedBy        string `json:"resolved_by_request_id,omitempty"`
@@ -188,42 +184,23 @@ func (s *Service) applyServiceCommand(ctx context.Context, command CommandRecord
 		if !body.ConfirmedProcessStopped {
 			return reject("confirmation_required", "operator must explicitly confirm that the original execution stopped")
 		}
-		if s.native {
-			if run.WorkflowVersion != MinimalWorkflowVersion || s.State.Control.DispatchMode != "manual" || s.State.Control.DispatchPaused {
-				return reject("recovery_rejected", "native retry requires a minimal-v1 run and unpaused manual dispatch")
-			}
-			startErr := s.startNativeRetryFor(ctx, run.RunID, command.RequestedBy)
-			if startErr != nil {
-				if receipt, applied, proofErr := s.nativeRetryProof(ctx, run, beforeAttempt, command.RequestedBy); proofErr == nil && applied {
-					return "accepted", mustJSON(serviceCommandResult{Code: "retry_admitted", Message: "native retry was admitted; current step state requires reconciliation: " + startErr.Error(), CommandID: command.CommandID, RunID: run.RunID, AttemptID: receipt.AttemptID, PreviousAttemptID: beforeAttempt, RequestedBy: command.RequestedBy, ExpectedRevision: beforeRevision})
-				} else if proofErr != nil {
-					return "indeterminate", mustJSON(serviceCommandResult{Code: "indeterminate", Message: errors.Join(startErr, proofErr).Error(), CommandID: command.CommandID, RunID: run.RunID, PreviousAttemptID: beforeAttempt})
-				}
-				return reject("recovery_rejected", startErr.Error())
-			}
-			current := s.recoveryTarget(run.RunID)
-			if current == nil || current.AttemptID == beforeAttempt {
-				return "indeterminate", mustJSON(serviceCommandResult{Code: "indeterminate", Message: "native retry returned without a new fixed step attempt", CommandID: command.CommandID, RunID: run.RunID, PreviousAttemptID: beforeAttempt})
-			}
-			return "accepted", mustJSON(serviceCommandResult{Code: "worker_started", Message: "native retry created a new step attempt and saved its worker identity", CommandID: command.CommandID, RunID: current.RunID, AttemptID: current.AttemptID, PreviousAttemptID: beforeAttempt, RequestedBy: command.RequestedBy, ExpectedRevision: beforeRevision, ResultRevision: current.ControlRevision, Basis: body.ConfirmationBasis})
+		if run.WorkflowVersion != MinimalWorkflowVersion || s.State.Control.DispatchMode != "manual" || s.State.Control.DispatchPaused {
+			return reject("recovery_rejected", "native retry requires a minimal-v1 run and unpaused manual dispatch")
 		}
-		oldAttempt := run.AttemptID
-		if err := s.startRetry(ctx, run.RunID); err != nil {
-			if run.AttemptID != oldAttempt && run.ExecutionStatus == "unknown" {
-				blocker := ControlBlocker{RequestID: command.CommandID, Action: command.Kind, TaskID: run.TaskID, RunID: run.RunID, AttemptID: run.AttemptID, Reason: "retry start outcome is indeterminate; no worker start will be replayed"}
-				s.State.Control.Blockers = append(s.State.Control.Blockers, blocker)
-				s.recalculateCurrentReservation("")
-				if saveErr := s.save(); saveErr != nil {
-					return "indeterminate", mustJSON(serviceCommandResult{Code: "indeterminate", Message: errors.Join(err, saveErr).Error(), CommandID: command.CommandID, RunID: run.RunID, AttemptID: run.AttemptID})
-				}
-				return "indeterminate", mustJSON(serviceCommandResult{Code: "indeterminate", Message: err.Error(), CommandID: command.CommandID, RunID: run.RunID, AttemptID: run.AttemptID})
+		startErr := s.startNativeRetryFor(ctx, run.RunID, command.RequestedBy)
+		if startErr != nil {
+			if receipt, applied, proofErr := s.nativeRetryProof(ctx, run, beforeAttempt, command.RequestedBy); proofErr == nil && applied {
+				return "accepted", mustJSON(serviceCommandResult{Code: "retry_admitted", Message: "native retry was admitted; current step state requires reconciliation: " + startErr.Error(), CommandID: command.CommandID, RunID: run.RunID, AttemptID: receipt.AttemptID, PreviousAttemptID: beforeAttempt, RequestedBy: command.RequestedBy, ExpectedRevision: beforeRevision})
+			} else if proofErr != nil {
+				return "indeterminate", mustJSON(serviceCommandResult{Code: "indeterminate", Message: errors.Join(startErr, proofErr).Error(), CommandID: command.CommandID, RunID: run.RunID, PreviousAttemptID: beforeAttempt})
 			}
-			if run.AttemptID != oldAttempt {
-				return "failed", mustJSON(serviceCommandResult{Code: "failed", Message: err.Error(), CommandID: command.CommandID, RunID: run.RunID, AttemptID: run.AttemptID})
-			}
-			return reject("recovery_rejected", err.Error())
+			return reject("recovery_rejected", startErr.Error())
 		}
-		return "accepted", mustJSON(serviceCommandResult{Code: "worker_started", Message: "retry created a new attempt and saved its worker identity", CommandID: command.CommandID, RunID: run.RunID, AttemptID: run.AttemptID, PreviousAttemptID: beforeAttempt, RequestedBy: command.RequestedBy, ExpectedRevision: beforeRevision, ResultRevision: run.ControlRevision, Basis: body.ConfirmationBasis})
+		current := s.recoveryTarget(run.RunID)
+		if current == nil || current.AttemptID == beforeAttempt {
+			return "indeterminate", mustJSON(serviceCommandResult{Code: "indeterminate", Message: "native retry returned without a new fixed step attempt", CommandID: command.CommandID, RunID: run.RunID, PreviousAttemptID: beforeAttempt})
+		}
+		return "accepted", mustJSON(serviceCommandResult{Code: "worker_started", Message: "native retry created a new step attempt and saved its worker identity", CommandID: command.CommandID, RunID: current.RunID, AttemptID: current.AttemptID, PreviousAttemptID: beforeAttempt, RequestedBy: command.RequestedBy, ExpectedRevision: beforeRevision, ResultRevision: current.ControlRevision, Basis: body.ConfirmationBasis})
 	case "mark_stopped":
 		if !body.ConfirmedProcessStopped {
 			return reject("confirmation_required", "operator must explicitly confirm that the original execution stopped")
@@ -232,25 +209,13 @@ func (s *Service) applyServiceCommand(ctx context.Context, command CommandRecord
 			return reject("recovery_rejected", err.Error())
 		}
 		return "accepted", mustJSON(serviceCommandResult{Code: "stopped_confirmed", Message: "unknown execution was recorded as failed/blocked; no worker was started", CommandID: command.CommandID, RunID: run.RunID, AttemptID: run.AttemptID, RequestedBy: command.RequestedBy, ExpectedRevision: beforeRevision, ResultRevision: run.ControlRevision, Basis: body.ConfirmationBasis})
-	case "accept_result":
-		if !body.ConfirmedProcessStopped {
-			return reject("confirmation_required", "operator must explicitly confirm that the original execution stopped")
-		}
-		data, err := base64.StdEncoding.DecodeString(body.ResultBase64)
-		if err != nil {
-			return reject("invalid_result", "result bytes are not valid base64")
-		}
-		if err = s.acceptResultBytes(ctx, run.RunID, command.CommandID, command.RequestedBy, body.ConfirmationBasis, data, body.ResultSHA256); err != nil {
-			return reject("recovery_rejected", err.Error())
-		}
-		return "accepted", mustJSON(serviceCommandResult{Code: "result_accepted", Message: "frozen result and verified PR are bound to this run; PR merge verification remains pending", CommandID: command.CommandID, RunID: run.RunID, AttemptID: run.AttemptID, RequestedBy: command.RequestedBy, ExpectedRevision: beforeRevision, ResultRevision: run.ControlRevision, ResultSHA256: body.ResultSHA256, Basis: body.ConfirmationBasis})
 	default:
 		return reject("unsupported_command", "unsupported recovery command")
 	}
 }
 
 func (s *Service) recoverInFlightServiceCommand(ctx context.Context, commands CommandService, command CommandRecord) error {
-	if s.native && command.Kind == "retry_run" {
+	if command.Kind == "retry_run" {
 		var envelope ServiceCommandPayload
 		if err := decode(command.Payload, &envelope); err != nil || !stableExecutionID(envelope.RunAttemptID) {
 			reason := "saved native retry has no valid original attempt identity; its in-flight effect cannot be ruled out"
@@ -281,35 +246,13 @@ func (s *Service) recoverInFlightServiceCommand(ctx context.Context, commands Co
 	if command.Kind == "resolve_command" {
 		return commands.SetStatus(ctx, command, "indeterminate", mustJSON(serviceCommandResult{Code: "indeterminate", Message: "service restarted while resolving; blocker presence alone cannot prove this command's result, and no instruction was replayed", CommandID: command.CommandID, OriginalRequest: command.TargetID, RequestedBy: command.RequestedBy}))
 	}
-	if command.Kind == "accept_result" {
-		var envelope ServiceCommandPayload
-		var body RecoveryCommandBody
-		if decode(command.Payload, &envelope) == nil && decode(envelope.Body, &body) == nil {
-			if run := s.recoveryTarget(command.TargetID); run != nil && run.FinishTaskStatus == "waiting_pr_merge" && run.ResultPath != nil {
-				expectedPath := filepath.Join(s.Config.RunDir, "runs", run.RunID, "recovery", command.CommandID, "result.json")
-				if canonical(*run.ResultPath) == canonical(expectedPath) {
-					data, readErr := os.ReadFile(expectedPath)
-					if readErr == nil && operationDigest(data) == body.ResultSHA256 {
-						result, parseErr := ParseResultBytes(data, run)
-						if parseErr == nil && result.PRURL != nil {
-							if _, verifyErr := s.verifyRecoveryPR(ctx, run, result); verifyErr == nil {
-								return commands.SetStatus(ctx, command, "accepted", mustJSON(serviceCommandResult{Code: "result_accepted", Message: "reconciled the durable managed result and current provider PR", CommandID: command.CommandID, RunID: run.RunID, AttemptID: run.AttemptID, RequestedBy: command.RequestedBy}))
-							}
-						}
-					}
-				}
-			}
-		}
-	}
 	var envelope ServiceCommandPayload
 	if decode(command.Payload, &envelope) != nil {
 		envelope = ServiceCommandPayload{}
 	}
-	var body RecoveryCommandBody
-	_ = decode(envelope.Body, &body)
 	reason := "service restarted during an in-flight recovery command; no command was replayed"
 	if run := s.recoveryTarget(command.TargetID); run != nil && run.FinishTaskStatus != "completed" {
-		if run.ExecutionStatus == "pending" || run.ExecutionStatus == "running" || command.Kind == "retry_run" {
+		if run.ExecutionStatus == "pending" || run.ExecutionStatus == "running" {
 			run.ExecutionStatus = "unknown"
 			s.blocked(run, reason)
 			s.State.CurrentTask = ptr(run.TaskID)

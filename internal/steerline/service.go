@@ -16,14 +16,12 @@ import (
 type Service struct {
 	Config      Config
 	State       Runtime
-	native      bool
 	store       *Store
 	domainStore *SQLiteStore
-	beads       Beads
 	prs         *PRClient
 	worker      *Worker
 	active      *Run
-	// activities holds one journal per run so PR/completion events always land in
+	// activities holds one journal per run so PR and delivery events always land in
 	// their own run's file, even after the worker exited.
 	activities                 map[string]*ActivityWriter
 	conversationMappers        map[string]*ConversationMapper
@@ -47,40 +45,26 @@ type Service struct {
 }
 
 func NewService(c Config) (_ *Service, retErr error) {
-	native := c.taskAuthority() == "native"
-	if !native {
-		if e := c.Completion.validate(); e != nil {
-			return nil, e
-		}
-		if e := preflightExistingState(c.RunDir, c.RuntimeFile); e != nil {
-			return nil, e
-		}
+	if err := requireNativeTaskAuthority(c); err != nil {
+		return nil, err
+	}
+	if _, err := c.validateNativeWorkflow(); err != nil {
+		return nil, err
+	}
+	if err := c.ResolveIdentity(context.Background()); err != nil {
+		return nil, err
+	}
+	if err := validateNativeStateLocation(c); err != nil {
+		return nil, err
+	}
+	if err := preflightNativeStatePath(c); err != nil {
+		return nil, err
 	}
 	if e := c.prepareWorktreeRoot(); e != nil {
 		return nil, e
 	}
-	databasePath := filepath.Join(c.RunDir, "steerline.db")
-	if !native {
-		if _, statErr := os.Stat(databasePath); os.IsNotExist(statErr) {
-			old, loadErr := LoadRuntime(filepath.Join(c.RunDir, c.RuntimeFile))
-			if loadErr != nil {
-				return nil, loadErr
-			}
-			if old != nil {
-				return nil, errors.New("runtime v5 projection exists without its authoritative SQLite database; restore the database before starting")
-			}
-		}
-	} else if err := preflightNativeStatePath(c); err != nil {
-		return nil, err
-	}
 	r := Runner{Dir: c.Repository, Timeout: duration(c.CommandTimeout)}
-	var db *SQLiteStore
-	var e error
-	if native {
-		db, e = OpenNativeTaskCommandStore(context.Background(), &c)
-	} else {
-		db, e = OpenSQLiteStore(databasePath)
-	}
+	db, e := OpenNativeTaskCommandStore(context.Background(), &c)
 	if e != nil {
 		return nil, e
 	}
@@ -89,7 +73,7 @@ func NewService(c Config) (_ *Service, retErr error) {
 			_ = db.Close()
 		}
 	}()
-	s := &Service{Config: c, native: native, domainStore: db, store: &Store{Path: filepath.Join(c.RunDir, c.RuntimeFile), Domain: db, Project: c.identity}, beads: Beads{Runner: r, Command: c.BD, Claimant: c.Claimant}, prs: &PRClient{Config: c.PR, Runner: r}, activities: map[string]*ActivityWriter{}, conversationMappers: map[string]*ConversationMapper{}}
+	s := &Service{Config: c, domainStore: db, store: &Store{Path: filepath.Join(c.RunDir, c.RuntimeFile), Domain: db, Project: c.identity}, prs: &PRClient{Config: c.PR, Runner: r}, activities: map[string]*ActivityWriter{}, conversationMappers: map[string]*ConversationMapper{}}
 	projection, _, e := db.LoadProjection(context.Background(), c.identity)
 	if e != nil {
 		return nil, e
@@ -104,27 +88,16 @@ func NewService(c Config) (_ *Service, retErr error) {
 			return nil, fmt.Errorf("unsupported SQLite runtime projection schema %d", projected.SchemaVersion)
 		}
 		old = &projected
-	} else if !native {
-		path := filepath.Join(c.RunDir, c.RuntimeFile)
-		old, e = LoadRuntime(path)
-		if e != nil {
-			return nil, e
-		}
-		if old != nil {
-			return nil, errors.New("runtime v5 projection exists without its authoritative SQLite database; restore the database before starting")
-		}
 	}
 	s.State = Runtime{SchemaVersion: 5, Repository: Repository{Path: c.Repository, Remote: c.Remote, Branch: c.Branch, Identity: c.identity}, Tasks: []TaskRecord{}, WorkflowRuns: []WorkflowRunRecord{}, Executions: []ExecutionRecord{}, Attempts: []StepAttemptRecord{}, Decisions: []DecisionRecord{}, Runs: []*Run{}, Control: ControlState{DispatchMode: "auto", Revision: 1, Blockers: []ControlBlocker{}}}
-	if native {
-		authority, authErr := db.nativeAuthority(context.Background(), c.identity)
-		if authErr != nil {
-			return nil, authErr
-		}
-		s.State.Control = ControlState{DispatchMode: authority.DispatchMode, DispatchPaused: authority.DispatchPaused, Revision: authority.AuthorityVersion, Blockers: []ControlBlocker{}}
+	authority, authErr := db.nativeAuthority(context.Background(), c.identity)
+	if authErr != nil {
+		return nil, authErr
 	}
+	s.State.Control = ControlState{DispatchMode: authority.DispatchMode, DispatchPaused: authority.DispatchPaused, Revision: authority.AuthorityVersion, Blockers: []ControlBlocker{}}
 	if old != nil {
-		if old.Repository.Identity != c.identity || old.Repository.Remote != c.Remote || old.Repository.Branch != c.Branch || (!native && old.Service.Claimant != c.Claimant) {
-			return nil, errors.New("runtime repository/branch/claimant mismatch; preserve state and use the original configuration")
+		if old.Repository.Identity != c.identity || old.Repository.Remote != c.Remote || old.Repository.Branch != c.Branch {
+			return nil, nativeErr("authority_mismatch", "runtime repository or branch differs from the native authority; preserve state")
 		}
 		baselineBytes, _ := json.Marshal(old)
 		var baseline Runtime
@@ -146,27 +119,19 @@ func NewService(c Config) (_ *Service, retErr error) {
 		s.State.Attempts = old.Attempts
 		s.State.Decisions = old.Decisions
 		s.State.Operations = old.Operations
-		if !native && (old.SchemaVersion != 5 || s.State.Control.DispatchMode != "manual" && s.State.Control.DispatchMode != "auto" || s.State.Control.Revision == 0) {
-			return nil, errors.New("invalid runtime v5 control state; preserve the snapshot for recovery")
+		if s.State.Control.DispatchMode != "manual" && s.State.Control.DispatchMode != "auto" || s.State.Control.Revision == 0 {
+			return nil, nativeErr("unsupported_schema", "invalid native runtime v5 control state; preserve the snapshot")
 		}
-		if native {
-			authority, authErr := db.nativeAuthority(context.Background(), c.identity)
-			if authErr != nil {
-				return nil, authErr
-			}
-			s.State.Control.DispatchMode = authority.DispatchMode
-			s.State.Control.DispatchPaused = authority.DispatchPaused
-			s.State.Control.Revision = authority.AuthorityVersion
-		} else {
-			s.State.Control.Revision = 1 // A control revision is scoped to its instance.
-		}
+		s.State.Control.DispatchMode = authority.DispatchMode
+		s.State.Control.DispatchPaused = authority.DispatchPaused
+		s.State.Control.Revision = authority.AuthorityVersion
 		if s.State.Control.Blockers == nil {
 			s.State.Control.Blockers = []ControlBlocker{}
 		}
 		if err := s.hydrateDecisionProjection(context.Background()); err != nil {
 			return nil, fmt.Errorf("read authoritative decision state: %w", err)
 		}
-		if op := s.State.Control.Operation; op != nil && !native {
+		if op := s.State.Control.Operation; op != nil {
 			if !controlIDPattern.MatchString(op.RequestID) || !validControlAction(op.Action) || (op.Phase != "applying" && op.Phase != "completed") || len(op.RequestDigest) != 64 || op.Action == "start_task" && (!controlIDPattern.MatchString(op.RunID) || op.TaskID == "") || op.Phase == "completed" && op.Result == nil {
 				return nil, errors.New("invalid runtime control operation; preserve the snapshot for recovery")
 			}
@@ -180,14 +145,6 @@ func NewService(c Config) (_ *Service, retErr error) {
 				return nil, errors.New("invalid or duplicate saved run")
 			}
 			seen[r.TaskID] = true
-			if r.DomainTaskID == "" {
-				for _, task := range s.State.Tasks {
-					if task.ExternalID == r.TaskID {
-						r.DomainTaskID = task.TaskID
-						break
-					}
-				}
-			}
 			if r.ManualStop != nil && (!manuallyStopped(r) || r.ExecutionStatus != "failed" && r.ExecutionStatus != "succeeded") {
 				return nil, errors.New("invalid manual stop confirmation for current attempt")
 
@@ -231,19 +188,17 @@ func NewService(c Config) (_ *Service, retErr error) {
 			if r.Decision != nil && (r.Decision.RequestPath != "" || r.Decision.AnswerPath != "") {
 				return nil, errors.New("decision state uses the removed sidecar-answer format; preserve it for manual recovery, no answer file will be imported")
 			}
-			if e := r.Completion.validate(); e != nil {
-				return nil, e
+			if r.BeadsContext != nil || r.Completion != nil || r.BeadsStatus != "" || r.IdentityMapDigest != "" || r.DomainTaskID != r.TaskID || r.ResultPath != nil {
+				return nil, nativeErr("authority_mismatch", "runtime contains a retired task-source or whole-run result binding; preserve it for manual recovery")
+			}
+			if r.WorkflowVersion != MinimalWorkflowVersion {
+				return nil, nativeErr("unsupported_schema", "runtime contains an execution workflow outside native minimal-v1; preserve it for manual recovery")
 			}
 			if r.Host != "local" && r.Host != "orca" && r.Host != "orca_supervised" {
 				r.ExecutionStatus = "unknown"
 				s.blocked(r, "Run lacks current backend identity; preserve state without migration")
 				s.State.SlotOccupied = true
 				continue
-			}
-			if r.WorkflowVersion != MinimalWorkflowVersion {
-				if err := s.reconcileRunExecutionRecord(r); err != nil {
-					return nil, err
-				}
 			}
 			switch r.ExecutionStatus {
 			case "pending", "running", "succeeded", "failed", "unknown":
@@ -340,13 +295,11 @@ func NewService(c Config) (_ *Service, retErr error) {
 			s.State.SlotOccupied = false
 		}
 	}
-	if native {
-		if err := s.refreshNativeSnapshot(context.Background(), false); err != nil {
-			return nil, err
-		}
+	if err := s.refreshNativeSnapshot(context.Background(), false); err != nil {
+		return nil, err
 	}
 	s.State.SchemaVersion = 5
-	s.State.Service = ServiceState{InstanceID: newID(), PID: os.Getpid(), Status: "running", Claimant: c.Claimant, Mode: "maintenance", Ready: false, ControlProtocol: ControlProtocolVersion, Capabilities: []string{"answer_decision", "retry_run", "mark_stopped", "accept_result", "resolve_command", "start_task", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "stop_service"}, ConfigDigest: c.configDigest, HeartbeatIntervalMS: duration(c.Heartbeat).Milliseconds()}
+	s.State.Service = ServiceState{InstanceID: newID(), PID: os.Getpid(), Status: "running", Claimant: c.Claimant, Mode: "maintenance", Ready: false, ControlProtocol: ControlProtocolVersion, Capabilities: []string{"answer_decision", "retry_run", "mark_stopped", "resolve_command", "start_task", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "stop_service"}, ConfigDigest: c.configDigest, HeartbeatIntervalMS: duration(c.Heartbeat).Milliseconds()}
 	identity, err := currentProcessIdentity()
 	if err != nil {
 		return nil, fmt.Errorf("identify service process: %w", err)
@@ -354,9 +307,6 @@ func NewService(c Config) (_ *Service, retErr error) {
 	s.State.Service.ProcessIdentity = identity
 	if err := db.ValidateConversationCheckpointFormat(context.Background(), c.identity); err != nil {
 		return nil, err
-	}
-	if !native {
-		s.reconcileOperationsAfterRestart()
 	}
 	return s, nil
 }
@@ -386,12 +336,22 @@ func (s *Service) hydrateDecisionProjection(ctx context.Context) error {
 		if !ok {
 			continue
 		}
+		if record.Version == 0 || !validDecisionStatus(record.Status) {
+			return fmt.Errorf("decision %s has invalid authoritative version or status", run.Decision.ID)
+		}
 		request, marshalErr := json.Marshal(run.Decision.Request)
 		if marshalErr != nil {
 			return marshalErr
 		}
-		if record.Version == 0 || !validDecisionStatus(record.Status) {
-			return fmt.Errorf("decision %s has invalid authoritative version or status", run.Decision.ID)
+		decisionAttemptExists := false
+		for _, attempt := range s.State.Attempts {
+			if attempt.ProjectIdentity == s.Config.identity && attempt.ExecutionID == run.ExecutionID && attempt.AttemptID == run.Decision.AttemptID {
+				decisionAttemptExists = true
+				break
+			}
+		}
+		if !decisionAttemptExists {
+			return fmt.Errorf("decision %s conflicts with the runtime execution, attempt or question identity", run.Decision.ID)
 		}
 		if record.WorkflowRunID != run.RunID || record.ExecutionID != run.ExecutionID || record.AttemptID != run.Decision.AttemptID || !bytes.Equal(bytes.TrimSpace(record.Request), bytes.TrimSpace(request)) {
 			return fmt.Errorf("decision %s conflicts with the runtime execution, attempt or question identity", run.Decision.ID)
@@ -444,12 +404,12 @@ func runVersionShape(r *Run) any {
 		prURL = *r.PR.URL
 	}
 	return struct {
-		TaskID, RunID, AttemptID, Execution, Finish, DecisionID, DecisionStatus, PRURL, Host, BeadsStatus string
-		WorktreePath, WorktreeBranch, BaseCommit                                                          *string
-		Process                                                                                           *ProcessIdentity
-		WorkspaceIntent                                                                                   *WorkspaceIntent
-		ManualStop                                                                                        *ManualStopConfirmation
-	}{r.TaskID, r.RunID, r.AttemptID, r.ExecutionStatus, r.FinishTaskStatus, decisionID, decisionStatus, prURL, r.Host, r.BeadsStatus, r.WorktreePath, r.WorktreeBranch, r.BaseCommit, r.Process, r.WorkspaceIntent, r.ManualStop}
+		TaskID, RunID, AttemptID, Execution, Finish, DecisionID, DecisionStatus, PRURL, Host string
+		WorktreePath, WorktreeBranch, BaseCommit                                             *string
+		Process                                                                              *ProcessIdentity
+		WorkspaceIntent                                                                      *WorkspaceIntent
+		ManualStop                                                                           *ManualStopConfirmation
+	}{r.TaskID, r.RunID, r.AttemptID, r.ExecutionStatus, r.FinishTaskStatus, decisionID, decisionStatus, prURL, r.Host, r.WorktreePath, r.WorktreeBranch, r.BaseCommit, r.Process, r.WorkspaceIntent, r.ManualStop}
 }
 func controlVersionShape(r Runtime) any {
 	type runShape struct{ TaskID, RunID, Execution, Finish, Decision string }
@@ -478,70 +438,29 @@ func controlVersionShape(r Runtime) any {
 func jsonShape(v any) string { b, _ := json.Marshal(v); return string(b) }
 func (s *Service) save() error {
 	s.refreshSlotOccupancy()
-	if s.native {
-		authority, err := s.domainStore.nativeAuthority(context.Background(), s.Config.identity)
-		if err != nil {
-			return err
-		}
-		s.State.Control.DispatchMode, s.State.Control.DispatchPaused, s.State.Control.Revision = authority.DispatchMode, authority.DispatchPaused, authority.AuthorityVersion
-		oldRuns := map[string]*Run{}
-		if s.versionPrevious != nil {
-			for _, run := range s.versionPrevious.Runs {
-				if run != nil {
-					oldRuns[run.RunID] = run
-				}
+	authority, err := s.domainStore.nativeAuthority(context.Background(), s.Config.identity)
+	if err != nil {
+		return err
+	}
+	s.State.Control.DispatchMode, s.State.Control.DispatchPaused, s.State.Control.Revision = authority.DispatchMode, authority.DispatchPaused, authority.AuthorityVersion
+	oldRuns := map[string]*Run{}
+	if s.versionPrevious != nil {
+		for _, run := range s.versionPrevious.Runs {
+			if run != nil {
+				oldRuns[run.RunID] = run
 			}
 		}
-		for _, run := range s.State.Runs {
-			if run == nil {
-				continue
-			}
-			if before := oldRuns[run.RunID]; before == nil {
-				if run.ControlRevision == 0 {
-					run.ControlRevision = 1
-				}
-			} else if jsonShape(runVersionShape(before)) != jsonShape(runVersionShape(run)) {
-				run.ControlRevision = before.ControlRevision + 1
-			}
+	}
+	for _, run := range s.State.Runs {
+		if run == nil {
+			continue
 		}
-	} else if s.versionPrevious != nil {
-		prev := *s.versionPrevious
-		if jsonShape(controlVersionShape(prev)) != jsonShape(controlVersionShape(s.State)) {
-			n := prev.Control.Revision + 1
-			if n == 0 {
-				n = 1
+		if before := oldRuns[run.RunID]; before == nil {
+			if run.ControlRevision == 0 {
+				run.ControlRevision = 1
 			}
-			s.State.Control.Revision = n
-		}
-		oldRuns := map[string]*Run{}
-		for _, r := range prev.Runs {
-			if r != nil {
-				oldRuns[r.RunID] = r
-			}
-		}
-		for _, r := range s.State.Runs {
-			if r == nil {
-				continue
-			}
-			if before := oldRuns[r.RunID]; before == nil {
-				if r.ControlRevision == 0 {
-					r.ControlRevision = 1
-				}
-			} else if jsonShape(runVersionShape(before)) != jsonShape(runVersionShape(r)) {
-				r.ControlRevision = before.ControlRevision + 1
-				if r.ControlRevision == 0 {
-					r.ControlRevision = 1
-				}
-			}
-		}
-	} else {
-		if s.State.Control.Revision == 0 {
-			s.State.Control.Revision = 1
-		}
-		for _, r := range s.State.Runs {
-			if r != nil && r.ControlRevision == 0 {
-				r.ControlRevision = 1
-			}
+		} else if jsonShape(runVersionShape(before)) != jsonShape(runVersionShape(run)) {
+			run.ControlRevision = before.ControlRevision + 1
 		}
 	}
 	if err := s.store.Publish(&s.State); err != nil {
@@ -641,11 +560,9 @@ func (s *Service) recordActivity(r *Run, ev ActivityEvent) {
 		return
 	}
 	domainTask, executionID := r.DomainTaskID, r.ExecutionID
-	if domainTask == "" {
-		domainTask = legacyTaskID(s.Config.identity, r)
-	}
-	if executionID == "" {
-		executionID = legacyExecutionID(r.RunID)
+	if domainTask == "" || executionID == "" || !stableExecutionID(r.RunID) || !stableExecutionID(r.AttemptID) {
+		s.setError(nativeErr("unsupported_schema", "native activity lacks its fixed task, run, execution or attempt identity"))
+		return
 	}
 	externalID := newID()
 	if ev.ItemID != "" {
@@ -692,38 +609,13 @@ func (s *Service) find(id string) *Run {
 	return nil
 }
 func (s *Service) reconcile(ctx context.Context) error {
-	if s.native {
-		if err := s.refreshNativeSnapshot(ctx, true); err != nil {
-			return err
-		}
-		if err := s.reconcileNativeCleanup(ctx); err != nil {
-			return err
-		}
-		return s.reconcileExitedNativeStep(ctx)
+	if err := s.refreshNativeSnapshot(ctx, true); err != nil {
+		return err
 	}
-	owned, e := s.beads.Owned(ctx)
-	if e != nil {
-		return e
+	if err := s.reconcileNativeCleanup(ctx); err != nil {
+		return err
 	}
-	for _, t := range owned {
-		if r := s.find(t.ID); r != nil {
-			r.BeadsStatus = t.Status
-			continue
-		}
-		if t.Status == "closed" {
-			continue
-		}
-		id := newID()
-		attemptID := id
-		for _, blocker := range s.State.Control.Blockers {
-			if blocker.TaskID == t.ID && stableExecutionID(blocker.RunID) && stableExecutionID(blocker.AttemptID) {
-				id, attemptID = blocker.RunID, blocker.AttemptID
-				break
-			}
-		}
-		s.State.Runs = append(s.State.Runs, &Run{TaskID: t.ID, Title: t.Title, RunID: id, AttemptID: attemptID, Host: s.Config.hostName(), Claimant: s.Config.Claimant, BeadsStatus: t.Status, ExecutionStatus: "unknown", FinishTaskStatus: "blocked", PR: PRState{State: "unknown"}, Error: ptr("Claim found without complete run record; manual recovery required; execution not restarted")})
-	}
-	return s.save()
+	return s.reconcileExitedNativeStep(ctx)
 }
 func (s *Service) setError(e error) {
 	s.State.Service.Status = "error"
@@ -734,361 +626,7 @@ func (s *Service) blocked(r *Run, msg string) {
 	r.Error = ptr(clip(msg, 2000))
 }
 func (s *Service) dispatch(ctx context.Context) error {
-	if s.native {
-		return s.dispatchNative(ctx)
-	}
-	reconcileErr := s.reconcile(ctx)
-	candidateErr := s.refreshCandidates(ctx)
-	if reconcileErr != nil {
-		return errors.Join(reconcileErr, candidateErr)
-	}
-	if candidateErr != nil {
-		return candidateErr
-	}
-	if s.State.Service.Mode == "scheduler" && ctx.Err() == nil {
-		s.State.Service.Ready = true
-	}
-	if (!s.explicitDispatch && s.State.Control.DispatchMode != "auto") || s.State.Control.DispatchPaused {
-		return nil
-	}
-	if s.worker != nil {
-		return nil
-	}
-	if reason := s.slotReason(s.activeControlRequestID()); reason != "" {
-		s.State.SlotOccupied = true
-		if reason != "waiting for a human decision" {
-			return errors.New(reason)
-		}
-		return nil
-	}
-	s.State.SlotOccupied = false
-	backendName, protocolName, backendErr := ExecutionBackendKind(s.Config.hostName())
-	if backendErr != nil {
-		return backendErr
-	}
-	minimalConfig, minimalErr := s.Config.minimalConfig()
-	if minimalErr != nil {
-		return minimalErr
-	}
-	if minimalConfig != nil && backendName != string(BackendLocal) {
-		return UnsupportedAdapterOperation("minimal-v1", "target-side step execution is not verified for this backend")
-	}
-	if minimalConfig != nil {
-		if err := s.Config.validateMinimalPreflight(*minimalConfig); err != nil {
-			return err
-		}
-	}
-	tasks, e := s.beads.Ready(ctx)
-	if e != nil {
-		return e
-	}
-	targetFound := s.targetTask == ""
-	for _, t := range tasks {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		if !executable(t, s.Config.ExecutableTypes) || s.find(t.ID) != nil {
-			continue
-		}
-		if s.targetTask != "" && t.ID != s.targetTask {
-			continue
-		}
-		targetFound = true
-		if minimalConfig == nil || s.Config.hostName() == "orca_supervised" {
-			required := []string{"start", "observe", "workspace_inspection", "output_reading"}
-			if s.Config.hostName() != "orca_supervised" {
-				required = append(required, "stop")
-			} else {
-				required = append(required, "message_inbox", "reply_continue", "resource_settlement")
-			}
-			if _, err := s.requireBackendCapabilities(ctx, backendFor(s.Config, BeadsContext{}), required...); err != nil {
-				return err
-			}
-		}
-		id := newID()
-		if s.reservedRunID != "" {
-			id = s.reservedRunID
-		}
-		s.State.SlotOccupied = true
-		s.State.CurrentTask = ptr(t.ID)
-		if e = s.save(); e != nil {
-			return e
-		}
-		source, err := s.beads.Context(ctx)
-		domainTaskID, identityMapDigest := "", ""
-		if err == nil {
-			domainTaskID, identityMapDigest, err = resolveDomainTaskIdentity(s.Config.Repository, s.Config.RunDir, s.Config.identity, source.ProjectID, t.ID)
-		}
-		if err == nil {
-			for _, savedTask := range s.State.Tasks {
-				if savedTask.TaskID == domainTaskID && savedTask.ExternalID != t.ID {
-					return fmt.Errorf("business task %q is already bound to a different Beads source ID", domainTaskID)
-				}
-			}
-		}
-		base := ""
-		if err == nil {
-			base, err = fetchBase(ctx, s.Config, id)
-		}
-		if err == nil && minimalConfig != nil {
-			err = s.Config.validateMinimalEntriesAtBase(ctx, *minimalConfig, base)
-		}
-		var intent *WorkspaceIntent
-		if err == nil {
-			intent, err = planWorkspace(s.Config, t.ID, id, base)
-		}
-		if err != nil {
-			s.State.SlotOccupied = false
-			s.State.CurrentTask = nil
-			return errors.Join(err, s.save())
-		}
-		dir := filepath.Join(s.Config.RunDir, "runs", id)
-		target := targetFor(s.Config)
-		r := &Run{TaskID: t.ID, DomainTaskID: domainTaskID, IdentityMapDigest: identityMapDigest, Title: t.Title, RunID: id, AttemptID: id, DomainAttemptNumber: 1, Claimant: s.Config.Claimant, Host: s.Config.hostName(), Backend: backendName, Protocol: protocolName, Agent: s.Config.agentName(), Target: target, BeadsStatus: t.Status, ExecutionStatus: "pending", FinishTaskStatus: "pending", PR: PRState{State: "unknown"}, LogPath: ptr(filepath.Join(dir, "events.jsonl")), ResultPath: ptr(filepath.Join(dir, "result.json"))}
-		r.WorkspaceIntent = intent
-		r.BeadsContext = &source
-		if minimalConfig != nil {
-			taskRecord, workflowRecord, executionRecord, prepareAttempt, initErr := InitializeMinimalWorkflow(s.Config.identity, s.Config, t, source, r)
-			if initErr != nil {
-				return initErr
-			}
-			r.WorkflowVersion = MinimalWorkflowVersion
-			s.State.Tasks = append(s.State.Tasks, taskRecord)
-			s.State.WorkflowRuns = append(s.State.WorkflowRuns, workflowRecord)
-			s.State.Executions = append(s.State.Executions, executionRecord)
-			s.State.Attempts = append(s.State.Attempts, prepareAttempt)
-		} else {
-			r.WorkflowVersion = "legacy-v1"
-		}
-		if s.Config.Completion != nil {
-			copy := *s.Config.Completion
-			copy.Command.Args = append([]string{}, copy.Command.Args...)
-			r.Completion = &copy
-		}
-		s.State.Runs = append(s.State.Runs, r)
-		// Durable intent BEFORE the external claim closes the crash window.
-		if e = s.save(); e != nil {
-			return e
-		}
-		claimOperationID, opErr := s.startOperation("claim_task", "claim:"+s.Config.identity+":"+t.ID+":"+id, map[string]any{"task_id": t.ID, "run_id": id, "claimant": s.Config.Claimant, "source_project": source.ProjectID})
-		if opErr != nil {
-			return opErr
-		}
-		ok, err := s.beads.Claim(ctx, t.ID)
-		if err != nil {
-			_ = s.setOperationState(claimOperationID, "outcome_unknown", "", nil, err.Error())
-			r.ExecutionStatus = "unknown"
-			s.State.SlotOccupied = true
-			s.blocked(r, "Claim uncertain: "+err.Error())
-			if e = s.save(); e != nil {
-				return e
-			}
-			return err
-		}
-		if !ok {
-			_ = s.setOperationState(claimOperationID, "rejected", "", []byte(`{"claimed":false}`), "claim conflict")
-			s.State.RejectedClaimRuns = append(s.State.RejectedClaimRuns, r.RunID)
-			s.State.SlotOccupied = false
-			s.State.CurrentTask = nil
-			s.State.Runs = s.State.Runs[:len(s.State.Runs)-1]
-			if e = s.save(); e != nil {
-				return e
-			}
-			if s.targetTask != "" {
-				return errClaimConflict
-			}
-			continue
-		}
-		if s.State.Control.Operation != nil {
-			s.injectControlFault("after_claim")
-		}
-		claimReceipt, _ := json.Marshal(map[string]any{"claimed": true, "task_id": t.ID, "claimant": s.Config.Claimant})
-		if err = s.setOperationState(claimOperationID, "confirmed", "", claimReceipt, ""); err != nil {
-			return err
-		}
-		r.BeadsStatus = "in_progress"
-		s.State.SlotOccupied = true
-		s.State.CurrentTask = ptr(t.ID)
-		if e = s.save(); e != nil {
-			return e
-		}
-		s.note(r, "steer", "claim", "completed", "claimed "+t.ID, "", map[string]any{"beads_status": "in_progress"})
-		if ctx.Err() != nil {
-			r.ExecutionStatus = "unknown"
-			s.blocked(r, "Stopped after claim, before worker launch")
-			s.note(r, "steer", "error", "failed", "stopped after claim", "no worker launched", nil)
-			s.closeActivity(r)
-			return s.save()
-		}
-		if r.WorkflowVersion == MinimalWorkflowVersion {
-			if err = s.setTaskStatus(r.DomainTaskID, "in_progress"); err != nil {
-				return err
-			}
-			workflow, execution := s.minimalRecords(r)
-			workflow.Phase = "executing"
-			workflow.UpdatedAt = now()
-			execution.Status = "active"
-			execution.UpdatedAt = now()
-			prepareAttempt := s.minimalAttempt(r, r.AttemptID)
-			if prepareAttempt == nil {
-				return errors.New("minimal workflow is missing its prepare attempt")
-			}
-			if err = s.save(); err != nil {
-				return err
-			}
-			s.note(r, "steer", "prepare", "started", "preparing minimal-v1 workspace", intent.Path, map[string]any{"base_commit": intent.BaseCommit})
-			return s.prepareMinimalExecution(ctx, t, r, source)
-		}
-		backend := backendFor(s.Config, source)
-		if local, ok := backend.(localExecutionBackend); ok && s.State.Control.Operation != nil {
-			local.afterPrepare = func() { s.injectControlFault("after_worktree") }
-			backend = local
-		}
-		backendKind, protocol := backend.Identity()
-		opID := attemptOperationID(r.RunID, r.AttemptID)
-		target, agent := targetFor(s.Config), agentFor(s.Config)
-		spec := AttemptSpec{ProjectID: s.Config.identity, TaskID: t.ID, RunID: r.RunID, AttemptID: r.AttemptID, OperationID: opID, ConfigDigest: s.Config.configDigest, Repository: s.Config.Repository, BaseCommit: intent.BaseCommit, Workspace: *intent, Agent: agent, Protocol: protocol, Target: target, Task: t, Run: cloneRun(*r), Beads: source}
-		records := executionRecords{root: s.Config.RunDir}
-		payloadDigest := digestValue(spec)
-		op := Operation{Version: ExecutionRecordVersion, ID: opID, RunID: r.RunID, AttemptID: r.AttemptID, Backend: backendKind, Protocol: protocol, Target: target, Action: "start", PayloadDigest: payloadDigest, Status: OperationPending, StartedAt: now(), UpdatedAt: now()}
-		if previous, loadErr := records.loadOperation(r.RunID, r.AttemptID, opID); loadErr == nil {
-			if previous.PayloadDigest != payloadDigest || previous.Backend != backendKind || previous.Protocol != protocol || previous.Target != target {
-				return errors.New("start operation identity conflicts with its persisted fixed input")
-			}
-			return fmt.Errorf("start operation is already %s; manual reconciliation required, refusing a second start", previous.Status)
-		} else if !os.IsNotExist(loadErr) {
-			return loadErr
-		}
-		// Persist the fixed input before any backend may create a workspace or process.
-		if err := records.saveOperation(op); err != nil {
-			return err
-		}
-		if err := s.save(); err != nil {
-			return err
-		}
-		if backendKind == BackendOrca {
-			s.note(r, "steer", "prepare", "started", "orca worktree/terminal start", intent.Branch, map[string]any{"base_commit": intent.BaseCommit, "agent": agent.Name})
-		} else {
-			s.note(r, "steer", "prepare", "started", "preparing local workspace and process", intent.Path, map[string]any{"branch": intent.Branch, "base_commit": intent.BaseCommit})
-		}
-		op.Status = OperationInFlight
-		op.UpdatedAt = now()
-		if err := records.saveOperation(op); err != nil {
-			return err
-		}
-		started, startErr := backend.Start(ctx, spec)
-		if startErr == nil {
-			s.injectControlFault("backend_started")
-		}
-		if startErr == nil && s.State.Control.Operation != nil {
-			s.injectControlFault("after_worker_start")
-		}
-		if startErr != nil {
-			op.ResidualResources = append([]string(nil), started.ResidualResources...)
-			var backendErr *BackendError
-			unknown := errors.As(startErr, &backendErr) && backendErr.Code == BackendOutcomeUnknown
-			if unknown {
-				op.Status, op.Diagnostic = OperationUnknown, startErr.Error()
-				r.ExecutionStatus = "unknown"
-				s.blocked(r, "Execution start outcome unknown; no replacement start will be attempted: "+startErr.Error())
-				s.State.SlotOccupied = true
-				s.State.CurrentTask = ptr(t.ID)
-			} else {
-				op.Status, op.Diagnostic = OperationRejected, startErr.Error()
-				r.ExecutionStatus = "failed"
-				r.EndedAt = ptr(now())
-				s.blocked(r, "Execution backend rejected start: "+startErr.Error())
-				s.State.SlotOccupied = false
-				s.State.CurrentTask = nil
-			}
-			op.UpdatedAt = now()
-			if err := records.saveOperation(op); err != nil {
-				return errors.Join(startErr, err)
-			}
-			if backendKind == BackendLocal {
-				return s.preparationFailed(r, "Local execution start failed: "+startErr.Error())
-			}
-			s.note(r, "steer", "error", "failed", "execution backend start failed", startErr.Error(), nil)
-			s.closeActivity(r)
-			return errors.Join(startErr, s.save())
-		}
-		if started.Disposition != "accepted" || started.Worker == nil {
-			op.Status, op.Diagnostic = OperationUnknown, "backend returned no verifiable accepted worker"
-			op.ResidualResources = append([]string(nil), started.ResidualResources...)
-			op.UpdatedAt = now()
-			if err := records.saveOperation(op); err != nil {
-				return err
-			}
-			r.ExecutionStatus = "unknown"
-			s.blocked(r, "Backend start receipt is incomplete; refusing replacement execution")
-			s.State.SlotOccupied = true
-			s.State.CurrentTask = ptr(t.ID)
-			return s.save()
-		}
-		ref := started.Ref
-		if ref.RunID != r.RunID || ref.AttemptID != r.AttemptID || ref.Backend != backendKind || ref.Protocol != protocol || ref.Target != target || ref.Agent != agent || ref.External != started.Worker.proc.Identity() {
-			identity := started.Worker.proc.Identity()
-			r.Process = &identity
-			r.ExecutionStatus = "unknown"
-			s.worker, s.active = started.Worker, r
-			s.State.SlotOccupied, s.State.CurrentTask = true, ptr(t.ID)
-			op.Status, op.Diagnostic, op.UpdatedAt = OperationUnknown, "backend returned an execution ref that does not match the fixed attempt identity", now()
-			opSaveErr := records.saveOperation(op)
-			s.blocked(r, "Backend returned a mismatched execution identity; execution retained as unknown")
-			return errors.Join(errors.New(op.Diagnostic), opSaveErr, s.save())
-		}
-		r.WorktreePath = started.Run.WorktreePath
-		r.WorktreeBranch = started.Run.WorktreeBranch
-		r.BaseCommit = started.Run.BaseCommit
-		r.WorkspaceIntent = started.Run.WorkspaceIntent
-		r.Process = &ref.External
-		r.ExecutionStatus = "running"
-		r.StartedAt = ptr(now())
-		s.worker, s.active = started.Worker, r
-		s.lastDispatched = t.ID
-		if err := records.saveBinding(ref); err != nil {
-			op.Status, op.Diagnostic = OperationUnknown, "binding persistence failed: "+err.Error()
-			op.UpdatedAt = now()
-			opSaveErr := records.saveOperation(op)
-			r.ExecutionStatus = "unknown"
-			s.blocked(r, "Execution started but its binding could not be persisted; execution retained as unknown")
-			s.State.SlotOccupied, s.State.CurrentTask = true, ptr(t.ID)
-			return errors.Join(err, opSaveErr, s.save())
-		}
-		s.injectControlFault("binding_persisted")
-		op.Status, op.Ref, op.UpdatedAt = OperationAccepted, &ref, now()
-		if err := records.saveOperation(op); err != nil {
-			op.Status, op.Diagnostic, op.UpdatedAt = OperationUnknown, "accepted operation receipt persistence failed: "+err.Error(), now()
-			opSaveErr := records.saveOperation(op)
-			r.ExecutionStatus = "unknown"
-			s.blocked(r, "Execution started but its operation receipt could not be persisted; execution retained as unknown")
-			s.State.SlotOccupied, s.State.CurrentTask = true, ptr(t.ID)
-			return errors.Join(err, opSaveErr, s.save())
-		}
-		s.injectControlFault("operation_accepted_persisted")
-		// Apply only adapter-observed execution facts to the single service-owned Run.
-		if e = s.save(); e != nil {
-			return e
-		}
-		if s.State.Control.Operation != nil {
-			s.injectControlFault("worker_persisted")
-		}
-		if backendKind == BackendOrca {
-			s.note(r, "steer", "worker_start", "started", "orca agent started", deref(r.WorktreePath), map[string]any{"terminal": ref.External.Terminal, "agent": agent.Name})
-		} else {
-			s.note(r, "steer", "prepare", "completed", "local workspace ready", deref(r.WorktreePath), map[string]any{"branch": deref(r.WorktreeBranch), "base_commit": deref(r.BaseCommit)})
-			s.note(r, "steer", "worker_start", "started", "local worker started", deref(r.WorktreePath), map[string]any{"pid": ref.External.PID})
-		}
-		op.Status, op.UpdatedAt = OperationConfirmed, now()
-		if err = records.saveOperation(op); err != nil {
-			return err
-		}
-		return s.save()
-	}
-	if !targetFound {
-		return errTaskNotReady
-	}
-	return nil
+	return s.dispatchNative(ctx)
 }
 
 func (s *Service) injectControlFault(point string) {
@@ -1103,6 +641,7 @@ func (s *Service) activeControlRequestID() string {
 	}
 	return ""
 }
+
 func (s *Service) slotReason(ignoreRequestID string) string {
 	return s.executionSlotReason(ignoreRequestID, false)
 }
@@ -1111,8 +650,8 @@ func (s *Service) executionSlotReason(ignoreRequestID string, resumingDecision b
 	if s.worker != nil {
 		return "worker is running"
 	}
-	if op := s.State.Control.Operation; op != nil && op.RequestID != ignoreRequestID {
-		if op.Phase == "completed" {
+	if operation := s.State.Control.Operation; operation != nil && operation.RequestID != ignoreRequestID {
+		if operation.Phase == "completed" {
 			return "terminal control receipt is pending publication"
 		}
 		return "control operation is applying"
@@ -1120,19 +659,19 @@ func (s *Service) executionSlotReason(ignoreRequestID string, resumingDecision b
 	if len(s.State.Control.Blockers) > 0 {
 		return s.State.Control.Blockers[0].Reason
 	}
-	for _, r := range s.State.Runs {
-		if r == nil {
+	for _, run := range s.State.Runs {
+		if run == nil {
 			continue
 		}
-		if r.ExecutionStatus == "unknown" {
+		if run.ExecutionStatus == "unknown" {
 			return "unresolved unknown execution; manual recovery required"
 		}
-		if r.ExecutionStatus == "pending" || r.ExecutionStatus == "running" {
+		if run.ExecutionStatus == "pending" || run.ExecutionStatus == "running" {
 			return "execution preparation or supervision is still active"
 		}
 	}
-	for _, r := range s.State.Runs {
-		if r != nil && !resumingDecision && r.FinishTaskStatus == "waiting_decision" {
+	for _, run := range s.State.Runs {
+		if run != nil && !resumingDecision && run.FinishTaskStatus == "waiting_decision" {
 			return "waiting for a human decision"
 		}
 	}
@@ -1142,8 +681,6 @@ func (s *Service) executionSlotReason(ignoreRequestID string, resumingDecision b
 	return ""
 }
 
-// Exported occupancy is derived from reservations; it is not itself proof of a
-// worker and must not bypass pending decisions or persistent control blockers.
 func (s *Service) refreshSlotOccupancy() {
 	occupied := s.worker != nil || s.State.Control.Operation != nil || len(s.State.Control.Blockers) > 0
 	for _, r := range s.State.Runs {
@@ -1157,60 +694,21 @@ func (s *Service) refreshSlotOccupancy() {
 	s.State.SlotOccupied = occupied
 }
 func (s *Service) refreshCandidates(ctx context.Context) error {
-	if s.native {
-		queried := now()
-		tasks, err := (QueryService{Store: s.domainStore, Project: s.Config.identity}).ReadyNativeTasks(ctx)
-		if err != nil {
-			return err
-		}
-		candidates := make([]TaskCandidate, 0, len(tasks))
-		for _, task := range tasks {
-			if !contains(s.Config.ExecutableTypes, task.Type) || s.find(task.TaskID) != nil {
-				continue
-			}
-			candidates = append(candidates, TaskCandidate{TaskID: task.TaskID, Title: task.Title, Type: task.Type})
-		}
-		s.candidateSnapshot = &TaskSnapshot{Version: 1, InstanceID: s.State.Service.InstanceID, RepositoryIdentity: s.State.Repository.Identity, QueriedAt: queried, LastSuccessAt: &queried, BlockReason: s.slotReason(s.activeControlRequestID()), Tasks: candidates}
-		return nil
-	}
 	queried := now()
-	old := s.candidateSnapshot
-	if old == nil {
-		if b, err := os.ReadFile(filepath.Join(s.Config.RunDir, "tasks.json")); err == nil {
-			var previous TaskSnapshot
-			if decode(b, &previous) == nil {
-				old = &previous
-			}
-		}
-	}
-	tasks, err := s.beads.Ready(ctx)
-	if err != nil {
-		if old == nil {
-			old = &TaskSnapshot{Tasks: []TaskCandidate{}}
-		}
-		snapshot := &TaskSnapshot{Version: 1, InstanceID: s.State.Service.InstanceID, RepositoryIdentity: s.State.Repository.Identity, QueriedAt: queried, LastSuccessAt: old.LastSuccessAt, Error: ptr(clip(err.Error(), 1000)), BlockReason: s.slotReason(s.activeControlRequestID()), Tasks: old.Tasks}
-		s.candidateSnapshot = snapshot
-		return s.writeTaskSnapshot(snapshot)
-	}
-	candidates := make([]TaskCandidate, 0, len(tasks))
-	for _, task := range tasks {
-		if !executable(task, s.Config.ExecutableTypes) || s.find(task.ID) != nil {
-			continue
-		}
-		candidates = append(candidates, TaskCandidate{TaskID: task.ID, Title: task.Title, Type: task.Type, Summary: clip(task.Description, 500)})
-	}
-	snapshot := &TaskSnapshot{Version: 1, InstanceID: s.State.Service.InstanceID, RepositoryIdentity: s.State.Repository.Identity, QueriedAt: queried, LastSuccessAt: &queried, BlockReason: s.slotReason(s.activeControlRequestID()), Tasks: candidates}
-	s.candidateSnapshot = snapshot
-	return s.writeTaskSnapshot(snapshot)
-}
-func (s *Service) writeTaskSnapshot(snapshot *TaskSnapshot) error {
-	b, err := json.MarshalIndent(snapshot, "", "  ")
+	tasks, err := (QueryService{Store: s.domainStore, Project: s.Config.identity}).ReadyNativeTasks(ctx)
 	if err != nil {
 		return err
 	}
-	return AtomicWrite(filepath.Join(s.Config.RunDir, "tasks.json"), append(b, '\n'))
+	candidates := make([]TaskCandidate, 0, len(tasks))
+	for _, task := range tasks {
+		if !contains(s.Config.ExecutableTypes, task.Type) || s.find(task.TaskID) != nil {
+			continue
+		}
+		candidates = append(candidates, TaskCandidate{TaskID: task.TaskID, Title: task.Title, Type: task.Type})
+	}
+	s.candidateSnapshot = &TaskSnapshot{Version: 1, InstanceID: s.State.Service.InstanceID, RepositoryIdentity: s.State.Repository.Identity, QueriedAt: queried, LastSuccessAt: &queried, BlockReason: s.slotReason(s.activeControlRequestID()), Tasks: candidates}
+	return nil
 }
-
 func (s *Service) preparationFailed(r *Run, reason string) error {
 	r.ExecutionStatus = "failed"
 	r.EndedAt = ptr(now())
@@ -1224,40 +722,6 @@ func (s *Service) preparationFailed(r *Run, reason string) error {
 
 // verifyHandoff checks the result's workspace/base claims against the scheduler
 // record. It applies to every outcome that carries workspace facts.
-func verifyHandoff(r *Run, result Result) error {
-	if r.WorkspaceIntent == nil || r.WorktreePath == nil || r.WorktreeBranch == nil || r.BaseCommit == nil {
-		return errors.New("run has no verified scheduler-prepared workspace; legacy/orphan result requires manual recovery")
-	}
-	if (result.WorktreePath != nil && canonical(*result.WorktreePath) != canonical(*r.WorktreePath)) || (result.BaseCommit != nil && *result.BaseCommit != *r.BaseCommit) {
-		return errors.New("handoff workspace/base differs from scheduler record")
-	}
-	if result.Outcome == "pr_submitted" && (result.WorktreePath == nil || result.BaseCommit == nil) {
-		return errors.New("handoff missing prepared workspace facts")
-	}
-	return nil
-}
-
-func blockedResultMessage(result Result) string {
-	msg := "Repository workflow reported blocked"
-	if result.Error != nil {
-		msg += ": " + *result.Error
-	}
-	return msg
-}
-
-// awaitDecision persists the structured request and pauses the run. It keeps the
-// worktree, terminal and Beads claim so a human answer can resume the same run.
-func (s *Service) awaitDecision(r *Run, result Result) error {
-	st, e := WriteDecisionRequest(r, *result.Decision)
-	if e != nil {
-		return e
-	}
-	r.Decision = st
-	r.FinishTaskStatus = "waiting_decision"
-	r.Error = nil
-	return nil
-}
-
 func decisionMeta(r *Run) map[string]any {
 	if r.Decision == nil {
 		return nil
@@ -1273,137 +737,30 @@ func decisionMeta(r *Run) map[string]any {
 	return m
 }
 
-func (s *Service) bind(r *Run, result Result) error {
-	if e := verifyHandoff(r, result); e != nil {
-		return e
-	}
-	if _, e := s.Config.PR.PRNumber(*result.PRURL); e != nil {
-		return e
-	}
-	for _, other := range s.State.Runs {
-		if other.RunID != r.RunID && other.PR.URL != nil && *other.PR.URL == *result.PRURL {
-			return errors.New("PR is already bound to another run")
-		}
-	}
-	r.PR.URL = result.PRURL
-	r.PR.State = "unknown"
-	r.FinishTaskStatus = "waiting_pr_merge"
-	r.Error = nil
-	return nil
-}
 func (s *Service) finished(err error) error {
-	r := s.active
+	run := s.active
 	if s.worker != nil {
-		// The host closes Events before signalling Done, so draining here always
-		// terminates and no tail event is lost by the Done-first select race.
 		for ev := range s.worker.Events {
-			if e := s.event(ev); e != nil {
-				s.setError(e)
+			if eventErr := s.event(ev); eventErr != nil {
+				s.setError(eventErr)
 			}
 		}
 	}
-	if r != nil {
-		if replayErr := s.reconcileConversationRun(r); replayErr != nil {
-			s.setError(fmt.Errorf("completed conversation source replay failed: %w", replayErr))
+	if run == nil || run.WorkflowVersion != MinimalWorkflowVersion {
+		return nativeErr("unsupported_schema", "native service observed a run without the current minimal-v1 workflow; preserve its execution identity")
+	}
+	if replayErr := s.reconcileConversationRun(run); replayErr != nil {
+		s.setError(fmt.Errorf("completed conversation source replay failed: %w", replayErr))
+	}
+	attemptID := run.AttemptID
+	worker := s.worker
+	finishErr := s.finishMinimalStep(err)
+	if worker != nil && worker.proc != nil && worker.proc.Identity().Kind == "orca_supervised" && worker.RemoteOutcome != "" {
+		if settleErr := s.settleSupervisedStepResources(run, attemptID, worker.RemoteOutcome); settleErr != nil {
+			return errors.Join(finishErr, settleErr)
 		}
 	}
-	if r != nil && r.WorkflowVersion == MinimalWorkflowVersion {
-		attemptID := r.AttemptID
-		worker := s.worker
-		finishErr := s.finishMinimalStep(err)
-		if worker != nil && worker.proc != nil && worker.proc.Identity().Kind == "orca_supervised" && worker.RemoteOutcome != "" {
-			if settleErr := s.settleSupervisedStepResources(r, attemptID, worker.RemoteOutcome); settleErr != nil {
-				return errors.Join(finishErr, settleErr)
-			}
-		}
-		return finishErr
-	}
-	s.worker = nil
-	s.active = nil
-	s.State.CurrentTask = nil
-	s.State.SlotOccupied = false
-	r.EndedAt = ptr(now())
-	if err != nil {
-		var backendErr *BackendError
-		if errors.As(err, &backendErr) && (backendErr.Code == BackendOutcomeUnknown || backendErr.Code == BackendUnreachable || backendErr.Code == BackendIdentityMismatch) {
-			r.ExecutionStatus = "unknown"
-			r.EndedAt = nil
-			s.State.SlotOccupied, s.State.CurrentTask = true, ptr(r.TaskID)
-			s.blocked(r, "Execution observation ended without settlement: "+err.Error())
-			s.note(r, "steer", "error", "unknown", "execution observation ended", err.Error(), nil)
-			s.closeActivity(r)
-			return s.save()
-		}
-		r.ExecutionStatus = "failed"
-		if r.Decision != nil && r.Decision.Status == "reply_accepted" {
-			return s.failUnverifiedDecisionApplication(r, "the original execution terminated without matching application evidence: "+err.Error())
-		}
-		s.blocked(r, "Codex execution failed: "+err.Error())
-		s.note(r, "steer", "error", "failed", "worker exited", err.Error(), map[string]any{"execution_status": "failed"})
-		s.closeActivity(r)
-		return s.save()
-	}
-	r.ExecutionStatus = "succeeded"
-	s.note(r, "steer", "worker_exit", "completed", "worker exited", "", map[string]any{"exit_code": 0})
-	result, e := ReadResult(*r.ResultPath, r)
-	if r.Decision != nil && r.Decision.Status == "reply_accepted" {
-		proofErr := e
-		var ref ExecutionRef
-		if proofErr == nil {
-			ref, proofErr = (executionRecords{root: s.Config.RunDir}).loadBinding(r.RunID, r.Decision.AttemptID)
-		}
-		if proofErr == nil {
-			proofErr = validateDecisionApplication(r, result, ref)
-		}
-		if proofErr != nil {
-			return s.failUnverifiedDecisionApplication(r, proofErr.Error())
-		}
-		r.Decision.Status = "applied"
-		r.Decision.Version++
-		r.Decision.AppliedAt = ptr(now())
-		s.note(r, "steer", "decision", "applied", "decision applied", decisionAnswerSummary(r), decisionAnswerMeta(r))
-		if e = s.save(); e != nil {
-			return e
-		}
-	}
-	if e == nil {
-		if persistErr := s.recordExecutionResult(r, result, *r.ResultPath); persistErr != nil {
-			s.setError(fmt.Errorf("execution result conversation persistence failed: %w", persistErr))
-		}
-	}
-	if e == nil {
-		e = s.inspectRunWorkspace(context.Background(), r)
-	}
-	if e == nil && result.Summary != nil {
-		r.Summary = ptr(clip(*result.Summary, 4096))
-	}
-	switch {
-	case e != nil:
-		s.blocked(r, "Invalid handoff: "+e.Error())
-		s.note(r, "steer", "result", "failed", "invalid handoff", e.Error(), nil)
-		s.closeActivity(r)
-	case result.Outcome == "needs_decision":
-		if de := s.awaitDecision(r, result); de != nil {
-			s.blocked(r, "Invalid decision request: "+de.Error())
-			s.note(r, "steer", "result", "failed", "invalid decision request", de.Error(), nil)
-			s.closeActivity(r)
-		} else {
-			s.note(r, "steer", "decision", "pending", "decision requested", r.Decision.Request.Question, decisionMeta(r))
-		}
-	case result.Outcome == "blocked":
-		s.blocked(r, blockedResultMessage(result))
-		s.note(r, "steer", "result", "completed", "blocked by workflow", deref(r.Error), nil)
-		s.closeActivity(r)
-	default:
-		if be := s.bind(r, result); be != nil {
-			s.blocked(r, "Invalid handoff: "+be.Error())
-			s.note(r, "steer", "result", "failed", "invalid handoff", be.Error(), nil)
-			s.closeActivity(r)
-		} else {
-			s.note(r, "steer", "result", "completed", "pr submitted", *r.PR.URL, nil)
-		}
-	}
-	return s.save()
+	return finishErr
 }
 
 func (s *Service) settleSupervisedStepResources(run *Run, attemptID, outcome string) error {
@@ -1521,112 +878,7 @@ func (s *Service) pollPRs(ctx context.Context) error {
 	return s.pollPRsFor(ctx, "")
 }
 func (s *Service) pollPRsFor(ctx context.Context, runID string) error {
-	if s.native {
-		return s.pollNativePRs(ctx, runID)
-	}
-	var operationErr error
-	for _, r := range s.State.Runs {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		if r.FinishTaskStatus != "waiting_pr_merge" || r.PR.URL == nil {
-			continue
-		}
-		info, e := s.prs.Query(ctx, *r.PR.URL)
-		r.PR.QueriedAt = ptr(now())
-		if e != nil {
-			r.PR.State = "unknown"
-			r.PR.QueryError = ptr(clip(e.Error(), 1000))
-			if errors.Is(e, ErrPRIdentity) {
-				s.blocked(r, e.Error())
-			}
-			if e = s.save(); e != nil {
-				return e
-			}
-			continue
-		}
-		previous := r.PR.State
-		r.PR.QueryError = nil
-		r.PR.State = info.State
-		r.PR.MergedAt = info.MergedAt
-		r.PR.MergeCommit = info.MergeCommit
-		if info.State != previous {
-			s.note(r, "steer", "pr", "info", "pr "+info.State, *r.PR.URL, map[string]any{"previous": previous})
-		}
-		if info.BaseBranch != s.Config.Branch {
-			s.blocked(r, "PR target branch mismatch: "+info.BaseBranch)
-			s.note(r, "steer", "pr", "failed", "pr target mismatch", info.BaseBranch, nil)
-			if e = s.save(); e != nil {
-				return e
-			}
-			continue
-		}
-		if r.PR.HeadRevision != nil && info.HeadRevision != *r.PR.HeadRevision {
-			s.blocked(r, "PR head changed after the recovery result was accepted; completion refused")
-			s.note(r, "steer", "pr", "failed", "accepted result PR head mismatch", info.HeadRevision, map[string]any{"accepted_head": *r.PR.HeadRevision})
-			if e = s.save(); e != nil {
-				return e
-			}
-			continue
-		}
-		if info.State == "closed_unmerged" {
-			s.blocked(r, "PR closed without merge; manual recovery required")
-			s.note(r, "steer", "pr", "failed", "pr closed unmerged", *r.PR.URL, nil)
-		}
-		if r.WorkflowVersion == MinimalWorkflowVersion && info.State != "closed_unmerged" {
-			workflow, execution := s.minimalRecords(r)
-			if workflow == nil || execution == nil || workflow.SelectedResult != execution.ExecutionID ||
-				execution.Status != "succeeded" || execution.CurrentStep != "waiting_pr_merge" ||
-				!revisionPattern.MatchString(execution.CandidateRevision) || info.HeadRevision != execution.CandidateRevision ||
-				execution.VerifiedRevision != execution.CandidateRevision || (workflow.Definition.ReviewRequired && execution.ReviewedRevision != execution.CandidateRevision) {
-				s.blocked(r, "PR head or selected execution no longer matches the verified candidate; completion refused")
-				if e = s.save(); e != nil {
-					return e
-				}
-				continue
-			}
-		}
-		// Persist authoritative merge evidence before attempting an external close.
-		if e = s.save(); e != nil {
-			return e
-		}
-		if info.State == "merged" {
-			if e = s.complete(ctx, r, info); e != nil {
-				r.Error = ptr("PR merged; completion will retry: " + clip(e.Error(), 1000))
-				operationErr = e
-			} else {
-				if r.WorkflowVersion == MinimalWorkflowVersion {
-					workflow, execution := s.minimalRecords(r)
-					var task *TaskRecord
-					for i := range s.State.Tasks {
-						if s.State.Tasks[i].TaskID == r.DomainTaskID {
-							task = &s.State.Tasks[i]
-							break
-						}
-					}
-					if workflow == nil || execution == nil || task == nil || info.HeadRevision != execution.CandidateRevision {
-						e = errors.New("merged PR delivery evidence does not match the selected candidate")
-					} else {
-						e = CompleteMergedDelivery(task, workflow, execution, DeliveryEvidence{PRURL: info.URL, PublishedHead: info.HeadRevision, MergeCommit: deref(info.MergeCommit), TargetBranch: info.BaseBranch, Merged: info.Merged, ProviderTaskStatus: "closed", ObservedAt: now()})
-					}
-				}
-				if e != nil {
-					r.Error = ptr("PR merged; completion will retry: " + clip(e.Error(), 1000))
-					operationErr = e
-				} else {
-					r.BeadsStatus = "closed"
-					r.FinishTaskStatus = "completed"
-					r.Error = nil
-					s.note(r, "steer", "completion", "completed", "task closed", r.TaskID, nil)
-					s.closeActivity(r)
-				}
-			}
-			if e = s.save(); e != nil {
-				return e
-			}
-		}
-	}
-	return operationErr
+	return s.pollNativePRs(ctx, runID)
 }
 func (s *Service) event(ev WorkerEvent) error {
 	ack := func(err error) error {
@@ -2104,9 +1356,7 @@ func (s *Service) run(ctx context.Context, dispatchMode string) (retErr error) {
 	}()
 	defer s.closeAllActivities()
 	s.State.Service.Mode = "scheduler"
-	if !s.native {
-		s.State.Control.DispatchMode = dispatchMode
-	} else if err := s.refreshNativeSnapshot(ctx, true); err != nil {
+	if err := s.refreshNativeSnapshot(ctx, true); err != nil {
 		return err
 	}
 	s.State.Service.Ready = false
@@ -2153,7 +1403,7 @@ func (s *Service) run(ctx context.Context, dispatchMode string) (retErr error) {
 				return
 			case <-stopTick.C:
 				stopReq, _, checkedAt := findStopRequestCached(s.Config, instanceID, stopSeen)
-				if stopRequested(s.Config, instanceID) || stopReq != nil {
+				if stopReq != nil {
 					if stopReq != nil {
 						acceptedStops <- stopAcceptance{Request: *stopReq, At: checkedAt}
 					}
@@ -2338,10 +1588,8 @@ func (s *Service) run(ctx context.Context, dispatchMode string) (retErr error) {
 			if e := step(s.processCommandsAndDecisions); e != nil {
 				return e
 			}
-			if s.native {
-				if e := step(s.reconcile); e != nil {
-					return e
-				}
+			if e := step(s.reconcile); e != nil {
+				return e
 			}
 			if e := s.pollControl(ctx, cancel); e != nil {
 				return e
@@ -2435,7 +1683,7 @@ func (s *Service) stopActiveExecution(ctx context.Context) (Operation, error) {
 	if ref.RunID != r.RunID || ref.AttemptID != r.AttemptID || r.Process == nil || ref.External != *r.Process {
 		return Operation{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "active execution binding does not match runtime identity"}
 	}
-	backend := backendFor(s.Config, BeadsContext{})
+	backend := backendFor(s.Config)
 	kind, protocol := backend.Identity()
 	if kind != ref.Backend || protocol != ref.Protocol {
 		return Operation{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "configured backend/protocol differs from fixed execution"}
@@ -2521,7 +1769,7 @@ func (s *Service) confirmExecutionStop(op Operation) (bool, error) {
 		}
 		ref = &loaded
 	}
-	backend := backendFor(s.Config, BeadsContext{})
+	backend := backendFor(s.Config)
 	obs, err := backend.Observe(context.Background(), *ref)
 	if err != nil {
 		op.Status, op.Diagnostic, op.UpdatedAt = OperationUnknown, err.Error(), now()
@@ -2547,7 +1795,7 @@ func (s *Service) preserveUnknownStop(reason string, cause error) {
 	r := s.active
 	if s.Config.hostName() == "orca_supervised" && s.worker != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), duration(s.Config.ShutdownGrace))
-		detachErr := backendFor(s.Config, BeadsContext{}).DetachObservation(ctx, s.worker)
+		detachErr := backendFor(s.Config).DetachObservation(ctx, s.worker)
 		cancel()
 		if detachErr != nil {
 			reason += "; local remote observation detach failed: " + detachErr.Error()
@@ -2565,26 +1813,4 @@ func (s *Service) preserveUnknownStop(reason string, cause error) {
 	if err := s.save(); err != nil {
 		s.setError(err)
 	}
-}
-func RequestStop(c Config) error {
-	v, e := LoadRuntime(filepath.Join(c.RunDir, c.RuntimeFile))
-	if e != nil {
-		return e
-	}
-	if v == nil {
-		return errors.New("no runtime snapshot")
-	}
-	b, _ := json.Marshal(map[string]string{"instance_id": v.Service.InstanceID})
-	return AtomicWrite(filepath.Join(c.RunDir, "stop.json"), b)
-}
-
-func stopRequested(c Config, instanceID string) bool {
-	b, e := os.ReadFile(filepath.Join(c.RunDir, "stop.json"))
-	if e != nil {
-		return false
-	}
-	var request struct {
-		InstanceID string `json:"instance_id"`
-	}
-	return json.Unmarshal(b, &request) == nil && request.InstanceID == instanceID
 }

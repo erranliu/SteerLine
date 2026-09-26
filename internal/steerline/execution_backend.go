@@ -35,27 +35,6 @@ type AgentSpec struct {
 	Name string `json:"name"`
 }
 
-// AttemptSpec is a value snapshot passed across the platform boundary. Legacy
-// Run and Task values are copies used only to render today's dispatch format;
-// the adapter cannot mutate the service's authoritative Run.
-type AttemptSpec struct {
-	ProjectID    string            `json:"project_id"`
-	TaskID       string            `json:"task_id"`
-	RunID        string            `json:"run_id"`
-	AttemptID    string            `json:"attempt_id"`
-	OperationID  string            `json:"operation_id"`
-	ConfigDigest string            `json:"config_digest"`
-	Repository   string            `json:"repository"`
-	BaseCommit   string            `json:"base_commit"`
-	Workspace    WorkspaceIntent   `json:"workspace"`
-	Agent        AgentSpec         `json:"agent"`
-	Protocol     ExecutionProtocol `json:"protocol"`
-	Target       ExecutionTarget   `json:"target"`
-	Task         Task              `json:"task"`
-	Run          Run               `json:"run"`
-	Beads        BeadsContext      `json:"beads"`
-}
-
 type ExecutionRef struct {
 	Version         int               `json:"version"`
 	Backend         BackendKind       `json:"backend"`
@@ -192,11 +171,9 @@ func (e *BackendError) Unwrap() error { return e.Cause }
 type ExecutionBackend interface {
 	Identity() (BackendKind, ExecutionProtocol)
 	Probe(context.Context, ExecutionTarget, AgentSpec) (CapabilityReport, error)
-	Start(context.Context, AttemptSpec) (StartReceipt, error)
 	Observe(context.Context, ExecutionRef) (Observation, error)
 	InspectWorkspace(context.Context, ExecutionRef) (WorkspaceInspection, error)
 	ReadOutput(context.Context, ExecutionRef, string, int) (OutputBatch, error)
-	Reply(context.Context, ExecutionRef, string, Operation, string) (ReplyReceipt, error)
 	StopExecution(context.Context, ExecutionRef, Operation, *Worker) (StopReceipt, error)
 	DetachObservation(context.Context, *Worker) error
 	SettleResources(context.Context, ExecutionRef, string) (SettlementReceipt, error)
@@ -211,13 +188,6 @@ type WorkspaceInspection struct {
 	Head       string    `json:"head"`
 	Dirty      bool      `json:"dirty"`
 	CheckedAt  time.Time `json:"checked_at"`
-}
-type ReplyReceipt struct {
-	InputAccepted bool    `json:"input_accepted"`
-	TurnStarted   bool    `json:"turn_started"`
-	Applied       bool    `json:"applied"`
-	Diagnostic    string  `json:"diagnostic,omitempty"`
-	Worker        *Worker `json:"-"`
 }
 
 func unsupported(name string) error {
@@ -299,7 +269,7 @@ func (r executionRecords) saveCapabilityReport(report CapabilityReport) error {
 	}
 	seen := map[string]bool{}
 	for _, cap := range report.Capabilities {
-		if cap.Name == "" || seen[cap.Name] || cap.Status != CapabilityVerified && cap.Status != CapabilityUnsupported && cap.Status != CapabilityNotTested || cap.Status == CapabilityVerified && cap.Evidence == "" {
+		if cap.Name == "" || retiredExecutionCapabilityName(cap.Name) || seen[cap.Name] || cap.Status != CapabilityVerified && cap.Status != CapabilityUnsupported && cap.Status != CapabilityNotTested || cap.Status == CapabilityVerified && cap.Evidence == "" {
 			return errors.New("capability report has invalid or unevidenced status")
 		}
 		if cap.Status == CapabilityVerified {
@@ -337,7 +307,7 @@ func (r executionRecords) loadCapabilityReport(key CapabilityReport) (Capability
 	}
 	seen := map[string]bool{}
 	for _, cap := range report.Capabilities {
-		if cap.Name == "" || seen[cap.Name] || cap.Status != CapabilityVerified && cap.Status != CapabilityUnsupported && cap.Status != CapabilityNotTested || cap.Status == CapabilityVerified && cap.Evidence == "" {
+		if cap.Name == "" || retiredExecutionCapabilityName(cap.Name) || seen[cap.Name] || cap.Status != CapabilityVerified && cap.Status != CapabilityUnsupported && cap.Status != CapabilityNotTested || cap.Status == CapabilityVerified && cap.Evidence == "" {
 			return report, errors.New("capability report contains invalid or unevidenced status")
 		}
 		if cap.Status == CapabilityVerified {
@@ -514,9 +484,7 @@ func (r executionRecords) loadOperation(run, attempt, id string) (Operation, err
 }
 
 type localExecutionBackend struct {
-	config       Config
-	source       BeadsContext
-	afterPrepare func()
+	config Config
 }
 
 func (b localExecutionBackend) Identity() (BackendKind, ExecutionProtocol) {
@@ -535,47 +503,6 @@ func (b localExecutionBackend) Probe(ctx context.Context, target ExecutionTarget
 		return CapabilityReport{}, &BackendError{Code: BackendProtocolInvalid, Diagnostic: "local Codex version probe returned no version"}
 	}
 	return capabilityReport(BackendLocal, ProtocolLocalProcess, target, agent, version), nil
-}
-func (b localExecutionBackend) Start(ctx context.Context, s AttemptSpec) (StartReceipt, error) {
-	r := cloneRun(s.Run)
-	intent := s.Workspace
-	c := b.config
-	var err error
-	if r.WorktreePath != nil {
-		if err = verifyRunWorkspace(ctx, c, &r); err == nil {
-			c, err = workerForWorkspace(ctx, c, &r, s.Beads)
-		}
-	} else {
-		if _, statErr := os.Lstat(intent.Path); statErr == nil {
-			return StartReceipt{}, &BackendError{Code: BackendRejected, Diagnostic: "local workspace path already exists; preserved without reuse"}
-		} else if !os.IsNotExist(statErr) {
-			return StartReceipt{}, &BackendError{Code: BackendRejected, Diagnostic: "local workspace path is inaccessible", Cause: statErr}
-		}
-		c, err = prepareWorkspace(ctx, c, &r, s.Beads)
-	}
-	if err != nil {
-		residuals := []string(nil)
-		if r.WorktreePath != nil {
-			residuals = append(residuals, *r.WorktreePath)
-		} else if _, statErr := os.Lstat(intent.Path); statErr == nil {
-			residuals = append(residuals, intent.Path)
-		}
-		return StartReceipt{Disposition: "rejected", Run: r, ResidualResources: residuals}, &BackendError{Code: BackendRejected, Diagnostic: "local workspace preparation failed", Cause: err}
-	}
-	if b.afterPrepare != nil {
-		b.afterPrepare()
-	}
-	path, branch, base := intent.Path, intent.Branch, intent.BaseCommit
-	r.WorktreePath = &path
-	r.WorktreeBranch = &branch
-	r.BaseCommit = &base
-	w, err := StartWorker(ctx, c, s.Task, &r)
-	if err != nil {
-		return StartReceipt{Disposition: "rejected", Run: r, ResidualResources: []string{path}}, &BackendError{Code: BackendRejected, Diagnostic: "local process launch failed", Cause: err}
-	}
-	id := w.proc.Identity()
-	ref := ExecutionRef{Version: 1, Backend: BackendLocal, Protocol: ProtocolLocalProcess, Target: s.Target, Agent: s.Agent, RunID: s.RunID, AttemptID: s.AttemptID, WorkspacePath: path, WorkspaceBranch: branch, BaseCommit: base, External: id, Generation: id.Created}
-	return StartReceipt{Disposition: "accepted", Worker: w, Ref: ref, Run: r}, nil
 }
 func (b localExecutionBackend) Observe(ctx context.Context, ref ExecutionRef) (Observation, error) {
 	if ref.Backend != BackendLocal || ref.Protocol != ProtocolLocalProcess || ref.Target != targetFor(b.config) {
@@ -740,9 +667,6 @@ func readOutputPrefix(f *os.File, offset int64) (string, error) {
 	_, _ = hash.Write(last)
 	return hex.EncodeToString(hash.Sum(nil)), nil
 }
-func (b localExecutionBackend) Reply(context.Context, ExecutionRef, string, Operation, string) (ReplyReceipt, error) {
-	return ReplyReceipt{}, unsupported("Reply")
-}
 func (b localExecutionBackend) StopExecution(ctx context.Context, ref ExecutionRef, _ Operation, worker *Worker) (StopReceipt, error) {
 	if ref.Backend != BackendLocal || ref.Protocol != ProtocolLocalProcess || ref.Target != targetFor(b.config) {
 		return StopReceipt{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "fixed local process target changed"}
@@ -829,18 +753,6 @@ func (b orcaTerminalBackend) Probe(ctx context.Context, target ExecutionTarget, 
 		report.AgentVersion = strings.TrimSpace(string(out))
 	}
 	return report, nil
-}
-func (b orcaTerminalBackend) Start(ctx context.Context, s AttemptSpec) (StartReceipt, error) {
-	r := cloneRun(s.Run)
-	intent := s.Workspace
-	w, err := startOrcaRun(ctx, b.config, s.Task, &r, s.Beads, &intent, filepath.Dir(deref(r.ResultPath)))
-	if err != nil {
-		return StartReceipt{Disposition: "outcome_unknown", Run: r, ResidualResources: []string{"Orca worktree or terminal may have been created"}}, &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "Orca start may have created external resources", Cause: err}
-	}
-	r.WorkspaceIntent = &intent
-	id := w.proc.Identity()
-	ref := ExecutionRef{Version: 1, Backend: BackendOrca, Protocol: ProtocolOrcaTerminalV2, Target: s.Target, Agent: s.Agent, RunID: s.RunID, AttemptID: s.AttemptID, WorkspacePath: deref(r.WorktreePath), WorkspaceBranch: deref(r.WorktreeBranch), BaseCommit: deref(r.BaseCommit), External: id, Generation: id.Incarnation}
-	return StartReceipt{Disposition: "accepted", Worker: w, Ref: ref, Run: r}, nil
 }
 func (b orcaTerminalBackend) Observe(ctx context.Context, ref ExecutionRef) (Observation, error) {
 	old := ref.External
@@ -1013,45 +925,6 @@ func (b orcaTerminalBackend) ReadOutput(ctx context.Context, ref ExecutionRef, c
 	}
 	return OutputBatch{}, &BackendError{Code: BackendProtocolInvalid, Diagnostic: "Orca output source changed repeatedly during one read"}
 }
-func (b orcaTerminalBackend) Reply(ctx context.Context, ref ExecutionRef, text string, operation Operation, resultOut string) (ReplyReceipt, error) {
-	if ref.Backend != BackendOrca || ref.Protocol != ProtocolOrcaTerminalV2 || ref.External.Terminal == "" {
-		return ReplyReceipt{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "Orca terminal binding is incomplete"}
-	}
-	if targetFor(b.config) != ref.Target {
-		return ReplyReceipt{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "configured Orca connection differs from the fixed execution target"}
-	}
-	obs, err := b.Observe(ctx, ref)
-	if err != nil {
-		return ReplyReceipt{}, err
-	}
-	if obs.Liveness != "live" {
-		return ReplyReceipt{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "continuation requires the original live terminal"}
-	}
-	if !stableExecutionID(ref.RunID) || !stableExecutionID(ref.AttemptID) || !filepath.IsAbs(ref.WorkspacePath) {
-		return ReplyReceipt{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "Orca continuation lacks fixed attempt/workspace identity"}
-	}
-	expectedDir := filepath.Join(b.config.RunDir, "runs", ref.RunID)
-	if ref.AttemptID != ref.RunID {
-		expectedDir = filepath.Join(expectedDir, "attempts", ref.AttemptID)
-	}
-	if canonical(resultOut) != canonical(filepath.Join(expectedDir, "result.json")) {
-		return ReplyReceipt{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "continuation result path differs from the fixed attempt"}
-	}
-	resultInWorktree := filepath.Join(ref.WorkspacePath, orcaResultFile)
-	if err := os.Remove(resultInWorktree); err != nil && !os.IsNotExist(err) {
-		return ReplyReceipt{}, &BackendError{Code: BackendRejected, Diagnostic: "previous Orca result could not be cleared before continuation", Cause: err}
-	}
-	receipt, err := (orcaClient{cfg: b.config}).terminalSend(ctx, ref.External, text)
-	if err != nil {
-		return ReplyReceipt{}, err
-	}
-	proc := &orcaProcess{cfg: b.config, term: orcaTerminal{Handle: ref.External.Terminal, RuntimeID: ref.External.RuntimeID, IncarnationID: ref.External.Incarnation}}
-	proc.ref = ref
-	proc.outputSegment = "reply:" + operation.ID
-	worker := superviseOrcaResult(b.config, proc, resultInWorktree, resultOut)
-	receipt.Worker = worker
-	return receipt, nil
-}
 func (b orcaTerminalBackend) StopExecution(ctx context.Context, ref ExecutionRef, _ Operation, worker *Worker) (StopReceipt, error) {
 	obs, err := b.Observe(ctx, ref)
 	if err != nil {
@@ -1114,22 +987,21 @@ func (b orcaTerminalBackend) ReconcileOperation(ctx context.Context, op Operatio
 }
 
 func capabilityReport(backend BackendKind, protocol ExecutionProtocol, target ExecutionTarget, agent AgentSpec, version string) CapabilityReport {
-	caps := []Capability{{Name: "start", Status: CapabilityNotTested}, {Name: "observe", Status: CapabilityNotTested}, {Name: "stop", Status: CapabilityNotTested}, {Name: "detach_observation", Status: CapabilityNotTested}, {Name: "reply_continue", Status: CapabilityNotTested}, {Name: "retry", Status: CapabilityNotTested}, {Name: "operation_reconciliation", Status: CapabilityNotTested}, {Name: "workspace_inspection", Status: CapabilityNotTested}, {Name: "output_reading", Status: CapabilityNotTested}, {Name: "output_turns", Status: CapabilityNotTested}, {Name: "output_final_answer", Status: CapabilityNotTested}, {Name: "resource_settlement", Status: CapabilityUnsupported}}
-	for i := range caps {
-		if backend == BackendLocal && caps[i].Name == "reply_continue" || backend == BackendOrca && caps[i].Name == "retry" {
-			caps[i].Status = CapabilityUnsupported
-		}
-	}
+	caps := []Capability{{Name: "start", Status: CapabilityNotTested}, {Name: "observe", Status: CapabilityNotTested}, {Name: "stop", Status: CapabilityNotTested}, {Name: "detach_observation", Status: CapabilityNotTested}, {Name: "operation_reconciliation", Status: CapabilityNotTested}, {Name: "workspace_inspection", Status: CapabilityNotTested}, {Name: "output_reading", Status: CapabilityNotTested}, {Name: "output_turns", Status: CapabilityNotTested}, {Name: "output_final_answer", Status: CapabilityNotTested}, {Name: "resource_settlement", Status: CapabilityUnsupported}}
 	return CapabilityReport{Version: 1, Backend: backend, Protocol: protocol, Target: target, Agent: agent, PlatformVersion: version, CheckedAt: now(), Capabilities: caps}
 }
-func backendFor(c Config, source BeadsContext) ExecutionBackend {
+
+func retiredExecutionCapabilityName(name string) bool {
+	return name == "reply_continue" || name == "retry"
+}
+func backendFor(c Config) ExecutionBackend {
 	if c.hostName() == "orca_supervised" {
 		return orcaSupervisedBackend{config: c}
 	}
 	if c.hostName() == "orca" {
 		return orcaTerminalBackend{config: c}
 	}
-	return localExecutionBackend{config: c, source: source}
+	return localExecutionBackend{config: c}
 }
 func cloneRun(r Run) Run {
 	b, _ := json.Marshal(r)
@@ -1155,42 +1027,12 @@ func targetFor(c Config) ExecutionTarget {
 	name, _ := os.Hostname()
 	return ExecutionTarget{ID: "local:" + runtime.GOOS + ":" + name}
 }
-func attemptOperationID(run, attempt string) string { return "start-" + run + "-" + attempt }
 func (s *Service) readRunWorkspace(ctx context.Context, run *Run) (WorkspaceInspection, error) {
-	if run != nil && run.WorkflowVersion == MinimalWorkflowVersion {
-		w, err := s.inspectMinimalWorkspace(ctx, run)
-		return WorkspaceInspection{Repository: w.Repository, Worktree: w.Worktree, Branch: w.Branch, Base: w.Base, Head: w.Head, Dirty: w.Dirty, CheckedAt: w.VerifiedAt}, err
+	if run == nil || run.WorkflowVersion != MinimalWorkflowVersion {
+		return WorkspaceInspection{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "native recovery requires its fixed minimal-v1 workflow identity"}
 	}
-	if run == nil || run.WorktreePath == nil || run.WorktreeBranch == nil || run.BaseCommit == nil || run.WorkspaceIntent == nil {
-		return WorkspaceInspection{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "run has no verified workspace fields"}
-	}
-	if canonical(*run.WorktreePath) != canonical(run.WorkspaceIntent.Path) || *run.WorktreeBranch != run.WorkspaceIntent.Branch || *run.BaseCommit != run.WorkspaceIntent.BaseCommit {
-		return WorkspaceInspection{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "runtime workspace differs from durable intent"}
-	}
-	if !stableExecutionID(run.RunID) || !stableExecutionID(run.AttemptID) {
-		return WorkspaceInspection{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "run has no current execution identity"}
-	}
-	records := executionRecords{root: s.Config.RunDir}
-	ref, err := records.loadBinding(run.RunID, run.AttemptID)
-	if err != nil {
-		return WorkspaceInspection{}, err
-	}
-	if ref.RunID != run.RunID || ref.AttemptID != run.AttemptID || canonical(ref.WorkspacePath) != canonical(*run.WorktreePath) || ref.WorkspaceBranch != *run.WorktreeBranch || ref.BaseCommit != *run.BaseCommit {
-		return WorkspaceInspection{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "execution binding and runtime workspace disagree"}
-	}
-	backend := backendFor(s.Config, BeadsContext{})
-	kind, protocol := backend.Identity()
-	if kind != ref.Backend || protocol != ref.Protocol {
-		return WorkspaceInspection{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "configured backend differs from the fixed workspace protocol"}
-	}
-	inspection, err := backend.InspectWorkspace(ctx, ref)
-	if err != nil {
-		return WorkspaceInspection{}, err
-	}
-	if canonical(inspection.Worktree) != canonical(ref.WorkspacePath) || inspection.Branch != ref.WorkspaceBranch || inspection.Base != ref.BaseCommit || canonical(inspection.Repository) != canonical(s.Config.Repository) {
-		return WorkspaceInspection{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "workspace inspection returned a different repository or ref"}
-	}
-	return inspection, nil
+	w, err := s.inspectMinimalWorkspace(ctx, run)
+	return WorkspaceInspection{Repository: w.Repository, Worktree: w.Worktree, Branch: w.Branch, Base: w.Base, Head: w.Head, Dirty: w.Dirty, CheckedAt: w.VerifiedAt}, err
 }
 
 func (s *Service) inspectRunWorkspace(ctx context.Context, run *Run) error {
@@ -1211,7 +1053,7 @@ func (s *Service) inspectRunProcess(run *Run) string {
 		if ref.Protocol == ProtocolOrcaSupervised && !sameSupervisedBaseTarget(ref.Target, targetFor(s.Config)) || ref.Protocol != ProtocolOrcaSupervised && ref.Target != targetFor(s.Config) {
 			return "execution target changed; refusing to inspect through a replacement backend connection"
 		}
-		backend := backendFor(s.Config, BeadsContext{})
+		backend := backendFor(s.Config)
 		kind, protocol := backend.Identity()
 		if kind != ref.Backend || protocol != ref.Protocol {
 			return "execution backend or protocol differs from the fixed binding"

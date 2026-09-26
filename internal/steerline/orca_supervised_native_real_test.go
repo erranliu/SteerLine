@@ -79,6 +79,8 @@ func TestSupervisedOrcaRealNativeTaskLifecycle(t *testing.T) {
 		}},
 		PR: PRConfig{Kind: "command", BaseURL: "https://github.com", Repository: testGitHubRepository, Query: Command{Executable: "gh", Args: []string{
 			"api", "repos/{repository}/pulls/{number}", "--jq", `{url:.html_url,repository:.base.repo.full_name,base_branch:.base.ref,head_revision:.head.sha,state:(if .merged then "merged" elif .state=="closed" then "closed_unmerged" else .state end),merged:.merged,merged_at:.merged_at,merge_commit:.merge_commit_sha}`,
+		}}, Close: Command{Executable: "gh", Args: []string{
+			"api", "repos/{repository}/pulls/{number}", "-X", "PATCH", "-f", "state=closed", "--jq", `{url:.html_url,repository:.base.repo.full_name,base_branch:.base.ref,head_revision:.head.sha,state:(if .merged then "merged" elif .state=="closed" then "closed_unmerged" else .state end),merged:.merged,merged_at:.merged_at,merge_commit:.merge_commit_sha}`,
 		}}},
 	}
 	definition := DefaultMinimalWorkflowDefinition(true)
@@ -147,8 +149,7 @@ func TestSupervisedOrcaRealNativeTaskLifecycle(t *testing.T) {
 		"observe":              {"spec03-supervised-r08-runtime-replacement-2026-09-26.json"},
 		"workspace_inspection": {"spec03-supervised-r19-retry2-staged-2026-09-26.json"},
 		"output_reading":       {"spec03-supervised-r19-retry2-publish-2026-09-26.json"},
-		"message_inbox":        {"spec03-supervised-r19-retry2-complete-2026-09-26.json"},
-		"reply_continue":       {"spec03-supervised-viewer-decision-live-2026-09-26.json"},
+		"message_inbox":        {"spec03-supervised-r19-retry2-complete-2026-09-26.json", "spec03-supervised-viewer-decision-live-2026-09-26.json"},
 		"resource_settlement":  {"spec03-supervised-r19-retry2-complete-2026-09-26.json"},
 	}
 	acceptanceRoot, err := os.Getwd()

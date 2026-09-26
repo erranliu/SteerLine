@@ -4,7 +4,7 @@
   "additionalProperties": false,
   "required": ["schema_version", "project_identity", "task_id", "workflow_run_id", "execution_id", "attempt_id", "result"],
   "properties": {
-    "schema_version": {"const": 1},
+    "schema_version": {"type": "integer", "enum": [1]},
     "project_identity": {"type": "string", "minLength": 1},
     "task_id": {"type": "string", "minLength": 1},
     "workflow_run_id": {"type": "string", "minLength": 1},
@@ -15,16 +15,15 @@
       "additionalProperties": false,
       "required": ["step_id", "succeeded", "result_id"],
       "properties": {
-        "step_id": {"enum": ["prepare", "implement", "verify", "review", "publish_pr"]},
+        "step_id": {"type": "string", "enum": ["prepare", "implement", "verify", "review", "publish_pr"]},
         "succeeded": {"type": "boolean"},
         "result_id": {"type": "string", "minLength": 1},
-        "input_revision": {"type": "string"},
-        "revision": {"type": "string"},
-        "base_ancestor": {"type": "boolean"},
+        "input_revision": {"type": ["string", "null"]},
+        "revision": {"type": ["string", "null"]},
         "workspace": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["repository", "worktree", "branch", "base", "head", "dirty"],
+          "required": ["repository", "worktree", "branch", "base", "head", "dirty", "verified_at"],
           "properties": {
             "repository": {"type": "string"},
             "worktree": {"type": "string"},
@@ -32,7 +31,7 @@
             "base": {"type": "string"},
             "head": {"type": "string"},
             "dirty": {"type": "boolean"},
-            "verified_at": {"type": "string", "format": "date-time"}
+            "verified_at": {"type": ["string", "null"], "format": "date-time"}
           }
         },
         "checks": {
@@ -43,7 +42,7 @@
             "required": ["name", "status", "revision", "command", "script_version", "exit_code", "passed", "evidence_ref", "actual_commit"],
             "properties": {
               "name": {"type": "string"},
-              "status": {"enum": ["passed", "failed", "not_run", "unknown"]},
+              "status": {"type": "string", "enum": ["passed", "failed", "not_run", "unknown"]},
               "revision": {"type": "string"},
               "command": {"type": "string", "minLength": 1},
               "script_version": {"type": "string", "minLength": 1},
@@ -54,37 +53,38 @@
             }
           }
         },
-        "review_verdict": {"enum": ["passed", "changes_requested", "blocked"]},
-        "pr_url": {"type": "string"},
-        "published_head": {"type": "string"},
-        "failure_kind": {"type": "string"},
+        "review_verdict": {"type": ["string", "null"], "enum": ["passed", "changes_requested", "blocked", null]},
+        "pr_url": {"type": ["string", "null"]},
+        "published_head": {"type": ["string", "null"]},
+        "failure_kind": {"type": ["string", "null"]},
         "prerequisite_result_ids": {"type": "array", "items": {"type": "string"}},
-        "applied_decision_id": {"type": "string"},
-        "applied_decision_attempt_id": {"type": "string"},
-        "applied_decision_execution_id": {"type": "string"},
-        "applied_answer_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "applied_decision_id": {"type": ["string", "null"]},
+        "applied_decision_attempt_id": {"type": ["string", "null"]},
+        "applied_decision_execution_id": {"type": ["string", "null"]},
+        "applied_answer_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
         "decision": {
           "type": ["object", "null"],
           "additionalProperties": false,
-          "required": ["question", "options"],
+          "required": ["question", "context", "options", "recommended", "allow_free_text"],
           "properties": {
             "question": {"type": "string"},
-            "context": {"type": "string"},
+            "context": {"type": ["string", "null"]},
             "options": {
               "type": "array",
               "maxItems": 12,
               "items": {
                 "type": "object",
                 "additionalProperties": false,
-                "required": ["id", "label"],
-                "properties": {"id": {"type": "string"}, "label": {"type": "string"}, "detail": {"type": "string"}}
+                "required": ["id", "label", "detail"],
+                "properties": {"id": {"type": "string"}, "label": {"type": "string"}, "detail": {"type": ["string", "null"]}}
               }
             },
-            "recommended": {"type": "string"},
-            "allow_free_text": {"type": "boolean"}
+            "recommended": {"type": ["string", "null"]},
+            "allow_free_text": {"type": ["boolean", "null"]}
           }
         }
-      }
+      },
+      "required": ["step_id", "succeeded", "result_id", "input_revision", "revision", "workspace", "checks", "review_verdict", "pr_url", "published_head", "failure_kind", "prerequisite_result_ids", "applied_decision_id", "applied_decision_attempt_id", "applied_decision_execution_id", "applied_answer_sha256", "decision"]
     }
   }
 }

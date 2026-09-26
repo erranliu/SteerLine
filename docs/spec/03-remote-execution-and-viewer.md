@@ -16,6 +16,8 @@
 
 开发前置：[Spec 01](01-orca-remote-protocol.md) 的真实远端证据与明确限制；[Spec 02](02-execution-model-and-adapter.md) 的模型、存储和执行接口。可先开发受限的远程适配器；生产启用仍须满足本 Spec 的剩余门槛。依据：[执行架构共同约束](execution-architecture.spec.md)。
 
+与 [#11 测试夹具](test-feedback.spec.md)、[#12 旧路径清理](beads-path-removal.spec.md)、[#13 图规则拆包](taskgraph-modules.spec.md)共享 Service、配置、worker 上下文、Query/Command 及测试接线。独立远端协议样例可并行，共同修改须串行集成，后集成方核验双方接口并重跑受影响回归；不通过修改已创建任务的固定依赖协调合并。
+
 ## 1. 目标与范围
 
 中心 SteerLine 领取一个业务任务，通过 Orca 在远端独立 worktree 中逐步执行 implement、verify、review、publish_pr，viewer 显示阶段、输出和人工问题；用户回答后同一权威步骤尝试继续，经中心核实各门槛、PR 合并及结项后任务完成。中心重启或网络暂断不会重复派发。
@@ -36,18 +38,16 @@ Orca 版本兼容键按 Spec 01 及用户于 2026-09-25 选择的 `major.minor` 
 
 配置目标是远端时，fallback 固定为 fail。任何创建前后的错误都不得改在中心执行。能力缺失、连接身份失效、仓库不可访问等问题在任务领取前尽可能发现；领取后发生的问题必须保留任务与执行记录。
 
-远端仓库包含已提交的项目步骤入口和必要脚本，project_steps 满足 Spec 02 契约。派发载荷使用远端相对路径、版本化引用或完整内容；不能引用中心 prompt/result 文件、中心私有 Git ref 或 Beads 数据库路径。旧的整段 start/finish 入口若不能在指定步骤停下，必须先拆分接入，不能直接用于 minimal-v1。
+远端仓库包含已提交的项目步骤入口和必要脚本，project_steps 满足 Spec 02 契约。派发载荷使用远端相对路径、版本化引用或完整内容；不能引用中心服务目录中的文件、中心私有 Git ref 或 task-source 数据库路径。旧的整段 start/finish 入口若不能在指定步骤停下，必须先拆分接入，不能直接用于 minimal-v1。
 
-任务来源与结项的权威留在中心。远端技能获得任务内容与已领取事实，不调用 `bd claim/close`，不复制数据库。若既有 start/finish 技能强制要求本机 Beads 访问，必须先提供并验证远程接入契约；不能只在提示词里宣布该依赖不存在。
-
-过渡期的 Beads 来源仅用于原生接入前的执行验证：中心可执行已有 Beads close 或明确在中心运行、无需远端 worktree 的 completion 适配器。这不构成长期任务权威或旧数据兼容要求。需要直接访问远端现场的 completion 在预检时拒绝，不能等到 PR 合并后才发现不可执行。
+任务来源与结项的权威留在中心，只接受显式 native 来源。远端技能获得固定的原生任务内容与已领取事实，不调用 `bd claim/close`，不复制数据库。依赖旧 start/finish、Beads 或 completion 的入口在预检拒绝；接入项目须提供并验证符合当前 project_steps 契约的步骤入口。服务端不提供过渡 Beads 来源或旧结项适配。
 
 原生项目复用 [原生接入 Spec B2](beads-exit.spec.md) 的任务上下文和本 Spec 的步骤/结果通道，由 [固定 DAG Spec D3](task-dag.spec.md) 的中心事务核验交付并关闭任务，不调用 Beads 或旧 completion。任务源不是后端类型，不能因接入远端自动切换权威；原生任务接入也不扩大本 Spec 的版本、消息大小或取消能力。
 
 ## 3. workspace 与派发
 
-1. 中心完成配置预检，固定目标仓库/分支、技能协议版本及 base commit。Beads 来源先持久化 WorkflowRun、Execution、StepAttempt 和任务领取意图；native 来源按下一步与 claim 在同一中心事务提交这些记录。
-2. 由中心领取任务并核实身份与领取者，之后才允许派发 agent。Beads 来源回读提供方，native 来源按固定 DAG Spec D3 事务保存 claim、运行和意图，不重复创建本步骤记录。claim 响应不确定时保持待核实并读取对应权威，不能直接再次 claim 或派发；被他人领取时记录冲突并结束本次准备，不改写对方领取。
+1. 中心完成配置预检，固定目标仓库/分支、技能协议版本及 base commit。WorkflowRun、Execution、StepAttempt 和任务领取意图按下一步与 claim 在同一中心事务提交。
+2. 由中心领取任务并核实身份与领取者，之后才允许派发 agent。按固定 DAG Spec D3 事务保存 claim、运行和意图，不重复创建本步骤记录。claim 响应不确定时保持待核实并读取中心权威，不能直接再次 claim 或派发；被他人领取时记录冲突并结束本次准备，不改写对方领取。
 3. 验证或通过 Orca 执行已验证的准备操作，使远端能够取得该固定 commit。远端不能解析中心私有 ref；分支名不能替代固定 SHA。
 4. 保存派发 Operation 后，通过受监管 worker 创建远端独立 worktree，获取平台身份。Orca 返回的 ready 只证明启动协议到达相应阶段；取得运行/进度证据后再显示运行中。
 5. worktree 分支、初始 HEAD、仓库身份和 base 必须在改动前核验。使用 Spec 01 验证的 Orca 元数据或远端确定性检查回执；不足时停止开发推进并标记准备失败，不能填入期望值冒充实际值。
@@ -81,7 +81,7 @@ verify 使用固定的检查命令和清单，回传实际脚本回执；review 
 
 没有输出超过 stall_timeout 只产生需关注提示；有可能仍存活时，不因此自动杀进程或重派。agentWait 对象显示“宿主交互待处理”；null 表示本次检查没有等待证据，缺失显示未知。只有真实 Orca ask 才进入业务回答入口。
 
-当后续原生任务层按 [固定 DAG Spec D3](task-dag.spec.md) 将未合并 PR 的任务丢弃时，本远端适配器停止该任务的新步骤派发和正常结项；已派发的远端 worker 可能继续，保留精确身份、资源占用与观察/清理待办，不调用不受支持的远程取消。迟到结果只归入原执行历史。此接口在原生任务层尚未交付时不构成本 Spec 的开工前置，也不能为 Beads 来源自行伪造丢弃状态。
+原生任务层按 [固定 DAG Spec D3](task-dag.spec.md) 将未合并 PR 的任务丢弃时，本远端适配器停止该任务的新步骤派发和正常结项；已派发的远端 worker 可能继续，保留精确身份、资源占用与观察/清理待办，不调用不受支持的远程取消。迟到结果只归入原执行历史，适配器不自行生成另一套任务状态。
 
 ## 5. 消息、输出与人工回答
 
@@ -111,7 +111,7 @@ publish_pr 成功结果包含精确 PR URL、实现 head commit、目标分支�
 
 等待 PR 合并时释放执行槽，保留任务领取、选用结果和 PR 绑定。worker 资源按 Orca 规则完成 release/明确的保留处理；释放 agent 终端不等于删除 worktree，远端产物默认保留，不触发公开发布。
 
-PR 合并后，原生来源由中心按固定 DAG D3 提交 TaskDelivery 与 closed；过渡 Beads 来源由中心调用已固定的结项适配并回读 closed。部分失败继续 completing 并按原操作身份对账，不重复开发或跳过结项事实。PR 未合并关闭或绑定漂移则 blocked，不能关闭任务。
+PR 合并后，由中心按固定 DAG D3 提交 TaskDelivery 与 closed。部分失败继续 completing 并按原操作身份对账，不重复开发或跳过结项事实。PR 未合并关闭或绑定漂移则 blocked，不能关闭任务。
 
 停止整个服务仅停止中心监督并保存状态；Windows 关服务窗口也会停止中心监督，远端 worker 可以继续，中心不得据此释放其活跃资源许可。当前生产远程取消不可用，相关命令返回明确的不支持并要求人工处理，不发送 Stop mutation。支持停止的本机适配器仍使用独立、持久化且可追踪的 Stop 操作。Windows 由用户重新打开固定服务窗口入口；启动恢复先处理已有消息、动作和执行身份，再考虑派发新任务。
 
@@ -147,7 +147,7 @@ PR 合并后，原生来源由中心按固定 DAG D3 提交 TaskDelivery 与 clo
 | R10 | 输出分页/source_changed/历史淘汰 | 已保留内容可读，缺失被标记，不影响持久业务消息 |
 | R11 | 较早 attempt 的消息迟到 | 仅进入原尝试记录；不改变当前执行状态或回答目标 |
 | R12 | PR 实际合并、PR 未合并关闭、结项部分成功 | 分别完成/阻塞/继续对账；task close 不重复产生副作用 |
-| R13 | local 路径或远端 completion 不支持 | 在预检拒绝或明确阻塞，不以本机同名路径替代 |
+| R13 | 派发引用中心本地路径，或项目仍依赖旧 start/finish、Beads、completion | 在预检拒绝，不以本机同名路径替代，不接入旧执行或结项路径 |
 | R14 | Windows viewer 退出、服务窗口关闭与远程取消不可用 | viewer 退出而窗口仍开时中心继续监督；关窗只结束中心监督，不取消远端；远程取消入口明确不可用、不发送 Orca stop、不释放可能仍活跃的资源许可；本机 worker 按 PR 3 清理，本机 Stop 仍需确认退出证据 |
 | R15 | claim 成功但回执丢失、领取者发生变化 | 中心回读核实后才能派发；不存在双重领取或对错误所有者启动执行 |
 | R16 | 验证失败、审查请求改动、修复预算耗尽 | 前两者由中心安排有限修复并重新检查，耗尽后等待人工处理，期间不发布 PR |
@@ -159,6 +159,6 @@ PR 合并后，原生来源由中心按固定 DAG D3 提交 TaskDelivery 与 clo
 
 ## 9. 完成定义
 
-远程配置有可复现样例；上述必需验收通过；旧 local/本机 Orca 行为回归通过；hosting、state-model、activity、decisions、skill-contract、completion 和 data-contract 文档按实际实现更新。
+远程配置有可复现样例；上述必需验收通过；现有原生 local/本机 Orca 行为回归通过；hosting、state-model、activity、decisions、skill-contract 和 data-contract 文档按实际实现更新。
 
 完成后中心状态机实际控制准备、实现、验证、审查、发布、等待合并和结项；用户能在控制台看见各阶段、回答业务问题并恢复监督。项目基础技能/脚本只完成被派发步骤。并行 agent 与移动端不在本任务范围。

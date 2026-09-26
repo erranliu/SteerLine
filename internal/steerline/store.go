@@ -193,7 +193,15 @@ func LoadRuntime(path string) (*Runtime, error) {
 // LoadDatabaseRuntime reads the committed service read model, even if exporting
 // runtime.json failed. It never creates a database or trusts a file projection.
 func LoadDatabaseRuntime(c Config) (*Runtime, error) {
-	db, err := OpenSQLiteReader(filepath.Join(c.RunDir, "steerline.db"))
+	if err := requireNativeTaskAuthority(c); err != nil {
+		return nil, err
+	}
+	if c.Identity() == "" {
+		if err := c.ResolveIdentity(context.Background()); err != nil {
+			return nil, err
+		}
+	}
+	db, err := OpenNativeTaskReader(context.Background(), &c)
 	if err != nil {
 		return nil, err
 	}

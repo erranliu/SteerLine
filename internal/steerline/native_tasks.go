@@ -16,12 +16,23 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
 )
 
 const nativeTaskProtocol = "native-tasks/v1"
+
+var canonicalNativeTaskIDPattern = regexp.MustCompile(`^(0|[1-9][0-9]*)$`)
+
+func canonicalDecimalID(value string) bool {
+	if !canonicalNativeTaskIDPattern.MatchString(value) {
+		return false
+	}
+	_, err := strconv.ParseUint(value, 10, 63)
+	return err == nil
+}
 
 type NativeTaskCapabilities struct {
 	DependencyReadiness string `json:"dependency_readiness"`
@@ -489,8 +500,8 @@ func OpenNativeTaskProject(ctx context.Context, c *Config) (*SQLiteStore, error)
 	if c == nil {
 		return nil, nativeErr("authority_mismatch", "native project configuration is required")
 	}
-	if c.taskAuthority() != "native" {
-		return nil, nativeErr("authority_mismatch", "configuration must select task_authority= native")
+	if requireNativeTaskAuthority(*c) != nil {
+		return nil, nativeErr("authority_mismatch", "configuration must explicitly select task_authority=native")
 	}
 	if err := validateNativeStateLocation(*c); err != nil {
 		return nil, err
@@ -561,7 +572,7 @@ func OpenNativeTaskProject(ctx context.Context, c *Config) (*SQLiteStore, error)
 // OpenNativeTaskReader opens an existing native authority without creating
 // project state. Every read is bound to the configured repository and target.
 func OpenNativeTaskReader(ctx context.Context, c *Config) (*SQLiteStore, error) {
-	if c == nil || c.taskAuthority() != "native" {
+	if c == nil || requireNativeTaskAuthority(*c) != nil {
 		return nil, nativeErr("authority_mismatch", "native task reader requires task_authority=native")
 	}
 	if err := validateNativeStateLocation(*c); err != nil {
@@ -581,7 +592,7 @@ func OpenNativeTaskReader(ctx context.Context, c *Config) (*SQLiteStore, error) 
 // for a bounded command. The caller must hold the repository identity lock,
 // and the project must already have been initialized and bound.
 func OpenNativeTaskCommandStore(ctx context.Context, c *Config) (*SQLiteStore, error) {
-	if c == nil || c.taskAuthority() != "native" {
+	if c == nil || requireNativeTaskAuthority(*c) != nil {
 		return nil, nativeErr("authority_mismatch", "native task command requires task_authority=native")
 	}
 	if err := validateNativeStateLocation(*c); err != nil {
@@ -645,6 +656,12 @@ func openBoundNativeStore(ctx context.Context, c Config, path string) (_ *SQLite
 	if err = validateDatabaseSchema(ctx, db.db); err != nil {
 		return nil, err
 	}
+	if err = validateRetiredWholeRunResultCommands(ctx, db.db); err != nil {
+		return nil, err
+	}
+	if err = validateNativeSQLiteRuntimeProjection(ctx, db.db); err != nil {
+		return nil, err
+	}
 	authority, err := db.nativeAuthority(ctx, c.Identity())
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nativeErr("authority_mismatch", "database has no native authority for this project; preserve existing state")
@@ -660,10 +677,24 @@ func openBoundNativeStore(ctx context.Context, c Config, path string) (_ *SQLite
 		return nil, nativeErr("authority_mismatch", "configuration repository, remote or branch differs from persisted native authority")
 	}
 	db.nativeBinding = &authority
+	snapshot, err := db.Query(ctx, c.Identity())
+	if err != nil {
+		return nil, err
+	}
+	for _, task := range snapshot.Tasks {
+		if task.Source != "native" || task.ExternalProvider != "" || task.ExternalProject != "" || task.ExternalID != "" || task.IdentityMapDigest != "" {
+			return nil, nativeErr("authority_mismatch", "native center contains a task identity from an unsupported source")
+		}
+	}
 	return db, nil
 }
 
 func preflightNativeStatePath(c Config) error {
+	if c.Identity() == "" {
+		if err := c.ResolveIdentity(context.Background()); err != nil {
+			return err
+		}
+	}
 	if err := ensureNativeRepositoryHasNoBeads(c.Repository); err != nil {
 		return err
 	}
@@ -672,16 +703,14 @@ func preflightNativeStatePath(c Config) error {
 	}
 	path := filepath.Join(c.RunDir, "steerline.db")
 	if _, err := os.Stat(path); err == nil {
-		// Full authority/binding checks are performed after Git identity resolution.
 		if err := ensureNativeStateFilesAllowed(c.RunDir, c.RuntimeFile); err != nil {
 			return err
 		}
-		reader, e := OpenSQLiteReader(path)
-		if e != nil {
-			return nativeErr("unsupported_schema", "existing native state database is unreadable")
+		reader, err := openBoundNativeStore(context.Background(), c, path)
+		if err != nil {
+			return err
 		}
-		defer reader.Close()
-		return validateDatabaseSchema(context.Background(), reader.db)
+		return reader.Close()
 	} else if !os.IsNotExist(err) {
 		return err
 	}
@@ -950,15 +979,50 @@ func validateNativeRuntimeProjection(path string) error {
 	if err != nil || runtime == nil || runtime.SchemaVersion != CurrentRuntimeSchema || runtime.Repository.Identity == "" {
 		return nativeErr("unsupported_schema", "native runtime projection is unreadable or has an unsupported schema")
 	}
+	return validateNativeRuntimeProjectionData(runtime)
+}
+
+func validateNativeRuntimeProjectionData(runtime *Runtime) error {
+	if runtime == nil || runtime.SchemaVersion != CurrentRuntimeSchema || runtime.Repository.Identity == "" {
+		return nativeErr("unsupported_schema", "native runtime projection is unreadable or has an unsupported schema")
+	}
 	for _, task := range runtime.Tasks {
-		if task.Source != "native" || task.ExternalProvider != "" || task.ExternalProject != "" || task.ExternalID != "" {
+		if task.Source != "native" || task.ExternalProvider != "" || task.ExternalProject != "" || task.ExternalID != "" || task.IdentityMapDigest != "" {
 			return nativeErr("authority_mismatch", "native runtime projection contains a non-native task identity")
 		}
 	}
 	for _, run := range runtime.Runs {
-		if run != nil && (run.BeadsContext != nil || run.Completion != nil || run.BeadsStatus != "") {
-			return nativeErr("authority_mismatch", "native runtime projection contains a legacy task-source binding")
+		if run != nil && (run.BeadsContext != nil || run.Completion != nil || run.BeadsStatus != "" || run.IdentityMapDigest != "" || run.DomainTaskID != run.TaskID || run.ResultPath != nil) {
+			return nativeErr("authority_mismatch", "native runtime projection contains a retired task-source or whole-run result binding")
 		}
+		if run != nil && run.WorkflowVersion != MinimalWorkflowVersion {
+			return nativeErr("unsupported_schema", "native runtime projection contains a non-native workflow version")
+		}
+	}
+	return nil
+}
+
+func validateNativeSQLiteRuntimeProjection(ctx context.Context, db *sql.DB) error {
+	rows, err := db.QueryContext(ctx, `SELECT payload FROM projection`)
+	if err != nil {
+		return nativeErr("unsupported_schema", "cannot inspect the saved runtime projection without mutation")
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var payload []byte
+		if err = rows.Scan(&payload); err != nil {
+			return nativeErr("unsupported_schema", "cannot read the saved runtime projection without mutation")
+		}
+		var runtime Runtime
+		if err = decode(payload, &runtime); err != nil {
+			return nativeErr("unsupported_schema", "saved runtime projection is unreadable; preserve it for manual recovery")
+		}
+		if err = validateNativeRuntimeProjectionData(&runtime); err != nil {
+			return err
+		}
+	}
+	if err = rows.Err(); err != nil {
+		return nativeErr("unsupported_schema", "cannot inspect the saved runtime projection without mutation")
 	}
 	return nil
 }
@@ -1232,6 +1296,9 @@ func validateFileReferenceShape(ref FileReference) error {
 // check the actual execution workspace before claim/implementation; this check
 // alone is never a startup permission.
 func VerifyTaskContractFiles(ctx context.Context, c Config, v TaskContract) error {
+	if err := requireNativeTaskAuthority(c); err != nil {
+		return err
+	}
 	if err := ValidateTaskContract(v); err != nil {
 		return err
 	}

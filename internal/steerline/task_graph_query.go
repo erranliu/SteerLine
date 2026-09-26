@@ -7,9 +7,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"time"
+
+	"github.com/erranliu/SteerLine/internal/steerline/taskgraph"
 )
 
 const (
@@ -115,8 +116,6 @@ func (q QueryService) QueryTaskGraph(ctx context.Context, filter TaskGraphFilter
 		}
 	}
 
-	incoming := make(map[string][]string, len(snapshot.Tasks))
-	outgoing := make(map[string][]string, len(snapshot.Tasks))
 	for _, edge := range snapshot.Edges {
 		if _, ok := byID[edge.PredecessorID]; !ok {
 			return TaskGraphPage{}, nativeErr("contract_mismatch", "graph edge has no predecessor task")
@@ -124,67 +123,11 @@ func (q QueryService) QueryTaskGraph(ctx context.Context, filter TaskGraphFilter
 		if _, ok := byID[edge.SuccessorID]; !ok {
 			return TaskGraphPage{}, nativeErr("contract_mismatch", "graph edge has no successor task")
 		}
-		incoming[edge.SuccessorID] = append(incoming[edge.SuccessorID], edge.PredecessorID)
-		outgoing[edge.PredecessorID] = append(outgoing[edge.PredecessorID], edge.SuccessorID)
 	}
-	for id := range incoming {
-		sortTaskIDs(incoming[id])
-	}
-	for id := range outgoing {
-		sortTaskIDs(outgoing[id])
-	}
-
-	depths := map[string]int{}
-	candidateOrder := make([]string, 0, len(snapshot.Tasks))
-	depthFrontier := map[string]bool{}
-	if filter.CenterTaskID == "" {
-		for _, task := range snapshot.Tasks {
-			candidateOrder = append(candidateOrder, task.TaskID)
-		}
-	} else {
-		depths[filter.CenterTaskID] = 0
-		reachable := []string{filter.CenterTaskID}
-		for head := 0; head < len(reachable); head++ {
-			id := reachable[head]
-			currentDepth := depths[id]
-			neighbors := graphNeighbors(id, filter.Direction, incoming, outgoing)
-			for _, neighbor := range neighbors {
-				if _, seen := depths[neighbor]; seen {
-					continue
-				}
-				depths[neighbor] = currentDepth + 1
-				reachable = append(reachable, neighbor)
-			}
-		}
-		for _, id := range reachable {
-			switch depths[id] {
-			case filter.Depth + 1:
-				depthFrontier[id] = true
-			}
-			if depths[id] <= filter.Depth {
-				candidateOrder = append(candidateOrder, id)
-			}
-		}
-	}
-
-	candidate := make(map[string]bool, len(candidateOrder))
-	for _, id := range candidateOrder {
-		candidate[id] = true
-	}
-	kept := make([]string, 0, min(filter.Limit, len(candidateOrder)))
-	for _, id := range candidateOrder {
-		if filter.Status != "" && byID[id].Status != filter.Status && id != filter.CenterTaskID {
-			continue
-		}
-		if len(kept) == filter.Limit {
-			continue
-		}
-		kept = append(kept, id)
-	}
-	selected := make(map[string]bool, len(kept))
-	for _, id := range kept {
-		selected[id] = true
-	}
+	projection := taskgraph.Project(taskgraphNodes(snapshot.Tasks), taskgraphEdges(snapshot.Edges), taskgraph.Filter{
+		Status: filter.Status, CenterID: filter.CenterTaskID, Direction: filter.Direction,
+		Depth: filter.Depth, Limit: filter.Limit, MaxBoundaryEdges: maxTaskGraphBoundaryEdges,
+	})
 
 	page := TaskGraphPage{
 		Protocol:         nativeTaskGraphProtocol,
@@ -204,7 +147,7 @@ func (q QueryService) QueryTaskGraph(ctx context.Context, filter TaskGraphFilter
 			Edges:    []TaskGraphBoundaryEdge{},
 		},
 	}
-	for _, id := range kept {
+	for _, id := range projection.NodeIDs {
 		task := byID[id]
 		ready, blockers := taskDependencyState(task, snapshot)
 		node := TaskGraphNode{TaskID: id, Title: task.Title, Status: task.Status, Priority: task.Priority, DependencyReady: ready, Blockers: blockers, StartupBlockers: nativeStartupBlockers(task, snapshot)}
@@ -214,113 +157,17 @@ func (q QueryService) QueryTaskGraph(ctx context.Context, filter TaskGraphFilter
 		}
 		page.Nodes = append(page.Nodes, node)
 	}
-
-	omittedIDs := map[string]bool{}
-	reasons := map[string]bool{}
-	for _, id := range candidateOrder {
-		if !selected[id] {
-			if filter.Status != "" && byID[id].Status != filter.Status && id != filter.CenterTaskID {
-				omittedIDs[id] = true
-				reasons["status_filter"] = true
-			} else {
-				omittedIDs[id] = true
-				reasons["node_limit"] = true
-			}
-		}
+	for _, edge := range projection.Edges {
+		page.Edges = append(page.Edges, TaskGraphEdge{Predecessor: edge.Predecessor, Successor: edge.Successor})
 	}
-	for id, depth := range depths {
-		if depth > filter.Depth {
-			omittedIDs[id] = true
-			reasons["depth_limit"] = true
-		}
+	for _, edge := range projection.BoundaryEdges {
+		page.Boundary.Edges = append(page.Boundary.Edges, TaskGraphBoundaryEdge{Predecessor: edge.Predecessor, Successor: edge.Successor, Reason: edge.Reason})
 	}
-	for _, edge := range snapshot.Edges {
-		inCandidate := candidate[edge.PredecessorID] && candidate[edge.SuccessorID]
-		frontierEdge := false
-		if filter.CenterTaskID != "" {
-			if depthFrontier[edge.PredecessorID] && depths[edge.SuccessorID] == filter.Depth {
-				frontierEdge = filter.Direction == "upstream" || filter.Direction == "both"
-			}
-			if depthFrontier[edge.SuccessorID] && depths[edge.PredecessorID] == filter.Depth {
-				frontierEdge = frontierEdge || filter.Direction == "downstream" || filter.Direction == "both"
-			}
-		}
-		if !inCandidate && !frontierEdge {
-			continue
-		}
-		predSelected, succSelected := selected[edge.PredecessorID], selected[edge.SuccessorID]
-		if predSelected && succSelected {
-			page.Edges = append(page.Edges, TaskGraphEdge{Predecessor: edge.PredecessorID, Successor: edge.SuccessorID})
-			continue
-		}
-		if !predSelected && !succSelected {
-			continue
-		}
-		omittedID := edge.PredecessorID
-		if predSelected {
-			omittedID = edge.SuccessorID
-		}
-		reason := "node_limit"
-		if frontierEdge || depthFrontier[omittedID] {
-			reason = "depth_limit"
-		} else if filter.Status != "" && candidate[omittedID] && byID[omittedID].Status != filter.Status && omittedID != filter.CenterTaskID {
-			reason = "status_filter"
-		}
-		if len(page.Boundary.Edges) < maxTaskGraphBoundaryEdges {
-			page.Boundary.Edges = append(page.Boundary.Edges, TaskGraphBoundaryEdge{Predecessor: edge.PredecessorID, Successor: edge.SuccessorID, Reason: reason})
-		} else {
-			page.Boundary.OmittedBoundaryEdgeCount++
-			reasons["boundary_edge_limit"] = true
-		}
-		reasons[reason] = true
-	}
-	for reason := range reasons {
-		page.Boundary.Reasons = append(page.Boundary.Reasons, reason)
-	}
-	sort.Strings(page.Boundary.Reasons)
-	page.Boundary.OmittedNodeCount = len(omittedIDs)
-	page.Boundary.Truncated = len(omittedIDs) > 0 || len(page.Boundary.Edges) > 0
+	page.Boundary.Reasons = projection.Reasons
+	page.Boundary.OmittedNodeCount = projection.OmittedNodeCount
+	page.Boundary.OmittedBoundaryEdgeCount = projection.OmittedBoundaryEdgeCount
+	page.Boundary.Truncated = projection.Truncated
 	return page, nil
-}
-
-func graphNeighbors(id, direction string, incoming, outgoing map[string][]string) []string {
-	var neighbors []string
-	switch direction {
-	case "upstream":
-		neighbors = append(neighbors, incoming[id]...)
-	case "downstream":
-		neighbors = append(neighbors, outgoing[id]...)
-	case "both":
-		neighbors = append(neighbors, incoming[id]...)
-		neighbors = append(neighbors, outgoing[id]...)
-		sortTaskIDs(neighbors)
-		neighbors = compactStrings(neighbors)
-	}
-	return neighbors
-}
-
-func sortTaskIDs(ids []string) {
-	sort.Slice(ids, func(i, j int) bool { return taskIDLess(ids[i], ids[j]) })
-}
-
-func taskIDLess(a, b string) bool {
-	if len(a) != len(b) {
-		return len(a) < len(b)
-	}
-	return a < b
-}
-
-func compactStrings(values []string) []string {
-	if len(values) < 2 {
-		return values
-	}
-	out := values[:1]
-	for _, value := range values[1:] {
-		if value != out[len(out)-1] {
-			out = append(out, value)
-		}
-	}
-	return out
 }
 
 type TaskGraphExportReceipt struct {

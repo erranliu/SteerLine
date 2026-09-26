@@ -357,21 +357,6 @@ func hasString(values []string, want string) bool {
 	return false
 }
 
-func TestStableReadyTaskOrderUsesPriorityTimeAndTaskID(t *testing.T) {
-	base := time.Date(2026, 9, 25, 0, 0, 0, 0, time.UTC)
-	tasks := []TaskRecord{{TaskID: "9", Priority: 2, CreatedAt: base.Add(time.Second)}, {TaskID: "10", Priority: 1, CreatedAt: base}, {TaskID: "11", Priority: 1, CreatedAt: base}, {TaskID: "12", Priority: 0, CreatedAt: base}}
-	got := StableTaskOrder(tasks, []TaskDependencyRecord{{PredecessorID: "9", SuccessorID: "12"}})
-	want := []string{"10", "11", "9", "12"}
-	if len(got) != len(want) {
-		t.Fatalf("order=%v", got)
-	}
-	for i := range want {
-		if got[i] != want[i] {
-			t.Fatalf("stable topological order=%v, want %v", got, want)
-		}
-	}
-}
-
 func TestNativeClaimRechecksReadySlotAndPersistsReservationWithoutAppliedReceipt(t *testing.T) {
 	ctx := context.Background()
 	c, commit := nativeTaskFixture(t)

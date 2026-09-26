@@ -8,7 +8,7 @@
 
 本任务交付原生身份、契约、项目权威、数据库结构和基础只读查询。任务创建并入 DAG、丢弃命令、DAG 计算、原生 claim/交付、项目执行接入与关系图展示均不在本任务范围。
 
-建立后续所需记录的 schema 与约束不等于开放业务写入口；测试通过仓储 fixture 注入数据。新原生项目仅初始化结构和查询，默认 manual/paused，不启用生产执行；正式接入由 [Beads 退出 Spec](beads-exit.spec.md) 验收。
+建立后续所需记录的 schema 与约束不等于开放业务写入口；测试通过仓储 fixture 注入数据。新原生项目仅初始化结构和查询，默认 manual/paused，不启用生产执行；当前生产接入由 [Beads 退出 Spec](beads-exit.spec.md) 实现，后续使用中心 native Task 身份。
 
 ## C2：模型与契约
 

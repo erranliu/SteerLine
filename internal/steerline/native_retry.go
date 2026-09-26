@@ -258,11 +258,11 @@ func (s *Service) startNativeRetryFor(ctx context.Context, runID, requestedBy st
 	}
 	required := []string{"start", "observe", "workspace_inspection", "output_reading"}
 	if s.Config.hostName() == "orca_supervised" {
-		required = append(required, "message_inbox", "reply_continue", "resource_settlement")
+		required = append(required, "message_inbox", "resource_settlement")
 	} else {
 		required = append(required, "stop")
 	}
-	if _, err = s.requireBackendCapabilities(ctx, backendFor(s.Config, BeadsContext{}), required...); err != nil {
+	if _, err = s.requireBackendCapabilities(ctx, backendFor(s.Config), required...); err != nil {
 		return err
 	}
 	page, err := (QueryService{Store: s.domainStore, Project: s.Config.identity}).ShowNativeTask(ctx, task.TaskID)
@@ -305,7 +305,7 @@ func (s *Service) startNativeRetryFor(ctx context.Context, runID, requestedBy st
 	if workflow == nil || execution == nil || attempt == nil || attempt.Status != "planned" {
 		return nativeErr("inconsistent_delivery", "planned native retry changed during runtime projection publication")
 	}
-	return s.startMinimalStep(ctx, nativeTaskModel(*task), run, BeadsContext{}, attempt)
+	return s.startMinimalStep(ctx, *task, run, attempt)
 }
 
 func nativeRetryRequestID(taskID, workflowRunID, executionID, failedAttemptID string) string {

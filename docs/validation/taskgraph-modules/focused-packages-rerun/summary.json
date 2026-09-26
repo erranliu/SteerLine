@@ -1,0 +1,341 @@
+{
+  "schema_version": 1,
+  "phase": "taskgraph-focused-packages-rerun",
+  "mode": "tests",
+  "command": [
+    "go",
+    "test",
+    "./internal/steerline/taskgraph",
+    "./internal/steerline/integration",
+    "./cmd/steerline",
+    "-count=1",
+    "-timeout",
+    "5m",
+    "-json"
+  ],
+  "started_at": "2026-09-26T06:06:26.9460708Z",
+  "finished_at": "2026-09-26T06:06:59.2021004Z",
+  "wall_seconds": 32.2582036,
+  "environment": {
+    "source_commit": "8e5df5e6d1cceae9b7b82aa6b1653372e214d9e7",
+    "worktree_status": " M cmd/steerline/native_task_test.go\n D internal/steerline/cli_test.go\n M internal/steerline/task_dag.go\n M internal/steerline/task_dag_test.go\n M internal/steerline/task_graph_query.go\n M internal/steerline/task_graph_query_test.go\n?? docs/validation/taskgraph-modules/baseline-build/go-test.jsonl\n?? docs/validation/taskgraph-modules/baseline-build/go-test.stderr.txt\n?? docs/validation/taskgraph-modules/baseline-build/summary.json\n?? docs/validation/taskgraph-modules/baseline-retry/go-test.jsonl\n?? docs/validation/taskgraph-modules/baseline-retry/go-test.stderr.txt\n?? docs/validation/taskgraph-modules/baseline-retry/summary.json\n?? docs/validation/taskgraph-modules/baseline/go-test.jsonl\n?? docs/validation/taskgraph-modules/baseline/go-test.stderr.txt\n?? docs/validation/taskgraph-modules/baseline/summary.json\n?? docs/validation/taskgraph-modules/focused-packages/go-test.jsonl\n?? docs/validation/taskgraph-modules/focused-packages/go-test.stderr.txt\n?? docs/validation/taskgraph-modules/focused-packages/summary.json\n?? internal/steerline/integration/cli_test.go\n?? internal/steerline/taskgraph/taskgraph.go\n?? internal/steerline/taskgraph/taskgraph_test.go",
+    "go_version": "go version go1.26.4 windows/amd64",
+    "go_env": {
+      "GOARCH": "amd64",
+      "GOCACHE": "C:\\Users\\lmas1\\AppData\\Local\\go-build",
+      "GOFLAGS": "",
+      "GOOS": "windows",
+      "GOTOOLCHAIN": "auto"
+    },
+    "os": "windows",
+    "architecture": "amd64",
+    "machine": {
+      "host_name": "liuming-asus",
+      "logical_cpu_count": 20,
+      "processor_identifier": "AMD64 Family 26 Model 36 Stepping 0, AuthenticAMD"
+    },
+    "concurrency": {
+      "GOMAXPROCS_environment": "unset",
+      "go_build_package_parallel": "Go default",
+      "go_test_parallel": "default 20",
+      "runtime_GOMAXPROCS": "20"
+    },
+    "build_cache_condition": "Go build cache warm from post-beads baseline; -count=1 disables test-result caching",
+    "enabled_native_acceptance_switches": [],
+    "native_acceptance_note": "Live GitHub/Codex/Orca/visible-window switches not enabled"
+  },
+  "summary": {
+    "status": "passed",
+    "passed": true,
+    "complete": true,
+    "command_exit_code": 0,
+    "package_count": 3,
+    "passed_packages": 3,
+    "failed_packages": [],
+    "skipped_packages": [],
+    "test_count": 22,
+    "passed_tests": 22,
+    "failed_tests": 0,
+    "skipped_tests": 0,
+    "packages": [
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/steerline",
+        "status": "pass",
+        "elapsed_seconds": 30.552
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline/integration",
+        "status": "pass",
+        "elapsed_seconds": 12.307
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline/taskgraph",
+        "status": "pass",
+        "elapsed_seconds": 0.564
+      }
+    ],
+    "tests": [
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/steerline",
+        "name": "TestNativeTaskBatchCLIValidatesCreatesAndDiscardsFixedTaskIDs",
+        "status": "pass",
+        "elapsed_seconds": 30.27
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline/integration",
+        "name": "TestTaskCLIProcessUsesNativeAuthorityWithoutInitializingMissingRead",
+        "status": "pass",
+        "elapsed_seconds": 9.33
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline/integration",
+        "name": "TestCLIRejectsLegacyTaskAuthorityBeforeStateInitialization",
+        "status": "pass",
+        "elapsed_seconds": 0.52
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/steerline",
+        "name": "TestProjectsMenuCanOpenCurrentConsole",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/steerline",
+        "name": "TestWatchFlagsRouteTTYToStreamingMode",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/steerline",
+        "name": "TestWatchFlagsRouteTTYToStreamingMode/JSON_streams",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/steerline",
+        "name": "TestWatchFlagsRouteTTYToStreamingMode/default_TTY_viewer",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/steerline",
+        "name": "TestWatchFlagsRouteTTYToStreamingMode/follow_false_streams",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/steerline",
+        "name": "TestWatchFlagsRouteTTYToStreamingMode/from_start_false_streams",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/steerline",
+        "name": "TestWatchFlagsRouteTTYToStreamingMode/no_TUI_streams",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/steerline",
+        "name": "TestWatchFlagsRouteTTYToStreamingMode/raw_streams",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline/taskgraph",
+        "name": "TestCycleIsDeterministicAndIncludesRepeatedEndpoint",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline/taskgraph",
+        "name": "TestCycleIsDeterministicAndIncludesRepeatedEndpoint/acyclic_disconnected_graph",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline/taskgraph",
+        "name": "TestCycleIsDeterministicAndIncludesRepeatedEndpoint/self_cycle",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline/taskgraph",
+        "name": "TestCycleIsDeterministicAndIncludesRepeatedEndpoint/smallest_numeric_cycle_first",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline/taskgraph",
+        "name": "TestProjectDepthLimitAndBoundaryEdgeCap",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline/taskgraph",
+        "name": "TestProjectDepthLimitAndBoundaryEdgeCap/500_edge_cap",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline/taskgraph",
+        "name": "TestProjectDepthLimitAndBoundaryEdgeCap/depth",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline/taskgraph",
+        "name": "TestProjectNeighborhoodKeepsBranchesMergesAndDisconnects",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline/taskgraph",
+        "name": "TestProjectSortsNumericIDsAndReportsNodeLimit",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline/taskgraph",
+        "name": "TestProjectStatusFilterRetainsAnchorAndMarksOmittedBoundary",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline/taskgraph",
+        "name": "TestStableTaskOrderUsesPriorityTimeAndNumericID",
+        "status": "pass",
+        "elapsed_seconds": 0
+      }
+    ],
+    "slowest_tests": [
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/steerline",
+        "name": "TestNativeTaskBatchCLIValidatesCreatesAndDiscardsFixedTaskIDs",
+        "status": "pass",
+        "elapsed_seconds": 30.27
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline/integration",
+        "name": "TestTaskCLIProcessUsesNativeAuthorityWithoutInitializingMissingRead",
+        "status": "pass",
+        "elapsed_seconds": 9.33
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline/integration",
+        "name": "TestCLIRejectsLegacyTaskAuthorityBeforeStateInitialization",
+        "status": "pass",
+        "elapsed_seconds": 0.52
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/steerline",
+        "name": "TestProjectsMenuCanOpenCurrentConsole",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/steerline",
+        "name": "TestWatchFlagsRouteTTYToStreamingMode",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/steerline",
+        "name": "TestWatchFlagsRouteTTYToStreamingMode/JSON_streams",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/steerline",
+        "name": "TestWatchFlagsRouteTTYToStreamingMode/default_TTY_viewer",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/steerline",
+        "name": "TestWatchFlagsRouteTTYToStreamingMode/follow_false_streams",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/steerline",
+        "name": "TestWatchFlagsRouteTTYToStreamingMode/from_start_false_streams",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/steerline",
+        "name": "TestWatchFlagsRouteTTYToStreamingMode/no_TUI_streams",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/steerline",
+        "name": "TestWatchFlagsRouteTTYToStreamingMode/raw_streams",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline/taskgraph",
+        "name": "TestCycleIsDeterministicAndIncludesRepeatedEndpoint",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline/taskgraph",
+        "name": "TestCycleIsDeterministicAndIncludesRepeatedEndpoint/acyclic_disconnected_graph",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline/taskgraph",
+        "name": "TestCycleIsDeterministicAndIncludesRepeatedEndpoint/self_cycle",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline/taskgraph",
+        "name": "TestCycleIsDeterministicAndIncludesRepeatedEndpoint/smallest_numeric_cycle_first",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline/taskgraph",
+        "name": "TestProjectDepthLimitAndBoundaryEdgeCap",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline/taskgraph",
+        "name": "TestProjectDepthLimitAndBoundaryEdgeCap/500_edge_cap",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline/taskgraph",
+        "name": "TestProjectDepthLimitAndBoundaryEdgeCap/depth",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline/taskgraph",
+        "name": "TestProjectNeighborhoodKeepsBranchesMergesAndDisconnects",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline/taskgraph",
+        "name": "TestProjectSortsNumericIDsAndReportsNodeLimit",
+        "status": "pass",
+        "elapsed_seconds": 0
+      }
+    ],
+    "failures": [],
+    "skipped": [],
+    "incomplete_reasons": [],
+    "test_event_wall_seconds": 31.0347166,
+    "has_test_event_wall": true
+  },
+  "stdout_json_log": "docs/validation/taskgraph-modules/focused-packages-rerun/go-test.jsonl",
+  "stderr_log": "docs/validation/taskgraph-modules/focused-packages-rerun/go-test.stderr.txt"
+}

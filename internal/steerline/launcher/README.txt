@@ -3,18 +3,14 @@ SteerLine home (STEERLINE_HOME)
 
 Double-click entries
 --------------------
-  projects.bat   open the console or choose a project action
   console.bat    multi-project execution console
-  viewer.bat     compatibility shortcut to the current console
-  run.bat        run one project's scheduler in this window (Ctrl+C to stop)
   service-window.bat  start manual service in a visible window; keep it open
-  stop.bat       ask one project's service to stop
-  home.bat       print the resolved paths
 
-console.bat and viewer.bat accept a config path, e.g. console.bat etc\other-repo.json
-Use service-window.bat for the console upgrade's manual service mode.
+console.bat accepts a config path to focus one project, or opens all projects
+without arguments. service-window.bat defaults to etc\SteerLine.json; pass
+a native config path or set STEERLINE_CONFIG for another project.
 The service window may be minimized. Closing it ends the service; Ctrl+C
-requests a normal shutdown. The original run.bat retains automatic dispatch.
+requests a normal shutdown. The console's x command also stops the service.
 
 Multiple projects
 -----------------

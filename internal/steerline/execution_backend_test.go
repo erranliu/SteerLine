@@ -1,7 +1,6 @@
 package steerline
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -58,7 +57,7 @@ func TestExecutionBackendCommonCapabilityContract(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	c := Config{Host: "local", Repository: t.TempDir(), CommandTimeout: "5s", Codex: Command{Executable: exe, Args: []string{"--fake", "codex", "unused"}}, Orca: OrcaConfig{Executable: exe, Args: []string{"--fake", "orca", t.TempDir()}}}
+	c := Config{Host: "local", Repository: t.TempDir(), CommandTimeout: "5s", Codex: Command{Executable: exe, Args: []string{"--fake", "codex"}}, Orca: OrcaConfig{Executable: exe, Args: []string{"--fake", "orca", t.TempDir()}}}
 	backends := []ExecutionBackend{localExecutionBackend{config: c}, orcaTerminalBackend{config: c}}
 	for _, backend := range backends {
 		kind, protocol := backend.Identity()
@@ -77,7 +76,16 @@ func TestExecutionBackendCommonCapabilityContract(t *testing.T) {
 	}
 }
 
-func TestHistoricalCapabilityCheckKeepsFixedAgent(t *testing.T) {
+func TestCapabilityReportRejectsRetiredWholeRunActions(t *testing.T) {
+	for _, name := range []string{"reply_continue", "retry"} {
+		report := CapabilityReport{Version: 1, Backend: BackendLocal, Protocol: ProtocolLocalProcess, Target: ExecutionTarget{ID: "local"}, Agent: AgentSpec{Name: "codex"}, PlatformVersion: "fixture", CheckedAt: now(), Capabilities: []Capability{{Name: name, Status: CapabilityUnsupported}}}
+		if err := (executionRecords{root: t.TempDir()}).saveCapabilityReport(report); err == nil {
+			t.Fatalf("capability report retained retired whole-run action %q", name)
+		}
+	}
+}
+
+func TestNativeCapabilityCheckKeepsFixedAgent(t *testing.T) {
 	f := newFixture(t)
 	exe, err := os.Executable()
 	if err != nil {
@@ -90,12 +98,12 @@ func TestHistoricalCapabilityCheckKeepsFixedAgent(t *testing.T) {
 	fixedTarget, fixedAgent := targetFor(f.c), agentFor(f.c)
 	f.c.Agent = "pi"
 	s := &Service{Config: f.c}
-	backend := backendFor(f.c, BeadsContext{})
-	if _, err := s.requireBackendCapabilitiesFor(context.Background(), backend, fixedTarget, fixedAgent, "reply_continue"); err != nil {
-		t.Fatalf("historical Codex capability was lost after changing the default agent: %v", err)
+	backend := backendFor(f.c)
+	if _, err := s.requireBackendCapabilitiesFor(context.Background(), backend, fixedTarget, fixedAgent, "workspace_inspection"); err != nil {
+		t.Fatalf("native capability was lost after changing the default agent: %v", err)
 	}
-	if _, err := s.requireBackendCapabilities(context.Background(), backend, "reply_continue"); err == nil {
-		t.Fatal("new default agent reused historical Codex verification")
+	if _, err := s.requireBackendCapabilities(context.Background(), backend, "workspace_inspection"); err == nil {
+		t.Fatal("new default agent reused evidence for another fixed agent")
 	}
 }
 
@@ -114,38 +122,6 @@ func TestLocalObservationRejectsReusedPIDIdentity(t *testing.T) {
 	var backendErr *BackendError
 	if !errors.As(err, &backendErr) || backendErr.Code != BackendIdentityMismatch {
 		t.Fatalf("reused PID identity was accepted: %v", err)
-	}
-}
-
-func TestChangedDefaultBackendCannotStopFixedLocalExecution(t *testing.T) {
-	f := newFixture(t, task("t-fixed-backend"))
-	db := readFake(f.db)
-	db.Behavior = "sleep"
-	writeFake(f.db, db)
-	s := f.service(t)
-	if err := s.dispatch(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	defer func() {
-		s.Config.Host = "local"
-		s.shutdown()
-	}()
-	run := s.State.Runs[0]
-	if run.Process == nil {
-		t.Fatal("local worker identity missing")
-	}
-	s.Config.Host = "orca"
-	_, err := s.stopActiveExecution(context.Background())
-	var backendErr *BackendError
-	if !errors.As(err, &backendErr) || backendErr.Code != BackendIdentityMismatch {
-		t.Fatalf("changed default backend targeted old run: %v", err)
-	}
-	if got := inspectProcess(run.Process); got != "matching process still exists" {
-		t.Fatalf("changed default backend affected old process: %s", got)
-	}
-	_, err = (executionRecords{root: f.c.RunDir}).loadOperation(run.RunID, run.AttemptID, "stop-"+run.AttemptID)
-	if !os.IsNotExist(err) {
-		t.Fatalf("rejected cross-backend stop persisted an operation: %v", err)
 	}
 }
 
@@ -200,82 +176,6 @@ func TestOperationRecordRejectsCorruptionBeforeUse(t *testing.T) {
 	}
 }
 
-func TestBothBackendsReconcileOnlyRecordedOperationResult(t *testing.T) {
-	for _, kind := range []BackendKind{BackendLocal, BackendOrca} {
-		t.Run(string(kind), func(t *testing.T) {
-			root := t.TempDir()
-			cfg := Config{RunDir: root, Host: string(kind)}
-			backend := backendFor(cfg, BeadsContext{})
-			selected, protocol := backend.Identity()
-			op := Operation{Version: 1, ID: "reply-" + newID(), RunID: newID(), AttemptID: newID(), Backend: selected, Protocol: protocol, Target: targetFor(cfg), Action: "reply", PayloadDigest: digestValue("fixed-answer"), Status: OperationPending}
-			records := executionRecords{root: root}
-			if err := records.saveOperation(op); err != nil {
-				t.Fatal(err)
-			}
-			got, err := backend.ReconcileOperation(context.Background(), op)
-			if err != nil || got.Status != OperationPending {
-				t.Fatalf("pending recorded operation=%#v err=%v", got, err)
-			}
-			op.Status = OperationAccepted
-			if err = records.saveOperation(op); err != nil {
-				t.Fatal(err)
-			}
-			got, err = backend.ReconcileOperation(context.Background(), op)
-			if err != nil || got.Status != OperationAccepted {
-				t.Fatalf("accepted recorded operation=%#v err=%v", got, err)
-			}
-			op.Status = OperationInFlight
-			if err = records.saveOperation(op); err != nil {
-				t.Fatal(err)
-			}
-			got, err = backend.ReconcileOperation(context.Background(), op)
-			var backendErr *BackendError
-			if !errors.As(err, &backendErr) || backendErr.Code != BackendOutcomeUnknown || got.Status != OperationInFlight {
-				t.Fatalf("in-flight operation was replayed or hidden: %#v, %v", got, err)
-			}
-			changed := op
-			changed.PayloadDigest = digestValue("different-answer")
-			if _, err = backend.ReconcileOperation(context.Background(), changed); !errors.As(err, &backendErr) || backendErr.Code != BackendIdentityMismatch {
-				t.Fatalf("changed payload accepted: %v", err)
-			}
-		})
-	}
-}
-
-func TestRecoveryRebuildsProjectionAndRejectsCorruptBinding(t *testing.T) {
-	f := newFixture(t)
-	s := f.service(t)
-	runID := newID()
-	r := &Run{TaskID: "projection-gap", RunID: runID, AttemptID: runID, Claimant: f.c.Claimant, Host: "local", ExecutionStatus: "pending", FinishTaskStatus: "pending", PR: PRState{State: "unknown"}}
-	s.State.Runs = append(s.State.Runs, r)
-	require(t, s.save())
-	ref := ExecutionRef{Version: 1, Backend: BackendLocal, Protocol: ProtocolLocalProcess, Target: targetFor(f.c), Agent: agentFor(f.c), RunID: runID, AttemptID: runID, WorkspacePath: filepath.Join(f.c.RunDir, "worktrees", runID), WorkspaceBranch: "codex/projection-gap", BaseCommit: strings.Repeat("a", 40), External: ProcessIdentity{Kind: "os", PID: 42000, Created: "creation-proof", Executable: "fake-codex"}, Generation: "creation-proof"}
-	records := executionRecords{root: f.c.RunDir}
-	require(t, records.saveBinding(ref))
-	op := Operation{Version: 1, ID: attemptOperationID(runID, runID), RunID: runID, AttemptID: runID, Backend: ref.Backend, Protocol: ref.Protocol, Target: ref.Target, Action: "start", PayloadDigest: digestValue("fixed-dispatch"), Status: OperationAccepted, Ref: &ref}
-	require(t, records.saveOperation(op))
-	before, err := os.ReadFile(s.store.Path)
-	require(t, err)
-	recovered, err := NewService(f.c)
-	require(t, err)
-	t.Cleanup(func() { _ = recovered.Close() })
-	got := recovered.State.Runs[0]
-	if got.Process == nil || *got.Process != ref.External || got.WorktreePath == nil || *got.WorktreePath != ref.WorkspacePath || got.ExecutionStatus != "unknown" || !recovered.State.SlotOccupied {
-		t.Fatalf("binding did not conservatively rebuild runtime projection: %+v", got)
-	}
-	after, err := os.ReadFile(s.store.Path)
-	require(t, err)
-	if !bytes.Equal(before, after) {
-		t.Fatal("read-only recovery rewrote runtime")
-	}
-	if err := records.writeRecord("execution_bindings", runID, runID, "binding", []byte("{invalid")); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := NewService(f.c); err == nil {
-		t.Fatal("corrupt execution binding did not block service startup")
-	}
-}
-
 func TestNativeEvidenceCertificationRequiresFixedTargetAndVersion(t *testing.T) {
 	f := newFixture(t)
 	path := filepath.Join(t.TempDir(), "local-native.json")
@@ -291,27 +191,17 @@ func TestNativeEvidenceCertificationRequiresFixedTargetAndVersion(t *testing.T) 
 		}
 	}
 	write()
-	retry := map[string]any{}
-	for key, value := range evidence {
-		retry[key] = value
-	}
-	retry["retry_same_run"], retry["retry_new_attempt"], retry["claim_count"], retry["workspace_reused"], retry["previous_run_preserved"] = true, true, 1, true, true
-	retryBytes, err := json.Marshal(retry)
+	report, err := CertifyExecutionBackend(context.Background(), f.c, []string{path})
 	if err != nil {
 		t.Fatal(err)
 	}
-	retryPath := filepath.Join(t.TempDir(), "local-retry-native.json")
-	if err = os.WriteFile(retryPath, retryBytes, 0600); err != nil {
-		t.Fatal(err)
-	}
-	report, err := CertifyExecutionBackend(context.Background(), f.c, []string{path, retryPath})
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, name := range []string{"start", "observe", "stop", "output_reading", "retry"} {
+	for _, name := range []string{"start", "observe", "stop", "output_reading"} {
 		if capabilityStatus(report, name) != CapabilityVerified {
 			t.Fatalf("%s not verified from native evidence: %#v", name, report)
 		}
+	}
+	if capabilityStatus(report, "retry") != CapabilityNotTested {
+		t.Fatalf("legacy backend retry capability was retained: %#v", report.Capabilities)
 	}
 	evidence["target_id"] = "different-target"
 	write()
@@ -354,16 +244,15 @@ func TestOrcaCertificationRequiresAgentAndTerminalEvidence(t *testing.T) {
 	}
 	agent := write("agent", map[string]any{"worktree_created": true, "agent_terminal_bound": true, "initial_output_observed": true, "git_clean": true})
 	adapter := write("adapter", map[string]any{"reconnect_matched": true, "worktree_retained": true, "output_bytes": 22, "output_sha256": strings.Repeat("b", 64), "output_source": "stream"})
-	continuation := write("continuation", map[string]any{"first_input_accepted": true, "first_turn_started": true, "second_input_accepted": true, "second_turn_started": true, "same_terminal": true, "same_incarnation": true, "same_runtime": true, "first_output_observed": true, "second_output_observed": true, "stop_confirmed": true, "git_clean": true})
 	workspace := write("workspace", map[string]any{"workspace_inspected": true, "base_ancestor": true, "git_clean": true})
 	if _, err = CertifyExecutionBackend(context.Background(), f.c, []string{adapter}); err == nil {
 		t.Fatal("Orca start was certified without agent evidence")
 	}
-	report, err := CertifyExecutionBackend(context.Background(), f.c, []string{agent, adapter, continuation, workspace})
+	report, err := CertifyExecutionBackend(context.Background(), f.c, []string{agent, adapter, workspace})
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"start", "observe", "stop", "output_reading", "reply_continue", "workspace_inspection"} {
+	for _, name := range []string{"start", "observe", "stop", "output_reading", "workspace_inspection"} {
 		if capabilityStatus(report, name) != CapabilityVerified {
 			t.Fatalf("%s not verified: %#v", name, report)
 		}
@@ -390,75 +279,5 @@ func TestOrcaObservationRejectsReplacedIncarnationAndConnection(t *testing.T) {
 	cfg.Orca.Args = append(cfg.Orca.Args, "different-connection")
 	if _, err := (orcaTerminalBackend{config: cfg}).Observe(context.Background(), ref); !errors.As(err, &mismatch) || mismatch.Code != BackendIdentityMismatch {
 		t.Fatalf("changed connection was accepted: %v", err)
-	}
-}
-
-func TestStartBindingFailureRetainsUnknownWorkerAndBlocksRestart(t *testing.T) {
-	f := newFixture(t, task("t-1"))
-	s := f.service(t)
-	runID := newID()
-	s.reservedRunID = runID
-	records := executionRecords{root: f.c.RunDir}
-	if err := records.writeRecord("execution_bindings", runID, runID, "binding", []byte("{invalid")); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.dispatch(context.Background()); err == nil {
-		t.Fatal("binding failure was ignored")
-	}
-	if s.worker == nil || !s.State.SlotOccupied || s.State.Runs[0].ExecutionStatus != "unknown" {
-		t.Fatalf("launched worker was not retained as unknown: %+v", s.State)
-	}
-	s.worker.Kill()
-	select {
-	case <-s.worker.Done:
-	case <-time.After(5 * time.Second):
-		t.Fatal("worker cleanup timed out")
-	}
-	if _, err := NewService(f.c); err == nil {
-		t.Fatal("corrupt binding path did not block restart")
-	}
-	if starts := readFake(f.db).Starts["t-1"]; starts != 1 {
-		t.Fatalf("worker was started %d times", starts)
-	}
-}
-
-func TestProjectionWriteFailureRebuildsBindingWithoutSecondStart(t *testing.T) {
-	f := newFixture(t, task("t-1"))
-	s := f.service(t)
-	s.controlFault = func(point string) {
-		if point == "operation_accepted_persisted" {
-			s.store.Path = filepath.Join(f.c.RunDir, "missing-directory", "runtime.json")
-		}
-	}
-	require(t, s.dispatch(context.Background()))
-	if s.State.ProjectionError == "" {
-		t.Fatal("stale file projection was not reported")
-	}
-	if s.worker == nil {
-		t.Fatal("started worker was abandoned after projection failure")
-	}
-	runID := s.State.Runs[0].RunID
-	records := executionRecords{root: f.c.RunDir}
-	if _, err := records.loadBinding(runID, runID); err != nil {
-		t.Fatal(err)
-	}
-	op, err := records.loadOperation(runID, runID, attemptOperationID(runID, runID))
-	if err != nil || op.Status != OperationConfirmed {
-		t.Fatalf("fixed start receipt missing after projection failure: %#v, %v", op, err)
-	}
-	s.worker.Kill()
-	select {
-	case <-s.worker.Done:
-	case <-time.After(5 * time.Second):
-		t.Fatal("worker cleanup timed out")
-	}
-	restarted := f.service(t)
-	got := restarted.State.Runs[0]
-	if got.ExecutionStatus != "unknown" || got.Process == nil || got.WorktreePath == nil || !restarted.State.SlotOccupied {
-		t.Fatalf("restart lost fixed execution binding: %+v", got)
-	}
-	_ = restarted.dispatch(context.Background())
-	if starts := readFake(f.db).Starts["t-1"]; starts != 1 {
-		t.Fatalf("restart launched a replacement worker: starts=%d", starts)
 	}
 }

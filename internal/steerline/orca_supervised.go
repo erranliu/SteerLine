@@ -638,7 +638,7 @@ func (b orcaSupervisedBackend) readPromptOutput(ctx context.Context, ref Executi
 	return b.ReadOutput(readCtx, ref, "", 100)
 }
 
-func (b orcaSupervisedBackend) StartMinimalStep(ctx context.Context, task Task, run Run, workflow WorkflowRunRecord, execution ExecutionRecord, attempt StepAttemptRecord, input MinimalStepInput, workerInput any, resultPath string) (StartReceipt, error) {
+func (b orcaSupervisedBackend) StartMinimalStep(ctx context.Context, task TaskRecord, run Run, workflow WorkflowRunRecord, execution ExecutionRecord, attempt StepAttemptRecord, input MinimalStepInput, workerInput any, resultPath string) (StartReceipt, error) {
 	if err := validateSupervisedOrcaConfig(&b.config); err != nil {
 		return StartReceipt{}, &BackendError{Code: BackendRejected, Diagnostic: "supervised Orca configuration is invalid", Cause: err}
 	}
@@ -788,7 +788,7 @@ func (s *Service) reattachSupervisedWorker(run *Run) error {
 	if operation == nil || operation.Kind != "dispatch_step" || operation.Status != "confirmed" && !(uncertainStart && operation.Status == "outcome_unknown") || operation.PlatformRequestID == "" || operation.PayloadDigest != operationDigest(operation.Request) {
 		return errors.New("supervised start operation is not durably confirmed")
 	}
-	input, err := decodeSupervisedStartInput(operation.Request, s.native)
+	input, err := decodeSupervisedStartInput(operation.Request)
 	if err != nil {
 		return err
 	}
@@ -848,7 +848,7 @@ func (s *Service) reattachSupervisedWorker(run *Run) error {
 	return nil
 }
 
-func decodeSupervisedStartInput(requestBytes []byte, native bool) (MinimalStepInput, error) {
+func decodeSupervisedStartInput(requestBytes []byte) (MinimalStepInput, error) {
 	var request struct {
 		Input json.RawMessage `json:"input"`
 	}
@@ -857,13 +857,6 @@ func decodeSupervisedStartInput(requestBytes []byte, native bool) (MinimalStepIn
 	}
 	if len(request.Input) == 0 || string(request.Input) == "null" {
 		return MinimalStepInput{}, errors.New("supervised start request omitted its fixed Step Input")
-	}
-	if !native {
-		var input MinimalStepInput
-		if err := json.Unmarshal(request.Input, &input); err != nil {
-			return MinimalStepInput{}, err
-		}
-		return input, nil
 	}
 	var input NativeTaskWorkerContext
 	if err := json.Unmarshal(request.Input, &input); err != nil {
@@ -875,7 +868,7 @@ func decodeSupervisedStartInput(requestBytes []byte, native bool) (MinimalStepIn
 	return input.StepInput, nil
 }
 
-func supervisedStepTaskSpec(c Config, task Task, run Run, workflow WorkflowRunRecord, attempt StepAttemptRecord, input MinimalStepInput, workerInput any, pair supervisedPreflight, base string) (string, error) {
+func supervisedStepTaskSpec(c Config, task TaskRecord, run Run, workflow WorkflowRunRecord, attempt StepAttemptRecord, input MinimalStepInput, workerInput any, pair supervisedPreflight, base string) (string, error) {
 	inputBytes, err := json.Marshal(struct {
 		ProjectIdentity       string                       `json:"project_identity"`
 		TaskID                string                       `json:"task_id"`
@@ -981,9 +974,6 @@ func supervisedStepTaskSpec(c Config, task Task, run Run, workflow WorkflowRunRe
 	fmt.Fprintf(&b, "Workflow definition: %s\nStep contract: %s\nStep input (fixed IDs, revisions, prerequisites, workspace, and decision only): %s\n", workflow.Definition.ID, string(contractBytes), string(inputBytes))
 	if attempt.StepID != "prepare" {
 		fmt.Fprintf(&b, "Task title: %s\n", task.Title)
-		if task.Description != "" {
-			fmt.Fprintf(&b, "Task description: %s\n", task.Description)
-		}
 	}
 	if c.TaskAuthority == "native" {
 		nativeInput, ok := workerInput.(NativeTaskWorkerContext)
@@ -1621,9 +1611,6 @@ func (b orcaSupervisedBackend) Probe(ctx context.Context, target ExecutionTarget
 	return report, nil
 }
 
-func (orcaSupervisedBackend) Start(context.Context, AttemptSpec) (StartReceipt, error) {
-	return StartReceipt{}, unsupported("supervised Orca worker start adapter")
-}
 func (b orcaSupervisedBackend) Observe(ctx context.Context, ref ExecutionRef) (Observation, error) {
 	if err := validateSupervisedRef(b.config, ref); err != nil {
 		return Observation{}, err
@@ -1704,10 +1691,6 @@ func (b orcaSupervisedBackend) ReadOutput(ctx context.Context, ref ExecutionRef,
 	}
 	return OutputBatch{Data: append([]byte(nil), env.Result...), Source: result.Source, ObservedAt: now(), NextCursor: next, Gap: len(result.Clipping) > 0, SourceChanged: result.SourceChanged || result.FallbackReason == "source_changed"}, nil
 }
-func (orcaSupervisedBackend) Reply(context.Context, ExecutionRef, string, Operation, string) (ReplyReceipt, error) {
-	return ReplyReceipt{}, unsupported("supervised Orca worker reply adapter")
-}
-
 func (b orcaSupervisedBackend) replyQuestion(ctx context.Context, ref ExecutionRef, questionID, answer string) (string, error) {
 	if err := validateSupervisedRef(b.config, ref); err != nil {
 		return "", err

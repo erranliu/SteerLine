@@ -1,0 +1,232 @@
+{
+  "date": "2026-09-26",
+  "platform": "windows/amd64",
+  "go_version": "go1.26.4",
+  "orca_version": "1.4.209",
+  "codex_cli_version": "0.156.1",
+  "post_change_checks": {
+    "go_test_all": "passed",
+    "go_vet": "passed",
+    "go_build": "passed",
+    "git_diff_check": "passed"
+  },
+  "registered_test_repository": "SteerLineNativeExitAcceptance",
+  "orca_target": "orca:f6912f0cd2ce941964b60190",
+  "capability_certificate": {
+    "status": "accepted",
+    "verified": ["start", "observe", "stop", "workspace_inspection", "output_reading"],
+    "source_evidence": [
+      "pr-04a-orca-agent-native-2026-09-24.json",
+      "pr-04a-orca-service-audit-2026-09-24.json",
+      "pr-04a-orca-workspace-native-2026-09-24.json"
+    ]
+  },
+  "windows_tty_orca_command_worker": {
+    "task_id": "95005",
+    "run_id": "ae9401b802805b1899b005ff6a6acc90",
+    "execution_id": "d63d0a4c9c01abe7e1ffea7ba1377c0a",
+    "question_attempt_id": "d9ecf6ca23a5d85f1f5f801dee46a1b0",
+    "decision_id": "9882ba4bb8e2a3d95dc18f6873f76bce",
+    "tty": {
+      "long_question_and_context_visible": true,
+      "twelve_options_and_custom_answer_visible": true,
+      "selected_option": "option-12",
+      "multiline_unicode_answer": "真实TTY中文答案第一行\n真实TTY中文答案第二行",
+      "cursor_movement_and_backspace": true,
+      "clipboard_paste": "not_tested",
+      "stale_revision_conflict": "not_tested",
+      "fold_navigation": "not_tested"
+    },
+    "application": {
+      "status": "applied",
+      "proof_bound_to_original_decision_attempt_execution_and_answer_digest": true,
+      "continuation_attempt_id": "c08cb80aa9baaed0a3da747a8a52abfa",
+      "evidence_source": "deterministic native command worker through a live Orca terminal"
+    },
+    "after_application": {
+      "automatic_verify_step": "accepted",
+      "publish_pr_step": "fixture rejected before PR provider call",
+      "run_status": "unknown/blocked",
+      "decision_status": "applied",
+      "publish_terminal": "term_eefbd146-9283-4009-8374-54e9c3790c4d",
+      "publish_terminal_exit_code": 1,
+      "worktree_clean": true,
+      "pr_bound_or_created": false
+    },
+    "service_restart_after_hydration_fix": {
+      "service_started": true,
+      "decision_status_preserved": "applied",
+      "continuation_replayed": false,
+      "remaining_publish_operation_reconciled": false
+    },
+    "recovery_panel": {
+      "original_publish_terminal_exited": true,
+      "worktree_clean": true,
+      "mark_stopped_available": false,
+      "reason": "minimal-v1 requires current step-attempt and Operation reconciliation",
+      "recovery_action_submitted": false
+    }
+  },
+  "codex_agent_attempt_after_schema_fix_and_answer": {
+    "task_id": "95008",
+    "run_id": "730a08cf003aa317591d9d21d3deee94",
+    "execution_id": "bf6f586c726e48fc7097443e0cf71db9",
+    "decision_id": "56d63460054f2c82ea0974d39a5be6c4",
+    "original_step_attempt_id": "eb1cad33b0be4068403eae6d3d9dd74b",
+    "continuation_step_attempt_id": "5d198bd82f6468c3ca06c7a311df8c87",
+    "answer": {
+      "option_id": "marker-12",
+      "option_label": "native-marker-12",
+      "note": "通过控制台人工确认 marker-12。\nPR5 live acceptance.",
+      "sha256": "b7d8eaf02514ac68af09d92ae32e6537902bb82ccfe55deaff2dfd44383926c7",
+      "sqlite_answer_version": 1
+    },
+    "tty_answer": {
+      "submitted_in_explicit_confirmation_editor": true,
+      "multiline_unicode_note": true,
+      "clipboard_paste": "not_tested",
+      "live_stale_revision_conflict": "not_tested"
+    },
+    "original_decision_result_reconciliation": {
+      "original_terminal": "term_8969956a-a188-4fd0-b9ff-17c6a698898e",
+      "terminal_incarnation": "42aa1b4e-364f-4372-9c7b-e0d9fe410468",
+      "terminal_exit_code": 0,
+      "saved_result_accepted_after_manual_service_restart": true,
+      "pending_decision_restored": true,
+      "original_worker_replayed": false
+    },
+    "continuation_terminal": {
+      "handle": "term_e95d1048-a0b5-4bf5-b99a-554c8ea914f8",
+      "incarnation": "c8263dbb-5cd7-4af4-98f1-0f5eb05a6afd",
+      "connected_and_writable_during_observation": true,
+      "orphaned": true,
+      "exit_code": 0,
+      "step_result_file_written": true,
+      "step_result_succeeded": false
+    },
+    "application_result": {
+      "bound_proof_fields_emitted": true,
+      "proof_bound_to_decision_original_attempt_execution_and_answer_digest": true,
+      "service_decision_status": "failed",
+      "service_run_status": "failed",
+      "failure_kind": "workspace_permission_denied: git add could not create the linked-worktree index under the external .git directory; evidence/95008.txt remains uncommitted",
+      "service_reconciled_same_saved_attempt_after_terminal_exit": true,
+      "continuation_replayed_after_reconciliation": false
+    },
+    "worktree": {
+      "branch": "codex/95008-730a08cf003a",
+      "head_remained_at_base_commit": true,
+      "only_change": "untracked evidence/95008.txt",
+      "evidence_file_contains_selected_option_and_answer_note": true,
+      "commit_created": false,
+      "pr_bound_or_created": false,
+      "push_occurred": false
+    },
+    "session_panel": {
+      "turn_boundary": "unknown",
+      "unknown_observation_items": 2,
+      "final_status": "final_unknown",
+      "precise_fold_navigation_verified": false
+    },
+    "service_cleanup": {
+      "stopped_through_console_confirmation": true,
+      "service_process_stopped": true,
+      "slot_occupied": false
+    }
+  },
+  "codex_agent_workspacewrite_recheck_and_tty_conflict": {
+    "task_id": "95009",
+    "task_batch": {
+      "request_id": "d41d9528642446089f098dbe500a8f1c",
+      "batch_id": "6562e4bb9bcb5e44f70f6939bb326cfb",
+      "authority_version": 3,
+      "graph_revision": 2,
+      "task_created_without_starting": true
+    },
+    "run_id": "899c9e48fc291a7a387c7e62c745cca4",
+    "execution_id": "a0bf3f79cc7881538f3a003b724c9670",
+    "decision_id": "13e615df127d68d5dae1e446878103db",
+    "initial_step_attempt": {
+      "attempt_id": "ffaa2d476b29af085e4be4f5286ac3d2",
+      "terminal": "term_0825a6b3-f367-42ce-ad61-f33cc2a5096a",
+      "terminal_incarnation": "39eb03dc-7f36-4546-90e8-751aac9fb370",
+      "terminal_exit_code": 0,
+      "saved_decision_result_reconciled_after_restart": true,
+      "pending_decision_restored": true,
+      "attempt_replayed": false
+    },
+    "tty": {
+      "draft_option": "marker-11",
+      "bracketed_paste_event": "passed",
+      "draft_note": "PR5 bracketed paste smoke\n第二行",
+      "actual_system_clipboard": "not_tested_preserved",
+      "reason_actual_clipboard_not_used": "Windows clipboard contained rich HTML and browser formats; it was not replaced.",
+      "stale_revision_conflict": "passed",
+      "conflict_response": "stale_revision; draft retained"
+    },
+    "answer": {
+      "option_id": "marker-12",
+      "note": "CLI answer to induce a live stale TTY conflict",
+      "command_id": "193b58ceaa1ea93f24b105f7ada0acc2",
+      "cli_wait_error": "sql: no rows in result set",
+      "sqlite_answer_version": 1,
+      "sha256": "4c41424b151e73fda5c30b6245a6748551c6ddf54d7b6de5c4de6ed6d3faab62"
+    },
+    "continuation_step_attempt": {
+      "attempt_id": "870fe50e043e1ef953607a0609336ece",
+      "terminal": "term_29a0fad4-b1c2-4835-83aa-7ffcf58d3af1",
+      "terminal_incarnation": "948ec1d6-9583-4598-afdc-87e979868643",
+      "terminal_exit_code": 0,
+      "result_succeeded": false,
+      "failure_kind": "filesystem_permission_denied",
+      "bound_proof_fields_emitted": true,
+      "proof_bound_to_original_decision_attempt_execution_and_answer_digest": true,
+      "service_reconciled_same_saved_attempt_after_terminal_exit": true,
+      "attempt_replayed": false,
+      "service_run_status": "failed",
+      "service_decision_status": "failed"
+    },
+    "sandbox_permission_experiment": {
+      "temporary_codex_flag": "--add-dir <repository Git common directory>",
+      "retained_in_source": false,
+      "outcome": "ineffective",
+      "denied_paths": [
+        ".git/worktrees/899c9e48fc291a7a387c7e62c745cca4/index.lock",
+        ".git/worktrees/899c9e48fc291a7a387c7e62c745cca4/COMMIT_EDITMSG",
+        ".git/worktrees/899c9e48fc291a7a387c7e62c745cca4/HEAD.lock"
+      ]
+    },
+    "worktree": {
+      "branch": "codex/95009-899c9e48fc29",
+      "head_remained_at_base_commit": true,
+      "only_change": "untracked evidence/95009.txt",
+      "branch_ref_updated": false,
+      "unreachable_commit_object": {
+        "sha": "272d18bfd9b4d8737213c60c4c1413f8ca5eba6a",
+        "parent": "c3f98ee644c18761f2c60c4769f822806856e7fc",
+        "subject": "Add task 95009 decision evidence",
+        "contains_only": "evidence/95009.txt",
+        "pushed": false
+      },
+      "pr_bound_or_created": false,
+      "push_occurred": false
+    },
+    "temporary_custom_index": {
+      "path": "%TEMP%\\steerline-95009-870fe50e043e1ef953607a0609336ece.index",
+      "removed": false,
+      "cleanup": "blocked_by_policy"
+    },
+    "session_panel": {
+      "attempt_id": "ffaa2d476b29af085e4be4f5286ac3d2",
+      "turn_boundary": "unknown",
+      "unknown_observation_items": 1,
+      "final_status": "final_unknown",
+      "precise_fold_navigation_verified": false
+    },
+    "service_cleanup": {
+      "stopped_through_console_confirmation": true,
+      "service_process_stopped": true,
+      "slot_occupied": false
+    }
+  }
+}

@@ -3,14 +3,9 @@ package console
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"os"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -46,6 +41,7 @@ const (
 	rowReady rowKind = iota
 	rowRun
 	rowNative
+	rowLegacy
 )
 
 type consoleRow struct {
@@ -56,6 +52,7 @@ type consoleRow struct {
 	run       *steerline.Run
 	candidate *steerline.TaskCandidate
 	native    *steerline.NativeTaskDetail
+	legacy    *steerline.LegacyBeadsTask
 }
 
 type actionState struct {
@@ -89,17 +86,6 @@ type decisionAnswerDialog struct {
 	noteFocus       bool
 	scroll          int
 	error           string
-}
-
-type resultPathDialog struct {
-	projectKey string
-	instance   string
-	runID      string
-	revision   uint64
-	requestID  string
-	path       []rune
-	cursor     int
-	error      string
 }
 
 type projectState struct {
@@ -167,28 +153,19 @@ type projectState struct {
 }
 
 type confirmAction struct {
-	scroll         int
-	requireBasis   bool
-	basisCursor    int
-	basisError     string
-	projectKey     string
-	instance       string
-	revision       uint64
-	action         string
-	taskID         string
-	requestID      string
-	runID          string
-	decisionID     string
-	resultBytes    []byte
-	resultSHA256   string
-	resultSummary  string
-	resultPRURL    string
-	resultPath     string
-	resultWorktree string
-	resultBase     string
-	resultTaskID   string
-	resultRunID    string
-	basis          string
+	scroll       int
+	requireBasis bool
+	basisCursor  int
+	basisError   string
+	projectKey   string
+	instance     string
+	revision     uint64
+	action       string
+	taskID       string
+	requestID    string
+	runID        string
+	decisionID   string
+	basis        string
 }
 
 type Model struct {
@@ -207,11 +184,11 @@ type Model struct {
 	prefs    ViewFile
 	prefsErr string
 
-	confirm      *confirmAction
-	answer       *decisionAnswerDialog
-	resultPicker *resultPathDialog
-	status       string
-	finalIndex   int
+	confirm    *confirmAction
+	answer     *decisionAnswerDialog
+	help       bool
+	status     string
+	finalIndex int
 
 	runFocus string
 }
@@ -227,11 +204,8 @@ func LoadProjects(configPath string) ([]ProjectRef, error) {
 		}
 		config, loadErr := steerline.LoadConfig(absolute)
 		name := strings.TrimSuffix(filepath.Base(absolute), filepath.Ext(absolute))
-		ref := ProjectRef{Name: name, ConfigPath: absolute}
 		if loadErr != nil {
-			ref.Error = loadErr.Error()
-			ref.Key, _ = absoluteViewKey(absolute, "")
-			return []ProjectRef{ref}, nil
+			return []ProjectRef{legacyProjectRef(name, absolute, loadErr)}, nil
 		}
 		refs = append(refs, makeProjectRef(name, absolute, config))
 	} else {
@@ -241,18 +215,13 @@ func LoadProjects(configPath string) ([]ProjectRef, error) {
 		}
 		for _, project := range projects {
 			path, _ := filepath.Abs(project.ConfigPath)
-			ref := ProjectRef{Name: project.Name, ConfigPath: path}
 			if project.Err != nil {
-				ref.Error = project.Err.Error()
-				ref.Key, _ = absoluteViewKey(path, "")
-				refs = append(refs, ref)
+				refs = append(refs, legacyProjectRef(project.Name, path, project.Err))
 				continue
 			}
 			config, loadErr := steerline.LoadConfig(path)
 			if loadErr != nil {
-				ref.Error = loadErr.Error()
-				ref.Key, _ = absoluteViewKey(path, "")
-				refs = append(refs, ref)
+				refs = append(refs, legacyProjectRef(project.Name, path, loadErr))
 				continue
 			}
 			refs = append(refs, makeProjectRef(project.Name, path, config))
@@ -275,6 +244,19 @@ func LoadProjects(configPath string) ([]ProjectRef, error) {
 		}
 	}
 	return refs, nil
+}
+
+func legacyProjectRef(name, path string, configErr error) ProjectRef {
+	legacy, err := steerline.LoadLegacyBeadsProject(path)
+	if err == nil {
+		key, _ := absoluteViewKey(path, legacy.RunDir)
+		return ProjectRef{Key: key, Name: name, ConfigPath: path, RunDir: legacy.RunDir, Legacy: legacy}
+	}
+	key, _ := absoluteViewKey(path, "")
+	if errors.Is(err, steerline.ErrNotLegacyBeadsConfig) {
+		return ProjectRef{Key: key, Name: name, ConfigPath: path, Error: configErr.Error()}
+	}
+	return ProjectRef{Key: key, Name: name, ConfigPath: path, Error: "旧 Beads 配置：" + err.Error()}
 }
 
 func makeProjectRef(name, path string, config steerline.Config) ProjectRef {
@@ -625,7 +607,7 @@ func (m Model) submitServiceAction(index int, action, targetID, requestedBy, com
 
 func validRecoveryAction(action string) bool {
 	switch action {
-	case "retry_run", "mark_stopped", "accept_result", "resolve_command":
+	case "retry_run", "mark_stopped", "resolve_command":
 		return true
 	default:
 		return false
@@ -796,8 +778,6 @@ func applyDecisionCommandResult(state *projectState, action *actionState, comman
 			action.Message = "新 attempt 已启动并保存执行身份"
 		case "mark_stopped":
 			action.Message = "原执行停止事实已记录；任务和工作目录保留"
-		case "accept_result":
-			action.Message = "固定结果已接回；PR 合并核验仍在进行"
 		case "resolve_command":
 			action.Message = "指定 blocker 已按证据解除；原指令未重放"
 		}
@@ -890,6 +870,12 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			if i == m.selected {
 				interval = time.Second
 			}
+			if state.ref.Legacy != nil {
+				interval = 15 * time.Second
+				if i == m.selected {
+					interval = 5 * time.Second
+				}
+			}
 			if !state.refreshing && (state.lastRefresh.IsZero() || now.Sub(state.lastRefresh) >= interval) {
 				cmds = append(cmds, m.readProject(i))
 			}
@@ -943,7 +929,7 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		rows := m.rows(index)
 		if state.selectedKey == "" && !state.selectionHold {
 			state.selectedKey = firstRowKey(rows)
-		} else if len(rows) > 0 && !rowExists(rows, state.selectedKey) {
+		} else if index == m.selected && len(rows) > 0 && !rowExists(rows, state.selectedKey) {
 			m.status = "当前选择不在最新快照中；未切换到其他任务，请刷新或重新选择"
 		}
 		if index == m.selected && m.runFocus != "" {
@@ -988,12 +974,16 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			state.recoveryError = msg.err.Error()
 			state.recoveryReport = nil
-			m.status = "恢复核验失败：" + msg.err.Error()
+			if index == m.selected {
+				m.status = "恢复核验失败：" + msg.err.Error()
+			}
 			return m, nil
 		}
 		state.recoveryError = ""
 		state.recoveryReport = &msg.report
-		m.status = "恢复核验报告已刷新 · run " + msg.report.RunID + " · revision " + strconv.FormatUint(msg.report.RunRevision, 10)
+		if index == m.selected {
+			m.status = "恢复核验报告已刷新 · run " + msg.report.RunID + " · revision " + strconv.FormatUint(msg.report.RunRevision, 10)
+		}
 		return m, nil
 	case activityResultMsg:
 		index := m.projectIndex(msg.projectKey)
@@ -1197,7 +1187,7 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 				remapDecisionActionID(state, action, msg.requestID, msg.command.CommandID)
 			}
 			refreshNow, reopen := applyDecisionCommandResult(state, action, msg.command, msg.err)
-			if reopen && action.Action == "answer_decision" {
+			if reopen && action.Action == "answer_decision" && index == m.selected {
 				m.reopenDecisionDraft(index, action)
 			}
 			if action.Resolved {
@@ -1266,7 +1256,7 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			action.InFlight = false
 			action.UpdatedAt = m.clock.Now()
 			refreshNow, reopen := applyDecisionCommandResult(state, action, msg.command, msg.err)
-			if reopen && action.Action == "answer_decision" {
+			if reopen && action.Action == "answer_decision" && index == m.selected {
 				m.reopenDecisionDraft(index, action)
 			}
 			if action.Resolved {
@@ -1442,6 +1432,12 @@ func (m Model) rows(index int) []consoleRow {
 	if state.filter == 0 && state.snapshot.SelectedNative != nil && state.selectedKey == "task:"+state.snapshot.SelectedNative.TaskID && !seenTasks[state.snapshot.SelectedNative.TaskID] {
 		detail := state.snapshot.SelectedNative
 		rows = append(rows, consoleRow{key: "task:" + detail.TaskID, kind: rowNative, taskID: detail.TaskID, title: detail.Title, native: detail})
+	}
+	if state.filter == 0 && state.ref.Legacy != nil && state.snapshot.Legacy != nil {
+		for i := range state.snapshot.Legacy.Tasks {
+			task := &state.snapshot.Legacy.Tasks[i]
+			rows = append(rows, consoleRow{key: "legacy:" + task.ID, kind: rowLegacy, taskID: task.ID, title: task.Title, legacy: task})
+		}
 	}
 	if runtime := state.snapshot.Observation.Runtime; runtime != nil {
 		for _, run := range runtime.Runs {
@@ -1811,6 +1807,10 @@ func (m Model) changeFilter(filter int) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	state := &m.projects[m.selected]
+	if state.ref.Legacy != nil && filter != 0 {
+		m.status = "旧 Beads 项目仅提供只读全量任务列表"
+		return m, nil
+	}
 	if state.filter == filter {
 		return m, nil
 	}
@@ -1830,14 +1830,17 @@ func (m Model) changeFilter(filter int) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if m.resultPicker != nil {
-		return m.handleResultPickerKey(key)
-	}
 	if m.answer != nil {
 		return m.handleDecisionAnswerKey(key)
 	}
 	if m.confirm != nil {
 		return m.handleConfirm(key)
+	}
+	if m.help {
+		if key.String() == "?" || key.String() == "esc" {
+			m.help = false
+		}
+		return m, nil
 	}
 	if m.selected < 0 || m.selected >= len(m.projects) {
 		if key.String() == "q" || key.String() == "ctrl+c" {
@@ -1858,8 +1861,6 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m.prepareRecoveryAction("retry_run")
 		case "m":
 			return m.prepareRecoveryAction("mark_stopped")
-		case "z":
-			return m.prepareRecoveryAction("accept_result")
 		case "v":
 			return m.prepareRecoveryAction("resolve_command")
 		case "[", "]":
@@ -2007,7 +2008,7 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "pgdown":
 		return m.scrollPanel(8)
 	case "?":
-		m.status = "帮助：↑↓ 选择 · ←→ 项目 · Enter 详情 · s 开始 · m 模式 · p 派发 · x 停止 · e 折叠 · = 保持展开 · y 更多 · / 筛选 · q 退出"
+		m.help = true
 		return m, nil
 	}
 	return m, nil
@@ -2308,6 +2309,10 @@ func (m Model) startSelected() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	state := &m.projects[m.selected]
+	if state.ref.Legacy != nil {
+		m.status = "旧 Beads 项目只读；原执行由旧服务结算，切换到 native 后才能在此启动"
+		return m, nil
+	}
 	row := m.selectedRow(m.selected)
 	if row == nil || row.kind != rowReady || row.candidate == nil {
 		m.status = "请选择 Ready 候选后再开始"
@@ -2479,19 +2484,6 @@ func (m Model) prepareRecoveryAction(action string) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		confirm.revision, confirm.requireBasis = report.RunRevision, true
-	case "accept_result":
-		if !strings.HasPrefix(report.AcceptResultReason, "confirm") {
-			m.status = "accept_result 不可用：" + report.AcceptResultReason
-			return m, nil
-		}
-		if !hasCapability(runtimeState, action) {
-			m.status = "服务未声明 accept_result 能力"
-			return m, nil
-		}
-		m.resultPicker = &resultPathDialog{projectKey: state.ref.Key, instance: runtimeState.Service.InstanceID, runID: report.RunID, revision: report.RunRevision, requestID: requestID, path: []rune(report.ResultPath), cursor: len([]rune(report.ResultPath))}
-		m.confirm = nil
-		m.status = "选择已有 result 文件；服务只会收到后续预览锁定的字节"
-		return m, nil
 	case "resolve_command":
 		if len(report.Blockers) == 0 || state.recoveryBlockerIndex < 0 || state.recoveryBlockerIndex >= len(report.Blockers) {
 			m.status = "没有可解除的 control blocker"
@@ -2560,11 +2552,7 @@ func (m Model) beginRecoveryAction(confirm *confirmAction) (tea.Model, tea.Cmd) 
 		return m, nil
 	}
 	requestedBy := steerline.DefaultRequestedBy()
-	body := steerline.RecoveryCommandBody{ConfirmedProcessStopped: confirm.action == "mark_stopped" || confirm.action == "accept_result" || confirm.action == "retry_run", ConfirmationBasis: confirm.basis}
-	if confirm.action == "accept_result" {
-		body.ResultBase64 = base64.StdEncoding.EncodeToString(confirm.resultBytes)
-		body.ResultSHA256 = confirm.resultSHA256
-	}
+	body := steerline.RecoveryCommandBody{ConfirmedProcessStopped: confirm.action == "mark_stopped" || confirm.action == "retry_run", ConfirmationBasis: confirm.basis}
 	if confirm.action == "resolve_command" {
 		body.ConfirmationBasis = confirm.basis
 	}
@@ -2580,137 +2568,6 @@ func (m Model) beginRecoveryAction(confirm *confirmAction) (tea.Model, tea.Cmd) 
 	m.confirm = nil
 	m.status = fmt.Sprintf("恢复命令已发布 · %s · command_id %s", confirm.action, confirm.requestID)
 	return m, m.submitServiceAction(index, confirm.action, targetID, requestedBy, confirm.requestID, confirm.revision, body)
-}
-
-func (m Model) handleResultPickerKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
-	dialog := m.resultPicker
-	if dialog == nil {
-		return m, nil
-	}
-	switch key.String() {
-	case "esc", "ctrl+c":
-		m.resultPicker = nil
-		m.status = "已取消结果选择；未提交 accept_result"
-		return m, nil
-	case "enter":
-		return m.freezeAcceptResultPreview()
-	case "left":
-		if dialog.cursor > 0 {
-			dialog.cursor--
-		}
-		return m, nil
-	case "right":
-		if dialog.cursor < len(dialog.path) {
-			dialog.cursor++
-		}
-		return m, nil
-	case "home":
-		dialog.cursor = 0
-		return m, nil
-	case "end":
-		dialog.cursor = len(dialog.path)
-		return m, nil
-	case "backspace":
-		if dialog.cursor > 0 {
-			dialog.path = append(dialog.path[:dialog.cursor-1], dialog.path[dialog.cursor:]...)
-			dialog.cursor--
-		}
-		dialog.error = ""
-		return m, nil
-	case "delete":
-		if dialog.cursor < len(dialog.path) {
-			dialog.path = append(dialog.path[:dialog.cursor], dialog.path[dialog.cursor+1:]...)
-		}
-		dialog.error = ""
-		return m, nil
-	}
-	if key.Type == tea.KeyRunes {
-		insert := make([]rune, 0, len(key.Runes))
-		for _, char := range key.Runes {
-			if char >= 0x20 && char != 0x7f && char != '\n' && char != '\r' && char != '\t' {
-				insert = append(insert, char)
-			}
-		}
-		if len(insert) > 0 {
-			joined := make([]rune, 0, len(dialog.path)+len(insert))
-			joined = append(joined, dialog.path[:dialog.cursor]...)
-			joined = append(joined, insert...)
-			joined = append(joined, dialog.path[dialog.cursor:]...)
-			dialog.path = joined
-			dialog.cursor += len(insert)
-			dialog.error = ""
-		}
-	}
-	return m, nil
-}
-
-func (m Model) freezeAcceptResultPreview() (tea.Model, tea.Cmd) {
-	dialog := m.resultPicker
-	if dialog == nil {
-		return m, nil
-	}
-	index := m.projectIndex(dialog.projectKey)
-	if index < 0 || index != m.selected {
-		dialog.error = "项目已变化；结果路径保留，请返回原项目"
-		return m, nil
-	}
-	state := &m.projects[index]
-	report := state.recoveryReport
-	runtimeState := state.snapshot.Connection.Snapshot.Runtime
-	if report == nil || runtimeState == nil || runtimeState.Service.InstanceID != dialog.instance || report.RunID != dialog.runID || report.RunRevision != dialog.revision {
-		dialog.error = "stale_revision：核验报告或服务实例已变化；请重新核验"
-		return m, nil
-	}
-	path := strings.TrimSpace(string(dialog.path))
-	if path == "" {
-		dialog.error = "请选择一个已有 result 文件"
-		return m, nil
-	}
-	file, err := os.Open(path)
-	if err != nil {
-		dialog.error = "打开 result 文件失败：" + err.Error()
-		return m, nil
-	}
-	info, err := file.Stat()
-	if err != nil {
-		_ = file.Close()
-		dialog.error = "读取 result 文件信息失败：" + err.Error()
-		return m, nil
-	}
-	if info.Size() <= 0 || info.Size() > 2<<20 {
-		_ = file.Close()
-		dialog.error = "result 文件必须在 1 byte 到 2 MiB 之间"
-		return m, nil
-	}
-	data, err := io.ReadAll(io.LimitReader(file, (2<<20)+1))
-	closeErr := file.Close()
-	if err != nil || closeErr != nil || len(data) > 2<<20 {
-		dialog.error = "读取 result 文件失败或超过 2 MiB"
-		return m, nil
-	}
-	var selectedRun *steerline.Run
-	for _, run := range runtimeState.Runs {
-		if run != nil && run.RunID == dialog.runID {
-			selectedRun = run
-			break
-		}
-	}
-	if selectedRun == nil {
-		dialog.error = "runtime run identity disappeared"
-		return m, nil
-	}
-	result, err := steerline.ParseResultBytes(data, selectedRun)
-	if err != nil || result.Outcome != "pr_submitted" || result.PRURL == nil {
-		if err == nil {
-			err = errors.New("result must contain a submitted PR")
-		}
-		dialog.error = "结果预览拒绝：" + err.Error()
-		return m, nil
-	}
-	sum := sha256.Sum256(data)
-	m.confirm = &confirmAction{projectKey: state.ref.Key, instance: dialog.instance, revision: dialog.revision, action: "accept_result", requireBasis: true, taskID: selectedRun.TaskID, runID: selectedRun.RunID, requestID: dialog.requestID, resultBytes: append([]byte(nil), data...), resultSHA256: hex.EncodeToString(sum[:]), resultSummary: ptrString(result.Summary), resultPRURL: *result.PRURL, resultPath: path, resultWorktree: ptrString(result.WorktreePath), resultBase: ptrString(result.BaseCommit), resultTaskID: result.TaskID, resultRunID: result.RunID}
-	m.resultPicker = nil
-	return m, nil
 }
 
 func (m *Model) readyControlTarget() (*projectState, *steerline.Runtime) {
@@ -3278,6 +3135,18 @@ func terminalCapabilities() string {
 func projectStatus(ref ProjectRef, snapshot ProjectSnapshot) string {
 	if ref.Error != "" {
 		return "配置错误"
+	}
+	if ref.Legacy != nil {
+		if snapshot.LegacyError != "" {
+			return "旧任务查询失败"
+		}
+		if snapshot.Legacy == nil {
+			return "旧任务读取中"
+		}
+		if snapshot.Legacy.ServiceLiveness == "live" {
+			return "旧服务活动"
+		}
+		return "旧 Beads 只读"
 	}
 	if ref.Conflict != "" {
 		return "关联冲突"

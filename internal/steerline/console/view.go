@@ -48,10 +48,10 @@ func render(m Model) string {
 		contentHeight = 3
 	}
 	var body string
-	if m.confirm != nil {
+	if m.help {
+		body = strings.Join(fitLines(renderHelp(*state), m.width, contentHeight), "\n")
+	} else if m.confirm != nil {
 		body = renderStopConfirmation(m, *state, contentHeight)
-	} else if m.resultPicker != nil {
-		body = renderResultPathPicker(m, *state, contentHeight)
 	} else if m.answer != nil {
 		body = renderAnswerDialog(m, *state, contentHeight)
 	} else if m.width < 100 {
@@ -68,7 +68,7 @@ func render(m Model) string {
 		rightWidth := m.width - leftWidth - 1
 		left := fitLines(renderRows(m, *state, leftWidth, contentHeight), leftWidth, contentHeight)
 		right := fitLines(renderPanel(m, *state, rightWidth, contentHeight), rightWidth, contentHeight)
-		body = joinLines(left, right, contentHeight)
+		body = joinLines(left, right, leftWidth, contentHeight)
 	}
 	lines := []string{header, projects, status, body}
 	lines = append(lines, footerLines...)
@@ -80,17 +80,11 @@ func renderEmptyProjects() string {
 }
 
 func renderProjectStrip(m Model) string {
-	parts := make([]string, 0, len(m.projects))
-	for i, state := range m.projects {
-		name := safeTerminalText(state.ref.Name)
-		status := projectShortSummary(state, m.clock.Now())
-		if i == m.selected {
-			parts = append(parts, styleSelected.Render(" "+name+" · "+status+" "))
-		} else {
-			parts = append(parts, " "+name+" · "+status+" ")
-		}
+	name := safeTerminalInlineText(m.projects[m.selected].ref.Name)
+	line := fmt.Sprintf("项目 %d/%d  %s", m.selected+1, len(m.projects), styleSelected.Render(" "+name+" "))
+	if len(m.projects) > 1 {
+		line += "  ←/→ 切换"
 	}
-	line := strings.Join(parts, "│")
 	if m.prefsErr != "" {
 		line += "  " + styleAlert.Render(safeTerminalText(m.prefsErr))
 	}
@@ -98,37 +92,74 @@ func renderProjectStrip(m Model) string {
 }
 
 func renderStatusLine(m Model, state projectState) string {
+	if state.ref.Legacy != nil {
+		service := projectStatus(state.ref, state.snapshot)
+		count, active := 0, 0
+		if legacy := state.snapshot.Legacy; legacy != nil {
+			count = len(legacy.Tasks)
+			for _, task := range legacy.Tasks {
+				if task.Status != "closed" {
+					active++
+				}
+			}
+			if legacy.ServiceStatus != "" {
+				service += " · " + legacy.ServiceStatus
+			}
+		}
+		parts := []string{"服务 " + service, fmt.Sprintf("旧 Beads 只读 · 未完成 %d/%d", active, count)}
+		if state.snapshot.LegacyError != "" {
+			parts = append(parts, "查询："+safeTerminalText(state.snapshot.LegacyError))
+		}
+		if m.status != "" {
+			parts = append([]string{"提示 " + safeTerminalInlineText(m.status)}, parts...)
+		}
+		return truncate(strings.Join(parts, "  |  "), m.width)
+	}
 	runtimeState := state.snapshot.Connection.Snapshot.Runtime
 	if runtimeState == nil {
 		runtimeState = state.snapshot.Observation.Runtime
 	}
 	service := projectStatus(state.ref, state.snapshot)
-	mode, paused, slot := "未知", false, "未知"
+	mode, paused, slot := "未知", false, ""
 	if runtimeState != nil {
-		service = string(state.snapshot.Connection.State)
 		mode = runtimeState.Control.DispatchMode
 		paused = runtimeState.Control.DispatchPaused
-		slot = "空闲"
 		if runtimeState.SlotOccupied {
-			slot = "占用 · " + stringValue(runtimeState.CurrentTask)
+			slot = "执行 " + stringValue(runtimeState.CurrentTask)
 		}
 	}
 	if paused {
 		mode += " · 已暂停"
 	}
-	ready, cached, running, decision, merge, attention := projectCounts(state, m.clock.Now())
-	sampled := "最近更新：未知"
-	if !state.snapshot.Observation.SampledAt.IsZero() {
-		sampled = "采样于 " + sampleTime(state.snapshot)
+	switch strings.TrimSuffix(mode, " · 已暂停") {
+	case "manual":
+		mode = strings.Replace(mode, "manual", "手动", 1)
+	case "auto":
+		mode = strings.Replace(mode, "auto", "自动", 1)
 	}
-	parts := []string{"服务 " + service, "派发 " + mode, "槽 " + slot, fmt.Sprintf("Ready %d · 缓存 %d · 运行 %d · 决策 %d · 合并 %d · 需处理 %d", ready, cached, running, decision, merge, attention), sampled}
+	ready, cached, running, decision, merge, attention := projectCounts(state, m.clock.Now())
+	parts := []string{"服务 " + service, "派发 " + mode, fmt.Sprintf("Ready %d", ready)}
+	if slot != "" {
+		parts = append(parts, slot)
+	}
+	for _, item := range []struct {
+		count int
+		label string
+	}{{cached, "缓存"}, {running, "运行"}, {decision, "待决策"}, {merge, "待合并"}, {attention, "需处理"}} {
+		if item.count > 0 {
+			parts = append(parts, fmt.Sprintf("%s %d", item.label, item.count))
+		}
+	}
+	if state.snapshot.Connection.State != steerline.ConnectionConnected && !state.snapshot.Observation.SampledAt.IsZero() {
+		parts = append(parts, "采样于 "+sampleTime(state.snapshot))
+	}
 	if m.status != "" {
-		parts = append(parts, safeTerminalText(m.status))
+		parts = append([]string{"提示 " + safeTerminalInlineText(m.status)}, parts...)
 	}
 	if diagnostic := state.snapshot.Connection.Diagnostic; diagnostic != "" {
 		parts = append(parts, "连接诊断 "+safeTerminalText(diagnostic))
 	}
-	return truncate(strings.Join(parts, "  |  "), m.width)
+	return truncate(strings.Join(parts, "  ·  "), m.width)
 }
 
 func projectCounts(state projectState, now time.Time) (ready, cached, running, decision, merge, attention int) {
@@ -161,22 +192,20 @@ func projectCounts(state projectState, now time.Time) (ready, cached, running, d
 	return
 }
 
-func projectShortSummary(state projectState, now time.Time) string {
-	status := projectStatus(state.ref, state.snapshot)
-	ready, cached, running, decision, merge, attention := projectCounts(state, now)
-	current := "空闲"
-	if rt := state.snapshot.Observation.Runtime; rt != nil && rt.CurrentTask != nil && *rt.CurrentTask != "" {
-		current = "执行 " + safeTerminalText(*rt.CurrentTask)
-	}
-	return fmt.Sprintf("%s · %s · run %d · R%d C%d D%d M%d !%d", status, current, running, ready, cached, decision, merge, attention)
-}
-
 func renderRows(m Model, state projectState, width, height int) []string {
 	rows := m.rows(m.selected)
-	out := []string{styleLabel.Render(fmt.Sprintf("任务与运行 · %d 项 · 筛选 %s", len(rows), filterName(state.filter)))}
+	out := []string{styleLabel.Render(fmt.Sprintf("任务 · %d 项 · %s", len(rows), filterDisplayName(state.filter)))}
 	if state.ref.Error != "" {
 		out = append(out, styleAlert.Render("配置错误："+safeTerminalText(state.ref.Error)))
 		return out
+	}
+	if state.ref.Legacy != nil {
+		if state.snapshot.LegacyError != "" {
+			out = append(out, styleAlert.Render("Beads 查询："+safeTerminalText(state.snapshot.LegacyError)))
+		}
+		if state.snapshot.Legacy != nil && state.snapshot.Legacy.RuntimeError != "" {
+			out = append(out, "旧运行投影："+safeTerminalText(state.snapshot.Legacy.RuntimeError))
+		}
 	}
 	if state.ref.Conflict != "" {
 		out = append(out, styleAlert.Render(safeTerminalText(state.ref.Conflict)))
@@ -192,6 +221,8 @@ func renderRows(m Model, state projectState, width, height int) []string {
 		switch {
 		case !state.snapshotLoaded:
 			out = append(out, "正在读取项目快照…")
+		case state.ref.Legacy != nil:
+			out = append(out, "旧 Beads 项目没有可显示的任务；检查只读查询诊断。")
 		case snapshot.Connection.State == steerline.ConnectionOffline || snapshot.Connection.State == steerline.ConnectionNoRecord:
 			out = append(out, "服务离线；已有运行和日志仍可查看。")
 			out = append(out, "服务入口："+safeTerminalText(serviceWindowInstruction(state.ref)))
@@ -215,42 +246,66 @@ func renderRows(m Model, state projectState, width, height int) []string {
 	}
 	visible := contentWindow(rows, state.selectedKey, max(1, height-len(out)))
 	for _, row := range visible {
-		prefix := "RUN "
 		stateText := ""
 		switch row.kind {
 		case rowReady:
-			prefix = "READY "
-			valid, reason := candidateFreshness(state.ref, state.snapshot, m.clock.Now())
+			valid, _ := candidateFreshness(state.ref, state.snapshot, m.clock.Now())
 			if valid {
 				stateText = "Ready"
 			} else {
-				stateText = "缓存 · 不可操作"
-				if reason != "" {
-					stateText += " · " + reason
-				}
+				stateText = "缓存"
 			}
 		case rowNative:
-			prefix = "TASK "
 			stateText = row.native.Status
-			if row.native.DependencyReady {
-				stateText += " · 依赖就绪"
-			} else if len(row.native.UnmetPredecessors) > 0 {
-				stateText += " · 依赖阻塞"
-			}
+		case rowLegacy:
+			stateText = row.legacy.Status
 		default:
 			stateText = runStatus(row.run)
 		}
-		visibleID := safeTerminalInlineText(row.taskID)
-		line := prefix + visibleID + "  " + truncate(safeTerminalInlineText(row.title), max(8, width-lipgloss.Width(prefix)-lipgloss.Width(visibleID)-4))
-		line += "  " + safeTerminalInlineText(stateText)
+		line := renderTaskListRow(row.taskID, row.title, displayTaskStatus(stateText), width)
 		if row.key == state.selectedKey {
 			line = styleSelected.Render(line)
-		} else if row.kind == rowReady && strings.HasPrefix(stateText, "缓存") {
+		} else if row.kind == rowReady && stateText == "缓存" {
 			line = styleDim.Render(line)
 		}
-		out = append(out, truncate(line, width))
+		out = append(out, line)
 	}
 	return out
+}
+
+func renderTaskListRow(id, title, status string, width int) string {
+	statusWidth, idWidth := 9, 12
+	if width < 40 {
+		statusWidth, idWidth = 7, 8
+	}
+	label := padDisplay(truncate(safeTerminalInlineText(status), statusWidth), statusWidth)
+	identity := padDisplay(truncate(safeTerminalInlineText(id), idWidth), idWidth)
+	titleWidth := max(1, width-statusWidth-idWidth-2)
+	return truncate(label+" "+identity+" "+truncate(safeTerminalInlineText(title), titleWidth), width)
+}
+
+func displayTaskStatus(status string) string {
+	switch status {
+	case "Ready":
+		return "可开始"
+	case "open":
+		return "待开始"
+	case "in_progress":
+		return "进行中"
+	case "blocked":
+		return "阻塞"
+	case "closed", "completed":
+		return "已完成"
+	default:
+		if strings.HasPrefix(status, "需处理") {
+			return "需处理"
+		}
+		return status
+	}
+}
+
+func padDisplay(value string, width int) string {
+	return value + strings.Repeat(" ", max(0, width-lipgloss.Width(value)))
 }
 
 func contentWindow(rows []consoleRow, selected string, size int) []consoleRow {
@@ -341,42 +396,60 @@ func renderNarrowPanel(m Model, state projectState, height int) []string {
 	if state.panel == 4 {
 		return renderRows(m, state, m.width, height)
 	}
-	lines := []string{"窄屏面板 · " + panelName(state.panel) + "  [t]列表 [d]详情 [a]回答/活动 [c]会话 [f]最终回复 [v]历史 [u]恢复核验"}
+	views := "t列表 · d详情"
+	if state.ref.Legacy == nil {
+		views += " · a活动 · c会话 · f最终回复"
+	}
+	lines := []string{"视图 " + panelDisplayName(state.panel) + "  |  " + views}
 	return append(lines, renderPanel(m, state, m.width, height-1)...)
+}
+
+func filterDisplayName(index int) string {
+	return []string{"全部", "Ready", "运行中", "待决策", "待合并", "需处理", "历史"}[min(max(index, 0), 6)]
+}
+
+func panelDisplayName(index int) string {
+	switch index {
+	case 1:
+		return "活动"
+	case 2:
+		return "会话"
+	case 3:
+		return "最终回复"
+	case 4:
+		return "列表"
+	case 5:
+		return "决策历史"
+	case 6:
+		return "恢复核验"
+	default:
+		return "详情"
+	}
 }
 
 func renderDetail(m Model, state projectState, row *consoleRow, width, height int) []string {
 	lines := []string{styleLabel.Render("详情")}
 	if row == nil {
+		if state.snapshotLoaded && state.selectedKey != "" {
+			lines = append(lines, "上次选中对象已不在当前快照中；按 ↑/↓ 重新选择。")
+		}
 		lines = append(lines, renderEmptySelection(state)...)
+		return scrollLines(wrapLines(lines, width), state.detailScroll, height)
+	}
+	if row.legacy != nil {
+		lines = append(lines, renderLegacyTaskDetail(state, *row.legacy)...)
 		return scrollLines(wrapLines(lines, width), state.detailScroll, height)
 	}
 	if row.native != nil {
 		lines = append(lines, renderNativeTaskDetail(state, *row.native)...)
 		if row.kind == rowReady {
-			valid, reason := candidateFreshness(state.ref, state.snapshot, m.clock.Now())
-			if valid {
-				lines = append(lines, "Ready 候选：当前缓存与服务身份匹配")
-			} else {
-				lines = append(lines, "Ready 候选：缓存 · 禁止开始")
-				if reason != "" {
-					lines = append(lines, "不可操作原因："+safeTerminalText(reason))
-				}
-			}
-			if state.snapshot.Tasks != nil {
-				lines = append(lines, "候选查询："+state.snapshot.Tasks.QueriedAt.Local().Format(timeLayout))
-				if state.snapshot.Tasks.LastSuccessAt != nil {
-					lines = append(lines, "最后成功查询："+state.snapshot.Tasks.LastSuccessAt.Local().Format(timeLayout))
-				}
-			}
-			lines = append(lines, "依赖就绪只描述任务关系，不授予启动许可。")
 			lines = append(lines, renderControlAvailability(state, row, m.clock.Now())...)
 			lines = append(lines, renderActionLines(state)...)
 		}
 		return scrollLines(wrapLines(lines, width), state.detailScroll, height)
 	}
 	if row.kind == rowReady {
-		valid, reason := candidateFreshness(state.ref, state.snapshot, m.clock.Now())
+		valid, _ := candidateFreshness(state.ref, state.snapshot, m.clock.Now())
 		stateText := "Ready 候选"
 		if !valid {
 			stateText = "候选缓存 · 禁止开始"
@@ -384,15 +457,6 @@ func renderDetail(m Model, state projectState, row *consoleRow, width, height in
 		lines = append(lines, "Task："+safeTerminalInlineText(row.taskID), "标题："+safeTerminalInlineText(row.title), "提供方状态："+stateText)
 		if row.candidate.Summary != "" {
 			lines = append(lines, "摘要："+safeTerminalText(row.candidate.Summary))
-		}
-		if reason != "" {
-			lines = append(lines, "不可操作原因："+safeTerminalText(reason))
-		}
-		if state.snapshot.Tasks != nil {
-			lines = append(lines, "候选查询："+state.snapshot.Tasks.QueriedAt.Local().Format(timeLayout))
-			if state.snapshot.Tasks.LastSuccessAt != nil {
-				lines = append(lines, "最后成功查询："+state.snapshot.Tasks.LastSuccessAt.Local().Format(timeLayout))
-			}
 		}
 		lines = append(lines, renderControlAvailability(state, row, m.clock.Now())...)
 		lines = append(lines, renderActionLines(state)...)
@@ -403,38 +467,37 @@ func renderDetail(m Model, state projectState, row *consoleRow, width, height in
 		lines = append(lines, "服务入口："+safeTerminalText(serviceWindowInstruction(state.ref)), "配置："+safeTerminalText(state.ref.ConfigPath))
 	}
 	lines = append(lines,
-		"Task："+safeTerminalInlineText(run.TaskID)+" · "+safeTerminalInlineText(run.Title),
-		"run_id："+safeTerminalText(run.RunID),
-		"execution："+safeTerminalText(firstText(run.ExecutionStatus, "unknown")),
-		"finish："+safeTerminalText(firstText(run.FinishTaskStatus, "unknown")),
-		"任务状态："+safeTerminalText(firstText(run.TaskStatus, run.BeadsStatus, "unknown")),
-		"整体："+runStatus(run),
-		"采样时间："+sampleTime(state.snapshot),
-		"最后核验时间："+executionVerifiedAt(state, run),
-		"execution_id："+safeTerminalText(displayDash(run.ExecutionID)),
-		"attempt_id："+safeTerminalText(displayDash(selectedAttempt(state, run))),
-		"后端/协议/目标："+safeTerminalText(strings.Join([]string{run.Backend, run.Protocol, run.Target.ID}, " / ")),
-		"PR："+safeTerminalText(firstText(run.PR.State, "unknown")),
-		"PR queried_at："+safeTerminalText(ptrTime(run.PR.QueriedAt)),
-		"PR query_error："+safeTerminalText(ptrString(run.PR.QueryError)),
-		"PR URL："+safeTerminalText(ptrString(run.PR.URL)),
-		"工作目录："+safeTerminalText(ptrString(run.WorktreePath)),
-		"分支："+safeTerminalText(ptrString(run.WorktreeBranch)),
-		"错误："+safeTerminalText(ptrString(run.Error)),
-		"摘要："+safeTerminalText(ptrString(run.Summary)),
+		"任务 "+safeTerminalInlineText(run.TaskID)+" · "+safeTerminalInlineText(run.Title),
+		"当前："+runStatus(run),
+		"执行："+safeTerminalText(firstText(run.ExecutionStatus, "unknown"))+"  ·  交付："+safeTerminalText(firstText(run.FinishTaskStatus, "unknown")),
+		"任务状态："+safeTerminalText(firstText(run.TaskStatus, "unknown")),
 	)
+	if run.PR.State != "" || run.PR.URL != nil {
+		lines = append(lines, "PR："+safeTerminalText(firstText(run.PR.State, "unknown")))
+		if run.PR.URL != nil && *run.PR.URL != "" {
+			lines = append(lines, "PR 地址："+safeTerminalText(*run.PR.URL))
+		}
+	}
+	if run.PR.QueryError != nil && *run.PR.QueryError != "" {
+		lines = append(lines, "PR 查询失败："+safeTerminalText(*run.PR.QueryError))
+	}
+	if run.Error != nil && *run.Error != "" {
+		lines = append(lines, "错误："+safeTerminalText(*run.Error))
+	}
+	if run.Summary != nil && *run.Summary != "" {
+		lines = append(lines, "摘要："+safeTerminalText(*run.Summary))
+	}
+	if state.snapshot.Connection.State != steerline.ConnectionConnected {
+		lines = append(lines, "采样于 "+sampleTime(state.snapshot))
+	}
+	if verified := executionVerifiedAt(state, run); verified != "未知" && verified != "—" {
+		lines = append(lines, "最后核验："+verified)
+	}
 	if runtimeState := state.snapshot.Observation.Runtime; runtimeState != nil && runtimeState.ProjectionError != "" {
 		lines = append(lines, "runtime 缓存来源："+safeTerminalText(runtimeState.ProjectionError))
 	}
 	if state.snapshot.DomainError != "" {
 		lines = append(lines, "execution/attempt 查询："+safeTerminalText(state.snapshot.DomainError))
-	}
-	if runtimeState := state.snapshot.Observation.Runtime; runtimeState != nil {
-		paused := "否"
-		if runtimeState.Control.DispatchPaused {
-			paused = "是"
-		}
-		lines = append(lines, "派发模式："+safeTerminalText(runtimeState.Control.DispatchMode)+" · 已暂停："+paused, "p 只暂停新派发，当前 worker 会继续运行。")
 	}
 	lines = append(lines, renderControlAvailability(state, row, m.clock.Now())...)
 	if run.Decision != nil && run.Decision.Status == "pending" {
@@ -460,6 +523,25 @@ func renderDetail(m Model, state projectState, row *consoleRow, width, height in
 			lines = append(lines, renderNativeTaskDetail(state, *task)...)
 		}
 	}
+	lines = append(lines, "", "技术信息", "run_id："+safeTerminalText(run.RunID))
+	if run.ExecutionID != "" {
+		lines = append(lines, "execution_id："+safeTerminalText(run.ExecutionID))
+	}
+	if attempt := selectedAttempt(state, run); attempt != "" {
+		lines = append(lines, "attempt_id："+safeTerminalText(attempt))
+	}
+	if run.Backend != "" || run.Protocol != "" || run.Target.ID != "" {
+		lines = append(lines, "后端/协议/目标："+safeTerminalText(strings.Join([]string{run.Backend, run.Protocol, run.Target.ID}, " / ")))
+	}
+	if run.PR.QueriedAt != nil {
+		lines = append(lines, "PR 查询时间："+safeTerminalText(ptrTime(run.PR.QueriedAt)))
+	}
+	if run.WorktreePath != nil && *run.WorktreePath != "" {
+		lines = append(lines, "工作目录："+safeTerminalText(*run.WorktreePath))
+	}
+	if run.WorktreeBranch != nil && *run.WorktreeBranch != "" {
+		lines = append(lines, "分支："+safeTerminalText(*run.WorktreeBranch))
+	}
 	return scrollLines(wrapLines(lines, width), state.detailScroll, height)
 }
 
@@ -479,81 +561,62 @@ func nativeDetailForTask(state projectState, taskID string) *steerline.NativeTas
 
 func renderNativeTaskDetail(state projectState, task steerline.NativeTaskDetail) []string {
 	lines := []string{
-		"Task：" + safeTerminalInlineText(task.TaskID),
-		"标题：" + safeTerminalInlineText(task.Title),
-		"状态：" + safeTerminalText(task.Status) + " · version " + fmt.Sprint(task.Version),
-		"依赖就绪：" + fmt.Sprint(task.DependencyReady),
+		"任务 " + safeTerminalInlineText(task.TaskID) + " · " + safeTerminalInlineText(task.Title),
+		"状态：" + safeTerminalText(task.Status),
 	}
-	if state.snapshot.NativeTasks != nil {
-		sampled := "未知"
-		if !state.snapshot.NativeTasks.SampledAt.IsZero() {
-			sampled = state.snapshot.NativeTasks.SampledAt.Local().Format(timeLayout)
-		}
-		if state.snapshot.Connection.State == steerline.ConnectionOffline || state.snapshot.Connection.State == steerline.ConnectionNoRecord {
-			sampled += " · 离线只读快照"
-		}
-		lines = append(lines, "关系采样时间："+sampled)
+	if state.snapshot.Connection.State == steerline.ConnectionOffline || state.snapshot.Connection.State == steerline.ConnectionNoRecord {
+		lines = append(lines, "离线只读快照 · 采样于 "+sampleTime(state.snapshot))
 	}
 	if state.snapshot.NativeTaskError != "" {
-		lines = append(lines, "查询状态："+safeTerminalText(state.snapshot.NativeTaskError))
+		lines = append(lines, "关系查询："+safeTerminalText(state.snapshot.NativeTaskError))
 	}
-	lines = append(lines, "", "前置")
-	if len(task.Predecessors) == 0 {
-		lines = append(lines, "无")
-	}
-	for _, predecessor := range task.Predecessors {
-		delivery := "未交付"
-		if predecessor.Delivered {
-			delivery = "已交付"
-		}
-		line := "task " + predecessor.TaskID + " · " + firstText(predecessor.Status, "unknown") + " · " + delivery
-		if predecessor.Blocker != "" {
-			line += " · 阻塞：" + predecessor.Blocker
-		}
-		lines = append(lines, safeTerminalInlineText(line))
-	}
-	lines = append(lines, "后继")
-	if len(task.Successors) == 0 {
-		lines = append(lines, "无")
-	} else {
-		for _, successor := range task.Successors {
-			lines = append(lines, "task "+safeTerminalInlineText(successor))
-		}
-	}
-	lines = append(lines, "阻塞原因")
-	if len(task.UnmetPredecessors) == 0 {
-		lines = append(lines, "无未满足前置")
-	} else {
+	if len(task.UnmetPredecessors) > 0 {
+		lines = append(lines, "", "未满足的前置")
 		for _, blocker := range task.UnmetPredecessors {
 			lines = append(lines, safeTerminalInlineText(fmt.Sprintf("task %s · %s · %s", blocker.TaskID, firstText(blocker.Status, "unknown"), firstText(blocker.Blocker, "predecessor_not_delivered"))))
 		}
+	} else if task.DependencyReady {
+		lines = append(lines, "前置：已满足")
 	}
 	if len(task.StartupBlockers) > 0 {
-		lines = append(lines, "启动阻塞："+safeTerminalText(strings.Join(task.StartupBlockers, ", ")))
+		for _, blocker := range task.StartupBlockers {
+			if blocker == "dispatch_paused" {
+				if rt := state.snapshot.Connection.Snapshot.Runtime; rt != nil && rt.Control.DispatchPaused {
+					continue
+				}
+			}
+			lines = append(lines, "任务阻塞："+displayActionReason(blocker))
+		}
 	}
-	lines = append(lines, "", "规格与交付定位")
-	lines = append(lines, "Spec："+safeTerminalInlineText(fileReferenceText(task.Contract.SpecRef)))
-	lines = append(lines, "Plan："+safeTerminalInlineText(fileReferenceText(task.Contract.PlanRef)))
-	for _, ref := range task.Contract.AcceptanceRefs {
-		lines = append(lines, "验收："+safeTerminalInlineText(fileReferenceText(ref)))
+	if len(task.Predecessors) > 0 {
+		ids := make([]string, 0, len(task.Predecessors))
+		for _, predecessor := range task.Predecessors {
+			ids = append(ids, safeTerminalInlineText(predecessor.TaskID))
+			if len(task.UnmetPredecessors) == 0 && !predecessor.Delivered && predecessor.Blocker != "" {
+				lines = append(lines, "前置阻塞：task "+safeTerminalInlineText(predecessor.TaskID)+" · "+safeTerminalInlineText(predecessor.Blocker))
+			}
+		}
+		lines = append(lines, "前置任务："+strings.Join(ids, "、"))
 	}
-	for _, ref := range task.Contract.CommonRefs {
-		lines = append(lines, "共同约束："+safeTerminalInlineText(fileReferenceText(ref)))
+	if len(task.Successors) > 0 {
+		ids := make([]string, 0, len(task.Successors))
+		for _, successor := range task.Successors {
+			ids = append(ids, safeTerminalInlineText(successor))
+		}
+		lines = append(lines, "后继任务："+strings.Join(ids, "、"))
 	}
-	if task.Delivery == nil {
-		lines = append(lines, "交付：无")
-	} else {
+	if task.Contract.SpecRef.Path != "" {
+		lines = append(lines, "Spec："+safeTerminalInlineText(task.Contract.SpecRef.Path))
+	}
+	if task.Delivery != nil {
 		lines = append(lines,
 			"PR："+safeTerminalInlineText(task.Delivery.PRURL),
-			"合并提交："+safeTerminalText(task.Delivery.MergeCommit),
-			"合并时间："+safeTerminalText(task.Delivery.MergedAt.Local().Format(timeLayout)),
 		)
+		if !task.Delivery.MergedAt.IsZero() {
+			lines = append(lines, "合并于 "+task.Delivery.MergedAt.Local().Format(timeLayout))
+		}
 	}
 	return lines
-}
-
-func fileReferenceText(ref steerline.FileReference) string {
-	return ref.Path + " @ " + ref.Commit + " · sha256 " + ref.SHA256
 }
 
 func renderActionLines(state projectState) []string {
@@ -562,78 +625,72 @@ func renderActionLines(state projectState) []string {
 		actions = append(actions, action)
 	}
 	sort.SliceStable(actions, func(i, j int) bool { return actions[i].UpdatedAt.After(actions[j].UpdatedAt) })
-	if len(actions) > 5 {
-		actions = actions[:5]
-	}
 	if len(actions) == 0 {
 		return nil
 	}
-	lines := []string{"", "控制请求 · 按 i 查询最近 request_id"}
+	visible := make([]*actionState, 0, 3)
 	for _, action := range actions {
+		if !action.Resolved && len(visible) < 3 {
+			visible = append(visible, action)
+		}
+	}
+	if len(visible) == 0 {
+		visible = append(visible, actions[0])
+	}
+	lines := []string{"", "控制请求"}
+	for _, action := range visible {
 		lines = append(lines, fmt.Sprintf("%s · task %s · request %s · %s", safeTerminalText(action.Status), safeTerminalText(displayDash(action.TaskID)), safeTerminalText(action.RequestID), safeTerminalText(action.Message)))
+	}
+	if len(actions) > len(visible) {
+		lines = append(lines, fmt.Sprintf("其余 %d 条历史请求 · 按 i 查询最近 request_id", len(actions)-len(visible)))
 	}
 	return lines
 }
 
 func renderControlAvailability(state projectState, row *consoleRow, now time.Time) []string {
-	lines := []string{"", "控制操作"}
-	connection := state.snapshot.Connection
+	var lines []string
 	if state.ref.Error != "" {
-		return append(lines, "控制不可用：配置错误 · "+safeTerminalText(state.ref.Error))
+		return []string{"控制不可用：配置错误 · " + safeTerminalText(state.ref.Error)}
 	}
 	if state.ref.Conflict != "" {
-		return append(lines, "控制不可用："+safeTerminalText(state.ref.Conflict))
+		return []string{"控制不可用：" + safeTerminalText(state.ref.Conflict)}
 	}
-	runtimeState := connection.Snapshot.Runtime
-	connected := connection.State == steerline.ConnectionConnected && connection.CanControl && runtimeState != nil
 	if row != nil && row.kind == rowReady {
 		reason := candidateActionReason(state.ref, state.snapshot, now)
 		if reason == "" {
-			lines = append(lines, "s 开始当前 Ready task "+safeTerminalText(row.taskID))
+			lines = append(lines, "操作：s 开始任务 "+safeTerminalText(row.taskID))
 		} else {
-			lines = append(lines, "s 开始不可用："+safeTerminalText(reason))
+			lines = append(lines, "开始不可用："+displayActionReason(reason))
 		}
-	} else {
-		lines = append(lines, "s 开始不可用：请先选择 Ready 候选")
 	}
 	if row != nil && row.kind == rowRun && row.run != nil && row.run.Decision != nil && row.run.Decision.Status == "pending" {
 		reason := decisionAnswerAvailability(state, row)
 		if strings.HasPrefix(reason, "提交后") {
-			lines = append(lines, "a 核验资格并回答当前决策")
+			lines = append(lines, "操作：a 回答当前决策")
 		} else {
-			lines = append(lines, "a 回答不可用："+safeTerminalText(reason))
+			lines = append(lines, "回答不可用："+safeTerminalText(reason))
 		}
-	}
-	if connected {
-		if hasCapability(runtimeState, "set_dispatch_mode") {
-			lines = append(lines, "m 派发模式："+safeTerminalText(runtimeState.Control.DispatchMode)+" ↔ 手动/自动")
-		} else {
-			lines = append(lines, "m 不可用：服务未声明 set_dispatch_mode")
-		}
-		pauseAction := "pause_dispatch"
-		if runtimeState.Control.DispatchPaused {
-			pauseAction = "resume_dispatch"
-		}
-		if hasCapability(runtimeState, pauseAction) {
-			lines = append(lines, "p "+pauseAction)
-		} else {
-			lines = append(lines, "p 不可用：服务未声明 "+pauseAction)
-		}
-	} else {
-		reason := firstText(connection.Diagnostic, string(connection.State), "服务未连接")
-		lines = append(lines, "m/p 不可用："+safeTerminalText(reason))
-	}
-	if connection.CanStop && runtimeState != nil {
-		lines = append(lines, "x 停止实例 "+safeTerminalText(runtimeState.Service.InstanceID)+"（需确认）")
-	} else {
-		lines = append(lines, "x 不可用："+safeTerminalText(firstText(connection.Diagnostic, "没有可定位且支持停止的服务实例")))
 	}
 	return lines
+}
+
+func displayActionReason(reason string) string {
+	switch {
+	case reason == "dispatch_paused":
+		return "派发已暂停"
+	case strings.HasPrefix(reason, "cursor_invalidated:"):
+		return "任务快照版本变化；等待刷新后再试"
+	default:
+		return safeTerminalText(reason)
+	}
 }
 
 const timeLayout = "2006-01-02 15:04:05"
 
 func renderEmptySelection(state projectState) []string {
+	if state.ref.Legacy != nil {
+		return []string{"旧 Beads 项目只读；请选择左侧任务查看依赖与旧运行。", "原执行仍由旧服务结算；s/m/p/x 在此项目不可用。", "配置路径：" + safeTerminalText(state.ref.ConfigPath)}
+	}
 	if state.snapshot.Connection.State == steerline.ConnectionOffline || state.snapshot.Connection.State == steerline.ConnectionNoRecord {
 		return []string{"服务离线 · 可以查看已有 runs 与日志", "服务入口：" + safeTerminalText(serviceWindowInstruction(state.ref)), "配置路径：" + safeTerminalText(state.ref.ConfigPath), terminalCapabilities()}
 	}
@@ -929,8 +986,6 @@ func renderRecoveryInspection(m Model, state projectState, width, height int) []
 	}
 	if report.NativeClaim != nil {
 		lines = append(lines, "center claim：task "+safeTerminalText(report.NativeClaim.TaskID)+" · "+safeTerminalText(report.NativeClaim.Status)+" · claimant "+safeTerminalText(report.NativeClaim.Claimant))
-	} else if report.Claim != nil {
-		lines = append(lines, "claim：task "+safeTerminalText(report.Claim.ID)+" · "+safeTerminalText(report.Claim.Status)+" · assignee "+safeTerminalText(report.Claim.Assignee))
 	} else {
 		lines = append(lines, "claim 核验失败："+safeTerminalText(report.ClaimError))
 	}
@@ -940,9 +995,6 @@ func renderRecoveryInspection(m Model, state projectState, width, height int) []
 		lines = append(lines, "PR 核验："+safeTerminalText(report.PRError))
 	} else {
 		lines = append(lines, "PR：未绑定")
-	}
-	if report.ResultPath != "" {
-		lines = append(lines, "候选结果文件："+safeTerminalText(report.ResultPath))
 	}
 	lines = append(lines, "", "可恢复动作 · 服务执行前会重新核验")
 	if report.RetryReason == "" {
@@ -954,11 +1006,6 @@ func renderRecoveryInspection(m Model, state projectState, width, height int) []
 		lines = append(lines, "M mark_stopped · 确认旧执行已停止并记录依据")
 	} else {
 		lines = append(lines, "M mark_stopped · 不可用："+safeTerminalText(report.MarkStoppedReason))
-	}
-	if strings.HasPrefix(report.AcceptResultReason, "confirm") {
-		lines = append(lines, "Z accept_result · 预览固定结果字节、核验 PR 并接回")
-	} else {
-		lines = append(lines, "Z accept_result · 不可用："+safeTerminalText(report.AcceptResultReason))
 	}
 	if len(report.Blockers) == 0 {
 		lines = append(lines, "v resolve_command · 没有 indeterminate blocker")
@@ -1005,10 +1052,10 @@ func decisionAnswerAvailability(state projectState, row *consoleRow) string {
 	if run.Decision.RequestPath != "" || run.Decision.AnswerPath != "" {
 		return "问题绑定了已移除的 sidecar-answer 格式；保留状态并转入人工恢复，不导入答案文件"
 	}
-	if run.Backend == "local" || run.Protocol == "local_process" {
-		return "local continuation 当前不受支持；保留原问题，通过服务恢复入口继续核验"
+	if run.WorkflowVersion != steerline.MinimalWorkflowVersion || run.ExecutionID == "" || run.AttemptID == "" || run.Decision.AttemptID != run.AttemptID {
+		return "问题未绑定当前 native WorkflowRun、Execution 和 attempt；保留原问题并转入只读恢复核验"
 	}
-	if run.Backend != "orca" || run.Protocol != "orca_terminal_v2" {
+	if run.Backend == "local" && run.Protocol != "local_process" || run.Backend == "orca" && run.Protocol != "orca_terminal_v2" || run.Backend != "local" && run.Backend != "orca" {
 		return "原执行后端/协议不支持决策续跑"
 	}
 	connection := state.snapshot.Connection
@@ -1253,9 +1300,6 @@ func renderStopConfirmation(m Model, state projectState, height int) string {
 		} else {
 			lines = append(lines, "目标服务实例："+safeTerminalText(m.confirm.instance))
 		}
-		if m.confirm.action == "accept_result" {
-			lines = append(lines, "result 文件："+safeTerminalText(m.confirm.resultPath), fmt.Sprintf("冻结结果字节：%d · SHA-256：%s", len(m.confirm.resultBytes), m.confirm.resultSHA256), "task/run："+safeTerminalText(m.confirm.resultTaskID+" / "+m.confirm.resultRunID), "摘要："+safeTerminalText(m.confirm.resultSummary), "PR："+safeTerminalText(m.confirm.resultPRURL), "worktree："+safeTerminalText(m.confirm.resultWorktree)+" · base："+safeTerminalText(m.confirm.resultBase), "服务会核验工作目录、base、仓库、目标分支和真实 PR 状态。")
-		}
 		if m.confirm.requireBasis {
 			lines = append(lines, "", "请填写亲自核验的停止或解除依据（最多 2000 字符）：")
 			evidence := []rune(m.confirm.basis)
@@ -1282,25 +1326,6 @@ func renderStopConfirmation(m Model, state projectState, height int) string {
 	width := max(1, m.width-2)
 	visible := fitLines(scrollLines(wrapLines(lines, width), max(0, m.confirm.scroll), height), m.width, height)
 	return strings.Join(visible, "\n")
-}
-
-func renderResultPathPicker(m Model, state projectState, height int) string {
-	dialog := m.resultPicker
-	if dialog == nil {
-		return ""
-	}
-	path := append([]rune(nil), dialog.path...)
-	if dialog.cursor >= 0 && dialog.cursor <= len(path) {
-		path = append(path, 0)
-		copy(path[dialog.cursor+1:], path[dialog.cursor:])
-		path[dialog.cursor] = '│'
-	}
-	lines := []string{"选择 recovery result 文件", "项目：" + safeTerminalText(state.ref.Name), "run_id：" + safeTerminalText(dialog.runID), "run revision：" + strconv.FormatUint(dialog.revision, 10), "输入已有文件的完整路径：", safeTerminalText(string(path)), "服务将冻结最多 2 MiB 原始字节，显示 task/run、PR、worktree、base 与摘要供最终确认。"}
-	if dialog.error != "" {
-		lines = append(lines, styleAlert.Render(safeTerminalText(dialog.error)))
-	}
-	lines = append(lines, "Enter 读取并预览 · Esc 取消")
-	return strings.Join(fitLines(wrapLines(lines, m.width), m.width, height), "\n")
 }
 
 func renderAnswerDialog(m Model, state projectState, height int) string {
@@ -1382,28 +1407,63 @@ func (m Model) answerRunTask(state projectState, dialog *decisionAnswerDialog) s
 }
 
 func renderFooter(m Model, state projectState) string {
+	if m.help {
+		return "? / Esc 关闭帮助"
+	}
 	if m.confirm != nil {
 		if m.confirm.requireBasis {
-			return "PgUp/PgDn 阅读完整结果 · 输入亲自核验的依据 · F2 确认提交 · Esc 取消"
+			return "输入亲自核验的依据 · F2 确认提交 · Esc 取消"
 		}
 		return "↑↓/PgUp/PgDn 阅读完整确认内容 · Enter/y 确认 · Esc/n 取消"
-	}
-	if m.resultPicker != nil {
-		return "输入完整 result 文件路径 · ←→移动光标 · Backspace/Delete 编辑 · Enter 读取固定字节并预览 · Esc 取消"
 	}
 	if m.answer != nil {
 		return "↑↓ 选择声明选项/移动光标 · Tab 切换选项与说明 · Enter 换到说明/插入换行 · F2 明确提交 · PgUp/PgDn 浏览完整问题 · Esc 丢弃草稿"
 	}
 	if state.panel == 6 {
-		return "r 重新核验 · R retry · m mark-stopped · z accept-result · [/]选择 blocker · v resolve-command · Enter/ Esc 返回"
+		return "r 重新核验 · R retry · m mark-stopped · [/]选择 blocker · v resolve-command · Enter/ Esc 返回"
 	}
-	if m.width < 100 {
-		return "↑↓选择/滚动 · ←→项目 · t列表 · d详情 · a回答/活动 · c会话 · f正文 · v历史 · u恢复核验\n" + "s开始 · m模式 · p暂停/恢复 · x停服 · i查request · q退出\n" + ",/.轮次 · e折叠 · =保持展开 · o过程正文 · n最终回复 · y更多"
+	if state.ref.Legacy != nil {
+		return "←→ 项目 · ↑↓ 选择/滚动 · t 列表 · d 详情 · q 退出"
 	}
-	return "↑↓ 选择/滚动 · PgUp/PgDn 阅读 · ←→ 项目 · 1-7 筛选 · Enter 详情 · s 开始 · a 回答/活动 · m 手动/自动 · p 暂停/恢复 · x 停止 · i 查询 request · d/c/f 面板 · v 决策历史 · u 恢复核验 · ,/. 轮次 · e 折叠 · = 保持展开 · o 正文 · n final · q 退出"
+	parts := []string{"←→ 项目", "↑↓ 选择/滚动"}
+	row := m.selectedRow(m.selected)
+	if row != nil && row.kind == rowReady && candidateActionReason(state.ref, state.snapshot, m.clock.Now()) == "" {
+		parts = append(parts, "s 开始")
+	}
+	if row != nil && row.run != nil && row.run.Decision != nil && row.run.Decision.Status == "pending" && strings.HasPrefix(decisionAnswerAvailability(state, row), "提交后") {
+		parts = append(parts, "a 回答")
+	}
+	connection := state.snapshot.Connection
+	if rt := connection.Snapshot.Runtime; rt != nil && connection.State == steerline.ConnectionConnected && connection.CanControl {
+		if hasCapability(rt, "set_dispatch_mode") {
+			parts = append(parts, "m 模式")
+		}
+		pauseAction, label := "pause_dispatch", "p 暂停"
+		if rt.Control.DispatchPaused {
+			pauseAction, label = "resume_dispatch", "p 恢复"
+		}
+		if hasCapability(rt, pauseAction) {
+			parts = append(parts, label)
+		}
+	}
+	if connection.CanStop {
+		parts = append(parts, "x 停服")
+	}
+	parts = append(parts, "? 帮助", "q 退出")
+	return strings.Join(parts, " · ")
 }
 
-func joinLines(left, right []string, height int) string {
+func renderHelp(state projectState) []string {
+	lines := []string{"快捷键", "", "←/→  切换项目", "↑/↓  选择任务或滚动当前面板", "t/d  列表 / 详情", "q    退出控制台；服务继续运行"}
+	if state.ref.Legacy != nil {
+		return append(lines, "", "旧 Beads 项目只读；控制操作不可用。")
+	}
+	return append(lines,
+		"", "任务与服务", "1–7  筛选任务和运行", "s    开始选中的 Ready 任务", "m/p  派发模式 / 暂停或恢复", "x    停止服务（需确认）", "i    查询最近控制请求",
+		"", "运行与会话", "a/c/f  活动 / 会话 / 最终回复", "v/u    决策历史 / 恢复核验", "[ / ]  切换 attempt", ", / .  选择轮次", "e / =  折叠 / 保持展开", "y / n  更多会话 / 下一条最终回复")
+}
+
+func joinLines(left, right []string, leftWidth, height int) string {
 	var lines []string
 	for i := 0; i < height; i++ {
 		l, r := "", ""
@@ -1413,7 +1473,8 @@ func joinLines(left, right []string, height int) string {
 		if i < len(right) {
 			r = right[i]
 		}
-		lines = append(lines, l+" "+r)
+		padding := max(0, leftWidth-lipgloss.Width(l))
+		lines = append(lines, l+strings.Repeat(" ", padding)+"│"+r)
 	}
 	return strings.Join(lines, "\n")
 }

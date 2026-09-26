@@ -16,18 +16,14 @@ import (
 	"time"
 )
 
-// fakeOrca is a protocol-level stand-in for the Orca CLI. `worktree create`
-// really creates a git worktree so Steerline's workspace verification runs for
-// real; `terminal send` writes the R-a result file. No Orca runtime is needed.
+// fakeOrca is a protocol-level stand-in for the supported terminal identity,
+// observation and close operations. No Orca runtime is needed.
 type fakeOrcaState struct {
 	Handle       string   `json:"handle"`
 	Incarnation  string   `json:"incarnation"`
 	Worktree     string   `json:"worktree,omitempty"`
 	Branch       string   `json:"branch,omitempty"`
-	Prompt       string   `json:"prompt,omitempty"`
-	Answered     bool     `json:"answered,omitempty"`
 	Exited       bool     `json:"exited,omitempty"`
-	Sends        int      `json:"sends,omitempty"`
 	Closed       bool     `json:"closed,omitempty"`
 	OutputLines  []string `json:"output_lines,omitempty"`
 	OldestCursor int      `json:"oldest_cursor,omitempty"`
@@ -83,8 +79,6 @@ func fakeOrca(stateDir string, argv []string) int {
 			return 1
 		}
 		switch argv[1] {
-		case "create":
-			return fakeOrcaCreate(stateDir, argv[2:])
 		case "rm":
 			return fakeOrcaRemove(argv[2:])
 		}
@@ -95,10 +89,6 @@ func fakeOrca(stateDir string, argv []string) int {
 		switch argv[1] {
 		case "create":
 			return fakeOrcaTerminalCreate(stateDir, argv[2:])
-		case "wait":
-			return fakeOrcaWait()
-		case "send":
-			return fakeOrcaSend(stateDir, argv[2:])
 		case "show":
 			return fakeOrcaShow(stateDir, argv[2:])
 		case "read":
@@ -174,40 +164,6 @@ func fakeOrcaTerminalCreate(stateDir string, argv []string) int {
 	return fakeOrcaOK(map[string]any{"terminal": map[string]any{"handle": handle, "worktreePath": filepath.ToSlash(selector), "branch": "refs/heads/" + state.Branch}})
 }
 
-func fakeOrcaCreate(stateDir string, argv []string) int {
-	name := arg(argv, "--name")
-	baseRef := arg(argv, "--base-branch")
-	cwd, _ := os.Getwd()
-	wt := filepath.Join(filepath.Dir(cwd), "orca-worktrees", name)
-	if e := os.MkdirAll(filepath.Dir(wt), 0700); e != nil {
-		return fakeOrcaErr("mkdir", e.Error())
-	}
-	git, e := exec.LookPath("git")
-	if e != nil {
-		return fakeOrcaErr("git", e.Error())
-	}
-	branch := "orca/" + name
-	if out, e := exec.Command(git, "-C", cwd, "worktree", "add", "--no-track", "-b", branch, "--", wt, baseRef).CombinedOutput(); e != nil {
-		return fakeOrcaErr("worktree", string(out))
-	}
-	head, _ := exec.Command(git, "-C", wt, "rev-parse", "HEAD").Output()
-	handle := "term_fake_" + name
-	if e := writeFakeOrcaState(stateDir, fakeOrcaState{Handle: handle, Incarnation: "inc_" + name, Worktree: wt, Branch: branch, Prompt: fakePromptPath(arg(argv, "--prompt"))}); e != nil {
-		return fakeOrcaErr("state", e.Error())
-	}
-	if os.Getenv("STEERLINE_FAKE_ORCA_CREATE_RESPONSE_LOST") == "1" {
-		return 2 // External worktree/terminal exist, but the caller got no identity.
-	}
-	reportedBranch := branch
-	if os.Getenv("STEERLINE_FAKE_ORCA_WRONG_WORKSPACE_BRANCH") == "1" {
-		reportedBranch = "orca/unverified-branch"
-	}
-	return fakeOrcaOK(map[string]any{
-		"worktree":            map[string]any{"id": "fake::" + filepath.ToSlash(wt), "path": filepath.ToSlash(wt), "branch": "refs/heads/" + reportedBranch, "head": strings.TrimSpace(string(head))},
-		"agentTerminalHandle": handle,
-	})
-}
-
 func fakeOrcaRemove(argv []string) int {
 	selector := arg(argv, "--worktree")
 	if i := strings.Index(selector, "::"); i >= 0 {
@@ -217,102 +173,6 @@ func fakeOrcaRemove(argv []string) int {
 		}
 	}
 	return fakeOrcaOK(map[string]any{"removed": true})
-}
-
-func fakeOrcaWait() int {
-	return fakeOrcaOK(map[string]any{"wait": map[string]any{"satisfied": true, "status": "idle"}})
-}
-
-func fakeOrcaSend(stateDir string, argv []string) int {
-	st, e := readFakeOrcaState(stateDir, arg(argv, "--terminal"))
-	if e != nil {
-		return fakeOrcaErr("terminal_handle_stale", e.Error())
-	}
-	if os.Getenv("STEERLINE_FAKE_ORCA_SEND_RECEIPT") == "reject" {
-		return fakeOrcaOK(map[string]any{"send": map[string]any{"handle": st.Handle, "accepted": false}})
-	}
-	src := fakePromptPath(arg(argv, "--text"))
-	if src != "" {
-		if _, e := os.Stat(src); e != nil {
-			return fakeOrcaErr("prompt_missing", e.Error())
-		}
-		st.Prompt = src
-		st.Answered = false
-	} else {
-		// Continuation sends reference continue.txt, not the dispatch pointer; the
-		// stored dispatch prompt still carries task_id/run_id/base_commit.
-		if e := fakeWriteResult(st.Worktree, st.Prompt, false); e != nil {
-			return fakeOrcaErr("prompt", e.Error())
-		}
-		st.Answered = true
-	}
-	st.Sends++
-	if e := writeFakeOrcaState(stateDir, st); e != nil {
-		return fakeOrcaErr("state", e.Error())
-	}
-	if os.Getenv("STEERLINE_FAKE_ORCA_SEND_RESPONSE_LOST") == "1" {
-		return 2 // The terminal accepted input, but its response was lost.
-	}
-	handle, incarnation := st.Handle, st.Incarnation
-	switch os.Getenv("STEERLINE_FAKE_ORCA_SEND_RECEIPT") {
-	case "wrong_handle":
-		handle = "replacement-handle"
-	case "wrong_incarnation":
-		incarnation = "replacement-incarnation"
-	case "missing":
-		return fakeOrcaOK(map[string]any{})
-	}
-	code := fakeOrcaOK(map[string]any{"send": map[string]any{"handle": handle, "accepted": true, "prompt": map[string]any{"processIncarnation": incarnation, "stages": []string{"input_accepted", "turn_started"}}}})
-	if os.Getenv("STEERLINE_FAKE_ORCA_SEND_RECEIPT") == "exit_error" {
-		return 2
-	}
-	return code
-}
-
-// fakePromptPath extracts the absolute prompt path from the pointer text
-// "Read and execute <path> now. Follow it exactly.".
-func fakePromptPath(text string) string {
-	if i := strings.Index(text, "execute "); i >= 0 {
-		rest := text[i+len("execute "):]
-		if j := strings.Index(rest, " now."); j >= 0 {
-			return rest[:j]
-		}
-	}
-	return ""
-}
-
-func fakeWriteResult(worktree, promptPath string, decision bool) error {
-	raw, e := os.ReadFile(promptPath)
-	if e != nil {
-		return e
-	}
-	get := func(key string) string {
-		m := regexp.MustCompile(`"` + key + `": "([^"]+)"`).FindSubmatch(raw)
-		if len(m) != 2 {
-			return ""
-		}
-		return string(m[1])
-	}
-	result := Result{
-		TaskID:       get("task_id"),
-		RunID:        get("run_id"),
-		WorktreePath: ptr(worktree),
-		BaseCommit:   ptr(get("base_commit")),
-		Summary:      ptr("orca hosted done"),
-	}
-	if decision {
-		result.Outcome = "needs_decision"
-		result.Decision = &DecisionRequest{
-			Question:    "Which option should the migration take?",
-			Options:     []DecisionOption{{ID: "a", Label: "Keep a data-only compat type"}, {ID: "b", Label: "Relax the persistence layer"}},
-			Recommended: "a",
-		}
-	} else {
-		result.Outcome = "pr_submitted"
-		result.PRURL = ptr(os.Getenv("STEERLINE_FAKE_ORCA_PR_BASE") + "/owner/repo/pulls/1")
-	}
-	b, _ := json.Marshal(result)
-	return os.WriteFile(filepath.Join(worktree, orcaResultFile), b, 0600)
 }
 
 func fakeOrcaShow(stateDir string, argv []string) int {
@@ -334,15 +194,6 @@ func fakeOrcaShow(stateDir string, argv []string) int {
 		}
 		if delay, err := strconv.Atoi(os.Getenv("STEERLINE_FAKE_ORCA_SLOW_SHOW_MS")); err == nil && delay > 0 {
 			time.Sleep(time.Duration(delay) * time.Millisecond)
-		}
-	}
-	// Model the agent answering once its prompt exists: Steerline calls show
-	// right after writing prompt.txt, so the R-a result lands deterministically.
-	// With STEERLINE_FAKE_ORCA_DECISION the first answer is a decision request; the
-	// decision is only satisfied once Steerline sends the continuation.
-	if st.Prompt != "" && !st.Answered {
-		if _, e := os.Stat(st.Prompt); e == nil {
-			_ = fakeWriteResult(st.Worktree, st.Prompt, os.Getenv("STEERLINE_FAKE_ORCA_DECISION") != "")
 		}
 	}
 	inc := st.Incarnation
@@ -607,6 +458,7 @@ func TestOrcaPreflightDoesNotRequireUnusedLocalCodex(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.c.Host = "orca"
+	fixtureGit(t, f.c.Repository, "remote", "add", "web", f.server.URL+"/owner/repo.git")
 	f.c.Remote = "web"
 	f.c.Orca = OrcaConfig{Executable: exe, Args: []string{"--fake", "orca", stateDir}, Shell: "cmd.exe", WaitTimeout: "5s"}
 	f.c.Codex.Executable = filepath.Join(stateDir, "missing-codex.exe")
@@ -691,7 +543,7 @@ func TestOrcaDetachObservationIsRepeatableAndRefLocal(t *testing.T) {
 			t.Fatal(err)
 		}
 		proc := &orcaProcess{cfg: cfg, term: orcaTerminal{Handle: handle, RuntimeID: "fake-runtime", IncarnationID: state.Incarnation}}
-		workers = append(workers, superviseOrcaResult(cfg, proc, filepath.Join(dir, handle+"-missing-result"), filepath.Join(dir, handle+"-result.json")))
+		workers = append(workers, superviseOrcaStep(cfg, proc, filepath.Join(dir, handle+"-missing-step-result")))
 		refs = append(refs, ExecutionRef{Backend: BackendOrca, Protocol: ProtocolOrcaTerminalV2, Target: targetFor(cfg), External: proc.Identity()})
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -804,206 +656,5 @@ func TestOrcaSameRefObservationsDoNotOverlapOrLeakGate(t *testing.T) {
 	orcaObservationGates.Unlock()
 	if remaining != 0 {
 		t.Fatalf("observation gates leaked: %d", remaining)
-	}
-}
-
-func TestServiceShutdownPersistsOrcaStopEvidence(t *testing.T) {
-	t.Setenv("STEERLINE_FAKE_ORCA_CLOSE_SHOW_UNCERTAIN", "1")
-	dir := t.TempDir()
-	cfg := orcaTestConfig(t, dir, "fail")
-	cfg.ShutdownGrace = "20ms"
-	handle := "terminal-service-stop"
-	if err := writeFakeOrcaState(dir, fakeOrcaState{Handle: handle, Incarnation: "inc-service-stop"}); err != nil {
-		t.Fatal(err)
-	}
-	runID, attemptID := newID(), newID()
-	identity := ProcessIdentity{Kind: "orca", Terminal: handle, RuntimeID: "fake-runtime", Incarnation: "inc-service-stop", Executable: cfg.Orca.Executable}
-	ref := ExecutionRef{Version: 1, Backend: BackendOrca, Protocol: ProtocolOrcaTerminalV2, Target: targetFor(cfg), Agent: AgentSpec{Name: "codex"}, RunID: runID, AttemptID: attemptID, WorkspacePath: dir, WorkspaceBranch: "orca/test", BaseCommit: strings.Repeat("a", 40), External: identity, Generation: identity.Incarnation}
-	if err := (executionRecords{root: dir}).saveBinding(ref); err != nil {
-		t.Fatal(err)
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	proc := &orcaProcess{cfg: cfg, term: orcaTerminal{Handle: handle, RuntimeID: identity.RuntimeID, IncarnationID: identity.Incarnation}, cancel: cancel}
-	w := &Worker{proc: proc, Events: make(chan WorkerEvent), Done: make(chan error, 1)}
-	go func() { <-ctx.Done(); close(w.Events); w.Done <- ctx.Err() }()
-	r := &Run{TaskID: "t-stop", RunID: runID, AttemptID: attemptID, Claimant: cfg.Claimant, Host: "orca", ExecutionStatus: "running", FinishTaskStatus: "pending", Process: &identity, LogPath: ptr(filepath.Join(dir, "events.jsonl"))}
-	s := &Service{Config: cfg, State: Runtime{SchemaVersion: CurrentRuntimeSchema, Runs: []*Run{r}, SlotOccupied: true, CurrentTask: ptr(r.TaskID)}, store: &Store{Path: filepath.Join(dir, "runtime.json")}, worker: w, active: r, activities: map[string]*ActivityWriter{}}
-	s.shutdown()
-	op, err := (executionRecords{root: dir}).loadOperation(runID, attemptID, "stop-"+attemptID)
-	if err != nil || op.Status != OperationConfirmed {
-		t.Fatalf("stop operation=%#v err=%v", op, err)
-	}
-	if s.State.SlotOccupied || s.worker != nil {
-		t.Fatalf("confirmed stop retained slot/worker: slot=%v worker=%v", s.State.SlotOccupied, s.worker)
-	}
-}
-
-func TestServiceShutdownRetainsSlotWhenExactStopReceiptCannotPersist(t *testing.T) {
-	dir := t.TempDir()
-	cfg := orcaTestConfig(t, dir, "")
-	cfg.ShutdownGrace = "20ms"
-	handle := "terminal-stop-receipt-fault"
-	if err := writeFakeOrcaState(dir, fakeOrcaState{Handle: handle, Incarnation: "inc-receipt-fault"}); err != nil {
-		t.Fatal(err)
-	}
-	runID, attemptID := newID(), newID()
-	identity := ProcessIdentity{Kind: "orca", Terminal: handle, RuntimeID: "fake-runtime", Incarnation: "inc-receipt-fault", Executable: cfg.Orca.Executable}
-	ref := ExecutionRef{Version: 1, Backend: BackendOrca, Protocol: ProtocolOrcaTerminalV2, Target: targetFor(cfg), Agent: AgentSpec{Name: "codex"}, RunID: runID, AttemptID: attemptID, WorkspacePath: dir, WorkspaceBranch: "orca/test", BaseCommit: strings.Repeat("a", 40), External: identity, Generation: identity.Incarnation}
-	records := executionRecords{root: dir}
-	if err := records.saveBinding(ref); err != nil {
-		t.Fatal(err)
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	proc := &orcaProcess{cfg: cfg, term: orcaTerminal{Handle: handle, RuntimeID: identity.RuntimeID, IncarnationID: identity.Incarnation}, cancel: cancel}
-	w := &Worker{proc: proc, Events: make(chan WorkerEvent), Done: make(chan error, 1)}
-	go func() { <-ctx.Done(); close(w.Events); w.Done <- ctx.Err() }()
-	r := &Run{TaskID: "t-stop-receipt-fault", RunID: runID, AttemptID: attemptID, Claimant: cfg.Claimant, Host: "orca", ExecutionStatus: "running", FinishTaskStatus: "pending", Process: &identity, LogPath: ptr(filepath.Join(dir, "events.jsonl"))}
-	s := &Service{Config: cfg, State: Runtime{SchemaVersion: CurrentRuntimeSchema, Runs: []*Run{r}, SlotOccupied: true, CurrentTask: ptr(r.TaskID)}, store: &Store{Path: filepath.Join(dir, "runtime.json")}, worker: w, active: r, activities: map[string]*ActivityWriter{}}
-	operationPath := filepath.Join(dir, "stop-receipt-fault-injected")
-	t.Setenv("STEERLINE_FAKE_ORCA_BREAK_STOP_RECEIPT", operationPath)
-	s.shutdown()
-	if !s.State.SlotOccupied || r.ExecutionStatus != "unknown" || r.FinishTaskStatus != "blocked" {
-		t.Fatalf("unpersisted close receipt released execution: slot=%v run=%#v", s.State.SlotOccupied, r)
-	}
-	if info, err := os.Stat(operationPath); err != nil || !info.IsDir() {
-		t.Fatalf("stop receipt fault was not injected: %v", err)
-	}
-}
-
-func TestServiceShutdownRetainsSlotWhenOrcaStopLacksExitEvidence(t *testing.T) {
-	dir := t.TempDir()
-	cfg := orcaTestConfig(t, dir, "fail")
-	cfg.ShutdownGrace = "20ms"
-	handle := "terminal-service-stop-unknown"
-	if err := writeFakeOrcaState(dir, fakeOrcaState{Handle: handle, Incarnation: "inc-service-unknown"}); err != nil {
-		t.Fatal(err)
-	}
-	runID, attemptID := newID(), newID()
-	identity := ProcessIdentity{Kind: "orca", Terminal: handle, RuntimeID: "fake-runtime", Incarnation: "inc-service-unknown", Executable: cfg.Orca.Executable}
-	ref := ExecutionRef{Version: 1, Backend: BackendOrca, Protocol: ProtocolOrcaTerminalV2, Target: targetFor(cfg), Agent: AgentSpec{Name: "codex"}, RunID: runID, AttemptID: attemptID, WorkspacePath: dir, WorkspaceBranch: "orca/test", BaseCommit: strings.Repeat("a", 40), External: identity, Generation: identity.Incarnation}
-	if err := (executionRecords{root: dir}).saveBinding(ref); err != nil {
-		t.Fatal(err)
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	proc := &orcaProcess{cfg: cfg, term: orcaTerminal{Handle: handle, RuntimeID: identity.RuntimeID, IncarnationID: identity.Incarnation}, cancel: cancel}
-	w := &Worker{proc: proc, Events: make(chan WorkerEvent), Done: make(chan error, 1)}
-	go func() { <-ctx.Done(); close(w.Events); w.Done <- ctx.Err() }()
-	r := &Run{TaskID: "t-stop-unknown", RunID: runID, AttemptID: attemptID, Claimant: cfg.Claimant, Host: "orca", ExecutionStatus: "running", FinishTaskStatus: "pending", Process: &identity, LogPath: ptr(filepath.Join(dir, "events.jsonl"))}
-	s := &Service{Config: cfg, State: Runtime{SchemaVersion: CurrentRuntimeSchema, Runs: []*Run{r}, SlotOccupied: true, CurrentTask: ptr(r.TaskID)}, store: &Store{Path: filepath.Join(dir, "runtime.json")}, worker: w, active: r, activities: map[string]*ActivityWriter{}}
-	t.Setenv("STEERLINE_FAKE_ORCA_CLOSE_STAYS_LIVE", "1")
-	s.shutdown()
-	op, err := (executionRecords{root: dir}).loadOperation(runID, attemptID, "stop-"+attemptID)
-	if err != nil || op.Status != OperationUnknown {
-		t.Fatalf("stop operation=%#v err=%v", op, err)
-	}
-	if !s.State.SlotOccupied || r.ExecutionStatus != "unknown" || r.FinishTaskStatus != "blocked" {
-		t.Fatalf("unconfirmed stop released execution: slot=%v run=%#v", s.State.SlotOccupied, r)
-	}
-}
-
-// TestOrcaHostedRunProducesResult exercises the full v2 path: dispatch creates an
-// Orca worktree and launches an agent, the agent writes the R-a result file, and
-// Steerline still owns PR verification and Beads completion.
-func TestOrcaHostedRunProducesResult(t *testing.T) {
-	f := newFixture(t, task("t-1"))
-	exe, e := os.Executable()
-	if e != nil {
-		t.Fatal(e)
-	}
-	stateDir := filepath.Join(filepath.Dir(f.c.RunDir), "orca-state")
-	if e := os.MkdirAll(stateDir, 0700); e != nil {
-		t.Fatal(e)
-	}
-	f.c.Host = "orca"
-	f.c.Agent = "codex"
-	f.c.Orca = OrcaConfig{Executable: exe, Args: []string{"--fake", "orca", stateDir}, Shell: "cmd.exe", WaitTimeout: "5s"}
-	t.Setenv("STEERLINE_FAKE_ORCA_PR_BASE", f.server.URL)
-
-	ctx := context.Background()
-	s := f.service(t)
-	require(t, s.dispatch(ctx))
-	if s.worker == nil {
-		t.Fatal("orca worker was not started")
-	}
-	finishWorker(t, s)
-	run := s.State.Runs[0]
-	if run.FinishTaskStatus != "waiting_pr_merge" || run.PR.URL == nil {
-		t.Fatalf("run did not bind a PR: %+v", run)
-	}
-	if run.WorktreePath == nil || run.Process == nil || run.Process.Kind != "orca" || run.Process.Terminal == "" {
-		t.Fatalf("orca facts missing: %+v", run)
-	}
-	if canonical(*run.WorktreePath) != canonical(filepath.Join(filepath.Dir(f.c.Repository), "orca-worktrees", orcaSafeName("t-1", run.RunID))) {
-		t.Fatalf("worktree not recorded from orca: %s", *run.WorktreePath)
-	}
-	b, e := os.ReadFile(filepath.Join(f.c.RunDir, "runs", run.RunID, "result.json"))
-	require(t, e)
-	if !strings.Contains(string(b), "pr_submitted") {
-		t.Fatalf("R-a result not persisted: %s", b)
-	}
-	// Completion stays with Steerline: PR merge + Beads close.
-	f.pr("1", "merged")
-	require(t, s.pollPRs(ctx))
-	if s.State.Runs[0].FinishTaskStatus != "completed" || s.State.Runs[0].BeadsStatus != "closed" {
-		t.Fatalf("run not completed after merge: %+v", s.State.Runs[0])
-	}
-	// The journal must keep the post-worker lifecycle, not stop at worker exit.
-	act, e := os.ReadFile(filepath.Join(f.c.RunDir, "runs", run.RunID, "activity.jsonl"))
-	require(t, e)
-	for _, want := range []string{"worker_start", "result", "pr", "completion"} {
-		if !strings.Contains(string(act), want) {
-			t.Fatalf("activity journal missing %q: %s", want, act)
-		}
-	}
-}
-
-func TestOrcaLostCreateReceiptNeverStartsReplacement(t *testing.T) {
-	f := newFixture(t, task("t-1"))
-	exe, err := os.Executable()
-	if err != nil {
-		t.Fatal(err)
-	}
-	stateDir := filepath.Join(filepath.Dir(f.c.RunDir), "orca-lost-receipt")
-	if err = os.MkdirAll(stateDir, 0700); err != nil {
-		t.Fatal(err)
-	}
-	f.c.Host = "orca"
-	f.c.Agent = "codex"
-	f.c.Orca = OrcaConfig{Executable: exe, Args: []string{"--fake", "orca", stateDir}, Shell: "cmd.exe", WaitTimeout: "5s"}
-	t.Setenv("STEERLINE_FAKE_ORCA_CREATE_RESPONSE_LOST", "1")
-	s := f.service(t)
-	if err = s.dispatch(context.Background()); err == nil {
-		t.Fatal("lost Orca create receipt was treated as rejected/no side effect")
-	}
-	if len(s.State.Runs) != 1 || s.State.Runs[0].ExecutionStatus != "unknown" || !s.State.SlotOccupied || readFake(f.db).Claims["t-1"] != 1 {
-		t.Fatalf("lost create receipt released task or slot: %+v", s.State)
-	}
-	entries, err := os.ReadDir(stateDir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	count := 0
-	for _, entry := range entries {
-		if strings.HasSuffix(entry.Name(), ".json") {
-			count++
-		}
-	}
-	if count != 1 {
-		t.Fatalf("Orca external resources not captured: state files=%d", count)
-	}
-	restarted := f.service(t)
-	_ = restarted.dispatch(context.Background())
-	entries, err = os.ReadDir(stateDir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	count = 0
-	for _, entry := range entries {
-		if strings.HasSuffix(entry.Name(), ".json") {
-			count++
-		}
-	}
-	if count != 1 || readFake(f.db).Claims["t-1"] != 1 {
-		t.Fatalf("restart created a replacement Orca worktree: states=%d claims=%v", count, readFake(f.db).Claims)
 	}
 }

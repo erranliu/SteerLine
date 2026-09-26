@@ -1,4 +1,6 @@
-# merge-h-308-code 接入
+# merge-h-308-code 接入（历史记录）
+
+> Historical record from the earlier Beads-backed integration. Its dedicated config sample and completion adapter were retired by [Beads-path removal](spec/beads-path-removal.spec.md); do not follow the setup steps below as current operating instructions. Current setup uses explicit native authority, fixed project steps and center-owned delivery. See [native config](../examples/config.json), [worktree preparation](worktree-preparation.md), and [hosting](hosting.md).
 
 目标：`C:/Projects/merge-h-308-code`，Gitea `http://192.168.0.66:3000/zymobile/merge-h-308-code`，远端 origin，主线 AIRefactor（来自仓库 `.codex/gitea.json`）。检查版本为 bd 1.1.2、codex-cli 0.145.0、Gitea 1.27.1。
 
@@ -13,7 +15,7 @@
 
 手动 start-sl-task、finish-beads-task、start-bd-task 和既有生命周期脚本保留原用途。新 start/finish 在一次 codex exec 中串行执行；只有服务的 PR 轮询确认合并后才调用 completion。
 
-`examples/merge-h-308-code.json` 已指向这些新文件，并启用 completion 命令。Orca 执行使用 Codex agent、GPT-6 Luna 与 xHigh 推理强度。并发执行固定为 1。工作目录和实现分支由调度器准备，不调用默认 AIRefactor_5 的手动 worktree 技能。
+当时的 `examples/merge-h-308-code.json` 指向上述旧文件并启用了 completion 命令。该配置样例已移除，不再代表当前协议。
 
 ## 真实启动前
 
@@ -31,4 +33,4 @@ Steerline 测试覆盖 PR 未合并不调用 completion、回执 task/run/PR 错
 
 本次创建技能不执行其业务工作流：没有领取/关闭业务任务，没有真实模型开发、创建/合并业务 PR 或真实结项。已有 Beads 运行文件不纳入技能交付。
 
-详细约定见 [技能契约](skill-contract.md)、[worktree 准备](worktree-preparation.md)、[completion 协议](completion-command.md)。
+当时的约定见 [技能契约](skill-contract.md) 与 [worktree 准备](worktree-preparation.md)；结项协议已退役。
