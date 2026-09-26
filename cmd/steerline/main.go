@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -394,7 +395,7 @@ func waitServiceCommand(ctx context.Context, c steerline.Config, commandID strin
 		if readErr == nil && (current.Status == "accepted" || current.Status == "rejected" || current.Status == "failed" || current.Status == "indeterminate") {
 			return current, nil
 		}
-		if readErr != nil && !os.IsNotExist(readErr) {
+		if readErr != nil && !errors.Is(readErr, sql.ErrNoRows) && !os.IsNotExist(readErr) {
 			return steerline.CommandRecord{}, readErr
 		}
 		select {
