@@ -96,6 +96,31 @@ func renderProjectStrip(m Model) string {
 }
 
 func renderStatusLine(m Model, state projectState) string {
+	if state.ref.Legacy != nil {
+		service := projectStatus(state.ref, state.snapshot)
+		count, active := 0, 0
+		sampled := "采样：未知"
+		if legacy := state.snapshot.Legacy; legacy != nil {
+			count = len(legacy.Tasks)
+			for _, task := range legacy.Tasks {
+				if task.Status != "closed" {
+					active++
+				}
+			}
+			sampled = "采样于 " + legacy.SampledAt.Local().Format(timeLayout)
+			if legacy.ServiceStatus != "" {
+				service += " · " + legacy.ServiceStatus
+			}
+		}
+		parts := []string{"服务 " + service, fmt.Sprintf("旧 Beads 只读 · 任务 %d · 未完成 %d", count, active), sampled}
+		if state.snapshot.LegacyError != "" {
+			parts = append(parts, "查询："+safeTerminalText(state.snapshot.LegacyError))
+		}
+		if m.status != "" {
+			parts = append(parts, safeTerminalText(m.status))
+		}
+		return truncate(strings.Join(parts, "  |  "), m.width)
+	}
 	runtimeState := state.snapshot.Connection.Snapshot.Runtime
 	if runtimeState == nil {
 		runtimeState = state.snapshot.Observation.Runtime
@@ -161,6 +186,12 @@ func projectCounts(state projectState, now time.Time) (ready, cached, running, d
 
 func projectShortSummary(state projectState, now time.Time) string {
 	status := projectStatus(state.ref, state.snapshot)
+	if state.ref.Legacy != nil {
+		if state.snapshot.Legacy == nil {
+			return status
+		}
+		return fmt.Sprintf("%s · 旧任务 %d · 只读", status, len(state.snapshot.Legacy.Tasks))
+	}
 	ready, cached, running, decision, merge, attention := projectCounts(state, now)
 	current := "空闲"
 	if rt := state.snapshot.Observation.Runtime; rt != nil && rt.CurrentTask != nil && *rt.CurrentTask != "" {
@@ -176,6 +207,15 @@ func renderRows(m Model, state projectState, width, height int) []string {
 		out = append(out, styleAlert.Render("配置错误："+safeTerminalText(state.ref.Error)))
 		return out
 	}
+	if state.ref.Legacy != nil {
+		out = append(out, "旧 Beads 项目只读 · 原执行仍由旧服务结算")
+		if state.snapshot.LegacyError != "" {
+			out = append(out, styleAlert.Render("Beads 查询："+safeTerminalText(state.snapshot.LegacyError)))
+		}
+		if state.snapshot.Legacy != nil && state.snapshot.Legacy.RuntimeError != "" {
+			out = append(out, "旧运行投影："+safeTerminalText(state.snapshot.Legacy.RuntimeError))
+		}
+	}
 	if state.ref.Conflict != "" {
 		out = append(out, styleAlert.Render(safeTerminalText(state.ref.Conflict)))
 	}
@@ -190,6 +230,8 @@ func renderRows(m Model, state projectState, width, height int) []string {
 		switch {
 		case !state.snapshotLoaded:
 			out = append(out, "正在读取项目快照…")
+		case state.ref.Legacy != nil:
+			out = append(out, "旧 Beads 项目没有可显示的任务；检查只读查询诊断。")
 		case snapshot.Connection.State == steerline.ConnectionOffline || snapshot.Connection.State == steerline.ConnectionNoRecord:
 			out = append(out, "服务离线；已有运行和日志仍可查看。")
 			out = append(out, "服务入口："+safeTerminalText(serviceWindowInstruction(state.ref)))
@@ -235,6 +277,9 @@ func renderRows(m Model, state projectState, width, height int) []string {
 			} else if len(row.native.UnmetPredecessors) > 0 {
 				stateText += " · 依赖阻塞"
 			}
+		case rowLegacy:
+			prefix = "BEADS "
+			stateText = row.legacy.Status + " · 只读"
 		default:
 			stateText = runStatus(row.run)
 		}
@@ -347,6 +392,10 @@ func renderDetail(m Model, state projectState, row *consoleRow, width, height in
 	lines := []string{styleLabel.Render("详情")}
 	if row == nil {
 		lines = append(lines, renderEmptySelection(state)...)
+		return scrollLines(wrapLines(lines, width), state.detailScroll, height)
+	}
+	if row.legacy != nil {
+		lines = append(lines, renderLegacyTaskDetail(state, *row.legacy)...)
 		return scrollLines(wrapLines(lines, width), state.detailScroll, height)
 	}
 	if row.native != nil {
@@ -632,6 +681,9 @@ func renderControlAvailability(state projectState, row *consoleRow, now time.Tim
 const timeLayout = "2006-01-02 15:04:05"
 
 func renderEmptySelection(state projectState) []string {
+	if state.ref.Legacy != nil {
+		return []string{"旧 Beads 项目只读；请选择左侧任务查看依赖与旧运行。", "原执行仍由旧服务结算；s/m/p/x 在此项目不可用。", "配置路径：" + safeTerminalText(state.ref.ConfigPath)}
+	}
 	if state.snapshot.Connection.State == steerline.ConnectionOffline || state.snapshot.Connection.State == steerline.ConnectionNoRecord {
 		return []string{"服务离线 · 可以查看已有 runs 与日志", "服务入口：" + safeTerminalText(serviceWindowInstruction(state.ref)), "配置路径：" + safeTerminalText(state.ref.ConfigPath), terminalCapabilities()}
 	}
