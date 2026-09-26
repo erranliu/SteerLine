@@ -92,6 +92,7 @@
 - [viewer 真实决策渲染回执](orca-probe/samples/spec03-supervised-viewer-decision-live-2026-09-26.json)在远端业务问题到达前启动只读探针，中心 SQLite 的 Decision 创建时间到 viewer `FileSource.Snapshot` 与同一 `Model.View()` 完成仅 126 ms，读取/渲染耗时 76 ms；[发布状态渲染回执](orca-probe/samples/spec03-supervised-viewer-publish-live-2026-09-26.json)在真实 PR 发布前启动，中心 publish Attempt 更新时间到 PR URL 可见为 276 ms，读取/渲染耗时 218 ms，均满足 2 秒目标。两项未使用屏幕截图或可见 TUI 终端，端到端显示仍需独立视觉验收。
 - 原生任务来源的入口复核发现三处阻断：`validateNativeWorkflow` 未允许 `orca_supervised` 的 `execution_site=target`，`dispatchNative` 与手动 retry 要求该后端不支持的 `stop` 能力，且在 Orca 创建新 worktree 前把本机计划路径写成远端 Worktree ID。现已沿用现有原生任务权威，允许目标端步骤契约、改查 `message_inbox`/`reply_continue`/`resource_settlement`，并让 prepare 的 Worktree ID 留空直至 Orca 返回精确身份；固定 `native-task/v1` 契约上下文由中心原 Step Input 校验后随受监管任务发送，远端 prepare 的上下文不提前依赖本机 worktree 路径，仍拒绝未验证的远端环境变量注入。定向测试覆盖原生目标端契约、未绑定 worktree 的 prepare 上下文、远端任务文本身份及异身份拒绝；真正的原生任务在远端发布、合并及中心结项尚无真机回执，能力报告仍阻止生产领取。
 - 现存独立门槛：真实远端 worker 活跃时由 Windows 可见服务窗口关窗并重开原中心；实际可见 viewer TUI 的端到端画面取证；P10 先前管理员/UAC 设置弹窗及人工处理的完整回执；原生任务来源的真实远端闭环（若其项目层已交付）。当前 `orca_supervised` 的能力报告和生产 claim 保持 `not_tested`/阻断；上述缺口不能由 Beads 来源真机样本、viewer 的纯渲染时延或本机原生夹具替代。
+- 最终代码的全仓回归 `go test ./... -count=1 -timeout 30m` 退出码 0（`internal/steerline` 1521.494 秒，console 1.067 秒，remoteprotocol 0.576 秒，viewer 2.002 秒）；`go vet ./...` 退出码 0。原生目标端契约、未绑定远端 worktree 的 prepare 上下文及受监管结果重放的定向测试也通过。全部 45 份 2026-09-26 JSON 样本可解析，未发现 capability 或 API key 格式的凭据，`gofmt` 与 `git diff --check` 无错误。
 
 ## 验证与交接
 
