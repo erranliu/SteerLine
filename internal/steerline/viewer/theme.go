@@ -14,7 +14,7 @@ var (
 )
 
 // deliveryBadge is the primary badge. It reflects the SteerLine delivery axis
-// (finish_task_status plus the pending-decision pause), not the Beads status.
+// (finish_task_status plus the pending-decision pause), not task status.
 func deliveryBadge(r *runRow) string {
 	if r == nil || r.run == nil {
 		return "IDLE"

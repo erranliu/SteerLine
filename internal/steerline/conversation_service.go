@@ -22,15 +22,15 @@ func (s *Service) recordConversationEvent(run *Run, source WorkerEvent) (retErr 
 		return nil
 	}
 	executionID := run.ExecutionID
-	if executionID == "" {
-		executionID = legacyExecutionID(run.RunID)
+	if !stableExecutionID(executionID) {
+		return nativeErr("contract_mismatch", "conversation event has no fixed native execution identity")
 	}
 	attemptID := source.AttemptID
 	if attemptID == "" {
 		attemptID = run.AttemptID
 	}
-	if attemptID == "" {
-		attemptID = run.RunID
+	if !stableExecutionID(attemptID) {
+		return nativeErr("contract_mismatch", "conversation event has no fixed native attempt identity")
 	}
 	segment := nonEmpty(source.SourceSegment, "local-jsonl-v1:"+source.SourceIdentity)
 	mapperKey := run.RunID + ":" + attemptID + ":" + segment
@@ -159,15 +159,15 @@ func verifyConversationSourceBytes(path, expectedFileID string, offset, length i
 
 func (s *Service) recordOrcaTerminalEvent(run *Run, source WorkerEvent) error {
 	executionID := run.ExecutionID
-	if executionID == "" {
-		executionID = legacyExecutionID(run.RunID)
+	if !stableExecutionID(executionID) {
+		return nativeErr("contract_mismatch", "Orca conversation event has no fixed native execution identity")
 	}
 	attemptID := source.AttemptID
 	if attemptID == "" {
 		attemptID = run.AttemptID
 	}
-	if attemptID == "" {
-		attemptID = run.RunID
+	if !stableExecutionID(attemptID) {
+		return nativeErr("contract_mismatch", "Orca conversation event has no fixed native attempt identity")
 	}
 	segment := nonEmpty(source.SourceSegment, "orca-terminal-v2-unsegmented")
 	eventID := source.SourceEventID
@@ -224,37 +224,6 @@ func (s *Service) recordOrcaTerminalEvent(run *Run, source WorkerEvent) error {
 	return err
 }
 
-func (s *Service) recordOrcaTurnStarted(run *Run, ref ExecutionRef, operation Operation, receipt ReplyReceipt) error {
-	if run == nil || s.domainStore == nil || ref.Backend != BackendOrca || !receipt.InputAccepted || !receipt.TurnStarted {
-		return nil
-	}
-	executionID := run.ExecutionID
-	if executionID == "" {
-		executionID = legacyExecutionID(run.RunID)
-	}
-	attemptID := run.AttemptID
-	if attemptID == "" {
-		attemptID = run.RunID
-	}
-	sessionID := "terminal:" + ref.External.Terminal + ":" + ref.External.Incarnation
-	segment := "orca-terminal-session-v1:" + digestValue(ref.External)
-	turnID := "reply:" + operation.ID
-	event := ConversationEvent{
-		Version: ConversationVersion, ProjectID: s.Config.identity, TaskID: run.DomainTaskID,
-		WorkflowID: run.RunID, ExecutionID: executionID, AttemptID: attemptID,
-		Backend: ref.Backend, Protocol: ref.Protocol, Agent: ref.Agent.Name, TargetID: ref.Target.ID,
-		ExternalRef: conversationExternalRef(&ref.External), Source: "orca-reply-receipt", SourceSegment: segment,
-		SourceIdentity: "terminal:" + ref.External.RuntimeID + ":" + ref.External.Terminal + ":" + ref.External.Incarnation,
-		SessionID:      sessionID, SessionQuality: IdentityDerived, TurnID: turnID, TurnQuality: IdentityDerived,
-		SourceEventID: "operation:" + operation.ID, SourceEventQuality: IdentityDerived,
-		Type: ConversationTurnStarted, Phase: MessagePhaseUnknown, FinalAvailability: FinalUnknown,
-		ReceivedAt: now(), Attributes: map[string]any{"input_accepted": true, "turn_started": true},
-		Evidence: map[string]string{"turn_boundary": "reply-receipt.prompt.stages", "derivation": "orca-terminal-reply-operation-v1"},
-	}
-	_, err := s.domainStore.CommitConversation(context.Background(), []ConversationWrite{{Event: event}}, ConversationCheckpoint{})
-	return err
-}
-
 func conversationExternalRef(identity *ProcessIdentity) string {
 	if identity == nil {
 		return ""
@@ -266,51 +235,6 @@ func conversationExternalRef(identity *ProcessIdentity) string {
 		return fmt.Sprintf("process:%d@%s", identity.PID, identity.Created)
 	}
 	return ""
-}
-
-func (s *Service) recordExecutionResult(run *Run, result Result, path string) error {
-	if run == nil || s.domainStore == nil {
-		return nil
-	}
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return err
-	}
-	sum := sha256.Sum256(raw)
-	digest := hex.EncodeToString(sum[:])
-	executionID := run.ExecutionID
-	if executionID == "" {
-		executionID = legacyExecutionID(run.RunID)
-	}
-	attemptID := run.AttemptID
-	if attemptID == "" {
-		attemptID = run.RunID
-	}
-	segment := "result-file-v1:" + digest
-	event := ConversationEvent{
-		Version: ConversationVersion, ProjectID: s.Config.identity, TaskID: run.DomainTaskID,
-		WorkflowID: run.RunID, ExecutionID: executionID, AttemptID: attemptID,
-		Backend: BackendKind(run.Backend), Protocol: ExecutionProtocol(run.Protocol), Agent: run.Agent,
-		TargetID: run.Target.ID, ExternalRef: conversationExternalRef(run.Process),
-		Source: "steerline-result", SourceSegment: segment,
-		SessionQuality: IdentityUnknown, TurnQuality: IdentityUnknown,
-		ItemID: "execution-summary", ItemQuality: IdentityDerived,
-		SourceEventID: "sha256:" + digest, SourceEventQuality: IdentityDerived,
-		Type: ConversationExecutionResult, Phase: MessagePhaseUnknown,
-		ReceivedAt: now(), Raw: &ConversationRawRef{},
-		Attributes: map[string]any{"outcome": result.Outcome, "summary_available": result.Summary != nil, "content_kind": "execution_summary"},
-		Evidence:   map[string]string{"source_record": "result.json", "result_sha256": digest, "authority": "structured-result-only"},
-	}
-	write := ConversationWrite{Event: event, Raw: raw, BodySource: "structured-execution-result"}
-	if result.Summary != nil {
-		write.Body = []byte(*result.Summary)
-		write.BodyMode = "complete"
-		event.ItemKey = conversationItemKey(event, event.ItemID)
-		write.Event = event
-	}
-	checkpoint := ConversationCheckpoint{ProjectID: event.ProjectID, ExecutionID: executionID, AttemptID: attemptID, Source: event.Source, SourceSegment: segment, SourceIdentity: "result-file:" + run.RunID + ":" + attemptID, Generation: digest, Cursor: digest, LocalSeq: 1}
-	_, err = s.domainStore.CommitConversation(context.Background(), []ConversationWrite{write}, checkpoint)
-	return err
 }
 
 func (s *Service) recordMinimalExecutionResult(run *Run, envelope MinimalStepResultEnvelope, path string) error {

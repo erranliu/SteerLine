@@ -3,14 +3,9 @@ package console
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"os"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -91,17 +86,6 @@ type decisionAnswerDialog struct {
 	error           string
 }
 
-type resultPathDialog struct {
-	projectKey string
-	instance   string
-	runID      string
-	revision   uint64
-	requestID  string
-	path       []rune
-	cursor     int
-	error      string
-}
-
 type projectState struct {
 	ref  ProjectRef
 	view ProjectView
@@ -167,28 +151,19 @@ type projectState struct {
 }
 
 type confirmAction struct {
-	scroll         int
-	requireBasis   bool
-	basisCursor    int
-	basisError     string
-	projectKey     string
-	instance       string
-	revision       uint64
-	action         string
-	taskID         string
-	requestID      string
-	runID          string
-	decisionID     string
-	resultBytes    []byte
-	resultSHA256   string
-	resultSummary  string
-	resultPRURL    string
-	resultPath     string
-	resultWorktree string
-	resultBase     string
-	resultTaskID   string
-	resultRunID    string
-	basis          string
+	scroll       int
+	requireBasis bool
+	basisCursor  int
+	basisError   string
+	projectKey   string
+	instance     string
+	revision     uint64
+	action       string
+	taskID       string
+	requestID    string
+	runID        string
+	decisionID   string
+	basis        string
 }
 
 type Model struct {
@@ -207,11 +182,10 @@ type Model struct {
 	prefs    ViewFile
 	prefsErr string
 
-	confirm      *confirmAction
-	answer       *decisionAnswerDialog
-	resultPicker *resultPathDialog
-	status       string
-	finalIndex   int
+	confirm    *confirmAction
+	answer     *decisionAnswerDialog
+	status     string
+	finalIndex int
 
 	runFocus string
 }
@@ -625,7 +599,7 @@ func (m Model) submitServiceAction(index int, action, targetID, requestedBy, com
 
 func validRecoveryAction(action string) bool {
 	switch action {
-	case "retry_run", "mark_stopped", "accept_result", "resolve_command":
+	case "retry_run", "mark_stopped", "resolve_command":
 		return true
 	default:
 		return false
@@ -796,8 +770,6 @@ func applyDecisionCommandResult(state *projectState, action *actionState, comman
 			action.Message = "新 attempt 已启动并保存执行身份"
 		case "mark_stopped":
 			action.Message = "原执行停止事实已记录；任务和工作目录保留"
-		case "accept_result":
-			action.Message = "固定结果已接回；PR 合并核验仍在进行"
 		case "resolve_command":
 			action.Message = "指定 blocker 已按证据解除；原指令未重放"
 		}
@@ -1830,9 +1802,6 @@ func (m Model) changeFilter(filter int) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if m.resultPicker != nil {
-		return m.handleResultPickerKey(key)
-	}
 	if m.answer != nil {
 		return m.handleDecisionAnswerKey(key)
 	}
@@ -1858,8 +1827,6 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m.prepareRecoveryAction("retry_run")
 		case "m":
 			return m.prepareRecoveryAction("mark_stopped")
-		case "z":
-			return m.prepareRecoveryAction("accept_result")
 		case "v":
 			return m.prepareRecoveryAction("resolve_command")
 		case "[", "]":
@@ -2479,19 +2446,6 @@ func (m Model) prepareRecoveryAction(action string) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		confirm.revision, confirm.requireBasis = report.RunRevision, true
-	case "accept_result":
-		if !strings.HasPrefix(report.AcceptResultReason, "confirm") {
-			m.status = "accept_result 不可用：" + report.AcceptResultReason
-			return m, nil
-		}
-		if !hasCapability(runtimeState, action) {
-			m.status = "服务未声明 accept_result 能力"
-			return m, nil
-		}
-		m.resultPicker = &resultPathDialog{projectKey: state.ref.Key, instance: runtimeState.Service.InstanceID, runID: report.RunID, revision: report.RunRevision, requestID: requestID, path: []rune(report.ResultPath), cursor: len([]rune(report.ResultPath))}
-		m.confirm = nil
-		m.status = "选择已有 result 文件；服务只会收到后续预览锁定的字节"
-		return m, nil
 	case "resolve_command":
 		if len(report.Blockers) == 0 || state.recoveryBlockerIndex < 0 || state.recoveryBlockerIndex >= len(report.Blockers) {
 			m.status = "没有可解除的 control blocker"
@@ -2560,11 +2514,7 @@ func (m Model) beginRecoveryAction(confirm *confirmAction) (tea.Model, tea.Cmd) 
 		return m, nil
 	}
 	requestedBy := steerline.DefaultRequestedBy()
-	body := steerline.RecoveryCommandBody{ConfirmedProcessStopped: confirm.action == "mark_stopped" || confirm.action == "accept_result" || confirm.action == "retry_run", ConfirmationBasis: confirm.basis}
-	if confirm.action == "accept_result" {
-		body.ResultBase64 = base64.StdEncoding.EncodeToString(confirm.resultBytes)
-		body.ResultSHA256 = confirm.resultSHA256
-	}
+	body := steerline.RecoveryCommandBody{ConfirmedProcessStopped: confirm.action == "mark_stopped" || confirm.action == "retry_run", ConfirmationBasis: confirm.basis}
 	if confirm.action == "resolve_command" {
 		body.ConfirmationBasis = confirm.basis
 	}
@@ -2580,137 +2530,6 @@ func (m Model) beginRecoveryAction(confirm *confirmAction) (tea.Model, tea.Cmd) 
 	m.confirm = nil
 	m.status = fmt.Sprintf("恢复命令已发布 · %s · command_id %s", confirm.action, confirm.requestID)
 	return m, m.submitServiceAction(index, confirm.action, targetID, requestedBy, confirm.requestID, confirm.revision, body)
-}
-
-func (m Model) handleResultPickerKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
-	dialog := m.resultPicker
-	if dialog == nil {
-		return m, nil
-	}
-	switch key.String() {
-	case "esc", "ctrl+c":
-		m.resultPicker = nil
-		m.status = "已取消结果选择；未提交 accept_result"
-		return m, nil
-	case "enter":
-		return m.freezeAcceptResultPreview()
-	case "left":
-		if dialog.cursor > 0 {
-			dialog.cursor--
-		}
-		return m, nil
-	case "right":
-		if dialog.cursor < len(dialog.path) {
-			dialog.cursor++
-		}
-		return m, nil
-	case "home":
-		dialog.cursor = 0
-		return m, nil
-	case "end":
-		dialog.cursor = len(dialog.path)
-		return m, nil
-	case "backspace":
-		if dialog.cursor > 0 {
-			dialog.path = append(dialog.path[:dialog.cursor-1], dialog.path[dialog.cursor:]...)
-			dialog.cursor--
-		}
-		dialog.error = ""
-		return m, nil
-	case "delete":
-		if dialog.cursor < len(dialog.path) {
-			dialog.path = append(dialog.path[:dialog.cursor], dialog.path[dialog.cursor+1:]...)
-		}
-		dialog.error = ""
-		return m, nil
-	}
-	if key.Type == tea.KeyRunes {
-		insert := make([]rune, 0, len(key.Runes))
-		for _, char := range key.Runes {
-			if char >= 0x20 && char != 0x7f && char != '\n' && char != '\r' && char != '\t' {
-				insert = append(insert, char)
-			}
-		}
-		if len(insert) > 0 {
-			joined := make([]rune, 0, len(dialog.path)+len(insert))
-			joined = append(joined, dialog.path[:dialog.cursor]...)
-			joined = append(joined, insert...)
-			joined = append(joined, dialog.path[dialog.cursor:]...)
-			dialog.path = joined
-			dialog.cursor += len(insert)
-			dialog.error = ""
-		}
-	}
-	return m, nil
-}
-
-func (m Model) freezeAcceptResultPreview() (tea.Model, tea.Cmd) {
-	dialog := m.resultPicker
-	if dialog == nil {
-		return m, nil
-	}
-	index := m.projectIndex(dialog.projectKey)
-	if index < 0 || index != m.selected {
-		dialog.error = "项目已变化；结果路径保留，请返回原项目"
-		return m, nil
-	}
-	state := &m.projects[index]
-	report := state.recoveryReport
-	runtimeState := state.snapshot.Connection.Snapshot.Runtime
-	if report == nil || runtimeState == nil || runtimeState.Service.InstanceID != dialog.instance || report.RunID != dialog.runID || report.RunRevision != dialog.revision {
-		dialog.error = "stale_revision：核验报告或服务实例已变化；请重新核验"
-		return m, nil
-	}
-	path := strings.TrimSpace(string(dialog.path))
-	if path == "" {
-		dialog.error = "请选择一个已有 result 文件"
-		return m, nil
-	}
-	file, err := os.Open(path)
-	if err != nil {
-		dialog.error = "打开 result 文件失败：" + err.Error()
-		return m, nil
-	}
-	info, err := file.Stat()
-	if err != nil {
-		_ = file.Close()
-		dialog.error = "读取 result 文件信息失败：" + err.Error()
-		return m, nil
-	}
-	if info.Size() <= 0 || info.Size() > 2<<20 {
-		_ = file.Close()
-		dialog.error = "result 文件必须在 1 byte 到 2 MiB 之间"
-		return m, nil
-	}
-	data, err := io.ReadAll(io.LimitReader(file, (2<<20)+1))
-	closeErr := file.Close()
-	if err != nil || closeErr != nil || len(data) > 2<<20 {
-		dialog.error = "读取 result 文件失败或超过 2 MiB"
-		return m, nil
-	}
-	var selectedRun *steerline.Run
-	for _, run := range runtimeState.Runs {
-		if run != nil && run.RunID == dialog.runID {
-			selectedRun = run
-			break
-		}
-	}
-	if selectedRun == nil {
-		dialog.error = "runtime run identity disappeared"
-		return m, nil
-	}
-	result, err := steerline.ParseResultBytes(data, selectedRun)
-	if err != nil || result.Outcome != "pr_submitted" || result.PRURL == nil {
-		if err == nil {
-			err = errors.New("result must contain a submitted PR")
-		}
-		dialog.error = "结果预览拒绝：" + err.Error()
-		return m, nil
-	}
-	sum := sha256.Sum256(data)
-	m.confirm = &confirmAction{projectKey: state.ref.Key, instance: dialog.instance, revision: dialog.revision, action: "accept_result", requireBasis: true, taskID: selectedRun.TaskID, runID: selectedRun.RunID, requestID: dialog.requestID, resultBytes: append([]byte(nil), data...), resultSHA256: hex.EncodeToString(sum[:]), resultSummary: ptrString(result.Summary), resultPRURL: *result.PRURL, resultPath: path, resultWorktree: ptrString(result.WorktreePath), resultBase: ptrString(result.BaseCommit), resultTaskID: result.TaskID, resultRunID: result.RunID}
-	m.resultPicker = nil
-	return m, nil
 }
 
 func (m *Model) readyControlTarget() (*projectState, *steerline.Runtime) {

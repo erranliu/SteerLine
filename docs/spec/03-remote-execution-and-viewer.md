@@ -26,7 +26,7 @@ Windows 中心服务从 [PR 3 固定入口](pr-03-service-lifecycle.spec.md) 由
 
 配置目标是远端时，fallback 固定为 fail。任何创建前后的错误都不得改在中心执行。能力缺失、连接身份失效、仓库不可访问等问题在任务领取前尽可能发现；领取后发生的问题必须保留任务与执行记录。
 
-远端仓库包含已提交的项目步骤入口和必要脚本，project_steps 满足 Spec 02 契约。派发载荷使用远端相对路径、版本化引用或完整内容；不能引用中心 prompt/result 文件、中心私有 Git ref 或 Beads 数据库路径。旧的整段 start/finish 入口若不能在指定步骤停下，必须先拆分接入，不能直接用于 minimal-v1。
+远端仓库包含已提交的项目步骤入口和必要脚本，project_steps 满足 Spec 02 契约。派发载荷使用远端相对路径、版本化引用或完整内容；不能引用中心服务目录中的文件、中心私有 Git ref 或 task-source 数据库路径。旧的整段 start/finish 入口若不能在指定步骤停下，必须先拆分接入，不能直接用于 minimal-v1。
 
 任务来源与结项的权威留在中心，只接受显式 native 来源。远端技能获得固定的原生任务内容与已领取事实，不调用 `bd claim/close`，不复制数据库。依赖旧 start/finish、Beads 或 completion 的入口在预检拒绝；接入项目须提供并验证符合当前 project_steps 契约的步骤入口。服务端不提供过渡 Beads 来源或旧结项适配。
 
@@ -147,6 +147,6 @@ PR 合并后，由中心按固定 DAG D3 提交 TaskDelivery 与 closed。部分
 
 ## 9. 完成定义
 
-远程配置有可复现样例；上述必需验收通过；现有原生 local/本机 Orca 行为回归通过；hosting、state-model、activity、decisions、skill-contract、completion 和 data-contract 文档按实际实现更新。
+远程配置有可复现样例；上述必需验收通过；现有原生 local/本机 Orca 行为回归通过；hosting、state-model、activity、decisions、skill-contract 和 data-contract 文档按实际实现更新。
 
 完成后中心状态机实际控制准备、实现、验证、审查、发布、等待合并和结项；用户能在控制台看见各阶段、回答业务问题并恢复监督。项目基础技能/脚本只完成被派发步骤。并行 agent 与移动端不在本任务范围。

@@ -37,10 +37,10 @@ func (m Model) View() string {
 
 // --- L2 run detail ---
 
-const detailTabCount = 5
+const detailTabCount = 4
 
-var detailTabs = []string{"Summary", "Workspace", "PR", "Decision", "Result"}
-var detailTabsCompact = []string{"Sum", "Work", "PR", "Dec", "Res"}
+var detailTabs = []string{"Summary", "Workspace", "PR", "Decision"}
+var detailTabsCompact = []string{"Sum", "Work", "PR", "Dec"}
 
 // paneWidths splits the terminal into the run-list and detail/activity columns.
 // The list gets 46% so task titles stay readable; the detail pane keeps the rest.
@@ -129,7 +129,7 @@ func (m Model) detailContent(r *steerline.Run, w int) []string {
 	case 3:
 		return detailDecision(r, w)
 	default:
-		return detailResult(r, w)
+		return detailSummary(r, td, hasTD, errMsg, w)
 	}
 }
 
@@ -187,12 +187,8 @@ func detailSummary(r *steerline.Run, td steerline.TaskDetail, hasTD bool, errMsg
 	default:
 		kvs = append(kvs, detailKV{"task", "loading…"})
 	}
-	taskStatusLabel, taskStatus := "beads", r.BeadsStatus
-	if r.TaskStatus != "" {
-		taskStatusLabel, taskStatus = "task", r.TaskStatus
-	}
 	kvs = append(kvs,
-		detailKV{taskStatusLabel, taskStatus},
+		detailKV{"task", r.TaskStatus},
 		detailKV{"started", ptrTime(r.StartedAt)},
 		detailKV{"ended", ptrTime(r.EndedAt)},
 		detailKV{"elapsed", elapsedShort(r)},
@@ -218,14 +214,6 @@ func detailWorkspace(r *steerline.Run, w int) []string {
 			detailKV{"intent_path", wi.Path},
 			detailKV{"intent_branch", wi.Branch},
 			detailKV{"intent_base", wi.BaseCommit},
-		)
-	}
-	if bc := r.BeadsContext; bc != nil {
-		kvs = append(kvs,
-			detailKV{"beads_dir", bc.Directory},
-			detailKV{"project", bc.ProjectID},
-			detailKV{"database", bc.Database},
-			detailKV{"backend", bc.Backend},
 		)
 	}
 	return detailFields(kvs, w)
@@ -265,26 +253,6 @@ func detailDecision(r *steerline.Run, w int) []string {
 		detailKV{"option_id", d.OptionID},
 		detailKV{"note", d.Note},
 	)
-	return detailFields(kvs, w)
-}
-
-func detailResult(r *steerline.Run, w int) []string {
-	kvs := []detailKV{
-		{"result", ptrStr(r.ResultPath)},
-		{"session", ptrStr(r.SessionID)},
-		{"summary", ptrStr(r.Summary)},
-		{"error", ptrStr(r.Error)},
-	}
-	if p := r.Process; p != nil {
-		kvs = append(kvs,
-			detailKV{"proc_kind", p.Kind},
-			detailKV{"pid", fmt.Sprintf("%d", p.PID)},
-			detailKV{"terminal", p.Terminal},
-			detailKV{"runtime_id", p.RuntimeID},
-			detailKV{"incarnation", p.Incarnation},
-			detailKV{"executable", p.Executable},
-		)
-	}
 	return detailFields(kvs, w)
 }
 

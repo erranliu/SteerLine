@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,16 +17,13 @@ import (
 	"time"
 )
 
-func TestNativeRuntimeProjectionDoesNotShadowCenterOwnedControlCommands(t *testing.T) {
+func TestRuntimeProjectionOmitsCenterOwnedControlCommands(t *testing.T) {
 	runtime := Runtime{Repository: Repository{Identity: "native-project"}, Control: ControlState{Operation: &ControlOperation{RequestID: strings.Repeat("a", 32), Action: "set_dispatch_mode", Phase: "applying", RequestDigest: strings.Repeat("b", 64)}}}
-	if operations := runtimeOperations(runtime, true); len(operations) != 0 {
+	if operations := runtimeOperations(runtime); len(operations) != 0 {
 		t.Fatalf("native center control was projected as a second operation: %+v", operations)
 	}
-	if operations := runtimeOperations(runtime, false); len(operations) != 1 || operations[0].Kind != "set_dispatch_mode" {
-		t.Fatalf("Beads-era control projection behavior changed: %+v", operations)
-	}
 	runtime.Control.Operation.Action = "stop_service"
-	if operations := runtimeOperations(runtime, true); len(operations) != 1 || operations[0].Kind != "stop_service" {
+	if operations := runtimeOperations(runtime); len(operations) != 1 || operations[0].Kind != "stop_service" {
 		t.Fatalf("service stop operation was omitted from the native runtime projection: %+v", operations)
 	}
 }
@@ -251,136 +249,6 @@ func TestMinimalWorkflowRevisionGatesAndRepairLimit(t *testing.T) {
 	}
 }
 
-func TestMinimalWorkflowDispatchesEachStepAndPersistsPRGate(t *testing.T) {
-	f := newFixture(t, task("t-17"))
-	exe, err := os.Executable()
-	require(t, err)
-	git, err := exec.LookPath("git")
-	require(t, err)
-	contract := func(step string) StepContract {
-		return StepContract{Provider: "command", Entry: "builtin:" + step, Version: "test-v1", InputSchema: MinimalStepInputSchema, OutputSchema: MinimalStepOutputSchema, ExecutionSite: "local", Timeout: 10 * time.Second, Command: []string{exe, "--fake", "minimal-step", f.db, git}}
-	}
-	f.c.Host = "local"
-	f.c.WorkflowDefinition = ptr(DefaultMinimalWorkflowDefinition(true))
-	f.c.ProjectSteps = &ProjectSteps{Implement: contract("implement"), Verify: contract("verify"), Review: contract("review"), PublishPR: contract("publish_pr")}
-	f.c.ProjectSteps.Verify.RequiredChecks = []string{"unit"}
-	f.c.PR.Kind = "command"
-	f.c.PR.Query = Command{Executable: exe, Args: []string{"--fake", "pr-query", f.db, "{pr_url}", "{repository}"}}
-	ctx := context.Background()
-	f.c.Remote = "web"
-	preflightErr := f.c.Preflight(ctx, true)
-	f.c.Remote = "origin"
-	if preflightErr != nil {
-		t.Fatal(preflightErr)
-	}
-	s := f.service(t)
-	t.Cleanup(func() { _ = s.Close() })
-	if err = s.dispatch(ctx); err != nil {
-		t.Fatal(err)
-	}
-	if s.worker == nil {
-		t.Fatalf("dispatch returned without a step worker: service=%+v runs=%+v workflow_runs=%+v attempts=%+v", s.State.Service, s.State.Runs, s.State.WorkflowRuns, s.State.Attempts)
-	}
-	finishWorker(t, s)
-	if s.State.Executions[0].CurrentStep != "verify" {
-		t.Fatalf("implement completion did not persist verify intent: %+v", s.State.Executions[0])
-	}
-	if err = s.Close(); err != nil {
-		t.Fatal(err)
-	}
-	s = f.service(t)
-	if err = s.resumeMinimalSteps(ctx); err != nil {
-		t.Fatal(err)
-	}
-	for step := 0; step < 3; step++ {
-		finishWorker(t, s)
-		if s.State.Runs[0].FinishTaskStatus == "waiting_pr_merge" {
-			break
-		}
-		if err = s.resumeMinimalSteps(ctx); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if got := s.State.Runs[0].FinishTaskStatus; got != "waiting_pr_merge" {
-		t.Fatalf("finish_task_status=%s, want waiting_pr_merge", got)
-	}
-	if len(s.State.WorkflowRuns) != 1 || s.State.WorkflowRuns[0].Phase != "waiting_pr_merge" || s.State.WorkflowRuns[0].SelectedResult != s.State.Executions[0].ExecutionID {
-		t.Fatalf("workflow gate was not persisted: %+v", s.State.WorkflowRuns)
-	}
-	if len(s.State.Attempts) != 5 {
-		t.Fatalf("step attempts=%d, want prepare plus four configured steps", len(s.State.Attempts))
-	}
-	for _, attempt := range s.State.Attempts {
-		if attempt.Status != "succeeded" {
-			t.Fatalf("attempt %s/%s status=%s", attempt.StepID, attempt.AttemptID, attempt.Status)
-		}
-	}
-	if s.State.Tasks[0].Status != "in_progress" || s.State.Executions[0].Status != "succeeded" || s.State.Executions[0].CurrentStep != "waiting_pr_merge" {
-		t.Fatalf("PR publication must wait for merge without closing task: task=%+v execution=%+v", s.State.Tasks[0], s.State.Executions[0])
-	}
-}
-
-func TestMinimalLocalDecisionAnswerIsRejectedWithoutContinuation(t *testing.T) {
-	f := newFixture(t, task("t-18"))
-	db := readFake(f.db)
-	db.Behavior = "minimal-decision"
-	writeFake(f.db, db)
-	exe, err := os.Executable()
-	require(t, err)
-	git, err := exec.LookPath("git")
-	require(t, err)
-	contract := func(step string) StepContract {
-		return StepContract{Provider: "command", Entry: "builtin:" + step, Version: "test-v1", InputSchema: MinimalStepInputSchema, OutputSchema: MinimalStepOutputSchema, ExecutionSite: "local", Timeout: 10 * time.Second, Command: []string{exe, "--fake", "minimal-step", f.db, git}}
-	}
-	f.c.Host = "local"
-	f.c.WorkflowDefinition = ptr(DefaultMinimalWorkflowDefinition(true))
-	f.c.ProjectSteps = &ProjectSteps{Implement: contract("implement"), Verify: contract("verify"), Review: contract("review"), PublishPR: contract("publish_pr")}
-	f.c.ProjectSteps.Verify.RequiredChecks = []string{"unit"}
-	s := f.service(t)
-	t.Cleanup(func() { _ = s.Close() })
-	ctx := context.Background()
-	if err = s.dispatch(ctx); err != nil {
-		t.Fatal(err)
-	}
-	finishWorker(t, s) // prepare and start implement
-	if got := s.State.Runs[0].FinishTaskStatus; got != "waiting_decision" {
-		t.Fatalf("finish_task_status=%s, want waiting_decision", got)
-	}
-	decision := s.State.Runs[0].Decision
-	if decision == nil || decision.Status != "pending" || len(s.State.Decisions) != 1 {
-		t.Fatalf("decision was not persisted: run=%+v records=%+v", decision, s.State.Decisions)
-	}
-	answer, err := json.Marshal(DecisionAnswer{DecisionID: decision.ID, RunID: s.State.Runs[0].RunID, OptionID: "keep", AnsweredBy: "tester", ExpectedDecisionVersion: decision.Version, ExpectedRunRevision: s.State.Runs[0].ControlRevision, ServiceInstanceID: s.State.Service.InstanceID})
-	require(t, err)
-	commands := CommandService{Store: s.domainStore, Project: s.Config.identity}
-	if _, _, err = commands.AnswerDecision(ctx, decision.ID, decision.Version, "answer-once", "tester", answer); err != nil {
-		t.Fatal(err)
-	}
-	if err = s.processPendingCommands(ctx); err != nil {
-		t.Fatal(err)
-	}
-	queued, err := s.domainStore.Commands(ctx, s.Config.identity, "", 100)
-	require(t, err)
-	if len(queued) != 1 || queued[0].Status != "rejected" || !strings.Contains(string(queued[0].Result), "local continuation is unsupported") {
-		t.Fatalf("unsupported local decision continuation was not rejected with its reason: %+v", queued)
-	}
-	if s.worker != nil || s.State.Runs[0].Decision.Status != "pending" || s.State.Runs[0].Decision.AnsweredBy != "" {
-		t.Fatalf("unsupported continuation mutated the decision or started a worker: worker=%v decision=%+v", s.worker != nil, s.State.Runs[0].Decision)
-	}
-	attemptCount := len(s.State.Attempts)
-	decision.Status, decision.OptionID, decision.AnsweredBy = "answer_saved", "keep", "tester"
-	decision.AnsweredAt = ptr(now())
-	if err = s.save(); err != nil {
-		t.Fatal(err)
-	}
-	if err = s.applyDecisions(ctx); err != nil {
-		t.Fatal(err)
-	}
-	if s.worker != nil || decision.Status != "answer_saved" || len(s.State.Attempts) != attemptCount || s.State.Executions[0].CurrentStep != "implement" {
-		t.Fatalf("saved answer bypassed unsupported-continuation gate: worker=%v decision=%+v attempts=%d/%d execution=%+v", s.worker != nil, decision, len(s.State.Attempts), attemptCount, s.State.Executions[0])
-	}
-}
-
 func TestRuntimeSchemasV1ThroughV4AreRejectedWithoutMutation(t *testing.T) {
 	for version := 1; version <= 4; version++ {
 		t.Run(strconv.Itoa(version), func(t *testing.T) {
@@ -407,6 +275,28 @@ func TestRuntimeSchemasV1ThroughV4AreRejectedWithoutMutation(t *testing.T) {
 				t.Fatalf("v%d snapshot was changed while rejecting it: %v", version, err)
 			}
 		})
+	}
+}
+
+func TestPreflightRejectsRetiredFileExecutionStateWithoutMutation(t *testing.T) {
+	runDir := t.TempDir()
+	path := filepath.Join(runDir, "execution", "v1", "bindings", "retired.json")
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		t.Fatal(err)
+	}
+	original := []byte(`{"version":1,"run_id":"retired"}`)
+	if err := os.WriteFile(path, original, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := preflightExistingState(runDir, "runtime.json"); err == nil || !strings.Contains(err.Error(), "file-based execution state is unsupported") {
+		t.Fatalf("retired file execution state was not rejected before startup: %v", err)
+	}
+	after, err := os.ReadFile(path)
+	if err != nil || !bytes.Equal(original, after) {
+		t.Fatalf("preflight changed retired execution evidence: %v", err)
+	}
+	if _, err = os.Stat(filepath.Join(runDir, "steerline.db")); !os.IsNotExist(err) {
+		t.Fatalf("preflight created a replacement database: %v", err)
 	}
 }
 
@@ -438,34 +328,31 @@ func TestPreflightRejectsUnknownSQLiteSchemaWithoutMutation(t *testing.T) {
 	}
 }
 
-func TestPlannedTaskIdentityNeedsVerifiedExplicitMapping(t *testing.T) {
-	repository := t.TempDir()
+func TestPreflightRejectsRetiredWholeRunResultCommandWithoutMutation(t *testing.T) {
+	ctx := context.Background()
 	runDir := t.TempDir()
-	planned := filepath.Join(repository, "docs", "roadmap", "task-ids")
-	if err := os.MkdirAll(planned, 0700); err != nil {
-		t.Fatal(err)
+	databasePath := filepath.Join(runDir, "steerline.db")
+	store, err := OpenSQLiteStore(databasePath)
+	require(t, err)
+	commandID, idempotencyKey := newID(), newID()
+	command := CommandRecord{ProjectIdentity: "repo:retired-result", CommandID: commandID, Kind: "accept_result", TargetID: "retired-run", ExpectedVersion: 1, IdempotencyKey: idempotencyKey, RequestedBy: "operator", Payload: []byte(`{}`), Status: "pending", CreatedAt: now()}
+	err = store.Transact(ctx, func(tx DomainTx) error {
+		_, _, enqueueErr := tx.EnqueueCommand(command)
+		return enqueueErr
+	})
+	require(t, err)
+	require(t, store.Close())
+
+	if err = preflightExistingState(runDir, "runtime.json"); err == nil || !strings.Contains(err.Error(), "retired whole-run result commands") {
+		t.Fatalf("retired result command was not rejected during read-only preflight: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(planned, "5.json"), []byte(`{"id":5,"name":"planned"}`), 0600); err != nil {
-		t.Fatal(err)
-	}
-	if _, _, err := resolveDomainTaskIdentity(repository, runDir, "repo:map", "beads-project", "5"); err == nil {
-		t.Fatal("planned numeric identity was guessed from the source ID")
-	}
-	mapFile := filepath.Join(runDir, "task-identity-map.json")
-	identityMap := TaskIdentityMap{Schema: taskIdentityMapSchema, ProjectIdentity: "repo:map", Mappings: []TaskIdentityMapping{{TaskID: "5", SourceProvider: "beads", SourceProject: "beads-project", SourceTaskID: "5"}}}
-	data, _ := json.Marshal(identityMap)
-	mapFile = filepath.Join(runDir, "task-identity-map.json")
-	if err := os.WriteFile(mapFile, data, 0600); err != nil {
-		t.Fatal(err)
-	}
-	if id, digest, err := resolveDomainTaskIdentity(repository, runDir, "repo:map", "beads-project", "5"); err != nil || id != "5" || digest == "" {
-		t.Fatalf("mapped task identity=%q digest=%q err=%v", id, digest, err)
-	}
-	identityMap.Mappings[0].TaskID = "05"
-	data, _ = json.Marshal(identityMap)
-	_ = os.WriteFile(mapFile, data, 0600)
-	if _, _, _, err := parseTaskIdentityMap(mapFile, "repo:map"); err == nil {
-		t.Fatal("leading zero in numeric ID should be rejected")
+	reader, err := OpenSQLiteReader(databasePath)
+	require(t, err)
+	defer reader.Close()
+	saved, err := reader.Command(ctx, command.ProjectIdentity, commandID)
+	require(t, err)
+	if saved.Kind != command.Kind || saved.Status != command.Status || string(saved.Payload) != string(command.Payload) {
+		t.Fatalf("preflight changed retired command state: %+v", saved)
 	}
 }
 
@@ -578,50 +465,6 @@ func TestOperationIdempotencyKeepsOneDurableIntent(t *testing.T) {
 	}
 }
 
-func TestQueuedLocalDecisionAnswerIsRejectedWithoutAContinuationCapability(t *testing.T) {
-	ctx := context.Background()
-	dir := t.TempDir()
-	project := "repo:decision-queue"
-	db, err := OpenSQLiteStore(filepath.Join(dir, "steerline.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-	runID := strings.Repeat("d", 32)
-	logPath := filepath.Join(dir, "runs", runID, "events.jsonl")
-	decision := &DecisionState{ID: "decision-1", AttemptID: runID, Version: 1, Request: DecisionRequest{Question: "Choose", Options: []DecisionOption{{ID: "yes", Label: "Yes"}}}, Status: "pending"}
-	run := &Run{TaskID: "beads-1", Title: "question", RunID: runID, AttemptID: runID, Claimant: "center", Host: "local", Backend: string(BackendLocal), Protocol: "local_process", BeadsStatus: "in_progress", ExecutionStatus: "succeeded", FinishTaskStatus: "waiting_decision", Decision: decision, LogPath: &logPath}
-	runtime := Runtime{SchemaVersion: 5, Repository: Repository{Identity: project, Path: "repo", Remote: "origin", Branch: "main"}, Service: ServiceState{InstanceID: "service-instance", Claimant: "center"}, Runs: []*Run{run}, Control: ControlState{DispatchMode: "auto", Revision: 1}}
-	service := &Service{Config: Config{RunDir: dir, RuntimeFile: "runtime.json", Claimant: "center", identity: project}, State: runtime, domainStore: db, store: &Store{Path: filepath.Join(dir, "runtime.json"), Domain: db, Project: project}}
-	if err = service.save(); err != nil {
-		t.Fatal(err)
-	}
-	answer := DecisionAnswer{DecisionID: decision.ID, RunID: runID, OptionID: "yes", AnsweredBy: "alice", ExpectedDecisionVersion: decision.Version, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: runtime.Service.InstanceID}
-	payload, _ := json.Marshal(answer)
-	commandService := CommandService{Store: db, Project: project}
-	_, created, err := commandService.AnswerDecision(ctx, decision.ID, 1, "answer:decision-1:v1", "alice", payload)
-	if err != nil || !created {
-		t.Fatalf("enqueue answer: created=%t err=%v", created, err)
-	}
-	if err = service.processPendingCommands(ctx); err != nil {
-		t.Fatal(err)
-	}
-	if run.Decision.Status != "pending" || run.Decision.Version != 1 || run.Decision.AnsweredBy != "" {
-		t.Fatalf("unsupported local continuation accepted an answer: %+v", run.Decision)
-	}
-	commands, err := db.Commands(ctx, project, "rejected", 10)
-	if err != nil || len(commands) != 1 || commands[0].Kind != "answer_decision" || !strings.Contains(string(commands[0].Result), "unsupported") {
-		t.Fatalf("unsupported answer command was not rejected with its reason: %+v %v", commands, err)
-	}
-	snapshot, err := db.Query(ctx, project)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(snapshot.Decisions) != 1 || snapshot.Decisions[0].Status != "pending" || snapshot.Decisions[0].Version != 1 {
-		t.Fatalf("unsupported continuation changed authoritative decision state: %+v", snapshot.Decisions)
-	}
-}
-
 func TestDecisionAnswerFirstWinsIdempotencyAndConflictAreTransactional(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
@@ -631,11 +474,7 @@ func TestDecisionAnswerFirstWinsIdempotencyAndConflictAreTransactional(t *testin
 	defer db.Close()
 	runID := strings.Repeat("a", 32)
 	decisionID := strings.Repeat("b", 32)
-	decision := &DecisionState{ID: decisionID, AttemptID: runID, Version: 1, Request: DecisionRequest{Question: "Choose", Options: []DecisionOption{{ID: "yes", Label: "Yes"}, {ID: "no", Label: "No"}}}, Status: "pending"}
-	run := &Run{TaskID: "task-1", RunID: runID, AttemptID: runID, ControlRevision: 4, Claimant: "alice", Host: "orca", Backend: string(BackendOrca), Protocol: string(ProtocolOrcaTerminalV2), BeadsStatus: "in_progress", ExecutionStatus: "succeeded", FinishTaskStatus: "waiting_decision", Decision: decision}
-	runtimeState := Runtime{SchemaVersion: 5, Repository: Repository{Identity: project, Path: "repo", Remote: "origin", Branch: "main"}, Service: ServiceState{InstanceID: "service-instance", Status: "running", Ready: true, Claimant: "alice"}, Runs: []*Run{run}, Control: ControlState{DispatchMode: "manual", Revision: 2}}
-	store := &Store{Path: filepath.Join(dir, "runtime.json"), Domain: db, Project: project}
-	require(t, store.Publish(&runtimeState))
+	seedNativeDecision(t, db, project, runID, decisionID)
 	db2, err := OpenSQLiteStore(filepath.Join(dir, "steerline.db"))
 	require(t, err)
 	defer db2.Close()
@@ -678,33 +517,15 @@ func TestDecisionAnswerFirstWinsIdempotencyAndConflictAreTransactional(t *testin
 	if !firstResult.created {
 		first = secondResult.command
 	}
-	var acceptedAnswer DecisionAnswer
-	require(t, decode(first.Payload, &acceptedAnswer))
-	first.Status = "in_flight"
-	require(t, commands1.SetStatus(ctx, first, "in_flight", nil))
-	var accepted DecisionRecord
-	require(t, db.Transact(ctx, func(tx DomainTx) error {
-		var acceptErr error
-		accepted, _, acceptErr = tx.AcceptDecisionAnswer(first, acceptedAnswer)
-		return acceptErr
-	}))
-	if accepted.Status != "answer_saved" || accepted.Version != 2 {
-		t.Fatalf("answer acceptance fact was not atomically recorded: %+v", accepted)
-	}
 	repeat, created, err := commands1.AnswerDecisionWithID(ctx, strings.Repeat("e", 32), decisionID, 1, decisionAnswerKey(answer), "alice", mustJSON(answer))
 	require(t, err)
-	if created || repeat.CommandID != first.CommandID || repeat.Status != "accepted" {
+	if created || repeat.CommandID != first.CommandID || repeat.Status != "pending" {
 		t.Fatalf("same accepted answer did not return its original result: %+v created=%v", repeat, created)
 	}
 	different := answer
 	different.OptionID, different.Note = "no", "different"
-	if _, created, err = commands1.AnswerDecisionWithID(ctx, strings.Repeat("f", 32), decisionID, 1, decisionAnswerKey(different), "alice", mustJSON(different)); !errors.Is(err, ErrAnswerConflict) || created {
-		t.Fatalf("different answer did not return answer_conflict: created=%v err=%v", created, err)
-	}
-	projected, err := db.Query(ctx, project)
-	require(t, err)
-	if len(projected.Decisions) != 1 || projected.Decisions[0].Status != "answer_saved" || projected.Decisions[0].Version != 2 {
-		t.Fatalf("conflict overwrote the first accepted answer: %+v", projected.Decisions)
+	if _, created, err = commands1.AnswerDecisionWithID(ctx, strings.Repeat("f", 32), decisionID, 1, decisionAnswerKey(answer), "alice", mustJSON(different)); err == nil || created {
+		t.Fatalf("same idempotency key accepted a different answer payload: created=%v err=%v", created, err)
 	}
 }
 
@@ -750,10 +571,7 @@ func TestDecisionAnswerSeparateClientProcessesUseOneFirstWinsCommand(t *testing.
 	db, err := OpenSQLiteStore(dbPath)
 	require(t, err)
 	runID, decisionID := strings.Repeat("1", 32), strings.Repeat("2", 32)
-	decision := &DecisionState{ID: decisionID, AttemptID: runID, Version: 1, Request: DecisionRequest{Question: "Choose", Options: []DecisionOption{{ID: "yes", Label: "Yes"}, {ID: "no", Label: "No"}}}, Status: "pending"}
-	run := &Run{TaskID: "task", RunID: runID, AttemptID: runID, ControlRevision: 3, Claimant: "service", Host: "orca", Backend: string(BackendOrca), Protocol: string(ProtocolOrcaTerminalV2), ExecutionStatus: "succeeded", FinishTaskStatus: "waiting_decision", Decision: decision}
-	runtimeState := Runtime{SchemaVersion: 5, Repository: Repository{Identity: project, Path: "repo", Remote: "origin", Branch: "main"}, Service: ServiceState{InstanceID: "instance", Status: "running", Ready: true, Claimant: "service"}, Runs: []*Run{run}, Control: ControlState{DispatchMode: "manual", Revision: 1}}
-	require(t, (&Store{Path: filepath.Join(dir, "runtime.json"), Domain: db, Project: project}).Publish(&runtimeState))
+	seedNativeDecision(t, db, project, runID, decisionID)
 	_ = db.Close()
 	by := []string{"alice", "bob"}
 	commands := []string{strings.Repeat("3", 32), strings.Repeat("4", 32)}
@@ -800,5 +618,59 @@ func TestDecisionAnswerSeparateClientProcessesUseOneFirstWinsCommand(t *testing.
 	require(t, err)
 	if len(commandsPending) != 1 || commandsPending[0].CommandID != results[0].CommandID {
 		t.Fatalf("command history contains duplicate answer writes: %+v", commandsPending)
+	}
+}
+
+func seedNativeDecision(t *testing.T, db *SQLiteStore, project, runID, decisionID string) {
+	t.Helper()
+	ctx := context.Background()
+	nowTime := now()
+	request := DecisionRequest{Question: "Choose", Options: []DecisionOption{{ID: "yes", Label: "Yes"}, {ID: "no", Label: "No"}}}
+	err := db.Transact(ctx, func(tx DomainTx) error {
+		raw := tx.(*sqliteTx).tx
+		if err := tx.PutProjectTaskAuthority(ProjectTaskAuthority{ProjectIdentity: project, Authority: "native", AuthorityVersion: 1, Repository: "repo", Remote: "origin", Branch: "main", DispatchMode: "manual", DispatchPaused: true, CreatedAt: nowTime, UpdatedAt: nowTime}); err != nil {
+			return err
+		}
+		task := TaskRecord{ProjectIdentity: project, TaskID: "1", Title: "Decision task", Type: "task", Priority: 1, BatchID: "batch-1", ContractID: "contract-1", Claimant: "fixture", Source: "native", Status: "in_progress", Version: 1, CreatedAt: nowTime, UpdatedAt: nowTime}
+		taskPayload, err := json.Marshal(task)
+		if err != nil {
+			return err
+		}
+		if _, err = raw.ExecContext(ctx, `INSERT INTO tasks(project_identity,task_id,status,version,payload) VALUES(?,?,?,?,?)`, project, task.TaskID, task.Status, task.Version, taskPayload); err != nil {
+			return fmt.Errorf("insert decision test task: %w", err)
+		}
+		contractDigest := strings.Repeat("a", 64)
+		if _, err = raw.ExecContext(ctx, `INSERT INTO task_contracts(project_identity,contract_id,task_id,digest,payload) VALUES(?,?,?,?,?)`, project, task.ContractID, task.TaskID, contractDigest, []byte(`{"contract_id":"contract-1"}`)); err != nil {
+			return err
+		}
+		batchIDs := []byte(`{"local":"1"}`)
+		if _, err = raw.ExecContext(ctx, `INSERT INTO task_batches(project_identity,batch_id,schema_version,payload_digest,created_at,command_id,task_ids) VALUES(?,?,?,?,?,?,?)`, project, task.BatchID, "task-batch/v1", strings.Repeat("b", 64), nowTime.UTC().Format(time.RFC3339Nano), strings.Repeat("c", 32), batchIDs); err != nil {
+			return err
+		}
+		workflow := WorkflowRunRecord{ProjectIdentity: project, WorkflowRunID: runID, TaskID: task.TaskID, WorkflowVersion: MinimalWorkflowVersion, Definition: WorkflowDefinition{ID: MinimalWorkflowVersion, Version: MinimalWorkflowVersion}, Phase: "waiting_decision", CreatedAt: nowTime, UpdatedAt: nowTime}
+		workflowPayload, err := json.Marshal(workflow)
+		if err != nil {
+			return err
+		}
+		if _, err = raw.ExecContext(ctx, `INSERT INTO workflow_runs(project_identity,workflow_run_id,task_id,phase,payload) VALUES(?,?,?,?,?)`, project, runID, "1", workflow.Phase, workflowPayload); err != nil {
+			return err
+		}
+		execution := ExecutionRecord{ProjectIdentity: project, ExecutionID: runID, WorkflowRunID: runID, Status: "waiting_decision", CurrentStep: "decision", CreatedAt: nowTime, UpdatedAt: nowTime}
+		executionPayload, err := json.Marshal(execution)
+		if err != nil {
+			return err
+		}
+		if _, err = raw.ExecContext(ctx, `INSERT INTO executions(project_identity,execution_id,workflow_run_id,status,current_step,target_json,payload) VALUES(?,?,?,?,?,?,?)`, project, runID, runID, execution.Status, execution.CurrentStep, []byte(`{}`), executionPayload); err != nil {
+			return err
+		}
+		return tx.PutDecision(DecisionRecord{ProjectIdentity: project, DecisionID: decisionID, Scope: "workflow", WorkflowRunID: runID, ExecutionID: runID, QuestionID: "question-1", Request: mustJSON(request), Status: "pending", Version: 1, CreatedAt: nowTime, UpdatedAt: nowTime})
+	})
+	if err != nil {
+		t.Fatalf("seed native decision graph: %v", err)
+	}
+	store := &Store{Path: filepath.Join(t.TempDir(), "runtime.json"), Domain: db, Project: project}
+	state := Runtime{SchemaVersion: 5, Repository: Repository{Identity: project, Path: "repo", Remote: "origin", Branch: "main"}, Service: ServiceState{InstanceID: "service-instance", Status: "running", Ready: true, Claimant: "alice"}, Runs: []*Run{}, Tasks: []TaskRecord{}, WorkflowRuns: []WorkflowRunRecord{}, Executions: []ExecutionRecord{}, Attempts: []StepAttemptRecord{}, Decisions: []DecisionRecord{}, Control: ControlState{DispatchMode: "manual", Revision: 1}}
+	if err = store.Publish(&state); err != nil {
+		t.Fatalf("publish decision test projection: %v", err)
 	}
 }

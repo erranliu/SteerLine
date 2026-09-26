@@ -3,16 +3,26 @@ package steerline
 import (
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 )
 
+func configTestRepository(t *testing.T) string {
+	t.Helper()
+	repository := t.TempDir()
+	if output, err := exec.Command("git", "init", "--quiet", "-b", "main", repository).CombinedOutput(); err != nil {
+		t.Fatalf("initialize config fixture repository: %v: %s", err, output)
+	}
+	return repository
+}
+
 func TestConfigKeepsOrcaCodexNativeByDefault(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.json")
 	write := func(host string) Config {
 		t.Helper()
-		data, err := json.Marshal(map[string]string{"repository": t.TempDir(), "run_dir": t.TempDir(), "branch": "main", "task_authority": "beads", "host": host, "agent": "codex"})
+		data, err := json.Marshal(map[string]string{"repository": configTestRepository(t), "branch": "main", "task_authority": "native", "host": host, "agent": "codex"})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -38,7 +48,7 @@ func TestConfigKeepsOrcaCodexNativeByDefault(t *testing.T) {
 func TestConfigRejectsRemovedOrcaFallback(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.json")
 	data, err := json.Marshal(map[string]any{
-		"repository": t.TempDir(), "run_dir": t.TempDir(), "branch": "main", "task_authority": "beads",
+		"repository": configTestRepository(t), "branch": "main", "task_authority": "native",
 		"host": "orca", "orca": map[string]any{"fallback": "local"},
 	})
 	if err != nil {
@@ -61,7 +71,25 @@ func TestConfigRequiresAnExplicitTaskAuthority(t *testing.T) {
 	if err := os.WriteFile(path, data, 0600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := LoadConfig(path); err == nil || !strings.Contains(err.Error(), "task_authority must be set explicitly") {
+	if _, err := LoadConfig(path); err == nil || !strings.Contains(err.Error(), "task_authority must be explicitly set to native") {
 		t.Fatalf("missing task authority silently selected a task source: %v", err)
+	}
+}
+
+func TestConfigRejectsRetiredBeadsExecutionFields(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.json")
+	data, err := json.Marshal(map[string]any{
+		"repository": configTestRepository(t), "remote": "origin", "branch": "main", "task_authority": "native",
+		"bd":         map[string]any{"executable": "bd"},
+		"completion": map[string]any{"command": map[string]any{"executable": "finish-task"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(path, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = LoadConfig(path); err == nil || !strings.Contains(err.Error(), "unknown field") {
+		t.Fatalf("retired Beads config fields were silently ignored: %v", err)
 	}
 }

@@ -3,14 +3,10 @@ package main
 import (
 	"bufio"
 	"context"
-	"crypto/sha256"
-	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -32,7 +28,7 @@ func main() {
 }
 func run() error {
 	if len(os.Args) < 2 {
-		return fmt.Errorf("usage: steerline <console|run|start-service|stop-service|retry|check|control|tasks|task|stop|watch|answer|accept-result|mark-stopped|certify-backend|home|install|launchers|projects> [-config config.json]")
+		return fmt.Errorf("usage: steerline <console|run|start-service|stop-service|retry|check|control|tasks|task|stop|watch|answer|mark-stopped|certify-backend|home|install|launchers|projects> [-config config.json]")
 	}
 	if os.Args[1] == "task" {
 		return runNativeTaskCommand(os.Args[2:])
@@ -50,7 +46,6 @@ func run() error {
 	controlMode := fs.String("mode", "", "control set_dispatch_mode value: auto|manual")
 	requestID := fs.String("request-id", "", "control request to query")
 	waitReceipt := fs.Bool("wait", false, "control: wait for a terminal receipt")
-	result := fs.String("result", "", "manual recovery result file")
 	evidence := fs.String("evidence", "", "certify-backend: comma-separated Windows native evidence JSON files")
 	confirmed := fs.Bool("confirm-process-stopped", false, "operator verified that the old process tree is stopped")
 	option := fs.String("option", "", "answer: chosen decision option id")
@@ -76,7 +71,7 @@ func run() error {
 	if command == "codex-session-launch" {
 		return steerline.RunCodexSessionLauncher(context.Background(), *config)
 	}
-	if command != "run" && command != "start-service" && command != "stop-service" && command != "retry" && command != "check" && command != "stop" && command != "control" && command != "tasks" && command != "answer" && command != "accept-result" && command != "mark-stopped" && command != "watch" && command != "certify-backend" && command != "home" && command != "install" && command != "launchers" && command != "projects" {
+	if command != "run" && command != "start-service" && command != "stop-service" && command != "retry" && command != "check" && command != "stop" && command != "control" && command != "tasks" && command != "answer" && command != "mark-stopped" && command != "watch" && command != "certify-backend" && command != "home" && command != "install" && command != "launchers" && command != "projects" {
 		return fmt.Errorf("unknown command %q", command)
 	}
 	if command == "run" && *dispatchMode != "manual" && *dispatchMode != "auto" {
@@ -117,19 +112,13 @@ func run() error {
 	if e != nil {
 		return e
 	}
-	if c.TaskAuthority != "native" && command != "run" && command != "start-service" {
-		return errors.New("SteerLine commands require task_authority=native; Beads is not an active product task source")
-	}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
-	if command == "retry" || command == "mark-stopped" || command == "accept-result" {
+	if command == "retry" || command == "mark-stopped" {
 		if command == "mark-stopped" && (!*confirmed || *runID == "" || strings.TrimSpace(*reason) == "") {
 			return fmt.Errorf("mark-stopped requires -run-id, -confirm-process-stopped and -reason")
 		}
-		if command == "accept-result" && (!*confirmed || *runID == "" || *result == "" || strings.TrimSpace(*reason) == "") {
-			return fmt.Errorf("accept-result requires -run-id, -result, -confirm-process-stopped and -reason")
-		}
-		return submitRecoveryCommand(ctx, c, command, *runID, *result, *confirmed, *reason, *by, *waitReceipt)
+		return submitRecoveryCommand(ctx, c, command, *runID, *confirmed, *reason, *by, *waitReceipt)
 	}
 	if command == "certify-backend" {
 		if strings.TrimSpace(*evidence) == "" {
@@ -307,11 +296,7 @@ func run() error {
 		return e
 	}
 	if command == "check" {
-		if c.TaskAuthority == "native" {
-			fmt.Println("Configuration, native authority binding, Git, PR provider and project step contracts verified; no task claimed.")
-		} else {
-			fmt.Println("Configuration, tools, Beads, PR provider and skill contracts verified; no task claimed.")
-		}
+		fmt.Println("Configuration, native authority binding, Git, PR provider and project step contracts verified; no task claimed.")
 		return nil
 	}
 	lock, e := steerline.LockRepository(c.Identity())
@@ -337,7 +322,7 @@ func run() error {
 	return s.RunWithDispatch(ctx, *dispatchMode)
 }
 
-func submitRecoveryCommand(ctx context.Context, c steerline.Config, command, runID, resultPath string, confirmed bool, reason, requestedBy string, wait bool) error {
+func submitRecoveryCommand(ctx context.Context, c steerline.Config, command, runID string, confirmed bool, reason, requestedBy string, wait bool) error {
 	if err := c.ResolveIdentity(ctx); err != nil {
 		return err
 	}
@@ -367,34 +352,6 @@ func submitRecoveryCommand(ctx context.Context, c steerline.Config, command, run
 	case "mark-stopped":
 		kind = "mark_stopped"
 		body = map[string]any{"confirmed_process_stopped": true, "confirmation_basis": strings.TrimSpace(reason)}
-	case "accept-result":
-		file, readErr := os.Open(resultPath)
-		if readErr != nil {
-			return readErr
-		}
-		info, statErr := file.Stat()
-		if statErr != nil {
-			_ = file.Close()
-			return statErr
-		}
-		if info.Size() > 2<<20 {
-			_ = file.Close()
-			return errors.New("recovery result exceeds 2 MiB")
-		}
-		data, readErr := io.ReadAll(io.LimitReader(file, (2<<20)+1))
-		closeErr := file.Close()
-		if readErr != nil {
-			return readErr
-		}
-		if closeErr != nil {
-			return closeErr
-		}
-		if len(data) == 0 || len(data) > 2<<20 {
-			return errors.New("recovery result must be between 1 byte and 2 MiB")
-		}
-		sum := sha256.Sum256(data)
-		kind = "accept_result"
-		body = map[string]any{"confirmed_process_stopped": true, "confirmation_basis": strings.TrimSpace(reason), "result_base64": base64.StdEncoding.EncodeToString(data), "result_sha256": hex.EncodeToString(sum[:])}
 	default:
 		return fmt.Errorf("unsupported recovery command %q", command)
 	}

@@ -16,7 +16,7 @@ steerline answer -config .\service.json `
 
 命令目标绑定服务实例、`decision_id`、显示的 decision version 和 `run.control_revision`。服务在 SQLite 事务中重新核对 pending 状态、问题/attempt/execution 身份、实例与运行 revision，再同时保存 first-wins 答案和命令接受事实。旧草稿冲突时保留给操作者检查，不把答案应用到后续问题。
 
-local `local_process` continuation 当前不受支持。服务会以相同能力规则拒绝它；不能通过重新启动另一执行伪装成续跑。Orca terminal v2 只对固定 terminal/incarnation 核验 `reply_continue`；发送前提示应用状态仍需证明，服务不会因终端接受输入就显示答案已应用。
+答案接受后，中心服务核对原 workflow/execution/attempt、当前 workspace 和原 StepAttempt，再事务性地完成等待中的 attempt 并为同一固定步骤预留新 attempt。新 worker 仍绑定原 WorkflowRun/Execution；不创建替代 Task 或第二条 workflow。local 与受支持 Orca 使用同一中心转移，后端过程/终端身份仍须匹配原 ExecutionRef。
 
 ## 持久状态与证明
 
@@ -30,12 +30,10 @@ local `local_process` continuation 当前不受支持。服务会以相同能力
 | `failed` | 原执行结束但无有效应用证明，或续跑明确失败；原问题、答案和 Operation 留档 |
 | `superseded` | 历史问题由新的 decision_id 取代；旧答案不变 |
 
-单次结果的 `decision_application` 要与 `decision_id`、原 `attempt_id`、`execution_id`、固定 `ExecutionRef` SHA-256 和答案摘要 SHA-256 相同。`turn.started`、进程存活、final 消息、PR 结果或单独的 reply receipt 都不足以证明应用。当前结果未提供匹配证明时，已结束的 run 进入 `blocked`，decision 进入 `failed`，不能补写 `applied`，也不能盲目重发 continuation。
-
-minimal-v1 步骤结果要求 `applied_decision_id`、`applied_decision_attempt_id`、`applied_decision_execution_id` 和 `applied_answer_sha256` 同时匹配。步骤 envelope 自身还必须绑定本次 workflow/execution/resumed step attempt。旧 attempt 的迟到结果不会解锁新的决策。
+minimal-v1 步骤结果要求 `applied_decision_id`、`applied_decision_attempt_id`、`applied_decision_execution_id` 和 `applied_answer_sha256` 同时匹配原决策、被暂停的 attempt、固定 execution 和答案摘要。步骤 envelope 自身还必须绑定本次 workflow/execution/resumed step attempt。进程存活、答案命令回执、自然语言总结或 PR 结果都不足以证明应用；旧 attempt 的迟到结果不会解锁新的决策。
 
 ## 历史与恢复
 
 历史页按 `decision_id` 展示本轮所有问题和已接受答案；折叠、展开、session/turn 结束只改变视图，不消费问题或修改决策。当前问题卡片留在折叠区外，UI 还分别呈现答案已保存、后端已接受、轮次已开始、已应用、失败与待核实。
 
-retry、mark-stopped、accept-result 和 resolve-command 也通过同一 SQLite `CommandService` 在线提交。执行结果不确定时保留原 command/request id、回执和 blocker；重启不重放 worker start 或 terminal send。见 [PR 5 Spec](spec/pr-05-intervention.spec.md) 与 [验证报告](validation/pr-05-intervention.md)。
+retry、mark-stopped 和 resolve-command 通过同一 SQLite `CommandService` 在线提交。whole-run `accept-result` 已从当前 CLI、控制台和服务能力中移除；native step 必须通过原 attempt 和 Operation 对账。执行结果不确定时保留原 command/request id、回执和 blocker；重启不重放 worker start 或 terminal send。历史设计和验证仍见 [PR 5 Spec](spec/pr-05-intervention.spec.md) 与 [验证报告](validation/pr-05-intervention.md)。

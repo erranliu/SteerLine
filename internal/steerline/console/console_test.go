@@ -2,9 +2,6 @@ package console
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -151,7 +148,7 @@ func decisionSnapshot(ref ProjectRef, now time.Time) (ProjectSnapshot, *steerlin
 	for i := range options {
 		options[i] = steerline.DecisionOption{ID: fmt.Sprintf("o%d", i), Label: fmt.Sprintf("选项 %d", i+1), Detail: fmt.Sprintf("详细说明 %02d：完整内容", i+1)}
 	}
-	run := &steerline.Run{TaskID: "task-decision", RunID: "0123456789abcdef0123456789abcdef", AttemptID: "fedcba9876543210fedcba9876543210", ControlRevision: 9, Host: "orca", Backend: "orca", Protocol: "orca_terminal_v2", FinishTaskStatus: "waiting_decision", ExecutionStatus: "succeeded", Decision: &steerline.DecisionState{ID: "decision-0123456789abcdef0123456789ab", AttemptID: "fedcba9876543210fedcba9876543210", Version: 3, Status: "pending", Request: steerline.DecisionRequest{Question: strings.Repeat("问题", 24), Context: "背景第一行\n背景第二行", Options: options, Recommended: "o10", AllowFreeText: true}}}
+	run := &steerline.Run{TaskID: "task-decision", RunID: "0123456789abcdef0123456789abcdef", AttemptID: "fedcba9876543210fedcba9876543210", ControlRevision: 9, WorkflowVersion: steerline.MinimalWorkflowVersion, ExecutionID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", Host: "orca", Backend: "orca", Protocol: "orca_terminal_v2", FinishTaskStatus: "waiting_decision", ExecutionStatus: "succeeded", Decision: &steerline.DecisionState{ID: "decision-0123456789abcdef0123456789ab", AttemptID: "fedcba9876543210fedcba9876543210", Version: 3, Status: "pending", Request: steerline.DecisionRequest{Question: strings.Repeat("问题", 24), Context: "背景第一行\n背景第二行", Options: options, Recommended: "o10", AllowFreeText: true}}}
 	runtime.Runs = []*steerline.Run{run}
 	snapshot.Connection.Snapshot.Runtime = runtime
 	snapshot.Observation.Runtime = runtime
@@ -273,7 +270,7 @@ func TestDecisionAnswerDraftSurvivesStaleRevisionAndLengthRejection(t *testing.T
 	}
 }
 
-func TestConsoleDoesNotOfferLocalContinuationAsAnswerAndResume(t *testing.T) {
+func TestConsoleOffersBoundLocalNativeDecisionForAnswer(t *testing.T) {
 	now := time.Now().UTC()
 	ref := testProject("local-decision")
 	snapshot, run := decisionSnapshot(ref, now)
@@ -282,113 +279,8 @@ func TestConsoleDoesNotOfferLocalContinuationAsAnswerAndResume(t *testing.T) {
 	m.projects[0].selectedKey = "run:" + run.RunID
 	updated, cmd := m.answerSelectedDecision()
 	m = updated.(Model)
-	if cmd != nil || m.answer != nil || !strings.Contains(m.status, "local continuation 当前不受支持") {
-		t.Fatalf("console offered a local fake continuation: dialog=%+v status=%q", m.answer, m.status)
-	}
-}
-
-func TestAcceptResultPreviewFreezesBytesBeforeRecoveryCommandPublication(t *testing.T) {
-	now := time.Now().UTC()
-	ref := testProject("recovery")
-	snapshot := readySnapshot(ref, now)
-	runtime := snapshot.Connection.Snapshot.Runtime
-	runtime.Service.Capabilities = append(runtime.Service.Capabilities, "accept_result")
-	runID := "0123456789abcdef0123456789abcdef"
-	worktree := t.TempDir()
-	base := strings.Repeat("a", 40)
-	prURL := "https://example.invalid/owner/repo/pulls/12"
-	run := &steerline.Run{TaskID: "task-recovery", RunID: runID, AttemptID: runID, ControlRevision: 14, Host: "local", Backend: "local", Protocol: "local_process", ExecutionStatus: "failed", FinishTaskStatus: "blocked", WorktreePath: &worktree, WorktreeBranch: stringPointer("codex/task-recovery"), BaseCommit: &base}
-	runtime.Runs = []*steerline.Run{run}
-	snapshot.Connection.Snapshot.Runtime = runtime
-	snapshot.Observation.Runtime = runtime
-	resultPath := filepath.Join(t.TempDir(), "candidate-result.json")
-	original := []byte(fmt.Sprintf(`{"task_id":%q,"run_id":%q,"outcome":"pr_submitted","pr_url":%q,"worktree_path":%q,"base_commit":%q,"summary":"frozen summary","error":null}`, run.TaskID, run.RunID, prURL, worktree, base))
-	if err := os.WriteFile(resultPath, original, 0600); err != nil {
-		t.Fatal(err)
-	}
-	originalHash := sha256.Sum256(original)
-	originalDigest := hex.EncodeToString(originalHash[:])
-	control := &testControlClient{}
-	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, control, now)
-	m.projects[0].selectedKey = "run:" + runID
-	m.projects[0].recoveryRunID = runID
-	m.projects[0].recoveryReport = &steerline.RecoveryInspection{RunID: runID, TaskID: run.TaskID, RunRevision: run.ControlRevision, ServiceInstanceID: runtime.Service.InstanceID, ResultPath: resultPath, AcceptResultReason: "confirm that the original execution stopped and verify the PR"}
-	updated, cmd := m.prepareRecoveryAction("accept_result")
-	m = updated.(Model)
-	if cmd != nil || m.resultPicker == nil {
-		t.Fatalf("accept-result did not open a result-path chooser: picker=%+v cmd=%v", m.resultPicker, cmd)
-	}
-	updated, _ = m.handleResultPickerKey(tea.KeyMsg{Type: tea.KeyEnter})
-	m = updated.(Model)
-	if m.confirm == nil || string(m.confirm.resultBytes) != string(original) || m.confirm.resultSHA256 != originalDigest {
-		t.Fatalf("result preview did not freeze source bytes and digest: %+v", m.confirm)
-	}
-	if err := os.WriteFile(resultPath, []byte("source changed after preview"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	updated, cmd = m.handleConfirm(tea.KeyMsg{Type: tea.KeyF2})
-	m = updated.(Model)
-	if cmd != nil || m.confirm == nil || m.confirm.basisError == "" {
-		t.Fatal("accept-result submitted without operator-written stop evidence")
-	}
-	updated, _ = m.handleConfirm(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("I inspected the original process and confirmed it stopped")})
-	m = updated.(Model)
-	updated, cmd = m.handleConfirm(tea.KeyMsg{Type: tea.KeyF2})
-	m = updated.(Model)
-	if cmd == nil || control.decisionCalls != 0 {
-		t.Fatalf("result command published before its stable ID could be inspected: cmd=%v calls=%d", cmd, control.decisionCalls)
-	}
-	var requestID string
-	for id, action := range m.projects[0].actions {
-		if action.Action == "accept_result" {
-			requestID = id
-			break
-		}
-	}
-	if requestID == "" || m.projects[0].view.Outstanding[requestID] == "" {
-		t.Fatal("accept-result command identity was not retained")
-	}
-	message := cmd()
-	updated, _ = m.Update(message)
-	m = updated.(Model)
-	var body steerline.RecoveryCommandBody
-	if err := json.Unmarshal(control.decisionCommand.Payload, &body); err != nil {
-		t.Fatal(err)
-	}
-	frozen, err := base64.StdEncoding.DecodeString(body.ResultBase64)
-	if err != nil || string(frozen) != string(original) || body.ResultSHA256 != originalDigest {
-		t.Fatalf("submitted result differed from the previewed bytes: bytes=%q digest=%s err=%v", frozen, body.ResultSHA256, err)
-	}
-}
-
-func TestRecoveryConfirmationCanScrollTheFullFrozenPreview(t *testing.T) {
-	now := time.Now().UTC()
-	ref := testProject("long-recovery-preview")
-	snapshot := readySnapshot(ref, now)
-	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, &testControlClient{}, now)
-	m.width, m.height = 80, 24
-	m.projects[0].panel = 6
-	m.confirm = &confirmAction{action: "accept_result", requireBasis: true, runID: "run", requestID: "command", revision: 9, resultPath: `C:\fixture\result.json`, resultTaskID: "task", resultRunID: "run", resultSummary: strings.Repeat("完整证据🙂", 100) + "尾部证据", resultPRURL: "https://example.invalid/pulls/1", resultWorktree: `C:\fixture\worktree`, resultBase: strings.Repeat("a", 40), basis: "the original execution stopped"}
-	if strings.Contains(renderStopConfirmation(m, m.projects[0], 8), "尾部证据") {
-		t.Fatal("long confirmation unexpectedly fit without scrolling")
-	}
-	seenTail := false
-	for i := 0; i < 100; i++ {
-		if strings.Contains(renderStopConfirmation(m, m.projects[0], 8), "尾部证据") {
-			seenTail = true
-			break
-		}
-		updated, cmd := m.handleConfirm(tea.KeyMsg{Type: tea.KeyPgDown})
-		m = updated.(Model)
-		if cmd != nil || m.confirm == nil {
-			t.Fatal("scrolling the preview submitted or closed the confirmation")
-		}
-	}
-	if !seenTail || !strings.Contains(renderFooter(m, m.projects[0]), "F2 确认") {
-		t.Fatalf("confirmation hid frozen evidence or confirmation keys: seen_tail=%t footer=%q", seenTail, renderFooter(m, m.projects[0]))
-	}
-	if lines := strings.Count(render(m), "\n") + 1; lines > m.height {
-		t.Fatalf("confirmation exceeded the %d-line terminal: %d", m.height, lines)
+	if cmd != nil || m.answer == nil || !strings.Contains(m.status, "决策草稿已打开") {
+		t.Fatalf("console rejected a fixed local native decision: dialog=%+v status=%q", m.answer, m.status)
 	}
 }
 
@@ -1234,7 +1126,7 @@ func TestLoadProjectsSupportsZeroPartialAndExplicitConfigs(t *testing.T) {
 
 func writeConsoleTestConfig(t *testing.T, path, repository, runDir string) {
 	t.Helper()
-	data, err := json.Marshal(map[string]string{"repository": repository, "branch": "main", "run_dir": runDir, "task_authority": "beads"})
+	data, err := json.Marshal(map[string]string{"repository": repository, "branch": "main", "task_authority": "native"})
 	if err != nil {
 		t.Fatal(err)
 	}

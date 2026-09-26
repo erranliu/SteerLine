@@ -1,6 +1,6 @@
-# runtime v5 / control protocol v1 / result v1 数据契约
+# runtime v5 / control protocol v1 / native minimal-step data contract
 
-编码为 UTF-8，时间为 RFC3339 UTC。完整例子：[runtime](../examples/runtime.json)、[result](../examples/result.json)。结果的可执行 JSON Schema 与程序一起嵌入：[result.schema.json](../internal/steerline/result.schema.json)。
+编码为 UTF-8，时间为 RFC3339 UTC。示例：[runtime projection](../examples/runtime.json)、[native config](../examples/native-tasks.config.json)。当前步骤结果 Schema：[minimal-step-result.schema.json](../internal/steerline/minimal-step-result.schema.json)。SteerLine 只接受显式 `task_authority=native`。
 
 ## Native task query `native-tasks/v1`
 
@@ -42,7 +42,7 @@ TASK-DAG 更新后的协议样例见 [native-tasks-v1.sample.json](validation/ta
 | service.pid | integer | 服务进程 PID |
 | service.status | string | running / stopping / stopped / error |
 | service.mode | string | scheduler（正常轮询派发）/ maintenance（生命周期初始化或人工恢复） |
-| service.claimant | string | 稳定 Beads 领取者，用于恢复不完整记录 |
+| service.claimant | string | 当前服务记录的 claimant，用于核对中心 Task claim |
 | service.error | string/null | 最近服务级错误，查询恢复后可能清除 |
 | service.process_identity | object/null | 服务 OS 进程身份；含 PID、创建时间和可执行文件，供连接器核验实例 |
 | service.startup_id | string/null | 后台启动握手 ID；前台运行为空 |
@@ -67,15 +67,12 @@ TASK-DAG 更新后的协议样例见 [native-tasks-v1.sample.json](validation/ta
 
 | 字段 | 类型 | 含义 |
 | --- | --- | --- |
-| task_id / title | string | 外部来源任务身份和领取时标题；`domain_task_id` 是本地稳定 Task 身份，`identity_map_digest` 记录采用的身份映射 |
+| task_id / title | string | 中心 native Task ID 和领取时标题 |
 | run_id / claimant | string | 本次随机运行 ID / 固定领取者 |
-| task_status | string | native 运行的中心任务状态；此字段出现时不写 Beads 字段 |
+| task_status | string | 中心 native Task 状态 |
 | attempt_id | string | 此运行当前日志代次；首次执行等于 run_id，后续 retry 使用新 ID |
 | control_revision | integer | 该运行最近一次操作相关状态变更的版本 |
 | host | string | `local` 或 `orca`，与 backend/protocol 固定身份并存 |
-| completion | object/null | 仅旧 Beads 运行有此结项配置；native 运行省略 |
-| beads_context | object/null | 仅旧 Beads 运行保存的 provider 身份；native worker 上下文和投影不包含它 |
-| beads_status | string | 仅旧 Beads 运行显示的最近核实 provider 状态；native 运行改用 `task_status` |
 | execution_status | string | pending / running / succeeded / failed / unknown |
 | finish_task_status | string | pending / waiting_decision / waiting_pr_merge / completed / blocked |
 | decision | object/null | 当前问题和答案的展示摘要；权威版本、问题历史与答案保存在 SQLite `decisions`。状态为 pending、answer_saved、resuming、reply_accepted、applied、failed 或 superseded。见 [decisions](decisions.md) |
@@ -87,16 +84,18 @@ TASK-DAG 更新后的协议样例见 [native-tasks-v1.sample.json](validation/ta
 | worktree_path / worktree_branch / base_commit | string/null | 调度器创建并核验的隔离目录、实现分支及起点 Git hash；准备成功前均为 null，不由 Codex 结果覆盖 |
 | pr.url | string/null | 当前运行的精确 PR 关联 |
 | pr.state | string | open / merged / closed_unmerged / unknown |
-| pr.head_revision | string/null | `accept_result` 接回时经真实提供方核验并固定的 PR head；后续 merged 查询必须仍匹配，变化时拒绝结项 |
+| pr.head_revision | string/null | 由 `publish_pr` 步骤结果绑定并经 PR 提供方核验的 head；后续 merged 查询必须仍匹配，变化时拒绝交付 |
 | pr.merged_at / merge_commit | timestamp/string/null | 平台核实的合并证据 |
 | pr.queried_at / query_error | timestamp/string/null | 最近查询时间和错误；失败时 state=unknown |
 | last_event | string/null | 最近 JSON 事件的类型摘要，最多 512 字符，不存完整对话 |
-| log_path / result_path | string/null | 每次运行独立的事件和结果文件；`activity.jsonl` 为 log_path 同目录的归一化派生物，不参与恢复；恢复孤儿记录时可能为 null |
-| summary / error | string/null | 技能结果摘要（最多 4096 字符）/ 当前阻塞或失败原因 |
+| log_path / step_result_path | string/null | 当前 attempt 的事件和步骤回执路径；`activity.jsonl` 是 log_path 同目录的归一化观察，不作为步骤或交付权威 |
+| summary / error | string/null | 当前运行摘要 / 当前阻塞或失败原因 |
+
+旧 `domain_task_id`、`identity_map_digest`、Beads/completion 绑定和 whole-run `result_path` 只作为拒绝旧投影的标记，不属于当前 native 运行契约。读取到这些标记时，服务保留状态并拒绝自动接管。
 
 `process.created` 在 Windows 为进程创建 FILETIME 的十六进制标识，Linux 为 boot ID 和 /proc starttime。PID 可复用，读取器不能仅凭 PID 判定存活。遗留进程的核验结论写入 error；unknown 不代表服务已接管或恢复该会话。
 
-execution_status=succeeded 仅表示进程正常退出，仍可能 finish_task_status=blocked（结果缺失/无效）、waiting_decision（等待人工决策）或 waiting_pr_merge。原生任务只有在重新核实对应 PR 确实合入目标主线，且中心事务写入匹配的 TaskDelivery 并关闭任务后才写 completed；Beads 测试路径还要求配置的结项命令成功返回匹配回执（若有）及 Beads show 返回 closed。finish_task_status 不是“finish 技能函数是否返回”。
+execution_status=succeeded 仅表示当前执行步骤成功，仍可能处于 blocked、waiting_decision 或 waiting_pr_merge。原生任务只有在重新核实对应 PR 确实合入目标主线，且中心事务写入匹配的 TaskDelivery 并关闭任务后才写 completed。delivery 不依赖独立 completion 回调或第二任务源。
 
 PR 4A 的执行后端复用 Spec 02 的 SQLite 权威存储：`execution_bindings` 保存不可变 ExecutionRef，`execution_operations` 保存后端动作的固定输入摘要和回执，与领域 `operations` 一起保存在 `steerline.db`。`execution/v1/` 只保留 `capabilities/` 能力报告及 `evidence/` 原生证据副本；不再读取文件式 binding/Operation。检测到旧文件式执行状态时拒绝启动并保留现场。持锁 Service 写执行记录，停服后的 `certify-backend` 取得同一仓库/run_dir 锁后维护能力报告。runtime v5 是数据库投影；未知或矛盾状态保留槽位，不自动重发副作用。
 
@@ -110,9 +109,9 @@ PR 4B 的 `ConversationEvent` 是 4C 控制台读取会话事实的公共 DTO。
 
 数据库 schema 4 在当前 schema 3 的原生任务表与约束上增添会话表；升级在同一事务提交。更早的开发数据库版本仍被拒绝。
 
-准备 worktree 时 execution_status=pending；创建或接入检查失败为 failed/blocked；遗留 pending/running 为 unknown/blocked。重启只核对目录、共享 Git 元数据、分支和起点祖先关系，不重建、不重跑。实际工作目录等字段只在创建及技能/Beads 核验全部通过后写入；创建后检查失败时，目录可能已存在，应查看 workspace_intent 和 error。
+准备 worktree 时 execution_status=pending；创建或接入检查失败为 failed/blocked；遗留 pending/running 为 unknown/blocked。重启只核对目录、共享 Git 元数据、分支和起点祖先关系，不重建、不重跑。实际工作目录等字段只在创建及 native Task/worktree 身份核验通过后写入；创建后检查失败时，目录可能已存在，应查看 workspace_intent 和 error。
 
-v5 中未带 workspace 准备证据的 Run 不能通过 accept-result 冒充已核验的运行；需要人工处理，并保留原有外部任务和执行证据。
+当前 native minimal-v1 不接受旧 one-shot Run 或 whole-run result 作为交付事实。包含这些绑定的投影会在恢复前被拒绝并保留现场。
 
 PR 查询失败会清除 state 的可信结论并写 unknown，但保留过去读到的合并字段用于诊断；读者必须同时看 state、queried_at 和 query_error。程序不会仅凭缓存的 merged_at 关闭任务。
 
@@ -153,12 +152,11 @@ runtime 中的 `control.operation` 先于副作用保存；完成时把业务结
 | `answer_decision` | decision_id、run_id、option_id、note、expected_run_revision、expected_decision_version、service_instance_id | SQLite 的 DecisionRecord 与 command 回执同事务记录固定答案；`accepted` 只表示答案已保存 |
 | `retry_run` | 操作者显式确认原执行已停止 | 同 task/run/worktree 的新 attempt worker 已启动且固定身份已保存 |
 | `mark_stopped` | `confirmed_process_stopped`、`confirmation_basis` | 精确 unknown attempt 已标为 failed/blocked；Service 仍运行，旧 Operation 仍保留未知 |
-| `accept_result` | 原结果字节 base64、SHA-256、停止确认依据 | SHA-256 匹配的原字节被保存到 `runs/<run_id>/recovery/<command_id>/result.json`，真实 PR 查询通过并进入 waiting_pr_merge |
 | `resolve_command` | 指定 blocker 的人工核验依据 | 只解除该 blocker 并记录原 request_id / resolved_by；不会重放原指令 |
 
-恢复命令先持久化为 `in_flight`；重启时先对账它们，再处理新的 pending 命令。没有与同一 command_id 精确关联的完成证据时，原命令为 `indeterminate`，执行副作用以 control blocker 保留，后续由 resolve_command 逐条核验。结果接回以 command payload 携带的冻结字节为准，不在服务执行时重读任意客户端路径；受管结果与同一 command_id、真实 PR 及固定 head 均通过核验后才可补回 accepted。人工停止或恢复依据必须是非空 UTF-8 且不超过 2000 字符，超限拒绝而不截断。命令 `accepted` 不代表 PR 已合并或任务已完成。
+恢复命令先持久化为 `in_flight`；重启时先对账它们，再处理新的 pending 命令。没有与同一 command_id 精确关联的完成证据时，原命令为 `indeterminate`，执行副作用以 control blocker 保留，后续由 resolve_command 逐条核验。人工停止或恢复依据必须是非空 UTF-8 且不超过 2000 字符，超限拒绝而不截断。命令 `accepted` 不代表 PR 已合并或任务已完成。
 
-原生 minimal-v1 的 `retry_run` 由当前服务创建中心 `retry_step` 事务。外层命令中断后，服务只根据固定旧 attempt 对应的中心回执与新 step attempt 判定是否已受理，不重放外层命令；计划中的步骤仍由步骤恢复流程对账。原生任务的 `mark_stopped`、`accept_result` 不绕过步骤与 Operation 对账；未核实的原生 `start_task` blocker 保留，不能改用 Beads claim 核验。
+原生 minimal-v1 的 `retry_run` 由当前服务创建中心 `retry_step` 事务。外层命令中断后，服务只根据固定旧 attempt 对应的中心回执与新 step attempt 判定是否已受理，不重放外层命令；计划中的步骤仍由步骤恢复流程对账。旧 `accept_result` 指令不再受理；未核实的原生 `start_task` blocker 保留并按中心 Operation/claim 核验。
 
 上表 `start_task` 对 native 项目通过 `ClaimNativeTask` 在中心事务中预留 Task claim、WorkflowRun、Execution、prepare Attempt、命令回执和 Operation；响应起初为 `claim_reserved` 且 `start_task_applied=false`。只有准备工作区并将当前 worker 身份持久化后，服务控制回执才报告 applied。native delivery 由 `CompleteNativeTask` 在事务外查询精确 PR，并在事务内重核 task version、所选运行、步骤门槛和整任务的 PR 发布绑定后写 TaskDelivery/closed；另一笔发布结果未知时，即使选用的 PR 已合并也不关闭任务。
 
@@ -166,11 +164,11 @@ runtime 中的 `control.operation` 先于副作用保存；完成时把业务结
 
 ## 候选任务快照
 
-native 服务的候选来自中心 `ReadyNativeTasks` 快照，并由事务领取重新验证；CLI `steerline task list` 读取中心分页协议。旧 Beads `tasks.json` 候选投影仅属于显式 Beads 测试/旧模式，不作为 native 许可或任务来源。
+native 服务的候选来自中心 `ReadyNativeTasks` 快照，并由事务领取重新验证；CLI `steerline task list` 读取中心分页协议。Beads `tasks.json` 不属于受支持的候选或状态来源。
 
 ## runtime 版本守卫
 
-新服务只从 当前 SQLite 数据库恢复，并将 `runtime.json` v5 用作可重建观察投影。v1–v4 文件保持原样，`LoadRuntime` 和服务启动均返回 `unsupported runtime schema`；不会尝试从这些文件恢复、迁移或清理数据。v5 投影缺少 SQLite 数据库时也会拒绝恢复。已有规划数字 ID 的新任务通过 `run_dir/task-identity-map.json` 中经过项目、来源三元组和一对一校验的 `task-identity-map/v1` 映射取得稳定身份；不能按标题猜测。未映射的 Beads 任务使用不占数字规划号的 `legacy:<hash>` 身份。
+新服务只从当前 SQLite 数据库恢复，并将 `runtime.json` v5 用作可重建观察投影。v1–v4 文件保持原样，`LoadRuntime` 和服务启动均返回 `unsupported runtime schema`；不会尝试从这些文件恢复、迁移或清理数据。v5 投影缺少 SQLite 数据库时也会拒绝恢复。native Task ID 直接作为 `task_id` 使用；不维护外部身份映射或按标题推断身份。检测到 Beads、旧 source 字段或 whole-run 结果绑定时拒绝服务启动。
 
 ## 执行结果
 
@@ -180,30 +178,11 @@ native 服务的候选来自中心 `ReadyNativeTasks` 快照，并由事务领�
 
 WorkflowRun 保存步骤定义及 Codex executable/args、sandbox、model、reasoning_effort、profile。配置变更不改变已创建流程的执行参数。输入包含工作区证据、前置结果 ID 和正文，修复步骤能够读取实际失败检查或审查结果。
 
-步骤回执包含 schema_version、project_identity、task_id、workflow_run_id、execution_id、attempt_id 与 result。中心逐项核验身份、输入 revision、真实 Git common-dir/分支/base、前置结果和步骤门槛。无效结果将尝试记为 failed；通过门槛后才提交 succeeded 与下一步意图。publish_pr 的前置验证/审查在启动发布器之前检查，PR head 在关闭外部任务之前核验。
+步骤 envelope 包含 `schema_version`、`project_identity`、`task_id`、`workflow_run_id`、`execution_id`、`attempt_id` 与 `result`。中心逐项核验身份、输入 revision、真实 Git common-dir/分支/base、前置结果和步骤门槛。无效结果将尝试记为 failed；通过门槛后才提交 succeeded 与下一步意图。`publish_pr` 的前置验证/审查在启动发布器之前检查，PR head 在创建 delivery 前重新核验。
 
-minimal-v1 当前拒绝本地决策续跑：answer_decision 在接受前核验固定执行能力，不支持的 local continuation 会被拒绝并保留 pending 问题，不启动新步骤。若执行状态已有 `reply_accepted` 决策，结果仍须同时返回 `result.applied_decision_id`、`applied_decision_attempt_id`、`applied_decision_execution_id` 和 `applied_answer_sha256`，分别匹配原问题、decision attempt、Workflow Execution 和固定答案摘要；后端接受输入只算 reply_accepted，缺少证明时决策失败且 run 阻塞。单段 accept-result/mark-stopped 入口不能用于 minimal-v1；retry 只针对已结算的失败步骤经中心事务预留新 attempt，不确定步骤仍须按原尝试和 Operation 对账。
+`answer_decision` 只接受绑定当前 native WorkflowRun、Execution 和 attempt 的 pending 问题。中心核对原 workspace 和等待中的 StepAttempt，再为同一 workflow/execution 创建新 attempt 继续固定步骤。若状态为 `reply_accepted`，后续步骤必须同时返回 `applied_decision_id`、`applied_decision_attempt_id`、`applied_decision_execution_id` 和 `applied_answer_sha256`，分别匹配原问题、decision attempt、Workflow Execution 和固定答案摘要；缺少证明时决策失败且执行阻塞。`retry_run` 只针对已结算的失败步骤经中心事务预留新 attempt；不确定步骤仍须按原尝试和 Operation 对账。
 
-### 单次入口结果
-
-八个基础键都必须出现，不允许额外键：task_id、run_id、outcome、pr_url、worktree_path、base_commit、summary、error；此外 `decision` 和 `decision_application` 是可选键。`decision` 仅用于 outcome=needs_decision；answer_decision 的后续结果只有携带严格匹配原 decision/attempt/execution/答案摘要的 `decision_application` 才能证明应用。
-
-- task_id/run_id 必须与此次派发精确匹配。
-- outcome 允许 pr_submitted、blocked、needs_decision。
-- needs_decision 必须带 `decision` 对象：`question`、1–12 个 `options`（每个含 `id`、`label`，可选 `detail`），以及可选 `context`/`recommended`/`allow_free_text`。服务会置 `finish_task_status=waiting_decision` 并等待人工回答，见 [decisions](decisions.md)。
-- pr_submitted 必须提供 PR URL，并原样回传调度器提供的绝对工作目录、40 或 64 位小写十六进制 base commit；不能用最后的实现 HEAD 替代 base。summary/error 可为 null。
-- blocked 可将未知字段设为 null，应在 error 中解释原因。
-- 最多读取 2 MiB，拒绝缺失字段、额外字段、多个 JSON 值、Markdown 包装或自然语言。
-
-Codex 通过 `exec --json --output-schema <file> --output-last-message <per-run-result> ... -` 启动，提示词经 stdin 传入。事件 stdout 与结果文件独立；结果提交不等于任务完成。
-
-进程工作目录为调度器创建的 worktree。接收结果或人工 accept-result 时，同时核验目录对应同一 Git common-dir、仍在分配的实现分支上，且 HEAD 保留 base_commit 作为祖先；核验失败即阻塞，不接受结果中的路径或提交改写事实。blocked 结果可用 null，但提供的目录/起点同样必须与调度记录一致。
-
-PR 命令适配器的数据结构与 result 不同，见 README 的 PR 查询部分。命令查询是可信的本机适配边界，必须直接验证平台事实。
-
-completion-request.json 与 completion-result.json 是每次运行目录下的最近一次结项请求和回执。服务通过 stdin 传请求，读取 stdout，非零退出时也保存返回的部分写入证据；这两份文件不会包含 PR 认证 token。详情见 [结项命令协议](completion-command.md)。completion 和 beads_context 是 v2 的可空扩展字段；不要用旧二进制读取新程序写入的快照。
-
-显式 retry 不改变 task_id/run_id/worktree/base_commit。log_path/result_path 指向本次 attempts/<attempt_id> 目录；该目录的 previous-run.json 保留上一次运行概要，原日志和结果不移动、不覆盖。重试准备状态同样先落盘，意外中断后仍变成 unknown，不能自动恢复。service.mode 是 v2 的新增可选读取字段。
+PR URL 和发布 head 是 `publish_pr` 的步骤事实，不是单独的 whole-run JSON handoff。只有固定验证/审查门槛通过、中心重新核验 PR 身份和真实合并证据后，才能创建 TaskDelivery、关闭 Task 并释放后继。旧 `result.schema.json`、one-shot result 和 `accept_result` 不属于当前协议；含 `result_path` 的旧 runtime 投影会在服务接管前拒绝。
 
 ## 历史与读取规则
 

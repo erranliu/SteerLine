@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 	"unicode/utf8"
 )
 
@@ -17,18 +16,10 @@ import (
 // authority. Clients append answer_decision commands; the single service writer
 // validates and accepts them before applyDecisions considers continuation.
 
-const (
-	decisionContinueTxt = "continue.txt"
-)
-
 var ErrAnswerConflict = errors.New("answer_conflict: this decision already has a different accepted answer")
 
 func sameDecisionAnswer(a, b DecisionAnswer) bool {
 	return a.DecisionID == b.DecisionID && a.RunID == b.RunID && strings.TrimSpace(a.OptionID) == strings.TrimSpace(b.OptionID) && strings.TrimSpace(a.Note) == strings.TrimSpace(b.Note)
-}
-
-func decisionContinuePath(r *Run) string {
-	return filepath.Join(filepath.Dir(*r.ResultPath), decisionContinueTxt)
 }
 
 func validateDecisionRequest(req *DecisionRequest) error {
@@ -171,7 +162,10 @@ func SubmitAnswerDecision(ctx context.Context, c Config, runID, decisionID, opti
 	if strings.TrimSpace(runID) == "" {
 		return CommandRecord{}, false, errors.New("answer requires a run ID")
 	}
-	if err := preflightExistingState(c.RunDir, c.RuntimeFile); err != nil {
+	if err := requireNativeTaskAuthority(c); err != nil {
+		return CommandRecord{}, false, err
+	}
+	if err := preflightNativeStatePath(c); err != nil {
 		return CommandRecord{}, false, err
 	}
 	if err := c.ResolveIdentity(ctx); err != nil {
@@ -329,7 +323,10 @@ func SubmitDecisionAnswer(ctx context.Context, c Config, o AnswerOptions) (Comma
 	if strings.TrimSpace(o.RunID) == "" {
 		return CommandRecord{}, false, errors.New("answer requires a run ID or task ID")
 	}
-	if err := preflightExistingState(c.RunDir, c.RuntimeFile); err != nil {
+	if err := requireNativeTaskAuthority(c); err != nil {
+		return CommandRecord{}, false, err
+	}
+	if err := preflightNativeStatePath(c); err != nil {
 		return CommandRecord{}, false, err
 	}
 	if err := c.ResolveIdentity(ctx); err != nil {
@@ -398,86 +395,8 @@ func decisionAnswerMeta(r *Run) map[string]any {
 	}
 }
 
-// decisionContinuation is the file the resumed agent reads. It restates the
-// question and the human's answer so the same agent can continue in place.
-func decisionContinuation(r *Run, ref ExecutionRef) string {
-	var b strings.Builder
-	b.WriteString("A human answered the blocking decision for this task. Continue the work now.\n\n")
-	b.WriteString("Question:\n")
-	b.WriteString(r.Decision.Request.Question)
-	b.WriteString("\n\n")
-	if r.Decision.OptionID != "" {
-		b.WriteString("Chosen option: " + r.Decision.OptionID)
-		for _, o := range r.Decision.Request.Options {
-			if o.ID == r.Decision.OptionID {
-				b.WriteString(" — " + o.Label)
-			}
-		}
-		b.WriteString("\n")
-	}
-	if r.Decision.Note != "" {
-		b.WriteString("Human note: " + r.Decision.Note + "\n")
-	}
-	answer, _ := ReadDecisionAnswer(r)
-	b.WriteString("\nResume the original dispatch prompt, apply this decision, and finish the task. When done, overwrite `.steerline-result.json` in the worktree root with the required final JSON (outcome pr_submitted when a PR is published, or blocked with a clear reason).\n")
-	b.WriteString("Only after applying the answer, include decision_application with these exact values in that result: decision_id=")
-	b.WriteString(r.Decision.ID)
-	b.WriteString(", attempt_id=")
-	b.WriteString(r.Decision.AttemptID)
-	b.WriteString(", execution_id=")
-	b.WriteString(r.ExecutionID)
-	b.WriteString(", execution_ref_sha256=")
-	b.WriteString(digestValue(ref))
-	b.WriteString(", answer_sha256=")
-	b.WriteString(decisionAnswerDigest(answer))
-	b.WriteString(". This is the application receipt; do not report it if the answer was not applied.\n")
-	return b.String()
-}
-
 func decisionAnswerDigest(answer DecisionAnswer) string {
 	return digestValue(struct{ OptionID, Note string }{strings.TrimSpace(answer.OptionID), strings.TrimSpace(answer.Note)})
-}
-
-func validateDecisionApplication(run *Run, result Result, ref ExecutionRef) error {
-	if run == nil || run.Decision == nil || run.Decision.Status != "reply_accepted" {
-		return errors.New("there is no accepted decision reply to verify")
-	}
-	evidence := result.DecisionApplication
-	if evidence == nil {
-		return errors.New("result has no decision application evidence")
-	}
-	answer, err := ReadDecisionAnswer(run)
-	if err != nil {
-		return fmt.Errorf("accepted answer is unavailable for verification: %w", err)
-	}
-	if evidence.DecisionID != run.Decision.ID || evidence.AttemptID != run.Decision.AttemptID || evidence.ExecutionID != run.ExecutionID || evidence.ExecutionRefHash != digestValue(ref) || evidence.AnswerHash != decisionAnswerDigest(answer) {
-		return errors.New("decision application evidence does not match the original decision, attempt, execution binding and fixed answer")
-	}
-	return nil
-}
-
-func (s *Service) failUnverifiedDecisionApplication(run *Run, reason string) error {
-	if run == nil || run.Decision == nil || run.Decision.Status != "reply_accepted" {
-		return errors.New("run has no unverified accepted decision reply")
-	}
-	run.Decision.Status = "failed"
-	run.Decision.Version++
-	run.ExecutionStatus = "failed"
-	run.FinishTaskStatus = "blocked"
-	run.EndedAt = ptr(now())
-	run.Error = ptr(clip("Decision application was not verified: "+reason, 2000))
-	if s.State.CurrentTask != nil && *s.State.CurrentTask == run.TaskID {
-		s.State.CurrentTask = nil
-		for _, other := range s.State.Runs {
-			if other != nil && other.RunID != run.RunID && (other.ExecutionStatus == "unknown" || other.ExecutionStatus == "pending" || other.ExecutionStatus == "running" || other.FinishTaskStatus == "waiting_decision") {
-				s.State.CurrentTask = ptr(other.TaskID)
-				break
-			}
-		}
-	}
-	s.closeActivity(run)
-	s.note(run, "steer", "decision", "failed", "decision application was not verified", reason, decisionAnswerMeta(run))
-	return s.save()
 }
 
 func (s *Service) requireDecisionReplyCapability(ctx context.Context, run *Run) error {
@@ -488,50 +407,21 @@ func (s *Service) requireDecisionReplyCapability(ctx context.Context, run *Run) 
 // CLI, console client and service handler. It checks the immutable execution
 // binding and verified reply capabilities for this exact target.
 func DecisionReplyEligibility(ctx context.Context, c Config, run *Run) error {
-	if run == nil || run.Decision == nil || run.Decision.Status != "pending" {
-		return errors.New("decision is not pending on the current run")
-	}
-	if run.AttemptID == "" || run.Decision.AttemptID != run.AttemptID {
-		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "decision belongs to a different execution attempt"}
-	}
-	if run.Backend != string(BackendOrca) || run.Protocol != string(ProtocolOrcaTerminalV2) {
-		return &BackendError{Code: BackendUnsupported, Diagnostic: "local continuation is unsupported; this decision cannot be answered and resumed on the local backend"}
-	}
-	records := executionRecords{root: c.RunDir}
-	ref, err := records.loadBinding(run.RunID, run.AttemptID)
-	if err != nil {
-		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "decision execution has no valid fixed backend binding", Cause: err}
-	}
-	if ref.RunID != run.RunID || ref.AttemptID != run.AttemptID || ref.Backend != BackendOrca || ref.Protocol != ProtocolOrcaTerminalV2 || ref.Target.ID != run.Target.ID || ref.Target.ConnectionID != run.Target.ConnectionID || ref.Agent != (AgentSpec{Name: run.Agent}) || run.Process == nil || *run.Process != ref.External || ref.WorkspacePath != deref(run.WorktreePath) || ref.WorkspaceBranch != deref(run.WorktreeBranch) || ref.BaseCommit != deref(run.BaseCommit) {
-		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "decision execution binding differs from the original run, attempt, target, workspace or process identity"}
-	}
-	backend := backendFor(c, BeadsContext{})
-	kind, protocol := backend.Identity()
-	if kind != ref.Backend || protocol != ref.Protocol {
-		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "configured backend differs from the fixed decision execution"}
-	}
-	probe, err := backend.Probe(ctx, ref.Target, ref.Agent)
-	if err != nil {
+	if err := requireNativeTaskAuthority(c); err != nil {
 		return err
 	}
-	report, err := records.loadCapabilityReport(probe)
-	if err != nil {
-		status := CapabilityNotTested
-		if !os.IsNotExist(err) {
-			return err
-		}
-		return &BackendError{Code: BackendUnsupported, Diagnostic: fmt.Sprintf("reply/observe/output capabilities are %s for %s/%s target %s", status, ref.Backend, ref.Protocol, ref.Target.ID)}
+	if run == nil || run.Decision == nil || run.Decision.Status != "pending" {
+		return errors.New("decision is not pending on the current native run")
 	}
-	for _, name := range []string{"reply_continue", "observe", "output_reading"} {
-		if capabilityStatus(report, name) != CapabilityVerified {
-			return &BackendError{Code: BackendUnsupported, Diagnostic: fmt.Sprintf("%s capability is %s for %s/%s target %s version %s", name, capabilityStatus(report, name), ref.Backend, ref.Protocol, ref.Target.ID, report.PlatformVersion)}
-		}
+	if run.WorkflowVersion != MinimalWorkflowVersion || !stableExecutionID(run.ExecutionID) || run.AttemptID == "" || run.Decision.AttemptID != run.AttemptID {
+		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "decision is not bound to a fixed native workflow, execution and attempt"}
+	}
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 	return nil
 }
 
-// applyDecisions resumes runs whose decision a human answered. It runs on a tick
-// and never runs alongside a worker: the single execution slot must be free.
 func (s *Service) applyDecisions(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -542,227 +432,58 @@ func (s *Service) applyDecisions(ctx context.Context) error {
 	if reason := s.executionSlotReason("", true); reason != "" {
 		return errors.New(reason)
 	}
-	for _, r := range s.State.Runs {
+	for _, run := range s.State.Runs {
 		if s.worker != nil {
-			// Single execution slot: one resumed decision at a time.
 			break
 		}
-		if r.FinishTaskStatus != "waiting_decision" || r.Decision == nil || r.Decision.Status != "answer_saved" {
+		if run == nil || run.FinishTaskStatus != "waiting_decision" || run.Decision == nil || run.Decision.Status != "answer_saved" {
 			continue
 		}
-		if r.AttemptID == "" || r.Decision.AttemptID != r.AttemptID {
-			return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "saved decision belongs to a different execution attempt; continuation refused"}
+		if run.WorkflowVersion != MinimalWorkflowVersion || !stableExecutionID(run.ExecutionID) || run.AttemptID == "" || run.Decision.AttemptID != run.AttemptID {
+			return nativeErr("unsupported_schema", "saved decision is not bound to a current minimal-v1 execution attempt")
 		}
-		a, e := ReadDecisionAnswer(r)
-		if e != nil {
-			if os.IsNotExist(e) {
-				continue
-			}
-			s.setError(fmt.Errorf("decision answer for %s ignored: %w", r.TaskID, e))
-			if se := s.save(); se != nil {
-				return se
+		answer, err := ReadDecisionAnswer(run)
+		if err != nil {
+			s.setError(fmt.Errorf("decision answer for %s ignored: %w", run.TaskID, err))
+			if saveErr := s.save(); saveErr != nil {
+				return saveErr
 			}
 			continue
 		}
-		if r.Backend != string(BackendOrca) || r.Protocol != string(ProtocolOrcaTerminalV2) || r.WorkflowVersion == MinimalWorkflowVersion {
-			reason := "decision continuation is unsupported for this backend/workflow; the saved answer was retained and no execution was started"
-			if r.Error == nil || *r.Error != reason {
-				r.Error = ptr(reason)
-				s.note(r, "steer", "decision", "unsupported", "decision continuation is unsupported", reason, decisionAnswerMeta(r))
-				if saveErr := s.save(); saveErr != nil {
-					return saveErr
-				}
-			}
-			continue
+		if answer.DecisionID != run.Decision.ID || answer.RunID != run.RunID {
+			return nativeErr("contract_mismatch", "saved decision answer differs from its fixed decision and workflow identity")
 		}
-		// Reconcile before consuming an answer so a newly discovered orphaned
-		// claim cannot remain invisible until after a terminal was resumed.
-		if e := s.reconcile(ctx); e != nil {
-			return e
+		if err := s.reconcile(ctx); err != nil {
+			return err
 		}
 		if reason := s.executionSlotReason("", true); reason != "" {
 			return errors.New(reason)
 		}
-		if r.WorkflowVersion == MinimalWorkflowVersion {
-			r.Decision.Status = "resuming"
-			r.Decision.Version++
-			if e := s.syncMinimalDecision(r); e != nil {
-				return e
-			}
-			if e := s.save(); e != nil {
-				return e
-			}
-			if e := s.resumeMinimalAfterDecision(ctx, r, a); e != nil {
-				s.blocked(r, "Decision resume failed: "+e.Error())
-				s.note(r, "steer", "decision", "failed", "decision resume failed", e.Error(), nil)
-				if r.Decision.Status == "resuming" && r.ExecutionStatus != "unknown" {
-					r.Decision.Status = "failed"
-					r.Decision.Version++
-					if syncErr := s.syncMinimalDecision(r); syncErr != nil {
-						return errors.Join(e, syncErr)
-					}
+		run.Decision.Status = "resuming"
+		run.Decision.Version++
+		if err := s.syncMinimalDecision(run); err != nil {
+			return err
+		}
+		if err := s.save(); err != nil {
+			return err
+		}
+		if err := s.resumeMinimalAfterDecision(ctx, run, answer); err != nil {
+			s.blocked(run, "Decision resume failed: "+err.Error())
+			s.note(run, "steer", "decision", "failed", "decision resume failed", err.Error(), nil)
+			if run.Decision.Status == "resuming" && run.ExecutionStatus != "unknown" {
+				run.Decision.Status = "failed"
+				run.Decision.Version++
+				if syncErr := s.syncMinimalDecision(run); syncErr != nil {
+					return errors.Join(err, syncErr)
 				}
-				if r.ExecutionStatus == "unknown" {
-					s.State.SlotOccupied, s.State.CurrentTask = true, ptr(r.TaskID)
-				}
-				s.closeActivity(r)
-				if se := s.save(); se != nil {
-					return se
-				}
-				continue
 			}
-			continue
-		}
-		r.Decision.Status = "resuming"
-		r.Decision.Version++
-		r.Decision.OptionID = a.OptionID
-		r.Decision.Note = a.Note
-		r.Decision.AnsweredBy = a.AnsweredBy
-		answeredAt := a.AnsweredAt
-		r.Decision.AnsweredAt = &answeredAt
-		s.note(r, "steer", "decision", "answered", "decision answered", decisionAnswerSummary(r), decisionAnswerMeta(r))
-		if e := s.save(); e != nil {
-			return e
-		}
-		if e := s.resumeAfterDecision(ctx, r); e != nil {
-			s.blocked(r, "Decision resume failed: "+e.Error())
-			s.note(r, "steer", "decision", "failed", "decision resume failed", e.Error(), nil)
-			if s.decisionResumeDefinitelyRejected(r) {
-				r.Decision.Status = "failed"
-				r.Decision.Version++
+			if run.ExecutionStatus == "unknown" {
+				s.State.SlotOccupied, s.State.CurrentTask = true, ptr(run.TaskID)
 			}
-			// The original terminal may still be alive even after a definite
-			// reply rejection. Keep its execution slot reserved until recovery.
-			r.ExecutionStatus = "unknown"
-			s.State.SlotOccupied = true
-			s.State.CurrentTask = ptr(r.TaskID)
-			s.closeActivity(r)
-			if se := s.save(); se != nil {
-				return se
+			s.closeActivity(run)
+			if saveErr := s.save(); saveErr != nil {
+				return saveErr
 			}
-			continue
-		}
-		r.Decision.Status = "reply_accepted"
-		r.Decision.Version++
-		r.ExecutionStatus = "running"
-		r.EndedAt = nil
-		r.Error = nil
-		if e := s.save(); e != nil {
-			return e
-		}
-		s.note(r, "steer", "decision", "reply_accepted", "decision reply accepted", decisionAnswerSummary(r), nil)
-		if e := s.save(); e != nil {
-			return e
-		}
-	}
-	return nil
-}
-
-func (s *Service) decisionResumeDefinitelyRejected(run *Run) bool {
-	if run == nil || run.Decision == nil {
-		return false
-	}
-	op, err := (executionRecords{root: s.Config.RunDir}).loadOperation(run.RunID, run.Decision.AttemptID, "reply-"+run.Decision.ID)
-	if os.IsNotExist(err) {
-		return true // Failure occurred before a durable external-send intent.
-	}
-	if err != nil {
-		return false
-	}
-	return op.Status == OperationPending || op.Status == OperationRejected
-}
-
-// resumeAfterDecision re-arms supervision of the fixed execution and sends a
-// continuation only when the selected backend has verified support.
-func (s *Service) resumeAfterDecision(ctx context.Context, r *Run) error {
-	if r.Process == nil || r.Decision == nil {
-		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "run has no complete decision/execution identity"}
-	}
-	if r.AttemptID == "" || r.Decision.AttemptID != r.AttemptID {
-		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "decision belongs to a different execution attempt"}
-	}
-	if r.ResultPath == nil {
-		return errors.New("run has no worktree or result path")
-	}
-	records := executionRecords{root: s.Config.RunDir}
-	ref, e := records.loadBinding(r.RunID, r.AttemptID)
-	if e != nil {
-		if os.IsNotExist(e) {
-			return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "execution has no fixed target binding; manual recovery required"}
-		}
-		return e
-	}
-	backend := backendFor(s.Config, BeadsContext{})
-	kind, protocol := backend.Identity()
-	if ref.Backend != kind || ref.Protocol != protocol || ref.Target != targetFor(s.Config) || ref.External != *r.Process {
-		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "fixed execution backend/protocol/target no longer matches the run"}
-	}
-	if _, e := s.requireBackendCapabilitiesFor(ctx, backend, ref.Target, ref.Agent, "reply_continue", "observe", "output_reading"); e != nil {
-		return e
-	}
-	contPath := decisionContinuePath(r)
-	if ref.WorkspacePath == "" || !filepath.IsAbs(ref.WorkspacePath) {
-		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "fixed workspace identity is incomplete"}
-	}
-	opID := "reply-" + r.Decision.ID
-	answer := "Read " + contPath + " and continue. Follow it exactly."
-	continuation := decisionContinuation(r, ref)
-	op := Operation{Version: ExecutionRecordVersion, ID: opID, RunID: r.RunID, AttemptID: r.AttemptID, Backend: ref.Backend, Protocol: ref.Protocol, Target: ref.Target, Action: "reply", PayloadDigest: digestValue(struct{ DecisionID, Pointer, Content string }{r.Decision.ID, answer, continuation}), Status: OperationPending, StartedAt: now(), UpdatedAt: now(), Ref: &ref}
-	if old, loadErr := records.loadOperation(r.RunID, r.AttemptID, opID); loadErr == nil {
-		if old.PayloadDigest != op.PayloadDigest {
-			return errors.New("reply operation id conflicts with its fixed answer")
-		}
-		return fmt.Errorf("reply operation is already %s; refusing duplicate continuation", old.Status)
-	} else if !os.IsNotExist(loadErr) {
-		return loadErr
-	}
-	if e := records.saveOperation(op); e != nil {
-		return e
-	}
-	if e := AtomicWrite(contPath, []byte(continuation)); e != nil {
-		op.Status, op.Diagnostic, op.UpdatedAt = OperationRejected, e.Error(), now()
-		if saveErr := records.saveOperation(op); saveErr != nil {
-			return errors.Join(e, saveErr)
-		}
-		return e
-	}
-	op.Status, op.UpdatedAt = OperationInFlight, now()
-	if e := records.saveOperation(op); e != nil {
-		return e
-	}
-	reply, e := backend.Reply(ctx, ref, answer, op, *r.ResultPath)
-	if e != nil {
-		var backendErr *BackendError
-		if errors.As(e, &backendErr) && backendErr.Code == BackendOutcomeUnknown {
-			op.Status = OperationUnknown
-		} else {
-			op.Status = OperationRejected
-		}
-		op.Diagnostic, op.UpdatedAt = e.Error(), now()
-		if saveErr := records.saveOperation(op); saveErr != nil {
-			return errors.Join(e, saveErr)
-		}
-		return e
-	}
-	if !reply.InputAccepted || reply.Worker == nil {
-		return &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "Orca reply did not return an accepted input and observer"}
-	}
-	s.worker, s.active = reply.Worker, r
-	s.State.SlotOccupied, s.State.CurrentTask = true, ptr(r.TaskID)
-	r.StartedAt = ptr(now())
-	op.Status, op.UpdatedAt = OperationAccepted, now()
-	if e := records.saveOperation(op); e != nil {
-		// Preserve the external session, but detach its local observer so an
-		// unrecorded reply cannot silently advance business state.
-		detachCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		_ = backend.DetachObservation(detachCtx, reply.Worker)
-		cancel()
-		s.worker, s.active = nil, nil
-		return &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "reply was accepted but its durable receipt could not be saved", Cause: e}
-	}
-	if reply.TurnStarted {
-		if e := s.recordOrcaTurnStarted(r, ref, op, reply); e != nil {
-			s.setError(fmt.Errorf("conversation turn receipt persistence failed: %w", e))
 		}
 	}
 	return nil

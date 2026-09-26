@@ -53,7 +53,7 @@ type MinimalStepInput struct {
 	WorkflowDefinition    WorkflowDefinition           `json:"workflow_definition"`
 	ProjectSteps          ProjectSteps                 `json:"project_steps"`
 	Workspace             WorkspaceEvidence            `json:"workspace"`
-	Task                  Task                         `json:"task"`
+	Task                  TaskRecord                   `json:"task"`
 	Decision              *MinimalDecisionContinuation `json:"decision,omitempty"`
 }
 
@@ -248,54 +248,6 @@ func (c Config) validateMinimalEntriesAtBase(ctx context.Context, workflow Minim
 	return nil
 }
 
-func InitializeMinimalWorkflow(project string, c Config, task Task, source BeadsContext, run *Run) (TaskRecord, WorkflowRunRecord, ExecutionRecord, StepAttemptRecord, error) {
-	workflow, err := c.minimalConfig()
-	if err != nil {
-		return TaskRecord{}, WorkflowRunRecord{}, ExecutionRecord{}, StepAttemptRecord{}, err
-	}
-	if workflow == nil {
-		return TaskRecord{}, WorkflowRunRecord{}, ExecutionRecord{}, StepAttemptRecord{}, errors.New("minimal workflow is not configured")
-	}
-	if run == nil || run.DomainTaskID == "" || run.RunID == "" || run.Backend == "" || run.Protocol == "" {
-		return TaskRecord{}, WorkflowRunRecord{}, ExecutionRecord{}, StepAttemptRecord{}, errors.New("minimal workflow requires stable task, run, backend and protocol identities")
-	}
-	runner := StepRunnerSettings{Codex: c.Codex, Sandbox: c.Sandbox, Model: c.Model, ReasoningEffort: c.ReasoningEffort, Profile: c.Profile}
-	runner.Codex.Args = append([]string(nil), c.Codex.Args...)
-	definitionBytes, err := json.Marshal(struct {
-		Workflow *MinimalWorkflowConfig
-		Runner   StepRunnerSettings
-	}{workflow, runner})
-	if err != nil {
-		return TaskRecord{}, WorkflowRunRecord{}, ExecutionRecord{}, StepAttemptRecord{}, err
-	}
-	digest := operationDigest(definitionBytes)
-	created := now()
-	taskRecord := TaskRecord{ProjectIdentity: project, TaskID: run.DomainTaskID, ExternalProvider: "beads", ExternalProject: source.ProjectID, ExternalID: task.ID, IdentityMapDigest: run.IdentityMapDigest, Title: task.Title, Claimant: run.Claimant, Source: "beads", Status: "open", Version: 1, CreatedAt: created, UpdatedAt: created}
-	wfr := WorkflowRunRecord{ProjectIdentity: project, WorkflowRunID: run.RunID, TaskID: taskRecord.TaskID, WorkflowVersion: MinimalWorkflowVersion, ConfigDigest: digest, Definition: workflow.Definition, ProjectSteps: workflow.Steps, Phase: "queued", Repository: c.Repository, Branch: c.Branch, CreatedAt: created, UpdatedAt: created}
-	wfr.Runner = runner
-	executionID := newID()
-	run.ExecutionID = executionID
-	run.WorkflowVersion = MinimalWorkflowVersion
-	run.WorkflowConfigDigest = digest
-	target := run.Target
-	target.BaseRevision = deref(run.BaseCommit)
-	if target.BaseRevision == "" && run.WorkspaceIntent != nil {
-		target.BaseRevision = run.WorkspaceIntent.BaseCommit
-	}
-	target.Branch = c.Branch
-	target.WorktreeID = deref(run.WorktreePath)
-	execution := ExecutionRecord{ProjectIdentity: project, ExecutionID: executionID, WorkflowRunID: run.RunID, Agent: run.Agent, Backend: run.Backend, Protocol: run.Protocol, Target: target, Status: "pending", CurrentStep: "prepare", CreatedAt: created, UpdatedAt: created}
-	attemptID := newID()
-	run.AttemptID = attemptID
-	run.DomainAttemptNumber = 1
-	attempt := StepAttemptRecord{ProjectIdentity: project, AttemptID: attemptID, ExecutionID: executionID, StepID: "prepare", AttemptNumber: 1, Status: "planned", InputRevision: target.BaseRevision, ContractDigest: operationDigest([]byte("prepare/v1")), CreatedAt: created, UpdatedAt: created}
-	return taskRecord, wfr, execution, attempt, nil
-}
-
-func workflowDigest(value MinimalWorkflowConfig) string {
-	data, _ := json.Marshal(value)
-	return operationDigest(data)
-}
 func nextStepAttemptNumber(attempts []StepAttemptRecord, executionID, stepID string) int {
 	next := 1
 	for _, attempt := range attempts {
@@ -347,7 +299,7 @@ func (s *Service) inspectMinimalWorkspace(ctx context.Context, run *Run) (Worksp
 	if canonical(worktree) != canonical(run.WorkspaceIntent.Path) || *run.WorktreeBranch != run.WorkspaceIntent.Branch || *run.BaseCommit != run.WorkspaceIntent.BaseCommit {
 		return WorkspaceEvidence{}, nativeErr("authority_mismatch", "minimal workspace differs from its fixed durable intent")
 	}
-	backend := backendFor(s.Config, BeadsContext{})
+	backend := backendFor(s.Config)
 	kind, protocol := backend.Identity()
 	if string(kind) != run.Backend || string(protocol) != run.Protocol || run.Target.ID != targetFor(s.Config).ID {
 		return WorkspaceEvidence{}, UnsupportedAdapterOperation("InspectWorkspace", "configured target differs from the native execution identity")
@@ -367,7 +319,7 @@ func minimalAttemptPaths(c Config, run *Run, attempt *StepAttemptRecord) (dir, e
 	return dir, filepath.Join(dir, "events.jsonl"), filepath.Join(dir, "stderr.log"), filepath.Join(dir, "result.json")
 }
 
-func buildMinimalStepInput(project string, task Task, run *Run, workflow *WorkflowRunRecord, execution *ExecutionRecord, attempt *StepAttemptRecord, history ...StepAttemptRecord) MinimalStepInput {
+func buildMinimalStepInput(project string, task TaskRecord, run *Run, workflow *WorkflowRunRecord, execution *ExecutionRecord, attempt *StepAttemptRecord, history ...StepAttemptRecord) MinimalStepInput {
 	input := MinimalStepInput{SchemaVersion: 1, ProjectIdentity: project, TaskID: run.DomainTaskID, WorkflowRunID: workflow.WorkflowRunID, ExecutionID: execution.ExecutionID, AttemptID: attempt.AttemptID, StepID: attempt.StepID, InputRevision: attempt.InputRevision, CandidateRevision: execution.CandidateRevision, PrerequisiteResultIDs: append([]string(nil), attempt.PrerequisiteIDs...), WorkflowDefinition: workflow.Definition, ProjectSteps: workflow.ProjectSteps, Workspace: execution.Workspace, Task: task}
 	for _, id := range attempt.PrerequisiteIDs {
 		for _, prior := range history {
@@ -387,29 +339,6 @@ func buildMinimalStepInput(project string, task Task, run *Run, workflow *Workfl
 	return input
 }
 
-func writeMinimalPrompt(path string, input MinimalStepInput, contract StepContract) error {
-	data, err := json.MarshalIndent(input, "", "  ")
-	if err != nil {
-		return err
-	}
-	var prompt string
-	if input.Decision != nil {
-		prompt = fmt.Sprintf("A human answered the blocking decision. Continue the same workflow step using the supplied request and answer. Load and follow project entry %q at version %q. Input is the following JSON. Return one JSON object matching the supplied output schema, without Markdown or extra text. Do not dispatch another step or write center state.\n\n%s\n", contract.Entry, contract.Version, string(data))
-	} else {
-		prompt = fmt.Sprintf("Execute only step %q for this task. Load and follow project entry %q at version %q. Input is the following JSON. Return one JSON object matching the supplied output schema, without Markdown or extra text. Do not dispatch another step or write center state.\n\n%s\n", input.StepID, contract.Entry, contract.Version, string(data))
-	}
-	boundaries := map[string]string{
-		"implement":  "Read the specification and project instructions. Implement and test the change, then commit a clean local candidate. Do not push, publish a PR, merge or close the task.",
-		"review":     "Review the verified candidate without changing code or publishing. Return passed, changes_requested or blocked with concrete evidence.",
-		"publish_pr": "Publish only the verified candidate and return its precise PR URL and published head. Do not merge or close the task.",
-	}
-	prompt = boundaries[input.StepID] + "\n" + prompt
-	if input.Decision != nil {
-		prompt += "\nAfter applying the provided answer, return result.applied_decision_id, applied_decision_attempt_id, applied_decision_execution_id and applied_answer_sha256 using the exact bound values in decision. A matching decision ID alone is not application evidence.\n"
-	}
-	return AtomicWrite(path, []byte(prompt))
-}
-
 func writeNativeMinimalPrompt(path string, input NativeTaskWorkerContext, contract StepContract) error {
 	data, err := json.MarshalIndent(input, "", "  ")
 	if err != nil {
@@ -422,14 +351,11 @@ func writeNativeMinimalPrompt(path string, input NativeTaskWorkerContext, contra
 	return AtomicWrite(path, []byte(prompt))
 }
 
-func (s *Service) minimalWorkerInput(ctx context.Context, task Task, run *Run, workflow *WorkflowRunRecord, execution *ExecutionRecord, attempt *StepAttemptRecord, input MinimalStepInput) (any, error) {
-	if !s.native {
-		return input, nil
-	}
+func (s *Service) minimalWorkerInput(ctx context.Context, task TaskRecord, run *Run, workflow *WorkflowRunRecord, execution *ExecutionRecord, attempt *StepAttemptRecord, input MinimalStepInput) (any, error) {
 	if run == nil || workflow == nil || execution == nil || attempt == nil || run.WorktreePath == nil || run.WorktreeBranch == nil || run.BaseCommit == nil {
 		return nil, nativeErr("contract_mismatch", "native worker context requires a fixed task, workflow, execution, attempt and workspace")
 	}
-	taskRecord := nativeTaskRecord(s.State.Tasks, task.ID)
+	taskRecord := nativeTaskRecord(s.State.Tasks, task.TaskID)
 	if taskRecord == nil || taskRecord.Status != "in_progress" || taskRecord.ContractID == "" {
 		return nil, nativeErr("stale_version", "native task is no longer in progress or its contract is missing")
 	}
@@ -459,7 +385,7 @@ func (s *Service) minimalWorkerInput(ctx context.Context, task Task, run *Run, w
 	return NativeTaskWorkerContext{SchemaVersion: NativeTaskInputSchema, ProjectID: s.Config.identity, TaskID: taskRecord.TaskID, Contract: contract, ContractDigest: contract.Digest, WorkflowRunID: workflow.WorkflowRunID, ExecutionID: execution.ExecutionID, AttemptID: attempt.AttemptID, Repository: contract.Repository, Branch: workspace.Branch, BaseCommit: workspace.Base, CurrentStep: attempt.StepID, StepInput: input}, nil
 }
 
-func minimalStepEnv(c Config, source BeadsContext, run *Run, attempt *StepAttemptRecord, input MinimalStepInput) map[string]string {
+func minimalStepEnv(c Config, run *Run, attempt *StepAttemptRecord) map[string]string {
 	env := map[string]string{"STEERLINE_WORKFLOW_RUN_ID": run.RunID, "STEERLINE_EXECUTION_ID": run.ExecutionID, "STEERLINE_ATTEMPT_ID": attempt.AttemptID, "STEERLINE_STEP_ID": attempt.StepID}
 	return env
 }
@@ -545,7 +471,7 @@ func minimalStepContract(steps ProjectSteps, step string) StepContract {
 	return StepContract{}
 }
 
-func (s *Service) startMinimalStepWorker(ctx context.Context, task Task, run *Run, workflow *WorkflowRunRecord, execution *ExecutionRecord, attempt *StepAttemptRecord, source BeadsContext, workerInput any) (*Worker, error) {
+func (s *Service) startMinimalStepWorker(ctx context.Context, task TaskRecord, run *Run, workflow *WorkflowRunRecord, execution *ExecutionRecord, attempt *StepAttemptRecord, workerInput any) (*Worker, error) {
 	if run.WorktreePath == nil {
 		return nil, errors.New("minimal step has no worktree")
 	}
@@ -554,24 +480,19 @@ func (s *Service) startMinimalStepWorker(ctx context.Context, task Task, run *Ru
 		return nil, err
 	}
 	input := buildMinimalStepInput(s.Config.identity, task, run, workflow, execution, attempt, s.State.Attempts...)
-	if s.native {
-		if contract.InputSchema != NativeTaskInputSchema {
-			return nil, errors.New("native step contract does not use native-task/v1")
-		}
-		if _, ok := workerInput.(NativeTaskWorkerContext); !ok {
-			return nil, errors.New("native step worker input is missing its native-task/v1 context")
-		}
+	if contract.InputSchema != NativeTaskInputSchema {
+		return nil, errors.New("native step contract does not use native-task/v1")
+	}
+	if _, ok := workerInput.(NativeTaskWorkerContext); !ok {
+		return nil, errors.New("native step worker input is missing its native-task/v1 context")
 	}
 	dir, events, stderr, result := minimalAttemptPaths(s.Config, run, attempt)
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return nil, err
 	}
 	run.StepResultPath = ptr(result)
-	env := minimalStepEnv(s.Config, source, run, attempt, input)
-	unsetEnv := []string(nil)
-	if s.native {
-		unsetEnv = []string{"BEADS_*", "BD_*"}
-	}
+	env := minimalStepEnv(s.Config, run, attempt)
+	unsetEnv := []string{"BEADS_*", "BD_*"}
 	workConfig := s.Config
 	workConfig.Codex, workConfig.Sandbox, workConfig.Model, workConfig.ReasoningEffort, workConfig.Profile = workflow.Runner.Codex, workflow.Runner.Sandbox, workflow.Runner.Model, workflow.Runner.ReasoningEffort, workflow.Runner.Profile
 	workConfig.Repository = *run.WorktreePath
@@ -600,14 +521,12 @@ func (s *Service) startMinimalStepWorker(ctx context.Context, task Task, run *Ru
 		return nil, err
 	}
 	promptPath := filepath.Join(dir, "prompt.txt")
-	var promptErr error
-	if nativeInput, ok := workerInput.(NativeTaskWorkerContext); ok {
-		promptErr = writeNativeMinimalPrompt(promptPath, nativeInput, contract)
-	} else {
-		promptErr = writeMinimalPrompt(promptPath, input, contract)
+	nativeInput, ok := workerInput.(NativeTaskWorkerContext)
+	if !ok {
+		return nil, nativeErr("contract_mismatch", "native worker input is missing native-task/v1 context")
 	}
-	if promptErr != nil {
-		return nil, promptErr
+	if err := writeNativeMinimalPrompt(promptPath, nativeInput, contract); err != nil {
+		return nil, err
 	}
 	prompt, err := os.ReadFile(promptPath)
 	if err != nil {
@@ -709,7 +628,7 @@ func (s *Service) minimalOperation(run *Run, attempt *StepAttemptRecord, kind, k
 	return id, nil
 }
 
-func (s *Service) prepareMinimalExecution(ctx context.Context, task Task, run *Run, source BeadsContext) error {
+func (s *Service) prepareMinimalExecution(ctx context.Context, task TaskRecord, run *Run) error {
 	workflow, execution := s.minimalRecords(run)
 	attempt := s.minimalAttempt(run, run.AttemptID)
 	if workflow == nil || execution == nil || attempt == nil {
@@ -778,7 +697,7 @@ func (s *Service) prepareMinimalExecution(ctx context.Context, task Task, run *R
 	if err = s.save(); err != nil {
 		return err
 	}
-	return s.startMinimalStep(ctx, task, run, source, s.minimalAttempt(run, newAttempt.AttemptID))
+	return s.startMinimalStep(ctx, task, run, s.minimalAttempt(run, newAttempt.AttemptID))
 }
 
 func (s *Service) finishMinimalStep(exitErr error) error {
@@ -786,35 +705,33 @@ func (s *Service) finishMinimalStep(exitErr error) error {
 	if run == nil {
 		return errors.New("minimal step finished without an active run")
 	}
-	if s.native {
-		page, err := (QueryService{Store: s.domainStore, Project: s.Config.identity}).ShowNativeTask(context.Background(), run.DomainTaskID)
-		if err != nil {
+	page, err := (QueryService{Store: s.domainStore, Project: s.Config.identity}).ShowNativeTask(context.Background(), run.DomainTaskID)
+	if err != nil {
+		return err
+	}
+	if len(page.Tasks) != 1 {
+		return nativeErr("task_not_found", "native task disappeared while its worker finished")
+	}
+	taskRecord := page.Tasks[0].TaskRecord
+	for i := range s.State.Tasks {
+		if s.State.Tasks[i].TaskID == taskRecord.TaskID {
+			s.State.Tasks[i] = taskRecord
+			break
+		}
+	}
+	if taskRecord.Status == "discarded" {
+		if err := s.reconcileNativeCleanup(context.Background()); err != nil {
 			return err
 		}
-		if len(page.Tasks) != 1 {
-			return nativeErr("task_not_found", "native task disappeared while its worker finished")
+		if s.active == nil {
+			return nil
 		}
-		taskRecord := page.Tasks[0].TaskRecord
-		for i := range s.State.Tasks {
-			if s.State.Tasks[i].TaskID == taskRecord.TaskID {
-				s.State.Tasks[i] = taskRecord
-				break
-			}
-		}
-		if taskRecord.Status == "discarded" {
-			if err := s.reconcileNativeCleanup(context.Background()); err != nil {
-				return err
-			}
-			if s.active == nil {
-				return nil
-			}
-			run.ExecutionStatus = "unknown"
-			run.FinishTaskStatus = "blocked"
-			run.Error = ptr("task was discarded while this step was active; its result was retained as late history and cleanup remains pending")
-			s.State.SlotOccupied, s.State.CurrentTask = true, ptr(run.TaskID)
-			s.note(run, "steer", "discard_cleanup", "unknown", "late step result was not accepted after discard", run.AttemptID, nil)
-			return s.save()
-		}
+		run.ExecutionStatus = "unknown"
+		run.FinishTaskStatus = "blocked"
+		run.Error = ptr("task was discarded while this step was active; its result was retained as late history and cleanup remains pending")
+		s.State.SlotOccupied, s.State.CurrentTask = true, ptr(run.TaskID)
+		s.note(run, "steer", "discard_cleanup", "unknown", "late step result was not accepted after discard", run.AttemptID, nil)
+		return s.save()
 	}
 	workflow, execution := s.minimalRecords(run)
 	attempt := s.minimalAttempt(run, run.AttemptID)
@@ -1144,22 +1061,16 @@ func (s *Service) resumeMinimalAfterDecision(ctx context.Context, run *Run, answ
 	if err := s.save(); err != nil {
 		return err
 	}
-	task, err := s.beads.Show(ctx, run.TaskID)
+	page, err := (QueryService{Store: s.domainStore, Project: s.Config.identity}).ShowNativeTask(ctx, run.DomainTaskID)
 	if err != nil {
 		return err
 	}
-	if task.Status != "in_progress" || task.Assignee != run.Claimant {
-		return errors.New("task ownership changed before decision continuation")
+	if len(page.Tasks) != 1 || page.Tasks[0].Status != "in_progress" || page.Tasks[0].Claimant != run.Claimant {
+		return nativeErr("stale_version", "native task status or claimant changed before decision continuation")
 	}
-	source, err := s.beads.Context(ctx)
-	if err != nil {
-		return err
-	}
-	if run.BeadsContext == nil || !source.Same(*run.BeadsContext) {
-		return errors.New("Beads identity changed before minimal decision resume")
-	}
+	task := page.Tasks[0].TaskRecord
 	resumedAttempt := s.minimalAttempt(run, resumed.AttemptID)
-	if err = s.startMinimalStep(ctx, task, run, source, resumedAttempt); err != nil {
+	if err = s.startMinimalStep(ctx, task, run, resumedAttempt); err != nil {
 		if run.ExecutionStatus != "unknown" {
 			run.Decision.Status = "failed"
 			run.Decision.Version++
@@ -1287,7 +1198,7 @@ func (s *Service) makeMinimalAttempt(run *Run, execution *ExecutionRecord, workf
 	return StepAttemptRecord{ProjectIdentity: s.Config.identity, AttemptID: newID(), ExecutionID: execution.ExecutionID, StepID: step, AttemptNumber: number, Status: "planned", InputRevision: inputRevision, ContractDigest: operationDigest(data), PrerequisiteIDs: append([]string(nil), prerequisites...), CreatedAt: now(), UpdatedAt: now()}
 }
 
-func (s *Service) startMinimalStep(ctx context.Context, task Task, run *Run, source BeadsContext, attempt *StepAttemptRecord) error {
+func (s *Service) startMinimalStep(ctx context.Context, task TaskRecord, run *Run, attempt *StepAttemptRecord) error {
 	workflow, execution := s.minimalRecords(run)
 	if workflow == nil || execution == nil || attempt == nil {
 		return errors.New("minimal step records are incomplete")
@@ -1362,7 +1273,7 @@ func (s *Service) startMinimalStep(ctx context.Context, task Task, run *Run, sou
 	if attempt.Status != "dispatching" {
 		return fmt.Errorf("minimal step attempt %s changed to %q after dispatch intent persistence", attempt.AttemptID, attempt.Status)
 	}
-	worker, err := s.startMinimalStepWorker(ctx, task, run, workflow, execution, attempt, source, workerInput)
+	worker, err := s.startMinimalStepWorker(ctx, task, run, workflow, execution, attempt, workerInput)
 	workflow, execution = s.minimalRecords(run)
 	attempt = s.minimalAttempt(run, run.AttemptID)
 	if workflow == nil || execution == nil || attempt == nil {
@@ -1483,35 +1394,14 @@ func (s *Service) resumeMinimalSteps(ctx context.Context) error {
 				return errors.New("another execution still holds the execution slot")
 			}
 		}
-		var task Task
-		var source BeadsContext
-		if s.native {
-			record := nativeTaskRecord(s.State.Tasks, run.DomainTaskID)
-			if record == nil || record.Status != "in_progress" || record.Claimant != run.Claimant {
-				return nativeErr("stale_version", "native task status or claimant changed before planned step dispatch")
-			}
-			task = nativeTaskModel(*record)
-		} else {
-			var err error
-			task, err = s.beads.Show(ctx, run.TaskID)
-			if err != nil {
-				return err
-			}
-			if task.Status != "in_progress" || task.Assignee != run.Claimant {
-				return errors.New("task ownership changed before planned step dispatch")
-			}
-			source, err = s.beads.Context(ctx)
-			if err != nil {
-				return err
-			}
-			if run.BeadsContext == nil || !source.Same(*run.BeadsContext) {
-				return errors.New("Beads identity changed before minimal step resume")
-			}
+		task := nativeTaskRecord(s.State.Tasks, run.DomainTaskID)
+		if task == nil || task.Status != "in_progress" || task.Claimant != run.Claimant {
+			return nativeErr("stale_version", "native task status or claimant changed before planned step dispatch")
 		}
 		if current.StepID == "prepare" {
-			return s.prepareMinimalExecution(ctx, task, run, source)
+			return s.prepareMinimalExecution(ctx, *task, run)
 		}
-		return s.startMinimalStep(ctx, task, run, source, current)
+		return s.startMinimalStep(ctx, *task, run, current)
 	}
 	return nil
 }

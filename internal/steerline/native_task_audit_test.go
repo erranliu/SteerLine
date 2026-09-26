@@ -125,7 +125,6 @@ func TestNativeAuditReadersCoexistWithWriterAndViewerUsesNative(t *testing.T) {
 	if len(page.Tasks) != 3 {
 		t.Fatal("read failed while writer owns repository")
 	}
-	c.BD = Command{Executable: "must-never-run-bd"}
 	detail, err := LoadTaskDetail(ctx, c, "2")
 	require(t, err)
 	if detail.ID != "2" || !strings.Contains(detail.Description, "Sampled:") {

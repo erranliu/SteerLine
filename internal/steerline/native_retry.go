@@ -256,7 +256,7 @@ func (s *Service) startNativeRetryFor(ctx context.Context, runID, requestedBy st
 	if workspace.Dirty || workspace.Head != failed.InputRevision {
 		return nativeErr("contract_mismatch", "native retry requires a clean fixed workspace at the failed attempt input revision")
 	}
-	if _, err = s.requireBackendCapabilities(ctx, backendFor(s.Config, BeadsContext{}), "start", "observe", "stop", "workspace_inspection", "output_reading"); err != nil {
+	if _, err = s.requireBackendCapabilities(ctx, backendFor(s.Config), "start", "observe", "stop", "workspace_inspection", "output_reading"); err != nil {
 		return err
 	}
 	page, err := (QueryService{Store: s.domainStore, Project: s.Config.identity}).ShowNativeTask(ctx, task.TaskID)
@@ -299,7 +299,7 @@ func (s *Service) startNativeRetryFor(ctx context.Context, runID, requestedBy st
 	if workflow == nil || execution == nil || attempt == nil || attempt.Status != "planned" {
 		return nativeErr("inconsistent_delivery", "planned native retry changed during runtime projection publication")
 	}
-	return s.startMinimalStep(ctx, nativeTaskModel(*task), run, BeadsContext{}, attempt)
+	return s.startMinimalStep(ctx, *task, run, attempt)
 }
 
 func nativeRetryRequestID(taskID, workflowRunID, executionID, failedAttemptID string) string {

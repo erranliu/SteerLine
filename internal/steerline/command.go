@@ -22,6 +22,9 @@ type ServiceCommandPayload struct {
 // SubmitServiceCommand targets the ready service's SQLite command queue. It
 // binds the command to the displayed service instance and run/control revision.
 func SubmitServiceCommand(ctx context.Context, c Config, kind, targetID, requestedBy, commandID string, expectedRevision uint64, body any) (CommandRecord, bool, error) {
+	if err := requireNativeTaskAuthority(c); err != nil {
+		return CommandRecord{}, false, err
+	}
 	if !validServiceCommandKind(kind) || targetID == "" || requestedBy == "" || !controlIDPattern.MatchString(commandID) || expectedRevision == 0 {
 		return CommandRecord{}, false, errors.New("service command identity, target, requester and expected revision are required")
 	}
@@ -99,7 +102,7 @@ func SubmitServiceCommand(ctx context.Context, c Config, kind, targetID, request
 
 func validServiceCommandKind(kind string) bool {
 	switch kind {
-	case "retry_run", "mark_stopped", "accept_result", "resolve_command":
+	case "retry_run", "mark_stopped", "resolve_command":
 		return true
 	default:
 		return false

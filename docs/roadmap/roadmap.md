@@ -8,7 +8,7 @@
 
 | 任务 ID | 任务名称 | 目标标识 | 剩余目标 | 前置条件 | 执行规格 |
 | --- | --- | --- | --- | --- | --- |
-| 12 | 移除 Beads 旧执行路径 | `REFACTOR` | 删除 Beads/旧 start-finish/completion 分支及专属测试，将当前不变量测试迁到原生路径 | 已交付的 `#11` 耗时和覆盖基线 | [Spec](../spec/beads-path-removal.spec.md) · [Plan](../spec/beads-path-removal.plan.md) |
+| 12 | 移除 Beads 旧执行路径 | `REFACTOR` | 实现和自动化验收完成；[#44](https://github.com/erranliu/SteerLine/pull/44) 待合入。live Codex/Orca/PR-provider/可见窗口仍按各自门槛验收 | 已交付的 `#11` 耗时和覆盖基线 | [Spec](../spec/beads-path-removal.spec.md) · [Plan](../spec/beads-path-removal.plan.md) · [验证记录](../validation/beads-path-removal/results.md) |
 | 13 | 任务图规则拆包与测试分层 | `REFACTOR` | 独立 taskgraph 规则包、CLI 黑盒集成包和按模块测试入口；按隔离条件评估并行 | `#12` 收敛后的原生代码；沿用 `#11` 测量工具 | [Spec](../spec/taskgraph-modules.spec.md) · [Plan](../spec/taskgraph-modules.plan.md) |
 
 [测试反馈验证记录](../validation/test-feedback/README.md)与[行为映射](../validation/test-feedback/coverage-map.md)供 `#12`/`#13` 复用。`#3` 的剩余原生验收、`#4` 的远端探测可在固定版本和隔离资源上继续。`#6` 可准备独立协议适配，涉及 Service、Query/Command、配置和同一夹具时与 `#12`/`#13` 串行集成；后集成方核对接口并补受影响回归。具体交接见 [execution-map](execution-map.md)。

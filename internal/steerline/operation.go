@@ -1,7 +1,6 @@
 package steerline
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 )
@@ -31,53 +30,6 @@ func TransitionOperation(op *OperationRecord, next string, requestID string, rec
 	return nil
 }
 
-func (s *Service) startOperation(kind, key string, payload any) (string, error) {
-	if kind == "" || key == "" {
-		return "", errors.New("operation kind and idempotency key are required")
-	}
-	b, err := json.Marshal(payload)
-	if err != nil {
-		return "", err
-	}
-	for _, existing := range s.State.Operations {
-		if existing.IdempotencyKey != key {
-			continue
-		}
-		if existing.Kind != kind || existing.PayloadDigest != operationDigest(b) || string(existing.Request) != string(b) {
-			return "", errors.New("operation idempotency key conflicts with the original request")
-		}
-		if existing.Status != "pending" {
-			return "", fmt.Errorf("operation %s is already %s; reconcile the original operation before another action", existing.OperationID, existing.Status)
-		}
-		if err = s.changeOperation(existing.OperationID, "in_flight", "", nil, ""); err != nil {
-			return "", err
-		}
-		return existing.OperationID, nil
-	}
-	operation := OperationRecord{ProjectIdentity: s.Config.identity, OperationID: newID(), IdempotencyKey: key, Kind: kind, Status: "pending", PayloadDigest: operationDigest(b), Request: b, CreatedAt: now(), UpdatedAt: now()}
-	s.State.Operations = append(s.State.Operations, operation)
-	if err = s.save(); err != nil {
-		return "", err
-	}
-	if err = s.changeOperation(operation.OperationID, "in_flight", "", nil, ""); err != nil {
-		return "", err
-	}
-	return operation.OperationID, nil
-}
-
-func (s *Service) changeOperation(id, next, requestID string, receipt []byte, reason string) error {
-	for i := range s.State.Operations {
-		if s.State.Operations[i].OperationID != id {
-			continue
-		}
-		if err := TransitionOperation(&s.State.Operations[i], next, requestID, receipt, reason); err != nil {
-			return err
-		}
-		return s.save()
-	}
-	return fmt.Errorf("operation %s not found", id)
-}
-
 func (s *Service) setOperationState(id, next, requestID string, receipt []byte, reason string) error {
 	for i := range s.State.Operations {
 		if s.State.Operations[i].OperationID == id {
@@ -85,15 +37,4 @@ func (s *Service) setOperationState(id, next, requestID string, receipt []byte, 
 		}
 	}
 	return fmt.Errorf("operation %s not found", id)
-}
-
-func (s *Service) reconcileOperationsAfterRestart() {
-	for i := range s.State.Operations {
-		op := &s.State.Operations[i]
-		if op.Status == "in_flight" || op.Status == "accepted" {
-			op.Status = "outcome_unknown"
-			op.UnknownReason = "center restarted before terminal operation evidence was committed"
-			op.UpdatedAt = now()
-		}
-	}
 }

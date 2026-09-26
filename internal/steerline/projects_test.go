@@ -3,18 +3,19 @@ package steerline
 import (
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 )
 
-func minimalConfig(repo, runDir string) Config {
+func minimalConfig(repo string) Config {
 	return Config{
-		TaskAuthority:   "beads",
+		TaskAuthority:   "native",
 		Repository:      repo,
+		Git:             Command{Executable: "git"},
 		Remote:          "origin",
 		Branch:          "main",
-		RunDir:          runDir,
 		RuntimeFile:     "runtime.json",
 		ExecutableTypes: []string{"task"},
 		TaskPoll:        "10s",
@@ -24,6 +25,17 @@ func minimalConfig(repo, runDir string) Config {
 		ShutdownGrace:   "10s",
 		Sandbox:         "workspace-write",
 	}
+}
+
+func projectRepo(t *testing.T) string {
+	t.Helper()
+	repo := filepath.Join(t.TempDir(), "repo")
+	for _, args := range [][]string{{"init", "--quiet", "-b", "main", repo}, {"-C", repo, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false", "commit", "--quiet", "--allow-empty", "-m", "fixture"}} {
+		if out, err := exec.Command("git", args...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v: %s", args, err, out)
+		}
+	}
+	return repo
 }
 
 func writeProjectConfig(t *testing.T, name string, c Config) {
@@ -42,8 +54,8 @@ func writeProjectConfig(t *testing.T, name string, c Config) {
 
 func TestListAndResolveProjects(t *testing.T) {
 	t.Setenv("STEERLINE_HOME", t.TempDir())
-	writeProjectConfig(t, "zeta", minimalConfig(filepath.Join(t.TempDir(), "z"), filepath.Join(t.TempDir(), "zstate")))
-	writeProjectConfig(t, "alpha", minimalConfig(filepath.Join(t.TempDir(), "a"), filepath.Join(t.TempDir(), "astate")))
+	writeProjectConfig(t, "zeta", minimalConfig(projectRepo(t)))
+	writeProjectConfig(t, "alpha", minimalConfig(projectRepo(t)))
 
 	projects, e := ListProjects()
 	if e != nil {

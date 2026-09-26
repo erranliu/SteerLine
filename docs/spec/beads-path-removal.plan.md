@@ -1,6 +1,6 @@
 # Plan：移除 Beads 旧执行路径
 
-任务 ID：12；任务名称：移除 Beads 旧执行路径；目标：`REFACTOR`。状态：待实施。唯一执行依据：[Spec](beads-path-removal.spec.md)。硬前置：[#11](test-feedback.spec.md) 合入；一个实现 PR 交付。
+任务 ID：12；任务名称：移除 Beads 旧执行路径；目标：`REFACTOR`。状态：实现与验证完成；[#44](https://github.com/erranliu/SteerLine/pull/44) 已提交审查，待合入。唯一执行依据：[Spec](beads-path-removal.spec.md)。硬前置：[#11](test-feedback.spec.md) 已交付；一个实现 PR 交付。
 
 ## 实施顺序
 
@@ -12,6 +12,6 @@
 
 ## 验证与完成条件
 
-按 LR1–LR6 逐项验收。先运行受影响配置、原生工作流、决策/恢复、PR 和旧状态拒绝用例；候选稳定后运行一次 #11 的完整无缓存入口及静态检查、双平台构建。若外部平台语义发生变化，补相应隔离原生验收。
+按 LR1–LR6 逐项验收。已运行受影响配置、原生工作流、决策/恢复、PR 和旧状态拒绝用例；最终完整 suite、静态检查、Windows/Linux 构建记录见 [验证结果](../validation/beads-path-removal/results.md)。Live Codex、Orca、PR-provider 和可见窗口开关未启用，保持为独立真实平台验收门槛。
 
 对每个删除的测试说明删除的是失效产品路径还是重复断言；当前仍有意义的行为必须给出承接位置。比较耗时并解释变动，不通过跳过测试或减少恢复约束达成清理。
