@@ -11,12 +11,17 @@ import (
 )
 
 func (s *Service) refreshNativeSnapshot(ctx context.Context, reconstruct bool) error {
-	if !s.native || s.domainStore == nil {
-		return errors.New("native snapshot requires a native service store")
+	if s.domainStore == nil {
+		return errors.New("native service store is required")
 	}
 	snapshot, err := s.domainStore.Query(ctx, s.Config.identity)
 	if err != nil {
 		return err
+	}
+	for _, task := range snapshot.Tasks {
+		if task.Source != "native" || task.ExternalProvider != "" || task.ExternalProject != "" || task.ExternalID != "" || task.IdentityMapDigest != "" {
+			return nativeErr("authority_mismatch", "native center contains a non-native task identity; preserve it for manual recovery")
+		}
 	}
 	authority, err := s.domainStore.nativeAuthority(ctx, s.Config.identity)
 	if err != nil {
@@ -58,8 +63,6 @@ func (s *Service) refreshNativeSnapshot(ctx context.Context, reconstruct bool) e
 		run.Backend, run.Protocol, run.Agent = execution.Backend, execution.Protocol, execution.Agent
 		run.Target = execution.Target
 		run.WorkflowVersion, run.WorkflowConfigDigest = workflow.WorkflowVersion, workflow.ConfigDigest
-		run.BeadsContext, run.Completion = nil, nil
-		run.BeadsStatus = ""
 		if attempt != nil {
 			run.AttemptID, run.DomainAttemptNumber = attempt.AttemptID, attempt.AttemptNumber
 		} else {
@@ -223,6 +226,9 @@ func nativeRuntimeExecutionStatus(task TaskRecord, workflow WorkflowRunRecord, e
 	if task.Status == "closed" {
 		return "succeeded"
 	}
+	if workflow.Phase == "waiting_decision" && execution.Status == "waiting_decision" {
+		return "succeeded"
+	}
 	switch execution.Status {
 	case "failed":
 		return "failed"
@@ -254,9 +260,6 @@ func nativeRuntimeExecutionStatus(task TaskRecord, workflow WorkflowRunRecord, e
 }
 
 func (s *Service) reconcileNativeCleanup(ctx context.Context) error {
-	if !s.native {
-		return nil
-	}
 	var cleanupErr error
 	for i := range s.State.Tasks {
 		task := s.State.Tasks[i]
@@ -309,7 +312,7 @@ func (s *Service) reconcileNativeCleanup(ctx context.Context) error {
 				if s.Config.hostName() != "local" {
 					continue // Remote cancellation is not available; keep the exact manual item.
 				}
-				if _, err := s.requireBackendCapabilities(ctx, backendFor(s.Config, BeadsContext{}), "stop", "observe"); err != nil {
+				if _, err := s.requireBackendCapabilities(ctx, backendFor(s.Config), "stop", "observe"); err != nil {
 					run.Error = ptr("discarded task worker remains active; verified local stop capability is unavailable: " + clip(err.Error(), 1000))
 					continue
 				}
@@ -319,7 +322,7 @@ func (s *Service) reconcileNativeCleanup(ctx context.Context) error {
 					continue
 				}
 				if op.Status != OperationConfirmed {
-					backend := backendFor(s.Config, BeadsContext{})
+					backend := backendFor(s.Config)
 					observation, observeErr := backend.Observe(ctx, *op.Ref)
 					if observeErr != nil || observation.Liveness != "exited" {
 						run.Error = ptr("discarded task worker stop is awaiting confirmed process absence")
@@ -522,7 +525,7 @@ func (s *Service) recordNativeStopCleanup(ctx context.Context, taskID, cleanupIt
 	if err != nil || persisted.Status != OperationConfirmed {
 		return errors.Join(err, nativeErr("outcome_unknown", "confirmed stop was not durably recorded"))
 	}
-	backend := backendFor(s.Config, BeadsContext{})
+	backend := backendFor(s.Config)
 	observation, err := backend.Observe(ctx, *op.Ref)
 	if err != nil || observation.Liveness != "exited" {
 		return errors.Join(err, nativeErr("outcome_unknown", "fixed local execution is not confirmed absent"))
@@ -572,7 +575,7 @@ func (s *Service) reconcileExitedNativeExecution(ctx context.Context, taskID, cl
 	if err != nil {
 		return err
 	}
-	backend := backendFor(s.Config, BeadsContext{})
+	backend := backendFor(s.Config)
 	observation, err := backend.Observe(ctx, ref)
 	if err != nil || observation.Liveness != "exited" {
 		return errors.Join(err, nativeErr("outcome_unknown", "fixed local process is live or its state is unknown; it cannot be stopped without the original handle"))
@@ -625,11 +628,6 @@ func nativeRuntimeFinishStatus(task TaskRecord, workflow WorkflowRunRecord) stri
 	}
 }
 
-func nativeTaskModel(task TaskRecord) Task {
-	priority := task.Priority
-	return Task{ID: task.TaskID, Title: task.Title, Status: task.Status, Type: task.Type, Assignee: task.Claimant, Priority: &priority}
-}
-
 func (s *Service) dispatchNative(ctx context.Context) error {
 	if s.worker != nil {
 		return nil
@@ -651,7 +649,7 @@ func (s *Service) dispatchNative(ctx context.Context) error {
 		return err
 	}
 	if len(ready) > 0 {
-		if _, err = s.requireBackendCapabilities(ctx, backendFor(s.Config, BeadsContext{}), "start", "observe", "stop", "workspace_inspection", "output_reading"); err != nil {
+		if _, err = s.requireBackendCapabilities(ctx, backendFor(s.Config), "start", "observe", "stop", "workspace_inspection", "output_reading"); err != nil {
 			return err
 		}
 	}
@@ -726,7 +724,7 @@ func (s *Service) dispatchNative(ctx context.Context) error {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		return s.prepareMinimalExecution(ctx, nativeTaskModel(task), run, BeadsContext{})
+		return s.prepareMinimalExecution(ctx, task, run)
 	}
 	if s.targetTask != "" {
 		return fmt.Errorf("%w: %s is not in the current ready native task set", errTaskNotReady, s.targetTask)

@@ -142,8 +142,8 @@ type Run struct {
 	WorktreePath         *string                 `json:"worktree_path"`
 	WorktreeBranch       *string                 `json:"worktree_branch"`
 	WorkspaceIntent      *WorkspaceIntent        `json:"workspace_intent"`
-	Completion           *CompletionConfig       `json:"completion,omitempty"`
-	BeadsContext         *BeadsContext           `json:"beads_context,omitempty"`
+	Completion           *LegacyCompletionConfig `json:"completion,omitempty"`
+	BeadsContext         *LegacyBeadsContext     `json:"beads_context,omitempty"`
 	BaseCommit           *string                 `json:"base_commit"`
 	PR                   PRState                 `json:"pr"`
 	LastEvent            *string                 `json:"last_event"`
@@ -154,6 +154,15 @@ type Run struct {
 	// Decision is set when the agent raised a structured question and the run is
 	// paused as finish_task_status=waiting_decision until a human answers.
 	Decision *DecisionState `json:"decision,omitempty"`
+}
+
+// LegacyBeadsContext is decoded only as a marker for rejecting old runtime
+// projections before any native recovery or dispatch action.
+type LegacyBeadsContext struct {
+	Directory string `json:"beads_dir"`
+	ProjectID string `json:"project_id"`
+	Database  string `json:"database"`
+	Backend   string `json:"backend"`
 }
 
 // A human-confirmed stop settles the resource uncertainty, not the outcome of
@@ -228,27 +237,6 @@ type PRState struct {
 	MergeCommit  *string    `json:"merge_commit"`
 	QueriedAt    *time.Time `json:"queried_at"`
 	QueryError   *string    `json:"query_error"`
-}
-type Result struct {
-	TaskID       string  `json:"task_id"`
-	RunID        string  `json:"run_id"`
-	Outcome      string  `json:"outcome"`
-	PRURL        *string `json:"pr_url"`
-	WorktreePath *string `json:"worktree_path"`
-	BaseCommit   *string `json:"base_commit"`
-	Summary      *string `json:"summary"`
-	Error        *string `json:"error"`
-	// Decision is present only when Outcome is "needs_decision".
-	Decision            *DecisionRequest             `json:"decision"`
-	DecisionApplication *DecisionApplicationEvidence `json:"decision_application,omitempty"`
-}
-
-type DecisionApplicationEvidence struct {
-	DecisionID       string `json:"decision_id"`
-	AttemptID        string `json:"attempt_id"`
-	ExecutionID      string `json:"execution_id"`
-	ExecutionRefHash string `json:"execution_ref_sha256"`
-	AnswerHash       string `json:"answer_sha256"`
 }
 
 func ptr[T any](v T) *T { return &v }

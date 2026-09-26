@@ -50,8 +50,6 @@ func render(m Model) string {
 	var body string
 	if m.confirm != nil {
 		body = renderStopConfirmation(m, *state, contentHeight)
-	} else if m.resultPicker != nil {
-		body = renderResultPathPicker(m, *state, contentHeight)
 	} else if m.answer != nil {
 		body = renderAnswerDialog(m, *state, contentHeight)
 	} else if m.width < 100 {
@@ -407,7 +405,7 @@ func renderDetail(m Model, state projectState, row *consoleRow, width, height in
 		"run_id："+safeTerminalText(run.RunID),
 		"execution："+safeTerminalText(firstText(run.ExecutionStatus, "unknown")),
 		"finish："+safeTerminalText(firstText(run.FinishTaskStatus, "unknown")),
-		"任务状态："+safeTerminalText(firstText(run.TaskStatus, run.BeadsStatus, "unknown")),
+		"任务状态："+safeTerminalText(firstText(run.TaskStatus, "unknown")),
 		"整体："+runStatus(run),
 		"采样时间："+sampleTime(state.snapshot),
 		"最后核验时间："+executionVerifiedAt(state, run),
@@ -929,8 +927,6 @@ func renderRecoveryInspection(m Model, state projectState, width, height int) []
 	}
 	if report.NativeClaim != nil {
 		lines = append(lines, "center claim：task "+safeTerminalText(report.NativeClaim.TaskID)+" · "+safeTerminalText(report.NativeClaim.Status)+" · claimant "+safeTerminalText(report.NativeClaim.Claimant))
-	} else if report.Claim != nil {
-		lines = append(lines, "claim：task "+safeTerminalText(report.Claim.ID)+" · "+safeTerminalText(report.Claim.Status)+" · assignee "+safeTerminalText(report.Claim.Assignee))
 	} else {
 		lines = append(lines, "claim 核验失败："+safeTerminalText(report.ClaimError))
 	}
@@ -940,9 +936,6 @@ func renderRecoveryInspection(m Model, state projectState, width, height int) []
 		lines = append(lines, "PR 核验："+safeTerminalText(report.PRError))
 	} else {
 		lines = append(lines, "PR：未绑定")
-	}
-	if report.ResultPath != "" {
-		lines = append(lines, "候选结果文件："+safeTerminalText(report.ResultPath))
 	}
 	lines = append(lines, "", "可恢复动作 · 服务执行前会重新核验")
 	if report.RetryReason == "" {
@@ -954,11 +947,6 @@ func renderRecoveryInspection(m Model, state projectState, width, height int) []
 		lines = append(lines, "M mark_stopped · 确认旧执行已停止并记录依据")
 	} else {
 		lines = append(lines, "M mark_stopped · 不可用："+safeTerminalText(report.MarkStoppedReason))
-	}
-	if strings.HasPrefix(report.AcceptResultReason, "confirm") {
-		lines = append(lines, "Z accept_result · 预览固定结果字节、核验 PR 并接回")
-	} else {
-		lines = append(lines, "Z accept_result · 不可用："+safeTerminalText(report.AcceptResultReason))
 	}
 	if len(report.Blockers) == 0 {
 		lines = append(lines, "v resolve_command · 没有 indeterminate blocker")
@@ -1005,10 +993,10 @@ func decisionAnswerAvailability(state projectState, row *consoleRow) string {
 	if run.Decision.RequestPath != "" || run.Decision.AnswerPath != "" {
 		return "问题绑定了已移除的 sidecar-answer 格式；保留状态并转入人工恢复，不导入答案文件"
 	}
-	if run.Backend == "local" || run.Protocol == "local_process" {
-		return "local continuation 当前不受支持；保留原问题，通过服务恢复入口继续核验"
+	if run.WorkflowVersion != steerline.MinimalWorkflowVersion || run.ExecutionID == "" || run.AttemptID == "" || run.Decision.AttemptID != run.AttemptID {
+		return "问题未绑定当前 native WorkflowRun、Execution 和 attempt；保留原问题并转入只读恢复核验"
 	}
-	if run.Backend != "orca" || run.Protocol != "orca_terminal_v2" {
+	if run.Backend == "local" && run.Protocol != "local_process" || run.Backend == "orca" && run.Protocol != "orca_terminal_v2" || run.Backend != "local" && run.Backend != "orca" {
 		return "原执行后端/协议不支持决策续跑"
 	}
 	connection := state.snapshot.Connection
@@ -1253,9 +1241,6 @@ func renderStopConfirmation(m Model, state projectState, height int) string {
 		} else {
 			lines = append(lines, "目标服务实例："+safeTerminalText(m.confirm.instance))
 		}
-		if m.confirm.action == "accept_result" {
-			lines = append(lines, "result 文件："+safeTerminalText(m.confirm.resultPath), fmt.Sprintf("冻结结果字节：%d · SHA-256：%s", len(m.confirm.resultBytes), m.confirm.resultSHA256), "task/run："+safeTerminalText(m.confirm.resultTaskID+" / "+m.confirm.resultRunID), "摘要："+safeTerminalText(m.confirm.resultSummary), "PR："+safeTerminalText(m.confirm.resultPRURL), "worktree："+safeTerminalText(m.confirm.resultWorktree)+" · base："+safeTerminalText(m.confirm.resultBase), "服务会核验工作目录、base、仓库、目标分支和真实 PR 状态。")
-		}
 		if m.confirm.requireBasis {
 			lines = append(lines, "", "请填写亲自核验的停止或解除依据（最多 2000 字符）：")
 			evidence := []rune(m.confirm.basis)
@@ -1282,25 +1267,6 @@ func renderStopConfirmation(m Model, state projectState, height int) string {
 	width := max(1, m.width-2)
 	visible := fitLines(scrollLines(wrapLines(lines, width), max(0, m.confirm.scroll), height), m.width, height)
 	return strings.Join(visible, "\n")
-}
-
-func renderResultPathPicker(m Model, state projectState, height int) string {
-	dialog := m.resultPicker
-	if dialog == nil {
-		return ""
-	}
-	path := append([]rune(nil), dialog.path...)
-	if dialog.cursor >= 0 && dialog.cursor <= len(path) {
-		path = append(path, 0)
-		copy(path[dialog.cursor+1:], path[dialog.cursor:])
-		path[dialog.cursor] = '│'
-	}
-	lines := []string{"选择 recovery result 文件", "项目：" + safeTerminalText(state.ref.Name), "run_id：" + safeTerminalText(dialog.runID), "run revision：" + strconv.FormatUint(dialog.revision, 10), "输入已有文件的完整路径：", safeTerminalText(string(path)), "服务将冻结最多 2 MiB 原始字节，显示 task/run、PR、worktree、base 与摘要供最终确认。"}
-	if dialog.error != "" {
-		lines = append(lines, styleAlert.Render(safeTerminalText(dialog.error)))
-	}
-	lines = append(lines, "Enter 读取并预览 · Esc 取消")
-	return strings.Join(fitLines(wrapLines(lines, m.width), m.width, height), "\n")
 }
 
 func renderAnswerDialog(m Model, state projectState, height int) string {
@@ -1384,18 +1350,15 @@ func (m Model) answerRunTask(state projectState, dialog *decisionAnswerDialog) s
 func renderFooter(m Model, state projectState) string {
 	if m.confirm != nil {
 		if m.confirm.requireBasis {
-			return "PgUp/PgDn 阅读完整结果 · 输入亲自核验的依据 · F2 确认提交 · Esc 取消"
+			return "输入亲自核验的依据 · F2 确认提交 · Esc 取消"
 		}
 		return "↑↓/PgUp/PgDn 阅读完整确认内容 · Enter/y 确认 · Esc/n 取消"
-	}
-	if m.resultPicker != nil {
-		return "输入完整 result 文件路径 · ←→移动光标 · Backspace/Delete 编辑 · Enter 读取固定字节并预览 · Esc 取消"
 	}
 	if m.answer != nil {
 		return "↑↓ 选择声明选项/移动光标 · Tab 切换选项与说明 · Enter 换到说明/插入换行 · F2 明确提交 · PgUp/PgDn 浏览完整问题 · Esc 丢弃草稿"
 	}
 	if state.panel == 6 {
-		return "r 重新核验 · R retry · m mark-stopped · z accept-result · [/]选择 blocker · v resolve-command · Enter/ Esc 返回"
+		return "r 重新核验 · R retry · m mark-stopped · [/]选择 blocker · v resolve-command · Enter/ Esc 返回"
 	}
 	if m.width < 100 {
 		return "↑↓选择/滚动 · ←→项目 · t列表 · d详情 · a回答/活动 · c会话 · f正文 · v历史 · u恢复核验\n" + "s开始 · m模式 · p暂停/恢复 · x停服 · i查request · q退出\n" + ",/.轮次 · e折叠 · =保持展开 · o过程正文 · n最终回复 · y更多"

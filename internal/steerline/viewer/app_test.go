@@ -141,7 +141,7 @@ func TestViewerShowsTaskDetailAndTabs(t *testing.T) {
 	mm, _ := m.Update(taskDetailMsg{taskID: "n308-21", detail: f.taskDetail["n308-21"]})
 	m = mm.(Model)
 	view := m.View()
-	for _, want := range []string{"Detail · n308-21", "Summary", "Workspace", "PR", "Decision", "Result", "bug"} {
+	for _, want := range []string{"Detail · n308-21", "Summary", "Workspace", "PR", "Decision", "bug"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("detail pane missing %q:\n%s", want, view)
 		}

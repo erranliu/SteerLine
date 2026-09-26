@@ -27,7 +27,7 @@ func TestNativeTaskListCLIInitializesReadOnlyProtocolWithoutBeads(t *testing.T) 
 		}
 	}
 	configPath := filepath.Join(t.TempDir(), "native.json")
-	data, err := json.Marshal(map[string]any{"repository": repo, "remote": "origin", "branch": "main", "task_authority": "native", "bd": map[string]any{"executable": "missing-bd"}})
+	data, err := json.Marshal(map[string]any{"repository": repo, "remote": "origin", "branch": "main", "task_authority": "native"})
 	if err != nil {
 		t.Fatal(err)
 	}

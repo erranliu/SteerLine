@@ -90,10 +90,10 @@ codex 原始行 → activity：
 
 ```
 {"type":"thread.started","thread_id":"01a0..."}
-→ {"v":1,"seq":1,"ts":"...","source":"codex","run_id":"3f9a","task_id":"bd-142","kind":"session","status":"info","title":"codex session","meta":{"thread_id":"01a0..."}}
+→ {"v":1,"seq":1,"ts":"...","source":"codex","run_id":"3f9a","task_id":"142","kind":"session","status":"info","title":"codex session","meta":{"thread_id":"01a0..."}}
 
 {"type":"item.completed","item":{"id":"item_1","type":"command_execution","command":"go test ./...","aggregated_output":"ok\n","exit_code":0,"status":"completed"}}
-→ {"v":1,"seq":4,"ts":"...","source":"codex","run_id":"3f9a","task_id":"bd-142","item_id":"item_1","kind":"command","status":"completed","title":"go test ./...","detail":"ok\n","elapsed_ms":13200,"meta":{"exit_code":0}}
+→ {"v":1,"seq":4,"ts":"...","source":"codex","run_id":"3f9a","task_id":"142","item_id":"item_1","kind":"command","status":"completed","title":"go test ./...","detail":"ok\n","elapsed_ms":13200,"meta":{"exit_code":0}}
 ```
 
 pi 增量：

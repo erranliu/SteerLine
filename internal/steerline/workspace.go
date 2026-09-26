@@ -10,6 +10,8 @@ import (
 	"strings"
 )
 
+var commitHash = regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`)
+
 func (c *Config) prepareWorktreeRoot() error {
 	if c.WorktreeRoot == "" {
 		c.WorktreeRoot = filepath.Join(c.RunDir, "worktrees")
@@ -50,30 +52,6 @@ func gitRunner(c Config, dir string) Runner {
 	return Runner{Dir: dir, Timeout: duration(c.CommandTimeout), Env: map[string]string{"GIT_TERMINAL_PROMPT": "0"}}
 }
 
-// Each fetch writes a run-specific ref, so another local fetch cannot change the
-// commit selected for this run by overwriting FETCH_HEAD or remote-tracking refs.
-func fetchBase(ctx context.Context, c Config, runID string) (string, error) {
-	if !regexp.MustCompile(`^[0-9a-f]{32}$`).MatchString(runID) {
-		return "", errors.New("invalid run ID")
-	}
-	r := gitRunner(c, c.Repository)
-	if _, e := r.Output(ctx, c.Git, "check-ref-format", "refs/heads/"+c.Branch); e != nil {
-		return "", e
-	}
-	ref := "refs/steerline/bases/" + runID
-	if _, e := r.Output(ctx, c.Git, "fetch", "--no-tags", "--no-recurse-submodules", "--no-write-fetch-head", "--", c.Remote, "refs/heads/"+c.Branch+":"+ref); e != nil {
-		return "", fmt.Errorf("fetch mainline: %w", e)
-	}
-	out, e := r.Output(ctx, c.Git, "rev-parse", "--verify", ref+"^{commit}")
-	if e != nil {
-		return "", e
-	}
-	sha := strings.TrimSpace(string(out))
-	if !commitHash.MatchString(sha) {
-		return "", errors.New("invalid fetched commit hash")
-	}
-	return sha, nil
-}
 func planWorkspace(c Config, taskID, runID, base string) (*WorkspaceIntent, error) {
 	if !regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]*$`).MatchString(taskID) || strings.Contains(taskID, "..") {
 		return nil, errors.New("task ID cannot safely form a branch name")
@@ -83,106 +61,6 @@ func planWorkspace(c Config, taskID, runID, base string) (*WorkspaceIntent, erro
 	}
 	return &WorkspaceIntent{Path: filepath.Join(c.WorktreeRoot, runID), Branch: "codex/" + taskID + "-" + runID[:12], BaseCommit: base}, nil
 }
-func prepareWorkspace(ctx context.Context, c Config, r *Run, source BeadsContext) (Config, error) {
-	i := r.WorkspaceIntent
-	if i == nil {
-		return c, errors.New("missing durable workspace intent")
-	}
-	if e := c.prepareWorktreeRoot(); e != nil {
-		return c, e
-	}
-	if canonical(filepath.Dir(i.Path)) != canonical(c.WorktreeRoot) {
-		return c, errors.New("workspace intent path no longer matches worktree_root")
-	}
-	if _, e := os.Lstat(i.Path); !os.IsNotExist(e) {
-		return c, fmt.Errorf("worktree path already exists or is inaccessible: %s", i.Path)
-	}
-	if e := os.MkdirAll(c.WorktreeRoot, 0700); e != nil {
-		return c, e
-	}
-	git := gitRunner(c, c.Repository)
-	if _, e := git.Output(ctx, c.Git, "check-ref-format", "refs/heads/"+i.Branch); e != nil {
-		return c, e
-	}
-	refs, e := git.Output(ctx, c.Git, "for-each-ref", "--format=%(refname)", "refs/heads/"+i.Branch)
-	if e != nil {
-		return c, e
-	}
-	if strings.TrimSpace(string(refs)) != "" {
-		return c, errors.New("worktree branch already exists")
-	}
-	// Reserve this previously absent directory atomically. Git can populate our
-	// empty reservation, but a concurrently created path is never reused.
-	if e = os.Mkdir(i.Path, 0700); e != nil {
-		return c, e
-	}
-	// No force, reset or reuse: leave partial creation intact on any failure.
-	if _, e = git.Output(ctx, c.Git, "worktree", "add", "--no-track", "-b", i.Branch, "--", i.Path, i.BaseCommit); e != nil {
-		return c, e
-	}
-	if e = verifyWorkspace(ctx, c, i, true); e != nil {
-		return c, e
-	}
-	return workerForWorkspace(ctx, c, r, source)
-}
-
-// Reused for an explicit clean-start retry without creating a new workspace or claim.
-func workerForWorkspace(ctx context.Context, c Config, r *Run, source BeadsContext) (Config, error) {
-	i := r.WorkspaceIntent
-	if i == nil {
-		return c, errors.New("missing workspace intent")
-	}
-	worker := c
-	worker.Repository = i.Path
-	for _, pair := range []struct {
-		from Skill
-		to   *Skill
-	}{{c.StartSkill, &worker.StartSkill}, {c.FinishSkill, &worker.FinishSkill}} {
-		path := pair.from.Path
-		if !filepath.IsAbs(path) {
-			path = filepath.Join(c.Repository, path)
-		}
-		rel, e := filepath.Rel(c.Repository, path)
-		if e != nil || !inside(c.Repository, path) {
-			return c, errors.New("skill path is outside source checkout")
-		}
-		pair.to.Path = filepath.Join(i.Path, rel)
-	}
-	if e := worker.validateSkills(); e != nil {
-		return c, e
-	}
-	worker.workerEnv = map[string]string{"BEADS_DIR": source.Directory, "BEADS_ACTOR": r.Claimant}
-	beads := Beads{Runner: Runner{Dir: i.Path, Timeout: duration(c.CommandTimeout), Env: worker.workerEnv}, Command: c.BD, Claimant: r.Claimant}
-	actual, e := beads.Context(ctx)
-	if e != nil {
-		return c, e
-	}
-	if !source.Same(actual) {
-		return c, errors.New("worktree Beads project/database does not match source")
-	}
-	task, e := beads.Show(ctx, r.TaskID)
-	if e != nil {
-		return c, e
-	}
-	if task.Status != "in_progress" || task.Assignee != r.Claimant {
-		return c, errors.New("worktree task claim does not match dispatch")
-	}
-	return worker, nil
-}
-
-func verifyRunWorkspace(ctx context.Context, c Config, r *Run) error {
-	i := r.WorkspaceIntent
-	if i == nil || r.WorktreePath == nil || r.WorktreeBranch == nil || r.BaseCommit == nil {
-		return errors.New("run has no verified scheduler-prepared workspace")
-	}
-	if canonical(*r.WorktreePath) != canonical(i.Path) || *r.WorktreeBranch != i.Branch || *r.BaseCommit != i.BaseCommit {
-		return errors.New("prepared workspace fields disagree with durable intent")
-	}
-	return verifyWorkspace(ctx, c, i, false)
-}
-
-// Read-only verification works after implementation too: HEAD may advance, but
-// the recorded base must remain in its history and the assigned branch must match.
 func verifyWorkspace(ctx context.Context, c Config, i *WorkspaceIntent, initial bool) error {
 	if i == nil || !filepath.IsAbs(i.Path) || i.Branch == "" || !commitHash.MatchString(i.BaseCommit) {
 		return errors.New("incomplete workspace intent")

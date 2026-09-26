@@ -50,7 +50,7 @@ func nativeTaskFixture(t *testing.T) (Config, string) {
 		t.Fatal(err)
 	}
 	commit := strings.TrimSpace(string(commitBytes))
-	c := Config{TaskAuthority: "native", Repository: repo, Remote: "origin", Branch: "main", Git: Command{Executable: "git"}, CommandTimeout: "10s"}
+	c := Config{TaskAuthority: "native", Repository: repo, Remote: "origin", Branch: "main", RuntimeFile: "runtime.json", TaskPoll: "10s", PRPoll: "30s", Heartbeat: "5s", CommandTimeout: "10s", ShutdownGrace: "10s", Sandbox: "workspace-write", ExecutableTypes: []string{"task", "bug", "feature", "chore"}, Git: Command{Executable: "git"}}
 	key, err := repoStateKey(c)
 	if err != nil {
 		t.Fatal(err)
@@ -86,6 +86,99 @@ func nativeContract(t *testing.T, c Config, commit, id string) TaskContract {
 	return v
 }
 
+func TestNativeDecisionAcceptanceIsSeparateFromApplication(t *testing.T) {
+	t.Setenv("STEERLINE_FAKE_NATIVE_STEP_DECISION", "implement")
+	f := newFixture(t)
+	f.c.configDigest = strings.Repeat("e", 64)
+	service := f.service(t)
+	defer service.Close()
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	step := func(name string) StepContract {
+		return StepContract{Provider: "command", Entry: "builtin:" + name, Version: "decision-v1", InputSchema: NativeTaskInputSchema, OutputSchema: MinimalStepOutputSchema, ExecutionSite: "local", Timeout: 10 * time.Second, Command: []string{executable, "--fake", "native-step"}}
+	}
+	f.c.ProjectSteps = &ProjectSteps{Implement: step("implement"), Verify: step("verify"), PublishPR: step("publish_pr")}
+	f.c.ProjectSteps.Verify.RequiredChecks = []string{"unit"}
+	service.Config.ProjectSteps = f.c.ProjectSteps
+	service.State.Service.Mode, service.State.Service.Ready = "scheduler", true
+	if err = service.save(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = service.Config.validateNativeWorkflow(); err != nil {
+		t.Fatal(err)
+	}
+	contract := nativeContract(t, service.Config, f.commit, "decision-contract")
+	batch, err := json.Marshal(TaskBatchInput{SchemaVersion: taskBatchSchemaVersion, ProjectID: service.Config.Identity(), Tasks: []TaskBatchTask{{LocalKey: "decision", TaskID: 301, Title: "Decision workflow", Type: "task", Contract: contract}}, Dependencies: []TaskBatchEdge{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	commands := CommandService{Store: service.domainStore, Project: service.Config.Identity()}
+	if _, err = commands.CreateTaskBatch(context.Background(), service.Config, batch, newID(), 1, "planner"); err != nil {
+		t.Fatal(err)
+	}
+	authority, err := service.domainStore.nativeAuthority(context.Background(), service.Config.Identity())
+	if err != nil {
+		t.Fatal(err)
+	}
+	manual, unpaused := "manual", false
+	if _, err = commands.SetNativeDispatchState(context.Background(), NativeDispatchUpdate{RequestID: newID(), ExpectedAuthorityVersion: authority.AuthorityVersion, Mode: &manual, Paused: &unpaused, RequestedBy: "operator"}); err != nil {
+		t.Fatal(err)
+	}
+	seedFakeCapabilities(t, service.Config)
+	service.explicitDispatch, service.targetTask, service.reservedRunID = true, "301", newID()
+	if err = service.dispatch(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if service.worker == nil {
+		t.Fatal("native implement step did not start")
+	}
+	finishNativeStepForTest(t, service)
+	run := service.find("301")
+	if run == nil || run.FinishTaskStatus != "waiting_decision" || run.Decision == nil || run.Decision.Status != "pending" {
+		t.Fatalf("native decision request was not persisted: %+v", run)
+	}
+	answer := DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, OptionID: "keep", AnsweredBy: "operator", ExpectedDecisionVersion: run.Decision.Version, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: service.State.Service.InstanceID}
+	answerCommand, created, err := commands.AnswerDecisionWithID(context.Background(), newID(), answer.DecisionID, run.Decision.Version, decisionAnswerKey(answer), answer.AnsweredBy, mustJSON(answer))
+	if err != nil || !created {
+		t.Fatalf("native answer was not queued: created=%t err=%v", created, err)
+	}
+	if err = service.processPendingCommands(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	storedAnswerCommand, commandErr := service.domainStore.Command(context.Background(), service.Config.Identity(), answerCommand.CommandID)
+	if run.Decision.Status != "answer_saved" || service.worker != nil {
+		t.Fatalf("answer acceptance was confused with step application: decision=%+v worker=%v command=%+v stored=%+v commandErr=%v serviceErr=%v", run.Decision, service.worker != nil, answerCommand, storedAnswerCommand, commandErr, service.State.Service.Error)
+	}
+	if err = service.applyDecisions(context.Background()); err != nil {
+		t.Fatalf("apply native answer: %v run=%+v execution_slot=%q blockers=%+v", err, run, service.executionSlotReason("", true), service.State.Control.Blockers)
+	}
+	if run.Decision.Status != "reply_accepted" || service.worker == nil {
+		t.Fatalf("accepted answer did not start its fixed native continuation: decision=%+v worker=%v", run.Decision, service.worker != nil)
+	}
+	finishNativeStepForTest(t, service)
+	if run.Decision.Status != "applied" {
+		t.Fatalf("native continuation lacked application proof: %+v", run.Decision)
+	}
+}
+
+func finishNativeStepForTest(t *testing.T, service *Service) {
+	t.Helper()
+	if service.worker == nil {
+		t.Fatal("native step worker is missing")
+	}
+	worker := service.worker
+	select {
+	case err := <-worker.Done:
+		if finishErr := service.finished(err); finishErr != nil {
+			t.Fatal(finishErr)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("native step worker timed out")
+	}
+}
+
 func TestNativePreflightDoesNotRequireBeadsAndRejectsLegacyStepEntrypoints(t *testing.T) {
 	t.Setenv("STEERLINE_HOME", t.TempDir())
 	c, _ := nativeTaskFixture(t)
@@ -112,7 +205,6 @@ func TestNativePreflightDoesNotRequireBeadsAndRejectsLegacyStepEntrypoints(t *te
 	if out, err := exec.Command("git", "-C", c.Repository, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "native project steps").CombinedOutput(); err != nil {
 		t.Fatalf("commit fixture steps: %v: %s", err, out)
 	}
-	c.BD = Command{Executable: "bd-and-bv-are-not-installed"}
 	c.PR = PRConfig{Kind: "command", BaseURL: "https://example.com", Repository: "owner/repo", Query: Command{Executable: "git"}, Close: Command{Executable: "git"}}
 	c.WorkflowDefinition = &WorkflowDefinition{ID: MinimalWorkflowVersion, Version: MinimalWorkflowVersion, ReviewRequired: false, MaxRepairRounds: 1}
 	contract := func(name string) StepContract {
@@ -188,7 +280,6 @@ func TestNativeOrcaProjectStepsUseFixedTaskContextAndCenterDelivery(t *testing.T
 	}
 	t.Setenv("STEERLINE_FAKE_GIT_FETCH_REMOTE", remotePath)
 	c.Git = Command{Executable: executable, Args: []string{"--fake", "git-proxy", gitExecutable}}
-	c.BD = Command{Executable: "bd-and-bv-are-not-installed"}
 	c.Host, c.Agent = "orca", "codex"
 	c.Orca = OrcaConfig{Executable: executable, Args: []string{"--fake", "orca", filepath.Join(t.TempDir(), "orca-state")}, Shell: "cmd.exe", WaitTimeout: "10s"}
 	c.PR = PRConfig{Kind: "command", BaseURL: "https://forge.invalid", Repository: "org/repo", Query: Command{Executable: executable, Args: []string{"--fake", "pr-query", filepath.Join(t.TempDir(), "native-orca-pr.json"), "{pr_url}", "{repository}"}}, Close: Command{Executable: executable, Args: []string{"--fake", "pr-close", filepath.Join(t.TempDir(), "native-orca-pr.json"), "{pr_url}", "{repository}"}}}
@@ -447,7 +538,7 @@ func TestNativeLocalProjectStepsDeliverTaskAndReleaseSuccessor(t *testing.T) {
 	}
 	t.Setenv("STEERLINE_FAKE_GIT_FETCH_REMOTE", remotePath)
 	c.Git = Command{Executable: executable, Args: []string{"--fake", "git-proxy", gitExecutable}}
-	c.Codex = Command{Executable: executable, Args: []string{"--fake", "codex", "unused"}}
+	c.Codex = Command{Executable: executable, Args: []string{"--fake", "codex"}}
 	fakePRPath := filepath.Join(t.TempDir(), "native-pr.json")
 	c.PR = PRConfig{Kind: "command", BaseURL: "https://forge.invalid", Repository: "org/repo", Query: Command{Executable: executable, Args: []string{"--fake", "pr-query", fakePRPath, "{pr_url}", "{repository}"}}, Close: Command{Executable: executable, Args: []string{"--fake", "pr-close", fakePRPath, "{pr_url}", "{repository}"}}}
 	if err := c.ResolveIdentity(context.Background()); err != nil {
@@ -457,7 +548,6 @@ func TestNativeLocalProjectStepsDeliverTaskAndReleaseSuccessor(t *testing.T) {
 	c.configDigest = strings.Repeat("d", 64)
 	c.ExecutableTypes = []string{"task", "bug", "feature", "chore"}
 	c.Host, c.Agent = "local", "codex"
-	c.BD = Command{Executable: "bd-and-bv-are-not-installed"}
 	c.CommandTimeout, c.ShutdownGrace = "10s", "1s"
 	c.WorkflowDefinition = &WorkflowDefinition{ID: MinimalWorkflowVersion, Version: MinimalWorkflowVersion, ReviewRequired: false, MaxRepairRounds: 1}
 	step := func(name string) StepContract {
@@ -530,7 +620,7 @@ func TestNativeLocalProjectStepsDeliverTaskAndReleaseSuccessor(t *testing.T) {
 	if err = AtomicWrite(proofPath, proof); err != nil {
 		t.Fatal(err)
 	}
-	backend := backendFor(c, BeadsContext{})
+	backend := backendFor(c)
 	report, err := backend.Probe(context.Background(), targetFor(c), agentFor(c))
 	if err != nil {
 		t.Fatal(err)
@@ -1450,6 +1540,77 @@ func TestNativeInitializationRefusesExistingBeadsTaskDatabase(t *testing.T) {
 	}
 	if count != 0 {
 		t.Fatalf("failed native init wrote project authority: count=%d", count)
+	}
+}
+
+func TestNewServiceRejectsNonNativeAuthorityBeforeCreatingState(t *testing.T) {
+	c, _ := nativeTaskFixture(t)
+	c.TaskAuthority = ""
+	if _, err := NewService(c); err == nil || !strings.Contains(err.Error(), "task_authority=native") {
+		t.Fatalf("direct service construction accepted missing native authority: %v", err)
+	}
+	if _, err := os.Stat(c.RunDir); !os.IsNotExist(err) {
+		t.Fatalf("authority rejection created a replacement state directory: %v", err)
+	}
+}
+
+func TestNativeRuntimeProjectionRejectsRetiredWholeRunResultWithoutMutation(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "runtime.json")
+	legacyResult := filepath.Join(t.TempDir(), "result.json")
+	runtimeState := Runtime{SchemaVersion: CurrentRuntimeSchema, Repository: Repository{Identity: "repo:current"}, Runs: []*Run{{TaskID: "1", RunID: "0123456789abcdef0123456789abcdef", WorkflowVersion: MinimalWorkflowVersion, ResultPath: &legacyResult}}}
+	data, err := json.Marshal(runtimeState)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(path, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err = validateNativeRuntimeProjection(path); err == nil || !strings.Contains(err.Error(), "whole-run result") {
+		t.Fatalf("retired result binding was accepted for native recovery: %v", err)
+	}
+	after, err := os.ReadFile(path)
+	if err != nil || !bytes.Equal(data, after) {
+		t.Fatalf("runtime evidence changed after refusal: %v", err)
+	}
+}
+
+func TestNativeStoreRejectsRetiredSQLiteRunProjectionBeforeAuthorityOpen(t *testing.T) {
+	ctx := context.Background()
+	c, _ := nativeTaskFixture(t)
+	if err := c.ResolveIdentity(ctx); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(c.RunDir, "steerline.db")
+	store, err := OpenSQLiteStore(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacyResult := filepath.Join(t.TempDir(), "result.json")
+	payload, err := json.Marshal(Runtime{SchemaVersion: CurrentRuntimeSchema, Repository: Repository{Identity: c.Identity()}, Runs: []*Run{{TaskID: "1", RunID: "0123456789abcdef0123456789abcdef", WorkflowVersion: MinimalWorkflowVersion, ResultPath: &legacyResult}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.db.Exec(`INSERT INTO projection(project_identity,revision,payload,updated_at) VALUES(?,?,?,?)`, c.Identity(), 1, payload, now().Format(time.RFC3339Nano)); err != nil {
+		t.Fatal(err)
+	}
+	if err = store.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = openBoundNativeStore(ctx, c, path); err == nil || !strings.Contains(err.Error(), "whole-run result") {
+		t.Fatalf("SQLite projection with a retired result binding was opened: %v", err)
+	}
+	reader, err := OpenSQLiteReader(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reader.Close()
+	saved, _, err := reader.LoadProjection(ctx, c.Identity())
+	if err != nil || !bytes.Equal(saved, payload) {
+		t.Fatalf("rejection changed the saved runtime projection: err=%v", err)
+	}
+	var authorities int
+	if err = reader.db.QueryRow(`SELECT COUNT(*) FROM project_task_authorities`).Scan(&authorities); err != nil || authorities != 0 {
+		t.Fatalf("projection refusal wrote a replacement task authority: count=%d err=%v", authorities, err)
 	}
 }
 

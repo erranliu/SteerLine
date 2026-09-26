@@ -99,7 +99,7 @@ func SubmitServiceCommand(ctx context.Context, c Config, kind, targetID, request
 
 func validServiceCommandKind(kind string) bool {
 	switch kind {
-	case "retry_run", "mark_stopped", "accept_result", "resolve_command":
+	case "retry_run", "mark_stopped", "resolve_command":
 		return true
 	default:
 		return false

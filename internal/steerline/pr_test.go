@@ -53,39 +53,11 @@ func TestPRURLsAndRemotes(t *testing.T) {
 		}
 	}
 }
-func TestReadResultToleratesUTF8BOM(t *testing.T) {
-	f := newFixture(t)
-	r := &Run{TaskID: "t-1", RunID: "run-1"}
-	path := filepath.Join(f.c.RunDir, "bom-result.json")
-	body := `{"task_id":"t-1","run_id":"run-1","outcome":"blocked","pr_url":null,"worktree_path":null,"base_commit":null,"summary":null,"error":null}`
-	require(t, os.WriteFile(path, append([]byte{0xef, 0xbb, 0xbf}, []byte(body)...), 0600))
-	result, e := ReadResult(path, r)
-	require(t, e)
-	if result.Outcome != "blocked" || result.TaskID != "t-1" || result.RunID != "run-1" {
-		t.Fatalf("unexpected result %+v", result)
-	}
-}
-func TestResultRequiredFieldsAndDuplicatePR(t *testing.T) {
-	f := newFixture(t)
-	s := f.service(t)
-	r := &Run{TaskID: "t-1", RunID: "run-1"}
-	path := filepath.Join(f.c.RunDir, "result.json")
-	require(t, os.WriteFile(path, []byte(`{"task_id":"t-1","run_id":"run-1","outcome":"blocked"}`), 0600))
-	if _, e := ReadResult(path, r); e == nil {
-		t.Fatal("missing fields accepted")
-	}
-	url := f.server.URL + "/owner/repo/pulls/1"
-	r.WorkspaceIntent = &WorkspaceIntent{Path: filepath.Join(f.c.RunDir, "worktrees", "test"), Branch: "codex/test", BaseCommit: strings.Repeat("a", 40)}
-	r.WorktreePath = &r.WorkspaceIntent.Path
-	r.WorktreeBranch = &r.WorkspaceIntent.Branch
-	r.BaseCommit = &r.WorkspaceIntent.BaseCommit
-	s.State.Runs = []*Run{{RunID: "other", PR: PRState{URL: &url}}}
-	if e := s.bind(r, Result{Outcome: "pr_submitted", PRURL: &url, WorktreePath: r.WorktreePath, BaseCommit: r.BaseCommit}); e == nil || !strings.Contains(e.Error(), "already bound") {
-		t.Fatal("duplicate PR accepted")
-	}
-}
+
 func TestRuntimeCorruptionNotOverwritten(t *testing.T) {
 	f := newFixture(t)
+	s := f.service(t)
+	require(t, s.Close())
 	path := filepath.Join(f.c.RunDir, f.c.RuntimeFile)
 	require(t, os.WriteFile(path, []byte("truncated{"), 0600))
 	if _, e := NewService(f.c); e == nil {

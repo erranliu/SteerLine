@@ -4,6 +4,8 @@
 
 状态：已实现，自动化验证及限制见[验证记录](../validation/pr-05-intervention.md)。依赖：PR 2、4A、4B、4C。对应 [Plan](pr-05-intervention.plan.md)。
 
+后续状态更新：[#12 旧执行路径移除](beads-path-removal.spec.md)退役 whole-run `accept_result` 与旧的原 terminal reply continuation。下文对这些动作的字段、流程和历史验收描述记录 PR 5 当时的设计，不是当前可用接口；minimal-v1 答案经中心核验后在同一 workflow/execution 中创建固定步骤的新 attempt。
+
 ## 目标
 
 在控制台完成完整的人工决策与现有恢复操作，让操作者看清问题、提交一次明确答案、确认服务处理结果，并在执行失败或结果未知时按现有证据恢复。
@@ -34,7 +36,7 @@
 - 服务崩溃于 resuming 或平台响应丢失时不自动重发；通过 ReconcileOperation 查询原动作，只有平台已验证的同请求去重/恢复协议允许恢复发送。已接受仍缺证明保持待核实，明确拒绝/失效进入 failed/blocked，未知保留阻塞；不能从超时判断未发送。
 - UI 区分：未提交、答案已保存/等待服务、服务已接受/等待执行条件、后端已接受、轮次已开始（若有证据）、答案已应用、明确失败、应用待核实。状态依据持久事实，command.applied 只表示答案被服务接受，与 Decision.applied 分开。
 - 服务离线时不直接写答案文件；界面展示固定服务窗口入口，用户恢复服务后通过同一命令提交。超时或实例存活未知时保留原请求身份并核实，不降级到另一写入路径。
-- local continuation 当前为 unsupported：回答入口共用服务资格与能力判断，控制台显示具体原因，不呈现可用的“回答并续跑”。未来补齐能力须有独立实现和原生恢复验收，不能通过新启动执行来冒充原会话续跑。
+- PR 5 当时的原 terminal continuation 对 local 为 unsupported；当前 minimal-v1 answer continuation 由中心核对原 workspace 和 waiting StepAttempt，再创建同一 workflow/execution 的新 attempt，不重新启动整段旧执行。
 - 待回答/应用待核实卡片位于 4C 折叠组之外，可导航到相关 session/turn/attempt；折叠和轮次结束均不消费问题或修改 Decision。宿主权限请求不使用 answer_decision 自动回答。
 
 ## H4：恢复动作

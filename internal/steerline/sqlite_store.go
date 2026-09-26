@@ -541,7 +541,7 @@ func (t *sqliteTx) PutTask(v TaskRecord) error {
 		return nativeErr("authority_mismatch", "native task cannot be stored without a registered native project")
 	}
 	if authorityErr == nil {
-		if nativeAuthority != "native" || v.Source != "native" || !canonicalDecimalID(v.TaskID) || v.BatchID == "" || v.Title == "" || v.Type == "" || v.Priority < 0 || v.Priority > 4 || v.ContractID == "" || v.Version == 0 || v.CreatedAt.IsZero() || v.ExternalProvider != "" || v.ExternalProject != "" || v.ExternalID != "" {
+		if nativeAuthority != "native" || v.Source != "native" || !canonicalDecimalID(v.TaskID) || v.BatchID == "" || v.Title == "" || v.Type == "" || v.Priority < 0 || v.Priority > 4 || v.ContractID == "" || v.Version == 0 || v.CreatedAt.IsZero() || v.ExternalProvider != "" || v.ExternalProject != "" || v.ExternalID != "" || v.IdentityMapDigest != "" {
 			return nativeErr("contract_mismatch", "native Task requires its original numeric ID, batch, type, priority and fixed contract")
 		}
 		var repository string
@@ -609,7 +609,7 @@ func (t *sqliteTx) UpdateNativeTaskCAS(v TaskRecord, expectedVersion uint64) err
 	if old.Version != expectedVersion {
 		return nativeErr("stale_version", fmt.Sprintf("expected version %d, found %d", expectedVersion, old.Version))
 	}
-	if v.ProjectIdentity != old.ProjectIdentity || v.TaskID != old.TaskID || v.BatchID != old.BatchID || v.ContractID != old.ContractID || v.Type != old.Type || v.Priority != old.Priority || v.Title != old.Title || !sameStrings(v.GoalIDs, old.GoalIDs) || v.IdentityMapDigest != old.IdentityMapDigest || v.Source != "native" || v.Version != expectedVersion+1 || !v.CreatedAt.Equal(old.CreatedAt) || v.ExternalProvider != "" || v.ExternalProject != "" || v.ExternalID != "" {
+	if v.ProjectIdentity != old.ProjectIdentity || v.TaskID != old.TaskID || v.BatchID != old.BatchID || v.ContractID != old.ContractID || v.Type != old.Type || v.Priority != old.Priority || v.Title != old.Title || !sameStrings(v.GoalIDs, old.GoalIDs) || v.IdentityMapDigest != old.IdentityMapDigest || v.Source != "native" || v.Version != expectedVersion+1 || !v.CreatedAt.Equal(old.CreatedAt) || v.ExternalProvider != "" || v.ExternalProject != "" || v.ExternalID != "" || v.IdentityMapDigest != "" {
 		return nativeErr("contract_mismatch", "native task update cannot change its identity, scope, contract, or fixed fields")
 	}
 	allowed := map[string]map[string]bool{"open": {"in_progress": true, "discarded": true}, "in_progress": {"discarded": true, "closed": true}}
@@ -1363,7 +1363,7 @@ func (s *SQLiteStore) Commands(ctx context.Context, project, status string, limi
 }
 
 func (s *SQLiteStore) serviceCommands(ctx context.Context, project, status string, limit int) ([]CommandRecord, error) {
-	return s.commandsFiltered(ctx, project, status, limit, []string{"answer_decision", "retry_run", "mark_stopped", "accept_result", "resolve_command"})
+	return s.commandsFiltered(ctx, project, status, limit, []string{"answer_decision", "retry_run", "mark_stopped", "resolve_command"})
 }
 
 func (s *SQLiteStore) commandsFiltered(ctx context.Context, project, status string, limit int, kinds []string) ([]CommandRecord, error) {
@@ -1453,21 +1453,23 @@ func (s *SQLiteStore) SaveRuntime(ctx context.Context, runtime Runtime) (Runtime
 		if authorityErr != nil && !errors.Is(authorityErr, sql.ErrNoRows) {
 			return authorityErr
 		}
+		if authority != "native" {
+			return nativeErr("authority_mismatch", "runtime publication requires the native task authority")
+		}
 		runtime.Revision = revision + 1
 		if runtime.SchemaVersion != 5 {
 			return fmt.Errorf("unsupported runtime schema %d; only schema 5 is accepted", runtime.SchemaVersion)
 		}
-		runtime.Operations = runtimeOperations(runtime, authority == "native")
+		runtime.Operations = runtimeOperations(runtime)
 		for _, run := range runtime.Runs {
 			if run == nil {
 				continue
 			}
 			var err error
-			if run.WorkflowVersion == MinimalWorkflowVersion {
-				err = persistNormalizedWorkflow(tx, project, runtime, run)
-			} else {
-				err = persistLegacyRun(tx, project, run)
+			if run.WorkflowVersion != MinimalWorkflowVersion {
+				return nativeErr("unsupported_schema", "runtime contains a workflow format outside native minimal-v1; preserve it for manual recovery")
 			}
+			err = persistNormalizedWorkflow(tx, project, runtime, run)
 			if err != nil {
 				return err
 			}
@@ -1580,7 +1582,10 @@ func persistNormalizedWorkflow(tx DomainTx, project string, runtime Runtime, run
 	if err := tx.(*sqliteTx).tx.QueryRowContext(tx.(*sqliteTx).ctx, `SELECT authority FROM project_task_authorities WHERE project_identity=?`, project).Scan(&authority); err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return err
 	}
-	if authority == "native" && task.Status == "closed" && workflow.Phase == "completed" && run.FinishTaskStatus == "completed" {
+	if authority != "native" {
+		return nativeErr("authority_mismatch", "normalized runtime publication requires the native task authority")
+	}
+	if task.Status == "closed" && workflow.Phase == "completed" && run.FinishTaskStatus == "completed" {
 		// CompleteNativeTask already committed the selected delivery, closed task,
 		// and immutable completed workflow in its center transaction.
 		return nil
@@ -1606,7 +1611,7 @@ func persistNormalizedWorkflow(tx DomainTx, project string, runtime Runtime, run
 			workflow.Phase = "completed"
 		}
 		if run.FinishTaskStatus == "blocked" {
-			if authority == "native" && task.Status == "discarded" && execution.Status == "stopped" {
+			if task.Status == "discarded" && execution.Status == "stopped" {
 				// A confirmed native discard stop has already settled the fixed
 				// execution resource; the task remains discarded and blocked.
 			} else if run.ExecutionStatus == "unknown" {
@@ -1632,16 +1637,9 @@ func persistNormalizedWorkflow(tx DomainTx, project string, runtime Runtime, run
 		return fmt.Errorf("minimal-v1 workflow %s has no Execution", run.RunID)
 	}
 	if run.FinishTaskStatus == "completed" && task.Status != "closed" {
-		if err := SetTaskStatus(task, "closed", run.PR.State == "merged"); err != nil {
-			return err
-		}
+		return nativeErr("inconsistent_delivery", "completed runtime projection lacks the center-owned closed task")
 	}
 	workflow.UpdatedAt = now()
-	if authority != "native" {
-		if err := tx.PutTask(*task); err != nil {
-			return err
-		}
-	}
 	if err := tx.PutWorkflowRun(*workflow); err != nil {
 		return err
 	}
@@ -1701,236 +1699,14 @@ func persistNormalizedWorkflow(tx DomainTx, project string, runtime Runtime, run
 	return nil
 }
 
-func persistLegacyRun(tx DomainTx, project string, run *Run) error {
-	if run.Host == "" {
-		run.Host = "local"
-	}
-	if run.WorkflowVersion == "" {
-		run.WorkflowVersion = "legacy-v1"
-	}
-	taskID := run.DomainTaskID
-	if taskID == "" {
-		taskID = legacyTaskID(project, run)
-	}
-	run.DomainTaskID = taskID
-	n := now()
-	created := n
-	if run.StartedAt != nil {
-		created = run.StartedAt.UTC()
-	}
-	taskStatus := "in_progress"
-	switch run.FinishTaskStatus {
-	case "completed":
-		taskStatus = "closed"
-	case "discarded":
-		taskStatus = "discarded"
-	case "pending", "blocked", "waiting_decision", "waiting_pr_merge":
-		if run.BeadsStatus == "open" {
-			taskStatus = "open"
-		}
-	}
-	provider, sourceProject := "", ""
-	if run.BeadsContext != nil {
-		provider = "beads"
-		sourceProject = run.BeadsContext.ProjectID
-	}
-	if err := tx.PutTask(TaskRecord{ProjectIdentity: project, TaskID: taskID, ExternalProvider: provider, ExternalProject: sourceProject, ExternalID: run.TaskID, IdentityMapDigest: run.IdentityMapDigest, Title: run.Title, Claimant: run.Claimant, Source: provider, Status: taskStatus, Version: 1, CreatedAt: created, UpdatedAt: n}); err != nil {
-		return err
-	}
-	phase := "executing"
-	switch run.FinishTaskStatus {
-	case "waiting_decision":
-		phase = "waiting_decision"
-	case "waiting_pr_merge":
-		phase = "waiting_pr_merge"
-	case "completed":
-		phase = "completed"
-	case "blocked":
-		phase = "blocked"
-	}
-	definition := WorkflowDefinition{ID: "legacy-v1", Version: "legacy-v1"}
-	definition.ID, definition.Version = run.WorkflowVersion, run.WorkflowVersion
-	wfr := WorkflowRunRecord{ProjectIdentity: project, WorkflowRunID: run.RunID, TaskID: taskID, WorkflowVersion: run.WorkflowVersion, Definition: definition, Phase: phase, Repository: run.WorktreePathValue(), Branch: run.WorktreeBranchValue(), CreatedAt: created, UpdatedAt: n}
-	if run.PR.URL != nil && run.FinishTaskStatus == "completed" {
-		wfr.SelectedResult = run.RunID
-	}
-	if err := tx.PutWorkflowRun(wfr); err != nil {
-		return err
-	}
-	executionID := legacyExecutionID(run.RunID)
-	run.ExecutionID = executionID
-	status := "pending"
-	switch run.ExecutionStatus {
-	case "running":
-		status = "active"
-	case "succeeded":
-		status = "succeeded"
-	case "failed":
-		status = "failed"
-	case "unknown":
-		status = "blocked"
-	}
-	target := run.Target
-	if target.ID == "" {
-		target.ID = targetFor(Config{Host: run.Host}).ID
-	}
-	if target.Branch == "" {
-		target.Branch = run.WorktreeBranchValue()
-	}
-	if target.BaseRevision == "" {
-		target.BaseRevision = run.BaseCommitValue()
-	}
-	if target.WorktreeID == "" {
-		target.WorktreeID = run.WorktreePathValue()
-	}
-	run.Target = target
-	if run.Host == "orca" && run.Process != nil {
-		if target.WorktreeID == "" {
-			target.WorktreeID = run.Process.Terminal
-		}
-		if target.ExternalRuntime == "" {
-			target.ExternalRuntime = run.Process.RuntimeID
-		}
-	}
-	workspace := WorkspaceEvidence{Repository: run.WorktreePathValue(), Worktree: run.WorktreePathValue(), Branch: run.WorktreeBranchValue(), Base: run.BaseCommitValue()}
-	if run.WorktreePath != nil {
-		workspace.VerifiedAt = n
-	}
-	backend := run.Backend
-	if backend == "" {
-		backend = run.Host
-	}
-	run.Backend = backend
-	protocol := run.Protocol
-	if protocol == "" {
-		protocol = legacyProtocol(run.Host)
-	}
-	run.Protocol = protocol
-	exec := ExecutionRecord{ProjectIdentity: project, ExecutionID: executionID, WorkflowRunID: run.RunID, Agent: run.Agent, Backend: backend, Protocol: protocol, Process: run.Process, Target: target, Workspace: workspace, Status: status, CurrentStep: "legacy-workflow", CreatedAt: created, UpdatedAt: n}
-	if err := tx.PutExecution(exec); err != nil {
-		return err
-	}
-	attemptID := run.AttemptID
-	if attemptID == "" {
-		attemptID = run.RunID
-	}
-	run.AttemptID = attemptID
-	attemptStatus := "planned"
-	if status == "active" {
-		attemptStatus = "running"
-	} else if status == "succeeded" {
-		attemptStatus = "succeeded"
-	} else if status == "failed" {
-		attemptStatus = "failed"
-	} else if status == "blocked" {
-		attemptStatus = "outcome_unknown"
-	}
-	attemptNumber := run.DomainAttemptNumber
-	if attemptNumber < 1 {
-		attemptNumber = 1
-	}
-	run.DomainAttemptNumber = attemptNumber
-	attempt := StepAttemptRecord{ProjectIdentity: project, AttemptID: attemptID, ExecutionID: executionID, StepID: "legacy-workflow", AttemptNumber: attemptNumber, Status: attemptStatus, InputRevision: run.BaseCommitValue(), ExternalBinding: target, Legacy: true, CreatedAt: created, UpdatedAt: n}
-	if run.ResultPath != nil {
-		attempt.ResultID = *run.ResultPath
-	}
-	if err := tx.PutStepAttempt(attempt); err != nil {
-		return err
-	}
-	if run.Decision != nil {
-		d := run.Decision
-		version := d.Version
-		if version == 0 {
-			version = 1
-		}
-		d.Version = version
-		decision := DecisionRecord{ProjectIdentity: project, DecisionID: d.ID, Scope: "execution", WorkflowRunID: run.RunID, ExecutionID: executionID, AttemptID: attemptID, QuestionID: d.ID, Status: legacyDecisionStatus(d.Status), Version: version, UpdatedAt: n, CreatedAt: created}
-		payload, _ := json.Marshal(d.Request)
-		decision.Request = payload
-		if d.Status != "pending" {
-			if answer, e := ReadDecisionAnswer(run); e == nil {
-				decision.Answer = mustJSON(answer)
-			}
-		}
-		decision.AnsweredBy = d.AnsweredBy
-		if err := tx.PutDecision(decision); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func legacyTaskID(project string, run *Run) string {
-	return "legacy:" + shortHash(project+"\x00beads\x00"+func() string {
-		if run.BeadsContext != nil {
-			return run.BeadsContext.ProjectID
-		}
-		return ""
-	}()+"\x00"+run.TaskID)
-}
-func legacyExecutionID(runID string) string { return "legacy-execution:" + runID }
-func legacyProtocol(host string) string {
-	if host == "orca" {
-		return "orca_terminal_v2"
-	}
-	return "local_process"
-}
-func (r *Run) WorktreePathValue() string {
-	if r.WorktreePath != nil {
-		return *r.WorktreePath
-	}
-	if r.WorkspaceIntent != nil {
-		return r.WorkspaceIntent.Path
-	}
-	return ""
-}
-func (r *Run) WorktreeBranchValue() string {
-	if r.WorktreeBranch != nil {
-		return *r.WorktreeBranch
-	}
-	if r.WorkspaceIntent != nil {
-		return r.WorkspaceIntent.Branch
-	}
-	return ""
-}
-func (r *Run) BaseCommitValue() string {
-	if r.BaseCommit != nil {
-		return *r.BaseCommit
-	}
-	if r.WorkspaceIntent != nil {
-		return r.WorkspaceIntent.BaseCommit
-	}
-	return ""
-}
-func legacyDecisionStatus(v string) string {
-	switch v {
-	case "pending":
-		return "pending"
-	case "answer_saved":
-		return "answer_saved"
-	case "reply_accepted":
-		return "reply_accepted"
-	case "resuming":
-		return "resuming"
-	case "applied":
-		return "applied"
-	case "failed":
-		return "failed"
-	case "superseded":
-		return "superseded"
-	default:
-		return "failed"
-	}
-}
-
-func runtimeOperations(runtime Runtime, native bool) []OperationRecord {
+func runtimeOperations(runtime Runtime) []OperationRecord {
 	project := runtime.Repository.Identity
 	out := append([]OperationRecord(nil), runtime.Operations...)
 	indices := map[string]int{}
 	for i, op := range out {
 		indices[op.OperationID] = i
 	}
-	if op := runtime.Control.Operation; op != nil && !(native && centerOwnedNativeControlAction(op.Action)) {
+	if op := runtime.Control.Operation; op != nil && !centerOwnedNativeControlAction(op.Action) {
 		status := "outcome_unknown"
 		if op.Phase == "applying" {
 			status = "in_flight"

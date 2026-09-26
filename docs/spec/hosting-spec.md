@@ -1,108 +1,33 @@
-# Hosting 规范 v2：Orca 驱动执行
+# Native local and Orca execution
 
-本文记录当前 Orca terminal v2 适配器的实现，不定义受监管远程路径的目标架构。业务权威和远程红线见 [hosting](../hosting.md)；目标接入按 [远程闭环 Spec](03-remote-execution-and-viewer.md) 实施。当前 v2 路径由 Orca 建 worktree 并启动 agent，SteerLine 负责调度与完成核验。
+This document describes the current native execution contract for local Codex and the supported Orca terminal backend. It is subordinate to the [execution architecture](execution-architecture.spec.md) and [native task constraints](native-task-constraints.md). There is one task authority and one fixed step protocol; backend identity describes where a step runs.
 
-## 配置轴
+## Configuration
 
-```
-host  = local | orca     在哪执行（默认 orca）
-agent = codex | pi | ... 交给 Orca 的 --agent id（默认 codex，仅 orca host）
-model / profile / reasoning_effort = Codex agent 的 CLI 选项；仅 Codex agent 可指定
-```
+Every project must explicitly set `task_authority` to `native`. Native configuration requires the repository, remote, branch, PR provider, a supported `minimal-v1` workflow and its `project_steps`. It omits `run_dir`; SteerLine derives the repository's unique state directory. Unknown retired fields such as `bd`, `start_skill`, `finish_skill` and `completion` are rejected by config decoding.
 
-`runner` 轴已删除：选择哪个 agent 由 Orca 的 `--agent` 决定，Steerline 不再拼 agent 命令、不再有 pi runner。
+`host` selects `local` or `orca`; `agent`, Codex model options and Orca CLI settings configure the selected executor. These values do not select a task source or change the task contract. The project steps define implement, verify, optional review and publish_pr. Verification checks are explicit and fixed in the workflow definition.
 
-## Orca 执行流程（host=orca）
+## Dispatch and step execution
 
-```
-1. Steerline 领取 Beads 任务，fetch 主线，得到 base
-2. 持久化运行与意图（branch/base；worktree 路径由 Orca 决定，创建后回填）
-3. 默认路径：`orca worktree create --agent <agent> --base-branch <baseRef> --prompt <pointer>`；Orca 在 agent 就绪后 prefill 并提交
-4. Codex override 路径（`agent=codex` 且指定 model/profile/reasoning_effort）：先让 Orca 创建不带 agent 的 worktree
-5. 回填并持久化 worktree_path / worktree_branch / base_commit；写 prompt 与 result.schema.json
-6. override 路径通过 `orca terminal create --worktree path:<path> --command <codex-cli-command>` 启动 Codex；例如 `codex --model gpt-6-luna --config model_reasoning_effort=xhigh`，pointer 作为启动 prompt
-7. 监管：轮询结果文件 + terminal show(agentWait)
-8. 结果文件出现 → 校验 schema → 落 runs/<run_id>/result.json
-9. Steerline 核验 PR 合入 + Beads closed（既有逻辑）
-```
+The center transaction claims one ready native Task and creates its WorkflowRun, Execution, prepare StepAttempt, command receipt and Operation. The service records the worktree intent before creating the workspace. It verifies the resulting repository, branch and base, persists the worker identity, and only then starts the step.
 
-### 为什么不 `terminal send`
+Each worker receives `native-task/v1`: fixed project/task/contract, workflow/execution/attempt, repository/branch/base, prerequisite result references and one step's input. A worker cannot claim or close tasks, write the center database, change the workflow, or invoke Beads. The worker returns one structured step result. The center checks its identity, operation, repository state and step gate before recording the result and advancing.
 
-- `terminal wait --for tui-idle` 会在 agent **启动菜单**阶段就返回，随后的 `terminal send` 会被启动界面吞掉（实测 pi：pointer 从未送达，agent 空转）。
-- 改用 Orca 原生 `--prompt`：Orca 在 agent 就绪后 prefill 并提交，无竞态。pointer 只引用 `prompt.txt`，正文如常在 create 之后写。
-- Codex override 路径不通过 `terminal send` 注入任务提示；Codex 在 terminal 创建时直接收到 pointer 参数，避免启动菜单时序竞态。
+Local Codex and Orca use the same center transitions and step result contract. Their process/terminal handles, output collection and stop capabilities stay backend-specific. A backend may be used only for the exact target/protocol/version combination supported by its capability evidence. Unsupported or uncertain actions retain the original binding and block replacement work.
 
-### pi 前置：信任目录
+## Delivery and decisions
 
-- pi 首次进入未信任目录会弹 `Trust project folder?`，会截获 Orca prefill 的提交键，导致这次运行收不到 prompt。
-- pi 的信任解析会**向上查找父目录**（`findNearestTrustEntry`）。预先在 `~/.pi/agent/trust.json` 加 `"<orca>/workspaces/<repo>": true`，此后新建 worktree 不再弹框。
-- 这是 pi 的环境前置，不是 Steerline 逻辑；codex 等无此门槛。
+`publish_pr` reports a PR URL and published head as step facts. The center verifies the saved step result, required verification/review gates and current PR identity. Human review and merge remain external. On a later poll, the center re-queries the precise repository, PR, target branch and merge commit; one SQLite transaction records TaskDelivery, closes the task and releases successors. A failed query, changed head or conflicting delivery leaves the task open and preserves its blocker.
 
-### 结果契约 R-a
+Decision answers are stored once in the center. Answer acceptance is not application: the resumed native step must return evidence bound to the original decision, attempt, execution and answer digest. The service resumes the same workflow and execution with a new attempt after checking the saved workspace and waiting step; it does not create a replacement task or workflow.
 
-- agent 写 `<worktree>/.steerline-result.json`（worktree 内，避免沙箱越界）。
-- Steerline 读取、校验（沿用 `result.schema.json`），原子写入 `runs/<run_id>/result.json`，之后走既有 `ReadResult`/`verifyRunWorkspace`/`bind`。
-- prompt 模板增加 Orca 专属段：agent 的 CWD 即 worktree 根，结果写到其中的相对路径 `.steerline-result.json`；"必须是纯 JSON"。
+## Restart and recovery
 
-### 完成检测
+Restart reconciliation reads only current SQLite state and saved Operation/attempt identities. It does not recreate worktrees, replay uncertain worker starts, or import old result files. Native failed-step retry is a center transaction that reserves a new attempt; unverified in-flight actions remain blockers. The retired one-shot result acceptance and Beads claim/close paths are not part of this contract.
 
-- 主判据：结果文件出现且校验通过。
-- 辅助：`terminal show` 的 `agentWait != null` → 判 `blocked`（agent 在等人工），保留终端不代答。
-- `stall_timeout`（默认 5m）：既无结果文件、无终端新输出、无 agentWait 变化 → `blocked`。
-- 不把 `tui-idle` 当完成：agent 可能多轮。
+Old runtime or database versions, legacy task-source fields, retired whole-run result bindings, or unsupported external execution identities are rejected before side effects and retained for manual inspection. The service never treats a config change as permission to create a second authority.
 
-### 回收
+## Acceptance evidence
 
-- `Kill()`：`terminal close`；可选 `worktree rm`（保留现场优先，默认不 rm）。
-- Steerline 停止/超时：关闭终端并保留 worktree 供诊断。
-
-## 恢复
-
-- 重启见到 `host=orca` 的 pending/running → `unknown/blocked`，绝不重连续跑。
-- 诊断：`worktree show --worktree path:<path>` + `terminal show --terminal <handle>`；`incarnationId` 变化或不可达 = unverifiable。
-- 结果文件与 worktree 在本地磁盘，`exit.json`/`result.json` 概念对 Orca 变为 `.steerline-result.json`；本地 host 仍用 `exit.json`。
-- 本地 host 的 `accept-result` 逻辑保持：人工核对后显式接回。
-
-## 配置增量
-
-```json
-"host": "orca",
-"agent": "codex",
-"model": "gpt-6-luna",
-"reasoning_effort": "xhigh",
-"stall_timeout": "5m",
-"orca": {
-  "executable": "orca",
-  "args": [],
-  "shell": "cmd.exe",
-  "wait_timeout": "15m",
-  "keep_terminal": false,
-  "fallback": "local"
-}
-```
-
-- 非 Codex agent 的模型选择与启动方式仍由 Orca 管理。对 `host=orca, agent=codex`，`model`、`profile`、`reasoning_effort` 和 `codex` executable/args 由 SteerLine 通过 Codex CLI 传入；`sandbox` 同样作为 Codex CLI 参数传入。
-- 默认值 `host=orca`、`agent=codex`。
-
-## runtime v3
-
-- `schema_version=3`；run 增 `host`、`process.kind/terminal/runtime_id/incarnation`。
-- orca 的 `worktree_path`/`worktree_branch` 来自 Orca；`base_commit` 仍是 Steerline 固定并核验的祖先。
-- v1/v2 记录视为 `host=local`。
-
-## 分期
-
-| 阶段 | 内容 | 状态 |
-| --- | --- | --- |
-| P0 | `activity.jsonl` + normalizer + `steerline watch` + `run -console` | 已实现 |
-| P1 | `Spawner`/`Worker` 抽象 + `LocalSpawner` | 已实现（保留给 local host） |
-| P1-decision | 人工决策通过当前 SQLite `CommandService` first-wins；Orca 只续跑固定 terminal/incarnation；仅严格绑定原 decision、attempt、execution 和答案摘要的证明可标 applied；不导入 request/answer sidecar | 见 [PR 5 Spec](pr-05-intervention.spec.md) 与 [决策契约](../decisions.md) |
-| P2-v1 | Orca 当可见终端宿主（headless worker） | 已被 v2 取代 |
-| P2-v2 | Orca 建 worktree + `--agent` 启 agent + R-a 结果 | 已实现（含集成测试） |
-| P2-viewer | 全屏交互查看器（`steerline watch`，run 列表 + activity + 决策面板，bubbletea） | 已实现（teatest 风格单测 + 真实 TTY 冒烟） |
-| P3 | 远程 host（`--on`/`--environment`）+ 结果回传 | 待做 |
-
-> 迁移说明：`host=local` 路径与旧测试保留，作为无 Orca 环境与回归基线；`host=orca` 走 v2 模型。
->
-> 已真机验证（Orca 1.4.206）：`--base-branch refs/steerline/bases/<runID>` 完整 ref 被接受，返回的 `worktree.head` 等于该 ref 指向的 pinned base，`baseRef` 原样保留。agent handle 读取容错：先 `agentTerminalHandle`，再 `startupTerminal.handle`，最后 `terminal list --worktree path:`。
-> 集成测试用的是协议替身（`git worktree add` + 写 `.steerline-result.json`），未连真实 Orca runtime；`--agent` 的真实返回形状依赖上述容错。
+`internal/steerline/native_tasks_test.go` covers local and Orca fixed-step flows, task claim/delivery and successor release, decision application, retry, and restart reconciliation. These isolated integration tests do not establish live Orca or Codex acceptance. Remaining live checks are tracked separately in the [roadmap](../roadmap/roadmap.md) and the corresponding validation reports.

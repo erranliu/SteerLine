@@ -42,7 +42,7 @@ func (s *Service) conversationJournalSources() []conversationJournalSource {
 		}
 		root := filepath.Join(s.Config.RunDir, "runs", run.RunID)
 		add := func(path, attempt string) {
-			if path == "" || attempt == "" {
+			if path == "" || !stableExecutionID(attempt) || !stableExecutionID(run.ExecutionID) || run.DomainTaskID == "" {
 				return
 			}
 			clean := filepath.Clean(path)
@@ -62,17 +62,9 @@ func (s *Service) conversationJournalSources() []conversationJournalSource {
 			}
 			_ = f.Close()
 			seen[clean] = true
-			executionID := run.ExecutionID
-			if executionID == "" {
-				executionID = legacyExecutionID(run.RunID)
-			}
-			taskID := run.DomainTaskID
-			if taskID == "" {
-				taskID = legacyTaskID(s.Config.identity, run)
-			}
 			source := conversationJournalSource{
-				Path: clean, RunID: run.RunID, TaskID: taskID, WorkflowID: run.RunID,
-				ExecutionID: executionID, AttemptID: attempt, Backend: BackendLocal,
+				Path: clean, RunID: run.RunID, TaskID: run.DomainTaskID, WorkflowID: run.RunID,
+				ExecutionID: run.ExecutionID, AttemptID: attempt, Backend: BackendLocal,
 				Protocol: ProtocolLocalProcess, Agent: run.Agent, TargetID: run.Target.ID,
 				ExternalRef: conversationExternalRef(run.Process), ProjectID: s.Config.identity,
 				Ended: run.EndedAt != nil, FileID: fileID,
@@ -86,7 +78,7 @@ func (s *Service) conversationJournalSources() []conversationJournalSource {
 					source.Diagnostic = fmt.Sprintf("source marker is invalid: %v", decodeErr)
 				} else if validateErr := marker.validate(); validateErr != nil {
 					source.Diagnostic = validateErr.Error()
-				} else if marker.ProjectID != s.Config.identity || marker.WorkflowID != run.RunID || marker.ExecutionID != executionID || marker.AttemptID != attempt || marker.Backend != BackendLocal || marker.Protocol != ProtocolLocalProcess || marker.Agent != run.Agent || marker.TargetID != run.Target.ID {
+				} else if marker.ProjectID != s.Config.identity || marker.WorkflowID != run.RunID || marker.ExecutionID != run.ExecutionID || marker.AttemptID != attempt || marker.Backend != BackendLocal || marker.Protocol != ProtocolLocalProcess || marker.Agent != run.Agent || marker.TargetID != run.Target.ID {
 					source.Diagnostic = "source marker identity does not match the fixed run and attempt"
 				} else {
 					source.ExpectedFileID = marker.SourceIdentity
@@ -97,9 +89,6 @@ func (s *Service) conversationJournalSources() []conversationJournalSource {
 				}
 			}
 			sources = append(sources, source)
-		}
-		if run.WorkflowVersion != MinimalWorkflowVersion {
-			add(deref(run.LogPath), nonEmpty(run.AttemptID, run.RunID))
 		}
 		for _, attempt := range s.State.Attempts {
 			if run.ExecutionID != "" && attempt.ExecutionID == run.ExecutionID && attempt.EventPath != "" {

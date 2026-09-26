@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 )
@@ -54,61 +53,37 @@ func serviceHasCapability(rt *Runtime, action string) bool {
 }
 
 func ReadTaskSnapshot(c Config) (*TaskSnapshot, error) {
+	if err := requireNativeTaskAuthority(c); err != nil {
+		return nil, err
+	}
 	if err := c.ResolveIdentity(context.Background()); err != nil {
 		return nil, err
 	}
-	if c.taskAuthority() == "native" {
-		store, err := OpenNativeTaskProject(context.Background(), &c)
-		if err != nil {
-			return nil, err
-		}
-		defer store.Close()
-		authority, err := store.nativeAuthority(context.Background(), c.identity)
-		if err != nil {
-			return nil, err
-		}
-		ready, err := (QueryService{Store: store, Project: c.identity}).ReadyNativeTasks(context.Background())
-		if err != nil {
-			return nil, err
-		}
-		queried := now()
-		snapshot := &TaskSnapshot{Version: 1, RepositoryIdentity: c.identity, QueriedAt: queried, LastSuccessAt: &queried, Tasks: []TaskCandidate{}}
-		if authority.DispatchPaused {
-			snapshot.BlockReason = "dispatch is paused"
-		}
-		for _, task := range ready {
-			if !contains(c.ExecutableTypes, task.Type) {
-				continue
-			}
-			snapshot.Tasks = append(snapshot.Tasks, TaskCandidate{TaskID: task.TaskID, Title: task.Title, Type: task.Type})
-		}
-		return snapshot, nil
-	}
-	rt, err := LoadRuntime(filepath.Join(c.RunDir, c.RuntimeFile))
+	store, err := OpenNativeTaskProject(context.Background(), &c)
 	if err != nil {
 		return nil, err
 	}
-	if rt == nil || rt.SchemaVersion != 5 {
-		return nil, errors.New("no runtime v5 snapshot for task candidates")
-	}
-	if canonical(rt.Repository.Identity) != canonical(c.identity) {
-		return nil, errors.New("runtime repository identity does not match configuration")
-	}
-	if rt.Repository.Remote != c.Remote || rt.Repository.Branch != c.Branch {
-		return nil, errors.New("runtime remote/branch does not match configuration")
-	}
-	b, err := readSnapshot(filepath.Join(c.RunDir, "tasks.json"))
+	defer store.Close()
+	authority, err := store.nativeAuthority(context.Background(), c.identity)
 	if err != nil {
 		return nil, err
 	}
-	var snapshot TaskSnapshot
-	if err = decode(b, &snapshot); err != nil {
+	ready, err := (QueryService{Store: store, Project: c.identity}).ReadyNativeTasks(context.Background())
+	if err != nil {
 		return nil, err
 	}
-	if snapshot.Version != 1 || snapshot.InstanceID != rt.Service.InstanceID || canonical(snapshot.RepositoryIdentity) != canonical(rt.Repository.Identity) {
-		return nil, errors.New("task snapshot targets a different service instance or repository")
+	queried := now()
+	snapshot := &TaskSnapshot{Version: 1, RepositoryIdentity: c.identity, QueriedAt: queried, LastSuccessAt: &queried, Tasks: []TaskCandidate{}}
+	if authority.DispatchPaused {
+		snapshot.BlockReason = "dispatch is paused"
 	}
-	return &snapshot, nil
+	for _, task := range ready {
+		if !contains(c.ExecutableTypes, task.Type) {
+			continue
+		}
+		snapshot.Tasks = append(snapshot.Tasks, TaskCandidate{TaskID: task.TaskID, Title: task.Title, Type: task.Type})
+	}
+	return snapshot, nil
 }
 
 func SubmitControl(c Config, action string, payload any, requestedBy string) (ControlRequest, error) {

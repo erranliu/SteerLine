@@ -69,6 +69,11 @@ func (FileQuerySource) ReadProject(ctx context.Context, ref ProjectRef, selected
 		return result
 	}
 	c := ref.Config
+	if c.TaskAuthority != "native" {
+		result.TaskError = "task_authority=native is required"
+		result.DomainError = result.TaskError
+		return result
+	}
 	if err := c.ResolveIdentity(ctx); err != nil {
 		result.TaskError = "resolve repository identity: " + err.Error()
 		result.Connection = steerline.ServiceConnection{State: steerline.ConnectionIdentityError, Diagnostic: result.TaskError}
@@ -76,97 +81,68 @@ func (FileQuerySource) ReadProject(ctx context.Context, ref ProjectRef, selected
 	}
 	result.Connection = steerline.ConnectService(ctx, c)
 	result.Observation = result.Connection.Snapshot
-	// Offline and damaged runtime.json must not hide a newer current-format
-	// SQLite projection from read-only project history. Connection eligibility
-	// remains the independent ConnectService result above.
 	databaseObservation := viewer.NewFileSource(c).Snapshot()
 	if databaseObservation.Runtime != nil && (result.Observation.Runtime == nil || databaseObservation.Runtime.Revision > result.Observation.Runtime.Revision || (databaseObservation.Runtime.Revision == result.Observation.Runtime.Revision && databaseObservation.Runtime.HeartbeatAt.After(result.Observation.Runtime.HeartbeatAt))) {
 		result.Observation = databaseObservation
 	} else if result.Observation.Runtime == nil && result.Observation.State == steerline.SnapshotNone {
 		result.Observation = steerline.ReadObservationSnapshot(filepath.Join(c.RunDir, c.RuntimeFile), c.Heartbeat, nil)
 	}
-	if c.TaskAuthority != "native" {
-		if snapshot, err := steerline.ReadTaskSnapshot(c); err != nil {
-			result.TaskError = err.Error()
+	if _, statErr := os.Stat(filepath.Join(c.RunDir, "steerline.db")); statErr != nil {
+		if os.IsNotExist(statErr) {
+			result.NativeTaskError = "native task database does not exist; the console remains read-only"
 		} else {
-			result.Tasks = snapshot
-			if snapshot.Error != nil && strings.TrimSpace(*snapshot.Error) != "" {
-				result.TaskError = *snapshot.Error
+			result.NativeTaskError = statErr.Error()
+		}
+		result.TaskError, result.DomainError = result.NativeTaskError, result.NativeTaskError
+		return result
+	}
+	store, err := steerline.OpenNativeTaskReader(ctx, &c)
+	if err != nil {
+		result.NativeTaskError, result.TaskError, result.DomainError = err.Error(), err.Error(), err.Error()
+		return result
+	}
+	defer store.Close()
+	query := steerline.QueryService{Store: store, Project: c.Identity()}
+	nativeTasks, err := query.ListNativeTasks(ctx, "", 500)
+	if err != nil {
+		result.NativeTaskError, result.TaskError = err.Error(), err.Error()
+	} else {
+		result.NativeTasks = &nativeTasks
+		ready, readyErr := query.ReadyNativeTaskSnapshot(ctx)
+		if readyErr != nil {
+			result.TaskError = readyErr.Error()
+		} else if ready.ProjectID != nativeTasks.ProjectID || ready.AuthorityVersion != nativeTasks.AuthorityVersion || ready.GraphRevision != nativeTasks.GraphRevision || ready.DatabaseID != nativeTasks.DatabaseID || ready.DatabaseRevision != nativeTasks.DatabaseRevision {
+			result.TaskError = "cursor_invalidated: selected task and Ready candidates use different sampled versions"
+		} else {
+			result.Tasks = nativeCandidateSnapshot(ref, result.Connection, ready)
+		}
+		if selectedTaskID != "" && steerline.ValidateNativeTaskID(selectedTaskID) == nil {
+			found := false
+			for i := range nativeTasks.Tasks {
+				if nativeTasks.Tasks[i].TaskID == selectedTaskID {
+					found = true
+					break
+				}
+			}
+			if !found {
+				selected, showErr := query.ShowNativeTask(ctx, selectedTaskID)
+				if showErr == nil && len(selected.Tasks) == 1 && selected.AuthorityVersion == nativeTasks.AuthorityVersion && selected.DatabaseID == nativeTasks.DatabaseID && selected.DatabaseRevision == nativeTasks.DatabaseRevision && selected.GraphRevision == nativeTasks.GraphRevision {
+					result.SelectedNative = &selected.Tasks[0]
+				} else if showErr == nil {
+					result.NativeTaskError = "cursor_invalidated: selected task uses a different sampled version"
+					result.TaskError = result.NativeTaskError
+				} else {
+					result.NativeTaskError = showErr.Error()
+					result.TaskError = showErr.Error()
+				}
 			}
 		}
 	}
-	dbPath := filepath.Join(c.RunDir, "steerline.db")
-	if _, err := os.Stat(dbPath); err == nil {
-		var store *steerline.SQLiteStore
-		var openErr error
-		if c.TaskAuthority == "native" {
-			store, openErr = steerline.OpenNativeTaskReader(ctx, &c)
-		} else {
-			store, openErr = steerline.OpenSQLiteReader(dbPath)
-		}
-		if openErr != nil {
-			result.DomainError = openErr.Error()
-			if c.TaskAuthority == "native" {
-				result.NativeTaskError = openErr.Error()
-				result.TaskError = openErr.Error()
-			}
-		} else {
-			if c.TaskAuthority == "native" {
-				query := steerline.QueryService{Store: store, Project: c.Identity()}
-				nativeTasks, nativeErr := query.ListNativeTasks(ctx, "", 500)
-				if nativeErr != nil {
-					result.NativeTaskError = nativeErr.Error()
-					result.TaskError = nativeErr.Error()
-				} else {
-					result.NativeTasks = &nativeTasks
-					ready, readyErr := query.ReadyNativeTaskSnapshot(ctx)
-					if readyErr != nil {
-						result.TaskError = readyErr.Error()
-					} else if ready.ProjectID != nativeTasks.ProjectID || ready.AuthorityVersion != nativeTasks.AuthorityVersion || ready.GraphRevision != nativeTasks.GraphRevision || ready.DatabaseID != nativeTasks.DatabaseID || ready.DatabaseRevision != nativeTasks.DatabaseRevision {
-						result.TaskError = "cursor_invalidated: 任务详情与 Ready 候选采样版本不同；禁止开始"
-					} else {
-						result.Tasks = nativeCandidateSnapshot(ref, result.Connection, ready)
-					}
-					if selectedTaskID != "" && steerline.ValidateNativeTaskID(selectedTaskID) == nil {
-						found := false
-						for i := range nativeTasks.Tasks {
-							if nativeTasks.Tasks[i].TaskID == selectedTaskID {
-								found = true
-								break
-							}
-						}
-						if !found {
-							selected, showErr := query.ShowNativeTask(ctx, selectedTaskID)
-							if showErr == nil && selected.AuthorityVersion == nativeTasks.AuthorityVersion && selected.DatabaseID == nativeTasks.DatabaseID && selected.DatabaseRevision == nativeTasks.DatabaseRevision && selected.GraphRevision == nativeTasks.GraphRevision {
-								result.SelectedNative = &selected.Tasks[0]
-							} else if showErr == nil {
-								result.NativeTaskError = "cursor_invalidated: 所选任务与列表采样版本不同"
-								result.TaskError = result.NativeTaskError
-							} else {
-								result.NativeTaskError = showErr.Error()
-								result.TaskError = result.NativeTaskError
-							}
-						}
-					}
-				}
-			}
-			domain, queryErr := store.Query(ctx, c.Identity())
-			_ = store.Close()
-			if queryErr != nil {
-				result.DomainError = queryErr.Error()
-			} else {
-				result.Domain = &domain
-			}
-		}
-	} else if !os.IsNotExist(err) {
-		result.DomainError = err.Error()
-		if c.TaskAuthority == "native" {
-			result.NativeTaskError = err.Error()
-			result.TaskError = err.Error()
-		}
-	} else if c.TaskAuthority == "native" {
-		result.NativeTaskError = "当前原生任务数据库不存在；控制台保持只读，不会初始化任务状态"
-		result.TaskError = result.NativeTaskError
+	domain, queryErr := store.Query(ctx, c.Identity())
+	if queryErr != nil {
+		result.DomainError = queryErr.Error()
+	} else {
+		result.Domain = &domain
 	}
 	return result
 }

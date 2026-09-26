@@ -57,9 +57,7 @@ func TestInstallExecutableCopiesAndOverwrites(t *testing.T) {
 // the same repository resolves to the same state directory.
 func TestDerivedRunDirIsStableAcrossWorktrees(t *testing.T) {
 	t.Setenv("STEERLINE_HOME", t.TempDir())
-	f := newFixture(t)
-
-	base := f.c
+	base, _ := nativeTaskFixture(t)
 	base.RunDir = ""
 	base.WorktreeRoot = ""
 	load := func(repo string) Config {
@@ -80,7 +78,7 @@ func TestDerivedRunDirIsStableAcrossWorktrees(t *testing.T) {
 		return loaded
 	}
 
-	fromMain := load(f.c.Repository)
+	fromMain := load(base.Repository)
 	if !strings.Contains(fromMain.RunDir, string(filepath.Separator)+"state"+string(filepath.Separator)) {
 		t.Fatalf("run_dir was not derived under state: %s", fromMain.RunDir)
 	}
@@ -92,7 +90,7 @@ func TestDerivedRunDirIsStableAcrossWorktrees(t *testing.T) {
 	if e := os.MkdirAll(filepath.Dir(linked), 0700); e != nil {
 		t.Fatal(e)
 	}
-	fixtureGit(t, f.c.Repository, "worktree", "add", "--no-track", "-b", "wt-derived", linked)
+	fixtureGit(t, base.Repository, "worktree", "add", "--no-track", "-b", "wt-derived", linked)
 
 	fromLinked := load(linked)
 	if fromLinked.RunDir != fromMain.RunDir {
@@ -100,11 +98,11 @@ func TestDerivedRunDirIsStableAcrossWorktrees(t *testing.T) {
 	}
 }
 
-// TestExplicitRunDirStillWins keeps existing configs working unchanged.
-func TestExplicitRunDirStillWins(t *testing.T) {
+func TestNativeConfigRejectsASecondRunDir(t *testing.T) {
 	t.Setenv("STEERLINE_HOME", t.TempDir())
-	f := newFixture(t)
-	b, e := json.Marshal(f.c)
+	c, _ := nativeTaskFixture(t)
+	c.RunDir = filepath.Join(t.TempDir(), "alternate-state")
+	b, e := json.Marshal(c)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -112,11 +110,10 @@ func TestExplicitRunDirStillWins(t *testing.T) {
 	if e := os.WriteFile(p, b, 0600); e != nil {
 		t.Fatal(e)
 	}
-	loaded, e := LoadConfig(p)
-	if e != nil {
-		t.Fatal(e)
+	if _, e = LoadConfig(p); e == nil || !strings.Contains(e.Error(), "stable shared state directory") {
+		t.Fatalf("native config accepted a second run directory: %v", e)
 	}
-	if loaded.RunDir != f.c.RunDir {
-		t.Fatalf("explicit run_dir overridden: %s want %s", loaded.RunDir, f.c.RunDir)
+	if _, err := os.Stat(c.RunDir); !os.IsNotExist(err) {
+		t.Fatalf("rejected alternate state path was created: %v", err)
 	}
 }

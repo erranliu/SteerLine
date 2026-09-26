@@ -36,21 +36,7 @@ type nativeCapabilityEvidence struct {
 	GitClean              bool              `json:"git_clean"`
 	WorkspaceInspected    bool              `json:"workspace_inspected"`
 	BaseAncestor          bool              `json:"base_ancestor"`
-	FirstInputAccepted    bool              `json:"first_input_accepted"`
-	FirstTurnStarted      bool              `json:"first_turn_started"`
-	SecondInputAccepted   bool              `json:"second_input_accepted"`
-	SecondTurnStarted     bool              `json:"second_turn_started"`
-	SameTerminal          bool              `json:"same_terminal"`
-	SameIncarnation       bool              `json:"same_incarnation"`
-	SameRuntime           bool              `json:"same_runtime"`
-	FirstOutputObserved   bool              `json:"first_output_observed"`
-	SecondOutputObserved  bool              `json:"second_output_observed"`
 	StopConfirmed         bool              `json:"stop_confirmed"`
-	RetrySameRun          bool              `json:"retry_same_run"`
-	RetryNewAttempt       bool              `json:"retry_new_attempt"`
-	ClaimCount            int               `json:"claim_count"`
-	WorkspaceReused       bool              `json:"workspace_reused"`
-	PreviousRunPreserved  bool              `json:"previous_run_preserved"`
 }
 
 func evidenceDigest(value string) bool {
@@ -83,7 +69,7 @@ func CertifyExecutionBackend(ctx context.Context, c Config, paths []string) (Cap
 			return CapabilityReport{}, err
 		}
 	}
-	backend := backendFor(c, BeadsContext{})
+	backend := backendFor(c)
 	probe, err := backend.Probe(ctx, targetFor(c), agentFor(c))
 	if err != nil {
 		return CapabilityReport{}, err
@@ -120,8 +106,6 @@ func CertifyExecutionBackend(ctx context.Context, c Config, paths []string) (Cap
 		copies[stablePath] = b
 		ref := stablePath + "#sha256=" + hex.EncodeToString(sum[:])
 		switch {
-		case probe.Backend == BackendLocal && evidence.RetrySameRun && evidence.RetryNewAttempt && evidence.ClaimCount == 1 && evidence.WorkspaceReused && evidence.PreviousRunPreserved && evidence.StopStatus == OperationConfirmed && evidence.OutputBytes > 0 && evidenceDigest(evidence.OutputSHA256):
-			proofs["retry"] = ref
 		case probe.Backend == BackendLocal && evidence.ProcessAbsent && evidence.StopStatus == OperationConfirmed && evidence.OutputBytes > 0 && evidenceDigest(evidence.OutputSHA256):
 			for _, name := range []string{"start", "observe", "stop", "workspace_inspection", "output_reading"} {
 				proofs[name] = ref
@@ -134,8 +118,6 @@ func CertifyExecutionBackend(ctx context.Context, c Config, paths []string) (Cap
 			}
 		case probe.Backend == BackendOrca && evidence.WorkspaceInspected && evidence.BaseAncestor && evidence.GitClean:
 			proofs["workspace_inspection"] = ref
-		case probe.Backend == BackendOrca && evidence.FirstInputAccepted && evidence.FirstTurnStarted && evidence.SecondInputAccepted && evidence.SecondTurnStarted && evidence.SameTerminal && evidence.SameIncarnation && evidence.SameRuntime && evidence.FirstOutputObserved && evidence.SecondOutputObserved && evidence.StopConfirmed && evidence.GitClean:
-			proofs["reply_continue"] = ref
 		default:
 			return CapabilityReport{}, fmt.Errorf("native evidence does not prove a supported capability: %s", path)
 		}

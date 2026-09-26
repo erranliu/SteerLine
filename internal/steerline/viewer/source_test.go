@@ -32,6 +32,11 @@ func TestFileSourceResolvesIdentityForDatabaseRecovery(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer db.Close()
+	if err = db.Transact(context.Background(), func(tx steerline.DomainTx) error {
+		return tx.PutProjectTaskAuthority(steerline.ProjectTaskAuthority{ProjectIdentity: resolved.Identity(), Authority: "native", AuthorityVersion: 1, Repository: "fixture", Remote: "origin", Branch: "main", DispatchMode: "manual", DispatchPaused: true})
+	}); err != nil {
+		t.Fatal(err)
+	}
 	state := steerline.Runtime{SchemaVersion: 5, Repository: steerline.Repository{Identity: resolved.Identity()}, HeartbeatAt: time.Now().UTC()}
 	state, err = db.SaveRuntime(context.Background(), state)
 	if err != nil {

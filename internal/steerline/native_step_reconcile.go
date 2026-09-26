@@ -16,7 +16,7 @@ type nativeStepDispatchOperation struct {
 }
 
 func (s *Service) reconcileExitedNativeStep(ctx context.Context) error {
-	if !s.native || s.worker != nil {
+	if s.worker != nil {
 		return nil
 	}
 	for _, run := range s.State.Runs {
@@ -33,7 +33,7 @@ func (s *Service) reconcileExitedNativeStep(ctx context.Context) error {
 		if err != nil || ref.RunID != run.RunID || ref.AttemptID != attempt.AttemptID || ref.External != *execution.Process || ref.Backend != BackendKind(execution.Backend) || ref.Protocol != ExecutionProtocol(execution.Protocol) || ref.Target.ID != targetFor(s.Config).ID {
 			continue
 		}
-		backend := backendFor(s.Config, BeadsContext{})
+		backend := backendFor(s.Config)
 		observation, err := backend.Observe(ctx, ref)
 		if err != nil || observation.Liveness != "exited" {
 			continue
@@ -119,7 +119,7 @@ func (s *Service) reconcileExitedOrcaStepLauncher(ctx context.Context, run *Run,
 	if err != nil {
 		return err
 	}
-	env := mergeStepEnv(minimalStepEnv(s.Config, BeadsContext{}, run, attempt, dispatch.Input.StepInput), contract.Environment)
+	env := mergeStepEnv(minimalStepEnv(s.Config, run, attempt), contract.Environment)
 	launcherPath := filepath.Join(*run.WorktreePath, ".steerline-launch-"+attempt.AttemptID+".cmd")
 	expected := renderNativeOrcaBatchRunner(stepExecutable, stepArgs, stdinPath, outputPath, captureStdout, env)
 	expectedDigest := operationDigest(expected)

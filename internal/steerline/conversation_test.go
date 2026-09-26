@@ -607,7 +607,8 @@ func TestConversationLiveSourceFailureKeepsGapAndMapperPosition(t *testing.T) {
 	store, err := OpenSQLiteStore(filepath.Join(root, "steerline.db"))
 	require(t, err)
 	defer store.Close()
-	run := &Run{RunID: runID, AttemptID: runID, ExecutionID: "execution", DomainTaskID: "task", Backend: string(BackendLocal), Protocol: string(ProtocolLocalProcess), Agent: "codex", Target: ExecutionTarget{ID: "local"}, LogPath: &path}
+	executionID, taskID := newID(), "501"
+	run := &Run{TaskID: taskID, RunID: runID, AttemptID: runID, ExecutionID: executionID, DomainTaskID: taskID, WorkflowVersion: MinimalWorkflowVersion, Backend: string(BackendLocal), Protocol: string(ProtocolLocalProcess), Agent: "codex", Target: ExecutionTarget{ID: "local"}, LogPath: &path}
 	s := &Service{Config: Config{RunDir: root, identity: "project"}, domainStore: store, State: Runtime{Runs: []*Run{run}}}
 	segment := "local-jsonl-v1:" + fileID
 	first := WorkerEvent{RunID: runID, AttemptID: runID, Source: "codex-jsonl", SourceSegment: segment, SourceIdentity: fileID, SourceSeq: 1, SourceOffset: 0, SourceLength: int64(len(firstRaw)), Raw: firstRaw}
@@ -622,12 +623,12 @@ func TestConversationLiveSourceFailureKeepsGapAndMapperPosition(t *testing.T) {
 	if mapper == nil || mapper.currentTurn != "" {
 		t.Fatal("failed source read advanced the in-memory turn mapper")
 	}
-	cp, err := store.ConversationCheckpoint(ctx, "project", "execution", runID, "codex-jsonl", segment)
+	cp, err := store.ConversationCheckpoint(ctx, "project", executionID, runID, "codex-jsonl", segment)
 	require(t, err)
 	if cp.LocalSeq != 1 {
 		t.Fatal("source checkpoint advanced after a failed read")
 	}
-	page, err := (ConversationQueryService{Store: store, Project: "project"}).ReadConversation(ctx, ConversationFilter{ExecutionID: "execution", AttemptID: runID}, "", 10)
+	page, err := (ConversationQueryService{Store: store, Project: "project"}).ReadConversation(ctx, ConversationFilter{ExecutionID: executionID, AttemptID: runID}, "", 10)
 	require(t, err)
 	if len(page.Events) != 2 || page.Events[1].Type != ConversationGap || page.Events[1].Status != "source_unavailable" || page.Events[1].Raw == nil {
 		t.Fatalf("failed source was not visible with raw evidence: %+v", page.Events)
@@ -638,6 +639,7 @@ func TestConversationChangedLiveBytesCannotBindOrCheckpoint(t *testing.T) {
 	ctx := context.Background()
 	root := t.TempDir()
 	runID := newID()
+	executionID, taskID := newID(), "502"
 	path := filepath.Join(root, "runs", runID, "events.jsonl")
 	require(t, os.MkdirAll(filepath.Dir(path), 0700))
 	actualSession := "00000000-0000-0000-0000-000000000001"
@@ -652,14 +654,14 @@ func TestConversationChangedLiveBytesCannotBindOrCheckpoint(t *testing.T) {
 	require(t, err)
 	require(t, file.Close())
 	segment := "local-jsonl-v1:" + fileID
-	marker := ConversationSourceMarker{Version: 1, ProjectID: "project", WorkflowID: runID, ExecutionID: "execution", AttemptID: runID, Backend: BackendLocal, Protocol: ProtocolLocalProcess, Agent: "codex", TargetID: "local", Source: "codex-jsonl", SourceSegment: segment, SourceIdentity: fileID, RecordName: "events.jsonl", CreatedAt: time.Now().UTC(), ReaderCommand: Command{Executable: "codex"}}
+	marker := ConversationSourceMarker{Version: 1, ProjectID: "project", WorkflowID: runID, ExecutionID: executionID, AttemptID: runID, Backend: BackendLocal, Protocol: ProtocolLocalProcess, Agent: "codex", TargetID: "local", Source: "codex-jsonl", SourceSegment: segment, SourceIdentity: fileID, RecordName: "events.jsonl", CreatedAt: time.Now().UTC(), ReaderCommand: Command{Executable: "codex"}}
 	markerBytes, err := json.Marshal(marker)
 	require(t, err)
 	require(t, AtomicWrite(filepath.Join(filepath.Dir(path), ConversationSourceMarkerName), markerBytes))
 	store, err := OpenSQLiteStore(filepath.Join(root, "steerline.db"))
 	require(t, err)
 	defer store.Close()
-	run := &Run{RunID: runID, AttemptID: runID, ExecutionID: "execution", Backend: string(BackendLocal), Protocol: string(ProtocolLocalProcess), Agent: "codex", Target: ExecutionTarget{ID: "local"}, WorktreePath: &root, LogPath: &path}
+	run := &Run{TaskID: taskID, RunID: runID, AttemptID: runID, ExecutionID: executionID, DomainTaskID: taskID, WorkflowVersion: MinimalWorkflowVersion, Backend: string(BackendLocal), Protocol: string(ProtocolLocalProcess), Agent: "codex", Target: ExecutionTarget{ID: "local"}, WorktreePath: &root, LogPath: &path}
 	service := &Service{Config: Config{RunDir: root, identity: "project", Codex: Command{Executable: "codex"}}, domainStore: store}
 	source := WorkerEvent{RunID: runID, AttemptID: runID, Source: "codex-jsonl", SourceSegment: segment, SourceIdentity: fileID, SourceSeq: 1, SourceOffset: 0, SourceLength: int64(len(forged)), Raw: forged, Session: forgedSession}
 	if err = service.recordConversationEvent(run, source); err == nil || !strings.Contains(err.Error(), "source bytes changed") {
@@ -668,10 +670,10 @@ func TestConversationChangedLiveBytesCannotBindOrCheckpoint(t *testing.T) {
 	if _, err = os.Stat(localCodexHistoryBindingPath(filepath.Dir(path), forgedSession)); !os.IsNotExist(err) {
 		t.Fatalf("undurable session was bound before source verification: %v", err)
 	}
-	if _, err = store.ConversationCheckpoint(ctx, "project", "execution", runID, "codex-jsonl", segment); err == nil {
+	if _, err = store.ConversationCheckpoint(ctx, "project", executionID, runID, "codex-jsonl", segment); err == nil {
 		t.Fatal("rewritten source advanced the checkpoint")
 	}
-	page, err := (ConversationQueryService{Store: store, Project: "project"}).ReadConversation(ctx, ConversationFilter{ExecutionID: "execution", AttemptID: runID, Source: "codex-jsonl"}, "", 10)
+	page, err := (ConversationQueryService{Store: store, Project: "project"}).ReadConversation(ctx, ConversationFilter{ExecutionID: executionID, AttemptID: runID, Source: "codex-jsonl"}, "", 10)
 	require(t, err)
 	if len(page.Events) != 1 || page.Events[0].Type != ConversationGap || page.Events[0].Status != "source_unavailable" {
 		t.Fatalf("rewritten source did not leave a visible gap: %+v", page.Events)
@@ -683,7 +685,8 @@ func TestConversationOrcaHostWaitPersistsWithoutBusinessDecision(t *testing.T) {
 	store, err := OpenSQLiteStore(filepath.Join(t.TempDir(), "wait.db"))
 	require(t, err)
 	defer store.Close()
-	run := &Run{RunID: newID(), AttemptID: newID(), ExecutionID: "execution", Backend: string(BackendOrca), Protocol: string(ProtocolOrcaTerminalV2), Agent: "codex", Target: ExecutionTarget{ID: "orca:probe"}}
+	runID, attemptID, executionID, taskID := newID(), newID(), newID(), "503"
+	run := &Run{TaskID: taskID, DomainTaskID: taskID, RunID: runID, AttemptID: attemptID, ExecutionID: executionID, WorkflowVersion: MinimalWorkflowVersion, Backend: string(BackendOrca), Protocol: string(ProtocolOrcaTerminalV2), Agent: "codex", Target: ExecutionTarget{ID: "orca:probe"}}
 	service := &Service{Config: Config{identity: "project"}, domainStore: store}
 	source := WorkerEvent{RunID: run.RunID, AttemptID: run.AttemptID, Source: "orca-terminal-v2", SourceSegment: "orca-host-wait-v1:probe", SourceEventID: "host-wait:probe", SourceIdentity: "terminal:runtime:handle:incarnation", SourceSeq: 1, Session: "terminal:handle:incarnation", InputWait: true}
 	require(t, service.recordConversationEvent(run, source))
@@ -698,6 +701,7 @@ func TestConversationJournalReplayIsBoundedAndIdempotent(t *testing.T) {
 	ctx := context.Background()
 	runID := "0123456789abcdef0123456789abcdef"
 	attemptID := "abcdef0123456789abcdef0123456789"
+	executionID, taskID := newID(), "504"
 	projectRoot := t.TempDir()
 	runRoot := filepath.Join(projectRoot, "runs", runID)
 	if err := os.MkdirAll(runRoot, 0700); err != nil {
@@ -721,7 +725,7 @@ func TestConversationJournalReplayIsBoundedAndIdempotent(t *testing.T) {
 	if err = sourceFile.Close(); err != nil {
 		t.Fatal(err)
 	}
-	marker := ConversationSourceMarker{Version: 1, ProjectID: "project", WorkflowID: runID, ExecutionID: "execution", AttemptID: attemptID, Backend: BackendLocal, Protocol: ProtocolLocalProcess, Agent: "codex", TargetID: "local-test", Source: "codex-jsonl", SourceSegment: "local-jsonl-v1:" + fileID, SourceIdentity: fileID, RecordName: "events.jsonl", CreatedAt: time.Now().UTC()}
+	marker := ConversationSourceMarker{Version: 1, ProjectID: "project", WorkflowID: runID, ExecutionID: executionID, AttemptID: attemptID, Backend: BackendLocal, Protocol: ProtocolLocalProcess, Agent: "codex", TargetID: "local-test", Source: "codex-jsonl", SourceSegment: "local-jsonl-v1:" + fileID, SourceIdentity: fileID, RecordName: "events.jsonl", CreatedAt: time.Now().UTC()}
 	markerBytes, err := json.Marshal(marker)
 	if err != nil {
 		t.Fatal(err)
@@ -735,7 +739,8 @@ func TestConversationJournalReplayIsBoundedAndIdempotent(t *testing.T) {
 	}
 	defer store.Close()
 	service := &Service{Config: Config{RunDir: projectRoot, identity: "project", Codex: Command{Executable: "codex"}}, domainStore: store, State: Runtime{
-		Runs: []*Run{{RunID: runID, AttemptID: attemptID, ExecutionID: "execution", DomainTaskID: "task", Backend: string(BackendLocal), Protocol: string(ProtocolLocalProcess), Agent: "codex", Target: ExecutionTarget{ID: "local-test"}, WorktreePath: &projectRoot, LogPath: &path, EndedAt: ptr(time.Now().UTC())}},
+		Runs:     []*Run{{TaskID: taskID, RunID: runID, AttemptID: attemptID, ExecutionID: executionID, DomainTaskID: taskID, WorkflowVersion: MinimalWorkflowVersion, Backend: string(BackendLocal), Protocol: string(ProtocolLocalProcess), Agent: "codex", Target: ExecutionTarget{ID: "local-test"}, WorktreePath: &projectRoot, LogPath: &path, EndedAt: ptr(time.Now().UTC())}},
+		Attempts: []StepAttemptRecord{{ProjectIdentity: "project", AttemptID: attemptID, ExecutionID: executionID, StepID: "implement", EventPath: path, Status: "succeeded"}},
 	}}
 	oldRunID := newID()
 	oldRoot := filepath.Join(projectRoot, "runs", oldRunID)
@@ -746,7 +751,7 @@ func TestConversationJournalReplayIsBoundedAndIdempotent(t *testing.T) {
 	if err = os.WriteFile(oldPath, []byte(`{"type":"thread.started","thread_id":"old-development-session"}`+"\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	service.State.Runs = append(service.State.Runs, &Run{RunID: oldRunID, AttemptID: oldRunID, ExecutionID: "old-execution", DomainTaskID: "task", Backend: string(BackendLocal), Protocol: string(ProtocolLocalProcess), Agent: "codex", Target: ExecutionTarget{ID: "local-test"}, LogPath: &oldPath, EndedAt: ptr(time.Now().UTC())})
+	service.State.Runs = append(service.State.Runs, &Run{TaskID: "505", RunID: oldRunID, AttemptID: oldRunID, ExecutionID: newID(), DomainTaskID: "505", WorkflowVersion: MinimalWorkflowVersion, Backend: string(BackendLocal), Protocol: string(ProtocolLocalProcess), Agent: "codex", Target: ExecutionTarget{ID: "local-test"}, LogPath: &oldPath, EndedAt: ptr(time.Now().UTC())})
 	sources := service.conversationJournalSources()
 	if len(sources) != 1 {
 		t.Fatalf("expected one validated local source, got %+v", sources)
@@ -755,7 +760,7 @@ func TestConversationJournalReplayIsBoundedAndIdempotent(t *testing.T) {
 		t.Fatal(err)
 	}
 	query := ConversationQueryService{Store: store, Project: "project"}
-	page, err := query.ReadConversation(ctx, ConversationFilter{ExecutionID: "execution", AttemptID: attemptID}, "", 10)
+	page, err := query.ReadConversation(ctx, ConversationFilter{ExecutionID: executionID, AttemptID: attemptID}, "", 10)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -777,16 +782,16 @@ func TestConversationJournalReplayIsBoundedAndIdempotent(t *testing.T) {
 	if err = service.replayConversationJournal(ctx, sources[0]); err != nil {
 		t.Fatal(err)
 	}
-	page, err = query.ReadConversation(ctx, ConversationFilter{ExecutionID: "execution", AttemptID: attemptID}, "", 10)
+	page, err = query.ReadConversation(ctx, ConversationFilter{ExecutionID: executionID, AttemptID: attemptID}, "", 10)
 	if err != nil || len(page.Events) != 4 {
 		t.Fatalf("replay was not idempotent: count=%d err=%v", len(page.Events), err)
 	}
-	checkpoint, err := store.ConversationCheckpoint(ctx, "project", "execution", attemptID, "codex-jsonl", sources[0].FileID)
+	checkpoint, err := store.ConversationCheckpoint(ctx, "project", executionID, attemptID, "codex-jsonl", sources[0].FileID)
 	if err == nil {
 		// Checkpoints are addressed by the full source segment, not only the file ID.
 		t.Fatalf("checkpoint lookup unexpectedly accepted a partial segment: %+v", checkpoint)
 	}
-	checkpoint, err = store.ConversationCheckpoint(ctx, "project", "execution", attemptID, "codex-jsonl", "local-jsonl-v1:"+sources[0].FileID)
+	checkpoint, err = store.ConversationCheckpoint(ctx, "project", executionID, attemptID, "codex-jsonl", "local-jsonl-v1:"+sources[0].FileID)
 	if err != nil || checkpoint.LocalSeq != 4 {
 		t.Fatalf("source cursor did not reach the last committed record: checkpoint=%+v err=%v", checkpoint, err)
 	}
@@ -808,7 +813,7 @@ func TestConversationJournalReplayIsBoundedAndIdempotent(t *testing.T) {
 		t.Fatal("in-place source replacement escaped the bound file")
 	}
 	require(t, service.replayConversationJournal(ctx, sources[0]))
-	changed, err := query.ReadConversation(ctx, ConversationFilter{ExecutionID: "execution", AttemptID: attemptID}, "", 20)
+	changed, err := query.ReadConversation(ctx, ConversationFilter{ExecutionID: executionID, AttemptID: attemptID}, "", 20)
 	require(t, err)
 	if len(changed.Events) != 9 || changed.Events[4].Type != ConversationGap || changed.Events[4].Status != "source_changed" || changed.Events[5].SessionID != "00000000-0000-0000-0000-000000000002" || changed.Events[2].Body == nil || len(service.codexHistorySources()) != 2 {
 		t.Fatalf("in-place source rewrite hid its gap or damaged old history: %+v", changed.Events)

@@ -1118,20 +1118,18 @@ func RunConfiguredService(ctx context.Context, c Config, mode, startupID, consol
 		failed.Error = clip(err.Error(), 4000)
 		return errors.Join(err, writeStartupRecord(c, failed))
 	}
-	if c.taskAuthority() != "native" {
-		return fail(errors.New("task_authority=native is required; Beads is not an active product task source"))
+	if err := requireNativeTaskAuthority(c); err != nil {
+		return fail(err)
 	}
 	if retErr = c.Preflight(ctx, true); retErr != nil {
 		return fail(fmt.Errorf("service preflight: %w", retErr))
 	}
-	if c.taskAuthority() == "native" {
-		nativeStore, initErr := OpenNativeTaskProject(ctx, &c)
-		if initErr != nil {
-			return fail(fmt.Errorf("initialize native project authority: %w", initErr))
-		}
-		if initErr = nativeStore.Close(); initErr != nil {
-			return fail(initErr)
-		}
+	nativeStore, initErr := OpenNativeTaskProject(ctx, &c)
+	if initErr != nil {
+		return fail(fmt.Errorf("initialize native project authority: %w", initErr))
+	}
+	if initErr = nativeStore.Close(); initErr != nil {
+		return fail(initErr)
 	}
 	// Preflight canonicalizes paths and applies the same defaults used by the
 	// service. Rewrite only this attempt's non-authoritative startup record.

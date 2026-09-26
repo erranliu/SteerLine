@@ -100,11 +100,22 @@ func TestLifecycleReviewFailedRecordMustBindProcess(t *testing.T) {
 
 func TestLifecycleReviewExistingServiceDoesNotNeedInstalledBinary(t *testing.T) {
 	f := newFixture(t)
+	initialized := f.service(t)
+	require(t, initialized.Close())
 	c, configPath := lifecycleConfigFile(t, f, f.c.RunDir)
 	s, err := NewService(c)
 	require(t, err)
+	identity, err := currentProcessIdentity()
+	require(t, err)
 	s.State.Service.Ready = true
 	s.State.Service.Status = "running"
+	startupID := newID()
+	_, _, err = createStartupAttempt(s.Config, startupID, true)
+	require(t, err)
+	record := initialStartupRecord(s.Config, startupID)
+	record.Status, record.InstanceID, record.ProcessIdentity = "started", s.State.Service.InstanceID, identity
+	require(t, writeStartupRecord(s.Config, record))
+	s.State.Service.StartupID, s.State.Service.PID, s.State.Service.ProcessIdentity = &startupID, identity.PID, identity
 	require(t, s.save())
 	result, err := StartService(context.Background(), configPath, StartServiceOptions{Executable: filepath.Join(t.TempDir(), "missing.exe")})
 	if err != nil || result.Status != "connected" {
@@ -174,8 +185,13 @@ func TestLifecycleReviewStopPublicationKeepsObservedInstance(t *testing.T) {
 
 func TestLifecycleReviewOfflineWithHeldLockCannotRestart(t *testing.T) {
 	s := controlReviewService(t)
-	s.State.Service.ProcessIdentity = &ProcessIdentity{Kind: "os", PID: 2_000_000_000, Created: "absent", Executable: "absent"}
+	absent := &ProcessIdentity{Kind: "os", PID: 2_000_000_000, Created: "absent", Executable: "absent"}
+	s.State.Service.ProcessIdentity = absent
 	s.State.Service.PID = s.State.Service.ProcessIdentity.PID
+	startup, err := readStartupRecord(s.Config, *s.State.Service.StartupID)
+	require(t, err)
+	startup.ProcessIdentity = absent
+	require(t, writeStartupRecord(s.Config, *startup))
 	require(t, s.save())
 	lock, err := LockRepository(s.Config.RunDir)
 	require(t, err)
@@ -200,9 +216,7 @@ func TestLifecycleReviewCorruptStartupCannotBeIgnored(t *testing.T) {
 func TestLifecycleReviewChildPublishesIdentityBeforePreflight(t *testing.T) {
 	f := newFixture(t)
 	c, _ := lifecycleConfigFile(t, f, f.c.RunDir)
-	db := readFake(f.db)
-	db.Behavior = "slow-context"
-	writeFake(f.db, db)
+	t.Setenv("STEERLINE_FAKE_PR_DELAY", "3s")
 	record := reviewStartup(t, c, "starting", nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
@@ -230,6 +244,10 @@ func TestLifecycleReviewStopReportsExitWithoutReceipt(t *testing.T) {
 	defer func() { process.Kill(); _ = cmd.Wait() }()
 	identity := process.Identity()
 	s.State.Service.PID, s.State.Service.ProcessIdentity = identity.PID, &identity
+	startup, err := readStartupRecord(s.Config, *s.State.Service.StartupID)
+	require(t, err)
+	startup.ProcessIdentity = &identity
+	require(t, writeStartupRecord(s.Config, *startup))
 	require(t, s.save())
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

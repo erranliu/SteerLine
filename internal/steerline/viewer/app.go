@@ -237,8 +237,8 @@ func (m Model) loadTaskDetail(taskID string) tea.Cmd {
 	}
 }
 
-// ensureTaskDetail starts one lazy, deduplicated `bd show` for the selected run.
-// Failures are cached so a broken Beads install cannot spam the provider.
+// ensureTaskDetail starts one lazy, deduplicated native task detail query.
+// Failures are cached so an unavailable task database cannot spam the reader.
 func (m Model) ensureTaskDetail() (Model, tea.Cmd) {
 	r := m.current()
 	if r == nil {
