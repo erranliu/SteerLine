@@ -32,7 +32,11 @@ func TestSupervisedOrcaRealNativeTaskLifecycle(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	root := t.TempDir()
+	root, err := os.MkdirTemp("", "s3-")
+	if err != nil {
+		t.Fatalf("create short isolated native acceptance root: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(root) })
 	repositoryURL := strings.TrimSpace(os.Getenv("STEERLINE_REAL_SUPERVISED_NATIVE_REPOSITORY_URL"))
 	if repositoryURL == "" {
 		repositoryURL = "https://github.com/erranliu/SteerlineTest.git"

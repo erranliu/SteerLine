@@ -937,7 +937,7 @@ func TestSupervisedStartMinimalStepBindsRemoteRunAndWorktree(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	requiredReviewText := []string{"Review the already verified candidate " + reviewRevision, `"review_verdict":`, "let the center decide repair or budget exhaustion", "$ids.project_identity", "$ids.task_id", "$ids.workflow_run_id", "$ids.execution_id", "$ids.attempt_id", "$ids.step_id", "$ids.result_id", "$ids.input_revision", "$ids.candidate_revision", "$identityExpected = [ordered]@{ project_identity=", "Decoded identity mismatch at ' + $identityKey", "ConvertFrom-Json -AsHashtable", "ConvertTo-Json -InputObject @($ids.prerequisite_result_ids) -Compress", "inner envelope exactly once", "The inner envelope must not contain `step_result`", "$payloadObject=[ordered]@{taskId=$orcaTaskId;dispatchId=$orcaDispatchId;remote_codex_version=$codexVersion", "require its four exact keys", "$sendArgv=@('orchestration','send'", "& $orca @sendArgv", "Keep JSON as one argv item after `--payload`", "Task Contract Branch is the future PR base", "do not require them to match", "Omit `--run`, `--to`, and all other structured flags"}
+	requiredReviewText := []string{"Review the already verified candidate " + reviewRevision, `"review_verdict":`, "let the center decide repair or budget exhaustion", "$ids.project_identity", "$ids.task_id", "$ids.workflow_run_id", "$ids.execution_id", "$ids.attempt_id", "$ids.step_id", "$ids.result_id", "$ids.input_revision", "$ids.candidate_revision", "$identityExpected = [ordered]@{ task_id=", "Decoded identity mismatch at ' + $identityKey", "$projectIdentitySHA256", "The immutable identity literal was copied incorrectly", "ConvertFrom-Json -AsHashtable", "ConvertTo-Json -InputObject @($ids.prerequisite_result_ids) -Compress", "inner envelope exactly once", "The inner envelope must not contain `step_result`", "$payloadObject=[ordered]@{taskId=$orcaTaskId;dispatchId=$orcaDispatchId;remote_codex_version=$codexVersion", "require its four exact keys", "$sendArgv=@('orchestration','send'", "& $orca @sendArgv", "Keep JSON as one argv item after `--payload`", "Task Contract Branch is the future PR base", "do not require them to match", "Omit `--run`, `--to`, and all other structured flags"}
 	var missingReviewText []string
 	for _, value := range requiredReviewText {
 		if !strings.Contains(reviewSpec, value) {
@@ -953,8 +953,8 @@ func TestSupervisedStartMinimalStepBindsRemoteRunAndWorktree(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(windowsSpec, `project_identity='C:\Users\tester\repo\.git'`) {
-		t.Fatal("supervised task spec did not preserve a Windows project path in its PowerShell identity assertion")
+	if !strings.Contains(windowsSpec, "$projectIdentitySHA256 -cne '"+operationDigest([]byte(windowsInput.ProjectIdentity))+"'") {
+		t.Fatal("supervised task spec did not bind a Windows project path in its digest assertion")
 	}
 	identityStart := strings.Index(reviewSpec, "FromBase64String('")
 	if identityStart < 0 {
@@ -969,6 +969,9 @@ func TestSupervisedStartMinimalStepBindsRemoteRunAndWorktree(t *testing.T) {
 	identityBytes, err := base64.StdEncoding.DecodeString(encodedIdentity)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if !strings.Contains(reviewSpec, "$identitySHA256 -cne '"+operationDigest(identityBytes)+"'") || !strings.Contains(reviewSpec, "$projectIdentitySHA256 -cne '"+operationDigest([]byte(reviewInput.ProjectIdentity))+"'") {
+		t.Fatal("supervised identity assertions do not bind both the encoded object and the exact project path")
 	}
 	var identity struct {
 		PrerequisiteIDs []string `json:"prerequisite_result_ids"`
