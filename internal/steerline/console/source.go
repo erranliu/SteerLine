@@ -21,6 +21,7 @@ type ProjectRef struct {
 	Name       string
 	ConfigPath string
 	Config     steerline.Config
+	Legacy     *steerline.LegacyBeadsProject
 	Identity   string
 	RunDir     string
 	Error      string
@@ -37,6 +38,8 @@ type ProjectSnapshot struct {
 	NativeTaskError string
 	Domain          *steerline.DomainSnapshot
 	DomainError     string
+	Legacy          *steerline.LegacyBeadsSnapshot
+	LegacyError     string
 }
 
 type QuerySource interface {
@@ -64,6 +67,14 @@ type FileQuerySource struct{}
 
 func (FileQuerySource) ReadProject(ctx context.Context, ref ProjectRef, selectedTaskID string) ProjectSnapshot {
 	result := ProjectSnapshot{}
+	if ref.Legacy != nil {
+		legacy, err := ref.Legacy.Read(ctx)
+		result.Legacy = &legacy
+		if err != nil {
+			result.LegacyError = err.Error()
+		}
+		return result
+	}
 	if ref.Error != "" {
 		result.TaskError, result.DomainError = ref.Error, ref.Error
 		return result
@@ -266,6 +277,9 @@ func (FileControlClient) DecisionEligibility(ctx context.Context, ref ProjectRef
 }
 
 func (FileControlClient) Submit(ctx context.Context, ref ProjectRef, action string, payload any, requestID, instance string, revision *uint64) (steerline.ControlRequest, error) {
+	if ref.Legacy != nil {
+		return steerline.ControlRequest{}, errors.New("old Beads project is read-only in this console")
+	}
 	if err := ctx.Err(); err != nil {
 		return steerline.ControlRequest{}, err
 	}
@@ -290,6 +304,9 @@ func (FileControlClient) Request(ctx context.Context, ref ProjectRef, requestID 
 }
 
 func (FileControlClient) SubmitDecision(ctx context.Context, ref ProjectRef, answer steerline.DecisionAnswer, requestedBy, commandID string) (steerline.CommandRecord, bool, error) {
+	if ref.Legacy != nil {
+		return steerline.CommandRecord{}, false, errors.New("old Beads project is read-only in this console")
+	}
 	if err := ctx.Err(); err != nil {
 		return steerline.CommandRecord{}, false, err
 	}
@@ -312,6 +329,9 @@ func (FileControlClient) DecisionCommand(ctx context.Context, ref ProjectRef, co
 }
 
 func (FileControlClient) SubmitServiceAction(ctx context.Context, ref ProjectRef, kind, targetID, requestedBy string, expectedRevision uint64, commandID string, payload any) (steerline.CommandRecord, bool, error) {
+	if ref.Legacy != nil {
+		return steerline.CommandRecord{}, false, errors.New("old Beads project is read-only in this console")
+	}
 	if err := ctx.Err(); err != nil {
 		return steerline.CommandRecord{}, false, err
 	}

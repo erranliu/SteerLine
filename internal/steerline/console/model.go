@@ -41,6 +41,7 @@ const (
 	rowReady rowKind = iota
 	rowRun
 	rowNative
+	rowLegacy
 )
 
 type consoleRow struct {
@@ -51,6 +52,7 @@ type consoleRow struct {
 	run       *steerline.Run
 	candidate *steerline.TaskCandidate
 	native    *steerline.NativeTaskDetail
+	legacy    *steerline.LegacyBeadsTask
 }
 
 type actionState struct {
@@ -201,11 +203,8 @@ func LoadProjects(configPath string) ([]ProjectRef, error) {
 		}
 		config, loadErr := steerline.LoadConfig(absolute)
 		name := strings.TrimSuffix(filepath.Base(absolute), filepath.Ext(absolute))
-		ref := ProjectRef{Name: name, ConfigPath: absolute}
 		if loadErr != nil {
-			ref.Error = loadErr.Error()
-			ref.Key, _ = absoluteViewKey(absolute, "")
-			return []ProjectRef{ref}, nil
+			return []ProjectRef{legacyProjectRef(name, absolute, loadErr)}, nil
 		}
 		refs = append(refs, makeProjectRef(name, absolute, config))
 	} else {
@@ -215,18 +214,13 @@ func LoadProjects(configPath string) ([]ProjectRef, error) {
 		}
 		for _, project := range projects {
 			path, _ := filepath.Abs(project.ConfigPath)
-			ref := ProjectRef{Name: project.Name, ConfigPath: path}
 			if project.Err != nil {
-				ref.Error = project.Err.Error()
-				ref.Key, _ = absoluteViewKey(path, "")
-				refs = append(refs, ref)
+				refs = append(refs, legacyProjectRef(project.Name, path, project.Err))
 				continue
 			}
 			config, loadErr := steerline.LoadConfig(path)
 			if loadErr != nil {
-				ref.Error = loadErr.Error()
-				ref.Key, _ = absoluteViewKey(path, "")
-				refs = append(refs, ref)
+				refs = append(refs, legacyProjectRef(project.Name, path, loadErr))
 				continue
 			}
 			refs = append(refs, makeProjectRef(project.Name, path, config))
@@ -249,6 +243,19 @@ func LoadProjects(configPath string) ([]ProjectRef, error) {
 		}
 	}
 	return refs, nil
+}
+
+func legacyProjectRef(name, path string, configErr error) ProjectRef {
+	legacy, err := steerline.LoadLegacyBeadsProject(path)
+	if err == nil {
+		key, _ := absoluteViewKey(path, legacy.RunDir)
+		return ProjectRef{Key: key, Name: name, ConfigPath: path, RunDir: legacy.RunDir, Legacy: legacy}
+	}
+	key, _ := absoluteViewKey(path, "")
+	if errors.Is(err, steerline.ErrNotLegacyBeadsConfig) {
+		return ProjectRef{Key: key, Name: name, ConfigPath: path, Error: configErr.Error()}
+	}
+	return ProjectRef{Key: key, Name: name, ConfigPath: path, Error: "旧 Beads 配置：" + err.Error()}
 }
 
 func makeProjectRef(name, path string, config steerline.Config) ProjectRef {
@@ -862,6 +869,12 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			if i == m.selected {
 				interval = time.Second
 			}
+			if state.ref.Legacy != nil {
+				interval = 15 * time.Second
+				if i == m.selected {
+					interval = 5 * time.Second
+				}
+			}
 			if !state.refreshing && (state.lastRefresh.IsZero() || now.Sub(state.lastRefresh) >= interval) {
 				cmds = append(cmds, m.readProject(i))
 			}
@@ -1414,6 +1427,12 @@ func (m Model) rows(index int) []consoleRow {
 	if state.filter == 0 && state.snapshot.SelectedNative != nil && state.selectedKey == "task:"+state.snapshot.SelectedNative.TaskID && !seenTasks[state.snapshot.SelectedNative.TaskID] {
 		detail := state.snapshot.SelectedNative
 		rows = append(rows, consoleRow{key: "task:" + detail.TaskID, kind: rowNative, taskID: detail.TaskID, title: detail.Title, native: detail})
+	}
+	if state.filter == 0 && state.ref.Legacy != nil && state.snapshot.Legacy != nil {
+		for i := range state.snapshot.Legacy.Tasks {
+			task := &state.snapshot.Legacy.Tasks[i]
+			rows = append(rows, consoleRow{key: "legacy:" + task.ID, kind: rowLegacy, taskID: task.ID, title: task.Title, legacy: task})
+		}
 	}
 	if runtime := state.snapshot.Observation.Runtime; runtime != nil {
 		for _, run := range runtime.Runs {
@@ -2275,6 +2294,10 @@ func (m Model) startSelected() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	state := &m.projects[m.selected]
+	if state.ref.Legacy != nil {
+		m.status = "旧 Beads 项目只读；原执行由旧服务结算，切换到 native 后才能在此启动"
+		return m, nil
+	}
 	row := m.selectedRow(m.selected)
 	if row == nil || row.kind != rowReady || row.candidate == nil {
 		m.status = "请选择 Ready 候选后再开始"
@@ -3097,6 +3120,18 @@ func terminalCapabilities() string {
 func projectStatus(ref ProjectRef, snapshot ProjectSnapshot) string {
 	if ref.Error != "" {
 		return "配置错误"
+	}
+	if ref.Legacy != nil {
+		if snapshot.LegacyError != "" {
+			return "旧任务查询失败"
+		}
+		if snapshot.Legacy == nil {
+			return "旧任务读取中"
+		}
+		if snapshot.Legacy.ServiceLiveness == "live" {
+			return "旧服务活动"
+		}
+		return "旧 Beads 只读"
 	}
 	if ref.Conflict != "" {
 		return "关联冲突"
