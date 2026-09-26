@@ -86,6 +86,41 @@ func TestProjectNeighborhoodKeepsBranchesMergesAndDisconnects(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("Project() = %+v, want %+v", got, want)
 	}
+	for _, tc := range []struct {
+		direction string
+		nodeIDs   []string
+		edges     []Edge
+	}{
+		{
+			direction: "upstream",
+			nodeIDs:   []string{"3", "1", "2"},
+			edges:     []Edge{{Predecessor: "1", Successor: "3"}, {Predecessor: "2", Successor: "3"}},
+		},
+		{
+			direction: "downstream",
+			nodeIDs:   []string{"3", "4", "5"},
+			edges:     []Edge{{Predecessor: "3", Successor: "4"}, {Predecessor: "3", Successor: "5"}},
+		},
+	} {
+		filter.Direction = tc.direction
+		got := Project(nodes, edges, filter)
+		if !reflect.DeepEqual(got.NodeIDs, tc.nodeIDs) || !reflect.DeepEqual(got.Edges, tc.edges) {
+			t.Fatalf("Project(direction=%q) = nodes:%v edges:%v, want nodes:%v edges:%v", tc.direction, got.NodeIDs, got.Edges, tc.nodeIDs, tc.edges)
+		}
+	}
+
+	reversedNodes := append([]Node(nil), nodes...)
+	reversedEdges := append([]Edge(nil), edges...)
+	for left, right := 0, len(reversedNodes)-1; left < right; left, right = left+1, right-1 {
+		reversedNodes[left], reversedNodes[right] = reversedNodes[right], reversedNodes[left]
+	}
+	for left, right := 0, len(reversedEdges)-1; left < right; left, right = left+1, right-1 {
+		reversedEdges[left], reversedEdges[right] = reversedEdges[right], reversedEdges[left]
+	}
+	filter.Direction = "both"
+	if reversed := Project(reversedNodes, reversedEdges, filter); !reflect.DeepEqual(reversed, want) {
+		t.Fatalf("Project() changed with input order: %+v, want %+v", reversed, want)
+	}
 }
 
 func TestProjectSortsNumericIDsAndReportsNodeLimit(t *testing.T) {
@@ -128,7 +163,7 @@ func TestProjectStatusFilterRetainsAnchorAndMarksOmittedBoundary(t *testing.T) {
 
 	filter.Limit = 2
 	got = Project(nodes, edges, filter)
-	if !reflect.DeepEqual(got.NodeIDs, []string{"1", "2"}) || got.BoundaryEdges[0].Reason != "depth_limit" {
+	if !reflect.DeepEqual(got.NodeIDs, []string{"1", "2"}) || len(got.BoundaryEdges) != 1 || got.BoundaryEdges[0].Reason != "depth_limit" {
 		t.Fatalf("anchor or depth boundary changed: %+v", got)
 	}
 }

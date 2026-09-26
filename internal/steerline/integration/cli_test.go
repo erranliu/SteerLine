@@ -35,6 +35,7 @@ func TestMain(m *testing.M) {
 	build := exec.Command("go", "build", "-o", cliPath, "./cmd/steerline")
 	build.Dir = repoRoot
 	if output, err := build.CombinedOutput(); err != nil {
+		_ = os.RemoveAll(buildDir)
 		fmt.Fprintf(os.Stderr, "build integration CLI once: %v\n%s", err, output)
 		os.Exit(1)
 	}
