@@ -107,6 +107,12 @@
 - 使用 `go test ./... -count=1 -timeout=30m -p 1 -parallel 1` 串行复跑仍在 30 分钟上限退出，停在 `TestTaskDiscardRequiresPreciseUnmergedPRAndRetainsUnknownIntent` 的 Windows `os/exec` 管道读取；单独运行该测试在 30.616 秒通过。`cmd/steerline`、console、remoteprotocol、viewer 包均通过。全仓长套件仍需在资源稳定的 Windows 环境完成一次无超时运行。
 - 最终提高串行回归上限后，`go test ./... -count=1 -timeout=45m -p 1 -parallel 1` 退出码 0：`internal/steerline` 2027.400 秒，cmd/steerline 38.092 秒，console 2.145 秒，remoteprotocol 0.643 秒，viewer 2.156 秒；`cmd/orca-probe` 无测试文件。`go vet ./...` 和 `git diff --check` 均通过。前两次 30 分钟长跑的进程启动超时未在这次 45 分钟串行运行中复现。
 
+## 2026-09-27 资源释放回执审计
+
+- home 到代理 `192.168.1.36:7897` 和测试仓库 `git ls-remote` 已连通。新 native Run `run_7e1ce93cc19a` 的 Prepare 被中心接受，但释放原 Dispatch `ctx_064c114d6ba1` 时 Orca 返回 `retained`、原因 `user_takeover`、`processAction=none`。旧中心把包含 `residual` 的 release 回执错误记为 `confirmed`，随后将已规划的 Implement 阻断。再次按精确 Dispatch 查询释放仍为 retained；该终端保留，未创建测试 PR 或关闭任务。见[释放拒绝证据](orca-probe/samples/spec03-supervised-native-release-retained-2026-09-27.json)。
+- 修复后，只有携带平台 request ID、无残留并与原 Run/Attempt/Dispatch 匹配的 `released` 回执可确认 Operation；`retained` 记为 rejected，`release_pending` 或不明结果记为 outcome_unknown。释放结果和执行阻断在同一保存中提交，未确认的先前 release 在重启后仍阻止下一步，旧误记的 confirmed/residual 回执也不能作为释放证明；不会自动重发原 release。
+- `TestSupervisedRetainedReleaseIsNotConfirmedOrReplayed` 覆盖真实 `user_takeover` 回执形状、重复释放拒绝、重启保留阻断、待释放和成功释放；生产能力报告继续保持 fail-closed。完整 native 发布、合并和 TaskDelivery 仍需新一轮受控真机验收。
+
 ## 验证与交接
 
 - 用协议替身和存储故障覆盖 Spec R01–R19；真机至少完成 Spec 要求的 R01、R02、R06、R07、R08、R16、R18 及测试 PR 合并/结项路径。

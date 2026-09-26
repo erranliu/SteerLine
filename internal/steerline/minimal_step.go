@@ -1404,6 +1404,9 @@ func (s *Service) startMinimalStep(ctx context.Context, task TaskRecord, run *Ru
 	if attempt.Status != "planned" {
 		return fmt.Errorf("step attempt %s is not planned", attempt.AttemptID)
 	}
+	if err := s.requireSettledSupervisedReleases(run); err != nil {
+		return err
+	}
 	var err error
 	contractBytes := []byte("prepare/v1")
 	if attempt.StepID != "prepare" {

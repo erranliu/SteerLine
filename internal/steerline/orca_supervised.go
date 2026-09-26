@@ -1809,7 +1809,7 @@ func (b orcaSupervisedBackend) SettleResources(ctx context.Context, ref Executio
 	}
 	out, callErr := (orcaClient{cfg: b.config}).call(ctx, positiveDuration(b.config.CommandTimeout, 30*time.Second), "orchestration", "worker-release", "--dispatch", ref.External.Dispatch, "--json")
 	env, parseErr := parseEnvelope(out)
-	if callErr != nil || parseErr != nil {
+	if parseErr != nil {
 		return SettlementReceipt{Disposition: "outcome_unknown", ResidualResources: []string{"dispatch:" + ref.External.Dispatch}}, &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "settled worker release outcome is uncertain; reconcile the exact Dispatch", Cause: errors.Join(callErr, parseErr)}
 	}
 	if env.Meta.RuntimeID != ref.External.CoordinatorRuntimeID {
@@ -1818,6 +1818,7 @@ func (b orcaSupervisedBackend) SettleResources(ctx context.Context, ref Executio
 	var result struct {
 		DispatchID string   `json:"dispatchId"`
 		State      string   `json:"state"`
+		Reason     string   `json:"reason"`
 		Residual   []string `json:"residualResources"`
 		Mutation   struct {
 			RequestID string `json:"requestId"`
@@ -1826,13 +1827,31 @@ func (b orcaSupervisedBackend) SettleResources(ctx context.Context, ref Executio
 	if err := json.Unmarshal(env.Result, &result); err != nil || result.DispatchID != ref.External.Dispatch {
 		return SettlementReceipt{Disposition: "outcome_unknown", ResidualResources: []string{"dispatch:" + ref.External.Dispatch}}, &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "worker release receipt does not identify the exact Dispatch", Cause: err}
 	}
-	if result.State != "released" && result.State != "already_released" {
-		if len(result.Residual) > 0 {
-			return SettlementReceipt{Disposition: "residual", PlatformRequestID: result.Mutation.RequestID, ResidualResources: result.Residual}, nil
-		}
-		return SettlementReceipt{Disposition: "residual", PlatformRequestID: result.Mutation.RequestID, ResidualResources: []string{"dispatch:" + ref.External.Dispatch}}, nil
+	receipt := SettlementReceipt{Disposition: result.State, PlatformRequestID: result.Mutation.RequestID, ResidualResources: result.Residual, Diagnostic: result.Reason}
+	if result.State != "released" && result.State != "already_released" && len(receipt.ResidualResources) == 0 {
+		receipt.ResidualResources = []string{"dispatch:" + ref.External.Dispatch}
 	}
-	return SettlementReceipt{Disposition: "released", PlatformRequestID: result.Mutation.RequestID}, nil
+	if callErr != nil {
+		receipt.Disposition = "outcome_unknown"
+		return receipt, &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "worker release command returned an uncertain outcome", Cause: callErr}
+	}
+	switch result.State {
+	case "released", "already_released":
+		if result.Mutation.RequestID == "" || len(result.Residual) != 0 {
+			receipt.Disposition = "outcome_unknown"
+			return receipt, &BackendError{Code: BackendProtocolInvalid, Diagnostic: "worker release receipt lacks a request ID or retains resources"}
+		}
+		receipt.Disposition = "released"
+		return receipt, nil
+	case "retained":
+		return receipt, &BackendError{Code: BackendRejected, Diagnostic: "Orca retained the settled worker terminal: " + result.Reason}
+	case "release_pending", "release_unknown":
+		receipt.Disposition = "outcome_unknown"
+		return receipt, &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "worker release requires reconciliation: " + result.State}
+	default:
+		receipt.Disposition = "outcome_unknown"
+		return receipt, &BackendError{Code: BackendProtocolInvalid, Diagnostic: "worker release returned an unsupported state: " + result.State}
+	}
 }
 
 func validateSupervisedRef(c Config, ref ExecutionRef) error {

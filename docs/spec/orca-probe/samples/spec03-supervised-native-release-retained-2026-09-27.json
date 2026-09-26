@@ -1,0 +1,29 @@
+{
+  "kind": "spec03-supervised-native-release-retained",
+  "captured_at": "2026-09-26T23:54:29Z",
+  "orchestration_run_id": "run_7e1ce93cc19a",
+  "dispatch_id": "ctx_064c114d6ba1",
+  "step": "prepare",
+  "worker_state": "succeeded",
+  "dispatch_status": "completed",
+  "center_at_failure": {
+    "workflow_phase": "blocked",
+    "execution_status": "blocked",
+    "current_step": "implement",
+    "next_attempt_status": "planned",
+    "release_operation_status": "confirmed",
+    "release_operation_platform_request_id": "e7a71ed9-f0ed-41ed-a5d8-e235fdddab9e",
+    "release_receipt_disposition": "residual",
+    "release_receipt_residual_resources": [
+      "dispatch:ctx_064c114d6ba1"
+    ]
+  },
+  "later_exact_release_probe": {
+    "state": "retained",
+    "reason": "user_takeover",
+    "process_action": "none",
+    "platform_request_id": "296fc811-635f-48fc-8637-c2580b245add"
+  },
+  "test_pr_created": false,
+  "native_task_closed": false
+}

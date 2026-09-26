@@ -187,7 +187,27 @@ func fakeSupervisedOrca(args []string) int {
 		case "check":
 			return fakeSupervisedEnvelope("fake-center-runtime", map[string]any{"runId": arg(args, "--run"), "deliveryId": nil, "messages": []any{}, "count": 0, "timedOut": true, "connectionLost": false, "cancelled": false})
 		case "worker-release":
-			return fakeSupervisedEnvelope("fake-center-runtime", map[string]any{"dispatchId": arg(args, "--dispatch"), "state": "released", "processAction": "closed_agent_terminal", "residualResources": []string{}, "mutation": map[string]any{"requestId": "request-worker-release"}})
+			if marker := os.Getenv("STEERLINE_FAKE_SUPERVISED_RELEASE_MARKER"); marker != "" {
+				file, err := os.OpenFile(marker, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+				if err != nil {
+					return fakeOrcaErr("internal", "worker-release marker could not be written")
+				}
+				_, err = file.WriteString("attempt\n")
+				_ = file.Close()
+				if err != nil {
+					return fakeOrcaErr("internal", "worker-release marker could not be written")
+				}
+			}
+			state := os.Getenv("STEERLINE_FAKE_SUPERVISED_RELEASE_STATE")
+			if state == "" {
+				state = "released"
+			}
+			reason := os.Getenv("STEERLINE_FAKE_SUPERVISED_RELEASE_REASON")
+			residual := []string{}
+			if state != "released" && state != "already_released" {
+				residual = append(residual, "dispatch:"+arg(args, "--dispatch"))
+			}
+			return fakeSupervisedEnvelope("fake-center-runtime", map[string]any{"dispatchId": arg(args, "--dispatch"), "state": state, "reason": reason, "processAction": "none", "residualResources": residual, "mutation": map[string]any{"requestId": "request-worker-release"}})
 		case "reply":
 			if os.Getenv("STEERLINE_FAKE_SUPERVISED_DENY_REPLY") != "" {
 				return fakeOrcaErr("unexpected_mutation", "reply was resent during read-only reconciliation")
@@ -481,6 +501,86 @@ func TestSupervisedDeliveryAckPersistsPlatformReceiptAndDeduplicates(t *testing.
 	}
 	if ackCalls != 1 || len(s.State.Operations) != 1 {
 		t.Fatalf("replayed Delivery duplicated an ack: ackCalls=%d operations=%d", ackCalls, len(s.State.Operations))
+	}
+}
+
+func TestSupervisedRetainedReleaseIsNotConfirmedOrReplayed(t *testing.T) {
+	f := newFixture(t)
+	f.c = supervisedConfigForFixture(t, f)
+	s := f.service(t)
+	t.Cleanup(func() { _ = s.Close() })
+	t.Setenv("STEERLINE_FAKE_SUPERVISED_DISPATCH_STATE", "completed")
+	t.Setenv("STEERLINE_FAKE_SUPERVISED_RELEASE_STATE", "retained")
+	t.Setenv("STEERLINE_FAKE_SUPERVISED_RELEASE_REASON", "user_takeover")
+	marker := filepath.Join(t.TempDir(), "release-attempts.txt")
+	t.Setenv("STEERLINE_FAKE_SUPERVISED_RELEASE_MARKER", marker)
+	backend := orcaSupervisedBackend{config: f.c}
+	started := supervisedStartReceipt{RunID: "orca-run-test", TaskID: "task-test", DispatchID: "dispatch-test", WorktreeID: "repo-test::C:/remote/steerline-run", CenterRuntimeID: "fake-center-runtime"}
+	observed, err := backend.showWorker(context.Background(), started)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ref := supervisedPromptTestRef(f.c, started, observed)
+	ref.RunID, ref.AttemptID = newID(), newID()
+	if err := (executionRecords{root: f.c.RunDir}).saveBinding(ref); err != nil {
+		t.Fatal(err)
+	}
+	run := &Run{RunID: ref.RunID, ExecutionID: newID(), AttemptID: ref.AttemptID, Protocol: string(ProtocolOrcaSupervised), Target: ref.Target}
+	if err := s.settleSupervisedStepResources(run, ref.AttemptID, "succeeded"); err == nil || !isBackendError(err, BackendRejected) {
+		t.Fatalf("user-taken-over terminal release was accepted: %v", err)
+	}
+	if len(s.State.Operations) != 1 || s.State.Operations[0].Status != "rejected" || s.State.Operations[0].PlatformRequestID != "request-worker-release" || !strings.Contains(s.State.Operations[0].UnknownReason, "user_takeover") {
+		t.Fatalf("retained terminal was recorded as a successful release: %+v", s.State.Operations)
+	}
+	var recorded struct {
+		Settlement SettlementReceipt `json:"settlement"`
+	}
+	if err := json.Unmarshal(s.State.Operations[0].Receipt, &recorded); err != nil || recorded.Settlement.Disposition != "retained" || len(recorded.Settlement.ResidualResources) != 1 {
+		t.Fatalf("retained release proof was not recorded: %+v, %v", recorded, err)
+	}
+	if err := s.requireSettledSupervisedReleases(run); err == nil || !isBackendError(err, BackendOutcomeUnknown) {
+		t.Fatalf("next supervised step ignored the retained terminal: %v", err)
+	}
+	restarted, err := NewService(f.c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = restarted.Close() })
+	if err := restarted.requireSettledSupervisedReleases(run); err == nil || !isBackendError(err, BackendOutcomeUnknown) {
+		t.Fatalf("restart forgot the retained terminal release: %v", err)
+	}
+	if err := s.settleSupervisedStepResources(run, ref.AttemptID, "succeeded"); err == nil || !isBackendError(err, BackendRejected) {
+		t.Fatalf("rejected release was replayed: %v", err)
+	}
+	attempts, err := os.ReadFile(marker)
+	if err != nil || string(attempts) != "attempt\n" {
+		t.Fatalf("release was sent more than once: %q, %v", attempts, err)
+	}
+	confirmedRequest := mustJSON(struct {
+		Ref     ExecutionRef `json:"ref"`
+		Outcome string       `json:"outcome"`
+	}{ref, "succeeded"})
+	confirmed := OperationRecord{ProjectIdentity: s.Config.identity, Kind: "settle_resources", IdempotencyKey: "release:" + run.ExecutionID + ":" + ref.AttemptID, Status: "confirmed", PayloadDigest: operationDigest(confirmedRequest), Request: confirmedRequest, PlatformRequestID: "request-worker-release", Receipt: mustJSON(map[string]any{"dispatch_id": ref.External.Dispatch, "settlement": SettlementReceipt{Disposition: "released", PlatformRequestID: "request-worker-release"}, "error": ""})}
+	s.State.Operations = []OperationRecord{confirmed}
+	if err := s.requireSettledSupervisedReleases(run); err != nil {
+		t.Fatalf("positive terminal release proof blocked the next step: %v", err)
+	}
+	s.State.Operations[0].Receipt = mustJSON(map[string]any{"dispatch_id": ref.External.Dispatch, "settlement": SettlementReceipt{Disposition: "residual", PlatformRequestID: "request-worker-release", ResidualResources: []string{"dispatch:dispatch-test"}}, "error": ""})
+	if err := s.requireSettledSupervisedReleases(run); err == nil || !isBackendError(err, BackendProtocolInvalid) {
+		t.Fatalf("old false-confirmed release proof permitted the next step: %v", err)
+	}
+	s.State.Operations[0].Receipt = mustJSON(map[string]any{"dispatch_id": "different-dispatch", "settlement": SettlementReceipt{Disposition: "released", PlatformRequestID: "request-worker-release"}, "error": ""})
+	if err := s.requireSettledSupervisedReleases(run); err == nil || !isBackendError(err, BackendProtocolInvalid) {
+		t.Fatalf("release proof for another Dispatch permitted the next step: %v", err)
+	}
+	t.Setenv("STEERLINE_FAKE_SUPERVISED_RELEASE_MARKER", "")
+	t.Setenv("STEERLINE_FAKE_SUPERVISED_RELEASE_STATE", "release_pending")
+	if receipt, err := backend.SettleResources(context.Background(), ref, "succeeded"); err == nil || !isBackendError(err, BackendOutcomeUnknown) || receipt.PlatformRequestID != "request-worker-release" {
+		t.Fatalf("pending release was treated as complete: %+v, %v", receipt, err)
+	}
+	t.Setenv("STEERLINE_FAKE_SUPERVISED_RELEASE_STATE", "released")
+	if receipt, err := backend.SettleResources(context.Background(), ref, "succeeded"); err != nil || receipt.Disposition != "released" || len(receipt.ResidualResources) != 0 {
+		t.Fatalf("released terminal was not accepted: %+v, %v", receipt, err)
 	}
 }
 

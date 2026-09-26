@@ -794,12 +794,17 @@ func (s *Service) settleSupervisedStepResources(run *Run, attemptID, outcome str
 		operation = &s.State.Operations[len(s.State.Operations)-1]
 	} else if operation.IdempotencyKey != idempotency || operation.PayloadDigest != digest || operation.Kind != "settle_resources" {
 		return errors.New("supervised release operation identity conflicts with the exact attempt")
-	} else if operation.Status == "confirmed" {
-		return nil
 	} else {
-		operation.Status = "in_flight"
-		operation.UnknownReason = ""
-		operation.UpdatedAt = now()
+		switch operation.Status {
+		case "confirmed":
+			return s.confirmedSupervisedRelease(*operation, run, ref.External.Dispatch)
+		case "rejected":
+			return &BackendError{Code: BackendRejected, Diagnostic: "original worker release was rejected: " + operation.UnknownReason}
+		case "in_flight", "accepted", "outcome_unknown":
+			return &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "original worker release needs exact request reconciliation; duplicate release refused"}
+		default:
+			return &BackendError{Code: BackendProtocolInvalid, Diagnostic: "worker release operation has an invalid status"}
+		}
 	}
 	if err = s.save(); err != nil {
 		return err
@@ -816,47 +821,86 @@ func (s *Service) settleSupervisedStepResources(run *Run, attemptID, outcome str
 	}
 	settlement, settleErr := (orcaSupervisedBackend{config: s.Config}).SettleResources(context.Background(), ref, outcome)
 	residual := settlement.ResidualResources
-	if settlement.PlatformRequestID != "" {
-		operation.PlatformRequestID = settlement.PlatformRequestID
+	if settleErr == nil && (settlement.Disposition != "released" || len(residual) != 0) {
+		settleErr = &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "worker release did not prove that its terminal was released: " + settlement.Disposition}
 	}
-	operation.Receipt = mustJSON(map[string]any{"dispatch_id": ref.External.Dispatch, "settlement": settlement, "error": errorString(settleErr)})
-	operation.UpdatedAt = now()
+	status := "confirmed"
 	if settleErr != nil {
+		status = "outcome_unknown"
 		var backendErr *BackendError
-		if errors.As(settleErr, &backendErr) && (backendErr.Code == BackendOutcomeUnknown || backendErr.Code == BackendUnreachable || backendErr.Code == BackendIdentityMismatch) {
-			operation.Status = "outcome_unknown"
-		} else {
-			operation.Status = "rejected"
+		if errors.As(settleErr, &backendErr) && backendErr.Code == BackendRejected {
+			status = "rejected"
 		}
-		operation.UnknownReason = settleErr.Error()
-	} else {
-		operation.Status = "confirmed"
+	}
+	if err := TransitionOperation(operation, status, settlement.PlatformRequestID, mustJSON(map[string]any{"dispatch_id": ref.External.Dispatch, "settlement": settlement, "error": errorString(settleErr)}), errorString(settleErr)); err != nil {
+		return err
+	}
+	if status != "confirmed" {
+		reason := "remote worker release requires reconciliation: " + settleErr.Error()
+		if workflow, execution := s.minimalRecords(run); workflow != nil && execution != nil {
+			execution.Status = "blocked"
+			execution.UpdatedAt = now()
+			workflow.Phase = "blocked"
+			workflow.UpdatedAt = now()
+			run.ExecutionStatus = "unknown"
+			run.FinishTaskStatus = "blocked"
+			run.Error = ptr(clip(reason, 2000))
+			s.State.CurrentTask = ptr(run.TaskID)
+			s.State.SlotOccupied = true
+			s.note(run, "steer", "resource_release", "unknown", "remote worker release requires reconciliation", reason, map[string]any{"attempt_id": attemptID, "dispatch_id": ref.External.Dispatch})
+		}
 	}
 	if err = s.save(); err != nil {
 		return err
 	}
-	if settleErr != nil || len(residual) > 0 {
-		reason := "settled remote worker resources are retained for manual reconciliation"
-		if settleErr != nil {
-			reason = "remote worker release requires reconciliation: " + settleErr.Error()
+	if status != "confirmed" {
+		return settleErr
+	}
+	return nil
+}
+
+// requireSettledSupervisedReleases fences the next step while an earlier
+// terminal release in the same execution lacks positive platform proof.
+func (s *Service) requireSettledSupervisedReleases(run *Run) error {
+	if run == nil || run.Protocol != string(ProtocolOrcaSupervised) {
+		return nil
+	}
+	prefix := "release:" + run.ExecutionID + ":"
+	for _, operation := range s.State.Operations {
+		if operation.Kind != "settle_resources" || !strings.HasPrefix(operation.IdempotencyKey, prefix) {
+			continue
 		}
-		if run.FinishTaskStatus != "waiting_pr_merge" {
-			if workflow, execution := s.minimalRecords(run); workflow != nil && execution != nil {
-				execution.Status = "blocked"
-				execution.UpdatedAt = now()
-				workflow.Phase = "blocked"
-				workflow.UpdatedAt = now()
-				run.ExecutionStatus = "unknown"
-				run.FinishTaskStatus = "blocked"
-				run.Error = ptr(clip(reason, 2000))
-				s.State.CurrentTask = ptr(run.TaskID)
-				s.State.SlotOccupied = true
-				s.note(run, "steer", "resource_release", "unknown", "remote worker release requires reconciliation", reason, map[string]any{"attempt_id": attemptID, "dispatch_id": ref.External.Dispatch})
-				if err = s.save(); err != nil {
-					return err
-				}
-			}
+		if operation.Status != "confirmed" {
+			return &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "prior supervised worker terminal release is unresolved: " + operation.Status}
 		}
+		if err := s.confirmedSupervisedRelease(operation, run, ""); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Service) confirmedSupervisedRelease(operation OperationRecord, run *Run, dispatch string) error {
+	var requested struct {
+		Ref     ExecutionRef `json:"ref"`
+		Outcome string       `json:"outcome"`
+	}
+	var recorded struct {
+		DispatchID string            `json:"dispatch_id"`
+		Settlement SettlementReceipt `json:"settlement"`
+		Error      string            `json:"error"`
+	}
+	if run == nil || operation.ProjectIdentity != s.Config.identity || operation.PayloadDigest != operationDigest(operation.Request) {
+		return &BackendError{Code: BackendProtocolInvalid, Diagnostic: "confirmed release operation lacks exact Dispatch and positive terminal release proof"}
+	}
+	if json.Unmarshal(operation.Request, &requested) != nil || json.Unmarshal(operation.Receipt, &recorded) != nil {
+		return &BackendError{Code: BackendProtocolInvalid, Diagnostic: "confirmed release operation lacks exact Dispatch and positive terminal release proof"}
+	}
+	if requested.Ref.RunID != run.RunID || requested.Ref.AttemptID == "" || requested.Ref.External.Dispatch == "" || operation.IdempotencyKey != "release:"+run.ExecutionID+":"+requested.Ref.AttemptID || requested.Outcome != "succeeded" && requested.Outcome != "failed" || dispatch != "" && requested.Ref.External.Dispatch != dispatch {
+		return &BackendError{Code: BackendProtocolInvalid, Diagnostic: "confirmed release operation lacks exact Dispatch and positive terminal release proof"}
+	}
+	if recorded.DispatchID != requested.Ref.External.Dispatch || recorded.Error != "" || recorded.Settlement.Disposition != "released" || recorded.Settlement.PlatformRequestID == "" || recorded.Settlement.PlatformRequestID != operation.PlatformRequestID || len(recorded.Settlement.ResidualResources) != 0 {
+		return &BackendError{Code: BackendProtocolInvalid, Diagnostic: "confirmed release operation lacks exact Dispatch and positive terminal release proof"}
 	}
 	return nil
 }
