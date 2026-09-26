@@ -17,6 +17,8 @@ The raw baseline and environment are retained at [#11 final report](../test-feed
 
 ## #12 final run
 
+Implementation PR: [#44](https://github.com/erranliu/SteerLine/pull/44) (`codex/beads-path-removal` → `main`), open for review.
+
 The fresh full suite ran on the same Windows host with `go1.26.4 windows/amd64`, 20 logical CPUs, default package parallelism and `-count=1` through the #11 runner. Its invocation included an explicit note that live Codex, Orca, PR-provider, and visible-window acceptance switches were not enabled.
 
 | Measure | #12 final full suite |

@@ -1,6 +1,6 @@
 # Plan：移除 Beads 旧执行路径
 
-任务 ID：12；任务名称：移除 Beads 旧执行路径；目标：`REFACTOR`。状态：实现与验证完成，待 PR 合入。唯一执行依据：[Spec](beads-path-removal.spec.md)。硬前置：[#11](test-feedback.spec.md) 已交付；一个实现 PR 交付。
+任务 ID：12；任务名称：移除 Beads 旧执行路径；目标：`REFACTOR`。状态：实现与验证完成；[#44](https://github.com/erranliu/SteerLine/pull/44) 已提交审查，待合入。唯一执行依据：[Spec](beads-path-removal.spec.md)。硬前置：[#11](test-feedback.spec.md) 已交付；一个实现 PR 交付。
 
 ## 实施顺序
 

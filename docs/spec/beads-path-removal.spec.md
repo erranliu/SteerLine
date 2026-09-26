@@ -1,6 +1,6 @@
 # Spec：移除 Beads 旧执行路径
 
-任务 ID：12；任务名称：移除 Beads 旧执行路径；目标：`REFACTOR`。状态：实现与自动化验收完成，待独立实现 PR 合入。配套 [Plan](beads-path-removal.plan.md)。
+任务 ID：12；任务名称：移除 Beads 旧执行路径；目标：`REFACTOR`。状态：实现与自动化验收完成；独立实现 [PR #44](https://github.com/erranliu/SteerLine/pull/44) 待合入。配套 [Plan](beads-path-removal.plan.md)。
 
 ## L1：目标与前置
 
