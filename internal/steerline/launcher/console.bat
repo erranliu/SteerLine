@@ -8,13 +8,13 @@ if "%SHOME:~-1%"=="\" set "SHOME=%SHOME:~0,-1%"
 set "BIN=%SHOME%\bin\steerline.exe"
 
 if not exist "%BIN%" ( echo [console] missing "%BIN%" & pause & exit /b 1 )
-mode con: cols=170 lines=52 >nul 2>&1
-title SteerLine Console
+
+rem Open a dedicated interactive console. This also works when this launcher
+rem was called from a process without an attached terminal (where Bubble Tea
+rem would otherwise exit immediately with "console requires an interactive terminal").
 if "%~1"=="" (
-  "%BIN%" console
+  start "SteerLine Console" "%BIN%" console
 ) else (
-  "%BIN%" console -config "%~1"
+  start "SteerLine Console" "%BIN%" console -config "%~1"
 )
-echo.
-echo [console] exited.
-pause
+exit /b %ERRORLEVEL%
