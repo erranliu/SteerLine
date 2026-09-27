@@ -1,0 +1,29 @@
+{
+  "id": "0540a5fa-b624-4818-8489-6220a66aa6e3",
+  "ok": true,
+  "result": {
+    "terminal": {
+      "handle": "term_fb8b1396-3971-429c-a933-5afabbbbfcbe",
+      "ptyId": "5da5463b-dc70-4ca8-8fa8-3b0e61536411::C:/Users/lmas1/AppData/Local/Temp/SteerLine-pr05-H6Incarnation-20260928/worktrees/33dadfc318643a157909a11d386b7214@@9beeae1d",
+      "incarnationId": "e4c9d381-434a-4765-b6de-d36d98c7aed3",
+      "orphaned": false,
+      "worktreeId": "5da5463b-dc70-4ca8-8fa8-3b0e61536411::C:/Users/lmas1/AppData/Local/Temp/SteerLine-pr05-H6Incarnation-20260928/worktrees/33dadfc318643a157909a11d386b7214",
+      "worktreePath": "C:/Users/lmas1/AppData/Local/Temp/SteerLine-pr05-H6Incarnation-20260928/worktrees/33dadfc318643a157909a11d386b7214",
+      "branch": "refs/heads/codex/95013-33dadfc31864",
+      "tabId": "e66c1e5a-fe01-45eb-81df-bb2900609551",
+      "leafId": "6dd3317b-9578-45d2-817a-3e4abe8b8966",
+      "title": "C:\\Windows\\SYSTEM32\\cmd.exe - call  \"C:\\Users\\lmas1\\AppData\\Local\\Programs\\orca\\resources\\bin\\orca.exe\" agent hooks prepare-codex   - call  .steerline-launch-30e503d59800b0a70a0c5bb7cb80df2b.cmd",
+      "connected": true,
+      "writable": true,
+      "lastOutputAt": 1790538648506,
+      "preview": "H_A15_RESUMING_ENTERED",
+      "executionHostId": "local",
+      "paneRuntimeId": -1,
+      "rendererGraphEpoch": 0,
+      "agentWait": null
+    }
+  },
+  "_meta": {
+    "runtimeId": "3dd6023d-87dd-4055-bcf6-f8dd87c3c731"
+  }
+}
