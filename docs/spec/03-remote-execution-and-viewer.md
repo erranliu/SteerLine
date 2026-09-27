@@ -1,14 +1,16 @@
 # Spec 03：最小状态机的分阶段远程闭环与 viewer 人工决策
 
-2026-09-28 后续：[本机可见控制台刷新样本](orca-probe/samples/spec03-viewer-follow-2026-09-28.json)发现默认当前 Attempt 被误保存为历史固定选择，修复后新 Attempt 的 SQLite `created_at` 至 Orca 可见终端 `source=screen` 帧出现的保守上界为 1.118 秒。手动选择历史 Attempt 仍保持固定。此样本没有覆盖 home 远端业务消息到 viewer 的 2 秒链路，也不能替代 Windows 管理员/UAC 桌面截图；两项仍开放。
+2026-09-28 后续：[本机可见控制台刷新样本](orca-probe/samples/spec03-viewer-follow-2026-09-28.json)发现默认当前 Attempt 被误保存为历史固定选择，修复后新 Attempt 的 SQLite `created_at` 至 Orca 可见终端 `source=screen` 帧出现的保守上界为 1.118 秒。手动选择历史 Attempt 仍保持固定。此本机样本本身没有覆盖 home 远端业务消息，也不能替代 Windows 管理员/UAC 桌面截图；远端时延由下段独立验收，UAC 仍开放。
+
+同日后续：[home 业务消息到可见 viewer 的真机验收](../validation/spec03-viewer-latency-2026-09-28.md)先发现顺序读取时原 Decision 展示耗时 2.476 秒；并行独立只读源并加快前台刷新后，新隔离任务的原 Decision 在 1.669 秒内出现在 Orca `source=screen` 帧，两次远端 review→publish 步骤帧分别为 1.414 与 1.798 秒。两条测试任务均完成五步、固定 head 的真实 PR 合并、中心 Task 结项和五个 Dispatch 释放，当前 1.4.209/1.4.210 `SteerlineTest` 目标的 2 秒 viewer 门槛通过。生产项目认证与 Windows 管理员/UAC 捕获仍单独开放。
 
 任务 ID：6；任务名称：分阶段远程闭环。
 
-2026-09-28 增补：[远端原生业务问答至真实合并](../validation/spec03-native-question-2026-09-28.md)在新的隔离任务 91024 上证明 `yes/no` 问题、中心答案、原 Dispatch 上的独立应用证明、五步验证、固定 head 的 [测试 PR #17](https://github.com/erranliu/SteerlineTest/pull/17) 合并及原中心 Task close。该运行的 publish 提示曾暂记 unknown，之后同一 SQLite 对账原 worker 结果，无第二个 PR。当前目标的业务问答主路径因此有原生任务证据；viewer 可见刷新 2 秒目标、管理员/UAC 设置提示及其余故障矩阵仍开放。
+2026-09-28 增补：[远端原生业务问答至真实合并](../validation/spec03-native-question-2026-09-28.md)在新的隔离任务 91024 上证明 `yes/no` 问题、中心答案、原 Dispatch 上的独立应用证明、五步验证、固定 head 的 [测试 PR #17](https://github.com/erranliu/SteerlineTest/pull/17) 合并及原中心 Task close。该运行的 publish 提示曾暂记 unknown，之后同一 SQLite 对账原 worker 结果，无第二个 PR。当前目标的业务问答主路径因此有原生任务证据；viewer 2 秒目标当时尚未通过，后续实测见上段；管理员/UAC 设置提示及其余故障矩阵仍开放。
 
 2026-09-27 新增[远端原生任务与 DAG 真机验收](../validation/spec03-native-dag-2026-09-27.md)：隔离任务 103 已在 home 依次完成五步、发布测试 PR #16，并由原中心按固定 HEAD 核验真实合并、写入 Delivery 和解锁后继 104。当前 1.4.209/1.4.210 目标的六项必需受监管能力已有新的内容哈希证据；review/publish 的原 Dispatch 在中心暂记 unknown 后经同 SQLite 重启对账成功，全部五个终端精确 release。宿主 on-request 命令的一次性权限批准已由远端可见界面验证；后续[活跃 home 回复限额样本](orca-probe/samples/p10-home-live-reply-size-2026-09-27.json)又验证 8 KiB 发送前拒绝和同一问题正常回复。管理员/UAC 设置提示仍开放。此前 [P10 home 权限样本](orca-probe/samples/p10-host-permission-2026-09-27.json)另记录 Codex `workspace-write` 沙箱内的 Orca CLI 无法读取 runtime 元数据并交付 `worker_done`，后续受监管适配器承接该交付路径。以下较早状态段落保留原验收当时的记录。
 
-同日后续[可见服务关窗样本](orca-probe/samples/spec03-native-r07-visible-window-2026-09-27.json)已证明原生 prepare 在中心窗口关闭后按原 Dispatch 恢复并进入 implement；[另一次协调终端丢失](orca-probe/samples/spec03-native-review-coordinator-loss-2026-09-27.json)使该隔离任务在 review 后阻断，不能把这次运行记为新的完整交付。[可见 viewer 刷新样本](orca-probe/samples/spec03-visible-viewer-latency-2026-09-27.json)也未证明 2 秒目标，保留为待验收。
+同日后续[可见服务关窗样本](orca-probe/samples/spec03-native-r07-visible-window-2026-09-27.json)已证明原生 prepare 在中心窗口关闭后按原 Dispatch 恢复并进入 implement；[另一次协调终端丢失](orca-probe/samples/spec03-native-review-coordinator-loss-2026-09-27.json)使该隔离任务在 review 后阻断，不能把这次运行记为新的完整交付。[可见 viewer 刷新样本](orca-probe/samples/spec03-visible-viewer-latency-2026-09-27.json)当时未证明 2 秒目标；后续实测见上段。
 
 2026-09-26 补充验收：[R19 原中心发布 Delivery 丢失回执](orca-probe/samples/spec03-supervised-r19-retry2-publish-2026-09-26.json)在真实测试 PR 已创建后丢弃首次 publish status Delivery、未入库/ack 即重开同一 SQLite；原 Dispatch 重放该 Delivery 后只绑定唯一 [PR #12](https://github.com/erranliu/SteerlineTest/pull/12)，按固定 head 合并、关闭原来源任务且重复轮询幂等。[viewer 实时决策](orca-probe/samples/spec03-supervised-viewer-decision-live-2026-09-26.json)和[发布状态](orca-probe/samples/spec03-supervised-viewer-publish-live-2026-09-26.json)使用真实中心 SQLite 与同一 `View()` 渲染路径，分别在入库后 126 ms 和 276 ms 显示；可见终端端到端截图仍待补取。此前 R19 的一次[重放比较失败](orca-probe/samples/spec03-supervised-r19-first-loss-failure-2026-09-26.json)暴露结果文件末尾 LF 误比，已修复并有幂等单测；另一次[prepare 身份失败](orca-probe/samples/spec03-supervised-r19-prepare-identity-failure-2026-09-26.json)被中心正确阻断。原生任务来源的目标端契约、能力选择及远端 worktree 身份准备已接入同一适配器，但真实原生任务闭环尚未验收。生产能力报告仍未认证，Windows 可见服务关窗及 P10 管理员/UAC 交互回执继续开放。以下较早状态段落保留原验收当时的记录。
 

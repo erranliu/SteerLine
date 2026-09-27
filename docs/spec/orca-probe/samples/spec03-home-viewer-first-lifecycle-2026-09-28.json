@@ -1,0 +1,35 @@
+{
+  "base_commit": "e33e51926ec28d90c42fbc4064db4d19002845a2",
+  "candidate_head": "a4c6ec4b2f86506b3a87c8531b2556e03ea777eb",
+  "capability_report_confined_to_temp_state": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\s3viewerlat28f\\steerline-home\\state\\native-project-3b0fc69143dc",
+  "captured_at": "2026-09-27T21:28:31.6807197Z",
+  "configured_codex_cli_version_pin": "",
+  "delivery": {
+    "project_id": "c:\\users\\lmas1\\appdata\\local\\temp\\s3viewerlat28f\\native-project\\.git",
+    "task_id": "91024",
+    "selected_workflow_run_id": "ef118af78fa636948f9853bdf8d9f82b",
+    "pr_instance": "https://github.com",
+    "pr_repository": "erranliu/SteerlineTest",
+    "pr_number": 18,
+    "pr_url": "https://github.com/erranliu/SteerlineTest/pull/18",
+    "merge_commit": "61b41ae59bb95ab6bc197fcf72211e9e70a51eb4",
+    "merged_at": "2026-09-27T21:28:27Z",
+    "recorded_at": "2026-09-27T21:28:31.3964355Z",
+    "evidence": {
+      "pr_instance": "https://github.com",
+      "url": "https://github.com/erranliu/SteerlineTest/pull/18",
+      "repository": "erranliu/SteerlineTest",
+      "number": 18,
+      "base_branch": "codex/spec03-native-question-viewer-base",
+      "state": "merged",
+      "merged": true,
+      "merged_at": "2026-09-27T21:28:27Z",
+      "merge_commit": "61b41ae59bb95ab6bc197fcf72211e9e70a51eb4"
+    }
+  },
+  "native_task_id": "91024",
+  "project_id": "c:\\users\\lmas1\\appdata\\local\\temp\\s3viewerlat28f\\native-project\\.git",
+  "remote_codex_cli_version": "codex-cli 0.157.1",
+  "task_status": "closed",
+  "test_pr_url": "https://github.com/erranliu/SteerlineTest/pull/18"
+}

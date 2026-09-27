@@ -1,0 +1,16 @@
+{
+  "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\s3viewerlat28g\\native-project\\.git",
+  "attempt_id": "426723400e87c6d4238e124987e4b395",
+  "execution_id": "0b2631636f584629e17101a7bf4334da",
+  "step_id": "publish_pr",
+  "attempt_number": 1,
+  "status": "planned",
+  "input_revision": "d2d902973ee4b6eda8da86c6322c830f587991ac",
+  "contract_digest": "6cda1bd69adf944506399974ab3f70539c7f910a6f3b4eaa11710effce58eb14",
+  "prerequisite_result_ids": [
+    "d5828024ac202a24e747c382e3295d74"
+  ],
+  "external_binding": {},
+  "created_at": "2026-09-27T21:59:04.2598572Z",
+  "updated_at": "2026-09-27T21:59:04.2598572Z"
+}

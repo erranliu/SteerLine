@@ -1,0 +1,36 @@
+{
+  "kind": "spec03-home-business-decision-to-visible-viewer",
+  "viewer_terminal": "term_8c209689-de89-4da3-bcc3-c58fb1e8e399",
+  "decision_id": "relay_582eacbe2eb0",
+  "workflow_run_id": "df97c5e08f33abf5673e224d81b308cd",
+  "execution_id": "0b2631636f584629e17101a7bf4334da",
+  "original_attempt_id": "2d8fed1936e98e9b319f7bef67264143",
+  "decision_created_at": "2026-09-27T21:42:02.6484427Z",
+  "visible_screen_returned_at": "2026-09-27T21:42:04.317665+00:00",
+  "latency_seconds_upper_bound": 1.669223,
+  "screen_source": "screen",
+  "reads": [
+    {
+      "returned_at": "2026-09-27T21:42:03.204698+00:00",
+      "query_seconds": 0.504448699997738,
+      "source": "screen",
+      "decision_id_visible": false
+    },
+    {
+      "returned_at": "2026-09-27T21:42:03.767174+00:00",
+      "query_seconds": 0.4618451999995159,
+      "source": "screen",
+      "decision_id_visible": false
+    },
+    {
+      "returned_at": "2026-09-27T21:42:04.317665+00:00",
+      "query_seconds": 0.4499476999917533,
+      "source": "screen",
+      "decision_id_visible": true
+    }
+  ],
+  "baseline_receipt": "remote-viewer-baseline.json",
+  "decision_record": "remote-viewer-decision-record.json",
+  "visible_receipt": "remote-viewer-decision-screen.json",
+  "timestamp_bound": "Decision created_at was assigned before SQLite commit, while visible time was sampled after Orca returned the rendered screen frame."
+}

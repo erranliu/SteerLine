@@ -11,3 +11,5 @@ publish_pr 的原提示一度停在输入框，Orca 报 `session_not_reported`�
 先前三个[隔离失败探测](../spec/orca-probe/samples/spec03-native-question-retries-2026-09-28.json)分别暴露原生问答 Run 等待状态在快照刷新中反复退回 pending、重启后等待中的原 Dispatch 未重接、Windows 工作树路径表示造成答案资格误拒，以及 worker 的应用证明模板缺少 `remote_codex_version`。修复后才运行本次全新任务；未把失败 Attempt 回写成成功。最终验收测试在**已完成的原 SQLite**上重新读取证据并通过；完整执行是同一中心状态经历受控停止、重开与原 publish 对账，不是一次未中断测试进程的结果。
 
 当前目标的原生业务问答、应用证明和真实交付路径由此通过。生产目标仍须按自己的配置认证；可见 viewer 的 2 秒展示、管理员/UAC 设置提示及未覆盖的故障矩阵继续开放。远程取消保持 unsupported。
+
+同日后续：[独立 viewer 时延验收](spec03-viewer-latency-2026-09-28.md)用两条新的 home 原生任务在真实可见 Orca 终端测得修复后的业务 Decision 1.669 秒、远端步骤转换 1.414 / 1.798 秒，当前测试目标的 2 秒门槛已通过；两条任务的 PR #18/#19 合并与资源结算均另有回执。上段记录的是本任务 91024 完成时的原结论，生产项目认证、UAC 提示和其余故障矩阵仍开放。

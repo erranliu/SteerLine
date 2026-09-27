@@ -1,0 +1,7 @@
+=== RUN   TestRealIsolatedConsoleReadBreakdown
+    real_latency_breakdown_test.go:64: sample=0 connect=380.6248ms snapshot=257.1148ms open=404.8765ms list=1.0515ms ready=1.6299ms domain=1.0534ms full=688.3937ms revision=16146
+    real_latency_breakdown_test.go:64: sample=1 connect=488.3037ms snapshot=249.3835ms open=548.0526ms list=4.308ms ready=4.3531ms domain=8.2724ms full=822.6869ms revision=16169
+    real_latency_breakdown_test.go:64: sample=2 connect=468.589ms snapshot=251.6813ms open=374.0456ms list=2.719ms ready=2.1082ms domain=2.1649ms full=741.4908ms revision=16185
+--- PASS: TestRealIsolatedConsoleReadBreakdown (6.67s)
+PASS
+ok  	github.com/erranliu/SteerLine/internal/steerline/console	7.002s

@@ -1,0 +1,292 @@
+{
+  "source_receipt_id": "63f57e13-c2b9-40e8-bcbb-5522a943521e",
+  "runtime_id": "3dd6023d-87dd-4055-bcf6-f8dd87c3c731",
+  "run_id": "run_cf56b3fd0361",
+  "workers": [
+    {
+      "dispatchId": "ctx_b03b226a32c1",
+      "taskId": "task_bfc42ac0ed49",
+      "runId": "run_cf56b3fd0361",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "agentTerminalHandle": null,
+      "terminalState": null,
+      "resource": null,
+      "projection": {
+        "id": "ctx_b03b226a32c1",
+        "dispatchId": "ctx_b03b226a32c1",
+        "taskId": "task_bfc42ac0ed49",
+        "runId": "run_cf56b3fd0361",
+        "role": "worker",
+        "parent": null,
+        "provider": null,
+        "host": {
+          "kind": "local",
+          "id": "local"
+        },
+        "workspace": {
+          "id": "09e35751-6517-4e7c-ae20-178ed0e90000::C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-ef118af78fa6",
+          "kind": "folder_or_worktree"
+        },
+        "stage": {
+          "worker": "succeeded",
+          "dispatch": "completed",
+          "detail": "released",
+          "activity": "unknown"
+        },
+        "outcome": "succeeded",
+        "liveness": {
+          "verdict": "exited",
+          "source": "execution_host"
+        },
+        "evidence": {
+          "durable": true,
+          "liveStatus": "unavailable",
+          "lastObservedAt": null
+        },
+        "resource": {
+          "state": "absent",
+          "reason": "not_materialized"
+        },
+        "nextAction": {
+          "kind": "none",
+          "argv": []
+        },
+        "attention": {
+          "categories": [
+            "root_completion"
+          ],
+          "requiresAction": false
+        }
+      }
+    },
+    {
+      "dispatchId": "ctx_232f23e99a44",
+      "taskId": "task_5b480d0409f6",
+      "runId": "run_cf56b3fd0361",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "agentTerminalHandle": null,
+      "terminalState": null,
+      "resource": null,
+      "projection": {
+        "id": "ctx_232f23e99a44",
+        "dispatchId": "ctx_232f23e99a44",
+        "taskId": "task_5b480d0409f6",
+        "runId": "run_cf56b3fd0361",
+        "role": "worker",
+        "parent": null,
+        "provider": null,
+        "host": {
+          "kind": "local",
+          "id": "local"
+        },
+        "workspace": {
+          "id": "09e35751-6517-4e7c-ae20-178ed0e90000::C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-ef118af78fa6",
+          "kind": "folder_or_worktree"
+        },
+        "stage": {
+          "worker": "succeeded",
+          "dispatch": "completed",
+          "detail": "released",
+          "activity": "unknown"
+        },
+        "outcome": "succeeded",
+        "liveness": {
+          "verdict": "exited",
+          "source": "execution_host"
+        },
+        "evidence": {
+          "durable": true,
+          "liveStatus": "unavailable",
+          "lastObservedAt": null
+        },
+        "resource": {
+          "state": "absent",
+          "reason": "not_materialized"
+        },
+        "nextAction": {
+          "kind": "none",
+          "argv": []
+        },
+        "attention": {
+          "categories": [
+            "root_completion"
+          ],
+          "requiresAction": false
+        }
+      }
+    },
+    {
+      "dispatchId": "ctx_ed0accfef5ca",
+      "taskId": "task_1102c39a753a",
+      "runId": "run_cf56b3fd0361",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "agentTerminalHandle": null,
+      "terminalState": null,
+      "resource": null,
+      "projection": {
+        "id": "ctx_ed0accfef5ca",
+        "dispatchId": "ctx_ed0accfef5ca",
+        "taskId": "task_1102c39a753a",
+        "runId": "run_cf56b3fd0361",
+        "role": "worker",
+        "parent": null,
+        "provider": null,
+        "host": {
+          "kind": "local",
+          "id": "local"
+        },
+        "workspace": {
+          "id": "09e35751-6517-4e7c-ae20-178ed0e90000::C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-ef118af78fa6",
+          "kind": "folder_or_worktree"
+        },
+        "stage": {
+          "worker": "succeeded",
+          "dispatch": "completed",
+          "detail": "released",
+          "activity": "unknown"
+        },
+        "outcome": "succeeded",
+        "liveness": {
+          "verdict": "exited",
+          "source": "execution_host"
+        },
+        "evidence": {
+          "durable": true,
+          "liveStatus": "unavailable",
+          "lastObservedAt": null
+        },
+        "resource": {
+          "state": "absent",
+          "reason": "not_materialized"
+        },
+        "nextAction": {
+          "kind": "none",
+          "argv": []
+        },
+        "attention": {
+          "categories": [
+            "root_completion"
+          ],
+          "requiresAction": false
+        }
+      }
+    },
+    {
+      "dispatchId": "ctx_fc2c7aaf7afa",
+      "taskId": "task_158c0e1dc9db",
+      "runId": "run_cf56b3fd0361",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "agentTerminalHandle": null,
+      "terminalState": null,
+      "resource": null,
+      "projection": {
+        "id": "ctx_fc2c7aaf7afa",
+        "dispatchId": "ctx_fc2c7aaf7afa",
+        "taskId": "task_158c0e1dc9db",
+        "runId": "run_cf56b3fd0361",
+        "role": "worker",
+        "parent": null,
+        "provider": null,
+        "host": {
+          "kind": "local",
+          "id": "local"
+        },
+        "workspace": {
+          "id": "09e35751-6517-4e7c-ae20-178ed0e90000::C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-ef118af78fa6",
+          "kind": "folder_or_worktree"
+        },
+        "stage": {
+          "worker": "succeeded",
+          "dispatch": "completed",
+          "detail": "released",
+          "activity": "unknown"
+        },
+        "outcome": "succeeded",
+        "liveness": {
+          "verdict": "exited",
+          "source": "execution_host"
+        },
+        "evidence": {
+          "durable": true,
+          "liveStatus": "unavailable",
+          "lastObservedAt": null
+        },
+        "resource": {
+          "state": "absent",
+          "reason": "not_materialized"
+        },
+        "nextAction": {
+          "kind": "none",
+          "argv": []
+        },
+        "attention": {
+          "categories": [
+            "root_completion"
+          ],
+          "requiresAction": false
+        }
+      }
+    },
+    {
+      "dispatchId": "ctx_3d0f9d1c17e5",
+      "taskId": "task_7abdb454182a",
+      "runId": "run_cf56b3fd0361",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "agentTerminalHandle": null,
+      "terminalState": null,
+      "resource": null,
+      "projection": {
+        "id": "ctx_3d0f9d1c17e5",
+        "dispatchId": "ctx_3d0f9d1c17e5",
+        "taskId": "task_7abdb454182a",
+        "runId": "run_cf56b3fd0361",
+        "role": "worker",
+        "parent": null,
+        "provider": null,
+        "host": {
+          "kind": "local",
+          "id": "local"
+        },
+        "workspace": {
+          "id": "09e35751-6517-4e7c-ae20-178ed0e90000::C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-ef118af78fa6",
+          "kind": "folder_or_worktree"
+        },
+        "stage": {
+          "worker": "succeeded",
+          "dispatch": "completed",
+          "detail": "released",
+          "activity": "unknown"
+        },
+        "outcome": "succeeded",
+        "liveness": {
+          "verdict": "exited",
+          "source": "execution_host"
+        },
+        "evidence": {
+          "durable": true,
+          "liveStatus": "unavailable",
+          "lastObservedAt": null
+        },
+        "resource": {
+          "state": "absent",
+          "reason": "not_materialized"
+        },
+        "nextAction": {
+          "kind": "none",
+          "argv": []
+        },
+        "attention": {
+          "categories": [
+            "root_completion"
+          ],
+          "requiresAction": false
+        }
+      }
+    }
+  ]
+}

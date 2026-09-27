@@ -527,6 +527,20 @@ func TestRefreshTicksDoNotStackSlowProjectReads(t *testing.T) {
 	if m.projects[0].refreshID != 1 {
 		t.Fatalf("slow project read stacked another request: %d", m.projects[0].refreshID)
 	}
+	updated, _ = m.Update(projectMsg{key: ref.Key, identity: ref.Identity, generation: m.generation, requestID: 1, snapshot: readySnapshot(ref, m.clock.Now())})
+	m = updated.(Model)
+	m.clock.(*testClock).now = now.Add(3*time.Second + 300*time.Millisecond)
+	updated, _ = m.Update(tickMsg(m.clock.Now()))
+	m = updated.(Model)
+	if m.projects[0].refreshID != 1 {
+		t.Fatal("foreground reader restarted before its refresh interval")
+	}
+	m.clock.(*testClock).now = now.Add(3*time.Second + 450*time.Millisecond)
+	updated, _ = m.Update(tickMsg(m.clock.Now()))
+	m = updated.(Model)
+	if m.projects[0].refreshID != 2 || !m.projects[0].refreshing {
+		t.Fatal("foreground reader did not restart within half a second after its last completed refresh")
+	}
 }
 
 func TestFailedRefreshKeepsLastGoodReadOnlyDataAndCurrentError(t *testing.T) {
