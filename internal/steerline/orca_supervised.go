@@ -832,6 +832,28 @@ func (s *Service) reattachSupervisedWorker(run *Run) error {
 	if observation.Liveness != "live" && observation.Liveness != "exited" {
 		return &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "original supervised Dispatch liveness remains unverifiable"}
 	}
+	recoverDecisionWait := uncertainStart && attempt.Status == "waiting_decision" && run.Decision != nil && run.Decision.Status == "pending" && run.Decision.AttemptID == attempt.AttemptID && operation.Status == "confirmed"
+	if recoverDecisionWait {
+		matched := false
+		for _, decision := range s.State.Decisions {
+			if decision.DecisionID == run.Decision.ID && decision.WorkflowRunID == run.RunID && decision.ExecutionID == run.ExecutionID && decision.AttemptID == attempt.AttemptID && decision.Status == "pending" {
+				matched = true
+				break
+			}
+		}
+		if !matched || observation.Liveness != "live" {
+			return &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "original pending decision or live Dispatch could not be verified after service stop"}
+		}
+		run.ExecutionStatus, run.FinishTaskStatus, run.EndedAt, run.Error = "running", "waiting_decision", nil, nil
+		workflow.Phase, workflow.UpdatedAt = "waiting_decision", now()
+		execution.Status, execution.CurrentStep, execution.Process, execution.UpdatedAt = "waiting_decision", attempt.StepID, &observation.Identity, now()
+		run.Process = &observation.Identity
+		s.State.CurrentTask, s.State.SlotOccupied = ptr(run.TaskID), true
+		s.note(run, "steer", "decision", "reconciled", "original supervised business question recovered after service stop", attempt.AttemptID, map[string]any{"decision_id": run.Decision.ID, "dispatch_id": observation.Identity.Dispatch})
+		if err := s.save(); err != nil {
+			return err
+		}
+	}
 	if unboundStart {
 		if attempt.Status == "dispatching" {
 			if err := TransitionStepAttempt(attempt, "dispatched"); err != nil {
@@ -849,7 +871,7 @@ func (s *Service) reattachSupervisedWorker(run *Run) error {
 			return err
 		}
 	}
-	if uncertainStart {
+	if uncertainStart && !recoverDecisionWait {
 		if err := TransitionStepAttempt(attempt, "dispatched"); err != nil {
 			return err
 		}
@@ -1001,7 +1023,7 @@ func supervisedStepTaskSpec(c Config, task TaskRecord, run Run, workflow Workflo
 		}
 	}
 	b.WriteString("Set `$stepResult` to the exact per-step StepGateResult template above. Build the inner envelope exactly once: `$envelope=[ordered]@{schema_version=1;project_identity=$ids.project_identity;task_id=$ids.task_id;workflow_run_id=$ids.workflow_run_id;execution_id=$ids.execution_id;attempt_id=$ids.attempt_id;result=$stepResult}`. The inner envelope must not contain `step_result`, `taskId`, or `dispatchId`. Then build the separate outer status object exactly once: `$payloadObject=[ordered]@{taskId=$orcaTaskId;dispatchId=$orcaDispatchId;remote_codex_version=$codexVersion;step_result=$envelope}`; require its four exact keys and require `$payloadObject.step_result.task_id -ceq $ids.task_id`. Assign `$payloadJson = ConvertTo-Json -InputObject $payloadObject -Compress -Depth 16`; reject UTF-8 payloads over 8192 bytes. Run the sender via exec_command shell `pwsh.exe` (PowerShell 7). From the exact preamble set `$orca`, `$from`, `$cap`, `$orcaTaskId`, and `$orcaDispatchId`; use `$sendArgv=@('orchestration','send','--from',$from,'--dispatch-capability',$cap,'--type','status','--subject',$subject,'--payload',$payloadJson,'--json')` then invoke `& $orca @sendArgv`. Keep JSON as one argv item after `--payload`; never put it in command text or pass it positionally. Omit `--run`, `--to`, and all other structured flags. Parse JSON and require `ok=true` plus a nonempty `result.mutation.requestId` (plain text is not a receipt; the immediate `from_handle` may differ). Then send one `worker_done` with a separate splatted argv array, the same auth, and the exact preamble taskId/dispatchId/outcome.\n")
-	b.WriteString("If blocked on a business decision, use the preamble ask command with `--json`; save and resume that exact message ID, never ask twice, and do not start a replacement step. After actually applying the answer, send a separate status proof echoing the original message ID, fixed attempt/execution IDs, and exact answer body; omit step_result. Continue the same attempt and submit its one final result.\n")
+	b.WriteString("If blocked on a business decision, use the preamble ask command with `--json`; save and resume that exact message ID, never ask twice, and do not start a replacement step. After actually applying the answer, send a separate status proof with exactly these keys: taskId=`$orcaTaskId`, dispatchId=`$orcaDispatchId`, remote_codex_version=`$codexVersion` from the successful `codex --version` command, decision_applied=<original question message ID>, applied_decision_attempt_id=`$ids.attempt_id`, applied_decision_execution_id=`$ids.execution_id`, and applied_answer_body=<exact answer body>. Omit step_result from this proof. JSON-serialize it once, reject UTF-8 payloads over 8192 bytes before sending, and require Orca's structured mutation request ID. Continue the same attempt and submit its one final result.\n")
 	fmt.Fprintf(&b, "Workflow definition: %s\nStep contract: %s\nStep input (fixed IDs, revisions, prerequisites, workspace, and decision only): %s\n", workflow.Definition.ID, string(contractBytes), string(inputBytes))
 	if attempt.StepID != "prepare" {
 		fmt.Fprintf(&b, "Task title: %s\n", task.Title)

@@ -110,6 +110,17 @@ func TestNativeSupervisedDecisionEligibilityRequiresExactDispatch(t *testing.T) 
 	if err := DecisionReplyEligibility(context.Background(), c, run); err != nil {
 		t.Fatalf("exact supervised decision was rejected: %v", err)
 	}
+	canonicalPath := canonical(path)
+	run.WorktreePath = &canonicalPath
+	if err := DecisionReplyEligibility(context.Background(), c, run); err != nil {
+		t.Fatalf("canonical persisted Windows workspace path was rejected: %v", err)
+	}
+	otherPath := "C:/other-probe"
+	run.WorktreePath = &otherPath
+	if err := DecisionReplyEligibility(context.Background(), c, run); err == nil {
+		t.Fatal("supervised decision accepted a different workspace path")
+	}
+	run.WorktreePath = &canonicalPath
 	run.Target.Dispatch = "different-dispatch"
 	if err := DecisionReplyEligibility(context.Background(), c, run); err == nil {
 		t.Fatal("supervised decision with a changed Dispatch was accepted")

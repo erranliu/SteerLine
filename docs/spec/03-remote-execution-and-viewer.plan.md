@@ -19,6 +19,11 @@
 - [Windows 可见服务关窗](orca-probe/samples/spec03-native-r07-visible-window-2026-09-27.json)在原 prepare Dispatch 存活时真实关闭窗口，发现“已保存启动回执和 binding、尚未提交 Run 投影”无法自动重接。修复后从同一 SQLite 的已确认 Operation、不可变 binding 和原 Dispatch 精确对账，prepare 转成功并派出唯一 implement。该任务又通过 verify；[后续 review 与协调终端丢失](orca-probe/samples/spec03-native-review-coordinator-loss-2026-09-27.json)使它阻断，无 PR。此故障不作为原生完整闭环的新通过样本。
 - [可见 viewer](orca-probe/samples/spec03-visible-viewer-native-2026-09-27.png)呈现远端任务且退出后服务继续运行；[刷新测量](orca-probe/samples/spec03-visible-viewer-latency-2026-09-27.json)仍见旧 Attempt，未证明 2 秒显示目标。后续用前台窗口与中心消息时间重新验收，再决定是否需要修正刷新循环。
 
+## 2026-09-28 原生业务问答与交付
+
+- 新隔离 fixture 固定 implement 的一次 `yes/no` 业务问题。前置探测暴露 native 快照刷新把活跃问答 Run 的 `waiting_decision` 反复改回 `pending`、停止服务后等待中的原 Dispatch 无法重接、Windows 工作树路径的等价表示被答案资格误拒。中心现以同一 Decision/Attempt 的持久记录核对等待状态，恢复时先核验原 Dispatch，工作树路径按规范化绝对路径比较；错误身份仍拒绝。
+- [最终真机闭环](../validation/spec03-native-question-2026-09-28.md)只提交无备注的 `yes`，中心确认 reply 后等待远端独立应用证明，未把 reply accepted 当作 applied。worker 指令固定证明消息的七个字段及 8 KiB 发送前检查。任务 91024 的五个独立 Dispatch 全部 succeeded/released，候选、验证和审查 revision 一致；唯一 [测试 PR #17](https://github.com/erranliu/SteerlineTest/pull/17) 在固定 head 合并，中心关闭原 Task。publish 暂记 unknown 后重开同一 SQLite 对账，未重发。失败探测的 Attempt/资源未冒充本次成功。
+
 ## 当前执行记录（2026-09-25）
 
 - 本地完成：minimal-v1 verify 的每项必需检查现在要求实际命令、脚本版本、退出码、passed 值、证据引用及匹配的 commit；缺项、结论矛盾或 commit 漂移会被中心状态机拒绝。viewer 的 Summary、Workspace、Result 视图读取现有 workflow/attempt/target/workspace 记录。Orca 版本族 helper 按用户批准的 `major.minor` 键比较，原始完整版本仍保留在能力证据中。
