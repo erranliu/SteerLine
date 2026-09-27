@@ -84,13 +84,23 @@ func (s *Service) executionConfigForWorkflowID(id string) (Config, error) {
 
 func (s *Service) restoreActiveExecutionProfile() error {
 	s.Config = s.projectExecutionConfig()
+	var only *Run
 	for _, run := range s.State.Runs {
 		if run == nil {
 			continue
 		}
 		if run.ExecutionStatus == "pending" || run.ExecutionStatus == "running" || run.ExecutionStatus == "unknown" || run.FinishTaskStatus == "waiting_decision" {
-			return s.useFixedRunProfile(run)
+			if _, err := s.executionConfigForRun(run); err != nil {
+				return err
+			}
+			if only != nil {
+				return nil
+			}
+			only = run
 		}
+	}
+	if only != nil {
+		return s.useFixedRunProfile(only)
 	}
 	return nil
 }

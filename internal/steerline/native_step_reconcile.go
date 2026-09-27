@@ -16,11 +16,11 @@ type nativeStepDispatchOperation struct {
 }
 
 func (s *Service) reconcileExitedNativeStep(ctx context.Context) error {
-	if s.worker != nil {
-		return nil
-	}
 	for _, run := range s.State.Runs {
 		if run == nil || run.WorkflowVersion != MinimalWorkflowVersion {
+			continue
+		}
+		if s.workers[run.RunID] != nil {
 			continue
 		}
 		task := nativeTaskRecord(s.State.Tasks, run.DomainTaskID)
@@ -77,7 +77,9 @@ func (s *Service) reconcileExitedNativeStep(ctx context.Context) error {
 				stepErr = fmt.Errorf("Orca native step command exited with status %d", exitCode)
 			}
 		}
-		s.Config = config // This exact run is now the one execution being reconciled.
+		previous := s.Config
+		s.Config = config
+		defer func() { s.Config = previous }()
 		if ref.Backend == BackendOrca {
 			if err = s.reconcileExitedOrcaStepLauncher(ctx, run, workflow, execution, attempt); err != nil {
 				run.Error = ptr("native Orca result is preserved but launcher cleanup requires reconciliation: " + clip(err.Error(), 1000))

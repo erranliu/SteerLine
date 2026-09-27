@@ -238,9 +238,6 @@ func (s *Service) processNextControl(ctx context.Context, cancel context.CancelF
 		if s.State.Control.DispatchPaused {
 			return s.rejectControl(*req, digest, "dispatch_paused", errors.New("dispatch is paused"))
 		}
-		if reason := s.slotReason(""); reason != "" {
-			return s.rejectControl(*req, digest, "slot_busy", errors.New(reason))
-		}
 		if err = s.validateReadyTarget(ctx, payload.TaskID); err != nil {
 			code := "task_not_ready"
 			if errors.Is(err, errAlreadyManaged) {
@@ -431,7 +428,7 @@ func (s *Service) applyControlAction(ctx context.Context, req ControlRequest, pa
 			if err := s.useFixedRunProfile(run); err != nil {
 				return err
 			}
-			if s.worker != nil && s.active == run {
+			if s.workers[run.RunID] != nil || s.worker != nil && s.active == run {
 				result.Message = "native task worker identity is persisted and running"
 				return nil
 			}

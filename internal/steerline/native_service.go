@@ -96,7 +96,7 @@ func (s *Service) refreshNativeSnapshot(ctx context.Context, reconstruct bool) e
 			run.WorkspaceIntent = intent
 			run.WorktreePath, run.WorktreeBranch, run.BaseCommit = ptr(intent.Path), ptr(intent.Branch), ptr(intent.BaseCommit)
 		}
-		workerActive := s.worker != nil && s.active == run
+		workerActive := s.workers[run.RunID] != nil
 		if execution.Process != nil {
 			run.Process = execution.Process
 		} else if !workerActive {
@@ -309,10 +309,18 @@ func (s *Service) reconcileNativeCleanup(ctx context.Context) error {
 				continue
 			}
 			executionID := strings.TrimPrefix(item, "execution_stop_manual:")
-			if run := s.active; run != nil && run.DomainTaskID == task.TaskID && run.ExecutionID == executionID && s.worker != nil {
-				if s.Config.hostName() != "local" {
+			if run := s.find(task.TaskID); run != nil && run.ExecutionID == executionID && s.workers[run.RunID] != nil {
+				config, configErr := s.executionConfigForRun(run)
+				if configErr != nil {
+					return configErr
+				}
+				if config.hostName() != "local" {
 					continue // Remote cancellation is not available; keep the exact manual item.
 				}
+				if err := s.selectWorker(run); err != nil {
+					return err
+				}
+				defer s.parkWorker()
 				if _, err := s.requireBackendCapabilities(ctx, backendFor(s.Config), "stop", "observe"); err != nil {
 					run.Error = ptr("discarded task worker remains active; verified local stop capability is unavailable: " + clip(err.Error(), 1000))
 					continue
@@ -343,6 +351,7 @@ func (s *Service) reconcileNativeCleanup(ctx context.Context) error {
 					return err
 				}
 				if s.active != nil && s.active.RunID == op.RunID && s.active.AttemptID == op.AttemptID {
+					delete(s.workers, run.RunID)
 					s.worker, s.active = nil, nil
 					s.State.CurrentTask = nil
 					s.State.SlotOccupied = false
@@ -638,7 +647,7 @@ func nativeRuntimeFinishStatus(task TaskRecord, workflow WorkflowRunRecord) stri
 }
 
 func (s *Service) dispatchNative(ctx context.Context) error {
-	if s.worker != nil {
+	if !s.explicitDispatch && len(s.workers) != 0 {
 		return nil
 	}
 	if err := s.refreshNativeSnapshot(ctx, true); err != nil {
@@ -647,11 +656,13 @@ func (s *Service) dispatchNative(ctx context.Context) error {
 	if !s.explicitDispatch && (s.State.Control.DispatchMode != "auto" || s.State.Control.DispatchPaused) {
 		return nil
 	}
-	if s.worker != nil || s.State.SlotOccupied && s.activeControlRequestID() == "" {
+	if !s.explicitDispatch && s.State.SlotOccupied && s.activeControlRequestID() == "" {
 		return nil
 	}
-	if reason := s.slotReason(s.activeControlRequestID()); reason != "" {
-		return errors.New(reason)
+	if !s.explicitDispatch {
+		if reason := s.slotReason(s.activeControlRequestID()); reason != "" {
+			return errors.New(reason)
+		}
 	}
 	if !s.explicitDispatch {
 		if err := s.selectDefaultDispatchProfile(); err != nil {

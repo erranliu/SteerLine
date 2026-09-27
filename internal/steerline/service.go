@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -21,8 +22,16 @@ type Service struct {
 	store           *Store
 	domainStore     *SQLiteStore
 	prs             *PRClient
-	worker          *Worker
-	active          *Run
+	// worker and active are the run currently being handled by the serial state
+	// machine. workers owns all live observers, keyed by authoritative run ID.
+	worker         *Worker
+	active         *Run
+	workers        map[string]*Worker
+	workerMessages chan workerMessage
+	runContext     context.Context
+	forwarders     sync.WaitGroup
+	forwardMu      sync.Mutex
+	forwardedDone  []workerMessage
 	// activities holds one journal per run so PR and delivery events always land in
 	// their own run's file, even after the worker exited.
 	activities                 map[string]*ActivityWriter
@@ -78,7 +87,7 @@ func NewService(c Config) (_ *Service, retErr error) {
 			_ = db.Close()
 		}
 	}()
-	s := &Service{Config: c, baseConfig: c, domainStore: db, store: &Store{Path: filepath.Join(c.RunDir, c.RuntimeFile), Domain: db, Project: c.identity}, prs: &PRClient{Config: c.PR, Runner: r}, activities: map[string]*ActivityWriter{}, conversationMappers: map[string]*ConversationMapper{}}
+	s := &Service{Config: c, baseConfig: c, domainStore: db, store: &Store{Path: filepath.Join(c.RunDir, c.RuntimeFile), Domain: db, Project: c.identity}, prs: &PRClient{Config: c.PR, Runner: r}, activities: map[string]*ActivityWriter{}, conversationMappers: map[string]*ConversationMapper{}, workers: map[string]*Worker{}}
 	projection, _, e := db.LoadProjection(context.Background(), c.identity)
 	if e != nil {
 		return nil, e
@@ -286,9 +295,10 @@ func NewService(c Config) (_ *Service, retErr error) {
 			if r.WorkspaceIntent != nil && r.Process != nil && r.FinishTaskStatus != "completed" {
 				err := s.inspectRunWorkspace(context.Background(), r)
 				if err != nil {
-					if s.active == r && s.worker != nil {
-						s.worker.Close()
-						<-s.worker.observationDone
+					if worker := s.workers[r.RunID]; worker != nil {
+						worker.Close()
+						<-worker.observationDone
+						delete(s.workers, r.RunID)
 						s.worker, s.active = nil, nil
 					}
 					r.FinishTaskStatus = "blocked"
@@ -730,7 +740,7 @@ func (s *Service) slotReason(ignoreRequestID string) string {
 }
 
 func (s *Service) executionSlotReason(ignoreRequestID string, resumingDecision bool) string {
-	if s.worker != nil {
+	if s.worker != nil || len(s.workers) != 0 {
 		return "worker is running"
 	}
 	if operation := s.State.Control.Operation; operation != nil && operation.RequestID != ignoreRequestID {
@@ -765,11 +775,18 @@ func (s *Service) executionSlotReason(ignoreRequestID string, resumingDecision b
 }
 
 func (s *Service) refreshSlotOccupancy() {
-	occupied := s.worker != nil || s.State.Control.Operation != nil || len(s.State.Control.Blockers) > 0
+	occupied := s.worker != nil || len(s.workers) != 0 || s.State.Control.Operation != nil || len(s.State.Control.Blockers) > 0
+	activeTasks := make([]string, 0, 2)
 	for _, r := range s.State.Runs {
 		if r != nil && (r.ExecutionStatus == "unknown" || r.ExecutionStatus == "pending" || r.ExecutionStatus == "running" || r.FinishTaskStatus == "waiting_decision") {
 			occupied = true
+			activeTasks = append(activeTasks, r.TaskID)
 		}
+	}
+	if len(activeTasks) == 1 {
+		s.State.CurrentTask = ptr(activeTasks[0])
+	} else if len(activeTasks) > 1 {
+		s.State.CurrentTask = nil
 	}
 	if s.State.SlotOccupied && s.State.CurrentTask != nil && s.find(*s.State.CurrentTask) == nil {
 		occupied = true // Reservation saved before the first run/claim exists.
@@ -789,7 +806,11 @@ func (s *Service) refreshCandidates(ctx context.Context) error {
 		}
 		candidates = append(candidates, TaskCandidate{TaskID: task.TaskID, Title: task.Title, Type: task.Type})
 	}
-	s.candidateSnapshot = &TaskSnapshot{Version: 1, InstanceID: s.State.Service.InstanceID, RepositoryIdentity: s.State.Repository.Identity, QueriedAt: queried, LastSuccessAt: &queried, BlockReason: s.slotReason(s.activeControlRequestID()), Tasks: candidates}
+	blockReason := ""
+	if s.State.Control.DispatchMode == "auto" {
+		blockReason = s.slotReason(s.activeControlRequestID())
+	}
+	s.candidateSnapshot = &TaskSnapshot{Version: 1, InstanceID: s.State.Service.InstanceID, RepositoryIdentity: s.State.Repository.Identity, QueriedAt: queried, LastSuccessAt: &queried, BlockReason: blockReason, Tasks: candidates}
 	return nil
 }
 func (s *Service) preparationFailed(r *Run, reason string) error {
@@ -1472,6 +1493,12 @@ func (s *Service) RunWithDispatch(ctx context.Context, mode string) error {
 
 func (s *Service) run(ctx context.Context, dispatchMode string) (retErr error) {
 	ctx, cancel := context.WithCancel(ctx)
+	s.parkWorker()
+	s.runContext = ctx
+	s.workerMessages = make(chan workerMessage, 128)
+	for runID, worker := range s.workers {
+		s.forwardWorker(ctx, runID, worker)
+	}
 	var conversationReplayDone <-chan struct{}
 	var codexHistoryDone <-chan struct{}
 	defer func() {
@@ -1595,6 +1622,7 @@ func (s *Service) run(ctx context.Context, dispatchMode string) (retErr error) {
 	controlTick := time.NewTicker(100 * time.Millisecond)
 	defer controlTick.Stop()
 	step := func(fn func(context.Context) error) error {
+		defer s.parkWorker()
 		e := fn(ctx)
 		if s.store.Err() != nil {
 			return s.store.Err()
@@ -1668,20 +1696,8 @@ func (s *Service) run(ctx context.Context, dispatchMode string) (retErr error) {
 			return e
 		}
 	}
-	var observedWorker *Worker
-	var events <-chan WorkerEvent
 	for {
-		if s.worker != observedWorker {
-			observedWorker = s.worker
-			events = nil
-			if s.worker != nil {
-				events = s.worker.Events
-			}
-		}
-		var done <-chan error
-		if s.worker != nil {
-			done = s.worker.Done
-		}
+		s.parkWorker()
 		select {
 		case <-ctx.Done():
 			return nil
@@ -1696,16 +1712,8 @@ func (s *Service) run(ctx context.Context, dispatchMode string) (retErr error) {
 					return e
 				}
 			}
-		case ev, ok := <-events:
-			if !ok {
-				events = nil
-				continue
-			}
-			if e := s.event(ev); e != nil {
-				return e
-			}
-		case e := <-done:
-			if err := s.finishWorkerInLoop(e); err != nil {
+		case message := <-s.workerMessages:
+			if err := s.handleWorkerMessage(message); err != nil {
 				return err
 			}
 		case <-decisionTick.C:
@@ -1731,7 +1739,7 @@ func (s *Service) run(ctx context.Context, dispatchMode string) (retErr error) {
 			if e := step(s.resumeMinimalSteps); e != nil {
 				return e
 			}
-			if s.worker != nil {
+			if len(s.workers) != 0 && s.State.Control.DispatchMode == "auto" {
 				continue
 			}
 			if e := step(s.dispatch); e != nil {
@@ -1765,6 +1773,41 @@ func (s *Service) finishWorkerInLoop(workerErr error) error {
 }
 
 func (s *Service) shutdown() {
+	if s.runContext != nil && s.runContext.Err() != nil {
+		s.forwarders.Wait()
+		s.drainWorkerMessages()
+	}
+	if len(s.workers) == 0 && s.worker != nil {
+		s.shutdownWorker()
+		return
+	}
+	for len(s.workers) != 0 {
+		var runID string
+		for id := range s.workers {
+			runID = id
+			break
+		}
+		var run *Run
+		for _, candidate := range s.State.Runs {
+			if candidate != nil && candidate.RunID == runID {
+				run = candidate
+				break
+			}
+		}
+		if err := s.selectWorker(run); err != nil {
+			s.setError(err)
+			return // Preserve the original worker identity for restart reconciliation.
+		}
+		stoppingWorker := s.worker
+		s.shutdownWorker()
+		if s.workers[runID] == stoppingWorker {
+			delete(s.workers, runID)
+		}
+		s.parkWorker()
+	}
+}
+
+func (s *Service) shutdownWorker() {
 	if s.worker == nil {
 		return
 	}

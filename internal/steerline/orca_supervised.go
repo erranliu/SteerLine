@@ -771,9 +771,16 @@ func (b orcaSupervisedBackend) StartMinimalStep(ctx context.Context, task TaskRe
 func (s *Service) reattachSupervisedWorker(run *Run) error {
 	uncertainStart := run != nil && run.ExecutionStatus == "unknown" && run.FinishTaskStatus == "blocked" && run.Process != nil
 	unboundStart := run != nil && run.Process == nil && (run.ExecutionStatus == "running" || run.ExecutionStatus == "unknown") && (run.FinishTaskStatus == "pending" || run.FinishTaskStatus == "blocked")
-	if s.worker != nil || run == nil || run.Process == nil && !unboundStart || run.FinishTaskStatus != "pending" && run.FinishTaskStatus != "waiting_decision" && !uncertainStart && !unboundStart {
+	if run == nil || s.workers[run.RunID] != nil || run.Process == nil && !unboundStart || run.FinishTaskStatus != "pending" && run.FinishTaskStatus != "waiting_decision" && !uncertainStart && !unboundStart {
 		return errors.New("supervised recovery requires one active, bound execution")
 	}
+	config, err := s.executionConfigForRun(run)
+	if err != nil {
+		return err
+	}
+	previous := s.Config
+	s.Config = config
+	defer func() { s.Config = previous; s.worker, s.active = nil, nil }()
 	workflow, execution := s.minimalRecords(run)
 	attempt := s.minimalAttempt(run, run.AttemptID)
 	if workflow == nil || execution == nil || attempt == nil || attempt.ResultPath == "" || attempt.OperationID == "" || attempt.Status != "dispatched" && attempt.Status != "running" && attempt.Status != "waiting_decision" && !(uncertainStart && attempt.Status == "outcome_unknown") && !(unboundStart && attempt.Status == "dispatching") {
@@ -896,6 +903,7 @@ func (s *Service) reattachSupervisedWorker(run *Run) error {
 	observerCtx, cancelObserver := context.WithCancel(context.Background())
 	worker := &Worker{proc: &supervisedProcess{identity: ref.External, cancel: cancelObserver}, Events: make(chan WorkerEvent, 16), Done: make(chan error, 1), cancelObservation: cancelObserver, observationDone: make(chan struct{})}
 	s.worker, s.active = worker, run
+	s.registerWorker(run, worker)
 	go backend.observeWorker(observerCtx, worker, ref, *attempt, input, attempt.ResultPath)
 	return nil
 }

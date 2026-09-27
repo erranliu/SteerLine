@@ -414,7 +414,7 @@ func (s *SQLiteStore) NativeTaskPage(ctx context.Context, project, taskID, expec
 		if dispatchPaused != 0 {
 			detail.StartupBlockers = append(detail.StartupBlockers, "dispatch_paused")
 		}
-		if executionSlotBusy > 0 {
+		if executionSlotBusy > 0 && dispatchMode == "auto" {
 			detail.StartupBlockers = append(detail.StartupBlockers, "execution_slot_busy")
 		}
 		var contractPayload []byte

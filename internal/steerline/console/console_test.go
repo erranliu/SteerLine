@@ -403,7 +403,7 @@ func TestStartIsNotPublishedWhenRequestIdentityCannotBePersisted(t *testing.T) {
 	}
 }
 
-func TestStartDisablesStaleCandidatesAndSlotBusy(t *testing.T) {
+func TestStartDisablesStaleCandidatesAndAllowsManualParallel(t *testing.T) {
 	now := time.Now().UTC()
 	ref := testProject("alpha")
 	control := &testControlClient{}
@@ -422,8 +422,8 @@ func TestStartDisablesStaleCandidatesAndSlotBusy(t *testing.T) {
 	m = modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, control, now)
 	updated, cmd = m.startSelected()
 	m = updated.(Model)
-	if cmd != nil || control.calls != 0 || !strings.Contains(m.status, "执行槽") {
-		t.Fatalf("occupied slot must be blocked: %q", m.status)
+	if cmd != nil || control.calls != 0 || m.profileChoice == nil {
+		t.Fatalf("manual start must allow another task while a worker runs: status=%q choice=%+v", m.status, m.profileChoice)
 	}
 }
 

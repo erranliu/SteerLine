@@ -98,7 +98,7 @@ func (c CommandService) RetryNativeStep(ctx context.Context, options NativeStepR
 		if err := tx.tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM executions WHERE project_identity=? AND status IN ('pending','active','waiting_decision','blocked') AND execution_id<>?`, c.Project, options.ExecutionID).Scan(&occupied); err != nil {
 			return err
 		}
-		if occupied != 0 {
+		if occupied != 0 && graph.Authority.DispatchMode == "auto" {
 			return nativeErr("slot_busy", "another execution holds or may hold the project execution slot")
 		}
 		snapshot, err := querySnapshot(ctx, tx.tx, c.Project)
@@ -227,12 +227,6 @@ func (s *Service) startNativeRetryFor(ctx context.Context, runID, requestedBy st
 	if requestedBy == "" {
 		return errors.New("native retry requires the operator identity")
 	}
-	if s.worker != nil || s.State.SlotOccupied {
-		return errors.New("execution slot occupied")
-	}
-	if reason := s.slotReason(""); reason != "" {
-		return errors.New(reason)
-	}
 	var run *Run
 	for _, candidate := range s.State.Runs {
 		if candidate != nil && candidate.RunID == runID {
@@ -242,6 +236,9 @@ func (s *Service) startNativeRetryFor(ctx context.Context, runID, requestedBy st
 	}
 	if run == nil || run.WorkflowVersion != MinimalWorkflowVersion || run.ExecutionStatus != "failed" || run.FinishTaskStatus != "blocked" || run.PR.URL != nil {
 		return nativeErr("stale_version", "retry requires a settled failed native workflow without a bound PR")
+	}
+	if s.workers[run.RunID] != nil {
+		return errors.New("this execution already has an active worker")
 	}
 	if err := s.useFixedRunProfile(run); err != nil {
 		return err

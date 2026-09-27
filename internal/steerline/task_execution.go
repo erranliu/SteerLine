@@ -360,7 +360,7 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 		if e = tx.tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM executions e JOIN workflow_runs w ON w.project_identity=e.project_identity AND w.workflow_run_id=e.workflow_run_id WHERE e.project_identity=? AND e.status IN ('pending','active','waiting_decision','blocked')`, c.Project).Scan(&occupied); e != nil {
 			return e
 		}
-		if occupied > 0 {
+		if occupied > 0 && !options.Explicit {
 			return nativeErr("slot_busy", "native execution slot is occupied or uncertain")
 		}
 		command := CommandRecord{ProjectIdentity: c.Project, CommandID: options.RequestID, Kind: "claim_task", TargetID: task.TaskID, ExpectedVersion: options.ExpectedTaskVersion, IdempotencyKey: options.RequestID, RequestedBy: options.RequestedBy, Payload: requestPayload, Status: "in_flight", CreatedAt: created}

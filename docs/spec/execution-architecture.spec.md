@@ -4,7 +4,7 @@
 
 远程执行分为三个 Spec：[01 Orca 远程协议验证](01-orca-remote-protocol.md) → [02 执行模型、最小状态机与适配器](02-execution-model-and-adapter.md) → [03 分阶段远程执行与 viewer 闭环](03-remote-execution-and-viewer.md)。本机双链路接口与会话契约由 [4A](pr-04a-execution-backends.spec.md)、[4B](pr-04b-conversation-events.spec.md) 定义，先落地的权威接口由后续阶段复用。
 
-本文与具体阶段 Spec 共同构成执行依据。单执行槽是调度策略；共享部署、移动端和多 agent 并行不因本 Spec 被隐式纳入当前阶段范围。
+本文与具体阶段 Spec 共同构成执行依据。自动派发保持单活动执行；不同任务的人工启动遵循 [人工并行启动任务](manual-parallel-start.spec.md)。共享部署、移动端和同任务多 agent 并行不因本 Spec 被隐式纳入当前阶段范围。
 
 ## 实施顺序与依赖
 
@@ -36,7 +36,7 @@ Service 持有唯一业务状态机和存储写入权；后端适配器只执行
 
 ## 执行身份
 
-Task、WorkflowRun、Execution 和 StepAttempt 分别标识任务、一次流程、执行现场和步骤尝试。首版只派发一个活动 Execution；重试产生新的 StepAttempt，并保留原尝试和迟到消息。Orca Task/Dispatch 是平台身份，不等同于业务 Task。worker 成功只提供步骤事实，任务交付仍由中心核验。
+Task、WorkflowRun、Execution 和 StepAttempt 分别标识任务、一次流程、执行现场和步骤尝试。每个 Task 只保留一个权威活动 WorkflowRun/Execution；不同 Task 可由操作者并行启动。重试产生新的 StepAttempt，并保留原尝试和迟到消息。Orca Task/Dispatch 是平台身份，不等同于业务 Task。worker 成功只提供步骤事实，任务交付仍由中心核验。
 
 同任务多 agent 候选、比较、整合和并行调度留待相应产品阶段另行设计；本阶段不实现其状态、命令或验收矩阵。
 

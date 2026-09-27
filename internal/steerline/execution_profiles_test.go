@@ -178,15 +178,22 @@ func TestServiceStartControlDispatchesChosenProfile(t *testing.T) {
 	f.c.ProjectSteps = &ProjectSteps{Implement: step("implement"), Verify: step("verify"), PublishPR: step("publish_pr")}
 	f.c.ProjectSteps.Verify.RequiredChecks = []string{"unit"}
 	profile := ExecutionProfile{ID: "local-selected", Name: "已选本地方案", Host: "local", Agent: "codex", Model: "selected-model", ReasoningEffort: "xhigh", Sandbox: "workspace-write", Codex: f.c.Codex, ProjectSteps: f.c.ProjectSteps}
-	f.c.ExecutionProfiles = []ExecutionProfile{profile}
+	otherProfile := profile
+	otherProfile.ID, otherProfile.Name, otherProfile.Model = "local-other", "另一套本地方案", "other-model"
+	f.c.ExecutionProfiles = []ExecutionProfile{profile, otherProfile}
 	service := f.service(t)
 	defer service.Close()
+	observerCtx, stopObservers := context.WithCancel(context.Background())
+	defer stopObservers()
+	service.runContext = observerCtx
+	service.workerMessages = make(chan workerMessage, 128)
 	service.State.Service.Mode, service.State.Service.Ready = "scheduler", true
 	if err = service.save(); err != nil {
 		t.Fatal(err)
 	}
 	contract := nativeContract(t, service.Config, f.commit, "selected-profile-contract")
-	batch, err := json.Marshal(TaskBatchInput{SchemaVersion: taskBatchSchemaVersion, ProjectID: service.Config.Identity(), Tasks: []TaskBatchTask{{LocalKey: "selected", TaskID: 611, Title: "Selected profile", Type: "task", Contract: contract}}, Dependencies: []TaskBatchEdge{}})
+	otherContract := nativeContract(t, service.Config, f.commit, "other-profile-contract")
+	batch, err := json.Marshal(TaskBatchInput{SchemaVersion: taskBatchSchemaVersion, ProjectID: service.Config.Identity(), Tasks: []TaskBatchTask{{LocalKey: "selected", TaskID: 611, Title: "Selected profile", Type: "task", Contract: contract}, {LocalKey: "other", TaskID: 612, Title: "Other profile", Type: "task", Contract: otherContract}}, Dependencies: []TaskBatchEdge{}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -222,7 +229,36 @@ func TestServiceStartControlDispatchesChosenProfile(t *testing.T) {
 	if workflow == nil || workflow.ExecutionProfile == nil || workflow.ExecutionProfile.ID != profile.ID || execution == nil || execution.Backend != string(BackendLocal) {
 		t.Fatalf("service did not persist selected route: %+v / %+v", workflow, execution)
 	}
-	finishNativeStepForTest(t, service)
+	firstWorker := service.worker
+	service.State.Control.Operation = nil
+	secondRequestID := newID()
+	secondPayload := ControlPayload{TaskID: "612", ExecutionProfileID: otherProfile.ID, ExecutionProfileDigest: otherProfile.Digest()}
+	secondOperation := &ControlOperation{RequestID: secondRequestID, Action: "start_task", TaskID: secondPayload.TaskID, RunID: newID(), Phase: "applying"}
+	service.State.Control.Operation = secondOperation
+	if err = service.save(); err != nil {
+		t.Fatal(err)
+	}
+	if err = service.applyControlAction(context.Background(), ControlRequest{Action: "start_task", RequestID: secondRequestID}, secondPayload, secondOperation, &ControlReceipt{}); err != nil {
+		t.Fatal(err)
+	}
+	secondRun := service.find("612")
+	if secondRun == nil || service.workers[run.RunID] != firstWorker || service.workers[secondRun.RunID] == nil || service.workers[secondRun.RunID] == firstWorker || service.Config.Model != "other-model" {
+		t.Fatal("independent manual tasks did not retain distinct simultaneous workers and profiles")
+	}
+	settled := map[string]bool{}
+	for len(settled) != 2 {
+		select {
+		case message := <-service.workerMessages:
+			if err = service.handleWorkerMessage(message); err != nil {
+				t.Fatal(err)
+			}
+			if message.done {
+				settled[message.runID] = true
+			}
+		case <-time.After(15 * time.Second):
+			t.Fatalf("parallel observers did not settle: %+v", settled)
+		}
+	}
 	service.State.Control.Operation = nil
 	if err = service.save(); err != nil {
 		t.Fatal(err)
@@ -239,8 +275,13 @@ func TestServiceStartControlDispatchesChosenProfile(t *testing.T) {
 		t.Fatalf("restart failed for fixed profile: %v", err)
 	}
 	defer restarted.Close()
-	if restarted.Config.Model != "selected-model" || restarted.Config.ReasoningEffort != "xhigh" {
-		t.Fatalf("restart adopted edited project settings: model=%q effort=%q", restarted.Config.Model, restarted.Config.ReasoningEffort)
+	fixedFirst, err := restarted.executionConfigForRun(restarted.find("611"))
+	if err != nil || fixedFirst.Model != "selected-model" || fixedFirst.ReasoningEffort != "xhigh" {
+		t.Fatalf("restart adopted edited settings for first run: model=%q effort=%q err=%v", fixedFirst.Model, fixedFirst.ReasoningEffort, err)
+	}
+	fixedSecond, err := restarted.executionConfigForRun(restarted.find("612"))
+	if err != nil || fixedSecond.Model != "other-model" {
+		t.Fatalf("restart adopted another run's settings: model=%q err=%v", fixedSecond.Model, err)
 	}
 }
 
@@ -295,6 +336,10 @@ func TestMixedTaskHistoriesKeepTheirOwnBackendRoutes(t *testing.T) {
 		if err != nil || config.Host != sample.host || hostForExecution(sample.run.Backend, sample.run.Protocol) != sample.host {
 			t.Fatalf("historical run used another task's route: run=%s host=%q err=%v", sample.run.RunID, config.Host, err)
 		}
+	}
+	localRun.ExecutionStatus, orcaRun.ExecutionStatus = "running", "running"
+	if err := s.restoreActiveExecutionProfile(); err != nil || s.Config.Host != base.Host {
+		t.Fatalf("multiple active routes changed the project control configuration: host=%q err=%v", s.Config.Host, err)
 	}
 }
 
