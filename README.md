@@ -12,6 +12,8 @@ SteerLine 是一款面向工程 AGI 的研究型软件开发工具。它以 road
 
 控制台通过服务查看中心 native 任务候选、运行和回执。选择 Ready 候选按 `s` 会打开已配置执行方案列表，选定后按 Enter 才提交开始请求；在普通详情页按 Enter 只打开详情。`m` 切换手动/自动派发，`p` 暂停/恢复派发，`x` 在确认后停止服务。Windows 服务仍需用户从固定的 `service-window.bat` 独立打开；退出控制台不会停止服务。待决策问题显示完整 question/context/选项详情和 decision_id；按 `a` 后，只有当前 native WorkflowRun、Execution 和 attempt 身份有效时才打开 Unicode 答案编辑器。选项只是预选，按 `F2` 才提交；答案被服务接受不等于已应用，应用须由原执行的绑定证明。服务核对原 workspace 和等待中的步骤后，会以新 attempt 继续同一 native workflow。`u` 打开只读恢复核验面板；当前格式的恢复命令会按原 attempt、Operation 和外部身份重新核对，不确定时保留 blocker 与现场。
 
+手动模式下，可以继续选择其他 Ready 任务按 `s` 启动；SteerLine 不设置人工并行数量上限，各任务分别冻结执行配置与 worker 身份。同一任务不能重复领取，DAG 前置仍须满足。自动模式保持一次一个活动执行；切换到自动模式不会停止已人工启动的任务。
+
 保留旧执行的 Beads 项目在控制台中以只读视图显示。任务和硬前置从原 Beads 库查询，旧运行投影只供诊断；这类项目不能在新版控制台按 `s/m/p/x` 控制。旧服务结算完成后再切换到 native DAG。
 
 native 项目控制台还会显示中心任务关系、阻塞原因、Spec 路径和交付定位；离线详情显示采样时间，Ready 缓存不会变成启动许可。完整固定引用保留在中心任务契约中。命令行可用 `steerline task graph -config <path> -task-id <id> -direction upstream -depth 3` 查询关系，或用 `steerline task export -config <path> -format json -output <path>` 导出；覆盖已有导出文件需显式传 `-overwrite`。

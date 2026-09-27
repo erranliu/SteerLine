@@ -2406,10 +2406,6 @@ func (m Model) startSelected() (tea.Model, tea.Cmd) {
 		m.status = "派发已暂停，先恢复派发"
 		return m, nil
 	}
-	if runtimeState.SlotOccupied {
-		m.status = "执行槽正忙：" + stringValue(runtimeState.CurrentTask)
-		return m, nil
-	}
 	for _, action := range state.actions {
 		if action.TaskID == row.taskID && action.Status != "applied" && action.Status != "rejected" && action.Status != "failed" {
 			m.status = "此视图已有该任务请求 · task " + row.taskID + " · request " + action.RequestID
@@ -2806,9 +2802,6 @@ func candidateActionReason(ref ProjectRef, snapshot ProjectSnapshot, now time.Ti
 	}
 	if runtimeState.Control.DispatchPaused {
 		return "派发已暂停，请先恢复派发"
-	}
-	if runtimeState.SlotOccupied {
-		return "执行槽被占用：" + stringValue(runtimeState.CurrentTask)
 	}
 	if !hasCapability(runtimeState, "start_task") {
 		return "服务未声明 start_task 能力"

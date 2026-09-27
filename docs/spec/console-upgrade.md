@@ -79,7 +79,7 @@ flowchart LR
 ## 交付边界
 
 - 可浏览的任务范围是提供方的 ready 候选以及本机已记录 runs。外部尚未 ready 的完整 DAG、任务创建/拆分/编辑、任务优先级调整不属于本轮。
-- 单项目保持一个执行槽；不同仓库仍可各有一个服务。人工决策和 unknown 执行保留现有调度阻塞约束。
+- 本阶段单项目保持一个执行槽；后续由 [人工并行启动任务](manual-parallel-start.spec.md) 将不同任务的人工启动改为不限量并行，自动派发仍保持单活动执行。
 - 任务、run、attempt、decision、command 身份分开。重试保持 task_id/run_id，日志切换到新 attempt；每轮决策有独立 decision_id。
 - 保留 `watch --json/--raw/--no-tui` 的脚本接口和离线日志读取。
 - PR 合并仍由外部人工流程完成；控制台展示状态与链接，完成判定继续通过平台核实和结项回读。

@@ -512,7 +512,7 @@ func nativeStartupBlockers(task TaskRecord, graph taskGraphSnapshot) []string {
 	if graph.Authority.DispatchPaused {
 		blockers = append(blockers, "dispatch_paused")
 	}
-	if graph.ExecutionSlotBusy {
+	if graph.ExecutionSlotBusy && graph.Authority.DispatchMode == "auto" {
 		blockers = append(blockers, "execution_slot_busy")
 	}
 	return blockers

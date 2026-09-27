@@ -111,12 +111,6 @@ func InspectRecovery(ctx context.Context, c Config, runID string) (RecoveryInspe
 			inspection.ConcurrentActionReason = "an untracked execution preparation still reserves the slot"
 		}
 	}
-	for _, other := range runtimeState.Runs {
-		if other != nil && other.RunID != run.RunID && (other.ExecutionStatus == "pending" || other.ExecutionStatus == "running" || other.FinishTaskStatus == "waiting_decision") {
-			inspection.ConcurrentActionReason = "another run has an active worker or preparation action"
-			break
-		}
-	}
 	inspection.RetryReason = inspectRetryReason(ctx, &service, run, &inspection)
 	inspection.MarkStoppedReason = inspectMarkStoppedReason(run, &inspection)
 	return inspection, nil
@@ -152,15 +146,22 @@ func inspectRetryReason(ctx context.Context, service *Service, run *Run, report 
 }
 
 func inspectNativeRetryReason(ctx context.Context, service *Service, run *Run, report *RecoveryInspection) string {
+	blockedRun := false
+	for _, blocker := range service.State.Control.Blockers {
+		if blocker.RunID == run.RunID || blocker.TaskID == run.TaskID {
+			blockedRun = true
+			break
+		}
+	}
 	switch {
 	case service.State.Service.Status != "running" || !service.State.Service.Ready:
 		return "service is not ready"
 	case service.State.Control.DispatchMode != "manual" || service.State.Control.DispatchPaused:
 		return "native retry requires unpaused manual dispatch"
-	case service.State.Control.Operation != nil || len(service.State.Control.Blockers) > 0 || report.ConcurrentActionReason != "":
+	case service.State.Control.Operation != nil || blockedRun || report.ConcurrentActionReason != "":
 		return "another control action or blocker prevents retry"
-	case service.State.SlotOccupied || service.worker != nil:
-		return "execution slot occupied"
+	case service.workers[run.RunID] != nil:
+		return "this execution has an active worker"
 	case run.WorkflowVersion != MinimalWorkflowVersion || run.ExecutionStatus != "failed" || run.FinishTaskStatus != "blocked" || run.PR.URL != nil:
 		return "retry requires a settled failed native workflow without a bound PR"
 	case report.NativeClaim == nil || report.NativeClaim.Status != "in_progress" || report.NativeClaim.Claimant != run.Claimant:
@@ -213,7 +214,7 @@ func (s *Service) recoveryTarget(runID string) *Run {
 }
 
 func (s *Service) requireRecoveryIdle(targetRunID string) error {
-	if s.worker != nil {
+	if targetRunID != "" && s.workers[targetRunID] != nil || targetRunID == "" && (s.worker != nil || len(s.workers) != 0) {
 		return errors.New("a worker is active; recovery changes are refused")
 	}
 	if s.State.Control.Operation != nil {
@@ -221,6 +222,9 @@ func (s *Service) requireRecoveryIdle(targetRunID string) error {
 	}
 	if s.State.SlotOccupied && s.State.CurrentTask != nil && s.find(*s.State.CurrentTask) == nil {
 		return errors.New("an untracked execution preparation still reserves the slot")
+	}
+	if targetRunID != "" {
+		return nil
 	}
 	for _, run := range s.State.Runs {
 		if run == nil || run.RunID == targetRunID {
@@ -331,9 +335,6 @@ func (s *Service) resolveControlBlocker(ctx context.Context, blockerID, requeste
 	if err != nil {
 		return nil, err
 	}
-	if err := s.requireRecoveryIdle(""); err != nil {
-		return nil, err
-	}
 	var blocker *ControlBlocker
 	for i := range s.State.Control.Blockers {
 		if s.State.Control.Blockers[i].RequestID == blockerID {
@@ -343,6 +344,9 @@ func (s *Service) resolveControlBlocker(ctx context.Context, blockerID, requeste
 	}
 	if blocker == nil {
 		return nil, errors.New("requested control blocker is no longer present")
+	}
+	if err := s.requireRecoveryIdle(blocker.RunID); err != nil {
+		return nil, err
 	}
 	command, err := s.domainStore.Command(ctx, s.Config.identity, blockerID)
 	if errors.Is(err, sql.ErrNoRows) {

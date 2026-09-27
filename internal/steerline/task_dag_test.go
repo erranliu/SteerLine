@@ -357,7 +357,7 @@ func hasString(values []string, want string) bool {
 	return false
 }
 
-func TestNativeClaimRechecksReadySlotAndPersistsReservationWithoutAppliedReceipt(t *testing.T) {
+func TestNativeClaimAllowsManualParallelButKeepsAutoSlot(t *testing.T) {
 	ctx := context.Background()
 	c, commit := nativeTaskFixture(t)
 	if out, err := exec.Command("git", "-C", c.Repository, "push", "--quiet", "origin", "HEAD:refs/heads/main").CombinedOutput(); err != nil {
@@ -382,7 +382,7 @@ func TestNativeClaimRechecksReadySlotAndPersistsReservationWithoutAppliedReceipt
 	c.ProjectSteps = &ProjectSteps{Implement: step(), Verify: step(), PublishPR: step()}
 	c.ProjectSteps.Verify.RequiredChecks = []string{"unit"}
 	commands := CommandService{Store: store, Project: c.Identity()}
-	payload := taskBatchFixture(t, c, commit, batchTasks(80, 81), nil)
+	payload := taskBatchFixture(t, c, commit, batchTasks(80, 81, 82, 83), nil)
 	if _, err = commands.CreateTaskBatch(ctx, c, payload, strings.Repeat("b", 32), 1, "planner"); err != nil {
 		t.Fatal(err)
 	}
@@ -416,8 +416,16 @@ func TestNativeClaimRechecksReadySlotAndPersistsReservationWithoutAppliedReceipt
 	if err != nil || replayed.WorkflowRunID != receipt.WorkflowRunID {
 		t.Fatalf("claim replay did not return original reservation: %+v / %v", replayed, err)
 	}
-	if _, err = commands.ClaimNativeTask(ctx, c, TaskClaimOptions{TaskID: "81", RequestID: strings.Repeat("d", 32), ExpectedTaskVersion: 1, ExpectedAuthorityVersion: 2, RequestedBy: "operator", Explicit: true}); err == nil || !strings.Contains(err.Error(), "slot_busy") {
-		t.Fatalf("second execution entered occupied slot: %v", err)
+	second, err := commands.ClaimNativeTask(ctx, c, TaskClaimOptions{TaskID: "81", RequestID: strings.Repeat("d", 32), ExpectedTaskVersion: 1, ExpectedAuthorityVersion: 2, RequestedBy: "operator", Explicit: true})
+	if err != nil || second.Status != "claim_reserved" || second.WorkflowRunID == receipt.WorkflowRunID {
+		t.Fatalf("independent manual task was not reserved: %+v / %v", second, err)
+	}
+	third, err := commands.ClaimNativeTask(ctx, c, TaskClaimOptions{TaskID: "82", RequestID: strings.Repeat("f", 32), ExpectedTaskVersion: 1, ExpectedAuthorityVersion: 2, RequestedBy: "operator", Explicit: true})
+	if err != nil || third.Status != "claim_reserved" || third.WorkflowRunID == receipt.WorkflowRunID || third.WorkflowRunID == second.WorkflowRunID {
+		t.Fatalf("third manual task hit a hidden parallel cap: %+v / %v", third, err)
+	}
+	if _, err = commands.ClaimNativeTask(ctx, c, TaskClaimOptions{TaskID: "80", RequestID: strings.Repeat("e", 32), ExpectedTaskVersion: 1, ExpectedAuthorityVersion: 2, RequestedBy: "operator", Explicit: true}); err == nil || !strings.Contains(err.Error(), "stale_version") {
+		t.Fatalf("same task received a second workflow: %v", err)
 	}
 	page, err := (QueryService{Store: store, Project: c.Identity()}).ShowNativeTask(ctx, "80")
 	if err != nil {
@@ -430,7 +438,7 @@ func TestNativeClaimRechecksReadySlotAndPersistsReservationWithoutAppliedReceipt
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(snapshot.Executions) != 1 || snapshot.Executions[0].Workspace.Repository != c.Identity() {
+	if len(snapshot.Executions) != 3 || snapshot.Executions[0].Workspace.Repository != c.Identity() || snapshot.Executions[1].Workspace.Repository != c.Identity() || snapshot.Executions[2].Workspace.Repository != c.Identity() {
 		t.Fatalf("native claim initialized workspace repository with a non-identity path: %+v", snapshot.Executions)
 	}
 	alteredWorkflow := page.Tasks[0].WorkflowRuns[0]
@@ -442,12 +450,19 @@ func TestNativeClaimRechecksReadySlotAndPersistsReservationWithoutAppliedReceipt
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !hasString(other.Tasks[0].StartupBlockers, "execution_slot_busy") {
-		t.Fatalf("active slot was not a startup blocker: %+v", other.Tasks[0].StartupBlockers)
+	if hasString(other.Tasks[0].StartupBlockers, "execution_slot_busy") {
+		t.Fatalf("manual task inherited another task's slot blocker: %+v", other.Tasks[0].StartupBlockers)
 	}
 	var operations int
 	if err = store.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM operations WHERE project_identity=? AND idempotency_key=? AND status='pending'`, c.Identity(), options.RequestID).Scan(&operations); err != nil || operations != 1 {
 		t.Fatalf("external preparation intent was not reserved: count=%d err=%v", operations, err)
+	}
+	auto := "auto"
+	if _, err = commands.SetNativeDispatchState(ctx, NativeDispatchUpdate{RequestID: strings.Repeat("1", 32), ExpectedAuthorityVersion: 2, Mode: &auto, RequestedBy: "operator"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = commands.ClaimNativeTask(ctx, c, TaskClaimOptions{TaskID: "83", RequestID: strings.Repeat("2", 32), ExpectedTaskVersion: 1, ExpectedAuthorityVersion: 3, RequestedBy: "scheduler", Explicit: false}); err == nil || !strings.Contains(err.Error(), "slot_busy") {
+		t.Fatalf("automatic dispatch bypassed its single active execution limit: %v", err)
 	}
 	if err = store.Close(); err != nil {
 		t.Fatal(err)
@@ -462,8 +477,9 @@ func TestNativeClaimRechecksReadySlotAndPersistsReservationWithoutAppliedReceipt
 	if err != nil || replayed.WorkflowRunID != receipt.WorkflowRunID || replayed.StartTaskApplied {
 		t.Fatalf("restart changed claim reservation or reported worker start: %+v / %v", replayed, err)
 	}
-	if _, err = commands.ClaimNativeTask(ctx, c, TaskClaimOptions{TaskID: "81", RequestID: strings.Repeat("d", 32), ExpectedTaskVersion: 1, ExpectedAuthorityVersion: 2, RequestedBy: "operator", Explicit: true}); err == nil || !strings.Contains(err.Error(), "slot_busy") {
-		t.Fatalf("restart released an uncertain native execution slot: %v", err)
+	secondReplay, err := commands.ClaimNativeTask(ctx, c, TaskClaimOptions{TaskID: "81", RequestID: strings.Repeat("d", 32), ExpectedTaskVersion: 1, ExpectedAuthorityVersion: 2, RequestedBy: "operator", Explicit: true})
+	if err != nil || secondReplay.WorkflowRunID != second.WorkflowRunID {
+		t.Fatalf("restart changed the second claim identity: %+v / %v", secondReplay, err)
 	}
 }
 

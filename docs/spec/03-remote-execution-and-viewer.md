@@ -32,7 +32,7 @@
 
 中心 SteerLine 领取一个业务任务，通过 Orca 在远端独立 worktree 中逐步执行 implement、verify、review、publish_pr，viewer 显示阶段、输出和人工问题；用户回答后同一权威步骤尝试继续，经中心核实各门槛、PR 合并及结项后任务完成。中心重启或网络暂断不会重复派发。
 
-生产调度保持一个活动 Execution，运行 Spec 02 的 `minimal-v1`；每个步骤可以使用项目基础技能或脚本，由中心控制顺序和门槛。本阶段不实现任意流程/DAG 编辑器、多 agent 并行、移动端、多租户或公开 HTTP 服务。数据与命令接口沿用 Spec 02。
+本阶段生产调度保持一个活动 Execution，运行 Spec 02 的 `minimal-v1`；每个步骤可以使用项目基础技能或脚本，由中心控制顺序和门槛。后续不同任务的人工并行启动由 [人工并行启动任务](manual-parallel-start.spec.md) 扩展；同任务仍只有一个活动 Execution。本阶段不实现任意流程/DAG 编辑器、多 agent 并行、移动端、多租户或公开 HTTP 服务。数据与命令接口沿用 Spec 02。
 
 ## 2. 配置与接入前置
 

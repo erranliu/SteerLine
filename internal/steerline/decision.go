@@ -445,28 +445,41 @@ func (s *Service) applyDecisions(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if s.worker != nil {
-		if s.active != nil && s.active.Protocol == string(ProtocolOrcaSupervised) && s.active.Decision != nil && s.active.Decision.Status == "answer_saved" {
-			return s.replySupervisedDecision(ctx, s.active)
-		}
+	if s.State.Control.Operation != nil {
 		return nil
 	}
-	if reason := s.executionSlotReason("", true); reason != "" {
-		return errors.New(reason)
-	}
 	for _, run := range s.State.Runs {
-		if s.worker != nil {
-			break
-		}
 		if run == nil || run.FinishTaskStatus != "waiting_decision" || run.Decision == nil || run.Decision.Status != "answer_saved" {
+			continue
+		}
+		blocked := false
+		for _, blocker := range s.State.Control.Blockers {
+			if blocker.RunID == run.RunID || blocker.TaskID == run.TaskID {
+				blocked = true
+				break
+			}
+		}
+		if blocked {
 			continue
 		}
 		if run.WorkflowVersion != MinimalWorkflowVersion || !stableExecutionID(run.ExecutionID) || run.AttemptID == "" || run.Decision.AttemptID != run.AttemptID {
 			return nativeErr("unsupported_schema", "saved decision is not bound to a current minimal-v1 execution attempt")
 		}
 		if run.Protocol == string(ProtocolOrcaSupervised) {
+			if s.workers[run.RunID] != nil {
+				if err := s.selectWorker(run); err != nil {
+					return err
+				}
+				return s.replySupervisedDecision(ctx, run)
+			}
 			// Reattach the original Dispatch before applying the saved answer.
 			continue
+		}
+		if s.workers[run.RunID] != nil {
+			continue
+		}
+		if err := s.useFixedRunProfile(run); err != nil {
+			return err
 		}
 		answer, err := ReadDecisionAnswer(run)
 		if err != nil {
@@ -482,8 +495,8 @@ func (s *Service) applyDecisions(ctx context.Context) error {
 		if err := s.reconcile(ctx); err != nil {
 			return err
 		}
-		if reason := s.executionSlotReason("", true); reason != "" {
-			return errors.New(reason)
+		if s.workers[run.RunID] != nil {
+			return errors.New("decision attempt already has an active worker")
 		}
 		run.Decision.Status = "resuming"
 		run.Decision.Version++
@@ -511,6 +524,7 @@ func (s *Service) applyDecisions(ctx context.Context) error {
 				return saveErr
 			}
 		}
+		return nil
 	}
 	return nil
 }

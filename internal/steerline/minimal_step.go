@@ -897,6 +897,9 @@ func (s *Service) finishMinimalStep(exitErr error) error {
 	if !uncertain && attempt.StepID != "publish_pr" {
 		execution.Process, run.Process = nil, nil
 	}
+	if s.worker != nil && s.workers[run.RunID] == s.worker {
+		delete(s.workers, run.RunID)
+	}
 	s.worker = nil
 	s.active = nil
 	s.State.CurrentTask = nil
@@ -1624,6 +1627,7 @@ func (s *Service) startMinimalStep(ctx context.Context, task TaskRecord, run *Ru
 	}
 	s.worker = worker
 	s.active = run
+	s.registerWorker(run, worker)
 	identity := worker.proc.Identity()
 	run.Process = &identity
 	run.StartedAt = ptr(now())
@@ -1672,14 +1676,24 @@ func (s *Service) startMinimalStep(ctx context.Context, task TaskRecord, run *Ru
 }
 
 func (s *Service) resumeMinimalSteps(ctx context.Context) error {
-	if s.worker != nil {
-		return nil
-	}
-	if s.State.Control.Operation != nil || len(s.State.Control.Blockers) != 0 {
+	if s.State.Control.Operation != nil {
 		return nil
 	}
 	for _, run := range s.State.Runs {
 		if run == nil || run.WorkflowVersion != MinimalWorkflowVersion {
+			continue
+		}
+		if s.workers[run.RunID] != nil {
+			continue
+		}
+		blocked := false
+		for _, blocker := range s.State.Control.Blockers {
+			if blocker.RunID == run.RunID || blocker.TaskID == run.TaskID {
+				blocked = true
+				break
+			}
+		}
+		if blocked {
 			continue
 		}
 		workflow, execution := s.minimalRecords(run)
@@ -1696,10 +1710,8 @@ func (s *Service) resumeMinimalSteps(ctx context.Context) error {
 		if current == nil {
 			continue
 		}
-		for _, other := range s.State.Runs {
-			if other != nil && other.RunID != run.RunID && (other.ExecutionStatus == "unknown" || other.ExecutionStatus == "pending" || other.ExecutionStatus == "running" || other.FinishTaskStatus == "waiting_decision") {
-				return errors.New("another execution still holds the execution slot")
-			}
+		if err := s.useFixedRunProfile(run); err != nil {
+			return err
 		}
 		task := nativeTaskRecord(s.State.Tasks, run.DomainTaskID)
 		if task == nil || task.Status != "in_progress" || task.Claimant != run.Claimant {

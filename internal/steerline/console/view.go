@@ -127,7 +127,23 @@ func renderStatusLine(m Model, state projectState) string {
 		mode = runtimeState.Control.DispatchMode
 		paused = runtimeState.Control.DispatchPaused
 		if runtimeState.SlotOccupied {
-			slot = "执行 " + stringValue(runtimeState.CurrentTask)
+			active := 0
+			for _, run := range runtimeState.Runs {
+				if run != nil && (run.ExecutionStatus == "pending" || run.ExecutionStatus == "running" || run.ExecutionStatus == "unknown" || run.FinishTaskStatus == "waiting_decision") {
+					active++
+				}
+			}
+			if mode == "manual" {
+				if active > 0 {
+					slot = fmt.Sprintf("活动 %d", active)
+				} else {
+					slot = "执行待核实"
+				}
+			} else if active > 1 {
+				slot = fmt.Sprintf("等待活动 %d", active)
+			} else {
+				slot = "执行 " + stringValue(runtimeState.CurrentTask)
+			}
 		}
 	}
 	if paused {
@@ -242,7 +258,7 @@ func renderRows(m Model, state projectState, width, height int) []string {
 			out = append(out, "配置："+safeTerminalText(state.ref.ConfigPath))
 		case snapshot.TaskError != "":
 			out = append(out, "候选查询失败："+safeTerminalText(snapshot.TaskError))
-		case snapshot.Observation.Runtime != nil && snapshot.Observation.Runtime.SlotOccupied:
+		case snapshot.Observation.Runtime != nil && snapshot.Observation.Runtime.SlotOccupied && snapshot.Observation.Runtime.Control.DispatchMode == "auto":
 			out = append(out, "没有可开始的任务；执行槽正被 "+safeTerminalText(stringValue(snapshot.Observation.Runtime.CurrentTask))+" 占用。")
 		case snapshot.Tasks != nil && len(snapshot.Tasks.Tasks) == 0:
 			out = append(out, "当前没有 Ready 任务。")
