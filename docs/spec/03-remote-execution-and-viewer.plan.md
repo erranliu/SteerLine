@@ -7,9 +7,9 @@
 共享接线与 [#11](test-feedback.spec.md)、[#12](beads-path-removal.spec.md)、[#13](taskgraph-modules.spec.md) 按 Spec 的冲突规则串行集成；独立协议样例可先准备，后集成方重跑受影响接口与测试。原生任务权威是唯一接入范围。
 
 1. 核对中心模型、共同后端/会话契约、已测 Orca 版本与固定远端身份；建立隔离测试仓库和目标，不从 viewer 代启 Windows 服务窗口。
-2. 实现受限 supervised 适配器的预检、固定 base/worktree、分步骤派发、消息/输出读取、问答与 Operation 对账。发送前限制结构化消息大小，生产远程取消入口返回不支持并保留活跃资源占用。
+2. 实现受限 supervised 适配器的预检、固定 base/worktree、分步骤派发、消息/输出读取、问答与 Operation 对账。发送前限制结构化消息大小；预检远端 `workspace-write` 的 worker_done 交付路径，不依赖 Codex 沙箱直接读取 Orca runtime 元数据。生产远程取消入口返回不支持并保留活跃资源占用。
 3. 在中心状态机中逐步执行 implement、verify、review、publish_pr；每步固定独立尝试及结果 revision，失败按预算返回修复，不让 agent 自行越过门槛。无 agent 脚本路径若采用，完成文件回执与重启后新终端取证。
-4. 接入已有 verify 校验器：中心向其提交已接受的 worker_done 身份、预期检查清单和执行端 HEAD。缺回执、非零退出、身份或 commit 不符时阻止审查/发布，完成协议 P13 的端到端验收。
+4. 已接入的 verify 校验器使用中心接受的 worker_done 身份、预期检查清单和执行端 HEAD；正负向真机回执证明退出码、检查及候选 revision 门槛。其余无效结果须逐项核对，不能因某一正负向样本将全部 P13 子场景算作通过。
 5. 复用 QueryService/CommandService 与会话读模型，在同一 viewer 展示阶段、缺口、待决策和真实应用证明。Windows 关闭服务窗口只结束中心监督；用户重新打开后按持久身份恢复消息和派发判断，不把远端 worker 误判已停。沿中心原生 Task 丢弃状态停止新步骤/结项，保留仍活跃的远端身份与人工清理提示，不把丢弃当成远程取消能力。
 6. 核验真实 PR 身份、head/merge 和结项事实，统一走中心固定 DAG 交付事务。预检拒绝 Beads 来源及旧 start/finish/completion 入口，验证响应丢失后的原操作对账。
 

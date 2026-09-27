@@ -135,7 +135,7 @@ func (s *Service) startOrcaMinimalStepWorker(ctx context.Context, c Config, task
 	if err = AtomicWrite(inputPath, append(inputBytes, '\n')); err != nil {
 		return nil, err
 	}
-	stepExecutable, stepArgs, stdinPath, outputPath, captureStdout, err := s.orcaNativeStepCommand(c, run, attempt, input, contract, schema, inputPath, promptPath, result)
+	stepExecutable, stepArgs, stdinPath, outputPath, captureStdout, err := s.orcaNativeStepCommand(ctx, c, run, attempt, input, contract, schema, inputPath, promptPath, result)
 	if err != nil {
 		return nil, err
 	}
@@ -184,7 +184,7 @@ func validateNativeTaskWorkerContext(value any, project, taskID string, run *Run
 	return nil
 }
 
-func (s *Service) orcaNativeStepCommand(c Config, run *Run, attempt *StepAttemptRecord, input MinimalStepInput, contract StepContract, schema, inputPath, promptPath, result string) (string, []string, string, string, bool, error) {
+func (s *Service) orcaNativeStepCommand(ctx context.Context, c Config, run *Run, attempt *StepAttemptRecord, input MinimalStepInput, contract StepContract, schema, inputPath, promptPath, result string) (string, []string, string, string, bool, error) {
 	workConfig := c
 	workConfig.Repository = deref(run.WorktreePath)
 	if contract.Provider == "command" {
@@ -202,6 +202,11 @@ func (s *Service) orcaNativeStepCommand(c Config, run *Run, attempt *StepAttempt
 	}
 	args := append([]string(nil), workConfig.Codex.Args...)
 	args = append(args, "exec", "--json", "--output-schema", schema, "--output-last-message", result, "--sandbox", workConfig.Sandbox)
+	gitWriteArgs, err := codexLinkedWorktreeWriteArgs(ctx, workConfig, workConfig.Repository)
+	if err != nil {
+		return "", nil, "", "", false, err
+	}
+	args = append(args, gitWriteArgs...)
 	if workConfig.Model != "" {
 		args = append(args, "--model", workConfig.Model)
 	}

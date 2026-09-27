@@ -739,6 +739,23 @@ func supervisedPromptTestRef(c Config, started supervisedStartReceipt, observati
 	return ExecutionRef{Version: ExecutionRecordVersion, Backend: BackendOrca, Protocol: ProtocolOrcaSupervised, Target: target, Agent: AgentSpec{Name: "codex"}, RunID: "workflow-test", AttemptID: "attempt-test", WorkspacePath: observation.WorktreePath, WorkspaceBranch: observation.Branch, BaseCommit: target.BaseRevision, External: observation.Identity, Generation: observation.Identity.RuntimeID + ":" + observation.Identity.Incarnation}
 }
 
+func TestSupervisedReplyRejectsEscapedOversizeBeforeOrcaCall(t *testing.T) {
+	c := supervisedFixtureConfig(t)
+	started := supervisedStartReceipt{RunID: "orca-run-test", TaskID: "task-test", DispatchID: "dispatch-test"}
+	worktreeID := "repo-test::C:/remote/steerline-run"
+	observation := supervisedWorkerObservation{Identity: ProcessIdentity{Kind: "orca_supervised", RuntimeID: "fake-remote-runtime", CoordinatorRuntimeID: "fake-center-runtime", Terminal: "terminal-test", Incarnation: "inc-test", OrchestrationRun: started.RunID, Task: started.TaskID, Dispatch: started.DispatchID, ExecutionHost: "env-home", WorktreeID: worktreeID}, WorktreePath: "C:/remote/steerline-run", Branch: "erranliu/steerline-run"}
+	ref := supervisedPromptTestRef(c, started, observation)
+	t.Setenv("STEERLINE_FAKE_SUPERVISED_OBSERVE_UNAVAILABLE", "1")
+	_, err := (orcaSupervisedBackend{config: c}).replyQuestion(context.Background(), ref, "question-test", strings.Repeat("\n", 4000))
+	if !isBackendError(err, BackendRejected) {
+		t.Fatalf("escaped oversized reply reached Orca observation or send: %v", err)
+	}
+	_, err = (orcaSupervisedBackend{config: c}).replyQuestion(context.Background(), ref, "question-test", "yes")
+	if !isBackendError(err, BackendUnreachable) {
+		t.Fatalf("bounded reply was rejected before Orca observation: %v", err)
+	}
+}
+
 func TestSupervisedPrepareKeepsPlatformWorktreeIdentitySeparateFromPath(t *testing.T) {
 	const worktreeID = "repo-test::C:/remote/steerline-run"
 	run := &Run{Protocol: string(ProtocolOrcaSupervised), Target: ExecutionTarget{WorktreeID: worktreeID}}

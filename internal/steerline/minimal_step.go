@@ -649,6 +649,11 @@ func (s *Service) startMinimalStepWorker(ctx context.Context, task TaskRecord, r
 	}
 	args := append([]string{}, workConfig.Codex.Args...)
 	args = append(args, "exec", "--json", "--output-schema", schema, "--output-last-message", result, "--sandbox", workConfig.Sandbox)
+	gitWriteArgs, err := codexLinkedWorktreeWriteArgs(ctx, workConfig, workConfig.Repository)
+	if err != nil {
+		return nil, err
+	}
+	args = append(args, gitWriteArgs...)
 	if workConfig.Model != "" {
 		args = append(args, "--model", workConfig.Model)
 	}
@@ -903,7 +908,7 @@ func (s *Service) finishMinimalStep(exitErr error) error {
 		if run.Protocol == string(ProtocolOrcaSupervised) && errors.As(exitErr, &backendErr) && backendErr.Code == BackendUnsupported {
 			unknown = true
 		}
-		if run.Decision != nil && run.Decision.Status == "reply_accepted" && (run.Protocol != string(ProtocolOrcaSupervised) || !unknown) {
+		if !unknown && run.Decision != nil && run.Decision.Status == "reply_accepted" {
 			if err := s.failMinimalDecisionApplication(run, "resumed step terminated without application evidence: "+exitErr.Error()); err != nil {
 				return err
 			}

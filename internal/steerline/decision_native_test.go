@@ -148,6 +148,41 @@ func TestHydrateDecisionAllowsAppliedPriorMinimalAttempt(t *testing.T) {
 	}
 }
 
+func TestHydrateDecisionRequiresExactActiveContinuation(t *testing.T) {
+	ctx := context.Background()
+	store := openDomainTestStore(t)
+	project, runID, decisionID := "repo:active-decision", newID(), newID()
+	originalID, continuationID := newID(), newID()
+	seedNativeDecision(t, store, project, runID, newID())
+	request := DecisionRequest{Question: "Proceed?", Options: []DecisionOption{{ID: "yes", Label: "Yes"}}}
+	err := store.Transact(ctx, func(tx DomainTx) error {
+		if err := tx.PutStepAttempt(StepAttemptRecord{ProjectIdentity: project, AttemptID: originalID, ExecutionID: runID, StepID: "implement", AttemptNumber: 1, Status: "succeeded"}); err != nil {
+			return err
+		}
+		if err := tx.PutStepAttempt(StepAttemptRecord{ProjectIdentity: project, AttemptID: continuationID, ExecutionID: runID, StepID: "implement", AttemptNumber: 2, Status: "running"}); err != nil {
+			return err
+		}
+		return tx.PutDecision(DecisionRecord{ProjectIdentity: project, DecisionID: decisionID, Scope: "execution", WorkflowRunID: runID, ExecutionID: runID, AttemptID: originalID, QuestionID: decisionID, Request: mustJSON(request), Status: "reply_accepted", Version: 2})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	run := &Run{RunID: runID, ExecutionID: runID, AttemptID: continuationID, WorkflowVersion: MinimalWorkflowVersion, Decision: &DecisionState{ID: decisionID, AttemptID: originalID, Request: request, Status: "reply_accepted", Version: 1}}
+	service := &Service{Config: Config{identity: project}, domainStore: store, State: Runtime{Runs: []*Run{run}, Attempts: []StepAttemptRecord{{ProjectIdentity: project, AttemptID: originalID, ExecutionID: runID, StepID: "implement", AttemptNumber: 1, Status: "succeeded"}, {ProjectIdentity: project, AttemptID: continuationID, ExecutionID: runID, StepID: "implement", AttemptNumber: 2, Status: "running"}}}}
+	if err := service.hydrateDecisionProjection(ctx); err != nil {
+		t.Fatalf("bound active continuation was rejected: %v", err)
+	}
+	service.State.Attempts[1].StepID = "publish_pr"
+	if err := service.hydrateDecisionProjection(ctx); err == nil {
+		t.Fatal("decision was accepted on a different step")
+	}
+	service.State.Attempts[1].StepID = "implement"
+	service.State.Attempts[1].AttemptNumber = 3
+	if err := service.hydrateDecisionProjection(ctx); err == nil {
+		t.Fatal("decision was accepted on a later attempt")
+	}
+}
+
 func TestMinimalDecisionApplicationEvidenceBindsOriginalDecisionAttemptAndAnswer(t *testing.T) {
 	oldAttempt := strings.Repeat("a", 32)
 	run := &Run{

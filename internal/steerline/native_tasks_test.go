@@ -87,11 +87,20 @@ func nativeContract(t *testing.T, c Config, commit, id string) TaskContract {
 }
 
 func TestNativeDecisionAcceptanceIsSeparateFromApplication(t *testing.T) {
+	testNativeDecisionAcceptance(t, false)
+}
+
+func TestNativeDecisionUnknownExitKeepsOriginalProofEligible(t *testing.T) {
+	testNativeDecisionAcceptance(t, true)
+}
+
+func testNativeDecisionAcceptance(t *testing.T, unknownExit bool) {
+	t.Helper()
 	t.Setenv("STEERLINE_FAKE_NATIVE_STEP_DECISION", "implement")
 	f := newFixture(t)
 	f.c.configDigest = strings.Repeat("e", 64)
 	service := f.service(t)
-	defer service.Close()
+	defer func() { _ = service.Close() }()
 	executable, err := os.Executable()
 	if err != nil {
 		t.Fatal(err)
@@ -164,7 +173,37 @@ func TestNativeDecisionAcceptanceIsSeparateFromApplication(t *testing.T) {
 	if err = service.hydrateDecisionProjection(context.Background()); err != nil {
 		t.Fatalf("reply-accepted decision could not be restored after attempt advancement: %v", err)
 	}
-	finishNativeStepForTest(t, service)
+	if unknownExit {
+		worker := service.worker
+		select {
+		case <-worker.Done:
+		case <-time.After(10 * time.Second):
+			t.Fatal("native continuation timed out")
+		}
+		uncertain := &BackendError{Code: BackendUnreachable, Diagnostic: "original worker liveness is unverifiable"}
+		if err = service.finished(uncertain); err == nil {
+			t.Fatal("unverifiable original worker was accepted as a completed step")
+		}
+		if run.Decision.Status != "reply_accepted" || run.ExecutionStatus != "unknown" || !service.State.SlotOccupied {
+			t.Fatalf("unverifiable worker prematurely failed its decision or released the slot: run=%+v", run)
+		}
+		if err = service.Close(); err != nil {
+			t.Fatal(err)
+		}
+		service, err = NewService(f.c)
+		if err != nil {
+			t.Fatalf("restart lost the original uncertain decision: %v", err)
+		}
+		run = service.find("301")
+		if run == nil || run.Decision == nil || run.Decision.Status != "reply_accepted" {
+			t.Fatalf("restart changed the original decision before reconciliation: %+v", run)
+		}
+		if err = service.reconcileExitedNativeStep(context.Background()); err != nil {
+			t.Fatalf("original exited worker result was not reconciled: %v", err)
+		}
+	} else {
+		finishNativeStepForTest(t, service)
+	}
 	if run.Decision.Status != "applied" {
 		t.Fatalf("native continuation lacked application proof: %+v", run.Decision)
 	}
