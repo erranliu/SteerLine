@@ -22,7 +22,7 @@
 - 能力结论采用 `verified / unsupported / not_tested`，并记录证据。必需能力存在后两种结果时，Spec 03 的对应生产路径不得启用。
 - Orca 版本兼容键采用 `major.minor`：用户于 2026-09-25 明确选择，同一 `major.minor` 的不同 patch 版本按同一版本族处理；跨 `major.minor` 组合预检拒绝，不建设旧版或混合版本兼容层。能力报告仍记录中心和远端完整版本；每个目标组合仍须满足本 Spec 的能力和故障验收，版本族匹配不替代协议证据。
 
-2026-09-27 补充：[home 权限提示真机样本](orca-probe/samples/p10-host-permission-2026-09-27.json)记录本机 1.4.209/home 1.4.210 的精确 Dispatch 出现 `agentWait=agent-interactive-prompt`，操作者一次性批准只读 `whoami` 后提示清除。该 Codex 终端在 `workspace-write` 下无法读取 Orca runtime 元数据，未交付 `worker_done`；两次测试 Dispatch 均已精确停止。P10 仍缺实际发送入口的 8 KiB 发送前拒绝验证，旧管理员/UAC 提示本身的完整捕获仍缺失。
+2026-09-27 补充：[home 权限提示真机样本](orca-probe/samples/p10-host-permission-2026-09-27.json)记录本机 1.4.209/home 1.4.210 的精确 Dispatch 出现 `agentWait=agent-interactive-prompt`，操作者一次性批准只读 `whoami` 后提示清除。该 Codex 终端在 `workspace-write` 下无法读取 Orca runtime 元数据，未交付 `worker_done`；两次测试 Dispatch 均已精确停止。后续[活跃 home 问题样本](orca-probe/samples/p10-home-live-reply-size-2026-09-27.json)通过 SteerLine 的实际回复入口拒绝 8553 字节序列化答案，再对同一问题接受正常答案，远端 worker 回报原文并精确 release。旧管理员/UAC 设置提示本身及人工处置仍缺完整捕获，P10 尚未全部验收。
 
 ## 3. 职责和寻址
 

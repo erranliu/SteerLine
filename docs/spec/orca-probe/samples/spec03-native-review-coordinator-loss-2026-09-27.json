@@ -1,0 +1,42 @@
+{
+  "kind": "spec03-native-review-prompt-and-coordinator-loss",
+  "captured_at": "2026-09-27T15:05:00Z",
+  "scope": "same isolated native task 91024 and original SQLite used by the visible service-window probe",
+  "workflow_run_id": "0ab50c42c8b26c09e24ad6e37fa4361b",
+  "orca_run_id": "run_1e6d35ac158d",
+  "candidate_revision": "088baac18432aaca2415239b1cdc5b1e19380d72",
+  "verify": {
+    "result": "succeeded",
+    "content_smoke_exit_code": 0,
+    "verified_revision": "088baac18432aaca2415239b1cdc5b1e19380d72"
+  },
+  "review": {
+    "attempt_id": "c1e8f27eda68bfc9b2daab5fbeccb470",
+    "dispatch_id": "ctx_4a77cd338c61",
+    "terminal_id": "term_3a6019a0-dee0-4649-a71e-f13ab79d4c95",
+    "first_state": "outcome_unknown after input_accepted; the exact prompt remained in the Codex composer with session_not_reported for over ten minutes",
+    "manual_recovery": "One Enter to the same verified live terminal caused its first reported Codex session and tool calls. The original SQLite center reattached the same Dispatch after restart.",
+    "follow_up": {
+      "reason": "the first review turn ended after a failed result command without worker_done",
+      "same_terminal_prompt_request_id": "0fbaf6e4-1389-4e10-8e54-7b5ca1e30af6",
+      "submission_stages": ["input_accepted", "turn_started"]
+    },
+    "platform_settlement": "succeeded/completed/released/exited",
+    "center_final_state": "failed/blocked after post-step workspace preflight could no longer verify its configured coordinator terminal"
+  },
+  "coordinator": {
+    "configured_terminal": "term_7beb937e-2713-4094-a1c3-adf133c0f404",
+    "observed_terminal_state": "orphaned, connected=false, exitCause=operator_close",
+    "center_error": "workspace inspection failed after step: unreachable: supervised workspace preflight failed: coordinator terminal is not connected to the current center runtime",
+    "replacement_terminal": "term_a145f325-8694-41db-a47c-3db07702c1d3",
+    "replacement_used_for_original_run": false
+  },
+  "final_test_state": {
+    "task": "in_progress with blocked execution",
+    "pr_created": false,
+    "all_four_dispatches": "succeeded/completed/released/exited",
+    "service_process": "exited",
+    "isolated_state_preserved": true
+  },
+  "limits": "The exact cause of the configured coordinator terminal's operator_close was not established. No replacement terminal was substituted into the pinned active run. This run does not prove review acceptance, viewer latency, publish, or task delivery."
+}

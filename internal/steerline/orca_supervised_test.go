@@ -746,8 +746,8 @@ func TestSupervisedReplyRejectsEscapedOversizeBeforeOrcaCall(t *testing.T) {
 	observation := supervisedWorkerObservation{Identity: ProcessIdentity{Kind: "orca_supervised", RuntimeID: "fake-remote-runtime", CoordinatorRuntimeID: "fake-center-runtime", Terminal: "terminal-test", Incarnation: "inc-test", OrchestrationRun: started.RunID, Task: started.TaskID, Dispatch: started.DispatchID, ExecutionHost: "env-home", WorktreeID: worktreeID}, WorktreePath: "C:/remote/steerline-run", Branch: "erranliu/steerline-run"}
 	ref := supervisedPromptTestRef(c, started, observation)
 	t.Setenv("STEERLINE_FAKE_SUPERVISED_OBSERVE_UNAVAILABLE", "1")
-	_, err := (orcaSupervisedBackend{config: c}).replyQuestion(context.Background(), ref, "question-test", strings.Repeat("\n", 4000))
-	if !isBackendError(err, BackendRejected) {
+	_, err := (orcaSupervisedBackend{config: c}).replyQuestion(context.Background(), ref, "question-test", "x"+strings.Repeat("\n", 4000))
+	if !isBackendError(err, BackendRejected) || !strings.Contains(err.Error(), "serialized message exceeds") {
 		t.Fatalf("escaped oversized reply reached Orca observation or send: %v", err)
 	}
 	_, err = (orcaSupervisedBackend{config: c}).replyQuestion(context.Background(), ref, "question-test", "yes")

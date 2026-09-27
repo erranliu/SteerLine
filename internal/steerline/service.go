@@ -240,7 +240,8 @@ func NewService(c Config) (_ *Service, retErr error) {
 				}
 			}
 			recoverUncertainSupervised := r.Host == "orca_supervised" && r.WorkflowVersion == MinimalWorkflowVersion && r.ExecutionStatus == "unknown" && r.FinishTaskStatus == "blocked" && r.Process != nil
-			if r.ExecutionStatus == "pending" || r.ExecutionStatus == "running" || recoverUncertainSupervised {
+			recoverUnboundSupervised := r.Host == "orca_supervised" && r.WorkflowVersion == MinimalWorkflowVersion && r.Process == nil && (r.ExecutionStatus == "running" || r.ExecutionStatus == "unknown") && (r.FinishTaskStatus == "pending" || r.FinishTaskStatus == "blocked")
+			if r.ExecutionStatus == "pending" || r.ExecutionStatus == "running" || recoverUncertainSupervised || recoverUnboundSupervised {
 				recoverPlannedStep := false
 				if r.WorkflowVersion == MinimalWorkflowVersion && r.ExecutionStatus == "pending" && r.FinishTaskStatus == "pending" {
 					for _, workflow := range s.State.WorkflowRuns {
@@ -262,7 +263,7 @@ func NewService(c Config) (_ *Service, retErr error) {
 				}
 				if !recoverPlannedStep {
 					recovered := false
-					if r.Host == "orca_supervised" && r.WorkflowVersion == MinimalWorkflowVersion && (r.ExecutionStatus == "running" || r.ExecutionStatus == "pending" && r.Process != nil || recoverUncertainSupervised) {
+					if r.Host == "orca_supervised" && r.WorkflowVersion == MinimalWorkflowVersion && (r.ExecutionStatus == "running" || r.ExecutionStatus == "pending" && r.Process != nil || recoverUncertainSupervised || recoverUnboundSupervised) {
 						if recoverErr := s.reattachSupervisedWorker(r); recoverErr == nil {
 							recovered = true
 						} else {

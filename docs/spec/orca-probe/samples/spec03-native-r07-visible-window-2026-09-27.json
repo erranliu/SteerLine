@@ -1,0 +1,53 @@
+{
+  "kind": "spec03-native-r07-visible-windows-service-restart",
+  "captured_at": "2026-09-27T15:05:00Z",
+  "scope": "isolated SteerlineTest native task 91024 on Windows center and home; original SQLite and original Orca Run",
+  "center_orca_version": "1.4.209",
+  "home_orca_version": "1.4.210",
+  "native_task_id": "91024",
+  "workflow_run_id": "0ab50c42c8b26c09e24ad6e37fa4361b",
+  "orca_run_id": "run_1e6d35ac158d",
+  "prepare_attempt_id": "1a87a11862f4ded5130deb83f2ed31a9",
+  "prepare_dispatch_id": "ctx_f86b5b1388d9",
+  "pre_close": {
+    "service_pid": 13168,
+    "window_title": "SteerLine service window",
+    "window_id": 15992736,
+    "dispatch_state": "dispatched",
+    "remote_liveness": "live",
+    "center_operation": "dispatch_step confirmed with exact ProcessIdentity receipt and SQLite binding",
+    "center_attempt_state": "dispatching before Run projection commit"
+  },
+  "first_close": {
+    "ui_action": "WindowsTerminal Close tab on the exact service window",
+    "old_service_pid_exited": true,
+    "remote_original_dispatch_remained_live": true
+  },
+  "failure_found": {
+    "first_reopened_service_pid": 39496,
+    "state": "original run became unknown and the service did not reattach it",
+    "safety": "execution slot stayed occupied; no second prepare Dispatch was created",
+    "cause": "recovery required Run.Process even though the confirmed start receipt and exact binding were already durable"
+  },
+  "repair_and_recovery": {
+    "change": "recover an unbound supervised start only when the confirmed operation receipt, saved immutable binding, original workspace and live exact Dispatch all agree",
+    "reopened_service_pid": 28648,
+    "same_prepare_attempt_succeeded": true,
+    "same_prepare_dispatch_released": true,
+    "prepare_terminal_exited": true,
+    "next_step": "implement",
+    "implement_dispatch_id": "ctx_08f83b5e1b5e",
+    "duplicate_prepare_dispatches": 0
+  },
+  "visible_viewer": {
+    "viewer_pid": 36244,
+    "screenshot": "spec03-visible-viewer-native-2026-09-27.png",
+    "screenshot_sha256": "9b3c0c785da1bbfd1f2b5156276ec140b57850dd805eabb69ba9a57e50bb5102",
+    "displayed": "task 91024 in progress, remote supervised backend, live run and attempt identity",
+    "quit_action": "q",
+    "viewer_pid_exited": true,
+    "service_pid_28648_remained_running": true
+  },
+  "later_outcome": "The same isolated task passed implement and verify. During review the original coordinator terminal became operator_close; the center blocked after workspace preflight, without a PR. The prepare window-restart assertion remains scoped to its original attempt and next-step advancement.",
+  "limits": "The visible viewer snapshot confirms presentation, not a measured two-second presentation latency. This run did not reach PR delivery after a later independent coordinator-terminal loss."
+}
