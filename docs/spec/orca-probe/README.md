@@ -81,4 +81,6 @@ The [committed worktree probe](samples/p12-committed-step-reuse-2026-09-24.json)
 
 The agreed production scope compares Orca by `major.minor`: the 1.4.209 center and 1.4.210 home pair has supervised probe evidence. Remote cancellation remains unavailable. The version-family match does not certify untested capabilities or other version families, and Spec 03 remains fail-closed before production claim.
 
+The [2026-09-27 home prompt probe](samples/p10-host-permission-2026-09-27.json) observed an exact `agentWait` host approval and its one-time manual resolution on the 1.4.209/1.4.210 pair. The Codex `workspace-write` sandbox could not read Orca runtime metadata to submit `worker_done`; both test Dispatches were stopped. P10 still requires the adapter's 8 KiB pre-send rejection, and the earlier administrator/UAC setup prompt still lacks a full capture.
+
 The [remaining gates](remaining-gates.md) list the exact fault scenarios and evidence needed before Spec 01 can be accepted for Spec 03.

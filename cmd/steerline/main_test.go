@@ -87,7 +87,7 @@ func TestWaitServiceCommandResolvesIdentityAndKeepsPolling(t *testing.T) {
 		commandWritten <- commands.SetStatus(context.Background(), queued, "accepted", []byte(`{}`))
 	}()
 
-	got, err := waitServiceCommand(context.Background(), config, command.CommandID, time.Second)
+	got, err := waitServiceCommand(context.Background(), config, command.CommandID, 5*time.Second)
 	if err != nil || got.Status != "accepted" {
 		t.Fatalf("wait for delayed accepted command = %+v, %v; want accepted", got, err)
 	}

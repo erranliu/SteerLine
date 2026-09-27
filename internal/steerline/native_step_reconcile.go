@@ -150,7 +150,7 @@ func (s *Service) reconcileExitedOrcaStepLauncher(ctx context.Context, run *Run,
 	inputPath := filepath.Join(dir, "native-task-input.json")
 	promptPath := filepath.Join(dir, "prompt.txt")
 	schemaPath := filepath.Join(dir, "step-result.schema.json")
-	stepExecutable, stepArgs, stdinPath, outputPath, captureStdout, err := s.orcaNativeStepCommand(s.Config, run, attempt, dispatch.Input.StepInput, contract, schemaPath, inputPath, promptPath, resultPath)
+	stepExecutable, stepArgs, stdinPath, outputPath, captureStdout, err := s.orcaNativeStepCommand(ctx, s.Config, run, attempt, dispatch.Input.StepInput, contract, schemaPath, inputPath, promptPath, resultPath)
 	if err != nil {
 		return err
 	}
