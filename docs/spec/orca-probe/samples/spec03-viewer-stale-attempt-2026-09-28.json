@@ -1,0 +1,88 @@
+{
+  "kind": "spec03-orca-visible-terminal-render-latency",
+  "viewer_terminal": "term_0407f32b-58bc-435c-b1bb-b7050f4d417c",
+  "baseline_attempt": "ef504bb68157f849de5d378ed4297856",
+  "new_attempt": "c7502c36eb09948ed10d08836fc89850",
+  "new_attempt_created_at": "2026-09-27T20:41:23.4559722Z",
+  "new_attempt_visible_at": null,
+  "render_latency_seconds_upper_bound": null,
+  "screen_source": "unverified",
+  "read_attempts": [
+    {
+      "received_at": "2026-09-27T20:41:23.933978+00:00",
+      "query_seconds": 0.45140340000216383,
+      "source": "screen",
+      "contains_new_attempt": false
+    },
+    {
+      "received_at": "2026-09-27T20:41:24.536019+00:00",
+      "query_seconds": 0.5014501999976346,
+      "source": "screen",
+      "contains_new_attempt": false
+    },
+    {
+      "received_at": "2026-09-27T20:41:25.051800+00:00",
+      "query_seconds": 0.41527390001283493,
+      "source": "screen",
+      "contains_new_attempt": false
+    },
+    {
+      "received_at": "2026-09-27T20:41:25.583988+00:00",
+      "query_seconds": 0.4315704999899026,
+      "source": "screen",
+      "contains_new_attempt": false
+    },
+    {
+      "received_at": "2026-09-27T20:41:26.134093+00:00",
+      "query_seconds": 0.44970939999620896,
+      "source": "screen",
+      "contains_new_attempt": false
+    },
+    {
+      "received_at": "2026-09-27T20:41:26.612654+00:00",
+      "query_seconds": 0.37796899999375455,
+      "source": "screen",
+      "contains_new_attempt": false
+    },
+    {
+      "received_at": "2026-09-27T20:41:27.258497+00:00",
+      "query_seconds": 0.5455527000012808,
+      "source": "screen",
+      "contains_new_attempt": false
+    },
+    {
+      "received_at": "2026-09-27T20:41:27.820238+00:00",
+      "query_seconds": 0.46130840000114404,
+      "source": "screen",
+      "contains_new_attempt": false
+    },
+    {
+      "received_at": "2026-09-27T20:41:28.434084+00:00",
+      "query_seconds": 0.5135025000054156,
+      "source": "screen",
+      "contains_new_attempt": false
+    },
+    {
+      "received_at": "2026-09-27T20:41:28.923273+00:00",
+      "query_seconds": 0.38848730000609066,
+      "source": "screen",
+      "contains_new_attempt": false
+    },
+    {
+      "received_at": "2026-09-27T20:41:29.508013+00:00",
+      "query_seconds": 0.48435470000549685,
+      "source": "screen",
+      "contains_new_attempt": false
+    },
+    {
+      "received_at": "2026-09-27T20:41:30.116331+00:00",
+      "query_seconds": 0.5079777000064496,
+      "source": "screen",
+      "contains_new_attempt": false
+    }
+  ],
+  "retry_command_exit_code": 0,
+  "baseline_receipt": "viewer-baseline.json",
+  "visible_receipt": null,
+  "note": "CreatedAt is assigned no later than the committed Attempt; receipt time is after Orca returned the rendered terminal frame, so the interval conservatively bounds the display delay."
+}

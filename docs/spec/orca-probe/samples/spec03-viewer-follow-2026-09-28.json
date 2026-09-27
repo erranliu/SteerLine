@@ -1,0 +1,37 @@
+{
+  "kind": "spec03-local-orca-visible-viewer-follow-acceptance",
+  "captured_at": "2026-09-27T20:52:14Z",
+  "scope": "isolated Windows local Orca 1.4.209 terminal running the real SteerLine console against one native Task and SQLite",
+  "workflow_run_id": "2431ddc5540c929cbe07015c1c9e3bff",
+  "execution_id": "f3771c74218de6bec554060e4d77f332",
+  "task_id": "95013",
+  "regression_before_fix": {
+    "result": "spec03-viewer-stale-attempt-2026-09-28.json",
+    "baseline_screen": "spec03-viewer-stale-baseline-2026-09-28.json",
+    "new_attempt_id": "c7502c36eb09948ed10d08836fc89850",
+    "twelve_screen_reads": "screen source retained the prior Attempt for more than 6 seconds after the new Attempt was committed",
+    "cause": "the console copied its automatically followed Attempt into the persisted manual-history selection, pinning the old Attempt"
+  },
+  "after_fix": {
+    "viewer_terminal_handle": "term_22fa853c-d7f9-43f2-b7ff-751d29f7fbc6",
+    "viewer_terminal_incarnation": "1c4f6fc0-cba4-4593-9fe4-785f2e76a801",
+    "baseline_attempt_id": "c7502c36eb09948ed10d08836fc89850",
+    "new_attempt_id": "2be255202eb202937c27865d8e63cf42",
+    "accepted_retry_command_id": "69741cd0d0a143097ef9c9c790de2bf6",
+    "attempt_created_at": "2026-09-27T20:50:56.9697126Z",
+    "screen_visible_at": "2026-09-27T20:50:58.087870+00:00",
+    "render_latency_seconds_upper_bound": 1.118158,
+    "screen_reads_to_new_attempt": 2,
+    "screen_source": "screen",
+    "baseline_screen": "spec03-viewer-follow-baseline-2026-09-28.json",
+    "new_attempt_screen": "spec03-viewer-follow-screen-2026-09-28.json",
+    "measurement": "spec03-viewer-follow-latency-2026-09-28.json",
+    "accepted_retry": "spec03-viewer-follow-retry-2026-09-28.json",
+    "committed_attempt_row": "spec03-viewer-follow-attempt-2026-09-28.json",
+    "old_worker_terminal_list": "spec03-viewer-follow-terminal-list-2026-09-28.json",
+    "measurement_source": "spec03-viewer-follow-probe-2026-09-28.py.txt",
+    "timestamp_bound": "the Attempt created_at is assigned before its SQLite commit and the visible_at timestamp was taken after Orca returned the rendered terminal frame",
+    "service_stop_receipt_id": "19bd571d365946222500ea874f974fdb"
+  },
+  "conclusion": "The local visible Orca terminal frame reflected this center step transition within 2 seconds after the committed Attempt. Manual historical Attempt selection remains pinned by design. This sample does not prove the separate home remote business-message-to-viewer latency or Windows desktop screenshot/UAC gate."
+}

@@ -311,7 +311,11 @@ func NewModel(ctx context.Context, refs []ProjectRef, options Options) (Model, e
 		if view.Actions == nil {
 			view.Actions = map[string]SavedAction{}
 		}
-		state := projectState{ref: ref, view: view, selectedKey: view.SelectedKey, selectionHold: view.SelectionPending, filter: filterIndex(view.Filter), panel: panelIndex(view.Panel), attemptID: view.AttemptID, detailScroll: view.DetailScroll, logScroll: view.LogScroll, actions: map[string]*actionState{}}
+		attemptID := ""
+		if view.AttemptPinned {
+			attemptID = view.AttemptID
+		}
+		state := projectState{ref: ref, view: view, selectedKey: view.SelectedKey, selectionHold: view.SelectionPending, filter: filterIndex(view.Filter), panel: panelIndex(view.Panel), attemptID: attemptID, detailScroll: view.DetailScroll, logScroll: view.LogScroll, actions: map[string]*actionState{}}
 		state.bodyKind = view.BodyKind
 		state.bodyPages = append([]int64(nil), view.BodyPages...)
 		for requestID, saved := range view.Actions {
@@ -1650,7 +1654,6 @@ func (m Model) refreshSelectedLogs(index int) (Model, tea.Cmd) {
 	if attemptID == "" {
 		attemptID = run.RunID
 	}
-	state.attemptID = attemptID
 	var activityPath string
 	if attemptID == run.AttemptID && run.LogPath != nil {
 		activityPath = *run.LogPath
@@ -1698,6 +1701,7 @@ func (m *Model) saveProjectView(index int) error {
 	state.view.SelectedKey, state.view.Filter, state.view.Panel = state.selectedKey, filterName(state.filter), panelName(state.panel)
 	state.view.SelectionPending = state.selectionHold
 	state.view.AttemptID = state.attemptID
+	state.view.AttemptPinned = state.attemptID != ""
 	state.view.DetailScroll, state.view.LogScroll = state.detailScroll, state.logScroll
 	state.view.BodyOffset = state.bodyViewOffset
 	state.view.BodyPages = append([]int64(nil), state.bodyPages...)
@@ -2859,9 +2863,13 @@ func (m Model) cycleAttempt(next bool) (tea.Model, tea.Cmd) {
 		m.status = "此 execution 只有一个已记录 attempt"
 		return m, nil
 	}
+	selectedAttemptID := state.attemptID
+	if selectedAttemptID == "" {
+		selectedAttemptID = row.run.AttemptID
+	}
 	current := 0
 	for i, attempt := range attempts {
-		if attempt.AttemptID == state.attemptID {
+		if attempt.AttemptID == selectedAttemptID {
 			current = i
 			break
 		}

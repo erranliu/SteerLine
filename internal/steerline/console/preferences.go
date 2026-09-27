@@ -45,6 +45,7 @@ type ProjectView struct {
 	Filter           string                 `json:"filter,omitempty"`
 	Panel            string                 `json:"panel,omitempty"`
 	AttemptID        string                 `json:"attempt_id,omitempty"`
+	AttemptPinned    bool                   `json:"attempt_pinned,omitempty"` // Only an explicit history choice pins an attempt across refreshes and restarts.
 	Follow           bool                   `json:"follow"`
 	AnchorGroup      string                 `json:"anchor_group,omitempty"`
 	AnchorItem       string                 `json:"anchor_item,omitempty"`
