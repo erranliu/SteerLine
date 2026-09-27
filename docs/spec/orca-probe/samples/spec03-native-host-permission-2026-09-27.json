@@ -1,0 +1,31 @@
+{
+  "kind": "supervised-native-target-host-permission-interaction",
+  "captured_at": "2026-09-27T12:33:15Z",
+  "center_orca_version": "1.4.209",
+  "home_orca_version": "1.4.210",
+  "home_codex_cli_version": "0.157.1",
+  "repository": "erranliu/SteerlineTest",
+  "terminal_handle": "term_9a739d25-31e9-4960-b1fd-65f49ba50e4c",
+  "terminal_incarnation": "84e3d9cf-8270-483a-bfa4-bc173590d493",
+  "scope": "isolated read-only whoami in a separate on-request Codex terminal; no native task Dispatch was changed",
+  "ordinary_sandbox_probe": {
+    "prompt_request_id": "710a827a-9217-4a67-b9ea-db8692d5e1a7",
+    "observed_turn_started": true,
+    "result_identity": "liuming-homepc\\codexsandboxoffline",
+    "host_approval_prompt": false
+  },
+  "explicit_host_approval_probe": {
+    "prompt_request_id": "3a6b77dc-b41a-4e12-a6c1-f716f48be3c4",
+    "menu_command": "whoami",
+    "menu_options": ["one-time approval", "persistent approval", "reject"],
+    "terminal_wait_blocked_reason": "agent-interactive-prompt",
+    "computer_use_action": "selected one-time approval through the remote Orca window's Terminal input and Return",
+    "terminal_confirmation": "You approved codex to run whoami this time",
+    "result_identity": "liuming-homepc\\liuming",
+    "persistent_approval_selected": false,
+    "file_changes_reported": false
+  },
+  "observation_limit": "terminal show agentWait remained prompt-text after the final Codex turn even though the prompt had cleared; the terminal transcript and current screen prove completion, but this stale field cannot by itself prove an active wait",
+  "exact_test_terminal_closed": true,
+  "administrator_uac_setup_prompt_captured": false
+}

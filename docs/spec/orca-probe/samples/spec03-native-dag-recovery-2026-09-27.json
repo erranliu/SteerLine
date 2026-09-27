@@ -1,0 +1,50 @@
+{
+  "kind": "supervised-native-dag-recovery-observations",
+  "captured_at": "2026-09-27T12:33:15Z",
+  "versions": {"center_orca": "1.4.209", "home_orca": "1.4.210", "remote_codex_cli": "0.157.1"},
+  "isolated_control_receipt_loss": {
+    "project_root": "s3dag27e",
+    "workflow_run_id": "78d8173577bf5f7cdf67bdcf90833bb0",
+    "native_task_id": "103",
+    "prepare_attempt_id": "7115ec0726d8752654f40be8eb649c61",
+    "orca_run_id": "run_e9d3770b9008",
+    "dispatch_id": "ctx_493e80ac8536",
+    "start_task_receipt": "timed out after the native task was claimed and the original remote worker was created",
+    "center_after_timeout": "outcome_unknown with a start_task control blocker; original Attempt and slot retained",
+    "original_worker_later_outcome": "succeeded on the same Dispatch",
+    "resource_release": "released with transcript archived",
+    "replacement_worker_started": false,
+    "center_state_preserved": true
+  },
+  "completed_dag_run": {
+    "project_root": "s3dag27g",
+    "workflow_run_id": "62d35b05ae5e24f9321619db60f9391d",
+    "execution_id": "f76c3099caacfd6dc476336354cda05b",
+    "orca_run_id": "run_60b8b05cff18",
+    "native_task_id": "103",
+    "review": {
+      "attempt_id": "9d70300b9daeb7ae41cb2e3f1dbd45cc",
+      "dispatch_id": "ctx_534b1376949c",
+      "fault": "first Enter accepted; no turn_started within the original 60-second window while the Codex service reconnected",
+      "center_intermediate": "outcome_unknown; no replacement Dispatch",
+      "original_worker_later": "structured review passed and worker_done accepted, then exact terminal released",
+      "after_center_restart": "same attempt reconciled as succeeded; publish_pr dispatched"
+    },
+    "publish_pr": {
+      "attempt_id": "72e33d9a22729206aadba4a620051193",
+      "dispatch_id": "ctx_b043f3d2d00b",
+      "fault": "first Enter accepted without turn_started; original prompt was still visibly staged",
+      "manual_action": "one Enter on the exact original terminal after verifying its current screen; no task text or new worker was sent",
+      "center_intermediate": "outcome_unknown with PR unbound; no replacement Dispatch",
+      "original_worker_later": "created PR 16 at the fixed head, sent one structured result and worker_done, then exact terminal released",
+      "after_center_restart": "same publish attempt reconciled as succeeded and bound to PR 16"
+    },
+    "candidate_head": "e28f0388d416d1b6c199ddcf173a44a7d1abbe13",
+    "test_pr_url": "https://github.com/erranliu/SteerlineTest/pull/16",
+    "merge_commit": "e7af046e6b04600fd7dee656afec8699fc75237f",
+    "task_103_closed_with_delivery": true,
+    "task_104_dependency_ready": true,
+    "all_five_dispatches_completed_released_and_archived": true
+  },
+  "limits": "This records center interruption and exact original-Dispatch reconciliation. It does not simulate a home Orca runtime replacement, an administrator/UAC setup prompt, or remote cancellation."
+}

@@ -595,7 +595,7 @@ func (b orcaSupervisedBackend) submitAcceptedPrompt(ctx context.Context, started
 	if !*sendResult.Send.Accepted {
 		return false, &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "Orca rejected Enter after accepting the worker prompt; preserve the exact Dispatch for reconciliation"}
 	}
-	deadline = time.Now().Add(60 * time.Second)
+	deadline = time.Now().Add(3 * time.Minute)
 	for {
 		batch, err := read()
 		if err == nil && supervisedTranscriptTurnStarted(batch) {
@@ -930,6 +930,7 @@ func supervisedStepTaskSpec(c Config, task TaskRecord, run Run, workflow Workflo
 		b.WriteString("Orca has assigned this new-top-level prepare worktree. Stay in it; do not create another worktree or edit. Verify its Orca ID/path, origin, actual Git branch, HEAD at the fixed base, clean status, and base ancestry. Task Contract Branch is the future PR base; record the actual worker branch and do not require them to match.\n")
 	}
 	b.WriteString("For every step, report fresh WorkspaceEvidence: repository=`$ids.project_identity`; worktree=absolute path from `orca worktree current --json`; branch=`git branch --show-current`; full base/head hashes; dirty from `git status --porcelain`; verified_at in RFC3339 UTC. Set base_ancestor=true only when `git merge-base --is-ancestor <fixed_base> HEAD` exits 0. The strict schema allows only shared result keys step_id, succeeded, input_revision, result_id, prerequisite_result_ids, workspace, base_ancestor, plus: implement revision; verify revision/checks; review revision/review_verdict; publish_pr revision/pr_url/published_head. Prepare uses no revision. Workspace allows only repository, worktree, branch, base, head, dirty, verified_at. Do not add platform IDs, origin flags, clean_status, or explanatory fields. For implement, commit a clean candidate; for verify, report each required check's exact command/version/exit/evidence/commit.\n")
+	b.WriteString("Set `$ErrorActionPreference='Stop'` at the start of the PowerShell status-send call. In that same call, set `$gitStatusLines = @(git status --porcelain)`; require `$LASTEXITCODE -eq 0`; set `$dirty = [bool]($gitStatusLines.Count -gt 0)` and require `$dirty -is [bool]`. An empty Git status produces an empty array and `dirty=false`; never call `.Trim()` on the possibly null output of `git status`. Before sending, require `$stepResult.workspace.dirty -is [bool]` and that it equals `$dirty`. A malformed first status cannot be repaired by sending changed content with the same fixed result_id.\n")
 	if attempt.StepID == "verify" {
 		fmt.Fprintf(&b, "Before sending verify status, set `$candidate = $ids.candidate_revision`, compare `(git rev-parse HEAD).Trim()` to `$candidate`, then run `git merge-base --is-ancestor %s $candidate` and record its actual exit code. Do not substitute a manually typed hash or run the check against a different commit. The verify result MUST contain the exact key base_ancestor=true only when this command exits zero; omitting base_ancestor rejects the result even if every required check passed.\n", base)
 		b.WriteString("If a required verify command exits nonzero, report the actual check with status=failed, passed=false, its nonzero exit_code and actual_commit, and set result.succeeded=false; omit failure_kind for a deterministic check failure. After Orca accepts that structured result, send worker_done outcome succeeded because the verify step executed and delivered a conclusive failure receipt; the center, not the worker, decides repair. Use worker_done outcome failed only when the step itself could not produce a valid receipt.\n")
@@ -1695,8 +1696,18 @@ func (b orcaSupervisedBackend) replyQuestion(ctx context.Context, ref ExecutionR
 	if err := validateSupervisedRef(b.config, ref); err != nil {
 		return "", err
 	}
-	if questionID == "" || strings.TrimSpace(answer) == "" || len([]byte(answer)) > maxSupervisedMessageBytes {
+	if questionID == "" || strings.TrimSpace(answer) == "" {
 		return "", &BackendError{Code: BackendRejected, Diagnostic: "supervised reply requires a bounded answer and original question ID"}
+	}
+	serializedReply, err := json.Marshal(struct {
+		QuestionID string `json:"question_id"`
+		Body       string `json:"body"`
+		Run        string `json:"run"`
+		From       string `json:"from"`
+		Dispatch   string `json:"dispatch"`
+	}{questionID, answer, ref.External.OrchestrationRun, b.config.Orca.Supervised.CoordinatorTerminal, ref.External.Dispatch})
+	if err != nil || len(serializedReply) > maxSupervisedMessageBytes-512 {
+		return "", &BackendError{Code: BackendRejected, Diagnostic: "supervised reply serialized message exceeds the conservative 8 KiB pre-send bound", Cause: err}
 	}
 	observation, err := b.Observe(ctx, ref)
 	if err != nil {
