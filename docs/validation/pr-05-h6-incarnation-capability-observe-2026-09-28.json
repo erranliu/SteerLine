@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "captured_at": "2026-09-27T19:48:08.577575+00:00",
+  "platform": "windows/amd64",
+  "backend": "orca",
+  "protocol": "orca_terminal_v2",
+  "target_id": "orca:c3f46d54ccb7547aa9205db2",
+  "agent": "codex",
+  "orca_version": "1.4.209",
+  "reconnect_matched": true,
+  "stop_status": "confirmed",
+  "worktree_retained": true,
+  "output_bytes": 1035,
+  "output_sha256": "b4e93089ad50ab2748d1f2d545d4f3ef408c5759f7c0a5cf8e6829931a2fc761",
+  "output_source": "screen",
+  "probe": {
+    "show_receipts": [
+      "cap-agent-show-first.json",
+      "cap-agent-show-second.json"
+    ],
+    "screen_receipt": "cap-agent-screen.json",
+    "close_receipt": "cap-agent-close.json"
+  }
+}
