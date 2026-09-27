@@ -149,7 +149,10 @@ func (s *Service) startOrcaMinimalStepWorker(ctx context.Context, c Config, task
 		_ = launcher.cleanup()
 		return nil, err
 	}
-	command := "call " + filepath.Base(launcher.path) + " & exit"
+	// Leave the cmd terminal attached briefly after Codex returns. Orca can
+	// otherwise retire a fast-exiting PTY before it records the exit cause,
+	// leaving a completed step stuck behind an unverifiable terminal.
+	command := "call " + filepath.Base(launcher.path) + " & ping -n 6 127.0.0.1 >nul & exit"
 	client := orcaClient{cfg: c}
 	title := "SteerLine " + run.RunID[:8] + " " + attempt.StepID + " " + attempt.AttemptID[:8]
 	term, err := client.terminalCreate(ctx, *run.WorktreePath, title, command)
