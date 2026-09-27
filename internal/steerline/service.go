@@ -357,14 +357,20 @@ func (s *Service) hydrateDecisionProjection(ctx context.Context) error {
 		if marshalErr != nil {
 			return marshalErr
 		}
-		decisionAttemptExists := false
-		for _, attempt := range s.State.Attempts {
-			if attempt.ProjectIdentity == s.Config.identity && attempt.ExecutionID == run.ExecutionID && attempt.AttemptID == run.Decision.AttemptID {
-				decisionAttemptExists = true
-				break
+		var decisionAttempt, currentAttempt *StepAttemptRecord
+		for i := range s.State.Attempts {
+			attempt := &s.State.Attempts[i]
+			if attempt.ProjectIdentity != s.Config.identity || attempt.ExecutionID != run.ExecutionID {
+				continue
+			}
+			if attempt.AttemptID == run.Decision.AttemptID {
+				decisionAttempt = attempt
+			}
+			if attempt.AttemptID == run.AttemptID {
+				currentAttempt = attempt
 			}
 		}
-		if !decisionAttemptExists {
+		if decisionAttempt == nil {
 			return fmt.Errorf("decision %s conflicts with the runtime execution, attempt or question identity", run.Decision.ID)
 		}
 		if record.WorkflowRunID != run.RunID || record.ExecutionID != run.ExecutionID || record.AttemptID != run.Decision.AttemptID || !bytes.Equal(bytes.TrimSpace(record.Request), bytes.TrimSpace(request)) {
@@ -372,14 +378,8 @@ func (s *Service) hydrateDecisionProjection(ctx context.Context) error {
 		}
 		if run.Decision.AttemptID != run.AttemptID {
 			historical := run.WorkflowVersion == MinimalWorkflowVersion && (record.Status == "applied" || record.Status == "failed" || record.Status == "superseded")
-			boundToOriginalAttempt := false
-			for _, attempt := range s.State.Attempts {
-				if attempt.AttemptID == record.AttemptID && attempt.ExecutionID == record.ExecutionID {
-					boundToOriginalAttempt = true
-					break
-				}
-			}
-			if !historical || !boundToOriginalAttempt {
+			activeContinuation := run.WorkflowVersion == MinimalWorkflowVersion && record.Status == "reply_accepted" && currentAttempt != nil && currentAttempt.StepID == decisionAttempt.StepID && currentAttempt.AttemptNumber == decisionAttempt.AttemptNumber+1
+			if !historical && !activeContinuation {
 				return fmt.Errorf("decision %s conflicts with the runtime execution, attempt or question identity", run.Decision.ID)
 			}
 		}
