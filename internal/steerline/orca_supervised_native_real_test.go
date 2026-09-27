@@ -293,16 +293,18 @@ func TestSupervisedOrcaRealNativeTaskLifecycle(t *testing.T) {
 		}
 		lock.Close()
 	}
-	if os.Getenv("STEERLINE_REAL_SUPERVISED_NATIVE_SETUP_ONLY") == "1" {
-		configPath := filepath.Join(root, "acceptance-config.json")
-		encoded, encodeErr := json.MarshalIndent(c, "", "  ")
-		if encodeErr != nil {
-			t.Fatal(encodeErr)
-		}
-		if err = AtomicWrite(configPath, append(encoded, '\n')); err != nil {
+	setupOnly := os.Getenv("STEERLINE_REAL_SUPERVISED_NATIVE_SETUP_ONLY") == "1"
+	configPath := strings.TrimSpace(os.Getenv("STEERLINE_REAL_SUPERVISED_NATIVE_CONFIG_PATH"))
+	if setupOnly && configPath == "" {
+		configPath = filepath.Join(root, "acceptance-config.json")
+	}
+	if configPath != "" {
+		if err = AtomicWrite(configPath, configBytes); err != nil {
 			t.Fatal(err)
 		}
 		t.Logf("isolated native acceptance config ready: %s", configPath)
+	}
+	if setupOnly {
 		return
 	}
 	service, err := NewService(c)
@@ -354,6 +356,7 @@ func TestSupervisedOrcaRealNativeTaskLifecycle(t *testing.T) {
 	mergedURL := ""
 	mergedHead := ""
 	mergeRequested := map[string]bool{}
+	answerCommands := map[string]string{}
 	for time.Now().Before(deadline) {
 		if err = ctx.Err(); err != nil {
 			t.Fatal(err)
@@ -386,6 +389,20 @@ func TestSupervisedOrcaRealNativeTaskLifecycle(t *testing.T) {
 		snapshot, snapshotErr := reader.Query(ctx, c.Identity())
 		if snapshotErr != nil {
 			t.Fatal(snapshotErr)
+		}
+		if os.Getenv("STEERLINE_REAL_SUPERVISED_NATIVE_AUTO_ANSWER") == "1" {
+			executionID := nativeTaskExecutionID(snapshot, taskID)
+			for _, decision := range snapshot.Decisions {
+				if decision.ExecutionID != executionID || decision.Status != "pending" || answerCommands[decision.DecisionID] != "" {
+					continue
+				}
+				command, _, answerErr := SubmitAnswerDecision(ctx, c, decision.WorkflowRunID, decision.DecisionID, "yes", "", c.Claimant, 0, 0, "", "")
+				if answerErr != nil {
+					t.Fatalf("submit original native business answer %s: %v", decision.DecisionID, answerErr)
+				}
+				answerCommands[decision.DecisionID] = command.CommandID
+				t.Logf("native business question %s answered through CommandService command %s", decision.DecisionID, command.CommandID)
+			}
 		}
 		prURL, candidateHead, foundPR := nativePublishedCandidate(snapshot, taskID)
 		if foundPR {
@@ -465,6 +482,9 @@ func TestSupervisedOrcaRealNativeTaskLifecycle(t *testing.T) {
 					}
 				}
 				evidence := map[string]any{"captured_at": now(), "project_id": c.Identity(), "native_task_id": taskID, "task_status": page.Tasks[0].Status, "delivery": page.Tasks[0].Delivery, "test_pr_url": mergedURL, "candidate_head": mergedHead, "base_commit": base, "remote_codex_cli_version": remoteCodexVersion, "configured_codex_cli_version_pin": c.Orca.Supervised.ExpectedCodexVersion, "capability_report_confined_to_temp_state": c.RunDir}
+				if len(answerCommands) > 0 {
+					evidence["business_answer_commands"] = answerCommands
+				}
 				if capabilityEvidence != "" {
 					evidence["current_target_capability_evidence"] = capabilityEvidence
 				}
@@ -525,6 +545,7 @@ func nativeObservedCodexVersion(events []DomainEvent) (string, error) {
 			TaskID             string `json:"taskId"`
 			DispatchID         string `json:"dispatchId"`
 			RemoteCodexVersion string `json:"remote_codex_version"`
+			DecisionAppliedID  string `json:"decision_applied"`
 			StepResult         struct {
 				AttemptID string `json:"attempt_id"`
 				Result    struct {
@@ -545,6 +566,12 @@ func nativeObservedCodexVersion(events []DomainEvent) (string, error) {
 		}
 		version := strings.TrimSpace(status.RemoteCodexVersion)
 		if version == "" {
+			continue
+		}
+		if status.DecisionAppliedID != "" && status.StepResult.Result.StepID == "" {
+			// The separately accepted answer-application proof carries a Codex
+			// version but no StepResult. The five step receipts below provide the
+			// fixed Attempt-bound version evidence for this report.
 			continue
 		}
 		if status.TaskID == "" || status.DispatchID == "" || message.FromHandle != "dispatch:"+status.DispatchID || !stableExecutionID(status.StepResult.AttemptID) || event.AttemptID != "" && event.AttemptID != status.StepResult.AttemptID || event.AttemptID == "" && status.StepResult.Result.StepID != "prepare" {
@@ -717,6 +744,11 @@ func TestNativeObservedCodexVersionReadsPersistedStatus(t *testing.T) {
 	events[0].Payload = mustJSON(OrcaInboxMessage{FromHandle: "dispatch:ctx-test", Payload: mustJSON(string(mustJSON(prepareStatus)))})
 	if got, err := nativeObservedCodexVersion(events); err != nil || got != "codex-cli 0.157.1" {
 		t.Fatalf("prepare status without projected attempt = %q, %v", got, err)
+	}
+	proofStatus := map[string]any{"taskId": "task-test", "dispatchId": "ctx-next", "remote_codex_version": "codex-cli 0.157.1", "decision_applied": "question-test", "applied_decision_attempt_id": nextAttempt, "applied_decision_execution_id": "execution-test", "applied_answer_body": "yes"}
+	events = append(events, DomainEvent{AttemptID: nextAttempt, Type: "orca.status", Payload: mustJSON(OrcaInboxMessage{FromHandle: "dispatch:ctx-next", Payload: mustJSON(proofStatus)})})
+	if got, err := nativeObservedCodexVersion(events); err != nil || got != "codex-cli 0.157.1" {
+		t.Fatalf("separate decision proof was mistaken for a step result: %q, %v", got, err)
 	}
 	events = append(events, DomainEvent{AttemptID: nextAttempt, Type: "orca.status", Payload: mustJSON(OrcaInboxMessage{FromHandle: "dispatch:ctx-next", Payload: mustJSON(map[string]any{"taskId": "task-test", "dispatchId": "ctx-next", "remote_codex_version": "codex-cli 0.157.2", "step_result": map[string]any{"attempt_id": nextAttempt, "result": map[string]any{"step_id": "verify"}}})})})
 	if _, err := nativeObservedCodexVersion(events); err == nil || !strings.Contains(err.Error(), "inconsistent") {

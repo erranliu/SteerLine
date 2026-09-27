@@ -431,7 +431,7 @@ func DecisionReplyEligibility(ctx context.Context, c Config, run *Run) error {
 		if err != nil {
 			return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "supervised decision has no fixed backend binding", Cause: err}
 		}
-		if ref.Incomplete || ref.RunID != run.RunID || ref.AttemptID != run.AttemptID || ref.Backend != BackendOrca || ref.Protocol != ProtocolOrcaSupervised || ref.Target != run.Target || ref.External != *run.Process || ref.WorkspacePath != deref(run.WorktreePath) || ref.WorkspaceBranch != deref(run.WorktreeBranch) || ref.BaseCommit != deref(run.BaseCommit) || !sameSupervisedBaseTarget(ref.Target, targetFor(c)) {
+		if ref.Incomplete || ref.RunID != run.RunID || ref.AttemptID != run.AttemptID || ref.Backend != BackendOrca || ref.Protocol != ProtocolOrcaSupervised || ref.Target != run.Target || ref.External != *run.Process || canonical(ref.WorkspacePath) != canonical(deref(run.WorktreePath)) || ref.WorkspaceBranch != deref(run.WorktreeBranch) || ref.BaseCommit != deref(run.BaseCommit) || !sameSupervisedBaseTarget(ref.Target, targetFor(c)) {
 			return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "supervised decision differs from the original Dispatch, target or workspace"}
 		}
 	}

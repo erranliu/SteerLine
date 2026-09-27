@@ -1465,6 +1465,7 @@ func (s *SQLiteStore) SaveRuntime(ctx context.Context, runtime Runtime) (Runtime
 			if run == nil {
 				continue
 			}
+			reconcileNativeWaitingDecision(&runtime, run)
 			var err error
 			if run.WorkflowVersion != MinimalWorkflowVersion {
 				return nativeErr("unsupported_schema", "runtime contains a workflow format outside native minimal-v1; preserve it for manual recovery")
@@ -1530,6 +1531,35 @@ func (s *SQLiteStore) SaveRuntime(ctx context.Context, runtime Runtime) (Runtime
 		runtime.RejectedClaimRuns = nil
 	}
 	return runtime, err
+}
+
+// A native question can be saved with its Decision and StepAttempt before the
+// Run projection catches up. Restore only the matching current wait.
+func reconcileNativeWaitingDecision(runtime *Runtime, run *Run) {
+	if runtime == nil || run == nil || run.Decision == nil || run.FinishTaskStatus != "pending" || run.ExecutionStatus != "running" && run.ExecutionStatus != "pending" || run.Decision.AttemptID != run.AttemptID {
+		return
+	}
+	switch run.Decision.Status {
+	case "pending", "answer_saved", "reply_accepted":
+	default:
+		return
+	}
+	matchedAttempt := false
+	for _, attempt := range runtime.Attempts {
+		if attempt.AttemptID == run.AttemptID && attempt.ExecutionID == run.ExecutionID && attempt.Status == "waiting_decision" {
+			matchedAttempt = true
+			break
+		}
+	}
+	if !matchedAttempt {
+		return
+	}
+	for _, decision := range runtime.Decisions {
+		if decision.DecisionID == run.Decision.ID && decision.WorkflowRunID == run.RunID && decision.ExecutionID == run.ExecutionID && decision.AttemptID == run.AttemptID && decision.Status == run.Decision.Status {
+			run.FinishTaskStatus = "waiting_decision"
+			return
+		}
+	}
 }
 
 func (t *sqliteTx) discardUnclaimedWorkflow(project, runID string) error {

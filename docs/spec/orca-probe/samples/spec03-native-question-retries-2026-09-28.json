@@ -1,0 +1,32 @@
+{
+  "kind": "spec03-native-business-question-isolated-retries",
+  "captured_at": "2026-09-27T17:42:00Z",
+  "purpose": "Preserve failed attempts separately from the successful new task; no old Attempt was rewritten as success.",
+  "attempts": [
+    {
+      "isolated_root": "s3question27a",
+      "workflow_run_id": "787b95663ebf1008e450d792aeca48f6",
+      "decision_id": "relay_c647bf6d9d85",
+      "implement_dispatch_id": "ctx_61a39098d441",
+      "finding": "Native snapshot refresh repeatedly rewrote an active waiting-decision Run to pending; the answer CLI could not submit. A matching current Decision/Attempt recovery and stable Run revision were added. The worker later reported a failed outcome after no answer arrived.",
+      "settlement": "failed Dispatch released; terminal exited; original SQLite retained"
+    },
+    {
+      "isolated_root": "s3question27b",
+      "workflow_run_id": "c21c465c9a6573cfc7fd6b57023d0ea1",
+      "decision_id": "relay_02fe758c900c",
+      "implement_dispatch_id": "ctx_b7cff38aee4f",
+      "finding": "The center accepted yes with a note, but the supervised reply contract could not deliver option and note together. Decision stayed answer_saved with no reply mutation; this immutable answer was not overwritten.",
+      "settlement": "exact worker-stop returned stopped/closed_agent_terminal/ptyKilled=true; execution host confirmed exited; SQLite retained"
+    },
+    {
+      "isolated_root": "s3question27c",
+      "workflow_run_id": "2f5ae8573cee8ddf7afb8ada74d1b2ce",
+      "decision_id": "relay_30d983495370",
+      "implement_dispatch_id": "ctx_a2b631aaa538",
+      "finding": "A note-free yes reached the original worker. Its separate answer-application status omitted remote_codex_version, and the center rejected it before marking applied. The worker later reported that its final implement result was not delivered.",
+      "settlement": "failed Dispatch released; terminal exited; no PR; original SQLite retained"
+    }
+  ],
+  "successful_new_run": "spec03-native-question-2026-09-28.json"
+}

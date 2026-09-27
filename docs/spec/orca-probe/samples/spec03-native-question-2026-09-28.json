@@ -1,0 +1,54 @@
+{
+  "kind": "spec03-native-business-question-to-merged-delivery",
+  "captured_at": "2026-09-27T17:41:00Z",
+  "scope": "isolated SteerlineTest native task; original SQLite center and one Orca Run",
+  "center_orca_version": "1.4.209",
+  "home_orca_version": "1.4.210",
+  "remote_codex_cli_version": "codex-cli 0.157.1",
+  "test_base_branch": "codex/spec03-native-question-base",
+  "test_base_commit": "e33e51926ec28d90c42fbc4064db4d19002845a2",
+  "native_task_id": "91024",
+  "workflow_run_id": "46eb499dbc36e059da6aadf900900110",
+  "execution_id": "39f13cc89474e5ee9494bf262164df83",
+  "orca_run_id": "run_35e784fa73bf",
+  "business_question": {
+    "decision_id": "relay_8efa2526f66a",
+    "attempt_id": "53f1750ae1cec89ac75486fad421d8b0",
+    "question": "Should I create the exact native acceptance artifact?",
+    "offered_options": ["yes", "no"],
+    "answer": "yes",
+    "answer_command_id": "8026a8a7191bec997e0c1581fcaee60b",
+    "answer_command_status": "accepted",
+    "reply_platform_request_id": "142e2cbd-35c1-4934-af8e-f1cbb9996d05",
+    "reply_operation_status": "confirmed",
+    "decision_applied_at": "2026-09-27T17:14:50.2515925Z",
+    "final_decision_status": "applied",
+    "answer_application_proof": "separate Orca status accepted with original question, Attempt, Execution, exact answer body and remote Codex CLI version before the implement result"
+  },
+  "fixed_candidate_head": "64dfc4e7bd333d7321f9fff36dbbafe4f0f55517",
+  "verified_head": "64dfc4e7bd333d7321f9fff36dbbafe4f0f55517",
+  "reviewed_head": "64dfc4e7bd333d7321f9fff36dbbafe4f0f55517",
+  "steps": [
+    {"step": "prepare", "attempt_id": "fe9a0237b29d55c0e3e7056ce962aa0c", "dispatch_id": "ctx_cb0f4074bd3e", "status": "succeeded"},
+    {"step": "implement", "attempt_id": "53f1750ae1cec89ac75486fad421d8b0", "dispatch_id": "ctx_4d67df073f7f", "status": "succeeded"},
+    {"step": "verify", "attempt_id": "733eda8033247a1e8343943d45ae1fec", "dispatch_id": "ctx_b78b56b70bf3", "status": "succeeded"},
+    {"step": "review", "attempt_id": "1da0384e9e533963527c3b7989c141d4", "dispatch_id": "ctx_3f95f5498302", "status": "succeeded"},
+    {"step": "publish_pr", "attempt_id": "2ea5fcde8134c73ae9d82ad2f0e7796c", "dispatch_id": "ctx_57b43595090d", "status": "succeeded"}
+  ],
+  "publish_recovery": "The original publish prompt remained staged with session_not_reported, so the center kept its Attempt outcome_unknown. After verifying that exact terminal, one manual Enter started its first Codex turn. The worker created one PR and settled. The same SQLite center was stopped and reopened to reconcile the original status and worker_done; no second publish Dispatch or PR was created.",
+  "test_pr": {
+    "url": "https://github.com/erranliu/SteerlineTest/pull/17",
+    "base_branch": "codex/spec03-native-question-base",
+    "head_revision": "64dfc4e7bd333d7321f9fff36dbbafe4f0f55517",
+    "merged_at": "2026-09-27T17:38:09Z",
+    "merge_commit": "a0172dbebd29621b737265810fd21e47759d2214"
+  },
+  "center_delivery": {
+    "task_status": "closed",
+    "run_status": "completed",
+    "recorded_at": "2026-09-27T17:38:12.865162Z"
+  },
+  "resource_settlement": "all five exact Dispatches succeeded/completed/released/exited",
+  "final_evidence_path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\s3question28d\\native-question-evidence.json",
+  "limits": "The native business Decision path is verified for this isolated target. This run does not certify a different production project, visible viewer latency, Windows administrator/UAC setup handling, or remote cancellation."
+}

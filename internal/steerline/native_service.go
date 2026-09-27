@@ -108,6 +108,7 @@ func (s *Service) refreshNativeSnapshot(ctx context.Context, reconstruct bool) e
 			run.ExecutionStatus = nativeRuntimeExecutionStatus(task, *workflow, *execution, attempt)
 			run.FinishTaskStatus = nativeRuntimeFinishStatus(task, *workflow)
 		}
+		reconcileNativeWaitingDecision(&s.State, run)
 		run.Error = nil
 		if run.FinishTaskStatus == "blocked" && task.Status == "discarded" {
 			run.Error = ptr("native task was discarded; cleanup is handled by its fixed external identities")
