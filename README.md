@@ -20,7 +20,7 @@ native 项目控制台还会显示中心任务关系、阻塞原因、Spec 路�
 
 选中 Ready 任务时，详情显示服务实际加载的执行位置、Agent、Model、Thinking effort 和 Sandbox；Orca 远程还显示固定环境与连接。项目没有显式指定模型时标明由 Codex 配置决定。控制台与服务的配置版本不一致时，界面不猜测实际模型或后端，并阻止启动与自动派发。
 
-本机 Orca 配置在 Orca worktree 的终端中运行无交互的 `codex exec --json`，因此不会出现一个可继续输入的 Codex TUI 会话。运行详情显示原 Orca 终端 handle；可用显示的 `orca terminal switch --terminal <handle>` 命令在 Orca 中打开它。终端暂时没有输出只记需关注提示，服务继续核对原终端与固定步骤结果；不能据此认定执行结束或重派任务。
+本机 Orca 配置在 Orca worktree 的终端中运行无交互的 `codex exec --json`。Orca 仍会在对应 worktree 下记录 Codex agent session；它不是可继续输入的 Codex TUI。若 Orca 将该 worktree 放入项目的“隐藏的已发现工作树”，先展开该分组并选择 worktree；查看右侧会话历史时也要选对本机主机和工作区范围。控制台运行详情显示原 Orca 终端 handle，可用 `orca terminal switch --terminal <handle>` 打开终端。终端暂时没有输出只记需关注提示，服务继续核对原终端与固定步骤结果；不能据此认定执行结束或重派任务。
 
 可在同一项目内预设多套[执行配置](docs/execution-profiles.md)。按 `s` 选择一套并确认；不同任务可以混用，本次任务的全部步骤固定在所选配置上。附加配置存在时，自动派发需要显式指定默认配置。
 
