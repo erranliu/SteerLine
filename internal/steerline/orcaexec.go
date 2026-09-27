@@ -24,7 +24,9 @@ import (
 // whole-run worktree or return a whole-run result artifact.
 
 func (c orcaClient) terminalCreate(ctx context.Context, worktreePath, title, command string) (orcaTerminal, error) {
-	args := []string{"terminal", "create", "--worktree", "path:" + filepath.ToSlash(worktreePath), "--title", title, "--shell", c.cfg.Orca.Shell, "--command", command, "--json"}
+	// Native steps should be visible in Orca while they run. Focus the
+	// terminal so the user can follow the exact task worktree and step.
+	args := []string{"terminal", "create", "--worktree", "path:" + filepath.ToSlash(worktreePath), "--title", title, "--shell", c.cfg.Orca.Shell, "--command", command, "--focus", "--json"}
 	out, callErr := c.call(ctx, positiveDuration(c.cfg.CommandTimeout, 30*time.Second), args...)
 	env, e := parseEnvelope(out)
 	if e != nil {
@@ -495,10 +497,9 @@ func superviseOrcaStep(c Config, proc *orcaProcess, resultPath string) *Worker {
 				w.Done <- e
 				return
 			}
-			if !term.exited() && (term.Orphaned || !term.Connected) {
-				w.Done <- &BackendError{Code: BackendUnreachable, Diagnostic: "original Orca terminal liveness is unverifiable"}
-				return
-			}
+			// Orca can briefly report a detached tab while the same terminal
+			// keeps running. Preserve the fixed identity and wait for exit or
+			// the normal stall bound before declaring its outcome unknown.
 			if f, openErr := os.Open(resultPath); openErr == nil {
 				b, readErr := io.ReadAll(io.LimitReader(f, (2<<20)+1))
 				closeErr := f.Close()
@@ -512,23 +513,23 @@ func superviseOrcaStep(c Config, proc *orcaProcess, resultPath string) *Worker {
 					w.Done <- e
 					return
 				}
-				if !settled.exited() {
-					continue
-				}
-				if e := ctx.Err(); e != nil {
-					w.Done <- &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "Orca observation ended before step settlement", Cause: e}
-					return
-				}
-				if e := os.Chmod(resultPath, 0600); e != nil {
-					w.Done <- &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "Orca native step result could not be protected", Cause: e}
-					return
-				}
-				if e := proc.launcher.cleanup(); e != nil {
-					w.Done <- &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "Orca native step settled but its exact launcher cleanup could not be confirmed", Cause: e}
-					return
-				}
+				if settled.exited() {
+					if e := ctx.Err(); e != nil {
+						w.Done <- &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "Orca observation ended before step settlement", Cause: e}
+						return
+					}
+					if e := os.Chmod(resultPath, 0600); e != nil {
+						w.Done <- &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "Orca native step result could not be protected", Cause: e}
+						return
+					}
+					if e := proc.launcher.cleanup(); e != nil {
+						w.Done <- &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "Orca native step settled but its exact launcher cleanup could not be confirmed", Cause: e}
+						return
+					}
 				w.Done <- nil
 				return
+				}
+				term = settled
 			} else if !os.IsNotExist(openErr) {
 				w.Done <- &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "Orca result file is inaccessible", Cause: openErr}
 				return
@@ -558,7 +559,11 @@ func superviseOrcaStep(c Config, proc *orcaProcess, resultPath string) *Worker {
 				return
 			}
 			if stall > 0 && time.Since(lastProgress) > stall {
-				w.Done <- &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "Orca execution stalled; the terminal may still be running"}
+				diagnostic := "Orca execution stalled; the terminal may still be running"
+				if term.Orphaned || !term.Connected {
+					diagnostic = "original Orca terminal liveness is unverifiable"
+				}
+				w.Done <- &BackendError{Code: BackendOutcomeUnknown, Diagnostic: diagnostic}
 				return
 			}
 		}
