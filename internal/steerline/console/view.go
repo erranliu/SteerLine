@@ -138,7 +138,16 @@ func renderStatusLine(m Model, state projectState) string {
 		mode = strings.Replace(mode, "auto", "自动", 1)
 	}
 	ready, cached, running, decision, merge, attention := projectCounts(state, m.clock.Now())
-	parts := []string{"服务 " + service, "派发 " + mode, fmt.Sprintf("Ready %d", ready)}
+	executor := executionHostLabel(state.ref.Config)
+	if executionConfigMismatch(state.ref, state.snapshot) {
+		executor = "执行配置待核对"
+	} else if state.ref.Config.Host == "orca" || state.ref.Config.Host == "orca_supervised" {
+		executor += " · " + safeTerminalInlineText(executionAgentName(state.ref.Config))
+	}
+	if state.snapshot.Connection.State != steerline.ConnectionConnected && !executionConfigMismatch(state.ref, state.snapshot) {
+		executor = "拟用 " + executor
+	}
+	parts := []string{"服务 " + service, executor, "派发 " + mode, fmt.Sprintf("Ready %d", ready)}
 	if slot != "" {
 		parts = append(parts, slot)
 	}
@@ -443,6 +452,7 @@ func renderDetail(m Model, state projectState, row *consoleRow, width, height in
 	if row.native != nil {
 		lines = append(lines, renderNativeTaskDetail(state, *row.native)...)
 		if row.kind == rowReady {
+			lines = append(lines, renderExecutionProfile(state.ref, state.snapshot)...)
 			lines = append(lines, renderControlAvailability(state, row, m.clock.Now())...)
 			lines = append(lines, renderActionLines(state)...)
 		}
@@ -458,6 +468,7 @@ func renderDetail(m Model, state projectState, row *consoleRow, width, height in
 		if row.candidate.Summary != "" {
 			lines = append(lines, "摘要："+safeTerminalText(row.candidate.Summary))
 		}
+		lines = append(lines, renderExecutionProfile(state.ref, state.snapshot)...)
 		lines = append(lines, renderControlAvailability(state, row, m.clock.Now())...)
 		lines = append(lines, renderActionLines(state)...)
 		return scrollLines(wrapLines(lines, width), state.detailScroll, height)
