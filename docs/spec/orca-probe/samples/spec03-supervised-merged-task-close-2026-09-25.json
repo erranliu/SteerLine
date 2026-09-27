@@ -1,0 +1,233 @@
+{
+  "captured_at": "2026-09-25T08:40:56.8507508Z",
+  "closed": true,
+  "execution": {
+    "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\testsupervisedorcarealmergedtaskclose3991968788\\001\\provider-project\\.git",
+    "execution_id": "1dd4f5e1decae237c95baac6173d010c",
+    "workflow_run_id": "39405e58cbce6e997635dde597868919",
+    "agent": "codex",
+    "backend": "orca",
+    "protocol": "orca_supervised",
+    "process": {
+      "kind": "orca_supervised",
+      "terminal": "term_b3afd6c6-2d36-4451-8371-66d0f1cdbba4",
+      "runtime_id": "d05f52b9-4dbd-4656-a01b-000a9f266b84",
+      "incarnation": "4f7e3a0e-3378-431e-a3d6-20cd07b742ef",
+      "coordinator_runtime_id": "7ccb02b0-aef2-4124-8db8-0ec063155b12",
+      "orchestration_run": "run_27b254892811",
+      "task": "task_d69ed36e8226",
+      "dispatch": "ctx_1b4b17c0898c",
+      "execution_host": "bed55de0-6d7d-497e-b1d5-3abab256b2ee",
+      "worktree_id": "09e35751-6517-4e7c-ae20-178ed0e90000::C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-39405e58cbce"
+    },
+    "target": {
+      "id": "orca-supervised:fe26dcce-e8f7-47dd-96c2-d611c1093733",
+      "connection_id": "fe26dcce-e8f7-47dd-96c2-d611c1093733",
+      "worktree_id": "09e35751-6517-4e7c-ae20-178ed0e90000::C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-39405e58cbce",
+      "branch": "erranliu/steerline-39405e58cbce",
+      "base_revision": "0028407ffbbcf9ad4139ff63720311a6e3fd0a1f",
+      "external_runtime": "bed55de0-6d7d-497e-b1d5-3abab256b2ee",
+      "orchestration_run": "run_27b254892811",
+      "external_task": "task_d69ed36e8226",
+      "dispatch": "ctx_1b4b17c0898c",
+      "execution_host": "bed55de0-6d7d-497e-b1d5-3abab256b2ee"
+    },
+    "workspace": {
+      "repository": "c:\\users\\lmas1\\appdata\\local\\temp\\testsupervisedorcarealmergedtaskclose3991968788\\001\\provider-project\\.git",
+      "worktree": "c:\\users\\liuming\\orca\\workspaces\\steerlinetest\\steerline-39405e58cbce",
+      "branch": "erranliu/steerline-39405e58cbce",
+      "base": "0028407ffbbcf9ad4139ff63720311a6e3fd0a1f",
+      "head": "344614147480d0fcf591cf2882210bb7785c6f87",
+      "verified_at": "2026-09-25T08:24:13.0915416Z"
+    },
+    "status": "succeeded",
+    "current_step": "completed",
+    "candidate_revision": "344614147480d0fcf591cf2882210bb7785c6f87",
+    "verified_revision": "344614147480d0fcf591cf2882210bb7785c6f87",
+    "repair_rounds": 0,
+    "created_at": "2026-09-25T07:45:34.7873901Z",
+    "updated_at": "2026-09-25T08:40:56.250326Z"
+  },
+  "isolated_beads_fixture": true,
+  "pr": {
+    "url": "https://github.com/erranliu/SteerlineTest/pull/4",
+    "repository": "erranliu/SteerlineTest",
+    "base_branch": "main",
+    "head_revision": "344614147480d0fcf591cf2882210bb7785c6f87",
+    "state": "open",
+    "merged": false,
+    "merged_at": null,
+    "merge_commit": "a83fbbadeca05ee6be33b0274e6905f5f2fc9fc5"
+  },
+  "provider_task": {
+    "id": "remote-probe-39405e58cb",
+    "title": "Spec 03 merged completion probe",
+    "status": "closed",
+    "issue_type": "task",
+    "assignee": "supervised-probe",
+    "priority": 2,
+    "description": "",
+    "spec_id": "",
+    "metadata": null,
+    "labels": null
+  },
+  "run": {
+    "task_id": "remote-probe-39405e58cb",
+    "domain_task_id": "remote-probe-39405e58cb",
+    "domain_attempt_number": 1,
+    "workflow_version": "minimal-v1",
+    "workflow_config_digest": "fea4b26bd4a98d864cc8817eb3c4d5c29e956319a9011303046669c6d0816863",
+    "execution_id": "1dd4f5e1decae237c95baac6173d010c",
+    "title": "isolated supervised prepare probe",
+    "run_id": "39405e58cbce6e997635dde597868919",
+    "attempt_id": "8b1ea12e46474dc2d600e179445f0f55",
+    "control_revision": 10,
+    "claimant": "supervised-probe",
+    "host": "orca_supervised",
+    "backend": "orca",
+    "protocol": "orca_supervised",
+    "agent": "codex",
+    "target": {
+      "id": "orca-supervised:fe26dcce-e8f7-47dd-96c2-d611c1093733",
+      "connection_id": "fe26dcce-e8f7-47dd-96c2-d611c1093733",
+      "worktree_id": "09e35751-6517-4e7c-ae20-178ed0e90000::C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-39405e58cbce",
+      "branch": "erranliu/steerline-39405e58cbce",
+      "base_revision": "0028407ffbbcf9ad4139ff63720311a6e3fd0a1f",
+      "external_runtime": "bed55de0-6d7d-497e-b1d5-3abab256b2ee",
+      "orchestration_run": "run_27b254892811",
+      "external_task": "task_d69ed36e8226",
+      "dispatch": "ctx_1b4b17c0898c",
+      "execution_host": "bed55de0-6d7d-497e-b1d5-3abab256b2ee"
+    },
+    "beads_status": "closed",
+    "execution_status": "succeeded",
+    "finish_task_status": "completed",
+    "codex_session_id": null,
+    "process": null,
+    "started_at": null,
+    "ended_at": "2026-09-25T08:28:49.1807708Z",
+    "worktree_path": "C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-39405e58cbce",
+    "worktree_branch": "erranliu/steerline-39405e58cbce",
+    "workspace_intent": {
+      "path": "C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-39405e58cbce",
+      "branch": "erranliu/steerline-39405e58cbce",
+      "base_commit": "0028407ffbbcf9ad4139ff63720311a6e3fd0a1f"
+    },
+    "completion": null,
+    "beads_context": {
+      "beads_dir": "",
+      "project_id": "isolated-protocol-probe",
+      "database": "",
+      "backend": ""
+    },
+    "base_commit": "0028407ffbbcf9ad4139ff63720311a6e3fd0a1f",
+    "pr": {
+      "url": "https://github.com/erranliu/SteerlineTest/pull/4",
+      "state": "merged",
+      "merged_at": "2026-09-25T08:31:12Z",
+      "merge_commit": "fbf236e85f0fbeadc38a6e58d424bbf51c3330f0",
+      "queried_at": "2026-09-25T08:40:53.7895446Z",
+      "query_error": null
+    },
+    "last_event": "Orca inbox Delivery",
+    "log_path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\TestSupervisedOrcaRealMergedTaskClose3991968788\\001\\runtime\\runs\\39405e58cbce6e997635dde597868919\\events.jsonl",
+    "result_path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\TestSupervisedOrcaRealMergedTaskClose3991968788\\001\\runtime\\runs\\39405e58cbce6e997635dde597868919\\result.json",
+    "summary": null,
+    "error": null
+  },
+  "task": {
+    "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\testsupervisedorcarealmergedtaskclose3991968788\\001\\provider-project\\.git",
+    "task_id": "remote-probe-39405e58cb",
+    "external_provider": "beads",
+    "external_project": "isolated-merged-close-probe",
+    "external_id": "remote-probe-39405e58cb",
+    "title": "isolated supervised prepare probe",
+    "claimant": "supervised-probe",
+    "source": "beads",
+    "status": "closed",
+    "version": 2,
+    "created_at": "2026-09-25T08:40:52.6646154Z",
+    "updated_at": "2026-09-25T08:40:56.2460449Z"
+  },
+  "workflow": {
+    "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\testsupervisedorcarealmergedtaskclose3991968788\\001\\provider-project\\.git",
+    "workflow_run_id": "39405e58cbce6e997635dde597868919",
+    "task_id": "remote-probe-39405e58cb",
+    "workflow_version": "minimal-v1",
+    "config_digest": "fea4b26bd4a98d864cc8817eb3c4d5c29e956319a9011303046669c6d0816863",
+    "workflow_definition": {
+      "id": "minimal-v1",
+      "version": "minimal-v1",
+      "review_required": false,
+      "max_repair_rounds": 2
+    },
+    "project_steps": {
+      "implement": {
+        "provider": "agent_skill",
+        "entry": "builtin:implement",
+        "version": "minimal-v1",
+        "input_schema": "steerline/minimal-step-input/v1",
+        "output_schema": "steerline/minimal-step-result/v1",
+        "execution_site": "target",
+        "timeout": 600000000000
+      },
+      "verify": {
+        "provider": "command",
+        "entry": "spec03-content-smoke-v1",
+        "version": "minimal-v1",
+        "input_schema": "steerline/minimal-step-input/v1",
+        "output_schema": "steerline/minimal-step-result/v1",
+        "execution_site": "target",
+        "timeout": 600000000000,
+        "command": [
+          "pwsh.exe",
+          "-NoProfile",
+          "-Command",
+          "$actual = git show HEAD:steerline-spec03-supervised-stage.txt; if ($LASTEXITCODE -ne 0 -or $actual.Trim() -ne 'spec03-supervised-stage-v1') { exit 7 }; exit 0"
+        ],
+        "required_checks": [
+          "content-smoke"
+        ]
+      },
+      "review": {
+        "provider": "",
+        "entry": "",
+        "version": "",
+        "input_schema": "",
+        "output_schema": "",
+        "execution_site": "",
+        "timeout": 0
+      },
+      "publish_pr": {
+        "provider": "command",
+        "entry": "README.md",
+        "version": "minimal-v1",
+        "input_schema": "steerline/minimal-step-input/v1",
+        "output_schema": "steerline/minimal-step-result/v1",
+        "execution_site": "target",
+        "timeout": 600000000000,
+        "command": [
+          "pwsh.exe",
+          "-NoProfile",
+          "-Command",
+          "$ErrorActionPreference='Stop'; $branch=git branch --show-current; git push -u origin HEAD; if($LASTEXITCODE -ne 0){exit $LASTEXITCODE}; $existing=gh pr list --repo erranliu/SteerlineTest --head $branch --state all --json url --jq '.[].url'; if($LASTEXITCODE -ne 0){exit $LASTEXITCODE}; if($existing){Write-Output $existing; exit 0}; gh pr create --repo erranliu/SteerlineTest --draft --base main --head $branch --title ('Spec 03 acceptance '+$branch) --body 'Isolated SteerLine Spec 03 remote execution acceptance; verified test-only commit.'; exit $LASTEXITCODE"
+        ]
+      }
+    },
+    "runner": {
+      "codex": {
+        "executable": "codex",
+        "args": null
+      },
+      "sandbox": "workspace-write",
+      "model": "gpt-6-luna",
+      "reasoning_effort": "high"
+    },
+    "phase": "completed",
+    "repository": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\TestSupervisedOrcaRealMergedTaskClose3991968788\\001\\provider-project",
+    "branch": "main",
+    "selected_result_id": "1dd4f5e1decae237c95baac6173d010c",
+    "created_at": "2026-09-25T07:45:34.7873901Z",
+    "updated_at": "2026-09-25T08:40:56.250326Z"
+  }
+}

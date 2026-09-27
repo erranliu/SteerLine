@@ -60,12 +60,24 @@ type Config struct {
 }
 
 type OrcaConfig struct {
-	Executable   string   `json:"executable"`
-	Args         []string `json:"args"`
-	Shell        string   `json:"shell"`
-	WaitTimeout  string   `json:"wait_timeout"`
-	KeepTerminal bool     `json:"keep_terminal"`
-	Activate     bool     `json:"activate"`
+	Executable   string                `json:"executable"`
+	Args         []string              `json:"args"`
+	Shell        string                `json:"shell"`
+	WaitTimeout  string                `json:"wait_timeout"`
+	KeepTerminal bool                  `json:"keep_terminal"`
+	Activate     bool                  `json:"activate"`
+	Supervised   *SupervisedOrcaConfig `json:"supervised,omitempty"`
+}
+
+type SupervisedOrcaConfig struct {
+	ConnectionID            string `json:"connection_id"`
+	EnvironmentID           string `json:"environment_id"`
+	RepositorySelector      string `json:"repository_selector"`
+	CoordinatorTerminal     string `json:"coordinator_terminal"`
+	ExpectedCodexVersion    string `json:"expected_codex_version,omitempty"` // Optional exact pin; empty accepts and records the observed CLI version.
+	PollInterval            string `json:"poll_interval"`
+	CapabilityReportVersion int    `json:"capability_report_version"`
+	RemoteCancelAvailable   bool   `json:"remote_cancel_available"`
 }
 
 // LegacyCompletionConfig is decoded only as a marker for rejecting old runtime
@@ -280,8 +292,8 @@ func LoadConfig(path string) (Config, error) {
 		}
 	}
 	// Empty means "use the default" so programmatic Configs stay valid.
-	if c.Host != "" && c.Host != "local" && c.Host != "orca" {
-		return c, errors.New("host must be local or orca")
+	if c.Host != "" && c.Host != "local" && c.Host != "orca" && c.Host != "orca_supervised" {
+		return c, errors.New("host must be local, orca, or orca_supervised")
 	}
 	if c.StallTimeout != "" {
 		if d, e := time.ParseDuration(c.StallTimeout); e != nil || d < 0 {
@@ -299,6 +311,19 @@ func LoadConfig(path string) (Config, error) {
 			return c, errors.New("orca.wait_timeout must be a positive duration")
 		}
 	}
+	if c.Host == "orca_supervised" {
+		var orcaFields map[string]json.RawMessage
+		var supervisedFields map[string]json.RawMessage
+		if json.Unmarshal(configFields["orca"], &orcaFields) != nil || json.Unmarshal(orcaFields["supervised"], &supervisedFields) != nil {
+			return c, errors.New("orca.supervised must be an explicit object")
+		}
+		if _, ok := supervisedFields["remote_cancel_available"]; !ok {
+			return c, errors.New("orca.supervised.remote_cancel_available must be explicitly set to false")
+		}
+		if err = validateSupervisedOrcaConfig(&c); err != nil {
+			return c, err
+		}
+	}
 	if len(c.ExecutableTypes) == 0 {
 		return c, errors.New("executable_types is empty")
 	}
@@ -311,6 +336,41 @@ func LoadConfig(path string) (Config, error) {
 		return c, err
 	}
 	return c, nil
+}
+
+func validateSupervisedOrcaConfig(c *Config) error {
+	if c == nil || c.agentName() != "codex" {
+		return errors.New("orca_supervised currently requires agent=codex")
+	}
+	if c.Model == "" || c.ReasoningEffort == "" {
+		return errors.New("orca_supervised requires explicit model and reasoning_effort; the remote Orca default is never inherited")
+	}
+	if c.Orca.Supervised == nil {
+		return errors.New("orca_supervised requires an explicit orca.supervised configuration")
+	}
+	supervised := c.Orca.Supervised
+	if strings.TrimSpace(supervised.ConnectionID) == "" || strings.TrimSpace(supervised.EnvironmentID) == "" || strings.TrimSpace(supervised.RepositorySelector) == "" || strings.TrimSpace(supervised.CoordinatorTerminal) == "" {
+		return errors.New("orca.supervised requires fixed connection_id, environment_id, repository_selector, and coordinator_terminal")
+	}
+	if supervised.RemoteCancelAvailable {
+		return errors.New("orca_supervised remote cancellation is fixed unavailable")
+	}
+	if strings.TrimSpace(supervised.PollInterval) == "" {
+		return errors.New("orca.supervised.poll_interval must be explicit")
+	}
+	if d, e := time.ParseDuration(supervised.PollInterval); e != nil || d <= 0 {
+		return errors.New("orca.supervised.poll_interval must be a positive duration")
+	}
+	if supervised.CapabilityReportVersion != 1 {
+		return errors.New("orca.supervised.capability_report_version must explicitly pin version 1")
+	}
+	if c.Orca.Executable == "" || c.Orca.Shell == "" {
+		return errors.New("orca.executable and orca.shell are required")
+	}
+	if d, e := time.ParseDuration(c.Orca.WaitTimeout); e != nil || d <= 0 {
+		return errors.New("orca.wait_timeout must be a positive duration")
+	}
+	return nil
 }
 
 func validateWorkflowConfig(c *Config, raw []byte) error {
@@ -497,6 +557,14 @@ func (c *Config) preflightNative(ctx context.Context, checkSteps bool) error {
 	}
 	if err = c.PR.ValidateRemote(strings.TrimSpace(string(remote))); err != nil {
 		return err
+	}
+	if c.hostName() == "orca_supervised" {
+		if err = validateSupervisedOrcaConfig(c); err != nil {
+			return err
+		}
+		if _, err = probeSupervisedOrcaTarget(ctx, *c); err != nil {
+			return fmt.Errorf("supervised Orca target preflight: %w", err)
+		}
 	}
 	if c.PR.Kind == "command" {
 		if err = resolveCommand(&c.PR.Query); err != nil {

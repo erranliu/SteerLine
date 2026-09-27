@@ -15,7 +15,7 @@
       "additionalProperties": false,
       "required": ["step_id", "succeeded", "result_id"],
       "properties": {
-        "step_id": {"type": "string", "enum": ["implement", "verify", "review", "publish_pr"]},
+        "step_id": {"type": "string", "enum": ["prepare", "implement", "verify", "review", "publish_pr"]},
         "succeeded": {"type": "boolean"},
         "result_id": {"type": "string", "minLength": 1},
         "input_revision": {"type": ["string", "null"]},
@@ -39,11 +39,17 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["name", "status", "revision"],
+            "required": ["name", "status", "revision", "command", "script_version", "exit_code", "passed", "evidence_ref", "actual_commit"],
             "properties": {
               "name": {"type": "string"},
               "status": {"type": "string", "enum": ["passed", "failed", "not_run", "unknown"]},
-              "revision": {"type": "string"}
+              "revision": {"type": "string"},
+              "command": {"type": "string", "minLength": 1},
+              "script_version": {"type": "string", "minLength": 1},
+              "exit_code": {"type": "integer"},
+              "passed": {"type": "boolean"},
+              "evidence_ref": {"type": "string", "minLength": 1},
+              "actual_commit": {"type": "string", "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"}
             }
           }
         },

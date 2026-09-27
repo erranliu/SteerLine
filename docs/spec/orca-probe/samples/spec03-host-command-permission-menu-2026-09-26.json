@@ -1,0 +1,17 @@
+{
+  "captured_at": "2026-09-25T22:28:31.3610637Z",
+  "scope": "isolated real R08 supervised Codex worker; host command approval observed separately from business ask",
+  "run_id": "run_c74f5dcee763",
+  "dispatch_id": "ctx_6fcf0b530c36",
+  "terminal_handle": "term_a24d9342-2b09-4858-af55-fe8ac4a98550",
+  "remote_codex_cli_version": "codex-cli 0.156.1",
+  "prompt_kind": "Codex command permission menu",
+  "command": "orca orchestration ask --question R08 continue original worker after Orca runtime restart? --options yes,no --json",
+  "terminal_send_error": "agent_prompt_blocked",
+  "approval_action": "Orca computer press-key Return on foreground remote Orca window; Yes, proceed once",
+  "approval_scope": "one command, no blanket policy",
+  "business_question_created_after_approval": "relay_150aa4297258",
+  "business_answer_message": "msg_b53da1560384",
+  "windows_uac_prompt_captured": false,
+  "terminal_outcome": "original worker_done succeeded after same-question resume"
+}

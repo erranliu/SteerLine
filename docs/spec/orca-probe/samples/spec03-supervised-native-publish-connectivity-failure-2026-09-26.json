@@ -1,0 +1,80 @@
+{
+  "kind": "spec03-supervised-native-acceptance-attempt",
+  "captured_at": "2026-09-26T14:42:09.4333565Z",
+  "run_id": "run_da8b6a4deda7",
+  "local_task_id": "91024",
+  "remote_repository_id": "09e35751-6517-4e7c-ae20-178ed0e90000",
+  "base_branch": "codex/spec03-native-acceptance-base",
+  "base_commit": "592a745f3ed8dc26ad74c4f01066d632e77bee30",
+  "remote_codex_version": "codex-cli 0.157.1",
+  "configured_codex_version_pin": "",
+  "candidate_revision": "f44aa97b960526b4dcf7fae2c794d1fdae46ed2c",
+  "expected_artifact_blob": "a7890c716cc3ad0cca79f8d7b68cffe125e6b106",
+  "steps": [
+    {
+      "step": "prepare",
+      "dispatch_id": "ctx_8834d2f9f816",
+      "worker_outcome": "succeeded",
+      "center_result_accepted": true,
+      "resources_released": true
+    },
+    {
+      "step": "implement",
+      "dispatch_id": "ctx_4f75e40055c5",
+      "worker_outcome": "succeeded",
+      "center_result_accepted": true,
+      "candidate_commit": "f44aa97b960526b4dcf7fae2c794d1fdae46ed2c",
+      "artifact_blob": "a7890c716cc3ad0cca79f8d7b68cffe125e6b106",
+      "resources_released": true
+    },
+    {
+      "step": "verify",
+      "dispatch_id": "ctx_b81961093276",
+      "worker_outcome": "succeeded",
+      "content_smoke_exit": 0,
+      "base_ancestor_exit": 0,
+      "center_result_accepted": true,
+      "resources_released": true
+    },
+    {
+      "step": "review",
+      "dispatch_id": "ctx_a80a6e7d5f31",
+      "worker_outcome": "succeeded",
+      "verdict": "passed",
+      "candidate_unchanged": true,
+      "center_result_accepted": true,
+      "resources_released": true
+    },
+    {
+      "step": "publish_pr",
+      "dispatch_id": "ctx_d096addbd1e5",
+      "worker_outcome": "failed",
+      "center_result_accepted": false,
+      "reason": "The remote execution host could not reach GitHub port 443 through 192.168.1.36; both push attempts failed before PR creation.",
+      "github_pr_created": false,
+      "branch_visible_on_origin": false,
+      "resources_released": true,
+      "terminal_liveness_after_release": "exited",
+      "transcript_archived": true
+    }
+  ],
+  "local_acceptance": {
+    "result": "stopped_at_publish_network_failure",
+    "test_duration_seconds": 1636.25,
+    "reason": "The center correctly stopped after the remote worker reported a conclusive publication failure; it did not merge, close the task, or create a duplicate PR."
+  },
+  "network_diagnosis": {
+    "remote_git_http_proxy": "192.168.1.36:8766",
+    "remote_proxy_environment_variables": "unset",
+    "remote_direct_github_https": "timed_out",
+    "remote_to_configured_proxy_tcp": false,
+    "remote_to_local_proxy_port_7897_tcp": false,
+    "test_pr_branch_visible_on_origin": false
+  },
+  "constraints": {
+    "production_repository_used": false,
+    "test_pr_created": false,
+    "test_pr_merged": false,
+    "native_task_closed": false
+  }
+}

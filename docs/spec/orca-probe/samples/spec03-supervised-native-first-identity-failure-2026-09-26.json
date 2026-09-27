@@ -1,0 +1,15 @@
+{
+  "captured_at": "2026-09-26T06:09:42Z",
+  "evidence_kind": "failed_native_remote_acceptance_attempt",
+  "project_id": "github.com/erranliu/SteerlineTest",
+  "native_base_branch": "codex/spec03-native-acceptance-base",
+  "base_commit": "eb1fc3d58d290c1ce596a65d367192e7f4f015b1",
+  "orca_run_id": "run_dc17274bb5a6",
+  "prepare_dispatch_id": "ctx_6e68966b8194",
+  "center_error": "identity_mismatch: supervised step result identity mismatch: project_identity",
+  "worker_released": true,
+  "task_claim_remains_in_test_only_temp_state": true,
+  "pull_request_created": false,
+  "counted_as_acceptance": false,
+  "corrective_change": "Add exact assertions for all six decoded identity fields before a native supervised status send."
+}

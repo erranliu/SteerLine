@@ -101,38 +101,44 @@ type ActivityWriter struct {
 	seq    uint64
 	runID  string
 	taskID string
+	items  map[string]uint64
 }
 
 // OpenActivity prepares the journal for append: it repairs a partial trailing
 // line and recovers the last seq so ordering stays monotonic across lazy reopens
 // and service restarts. No handle is retained after this call.
 func OpenActivity(path, runID, taskID string) (*ActivityWriter, error) {
-	seq, e := recoverActivitySeq(path)
+	seq, items, e := recoverActivityState(path)
 	if e != nil {
 		return nil, e
 	}
-	return &ActivityWriter{path: path, seq: seq, runID: runID, taskID: taskID}, nil
+	return &ActivityWriter{path: path, seq: seq, runID: runID, taskID: taskID, items: items}, nil
 }
 
 // recoverActivitySeq repairs a partial trailing line and returns the highest seq
 // already present. The journal is a derivative file: a read failure costs only
 // ordering, never truth.
 func recoverActivitySeq(path string) (uint64, error) {
+	seq, _, err := recoverActivityState(path)
+	return seq, err
+}
+
+func recoverActivityState(path string) (uint64, map[string]uint64, error) {
 	f, e := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0600)
 	if e != nil {
-		return 0, e
+		return 0, nil, e
 	}
 	defer f.Close()
 	info, e := f.Stat()
 	if e != nil {
-		return 0, e
+		return 0, nil, e
 	}
 	if info.Size() == 0 {
-		return 0, nil
+		return 0, map[string]uint64{}, nil
 	}
 	b, e := io.ReadAll(io.LimitReader(f, 64<<20))
 	if e != nil {
-		return 0, e
+		return 0, nil, e
 	}
 	if len(b) > 0 && b[len(b)-1] != '\n' {
 		if i := bytes.LastIndexByte(b, '\n'); i >= 0 {
@@ -141,22 +147,28 @@ func recoverActivitySeq(path string) (uint64, error) {
 			b = nil
 		}
 		if e := f.Truncate(int64(len(b))); e != nil {
-			return 0, e
+			return 0, nil, e
 		}
 	}
 	var last uint64
+	items := map[string]uint64{}
 	for len(b) > 0 {
 		i := bytes.IndexByte(b, '\n')
 		if i < 0 {
 			break
 		}
 		var ev ActivityEvent
-		if json.Unmarshal(b[:i], &ev) == nil && ev.Seq > last {
-			last = ev.Seq
+		if json.Unmarshal(b[:i], &ev) == nil {
+			if ev.Seq > last {
+				last = ev.Seq
+			}
+			if ev.ItemID != "" {
+				items[ev.ItemID] = ev.Seq
+			}
 		}
 		b = b[i+1:]
 	}
-	return last, nil
+	return last, items, nil
 }
 
 func (w *ActivityWriter) Write(ev ActivityEvent) error {
@@ -167,6 +179,12 @@ func (w *ActivityWriter) Write(ev ActivityEvent) error {
 func (w *ActivityWriter) WriteEvent(ev ActivityEvent) (ActivityEvent, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
+	if ev.ItemID != "" {
+		if seq, exists := w.items[ev.ItemID]; exists {
+			ev.Seq = seq
+			return ev, nil
+		}
+	}
 	w.seq++
 	ev.V = ActivityVersion
 	ev.Seq = w.seq
@@ -202,6 +220,12 @@ func (w *ActivityWriter) WriteEvent(ev ActivityEvent) (ActivityEvent, error) {
 	}
 	if e != nil {
 		return ActivityEvent{}, e
+	}
+	if ev.ItemID != "" {
+		if w.items == nil {
+			w.items = map[string]uint64{}
+		}
+		w.items[ev.ItemID] = ev.Seq
 	}
 	return ev, nil
 }

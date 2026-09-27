@@ -1,0 +1,47 @@
+{
+  "kind": "spec03-supervised-native-acceptance-attempt",
+  "captured_at": "2026-09-26T14:05:56.7840267Z",
+  "run_id": "run_b60e0c4f7ad0",
+  "local_task_id": "91024",
+  "remote_repository_id": "09e35751-6517-4e7c-ae20-178ed0e90000",
+  "base_branch": "codex/spec03-native-acceptance-base",
+  "base_commit": "592a745f3ed8dc26ad74c4f01066d632e77bee30",
+  "remote_codex_version": "codex-cli 0.157.1",
+  "configured_codex_version_pin": "",
+  "steps": [
+    {
+      "step": "prepare",
+      "dispatch_id": "ctx_756249aa4e6f",
+      "worker_outcome": "succeeded",
+      "status_accepted": true,
+      "resources_released": true
+    },
+    {
+      "step": "implement",
+      "dispatch_id": "ctx_b76caca8d008",
+      "worker_outcome": "failed",
+      "artifact_commit": "df8bb16a8bd8880c0b94382158c70cc5a28f9897",
+      "artifact_blob": "a7890c716cc3ad0cca79f8d7b68cffe125e6b106",
+      "worktree_clean": true,
+      "status_result_sent": false,
+      "worker_done_failure_accepted": true,
+      "reason": "The worker copied the immutable identity base64 incorrectly; the exact SHA/field assertion caught a project_identity path mismatch before any step result was sent.",
+      "resources_released": true,
+      "terminal_liveness_after_release": "exited",
+      "transcript_archived": true
+    }
+  ],
+  "local_acceptance": {
+    "result": "stopped_at_implement",
+    "test_duration_seconds": 785.95,
+    "reason": "The center correctly rejected the worker's failed outcome and did not plan Verify, Review, Publish, PR creation, or merge.",
+    "follow_up_fix": "Stop repeating the long project path in the worker's identity assertion: validate the immutable base64 JSON digest, compare short fixed IDs field by field, and validate project_identity by SHA-256. Use a short isolated local temp root to reduce duplicated prompt text."
+  },
+  "constraints": {
+    "production_repository_used": false,
+    "verify_dispatched": false,
+    "review_or_publish_dispatched": false,
+    "test_pr_created": false,
+    "test_pr_merged": false
+  }
+}

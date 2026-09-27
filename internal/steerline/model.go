@@ -100,16 +100,23 @@ type TaskCandidate struct {
 }
 
 // ProcessIdentity is the host-neutral identity of a running worker. OS hosts use
-// PID/Created/Executable; the Orca host uses Terminal/RuntimeID/Incarnation.
-// Kind is "os" for local runs and "orca" when hosted by Orca.
+// PID/Created/Executable; Orca terminal-v2 uses Terminal/RuntimeID/Incarnation;
+// supervised Orca uses coordinator/remote runtime epochs and exact Run/Task/
+// Dispatch/execution-host/worktree identity. Kind names the protocol family.
 type ProcessIdentity struct {
-	Kind        string `json:"kind,omitempty"`
-	PID         int    `json:"pid,omitempty"`
-	Created     string `json:"created,omitempty"`
-	Executable  string `json:"executable,omitempty"`
-	Terminal    string `json:"terminal,omitempty"`
-	RuntimeID   string `json:"runtime_id,omitempty"`
-	Incarnation string `json:"incarnation,omitempty"`
+	Kind                 string `json:"kind,omitempty"`
+	PID                  int    `json:"pid,omitempty"`
+	Created              string `json:"created,omitempty"`
+	Executable           string `json:"executable,omitempty"`
+	Terminal             string `json:"terminal,omitempty"`
+	RuntimeID            string `json:"runtime_id,omitempty"`
+	Incarnation          string `json:"incarnation,omitempty"`
+	CoordinatorRuntimeID string `json:"coordinator_runtime_id,omitempty"`
+	OrchestrationRun     string `json:"orchestration_run,omitempty"`
+	Task                 string `json:"task,omitempty"`
+	Dispatch             string `json:"dispatch,omitempty"`
+	ExecutionHost        string `json:"execution_host,omitempty"`
+	WorktreeID           string `json:"worktree_id,omitempty"`
 }
 type Run struct {
 	ManualStop           *ManualStopConfirmation `json:"manual_stop,omitempty"`

@@ -1,0 +1,49 @@
+{
+  "captured_at": "2026-09-25T22:13:58.2913688Z",
+  "operation": "spec03_r08_remote_runtime_restart_with_original_question",
+  "before": {
+    "run_id": "run_c74f5dcee763",
+    "task_id": "task_c529abc4c7f5",
+    "dispatch_id": "ctx_6fcf0b530c36",
+    "question_id": "relay_150aa4297258",
+    "remote_runtime_id": "d05f52b9-4dbd-4656-a01b-000a9f266b84",
+    "worker_remote_runtime_epoch": "d05f52b9-4dbd-4656-a01b-000a9f266b84",
+    "terminal_handle": "term_a24d9342-2b09-4858-af55-fe8ac4a98550",
+    "terminal_incarnation": "37879ac0-f59c-4b63-a114-df1a818ec48a",
+    "worktree_id": "09e35751-6517-4e7c-ae20-178ed0e90000::C:/Users/liuming/orca/workspaces/SteerlineTest/remote-probe-340bc5abf6-prepare",
+    "observation_status": "live",
+    "exact_worker": true,
+    "worker_count": 1
+  },
+  "fault": {
+    "mechanism": "Independent hidden helper stopped exact remote Orca GUI process, then reopened Orca; a delayed backup helper was also launched",
+    "before_main_pid": 13704,
+    "before_main_start_utc": "2026-09-24T22:43:57.7567915Z",
+    "after_main_pid": 13528,
+    "restart_source": "primary_or_backup_not_individually_attributed",
+    "runtime_id_changed": true
+  },
+  "after": {
+    "remote_runtime_id": "66c5fc0b-b41c-4375-a003-01eba5c3b7dc",
+    "same_dispatch_id": "ctx_6fcf0b530c36",
+    "same_worktree_id": "09e35751-6517-4e7c-ae20-178ed0e90000::C:/Users/liuming/orca/workspaces/SteerlineTest/remote-probe-340bc5abf6-prepare",
+    "worker_live_after_restart": true,
+    "exact_worker_after_restart": true,
+    "worker_count_in_run": 1,
+    "old_binding_observation": "identity_mismatch",
+    "replacement_worker_created": false
+  },
+  "settlement": {
+    "original_question_id": "relay_150aa4297258",
+    "answer_message_id": "msg_b53da1560384",
+    "answer_body": "yes",
+    "original_worker_done_id": "relay_187cedb7a66f",
+    "worker_state": "succeeded",
+    "dispatch_status": "completed",
+    "worker_release_state": "retained_preexisting_terminal",
+    "worker_release_request_id": "34c2e54c-96f4-4a52-95fd-918c2e97b1c7",
+    "preexisting_test_terminal_closed_after_settlement": true,
+    "final_exact_worker_liveness": "exited",
+    "residual_owned_resources": []
+  }
+}

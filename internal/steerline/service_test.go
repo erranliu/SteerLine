@@ -273,6 +273,8 @@ func fakeMain(args []string) int {
 		return 0
 	case "orca":
 		return fakeOrca(args[1], args[2:])
+	case "orca-supervised":
+		return fakeSupervisedOrca(args[1:])
 	case "native-step":
 		return fakeNativeMinimalStep()
 	case "publish-control":

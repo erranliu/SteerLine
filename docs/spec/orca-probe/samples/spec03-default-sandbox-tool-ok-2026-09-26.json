@@ -1,0 +1,24 @@
+{
+  "captured_at": "2026-09-25T18:53:31.5379453Z",
+  "scope": "ordinary isolated Codex TUI, default Windows sandbox; no supervised Dispatch",
+  "center_orca_version": "1.4.209",
+  "remote_orca_version": "1.4.210",
+  "remote_codex_cli_version": "codex-cli 0.156.1",
+  "environment_id": "bed55de0-6d7d-497e-b1d5-3abab256b2ee",
+  "remote_runtime_id": "d05f52b9-4dbd-4656-a01b-000a9f266b84",
+  "terminal_handle": "term_4849dca4-ddf9-4ca3-b768-b27b83b4e200",
+  "incarnation_id": "62339335-5e39-4166-8997-90293fbe02b4",
+  "worktree_id": "09e35751-6517-4e7c-ae20-178ed0e90000::C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-20c94afe4670",
+  "tool_command": "Write-Output SPEC03_ELEVATED_OK",
+  "tool_output": "SPEC03_ELEVATED_OK",
+  "tool_exit_code": 0,
+  "screen_evidence": [
+    "› Read-only sandbox acceptance probe. Call the exec_command tool with a PowerShell command that prints exactly SPEC03_ELEVATED_OK using Write-Output. Do not edit any files. In your final answer include the actual tool result and whether",
+    "  the command succeeded.",
+    "• Ran Write-Output SPEC03_ELEVATED_OK",
+    "  └ SPEC03_ELEVATED_OK",
+    "• Tool result: SPEC03_ELEVATED_OK. The command succeeded (exit code 0)."
+  ],
+  "permission_prompt_capture": "not_captured",
+  "business_dispatch_created": false
+}

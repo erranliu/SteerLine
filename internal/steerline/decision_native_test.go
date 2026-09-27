@@ -94,6 +94,60 @@ func TestNativeDecisionEligibilityRequiresFixedWorkflowBinding(t *testing.T) {
 	}
 }
 
+func TestNativeSupervisedDecisionEligibilityRequiresExactDispatch(t *testing.T) {
+	c := Config{TaskAuthority: "native", Host: "orca_supervised", RunDir: t.TempDir(), Orca: OrcaConfig{Supervised: &SupervisedOrcaConfig{ConnectionID: "connection-home", EnvironmentID: "environment-home"}}}
+	target := targetFor(c)
+	target.WorktreeID, target.Branch, target.BaseRevision = "repo::C:/probe", "probe", strings.Repeat("a", 40)
+	target.OrchestrationRun, target.ExternalTask, target.Dispatch, target.ExecutionHost = "run-probe", "task-probe", "dispatch-probe", "remote-host"
+	process := ProcessIdentity{Kind: "orca_supervised", RuntimeID: "remote-runtime", CoordinatorRuntimeID: "center-runtime", Terminal: "terminal-probe", Incarnation: "incarnation-probe", OrchestrationRun: target.OrchestrationRun, Task: target.ExternalTask, Dispatch: target.Dispatch, ExecutionHost: target.ExecutionHost, WorktreeID: target.WorktreeID}
+	path, branch, base := "C:/probe", target.Branch, target.BaseRevision
+	run := &Run{RunID: newID(), ExecutionID: newID(), AttemptID: newID(), WorkflowVersion: MinimalWorkflowVersion, Backend: string(BackendOrca), Protocol: string(ProtocolOrcaSupervised), Agent: "codex", Target: target, Process: &process, WorktreePath: &path, WorktreeBranch: &branch, BaseCommit: &base}
+	run.Decision = &DecisionState{ID: newID(), AttemptID: run.AttemptID, Status: "pending"}
+	ref := ExecutionRef{Version: ExecutionRecordVersion, Backend: BackendOrca, Protocol: ProtocolOrcaSupervised, Target: target, Agent: AgentSpec{Name: "codex"}, RunID: run.RunID, AttemptID: run.AttemptID, WorkspacePath: path, WorkspaceBranch: branch, BaseCommit: base, External: process, Generation: process.RuntimeID + ":" + process.Incarnation}
+	if err := (executionRecords{root: c.RunDir}).saveBinding(ref); err != nil {
+		t.Fatal(err)
+	}
+	if err := DecisionReplyEligibility(context.Background(), c, run); err != nil {
+		t.Fatalf("exact supervised decision was rejected: %v", err)
+	}
+	run.Target.Dispatch = "different-dispatch"
+	if err := DecisionReplyEligibility(context.Background(), c, run); err == nil {
+		t.Fatal("supervised decision with a changed Dispatch was accepted")
+	}
+}
+
+func TestHydrateDecisionAllowsAppliedPriorMinimalAttempt(t *testing.T) {
+	ctx := context.Background()
+	store := openDomainTestStore(t)
+	project, runID := "repo:historical-decision", newID()
+	executionID := runID
+	prepareID, publishID, decisionID := newID(), newID(), newID()
+	seedNativeDecision(t, store, project, runID, newID())
+	request := DecisionRequest{Question: "Proceed?", Options: []DecisionOption{{ID: "yes", Label: "Yes"}}}
+	answer := DecisionAnswer{DecisionID: decisionID, RunID: runID, OptionID: "yes", AnsweredBy: "tester", AnsweredAt: now()}
+	err := store.Transact(ctx, func(tx DomainTx) error {
+		if err := tx.PutStepAttempt(StepAttemptRecord{ProjectIdentity: project, AttemptID: prepareID, ExecutionID: executionID, StepID: "prepare", AttemptNumber: 1, Status: "succeeded"}); err != nil {
+			return err
+		}
+		if err := tx.PutStepAttempt(StepAttemptRecord{ProjectIdentity: project, AttemptID: publishID, ExecutionID: executionID, StepID: "publish_pr", AttemptNumber: 1, Status: "succeeded"}); err != nil {
+			return err
+		}
+		return tx.PutDecision(DecisionRecord{ProjectIdentity: project, DecisionID: decisionID, Scope: "execution", WorkflowRunID: runID, ExecutionID: executionID, AttemptID: prepareID, QuestionID: decisionID, Request: mustJSON(request), Answer: mustJSON(answer), Status: "applied", Version: 2})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	run := &Run{RunID: runID, ExecutionID: executionID, AttemptID: publishID, WorkflowVersion: MinimalWorkflowVersion, Decision: &DecisionState{ID: decisionID, AttemptID: prepareID, Request: request, Status: "applied", Version: 1}}
+	service := &Service{Config: Config{identity: project}, domainStore: store, State: Runtime{Runs: []*Run{run}, Attempts: []StepAttemptRecord{{ProjectIdentity: project, AttemptID: prepareID, ExecutionID: executionID, StepID: "prepare", Status: "succeeded"}, {ProjectIdentity: project, AttemptID: publishID, ExecutionID: executionID, StepID: "publish_pr", Status: "succeeded"}}}}
+	if err := service.hydrateDecisionProjection(ctx); err != nil || run.Decision.Status != "applied" || run.Decision.Version != 2 {
+		t.Fatalf("historical applied decision was rejected after a later step: decision=%+v err=%v", run.Decision, err)
+	}
+	run.Decision.AttemptID = newID()
+	if err := service.hydrateDecisionProjection(ctx); err == nil {
+		t.Fatal("decision rebound to an unknown historical attempt was accepted")
+	}
+}
+
 func TestMinimalDecisionApplicationEvidenceBindsOriginalDecisionAttemptAndAnswer(t *testing.T) {
 	oldAttempt := strings.Repeat("a", 32)
 	run := &Run{

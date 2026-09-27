@@ -58,7 +58,7 @@ func markVerified(report *CapabilityReport, name, evidence string) {
 }
 
 // CertifyExecutionBackend imports evidence captured by the native acceptance
-// harness for this exact backend, agent, target, platform and CLI version.
+// harness for this backend, agent, target, platform and CLI version family.
 // Repository and run-dir locks exclude the live Service while the report is saved.
 func CertifyExecutionBackend(ctx context.Context, c Config, paths []string) (CapabilityReport, error) {
 	if err := requireNativeTaskAuthority(c); err != nil {
@@ -98,7 +98,11 @@ func CertifyExecutionBackend(ctx context.Context, c Config, paths []string) (Cap
 		if probe.Backend == BackendOrca {
 			version = evidence.OrcaVersion
 		}
-		if evidence.Version != 1 || evidence.CapturedAt.IsZero() || evidence.Platform != runtime.GOOS+"/"+runtime.GOARCH || evidence.Backend != probe.Backend || evidence.Protocol != probe.Protocol || evidence.TargetID != probe.Target.ID || evidence.Agent != probe.Agent.Name || version != probe.PlatformVersion {
+		versionMatches := version == probe.PlatformVersion
+		if probe.Backend == BackendOrca && !versionMatches {
+			versionMatches = sameOrcaVersionFamily(version, probe.PlatformVersion)
+		}
+		if evidence.Version != 1 || evidence.CapturedAt.IsZero() || evidence.Platform != runtime.GOOS+"/"+runtime.GOARCH || evidence.Backend != probe.Backend || evidence.Protocol != probe.Protocol || evidence.TargetID != probe.Target.ID || evidence.Agent != probe.Agent.Name || !versionMatches {
 			return CapabilityReport{}, fmt.Errorf("native evidence identity, target, platform or version differs from current backend: %s", path)
 		}
 		if probe.Backend == BackendOrca && evidence.CodexVersion != probe.AgentVersion {

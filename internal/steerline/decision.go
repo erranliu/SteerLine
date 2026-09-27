@@ -77,11 +77,18 @@ func validateDecisionRequest(req *DecisionRequest) error {
 // WriteDecisionRequest creates a new decision identity in the service-owned
 // runtime projection. The caller persists it to SQLite with the run transition.
 func WriteDecisionRequest(r *Run, req DecisionRequest) (*DecisionState, error) {
+	return writeDecisionRequestWithID(r, req, newID())
+}
+
+func writeDecisionRequestWithID(r *Run, req DecisionRequest, decisionID string) (*DecisionState, error) {
+	if r == nil || strings.TrimSpace(decisionID) == "" {
+		return nil, errors.New("decision requires a run and stable ID")
+	}
 	if e := validateDecisionRequest(&req); e != nil {
 		return nil, e
 	}
 	st := &DecisionState{
-		ID:        newID(),
+		ID:        decisionID,
 		AttemptID: r.AttemptID,
 		Version:   1,
 		Request:   req,
@@ -416,6 +423,18 @@ func DecisionReplyEligibility(ctx context.Context, c Config, run *Run) error {
 	if run.WorkflowVersion != MinimalWorkflowVersion || !stableExecutionID(run.ExecutionID) || run.AttemptID == "" || run.Decision.AttemptID != run.AttemptID {
 		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "decision is not bound to a fixed native workflow, execution and attempt"}
 	}
+	if run.Protocol == string(ProtocolOrcaSupervised) {
+		if c.hostName() != "orca_supervised" || run.Process == nil {
+			return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "supervised decision has no original backend or process identity"}
+		}
+		ref, err := (executionRecords{root: c.RunDir}).loadBinding(run.RunID, run.AttemptID)
+		if err != nil {
+			return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "supervised decision has no fixed backend binding", Cause: err}
+		}
+		if ref.Incomplete || ref.RunID != run.RunID || ref.AttemptID != run.AttemptID || ref.Backend != BackendOrca || ref.Protocol != ProtocolOrcaSupervised || ref.Target != run.Target || ref.External != *run.Process || ref.WorkspacePath != deref(run.WorktreePath) || ref.WorkspaceBranch != deref(run.WorktreeBranch) || ref.BaseCommit != deref(run.BaseCommit) || !sameSupervisedBaseTarget(ref.Target, targetFor(c)) {
+			return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "supervised decision differs from the original Dispatch, target or workspace"}
+		}
+	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -427,6 +446,9 @@ func (s *Service) applyDecisions(ctx context.Context) error {
 		return err
 	}
 	if s.worker != nil {
+		if s.active != nil && s.active.Protocol == string(ProtocolOrcaSupervised) && s.active.Decision != nil && s.active.Decision.Status == "answer_saved" {
+			return s.replySupervisedDecision(ctx, s.active)
+		}
 		return nil
 	}
 	if reason := s.executionSlotReason("", true); reason != "" {
@@ -441,6 +463,10 @@ func (s *Service) applyDecisions(ctx context.Context) error {
 		}
 		if run.WorkflowVersion != MinimalWorkflowVersion || !stableExecutionID(run.ExecutionID) || run.AttemptID == "" || run.Decision.AttemptID != run.AttemptID {
 			return nativeErr("unsupported_schema", "saved decision is not bound to a current minimal-v1 execution attempt")
+		}
+		if run.Protocol == string(ProtocolOrcaSupervised) {
+			// Reattach the original Dispatch before applying the saved answer.
+			continue
 		}
 		answer, err := ReadDecisionAnswer(run)
 		if err != nil {
@@ -487,4 +513,116 @@ func (s *Service) applyDecisions(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+func (s *Service) replySupervisedDecision(ctx context.Context, run *Run) error {
+	if run == nil || run.Decision == nil || run.Process == nil || s.active != run || s.worker == nil || run.Decision.AttemptID != run.AttemptID || run.FinishTaskStatus != "waiting_decision" {
+		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "supervised answer no longer belongs to the live original attempt"}
+	}
+	answer, err := ReadDecisionAnswer(run)
+	if err != nil {
+		return err
+	}
+	body := answer.OptionID
+	if body == "" {
+		body = answer.Note
+	}
+	if err := validateDecisionAnswer(&run.Decision.Request, &answer); err != nil {
+		return err
+	}
+	if answer.OptionID != "" && answer.Note != "" {
+		run.Error = ptr("Answer saved; the supervised Orca reply contract cannot deliver an option and note together without losing the note")
+		return s.save()
+	}
+	ref, err := (executionRecords{root: s.Config.RunDir}).loadBinding(run.RunID, run.AttemptID)
+	if err != nil {
+		return err
+	}
+	if ref.Protocol != ProtocolOrcaSupervised || ref.External != *run.Process || ref.Target != run.Target || ref.AttemptID != run.Decision.AttemptID || s.worker.proc.Identity() != ref.External {
+		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "supervised answer binding differs from the original Dispatch"}
+	}
+	request := mustJSON(struct {
+		Ref        ExecutionRef `json:"ref"`
+		QuestionID string       `json:"question_id"`
+		Answer     string       `json:"answer"`
+	}{ref, run.Decision.ID, body})
+	key := "orca-question-reply:" + run.RunID + ":" + run.AttemptID + ":" + run.Decision.ID
+	digest := operationDigest(request)
+	var operation *OperationRecord
+	for i := range s.State.Operations {
+		if s.State.Operations[i].IdempotencyKey == key {
+			operation = &s.State.Operations[i]
+			break
+		}
+	}
+	confirmed := false
+	if operation != nil {
+		if operation.Kind != "reply_orca_question" || operation.PayloadDigest != digest || string(operation.Request) != string(request) {
+			return errors.New("supervised reply operation conflicts with the saved answer")
+		}
+		switch operation.Status {
+		case "confirmed":
+			confirmed = true
+		case "in_flight":
+			return nil // The exact reply may already be applying; do not resend.
+		case "outcome_unknown":
+			answerMessageID, reconcileErr := (orcaSupervisedBackend{config: s.Config}).findAnsweredQuestion(ctx, ref, run.Decision.ID, body)
+			if reconcileErr != nil {
+				return nil // Preserve uncertainty and the original live Dispatch.
+			}
+			receipt := mustJSON(map[string]any{"question_id": run.Decision.ID, "answer": body, "answer_message_id": answerMessageID, "reconciled_from": "orca_inbox_exact_thread"})
+			if err := s.changeOperation(operation.OperationID, "confirmed", operation.PlatformRequestID, receipt, ""); err != nil {
+				return err
+			}
+			confirmed = true
+		case "pending":
+			// startOperation below claims the previously persisted pending intent.
+		default:
+			return errors.New("supervised reply operation was rejected; preserve the original question")
+		}
+	}
+	if !confirmed {
+		observation, observeErr := (orcaSupervisedBackend{config: s.Config}).Observe(ctx, ref)
+		if observeErr != nil || observation.Liveness != "live" {
+			reason := "the original remote Dispatch is not yet verifiably live"
+			if observeErr != nil {
+				reason = observeErr.Error()
+			}
+			run.Error = ptr("Answer saved; waiting to verify the original Dispatch before reply: " + clip(reason, 1000))
+			return s.save() // No reply Operation or side effect was started.
+		}
+		opID, startErr := s.startOperation("reply_orca_question", key, struct {
+			Ref        ExecutionRef `json:"ref"`
+			QuestionID string       `json:"question_id"`
+			Answer     string       `json:"answer"`
+		}{ref, run.Decision.ID, body})
+		if startErr != nil {
+			return startErr
+		}
+		requestID, replyErr := (orcaSupervisedBackend{config: s.Config}).replyQuestion(ctx, ref, run.Decision.ID, body)
+		receipt := mustJSON(map[string]any{"question_id": run.Decision.ID, "answer": body, "platform_request_id": requestID, "error": errorString(replyErr)})
+		if replyErr != nil {
+			if persistErr := s.changeOperation(opID, "outcome_unknown", requestID, receipt, replyErr.Error()); persistErr != nil {
+				return errors.Join(replyErr, persistErr)
+			}
+			run.Error = ptr("Remote answer outcome is uncertain; reconcile the original question: " + clip(replyErr.Error(), 1000))
+			return s.save()
+		}
+		if err := s.changeOperation(opID, "confirmed", requestID, receipt, ""); err != nil {
+			return err
+		}
+	}
+	workflow, execution := s.minimalRecords(run)
+	attempt := s.minimalAttempt(run, run.AttemptID)
+	if err := SetWorkflowDecision(workflow, execution, attempt, "reply_accepted"); err != nil {
+		return err
+	}
+	run.Decision.Status = "reply_accepted"
+	run.Decision.Version++
+	run.Error = nil
+	if err := s.syncMinimalDecision(run); err != nil {
+		return err
+	}
+	s.note(run, "steer", "decision", "reply_accepted", "remote answer accepted", decisionAnswerSummary(run), nil)
+	return s.save()
 }

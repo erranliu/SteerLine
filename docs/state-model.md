@@ -16,6 +16,12 @@ Process and terminal state are external observations. A process exit does not pr
 
 ## Native workflow
 
+受监管 Orca Run 同时保存本地 WorkflowRun/Execution/Attempt 与外部 Run/Task/Dispatch、执行 host、worktree 和 runtime epoch。每个步骤的 `dispatch_step`、Delivery ack、reply、资源 release 都有独立 Operation 与平台 request ID（丢失时记录 `outcome_unknown` 并按原对象只读对账）。业务 question 等待与应用仍属于原 Attempt；中心重启只按已确认 start Operation 和固定 binding 重接原 Dispatch，身份不确定时保留占用，不派替代 worker。已结算的远端资源 release 不删除 worktree。当前能力报告仍未开放生产 claim。
+
+Orca `worker-start` 的 `input_accepted` 只使 Attempt 到 `dispatched`。同一 Dispatch 的 assistant transcript 或业务消息被服务持久化后才转 `running`；terminal ready、idle、输出沉默或存活事实不证明 turn 开始。`dispatched` 的固定绑定也可在中心重启后重接并继续观察。
+
+受监管远端 Run 的 `execution_status` 在 `input_accepted` 后也保持 `pending`，直到同一 Attempt 的 turn 证据到达才记为 `running`。这条业务阶段与 Orca 报告的进程 `live` 分开；中心重启时，已有精确 Process/Dispatch/Operation 绑定的 `pending/dispatched` 仍只读重接原 worker。
+
 New native projects start in manual, paused dispatch mode. A successful claim transaction creates the Task claim, WorkflowRun, Execution, prepare StepAttempt and operation checkpoint together. The worker receives a fixed `native-task/v1` context for one step. Each structured step result is validated against the saved contract, repository state, prerequisites and that step's gate before success and the next attempt are committed.
 
 The current `minimal-v1` path prepares a workspace, implements, verifies required checks, optionally reviews, publishes a PR, and waits for merge. After a human merges, SteerLine re-queries the exact PR and branch. Only matching merge evidence lets one transaction record TaskDelivery, close the task and release ready successors. Duplicate delivery requests return the recorded delivery without repeating those effects.

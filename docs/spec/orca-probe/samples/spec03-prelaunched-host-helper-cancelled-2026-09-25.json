@@ -1,0 +1,42 @@
+{
+  "schema_version": "steerline.spec03-host-interaction-probe.v1",
+  "evidence_class": "real_remote_failure",
+  "center_orca_version": "1.4.209",
+  "remote_orca_version": "1.4.210",
+  "remote_codex_cli_version": "codex-cli 0.156.1",
+  "orca_run_id": "run_27b254892811",
+  "dispatch_id": "ctx_f9d3b783414b",
+  "task_id": "task_cfa827aba498",
+  "worktree_id": "09e35751-6517-4e7c-ae20-178ed0e90000::C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-20c94afe4670",
+  "terminal_handle": "term_99d1fd1a-0e88-44cd-8506-c169b9a5aaa5",
+  "terminal_incarnation": "6979ee08-3af4-48b9-91a3-1b886292c247",
+  "launch": {
+    "prelaunched_codex_tui": true,
+    "tui_idle_confirmed": true,
+    "worker_start_terminal_reused": true,
+    "worker_start_stage": "input_accepted",
+    "worker_start_request_id": "245a8366-be95-427c-9064-d46ace971b39",
+    "assistant_transcript_observed": true
+  },
+  "execution_host_failure": {
+    "code": "orchestrator_helper_launch_canceled",
+    "message": "ShellExecuteExW failed to launch setup helper: 1223",
+    "affected_calls": "Git check, coordinator check and worker_done via Codex exec_command",
+    "agent_wait_observation": "null",
+    "orca_gui_dialog_observed": false,
+    "consent_process_count_at_read_only_check": 0,
+    "plain_orca_pwsh_terminal_diagnostic": "SPEC03_DIAG_OK",
+    "accepted_status": false,
+    "accepted_worker_done": false
+  },
+  "resource_action": {
+    "terminal_close_request_id": "077f8c5d-854b-46b2-8ce1-4bc9dadf57f0",
+    "pty_killed": true,
+    "exact_worker_exited": true,
+    "worker_abandon_request_id": "a502c92f-53e5-444b-b4ae-805539f9891c",
+    "worker_state": "abandoned",
+    "residual_resources": [],
+    "diagnostic_terminal_close_request_id": "cb327cb5-154e-491e-b651-17f8fb777ea6"
+  },
+  "acceptance": "not_passed"
+}

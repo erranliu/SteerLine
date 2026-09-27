@@ -1,0 +1,462 @@
+{
+  "captured_at": "2026-09-25T05:53:59.9916922Z",
+  "center_orca_version": "1.4.209",
+  "domain_messages": [
+    {
+      "attempt_id": "b57f6ebd2e6f19676febe2d0502de87e",
+      "dispatch_id": "",
+      "message_id": "output-gap:2abf3c9e88eeeba0d266c1763567a1dac2c280fca8f1773b89162b113d844647",
+      "payload_bytes": 161,
+      "payload_digest": "17a18a1a6bb30decb2ab70ccef8b29d24dce4f751580dca47bfadfd26a73419a",
+      "type": "activity.gap"
+    },
+    {
+      "attempt_id": "",
+      "dispatch_id": "ctx_4e5f2303a9be",
+      "message_id": "relay_374f537d693b",
+      "payload_bytes": 538,
+      "payload_digest": "c7c859221d9086716b3506d8e818978bc0056aab2920d2ff86d3b4d8dcd31bf3",
+      "type": "orca.worker_done"
+    },
+    {
+      "attempt_id": "b57f6ebd2e6f19676febe2d0502de87e",
+      "dispatch_id": "ctx_88e390dff523",
+      "message_id": "relay_7d1436b8e7fc",
+      "payload_bytes": 346,
+      "payload_digest": "c9b6be02c5a8b5aaf0d73554dffd075453d1bc5420ed5b415619b1f51bcede60",
+      "type": "orca.question"
+    },
+    {
+      "attempt_id": "b57f6ebd2e6f19676febe2d0502de87e",
+      "dispatch_id": "ctx_88e390dff523",
+      "message_id": "relay_de0fc5a9017b",
+      "payload_bytes": 342,
+      "payload_digest": "0f5d8a5e1f9161a30bf3533c1b435cff38feb9c40949ad5cf96d6e8f50f2c9bf",
+      "type": "orca.status"
+    },
+    {
+      "attempt_id": "b57f6ebd2e6f19676febe2d0502de87e",
+      "dispatch_id": "ctx_88e390dff523",
+      "message_id": "relay_31f763dd7d54",
+      "payload_bytes": 1387,
+      "payload_digest": "68acb55bd4b7ffe4c4a589a7e32be0db48fed113e0fe23b925d51e55646b9845",
+      "type": "orca.status"
+    },
+    {
+      "attempt_id": "b57f6ebd2e6f19676febe2d0502de87e",
+      "dispatch_id": "ctx_88e390dff523",
+      "message_id": "relay_1c2cb503d603",
+      "payload_bytes": 605,
+      "payload_digest": "282531a6bd67f03fcf73a3c99f568c222959a106329a22783da49f29ebebe9c1",
+      "type": "orca.worker_done"
+    }
+  ],
+  "execution": {
+    "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\testsupervisedorcarealprepareroundtrip1393254020\\001\\local-identity\\.git",
+    "execution_id": "19d9d89ed32070bb873eed59298e9e78",
+    "workflow_run_id": "8f913962f05ac8e78091ed53b57f20d4",
+    "agent": "codex",
+    "backend": "orca",
+    "protocol": "orca_supervised",
+    "process": {
+      "kind": "orca_supervised",
+      "terminal": "term_00307036-99f1-41b3-a991-dbea977d6951",
+      "runtime_id": "d05f52b9-4dbd-4656-a01b-000a9f266b84",
+      "incarnation": "25909bda-bed8-436d-b513-7ca8feb84954",
+      "coordinator_runtime_id": "7ccb02b0-aef2-4124-8db8-0ec063155b12",
+      "orchestration_run": "run_27b254892811",
+      "task": "task_96f6f0b5b68d",
+      "dispatch": "ctx_88e390dff523",
+      "execution_host": "bed55de0-6d7d-497e-b1d5-3abab256b2ee",
+      "worktree_id": "09e35751-6517-4e7c-ae20-178ed0e90000::C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-0a5dcff7b5d3"
+    },
+    "target": {
+      "id": "orca-supervised:fe26dcce-e8f7-47dd-96c2-d611c1093733",
+      "connection_id": "fe26dcce-e8f7-47dd-96c2-d611c1093733",
+      "worktree_id": "09e35751-6517-4e7c-ae20-178ed0e90000::C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-0a5dcff7b5d3",
+      "branch": "erranliu/steerline-0a5dcff7b5d3",
+      "base_revision": "0028407ffbbcf9ad4139ff63720311a6e3fd0a1f",
+      "external_runtime": "bed55de0-6d7d-497e-b1d5-3abab256b2ee",
+      "orchestration_run": "run_27b254892811",
+      "external_task": "task_96f6f0b5b68d",
+      "dispatch": "ctx_88e390dff523",
+      "execution_host": "bed55de0-6d7d-497e-b1d5-3abab256b2ee"
+    },
+    "workspace": {
+      "repository": "c:\\users\\lmas1\\appdata\\local\\temp\\testsupervisedorcarealprepareroundtrip1393254020\\001\\local-identity\\.git",
+      "worktree": "c:\\users\\liuming\\orca\\workspaces\\steerlinetest\\steerline-0a5dcff7b5d3",
+      "branch": "erranliu/steerline-0a5dcff7b5d3",
+      "base": "0028407ffbbcf9ad4139ff63720311a6e3fd0a1f",
+      "head": "0028407ffbbcf9ad4139ff63720311a6e3fd0a1f",
+      "verified_at": "2026-09-25T05:53:52.7550273Z"
+    },
+    "status": "active",
+    "current_step": "implement",
+    "repair_rounds": 0,
+    "created_at": "2026-09-25T05:49:57.4114809Z",
+    "updated_at": "2026-09-25T05:53:54.6715573Z"
+  },
+  "execution_binding": {
+    "version": 1,
+    "backend": "orca",
+    "protocol": "orca_supervised",
+    "target": {
+      "id": "orca-supervised:fe26dcce-e8f7-47dd-96c2-d611c1093733",
+      "connection_id": "fe26dcce-e8f7-47dd-96c2-d611c1093733",
+      "worktree_id": "09e35751-6517-4e7c-ae20-178ed0e90000::C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-0a5dcff7b5d3",
+      "branch": "erranliu/steerline-0a5dcff7b5d3",
+      "base_revision": "0028407ffbbcf9ad4139ff63720311a6e3fd0a1f",
+      "external_runtime": "bed55de0-6d7d-497e-b1d5-3abab256b2ee",
+      "orchestration_run": "run_27b254892811",
+      "external_task": "task_96f6f0b5b68d",
+      "dispatch": "ctx_88e390dff523",
+      "execution_host": "bed55de0-6d7d-497e-b1d5-3abab256b2ee"
+    },
+    "agent": {
+      "name": "codex"
+    },
+    "run_id": "8f913962f05ac8e78091ed53b57f20d4",
+    "attempt_id": "b57f6ebd2e6f19676febe2d0502de87e",
+    "workspace_path": "C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-0a5dcff7b5d3",
+    "workspace_branch": "erranliu/steerline-0a5dcff7b5d3",
+    "base_commit": "0028407ffbbcf9ad4139ff63720311a6e3fd0a1f",
+    "external": {
+      "kind": "orca_supervised",
+      "terminal": "term_00307036-99f1-41b3-a991-dbea977d6951",
+      "runtime_id": "d05f52b9-4dbd-4656-a01b-000a9f266b84",
+      "incarnation": "25909bda-bed8-436d-b513-7ca8feb84954",
+      "coordinator_runtime_id": "7ccb02b0-aef2-4124-8db8-0ec063155b12",
+      "orchestration_run": "run_27b254892811",
+      "task": "task_96f6f0b5b68d",
+      "dispatch": "ctx_88e390dff523",
+      "execution_host": "bed55de0-6d7d-497e-b1d5-3abab256b2ee",
+      "worktree_id": "09e35751-6517-4e7c-ae20-178ed0e90000::C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-0a5dcff7b5d3"
+    },
+    "generation": "d05f52b9-4dbd-4656-a01b-000a9f266b84:25909bda-bed8-436d-b513-7ca8feb84954"
+  },
+  "files_changed": [],
+  "operations": [
+    {
+      "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\testsupervisedorcarealprepareroundtrip1393254020\\001\\local-identity\\.git",
+      "operation_id": "0437dd79133a1442a8609b210aac53e8",
+      "idempotency_key": "step:19d9d89ed32070bb873eed59298e9e78:b57f6ebd2e6f19676febe2d0502de87e",
+      "kind": "dispatch_step",
+      "status": "confirmed",
+      "payload_digest": "a598f7a2a1803c18de53c21a64e579a7e7aca958a3eb9224c48628e0cf9ea6df",
+      "request": "eyJhdHRlbXB0X2lkIjoiYjU3ZjZlYmQyZTZmMTk2NzZmZWJlMmQwNTAyZGU4N2UiLCJjb250cmFjdF9kaWdlc3QiOiI3NDc4OTg0ZTZkNWY0NzQ2MjMxMWU3ODRhNDNmODM0ZTA0MDMwMjdjYWRhZTEwYzNmNTJiZjgyN2FmM2UzZmM5IiwiZXhlY3V0aW9uX2lkIjoiMTlkOWQ4OWVkMzIwNzBiYjg3M2VlZDU5Mjk4ZTllNzgiLCJpbnB1dCI6eyJzY2hlbWFfdmVyc2lvbiI6MSwicHJvamVjdF9pZGVudGl0eSI6ImM6XFx1c2Vyc1xcbG1hczFcXGFwcGRhdGFcXGxvY2FsXFx0ZW1wXFx0ZXN0c3VwZXJ2aXNlZG9yY2FyZWFscHJlcGFyZXJvdW5kdHJpcDEzOTMyNTQwMjBcXDAwMVxcbG9jYWwtaWRlbnRpdHlcXC5naXQiLCJ0YXNrX2lkIjoicmVtb3RlLXByb2JlLThmOTEzOTYyZjAiLCJ3b3JrZmxvd19ydW5faWQiOiI4ZjkxMzk2MmYwNWFjOGU3ODA5MWVkNTNiNTdmMjBkNCIsImV4ZWN1dGlvbl9pZCI6IjE5ZDlkODllZDMyMDcwYmI4NzNlZWQ1OTI5OGU5ZTc4IiwiYXR0ZW1wdF9pZCI6ImI1N2Y2ZWJkMmU2ZjE5Njc2ZmViZTJkMDUwMmRlODdlIiwic3RlcF9pZCI6InByZXBhcmUiLCJpbnB1dF9yZXZpc2lvbiI6IjAwMjg0MDdmZmJiY2Y5YWQ0MTM5ZmY2MzcyMDMxMWE2ZTNmZDBhMWYiLCJ3b3JrZmxvd19kZWZpbml0aW9uIjp7ImlkIjoibWluaW1hbC12MSIsInZlcnNpb24iOiJtaW5pbWFsLXYxIiwicmV2aWV3X3JlcXVpcmVkIjpmYWxzZSwibWF4X3JlcGFpcl9yb3VuZHMiOjJ9LCJwcm9qZWN0X3N0ZXBzIjp7ImltcGxlbWVudCI6eyJwcm92aWRlciI6ImFnZW50X3NraWxsIiwiZW50cnkiOiJidWlsdGluOmltcGxlbWVudCIsInZlcnNpb24iOiJtaW5pbWFsLXYxIiwiaW5wdXRfc2NoZW1hIjoic3RlZXJsaW5lL21pbmltYWwtc3RlcC1pbnB1dC92MSIsIm91dHB1dF9zY2hlbWEiOiJzdGVlcmxpbmUvbWluaW1hbC1zdGVwLXJlc3VsdC92MSIsImV4ZWN1dGlvbl9zaXRlIjoidGFyZ2V0IiwidGltZW91dCI6NjAwMDAwMDAwMDAwfSwidmVyaWZ5Ijp7InByb3ZpZGVyIjoiY29tbWFuZCIsImVudHJ5IjoidmVyaWZ5LnBzMSIsInZlcnNpb24iOiJtaW5pbWFsLXYxIiwiaW5wdXRfc2NoZW1hIjoic3RlZXJsaW5lL21pbmltYWwtc3RlcC1pbnB1dC92MSIsIm91dHB1dF9zY2hlbWEiOiJzdGVlcmxpbmUvbWluaW1hbC1zdGVwLXJlc3VsdC92MSIsImV4ZWN1dGlvbl9zaXRlIjoidGFyZ2V0IiwidGltZW91dCI6NjAwMDAwMDAwMDAwLCJjb21tYW5kIjpbInBvd2Vyc2hlbGwiLCItTm9Qcm9maWxlIiwiLUZpbGUiLCJ2ZXJpZnkucHMxIl0sInJlcXVpcmVkX2NoZWNrcyI6WyJwcmVwYXJlLXNtb2tlIl19LCJyZXZpZXciOnsicHJvdmlkZXIiOiIiLCJlbnRyeSI6IiIsInZlcnNpb24iOiIiLCJpbnB1dF9zY2hlbWEiOiIiLCJvdXRwdXRfc2NoZW1hIjoiIiwiZXhlY3V0aW9uX3NpdGUiOiIiLCJ0aW1lb3V0IjowfSwicHVibGlzaF9wciI6eyJwcm92aWRlciI6ImNvbW1hbmQiLCJlbnRyeSI6InB1Ymxpc2gucHMxIiwidmVyc2lvbiI6Im1pbmltYWwtdjEiLCJpbnB1dF9zY2hlbWEiOiJzdGVlcmxpbmUvbWluaW1hbC1zdGVwLWlucHV0L3YxIiwib3V0cHV0X3NjaGVtYSI6InN0ZWVybGluZS9taW5pbWFsLXN0ZXAtcmVzdWx0L3YxIiwiZXhlY3V0aW9uX3NpdGUiOiJ0YXJnZXQiLCJ0aW1lb3V0Ijo2MDAwMDAwMDAwMDAsImNvbW1hbmQiOlsicG93ZXJzaGVsbCIsIi1Ob1Byb2ZpbGUiLCItRmlsZSIsInB1Ymxpc2gucHMxIl19fSwid29ya3NwYWNlIjp7InZlcmlmaWVkX2F0IjoiMDAwMS0wMS0wMVQwMDowMDowMFoifSwidGFzayI6eyJpZCI6InJlbW90ZS1wcm9iZS04ZjkxMzk2MmYwIiwidGl0bGUiOiJpc29sYXRlZCBzdXBlcnZpc2VkIHByZXBhcmUgcHJvYmUiLCJzdGF0dXMiOiJvcGVuIiwiaXNzdWVfdHlwZSI6InRhc2siLCJhc3NpZ25lZSI6IiIsInByaW9yaXR5IjpudWxsLCJkZXNjcmlwdGlvbiI6Ik5vIEJlYWRzIGFjY2Vzcy4gVmVyaWZ5IGEgY2xlYW4gcmVtb3RlIHdvcmt0cmVlIGFuZCByZXR1cm4gcHJlcGFyZSBldmlkZW5jZSBvbmx5LiBCZWZvcmUgcmVwb3J0aW5nIHByZXBhcmUsIHVzZSBPcmNhIGFzayB0byByZXF1ZXN0IHRoZSBidXNpbmVzcyBkZWNpc2lvbiAnUHJvY2VlZCB3aXRoIHJlYWQtb25seSBwcmVwYXJlPycgd2l0aCBleGFjdCBvcHRpb25zIHllcyxuby4gV2FpdCBmb3IgdGhlIGNvb3JkaW5hdG9yJ3MgYW5zd2VyLCByZXBvcnQgZGVjaXNpb25fYXBwbGllZCBmb3IgdGhhdCBvcmlnaW5hbCBxdWVzdGlvbiwgdGhlbiBmaW5pc2ggdGhlIHNhbWUgcHJlcGFyZSBhdHRlbXB0IHdpdGhvdXQgZWRpdGluZyBmaWxlcy4iLCJzcGVjX2lkIjoiIiwibWV0YWRhdGEiOm51bGwsImxhYmVscyI6bnVsbH19LCJzdGVwX2lkIjoicHJlcGFyZSIsInRhc2tfaWQiOiJyZW1vdGUtcHJvYmUtOGY5MTM5NjJmMCIsIndvcmtmbG93X3J1bl9pZCI6IjhmOTEzOTYyZjA1YWM4ZTc4MDkxZWQ1M2I1N2YyMGQ0In0=",
+      "platform_request_id": "9bd1bbc5-708f-40f2-a8ea-42b02b7b5aef",
+      "receipt": "eyJraW5kIjoib3JjYV9zdXBlcnZpc2VkIiwidGVybWluYWwiOiJ0ZXJtXzAwMzA3MDM2LTk5ZjEtNDFiMy1hOTkxLWRiZWE5NzdkNjk1MSIsInJ1bnRpbWVfaWQiOiJkMDVmNTJiOS00ZGJkLTQ2NTYtYTAxYi0wMDBhOWYyNjZiODQiLCJpbmNhcm5hdGlvbiI6IjI1OTA5YmRhLWJlZDgtNDM2ZC1iNTEzLTdjYThmZWI4NDk1NCIsImNvb3JkaW5hdG9yX3J1bnRpbWVfaWQiOiI3Y2NiMDJiMC1hZWYyLTQxMjQtOGRiOC0wZWMwNjMxNTViMTIiLCJvcmNoZXN0cmF0aW9uX3J1biI6InJ1bl8yN2IyNTQ4OTI4MTEiLCJ0YXNrIjoidGFza185NmY2ZjBiNWI2OGQiLCJkaXNwYXRjaCI6ImN0eF84OGUzOTBkZmY1MjMiLCJleGVjdXRpb25faG9zdCI6ImJlZDU1ZGUwLTZkN2QtNDk3ZS1iMWQ1LTNhYmFiMjU2YjJlZSIsIndvcmt0cmVlX2lkIjoiMDllMzU3NTEtNjUxNy00ZTdjLWFlMjAtMTc4ZWQwZTkwMDAwOjpDOi9Vc2Vycy9saXVtaW5nL29yY2Evd29ya3NwYWNlcy9TdGVlcmxpbmVUZXN0L3N0ZWVybGluZS0wYTVkY2ZmN2I1ZDMifQ==",
+      "created_at": "2026-09-25T05:49:57.4391167Z",
+      "updated_at": "2026-09-25T05:50:18.0733425Z"
+    },
+    {
+      "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\testsupervisedorcarealprepareroundtrip1393254020\\001\\local-identity\\.git",
+      "operation_id": "ack-7e6e81c209affeeb7081527210d5f56f",
+      "idempotency_key": "orca-delivery-ack:run_27b254892811:delivery_6c5e44cee6af",
+      "kind": "ack_orca_delivery",
+      "status": "confirmed",
+      "payload_digest": "16dd2df9556f37cb9a63b32524131fdd162bf88d67a9f31fd915611719d3bdee",
+      "request": "eyJydW5faWQiOiJydW5fMjdiMjU0ODkyODExIiwiZGVsaXZlcnlfaWQiOiJkZWxpdmVyeV82YzVlNDRjZWU2YWYifQ==",
+      "platform_request_id": "7946c666-992e-4f27-861f-cb2190785cb9",
+      "receipt": "eyJhY2tub3dsZWRnZWQiOnRydWUsImRlbGl2ZXJ5X2lkIjoiZGVsaXZlcnlfNmM1ZTQ0Y2VlNmFmIiwiZXJyb3IiOiIiLCJydW5faWQiOiJydW5fMjdiMjU0ODkyODExIn0=",
+      "created_at": "2026-09-25T05:50:19.1232332Z",
+      "updated_at": "2026-09-25T05:50:19.6668383Z"
+    },
+    {
+      "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\testsupervisedorcarealprepareroundtrip1393254020\\001\\local-identity\\.git",
+      "operation_id": "ack-21a972b47086fae0658bb75c4485e468",
+      "idempotency_key": "orca-delivery-ack:run_27b254892811:delivery_b87918ee663e",
+      "kind": "ack_orca_delivery",
+      "status": "confirmed",
+      "payload_digest": "436f50e59cf1cd41e6f1764de314e3940b5d9ed81550770d983a2cf4e3932f49",
+      "request": "eyJydW5faWQiOiJydW5fMjdiMjU0ODkyODExIiwiZGVsaXZlcnlfaWQiOiJkZWxpdmVyeV9iODc5MThlZTY2M2UifQ==",
+      "platform_request_id": "031ad408-5d91-4da3-b13e-cfed8281df53",
+      "receipt": "eyJhY2tub3dsZWRnZWQiOnRydWUsImRlbGl2ZXJ5X2lkIjoiZGVsaXZlcnlfYjg3OTE4ZWU2NjNlIiwiZXJyb3IiOiIiLCJydW5faWQiOiJydW5fMjdiMjU0ODkyODExIn0=",
+      "created_at": "2026-09-25T05:52:13.7863427Z",
+      "updated_at": "2026-09-25T05:52:14.4517264Z"
+    },
+    {
+      "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\testsupervisedorcarealprepareroundtrip1393254020\\001\\local-identity\\.git",
+      "operation_id": "7d60b73328896fcbcccbb1edd9d4b0ee",
+      "idempotency_key": "orca-question-reply:8f913962f05ac8e78091ed53b57f20d4:b57f6ebd2e6f19676febe2d0502de87e:relay_7d1436b8e7fc",
+      "kind": "reply_orca_question",
+      "status": "confirmed",
+      "payload_digest": "afb323200ae72f6b8d186784782cd43029e25e395c8673d5151b935275b2b741",
+      "request": "eyJyZWYiOnsidmVyc2lvbiI6MSwiYmFja2VuZCI6Im9yY2EiLCJwcm90b2NvbCI6Im9yY2Ffc3VwZXJ2aXNlZCIsInRhcmdldCI6eyJpZCI6Im9yY2Etc3VwZXJ2aXNlZDpmZTI2ZGNjZS1lOGY3LTQ3ZGQtOTZjMi1kNjExYzEwOTM3MzMiLCJjb25uZWN0aW9uX2lkIjoiZmUyNmRjY2UtZThmNy00N2RkLTk2YzItZDYxMWMxMDkzNzMzIiwid29ya3RyZWVfaWQiOiIwOWUzNTc1MS02NTE3LTRlN2MtYWUyMC0xNzhlZDBlOTAwMDA6OkM6L1VzZXJzL2xpdW1pbmcvb3JjYS93b3Jrc3BhY2VzL1N0ZWVybGluZVRlc3Qvc3RlZXJsaW5lLTBhNWRjZmY3YjVkMyIsImJyYW5jaCI6ImVycmFubGl1L3N0ZWVybGluZS0wYTVkY2ZmN2I1ZDMiLCJiYXNlX3JldmlzaW9uIjoiMDAyODQwN2ZmYmJjZjlhZDQxMzlmZjYzNzIwMzExYTZlM2ZkMGExZiIsImV4dGVybmFsX3J1bnRpbWUiOiJiZWQ1NWRlMC02ZDdkLTQ5N2UtYjFkNS0zYWJhYjI1NmIyZWUiLCJvcmNoZXN0cmF0aW9uX3J1biI6InJ1bl8yN2IyNTQ4OTI4MTEiLCJleHRlcm5hbF90YXNrIjoidGFza185NmY2ZjBiNWI2OGQiLCJkaXNwYXRjaCI6ImN0eF84OGUzOTBkZmY1MjMiLCJleGVjdXRpb25faG9zdCI6ImJlZDU1ZGUwLTZkN2QtNDk3ZS1iMWQ1LTNhYmFiMjU2YjJlZSJ9LCJhZ2VudCI6eyJuYW1lIjoiY29kZXgifSwicnVuX2lkIjoiOGY5MTM5NjJmMDVhYzhlNzgwOTFlZDUzYjU3ZjIwZDQiLCJhdHRlbXB0X2lkIjoiYjU3ZjZlYmQyZTZmMTk2NzZmZWJlMmQwNTAyZGU4N2UiLCJ3b3Jrc3BhY2VfcGF0aCI6IkM6L1VzZXJzL2xpdW1pbmcvb3JjYS93b3Jrc3BhY2VzL1N0ZWVybGluZVRlc3Qvc3RlZXJsaW5lLTBhNWRjZmY3YjVkMyIsIndvcmtzcGFjZV9icmFuY2giOiJlcnJhbmxpdS9zdGVlcmxpbmUtMGE1ZGNmZjdiNWQzIiwiYmFzZV9jb21taXQiOiIwMDI4NDA3ZmZiYmNmOWFkNDEzOWZmNjM3MjAzMTFhNmUzZmQwYTFmIiwiZXh0ZXJuYWwiOnsia2luZCI6Im9yY2Ffc3VwZXJ2aXNlZCIsInRlcm1pbmFsIjoidGVybV8wMDMwNzAzNi05OWYxLTQxYjMtYTk5MS1kYmVhOTc3ZDY5NTEiLCJydW50aW1lX2lkIjoiZDA1ZjUyYjktNGRiZC00NjU2LWEwMWItMDAwYTlmMjY2Yjg0IiwiaW5jYXJuYXRpb24iOiIyNTkwOWJkYS1iZWQ4LTQzNmQtYjUxMy03Y2E4ZmViODQ5NTQiLCJjb29yZGluYXRvcl9ydW50aW1lX2lkIjoiN2NjYjAyYjAtYWVmMi00MTI0LThkYjgtMGVjMDYzMTU1YjEyIiwib3JjaGVzdHJhdGlvbl9ydW4iOiJydW5fMjdiMjU0ODkyODExIiwidGFzayI6InRhc2tfOTZmNmYwYjViNjhkIiwiZGlzcGF0Y2giOiJjdHhfODhlMzkwZGZmNTIzIiwiZXhlY3V0aW9uX2hvc3QiOiJiZWQ1NWRlMC02ZDdkLTQ5N2UtYjFkNS0zYWJhYjI1NmIyZWUiLCJ3b3JrdHJlZV9pZCI6IjA5ZTM1NzUxLTY1MTctNGU3Yy1hZTIwLTE3OGVkMGU5MDAwMDo6QzovVXNlcnMvbGl1bWluZy9vcmNhL3dvcmtzcGFjZXMvU3RlZXJsaW5lVGVzdC9zdGVlcmxpbmUtMGE1ZGNmZjdiNWQzIn0sImdlbmVyYXRpb24iOiJkMDVmNTJiOS00ZGJkLTQ2NTYtYTAxYi0wMDBhOWYyNjZiODQ6MjU5MDliZGEtYmVkOC00MzZkLWI1MTMtN2NhOGZlYjg0OTU0In0sInF1ZXN0aW9uX2lkIjoicmVsYXlfN2QxNDM2YjhlN2ZjIiwiYW5zd2VyIjoieWVzIn0=",
+      "receipt": "eyJhbnN3ZXIiOiJ5ZXMiLCJhbnN3ZXJfbWVzc2FnZV9pZCI6Im1zZ181NTBiZDc3MjI1NjEiLCJxdWVzdGlvbl9pZCI6InJlbGF5XzdkMTQzNmI4ZTdmYyIsInJlY29uY2lsZWRfZnJvbSI6Im9yY2FfaW5ib3hfZXhhY3RfdGhyZWFkIn0=",
+      "created_at": "2026-09-25T05:52:15.8125765Z",
+      "updated_at": "2026-09-25T05:52:18.5257007Z"
+    },
+    {
+      "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\testsupervisedorcarealprepareroundtrip1393254020\\001\\local-identity\\.git",
+      "operation_id": "ack-acfedcc2411e2ab42a33a7f9e15820db",
+      "idempotency_key": "orca-delivery-ack:run_27b254892811:delivery_a50a5ff4fb8f",
+      "kind": "ack_orca_delivery",
+      "status": "confirmed",
+      "payload_digest": "44ddc6ffef7bebffba41492928129c44e39aa718d4f229a10bc86e54b9bcfa6c",
+      "request": "eyJydW5faWQiOiJydW5fMjdiMjU0ODkyODExIiwiZGVsaXZlcnlfaWQiOiJkZWxpdmVyeV9hNTBhNWZmNGZiOGYifQ==",
+      "platform_request_id": "4153a917-c3df-4b76-bfae-186e13321d96",
+      "receipt": "eyJhY2tub3dsZWRnZWQiOnRydWUsImRlbGl2ZXJ5X2lkIjoiZGVsaXZlcnlfYTUwYTVmZjRmYjhmIiwiZXJyb3IiOiIiLCJydW5faWQiOiJydW5fMjdiMjU0ODkyODExIn0=",
+      "created_at": "2026-09-25T05:52:39.284564Z",
+      "updated_at": "2026-09-25T05:52:39.8792209Z"
+    },
+    {
+      "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\testsupervisedorcarealprepareroundtrip1393254020\\001\\local-identity\\.git",
+      "operation_id": "ack-f7cc1420301b38d2337fb230b814dba1",
+      "idempotency_key": "orca-delivery-ack:run_27b254892811:delivery_a883b42c491d",
+      "kind": "ack_orca_delivery",
+      "status": "confirmed",
+      "payload_digest": "461a1de52005707da1f2adc59fe69a01b9a3c1e977afa23166dfc936776a0873",
+      "request": "eyJydW5faWQiOiJydW5fMjdiMjU0ODkyODExIiwiZGVsaXZlcnlfaWQiOiJkZWxpdmVyeV9hODgzYjQyYzQ5MWQifQ==",
+      "platform_request_id": "9310c673-5322-410f-b9c4-5e636432470e",
+      "receipt": "eyJhY2tub3dsZWRnZWQiOnRydWUsImRlbGl2ZXJ5X2lkIjoiZGVsaXZlcnlfYTg4M2I0MmM0OTFkIiwiZXJyb3IiOiIiLCJydW5faWQiOiJydW5fMjdiMjU0ODkyODExIn0=",
+      "created_at": "2026-09-25T05:53:20.6497923Z",
+      "updated_at": "2026-09-25T05:53:21.7110522Z"
+    },
+    {
+      "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\testsupervisedorcarealprepareroundtrip1393254020\\001\\local-identity\\.git",
+      "operation_id": "ack-617190f68804141469ebed16cf64dc5c",
+      "idempotency_key": "orca-delivery-ack:run_27b254892811:delivery_1d755ff6be11",
+      "kind": "ack_orca_delivery",
+      "status": "confirmed",
+      "payload_digest": "7855b4a9bf3e784ee0457566e6310919defb84ce6bccfa37db31cc1d5d79e776",
+      "request": "eyJydW5faWQiOiJydW5fMjdiMjU0ODkyODExIiwiZGVsaXZlcnlfaWQiOiJkZWxpdmVyeV8xZDc1NWZmNmJlMTEifQ==",
+      "platform_request_id": "84f6a04a-9b8c-414f-8e96-975b8193c2d3",
+      "receipt": "eyJhY2tub3dsZWRnZWQiOnRydWUsImRlbGl2ZXJ5X2lkIjoiZGVsaXZlcnlfMWQ3NTVmZjZiZTExIiwiZXJyb3IiOiIiLCJydW5faWQiOiJydW5fMjdiMjU0ODkyODExIn0=",
+      "created_at": "2026-09-25T05:53:42.4156209Z",
+      "updated_at": "2026-09-25T05:53:43.2208975Z"
+    },
+    {
+      "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\testsupervisedorcarealprepareroundtrip1393254020\\001\\local-identity\\.git",
+      "operation_id": "release-b57f6ebd2e6f19676febe2d0502de87e",
+      "idempotency_key": "release:19d9d89ed32070bb873eed59298e9e78:b57f6ebd2e6f19676febe2d0502de87e",
+      "kind": "settle_resources",
+      "status": "confirmed",
+      "payload_digest": "428afa3dc91e1d8ff427c4b6d2b7eca197acda93c4393034733e24ba0f9a6d16",
+      "request": "eyJyZWYiOnsidmVyc2lvbiI6MSwiYmFja2VuZCI6Im9yY2EiLCJwcm90b2NvbCI6Im9yY2Ffc3VwZXJ2aXNlZCIsInRhcmdldCI6eyJpZCI6Im9yY2Etc3VwZXJ2aXNlZDpmZTI2ZGNjZS1lOGY3LTQ3ZGQtOTZjMi1kNjExYzEwOTM3MzMiLCJjb25uZWN0aW9uX2lkIjoiZmUyNmRjY2UtZThmNy00N2RkLTk2YzItZDYxMWMxMDkzNzMzIiwid29ya3RyZWVfaWQiOiIwOWUzNTc1MS02NTE3LTRlN2MtYWUyMC0xNzhlZDBlOTAwMDA6OkM6L1VzZXJzL2xpdW1pbmcvb3JjYS93b3Jrc3BhY2VzL1N0ZWVybGluZVRlc3Qvc3RlZXJsaW5lLTBhNWRjZmY3YjVkMyIsImJyYW5jaCI6ImVycmFubGl1L3N0ZWVybGluZS0wYTVkY2ZmN2I1ZDMiLCJiYXNlX3JldmlzaW9uIjoiMDAyODQwN2ZmYmJjZjlhZDQxMzlmZjYzNzIwMzExYTZlM2ZkMGExZiIsImV4dGVybmFsX3J1bnRpbWUiOiJiZWQ1NWRlMC02ZDdkLTQ5N2UtYjFkNS0zYWJhYjI1NmIyZWUiLCJvcmNoZXN0cmF0aW9uX3J1biI6InJ1bl8yN2IyNTQ4OTI4MTEiLCJleHRlcm5hbF90YXNrIjoidGFza185NmY2ZjBiNWI2OGQiLCJkaXNwYXRjaCI6ImN0eF84OGUzOTBkZmY1MjMiLCJleGVjdXRpb25faG9zdCI6ImJlZDU1ZGUwLTZkN2QtNDk3ZS1iMWQ1LTNhYmFiMjU2YjJlZSJ9LCJhZ2VudCI6eyJuYW1lIjoiY29kZXgifSwicnVuX2lkIjoiOGY5MTM5NjJmMDVhYzhlNzgwOTFlZDUzYjU3ZjIwZDQiLCJhdHRlbXB0X2lkIjoiYjU3ZjZlYmQyZTZmMTk2NzZmZWJlMmQwNTAyZGU4N2UiLCJ3b3Jrc3BhY2VfcGF0aCI6IkM6L1VzZXJzL2xpdW1pbmcvb3JjYS93b3Jrc3BhY2VzL1N0ZWVybGluZVRlc3Qvc3RlZXJsaW5lLTBhNWRjZmY3YjVkMyIsIndvcmtzcGFjZV9icmFuY2giOiJlcnJhbmxpdS9zdGVlcmxpbmUtMGE1ZGNmZjdiNWQzIiwiYmFzZV9jb21taXQiOiIwMDI4NDA3ZmZiYmNmOWFkNDEzOWZmNjM3MjAzMTFhNmUzZmQwYTFmIiwiZXh0ZXJuYWwiOnsia2luZCI6Im9yY2Ffc3VwZXJ2aXNlZCIsInRlcm1pbmFsIjoidGVybV8wMDMwNzAzNi05OWYxLTQxYjMtYTk5MS1kYmVhOTc3ZDY5NTEiLCJydW50aW1lX2lkIjoiZDA1ZjUyYjktNGRiZC00NjU2LWEwMWItMDAwYTlmMjY2Yjg0IiwiaW5jYXJuYXRpb24iOiIyNTkwOWJkYS1iZWQ4LTQzNmQtYjUxMy03Y2E4ZmViODQ5NTQiLCJjb29yZGluYXRvcl9ydW50aW1lX2lkIjoiN2NjYjAyYjAtYWVmMi00MTI0LThkYjgtMGVjMDYzMTU1YjEyIiwib3JjaGVzdHJhdGlvbl9ydW4iOiJydW5fMjdiMjU0ODkyODExIiwidGFzayI6InRhc2tfOTZmNmYwYjViNjhkIiwiZGlzcGF0Y2giOiJjdHhfODhlMzkwZGZmNTIzIiwiZXhlY3V0aW9uX2hvc3QiOiJiZWQ1NWRlMC02ZDdkLTQ5N2UtYjFkNS0zYWJhYjI1NmIyZWUiLCJ3b3JrdHJlZV9pZCI6IjA5ZTM1NzUxLTY1MTctNGU3Yy1hZTIwLTE3OGVkMGU5MDAwMDo6QzovVXNlcnMvbGl1bWluZy9vcmNhL3dvcmtzcGFjZXMvU3RlZXJsaW5lVGVzdC9zdGVlcmxpbmUtMGE1ZGNmZjdiNWQzIn0sImdlbmVyYXRpb24iOiJkMDVmNTJiOS00ZGJkLTQ2NTYtYTAxYi0wMDBhOWYyNjZiODQ6MjU5MDliZGEtYmVkOC00MzZkLWI1MTMtN2NhOGZlYjg0OTU0In0sIm91dGNvbWUiOiJzdWNjZWVkZWQifQ==",
+      "platform_request_id": "d8ebe0bb-2e31-49ef-ac1d-9f7d85bed5f0",
+      "receipt": "eyJkaXNwYXRjaF9pZCI6ImN0eF84OGUzOTBkZmY1MjMiLCJlcnJvciI6IiIsInNldHRsZW1lbnQiOnsiZGlzcG9zaXRpb24iOiJyZWxlYXNlZCIsInBsYXRmb3JtX3JlcXVlc3RfaWQiOiJkOGViZTBiYi0yZTMxLTQ5ZWYtYWMxZC05ZjdkODViZWQ1ZjAifX0=",
+      "created_at": "2026-09-25T05:53:52.8232484Z",
+      "updated_at": "2026-09-25T05:53:54.6647988Z"
+    }
+  ],
+  "remote_codex_cli_version": "codex-cli 0.156.1",
+  "remote_orca_version": "1.4.210",
+  "resources_released": true,
+  "run": {
+    "task_id": "remote-probe-8f913962f0",
+    "domain_task_id": "remote-probe-8f913962f0",
+    "domain_attempt_number": 1,
+    "workflow_version": "minimal-v1",
+    "workflow_config_digest": "854970bde0b3d7aba606e3070fdc1fc9ab60a826120d71b8353f735161add0f6",
+    "execution_id": "19d9d89ed32070bb873eed59298e9e78",
+    "title": "isolated supervised prepare probe",
+    "run_id": "8f913962f05ac8e78091ed53b57f20d4",
+    "attempt_id": "a7dda0c6c0dbf3ae348516fbc0a6843f",
+    "control_revision": 7,
+    "claimant": "supervised-probe",
+    "host": "orca_supervised",
+    "backend": "orca",
+    "protocol": "orca_supervised",
+    "agent": "codex",
+    "target": {
+      "id": "orca-supervised:fe26dcce-e8f7-47dd-96c2-d611c1093733",
+      "connection_id": "fe26dcce-e8f7-47dd-96c2-d611c1093733",
+      "worktree_id": "09e35751-6517-4e7c-ae20-178ed0e90000::C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-0a5dcff7b5d3",
+      "branch": "erranliu/steerline-0a5dcff7b5d3",
+      "base_revision": "0028407ffbbcf9ad4139ff63720311a6e3fd0a1f",
+      "external_runtime": "bed55de0-6d7d-497e-b1d5-3abab256b2ee",
+      "orchestration_run": "run_27b254892811",
+      "external_task": "task_96f6f0b5b68d",
+      "dispatch": "ctx_88e390dff523",
+      "execution_host": "bed55de0-6d7d-497e-b1d5-3abab256b2ee"
+    },
+    "beads_status": "in_progress",
+    "execution_status": "pending",
+    "finish_task_status": "pending",
+    "codex_session_id": null,
+    "process": null,
+    "started_at": null,
+    "ended_at": "2026-09-25T05:53:45.032871Z",
+    "worktree_path": "C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-0a5dcff7b5d3",
+    "worktree_branch": "erranliu/steerline-0a5dcff7b5d3",
+    "workspace_intent": {
+      "path": "C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-0a5dcff7b5d3",
+      "branch": "erranliu/steerline-0a5dcff7b5d3",
+      "base_commit": "0028407ffbbcf9ad4139ff63720311a6e3fd0a1f"
+    },
+    "completion": null,
+    "beads_context": {
+      "beads_dir": "",
+      "project_id": "isolated-protocol-probe",
+      "database": "",
+      "backend": ""
+    },
+    "base_commit": "0028407ffbbcf9ad4139ff63720311a6e3fd0a1f",
+    "pr": {
+      "url": null,
+      "state": "unknown",
+      "merged_at": null,
+      "merge_commit": null,
+      "queried_at": null,
+      "query_error": null
+    },
+    "last_event": "Orca inbox Delivery",
+    "log_path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\TestSupervisedOrcaRealPrepareRoundtrip1393254020\\001\\runtime\\runs\\8f913962f05ac8e78091ed53b57f20d4\\events.jsonl",
+    "result_path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\TestSupervisedOrcaRealPrepareRoundtrip1393254020\\001\\runtime\\runs\\8f913962f05ac8e78091ed53b57f20d4\\result.json",
+    "summary": null,
+    "error": null,
+    "decision": {
+      "id": "relay_7d1436b8e7fc",
+      "attempt_id": "b57f6ebd2e6f19676febe2d0502de87e",
+      "version": 4,
+      "request": {
+        "question": "Proceed with read-only prepare?",
+        "options": [
+          {
+            "id": "yes",
+            "label": "yes"
+          },
+          {
+            "id": "no",
+            "label": "no"
+          }
+        ]
+      },
+      "status": "applied",
+      "option_id": "yes",
+      "answered_by": "spec03-acceptance",
+      "answered_at": "2026-09-25T05:52:15.7303275Z",
+      "applied_at": "2026-09-25T05:52:39.2442979Z",
+      "request_path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\TestSupervisedOrcaRealPrepareRoundtrip1393254020\\001\\runtime\\runs\\8f913962f05ac8e78091ed53b57f20d4\\decision.request.json",
+      "answer_path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\TestSupervisedOrcaRealPrepareRoundtrip1393254020\\001\\runtime\\runs\\8f913962f05ac8e78091ed53b57f20d4\\decision.answer.json"
+    }
+  },
+  "step_attempt": {
+    "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\testsupervisedorcarealprepareroundtrip1393254020\\001\\local-identity\\.git",
+    "attempt_id": "b57f6ebd2e6f19676febe2d0502de87e",
+    "execution_id": "19d9d89ed32070bb873eed59298e9e78",
+    "step_id": "prepare",
+    "attempt_number": 1,
+    "operation_id": "0437dd79133a1442a8609b210aac53e8",
+    "event_path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\TestSupervisedOrcaRealPrepareRoundtrip1393254020\\001\\runtime\\runs\\8f913962f05ac8e78091ed53b57f20d4\\steps\\b57f6ebd2e6f19676febe2d0502de87e\\events.jsonl",
+    "result_path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\TestSupervisedOrcaRealPrepareRoundtrip1393254020\\001\\runtime\\runs\\8f913962f05ac8e78091ed53b57f20d4\\steps\\b57f6ebd2e6f19676febe2d0502de87e\\result.json",
+    "output_source": "terminal",
+    "output_cursor": "owr1_eyJ2IjoxLCJkIjoiY3R4Xzg4ZTM5MGRmZjUyMyIsInMiOiJ0ZXJtaW5hbCIsImkiOiJ2bzNFQlFRYVoxcGNGdmM1X0ExQ01QT3dKeFY4d3ptTCIsInAiOjIyNH0",
+    "status": "succeeded",
+    "input_revision": "0028407ffbbcf9ad4139ff63720311a6e3fd0a1f",
+    "contract_digest": "7478984e6d5f47462311e784a43f834e0403027cadae10c3f52bf827af3e3fc9",
+    "result_id": "prep-19d9d89ed32070bb873eed59298e9e78",
+    "result": {
+      "step_id": "prepare",
+      "succeeded": true,
+      "input_revision": "0028407ffbbcf9ad4139ff63720311a6e3fd0a1f",
+      "base_ancestor": true,
+      "workspace": {
+        "repository": "c:\\users\\lmas1\\appdata\\local\\temp\\testsupervisedorcarealprepareroundtrip1393254020\\001\\local-identity\\.git",
+        "worktree": "c:\\users\\liuming\\orca\\workspaces\\steerlinetest\\steerline-0a5dcff7b5d3",
+        "branch": "erranliu/steerline-0a5dcff7b5d3",
+        "base": "0028407ffbbcf9ad4139ff63720311a6e3fd0a1f",
+        "head": "0028407ffbbcf9ad4139ff63720311a6e3fd0a1f",
+        "verified_at": "2026-09-25T05:53:52.7550273Z"
+      },
+      "result_id": "prep-19d9d89ed32070bb873eed59298e9e78"
+    },
+    "external_binding": {
+      "id": "orca-supervised:fe26dcce-e8f7-47dd-96c2-d611c1093733",
+      "connection_id": "fe26dcce-e8f7-47dd-96c2-d611c1093733",
+      "worktree_id": "09e35751-6517-4e7c-ae20-178ed0e90000::C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-0a5dcff7b5d3",
+      "branch": "erranliu/steerline-0a5dcff7b5d3",
+      "base_revision": "0028407ffbbcf9ad4139ff63720311a6e3fd0a1f",
+      "external_runtime": "bed55de0-6d7d-497e-b1d5-3abab256b2ee",
+      "orchestration_run": "run_27b254892811",
+      "external_task": "task_96f6f0b5b68d",
+      "dispatch": "ctx_88e390dff523",
+      "execution_host": "bed55de0-6d7d-497e-b1d5-3abab256b2ee"
+    },
+    "created_at": "2026-09-25T05:49:57.4114809Z",
+    "updated_at": "2026-09-25T05:53:52.7550273Z"
+  },
+  "worker_done_outcome": "succeeded",
+  "workflow": {
+    "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\testsupervisedorcarealprepareroundtrip1393254020\\001\\local-identity\\.git",
+    "workflow_run_id": "8f913962f05ac8e78091ed53b57f20d4",
+    "task_id": "remote-probe-8f913962f0",
+    "workflow_version": "minimal-v1",
+    "config_digest": "854970bde0b3d7aba606e3070fdc1fc9ab60a826120d71b8353f735161add0f6",
+    "workflow_definition": {
+      "id": "minimal-v1",
+      "version": "minimal-v1",
+      "review_required": false,
+      "max_repair_rounds": 2
+    },
+    "project_steps": {
+      "implement": {
+        "provider": "agent_skill",
+        "entry": "builtin:implement",
+        "version": "minimal-v1",
+        "input_schema": "steerline/minimal-step-input/v1",
+        "output_schema": "steerline/minimal-step-result/v1",
+        "execution_site": "target",
+        "timeout": 600000000000
+      },
+      "verify": {
+        "provider": "command",
+        "entry": "verify.ps1",
+        "version": "minimal-v1",
+        "input_schema": "steerline/minimal-step-input/v1",
+        "output_schema": "steerline/minimal-step-result/v1",
+        "execution_site": "target",
+        "timeout": 600000000000,
+        "command": [
+          "powershell",
+          "-NoProfile",
+          "-File",
+          "verify.ps1"
+        ],
+        "required_checks": [
+          "prepare-smoke"
+        ]
+      },
+      "review": {
+        "provider": "",
+        "entry": "",
+        "version": "",
+        "input_schema": "",
+        "output_schema": "",
+        "execution_site": "",
+        "timeout": 0
+      },
+      "publish_pr": {
+        "provider": "command",
+        "entry": "publish.ps1",
+        "version": "minimal-v1",
+        "input_schema": "steerline/minimal-step-input/v1",
+        "output_schema": "steerline/minimal-step-result/v1",
+        "execution_site": "target",
+        "timeout": 600000000000,
+        "command": [
+          "powershell",
+          "-NoProfile",
+          "-File",
+          "publish.ps1"
+        ]
+      }
+    },
+    "runner": {
+      "codex": {
+        "executable": "codex",
+        "args": null
+      },
+      "sandbox": "workspace-write",
+      "model": "gpt-6-luna",
+      "reasoning_effort": "high"
+    },
+    "phase": "executing",
+    "repository": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\TestSupervisedOrcaRealPrepareRoundtrip1393254020\\001\\local-identity",
+    "branch": "main",
+    "created_at": "2026-09-25T05:49:57.4114809Z",
+    "updated_at": "2026-09-25T05:53:54.6715573Z"
+  },
+  "worktree_retained": true
+}

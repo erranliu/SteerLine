@@ -1,0 +1,21 @@
+{
+  "captured_at": "2026-09-26T01:46:28Z",
+  "evidence_kind": "post_run_assertion_summary",
+  "test": "go test ./internal/steerline -run ^TestSupervisedOrcaRealPrepareRoundtrip$ -count=1 -v -timeout 90m",
+  "test_result": "PASS",
+  "test_duration_seconds": 1523.22,
+  "fault_injection": "STEERLINE_REAL_SUPERVISED_RESTART_AFTER_STEP_STATUS=publish_pr",
+  "assertion": "The test must save and acknowledge publish_pr status, close and reopen the original SQLite service, reattach the original Dispatch, then accept worker_done; it fails if this restart is not observed.",
+  "orca_run_id": "run_218d26adbfcf",
+  "publish_dispatch_id": "ctx_4303459ed482",
+  "candidate_revision": "a12f72da5fb9bff6536673b0be853abbd0b1a46d",
+  "pull_request": "https://github.com/erranliu/SteerlineTest/pull/10",
+  "merge_commit": "b278a01449e9acb6a803644004f1cef81c5a98e7",
+  "original_run_completed": true,
+  "provider_task_closed": true,
+  "idempotent_second_poll": true,
+  "source_receipts": [
+    "spec03-supervised-r07-publish-accepted-2026-09-26.json",
+    "spec03-supervised-r07-publish-complete-2026-09-26.json"
+  ]
+}

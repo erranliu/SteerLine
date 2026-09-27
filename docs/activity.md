@@ -23,11 +23,11 @@ PR 4B 增加了单独的 `ConversationEvent` 读模型，保存在当前 `steerl
 | v | integer | schema 版本，当前 1 |
 | seq | integer | 本文件内单调递增，从 1 开始，用于排序与去重 |
 | ts | timestamp | 记录时间（RFC3339 UTC）。agent 事件无自带时间，取到达时间 |
-| source | string | `codex` / `pi` / `steer`（调度器生命周期） |
+| source | string | `codex` / `pi` / `orca-supervised` / `steer`（调度器生命周期） |
 | run_id / task_id | string | 运行的稳定身份，由写者补齐 |
 | item_id | string/null | agent 内同一个工具调用/消息的关联键，用于把 running 更新折叠到同一项 |
 | kind | string | 见下表 |
-| status | string/null | `started` / `running` / `completed` / `failed` / `info` |
+| status | string/null | `started` / `running` / `completed` / `failed` / `info` / `manual_host_check` |
 | title | string/null | 简短标题（命令首行、工具名、文件变更列表、生命周期标题） |
 | detail | string/null | 正文或输出，最多 4096 字符（原始全文在 events.jsonl） |
 | elapsed_ms | integer/null | 成对的 started→completed 时长 |
@@ -51,7 +51,11 @@ PR 4B 增加了单独的 `ConversationEvent` 读模型，保存在当前 `steerl
 
 调度器生命周期额外使用 `claim`、`prepare`、`worker_start`、`worker_exit`、`result`、`retry`、`pr`、`completion`、`decision`。
 
-`decision` 表示 agent 请求人工决策以及该决策的流转（`status` 为 `pending`/`answered`/`applied`/`failed`）；`meta` 带 `decision_id`、`options`、`option_id`、`answered_by`。协议见 [decisions](decisions.md)。
+`decision` 表示 agent 请求人工决策以及该决策的流转（`status` 为 `pending`/`answer_saved`/`reply_accepted`/`applied`/`failed`）；`meta` 带 `decision_id`、`options`、`option_id`、`answered_by`。协议见 [decisions](decisions.md)。
+
+受监管 Orca 的原始 Delivery 与完整 payload 先以 Run/Execution/Attempt、`external_message_id` 写入 SQLite；activity 只是展示摘要。`worker-read` 保留 `transcript` 或 `terminal` 的 source 与不透明 cursor，写入成功后才推进游标；source 改变、剪裁和历史缺口写显式 gap，不能以无输出推断 worker 完成。业务完成仍要求对应结构化 status、受接受的 worker_done 与中心门槛。
+
+Orca 报告明确的 `agentWait` 对象，或 transcript 出现远端 helper 启动取消时，受监管 activity 记 `error/manual_host_check`，提示人工核实宿主交互；它不创建业务 Decision、不自动批准权限，也不把 `agentWait=null` 解读为无需人工检查。
 
 ### 关键规则
 

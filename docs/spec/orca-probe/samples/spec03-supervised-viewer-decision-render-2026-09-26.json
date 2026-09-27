@@ -1,0 +1,15 @@
+{
+  "arrival_latency_measured": false,
+  "captured_at": "2026-09-26T01:58:38.7896361Z",
+  "center_to_render_ms": 65802,
+  "decision_created_at": "2026-09-26T01:57:32.9868845Z",
+  "decision_id": "relay_e623964d80f9",
+  "probe_started_at": "2026-09-26T01:58:38.6710498Z",
+  "question_rendered": true,
+  "run_id": "8be6ce01697fed6a2e077b21fa8fee48",
+  "snapshot_and_render_ms": 115,
+  "source": "live supervised SQLite projection",
+  "view_height": 50,
+  "view_width": 160,
+  "viewer_refresh_interval_ms": 700
+}

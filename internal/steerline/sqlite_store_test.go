@@ -212,7 +212,7 @@ func TestMinimalWorkflowRevisionGatesAndRepairLimit(t *testing.T) {
 	run := &WorkflowRunRecord{WorkflowVersion: MinimalWorkflowVersion, Definition: WorkflowDefinition{ID: MinimalWorkflowVersion, Version: MinimalWorkflowVersion, ReviewRequired: true, MaxRepairRounds: 1}, Phase: "executing"}
 	base := strings.Repeat("a", 40)
 	prepared := WorkspaceEvidence{Repository: "repo", Worktree: "tree", Branch: "codex/test", Base: base, Head: base, VerifiedAt: time.Now().UTC()}
-	exec := &ExecutionRecord{Status: "active", CurrentStep: "prepare", Workspace: WorkspaceEvidence{Repository: "repo", Worktree: "tree", Branch: "codex/test", Base: base}}
+	exec := &ExecutionRecord{Status: "active", Protocol: string(ProtocolOrcaSupervised), CurrentStep: "prepare", Workspace: WorkspaceEvidence{Repository: "repo", Worktree: "tree", Branch: "codex/test", Base: base}}
 	if step, err := AdvanceMinimalExecution(run, exec, StepGateResult{StepID: "prepare", Succeeded: true, Workspace: prepared}, nil); err != nil || step != "implement" {
 		t.Fatalf("prepare gate: %q %v", step, err)
 	}
@@ -220,15 +220,58 @@ func TestMinimalWorkflowRevisionGatesAndRepairLimit(t *testing.T) {
 	commit := strings.Repeat("b", 40)
 	verified := time.Now().UTC()
 	implement := StepGateResult{StepID: "implement", Succeeded: true, InputRevision: base, Revision: commit, Workspace: WorkspaceEvidence{Repository: "repo", Worktree: "tree", Branch: "codex/test", Base: exec.Workspace.Base, Head: commit, VerifiedAt: verified}}
+	for _, test := range []struct {
+		name       string
+		mutate     func(*StepGateResult)
+		wantErrSub string
+	}{
+		{name: "input revision", mutate: func(v *StepGateResult) { v.InputRevision = strings.Repeat("c", 40) }, wantErrSub: "implement input revision"},
+		{name: "repository", mutate: func(v *StepGateResult) { v.Workspace.Repository = "other-repo" }, wantErrSub: "implement workspace repository"},
+		{name: "worktree", mutate: func(v *StepGateResult) { v.Workspace.Worktree = "other-tree" }, wantErrSub: "implement worktree"},
+		{name: "branch", mutate: func(v *StepGateResult) { v.Workspace.Branch = "other-branch" }, wantErrSub: "implement branch"},
+		{name: "base", mutate: func(v *StepGateResult) { v.Workspace.Base = strings.Repeat("c", 40) }, wantErrSub: "implement base revision"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			badRun, badExec, badResult := *run, *exec, implement
+			test.mutate(&badResult)
+			if _, err := AdvanceMinimalExecution(&badRun, &badExec, badResult, nil); err == nil || !strings.Contains(err.Error(), test.wantErrSub) {
+				t.Fatalf("mismatched implement %s receipt was not rejected precisely: %v", test.name, err)
+			}
+		})
+	}
 	if step, err := AdvanceMinimalExecution(run, exec, implement, nil); err != nil || step != "verify" {
 		t.Fatalf("implement gate: %q %v", step, err)
 	}
 	exec.CurrentStep = "verify"
-	verify := StepGateResult{StepID: "verify", Succeeded: true, Revision: commit, Workspace: implement.Workspace, ResultID: "verify-1", Checks: []CheckEvidence{{Name: "unit", Status: "failed", Revision: commit}}}
+	failedExit := 1
+	failedPassed := false
+	verify := StepGateResult{StepID: "verify", Succeeded: true, Revision: commit, Workspace: implement.Workspace, ResultID: "verify-1", Checks: []CheckEvidence{{Name: "unit", Status: "failed", Revision: commit, Command: "go test ./...", ScriptVersion: "fixture/v1", ExitCode: &failedExit, Passed: &failedPassed, EvidenceRef: "fixture:unit", ActualCommit: commit}}}
+	badVerify := verify
+	badVerify.Checks = append([]CheckEvidence(nil), verify.Checks...)
+	badVerify.Checks[0].EvidenceRef = ""
+	if _, err := AdvanceMinimalExecution(run, exec, badVerify, []string{"unit"}); err == nil {
+		t.Fatal("verify passed without a script evidence reference")
+	}
+	badVerify = verify
+	badVerify.Checks = append([]CheckEvidence(nil), verify.Checks...)
+	badVerify.Checks[0].ActualCommit = base
+	if _, err := AdvanceMinimalExecution(run, exec, badVerify, []string{"unit"}); err == nil {
+		t.Fatal("verify passed with check evidence from another commit")
+	}
+	badVerify = verify
+	badVerify.Checks = append([]CheckEvidence(nil), verify.Checks...)
+	badVerify.Checks[0].Status = "passed"
+	if _, err := AdvanceMinimalExecution(run, exec, badVerify, []string{"unit"}); err == nil {
+		t.Fatal("verify passed with a failed exit code")
+	}
 	if step, err := AdvanceMinimalExecution(run, exec, verify, []string{"unit"}); err != nil || step != "implement" || exec.RepairRounds != 1 {
 		t.Fatalf("failed deterministic check did not enter repair: step=%q err=%v rounds=%d", step, err, exec.RepairRounds)
 	}
 	verify.Checks[0].Status = "passed"
+	passedExit := 0
+	passed := true
+	verify.Checks[0].ExitCode = &passedExit
+	verify.Checks[0].Passed = &passed
 	exec.CurrentStep = "verify"
 	if step, err := AdvanceMinimalExecution(run, exec, verify, []string{"unit"}); err != nil || step != "review" {
 		t.Fatalf("verify gate: %q %v", step, err)

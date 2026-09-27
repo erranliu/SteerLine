@@ -32,6 +32,10 @@ steerline answer -config .\service.json `
 
 minimal-v1 步骤结果要求 `applied_decision_id`、`applied_decision_attempt_id`、`applied_decision_execution_id` 和 `applied_answer_sha256` 同时匹配原决策、被暂停的 attempt、固定 execution 和答案摘要。步骤 envelope 自身还必须绑定本次 workflow/execution/resumed step attempt。进程存活、答案命令回执、自然语言总结或 PR 结果都不足以证明应用；旧 attempt 的迟到结果不会解锁新的决策。
 
+受监管 Orca 的 `question` message ID 是 Decision ID，原 Attempt 和 Dispatch 在等待期间保持活跃。回答命令经服务保存后，用独立的 `reply_orca_question` Operation 调用 Orca `reply`；回执必须匹配原 question、Run、Dispatch、答案及平台 request ID。worker 以 `ask --json` 保存原问题 ID，收到答案后在同一 Attempt 发送 `decision_applied` status。回执丢失时，服务只读检查 Orca inbox 中原 question thread 的唯一答案消息；无法唯一确认就保持 `outcome_unknown`，不另开 worker 或重发答案。
+
+远端 `decision_applied` 必须同时回传原 Attempt/Execution ID 与实际应用的答案正文。中心逐字比对已保存答案，再按本页固定摘要规则核验应用证明；只含 question ID 的旧探测回执不构成当前完整证明，生产远端能力保持未认证。选项附备注在当前 Orca reply 格式下无法同时交付，中心保留 `answer_saved` 并在发送前明确阻断。
+
 ## 历史与恢复
 
 历史页按 `decision_id` 展示本轮所有问题和已接受答案；折叠、展开、session/turn 结束只改变视图，不消费问题或修改决策。当前问题卡片留在折叠区外，UI 还分别呈现答案已保存、后端已接受、轮次已开始、已应用、失败与待核实。

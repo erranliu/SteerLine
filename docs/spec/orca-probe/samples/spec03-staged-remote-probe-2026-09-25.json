@@ -1,0 +1,117 @@
+{
+  "schema_version": "steerline.spec03-remote-probe.v1",
+  "captured_at": "2026-09-24T23:14:00Z",
+  "evidence_class": "real_remote",
+  "scope": "isolated SteerlineTest protocol probe; not SteerLine adapter acceptance",
+  "versions": {
+    "center_orca_cli": "1.4.209",
+    "remote_orca_runtime": "1.4.210",
+    "compatibility_key": "1.4",
+    "remote_codex_cli": "0.156.1",
+    "agent_model": "gpt-6-luna",
+    "reasoning_effort": "high"
+  },
+  "workspace": {
+    "repository_alias": "SteerlineTest",
+    "origin": "https://github.com/erranliu/SteerlineTest.git",
+    "worktree_id": "09e35751-6517-4e7c-ae20-178ed0e90000::C:/Users/liuming/orca/workspaces/SteerlineTest/spec03-probe-1-4-family-run27b254",
+    "worktree_identity": "wt2:local:1c534912-2935-4c0d-ad4f-b384c63f29dd",
+    "path": "C:/Users/liuming/orca/workspaces/SteerlineTest/spec03-probe-1-4-family-run27b254",
+    "branch": "erranliu/spec03-probe-1-4-family-run27b254",
+    "fixed_base": "0028407ffbbcf9ad4139ff63720311a6e3fd0a1f",
+    "main_unchanged": true
+  },
+  "attempt_history": [
+    {
+      "phase": "initial_default_model_probe",
+      "task_alias": "task_fcba288b591e",
+      "dispatch_alias": "ctx_82f5a675e56d",
+      "codex_cli": "0.149.0",
+      "requested_model": null,
+      "effective_model": "gpt-6-astra/high",
+      "result": "CLI rejected model as requiring a newer Codex; no files changed",
+      "post_update_runtime_epoch_change": true,
+      "dispatch_state": "abandoned",
+      "liveness_after_epoch_change": "unverifiable/host_indeterminate",
+      "user_confirmed_original_process_exit": true,
+      "old_terminal_closed_by_orca": false,
+      "residual_resource": "retained; do not stop/release without exact positive settlement evidence"
+    },
+    {
+      "phase": "retry_without_fixed_base_in_task_context",
+      "dispatch_alias": "ctx_2c01b18f72df",
+      "codex_cli": "0.156.1",
+      "model": "gpt-6-luna/high",
+      "result": "failed before edit because task context omitted fixed_base",
+      "head_unchanged": true,
+      "worktree_clean": true,
+      "worker_done": "failed accepted",
+      "terminal_release": "released by exact settled Dispatch"
+    },
+    {
+      "phase": "implement",
+      "task_id": "task_bef3d6929fa4",
+      "dispatch_id": "ctx_ab944e79255b",
+      "codex_cli": "0.156.1",
+      "model": "gpt-6-luna/high",
+      "input_revision": "0028407ffbbcf9ad4139ff63720311a6e3fd0a1f",
+      "output_revision": "04ad46d30a156e81ad2d48fa522e8fb57eb6a558",
+      "initial_dirty": false,
+      "final_dirty": false,
+      "files_modified": [
+        "steerline-spec03-probe.txt"
+      ],
+      "file_content": "steerline-1.4-family-2026-09-25-run27b254892811",
+      "commit_parent": "0028407ffbbcf9ad4139ff63720311a6e3fd0a1f",
+      "commit_files": [
+        "steerline-spec03-probe.txt"
+      ],
+      "worker_done": "succeeded accepted",
+      "terminal_release": "released by exact settled Dispatch"
+    },
+    {
+      "phase": "verify",
+      "task_id": "task_1816b63dd3ab",
+      "dispatch_id": "ctx_ab202aad8f4f",
+      "codex_cli": "0.156.1",
+      "model": "gpt-6-luna/high",
+      "input_revision": "04ad46d30a156e81ad2d48fa522e8fb57eb6a558",
+      "output_revision": "04ad46d30a156e81ad2d48fa522e8fb57eb6a558",
+      "initial_dirty": false,
+      "final_dirty": false,
+      "files_modified": [],
+      "checks": [
+        "exact worktree ID/path and repository origin",
+        "branch and initial/final HEAD",
+        "fixed-base ancestry",
+        "clean status before and after",
+        "marker content and single-file commit list",
+        "actual remote Codex CLI version"
+      ],
+      "worker_done": "succeeded accepted",
+      "terminal_release": "released by exact settled Dispatch"
+    }
+  ],
+  "verified_scope": [
+    "1.4.209 center and 1.4.210 remote runtime passed the user-selected major.minor compatibility key",
+    "remote worker start with an explicit model and reasoning effort",
+    "exact remote worktree identity and fixed-base pre/post checks",
+    "one implement commit followed by a distinct read-only verify Dispatch on the same worktree",
+    "structured status, worker_done delivery, and exact settled-worker release"
+  ],
+  "not_verified": [
+    "SteerLine supervised execution adapter or viewer integration",
+    "business ask/reply and decision-applied proof",
+    "center restart, response-loss reconciliation, and output source-change recovery through SteerLine",
+    "verify/review/publish_pr gates in SteerLine",
+    "PR creation, merge verification, or task completion"
+  ],
+  "external_side_effects": {
+    "main_branch_changed": false,
+    "pushed": false,
+    "pull_request_created": false,
+    "merged": false,
+    "remote_steerline_service_started": false
+  },
+  "conclusion": "The isolated real-remote probe partially verifies Orca 1.4-family worker identity, an implement result, a distinct same-worktree verify Dispatch, worker_done delivery, and exact resource release. The original runtime-stale Dispatch remains abandoned and unverifiable with its resource retained. Spec 03 remains unaccepted; the unverified protocol gates and SteerLine adapter/viewer/PR integration remain required."
+}

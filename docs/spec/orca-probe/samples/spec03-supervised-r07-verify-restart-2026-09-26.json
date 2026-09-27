@@ -1,0 +1,531 @@
+{
+  "attempts": [
+    {
+      "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\testsupervisedorcarealprepareroundtrip3312261080\\001\\local-identity\\.git",
+      "attempt_id": "5c8035a028bacbccc270b141bde1c22c",
+      "execution_id": "547efb821e96e76d4f286389d9800969",
+      "step_id": "implement",
+      "attempt_number": 1,
+      "operation_id": "94c4b585109f2f95466ea7cebb2f7d41",
+      "event_path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\TestSupervisedOrcaRealPrepareRoundtrip3312261080\\001\\runtime\\runs\\a38eb476ac9595ee9cd9b02482301fc9\\steps\\5c8035a028bacbccc270b141bde1c22c\\events.jsonl",
+      "result_path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\TestSupervisedOrcaRealPrepareRoundtrip3312261080\\001\\runtime\\runs\\a38eb476ac9595ee9cd9b02482301fc9\\steps\\5c8035a028bacbccc270b141bde1c22c\\result.json",
+      "output_source": "terminal",
+      "output_cursor": "owr1_eyJ2IjoxLCJkIjoiY3R4XzIwYzQ5YTdhZWNhOSIsInMiOiJ0ZXJtaW5hbCIsImkiOiJjRzZwcEt6TDI4Vm9sVDFwYzdLWVZLNzFjelVDdF9nRCIsInAiOjMyOH0",
+      "status": "succeeded",
+      "input_revision": "0028407ffbbcf9ad4139ff63720311a6e3fd0a1f",
+      "contract_digest": "64322548c932bc7bb2ba2a6a875648ba18f4239bb1484b2a335df6bf24889bb1",
+      "prerequisite_result_ids": [
+        "3be1263a-7e72-41aa-af17-3518e592ea84"
+      ],
+      "result_id": "f1175360-f7df-4596-beef-43b28e545cec",
+      "result": {
+        "step_id": "implement",
+        "succeeded": true,
+        "input_revision": "0028407ffbbcf9ad4139ff63720311a6e3fd0a1f",
+        "revision": "22f84c3d1f3a7d7c75ecf03303e31b38e60179a0",
+        "base_ancestor": true,
+        "workspace": {
+          "repository": "c:\\users\\lmas1\\appdata\\local\\temp\\testsupervisedorcarealprepareroundtrip3312261080\\001\\local-identity\\.git",
+          "worktree": "c:\\users\\liuming\\orca\\workspaces\\steerlinetest\\steerline-4d8d8b18d8e7",
+          "branch": "erranliu/steerline-4d8d8b18d8e7",
+          "base": "0028407ffbbcf9ad4139ff63720311a6e3fd0a1f",
+          "head": "22f84c3d1f3a7d7c75ecf03303e31b38e60179a0",
+          "verified_at": "2026-09-25T19:34:58.3070586Z"
+        },
+        "result_id": "f1175360-f7df-4596-beef-43b28e545cec",
+        "prerequisite_result_ids": [
+          "3be1263a-7e72-41aa-af17-3518e592ea84"
+        ]
+      },
+      "external_binding": {
+        "id": "orca-supervised:fe26dcce-e8f7-47dd-96c2-d611c1093733",
+        "connection_id": "fe26dcce-e8f7-47dd-96c2-d611c1093733",
+        "worktree_id": "09e35751-6517-4e7c-ae20-178ed0e90000::C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-4d8d8b18d8e7",
+        "branch": "erranliu/steerline-4d8d8b18d8e7",
+        "base_revision": "0028407ffbbcf9ad4139ff63720311a6e3fd0a1f",
+        "external_runtime": "bed55de0-6d7d-497e-b1d5-3abab256b2ee",
+        "orchestration_run": "run_3be2c4b42310",
+        "external_task": "task_d14927408604",
+        "dispatch": "ctx_20c49a7aeca9",
+        "execution_host": "bed55de0-6d7d-497e-b1d5-3abab256b2ee"
+      },
+      "created_at": "2026-09-25T19:29:09.034871Z",
+      "updated_at": "2026-09-25T19:34:58.3070586Z"
+    },
+    {
+      "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\testsupervisedorcarealprepareroundtrip3312261080\\001\\local-identity\\.git",
+      "attempt_id": "eeac48dfb197afec48d408764ed4b56c",
+      "execution_id": "547efb821e96e76d4f286389d9800969",
+      "step_id": "prepare",
+      "attempt_number": 1,
+      "operation_id": "3caea5efabf51b1cf1e901d5532ee13c",
+      "event_path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\TestSupervisedOrcaRealPrepareRoundtrip3312261080\\001\\runtime\\runs\\a38eb476ac9595ee9cd9b02482301fc9\\steps\\eeac48dfb197afec48d408764ed4b56c\\events.jsonl",
+      "result_path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\TestSupervisedOrcaRealPrepareRoundtrip3312261080\\001\\runtime\\runs\\a38eb476ac9595ee9cd9b02482301fc9\\steps\\eeac48dfb197afec48d408764ed4b56c\\result.json",
+      "output_source": "terminal",
+      "output_cursor": "owr1_eyJ2IjoxLCJkIjoiY3R4X2E1NTIzZGYxZWUzNCIsInMiOiJ0ZXJtaW5hbCIsImkiOiIzSmpreWRTaHpwckJvT21xYjhuUFAtalBLRk5OZnozQSIsInAiOjI2N30",
+      "status": "succeeded",
+      "input_revision": "0028407ffbbcf9ad4139ff63720311a6e3fd0a1f",
+      "contract_digest": "7478984e6d5f47462311e784a43f834e0403027cadae10c3f52bf827af3e3fc9",
+      "result_id": "3be1263a-7e72-41aa-af17-3518e592ea84",
+      "result": {
+        "step_id": "prepare",
+        "succeeded": true,
+        "input_revision": "0028407ffbbcf9ad4139ff63720311a6e3fd0a1f",
+        "base_ancestor": true,
+        "workspace": {
+          "repository": "c:\\users\\lmas1\\appdata\\local\\temp\\testsupervisedorcarealprepareroundtrip3312261080\\001\\local-identity\\.git",
+          "worktree": "c:\\users\\liuming\\orca\\workspaces\\steerlinetest\\steerline-4d8d8b18d8e7",
+          "branch": "erranliu/steerline-4d8d8b18d8e7",
+          "base": "0028407ffbbcf9ad4139ff63720311a6e3fd0a1f",
+          "head": "0028407ffbbcf9ad4139ff63720311a6e3fd0a1f",
+          "verified_at": "2026-09-25T19:29:09.0343053Z"
+        },
+        "result_id": "3be1263a-7e72-41aa-af17-3518e592ea84"
+      },
+      "external_binding": {
+        "id": "orca-supervised:fe26dcce-e8f7-47dd-96c2-d611c1093733",
+        "connection_id": "fe26dcce-e8f7-47dd-96c2-d611c1093733",
+        "worktree_id": "09e35751-6517-4e7c-ae20-178ed0e90000::C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-4d8d8b18d8e7",
+        "branch": "erranliu/steerline-4d8d8b18d8e7",
+        "base_revision": "0028407ffbbcf9ad4139ff63720311a6e3fd0a1f",
+        "external_runtime": "bed55de0-6d7d-497e-b1d5-3abab256b2ee",
+        "orchestration_run": "run_3be2c4b42310",
+        "external_task": "task_0f9260be28b2",
+        "dispatch": "ctx_a5523df1ee34",
+        "execution_host": "bed55de0-6d7d-497e-b1d5-3abab256b2ee"
+      },
+      "created_at": "2026-09-25T19:25:09.3579165Z",
+      "updated_at": "2026-09-25T19:29:09.0343053Z"
+    },
+    {
+      "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\testsupervisedorcarealprepareroundtrip3312261080\\001\\local-identity\\.git",
+      "attempt_id": "df374e79db1f141ddff5b6adff52893e",
+      "execution_id": "547efb821e96e76d4f286389d9800969",
+      "step_id": "publish_pr",
+      "attempt_number": 1,
+      "status": "planned",
+      "input_revision": "22f84c3d1f3a7d7c75ecf03303e31b38e60179a0",
+      "contract_digest": "1fc48f953da0f76108c653c7d679c9d18b67a6cfe36e511cc480461234e8feda",
+      "prerequisite_result_ids": [
+        "ecaf9b84-2fff-4586-936c-de8cdec4425b"
+      ],
+      "external_binding": {},
+      "created_at": "2026-09-25T19:39:56.8931619Z",
+      "updated_at": "2026-09-25T19:39:56.8931619Z"
+    },
+    {
+      "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\testsupervisedorcarealprepareroundtrip3312261080\\001\\local-identity\\.git",
+      "attempt_id": "2b6070f5667fdda8107be638509ecba0",
+      "execution_id": "547efb821e96e76d4f286389d9800969",
+      "step_id": "verify",
+      "attempt_number": 1,
+      "operation_id": "1ae1aee902d4607f0401aceb460e6de8",
+      "event_path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\TestSupervisedOrcaRealPrepareRoundtrip3312261080\\001\\runtime\\runs\\a38eb476ac9595ee9cd9b02482301fc9\\steps\\2b6070f5667fdda8107be638509ecba0\\events.jsonl",
+      "result_path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\TestSupervisedOrcaRealPrepareRoundtrip3312261080\\001\\runtime\\runs\\a38eb476ac9595ee9cd9b02482301fc9\\steps\\2b6070f5667fdda8107be638509ecba0\\result.json",
+      "output_source": "terminal",
+      "output_cursor": "owr1_eyJ2IjoxLCJkIjoiY3R4XzA4MGQyNTUzYThlMCIsInMiOiJ0ZXJtaW5hbCIsImkiOiJKRW1fZjVFYXcxU0RabWxSOE0wRnF0OHA4emhoTVZQSyIsInAiOjM0MX0",
+      "status": "succeeded",
+      "input_revision": "22f84c3d1f3a7d7c75ecf03303e31b38e60179a0",
+      "contract_digest": "65c54eba9fab88f923f9a1f2f5e9cd443f9b825e82b658f6dd46187e7facf065",
+      "prerequisite_result_ids": [
+        "f1175360-f7df-4596-beef-43b28e545cec"
+      ],
+      "result_id": "ecaf9b84-2fff-4586-936c-de8cdec4425b",
+      "result": {
+        "step_id": "verify",
+        "succeeded": true,
+        "input_revision": "22f84c3d1f3a7d7c75ecf03303e31b38e60179a0",
+        "revision": "22f84c3d1f3a7d7c75ecf03303e31b38e60179a0",
+        "base_ancestor": true,
+        "workspace": {
+          "repository": "c:\\users\\lmas1\\appdata\\local\\temp\\testsupervisedorcarealprepareroundtrip3312261080\\001\\local-identity\\.git",
+          "worktree": "c:\\users\\liuming\\orca\\workspaces\\steerlinetest\\steerline-4d8d8b18d8e7",
+          "branch": "erranliu/steerline-4d8d8b18d8e7",
+          "base": "0028407ffbbcf9ad4139ff63720311a6e3fd0a1f",
+          "head": "22f84c3d1f3a7d7c75ecf03303e31b38e60179a0",
+          "verified_at": "2026-09-25T19:39:56.8926494Z"
+        },
+        "checks": [
+          {
+            "name": "content-smoke",
+            "status": "passed",
+            "revision": "22f84c3d1f3a7d7c75ecf03303e31b38e60179a0",
+            "command": "pwsh.exe -NoProfile -Command $actual = git rev-parse HEAD:steerline-spec03-supervised-stage.txt; if ($LASTEXITCODE -ne 0 -or $actual.Trim() -ne 'a7890c716cc3ad0cca79f8d7b68cffe125e6b106') { exit 7 }; exit 0",
+            "script_version": "spec03-content-smoke-v2",
+            "exit_code": 0,
+            "passed": true,
+            "evidence_ref": "git:HEAD:steerline-spec03-supervised-stage.txt",
+            "actual_commit": "22f84c3d1f3a7d7c75ecf03303e31b38e60179a0"
+          }
+        ],
+        "result_id": "ecaf9b84-2fff-4586-936c-de8cdec4425b",
+        "prerequisite_result_ids": [
+          "f1175360-f7df-4596-beef-43b28e545cec"
+        ]
+      },
+      "external_binding": {
+        "id": "orca-supervised:fe26dcce-e8f7-47dd-96c2-d611c1093733",
+        "connection_id": "fe26dcce-e8f7-47dd-96c2-d611c1093733",
+        "worktree_id": "09e35751-6517-4e7c-ae20-178ed0e90000::C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-4d8d8b18d8e7",
+        "branch": "erranliu/steerline-4d8d8b18d8e7",
+        "base_revision": "0028407ffbbcf9ad4139ff63720311a6e3fd0a1f",
+        "external_runtime": "bed55de0-6d7d-497e-b1d5-3abab256b2ee",
+        "orchestration_run": "run_3be2c4b42310",
+        "external_task": "task_e00f384589c5",
+        "dispatch": "ctx_080d2553a8e0",
+        "execution_host": "bed55de0-6d7d-497e-b1d5-3abab256b2ee"
+      },
+      "created_at": "2026-09-25T19:34:58.3077926Z",
+      "updated_at": "2026-09-25T19:39:56.8926494Z"
+    }
+  ],
+  "candidate_revision": "22f84c3d1f3a7d7c75ecf03303e31b38e60179a0",
+  "captured_at": "2026-09-25T19:39:58.2331564Z",
+  "completion_window_restart_step": "verify",
+  "dispatches": {
+    "implement": "ctx_20c49a7aeca9",
+    "prepare": "ctx_a5523df1ee34",
+    "verify": "ctx_080d2553a8e0"
+  },
+  "execution": {
+    "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\testsupervisedorcarealprepareroundtrip3312261080\\001\\local-identity\\.git",
+    "execution_id": "547efb821e96e76d4f286389d9800969",
+    "workflow_run_id": "a38eb476ac9595ee9cd9b02482301fc9",
+    "agent": "codex",
+    "backend": "orca",
+    "protocol": "orca_supervised",
+    "target": {
+      "id": "orca-supervised:fe26dcce-e8f7-47dd-96c2-d611c1093733",
+      "connection_id": "fe26dcce-e8f7-47dd-96c2-d611c1093733",
+      "worktree_id": "09e35751-6517-4e7c-ae20-178ed0e90000::C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-4d8d8b18d8e7",
+      "branch": "erranliu/steerline-4d8d8b18d8e7",
+      "base_revision": "0028407ffbbcf9ad4139ff63720311a6e3fd0a1f",
+      "external_runtime": "bed55de0-6d7d-497e-b1d5-3abab256b2ee",
+      "orchestration_run": "run_3be2c4b42310",
+      "external_task": "task_e00f384589c5",
+      "dispatch": "ctx_080d2553a8e0",
+      "execution_host": "bed55de0-6d7d-497e-b1d5-3abab256b2ee"
+    },
+    "workspace": {
+      "repository": "c:\\users\\lmas1\\appdata\\local\\temp\\testsupervisedorcarealprepareroundtrip3312261080\\001\\local-identity\\.git",
+      "worktree": "c:\\users\\liuming\\orca\\workspaces\\steerlinetest\\steerline-4d8d8b18d8e7",
+      "branch": "erranliu/steerline-4d8d8b18d8e7",
+      "base": "0028407ffbbcf9ad4139ff63720311a6e3fd0a1f",
+      "head": "22f84c3d1f3a7d7c75ecf03303e31b38e60179a0",
+      "verified_at": "2026-09-25T19:35:20.1782482Z"
+    },
+    "status": "active",
+    "current_step": "publish_pr",
+    "candidate_revision": "22f84c3d1f3a7d7c75ecf03303e31b38e60179a0",
+    "verified_revision": "22f84c3d1f3a7d7c75ecf03303e31b38e60179a0",
+    "repair_rounds": 0,
+    "created_at": "2026-09-25T19:25:09.3579165Z",
+    "updated_at": "2026-09-25T19:39:58.2021355Z"
+  },
+  "fixed_base": "0028407ffbbcf9ad4139ff63720311a6e3fd0a1f",
+  "operations": [
+    {
+      "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\testsupervisedorcarealprepareroundtrip3312261080\\001\\local-identity\\.git",
+      "operation_id": "3caea5efabf51b1cf1e901d5532ee13c",
+      "idempotency_key": "step:547efb821e96e76d4f286389d9800969:eeac48dfb197afec48d408764ed4b56c",
+      "kind": "dispatch_step",
+      "status": "confirmed",
+      "payload_digest": "e6f1dd363bb826fcba9d416c5018971dc5c05dc9ead8d667db5cd0751bccc150",
+      "request": "eyJhdHRlbXB0X2lkIjoiZWVhYzQ4ZGZiMTk3YWZlYzQ4ZDQwODc2NGVkNGI1NmMiLCJjb250cmFjdF9kaWdlc3QiOiI3NDc4OTg0ZTZkNWY0NzQ2MjMxMWU3ODRhNDNmODM0ZTA0MDMwMjdjYWRhZTEwYzNmNTJiZjgyN2FmM2UzZmM5IiwiZXhlY3V0aW9uX2lkIjoiNTQ3ZWZiODIxZTk2ZTc2ZDRmMjg2Mzg5ZDk4MDA5NjkiLCJpbnB1dCI6eyJzY2hlbWFfdmVyc2lvbiI6MSwicHJvamVjdF9pZGVudGl0eSI6ImM6XFx1c2Vyc1xcbG1hczFcXGFwcGRhdGFcXGxvY2FsXFx0ZW1wXFx0ZXN0c3VwZXJ2aXNlZG9yY2FyZWFscHJlcGFyZXJvdW5kdHJpcDMzMTIyNjEwODBcXDAwMVxcbG9jYWwtaWRlbnRpdHlcXC5naXQiLCJ0YXNrX2lkIjoicmVtb3RlLXByb2JlLWEzOGViNDc2YWMiLCJ3b3JrZmxvd19ydW5faWQiOiJhMzhlYjQ3NmFjOTU5NWVlOWNkOWIwMjQ4MjMwMWZjOSIsImV4ZWN1dGlvbl9pZCI6IjU0N2VmYjgyMWU5NmU3NmQ0ZjI4NjM4OWQ5ODAwOTY5IiwiYXR0ZW1wdF9pZCI6ImVlYWM0OGRmYjE5N2FmZWM0OGQ0MDg3NjRlZDRiNTZjIiwic3RlcF9pZCI6InByZXBhcmUiLCJpbnB1dF9yZXZpc2lvbiI6IjAwMjg0MDdmZmJiY2Y5YWQ0MTM5ZmY2MzcyMDMxMWE2ZTNmZDBhMWYiLCJ3b3JrZmxvd19kZWZpbml0aW9uIjp7ImlkIjoibWluaW1hbC12MSIsInZlcnNpb24iOiJtaW5pbWFsLXYxIiwicmV2aWV3X3JlcXVpcmVkIjpmYWxzZSwibWF4X3JlcGFpcl9yb3VuZHMiOjJ9LCJwcm9qZWN0X3N0ZXBzIjp7ImltcGxlbWVudCI6eyJwcm92aWRlciI6ImFnZW50X3NraWxsIiwiZW50cnkiOiJidWlsdGluOmltcGxlbWVudCIsInZlcnNpb24iOiJtaW5pbWFsLXYxIiwiaW5wdXRfc2NoZW1hIjoic3RlZXJsaW5lL21pbmltYWwtc3RlcC1pbnB1dC92MSIsIm91dHB1dF9zY2hlbWEiOiJzdGVlcmxpbmUvbWluaW1hbC1zdGVwLXJlc3VsdC92MSIsImV4ZWN1dGlvbl9zaXRlIjoidGFyZ2V0IiwidGltZW91dCI6NjAwMDAwMDAwMDAwfSwidmVyaWZ5Ijp7InByb3ZpZGVyIjoiY29tbWFuZCIsImVudHJ5Ijoic3BlYzAzLWNvbnRlbnQtc21va2UtdjIiLCJ2ZXJzaW9uIjoibWluaW1hbC12MSIsImlucHV0X3NjaGVtYSI6InN0ZWVybGluZS9taW5pbWFsLXN0ZXAtaW5wdXQvdjEiLCJvdXRwdXRfc2NoZW1hIjoic3RlZXJsaW5lL21pbmltYWwtc3RlcC1yZXN1bHQvdjEiLCJleGVjdXRpb25fc2l0ZSI6InRhcmdldCIsInRpbWVvdXQiOjYwMDAwMDAwMDAwMCwiY29tbWFuZCI6WyJwd3NoLmV4ZSIsIi1Ob1Byb2ZpbGUiLCItQ29tbWFuZCIsIiRhY3R1YWwgPSBnaXQgcmV2LXBhcnNlIEhFQUQ6c3RlZXJsaW5lLXNwZWMwMy1zdXBlcnZpc2VkLXN0YWdlLnR4dDsgaWYgKCRMQVNURVhJVENPREUgLW5lIDAgLW9yICRhY3R1YWwuVHJpbSgpIC1uZSAnYTc4OTBjNzE2Y2MzYWQwY2NhNzlmOGQ3YjY4Y2ZmZTEyNWU2YjEwNicpIHsgZXhpdCA3IH07IGV4aXQgMCJdLCJyZXF1aXJlZF9jaGVja3MiOlsiY29udGVudC1zbW9rZSJdfSwicmV2aWV3Ijp7InByb3ZpZGVyIjoiIiwiZW50cnkiOiIiLCJ2ZXJzaW9uIjoiIiwiaW5wdXRfc2NoZW1hIjoiIiwib3V0cHV0X3NjaGVtYSI6IiIsImV4ZWN1dGlvbl9zaXRlIjoiIiwidGltZW91dCI6MH0sInB1Ymxpc2hfcHIiOnsicHJvdmlkZXIiOiJjb21tYW5kIiwiZW50cnkiOiJwdWJsaXNoLnBzMSIsInZlcnNpb24iOiJtaW5pbWFsLXYxIiwiaW5wdXRfc2NoZW1hIjoic3RlZXJsaW5lL21pbmltYWwtc3RlcC1pbnB1dC92MSIsIm91dHB1dF9zY2hlbWEiOiJzdGVlcmxpbmUvbWluaW1hbC1zdGVwLXJlc3VsdC92MSIsImV4ZWN1dGlvbl9zaXRlIjoidGFyZ2V0IiwidGltZW91dCI6NjAwMDAwMDAwMDAwLCJjb21tYW5kIjpbInBvd2Vyc2hlbGwiLCItTm9Qcm9maWxlIiwiLUZpbGUiLCJwdWJsaXNoLnBzMSJdfX0sIndvcmtzcGFjZSI6eyJ2ZXJpZmllZF9hdCI6IjAwMDEtMDEtMDFUMDA6MDA6MDBaIn0sInRhc2siOnsiaWQiOiJyZW1vdGUtcHJvYmUtYTM4ZWI0NzZhYyIsInRpdGxlIjoiaXNvbGF0ZWQgc3VwZXJ2aXNlZCBwcmVwYXJlIHByb2JlIiwic3RhdHVzIjoib3BlbiIsImlzc3VlX3R5cGUiOiJ0YXNrIiwiYXNzaWduZWUiOiIiLCJwcmlvcml0eSI6bnVsbCwiZGVzY3JpcHRpb24iOiJObyBCZWFkcyBhY2Nlc3MuIFZlcmlmeSBhIGNsZWFuIHJlbW90ZSB3b3JrdHJlZSBhbmQgcmV0dXJuIHByZXBhcmUgZXZpZGVuY2Ugb25seS4iLCJzcGVjX2lkIjoiIiwibWV0YWRhdGEiOm51bGwsImxhYmVscyI6bnVsbH19LCJzdGVwX2lkIjoicHJlcGFyZSIsInRhc2tfaWQiOiJyZW1vdGUtcHJvYmUtYTM4ZWI0NzZhYyIsIndvcmtmbG93X3J1bl9pZCI6ImEzOGViNDc2YWM5NTk1ZWU5Y2Q5YjAyNDgyMzAxZmM5In0=",
+      "platform_request_id": "99fca629-91b0-4b51-bff7-ae621862aadd",
+      "receipt": "eyJraW5kIjoib3JjYV9zdXBlcnZpc2VkIiwidGVybWluYWwiOiJ0ZXJtXzRkYWZmNmRiLTFkNmItNDY5Yi05NGQwLTQ2MjE0NjZjMzcwMSIsInJ1bnRpbWVfaWQiOiJkMDVmNTJiOS00ZGJkLTQ2NTYtYTAxYi0wMDBhOWYyNjZiODQiLCJpbmNhcm5hdGlvbiI6IjBlNWM0NzFhLTJlZjQtNGY0NC05ODFkLWIyMzNlYWM4NWFmYSIsImNvb3JkaW5hdG9yX3J1bnRpbWVfaWQiOiI3Y2NiMDJiMC1hZWYyLTQxMjQtOGRiOC0wZWMwNjMxNTViMTIiLCJvcmNoZXN0cmF0aW9uX3J1biI6InJ1bl8zYmUyYzRiNDIzMTAiLCJ0YXNrIjoidGFza18wZjkyNjBiZTI4YjIiLCJkaXNwYXRjaCI6ImN0eF9hNTUyM2RmMWVlMzQiLCJleGVjdXRpb25faG9zdCI6ImJlZDU1ZGUwLTZkN2QtNDk3ZS1iMWQ1LTNhYmFiMjU2YjJlZSIsIndvcmt0cmVlX2lkIjoiMDllMzU3NTEtNjUxNy00ZTdjLWFlMjAtMTc4ZWQwZTkwMDAwOjpDOi9Vc2Vycy9saXVtaW5nL29yY2Evd29ya3NwYWNlcy9TdGVlcmxpbmVUZXN0L3N0ZWVybGluZS00ZDhkOGIxOGQ4ZTcifQ==",
+      "created_at": "2026-09-25T19:25:09.3882145Z",
+      "updated_at": "2026-09-25T19:25:26.9264817Z"
+    },
+    {
+      "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\testsupervisedorcarealprepareroundtrip3312261080\\001\\local-identity\\.git",
+      "operation_id": "ack-efac46610e03ecd1f40be83cbaef416b",
+      "idempotency_key": "orca-delivery-ack:run_3be2c4b42310:delivery_ed975f6e81e9",
+      "kind": "ack_orca_delivery",
+      "status": "confirmed",
+      "payload_digest": "edda79e4f8ff9252bd7ebe4b32a359b7c88a69ee935487e0778d962fcaa2c761",
+      "request": "eyJydW5faWQiOiJydW5fM2JlMmM0YjQyMzEwIiwiZGVsaXZlcnlfaWQiOiJkZWxpdmVyeV9lZDk3NWY2ZTgxZTkifQ==",
+      "platform_request_id": "8a17e550-6cef-46e3-956f-7ee82c5e2a8a",
+      "receipt": "eyJhY2tub3dsZWRnZWQiOnRydWUsImRlbGl2ZXJ5X2lkIjoiZGVsaXZlcnlfZWQ5NzVmNmU4MWU5IiwiZXJyb3IiOiIiLCJydW5faWQiOiJydW5fM2JlMmM0YjQyMzEwIn0=",
+      "created_at": "2026-09-25T19:28:42.2598436Z",
+      "updated_at": "2026-09-25T19:28:42.7428234Z"
+    },
+    {
+      "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\testsupervisedorcarealprepareroundtrip3312261080\\001\\local-identity\\.git",
+      "operation_id": "ack-aaf8c8c15b692f9494c3a982145aaa12",
+      "idempotency_key": "orca-delivery-ack:run_3be2c4b42310:delivery_ce77a8ec96b3",
+      "kind": "ack_orca_delivery",
+      "status": "confirmed",
+      "payload_digest": "b4d76b1781476c79e2b417ba2cd730ad6bac5373fd9b9b6c619cbf5f736587bf",
+      "request": "eyJydW5faWQiOiJydW5fM2JlMmM0YjQyMzEwIiwiZGVsaXZlcnlfaWQiOiJkZWxpdmVyeV9jZTc3YThlYzk2YjMifQ==",
+      "platform_request_id": "14d61ce4-acd1-467e-8f8c-a23ea18d1cee",
+      "receipt": "eyJhY2tub3dsZWRnZWQiOnRydWUsImRlbGl2ZXJ5X2lkIjoiZGVsaXZlcnlfY2U3N2E4ZWM5NmIzIiwiZXJyb3IiOiIiLCJydW5faWQiOiJydW5fM2JlMmM0YjQyMzEwIn0=",
+      "created_at": "2026-09-25T19:29:04.9020787Z",
+      "updated_at": "2026-09-25T19:29:05.4220024Z"
+    },
+    {
+      "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\testsupervisedorcarealprepareroundtrip3312261080\\001\\local-identity\\.git",
+      "operation_id": "release-eeac48dfb197afec48d408764ed4b56c",
+      "idempotency_key": "release:547efb821e96e76d4f286389d9800969:eeac48dfb197afec48d408764ed4b56c",
+      "kind": "settle_resources",
+      "status": "confirmed",
+      "payload_digest": "e541ad646dd642ed40c227e2eaccf623ae073721cf9b04375be32ecb635b0811",
+      "request": "eyJyZWYiOnsidmVyc2lvbiI6MSwiYmFja2VuZCI6Im9yY2EiLCJwcm90b2NvbCI6Im9yY2Ffc3VwZXJ2aXNlZCIsInRhcmdldCI6eyJpZCI6Im9yY2Etc3VwZXJ2aXNlZDpmZTI2ZGNjZS1lOGY3LTQ3ZGQtOTZjMi1kNjExYzEwOTM3MzMiLCJjb25uZWN0aW9uX2lkIjoiZmUyNmRjY2UtZThmNy00N2RkLTk2YzItZDYxMWMxMDkzNzMzIiwid29ya3RyZWVfaWQiOiIwOWUzNTc1MS02NTE3LTRlN2MtYWUyMC0xNzhlZDBlOTAwMDA6OkM6L1VzZXJzL2xpdW1pbmcvb3JjYS93b3Jrc3BhY2VzL1N0ZWVybGluZVRlc3Qvc3RlZXJsaW5lLTRkOGQ4YjE4ZDhlNyIsImJyYW5jaCI6ImVycmFubGl1L3N0ZWVybGluZS00ZDhkOGIxOGQ4ZTciLCJiYXNlX3JldmlzaW9uIjoiMDAyODQwN2ZmYmJjZjlhZDQxMzlmZjYzNzIwMzExYTZlM2ZkMGExZiIsImV4dGVybmFsX3J1bnRpbWUiOiJiZWQ1NWRlMC02ZDdkLTQ5N2UtYjFkNS0zYWJhYjI1NmIyZWUiLCJvcmNoZXN0cmF0aW9uX3J1biI6InJ1bl8zYmUyYzRiNDIzMTAiLCJleHRlcm5hbF90YXNrIjoidGFza18wZjkyNjBiZTI4YjIiLCJkaXNwYXRjaCI6ImN0eF9hNTUyM2RmMWVlMzQiLCJleGVjdXRpb25faG9zdCI6ImJlZDU1ZGUwLTZkN2QtNDk3ZS1iMWQ1LTNhYmFiMjU2YjJlZSJ9LCJhZ2VudCI6eyJuYW1lIjoiY29kZXgifSwicnVuX2lkIjoiYTM4ZWI0NzZhYzk1OTVlZTljZDliMDI0ODIzMDFmYzkiLCJhdHRlbXB0X2lkIjoiZWVhYzQ4ZGZiMTk3YWZlYzQ4ZDQwODc2NGVkNGI1NmMiLCJ3b3Jrc3BhY2VfcGF0aCI6IkM6L1VzZXJzL2xpdW1pbmcvb3JjYS93b3Jrc3BhY2VzL1N0ZWVybGluZVRlc3Qvc3RlZXJsaW5lLTRkOGQ4YjE4ZDhlNyIsIndvcmtzcGFjZV9icmFuY2giOiJlcnJhbmxpdS9zdGVlcmxpbmUtNGQ4ZDhiMThkOGU3IiwiYmFzZV9jb21taXQiOiIwMDI4NDA3ZmZiYmNmOWFkNDEzOWZmNjM3MjAzMTFhNmUzZmQwYTFmIiwiZXh0ZXJuYWwiOnsia2luZCI6Im9yY2Ffc3VwZXJ2aXNlZCIsInRlcm1pbmFsIjoidGVybV80ZGFmZjZkYi0xZDZiLTQ2OWItOTRkMC00NjIxNDY2YzM3MDEiLCJydW50aW1lX2lkIjoiZDA1ZjUyYjktNGRiZC00NjU2LWEwMWItMDAwYTlmMjY2Yjg0IiwiaW5jYXJuYXRpb24iOiIwZTVjNDcxYS0yZWY0LTRmNDQtOTgxZC1iMjMzZWFjODVhZmEiLCJjb29yZGluYXRvcl9ydW50aW1lX2lkIjoiN2NjYjAyYjAtYWVmMi00MTI0LThkYjgtMGVjMDYzMTU1YjEyIiwib3JjaGVzdHJhdGlvbl9ydW4iOiJydW5fM2JlMmM0YjQyMzEwIiwidGFzayI6InRhc2tfMGY5MjYwYmUyOGIyIiwiZGlzcGF0Y2giOiJjdHhfYTU1MjNkZjFlZTM0IiwiZXhlY3V0aW9uX2hvc3QiOiJiZWQ1NWRlMC02ZDdkLTQ5N2UtYjFkNS0zYWJhYjI1NmIyZWUiLCJ3b3JrdHJlZV9pZCI6IjA5ZTM1NzUxLTY1MTctNGU3Yy1hZTIwLTE3OGVkMGU5MDAwMDo6QzovVXNlcnMvbGl1bWluZy9vcmNhL3dvcmtzcGFjZXMvU3RlZXJsaW5lVGVzdC9zdGVlcmxpbmUtNGQ4ZDhiMThkOGU3In0sImdlbmVyYXRpb24iOiJkMDVmNTJiOS00ZGJkLTQ2NTYtYTAxYi0wMDBhOWYyNjZiODQ6MGU1YzQ3MWEtMmVmNC00ZjQ0LTk4MWQtYjIzM2VhYzg1YWZhIn0sIm91dGNvbWUiOiJzdWNjZWVkZWQifQ==",
+      "platform_request_id": "138167b2-5452-4b16-a05e-43b40418c9ee",
+      "receipt": "eyJkaXNwYXRjaF9pZCI6ImN0eF9hNTUyM2RmMWVlMzQiLCJlcnJvciI6IiIsInNldHRsZW1lbnQiOnsiZGlzcG9zaXRpb24iOiJyZWxlYXNlZCIsInBsYXRmb3JtX3JlcXVlc3RfaWQiOiIxMzgxNjdiMi01NDUyLTRiMTYtYTA1ZS00M2I0MDQxOGM5ZWUifX0=",
+      "created_at": "2026-09-25T19:29:09.079711Z",
+      "updated_at": "2026-09-25T19:29:10.2070494Z"
+    },
+    {
+      "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\testsupervisedorcarealprepareroundtrip3312261080\\001\\local-identity\\.git",
+      "operation_id": "94c4b585109f2f95466ea7cebb2f7d41",
+      "idempotency_key": "step:547efb821e96e76d4f286389d9800969:5c8035a028bacbccc270b141bde1c22c",
+      "kind": "dispatch_step",
+      "status": "confirmed",
+      "payload_digest": "f4606afbe06e13a400211209a004243c3a4578133ada3faf15fe7c28fc408045",
+      "request": "eyJhdHRlbXB0X2lkIjoiNWM4MDM1YTAyOGJhY2JjY2MyNzBiMTQxYmRlMWMyMmMiLCJjb250cmFjdF9kaWdlc3QiOiI2NDMyMjU0OGM5MzJiYzdiYjJiYTJhNmE4NzU2NDhiYTE4ZjQyMzliYjE0ODRiMmEzMzVkZjZiZjI0ODg5YmIxIiwiZXhlY3V0aW9uX2lkIjoiNTQ3ZWZiODIxZTk2ZTc2ZDRmMjg2Mzg5ZDk4MDA5NjkiLCJpbnB1dCI6eyJzY2hlbWFfdmVyc2lvbiI6MSwicHJvamVjdF9pZGVudGl0eSI6ImM6XFx1c2Vyc1xcbG1hczFcXGFwcGRhdGFcXGxvY2FsXFx0ZW1wXFx0ZXN0c3VwZXJ2aXNlZG9yY2FyZWFscHJlcGFyZXJvdW5kdHJpcDMzMTIyNjEwODBcXDAwMVxcbG9jYWwtaWRlbnRpdHlcXC5naXQiLCJ0YXNrX2lkIjoicmVtb3RlLXByb2JlLWEzOGViNDc2YWMiLCJ3b3JrZmxvd19ydW5faWQiOiJhMzhlYjQ3NmFjOTU5NWVlOWNkOWIwMjQ4MjMwMWZjOSIsImV4ZWN1dGlvbl9pZCI6IjU0N2VmYjgyMWU5NmU3NmQ0ZjI4NjM4OWQ5ODAwOTY5IiwiYXR0ZW1wdF9pZCI6IjVjODAzNWEwMjhiYWNiY2NjMjcwYjE0MWJkZTFjMjJjIiwic3RlcF9pZCI6ImltcGxlbWVudCIsImlucHV0X3JldmlzaW9uIjoiMDAyODQwN2ZmYmJjZjlhZDQxMzlmZjYzNzIwMzExYTZlM2ZkMGExZiIsInByZXJlcXVpc2l0ZV9yZXN1bHRfaWRzIjpbIjNiZTEyNjNhLTdlNzItNDFhYS1hZjE3LTM1MThlNTkyZWE4NCJdLCJwcmVyZXF1aXNpdGVfcmVzdWx0cyI6W3sic3RlcF9pZCI6InByZXBhcmUiLCJzdWNjZWVkZWQiOnRydWUsImlucHV0X3JldmlzaW9uIjoiMDAyODQwN2ZmYmJjZjlhZDQxMzlmZjYzNzIwMzExYTZlM2ZkMGExZiIsImJhc2VfYW5jZXN0b3IiOnRydWUsIndvcmtzcGFjZSI6eyJyZXBvc2l0b3J5IjoiYzpcXHVzZXJzXFxsbWFzMVxcYXBwZGF0YVxcbG9jYWxcXHRlbXBcXHRlc3RzdXBlcnZpc2Vkb3JjYXJlYWxwcmVwYXJlcm91bmR0cmlwMzMxMjI2MTA4MFxcMDAxXFxsb2NhbC1pZGVudGl0eVxcLmdpdCIsIndvcmt0cmVlIjoiYzpcXHVzZXJzXFxsaXVtaW5nXFxvcmNhXFx3b3Jrc3BhY2VzXFxzdGVlcmxpbmV0ZXN0XFxzdGVlcmxpbmUtNGQ4ZDhiMThkOGU3IiwiYnJhbmNoIjoiZXJyYW5saXUvc3RlZXJsaW5lLTRkOGQ4YjE4ZDhlNyIsImJhc2UiOiIwMDI4NDA3ZmZiYmNmOWFkNDEzOWZmNjM3MjAzMTFhNmUzZmQwYTFmIiwiaGVhZCI6IjAwMjg0MDdmZmJiY2Y5YWQ0MTM5ZmY2MzcyMDMxMWE2ZTNmZDBhMWYiLCJ2ZXJpZmllZF9hdCI6IjIwMjYtMDktMjVUMTk6Mjk6MDkuMDM0MzA1M1oifSwicmVzdWx0X2lkIjoiM2JlMTI2M2EtN2U3Mi00MWFhLWFmMTctMzUxOGU1OTJlYTg0In1dLCJ3b3JrZmxvd19kZWZpbml0aW9uIjp7ImlkIjoibWluaW1hbC12MSIsInZlcnNpb24iOiJtaW5pbWFsLXYxIiwicmV2aWV3X3JlcXVpcmVkIjpmYWxzZSwibWF4X3JlcGFpcl9yb3VuZHMiOjJ9LCJwcm9qZWN0X3N0ZXBzIjp7ImltcGxlbWVudCI6eyJwcm92aWRlciI6ImFnZW50X3NraWxsIiwiZW50cnkiOiJidWlsdGluOmltcGxlbWVudCIsInZlcnNpb24iOiJtaW5pbWFsLXYxIiwiaW5wdXRfc2NoZW1hIjoic3RlZXJsaW5lL21pbmltYWwtc3RlcC1pbnB1dC92MSIsIm91dHB1dF9zY2hlbWEiOiJzdGVlcmxpbmUvbWluaW1hbC1zdGVwLXJlc3VsdC92MSIsImV4ZWN1dGlvbl9zaXRlIjoidGFyZ2V0IiwidGltZW91dCI6NjAwMDAwMDAwMDAwfSwidmVyaWZ5Ijp7InByb3ZpZGVyIjoiY29tbWFuZCIsImVudHJ5Ijoic3BlYzAzLWNvbnRlbnQtc21va2UtdjIiLCJ2ZXJzaW9uIjoibWluaW1hbC12MSIsImlucHV0X3NjaGVtYSI6InN0ZWVybGluZS9taW5pbWFsLXN0ZXAtaW5wdXQvdjEiLCJvdXRwdXRfc2NoZW1hIjoic3RlZXJsaW5lL21pbmltYWwtc3RlcC1yZXN1bHQvdjEiLCJleGVjdXRpb25fc2l0ZSI6InRhcmdldCIsInRpbWVvdXQiOjYwMDAwMDAwMDAwMCwiY29tbWFuZCI6WyJwd3NoLmV4ZSIsIi1Ob1Byb2ZpbGUiLCItQ29tbWFuZCIsIiRhY3R1YWwgPSBnaXQgcmV2LXBhcnNlIEhFQUQ6c3RlZXJsaW5lLXNwZWMwMy1zdXBlcnZpc2VkLXN0YWdlLnR4dDsgaWYgKCRMQVNURVhJVENPREUgLW5lIDAgLW9yICRhY3R1YWwuVHJpbSgpIC1uZSAnYTc4OTBjNzE2Y2MzYWQwY2NhNzlmOGQ3YjY4Y2ZmZTEyNWU2YjEwNicpIHsgZXhpdCA3IH07IGV4aXQgMCJdLCJyZXF1aXJlZF9jaGVja3MiOlsiY29udGVudC1zbW9rZSJdfSwicmV2aWV3Ijp7InByb3ZpZGVyIjoiIiwiZW50cnkiOiIiLCJ2ZXJzaW9uIjoiIiwiaW5wdXRfc2NoZW1hIjoiIiwib3V0cHV0X3NjaGVtYSI6IiIsImV4ZWN1dGlvbl9zaXRlIjoiIiwidGltZW91dCI6MH0sInB1Ymxpc2hfcHIiOnsicHJvdmlkZXIiOiJjb21tYW5kIiwiZW50cnkiOiJwdWJsaXNoLnBzMSIsInZlcnNpb24iOiJtaW5pbWFsLXYxIiwiaW5wdXRfc2NoZW1hIjoic3RlZXJsaW5lL21pbmltYWwtc3RlcC1pbnB1dC92MSIsIm91dHB1dF9zY2hlbWEiOiJzdGVlcmxpbmUvbWluaW1hbC1zdGVwLXJlc3VsdC92MSIsImV4ZWN1dGlvbl9zaXRlIjoidGFyZ2V0IiwidGltZW91dCI6NjAwMDAwMDAwMDAwLCJjb21tYW5kIjpbInBvd2Vyc2hlbGwiLCItTm9Qcm9maWxlIiwiLUZpbGUiLCJwdWJsaXNoLnBzMSJdfX0sIndvcmtzcGFjZSI6eyJyZXBvc2l0b3J5IjoiYzpcXHVzZXJzXFxsbWFzMVxcYXBwZGF0YVxcbG9jYWxcXHRlbXBcXHRlc3RzdXBlcnZpc2Vkb3JjYXJlYWxwcmVwYXJlcm91bmR0cmlwMzMxMjI2MTA4MFxcMDAxXFxsb2NhbC1pZGVudGl0eVxcLmdpdCIsIndvcmt0cmVlIjoiYzpcXHVzZXJzXFxsaXVtaW5nXFxvcmNhXFx3b3Jrc3BhY2VzXFxzdGVlcmxpbmV0ZXN0XFxzdGVlcmxpbmUtNGQ4ZDhiMThkOGU3IiwiYnJhbmNoIjoiZXJyYW5saXUvc3RlZXJsaW5lLTRkOGQ4YjE4ZDhlNyIsImJhc2UiOiIwMDI4NDA3ZmZiYmNmOWFkNDEzOWZmNjM3MjAzMTFhNmUzZmQwYTFmIiwiaGVhZCI6IjAwMjg0MDdmZmJiY2Y5YWQ0MTM5ZmY2MzcyMDMxMWE2ZTNmZDBhMWYiLCJ2ZXJpZmllZF9hdCI6IjIwMjYtMDktMjVUMTk6Mjk6MDkuMDM0MzA1M1oifSwidGFzayI6eyJpZCI6InJlbW90ZS1wcm9iZS1hMzhlYjQ3NmFjIiwidGl0bGUiOiJpc29sYXRlZCBzdXBlcnZpc2VkIGltcGxlbWVudCBwcm9iZSIsInN0YXR1cyI6Im9wZW4iLCJpc3N1ZV90eXBlIjoidGFzayIsImFzc2lnbmVlIjoiIiwicHJpb3JpdHkiOm51bGwsImRlc2NyaXB0aW9uIjoiQ3JlYXRlIGV4YWN0bHkgc3RlZXJsaW5lLXNwZWMwMy1zdXBlcnZpc2VkLXN0YWdlLnR4dCB3aXRoIHRoZSBVVEYtOCBieXRlcyBvZiBzcGVjMDMtc3VwZXJ2aXNlZC1zdGFnZS12MSBmb2xsb3dlZCBieSBvbmUgTEYgYnl0ZSAoMEEpLCB1c2luZyBbSU8uRmlsZV06OldyaXRlQWxsQnl0ZXMgaWYgbmVjZXNzYXJ5LiBCZWZvcmUgYW5kIGFmdGVyIGNvbW1pdHRpbmcsIHZlcmlmeSB0aGF0IGdpdCBoYXNoLW9iamVjdCBhbmQgZ2l0IHJldi1wYXJzZSBIRUFEOnN0ZWVybGluZS1zcGVjMDMtc3VwZXJ2aXNlZC1zdGFnZS50eHQgZXF1YWwgYTc4OTBjNzE2Y2MzYWQwY2NhNzlmOGQ3YjY4Y2ZmZTEyNWU2YjEwNjsgaWYgZWl0aGVyIGRpZmZlcnMsIGNvcnJlY3QgdGhlIGZpbGUgYmVmb3JlIHJlcG9ydGluZyBzdWNjZXNzLiBDb21taXQgdGhhdCBvbmUgZmlsZSBvbiB0aGUgYXNzaWduZWQgd29ya3RyZWUgYnJhbmNoLiBEbyBub3QgcHVzaCwgY3JlYXRlIGEgUFIsIGVkaXQgYW5vdGhlciBmaWxlLCBvciBydW4gbGF0ZXIgd29ya2Zsb3cgc3RlcHMuIFJldHVybiBpbXBsZW1lbnQgcmVzdWx0LnJldmlzaW9uIGFzIHRoZSBhY3R1YWwgZnVsbCBjb21taXQgSEVBRCBhbmQgaW5jbHVkZSBjbGVhbiB3b3Jrc3BhY2UvYmFzZSBhbmNlc3RyeSBldmlkZW5jZS4iLCJzcGVjX2lkIjoiIiwibWV0YWRhdGEiOm51bGwsImxhYmVscyI6bnVsbH19LCJzdGVwX2lkIjoiaW1wbGVtZW50IiwidGFza19pZCI6InJlbW90ZS1wcm9iZS1hMzhlYjQ3NmFjIiwid29ya2Zsb3dfcnVuX2lkIjoiYTM4ZWI0NzZhYzk1OTVlZTljZDliMDI0ODIzMDFmYzkifQ==",
+      "platform_request_id": "0f8236db-9850-4903-91bb-ff4f3b9e9f36",
+      "receipt": "eyJraW5kIjoib3JjYV9zdXBlcnZpc2VkIiwidGVybWluYWwiOiJ0ZXJtX2MyNGQ0ZmYxLTdjOTEtNDk1ZC04MGIyLWQ4MTZkZDQwNjgzYyIsInJ1bnRpbWVfaWQiOiJkMDVmNTJiOS00ZGJkLTQ2NTYtYTAxYi0wMDBhOWYyNjZiODQiLCJpbmNhcm5hdGlvbiI6IjcyY2M5NGVlLTEyZjEtNDI3Ny04YTYxLTFiMDQxNzQ2N2QzYiIsImNvb3JkaW5hdG9yX3J1bnRpbWVfaWQiOiI3Y2NiMDJiMC1hZWYyLTQxMjQtOGRiOC0wZWMwNjMxNTViMTIiLCJvcmNoZXN0cmF0aW9uX3J1biI6InJ1bl8zYmUyYzRiNDIzMTAiLCJ0YXNrIjoidGFza19kMTQ5Mjc0MDg2MDQiLCJkaXNwYXRjaCI6ImN0eF8yMGM0OWE3YWVjYTkiLCJleGVjdXRpb25faG9zdCI6ImJlZDU1ZGUwLTZkN2QtNDk3ZS1iMWQ1LTNhYmFiMjU2YjJlZSIsIndvcmt0cmVlX2lkIjoiMDllMzU3NTEtNjUxNy00ZTdjLWFlMjAtMTc4ZWQwZTkwMDAwOjpDOi9Vc2Vycy9saXVtaW5nL29yY2Evd29ya3NwYWNlcy9TdGVlcmxpbmVUZXN0L3N0ZWVybGluZS00ZDhkOGIxOGQ4ZTcifQ==",
+      "created_at": "2026-09-25T19:29:18.1890114Z",
+      "updated_at": "2026-09-25T19:29:35.9729747Z"
+    },
+    {
+      "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\testsupervisedorcarealprepareroundtrip3312261080\\001\\local-identity\\.git",
+      "operation_id": "ack-2620a0611d51111d8052a693e225abce",
+      "idempotency_key": "orca-delivery-ack:run_3be2c4b42310:delivery_c95bced811da",
+      "kind": "ack_orca_delivery",
+      "status": "confirmed",
+      "payload_digest": "9ad9ae4a197066b057f0f7ab05fefa5b74b62f75adb07e39eee1cc98cff6aeff",
+      "request": "eyJydW5faWQiOiJydW5fM2JlMmM0YjQyMzEwIiwiZGVsaXZlcnlfaWQiOiJkZWxpdmVyeV9jOTViY2VkODExZGEifQ==",
+      "platform_request_id": "76f1dc12-c0fc-4157-b7ad-9dbef0710fa0",
+      "receipt": "eyJhY2tub3dsZWRnZWQiOnRydWUsImRlbGl2ZXJ5X2lkIjoiZGVsaXZlcnlfYzk1YmNlZDgxMWRhIiwiZXJyb3IiOiIiLCJydW5faWQiOiJydW5fM2JlMmM0YjQyMzEwIn0=",
+      "created_at": "2026-09-25T19:34:32.9299622Z",
+      "updated_at": "2026-09-25T19:34:33.440497Z"
+    },
+    {
+      "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\testsupervisedorcarealprepareroundtrip3312261080\\001\\local-identity\\.git",
+      "operation_id": "ack-a43b24d84c205c4b9184eef3efc3df79",
+      "idempotency_key": "orca-delivery-ack:run_3be2c4b42310:delivery_b5771ae3e452",
+      "kind": "ack_orca_delivery",
+      "status": "confirmed",
+      "payload_digest": "d132275e958bb38c1069a5c4a9636633ad5cb13b48e13fda8a689ea5aebe4007",
+      "request": "eyJydW5faWQiOiJydW5fM2JlMmM0YjQyMzEwIiwiZGVsaXZlcnlfaWQiOiJkZWxpdmVyeV9iNTc3MWFlM2U0NTIifQ==",
+      "platform_request_id": "31b964b6-6738-446a-8d5f-389146f48275",
+      "receipt": "eyJhY2tub3dsZWRnZWQiOnRydWUsImRlbGl2ZXJ5X2lkIjoiZGVsaXZlcnlfYjU3NzFhZTNlNDUyIiwiZXJyb3IiOiIiLCJydW5faWQiOiJydW5fM2JlMmM0YjQyMzEwIn0=",
+      "created_at": "2026-09-25T19:34:53.1293158Z",
+      "updated_at": "2026-09-25T19:34:53.673128Z"
+    },
+    {
+      "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\testsupervisedorcarealprepareroundtrip3312261080\\001\\local-identity\\.git",
+      "operation_id": "release-5c8035a028bacbccc270b141bde1c22c",
+      "idempotency_key": "release:547efb821e96e76d4f286389d9800969:5c8035a028bacbccc270b141bde1c22c",
+      "kind": "settle_resources",
+      "status": "confirmed",
+      "payload_digest": "bcc219fa6ab16c555d58d45d4acc971c852d30532e46f7f570bea9ff8875f7ed",
+      "request": "eyJyZWYiOnsidmVyc2lvbiI6MSwiYmFja2VuZCI6Im9yY2EiLCJwcm90b2NvbCI6Im9yY2Ffc3VwZXJ2aXNlZCIsInRhcmdldCI6eyJpZCI6Im9yY2Etc3VwZXJ2aXNlZDpmZTI2ZGNjZS1lOGY3LTQ3ZGQtOTZjMi1kNjExYzEwOTM3MzMiLCJjb25uZWN0aW9uX2lkIjoiZmUyNmRjY2UtZThmNy00N2RkLTk2YzItZDYxMWMxMDkzNzMzIiwid29ya3RyZWVfaWQiOiIwOWUzNTc1MS02NTE3LTRlN2MtYWUyMC0xNzhlZDBlOTAwMDA6OkM6L1VzZXJzL2xpdW1pbmcvb3JjYS93b3Jrc3BhY2VzL1N0ZWVybGluZVRlc3Qvc3RlZXJsaW5lLTRkOGQ4YjE4ZDhlNyIsImJyYW5jaCI6ImVycmFubGl1L3N0ZWVybGluZS00ZDhkOGIxOGQ4ZTciLCJiYXNlX3JldmlzaW9uIjoiMDAyODQwN2ZmYmJjZjlhZDQxMzlmZjYzNzIwMzExYTZlM2ZkMGExZiIsImV4dGVybmFsX3J1bnRpbWUiOiJiZWQ1NWRlMC02ZDdkLTQ5N2UtYjFkNS0zYWJhYjI1NmIyZWUiLCJvcmNoZXN0cmF0aW9uX3J1biI6InJ1bl8zYmUyYzRiNDIzMTAiLCJleHRlcm5hbF90YXNrIjoidGFza19kMTQ5Mjc0MDg2MDQiLCJkaXNwYXRjaCI6ImN0eF8yMGM0OWE3YWVjYTkiLCJleGVjdXRpb25faG9zdCI6ImJlZDU1ZGUwLTZkN2QtNDk3ZS1iMWQ1LTNhYmFiMjU2YjJlZSJ9LCJhZ2VudCI6eyJuYW1lIjoiY29kZXgifSwicnVuX2lkIjoiYTM4ZWI0NzZhYzk1OTVlZTljZDliMDI0ODIzMDFmYzkiLCJhdHRlbXB0X2lkIjoiNWM4MDM1YTAyOGJhY2JjY2MyNzBiMTQxYmRlMWMyMmMiLCJ3b3Jrc3BhY2VfcGF0aCI6IkM6L1VzZXJzL2xpdW1pbmcvb3JjYS93b3Jrc3BhY2VzL1N0ZWVybGluZVRlc3Qvc3RlZXJsaW5lLTRkOGQ4YjE4ZDhlNyIsIndvcmtzcGFjZV9icmFuY2giOiJlcnJhbmxpdS9zdGVlcmxpbmUtNGQ4ZDhiMThkOGU3IiwiYmFzZV9jb21taXQiOiIwMDI4NDA3ZmZiYmNmOWFkNDEzOWZmNjM3MjAzMTFhNmUzZmQwYTFmIiwiZXh0ZXJuYWwiOnsia2luZCI6Im9yY2Ffc3VwZXJ2aXNlZCIsInRlcm1pbmFsIjoidGVybV9jMjRkNGZmMS03YzkxLTQ5NWQtODBiMi1kODE2ZGQ0MDY4M2MiLCJydW50aW1lX2lkIjoiZDA1ZjUyYjktNGRiZC00NjU2LWEwMWItMDAwYTlmMjY2Yjg0IiwiaW5jYXJuYXRpb24iOiI3MmNjOTRlZS0xMmYxLTQyNzctOGE2MS0xYjA0MTc0NjdkM2IiLCJjb29yZGluYXRvcl9ydW50aW1lX2lkIjoiN2NjYjAyYjAtYWVmMi00MTI0LThkYjgtMGVjMDYzMTU1YjEyIiwib3JjaGVzdHJhdGlvbl9ydW4iOiJydW5fM2JlMmM0YjQyMzEwIiwidGFzayI6InRhc2tfZDE0OTI3NDA4NjA0IiwiZGlzcGF0Y2giOiJjdHhfMjBjNDlhN2FlY2E5IiwiZXhlY3V0aW9uX2hvc3QiOiJiZWQ1NWRlMC02ZDdkLTQ5N2UtYjFkNS0zYWJhYjI1NmIyZWUiLCJ3b3JrdHJlZV9pZCI6IjA5ZTM1NzUxLTY1MTctNGU3Yy1hZTIwLTE3OGVkMGU5MDAwMDo6QzovVXNlcnMvbGl1bWluZy9vcmNhL3dvcmtzcGFjZXMvU3RlZXJsaW5lVGVzdC9zdGVlcmxpbmUtNGQ4ZDhiMThkOGU3In0sImdlbmVyYXRpb24iOiJkMDVmNTJiOS00ZGJkLTQ2NTYtYTAxYi0wMDBhOWYyNjZiODQ6NzJjYzk0ZWUtMTJmMS00Mjc3LThhNjEtMWIwNDE3NDY3ZDNiIn0sIm91dGNvbWUiOiJzdWNjZWVkZWQifQ==",
+      "platform_request_id": "57c49eec-cfac-4fdb-88e6-1933712d737b",
+      "receipt": "eyJkaXNwYXRjaF9pZCI6ImN0eF8yMGM0OWE3YWVjYTkiLCJlcnJvciI6IiIsInNldHRsZW1lbnQiOnsiZGlzcG9zaXRpb24iOiJyZWxlYXNlZCIsInBsYXRmb3JtX3JlcXVlc3RfaWQiOiI1N2M0OWVlYy1jZmFjLTRmZGItODhlNi0xOTMzNzEyZDczN2IifX0=",
+      "created_at": "2026-09-25T19:34:58.4041335Z",
+      "updated_at": "2026-09-25T19:34:59.5983711Z"
+    },
+    {
+      "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\testsupervisedorcarealprepareroundtrip3312261080\\001\\local-identity\\.git",
+      "operation_id": "1ae1aee902d4607f0401aceb460e6de8",
+      "idempotency_key": "step:547efb821e96e76d4f286389d9800969:2b6070f5667fdda8107be638509ecba0",
+      "kind": "dispatch_step",
+      "status": "confirmed",
+      "payload_digest": "d604e4927362c398f75e5e368643ea5eb8ea53a3044b8108d45897f080d48a77",
+      "request": "eyJhdHRlbXB0X2lkIjoiMmI2MDcwZjU2NjdmZGRhODEwN2JlNjM4NTA5ZWNiYTAiLCJjb250cmFjdF9kaWdlc3QiOiI2NWM1NGViYTlmYWI4OGY5MjNmOWExZjJmNWU5Y2Q0NDNmOWI4MjVlODJiNjU4ZjZkZDQ2MTg3ZTdmYWNmMDY1IiwiZXhlY3V0aW9uX2lkIjoiNTQ3ZWZiODIxZTk2ZTc2ZDRmMjg2Mzg5ZDk4MDA5NjkiLCJpbnB1dCI6eyJzY2hlbWFfdmVyc2lvbiI6MSwicHJvamVjdF9pZGVudGl0eSI6ImM6XFx1c2Vyc1xcbG1hczFcXGFwcGRhdGFcXGxvY2FsXFx0ZW1wXFx0ZXN0c3VwZXJ2aXNlZG9yY2FyZWFscHJlcGFyZXJvdW5kdHJpcDMzMTIyNjEwODBcXDAwMVxcbG9jYWwtaWRlbnRpdHlcXC5naXQiLCJ0YXNrX2lkIjoicmVtb3RlLXByb2JlLWEzOGViNDc2YWMiLCJ3b3JrZmxvd19ydW5faWQiOiJhMzhlYjQ3NmFjOTU5NWVlOWNkOWIwMjQ4MjMwMWZjOSIsImV4ZWN1dGlvbl9pZCI6IjU0N2VmYjgyMWU5NmU3NmQ0ZjI4NjM4OWQ5ODAwOTY5IiwiYXR0ZW1wdF9pZCI6IjJiNjA3MGY1NjY3ZmRkYTgxMDdiZTYzODUwOWVjYmEwIiwic3RlcF9pZCI6InZlcmlmeSIsImlucHV0X3JldmlzaW9uIjoiMjJmODRjM2QxZjNhN2Q3Yzc1ZWNmMDMzMDNlMzFiMzhlNjAxNzlhMCIsImNhbmRpZGF0ZV9yZXZpc2lvbiI6IjIyZjg0YzNkMWYzYTdkN2M3NWVjZjAzMzAzZTMxYjM4ZTYwMTc5YTAiLCJwcmVyZXF1aXNpdGVfcmVzdWx0X2lkcyI6WyJmMTE3NTM2MC1mN2RmLTQ1OTYtYmVlZi00M2IyOGU1NDVjZWMiXSwicHJlcmVxdWlzaXRlX3Jlc3VsdHMiOlt7InN0ZXBfaWQiOiJpbXBsZW1lbnQiLCJzdWNjZWVkZWQiOnRydWUsImlucHV0X3JldmlzaW9uIjoiMDAyODQwN2ZmYmJjZjlhZDQxMzlmZjYzNzIwMzExYTZlM2ZkMGExZiIsInJldmlzaW9uIjoiMjJmODRjM2QxZjNhN2Q3Yzc1ZWNmMDMzMDNlMzFiMzhlNjAxNzlhMCIsImJhc2VfYW5jZXN0b3IiOnRydWUsIndvcmtzcGFjZSI6eyJyZXBvc2l0b3J5IjoiYzpcXHVzZXJzXFxsbWFzMVxcYXBwZGF0YVxcbG9jYWxcXHRlbXBcXHRlc3RzdXBlcnZpc2Vkb3JjYXJlYWxwcmVwYXJlcm91bmR0cmlwMzMxMjI2MTA4MFxcMDAxXFxsb2NhbC1pZGVudGl0eVxcLmdpdCIsIndvcmt0cmVlIjoiYzpcXHVzZXJzXFxsaXVtaW5nXFxvcmNhXFx3b3Jrc3BhY2VzXFxzdGVlcmxpbmV0ZXN0XFxzdGVlcmxpbmUtNGQ4ZDhiMThkOGU3IiwiYnJhbmNoIjoiZXJyYW5saXUvc3RlZXJsaW5lLTRkOGQ4YjE4ZDhlNyIsImJhc2UiOiIwMDI4NDA3ZmZiYmNmOWFkNDEzOWZmNjM3MjAzMTFhNmUzZmQwYTFmIiwiaGVhZCI6IjIyZjg0YzNkMWYzYTdkN2M3NWVjZjAzMzAzZTMxYjM4ZTYwMTc5YTAiLCJ2ZXJpZmllZF9hdCI6IjIwMjYtMDktMjVUMTk6MzQ6NTguMzA3MDU4NloifSwicmVzdWx0X2lkIjoiZjExNzUzNjAtZjdkZi00NTk2LWJlZWYtNDNiMjhlNTQ1Y2VjIiwicHJlcmVxdWlzaXRlX3Jlc3VsdF9pZHMiOlsiM2JlMTI2M2EtN2U3Mi00MWFhLWFmMTctMzUxOGU1OTJlYTg0Il19XSwid29ya2Zsb3dfZGVmaW5pdGlvbiI6eyJpZCI6Im1pbmltYWwtdjEiLCJ2ZXJzaW9uIjoibWluaW1hbC12MSIsInJldmlld19yZXF1aXJlZCI6ZmFsc2UsIm1heF9yZXBhaXJfcm91bmRzIjoyfSwicHJvamVjdF9zdGVwcyI6eyJpbXBsZW1lbnQiOnsicHJvdmlkZXIiOiJhZ2VudF9za2lsbCIsImVudHJ5IjoiYnVpbHRpbjppbXBsZW1lbnQiLCJ2ZXJzaW9uIjoibWluaW1hbC12MSIsImlucHV0X3NjaGVtYSI6InN0ZWVybGluZS9taW5pbWFsLXN0ZXAtaW5wdXQvdjEiLCJvdXRwdXRfc2NoZW1hIjoic3RlZXJsaW5lL21pbmltYWwtc3RlcC1yZXN1bHQvdjEiLCJleGVjdXRpb25fc2l0ZSI6InRhcmdldCIsInRpbWVvdXQiOjYwMDAwMDAwMDAwMH0sInZlcmlmeSI6eyJwcm92aWRlciI6ImNvbW1hbmQiLCJlbnRyeSI6InNwZWMwMy1jb250ZW50LXNtb2tlLXYyIiwidmVyc2lvbiI6Im1pbmltYWwtdjEiLCJpbnB1dF9zY2hlbWEiOiJzdGVlcmxpbmUvbWluaW1hbC1zdGVwLWlucHV0L3YxIiwib3V0cHV0X3NjaGVtYSI6InN0ZWVybGluZS9taW5pbWFsLXN0ZXAtcmVzdWx0L3YxIiwiZXhlY3V0aW9uX3NpdGUiOiJ0YXJnZXQiLCJ0aW1lb3V0Ijo2MDAwMDAwMDAwMDAsImNvbW1hbmQiOlsicHdzaC5leGUiLCItTm9Qcm9maWxlIiwiLUNvbW1hbmQiLCIkYWN0dWFsID0gZ2l0IHJldi1wYXJzZSBIRUFEOnN0ZWVybGluZS1zcGVjMDMtc3VwZXJ2aXNlZC1zdGFnZS50eHQ7IGlmICgkTEFTVEVYSVRDT0RFIC1uZSAwIC1vciAkYWN0dWFsLlRyaW0oKSAtbmUgJ2E3ODkwYzcxNmNjM2FkMGNjYTc5ZjhkN2I2OGNmZmUxMjVlNmIxMDYnKSB7IGV4aXQgNyB9OyBleGl0IDAiXSwicmVxdWlyZWRfY2hlY2tzIjpbImNvbnRlbnQtc21va2UiXX0sInJldmlldyI6eyJwcm92aWRlciI6IiIsImVudHJ5IjoiIiwidmVyc2lvbiI6IiIsImlucHV0X3NjaGVtYSI6IiIsIm91dHB1dF9zY2hlbWEiOiIiLCJleGVjdXRpb25fc2l0ZSI6IiIsInRpbWVvdXQiOjB9LCJwdWJsaXNoX3ByIjp7InByb3ZpZGVyIjoiY29tbWFuZCIsImVudHJ5IjoicHVibGlzaC5wczEiLCJ2ZXJzaW9uIjoibWluaW1hbC12MSIsImlucHV0X3NjaGVtYSI6InN0ZWVybGluZS9taW5pbWFsLXN0ZXAtaW5wdXQvdjEiLCJvdXRwdXRfc2NoZW1hIjoic3RlZXJsaW5lL21pbmltYWwtc3RlcC1yZXN1bHQvdjEiLCJleGVjdXRpb25fc2l0ZSI6InRhcmdldCIsInRpbWVvdXQiOjYwMDAwMDAwMDAwMCwiY29tbWFuZCI6WyJwb3dlcnNoZWxsIiwiLU5vUHJvZmlsZSIsIi1GaWxlIiwicHVibGlzaC5wczEiXX19LCJ3b3Jrc3BhY2UiOnsicmVwb3NpdG9yeSI6ImM6XFx1c2Vyc1xcbG1hczFcXGFwcGRhdGFcXGxvY2FsXFx0ZW1wXFx0ZXN0c3VwZXJ2aXNlZG9yY2FyZWFscHJlcGFyZXJvdW5kdHJpcDMzMTIyNjEwODBcXDAwMVxcbG9jYWwtaWRlbnRpdHlcXC5naXQiLCJ3b3JrdHJlZSI6ImM6XFx1c2Vyc1xcbGl1bWluZ1xcb3JjYVxcd29ya3NwYWNlc1xcc3RlZXJsaW5ldGVzdFxcc3RlZXJsaW5lLTRkOGQ4YjE4ZDhlNyIsImJyYW5jaCI6ImVycmFubGl1L3N0ZWVybGluZS00ZDhkOGIxOGQ4ZTciLCJiYXNlIjoiMDAyODQwN2ZmYmJjZjlhZDQxMzlmZjYzNzIwMzExYTZlM2ZkMGExZiIsImhlYWQiOiIyMmY4NGMzZDFmM2E3ZDdjNzVlY2YwMzMwM2UzMWIzOGU2MDE3OWEwIiwidmVyaWZpZWRfYXQiOiIyMDI2LTA5LTI1VDE5OjI5OjM1Ljg3MzU4NjJaIn0sInRhc2siOnsiaWQiOiJyZW1vdGUtcHJvYmUtYTM4ZWI0NzZhYyIsInRpdGxlIjoiaXNvbGF0ZWQgc3VwZXJ2aXNlZCB2ZXJpZnkgcHJvYmUiLCJzdGF0dXMiOiJvcGVuIiwiaXNzdWVfdHlwZSI6InRhc2siLCJhc3NpZ25lZSI6IiIsInByaW9yaXR5IjpudWxsLCJkZXNjcmlwdGlvbiI6IlJ1biB0aGUgcGlubmVkIGNvbnRlbnQtc21va2UgY29tbWFuZCBleGFjdGx5IGFnYWluc3QgdGhlIGN1cnJlbnQgY2FuZGlkYXRlIGNvbW1pdC4gRGVjb2RlIGNhbmRpZGF0ZV9yZXZpc2lvbiBmcm9tIHRoZSB0YXNrIHNwZWMgYmFzZTY0IGlucHV0IG9iamVjdCBpbnRvICRpZHMuY2FuZGlkYXRlX3JldmlzaW9uIGFuZCB1c2UgdGhhdCB2YXJpYWJsZSBmb3IgZXZlcnkgU0hBIGFyZ3VtZW50IGFuZCByZXN1bHQgZmllbGQ7IGRvIG5vdCByZXR5cGUgaXRzIGhleCBkaWdpdHMuIEFsc28gcnVuIGdpdCBtZXJnZS1iYXNlIC0taXMtYW5jZXN0b3IgXHUwMDNjZml4ZWRfYmFzZVx1MDAzZSAkaWRzLmNhbmRpZGF0ZV9yZXZpc2lvbjsgaW5jbHVkZSByZXN1bHQuYmFzZV9hbmNlc3Rvcj10cnVlIG9ubHkgYWZ0ZXIgaXRzIGV4aXQgY29kZSBpcyB6ZXJvLiBUaGlzIGtleSBpcyBtYW5kYXRvcnkgZXZlbiB3aGVuIGNvbnRlbnQtc21va2UgcGFzc2VzLiBSZWFkLW9ubHkgdmVyaWZpY2F0aW9uIG9ubHk6IGRvIG5vdCBlZGl0LCBjb21taXQsIHB1c2gsIGNyZWF0ZSBhIFBSLCBvciBydW4gYSBsYXRlciBzdGVwLiBSZXR1cm4gb25lIGNoZWNrIG5hbWVkIGNvbnRlbnQtc21va2Ugd2l0aCB0aGUgYWN0dWFsIGNvbW1hbmQsIHNjcmlwdF92ZXJzaW9uIHNwZWMwMy1jb250ZW50LXNtb2tlLXYyLCBvYnNlcnZlZCBleGl0X2NvZGUsIHBhc3NlZC9zdGF0dXMsIGV2aWRlbmNlX3JlZiBnaXQ6SEVBRDpzdGVlcmxpbmUtc3BlYzAzLXN1cGVydmlzZWQtc3RhZ2UudHh0LCBhbmQgYWN0dWFsX2NvbW1pdCBlcXVhbCB0byB0aGUgZnVsbCBIRUFELiBSZXR1cm4gdmVyaWZ5IHJlc3VsdC5yZXZpc2lvbiBlcXVhbCB0byB0aGF0IHNhbWUgY2FuZGlkYXRlIGNvbW1pdC4iLCJzcGVjX2lkIjoiIiwibWV0YWRhdGEiOm51bGwsImxhYmVscyI6bnVsbH19LCJzdGVwX2lkIjoidmVyaWZ5IiwidGFza19pZCI6InJlbW90ZS1wcm9iZS1hMzhlYjQ3NmFjIiwid29ya2Zsb3dfcnVuX2lkIjoiYTM4ZWI0NzZhYzk1OTVlZTljZDliMDI0ODIzMDFmYzkifQ==",
+      "platform_request_id": "b46b0c0a-23dc-4f31-b121-767cd4f8b0d5",
+      "receipt": "eyJraW5kIjoib3JjYV9zdXBlcnZpc2VkIiwidGVybWluYWwiOiJ0ZXJtX2I4YzRkZjIzLWEwYzctNDRkYS04NjlhLWFiNTdhYjg0YTEzNyIsInJ1bnRpbWVfaWQiOiJkMDVmNTJiOS00ZGJkLTQ2NTYtYTAxYi0wMDBhOWYyNjZiODQiLCJpbmNhcm5hdGlvbiI6IjgzYmZiNWJlLWI3ZjAtNDg1MC04ZmY1LWIxYjBkYTcwODMzMCIsImNvb3JkaW5hdG9yX3J1bnRpbWVfaWQiOiI3Y2NiMDJiMC1hZWYyLTQxMjQtOGRiOC0wZWMwNjMxNTViMTIiLCJvcmNoZXN0cmF0aW9uX3J1biI6InJ1bl8zYmUyYzRiNDIzMTAiLCJ0YXNrIjoidGFza19lMDBmMzg0NTg5YzUiLCJkaXNwYXRjaCI6ImN0eF8wODBkMjU1M2E4ZTAiLCJleGVjdXRpb25faG9zdCI6ImJlZDU1ZGUwLTZkN2QtNDk3ZS1iMWQ1LTNhYmFiMjU2YjJlZSIsIndvcmt0cmVlX2lkIjoiMDllMzU3NTEtNjUxNy00ZTdjLWFlMjAtMTc4ZWQwZTkwMDAwOjpDOi9Vc2Vycy9saXVtaW5nL29yY2Evd29ya3NwYWNlcy9TdGVlcmxpbmVUZXN0L3N0ZWVybGluZS00ZDhkOGIxOGQ4ZTcifQ==",
+      "created_at": "2026-09-25T19:35:03.1954713Z",
+      "updated_at": "2026-09-25T19:35:20.2728919Z"
+    },
+    {
+      "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\testsupervisedorcarealprepareroundtrip3312261080\\001\\local-identity\\.git",
+      "operation_id": "ack-53a62289b656326fc7bbdf23bdb22a5b",
+      "idempotency_key": "orca-delivery-ack:run_3be2c4b42310:delivery_424dc7ad5f85",
+      "kind": "ack_orca_delivery",
+      "status": "confirmed",
+      "payload_digest": "ec02d4d8ffb91d538fdc751d5c9ee1c0675604616a41b66f1d85117298003224",
+      "request": "eyJydW5faWQiOiJydW5fM2JlMmM0YjQyMzEwIiwiZGVsaXZlcnlfaWQiOiJkZWxpdmVyeV80MjRkYzdhZDVmODUifQ==",
+      "platform_request_id": "18f5479e-5983-42e5-b9d5-005403254cc6",
+      "receipt": "eyJhY2tub3dsZWRnZWQiOnRydWUsImRlbGl2ZXJ5X2lkIjoiZGVsaXZlcnlfNDI0ZGM3YWQ1Zjg1IiwiZXJyb3IiOiIiLCJydW5faWQiOiJydW5fM2JlMmM0YjQyMzEwIn0=",
+      "created_at": "2026-09-25T19:39:35.1696383Z",
+      "updated_at": "2026-09-25T19:39:35.7104637Z"
+    },
+    {
+      "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\testsupervisedorcarealprepareroundtrip3312261080\\001\\local-identity\\.git",
+      "operation_id": "ack-f41a7a10e10919b5a19de660c37ed688",
+      "idempotency_key": "orca-delivery-ack:run_3be2c4b42310:delivery_c2ba4bd08ef6",
+      "kind": "ack_orca_delivery",
+      "status": "confirmed",
+      "payload_digest": "49186d3493a1e23881c55080e92bc1c55e82991f66bdb52c20f201508992be09",
+      "request": "eyJydW5faWQiOiJydW5fM2JlMmM0YjQyMzEwIiwiZGVsaXZlcnlfaWQiOiJkZWxpdmVyeV9jMmJhNGJkMDhlZjYifQ==",
+      "platform_request_id": "270c6097-9128-4155-bd49-a4be175f6704",
+      "receipt": "eyJhY2tub3dsZWRnZWQiOnRydWUsImRlbGl2ZXJ5X2lkIjoiZGVsaXZlcnlfYzJiYTRiZDA4ZWY2IiwiZXJyb3IiOiIiLCJydW5faWQiOiJydW5fM2JlMmM0YjQyMzEwIn0=",
+      "created_at": "2026-09-25T19:39:52.7276413Z",
+      "updated_at": "2026-09-25T19:39:53.2444989Z"
+    },
+    {
+      "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\testsupervisedorcarealprepareroundtrip3312261080\\001\\local-identity\\.git",
+      "operation_id": "release-2b6070f5667fdda8107be638509ecba0",
+      "idempotency_key": "release:547efb821e96e76d4f286389d9800969:2b6070f5667fdda8107be638509ecba0",
+      "kind": "settle_resources",
+      "status": "confirmed",
+      "payload_digest": "8931c095db0fc11b14f3c84cc1e1eff3bfe1e0717a145d5b039be0281ef381c4",
+      "request": "eyJyZWYiOnsidmVyc2lvbiI6MSwiYmFja2VuZCI6Im9yY2EiLCJwcm90b2NvbCI6Im9yY2Ffc3VwZXJ2aXNlZCIsInRhcmdldCI6eyJpZCI6Im9yY2Etc3VwZXJ2aXNlZDpmZTI2ZGNjZS1lOGY3LTQ3ZGQtOTZjMi1kNjExYzEwOTM3MzMiLCJjb25uZWN0aW9uX2lkIjoiZmUyNmRjY2UtZThmNy00N2RkLTk2YzItZDYxMWMxMDkzNzMzIiwid29ya3RyZWVfaWQiOiIwOWUzNTc1MS02NTE3LTRlN2MtYWUyMC0xNzhlZDBlOTAwMDA6OkM6L1VzZXJzL2xpdW1pbmcvb3JjYS93b3Jrc3BhY2VzL1N0ZWVybGluZVRlc3Qvc3RlZXJsaW5lLTRkOGQ4YjE4ZDhlNyIsImJyYW5jaCI6ImVycmFubGl1L3N0ZWVybGluZS00ZDhkOGIxOGQ4ZTciLCJiYXNlX3JldmlzaW9uIjoiMDAyODQwN2ZmYmJjZjlhZDQxMzlmZjYzNzIwMzExYTZlM2ZkMGExZiIsImV4dGVybmFsX3J1bnRpbWUiOiJiZWQ1NWRlMC02ZDdkLTQ5N2UtYjFkNS0zYWJhYjI1NmIyZWUiLCJvcmNoZXN0cmF0aW9uX3J1biI6InJ1bl8zYmUyYzRiNDIzMTAiLCJleHRlcm5hbF90YXNrIjoidGFza19lMDBmMzg0NTg5YzUiLCJkaXNwYXRjaCI6ImN0eF8wODBkMjU1M2E4ZTAiLCJleGVjdXRpb25faG9zdCI6ImJlZDU1ZGUwLTZkN2QtNDk3ZS1iMWQ1LTNhYmFiMjU2YjJlZSJ9LCJhZ2VudCI6eyJuYW1lIjoiY29kZXgifSwicnVuX2lkIjoiYTM4ZWI0NzZhYzk1OTVlZTljZDliMDI0ODIzMDFmYzkiLCJhdHRlbXB0X2lkIjoiMmI2MDcwZjU2NjdmZGRhODEwN2JlNjM4NTA5ZWNiYTAiLCJ3b3Jrc3BhY2VfcGF0aCI6IkM6L1VzZXJzL2xpdW1pbmcvb3JjYS93b3Jrc3BhY2VzL1N0ZWVybGluZVRlc3Qvc3RlZXJsaW5lLTRkOGQ4YjE4ZDhlNyIsIndvcmtzcGFjZV9icmFuY2giOiJlcnJhbmxpdS9zdGVlcmxpbmUtNGQ4ZDhiMThkOGU3IiwiYmFzZV9jb21taXQiOiIwMDI4NDA3ZmZiYmNmOWFkNDEzOWZmNjM3MjAzMTFhNmUzZmQwYTFmIiwiZXh0ZXJuYWwiOnsia2luZCI6Im9yY2Ffc3VwZXJ2aXNlZCIsInRlcm1pbmFsIjoidGVybV9iOGM0ZGYyMy1hMGM3LTQ0ZGEtODY5YS1hYjU3YWI4NGExMzciLCJydW50aW1lX2lkIjoiZDA1ZjUyYjktNGRiZC00NjU2LWEwMWItMDAwYTlmMjY2Yjg0IiwiaW5jYXJuYXRpb24iOiI4M2JmYjViZS1iN2YwLTQ4NTAtOGZmNS1iMWIwZGE3MDgzMzAiLCJjb29yZGluYXRvcl9ydW50aW1lX2lkIjoiN2NjYjAyYjAtYWVmMi00MTI0LThkYjgtMGVjMDYzMTU1YjEyIiwib3JjaGVzdHJhdGlvbl9ydW4iOiJydW5fM2JlMmM0YjQyMzEwIiwidGFzayI6InRhc2tfZTAwZjM4NDU4OWM1IiwiZGlzcGF0Y2giOiJjdHhfMDgwZDI1NTNhOGUwIiwiZXhlY3V0aW9uX2hvc3QiOiJiZWQ1NWRlMC02ZDdkLTQ5N2UtYjFkNS0zYWJhYjI1NmIyZWUiLCJ3b3JrdHJlZV9pZCI6IjA5ZTM1NzUxLTY1MTctNGU3Yy1hZTIwLTE3OGVkMGU5MDAwMDo6QzovVXNlcnMvbGl1bWluZy9vcmNhL3dvcmtzcGFjZXMvU3RlZXJsaW5lVGVzdC9zdGVlcmxpbmUtNGQ4ZDhiMThkOGU3In0sImdlbmVyYXRpb24iOiJkMDVmNTJiOS00ZGJkLTQ2NTYtYTAxYi0wMDBhOWYyNjZiODQ6ODNiZmI1YmUtYjdmMC00ODUwLThmZjUtYjFiMGRhNzA4MzMwIn0sIm91dGNvbWUiOiJzdWNjZWVkZWQifQ==",
+      "platform_request_id": "3e853ca7-9df3-4df5-b928-07be7c27d5c9",
+      "receipt": "eyJkaXNwYXRjaF9pZCI6ImN0eF8wODBkMjU1M2E4ZTAiLCJlcnJvciI6IiIsInNldHRsZW1lbnQiOnsiZGlzcG9zaXRpb24iOiJyZWxlYXNlZCIsInBsYXRmb3JtX3JlcXVlc3RfaWQiOiIzZTg1M2NhNy05ZGYzLTRkZjUtYjkyOC0wN2JlN2MyN2Q1YzkifX0=",
+      "created_at": "2026-09-25T19:39:56.9514236Z",
+      "updated_at": "2026-09-25T19:39:58.1973593Z"
+    }
+  ],
+  "pr_created": false,
+  "run": {
+    "task_id": "remote-probe-a38eb476ac",
+    "domain_task_id": "remote-probe-a38eb476ac",
+    "domain_attempt_number": 1,
+    "workflow_version": "minimal-v1",
+    "workflow_config_digest": "55032dd537e074ab4400ce7bca8f98f19973f72525258d9e0dff87698291837d",
+    "execution_id": "547efb821e96e76d4f286389d9800969",
+    "title": "isolated supervised prepare probe",
+    "run_id": "a38eb476ac9595ee9cd9b02482301fc9",
+    "attempt_id": "df374e79db1f141ddff5b6adff52893e",
+    "control_revision": 10,
+    "claimant": "supervised-probe",
+    "host": "orca_supervised",
+    "backend": "orca",
+    "protocol": "orca_supervised",
+    "agent": "codex",
+    "target": {
+      "id": "orca-supervised:fe26dcce-e8f7-47dd-96c2-d611c1093733",
+      "connection_id": "fe26dcce-e8f7-47dd-96c2-d611c1093733",
+      "worktree_id": "09e35751-6517-4e7c-ae20-178ed0e90000::C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-4d8d8b18d8e7",
+      "branch": "erranliu/steerline-4d8d8b18d8e7",
+      "base_revision": "0028407ffbbcf9ad4139ff63720311a6e3fd0a1f",
+      "external_runtime": "bed55de0-6d7d-497e-b1d5-3abab256b2ee",
+      "orchestration_run": "run_3be2c4b42310",
+      "external_task": "task_e00f384589c5",
+      "dispatch": "ctx_080d2553a8e0",
+      "execution_host": "bed55de0-6d7d-497e-b1d5-3abab256b2ee"
+    },
+    "beads_status": "in_progress",
+    "execution_status": "pending",
+    "finish_task_status": "pending",
+    "codex_session_id": null,
+    "process": null,
+    "started_at": null,
+    "ended_at": "2026-09-25T19:39:53.2728617Z",
+    "worktree_path": "C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-4d8d8b18d8e7",
+    "worktree_branch": "erranliu/steerline-4d8d8b18d8e7",
+    "workspace_intent": {
+      "path": "C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-4d8d8b18d8e7",
+      "branch": "erranliu/steerline-4d8d8b18d8e7",
+      "base_commit": "0028407ffbbcf9ad4139ff63720311a6e3fd0a1f"
+    },
+    "beads_context": {
+      "beads_dir": "",
+      "project_id": "isolated-protocol-probe",
+      "database": "",
+      "backend": ""
+    },
+    "base_commit": "0028407ffbbcf9ad4139ff63720311a6e3fd0a1f",
+    "pr": {
+      "url": null,
+      "state": "unknown",
+      "merged_at": null,
+      "merge_commit": null,
+      "queried_at": null,
+      "query_error": null
+    },
+    "last_event": "Orca inbox Delivery",
+    "log_path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\TestSupervisedOrcaRealPrepareRoundtrip3312261080\\001\\runtime\\runs\\a38eb476ac9595ee9cd9b02482301fc9\\events.jsonl",
+    "result_path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\TestSupervisedOrcaRealPrepareRoundtrip3312261080\\001\\runtime\\runs\\a38eb476ac9595ee9cd9b02482301fc9\\result.json",
+    "summary": null,
+    "error": null
+  },
+  "verified_revision": "22f84c3d1f3a7d7c75ecf03303e31b38e60179a0",
+  "workflow": {
+    "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\testsupervisedorcarealprepareroundtrip3312261080\\001\\local-identity\\.git",
+    "workflow_run_id": "a38eb476ac9595ee9cd9b02482301fc9",
+    "task_id": "remote-probe-a38eb476ac",
+    "workflow_version": "minimal-v1",
+    "config_digest": "55032dd537e074ab4400ce7bca8f98f19973f72525258d9e0dff87698291837d",
+    "workflow_definition": {
+      "id": "minimal-v1",
+      "version": "minimal-v1",
+      "review_required": false,
+      "max_repair_rounds": 2
+    },
+    "project_steps": {
+      "implement": {
+        "provider": "agent_skill",
+        "entry": "builtin:implement",
+        "version": "minimal-v1",
+        "input_schema": "steerline/minimal-step-input/v1",
+        "output_schema": "steerline/minimal-step-result/v1",
+        "execution_site": "target",
+        "timeout": 600000000000
+      },
+      "verify": {
+        "provider": "command",
+        "entry": "spec03-content-smoke-v2",
+        "version": "minimal-v1",
+        "input_schema": "steerline/minimal-step-input/v1",
+        "output_schema": "steerline/minimal-step-result/v1",
+        "execution_site": "target",
+        "timeout": 600000000000,
+        "command": [
+          "pwsh.exe",
+          "-NoProfile",
+          "-Command",
+          "$actual = git rev-parse HEAD:steerline-spec03-supervised-stage.txt; if ($LASTEXITCODE -ne 0 -or $actual.Trim() -ne 'a7890c716cc3ad0cca79f8d7b68cffe125e6b106') { exit 7 }; exit 0"
+        ],
+        "required_checks": [
+          "content-smoke"
+        ]
+      },
+      "review": {
+        "provider": "",
+        "entry": "",
+        "version": "",
+        "input_schema": "",
+        "output_schema": "",
+        "execution_site": "",
+        "timeout": 0
+      },
+      "publish_pr": {
+        "provider": "command",
+        "entry": "publish.ps1",
+        "version": "minimal-v1",
+        "input_schema": "steerline/minimal-step-input/v1",
+        "output_schema": "steerline/minimal-step-result/v1",
+        "execution_site": "target",
+        "timeout": 600000000000,
+        "command": [
+          "powershell",
+          "-NoProfile",
+          "-File",
+          "publish.ps1"
+        ]
+      }
+    },
+    "runner": {
+      "codex": {
+        "executable": "codex",
+        "args": null
+      },
+      "sandbox": "workspace-write",
+      "model": "gpt-6-luna",
+      "reasoning_effort": "high"
+    },
+    "phase": "executing",
+    "repository": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\TestSupervisedOrcaRealPrepareRoundtrip3312261080\\001\\local-identity",
+    "branch": "main",
+    "created_at": "2026-09-25T19:25:09.3579165Z",
+    "updated_at": "2026-09-25T19:39:58.2021355Z"
+  },
+  "worktree_id": "09e35751-6517-4e7c-ae20-178ed0e90000::C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-4d8d8b18d8e7",
+  "worktree_retained": true
+}

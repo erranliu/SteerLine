@@ -1,0 +1,22 @@
+{
+  "schema_version": "steerline.spec03-run-create-loss-probe.v1",
+  "evidence_class": "real_center_mutation_response_loss",
+  "orca_center_version": "1.4.209",
+  "objective": "SteerLine Spec03 R02 isolated response-loss probe 3332cea8-157b-41fe-b608-5b2fe5b2c598",
+  "coordinator_terminal": "term_87f154e5-4bf4-4c1d-a1df-9b3ace982933",
+  "run_create_response_discarded_by_caller": true,
+  "run_create_exit_code": 0,
+  "read_only_reconciliation": {
+    "run_current_id": "run_300746ff8f5e",
+    "run_current_objective_matched": true,
+    "run_current_coordinator_matched": true,
+    "run_show_confirmed": true,
+    "run_list_exact_objective_count": 1,
+    "platform_request_id_available_to_caller": false
+  },
+  "worker_count": 0,
+  "second_run_create_attempted": false,
+  "terminal_close_request_id": "282eaec8-154e-4b23-a88b-04f1f88a43ab",
+  "scope": "Run-create response-loss branch only; does not certify lost worker-start receipt or all of R02",
+  "acceptance": "partial"
+}

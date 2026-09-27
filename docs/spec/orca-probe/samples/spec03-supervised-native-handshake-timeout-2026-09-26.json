@@ -1,0 +1,66 @@
+{
+  "kind": "spec03-supervised-native-acceptance-attempt",
+  "captured_at": "2026-09-26T11:23:37Z",
+  "run_id": "run_20df1cd89ebd",
+  "local_workflow_run_id": "1566dd9dc30830e35eafd2f44e573959",
+  "local_task_id": "91024",
+  "remote_repository_id": "09e35751-6517-4e7c-ae20-178ed0e90000",
+  "base_branch": "codex/spec03-native-acceptance-base",
+  "base_commit": "592a745f3ed8dc26ad74c4f01066d632e77bee30",
+  "remote_codex_version": "codex-cli 0.157.1",
+  "steps": [
+    {
+      "step": "prepare",
+      "dispatch_id": "ctx_6fac58ced006",
+      "status": "succeeded",
+      "result_id": "a8bc30f3f609f03b111eb44ec340e13f",
+      "observed_head": "592a745f3ed8dc26ad74c4f01066d632e77bee30",
+      "status_accepted": true,
+      "worker_done": "succeeded"
+    },
+    {
+      "step": "implement",
+      "dispatch_id": "ctx_391b5042d2c4",
+      "attempt_id": "a40c8dad5492dbd58965a954a26f733d",
+      "status": "succeeded_on_remote_worker",
+      "status_message_id": "relay_cff02e680c15",
+      "worker_done_message_id": "relay_e5794c4afe7d",
+      "delivery_id": "delivery_7b372485c8b1",
+      "remote_candidate_revision": "542dd073eb573503818c375a2804e56ba78810c0",
+      "remote_status_accepted": true,
+      "remote_worker_done_accepted": true,
+      "local_gate_accepted": false,
+      "reason": "The one-shot tui-idle wait timed out after input_accepted; the exact binding persisted, but the original center did not confirm turn_started before blocking.",
+      "reconciliation": {
+        "dispatch_identity_rechecked": true,
+        "terminal_handle": "term_4f99aa0d-0b74-4864-8287-053d25d6c4b5",
+        "terminal_incarnation": "32204681-baa1-4e01-bbe2-f3a7ec620aa8",
+        "terminal_liveness": "live",
+        "staged_prompt_visible": true,
+        "enter_count_after_recheck": 1,
+        "request_timeout_reconnect_observed": true,
+        "latest_observed_terminal_state": "succeeded_after_candidate_commit",
+        "candidate_file": "steerline-spec03-native-stage.txt",
+        "observed_candidate_commit": "542dd073eb573503818c375a2804e56ba78810c0",
+        "archived_after_settlement": true
+      }
+    }
+  ],
+  "test_process": {
+    "command": "go test ./internal/steerline -run '^TestSupervisedOrcaRealNativeTaskLifecycle$' -count=1 -v -timeout 25m",
+    "result": "timed_out_after_25m",
+    "last_observed_stack": "Windows runtime-state Store.Publish/ReadObservationSnapshot",
+    "end_to_end_native_lifecycle_passed": false
+  },
+  "same_run_resume_attempt": {
+    "result": "failed_at_implement_gate",
+    "diagnostic": "implement input revision 592a745f3ed8dc26ad74c4f01066d632e77bee30 differs from prepared HEAD 542dd073eb573503818c375a2804e56ba78810c0",
+    "root_cause": "finishMinimalStep applied live workspace HEAD before validating the result against the prepared input revision",
+    "local_fix": "persist exact workspace target before the gate, then persist current workspace evidence only after AdvanceMinimalExecution succeeds"
+  },
+  "constraints": {
+    "second_worker_start_sent": false,
+    "production_repository_used": false,
+    "publish_or_merge_observed": false
+  }
+}

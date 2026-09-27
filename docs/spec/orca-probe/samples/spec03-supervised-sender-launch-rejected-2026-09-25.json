@@ -1,0 +1,209 @@
+{
+  "probeSummary": {
+    "captured_at": "2026-09-25T03:25:00Z",
+    "center_orca_version": "1.4.209",
+    "remote_orca_version": "1.4.210",
+    "remote_codex_cli_version": "codex-cli 0.156.1",
+    "run_id": "run_27b254892811",
+    "task_id": "task_e7653d2b8633",
+    "dispatch_id": "ctx_b4a5c8f5947d",
+    "worktree_id": "09e35751-6517-4e7c-ae20-178ed0e90000::C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-0a5dcff7b5d3",
+    "worker_done_outcome": "failed",
+    "failure": "The status sender launch was rejected before execution after a temporary Node helper attempted to forward the Dispatch capability.",
+    "status_message_accepted": false,
+    "worker_state": "failed",
+    "worker_stage": "released",
+    "terminal_liveness": "exited",
+    "residual_resources": [],
+    "files_changed": [],
+    "automatic_review_rejected": true,
+    "rejected_action": "PowerShell execution of a temporary Node helper that forwarded the live Orca Dispatch capability",
+    "review_reason": "blocked by policy"
+  },
+  "center_runtime_id": "7ccb02b0-aef2-4124-8db8-0ec063155b12",
+  "messages": [
+    {
+      "id": "relay_bfceedc5ac63",
+      "run_id": "run_27b254892811",
+      "delivery_contract": "current_delivery",
+      "from_handle": "dispatch:ctx_b4a5c8f5947d",
+      "to_handle": "run:run_27b254892811",
+      "subject": "Prepare status not accepted",
+      "body": "I verified codex-cli 0.156.1 and inspected the specified Orca worktree and Git state. The worktree is clean at the required base commit, and the base ancestor check succeeded. I could not complete the prepare dispatch because the required status sender launch was rejected before execution, so status payload acceptance was not proven.",
+      "type": "worker_done",
+      "priority": "normal",
+      "thread_id": null,
+      "payload": "{\"taskId\":\"task_e7653d2b8633\",\"dispatchId\":\"ctx_b4a5c8f5947d\",\"outcome\":\"failed\"}",
+      "created_at": "2026-09-25T03:34:53Z",
+      "delivered_at": null
+    }
+  ],
+  "workerShow": {
+    "id": "38235d5a-9d6c-4038-b447-f0133c8ae07c",
+    "ok": true,
+    "result": {
+      "dispatch": {
+        "id": "ctx_b4a5c8f5947d",
+        "runId": "run_27b254892811",
+        "taskId": "task_e7653d2b8633",
+        "task_id": "task_e7653d2b8633",
+        "contractVersion": 1,
+        "assigneeHandle": null,
+        "assigneePaneKey": null,
+        "processIncarnation": null,
+        "capabilityRevokedAt": "2026-09-25T03:34:53.959Z",
+        "retryOfDispatchId": null,
+        "creatorDispatchId": null,
+        "hostScope": null,
+        "status": "failed",
+        "failureCount": 0,
+        "lastFailure": "{\"provenance\":\"worker_report\",\"outcome\":\"failed\",\"messageId\":\"relay_bfceedc5ac63\",\"reportedBy\":\"dispatch:ctx_b4a5c8f5947d\",\"subject\":\"Prepare status not accepted\",\"body\":\"I verified codex-cli 0.156.1 and inspected the specified Orca worktree and Git state. The worktree is clean at the required base commit, and the base ancestor check succeeded. I could not complete the prepare dispatch because the required status sender launch was rejected before execution, so status payload acceptance was not proven.\",\"completedBy\":\"dispatch:ctx_b4a5c8f5947d\",\"filesModified\":[],\"reportPath\":null,\"completedAt\":\"2026-09-25T03:34:53.958Z\"}",
+        "terminationReason": null,
+        "depth": 1,
+        "dispatchedAt": "2026-09-25 03:27:51",
+        "completedAt": "2026-09-25T03:34:53.959Z",
+        "createdAt": "2026-09-25 03:27:51",
+        "lastHeartbeatAt": null
+      },
+      "worker": {
+        "dispatchId": "ctx_b4a5c8f5947d",
+        "runtimeEpoch": "7ccb02b0-aef2-4124-8db8-0ec063155b12",
+        "state": "failed",
+        "stage": "released",
+        "worktreeId": "09e35751-6517-4e7c-ae20-178ed0e90000::C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-0a5dcff7b5d3",
+        "agentTerminalHandle": null,
+        "setupState": "not_applicable",
+        "effects": [
+          {
+            "kind": "worktree",
+            "action": "reused",
+            "id": "09e35751-6517-4e7c-ae20-178ed0e90000::C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-0a5dcff7b5d3"
+          },
+          {
+            "kind": "setup",
+            "action": "not_applicable",
+            "state": "not_applicable"
+          },
+          {
+            "kind": "terminal",
+            "role": "agent",
+            "action": "created",
+            "id": "term_9587d0b8-d6cf-4b2b-bd23-693dc443184b"
+          },
+          {
+            "kind": "dispatch_input",
+            "role": "agent",
+            "id": "term_9587d0b8-d6cf-4b2b-bd23-693dc443184b",
+            "state": "accepted"
+          }
+        ],
+        "residualResources": [],
+        "startOptions": {
+          "on": "bed55de0-6d7d-497e-b1d5-3abab256b2ee",
+          "serverName": "home",
+          "worktree": "id:09e35751-6517-4e7c-ae20-178ed0e90000::C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-0a5dcff7b5d3",
+          "name": null,
+          "repo": null,
+          "baseBranch": null,
+          "terminal": null,
+          "agent": "codex",
+          "launch": {
+            "requested": {
+              "agent": "codex",
+              "model": "gpt-6-luna",
+              "effort": "high"
+            },
+            "effective": null
+          },
+          "timeoutMs": 60000,
+          "setup": "not_applicable",
+          "setupSource": "existing_worktree"
+        },
+        "lastError": null,
+        "createdAt": "2026-09-25 03:27:51",
+        "updatedAt": "2026-09-25T03:34:56.385Z"
+      },
+      "projection": {
+        "id": "ctx_b4a5c8f5947d",
+        "dispatchId": "ctx_b4a5c8f5947d",
+        "taskId": "task_e7653d2b8633",
+        "runId": "run_27b254892811",
+        "role": "worker",
+        "parent": null,
+        "provider": null,
+        "host": {
+          "kind": "remote",
+          "id": "bed55de0-6d7d-497e-b1d5-3abab256b2ee"
+        },
+        "workspace": {
+          "id": "09e35751-6517-4e7c-ae20-178ed0e90000::C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-0a5dcff7b5d3",
+          "kind": "folder_or_worktree"
+        },
+        "stage": {
+          "worker": "failed",
+          "dispatch": "failed",
+          "detail": "released",
+          "activity": "unknown"
+        },
+        "outcome": "failed",
+        "liveness": {
+          "verdict": "exited",
+          "source": "execution_host"
+        },
+        "evidence": {
+          "durable": true,
+          "liveStatus": "unavailable",
+          "lastObservedAt": 1790307450854
+        },
+        "resource": {
+          "state": "absent",
+          "reason": "not_materialized"
+        },
+        "nextAction": {
+          "kind": "none",
+          "argv": []
+        },
+        "attention": {
+          "categories": [
+            "failure"
+          ],
+          "requiresAction": true
+        }
+      },
+      "server": {
+        "environmentId": "bed55de0-6d7d-497e-b1d5-3abab256b2ee",
+        "name": "home"
+      },
+      "remoteRuntimeEpoch": "d05f52b9-4dbd-4656-a01b-000a9f266b84",
+      "terminal": {
+        "handle": "term_9587d0b8-d6cf-4b2b-bd23-693dc443184b",
+        "ptyId": "09e35751-6517-4e7c-ae20-178ed0e90000::C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-0a5dcff7b5d3@@4ffbbd78",
+        "incarnationId": "2cb39f30-a024-4e98-a921-d9f833f0d76b",
+        "orphaned": true,
+        "worktreeId": "09e35751-6517-4e7c-ae20-178ed0e90000::C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-0a5dcff7b5d3",
+        "worktreePath": "C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-0a5dcff7b5d3",
+        "branch": "refs/heads/erranliu/steerline-0a5dcff7b5d3",
+        "tabId": "b54af540-d838-4b3e-9b57-024665b74393",
+        "leafId": "2c6e3bd4-8b6a-4e48-b9b5-8e7a03eb894f",
+        "title": "⠸ steerline-0a5dcff7b5d3",
+        "connected": false,
+        "writable": false,
+        "lastOutputAt": 1790307289838,
+        "preview": "│ \"I verified codex-cli 0.156.1 and inspected the specified Orca worktree and Git state. The worktree is clean at\n│ … +3 lines\n└ {\n\"id\": \"18965d63-3c5d-4e6b-8d1a-29e1967f3924\",\n\"ok\": true,\n+21 lines (ctrl+t to view transcript)•••••4•••••5••",
+        "exitCause": {
+          "kind": "operator_close"
+        },
+        "executionHostId": "local",
+        "paneRuntimeId": -1,
+        "rendererGraphEpoch": 0
+      },
+      "observation": {
+        "status": "exited",
+        "exactWorker": true
+      }
+    },
+    "_meta": {
+      "runtimeId": "7ccb02b0-aef2-4124-8db8-0ec063155b12"
+    }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "captured_at": "2026-09-25T19:21:59.8760831Z",
+  "run_id": "run_7088fec3ed80",
+  "dispatch_id": "ctx_ec3c7287d8c2",
+  "worker_state": "succeeded",
+  "worker_stage": "released",
+  "dispatch_status": "completed",
+  "worktree_id": "09e35751-6517-4e7c-ae20-178ed0e90000::C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-4d8d8b18d8e7",
+  "agent_terminal": null,
+  "release_request_id": "ef4a1a0e-b3b1-4f0b-ab97-00952830d471",
+  "release_state": "released",
+  "release_process_action": "closed_agent_terminal",
+  "archive_status": "captured",
+  "residual_resources": []
+}
