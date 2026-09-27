@@ -1,5 +1,7 @@
 # Spec 03：最小状态机的分阶段远程闭环与 viewer 人工决策
 
+2026-09-28 后续：[本机可见控制台刷新样本](orca-probe/samples/spec03-viewer-follow-2026-09-28.json)发现默认当前 Attempt 被误保存为历史固定选择，修复后新 Attempt 的 SQLite `created_at` 至 Orca 可见终端 `source=screen` 帧出现的保守上界为 1.118 秒。手动选择历史 Attempt 仍保持固定。此样本没有覆盖 home 远端业务消息到 viewer 的 2 秒链路，也不能替代 Windows 管理员/UAC 桌面截图；两项仍开放。
+
 任务 ID：6；任务名称：分阶段远程闭环。
 
 2026-09-28 增补：[远端原生业务问答至真实合并](../validation/spec03-native-question-2026-09-28.md)在新的隔离任务 91024 上证明 `yes/no` 问题、中心答案、原 Dispatch 上的独立应用证明、五步验证、固定 head 的 [测试 PR #17](https://github.com/erranliu/SteerlineTest/pull/17) 合并及原中心 Task close。该运行的 publish 提示曾暂记 unknown，之后同一 SQLite 对账原 worker 结果，无第二个 PR。当前目标的业务问答主路径因此有原生任务证据；viewer 可见刷新 2 秒目标、管理员/UAC 设置提示及其余故障矩阵仍开放。

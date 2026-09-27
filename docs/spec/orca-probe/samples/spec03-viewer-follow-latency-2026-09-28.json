@@ -1,0 +1,28 @@
+{
+  "kind": "spec03-orca-visible-terminal-render-latency",
+  "viewer_terminal": "term_22fa853c-d7f9-43f2-b7ff-751d29f7fbc6",
+  "baseline_attempt": "c7502c36eb09948ed10d08836fc89850",
+  "new_attempt": "2be255202eb202937c27865d8e63cf42",
+  "new_attempt_created_at": "2026-09-27T20:50:56.9697126Z",
+  "new_attempt_visible_at": "2026-09-27T20:50:58.087870+00:00",
+  "render_latency_seconds_upper_bound": 1.118158,
+  "screen_source": "screen",
+  "read_attempts": [
+    {
+      "received_at": "2026-09-27T20:50:57.463032+00:00",
+      "query_seconds": 0.3877477999922121,
+      "source": "screen",
+      "contains_new_attempt": false
+    },
+    {
+      "received_at": "2026-09-27T20:50:58.087870+00:00",
+      "query_seconds": 0.524394600011874,
+      "source": "screen",
+      "contains_new_attempt": true
+    }
+  ],
+  "retry_command_exit_code": 0,
+  "baseline_receipt": "viewer-r2-baseline.json",
+  "visible_receipt": "viewer-r2-new-attempt-screen.json",
+  "note": "CreatedAt is assigned no later than the committed Attempt; receipt time is after Orca returned the rendered terminal frame, so the interval conservatively bounds the display delay."
+}

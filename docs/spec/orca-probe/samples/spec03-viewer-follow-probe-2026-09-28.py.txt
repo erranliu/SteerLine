@@ -1,0 +1,104 @@
+import datetime
+import json
+import os
+import pathlib
+import sqlite3
+import subprocess
+import time
+
+
+root = pathlib.Path(__file__).parent
+db_path = next((root / "state").rglob("steerline.db"))
+config = root / "config.json"
+exe = root / "steerline.exe"
+orca = pathlib.Path(r"C:\Users\lmas1\AppData\Local\Programs\orca\resources\bin\orca.exe")
+viewer = "term_22fa853c-d7f9-43f2-b7ff-751d29f7fbc6"
+run_id = "2431ddc5540c929cbe07015c1c9e3bff"
+execution_id = "f3771c74218de6bec554060e4d77f332"
+previous_attempt = "c7502c36eb09948ed10d08836fc89850"
+base = "c3f98ee644c18761f2c60c4769f822806856e7fc"
+worktree = root / "worktrees" / run_id
+env = dict(os.environ, STEERLINE_HOME=str(root / "state"))
+
+
+def screen():
+    started = time.perf_counter()
+    raw = subprocess.check_output([str(orca), "terminal", "read", "--terminal", viewer, "--json"], timeout=10)
+    received = datetime.datetime.now(datetime.timezone.utc)
+    document = json.loads(raw)
+    terminal = document["result"]["terminal"]
+    return document, raw, received, time.perf_counter() - started, "\n".join(terminal["tail"])
+
+
+connection = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=2)
+baseline, baseline_raw, _, _, baseline_text = screen()
+if baseline["result"]["terminal"].get("source") != "screen" or previous_attempt not in baseline_text:
+    raise SystemExit("viewer baseline is not an exact rendered screen with the previous Attempt")
+if subprocess.check_output(["git", "-C", str(worktree), "status", "--porcelain"]).strip():
+    raise SystemExit("test worktree is dirty")
+if subprocess.check_output(["git", "-C", str(worktree), "rev-parse", "HEAD"], text=True).strip() != base:
+    raise SystemExit("test worktree changed from the fixed base")
+inventory_raw = subprocess.check_output([str(orca), "terminal", "list", "--worktree", "path:" + worktree.as_posix(), "--json"])
+if json.loads(inventory_raw)["result"]["totalCount"] != 0:
+    raise SystemExit("previous worker terminal is still present")
+
+(root / "viewer-r2-baseline.json").write_bytes(baseline_raw)
+(root / "viewer-r2-before-terminal-list.json").write_bytes(inventory_raw)
+output_file = (root / "viewer-r2-retry-command.txt").open("wb")
+reason = "Prior fixed Attempt settled failed; exact Orca worktree terminal list empty; workspace clean at input revision " + base
+command = subprocess.Popen(
+    [str(exe), "retry", "-config", str(config), "-run-id", run_id, "-confirm-process-stopped", "-reason", reason, "-by", "acceptance", "-wait"],
+    env=env, stdout=output_file, stderr=subprocess.STDOUT,
+)
+new_attempt = None
+created_at = None
+deadline = time.monotonic() + 30
+while time.monotonic() < deadline:
+    row = connection.execute(
+        "SELECT attempt_id, payload FROM step_attempts WHERE execution_id=? AND step_id='implement' ORDER BY attempt_number DESC LIMIT 1",
+        (execution_id,),
+    ).fetchone()
+    if row and row[0] != previous_attempt:
+        new_attempt = row[0]
+        created_at = json.loads(row[1])["created_at"]
+        break
+    time.sleep(0.05)
+if not new_attempt:
+    command.wait(timeout=30)
+    output_file.close()
+    raise SystemExit("no new committed Attempt appeared")
+
+reads = []
+visible = None
+visible_raw = None
+for _ in range(12):
+    document, raw, received, duration, frame = screen()
+    reads.append({"received_at": received.isoformat(), "query_seconds": duration, "source": document["result"]["terminal"].get("source"), "contains_new_attempt": new_attempt in frame})
+    if document["result"]["terminal"].get("source") == "screen" and new_attempt in frame:
+        visible = received
+        visible_raw = raw
+        break
+    time.sleep(0.1)
+command_exit = command.wait(timeout=60)
+output_file.close()
+if visible_raw:
+    (root / "viewer-r2-new-attempt-screen.json").write_bytes(visible_raw)
+created = datetime.datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+latency = (visible - created).total_seconds() if visible else None
+result = {
+    "kind": "spec03-orca-visible-terminal-render-latency",
+    "viewer_terminal": viewer,
+    "baseline_attempt": previous_attempt,
+    "new_attempt": new_attempt,
+    "new_attempt_created_at": created_at,
+    "new_attempt_visible_at": visible.isoformat() if visible else None,
+    "render_latency_seconds_upper_bound": latency,
+    "screen_source": "screen" if visible else "unverified",
+    "read_attempts": reads,
+    "retry_command_exit_code": command_exit,
+    "baseline_receipt": "viewer-r2-baseline.json",
+    "visible_receipt": "viewer-r2-new-attempt-screen.json" if visible else None,
+    "note": "CreatedAt is assigned no later than the committed Attempt; receipt time is after Orca returned the rendered terminal frame, so the interval conservatively bounds the display delay.",
+}
+(root / "viewer-r2-latency-result.json").write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+print(json.dumps({"attempt": new_attempt, "latency_seconds": latency, "source": result["screen_source"], "reads": len(reads), "command_exit_code": command_exit}))

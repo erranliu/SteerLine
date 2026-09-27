@@ -1,0 +1,62 @@
+{
+  "id": "d4e06622-a4b9-4366-8031-230ba0c7e558",
+  "ok": true,
+  "result": {
+    "terminal": {
+      "handle": "term_22fa853c-d7f9-43f2-b7ff-751d29f7fbc6",
+      "status": "running",
+      "tail": [
+        "SteerLine · 执行控制台",
+        "项目 1/1   viewer-fresh-config",
+        "服务 已连接  ·  Orca 本机终端 · codex  ·  派发 手动  ·  Ready 0  ·  需处理 1",
+        "任务 · 1 项 · 全部                           │详情",
+        "需处理    95013        PR5 eligible recovery…│任务 95013 · PR5 eligible recovery confirmation probe: settled implement",
+        "                                             │failure and explicit retry on the fixed run/worktree.",
+        "                                             │当前：需处理 · failed",
+        "                                             │执行：failed  ·  交付：blocked",
+        "                                             │任务状态：in_progress",
+        "                                             │执行方案：项目默认 [project-default] · Orca 本机终端",
+        "                                             │Agent / Model / Thinking：codex / 未在项目配置固定（由 Codex 配置决定） /",
+        "                                             │默认强度（未固定，由目标 agent 决定）",
+        "                                             │PR：unknown",
+        "                                             │最后核验：2026-09-28 04:01:39",
+        "                                             │runtime 缓存来源：runtime.json is missing or stale; reading the committed",
+        "                                             │SQLite projection",
+        "                                             │",
+        "                                             │任务关系 · 中心只读快照",
+        "                                             │任务 95013 · PR5 eligible recovery confirmation probe: settled implement",
+        "                                             │failure and explicit retry on the fixed run/worktree.",
+        "                                             │状态：in_progress",
+        "                                             │任务阻塞：task_not_open",
+        "                                             │Spec：docs/spec/acceptance-a.spec.md",
+        "                                             │",
+        "                                             │技术信息",
+        "                                             │run_id：2431ddc5540c929cbe07015c1c9e3bff",
+        "                                             │execution_id：f3771c74218de6bec554060e4d77f332",
+        "                                             │attempt_id：c7502c36eb09948ed10d08836fc89850",
+        "                                             │后端/协议/目标：orca / orca_terminal_v2 / orca:c3f46d54ccb7547aa9205db2",
+        "                                             │工作目录：c:\\users\\lmas1\\appdata\\local\\temp\\steerline-pr05-recovery-",
+        "                                             │20260928\\worktrees\\2431ddc5540c929cbe07015c1c9e3bff",
+        "                                             │分支：codex/95013-2431ddc5540c",
+        "                                             │",
+        "                                             │",
+        "                                             │",
+        "                                             │",
+        "                                             │",
+        "                                             │",
+        "                                             │",
+        "←→ 项目 · ↑↓ 选择/滚动 · m 模式 · p 暂停 · x 停服 · ? 帮助 · q 退出"
+      ],
+      "truncated": false,
+      "limited": true,
+      "oldestCursor": "0",
+      "nextCursor": "156",
+      "latestCursor": "156",
+      "returnedLineCount": 40,
+      "source": "screen"
+    }
+  },
+  "_meta": {
+    "runtimeId": "3dd6023d-87dd-4055-bcf6-f8dd87c3c731"
+  }
+}
