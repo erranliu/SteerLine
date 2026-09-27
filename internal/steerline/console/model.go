@@ -946,7 +946,18 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		if state.selectedKey == "" && !state.selectionHold {
 			state.selectedKey = firstRowKey(rows)
 		} else if index == m.selected && len(rows) > 0 && !rowExists(rows, state.selectedKey) {
-			m.status = "当前选择不在最新快照中；未切换到其他任务，请刷新或重新选择"
+			if state.filter == 0 && strings.HasPrefix(state.selectedKey, "task:") {
+				taskID := strings.TrimPrefix(state.selectedKey, "task:")
+				for _, row := range rows {
+					if row.kind == rowRun && row.taskID == taskID {
+						state.selectedKey = row.key
+						break
+					}
+				}
+			}
+			if !rowExists(rows, state.selectedKey) {
+				m.status = "当前选择不在最新快照中；未切换到其他任务，请刷新或重新选择"
+			}
 		}
 		if index == m.selected && m.runFocus != "" {
 			found := false
@@ -1415,6 +1426,19 @@ func (m Model) rows(index int) []consoleRow {
 	}
 	state := &m.projects[index]
 	var rows []consoleRow
+	runsByTask := map[string]*steerline.Run{}
+	if runtime := state.snapshot.Observation.Runtime; runtime != nil {
+		for _, run := range runtime.Runs {
+			if run != nil {
+				runsByTask[firstText(run.DomainTaskID, run.TaskID)] = run
+			}
+		}
+	}
+	shownRuns := map[string]bool{}
+	appendRun := func(run *steerline.Run) {
+		rows = append(rows, consoleRow{key: "run:" + run.RunID, kind: rowRun, taskID: run.TaskID, title: run.Title, run: run})
+		shownRuns[run.RunID] = true
+	}
 	nativeByID := map[string]*steerline.NativeTaskDetail{}
 	if state.snapshot.NativeTasks != nil {
 		for i := range state.snapshot.NativeTasks.Tasks {
@@ -1431,6 +1455,9 @@ func (m Model) rows(index int) []consoleRow {
 		if filterAllows(state.filter, rowReady, nil) {
 			for i := range state.snapshot.Tasks.Tasks {
 				candidate := &state.snapshot.Tasks.Tasks[i]
+				if runsByTask[candidate.TaskID] != nil {
+					continue
+				}
 				row := consoleRow{key: "task:" + candidate.TaskID, kind: rowReady, taskID: candidate.TaskID, title: candidate.Title, candidate: candidate, native: nativeByID[candidate.TaskID]}
 				rows = append(rows, row)
 				seenTasks[candidate.TaskID] = true
@@ -1443,13 +1470,21 @@ func (m Model) rows(index int) []consoleRow {
 			if seenTasks[detail.TaskID] {
 				continue
 			}
-			rows = append(rows, consoleRow{key: "task:" + detail.TaskID, kind: rowNative, taskID: detail.TaskID, title: detail.Title, native: detail})
+			if run := runsByTask[detail.TaskID]; run != nil {
+				appendRun(run)
+			} else {
+				rows = append(rows, consoleRow{key: "task:" + detail.TaskID, kind: rowNative, taskID: detail.TaskID, title: detail.Title, native: detail})
+			}
 			seenTasks[detail.TaskID] = true
 		}
 	}
 	if state.filter == 0 && state.snapshot.SelectedNative != nil && state.selectedKey == "task:"+state.snapshot.SelectedNative.TaskID && !seenTasks[state.snapshot.SelectedNative.TaskID] {
 		detail := state.snapshot.SelectedNative
-		rows = append(rows, consoleRow{key: "task:" + detail.TaskID, kind: rowNative, taskID: detail.TaskID, title: detail.Title, native: detail})
+		if run := runsByTask[detail.TaskID]; run != nil {
+			appendRun(run)
+		} else {
+			rows = append(rows, consoleRow{key: "task:" + detail.TaskID, kind: rowNative, taskID: detail.TaskID, title: detail.Title, native: detail})
+		}
 	}
 	if state.filter == 0 && state.ref.Legacy != nil && state.snapshot.Legacy != nil {
 		for i := range state.snapshot.Legacy.Tasks {
@@ -1459,11 +1494,10 @@ func (m Model) rows(index int) []consoleRow {
 	}
 	if runtime := state.snapshot.Observation.Runtime; runtime != nil {
 		for _, run := range runtime.Runs {
-			if run == nil || !filterAllows(state.filter, rowRun, run) {
+			if run == nil || shownRuns[run.RunID] || !filterAllows(state.filter, rowRun, run) {
 				continue
 			}
-			row := consoleRow{key: "run:" + run.RunID, kind: rowRun, taskID: run.TaskID, title: run.Title, run: run}
-			rows = append(rows, row)
+			appendRun(run)
 		}
 	}
 	return rows
@@ -1473,8 +1507,11 @@ func filterAllows(filter int, kind rowKind, run *steerline.Run) bool {
 	if filter == 0 {
 		return true
 	}
+	if filter == 1 {
+		return kind == rowReady
+	}
 	if kind == rowReady {
-		return filter == 1
+		return false
 	}
 	if kind == rowNative {
 		return filter == 0
