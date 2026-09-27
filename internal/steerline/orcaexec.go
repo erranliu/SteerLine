@@ -24,9 +24,7 @@ import (
 // whole-run worktree or return a whole-run result artifact.
 
 func (c orcaClient) terminalCreate(ctx context.Context, worktreePath, title, command string) (orcaTerminal, error) {
-	// Native steps should be visible in Orca while they run. Focus the
-	// terminal so the user can follow the exact task worktree and step.
-	args := []string{"terminal", "create", "--worktree", "path:" + filepath.ToSlash(worktreePath), "--title", title, "--shell", c.cfg.Orca.Shell, "--command", command, "--focus", "--json"}
+	args := []string{"terminal", "create", "--worktree", "path:" + filepath.ToSlash(worktreePath), "--title", title, "--shell", c.cfg.Orca.Shell, "--command", command, "--json"}
 	out, callErr := c.call(ctx, positiveDuration(c.cfg.CommandTimeout, 30*time.Second), args...)
 	env, e := parseEnvelope(out)
 	if e != nil {
