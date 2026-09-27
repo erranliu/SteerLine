@@ -2,7 +2,9 @@
 
 任务 ID：6；任务名称：分阶段远程闭环。执行依据：[Spec](03-remote-execution-and-viewer.md)。开发输入为 [远程协议 Spec](01-orca-remote-protocol.md) 的真实证据及限制、[中心模型 Spec](02-execution-model-and-adapter.md) 已交付的模型和接口；生产启用另受剩余协议门槛约束。
 
-2026-09-28 验收补充：[真实 home 消息到可见 viewer 时延](../validation/spec03-viewer-latency-2026-09-28.md)先测出 Decision 2.476 秒失败，随后并行只读源并加快前台刷新；新隔离 Decision 为 1.669 秒，两次远端步骤转换为 1.414 / 1.798 秒。两条任务均按固定 head 真实合并、关闭原 Task 并释放五个 Dispatch。当前目标的 2 秒 viewer 门槛已通过；生产项目认证和管理员/UAC 可见捕获仍按原边界开放。下文早期 viewer 失败样本保留其当时结论。
+2026-09-28 验收补充：[真实 home 消息到可见 viewer 时延](../validation/spec03-viewer-latency-2026-09-28.md)先测出 Decision 2.476 秒失败，随后并行只读源并加快前台刷新；新隔离 Decision 为 1.669 秒，两次远端步骤转换为 1.414 / 1.798 秒。两条任务均按固定 head 真实合并、关闭原 Task 并释放五个 Dispatch。当前目标的 2 秒 viewer 门槛已通过；生产项目认证当时未完成，后续见下段；管理员/UAC 可见捕获仍按原边界开放。下文早期 viewer 失败样本保留其当时结论。
+
+同日后续：[SteerLine 仓库 home 能力报告](../validation/spec03-production-project-capability-2026-09-28.md)现将六项必需受监管能力绑定到独立的项目工作树及真实 Dispatch/Task/消息/release 回执。首次复用旧终端的 worker_done 失败并按精确身份停止，正常新 agent 终端重试才结算成功。当前报告不包括生产项目的原生五步任务或 PR 演练；UAC 与其余故障门槛仍开放。
 
 ## 实施顺序
 

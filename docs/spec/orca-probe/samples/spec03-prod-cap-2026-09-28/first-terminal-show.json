@@ -1,0 +1,32 @@
+{
+  "id": "3ce44b78-c008-47dd-8576-057c629c9ee1",
+  "ok": true,
+  "result": {
+    "terminal": {
+      "handle": "term_b5bf8ac3-ddb5-4e0f-a162-cf62ec3f0921",
+      "ptyId": "c67f8c64-d472-449b-82e3-24df822d0fdb::C:/Users/liuming/orca/workspaces/SteerLine/prod-capability-20260928@@2033713b",
+      "incarnationId": "52cd581e-acd1-41fe-8123-1388411bf575",
+      "orphaned": true,
+      "worktreeId": "c67f8c64-d472-449b-82e3-24df822d0fdb::C:/Users/liuming/orca/workspaces/SteerLine/prod-capability-20260928",
+      "worktreePath": "C:/Users/liuming/orca/workspaces/SteerLine/prod-capability-20260928",
+      "branch": "refs/heads/erranliu/prod-capability-20260928",
+      "tabId": "c30400f8-e6c7-4873-a400-6a83d94c3499",
+      "leafId": "5970def2-d511-4637-b99d-acdaa062cafd",
+      "title": "prod-capability-20260928",
+      "connected": false,
+      "writable": false,
+      "lastOutputAt": 1790549186661,
+      "preview": " handle 和 --dispatch-capability 参数。• Working(55s • esc to interrupt) · Running hookWWWWoWoWoWoWorWorWor6WorkWork  06:46                                                                                                             Tip: NEW: Prevent sleep while running is now available in /experimental.",
+      "exitCause": {
+        "kind": "operator_close"
+      },
+      "executionHostId": "local",
+      "agentIdentity": "codex",
+      "paneRuntimeId": -1,
+      "rendererGraphEpoch": 0
+    }
+  },
+  "_meta": {
+    "runtimeId": "a8aa72a1-af21-4b48-85e2-231d527b2e38"
+  }
+}

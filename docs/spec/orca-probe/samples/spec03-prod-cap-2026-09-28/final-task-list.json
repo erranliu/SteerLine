@@ -1,0 +1,31 @@
+{
+  "id": "c78c35c1-eef5-4f00-b29e-b6e15f31e07d",
+  "ok": true,
+  "result": {
+    "runId": "run_707f6533c393",
+    "legacyReadOnly": false,
+    "tasks": [
+      {
+        "id": "task_ae1a7cb84662",
+        "run_id": "run_707f6533c393",
+        "parent_id": null,
+        "created_by_terminal_handle": null,
+        "created_by_pane_key": null,
+        "created_by_process_incarnation": null,
+        "created_by_run_generation": null,
+        "task_title": "Read-only SteerLine capability probe",
+        "display_name": "Read-only SteerLine capability probe",
+        "spec": "Read-only SteerLine production-project capability probe. In this exact assigned worktree, observe and report the worktree path, branch, origin URL, HEAD, clean/dirty status, and `codex --version`. Do not edit files, install dependencies, push, create a PR, or touch another worktree. Follow the Dispatch preamble's exact Run/Task/Dispatch identity and authorization. Send one status message with the observed facts, then exactly one worker_done with outcome succeeded if all checks pass, or failed with a precise reason. Leave the terminal idle after worker_done.",
+        "status": "completed",
+        "deps": "[]",
+        "result": "{\"provenance\":\"worker_report\",\"outcome\":\"succeeded\",\"messageId\":\"relay_0b9a1955b536\",\"reportedBy\":\"dispatch:ctx_3ceb7b58383c\",\"subject\":\"Capability probe succeeded\",\"body\":\"I inspected the assigned worktree at C:\\\\\\\\Users\\\\\\\\liuming\\\\\\\\orca\\\\\\\\workspaces\\\\\\\\SteerLine\\\\\\\\prod-capability-20260928 and made no changes. It is on branch erranliu/prod-capability-20260928, origin https://github.com/erranliu/SteerLine.git, HEAD 1f6a9ce4c104df6b9638e7587c74bc85323aa971, and clean; codex --version is codex-cli 0.157.1. All requested checks passed, and nothing remains.\",\"completedBy\":\"dispatch:ctx_3ceb7b58383c\",\"filesModified\":[],\"reportPath\":null,\"completedAt\":\"2026-09-27T22:54:20.934Z\"}",
+        "created_at": "2026-09-27 22:30:32",
+        "completed_at": "2026-09-27T22:54:20.937Z"
+      }
+    ],
+    "count": 1
+  },
+  "_meta": {
+    "runtimeId": "3dd6023d-87dd-4055-bcf6-f8dd87c3c731"
+  }
+}

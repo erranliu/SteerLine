@@ -1,0 +1,70 @@
+{
+  "id": "5764f7da-2ff0-467d-9a93-24827faf1ba9",
+  "ok": true,
+  "result": {
+    "worktree": {
+      "id": "c67f8c64-d472-449b-82e3-24df822d0fdb::C:/Users/liuming/orca/workspaces/SteerLine/prod-capability-20260928",
+      "identity": {
+        "key": "wt2:local:eca85597-061f-4dfa-865e-af3608ce55e8",
+        "executionHostId": "local",
+        "instanceId": "eca85597-061f-4dfa-865e-af3608ce55e8"
+      },
+      "instanceId": "eca85597-061f-4dfa-865e-af3608ce55e8",
+      "repoId": "c67f8c64-d472-449b-82e3-24df822d0fdb",
+      "projectId": "github:erranliu/steerline",
+      "hostId": "local",
+      "projectHostSetupId": "c67f8c64-d472-449b-82e3-24df822d0fdb",
+      "creatorProvenance": {
+        "kind": "paired-device",
+        "deviceId": "fe26dcce-e8f7-47dd-96c2-d611c1093733"
+      },
+      "path": "C:/Users/liuming/orca/workspaces/SteerLine/prod-capability-20260928",
+      "head": "1f6a9ce4c104df6b9638e7587c74bc85323aa971",
+      "branch": "refs/heads/erranliu/prod-capability-20260928",
+      "isBare": false,
+      "isMainWorktree": false,
+      "displayName": "prod-capability-20260928",
+      "displayNameMode": "fixed",
+      "comment": "",
+      "linkedIssue": null,
+      "linkedPR": null,
+      "linkedLinearIssue": null,
+      "linkedLinearIssueWorkspaceId": null,
+      "linkedLinearIssueOrganizationUrlKey": null,
+      "linkedGitLabMR": null,
+      "linkedGitLabIssue": null,
+      "linkedBitbucketPR": null,
+      "linkedAzureDevOpsPR": null,
+      "linkedGiteaPR": null,
+      "linkedWorkItem": null,
+      "linkedTaskSourceContext": null,
+      "isArchived": false,
+      "isUnread": false,
+      "isPinned": false,
+      "sortOrder": 1790549725515,
+      "lastActivityAt": 1790548132275,
+      "createdAt": 1790548132275,
+      "createdWithAgent": "codex",
+      "cliProvenance": {
+        "kind": "created-by-cli",
+        "createdAt": 1790548130464,
+        "startupAgent": "codex"
+      },
+      "baseRef": "main",
+      "workspaceStatus": "in-progress",
+      "parentWorktreeId": null,
+      "childWorktreeIds": [],
+      "lineage": null,
+      "git": {
+        "path": "C:/Users/liuming/orca/workspaces/SteerLine/prod-capability-20260928",
+        "head": "1f6a9ce4c104df6b9638e7587c74bc85323aa971",
+        "branch": "refs/heads/erranliu/prod-capability-20260928",
+        "isBare": false,
+        "isMainWorktree": false
+      }
+    }
+  },
+  "_meta": {
+    "runtimeId": "a8aa72a1-af21-4b48-85e2-231d527b2e38"
+  }
+}

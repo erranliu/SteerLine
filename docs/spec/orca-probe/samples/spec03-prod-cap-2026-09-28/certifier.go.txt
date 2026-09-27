@@ -1,0 +1,76 @@
+package steerline
+
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+func TestRealIsolatedSteerLineProductionCapabilityReport(t *testing.T) {
+	root := os.Getenv("STEERLINE_REAL_PROD_CAP_ROOT")
+	if root == "" {
+		t.Skip("set STEERLINE_REAL_PROD_CAP_ROOT to the isolated SteerLine/home evidence directory")
+	}
+	ctx := context.Background()
+	c := Config{
+		TaskAuthority: "native", Repository: filepath.Join(root, "local-source"), Remote: "origin", Branch: "main",
+		RunDir: filepath.Join(root, "state"), RuntimeFile: "runtime.json", Git: Command{Executable: "git"}, Agent: "codex", Host: "orca_supervised",
+		Model: "gpt-6-luna", ReasoningEffort: "low",
+		Orca: OrcaConfig{Executable: "orca", Shell: "powershell", WaitTimeout: "15m", Supervised: &SupervisedOrcaConfig{
+			ConnectionID: "fe26dcce-e8f7-47dd-96c2-d611c1093733", EnvironmentID: "bed55de0-6d7d-497e-b1d5-3abab256b2ee",
+			RepositorySelector: "id:c67f8c64-d472-449b-82e3-24df822d0fdb", CoordinatorTerminal: "term_a145f325-8694-41db-a47c-3db07702c1d3",
+			PollInterval: "2s", CapabilityReportVersion: 1, RemoteCancelAvailable: false,
+		}},
+	}
+	if err := c.ResolveIdentity(ctx); err != nil {
+		t.Fatal(err)
+	}
+	report, err := backendFor(c).Probe(ctx, targetFor(c), agentFor(c))
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifestPath := filepath.Join(root, "capability-manifest.json")
+	manifest, err := os.ReadFile(manifestPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sum := sha256.Sum256(manifest)
+	evidence := manifestPath + "#sha256=" + hex.EncodeToString(sum[:])
+	required := map[string]bool{"start": true, "observe": true, "workspace_inspection": true, "output_reading": true, "message_inbox": true, "resource_settlement": true}
+	for i := range report.Capabilities {
+		if required[report.Capabilities[i].Name] {
+			report.Capabilities[i].Status = CapabilityVerified
+			report.Capabilities[i].Evidence = evidence
+			delete(required, report.Capabilities[i].Name)
+		}
+	}
+	if len(required) != 0 {
+		t.Fatalf("supervised probe omitted required capabilities: %v", required)
+	}
+	records := executionRecords{root: c.RunDir}
+	if err := records.saveCapabilityReport(report); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := records.loadCapabilityReport(report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"start", "observe", "workspace_inspection", "output_reading", "message_inbox", "resource_settlement"} {
+		if capabilityStatus(loaded, name) != CapabilityVerified {
+			t.Fatalf("%s was not durably certified", name)
+		}
+	}
+	data, err := json.MarshalIndent(loaded, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(root, "capability-report.json")
+	if err := AtomicWrite(path, append(data, '\n')); err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("SteerLine/home project-specific report saved: %s, center=%s home=%s", path, report.CenterVersion, report.PlatformVersion)
+}

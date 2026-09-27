@@ -1,0 +1,42 @@
+{
+  "id": "d3c91967-1181-49c8-8311-6433fc4ae401",
+  "ok": true,
+  "result": {
+    "repo": {
+      "id": "c67f8c64-d472-449b-82e3-24df822d0fdb",
+      "path": "C:\\project\\SteerLine",
+      "displayName": "SteerLine",
+      "badgeColor": "#737373",
+      "executionHostId": "local",
+      "addedAt": 1790547910732,
+      "kind": "git",
+      "externalWorktreeVisibilityLegacy": false,
+      "gitUsername": "erranliu",
+      "repoIcon": {
+        "type": "image",
+        "src": "https://github.com/erranliu.png?size=64",
+        "source": "github",
+        "label": "erranliu/SteerLine"
+      },
+      "upstream": null,
+      "gitRemoteIdentity": {
+        "canonicalKey": "github.com/erranliu/SteerLine",
+        "remoteName": "origin",
+        "remoteUrl": "https://github.com/erranliu/SteerLine.git"
+      },
+      "projectHostSetupMethod": "cloned",
+      "hookSettings": {
+        "mode": "auto",
+        "setupRunPolicy": "run-by-default",
+        "setupAgentStartupPolicy": "start-immediately",
+        "scripts": {
+          "setup": "",
+          "archive": ""
+        }
+      }
+    }
+  },
+  "_meta": {
+    "runtimeId": "a8aa72a1-af21-4b48-85e2-231d527b2e38"
+  }
+}
