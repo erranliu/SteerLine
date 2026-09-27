@@ -27,36 +27,38 @@ type Skill struct {
 	Invocation string `json:"invocation"`
 }
 type Config struct {
-	Repository         string              `json:"repository"`
-	TaskAuthority      string              `json:"task_authority,omitempty"`
-	Remote             string              `json:"remote"`
-	Branch             string              `json:"branch"`
-	RunDir             string              `json:"run_dir"`
-	WorktreeRoot       string              `json:"worktree_root"`
-	RuntimeFile        string              `json:"runtime_file"`
-	Claimant           string              `json:"claimant"`
-	Git                Command             `json:"git"`
-	Codex              Command             `json:"codex"`
-	WorkflowDefinition *WorkflowDefinition `json:"workflow_definition,omitempty"`
-	ProjectSteps       *ProjectSteps       `json:"project_steps,omitempty"`
-	ExecutableTypes    []string            `json:"executable_types"`
-	TaskPoll           string              `json:"task_poll"`
-	PRPoll             string              `json:"pr_poll"`
-	Heartbeat          string              `json:"heartbeat"`
-	CommandTimeout     string              `json:"command_timeout"`
-	ShutdownGrace      string              `json:"shutdown_grace"`
-	Model              string              `json:"model"`
-	ReasoningEffort    string              `json:"reasoning_effort"`
-	Sandbox            string              `json:"sandbox"`
-	Profile            string              `json:"profile"`
-	Agent              string              `json:"agent"`
-	Host               string              `json:"host"`
-	StallTimeout       string              `json:"stall_timeout"`
-	Orca               OrcaConfig          `json:"orca"`
-	PR                 PRConfig            `json:"pr"`
-	identity           string
-	workerEnv          map[string]string
-	configDigest       string
+	Repository              string              `json:"repository"`
+	TaskAuthority           string              `json:"task_authority,omitempty"`
+	Remote                  string              `json:"remote"`
+	Branch                  string              `json:"branch"`
+	RunDir                  string              `json:"run_dir"`
+	WorktreeRoot            string              `json:"worktree_root"`
+	RuntimeFile             string              `json:"runtime_file"`
+	Claimant                string              `json:"claimant"`
+	Git                     Command             `json:"git"`
+	Codex                   Command             `json:"codex"`
+	WorkflowDefinition      *WorkflowDefinition `json:"workflow_definition,omitempty"`
+	ProjectSteps            *ProjectSteps       `json:"project_steps,omitempty"`
+	ExecutableTypes         []string            `json:"executable_types"`
+	TaskPoll                string              `json:"task_poll"`
+	PRPoll                  string              `json:"pr_poll"`
+	Heartbeat               string              `json:"heartbeat"`
+	CommandTimeout          string              `json:"command_timeout"`
+	ShutdownGrace           string              `json:"shutdown_grace"`
+	Model                   string              `json:"model"`
+	ReasoningEffort         string              `json:"reasoning_effort"`
+	Sandbox                 string              `json:"sandbox"`
+	Profile                 string              `json:"profile"`
+	Agent                   string              `json:"agent"`
+	Host                    string              `json:"host"`
+	ExecutionProfiles       []ExecutionProfile  `json:"execution_profiles,omitempty"`
+	DefaultExecutionProfile string              `json:"default_execution_profile,omitempty"`
+	StallTimeout            string              `json:"stall_timeout"`
+	Orca                    OrcaConfig          `json:"orca"`
+	PR                      PRConfig            `json:"pr"`
+	identity                string
+	workerEnv               map[string]string
+	configDigest            string
 }
 
 // LoadedConfigDigest identifies the exact config file bytes used to build this
@@ -340,6 +342,9 @@ func LoadConfig(path string) (Config, error) {
 	if err = validateWorkflowConfig(&c, b); err != nil {
 		return c, err
 	}
+	if err = validateExecutionProfiles(c); err != nil {
+		return c, err
+	}
 	return c, nil
 }
 
@@ -497,6 +502,9 @@ func (c *Config) Preflight(ctx context.Context, checkSkills bool) error {
 // state directory.
 func (c *Config) preflightNative(ctx context.Context, checkSteps bool) error {
 	if err := requireNativeTaskAuthority(*c); err != nil {
+		return err
+	}
+	if err := validateExecutionProfiles(*c); err != nil {
 		return err
 	}
 	if c.hostName() == "local" && c.agentName() != "codex" {

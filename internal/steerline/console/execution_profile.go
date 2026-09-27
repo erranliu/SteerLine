@@ -1,6 +1,7 @@
 package console
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/erranliu/SteerLine/internal/steerline"
@@ -61,6 +62,13 @@ func renderExecutionProfile(ref ProjectRef, snapshot ProjectSnapshot) []string {
 	if executionConfigMismatch(ref, snapshot) {
 		return []string{"", "执行配置：" + executionConfigChanged}
 	}
+	if len(ref.Config.ExecutionProfiles) > 0 {
+		lines := []string{"", fmt.Sprintf("执行配置：%d 套；按 s 选择后确认", len(ref.Config.AvailableExecutionProfiles()))}
+		if id := ref.Config.DefaultProfileID(); id != "" {
+			lines = append(lines, "自动派发默认："+safeTerminalInlineText(id))
+		}
+		return lines
+	}
 	label := "执行配置 · 配置预览；服务未连接"
 	if snapshot.Connection.State == steerline.ConnectionConnected && snapshot.Connection.Snapshot.Runtime != nil {
 		label = "执行配置 · 当前服务"
@@ -85,4 +93,28 @@ func renderExecutionProfile(ref ProjectRef, snapshot ProjectSnapshot) []string {
 			"连接："+safeTerminalInlineText(c.Orca.Supervised.ConnectionID))
 	}
 	return lines
+}
+
+func renderFixedRunExecutionProfile(state projectState, run *steerline.Run) []string {
+	if run == nil {
+		return nil
+	}
+	workflows := []steerline.WorkflowRunRecord(nil)
+	if state.snapshot.Domain != nil {
+		workflows = state.snapshot.Domain.WorkflowRuns
+	} else if state.snapshot.Observation.Runtime != nil {
+		workflows = state.snapshot.Observation.Runtime.WorkflowRuns
+	}
+	for _, workflow := range workflows {
+		if workflow.WorkflowRunID != run.RunID || workflow.ExecutionProfile == nil {
+			continue
+		}
+		fixed := workflow.ExecutionProfile
+		config := steerline.Config{Host: fixed.Host, Agent: fixed.Agent, Model: fixed.Model, ReasoningEffort: fixed.ReasoningEffort}
+		return []string{
+			"执行方案：" + safeTerminalInlineText(fixed.Name) + " [" + safeTerminalInlineText(fixed.ID) + "] · " + safeTerminalInlineText(executionHostLabel(config)),
+			"Agent / Model / Thinking：" + safeTerminalInlineText(fixed.Agent) + " / " + safeTerminalInlineText(executionModelLabel(config)) + " / " + safeTerminalInlineText(executionEffortLabel(config)),
+		}
+	}
+	return nil
 }

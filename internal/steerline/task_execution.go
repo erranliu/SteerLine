@@ -33,6 +33,7 @@ type TaskClaimOptions struct {
 	RequestedBy              string
 	Explicit                 bool
 	WorkflowRunID            string
+	ExecutionProfile         *ExecutionProfile
 }
 
 type NativeDispatchUpdate struct {
@@ -174,6 +175,9 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 	if !controlIDPattern.MatchString(options.RequestID) || options.ExpectedTaskVersion == 0 || options.ExpectedAuthorityVersion == 0 || options.WorkflowRunID != "" && !stableExecutionID(options.WorkflowRunID) {
 		return TaskClaimReceipt{}, nativeErr("invalid_batch", "claim requires request ID and current task/project versions")
 	}
+	if options.ExecutionProfile != nil && !options.ExecutionProfile.MatchesConfig(config) {
+		return TaskClaimReceipt{}, nativeErr("contract_mismatch", "selected execution profile differs from the claim configuration")
+	}
 	if strings.TrimSpace(options.RequestedBy) == "" {
 		options.RequestedBy = DefaultRequestedBy()
 	}
@@ -182,7 +186,13 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 		RequestedBy   string `json:"requested_by"`
 		Explicit      bool   `json:"explicit"`
 		WorkflowRunID string `json:"workflow_run_id,omitempty"`
-	}{options.TaskID, options.RequestedBy, options.Explicit, options.WorkflowRunID}
+		ProfileID     string `json:"execution_profile_id,omitempty"`
+		ProfileDigest string `json:"execution_profile_digest,omitempty"`
+	}{TaskID: options.TaskID, RequestedBy: options.RequestedBy, Explicit: options.Explicit, WorkflowRunID: options.WorkflowRunID}
+	if options.ExecutionProfile != nil {
+		requestBody.ProfileID = options.ExecutionProfile.ID
+		requestBody.ProfileDigest = options.ExecutionProfile.Digest()
+	}
 	requestRaw, _ := json.Marshal(requestBody)
 	requestPayload, err := CanonicalJSON(requestRaw)
 	if err != nil {
@@ -292,6 +302,10 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 	runner := StepRunnerSettings{Codex: config.Codex, Sandbox: config.Sandbox, Model: config.Model, ReasoningEffort: config.ReasoningEffort, Profile: config.Profile}
 	runner.Codex.Args = append([]string(nil), config.Codex.Args...)
 	wfr := WorkflowRunRecord{ProjectIdentity: c.Project, WorkflowRunID: workflowRunID, TaskID: task.TaskID, WorkflowVersion: MinimalWorkflowVersion, ConfigDigest: config.configDigest, Definition: workflow.Definition, ProjectSteps: workflow.Steps, Runner: runner, Phase: "queued", Repository: config.Repository, Branch: config.Branch, CreatedAt: created, UpdatedAt: created}
+	if options.ExecutionProfile != nil {
+		fixed := options.ExecutionProfile.Freeze()
+		wfr.ExecutionProfile = &fixed
+	}
 	execution := ExecutionRecord{ProjectIdentity: c.Project, ExecutionID: executionID, WorkflowRunID: workflowRunID, Agent: config.agentName(), Backend: string(backend), Protocol: string(protocol), Target: target, Workspace: WorkspaceEvidence{Repository: config.identity, Branch: config.Branch, Base: base}, Status: "pending", CurrentStep: "prepare", CreatedAt: created, UpdatedAt: created}
 	attempt := StepAttemptRecord{ProjectIdentity: c.Project, AttemptID: attemptID, ExecutionID: executionID, StepID: "prepare", AttemptNumber: 1, Status: "planned", InputRevision: base, ContractDigest: contract.Digest, ExternalBinding: target, CreatedAt: created, UpdatedAt: created}
 	nextTask := task

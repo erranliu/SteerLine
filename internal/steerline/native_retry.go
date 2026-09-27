@@ -243,6 +243,14 @@ func (s *Service) startNativeRetryFor(ctx context.Context, runID, requestedBy st
 	if run == nil || run.WorkflowVersion != MinimalWorkflowVersion || run.ExecutionStatus != "failed" || run.FinishTaskStatus != "blocked" || run.PR.URL != nil {
 		return nativeErr("stale_version", "retry requires a settled failed native workflow without a bound PR")
 	}
+	if err := s.useFixedRunProfile(run); err != nil {
+		return err
+	}
+	defer func() {
+		if s.worker == nil && !s.State.SlotOccupied {
+			s.Config = s.projectExecutionConfig()
+		}
+	}()
 	task := nativeTaskRecord(s.State.Tasks, run.DomainTaskID)
 	workflow, execution := s.minimalRecords(run)
 	failed := s.minimalAttempt(run, run.AttemptID)

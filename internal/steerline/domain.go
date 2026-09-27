@@ -124,21 +124,22 @@ type WorkflowDefinition struct {
 }
 
 type WorkflowRunRecord struct {
-	ProjectIdentity  string             `json:"project_identity"`
-	WorkflowRunID    string             `json:"workflow_run_id"`
-	TaskID           string             `json:"task_id"`
-	WorkflowVersion  string             `json:"workflow_version"`
-	ConfigDigest     string             `json:"config_digest,omitempty"`
-	Definition       WorkflowDefinition `json:"workflow_definition"`
-	ProjectSteps     ProjectSteps       `json:"project_steps,omitempty"`
-	Runner           StepRunnerSettings `json:"runner"`
-	Phase            string             `json:"phase"`
-	Repository       string             `json:"repository,omitempty"`
-	Branch           string             `json:"branch,omitempty"`
-	SelectedResult   string             `json:"selected_result_id,omitempty"`
-	PendingDecisions int                `json:"pending_decisions,omitempty"`
-	CreatedAt        time.Time          `json:"created_at"`
-	UpdatedAt        time.Time          `json:"updated_at"`
+	ProjectIdentity  string                 `json:"project_identity"`
+	WorkflowRunID    string                 `json:"workflow_run_id"`
+	TaskID           string                 `json:"task_id"`
+	WorkflowVersion  string                 `json:"workflow_version"`
+	ConfigDigest     string                 `json:"config_digest,omitempty"`
+	ExecutionProfile *FixedExecutionProfile `json:"execution_profile,omitempty"`
+	Definition       WorkflowDefinition     `json:"workflow_definition"`
+	ProjectSteps     ProjectSteps           `json:"project_steps,omitempty"`
+	Runner           StepRunnerSettings     `json:"runner"`
+	Phase            string                 `json:"phase"`
+	Repository       string                 `json:"repository,omitempty"`
+	Branch           string                 `json:"branch,omitempty"`
+	SelectedResult   string                 `json:"selected_result_id,omitempty"`
+	PendingDecisions int                    `json:"pending_decisions,omitempty"`
+	CreatedAt        time.Time              `json:"created_at"`
+	UpdatedAt        time.Time              `json:"updated_at"`
 }
 
 type StepRunnerSettings struct {

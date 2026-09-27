@@ -14,13 +14,15 @@ import (
 )
 
 type Service struct {
-	Config      Config
-	State       Runtime
-	store       *Store
-	domainStore *SQLiteStore
-	prs         *PRClient
-	worker      *Worker
-	active      *Run
+	Config          Config
+	baseConfig      Config
+	dispatchProfile *ExecutionProfile
+	State           Runtime
+	store           *Store
+	domainStore     *SQLiteStore
+	prs             *PRClient
+	worker          *Worker
+	active          *Run
 	// activities holds one journal per run so PR and delivery events always land in
 	// their own run's file, even after the worker exited.
 	activities                 map[string]*ActivityWriter
@@ -48,6 +50,9 @@ func NewService(c Config) (_ *Service, retErr error) {
 	if err := requireNativeTaskAuthority(c); err != nil {
 		return nil, err
 	}
+	if err := validateExecutionProfiles(c); err != nil {
+		return nil, err
+	}
 	if _, err := c.validateNativeWorkflow(); err != nil {
 		return nil, err
 	}
@@ -73,7 +78,7 @@ func NewService(c Config) (_ *Service, retErr error) {
 			_ = db.Close()
 		}
 	}()
-	s := &Service{Config: c, domainStore: db, store: &Store{Path: filepath.Join(c.RunDir, c.RuntimeFile), Domain: db, Project: c.identity}, prs: &PRClient{Config: c.PR, Runner: r}, activities: map[string]*ActivityWriter{}, conversationMappers: map[string]*ConversationMapper{}}
+	s := &Service{Config: c, baseConfig: c, domainStore: db, store: &Store{Path: filepath.Join(c.RunDir, c.RuntimeFile), Domain: db, Project: c.identity}, prs: &PRClient{Config: c.PR, Runner: r}, activities: map[string]*ActivityWriter{}, conversationMappers: map[string]*ConversationMapper{}}
 	projection, _, e := db.LoadProjection(context.Background(), c.identity)
 	if e != nil {
 		return nil, e
@@ -93,6 +98,9 @@ func NewService(c Config) (_ *Service, retErr error) {
 	authority, authErr := db.nativeAuthority(context.Background(), c.identity)
 	if authErr != nil {
 		return nil, authErr
+	}
+	if authority.DispatchMode == "auto" && c.DefaultProfileID() == "" {
+		return nil, errors.New("automatic dispatch requires default_execution_profile")
 	}
 	s.State.Control = ControlState{DispatchMode: authority.DispatchMode, DispatchPaused: authority.DispatchPaused, Revision: authority.AuthorityVersion, Blockers: []ControlBlocker{}}
 	if old != nil {
@@ -143,6 +151,9 @@ func NewService(c Config) (_ *Service, retErr error) {
 		for _, r := range s.State.Runs {
 			if r == nil || r.TaskID == "" || r.RunID == "" || seen[r.TaskID] || r.Claimant != c.Claimant {
 				return nil, errors.New("invalid or duplicate saved run")
+			}
+			if err := s.useFixedRunProfile(r); err != nil {
+				return nil, err
 			}
 			seen[r.TaskID] = true
 			if r.ManualStop != nil && (!manuallyStopped(r) || r.ExecutionStatus != "failed" && r.ExecutionStatus != "succeeded") {
@@ -287,6 +298,9 @@ func NewService(c Config) (_ *Service, retErr error) {
 					r.Error = ptr(clip(previous+"Workspace recovery check failed: "+err.Error()+"; no recreation attempted", 2000))
 				}
 			}
+		}
+		if err := s.restoreActiveExecutionProfile(); err != nil {
+			return nil, err
 		}
 		if s.State.Control.Operation == nil && s.State.CurrentTask != nil && s.find(*s.State.CurrentTask) == nil {
 			// Automatic dispatch persists the reservation before fetch. With no run
@@ -1110,7 +1124,11 @@ func (s *Service) applySupervisedDecisionProof(run *Run, ev WorkerEvent) error {
 				answerBody = run.Decision.Note
 			}
 		}
-		if proof.TaskID != run.Process.Task || proof.DispatchID != run.Process.Dispatch || !supervisedCodexVersionAccepted(s.Config.Orca.Supervised.ExpectedCodexVersion, proof.RemoteCodexVersion) || run.Decision == nil || proof.DecisionAppliedID != run.Decision.ID || run.Decision.AttemptID != ev.AttemptID || proof.AppliedDecisionAttemptID != run.Decision.AttemptID || proof.AppliedDecisionExecutionID != run.ExecutionID || answerBody == "" || proof.AppliedAnswerBody != answerBody {
+		fixedConfig, configErr := s.executionConfigForRun(run)
+		if configErr != nil || fixedConfig.Orca.Supervised == nil {
+			return errors.Join(configErr, errors.New("remote decision has no fixed supervised profile"))
+		}
+		if proof.TaskID != run.Process.Task || proof.DispatchID != run.Process.Dispatch || !supervisedCodexVersionAccepted(fixedConfig.Orca.Supervised.ExpectedCodexVersion, proof.RemoteCodexVersion) || run.Decision == nil || proof.DecisionAppliedID != run.Decision.ID || run.Decision.AttemptID != ev.AttemptID || proof.AppliedDecisionAttemptID != run.Decision.AttemptID || proof.AppliedDecisionExecutionID != run.ExecutionID || answerBody == "" || proof.AppliedAnswerBody != answerBody {
 			return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "remote decision application proof conflicts with the fixed decision, attempt, execution or answer"}
 		}
 		if run.Decision.Status == "applied" {
@@ -1719,7 +1737,11 @@ func (s *Service) stopActiveExecution(ctx context.Context) (Operation, error) {
 	if r == nil || s.worker == nil {
 		return Operation{}, errors.New("there is no active execution to stop")
 	}
-	records := executionRecords{root: s.Config.RunDir}
+	config, configErr := s.executionConfigForRun(r)
+	if configErr != nil {
+		return Operation{}, configErr
+	}
+	records := executionRecords{root: config.RunDir}
 	ref, err := records.loadBinding(r.RunID, r.AttemptID)
 	if err != nil {
 		return Operation{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "active execution has no valid fixed binding", Cause: err}
@@ -1727,7 +1749,7 @@ func (s *Service) stopActiveExecution(ctx context.Context) (Operation, error) {
 	if ref.RunID != r.RunID || ref.AttemptID != r.AttemptID || r.Process == nil || ref.External != *r.Process {
 		return Operation{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "active execution binding does not match runtime identity"}
 	}
-	backend := backendFor(s.Config)
+	backend := backendFor(config)
 	kind, protocol := backend.Identity()
 	if kind != ref.Backend || protocol != ref.Protocol {
 		return Operation{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "configured backend/protocol differs from fixed execution"}
@@ -1736,7 +1758,7 @@ func (s *Service) stopActiveExecution(ctx context.Context) (Operation, error) {
 	payload := struct {
 		Policy string
 		Grace  string
-	}{"fixed_local_execution_stop", s.Config.ShutdownGrace}
+	}{"fixed_local_execution_stop", config.ShutdownGrace}
 	op := Operation{Version: ExecutionRecordVersion, ID: opID, RunID: r.RunID, AttemptID: r.AttemptID, Backend: ref.Backend, Protocol: ref.Protocol, Target: ref.Target, Action: "stop", PayloadDigest: digestValue(payload), Status: OperationPending, StartedAt: now(), UpdatedAt: now(), Ref: &ref}
 	if old, loadErr := records.loadOperation(r.RunID, r.AttemptID, opID); loadErr == nil {
 		if old.Action != op.Action || old.PayloadDigest != op.PayloadDigest || old.Target != op.Target {
@@ -1788,10 +1810,14 @@ func (s *Service) stopActiveExecution(ctx context.Context) (Operation, error) {
 }
 
 func (s *Service) confirmExecutionStop(op Operation) (bool, error) {
+	config, configErr := s.executionConfigForWorkflowID(op.RunID)
+	if configErr != nil {
+		return false, configErr
+	}
 	if op.ID == "" {
 		return false, errors.New("stop operation is missing")
 	}
-	records := executionRecords{root: s.Config.RunDir}
+	records := executionRecords{root: config.RunDir}
 	// The adapter already persisted an exact stop receipt. Orca's terminal show
 	// may later report an orphaned/disconnected tab even after ptyKilled=true;
 	// that weaker observation must not erase the durable close evidence.
@@ -1807,13 +1833,13 @@ func (s *Service) confirmExecutionStop(op Operation) (bool, error) {
 	}
 	ref := op.Ref
 	if ref == nil {
-		loaded, err := (executionRecords{root: s.Config.RunDir}).loadBinding(op.RunID, op.AttemptID)
+		loaded, err := (executionRecords{root: config.RunDir}).loadBinding(op.RunID, op.AttemptID)
 		if err != nil {
 			return false, err
 		}
 		ref = &loaded
 	}
-	backend := backendFor(s.Config)
+	backend := backendFor(config)
 	obs, err := backend.Observe(context.Background(), *ref)
 	if err != nil {
 		op.Status, op.Diagnostic, op.UpdatedAt = OperationUnknown, err.Error(), now()

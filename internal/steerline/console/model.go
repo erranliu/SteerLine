@@ -56,21 +56,23 @@ type consoleRow struct {
 }
 
 type actionState struct {
-	RequestID             string
-	Action                string
-	TaskID                string
-	RunID                 string
-	DecisionID            string
-	DecisionDraftOptionID string
-	DecisionDraftNote     string
-	DecisionRevision      uint64
-	DecisionVersion       uint64
-	Status                string
-	Message               string
-	TargetInstance        string
-	InFlight              bool
-	Resolved              bool
-	UpdatedAt             time.Time
+	RequestID              string
+	Action                 string
+	TaskID                 string
+	ExecutionProfileID     string
+	ExecutionProfileDigest string
+	RunID                  string
+	DecisionID             string
+	DecisionDraftOptionID  string
+	DecisionDraftNote      string
+	DecisionRevision       uint64
+	DecisionVersion        uint64
+	Status                 string
+	Message                string
+	TargetInstance         string
+	InFlight               bool
+	Resolved               bool
+	UpdatedAt              time.Time
 }
 
 type decisionAnswerDialog struct {
@@ -168,6 +170,14 @@ type confirmAction struct {
 	basis        string
 }
 
+type executionProfileChoice struct {
+	projectKey string
+	taskID     string
+	instance   string
+	revision   uint64
+	index      int
+}
+
 type Model struct {
 	ctx        context.Context
 	query      QuerySource
@@ -184,11 +194,12 @@ type Model struct {
 	prefs    ViewFile
 	prefsErr string
 
-	confirm    *confirmAction
-	answer     *decisionAnswerDialog
-	help       bool
-	status     string
-	finalIndex int
+	confirm       *confirmAction
+	profileChoice *executionProfileChoice
+	answer        *decisionAnswerDialog
+	help          bool
+	status        string
+	finalIndex    int
 
 	runFocus string
 }
@@ -312,7 +323,7 @@ func NewModel(ctx context.Context, refs []ProjectRef, options Options) (Model, e
 			if outstanding {
 				message = "控制台重开后重新查询此 request_id"
 			}
-			state.actions[requestID] = &actionState{RequestID: requestID, Action: saved.Action, TaskID: saved.TaskID, Status: saved.Status, Message: message, RunID: saved.RunID, DecisionID: saved.DecisionID, TargetInstance: saved.TargetInstance, Resolved: !outstanding, UpdatedAt: saved.UpdatedAt}
+			state.actions[requestID] = &actionState{RequestID: requestID, Action: saved.Action, TaskID: saved.TaskID, ExecutionProfileID: saved.ExecutionProfileID, ExecutionProfileDigest: saved.ExecutionProfileDigest, Status: saved.Status, Message: message, RunID: saved.RunID, DecisionID: saved.DecisionID, TargetInstance: saved.TargetInstance, Resolved: !outstanding, UpdatedAt: saved.UpdatedAt}
 		}
 		m.projects = append(m.projects, state)
 	}
@@ -478,7 +489,12 @@ func (m Model) submitControl(index int, action, taskID, requestID string, instan
 	payload := any(nil)
 	switch action {
 	case "start_task":
-		payload = map[string]string{"task_id": taskID}
+		profile := state.actions[requestID]
+		if profile != nil && profile.ExecutionProfileID != "" {
+			payload = map[string]string{"task_id": taskID, "execution_profile_id": profile.ExecutionProfileID, "execution_profile_digest": profile.ExecutionProfileDigest}
+		} else {
+			payload = map[string]string{"task_id": taskID}
+		}
 	case "set_dispatch_mode":
 		payload = map[string]string{"mode": taskID}
 	}
@@ -1340,15 +1356,17 @@ func controlRequestMatchesAction(request *steerline.ControlRequest, action *acti
 		return false
 	}
 	var payload struct {
-		TaskID string `json:"task_id"`
-		Mode   string `json:"mode"`
+		TaskID                 string `json:"task_id"`
+		Mode                   string `json:"mode"`
+		ExecutionProfileID     string `json:"execution_profile_id"`
+		ExecutionProfileDigest string `json:"execution_profile_digest"`
 	}
 	if len(request.Payload) > 0 && json.Unmarshal(request.Payload, &payload) != nil {
 		return false
 	}
 	switch action.Action {
 	case "start_task":
-		return payload.TaskID == action.TaskID && payload.Mode == ""
+		return payload.TaskID == action.TaskID && payload.Mode == "" && payload.ExecutionProfileID == action.ExecutionProfileID && payload.ExecutionProfileDigest == action.ExecutionProfileDigest
 	case "set_dispatch_mode":
 		return payload.Mode == action.TaskID && payload.TaskID == ""
 	default:
@@ -1718,13 +1736,13 @@ func savedActions(actions map[string]*actionState, limit int) map[string]SavedAc
 		if len(out) >= limit {
 			break
 		}
-		out[action.RequestID] = SavedAction{Action: action.Action, TaskID: action.TaskID, Status: action.Status, RunID: action.RunID, DecisionID: action.DecisionID, TargetInstance: action.TargetInstance, UpdatedAt: action.UpdatedAt}
+		out[action.RequestID] = SavedAction{Action: action.Action, TaskID: action.TaskID, ExecutionProfileID: action.ExecutionProfileID, ExecutionProfileDigest: action.ExecutionProfileDigest, Status: action.Status, RunID: action.RunID, DecisionID: action.DecisionID, TargetInstance: action.TargetInstance, UpdatedAt: action.UpdatedAt}
 	}
 	for _, action := range terminal {
 		if len(out) >= limit {
 			break
 		}
-		out[action.RequestID] = SavedAction{Action: action.Action, TaskID: action.TaskID, Status: action.Status, RunID: action.RunID, DecisionID: action.DecisionID, TargetInstance: action.TargetInstance, UpdatedAt: action.UpdatedAt}
+		out[action.RequestID] = SavedAction{Action: action.Action, TaskID: action.TaskID, ExecutionProfileID: action.ExecutionProfileID, ExecutionProfileDigest: action.ExecutionProfileDigest, Status: action.Status, RunID: action.RunID, DecisionID: action.DecisionID, TargetInstance: action.TargetInstance, UpdatedAt: action.UpdatedAt}
 	}
 	return out
 }
@@ -1830,6 +1848,9 @@ func (m Model) changeFilter(filter int) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.profileChoice != nil {
+		return m.handleExecutionProfileChoice(key)
+	}
 	if m.answer != nil {
 		return m.handleDecisionAnswerKey(key)
 	}
@@ -2354,7 +2375,8 @@ func (m Model) startSelected() (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 	}
-	return m.createAction("start_task", row.taskID)
+	m.profileChoice = &executionProfileChoice{projectKey: state.ref.Key, taskID: row.taskID, instance: runtimeState.Service.InstanceID, revision: runtimeState.Control.Revision}
+	return m, nil
 }
 
 func (m Model) toggleMode() (tea.Model, tea.Cmd) {
@@ -2367,6 +2389,10 @@ func (m Model) toggleMode() (tea.Model, tea.Cmd) {
 		mode = "auto"
 	}
 	if mode == "auto" {
+		if m.projects[m.selected].ref.Config.DefaultProfileID() == "" {
+			m.status = "自动派发需要在项目配置中指定 default_execution_profile"
+			return m, nil
+		}
 		if executionConfigMismatch(m.projects[m.selected].ref, m.projects[m.selected].snapshot) {
 			m.status = "不能切换自动派发：" + executionConfigChanged
 			return m, nil
@@ -2598,6 +2624,10 @@ func (m *Model) readyControlTarget() (*projectState, *steerline.Runtime) {
 }
 
 func (m Model) createAction(action, taskID string) (tea.Model, tea.Cmd) {
+	return m.createActionWithProfile(action, taskID, nil)
+}
+
+func (m Model) createActionWithProfile(action, taskID string, profile *steerline.ExecutionProfile) (tea.Model, tea.Cmd) {
 	state, runtimeState := m.readyControlTarget()
 	if runtimeState == nil {
 		return m, nil
@@ -2622,11 +2652,23 @@ func (m Model) createAction(action, taskID string) (tea.Model, tea.Cmd) {
 			m.status = "候选已不可操作：" + reason
 			return m, nil
 		}
+		if profile == nil {
+			first := state.ref.Config.AvailableExecutionProfiles()[0]
+			profile = &first
+		}
+		if _, _, err := state.ref.Config.ResolveExecutionProfile(profile.ID, profile.Digest()); err != nil {
+			m.status = "执行配置不可用：" + err.Error()
+			return m, nil
+		}
 	}
 	requestID := steerline.NewControlRequestID()
 	instance := runtimeState.Service.InstanceID
 	revision := runtimeState.Control.Revision
-	state.actions[requestID] = &actionState{RequestID: requestID, Action: action, TaskID: taskID, Status: "submitting", Message: "准备提交", TargetInstance: instance, UpdatedAt: m.clock.Now()}
+	newAction := &actionState{RequestID: requestID, Action: action, TaskID: taskID, Status: "submitting", Message: "准备提交", TargetInstance: instance, UpdatedAt: m.clock.Now()}
+	if profile != nil {
+		newAction.ExecutionProfileID, newAction.ExecutionProfileDigest = profile.ID, profile.Digest()
+	}
+	state.actions[requestID] = newAction
 	state.view.Outstanding[requestID] = "task:" + taskID
 	if err := m.saveProjectView(m.selected); err != nil {
 		delete(state.actions, requestID)
@@ -2635,6 +2677,9 @@ func (m Model) createAction(action, taskID string) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.status = fmt.Sprintf("提交中 · task %s · request %s", displayDash(taskID), requestID)
+	if profile != nil {
+		m.status += " · " + safeTerminalInlineText(profile.Name)
+	}
 	if action == "set_dispatch_mode" && taskID == "auto" {
 		m.status += " · auto 可能开始领取 Ready 任务"
 	}

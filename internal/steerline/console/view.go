@@ -48,7 +48,9 @@ func render(m Model) string {
 		contentHeight = 3
 	}
 	var body string
-	if m.help {
+	if m.profileChoice != nil {
+		body = renderExecutionProfileChoice(m, *state, contentHeight)
+	} else if m.help {
 		body = strings.Join(fitLines(renderHelp(*state), m.width, contentHeight), "\n")
 	} else if m.confirm != nil {
 		body = renderStopConfirmation(m, *state, contentHeight)
@@ -141,6 +143,8 @@ func renderStatusLine(m Model, state projectState) string {
 	executor := executionHostLabel(state.ref.Config)
 	if executionConfigMismatch(state.ref, state.snapshot) {
 		executor = "执行配置待核对"
+	} else if len(state.ref.Config.ExecutionProfiles) > 0 {
+		executor = fmt.Sprintf("执行配置 %d 套", len(state.ref.Config.AvailableExecutionProfiles()))
 	} else if state.ref.Config.Host == "orca" || state.ref.Config.Host == "orca_supervised" {
 		executor += " · " + safeTerminalInlineText(executionAgentName(state.ref.Config))
 	}
@@ -483,6 +487,7 @@ func renderDetail(m Model, state projectState, row *consoleRow, width, height in
 		"执行："+safeTerminalText(firstText(run.ExecutionStatus, "unknown"))+"  ·  交付："+safeTerminalText(firstText(run.FinishTaskStatus, "unknown")),
 		"任务状态："+safeTerminalText(firstText(run.TaskStatus, "unknown")),
 	)
+	lines = append(lines, renderFixedRunExecutionProfile(state, run)...)
 	if run.PR.State != "" || run.PR.URL != nil {
 		lines = append(lines, "PR："+safeTerminalText(firstText(run.PR.State, "unknown")))
 		if run.PR.URL != nil && *run.PR.URL != "" {
@@ -669,7 +674,7 @@ func renderControlAvailability(state projectState, row *consoleRow, now time.Tim
 	if row != nil && row.kind == rowReady {
 		reason := candidateActionReason(state.ref, state.snapshot, now)
 		if reason == "" {
-			lines = append(lines, "操作：s 开始任务 "+safeTerminalText(row.taskID))
+			lines = append(lines, "操作：s 选择执行方案并开始任务 "+safeTerminalText(row.taskID))
 		} else {
 			lines = append(lines, "开始不可用："+displayActionReason(reason))
 		}
@@ -1418,6 +1423,9 @@ func (m Model) answerRunTask(state projectState, dialog *decisionAnswerDialog) s
 }
 
 func renderFooter(m Model, state projectState) string {
+	if m.profileChoice != nil {
+		return "↑↓ 选择预设方案 · Enter 确认并开始 · Esc 取消"
+	}
 	if m.help {
 		return "? / Esc 关闭帮助"
 	}
@@ -1439,7 +1447,7 @@ func renderFooter(m Model, state projectState) string {
 	parts := []string{"←→ 项目", "↑↓ 选择/滚动"}
 	row := m.selectedRow(m.selected)
 	if row != nil && row.kind == rowReady && candidateActionReason(state.ref, state.snapshot, m.clock.Now()) == "" {
-		parts = append(parts, "s 开始")
+		parts = append(parts, "s 选方案")
 	}
 	if row != nil && row.run != nil && row.run.Decision != nil && row.run.Decision.Status == "pending" && strings.HasPrefix(decisionAnswerAvailability(state, row), "提交后") {
 		parts = append(parts, "a 回答")
@@ -1470,7 +1478,7 @@ func renderHelp(state projectState) []string {
 		return append(lines, "", "旧 Beads 项目只读；控制操作不可用。")
 	}
 	return append(lines,
-		"", "任务与服务", "1–7  筛选任务和运行", "s    开始选中的 Ready 任务", "m/p  派发模式 / 暂停或恢复", "x    停止服务（需确认）", "i    查询最近控制请求",
+		"", "任务与服务", "1–7  筛选任务和运行", "s    选择已配置方案并开始 Ready 任务", "m/p  派发模式 / 暂停或恢复", "x    停止服务（需确认）", "i    查询最近控制请求",
 		"", "运行与会话", "a/c/f  活动 / 会话 / 最终回复", "v/u    决策历史 / 恢复核验", "[ / ]  切换 attempt", ", / .  选择轮次", "e / =  折叠 / 保持展开", "y / n  更多会话 / 下一条最终回复")
 }
 

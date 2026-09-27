@@ -102,6 +102,7 @@ func TestNativeDecisionAcceptanceIsSeparateFromApplication(t *testing.T) {
 	f.c.ProjectSteps = &ProjectSteps{Implement: step("implement"), Verify: step("verify"), PublishPR: step("publish_pr")}
 	f.c.ProjectSteps.Verify.RequiredChecks = []string{"unit"}
 	service.Config.ProjectSteps = f.c.ProjectSteps
+	service.baseConfig.ProjectSteps = f.c.ProjectSteps
 	service.State.Service.Mode, service.State.Service.Ready = "scheduler", true
 	if err = service.save(); err != nil {
 		t.Fatal(err)
