@@ -1,0 +1,75 @@
+import datetime
+import json
+import pathlib
+import sqlite3
+import subprocess
+import time
+
+
+root = pathlib.Path(__file__).parent
+config = json.loads((root / "acceptance-config.json").read_text(encoding="utf-8-sig"))
+db = pathlib.Path(config["run_dir"]) / "steerline.db"
+viewer = "term_a0473310-a855-473a-8bc7-1ae1a6617986"
+previous = "63a55354bb9c4aa2d739dd6fd574dfbf"
+orca = pathlib.Path(r"C:\Users\lmas1\AppData\Local\Programs\orca\resources\bin\orca.exe")
+
+
+def read_screen():
+    started = time.perf_counter()
+    raw = subprocess.check_output([str(orca), "terminal", "read", "--terminal", viewer, "--json"], timeout=10)
+    returned_at = datetime.datetime.now(datetime.timezone.utc)
+    frame = json.loads(raw)["result"]["terminal"]
+    return raw, frame, returned_at, time.perf_counter() - started, "\n".join(frame["tail"])
+
+
+baseline_raw, baseline, _, _, baseline_text = read_screen()
+if baseline.get("source") != "screen" or previous not in baseline_text:
+    raise SystemExit("optimized visible viewer did not render the current review Attempt")
+(root / "publish-viewer-baseline.json").write_bytes(baseline_raw)
+
+connection = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=2)
+attempt = None
+deadline = time.monotonic() + 900
+while time.monotonic() < deadline:
+    row = connection.execute("SELECT attempt_id, payload FROM step_attempts WHERE step_id='publish_pr' ORDER BY rowid DESC LIMIT 1").fetchone()
+    if row:
+        attempt = json.loads(row[1])
+        break
+    time.sleep(0.1)
+if attempt is None:
+    raise SystemExit("publish Attempt did not appear in 15 minutes")
+
+(root / "publish-viewer-attempt-record.json").write_text(json.dumps(attempt, indent=2) + "\n", encoding="utf-8")
+attempt_id = attempt["attempt_id"]
+created = datetime.datetime.fromisoformat(attempt["created_at"].replace("Z", "+00:00"))
+reads = []
+visible_at = None
+visible_raw = None
+for _ in range(36):
+    raw, frame, returned_at, duration, text = read_screen()
+    exact = attempt_id in text
+    reads.append({"returned_at": returned_at.isoformat(), "query_seconds": duration, "source": frame.get("source"), "attempt_id_visible": exact})
+    if frame.get("source") == "screen" and exact:
+        visible_at, visible_raw = returned_at, raw
+        break
+    time.sleep(0.1)
+if visible_raw:
+    (root / "publish-viewer-screen.json").write_bytes(visible_raw)
+
+latency = (visible_at - created).total_seconds() if visible_at else None
+result = {
+    "kind": "spec03-home-publish-step-to-optimized-visible-viewer",
+    "viewer_terminal": viewer,
+    "previous_review_attempt": previous,
+    "publish_attempt": attempt_id,
+    "attempt_created_at": attempt["created_at"],
+    "visible_screen_returned_at": visible_at.isoformat() if visible_at else None,
+    "latency_seconds_upper_bound": latency,
+    "screen_source": "screen" if visible_at else "unverified",
+    "reads": reads,
+    "baseline_receipt": "publish-viewer-baseline.json",
+    "attempt_record": "publish-viewer-attempt-record.json",
+    "visible_receipt": "publish-viewer-screen.json" if visible_at else None,
+}
+(root / "publish-viewer-latency.json").write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+print(json.dumps({"attempt": attempt_id, "latency_seconds": latency, "source": result["screen_source"], "reads": len(reads)}), flush=True)

@@ -1,0 +1,62 @@
+{
+  "id": "c9acf553-d261-4c52-acae-72df354fdde8",
+  "ok": true,
+  "result": {
+    "terminal": {
+      "handle": "term_8c209689-de89-4da3-bcc3-c58fb1e8e399",
+      "status": "running",
+      "tail": [
+        "SteerLine · 执行控制台",
+        "项目 1/1   acceptance-config",
+        "服务 已连接  ·  Orca 受监管远程 · codex  ·  派发 自动  ·  Ready 0  ·  执行 91024  ·  运行 1  ·  待决策 1  ·  需处理 1",
+        "任务 · 1 项 · 全部                           │详情",
+        "待决策    91024        Native supervised acc…│任务 91024 · Native supervised acceptance artifact",
+        "                                             │当前：待决策",
+        "                                             │执行：running  ·  交付：waiting_decision",
+        "                                             │任务状态：in_progress",
+        "                                             │执行方案：项目默认 [project-default] · Orca 受监管远程",
+        "                                             │Agent / Model / Thinking：codex / gpt-6-luna / high",
+        "                                             │PR：unknown",
+        "                                             │最后核验：2026-09-28 05:38:56",
+        "                                             │回答不可用：原执行后端/协议不支持决策续跑",
+        "                                             │",
+        "                                             │项目：acceptance-config",
+        "                                             │task_id：91024",
+        "                                             │run_id：df97c5e08f33abf5673e224d81b308cd",
+        "                                             │decision_id：relay_582eacbe2eb0",
+        "                                             │attempt_id：2d8fed1936e98e9b319f7bef67264143",
+        "                                             │等待时长：1s",
+        "                                             │问题：Should I create the exact native acceptance artifact?",
+        "                                             │上下文：",
+        "                                             │选项 1 · yes：yes",
+        "                                             │  详情：",
+        "                                             │选项 2 · no：no",
+        "                                             │  详情：",
+        "                                             │a 不可用 · 原执行后端/协议不支持决策续跑",
+        "                                             │",
+        "                                             │任务关系 · 中心只读快照",
+        "                                             │任务 91024 · Native supervised acceptance artifact",
+        "                                             │状态：in_progress",
+        "                                             │任务阻塞：task_not_open",
+        "                                             │任务阻塞：execution_slot_busy",
+        "                                             │Spec：docs/spec/native-acceptance.spec.md",
+        "                                             │",
+        "                                             │技术信息",
+        "                                             │run_id：df97c5e08f33abf5673e224d81b308cd",
+        "                                             │execution_id：0b2631636f584629e17101a7bf4334da",
+        "                                             │attempt_id：2d8fed1936e98e9b319f7bef67264143",
+        "←→ 项目 · ↑↓ 选择/滚动 · m 模式 · p 暂停 · x 停服 · ? 帮助 · q 退出"
+      ],
+      "truncated": false,
+      "limited": true,
+      "oldestCursor": "0",
+      "nextCursor": "741",
+      "latestCursor": "741",
+      "returnedLineCount": 40,
+      "source": "screen"
+    }
+  },
+  "_meta": {
+    "runtimeId": "3dd6023d-87dd-4055-bcf6-f8dd87c3c731"
+  }
+}

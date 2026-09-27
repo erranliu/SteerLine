@@ -90,15 +90,32 @@ func (FileQuerySource) ReadProject(ctx context.Context, ref ProjectRef, selected
 		result.Connection = steerline.ServiceConnection{State: steerline.ConnectionIdentityError, Diagnostic: result.TaskError}
 		return result
 	}
-	result.Connection = steerline.ConnectService(ctx, c)
+	connectionCh := make(chan steerline.ServiceConnection, 1)
+	observationCh := make(chan steerline.ObservationSnapshot, 1)
+	type readerResult struct {
+		store *steerline.SQLiteStore
+		err   error
+	}
+	readerCh := make(chan readerResult, 1)
+	connectionConfig, observationConfig, readerConfig := c, c, c
+	go func() { connectionCh <- steerline.ConnectService(ctx, connectionConfig) }()
+	go func() { observationCh <- viewer.NewFileSource(observationConfig).Snapshot() }()
+	go func() {
+		store, err := steerline.OpenNativeTaskReader(ctx, &readerConfig)
+		readerCh <- readerResult{store: store, err: err}
+	}()
+	result.Connection = <-connectionCh
 	result.Observation = result.Connection.Snapshot
-	databaseObservation := viewer.NewFileSource(c).Snapshot()
+	databaseObservation := <-observationCh
 	if databaseObservation.Runtime != nil && (result.Observation.Runtime == nil || databaseObservation.Runtime.Revision > result.Observation.Runtime.Revision || (databaseObservation.Runtime.Revision == result.Observation.Runtime.Revision && databaseObservation.Runtime.HeartbeatAt.After(result.Observation.Runtime.HeartbeatAt))) {
 		result.Observation = databaseObservation
 	} else if result.Observation.Runtime == nil && result.Observation.State == steerline.SnapshotNone {
 		result.Observation = steerline.ReadObservationSnapshot(filepath.Join(c.RunDir, c.RuntimeFile), c.Heartbeat, nil)
 	}
 	if _, statErr := os.Stat(filepath.Join(c.RunDir, "steerline.db")); statErr != nil {
+		if reader := <-readerCh; reader.store != nil {
+			_ = reader.store.Close()
+		}
 		if os.IsNotExist(statErr) {
 			result.NativeTaskError = "native task database does not exist; the console remains read-only"
 		} else {
@@ -107,7 +124,8 @@ func (FileQuerySource) ReadProject(ctx context.Context, ref ProjectRef, selected
 		result.TaskError, result.DomainError = result.NativeTaskError, result.NativeTaskError
 		return result
 	}
-	store, err := steerline.OpenNativeTaskReader(ctx, &c)
+	reader := <-readerCh
+	store, err := reader.store, reader.err
 	if err != nil {
 		result.NativeTaskError, result.TaskError, result.DomainError = err.Error(), err.Error(), err.Error()
 		return result

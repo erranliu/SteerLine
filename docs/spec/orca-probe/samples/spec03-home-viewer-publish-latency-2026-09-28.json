@@ -1,0 +1,27 @@
+{
+  "kind": "spec03-home-publish-step-to-optimized-visible-viewer",
+  "viewer_terminal": "term_a0473310-a855-473a-8bc7-1ae1a6617986",
+  "previous_review_attempt": "63a55354bb9c4aa2d739dd6fd574dfbf",
+  "publish_attempt": "0c2de346ef57ccd2a1d856f7416d38f7",
+  "attempt_created_at": "2026-09-27T21:23:08.9474552Z",
+  "visible_screen_returned_at": "2026-09-27T21:23:10.361832+00:00",
+  "latency_seconds_upper_bound": 1.414377,
+  "screen_source": "screen",
+  "reads": [
+    {
+      "returned_at": "2026-09-27T21:23:09.673131+00:00",
+      "query_seconds": 0.6519356000062544,
+      "source": "screen",
+      "attempt_id_visible": false
+    },
+    {
+      "returned_at": "2026-09-27T21:23:10.361832+00:00",
+      "query_seconds": 0.5879195000015898,
+      "source": "screen",
+      "attempt_id_visible": true
+    }
+  ],
+  "baseline_receipt": "publish-viewer-baseline.json",
+  "attempt_record": "publish-viewer-attempt-record.json",
+  "visible_receipt": "publish-viewer-screen.json"
+}

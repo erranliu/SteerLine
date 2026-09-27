@@ -1,0 +1,28 @@
+{
+  "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\s3viewerlat28g\\native-project\\.git",
+  "command_id": "f7768707fcfafbfc76e229a7b9ad1328",
+  "kind": "answer_decision",
+  "target_id": "relay_582eacbe2eb0",
+  "expected_version": 1,
+  "idempotency_key": "answer:relay_582eacbe2eb0:d77f3c6dd34be33ed178d3dd3b0a46b9e0f54997b8d5d0a401b5b8f42e4bbb5f",
+  "requested_by": "acceptance",
+  "payload": {
+    "decision_id": "relay_582eacbe2eb0",
+    "run_id": "df97c5e08f33abf5673e224d81b308cd",
+    "option_id": "yes",
+    "answered_by": "acceptance",
+    "answered_at": "2026-09-27T21:42:53.0067499Z",
+    "expected_decision_version": 1,
+    "expected_run_revision": 9,
+    "service_instance_id": "497ac2b3fafaca208f3f355530c506b3"
+  },
+  "status": "accepted",
+  "result": {
+    "decision_id": "relay_582eacbe2eb0",
+    "idempotent": false,
+    "status": "answer_saved",
+    "version": 2
+  },
+  "created_at": "2026-09-27T21:42:53.0067499Z",
+  "updated_at": "2026-09-27T21:42:53.4513712Z"
+}

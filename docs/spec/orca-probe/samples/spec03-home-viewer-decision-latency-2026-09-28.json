@@ -1,0 +1,48 @@
+{
+  "kind": "spec03-home-business-decision-to-visible-viewer",
+  "viewer_terminal": "term_36a34155-7492-49fb-bfb2-67f4b1cb4def",
+  "decision_id": "relay_00bddcf2150a",
+  "workflow_run_id": "ef118af78fa636948f9853bdf8d9f82b",
+  "execution_id": "32eebf3267ba11f04f5f0e3020f13638",
+  "original_attempt_id": "e8d51d6ba9444e84e116ddf73cc72e24",
+  "decision_created_at": "2026-09-27T21:08:34.253552Z",
+  "visible_screen_returned_at": "2026-09-27T21:08:36.729825+00:00",
+  "latency_seconds_upper_bound": 2.476273,
+  "screen_source": "screen",
+  "reads": [
+    {
+      "returned_at": "2026-09-27T21:08:34.720017+00:00",
+      "query_seconds": 0.43150940000487026,
+      "source": "screen",
+      "decision_id_visible": false
+    },
+    {
+      "returned_at": "2026-09-27T21:08:35.190088+00:00",
+      "query_seconds": 0.3696781999897212,
+      "source": "screen",
+      "decision_id_visible": false
+    },
+    {
+      "returned_at": "2026-09-27T21:08:35.769245+00:00",
+      "query_seconds": 0.4786158999922918,
+      "source": "screen",
+      "decision_id_visible": false
+    },
+    {
+      "returned_at": "2026-09-27T21:08:36.240317+00:00",
+      "query_seconds": 0.37092269999266136,
+      "source": "screen",
+      "decision_id_visible": false
+    },
+    {
+      "returned_at": "2026-09-27T21:08:36.729825+00:00",
+      "query_seconds": 0.3892786999931559,
+      "source": "screen",
+      "decision_id_visible": true
+    }
+  ],
+  "baseline_receipt": "remote-viewer-baseline.json",
+  "decision_record": "remote-viewer-decision-record.json",
+  "visible_receipt": "remote-viewer-decision-screen.json",
+  "timestamp_bound": "Decision created_at was assigned before SQLite commit, while visible time was sampled after Orca returned the rendered screen frame."
+}

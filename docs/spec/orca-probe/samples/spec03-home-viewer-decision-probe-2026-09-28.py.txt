@@ -1,0 +1,79 @@
+import datetime
+import json
+import pathlib
+import sqlite3
+import subprocess
+import time
+
+
+root = pathlib.Path(__file__).parent
+config = json.loads((root / "acceptance-config.json").read_text(encoding="utf-8-sig"))
+db = pathlib.Path(config["run_dir"]) / "steerline.db"
+viewer = "term_36a34155-7492-49fb-bfb2-67f4b1cb4def"
+orca = pathlib.Path(r"C:\Users\lmas1\AppData\Local\Programs\orca\resources\bin\orca.exe")
+
+
+def read_screen():
+    started = time.perf_counter()
+    raw = subprocess.check_output([str(orca), "terminal", "read", "--terminal", viewer, "--json"], timeout=10)
+    returned_at = datetime.datetime.now(datetime.timezone.utc)
+    result = json.loads(raw)["result"]["terminal"]
+    return raw, result, returned_at, time.perf_counter() - started, "\n".join(result["tail"])
+
+
+baseline_raw, baseline, _, _, baseline_text = read_screen()
+if baseline.get("source") != "screen" or "91024" not in baseline_text:
+    raise SystemExit("visible viewer baseline did not render native Task 91024")
+(root / "remote-viewer-baseline.json").write_bytes(baseline_raw)
+
+connection = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=2)
+decision = None
+deadline = time.monotonic() + 900
+while time.monotonic() < deadline:
+    row = connection.execute("SELECT decision_id, payload FROM decisions ORDER BY rowid DESC LIMIT 1").fetchone()
+    if row:
+        record = json.loads(row[1])
+        if record["status"] == "pending":
+            decision = record
+            break
+    time.sleep(0.1)
+if decision is None:
+    raise SystemExit("no pending remote business Decision appeared within 15 minutes")
+
+(root / "remote-viewer-decision-record.json").write_text(json.dumps(decision, indent=2) + "\n", encoding="utf-8")
+decision_id = decision["decision_id"]
+created = datetime.datetime.fromisoformat(decision["created_at"].replace("Z", "+00:00"))
+reads = []
+visible_at = None
+visible_raw = None
+for _ in range(36):
+    raw, frame, returned_at, duration, text = read_screen()
+    exact = decision_id in text
+    reads.append({"returned_at": returned_at.isoformat(), "query_seconds": duration, "source": frame.get("source"), "decision_id_visible": exact})
+    if frame.get("source") == "screen" and exact:
+        visible_at, visible_raw = returned_at, raw
+        break
+    time.sleep(0.1)
+if visible_raw:
+    (root / "remote-viewer-decision-screen.json").write_bytes(visible_raw)
+
+latency = (visible_at - created).total_seconds() if visible_at else None
+result = {
+    "kind": "spec03-home-business-decision-to-visible-viewer",
+    "viewer_terminal": viewer,
+    "decision_id": decision_id,
+    "workflow_run_id": decision["workflow_run_id"],
+    "execution_id": decision["execution_id"],
+    "original_attempt_id": decision["attempt_id"],
+    "decision_created_at": decision["created_at"],
+    "visible_screen_returned_at": visible_at.isoformat() if visible_at else None,
+    "latency_seconds_upper_bound": latency,
+    "screen_source": "screen" if visible_at else "unverified",
+    "reads": reads,
+    "baseline_receipt": "remote-viewer-baseline.json",
+    "decision_record": "remote-viewer-decision-record.json",
+    "visible_receipt": "remote-viewer-decision-screen.json" if visible_at else None,
+    "timestamp_bound": "Decision created_at was assigned before SQLite commit, while visible time was sampled after Orca returned the rendered screen frame.",
+}
+(root / "remote-viewer-latency.json").write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+print(json.dumps({"decision_id": decision_id, "latency_seconds": latency, "source": result["screen_source"], "reads": len(reads)}), flush=True)

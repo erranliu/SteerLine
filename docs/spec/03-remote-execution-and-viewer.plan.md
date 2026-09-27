@@ -2,6 +2,8 @@
 
 任务 ID：6；任务名称：分阶段远程闭环。执行依据：[Spec](03-remote-execution-and-viewer.md)。开发输入为 [远程协议 Spec](01-orca-remote-protocol.md) 的真实证据及限制、[中心模型 Spec](02-execution-model-and-adapter.md) 已交付的模型和接口；生产启用另受剩余协议门槛约束。
 
+2026-09-28 验收补充：[真实 home 消息到可见 viewer 时延](../validation/spec03-viewer-latency-2026-09-28.md)先测出 Decision 2.476 秒失败，随后并行只读源并加快前台刷新；新隔离 Decision 为 1.669 秒，两次远端步骤转换为 1.414 / 1.798 秒。两条任务均按固定 head 真实合并、关闭原 Task 并释放五个 Dispatch。当前目标的 2 秒 viewer 门槛已通过；生产项目认证和管理员/UAC 可见捕获仍按原边界开放。下文早期 viewer 失败样本保留其当时结论。
+
 ## 实施顺序
 
 共享接线与 [#11](test-feedback.spec.md)、[#12](beads-path-removal.spec.md)、[#13](taskgraph-modules.spec.md) 按 Spec 的冲突规则串行集成；独立协议样例可先准备，后集成方重跑受影响接口与测试。原生任务权威是唯一接入范围。
