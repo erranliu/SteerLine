@@ -29,11 +29,15 @@ func (s *Service) reconcileExitedNativeStep(ctx context.Context) error {
 		if task == nil || task.Status != "in_progress" || workflow == nil || execution == nil || attempt == nil || execution.CurrentStep != attempt.StepID || execution.Process == nil || !isReconcileableStepStatus(attempt.Status) {
 			continue
 		}
-		ref, err := (executionRecords{root: s.Config.RunDir}).loadBinding(run.RunID, attempt.AttemptID)
-		if err != nil || ref.RunID != run.RunID || ref.AttemptID != attempt.AttemptID || ref.External != *execution.Process || ref.Backend != BackendKind(execution.Backend) || ref.Protocol != ExecutionProtocol(execution.Protocol) || ref.Target.ID != targetFor(s.Config).ID {
+		config, configErr := s.executionConfigForRun(run)
+		if configErr != nil {
+			return configErr
+		}
+		ref, err := (executionRecords{root: config.RunDir}).loadBinding(run.RunID, attempt.AttemptID)
+		if err != nil || ref.RunID != run.RunID || ref.AttemptID != attempt.AttemptID || ref.External != *execution.Process || ref.Backend != BackendKind(execution.Backend) || ref.Protocol != ExecutionProtocol(execution.Protocol) || ref.Target.ID != targetFor(config).ID {
 			continue
 		}
-		backend := backendFor(s.Config)
+		backend := backendFor(config)
 		observation, err := backend.Observe(ctx, ref)
 		if err != nil || observation.Liveness != "exited" {
 			continue
@@ -42,7 +46,7 @@ func (s *Service) reconcileExitedNativeStep(ctx context.Context) error {
 		if resultPath == "" {
 			continue
 		}
-		_, _, _, fixedResultPath := minimalAttemptPaths(s.Config, run, attempt)
+		_, _, _, fixedResultPath := minimalAttemptPaths(config, run, attempt)
 		if canonical(resultPath) != canonical(fixedResultPath) {
 			return nativeErr("authority_mismatch", "native step result path differs from the fixed attempt")
 		}
@@ -50,6 +54,7 @@ func (s *Service) reconcileExitedNativeStep(ctx context.Context) error {
 		if err != nil || !resultInfo.Mode().IsRegular() || resultInfo.Size() <= 0 {
 			continue
 		}
+		s.Config = config // This exact run is now the one execution being reconciled.
 		if ref.Backend == BackendOrca {
 			if err = s.reconcileExitedOrcaStepLauncher(ctx, run, workflow, execution, attempt); err != nil {
 				run.Error = ptr("native Orca result is preserved but launcher cleanup requires reconciliation: " + clip(err.Error(), 1000))

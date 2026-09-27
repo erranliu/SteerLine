@@ -1044,16 +1044,20 @@ func (s *Service) inspectRunProcess(run *Run) string {
 	if run == nil || run.Process == nil {
 		return "execution identity unavailable"
 	}
-	records := executionRecords{root: s.Config.RunDir}
+	c, configErr := s.executionConfigForRun(run)
+	if configErr != nil {
+		return "fixed execution profile unavailable: " + configErr.Error()
+	}
+	records := executionRecords{root: c.RunDir}
 	ref, err := records.loadBinding(run.RunID, run.AttemptID)
 	if err == nil {
 		if ref.External != *run.Process || ref.Backend == "" || ref.Protocol == "" || ref.Target.ID == "" {
 			return "execution binding conflicts with runtime identity"
 		}
-		if ref.Protocol == ProtocolOrcaSupervised && !sameSupervisedBaseTarget(ref.Target, targetFor(s.Config)) || ref.Protocol != ProtocolOrcaSupervised && ref.Target != targetFor(s.Config) {
+		if ref.Protocol == ProtocolOrcaSupervised && !sameSupervisedBaseTarget(ref.Target, targetFor(c)) || ref.Protocol != ProtocolOrcaSupervised && ref.Target != targetFor(c) {
 			return "execution target changed; refusing to inspect through a replacement backend connection"
 		}
-		backend := backendFor(s.Config)
+		backend := backendFor(c)
 		kind, protocol := backend.Identity()
 		if kind != ref.Backend || protocol != ref.Protocol {
 			return "execution backend or protocol differs from the fixed binding"

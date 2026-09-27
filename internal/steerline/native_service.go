@@ -53,12 +53,12 @@ func (s *Service) refreshNativeSnapshot(ctx context.Context, reconstruct bool) e
 		attempt := latestCurrentNativeAttempt(snapshot.Attempts, execution)
 		run := s.find(task.TaskID)
 		if run == nil {
-			run = &Run{TaskID: task.TaskID, DomainTaskID: task.TaskID, Title: task.Title, RunID: workflow.WorkflowRunID, Claimant: task.Claimant, Host: s.Config.hostName(), Backend: execution.Backend, Protocol: execution.Protocol, Agent: execution.Agent, Target: execution.Target, WorkflowVersion: workflow.WorkflowVersion, WorkflowConfigDigest: workflow.ConfigDigest, ExecutionID: execution.ExecutionID, PR: PRState{State: "unknown"}}
+			run = &Run{TaskID: task.TaskID, DomainTaskID: task.TaskID, Title: task.Title, RunID: workflow.WorkflowRunID, Claimant: task.Claimant, Host: hostForExecution(execution.Backend, execution.Protocol), Backend: execution.Backend, Protocol: execution.Protocol, Agent: execution.Agent, Target: execution.Target, WorkflowVersion: workflow.WorkflowVersion, WorkflowConfigDigest: workflow.ConfigDigest, ExecutionID: execution.ExecutionID, PR: PRState{State: "unknown"}}
 			s.State.Runs = append(s.State.Runs, run)
 		}
 		run.TaskID, run.DomainTaskID, run.Title = task.TaskID, task.TaskID, task.Title
 		run.RunID, run.ExecutionID = workflow.WorkflowRunID, execution.ExecutionID
-		run.Claimant, run.Host = task.Claimant, s.Config.hostName()
+		run.Claimant, run.Host = task.Claimant, hostForExecution(execution.Backend, execution.Protocol)
 		run.TaskStatus = task.Status
 		run.Backend, run.Protocol, run.Agent = execution.Backend, execution.Protocol, execution.Agent
 		run.Target = execution.Target
@@ -424,9 +424,6 @@ func latestNativePublicationAttemptID(attempts []StepAttemptRecord, executionID 
 }
 
 func (s *Service) reconcileNativeWorkspaceCleanup(ctx context.Context, task TaskRecord, cleanupItem string) error {
-	if s.Config.hostName() != "local" {
-		return UnsupportedAdapterOperation("WorkspaceCleanup", "remote native worktree cleanup is unavailable")
-	}
 	path := strings.TrimPrefix(cleanupItem, "workspace_cleanup:")
 	root, err := filepath.EvalSymlinks(s.Config.WorktreeRoot)
 	if err != nil {
@@ -452,6 +449,9 @@ func (s *Service) reconcileNativeWorkspaceCleanup(ctx context.Context, task Task
 	}
 	if execution == nil || workflow == nil || execution.Target.Branch == "" || !validCommit(execution.Target.BaseRevision) {
 		return nativeErr("contract_mismatch", "discarded workspace path lacks a fixed branch and base identity")
+	}
+	if hostForExecution(execution.Backend, execution.Protocol) != "local" {
+		return UnsupportedAdapterOperation("WorkspaceCleanup", "remote native worktree cleanup is unavailable")
 	}
 	branch := execution.Target.Branch
 	if _, err = (Runner{Dir: s.Config.Repository, Timeout: duration(s.Config.CommandTimeout)}).Output(ctx, s.Config.Git, "check-ref-format", "refs/heads/"+branch); err != nil {
@@ -525,7 +525,11 @@ func (s *Service) recordNativeStopCleanup(ctx context.Context, taskID, cleanupIt
 	if err != nil || persisted.Status != OperationConfirmed {
 		return errors.Join(err, nativeErr("outcome_unknown", "confirmed stop was not durably recorded"))
 	}
-	backend := backendFor(s.Config)
+	config, configErr := s.executionConfigForWorkflowID(op.RunID)
+	if configErr != nil {
+		return configErr
+	}
+	backend := backendFor(config)
 	observation, err := backend.Observe(ctx, *op.Ref)
 	if err != nil || observation.Liveness != "exited" {
 		return errors.Join(err, nativeErr("outcome_unknown", "fixed local execution is not confirmed absent"))
@@ -545,9 +549,6 @@ func (s *Service) recordNativeStopCleanup(ctx context.Context, taskID, cleanupIt
 }
 
 func (s *Service) reconcileExitedNativeExecution(ctx context.Context, taskID, cleanupItem, executionID string) error {
-	if s.Config.hostName() != "local" {
-		return UnsupportedAdapterOperation("StopExecution", "remote native worker cancellation is unavailable")
-	}
 	var execution *ExecutionRecord
 	for i := range s.State.Executions {
 		if s.State.Executions[i].ExecutionID == executionID {
@@ -558,7 +559,14 @@ func (s *Service) reconcileExitedNativeExecution(ctx context.Context, taskID, cl
 	if execution == nil || execution.Process == nil {
 		return nativeErr("outcome_unknown", "discarded task has no fixed local process identity")
 	}
+	if hostForExecution(execution.Backend, execution.Protocol) != "local" {
+		return UnsupportedAdapterOperation("StopExecution", "remote native worker cancellation is unavailable")
+	}
 	workflowRunID := execution.WorkflowRunID
+	config, configErr := s.executionConfigForWorkflowID(workflowRunID)
+	if configErr != nil {
+		return configErr
+	}
 	var attempt *StepAttemptRecord
 	for i := range s.State.Attempts {
 		candidate := &s.State.Attempts[i]
@@ -575,7 +583,7 @@ func (s *Service) reconcileExitedNativeExecution(ctx context.Context, taskID, cl
 	if err != nil {
 		return err
 	}
-	backend := backendFor(s.Config)
+	backend := backendFor(config)
 	observation, err := backend.Observe(ctx, ref)
 	if err != nil || observation.Liveness != "exited" {
 		return errors.Join(err, nativeErr("outcome_unknown", "fixed local process is live or its state is unknown; it cannot be stopped without the original handle"))
@@ -644,6 +652,21 @@ func (s *Service) dispatchNative(ctx context.Context) error {
 	if reason := s.slotReason(s.activeControlRequestID()); reason != "" {
 		return errors.New(reason)
 	}
+	if !s.explicitDispatch {
+		if err := s.selectDefaultDispatchProfile(); err != nil {
+			return err
+		}
+	} else if s.dispatchProfile == nil {
+		if err := s.selectDispatchProfile(ProjectExecutionProfileID, ""); err != nil {
+			return err
+		}
+	}
+	defer func() {
+		if s.worker == nil && !s.State.SlotOccupied {
+			s.Config = s.projectExecutionConfig()
+			s.dispatchProfile = nil
+		}
+	}()
 	ready, err := (QueryService{Store: s.domainStore, Project: s.Config.identity}).ReadyNativeTasks(ctx)
 	if err != nil {
 		return err
@@ -678,7 +701,7 @@ func (s *Service) dispatchNative(ctx context.Context) error {
 		if s.reservedRunID != "" {
 			workflowRunID = s.reservedRunID
 		}
-		receipt, claimErr := (CommandService{Store: s.domainStore, Project: s.Config.identity}).ClaimNativeTask(ctx, s.Config, TaskClaimOptions{TaskID: task.TaskID, RequestID: requestID, ExpectedTaskVersion: task.Version, ExpectedAuthorityVersion: authority.AuthorityVersion, RequestedBy: s.Config.Claimant, Explicit: s.explicitDispatch, WorkflowRunID: workflowRunID})
+		receipt, claimErr := (CommandService{Store: s.domainStore, Project: s.Config.identity}).ClaimNativeTask(ctx, s.Config, TaskClaimOptions{TaskID: task.TaskID, RequestID: requestID, ExpectedTaskVersion: task.Version, ExpectedAuthorityVersion: authority.AuthorityVersion, RequestedBy: s.Config.Claimant, Explicit: s.explicitDispatch, WorkflowRunID: workflowRunID, ExecutionProfile: s.dispatchProfile})
 		if claimErr != nil {
 			if isNativeErrorCode(claimErr, "task_not_ready", "stale_version", "slot_busy", "dispatch_paused", "wrong_mode", "task_discarded") {
 				if s.targetTask != "" {

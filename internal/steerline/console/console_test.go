@@ -344,8 +344,13 @@ func TestEnterOnlyOpensDetailAndStartKeepsOneRequestID(t *testing.T) {
 	}
 	updated, cmd := m.Update(runeKey('s'))
 	m = updated.(Model)
+	if cmd != nil || m.profileChoice == nil || len(m.projects[0].actions) != 0 {
+		t.Fatal("start key should open the configured execution selection without submitting")
+	}
+	updated, cmd = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = updated.(Model)
 	if cmd == nil || len(m.projects[0].actions) != 1 {
-		t.Fatal("start should allocate and persist one request before publishing")
+		t.Fatal("confirmed profile should allocate and persist one request before publishing")
 	}
 	var originalID string
 	for id, action := range m.projects[0].actions {
@@ -387,6 +392,11 @@ func TestStartIsNotPublishedWhenRequestIdentityCannotBePersisted(t *testing.T) {
 	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{readySnapshot(ref, now)}, control, now)
 	m.profile = &viewProfile{dir: filepath.Join(t.TempDir(), "missing-profile")}
 	updated, cmd := m.startSelected()
+	m = updated.(Model)
+	if cmd != nil || m.profileChoice == nil {
+		t.Fatal("expected profile selection before start")
+	}
+	updated, cmd = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = updated.(Model)
 	if cmd != nil || control.calls != 0 || len(m.projects[0].actions) != 0 || !strings.Contains(m.status, "未提交") {
 		t.Fatalf("request was published without durable request identity: status=%q calls=%d", m.status, control.calls)
@@ -1154,7 +1164,7 @@ func TestNarrowConsoleKeepsDetailAndSelectionEntryReachable(t *testing.T) {
 	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{readySnapshot(ref, now)}, control, now)
 	m.width, m.height = 80, 24
 	view := m.View()
-	for _, want := range []string{"Task：task-B", "Build B", "t列表", "s 开始"} {
+	for _, want := range []string{"Task：task-B", "Build B", "t列表", "s 选方案"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("narrow console lost %q:\n%s", want, view)
 		}

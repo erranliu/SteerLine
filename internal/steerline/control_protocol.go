@@ -56,8 +56,10 @@ type ControlReceipt struct {
 }
 
 type ControlPayload struct {
-	TaskID string `json:"task_id,omitempty"`
-	Mode   string `json:"mode,omitempty"`
+	TaskID                 string `json:"task_id,omitempty"`
+	Mode                   string `json:"mode,omitempty"`
+	ExecutionProfileID     string `json:"execution_profile_id,omitempty"`
+	ExecutionProfileDigest string `json:"execution_profile_digest,omitempty"`
 }
 
 func controlRequestPath(runDir, id string) string {
@@ -223,8 +225,8 @@ func decodeControlPayload(req ControlRequest) (ControlPayload, error) {
 	}
 	switch req.Action {
 	case "start_task":
-		if strings.TrimSpace(p.TaskID) == "" || len(fields) != 1 {
-			return p, errors.New("start_task requires only task_id")
+		if strings.TrimSpace(p.TaskID) == "" || len(fields) != 1 && len(fields) != 3 || p.ExecutionProfileID == "" && p.ExecutionProfileDigest != "" || p.ExecutionProfileID != "" && !evidenceDigest(p.ExecutionProfileDigest) {
+			return p, errors.New("start_task requires task_id and a complete configured execution profile selection")
 		}
 	case "set_dispatch_mode":
 		if (p.Mode != "manual" && p.Mode != "auto") || len(fields) != 1 {

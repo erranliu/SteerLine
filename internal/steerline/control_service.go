@@ -221,6 +221,17 @@ func (s *Service) processNextControl(ctx context.Context, cancel context.CancelF
 	}
 	switch req.Action {
 	case "start_task":
+		base := s.projectExecutionConfig()
+		profileID := payload.ExecutionProfileID
+		if profileID == "" {
+			if len(base.ExecutionProfiles) != 0 {
+				return s.rejectControl(*req, digest, "invalid_request", errors.New("start_task requires an execution profile selection"))
+			}
+			profileID = ProjectExecutionProfileID
+		}
+		if _, _, profileErr := base.ResolveExecutionProfile(profileID, payload.ExecutionProfileDigest); profileErr != nil {
+			return s.rejectControl(*req, digest, "stale_profile", profileErr)
+		}
 		if s.State.Control.DispatchMode != "manual" {
 			return s.rejectControl(*req, digest, "wrong_mode", errors.New("start_task requires manual dispatch mode"))
 		}
@@ -238,11 +249,17 @@ func (s *Service) processNextControl(ctx context.Context, cancel context.CancelF
 			return s.rejectControl(*req, digest, code, err)
 		}
 	case "set_dispatch_mode":
+		if payload.Mode == "auto" && s.projectExecutionConfig().DefaultProfileID() == "" {
+			return s.rejectControl(*req, digest, "invalid_request", errors.New("automatic dispatch requires default_execution_profile"))
+		}
 	case "pause_dispatch":
 		if s.State.Control.DispatchPaused {
 			return s.rejectControl(*req, digest, "invalid_request", errors.New("dispatch is already paused"))
 		}
 	case "resume_dispatch":
+		if s.State.Control.DispatchMode == "auto" && s.projectExecutionConfig().DefaultProfileID() == "" {
+			return s.rejectControl(*req, digest, "invalid_request", errors.New("automatic dispatch requires default_execution_profile"))
+		}
 		if !s.State.Control.DispatchPaused {
 			return s.rejectControl(*req, digest, "invalid_request", errors.New("dispatch is not paused"))
 		}
@@ -399,16 +416,26 @@ func (s *Service) applyControlAction(ctx context.Context, req ControlRequest, pa
 		}
 		s.State.Control.DispatchMode, s.State.Control.DispatchPaused, s.State.Control.Revision = updated.DispatchMode, updated.DispatchPaused, updated.AuthorityVersion
 	case "start_task":
+		profileID := payload.ExecutionProfileID
+		if profileID == "" {
+			profileID = ProjectExecutionProfileID
+		}
 		if run := s.find(payload.TaskID); run != nil {
 			if run.RunID != op.RunID {
 				return errAlreadyManaged
+			}
+			workflow, execution := s.minimalRecords(run)
+			if workflow == nil || workflow.ExecutionProfile != nil && (workflow.ExecutionProfile.ID != profileID || workflow.ExecutionProfile.Digest != payload.ExecutionProfileDigest) {
+				return nativeErr("contract_mismatch", "reserved start request differs from the fixed execution profile")
+			}
+			if err := s.useFixedRunProfile(run); err != nil {
+				return err
 			}
 			if s.worker != nil && s.active == run {
 				result.Message = "native task worker identity is persisted and running"
 				return nil
 			}
 			task := nativeTaskRecord(s.State.Tasks, payload.TaskID)
-			workflow, execution := s.minimalRecords(run)
 			attempt := s.minimalAttempt(run, run.AttemptID)
 			if task == nil || workflow == nil || execution == nil || attempt == nil {
 				return nativeErr("inconsistent_delivery", "reserved native start request cannot be recovered from center records")
@@ -430,6 +457,9 @@ func (s *Service) applyControlAction(ctx context.Context, req ControlRequest, pa
 			}
 			result.Message = "native task worker identity is persisted and running"
 			return nil
+		}
+		if err := s.selectDispatchProfile(profileID, payload.ExecutionProfileDigest); err != nil {
+			return err
 		}
 		if err := s.validateReadyTarget(ctx, payload.TaskID); err != nil {
 			return err

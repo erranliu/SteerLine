@@ -414,12 +414,15 @@ func seedFakeCapabilities(t *testing.T, c Config) {
 	if err := os.MkdirAll(c.RunDir, 0700); err != nil {
 		t.Fatal(err)
 	}
-	path := filepath.Join(c.RunDir, "fake-native-evidence.json")
 	data := []byte("fake platform fixture: " + t.Name())
+	sum := sha256.Sum256(data)
+	path := filepath.Join(c.RunDir, "execution", "v1", "evidence", hex.EncodeToString(sum[:])+".json")
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		t.Fatal(err)
+	}
 	if err := AtomicWrite(path, data); err != nil {
 		t.Fatal(err)
 	}
-	sum := sha256.Sum256(data)
 	evidence := path + "#sha256=" + hex.EncodeToString(sum[:])
 	backend, protocol := backendFor(c).Identity()
 	version := "fake-codex/1"

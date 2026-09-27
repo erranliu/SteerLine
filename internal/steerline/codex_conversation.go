@@ -547,10 +547,14 @@ func (s *Service) recordCodexHistoryCapabilities(ctx context.Context, b codexHis
 	names := []string{"turn_boundaries", "message_phase", "final_content", "stable_item_identity", "incremental_read", "history_replay", "input_wait"}
 	platformVersion := version
 	if b.Backend == BackendOrca {
-		if s.Config.Orca.Executable == "" {
+		config, configErr := s.executionConfigForWorkflowID(b.WorkflowID)
+		if configErr != nil {
+			return configErr
+		}
+		if config.Orca.Executable == "" {
 			return errors.New("Orca capability report lacks a configured version probe")
 		}
-		response, probeErr := (orcaClient{cfg: s.Config}).call(ctx, positiveDuration(s.Config.CommandTimeout, 30*time.Second), "--version")
+		response, probeErr := (orcaClient{cfg: config}).call(ctx, positiveDuration(config.CommandTimeout, 30*time.Second), "--version")
 		if probeErr != nil {
 			return fmt.Errorf("Orca capability version probe failed: %w", probeErr)
 		}

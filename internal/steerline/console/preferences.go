@@ -26,13 +26,15 @@ type FoldChoice struct {
 }
 
 type SavedAction struct {
-	Action         string    `json:"action,omitempty"`
-	TaskID         string    `json:"task_id,omitempty"`
-	DecisionID     string    `json:"decision_id,omitempty"`
-	Status         string    `json:"status"`
-	RunID          string    `json:"run_id,omitempty"`
-	TargetInstance string    `json:"target_instance,omitempty"`
-	UpdatedAt      time.Time `json:"updated_at,omitempty"`
+	Action                 string    `json:"action,omitempty"`
+	TaskID                 string    `json:"task_id,omitempty"`
+	ExecutionProfileID     string    `json:"execution_profile_id,omitempty"`
+	ExecutionProfileDigest string    `json:"execution_profile_digest,omitempty"`
+	DecisionID             string    `json:"decision_id,omitempty"`
+	Status                 string    `json:"status"`
+	RunID                  string    `json:"run_id,omitempty"`
+	TargetInstance         string    `json:"target_instance,omitempty"`
+	UpdatedAt              time.Time `json:"updated_at,omitempty"`
 }
 
 type ProjectView struct {

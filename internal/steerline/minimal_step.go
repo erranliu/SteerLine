@@ -297,11 +297,15 @@ func (s *Service) inspectMinimalWorkspace(ctx context.Context, run *Run) (Worksp
 	if run == nil || run.WorktreePath == nil || run.WorktreeBranch == nil || run.BaseCommit == nil || run.WorkspaceIntent == nil {
 		return WorkspaceEvidence{}, errors.New("minimal execution has no recorded workspace")
 	}
+	c, configErr := s.executionConfigForRun(run)
+	if configErr != nil {
+		return WorkspaceEvidence{}, configErr
+	}
 	if run.Backend == string(BackendOrca) && run.Protocol == string(ProtocolOrcaSupervised) {
-		if err := restoreSupervisedTarget(run, s.State.Attempts, targetFor(s.Config), executionRecords{root: s.Config.RunDir}); err != nil {
+		if err := restoreSupervisedTarget(run, s.State.Attempts, targetFor(c), executionRecords{root: c.RunDir}); err != nil {
 			return WorkspaceEvidence{}, err
 		}
-		records := executionRecords{root: s.Config.RunDir}
+		records := executionRecords{root: c.RunDir}
 		bindingAttemptID := run.AttemptID
 		ref, err := records.loadBinding(run.RunID, bindingAttemptID)
 		if os.IsNotExist(err) {
@@ -321,7 +325,7 @@ func (s *Service) inspectMinimalWorkspace(ctx context.Context, run *Run) (Worksp
 		if err != nil {
 			return WorkspaceEvidence{}, err
 		}
-		inspection, err := (orcaSupervisedBackend{config: s.Config}).InspectWorkspace(ctx, ref)
+		inspection, err := (orcaSupervisedBackend{config: c}).InspectWorkspace(ctx, ref)
 		if err != nil {
 			return WorkspaceEvidence{}, err
 		}
@@ -334,19 +338,19 @@ func (s *Service) inspectMinimalWorkspace(ctx context.Context, run *Run) (Worksp
 	if canonical(worktree) != canonical(run.WorkspaceIntent.Path) || *run.WorktreeBranch != run.WorkspaceIntent.Branch || *run.BaseCommit != run.WorkspaceIntent.BaseCommit {
 		return WorkspaceEvidence{}, nativeErr("authority_mismatch", "minimal workspace differs from its fixed durable intent")
 	}
-	backend := backendFor(s.Config)
+	backend := backendFor(c)
 	kind, protocol := backend.Identity()
-	if string(kind) != run.Backend || string(protocol) != run.Protocol || run.Target.ID != targetFor(s.Config).ID {
+	if string(kind) != run.Backend || string(protocol) != run.Protocol || run.Target.ID != targetFor(c).ID {
 		return WorkspaceEvidence{}, UnsupportedAdapterOperation("InspectWorkspace", "configured target differs from the native execution identity")
 	}
-	inspection, err := backend.InspectWorkspace(ctx, ExecutionRef{Version: ExecutionRecordVersion, Backend: kind, Protocol: protocol, Target: targetFor(s.Config), RunID: run.RunID, AttemptID: run.AttemptID, WorkspacePath: worktree, WorkspaceBranch: *run.WorktreeBranch, BaseCommit: *run.BaseCommit})
+	inspection, err := backend.InspectWorkspace(ctx, ExecutionRef{Version: ExecutionRecordVersion, Backend: kind, Protocol: protocol, Target: targetFor(c), RunID: run.RunID, AttemptID: run.AttemptID, WorkspacePath: worktree, WorkspaceBranch: *run.WorktreeBranch, BaseCommit: *run.BaseCommit})
 	if err != nil {
 		return WorkspaceEvidence{}, err
 	}
 	if canonical(inspection.Worktree) != canonical(worktree) || inspection.Branch != *run.WorktreeBranch || inspection.Base != *run.BaseCommit || !revisionPattern.MatchString(inspection.Head) {
 		return WorkspaceEvidence{}, nativeErr("contract_mismatch", "native target workspace inspection differs from its fixed identity")
 	}
-	return WorkspaceEvidence{Repository: s.Config.identity, Worktree: canonical(worktree), Branch: inspection.Branch, Base: inspection.Base, Head: inspection.Head, Dirty: inspection.Dirty, VerifiedAt: inspection.CheckedAt}, nil
+	return WorkspaceEvidence{Repository: c.identity, Worktree: canonical(worktree), Branch: inspection.Branch, Base: inspection.Base, Head: inspection.Head, Dirty: inspection.Dirty, VerifiedAt: inspection.CheckedAt}, nil
 }
 
 func restoreSupervisedTarget(run *Run, attempts []StepAttemptRecord, fixedTarget ExecutionTarget, records executionRecords) error {
