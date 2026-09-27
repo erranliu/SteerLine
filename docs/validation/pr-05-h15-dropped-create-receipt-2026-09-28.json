@@ -1,0 +1,21 @@
+{
+  "id": "685a654d-cdb1-43bd-ab8f-8d46a8644322",
+  "ok": true,
+  "result": {
+    "terminal": {
+      "handle": "term_6eea48fb-6f8d-48ab-90a5-856fe90a2978",
+      "tabId": "c1cbd2eb-3600-41d2-830e-9f044aec66aa",
+      "paneKey": "c1cbd2eb-3600-41d2-830e-9f044aec66aa:a196f469-8aca-49ad-9462-eb0a3352e7fa",
+      "ptyId": "5da5463b-dc70-4ca8-8fa8-3b0e61536411::C:/Users/lmas1/AppData/Local/Temp/SteerLine-pr05-H15-20260928/worktrees/4ccc890962262f6a009dc761ef1baa6c@@b5de0e65",
+      "worktreeId": "5da5463b-dc70-4ca8-8fa8-3b0e61536411::C:/Users/lmas1/AppData/Local/Temp/SteerLine-pr05-H15-20260928/worktrees/4ccc890962262f6a009dc761ef1baa6c",
+      "title": "SteerLine 4ccc8909 implement 535ec594",
+      "executionHostId": "local",
+      "incarnationId": "aa7e8aaf-9a3e-424f-bf5d-38e4a3aa80ec",
+      "hostPlatform": "win32",
+      "surface": "visible"
+    }
+  },
+  "_meta": {
+    "runtimeId": "3dd6023d-87dd-4055-bcf6-f8dd87c3c731"
+  }
+}

@@ -377,11 +377,35 @@ func (s *Service) hydrateDecisionProjection(ctx context.Context) error {
 		if record.WorkflowRunID != run.RunID || record.ExecutionID != run.ExecutionID || record.AttemptID != run.Decision.AttemptID || !bytes.Equal(bytes.TrimSpace(record.Request), bytes.TrimSpace(request)) {
 			return fmt.Errorf("decision %s conflicts with the runtime execution, attempt or question identity", run.Decision.ID)
 		}
+		recoveredAnswer := false
+		if record.Status == "answer_saved" && len(record.Answer) == 0 && run.Decision.Status == "resuming" {
+			if answer, found := s.acceptedUnknownDecisionAnswer(ctx, run, record); found {
+				record.Answer = mustJSON(answer)
+				recoveredAnswer = true
+			}
+		}
 		if run.Decision.AttemptID != run.AttemptID {
 			historical := run.WorkflowVersion == MinimalWorkflowVersion && (record.Status == "applied" || record.Status == "failed" || record.Status == "superseded")
 			activeContinuation := run.WorkflowVersion == MinimalWorkflowVersion && record.Status == "reply_accepted" && currentAttempt != nil && currentAttempt.StepID == decisionAttempt.StepID && currentAttempt.AttemptNumber == decisionAttempt.AttemptNumber+1
-			if !historical && !activeContinuation {
+			uncertainContinuation := run.WorkflowVersion == MinimalWorkflowVersion && record.Status == "answer_saved" && run.Decision.Status == "resuming" && currentAttempt != nil && currentAttempt.StepID == decisionAttempt.StepID && currentAttempt.AttemptNumber == decisionAttempt.AttemptNumber+1 && savedUnknownDecisionContinuation(run, decisionAttempt, currentAttempt, record, s.State.Operations)
+			if !historical && !activeContinuation && !uncertainContinuation {
 				return fmt.Errorf("decision %s conflicts with the runtime execution, attempt or question identity", run.Decision.ID)
+			}
+			if uncertainContinuation {
+				if recoveredAnswer {
+					if err := s.domainStore.Transact(ctx, func(tx DomainTx) error { return tx.PutDecision(record) }); err != nil {
+						return fmt.Errorf("restore accepted answer for uncertain decision %s: %w", record.DecisionID, err)
+					}
+					for i := range s.State.Decisions {
+						if s.State.Decisions[i].DecisionID == record.DecisionID {
+							s.State.Decisions[i] = record
+							break
+						}
+					}
+				}
+				// SQLite stores the accepted answer while the runtime keeps the
+				// interrupted resuming checkpoint. Preserve that uncertainty.
+				record.Status = "resuming"
 			}
 		}
 		run.Decision.Version = record.Version
@@ -404,6 +428,50 @@ func (s *Service) hydrateDecisionProjection(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+func (s *Service) acceptedUnknownDecisionAnswer(ctx context.Context, run *Run, record DecisionRecord) (DecisionAnswer, bool) {
+	if s == nil || s.domainStore == nil || run == nil || run.Decision == nil || record.Status != "answer_saved" || len(record.Answer) != 0 {
+		return DecisionAnswer{}, false
+	}
+	expected := DecisionAnswer{DecisionID: record.DecisionID, RunID: run.RunID, OptionID: run.Decision.OptionID, Note: run.Decision.Note}
+	command, err := s.domainStore.CommandByIdempotency(ctx, s.Config.identity, decisionAnswerKey(expected))
+	if err != nil || command.ProjectIdentity != s.Config.identity || command.Kind != "answer_decision" || command.TargetID != record.DecisionID || command.Status != "accepted" || len(command.Payload) == 0 {
+		return DecisionAnswer{}, false
+	}
+	var answer DecisionAnswer
+	if json.Unmarshal(command.Payload, &answer) != nil || !sameDecisionAnswer(answer, expected) || answer.AnsweredBy == "" || answer.AnsweredBy != run.Decision.AnsweredBy || validateDecisionAnswer(&run.Decision.Request, &answer) != nil {
+		return DecisionAnswer{}, false
+	}
+	return answer, true
+}
+
+// Only a saved, identity-bound continuation start with a lost outcome may
+// retain a resuming Decision across restart. This does not retry that start.
+func savedUnknownDecisionContinuation(run *Run, original, current *StepAttemptRecord, record DecisionRecord, operations []OperationRecord) bool {
+	if run == nil || run.Decision == nil || original == nil || current == nil || original.Status != "succeeded" || current.Status != "outcome_unknown" || current.OperationID == "" || run.Decision.Version != record.Version || len(record.Answer) == 0 {
+		return false
+	}
+	var savedAnswer DecisionAnswer
+	if json.Unmarshal(record.Answer, &savedAnswer) != nil {
+		return false
+	}
+	for _, operation := range operations {
+		if operation.OperationID != current.OperationID {
+			continue
+		}
+		if operation.Kind != "dispatch_step" || operation.Status != "outcome_unknown" || operation.ProjectIdentity != current.ProjectIdentity || operation.PayloadDigest != operationDigest(operation.Request) {
+			return false
+		}
+		var request nativeStepDispatchOperation
+		if json.Unmarshal(operation.Request, &request) != nil {
+			return false
+		}
+		input := request.Input
+		decision := input.StepInput.Decision
+		return input.SchemaVersion == NativeTaskInputSchema && input.ProjectID == current.ProjectIdentity && input.TaskID == run.DomainTaskID && input.WorkflowRunID == run.RunID && input.ExecutionID == run.ExecutionID && input.AttemptID == current.AttemptID && input.CurrentStep == current.StepID && input.StepInput.AttemptID == current.AttemptID && input.StepInput.StepID == current.StepID && decision != nil && decision.AttemptID == original.AttemptID && decision.ExecutionID == run.ExecutionID && sameDecisionAnswer(savedAnswer, decision.Answer) && decision.AnswerSHA256 == decisionAnswerDigest(savedAnswer) && digestValue(decision.Request) == digestValue(run.Decision.Request)
+	}
+	return false
 }
 
 func runVersionShape(r *Run) any {
