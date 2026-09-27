@@ -565,6 +565,33 @@ func TestOrcaDetachObservationIsRepeatableAndRefLocal(t *testing.T) {
 	}
 }
 
+func TestOrcaStepResultDoesNotBypassUnverifiableTerminalStall(t *testing.T) {
+	dir := t.TempDir()
+	cfg := orcaTestConfig(t, dir, "")
+	cfg.StallTimeout = "1ms"
+	state := fakeOrcaState{Handle: "unverifiable-step", Incarnation: "inc-unverifiable"}
+	if err := writeFakeOrcaState(dir, state); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("STEERLINE_FAKE_ORCA_DISCONNECTED", "1")
+	resultPath := filepath.Join(dir, "saved-result.json")
+	if err := os.WriteFile(resultPath, []byte(`{"result":"saved"}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	proc := &orcaProcess{cfg: cfg, term: orcaTerminal{Handle: state.Handle, RuntimeID: "fake-runtime", IncarnationID: state.Incarnation}}
+	worker := superviseOrcaStep(cfg, proc, resultPath)
+	select {
+	case err := <-worker.Done:
+		var backendErr *BackendError
+		if !errors.As(err, &backendErr) || backendErr.Code != BackendOutcomeUnknown || !strings.Contains(backendErr.Diagnostic, "liveness is unverifiable") {
+			t.Fatalf("unverified terminal result was not bounded as unknown: %v", err)
+		}
+	case <-time.After(8 * time.Second):
+		proc.Close()
+		t.Fatal("saved result bypassed the Orca liveness stall bound")
+	}
+}
+
 func TestSlowOrcaObservationDoesNotBlockOtherRefStop(t *testing.T) {
 	dir := t.TempDir()
 	cfg := orcaTestConfig(t, dir, "")
