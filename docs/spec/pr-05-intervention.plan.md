@@ -4,6 +4,8 @@
 
 依据：[Spec](pr-05-intervention.spec.md)。依赖：PR 2、4A、4B、4C 审核合并；从最新 origin/main 实施，复用已落地的权威存储与接口。
 
+2026-09-28 验收补充：在独立本机 Orca 1.4.209 目标上，经过真实能力认证后只丢弃一次已接受的原续跑 `terminal create` 回执。[H-A15 回执](../validation/pr-05-h15-response-loss-2026-09-28.json)显示原 Operation/Attempt/Decision 与执行槽跨服务重启保留，工作树只有原 terminal 和单次标记，无重发或 PR；由于 Orca 回执未带平台 request ID，保持 unknown 待人工核实。后续[同一 SQLite 恢复预览](../validation/pr-05-h15-recovery-preview-2026-09-28.json)已证明缺失的当前格式答案可从原 accepted command 按精确身份恢复，但这次故障没有合格的 `retry_run`/`mark_stopped` 动作。H-A6 活跃同 handle incarnation 替换与 H-A16 精确 TTY/可执行恢复仍按原门槛继续测。
+
 ## 实施步骤
 
 1. **统一答案命令。** 建立固定 decision_id、first-wins 与相同内容幂等；扩展 free-text 语义。UI/CLI 使用同一当前权威，不读取或导入旧 pending 答案文件。

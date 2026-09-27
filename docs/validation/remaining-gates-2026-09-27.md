@@ -36,13 +36,19 @@
 
 自动化故障注入 `TestNativeOrcaProjectStepsUseFixedTaskContextAndCenterDelivery` 另覆盖 Orca 终端已创建且命令已完成、但 `terminal create` 回执丢失的情况：中心持久化原 step attempt 为 `outcome_unknown`，服务重启后保持占槽、没有创建第二个终端。此为协议级 fake Orca 测试，不作为 H-A15 真机响应丢失的通过证据。
 
+## 2026-09-28 本机 Orca 显式响应丢失
+
+另建独立 clone、SQLite 与 H-A15 单次故障代理。代理未布置故障时通过真实 Orca 1.4.209 的 worktree/agent 启动、输出、精确观察、一次暂断后同 terminal/incarnation 重接、工作树检查与终端关闭取证，为其独立目标认证五项本机必需能力。隔离 Task 95013 的 12 选项 Decision 接受 `marker-01` 后，代理让原 `terminal create` 在 Orca 已返回 `ok=true` 后丢弃回执。原续跑 attempt `535ec59416ca1713b72fff6465ba4516` 的唯一终端实际运行并写一次绑定标记；中心保存 Operation=`outcome_unknown`、Decision=`resuming` 与执行槽。重开同一 SQLite 后 attempts 仍只有三条、同一工作树只有原 terminal/incarnation，没有第二次创建或 PR。由于 Orca 该回执没有 request ID，未把 unknown 自动提升为 applied。最后仅关闭精确测试终端，回读 exited/`stop_unverified`，未伪称正常完成。[原回执、标记与状态样本](pr-05-h15-response-loss-2026-09-28.json)。
+
+清理后再次启动最初暴露原格式 `resuming`/`answer_saved` 的答案记录不完整：运行投影保留答案，但 SQLite Decision row 丢失答案字节，导致身份校验拒绝。仅在原接受命令、原 Decision/Attempt、下一轮 unknown Attempt 和丢失回执 Operation 全部匹配时，中心现从同一 SQLite 的接受命令恢复缺失答案字节；不重发或标记应用。修复后的服务能启动并生成[只读恢复预览](pr-05-h15-recovery-preview-2026-09-28.json)：槽仍占用、工作树干净、旧终端身份不可用，`retry_run` 与 minimal-v1 `mark_stopped` 仍不合格。因此 H-A16 的**可执行**恢复确认尚未通过。
+
 ## 尚未取得的门槛
 
 | 门槛 | 下一步与判定边界 |
 | --- | --- |
-| #3 H-A6、H-A14、H-A15 | Git 目录授权已接入代码，95012 已取得绑定证明、Decision.applied 与同 attempt 重启对账的真机证据；95013 已验证本机 Orca 在 resuming 中终端死亡后不重派。仍缺活跃 worker incarnation 替换及显式响应丢失/无重发。95008/95009/95010 的失败 attempts 不重放；95011 的 failed 决策与 publish unknown 现场不回写成成功。 |
+| #3 H-A6、H-A14、H-A15 | 95012 已取得绑定证明、Decision.applied 与同 attempt 重启对账；旧隔离 95013 验证 resuming 中终端死亡不重派，新隔离 H-A15 又验证 Orca 实际创建原续跑终端后回执丢失、同 SQLite 重启保留原 Attempt/Operation/占槽且不重派。该回执没有平台 request ID，所以不支持自动确认应用。活跃 worker 的同 handle incarnation 替换仍缺真机证据。95008/95009/95010 的失败 attempts 不重放；95011 的 failed 决策与 publish unknown 现场不回写成成功。 |
 | #3 H-A16 与恢复确认 | 在有真实可读 turn/final 事件的 TTY 会话里核对精确轮次折叠与导航；准备符合当前 step/Operation 资格的隔离恢复对象，检查完整预览并执行确认。原 95010 无可读 session 记录，不能作为精确折叠通过证据。 |
-| #4 P10 | 本机中心 1.4.209/home 远端 1.4.210 已验证命令权限提示的观察和人工处置。剩余实际发送入口的 8 KiB 发送前拒绝，以及早期管理员/UAC 提示本身的完整捕获；记录原请求、拒绝事实和未发生的 Orca 发送。 |
+| #4 P10 | 本机中心 1.4.209/home 远端 1.4.210 已验证命令权限提示的观察和人工处置；活跃 home 问题上的 8553 字节序列化回复已在实际发送入口拒绝，并保留原问题供有界回复。剩余早期管理员/UAC 提示本身及处置的完整可见捕获。 |
 | #4 P13 | 主线已接入中心校验器，正负向受监管 verify 回执和有界修复循环已有真机证据。本轮未重测远端；其余无效结果按[现行门槛](../spec/orca-probe/remaining-gates.md)分别核对，不把纯函数测试单独当作端到端证据。 |
 
 ## home 远端 P10 探测进展

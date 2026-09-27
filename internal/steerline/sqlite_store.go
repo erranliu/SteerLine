@@ -1701,7 +1701,7 @@ func persistNormalizedWorkflow(tx DomainTx, project string, runtime Runtime, run
 			return err
 		}
 		var answer []byte
-		if run.Decision.Status == "answer_saved" || run.Decision.Status == "reply_accepted" || run.Decision.Status == "applied" || run.Decision.Status == "failed" {
+		if run.Decision.Status == "answer_saved" || run.Decision.Status == "resuming" || run.Decision.Status == "reply_accepted" || run.Decision.Status == "applied" || run.Decision.Status == "failed" {
 			value := DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, OptionID: run.Decision.OptionID, Note: run.Decision.Note, AnsweredBy: run.Decision.AnsweredBy}
 			if run.Decision.AnsweredAt != nil {
 				value.AnsweredAt = *run.Decision.AnsweredAt

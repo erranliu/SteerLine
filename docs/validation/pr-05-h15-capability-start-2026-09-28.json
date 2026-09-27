@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "captured_at": "2026-09-27T18:48:10.592621+00:00",
+  "platform": "windows/amd64",
+  "backend": "orca",
+  "protocol": "orca_terminal_v2",
+  "target_id": "orca:be2ce832a7fb1309f38608f2",
+  "agent": "codex",
+  "orca_version": "1.4.209",
+  "worktree_created": true,
+  "agent_terminal_bound": true,
+  "initial_output_observed": true,
+  "stop_status": "confirmed",
+  "git_clean": true,
+  "probe": {
+    "worktree_id": "5da5463b-dc70-4ca8-8fa8-3b0e61536411::C:/Users/lmas1/orca/workspaces/SteerLineNativeExitAcceptanceH15-20260928/h15-capability",
+    "base_head": "c3f98ee644c18761f2c60c4769f822806856e7fc",
+    "agent_terminal": "term_410b62ad-34c5-4345-8ea9-4aed740de865",
+    "agent_incarnation": "095e3bb1-4411-4215-b268-d7710eaea902",
+    "terminal_close": "ok=true,ptyKilled=true,operator_close",
+    "no_file_edits": true
+  }
+}

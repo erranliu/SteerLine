@@ -194,6 +194,66 @@ func TestHydrateDecisionRequiresExactActiveContinuation(t *testing.T) {
 	}
 }
 
+func TestHydrateDecisionPreservesBoundUnknownContinuation(t *testing.T) {
+	ctx := context.Background()
+	store := openDomainTestStore(t)
+	project, runID, decisionID := "repo:unknown-continuation", newID(), newID()
+	originalID, continuationID, operationID := newID(), newID(), newID()
+	seedNativeDecision(t, store, project, runID, newID())
+	request := DecisionRequest{Question: "Proceed?", Options: []DecisionOption{{ID: "yes", Label: "Yes"}}}
+	answer := DecisionAnswer{DecisionID: decisionID, RunID: runID, OptionID: "yes", AnsweredBy: "tester", AnsweredAt: now()}
+	if err := store.Transact(ctx, func(tx DomainTx) error {
+		if err := tx.PutStepAttempt(StepAttemptRecord{ProjectIdentity: project, AttemptID: originalID, ExecutionID: runID, StepID: "implement", AttemptNumber: 1, Status: "succeeded"}); err != nil {
+			return err
+		}
+		if err := tx.PutStepAttempt(StepAttemptRecord{ProjectIdentity: project, AttemptID: continuationID, ExecutionID: runID, StepID: "implement", AttemptNumber: 2, Status: "outcome_unknown", OperationID: operationID}); err != nil {
+			return err
+		}
+		return tx.PutDecision(DecisionRecord{ProjectIdentity: project, DecisionID: decisionID, Scope: "execution", WorkflowRunID: runID, ExecutionID: runID, AttemptID: originalID, QuestionID: decisionID, Request: mustJSON(request), Answer: mustJSON(answer), Status: "answer_saved", Version: 3})
+	}); err != nil {
+		t.Fatal(err)
+	}
+	continuation := &MinimalDecisionContinuation{Request: request, Answer: answer, AttemptID: originalID, ExecutionID: runID, AnswerSHA256: decisionAnswerDigest(answer)}
+	operationRequest := mustJSON(nativeStepDispatchOperation{Input: NativeTaskWorkerContext{SchemaVersion: NativeTaskInputSchema, ProjectID: project, TaskID: "1", WorkflowRunID: runID, ExecutionID: runID, AttemptID: continuationID, CurrentStep: "implement", StepInput: MinimalStepInput{AttemptID: continuationID, StepID: "implement", Decision: continuation}}})
+	operation := OperationRecord{ProjectIdentity: project, OperationID: operationID, Kind: "dispatch_step", Status: "outcome_unknown", Request: operationRequest, PayloadDigest: operationDigest(operationRequest)}
+	run := &Run{RunID: runID, DomainTaskID: "1", ExecutionID: runID, AttemptID: continuationID, WorkflowVersion: MinimalWorkflowVersion, ExecutionStatus: "unknown", FinishTaskStatus: "blocked", Decision: &DecisionState{ID: decisionID, AttemptID: originalID, Request: request, Status: "resuming", Version: 3}}
+	service := &Service{Config: Config{identity: project}, domainStore: store, State: Runtime{Runs: []*Run{run}, Attempts: []StepAttemptRecord{{ProjectIdentity: project, AttemptID: originalID, ExecutionID: runID, StepID: "implement", AttemptNumber: 1, Status: "succeeded"}, {ProjectIdentity: project, AttemptID: continuationID, ExecutionID: runID, StepID: "implement", AttemptNumber: 2, Status: "outcome_unknown", OperationID: operationID}}, Operations: []OperationRecord{operation}}}
+	if err := service.hydrateDecisionProjection(ctx); err != nil || run.Decision.Status != "resuming" || run.ExecutionStatus != "unknown" || run.FinishTaskStatus != "blocked" {
+		t.Fatalf("original uncertain continuation was not retained: run=%+v error=%v", run, err)
+	}
+	if err := store.Transact(ctx, func(tx DomainTx) error {
+		record := DecisionRecord{ProjectIdentity: project, DecisionID: decisionID, Scope: "execution", WorkflowRunID: runID, ExecutionID: runID, AttemptID: originalID, QuestionID: decisionID, Request: mustJSON(request), Status: "answer_saved", Version: 3}
+		if err := tx.PutDecision(record); err != nil {
+			return err
+		}
+		_, _, err := tx.EnqueueCommand(CommandRecord{ProjectIdentity: project, CommandID: newID(), Kind: "answer_decision", TargetID: decisionID, ExpectedVersion: 2, IdempotencyKey: decisionAnswerKey(answer), RequestedBy: answer.AnsweredBy, Payload: mustJSON(answer), Status: "accepted"})
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := service.hydrateDecisionProjection(ctx); err != nil || run.Decision.Status != "resuming" {
+		t.Fatalf("accepted command did not restore the original resuming answer: decision=%+v error=%v", run.Decision, err)
+	}
+	restored, err := store.Query(ctx, project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var answerRestored bool
+	for _, record := range restored.Decisions {
+		if record.DecisionID == decisionID {
+			var got DecisionAnswer
+			answerRestored = len(record.Answer) > 0 && decode(record.Answer, &got) == nil && sameDecisionAnswer(got, answer)
+		}
+	}
+	if !answerRestored {
+		t.Fatal("accepted answer was not durably restored in the current-format Decision record")
+	}
+	service.State.Operations[0].PayloadDigest = strings.Repeat("0", 64)
+	if err := service.hydrateDecisionProjection(ctx); err == nil {
+		t.Fatal("unknown continuation with a changed Operation request was accepted")
+	}
+}
+
 func TestMinimalDecisionApplicationEvidenceBindsOriginalDecisionAttemptAndAnswer(t *testing.T) {
 	oldAttempt := strings.Repeat("a", 32)
 	run := &Run{

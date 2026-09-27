@@ -4,6 +4,8 @@
 
 状态：已实现，自动化验证及限制见[验证记录](../validation/pr-05-intervention.md)。依赖：PR 2、4A、4B、4C。对应 [Plan](pr-05-intervention.plan.md)。
 
+2026-09-28 补充：[H-A15 本机 Orca 显式回执丢失](../validation/pr-05-h15-response-loss-2026-09-28.json)已证明原续跑 terminal 实际启动后中心保存 unknown Operation/Decision 与执行槽，同 SQLite 重启不重派。Orca 该 terminal-create 回执无 request ID，未把未知结果自动提升为已应用；H-A6 同 handle incarnation 替换和 H-A16 精确 TTY 折叠仍分别开放。
+
 后续状态更新：[#12 旧执行路径移除](beads-path-removal.spec.md)退役 whole-run `accept_result` 与旧的原 terminal reply continuation。下文对这些动作的字段、流程和历史验收描述记录 PR 5 当时的设计，不是当前可用接口；minimal-v1 答案经中心核验后在同一 workflow/execution 中创建固定步骤的新 attempt。
 
 ## 目标
