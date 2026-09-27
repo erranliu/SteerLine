@@ -1,0 +1,54 @@
+{
+  "schema_version": "steerline.orca-probe.observation.v1",
+  "captured_at": "2026-09-27",
+  "operation": "p10_host_permission_observation",
+  "evidence_class": "real_remote",
+  "versions": {
+    "center_orca": "1.4.209",
+    "home_orca": "1.4.210",
+    "home_codex_cli": "0.157.1"
+  },
+  "target": {
+    "repository": "isolated SteerlineTest",
+    "new_worktree": true,
+    "new_task_and_dispatch": true,
+    "existing_terminal_touched": false,
+    "pr_created": false
+  },
+  "initial_attempt": {
+    "input_stage": "input_accepted",
+    "turn_start_observed": false,
+    "terminal_permissions": "YOLO mode",
+    "agent_wait": null,
+    "cleanup": "operator-authorized exact worker-stop; execution-host exit verified"
+  },
+  "retry_attempt": {
+    "same_task": true,
+    "new_dispatch": true,
+    "same_isolated_worktree": true,
+    "codex_launch": "codex -s workspace-write -a on-request",
+    "turn_started_in_terminal": true,
+    "requested_action": "read-only whoami with explicit require_escalated",
+    "approval_prompt_visible": true,
+    "approval_prompt_unanswered_at_initial_capture": true,
+    "operator_chose": "one-time approval",
+    "read_only_command_completed": true,
+    "agent_wait_cleared_after_approval": true,
+    "worker_done": "not_delivered: Codex workspace-write could not read Orca runtime metadata",
+    "settlement": "exact worker-stop after terminal final turn; execution-host exit verified",
+    "worker_show": {
+      "observation_status": "live",
+      "exact_worker": true,
+      "agent_wait": {
+        "source": "prompt-text",
+        "reason": "agent-interactive-prompt"
+      }
+    }
+  },
+  "verdict": {
+    "host_prompt_observation": "verified",
+    "human_handling": "verified on the exact terminal",
+    "serialized_8k_send_guard": "not_tested",
+    "p10": "not_tested"
+  }
+}

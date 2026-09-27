@@ -388,7 +388,13 @@ func waitServiceCommand(ctx context.Context, c steerline.Config, commandID strin
 	defer cancel()
 	ticker := time.NewTicker(150 * time.Millisecond)
 	defer ticker.Stop()
+	unconfirmed := func() (steerline.CommandRecord, error) {
+		return steerline.CommandRecord{}, fmt.Errorf("command %s remains unconfirmed; query this same command ID later", commandID)
+	}
 	for {
+		if waitCtx.Err() != nil {
+			return unconfirmed()
+		}
 		reader, openErr := steerline.OpenSQLiteReader(filepath.Join(c.RunDir, "steerline.db"))
 		if openErr != nil {
 			return steerline.CommandRecord{}, openErr
@@ -398,12 +404,15 @@ func waitServiceCommand(ctx context.Context, c steerline.Config, commandID strin
 		if readErr == nil && (current.Status == "accepted" || current.Status == "rejected" || current.Status == "failed" || current.Status == "indeterminate") {
 			return current, nil
 		}
+		if waitCtx.Err() != nil {
+			return unconfirmed()
+		}
 		if readErr != nil && !errors.Is(readErr, sql.ErrNoRows) && !os.IsNotExist(readErr) {
 			return steerline.CommandRecord{}, readErr
 		}
 		select {
 		case <-waitCtx.Done():
-			return steerline.CommandRecord{}, fmt.Errorf("command %s remains unconfirmed; query this same command ID later", commandID)
+			return unconfirmed()
 		case <-ticker.C:
 		}
 	}
