@@ -16,8 +16,8 @@
 
 | 任务 ID | 任务名称 | 目标标识 | 剩余目标 | 依赖 | 执行规格 |
 | --- | --- | --- | --- | --- | --- |
-| 4 | Orca 远程协议验证 | `REMOTE-PROTOCOL` | P10 宿主命令权限提示的观察与人工处置已在 home 真机验证；仍需实际发送入口的 8 KiB 发送前拒绝及早期管理员/UAC 提示的完整捕获。P13 的中心正负向 verify 回执已有真机证据，完整协议验收仍开放 | 复用真实远端证据；不测平台最大载荷；仅支持当前明确验收的版本族 | [Spec](../spec/01-orca-remote-protocol.md) · [Plan](../spec/01-orca-remote-protocol.plan.md) · [剩余门槛](../spec/orca-probe/remaining-gates.md) · [真机样本](../spec/orca-probe/samples/p10-host-permission-2026-09-27.json) |
-| 6 | 分阶段远程闭环 | `REMOTE-WORKFLOW` | [远端原生任务 103](../validation/spec03-native-dag-2026-09-27.md) 已完成五步、真实合并并由中心关闭，后继 104 解锁；当前 1.4.209/1.4.210 目标的六项必需受监管能力已有真机认证。生产启用仍待剩余权限、消息限额、Windows 服务关窗和完整故障矩阵验收 | 复用 `#3` 决策接口、`#5` 中心模型及 `#4` 已测协议；远程取消不可用 | [Spec](../spec/03-remote-execution-and-viewer.md) · [Plan](../spec/03-remote-execution-and-viewer.plan.md) · [验收记录](../validation/spec03-native-dag-2026-09-27.md) |
+| 4 | Orca 远程协议验证 | `REMOTE-PROTOCOL` | P10 宿主命令权限提示的观察与人工处置、活跃 home 问题上的 8 KiB 序列化回复发送前拒绝均已真机验证；仍缺早期管理员/UAC 设置提示的完整捕获。P13 的中心正负向 verify 回执已有真机证据，完整协议验收仍开放 | 复用真实远端证据；不测平台最大载荷；仅支持当前明确验收的版本族 | [Spec](../spec/01-orca-remote-protocol.md) · [Plan](../spec/01-orca-remote-protocol.plan.md) · [剩余门槛](../spec/orca-probe/remaining-gates.md) · [消息门槛样本](../spec/orca-probe/samples/p10-home-live-reply-size-2026-09-27.json) |
+| 6 | 分阶段远程闭环 | `REMOTE-WORKFLOW` | [远端原生任务 103](../validation/spec03-native-dag-2026-09-27.md) 已完成五步、真实合并并由中心关闭，后继 104 解锁；当前 1.4.209/1.4.210 目标的六项必需受监管能力已有真机认证。活跃 home 问题回复限额与[可见服务关窗后的原 prepare 恢复](../spec/orca-probe/samples/spec03-native-r07-visible-window-2026-09-27.json)已通过；另一次[协调终端丢失](../spec/orca-probe/samples/spec03-native-review-coordinator-loss-2026-09-27.json)使后续 review 受阻。生产启用仍待剩余权限、可见 viewer 时延与故障矩阵验收 | 复用 `#3` 决策接口、`#5` 中心模型及 `#4` 已测协议；远程取消不可用 | [Spec](../spec/03-remote-execution-and-viewer.md) · [Plan](../spec/03-remote-execution-and-viewer.plan.md) · [验收记录](../validation/spec03-native-dag-2026-09-27.md) |
 
 受限远程适配器已接入中心 verify 校验器，P13 正负向受监管回执见[剩余门槛](../spec/orca-probe/remaining-gates.md)。本轮新增的原生任务闭环与本机 `#3` 验收分别记录；远程闭环继续复用已有执行后端、会话读模型、决策与恢复命令及 SQLite 中心权威。
 

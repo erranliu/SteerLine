@@ -13,6 +13,12 @@
 5. 复用 QueryService/CommandService 与会话读模型，在同一 viewer 展示阶段、缺口、待决策和真实应用证明。Windows 关闭服务窗口只结束中心监督；用户重新打开后按持久身份恢复消息和派发判断，不把远端 worker 误判已停。沿中心原生 Task 丢弃状态停止新步骤/结项，保留仍活跃的远端身份与人工清理提示，不把丢弃当成远程取消能力。
 6. 核验真实 PR 身份、head/merge 和结项事实，统一走中心固定 DAG 交付事务。预检拒绝 Beads 来源及旧 start/finish/completion 入口，验证响应丢失后的原操作对账。
 
+## 2026-09-27 可见窗口与消息限额复测
+
+- [P10 活跃 home 问题](orca-probe/samples/p10-home-live-reply-size-2026-09-27.json)通过实际 `replyQuestion` 入口拒绝 8553 字节序列化答案，原问题保持未答；随后同一问题收到正常答案，worker 回报原文并精确 release。管理员/UAC 设置提示仍待完整捕获。
+- [Windows 可见服务关窗](orca-probe/samples/spec03-native-r07-visible-window-2026-09-27.json)在原 prepare Dispatch 存活时真实关闭窗口，发现“已保存启动回执和 binding、尚未提交 Run 投影”无法自动重接。修复后从同一 SQLite 的已确认 Operation、不可变 binding 和原 Dispatch 精确对账，prepare 转成功并派出唯一 implement。该任务又通过 verify；[后续 review 与协调终端丢失](orca-probe/samples/spec03-native-review-coordinator-loss-2026-09-27.json)使它阻断，无 PR。此故障不作为原生完整闭环的新通过样本。
+- [可见 viewer](orca-probe/samples/spec03-visible-viewer-native-2026-09-27.png)呈现远端任务且退出后服务继续运行；[刷新测量](orca-probe/samples/spec03-visible-viewer-latency-2026-09-27.json)仍见旧 Attempt，未证明 2 秒显示目标。后续用前台窗口与中心消息时间重新验收，再决定是否需要修正刷新循环。
+
 ## 当前执行记录（2026-09-25）
 
 - 本地完成：minimal-v1 verify 的每项必需检查现在要求实际命令、脚本版本、退出码、passed 值、证据引用及匹配的 commit；缺项、结论矛盾或 commit 漂移会被中心状态机拒绝。viewer 的 Summary、Workspace、Result 视图读取现有 workflow/attempt/target/workspace 记录。Orca 版本族 helper 按用户批准的 `major.minor` 键比较，原始完整版本仍保留在能力证据中。

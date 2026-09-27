@@ -770,12 +770,13 @@ func (b orcaSupervisedBackend) StartMinimalStep(ctx context.Context, task TaskRe
 // never creates a Run, worker, terminal, or worktree during service recovery.
 func (s *Service) reattachSupervisedWorker(run *Run) error {
 	uncertainStart := run != nil && run.ExecutionStatus == "unknown" && run.FinishTaskStatus == "blocked" && run.Process != nil
-	if s.worker != nil || run == nil || run.Process == nil || run.FinishTaskStatus != "pending" && run.FinishTaskStatus != "waiting_decision" && !uncertainStart {
+	unboundStart := run != nil && run.Process == nil && (run.ExecutionStatus == "running" || run.ExecutionStatus == "unknown") && (run.FinishTaskStatus == "pending" || run.FinishTaskStatus == "blocked")
+	if s.worker != nil || run == nil || run.Process == nil && !unboundStart || run.FinishTaskStatus != "pending" && run.FinishTaskStatus != "waiting_decision" && !uncertainStart && !unboundStart {
 		return errors.New("supervised recovery requires one active, bound execution")
 	}
 	workflow, execution := s.minimalRecords(run)
 	attempt := s.minimalAttempt(run, run.AttemptID)
-	if workflow == nil || execution == nil || attempt == nil || attempt.ResultPath == "" || attempt.OperationID == "" || attempt.Status != "dispatched" && attempt.Status != "running" && attempt.Status != "waiting_decision" && !(uncertainStart && attempt.Status == "outcome_unknown") {
+	if workflow == nil || execution == nil || attempt == nil || attempt.ResultPath == "" || attempt.OperationID == "" || attempt.Status != "dispatched" && attempt.Status != "running" && attempt.Status != "waiting_decision" && !(uncertainStart && attempt.Status == "outcome_unknown") && !(unboundStart && attempt.Status == "dispatching") {
 		return errors.New("supervised recovery lacks its current workflow, attempt, or result path")
 	}
 	var operation *OperationRecord
@@ -799,8 +800,17 @@ func (s *Service) reattachSupervisedWorker(run *Run) error {
 	if err != nil {
 		return err
 	}
-	if ref.Protocol != ProtocolOrcaSupervised || ref.External != *run.Process || ref.Target != run.Target || ref.AttemptID != attempt.AttemptID {
+	if ref.Protocol != ProtocolOrcaSupervised || ref.RunID != run.RunID || ref.AttemptID != attempt.AttemptID || !sameSupervisedBaseTarget(ref.Target, targetFor(s.Config)) || !unboundStart && (ref.External != *run.Process || ref.Target != run.Target) {
 		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "supervised recovery binding differs from the original Run and attempt"}
+	}
+	if unboundStart {
+		var receiptIdentity ProcessIdentity
+		if err := validateExecutionRef(ref); err != nil {
+			return err
+		}
+		if operation.Status != "confirmed" || json.Unmarshal(operation.Receipt, &receiptIdentity) != nil || receiptIdentity != ref.External || !sameSupervisedBaseTarget(ref.Target, run.Target) || savedSupervisedTargetConflicts(run.Target, ref.Target) || ref.Target.BaseRevision != deref(run.BaseCommit) || ref.WorkspacePath == "" || canonical(ref.WorkspacePath) != canonical(deref(run.WorktreePath)) || ref.WorkspaceBranch != deref(run.WorktreeBranch) || ref.External.OrchestrationRun != ref.Target.OrchestrationRun || ref.External.Dispatch != ref.Target.Dispatch || ref.External.Task != ref.Target.ExternalTask {
+			return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "confirmed supervised start receipt does not match its saved binding and original workspace"}
+		}
 	}
 	backend := orcaSupervisedBackend{config: s.Config}
 	if operation.Status == "outcome_unknown" {
@@ -816,8 +826,28 @@ func (s *Service) reattachSupervisedWorker(run *Run) error {
 	if err != nil {
 		return err
 	}
+	if observation.Identity != ref.External {
+		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "original supervised Dispatch changed terminal, incarnation, or runtime during recovery"}
+	}
 	if observation.Liveness != "live" && observation.Liveness != "exited" {
 		return &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "original supervised Dispatch liveness remains unverifiable"}
+	}
+	if unboundStart {
+		if attempt.Status == "dispatching" {
+			if err := TransitionStepAttempt(attempt, "dispatched"); err != nil {
+				return err
+			}
+		}
+		run.Target, run.Process = ref.Target, &observation.Identity
+		run.ExecutionStatus, run.FinishTaskStatus, run.EndedAt, run.Error = "pending", "pending", nil, nil
+		workflow.Phase, workflow.UpdatedAt = "executing", now()
+		execution.Target, execution.Process, execution.Status, execution.CurrentStep, execution.UpdatedAt = ref.Target, &observation.Identity, "active", attempt.StepID, now()
+		attempt.ExternalBinding = ref.Target
+		s.State.CurrentTask, s.State.SlotOccupied = ptr(run.TaskID), true
+		s.note(run, "steer", "step_start", "reconciled", "confirmed supervised start recovered from its saved binding after service-window exit", attempt.AttemptID, map[string]any{"dispatch_id": ref.External.Dispatch, "step": attempt.StepID})
+		if err := s.save(); err != nil {
+			return err
+		}
 	}
 	if uncertainStart {
 		if err := TransitionStepAttempt(attempt, "dispatched"); err != nil {
@@ -836,7 +866,7 @@ func (s *Service) reattachSupervisedWorker(run *Run) error {
 			return err
 		}
 	}
-	if attempt.Status == "dispatched" && observation.DispatchState == "dispatched" && observation.Liveness == "live" {
+	if !unboundStart && attempt.Status == "dispatched" && observation.DispatchState == "dispatched" && observation.Liveness == "live" {
 		if _, err := backend.submitAcceptedPrompt(context.Background(), started, observation, ref, attempt.StepID); err != nil {
 			return err
 		}
@@ -1875,6 +1905,15 @@ func validateSupervisedRef(c Config, ref ExecutionRef) error {
 func sameSupervisedBaseTarget(a, b ExecutionTarget) bool {
 	return a.ID != "" && a.ID == b.ID && a.ConnectionID == b.ConnectionID && a.ExternalRuntime == b.ExternalRuntime
 }
+
+func savedSupervisedTargetConflicts(saved, bound ExecutionTarget) bool {
+	return saved.OrchestrationRun != "" && saved.OrchestrationRun != bound.OrchestrationRun ||
+		saved.ExternalTask != "" && saved.ExternalTask != bound.ExternalTask ||
+		saved.Dispatch != "" && saved.Dispatch != bound.Dispatch ||
+		saved.ExecutionHost != "" && saved.ExecutionHost != bound.ExecutionHost ||
+		saved.WorktreeID != "" && saved.WorktreeID != bound.WorktreeID
+}
+
 func (b orcaSupervisedBackend) ReconcileOperation(ctx context.Context, op Operation) (Operation, error) {
 	return reconcileRecordedOperation(ctx, b.config.RunDir, op)
 }

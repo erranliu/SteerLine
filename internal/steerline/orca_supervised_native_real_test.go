@@ -293,6 +293,18 @@ func TestSupervisedOrcaRealNativeTaskLifecycle(t *testing.T) {
 		}
 		lock.Close()
 	}
+	if os.Getenv("STEERLINE_REAL_SUPERVISED_NATIVE_SETUP_ONLY") == "1" {
+		configPath := filepath.Join(root, "acceptance-config.json")
+		encoded, encodeErr := json.MarshalIndent(c, "", "  ")
+		if encodeErr != nil {
+			t.Fatal(encodeErr)
+		}
+		if err = AtomicWrite(configPath, append(encoded, '\n')); err != nil {
+			t.Fatal(err)
+		}
+		t.Logf("isolated native acceptance config ready: %s", configPath)
+		return
+	}
 	service, err := NewService(c)
 	if err != nil {
 		t.Fatal(err)

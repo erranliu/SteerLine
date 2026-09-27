@@ -1,0 +1,20 @@
+{
+  "kind": "spec03-visible-viewer-latency-negative-observation",
+  "captured_at": "2026-09-27T14:55:00Z",
+  "scope": "isolated SteerlineTest native task 91024, viewer in a visible Windows Terminal window",
+  "workflow_run_id": "0ab50c42c8b26c09e24ad6e37fa4361b",
+  "center_verify_succeeded_at": "2026-09-27T14:43:34.8840234Z",
+  "visible_capture_created_at": "2026-09-27T14:43:37.0028000Z",
+  "capture_after_center_ms": 2118.7766,
+  "screenshot": "spec03-visible-viewer-stale-verify-2026-09-27.png",
+  "screenshot_sha256": "f741bb2b6352f17b41caeadb2a0b0b78a29a8b7ec44e8b8126dc8bd7d298a011",
+  "observed_display": "The visible window still showed the earlier implement Attempt 3f5d0b6c0823e28e45c19bacc84ed36e after verify had succeeded and review had been planned.",
+  "direct_source_check": {
+    "at": "2026-09-27T14:54:31.0901318Z",
+    "runtime_revision": 26003,
+    "run_attempt_id": "c1e8f27eda68bfc9b2daab5fbeccb470",
+    "run_status": "unknown",
+    "result": "FileQuerySource.ReadProject returned the current run while the previously open TUI remained stale."
+  },
+  "conclusion": "The visible two-second display target is not verified by this run. The snapshot and source timings do not prove a specific root cause; a focused foreground TUI refresh probe is still required."
+}

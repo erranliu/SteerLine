@@ -1,0 +1,53 @@
+{
+  "kind": "spec01-p10-live-supervised-reply-size",
+  "captured_at": "2026-09-27T15:37:00Z",
+  "scope": "isolated SteerlineTest remote Dispatches; no repository files changed",
+  "center_orca_version": "1.4.209",
+  "home_orca_version": "1.4.210",
+  "center_runtime_id": "3dd6023d-87dd-4055-bcf6-f8dd87c3c731",
+  "home_runtime_id": "a8aa72a1-af21-4b48-85e2-231d527b2e38",
+  "invalid_initial_probe": {
+    "run_id": "run_57d1aa54ebc0",
+    "dispatch_id": "ctx_136ea2a5c214",
+    "question_id": "relay_244c88549230",
+    "answer_shape": "4200 newline characters only",
+    "serialized_reply_bytes": 8552,
+    "result": "BackendRejected by the earlier empty-answer guard; this does not prove the 8 KiB size guard",
+    "settlement": "bounded reply accepted, worker_done succeeded, Dispatch released"
+  },
+  "valid_nonblank_probe": {
+    "run_id": "run_5620fbc4f60a",
+    "task_id": "task_bb542007e5cb",
+    "dispatch_id": "ctx_cab458fc8f88",
+    "coordinator_terminal": "term_a145f325-8694-41db-a47c-3db07702c1d3",
+    "question_id": "relay_869407bc6fa3",
+    "question_delivery_id": "delivery_1a241a3fd527",
+    "question": "Should the nonblank P10 size probe return marker SPEC03_P10_SIZE_OK?",
+    "oversize_probe": {
+      "entry": "orcaSupervisedBackend.replyQuestion",
+      "answer_shape": "one nonwhitespace character followed by 4200 newline characters",
+      "serialized_reply_bytes": 8553,
+      "configured_message_bound_bytes": 8192,
+      "result": "BackendRejected with diagnostic supervised reply serialized message exceeds the conservative 8 KiB pre-send bound",
+      "post_probe_delivery": "the same question and delivery replayed unanswered"
+    },
+    "bounded_reply": {
+      "body": "SPEC03_P10_SIZE_OK",
+      "reply_request_id": "04ceae6c-a0bc-4053-955c-4acd3b3dc513",
+      "result": "same entry accepted exact question/run/dispatch response"
+    },
+    "remote_worker_done": {
+      "message_id": "relay_a8da7ffda1d5",
+      "delivery_id": "delivery_e48a6b14aa6d",
+      "outcome": "succeeded",
+      "reported_answer": "SPEC03_P10_SIZE_OK"
+    },
+    "settlement": {
+      "state": "released",
+      "terminal": "exited",
+      "archive": "transcript captured",
+      "both_deliveries_acknowledged": true
+    }
+  },
+  "limits": "This proves the SteerLine reply entry on a live home question; it does not prove the native center Decision applied state or capture the Windows administrator/UAC setup prompt."
+}
