@@ -83,4 +83,6 @@ The agreed production scope compares Orca by `major.minor`: the 1.4.209 center a
 
 The [2026-09-27 home prompt probe](samples/p10-host-permission-2026-09-27.json) observed an exact `agentWait` host approval and its one-time manual resolution on the 1.4.209/1.4.210 pair. The Codex `workspace-write` sandbox could not read Orca runtime metadata to submit `worker_done`; both test Dispatches were stopped. P10 still requires the adapter's 8 KiB pre-send rejection, and the earlier administrator/UAC setup prompt still lacks a full capture.
 
+The later [native DAG run](../../validation/spec03-native-dag-2026-09-27.md) delivered task 103 through a real merged PR and unlocked 104. Its [current-target capability report](samples/spec03-native-dag-capability-2026-09-27.json), [same-attempt recovery sample](samples/spec03-native-dag-recovery-2026-09-27.json), and [remote computer-use permission sample](samples/spec03-native-host-permission-2026-09-27.json) preserve their separate evidence boundaries.
+
 The [remaining gates](remaining-gates.md) list the exact fault scenarios and evidence needed before Spec 01 can be accepted for Spec 03.

@@ -1,0 +1,39 @@
+{
+  "base_commit": "2e5abd21d02a3089ee14a56a5c89796dea8991f6",
+  "candidate_head": "e28f0388d416d1b6c199ddcf173a44a7d1abbe13",
+  "capability_report_confined_to_temp_state": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\s3dag27g\\steerline-home\\state\\native-project-9ddbb731d49d",
+  "captured_at": "2026-09-27T12:17:29.0935932Z",
+  "configured_codex_cli_version_pin": "",
+  "current_target_capability_evidence": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\s3dag27g\\steerline-home\\state\\native-project-9ddbb731d49d\\execution\\v1\\evidence\\4e6e3ae1fba64d5c7c5cc0e4ff50b0062fe13f4feb9bc7cf46a32489866b674e.json#sha256=4e6e3ae1fba64d5c7c5cc0e4ff50b0062fe13f4feb9bc7cf46a32489866b674e",
+  "dag_successor_dependency_ready": true,
+  "dag_successor_status": "open",
+  "dag_successor_task_id": "104",
+  "delivery": {
+    "project_id": "c:\\users\\lmas1\\appdata\\local\\temp\\s3dag27g\\native-project\\.git",
+    "task_id": "103",
+    "selected_workflow_run_id": "62d35b05ae5e24f9321619db60f9391d",
+    "pr_instance": "https://github.com",
+    "pr_repository": "erranliu/SteerlineTest",
+    "pr_number": 16,
+    "pr_url": "https://github.com/erranliu/SteerlineTest/pull/16",
+    "merge_commit": "e7af046e6b04600fd7dee656afec8699fc75237f",
+    "merged_at": "2026-09-27T12:03:17Z",
+    "recorded_at": "2026-09-27T12:03:21.969944Z",
+    "evidence": {
+      "pr_instance": "https://github.com",
+      "url": "https://github.com/erranliu/SteerlineTest/pull/16",
+      "repository": "erranliu/SteerlineTest",
+      "number": 16,
+      "base_branch": "main",
+      "state": "merged",
+      "merged": true,
+      "merged_at": "2026-09-27T12:03:17Z",
+      "merge_commit": "e7af046e6b04600fd7dee656afec8699fc75237f"
+    }
+  },
+  "native_task_id": "103",
+  "project_id": "c:\\users\\lmas1\\appdata\\local\\temp\\s3dag27g\\native-project\\.git",
+  "remote_codex_cli_version": "codex-cli 0.157.1",
+  "task_status": "closed",
+  "test_pr_url": "https://github.com/erranliu/SteerlineTest/pull/16"
+}
