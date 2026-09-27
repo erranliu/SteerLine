@@ -349,7 +349,7 @@ func submitRecoveryCommand(ctx context.Context, c steerline.Config, command, run
 	switch command {
 	case "retry":
 		kind = "retry_run"
-		body = map[string]any{"confirmed_process_stopped": confirmed}
+		body = map[string]any{"confirmed_process_stopped": confirmed, "confirmation_basis": strings.TrimSpace(reason)}
 	case "mark-stopped":
 		kind = "mark_stopped"
 		body = map[string]any{"confirmed_process_stopped": true, "confirmation_basis": strings.TrimSpace(reason)}

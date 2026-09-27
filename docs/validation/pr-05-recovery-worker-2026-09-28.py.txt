@@ -1,0 +1,48 @@
+import datetime
+import json
+import pathlib
+import subprocess
+import sys
+
+
+task = json.load(sys.stdin)
+step = task["step_input"]
+if step["step_id"] != "implement":
+    raise SystemExit("recovery fixture only handles implement")
+
+root = pathlib.Path(__file__).parent
+(root / f"recovery-worker-{task['attempt_id']}.json").write_text(
+    json.dumps({
+        "workflow_run_id": task["workflow_run_id"],
+        "execution_id": task["execution_id"],
+        "attempt_id": task["attempt_id"],
+        "started_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    }), encoding="utf-8"
+)
+workspace = dict(step["workspace"])
+worktree = pathlib.Path(workspace["worktree"])
+workspace["head"] = subprocess.check_output(["git", "-C", str(worktree), "rev-parse", "HEAD"], text=True).strip()
+workspace["dirty"] = bool(subprocess.check_output(["git", "-C", str(worktree), "status", "--porcelain"], text=True).strip())
+workspace["verified_at"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+if workspace["dirty"] or workspace["head"] != step["input_revision"]:
+    raise SystemExit("recovery fixture requires clean fixed input revision")
+
+result = {
+    "step_id": "implement",
+    "succeeded": False,
+    "result_id": "implement:recovery-fixture-" + task["attempt_id"],
+    "input_revision": step["input_revision"],
+    "workspace": workspace,
+    "failure_kind": "fixture_failure",
+    "prerequisite_result_ids": step["prerequisite_result_ids"],
+}
+envelope = {
+    "schema_version": 1,
+    "project_identity": task["project_id"],
+    "task_id": task["task_id"],
+    "workflow_run_id": task["workflow_run_id"],
+    "execution_id": task["execution_id"],
+    "attempt_id": task["attempt_id"],
+    "result": result,
+}
+print(json.dumps(envelope, ensure_ascii=False, separators=(",", ":")))

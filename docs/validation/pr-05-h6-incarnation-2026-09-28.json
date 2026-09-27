@@ -9,7 +9,7 @@
     "pr-05-h6-incarnation-capability-workspace-2026-09-28.json"
   ],
   "fault_proxy": {
-    "source": "pr-05-h6-incarnation-proxy-2026-09-28.go",
+    "source": "pr-05-h6-incarnation-proxy-2026-09-28.go.txt",
     "source_sha256": "915694a0b571945e0905dfcec2b440d2908c85e88a93ac03420bf85c394e9521",
     "original_receipt": "pr-05-h6-incarnation-original-show-2026-09-28.json",
     "mutated_receipt": "pr-05-h6-incarnation-mutated-show-2026-09-28.json",

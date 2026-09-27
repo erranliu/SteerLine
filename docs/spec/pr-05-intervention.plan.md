@@ -6,6 +6,8 @@
 
 2026-09-28 验收补充：在独立本机 Orca 1.4.209 目标上，经过真实能力认证后只丢弃一次已接受的原续跑 `terminal create` 回执。[H-A15 回执](../validation/pr-05-h15-response-loss-2026-09-28.json)显示原 Operation/Attempt/Decision 与执行槽跨服务重启保留，工作树只有原 terminal 和单次标记，无重发或 PR；由于 Orca 回执未带平台 request ID，保持 unknown 待人工核实。后续[同一 SQLite 恢复预览](../validation/pr-05-h15-recovery-preview-2026-09-28.json)已证明缺失的当前格式答案可从原 accepted command 按精确身份恢复，但这次故障没有合格的 `retry_run`/`mark_stopped` 动作。H-A6 活跃同 handle incarnation 替换与 H-A16 精确 TTY/可执行恢复仍按原门槛继续测。
 
+2026-09-28 后续：[独立合格恢复现场](../validation/pr-05-recovery-confirmation-2026-09-28.json)已完成只读预览、原终端停止核实、确认命令、同 Run/工作树的新 Attempt 和后续同库状态核对。对再次确定性失败的步骤，中心现在保留已结算 `failed/blocked` 并继续在线；CLI 将可选确认依据写入 accepted `retry_run` 命令。此补充更新上段当时尚未取得可执行恢复对象的结论，H-A16 精确 TTY 折叠仍未通过。
+
 ## 实施步骤
 
 1. **统一答案命令。** 建立固定 decision_id、first-wins 与相同内容幂等；扩展 free-text 语义。UI/CLI 使用同一当前权威，不读取或导入旧 pending 答案文件。

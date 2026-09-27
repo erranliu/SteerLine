@@ -746,11 +746,11 @@ func TestNativeLocalProjectStepsDeliverTaskAndReleaseSuccessor(t *testing.T) {
 	failedWorker := s.worker
 	failedRunID := s.find("101").RunID
 	failedExecutionID := s.find("101").ExecutionID
-	if finishErr := s.finished(<-failedWorker.Done); finishErr == nil {
-		t.Fatal("injected implement failure did not settle as failed")
+	if finishErr := s.finishWorkerInLoop(<-failedWorker.Done); finishErr != nil {
+		t.Fatalf("settled implement failure stopped the service loop: %v", finishErr)
 	}
 	failedAttemptID := s.find("101").AttemptID
-	if s.find("101").ExecutionStatus != "failed" || s.find("101").FinishTaskStatus != "blocked" || !strings.Contains(deref(s.find("101").Error), "exit status 38") {
+	if s.worker != nil || s.State.SlotOccupied || s.find("101").ExecutionStatus != "failed" || s.find("101").FinishTaskStatus != "blocked" || !strings.Contains(deref(s.find("101").Error), "exit status 38") {
 		t.Fatalf("failed native step did not settle with its execution blocked: %+v", s.find("101"))
 	}
 	authority, err = s.domainStore.nativeAuthority(context.Background(), c.Identity())
