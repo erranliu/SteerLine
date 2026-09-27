@@ -59,6 +59,11 @@ type Config struct {
 	configDigest       string
 }
 
+// LoadedConfigDigest identifies the exact config file bytes used to build this
+// value. A console can compare it with a running service before presenting its
+// execution settings as the service's current settings.
+func (c Config) LoadedConfigDigest() string { return c.configDigest }
+
 type OrcaConfig struct {
 	Executable   string                `json:"executable"`
 	Args         []string              `json:"args"`

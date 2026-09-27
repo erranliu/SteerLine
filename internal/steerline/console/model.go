@@ -2323,6 +2323,10 @@ func (m Model) startSelected() (tea.Model, tea.Cmd) {
 		m.status = "不能开始：" + reason
 		return m, nil
 	}
+	if executionConfigMismatch(state.ref, state.snapshot) {
+		m.status = "不能开始：" + executionConfigChanged
+		return m, nil
+	}
 	runtimeState := state.snapshot.Connection.Snapshot.Runtime
 	if runtimeState == nil {
 		m.status = "不能开始：缺少当前服务控制快照"
@@ -2363,6 +2367,10 @@ func (m Model) toggleMode() (tea.Model, tea.Cmd) {
 		mode = "auto"
 	}
 	if mode == "auto" {
+		if executionConfigMismatch(m.projects[m.selected].ref, m.projects[m.selected].snapshot) {
+			m.status = "不能切换自动派发：" + executionConfigChanged
+			return m, nil
+		}
 		m.status = "确认前请留意：切到 auto 后服务可能领取 Ready 任务"
 	}
 	return m.createAction("set_dispatch_mode", mode)
@@ -2374,6 +2382,10 @@ func (m Model) togglePause() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	if runtimeState.Control.DispatchPaused {
+		if runtimeState.Control.DispatchMode == "auto" && executionConfigMismatch(m.projects[m.selected].ref, m.projects[m.selected].snapshot) {
+			m.status = "不能恢复自动派发：" + executionConfigChanged
+			return m, nil
+		}
 		return m.createAction("resume_dispatch", "")
 	}
 	return m.createAction("pause_dispatch", "")
@@ -2692,6 +2704,9 @@ func candidateActionReason(ref ProjectRef, snapshot ProjectSnapshot, now time.Ti
 	valid, reason := candidateFreshness(ref, snapshot, now)
 	if !valid {
 		return reason
+	}
+	if executionConfigMismatch(ref, snapshot) {
+		return executionConfigChanged
 	}
 	if ref.Conflict != "" {
 		return ref.Conflict
