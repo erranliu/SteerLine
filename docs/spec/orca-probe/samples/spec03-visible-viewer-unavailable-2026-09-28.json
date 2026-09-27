@@ -1,0 +1,26 @@
+{
+  "kind": "spec03-visible-viewer-capture-unavailable",
+  "captured_at": "2026-09-27T18:04:00Z",
+  "scope": "isolated SteerlineTest native task with a visible Windows service-window process and separate console viewer",
+  "project_state_root": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\s3viewer28e\\steerline-home\\state\\native-project-7b5977cc9a7f",
+  "workflow_run_id": "6c9a80fe8b731f42207cdef14efcb2fd",
+  "service_pid_before_fault": 7792,
+  "viewer_pid": 13076,
+  "observations": [
+    "The service reported running/ready and claimed native task 91024; the separate console viewer process remained live while the task advanced to implement.",
+    "Orca computer-use listed the viewer Windows Terminal window and its accessibility tree, but get-app-state returned screenshot_failed with no image. The Windows screenshot permission query reported unsupported; an independent CopyFromScreen attempt raised invalid handle.",
+    "The first business question relay_48e1f7156311 was persisted as pending on the original implement Attempt. Before the answer command, the worker created a second same-body question relay_bf9d6c7df591 instead of resuming the first ID; the center rejected it and kept the original Decision and execution slot."
+  ],
+  "cleanup": {
+    "implement_dispatch_id": "ctx_d01bcaae7dba",
+    "worker_stop_request_id": "10bca893-ba98-4567-a0c1-1229c54de78b",
+    "worker_stop": "stopped/closed_agent_terminal/ptyKilled=true",
+    "execution_host_liveness": "exited",
+    "duplicate_question_delivery_id": "delivery_6f7770efa0df",
+    "duplicate_question_delivery_acknowledged": true,
+    "viewer_and_launcher_processes_exited": true,
+    "pr_created": false,
+    "isolated_state_preserved": true
+  },
+  "conclusion": "The visible two-second latency and UAC screenshot gates remain unverified while this Windows desktop capture path is unavailable. The duplicate question was a separate fail-closed worker protocol fault; no replacement Decision or Dispatch was accepted."
+}
