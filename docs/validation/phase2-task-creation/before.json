@@ -1,0 +1,170 @@
+{
+  "protocol": "native-tasks/v1",
+  "project_id": "c:\\project\\steerline\\.git",
+  "authority_version": 1,
+  "graph_revision": 1,
+  "database_revision": 748940,
+  "database_id": "1ac8d0529fb922c4ccd187a2b8705c27",
+  "sampled_at": "2026-09-27T13:15:10.7436653Z",
+  "capabilities": {
+    "dependency_readiness": "provided",
+    "dependency_blockers": "provided",
+    "startup_blockers": "provided"
+  },
+  "tasks": [
+    {
+      "project_identity": "c:\\project\\steerline\\.git",
+      "task_id": "3",
+      "batch_id": "7806a3bc67c4955c785d66a93b099143",
+      "title": "人工决策与恢复闭环",
+      "type": "task",
+      "goal_ids": [
+        "INTERVENTION"
+      ],
+      "contract_id": "steerline-roadmap-3-49ac56e45454",
+      "source": "native",
+      "status": "open",
+      "version": 1,
+      "created_at": "2026-09-26T11:46:51.8662248Z",
+      "updated_at": "2026-09-26T11:46:51.8662248Z",
+      "project_id": "c:\\project\\steerline\\.git",
+      "priority": 2,
+      "contract": {
+        "contract_id": "steerline-roadmap-3-49ac56e45454",
+        "repository": "https://github.com/erranliu/SteerLine.git",
+        "remote": "origin",
+        "branch": "main",
+        "spec_ref": {
+          "path": "docs/spec/pr-05-intervention.spec.md",
+          "commit": "49ac56e45454b5b4aa9a36aadba4c45f8a46c9c3",
+          "sha256": "1f3e2249a6c1f1bc7a377715322f276cae0aab31f74f0f904be153312497eddd"
+        },
+        "plan_ref": {
+          "path": "docs/spec/pr-05-intervention.plan.md",
+          "commit": "49ac56e45454b5b4aa9a36aadba4c45f8a46c9c3",
+          "sha256": "620e1610670b9182fdbf9f696c2ce8ad5ef6b4c4f3f2ef45c07df18364cede3b"
+        },
+        "common_refs": null,
+        "acceptance_refs": [
+          {
+            "path": "docs/spec/pr-05-intervention.spec.md",
+            "commit": "49ac56e45454b5b4aa9a36aadba4c45f8a46c9c3",
+            "sha256": "1f3e2249a6c1f1bc7a377715322f276cae0aab31f74f0f904be153312497eddd"
+          }
+        ],
+        "digest": "e476fa7a58dc81aca222aa6e1150fc49dbff648abc5dd30d77320541524685c5"
+      },
+      "workflow_runs": [],
+      "predecessors": [],
+      "successors": [],
+      "dependency_ready": true,
+      "unmet_predecessors": [],
+      "startup_blockers": [
+        "dispatch_paused"
+      ]
+    },
+    {
+      "project_identity": "c:\\project\\steerline\\.git",
+      "task_id": "4",
+      "batch_id": "7806a3bc67c4955c785d66a93b099143",
+      "title": "Orca 远程协议验证",
+      "type": "task",
+      "goal_ids": [
+        "REMOTE-PROTOCOL"
+      ],
+      "contract_id": "steerline-roadmap-4-49ac56e45454",
+      "source": "native",
+      "status": "open",
+      "version": 1,
+      "created_at": "2026-09-26T11:46:51.8662248Z",
+      "updated_at": "2026-09-26T11:46:51.8662248Z",
+      "project_id": "c:\\project\\steerline\\.git",
+      "priority": 2,
+      "contract": {
+        "contract_id": "steerline-roadmap-4-49ac56e45454",
+        "repository": "https://github.com/erranliu/SteerLine.git",
+        "remote": "origin",
+        "branch": "main",
+        "spec_ref": {
+          "path": "docs/spec/01-orca-remote-protocol.md",
+          "commit": "49ac56e45454b5b4aa9a36aadba4c45f8a46c9c3",
+          "sha256": "23e79a3d9d472e4c9661ea48b6421ef2fdef4dabff5fb132afa59bf4e1337d8a"
+        },
+        "plan_ref": {
+          "path": "docs/spec/01-orca-remote-protocol.plan.md",
+          "commit": "49ac56e45454b5b4aa9a36aadba4c45f8a46c9c3",
+          "sha256": "ff2f4eb9b0d788598f4a78e43aa1c67cb030d9c3304e516638368c25147e2f5b"
+        },
+        "common_refs": null,
+        "acceptance_refs": [
+          {
+            "path": "docs/spec/01-orca-remote-protocol.md",
+            "commit": "49ac56e45454b5b4aa9a36aadba4c45f8a46c9c3",
+            "sha256": "23e79a3d9d472e4c9661ea48b6421ef2fdef4dabff5fb132afa59bf4e1337d8a"
+          }
+        ],
+        "digest": "6361675129765a99fb7d40e51ce3382450545da019192f41a5f6655c46bb085b"
+      },
+      "workflow_runs": [],
+      "predecessors": [],
+      "successors": [],
+      "dependency_ready": true,
+      "unmet_predecessors": [],
+      "startup_blockers": [
+        "dispatch_paused"
+      ]
+    },
+    {
+      "project_identity": "c:\\project\\steerline\\.git",
+      "task_id": "6",
+      "batch_id": "7806a3bc67c4955c785d66a93b099143",
+      "title": "分阶段远程闭环",
+      "type": "task",
+      "goal_ids": [
+        "REMOTE-WORKFLOW"
+      ],
+      "contract_id": "steerline-roadmap-6-49ac56e45454",
+      "source": "native",
+      "status": "open",
+      "version": 1,
+      "created_at": "2026-09-26T11:46:51.8662248Z",
+      "updated_at": "2026-09-26T11:46:51.8662248Z",
+      "project_id": "c:\\project\\steerline\\.git",
+      "priority": 2,
+      "contract": {
+        "contract_id": "steerline-roadmap-6-49ac56e45454",
+        "repository": "https://github.com/erranliu/SteerLine.git",
+        "remote": "origin",
+        "branch": "main",
+        "spec_ref": {
+          "path": "docs/spec/03-remote-execution-and-viewer.md",
+          "commit": "49ac56e45454b5b4aa9a36aadba4c45f8a46c9c3",
+          "sha256": "6428b5b51c25cbf3bf0b94b58c21c8bd56979a83793df4d5728d9f6a7799264e"
+        },
+        "plan_ref": {
+          "path": "docs/spec/03-remote-execution-and-viewer.plan.md",
+          "commit": "49ac56e45454b5b4aa9a36aadba4c45f8a46c9c3",
+          "sha256": "eda5289bb02387673298c54968d7ef231c40a8184471f0a6b313bbc44d320c7e"
+        },
+        "common_refs": null,
+        "acceptance_refs": [
+          {
+            "path": "docs/spec/03-remote-execution-and-viewer.md",
+            "commit": "49ac56e45454b5b4aa9a36aadba4c45f8a46c9c3",
+            "sha256": "6428b5b51c25cbf3bf0b94b58c21c8bd56979a83793df4d5728d9f6a7799264e"
+          }
+        ],
+        "digest": "02d945d7169cac60bfb69d702c51bb2d1e0a077bf83a7033ee4743c6f3031498"
+      },
+      "workflow_runs": [],
+      "predecessors": [],
+      "successors": [],
+      "dependency_ready": true,
+      "unmet_predecessors": [],
+      "startup_blockers": [
+        "dispatch_paused"
+      ]
+    }
+  ],
+  "has_more": false
+}

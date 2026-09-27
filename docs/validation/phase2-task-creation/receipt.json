@@ -1,0 +1,21 @@
+{
+  "request_id": "e4756c06b2e1403eb6442154a659f2a0",
+  "batch_id": "24df9e6c3acdb83621ed94306e085df8",
+  "task_ids": {
+    "task-14": "14",
+    "task-15": "15",
+    "task-16": "16",
+    "task-17": "17",
+    "task-18": "18",
+    "task-19": "19",
+    "task-20": "20",
+    "task-21": "21",
+    "task-22": "22",
+    "task-23": "23",
+    "task-24": "24"
+  },
+  "graph_revision": 2,
+  "payload_digest": "94d0d90fa29ea753c46b161f6c6dfaa755c5abb5c7087ff83b8c4d63275c2f1a",
+  "status": "accepted",
+  "dispatch_note": "Task creation does not start work. If dispatch is already auto and unpaused, normal polling may consider these tasks."
+}
