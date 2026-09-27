@@ -1,0 +1,25 @@
+{
+  "source_receipt_id": "c75f12df-f788-4931-9033-f04e483d6d96",
+  "request_id": "8cab3e4d-7da4-4dc4-aee6-1bd5337fb9a5",
+  "request_state": "completed",
+  "method": "orchestration.workerRelease",
+  "dispatch_id": "ctx_3ceb7b58383c",
+  "settlement_state": "released",
+  "process_action": "closed_agent_terminal",
+  "archive": {
+    "source": "transcript",
+    "status": "captured"
+  },
+  "output_source": "transcript",
+  "output_source_exact": true,
+  "output_archived": true,
+  "output_status": {
+    "worker": "succeeded",
+    "terminal": "exited",
+    "liveness": "exited"
+  },
+  "output_warnings": [
+    "Dispatch capability tokens were redacted from transcript output.",
+    "Oversized transcript text was clipped."
+  ]
+}

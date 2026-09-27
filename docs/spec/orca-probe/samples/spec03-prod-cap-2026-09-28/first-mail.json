@@ -1,0 +1,59 @@
+{
+  "id": "eedfc7b4-596f-4949-9774-61fffbb72bdd",
+  "ok": true,
+  "result": {
+    "messages": [
+      {
+        "id": "relay_9c6887f1d89b",
+        "run_id": "run_707f6533c393",
+        "delivery_contract": "current_delivery",
+        "from_handle": "dispatch:ctx_5dfac74462a6",
+        "to_handle": "run:run_707f6533c393",
+        "subject": "Rejected worker_done flag check",
+        "body": "Attempt 1: original --from handle included: yes; --dispatch-capability flag included: yes. Attempt 2: original --from handle included: yes; --dispatch-capability flag included: yes.",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": "{\"taskId\":\"task_ae1a7cb84662\",\"dispatchId\":\"ctx_5dfac74462a6\"}",
+        "created_at": "2026-09-27T22:46:21Z",
+        "delivered_at": null
+      },
+      {
+        "id": "relay_a3a56ce0100d",
+        "run_id": "run_707f6533c393",
+        "delivery_contract": "current_delivery",
+        "from_handle": "dispatch:ctx_5dfac74462a6",
+        "to_handle": "run:run_707f6533c393",
+        "subject": "Question",
+        "body": "My required worker_done command was rejected with ‘No recipient or active Dispatch could be resolved’; request-show says absent and worker-show --dispatch ctx_5dfac74462a6 says dispatch_not_found. The assigned worktree checks passed and I already sent the required status message. How should I settle this exact Dispatch?",
+        "type": "question",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": "{\"taskId\":\"task_ae1a7cb84662\",\"dispatchId\":\"ctx_5dfac74462a6\",\"question\":\"My required worker_done command was rejected with ‘No recipient or active Dispatch could be resolved’; request-show says absent and worker-show --dispatch ctx_5dfac74462a6 says dispatch_not_found. The assigned worktree checks passed and I already sent the required status message. How should I settle this exact Dispatch?\",\"options\":[]}",
+        "created_at": "2026-09-27T22:33:48Z",
+        "delivered_at": null
+      },
+      {
+        "id": "relay_7d5fc0d35501",
+        "run_id": "run_707f6533c393",
+        "delivery_contract": "current_delivery",
+        "from_handle": "dispatch:ctx_5dfac74462a6",
+        "to_handle": "run:run_707f6533c393",
+        "subject": "Production capability probe",
+        "body": "Worktree: C:\\\\Users\\\\liuming\\\\orca\\\\workspaces\\\\SteerLine\\\\prod-capability-20260928; branch: erranliu/prod-capability-20260928; origin: https://github.com/erranliu/SteerLine.git; HEAD: 1f6a9ce4c104df6b9638e7587c74bc85323aa971; status: clean (git status --short --branch showed only branch header); codex --version: codex-cli 0.157.1.",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": "{\"taskId\":\"task_ae1a7cb84662\",\"dispatchId\":\"ctx_5dfac74462a6\"}",
+        "created_at": "2026-09-27T22:32:46Z",
+        "delivered_at": null
+      }
+    ],
+    "count": 3,
+    "acknowledged": null,
+    "runId": "run_707f6533c393"
+  },
+  "_meta": {
+    "runtimeId": "3dd6023d-87dd-4055-bcf6-f8dd87c3c731"
+  }
+}

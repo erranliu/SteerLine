@@ -1,0 +1,174 @@
+{
+  "id": "1674405e-c53d-4cb1-9eb0-50d425d673ef",
+  "ok": true,
+  "result": {
+    "dispatch": {
+      "id": "ctx_5dfac74462a6",
+      "runId": "run_707f6533c393",
+      "taskId": "task_ae1a7cb84662",
+      "task_id": "task_ae1a7cb84662",
+      "contractVersion": 1,
+      "assigneeHandle": null,
+      "assigneePaneKey": null,
+      "processIncarnation": null,
+      "capabilityRevokedAt": "2026-09-27T22:49:24.440Z",
+      "retryOfDispatchId": null,
+      "creatorDispatchId": null,
+      "hostScope": null,
+      "status": "failed",
+      "failureCount": 0,
+      "lastFailure": "stopped",
+      "terminationReason": null,
+      "depth": 1,
+      "dispatchedAt": "2026-09-27 22:30:32",
+      "completedAt": "2026-09-27T22:49:24.684Z",
+      "createdAt": "2026-09-27 22:30:32",
+      "lastHeartbeatAt": null
+    },
+    "worker": {
+      "dispatchId": "ctx_5dfac74462a6",
+      "runtimeEpoch": "3dd6023d-87dd-4055-bcf6-f8dd87c3c731",
+      "state": "stopped",
+      "stage": "process_stopped",
+      "worktreeId": "c67f8c64-d472-449b-82e3-24df822d0fdb::C:/Users/liuming/orca/workspaces/SteerLine/prod-capability-20260928",
+      "agentTerminalHandle": "term_b5bf8ac3-ddb5-4e0f-a162-cf62ec3f0921",
+      "setupState": "not_applicable",
+      "effects": [
+        {
+          "kind": "worktree",
+          "action": "reused",
+          "id": "c67f8c64-d472-449b-82e3-24df822d0fdb::C:/Users/liuming/orca/workspaces/SteerLine/prod-capability-20260928"
+        },
+        {
+          "kind": "setup",
+          "action": "not_applicable",
+          "state": "not_applicable"
+        },
+        {
+          "kind": "terminal",
+          "role": "agent",
+          "action": "reused",
+          "id": "term_b5bf8ac3-ddb5-4e0f-a162-cf62ec3f0921"
+        },
+        {
+          "kind": "dispatch_input",
+          "role": "agent",
+          "id": "term_b5bf8ac3-ddb5-4e0f-a162-cf62ec3f0921",
+          "state": "accepted"
+        }
+      ],
+      "residualResources": [],
+      "startOptions": {
+        "on": "bed55de0-6d7d-497e-b1d5-3abab256b2ee",
+        "serverName": "home",
+        "worktree": "id:c67f8c64-d472-449b-82e3-24df822d0fdb::C:/Users/liuming/orca/workspaces/SteerLine/prod-capability-20260928",
+        "name": null,
+        "repo": null,
+        "baseBranch": null,
+        "terminal": "term_b5bf8ac3-ddb5-4e0f-a162-cf62ec3f0921",
+        "agent": null,
+        "launch": {
+          "requested": {
+            "agent": null,
+            "model": null,
+            "effort": null
+          },
+          "effective": null
+        },
+        "timeoutMs": 900000,
+        "setup": "not_applicable",
+        "setupSource": "existing_worktree"
+      },
+      "lastError": null,
+      "createdAt": "2026-09-27 22:30:32",
+      "updatedAt": "2026-09-27T22:49:24.684Z"
+    },
+    "projection": {
+      "id": "ctx_5dfac74462a6",
+      "dispatchId": "ctx_5dfac74462a6",
+      "taskId": "task_ae1a7cb84662",
+      "runId": "run_707f6533c393",
+      "role": "worker",
+      "parent": null,
+      "provider": null,
+      "host": {
+        "kind": "remote",
+        "id": "bed55de0-6d7d-497e-b1d5-3abab256b2ee"
+      },
+      "workspace": {
+        "id": "c67f8c64-d472-449b-82e3-24df822d0fdb::C:/Users/liuming/orca/workspaces/SteerLine/prod-capability-20260928",
+        "kind": "folder_or_worktree"
+      },
+      "stage": {
+        "worker": "stopped",
+        "dispatch": "failed",
+        "detail": "process_stopped",
+        "activity": "unknown"
+      },
+      "outcome": "failed",
+      "liveness": {
+        "verdict": "exited",
+        "source": "execution_host"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": 1790549485004
+      },
+      "resource": {
+        "state": "absent",
+        "reason": "not_materialized"
+      },
+      "nextAction": {
+        "kind": "inspect",
+        "argv": [
+          "orchestration",
+          "worker-show",
+          "--dispatch",
+          "ctx_5dfac74462a6"
+        ]
+      },
+      "attention": {
+        "categories": [
+          "failure"
+        ],
+        "requiresAction": true
+      }
+    },
+    "server": {
+      "environmentId": "bed55de0-6d7d-497e-b1d5-3abab256b2ee",
+      "name": "home"
+    },
+    "remoteRuntimeEpoch": "a8aa72a1-af21-4b48-85e2-231d527b2e38",
+    "terminal": {
+      "handle": "term_b5bf8ac3-ddb5-4e0f-a162-cf62ec3f0921",
+      "ptyId": "c67f8c64-d472-449b-82e3-24df822d0fdb::C:/Users/liuming/orca/workspaces/SteerLine/prod-capability-20260928@@2033713b",
+      "incarnationId": "52cd581e-acd1-41fe-8123-1388411bf575",
+      "orphaned": true,
+      "worktreeId": "c67f8c64-d472-449b-82e3-24df822d0fdb::C:/Users/liuming/orca/workspaces/SteerLine/prod-capability-20260928",
+      "worktreePath": "C:/Users/liuming/orca/workspaces/SteerLine/prod-capability-20260928",
+      "branch": "refs/heads/erranliu/prod-capability-20260928",
+      "tabId": "c30400f8-e6c7-4873-a400-6a83d94c3499",
+      "leafId": "5970def2-d511-4637-b99d-acdaa062cafd",
+      "title": "prod-capability-20260928",
+      "connected": false,
+      "writable": false,
+      "lastOutputAt": 1790549186661,
+      "preview": " handle 和 --dispatch-capability 参数。• Working(55s • esc to interrupt) · Running hookWWWWoWoWoWoWorWorWor6WorkWork  06:46                                                                                                             Tip: NEW: Prevent sleep while running is now available in /experimental.",
+      "exitCause": {
+        "kind": "operator_close"
+      },
+      "executionHostId": "local",
+      "agentIdentity": "codex",
+      "paneRuntimeId": -1,
+      "rendererGraphEpoch": 0
+    },
+    "observation": {
+      "status": "exited",
+      "exactWorker": true
+    }
+  },
+  "_meta": {
+    "runtimeId": "3dd6023d-87dd-4055-bcf6-f8dd87c3c731"
+  }
+}

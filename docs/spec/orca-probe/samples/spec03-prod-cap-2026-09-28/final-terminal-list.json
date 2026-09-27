@@ -1,0 +1,19 @@
+{
+  "id": "26003931-6354-4037-ab88-599507ebf0ba",
+  "ok": true,
+  "result": {
+    "terminals": [],
+    "hostScope": {
+      "hostIds": [
+        "local"
+      ],
+      "omittedHostIds": []
+    },
+    "topologyRevisions": {},
+    "totalCount": 0,
+    "truncated": false
+  },
+  "_meta": {
+    "runtimeId": "a8aa72a1-af21-4b48-85e2-231d527b2e38"
+  }
+}

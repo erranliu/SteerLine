@@ -1,0 +1,75 @@
+{
+  "version": 1,
+  "captured_at": "2026-09-27T23:10:26.917188+00:00",
+  "project": "github:erranliu/steerline",
+  "center_orca_version": "1.4.209",
+  "home_orca_version": "1.4.210",
+  "remote_codex_version": "codex-cli 0.157.1",
+  "remote_repository_id": "c67f8c64-d472-449b-82e3-24df822d0fdb",
+  "remote_worktree_id": "c67f8c64-d472-449b-82e3-24df822d0fdb::C:/Users/liuming/orca/workspaces/SteerLine/prod-capability-20260928",
+  "successful_dispatch": "ctx_3ceb7b58383c",
+  "failed_reused_terminal_dispatch": "ctx_5dfac74462a6",
+  "capabilities": {
+    "start": [
+      {
+        "file": "home-worktree.json",
+        "sha256": "cfc022e76cbb08bb543d0fbcb16137975bc1940261580e0c0bcc79d47b7d5f7d"
+      },
+      {
+        "file": "final-worker-show.json",
+        "sha256": "86e3376026587a1dd46b8931ca6671fc4b6e2e945ee930d8e7741261ec47da17"
+      }
+    ],
+    "observe": [
+      {
+        "file": "final-worker-show.json",
+        "sha256": "86e3376026587a1dd46b8931ca6671fc4b6e2e945ee930d8e7741261ec47da17"
+      },
+      {
+        "file": "final-worker-list.json",
+        "sha256": "ac48453af3125596514f93e52b5a3bf8a3c75483efebd5f261ade6314bc20526"
+      }
+    ],
+    "workspace_inspection": [
+      {
+        "file": "home-repo.json",
+        "sha256": "425d6530acca68b2596ceef6a19137a2bdd916196cdbb8b39a23f934024216b4"
+      },
+      {
+        "file": "home-worktree.json",
+        "sha256": "cfc022e76cbb08bb543d0fbcb16137975bc1940261580e0c0bcc79d47b7d5f7d"
+      },
+      {
+        "file": "host-git-read.json",
+        "sha256": "29f254ed3374450dd61750032d2f2838b053e71897105c9275f796fc03003436"
+      }
+    ],
+    "output_reading": [
+      {
+        "file": "worker-read-summary.json",
+        "sha256": "5941679f1ae15439c00c2d5c13f3dac6792ef53e095ecfb02fac743a856e2f33"
+      }
+    ],
+    "message_inbox": [
+      {
+        "file": "final-mail.json",
+        "sha256": "65b0f4f9318514710bd59cc5f0f589a42e5e8296eeaecd42d5f518c9abda4a10"
+      },
+      {
+        "file": "final-task-list.json",
+        "sha256": "92a519ca5e88bf9ee8766d2eb23785aed788c7e6b9d6c14a61156530f9c60086"
+      }
+    ],
+    "resource_settlement": [
+      {
+        "file": "release-summary.json",
+        "sha256": "fa357a5d297aaeba3cc2d85e1a96d96c8b9eeaf7b92488e453906a3b5dcc06c0"
+      },
+      {
+        "file": "final-terminal-list.json",
+        "sha256": "a509d11ce122064cad215a52eb2a169eb0a05e55310107794003fa4492149576"
+      }
+    ]
+  },
+  "limits": "The first reused-terminal Dispatch could send status but not worker_done and was explicitly stopped. The successful proof uses worker-start --agent and normal worker-release; it is an Orca project capability probe, not a SteerLine native Task on the production repository."
+}

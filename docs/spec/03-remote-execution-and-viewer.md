@@ -4,6 +4,8 @@
 
 同日后续：[home 业务消息到可见 viewer 的真机验收](../validation/spec03-viewer-latency-2026-09-28.md)先发现顺序读取时原 Decision 展示耗时 2.476 秒；并行独立只读源并加快前台刷新后，新隔离任务的原 Decision 在 1.669 秒内出现在 Orca `source=screen` 帧，两次远端 review→publish 步骤帧分别为 1.414 与 1.798 秒。两条测试任务均完成五步、固定 head 的真实 PR 合并、中心 Task 结项和五个 Dispatch 释放，当前 1.4.209/1.4.210 `SteerlineTest` 目标的 2 秒 viewer 门槛通过。生产项目认证与 Windows 管理员/UAC 捕获仍单独开放。
 
+同日进一步完成[SteerLine 仓库在 home 的六项受监管能力认证](../validation/spec03-production-project-capability-2026-09-28.md)：在新 clone/工作树上只读核验并保存内容哈希报告，正常 `worker-start --agent` 试次完成 status、worker_done、精确 transcript 与 release。复用已有终端的独立试次不能结算 worker_done，已明确失败并精确停止，不能外推为受支持路径。此认证未在 SteerLine 仓库上运行原生五步任务或提交 PR；生产启用仍受 UAC、故障矩阵和本项目原生演练门槛约束。
+
 任务 ID：6；任务名称：分阶段远程闭环。
 
 2026-09-28 增补：[远端原生业务问答至真实合并](../validation/spec03-native-question-2026-09-28.md)在新的隔离任务 91024 上证明 `yes/no` 问题、中心答案、原 Dispatch 上的独立应用证明、五步验证、固定 head 的 [测试 PR #17](https://github.com/erranliu/SteerlineTest/pull/17) 合并及原中心 Task close。该运行的 publish 提示曾暂记 unknown，之后同一 SQLite 对账原 worker 结果，无第二个 PR。当前目标的业务问答主路径因此有原生任务证据；viewer 2 秒目标当时尚未通过，后续实测见上段；管理员/UAC 设置提示及其余故障矩阵仍开放。

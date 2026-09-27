@@ -1,0 +1,73 @@
+{
+  "version": 1,
+  "backend": "orca",
+  "protocol": "orca_supervised",
+  "agent": {
+    "name": "codex"
+  },
+  "target": {
+    "id": "orca-supervised:fe26dcce-e8f7-47dd-96c2-d611c1093733",
+    "connection_id": "fe26dcce-e8f7-47dd-96c2-d611c1093733",
+    "external_runtime": "bed55de0-6d7d-497e-b1d5-3abab256b2ee"
+  },
+  "checked_at": "2026-09-27T23:13:38.8206031Z",
+  "center_version": "1.4.209",
+  "platform_version": "1.4.210",
+  "capabilities": [
+    {
+      "name": "start",
+      "status": "verified",
+      "evidence": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\SteerLineProdCap-20260928\\capability-manifest.json#sha256=a5a62b5207770defa06d4dede600a1aa417feff9969fdf28e0760eb7ceaabba2"
+    },
+    {
+      "name": "observe",
+      "status": "verified",
+      "evidence": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\SteerLineProdCap-20260928\\capability-manifest.json#sha256=a5a62b5207770defa06d4dede600a1aa417feff9969fdf28e0760eb7ceaabba2"
+    },
+    {
+      "name": "stop",
+      "status": "unsupported"
+    },
+    {
+      "name": "detach_observation",
+      "status": "not_tested"
+    },
+    {
+      "name": "operation_reconciliation",
+      "status": "not_tested"
+    },
+    {
+      "name": "workspace_inspection",
+      "status": "verified",
+      "evidence": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\SteerLineProdCap-20260928\\capability-manifest.json#sha256=a5a62b5207770defa06d4dede600a1aa417feff9969fdf28e0760eb7ceaabba2"
+    },
+    {
+      "name": "output_reading",
+      "status": "verified",
+      "evidence": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\SteerLineProdCap-20260928\\capability-manifest.json#sha256=a5a62b5207770defa06d4dede600a1aa417feff9969fdf28e0760eb7ceaabba2"
+    },
+    {
+      "name": "output_turns",
+      "status": "not_tested"
+    },
+    {
+      "name": "output_final_answer",
+      "status": "not_tested"
+    },
+    {
+      "name": "resource_settlement",
+      "status": "verified",
+      "evidence": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\SteerLineProdCap-20260928\\capability-manifest.json#sha256=a5a62b5207770defa06d4dede600a1aa417feff9969fdf28e0760eb7ceaabba2"
+    },
+    {
+      "name": "message_inbox",
+      "status": "verified",
+      "evidence": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\SteerLineProdCap-20260928\\capability-manifest.json#sha256=a5a62b5207770defa06d4dede600a1aa417feff9969fdf28e0760eb7ceaabba2"
+    },
+    {
+      "name": "remote_cancellation",
+      "status": "unsupported",
+      "evidence": "Spec 03 fixes remote_cancel_available=false"
+    }
+  ]
+}

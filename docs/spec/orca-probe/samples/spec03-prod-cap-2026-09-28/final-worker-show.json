@@ -1,0 +1,168 @@
+{
+  "id": "1cbe5577-1022-4ef6-bb9f-2d4f712ba7b3",
+  "ok": true,
+  "result": {
+    "dispatch": {
+      "id": "ctx_3ceb7b58383c",
+      "runId": "run_707f6533c393",
+      "taskId": "task_ae1a7cb84662",
+      "task_id": "task_ae1a7cb84662",
+      "contractVersion": 1,
+      "assigneeHandle": null,
+      "assigneePaneKey": null,
+      "processIncarnation": null,
+      "capabilityRevokedAt": "2026-09-27T22:54:20.937Z",
+      "retryOfDispatchId": "ctx_5dfac74462a6",
+      "creatorDispatchId": null,
+      "hostScope": null,
+      "status": "completed",
+      "failureCount": 0,
+      "lastFailure": null,
+      "terminationReason": null,
+      "depth": 1,
+      "dispatchedAt": "2026-09-27 22:51:46",
+      "completedAt": "2026-09-27T22:54:20.937Z",
+      "createdAt": "2026-09-27 22:51:46",
+      "lastHeartbeatAt": null
+    },
+    "worker": {
+      "dispatchId": "ctx_3ceb7b58383c",
+      "runtimeEpoch": "3dd6023d-87dd-4055-bcf6-f8dd87c3c731",
+      "state": "succeeded",
+      "stage": "released",
+      "worktreeId": "c67f8c64-d472-449b-82e3-24df822d0fdb::C:/Users/liuming/orca/workspaces/SteerLine/prod-capability-20260928",
+      "agentTerminalHandle": null,
+      "setupState": "not_applicable",
+      "effects": [
+        {
+          "kind": "worktree",
+          "action": "reused",
+          "id": "c67f8c64-d472-449b-82e3-24df822d0fdb::C:/Users/liuming/orca/workspaces/SteerLine/prod-capability-20260928"
+        },
+        {
+          "kind": "setup",
+          "action": "not_applicable",
+          "state": "not_applicable"
+        },
+        {
+          "kind": "terminal",
+          "role": "agent",
+          "action": "created",
+          "id": "term_ec34a059-631a-4785-b510-1a572e5dbfb6"
+        },
+        {
+          "kind": "dispatch_input",
+          "role": "agent",
+          "id": "term_ec34a059-631a-4785-b510-1a572e5dbfb6",
+          "state": "accepted"
+        }
+      ],
+      "residualResources": [],
+      "startOptions": {
+        "on": "bed55de0-6d7d-497e-b1d5-3abab256b2ee",
+        "serverName": "home",
+        "worktree": "id:c67f8c64-d472-449b-82e3-24df822d0fdb::C:/Users/liuming/orca/workspaces/SteerLine/prod-capability-20260928",
+        "name": null,
+        "repo": null,
+        "baseBranch": null,
+        "terminal": null,
+        "agent": "codex",
+        "launch": {
+          "requested": {
+            "agent": "codex",
+            "model": "gpt-6-luna",
+            "effort": "low"
+          },
+          "effective": null
+        },
+        "timeoutMs": 900000,
+        "setup": "not_applicable",
+        "setupSource": "existing_worktree"
+      },
+      "lastError": null,
+      "createdAt": "2026-09-27 22:51:46",
+      "updatedAt": "2026-09-27T22:55:25.458Z"
+    },
+    "projection": {
+      "id": "ctx_3ceb7b58383c",
+      "dispatchId": "ctx_3ceb7b58383c",
+      "taskId": "task_ae1a7cb84662",
+      "runId": "run_707f6533c393",
+      "role": "worker",
+      "parent": null,
+      "provider": null,
+      "host": {
+        "kind": "remote",
+        "id": "bed55de0-6d7d-497e-b1d5-3abab256b2ee"
+      },
+      "workspace": {
+        "id": "c67f8c64-d472-449b-82e3-24df822d0fdb::C:/Users/liuming/orca/workspaces/SteerLine/prod-capability-20260928",
+        "kind": "folder_or_worktree"
+      },
+      "stage": {
+        "worker": "succeeded",
+        "dispatch": "completed",
+        "detail": "released",
+        "activity": "unknown"
+      },
+      "outcome": "succeeded",
+      "liveness": {
+        "verdict": "exited",
+        "source": "execution_host"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": 1790550154729
+      },
+      "resource": {
+        "state": "absent",
+        "reason": "not_materialized"
+      },
+      "nextAction": {
+        "kind": "none",
+        "argv": []
+      },
+      "attention": {
+        "categories": [
+          "root_completion"
+        ],
+        "requiresAction": false
+      }
+    },
+    "server": {
+      "environmentId": "bed55de0-6d7d-497e-b1d5-3abab256b2ee",
+      "name": "home"
+    },
+    "remoteRuntimeEpoch": "a8aa72a1-af21-4b48-85e2-231d527b2e38",
+    "terminal": {
+      "handle": "term_ec34a059-631a-4785-b510-1a572e5dbfb6",
+      "ptyId": "c67f8c64-d472-449b-82e3-24df822d0fdb::C:/Users/liuming/orca/workspaces/SteerLine/prod-capability-20260928@@df62a3bc",
+      "incarnationId": "a00a27f1-3479-43ad-828c-55018a84d684",
+      "orphaned": true,
+      "worktreeId": "c67f8c64-d472-449b-82e3-24df822d0fdb::C:/Users/liuming/orca/workspaces/SteerLine/prod-capability-20260928",
+      "worktreePath": "C:/Users/liuming/orca/workspaces/SteerLine/prod-capability-20260928",
+      "branch": "refs/heads/erranliu/prod-capability-20260928",
+      "tabId": "e9ed5bdd-dc43-4931-89f2-698eea194133",
+      "leafId": "6288b614-4cd1-473c-af3a-f1b1132fa117",
+      "title": "prod-capability-20260928",
+      "connected": false,
+      "writable": false,
+      "lastOutputAt": 1790549670047,
+      "preview": "eported the observed facts and completion tothecoordinator.•Working (2m 34s • esc to interrupt) · Running hook••5  ed for 2m 35s· 06:54                                                                                          Tip:VisittheCodex community forum(https://community.openai.com/c/codex/37).",
+      "exitCause": {
+        "kind": "operator_close"
+      },
+      "executionHostId": "local",
+      "paneRuntimeId": -1,
+      "rendererGraphEpoch": 0
+    },
+    "observation": {
+      "status": "exited",
+      "exactWorker": true
+    }
+  },
+  "_meta": {
+    "runtimeId": "3dd6023d-87dd-4055-bcf6-f8dd87c3c731"
+  }
+}
