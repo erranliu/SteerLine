@@ -488,6 +488,12 @@ func renderDetail(m Model, state projectState, row *consoleRow, width, height in
 		"任务状态："+safeTerminalText(firstText(run.TaskStatus, "unknown")),
 	)
 	lines = append(lines, renderFixedRunExecutionProfile(state, run)...)
+	if run.Process != nil && run.Process.Kind == "orca" && run.Process.Terminal != "" {
+		lines = append(lines,
+			"Orca 终端："+safeTerminalText(run.Process.Terminal),
+			"在 Orca 中查看：orca terminal switch --terminal "+safeTerminalText(run.Process.Terminal),
+		)
+	}
 	if run.PR.State != "" || run.PR.URL != nil {
 		lines = append(lines, "PR："+safeTerminalText(firstText(run.PR.State, "unknown")))
 		if run.PR.URL != nil && *run.PR.URL != "" {

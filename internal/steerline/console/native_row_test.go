@@ -14,7 +14,7 @@ func TestNativeTaskAndItsRunShareOneListRow(t *testing.T) {
 	ref.Config.TaskAuthority = "native"
 	snapshot := readySnapshot(ref, now)
 	snapshot.Tasks.Tasks = []steerline.TaskCandidate{{TaskID: "102", Title: "Native branch A"}}
-	run := &steerline.Run{RunID: strings.Repeat("a", 32), TaskID: "102", DomainTaskID: "102", Title: "Native branch A", TaskStatus: "in_progress", ExecutionStatus: "running", FinishTaskStatus: "pending"}
+	run := &steerline.Run{RunID: strings.Repeat("a", 32), TaskID: "102", DomainTaskID: "102", Title: "Native branch A", TaskStatus: "in_progress", ExecutionStatus: "running", FinishTaskStatus: "pending", Process: &steerline.ProcessIdentity{Kind: "orca", Terminal: "term-native-102"}}
 	snapshot.Observation.Runtime.Runs = []*steerline.Run{run}
 	snapshot.NativeTasks = &steerline.NativeTaskPage{Tasks: []steerline.NativeTaskDetail{
 		{TaskRecord: steerline.TaskRecord{TaskID: "102", Title: "Native branch A", Status: "in_progress"}, Successors: []string{"104"}},
@@ -27,7 +27,7 @@ func TestNativeTaskAndItsRunShareOneListRow(t *testing.T) {
 		t.Fatalf("native task and run were not coalesced in task order: %+v", rows)
 	}
 	detail := strings.Join(renderDetail(m, m.projects[0], &rows[0], 120, 60), "\n")
-	if !strings.Contains(detail, "后继任务：104") || !strings.Contains(detail, "执行：running") {
+	if !strings.Contains(detail, "后继任务：104") || !strings.Contains(detail, "执行：running") || !strings.Contains(detail, "orca terminal switch --terminal term-native-102") {
 		t.Fatalf("coalesced row lost task relations or execution detail: %s", detail)
 	}
 	m.projects[0].refreshID = 1

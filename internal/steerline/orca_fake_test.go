@@ -206,6 +206,9 @@ func fakeOrcaShow(stateDir string, argv []string) int {
 	if os.Getenv("STEERLINE_FAKE_ORCA_DISCONNECTED") == "1" {
 		connected = false
 	}
+	if os.Getenv("STEERLINE_FAKE_ORCA_ORPHANED") == "1" {
+		orphaned = true
+	}
 	if st.Closed || st.Exited {
 		status = "exited"
 		connected = false
@@ -565,7 +568,7 @@ func TestOrcaDetachObservationIsRepeatableAndRefLocal(t *testing.T) {
 	}
 }
 
-func TestOrcaStepResultDoesNotBypassUnverifiableTerminalStall(t *testing.T) {
+func TestOrcaStallWarnsWithoutSettlingAnUnverifiedResult(t *testing.T) {
 	dir := t.TempDir()
 	cfg := orcaTestConfig(t, dir, "")
 	cfg.StallTimeout = "1ms"
@@ -579,16 +582,40 @@ func TestOrcaStepResultDoesNotBypassUnverifiableTerminalStall(t *testing.T) {
 		t.Fatal(err)
 	}
 	proc := &orcaProcess{cfg: cfg, term: orcaTerminal{Handle: state.Handle, RuntimeID: "fake-runtime", IncarnationID: state.Incarnation}}
+	proc.ref = ExecutionRef{Backend: BackendOrca, Protocol: ProtocolOrcaTerminalV2, Target: targetFor(cfg), RunID: newID(), AttemptID: newID(), External: proc.Identity()}
 	worker := superviseOrcaStep(cfg, proc, resultPath)
+	deadline := time.After(8 * time.Second)
+	for {
+		select {
+		case event := <-worker.Events:
+			if strings.HasPrefix(event.SourceEventID, "orca-stall-v1:") {
+				if event.Activity.Status != "attention" || !strings.Contains(event.Diagnostic, "may still be running") {
+					t.Fatalf("stall notice lost its uncertainty: %+v", event)
+				}
+				goto warned
+			}
+		case err := <-worker.Done:
+			t.Fatalf("unverified result or stall ended the original execution: %v", err)
+		case <-deadline:
+			proc.Close()
+			t.Fatal("running but disconnected terminal did not emit a stall notice")
+		}
+	}
+warned:
+	select {
+	case err := <-worker.Done:
+		t.Fatalf("stall warning settled the original execution: %v", err)
+	case <-time.After(100 * time.Millisecond):
+	}
+	proc.Close()
 	select {
 	case err := <-worker.Done:
 		var backendErr *BackendError
-		if !errors.As(err, &backendErr) || backendErr.Code != BackendOutcomeUnknown || !strings.Contains(backendErr.Diagnostic, "liveness is unverifiable") {
-			t.Fatalf("unverified terminal result was not bounded as unknown: %v", err)
+		if !errors.As(err, &backendErr) || backendErr.Code != BackendOutcomeUnknown {
+			t.Fatalf("explicit observer detach lost the original uncertain result: %v", err)
 		}
-	case <-time.After(8 * time.Second):
-		proc.Close()
-		t.Fatal("saved result bypassed the Orca liveness stall bound")
+	case <-time.After(5 * time.Second):
+		t.Fatal("observer did not stop after an explicit detach")
 	}
 }
 
@@ -596,6 +623,7 @@ func TestOrcaNativeStepSettlesLiveTerminalWithConfirmedStop(t *testing.T) {
 	dir := t.TempDir()
 	cfg := orcaTestConfig(t, dir, "")
 	cfg.StallTimeout = "10s"
+	t.Setenv("STEERLINE_FAKE_ORCA_ORPHANED", "1")
 	state := fakeOrcaState{Handle: "completed-step", Incarnation: "inc-completed", Worktree: dir, Branch: "codex/test"}
 	if err := writeFakeOrcaState(dir, state); err != nil {
 		t.Fatal(err)
@@ -603,6 +631,9 @@ func TestOrcaNativeStepSettlesLiveTerminalWithConfirmedStop(t *testing.T) {
 	runID, attemptID := newID(), newID()
 	proc := &orcaProcess{cfg: cfg, term: orcaTerminal{Handle: state.Handle, RuntimeID: "fake-runtime", IncarnationID: state.Incarnation}}
 	proc.ref = ExecutionRef{Version: ExecutionRecordVersion, Backend: BackendOrca, Protocol: ProtocolOrcaTerminalV2, Target: targetFor(cfg), Agent: AgentSpec{Name: "codex"}, RunID: runID, AttemptID: attemptID, WorkspacePath: dir, WorkspaceBranch: state.Branch, BaseCommit: strings.Repeat("a", 40), External: proc.Identity()}
+	if observation, err := (orcaTerminalBackend{config: cfg}).Observe(context.Background(), proc.ref); err != nil || observation.Liveness != "live" {
+		t.Fatalf("connected orphaned terminal lost its exact live identity: %+v %v", observation, err)
+	}
 	resultPath := filepath.Join(dir, "result.json")
 	if err := os.WriteFile(resultPath, []byte(`{"result":"saved"}`), 0600); err != nil {
 		t.Fatal(err)
@@ -627,6 +658,42 @@ func TestOrcaNativeStepSettlesLiveTerminalWithConfirmedStop(t *testing.T) {
 	confirmed, err := confirmedOrcaStepStop(cfg, proc.ref, &StepAttemptRecord{AttemptID: attemptID, ResultPath: resultPath})
 	if err != nil || !confirmed {
 		t.Fatalf("restart reconciliation lost the confirmed stop: %v, %v", confirmed, err)
+	}
+}
+
+func TestRecoveredOrcaStepStopsOnlyAfterExactResultAndExitMarker(t *testing.T) {
+	dir := t.TempDir()
+	cfg := orcaTestConfig(t, dir, "")
+	t.Setenv("STEERLINE_FAKE_ORCA_ORPHANED", "1")
+	state := fakeOrcaState{Handle: "recovered-step", Incarnation: "inc-recovered", Worktree: dir, Branch: "codex/test"}
+	if err := writeFakeOrcaState(dir, state); err != nil {
+		t.Fatal(err)
+	}
+	runID, attemptID := newID(), newID()
+	proc := &orcaProcess{cfg: cfg, term: orcaTerminal{Handle: state.Handle, RuntimeID: "fake-runtime", IncarnationID: state.Incarnation}}
+	ref := ExecutionRef{Version: ExecutionRecordVersion, Backend: BackendOrca, Protocol: ProtocolOrcaTerminalV2, Target: targetFor(cfg), Agent: AgentSpec{Name: "codex"}, RunID: runID, AttemptID: attemptID, WorkspacePath: dir, WorkspaceBranch: state.Branch, BaseCommit: strings.Repeat("a", 40), External: proc.Identity()}
+	resultPath := filepath.Join(dir, "result.json")
+	if err := os.WriteFile(resultPath, []byte(`{"result":"saved"}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	attempt := &StepAttemptRecord{AttemptID: attemptID, ResultPath: resultPath}
+	if settled, err := settleRecoveredOrcaStep(context.Background(), cfg, ref, attempt); err != nil || settled {
+		t.Fatalf("result without an exit marker closed the live terminal: settled=%t err=%v", settled, err)
+	}
+	if current, err := readFakeOrcaState(dir, state.Handle); err != nil || current.Closed {
+		t.Fatalf("original terminal changed before exit proof: %+v %v", current, err)
+	}
+	if err := os.WriteFile(resultPath+".exit", []byte(attemptID+":0\r\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if settled, err := settleRecoveredOrcaStep(context.Background(), cfg, ref, attempt); err != nil || !settled {
+		t.Fatalf("confirmed original step was not settled: settled=%t err=%v", settled, err)
+	}
+	if current, err := readFakeOrcaState(dir, state.Handle); err != nil || !current.Closed {
+		t.Fatalf("exact original terminal was not closed: %+v %v", current, err)
+	}
+	if confirmed, err := confirmedOrcaStepStop(cfg, ref, attempt); err != nil || !confirmed {
+		t.Fatalf("restart lost the exact stop receipt: confirmed=%t err=%v", confirmed, err)
 	}
 }
 
