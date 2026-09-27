@@ -37,18 +37,6 @@ func (s *Service) reconcileExitedNativeStep(ctx context.Context) error {
 		if err != nil || ref.RunID != run.RunID || ref.AttemptID != attempt.AttemptID || ref.External != *execution.Process || ref.Backend != BackendKind(execution.Backend) || ref.Protocol != ExecutionProtocol(execution.Protocol) || ref.Target.ID != targetFor(config).ID {
 			continue
 		}
-		backend := backendFor(config)
-		observation, err := backend.Observe(ctx, ref)
-		settled := err == nil && observation.Liveness == "exited"
-		if !settled && ref.Backend == BackendOrca {
-			settled, err = confirmedOrcaStepStop(config, ref, attempt)
-			if err != nil {
-				return err
-			}
-		}
-		if !settled {
-			continue
-		}
 		resultPath := attempt.ResultPath
 		if resultPath == "" {
 			continue
@@ -60,6 +48,34 @@ func (s *Service) reconcileExitedNativeStep(ctx context.Context) error {
 		resultInfo, err := os.Stat(resultPath)
 		if err != nil || !resultInfo.Mode().IsRegular() || resultInfo.Size() <= 0 {
 			continue
+		}
+		backend := backendFor(config)
+		observation, err := backend.Observe(ctx, ref)
+		settled := err == nil && observation.Liveness == "exited"
+		if !settled && ref.Backend == BackendOrca {
+			settled, err = confirmedOrcaStepStop(config, ref, attempt)
+			if err != nil {
+				return err
+			}
+			if !settled && observation.Liveness == "live" {
+				settled, err = settleRecoveredOrcaStep(ctx, config, ref, attempt)
+				if err != nil {
+					return err
+				}
+			}
+		}
+		if !settled {
+			continue
+		}
+		var stepErr error
+		if ref.Backend == BackendOrca {
+			completed, exitCode, markerErr := nativeOrcaExitStatus(resultPath+".exit", attempt.AttemptID)
+			if markerErr != nil {
+				return markerErr
+			}
+			if completed && exitCode != 0 {
+				stepErr = fmt.Errorf("Orca native step command exited with status %d", exitCode)
+			}
 		}
 		s.Config = config // This exact run is now the one execution being reconciled.
 		if ref.Backend == BackendOrca {
@@ -89,9 +105,29 @@ func (s *Service) reconcileExitedNativeStep(ctx context.Context) error {
 		s.active = run
 		s.worker = nil
 		s.note(run, "steer", "step_result", "reconciled", "accepted the saved result after observing the original worker exit", attempt.AttemptID, map[string]any{"backend": ref.Backend, "protocol": ref.Protocol, "result_path": resultPath})
-		return s.finishMinimalStep(nil)
+		return s.finishMinimalStep(stepErr)
 	}
 	return nil
+}
+
+// A saved result alone cannot authorize closing an original terminal. The
+// fixed launcher must also have written its attempt-bound exit marker.
+func settleRecoveredOrcaStep(ctx context.Context, config Config, ref ExecutionRef, attempt *StepAttemptRecord) (bool, error) {
+	if attempt == nil || attempt.ResultPath == "" {
+		return false, nil
+	}
+	resultInfo, err := os.Stat(attempt.ResultPath)
+	if err != nil || !resultInfo.Mode().IsRegular() || resultInfo.Size() <= 0 {
+		return false, nil
+	}
+	completed, _, err := nativeOrcaExitStatus(attempt.ResultPath+".exit", attempt.AttemptID)
+	if err != nil || !completed {
+		return false, err
+	}
+	if err := settleCompletedOrcaStep(ctx, config, &orcaProcess{ref: ref}); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 func confirmedOrcaStepStop(config Config, ref ExecutionRef, attempt *StepAttemptRecord) (bool, error) {

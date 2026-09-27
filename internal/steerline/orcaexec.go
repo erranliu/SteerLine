@@ -555,6 +555,7 @@ func superviseOrcaStep(c Config, proc *orcaProcess, resultPath string) *Worker {
 		}()
 		var lastOutput int64
 		lastProgress := time.Now()
+		stallNoted := false
 		ticker := time.NewTicker(2 * time.Second)
 		defer ticker.Stop()
 		for {
@@ -575,7 +576,7 @@ func superviseOrcaStep(c Config, proc *orcaProcess, resultPath string) *Worker {
 				return
 			}
 			stoppedWithReceipt := false
-			if completed && !term.exited() && term.Connected && !term.Orphaned {
+			if completed && !term.exited() && term.Connected {
 				if e := settleCompletedOrcaStep(ctx, c, proc); e != nil {
 					w.Done <- e
 					return
@@ -649,6 +650,7 @@ func superviseOrcaStep(c Config, proc *orcaProcess, resultPath string) *Worker {
 			if term.LastOutputAt != lastOutput {
 				lastOutput = term.LastOutputAt
 				lastProgress = time.Now()
+				stallNoted = false
 			}
 			if term.exited() {
 				if e := proc.launcher.cleanup(); e != nil {
@@ -658,13 +660,20 @@ func superviseOrcaStep(c Config, proc *orcaProcess, resultPath string) *Worker {
 				w.Done <- errors.New("Orca terminal ended without its fixed native step result")
 				return
 			}
-			if stall > 0 && time.Since(lastProgress) > stall {
-				diagnostic := "Orca execution stalled; the terminal may still be running"
-				if term.Orphaned || !term.Connected {
-					diagnostic = "original Orca terminal liveness is unverifiable"
+			if stall > 0 && !stallNoted && time.Since(lastProgress) > stall {
+				stallNoted = true
+				if proc.ref.RunID != "" && proc.ref.AttemptID != "" {
+					diagnostic := "No Orca terminal output within the stall interval; the original execution may still be running"
+					if term.Orphaned || !term.Connected {
+						diagnostic += " (terminal is detached from its visible layout or connection)"
+					}
+					segment := fmt.Sprintf("orca-stall-v1:%s:%d", proc.outputSegment, lastOutput)
+					event := WorkerEvent{RunID: proc.ref.RunID, AttemptID: proc.ref.AttemptID, Source: "orca-terminal-v2", SourceEventID: segment, SourceIdentity: "terminal:" + proc.ref.External.RuntimeID + ":" + proc.ref.External.Terminal + ":" + proc.ref.External.Incarnation, SourceSegment: segment, SourceSeq: 1, Session: "terminal:" + proc.ref.External.Terminal + ":" + proc.ref.External.Incarnation, Diagnostic: diagnostic, Activity: ActivityEvent{Source: "orca", Kind: "note", Status: "attention", Title: "Orca terminal has no recent output", Detail: diagnostic}}
+					if !sendConversationWorkerEvent(ctx, w.Events, event) {
+						w.Done <- &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "Orca observation detached before stall notice could be recorded", Cause: ctx.Err()}
+						return
+					}
 				}
-				w.Done <- &BackendError{Code: BackendOutcomeUnknown, Diagnostic: diagnostic}
-				return
 			}
 		}
 	}()
