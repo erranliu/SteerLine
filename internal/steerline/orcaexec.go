@@ -14,6 +14,7 @@ import (
 	"regexp"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf16"
@@ -138,7 +139,7 @@ func (s *Service) startOrcaMinimalStepWorker(ctx context.Context, c Config, task
 	if err != nil {
 		return nil, err
 	}
-	launcher, err := writeNativeOrcaBatchRunner(ctx, c, run, attempt, stepExecutable, stepArgs, stdinPath, outputPath, captureStdout, env)
+	launcher, err := writeNativeOrcaBatchRunner(ctx, c, run, attempt, stepExecutable, stepArgs, stdinPath, outputPath, result+".exit", captureStdout, env)
 	if err != nil {
 		return nil, err
 	}
@@ -149,7 +150,9 @@ func (s *Service) startOrcaMinimalStepWorker(ctx context.Context, c Config, task
 		_ = launcher.cleanup()
 		return nil, err
 	}
-	command := "call " + filepath.Base(launcher.path) + " & exit"
+	// Keep the shell attached after the launcher writes its exit marker. The
+	// observer records an exact stop operation before closing the live PTY.
+	command := "call " + filepath.Base(launcher.path)
 	client := orcaClient{cfg: c}
 	title := "SteerLine " + run.RunID[:8] + " " + attempt.StepID + " " + attempt.AttemptID[:8]
 	term, err := client.terminalCreate(ctx, *run.WorktreePath, title, command)
@@ -255,12 +258,12 @@ func restoreOrcaExclude(path string, before []byte, existed bool) error {
 	return nil
 }
 
-func writeNativeOrcaBatchRunner(ctx context.Context, c Config, run *Run, attempt *StepAttemptRecord, executable string, args []string, stdinPath, outputPath string, captureStdout bool, env map[string]string) (*orcaStepLauncher, error) {
+func writeNativeOrcaBatchRunner(ctx context.Context, c Config, run *Run, attempt *StepAttemptRecord, executable string, args []string, stdinPath, outputPath, exitPath string, captureStdout bool, env map[string]string) (*orcaStepLauncher, error) {
 	if run == nil || run.WorktreePath == nil || attempt == nil || !stableExecutionID(attempt.AttemptID) {
 		return nil, errors.New("Orca native launcher requires the fixed worktree and attempt identity")
 	}
 	launcherPath := filepath.Join(*run.WorktreePath, ".steerline-launch-"+attempt.AttemptID+".cmd")
-	values := append([]string{launcherPath, executable, stdinPath, outputPath}, args...)
+	values := append([]string{launcherPath, executable, stdinPath, outputPath, exitPath}, args...)
 	for key, value := range env {
 		if !regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`).MatchString(key) {
 			return nil, fmt.Errorf("invalid Orca native worker environment name %q", key)
@@ -299,7 +302,7 @@ func writeNativeOrcaBatchRunner(ctx context.Context, c Config, run *Run, attempt
 	if err = AtomicWrite(excludePath, excludeAfter); err != nil {
 		return nil, err
 	}
-	scriptBytes := renderNativeOrcaBatchRunner(executable, args, stdinPath, outputPath, captureStdout, env)
+	scriptBytes := renderNativeOrcaBatchRunner(executable, args, stdinPath, outputPath, exitPath, attempt.AttemptID, captureStdout, env)
 	file, createErr := os.OpenFile(launcherPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
 	if createErr != nil {
 		_ = restoreOrcaExclude(excludePath, excludeBefore, excludeExisted)
@@ -319,7 +322,7 @@ func writeNativeOrcaBatchRunner(ctx context.Context, c Config, run *Run, attempt
 	return &orcaStepLauncher{path: launcherPath, bytes: scriptBytes, excludePath: excludePath, excludeBefore: excludeBefore, excludeAfter: excludeAfter, excludeExisted: excludeExisted}, nil
 }
 
-func renderNativeOrcaBatchRunner(executable string, args []string, stdinPath, outputPath string, captureStdout bool, env map[string]string) []byte {
+func renderNativeOrcaBatchRunner(executable string, args []string, stdinPath, outputPath, exitPath, attemptID string, captureStdout bool, env map[string]string) []byte {
 	var script strings.Builder
 	script.WriteString("@echo off\r\n@setlocal DisableDelayedExpansion\r\n")
 	script.WriteString("for /f \"tokens=1 delims==\" %%V in ('set BEADS_ 2^>nul') do set \"%%V=\"\r\n")
@@ -340,8 +343,74 @@ func renderNativeOrcaBatchRunner(executable string, args []string, stdinPath, ou
 	if captureStdout {
 		script.WriteString(" > " + windowsCommandLineArg(outputPath))
 	}
-	script.WriteString("\r\nset \"steerline_exit=%ERRORLEVEL%\"\r\nendlocal & exit /b %steerline_exit%\r\n")
+	script.WriteString("\r\nset \"steerline_exit=%ERRORLEVEL%\"\r\n")
+	script.WriteString("> " + windowsCommandLineArg(exitPath) + " echo " + attemptID + ":%steerline_exit%\r\n")
+	script.WriteString("endlocal & exit /b %steerline_exit%\r\n")
 	return []byte(script.String())
+}
+
+func nativeOrcaExitStatus(path, attemptID string) (bool, int, error) {
+	info, err := os.Lstat(path)
+	if os.IsNotExist(err) {
+		return false, 0, nil
+	}
+	if err != nil {
+		return false, 0, err
+	}
+	if !info.Mode().IsRegular() || info.Size() < 3 || info.Size() > 128 {
+		return false, 0, errors.New("Orca native step exit marker is not a bounded regular file")
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return false, 0, err
+	}
+	value := strings.TrimSpace(string(data))
+	prefix := attemptID + ":"
+	if !strings.HasPrefix(value, prefix) {
+		return false, 0, errors.New("Orca native step exit marker has another attempt identity")
+	}
+	code, err := strconv.Atoi(strings.TrimPrefix(value, prefix))
+	if err != nil || code < 0 {
+		return false, 0, errors.New("Orca native step exit marker has an invalid process status")
+	}
+	return true, code, nil
+}
+
+func settleCompletedOrcaStep(ctx context.Context, c Config, proc *orcaProcess) error {
+	ref := proc.ref
+	records := executionRecords{root: c.RunDir}
+	opID := "stop-" + ref.AttemptID
+	payload := struct{ Policy, Grace string }{"fixed_local_execution_stop", c.ShutdownGrace}
+	op := Operation{Version: ExecutionRecordVersion, ID: opID, RunID: ref.RunID, AttemptID: ref.AttemptID, Backend: ref.Backend, Protocol: ref.Protocol, Target: ref.Target, Action: "stop", PayloadDigest: digestValue(payload), Status: OperationPending, StartedAt: now(), UpdatedAt: now(), Ref: &ref}
+	if old, err := records.loadOperation(ref.RunID, ref.AttemptID, opID); err == nil {
+		if old.Action != op.Action || old.PayloadDigest != op.PayloadDigest || old.Target != op.Target || old.Ref == nil || digestValue(*old.Ref) != digestValue(ref) {
+			return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "Orca step stop operation conflicts with its fixed terminal"}
+		}
+		if old.Status == OperationConfirmed {
+			return nil
+		}
+		return &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "original Orca step stop operation remains unresolved; it will not be replayed"}
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+	if err := records.saveOperation(op); err != nil {
+		return err
+	}
+	op.Status, op.UpdatedAt = OperationInFlight, now()
+	if err := records.saveOperation(op); err != nil {
+		return err
+	}
+	receipt, stopErr := (orcaTerminalBackend{config: c}).StopExecution(ctx, ref, op, nil)
+	if stopErr != nil {
+		op.Status, op.Diagnostic, op.UpdatedAt = OperationUnknown, stopErr.Error(), now()
+		return errors.Join(stopErr, records.saveOperation(op))
+	}
+	if receipt.Disposition != "confirmed" {
+		op.Status, op.Diagnostic, op.UpdatedAt = OperationAccepted, receipt.Diagnostic, now()
+		return errors.Join(&BackendError{Code: BackendOutcomeUnknown, Diagnostic: "Orca accepted step terminal close without exact PTY stop proof"}, records.saveOperation(op))
+	}
+	op.Status, op.Diagnostic, op.UpdatedAt = OperationConfirmed, receipt.Diagnostic, now()
+	return records.saveOperation(op)
 }
 
 func isASCII(value string) bool {
@@ -495,10 +564,21 @@ func superviseOrcaStep(c Config, proc *orcaProcess, resultPath string) *Worker {
 				w.Done <- e
 				return
 			}
-			if !term.exited() && (term.Orphaned || !term.Connected) {
-				w.Done <- &BackendError{Code: BackendUnreachable, Diagnostic: "original Orca terminal liveness is unverifiable"}
+			completed, exitCode, markerErr := nativeOrcaExitStatus(resultPath+".exit", proc.ref.AttemptID)
+			if markerErr != nil {
+				w.Done <- &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "Orca native step exit marker cannot be verified", Cause: markerErr}
 				return
 			}
+			stoppedWithReceipt := false
+			if completed && !term.exited() && term.Connected && !term.Orphaned {
+				if e := settleCompletedOrcaStep(ctx, c, proc); e != nil {
+					w.Done <- e
+					return
+				}
+				stoppedWithReceipt = true
+			}
+			// Orca can briefly report a detached tab while the same terminal
+			// keeps running. Preserve its identity until exit or the stall bound.
 			if f, openErr := os.Open(resultPath); openErr == nil {
 				b, readErr := io.ReadAll(io.LimitReader(f, (2<<20)+1))
 				closeErr := f.Close()
@@ -506,31 +586,47 @@ func superviseOrcaStep(c Config, proc *orcaProcess, resultPath string) *Worker {
 					w.Done <- &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "Orca native step result cannot be read within the 2 MiB bound", Cause: errors.Join(readErr, closeErr)}
 					return
 				}
-				// Do not publish output after the external identity was replaced.
-				settled, e := inspectBoundOrcaTerminal(ctx, c, proc.Identity())
-				if e != nil {
-					w.Done <- e
+				// A confirmed close receipt is stronger than Orca's later orphaned
+				// tab view. Otherwise recheck the original terminal identity.
+				settled := term
+				if !stoppedWithReceipt {
+					settled, e = inspectBoundOrcaTerminal(ctx, c, proc.Identity())
+					if e != nil {
+						w.Done <- e
+						return
+					}
+				}
+				if settled.exited() || stoppedWithReceipt {
+					if e := ctx.Err(); e != nil {
+						w.Done <- &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "Orca observation ended before step settlement", Cause: e}
+						return
+					}
+					if e := os.Chmod(resultPath, 0600); e != nil {
+						w.Done <- &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "Orca native step result could not be protected", Cause: e}
+						return
+					}
+					if e := proc.launcher.cleanup(); e != nil {
+						w.Done <- &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "Orca native step settled but its exact launcher cleanup could not be confirmed", Cause: e}
+						return
+					}
+					if completed && exitCode != 0 {
+						w.Done <- fmt.Errorf("Orca native step command exited with status %d", exitCode)
+					} else {
+						w.Done <- nil
+					}
 					return
 				}
-				if !settled.exited() {
-					continue
-				}
-				if e := ctx.Err(); e != nil {
-					w.Done <- &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "Orca observation ended before step settlement", Cause: e}
-					return
-				}
-				if e := os.Chmod(resultPath, 0600); e != nil {
-					w.Done <- &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "Orca native step result could not be protected", Cause: e}
-					return
-				}
-				if e := proc.launcher.cleanup(); e != nil {
-					w.Done <- &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "Orca native step settled but its exact launcher cleanup could not be confirmed", Cause: e}
-					return
-				}
-				w.Done <- nil
-				return
+				term = settled
 			} else if !os.IsNotExist(openErr) {
 				w.Done <- &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "Orca result file is inaccessible", Cause: openErr}
+				return
+			}
+			if stoppedWithReceipt {
+				if e := proc.launcher.cleanup(); e != nil {
+					w.Done <- &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "Orca native step stopped without result but launcher cleanup failed", Cause: e}
+				} else {
+					w.Done <- errors.New("Orca native step command completed without its fixed result")
+				}
 				return
 			}
 			if term.AgentWait != nil {
@@ -558,7 +654,11 @@ func superviseOrcaStep(c Config, proc *orcaProcess, resultPath string) *Worker {
 				return
 			}
 			if stall > 0 && time.Since(lastProgress) > stall {
-				w.Done <- &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "Orca execution stalled; the terminal may still be running"}
+				diagnostic := "Orca execution stalled; the terminal may still be running"
+				if term.Orphaned || !term.Connected {
+					diagnostic = "original Orca terminal liveness is unverifiable"
+				}
+				w.Done <- &BackendError{Code: BackendOutcomeUnknown, Diagnostic: diagnostic}
 				return
 			}
 		}

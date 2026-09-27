@@ -565,6 +565,71 @@ func TestOrcaDetachObservationIsRepeatableAndRefLocal(t *testing.T) {
 	}
 }
 
+func TestOrcaStepResultDoesNotBypassUnverifiableTerminalStall(t *testing.T) {
+	dir := t.TempDir()
+	cfg := orcaTestConfig(t, dir, "")
+	cfg.StallTimeout = "1ms"
+	state := fakeOrcaState{Handle: "unverifiable-step", Incarnation: "inc-unverifiable"}
+	if err := writeFakeOrcaState(dir, state); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("STEERLINE_FAKE_ORCA_DISCONNECTED", "1")
+	resultPath := filepath.Join(dir, "saved-result.json")
+	if err := os.WriteFile(resultPath, []byte(`{"result":"saved"}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	proc := &orcaProcess{cfg: cfg, term: orcaTerminal{Handle: state.Handle, RuntimeID: "fake-runtime", IncarnationID: state.Incarnation}}
+	worker := superviseOrcaStep(cfg, proc, resultPath)
+	select {
+	case err := <-worker.Done:
+		var backendErr *BackendError
+		if !errors.As(err, &backendErr) || backendErr.Code != BackendOutcomeUnknown || !strings.Contains(backendErr.Diagnostic, "liveness is unverifiable") {
+			t.Fatalf("unverified terminal result was not bounded as unknown: %v", err)
+		}
+	case <-time.After(8 * time.Second):
+		proc.Close()
+		t.Fatal("saved result bypassed the Orca liveness stall bound")
+	}
+}
+
+func TestOrcaNativeStepSettlesLiveTerminalWithConfirmedStop(t *testing.T) {
+	dir := t.TempDir()
+	cfg := orcaTestConfig(t, dir, "")
+	cfg.StallTimeout = "10s"
+	state := fakeOrcaState{Handle: "completed-step", Incarnation: "inc-completed", Worktree: dir, Branch: "codex/test"}
+	if err := writeFakeOrcaState(dir, state); err != nil {
+		t.Fatal(err)
+	}
+	runID, attemptID := newID(), newID()
+	proc := &orcaProcess{cfg: cfg, term: orcaTerminal{Handle: state.Handle, RuntimeID: "fake-runtime", IncarnationID: state.Incarnation}}
+	proc.ref = ExecutionRef{Version: ExecutionRecordVersion, Backend: BackendOrca, Protocol: ProtocolOrcaTerminalV2, Target: targetFor(cfg), Agent: AgentSpec{Name: "codex"}, RunID: runID, AttemptID: attemptID, WorkspacePath: dir, WorkspaceBranch: state.Branch, BaseCommit: strings.Repeat("a", 40), External: proc.Identity()}
+	resultPath := filepath.Join(dir, "result.json")
+	if err := os.WriteFile(resultPath, []byte(`{"result":"saved"}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(resultPath+".exit", []byte(attemptID+":0\r\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	worker := superviseOrcaStep(cfg, proc, resultPath)
+	select {
+	case err := <-worker.Done:
+		if err != nil {
+			t.Fatalf("completed step did not settle: %v", err)
+		}
+	case <-time.After(8 * time.Second):
+		proc.Close()
+		t.Fatal("completed step terminal was not stopped")
+	}
+	op, err := (executionRecords{root: dir}).loadOperation(runID, attemptID, "stop-"+attemptID)
+	if err != nil || op.Status != OperationConfirmed || op.Ref == nil || *op.Ref != proc.ref {
+		t.Fatalf("exact stop confirmation was not durable: %+v, %v", op, err)
+	}
+	confirmed, err := confirmedOrcaStepStop(cfg, proc.ref, &StepAttemptRecord{AttemptID: attemptID, ResultPath: resultPath})
+	if err != nil || !confirmed {
+		t.Fatalf("restart reconciliation lost the confirmed stop: %v, %v", confirmed, err)
+	}
+}
+
 func TestSlowOrcaObservationDoesNotBlockOtherRefStop(t *testing.T) {
 	dir := t.TempDir()
 	cfg := orcaTestConfig(t, dir, "")

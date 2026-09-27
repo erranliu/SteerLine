@@ -39,7 +39,14 @@ func (s *Service) reconcileExitedNativeStep(ctx context.Context) error {
 		}
 		backend := backendFor(config)
 		observation, err := backend.Observe(ctx, ref)
-		if err != nil || observation.Liveness != "exited" {
+		settled := err == nil && observation.Liveness == "exited"
+		if !settled && ref.Backend == BackendOrca {
+			settled, err = confirmedOrcaStepStop(config, ref, attempt)
+			if err != nil {
+				return err
+			}
+		}
+		if !settled {
 			continue
 		}
 		resultPath := attempt.ResultPath
@@ -87,6 +94,29 @@ func (s *Service) reconcileExitedNativeStep(ctx context.Context) error {
 	return nil
 }
 
+func confirmedOrcaStepStop(config Config, ref ExecutionRef, attempt *StepAttemptRecord) (bool, error) {
+	if attempt.ResultPath == "" {
+		return false, nil
+	}
+	completed, code, err := nativeOrcaExitStatus(attempt.ResultPath+".exit", attempt.AttemptID)
+	if err != nil || !completed || code != 0 {
+		return false, err
+	}
+	records := executionRecords{root: config.RunDir}
+	op, err := records.loadOperation(ref.RunID, ref.AttemptID, "stop-"+ref.AttemptID)
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	payload := struct{ Policy, Grace string }{"fixed_local_execution_stop", config.ShutdownGrace}
+	if op.Action != "stop" || op.PayloadDigest != digestValue(payload) || op.Target != ref.Target || op.Ref == nil || digestValue(*op.Ref) != digestValue(ref) {
+		return false, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "saved Orca step stop differs from the fixed execution"}
+	}
+	return op.Status == OperationConfirmed, nil
+}
+
 func isReconcileableStepStatus(status string) bool {
 	switch status {
 	case "dispatching", "dispatched", "running", "outcome_unknown":
@@ -126,7 +156,7 @@ func (s *Service) reconcileExitedOrcaStepLauncher(ctx context.Context, run *Run,
 	}
 	env := mergeStepEnv(minimalStepEnv(s.Config, run, attempt), contract.Environment)
 	launcherPath := filepath.Join(*run.WorktreePath, ".steerline-launch-"+attempt.AttemptID+".cmd")
-	expected := renderNativeOrcaBatchRunner(stepExecutable, stepArgs, stdinPath, outputPath, captureStdout, env)
+	expected := renderNativeOrcaBatchRunner(stepExecutable, stepArgs, stdinPath, outputPath, resultPath+".exit", attempt.AttemptID, captureStdout, env)
 	expectedDigest := operationDigest(expected)
 	if attempt.NativeLauncherPath != "" && canonical(attempt.NativeLauncherPath) != canonical(launcherPath) {
 		return nativeErr("authority_mismatch", "native Orca launcher path differs from its fixed step attempt")
