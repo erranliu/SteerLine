@@ -40,18 +40,22 @@
 
 另建独立 clone、SQLite 与 H-A15 单次故障代理。代理未布置故障时通过真实 Orca 1.4.209 的 worktree/agent 启动、输出、精确观察、一次暂断后同 terminal/incarnation 重接、工作树检查与终端关闭取证，为其独立目标认证五项本机必需能力。隔离 Task 95013 的 12 选项 Decision 接受 `marker-01` 后，代理让原 `terminal create` 在 Orca 已返回 `ok=true` 后丢弃回执。原续跑 attempt `535ec59416ca1713b72fff6465ba4516` 的唯一终端实际运行并写一次绑定标记；中心保存 Operation=`outcome_unknown`、Decision=`resuming` 与执行槽。重开同一 SQLite 后 attempts 仍只有三条、同一工作树只有原 terminal/incarnation，没有第二次创建或 PR。由于 Orca 该回执没有 request ID，未把 unknown 自动提升为 applied。最后仅关闭精确测试终端，回读 exited/`stop_unverified`，未伪称正常完成。[原回执、标记与状态样本](pr-05-h15-response-loss-2026-09-28.json)。
 
-清理后再次启动最初暴露原格式 `resuming`/`answer_saved` 的答案记录不完整：运行投影保留答案，但 SQLite Decision row 丢失答案字节，导致身份校验拒绝。仅在原接受命令、原 Decision/Attempt、下一轮 unknown Attempt 和丢失回执 Operation 全部匹配时，中心现从同一 SQLite 的接受命令恢复缺失答案字节；不重发或标记应用。修复后的服务能启动并生成[只读恢复预览](pr-05-h15-recovery-preview-2026-09-28.json)：槽仍占用、工作树干净、旧终端身份不可用，`retry_run` 与 minimal-v1 `mark_stopped` 仍不合格。因此 H-A16 的**可执行**恢复确认尚未通过。
+清理后再次启动最初暴露原格式 `resuming`/`answer_saved` 的答案记录不完整：运行投影保留答案，但 SQLite Decision row 丢失答案字节，导致身份校验拒绝。仅在原接受命令、原 Decision/Attempt、下一轮 unknown Attempt 和丢失回执 Operation 全部匹配时，中心现从同一 SQLite 的接受命令恢复缺失答案字节；不重发或标记应用。修复后的服务能启动并生成[只读恢复预览](pr-05-h15-recovery-preview-2026-09-28.json)：槽仍占用、工作树干净、旧终端身份不可用，`retry_run` 与 minimal-v1 `mark_stopped` 仍不合格。这个 H-A15 现场本身没有可执行恢复资格；后续独立目标见下文。
 
 ## 2026-09-28 活跃 worker incarnation 故障注入
 
 复用测试源 clone，另建独立 worktree、SQLite 与 Orca 代理目标，并在该目标上重新认证五项本机必需能力。隔离 Task 95013 的原 implement 问题接受 `marker-01` 后，续跑 worker 在精确终端写一次身份标记并保持存活。代理仅把一次真实 `terminal show` 回执中的 `incarnationId` 改为新值，此后对同句柄观察保持该值；[原回执与改后回执](pr-05-h6-incarnation-2026-09-28.json)除这一个字段完全相同。中心以 `identity_mismatch` 退出当前 worker，将原续跑 Attempt 留为 `outcome_unknown`、Decision 保持 `reply_accepted`、执行槽保留。绕开代理直接查 Orca，原句柄/原 incarnation 的终端当时仍存活。同 SQLite 重启后服务 `running/ready`，仍只有原三条 Attempt、同一原终端，未重派或创建 PR；随后只关闭测试终端并正常停服务。这个结果验证活跃 worker 对观察到的同句柄新 incarnation 会拒绝冒认并保留现场；它是**代理注入**，不宣称 Orca 平台实际创建了同句柄的新 incarnation。
+
+## 2026-09-28 合格恢复预览与在线确认
+
+另建同一测试源 clone 的独立工作树、SQLite 和确定性失败 worker。原 implement Attempt 已结算 `failed`，直接 Orca 终端列表为空，固定工作树干净且 HEAD 等于失败步骤输入版本。在线[只读恢复预览](pr-05-recovery-preview-first-2026-09-28.json)显示 manual、未暂停、无槽占用/阻塞，`retry_reason` 为空；minimal-v1 `mark_stopped` 仍被拒。操作者确认原终端已停止后提交 `retry_run`，中心在原 Task/Run/工作树创建唯一新 Attempt。新 worker 再次确定性失败暴露服务误将已保存的步骤失败升级为致命退出；修复后对同一已结算失败对象再次[预览资格](pr-05-recovery-preview-second-2026-09-28.json)并提交[带依据的确认命令](pr-05-recovery-retry-command-2026-09-28.json)。第三个 Attempt 同样失败，但中心保持 `running/ready`、槽释放、原 claim/工作树/base 不变，未创建 PR；测试服务最后正常停止。[完整身份与结论](pr-05-recovery-confirmation-2026-09-28.json)。这通过了可执行恢复确认；精确 TTY 轮次折叠仍另测。
 
 ## 尚未取得的门槛
 
 | 门槛 | 下一步与判定边界 |
 | --- | --- |
 | #3 H-A6、H-A14、H-A15 | 95012 已取得绑定证明、Decision.applied 与同 attempt 重启对账；旧隔离 95013 验证 resuming 中终端死亡不重派，H-A15 验证 Orca 实际创建原续跑终端后回执丢失、同 SQLite 重启保留原 Attempt/Operation/占槽且不重派。新的[活跃 worker 同句柄 incarnation 注入](pr-05-h6-incarnation-2026-09-28.json)验证身份拒绝、unknown/占槽保留与同库重启不重派；Orca 平台真实产生这种同句柄换代尚未观察。H-A15 回执没有平台 request ID，所以不支持自动确认应用。95008/95009/95010 的失败 attempts 不重放；95011 的 failed 决策与 publish unknown 现场不回写成成功。 |
-| #3 H-A16 与恢复确认 | 在有真实可读 turn/final 事件的 TTY 会话里核对精确轮次折叠与导航；准备符合当前 step/Operation 资格的隔离恢复对象，检查完整预览并执行确认。原 95010 无可读 session 记录，不能作为精确折叠通过证据。 |
+| #3 H-A16 与恢复确认 | [合格的本机原生恢复预览与确认](pr-05-recovery-confirmation-2026-09-28.json)已通过。仍须在有真实可读 turn/final 事件的 TTY 会话里核对精确轮次折叠与导航；原 95010 无可读 session 记录，不能作为折叠通过证据。 |
 | #4 P10 | 本机中心 1.4.209/home 远端 1.4.210 已验证命令权限提示的观察和人工处置；活跃 home 问题上的 8553 字节序列化回复已在实际发送入口拒绝，并保留原问题供有界回复。剩余早期管理员/UAC 提示本身及处置的完整可见捕获。 |
 | #4 P13 | 主线已接入中心校验器，正负向受监管 verify 回执和有界修复循环已有真机证据。本轮未重测远端；其余无效结果按[现行门槛](../spec/orca-probe/remaining-gates.md)分别核对，不把纯函数测试单独当作端到端证据。 |
 

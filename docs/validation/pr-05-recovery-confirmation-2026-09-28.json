@@ -1,0 +1,70 @@
+{
+  "kind": "pr05-live-eligible-native-recovery-confirmation",
+  "captured_at": "2026-09-27T20:10:32Z",
+  "scope": "isolated Windows local Orca 1.4.209 target, source test clone, fresh task worktree and SQLite",
+  "fixture_source": "pr-05-recovery-worker-2026-09-28.py.txt",
+  "fixture_source_sha256": "1cb9e9c906d99d2b248b3f8a174472cfafbc0c1b4b051b25f701e5cb1c3c0221",
+  "target_id": "orca:c3f46d54ccb7547aa9205db2",
+  "task_id": "95013",
+  "workflow_run_id": "2431ddc5540c929cbe07015c1c9e3bff",
+  "execution_id": "f3771c74218de6bec554060e4d77f332",
+  "fixed_worktree_branch": "codex/95013-2431ddc5540c",
+  "fixed_base_and_final_head": "c3f98ee644c18761f2c60c4769f822806856e7fc",
+  "initial_settled_failure": {
+    "attempt_id": "e88ab44f27642ebaf8272a7b5b9bc013",
+    "attempt_number": 1,
+    "status": "failed",
+    "worker_marker": "pr-05-recovery-worker-first-2026-09-28.json",
+    "read_only_preview": "pr-05-recovery-preview-first-2026-09-28.json",
+    "retry_reason_absent": true,
+    "mark_stopped_reason": "minimal-v1 requires current step-attempt and Operation reconciliation",
+    "old_terminal_list": "pr-05-recovery-old-terminal-list-2026-09-28.json",
+    "old_terminal_count": 0,
+    "workspace_clean_at_failed_input_revision": true,
+    "slot_occupied": false
+  },
+  "first_confirmed_retry": {
+    "command_id": "bc24a6c462dd1c1a700d4ad4721b4141",
+    "status": "accepted",
+    "code": "worker_started",
+    "same_run_and_worktree": true,
+    "new_attempt_id": "579d1fbbba7bf213de4a33a689242b9a",
+    "attempt_number": 2,
+    "worker_marker": "pr-05-recovery-worker-second-2026-09-28.json",
+    "subsequent_fixture_failure": "failed",
+    "original_service_behavior": "exited after the settled failure; fixed before the second confirmed retry"
+  },
+  "second_eligible_preview": {
+    "read_only_preview": "pr-05-recovery-preview-second-2026-09-28.json",
+    "retry_reason_absent": true,
+    "old_terminal_list": "pr-05-recovery-second-terminal-list-2026-09-28.json",
+    "old_terminal_count": 0,
+    "workspace_clean_at_failed_input_revision": true,
+    "slot_occupied": false
+  },
+  "second_confirmed_retry_after_fix": {
+    "command_receipt": "pr-05-recovery-retry-command-2026-09-28.json",
+    "command_id": "ab1a8fa08c08785ee92af5324e57810c",
+    "status": "accepted",
+    "code": "worker_started",
+    "confirmation_basis_in_accepted_command": true,
+    "previous_attempt_id": "579d1fbbba7bf213de4a33a689242b9a",
+    "new_attempt_id": "ef504bb68157f849de5d378ed4297856",
+    "attempt_number": 3,
+    "worker_marker": "pr-05-recovery-worker-third-2026-09-28.json",
+    "subsequent_fixture_failure": "failed",
+    "service_remained_running_and_ready": true,
+    "slot_released": true,
+    "final_terminal_list": "pr-05-recovery-final-terminal-list-2026-09-28.json",
+    "final_terminal_count": 0,
+    "task_claim_retained": true,
+    "pr_created": false
+  },
+  "cleanup": {
+    "service_stop_receipt_id": "bb5d5a6f17781a0626abb6220beffc53",
+    "service_process_exited_and_locks_released": true,
+    "test_worktree_clean_at_base": true,
+    "failed_task_not_reported_delivered": true
+  },
+  "limit": "This proves an eligible current minimal-v1 native retry and post-failure service continuity on the isolated Orca target. It does not make mark_stopped eligible for minimal-v1 or prove precise TTY turn folding."
+}

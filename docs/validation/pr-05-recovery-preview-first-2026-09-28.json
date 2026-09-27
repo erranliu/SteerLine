@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "sampled_at": "2026-09-27T20:03:18.2691659Z",
+  "run_id": "2431ddc5540c929cbe07015c1c9e3bff",
+  "run_revision": 5,
+  "service_instance_id": "485dfeeaef735a646900a306a4faf276",
+  "service_status": "running",
+  "dispatch_mode": "manual",
+  "dispatch_paused": false,
+  "slot_occupied": false,
+  "task_id": "95013",
+  "execution_status": "failed",
+  "delivery_status": "blocked",
+  "backend": "orca",
+  "protocol": "orca_terminal_v2",
+  "target": {
+    "id": "orca:c3f46d54ccb7547aa9205db2",
+    "worktree_id": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-pr05-recovery-20260928\\worktrees\\2431ddc5540c929cbe07015c1c9e3bff",
+    "branch": "codex/95013-2431ddc5540c",
+    "base_revision": "c3f98ee644c18761f2c60c4769f822806856e7fc"
+  },
+  "process_check": "execution identity unavailable",
+  "workspace": {
+    "repository": "c:\\users\\lmas1\\appdata\\local\\temp\\steerlinenativeexitacceptanceh15-20260928\\.git",
+    "worktree": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-pr05-recovery-20260928\\worktrees\\2431ddc5540c929cbe07015c1c9e3bff",
+    "branch": "codex/95013-2431ddc5540c",
+    "base": "c3f98ee644c18761f2c60c4769f822806856e7fc",
+    "head": "c3f98ee644c18761f2c60c4769f822806856e7fc",
+    "dirty": false,
+    "checked_at": "2026-09-27T20:03:18.9420118Z"
+  },
+  "native_claim": {
+    "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\steerlinenativeexitacceptanceh15-20260928\\.git",
+    "task_id": "95013",
+    "batch_id": "b3d75a51348adea8097d9797c644945f",
+    "title": "PR5 eligible recovery confirmation probe: settled implement failure and explicit retry on the fixed run/worktree.",
+    "type": "task",
+    "priority": 2,
+    "contract_id": "pr05-h6-local-20260927-95013",
+    "claimant": "pr05-recovery-validation",
+    "source": "native",
+    "status": "in_progress",
+    "version": 2,
+    "created_at": "2026-09-27T20:01:06.0875414Z",
+    "updated_at": "2026-09-27T20:01:37.6841778Z"
+  },
+  "blockers": null,
+  "mark_stopped_reason": "minimal-v1 requires current step-attempt and Operation reconciliation"
+}

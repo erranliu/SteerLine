@@ -1,0 +1,32 @@
+{
+  "id": "f374055b-4171-448e-804b-654e64f8e678",
+  "ok": true,
+  "result": {
+    "terminals": [],
+    "hostScope": {
+      "hostIds": [
+        "local"
+      ],
+      "omittedHostIds": [
+        "runtime:bed55de0-6d7d-497e-b1d5-3abab256b2ee",
+        "runtime:e68f4edf-8a83-42c2-a9da-6d404d3aa3d8"
+      ],
+      "omittedHostSelectors": [
+        {
+          "hostId": "runtime:bed55de0-6d7d-497e-b1d5-3abab256b2ee",
+          "selector": "--environment home"
+        },
+        {
+          "hostId": "runtime:e68f4edf-8a83-42c2-a9da-6d404d3aa3d8",
+          "selector": "--environment 台式机64g"
+        }
+      ]
+    },
+    "topologyRevisions": {},
+    "totalCount": 0,
+    "truncated": false
+  },
+  "_meta": {
+    "runtimeId": "3dd6023d-87dd-4055-bcf6-f8dd87c3c731"
+  }
+}

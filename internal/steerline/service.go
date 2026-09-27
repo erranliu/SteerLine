@@ -1705,7 +1705,7 @@ func (s *Service) run(ctx context.Context, dispatchMode string) (retErr error) {
 				return e
 			}
 		case e := <-done:
-			if err := s.finished(e); err != nil {
+			if err := s.finishWorkerInLoop(e); err != nil {
 				return err
 			}
 		case <-decisionTick.C:
@@ -1753,6 +1753,15 @@ func (s *Service) run(ctx context.Context, dispatchMode string) (retErr error) {
 			}
 		}
 	}
+}
+
+func (s *Service) finishWorkerInLoop(workerErr error) error {
+	err := s.finished(workerErr)
+	var settled *settledMinimalStepFailure
+	if errors.As(err, &settled) {
+		return nil
+	}
+	return err
 }
 
 func (s *Service) shutdown() {

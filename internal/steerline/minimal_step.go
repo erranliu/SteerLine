@@ -1073,6 +1073,13 @@ func (s *Service) finishMinimalStep(exitErr error) error {
 	return s.save()
 }
 
+// A settled failed step is a task outcome, not a service failure. Keep the
+// cause visible to direct callers while the service loop continues polling.
+type settledMinimalStepFailure struct{ cause error }
+
+func (e *settledMinimalStepFailure) Error() string { return e.cause.Error() }
+func (e *settledMinimalStepFailure) Unwrap() error { return e.cause }
+
 func (s *Service) failMinimalStep(run *Run, workflow *WorkflowRunRecord, execution *ExecutionRecord, attempt *StepAttemptRecord, cause error, unknown bool) error {
 	status := "failed"
 	if unknown {
@@ -1112,7 +1119,13 @@ func (s *Service) failMinimalStep(run *Run, workflow *WorkflowRunRecord, executi
 	}
 	s.note(run, "steer", "step_result", status, "minimal-v1 step blocked", attempt.StepID, map[string]any{"attempt_id": attempt.AttemptID, "outcome_unknown": unknown, "reason": cause.Error()})
 	s.closeActivity(run)
-	return errors.Join(cause, s.save())
+	if err := s.save(); err != nil {
+		return errors.Join(cause, err)
+	}
+	if unknown {
+		return cause
+	}
+	return &settledMinimalStepFailure{cause: cause}
 }
 
 func validateMinimalWorkspaceReceipt(receipt, actual WorkspaceEvidence) error {
