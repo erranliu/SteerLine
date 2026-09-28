@@ -1,0 +1,2 @@
+request_id 8e8dc53ae5b3fa3f7425f6a495cd327d
+{"version":1,"request_id":"8e8dc53ae5b3fa3f7425f6a495cd327d","request_digest":"ddc88243c2a952690fd2b3787cc5c4566bcda008c1b078180bb92c032c7a50a7","instance_id":"a3fef28bb658bc9186d79d292d1d019d","action":"pause_dispatch","status":"applied","code":"applied","message":"control action applied","requested_by":"Codex: user requested modular refactoring tasks and DAG","submitted_at":"2026-09-28T08:08:25.8716656Z","accepted_at":"2026-09-28T08:08:25.9674689Z","completed_at":"2026-09-28T08:08:26.0378126Z","control_revision":10}

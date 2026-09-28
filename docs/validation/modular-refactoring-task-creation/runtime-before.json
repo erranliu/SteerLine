@@ -1,0 +1,450 @@
+{
+  "schema_version": 5,
+  "repository": {
+    "path": "C:\\Project\\SteerLine",
+    "remote": "origin",
+    "branch": "main",
+    "identity": "c:\\project\\steerline\\.git"
+  },
+  "service": {
+    "mode": "scheduler",
+    "instance_id": "a3fef28bb658bc9186d79d292d1d019d",
+    "pid": 45916,
+    "status": "running",
+    "claimant": "steerline-e6a8a7b6252fd3170bfef5fa",
+    "error": null,
+    "process_identity": {
+      "kind": "os",
+      "pid": 45916,
+      "created": "01dd4f201b334167",
+      "executable": "c:\\steerlineruntime\\bin\\steerline.exe"
+    },
+    "startup_id": "8f76059248aced6c3affe05476df5c96",
+    "config_digest": "cb08f2e2073b526956ae36502f8133323cd2ab883e7e8b98607616516635d27e",
+    "ready": true,
+    "control_protocol": 1,
+    "capabilities": [
+      "answer_decision",
+      "retry_run",
+      "mark_stopped",
+      "resolve_command",
+      "start_task",
+      "set_dispatch_mode",
+      "pause_dispatch",
+      "resume_dispatch",
+      "stop_service"
+    ],
+    "heartbeat_interval_ms": 5000
+  },
+  "control": {
+    "dispatch_mode": "manual",
+    "dispatch_paused": false,
+    "revision": 8,
+    "operation": null,
+    "blockers": []
+  },
+  "tasks": [
+    {
+      "project_identity": "c:\\project\\steerline\\.git",
+      "task_id": "14",
+      "status": "open",
+      "version": 5
+    },
+    {
+      "project_identity": "c:\\project\\steerline\\.git",
+      "task_id": "15",
+      "status": "open",
+      "version": 3
+    },
+    {
+      "project_identity": "c:\\project\\steerline\\.git",
+      "task_id": "16",
+      "status": "open",
+      "version": 2
+    },
+    {
+      "project_identity": "c:\\project\\steerline\\.git",
+      "task_id": "17",
+      "status": "open",
+      "version": 1
+    },
+    {
+      "project_identity": "c:\\project\\steerline\\.git",
+      "task_id": "18",
+      "status": "open",
+      "version": 1
+    },
+    {
+      "project_identity": "c:\\project\\steerline\\.git",
+      "task_id": "19",
+      "status": "open",
+      "version": 1
+    },
+    {
+      "project_identity": "c:\\project\\steerline\\.git",
+      "task_id": "20",
+      "status": "open",
+      "version": 1
+    },
+    {
+      "project_identity": "c:\\project\\steerline\\.git",
+      "task_id": "21",
+      "status": "open",
+      "version": 1
+    },
+    {
+      "project_identity": "c:\\project\\steerline\\.git",
+      "task_id": "22",
+      "status": "open",
+      "version": 1
+    },
+    {
+      "project_identity": "c:\\project\\steerline\\.git",
+      "task_id": "23",
+      "status": "open",
+      "version": 1
+    },
+    {
+      "project_identity": "c:\\project\\steerline\\.git",
+      "task_id": "24",
+      "status": "open",
+      "version": 2
+    },
+    {
+      "project_identity": "c:\\project\\steerline\\.git",
+      "task_id": "26",
+      "status": "open",
+      "version": 3
+    },
+    {
+      "project_identity": "c:\\project\\steerline\\.git",
+      "task_id": "27",
+      "status": "open",
+      "version": 1
+    },
+    {
+      "project_identity": "c:\\project\\steerline\\.git",
+      "task_id": "28",
+      "status": "open",
+      "version": 1
+    },
+    {
+      "project_identity": "c:\\project\\steerline\\.git",
+      "task_id": "29",
+      "status": "open",
+      "version": 1
+    },
+    {
+      "project_identity": "c:\\project\\steerline\\.git",
+      "task_id": "3",
+      "status": "open",
+      "version": 1
+    },
+    {
+      "project_identity": "c:\\project\\steerline\\.git",
+      "task_id": "30",
+      "status": "open",
+      "version": 3
+    },
+    {
+      "project_identity": "c:\\project\\steerline\\.git",
+      "task_id": "31",
+      "status": "open",
+      "version": 1
+    },
+    {
+      "project_identity": "c:\\project\\steerline\\.git",
+      "task_id": "32",
+      "status": "open",
+      "version": 1
+    },
+    {
+      "project_identity": "c:\\project\\steerline\\.git",
+      "task_id": "4",
+      "status": "open",
+      "version": 1
+    },
+    {
+      "project_identity": "c:\\project\\steerline\\.git",
+      "task_id": "6",
+      "status": "open",
+      "version": 1
+    }
+  ],
+  "workflow_runs": [
+    {
+      "project_identity": "c:\\project\\steerline\\.git",
+      "workflow_run_id": "752d3210250b2f258e417dc6d2514c49",
+      "task_id": "14",
+      "phase": "abandoned"
+    },
+    {
+      "project_identity": "c:\\project\\steerline\\.git",
+      "workflow_run_id": "82e5d3178ae7447ee6e2ec12fdf130eb",
+      "task_id": "26",
+      "phase": "abandoned"
+    },
+    {
+      "project_identity": "c:\\project\\steerline\\.git",
+      "workflow_run_id": "a189b2ee950bbbddd85fb52f93574f85",
+      "task_id": "30",
+      "phase": "abandoned"
+    },
+    {
+      "project_identity": "c:\\project\\steerline\\.git",
+      "workflow_run_id": "bb8ffcc3bd0c0d9587ed9ab58f4f0fbf",
+      "task_id": "15",
+      "phase": "abandoned"
+    },
+    {
+      "project_identity": "c:\\project\\steerline\\.git",
+      "workflow_run_id": "e7af7868bce90918afb7306240951fca",
+      "task_id": "14",
+      "phase": "abandoned"
+    }
+  ],
+  "executions": [
+    {
+      "project_identity": "c:\\project\\steerline\\.git",
+      "execution_id": "1bcd78820b783117a0e471aa66bca68b",
+      "workflow_run_id": "a189b2ee950bbbddd85fb52f93574f85",
+      "status": "stopped",
+      "current_step": "prepare"
+    },
+    {
+      "project_identity": "c:\\project\\steerline\\.git",
+      "execution_id": "3d5bbe30bfd45550d6940dfef02ec250",
+      "workflow_run_id": "752d3210250b2f258e417dc6d2514c49",
+      "status": "stopped",
+      "current_step": "prepare"
+    },
+    {
+      "project_identity": "c:\\project\\steerline\\.git",
+      "execution_id": "5d448d33bd7a7f9b0ecf8c6acafca741",
+      "workflow_run_id": "e7af7868bce90918afb7306240951fca",
+      "status": "stopped",
+      "current_step": "implement"
+    },
+    {
+      "project_identity": "c:\\project\\steerline\\.git",
+      "execution_id": "e8a7a7c13421951b72c321781a8a63e5",
+      "workflow_run_id": "bb8ffcc3bd0c0d9587ed9ab58f4f0fbf",
+      "status": "stopped",
+      "current_step": "verify"
+    },
+    {
+      "project_identity": "c:\\project\\steerline\\.git",
+      "execution_id": "f544e755739f3e5ad9c5665b97029436",
+      "workflow_run_id": "82e5d3178ae7447ee6e2ec12fdf130eb",
+      "status": "stopped",
+      "current_step": "prepare"
+    }
+  ],
+  "attempts": [
+    {
+      "project_identity": "c:\\project\\steerline\\.git",
+      "attempt_id": "eb5fca5ef8a0839269d8425e7cc40868",
+      "execution_id": "1bcd78820b783117a0e471aa66bca68b",
+      "step_id": "prepare",
+      "operation_id": "02366144739a9589a1e7bd1eaf9796d7",
+      "status": "stopped"
+    },
+    {
+      "project_identity": "c:\\project\\steerline\\.git",
+      "attempt_id": "9b1b70cf573a1c585fb85d808d46b63e",
+      "execution_id": "3d5bbe30bfd45550d6940dfef02ec250",
+      "step_id": "prepare",
+      "operation_id": "57353106e6bf528468ff8010f1eb91cb",
+      "status": "stopped"
+    },
+    {
+      "project_identity": "c:\\project\\steerline\\.git",
+      "attempt_id": "a46e98a5245d09f5ff07bb41660328c3",
+      "execution_id": "5d448d33bd7a7f9b0ecf8c6acafca741",
+      "step_id": "implement",
+      "operation_id": "f0b08482f1f9f372e6470cf7d5cf4d74",
+      "status": "stopped"
+    },
+    {
+      "project_identity": "c:\\project\\steerline\\.git",
+      "attempt_id": "05d4ee6f9a2f60dccb2577ae4abe4c13",
+      "execution_id": "5d448d33bd7a7f9b0ecf8c6acafca741",
+      "step_id": "prepare",
+      "operation_id": "ad043c866bb90c21914e40b8c61511b9",
+      "status": "succeeded"
+    },
+    {
+      "project_identity": "c:\\project\\steerline\\.git",
+      "attempt_id": "0ce8b5e94293fa6208e49d93851def2e",
+      "execution_id": "e8a7a7c13421951b72c321781a8a63e5",
+      "step_id": "implement",
+      "operation_id": "5c392d437c257a3345f202bd822bac04",
+      "status": "succeeded"
+    },
+    {
+      "project_identity": "c:\\project\\steerline\\.git",
+      "attempt_id": "594ee900ea6bd6c5b8259393cfe0b4a5",
+      "execution_id": "e8a7a7c13421951b72c321781a8a63e5",
+      "step_id": "prepare",
+      "operation_id": "62be7a8d89ef0f96c6544a2ed17bfdb5",
+      "status": "succeeded"
+    },
+    {
+      "project_identity": "c:\\project\\steerline\\.git",
+      "attempt_id": "7d197b4c3bbfd233372621600a73075c",
+      "execution_id": "e8a7a7c13421951b72c321781a8a63e5",
+      "step_id": "verify",
+      "operation_id": "f879bdcb6c6e4b63d102056e32a167fe",
+      "status": "stopped"
+    },
+    {
+      "project_identity": "c:\\project\\steerline\\.git",
+      "attempt_id": "b6abb409ddb53e2b4535561fbb3553bd",
+      "execution_id": "f544e755739f3e5ad9c5665b97029436",
+      "step_id": "prepare",
+      "operation_id": "1b7a9ddb3792935cf2b8cf060799c516",
+      "status": "stopped"
+    }
+  ],
+  "operations": [
+    {
+      "project_identity": "c:\\project\\steerline\\.git",
+      "operation_id": "ad043c866bb90c21914e40b8c61511b9",
+      "kind": "prepare_workspace",
+      "status": "confirmed"
+    },
+    {
+      "project_identity": "c:\\project\\steerline\\.git",
+      "operation_id": "f0b08482f1f9f372e6470cf7d5cf4d74",
+      "kind": "dispatch_step",
+      "status": "confirmed"
+    },
+    {
+      "project_identity": "c:\\project\\steerline\\.git",
+      "operation_id": "b8cb55bc7c174d14af557500db306086",
+      "kind": "reopen_task",
+      "status": "confirmed"
+    },
+    {
+      "project_identity": "c:\\project\\steerline\\.git",
+      "operation_id": "02366144739a9589a1e7bd1eaf9796d7",
+      "kind": "dispatch_step",
+      "status": "confirmed"
+    },
+    {
+      "project_identity": "c:\\project\\steerline\\.git",
+      "operation_id": "c5f965e119b7dce20ff49a168c6f939a",
+      "kind": "create_orca_run",
+      "status": "confirmed"
+    },
+    {
+      "project_identity": "c:\\project\\steerline\\.git",
+      "operation_id": "1b7a9ddb3792935cf2b8cf060799c516",
+      "kind": "dispatch_step",
+      "status": "confirmed"
+    },
+    {
+      "project_identity": "c:\\project\\steerline\\.git",
+      "operation_id": "ce0928c75617201e33ce0bcf215ecedb",
+      "kind": "create_orca_run",
+      "status": "confirmed"
+    },
+    {
+      "project_identity": "c:\\project\\steerline\\.git",
+      "operation_id": "57353106e6bf528468ff8010f1eb91cb",
+      "kind": "dispatch_step",
+      "status": "confirmed"
+    },
+    {
+      "project_identity": "c:\\project\\steerline\\.git",
+      "operation_id": "0e7e6ddb2a421f086b47c798514e59e8",
+      "kind": "create_orca_run",
+      "status": "confirmed"
+    },
+    {
+      "project_identity": "c:\\project\\steerline\\.git",
+      "operation_id": "62be7a8d89ef0f96c6544a2ed17bfdb5",
+      "kind": "dispatch_step",
+      "status": "confirmed"
+    },
+    {
+      "project_identity": "c:\\project\\steerline\\.git",
+      "operation_id": "9a7d2551ec1354ed86e3fca2c7a081ee",
+      "kind": "create_orca_run",
+      "status": "confirmed"
+    },
+    {
+      "project_identity": "c:\\project\\steerline\\.git",
+      "operation_id": "ack-23670accb9488784110371ca1236c13b",
+      "kind": "ack_orca_delivery",
+      "status": "confirmed"
+    },
+    {
+      "project_identity": "c:\\project\\steerline\\.git",
+      "operation_id": "ack-2caa43de67a0614a50de1d0821774b2c",
+      "kind": "ack_orca_delivery",
+      "status": "confirmed"
+    },
+    {
+      "project_identity": "c:\\project\\steerline\\.git",
+      "operation_id": "release-594ee900ea6bd6c5b8259393cfe0b4a5",
+      "kind": "settle_resources",
+      "status": "confirmed"
+    },
+    {
+      "project_identity": "c:\\project\\steerline\\.git",
+      "operation_id": "5c392d437c257a3345f202bd822bac04",
+      "kind": "dispatch_step",
+      "status": "confirmed"
+    },
+    {
+      "project_identity": "c:\\project\\steerline\\.git",
+      "operation_id": "ack-838a06d4c20b733daa3da4fbce7d61de",
+      "kind": "ack_orca_delivery",
+      "status": "confirmed"
+    },
+    {
+      "project_identity": "c:\\project\\steerline\\.git",
+      "operation_id": "ack-441deee5bbea8e503f0b4e6f0d8335c7",
+      "kind": "ack_orca_delivery",
+      "status": "confirmed"
+    },
+    {
+      "project_identity": "c:\\project\\steerline\\.git",
+      "operation_id": "release-0ce8b5e94293fa6208e49d93851def2e",
+      "kind": "settle_resources",
+      "status": "confirmed"
+    },
+    {
+      "project_identity": "c:\\project\\steerline\\.git",
+      "operation_id": "f879bdcb6c6e4b63d102056e32a167fe",
+      "kind": "dispatch_step",
+      "status": "confirmed"
+    },
+    {
+      "project_identity": "c:\\project\\steerline\\.git",
+      "operation_id": "4d4d3b8ff67f4d469a3676c224fc7412",
+      "kind": "reopen_task",
+      "status": "confirmed"
+    },
+    {
+      "project_identity": "c:\\project\\steerline\\.git",
+      "operation_id": "b1b6cf24e3784949939ddd9ac8dd6e10",
+      "kind": "reopen_task",
+      "status": "confirmed"
+    },
+    {
+      "project_identity": "c:\\project\\steerline\\.git",
+      "operation_id": "12b8a8cfb8c24ec7abb8ec2d329e8e23",
+      "kind": "reopen_task",
+      "status": "confirmed"
+    },
+    {
+      "project_identity": "c:\\project\\steerline\\.git",
+      "operation_id": "c4d36d9028494f4ca73d4f8fa758f0bb",
+      "kind": "reopen_task",
+      "status": "confirmed"
+    }
+  ],
+  "decisions": []
+}

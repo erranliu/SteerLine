@@ -1,0 +1,2 @@
+request_id 91e450a0dff4165979d4555101550667
+{"version":1,"request_id":"91e450a0dff4165979d4555101550667","request_digest":"31af902a7bcf34ce25ffe016d00838fe9de5383da7d4798fd6e4d5f6b0069af5","instance_id":"c3ebe12160a50f9238cd8a930c1443e8","action":"resume_dispatch","status":"applied","code":"applied","message":"control action applied","requested_by":"Codex: restore original manual dispatch after modular task creation","submitted_at":"2026-09-28T08:14:45.7331132Z","accepted_at":"2026-09-28T08:14:45.8141583Z","completed_at":"2026-09-28T08:14:45.8732273Z","control_revision":11}

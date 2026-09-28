@@ -38,15 +38,29 @@
 
 Spec 完成交付后从未完成表移出；仍有消费者时只保留必要交接。本图不记录 PR、提交或文档维护历史。
 
-## 第一阶段新增范围与第二阶段的交接
+## 第一阶段模块重构与交接
 
-[第一阶段版本交付方案](phase-1-delivery.md)的新增范围已落实为独立规格和中心任务；下表依赖由中心创建及补边回读核验。#3/#4 的正常交付与 #6 的目标定向验收可在独立资源推进，共用 Service/SQLite、构建产物或 Orca 宿主的工作串行协调。固定 TaskContract 的 Git 引用不因本图状态更新而改变。
+本组按[共同约束](../spec/modular-refactoring-constraints.md)划分职责、包依赖和状态所有者。下列任务与依赖均已进入中心 DAG；[创建记录](../validation/modular-refactoring-task-creation/README.md)保存原生命令回执与完整回读。#3/#4 的正常交付与 #6 的目标定向验收可在独立资源推进，共用 Service/SQLite、构建产物或 Orca 宿主的工作串行协调。固定 TaskContract 的 Git 引用不因本图状态更新而改变。
 
 | 任务 ID | 任务名称 | 目标 / 执行 Spec | 直接开工前置 | 集成与交付条件 |
 | --- | --- | --- | --- | --- |
-| 26 | 多候选模型与准入 | `PHASE1-CANDIDATES` · [Spec](../spec/task-candidates.spec.md) · [Plan](../spec/task-candidates.plan.md) | 无未完成硬前置 | 交付精确候选身份/Query/Command；multiple 发布在 #27 仲裁交付前受控拒绝 |
+| 33 | 执行规则包提取 | `PHASE1-MODULARITY` · [Spec](../spec/workflow-rules.spec.md) · [Plan](../spec/workflow-rules.plan.md) | 无未完成硬前置 | workflow 纯规则、全部生产接线、错误语义及包依赖检查通过；供 #34 消费 |
+| 34 | 执行上下文封装与服务职责收缩 | `PHASE1-MODULARITY` · [Spec](../spec/execution-context.spec.md) · [Plan](../spec/execution-context.plan.md) | `#33` | 显式上下文、单写者、不同任务交错与当前格式恢复通过；作为 #26 已追加的硬前置 |
+| 35 | 中心命令查询与SQLite边界封装 | `PHASE1-MODULARITY` · [Spec](../spec/center-boundary.spec.md) · [Plan](../spec/center-boundary.plan.md) | `#27` | center 包无 SQL 旁路/反向依赖，事务、查询及恢复回归；向 #28/#16 交接 |
+
+中心已创建 #33 → #34 和 #27 → #35，并追加 #34 → #26、#35 → #28、#35 → #16。原 #26 → #27、#27 → #28、#26 → #16 继续保留，全部为完整交付后的 AND 硬前置；追加关系没有重绑定原执行契约。
+
+代码集成顺序为 #33 → #34 → #26 → #27 → #35 → #28/#16。#30/#31 独立推进；与本组共用 Service/SQLite/启动恢复入口时串行集成并回归此前已交付的边界。#3/#4 的正常 Task Delivery 与 #6 的剩余验收在固定版本和隔离资源上继续推进。
+
+## 第一阶段新增范围与第二阶段的交接
+
+[第一阶段版本交付方案](phase-1-delivery.md)的 #26–#32 已有独立规格和中心任务；原有依赖已回读核验，结构重构新增前置在表中单独标注。`#3/#4` 的正常 Task Delivery、`#6` 的剩余原生验收与 `#33/#30` 可使用独立资源推进，#26 遵守新增重构顺序；共用 Service/SQLite、构建产物或真实 Orca 宿主的集成和故障注入串行协调。规格必须先集成到执行目标分支才能按原固定契约开始实现。
+
+| 任务 ID | 任务名称 | 目标 / 执行 Spec | 直接开工前置 | 集成与交付条件 |
+| --- | --- | --- | --- | --- |
+| 26 | 多候选模型与准入 | `PHASE1-CANDIDATES` · [Spec](../spec/task-candidates.spec.md) · [Plan](../spec/task-candidates.plan.md) | `#34`（中心追加） | 交付精确候选身份/Query/Command；multiple 发布在 #27 仲裁交付前受控拒绝 |
 | 27 | PR 胜出与落选候选对账 | `PHASE1-CANDIDATES` · [Spec](../spec/candidate-delivery.spec.md) · [Plan](../spec/candidate-delivery.plan.md) | `#26` | 唯一交付、在途冻结、迟到冲突和 closed 后资源对账通过 |
-| 28 | 候选观察界面 | `PHASE1-CANDIDATES` · [Spec](../spec/candidate-console.spec.md) · [Plan](../spec/candidate-console.plan.md) | `#27` | 真实 Windows TUI 展示/输入和中心命令身份通过；跨主机 agent 证据不在本任务代验 |
+| 28 | 候选观察界面 | `PHASE1-CANDIDATES` · [Spec](../spec/candidate-console.spec.md) · [Plan](../spec/candidate-console.plan.md) | `#27`、`#35`（后者为中心追加） | 真实 Windows TUI 展示/输入和中心命令身份通过；跨主机 agent 证据不在本任务代验 |
 | 29 | 多候选本机与远端真机验收 | `PHASE1-CANDIDATES` · [Spec](../spec/candidate-native-acceptance.spec.md) · [Plan](../spec/candidate-native-acceptance.plan.md) | `#28`、`#3`、`#4`、`#6` | 当前认证目标上两后端双候选/后继真实合并及故障恢复均通过 |
 | 30 | 固定版本与双入口 | `PHASE1-RUNTIME` · [Spec](../spec/versioned-runtime.spec.md) · [Plan](../spec/versioned-runtime.plan.md) | 无未完成硬前置 | 不可变版本、固定入口与实例身份通过；切换资格由 #31 接入 |
 | 31 | dev 隔离与 stable 提升 | `PHASE1-RUNTIME` · [Spec](../spec/runtime-isolation-promotion.spec.md) · [Plan](../spec/runtime-isolation-promotion.plan.md) | `#30` | home/仓库隔离、受控提升、失败继续和当前格式恢复通过 |
@@ -66,7 +80,18 @@ flowchart LR
     T32 --> T24["#24 二阶段完整验收"]
 ```
 
-图中关系均已存在于中心 DAG；各任务的真实交付仍由中心 PR 合并核验决定。
+上图展示原 #26–#32 的中心关系。模块重构新增关系另见下图；各任务的真实交付仍由中心 PR 合并核验决定。
+
+```mermaid
+flowchart LR
+    R33["#33 执行规则"] --> R34["#34 执行上下文"]
+    R34 --> T26["#26 多候选"]
+    T26 --> T27["#27 交付仲裁"] --> R35["#35 中心封装"]
+    R35 --> T28["#28 候选界面"]
+    R35 --> T16["#16 本机 API"]
+```
+
+本图中的新增任务及边均已由中心回读确认；为便于阅读，原有 #27 → #28 和 #26 → #16 在此局部图中省略，实际 DAG 保留。
 
 ## 第二阶段硬前置与并行集成
 
@@ -76,7 +101,7 @@ flowchart LR
 | --- | --- | --- | --- | --- |
 | 14 | Codex 规划主 agent 能力验证 | `PHASE2` · [Spec](../spec/phase2-agent-capabilities.spec.md) · [Plan](../spec/phase2-agent-capabilities.plan.md) | 无未完成硬前置 | 本 Spec 全部验收通过；共享接口有变更时同步消费者和受影响回归。 |
 | 15 | WinUI 基座与原生输入 | `PHASE2` · [Spec](../spec/phase2-winui-foundation.spec.md) · [Plan](../spec/phase2-winui-foundation.plan.md) | 无未完成硬前置 | 本 Spec 全部验收通过；共享接口有变更时同步消费者和受影响回归。 |
-| 16 | 本机客户端协议与历史查询 | `PHASE2` · [Spec](../spec/phase2-local-api.spec.md) · [Plan](../spec/phase2-local-api.plan.md) | `#26`（中心追加） | 本 Spec 全部验收通过；共享接口有变更时同步消费者和受影响回归。 |
+| 16 | 本机客户端协议与历史查询 | `PHASE2` · [Spec](../spec/phase2-local-api.spec.md) · [Plan](../spec/phase2-local-api.plan.md) | `#26`、`#35`（中心追加） | 本 Spec 全部验收通过；共享接口有变更时同步消费者和受影响回归。 |
 | 17 | 规划提案与受控草稿 | `PHASE2` · [Spec](../spec/phase2-planning-drafts.spec.md) · [Plan](../spec/phase2-planning-drafts.plan.md) | `#16` | 本 Spec 全部验收通过；共享接口有变更时同步消费者和受影响回归。 |
 | 18 | Codex 规划会话服务 | `PHASE2` · [Spec](../spec/phase2-planning-sessions.spec.md) · [Plan](../spec/phase2-planning-sessions.plan.md) | `#14`、`#17` | #14 必须有通过证据，复用 #17 guard；与 #19 的 Service/存储接线串行集成。 |
 | 19 | 正式文档发布与任务创建 | `PHASE2` · [Spec](../spec/phase2-document-publish.spec.md) · [Plan](../spec/phase2-document-publish.plan.md) | `#17` | 复用 #17 guard 与正式读模型；与 #18 独立开发，共享接线后合入方回归双方。 |
