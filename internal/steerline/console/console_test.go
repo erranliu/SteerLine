@@ -1178,12 +1178,24 @@ func TestNarrowConsoleKeepsDetailAndSelectionEntryReachable(t *testing.T) {
 	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{readySnapshot(ref, now)}, control, now)
 	m.width, m.height = 80, 24
 	view := m.View()
-	for _, want := range []string{"Task：task-B", "Build B", "t列表", "s 选方案"} {
+	for _, want := range []string{"任务列表", "▸", "Build B", "d 完整详情", "s 选方案"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("narrow console lost %q:\n%s", want, view)
 		}
 	}
-	updated, _ := m.Update(runeKey('t'))
+	updated, _ := m.Update(runeKey('d'))
+	m = updated.(Model)
+	if !strings.Contains(m.View(), "Task：task-B") {
+		t.Fatal("full read-only detail is not reachable")
+	}
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m = updated.(Model)
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyTab})
+	m = updated.(Model)
+	if !strings.Contains(m.View(), "任务动态 · 活动") || m.projects[0].focus != 1 {
+		t.Fatal("Tab did not focus task activity")
+	}
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyTab})
 	m = updated.(Model)
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
 	m = updated.(Model)
@@ -1203,8 +1215,7 @@ func TestPanelScrollHeightMatchesWrappedFooter(t *testing.T) {
 		t.Fatalf("narrow scroll viewport=%d, render viewport=%d", got, expected)
 	}
 	m.width = 170
-	footerLines = wrapLines(strings.Split(renderFooter(m, m.projects[0]), "\n"), m.width)
-	expected = max(1, max(3, m.height-3-len(footerLines)))
+	expected = max(1, consoleContentHeight(m)-detailPanelHeight(m)-2)
 	if got := activityPanelHeight(m); got != expected {
 		t.Fatalf("wide scroll viewport=%d, render viewport=%d", got, expected)
 	}

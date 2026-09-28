@@ -56,20 +56,33 @@ func render(m Model) string {
 		body = renderStopConfirmation(m, *state, contentHeight)
 	} else if m.answer != nil {
 		body = renderAnswerDialog(m, *state, contentHeight)
-	} else if m.width < 100 {
+	} else if m.detailExpanded {
+		expanded := *state
+		expanded.detailScroll = m.expandedDetailScroll
+		body = strings.Join(fitLines(renderDetail(m, expanded, m.selectedRow(m.selected), m.width, contentHeight), m.width, contentHeight), "\n")
+	} else if compactLayout(m) {
 		panel := renderNarrowPanel(m, *state, contentHeight)
 		body = strings.Join(fitLines(panel, m.width, contentHeight), "\n")
 	} else {
-		leftWidth := m.width * 38 / 100
-		if leftWidth < 34 {
-			leftWidth = 34
-		}
-		if leftWidth > 60 {
-			leftWidth = 60
-		}
-		rightWidth := m.width - leftWidth - 1
+		leftWidth := listPanelWidth(m)
+		rightWidth := activityPanelWidth(m)
+		detailHeight := detailPanelHeight(m)
+		activityHeight := activityPanelHeight(m)
 		left := fitLines(renderRows(m, *state, leftWidth, contentHeight), leftWidth, contentHeight)
-		right := fitLines(renderPanel(m, *state, rightWidth, contentHeight), rightWidth, contentHeight)
+		preview := *state
+		preview.detailScroll = 0
+		detail := renderDetail(m, preview, m.selectedRow(m.selected), rightWidth, 100000)
+		if len(detail) > detailHeight {
+			detail = append(detail[:detailHeight-1], styleDim.Render("d / Enter 查看完整详情"))
+		}
+		right := fitLines(detail, rightWidth, detailHeight)
+		right = append(right, styleRule.Render(strings.Repeat("─", rightWidth)))
+		focus := ""
+		if state.focus == 1 {
+			focus = " [焦点]"
+		}
+		right = append(right, truncate(styleLabel.Render("任务动态"+focus)+" · "+dynamicPanelDisplayName(state.panel)+"  (A 活动 / c 会话 / f 最终回复)", rightWidth))
+		right = append(right, fitLines(renderDynamicPanel(m, *state, rightWidth, activityHeight), rightWidth, activityHeight)...)
 		body = joinLines(left, right, leftWidth, contentHeight)
 	}
 	lines := []string{header, projects, status, body}
@@ -223,7 +236,11 @@ func projectCounts(state projectState, now time.Time) (ready, cached, running, d
 
 func renderRows(m Model, state projectState, width, height int) []string {
 	rows := m.rows(m.selected)
-	out := []string{styleLabel.Render(fmt.Sprintf("任务 · %d 项 · %s", len(rows), filterDisplayName(state.filter)))}
+	focus := ""
+	if state.focus == 0 {
+		focus = " [焦点]"
+	}
+	out := []string{styleLabel.Render(fmt.Sprintf("任务列表%s · %d 项 · %s", focus, len(rows), filterDisplayName(state.filter)))}
 	if state.ref.Error != "" {
 		out = append(out, styleAlert.Render("配置错误："+safeTerminalText(state.ref.Error)))
 		return out
@@ -291,11 +308,13 @@ func renderRows(m Model, state projectState, width, height int) []string {
 		default:
 			stateText = runStatus(row.run)
 		}
-		line := renderTaskListRow(row.taskID, row.title, displayTaskStatus(stateText), width)
+		line := renderTaskListRow(row.taskID, row.title, displayTaskStatus(stateText), max(1, width-2))
 		if row.key == state.selectedKey {
-			line = styleSelected.Render(line)
+			line = styleSelected.Render("▸ " + line)
 		} else if row.kind == rowReady && stateText == "缓存" {
-			line = styleDim.Render(line)
+			line = "  " + styleDim.Render(line)
+		} else {
+			line = "  " + line
 		}
 		out = append(out, line)
 	}
@@ -403,11 +422,9 @@ func runNeedsAttention(run *steerline.Run) bool {
 	return run.FinishTaskStatus == "waiting_decision" || run.ExecutionStatus == "unknown" || run.ExecutionStatus == "failed" || run.ExecutionStatus == "blocked" || run.FinishTaskStatus == "blocked" || (run.Error != nil && strings.TrimSpace(*run.Error) != "") || (run.PR.QueryError != nil && strings.TrimSpace(*run.PR.QueryError) != "")
 }
 
-func renderPanel(m Model, state projectState, width, height int) []string {
+func renderDynamicPanel(m Model, state projectState, width, height int) []string {
 	row := m.selectedRow(m.selected)
 	switch state.panel {
-	case 1:
-		return renderActivity(state, row, width, height)
 	case 2:
 		return renderSession(state, row, width, height, m.clock.Now())
 	case 3:
@@ -417,20 +434,27 @@ func renderPanel(m Model, state projectState, width, height int) []string {
 	case 6:
 		return renderRecoveryInspection(m, state, width, height)
 	default:
-		return renderDetail(m, state, row, width, height)
+		return renderActivity(state, row, width, height)
 	}
 }
 
 func renderNarrowPanel(m Model, state projectState, height int) []string {
-	if state.panel == 4 {
-		return renderRows(m, state, m.width, height)
-	}
-	views := "t列表 · d详情"
+	views := "Tab 列表/动态 · d 完整详情"
 	if state.ref.Legacy == nil {
-		views += " · a活动 · c会话 · f最终回复"
+		views += " · A活动 · c会话 · f最终回复"
 	}
-	lines := []string{"视图 " + panelDisplayName(state.panel) + "  |  " + views}
-	return append(lines, renderPanel(m, state, m.width, height-1)...)
+	if state.focus == 0 {
+		return append([]string{"视图 任务列表  |  " + views}, renderRows(m, state, m.width, height-1)...)
+	}
+	lines := []string{"视图 任务动态 · " + dynamicPanelDisplayName(state.panel) + "  |  " + views}
+	return append(lines, renderDynamicPanel(m, state, m.width, height-1)...)
+}
+
+func dynamicPanelDisplayName(index int) string {
+	if index == 0 || index == 4 {
+		return "活动"
+	}
+	return panelDisplayName(index)
 }
 
 func filterDisplayName(index int) string {
@@ -748,7 +772,9 @@ func renderActivity(state projectState, row *consoleRow, width, height int) []st
 		lines = append(lines, styleAlert.Render("日志读取："+safeTerminalText(state.activityError)))
 	}
 	if len(state.activityEvents) == 0 {
-		if state.activityKey == "" {
+		if row == nil || row.run == nil {
+			lines = append(lines, "所选任务尚无执行记录；开始后这里显示任务动态。")
+		} else if state.activityKey == "" {
 			lines = append(lines, "所选 run/attempt 没有日志记录。")
 		} else if state.activityError != "" {
 			lines = append(lines, "活动源不可用；会话页可能仍有当前格式记录。")
@@ -1460,13 +1486,16 @@ func renderFooter(m Model, state projectState) string {
 	if m.answer != nil {
 		return "↑↓ 选择声明选项/移动光标 · Tab 切换选项与说明 · Enter 换到说明/插入换行 · F2 明确提交 · PgUp/PgDn 浏览完整问题 · Esc 丢弃草稿"
 	}
+	if m.detailExpanded {
+		return "↑↓/PgUp/PgDn 阅读完整详情 · d / Enter / Esc 返回 · q 退出"
+	}
 	if state.panel == 6 {
 		return "r 重新核验 · R retry · m mark-stopped · [/]选择 blocker · v resolve-command · Enter/ Esc 返回"
 	}
 	if state.ref.Legacy != nil {
-		return "←→ 项目 · ↑↓ 选择/滚动 · t 列表 · d 详情 · q 退出"
+		return "←→ 项目 · Tab 列表/动态 · ↑↓ 选择/滚动 · d 详情 · q 退出"
 	}
-	parts := []string{"←→ 项目", "↑↓ 选择/滚动"}
+	parts := []string{"←→ 项目", "Tab 列表/动态", "↑↓ 选择/滚动", "d 详情"}
 	row := m.selectedRow(m.selected)
 	if row != nil && row.kind == rowReady && candidateActionReason(state.ref, state.snapshot, m.clock.Now()) == "" {
 		parts = append(parts, "s 选方案")
@@ -1495,13 +1524,13 @@ func renderFooter(m Model, state projectState) string {
 }
 
 func renderHelp(state projectState) []string {
-	lines := []string{"快捷键", "", "←/→  切换项目", "↑/↓  选择任务或滚动当前面板", "t/d  列表 / 详情", "q    退出控制台；服务继续运行"}
+	lines := []string{"快捷键", "", "←/→  切换项目", "Tab  在任务列表与任务动态间切换", "↑/↓  选择任务或滚动动态", "d/Enter  打开完整只读详情；Esc 返回", "q    退出控制台；服务继续运行"}
 	if state.ref.Legacy != nil {
 		return append(lines, "", "旧 Beads 项目只读；控制操作不可用。")
 	}
 	return append(lines,
 		"", "任务与服务", "1–7  筛选任务和运行", "s    选择已配置方案并开始 Ready 任务", "m/p  派发模式 / 暂停或恢复", "x    停止服务（需确认）", "i    查询最近控制请求",
-		"", "运行与会话", "a/c/f  活动 / 会话 / 最终回复", "v/u    决策历史 / 恢复核验", "[ / ]  切换 attempt", ", / .  选择轮次", "e / =  折叠 / 保持展开", "y / n  更多会话 / 下一条最终回复")
+		"", "运行与会话", "A/c/f  活动 / 会话 / 最终回复", "a    回答当前待决策问题", "v/u    决策历史 / 恢复核验", "[ / ]  切换 attempt", ", / .  选择轮次", "e / =  折叠 / 保持展开", "y / n  更多会话 / 下一条最终回复")
 }
 
 func joinLines(left, right []string, leftWidth, height int) string {
@@ -1567,10 +1596,19 @@ func scrollLinesFromEnd(lines []string, offset, height int) []string {
 	return lines[start:end]
 }
 
-func activityPanelWidth(m Model) int {
-	if m.width < 100 {
-		return m.width
+func consoleContentHeight(m Model) int {
+	height := m.height - 3
+	if m.selected >= 0 && m.selected < len(m.projects) {
+		height -= len(wrapLines(strings.Split(renderFooter(m, m.projects[m.selected]), "\n"), m.width))
 	}
+	return max(3, height)
+}
+
+func compactLayout(m Model) bool {
+	return m.width < 100 || consoleContentHeight(m) < 17
+}
+
+func listPanelWidth(m Model) int {
 	left := m.width * 38 / 100
 	if left < 34 {
 		left = 34
@@ -1578,25 +1616,26 @@ func activityPanelWidth(m Model) int {
 	if left > 60 {
 		left = 60
 	}
-	return m.width - left - 1
+	return left
+}
+
+func detailPanelHeight(m Model) int {
+	content := consoleContentHeight(m)
+	return min(max(7, content*45/100), content-9)
+}
+
+func activityPanelWidth(m Model) int {
+	if compactLayout(m) {
+		return m.width
+	}
+	return m.width - listPanelWidth(m) - 1
 }
 
 func activityPanelHeight(m Model) int {
-	height := m.height - 4
-	if m.selected >= 0 && m.selected < len(m.projects) {
-		footerLines := wrapLines(strings.Split(renderFooter(m, m.projects[m.selected]), "\n"), m.width)
-		height = m.height - 3 - len(footerLines)
-		if height < 3 {
-			height = 3
-		}
-		if m.width < 100 {
-			height--
-		}
+	if compactLayout(m) {
+		return max(1, consoleContentHeight(m)-1)
 	}
-	if height < 1 {
-		height = 1
-	}
-	return height
+	return max(1, consoleContentHeight(m)-detailPanelHeight(m)-2)
 }
 
 func allActivityLines(state projectState, row *consoleRow, width int) []string {

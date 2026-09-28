@@ -104,6 +104,7 @@ type projectState struct {
 	selectionHold bool
 	filter        int
 	panel         int
+	focus         int // 0: task list, 1: task activity
 	attemptID     string
 
 	actions map[string]*actionState
@@ -194,12 +195,14 @@ type Model struct {
 	prefs    ViewFile
 	prefsErr string
 
-	confirm       *confirmAction
-	profileChoice *executionProfileChoice
-	answer        *decisionAnswerDialog
-	help          bool
-	status        string
-	finalIndex    int
+	confirm              *confirmAction
+	profileChoice        *executionProfileChoice
+	answer               *decisionAnswerDialog
+	help                 bool
+	detailExpanded       bool
+	expandedDetailScroll int
+	status               string
+	finalIndex           int
 
 	runFocus string
 }
@@ -300,7 +303,7 @@ func NewModel(ctx context.Context, refs []ProjectRef, options Options) (Model, e
 	for _, ref := range refs {
 		view, exists := prefs.Projects[ref.Key]
 		if !exists {
-			view = ProjectView{ConfigPath: ref.ConfigPath, RunDir: ref.RunDir, Follow: true, Panel: "detail", Groups: map[string]FoldChoice{}, Outstanding: map[string]string{}}
+			view = ProjectView{ConfigPath: ref.ConfigPath, RunDir: ref.RunDir, Follow: true, Panel: "activity", Groups: map[string]FoldChoice{}, Outstanding: map[string]string{}}
 		}
 		if view.Groups == nil {
 			view.Groups = map[string]FoldChoice{}
@@ -1603,7 +1606,7 @@ func panelName(index int) string {
 	case 6:
 		return "recovery"
 	}
-	return "detail"
+	return "activity"
 }
 
 func rowExists(rows []consoleRow, key string) bool {
@@ -1911,6 +1914,27 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	state := &m.projects[m.selected]
+	if m.detailExpanded {
+		switch key.String() {
+		case "q", "ctrl+c":
+			return m, tea.Quit
+		case "d", "enter", "esc":
+			m.detailExpanded = false
+			return m, nil
+		case "up", "k":
+			return m.scrollExpandedDetail(-1)
+		case "down", "j":
+			return m.scrollExpandedDetail(1)
+		case "pgup":
+			return m.scrollExpandedDetail(-8)
+		case "pgdown":
+			return m.scrollExpandedDetail(8)
+		case "s", "a", "m", "p", "x", "i":
+			m.detailExpanded = false
+		default:
+			return m, nil
+		}
+	}
 	if state.panel == 6 {
 		switch key.String() {
 		case "esc":
@@ -1945,13 +1969,16 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.moveProject(-1)
 	case "right", "l":
 		return m.moveProject(1)
+	case "tab", "shift+tab":
+		state.focus = 1 - state.focus
+		return m, nil
 	case "up", "k":
-		if m.width < 100 && state.panel != 4 || m.width >= 100 && state.panel != 0 {
+		if state.focus == 1 {
 			return m.scrollPanel(-1)
 		}
 		return m.moveSelection(-1)
 	case "down", "j":
-		if m.width < 100 && state.panel != 4 || m.width >= 100 && state.panel != 0 {
+		if state.focus == 1 {
 			return m.scrollPanel(1)
 		}
 		return m.moveSelection(1)
@@ -1959,42 +1986,37 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		state.lastRefresh = time.Time{}
 		return m, m.readProject(m.selected)
 	case "enter":
-		if state.panel != 0 {
-			state.panel = 0
-			m.saveProjectView(m.selected)
-			return m, nil
-		}
-		state.panel = 0
+		m.detailExpanded = true
+		m.expandedDetailScroll = 0
 		return m, nil
 	case "d":
-		state.panel = 0
-		m.saveProjectView(m.selected)
+		m.detailExpanded = true
+		m.expandedDetailScroll = 0
 		return m, nil
 	case "t":
-		if m.width < 100 {
-			state.panel = 4
-		} else {
-			state.panel = 0
-		}
-		m.saveProjectView(m.selected)
+		state.focus = 0
 		return m, nil
 	case "a":
 		if row := m.selectedRow(m.selected); row != nil && row.run != nil && row.run.Decision != nil && row.run.Decision.Status == "pending" {
 			return m.answerSelectedDecision()
 		}
 		state.panel = 1
+		state.focus = 1
 		m.saveProjectView(m.selected)
 		return m, nil
 	case "A":
 		state.panel = 1
+		state.focus = 1
 		m.saveProjectView(m.selected)
 		return m, nil
 	case "c":
 		state.panel = 2
+		state.focus = 1
 		m.saveProjectView(m.selected)
 		return m, nil
 	case "f":
 		state.panel = 3
+		state.focus = 1
 		m.finalIndex = 0
 		m.saveProjectView(m.selected)
 		return m, nil
@@ -2002,6 +2024,7 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.inspectSelectedRecovery()
 	case "v":
 		state.panel = 5
+		state.focus = 1
 		m.saveProjectView(m.selected)
 		return m, nil
 	case "1":
@@ -2049,7 +2072,7 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case ">":
 		return m.pageBody(true)
 	case "g":
-		if state.panel == 1 {
+		if state.panel == 0 || state.panel == 1 {
 			lines := allActivityLines(*state, m.selectedRow(m.selected), activityPanelWidth(m))
 			height := activityPanelHeight(m)
 			state.logScroll = max(0, len(lines)-height)
@@ -2066,8 +2089,14 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m, cmd = m.refreshSelectedLogs(m.selected)
 		return m, cmd
 	case "pgup":
+		if state.focus == 0 {
+			return m.moveSelection(-8)
+		}
 		return m.scrollPanel(-8)
 	case "pgdown":
+		if state.focus == 0 {
+			return m.moveSelection(8)
+		}
 		return m.scrollPanel(8)
 	case "?":
 		m.help = true
@@ -2507,6 +2536,7 @@ func (m Model) inspectSelectedRecovery() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	state.panel = 6
+	state.focus = 1
 	state.recoveryRunID = row.run.RunID
 	state.recoveryReport = nil
 	state.recoveryError = ""
@@ -3129,12 +3159,12 @@ func (m Model) scrollPanel(delta int) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	state := &m.projects[m.selected]
-	if m.width < 100 && state.panel == 4 {
-		return m.moveSelection(delta)
-	}
-	if state.panel == 1 {
+	if state.panel == 0 || state.panel == 1 || state.panel == 4 {
 		lines := allActivityLines(*state, m.selectedRow(m.selected), activityPanelWidth(m))
 		height := activityPanelHeight(m)
+		if len(lines) <= height {
+			return m, nil
+		}
 		if state.view.Follow {
 			state.logScroll = max(0, len(lines)-height)
 			state.view.Follow = false
@@ -3168,6 +3198,18 @@ func (m Model) scrollPanel(delta int) (tea.Model, tea.Cmd) {
 	if state.detailScroll < 0 {
 		state.detailScroll = 0
 	}
+	return m, nil
+}
+
+func (m Model) scrollExpandedDetail(delta int) (tea.Model, tea.Cmd) {
+	if m.selected < 0 || m.selected >= len(m.projects) {
+		return m, nil
+	}
+	state := m.projects[m.selected]
+	state.detailScroll = 0
+	lines := renderDetail(m, state, m.selectedRow(m.selected), m.width, 100000)
+	maximum := max(0, len(lines)-consoleContentHeight(m))
+	m.expandedDetailScroll = min(max(0, m.expandedDetailScroll+delta), maximum)
 	return m, nil
 }
 
