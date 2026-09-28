@@ -1259,6 +1259,41 @@ func TestEmptyRunningFilterExplainsWhyNativeTasksAreHidden(t *testing.T) {
 	}
 }
 
+func TestNativeTaskRefreshRetriesHeartbeatBetweenListAndReadyReads(t *testing.T) {
+	listed, readied := 0, 0
+	list := func(context.Context) (steerline.NativeTaskPage, error) {
+		listed++
+		revision := uint64(10)
+		if listed > 1 {
+			revision = 11
+		}
+		return steerline.NativeTaskPage{ProjectID: "project", AuthorityVersion: 2, GraphRevision: 3, DatabaseID: "database", DatabaseRevision: revision}, nil
+	}
+	ready := func(context.Context) (steerline.NativeReadyTaskSnapshot, error) {
+		readied++
+		return steerline.NativeReadyTaskSnapshot{ProjectID: "project", AuthorityVersion: 2, GraphRevision: 3, DatabaseID: "database", DatabaseRevision: 11}, nil
+	}
+	page, candidates, err := readMatchedNativeTaskSnapshots(context.Background(), list, ready)
+	if err != nil || listed != 2 || readied != 2 || page.DatabaseRevision != candidates.DatabaseRevision {
+		t.Fatalf("heartbeat version change escaped one refresh: page=%+v ready=%+v reads=%d/%d err=%v", page, candidates, listed, readied, err)
+	}
+}
+
+func TestNativeTaskRefreshKeepsPersistentVersionMismatchUnavailable(t *testing.T) {
+	reads := 0
+	list := func(context.Context) (steerline.NativeTaskPage, error) {
+		reads++
+		return steerline.NativeTaskPage{ProjectID: "project", DatabaseID: "database", DatabaseRevision: 10}, nil
+	}
+	ready := func(context.Context) (steerline.NativeReadyTaskSnapshot, error) {
+		return steerline.NativeReadyTaskSnapshot{ProjectID: "project", DatabaseID: "database", DatabaseRevision: 11}, nil
+	}
+	_, _, err := readMatchedNativeTaskSnapshots(context.Background(), list, ready)
+	if err == nil || !strings.Contains(err.Error(), "cursor_invalidated") || reads != 3 {
+		t.Fatalf("persistent mismatch was treated as current candidates: reads=%d err=%v", reads, err)
+	}
+}
+
 func TestNativeTaskViewKeepsOffPageSelectionAndEscapesText(t *testing.T) {
 	now := time.Date(2026, 9, 25, 1, 0, 0, 0, time.UTC)
 	ref := testProject("native")
