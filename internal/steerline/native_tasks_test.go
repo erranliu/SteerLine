@@ -451,14 +451,27 @@ func TestNativeOrcaProjectStepsUseFixedTaskContextAndCenterDelivery(t *testing.T
 			_ = s.Close()
 		}
 	}()
+	// An unavailable Orca UI must not turn the created worker into an unknown
+	// start or discard its durable terminal binding.
+	t.Setenv("STEERLINE_FAKE_ORCA_SWITCH_FAIL", "1")
+	t.Setenv("STEERLINE_FAKE_ORCA_ORPHANED", "1")
 	if err = s.dispatch(context.Background()); err != nil {
 		t.Fatal(err)
 	}
+	t.Setenv("STEERLINE_FAKE_ORCA_SWITCH_FAIL", "0")
+	t.Setenv("STEERLINE_FAKE_ORCA_ORPHANED", "0")
 	claimed := s.find("201")
 	claimedTask := nativeTaskRecord(s.State.Tasks, "201")
 	claimedWorkflow, claimedExecution := s.minimalRecords(claimed)
 	if claimed == nil || claimedTask == nil || claimedWorkflow == nil || claimedExecution == nil {
 		t.Fatal("native claim did not retain its fixed task and workflow context")
+	}
+	if claimed.ExecutionStatus != "running" || claimed.Process == nil || claimed.Process.Terminal == "" {
+		t.Fatalf("Orca UI switch failure changed the accepted worker start: %+v", claimed)
+	}
+	initialBinding, bindErr := (executionRecords{root: c.RunDir}).loadBinding(claimed.RunID, claimed.AttemptID)
+	if bindErr != nil || initialBinding.External.Terminal != claimed.Process.Terminal {
+		t.Fatalf("Orca UI switch failure lost the durable terminal binding: %+v %v", initialBinding, bindErr)
 	}
 	remoteConfig := s.Config
 	remoteConfig.Host = "orca_supervised"

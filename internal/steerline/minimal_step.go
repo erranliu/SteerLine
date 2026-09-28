@@ -1672,6 +1672,14 @@ func (s *Service) startMinimalStep(ctx context.Context, task TaskRecord, run *Ru
 	if err = s.save(); err != nil {
 		return err
 	}
+	if run.Process != nil && run.Process.Kind == "orca" && s.Config.hostName() == "orca" {
+		// Terminal creation and its exact binding are durable before asking Orca
+		// to show the tab. UI focus is independent of worker admission.
+		if focusErr := (orcaClient{cfg: s.Config}).terminalSwitch(context.Background(), run.Process.Terminal); focusErr != nil {
+			s.note(run, "steer", "step_start", "info", "Orca terminal started but could not be shown automatically", focusErr.Error(), map[string]any{"terminal": run.Process.Terminal})
+			_ = s.save()
+		}
+	}
 	return nil
 }
 
