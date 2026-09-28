@@ -1,0 +1,39 @@
+{
+  "schema_version": "task-batch/v1",
+  "project_id": "c:\\projects\\steerlinetest\\.git",
+  "tasks": [
+    {
+      "local_key": "viewer",
+      "task_id": 105,
+      "title": "Viewer transition sample",
+      "type": "task",
+      "priority": 2,
+      "contract": {
+        "contract_id": "steerlinetest-native-105-v1",
+        "repository": "https://github.com/erranliu/SteerlineTest.git",
+        "remote": "origin",
+        "branch": "main",
+        "spec_ref": {
+          "path": "docs/spec/native-105.spec.md",
+          "commit": "54021d66a9174cec9fb8e56bed6cb084c703a1d3",
+          "sha256": "5653d9401bfcf468fde6a80055752c616c0de61c33f481bc6758856fb968f698"
+        },
+        "plan_ref": {
+          "path": "docs/spec/native-105.plan.md",
+          "commit": "54021d66a9174cec9fb8e56bed6cb084c703a1d3",
+          "sha256": "8eb44292903c6c55d7b33aefb0124fb8e0b845d752ec8a2e87753b6689edf5b4"
+        },
+        "common_refs": [],
+        "acceptance_refs": [
+          {
+            "path": "docs/spec/native-105.spec.md",
+            "commit": "54021d66a9174cec9fb8e56bed6cb084c703a1d3",
+            "sha256": "5653d9401bfcf468fde6a80055752c616c0de61c33f481bc6758856fb968f698"
+          }
+        ],
+        "digest": "80343a214849644cee3d4019c5aa3702159a5eab63dcc9870be52c70c008ef79"
+      }
+    }
+  ],
+  "dependencies": []
+}

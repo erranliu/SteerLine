@@ -22,11 +22,11 @@
 | 任务 ID | 任务名称 | 目标标识 | 剩余目标 | 依赖 | 执行规格 |
 | --- | --- | --- | --- | --- | --- |
 | 4 | Orca 远程协议验证 | `REMOTE-PROTOCOL` | 当前 Orca 1.4 版本族与台式机64g 目标的 P01–P13 已通过；P10 人工处置和 P13 正负向中心门槛均有证据。原中心 Task 仍待真实 Delivery，不重跑未受变更影响的探测 | 远程取消 unsupported；新目标、版本族或调用路径变更时定向补证 | [Spec](../spec/01-orca-remote-protocol.md) · [Plan](../spec/01-orca-remote-protocol.plan.md) · [P13 回执](../validation/spec01-p13-steerlinetest-2026-09-28/README.md) |
-| 6 | 分阶段远程闭环 | `REMOTE-WORKFLOW` | home 的 R01–R19、2 秒 viewer 和原生闭环已有证据；台式机64g 已完成原生五步、业务答案、固定 head 真实合并及释放，Decision 可见上界 2.215 秒，通过当前 4 秒门槛。仍待当前主机受影响故障路径和步骤转换的可见时延，以及原中心 Task Delivery | 长期无人值守矩阵归 #32；远程取消 unsupported | [Spec](../spec/03-remote-execution-and-viewer.md) · [Plan](../spec/03-remote-execution-and-viewer.plan.md) · [当前主机回执](../validation/spec03-desktop64g-followup-2026-09-28/README.md) |
+| 6 | 分阶段远程闭环 | `REMOTE-WORKFLOW` | home 的 R01–R19、2 秒 viewer 和原生闭环已有证据；台式机64g 已完成原生五步、业务答案、固定 head 真实合并及释放，Decision 可见上界 2.215 秒，通过当前 4 秒门槛。当前主机步骤转换可见上界 1.334 秒通过 4 秒门槛；仍待受影响故障路径和原中心 Task Delivery | 长期无人值守矩阵归 #32；远程取消 unsupported | [Spec](../spec/03-remote-execution-and-viewer.md) · [Plan](../spec/03-remote-execution-and-viewer.plan.md) · [当前主机回执](../validation/spec03-desktop64g-followup-2026-09-28/README.md) · [Task 105 步骤可见](../validation/spec03-viewer-task105-2026-09-28/README.md) |
 
 2026-09-28 远端目标改为 `台式机64g`。Smart App Control 的首次阻断、用户处置、UAC 人工拒绝与批准均见[目标验收记录](../validation/spec03-desktop64g-2026-09-28.md)；隔离原生 Task 的五步、答案、固定 head 合并和资源释放见[后续回执](../validation/spec03-desktop64g-followup-2026-09-28/README.md)。这些回执不触及 `main`，也不自动关闭中心 #6 Task。
 
-2026-09-28 用户将当前 `台式机64g` 的可见 viewer 时延门槛从 2 秒调整为 **4 秒**；先前 `home` 的 2 秒验收不变。[当前主机后续回执](../validation/spec03-desktop64g-followup-2026-09-28/README.md)中，一次原生 Decision 从中心记录到可见画面的保守上界为 2.215 秒，按新门槛通过该样本；新主机步骤转换仍须单独实测。
+2026-09-28 用户将当前 `台式机64g` 的可见 viewer 时延门槛从 2 秒调整为 **4 秒**；先前 `home` 的 2 秒验收不变。[当前主机后续回执](../validation/spec03-desktop64g-followup-2026-09-28/README.md)中，一次原生 Decision 从中心记录到可见画面的保守上界为 2.215 秒，按新门槛通过该样本；后续 [SteerlineTest Task 105](../validation/spec03-viewer-task105-2026-09-28/README.md) 的步骤转换可见上界为 1.334 秒，通过当前主机 4 秒门槛；首个因筛选丢失对象的样本不计通过。
 
 同日验收归属收口：#6 的关闭以 [Spec 03](../spec/03-remote-execution-and-viewer.md) 第 8–9 节的远程功能、故障安全、目标可见 viewer 和真实交付为准；已通过且未受变更影响的版本族回执不重跑，新主机特有和受影响路径补证。长期无人值守矩阵、固定 stable 24 小时及资源趋势属于 #32；#6 不因等待该矩阵阻塞 #29。此调整不跳过 #6 的真实 Task Delivery，也不自动关闭中心任务。
 

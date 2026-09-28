@@ -1,6 +1,6 @@
 # Plan：分阶段远程闭环与 viewer 决策
 
-2026-09-28 用户将当前 `台式机64g` 的可见 viewer 门槛改为 4 秒内；`home` 的 2 秒原门槛和 1.669 / 1.414 / 1.798 秒回执不变。[当前主机后续回执](../validation/spec03-desktop64g-followup-2026-09-28/README.md)中的 Decision 可见画面保守上界为 2.215 秒，按 4 秒通过该样本；步骤转换仍由 #6 实测，持续无人值守由 #32 验收。
+2026-09-28 用户将当前 `台式机64g` 的可见 viewer 门槛改为 4 秒内；`home` 的 2 秒原门槛和 1.669 / 1.414 / 1.798 秒回执不变。[当前主机后续回执](../validation/spec03-desktop64g-followup-2026-09-28/README.md)中的 Decision 可见画面保守上界为 2.215 秒；后续 [SteerlineTest Task 105](../validation/spec03-viewer-task105-2026-09-28/README.md) 的步骤转换为 1.334 秒，均按 4 秒通过各自样本。当前目标受影响故障路径仍由 #6 验收，持续无人值守由 #32 验收。
 
 任务 ID：6；任务名称：分阶段远程闭环。
 
