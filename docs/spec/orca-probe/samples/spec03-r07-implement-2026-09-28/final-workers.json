@@ -1,0 +1,364 @@
+{
+  "id": "c03e5828-ac31-4e57-8e22-dc130218e789",
+  "ok": true,
+  "result": {
+    "workers": [
+      {
+        "dispatchId": "ctx_b88c6e7e368b",
+        "taskId": "task_ecf59312e597",
+        "runId": "run_d3e6d5954699",
+        "workerState": "succeeded",
+        "dispatchStatus": "completed",
+        "agentTerminalHandle": null,
+        "terminalState": null,
+        "resource": null,
+        "projection": {
+          "id": "ctx_b88c6e7e368b",
+          "dispatchId": "ctx_b88c6e7e368b",
+          "taskId": "task_ecf59312e597",
+          "runId": "run_d3e6d5954699",
+          "role": "worker",
+          "parent": null,
+          "provider": null,
+          "host": {
+            "kind": "remote",
+            "id": "bed55de0-6d7d-497e-b1d5-3abab256b2ee"
+          },
+          "workspace": {
+            "id": "09e35751-6517-4e7c-ae20-178ed0e90000::C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-ba297363740f",
+            "kind": "folder_or_worktree"
+          },
+          "stage": {
+            "worker": "succeeded",
+            "dispatch": "completed",
+            "detail": "released",
+            "activity": "unknown"
+          },
+          "outcome": "succeeded",
+          "liveness": {
+            "verdict": "exited",
+            "source": "execution_host"
+          },
+          "evidence": {
+            "durable": true,
+            "liveStatus": "unavailable",
+            "lastObservedAt": 1790557024158
+          },
+          "resource": {
+            "state": "absent",
+            "reason": "not_materialized"
+          },
+          "nextAction": {
+            "kind": "none",
+            "argv": []
+          },
+          "attention": {
+            "categories": [
+              "root_completion"
+            ],
+            "requiresAction": false
+          }
+        }
+      },
+      {
+        "dispatchId": "ctx_6194684e8f1e",
+        "taskId": "task_d921102cc333",
+        "runId": "run_d3e6d5954699",
+        "workerState": "succeeded",
+        "dispatchStatus": "completed",
+        "agentTerminalHandle": null,
+        "terminalState": null,
+        "resource": null,
+        "projection": {
+          "id": "ctx_6194684e8f1e",
+          "dispatchId": "ctx_6194684e8f1e",
+          "taskId": "task_d921102cc333",
+          "runId": "run_d3e6d5954699",
+          "role": "worker",
+          "parent": null,
+          "provider": null,
+          "host": {
+            "kind": "remote",
+            "id": "bed55de0-6d7d-497e-b1d5-3abab256b2ee"
+          },
+          "workspace": {
+            "id": "09e35751-6517-4e7c-ae20-178ed0e90000::C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-ba297363740f",
+            "kind": "folder_or_worktree"
+          },
+          "stage": {
+            "worker": "succeeded",
+            "dispatch": "completed",
+            "detail": "released",
+            "activity": "unknown"
+          },
+          "outcome": "succeeded",
+          "liveness": {
+            "verdict": "exited",
+            "source": "execution_host"
+          },
+          "evidence": {
+            "durable": true,
+            "liveStatus": "unavailable",
+            "lastObservedAt": 1790557024158
+          },
+          "resource": {
+            "state": "absent",
+            "reason": "not_materialized"
+          },
+          "nextAction": {
+            "kind": "none",
+            "argv": []
+          },
+          "attention": {
+            "categories": [
+              "root_completion"
+            ],
+            "requiresAction": false
+          }
+        }
+      },
+      {
+        "dispatchId": "ctx_a8b42c4dbc78",
+        "taskId": "task_78252b850a96",
+        "runId": "run_d3e6d5954699",
+        "workerState": "succeeded",
+        "dispatchStatus": "completed",
+        "agentTerminalHandle": null,
+        "terminalState": null,
+        "resource": null,
+        "projection": {
+          "id": "ctx_a8b42c4dbc78",
+          "dispatchId": "ctx_a8b42c4dbc78",
+          "taskId": "task_78252b850a96",
+          "runId": "run_d3e6d5954699",
+          "role": "worker",
+          "parent": null,
+          "provider": null,
+          "host": {
+            "kind": "remote",
+            "id": "bed55de0-6d7d-497e-b1d5-3abab256b2ee"
+          },
+          "workspace": {
+            "id": "09e35751-6517-4e7c-ae20-178ed0e90000::C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-ba297363740f",
+            "kind": "folder_or_worktree"
+          },
+          "stage": {
+            "worker": "succeeded",
+            "dispatch": "completed",
+            "detail": "released",
+            "activity": "unknown"
+          },
+          "outcome": "succeeded",
+          "liveness": {
+            "verdict": "exited",
+            "source": "execution_host"
+          },
+          "evidence": {
+            "durable": true,
+            "liveStatus": "unavailable",
+            "lastObservedAt": 1790557024158
+          },
+          "resource": {
+            "state": "absent",
+            "reason": "not_materialized"
+          },
+          "nextAction": {
+            "kind": "none",
+            "argv": []
+          },
+          "attention": {
+            "categories": [
+              "root_completion"
+            ],
+            "requiresAction": false
+          }
+        }
+      },
+      {
+        "dispatchId": "ctx_d3bc9800c64e",
+        "taskId": "task_bc0d8f61a458",
+        "runId": "run_d3e6d5954699",
+        "workerState": "succeeded",
+        "dispatchStatus": "completed",
+        "agentTerminalHandle": null,
+        "terminalState": null,
+        "resource": null,
+        "projection": {
+          "id": "ctx_d3bc9800c64e",
+          "dispatchId": "ctx_d3bc9800c64e",
+          "taskId": "task_bc0d8f61a458",
+          "runId": "run_d3e6d5954699",
+          "role": "worker",
+          "parent": null,
+          "provider": null,
+          "host": {
+            "kind": "remote",
+            "id": "bed55de0-6d7d-497e-b1d5-3abab256b2ee"
+          },
+          "workspace": {
+            "id": "09e35751-6517-4e7c-ae20-178ed0e90000::C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-ba297363740f",
+            "kind": "folder_or_worktree"
+          },
+          "stage": {
+            "worker": "succeeded",
+            "dispatch": "completed",
+            "detail": "released",
+            "activity": "unknown"
+          },
+          "outcome": "succeeded",
+          "liveness": {
+            "verdict": "exited",
+            "source": "execution_host"
+          },
+          "evidence": {
+            "durable": true,
+            "liveStatus": "unavailable",
+            "lastObservedAt": 1790557024158
+          },
+          "resource": {
+            "state": "absent",
+            "reason": "not_materialized"
+          },
+          "nextAction": {
+            "kind": "none",
+            "argv": []
+          },
+          "attention": {
+            "categories": [
+              "root_completion"
+            ],
+            "requiresAction": false
+          }
+        }
+      },
+      {
+        "dispatchId": "ctx_f8c1aa0e6244",
+        "taskId": "task_7624afc0f2be",
+        "runId": "run_d3e6d5954699",
+        "workerState": "succeeded",
+        "dispatchStatus": "completed",
+        "agentTerminalHandle": null,
+        "terminalState": null,
+        "resource": null,
+        "projection": {
+          "id": "ctx_f8c1aa0e6244",
+          "dispatchId": "ctx_f8c1aa0e6244",
+          "taskId": "task_7624afc0f2be",
+          "runId": "run_d3e6d5954699",
+          "role": "worker",
+          "parent": null,
+          "provider": null,
+          "host": {
+            "kind": "remote",
+            "id": "bed55de0-6d7d-497e-b1d5-3abab256b2ee"
+          },
+          "workspace": {
+            "id": "09e35751-6517-4e7c-ae20-178ed0e90000::C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-ba297363740f",
+            "kind": "folder_or_worktree"
+          },
+          "stage": {
+            "worker": "succeeded",
+            "dispatch": "completed",
+            "detail": "released",
+            "activity": "unknown"
+          },
+          "outcome": "succeeded",
+          "liveness": {
+            "verdict": "exited",
+            "source": "execution_host"
+          },
+          "evidence": {
+            "durable": true,
+            "liveStatus": "unavailable",
+            "lastObservedAt": 1790557024158
+          },
+          "resource": {
+            "state": "absent",
+            "reason": "not_materialized"
+          },
+          "nextAction": {
+            "kind": "none",
+            "argv": []
+          },
+          "attention": {
+            "categories": [
+              "root_completion"
+            ],
+            "requiresAction": false
+          }
+        }
+      },
+      {
+        "dispatchId": "ctx_c1c128a5ffef",
+        "taskId": "task_fc7b80132241",
+        "runId": "run_d3e6d5954699",
+        "workerState": "succeeded",
+        "dispatchStatus": "completed",
+        "agentTerminalHandle": null,
+        "terminalState": null,
+        "resource": null,
+        "projection": {
+          "id": "ctx_c1c128a5ffef",
+          "dispatchId": "ctx_c1c128a5ffef",
+          "taskId": "task_fc7b80132241",
+          "runId": "run_d3e6d5954699",
+          "role": "worker",
+          "parent": null,
+          "provider": null,
+          "host": {
+            "kind": "remote",
+            "id": "bed55de0-6d7d-497e-b1d5-3abab256b2ee"
+          },
+          "workspace": {
+            "id": "09e35751-6517-4e7c-ae20-178ed0e90000::C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-ba297363740f",
+            "kind": "folder_or_worktree"
+          },
+          "stage": {
+            "worker": "succeeded",
+            "dispatch": "completed",
+            "detail": "released",
+            "activity": "unknown"
+          },
+          "outcome": "succeeded",
+          "liveness": {
+            "verdict": "exited",
+            "source": "execution_host"
+          },
+          "evidence": {
+            "durable": true,
+            "liveStatus": "unavailable",
+            "lastObservedAt": 1790557024158
+          },
+          "resource": {
+            "state": "absent",
+            "reason": "not_materialized"
+          },
+          "nextAction": {
+            "kind": "none",
+            "argv": []
+          },
+          "attention": {
+            "categories": [
+              "root_completion"
+            ],
+            "requiresAction": false
+          }
+        }
+      }
+    ],
+    "counts": {},
+    "page": {
+      "limit": 100,
+      "total": 6,
+      "hasMore": false,
+      "nextCursor": null
+    },
+    "scope": {
+      "run": "run_d3e6d5954699",
+      "source": "flag"
+    }
+  },
+  "_meta": {
+    "runtimeId": "3dd6023d-87dd-4055-bcf6-f8dd87c3c731"
+  }
+}

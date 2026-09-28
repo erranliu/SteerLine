@@ -1,0 +1,33 @@
+import json
+import pathlib
+import sqlite3
+import subprocess
+import time
+
+
+root = pathlib.Path(__file__).parent
+config = json.loads((root / "acceptance-config.json").read_text(encoding="utf-8-sig"))
+run_dir = pathlib.Path(config["run_dir"])
+db = sqlite3.connect(f"file:{run_dir / 'steerline.db'}?mode=ro", uri=True, timeout=2)
+decision_id = "relay_354238418313"
+dispatch = "ctx_f8c1aa0e6244"
+deadline = time.monotonic() + 600
+while time.monotonic() < deadline:
+    row = db.execute("SELECT status FROM decisions WHERE decision_id=?", (decision_id,)).fetchone()
+    if row and row[0] == "applied":
+        raw = (run_dir / "runtime.json").read_bytes()
+        state = json.loads(raw)
+        attempt = next(a for a in state["attempts"] if a["attempt_id"] == state["runs"][0]["attempt_id"])
+        if attempt["step_id"] != "implement" or attempt["status"] in ("succeeded", "failed", "outcome_unknown"):
+            raise SystemExit("Decision applied after implement already settled")
+        worker_raw = subprocess.check_output(["orca", "orchestration", "worker-show", "--dispatch", dispatch, "--json"], timeout=15)
+        worker = json.loads(worker_raw)["result"]
+        if worker["dispatch"]["status"] != "dispatched" or worker["observation"]["status"] != "live":
+            raise SystemExit("original implement worker is no longer live and dispatched")
+        (root / "pre-interrupt-runtime.json").write_bytes(raw)
+        (root / "pre-interrupt-worker.json").write_bytes(worker_raw)
+        print(json.dumps({"service_pid": state["service"]["pid"], "run_id": state["runs"][0]["run_id"], "attempt_id": attempt["attempt_id"], "decision": row[0], "worker_dispatch": dispatch}), flush=True)
+        break
+    time.sleep(0.1)
+else:
+    raise SystemExit("Decision was not applied within ten minutes")

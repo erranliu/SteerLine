@@ -1,0 +1,174 @@
+{
+  "id": "1b6ff99d-cca3-45b9-88de-0c4773b542ff",
+  "ok": true,
+  "result": {
+    "dispatch": {
+      "id": "ctx_d3bc9800c64e",
+      "runId": "run_d3e6d5954699",
+      "taskId": "task_bc0d8f61a458",
+      "task_id": "task_bc0d8f61a458",
+      "contractVersion": 1,
+      "assigneeHandle": null,
+      "assigneePaneKey": null,
+      "processIncarnation": null,
+      "capabilityRevokedAt": "2026-09-28T00:11:07.992Z",
+      "retryOfDispatchId": null,
+      "creatorDispatchId": null,
+      "hostScope": null,
+      "status": "completed",
+      "failureCount": 0,
+      "lastFailure": null,
+      "terminationReason": null,
+      "depth": 1,
+      "dispatchedAt": "2026-09-28 00:03:06",
+      "completedAt": "2026-09-28T00:11:07.992Z",
+      "createdAt": "2026-09-28 00:03:06",
+      "lastHeartbeatAt": null
+    },
+    "worker": {
+      "dispatchId": "ctx_d3bc9800c64e",
+      "runtimeEpoch": "3dd6023d-87dd-4055-bcf6-f8dd87c3c731",
+      "state": "succeeded",
+      "stage": "settled",
+      "worktreeId": "09e35751-6517-4e7c-ae20-178ed0e90000::C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-ba297363740f",
+      "agentTerminalHandle": "term_cd16453d-7245-45ff-a6c2-7a90715c4534",
+      "setupState": "not_applicable",
+      "effects": [
+        {
+          "kind": "worktree",
+          "action": "reused",
+          "id": "09e35751-6517-4e7c-ae20-178ed0e90000::C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-ba297363740f"
+        },
+        {
+          "kind": "setup",
+          "action": "not_applicable",
+          "state": "not_applicable"
+        },
+        {
+          "kind": "terminal",
+          "role": "agent",
+          "action": "created",
+          "id": "term_cd16453d-7245-45ff-a6c2-7a90715c4534"
+        },
+        {
+          "kind": "dispatch_input",
+          "role": "agent",
+          "id": "term_cd16453d-7245-45ff-a6c2-7a90715c4534",
+          "state": "accepted"
+        }
+      ],
+      "residualResources": [],
+      "startOptions": {
+        "on": "bed55de0-6d7d-497e-b1d5-3abab256b2ee",
+        "serverName": "home",
+        "worktree": "id:09e35751-6517-4e7c-ae20-178ed0e90000::C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-ba297363740f",
+        "name": null,
+        "repo": null,
+        "baseBranch": null,
+        "terminal": null,
+        "agent": "codex",
+        "launch": {
+          "requested": {
+            "agent": "codex",
+            "model": "gpt-6-luna",
+            "effort": "high"
+          },
+          "effective": null
+        },
+        "timeoutMs": 60000,
+        "setup": "not_applicable",
+        "setupSource": "existing_worktree"
+      },
+      "lastError": null,
+      "createdAt": "2026-09-28 00:03:06",
+      "updatedAt": "2026-09-28T00:11:07.992Z"
+    },
+    "projection": {
+      "id": "ctx_d3bc9800c64e",
+      "dispatchId": "ctx_d3bc9800c64e",
+      "taskId": "task_bc0d8f61a458",
+      "runId": "run_d3e6d5954699",
+      "role": "worker",
+      "parent": null,
+      "provider": null,
+      "host": {
+        "kind": "remote",
+        "id": "bed55de0-6d7d-497e-b1d5-3abab256b2ee"
+      },
+      "workspace": {
+        "id": "09e35751-6517-4e7c-ae20-178ed0e90000::C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-ba297363740f",
+        "kind": "folder_or_worktree"
+      },
+      "stage": {
+        "worker": "succeeded",
+        "dispatch": "completed",
+        "detail": "settled",
+        "activity": "unknown"
+      },
+      "outcome": "succeeded",
+      "liveness": {
+        "verdict": "live",
+        "observedAt": 1790554429765,
+        "source": "execution_host"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "fresh",
+        "lastObservedAt": 1790554429765
+      },
+      "resource": {
+        "state": "absent",
+        "reason": "not_materialized"
+      },
+      "nextAction": {
+        "kind": "inspect",
+        "argv": [
+          "orchestration",
+          "worker-show",
+          "--dispatch",
+          "ctx_d3bc9800c64e"
+        ]
+      },
+      "attention": {
+        "categories": [
+          "root_completion"
+        ],
+        "requiresAction": false
+      }
+    },
+    "server": {
+      "environmentId": "bed55de0-6d7d-497e-b1d5-3abab256b2ee",
+      "name": "home"
+    },
+    "remoteRuntimeEpoch": "a8aa72a1-af21-4b48-85e2-231d527b2e38",
+    "terminal": {
+      "handle": "term_cd16453d-7245-45ff-a6c2-7a90715c4534",
+      "ptyId": "09e35751-6517-4e7c-ae20-178ed0e90000::C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-ba297363740f@@b2f9cc65",
+      "incarnationId": "89a34999-4d32-41aa-90f3-dd15f485c28b",
+      "orphaned": true,
+      "worktreeId": "09e35751-6517-4e7c-ae20-178ed0e90000::C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-ba297363740f",
+      "worktreePath": "C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-ba297363740f",
+      "branch": "refs/heads/erranliu/steerline-ba297363740f",
+      "tabId": "6d4985fa-23b9-4909-8ac6-d4d9a33d97ec",
+      "leafId": "6be5ba6f-20fd-427a-a038-00188053c0d5",
+      "title": "steerline-ba297363740f",
+      "connected": true,
+      "writable": true,
+      "lastOutputAt": 1790554279672,
+      "preview": "s · 08:11\nTip: Type / to open the command popup; Tab autocompletes slash commands.\n› Ask Codex to do anything\nGPT-6-Luna high · ~\\orca\\workspaces\\SteerlineTest\\steerline-ba297363740f\n? for shortcuts                                                                             ⚠ 2 warnings · f2 to view",
+      "executionHostId": "local",
+      "agentIdentity": "codex",
+      "paneRuntimeId": -1,
+      "rendererGraphEpoch": 0,
+      "agentWait": null
+    },
+    "observation": {
+      "status": "live",
+      "exactWorker": true,
+      "agentWait": null
+    }
+  },
+  "_meta": {
+    "runtimeId": "3dd6023d-87dd-4055-bcf6-f8dd87c3c731"
+  }
+}

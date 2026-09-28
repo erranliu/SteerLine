@@ -1,0 +1,44 @@
+{
+  "id": "3eb27694-5f75-408d-a242-8e956c786997",
+  "ok": true,
+  "result": {
+    "runId": "run_d3e6d5954699",
+    "messages": [
+      {
+        "id": "relay_85afb62ade3e",
+        "run_id": "run_d3e6d5954699",
+        "delivery_contract": "current_delivery",
+        "from_handle": "dispatch:ctx_d3bc9800c64e",
+        "to_handle": "run:run_d3e6d5954699",
+        "subject": "verify step result for task 91024",
+        "body": "",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": "{\"taskId\":\"task_bc0d8f61a458\",\"dispatchId\":\"ctx_d3bc9800c64e\",\"remote_codex_version\":\"codex-cli 0.157.1\",\"step_result\":{\"schema_version\":1,\"project_identity\":\"c:\\\\users\\\\lmas1\\\\appdata\\\\local\\\\temp\\\\s3r07impl28h\\\\native-project\\\\.git\",\"task_id\":\"91024\",\"workflow_run_id\":\"ba297363740f7448637a9c14bb07e8bd\",\"execution_id\":\"2866ad0874fe69acf9c2ae6a5a0ec596\",\"attempt_id\":\"3ed0881d459f40dd48055226ab1f10e4\",\"result\":{\"base_ancestor\":true,\"checks\":[{\"passed\":true,\"name\":\"content-smoke\",\"revision\":\"ed7f31153ae7d6fe39b6ab03ebc95cf6eb2c8652\",\"actual_commit\":\"ed7f31153ae7d6fe39b6ab03ebc95cf6eb2c8652\",\"status\":\"passed\",\"command\":\"pwsh.exe -NoProfile -Command $h=(git rev-parse HEAD:steerline-spec03-native-stage.txt).Trim(); if($LASTEXITCODE -ne 0 -or $h -cne 'a7890c716cc3ad0cca79f8d7b68cffe125e6b106'){exit 7}; exit 0\",\"script_version\":\"README.md\",\"evidence_ref\":\"command-receipt:content-smoke; raw immutable spec SHA-256=c17ac174256d2c6badab50afb76434dfa1d66983edecb782cbba3a51fe608a7d; plan SHA-256=c3a109229bac877b1054f037bf3ef1a19682e386fe9e8ac48a9d013bc8c9c4c4\",\"exit_code\":0}],\"input_revision\":\"ed7f31153ae7d6fe39b6ab03ebc95cf6eb2c8652\",\"prerequisite_result_ids\":[\"82cf3c40136f611f6a5bea1622e3ddd1\"],\"result_id\":\"3ed0881d459f40dd48055226ab1f10e4\",\"revision\":\"ed7f31153ae7d6fe39b6ab03ebc95cf6eb2c8652\",\"step_id\":\"verify\",\"succeeded\":true,\"workspace\":{\"base\":\"e33e51926ec28d90c42fbc4064db4d19002845a2\",\"branch\":\"erranliu/steerline-ba297363740f\",\"dirty\":false,\"head\":\"ed7f31153ae7d6fe39b6ab03ebc95cf6eb2c8652\",\"repository\":\"c:\\\\users\\\\lmas1\\\\appdata\\\\local\\\\temp\\\\s3r07impl28h\\\\native-project\\\\.git\",\"verified_at\":\"2026-09-28T00:11:05.1396122Z\",\"worktree\":\"\"}}}}",
+        "created_at": "2026-09-28T00:11:07Z",
+        "delivered_at": null
+      },
+      {
+        "id": "relay_57cd3bf3fbc2",
+        "run_id": "run_d3e6d5954699",
+        "delivery_contract": "current_delivery",
+        "from_handle": "dispatch:ctx_d3bc9800c64e",
+        "to_handle": "run:run_d3e6d5954699",
+        "subject": "Verify step completed",
+        "body": "Verified candidate and content smoke with exit code 0; status receipt ad94d790-f73f-4981-a71d-947e6df510ba. Immutable spec and plan blobs matched their pinned SHA-256 values. No files changed; the verify result is recorded.",
+        "type": "worker_done",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": "{\"taskId\":\"task_bc0d8f61a458\",\"dispatchId\":\"ctx_d3bc9800c64e\",\"outcome\":\"succeeded\"}",
+        "created_at": "2026-09-28T00:11:07Z",
+        "delivered_at": null
+      }
+    ],
+    "count": 2,
+    "acknowledged": null
+  },
+  "_meta": {
+    "runtimeId": "3dd6023d-87dd-4055-bcf6-f8dd87c3c731"
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "id": "63f3b909-cc56-4087-89cd-3b537e363c33",
+  "ok": true,
+  "result": {
+    "runId": "run_d3e6d5954699",
+    "messages": [
+      {
+        "id": "relay_f3a25022b531",
+        "run_id": "run_d3e6d5954699",
+        "delivery_contract": "current_delivery",
+        "from_handle": "dispatch:ctx_6194684e8f1e",
+        "to_handle": "run:run_d3e6d5954699",
+        "subject": "Native candidate review passed",
+        "body": "",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": "{\"taskId\":\"task_d921102cc333\",\"dispatchId\":\"ctx_6194684e8f1e\",\"remote_codex_version\":\"codex-cli 0.157.1\",\"step_result\":{\"schema_version\":1,\"project_identity\":\"c:\\\\users\\\\lmas1\\\\appdata\\\\local\\\\temp\\\\s3r07impl28h\\\\native-project\\\\.git\",\"task_id\":\"91024\",\"workflow_run_id\":\"ba297363740f7448637a9c14bb07e8bd\",\"execution_id\":\"2866ad0874fe69acf9c2ae6a5a0ec596\",\"attempt_id\":\"c6ee5e3cb1b3f0c043bf8b90899c86c7\",\"result\":{\"base_ancestor\":true,\"input_revision\":\"ed7f31153ae7d6fe39b6ab03ebc95cf6eb2c8652\",\"prerequisite_result_ids\":[\"e60d5c9878c1151e81f821716b0cf34f\"],\"result_id\":\"c6ee5e3cb1b3f0c043bf8b90899c86c7\",\"review_verdict\":\"passed\",\"revision\":\"ed7f31153ae7d6fe39b6ab03ebc95cf6eb2c8652\",\"step_id\":\"review\",\"succeeded\":true,\"workspace\":{\"base\":\"e33e51926ec28d90c42fbc4064db4d19002845a2\",\"branch\":\"erranliu/steerline-ba297363740f\",\"dirty\":false,\"head\":\"ed7f31153ae7d6fe39b6ab03ebc95cf6eb2c8652\",\"repository\":\"c:\\\\users\\\\lmas1\\\\appdata\\\\local\\\\temp\\\\s3r07impl28h\\\\native-project\\\\.git\",\"verified_at\":\"2026-09-28T00:44:05.0355061Z\",\"worktree\":\"C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-ba297363740f\"}}}}",
+        "created_at": "2026-09-28T00:44:07Z",
+        "delivered_at": null
+      },
+      {
+        "id": "relay_3649e8dc6ca7",
+        "run_id": "run_d3e6d5954699",
+        "delivery_contract": "current_delivery",
+        "from_handle": "dispatch:ctx_6194684e8f1e",
+        "to_handle": "run:run_d3e6d5954699",
+        "subject": "Review complete: passed",
+        "body": "I reviewed candidate ed7f31153ae7d6fe39b6ab03ebc95cf6eb2c8652 against the pinned native acceptance spec and plan. The diff adds only the required artifact, its Git blob matches the pinned hash, the base is an ancestor, and the worktree is clean. No further review work remains; the center can proceed with the next workflow step.",
+        "type": "worker_done",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": "{\"taskId\":\"task_d921102cc333\",\"dispatchId\":\"ctx_6194684e8f1e\",\"outcome\":\"succeeded\"}",
+        "created_at": "2026-09-28T00:44:07Z",
+        "delivered_at": null
+      }
+    ],
+    "count": 2,
+    "acknowledged": null
+  },
+  "_meta": {
+    "runtimeId": "3dd6023d-87dd-4055-bcf6-f8dd87c3c731"
+  }
+}

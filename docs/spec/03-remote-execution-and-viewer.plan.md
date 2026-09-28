@@ -6,6 +6,8 @@
 
 同日后续：[SteerLine 仓库 home 能力报告](../validation/spec03-production-project-capability-2026-09-28.md)现将六项必需受监管能力绑定到独立的项目工作树及真实 Dispatch/Task/消息/release 回执。首次复用旧终端的 worker_done 失败并按精确身份停止，正常新 agent 终端重试才结算成功。当前报告不包括生产项目的原生五步任务或 PR 演练；UAC 与其余故障门槛仍开放。
 
+同日[R07 implement 离线完成与原库恢复](../validation/spec03-r07-implement-2026-09-28.md)补齐最后一个独立步骤完成窗口样本；[R01–R19 对照](../validation/spec03-fault-matrix-2026-09-28.md)列出每项真机/自动化证据。该隔离任务最终 PR #20 合并、Task 关闭，但 verify/review 的提示提交反复需人工 Enter，生产无人值守启动可靠性仍未通过；不能用 R07 恢复通过掩盖这个实际故障。
+
 ## 实施顺序
 
 共享接线与 [#11](test-feedback.spec.md)、[#12](beads-path-removal.spec.md)、[#13](taskgraph-modules.spec.md) 按 Spec 的冲突规则串行集成；独立协议样例可先准备，后集成方重跑受影响接口与测试。原生任务权威是唯一接入范围。
