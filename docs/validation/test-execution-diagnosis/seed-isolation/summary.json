@@ -1,0 +1,18 @@
+{
+  "command": [
+    "go",
+    "tool",
+    "test2json",
+    "-t",
+    "-p",
+    "github.com/erranliu/SteerLine/internal/steerline",
+    "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-test-probes-pb3edgp0\\core-seed.exe",
+    "-test.v=test2json",
+    "-test.count=1",
+    "-test.parallel=1",
+    "-test.timeout=120s",
+    "-test.run=^(TestDiagnosticSeedIsolation|TestCreateTaskBatchAtomicIdempotentAndQueryable|TestNativeClaimCompetitionCreatesOnlyOneWorkflowReservation)$"
+  ],
+  "wall_seconds": 35.85408449999886,
+  "exit_code": 0
+}

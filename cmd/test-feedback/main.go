@@ -27,6 +27,8 @@ type options struct {
 	summarizeLog   string
 	exitCode       int
 	goTestArgs     []string
+	quick          bool
+	workers        int
 }
 
 type environment struct {
@@ -45,6 +47,7 @@ type environment struct {
 
 type runReport struct {
 	SchemaVersion int                  `json:"schema_version"`
+	Scope         string               `json:"scope"`
 	Phase         string               `json:"phase"`
 	Mode          string               `json:"mode"`
 	Command       []string             `json:"command"`
@@ -84,15 +87,19 @@ func run(args []string) int {
 	if parsed.summarizeLog != "" {
 		return summarizeExisting(parsed)
 	}
+	if parsed.quick || parsed.workers == 3 {
+		return runScoped(parsed)
+	}
 
 	goArgs := parsed.goTestArgs
 	mode := "tests"
+	scope := "targeted"
 	if parsed.buildOnly {
 		mode = "build-only"
 		goArgs = []string{"./...", "-run=^$", "-count=1", "-timeout", "20m", "-json"}
 	} else if len(goArgs) == 0 {
-		// Keep the full-suite command identical to the Spec's required entry.
-		goArgs = []string{"./...", "-json", "-count=1", "-timeout", "20m"}
+		scope = "full"
+		goArgs = []string{"./...", "-json", "-count=1", "-timeout", "45m", "-p", "1", "-parallel", "1"}
 	} else if !hasJSONFlag(goArgs) {
 		goArgs = append(goArgs, "-json")
 	}
@@ -159,6 +166,7 @@ func run(args []string) int {
 	}
 	report := runReport{
 		SchemaVersion: 1,
+		Scope:         scope,
 		Phase:         parsed.phase,
 		Mode:          mode,
 		Command:       command,
@@ -217,6 +225,8 @@ func parseOptions(args []string) (options, error) {
 	flags.BoolVar(&opts.buildOnly, "build-only", false, "run all packages with -run=^$ to measure build/precompile time")
 	flags.StringVar(&opts.summarizeLog, "summarize-log", "", "summarize an existing go test -json log without running tests")
 	flags.IntVar(&opts.exitCode, "exit-code", 0, "exit code from the command that produced -summarize-log")
+	flags.BoolVar(&opts.quick, "quick", false, "run the fixed minimal closed loop and pure rule packages")
+	flags.IntVar(&opts.workers, "workers", 1, "complete test suite processes: 1 or 3")
 	if err := flags.Parse(toolArgs); err != nil {
 		return opts, fmt.Errorf("test-feedback options: %w", err)
 	}
@@ -229,8 +239,31 @@ func parseOptions(args []string) (options, error) {
 	if opts.summarizeLog != "" && (opts.buildOnly || len(goArgs) != 0) {
 		return opts, fmt.Errorf("-summarize-log cannot be combined with Go test arguments or -build-only")
 	}
+	if opts.workers != 1 && opts.workers != 3 {
+		return opts, fmt.Errorf("-workers must be 1 or 3")
+	}
+	if opts.quick && (opts.workers != 1 || opts.buildOnly || opts.summarizeLog != "") {
+		return opts, fmt.Errorf("-quick cannot be combined with workers, build-only, or summarize-log")
+	}
+	if opts.quick && len(goArgs) > 0 {
+		for _, arg := range goArgs {
+			if arg == "./..." {
+				return opts, fmt.Errorf("-quick additional Go arguments must select a focused package or test, not ./...")
+			}
+		}
+		if count := flagValue(goArgs, "-count", "1"); count != "1" {
+			return opts, fmt.Errorf("-quick additional tests require -count=1")
+		}
+	}
+	if opts.workers == 3 && (opts.buildOnly || opts.summarizeLog != "" || len(goArgs) != 0) {
+		return opts, fmt.Errorf("-workers=3 only runs the complete deterministic suite")
+	}
 	if opts.out == "" {
-		opts.out = filepath.Join("docs", "validation", "test-feedback", "runs", time.Now().UTC().Format("20060102T150405Z"))
+		if opts.quick || opts.workers == 3 {
+			opts.out = filepath.Join(os.TempDir(), "steerline-test-feedback", time.Now().UTC().Format("20060102T150405.000000000Z"))
+		} else {
+			opts.out = filepath.Join("docs", "validation", "test-feedback", "runs", time.Now().UTC().Format("20060102T150405Z"))
+		}
 	}
 	opts.goTestArgs = goArgs
 	return opts, nil

@@ -1,0 +1,3 @@
+# Archived diagnostic patches retain the original whitespace from Go diffs.
+docs/validation/test-execution-diagnosis/probes/*.patch whitespace=-blank-at-eol,-space-before-tab
+docs/validation/test-execution-diagnosis/reduction-audit/*.patch whitespace=-blank-at-eol,-space-before-tab

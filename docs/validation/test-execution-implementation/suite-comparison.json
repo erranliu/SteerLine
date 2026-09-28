@@ -1,0 +1,95 @@
+{
+  "source_commit": "9877cb0746f3507c7ef29274dceaedd419f8c633",
+  "go_version": "go version go1.26.4 windows/amd64",
+  "machine": {
+    "host_name": "liuming-asus",
+    "logical_cpu_count": 20,
+    "processor_identifier": "AMD64 Family 26 Model 36 Stepping 0, AuthenticAMD"
+  },
+  "native_switches": [],
+  "serial_wall_seconds": 463.7802522,
+  "full_preparation_seconds": 5.1286716,
+  "full_execution_seconds": 263.317964,
+  "full_to_serial_ratio": 0.5677645021557475,
+  "quick_execution_seconds": 29.7694519,
+  "quick_focused_execution_seconds": 41.9993194,
+  "top_level_core_tests": 276,
+  "packages": 11,
+  "terminal_tests_and_subtests": 487,
+  "skipped_tests_and_subtests": 17,
+  "terminal_outcomes_sha256": "218125f55e8b721a0c3d0e0b4ffdb70791b745f5852cead95207a4c208f81d47",
+  "groups": [
+    {
+      "id": "core-1",
+      "assigned_tests": 90,
+      "wall_seconds": 207.3940497
+    },
+    {
+      "id": "core-2",
+      "assigned_tests": 92,
+      "wall_seconds": 224.5103171
+    },
+    {
+      "id": "core-3",
+      "assigned_tests": 94,
+      "wall_seconds": 206.7084899
+    },
+    {
+      "id": "other-packages",
+      "assigned_tests": 0,
+      "wall_seconds": 38.7685229
+    }
+  ],
+  "raw_logs": {
+    "serial": {
+      "file": "serial.jsonl.gz",
+      "raw_sha256": "a04da27fe0e6469e95f6308e7908a49f9137f16964dd7b511064ad34a1496e33",
+      "raw_bytes": 460586
+    },
+    "full-core-1": {
+      "file": "full-core-1.jsonl.gz",
+      "raw_sha256": "33e1648bf985a01f2288b5735bb2f99de0e569112eedcff7b8ede1b45623106f",
+      "raw_bytes": 102177
+    },
+    "full-core-2": {
+      "file": "full-core-2.jsonl.gz",
+      "raw_sha256": "61c933fc3c87d193885e0e6caf7b83ae3c48d2ff3e101bf0ab280a162e368b6b",
+      "raw_bytes": 101580
+    },
+    "full-core-3": {
+      "file": "full-core-3.jsonl.gz",
+      "raw_sha256": "f5fc24ee7b72d112ab1880578226a850a2a94cf4974b8a69a512a03e19011c32",
+      "raw_bytes": 100727
+    },
+    "full-other-packages": {
+      "file": "full-other-packages.jsonl.gz",
+      "raw_sha256": "d25c2fa24ebdb082ea7dbe7d47e7508cc9136095adc852d022c303749fac892e",
+      "raw_bytes": 156768
+    },
+    "quick-quick-core": {
+      "file": "quick-quick-core.jsonl.gz",
+      "raw_sha256": "6e94a95dc41212acb840edd6ba2b854282e1b3e22529f27117b8bee9479af6f0",
+      "raw_bytes": 2363
+    },
+    "quick-quick-rules": {
+      "file": "quick-quick-rules.jsonl.gz",
+      "raw_sha256": "b62b73f109b1ac79d8a2ab9a4089c53a2b9552db4a0a6945400a91f17a6c6e34",
+      "raw_bytes": 26987
+    },
+    "quick-focused-quick-core": {
+      "file": "quick-focused-quick-core.jsonl.gz",
+      "raw_sha256": "f37d438edba1d2bfd87419e48442ab2f769287fb77750bdea9db08e523c4eb3b",
+      "raw_bytes": 2361
+    },
+    "quick-focused-quick-rules": {
+      "file": "quick-focused-quick-rules.jsonl.gz",
+      "raw_sha256": "b54303a71b903ea24c90e2300d3a7728e3abf4fa48607f45285d001a3a9600da",
+      "raw_bytes": 26986
+    },
+    "quick-focused-quick-targeted": {
+      "file": "quick-focused-quick-targeted.jsonl.gz",
+      "raw_sha256": "9abc48a45268a5635fe1e8a698ac44efdb5fca8d49205bd1ca9d5afce9e00ec3",
+      "raw_bytes": 4821
+    }
+  }
+}
