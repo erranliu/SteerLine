@@ -56,7 +56,7 @@
 
 ## 2. 配置与接入前置
 
-新增显式的受监管远程配置，至少包含固定 connection ID、home Orca runtime/协调者绑定、environment ID、远端 repo selector、agent、固定 model/reasoning_effort、输出/状态轮询参数和能力报告版本。当前配置字段见[配置片段](orca-probe/samples/supervised-config.fragment.json)；它仍不能启用生产派发：worker start、消息、输出和结算已有受限实现与局部真机回执，完整能力认证仍未通过。本机 Orca terminal v2 与受监管远端是不同协议实现，不从前者的配置隐式切换。远端 worker-start 显式传递已固定的 model/reasoning_effort；若缺少必需值，领取前拒绝，不继承远端用户的 Orca 默认模型。
+新增显式的受监管远程配置，至少包含固定 connection ID、home Orca runtime/协调者绑定、environment ID、远端 repo selector、agent、固定 model/reasoning_effort、输出/状态轮询参数和能力报告版本。当前配置字段见[配置片段](orca-probe/samples/supervised-config.fragment.json)；片段含占位身份，不能直接运行。台式机64g 的六项基础能力已由真机五步回执认证，按本文 MVP 边界核验实际项目配置后可人工值守使用；完整无人值守验收仍开放。本机 Orca terminal v2 与受监管远端是不同协议实现，不从前者的配置隐式切换。远端 worker-start 显式传递已固定的 model/reasoning_effort；若缺少必需值，领取前拒绝，不继承远端用户的 Orca 默认模型。
 
 Codex CLI 版本作为执行证据记录，不作为默认兼容门槛：每个 worker 必须成功运行 `codex --version`，把非空实际输出放入受监管状态回执；配置 `expected_codex_version` 只有显式填写时才启用精确 pin，省略或留空不限制版本号。当前验收目标环境报告为 Codex CLI 0.157.1，版本号仍会随真实回执记录。
 
