@@ -22,7 +22,7 @@
 | 任务 ID | 任务名称 | 目标标识 | 剩余目标 | 依赖 | 执行规格 |
 | --- | --- | --- | --- | --- | --- |
 | 4 | Orca 远程协议验证 | `REMOTE-PROTOCOL` | 当前 Orca 1.4 版本族与台式机64g 目标的 P01–P13 已通过；原中心 Task version 3 已 closed，unknown verify 精确对账后 Delivery 核验原合并 PR #16。未受变更影响的探测不重跑 | 远程取消 unsupported；新目标、版本族或调用路径变更时定向补证 | [Spec](../spec/01-orca-remote-protocol.md) · [Plan](../spec/01-orca-remote-protocol.plan.md) · [结项回执](../validation/phase1-task-closure-2026-09-28/README.md) |
-| 6 | 分阶段远程闭环 | `REMOTE-WORKFLOW` | home 的 R01–R19、2 秒 viewer 和原生闭环已有证据；台式机64g 已完成原生五步、业务答案、固定 head 真实合并及释放，Decision 可见上界 2.215 秒，通过当前 4 秒门槛。当前主机步骤转换可见上界 1.334 秒通过 4 秒门槛；仍待受影响故障路径和原中心 Task Delivery | 长期无人值守矩阵归 #32；远程取消 unsupported | [Spec](../spec/03-remote-execution-and-viewer.md) · [Plan](../spec/03-remote-execution-and-viewer.plan.md) · [当前主机回执](../validation/spec03-desktop64g-followup-2026-09-28/README.md) · [Task 105 步骤可见](../validation/spec03-viewer-task105-2026-09-28/README.md) |
+| 6 | 分阶段远程闭环 | `REMOTE-WORKFLOW` | home 的 R01–R19、2 秒 viewer 和原生闭环已有证据；台式机64g 已完成原生五步、业务答案、固定 head 真实合并及释放，Decision 2.215 秒、步骤转换 1.334 秒的可见上界均通过当前 4 秒门槛。当前主机活跃 worker 停服重接和身份不可核实的 fail-closed 已定向留证；仍待最终故障范围核对和原中心 Task Delivery | 长期无人值守矩阵归 #32；远程取消 unsupported | [Spec](../spec/03-remote-execution-and-viewer.md) · [Plan](../spec/03-remote-execution-and-viewer.plan.md) · [当前主机故障回执](../validation/spec03-current-host-affected-2026-09-28/README.md) · [Task 105 步骤可见](../validation/spec03-viewer-task105-2026-09-28/README.md) |
 
 2026-09-28 远端目标改为 `台式机64g`。Smart App Control 的首次阻断、用户处置、UAC 人工拒绝与批准均见[目标验收记录](../validation/spec03-desktop64g-2026-09-28.md)；隔离原生 Task 的五步、答案、固定 head 合并和资源释放见[后续回执](../validation/spec03-desktop64g-followup-2026-09-28/README.md)。这些回执不触及 `main`，也不自动关闭中心 #6 Task。
 
