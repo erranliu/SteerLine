@@ -1,5 +1,7 @@
 # PR 5 人工决策与恢复验证记录
 
+2026-09-28 验收结论更新：H-A6 的活跃真实 worker 入口单字段故障注入、resuming 终端死亡及 H-A15 回执丢失已覆盖不冒认、不重派和占槽保留；H-A16 的 SteerlineTest Task 104 可见 TTY 精确折叠已通过。Orca 平台自然产生同句柄新 incarnation 的现场不再作为 #3 关闭前置；发生时按受影响版本定向回归。下文较早的“仍开放”结论保留对应测试时间，不撤销原始失败记录。中心 #3 Task 仍须正常交付。
+
 Date: 2026-09-25 (Asia/Shanghai)
 Base: `7b2706f` (`origin/main` at implementation start)
 Environment: Windows amd64, Go 1.26.4

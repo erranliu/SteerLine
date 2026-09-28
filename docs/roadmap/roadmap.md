@@ -12,9 +12,9 @@
 
 | 任务 ID | 任务名称 | 目标标识 | 剩余目标 | 前置条件 | 执行规格 |
 | --- | --- | --- | --- | --- | --- |
-| 3 | 人工决策与恢复闭环 | `INTERVENTION` | 95012 已验证 Orca 承载 Codex 在 `workspace-write` 下提交、绑定应用证明和同 attempt 重启对账；95013 已验证 resuming 中终端死亡不重派。[H-A15 显式续跑创建回执丢失](../validation/pr-05-h15-response-loss-2026-09-28.json)与[H-A6 活跃 worker 同句柄 incarnation 注入](../validation/pr-05-h6-incarnation-2026-09-28.json)均验证原 Attempt/执行槽保留且同库重启不重派；[H-A16 本机可见 TTY 精确折叠](../validation/pr05-ha16-steerlinetest-2026-09-28/README.md)已通过；Orca 平台自身真实同句柄换代仍缺。[可执行恢复确认](../validation/pr-05-recovery-confirmation-2026-09-28.json)已通过。实时 stale-revision 和用户确认的系统剪贴板粘贴已通过 | 95008/95009/95010 的失败结果不重放；95011 的旧失败决策、95012 的 publish unknown、95013 的故障现场分别保留，不把完成的 implement 误报为任务交付 | [Spec](../spec/pr-05-intervention.spec.md) · [Plan](../spec/pr-05-intervention.plan.md) · [验证记录](../validation/pr-05-intervention.md) · [后续验证](../validation/remaining-gates-2026-09-27.md) |
+| 3 | 人工决策与恢复闭环 | `INTERVENTION` | 95012 已验证 Orca 承载 Codex 在 `workspace-write` 下提交、绑定应用证明和同 attempt 重启对账；95013 已验证 resuming 中终端死亡不重派。[H-A15 显式续跑创建回执丢失](../validation/pr-05-h15-response-loss-2026-09-28.json)与[H-A6 活跃 worker 同句柄 incarnation 注入](../validation/pr-05-h6-incarnation-2026-09-28.json)均验证原 Attempt/执行槽保留且同库重启不重派；[H-A16 本机可见 TTY 精确折叠](../validation/pr05-ha16-steerlinetest-2026-09-28/README.md)已通过；平台自然发生同句柄换代不作为当前 #3 关闭前置。[可执行恢复确认](../validation/pr-05-recovery-confirmation-2026-09-28.json)已通过。实时 stale-revision 和用户确认的系统剪贴板粘贴已通过 | 95008/95009/95010 的失败结果不重放；95011 的旧失败决策、95012 的 publish unknown、95013 的故障现场分别保留，不把完成的 implement 误报为任务交付 | [Spec](../spec/pr-05-intervention.spec.md) · [Plan](../spec/pr-05-intervention.plan.md) · [验证记录](../validation/pr-05-intervention.md) · [后续验证](../validation/remaining-gates-2026-09-27.md) |
 
-2026-09-28 后续：[SteerlineTest Task 104 的可见 TTY 记录](../validation/pr05-ha16-steerlinetest-2026-09-28/README.md)已补齐 H-A16 的本机 Codex 原生 turn/final 自动与手动折叠、最终正文导航；上段与表格的“仍未完成”是该试次前的历史状态。#3 仍缺 Orca 平台自身同句柄新 incarnation 的实际观察。
+2026-09-28 后续：[SteerlineTest Task 104 的可见 TTY 记录](../validation/pr05-ha16-steerlinetest-2026-09-28/README.md)已补齐 H-A16 的本机 Codex 原生 turn/final 自动与手动折叠、最终正文导航；上段的“仍未完成”是该试次前的历史状态。H-A6 的真实 worker 入口单字段故障注入已验证 fail-closed，平台自然发生同句柄换代不作为 #3 关闭前置；#3 仍需原中心 Task 的真实 Delivery。
 
 只有发送或回复回执时，答案仍不能标记为已应用；直接本机 Codex 后端续跑仍是不支持能力，95012 的成功证据限定于本机 Orca 承载 Codex。验收结果须按真实平台证据记录，不把模拟后端测试外推到远端执行。
 

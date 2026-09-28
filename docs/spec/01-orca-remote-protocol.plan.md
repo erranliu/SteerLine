@@ -1,6 +1,6 @@
 # Plan：Orca 远程协议剩余门槛
 
-2026-09-28 后续：[SteerlineTest 当前目标 P13 负向](../validation/spec01-p13-steerlinetest-2026-09-28/README.md)用真实远端 verify worker、原 Dispatch 和中心状态，分别证明缺必需检查与检查提交不符时拒绝推进；此前非零退出真机分支保留。P10 当前目标人工提示/处置与活跃问题 8 KiB 发送前拒绝已有回执，当前支持范围的 P01–P13 完成。远程取消仍为 unsupported，Spec 03 的长期可靠性和 viewer 单独验收。
+2026-09-28 后续：[SteerlineTest 当前目标 P13 负向](../validation/spec01-p13-steerlinetest-2026-09-28/README.md)用真实远端 verify worker、原 Dispatch 和中心状态，分别证明缺必需检查与检查提交不符时拒绝推进；此前非零退出真机分支保留。P10 当前目标人工提示/处置与活跃问题 8 KiB 发送前拒绝已有回执，当前支持范围的 P01–P13 完成。#4 不再安排重复协议验证；下一步是原中心 Task 按固定契约形成真实 Delivery。远程取消仍为 unsupported，Spec 03 的受影响故障路径和 viewer、#32 的长期可靠性分别验收。
 
 本次发布遵守 Spec 的最小交付边界，保留已通过的当前目标证据和所有未通过项。基础能力与项目预检须在交付配置上核验；不再把完整协议验收与有人值守 MVP 的启用混为一个门槛。
 
