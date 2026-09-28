@@ -10,6 +10,8 @@
 
 先在正式状态的隔离副本上运行四次重开并回读幂等结果，然后在原中心提交四个相同身份的请求。正式回执：#30 `4d4d3b8ff67f4d469a3676c224fc7412`，#26 `b1b6cf24e3784949939ddd9ac8dd6e10`，#14 `12b8a8cfb8c24ec7abb8ec2d329e8e23`，#15 `c4d36d9028494f4ca73d4f8fa758f0bb`。四项回读均为 `open`、`dependency_ready=true`、无启动阻塞；旧 WorkflowRun 均为 `abandoned`。原状态和 SQLite 备份位于 `C:\SteerlineRuntime\backup\reopen-four-20260928-1530`。
 
+后续中心又为 #26 追加了 #34 硬前置，#34 依赖 #33。最终安装后的回读中，四项仍为 `open`；#30/#14/#15 可启动，#26 因 #34 尚未交付而 `dependency_ready=false`。本次修复未删除或绕过新边，用户后续重新运行时须遵守当前 DAG。
+
 后续新远端 Run 在本机 Orca 为各自 WorkflowRun 创建独立协调终端，并将句柄固定到 ExecutionTarget。调用收件、确认和回复前查询 Orca Run 的当前绑定，绑定不符则拒绝，不从另一个 Run 的终端读取。终端创建或 Run-create 回执不明时，保留原 Operation/身份且禁止自动重派。现有格式中的旧 Run 仅在 Orca 回报其仍绑定原配置终端时可继续读取，不接管已换绑的外部执行。
 
 本次只修复未来运行的协调终端与四项状态，不把这次已放弃的工作记为交付，也没有重新启动四项任务。完整远端验收仍按 #6 保留。
