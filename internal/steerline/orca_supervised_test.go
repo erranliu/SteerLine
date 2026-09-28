@@ -75,6 +75,12 @@ func fakeSupervisedOrca(args []string) int {
 		if len(args) < 2 {
 			return fakeOrcaErr("invalid_argument", "missing terminal verb")
 		}
+		if args[1] == "show" && os.Getenv("STEERLINE_FAKE_ACCEPTANCE_TERMINAL") != "" {
+			if arg(args, "--environment") != "env-home" || arg(args, "--terminal") != "terminal-acceptance" {
+				return fakeOrcaErr("terminal_handle_stale", "wrong terminal identity")
+			}
+			return fakeSupervisedEnvelope("fake-remote-runtime", map[string]any{"terminal": map[string]any{"handle": "terminal-acceptance", "incarnationId": os.Getenv("STEERLINE_FAKE_ACCEPTANCE_TERMINAL"), "worktreeId": "repo-test::worktree", "connected": false, "exitCause": map[string]any{"kind": "operator_close"}}})
+		}
 		if args[1] == "wait" {
 			if arg(args, "--terminal") != "terminal-test" || arg(args, "--for") != "tui-idle" || arg(args, "--environment") != "env-home" {
 				return fakeOrcaErr("invalid_argument", "prompt readiness wait did not target the exact remote terminal")
@@ -143,6 +149,9 @@ func fakeSupervisedOrca(args []string) int {
 			}
 			return fakeSupervisedEnvelope("fake-center-runtime", map[string]any{"runId": arg(args, "--run"), "taskId": "task-test", "dispatchId": "dispatch-test", "state": "ready", "stage": "input_accepted", "server": map[string]any{"environmentId": "env-home"}, "launch": map[string]any{"effective": map[string]any{"agent": "codex", "model": "gpt-6-luna", "effort": "high"}}, "worker": map[string]any{"worktreeId": worktree, "effects": []any{map[string]any{"kind": "worktree", "action": "created_top_level", "id": worktree}}}, "mutation": map[string]any{"requestId": "request-worker-start"}})
 		case "worker-show":
+			if os.Getenv("STEERLINE_FAKE_ACCEPTANCE_DISPATCH") != "" {
+				return fakeSupervisedEnvelope("fake-center-runtime", map[string]any{"dispatch": map[string]any{"id": "dispatch-acceptance", "runId": "run-acceptance", "taskId": "task-acceptance", "status": "failed"}, "worker": map[string]any{"dispatchId": "dispatch-acceptance", "state": os.Getenv("STEERLINE_FAKE_ACCEPTANCE_DISPATCH"), "worktreeId": "repo-test::worktree", "agentTerminalHandle": "terminal-acceptance", "residualResources": []any{}}, "server": map[string]any{"environmentId": "env-home"}})
+			}
 			if os.Getenv("STEERLINE_FAKE_SUPERVISED_OBSERVE_UNAVAILABLE") != "" {
 				return fakeOrcaErr("transport_unavailable", "execution host is temporarily unreachable")
 			}
@@ -666,9 +675,9 @@ func TestSupervisedResultCannotCompleteAnotherAttempt(t *testing.T) {
 		return OrcaInboxMessage{Type: "status", FromHandle: sender, Payload: mustJSON(map[string]any{"taskId": task, "dispatchId": dispatch, "remote_codex_version": "codex-cli 0.157.1", "step_result": envelope})}
 	}
 	for _, test := range []struct {
-		name     string
+		name    string
 		message OrcaInboxMessage
-		wantErr  bool
+		wantErr bool
 	}{
 		{name: "old Attempt under current Dispatch", message: func() OrcaInboxMessage {
 			old := base
@@ -736,7 +745,7 @@ func TestSupervisedDeliveryIsNotAckedWhenLocalCommitFails(t *testing.T) {
 	event := WorkerEvent{
 		RunID: runID, AttemptID: attemptID, RemoteRunID: "orca-run-current", RemoteDeliveryID: "delivery-uncommitted",
 		RemoteMessages: []OrcaInboxMessage{{ID: "message-uncommitted", Type: "status", FromHandle: "dispatch:dispatch-current", Payload: mustJSON(map[string]string{"taskId": "task-current", "dispatchId": "dispatch-current"})}},
-		Acknowledge: func() (string, error) { ackCalls++; return "unexpected-ack", nil }, Processed: make(chan error, 1),
+		Acknowledge:    func() (string, error) { ackCalls++; return "unexpected-ack", nil }, Processed: make(chan error, 1),
 	}
 	if err := s.event(event); err == nil || ackCalls != 0 {
 		t.Fatalf("uncommitted remote Delivery was acknowledged: error=%v ack_calls=%d", err, ackCalls)

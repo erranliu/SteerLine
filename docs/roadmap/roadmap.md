@@ -4,7 +4,7 @@
 
 ## 当前交付边界
 
-先交付[有人值守的远程执行 MVP](../remote-execution.md)：已认证台式机64g、原生五步、人工启动/问答/合并、每任务单候选。#3 的决策安全与本机 TTY、#4 的当前范围协议验证已有回执；两项中心 Task 仍待正常 Delivery。#6 保留当前目标的受影响故障路径和 viewer 步骤转换门槛，长期无人值守由 #32 验收。#29/#24 的原有硬前置不变。
+先交付[有人值守的远程执行 MVP](../remote-execution.md)：已认证台式机64g、原生五步、人工启动/问答/合并、每任务单候选。#3 的决策安全与本机 TTY、#4 的当前范围协议验证已有回执；原实现 PR 早于中心 Task 创建，按用户选定的[既有合并 PR 与证据核验](../validation/phase1-existing-acceptance-2026-09-28.md)写入同一 TaskDelivery 权威，保留原失败/unknown Run 历史。#4 的 unknown 必须先精确对账。#6 保留当前目标的受影响故障路径和原 Task Delivery，长期无人值守由 #32 验收。#29/#24 的原有硬前置不变。
 
 ## 第一阶段：人工决策与恢复
 
@@ -43,7 +43,7 @@
 
 ## 第一阶段版本交付目标与推进顺序
 
-[第一阶段版本交付方案](phase-1-delivery.md)汇合 #3/#4 的正常 Task Delivery、#6 的当前目标剩余验收，以及同任务多候选、stable/dev 双入口和最终集成验收。下列任务已有独立 Spec/Plan 并进入中心 DAG；执行遵守[第一阶段共同约束](../spec/phase1-delivery-constraints.md)，原 TaskContract 固定引用与硬前置不因文档状态更新而改写。
+[第一阶段版本交付方案](phase-1-delivery.md)汇合 #3/#4 的既有合并实现核验后 Task Delivery、#6 的当前目标剩余验收，以及同任务多候选、stable/dev 双入口和最终集成验收。下列任务已有独立 Spec/Plan 并进入中心 DAG；执行遵守[第一阶段共同约束](../spec/phase1-delivery-constraints.md)，原 TaskContract 固定引用与硬前置不因文档状态更新而改写。
 
 | 任务 ID | 任务名称 | 目标标识 | 剩余目标 | 硬前置 | 执行规格 |
 | --- | --- | --- | --- | --- | --- |
@@ -55,7 +55,7 @@
 | 31 | dev 隔离与 stable 提升 | `PHASE1-RUNTIME` | 独立 home/仓库、受控选择与当前状态恢复；未知执行阻止提升 | `#30` | [Spec](../spec/runtime-isolation-promotion.spec.md) · [Plan](../spec/runtime-isolation-promotion.plan.md) |
 | 32 | 第一阶段集成验收 | `PHASE1-DELIVERY` | 固定 stable 构建的两后端闭环、24 小时真实运行、dev 并行与受控提升 | `#29`、`#31` | [Spec](../spec/phase1-release-acceptance.spec.md) · [Plan](../spec/phase1-release-acceptance.plan.md) |
 
-项目以人工派发优先完成第一阶段；`#26/#30` 与 `#3/#4` 的正常交付、`#6` 的剩余验收可在独立资源上推进。`#28` 不等待远端真机门槛，远端证明单列到 `#29`。已交付的[追加前置能力](../spec/native-task-add-predecessors.spec.md)建立 `#26 → #16` 与 `#32 → #24`；`#14/#15` 可在隔离资源准备。中心固定 TaskContract 和 AND 依赖保持不变。[中心创建与回读证据](../validation/phase1-task-creation/README.md)记录命令事实。
+项目以人工派发优先完成第一阶段；`#26/#30` 与 `#3/#4` 的核验交付、`#6` 的剩余验收可在独立资源上推进。`#28` 不等待远端真机门槛，远端证明单列到 `#29`。已交付的[追加前置能力](../spec/native-task-add-predecessors.spec.md)建立 `#26 → #16` 与 `#32 → #24`；`#14/#15` 可在隔离资源准备。中心固定 TaskContract 和 AND 依赖保持不变。[中心创建与回读证据](../validation/phase1-task-creation/README.md)记录命令事实。
 
 ## 第二阶段：Windows 原生 UI 与受控规划
 
