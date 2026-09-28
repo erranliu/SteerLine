@@ -24,6 +24,8 @@ native 项目控制台还会显示中心任务关系、阻塞原因、Spec 路�
 
 本机 Orca 配置在 Orca worktree 的终端中运行无交互的 `codex exec --json`。Orca 仍会在对应 worktree 下记录 Codex agent session；它不是可继续输入的 Codex TUI。若 Orca 将该 worktree 放入项目的“隐藏的已发现工作树”，先展开该分组并选择 worktree；查看右侧会话历史时也要选对本机主机和工作区范围。控制台运行详情显示原 Orca 终端 handle，可用 `orca terminal switch --terminal <handle>` 打开终端。终端暂时没有输出只记需关注提示，服务继续核对原终端与固定步骤结果；不能据此认定执行结束或重派任务。
 
+已认证 Windows 目标可使用[有人值守的远程执行 MVP](docs/remote-execution.md)，远端通过 Orca 运行 Codex，完整验收仍按 roadmap 保留。
+
 可在同一项目内预设多套[执行配置](docs/execution-profiles.md)。按 `s` 选择一套并确认；不同任务可以混用，本次任务的全部步骤固定在所选配置上。附加配置存在时，自动派发需要显式指定默认配置。
 
 项目、所选 run/attempt、活动日志、控制请求以及折叠状态按各自身份隔离。活动会话只有明确的 turn 终态才自动收起过程消息；`final_answer` 正文单独分页阅读，过程完成、执行结束和业务任务完成分别展示。来源没有确认轮次或 final 时，控制台会显示能力原因和未识别状态。
