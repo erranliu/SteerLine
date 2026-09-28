@@ -4,28 +4,27 @@
 
 ## 当前交付边界
 
-先交付[有人值守的远程执行 MVP](../remote-execution.md)：已认证台式机64g、原生五步、人工启动/问答/合并、每任务单候选。执行契约见 [Spec 03](../spec/03-remote-execution-and-viewer.md#有人值守-mvp-交付边界)及其 Plan。下列 #3/#4/#6 继续保留完整验收，不因 MVP 发布关闭或解除后续硬前置；#26–#32 属于后续第一阶段完整版本，不阻塞本次最小交付。
+先交付[有人值守的远程执行 MVP](../remote-execution.md)：已认证台式机64g、原生五步、人工启动/问答/合并、每任务单候选。#3 的决策安全与本机 TTY、#4 的当前范围协议验证已有回执；两项中心 Task 仍待正常 Delivery。#6 保留当前目标的受影响故障路径和 viewer 步骤转换门槛，长期无人值守由 #32 验收。#29/#24 的原有硬前置不变。
 
-## 第一阶段遗留：人工决策与恢复的剩余验收
+## 第一阶段：人工决策与恢复
 
-`#3` 的实现已随 [PR #39](https://github.com/erranliu/SteerLine/pull/39) 合入 `main`，包括 SQLite 答案仲裁、固定执行续跑、在线恢复与审计命令，以及控制台决策历史和恢复操作；自动化回归已通过。2026-09-26 的 Windows TTY stale-revision 和 Orca command-worker 路径已取得部分实时证据，用户已确认实际 Windows 系统剪贴板粘贴通过。Codex tasks 95008/95009/95010 的终端和保存结果均已核实并结算为失败：答案证明与原 decision/attempt/execution 绑定，但 `workspace-write` 下的 linked-worktree Git 管理目录写入失败。2026-09-27 已将精确 Git 对象及 worktree 管理目录授权接入代码，并修复原终端暂不可核实时过早判 Decision 失败的问题；新隔离任务 95012 取得真实 Codex 绑定应用证明、干净提交和同 attempt 重启对账，中心 Decision 为 `applied`。本机 95013 还证明 resuming 中精确终端死亡不会重派；下游 publish fixture 的结果仍为 unknown 且保留槽。2026-09-28 又以独立本机目标验证了 H-A15：Orca 已创建原续跑终端但回执丢失时，中心保存 unknown Operation、Decision.resuming 与执行槽，同 SQLite 重启不重派；无平台 request ID 时未伪称自动应用。另在活跃续跑 worker 的真实 Orca 观察回执中仅注入同句柄的新 incarnation，中心拒绝身份、保留原 unknown Attempt/执行槽，同库重启不重派；Orca 平台自身的同句柄换代仍未观察。[可执行恢复确认](../validation/pr-05-recovery-confirmation-2026-09-28.json)已通过；H-A16 精确折叠仍未完成。见[验证记录](../validation/pr-05-intervention.md)与[后续验证](../validation/remaining-gates-2026-09-27.md)。
+`#3` 的实现已合入主线。[H-A6 活跃 worker 身份变化](../validation/pr-05-h6-incarnation-2026-09-28.json)、[H-A15 回执丢失](../validation/pr-05-h15-response-loss-2026-09-28.json)、[合格恢复确认](../validation/pr-05-recovery-confirmation-2026-09-28.json)与 [SteerlineTest Task 104 的 H-A16 可见 TTY](../validation/pr05-ha16-steerlinetest-2026-09-28/README.md)已有验收回执。H-A6 使用真实 worker 的入口单字段故障注入证明拒绝冒认和不重派；平台自然发生同句柄换代不作为关闭前置。早期失败试次与当时限制见[原验证记录](../validation/pr-05-intervention.md)，不回写为成功。
 
 | 任务 ID | 任务名称 | 目标标识 | 剩余目标 | 前置条件 | 执行规格 |
 | --- | --- | --- | --- | --- | --- |
-| 3 | 人工决策与恢复闭环 | `INTERVENTION` | 95012 已验证 Orca 承载 Codex 在 `workspace-write` 下提交、绑定应用证明和同 attempt 重启对账；95013 已验证 resuming 中终端死亡不重派。[H-A15 显式续跑创建回执丢失](../validation/pr-05-h15-response-loss-2026-09-28.json)与[H-A6 活跃 worker 同句柄 incarnation 注入](../validation/pr-05-h6-incarnation-2026-09-28.json)均验证原 Attempt/执行槽保留且同库重启不重派；[H-A16 本机可见 TTY 精确折叠](../validation/pr05-ha16-steerlinetest-2026-09-28/README.md)已通过；平台自然发生同句柄换代不作为当前 #3 关闭前置。[可执行恢复确认](../validation/pr-05-recovery-confirmation-2026-09-28.json)已通过。实时 stale-revision 和用户确认的系统剪贴板粘贴已通过 | 95008/95009/95010 的失败结果不重放；95011 的旧失败决策、95012 的 publish unknown、95013 的故障现场分别保留，不把完成的 implement 误报为任务交付 | [Spec](../spec/pr-05-intervention.spec.md) · [Plan](../spec/pr-05-intervention.plan.md) · [验证记录](../validation/pr-05-intervention.md) · [后续验证](../validation/remaining-gates-2026-09-27.md) |
+| 3 | 人工决策与恢复闭环 | `INTERVENTION` | H-A1–H-A16 按现有自动化与真机证据在受测范围完成；绑定答案应用、响应丢失不重派、恢复确认和精确折叠均有回执。当前剩余的是原中心 Task 的真实 Delivery，不重复已通过场景 | 直接本机 Codex 续跑仍 unsupported；发送回执不能代替答案应用证明 | [Spec](../spec/pr-05-intervention.spec.md) · [Plan](../spec/pr-05-intervention.plan.md) · [验证记录](../validation/pr-05-intervention.md) |
 
-2026-09-28 后续：[SteerlineTest Task 104 的可见 TTY 记录](../validation/pr05-ha16-steerlinetest-2026-09-28/README.md)已补齐 H-A16 的本机 Codex 原生 turn/final 自动与手动折叠、最终正文导航；上段的“仍未完成”是该试次前的历史状态。H-A6 的真实 worker 入口单字段故障注入已验证 fail-closed，平台自然发生同句柄换代不作为 #3 关闭前置；#3 仍需原中心 Task 的真实 Delivery。
 
 只有发送或回复回执时，答案仍不能标记为已应用；直接本机 Codex 后端续跑仍是不支持能力，95012 的成功证据限定于本机 Orca 承载 Codex。验收结果须按真实平台证据记录，不把模拟后端测试外推到远端执行。
 
-## 第一阶段遗留：远程协议与原生闭环的剩余验收
+## 第一阶段：远程协议与原生闭环
 
 | 任务 ID | 任务名称 | 目标标识 | 剩余目标 | 依赖 | 执行规格 |
 | --- | --- | --- | --- | --- | --- |
-| 4 | Orca 远程协议验证 | `REMOTE-PROTOCOL` | 当前支持的 1.4 版本族与台式机64g 目标下，P01–P13 协议验收已收口：P10 的宿主权限/UAC 人工处置及 8 KiB 发送前拒绝有真机回执；P13 的正向、非零退出、缺必需检查与错提交均在真实受监管远端/中心边界验证，后两项为明确标记的入口单字段故障注入。远程取消保持 unsupported；旧主机早期提示只留历史缺口。测试门槛通过不自动把中心 Task 记为 Delivery | 复用真实远端证据；不测平台最大载荷；仅支持当前明确验收的版本族 | [Spec](../spec/01-orca-remote-protocol.md) · [Plan](../spec/01-orca-remote-protocol.plan.md) · [P13 新回执](../validation/spec01-p13-steerlinetest-2026-09-28/README.md) · [消息门槛样本](../spec/orca-probe/samples/p10-home-live-reply-size-2026-09-27.json) |
-| 6 | 分阶段远程闭环 | `REMOTE-WORKFLOW` | [原生任务 103](../validation/spec03-native-dag-2026-09-27.md) 已完成五步、真实合并与 DAG 后继解锁；[原生业务问答任务 91024](../validation/spec03-native-question-2026-09-28.md) 又在同一 Attempt 获得答案应用证明、五步检查、固定 head 合并与中心结项。既有 home 1.4.209/1.4.210 目标六项必需受监管能力已认证，活跃 home 回复限额及[可见关窗后的原 prepare 恢复](../spec/orca-probe/samples/spec03-native-r07-visible-window-2026-09-27.json)已通过。[协调终端丢失](../spec/orca-probe/samples/spec03-native-review-coordinator-loss-2026-09-27.json)仍有开放结论；[本机可见 viewer 刷新](../spec/orca-probe/samples/spec03-viewer-follow-2026-09-28.json)为 1.118 秒，[home 业务消息到可见 viewer](../validation/spec03-viewer-latency-2026-09-28.md)测得 Decision 1.669 秒、两次步骤转换 1.414 / 1.798 秒，home 目标的 2 秒门槛通过；[SteerLine 仓库项目能力](../validation/spec03-production-project-capability-2026-09-28.md)已在独立只读工作树认证；[R01–R19 故障矩阵](../validation/spec03-fault-matrix-2026-09-28.md)已核对并补齐 implement 离线完成窗口；[台式机64g 原生五步 canary](../validation/spec03-desktop64g-2026-09-28.md) 已通过；固定 gh 命令发布已在当前主机复验；完整 #6 验收仍待新主机受影响故障路径及步骤转换的可见 viewer 时延，长期无人值守由 #32 承担；有人值守 MVP 按上述边界启用 | 复用 `#3` 决策接口、`#5` 中心模型及 `#4` 已测协议；远程取消不可用 | [Spec](../spec/03-remote-execution-and-viewer.md) · [Plan](../spec/03-remote-execution-and-viewer.plan.md) · [原生问答验收](../validation/spec03-native-question-2026-09-28.md) |
+| 4 | Orca 远程协议验证 | `REMOTE-PROTOCOL` | 当前 Orca 1.4 版本族与台式机64g 目标的 P01–P13 已通过；P10 人工处置和 P13 正负向中心门槛均有证据。原中心 Task 仍待真实 Delivery，不重跑未受变更影响的探测 | 远程取消 unsupported；新目标、版本族或调用路径变更时定向补证 | [Spec](../spec/01-orca-remote-protocol.md) · [Plan](../spec/01-orca-remote-protocol.plan.md) · [P13 回执](../validation/spec01-p13-steerlinetest-2026-09-28/README.md) |
+| 6 | 分阶段远程闭环 | `REMOTE-WORKFLOW` | home 的 R01–R19、2 秒 viewer 和原生闭环已有证据；台式机64g 已完成原生五步、业务答案、固定 head 真实合并及释放，Decision 可见上界 2.215 秒，通过当前 4 秒门槛。仍待当前主机受影响故障路径和步骤转换的可见时延，以及原中心 Task Delivery | 长期无人值守矩阵归 #32；远程取消 unsupported | [Spec](../spec/03-remote-execution-and-viewer.md) · [Plan](../spec/03-remote-execution-and-viewer.plan.md) · [当前主机回执](../validation/spec03-desktop64g-followup-2026-09-28/README.md) |
 
-2026-09-28 生产远端已改为 `台式机64g`（本机 Orca 1.4.209/远端 1.4.215）。[新主机完整记录](../validation/spec03-desktop64g-2026-09-28.md)保留首次 Smart App Control 拒绝未签名 `orca.exe` 的失败 Dispatch；用户批准关闭该设置后，独立只读 Run 通过新主机六项受监管能力，随后 SteerLine 项目原生 Task 91024 在同一新主机完成五步、原业务答案应用证明、固定 head 的 [PR #78](https://github.com/erranliu/SteerLine/pull/78) 合并、原中心结项及五个 Dispatch release/exited。测试 PR 只合入隔离 canary 基线，未修改 `main`。首次完整 Run 不需人工补按 Enter，但当时远端 `gh` 无会话，publish worker 通过已连接 GitHub 能力创建 PR。用户完成远端 `gh` 登录后，新的隔离 Task 按固定 `gh pr create` 命令创建并合并 [PR #85](https://github.com/erranliu/SteerLine/pull/85)，原业务答案应用、五步、Task 关闭及资源释放再次通过；[命令与闭环回执](../validation/spec03-desktop64g-2026-09-28.md)已归档。远端 UAC 原为关闭；经用户授权启用并重启后，受控提示的人工拒绝、批准/程序启动，以及用户拍摄的安全桌面原图已分别归档，当前目标 P10 的 UAC 可见分支通过。先前 home 的 R01–R19 故障矩阵和 2 秒 viewer 证据仍限定于旧主机；新主机长期无人值守及 #3 精确轮次/平台同句柄换代继续开放，完整生产派发仍受剩余门槛约束；有人值守 MVP 依当前独立边界启用。
+2026-09-28 远端目标改为 `台式机64g`。Smart App Control 的首次阻断、用户处置、UAC 人工拒绝与批准均见[目标验收记录](../validation/spec03-desktop64g-2026-09-28.md)；隔离原生 Task 的五步、答案、固定 head 合并和资源释放见[后续回执](../validation/spec03-desktop64g-followup-2026-09-28/README.md)。这些回执不触及 `main`，也不自动关闭中心 #6 Task。
 
 2026-09-28 用户将当前 `台式机64g` 的可见 viewer 时延门槛从 2 秒调整为 **4 秒**；先前 `home` 的 2 秒验收不变。[当前主机后续回执](../validation/spec03-desktop64g-followup-2026-09-28/README.md)中，一次原生 Decision 从中心记录到可见画面的保守上界为 2.215 秒，按新门槛通过该样本；新主机步骤转换仍须单独实测。
 
@@ -38,13 +37,13 @@
 ### 后续仍依赖的已有基础
 
 - [中心执行模型](../spec/02-execution-model-and-adapter.md)：`#6` 复用 WorkflowRun/Execution/StepAttempt、SQLite 单写者、Query/Command、Operation 和 minimal-v1 流程；远端原生闭环已有真机回执，生产启用仍待剩余门槛。
-- [人工决策与恢复](../spec/pr-05-intervention.spec.md)与[验证记录](../validation/pr-05-intervention.md)：`#6` 复用已实现的答案仲裁、应用证明门槛和在线恢复入口；`#3` 的本机 TTY/Orca 原生验收仍单独完成，远端能力由 `#6` 独立验证。
+- [人工决策与恢复](../spec/pr-05-intervention.spec.md)与[验证记录](../validation/pr-05-intervention.md)：`#6` 复用已验收的答案仲裁、应用证明门槛和在线恢复入口；`#3` 仍待中心 Task Delivery，远端能力由 `#6` 独立验证。
 - [真实远端能力报告](../spec/orca-probe/remote-capability-report-2026-09-23.json)与[字段映射](../spec/orca-probe/field-mapping.md)：供远程闭环复用派发、身份、输出、问答、同工作区跨步骤与故障恢复证据；远端执行目标仍须按版本独立验证精确 turn/phase 能力，不能借用本机 `#1` 的验收。
 - [verify 结果校验器](../../internal/steerline/remoteprotocol/verify_result.go)：已接入受监管中心状态机，正负向真机回执及任务 103 的三项实际检查验证固定候选门槛；其他无效结果仍按各自验收范围核对。
 
 ## 第一阶段版本交付目标与推进顺序
 
-[第一阶段版本交付方案](phase-1-delivery.md)将现有 `#3/#4/#6` 的真实剩余验收，与同任务多候选、stable/dev 双入口及最终集成验收组成一个交付目标。下列任务已有独立 Spec/Plan 并已进入中心 DAG；具体执行遵守[第一阶段共同约束](../spec/phase1-delivery-constraints.md)，执行前须将中心固定引用的规格提交集成到目标分支。
+[第一阶段版本交付方案](phase-1-delivery.md)汇合 #3/#4 的正常 Task Delivery、#6 的当前目标剩余验收，以及同任务多候选、stable/dev 双入口和最终集成验收。下列任务已有独立 Spec/Plan 并进入中心 DAG；执行遵守[第一阶段共同约束](../spec/phase1-delivery-constraints.md)，原 TaskContract 固定引用与硬前置不因文档状态更新而改写。
 
 | 任务 ID | 任务名称 | 目标标识 | 剩余目标 | 硬前置 | 执行规格 |
 | --- | --- | --- | --- | --- | --- |
@@ -56,7 +55,7 @@
 | 31 | dev 隔离与 stable 提升 | `PHASE1-RUNTIME` | 独立 home/仓库、受控选择与当前状态恢复；未知执行阻止提升 | `#30` | [Spec](../spec/runtime-isolation-promotion.spec.md) · [Plan](../spec/runtime-isolation-promotion.plan.md) |
 | 32 | 第一阶段集成验收 | `PHASE1-DELIVERY` | 固定 stable 构建的两后端闭环、24 小时真实运行、dev 并行与受控提升 | `#29`、`#31` | [Spec](../spec/phase1-release-acceptance.spec.md) · [Plan](../spec/phase1-release-acceptance.plan.md) |
 
-项目以人工派发优先完成第一阶段，`#26/#30` 与 `#3/#4/#6` 的独立验收可并行；`#28` 不等待远端真机门槛，远端证明单列到 `#29`。已交付的[追加前置能力](../spec/native-task-add-predecessors.spec.md)已用于建立 `#26 → #16` 与 `#32 → #24`；`#14/#15` 保持可并行准备。补边只增加开工资格，`#16/#24` 的固定执行内容没有被重绑定。[中心创建与回读证据](../validation/phase1-task-creation/README.md)独立记录命令事实。
+项目以人工派发优先完成第一阶段；`#26/#30` 与 `#3/#4` 的正常交付、`#6` 的剩余验收可在独立资源上推进。`#28` 不等待远端真机门槛，远端证明单列到 `#29`。已交付的[追加前置能力](../spec/native-task-add-predecessors.spec.md)建立 `#26 → #16` 与 `#32 → #24`；`#14/#15` 可在隔离资源准备。中心固定 TaskContract 和 AND 依赖保持不变。[中心创建与回读证据](../validation/phase1-task-creation/README.md)记录命令事实。
 
 ## 第二阶段：Windows 原生 UI 与受控规划
 
