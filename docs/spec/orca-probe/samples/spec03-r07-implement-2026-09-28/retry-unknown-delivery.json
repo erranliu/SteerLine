@@ -1,0 +1,44 @@
+{
+  "id": "7b948717-129d-47b4-a37a-9f464c679b55",
+  "ok": true,
+  "result": {
+    "runId": "run_d3e6d5954699",
+    "messages": [
+      {
+        "id": "relay_0ad3839f228a",
+        "run_id": "run_d3e6d5954699",
+        "delivery_contract": "current_delivery",
+        "from_handle": "dispatch:ctx_a8b42c4dbc78",
+        "to_handle": "run:run_d3e6d5954699",
+        "subject": "Native acceptance verify receipt",
+        "body": "",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": "{\"taskId\":\"task_78252b850a96\",\"dispatchId\":\"ctx_a8b42c4dbc78\",\"remote_codex_version\":\"codex-cli 0.157.1\",\"step_result\":{\"schema_version\":1,\"project_identity\":\"c:\\\\users\\\\lmas1\\\\appdata\\\\local\\\\temp\\\\s3r07impl28h\\\\native-project\\\\.git\",\"task_id\":\"91024\",\"workflow_run_id\":\"ba297363740f7448637a9c14bb07e8bd\",\"execution_id\":\"2866ad0874fe69acf9c2ae6a5a0ec596\",\"attempt_id\":\"e60d5c9878c1151e81f821716b0cf34f\",\"result\":{\"base_ancestor\":true,\"checks\":[{\"actual_commit\":\"ed7f31153ae7d6fe39b6ab03ebc95cf6eb2c8652\",\"command\":\"pwsh.exe -NoProfile -Command $h=(git rev-parse HEAD:steerline-spec03-native-stage.txt).Trim(); if($LASTEXITCODE -ne 0 -or $h -cne 'a7890c716cc3ad0cca79f8d7b68cffe125e6b106'){exit 7}; exit 0\",\"evidence_ref\":\"git rev-parse HEAD:steerline-spec03-native-stage.txt => a7890c716cc3ad0cca79f8d7b68cffe125e6b106\",\"exit_code\":0,\"name\":\"content-smoke\",\"passed\":true,\"revision\":\"ed7f31153ae7d6fe39b6ab03ebc95cf6eb2c8652\",\"script_version\":\"README.md\",\"status\":\"passed\"}],\"input_revision\":\"ed7f31153ae7d6fe39b6ab03ebc95cf6eb2c8652\",\"prerequisite_result_ids\":[\"82cf3c40136f611f6a5bea1622e3ddd1\"],\"result_id\":\"e60d5c9878c1151e81f821716b0cf34f\",\"revision\":\"ed7f31153ae7d6fe39b6ab03ebc95cf6eb2c8652\",\"step_id\":\"verify\",\"succeeded\":true,\"workspace\":{\"base\":\"e33e51926ec28d90c42fbc4064db4d19002845a2\",\"branch\":\"erranliu/steerline-ba297363740f\",\"dirty\":false,\"head\":\"ed7f31153ae7d6fe39b6ab03ebc95cf6eb2c8652\",\"repository\":\"c:\\\\users\\\\lmas1\\\\appdata\\\\local\\\\temp\\\\s3r07impl28h\\\\native-project\\\\.git\",\"verified_at\":\"2026-09-28T00:28:44.8080289Z\",\"worktree\":\"C:/Users/liuming/orca/workspaces/SteerlineTest/steerline-ba297363740f\"}}}}",
+        "created_at": "2026-09-28T00:28:47Z",
+        "delivered_at": null
+      },
+      {
+        "id": "relay_3233da680988",
+        "run_id": "run_d3e6d5954699",
+        "delivery_contract": "current_delivery",
+        "from_handle": "dispatch:ctx_a8b42c4dbc78",
+        "to_handle": "run:run_d3e6d5954699",
+        "subject": "Verify step completed",
+        "body": "Verified required content check and ancestry at ed7f31153ae7d6fe39b6ab03ebc95cf6eb2c8652; spec and plan pinned blob hashes match; Codex CLI version observed as codex-cli 0.157.1. The status receipt was accepted by Orca with request f5817e38-2932-460a-ab9d-b106b8666d1e. No files changed and no follow-up work remains.",
+        "type": "worker_done",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": "{\"taskId\":\"task_78252b850a96\",\"dispatchId\":\"ctx_a8b42c4dbc78\",\"outcome\":\"succeeded\"}",
+        "created_at": "2026-09-28T00:28:48Z",
+        "delivered_at": null
+      }
+    ],
+    "count": 2,
+    "acknowledged": null
+  },
+  "_meta": {
+    "runtimeId": "3dd6023d-87dd-4055-bcf6-f8dd87c3c731"
+  }
+}

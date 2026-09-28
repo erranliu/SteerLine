@@ -1,0 +1,20 @@
+import json
+import pathlib
+import subprocess
+import time
+
+
+root = pathlib.Path(__file__).parent
+dispatch = "ctx_f8c1aa0e6244"
+deadline = time.monotonic() + 900
+while time.monotonic() < deadline:
+    raw = subprocess.check_output(["orca", "orchestration", "worker-show", "--dispatch", dispatch, "--json"], timeout=15)
+    value = json.loads(raw)["result"]
+    worker, context = value["worker"], value["dispatch"]
+    if worker["state"] in ("succeeded", "failed", "stopped") and context["status"] in ("completed", "failed", "stopped"):
+        (root / "offline-complete-worker.json").write_bytes(raw)
+        print(json.dumps({"dispatch": dispatch, "worker_state": worker["state"], "dispatch_status": context["status"], "terminal": worker.get("agentTerminalHandle")}), flush=True)
+        break
+    time.sleep(5)
+else:
+    raise SystemExit("original implement worker did not settle within 15 minutes")

@@ -185,6 +185,9 @@ func fakeSupervisedOrca(args []string) int {
 			}
 			return fakeSupervisedEnvelope("fake-center-runtime", map[string]any{"dispatchId": arg(args, "--dispatch"), "source": "transcript", "cursor": "cursor-1", "contentComplete": true, "clipping": []string{}, "status": map[string]any{"worker": "ready", "terminal": "running", "liveness": "live"}, "transcript": map[string]any{"messages": []any{}}})
 		case "check":
+			if os.Getenv("STEERLINE_FAKE_SUPERVISED_DONE_WITHOUT_RESULT") == "1" {
+				return fakeSupervisedEnvelope("fake-center-runtime", map[string]any{"runId": "orca-run-test", "deliveryId": "delivery-done-without-result", "messages": []any{map[string]any{"id": "done-without-result", "type": "worker_done", "from_handle": "dispatch:dispatch-test", "to_handle": "run:orca-run-test", "body": "worker reported success without the structured result", "payload": map[string]any{"taskId": "task-test", "dispatchId": "dispatch-test", "outcome": "succeeded"}}}, "count": 1})
+			}
 			return fakeSupervisedEnvelope("fake-center-runtime", map[string]any{"runId": arg(args, "--run"), "deliveryId": nil, "messages": []any{}, "count": 0, "timedOut": true, "connectionLost": false, "cancelled": false})
 		case "worker-release":
 			if marker := os.Getenv("STEERLINE_FAKE_SUPERVISED_RELEASE_MARKER"); marker != "" {
@@ -650,6 +653,105 @@ func TestSupervisedResultDeliveryReplayUsesPersistedJSONContent(t *testing.T) {
 	envelope.Result.PRURL = "https://example.test/pr/2"
 	if found, err := backend.stepResultFromMessages([]OrcaInboxMessage{message()}, identity, attempt, input, resultPath); err == nil || !isBackendError(err, BackendProtocolInvalid) || found {
 		t.Fatalf("different content under the same result ID was accepted: %t, %v", found, err)
+	}
+}
+
+func TestSupervisedResultCannotCompleteAnotherAttempt(t *testing.T) {
+	identity := ProcessIdentity{Task: "task-current", Dispatch: "dispatch-current"}
+	attempt := StepAttemptRecord{AttemptID: "attempt-current", StepID: "verify"}
+	expected := MinimalStepInput{ProjectIdentity: "repo", TaskID: "business-task", WorkflowRunID: "workflow-current", ExecutionID: "execution-current", AttemptID: attempt.AttemptID, StepID: attempt.StepID}
+	backend := orcaSupervisedBackend{config: Config{Orca: OrcaConfig{Supervised: &SupervisedOrcaConfig{}}}}
+	base := MinimalStepResultEnvelope{SchemaVersion: 1, ProjectIdentity: expected.ProjectIdentity, TaskID: expected.TaskID, WorkflowRunID: expected.WorkflowRunID, ExecutionID: expected.ExecutionID, AttemptID: expected.AttemptID, Result: StepGateResult{StepID: attempt.StepID, ResultID: "result-current"}}
+	message := func(sender, task, dispatch string, envelope MinimalStepResultEnvelope) OrcaInboxMessage {
+		return OrcaInboxMessage{Type: "status", FromHandle: sender, Payload: mustJSON(map[string]any{"taskId": task, "dispatchId": dispatch, "remote_codex_version": "codex-cli 0.157.1", "step_result": envelope})}
+	}
+	for _, test := range []struct {
+		name     string
+		message OrcaInboxMessage
+		wantErr  bool
+	}{
+		{name: "old Attempt under current Dispatch", message: func() OrcaInboxMessage {
+			old := base
+			old.AttemptID = "attempt-old"
+			return message("dispatch:dispatch-current", identity.Task, identity.Dispatch, old)
+		}(), wantErr: true},
+		{name: "other Task under current Dispatch", message: message("dispatch:dispatch-current", "task-other", identity.Dispatch, base), wantErr: true},
+		{name: "late old Dispatch", message: message("dispatch:dispatch-old", "task-old", "dispatch-old", base)},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "result.json")
+			found, err := backend.stepResultFromMessages([]OrcaInboxMessage{test.message}, identity, attempt, expected, path)
+			if found || test.wantErr && !isBackendError(err, BackendIdentityMismatch) || !test.wantErr && err != nil {
+				t.Fatalf("foreign result changed the current Attempt: found=%t error=%v", found, err)
+			}
+			if _, statErr := os.Stat(path); !os.IsNotExist(statErr) {
+				t.Fatalf("foreign result wrote a current Attempt file: %v", statErr)
+			}
+		})
+	}
+}
+
+func TestSupervisedWorkerDoneWithoutStructuredResultBlocksCompletion(t *testing.T) {
+	c := supervisedFixtureConfig(t)
+	t.Setenv("STEERLINE_FAKE_SUPERVISED_DONE_WITHOUT_RESULT", "1")
+	b := orcaSupervisedBackend{config: c}
+	ref := ExecutionRef{Version: ExecutionRecordVersion, Backend: BackendOrca, Protocol: ProtocolOrcaSupervised, Target: targetFor(c), Agent: AgentSpec{Name: "codex"}, RunID: "local-run", AttemptID: "attempt-current", External: ProcessIdentity{Kind: "orca_supervised", RuntimeID: "fake-remote-runtime", CoordinatorRuntimeID: "fake-center-runtime", Terminal: "terminal-test", Incarnation: "inc-test", OrchestrationRun: "orca-run-test", Task: "task-test", Dispatch: "dispatch-test", ExecutionHost: "env-home", WorktreeID: "repo-test::C:/remote/steerline-run"}}
+	ref.Target.OrchestrationRun, ref.Target.ExternalTask, ref.Target.Dispatch = ref.External.OrchestrationRun, ref.External.Task, ref.External.Dispatch
+	ref.Target.ExecutionHost, ref.Target.WorktreeID = ref.External.ExecutionHost, ref.External.WorktreeID
+	input := MinimalStepInput{ProjectIdentity: "repo", TaskID: "business-task", WorkflowRunID: ref.RunID, ExecutionID: "execution-current", AttemptID: ref.AttemptID, StepID: "verify"}
+	attempt := StepAttemptRecord{AttemptID: ref.AttemptID, StepID: input.StepID, Status: "running"}
+	path := filepath.Join(t.TempDir(), "missing-result.json")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	worker := &Worker{Events: make(chan WorkerEvent, 8), Done: make(chan error, 1), observationDone: make(chan struct{})}
+	go b.observeWorker(ctx, worker, ref, attempt, input, path)
+	for {
+		select {
+		case event := <-worker.Events:
+			event.Processed <- nil
+		case err := <-worker.Done:
+			if !isBackendError(err, BackendProtocolInvalid) || !strings.Contains(err.Error(), "no matching structured step result") {
+				t.Fatalf("bare worker_done completed the step: %v", err)
+			}
+			if _, statErr := os.Stat(path); !os.IsNotExist(statErr) {
+				t.Fatalf("missing structured result acquired a file: %v", statErr)
+			}
+			return
+		case <-ctx.Done():
+			t.Fatal("observer never rejected the bare worker_done")
+		}
+	}
+}
+
+func TestSupervisedDeliveryIsNotAckedWhenLocalCommitFails(t *testing.T) {
+	f := newFixture(t)
+	s := f.service(t)
+	t.Cleanup(func() { _ = s.Close() })
+	runID, executionID, attemptID := newID(), newID(), newID()
+	s.State.Runs = append(s.State.Runs, &Run{RunID: runID, ExecutionID: executionID, AttemptID: attemptID, TaskID: "task-current", DomainTaskID: "task-current"})
+	if err := s.domainStore.Close(); err != nil {
+		t.Fatal(err)
+	}
+	ackCalls := 0
+	event := WorkerEvent{
+		RunID: runID, AttemptID: attemptID, RemoteRunID: "orca-run-current", RemoteDeliveryID: "delivery-uncommitted",
+		RemoteMessages: []OrcaInboxMessage{{ID: "message-uncommitted", Type: "status", FromHandle: "dispatch:dispatch-current", Payload: mustJSON(map[string]string{"taskId": "task-current", "dispatchId": "dispatch-current"})}},
+		Acknowledge: func() (string, error) { ackCalls++; return "unexpected-ack", nil }, Processed: make(chan error, 1),
+	}
+	if err := s.event(event); err == nil || ackCalls != 0 {
+		t.Fatalf("uncommitted remote Delivery was acknowledged: error=%v ack_calls=%d", err, ackCalls)
+	}
+	if processed := <-event.Processed; processed == nil {
+		t.Fatal("observer was told that an uncommitted Delivery was safe to ack")
+	}
+	reader, err := OpenSQLiteReader(filepath.Join(s.Config.RunDir, "steerline.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reader.Close()
+	var persisted int
+	if err := reader.db.QueryRow(`SELECT COUNT(*) FROM events WHERE external_source=? AND external_id=?`, "orca-run:orca-run-current", "message-uncommitted").Scan(&persisted); err != nil || persisted != 0 {
+		t.Fatalf("failed local commit persisted the remote message: count=%d error=%v", persisted, err)
 	}
 }
 

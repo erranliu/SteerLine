@@ -6,6 +6,8 @@
 
 同日进一步完成[SteerLine 仓库在 home 的六项受监管能力认证](../validation/spec03-production-project-capability-2026-09-28.md)：在新 clone/工作树上只读核验并保存内容哈希报告，正常 `worker-start --agent` 试次完成 status、worker_done、精确 transcript 与 release。复用已有终端的独立试次不能结算 worker_done，已明确失败并精确停止，不能外推为受支持路径。此认证未在 SteerLine 仓库上运行原生五步任务或提交 PR；生产启用仍受 UAC、故障矩阵和本项目原生演练门槛约束。
 
+同日[R07 implement 完成窗口验收](../validation/spec03-r07-implement-2026-09-28.md)在中心停服后保留原 Dispatch；原 status/worker_done 于离线窗口产生，同一 SQLite 重开后只将原 implement Attempt 对账为 succeeded 并进入 verify，最后唯一测试 PR #20 固定 head 合并、Task 关闭、六个 Dispatch 释放。verify 首轮结果格式失败，以及 verify 两轮和 review 共三次 `input_accepted` 未形成 turn 后需人工 Enter 的事实另行保留；该矩阵分支通过，不宣称无人值守生产可靠性。
+
 任务 ID：6；任务名称：分阶段远程闭环。
 
 2026-09-28 增补：[远端原生业务问答至真实合并](../validation/spec03-native-question-2026-09-28.md)在新的隔离任务 91024 上证明 `yes/no` 问题、中心答案、原 Dispatch 上的独立应用证明、五步验证、固定 head 的 [测试 PR #17](https://github.com/erranliu/SteerlineTest/pull/17) 合并及原中心 Task close。该运行的 publish 提示曾暂记 unknown，之后同一 SQLite 对账原 worker 结果，无第二个 PR。当前目标的业务问答主路径因此有原生任务证据；viewer 2 秒目标当时尚未通过，后续实测见上段；管理员/UAC 设置提示及其余故障矩阵仍开放。
