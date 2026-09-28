@@ -47,6 +47,9 @@ func TestConversationSchemaUpgradesCurrentCenterDatabase(t *testing.T) {
 	_, err = tx.Exec(`CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)`)
 	require(t, err)
 	for _, stmt := range append(append([]string{}, domainExecutionSchema...), nativeTaskSchema...) {
+		if stmt == activeWorkflowIndexV5 {
+			stmt = activeWorkflowIndexV4
+		}
 		_, err = tx.Exec(stmt)
 		require(t, err)
 	}
@@ -77,6 +80,34 @@ func TestConversationSchemaUpgradesCurrentCenterDatabase(t *testing.T) {
 		}
 	}
 	require(t, validateDatabaseSchema(context.Background(), store.db))
+}
+
+func TestNativeWorkflowIndexUpgradesCurrentCenterDatabase(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "steerline.db")
+	store, err := OpenSQLiteStore(path)
+	require(t, err)
+	require(t, store.Close())
+	raw, err := sql.Open("sqlite", path)
+	require(t, err)
+	_, err = raw.Exec(`DROP INDEX one_active_workflow_per_task`)
+	require(t, err)
+	_, err = raw.Exec(activeWorkflowIndexV4)
+	require(t, err)
+	_, err = raw.Exec(`DELETE FROM schema_migrations WHERE version=?`, domainSchemaVersion)
+	require(t, err)
+	_, err = raw.Exec(`INSERT INTO schema_migrations(version,applied_at) VALUES(4,?)`, now().Format(time.RFC3339Nano))
+	require(t, err)
+	require(t, raw.Close())
+	require(t, validateExistingDatabase(path))
+	store, err = OpenSQLiteStore(path)
+	require(t, err)
+	defer store.Close()
+	require(t, validateDatabaseSchema(context.Background(), store.db))
+	var definition string
+	require(t, store.db.QueryRow(`SELECT sql FROM sqlite_master WHERE name='one_active_workflow_per_task'`).Scan(&definition))
+	if strings.Join(strings.Fields(definition), " ") != activeWorkflowIndexV5 {
+		t.Fatalf("native workflow index was not upgraded: %s", definition)
+	}
 }
 
 func TestSQLiteRejectsParallelExecutionsInOneWorkflow(t *testing.T) {

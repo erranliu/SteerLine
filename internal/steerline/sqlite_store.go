@@ -19,7 +19,10 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const domainSchemaVersion = 4
+const domainSchemaVersion = 5
+
+const activeWorkflowIndexV4 = `CREATE UNIQUE INDEX one_active_workflow_per_task ON workflow_runs(project_identity,task_id) WHERE phase <> 'completed'`
+const activeWorkflowIndexV5 = `CREATE UNIQUE INDEX one_active_workflow_per_task ON workflow_runs(project_identity,task_id) WHERE phase NOT IN ('completed','abandoned')`
 
 type DomainTx interface {
 	PutTask(TaskRecord) error
@@ -145,7 +148,7 @@ func (s *SQLiteStore) migrate(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if version != 0 && version != 3 && version != domainSchemaVersion {
+	if version != 0 && version != 3 && version != 4 && version != domainSchemaVersion {
 		return nativeErr("unsupported_schema", fmt.Sprintf("unsupported SQLite schema %d; preserve existing state", version))
 	}
 	if version == 0 {
@@ -164,6 +167,18 @@ func (s *SQLiteStore) migrate(ctx context.Context) error {
 			if _, err = tx.ExecContext(ctx, stmt); err != nil {
 				return fmt.Errorf("create conversation schema: %w", err)
 			}
+		}
+		if _, err = tx.ExecContext(ctx, `INSERT INTO schema_migrations(version, applied_at) VALUES(?, ?)`, 4, now().Format(time.RFC3339Nano)); err != nil {
+			return err
+		}
+		version = 4
+	}
+	if version == 4 {
+		if _, err = tx.ExecContext(ctx, `DROP INDEX one_active_workflow_per_task`); err != nil {
+			return fmt.Errorf("replace native workflow index: %w", err)
+		}
+		if _, err = tx.ExecContext(ctx, activeWorkflowIndexV5); err != nil {
+			return fmt.Errorf("create native workflow index: %w", err)
 		}
 		if _, err = tx.ExecContext(ctx, `INSERT INTO schema_migrations(version, applied_at) VALUES(?, ?)`, domainSchemaVersion, now().Format(time.RFC3339Nano)); err != nil {
 			return err
@@ -201,7 +216,7 @@ var domainExecutionSchema = []string{
 	`CREATE UNIQUE INDEX task_external_identity ON tasks(project_identity,external_provider,external_project,external_id) WHERE external_id <> ''`,
 	`CREATE TABLE workflow_runs (project_identity TEXT NOT NULL, workflow_run_id TEXT NOT NULL, task_id TEXT NOT NULL, phase TEXT NOT NULL, payload BLOB NOT NULL, PRIMARY KEY(project_identity, workflow_run_id), FOREIGN KEY(project_identity, task_id) REFERENCES tasks(project_identity, task_id))`,
 	`CREATE INDEX workflow_runs_task_idx ON workflow_runs(project_identity, task_id)`,
-	`CREATE UNIQUE INDEX one_active_workflow_per_task ON workflow_runs(project_identity,task_id) WHERE phase <> 'completed'`,
+	activeWorkflowIndexV5,
 	`CREATE TABLE executions (project_identity TEXT NOT NULL, execution_id TEXT NOT NULL, workflow_run_id TEXT NOT NULL, status TEXT NOT NULL, current_step TEXT NOT NULL DEFAULT '', target_json BLOB NOT NULL, payload BLOB NOT NULL, PRIMARY KEY(project_identity, execution_id), FOREIGN KEY(project_identity, workflow_run_id) REFERENCES workflow_runs(project_identity, workflow_run_id))`,
 	`CREATE INDEX executions_workflow_idx ON executions(project_identity, workflow_run_id)`,
 	`CREATE UNIQUE INDEX one_active_execution_per_workflow ON executions(project_identity,workflow_run_id) WHERE status IN ('pending','active','waiting_decision','blocked')`,
