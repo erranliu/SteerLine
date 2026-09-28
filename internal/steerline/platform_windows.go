@@ -49,7 +49,7 @@ func ServiceWindowContext(parent context.Context, projectName string) (context.C
 	}
 	ctx, cancel := context.WithCancel(parent)
 	go func() {
-		tick := time.NewTicker(100 * time.Millisecond)
+		tick := time.NewTicker(500 * time.Millisecond)
 		defer tick.Stop()
 		for {
 			select {

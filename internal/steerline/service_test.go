@@ -167,9 +167,9 @@ func (f *fixture) service(t *testing.T) *Service {
 	return service
 }
 
-func TestIdleServiceDoesNotPublishOnControlPoll(t *testing.T) {
+func TestIdleServiceDoesNotPublishOnNoOpPolls(t *testing.T) {
 	f := newFixture(t)
-	f.c.Heartbeat, f.c.TaskPoll, f.c.PRPoll = "30s", "30s", "30s"
+	f.c.Heartbeat, f.c.TaskPoll, f.c.PRPoll = "30s", "500ms", "500ms"
 	s := f.service(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
@@ -201,13 +201,13 @@ func TestIdleServiceDoesNotPublishOnControlPoll(t *testing.T) {
 	before, err := LoadDatabaseRuntime(f.c)
 	require(t, err)
 	started := time.Now()
-	time.Sleep(1200 * time.Millisecond)
+	time.Sleep(2200 * time.Millisecond)
 	after, err := LoadDatabaseRuntime(f.c)
 	require(t, err)
 	elapsed := time.Since(started)
-	allowed := uint64(2 + elapsed/(2*time.Second)) // Decision polling may publish once every two seconds.
+	allowed := uint64(2) // No-op task, decision, PR and control polls do not publish runtime revisions.
 	if delta := after.Revision - before.Revision; delta > allowed {
-		t.Fatalf("idle control polls published %d full runtime revisions in %s", delta, elapsed)
+		t.Fatalf("idle polls published %d full runtime revisions in %s", delta, elapsed)
 	}
 }
 

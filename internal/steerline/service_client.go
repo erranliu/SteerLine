@@ -382,6 +382,12 @@ func ConnectService(ctx context.Context, c Config) ServiceConnection {
 	return connectServiceWithProbe(ctx, c, probeProcess)
 }
 
+// ProbeServiceProcess checks the exact saved OS identity without running Git.
+// It is only an observation; control commands perform their own admission checks.
+func ProbeServiceProcess(identity *ProcessIdentity) ProcessProbe {
+	return probeProcess(identity)
+}
+
 func connectServiceWithProbe(ctx context.Context, c Config, probe func(*ProcessIdentity) ProcessProbe) ServiceConnection {
 	connection := ServiceConnection{State: ConnectionNoRecord, Capabilities: []string{}, CanStart: true}
 	if err := c.ResolveIdentity(ctx); err != nil {
