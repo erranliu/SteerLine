@@ -1,5 +1,7 @@
 # Spec 01：Orca 远程能力验证与执行协议
 
+2026-09-28 结项：原中心 #4 的 unknown verify 经原 Dispatch 与终端精确对账后，按[既有合并 PR 与证据核验](../validation/phase1-task-closure-2026-09-28/README.md)写入 TaskDelivery 并关闭。原失败 Run 保留，未扩大受测版本和远程取消范围。
+
 ## 当前最小交付的协议边界
 
 允许 [Spec 03 的有人值守 MVP](03-remote-execution-and-viewer.md#有人值守-mvp-交付边界) 使用台式机64g 已取证的六项受监管能力及 UAC 人工处置。8 KiB 发送前限制继续执行；不启用远程取消，不扩大版本族或主机范围。P13 剩余负向已由[当前目标 SteerlineTest 回执](../validation/spec01-p13-steerlinetest-2026-09-28/README.md)补齐，P01–P13 在已测 1.4 版本族和当前目标边界内验收通过；Spec 03 的受影响故障与显示门槛、#32 的长期无人值守门槛分别验收，不据此宣告生产无人值守就绪。
