@@ -1,0 +1,3 @@
+=== RUN   TestNativeDecisionAcceptanceIsSeparateFromApplication
+--- PASS: TestNativeDecisionAcceptanceIsSeparateFromApplication (36.53s)
+PASS

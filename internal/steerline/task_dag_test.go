@@ -74,6 +74,8 @@ func TestTaskBatchStrictDecodeAndDeterministicCyclePath(t *testing.T) {
 	c, commit, store := openDAGFixture(t)
 	tasks := batchTasks(2, 3)
 	edges := []TaskBatchEdge{{Predecessor: TaskBatchReference{LocalKey: "k2"}, Successor: TaskBatchReference{LocalKey: "k3"}}, {Predecessor: TaskBatchReference{LocalKey: "k3"}, Successor: TaskBatchReference{LocalKey: "k2"}}}
+	beforeGraph, err := store.taskGraphSnapshot(context.Background(), c.Identity())
+	require(t, err)
 	payload := taskBatchFixture(t, c, commit, tasks, edges)
 	validation, err := (CommandService{Store: store, Project: c.Identity()}).ValidateTaskBatch(context.Background(), c, payload)
 	if err != nil {
@@ -85,18 +87,20 @@ func TestTaskBatchStrictDecodeAndDeterministicCyclePath(t *testing.T) {
 	if len(validation.Issues) == 0 || validation.Issues[len(validation.Issues)-1].Code != "dependency_cycle" {
 		t.Fatalf("cycle issue missing: %+v", validation.Issues)
 	}
+	afterGraph, err := store.taskGraphSnapshot(context.Background(), c.Identity())
+	require(t, err)
+	if beforeGraph.DatabaseRevision != afterGraph.DatabaseRevision || beforeGraph.Authority.GraphRevision != afterGraph.Authority.GraphRevision || len(beforeGraph.Tasks) != len(afterGraph.Tasks) || len(beforeGraph.Edges) != len(afterGraph.Edges) {
+		t.Fatal("rejected cycle validation mutated center state")
+	}
 }
 
 func TestCreateTaskBatchAtomicIdempotentAndQueryable(t *testing.T) {
 	ctx := context.Background()
 	c, commit, store := openDAGFixture(t)
-	tasks := batchTasks(20, 21, 22, 23, 24)
-	tasks[4].Priority = func() *int { v := 0; return &v }()
+	tasks := batchTasks(20, 21, 24)
+	tasks[2].Priority = func() *int { v := 0; return &v }()
 	edges := []TaskBatchEdge{
 		{Predecessor: TaskBatchReference{LocalKey: "k20"}, Successor: TaskBatchReference{LocalKey: "k21"}},
-		{Predecessor: TaskBatchReference{LocalKey: "k20"}, Successor: TaskBatchReference{LocalKey: "k22"}},
-		{Predecessor: TaskBatchReference{LocalKey: "k21"}, Successor: TaskBatchReference{LocalKey: "k23"}},
-		{Predecessor: TaskBatchReference{LocalKey: "k22"}, Successor: TaskBatchReference{LocalKey: "k23"}},
 	}
 	payload := taskBatchFixture(t, c, commit, tasks, edges)
 	commands := CommandService{Store: store, Project: c.Identity()}
@@ -126,7 +130,7 @@ func TestCreateTaskBatchAtomicIdempotentAndQueryable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(page.Tasks) != 5 || page.GraphRevision != 1 || page.Capabilities.DependencyReadiness != "provided" {
+	if len(page.Tasks) != 3 || page.GraphRevision != 1 || page.Capabilities.DependencyReadiness != "provided" {
 		t.Fatalf("new graph is absent from task read model: %+v", page)
 	}
 	ready := map[string]bool{}
@@ -135,11 +139,8 @@ func TestCreateTaskBatchAtomicIdempotentAndQueryable(t *testing.T) {
 		if task.TaskID == "24" && !hasString(task.StartupBlockers, "dispatch_paused") {
 			t.Fatalf("startup blockers were not separated from dependency readiness: %+v", task.StartupBlockers)
 		}
-		if task.TaskID == "23" && (len(task.Predecessors) != 2 || len(task.UnmetPredecessors) != 2) {
-			t.Fatalf("diamond blockers are wrong: %+v", task)
-		}
 	}
-	if !ready["20"] || !ready["24"] || ready["21"] || ready["22"] || ready["23"] {
+	if !ready["20"] || !ready["24"] || ready["21"] {
 		t.Fatalf("AND readiness is wrong: %v", ready)
 	}
 	candidates, err := query.ReadyNativeTasks(ctx)
@@ -296,15 +297,27 @@ func TestTaskBatchRejectsDuplicateAndCrossProjectDependencies(t *testing.T) {
 	if validation.Valid || !hasTaskIssue(validation.Issues, "cross_project_dependency") {
 		t.Fatalf("cross-project dependency was accepted: %+v", validation)
 	}
+	validateRules := func(payload []byte) (TaskBatchValidation, error) {
+		batch, _, err := decodeTaskBatch(payload)
+		if err != nil {
+			return TaskBatchValidation{}, err
+		}
+		graph, err := store.taskGraphSnapshot(ctx, c.Identity())
+		if err != nil {
+			return TaskBatchValidation{}, err
+		}
+		issues, cycle := validateTaskBatchAgainstGraph(ctx, c, batch, graph, false)
+		return TaskBatchValidation{Valid: len(issues) == 0, Issues: issues, Cycle: cycle}, nil
+	}
 	contractCollision := batchTasks(30)
 	contractCollision[0].Contract = nativeContract(t, c, commit, foreignContract.ContractID)
-	validation, err = commands.ValidateTaskBatch(ctx, c, taskBatchFixture(t, c, commit, contractCollision, nil))
+	validation, err = validateRules(taskBatchFixture(t, c, commit, contractCollision, nil))
 	if err != nil || validation.Valid || !hasTaskIssue(validation.Issues, "invalid_batch") {
 		t.Fatalf("cross-project contract ID mismatch was hidden by validation: %+v / %v", validation, err)
 	}
 	dupTasks := batchTasks(30, 31)
 	dup := []TaskBatchEdge{{Predecessor: TaskBatchReference{LocalKey: "k30"}, Successor: TaskBatchReference{LocalKey: "k31"}}, {Predecessor: TaskBatchReference{LocalKey: "k30"}, Successor: TaskBatchReference{LocalKey: "k31"}}}
-	validation, err = commands.ValidateTaskBatch(ctx, c, taskBatchFixture(t, c, commit, dupTasks, dup))
+	validation, err = validateRules(taskBatchFixture(t, c, commit, dupTasks, dup))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -312,7 +325,7 @@ func TestTaskBatchRejectsDuplicateAndCrossProjectDependencies(t *testing.T) {
 		t.Fatalf("duplicate edge was accepted: %+v", validation)
 	}
 	self := []TaskBatchEdge{{Predecessor: TaskBatchReference{LocalKey: "k30"}, Successor: TaskBatchReference{LocalKey: "k30"}}}
-	validation, err = commands.ValidateTaskBatch(ctx, c, taskBatchFixture(t, c, commit, batchTasks(30), self))
+	validation, err = validateRules(taskBatchFixture(t, c, commit, batchTasks(30), self))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -321,7 +334,7 @@ func TestTaskBatchRejectsDuplicateAndCrossProjectDependencies(t *testing.T) {
 	}
 	missing := int64(404)
 	missingEdge := []TaskBatchEdge{{Predecessor: TaskBatchReference{TaskID: &missing}, Successor: TaskBatchReference{LocalKey: "k30"}}}
-	validation, err = commands.ValidateTaskBatch(ctx, c, taskBatchFixture(t, c, commit, batchTasks(30), missingEdge))
+	validation, err = validateRules(taskBatchFixture(t, c, commit, batchTasks(30), missingEdge))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -330,12 +343,44 @@ func TestTaskBatchRejectsDuplicateAndCrossProjectDependencies(t *testing.T) {
 	}
 	oldSuccessor := int64(99)
 	badSuccessor := []TaskBatchEdge{{Predecessor: TaskBatchReference{LocalKey: "k30"}, Successor: TaskBatchReference{TaskID: &oldSuccessor}}}
-	validation, err = commands.ValidateTaskBatch(ctx, c, taskBatchFixture(t, c, commit, batchTasks(30), badSuccessor))
+	validation, err = validateRules(taskBatchFixture(t, c, commit, batchTasks(30), badSuccessor))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if validation.Valid {
 		t.Fatalf("old successor accepted a new dependency: %+v", validation)
+	}
+}
+
+func TestTaskDependencyStateRequiresEveryPredecessorDelivery(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		delivered  int
+		wantReady  bool
+		wantBlocks int
+	}{
+		{"none", 0, false, 2},
+		{"one", 1, false, 1},
+		{"all", 2, true, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			task := TaskRecord{TaskID: "3", Status: "open"}
+			graph := taskGraphSnapshot{
+				ByID:       map[string]TaskRecord{"1": {TaskID: "1", Status: "open"}, "2": {TaskID: "2", Status: "open"}, "3": task},
+				Edges:      []TaskDependencyRecord{{PredecessorID: "1", SuccessorID: "3"}, {PredecessorID: "2", SuccessorID: "3"}},
+				Deliveries: map[string]TaskDeliveryRecord{},
+			}
+			for i, id := range []string{"1", "2"} {
+				if i < tc.delivered {
+					graph.ByID[id] = TaskRecord{TaskID: id, Status: "closed"}
+					graph.Deliveries[id] = TaskDeliveryRecord{TaskID: id}
+				}
+			}
+			ready, blockers := taskDependencyState(task, graph)
+			if ready != tc.wantReady || len(blockers) != tc.wantBlocks {
+				t.Fatalf("ready=%v blockers=%+v, want ready=%v blockers=%d", ready, blockers, tc.wantReady, tc.wantBlocks)
+			}
+		})
 	}
 }
 

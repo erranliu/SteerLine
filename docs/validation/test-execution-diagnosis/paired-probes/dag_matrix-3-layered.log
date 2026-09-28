@@ -1,0 +1,3 @@
+=== RUN   TestTaskBatchRejectsDuplicateAndCrossProjectDependencies
+--- PASS: TestTaskBatchRejectsDuplicateAndCrossProjectDependencies (11.07s)
+PASS

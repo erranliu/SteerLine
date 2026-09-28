@@ -1,0 +1,12 @@
+{
+  "service_instance": "c3ebe12160a50f9238cd8a930c1443e8",
+  "pid": 41440,
+  "service_ready": true,
+  "dispatch_mode": "manual",
+  "dispatch_paused": false,
+  "active_runs": 0,
+  "graph_revision": 14,
+  "authority_version": 10,
+  "task_count": 24,
+  "new_tasks_started": false
+}

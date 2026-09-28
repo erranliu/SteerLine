@@ -1,0 +1,31 @@
+--- a/internal/steerline/native_tasks_test.go
++++ b/internal/steerline/native_tasks_test.go
+@@ -328,7 +328,7 @@
+ 		t.Fatal(err)
+ 	}
+ 	t.Setenv("STEERLINE_FAKE_GIT_FETCH_REMOTE", remotePath)
+-	c.Git = Command{Executable: executable, Args: []string{"--fake", "git-proxy", gitExecutable}}
++	c.Git = Command{Executable: os.Getenv("STEERLINE_DIAGNOSTIC_GIT_PROXY"), Args: []string{"git-proxy", gitExecutable}}
+ 	c.Host, c.Agent = "orca", "codex"
+ 	c.Orca = OrcaConfig{Executable: executable, Args: []string{"--fake", "orca", filepath.Join(t.TempDir(), "orca-state")}, Shell: "cmd.exe", WaitTimeout: "10s"}
+ 	c.PR = PRConfig{Kind: "command", BaseURL: "https://forge.invalid", Repository: "org/repo", Query: Command{Executable: executable, Args: []string{"--fake", "pr-query", filepath.Join(t.TempDir(), "native-orca-pr.json"), "{pr_url}", "{repository}"}}, Close: Command{Executable: executable, Args: []string{"--fake", "pr-close", filepath.Join(t.TempDir(), "native-orca-pr.json"), "{pr_url}", "{repository}"}}}
+@@ -636,7 +636,7 @@
+ 		t.Fatal(err)
+ 	}
+ 	t.Setenv("STEERLINE_FAKE_GIT_FETCH_REMOTE", remotePath)
+-	c.Git = Command{Executable: executable, Args: []string{"--fake", "git-proxy", gitExecutable}}
++	c.Git = Command{Executable: os.Getenv("STEERLINE_DIAGNOSTIC_GIT_PROXY"), Args: []string{"git-proxy", gitExecutable}}
+ 	c.Codex = Command{Executable: executable, Args: []string{"--fake", "codex"}}
+ 	fakePRPath := filepath.Join(t.TempDir(), "native-pr.json")
+ 	c.PR = PRConfig{Kind: "command", BaseURL: "https://forge.invalid", Repository: "org/repo", Query: Command{Executable: executable, Args: []string{"--fake", "pr-query", fakePRPath, "{pr_url}", "{repository}"}}, Close: Command{Executable: executable, Args: []string{"--fake", "pr-close", fakePRPath, "{pr_url}", "{repository}"}}}
+--- a/internal/steerline/service_test.go
++++ b/internal/steerline/service_test.go
+@@ -130,7 +130,7 @@
+ 
+ 	f.c.Remote, f.c.Branch = "origin", "main"
+ 	t.Setenv("STEERLINE_FAKE_GIT_FETCH_REMOTE", remotePath)
+-	f.c.Git = Command{Executable: executable, Args: []string{"--fake", "git-proxy", git}}
++	f.c.Git = Command{Executable: os.Getenv("STEERLINE_DIAGNOSTIC_GIT_PROXY"), Args: []string{"git-proxy", git}}
+ 	if output, err := exec.Command("git", "-C", f.c.Repository, "remote", "set-url", "origin", f.server.URL+"/owner/repo.git").CombinedOutput(); err != nil {
+ 		t.Fatalf("set native fixture remote: %v: %s", err, output)
+ 	}

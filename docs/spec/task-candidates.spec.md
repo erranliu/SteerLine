@@ -4,7 +4,9 @@
 
 ## 范围与前置
 
-无未完成硬前置。复用已交付的[不同任务人工并行](manual-parallel-start.spec.md)、[固定 DAG](task-dag.spec.md)和[共同约束](phase1-delivery-constraints.md)。本任务交付同 Task 的多个独立 WorkflowRun、启动准入、精确命令目标、完整读模型与恢复；PR 胜出和落选结算由 #27 交付。
+原固定规格无未完成硬前置。复用已交付的[不同任务人工并行](manual-parallel-start.spec.md)、[固定 DAG](task-dag.spec.md)和[共同约束](phase1-delivery-constraints.md)。本任务交付同 Task 的多个独立 WorkflowRun、启动准入、精确命令目标、完整读模型与恢复；PR 胜出和落选结算由 #27 交付。
+
+中心已追加 #34 为开工前置，消费[执行上下文](execution-context.spec.md)和其前置 #33 的纯规则。追加边只改变开工资格，不重绑定原 TaskContract；本任务的候选策略、schema 转换与验收范围保持。
 
 Task 创建契约增加 execution_policy，取值 `single` / `multiple`，省略时为 single；新契约摘要包含规范化后的策略。既有固定契约原字节/摘要保留，缺字段按原 single 事实解释，不把原 Task 升成 multiple。创建后不修改策略。multiple 不设置业务数量上限；后端启动失败按该请求单独结算，不推断可用容量或引入配置数量上限。人工显式启动候选；自动派发仍按既有单活动执行策略只领取未领取 Task 的首个候选，不自动生成竞争候选。
 
@@ -21,6 +23,8 @@ Task 创建契约增加 execution_policy，取值 `single` / `multiple`，省略
 ## 独立流程与读模型
 
 清除按 task_id 选“最后一个运行”作为唯一事实的 Service、投影、worker 查找、停止/重试、恢复和输出路径。答案继续绑定 Decision/Attempt/Execution；所有执行级变更命令必须提供精确 workflow_run_id 及原有版本/身份。旧任务级命令若无法唯一定位候选，返回 ambiguous_execution，不能猜最近一项。
+
+运行投影逐个按 workflow_run_id 重建，task_id 只用于取得候选集合或任务级事实；查找时核验 WorkflowRun 属于指定 Task、Execution 属于该 WorkflowRun、Attempt 属于该 Execution。既有 worker 映射继续按 WorkflowRun 管理，不复制到另一套候选调度器。任务级占用摘要和 UI 选择不能代替执行身份，也不能据此遗漏兄弟候选或清除其 unknown 占用；历史候选与当前 claim 的候选分开解释，旧结果不得改写当前候选。
 
 QueryService 提供 Task 下稳定分页的候选列表和精确候选详情，返回 task_id、workflow_run_id、execution_id、attempt_id、对象版本、阶段、后端/目标、base、workspace、能力、Decision、PR、资源状态和阻塞原因。列表包含 items、next_cursor、has_more、database_revision；游标失效不能拼接新旧快照。声明未交付能力时返回 unsupported，不伪造空成功。#27 在同一 DTO 中填充 delivery_role（unselected/winner/loser/conflict）及结算结果；#26 阶段以 unselected/unsupported 表示，不另建并行查询协议。事件持久保存所属 Task/WorkflowRun/Execution/Attempt 后供消费者补读。
 
@@ -40,7 +44,7 @@ QueryService 提供 Task 下稳定分页的候选列表和精确候选详情，�
 | --- | --- |
 | CM1 | 同 Task 创建三个独立候选，不存在业务数量上限；不同配置/工作区/请求/问题互不串线，single 策略拒绝第二候选 |
 | CM2 | 首次 claim 只发生一次；相同请求重放只得原候选，异内容拒绝，版本竞争和启动回执丢失不重复 worker |
-| CM3 | 各候选逐步运行；按 Task 猜执行的命令拒绝，回答不能作用于兄弟候选，历史分页与重启恢复不遗漏候选 |
+| CM3 | 各候选逐步运行；按 Task 猜执行的命令拒绝，回答不能作用于兄弟候选；候选顺序变化、历史候选迟到结果、分页与重启恢复不遗漏或替换候选，unknown 占用保留 |
 | CM4 | 新候选 base/契约与首次 claim 一致；依赖或任务版本变化、目标端缺 base、工作区重复均在副作用前阻断 |
 | CM5 | multiple 发布/交付在 #27 前全入口受控拒绝；open 零候选可补边/丢弃；全部已结算失败候选可原子重置；任一活动/未知候选、集合竞争或未决问题均阻断，旧结果不推进新领取 |
 | CM6 | 固定 schema 5 样本转换前后原 Task/DAG、契约字节/摘要、未决问题、unknown Operation 和外部绑定保持；含已领取/等待 PR 的原任务按旧摘要模式继续校验和恢复；新契约策略改动导致摘要失败，未知模式拒绝；中断不重建库或派发替代执行 |
