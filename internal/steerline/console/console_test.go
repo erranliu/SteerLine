@@ -235,6 +235,36 @@ func TestDecisionAnswerEditorHandlesTwelveOptionsUnicodePasteAndStableCommandID(
 	}
 }
 
+func TestSupervisedDecisionUsesBoundAnswerCommand(t *testing.T) {
+	now := time.Date(2026, 9, 28, 5, 42, 0, 0, time.UTC)
+	ref := testProject("supervised-decision")
+	snapshot, run := decisionSnapshot(ref, now)
+	run.Host, run.Protocol = "orca_supervised", "orca_supervised"
+	control := &testControlClient{}
+	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, control, now)
+	m.profile = &viewProfile{dir: t.TempDir()}
+	m.projects[0].selectedKey = "run:" + run.RunID
+	row := &consoleRow{kind: rowRun, run: run}
+	if reason := decisionAnswerAvailability(m.projects[0], row); !strings.HasPrefix(reason, "提交后") {
+		t.Fatalf("supervised answer was unavailable despite the live command capability: %s", reason)
+	}
+	updated, cmd := m.answerSelectedDecision()
+	m = updated.(Model)
+	if cmd != nil || m.answer == nil {
+		t.Fatalf("supervised answer draft did not open: dialog=%+v cmd=%v", m.answer, cmd)
+	}
+	updated, cmd = m.handleDecisionAnswerKey(tea.KeyMsg{Type: tea.KeyF2})
+	m = updated.(Model)
+	if cmd == nil {
+		t.Fatal("supervised answer was not submitted through CommandService")
+	}
+	updated, _ = m.Update(cmd())
+	m = updated.(Model)
+	if control.decisionCalls != 1 || control.decisionAnswer.RunID != run.RunID || control.decisionAnswer.DecisionID != run.Decision.ID || control.decisionAnswer.OptionID != "o10" || control.decisionAnswer.ExpectedRunRevision != run.ControlRevision {
+		t.Fatalf("supervised answer lost its original execution identity: %+v", control.decisionAnswer)
+	}
+}
+
 func (m *Model) profileViewBytes(t *testing.T) []byte {
 	t.Helper()
 	data, err := os.ReadFile(m.profile.path())

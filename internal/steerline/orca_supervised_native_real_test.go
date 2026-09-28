@@ -99,6 +99,9 @@ func TestSupervisedOrcaRealNativeTaskLifecycle(t *testing.T) {
 			"api", "repos/{repository}/pulls/{number}", "-X", "PATCH", "-f", "state=closed", "--jq", `{url:.html_url,repository:.base.repo.full_name,base_branch:.base.ref,head_revision:.head.sha,state:(if .merged then "merged" elif .state=="closed" then "closed_unmerged" else .state end),merged:.merged,merged_at:.merged_at,merge_commit:.merge_commit_sha}`,
 		}}},
 	}
+	if executable := strings.TrimSpace(os.Getenv("STEERLINE_REAL_SUPERVISED_ORCA_EXECUTABLE")); executable != "" {
+		c.Orca.Executable = executable
+	}
 	definition := DefaultMinimalWorkflowDefinition(true)
 	step := func(provider, entry string, command []string) StepContract {
 		return StepContract{Provider: provider, Entry: entry, Version: MinimalWorkflowVersion, InputSchema: NativeTaskInputSchema, OutputSchema: MinimalStepOutputSchema, ExecutionSite: "target", Timeout: 10 * time.Minute, Command: command}

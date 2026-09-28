@@ -1,0 +1,140 @@
+// Controlled P13 acceptance fixture. Build this file as main.go in an isolated
+// directory and set STEERLINE_REAL_SUPERVISED_ORCA_EXECUTABLE to the resulting
+// executable only for an isolated SteerlineTest center. The remote worker and
+// Orca platform run normally; this wrapper changes one center-visible verify
+// status payload while preserving the original Delivery and Dispatch IDs.
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+)
+
+func main() {
+	real := os.Getenv("STEERLINE_P13_REAL_ORCA")
+	kind := os.Getenv("STEERLINE_P13_FAULT")
+	dir := os.Getenv("STEERLINE_P13_EVIDENCE_DIR")
+	if real == "" || dir == "" || (kind != "missing_check" && kind != "wrong_commit") {
+		fmt.Fprintln(os.Stderr, "P13 proxy requires the real Orca path, evidence directory and one supported fault")
+		os.Exit(2)
+	}
+	args := os.Args[1:]
+	command := exec.Command(real, args...)
+	command.Stdin, command.Stderr = os.Stdin, os.Stderr
+	if len(args) < 2 || args[0] != "orchestration" || args[1] != "check" {
+		command.Stdout = os.Stdout
+		exit(command.Run())
+		return
+	}
+	out, err := command.Output()
+	if err != nil {
+		_, _ = os.Stdout.Write(out)
+		exit(err)
+		return
+	}
+	var response map[string]any
+	if json.Unmarshal(out, &response) != nil {
+		_, _ = os.Stdout.Write(out)
+		return
+	}
+	messageID, changed := mutate(response, kind)
+	if !changed {
+		_, _ = os.Stdout.Write(out)
+		return
+	}
+	marker := filepath.Join(dir, "target-message-id.txt")
+	if previous, readErr := os.ReadFile(marker); readErr == nil && strings.TrimSpace(string(previous)) != messageID {
+		_, _ = os.Stdout.Write(out)
+		return
+	} else if readErr != nil && !os.IsNotExist(readErr) {
+		exit(readErr)
+		return
+	}
+	modified, err := json.Marshal(response)
+	if err != nil {
+		exit(err)
+		return
+	}
+	if _, statErr := os.Stat(marker); os.IsNotExist(statErr) {
+		if err = os.MkdirAll(dir, 0700); err == nil {
+			err = os.WriteFile(filepath.Join(dir, "original-check.json"), out, 0600)
+		}
+		if err == nil {
+			err = os.WriteFile(filepath.Join(dir, "mutated-check.json"), modified, 0600)
+		}
+		if err == nil {
+			err = os.WriteFile(marker, []byte(messageID+"\n"), 0600)
+		}
+		if err != nil {
+			exit(err)
+			return
+		}
+	}
+	_, _ = os.Stdout.Write(modified)
+}
+
+func mutate(node any, kind string) (string, bool) {
+	switch value := node.(type) {
+	case map[string]any:
+		if value["type"] == "status" {
+			payloadText, ok := value["payload"].(string)
+			if ok {
+				var payload map[string]any
+				if json.Unmarshal([]byte(payloadText), &payload) == nil {
+					if envelope, ok := payload["step_result"].(map[string]any); ok {
+						if result, ok := envelope["result"].(map[string]any); ok && result["step_id"] == "verify" {
+							switch kind {
+							case "missing_check":
+								result["checks"] = []any{}
+							case "wrong_commit":
+								checks, ok := result["checks"].([]any)
+								if !ok || len(checks) == 0 {
+									return "", false
+								}
+								check, ok := checks[0].(map[string]any)
+								if !ok {
+									return "", false
+								}
+								check["actual_commit"] = strings.Repeat("0", 40)
+							}
+							mutated, err := json.Marshal(payload)
+							if err != nil {
+								return "", false
+							}
+							value["payload"] = string(mutated)
+							id, _ := value["id"].(string)
+							return id, id != ""
+						}
+					}
+				}
+			}
+		}
+		for _, child := range value {
+			if id, changed := mutate(child, kind); changed {
+				return id, true
+			}
+		}
+	case []any:
+		for _, child := range value {
+			if id, changed := mutate(child, kind); changed {
+				return id, true
+			}
+		}
+	}
+	return "", false
+}
+
+func exit(err error) {
+	if err == nil {
+		return
+	}
+	if status, ok := err.(*exec.ExitError); ok {
+		os.Exit(status.ExitCode())
+	}
+	fmt.Fprintln(os.Stderr, err)
+	os.Exit(1)
+}

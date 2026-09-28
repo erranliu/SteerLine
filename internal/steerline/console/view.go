@@ -1124,7 +1124,7 @@ func decisionAnswerAvailability(state projectState, row *consoleRow) string {
 	if run.WorkflowVersion != steerline.MinimalWorkflowVersion || run.ExecutionID == "" || run.AttemptID == "" || run.Decision.AttemptID != run.AttemptID {
 		return "问题未绑定当前 native WorkflowRun、Execution 和 attempt；保留原问题并转入只读恢复核验"
 	}
-	if run.Backend == "local" && run.Protocol != "local_process" || run.Backend == "orca" && run.Protocol != "orca_terminal_v2" || run.Backend != "local" && run.Backend != "orca" {
+	if run.Backend == "local" && run.Protocol != "local_process" || run.Backend == "orca" && run.Protocol != "orca_terminal_v2" && run.Protocol != "orca_supervised" || run.Backend != "local" && run.Backend != "orca" {
 		return "原执行后端/协议不支持决策续跑"
 	}
 	connection := state.snapshot.Connection
