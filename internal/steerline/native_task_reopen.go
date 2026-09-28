@@ -332,7 +332,7 @@ func verifyStoppedSupervisedReopen(ctx context.Context, config Config, p Process
 			ExactWorker bool   `json:"exactWorker"`
 		} `json:"observation"`
 	}
-	if json.Unmarshal(env.Result, &worker) != nil || env.Meta.RuntimeID != p.CoordinatorRuntimeID || worker.Dispatch.ID != p.Dispatch || worker.Dispatch.RunID != p.OrchestrationRun || worker.Dispatch.TaskID != p.Task || worker.Dispatch.Status != "completed" || worker.Worker.DispatchID != p.Dispatch || worker.Worker.State != "succeeded" || worker.Worker.WorktreeID != p.WorktreeID || worker.Worker.AgentTerminalHandle != p.Terminal || len(worker.Worker.ResidualResources) != 0 || worker.Server.EnvironmentID != p.ExecutionHost || worker.RemoteRuntimeEpoch != p.RuntimeID || !worker.Observation.ExactWorker || worker.Observation.Status != "exited" {
+	if json.Unmarshal(env.Result, &worker) != nil || env.Meta.RuntimeID != p.CoordinatorRuntimeID || worker.Dispatch.ID != p.Dispatch || worker.Dispatch.RunID != p.OrchestrationRun || worker.Dispatch.TaskID != p.Task || worker.Dispatch.Status != "completed" || worker.Worker.DispatchID != p.Dispatch || worker.Worker.State != "succeeded" || worker.Worker.WorktreeID != p.WorktreeID || worker.Worker.AgentTerminalHandle != p.Terminal || worker.Worker.ResidualResources == nil || len(worker.Worker.ResidualResources) != 0 || worker.Server.EnvironmentID != p.ExecutionHost || worker.RemoteRuntimeEpoch != p.RuntimeID || !worker.Observation.ExactWorker || worker.Observation.Status != "exited" {
 		return nativeErr("cleanup_pending", "original supervised worker is not the exact settled and exited Dispatch")
 	}
 	env, err = call("terminal", "show", "--environment", p.ExecutionHost, "--terminal", p.Terminal, "--json")
@@ -340,9 +340,15 @@ func verifyStoppedSupervisedReopen(ctx context.Context, config Config, p Process
 		return nativeErr("cleanup_pending", "original remote terminal cannot be inspected")
 	}
 	var remote struct {
-		Terminal orcaTerminal `json:"terminal"`
+		Terminal struct {
+			Handle        string                 `json:"handle"`
+			IncarnationID string                 `json:"incarnationId"`
+			WorktreeID    string                 `json:"worktreeId"`
+			Connected     *bool                  `json:"connected"`
+			ExitCause     *orcaTerminalExitCause `json:"exitCause"`
+		} `json:"terminal"`
 	}
-	if json.Unmarshal(env.Result, &remote) != nil || env.Meta.RuntimeID != p.RuntimeID || remote.Terminal.Handle != p.Terminal || remote.Terminal.IncarnationID != p.Incarnation || remote.Terminal.WorktreeID != p.WorktreeID || remote.Terminal.Connected || remote.Terminal.ExitCause == nil || remote.Terminal.ExitCause.Kind != "operator_close" {
+	if json.Unmarshal(env.Result, &remote) != nil || env.Meta.RuntimeID != p.RuntimeID || remote.Terminal.Handle != p.Terminal || remote.Terminal.IncarnationID != p.Incarnation || remote.Terminal.WorktreeID != p.WorktreeID || remote.Terminal.Connected == nil || *remote.Terminal.Connected || remote.Terminal.ExitCause == nil || remote.Terminal.ExitCause.Kind != "operator_close" {
 		return nativeErr("cleanup_pending", "original remote terminal has not been exactly operator-closed")
 	}
 	out, _ := client.call(ctx, positiveDuration(config.CommandTimeout, 30*time.Second), "worktree", "show", "--environment", p.ExecutionHost, "--worktree", "id:"+p.WorktreeID, "--json")
