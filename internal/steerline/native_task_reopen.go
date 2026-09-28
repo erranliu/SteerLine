@@ -94,15 +94,17 @@ func (c CommandService) ReopenNativeTask(ctx context.Context, config Config, inp
 	for _, candidate := range runtimeState.Runs {
 		if candidate != nil && candidate.RunID == input.WorkflowRunID {
 			run = candidate
-		} else if candidate != nil && (candidate.ExecutionStatus == "unknown" || candidate.ExecutionStatus == "pending" || candidate.ExecutionStatus == "running" || candidate.FinishTaskStatus == "waiting_decision") {
-			return empty, nativeErr("slot_busy", "another run still holds an execution reservation")
+		} else if candidate != nil && candidate.TaskID == input.TaskID && (candidate.ExecutionStatus == "unknown" || candidate.ExecutionStatus == "pending" || candidate.ExecutionStatus == "running" || candidate.FinishTaskStatus == "waiting_decision") {
+			return empty, nativeErr("slot_busy", "another run for this task still holds an execution reservation")
 		}
 	}
-	if run == nil || runtimeState.CurrentTask == nil || *runtimeState.CurrentTask != input.TaskID || !runtimeState.SlotOccupied || run.TaskID != input.TaskID || run.DomainTaskID != input.TaskID || run.WorkflowVersion != MinimalWorkflowVersion || run.ExecutionStatus != "unknown" || run.FinishTaskStatus != "blocked" || run.Process == nil || run.Process.Kind != "orca" || run.Process.Terminal == "" || run.Process.RuntimeID == "" || run.Process.Incarnation == "" || run.WorktreePath == nil || deref(run.PR.URL) != "" {
-		return empty, nativeErr("immutable_task", "reopen requires the exact blocked, unpublished local Orca run")
+	if run == nil || runtimeState.CurrentTask != nil && *runtimeState.CurrentTask != input.TaskID || !runtimeState.SlotOccupied || run.TaskID != input.TaskID || run.DomainTaskID != input.TaskID || run.WorkflowVersion != MinimalWorkflowVersion || run.ExecutionStatus != "unknown" || run.FinishTaskStatus != "blocked" || run.Process == nil || run.Process.Kind != "orca" && run.Process.Kind != "orca_supervised" || run.Process.Terminal == "" || run.Process.RuntimeID == "" || run.Process.Incarnation == "" || run.WorktreePath == nil || deref(run.PR.URL) != "" {
+		return empty, nativeErr("immutable_task", "reopen requires the exact blocked, unpublished Orca run")
 	}
-	if _, statErr := os.Lstat(*run.WorktreePath); !os.IsNotExist(statErr) {
-		return empty, nativeErr("cleanup_pending", "original worktree must be removed before reopening the task")
+	if run.Process.Kind == "orca" {
+		if _, statErr := os.Lstat(*run.WorktreePath); !os.IsNotExist(statErr) {
+			return empty, nativeErr("cleanup_pending", "original worktree must be removed before reopening the task")
+		}
 	}
 	var executionConfig Config
 	for _, workflow := range runtimeState.WorkflowRuns {
@@ -114,17 +116,26 @@ func (c CommandService) ReopenNativeTask(ctx context.Context, config Config, inp
 			break
 		}
 	}
-	if executionConfig.hostName() != "orca" {
-		return empty, nativeErr("contract_mismatch", "old workflow has no pinned local Orca execution profile")
-	}
-	term, showErr := (orcaClient{cfg: executionConfig}).showTerminal(ctx, run.Process.Terminal)
-	if showErr != nil {
-		diagnostic := strings.ToLower(showErr.Error())
-		if !strings.Contains(diagnostic, "terminal_handle_stale") && !strings.Contains(diagnostic, "terminal handle stale") {
-			return empty, nativeErr("cleanup_pending", "original Orca terminal is not verifiably absent: "+showErr.Error())
+	if run.Process.Kind == "orca_supervised" {
+		if executionConfig.hostName() != "orca_supervised" || executionConfig.Orca.Supervised == nil || executionConfig.Orca.Supervised.EnvironmentID != run.Process.ExecutionHost {
+			return empty, nativeErr("contract_mismatch", "old workflow has no matching pinned supervised Orca profile")
 		}
-	} else if term.Handle != run.Process.Terminal || term.RuntimeID != run.Process.RuntimeID || term.IncarnationID != run.Process.Incarnation || !term.exited() {
-		return empty, nativeErr("cleanup_pending", "original Orca terminal still exists or changed identity, including a detached or orphaned tab")
+		if err := verifyStoppedSupervisedReopen(ctx, executionConfig, *run.Process); err != nil {
+			return empty, err
+		}
+	} else {
+		if executionConfig.hostName() != "orca" {
+			return empty, nativeErr("contract_mismatch", "old workflow has no pinned local Orca execution profile")
+		}
+		term, showErr := (orcaClient{cfg: executionConfig}).showTerminal(ctx, run.Process.Terminal)
+		if showErr != nil {
+			diagnostic := strings.ToLower(showErr.Error())
+			if !strings.Contains(diagnostic, "terminal_handle_stale") && !strings.Contains(diagnostic, "terminal handle stale") {
+				return empty, nativeErr("cleanup_pending", "original Orca terminal is not verifiably absent: "+showErr.Error())
+			}
+		} else if term.Handle != run.Process.Terminal || term.RuntimeID != run.Process.RuntimeID || term.IncarnationID != run.Process.Incarnation || !term.exited() {
+			return empty, nativeErr("cleanup_pending", "original Orca terminal still exists or changed identity, including a detached or orphaned tab")
+		}
 	}
 
 	var receipt TaskReopenReceipt
@@ -258,7 +269,9 @@ func (c CommandService) ReopenNativeTask(ctx context.Context, config Config, inp
 		}
 		runtimeState.Runs = remaining
 		runtimeState.CurrentTask = nil
-		runtimeState.SlotOccupied = false
+		reservation := &Service{State: runtimeState}
+		reservation.refreshSlotOccupancy()
+		runtimeState = reservation.State
 		runtimeState.Tasks = updatedSnapshot.Tasks
 		runtimeState.WorkflowRuns = updatedSnapshot.WorkflowRuns
 		runtimeState.Executions = updatedSnapshot.Executions
@@ -274,6 +287,70 @@ func (c CommandService) ReopenNativeTask(ctx context.Context, config Config, inp
 		return tx.PutProjection(c.Project, runtimeState.Revision, projectionBody)
 	})
 	return receipt, err
+}
+
+// verifyStoppedSupervisedReopen does not infer safety from a missing local
+// Windows path. The execution host must confirm the original Dispatch,
+// terminal incarnation and worktree have all stopped or been removed.
+func verifyStoppedSupervisedReopen(ctx context.Context, config Config, p ProcessIdentity) error {
+	if p.Kind != "orca_supervised" || p.CoordinatorRuntimeID == "" || p.OrchestrationRun == "" || p.Task == "" || p.Dispatch == "" || p.ExecutionHost == "" || p.WorktreeID == "" {
+		return nativeErr("contract_mismatch", "supervised reopen requires the complete original external binding")
+	}
+	client := orcaClient{cfg: config}
+	call := func(args ...string) (orcaEnvelope, error) {
+		out, callErr := client.call(ctx, positiveDuration(config.CommandTimeout, 30*time.Second), args...)
+		env, parseErr := parseEnvelope(out)
+		if callErr != nil || parseErr != nil {
+			return env, errors.Join(callErr, parseErr)
+		}
+		return env, nil
+	}
+	env, err := call("orchestration", "worker-show", "--dispatch", p.Dispatch, "--json")
+	if err != nil {
+		return nativeErr("cleanup_pending", "original supervised Dispatch cannot be inspected")
+	}
+	var worker struct {
+		Dispatch struct {
+			ID     string `json:"id"`
+			RunID  string `json:"runId"`
+			TaskID string `json:"taskId"`
+			Status string `json:"status"`
+		} `json:"dispatch"`
+		Worker struct {
+			DispatchID          string            `json:"dispatchId"`
+			State               string            `json:"state"`
+			WorktreeID          string            `json:"worktreeId"`
+			AgentTerminalHandle string            `json:"agentTerminalHandle"`
+			ResidualResources   []json.RawMessage `json:"residualResources"`
+		} `json:"worker"`
+		Server struct {
+			EnvironmentID string `json:"environmentId"`
+		} `json:"server"`
+		RemoteRuntimeEpoch string `json:"remoteRuntimeEpoch"`
+		Observation        struct {
+			Status      string `json:"status"`
+			ExactWorker bool   `json:"exactWorker"`
+		} `json:"observation"`
+	}
+	if json.Unmarshal(env.Result, &worker) != nil || env.Meta.RuntimeID != p.CoordinatorRuntimeID || worker.Dispatch.ID != p.Dispatch || worker.Dispatch.RunID != p.OrchestrationRun || worker.Dispatch.TaskID != p.Task || worker.Dispatch.Status != "completed" || worker.Worker.DispatchID != p.Dispatch || worker.Worker.State != "succeeded" || worker.Worker.WorktreeID != p.WorktreeID || worker.Worker.AgentTerminalHandle != p.Terminal || len(worker.Worker.ResidualResources) != 0 || worker.Server.EnvironmentID != p.ExecutionHost || worker.RemoteRuntimeEpoch != p.RuntimeID || !worker.Observation.ExactWorker || worker.Observation.Status != "exited" {
+		return nativeErr("cleanup_pending", "original supervised worker is not the exact settled and exited Dispatch")
+	}
+	env, err = call("terminal", "show", "--environment", p.ExecutionHost, "--terminal", p.Terminal, "--json")
+	if err != nil {
+		return nativeErr("cleanup_pending", "original remote terminal cannot be inspected")
+	}
+	var remote struct {
+		Terminal orcaTerminal `json:"terminal"`
+	}
+	if json.Unmarshal(env.Result, &remote) != nil || env.Meta.RuntimeID != p.RuntimeID || remote.Terminal.Handle != p.Terminal || remote.Terminal.IncarnationID != p.Incarnation || remote.Terminal.WorktreeID != p.WorktreeID || remote.Terminal.Connected || remote.Terminal.ExitCause == nil || remote.Terminal.ExitCause.Kind != "operator_close" {
+		return nativeErr("cleanup_pending", "original remote terminal has not been exactly operator-closed")
+	}
+	out, _ := client.call(ctx, positiveDuration(config.CommandTimeout, 30*time.Second), "worktree", "show", "--environment", p.ExecutionHost, "--worktree", "id:"+p.WorktreeID, "--json")
+	var absent orcaEnvelope
+	if json.Unmarshal(out, &absent) != nil || absent.OK || absent.Error == nil || absent.Error.Code != "selector_not_found" || absent.Meta.RuntimeID != p.RuntimeID {
+		return nativeErr("cleanup_pending", "original remote worktree is not verifiably removed")
+	}
+	return nil
 }
 
 func (t *sqliteTx) reopenNativeTaskCAS(next TaskRecord, expectedVersion uint64) error {
