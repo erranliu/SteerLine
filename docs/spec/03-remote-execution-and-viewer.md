@@ -1,5 +1,19 @@
 # Spec 03：最小状态机的分阶段远程闭环与 viewer 人工决策
 
+任务 ID：6；任务名称：分阶段远程闭环。
+
+## 有人值守 MVP 交付边界
+
+2026-09-28 范围收口：允许将已实现并有真机五步证据的远程能力交付为有人值守 MVP，完整 Spec 验收继续开放。本节是当前启用规则；下方按日期记录的早期生产阻断结论保留其历史含义，不再将所有剩余验收一律作为 MVP 的启用条件。
+
+- 固定本机中心与已认证的 Windows 台式机64g 目标（Orca 1.4.209/1.4.215），仅 native 任务、minimal-v1 五步、每任务单候选。由人显式选择命名方案启动、处理问题和审阅合并；本次方案固定 Codex / gpt-6-luna / xhigh。不同任务的现有人工并行能力不变，MVP 首次使用按单任务值守。
+- 交付门槛：六项必需受监管能力的真实证据和内容哈希、当前连接/仓库/协调终端预检、项目步骤及工具可用、模型实际启动；保留原生 Task、Decision、Operation、执行身份、幂等恢复和精确 head 真实合并核验。能力报告只证明已测能力，项目配置不能冒充认证。主机基础能力可在同一已测目标复用，各项目仍分别核验仓库身份、工具与固定步骤。
+- 允许交付人工值守的配置与固定构建；不增加绕过能力检查的开关，不改自动派发默认方案，不放开未知结果重派，不启用远程取消。
+- 持续无人值守可靠性、新主机故障矩阵与 2 秒可见 viewer、精确 turn/final 及平台真实同句柄换代继续验收，不宣称已通过。#3/#4/#6 保持开放；#29/#32/#24 的完整交付前置不变。
+- 部署到既有 home 时先核验无活动/未知执行，受控停服并保存状态备份，再替换二进制、增加项目命名方案和持久能力证据。重启后回读原任务与服务配置；不清库、不迁移旧 Beads 项目。
+
+本节定义最小交付，本文第 8–9 节仍定义完整远程验收。后续扩大目标主机或无人值守承诺时完成对应剩余门槛。
+
 2026-09-28 新目标补充：远端已改为 `台式机64g`（本机 Orca 1.4.209、远端 1.4.215）。[新主机验收记录](../validation/spec03-desktop64g-2026-09-28.md)保留 Smart App Control 首次阻断和后续用户授权关闭的不同试次；新主机的六项受监管能力与 SteerLine 仓库原生五步 Task 91024、绑定 `yes` 答案、固定 head 的隔离 PR #78 合并、五个 Dispatch release/exited 已通过。完整 Run 无人工补按 Enter。首次 Run 的远端 `gh` 未登录，publish 使用已连接 GitHub 能力创建 PR；用户完成机器准备后，新隔离 Task 已以固定 `gh pr create` 命令创建并合并 PR #85，原生五步、业务答案应用与释放再次通过。UAC 启用重启后观察到受控取消及用户批准/程序启动；Orca computer-use 无法读取安全桌面，用户另提供匹配的 Git for Windows 提示原图，当前目标 P10 可见分支通过。home 的故障矩阵和 2 秒 viewer 证据仍限定旧主机；新主机的长期可靠性及 #3 精确轮次/平台真实同句柄换代继续开放。
 
 2026-09-28 后续：[本机可见控制台刷新样本](orca-probe/samples/spec03-viewer-follow-2026-09-28.json)发现默认当前 Attempt 被误保存为历史固定选择，修复后新 Attempt 的 SQLite `created_at` 至 Orca 可见终端 `source=screen` 帧出现的保守上界为 1.118 秒。手动选择历史 Attempt 仍保持固定。此本机样本本身没有覆盖 home 远端业务消息，也不能替代 Windows 管理员/UAC 桌面截图；home 远端时延由下段独立验收；当前主机的后续 UAC 证据见上段。
@@ -10,7 +24,7 @@
 
 同日[R07 implement 完成窗口验收](../validation/spec03-r07-implement-2026-09-28.md)在中心停服后保留原 Dispatch；原 status/worker_done 于离线窗口产生，同一 SQLite 重开后只将原 implement Attempt 对账为 succeeded 并进入 verify，最后唯一测试 PR #20 固定 head 合并、Task 关闭、六个 Dispatch 释放。verify 首轮结果格式失败，以及 verify 两轮和 review 共三次 `input_accepted` 未形成 turn 后需人工 Enter 的事实另行保留；该矩阵分支通过，不宣称无人值守生产可靠性。
 
-任务 ID：6；任务名称：分阶段远程闭环。
+
 
 2026-09-28 增补：[远端原生业务问答至真实合并](../validation/spec03-native-question-2026-09-28.md)在新的隔离任务 91024 上证明 `yes/no` 问题、中心答案、原 Dispatch 上的独立应用证明、五步验证、固定 head 的 [测试 PR #17](https://github.com/erranliu/SteerlineTest/pull/17) 合并及原中心 Task close。该运行的 publish 提示曾暂记 unknown，之后同一 SQLite 对账原 worker 结果，无第二个 PR。当前目标的业务问答主路径因此有原生任务证据；viewer 2 秒目标当时尚未通过，后续实测见上段；管理员/UAC 设置提示及其余故障矩阵仍开放。
 

@@ -1,8 +1,16 @@
 # Plan：分阶段远程闭环与 viewer 决策
 
+任务 ID：6；任务名称：分阶段远程闭环。
+
+## 本次 MVP 收口与发布
+
+按 Spec 的“有人值守 MVP 交付边界”执行：同步当前启用边界和剩余验收；核对安装中每个 native 项目的远端仓库、工具、专用协调终端与 Luna xhigh 启动；将同一目标的已认证基础能力证据持久化，分别核验项目配置；运行自动化回归、vet、build；确认无活动/未知执行后备份同一 home、停服安装、增加远程命名方案，再按 manual 重启并核验原 Task/Decision/Operation 与配置。旧 Beads 项目保持只读。
+
+发布记录保留源码/二进制哈希、配置摘要、能力证据来源和部署冒烟结果。完整 #6 故障/长期/viewer 验收不在此次冒烟中伪报通过，#3/#4 及下游完整交付前置不变。
+
 2026-09-28 新主机验收：[台式机64g 记录](../validation/spec03-desktop64g-2026-09-28.md)将首次 Smart App Control 失败保留为独立 Dispatch；用户批准关闭后，以当前主机原回执认证六项受监管能力，在隔离 SteerLine 项目基线完成原生五步、真实业务问答/应用证明、PR #78 固定 head 合并及原中心结项，五个 Dispatch 均 release/exited。首次 `gh` 无会话导致固定发布命令失败，worker 用连接器完成该次 PR；用户完成机器准备后，新隔离 Task 的固定 `gh pr create` 命令创建并合并 PR #85，原 Task 和五个 Dispatch 均结算。重启启用 UAC 后，人工拒绝/批准的系统与进程回执已分开记录，用户另拍下匹配的安全桌面原图，当前目标 P10 可见分支通过。home 的故障矩阵和 viewer 时延证据不直接外推到新主机。
 
-任务 ID：6；任务名称：分阶段远程闭环。执行依据：[Spec](03-remote-execution-and-viewer.md)。开发输入为 [远程协议 Spec](01-orca-remote-protocol.md) 的真实证据及限制、[中心模型 Spec](02-execution-model-and-adapter.md) 已交付的模型和接口；生产启用另受剩余协议门槛约束。
+执行依据：[Spec](03-remote-execution-and-viewer.md)。开发输入为 [远程协议 Spec](01-orca-remote-protocol.md) 的真实证据及限制、[中心模型 Spec](02-execution-model-and-adapter.md) 已交付的模型和接口；生产启用另受剩余协议门槛约束。
 
 2026-09-28 验收补充：[真实 home 消息到可见 viewer 时延](../validation/spec03-viewer-latency-2026-09-28.md)先测出 Decision 2.476 秒失败，随后并行只读源并加快前台刷新；新隔离 Decision 为 1.669 秒，两次远端步骤转换为 1.414 / 1.798 秒。两条任务均按固定 head 真实合并、关闭原 Task 并释放五个 Dispatch。当前目标的 2 秒 viewer 门槛已通过；生产项目认证当时未完成，后续见下段；管理员/UAC 可见捕获仍按原边界开放。下文早期 viewer 失败样本保留其当时结论。
 
