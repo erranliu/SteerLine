@@ -1,26 +1,24 @@
 # 已规划 Spec 的执行依赖
 
-这里列出 [主 roadmap](roadmap.md) 中尚未完成的中心 Task、执行 Spec 与硬前置。#3 的 H-A6/H-A16 和 #4 的当前范围 P01–P13 已有验收回执，仍需各自原 Task 的真实 Delivery；#6 的当前目标 viewer 步骤转换已通过 4 秒样本，受影响故障路径仍开放，长期无人值守归 #32。具体证据见各行引用。
+这里列出 [主 roadmap](roadmap.md) 中仍在推进的中心 Task、执行 Spec 与硬前置。原 #3/#4/#6 已按当前受测范围完成原中心 TaskDelivery；4 秒 viewer 和定向故障回执分别见[Spec 03 最终范围](../validation/spec03-final-scope-audit-2026-09-28.md)。长期无人值守归 #32，具体证据见下文引用。
 
 下文的 `#数字` 均指任务 ID。“直接开工前置”列出必须已有的实现或证据；“集成与交付条件”说明何时才能验收并交给后续任务。共享接口的并行准备不等于允许越过各 Spec 的硬前置。
 
-## 未完成范围与直接依赖
+## 已结项的远端链路前置
 
-| 任务 ID | 任务名称 | 目标 / 执行 Spec | 直接开工前置 | 集成与交付条件 |
-| --- | --- | --- | --- | --- |
-| 3 | 人工决策与恢复闭环 | `INTERVENTION` · [Spec](../spec/pr-05-intervention.spec.md) · [Plan](../spec/pr-05-intervention.plan.md) · [验证记录](../validation/pr-05-intervention.md) | 实现及 H-A1–H-A16 受测范围已验收；活跃真实 worker 的同句柄新 incarnation 入口注入验证 fail-closed，平台自然发生该现象不作为关闭前置 | 原中心 Task 的真实 Delivery；直接本机 Codex 续跑仍 unsupported，发送回执不能代替答案应用证明 |
-| 4 | Orca 远程协议验证 | `REMOTE-PROTOCOL` · [Spec](../spec/01-orca-remote-protocol.md) · [Plan](../spec/01-orca-remote-protocol.plan.md) · [P13 回执](../validation/spec01-p13-steerlinetest-2026-09-28/README.md) | 当前版本族与目标的 P01–P13 已验收；未受变更影响的探测不重跑 | 原中心 Task 的真实 Delivery；远程取消仍 unsupported，新目标或版本族定向认证 |
-| 6 | 分阶段远程闭环 | `REMOTE-WORKFLOW` · [Spec](../spec/03-remote-execution-and-viewer.md) · [Plan](../spec/03-remote-execution-and-viewer.plan.md) · [验收记录](../validation/spec03-native-dag-2026-09-27.md) · [Task 105 可见时延](../validation/spec03-viewer-task105-2026-09-28/README.md) | 已交付的 `#3` 决策接口与 `#5` 模型、存储和执行接口；`#4` 已实测协议及限制 | 原生任务 103 已在远端五步发布、真实合并、中心结项并解锁 104；当前目标的六项必需受监管能力已有认证。台式机64g 已完成原生五步及固定 gh 发布闭环，允许按 [Spec 03 MVP 边界](../spec/03-remote-execution-and-viewer.md#有人值守-mvp-交付边界) 人工值守使用；新主机受影响故障路径仍为 #6 条件；4 秒步骤转换 viewer 样本已通过；长期无人值守由 #32 验收。远程取消保持不可用。 |
-
-控制台与原生任务关系视图、#3 的决策与恢复实现均已交付代码；#3/#4 的验收证据已收齐，但中心 Task 仍需真实 Delivery。#6 复用单一原生中心权威接入远程执行，按当前目标剩余门槛验收。
+| 原 Task | 完成依据 | 保留边界 |
+| --- | --- | --- |
+| #3 人工决策与恢复 | [H-A1–H-A16 与原中心 Delivery](../validation/phase1-task-closure-2026-09-28/README.md) | 直接本机 Codex 续跑仍 unsupported；发送回执不等于答案应用证明。 |
+| #4 Orca 远程协议 | [P01–P13 与原中心 Delivery](../validation/phase1-task-closure-2026-09-28/README.md) | 远程取消仍 unsupported；新目标或版本族须定向认证。 |
+| #6 分阶段远程闭环 | [最终故障范围](../validation/spec03-final-scope-audit-2026-09-28.md)、[4 秒 viewer 样本](../validation/spec03-viewer-task105-2026-09-28/README.md)与[原 Task PR #110 Delivery](../validation/spec03-task6-closure-2026-09-28/README.md) | 长期无人值守、固定 stable 24 小时及受控提升仍归 #32。 |
 
 ## 跨链路的接口与并行条件
 
 - **#6 与当前执行接口的共享修改**：Service、配置、worker 上下文、Query/Command、Task DTO 和测试夹具存在共同修改面。独立协议样例可并行；涉及共同接口的修改串行集成，后集成方校验接口并运行受影响回归。`#6` 只接 native，不增加既有运行时任务的可变依赖。
-- **#3/#4 与 #6 的交付资源**：#3/#4 的正常 Task Delivery 和 #6 的定向验收共用 Service、SQLite、CLI 构建或 Orca 宿主时串行集成；#6 已测调用路径变更时只重跑受影响项。
+- **#3/#4 与 #6 的交付资源**：三项原中心 Delivery 已完成；后续若共享 Service、SQLite、CLI 构建或 Orca 宿主，仍须串行集成。已测调用路径变更时只重跑受影响项。
 - **#3 的原生验收**：绑定答案应用、同 attempt 恢复、回执丢失、活跃 worker 身份变化拒绝、可执行恢复确认和 SteerlineTest Task 104 精确 turn/final 折叠均有回执，见[验证记录](../validation/pr-05-intervention.md)。早期失败任务保持原历史；95012 的下游 publish unknown 不算 Task Delivery。
 - **#4 与本机工作**：新目标或受影响路径的定向远端探测可与 `#3` 的本机工作并行，探测与适配器集成不能同时占用同一真实远端测试执行资源。本机 `#1` 的精确 turn/phase 及 `#3` 的应用证明验收不代替远端能力证据；远端分页/恢复证据也不代替远端精确会话验证。
-- **#6 复用已交付的原生接入**：远程闭环沿用 `#9` 的中心任务权威、固定执行上下文和恢复接口；远端生产能力仍须按 `#4`/`#6` 的独立门槛验收，不扩大版本、消息大小或取消能力。
+- **#6 复用已交付的原生接入**：远程闭环沿用 `#9` 的中心任务权威、固定执行上下文和恢复接口；当前支持范围已按 `#4`/`#6` 独立门槛结项，不扩大版本、消息大小或取消能力。
 - **接口前置与硬前置**：接口固定后可以准备独立样本、只读展示或测试；需要真实平台、数据库或 UI 的集成验收仍须等待对应前置实现。并行建议不改变各 Spec/Plan 明定的串行交付要求；调整顺序时先修订受影响的 Spec/Plan。
 
 ## 后续仍依赖的已交付基础
@@ -28,9 +26,9 @@
 - [执行控制台与轮次折叠](../spec/pr-04-console.spec.md)及[验收报告](../validation/pr-04c-console.md)：#3 的决策卡片、UI 状态与精确折叠已有受测证据；#6 复用相同的查询与能力展示边界。
 - [双执行后端](../spec/pr-04a-execution-backends.spec.md)与[Windows 验收报告](../validation/pr-04a-execution-backends.md)：`#3` 的本机 Orca 验收和 `#6` 复用固定 ExecutionRef、Operation、能力报告、ReadOutput 及双后端操作边界；会话 phase/turn、资源结算与 Linux 原生验收不在该后端 Spec 的交付范围内。
 - [会话事件](../spec/pr-04b-conversation-events.spec.md)与[本机验收报告](../validation/pr-04b-conversation-events-2026-09-24.md)：`#3`/`#6` 复用统一会话 DTO、完整正文、分页、来源缺口与版本化能力报告；精确 turn/phase/final 仅在报告列明的本机 Codex/Orca 范围内通过。
-- [中心执行模型](../spec/02-execution-model-and-adapter.md)：`#3`/`#6` 复用 WorkflowRun/Execution/StepAttempt、SQLite 单写者、Query/Command、Operation 和 minimal-v1 流程；远端原生闭环已有真机回执，生产启用仍待 `#6` 剩余门槛。
-- [人工决策与恢复](../spec/pr-05-intervention.spec.md)与[验证记录](../validation/pr-05-intervention.md)：#6 复用已验收的 SQLite CommandService、固定答案和应用证明；#3 仍待原中心 Task Delivery。
-- [原生项目接入](../spec/beads-exit.spec.md)与[验收记录](../validation/beads-exit/README.md)：`#6` 沿用固定 worker 上下文，仍按独立远端门槛验收。
+- [中心执行模型](../spec/02-execution-model-and-adapter.md)：`#3`/`#6` 复用 WorkflowRun/Execution/StepAttempt、SQLite 单写者、Query/Command、Operation 和 minimal-v1 流程；当前有人值守远端原生闭环已由 #6 真实交付。
+- [人工决策与恢复](../spec/pr-05-intervention.spec.md)与[原中心结项](../validation/phase1-task-closure-2026-09-28/README.md)：#6 复用已验收的 SQLite CommandService、固定答案和应用证明；#3 已完成原中心 Task Delivery。
+- [原生项目接入](../spec/beads-exit.spec.md)与[验收记录](../validation/beads-exit/README.md)：`#6` 沿用固定 worker 上下文，已按独立远端门槛结项。
 - [统一观察契约](../spec/pr-01-observation.spec.md)：#3 沿用已测选择、游标、来源换代及 raw 读取；未来受影响平台版本按能力重新核验。
 - [服务控制协议](../spec/pr-02-control.spec.md)与[服务窗口生命周期](../spec/pr-03-service-lifecycle.spec.md)：#3 沿用请求/实例身份、回执、连接分类和停止确认；关闭控制台不停服，关闭服务窗口结束服务。Linux detached 原生会话生命周期仍未实测，不属于当前 Windows #3 关闭前置。
 - [真实远端能力报告](../spec/orca-probe/remote-capability-report-2026-09-23.json)与[字段映射](../spec/orca-probe/field-mapping.md)：`#4`/`#6` 复用已实测派发、身份、问答和恢复语义；远端精确会话能力仍须独立验证，不能从本机 `#1` 的验收外推。
@@ -40,7 +38,7 @@ Spec 完成交付后从未完成表移出；仍有消费者时只保留必要交
 
 ## 第一阶段模块重构与交接
 
-本组按[共同约束](../spec/modular-refactoring-constraints.md)划分职责、包依赖和状态所有者。下列任务与依赖均已进入中心 DAG；[创建记录](../validation/modular-refactoring-task-creation/README.md)保存原生命令回执与完整回读。#3/#4 的正常交付与 #6 的目标定向验收可在独立资源推进，共用 Service/SQLite、构建产物或 Orca 宿主的工作串行协调。固定 TaskContract 的 Git 引用不因本图状态更新而改变。
+本组按[共同约束](../spec/modular-refactoring-constraints.md)划分职责、包依赖和状态所有者。下列任务与依赖均已进入中心 DAG；[创建记录](../validation/modular-refactoring-task-creation/README.md)保存原生命令回执与完整回读。#3/#4/#6 的原中心交付已完成；后续共用 Service/SQLite、构建产物或 Orca 宿主的工作仍须串行协调。固定 TaskContract 的 Git 引用不因本图状态更新而改变。
 
 | 任务 ID | 任务名称 | 目标 / 执行 Spec | 直接开工前置 | 集成与交付条件 |
 | --- | --- | --- | --- | --- |

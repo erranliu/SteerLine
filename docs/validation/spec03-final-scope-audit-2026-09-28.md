@@ -12,7 +12,7 @@
 | R06 答案离线与 reply 回执丢失 | [原问题/Attempt 的真机双故障](../spec/orca-probe/samples/spec03-supervised-reply-loss-2026-09-25.json)及[原矩阵](spec03-fault-matrix-2026-09-28.md) | 同一受测协议版本族复用；未知状态仍不得补发。 |
 | R07 步骤完成窗口停服 | [home 各步骤完成窗口](spec03-fault-matrix-2026-09-28.md)；[当前主机三个活跃 worker 停服重接](spec03-current-host-affected-2026-09-28/README.md) | 当前主机样本证实原 Run/Dispatch/Attempt 不重派；#15 虽在 Orca 显示 completed，采样时中心未确认推进，不能算新增离线完成成功。旧完成窗口仍按版本族证据复用。 |
 | R08 网络/runtime/身份变化 | [home runtime 更替及旧绑定拒绝](../spec/orca-probe/samples/spec03-supervised-r08-runtime-replacement-2026-09-26.json)；[当前主机身份不可核实与精确人工结算](spec03-current-host-affected-2026-09-28/README.md) | 当前主机观察为 `identity_changed`/`exactWorker=false`，未自动重派；不声称 Orca 自发产生同句柄新 incarnation。 |
-| R09 无结果、错身份、重复完成 | [原矩阵的受监管结果负向回归](spec03-fault-matrix-2026-09-28.md)；原 #6 当前主机错误 `workflow_run_id` 的 status 被中心拒绝并保留原 unknown Attempt | 负向拒绝真实发生；该失败 Run 不计交付成功。 |
+| R09 无结果、错身份、重复完成 | [原矩阵的受监管结果负向回归](spec03-fault-matrix-2026-09-28.md)；原 #6 当前主机错误 `workflow_run_id` 的 status 被中心拒绝并保留原 unknown Attempt；[PR #107](https://github.com/erranliu/SteerLine/pull/107)收紧 sender/结果身份 | 负向拒绝真实发生；失败 Run 不计交付成功，另由[新 Run](spec03-task6-closure-2026-09-28/README.md)独立完成。 |
 | R10 输出分页与缺口 | [原矩阵](spec03-fault-matrix-2026-09-28.md)及[协议输出真机](../spec/orca-probe/samples/p03-output-2026-09-24.json) | 仅承诺已保留内容可读，缺失显式标记。 |
 | R11 较早 Attempt 消息迟到 | [原矩阵的跨 Attempt 回归](spec03-fault-matrix-2026-09-28.md) | 旧消息归旧身份；不改变当前结果。 |
 | R12 合并/未合并/部分结项 | [Task 105 固定 head 真实合并与原 TaskDelivery](spec03-viewer-task105-2026-09-28/README.md)和[原矩阵负向回归](spec03-fault-matrix-2026-09-28.md) | PR 合并必须由 provider 和固定提交核验。 |
@@ -26,4 +26,4 @@
 
 当前主机可见 viewer：[业务 Decision 2.215 秒上界](spec03-desktop64g-followup-2026-09-28/README.md)、[步骤转换 1.334 秒上界](spec03-viewer-task105-2026-09-28/README.md)，各自满足 4 秒门槛。P01–P13 的当前支持范围与原中心 #3/#4 Delivery 已[另行结项](phase1-task-closure-2026-09-28/README.md)。
 
-本报告在原中心 #6 Task Delivery 完成前只固定**验收范围和证据适用性**；#6 不因本表自动关闭。24 小时固定 stable、长期无人值守矩阵、资源趋势与 dev/stable 提升仍由 #32 验收。远程取消继续 unsupported。
+原中心 #6 已由[五步真实 TaskDelivery](spec03-task6-closure-2026-09-28/README.md)关闭，PR #110 的固定 head 经 verify/review、真实合并和中心事务核验。本表按已测目标与版本族范围结项；表中没有测出的当前主机自然故障或原样本局限仍保持其原意，不改写为额外通过次数。24 小时固定 stable、长期无人值守矩阵、资源趋势与 dev/stable 提升仍由 #32 验收。远程取消继续 unsupported。

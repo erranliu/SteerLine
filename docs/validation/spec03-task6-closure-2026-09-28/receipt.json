@@ -1,0 +1,180 @@
+{
+  "sampled_at": "2026-09-28T12:21:31.297091+00:00",
+  "project_id": "c:\\project\\steerline\\.git",
+  "task": {
+    "task_id": "6",
+    "status": "closed",
+    "version": 5
+  },
+  "delivery": {
+    "workflow_run_id": "ad77df16f40aa035c333227d1a5c05b4",
+    "pr_url": "https://github.com/erranliu/SteerLine/pull/110",
+    "merge_commit": "b738a800cabd5f67040a338c29de22e8bf32d8ab",
+    "merged_at": "2026-09-28T12:18:15Z",
+    "evidence": {
+      "pr_instance": "https://github.com",
+      "url": "https://github.com/erranliu/SteerLine/pull/110",
+      "repository": "erranliu/SteerLine",
+      "number": 110,
+      "base_branch": "main",
+      "state": "merged",
+      "merged": true,
+      "merged_at": "2026-09-28T12:18:15Z",
+      "merge_commit": "b738a800cabd5f67040a338c29de22e8bf32d8ab"
+    }
+  },
+  "workflow": {
+    "phase": "completed",
+    "selected_result_id": "75ba76d6d40e0d4c444e134d31b84af6"
+  },
+  "execution": {
+    "execution_id": "75ba76d6d40e0d4c444e134d31b84af6",
+    "status": "succeeded",
+    "current_step": "completed",
+    "candidate_revision": "9d0e080eef4ffb48f86f0b213e40d019a43fd4b2",
+    "verified_revision": "9d0e080eef4ffb48f86f0b213e40d019a43fd4b2",
+    "reviewed_revision": "9d0e080eef4ffb48f86f0b213e40d019a43fd4b2"
+  },
+  "attempts": [
+    {
+      "step_id": "review",
+      "attempt_id": "1126d799d4b31c4d7f56f94b349e9f08",
+      "status": "succeeded",
+      "result_id": "8edcd0f7696f4b618d39f3c62eae3df8",
+      "revision": "9d0e080eef4ffb48f86f0b213e40d019a43fd4b2",
+      "succeeded": true,
+      "published_head": null,
+      "pr_url": null,
+      "checks": []
+    },
+    {
+      "step_id": "prepare",
+      "attempt_id": "11abc526a1e381adf53d7aadc4c11df2",
+      "status": "succeeded",
+      "result_id": "prepare:11abc526a1e381adf53d7aadc4c11df2",
+      "revision": null,
+      "succeeded": true,
+      "published_head": null,
+      "pr_url": null,
+      "checks": []
+    },
+    {
+      "step_id": "verify",
+      "attempt_id": "271fb12c173ea2e058d915ce08d219e8",
+      "status": "succeeded",
+      "result_id": "cb116e3ef06547468c2959f4ebafe715",
+      "revision": "9d0e080eef4ffb48f86f0b213e40d019a43fd4b2",
+      "succeeded": true,
+      "published_head": null,
+      "pr_url": null,
+      "checks": [
+        {
+          "name": "go_test",
+          "status": "passed",
+          "revision": "9d0e080eef4ffb48f86f0b213e40d019a43fd4b2"
+        },
+        {
+          "name": "go_vet",
+          "status": "passed",
+          "revision": "9d0e080eef4ffb48f86f0b213e40d019a43fd4b2"
+        },
+        {
+          "name": "go_build",
+          "status": "passed",
+          "revision": "9d0e080eef4ffb48f86f0b213e40d019a43fd4b2"
+        }
+      ]
+    },
+    {
+      "step_id": "publish_pr",
+      "attempt_id": "34f8970710176217b73f67352a2a7611",
+      "status": "succeeded",
+      "result_id": "1f37d202fe284818b7feb367bdf94ddc",
+      "revision": "9d0e080eef4ffb48f86f0b213e40d019a43fd4b2",
+      "succeeded": true,
+      "published_head": "9d0e080eef4ffb48f86f0b213e40d019a43fd4b2",
+      "pr_url": "https://github.com/erranliu/SteerLine/pull/110",
+      "checks": []
+    },
+    {
+      "step_id": "implement",
+      "attempt_id": "b4da097f0f0701b70640b32b78336869",
+      "status": "succeeded",
+      "result_id": "implement:b4da097f0f0701b70640b32b78336869",
+      "revision": "9d0e080eef4ffb48f86f0b213e40d019a43fd4b2",
+      "succeeded": true,
+      "published_head": null,
+      "pr_url": null,
+      "checks": [
+        {
+          "name": "gofmt",
+          "status": "passed",
+          "revision": "9d0e080eef4ffb48f86f0b213e40d019a43fd4b2"
+        },
+        {
+          "name": "diff_check",
+          "status": "passed",
+          "revision": "9d0e080eef4ffb48f86f0b213e40d019a43fd4b2"
+        },
+        {
+          "name": "candidate_commit_and_clean_workspace",
+          "status": "passed",
+          "revision": "9d0e080eef4ffb48f86f0b213e40d019a43fd4b2"
+        }
+      ]
+    }
+  ],
+  "prior_rejected_run": {
+    "workflow_run_id": "a4711862227df69c2be90c6ea6357b27",
+    "phase": "abandoned",
+    "rejected_attempt_id": "71ed4f847645ad3c2f06c376e04f7122",
+    "attempt_status": "stopped"
+  },
+  "service": {
+    "status": "running",
+    "ready": true,
+    "pid": 2772
+  },
+  "other_active_dispatches": [
+    {
+      "task_id": "15",
+      "run_id": "9417f8837468c626c3c4555d5ca4b947",
+      "dispatch": "ctx_74e5a111d175",
+      "execution_status": "running"
+    },
+    {
+      "task_id": "14",
+      "run_id": "f59943a649ed4ccdc0f59acb46b38437",
+      "dispatch": "ctx_b4d79263d0ec",
+      "execution_status": "running"
+    },
+    {
+      "task_id": "30",
+      "run_id": "965aa400646f9355d355ef1ef4457f4b",
+      "dispatch": "ctx_f73922c720d0",
+      "execution_status": "running"
+    }
+  ],
+  "graph_revision": 18,
+  "successor_29": {
+    "status": "open",
+    "predecessors": [
+      {
+        "task_id": "28",
+        "delivered": false
+      },
+      {
+        "task_id": "3",
+        "delivered": true
+      },
+      {
+        "task_id": "4",
+        "delivered": true
+      },
+      {
+        "task_id": "6",
+        "delivered": true
+      }
+    ]
+  }
+}
