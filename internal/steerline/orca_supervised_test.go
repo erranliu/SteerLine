@@ -670,15 +670,22 @@ func TestSupervisedResultCannotCompleteAnotherAttempt(t *testing.T) {
 	attempt := StepAttemptRecord{AttemptID: "attempt-current", StepID: "verify"}
 	expected := MinimalStepInput{ProjectIdentity: "repo", TaskID: "business-task", WorkflowRunID: "workflow-current", ExecutionID: "execution-current", AttemptID: attempt.AttemptID, StepID: attempt.StepID}
 	backend := orcaSupervisedBackend{config: Config{Orca: OrcaConfig{Supervised: &SupervisedOrcaConfig{}}}}
-	base := MinimalStepResultEnvelope{SchemaVersion: 1, ProjectIdentity: expected.ProjectIdentity, TaskID: expected.TaskID, WorkflowRunID: expected.WorkflowRunID, ExecutionID: expected.ExecutionID, AttemptID: expected.AttemptID, Result: StepGateResult{StepID: attempt.StepID, ResultID: "result-current"}}
+	base := MinimalStepResultEnvelope{SchemaVersion: 1, ProjectIdentity: expected.ProjectIdentity, TaskID: expected.TaskID, WorkflowRunID: expected.WorkflowRunID, ExecutionID: expected.ExecutionID, AttemptID: expected.AttemptID, Result: StepGateResult{StepID: attempt.StepID, ResultID: attempt.AttemptID}}
 	message := func(sender, task, dispatch string, envelope MinimalStepResultEnvelope) OrcaInboxMessage {
 		return OrcaInboxMessage{Type: "status", FromHandle: sender, Payload: mustJSON(map[string]any{"taskId": task, "dispatchId": dispatch, "remote_codex_version": "codex-cli 0.157.1", "step_result": envelope})}
 	}
 	for _, test := range []struct {
-		name    string
-		message OrcaInboxMessage
-		wantErr bool
+		name      string
+		message   OrcaInboxMessage
+		wantErr   bool
+		wantFound bool
 	}{
+		{name: "exact current Dispatch", message: message("dispatch:dispatch-current", identity.Task, identity.Dispatch, base), wantFound: true},
+		{name: "wrong result ID under current Dispatch", message: func() OrcaInboxMessage {
+			wrong := base
+			wrong.Result.ResultID = "result-other"
+			return message("dispatch:dispatch-current", identity.Task, identity.Dispatch, wrong)
+		}(), wantErr: true},
 		{name: "old Attempt under current Dispatch", message: func() OrcaInboxMessage {
 			old := base
 			old.AttemptID = "attempt-old"
@@ -686,15 +693,16 @@ func TestSupervisedResultCannotCompleteAnotherAttempt(t *testing.T) {
 		}(), wantErr: true},
 		{name: "other Task under current Dispatch", message: message("dispatch:dispatch-current", "task-other", identity.Dispatch, base), wantErr: true},
 		{name: "late old Dispatch", message: message("dispatch:dispatch-old", "task-old", "dispatch-old", base)},
+		{name: "foreign Dispatch spoofing current payload", message: message("dispatch:dispatch-old", identity.Task, identity.Dispatch, base)},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "result.json")
 			found, err := backend.stepResultFromMessages([]OrcaInboxMessage{test.message}, identity, attempt, expected, path)
-			if found || test.wantErr && !isBackendError(err, BackendIdentityMismatch) || !test.wantErr && err != nil {
+			if found != test.wantFound || test.wantErr && !isBackendError(err, BackendIdentityMismatch) || !test.wantErr && err != nil {
 				t.Fatalf("foreign result changed the current Attempt: found=%t error=%v", found, err)
 			}
-			if _, statErr := os.Stat(path); !os.IsNotExist(statErr) {
-				t.Fatalf("foreign result wrote a current Attempt file: %v", statErr)
+			if _, statErr := os.Stat(path); test.wantFound && statErr != nil || !test.wantFound && !os.IsNotExist(statErr) {
+				t.Fatalf("result file did not match the fixed sender gate: %v", statErr)
 			}
 		})
 	}
