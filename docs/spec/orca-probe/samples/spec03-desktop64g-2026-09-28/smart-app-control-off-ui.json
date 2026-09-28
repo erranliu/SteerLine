@@ -1,0 +1,55 @@
+{
+  "id": "cf683242-99df-431f-a0de-7de25ed8501e",
+  "ok": true,
+  "result": {
+    "snapshot": {
+      "id": "c5dc4f65-0b5f-42b3-a5d2-465e648b900e",
+      "app": {
+        "name": "Windows 安全中心",
+        "bundleId": "ApplicationFrameHost",
+        "pid": 20204
+      },
+      "window": {
+        "title": "Windows 安全中心",
+        "id": 919604,
+        "index": null,
+        "x": 40,
+        "y": 32,
+        "width": 1216,
+        "height": 941,
+        "isMinimized": null,
+        "isOffscreen": null,
+        "screenIndex": null
+      },
+      "coordinateSpace": "window",
+      "treeText": "App=ApplicationFrameHost (pid 20204)\nWindow: \"Windows 安全中心\", App: Windows 安全中心.\n\n0 window Windows 安全中心\n\t1 ControlType.Window Windows 安全中心, Secondary Actions: SetValue\n\t\t2 菜单栏 系统\n\t\t\t3 菜单项 系统\n\t\t4 按钮 最小化 Windows 安全中心\n\t\t5 按钮 使 Windows 安全中心 最大化\n\t\t6 按钮 关闭 Windows 安全中心\n\t7 窗口 Windows 安全中心\n\t\t8 文本 Windows 安全中心\n\t\t9 自定义 navView\n\t\t\t10 按钮 返回\n\t\t\t11 按钮 关闭导航\n\t\t\t\t12 文本 PaneTitleTextBlock\n\t\t\t13 窗口 PaneRoot\n\t\t\t\t14 窗格 MenuItemsScrollViewer, Secondary Actions: Scroll\n\t\t\t\t\t15 组 MenuItemsHost\n\t\t\t\t\t\t16 列表项目 主页, Secondary Actions: Select\n\t\t\t\t\t\t\t17 文本 主页\n\t\t\t\t\t\t18 列表项目 病毒和威胁防护, Secondary Actions: Select\n\t\t\t\t\t\t\t19 文本 病毒和威胁防护\n\t\t\t\t\t\t20 列表项目 账户保护, Secondary Actions: Select\n\t\t\t\t\t\t\t21 文本 账户保护\n\t\t\t\t\t\t22 列表项目 防火墙和网络保护, Secondary Actions: Select\n\t\t\t\t\t\t\t23 文本 防火墙和网络保护\n\t\t\t\t\t\t24 列表项目 应用和浏览器控制, Secondary Actions: Select\n\t\t\t\t\t\t\t25 文本 应用和浏览器控制\n\t\t\t\t\t\t26 列表项目 设备安全性, Secondary Actions: Select\n\t\t\t\t\t\t\t27 文本 设备安全性\n\t\t\t\t\t\t28 列表项目 设备性能和运行状况, Secondary Actions: Select\n\t\t\t\t\t\t\t29 文本 设备性能和运行状况\n\t\t\t\t\t\t30 列表项目 家庭选项, Secondary Actions: Select\n\t\t\t\t\t\t\t31 文本 家庭选项\n\t\t\t\t\t\t32 列表项目 保护历史记录, Secondary Actions: Select\n\t\t\t\t\t\t\t33 文本 保护历史记录\n\t\t\t\t34 窗格 FooterItemsScrollViewer, Secondary Actions: Scroll\n\t\t\t\t\t35 组 FooterMenuItemsHost\n\t\t\t\t\t\t36 列表项目 设置, Secondary Actions: Select\n\t\t\t37 窗格 mainWindowScrollView, Secondary Actions: Scroll\n\t\t\t\t38 文本 智能应用控制\n\t\t\t\t39 文本 增强了对不受信任应用的保护。\n\t\t\t\t40 单选按钮 打开, Secondary Actions: Select\n\t\t\t\t\t41 文本 打开\n\t\t\t\t\t42 文本 如果智能应用控制发现恶意或不受信任的应用，会阻止该应用以帮助保护你的设备。\n\t\t\t\t43 单选按钮 评估, Secondary Actions: Select\n\t\t\t\t\t44 文本 评估\n\t\t\t\t\t45 文本 虽然智能应用控制处于评估模式，但它将了解是否可以在不对你造成过多妨碍的情况下帮助保护你。如果是这样，它将自动启用。否则将自动禁用。\n\t\t\t\t46 单选按钮 关闭, Secondary Actions: Select\n\t\t\t\t\t47 文本 关闭\n\t\t\t\t\t48 文本\n\t\t\t\t49 链接 HyperlinkWrapButton\n\t\t\t\t\t50 文本\n\t\t\t\t51 组 了解更多信息\n\t\t\t\t\t52 文本 了解更多信息\n\t\t\t\t\t53 链接 阅读有关智能应用控制的信息\n\t\t\t\t\t\t54 文本 阅读有关智能应用控制的信息\n\t\t\t\t55 组 有什么疑问?\n\t\t\t\t\t56 文本 有什么疑问?\n\t\t\t\t\t57 链接 获取帮助\n\t\t\t\t\t\t58 文本 获取帮助\n\t\t\t\t59 组 谁在保护我?\n\t\t\t\t60 组 帮助改进 Windows 安全中心\n\t\t\t\t\t61 文本 帮助改进 Windows 安全中心\n\t\t\t\t\t62 链接 提供反馈\n\t\t\t\t\t\t63 文本 提供反馈\n\t\t\t\t64 组 更改你的隐私设置\n\t\t\t\t\t65 文本 更改你的隐私设置\n\t\t\t\t\t66 文本 查看和更改 Windows 11 家庭版 中文版 设备的隐私设置。\n\t\t\t\t\t67 链接 隐私设置\n\t\t\t\t\t\t68 文本 隐私设置\n\t\t\t\t\t69 链接 隐私仪表板\n\t\t\t\t\t\t70 文本 隐私仪表板\n\t\t\t\t\t71 链接 隐私声明\n\t\t\t\t\t\t72 文本 隐私声明",
+      "elementCount": 73,
+      "focusedElementId": null,
+      "truncation": {
+        "truncated": false,
+        "maxNodes": 1200,
+        "maxDepth": 64,
+        "maxDepthReached": false
+      }
+    },
+    "screenshot": {
+      "format": "png",
+      "width": 1216,
+      "height": 941,
+      "scale": 1,
+      "path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\orca-computer-use\\cf683242-99df-431f-a0de-7de25ed8501e-screenshot.png",
+      "dataOmitted": true,
+      "expiresAt": "2026-09-29T02:01:34.886Z"
+    },
+    "screenshotStatus": {
+      "state": "captured",
+      "metadata": {
+        "engine": "unknown",
+        "windowId": 919604
+      }
+    }
+  },
+  "_meta": {
+    "runtimeId": "43ecb8ee-86e7-412d-abef-5fc345a1ccc6"
+  }
+}

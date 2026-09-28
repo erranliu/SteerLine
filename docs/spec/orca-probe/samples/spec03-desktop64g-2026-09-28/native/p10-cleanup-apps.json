@@ -1,0 +1,43 @@
+{
+  "id": "4e0635f5-81ce-4bed-9086-3e2c25423583",
+  "ok": true,
+  "result": {
+    "apps": [
+      {
+        "name": "clash-verge",
+        "bundleId": "clash-verge",
+        "pid": 13704,
+        "isRunning": true,
+        "lastUsedAt": null,
+        "useCount": null
+      },
+      {
+        "name": "explorer",
+        "bundleId": "explorer",
+        "pid": 3172,
+        "isRunning": true,
+        "lastUsedAt": null,
+        "useCount": null
+      },
+      {
+        "name": "Orca",
+        "bundleId": "Orca",
+        "pid": 10628,
+        "isRunning": true,
+        "lastUsedAt": null,
+        "useCount": null
+      },
+      {
+        "name": "TextInputHost",
+        "bundleId": "TextInputHost",
+        "pid": 10580,
+        "isRunning": true,
+        "lastUsedAt": null,
+        "useCount": null
+      }
+    ]
+  },
+  "_meta": {
+    "runtimeId": "b77f34d6-2f87-4533-ae03-f5d69555c5dc"
+  }
+}

@@ -1,0 +1,82 @@
+{
+  "id": "2f4fe2a7-3be7-4600-b6e0-c94aea4533d7",
+  "ok": true,
+  "result": {
+    "requestId": "c419beee-b05c-42f6-afcc-662b47444910",
+    "state": "completed",
+    "method": "orchestration.workerStart",
+    "createdAt": "2026-09-28 02:02:35",
+    "updatedAt": "2026-09-28 02:02:48",
+    "receipt": {
+      "runId": "run_608b9655bb4c",
+      "taskId": "task_5757427ce8f1",
+      "dispatchId": "ctx_ec8831dc470b",
+      "state": "ready",
+      "stage": "input_accepted",
+      "server": {
+        "environmentId": "e68f4edf-8a83-42c2-a9da-6d404d3aa3d8",
+        "name": "台式机64g"
+      },
+      "setup": {
+        "requested": "not_applicable",
+        "effective": "not_applicable",
+        "source": "existing_worktree",
+        "hookFound": false,
+        "startupPolicy": "start-immediately",
+        "state": "not_applicable"
+      },
+      "launch": {
+        "requested": {
+          "agent": "codex",
+          "model": "gpt-6-luna",
+          "effort": "high"
+        },
+        "effective": {
+          "agent": "codex",
+          "model": "gpt-6-luna",
+          "effort": "high"
+        }
+      },
+      "timeoutMs": 60000,
+      "effects": [
+        {
+          "kind": "worktree",
+          "action": "reused",
+          "id": "30162573-cc04-416e-bef4-226c418dde1f::C:/Users/Administrator/orca/workspaces/SteerLine/spec03-desktop64g-readonly-20260928"
+        },
+        {
+          "kind": "setup",
+          "action": "not_applicable",
+          "state": "not_applicable"
+        },
+        {
+          "kind": "terminal",
+          "role": "agent",
+          "action": "created",
+          "id": "term_3d9aae81-da39-47bb-a937-efb0aeb6e906"
+        },
+        {
+          "kind": "dispatch_input",
+          "role": "agent",
+          "id": "term_3d9aae81-da39-47bb-a937-efb0aeb6e906",
+          "state": "accepted"
+        }
+      ],
+      "residualResources": [],
+      "mode": {
+        "mode": "terminal",
+        "preferred": "terminal",
+        "reason": "user_default",
+        "detail": "Started a terminal agent worker, the default for new agent tabs in your settings."
+      },
+      "mutation": {
+        "requestId": "c419beee-b05c-42f6-afcc-662b47444910",
+        "replayed": false
+      }
+    },
+    "interpretation": "Request c419beee-b05c-42f6-afcc-662b47444910 already took effect (orchestration.workerStart). Replaying it with --retry-request c419beee-b05c-42f6-afcc-662b47444910 returns the recorded outcome and starts nothing new."
+  },
+  "_meta": {
+    "runtimeId": "baf46a9c-923a-4bf1-b595-b866b5555e2e"
+  }
+}

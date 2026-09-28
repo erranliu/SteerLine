@@ -1,0 +1,57 @@
+{
+  "id": "ca8d5ddb-992c-432a-bc1e-7d29fa440470",
+  "ok": true,
+  "result": {
+    "terminal": {
+      "handle": "term_a4e96e32-9ba7-479d-bb63-a4c04fe385bb",
+      "status": "running",
+      "tail": [
+        "PowerShell 7.6.6",
+        "PS C:\\Users\\Administrator\\orca\\workspaces\\SteerLine\\spec03-desktop64g-readonly-20260928> Get-Process consent -ErrorAction SilentlyContinue | Select-Object Id,ProcessName,StartTime",
+        "PS C:\\Users\\Administrator\\orca\\workspaces\\SteerLine\\spec03-desktop64g-readonly-20260928> Get-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System' | Select-Object EnableLUA,ConsentPromptBehaviorAdmin,PromptOnSecureDesktop",
+        "",
+        "EnableLUA ConsentPromptBehaviorAdmin PromptOnSecureDesktop",
+        "--------- -------------------------- ---------------------",
+        "        0                          5                     1",
+        "",
+        "PS C:\\Users\\Administrator\\orca\\workspaces\\SteerLine\\spec03-desktop64g-readonly-20260928> Get-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System' | Select-Object EnableLUA,FilterAdministratorToken,ConsentPromptBehaviorAdmin,PromptOnSecureDesktop",
+        "",
+        "EnableLUA FilterAdministratorToken ConsentPromptBehaviorAdmin PromptOnSecureDesktop",
+        "--------- ------------------------ -------------------------- ---------------------",
+        "        0                        1                          5                     1",
+        "",
+        "PS C:\\Users\\Administrator\\orca\\workspaces\\SteerLine\\spec03-desktop64g-readonly-20260928> Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System' -Name EnableLUA -Value 1 -Type DWord -ErrorAction Stop",
+        "PS C:\\Users\\Administrator\\orca\\workspaces\\SteerLine\\spec03-desktop64g-readonly-20260928> Get-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System' | Select-Object EnableLUA,FilterAdministratorToken,ConsentPromptBehaviorAdmin,PromptOnSecureDesktop",
+        "",
+        "EnableLUA FilterAdministratorToken ConsentPromptBehaviorAdmin PromptOnSecureDesktop",
+        "--------- ------------------------ -------------------------- ---------------------",
+        "        1                        1                          5                     1",
+        "",
+        "PS C:\\Users\\Administrator\\orca\\workspaces\\SteerLine\\spec03-desktop64g-readonly-20260928>PS C:\\Users\\Administrator\\orca\\workspaces\\SteerLine\\spec03-desktop64g-readonly-20260928>wwhoami /groups | Select-Stringwhoami /groups | Select-Stringwhoami /groups | Select-String 'whoami /groups | Select-String 'Swhoami /groups | Select-String 'S-whoami /groups | Select-String 'S-1whoami /groups | Select-String 'S-1-whoami /groups | Select-String 'S-1-1whoami /groups | Select-String 'S-1-16whoami /groups | Select-String 'S-1-16-whoami /groups | Select-String 'S-1-16-'",
+        "",
+        "Mandatory Label\\Medium Mandatory Level Label            S-1-16-8192",
+        "",
+        "",
+        "PS C:\\Users\\Administrator\\orca\\workspaces\\SteerLine\\spec03-desktop64g-readonly-20260928>GGet-Process consent -ErrorAction SilentlyContinue | Select-Object IdGet-Process consent -ErrorAction SilentlyContinue | Select-Object Id,Get-Process consent -ErrorAction SilentlyContinue | Select-Object Id,SGet-Process consent -ErrorAction SilentlyContinue | Select-Object Id,StGet-Process consent -ErrorAction SilentlyContinue | Select-Object Id,StaGet-Process consent -ErrorAction SilentlyContinue | Select-Object Id,StarGet-Process consent -ErrorAction SilentlyContinue | Select-Object Id,StartGet-Process consent -ErrorAction SilentlyContinue | Select-Object Id,StartTGet-Process consent -ErrorAction SilentlyContinue | Select-Object Id,StartTiGet-Process consent -ErrorAction SilentlyContinue | Select-Object Id,StartTimGet-Process consent -ErrorAction SilentlyContinue | Select-Object Id,StartTime",
+        "PS C:\\Users\\Administrator\\orca\\workspaces\\SteerLine\\spec03-desktop64g-readonly-20260928>GGet-Process consent -ErrorAction SilentlyContinue | Select-Object IdGet-Process consent -ErrorAction SilentlyContinue | Select-Object Id,Get-Process consent -ErrorAction SilentlyContinue | Select-Object Id,SGet-Process consent -ErrorAction SilentlyContinue | Select-Object Id,StGet-Process consent -ErrorAction SilentlyContinue | Select-Object Id,StaGet-Process consent -ErrorAction SilentlyContinue | Select-Object Id,StarGet-Process consent -ErrorAction SilentlyContinue | Select-Object Id,StartGet-Process consent -ErrorAction SilentlyContinue | Select-Object Id,StartTGet-Process consent -ErrorAction SilentlyContinue | Select-Object Id,StartTiGet-Process consent -ErrorAction SilentlyContinue | Select-Object Id,StartTimGet-Process consent -ErrorAction SilentlyContinue | Select-Object Id,StartTime",
+        "",
+        "  Id StartTime",
+        "  -- ---------",
+        "7768",
+        "",
+        "",
+        "PS C:\\Users\\Administrator\\orca\\workspaces\\SteerLine\\spec03-desktop64g-readonly-20260928>"
+      ],
+      "truncated": false,
+      "limited": false,
+      "oldestCursor": "0",
+      "nextCursor": "34",
+      "latestCursor": "34",
+      "returnedLineCount": 35,
+      "source": "stream"
+    }
+  },
+  "_meta": {
+    "runtimeId": "b77f34d6-2f87-4533-ae03-f5d69555c5dc"
+  }
+}

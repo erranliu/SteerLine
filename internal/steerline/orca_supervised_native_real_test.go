@@ -179,6 +179,20 @@ func TestSupervisedOrcaRealNativeTaskLifecycle(t *testing.T) {
 			t.Fatal(err)
 		}
 		acceptanceRoot = filepath.Join(acceptanceRoot, "..", "..", "docs", "spec", "orca-probe", "samples")
+		if currentTargetEvidence := strings.TrimSpace(os.Getenv("STEERLINE_REAL_SUPERVISED_NATIVE_CAPABILITY_SAMPLES")); currentTargetEvidence != "" {
+			acceptanceRoot = currentTargetEvidence
+			if err := verifySupervisedReadOnlyCapabilitySample(acceptanceRoot, c.Orca.Supervised.EnvironmentID, c.Orca.Supervised.RepositorySelector); err != nil {
+				t.Fatalf("current supervised target bootstrap evidence: %v", err)
+			}
+			evidenceSources = map[string][]string{
+				"start":                {"post-sac/start.json"},
+				"observe":              {"post-sac/final-worker.json", "post-sac/final-fleet.json"},
+				"workspace_inspection": {"remote-setup.json", "post-sac/output.json"},
+				"output_reading":       {"post-sac/output.json"},
+				"message_inbox":        {"post-sac/status-delivery.json", "post-sac/done-delivery.json", "post-sac/final-task.json"},
+				"resource_settlement":  {"post-sac/release.json", "post-sac/final-terminals.json"},
+			}
+		}
 		manifest := map[string]any{"kind": "isolated-native-task-test-capabilities", "captured_at": now(), "capabilities": map[string]any{}}
 		manifestCaps := map[string]any{}
 		for name, files := range evidenceSources {
@@ -463,22 +477,20 @@ func TestSupervisedOrcaRealNativeTaskLifecycle(t *testing.T) {
 					t.Fatalf("read observed remote Codex CLI version: %v", versionErr)
 				}
 				capabilityEvidence := ""
-				if dagMode {
-					if capabilityPath := os.Getenv("STEERLINE_REAL_SUPERVISED_NATIVE_CAPABILITY_EVIDENCE_PATH"); capabilityPath != "" {
-						serviceCancel()
-						select {
-						case <-serviceDone:
-						case <-time.After(20 * time.Second):
-							t.Fatal("native center did not stop before capability certification")
-						}
-						if err = service.Close(); err != nil {
-							t.Fatal(err)
-						}
-						serviceStopped = true
-						capabilityEvidence, err = certifyCurrentNativeSupervisedRun(ctx, c, snapshot, executionID, events, capabilityPath)
-						if err != nil {
-							t.Fatalf("certify current supervised target: %v", err)
-						}
+				if capabilityPath := os.Getenv("STEERLINE_REAL_SUPERVISED_NATIVE_CAPABILITY_EVIDENCE_PATH"); capabilityPath != "" {
+					serviceCancel()
+					select {
+					case <-serviceDone:
+					case <-time.After(20 * time.Second):
+						t.Fatal("native center did not stop before capability certification")
+					}
+					if err = service.Close(); err != nil {
+						t.Fatal(err)
+					}
+					serviceStopped = true
+					capabilityEvidence, err = certifyCurrentNativeSupervisedRun(ctx, c, snapshot, executionID, events, capabilityPath)
+					if err != nil {
+						t.Fatalf("certify current supervised target: %v", err)
 					}
 				}
 				evidence := map[string]any{"captured_at": now(), "project_id": c.Identity(), "native_task_id": taskID, "task_status": page.Tasks[0].Status, "delivery": page.Tasks[0].Delivery, "test_pr_url": mergedURL, "candidate_head": mergedHead, "base_commit": base, "remote_codex_cli_version": remoteCodexVersion, "configured_codex_cli_version_pin": c.Orca.Supervised.ExpectedCodexVersion, "capability_report_confined_to_temp_state": c.RunDir}
@@ -510,6 +522,206 @@ func TestSupervisedOrcaRealNativeTaskLifecycle(t *testing.T) {
 		time.Sleep(250 * time.Millisecond)
 	}
 	t.Fatal(errors.New("native task did not complete remote publish, merge and delivery before timeout"))
+}
+
+// verifySupervisedReadOnlyCapabilitySample binds the opt-in bootstrap receipt
+// set to one current remote host, Task and Dispatch before it can certify the
+// native canary's isolated state. The previous host's receipts are not reused.
+func verifySupervisedReadOnlyCapabilitySample(root, environmentID, repositorySelector string) error {
+	read := func(name string, target any) error {
+		data, err := os.ReadFile(filepath.Join(root, name))
+		if err != nil {
+			return err
+		}
+		var envelope struct {
+			OK     bool            `json:"ok"`
+			Result json.RawMessage `json:"result"`
+		}
+		if err := json.Unmarshal(data, &envelope); err != nil {
+			return err
+		}
+		if !envelope.OK {
+			return fmt.Errorf("%s is not a successful Orca receipt", name)
+		}
+		return json.Unmarshal(envelope.Result, target)
+	}
+	var startReceipt struct {
+		State  string `json:"state"`
+		Stage  string `json:"stage"`
+		RunID  string `json:"runId"`
+		TaskID string `json:"taskId"`
+		ID     string `json:"dispatchId"`
+		Server struct {
+			EnvironmentID string `json:"environmentId"`
+		} `json:"server"`
+	}
+	var startEnvelope struct {
+		State   string          `json:"state"`
+		Method  string          `json:"method"`
+		Receipt json.RawMessage `json:"receipt"`
+	}
+	if err := read("post-sac/start.json", &startEnvelope); err != nil {
+		return err
+	}
+	if err := json.Unmarshal(startEnvelope.Receipt, &startReceipt); err != nil {
+		return err
+	}
+	if startEnvelope.State != "completed" || startEnvelope.Method != "orchestration.workerStart" || startReceipt.State != "ready" || startReceipt.Stage != "input_accepted" || startReceipt.Server.EnvironmentID != environmentID || startReceipt.RunID == "" || startReceipt.TaskID == "" || startReceipt.ID == "" {
+		return errors.New("bootstrap start receipt lacks the fixed remote Run, Task or Dispatch")
+	}
+	var worker struct {
+		Dispatch struct {
+			ID     string `json:"id"`
+			RunID  string `json:"runId"`
+			TaskID string `json:"taskId"`
+			Status string `json:"status"`
+		} `json:"dispatch"`
+		Worker struct {
+			State      string `json:"state"`
+			Stage      string `json:"stage"`
+			WorktreeID string `json:"worktreeId"`
+		} `json:"worker"`
+		Projection struct {
+			Liveness struct {
+				Verdict string `json:"verdict"`
+			} `json:"liveness"`
+		} `json:"projection"`
+	}
+	if err := read("post-sac/final-worker.json", &worker); err != nil {
+		return err
+	}
+	if worker.Dispatch.ID != startReceipt.ID || worker.Dispatch.RunID != startReceipt.RunID || worker.Dispatch.TaskID != startReceipt.TaskID || worker.Dispatch.Status != "completed" || worker.Worker.State != "succeeded" || worker.Worker.Stage != "released" || worker.Projection.Liveness.Verdict != "exited" || !strings.HasPrefix(worker.Worker.WorktreeID, strings.TrimPrefix(repositorySelector, "id:")+"::") {
+		return errors.New("bootstrap final worker does not match the successful original Dispatch")
+	}
+	var setup struct {
+		Setups []struct {
+			RepoID string `json:"repoId"`
+		} `json:"setups"`
+	}
+	if err := read("remote-setup.json", &setup); err != nil {
+		return err
+	}
+	if len(setup.Setups) != 1 || setup.Setups[0].RepoID != strings.TrimPrefix(repositorySelector, "id:") {
+		return errors.New("bootstrap remote project setup differs from the configured repository")
+	}
+	checkMessage := func(name, kind string) (string, error) {
+		var delivery struct {
+			State   string `json:"state"`
+			Method  string `json:"method"`
+			Receipt struct {
+				RunID      string `json:"runId"`
+				DeliveryID string `json:"deliveryId"`
+				Messages   []struct {
+					Type       string `json:"type"`
+					FromHandle string `json:"from_handle"`
+					Payload    string `json:"payload"`
+				} `json:"messages"`
+			} `json:"receipt"`
+		}
+		if err := read(name, &delivery); err != nil {
+			return "", err
+		}
+		if delivery.State != "completed" || delivery.Receipt.RunID != startReceipt.RunID || delivery.Receipt.DeliveryID == "" || len(delivery.Receipt.Messages) != 1 || delivery.Receipt.Messages[0].Type != kind || delivery.Receipt.Messages[0].FromHandle != "dispatch:"+startReceipt.ID {
+			return "", fmt.Errorf("%s does not contain one exact %s Delivery", name, kind)
+		}
+		var payload struct {
+			TaskID     string `json:"taskId"`
+			DispatchID string `json:"dispatchId"`
+			Outcome    string `json:"outcome"`
+		}
+		if err := json.Unmarshal([]byte(delivery.Receipt.Messages[0].Payload), &payload); err != nil {
+			return "", err
+		}
+		if payload.TaskID != startReceipt.TaskID || payload.DispatchID != startReceipt.ID || kind == "worker_done" && payload.Outcome != "succeeded" {
+			return "", fmt.Errorf("%s payload does not bind the original Task and Dispatch", name)
+		}
+		return delivery.Receipt.DeliveryID, nil
+	}
+	statusDeliveryID, err := checkMessage("post-sac/status-delivery.json", "status")
+	if err != nil {
+		return err
+	}
+	doneDeliveryID, err := checkMessage("post-sac/done-delivery.json", "worker_done")
+	if err != nil {
+		return err
+	}
+	for name, deliveryID := range map[string]string{"post-sac/status-ack.json": statusDeliveryID, "post-sac/done-ack.json": doneDeliveryID} {
+		var ack struct {
+			State   string `json:"state"`
+			Receipt struct {
+				RunID        string `json:"runId"`
+				Acknowledged string `json:"acknowledged"`
+			} `json:"receipt"`
+		}
+		if err := read(name, &ack); err != nil {
+			return err
+		}
+		if ack.State != "completed" || ack.Receipt.RunID != startReceipt.RunID || ack.Receipt.Acknowledged != deliveryID {
+			return fmt.Errorf("%s does not confirm the original Run Delivery", name)
+		}
+	}
+	var task struct {
+		RunID string `json:"runId"`
+		Tasks []struct {
+			ID     string `json:"id"`
+			Status string `json:"status"`
+		} `json:"tasks"`
+	}
+	if err := read("post-sac/final-task.json", &task); err != nil {
+		return err
+	}
+	if task.RunID != startReceipt.RunID || len(task.Tasks) != 1 || task.Tasks[0].ID != startReceipt.TaskID || task.Tasks[0].Status != "completed" {
+		return errors.New("bootstrap Task did not complete under the original Run")
+	}
+	var release struct {
+		State   string `json:"state"`
+		Method  string `json:"method"`
+		Receipt struct {
+			DispatchID string `json:"dispatchId"`
+			State      string `json:"state"`
+			Archive    struct {
+				Status string `json:"status"`
+			} `json:"archive"`
+		} `json:"receipt"`
+	}
+	if err := read("post-sac/release.json", &release); err != nil {
+		return err
+	}
+	if release.State != "completed" || release.Receipt.DispatchID != startReceipt.ID || release.Receipt.State != "released" || release.Receipt.Archive.Status != "captured" {
+		return errors.New("bootstrap original Dispatch was not released with archived output")
+	}
+	var output struct {
+		DispatchID string `json:"dispatchId"`
+		Source     string `json:"source"`
+		Exact      bool   `json:"sourceExact"`
+		Archived   bool   `json:"archived"`
+		Transcript struct {
+			ReturnedMessageCount int `json:"returnedMessageCount"`
+		} `json:"transcript"`
+	}
+	if err := read("post-sac/output.json", &output); err != nil {
+		return err
+	}
+	if output.DispatchID != startReceipt.ID || output.Source != "transcript" || !output.Exact || !output.Archived || output.Transcript.ReturnedMessageCount == 0 {
+		return errors.New("bootstrap output lacks exact archived transcript evidence")
+	}
+	var terminals struct {
+		Total int `json:"totalCount"`
+	}
+	if err := read("post-sac/final-terminals.json", &terminals); err != nil {
+		return err
+	}
+	if terminals.Total != 0 {
+		return errors.New("bootstrap worktree still has a live terminal")
+	}
+	return nil
+}
+
+func TestDesktop64gSupervisedCapabilityReceiptsBindOneDispatch(t *testing.T) {
+	root := filepath.Join("..", "..", "docs", "spec", "orca-probe", "samples", "spec03-desktop64g-2026-09-28")
+	if err := verifySupervisedReadOnlyCapabilitySample(root, "e68f4edf-8a83-42c2-a9da-6d404d3aa3d8", "id:30162573-cc04-416e-bef4-226c418dde1f"); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func nativeTaskExecutionID(snapshot DomainSnapshot, taskID string) string {

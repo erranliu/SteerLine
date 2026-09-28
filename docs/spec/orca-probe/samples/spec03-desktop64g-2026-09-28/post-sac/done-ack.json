@@ -1,0 +1,29 @@
+{
+  "id": "e3d034ff-7bfb-4381-835a-c17ae1bdcee5",
+  "ok": true,
+  "result": {
+    "requestId": "2e25740e-ba58-4065-809d-2e22f97475ee",
+    "state": "completed",
+    "method": "orchestration.check",
+    "createdAt": "2026-09-28 02:04:15",
+    "updatedAt": "2026-09-28 02:04:15",
+    "receipt": {
+      "runId": "run_608b9655bb4c",
+      "deliveryId": null,
+      "messages": [],
+      "count": 0,
+      "acknowledged": "delivery_1f5c15454b73",
+      "timedOut": false,
+      "cancelled": false,
+      "connectionLost": false,
+      "mutation": {
+        "requestId": "2e25740e-ba58-4065-809d-2e22f97475ee",
+        "replayed": false
+      }
+    },
+    "interpretation": "Request 2e25740e-ba58-4065-809d-2e22f97475ee already took effect (orchestration.check). Replaying it with --retry-request 2e25740e-ba58-4065-809d-2e22f97475ee returns the recorded outcome and starts nothing new."
+  },
+  "_meta": {
+    "runtimeId": "baf46a9c-923a-4bf1-b595-b866b5555e2e"
+  }
+}

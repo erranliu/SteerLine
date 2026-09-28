@@ -1,0 +1,26 @@
+{
+  "id": "e797d322-9a47-4fc6-ac42-0861c435f254",
+  "ok": true,
+  "result": {
+    "terminal": {
+      "handle": "term_c823380c-7449-4421-941c-17b0e6933342",
+      "status": "running",
+      "tail": [
+        "PowerShell 7.6.6",
+        "PS C:\\Users\\Administrator\\orca\\workspaces\\SteerLine\\spec03-desktop64g-readonly-20260928>Stop-Process -Id 8572 -Force -ErrorAction StopStart-Process -FilePath 'C:\\Program Files\\Git\\git-bash.exe' -Verb RunAs -PassThruStart-Process -FilePath 'C:\\Program Files\\Git\\git-bash.exe' -Verb RunAs -PassThruStart-Process -FilePath 'C:\\Program Files\\Git\\git-bash.exe' -Verb RunAs -PassThruStart-Process -FilePath 'C:\\Program Files\\Git\\git-bash.exe' -Verb RunAs -PassThruStart-Process -FilePath 'C:\\Program Files\\Git\\git-bash.exe' -Verb RunAs -PassThruStart-Process -FilePath 'C:\\Program Files\\Git\\git-bash.exe' -Verb RunAs -PassThruStart-Process -FilePath 'C:\\Program Files\\Git\\git-bash.exe' -Verb RunAs -PassThruStart-Process -FilePath 'C:\\Program Files\\Git\\git-bash.exe' -Verb RunAs -PassThruStart-Process -FilePath 'C:\\Program Files\\Git\\git-bash.exe' -Verb RunAs -PassThruStart-Process -FilePath 'C:\\Program Files\\Git\\git-bash.exe' -Verb RunAs -PassThruStart-Process -FilePath 'C:\\Program Files\\Git\\git-bash.exe' -Verb RunAs -PassThru",
+        "Start-Process: 由于以下错误，无法运行此命令: An error occurred trying to start process 'C:\\Program Files\\Git\\git-bash.exe' with working directory 'C:\\Users\\Administrator\\orca\\workspaces\\SteerLine\\spec03-desktop64g-readonly-20260928'. 操作已被用户取消。",
+        "PS C:\\Users\\Administrator\\orca\\workspaces\\SteerLine\\spec03-desktop64g-readonly-20260928>"
+      ],
+      "truncated": false,
+      "limited": false,
+      "oldestCursor": "0",
+      "nextCursor": "3",
+      "latestCursor": "3",
+      "returnedLineCount": 4,
+      "source": "stream"
+    }
+  },
+  "_meta": {
+    "runtimeId": "b77f34d6-2f87-4533-ae03-f5d69555c5dc"
+  }
+}

@@ -1,0 +1,73 @@
+{
+  "version": 1,
+  "backend": "orca",
+  "protocol": "orca_supervised",
+  "agent": {
+    "name": "codex"
+  },
+  "target": {
+    "id": "orca-supervised:832501c0-57ad-4432-b9a7-6d931662b05e",
+    "connection_id": "832501c0-57ad-4432-b9a7-6d931662b05e",
+    "external_runtime": "e68f4edf-8a83-42c2-a9da-6d404d3aa3d8"
+  },
+  "checked_at": "2026-09-28T02:48:44.3789846Z",
+  "center_version": "1.4.209",
+  "platform_version": "1.4.215",
+  "capabilities": [
+    {
+      "name": "start",
+      "status": "verified",
+      "evidence": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\s3desktop64g28b\\steerline-home\\state\\native-project-fe1255b8317b\\execution\\v1\\evidence\\2fa05f56b325d9cb9f41e7ea1ebbe97ed9d431c64278b5b57793e3df3d713552.json#sha256=2fa05f56b325d9cb9f41e7ea1ebbe97ed9d431c64278b5b57793e3df3d713552"
+    },
+    {
+      "name": "observe",
+      "status": "verified",
+      "evidence": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\s3desktop64g28b\\steerline-home\\state\\native-project-fe1255b8317b\\execution\\v1\\evidence\\2fa05f56b325d9cb9f41e7ea1ebbe97ed9d431c64278b5b57793e3df3d713552.json#sha256=2fa05f56b325d9cb9f41e7ea1ebbe97ed9d431c64278b5b57793e3df3d713552"
+    },
+    {
+      "name": "stop",
+      "status": "unsupported"
+    },
+    {
+      "name": "detach_observation",
+      "status": "not_tested"
+    },
+    {
+      "name": "operation_reconciliation",
+      "status": "not_tested"
+    },
+    {
+      "name": "workspace_inspection",
+      "status": "verified",
+      "evidence": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\s3desktop64g28b\\steerline-home\\state\\native-project-fe1255b8317b\\execution\\v1\\evidence\\2fa05f56b325d9cb9f41e7ea1ebbe97ed9d431c64278b5b57793e3df3d713552.json#sha256=2fa05f56b325d9cb9f41e7ea1ebbe97ed9d431c64278b5b57793e3df3d713552"
+    },
+    {
+      "name": "output_reading",
+      "status": "verified",
+      "evidence": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\s3desktop64g28b\\steerline-home\\state\\native-project-fe1255b8317b\\execution\\v1\\evidence\\2fa05f56b325d9cb9f41e7ea1ebbe97ed9d431c64278b5b57793e3df3d713552.json#sha256=2fa05f56b325d9cb9f41e7ea1ebbe97ed9d431c64278b5b57793e3df3d713552"
+    },
+    {
+      "name": "output_turns",
+      "status": "not_tested"
+    },
+    {
+      "name": "output_final_answer",
+      "status": "not_tested"
+    },
+    {
+      "name": "resource_settlement",
+      "status": "verified",
+      "evidence": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\s3desktop64g28b\\steerline-home\\state\\native-project-fe1255b8317b\\execution\\v1\\evidence\\2fa05f56b325d9cb9f41e7ea1ebbe97ed9d431c64278b5b57793e3df3d713552.json#sha256=2fa05f56b325d9cb9f41e7ea1ebbe97ed9d431c64278b5b57793e3df3d713552"
+    },
+    {
+      "name": "message_inbox",
+      "status": "verified",
+      "evidence": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\s3desktop64g28b\\steerline-home\\state\\native-project-fe1255b8317b\\execution\\v1\\evidence\\2fa05f56b325d9cb9f41e7ea1ebbe97ed9d431c64278b5b57793e3df3d713552.json#sha256=2fa05f56b325d9cb9f41e7ea1ebbe97ed9d431c64278b5b57793e3df3d713552"
+    },
+    {
+      "name": "remote_cancellation",
+      "status": "unsupported",
+      "evidence": "Spec 03 fixes remote_cancel_available=false"
+    }
+  ]
+}

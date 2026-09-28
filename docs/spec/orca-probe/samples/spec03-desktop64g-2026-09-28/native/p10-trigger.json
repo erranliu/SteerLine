@@ -1,0 +1,25 @@
+{
+  "id": "45b01c4f-09c2-431c-b64e-0d5cf7d16f71",
+  "ok": true,
+  "result": {
+    "terminal": {
+      "handle": "term_7fec1dfa-7766-4208-9273-d1fe51acbb74",
+      "status": "running",
+      "tail": [
+        "PowerShell 7.6.6",
+        "PS C:\\Users\\Administrator\\orca\\workspaces\\SteerLine\\spec03-desktop64g-readonly-20260928>Start-Process 'windowsdefender:'Start-Process notepad.exe -Verb RStart-Process notepad.exe -Verb RuStart-Process notepad.exe -Verb RunStart-Process notepad.exe -Verb RunAStart-Process notepad.exe -Verb RunAsStart-Process notepad.exe -Verb RunAsStart-Process notepad.exe -Verb RunAs -Start-Process notepad.exe -Verb RunAs -WStart-Process notepad.exe -Verb RunAs -WaStart-Process notepad.exe -Verb RunAs -WaiStart-Process notepad.exe -Verb RunAs -Wait",
+        "PS C:\\Users\\Administrator\\orca\\workspaces\\SteerLine\\spec03-desktop64g-readonly-20260928>"
+      ],
+      "truncated": false,
+      "limited": false,
+      "oldestCursor": "0",
+      "nextCursor": "2",
+      "latestCursor": "2",
+      "returnedLineCount": 3,
+      "source": "stream"
+    }
+  },
+  "_meta": {
+    "runtimeId": "43ecb8ee-86e7-412d-abef-5fc345a1ccc6"
+  }
+}
