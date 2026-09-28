@@ -13,3 +13,5 @@
 本次检查发现 [版本交付方案](../roadmap/phase-1-delivery.md)仍写着台式机64g 因 Smart App Control 未完成回传/结算，以及当前 UAC 提示尚未捕获；两条均已被 2026-09-28 的原始回执超越，现已按实际结果更新。当前代码的 `AdvanceMinimalExecution` 通过 `validateChecks` 和 `validateSupervisedChecks` 核对必需检查、脚本退出与固定提交；`internal/steerline/remoteprotocol` 的独立纯校验器并不是此状态转换的调用入口。新增回归让缺少整条必需检查回执的 verify 结果进入实际状态转换函数，确认不推进；已有同一测试覆盖缺 evidence reference、错误 actual commit 和非零退出冒充通过。该自动回归不能替代 #4 上述真机负向试次。
 
 验证：`go test ./internal/steerline -run '^TestMinimalWorkflowRevisionGatesAndRepairLimit$' -count=1 -timeout 3m` 通过；`go test ./... -count=1 -timeout=45m -p 1 -parallel 1` 全部通过，核心包 477.151 秒；`go vet ./...`、Windows `go build ./...`、Linux/amd64 `go build ./...`、变更文档相对链接检查与 `git diff --check` 均通过。此处未宣称 #3/#4/#6 或第一阶段整体完成。
+
+H-A16 只读预检：当前 Codex CLI 为 0.157.1。本机 Orca 1.4.209 可用，但 `orca search --index-status --json` 返回 `enabled=false`。将原 4B 独立真实会话绑定传给 `TestCodexHistoryNativeAcceptance` 重新读取时，`local` 子项通过；旧 `orca` 子项返回 `workflow has no persisted run for its execution profile`，整次命令退出 1。这只说明该旧 Orca 会话当前不可复读，不推翻当时保存的[原生验收回执](pr-04b-public-history-acceptance-2026-09-25.json)，也不能作为 H-A16 的新 TTY 折叠证明。下一次须从新的隔离任务绑定当前可读的原生会话。
