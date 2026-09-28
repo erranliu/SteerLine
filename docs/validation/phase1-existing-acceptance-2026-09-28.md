@@ -45,4 +45,4 @@
 | P12 | 通过；[当前目标原生五步同工作树、逐步新 Dispatch](spec03-desktop64g-followup-2026-09-28/README.md)。 |
 | P13 | 通过；[真实正向和非零退出负向](../spec/orca-probe/remaining-gates.md)，以及[SteerlineTest 两项中心入口单字段负向注入](spec01-p13-steerlinetest-2026-09-28/README.md)。 |
 
-中心 #4 的本次原生 verify Attempt 目前仍为 `outcome_unknown`；原 Dispatch 已被精确 abandon，原绑定 terminal 后续由人工关闭并观察到退出。结项命令在中心完成这条 unknown 的代码核验对账前必须拒绝关闭 #4。#3 的失败 Run 也保留为真实历史，不把既有 PR 冒充为新候选。
+结项前，中心 #4 的本次原生 verify Attempt 为 `outcome_unknown`；原 Dispatch 已被精确 abandon，原绑定 terminal 后续由人工关闭并观察到退出。结项命令在中心完成这条 unknown 的代码核验对账前必须拒绝关闭 #4。该对账与 #3/#4 最终 Delivery 已完成，见[原中心回执](phase1-task-closure-2026-09-28/README.md)。两个失败 Run 均保留为真实历史，不把既有 PR 冒充为新候选。

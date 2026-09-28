@@ -1,5 +1,7 @@
 # PR 5 Spec：人工决策与恢复闭环
 
+2026-09-28 结项：原中心 #3 已按[既有合并 PR 与证据核验](../validation/phase1-task-closure-2026-09-28/README.md)写入 TaskDelivery 并关闭。下文“仍须正常 Delivery”保留为成文时门槛，不表示当前仍开放；原失败 Run 继续保留。
+
 2026-09-28 后续：[SteerlineTest 原生 Task 104](../validation/pr05-ha16-steerlinetest-2026-09-28/README.md)已以真实本机 Codex 公共历史和可见 TTY 完成 H-A16 精确 turn/final 折叠、展开、再折叠及最终正文导航；下文较早“仍开放”字样保留当时状态。
 
 验收收口：H-A6 要求中心对观察到的同句柄新 incarnation 拒绝冒认、保留原 Attempt/占槽，并在同库重启后不重派；[活跃真实 Orca worker 的入口单字段故障注入](../validation/pr-05-h6-incarnation-2026-09-28.json)已验证该行为。Orca 平台本身自然产生同句柄换代的现场不作为 #3 关闭前置；当前版本没有可重复触发该现象的受支持操作。以后若平台实际出现此现象或更改相关观察字段，应在受影响版本上定向回归，未核实前保持 fail-closed。H-A1–H-A16 的既有自动化与真机回执按已测范围复用，#3 仍须经原中心任务的正常 Delivery 关闭，不能直接改状态。
