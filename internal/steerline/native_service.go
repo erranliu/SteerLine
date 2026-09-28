@@ -136,8 +136,18 @@ func (s *Service) refreshNativeSnapshot(ctx context.Context, reconstruct bool) e
 				return nativeErr("inconsistent_delivery", "closed native task has no delivery evidence")
 			}
 			delivery := page.Tasks[0].Delivery
-			run.PR.URL = ptr(delivery.PRURL)
-			run.PR.State, run.PR.MergedAt, run.PR.MergeCommit = "merged", ptr(delivery.MergedAt), ptr(delivery.MergeCommit)
+			var proof TaskDeliveryEvidence
+			if err := json.Unmarshal(delivery.Evidence, &proof); err != nil {
+				return nativeErr("inconsistent_delivery", "closed native task has unreadable delivery evidence")
+			}
+			if proof.ExistingAcceptance == nil {
+				run.PR.URL = ptr(delivery.PRURL)
+				run.PR.State, run.PR.MergedAt, run.PR.MergeCommit = "merged", ptr(delivery.MergedAt), ptr(delivery.MergeCommit)
+			} else {
+				// The merged implementation predates this Run. Keep its failed,
+				// unpublished candidate history distinct from TaskDelivery.
+				run.PR = PRState{State: "unknown"}
+			}
 		}
 	}
 	s.State.SchemaVersion = CurrentRuntimeSchema
@@ -224,6 +234,12 @@ func latestNativeExecutionAttempt(attempts []StepAttemptRecord, executionID stri
 }
 
 func nativeRuntimeExecutionStatus(task TaskRecord, workflow WorkflowRunRecord, execution ExecutionRecord, attempt *StepAttemptRecord) string {
+	if task.Status == "closed" && workflow.Phase == "blocked" {
+		if execution.Status == "failed" || execution.Status == "stopped" {
+			return "failed"
+		}
+		return "unknown"
+	}
 	if task.Status == "closed" {
 		return "succeeded"
 	}
@@ -633,6 +649,8 @@ func nativeExecutionIDForAttempt(attempts []StepAttemptRecord, attemptID string)
 
 func nativeRuntimeFinishStatus(task TaskRecord, workflow WorkflowRunRecord) string {
 	switch {
+	case task.Status == "closed" && workflow.Phase == "blocked":
+		return "blocked"
 	case task.Status == "closed" || workflow.Phase == "completed":
 		return "completed"
 	case workflow.Phase == "waiting_pr_merge":

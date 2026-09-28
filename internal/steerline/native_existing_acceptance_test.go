@@ -122,6 +122,17 @@ func TestExistingAcceptanceClosesOnlySettledOriginalTask(t *testing.T) {
 			t.Fatalf("historical run altered: %+v", recorded)
 		}
 	}
+	projection, _, err := store.LoadProjection(ctx, c.Identity())
+	require(t, err)
+	var restored Runtime
+	require(t, json.Unmarshal(projection, &restored))
+	service := &Service{Config: c, domainStore: store, State: restored}
+	require(t, service.refreshNativeSnapshot(ctx, false))
+	if service.State.Runs[0].FinishTaskStatus != "blocked" || service.State.Runs[0].ExecutionStatus != "failed" || service.State.Runs[0].PR.URL != nil {
+		t.Fatalf("existing acceptance was projected as a successful candidate: %+v", service.State.Runs[0])
+	}
+	_, err = store.SaveRuntime(ctx, service.State)
+	require(t, err)
 }
 
 func TestExistingAcceptanceUnknownRequiresExactStoppedRemoteIdentity(t *testing.T) {
