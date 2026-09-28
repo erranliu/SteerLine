@@ -443,7 +443,7 @@ func runConsoleCommand(args []string) error {
 
 func runNativeTaskCommand(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: steerline task <validate|create|discard|reopen|graph|export|show|list> -config config.json")
+		return fmt.Errorf("usage: steerline task <validate|create|accept-existing|discard|reopen|graph|export|show|list> -config config.json")
 	}
 	subcommand := args[0]
 	fs := flag.NewFlagSet("task "+subcommand, flag.ContinueOnError)
@@ -467,7 +467,7 @@ func runNativeTaskCommand(args []string) error {
 	expectedGraphRevision := fs.Uint64("expected-graph-revision", 0, "sampled native graph revision")
 	reason := fs.String("reason", "", "reason for discarding or reopening the task")
 	by := fs.String("by", "", "task command requester")
-	if subcommand != "show" && subcommand != "list" && subcommand != "validate" && subcommand != "create" && subcommand != "discard" && subcommand != "reopen" && subcommand != "add-predecessors" && subcommand != "graph" && subcommand != "export" {
+	if subcommand != "show" && subcommand != "list" && subcommand != "validate" && subcommand != "create" && subcommand != "accept-existing" && subcommand != "discard" && subcommand != "reopen" && subcommand != "add-predecessors" && subcommand != "graph" && subcommand != "export" {
 		return fmt.Errorf("unsupported task command %q", subcommand)
 	}
 	if err := fs.Parse(args[1:]); err != nil {
@@ -478,6 +478,7 @@ func runNativeTaskCommand(args []string) error {
 		"list":             {"config": true, "cursor": true, "limit": true},
 		"validate":         {"config": true, "file": true},
 		"create":           {"config": true, "file": true, "request-id": true, "expected-authority-version": true, "by": true},
+		"accept-existing":  {"config": true, "file": true},
 		"discard":          {"config": true, "task-id": true, "request-id": true, "expected-version": true, "reason": true, "by": true},
 		"reopen":           {"config": true, "task-id": true, "run-id": true, "request-id": true, "expected-version": true, "confirm-process-stopped": true, "reason": true, "by": true},
 		"add-predecessors": {"config": true, "task-id": true, "predecessors": true, "run-id": true, "request-id": true, "expected-version": true, "expected-graph-revision": true, "confirm-process-stopped": true, "reason": true, "by": true},
@@ -541,6 +542,10 @@ func runNativeTaskCommand(args []string) error {
 		if *taskID != "" || *cursor != "" {
 			return errors.New("task create does not accept -task-id or -cursor")
 		}
+	case "accept-existing":
+		if *file == "" || *taskID != "" || *cursor != "" || *requestID != "" || *expectedAuthority != 0 || *expectedVersion != 0 || *runID != "" || *by != "" {
+			return errors.New("task accept-existing accepts only -config and -file; identity and operator are fixed in the manifest")
+		}
 	case "discard":
 		if *taskID == "" || *requestID == "" || *expectedVersion == 0 || strings.TrimSpace(*reason) == "" {
 			return errors.New("task discard requires -task-id, -request-id, -expected-version and -reason")
@@ -601,7 +606,7 @@ func runNativeTaskCommand(args []string) error {
 	if err != nil {
 		return err
 	}
-	if subcommand == "create" || subcommand == "discard" || subcommand == "reopen" || subcommand == "add-predecessors" {
+	if subcommand == "create" || subcommand == "accept-existing" || subcommand == "discard" || subcommand == "reopen" || subcommand == "add-predecessors" {
 		if err = store.Close(); err != nil {
 			return err
 		}
@@ -647,6 +652,21 @@ func runNativeTaskCommand(args []string) error {
 		receipt, createErr := (steerline.CommandService{Store: store, Project: c.Identity()}).CreateTaskBatch(context.Background(), c, payload, *requestID, *expectedAuthority, *by)
 		if createErr != nil {
 			return createErr
+		}
+		return json.NewEncoder(os.Stdout).Encode(receipt)
+	case "accept-existing":
+		payload, readErr := os.ReadFile(*file)
+		if readErr != nil {
+			return readErr
+		}
+		input, parseErr := steerline.DecodeExistingAcceptanceInput(payload)
+		if parseErr != nil {
+			return parseErr
+		}
+		verifier := &steerline.PRClient{Config: c.PR, Runner: steerline.Runner{Dir: c.Repository, Timeout: 30 * time.Second}}
+		receipt, completeErr := (steerline.CommandService{Store: store, Project: c.Identity()}).CompleteExistingAcceptance(context.Background(), c, input, verifier)
+		if completeErr != nil {
+			return completeErr
 		}
 		return json.NewEncoder(os.Stdout).Encode(receipt)
 	case "discard":

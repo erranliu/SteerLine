@@ -1,6 +1,6 @@
 # 第一阶段版本交付方案
 
-本文描述第一阶段的产品交付目标与实施顺序。#26–#32 已有独立 Spec/Plan 和中心 DAG，入口见[主 roadmap](roadmap.md)与[执行依赖图](execution-map.md)。#3/#4 的当前范围验收已有证据，中心 Task 尚未交付；#6 保留目标定向门槛。本文不代替各任务执行 Spec，也不改变固定 TaskContract。
+本文描述第一阶段的产品交付目标与实施顺序。#26–#32 已有独立 Spec/Plan 和中心 DAG，入口见[主 roadmap](roadmap.md)与[执行依赖图](execution-map.md)。#3/#4 的当前范围验收已有证据，原实现 PR 早于中心 Task 创建，采用[既有合并 PR 与证据核验](../validation/phase1-existing-acceptance-2026-09-28.md)写入原 TaskDelivery；#4 的 unknown 须先精确对账。#6 保留目标定向门槛。本文不代替各任务执行 Spec，也不改变固定 TaskContract。
 
 有人值守的远程执行 MVP 可按 [Spec 03](../spec/03-remote-execution-and-viewer.md#有人值守-mvp-交付边界) 先行交付；本文描述包含多候选和双入口的后续完整阶段，不能反向阻塞该最小交付。
 
@@ -30,7 +30,7 @@
 
 ## 优先顺序及第二阶段并行边界
 
-`#3/#4` 的正常 Task Delivery 与 `#6` 的当前目标剩余验收继续在固定版本和隔离资源上收尾。重构线 #33 与版本线 #30 可各自推进，#26 按下述结构重构顺序实施；涉及 Service、Query/Command、SQLite、控制台或同一真实 Orca 宿主的修改/验收串行集成。#29 等待 #3/#4/#6 真实交付；#32 汇合 #29 和 #31，不把平台替身或长期运行时长当作任务合并证明。
+`#3/#4` 的既有合并证据核验后 Task Delivery 与 `#6` 的当前目标剩余验收继续在固定版本和隔离资源上收尾。重构线 #33 与版本线 #30 可各自推进，#26 按下述结构重构顺序实施；涉及 Service、Query/Command、SQLite、控制台或同一真实 Orca 宿主的修改/验收串行集成。#29 等待 #3/#4/#6 真实交付；#32 汇合 #29 和 #31，不把平台替身或长期运行时长当作任务合并证明。
 
 结构重构由三个独立任务交付：#33 提取 workflow 纯规则，#34 封装显式执行上下文与 Service 职责，以 #34 → #26 作为多候选开发前置；#27 完成后 #35 封装中心命令/查询及 SQLite，作为 #28/#16 已追加的前置。具体职责、包依赖与验收见[模块重构共同约束](../spec/modular-refactoring-constraints.md)及独立 Spec/Plan。三项任务及全部新增依赖已由中心回读确认，证据见[创建记录](../validation/modular-refactoring-task-creation/README.md)。
 

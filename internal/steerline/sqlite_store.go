@@ -298,7 +298,9 @@ func validateNativeTaskStructure(ctx context.Context, tx *sql.Tx) error {
 	if err != nil {
 		return err
 	}
-	err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM task_deliveries d JOIN project_task_authorities p ON p.project_identity=d.project_identity AND p.authority='native' JOIN tasks t ON t.project_identity=d.project_identity AND t.task_id=d.task_id WHERE t.status<>'closed' OR NOT EXISTS (SELECT 1 FROM workflow_runs w JOIN executions e ON e.project_identity=w.project_identity AND e.workflow_run_id=w.workflow_run_id WHERE w.project_identity=d.project_identity AND w.workflow_run_id=d.selected_workflow_run_id AND w.task_id=d.task_id AND w.phase='completed' AND e.execution_id=json_extract(w.payload,'$.selected_result_id') AND e.status='succeeded' AND e.current_step='completed')`).Scan(&invalidDeliveries)
+	err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM task_deliveries d JOIN project_task_authorities p ON p.project_identity=d.project_identity AND p.authority='native' JOIN tasks t ON t.project_identity=d.project_identity AND t.task_id=d.task_id WHERE t.status<>'closed' OR
+		(json_type(d.evidence,'$.existing_acceptance') IS NULL AND NOT EXISTS (SELECT 1 FROM workflow_runs w JOIN executions e ON e.project_identity=w.project_identity AND e.workflow_run_id=w.workflow_run_id WHERE w.project_identity=d.project_identity AND w.workflow_run_id=d.selected_workflow_run_id AND w.task_id=d.task_id AND w.phase='completed' AND e.execution_id=json_extract(w.payload,'$.selected_result_id') AND e.status='succeeded' AND e.current_step='completed')) OR
+		(json_type(d.evidence,'$.existing_acceptance') IS NOT NULL AND (json_type(d.evidence,'$.existing_acceptance')<>'object' OR NOT EXISTS (SELECT 1 FROM workflow_runs w JOIN executions e ON e.project_identity=w.project_identity AND e.workflow_run_id=w.workflow_run_id WHERE w.project_identity=d.project_identity AND w.workflow_run_id=d.selected_workflow_run_id AND w.task_id=d.task_id AND w.phase='blocked' AND e.status='failed' AND json_extract(e.payload,'$.process') IS NULL)))`).Scan(&invalidDeliveries)
 	if err != nil {
 		return err
 	}
@@ -517,15 +519,52 @@ func (t *sqliteTx) PutTaskDelivery(v TaskDeliveryRecord) error {
 	if err := json.Unmarshal(runPayload, &run); err != nil {
 		return err
 	}
-	if run.Phase != "waiting_pr_merge" || run.SelectedResult == "" {
-		return nativeErr("stale_version", "delivery requires the selected workflow run awaiting PR merge")
-	}
-	var selected int
-	if err := t.tx.QueryRowContext(t.ctx, `SELECT COUNT(*) FROM executions WHERE project_identity=? AND workflow_run_id=? AND execution_id=? AND status='succeeded' AND current_step='waiting_pr_merge'`, v.ProjectIdentity, v.SelectedWorkflowRunID, run.SelectedResult).Scan(&selected); err != nil {
+	var evidence TaskDeliveryEvidence
+	if err := json.Unmarshal(v.Evidence, &evidence); err != nil {
 		return err
 	}
-	if selected != 1 {
-		return nativeErr("contract_mismatch", "delivery has no selected successful execution")
+	if evidence.ExistingAcceptance == nil {
+		if run.Phase != "waiting_pr_merge" || run.SelectedResult == "" {
+			return nativeErr("stale_version", "delivery requires the selected workflow run awaiting PR merge")
+		}
+		var selected int
+		if err := t.tx.QueryRowContext(t.ctx, `SELECT COUNT(*) FROM executions WHERE project_identity=? AND workflow_run_id=? AND execution_id=? AND status='succeeded' AND current_step='waiting_pr_merge'`, v.ProjectIdentity, v.SelectedWorkflowRunID, run.SelectedResult).Scan(&selected); err != nil {
+			return err
+		}
+		if selected != 1 {
+			return nativeErr("contract_mismatch", "delivery has no selected successful execution")
+		}
+	} else {
+		graph, err := taskGraphSnapshotTx(t.ctx, t, v.ProjectIdentity)
+		if err != nil {
+			return err
+		}
+		task, ok := graph.ByID[v.TaskID]
+		if !ok {
+			return nativeErr("task_not_found", "existing acceptance task disappeared")
+		}
+		contract, err := nativeContractForTaskTx(t.ctx, t, v.ProjectIdentity, task)
+		if err != nil {
+			return err
+		}
+		if _, err = existingAcceptanceGatePrefix(v.TaskID, contract); err != nil || evidence.ExistingAcceptance.ContractDigest != contract.Digest {
+			return nativeErr("contract_mismatch", "existing acceptance differs from the fixed Task contract")
+		}
+		var projection []byte
+		if err = t.tx.QueryRowContext(t.ctx, `SELECT payload FROM projection WHERE project_identity=?`, v.ProjectIdentity).Scan(&projection); err != nil {
+			return err
+		}
+		var runtimeState Runtime
+		if err = json.Unmarshal(projection, &runtimeState); err != nil {
+			return err
+		}
+		snapshot, err := querySnapshot(t.ctx, t.tx, v.ProjectIdentity)
+		if err != nil {
+			return err
+		}
+		if _, _, _, err = existingAcceptanceRunState(snapshot, runtimeState, v.TaskID, v.SelectedWorkflowRunID); err != nil {
+			return err
+		}
 	}
 	_, err = t.tx.ExecContext(t.ctx, `INSERT INTO task_deliveries(project_identity,task_id,selected_workflow_run_id,pr_instance,pr_repository,pr_number,pr_url,merge_commit,merged_at,recorded_at,evidence) VALUES(?,?,?,?,?,?,?,?,?,?,?)`, v.ProjectIdentity, v.TaskID, v.SelectedWorkflowRunID, v.PRInstance, v.PRRepository, v.PRNumber, v.PRURL, v.MergeCommit, v.MergedAt.UTC().Format(time.RFC3339Nano), v.RecordedAt.UTC().Format(time.RFC3339Nano), []byte(v.Evidence))
 	return err
@@ -544,6 +583,9 @@ func validateNativeTaskDelivery(v TaskDeliveryRecord, targetBranch string) error
 	}
 	if !evidence.Merged || evidence.State != "merged" || evidence.PRInstance != v.PRInstance || evidence.URL != v.PRURL || evidence.Repository != v.PRRepository || evidence.PRNumber != v.PRNumber || evidence.MergeCommit != v.MergeCommit || !evidence.MergedAt.Equal(v.MergedAt) || evidence.BaseBranch != targetBranch {
 		return nativeErr("inconsistent_delivery", "native task delivery PR evidence differs from its fixed identity")
+	}
+	if err := validateExistingAcceptanceProof(evidence); err != nil {
+		return err
 	}
 	return nil
 }
@@ -704,9 +746,19 @@ func (t *sqliteTx) UpdateNativeTaskCAS(v TaskRecord, expectedVersion uint64) err
 func (t *sqliteTx) completeNativeDeliveryWorkflow(project, taskID string) error {
 	var runID string
 	var runPayload []byte
-	err := t.tx.QueryRowContext(t.ctx, `SELECT d.selected_workflow_run_id,w.payload FROM task_deliveries d JOIN workflow_runs w ON w.project_identity=d.project_identity AND w.workflow_run_id=d.selected_workflow_run_id AND w.task_id=d.task_id WHERE d.project_identity=? AND d.task_id=?`, project, taskID).Scan(&runID, &runPayload)
+	var deliveryEvidence []byte
+	err := t.tx.QueryRowContext(t.ctx, `SELECT d.selected_workflow_run_id,w.payload,d.evidence FROM task_deliveries d JOIN workflow_runs w ON w.project_identity=d.project_identity AND w.workflow_run_id=d.selected_workflow_run_id AND w.task_id=d.task_id WHERE d.project_identity=? AND d.task_id=?`, project, taskID).Scan(&runID, &runPayload, &deliveryEvidence)
 	if err != nil {
 		return nativeErr("contract_mismatch", "task cannot close without its authoritative selected delivery")
+	}
+	var proof TaskDeliveryEvidence
+	if err = json.Unmarshal(deliveryEvidence, &proof); err != nil {
+		return nativeErr("inconsistent_delivery", "task delivery evidence is unreadable")
+	}
+	if proof.ExistingAcceptance != nil {
+		// This delivery accepts implementation merged before the Task existed.
+		// Preserve the blocked workflow and failed execution as historical facts.
+		return nil
 	}
 	var run WorkflowRunRecord
 	if err = json.Unmarshal(runPayload, &run); err != nil {

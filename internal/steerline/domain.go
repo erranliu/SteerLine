@@ -105,15 +105,38 @@ type TaskDeliveryRecord struct {
 }
 
 type TaskDeliveryEvidence struct {
-	PRInstance  string    `json:"pr_instance"`
-	URL         string    `json:"url"`
-	Repository  string    `json:"repository"`
-	PRNumber    int64     `json:"number"`
-	BaseBranch  string    `json:"base_branch"`
-	State       string    `json:"state"`
-	Merged      bool      `json:"merged"`
-	MergedAt    time.Time `json:"merged_at"`
-	MergeCommit string    `json:"merge_commit"`
+	PRInstance         string                      `json:"pr_instance"`
+	URL                string                      `json:"url"`
+	Repository         string                      `json:"repository"`
+	PRNumber           int64                       `json:"number"`
+	BaseBranch         string                      `json:"base_branch"`
+	State              string                      `json:"state"`
+	Merged             bool                        `json:"merged"`
+	MergedAt           time.Time                   `json:"merged_at"`
+	MergeCommit        string                      `json:"merge_commit"`
+	ExistingAcceptance *ExistingAcceptanceEvidence `json:"existing_acceptance,omitempty"`
+}
+
+// ExistingAcceptanceEvidence records a deliberately accepted task whose code
+// PR was merged before the native Task was created. The blocked worker history
+// remains intact; this is a separate, explicit delivery gate in the same
+// TaskDelivery authority.
+type ExistingAcceptanceEvidence struct {
+	RequestID      string                  `json:"request_id"`
+	RequestedBy    string                  `json:"requested_by"`
+	InputDigest    string                  `json:"input_digest"`
+	ContractDigest string                  `json:"contract_digest"`
+	GateIDs        []string                `json:"gate_ids"`
+	EvidenceRef    FileReference           `json:"evidence_ref"`
+	MergedPRs      []ExistingMergedPRProof `json:"merged_prs"`
+	StoppedUnknown *ExistingStoppedUnknown `json:"stopped_unknown,omitempty"`
+}
+
+type ExistingMergedPRProof struct {
+	URL          string    `json:"url"`
+	HeadRevision string    `json:"head_revision"`
+	MergeCommit  string    `json:"merge_commit"`
+	MergedAt     time.Time `json:"merged_at"`
 }
 
 type WorkflowDefinition struct {
