@@ -16,7 +16,7 @@ import (
 
 func serviceConsoleWindow() uint64 { return 0 }
 
-func ServiceWindowContext(context.Context) (context.Context, context.CancelFunc, error) {
+func ServiceWindowContext(context.Context, string) (context.Context, context.CancelFunc, error) {
 	return nil, nil, errors.New("service-window requires Windows")
 }
 
