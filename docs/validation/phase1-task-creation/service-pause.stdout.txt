@@ -1,0 +1,2 @@
+request_id 0aff84b3b0601a9b041f36aa1e8feff6
+{"version":1,"request_id":"0aff84b3b0601a9b041f36aa1e8feff6","request_digest":"9fe3119082a6a7c739a6a508fb35d574f64c41db6b20c322bbb7a301fdedc5f1","instance_id":"451f964c35f9f3e5e01f35a35ea95c6a","action":"pause_dispatch","status":"applied","code":"applied","message":"control action applied","requested_by":"Codex: user requested Phase 1 task creation and DAG","submitted_at":"2026-09-28T03:29:38.6992715Z","accepted_at":"2026-09-28T03:29:38.7923444Z","completed_at":"2026-09-28T03:29:38.8432829Z","control_revision":4}

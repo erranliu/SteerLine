@@ -1,0 +1,14 @@
+{
+  "authority_version": 4,
+  "graph_revision": 6,
+  "dispatch_mode": "manual",
+  "dispatch_paused": false,
+  "service": {
+    "instance_id": "0137d4ae5b1bea067891e9e11019a334",
+    "pid": 28632,
+    "status": "running",
+    "ready": true
+  },
+  "active_runs": [],
+  "original_dispatch_state_restored": true
+}

@@ -1,0 +1,1009 @@
+{
+  "authority": {
+    "project_identity": "c:\\project\\steerline\\.git",
+    "authority": "native",
+    "authority_version": 2,
+    "graph_revision": 3,
+    "repository": "https://github.com/erranliu/SteerLine.git",
+    "remote": "origin",
+    "branch": "main",
+    "dispatch_mode": "manual",
+    "dispatch_paused": 0,
+    "created_at": "2026-09-26T11:45:30.4526903Z",
+    "updated_at": "2026-09-28T02:10:27.1290414Z"
+  },
+  "tasks": [
+    {
+      "task_id": "3",
+      "status": "open",
+      "version": 1,
+      "payload": {
+        "project_identity": "c:\\project\\steerline\\.git",
+        "task_id": "3",
+        "batch_id": "7806a3bc67c4955c785d66a93b099143",
+        "title": "人工决策与恢复闭环",
+        "type": "task",
+        "priority": 2,
+        "goal_ids": [
+          "INTERVENTION"
+        ],
+        "contract_id": "steerline-roadmap-3-49ac56e45454",
+        "source": "native",
+        "status": "open",
+        "version": 1,
+        "created_at": "2026-09-26T11:46:51.8662248Z",
+        "updated_at": "2026-09-26T11:46:51.8662248Z"
+      }
+    },
+    {
+      "task_id": "4",
+      "status": "open",
+      "version": 1,
+      "payload": {
+        "project_identity": "c:\\project\\steerline\\.git",
+        "task_id": "4",
+        "batch_id": "7806a3bc67c4955c785d66a93b099143",
+        "title": "Orca 远程协议验证",
+        "type": "task",
+        "priority": 2,
+        "goal_ids": [
+          "REMOTE-PROTOCOL"
+        ],
+        "contract_id": "steerline-roadmap-4-49ac56e45454",
+        "source": "native",
+        "status": "open",
+        "version": 1,
+        "created_at": "2026-09-26T11:46:51.8662248Z",
+        "updated_at": "2026-09-26T11:46:51.8662248Z"
+      }
+    },
+    {
+      "task_id": "6",
+      "status": "open",
+      "version": 1,
+      "payload": {
+        "project_identity": "c:\\project\\steerline\\.git",
+        "task_id": "6",
+        "batch_id": "7806a3bc67c4955c785d66a93b099143",
+        "title": "分阶段远程闭环",
+        "type": "task",
+        "priority": 2,
+        "goal_ids": [
+          "REMOTE-WORKFLOW"
+        ],
+        "contract_id": "steerline-roadmap-6-49ac56e45454",
+        "source": "native",
+        "status": "open",
+        "version": 1,
+        "created_at": "2026-09-26T11:46:51.8662248Z",
+        "updated_at": "2026-09-26T11:46:51.8662248Z"
+      }
+    },
+    {
+      "task_id": "14",
+      "status": "open",
+      "version": 3,
+      "payload": {
+        "project_identity": "c:\\project\\steerline\\.git",
+        "task_id": "14",
+        "batch_id": "24df9e6c3acdb83621ed94306e085df8",
+        "title": "Codex 规划主 agent 能力验证",
+        "type": "task",
+        "priority": 2,
+        "goal_ids": [
+          "PHASE2"
+        ],
+        "contract_id": "phase2-14-12626a9de970",
+        "source": "native",
+        "status": "open",
+        "version": 3,
+        "created_at": "2026-09-27T13:17:08.1681487Z",
+        "updated_at": "2026-09-28T02:10:27.128509Z"
+      }
+    },
+    {
+      "task_id": "15",
+      "status": "open",
+      "version": 1,
+      "payload": {
+        "project_identity": "c:\\project\\steerline\\.git",
+        "task_id": "15",
+        "batch_id": "24df9e6c3acdb83621ed94306e085df8",
+        "title": "WinUI 基座与原生输入",
+        "type": "task",
+        "priority": 2,
+        "goal_ids": [
+          "PHASE2"
+        ],
+        "contract_id": "phase2-15-12626a9de970",
+        "source": "native",
+        "status": "open",
+        "version": 1,
+        "created_at": "2026-09-27T13:17:08.1681487Z",
+        "updated_at": "2026-09-27T13:17:08.1681487Z"
+      }
+    },
+    {
+      "task_id": "16",
+      "status": "open",
+      "version": 1,
+      "payload": {
+        "project_identity": "c:\\project\\steerline\\.git",
+        "task_id": "16",
+        "batch_id": "24df9e6c3acdb83621ed94306e085df8",
+        "title": "本机客户端协议与历史查询",
+        "type": "task",
+        "priority": 2,
+        "goal_ids": [
+          "PHASE2"
+        ],
+        "contract_id": "phase2-16-12626a9de970",
+        "source": "native",
+        "status": "open",
+        "version": 1,
+        "created_at": "2026-09-27T13:17:08.1681487Z",
+        "updated_at": "2026-09-27T13:17:08.1681487Z"
+      }
+    },
+    {
+      "task_id": "17",
+      "status": "open",
+      "version": 1,
+      "payload": {
+        "project_identity": "c:\\project\\steerline\\.git",
+        "task_id": "17",
+        "batch_id": "24df9e6c3acdb83621ed94306e085df8",
+        "title": "规划提案与受控草稿",
+        "type": "task",
+        "priority": 2,
+        "goal_ids": [
+          "PHASE2"
+        ],
+        "contract_id": "phase2-17-12626a9de970",
+        "source": "native",
+        "status": "open",
+        "version": 1,
+        "created_at": "2026-09-27T13:17:08.1681487Z",
+        "updated_at": "2026-09-27T13:17:08.1681487Z"
+      }
+    },
+    {
+      "task_id": "18",
+      "status": "open",
+      "version": 1,
+      "payload": {
+        "project_identity": "c:\\project\\steerline\\.git",
+        "task_id": "18",
+        "batch_id": "24df9e6c3acdb83621ed94306e085df8",
+        "title": "Codex 规划会话服务",
+        "type": "task",
+        "priority": 2,
+        "goal_ids": [
+          "PHASE2"
+        ],
+        "contract_id": "phase2-18-12626a9de970",
+        "source": "native",
+        "status": "open",
+        "version": 1,
+        "created_at": "2026-09-27T13:17:08.1681487Z",
+        "updated_at": "2026-09-27T13:17:08.1681487Z"
+      }
+    },
+    {
+      "task_id": "19",
+      "status": "open",
+      "version": 1,
+      "payload": {
+        "project_identity": "c:\\project\\steerline\\.git",
+        "task_id": "19",
+        "batch_id": "24df9e6c3acdb83621ed94306e085df8",
+        "title": "正式文档发布与任务创建",
+        "type": "task",
+        "priority": 2,
+        "goal_ids": [
+          "PHASE2"
+        ],
+        "contract_id": "phase2-19-12626a9de970",
+        "source": "native",
+        "status": "open",
+        "version": 1,
+        "created_at": "2026-09-27T13:17:08.1681487Z",
+        "updated_at": "2026-09-27T13:17:08.1681487Z"
+      }
+    },
+    {
+      "task_id": "20",
+      "status": "open",
+      "version": 1,
+      "payload": {
+        "project_identity": "c:\\project\\steerline\\.git",
+        "task_id": "20",
+        "batch_id": "24df9e6c3acdb83621ed94306e085df8",
+        "title": "Roadmap 与 DAG 原生浏览",
+        "type": "task",
+        "priority": 2,
+        "goal_ids": [
+          "PHASE2"
+        ],
+        "contract_id": "phase2-20-12626a9de970",
+        "source": "native",
+        "status": "open",
+        "version": 1,
+        "created_at": "2026-09-27T13:17:08.1681487Z",
+        "updated_at": "2026-09-27T13:17:08.1681487Z"
+      }
+    },
+    {
+      "task_id": "21",
+      "status": "open",
+      "version": 1,
+      "payload": {
+        "project_identity": "c:\\project\\steerline\\.git",
+        "task_id": "21",
+        "batch_id": "24df9e6c3acdb83621ed94306e085df8",
+        "title": "执行与待处理原生界面",
+        "type": "task",
+        "priority": 2,
+        "goal_ids": [
+          "PHASE2"
+        ],
+        "contract_id": "phase2-21-12626a9de970",
+        "source": "native",
+        "status": "open",
+        "version": 1,
+        "created_at": "2026-09-27T13:17:08.1681487Z",
+        "updated_at": "2026-09-27T13:17:08.1681487Z"
+      }
+    },
+    {
+      "task_id": "22",
+      "status": "open",
+      "version": 1,
+      "payload": {
+        "project_identity": "c:\\project\\steerline\\.git",
+        "task_id": "22",
+        "batch_id": "24df9e6c3acdb83621ed94306e085df8",
+        "title": "规划对话原生界面",
+        "type": "task",
+        "priority": 2,
+        "goal_ids": [
+          "PHASE2"
+        ],
+        "contract_id": "phase2-22-12626a9de970",
+        "source": "native",
+        "status": "open",
+        "version": 1,
+        "created_at": "2026-09-27T13:17:08.1681487Z",
+        "updated_at": "2026-09-27T13:17:08.1681487Z"
+      }
+    },
+    {
+      "task_id": "23",
+      "status": "open",
+      "version": 1,
+      "payload": {
+        "project_identity": "c:\\project\\steerline\\.git",
+        "task_id": "23",
+        "batch_id": "24df9e6c3acdb83621ed94306e085df8",
+        "title": "文档审阅与确认原生界面",
+        "type": "task",
+        "priority": 2,
+        "goal_ids": [
+          "PHASE2"
+        ],
+        "contract_id": "phase2-23-12626a9de970",
+        "source": "native",
+        "status": "open",
+        "version": 1,
+        "created_at": "2026-09-27T13:17:08.1681487Z",
+        "updated_at": "2026-09-27T13:17:08.1681487Z"
+      }
+    },
+    {
+      "task_id": "24",
+      "status": "open",
+      "version": 1,
+      "payload": {
+        "project_identity": "c:\\project\\steerline\\.git",
+        "task_id": "24",
+        "batch_id": "24df9e6c3acdb83621ed94306e085df8",
+        "title": "第二阶段完整闭环验收",
+        "type": "task",
+        "priority": 2,
+        "goal_ids": [
+          "PHASE2"
+        ],
+        "contract_id": "phase2-24-12626a9de970",
+        "source": "native",
+        "status": "open",
+        "version": 1,
+        "created_at": "2026-09-27T13:17:08.1681487Z",
+        "updated_at": "2026-09-27T13:17:08.1681487Z"
+      }
+    }
+  ],
+  "contracts": [
+    {
+      "task_id": "3",
+      "contract_id": "steerline-roadmap-3-49ac56e45454",
+      "digest": "e476fa7a58dc81aca222aa6e1150fc49dbff648abc5dd30d77320541524685c5",
+      "payload": {
+        "contract_id": "steerline-roadmap-3-49ac56e45454",
+        "repository": "https://github.com/erranliu/SteerLine.git",
+        "remote": "origin",
+        "branch": "main",
+        "spec_ref": {
+          "path": "docs/spec/pr-05-intervention.spec.md",
+          "commit": "49ac56e45454b5b4aa9a36aadba4c45f8a46c9c3",
+          "sha256": "1f3e2249a6c1f1bc7a377715322f276cae0aab31f74f0f904be153312497eddd"
+        },
+        "plan_ref": {
+          "path": "docs/spec/pr-05-intervention.plan.md",
+          "commit": "49ac56e45454b5b4aa9a36aadba4c45f8a46c9c3",
+          "sha256": "620e1610670b9182fdbf9f696c2ce8ad5ef6b4c4f3f2ef45c07df18364cede3b"
+        },
+        "common_refs": null,
+        "acceptance_refs": [
+          {
+            "path": "docs/spec/pr-05-intervention.spec.md",
+            "commit": "49ac56e45454b5b4aa9a36aadba4c45f8a46c9c3",
+            "sha256": "1f3e2249a6c1f1bc7a377715322f276cae0aab31f74f0f904be153312497eddd"
+          }
+        ],
+        "digest": "e476fa7a58dc81aca222aa6e1150fc49dbff648abc5dd30d77320541524685c5"
+      }
+    },
+    {
+      "task_id": "4",
+      "contract_id": "steerline-roadmap-4-49ac56e45454",
+      "digest": "6361675129765a99fb7d40e51ce3382450545da019192f41a5f6655c46bb085b",
+      "payload": {
+        "contract_id": "steerline-roadmap-4-49ac56e45454",
+        "repository": "https://github.com/erranliu/SteerLine.git",
+        "remote": "origin",
+        "branch": "main",
+        "spec_ref": {
+          "path": "docs/spec/01-orca-remote-protocol.md",
+          "commit": "49ac56e45454b5b4aa9a36aadba4c45f8a46c9c3",
+          "sha256": "23e79a3d9d472e4c9661ea48b6421ef2fdef4dabff5fb132afa59bf4e1337d8a"
+        },
+        "plan_ref": {
+          "path": "docs/spec/01-orca-remote-protocol.plan.md",
+          "commit": "49ac56e45454b5b4aa9a36aadba4c45f8a46c9c3",
+          "sha256": "ff2f4eb9b0d788598f4a78e43aa1c67cb030d9c3304e516638368c25147e2f5b"
+        },
+        "common_refs": null,
+        "acceptance_refs": [
+          {
+            "path": "docs/spec/01-orca-remote-protocol.md",
+            "commit": "49ac56e45454b5b4aa9a36aadba4c45f8a46c9c3",
+            "sha256": "23e79a3d9d472e4c9661ea48b6421ef2fdef4dabff5fb132afa59bf4e1337d8a"
+          }
+        ],
+        "digest": "6361675129765a99fb7d40e51ce3382450545da019192f41a5f6655c46bb085b"
+      }
+    },
+    {
+      "task_id": "6",
+      "contract_id": "steerline-roadmap-6-49ac56e45454",
+      "digest": "02d945d7169cac60bfb69d702c51bb2d1e0a077bf83a7033ee4743c6f3031498",
+      "payload": {
+        "contract_id": "steerline-roadmap-6-49ac56e45454",
+        "repository": "https://github.com/erranliu/SteerLine.git",
+        "remote": "origin",
+        "branch": "main",
+        "spec_ref": {
+          "path": "docs/spec/03-remote-execution-and-viewer.md",
+          "commit": "49ac56e45454b5b4aa9a36aadba4c45f8a46c9c3",
+          "sha256": "6428b5b51c25cbf3bf0b94b58c21c8bd56979a83793df4d5728d9f6a7799264e"
+        },
+        "plan_ref": {
+          "path": "docs/spec/03-remote-execution-and-viewer.plan.md",
+          "commit": "49ac56e45454b5b4aa9a36aadba4c45f8a46c9c3",
+          "sha256": "eda5289bb02387673298c54968d7ef231c40a8184471f0a6b313bbc44d320c7e"
+        },
+        "common_refs": null,
+        "acceptance_refs": [
+          {
+            "path": "docs/spec/03-remote-execution-and-viewer.md",
+            "commit": "49ac56e45454b5b4aa9a36aadba4c45f8a46c9c3",
+            "sha256": "6428b5b51c25cbf3bf0b94b58c21c8bd56979a83793df4d5728d9f6a7799264e"
+          }
+        ],
+        "digest": "02d945d7169cac60bfb69d702c51bb2d1e0a077bf83a7033ee4743c6f3031498"
+      }
+    },
+    {
+      "task_id": "14",
+      "contract_id": "phase2-14-12626a9de970",
+      "digest": "b2c7cd47413365e1b4960208198315292cb369c8e3bcf85191ca7d2633facf38",
+      "payload": {
+        "contract_id": "phase2-14-12626a9de970",
+        "repository": "https://github.com/erranliu/SteerLine.git",
+        "remote": "origin",
+        "branch": "main",
+        "spec_ref": {
+          "path": "docs/spec/phase2-agent-capabilities.spec.md",
+          "commit": "12626a9de970d5a865ed676cffddfb7916fe443d",
+          "sha256": "c88fa1ae71cb2cb0cd07fa4f35f49e0575e605f2c2f11cc6c5ac561acca9825d"
+        },
+        "plan_ref": {
+          "path": "docs/spec/phase2-agent-capabilities.plan.md",
+          "commit": "12626a9de970d5a865ed676cffddfb7916fe443d",
+          "sha256": "24991cf571618e874a145cdcc58ea01e442213484e29bc38fcaacc45a74da793"
+        },
+        "common_refs": [
+          {
+            "path": "docs/spec/phase2-constraints.md",
+            "commit": "12626a9de970d5a865ed676cffddfb7916fe443d",
+            "sha256": "a3f8393da16efda385dc74e84578a90404576acbed31b083ef5307f88bfb58fe"
+          },
+          {
+            "path": "docs/spec/native-task-constraints.md",
+            "commit": "12626a9de970d5a865ed676cffddfb7916fe443d",
+            "sha256": "70f11e86d7fcf539e4f528245302ff5d65cff90cb18dbe652e7be0422c768eb4"
+          },
+          {
+            "path": "docs/spec/execution-architecture.spec.md",
+            "commit": "12626a9de970d5a865ed676cffddfb7916fe443d",
+            "sha256": "f1072edbe71b4923e3b57a33745b6fa8f0a19b0a7231fdeedd235bd9780f4ad7"
+          }
+        ],
+        "acceptance_refs": [
+          {
+            "path": "docs/spec/phase2-agent-capabilities.spec.md",
+            "commit": "12626a9de970d5a865ed676cffddfb7916fe443d",
+            "sha256": "c88fa1ae71cb2cb0cd07fa4f35f49e0575e605f2c2f11cc6c5ac561acca9825d"
+          }
+        ],
+        "digest": "b2c7cd47413365e1b4960208198315292cb369c8e3bcf85191ca7d2633facf38"
+      }
+    },
+    {
+      "task_id": "15",
+      "contract_id": "phase2-15-12626a9de970",
+      "digest": "f7abd93ae375afe56703bb141fa4fbe01cc052d4753905d8a55cef4feb91ddfc",
+      "payload": {
+        "contract_id": "phase2-15-12626a9de970",
+        "repository": "https://github.com/erranliu/SteerLine.git",
+        "remote": "origin",
+        "branch": "main",
+        "spec_ref": {
+          "path": "docs/spec/phase2-winui-foundation.spec.md",
+          "commit": "12626a9de970d5a865ed676cffddfb7916fe443d",
+          "sha256": "e1eb73c209450a40bc2fed5a49b22c4fb8bdd94a5f613325b5fa5c7609be8e19"
+        },
+        "plan_ref": {
+          "path": "docs/spec/phase2-winui-foundation.plan.md",
+          "commit": "12626a9de970d5a865ed676cffddfb7916fe443d",
+          "sha256": "932b3b44e82b9351d3c4530c2602f9fa3515bf6063f2afdd0a8487b30c312f74"
+        },
+        "common_refs": [
+          {
+            "path": "docs/spec/phase2-constraints.md",
+            "commit": "12626a9de970d5a865ed676cffddfb7916fe443d",
+            "sha256": "a3f8393da16efda385dc74e84578a90404576acbed31b083ef5307f88bfb58fe"
+          },
+          {
+            "path": "docs/spec/native-task-constraints.md",
+            "commit": "12626a9de970d5a865ed676cffddfb7916fe443d",
+            "sha256": "70f11e86d7fcf539e4f528245302ff5d65cff90cb18dbe652e7be0422c768eb4"
+          },
+          {
+            "path": "docs/spec/execution-architecture.spec.md",
+            "commit": "12626a9de970d5a865ed676cffddfb7916fe443d",
+            "sha256": "f1072edbe71b4923e3b57a33745b6fa8f0a19b0a7231fdeedd235bd9780f4ad7"
+          }
+        ],
+        "acceptance_refs": [
+          {
+            "path": "docs/spec/phase2-winui-foundation.spec.md",
+            "commit": "12626a9de970d5a865ed676cffddfb7916fe443d",
+            "sha256": "e1eb73c209450a40bc2fed5a49b22c4fb8bdd94a5f613325b5fa5c7609be8e19"
+          }
+        ],
+        "digest": "f7abd93ae375afe56703bb141fa4fbe01cc052d4753905d8a55cef4feb91ddfc"
+      }
+    },
+    {
+      "task_id": "16",
+      "contract_id": "phase2-16-12626a9de970",
+      "digest": "59517849d131f337286476fb956df0f2efa06c8d65e8576e0a47770cce8de9c1",
+      "payload": {
+        "contract_id": "phase2-16-12626a9de970",
+        "repository": "https://github.com/erranliu/SteerLine.git",
+        "remote": "origin",
+        "branch": "main",
+        "spec_ref": {
+          "path": "docs/spec/phase2-local-api.spec.md",
+          "commit": "12626a9de970d5a865ed676cffddfb7916fe443d",
+          "sha256": "fdafb003ed3c88fe6064f2721946b16b5508dbcabab290200933df5293da5ddc"
+        },
+        "plan_ref": {
+          "path": "docs/spec/phase2-local-api.plan.md",
+          "commit": "12626a9de970d5a865ed676cffddfb7916fe443d",
+          "sha256": "1498c4427ea3c32ac3006baa43cc484f19b753b1751f7382d2419c56e44ee4bb"
+        },
+        "common_refs": [
+          {
+            "path": "docs/spec/phase2-constraints.md",
+            "commit": "12626a9de970d5a865ed676cffddfb7916fe443d",
+            "sha256": "a3f8393da16efda385dc74e84578a90404576acbed31b083ef5307f88bfb58fe"
+          },
+          {
+            "path": "docs/spec/native-task-constraints.md",
+            "commit": "12626a9de970d5a865ed676cffddfb7916fe443d",
+            "sha256": "70f11e86d7fcf539e4f528245302ff5d65cff90cb18dbe652e7be0422c768eb4"
+          },
+          {
+            "path": "docs/spec/execution-architecture.spec.md",
+            "commit": "12626a9de970d5a865ed676cffddfb7916fe443d",
+            "sha256": "f1072edbe71b4923e3b57a33745b6fa8f0a19b0a7231fdeedd235bd9780f4ad7"
+          }
+        ],
+        "acceptance_refs": [
+          {
+            "path": "docs/spec/phase2-local-api.spec.md",
+            "commit": "12626a9de970d5a865ed676cffddfb7916fe443d",
+            "sha256": "fdafb003ed3c88fe6064f2721946b16b5508dbcabab290200933df5293da5ddc"
+          }
+        ],
+        "digest": "59517849d131f337286476fb956df0f2efa06c8d65e8576e0a47770cce8de9c1"
+      }
+    },
+    {
+      "task_id": "17",
+      "contract_id": "phase2-17-12626a9de970",
+      "digest": "62249cc976e06f1bbb4a5e0103793c086b706a17c85ea5690f9cc092158ce384",
+      "payload": {
+        "contract_id": "phase2-17-12626a9de970",
+        "repository": "https://github.com/erranliu/SteerLine.git",
+        "remote": "origin",
+        "branch": "main",
+        "spec_ref": {
+          "path": "docs/spec/phase2-planning-drafts.spec.md",
+          "commit": "12626a9de970d5a865ed676cffddfb7916fe443d",
+          "sha256": "7cdad6766285f0a51a7a406188667804b635ee56a3650686cd39ae6fc8832fb4"
+        },
+        "plan_ref": {
+          "path": "docs/spec/phase2-planning-drafts.plan.md",
+          "commit": "12626a9de970d5a865ed676cffddfb7916fe443d",
+          "sha256": "fd5b95a061eb5915ab78c8dc7774e506e3bb8400a43ba60be0838004b8c2e464"
+        },
+        "common_refs": [
+          {
+            "path": "docs/spec/phase2-constraints.md",
+            "commit": "12626a9de970d5a865ed676cffddfb7916fe443d",
+            "sha256": "a3f8393da16efda385dc74e84578a90404576acbed31b083ef5307f88bfb58fe"
+          },
+          {
+            "path": "docs/spec/native-task-constraints.md",
+            "commit": "12626a9de970d5a865ed676cffddfb7916fe443d",
+            "sha256": "70f11e86d7fcf539e4f528245302ff5d65cff90cb18dbe652e7be0422c768eb4"
+          },
+          {
+            "path": "docs/spec/execution-architecture.spec.md",
+            "commit": "12626a9de970d5a865ed676cffddfb7916fe443d",
+            "sha256": "f1072edbe71b4923e3b57a33745b6fa8f0a19b0a7231fdeedd235bd9780f4ad7"
+          }
+        ],
+        "acceptance_refs": [
+          {
+            "path": "docs/spec/phase2-planning-drafts.spec.md",
+            "commit": "12626a9de970d5a865ed676cffddfb7916fe443d",
+            "sha256": "7cdad6766285f0a51a7a406188667804b635ee56a3650686cd39ae6fc8832fb4"
+          }
+        ],
+        "digest": "62249cc976e06f1bbb4a5e0103793c086b706a17c85ea5690f9cc092158ce384"
+      }
+    },
+    {
+      "task_id": "18",
+      "contract_id": "phase2-18-12626a9de970",
+      "digest": "1ec33dcb8b51f8bc58a2fee035856d855351d3cf7c17cc1b3005e9920c7b432b",
+      "payload": {
+        "contract_id": "phase2-18-12626a9de970",
+        "repository": "https://github.com/erranliu/SteerLine.git",
+        "remote": "origin",
+        "branch": "main",
+        "spec_ref": {
+          "path": "docs/spec/phase2-planning-sessions.spec.md",
+          "commit": "12626a9de970d5a865ed676cffddfb7916fe443d",
+          "sha256": "02acae7784c55088b8b43e128892c98363360720a2e510dad1070f8b7f6e7600"
+        },
+        "plan_ref": {
+          "path": "docs/spec/phase2-planning-sessions.plan.md",
+          "commit": "12626a9de970d5a865ed676cffddfb7916fe443d",
+          "sha256": "1847470648ca72b836480ae6f7945f95480a0f7a99a5e4db8b1e9d8b6d400a57"
+        },
+        "common_refs": [
+          {
+            "path": "docs/spec/phase2-constraints.md",
+            "commit": "12626a9de970d5a865ed676cffddfb7916fe443d",
+            "sha256": "a3f8393da16efda385dc74e84578a90404576acbed31b083ef5307f88bfb58fe"
+          },
+          {
+            "path": "docs/spec/native-task-constraints.md",
+            "commit": "12626a9de970d5a865ed676cffddfb7916fe443d",
+            "sha256": "70f11e86d7fcf539e4f528245302ff5d65cff90cb18dbe652e7be0422c768eb4"
+          },
+          {
+            "path": "docs/spec/execution-architecture.spec.md",
+            "commit": "12626a9de970d5a865ed676cffddfb7916fe443d",
+            "sha256": "f1072edbe71b4923e3b57a33745b6fa8f0a19b0a7231fdeedd235bd9780f4ad7"
+          }
+        ],
+        "acceptance_refs": [
+          {
+            "path": "docs/spec/phase2-planning-sessions.spec.md",
+            "commit": "12626a9de970d5a865ed676cffddfb7916fe443d",
+            "sha256": "02acae7784c55088b8b43e128892c98363360720a2e510dad1070f8b7f6e7600"
+          }
+        ],
+        "digest": "1ec33dcb8b51f8bc58a2fee035856d855351d3cf7c17cc1b3005e9920c7b432b"
+      }
+    },
+    {
+      "task_id": "19",
+      "contract_id": "phase2-19-12626a9de970",
+      "digest": "e9e3249bb4ad27cc814d896c8b95817f22890e2bb5064755e393bca7dcb1427d",
+      "payload": {
+        "contract_id": "phase2-19-12626a9de970",
+        "repository": "https://github.com/erranliu/SteerLine.git",
+        "remote": "origin",
+        "branch": "main",
+        "spec_ref": {
+          "path": "docs/spec/phase2-document-publish.spec.md",
+          "commit": "12626a9de970d5a865ed676cffddfb7916fe443d",
+          "sha256": "c3c9cdb34913aa7da72052e8a94cdb18763233a7187b6d008cd5c13503a615e1"
+        },
+        "plan_ref": {
+          "path": "docs/spec/phase2-document-publish.plan.md",
+          "commit": "12626a9de970d5a865ed676cffddfb7916fe443d",
+          "sha256": "f3df87048067a763c9aa3ad7f6f37e6d728e85aaf47b90b486edd31e54446462"
+        },
+        "common_refs": [
+          {
+            "path": "docs/spec/phase2-constraints.md",
+            "commit": "12626a9de970d5a865ed676cffddfb7916fe443d",
+            "sha256": "a3f8393da16efda385dc74e84578a90404576acbed31b083ef5307f88bfb58fe"
+          },
+          {
+            "path": "docs/spec/native-task-constraints.md",
+            "commit": "12626a9de970d5a865ed676cffddfb7916fe443d",
+            "sha256": "70f11e86d7fcf539e4f528245302ff5d65cff90cb18dbe652e7be0422c768eb4"
+          },
+          {
+            "path": "docs/spec/execution-architecture.spec.md",
+            "commit": "12626a9de970d5a865ed676cffddfb7916fe443d",
+            "sha256": "f1072edbe71b4923e3b57a33745b6fa8f0a19b0a7231fdeedd235bd9780f4ad7"
+          }
+        ],
+        "acceptance_refs": [
+          {
+            "path": "docs/spec/phase2-document-publish.spec.md",
+            "commit": "12626a9de970d5a865ed676cffddfb7916fe443d",
+            "sha256": "c3c9cdb34913aa7da72052e8a94cdb18763233a7187b6d008cd5c13503a615e1"
+          }
+        ],
+        "digest": "e9e3249bb4ad27cc814d896c8b95817f22890e2bb5064755e393bca7dcb1427d"
+      }
+    },
+    {
+      "task_id": "20",
+      "contract_id": "phase2-20-12626a9de970",
+      "digest": "10b9cad17215a1908f4ef72f3c1eb0003778fe42cb310ed677dd703c79cf2b8f",
+      "payload": {
+        "contract_id": "phase2-20-12626a9de970",
+        "repository": "https://github.com/erranliu/SteerLine.git",
+        "remote": "origin",
+        "branch": "main",
+        "spec_ref": {
+          "path": "docs/spec/phase2-roadmap-ui.spec.md",
+          "commit": "12626a9de970d5a865ed676cffddfb7916fe443d",
+          "sha256": "136085de5169d5a8302e612b823471987b9694c3d09a015bdf809ebb03f20fe5"
+        },
+        "plan_ref": {
+          "path": "docs/spec/phase2-roadmap-ui.plan.md",
+          "commit": "12626a9de970d5a865ed676cffddfb7916fe443d",
+          "sha256": "19beae0b62fcc80dce0c8a837c8683823f1f918bcf8654695fe0efeb04cdae7f"
+        },
+        "common_refs": [
+          {
+            "path": "docs/spec/phase2-constraints.md",
+            "commit": "12626a9de970d5a865ed676cffddfb7916fe443d",
+            "sha256": "a3f8393da16efda385dc74e84578a90404576acbed31b083ef5307f88bfb58fe"
+          },
+          {
+            "path": "docs/spec/native-task-constraints.md",
+            "commit": "12626a9de970d5a865ed676cffddfb7916fe443d",
+            "sha256": "70f11e86d7fcf539e4f528245302ff5d65cff90cb18dbe652e7be0422c768eb4"
+          },
+          {
+            "path": "docs/spec/execution-architecture.spec.md",
+            "commit": "12626a9de970d5a865ed676cffddfb7916fe443d",
+            "sha256": "f1072edbe71b4923e3b57a33745b6fa8f0a19b0a7231fdeedd235bd9780f4ad7"
+          }
+        ],
+        "acceptance_refs": [
+          {
+            "path": "docs/spec/phase2-roadmap-ui.spec.md",
+            "commit": "12626a9de970d5a865ed676cffddfb7916fe443d",
+            "sha256": "136085de5169d5a8302e612b823471987b9694c3d09a015bdf809ebb03f20fe5"
+          }
+        ],
+        "digest": "10b9cad17215a1908f4ef72f3c1eb0003778fe42cb310ed677dd703c79cf2b8f"
+      }
+    },
+    {
+      "task_id": "21",
+      "contract_id": "phase2-21-12626a9de970",
+      "digest": "89196b20c9696472b7cd539792b1ad06de9b8804a2aacbe03b7175bb325e63c7",
+      "payload": {
+        "contract_id": "phase2-21-12626a9de970",
+        "repository": "https://github.com/erranliu/SteerLine.git",
+        "remote": "origin",
+        "branch": "main",
+        "spec_ref": {
+          "path": "docs/spec/phase2-execution-ui.spec.md",
+          "commit": "12626a9de970d5a865ed676cffddfb7916fe443d",
+          "sha256": "4b1ea99cbd2370ec346047d5f6bf4c23c0f1a789e8371280987ad4432556fd88"
+        },
+        "plan_ref": {
+          "path": "docs/spec/phase2-execution-ui.plan.md",
+          "commit": "12626a9de970d5a865ed676cffddfb7916fe443d",
+          "sha256": "1c1621514b3419c65a292022cd1881c66005afff9bbc273316ddce2fc73986c4"
+        },
+        "common_refs": [
+          {
+            "path": "docs/spec/phase2-constraints.md",
+            "commit": "12626a9de970d5a865ed676cffddfb7916fe443d",
+            "sha256": "a3f8393da16efda385dc74e84578a90404576acbed31b083ef5307f88bfb58fe"
+          },
+          {
+            "path": "docs/spec/native-task-constraints.md",
+            "commit": "12626a9de970d5a865ed676cffddfb7916fe443d",
+            "sha256": "70f11e86d7fcf539e4f528245302ff5d65cff90cb18dbe652e7be0422c768eb4"
+          },
+          {
+            "path": "docs/spec/execution-architecture.spec.md",
+            "commit": "12626a9de970d5a865ed676cffddfb7916fe443d",
+            "sha256": "f1072edbe71b4923e3b57a33745b6fa8f0a19b0a7231fdeedd235bd9780f4ad7"
+          }
+        ],
+        "acceptance_refs": [
+          {
+            "path": "docs/spec/phase2-execution-ui.spec.md",
+            "commit": "12626a9de970d5a865ed676cffddfb7916fe443d",
+            "sha256": "4b1ea99cbd2370ec346047d5f6bf4c23c0f1a789e8371280987ad4432556fd88"
+          }
+        ],
+        "digest": "89196b20c9696472b7cd539792b1ad06de9b8804a2aacbe03b7175bb325e63c7"
+      }
+    },
+    {
+      "task_id": "22",
+      "contract_id": "phase2-22-12626a9de970",
+      "digest": "f3886c533b2e62ba14e20d0951b1ae83031c7df5f095494da4fe19d8d977d521",
+      "payload": {
+        "contract_id": "phase2-22-12626a9de970",
+        "repository": "https://github.com/erranliu/SteerLine.git",
+        "remote": "origin",
+        "branch": "main",
+        "spec_ref": {
+          "path": "docs/spec/phase2-conversation-ui.spec.md",
+          "commit": "12626a9de970d5a865ed676cffddfb7916fe443d",
+          "sha256": "7c08adc2e960a310a2ab7d69cb9128cf2b3217b464e1e1ade18b1ef334618dd7"
+        },
+        "plan_ref": {
+          "path": "docs/spec/phase2-conversation-ui.plan.md",
+          "commit": "12626a9de970d5a865ed676cffddfb7916fe443d",
+          "sha256": "c7e58ebd5d7dd7c701d54bab4429d5f664b0d3210854273f4e6fb8cfb093daad"
+        },
+        "common_refs": [
+          {
+            "path": "docs/spec/phase2-constraints.md",
+            "commit": "12626a9de970d5a865ed676cffddfb7916fe443d",
+            "sha256": "a3f8393da16efda385dc74e84578a90404576acbed31b083ef5307f88bfb58fe"
+          },
+          {
+            "path": "docs/spec/native-task-constraints.md",
+            "commit": "12626a9de970d5a865ed676cffddfb7916fe443d",
+            "sha256": "70f11e86d7fcf539e4f528245302ff5d65cff90cb18dbe652e7be0422c768eb4"
+          },
+          {
+            "path": "docs/spec/execution-architecture.spec.md",
+            "commit": "12626a9de970d5a865ed676cffddfb7916fe443d",
+            "sha256": "f1072edbe71b4923e3b57a33745b6fa8f0a19b0a7231fdeedd235bd9780f4ad7"
+          }
+        ],
+        "acceptance_refs": [
+          {
+            "path": "docs/spec/phase2-conversation-ui.spec.md",
+            "commit": "12626a9de970d5a865ed676cffddfb7916fe443d",
+            "sha256": "7c08adc2e960a310a2ab7d69cb9128cf2b3217b464e1e1ade18b1ef334618dd7"
+          }
+        ],
+        "digest": "f3886c533b2e62ba14e20d0951b1ae83031c7df5f095494da4fe19d8d977d521"
+      }
+    },
+    {
+      "task_id": "23",
+      "contract_id": "phase2-23-12626a9de970",
+      "digest": "5ddb41e1b8e22c3875a4930f734598898dda4df699c7dcb8d99b91bd847c9b57",
+      "payload": {
+        "contract_id": "phase2-23-12626a9de970",
+        "repository": "https://github.com/erranliu/SteerLine.git",
+        "remote": "origin",
+        "branch": "main",
+        "spec_ref": {
+          "path": "docs/spec/phase2-review-ui.spec.md",
+          "commit": "12626a9de970d5a865ed676cffddfb7916fe443d",
+          "sha256": "e81df0d3b052369932be199ef6bfb47bf19743413a0f9509c252ba8275e7c636"
+        },
+        "plan_ref": {
+          "path": "docs/spec/phase2-review-ui.plan.md",
+          "commit": "12626a9de970d5a865ed676cffddfb7916fe443d",
+          "sha256": "6a00dd655a8a0604f0f767971695e2b311092b5f8ccacfa5bbc77c3c0f123e48"
+        },
+        "common_refs": [
+          {
+            "path": "docs/spec/phase2-constraints.md",
+            "commit": "12626a9de970d5a865ed676cffddfb7916fe443d",
+            "sha256": "a3f8393da16efda385dc74e84578a90404576acbed31b083ef5307f88bfb58fe"
+          },
+          {
+            "path": "docs/spec/native-task-constraints.md",
+            "commit": "12626a9de970d5a865ed676cffddfb7916fe443d",
+            "sha256": "70f11e86d7fcf539e4f528245302ff5d65cff90cb18dbe652e7be0422c768eb4"
+          },
+          {
+            "path": "docs/spec/execution-architecture.spec.md",
+            "commit": "12626a9de970d5a865ed676cffddfb7916fe443d",
+            "sha256": "f1072edbe71b4923e3b57a33745b6fa8f0a19b0a7231fdeedd235bd9780f4ad7"
+          }
+        ],
+        "acceptance_refs": [
+          {
+            "path": "docs/spec/phase2-review-ui.spec.md",
+            "commit": "12626a9de970d5a865ed676cffddfb7916fe443d",
+            "sha256": "e81df0d3b052369932be199ef6bfb47bf19743413a0f9509c252ba8275e7c636"
+          }
+        ],
+        "digest": "5ddb41e1b8e22c3875a4930f734598898dda4df699c7dcb8d99b91bd847c9b57"
+      }
+    },
+    {
+      "task_id": "24",
+      "contract_id": "phase2-24-12626a9de970",
+      "digest": "9b665d9e180e0e5a5ce513e7e972e4bb2ec6d30e3899317e8d8aabfd6ad5dcfb",
+      "payload": {
+        "contract_id": "phase2-24-12626a9de970",
+        "repository": "https://github.com/erranliu/SteerLine.git",
+        "remote": "origin",
+        "branch": "main",
+        "spec_ref": {
+          "path": "docs/spec/phase2-integration.spec.md",
+          "commit": "12626a9de970d5a865ed676cffddfb7916fe443d",
+          "sha256": "e4ac34c2d63b40e00ce7d08c8fc36cb2ed957ad9cff6231c2864e472823848a9"
+        },
+        "plan_ref": {
+          "path": "docs/spec/phase2-integration.plan.md",
+          "commit": "12626a9de970d5a865ed676cffddfb7916fe443d",
+          "sha256": "15f3aa3a123522bef0db00720b2670eff973b217731b38a152e4ae28ca4706a3"
+        },
+        "common_refs": [
+          {
+            "path": "docs/spec/phase2-constraints.md",
+            "commit": "12626a9de970d5a865ed676cffddfb7916fe443d",
+            "sha256": "a3f8393da16efda385dc74e84578a90404576acbed31b083ef5307f88bfb58fe"
+          },
+          {
+            "path": "docs/spec/native-task-constraints.md",
+            "commit": "12626a9de970d5a865ed676cffddfb7916fe443d",
+            "sha256": "70f11e86d7fcf539e4f528245302ff5d65cff90cb18dbe652e7be0422c768eb4"
+          },
+          {
+            "path": "docs/spec/execution-architecture.spec.md",
+            "commit": "12626a9de970d5a865ed676cffddfb7916fe443d",
+            "sha256": "f1072edbe71b4923e3b57a33745b6fa8f0a19b0a7231fdeedd235bd9780f4ad7"
+          }
+        ],
+        "acceptance_refs": [
+          {
+            "path": "docs/spec/phase2-integration.spec.md",
+            "commit": "12626a9de970d5a865ed676cffddfb7916fe443d",
+            "sha256": "e4ac34c2d63b40e00ce7d08c8fc36cb2ed957ad9cff6231c2864e472823848a9"
+          }
+        ],
+        "digest": "9b665d9e180e0e5a5ce513e7e972e4bb2ec6d30e3899317e8d8aabfd6ad5dcfb"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "predecessor_id": "16",
+      "successor_id": "17"
+    },
+    {
+      "predecessor_id": "14",
+      "successor_id": "18"
+    },
+    {
+      "predecessor_id": "17",
+      "successor_id": "18"
+    },
+    {
+      "predecessor_id": "17",
+      "successor_id": "19"
+    },
+    {
+      "predecessor_id": "15",
+      "successor_id": "20"
+    },
+    {
+      "predecessor_id": "19",
+      "successor_id": "20"
+    },
+    {
+      "predecessor_id": "15",
+      "successor_id": "21"
+    },
+    {
+      "predecessor_id": "16",
+      "successor_id": "21"
+    },
+    {
+      "predecessor_id": "15",
+      "successor_id": "22"
+    },
+    {
+      "predecessor_id": "18",
+      "successor_id": "22"
+    },
+    {
+      "predecessor_id": "15",
+      "successor_id": "23"
+    },
+    {
+      "predecessor_id": "19",
+      "successor_id": "23"
+    },
+    {
+      "predecessor_id": "3",
+      "successor_id": "24"
+    },
+    {
+      "predecessor_id": "4",
+      "successor_id": "24"
+    },
+    {
+      "predecessor_id": "6",
+      "successor_id": "24"
+    },
+    {
+      "predecessor_id": "20",
+      "successor_id": "24"
+    },
+    {
+      "predecessor_id": "21",
+      "successor_id": "24"
+    },
+    {
+      "predecessor_id": "22",
+      "successor_id": "24"
+    },
+    {
+      "predecessor_id": "23",
+      "successor_id": "24"
+    }
+  ],
+  "workflow_runs": [
+    {
+      "task_id": "14",
+      "workflow_run_id": "e7af7868bce90918afb7306240951fca",
+      "phase": "abandoned"
+    }
+  ],
+  "deliveries": []
+}
