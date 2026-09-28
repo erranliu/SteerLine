@@ -1,6 +1,6 @@
 # 已规划 Spec 的执行依赖
 
-这里列出 [主 roadmap](roadmap.md) 中尚未完成的中心 Task、执行 Spec 与硬前置。#3 的 H-A6/H-A16 和 #4 的当前范围 P01–P13 已有验收回执，仍需各自原 Task 的真实 Delivery；#6 保留当前目标受影响故障路径和 viewer 步骤转换门槛，长期无人值守归 #32。具体证据见各行引用。
+这里列出 [主 roadmap](roadmap.md) 中尚未完成的中心 Task、执行 Spec 与硬前置。#3 的 H-A6/H-A16 和 #4 的当前范围 P01–P13 已有验收回执，仍需各自原 Task 的真实 Delivery；#6 的当前目标 viewer 步骤转换已通过 4 秒样本，受影响故障路径仍开放，长期无人值守归 #32。具体证据见各行引用。
 
 下文的 `#数字` 均指任务 ID。“直接开工前置”列出必须已有的实现或证据；“集成与交付条件”说明何时才能验收并交给后续任务。共享接口的并行准备不等于允许越过各 Spec 的硬前置。
 
@@ -10,7 +10,7 @@
 | --- | --- | --- | --- | --- |
 | 3 | 人工决策与恢复闭环 | `INTERVENTION` · [Spec](../spec/pr-05-intervention.spec.md) · [Plan](../spec/pr-05-intervention.plan.md) · [验证记录](../validation/pr-05-intervention.md) | 实现及 H-A1–H-A16 受测范围已验收；活跃真实 worker 的同句柄新 incarnation 入口注入验证 fail-closed，平台自然发生该现象不作为关闭前置 | 原中心 Task 的真实 Delivery；直接本机 Codex 续跑仍 unsupported，发送回执不能代替答案应用证明 |
 | 4 | Orca 远程协议验证 | `REMOTE-PROTOCOL` · [Spec](../spec/01-orca-remote-protocol.md) · [Plan](../spec/01-orca-remote-protocol.plan.md) · [P13 回执](../validation/spec01-p13-steerlinetest-2026-09-28/README.md) | 当前版本族与目标的 P01–P13 已验收；未受变更影响的探测不重跑 | 原中心 Task 的真实 Delivery；远程取消仍 unsupported，新目标或版本族定向认证 |
-| 6 | 分阶段远程闭环 | `REMOTE-WORKFLOW` · [Spec](../spec/03-remote-execution-and-viewer.md) · [Plan](../spec/03-remote-execution-and-viewer.plan.md) · [验收记录](../validation/spec03-native-dag-2026-09-27.md) | 已交付的 `#3` 决策接口与 `#5` 模型、存储和执行接口；`#4` 已实测协议及限制 | 原生任务 103 已在远端五步发布、真实合并、中心结项并解锁 104；当前目标的六项必需受监管能力已有认证。台式机64g 已完成原生五步及固定 gh 发布闭环，允许按 [Spec 03 MVP 边界](../spec/03-remote-execution-and-viewer.md#有人值守-mvp-交付边界) 人工值守使用；新主机受影响故障路径及 4 秒步骤转换 viewer 样本仍为 #6 条件；长期无人值守由 #32 验收。远程取消保持不可用。 |
+| 6 | 分阶段远程闭环 | `REMOTE-WORKFLOW` · [Spec](../spec/03-remote-execution-and-viewer.md) · [Plan](../spec/03-remote-execution-and-viewer.plan.md) · [验收记录](../validation/spec03-native-dag-2026-09-27.md) · [Task 105 可见时延](../validation/spec03-viewer-task105-2026-09-28/README.md) | 已交付的 `#3` 决策接口与 `#5` 模型、存储和执行接口；`#4` 已实测协议及限制 | 原生任务 103 已在远端五步发布、真实合并、中心结项并解锁 104；当前目标的六项必需受监管能力已有认证。台式机64g 已完成原生五步及固定 gh 发布闭环，允许按 [Spec 03 MVP 边界](../spec/03-remote-execution-and-viewer.md#有人值守-mvp-交付边界) 人工值守使用；新主机受影响故障路径仍为 #6 条件；4 秒步骤转换 viewer 样本已通过；长期无人值守由 #32 验收。远程取消保持不可用。 |
 
 控制台与原生任务关系视图、#3 的决策与恢复实现均已交付代码；#3/#4 的验收证据已收齐，但中心 Task 仍需真实 Delivery。#6 复用单一原生中心权威接入远程执行，按当前目标剩余门槛验收。
 

@@ -18,7 +18,7 @@
 | --- | --- | --- |
 | `#3` 人工决策与恢复 | 成功应用、同 attempt 重启、显式响应丢失、可执行恢复确认已有真机证据；精确轮次折叠已在 SteerlineTest Task 104 验证；H-A6 真实 worker 入口单字段故障注入已验证 fail-closed，平台自然同句柄换代不作为关闭前置；仍待原中心 Task Delivery，见[验证记录](../validation/pr-05-intervention.md) | 多候选沿用其答案绑定、应用证明与未知结果守卫，不能把另一候选的回答用于原 Attempt |
 | `#4` Orca 远程协议验证 | home 的活跃问题 8 KiB 发送前拒绝和宿主命令审批已有真机回执；当前台式机64g 的 UAC 安全桌面原图及拒绝/批准回执也已归档。P13 正向及非零退出负向为受监管真机回执；缺检查回执、提交不符的当前主机受监管入口单字段故障注入已通过；P01–P13 当前范围均通过，仍待原中心 Task Delivery，见[剩余门槛](../spec/orca-probe/remaining-gates.md)与[门槛核对](../validation/phase1-acceptance-audit-2026-09-28.md) | 远端候选只能启用实际目标已认证的能力；取消仍不可用 |
-| `#6` 分阶段远程闭环 | home 的问答、合并、2 秒 viewer 及 R01–R19 有证据；台式机64g 的原生五步、原业务答案、固定 head 合并、中心结项与释放已通过，Decision 2.215 秒可见上界通过当前 4 秒门槛。步骤转换和受影响故障路径待补证；长期无人值守由 #32 验收，见[当前主机回执](../validation/spec03-desktop64g-followup-2026-09-28/README.md) | 同任务多候选复用已认证目标的远端步骤与 PR 核验，不把 home 或替身结果外推到新主机 |
+| `#6` 分阶段远程闭环 | home 的问答、合并、2 秒 viewer 及 R01–R19 有证据；台式机64g 的原生五步、原业务答案、固定 head 合并、中心结项与释放已通过，Decision 2.215 秒可见上界通过当前 4 秒门槛。步骤转换可见上界 1.334 秒通过 4 秒门槛，受影响故障路径待补证；长期无人值守由 #32 验收，见[当前主机闭环](../validation/spec03-desktop64g-followup-2026-09-28/README.md)与[Task 105 可见时延](../validation/spec03-viewer-task105-2026-09-28/README.md) | 同任务多候选复用已认证目标的远端步骤与 PR 核验，不把 home 或替身结果外推到新主机 |
 
 [不同任务人工并行 Spec](../spec/manual-parallel-start.spec.md)的服务按 WorkflowRun 管理 worker、各任务独立受理控制与恢复的能力已交付。本方案只增加**同一任务**内多个候选所需的准入、投影和结果仲裁；不再建设一套项目级并行 worker 管理器。
 
