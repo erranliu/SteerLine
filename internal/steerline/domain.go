@@ -203,6 +203,7 @@ type ExecutionTarget struct {
 	ExternalRuntime           string `json:"external_runtime,omitempty"`
 	OrchestrationRun          string `json:"orchestration_run,omitempty"`
 	OrchestrationRunRequestID string `json:"orchestration_run_request_id,omitempty"`
+	CoordinatorTerminal       string `json:"coordinator_terminal,omitempty"`
 	ExternalTask              string `json:"external_task,omitempty"`
 	Dispatch                  string `json:"dispatch,omitempty"`
 	ExecutionHost             string `json:"execution_host,omitempty"`
