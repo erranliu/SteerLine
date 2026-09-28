@@ -175,3 +175,14 @@ func TestExistingAcceptanceUnknownStateRejectsPublicationAndReplacement(t *testi
 		t.Fatalf("replacement process passed: %v", err)
 	}
 }
+
+func TestExistingAcceptanceReconciliationKeepsOtherWorkerReservation(t *testing.T) {
+	stopped := &Run{TaskID: "4", RunID: "run-4", ExecutionStatus: "failed", FinishTaskStatus: "blocked"}
+	otherProcess := &ProcessIdentity{Kind: "orca_supervised", Dispatch: "dispatch-14"}
+	other := &Run{TaskID: "14", RunID: "run-14", ExecutionStatus: "running", FinishTaskStatus: "pending", Process: otherProcess}
+	reservation := &Service{State: Runtime{Runs: []*Run{stopped, other}, CurrentTask: ptr("4"), SlotOccupied: true}}
+	reservation.recalculateCurrentReservation(stopped.RunID)
+	if !reservation.State.SlotOccupied || reservation.State.CurrentTask == nil || *reservation.State.CurrentTask != "14" || reservation.State.Runs[1].Process != otherProcess {
+		t.Fatalf("settling #4 disturbed the other worker: %+v", reservation.State)
+	}
+}

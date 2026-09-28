@@ -456,13 +456,9 @@ func (c CommandService) CompleteExistingAcceptance(ctx context.Context, config C
 			}
 			currentRun.ExecutionStatus, currentRun.Process, currentRun.EndedAt = "failed", nil, &stamp
 			currentRun.ManualStop = &ManualStopConfirmation{AttemptID: unknownAttempt.AttemptID, ConfirmedAt: stamp, ConfirmedBy: input.RequestedBy, Basis: input.StoppedUnknown.Reason}
-			currentRuntime.CurrentTask = nil
-			currentRuntime.SlotOccupied = false
-			for _, other := range currentRuntime.Runs {
-				if other != nil && other.RunID != currentRun.RunID && (other.ExecutionStatus == "unknown" || other.ExecutionStatus == "pending" || other.ExecutionStatus == "running" || other.FinishTaskStatus == "waiting_decision") {
-					return nativeErr("slot_busy", "another worker still occupies the project")
-				}
-			}
+			reservation := &Service{State: currentRuntime}
+			reservation.recalculateCurrentReservation(currentRun.RunID)
+			currentRuntime = reservation.State
 			currentRuntime.Revision++
 			projectionBody, marshalErr := json.Marshal(currentRuntime)
 			if marshalErr != nil {
