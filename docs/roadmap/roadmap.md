@@ -34,13 +34,19 @@
 
 ## 第一阶段版本交付目标与推进顺序
 
-[第一阶段版本交付调整方案](phase-1-delivery.md)将现有 `#3/#4/#6` 的真实剩余验收，与同任务多候选、stable/dev 双入口及最终集成验收组成一个交付目标。不同任务人工并行已交付，新增机制复用其按运行身份管理 worker 的能力。新增切片在取得独立 ID、Spec/Plan 并由中心固定创建后进入活动任务表；目前的设计摘要不作为执行依据。
+[第一阶段版本交付方案](phase-1-delivery.md)将现有 `#3/#4/#6` 的真实剩余验收，与同任务多候选、stable/dev 双入口及最终集成验收组成一个交付目标。下列新任务已有独立 Spec/Plan 和规划身份，尚未调用中心创建；具体执行遵守[第一阶段共同约束](../spec/phase1-delivery-constraints.md)。
 
 | 任务 ID | 任务名称 | 目标标识 | 剩余目标 | 硬前置 | 执行规格 |
 | --- | --- | --- | --- | --- | --- |
-| 25 | 已建任务追加前置与安全重置 | `TASK-DAG` | 已建未交付任务只追加硬前置；已领取任务在原执行安全结算后同事务重置并加边 | 已交付的固定 DAG 和受控 reopen 能力 | [Spec](../spec/native-task-add-predecessors.spec.md) · [Plan](../spec/native-task-add-predecessors.plan.md) |
+| 26 | 多候选模型与准入 | `PHASE1-CANDIDATES` | 同 Task 独立候选、固定 base、精确命令/查询与恢复；仲裁交付前限制 multiple 发布 | 无未完成硬前置 | [Spec](../spec/task-candidates.spec.md) · [Plan](../spec/task-candidates.plan.md) |
+| 27 | PR 胜出与落选候选对账 | `PHASE1-CANDIDATES` | 候选独立 PR、唯一 TaskDelivery、迟到合并与落选资源对账 | `#26` | [Spec](../spec/candidate-delivery.spec.md) · [Plan](../spec/candidate-delivery.plan.md) |
+| 28 | 候选观察界面 | `PHASE1-CANDIDATES` | TUI 候选选择、独立会话/问题/PR 和未结算资源观察 | `#27` | [Spec](../spec/candidate-console.spec.md) · [Plan](../spec/candidate-console.plan.md) |
+| 29 | 多候选本机与远端真机验收 | `PHASE1-CANDIDATES` | 两后端双候选真实交付、后继链与故障恢复证据 | `#28`、`#3`、`#4`、`#6` | [Spec](../spec/candidate-native-acceptance.spec.md) · [Plan](../spec/candidate-native-acceptance.plan.md) |
+| 30 | 固定版本与双入口 | `PHASE1-RUNTIME` | 不可变版本清单、stable/dev 固定入口及构建/home/channel 身份核验 | 无未完成硬前置 | [Spec](../spec/versioned-runtime.spec.md) · [Plan](../spec/versioned-runtime.plan.md) |
+| 31 | dev 隔离与 stable 提升 | `PHASE1-RUNTIME` | 独立 home/仓库、受控选择与当前状态恢复；未知执行阻止提升 | `#30` | [Spec](../spec/runtime-isolation-promotion.spec.md) · [Plan](../spec/runtime-isolation-promotion.plan.md) |
+| 32 | 第一阶段集成验收 | `PHASE1-DELIVERY` | 固定 stable 构建的两后端闭环、24 小时真实运行、dev 并行与受控提升 | `#29`、`#31` | [Spec](../spec/phase1-release-acceptance.spec.md) · [Plan](../spec/phase1-release-acceptance.plan.md) |
 
-项目以人工派发优先完成第一阶段。`#25` 交付后可为仍符合资格的已建二阶段任务受控补前置，不重占任务 ID 或修改既有边；`#14` 与 `#15` 可在隔离资源上准备，`#16` 的执行查询和命令接口待多候选契约固定后集成。加边不改变 `#16` 的固定执行范围，接口交付内容若需变化仍须另行修订契约。
+项目以人工派发优先完成第一阶段，`#26/#30` 与 `#3/#4/#6` 的独立验收可并行；`#28` 不等待远端真机门槛，远端证明单列到 `#29`。已交付的[追加前置能力](../spec/native-task-add-predecessors.spec.md)保留作后续操作依据。拟在新任务中心创建后追加 `#26 → #16` 与 `#32 → #24`；目前两条边均未生效。`#14/#15` 保持可并行准备。补边只增加开工资格，`#16/#24` 的固定执行内容不被本轮文档重绑定。
 
 ## 第二阶段：Windows 原生 UI 与受控规划
 

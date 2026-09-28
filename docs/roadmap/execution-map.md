@@ -40,13 +40,33 @@ Spec 完成交付后从未完成表移出；仍有消费者时只保留必要交
 
 ## 第一阶段新增范围与第二阶段的交接
 
-[第一阶段版本交付调整方案](phase-1-delivery.md)列出同任务多候选、stable/dev 双入口和版本集成验收的实施切片及直接交接。除已选定的 `#25` 外，这些切片尚无数字任务身份，不能当作本表已固定的硬前置。`#3/#4/#6` 的剩余原生验收与新切片可以使用独立工作区准备；共用 Service/SQLite、测试二进制或真实 Orca 宿主的集成和故障注入需串行协调。
+[第一阶段版本交付方案](phase-1-delivery.md)的新增范围已落实为以下独立规格。表中依赖是待创建任务的执行要求；新任务尚未进入中心 DAG。`#3/#4/#6` 的剩余原生验收与 `#26/#30` 可使用独立资源推进；共用 Service/SQLite、构建产物或真实 Orca 宿主的集成和故障注入串行协调。
 
 | 任务 ID | 任务名称 | 目标 / 执行 Spec | 直接开工前置 | 集成与交付条件 |
 | --- | --- | --- | --- | --- |
-| 25 | 已建任务追加前置与安全重置 | `TASK-DAG` · [Spec](../spec/native-task-add-predecessors.spec.md) · [Plan](../spec/native-task-add-predecessors.plan.md) | 已交付固定 DAG 和受控 reopen | 原子加边、版本竞争、原执行安全结算、幂等恢复与拒绝已交付任务均通过；与 Service/SQLite 集成串行协调 |
+| 26 | 多候选模型与准入 | `PHASE1-CANDIDATES` · [Spec](../spec/task-candidates.spec.md) · [Plan](../spec/task-candidates.plan.md) | 无未完成硬前置 | 交付精确候选身份/Query/Command；multiple 发布在 #27 仲裁交付前受控拒绝 |
+| 27 | PR 胜出与落选候选对账 | `PHASE1-CANDIDATES` · [Spec](../spec/candidate-delivery.spec.md) · [Plan](../spec/candidate-delivery.plan.md) | `#26` | 唯一交付、在途冻结、迟到冲突和 closed 后资源对账通过 |
+| 28 | 候选观察界面 | `PHASE1-CANDIDATES` · [Spec](../spec/candidate-console.spec.md) · [Plan](../spec/candidate-console.plan.md) | `#27` | 真实 Windows TUI 展示/输入和中心命令身份通过；跨主机 agent 证据不在本任务代验 |
+| 29 | 多候选本机与远端真机验收 | `PHASE1-CANDIDATES` · [Spec](../spec/candidate-native-acceptance.spec.md) · [Plan](../spec/candidate-native-acceptance.plan.md) | `#28`、`#3`、`#4`、`#6` | 当前认证目标上两后端双候选/后继真实合并及故障恢复均通过 |
+| 30 | 固定版本与双入口 | `PHASE1-RUNTIME` · [Spec](../spec/versioned-runtime.spec.md) · [Plan](../spec/versioned-runtime.plan.md) | 无未完成硬前置 | 不可变版本、固定入口与实例身份通过；切换资格由 #31 接入 |
+| 31 | dev 隔离与 stable 提升 | `PHASE1-RUNTIME` · [Spec](../spec/runtime-isolation-promotion.spec.md) · [Plan](../spec/runtime-isolation-promotion.plan.md) | `#30` | home/仓库隔离、受控提升、失败继续和当前格式恢复通过 |
+| 32 | 第一阶段集成验收 | `PHASE1-DELIVERY` · [Spec](../spec/phase1-release-acceptance.spec.md) · [Plan](../spec/phase1-release-acceptance.plan.md) | `#29`、`#31` | 固定组合构建真实两链、24 小时运行、dev 并行及提升验收通过 |
 
-保留第二阶段 `#14–#24` 的现有边。`#25` 交付后可受控追加符合资格的前置，当前尚未给这些任务实际加边。人工派发先安排第一阶段；`#14/#15` 的隔离验证与 UI 基座可同步准备。`#16` 与多候选读/命令模型共享接口，先核其消费契约，真实接线在该模型固定后集成；后续第二阶段任务沿用其已创建的直接依赖。第一阶段整体交付是第二阶段产品验收前的人工门槛，当前 DAG 未编码这一新增关系。
+保留第二阶段 `#14–#24` 的现有边；[追加前置能力](../spec/native-task-add-predecessors.spec.md)已交付，拟在新任务创建后补 `#26 → #16` 与 `#32 → #24`，两条均未提交中心。后表和现有第二阶段图仍列实际既有边。`#14/#15` 可同步准备；#16 消费 #26 的身份接口，超出其冻结规格的新 API/WinUI 范围须另有执行契约。加边不修改原 TaskContract 的 Git 引用。
+
+```mermaid
+flowchart LR
+    T26["#26 多候选模型"] --> T27["#27 PR 仲裁"] --> T28["#28 候选界面"] --> T29["#29 多候选真机验收"]
+    T3["#3 决策验收"] --> T29
+    T4["#4 协议验收"] --> T29
+    T6["#6 远端闭环"] --> T29
+    T30["#30 固定版本/双入口"] --> T31["#31 隔离/提升"] --> T32["#32 一阶段集成验收"]
+    T29 --> T32
+    T26 -. "拟补边，未生效" .-> T16["#16 本机协议"]
+    T32 -. "拟补边，未生效" .-> T24["#24 二阶段完整验收"]
+```
+
+图中实线同样是 #26–#32 的待创建关系，不表示这些新任务已存在于中心；虚线单独标出对已建二阶段任务拟追加的关系。
 
 ## 第二阶段硬前置与并行集成
 

@@ -41,6 +41,20 @@
 按表中顺序分别交付，复用中心执行模型，不等待整个远程闭环。系统不提供任务拆分或回退流程，两者由用户人工处置；共同文档不代替各任务的执行范围与验收。
 
 
+## 第一阶段多候选与版本交付
+
+[第一阶段共同约束](phase1-delivery-constraints.md)定义交接、版本与证据边界。以下只有文档身份，尚未中心创建、实现或验收。每项独立 Spec/Plan 对应一个实现 PR。
+
+| 任务 ID | 任务名称 | 硬前置 | Spec | Plan |
+| --- | --- | --- | --- | --- |
+| 26 | 多候选模型与准入 | 无未完成硬前置 | [Spec](task-candidates.spec.md) | [Plan](task-candidates.plan.md) |
+| 27 | PR 胜出与落选候选对账 | `#26` | [Spec](candidate-delivery.spec.md) | [Plan](candidate-delivery.plan.md) |
+| 28 | 候选观察界面 | `#27` | [Spec](candidate-console.spec.md) | [Plan](candidate-console.plan.md) |
+| 29 | 多候选本机与远端真机验收 | `#28`、`#3`、`#4`、`#6` | [Spec](candidate-native-acceptance.spec.md) | [Plan](candidate-native-acceptance.plan.md) |
+| 30 | 固定版本与双入口 | 无未完成硬前置 | [Spec](versioned-runtime.spec.md) | [Plan](versioned-runtime.plan.md) |
+| 31 | dev 隔离与 stable 提升 | `#30` | [Spec](runtime-isolation-promotion.spec.md) | [Plan](runtime-isolation-promotion.plan.md) |
+| 32 | 第一阶段集成验收 | `#29`、`#31` | [Spec](phase1-release-acceptance.spec.md) | [Plan](phase1-release-acceptance.plan.md) |
+
 ## 第二阶段原生 UI 与受控规划
 
 [共同接口与边界](phase2-constraints.md)只承载共同要求；下列每个任务各有独立 Spec、Plan 和实现 PR。未实现/未验收；硬前置均以真实任务交付为准。`#14–#24` 已进入中心固定 DAG。
