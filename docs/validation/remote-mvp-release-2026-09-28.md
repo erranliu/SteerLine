@@ -2,7 +2,7 @@
 
 ## 发布范围
 
-本次按用户要求发布有人值守的远程执行 MVP 到 `C:\SteerlineRuntime`。来源为 `origin/main` 的 `8b79952`，范围文档提交为 `72834b3`；运行代码与该 main 基线相同，没有新增绕过预检的开关。安装二进制 SHA-256：`be7b242af31541d2460fb46c37de9bdb4077e9e4618b642852b0d7dcb59567df`。
+本次按用户要求发布有人值守的远程执行 MVP 到 `C:\SteerlineRuntime`。发布时的代码基线为 `origin/main` 的 `8b79952`；运行代码与该基线相同，没有新增绕过预检的开关。范围文档及发布回执随本 PR 提交。安装二进制 SHA-256：`be7b242af31541d2460fb46c37de9bdb4077e9e4618b642852b0d7dcb59567df`。
 
 SteerLine、SteerlineTest 各新增 `orca-remote-luna-xhigh` 方案，显示名为“Orca 台式机64g Codex Luna xhigh”，固定 `host=orca_supervised`、`agent=codex`、`model=gpt-6-luna`、`reasoning_effort=xhigh`，沿用各项目已有 sandbox 和四步契约，仅将步骤执行位置设为 target。远端取消仍不可用。本机默认方案及自动派发默认值未修改。
 
