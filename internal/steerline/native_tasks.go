@@ -653,8 +653,12 @@ func openBoundNativeStore(ctx context.Context, c Config, path string) (_ *SQLite
 			_ = db.Close()
 		}
 	}()
-	if err = validateDatabaseSchema(ctx, db.db); err != nil {
+	if err = validateDatabaseSchemaVersion(ctx, db.db, true); err != nil {
 		return nil, err
+	}
+	var schemaVersion int
+	if err = db.db.QueryRowContext(ctx, `SELECT COALESCE(MAX(version),0) FROM schema_migrations`).Scan(&schemaVersion); err != nil || schemaVersion != 4 && schemaVersion != domainSchemaVersion {
+		return nil, nativeErr("unsupported_schema", "bound native reader requires the current database or its immediately preceding format")
 	}
 	if err = validateRetiredWholeRunResultCommands(ctx, db.db); err != nil {
 		return nil, err

@@ -122,13 +122,22 @@ func validateDatabaseSchemaVersion(ctx context.Context, db schemaQuery, allowCur
 	if err := db.QueryRowContext(ctx, `SELECT COALESCE(MAX(version),0) FROM schema_migrations`).Scan(&version); err != nil {
 		return nativeErr("unsupported_schema", "existing SQLite database has an unknown schema; preserve it for manual recovery")
 	}
-	if version != domainSchemaVersion && !(allowCurrentUpgrade && version == 3) {
+	if version != domainSchemaVersion && !(allowCurrentUpgrade && (version == 3 || version == 4)) {
 		return nativeErr("unsupported_schema", fmt.Sprintf("unsupported SQLite schema %d; only schema %d is accepted", version, domainSchemaVersion))
 	}
 	expected := map[string]string{}
 	definitions := append(append([]string{}, domainExecutionSchema...), nativeTaskSchema...)
-	if version == domainSchemaVersion {
+	if version >= 4 {
 		definitions = append(definitions, conversationSchemaV4...)
+	}
+	if version < domainSchemaVersion {
+		expectedIndex := activeWorkflowIndexV4
+		for i, stmt := range definitions {
+			if stmt == activeWorkflowIndexV5 {
+				definitions[i] = expectedIndex
+				break
+			}
+		}
 	}
 	for _, stmt := range definitions {
 		fields := strings.Fields(stmt)

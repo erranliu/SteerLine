@@ -442,12 +442,14 @@ func runConsoleCommand(args []string) error {
 
 func runNativeTaskCommand(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: steerline task <validate|create|discard|graph|export|show|list> -config config.json")
+		return fmt.Errorf("usage: steerline task <validate|create|discard|reopen|graph|export|show|list> -config config.json")
 	}
 	subcommand := args[0]
 	fs := flag.NewFlagSet("task "+subcommand, flag.ContinueOnError)
 	config := fs.String("config", "steerline.local.json", "configuration JSON")
 	taskID := fs.String("task-id", "", "native task ID")
+	runID := fs.String("run-id", "", "exact workflow run to abandon when reopening a task")
+	confirmedStopped := fs.Bool("confirm-process-stopped", false, "operator confirmed the old worker process stopped")
 	cursor := fs.String("cursor", "", "native task list cursor")
 	limit := fs.Int("limit", 100, "list page size (default 100); graph/export default to 500 nodes, maximum 500")
 	status := fs.String("status", "", "filter graph nodes by native task status")
@@ -460,9 +462,9 @@ func runNativeTaskCommand(args []string) error {
 	requestID := fs.String("request-id", "", "stable idempotency key for this task command")
 	expectedAuthority := fs.Uint64("expected-authority-version", 0, "sampled native project authority version")
 	expectedVersion := fs.Uint64("expected-version", 0, "expected native task version")
-	reason := fs.String("reason", "", "reason for discarding the task")
+	reason := fs.String("reason", "", "reason for discarding or reopening the task")
 	by := fs.String("by", "", "task command requester")
-	if subcommand != "show" && subcommand != "list" && subcommand != "validate" && subcommand != "create" && subcommand != "discard" && subcommand != "graph" && subcommand != "export" {
+	if subcommand != "show" && subcommand != "list" && subcommand != "validate" && subcommand != "create" && subcommand != "discard" && subcommand != "reopen" && subcommand != "graph" && subcommand != "export" {
 		return fmt.Errorf("unsupported task command %q", subcommand)
 	}
 	if err := fs.Parse(args[1:]); err != nil {
@@ -474,6 +476,7 @@ func runNativeTaskCommand(args []string) error {
 		"validate": {"config": true, "file": true},
 		"create":   {"config": true, "file": true, "request-id": true, "expected-authority-version": true, "by": true},
 		"discard":  {"config": true, "task-id": true, "request-id": true, "expected-version": true, "reason": true, "by": true},
+		"reopen":   {"config": true, "task-id": true, "run-id": true, "request-id": true, "expected-version": true, "confirm-process-stopped": true, "reason": true, "by": true},
 		"graph":    {"config": true, "task-id": true, "cursor": true, "limit": true, "status": true, "direction": true, "depth": true},
 		"export":   {"config": true, "task-id": true, "status": true, "direction": true, "depth": true, "format": true, "output": true, "overwrite": true},
 	}
@@ -540,6 +543,13 @@ func runNativeTaskCommand(args []string) error {
 		if *file != "" || *cursor != "" || *expectedAuthority != 0 {
 			return errors.New("task discard does not accept -file, -cursor or -expected-authority-version")
 		}
+	case "reopen":
+		if *taskID == "" || *runID == "" || *requestID == "" || *expectedVersion == 0 || !*confirmedStopped || strings.TrimSpace(*reason) == "" || strings.TrimSpace(*by) == "" {
+			return errors.New("task reopen requires -task-id, -run-id, -request-id, -expected-version, -confirm-process-stopped, -reason and -by")
+		}
+		if err := steerline.ValidateNativeTaskID(*taskID); err != nil {
+			return err
+		}
 	case "graph":
 		if *file != "" || *requestID != "" || *expectedAuthority != 0 || *expectedVersion != 0 || *reason != "" || *by != "" {
 			return errors.New("task graph does not accept task mutation flags")
@@ -573,7 +583,7 @@ func runNativeTaskCommand(args []string) error {
 	if err != nil {
 		return err
 	}
-	if subcommand == "create" || subcommand == "discard" {
+	if subcommand == "create" || subcommand == "discard" || subcommand == "reopen" {
 		if err = store.Close(); err != nil {
 			return err
 		}
@@ -625,6 +635,12 @@ func runNativeTaskCommand(args []string) error {
 		receipt, discardErr := (steerline.CommandService{Store: store, Project: c.Identity()}).DiscardNativeTask(context.Background(), c, *taskID, *requestID, *expectedVersion, *reason, *by)
 		if discardErr != nil {
 			return discardErr
+		}
+		return json.NewEncoder(os.Stdout).Encode(receipt)
+	case "reopen":
+		receipt, reopenErr := (steerline.CommandService{Store: store, Project: c.Identity()}).ReopenNativeTask(context.Background(), c, steerline.TaskReopenInput{TaskID: *taskID, WorkflowRunID: *runID, RequestID: *requestID, ExpectedVersion: *expectedVersion, ConfirmedProcessStopped: *confirmedStopped, Reason: *reason, RequestedBy: *by})
+		if reopenErr != nil {
+			return reopenErr
 		}
 		return json.NewEncoder(os.Stdout).Encode(receipt)
 	case "graph":

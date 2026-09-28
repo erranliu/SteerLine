@@ -14,21 +14,21 @@ import (
 // orcaTerminal is the subset of `orca terminal show/create/list` fields the
 // scheduler reads. Orca owns execution facts; Steerline only diagnoses them.
 type orcaTerminal struct {
-	Handle          string           `json:"handle"`
-	Title           string           `json:"title"`
-	WorktreeID      string           `json:"worktreeId"`
-	WorktreePath    string           `json:"worktreePath"`
-	Branch          string           `json:"branch"`
-	Status          string           `json:"status"`
-	Connected       bool             `json:"connected"`
-	Orphaned        bool             `json:"orphaned"`
-	IncarnationID   string           `json:"incarnationId"`
-	ExecutionHostID string           `json:"executionHostId"`
-	AgentIdentity   string           `json:"agentIdentity"`
-	LastOutputAt    int64            `json:"lastOutputAt"`
-	AgentWait       *json.RawMessage `json:"agentWait"`
+	Handle          string                 `json:"handle"`
+	Title           string                 `json:"title"`
+	WorktreeID      string                 `json:"worktreeId"`
+	WorktreePath    string                 `json:"worktreePath"`
+	Branch          string                 `json:"branch"`
+	Status          string                 `json:"status"`
+	Connected       bool                   `json:"connected"`
+	Orphaned        bool                   `json:"orphaned"`
+	IncarnationID   string                 `json:"incarnationId"`
+	ExecutionHostID string                 `json:"executionHostId"`
+	AgentIdentity   string                 `json:"agentIdentity"`
+	LastOutputAt    int64                  `json:"lastOutputAt"`
+	AgentWait       *json.RawMessage       `json:"agentWait"`
 	ExitCause       *orcaTerminalExitCause `json:"exitCause,omitempty"`
-	RuntimeID       string           `json:"-"`
+	RuntimeID       string                 `json:"-"`
 }
 
 type orcaTerminalExitCause struct {
@@ -207,7 +207,7 @@ func (c orcaClient) showTerminal(ctx context.Context, handle string) (orcaTermin
 	env, e := parseEnvelope(out)
 	if e != nil {
 		if callErr != nil {
-			return orcaTerminal{}, callErr
+			return orcaTerminal{}, errors.Join(callErr, e)
 		}
 		return orcaTerminal{}, e
 	}

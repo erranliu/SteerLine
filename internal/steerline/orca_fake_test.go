@@ -195,6 +195,9 @@ func fakeOrcaRemove(argv []string) int {
 }
 
 func fakeOrcaShow(stateDir string, argv []string) int {
+	if os.Getenv("STEERLINE_FAKE_ORCA_SHOW_UNREACHABLE") == "1" {
+		return 2
+	}
 	st, e := readFakeOrcaState(stateDir, arg(argv, "--terminal"))
 	if e != nil {
 		return fakeOrcaErr("terminal_handle_stale", "terminal handle stale")

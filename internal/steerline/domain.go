@@ -819,7 +819,7 @@ func validTaskStatus(v string) bool {
 }
 func validWorkflowPhase(v string) bool {
 	switch v {
-	case "queued", "executing", "waiting_decision", "waiting_pr_merge", "completing", "completed", "blocked":
+	case "queued", "executing", "waiting_decision", "waiting_pr_merge", "completing", "completed", "blocked", "abandoned":
 		return true
 	}
 	return false

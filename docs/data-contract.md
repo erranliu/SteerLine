@@ -16,6 +16,8 @@ native 状态目录必须使用仓库唯一派生的 `STEERLINE_HOME/state/<repo
 
 `task discard -task-id <id> -request-id <id> -expected-version <n> -reason <text>` 先持久化绑定任务/运行/PR 的意图，再在数据库事务外核验精确 PR。合并状态不明或发布结果身份不完整时返回 `pending_verification` 并保留 Operation；真实未合并后才 CAS 为 discarded。已合并任务拒绝丢弃。依赖边、claim、运行和 task_id 保留；被丢弃的前置不会放行后继。本机仅使用已核验的固定 Stop 能力停止原 worker；停止后工作区通过精确 worktree/branch 身份单独清理。Gitea PR 使用固定 API 身份关闭；command provider 必须配置 `pr.close` 并返回 `closed_unmerged` 事实。每项清理回执在中心事务内持久化并移除对应 `cleanup_pending` 项。远端取消、停止回执不明或外部清理失败保留原身份和人工待办。已丢弃任务的精确 PR 后来确认合并时，只追加幂等的 `task.delivery.conflict` 事件，不生成 TaskDelivery。
 
+`task reopen` 只用于人工放弃一个尚未发布的、本机 Orca `implement` 步骤结果未知的 native Workflow。停服并确认原终端/worker 已停止、原 worktree 已清理后，操作者提供精确 run ID、Task 版本、固定 request ID、停止确认和证据。中心在一个事务中将旧 Attempt 记为 stopped、旧 Execution 记为 stopped、旧 Workflow 记为 abandoned，并让同一 Task ID 回到 open；旧 Workflow、执行绑定、命令及事件保留审计，新领取产生独立的 Workflow/Execution/Attempt。已有发布步骤、PR、Delivery、未决问题、活终端或其他执行占用时拒绝重开。该操作不启动新 worker，仍由人在控制台选择执行配置后按 `s` 开始。
+
 `task graph` 返回 `native-task-graph/v1`，包含同一 SQLite 只读快照的任务标题/状态、前置方向边、阻塞、采样版本、过滤条件与边界。可用 `-status` 筛选状态，也可用 `-task-id <id> -direction upstream|downstream|both -depth <1..10>` 查询邻域；方向默认 `both`，深度默认 1，单次最多 500 个节点。中心任务始终作为锚点保留；状态筛选作用于显示集合，不会切断邻域遍历。截断结果在 `boundary.truncated`、`omitted_node_count`、`reasons` 和跨边界 `edges` 中说明省略部分；跨边界边最多列出 500 条，余量由 `omitted_boundary_edge_count` 标明。中心查询的省略节点数计算整个所选方向可达范围，不包含不连通的其他任务。丢弃任务仍在图中，其后继保留 `discarded_predecessor` 阻塞。
 
 未筛选的 `task graph -limit <n>` 或显式 `-cursor ""` 使用一致性分页；将返回的 `next_cursor` 传入下一次 `-cursor <token>`。游标绑定项目、数据库身份和采样版本，版本变化返回 `cursor_invalidated`。状态或邻域筛选使用单次有界结果和边界字段，不混用分页游标。
