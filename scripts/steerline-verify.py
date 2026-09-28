@@ -28,7 +28,7 @@ def main():
     checks = []
     with tempfile.TemporaryDirectory(prefix="steerline-go-build-") as build_dir:
         commands = {
-            "go_test": ["go", "test", "./...", "-count=1", "-timeout", "20m"],
+            "go_test": ["go", "run", "./cmd/test-feedback", "-workers=3", "-out", str(pathlib.Path(build_dir) / "test-feedback")],
             "go_vet": ["go", "vet", "./..."],
             "go_build": ["go", "build", "-o", build_dir, "./..."],
         }

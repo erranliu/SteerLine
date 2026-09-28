@@ -198,7 +198,7 @@ func TestServiceStartControlDispatchesChosenProfile(t *testing.T) {
 		t.Fatal(err)
 	}
 	commands := CommandService{Store: service.domainStore, Project: service.Config.Identity()}
-	if _, err = commands.CreateTaskBatch(context.Background(), service.Config, batch, newID(), 1, "planner"); err != nil {
+	if _, err = seedExecutionProfileTasks(t, service.Config, service.domainStore, batch); err != nil {
 		t.Fatal(err)
 	}
 	authority, err := service.domainStore.nativeAuthority(context.Background(), service.Config.Identity())

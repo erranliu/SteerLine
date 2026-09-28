@@ -1,0 +1,23 @@
+=== RUN   TestDiagnosticFixtureBatch
+=== RUN   TestDiagnosticFixtureBatch/x
+=== RUN   TestDiagnosticFixtureBatch/xx
+=== RUN   TestDiagnosticFixtureBatch/xxx
+=== RUN   TestDiagnosticFixtureBatch/xxxx
+=== RUN   TestDiagnosticFixtureBatch/xxxxx
+=== RUN   TestDiagnosticFixtureBatch/xxxxxx
+=== RUN   TestDiagnosticFixtureBatch/xxxxxxx
+=== RUN   TestDiagnosticFixtureBatch/xxxxxxxx
+=== RUN   TestDiagnosticFixtureBatch/xxxxxxxxx
+=== RUN   TestDiagnosticFixtureBatch/xxxxxxxxxx
+--- PASS: TestDiagnosticFixtureBatch (1.94s)
+    --- PASS: TestDiagnosticFixtureBatch/x (0.56s)
+    --- PASS: TestDiagnosticFixtureBatch/xx (0.14s)
+    --- PASS: TestDiagnosticFixtureBatch/xxx (0.15s)
+    --- PASS: TestDiagnosticFixtureBatch/xxxx (0.15s)
+    --- PASS: TestDiagnosticFixtureBatch/xxxxx (0.16s)
+    --- PASS: TestDiagnosticFixtureBatch/xxxxxx (0.15s)
+    --- PASS: TestDiagnosticFixtureBatch/xxxxxxx (0.16s)
+    --- PASS: TestDiagnosticFixtureBatch/xxxxxxxx (0.18s)
+    --- PASS: TestDiagnosticFixtureBatch/xxxxxxxxx (0.14s)
+    --- PASS: TestDiagnosticFixtureBatch/xxxxxxxxxx (0.16s)
+PASS
