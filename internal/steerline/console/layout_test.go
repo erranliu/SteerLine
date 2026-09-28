@@ -6,9 +6,46 @@ import (
 	"testing"
 	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/erranliu/SteerLine/internal/steerline"
 )
+
+func TestTaskSelectionAndTwoFocusRegions(t *testing.T) {
+	now := time.Now().UTC()
+	ref := testProject("alpha")
+	snapshot := readySnapshot(ref, now)
+	snapshot.Tasks.Tasks = append(snapshot.Tasks.Tasks, steerline.TaskCandidate{TaskID: "task-C", Title: "Build C"})
+	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, &testControlClient{}, now)
+	m.width, m.height = 120, 40
+	view := m.View()
+	for _, want := range []string{"任务列表 [焦点]", "▸", "详情", "任务动态 · 活动", "────────"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("stacked layout lost %q:\n%s", want, view)
+		}
+	}
+	selected := m.projects[0].selectedKey
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyTab})
+	m = updated.(Model)
+	if m.projects[0].focus != 1 || !strings.Contains(m.View(), "任务动态 [焦点]") || !strings.Contains(m.View(), "▸") {
+		t.Fatal("activity focus hid the selected task")
+	}
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m = updated.(Model)
+	if m.projects[0].selectedKey != selected {
+		t.Fatal("activity scrolling changed the selected task")
+	}
+	if !m.projects[0].view.Follow {
+		t.Fatal("scrolling an empty activity pane disabled follow mode")
+	}
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyTab})
+	m = updated.(Model)
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m = updated.(Model)
+	if m.projects[0].focus != 0 || m.projects[0].selectedKey == selected {
+		t.Fatal("list focus did not move task selection")
+	}
+}
 
 func TestProjectSwitchKeepsCurrentIdentityVisibleAndBackgroundNoticeIsolated(t *testing.T) {
 	now := time.Date(2026, 9, 26, 1, 0, 0, 0, time.UTC)
