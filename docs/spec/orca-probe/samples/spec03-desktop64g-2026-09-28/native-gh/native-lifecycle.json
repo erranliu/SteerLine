@@ -1,0 +1,39 @@
+{
+  "base_commit": "995bdadebae849fd45d1a929cd6984b201dcea61",
+  "business_answer_commands": {
+    "relay_3f72d0a4341b": "fb72105a899b4eafbee1435a810cbfb5"
+  },
+  "candidate_head": "e1716ebabbec3791c44ee3c36a1ee6b517aa19b1",
+  "capability_report_confined_to_temp_state": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\s3desktop64ggh\\steerline-home\\state\\native-project-5f45726d432b",
+  "captured_at": "2026-09-28T04:19:07.3397929Z",
+  "configured_codex_cli_version_pin": "",
+  "current_target_capability_evidence": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\s3desktop64ggh\\steerline-home\\state\\native-project-5f45726d432b\\execution\\v1\\evidence\\ec0622cf9d0c0e86e35916002a30a3e5a4cdc7d3a28243e657e35b7307089eb9.json#sha256=ec0622cf9d0c0e86e35916002a30a3e5a4cdc7d3a28243e657e35b7307089eb9",
+  "delivery": {
+    "project_id": "c:\\users\\lmas1\\appdata\\local\\temp\\s3desktop64ggh\\native-project\\.git",
+    "task_id": "91024",
+    "selected_workflow_run_id": "8cee9a0ae48b51cfb79d77928fe2a8ff",
+    "pr_instance": "https://github.com",
+    "pr_repository": "erranliu/SteerLine",
+    "pr_number": 85,
+    "pr_url": "https://github.com/erranliu/SteerLine/pull/85",
+    "merge_commit": "9425f55452826cdc9d49eb1c632b04cb9d5daa27",
+    "merged_at": "2026-09-28T04:18:54Z",
+    "recorded_at": "2026-09-28T04:18:58.8493569Z",
+    "evidence": {
+      "pr_instance": "https://github.com",
+      "url": "https://github.com/erranliu/SteerLine/pull/85",
+      "repository": "erranliu/SteerLine",
+      "number": 85,
+      "base_branch": "codex/spec03-desktop64g-gh-canary-base",
+      "state": "merged",
+      "merged": true,
+      "merged_at": "2026-09-28T04:18:54Z",
+      "merge_commit": "9425f55452826cdc9d49eb1c632b04cb9d5daa27"
+    }
+  },
+  "native_task_id": "91024",
+  "project_id": "c:\\users\\lmas1\\appdata\\local\\temp\\s3desktop64ggh\\native-project\\.git",
+  "remote_codex_cli_version": "codex-cli 0.156.1",
+  "task_status": "closed",
+  "test_pr_url": "https://github.com/erranliu/SteerLine/pull/85"
+}

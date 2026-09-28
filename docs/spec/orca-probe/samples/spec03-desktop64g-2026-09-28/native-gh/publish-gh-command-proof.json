@@ -1,0 +1,19 @@
+{
+  "kind": "native-gh-publish-command-proof",
+  "environment_id": "e68f4edf-8a83-42c2-a9da-6d404d3aa3d8",
+  "dispatch_id": "ctx_7e5dfad59054",
+  "source": "transcript",
+  "source_exact": true,
+  "archived": true,
+  "worker": "succeeded",
+  "terminal": "exited",
+  "tool_call_message": "ctc_0506b2a8dd64b53b016ab9ea2cc32c87d090caccc49ff91e9c",
+  "tool_result_message": "ctco_01a0e63a-f2fd-7021-8052-e00b75d85803",
+  "command_form": "gh pr create --repo erranliu/SteerLine --draft --base codex/spec03-desktop64g-gh-canary-base --head $branch",
+  "command_result": "Script completed\nWall time 8.2 seconds\nOutput:\nremote: \nremote: Create a pull request for 'steerline-8cee9a0ae48b' on GitHub by visiting:        \nremote:      https://github.com/erranliu/SteerLine/pull/new/steerline-8cee9a0ae48b        \nremote: \nTo https://github.com/erranliu/SteerLine.git\n * [new branch]      HEAD -> steerline-8cee9a0ae48b\nbranch 'steerline-8cee9a0ae48b' set up to track 'origin/steerline-8cee9a0ae48b'.\nPR_URL=https://github.com/erranliu/SteerLine/pull/85",
+  "pr_url": "https://github.com/erranliu/SteerLine/pull/85",
+  "transcript_content_complete": false,
+  "transcript_clipping": [
+    "transcript_payload"
+  ]
+}
