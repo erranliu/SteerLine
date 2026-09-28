@@ -1790,8 +1790,10 @@ func (s *Service) run(ctx context.Context, dispatchMode string) (retErr error) {
 
 func (s *Service) finishWorkerInLoop(workerErr error) error {
 	err := s.finished(workerErr)
-	var settled *settledMinimalStepFailure
-	if errors.As(err, &settled) {
+	if _, settled := err.(*settledMinimalStepFailure); settled {
+		return nil
+	}
+	if _, preserved := err.(*preservedMinimalStepUnknown); preserved {
 		return nil
 	}
 	return err
@@ -1835,6 +1837,16 @@ func (s *Service) shutdown() {
 func (s *Service) shutdownWorker() {
 	if s.worker == nil {
 		return
+	}
+	if s.active != nil && s.active.Protocol == string(ProtocolOrcaSupervised) {
+		ctx, cancel := context.WithTimeout(context.Background(), duration(s.Config.ShutdownGrace))
+		defer cancel()
+		if err := s.worker.detachLocalObservation(ctx); err != nil {
+			s.preserveUnknownStop("remote observation could not be detached during service shutdown", err)
+		} else {
+			s.worker = nil
+		}
+		return // Stopping supervision must not cancel an active remote Dispatch.
 	}
 	t := time.NewTimer(duration(s.Config.ShutdownGrace))
 	defer t.Stop()

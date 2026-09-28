@@ -1083,6 +1083,14 @@ type settledMinimalStepFailure struct{ cause error }
 func (e *settledMinimalStepFailure) Error() string { return e.cause.Error() }
 func (e *settledMinimalStepFailure) Unwrap() error { return e.cause }
 
+// preservedMinimalStepUnknown means the uncertain outcome and its original
+// execution binding have already been saved. It blocks that Run, not the
+// service's observers for other independent Runs.
+type preservedMinimalStepUnknown struct{ cause error }
+
+func (e *preservedMinimalStepUnknown) Error() string { return e.cause.Error() }
+func (e *preservedMinimalStepUnknown) Unwrap() error { return e.cause }
+
 func (s *Service) failMinimalStep(run *Run, workflow *WorkflowRunRecord, execution *ExecutionRecord, attempt *StepAttemptRecord, cause error, unknown bool) error {
 	status := "failed"
 	if unknown {
@@ -1126,7 +1134,7 @@ func (s *Service) failMinimalStep(run *Run, workflow *WorkflowRunRecord, executi
 		return errors.Join(cause, err)
 	}
 	if unknown {
-		return cause
+		return &preservedMinimalStepUnknown{cause: cause}
 	}
 	return &settledMinimalStepFailure{cause: cause}
 }
