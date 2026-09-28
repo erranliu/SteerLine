@@ -1,0 +1,31 @@
+{
+  "id": "e3aa1591-64a8-47e0-8b96-240e27f48265",
+  "ok": true,
+  "result": {
+    "runId": "run_75f4d2338846",
+    "legacyReadOnly": false,
+    "tasks": [
+      {
+        "id": "task_eee5a4e47a85",
+        "run_id": "run_75f4d2338846",
+        "parent_id": null,
+        "created_by_terminal_handle": null,
+        "created_by_pane_key": null,
+        "created_by_process_incarnation": null,
+        "created_by_run_generation": null,
+        "task_title": "desktop64g read-only supervised SteerLine probe",
+        "display_name": "desktop64g read-only supervised SteerLine probe",
+        "spec": "Read-only SteerLine desktop64g supervised acceptance. Target: this newly created SteerLine worktree and its origin/main. Change: do not modify files, commits, branches, or PRs. Inspect git remote URL, HEAD, git status and README.md, then report the exact worktree path, HEAD, and clean status to the coordinator using the live orchestration preamble's status and worker_done commands. Constraints: no code edits, no network writes, no additional workers. Acceptance: one succeeded worker_done for the original Dispatch with a factual read-only summary.",
+        "status": "blocked",
+        "deps": "[]",
+        "result": null,
+        "created_at": "2026-09-28 01:48:06",
+        "completed_at": null
+      }
+    ],
+    "count": 1
+  },
+  "_meta": {
+    "runtimeId": "baf46a9c-923a-4bf1-b595-b866b5555e2e"
+  }
+}
