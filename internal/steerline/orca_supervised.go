@@ -1175,6 +1175,9 @@ func (b orcaSupervisedBackend) stepResultFromMessages(messages []OrcaInboxMessag
 		if message.Type != "status" {
 			continue
 		}
+		if message.FromHandle != "dispatch:"+identity.Dispatch {
+			continue // Only the fixed Dispatch sender may complete this Attempt.
+		}
 		payload, err := supervisedMessagePayload(message)
 		if err != nil {
 			return false, &BackendError{Code: BackendProtocolInvalid, Diagnostic: "supervised status payload encoding is invalid", Cause: err}
@@ -1183,9 +1186,6 @@ func (b orcaSupervisedBackend) stepResultFromMessages(messages []OrcaInboxMessag
 			continue
 		}
 		if len(payload) > maxSupervisedMessageBytes {
-			if message.FromHandle != "dispatch:"+identity.Dispatch {
-				continue
-			}
 			return false, &BackendError{Code: BackendProtocolInvalid, Diagnostic: "supervised structured status exceeds the fixed 8 KiB payload limit"}
 		}
 		var status struct {
@@ -1196,16 +1196,10 @@ func (b orcaSupervisedBackend) stepResultFromMessages(messages []OrcaInboxMessag
 			StepResult         json.RawMessage `json:"step_result"`
 		}
 		if err = json.Unmarshal(payload, &status); err != nil {
-			if message.FromHandle != "dispatch:"+identity.Dispatch {
-				continue
-			}
 			return false, &BackendError{Code: BackendProtocolInvalid, Diagnostic: "supervised status payload is not valid JSON", Cause: err}
 		}
 		if status.TaskID != identity.Task || status.DispatchID != identity.Dispatch {
-			if message.FromHandle == "dispatch:"+identity.Dispatch {
-				return false, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "supervised status payload identity conflicts with its Dispatch sender"}
-			}
-			continue // A late status belongs to another attempt; it cannot complete this one.
+			return false, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "supervised status payload identity conflicts with its Dispatch sender"}
 		}
 		if !supervisedCodexVersionAccepted(b.config.Orca.Supervised.ExpectedCodexVersion, status.RemoteCodexVersion) {
 			return false, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "remote Codex CLI version is missing or differs from the optional exact capability pin"}
@@ -1221,7 +1215,7 @@ func (b orcaSupervisedBackend) stepResultFromMessages(messages []OrcaInboxMessag
 			return false, &BackendError{Code: BackendProtocolInvalid, Diagnostic: "supervised step result envelope is invalid", Cause: err}
 		}
 		identityMismatches := []string{}
-		if canonical(envelope.ProjectIdentity) != canonical(expected.ProjectIdentity) {
+		if envelope.ProjectIdentity != expected.ProjectIdentity {
 			identityMismatches = append(identityMismatches, fmt.Sprintf("project_identity (got %q, expected %q)", envelope.ProjectIdentity, expected.ProjectIdentity))
 		}
 		if envelope.TaskID != expected.TaskID {
@@ -1238,6 +1232,9 @@ func (b orcaSupervisedBackend) stepResultFromMessages(messages []OrcaInboxMessag
 		}
 		if envelope.Result.StepID != attempt.StepID {
 			identityMismatches = append(identityMismatches, "step_id")
+		}
+		if envelope.Result.ResultID != attempt.AttemptID {
+			identityMismatches = append(identityMismatches, "result_id")
 		}
 		if len(identityMismatches) > 0 {
 			return false, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "supervised step result identity mismatch: " + strings.Join(identityMismatches, ", ")}
@@ -1347,14 +1344,12 @@ func (b orcaSupervisedBackend) observeWorker(ctx context.Context, worker *Worker
 				if message.Type == "escalation" && supervisedMessageMatches(message, identity) {
 					unhandledEscalation = true
 				}
-				if message.Type != "worker_done" {
+				if message.Type != "worker_done" || message.FromHandle != "dispatch:"+identity.Dispatch {
 					continue
 				}
 				payload, payloadErr := supervisedMessagePayload(message)
 				if payloadErr != nil {
-					if message.FromHandle == "dispatch:"+identity.Dispatch {
-						resultErr = &BackendError{Code: BackendProtocolInvalid, Diagnostic: "worker_done payload encoding is invalid", Cause: payloadErr}
-					}
+					resultErr = &BackendError{Code: BackendProtocolInvalid, Diagnostic: "worker_done payload encoding is invalid", Cause: payloadErr}
 					continue
 				}
 				var done struct {
@@ -1363,15 +1358,11 @@ func (b orcaSupervisedBackend) observeWorker(ctx context.Context, worker *Worker
 					Outcome    string `json:"outcome"`
 				}
 				if err = json.Unmarshal(payload, &done); err != nil {
-					if message.FromHandle == "dispatch:"+identity.Dispatch {
-						resultErr = &BackendError{Code: BackendProtocolInvalid, Diagnostic: "worker_done payload is not valid JSON", Cause: err}
-					}
+					resultErr = &BackendError{Code: BackendProtocolInvalid, Diagnostic: "worker_done payload is not valid JSON", Cause: err}
 					continue
 				}
 				if done.TaskID != identity.Task || done.DispatchID != identity.Dispatch {
-					if message.FromHandle == "dispatch:"+identity.Dispatch {
-						resultErr = &BackendError{Code: BackendIdentityMismatch, Diagnostic: "worker_done payload identity conflicts with its Dispatch sender"}
-					}
+					resultErr = &BackendError{Code: BackendIdentityMismatch, Diagnostic: "worker_done payload identity conflicts with its Dispatch sender"}
 					continue
 				}
 				doneOutcome, doneBody = done.Outcome, message.Body
@@ -1489,16 +1480,6 @@ func (b orcaSupervisedBackend) observeWorker(ctx context.Context, worker *Worker
 }
 
 func supervisedMessageMatches(message OrcaInboxMessage, identity ProcessIdentity) bool {
-	payload, err := supervisedMessagePayload(message)
-	if err == nil && len(payload) > 0 {
-		var fields struct {
-			TaskID     string `json:"taskId"`
-			DispatchID string `json:"dispatchId"`
-		}
-		if json.Unmarshal(payload, &fields) == nil && fields.TaskID == identity.Task && fields.DispatchID == identity.Dispatch {
-			return true
-		}
-	}
 	return message.FromHandle == "dispatch:"+identity.Dispatch
 }
 
