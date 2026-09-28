@@ -25,6 +25,7 @@ type fakeOrcaState struct {
 	Branch       string   `json:"branch,omitempty"`
 	Exited       bool     `json:"exited,omitempty"`
 	Closed       bool     `json:"closed,omitempty"`
+	Switched     bool     `json:"switched,omitempty"`
 	OutputLines  []string `json:"output_lines,omitempty"`
 	OldestCursor int      `json:"oldest_cursor,omitempty"`
 }
@@ -91,6 +92,19 @@ func fakeOrca(stateDir string, argv []string) int {
 			return fakeOrcaTerminalCreate(stateDir, argv[2:])
 		case "show":
 			return fakeOrcaShow(stateDir, argv[2:])
+		case "switch":
+			if os.Getenv("STEERLINE_FAKE_ORCA_SWITCH_FAIL") == "1" {
+				return fakeOrcaErr("switch_failed", "injected UI switch failure")
+			}
+			st, err := readFakeOrcaState(stateDir, arg(argv, "--terminal"))
+			if err != nil {
+				return fakeOrcaErr("terminal_handle_stale", err.Error())
+			}
+			st.Switched = true
+			if err = writeFakeOrcaState(stateDir, st); err != nil {
+				return fakeOrcaErr("state", err.Error())
+			}
+			return fakeOrcaOK(map[string]any{"terminal": map[string]any{"handle": st.Handle}})
 		case "read":
 			return fakeOrcaRead(stateDir, argv[2:])
 		case "close":
@@ -126,6 +140,11 @@ func fakeOrca(stateDir string, argv []string) int {
 }
 
 func fakeOrcaTerminalCreate(stateDir string, argv []string) int {
+	for _, value := range argv {
+		if value == "--focus" {
+			return fakeOrcaErr("terminal_create", "focus must be requested after the terminal is bound")
+		}
+	}
 	selector := strings.TrimPrefix(arg(argv, "--worktree"), "path:")
 	title := arg(argv, "--title")
 	command := arg(argv, "--command")
@@ -217,6 +236,41 @@ func fakeOrcaShow(stateDir string, argv []string) int {
 		}
 	}
 	return fakeOrcaOK(map[string]any{"terminal": map[string]any{"handle": st.Handle, "incarnationId": inc, "status": status, "connected": connected, "orphaned": orphaned, "worktreePath": filepath.ToSlash(st.Worktree), "branch": "refs/heads/" + st.Branch, "executionHostId": "local", "agentIdentity": os.Getenv("STEERLINE_FAKE_ORCA_AGENT_IDENTITY")}})
+}
+
+func TestOrcaAgentSkillUsesReadableTerminalOutput(t *testing.T) {
+	worktree := t.TempDir()
+	c := Config{Host: "orca", Agent: "codex", Sandbox: "danger-full-access", Codex: Command{Executable: "codex.exe"}, Model: "gpt-6-luna", ReasoningEffort: "xhigh"}
+	run := &Run{WorktreePath: &worktree}
+	executable, args, stdin, output, capture, err := (&Service{}).orcaNativeStepCommand(context.Background(), c, run, &StepAttemptRecord{}, MinimalStepInput{}, StepContract{Provider: "agent_skill"}, "schema.json", "input.json", "prompt.txt", "result.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if executable != "codex.exe" || stdin != "prompt.txt" || output != "" || capture {
+		t.Fatalf("Orca agent step lost terminal streaming or its fixed input: exe=%q stdin=%q output=%q capture=%t", executable, stdin, output, capture)
+	}
+	joined := " " + strings.Join(args, " ") + " "
+	if strings.Contains(joined, " --json ") || !strings.Contains(joined, " exec --output-schema schema.json --output-last-message result.json ") || !strings.Contains(joined, " --model gpt-6-luna ") || !strings.Contains(joined, " model_reasoning_effort=xhigh ") {
+		t.Fatalf("Orca Codex command lacks fixed result options or still enables JSONL: %v", args)
+	}
+}
+
+func TestOrcaTerminalSwitchTargetsExactHandleAndFailureIsReportable(t *testing.T) {
+	dir := t.TempDir()
+	c := orcaClient{cfg: orcaTestConfig(t, dir, "local")}
+	state := fakeOrcaState{Handle: "bound-terminal", Incarnation: "bound-incarnation"}
+	require(t, writeFakeOrcaState(dir, state))
+	if err := c.terminalSwitch(context.Background(), state.Handle); err != nil {
+		t.Fatal(err)
+	}
+	state, err := readFakeOrcaState(dir, state.Handle)
+	if err != nil || !state.Switched {
+		t.Fatalf("exact Orca terminal was not switched: %+v %v", state, err)
+	}
+	t.Setenv("STEERLINE_FAKE_ORCA_SWITCH_FAIL", "1")
+	if err = c.terminalSwitch(context.Background(), state.Handle); err == nil {
+		t.Fatal("Orca UI switch failure was not reported")
+	}
 }
 
 func TestOrcaHistoryLaunchRequiresSameLiveCodexAgent(t *testing.T) {

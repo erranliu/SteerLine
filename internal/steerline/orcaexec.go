@@ -63,6 +63,14 @@ func (c orcaClient) terminalCreate(ctx context.Context, worktreePath, title, com
 	return res.Terminal, nil
 }
 
+// Switching an existing terminal is a UI request. A failed switch must never
+// change the outcome of the already-created, durably bound worker.
+func (c orcaClient) terminalSwitch(ctx context.Context, handle string) error {
+	out, callErr := c.call(ctx, 5*time.Second, "terminal", "switch", "--terminal", handle, "--json")
+	_, parseErr := parseEnvelope(out)
+	return errors.Join(callErr, parseErr)
+}
+
 func (c orcaClient) terminalListForWorktree(ctx context.Context, worktreePath string) ([]orcaTerminal, error) {
 	out, callErr := c.call(ctx, positiveDuration(c.cfg.CommandTimeout, 30*time.Second), "terminal", "list", "--worktree", "path:"+filepath.ToSlash(worktreePath), "--json")
 	env, e := parseEnvelope(out)
@@ -166,7 +174,7 @@ func (s *Service) startOrcaMinimalStepWorker(ctx context.Context, c Config, task
 	if err != nil {
 		return nil, &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "Orca created a native step terminal whose identity cannot be confirmed", Cause: err}
 	}
-	if term.Handle == "" || term.RuntimeID == "" || term.IncarnationID == "" || term.Orphaned || term.ExecutionHostID != "local" || term.WorktreePath != "" && canonical(filepath.FromSlash(term.WorktreePath)) != canonical(*run.WorktreePath) || term.Branch != "" && strings.TrimPrefix(term.Branch, "refs/heads/") != *run.WorktreeBranch || !term.exited() && !term.Connected {
+	if term.Handle == "" || term.RuntimeID == "" || term.IncarnationID == "" || term.ExecutionHostID != "local" || term.WorktreePath != "" && canonical(filepath.FromSlash(term.WorktreePath)) != canonical(*run.WorktreePath) || term.Branch != "" && strings.TrimPrefix(term.Branch, "refs/heads/") != *run.WorktreeBranch || !term.exited() && !term.Connected {
 		return nil, &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "Orca native step terminal does not match the fixed local workspace or live identity"}
 	}
 	proc := &orcaProcess{cfg: c, term: term, launcher: launcher}
@@ -201,7 +209,7 @@ func (s *Service) orcaNativeStepCommand(ctx context.Context, c Config, run *Run,
 		return "", nil, "", "", false, UnsupportedAdapterOperation("native-task/v1", "Orca target agent_skill steps currently require Codex")
 	}
 	args := append([]string(nil), workConfig.Codex.Args...)
-	args = append(args, "exec", "--json", "--output-schema", schema, "--output-last-message", result, "--sandbox", workConfig.Sandbox)
+	args = append(args, "exec", "--output-schema", schema, "--output-last-message", result, "--sandbox", workConfig.Sandbox)
 	gitWriteArgs, err := codexLinkedWorktreeWriteArgs(ctx, workConfig, workConfig.Repository)
 	if err != nil {
 		return "", nil, "", "", false, err
