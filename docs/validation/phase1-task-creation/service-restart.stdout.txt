@@ -1,0 +1,1 @@
+{"status": "window-required", "launcher_path": "C:\\SteerlineRuntime\\service-window.bat", "config_path": "C:\\SteerlineRuntime\\etc\\SteerLine.json"}

@@ -1,0 +1,45 @@
+{
+  "request_id": "8affb9f68d154ef494f3360be51f69e9",
+  "spec_commit": "7372c04c8fdd7bea0965e9c5592e9e15cad918ad",
+  "task_ids": [
+    26,
+    27,
+    28,
+    29,
+    30,
+    31,
+    32
+  ],
+  "dependency_count": 9,
+  "config": "C:\\SteerlineRuntime\\etc\\SteerLine.json",
+  "cli": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-planning-7372c04.exe",
+  "cli_sha256": "43fe3275e58a7fee0aaf6176339acbc10ed91ee762ee0a0bc71064a0405548ce",
+  "requested_by": "Codex: user requested Phase 1 task creation and DAG",
+  "observed_authority_version": 2,
+  "observed_graph_revision": 3,
+  "add_predecessors": [
+    {
+      "task_id": "16",
+      "predecessor_ids": [
+        "26"
+      ],
+      "request_id": "696f1f3d644b4da19e95054c8ea7b512",
+      "expected_task_version": 1,
+      "expected_graph_revision": 4,
+      "reason": "Phase 1 candidate interface prerequisite"
+    },
+    {
+      "task_id": "24",
+      "predecessor_ids": [
+        "32"
+      ],
+      "request_id": "033235f6d36344c8b74d914b30c3854f",
+      "expected_task_version": 1,
+      "expected_graph_revision": 5,
+      "reason": "Phase 1 integrated delivery gate before Phase 2 acceptance"
+    }
+  ],
+  "expected_authority_version": 3,
+  "expected_graph_revision": 3,
+  "backup": "C:\\SteerlineRuntime\\backup\\phase1-before-8affb9f68d154ef494f3360be51f69e9.sqlite"
+}

@@ -40,7 +40,7 @@ Spec 完成交付后从未完成表移出；仍有消费者时只保留必要交
 
 ## 第一阶段新增范围与第二阶段的交接
 
-[第一阶段版本交付方案](phase-1-delivery.md)的新增范围已落实为以下独立规格。表中依赖是待创建任务的执行要求；新任务尚未进入中心 DAG。`#3/#4/#6` 的剩余原生验收与 `#26/#30` 可使用独立资源推进；共用 Service/SQLite、构建产物或真实 Orca 宿主的集成和故障注入串行协调。
+[第一阶段版本交付方案](phase-1-delivery.md)的新增范围已落实为以下独立规格和中心任务；表中依赖已由中心创建及补边回读核验。`#3/#4/#6` 的剩余原生验收与 `#26/#30` 可使用独立资源推进；共用 Service/SQLite、构建产物或真实 Orca 宿主的集成和故障注入串行协调。规格必须先集成到执行目标分支才能按原固定契约开始实现。
 
 | 任务 ID | 任务名称 | 目标 / 执行 Spec | 直接开工前置 | 集成与交付条件 |
 | --- | --- | --- | --- | --- |
@@ -52,7 +52,7 @@ Spec 完成交付后从未完成表移出；仍有消费者时只保留必要交
 | 31 | dev 隔离与 stable 提升 | `PHASE1-RUNTIME` · [Spec](../spec/runtime-isolation-promotion.spec.md) · [Plan](../spec/runtime-isolation-promotion.plan.md) | `#30` | home/仓库隔离、受控提升、失败继续和当前格式恢复通过 |
 | 32 | 第一阶段集成验收 | `PHASE1-DELIVERY` · [Spec](../spec/phase1-release-acceptance.spec.md) · [Plan](../spec/phase1-release-acceptance.plan.md) | `#29`、`#31` | 固定组合构建真实两链、24 小时运行、dev 并行及提升验收通过 |
 
-保留第二阶段 `#14–#24` 的现有边；[追加前置能力](../spec/native-task-add-predecessors.spec.md)已交付，拟在新任务创建后补 `#26 → #16` 与 `#32 → #24`，两条均未提交中心。后表和现有第二阶段图仍列实际既有边。`#14/#15` 可同步准备；#16 消费 #26 的身份接口，超出其冻结规格的新 API/WinUI 范围须另有执行契约。加边不修改原 TaskContract 的 Git 引用。
+第二阶段原有边保留，并已通过[追加前置能力](../spec/native-task-add-predecessors.spec.md)加入 `#26 → #16` 与 `#32 → #24`。`#14/#15` 可同步准备；#16 消费 #26 的身份接口，超出其冻结规格的新 API/WinUI 范围须另有执行契约。中心新边收紧执行资格，原 TaskContract 的 Git 引用保持不变。[创建与回读证据](../validation/phase1-task-creation/README.md)列出原请求和精确快照。
 
 ```mermaid
 flowchart LR
@@ -62,11 +62,11 @@ flowchart LR
     T6["#6 远端闭环"] --> T29
     T30["#30 固定版本/双入口"] --> T31["#31 隔离/提升"] --> T32["#32 一阶段集成验收"]
     T29 --> T32
-    T26 -. "拟补边，未生效" .-> T16["#16 本机协议"]
-    T32 -. "拟补边，未生效" .-> T24["#24 二阶段完整验收"]
+    T26 --> T16["#16 本机协议"]
+    T32 --> T24["#24 二阶段完整验收"]
 ```
 
-图中实线同样是 #26–#32 的待创建关系，不表示这些新任务已存在于中心；虚线单独标出对已建二阶段任务拟追加的关系。
+图中关系均已存在于中心 DAG；各任务的真实交付仍由中心 PR 合并核验决定。
 
 ## 第二阶段硬前置与并行集成
 
@@ -76,7 +76,7 @@ flowchart LR
 | --- | --- | --- | --- | --- |
 | 14 | Codex 规划主 agent 能力验证 | `PHASE2` · [Spec](../spec/phase2-agent-capabilities.spec.md) · [Plan](../spec/phase2-agent-capabilities.plan.md) | 无未完成硬前置 | 本 Spec 全部验收通过；共享接口有变更时同步消费者和受影响回归。 |
 | 15 | WinUI 基座与原生输入 | `PHASE2` · [Spec](../spec/phase2-winui-foundation.spec.md) · [Plan](../spec/phase2-winui-foundation.plan.md) | 无未完成硬前置 | 本 Spec 全部验收通过；共享接口有变更时同步消费者和受影响回归。 |
-| 16 | 本机客户端协议与历史查询 | `PHASE2` · [Spec](../spec/phase2-local-api.spec.md) · [Plan](../spec/phase2-local-api.plan.md) | 无未完成硬前置 | 本 Spec 全部验收通过；共享接口有变更时同步消费者和受影响回归。 |
+| 16 | 本机客户端协议与历史查询 | `PHASE2` · [Spec](../spec/phase2-local-api.spec.md) · [Plan](../spec/phase2-local-api.plan.md) | `#26`（中心追加） | 本 Spec 全部验收通过；共享接口有变更时同步消费者和受影响回归。 |
 | 17 | 规划提案与受控草稿 | `PHASE2` · [Spec](../spec/phase2-planning-drafts.spec.md) · [Plan](../spec/phase2-planning-drafts.plan.md) | `#16` | 本 Spec 全部验收通过；共享接口有变更时同步消费者和受影响回归。 |
 | 18 | Codex 规划会话服务 | `PHASE2` · [Spec](../spec/phase2-planning-sessions.spec.md) · [Plan](../spec/phase2-planning-sessions.plan.md) | `#14`、`#17` | #14 必须有通过证据，复用 #17 guard；与 #19 的 Service/存储接线串行集成。 |
 | 19 | 正式文档发布与任务创建 | `PHASE2` · [Spec](../spec/phase2-document-publish.spec.md) · [Plan](../spec/phase2-document-publish.plan.md) | `#17` | 复用 #17 guard 与正式读模型；与 #18 独立开发，共享接线后合入方回归双方。 |
@@ -84,11 +84,13 @@ flowchart LR
 | 21 | 执行与待处理原生界面 | `PHASE2` · [Spec](../spec/phase2-execution-ui.spec.md) · [Plan](../spec/phase2-execution-ui.plan.md) | `#15`、`#16` | 未通过的第一阶段能力保持不可用；本任务交付不代替 #24 完整后端验收。 |
 | 22 | 规划对话原生界面 | `PHASE2` · [Spec](../spec/phase2-conversation-ui.spec.md) · [Plan](../spec/phase2-conversation-ui.plan.md) | `#15`、`#18` | 真实会话/工具经 #18；不等 #19，但无审阅发布副作用入口。 |
 | 23 | 文档审阅与确认原生界面 | `PHASE2` · [Spec](../spec/phase2-review-ui.spec.md) · [Plan](../spec/phase2-review-ui.plan.md) | `#15`、`#19` | 使用 #19/#17 已交付的真实版本查询；与另一文档页面可分头开发，共享 WinUI 导航串行集成。 |
-| 24 | 第二阶段完整闭环验收 | `PHASE2` · [Spec](../spec/phase2-integration.spec.md) · [Plan](../spec/phase2-integration.plan.md) | `#20`、`#21`、`#22`、`#23`、`#3`、`#4`、`#6` | 全部前置真实交付；本任务逐项完成两后端和跨组件故障验收，不以样例代替。 |
+| 24 | 第二阶段完整闭环验收 | `PHASE2` · [Spec](../spec/phase2-integration.spec.md) · [Plan](../spec/phase2-integration.plan.md) | `#20`、`#21`、`#22`、`#23`、`#3`、`#4`、`#6`，另有中心追加的 `#32` | 全部前置真实交付；本任务逐项完成两后端和跨组件故障验收，不以样例代替。 |
 
 ```mermaid
 flowchart LR
     T14["#14 能力验证"] --> T18["#18 规划会话"]
+    T26["#26 多候选模型"] --> T16["#16 本机协议"]
+    T32["#32 一阶段集成验收"] --> T24["#24 完整闭环验收"]
     T16["#16 本机协议"] --> T17["#17 提案与草稿"]
     T17 --> T18
     T17 --> T19["#19 正式发布"]

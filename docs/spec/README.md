@@ -43,7 +43,7 @@
 
 ## 第一阶段多候选与版本交付
 
-[第一阶段共同约束](phase1-delivery-constraints.md)定义交接、版本与证据边界。以下只有文档身份，尚未中心创建、实现或验收。每项独立 Spec/Plan 对应一个实现 PR。
+[第一阶段共同约束](phase1-delivery-constraints.md)定义交接、版本与证据边界。以下任务已中心创建，尚未实现或验收；执行前须先集成中心固定引用的规格提交。每项独立 Spec/Plan 对应一个实现 PR。
 
 | 任务 ID | 任务名称 | 硬前置 | Spec | Plan |
 | --- | --- | --- | --- | --- |
@@ -57,13 +57,13 @@
 
 ## 第二阶段原生 UI 与受控规划
 
-[共同接口与边界](phase2-constraints.md)只承载共同要求；下列每个任务各有独立 Spec、Plan 和实现 PR。未实现/未验收；硬前置均以真实任务交付为准。`#14–#24` 已进入中心固定 DAG。
+[共同接口与边界](phase2-constraints.md)只承载共同要求；下列每个任务各有独立 Spec、Plan 和实现 PR。未实现/未验收；硬前置均以真实任务交付为准。`#14–#24` 已进入中心 DAG，#16/#24 后续受控追加的前置只收紧开工资格，未改原 Spec/Plan 的固定 Git 引用。
 
 | 任务 ID | 任务名称 | 硬前置 | Spec | Plan |
 | --- | --- | --- | --- | --- |
 | 14 | Codex 规划主 agent 能力验证 | 无未完成硬前置 | [Spec](phase2-agent-capabilities.spec.md) | [Plan](phase2-agent-capabilities.plan.md) |
 | 15 | WinUI 基座与原生输入 | 无未完成硬前置 | [Spec](phase2-winui-foundation.spec.md) | [Plan](phase2-winui-foundation.plan.md) |
-| 16 | 本机客户端协议与历史查询 | 无未完成硬前置 | [Spec](phase2-local-api.spec.md) | [Plan](phase2-local-api.plan.md) |
+| 16 | 本机客户端协议与历史查询 | `#26`（中心追加） | [Spec](phase2-local-api.spec.md) | [Plan](phase2-local-api.plan.md) |
 | 17 | 规划提案与受控草稿 | `#16` | [Spec](phase2-planning-drafts.spec.md) | [Plan](phase2-planning-drafts.plan.md) |
 | 18 | Codex 规划会话服务 | `#14`、`#17` | [Spec](phase2-planning-sessions.spec.md) | [Plan](phase2-planning-sessions.plan.md) |
 | 19 | 正式文档发布与任务创建 | `#17` | [Spec](phase2-document-publish.spec.md) | [Plan](phase2-document-publish.plan.md) |
@@ -71,7 +71,7 @@
 | 21 | 执行与待处理原生界面 | `#15`、`#16` | [Spec](phase2-execution-ui.spec.md) | [Plan](phase2-execution-ui.plan.md) |
 | 22 | 规划对话原生界面 | `#15`、`#18` | [Spec](phase2-conversation-ui.spec.md) | [Plan](phase2-conversation-ui.plan.md) |
 | 23 | 文档审阅与确认原生界面 | `#15`、`#19` | [Spec](phase2-review-ui.spec.md) | [Plan](phase2-review-ui.plan.md) |
-| 24 | 第二阶段完整闭环验收 | `#20`、`#21`、`#22`、`#23`、`#3`、`#4`、`#6` | [Spec](phase2-integration.spec.md) | [Plan](phase2-integration.plan.md) |
+| 24 | 第二阶段完整闭环验收 | `#20`、`#21`、`#22`、`#23`、`#3`、`#4`、`#6`，另有中心追加的 `#32` | [Spec](phase2-integration.spec.md) | [Plan](phase2-integration.plan.md) |
 
 ## 现有 Hosting 实现
 
