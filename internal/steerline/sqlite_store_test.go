@@ -278,6 +278,11 @@ func TestMinimalWorkflowRevisionGatesAndRepairLimit(t *testing.T) {
 	failedPassed := false
 	verify := StepGateResult{StepID: "verify", Succeeded: true, Revision: commit, Workspace: implement.Workspace, ResultID: "verify-1", Checks: []CheckEvidence{{Name: "unit", Status: "failed", Revision: commit, Command: "go test ./...", ScriptVersion: "fixture/v1", ExitCode: &failedExit, Passed: &failedPassed, EvidenceRef: "fixture:unit", ActualCommit: commit}}}
 	badVerify := verify
+	badVerify.Checks = nil
+	if _, err := AdvanceMinimalExecution(run, exec, badVerify, []string{"unit"}); err == nil || !strings.Contains(err.Error(), "no conclusive execution receipt") {
+		t.Fatalf("verify advanced without the required check receipt: %v", err)
+	}
+	badVerify = verify
 	badVerify.Checks = append([]CheckEvidence(nil), verify.Checks...)
 	badVerify.Checks[0].EvidenceRef = ""
 	if _, err := AdvanceMinimalExecution(run, exec, badVerify, []string{"unit"}); err == nil {
