@@ -240,7 +240,10 @@ func renderRows(m Model, state projectState, width, height int) []string {
 	if state.focus == 0 {
 		focus = " [焦点]"
 	}
-	out := []string{styleLabel.Render(fmt.Sprintf("任务列表%s · %d 项 · %s", focus, len(rows), filterDisplayName(state.filter)))}
+	out := []string{styleLabel.Render(fmt.Sprintf("任务列表%s · %d 项 · %d %s", focus, len(rows), state.filter+1, filterDisplayName(state.filter)))}
+	if state.ref.Legacy == nil && height >= 6 {
+		out = append(out, styleDim.Render("筛选 1全部  2Ready  3运行中  4待决策"), styleDim.Render("     5待合并  6需处理  7历史"))
+	}
 	if state.ref.Error != "" {
 		out = append(out, styleAlert.Render("配置错误："+safeTerminalText(state.ref.Error)))
 		return out
@@ -277,6 +280,8 @@ func renderRows(m Model, state projectState, width, height int) []string {
 			out = append(out, "候选查询失败："+safeTerminalText(snapshot.TaskError))
 		case snapshot.Observation.Runtime != nil && snapshot.Observation.Runtime.SlotOccupied && snapshot.Observation.Runtime.Control.DispatchMode == "auto":
 			out = append(out, "没有可开始的任务；执行槽正被 "+safeTerminalText(stringValue(snapshot.Observation.Runtime.CurrentTask))+" 占用。")
+		case state.filter != 0:
+			out = append(out, "“"+filterDisplayName(state.filter)+"”筛选没有匹配任务；按 1 查看全部任务。")
 		case snapshot.Tasks != nil && len(snapshot.Tasks.Tasks) == 0:
 			out = append(out, "当前没有 Ready 任务。")
 		default:
@@ -1495,7 +1500,7 @@ func renderFooter(m Model, state projectState) string {
 	if state.ref.Legacy != nil {
 		return "←→ 项目 · Tab 列表/动态 · ↑↓ 选择/滚动 · d 详情 · q 退出"
 	}
-	parts := []string{"←→ 项目", "Tab 列表/动态", "↑↓ 选择/滚动", "d 详情"}
+	parts := []string{"←→ 项目", "Tab 列表/动态", "1–7 筛选", "↑↓ 选择/滚动", "d 详情"}
 	row := m.selectedRow(m.selected)
 	if row != nil && row.kind == rowReady && candidateActionReason(state.ref, state.snapshot, m.clock.Now()) == "" {
 		parts = append(parts, "s 选方案")
@@ -1529,7 +1534,7 @@ func renderHelp(state projectState) []string {
 		return append(lines, "", "旧 Beads 项目只读；控制操作不可用。")
 	}
 	return append(lines,
-		"", "任务与服务", "1–7  筛选任务和运行", "s    选择已配置方案并开始 Ready 任务", "m/p  派发模式 / 暂停或恢复", "x    停止服务（需确认）", "i    查询最近控制请求",
+		"", "任务与服务", "1 全部 · 2 Ready · 3 运行中", "4 待决策 · 5 待合并", "6 需处理 · 7 历史", "s    选择已配置方案并开始 Ready 任务", "m/p  派发模式 / 暂停或恢复", "x    停止服务（需确认）", "i    查询最近控制请求",
 		"", "运行与会话", "A/c/f  活动 / 会话 / 最终回复", "a    回答当前待决策问题", "v/u    决策历史 / 恢复核验", "[ / ]  切换 attempt", ", / .  选择轮次", "e / =  折叠 / 保持展开", "y / n  更多会话 / 下一条最终回复")
 }
 
