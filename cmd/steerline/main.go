@@ -284,7 +284,8 @@ func run() error {
 	}
 	if command == "run" {
 		if *serviceWindow {
-			windowCtx, windowCancel, err := steerline.ServiceWindowContext(ctx)
+			projectName := strings.TrimSuffix(filepath.Base(*config), filepath.Ext(*config))
+			windowCtx, windowCancel, err := steerline.ServiceWindowContext(ctx, projectName)
 			if err != nil {
 				return err
 			}
