@@ -31,7 +31,7 @@ type testQuerySource struct {
 	selected string
 }
 
-func (q *testQuerySource) ReadProject(_ context.Context, _ ProjectRef, selected string) ProjectSnapshot {
+func (q *testQuerySource) ReadProject(_ context.Context, _ ProjectRef, selected string, _ ProjectSnapshot) ProjectSnapshot {
 	q.selected = selected
 	return q.snapshot
 }
@@ -232,6 +232,36 @@ func TestDecisionAnswerEditorHandlesTwelveOptionsUnicodePasteAndStableCommandID(
 	}
 	if m.projects[0].actions[requestID].Status != "pending" {
 		t.Fatalf("pending command was not tracked by its stable ID: %+v", m.projects[0].actions[requestID])
+	}
+}
+
+func TestSupervisedDecisionUsesBoundAnswerCommand(t *testing.T) {
+	now := time.Date(2026, 9, 28, 5, 42, 0, 0, time.UTC)
+	ref := testProject("supervised-decision")
+	snapshot, run := decisionSnapshot(ref, now)
+	run.Host, run.Protocol = "orca_supervised", "orca_supervised"
+	control := &testControlClient{}
+	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, control, now)
+	m.profile = &viewProfile{dir: t.TempDir()}
+	m.projects[0].selectedKey = "run:" + run.RunID
+	row := &consoleRow{kind: rowRun, run: run}
+	if reason := decisionAnswerAvailability(m.projects[0], row); !strings.HasPrefix(reason, "提交后") {
+		t.Fatalf("supervised answer was unavailable despite the live command capability: %s", reason)
+	}
+	updated, cmd := m.answerSelectedDecision()
+	m = updated.(Model)
+	if cmd != nil || m.answer == nil {
+		t.Fatalf("supervised answer draft did not open: dialog=%+v cmd=%v", m.answer, cmd)
+	}
+	updated, cmd = m.handleDecisionAnswerKey(tea.KeyMsg{Type: tea.KeyF2})
+	m = updated.(Model)
+	if cmd == nil {
+		t.Fatal("supervised answer was not submitted through CommandService")
+	}
+	updated, _ = m.Update(cmd())
+	m = updated.(Model)
+	if control.decisionCalls != 1 || control.decisionAnswer.RunID != run.RunID || control.decisionAnswer.DecisionID != run.Decision.ID || control.decisionAnswer.OptionID != "o10" || control.decisionAnswer.ExpectedRunRevision != run.ControlRevision {
+		t.Fatalf("supervised answer lost its original execution identity: %+v", control.decisionAnswer)
 	}
 }
 
@@ -535,11 +565,53 @@ func TestRefreshTicksDoNotStackSlowProjectReads(t *testing.T) {
 	if m.projects[0].refreshID != 1 {
 		t.Fatal("foreground reader restarted before its refresh interval")
 	}
-	m.clock.(*testClock).now = now.Add(3*time.Second + 450*time.Millisecond)
+	m.clock.(*testClock).now = now.Add(4*time.Second + 50*time.Millisecond)
 	updated, _ = m.Update(tickMsg(m.clock.Now()))
 	m = updated.(Model)
 	if m.projects[0].refreshID != 2 || !m.projects[0].refreshing {
-		t.Fatal("foreground reader did not restart within half a second after its last completed refresh")
+		t.Fatal("foreground reader did not restart one second after its last completed refresh")
+	}
+}
+
+func TestProjectSnapshotReuseRequiresSameLiveIdentityAndDatabaseVersion(t *testing.T) {
+	now := time.Now()
+	ref := testProject("alpha")
+	process := &steerline.ProcessIdentity{PID: 42}
+	runtime := &steerline.Runtime{Repository: steerline.Repository{Identity: ref.Identity}, Service: steerline.ServiceState{ProcessIdentity: process}, HeartbeatAt: now}
+	previous := ProjectSnapshot{
+		SelectedTaskID: "14", FullReadAt: now,
+		Connection:  steerline.ServiceConnection{State: steerline.ConnectionConnected, Snapshot: steerline.ObservationSnapshot{Runtime: runtime}},
+		Observation: steerline.ObservationSnapshot{Runtime: runtime, FreshnessLimit: 15 * time.Second},
+		NativeTasks: &steerline.NativeTaskPage{ProjectID: ref.Identity, DatabaseID: "database", DatabaseRevision: 7},
+		Tasks:       &steerline.TaskSnapshot{}, Domain: &steerline.DomainSnapshot{},
+	}
+	probe := func(*steerline.ProcessIdentity) steerline.ProcessProbe {
+		return steerline.ProcessProbe{State: steerline.ProcessMatches}
+	}
+	version := func(context.Context, string) (string, uint64, error) { return "database", 7, nil }
+	if !reusableProjectSnapshot(context.Background(), ref, "14", previous, probe, version) {
+		t.Fatal("unchanged verified project was fully reloaded")
+	}
+	for _, changed := range []struct {
+		name     string
+		selected string
+		snapshot ProjectSnapshot
+		probe    func(*steerline.ProcessIdentity) steerline.ProcessProbe
+		version  func(context.Context, string) (string, uint64, error)
+	}{
+		{name: "selection changed", selected: "15", snapshot: previous, probe: probe, version: version},
+		{name: "database revision changed", selected: "14", snapshot: previous, probe: probe, version: func(context.Context, string) (string, uint64, error) { return "database", 8, nil }},
+		{name: "process exited", selected: "14", snapshot: previous, probe: func(*steerline.ProcessIdentity) steerline.ProcessProbe {
+			return steerline.ProcessProbe{State: steerline.ProcessAbsent}
+		}, version: version},
+		{name: "database probe failed", selected: "14", snapshot: previous, probe: probe, version: func(context.Context, string) (string, uint64, error) { return "", 0, errors.New("unavailable") }},
+		{name: "full check expired", selected: "14", snapshot: func() ProjectSnapshot { old := previous; old.FullReadAt = now.Add(-6 * time.Second); return old }(), probe: probe, version: version},
+	} {
+		t.Run(changed.name, func(t *testing.T) {
+			if reusableProjectSnapshot(context.Background(), ref, changed.selected, changed.snapshot, changed.probe, changed.version) {
+				t.Fatal("stale or mismatched project snapshot was reused")
+			}
+		})
 	}
 }
 

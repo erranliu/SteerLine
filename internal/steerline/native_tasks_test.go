@@ -13,43 +13,62 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
 
+var nativeSeedOnce sync.Once
+var nativeSeedRepo, nativeSeedRemote, nativeSeedCommit string
+
+func prepareNativeSeed(t *testing.T) {
+	t.Helper()
+	nativeSeedOnce.Do(func() {
+		root, err := sharedTestArtifactsDir()
+		require(t, err)
+		nativeSeedRepo = filepath.Join(root, "native-seed", "repo")
+		nativeSeedRemote = filepath.Join(root, "native-seed", "origin.git")
+		require(t, os.MkdirAll(filepath.Dir(nativeSeedRepo), 0700))
+		for _, args := range [][]string{{"init", "--quiet", "-b", "main", nativeSeedRepo}, {"init", "--quiet", "--bare", nativeSeedRemote}, {"-C", nativeSeedRepo, "remote", "add", "origin", nativeSeedRemote}} {
+			output, err := exec.Command("git", args...).CombinedOutput()
+			if err != nil {
+				t.Fatalf("seed git: %v: %s", err, output)
+			}
+		}
+		for name, content := range map[string]string{
+			"docs/spec/task-core.spec.md":          "# Task Spec\n\n## Acceptance\n\nPass.\n",
+			"docs/spec/task-core.plan.md":          "# Task Plan\n",
+			"docs/spec/native-task-constraints.md": "# Shared constraints\n",
+		} {
+			path := filepath.Join(nativeSeedRepo, filepath.FromSlash(name))
+			require(t, os.MkdirAll(filepath.Dir(path), 0700))
+			require(t, os.WriteFile(path, []byte(content), 0600))
+		}
+		for _, args := range [][]string{{"-C", nativeSeedRepo, "add", "."}, {"-C", nativeSeedRepo, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "fixture"}} {
+			output, err := exec.Command("git", args...).CombinedOutput()
+			if err != nil {
+				t.Fatalf("seed git: %v: %s", err, output)
+			}
+		}
+		output, err := exec.Command("git", "-C", nativeSeedRepo, "rev-parse", "HEAD").Output()
+		require(t, err)
+		nativeSeedCommit = strings.TrimSpace(string(output))
+	})
+}
+
 func nativeTaskFixture(t *testing.T) (Config, string) {
 	t.Helper()
+	prepareNativeSeed(t)
 	t.Setenv("STEERLINE_HOME", t.TempDir())
 	repo := filepath.Join(t.TempDir(), "repo")
 	remote := filepath.Join(t.TempDir(), "origin.git")
-	for _, args := range [][]string{{"init", "--quiet", "-b", "main", repo}, {"init", "--quiet", "--bare", remote}, {"-C", repo, "remote", "add", "origin", remote}} {
-		if out, err := exec.Command("git", args...).CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v: %s", args, err, out)
-		}
-	}
-	for name, content := range map[string]string{
-		"docs/spec/task-core.spec.md":          "# Task Spec\n\n## Acceptance\n\nPass.\n",
-		"docs/spec/task-core.plan.md":          "# Task Plan\n",
-		"docs/spec/native-task-constraints.md": "# Shared constraints\n",
-	} {
-		path := filepath.Join(repo, filepath.FromSlash(name))
-		if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(path, []byte(content), 0600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	for _, args := range [][]string{{"-C", repo, "add", "."}, {"-C", repo, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "fixture"}} {
-		if out, err := exec.Command("git", args...).CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v: %s", args, err, out)
-		}
-	}
-	commitBytes, err := exec.Command("git", "-C", repo, "rev-parse", "HEAD").Output()
+	require(t, os.CopyFS(repo, os.DirFS(nativeSeedRepo)))
+	require(t, os.CopyFS(remote, os.DirFS(nativeSeedRemote)))
+	output, err := exec.Command("git", "-C", repo, "remote", "set-url", "origin", remote).CombinedOutput()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("fixture remote: %v: %s", err, output)
 	}
-	commit := strings.TrimSpace(string(commitBytes))
+	commit := nativeSeedCommit
 	c := Config{TaskAuthority: "native", Repository: repo, Remote: "origin", Branch: "main", RuntimeFile: "runtime.json", TaskPoll: "10s", PRPoll: "30s", Heartbeat: "5s", CommandTimeout: "10s", ShutdownGrace: "10s", Sandbox: "workspace-write", ExecutableTypes: []string{"task", "bug", "feature", "chore"}, Git: Command{Executable: "git"}}
 	key, err := repoStateKey(c)
 	if err != nil {
@@ -57,6 +76,58 @@ func nativeTaskFixture(t *testing.T) (Config, string) {
 	}
 	c.RunDir = filepath.Join(SteerlineStateRoot(), key)
 	return c, commit
+}
+
+func TestNativeFixtureSeedAndCopiesAreIndependent(t *testing.T) {
+	a, initial := nativeTaskFixture(t)
+	b, otherInitial := nativeTaskFixture(t)
+	if initial != otherInitial || a.Repository == b.Repository || a.RunDir == b.RunDir {
+		t.Fatalf("fixture identities or seed commits overlap: %s %s / %s %s", a.Repository, b.Repository, initial, otherInitial)
+	}
+	git := func(args ...string) string {
+		t.Helper()
+		output, err := exec.Command("git", args...).CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v: %v: %s", args, err, output)
+		}
+		return strings.TrimSpace(string(output))
+	}
+	aRemote := git("-C", a.Repository, "remote", "get-url", "origin")
+	bRemote := git("-C", b.Repository, "remote", "get-url", "origin")
+	if aRemote == bRemote || aRemote == nativeSeedRemote || bRemote == nativeSeedRemote {
+		t.Fatalf("fixture remotes overlap: %s / %s / %s", aRemote, bRemote, nativeSeedRemote)
+	}
+	file := filepath.Join(a.Repository, "docs", "spec", "task-core.spec.md")
+	require(t, os.WriteFile(file, []byte("# changed only in A\n"), 0600))
+	git("-C", a.Repository, "add", ".")
+	git("-C", a.Repository, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "isolated change")
+	newHead := git("-C", a.Repository, "rev-parse", "HEAD")
+	if newHead == initial {
+		t.Fatal("A did not advance")
+	}
+	git("-C", a.Repository, "push", "origin", "main")
+	for _, repo := range []string{b.Repository, nativeSeedRepo} {
+		if head := git("-C", repo, "rev-parse", "HEAD"); head != initial {
+			t.Fatalf("%s HEAD changed to %s", repo, head)
+		}
+		content, err := os.ReadFile(filepath.Join(repo, "docs", "spec", "task-core.spec.md"))
+		require(t, err)
+		if string(content) == "# changed only in A\n" {
+			t.Fatalf("%s contents changed with A", repo)
+		}
+	}
+	if got := git("--git-dir", aRemote, "rev-parse", "refs/heads/main"); got != newHead {
+		t.Fatalf("A remote head=%s, want %s", got, newHead)
+	}
+	for _, remote := range []string{bRemote, nativeSeedRemote} {
+		if output, err := exec.Command("git", "--git-dir", remote, "show-ref", "--verify", "refs/heads/main").CombinedOutput(); err == nil {
+			t.Fatalf("%s received A push: %s", remote, output)
+		}
+	}
+	require(t, os.RemoveAll(a.Repository))
+	if head := git("-C", b.Repository, "rev-parse", "HEAD"); head != initial {
+		t.Fatalf("B broke after A cleanup: %s", head)
+	}
 }
 
 func nativeRef(t *testing.T, c Config, commit, name string) FileReference {
@@ -1796,5 +1867,227 @@ func TestNativeCursorErrorHasStableCode(t *testing.T) {
 	var native *NativeTaskError
 	if !errors.As(nativeErr("cursor_invalidated", "expired"), &native) || native.Code != "cursor_invalidated" {
 		t.Fatalf("native error code missing: %+v", native)
+	}
+}
+
+// Task creation is not the behavior under test in the execution profile case.
+func seedExecutionProfileTasks(t *testing.T, c Config, store *SQLiteStore, payload []byte) (TaskBatchReceipt, error) {
+	t.Helper()
+	var batch TaskBatchInput
+	if err := json.Unmarshal(payload, &batch); err != nil {
+		return TaskBatchReceipt{}, err
+	}
+	authority, err := store.nativeAuthority(context.Background(), c.Identity())
+	if err != nil {
+		return TaskBatchReceipt{}, err
+	}
+	stamp := now()
+	batchID := newID()
+	mapping := map[string]string{}
+	for _, v := range batch.Tasks {
+		mapping[v.LocalKey] = strconvID(v.TaskID)
+	}
+	err = store.Transact(context.Background(), func(tx DomainTx) error {
+		if err := tx.PutTaskBatch(TaskBatchRecord{ProjectIdentity: c.Identity(), BatchID: batchID, SchemaVersion: taskBatchSchemaVersion, PayloadDigest: digestCanonical(payload), CommandID: "fixture-" + batchID, CreatedAt: stamp, TaskIDs: mapping}, authority.AuthorityVersion, authority.GraphRevision); err != nil {
+			return err
+		}
+		for _, v := range batch.Tasks {
+			priority := 2
+			if v.Priority != nil {
+				priority = *v.Priority
+			}
+			record := TaskRecord{ProjectIdentity: c.Identity(), TaskID: strconvID(v.TaskID), BatchID: batchID, Title: v.Title, Type: v.Type, Priority: priority, GoalIDs: append([]string(nil), v.GoalIDs...), ContractID: v.Contract.ContractID, Source: "native", Status: "open", Version: 1, CreatedAt: stamp, UpdatedAt: stamp}
+			if err := tx.PutTask(record); err != nil {
+				return err
+			}
+			if err := tx.PutTaskContract(c.Identity(), record.TaskID, v.Contract); err != nil {
+				return err
+			}
+		}
+		for _, edge := range resolveTaskBatchEdges(batch) {
+			if err := tx.PutTaskDependency(edge); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	return TaskBatchReceipt{TaskIDs: mapping, BatchID: batchID, Status: "fixture"}, err
+}
+
+func TestNativeMinimalClosedLoopSmoke(t *testing.T) {
+	t.Setenv("STEERLINE_HOME", t.TempDir())
+	t.Setenv("BEADS_DIR", filepath.Join(t.TempDir(), "old-beads"))
+	t.Setenv("BEADS_ACTOR", "legacy-agent")
+	c, _ := nativeTaskFixture(t)
+	remoteURL, err := exec.Command("git", "-C", c.Repository, "remote", "get-url", "origin").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	remotePath := strings.TrimSpace(string(remoteURL))
+	for _, args := range [][]string{
+		{"-C", c.Repository, "remote", "set-url", "origin", "https://forge.invalid/org/repo.git"},
+	} {
+		if out, err := exec.Command("git", args...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v: %s", args, err, out)
+		}
+	}
+	for name, content := range map[string]string{"implement": "package steps\n", "verify": "package steps\n", "publish_pr": "package steps\n"} {
+		path := filepath.Join(c.Repository, "steps", name+".go")
+		if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if out, err := exec.Command("git", "-C", c.Repository, "add", "steps").CombinedOutput(); err != nil {
+		t.Fatalf("stage project steps: %v: %s", err, out)
+	}
+	if out, err := exec.Command("git", "-C", c.Repository, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "native workflow steps").CombinedOutput(); err != nil {
+		t.Fatalf("commit project steps: %v: %s", err, out)
+	}
+	pushOut, pushErr := exec.Command("git", "-C", c.Repository, "push", remotePath, "main").CombinedOutput()
+	if pushErr != nil {
+		t.Fatalf("push fixture base: %v: %s", pushErr, pushOut)
+	}
+	commitBytes, err := exec.Command("git", "-C", c.Repository, "rev-parse", "HEAD").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	commit := strings.TrimSpace(string(commitBytes))
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	gitExecutable, err := exec.LookPath("git")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("STEERLINE_FAKE_GIT_FETCH_REMOTE", remotePath)
+	c.Git = Command{Executable: executable, Args: []string{"--fake", "git-proxy", gitExecutable}}
+	c.Codex = Command{Executable: executable, Args: []string{"--fake", "codex"}}
+	fakePRPath := filepath.Join(t.TempDir(), "native-pr.json")
+	c.PR = PRConfig{Kind: "command", BaseURL: "https://forge.invalid", Repository: "org/repo", Query: Command{Executable: executable, Args: []string{"--fake", "pr-query", fakePRPath, "{pr_url}", "{repository}"}}, Close: Command{Executable: executable, Args: []string{"--fake", "pr-close", fakePRPath, "{pr_url}", "{repository}"}}}
+	if err := c.ResolveIdentity(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	c.Claimant = "native-test"
+	c.configDigest = strings.Repeat("d", 64)
+	c.ExecutableTypes = []string{"task", "bug", "feature", "chore"}
+	c.Host, c.Agent = "local", "codex"
+	c.CommandTimeout, c.ShutdownGrace = "10s", "1s"
+	c.WorkflowDefinition = &WorkflowDefinition{ID: MinimalWorkflowVersion, Version: MinimalWorkflowVersion, ReviewRequired: false, MaxRepairRounds: 1}
+	step := func(name string) StepContract {
+		return StepContract{Provider: "command", Entry: "steps/" + name + ".go", Version: "v1", InputSchema: NativeTaskInputSchema, OutputSchema: MinimalStepOutputSchema, ExecutionSite: "local", Timeout: 20 * time.Second, Command: []string{executable, "--fake", "native-step"}}
+	}
+	c.ProjectSteps = &ProjectSteps{Implement: step("implement"), Verify: step("verify"), PublishPR: step("publish_pr")}
+	c.ProjectSteps.Verify.RequiredChecks = []string{"unit"}
+	writeFake(fakePRPath, fakeDB{PRHeadRevision: commit})
+	reader, err := OpenNativeTaskProject(context.Background(), &c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = reader.Close(); err != nil {
+		t.Fatal(err)
+	}
+	lock, err := LockRepository(c.Identity())
+	if err != nil {
+		t.Fatal(err)
+	}
+	store, err := OpenNativeTaskCommandStore(context.Background(), &c)
+	if err != nil {
+		lock.Close()
+		t.Fatal(err)
+	}
+	contractA := nativeContract(t, c, commit, "contract-101")
+	contractB := nativeContract(t, c, commit, "contract-102")
+	batchBytes, err := json.Marshal(TaskBatchInput{SchemaVersion: "task-batch/v1", ProjectID: c.Identity(), Tasks: []TaskBatchTask{{LocalKey: "a", TaskID: 101, Title: "Deliver A", Type: "task", Contract: contractA}, {LocalKey: "b", TaskID: 102, Title: "Wait for A", Type: "task", Contract: contractB}}, Dependencies: []TaskBatchEdge{{Predecessor: TaskBatchReference{LocalKey: "a"}, Successor: TaskBatchReference{LocalKey: "b"}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	commands := CommandService{Store: store, Project: c.Identity()}
+	if _, err = commands.CreateTaskBatch(context.Background(), c, batchBytes, strings.Repeat("a", 32), 1, "planner"); err != nil {
+		store.Close()
+		lock.Close()
+		t.Fatal(err)
+	}
+	authority, err := store.nativeAuthority(context.Background(), c.Identity())
+	if err != nil {
+		t.Fatal(err)
+	}
+	auto, unpaused, by := "auto", false, "operator"
+	update := NativeDispatchUpdate{RequestID: strings.Repeat("b", 32), ExpectedAuthorityVersion: authority.AuthorityVersion, Mode: &auto, Paused: &unpaused, RequestedBy: by}
+	if _, err = commands.SetNativeDispatchState(context.Background(), update); err != nil {
+		t.Fatal(err)
+	}
+	seedFakeCapabilities(t, c)
+	if err = store.Close(); err != nil {
+		t.Fatal(err)
+	}
+	lock.Close()
+	s, err := NewService(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if s != nil {
+			_ = s.Close()
+		}
+	}()
+
+	if err = s.dispatch(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	run := s.find("101")
+	if run == nil || run.RunID == "" || s.worker == nil {
+		t.Fatal("native task was not claimed with a worker")
+	}
+	for step := 0; step < 3; step++ {
+		worker := s.worker
+		if worker == nil {
+			t.Fatalf("step %d had no worker", step)
+		}
+		if err = s.finished(<-worker.Done); err != nil {
+			t.Fatalf("step %d: %v", step, err)
+		}
+		if s.find("101").FinishTaskStatus == "waiting_pr_merge" {
+			break
+		}
+		if err = s.resumeMinimalSteps(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	run = s.find("101")
+	if run == nil || run.FinishTaskStatus != "waiting_pr_merge" || run.PR.URL == nil {
+		t.Fatalf("workflow did not publish a fixed PR: %+v", run)
+	}
+	blocked, err := (QueryService{Store: s.domainStore, Project: c.Identity()}).ShowNativeTask(context.Background(), "102")
+	if err != nil || len(blocked.Tasks) != 1 || blocked.Tasks[0].DependencyReady {
+		t.Fatalf("successor was released before merge: %+v %v", blocked, err)
+	}
+	if err = s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	s = nil
+	s, err = NewService(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.worker != nil || s.find("101") == nil || s.find("101").RunID != run.RunID || s.find("101").FinishTaskStatus != "waiting_pr_merge" {
+		t.Fatal("PR wait did not recover under the original run")
+	}
+	db := readFake(fakePRPath)
+	db.PRState, db.PRMerged, db.PRMergedAt, db.PRMergeCommit = "merged", true, ptr(time.Now().UTC()), commit
+	writeFake(fakePRPath, db)
+	if err = s.pollPRs(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	delivered, err := (QueryService{Store: s.domainStore, Project: c.Identity()}).ShowNativeTask(context.Background(), "101")
+	if err != nil || len(delivered.Tasks) != 1 || delivered.Tasks[0].Status != "closed" || delivered.Tasks[0].Delivery == nil || delivered.Tasks[0].Delivery.MergeCommit != commit || delivered.Tasks[0].Delivery.SelectedWorkflowRunID != run.RunID {
+		t.Fatalf("selected PR merge did not close the original task: %+v %v", delivered, err)
+	}
+	ready, err := (QueryService{Store: s.domainStore, Project: c.Identity()}).ShowNativeTask(context.Background(), "102")
+	if err != nil || len(ready.Tasks) != 1 || !ready.Tasks[0].DependencyReady {
+		t.Fatalf("merged delivery did not release the successor: %+v %v", ready, err)
 	}
 }

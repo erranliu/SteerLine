@@ -3,3 +3,4 @@
 *.local.json
 *.test.exe
 coverage.out
+__pycache__/

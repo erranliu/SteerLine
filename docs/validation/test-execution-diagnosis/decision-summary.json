@@ -1,0 +1,42 @@
+{
+  "source_commit": "543f0d4e9dd9559f253de663d3ffb646ceecf079",
+  "go_version": "go version go1.26.4 windows/amd64",
+  "machine": {
+    "host_name": "liuming-asus",
+    "logical_cpu_count": 20,
+    "processor_identifier": "AMD64 Family 26 Model 36 Stepping 0, AuthenticAMD"
+  },
+  "baseline_wall_seconds": 658.6328289,
+  "baseline_core_seconds": 603.209,
+  "sharded_wall_seconds": 349.3256426000007,
+  "sharded_core_wall_seconds": 307.33294860000024,
+  "full_suite_terminal_events": 460,
+  "passed": 443,
+  "skipped": 17,
+  "failed": 0,
+  "same_test_outcomes": true,
+  "accepted_changes": [
+    "trim repeated graph assertions and use a three-node atomic-creation fixture",
+    "prepare typed native task records only in the execution-profile control test",
+    "immutable Git fixture seed and independent copies",
+    "five DAG rule cases via existing pure validator",
+    "three isolated core test processes, balanced using fixed measured top-level weights, with exact coverage"
+  ],
+  "rejected_change": "lightweight Git proxy helper",
+  "code_application": "temporary test-only Go overlays; no product source modified",
+  "task_creation": "not requested; no task ID or DAG mutation",
+  "final_experiment": {
+    "wall_seconds": 264.8712864000008,
+    "core_wall_seconds": 222.32707970000047,
+    "terminal_events": 460,
+    "same_original_outcomes": true,
+    "failures": 0,
+    "reference_machine_target_seconds": 300,
+    "versus_first_sharding_improvement_percent": 24.176397578893262
+  },
+  "rejected_changes": [
+    "lightweight Git proxy helper: inconsistent paired benefit",
+    "decision fixture seeding: no measured gain",
+    "deleting long local/Orca/decision tests with unique recovery, application and cleanup checks"
+  ]
+}

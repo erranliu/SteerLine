@@ -1,5 +1,7 @@
 # PR 5 人工决策与恢复验证记录
 
+2026-09-28 验收结论更新：H-A6 的活跃真实 worker 入口单字段故障注入、resuming 终端死亡及 H-A15 回执丢失已覆盖不冒认、不重派和占槽保留；H-A16 的 SteerlineTest Task 104 可见 TTY 精确折叠已通过。Orca 平台自然产生同句柄新 incarnation 的现场不再作为 #3 关闭前置；发生时按受影响版本定向回归。下文较早的“仍开放”结论保留对应测试时间，不撤销原始失败记录。中心 #3 Task 仍须正常交付。
+
 Date: 2026-09-25 (Asia/Shanghai)
 Base: `7b2706f` (`origin/main` at implementation start)
 Environment: Windows amd64, Go 1.26.4
@@ -88,7 +90,7 @@ Focused regression tests for these paths passed. The post-audit full run and fin
 | H-A13 | Automated pass; target certificate reused; Codex structured result observed | The exact Windows Orca 1.4.209 target was used. Codex emitted schema-valid results through the target terminal, but the live session projection still reports unknown turn boundaries and `final_unknown`; precise turn/final capability remains unverified. |
 | H-A14 | Automated pass; command-worker pass; Codex/Orca bound application passed in 95012 | The deterministic command worker returned bound proof and SQLite recorded `applied`. Codex attempts 95008–95010 failed at Windows linked-worktree Git metadata access and remain failed. With exact Git object/admin grants and the unknown-result guard, 95012 committed only its evidence file; the saved result bound decision, original attempt, execution and answer digest, and SQLite recorded Decision.applied after the same-attempt reconciliation. [New live evidence](pr-05-intervention-live-gitfix-2026-09-27.json). |
 | H-A15 | Automated pass; live same-attempt application recovery and explicit post-answer response-loss/no-resend passed | Earlier 95008–95010 failures and 95012's pending decision were reconciled without replay. In 95012, transiently unverifiable original Orca liveness retained `reply_accepted` and the slot; after exact terminal exit, service restart accepted the same saved proof and marked applied without starting another implement attempt. A later [isolated live fault](pr-05-h15-response-loss-2026-09-28.json) discarded the successful Orca terminal-create response after the original continuation started; the center retained its unknown Operation, resuming Decision and slot across restart, with one original terminal and no PR. The missing platform request ID prevents automatic promotion to applied. |
-| H-A16 | Automated model pass; live precision gate pending | The real console displayed the session group, but its turn boundary was unknown and its observation items were unclassified. Precise turn-group folding and navigation remain unverified. |
+| H-A16 | Automated model and local Codex visible TTY precision gate passed | The earlier Orca terminal-only view had unknown turn boundaries. A later [SteerlineTest native Task 104](pr05-ha16-steerlinetest-2026-09-28/README.md) bound public Codex history to the original Attempt: one native turn completed with an explicit final; the visible TTY automatically folded 37 process items, manually expanded and refolded them, retained final/terminal status, and `n` opened the exact final body. This Task had no pending business Decision, so that live subcase is not claimed here; the existing model tests cover Decision preservation. |
 
 ## Remaining acceptance gates
 

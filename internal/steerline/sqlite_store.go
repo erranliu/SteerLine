@@ -1243,6 +1243,15 @@ func (s *SQLiteStore) LoadProjection(ctx context.Context, project string) ([]byt
 	return payload, revision, err
 }
 
+// DatabaseVersion is a read-only cache invalidation hint. Callers must still
+// use the bound native reader before trusting task data or issuing commands.
+func (s *SQLiteStore) DatabaseVersion(ctx context.Context) (string, uint64, error) {
+	var id string
+	var revision uint64
+	err := s.db.QueryRowContext(ctx, `SELECT database_id,revision FROM database_state WHERE singleton=1`).Scan(&id, &revision)
+	return id, revision, err
+}
+
 func (s *SQLiteStore) Query(ctx context.Context, project string) (DomainSnapshot, error) {
 	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {

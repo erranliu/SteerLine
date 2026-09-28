@@ -27,7 +27,7 @@ func serviceConsoleWindow() uint64 {
 // ServiceWindowContext ends a foreground service when its required console
 // window is destroyed. A Windows host may close the window without terminating
 // every process that used it, especially when a Job Object owns the process.
-func ServiceWindowContext(parent context.Context) (context.Context, context.CancelFunc, error) {
+func ServiceWindowContext(parent context.Context, projectName string) (context.Context, context.CancelFunc, error) {
 	hwnd := serviceConsoleWindow()
 	if hwnd == 0 {
 		return nil, nil, errors.New("service-window requires a visible Windows console")
@@ -40,9 +40,16 @@ func ServiceWindowContext(parent context.Context) (context.Context, context.Canc
 	if exists == 0 || visible == 0 {
 		return nil, nil, errors.New("service-window console is not visible")
 	}
+	title, err := windows.UTF16PtrFromString(projectName + " - SteerLine service")
+	if err != nil {
+		return nil, nil, fmt.Errorf("service-window title: %w", err)
+	}
+	if ok, _, callErr := windows.NewLazySystemDLL("kernel32.dll").NewProc("SetConsoleTitleW").Call(uintptr(unsafe.Pointer(title))); ok == 0 {
+		return nil, nil, fmt.Errorf("set service-window title: %w", callErr)
+	}
 	ctx, cancel := context.WithCancel(parent)
 	go func() {
-		tick := time.NewTicker(100 * time.Millisecond)
+		tick := time.NewTicker(500 * time.Millisecond)
 		defer tick.Stop()
 		for {
 			select {

@@ -1552,7 +1552,7 @@ func (s *Service) run(ctx context.Context, dispatchMode string) (retErr error) {
 		defer close(heartDone)
 		t := time.NewTicker(duration(s.Config.Heartbeat))
 		defer t.Stop()
-		stopTick := time.NewTicker(100 * time.Millisecond)
+		stopTick := time.NewTicker(500 * time.Millisecond)
 		defer stopTick.Stop()
 		stopSeen := map[string]bool{}
 		for {
@@ -1619,9 +1619,20 @@ func (s *Service) run(ctx context.Context, dispatchMode string) (retErr error) {
 	defer prTick.Stop()
 	decisionTick := time.NewTicker(2 * time.Second)
 	defer decisionTick.Stop()
-	controlTick := time.NewTicker(100 * time.Millisecond)
+	controlTick := time.NewTicker(500 * time.Millisecond)
 	defer controlTick.Stop()
-	step := func(fn func(context.Context) error) error {
+	stepWithChange := func(fn func(context.Context) error, onlyWhenChanged bool) error {
+		var before []byte
+		var beforeDatabaseID string
+		var beforeDatabaseRevision uint64
+		if onlyWhenChanged {
+			var snapshotErr, versionErr error
+			before, snapshotErr = json.Marshal(s.State)
+			beforeDatabaseID, beforeDatabaseRevision, versionErr = s.domainStore.DatabaseVersion(ctx)
+			if snapshotErr != nil || versionErr != nil {
+				onlyWhenChanged = false // Fall back to the existing durable publication path.
+			}
+		}
 		defer s.parkWorker()
 		e := fn(ctx)
 		if s.store.Err() != nil {
@@ -1633,6 +1644,14 @@ func (s *Service) run(ctx context.Context, dispatchMode string) (retErr error) {
 			s.State.Service.Status = "running"
 			s.State.Service.Error = nil
 		}
+		if onlyWhenChanged && e == nil {
+			after, snapshotErr := json.Marshal(s.State)
+			databaseID, databaseRevision, versionErr := s.domainStore.DatabaseVersion(ctx)
+			if snapshotErr == nil && versionErr == nil && bytes.Equal(before, after) &&
+				beforeDatabaseID == databaseID && beforeDatabaseRevision == databaseRevision {
+				return nil
+			}
+		}
 		if e := s.save(); e != nil {
 			return e
 		}
@@ -1641,6 +1660,8 @@ func (s *Service) run(ctx context.Context, dispatchMode string) (retErr error) {
 		}
 		return nil
 	}
+	step := func(fn func(context.Context) error) error { return stepWithChange(fn, false) }
+	stepIfChanged := func(fn func(context.Context) error) error { return stepWithChange(fn, true) }
 	for s.State.Control.Operation != nil {
 		if e := s.recoverControlOperation(); e != nil {
 			if e = s.retainControlPublicationFailure(e); e != nil {
@@ -1720,14 +1741,14 @@ func (s *Service) run(ctx context.Context, dispatchMode string) (retErr error) {
 			if s.State.Control.Operation != nil {
 				continue
 			}
-			if e := step(s.processCommandsAndDecisions); e != nil {
+			if e := stepIfChanged(s.processCommandsAndDecisions); e != nil {
 				return e
 			}
 		case <-taskTick.C:
-			if e := step(s.processCommandsAndDecisions); e != nil {
+			if e := stepIfChanged(s.processCommandsAndDecisions); e != nil {
 				return e
 			}
-			if e := step(s.reconcile); e != nil {
+			if e := stepIfChanged(s.reconcile); e != nil {
 				return e
 			}
 			if e := s.pollControl(ctx, cancel); e != nil {
@@ -1736,18 +1757,22 @@ func (s *Service) run(ctx context.Context, dispatchMode string) (retErr error) {
 			if s.State.Control.Operation != nil {
 				continue
 			}
-			if e := step(s.resumeMinimalSteps); e != nil {
+			if e := stepIfChanged(s.resumeMinimalSteps); e != nil {
 				return e
 			}
 			if len(s.workers) != 0 && s.State.Control.DispatchMode == "auto" {
 				continue
 			}
-			if e := step(s.dispatch); e != nil {
+			if e := stepIfChanged(s.dispatch); e != nil {
 				return e
 			}
 		case <-controlTick.C:
-			if e := step(s.processPendingCommands); e != nil {
-				return e
+			processed := false
+			commandErr := s.processPendingCommandsTracked(ctx, &processed)
+			if processed || commandErr != nil || s.State.Service.Status != "running" || s.State.Service.Error != nil {
+				if e := step(func(context.Context) error { return commandErr }); e != nil {
+					return e
+				}
 			}
 			if e := s.pollControl(ctx, cancel); e != nil {
 				return e
@@ -1756,7 +1781,7 @@ func (s *Service) run(ctx context.Context, dispatchMode string) (retErr error) {
 			if s.State.Control.Operation != nil {
 				continue
 			}
-			if e := step(s.pollPRs); e != nil {
+			if e := stepIfChanged(s.pollPRs); e != nil {
 				return e
 			}
 		}
@@ -1765,8 +1790,10 @@ func (s *Service) run(ctx context.Context, dispatchMode string) (retErr error) {
 
 func (s *Service) finishWorkerInLoop(workerErr error) error {
 	err := s.finished(workerErr)
-	var settled *settledMinimalStepFailure
-	if errors.As(err, &settled) {
+	if _, settled := err.(*settledMinimalStepFailure); settled {
+		return nil
+	}
+	if _, preserved := err.(*preservedMinimalStepUnknown); preserved {
 		return nil
 	}
 	return err
@@ -1810,6 +1837,16 @@ func (s *Service) shutdown() {
 func (s *Service) shutdownWorker() {
 	if s.worker == nil {
 		return
+	}
+	if s.active != nil && s.active.Protocol == string(ProtocolOrcaSupervised) {
+		ctx, cancel := context.WithTimeout(context.Background(), duration(s.Config.ShutdownGrace))
+		defer cancel()
+		if err := s.worker.detachLocalObservation(ctx); err != nil {
+			s.preserveUnknownStop("remote observation could not be detached during service shutdown", err)
+		} else {
+			s.worker = nil
+		}
+		return // Stopping supervision must not cancel an active remote Dispatch.
 	}
 	t := time.NewTimer(duration(s.Config.ShutdownGrace))
 	defer t.Stop()

@@ -1,0 +1,12 @@
+{
+  "decision_id": "relay_778a93228b77",
+  "center_created_at": "2026-09-28T06:02:18.535871+00:00",
+  "db_observed_at": "2026-09-28T06:02:18.654130+00:00",
+  "viewer_observed_at": "2026-09-28T06:02:20.750702+00:00",
+  "upper_bound_ms": 2214.831,
+  "source": "screen",
+  "exact_id_visible": true,
+  "screen_excerpt": "SteerLine · 执行控制台\n项目 1/1   acceptance-config\n服务 已连接  ·  Orca 受监管远程 · codex  ·  派发 自动  ·  Ready 0  ·  执行 91024  ·  运行 1  ·  待决策 1  ·  需处理 1\n详情\n任务 91024 · Native supervised acceptance artifact\n当前：待决策\n执行：running  ·  交付：waiting_decision\n任务状态：in_progress\n执行方案：项目默认 [project-default] · Orca 受监管远程\nAgent / Model / Thinking：codex / gpt-6-luna / high\nPR：unknown\n最后核验：2026-09-28 14:01:36\n操作：a 回答当前决策\n项目：acceptance-config\ntask_id：91024\nrun_id：3cd46319e60437e61789c3dddcee1020\ndecision_id：relay_778a93228b77\nattempt_id：cecf6a42f974b4195091be619fa34a7d\n等待时长：2s\n问题：Should I create the exact native acceptance artifact?\n上下文：\n选项 1 · yes：yes\n  详情：\n选项 2 · no：no\n  详情：\na 核验固定后端能力并打开回答草稿 · 提交后先确认答案送达；应用状态仍须等待原执行的绑定证明核验\n显式提交后仍分别核验答案接受、后端送达、轮次启动和答案应用。\n任务关系 · 中心只读快照\n任务 91024 · Native supervised acceptance artifact\n状态：in_progress\n任务阻塞：task_not_open\n任务阻塞：execution_slot_busy\nSpec：docs/spec/native-acceptance.spec.md\n技术信息\nrun_id：3cd46319e60437e61789c3dddcee1020\nexecution_id：facaca00adab918c8a36a1727fe0cc48\n↑↓/PgUp/PgDn 阅读完整详情 · d / Enter / Esc 返回 · q 退出",
+  "read_count": 3,
+  "terminal_handle": "term_a09a6845-bd3f-4af4-9cff-dac2dcbc4deb"
+}

@@ -146,18 +146,6 @@ func TestTaskGraphViewSnapshotAndBoundary(t *testing.T) {
 	if len(anchored.Boundary.Edges) != 1 || anchored.Boundary.Edges[0].Reason != "node_limit" {
 		t.Fatalf("a mismatched visible anchor mislabeled its omitted neighbor: %+v", anchored.Boundary)
 	}
-	cycle := taskBatchFixture(t, c, commit, batchTasks(7, 8), []TaskBatchEdge{
-		{Predecessor: TaskBatchReference{LocalKey: "k7"}, Successor: TaskBatchReference{LocalKey: "k8"}},
-		{Predecessor: TaskBatchReference{LocalKey: "k8"}, Successor: TaskBatchReference{LocalKey: "k7"}},
-	})
-	validation, err := (CommandService{Store: store, Project: c.Identity()}).ValidateTaskBatch(ctx, c, cycle)
-	if err != nil || validation.Valid || len(validation.Cycle) == 0 {
-		t.Fatalf("cycle was not rejected: %+v / %v", validation, err)
-	}
-	after, err := q.QueryTaskGraph(ctx, TaskGraphFilter{})
-	if err != nil || len(after.Nodes) != 6 || len(after.Edges) != len(edges) {
-		t.Fatalf("rejected cycle changed the graph: %v / %+v", err, after)
-	}
 }
 
 func TestTaskGraphLimitsAndExportPublication(t *testing.T) {

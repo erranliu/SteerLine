@@ -1,0 +1,256 @@
+--- a/internal/steerline/native_tasks_test.go
++++ b/internal/steerline/native_tasks_test.go
+@@ -13,43 +13,50 @@
+ 	"path/filepath"
+ 	"runtime"
+ 	"strings"
++	"sync"
+ 	"testing"
+ 	"time"
+ )
+ 
+-func nativeTaskFixture(t *testing.T) (Config, string) {
+-	t.Helper()
+-	t.Setenv("STEERLINE_HOME", t.TempDir())
+-	repo := filepath.Join(t.TempDir(), "repo")
+-	remote := filepath.Join(t.TempDir(), "origin.git")
+-	for _, args := range [][]string{{"init", "--quiet", "-b", "main", repo}, {"init", "--quiet", "--bare", remote}, {"-C", repo, "remote", "add", "origin", remote}} {
+-		if out, err := exec.Command("git", args...).CombinedOutput(); err != nil {
+-			t.Fatalf("git %v: %v: %s", args, err, out)
+-		}
+-	}
+-	for name, content := range map[string]string{
+-		"docs/spec/task-core.spec.md":          "# Task Spec\n\n## Acceptance\n\nPass.\n",
+-		"docs/spec/task-core.plan.md":          "# Task Plan\n",
+-		"docs/spec/native-task-constraints.md": "# Shared constraints\n",
+-	} {
+-		path := filepath.Join(repo, filepath.FromSlash(name))
+-		if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+-			t.Fatal(err)
+-		}
+-		if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+-			t.Fatal(err)
+-		}
+-	}
+-	for _, args := range [][]string{{"-C", repo, "add", "."}, {"-C", repo, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "fixture"}} {
+-		if out, err := exec.Command("git", args...).CombinedOutput(); err != nil {
+-			t.Fatalf("git %v: %v: %s", args, err, out)
+-		}
+-	}
+-	commitBytes, err := exec.Command("git", "-C", repo, "rev-parse", "HEAD").Output()
+-	if err != nil {
+-		t.Fatal(err)
+-	}
+-	commit := strings.TrimSpace(string(commitBytes))
++var diagnosticSeedOnce sync.Once
++var diagnosticSeedRepo, diagnosticSeedRemote, diagnosticSeedCommit string
++
++func diagnosticNativeSeed(t *testing.T) {
++ t.Helper()
++ diagnosticSeedOnce.Do(func() {
++  root, err := sharedTestArtifactsDir(); require(t, err)
++  diagnosticSeedRepo = filepath.Join(root, "native-seed", "repo")
++  diagnosticSeedRemote = filepath.Join(root, "native-seed", "origin.git")
++  require(t, os.MkdirAll(filepath.Dir(diagnosticSeedRepo), 0700))
++  for _, args := range [][]string{{"init", "--quiet", "-b", "main", diagnosticSeedRepo}, {"init", "--quiet", "--bare", diagnosticSeedRemote}, {"-C", diagnosticSeedRepo, "remote", "add", "origin", diagnosticSeedRemote}} {
++   output, err := exec.Command("git", args...).CombinedOutput()
++   if err != nil { t.Fatalf("seed git: %v: %s", err, output) }
++  }
++  for name, content := range map[string]string{
++   "docs/spec/task-core.spec.md":"# Task Spec\n\n## Acceptance\n\nPass.\n",
++   "docs/spec/task-core.plan.md":"# Task Plan\n",
++   "docs/spec/native-task-constraints.md":"# Shared constraints\n",
++  } {
++   path := filepath.Join(diagnosticSeedRepo, filepath.FromSlash(name))
++   require(t, os.MkdirAll(filepath.Dir(path),0700)); require(t,os.WriteFile(path,[]byte(content),0600))
++  }
++  for _, args := range [][]string{{"-C",diagnosticSeedRepo,"add","."},{"-C",diagnosticSeedRepo,"-c","user.name=Fixture","-c","user.email=fixture@example.invalid","-c","commit.gpgsign=false","commit","--quiet","-m","fixture"}} {
++   output, err := exec.Command("git", args...).CombinedOutput(); if err != nil {t.Fatalf("seed git: %v: %s",err,output)}
++  }
++  output,err := exec.Command("git","-C",diagnosticSeedRepo,"rev-parse","HEAD").Output();require(t,err)
++  diagnosticSeedCommit=strings.TrimSpace(string(output))
++ })
++}
++
++func nativeTaskFixture(t *testing.T) (Config,string) {
++ t.Helper(); diagnosticNativeSeed(t)
++ t.Setenv("STEERLINE_HOME", t.TempDir())
++ repo:=filepath.Join(t.TempDir(),"repo"); remote:=filepath.Join(t.TempDir(),"origin.git")
++ require(t, os.CopyFS(repo,os.DirFS(diagnosticSeedRepo)))
++ require(t, os.CopyFS(remote,os.DirFS(diagnosticSeedRemote)))
++ output,err:=exec.Command("git","-C",repo,"remote","set-url","origin",remote).CombinedOutput()
++ if err != nil {t.Fatalf("fixture remote: %v: %s",err,output)}
++ commit:=diagnosticSeedCommit
+ 	c := Config{TaskAuthority: "native", Repository: repo, Remote: "origin", Branch: "main", RuntimeFile: "runtime.json", TaskPoll: "10s", PRPoll: "30s", Heartbeat: "5s", CommandTimeout: "10s", ShutdownGrace: "10s", Sandbox: "workspace-write", ExecutableTypes: []string{"task", "bug", "feature", "chore"}, Git: Command{Executable: "git"}}
+ 	key, err := repoStateKey(c)
+ 	if err != nil {
+@@ -1798,3 +1805,24 @@
+ 		t.Fatalf("native error code missing: %+v", native)
+ 	}
+ }
++
++// Diagnostic fixture only: task creation is not the behavior under test here.
++func diagnosticSeedExecutionTasks(t *testing.T, c Config, store *SQLiteStore, payload []byte) (TaskBatchReceipt,error) {
++ t.Helper()
++ var batch TaskBatchInput
++ if err:=json.Unmarshal(payload,&batch);err!=nil{return TaskBatchReceipt{},err}
++ authority,err:=store.nativeAuthority(context.Background(),c.Identity());if err!=nil{return TaskBatchReceipt{},err}
++ stamp:=now();batchID:=newID();mapping:=map[string]string{}
++ for _,v:=range batch.Tasks {mapping[v.LocalKey]=strconvID(v.TaskID)}
++ err=store.Transact(context.Background(),func(tx DomainTx)error{
++  if err:=tx.PutTaskBatch(TaskBatchRecord{ProjectIdentity:c.Identity(),BatchID:batchID,SchemaVersion:taskBatchSchemaVersion,PayloadDigest:digestCanonical(payload),CommandID:"fixture-"+batchID,CreatedAt:stamp,TaskIDs:mapping},authority.AuthorityVersion,authority.GraphRevision);err!=nil{return err}
++  for _,v:=range batch.Tasks {
++   priority:=2;if v.Priority!=nil {priority=*v.Priority}
++   record:=TaskRecord{ProjectIdentity:c.Identity(),TaskID:strconvID(v.TaskID),BatchID:batchID,Title:v.Title,Type:v.Type,Priority:priority,GoalIDs:append([]string(nil),v.GoalIDs...),ContractID:v.Contract.ContractID,Source:"native",Status:"open",Version:1,CreatedAt:stamp,UpdatedAt:stamp}
++   if err:=tx.PutTask(record);err!=nil{return err};if err:=tx.PutTaskContract(c.Identity(),record.TaskID,v.Contract);err!=nil{return err}
++  }
++  for _,edge:=range resolveTaskBatchEdges(batch){if err:=tx.PutTaskDependency(edge);err!=nil{return err}}
++  return nil
++ })
++ return TaskBatchReceipt{TaskIDs:mapping,BatchID:batchID,Status:"fixture"},err
++}
+--- a/internal/steerline/execution_profiles_test.go
++++ b/internal/steerline/execution_profiles_test.go
+@@ -198,7 +198,7 @@
+ 		t.Fatal(err)
+ 	}
+ 	commands := CommandService{Store: service.domainStore, Project: service.Config.Identity()}
+-	if _, err = commands.CreateTaskBatch(context.Background(), service.Config, batch, newID(), 1, "planner"); err != nil {
++	if _, err = diagnosticSeedExecutionTasks(t, service.Config, service.domainStore, batch); err != nil {
+ 		t.Fatal(err)
+ 	}
+ 	authority, err := service.domainStore.nativeAuthority(context.Background(), service.Config.Identity())
+--- a/internal/steerline/task_dag_test.go
++++ b/internal/steerline/task_dag_test.go
+@@ -74,6 +74,8 @@
+ 	c, commit, store := openDAGFixture(t)
+ 	tasks := batchTasks(2, 3)
+ 	edges := []TaskBatchEdge{{Predecessor: TaskBatchReference{LocalKey: "k2"}, Successor: TaskBatchReference{LocalKey: "k3"}}, {Predecessor: TaskBatchReference{LocalKey: "k3"}, Successor: TaskBatchReference{LocalKey: "k2"}}}
++	beforeGraph, err := store.taskGraphSnapshot(context.Background(), c.Identity())
++	require(t, err)
+ 	payload := taskBatchFixture(t, c, commit, tasks, edges)
+ 	validation, err := (CommandService{Store: store, Project: c.Identity()}).ValidateTaskBatch(context.Background(), c, payload)
+ 	if err != nil {
+@@ -85,18 +87,21 @@
+ 	if len(validation.Issues) == 0 || validation.Issues[len(validation.Issues)-1].Code != "dependency_cycle" {
+ 		t.Fatalf("cycle issue missing: %+v", validation.Issues)
+ 	}
++	afterGraph, err := store.taskGraphSnapshot(context.Background(), c.Identity())
++	require(t, err)
++	if beforeGraph.DatabaseRevision != afterGraph.DatabaseRevision || beforeGraph.Authority.GraphRevision != afterGraph.Authority.GraphRevision || len(beforeGraph.Tasks) != len(afterGraph.Tasks) || len(beforeGraph.Edges) != len(afterGraph.Edges) {
++		t.Fatal("rejected cycle validation mutated center state")
++	}
++
+ }
+ 
+ func TestCreateTaskBatchAtomicIdempotentAndQueryable(t *testing.T) {
+ 	ctx := context.Background()
+ 	c, commit, store := openDAGFixture(t)
+-	tasks := batchTasks(20, 21, 22, 23, 24)
+-	tasks[4].Priority = func() *int { v := 0; return &v }()
++	tasks := batchTasks(20, 21, 24)
++	tasks[2].Priority = func() *int { v := 0; return &v }()
+ 	edges := []TaskBatchEdge{
+ 		{Predecessor: TaskBatchReference{LocalKey: "k20"}, Successor: TaskBatchReference{LocalKey: "k21"}},
+-		{Predecessor: TaskBatchReference{LocalKey: "k20"}, Successor: TaskBatchReference{LocalKey: "k22"}},
+-		{Predecessor: TaskBatchReference{LocalKey: "k21"}, Successor: TaskBatchReference{LocalKey: "k23"}},
+-		{Predecessor: TaskBatchReference{LocalKey: "k22"}, Successor: TaskBatchReference{LocalKey: "k23"}},
+ 	}
+ 	payload := taskBatchFixture(t, c, commit, tasks, edges)
+ 	commands := CommandService{Store: store, Project: c.Identity()}
+@@ -126,7 +131,7 @@
+ 	if err != nil {
+ 		t.Fatal(err)
+ 	}
+-	if len(page.Tasks) != 5 || page.GraphRevision != 1 || page.Capabilities.DependencyReadiness != "provided" {
++	if len(page.Tasks) != 3 || page.GraphRevision != 1 || page.Capabilities.DependencyReadiness != "provided" {
+ 		t.Fatalf("new graph is absent from task read model: %+v", page)
+ 	}
+ 	ready := map[string]bool{}
+@@ -135,11 +140,8 @@
+ 		if task.TaskID == "24" && !hasString(task.StartupBlockers, "dispatch_paused") {
+ 			t.Fatalf("startup blockers were not separated from dependency readiness: %+v", task.StartupBlockers)
+ 		}
+-		if task.TaskID == "23" && (len(task.Predecessors) != 2 || len(task.UnmetPredecessors) != 2) {
+-			t.Fatalf("diamond blockers are wrong: %+v", task)
+-		}
+-	}
+-	if !ready["20"] || !ready["24"] || ready["21"] || ready["22"] || ready["23"] {
++	}
++	if !ready["20"] || !ready["24"] || ready["21"] {
+ 		t.Fatalf("AND readiness is wrong: %v", ready)
+ 	}
+ 	candidates, err := query.ReadyNativeTasks(ctx)
+@@ -296,15 +298,21 @@
+ 	if validation.Valid || !hasTaskIssue(validation.Issues, "cross_project_dependency") {
+ 		t.Fatalf("cross-project dependency was accepted: %+v", validation)
+ 	}
++ validateRules := func(payload []byte) (TaskBatchValidation,error) {
++  batch,_,err:=decodeTaskBatch(payload);if err!=nil{return TaskBatchValidation{},err}
++  graph,err:=store.taskGraphSnapshot(ctx,c.Identity());if err!=nil{return TaskBatchValidation{},err}
++  issues,cycle:=validateTaskBatchAgainstGraph(ctx,c,batch,graph,false)
++  return TaskBatchValidation{Valid:len(issues)==0,Issues:issues,Cycle:cycle},nil
++ }
+ 	contractCollision := batchTasks(30)
+ 	contractCollision[0].Contract = nativeContract(t, c, commit, foreignContract.ContractID)
+-	validation, err = commands.ValidateTaskBatch(ctx, c, taskBatchFixture(t, c, commit, contractCollision, nil))
++	validation, err = validateRules(taskBatchFixture(t, c, commit, contractCollision, nil))
+ 	if err != nil || validation.Valid || !hasTaskIssue(validation.Issues, "invalid_batch") {
+ 		t.Fatalf("cross-project contract ID mismatch was hidden by validation: %+v / %v", validation, err)
+ 	}
+ 	dupTasks := batchTasks(30, 31)
+ 	dup := []TaskBatchEdge{{Predecessor: TaskBatchReference{LocalKey: "k30"}, Successor: TaskBatchReference{LocalKey: "k31"}}, {Predecessor: TaskBatchReference{LocalKey: "k30"}, Successor: TaskBatchReference{LocalKey: "k31"}}}
+-	validation, err = commands.ValidateTaskBatch(ctx, c, taskBatchFixture(t, c, commit, dupTasks, dup))
++	validation, err = validateRules(taskBatchFixture(t, c, commit, dupTasks, dup))
+ 	if err != nil {
+ 		t.Fatal(err)
+ 	}
+@@ -312,7 +320,7 @@
+ 		t.Fatalf("duplicate edge was accepted: %+v", validation)
+ 	}
+ 	self := []TaskBatchEdge{{Predecessor: TaskBatchReference{LocalKey: "k30"}, Successor: TaskBatchReference{LocalKey: "k30"}}}
+-	validation, err = commands.ValidateTaskBatch(ctx, c, taskBatchFixture(t, c, commit, batchTasks(30), self))
++	validation, err = validateRules(taskBatchFixture(t, c, commit, batchTasks(30), self))
+ 	if err != nil {
+ 		t.Fatal(err)
+ 	}
+@@ -321,7 +329,7 @@
+ 	}
+ 	missing := int64(404)
+ 	missingEdge := []TaskBatchEdge{{Predecessor: TaskBatchReference{TaskID: &missing}, Successor: TaskBatchReference{LocalKey: "k30"}}}
+-	validation, err = commands.ValidateTaskBatch(ctx, c, taskBatchFixture(t, c, commit, batchTasks(30), missingEdge))
++	validation, err = validateRules(taskBatchFixture(t, c, commit, batchTasks(30), missingEdge))
+ 	if err != nil {
+ 		t.Fatal(err)
+ 	}
+@@ -330,7 +338,7 @@
+ 	}
+ 	oldSuccessor := int64(99)
+ 	badSuccessor := []TaskBatchEdge{{Predecessor: TaskBatchReference{LocalKey: "k30"}, Successor: TaskBatchReference{TaskID: &oldSuccessor}}}
+-	validation, err = commands.ValidateTaskBatch(ctx, c, taskBatchFixture(t, c, commit, batchTasks(30), badSuccessor))
++	validation, err = validateRules(taskBatchFixture(t, c, commit, batchTasks(30), badSuccessor))
+ 	if err != nil {
+ 		t.Fatal(err)
+ 	}
+--- a/internal/steerline/task_graph_query_test.go
++++ b/internal/steerline/task_graph_query_test.go
+@@ -146,18 +146,7 @@
+ 	if len(anchored.Boundary.Edges) != 1 || anchored.Boundary.Edges[0].Reason != "node_limit" {
+ 		t.Fatalf("a mismatched visible anchor mislabeled its omitted neighbor: %+v", anchored.Boundary)
+ 	}
+-	cycle := taskBatchFixture(t, c, commit, batchTasks(7, 8), []TaskBatchEdge{
+-		{Predecessor: TaskBatchReference{LocalKey: "k7"}, Successor: TaskBatchReference{LocalKey: "k8"}},
+-		{Predecessor: TaskBatchReference{LocalKey: "k8"}, Successor: TaskBatchReference{LocalKey: "k7"}},
+-	})
+-	validation, err := (CommandService{Store: store, Project: c.Identity()}).ValidateTaskBatch(ctx, c, cycle)
+-	if err != nil || validation.Valid || len(validation.Cycle) == 0 {
+-		t.Fatalf("cycle was not rejected: %+v / %v", validation, err)
+-	}
+-	after, err := q.QueryTaskGraph(ctx, TaskGraphFilter{})
+-	if err != nil || len(after.Nodes) != 6 || len(after.Edges) != len(edges) {
+-		t.Fatalf("rejected cycle changed the graph: %v / %+v", err, after)
+-	}
++
+ }
+ 
+ func TestTaskGraphLimitsAndExportPublication(t *testing.T) {
