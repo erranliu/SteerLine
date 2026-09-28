@@ -1,0 +1,68 @@
+{
+  "tasks": [
+    [
+      "91024",
+      "closed"
+    ]
+  ],
+  "executions": [
+    [
+      "a98bd222f2326546b0fed96b86f4882e",
+      "8cee9a0ae48b51cfb79d77928fe2a8ff",
+      "succeeded",
+      "completed"
+    ]
+  ],
+  "attempts": [
+    [
+      "c7d61c013676b254add3e35de5a44df2",
+      "a98bd222f2326546b0fed96b86f4882e",
+      "prepare",
+      1,
+      "succeeded"
+    ],
+    [
+      "71e2c20167817292a379e338e0724b91",
+      "a98bd222f2326546b0fed96b86f4882e",
+      "implement",
+      1,
+      "succeeded"
+    ],
+    [
+      "55a351b9d5a6eed3a7f1b6cfa4a6199c",
+      "a98bd222f2326546b0fed96b86f4882e",
+      "verify",
+      1,
+      "succeeded"
+    ],
+    [
+      "ee087b91f7dc6f6378d1d855a8b44696",
+      "a98bd222f2326546b0fed96b86f4882e",
+      "review",
+      1,
+      "succeeded"
+    ],
+    [
+      "441b0039ca4c919b27c994383ed45db0",
+      "a98bd222f2326546b0fed96b86f4882e",
+      "publish_pr",
+      1,
+      "succeeded"
+    ]
+  ],
+  "decisions": [
+    [
+      "relay_3f72d0a4341b",
+      "71e2c20167817292a379e338e0724b91",
+      "applied"
+    ]
+  ],
+  "deliveries": [
+    [
+      "91024",
+      85,
+      "https://github.com/erranliu/SteerLine/pull/85",
+      "9425f55452826cdc9d49eb1c632b04cb9d5daa27"
+    ]
+  ]
+}

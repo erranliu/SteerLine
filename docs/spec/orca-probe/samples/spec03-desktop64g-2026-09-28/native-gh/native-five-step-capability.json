@@ -1,0 +1,89 @@
+{
+  "captured_at": "2026-09-28T04:19:07.2690111Z",
+  "center_orca_version": "1.4.209",
+  "dispatches": [
+    {
+      "attempt_id": "71e2c20167817292a379e338e0724b91",
+      "dispatch_id": "ctx_c49d742c9940",
+      "dispatch_status": "completed",
+      "liveness": "exited",
+      "output_exact": true,
+      "output_source": "transcript",
+      "resource_stage": "released",
+      "status_messages": 2,
+      "step": "implement",
+      "worker_done_messages": 1,
+      "worker_state": "succeeded"
+    },
+    {
+      "attempt_id": "c7d61c013676b254add3e35de5a44df2",
+      "dispatch_id": "ctx_c1b224ddaedf",
+      "dispatch_status": "completed",
+      "liveness": "exited",
+      "output_exact": true,
+      "output_source": "transcript",
+      "resource_stage": "released",
+      "status_messages": 1,
+      "step": "prepare",
+      "worker_done_messages": 1,
+      "worker_state": "succeeded"
+    },
+    {
+      "attempt_id": "441b0039ca4c919b27c994383ed45db0",
+      "dispatch_id": "ctx_7e5dfad59054",
+      "dispatch_status": "completed",
+      "liveness": "exited",
+      "output_exact": true,
+      "output_source": "transcript",
+      "resource_stage": "released",
+      "status_messages": 1,
+      "step": "publish_pr",
+      "worker_done_messages": 1,
+      "worker_state": "succeeded"
+    },
+    {
+      "attempt_id": "ee087b91f7dc6f6378d1d855a8b44696",
+      "dispatch_id": "ctx_94215a77999a",
+      "dispatch_status": "completed",
+      "liveness": "exited",
+      "output_exact": true,
+      "output_source": "transcript",
+      "resource_stage": "released",
+      "status_messages": 1,
+      "step": "review",
+      "worker_done_messages": 1,
+      "worker_state": "succeeded"
+    },
+    {
+      "attempt_id": "55a351b9d5a6eed3a7f1b6cfa4a6199c",
+      "dispatch_id": "ctx_c0e02d5304c9",
+      "dispatch_status": "completed",
+      "liveness": "exited",
+      "output_exact": true,
+      "output_source": "transcript",
+      "resource_stage": "released",
+      "status_messages": 1,
+      "step": "verify",
+      "worker_done_messages": 1,
+      "worker_state": "succeeded"
+    }
+  ],
+  "execution_id": "a98bd222f2326546b0fed96b86f4882e",
+  "kind": "current-supervised-native-target-capability",
+  "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\s3desktop64ggh\\native-project\\.git",
+  "remote_cancellation": "unsupported",
+  "remote_orca_version": "1.4.215",
+  "target": {
+    "id": "orca-supervised:832501c0-57ad-4432-b9a7-6d931662b05e",
+    "connection_id": "832501c0-57ad-4432-b9a7-6d931662b05e",
+    "external_runtime": "e68f4edf-8a83-42c2-a9da-6d404d3aa3d8"
+  },
+  "verified_capabilities": [
+    "start",
+    "observe",
+    "workspace_inspection",
+    "output_reading",
+    "message_inbox",
+    "resource_settlement"
+  ]
+}
