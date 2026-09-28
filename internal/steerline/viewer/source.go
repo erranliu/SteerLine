@@ -50,7 +50,12 @@ func NewFileSource(c steerline.Config) *FileSource {
 }
 
 func (f *FileSource) Snapshot() steerline.ObservationSnapshot {
-	obs := steerline.ReadObservationSnapshot(filepath.Join(f.cfg.RunDir, f.cfg.RuntimeFile), f.cfg.Heartbeat, nil)
+	return f.SnapshotFromObservation(steerline.ReadObservationSnapshot(filepath.Join(f.cfg.RunDir, f.cfg.RuntimeFile), f.cfg.Heartbeat, nil))
+}
+
+// SnapshotFromObservation reuses a runtime file snapshot already read by a
+// caller while retaining the committed SQLite fallback and freshness checks.
+func (f *FileSource) SnapshotFromObservation(obs steerline.ObservationSnapshot) steerline.ObservationSnapshot {
 	if f.cfg.Identity() != "" {
 		if databaseObs, err := f.readDatabaseProjection(); err == nil && databaseObs.Runtime != nil {
 			if obs.Runtime == nil || databaseObs.Runtime.Revision > obs.Runtime.Revision || (databaseObs.Runtime.Revision == obs.Runtime.Revision && databaseObs.Runtime.HeartbeatAt.After(obs.Runtime.HeartbeatAt)) {

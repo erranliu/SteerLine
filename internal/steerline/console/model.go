@@ -360,7 +360,7 @@ func Run(ctx context.Context, refs []ProjectRef, options Options) error {
 }
 
 func (m Model) Init() tea.Cmd {
-	cmds := []tea.Cmd{waitTick(m.clock, 200*time.Millisecond)}
+	cmds := []tea.Cmd{waitTick(m.clock, 500*time.Millisecond)}
 	if len(m.projects) > 0 {
 		for i := range m.projects {
 			if i == m.selected {
@@ -891,7 +891,7 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			state := &m.projects[i]
 			interval := 5 * time.Second
 			if i == m.selected {
-				interval = 400 * time.Millisecond
+				interval = time.Second
 			}
 			if state.ref.Legacy != nil {
 				interval = 15 * time.Second
@@ -924,7 +924,7 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 				cmds = append(cmds, m.readConversation(m.selected, cursor, state.conversationKey, mode))
 			}
 		}
-		cmds = append(cmds, waitTick(m.clock, 200*time.Millisecond))
+		cmds = append(cmds, waitTick(m.clock, 500*time.Millisecond))
 		return m, tea.Batch(cmds...)
 	case projectMsg:
 		index := m.projectIndex(msg.key)
