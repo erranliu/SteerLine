@@ -229,7 +229,7 @@ func existingAcceptanceUnknownState(snapshot DomainSnapshot, runtimeState Runtim
 			return WorkflowRunRecord{}, ExecutionRecord{}, StepAttemptRecord{}, nil, nativeErr("slot_busy", "another #4 Run is unresolved")
 		}
 	}
-	if run == nil || run.ExecutionID != execution.ExecutionID || run.AttemptID != attempt.AttemptID || run.ExecutionStatus != "unknown" || run.FinishTaskStatus != "blocked" || run.Process == nil || *run.Process != *execution.Process || deref(run.PR.URL) != "" || runtimeState.CurrentTask == nil || *runtimeState.CurrentTask != "4" || !runtimeState.SlotOccupied || runtimeState.Control.Operation != nil {
+	if run == nil || run.ExecutionID != execution.ExecutionID || run.AttemptID != attempt.AttemptID || run.ExecutionStatus != "unknown" || run.FinishTaskStatus != "blocked" || run.Process == nil || *run.Process != *execution.Process || deref(run.PR.URL) != "" || runtimeState.CurrentTask != nil && *runtimeState.CurrentTask != "4" || !runtimeState.SlotOccupied || runtimeState.Control.Operation != nil {
 		return WorkflowRunRecord{}, ExecutionRecord{}, StepAttemptRecord{}, nil, nativeErr("outcome_unknown", "#4 runtime does not match its reserved unknown Attempt")
 	}
 	return *workflow, *execution, *attempt, run, nil

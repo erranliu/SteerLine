@@ -160,6 +160,9 @@ func TestExistingAcceptanceUnknownStateRejectsPublicationAndReplacement(t *testi
 	input := ExistingAcceptanceInput{TaskID: "4", WorkflowRunID: workflow.WorkflowRunID, StoppedUnknown: &ExistingStoppedUnknown{AttemptID: attempt.AttemptID}}
 	_, _, _, _, err := existingAcceptanceUnknownState(snapshot, state, input)
 	require(t, err)
+	state.CurrentTask = nil // A persisted multi-task scheduler may leave this selector empty.
+	_, _, _, _, err = existingAcceptanceUnknownState(snapshot, state, input)
+	require(t, err)
 	snapshot.Attempts = append(snapshot.Attempts, StepAttemptRecord{AttemptID: "publish", ExecutionID: execution.ExecutionID, StepID: "publish_pr", Status: "outcome_unknown"})
 	if _, _, _, _, err := existingAcceptanceUnknownState(snapshot, state, input); err == nil || !strings.Contains(err.Error(), "merge_state_unknown") {
 		t.Fatalf("publish attempt passed: %v", err)
