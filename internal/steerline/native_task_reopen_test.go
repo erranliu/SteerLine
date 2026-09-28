@@ -118,3 +118,21 @@ func TestReopenNativeTaskRequiresStoppedWorkerAndPreservesAbandonedHistory(t *te
 		return d.PutWorkflowRun(newRun)
 	}))
 }
+
+func TestSupervisedReopenRequiresExactCompletedWorkerStoppedTerminalAndRemovedWorktree(t *testing.T) {
+	executable, err := os.Executable()
+	require(t, err)
+	config := Config{Repository: t.TempDir(), CommandTimeout: "5s", Orca: OrcaConfig{Executable: executable, Args: []string{"--fake", "orca-supervised"}, Supervised: &SupervisedOrcaConfig{EnvironmentID: "env-home"}}}
+	identity := ProcessIdentity{Kind: "orca_supervised", CoordinatorRuntimeID: "fake-center-runtime", RuntimeID: "fake-remote-runtime", OrchestrationRun: "run-reopen", Task: "task-reopen", Dispatch: "dispatch-reopen", ExecutionHost: "env-home", WorktreeID: "repo-test::worktree", Terminal: "terminal-reopen", Incarnation: "inc-reopen"}
+	t.Setenv("STEERLINE_FAKE_REOPEN", "1")
+	t.Setenv("STEERLINE_FAKE_REOPEN_TERMINAL_LIVE", "1")
+	if err := verifyStoppedSupervisedReopen(context.Background(), config, identity); err == nil || !strings.Contains(err.Error(), "cleanup_pending") {
+		t.Fatalf("live terminal was reopened: %v", err)
+	}
+	t.Setenv("STEERLINE_FAKE_REOPEN_TERMINAL_LIVE", "0")
+	require(t, verifyStoppedSupervisedReopen(context.Background(), config, identity))
+	identity.RuntimeID = "replacement-runtime"
+	if err := verifyStoppedSupervisedReopen(context.Background(), config, identity); err == nil || !strings.Contains(err.Error(), "cleanup_pending") {
+		t.Fatalf("changed runtime was reopened: %v", err)
+	}
+}

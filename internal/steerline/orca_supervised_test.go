@@ -46,6 +46,11 @@ func fakeSupervisedOrca(args []string) int {
 		}
 		return fakeSupervisedEnvelope(runtimeID, map[string]any{"runtime": map[string]any{"state": "ready", "reachable": true, "runtimeId": runtimeID, "appVersion": version, "capabilities": caps}})
 	case "worktree":
+		if os.Getenv("STEERLINE_FAKE_REOPEN") == "1" && arg(args, "--environment") == "env-home" && arg(args, "--worktree") == "id:repo-test::worktree" {
+			b, _ := json.Marshal(map[string]any{"ok": false, "error": map[string]any{"code": "selector_not_found", "message": "selector_not_found"}, "_meta": map[string]any{"runtimeId": "fake-remote-runtime"}})
+			fmt.Println(string(b))
+			return 1
+		}
 		if len(args) < 2 || args[1] != "show" {
 			return fakeOrcaErr("invalid_argument", "unexpected worktree verb")
 		}
@@ -80,6 +85,9 @@ func fakeSupervisedOrca(args []string) int {
 				return fakeOrcaErr("terminal_handle_stale", "wrong terminal identity")
 			}
 			return fakeSupervisedEnvelope("fake-remote-runtime", map[string]any{"terminal": map[string]any{"handle": "terminal-acceptance", "incarnationId": os.Getenv("STEERLINE_FAKE_ACCEPTANCE_TERMINAL"), "worktreeId": "repo-test::worktree", "connected": false, "exitCause": map[string]any{"kind": "operator_close"}}})
+		}
+		if args[1] == "show" && os.Getenv("STEERLINE_FAKE_REOPEN") == "1" && arg(args, "--environment") == "env-home" && arg(args, "--terminal") == "terminal-reopen" {
+			return fakeSupervisedEnvelope("fake-remote-runtime", map[string]any{"terminal": map[string]any{"handle": "terminal-reopen", "incarnationId": "inc-reopen", "worktreeId": "repo-test::worktree", "connected": os.Getenv("STEERLINE_FAKE_REOPEN_TERMINAL_LIVE") == "1", "exitCause": map[string]any{"kind": "operator_close"}}})
 		}
 		if args[1] == "wait" {
 			if arg(args, "--terminal") != "terminal-test" || arg(args, "--for") != "tui-idle" || arg(args, "--environment") != "env-home" {
@@ -149,6 +157,9 @@ func fakeSupervisedOrca(args []string) int {
 			}
 			return fakeSupervisedEnvelope("fake-center-runtime", map[string]any{"runId": arg(args, "--run"), "taskId": "task-test", "dispatchId": "dispatch-test", "state": "ready", "stage": "input_accepted", "server": map[string]any{"environmentId": "env-home"}, "launch": map[string]any{"effective": map[string]any{"agent": "codex", "model": "gpt-6-luna", "effort": "high"}}, "worker": map[string]any{"worktreeId": worktree, "effects": []any{map[string]any{"kind": "worktree", "action": "created_top_level", "id": worktree}}}, "mutation": map[string]any{"requestId": "request-worker-start"}})
 		case "worker-show":
+			if os.Getenv("STEERLINE_FAKE_REOPEN") == "1" {
+				return fakeSupervisedEnvelope("fake-center-runtime", map[string]any{"dispatch": map[string]any{"id": "dispatch-reopen", "runId": "run-reopen", "taskId": "task-reopen", "status": "completed"}, "worker": map[string]any{"dispatchId": "dispatch-reopen", "state": "succeeded", "worktreeId": "repo-test::worktree", "agentTerminalHandle": "terminal-reopen", "residualResources": []any{}}, "server": map[string]any{"environmentId": "env-home"}, "remoteRuntimeEpoch": "fake-remote-runtime", "observation": map[string]any{"status": "exited", "exactWorker": true}})
+			}
 			if os.Getenv("STEERLINE_FAKE_ACCEPTANCE_DISPATCH") != "" {
 				return fakeSupervisedEnvelope("fake-center-runtime", map[string]any{"dispatch": map[string]any{"id": "dispatch-acceptance", "runId": "run-acceptance", "taskId": "task-acceptance", "status": "failed"}, "worker": map[string]any{"dispatchId": "dispatch-acceptance", "state": os.Getenv("STEERLINE_FAKE_ACCEPTANCE_DISPATCH"), "worktreeId": "repo-test::worktree", "agentTerminalHandle": "terminal-acceptance", "residualResources": []any{}}, "server": map[string]any{"environmentId": "env-home"}})
 			}
