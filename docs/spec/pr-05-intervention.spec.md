@@ -1,5 +1,7 @@
 # PR 5 Spec：人工决策与恢复闭环
 
+2026-09-28 后续：[SteerlineTest 原生 Task 104](../validation/pr05-ha16-steerlinetest-2026-09-28/README.md)已以真实本机 Codex 公共历史和可见 TTY 完成 H-A16 精确 turn/final 折叠、展开、再折叠及最终正文导航；下文较早“仍开放”字样保留当时状态。#3 整体验收仍保留 Orca 平台自身同句柄新 incarnation 的独立门槛。
+
 任务 ID：3；任务名称：人工决策与恢复闭环。
 
 状态：已实现，自动化验证及限制见[验证记录](../validation/pr-05-intervention.md)。依赖：PR 2、4A、4B、4C。对应 [Plan](pr-05-intervention.plan.md)。

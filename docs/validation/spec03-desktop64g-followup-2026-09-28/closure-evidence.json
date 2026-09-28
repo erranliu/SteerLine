@@ -1,0 +1,36 @@
+{
+  "base_commit": "995bdadebae849fd45d1a929cd6984b201dcea61",
+  "candidate_head": "f29b329585413836954b6b93c1244d7d991c50ee",
+  "capability_report_confined_to_temp_state": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\s3desktop64g-repeat3\\steerline-home\\state\\native-project-33603990c9a2",
+  "captured_at": "2026-09-28T06:18:28.3767724Z",
+  "configured_codex_cli_version_pin": "",
+  "current_target_capability_evidence": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\s3desktop64g-repeat3\\steerline-home\\state\\native-project-33603990c9a2\\execution\\v1\\evidence\\27c1936ccbb2c226945b7c3e7a785f3e4f92f11f0a7071684fffda0aef51244a.json#sha256=27c1936ccbb2c226945b7c3e7a785f3e4f92f11f0a7071684fffda0aef51244a",
+  "delivery": {
+    "project_id": "c:\\users\\lmas1\\appdata\\local\\temp\\s3desktop64g-repeat3\\native-project\\.git",
+    "task_id": "91024",
+    "selected_workflow_run_id": "3cd46319e60437e61789c3dddcee1020",
+    "pr_instance": "https://github.com",
+    "pr_repository": "erranliu/SteerLine",
+    "pr_number": 89,
+    "pr_url": "https://github.com/erranliu/SteerLine/pull/89",
+    "merge_commit": "7477158670589217f15df7cafa86bebae7172325",
+    "merged_at": "2026-09-28T06:18:11Z",
+    "recorded_at": "2026-09-28T06:18:17.8984092Z",
+    "evidence": {
+      "pr_instance": "https://github.com",
+      "url": "https://github.com/erranliu/SteerLine/pull/89",
+      "repository": "erranliu/SteerLine",
+      "number": 89,
+      "base_branch": "codex/spec03-desktop64g-repeat-base-20260928",
+      "state": "merged",
+      "merged": true,
+      "merged_at": "2026-09-28T06:18:11Z",
+      "merge_commit": "7477158670589217f15df7cafa86bebae7172325"
+    }
+  },
+  "native_task_id": "91024",
+  "project_id": "c:\\users\\lmas1\\appdata\\local\\temp\\s3desktop64g-repeat3\\native-project\\.git",
+  "remote_codex_cli_version": "codex-cli 0.156.1",
+  "task_status": "closed",
+  "test_pr_url": "https://github.com/erranliu/SteerLine/pull/89"
+}

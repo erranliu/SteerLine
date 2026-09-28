@@ -1,0 +1,38 @@
+{
+  "id": "b01cf822-239f-4484-a2a5-f4b68d20cc40",
+  "ok": true,
+  "result": {
+    "runId": "run_fde816b49723",
+    "deliveryId": "delivery_a8bd3fdae17f",
+    "messages": [
+      {
+        "id": "relay_ffb35df9b3a5",
+        "run_id": "run_fde816b49723",
+        "delivery_contract": "current_delivery",
+        "from_handle": "dispatch:ctx_02ec0a318249",
+        "to_handle": "run:run_fde816b49723",
+        "subject": "Verify step receipt",
+        "body": "",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": "{\"taskId\":\"task_1f34eff15f06\",\"dispatchId\":\"ctx_02ec0a318249\",\"remote_codex_version\":\"codex-cli 0.156.1\",\"step_result\":{\"schema_version\":1,\"project_identity\":\"c:\\\\users\\\\lmas1\\\\appdata\\\\local\\\\temp\\\\steerlinetest-p13-missing2\\\\native-project\\\\.git\",\"task_id\":\"91024\",\"workflow_run_id\":\"e38b5b6bbc5e29ca9cd08eb866a79260\",\"execution_id\":\"cae21ceb9a613488b57f20d7fdb1e104\",\"attempt_id\":\"7db6722df3a84b7bc42dba2dba03f7bd\",\"result\":{\"base_ancestor\":true,\"checks\":[{\"actual_commit\":\"33955e5abb00fecd6e7ee01b0a9f5ac433d738f7\",\"command\":\"pwsh.exe -NoProfile -Command $h=(git rev-parse HEAD:steerline-spec03-native-stage.txt).Trim(); if($LASTEXITCODE -ne 0 -or $h -cne 'a7890c716cc3ad0cca79f8d7b68cffe125e6b106'){exit 7}; exit 0\",\"evidence_ref\":\"HEAD:steerline-spec03-native-stage.txt\",\"exit_code\":0,\"name\":\"content-smoke\",\"passed\":true,\"revision\":\"33955e5abb00fecd6e7ee01b0a9f5ac433d738f7\",\"script_version\":\"README.md\",\"status\":\"passed\"}],\"input_revision\":\"33955e5abb00fecd6e7ee01b0a9f5ac433d738f7\",\"prerequisite_result_ids\":[\"dc228f9cc87ecfd7530fd2ffa7809a4d\"],\"result_id\":\"7db6722df3a84b7bc42dba2dba03f7bd\",\"revision\":\"33955e5abb00fecd6e7ee01b0a9f5ac433d738f7\",\"step_id\":\"verify\",\"succeeded\":true,\"workspace\":{\"base\":\"592a745f3ed8dc26ad74c4f01066d632e77bee30\",\"branch\":\"steerline-e38b5b6bbc5e\",\"dirty\":false,\"head\":\"33955e5abb00fecd6e7ee01b0a9f5ac433d738f7\",\"repository\":\"c:\\\\users\\\\lmas1\\\\appdata\\\\local\\\\temp\\\\steerlinetest-p13-missing2\\\\native-project\\\\.git\",\"verified_at\":\"2026-09-28T06:53:33.6515176Z\",\"worktree\":\"C:\\\\Users\\\\Administrator\\\\orca\\\\workspaces\\\\SteerlineTest\\\\steerline-e38b5b6bbc5e\"}}}}",
+        "created_at": "2026-09-28T06:53:38Z",
+        "delivered_at": null
+      }
+    ],
+    "count": 1,
+    "replayed": false,
+    "acknowledged": null,
+    "timedOut": false,
+    "cancelled": false,
+    "connectionLost": false,
+    "mutation": {
+      "requestId": "9d5a5082-ef07-418d-8fd7-951e557d6fc8",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "baf46a9c-923a-4bf1-b595-b866b5555e2e"
+  }
+}
