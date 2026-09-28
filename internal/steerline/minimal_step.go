@@ -757,25 +757,38 @@ func (s *Service) ensureSupervisedRun(ctx context.Context, run *Run) error {
 	objective := "SteerLine workflow " + run.RunID + " on " + s.Config.Orca.Supervised.RepositorySelector
 	opID, err := s.startOperation("create_orca_run", "orca-run:"+run.RunID, map[string]string{
 		"workflow_run_id": run.RunID,
-		"coordinator":     s.Config.Orca.Supervised.CoordinatorTerminal,
 		"objective":       objective,
 	})
 	if err != nil {
 		return err
 	}
-	runID, requestID, createErr := (orcaSupervisedBackend{config: s.Config}).createOrchestrationRun(ctx, run.RunID, objective)
+	runID, requestID, coordinator, createErr := (orcaSupervisedBackend{config: s.Config}).createOrchestrationRun(ctx, run.RunID, objective)
+	if coordinator != "" {
+		run.Target.CoordinatorTerminal = coordinator
+	}
 	if runID != "" {
 		run.Target.OrchestrationRun = runID
 		run.Target.OrchestrationRunRequestID = requestID
+	}
+	for i := range s.State.Executions {
+		if s.State.Executions[i].ExecutionID == run.ExecutionID {
+			s.State.Executions[i].Target = run.Target
+			break
+		}
 	}
 	status := "confirmed"
 	reason := ""
 	if createErr != nil {
 		status, reason = "outcome_unknown", createErr.Error()
 	}
-	receipt := mustJSON(map[string]string{"run_id": runID, "platform_request_id": requestID})
+	receipt := mustJSON(map[string]string{"run_id": runID, "platform_request_id": requestID, "coordinator_terminal": coordinator})
 	if err := s.changeOperation(opID, status, requestID, receipt, reason); err != nil {
 		return errors.Join(createErr, err)
+	}
+	if createErr == nil && coordinator != "" {
+		coordinatorConfig := *s.Config.Orca.Supervised
+		coordinatorConfig.CoordinatorTerminal = coordinator
+		s.Config.Orca.Supervised = &coordinatorConfig
 	}
 	return createErr
 }

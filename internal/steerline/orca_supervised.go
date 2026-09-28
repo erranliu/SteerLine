@@ -43,13 +43,16 @@ type supervisedStartReceipt struct {
 }
 
 type supervisedWorkerObservation struct {
-	Identity       ProcessIdentity
-	Liveness       string
-	DispatchState  string
-	AgentWaitState string
-	WorktreePath   string
-	Branch         string
-	ObservedAt     time.Time
+	Identity          ProcessIdentity
+	Liveness          string
+	DispatchState     string
+	WorkerState       string
+	WorkerStage       string
+	TerminalConnected *bool
+	AgentWaitState    string
+	WorktreePath      string
+	Branch            string
+	ObservedAt        time.Time
 }
 
 type supervisedDelivery struct {
@@ -261,25 +264,28 @@ func normalizeRemoteURL(value string) string {
 	return strings.TrimSuffix(value, "/")
 }
 
-func (b orcaSupervisedBackend) createOrchestrationRun(ctx context.Context, workflowRunID, objective string) (string, string, error) {
+func (b orcaSupervisedBackend) createOrchestrationRun(ctx context.Context, workflowRunID, objective string) (string, string, string, error) {
 	if !stableExecutionID(workflowRunID) || strings.TrimSpace(objective) == "" {
-		return "", "", &BackendError{Code: BackendRejected, Diagnostic: "supervised Orca Run requires a fixed workflow identity and objective"}
+		return "", "", "", &BackendError{Code: BackendRejected, Diagnostic: "supervised Orca Run requires a fixed workflow identity and objective"}
 	}
 	if err := validateSupervisedOrcaConfig(&b.config); err != nil {
-		return "", "", &BackendError{Code: BackendRejected, Diagnostic: "supervised Orca configuration is invalid", Cause: err}
+		return "", "", "", &BackendError{Code: BackendRejected, Diagnostic: "supervised Orca configuration is invalid", Cause: err}
 	}
 	pair, err := probeSupervisedOrcaTarget(ctx, b.config)
 	if err != nil {
-		return "", "", &BackendError{Code: BackendUnreachable, Diagnostic: "supervised Orca preflight failed before Run creation", Cause: err}
+		return "", "", "", &BackendError{Code: BackendUnreachable, Diagnostic: "supervised Orca preflight failed before Run creation", Cause: err}
 	}
-	sc := b.config.Orca.Supervised
-	out, callErr := (orcaClient{cfg: b.config}).call(ctx, positiveDuration(b.config.CommandTimeout, 30*time.Second), "orchestration", "run-create", "--objective", objective, "--from", sc.CoordinatorTerminal, "--json")
+	coordinator, err := b.createRunCoordinator(ctx, workflowRunID, pair.CenterRuntime)
+	if err != nil {
+		return "", "", "", err
+	}
+	out, callErr := (orcaClient{cfg: b.config}).call(ctx, positiveDuration(b.config.CommandTimeout, 30*time.Second), "orchestration", "run-create", "--objective", objective, "--from", coordinator, "--json")
 	env, parseErr := parseEnvelope(out)
 	if callErr != nil || parseErr != nil {
-		if runID, reconcileErr := b.currentRunForObjective(ctx, objective, pair.CenterRuntime); reconcileErr == nil {
-			return runID, "", &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "Orca Run was found by its fixed objective, but its platform request UUID is unavailable"}
+		if runID, reconcileErr := b.currentRunForObjective(ctx, objective, pair.CenterRuntime, coordinator); reconcileErr == nil {
+			return runID, "", coordinator, &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "Orca Run was found by its fixed objective, but its platform request UUID is unavailable"}
 		}
-		return "", "", &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "supervised Orca Run creation may have been applied; no platform request UUID was received and exact reconciliation failed", Cause: errors.Join(callErr, parseErr)}
+		return "", "", coordinator, &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "supervised Orca Run creation may have been applied; no platform request UUID was received and exact reconciliation failed", Cause: errors.Join(callErr, parseErr)}
 	}
 	var result struct {
 		Run struct {
@@ -290,23 +296,22 @@ func (b orcaSupervisedBackend) createOrchestrationRun(ctx context.Context, workf
 		} `json:"mutation"`
 	}
 	if err := json.Unmarshal(env.Result, &result); err != nil || result.Run.ID == "" {
-		if runID, reconcileErr := b.currentRunForObjective(ctx, objective, pair.CenterRuntime); reconcileErr == nil {
-			return runID, "", &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "Orca Run was found by its fixed objective, but its platform request UUID is unavailable"}
+		if runID, reconcileErr := b.currentRunForObjective(ctx, objective, pair.CenterRuntime, coordinator); reconcileErr == nil {
+			return runID, "", coordinator, &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "Orca Run was found by its fixed objective, but its platform request UUID is unavailable"}
 		}
-		return "", "", &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "Orca Run creation receipt lacks its stable Run ID", Cause: err}
+		return "", "", coordinator, &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "Orca Run creation receipt lacks its stable Run ID", Cause: err}
 	}
 	if env.Meta.RuntimeID != pair.CenterRuntime {
-		return "", "", &BackendError{Code: BackendIdentityMismatch, Diagnostic: "Orca Run creation receipt came from a different center runtime"}
+		return "", "", coordinator, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "Orca Run creation receipt came from a different center runtime"}
 	}
 	if result.Mutation.RequestID == "" {
-		return result.Run.ID, "", &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "Orca Run was created but its platform request UUID was omitted; persist the exact Run and reconcile before another mutation"}
+		return result.Run.ID, "", coordinator, &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "Orca Run was created but its platform request UUID was omitted; persist the exact Run and reconcile before another mutation"}
 	}
-	return result.Run.ID, result.Mutation.RequestID, nil
+	return result.Run.ID, result.Mutation.RequestID, coordinator, nil
 }
 
-func (b orcaSupervisedBackend) currentRunForObjective(ctx context.Context, objective, centerRuntime string) (string, error) {
-	sc := b.config.Orca.Supervised
-	out, callErr := (orcaClient{cfg: b.config}).call(ctx, positiveDuration(b.config.CommandTimeout, 30*time.Second), "orchestration", "run-current", "--from", sc.CoordinatorTerminal, "--json")
+func (b orcaSupervisedBackend) currentRunForObjective(ctx context.Context, objective, centerRuntime, coordinator string) (string, error) {
+	out, callErr := (orcaClient{cfg: b.config}).call(ctx, positiveDuration(b.config.CommandTimeout, 30*time.Second), "orchestration", "run-current", "--from", coordinator, "--json")
 	env, parseErr := parseEnvelope(out)
 	if callErr != nil || parseErr != nil {
 		return "", errors.Join(callErr, parseErr)
@@ -324,6 +329,52 @@ func (b orcaSupervisedBackend) currentRunForObjective(ctx context.Context, objec
 		return "", errors.New("current coordinator Run does not uniquely match the fixed objective")
 	}
 	return result.Run.ID, nil
+}
+
+// The configured terminal is only a bootstrap/preflight surface. Orca binds a
+// coordinator terminal to one Run, so concurrent WorkflowRuns own distinct
+// terminals on the center host.
+func (b orcaSupervisedBackend) createRunCoordinator(ctx context.Context, workflowRunID, centerRuntime string) (string, error) {
+	out, callErr := (orcaClient{cfg: b.config}).call(ctx, positiveDuration(b.config.CommandTimeout, 30*time.Second), "terminal", "create", "--worktree", "path:"+b.config.Repository, "--shell", "powershell", "--title", "SteerLine coordinator "+workflowRunID, "--json")
+	env, parseErr := parseEnvelope(out)
+	if callErr != nil || parseErr != nil {
+		return "", &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "per-Run coordinator creation is uncertain; inspect the original WorkflowRun before retry", Cause: errors.Join(callErr, parseErr)}
+	}
+	var result struct {
+		Terminal struct {
+			Handle string `json:"handle"`
+		} `json:"terminal"`
+	}
+	if err := json.Unmarshal(env.Result, &result); err != nil || env.Meta.RuntimeID != centerRuntime || result.Terminal.Handle == "" {
+		return "", &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "per-Run coordinator receipt lacks an exact handle or center runtime", Cause: err}
+	}
+	return result.Terminal.Handle, nil
+}
+
+func (b orcaSupervisedBackend) verifiedRunCoordinator(ctx context.Context, ref ExecutionRef) (string, error) {
+	coordinator := ref.Target.CoordinatorTerminal
+	if coordinator == "" && b.config.Orca.Supervised != nil {
+		coordinator = b.config.Orca.Supervised.CoordinatorTerminal
+	}
+	if !stableExecutionID(ref.RunID) || ref.External.OrchestrationRun == "" || ref.External.CoordinatorRuntimeID == "" || coordinator == "" {
+		return "", &BackendError{Code: BackendIdentityMismatch, Diagnostic: "supervised Run lacks its pinned coordinator binding"}
+	}
+	client := orcaClient{cfg: b.config}
+	out, callErr := client.call(ctx, positiveDuration(b.config.CommandTimeout, 30*time.Second), "orchestration", "run-show", "--id", ref.External.OrchestrationRun, "--json")
+	env, parseErr := parseEnvelope(out)
+	if callErr != nil || parseErr != nil {
+		return "", &BackendError{Code: BackendUnreachable, Diagnostic: "original Orca Run cannot be inspected", Cause: errors.Join(callErr, parseErr)}
+	}
+	var result struct {
+		Run struct {
+			ID          string `json:"id"`
+			Coordinator string `json:"coordinator_handle"`
+		} `json:"run"`
+	}
+	if err := json.Unmarshal(env.Result, &result); err != nil || env.Meta.RuntimeID != ref.External.CoordinatorRuntimeID || result.Run.ID != ref.External.OrchestrationRun || result.Run.Coordinator != coordinator {
+		return "", &BackendError{Code: BackendIdentityMismatch, Diagnostic: "Orca Run is bound to another coordinator", Cause: err}
+	}
+	return coordinator, nil
 }
 
 // startWorker uses only the supervised worker API. It never switches to a
@@ -454,6 +505,8 @@ func (b orcaSupervisedBackend) showWorker(ctx context.Context, expected supervis
 		Worker struct {
 			DispatchID string `json:"dispatchId"`
 			WorktreeID string `json:"worktreeId"`
+			State      string `json:"state"`
+			Stage      string `json:"stage"`
 		} `json:"worker"`
 		Projection struct {
 			Liveness struct {
@@ -469,6 +522,7 @@ func (b orcaSupervisedBackend) showWorker(ctx context.Context, expected supervis
 		RemoteRuntimeEpoch string `json:"remoteRuntimeEpoch"`
 		Terminal           struct {
 			Handle        string          `json:"handle"`
+			Connected     *bool           `json:"connected"`
 			IncarnationID string          `json:"incarnationId"`
 			WorktreeID    string          `json:"worktreeId"`
 			WorktreePath  string          `json:"worktreePath"`
@@ -501,7 +555,7 @@ func (b orcaSupervisedBackend) showWorker(ctx context.Context, expected supervis
 			waitState = "none"
 		}
 	}
-	return supervisedWorkerObservation{Identity: identity, Liveness: result.Projection.Liveness.Verdict, DispatchState: result.Dispatch.Status, AgentWaitState: waitState, WorktreePath: result.Terminal.WorktreePath, Branch: strings.TrimPrefix(result.Terminal.Branch, "refs/heads/"), ObservedAt: now()}, nil
+	return supervisedWorkerObservation{Identity: identity, Liveness: result.Projection.Liveness.Verdict, DispatchState: result.Dispatch.Status, WorkerState: result.Worker.State, WorkerStage: result.Worker.Stage, TerminalConnected: result.Terminal.Connected, AgentWaitState: waitState, WorktreePath: result.Terminal.WorktreePath, Branch: strings.TrimPrefix(result.Terminal.Branch, "refs/heads/"), ObservedAt: now()}, nil
 }
 
 // submitAcceptedPrompt waits for the exact prompt to appear in the live Codex
@@ -1090,7 +1144,8 @@ func (b orcaSupervisedBackend) inspectSupervisedWorktree(ctx context.Context, pa
 	return WorkspaceInspection{Repository: b.config.identity, Worktree: result.Worktree.Path, Branch: branch, Base: base, Head: result.Worktree.Head, Dirty: false, CheckedAt: now()}, nil
 }
 
-func (b orcaSupervisedBackend) checkDelivery(ctx context.Context, identity ProcessIdentity) (supervisedDelivery, error) {
+func (b orcaSupervisedBackend) checkDelivery(ctx context.Context, ref ExecutionRef) (supervisedDelivery, error) {
+	identity := ref.External
 	sc := b.config.Orca.Supervised
 	if sc == nil || identity.Kind != "orca_supervised" || identity.OrchestrationRun == "" || identity.CoordinatorRuntimeID == "" {
 		return supervisedDelivery{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "supervised inbox read lacks the fixed coordinator and Orca Run identity"}
@@ -1099,7 +1154,11 @@ func (b orcaSupervisedBackend) checkDelivery(ctx context.Context, identity Proce
 	if waitMillis <= 0 {
 		waitMillis = 2000
 	}
-	out, callErr := (orcaClient{cfg: b.config}).call(ctx, positiveDuration(b.config.CommandTimeout, time.Duration(waitMillis+5000)*time.Millisecond), "orchestration", "check", "--terminal", sc.CoordinatorTerminal, "--run", identity.OrchestrationRun, "--wait", "--types", "worker_done,status,question,escalation", "--timeout-ms", strconv.FormatInt(waitMillis, 10), "--json")
+	coordinator, err := b.verifiedRunCoordinator(ctx, ref)
+	if err != nil {
+		return supervisedDelivery{}, err
+	}
+	out, callErr := (orcaClient{cfg: b.config}).call(ctx, positiveDuration(b.config.CommandTimeout, time.Duration(waitMillis+5000)*time.Millisecond), "orchestration", "check", "--terminal", coordinator, "--run", identity.OrchestrationRun, "--wait", "--types", "worker_done,status,question,escalation", "--timeout-ms", strconv.FormatInt(waitMillis, 10), "--json")
 	env, parseErr := parseEnvelope(out)
 	if callErr != nil || parseErr != nil {
 		return supervisedDelivery{}, &BackendError{Code: BackendUnreachable, Diagnostic: "supervised coordinator inbox read failed", Cause: errors.Join(callErr, parseErr)}
@@ -1133,12 +1192,16 @@ func (b orcaSupervisedBackend) checkDelivery(ctx context.Context, identity Proce
 	return supervisedDelivery{ID: result.DeliveryID, Messages: result.Messages, TimedOut: result.TimedOut}, nil
 }
 
-func (b orcaSupervisedBackend) acknowledgeDelivery(ctx context.Context, identity ProcessIdentity, deliveryID string) (string, error) {
+func (b orcaSupervisedBackend) acknowledgeDelivery(ctx context.Context, ref ExecutionRef, deliveryID string) (string, error) {
+	identity := ref.External
 	if deliveryID == "" || identity.CoordinatorRuntimeID == "" || identity.OrchestrationRun == "" {
 		return "", &BackendError{Code: BackendIdentityMismatch, Diagnostic: "supervised Delivery acknowledgement lacks exact identity"}
 	}
-	sc := b.config.Orca.Supervised
-	out, callErr := (orcaClient{cfg: b.config}).call(ctx, positiveDuration(b.config.CommandTimeout, 30*time.Second), "orchestration", "check", "--terminal", sc.CoordinatorTerminal, "--run", identity.OrchestrationRun, "--ack", deliveryID, "--json")
+	coordinator, err := b.verifiedRunCoordinator(ctx, ref)
+	if err != nil {
+		return "", err
+	}
+	out, callErr := (orcaClient{cfg: b.config}).call(ctx, positiveDuration(b.config.CommandTimeout, 30*time.Second), "orchestration", "check", "--terminal", coordinator, "--run", identity.OrchestrationRun, "--ack", deliveryID, "--json")
 	env, parseErr := parseEnvelope(out)
 	if callErr != nil || parseErr != nil {
 		return "", &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "supervised Delivery acknowledgement is uncertain; reconcile the exact Delivery ID", Cause: errors.Join(callErr, parseErr)}
@@ -1317,7 +1380,7 @@ func (b orcaSupervisedBackend) observeWorker(ctx context.Context, worker *Worker
 				return
 			}
 		}
-		delivery, err := b.checkDelivery(ctx, identity)
+		delivery, err := b.checkDelivery(ctx, ref)
 		if err != nil {
 			if ctx.Err() != nil {
 				finish(&BackendError{Code: BackendOutcomeUnknown, Diagnostic: "supervised observer stopped without remote settlement proof", Cause: ctx.Err()})
@@ -1368,7 +1431,7 @@ func (b orcaSupervisedBackend) observeWorker(ctx context.Context, worker *Worker
 				doneOutcome, doneBody = done.Outcome, message.Body
 			}
 			activity := ActivityEvent{V: ActivityVersion, TS: now(), Source: "orca-supervised", RunID: attemptResultRunID(input), ItemID: delivery.ID, Kind: "message", Title: "Orca inbox Delivery", Detail: summarizeSupervisedMessages(delivery.Messages)}
-			event := WorkerEvent{RunID: attemptResultRunID(input), AttemptID: attempt.AttemptID, Summary: activity.Title, Activity: activity, RemoteRunID: identity.OrchestrationRun, RemoteDeliveryID: delivery.ID, RemoteMessages: delivery.Messages, Acknowledge: func() (string, error) { return b.acknowledgeDelivery(ctx, identity, delivery.ID) }, Processed: make(chan error, 1)}
+			event := WorkerEvent{RunID: attemptResultRunID(input), AttemptID: attempt.AttemptID, Summary: activity.Title, Activity: activity, RemoteRunID: identity.OrchestrationRun, RemoteDeliveryID: delivery.ID, RemoteMessages: delivery.Messages, Acknowledge: func() (string, error) { return b.acknowledgeDelivery(ctx, ref, delivery.ID) }, Processed: make(chan error, 1)}
 			select {
 			case worker.Events <- event:
 			case <-ctx.Done():
@@ -1735,15 +1798,23 @@ func (b orcaSupervisedBackend) replyQuestion(ctx context.Context, ref ExecutionR
 	if questionID == "" || strings.TrimSpace(answer) == "" {
 		return "", &BackendError{Code: BackendRejected, Diagnostic: "supervised reply requires a bounded answer and original question ID"}
 	}
+	coordinator := ref.Target.CoordinatorTerminal
+	if coordinator == "" && b.config.Orca.Supervised != nil {
+		coordinator = b.config.Orca.Supervised.CoordinatorTerminal
+	}
 	serializedReply, err := json.Marshal(struct {
 		QuestionID string `json:"question_id"`
 		Body       string `json:"body"`
 		Run        string `json:"run"`
 		From       string `json:"from"`
 		Dispatch   string `json:"dispatch"`
-	}{questionID, answer, ref.External.OrchestrationRun, b.config.Orca.Supervised.CoordinatorTerminal, ref.External.Dispatch})
+	}{questionID, answer, ref.External.OrchestrationRun, coordinator, ref.External.Dispatch})
 	if err != nil || len(serializedReply) > maxSupervisedMessageBytes-512 {
 		return "", &BackendError{Code: BackendRejected, Diagnostic: "supervised reply serialized message exceeds the conservative 8 KiB pre-send bound", Cause: err}
+	}
+	coordinator, err = b.verifiedRunCoordinator(ctx, ref)
+	if err != nil {
+		return "", err
 	}
 	observation, err := b.Observe(ctx, ref)
 	if err != nil {
@@ -1752,7 +1823,7 @@ func (b orcaSupervisedBackend) replyQuestion(ctx context.Context, ref ExecutionR
 	if observation.Liveness != "live" {
 		return "", &BackendError{Code: BackendIdentityMismatch, Diagnostic: "supervised reply requires the original live Dispatch"}
 	}
-	out, callErr := (orcaClient{cfg: b.config}).call(ctx, positiveDuration(b.config.CommandTimeout, 30*time.Second), "orchestration", "reply", "--id", questionID, "--body", answer, "--run", ref.External.OrchestrationRun, "--from", b.config.Orca.Supervised.CoordinatorTerminal, "--json")
+	out, callErr := (orcaClient{cfg: b.config}).call(ctx, positiveDuration(b.config.CommandTimeout, 30*time.Second), "orchestration", "reply", "--id", questionID, "--body", answer, "--run", ref.External.OrchestrationRun, "--from", coordinator, "--json")
 	env, parseErr := parseEnvelope(out)
 	if callErr != nil || parseErr != nil {
 		return "", &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "supervised reply outcome is uncertain; reconcile the exact question before retry", Cause: errors.Join(callErr, parseErr)}

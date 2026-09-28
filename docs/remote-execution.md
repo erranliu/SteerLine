@@ -4,7 +4,7 @@
 
 ## 使用
 
-1. 保持两端 Orca 在线，远端 Git、Codex、项目检查工具和 PR 发布凭据可用。本机每个项目的专用 `remote coordinator - keep open` 终端须保持打开。
+1. 保持两端 Orca 在线，远端 Git、Codex、项目检查工具和 PR 发布凭据可用。本机项目配置指定的预检终端须保持打开；每个新运行另有由中心创建的独立协调终端。
 2. 打开 `C:\SteerlineRuntime\service-window.bat`；SteerlineTest 使用参数 `C:\SteerlineRuntime\etc\SteerlineTest.json`。保持服务窗口打开。
 3. 打开 `C:\SteerlineRuntime\console.bat`，选择 Ready 任务，按 `s`，选择“Orca 台式机64g Codex Luna xhigh”并确认。已有本机配置和自动派发默认配置保持不变。
 4. 中心控制 prepare、implement、verify、review、publish_pr；在控制台回答业务问题，在代码托管平台审阅并人工合并 PR。中心核对固定 head 的真实合并后才关闭 Task、释放 DAG 后继。
@@ -18,6 +18,7 @@
 - 模型与思考强度固定在每次 WorkflowRun 中；配置变更不重定向已开始的任务。服务和控制台在修改配置后重开。
 - 不确定的启动、回答或发布结果保留原 Operation、Attempt 和资源占用，先对账，不重复启动或创建 PR。重启中心仍使用原 home 和 SQLite。
 - 远程取消不可用。关闭 viewer 不停服；关闭服务窗口只停止中心监督，远端 worker 可能继续。不要以关窗作为已停止证明。已结算的 worker 正常 release。
+- 已明确停止或释放、且没有 publish_pr 尝试与未决问题的远端运行，可以用中心 `task reopen` 命令按固定 Task/Run 身份重开。原工作树和会话历史保留供人工清理，新任务运行使用新身份，不重新接收被放弃的旧结果。
 - Orca 重启或专用协调终端丢失时，旧句柄不再可靠。先恢复并核验已有执行，再为后续任务更新协调终端；不能通过新句柄接管身份不明的活动执行。
 
 当前台式机64g 的目标功能、受影响故障与 4 秒 viewer 已按[Spec 03 最终范围](validation/spec03-final-scope-audit-2026-09-28.md)核对；原中心 #3/#4/#6 TaskDelivery 均已关闭。Orca 平台自然产生同句柄新 incarnation 未被声称已观察，出现时仍须定向回归。长期无人值守、固定 stable 24 小时与受控提升仍属于 #32；#29/#32/#24 的其他硬前置保持。
