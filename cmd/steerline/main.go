@@ -449,6 +449,7 @@ func runNativeTaskCommand(args []string) error {
 	config := fs.String("config", "steerline.local.json", "configuration JSON")
 	taskID := fs.String("task-id", "", "native task ID")
 	runID := fs.String("run-id", "", "exact workflow run to abandon when reopening a task")
+	predecessors := fs.String("predecessors", "", "comma-separated native predecessor task IDs")
 	confirmedStopped := fs.Bool("confirm-process-stopped", false, "operator confirmed the old worker process stopped")
 	cursor := fs.String("cursor", "", "native task list cursor")
 	limit := fs.Int("limit", 100, "list page size (default 100); graph/export default to 500 nodes, maximum 500")
@@ -462,33 +463,39 @@ func runNativeTaskCommand(args []string) error {
 	requestID := fs.String("request-id", "", "stable idempotency key for this task command")
 	expectedAuthority := fs.Uint64("expected-authority-version", 0, "sampled native project authority version")
 	expectedVersion := fs.Uint64("expected-version", 0, "expected native task version")
+	expectedGraphRevision := fs.Uint64("expected-graph-revision", 0, "sampled native graph revision")
 	reason := fs.String("reason", "", "reason for discarding or reopening the task")
 	by := fs.String("by", "", "task command requester")
-	if subcommand != "show" && subcommand != "list" && subcommand != "validate" && subcommand != "create" && subcommand != "discard" && subcommand != "reopen" && subcommand != "graph" && subcommand != "export" {
+	if subcommand != "show" && subcommand != "list" && subcommand != "validate" && subcommand != "create" && subcommand != "discard" && subcommand != "reopen" && subcommand != "add-predecessors" && subcommand != "graph" && subcommand != "export" {
 		return fmt.Errorf("unsupported task command %q", subcommand)
 	}
 	if err := fs.Parse(args[1:]); err != nil {
 		return err
 	}
 	allowedFlags := map[string]map[string]bool{
-		"show":     {"config": true, "task-id": true},
-		"list":     {"config": true, "cursor": true, "limit": true},
-		"validate": {"config": true, "file": true},
-		"create":   {"config": true, "file": true, "request-id": true, "expected-authority-version": true, "by": true},
-		"discard":  {"config": true, "task-id": true, "request-id": true, "expected-version": true, "reason": true, "by": true},
-		"reopen":   {"config": true, "task-id": true, "run-id": true, "request-id": true, "expected-version": true, "confirm-process-stopped": true, "reason": true, "by": true},
-		"graph":    {"config": true, "task-id": true, "cursor": true, "limit": true, "status": true, "direction": true, "depth": true},
-		"export":   {"config": true, "task-id": true, "status": true, "direction": true, "depth": true, "format": true, "output": true, "overwrite": true},
+		"show":             {"config": true, "task-id": true},
+		"list":             {"config": true, "cursor": true, "limit": true},
+		"validate":         {"config": true, "file": true},
+		"create":           {"config": true, "file": true, "request-id": true, "expected-authority-version": true, "by": true},
+		"discard":          {"config": true, "task-id": true, "request-id": true, "expected-version": true, "reason": true, "by": true},
+		"reopen":           {"config": true, "task-id": true, "run-id": true, "request-id": true, "expected-version": true, "confirm-process-stopped": true, "reason": true, "by": true},
+		"add-predecessors": {"config": true, "task-id": true, "predecessors": true, "run-id": true, "request-id": true, "expected-version": true, "expected-graph-revision": true, "confirm-process-stopped": true, "reason": true, "by": true},
+		"graph":            {"config": true, "task-id": true, "cursor": true, "limit": true, "status": true, "direction": true, "depth": true},
+		"export":           {"config": true, "task-id": true, "status": true, "direction": true, "depth": true, "format": true, "output": true, "overwrite": true},
 	}
 	var unexpectedFlag string
 	limitWasSet := false
 	cursorWasSet := false
+	graphRevisionWasSet := false
 	fs.Visit(func(f *flag.Flag) {
 		if f.Name == "limit" {
 			limitWasSet = true
 		}
 		if f.Name == "cursor" {
 			cursorWasSet = true
+		}
+		if f.Name == "expected-graph-revision" {
+			graphRevisionWasSet = true
 		}
 		if !allowedFlags[subcommand][f.Name] && unexpectedFlag == "" {
 			unexpectedFlag = f.Name
@@ -550,6 +557,16 @@ func runNativeTaskCommand(args []string) error {
 		if err := steerline.ValidateNativeTaskID(*taskID); err != nil {
 			return err
 		}
+	case "add-predecessors":
+		if *taskID == "" || strings.TrimSpace(*predecessors) == "" || *requestID == "" || *expectedVersion == 0 || !graphRevisionWasSet || strings.TrimSpace(*reason) == "" || strings.TrimSpace(*by) == "" {
+			return errors.New("task add-predecessors requires -task-id, -predecessors, -request-id, -expected-version, -expected-graph-revision, -reason and -by")
+		}
+		if err := steerline.ValidateNativeTaskID(*taskID); err != nil {
+			return err
+		}
+		if (*runID == "") != !*confirmedStopped {
+			return errors.New("task add-predecessors requires -run-id and -confirm-process-stopped together for a claimed task")
+		}
 	case "graph":
 		if *file != "" || *requestID != "" || *expectedAuthority != 0 || *expectedVersion != 0 || *reason != "" || *by != "" {
 			return errors.New("task graph does not accept task mutation flags")
@@ -583,7 +600,7 @@ func runNativeTaskCommand(args []string) error {
 	if err != nil {
 		return err
 	}
-	if subcommand == "create" || subcommand == "discard" || subcommand == "reopen" {
+	if subcommand == "create" || subcommand == "discard" || subcommand == "reopen" || subcommand == "add-predecessors" {
 		if err = store.Close(); err != nil {
 			return err
 		}
@@ -641,6 +658,16 @@ func runNativeTaskCommand(args []string) error {
 		receipt, reopenErr := (steerline.CommandService{Store: store, Project: c.Identity()}).ReopenNativeTask(context.Background(), c, steerline.TaskReopenInput{TaskID: *taskID, WorkflowRunID: *runID, RequestID: *requestID, ExpectedVersion: *expectedVersion, ConfirmedProcessStopped: *confirmedStopped, Reason: *reason, RequestedBy: *by})
 		if reopenErr != nil {
 			return reopenErr
+		}
+		return json.NewEncoder(os.Stdout).Encode(receipt)
+	case "add-predecessors":
+		ids := strings.Split(*predecessors, ",")
+		for i := range ids {
+			ids[i] = strings.TrimSpace(ids[i])
+		}
+		receipt, addErr := (steerline.CommandService{Store: store, Project: c.Identity()}).AddNativeTaskPredecessors(context.Background(), c, steerline.TaskPredecessorAddInput{TaskID: *taskID, PredecessorIDs: ids, RequestID: *requestID, ExpectedTaskVersion: *expectedVersion, ExpectedGraphRevision: *expectedGraphRevision, WorkflowRunID: *runID, ConfirmedProcessStopped: *confirmedStopped, Reason: *reason, RequestedBy: *by})
+		if addErr != nil {
+			return addErr
 		}
 		return json.NewEncoder(os.Stdout).Encode(receipt)
 	case "graph":
