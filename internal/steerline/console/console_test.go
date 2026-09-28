@@ -1318,7 +1318,7 @@ func TestEmptyRunningFilterExplainsWhyNativeTasksAreHidden(t *testing.T) {
 	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, &testControlClient{}, now)
 	m.projects[0].filter = 2
 	empty := strings.Join(renderRows(m, m.projects[0], 80, 8), "\n")
-	if !strings.Contains(empty, "3 运行中") || !strings.Contains(empty, "1全部") || !strings.Contains(empty, "5待合并") || !strings.Contains(empty, "按 1 查看全部任务") || strings.Contains(empty, "当前没有 Ready 任务") {
+	if !strings.Contains(empty, "3 进行中") || !strings.Contains(empty, "1全部") || !strings.Contains(empty, "5待合并") || !strings.Contains(empty, "按 1 查看全部任务") || strings.Contains(empty, "当前没有 Ready 任务") {
 		t.Fatalf("empty filtered list implied the task data disappeared: %q", empty)
 	}
 	if !strings.Contains(renderFooter(m, m.projects[0]), "1–7 筛选") || !strings.Contains(strings.Join(renderHelp(m.projects[0]), "\n"), "5 待合并") {
@@ -1500,8 +1500,7 @@ func TestControlRequestIDFromErrorRemainsQueryOnly(t *testing.T) {
 	if m.projects[0].actions[requestID].Status != "indeterminate" {
 		t.Fatal("uncertain publication must remain indeterminate")
 	}
-	updated, reconcile := m.reconcileLatest()
-	m = updated.(Model)
+	reconcile := m.pollAction(0, m.projects[0].actions[requestID])
 	if reconcile == nil || control.calls != 1 {
 		t.Fatal("reconciliation must query the same ID without publishing again")
 	}

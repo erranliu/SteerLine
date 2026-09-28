@@ -62,13 +62,6 @@ func TestReadyTaskShowsExecutionSettingsAndConfigMismatchBlocksStart(t *testing.
 	if cmd != nil || !strings.Contains(m.status, "不能切换自动派发") {
 		t.Fatalf("mismatched config enabled auto dispatch: %q", m.status)
 	}
-	m.projects[0].snapshot.Connection.Snapshot.Runtime.Control.DispatchMode = "auto"
-	m.projects[0].snapshot.Connection.Snapshot.Runtime.Control.DispatchPaused = true
-	updated, cmd = m.togglePause()
-	m = updated.(Model)
-	if cmd != nil || !strings.Contains(m.status, "不能恢复自动派发") {
-		t.Fatalf("mismatched config resumed auto dispatch: %q", m.status)
-	}
 }
 
 func TestOrcaExecutionProfilesNameAgentModelEffortAndRemoteTarget(t *testing.T) {

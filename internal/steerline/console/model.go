@@ -1526,7 +1526,7 @@ func filterAllows(filter int, kind rowKind, run *steerline.Run) bool {
 	}
 	switch filter {
 	case 2:
-		return run != nil && run.ExecutionStatus == "running"
+		return run != nil && run.TaskStatus == "in_progress" && (run.ExecutionStatus == "pending" || run.ExecutionStatus == "running")
 	case 3:
 		return run != nil && run.FinishTaskStatus == "waiting_decision"
 	case 4:
@@ -2048,12 +2048,8 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.startSelected()
 	case "m":
 		return m.toggleMode()
-	case "p":
-		return m.togglePause()
 	case "x":
 		return m.prepareStop()
-	case "i":
-		return m.reconcileLatest()
 	case "e":
 		return m.toggleGroup()
 	case ",":
@@ -2469,21 +2465,6 @@ func (m Model) toggleMode() (tea.Model, tea.Cmd) {
 	return m.createAction("set_dispatch_mode", mode)
 }
 
-func (m Model) togglePause() (tea.Model, tea.Cmd) {
-	_, runtimeState := m.readyControlTarget()
-	if runtimeState == nil {
-		return m, nil
-	}
-	if runtimeState.Control.DispatchPaused {
-		if runtimeState.Control.DispatchMode == "auto" && executionConfigMismatch(m.projects[m.selected].ref, m.projects[m.selected].snapshot) {
-			m.status = "不能恢复自动派发：" + executionConfigChanged
-			return m, nil
-		}
-		return m.createAction("resume_dispatch", "")
-	}
-	return m.createAction("pause_dispatch", "")
-}
-
 func (m Model) prepareStop() (tea.Model, tea.Cmd) {
 	if m.selected < 0 || m.selected >= len(m.projects) {
 		return m, nil
@@ -2501,29 +2482,6 @@ func (m Model) prepareStop() (tea.Model, tea.Cmd) {
 	}
 	m.confirm = &confirmAction{projectKey: state.ref.Key, instance: runtimeState.Service.InstanceID, revision: runtimeState.Control.Revision, action: "stop_service", requestID: steerline.NewControlRequestID()}
 	return m, nil
-}
-
-func (m Model) reconcileLatest() (tea.Model, tea.Cmd) {
-	if m.selected < 0 || m.selected >= len(m.projects) {
-		return m, nil
-	}
-	state := &m.projects[m.selected]
-	var latest *actionState
-	for _, action := range state.actions {
-		if latest == nil || action.UpdatedAt.After(latest.UpdatedAt) {
-			latest = action
-		}
-	}
-	if latest == nil {
-		m.status = "没有可对账的 request_id"
-		return m, nil
-	}
-	if latest.InFlight {
-		m.status = "该 request_id 正在查询：" + latest.RequestID
-		return m, nil
-	}
-	latest.InFlight = true
-	return m, m.pollAction(m.selected, latest)
 }
 
 func (m Model) inspectSelectedRecovery() (tea.Model, tea.Cmd) {
