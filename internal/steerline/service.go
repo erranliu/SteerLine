@@ -1746,8 +1746,12 @@ func (s *Service) run(ctx context.Context, dispatchMode string) (retErr error) {
 				return e
 			}
 		case <-controlTick.C:
-			if e := step(s.processPendingCommands); e != nil {
-				return e
+			processed := false
+			commandErr := s.processPendingCommandsTracked(ctx, &processed)
+			if processed || commandErr != nil || s.State.Service.Status != "running" || s.State.Service.Error != nil {
+				if e := step(func(context.Context) error { return commandErr }); e != nil {
+					return e
+				}
 			}
 			if e := s.pollControl(ctx, cancel); e != nil {
 				return e

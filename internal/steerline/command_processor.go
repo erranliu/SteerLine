@@ -10,6 +10,13 @@ import (
 )
 
 func (s *Service) processPendingCommands(ctx context.Context) error {
+	return s.processPendingCommandsTracked(ctx, nil)
+}
+
+// processPendingCommandsTracked reports whether a service-owned command was
+// processed. The scheduler uses this to avoid publishing an unchanged runtime
+// on every control poll.
+func (s *Service) processPendingCommandsTracked(ctx context.Context, processed *bool) error {
 	if s.domainStore == nil {
 		return nil
 	}
@@ -31,6 +38,9 @@ func (s *Service) processPendingCommands(ctx context.Context) error {
 					// Native task, dispatch and cleanup commands share the center's
 					// commands table. Their own transaction/reconciler owns their status.
 					continue
+				}
+				if processed != nil {
+					*processed = true
 				}
 				if command.Status == "in_flight" {
 					if err = s.recoverInFlightServiceCommand(ctx, service, command); err != nil {
@@ -55,6 +65,9 @@ func (s *Service) processPendingCommands(ctx context.Context) error {
 					return err
 				}
 				continue
+			}
+			if processed != nil {
+				*processed = true
 			}
 			var answer DecisionAnswer
 			if err = decode(command.Payload, &answer); err != nil {

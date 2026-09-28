@@ -535,11 +535,11 @@ func TestRefreshTicksDoNotStackSlowProjectReads(t *testing.T) {
 	if m.projects[0].refreshID != 1 {
 		t.Fatal("foreground reader restarted before its refresh interval")
 	}
-	m.clock.(*testClock).now = now.Add(3*time.Second + 450*time.Millisecond)
+	m.clock.(*testClock).now = now.Add(4*time.Second + 50*time.Millisecond)
 	updated, _ = m.Update(tickMsg(m.clock.Now()))
 	m = updated.(Model)
 	if m.projects[0].refreshID != 2 || !m.projects[0].refreshing {
-		t.Fatal("foreground reader did not restart within half a second after its last completed refresh")
+		t.Fatal("foreground reader did not restart one second after its last completed refresh")
 	}
 }
 

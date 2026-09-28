@@ -167,6 +167,50 @@ func (f *fixture) service(t *testing.T) *Service {
 	return service
 }
 
+func TestIdleServiceDoesNotPublishOnControlPoll(t *testing.T) {
+	f := newFixture(t)
+	f.c.Heartbeat, f.c.TaskPoll, f.c.PRPoll = "30s", "30s", "30s"
+	s := f.service(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- s.RunWithDispatch(ctx, "manual") }()
+	defer func() {
+		cancel()
+		select {
+		case err := <-done:
+			if err != nil {
+				t.Errorf("stop idle service: %v", err)
+			}
+		case <-time.After(5 * time.Second):
+			t.Error("idle service did not stop")
+		}
+	}()
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		state, err := LoadDatabaseRuntime(f.c)
+		if err == nil && state != nil && state.Service.Ready {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("idle service did not become ready: %v", err)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	// Let the final startup dispatch checkpoint settle before measuring idle time.
+	time.Sleep(200 * time.Millisecond)
+	before, err := LoadDatabaseRuntime(f.c)
+	require(t, err)
+	started := time.Now()
+	time.Sleep(1200 * time.Millisecond)
+	after, err := LoadDatabaseRuntime(f.c)
+	require(t, err)
+	elapsed := time.Since(started)
+	allowed := uint64(2 + elapsed/(2*time.Second)) // Decision polling may publish once every two seconds.
+	if delta := after.Revision - before.Revision; delta > allowed {
+		t.Fatalf("idle control polls published %d full runtime revisions in %s", delta, elapsed)
+	}
+}
+
 func controlReviewService(t *testing.T) *Service {
 	t.Helper()
 	service := newFixture(t).service(t)

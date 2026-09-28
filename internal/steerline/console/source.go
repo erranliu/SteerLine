@@ -91,22 +91,20 @@ func (FileQuerySource) ReadProject(ctx context.Context, ref ProjectRef, selected
 		return result
 	}
 	connectionCh := make(chan steerline.ServiceConnection, 1)
-	observationCh := make(chan steerline.ObservationSnapshot, 1)
 	type readerResult struct {
 		store *steerline.SQLiteStore
 		err   error
 	}
 	readerCh := make(chan readerResult, 1)
-	connectionConfig, observationConfig, readerConfig := c, c, c
+	connectionConfig, readerConfig := c, c
 	go func() { connectionCh <- steerline.ConnectService(ctx, connectionConfig) }()
-	go func() { observationCh <- viewer.NewFileSource(observationConfig).Snapshot() }()
 	go func() {
 		store, err := steerline.OpenNativeTaskReader(ctx, &readerConfig)
 		readerCh <- readerResult{store: store, err: err}
 	}()
 	result.Connection = <-connectionCh
 	result.Observation = result.Connection.Snapshot
-	databaseObservation := <-observationCh
+	databaseObservation := viewer.NewFileSource(c).SnapshotFromObservation(result.Connection.Snapshot)
 	if databaseObservation.Runtime != nil && (result.Observation.Runtime == nil || databaseObservation.Runtime.Revision > result.Observation.Runtime.Revision || (databaseObservation.Runtime.Revision == result.Observation.Runtime.Revision && databaseObservation.Runtime.HeartbeatAt.After(result.Observation.Runtime.HeartbeatAt))) {
 		result.Observation = databaseObservation
 	} else if result.Observation.Runtime == nil && result.Observation.State == steerline.SnapshotNone {
