@@ -1,5 +1,7 @@
 # Spec 03：最小状态机的分阶段远程闭环与 viewer 人工决策
 
+2026-09-28 新目标补充：远端已改为 `台式机64g`（本机 Orca 1.4.209、远端 1.4.215）。[新主机验收记录](../validation/spec03-desktop64g-2026-09-28.md)保留 Smart App Control 首次阻断和后续用户授权关闭的不同试次；新主机的六项受监管能力与 SteerLine 仓库原生五步 Task 91024、绑定 `yes` 答案、固定 head 的隔离 PR #78 合并、五个 Dispatch release/exited 已通过。完整 Run 无人工补按 Enter。远端 `gh` 未登录，publish 使用已连接 GitHub 能力创建 PR；固定 `gh` 命令须在机器准备登录后再验。UAC 启用重启后观察到受控取消及用户批准/程序启动；Orca computer-use 无法读取安全桌面，用户另提供匹配的 Git for Windows 提示原图，当前目标 P10 可见分支通过。home 的故障矩阵和 2 秒 viewer 证据仍限定旧主机；新主机的长期可靠性及 #3 精确轮次/平台真实同句柄换代继续开放。
+
 2026-09-28 后续：[本机可见控制台刷新样本](orca-probe/samples/spec03-viewer-follow-2026-09-28.json)发现默认当前 Attempt 被误保存为历史固定选择，修复后新 Attempt 的 SQLite `created_at` 至 Orca 可见终端 `source=screen` 帧出现的保守上界为 1.118 秒。手动选择历史 Attempt 仍保持固定。此本机样本本身没有覆盖 home 远端业务消息，也不能替代 Windows 管理员/UAC 桌面截图；远端时延由下段独立验收，UAC 仍开放。
 
 同日后续：[home 业务消息到可见 viewer 的真机验收](../validation/spec03-viewer-latency-2026-09-28.md)先发现顺序读取时原 Decision 展示耗时 2.476 秒；并行独立只读源并加快前台刷新后，新隔离任务的原 Decision 在 1.669 秒内出现在 Orca `source=screen` 帧，两次远端 review→publish 步骤帧分别为 1.414 与 1.798 秒。两条测试任务均完成五步、固定 head 的真实 PR 合并、中心 Task 结项和五个 Dispatch 释放，当前 1.4.209/1.4.210 `SteerlineTest` 目标的 2 秒 viewer 门槛通过。生产项目认证与 Windows 管理员/UAC 捕获仍单独开放。

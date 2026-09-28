@@ -1,0 +1,62 @@
+{
+  "capabilities": {
+    "message_inbox": [
+      {
+        "path": "post-sac/status-delivery.json",
+        "sha256": "2307ba52bd4862e9e92c3d1df164d705a342d21a1cbfd68cd395aa0d3d679542"
+      },
+      {
+        "path": "post-sac/done-delivery.json",
+        "sha256": "57d8a30bdca11fb25cdf3e2f675650c0f5cdad52839432b5dcbb7be008ae760e"
+      },
+      {
+        "path": "post-sac/final-task.json",
+        "sha256": "09cc243da87ddab35a505a45282a352ce6783eaaf7e7fe14eea466044c848201"
+      }
+    ],
+    "observe": [
+      {
+        "path": "post-sac/final-worker.json",
+        "sha256": "08b8cfb7175bb734808368162e096384a97ed83941128febb036fbac2605cb24"
+      },
+      {
+        "path": "post-sac/final-fleet.json",
+        "sha256": "5dc614772ace91d7196a6d3d4350e8ac6650643c540516b29f8990c993130765"
+      }
+    ],
+    "output_reading": [
+      {
+        "path": "post-sac/output.json",
+        "sha256": "0747b425252b087a86464da677b1a08ef5ecf08d6dda46859d538288636c4fc3"
+      }
+    ],
+    "resource_settlement": [
+      {
+        "path": "post-sac/release.json",
+        "sha256": "97ec6b61965e222c22f840d455074fb0b8d75d1a5d4e8a91b59830283c108ab8"
+      },
+      {
+        "path": "post-sac/final-terminals.json",
+        "sha256": "f704fa41a5c0cf524c16edb090e85d355aa7e32c5fc912d3cc53b554f4b52fe8"
+      }
+    ],
+    "start": [
+      {
+        "path": "post-sac/start.json",
+        "sha256": "5299b21bc1f11a5e14c6f87ce0991bed372f0b2321b5150d9a2c7b34e45e1edb"
+      }
+    ],
+    "workspace_inspection": [
+      {
+        "path": "remote-setup.json",
+        "sha256": "613568823cd039012da59d53d5183ef8d190fc307a840ef1176828932baf24a8"
+      },
+      {
+        "path": "post-sac/output.json",
+        "sha256": "0747b425252b087a86464da677b1a08ef5ecf08d6dda46859d538288636c4fc3"
+      }
+    ]
+  },
+  "captured_at": "2026-09-28T02:23:25.8165686Z",
+  "kind": "isolated-native-task-test-capabilities"
+}

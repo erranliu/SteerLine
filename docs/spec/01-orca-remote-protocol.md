@@ -4,6 +4,8 @@
 
 状态：已完成部分真实远端探测；必需故障场景仍待验收。配套 [Plan](01-orca-remote-protocol.plan.md)。更新：2026-09-24。
 
+2026-09-28 新远端 `台式机64g` 的 [P10 后续回执](../validation/spec03-desktop64g-2026-09-28.md)：初始 Smart App Control 阻断未签名 Orca CLI，原试次失败；用户批准关闭后消息/资源闭环和 SteerLine 原生五步通过。该机原有 `EnableLUA=0`，用户批准启用并重启后，受控 Git Bash 提权分别取得取消和人工批准/进程启动回执。Orca computer-use 不能读取 UAC 安全桌面，用户在第三次受控提示时拍下 `Git for Windows`、已验证发布者及“是/否”按钮原图，并选择“否”；当前主机 P10 的可见 UAC 与人工处置分支通过。旧主机早期设置提示本身没有当时画面，不回填历史。8 KiB 发送前拒绝的既有 home 证据按旧主机保留，未在新机重测。
+
 依据：[执行架构共同约束](execution-architecture.spec.md)。后续：[Spec 02](02-execution-model-and-adapter.md)、[Spec 03](03-remote-execution-and-viewer.md)。
 
 ## 1. 目标与交付

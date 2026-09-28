@@ -1,0 +1,79 @@
+{
+  "id": "19ffaa75-9653-4d81-b788-8aa8784631f8",
+  "ok": true,
+  "result": {
+    "workers": [
+      {
+        "dispatchId": "ctx_ec8831dc470b",
+        "taskId": "task_5757427ce8f1",
+        "runId": "run_608b9655bb4c",
+        "workerState": "succeeded",
+        "dispatchStatus": "completed",
+        "agentTerminalHandle": null,
+        "terminalState": null,
+        "resource": null,
+        "projection": {
+          "id": "ctx_ec8831dc470b",
+          "dispatchId": "ctx_ec8831dc470b",
+          "taskId": "task_5757427ce8f1",
+          "runId": "run_608b9655bb4c",
+          "role": "worker",
+          "parent": null,
+          "provider": null,
+          "host": {
+            "kind": "remote",
+            "id": "e68f4edf-8a83-42c2-a9da-6d404d3aa3d8"
+          },
+          "workspace": {
+            "id": "30162573-cc04-416e-bef4-226c418dde1f::C:/Users/Administrator/orca/workspaces/SteerLine/spec03-desktop64g-readonly-20260928",
+            "kind": "folder_or_worktree"
+          },
+          "stage": {
+            "worker": "succeeded",
+            "dispatch": "completed",
+            "detail": "released",
+            "activity": "unknown"
+          },
+          "outcome": "succeeded",
+          "liveness": {
+            "verdict": "exited",
+            "source": "execution_host"
+          },
+          "evidence": {
+            "durable": true,
+            "liveStatus": "unavailable",
+            "lastObservedAt": 1790561329115
+          },
+          "resource": {
+            "state": "absent",
+            "reason": "not_materialized"
+          },
+          "nextAction": {
+            "kind": "none",
+            "argv": []
+          },
+          "attention": {
+            "categories": [
+              "root_completion"
+            ],
+            "requiresAction": false
+          }
+        }
+      }
+    ],
+    "counts": {},
+    "page": {
+      "limit": 100,
+      "total": 1,
+      "hasMore": false,
+      "nextCursor": null
+    },
+    "scope": {
+      "run": "run_608b9655bb4c",
+      "source": "flag"
+    }
+  },
+  "_meta": {
+    "runtimeId": "baf46a9c-923a-4bf1-b595-b866b5555e2e"
+  }
+}

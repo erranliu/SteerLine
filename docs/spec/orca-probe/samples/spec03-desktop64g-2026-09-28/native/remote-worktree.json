@@ -1,0 +1,64 @@
+{
+  "id": "f0d66f38-b497-4bd4-8439-ee896d9d386f",
+  "ok": true,
+  "result": {
+    "worktree": {
+      "id": "30162573-cc04-416e-bef4-226c418dde1f::C:/Users/Administrator/orca/workspaces/SteerLine/steerline-a37bb5cfa97c",
+      "identity": {
+        "key": "wt2:local:78647be7-e1f5-40a2-92b3-7bc703503454",
+        "executionHostId": "local",
+        "instanceId": "78647be7-e1f5-40a2-92b3-7bc703503454"
+      },
+      "instanceId": "78647be7-e1f5-40a2-92b3-7bc703503454",
+      "repoId": "30162573-cc04-416e-bef4-226c418dde1f",
+      "projectId": "github:erranliu/steerline",
+      "hostId": "local",
+      "projectHostSetupId": "30162573-cc04-416e-bef4-226c418dde1f",
+      "creatorProvenance": {
+        "kind": "host"
+      },
+      "path": "C:/Users/Administrator/orca/workspaces/SteerLine/steerline-a37bb5cfa97c",
+      "head": "bee0572b2ac65a7932c9cbcb6d3cc26eb07d02ed",
+      "branch": "refs/heads/steerline-a37bb5cfa97c",
+      "isBare": false,
+      "isMainWorktree": false,
+      "displayName": "steerline-a37bb5cfa97c",
+      "displayNameMode": "fixed",
+      "comment": "",
+      "linkedIssue": null,
+      "linkedPR": null,
+      "linkedLinearIssue": null,
+      "linkedLinearIssueWorkspaceId": null,
+      "linkedLinearIssueOrganizationUrlKey": null,
+      "linkedGitLabMR": null,
+      "linkedGitLabIssue": null,
+      "linkedBitbucketPR": null,
+      "linkedAzureDevOpsPR": null,
+      "linkedGiteaPR": null,
+      "linkedWorkItem": null,
+      "linkedTaskSourceContext": null,
+      "isArchived": false,
+      "isUnread": false,
+      "isPinned": false,
+      "sortOrder": 1790562326710,
+      "lastActivityAt": 1790562326709,
+      "createdAt": 1790562326709,
+      "createdWithAgent": "codex",
+      "baseRef": "8e7858fbe511f5cfcd2fda995f90b898cbac6ade",
+      "workspaceStatus": "in-progress",
+      "parentWorktreeId": null,
+      "childWorktreeIds": [],
+      "lineage": null,
+      "git": {
+        "path": "C:/Users/Administrator/orca/workspaces/SteerLine/steerline-a37bb5cfa97c",
+        "head": "bee0572b2ac65a7932c9cbcb6d3cc26eb07d02ed",
+        "branch": "refs/heads/steerline-a37bb5cfa97c",
+        "isBare": false,
+        "isMainWorktree": false
+      }
+    }
+  },
+  "_meta": {
+    "runtimeId": "43ecb8ee-86e7-412d-abef-5fc345a1ccc6"
+  }
+}

@@ -1,0 +1,168 @@
+{
+  "id": "37e11078-83f7-4f9a-b87b-dae49b5be296",
+  "ok": true,
+  "result": {
+    "dispatch": {
+      "id": "ctx_ec8831dc470b",
+      "runId": "run_608b9655bb4c",
+      "taskId": "task_5757427ce8f1",
+      "task_id": "task_5757427ce8f1",
+      "contractVersion": 1,
+      "assigneeHandle": null,
+      "assigneePaneKey": null,
+      "processIncarnation": null,
+      "capabilityRevokedAt": "2026-09-28T02:03:28.645Z",
+      "retryOfDispatchId": null,
+      "creatorDispatchId": null,
+      "hostScope": null,
+      "status": "completed",
+      "failureCount": 0,
+      "lastFailure": null,
+      "terminationReason": null,
+      "depth": 1,
+      "dispatchedAt": "2026-09-28 02:02:35",
+      "completedAt": "2026-09-28T02:03:28.645Z",
+      "createdAt": "2026-09-28 02:02:35",
+      "lastHeartbeatAt": null
+    },
+    "worker": {
+      "dispatchId": "ctx_ec8831dc470b",
+      "runtimeEpoch": "baf46a9c-923a-4bf1-b595-b866b5555e2e",
+      "state": "succeeded",
+      "stage": "released",
+      "worktreeId": "30162573-cc04-416e-bef4-226c418dde1f::C:/Users/Administrator/orca/workspaces/SteerLine/spec03-desktop64g-readonly-20260928",
+      "agentTerminalHandle": null,
+      "setupState": "not_applicable",
+      "effects": [
+        {
+          "kind": "worktree",
+          "action": "reused",
+          "id": "30162573-cc04-416e-bef4-226c418dde1f::C:/Users/Administrator/orca/workspaces/SteerLine/spec03-desktop64g-readonly-20260928"
+        },
+        {
+          "kind": "setup",
+          "action": "not_applicable",
+          "state": "not_applicable"
+        },
+        {
+          "kind": "terminal",
+          "role": "agent",
+          "action": "created",
+          "id": "term_3d9aae81-da39-47bb-a937-efb0aeb6e906"
+        },
+        {
+          "kind": "dispatch_input",
+          "role": "agent",
+          "id": "term_3d9aae81-da39-47bb-a937-efb0aeb6e906",
+          "state": "accepted"
+        }
+      ],
+      "residualResources": [],
+      "startOptions": {
+        "on": "e68f4edf-8a83-42c2-a9da-6d404d3aa3d8",
+        "serverName": "台式机64g",
+        "worktree": "id:30162573-cc04-416e-bef4-226c418dde1f::C:/Users/Administrator/orca/workspaces/SteerLine/spec03-desktop64g-readonly-20260928",
+        "name": null,
+        "repo": null,
+        "baseBranch": null,
+        "terminal": null,
+        "agent": "codex",
+        "launch": {
+          "requested": {
+            "agent": "codex",
+            "model": "gpt-6-luna",
+            "effort": "high"
+          },
+          "effective": null
+        },
+        "timeoutMs": 60000,
+        "setup": "not_applicable",
+        "setupSource": "existing_worktree"
+      },
+      "lastError": null,
+      "createdAt": "2026-09-28 02:02:35",
+      "updatedAt": "2026-09-28T02:04:09.121Z"
+    },
+    "projection": {
+      "id": "ctx_ec8831dc470b",
+      "dispatchId": "ctx_ec8831dc470b",
+      "taskId": "task_5757427ce8f1",
+      "runId": "run_608b9655bb4c",
+      "role": "worker",
+      "parent": null,
+      "provider": null,
+      "host": {
+        "kind": "remote",
+        "id": "e68f4edf-8a83-42c2-a9da-6d404d3aa3d8"
+      },
+      "workspace": {
+        "id": "30162573-cc04-416e-bef4-226c418dde1f::C:/Users/Administrator/orca/workspaces/SteerLine/spec03-desktop64g-readonly-20260928",
+        "kind": "folder_or_worktree"
+      },
+      "stage": {
+        "worker": "succeeded",
+        "dispatch": "completed",
+        "detail": "released",
+        "activity": "unknown"
+      },
+      "outcome": "succeeded",
+      "liveness": {
+        "verdict": "exited",
+        "source": "execution_host"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": 1790561328430
+      },
+      "resource": {
+        "state": "absent",
+        "reason": "not_materialized"
+      },
+      "nextAction": {
+        "kind": "none",
+        "argv": []
+      },
+      "attention": {
+        "categories": [
+          "root_completion"
+        ],
+        "requiresAction": false
+      }
+    },
+    "server": {
+      "environmentId": "e68f4edf-8a83-42c2-a9da-6d404d3aa3d8",
+      "name": "台式机64g"
+    },
+    "remoteRuntimeEpoch": "43ecb8ee-86e7-412d-abef-5fc345a1ccc6",
+    "terminal": {
+      "handle": "term_3d9aae81-da39-47bb-a937-efb0aeb6e906",
+      "ptyId": "30162573-cc04-416e-bef4-226c418dde1f::C:/Users/Administrator/orca/workspaces/SteerLine/spec03-desktop64g-readonly-20260928@@64500a7f",
+      "incarnationId": "9ebd9435-fbb0-464f-b571-7967e3ab1bbe",
+      "orphaned": true,
+      "worktreeId": "30162573-cc04-416e-bef4-226c418dde1f::C:/Users/Administrator/orca/workspaces/SteerLine/spec03-desktop64g-readonly-20260928",
+      "worktreePath": "C:/Users/Administrator/orca/workspaces/SteerLine/spec03-desktop64g-readonly-20260928",
+      "branch": "refs/heads/spec03-desktop64g-readonly-20260928",
+      "tabId": "33ffd659-9165-4579-ac10-30affc6c6186",
+      "leafId": "88aa0d47-4094-4696-a021-a1c308bb58fe",
+      "title": "Report task outcome | spec03-desktop64g-rea...",
+      "connected": false,
+      "writable": false,
+      "lastOutputAt": 1790561010895,
+      "preview": "terrupt) · Running hook  › Ask Codex to do anything   GPT-6-Luna high · ~\\orca\\workspaces\\SteerLine\\spec03-desktop64g-readonly-20260928 · Report task outcome ••\n10:03  › Ask Codex to do anything   GPT-6-Luna high · ~\\orca\\workspaces\\SteerLine\\spec03-desktop64g-readonly-20260928 · Report task outcome",
+      "exitCause": {
+        "kind": "operator_close"
+      },
+      "executionHostId": "local",
+      "paneRuntimeId": -1,
+      "rendererGraphEpoch": 0
+    },
+    "observation": {
+      "status": "exited",
+      "exactWorker": true
+    }
+  },
+  "_meta": {
+    "runtimeId": "baf46a9c-923a-4bf1-b595-b866b5555e2e"
+  }
+}
