@@ -1,0 +1,86 @@
+{
+  "id": "19c19d9e-e186-4bcb-8afb-e27c6c009563",
+  "ok": true,
+  "result": {
+    "workers": [
+      {
+        "dispatchId": "ctx_68e4d8a33e15",
+        "taskId": "task_eee5a4e47a85",
+        "runId": "run_75f4d2338846",
+        "workerState": "stopped",
+        "dispatchStatus": "failed",
+        "agentTerminalHandle": "term_5af53ab6-01fc-4e1c-a140-6a6a883d2a16",
+        "terminalState": "retained",
+        "resource": null,
+        "projection": {
+          "id": "ctx_68e4d8a33e15",
+          "dispatchId": "ctx_68e4d8a33e15",
+          "taskId": "task_eee5a4e47a85",
+          "runId": "run_75f4d2338846",
+          "role": "worker",
+          "parent": null,
+          "provider": null,
+          "host": {
+            "kind": "remote",
+            "id": "e68f4edf-8a83-42c2-a9da-6d404d3aa3d8"
+          },
+          "workspace": {
+            "id": "30162573-cc04-416e-bef4-226c418dde1f::C:/Users/Administrator/orca/workspaces/SteerLine/spec03-desktop64g-readonly-20260928",
+            "kind": "folder_or_worktree"
+          },
+          "stage": {
+            "worker": "stopped",
+            "dispatch": "failed",
+            "detail": "process_stopped",
+            "activity": "unknown"
+          },
+          "outcome": "failed",
+          "liveness": {
+            "verdict": "exited",
+            "source": "execution_host"
+          },
+          "evidence": {
+            "durable": true,
+            "liveStatus": "unavailable",
+            "lastObservedAt": 1790560338722
+          },
+          "resource": {
+            "state": "absent",
+            "reason": "not_materialized"
+          },
+          "nextAction": {
+            "kind": "inspect",
+            "argv": [
+              "orchestration",
+              "worker-show",
+              "--dispatch",
+              "ctx_68e4d8a33e15"
+            ]
+          },
+          "attention": {
+            "categories": [
+              "failure"
+            ],
+            "requiresAction": true
+          }
+        }
+      }
+    ],
+    "counts": {
+      "retained": 1
+    },
+    "page": {
+      "limit": 100,
+      "total": 1,
+      "hasMore": false,
+      "nextCursor": null
+    },
+    "scope": {
+      "run": "run_75f4d2338846",
+      "source": "flag"
+    }
+  },
+  "_meta": {
+    "runtimeId": "baf46a9c-923a-4bf1-b595-b866b5555e2e"
+  }
+}

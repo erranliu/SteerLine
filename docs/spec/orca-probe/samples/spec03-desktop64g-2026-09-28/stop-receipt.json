@@ -1,0 +1,30 @@
+{
+  "id": "20ae7d23-870f-45a2-be2b-cd1e6ed603bc",
+  "ok": true,
+  "result": {
+    "requestId": "cbb4bf01-22cc-4ccd-b574-a0ea3029a754",
+    "state": "completed",
+    "method": "orchestration.workerStop",
+    "createdAt": "2026-09-28 01:49:57",
+    "updatedAt": "2026-09-28 01:49:57",
+    "receipt": {
+      "dispatchId": "ctx_68e4d8a33e15",
+      "state": "stopped",
+      "alreadySettled": false,
+      "processAction": "closed_agent_terminal",
+      "close": {
+        "handle": "term_5af53ab6-01fc-4e1c-a140-6a6a883d2a16",
+        "tabId": "7ae8f69e-1143-4675-8fea-8fa74c62def7",
+        "ptyKilled": true
+      },
+      "mutation": {
+        "requestId": "cbb4bf01-22cc-4ccd-b574-a0ea3029a754",
+        "replayed": false
+      }
+    },
+    "interpretation": "Request cbb4bf01-22cc-4ccd-b574-a0ea3029a754 already took effect (orchestration.workerStop). Replaying it with --retry-request cbb4bf01-22cc-4ccd-b574-a0ea3029a754 returns the recorded outcome and starts nothing new."
+  },
+  "_meta": {
+    "runtimeId": "baf46a9c-923a-4bf1-b595-b866b5555e2e"
+  }
+}

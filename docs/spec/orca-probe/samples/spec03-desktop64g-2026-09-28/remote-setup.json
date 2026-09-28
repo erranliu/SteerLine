@@ -1,0 +1,25 @@
+{
+  "id": "a7f9c6b5-89cd-4422-8b6c-975f39b75f1f",
+  "ok": true,
+  "result": {
+    "setups": [
+      {
+        "id": "30162573-cc04-416e-bef4-226c418dde1f",
+        "projectId": "github:erranliu/steerline",
+        "hostId": "local",
+        "repoId": "30162573-cc04-416e-bef4-226c418dde1f",
+        "path": "C:\\Projects\\SteerLine",
+        "displayName": "SteerLine",
+        "kind": "git",
+        "executionHostId": "local",
+        "setupState": "ready",
+        "setupMethod": "cloned",
+        "createdAt": 1790559960606,
+        "updatedAt": 1790559960606
+      }
+    ]
+  },
+  "_meta": {
+    "runtimeId": "43ecb8ee-86e7-412d-abef-5fc345a1ccc6"
+  }
+}
