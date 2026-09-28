@@ -335,7 +335,7 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 		if !ok {
 			return nativeErr("task_not_found", "native task was not found")
 		}
-		if current.Authority.AuthorityVersion != options.ExpectedAuthorityVersion || currentTask.Version != options.ExpectedTaskVersion || currentTask.Status != "open" {
+		if current.Authority.AuthorityVersion != options.ExpectedAuthorityVersion || current.Authority.GraphRevision != graph.Authority.GraphRevision || currentTask.Version != options.ExpectedTaskVersion || currentTask.Status != "open" {
 			return nativeErr("stale_version", "task or project authority changed during claim preflight")
 		}
 		if nativeDeliveryInconsistent(currentTask, current) {

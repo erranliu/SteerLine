@@ -76,7 +76,13 @@ func TestNativeTaskBatchCLIValidatesCreatesAndDiscardsFixedTaskIDs(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	payload, err := json.Marshal(steerline.TaskBatchInput{SchemaVersion: "task-batch/v1", ProjectID: c.Identity(), Tasks: []steerline.TaskBatchTask{{LocalKey: "fixed-task", TaskID: 70, Title: "Fixed planned task", Type: "task", Contract: contract}}, Dependencies: []steerline.TaskBatchEdge{}})
+	contract2 := contract
+	contract2.ContractID = "contract-second"
+	contract2.Digest, err = steerline.TaskContractDigest(contract2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := json.Marshal(steerline.TaskBatchInput{SchemaVersion: "task-batch/v1", ProjectID: c.Identity(), Tasks: []steerline.TaskBatchTask{{LocalKey: "fixed-task", TaskID: 70, Title: "Fixed planned task", Type: "task", Contract: contract}, {LocalKey: "second-task", TaskID: 71, Title: "Second task", Type: "task", Contract: contract2}}, Dependencies: []steerline.TaskBatchEdge{}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,6 +106,14 @@ func TestNativeTaskBatchCLIValidatesCreatesAndDiscardsFixedTaskIDs(t *testing.T)
 	var receipt steerline.TaskBatchReceipt
 	if err = json.Unmarshal(createOutput, &receipt); err != nil || receipt.TaskIDs["fixed-task"] != "70" || !strings.Contains(receipt.DispatchNote, "does not start work") {
 		t.Fatalf("unexpected create receipt: %v: %+v", err, receipt)
+	}
+	addOutput, callErr := captureTaskCLI(t, []string{"add-predecessors", "-task-id", "71", "-predecessors", "70", "-request-id", strings.Repeat("3", 32), "-expected-version", "1", "-expected-graph-revision", "1", "-reason", "second task now requires first", "-by", "planner", "-config", configPath})
+	if callErr != nil {
+		t.Fatalf("add-predecessors failed: %v: %s", callErr, addOutput)
+	}
+	var added steerline.TaskPredecessorAddReceipt
+	if err = json.Unmarshal(addOutput, &added); err != nil || added.TaskVersion != 2 || added.GraphRevision != 2 || added.TaskID != "71" {
+		t.Fatalf("unexpected predecessor receipt: %v: %+v", err, added)
 	}
 	discardOutput, callErr := captureTaskCLI(t, []string{"discard", "-task-id", "70", "-request-id", strings.Repeat("2", 32), "-expected-version", "1", "-reason", "replaced by follow-up", "-by", "planner", "-config", configPath})
 	if callErr != nil {

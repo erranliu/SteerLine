@@ -454,6 +454,20 @@ func (t *sqliteTx) PutTaskDependency(v TaskDependencyRecord) error {
 	if err := t.tx.QueryRowContext(t.ctx, `SELECT authority FROM project_task_authorities WHERE project_identity=?`, v.ProjectIdentity).Scan(&authority); err != nil || authority != "native" {
 		return nativeErr("authority_mismatch", "task dependency requires a registered native project")
 	}
+	var successorStatus string
+	if err := t.tx.QueryRowContext(t.ctx, `SELECT status FROM tasks WHERE project_identity=? AND task_id=?`, v.ProjectIdentity, v.SuccessorID).Scan(&successorStatus); err != nil {
+		return nativeErr("task_not_found", "dependency successor is not present")
+	}
+	if successorStatus != "open" {
+		return nativeErr("immutable_task", "dependency successor must be open when an edge is inserted")
+	}
+	var delivered int
+	if err := t.tx.QueryRowContext(t.ctx, `SELECT COUNT(*) FROM task_deliveries WHERE project_identity=? AND task_id=?`, v.ProjectIdentity, v.SuccessorID).Scan(&delivered); err != nil {
+		return err
+	}
+	if delivered != 0 {
+		return nativeErr("already_merged", "delivered task cannot acquire a predecessor")
+	}
 	_, err := t.tx.ExecContext(t.ctx, `INSERT INTO task_dependencies(project_identity,predecessor_id,successor_id) VALUES(?,?,?)`, v.ProjectIdentity, v.PredecessorID, v.SuccessorID)
 	return err
 }

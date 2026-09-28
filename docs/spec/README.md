@@ -36,13 +36,14 @@
 | TASK-DAG：固定依赖调度 | [Spec](task-dag.spec.md) | [Plan](task-dag.plan.md) |
 | BEADS-EXIT：解除 Beads 依赖与原生接入 | [Spec](beads-exit.spec.md) | [Plan](beads-exit.plan.md) |
 | DAG-VIEW：任务关系视图与 JSON 导出 | [Spec](dag-view.spec.md) | [Plan](dag-view.plan.md) |
+| #25 TASK-DAG：已建任务追加前置与安全重置 | [Spec](native-task-add-predecessors.spec.md) | [Plan](native-task-add-predecessors.plan.md) |
 
 按表中顺序分别交付，复用中心执行模型，不等待整个远程闭环。系统不提供任务拆分或回退流程，两者由用户人工处置；共同文档不代替各任务的执行范围与验收。
 
 
 ## 第二阶段原生 UI 与受控规划
 
-[共同接口与边界](phase2-constraints.md)只承载共同要求；下列每个任务各有独立 Spec、Plan 和实现 PR。未实现/未验收；硬前置均以真实任务交付为准。规划身份不等于中心运行任务已创建。
+[共同接口与边界](phase2-constraints.md)只承载共同要求；下列每个任务各有独立 Spec、Plan 和实现 PR。未实现/未验收；硬前置均以真实任务交付为准。`#14–#24` 已进入中心固定 DAG。
 
 | 任务 ID | 任务名称 | 硬前置 | Spec | Plan |
 | --- | --- | --- | --- | --- |

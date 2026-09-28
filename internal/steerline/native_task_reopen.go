@@ -18,6 +18,8 @@ type TaskReopenInput struct {
 	WorkflowRunID           string
 	RequestID               string
 	ExpectedVersion         uint64
+	ExpectedGraphRevision   *uint64
+	PredecessorIDs          []string
 	ConfirmedProcessStopped bool
 	Reason                  string
 	RequestedBy             string
@@ -49,13 +51,15 @@ func (c CommandService) ReopenNativeTask(ctx context.Context, config Config, inp
 		return empty, err
 	}
 	request, _ := CanonicalJSON(mustJSON(struct {
-		TaskID      string `json:"task_id"`
-		RunID       string `json:"workflow_run_id"`
-		TaskVersion uint64 `json:"expected_version"`
-		Stopped     bool   `json:"confirmed_process_stopped"`
-		Reason      string `json:"reason"`
-		RequestedBy string `json:"requested_by"`
-	}{input.TaskID, input.WorkflowRunID, input.ExpectedVersion, true, reason, input.RequestedBy}))
+		TaskID         string   `json:"task_id"`
+		RunID          string   `json:"workflow_run_id"`
+		TaskVersion    uint64   `json:"expected_version"`
+		GraphRevision  *uint64  `json:"expected_graph_revision,omitempty"`
+		PredecessorIDs []string `json:"predecessor_ids,omitempty"`
+		Stopped        bool     `json:"confirmed_process_stopped"`
+		Reason         string   `json:"reason"`
+		RequestedBy    string   `json:"requested_by"`
+	}{input.TaskID, input.WorkflowRunID, input.ExpectedVersion, input.ExpectedGraphRevision, input.PredecessorIDs, true, reason, input.RequestedBy}))
 	if previous, lookupErr := store.CommandByIdempotency(ctx, c.Project, input.RequestID); lookupErr == nil {
 		if previous.Kind != "reopen_task" || previous.TargetID != input.TaskID || previous.ExpectedVersion != input.ExpectedVersion || previous.RequestedBy != input.RequestedBy || !bytes.Equal(previous.Payload, request) || previous.Status != "accepted" {
 			return empty, nativeErr("idempotency_conflict", "reopen request ID belongs to a different or incomplete command")
@@ -67,6 +71,15 @@ func (c CommandService) ReopenNativeTask(ctx context.Context, config Config, inp
 		return receipt, nil
 	} else if !errors.Is(lookupErr, sql.ErrNoRows) {
 		return empty, lookupErr
+	}
+	if len(input.PredecessorIDs) != 0 {
+		authority, authorityErr := store.nativeAuthority(ctx, c.Project)
+		if authorityErr != nil {
+			return empty, authorityErr
+		}
+		if err := validateNativeConfiguredTarget(ctx, config, authority); err != nil {
+			return empty, err
+		}
 	}
 
 	projection, revision, err := store.LoadProjection(ctx, c.Project)
@@ -124,6 +137,14 @@ func (c CommandService) ReopenNativeTask(ctx context.Context, config Config, inp
 		graph, e := taskGraphSnapshotTx(ctx, tx, c.Project)
 		if e != nil {
 			return e
+		}
+		if input.ExpectedGraphRevision != nil && graph.Authority.GraphRevision != *input.ExpectedGraphRevision {
+			return nativeErr("stale_version", "native graph changed before reopen")
+		}
+		if len(input.PredecessorIDs) != 0 {
+			if e = validateNativePredecessorAddition(graph, input.TaskID, input.PredecessorIDs); e != nil {
+				return e
+			}
 		}
 		task, found := graph.ByID[input.TaskID]
 		if !found || task.Status != "in_progress" || task.Version != input.ExpectedVersion || task.Claimant == "" || nativeDeliveryInconsistent(task, graph) {
@@ -202,12 +223,17 @@ func (c CommandService) ReopenNativeTask(ctx context.Context, config Config, inp
 		if e = tx.reopenNativeTaskCAS(task, input.ExpectedVersion); e != nil {
 			return e
 		}
+		for _, predecessorID := range input.PredecessorIDs {
+			if e = tx.PutTaskDependency(TaskDependencyRecord{ProjectIdentity: c.Project, PredecessorID: predecessorID, SuccessorID: input.TaskID}); e != nil {
+				return e
+			}
+		}
 		graphRevision, e := tx.AdvanceTaskGraphRevision(c.Project, graph.Authority.AuthorityVersion, graph.Authority.GraphRevision)
 		if e != nil {
 			return e
 		}
 		receipt = TaskReopenReceipt{RequestID: input.RequestID, TaskID: input.TaskID, TaskVersion: task.Version, GraphRevision: graphRevision, AbandonedRunID: run.RunID, Status: "open"}
-		body, _ := json.Marshal(map[string]any{"receipt": receipt, "old_execution_id": execution.ExecutionID, "old_attempt_id": attempt.AttemptID, "old_terminal": run.Process, "confirmed_process_stopped": true, "reason": reason, "requested_by": input.RequestedBy})
+		body, _ := json.Marshal(map[string]any{"receipt": receipt, "old_execution_id": execution.ExecutionID, "old_attempt_id": attempt.AttemptID, "old_terminal": run.Process, "confirmed_process_stopped": true, "reason": reason, "requested_by": input.RequestedBy, "added_predecessors": input.PredecessorIDs})
 		if _, e = tx.AppendEvent(DomainEvent{ProjectIdentity: c.Project, TaskID: input.TaskID, WorkflowRunID: run.RunID, ExecutionID: execution.ExecutionID, AttemptID: attempt.AttemptID, ExternalSource: "native-task-command", ExternalID: input.RequestID, Type: "task.reopened", ReceivedAt: stamp, Payload: body}); e != nil {
 			return e
 		}
