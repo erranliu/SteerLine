@@ -6,6 +6,8 @@
 
 硬前置：#27。传递包含 #26。消费[候选模型](task-candidates.spec.md)和[交付仲裁](candidate-delivery.spec.md)已交付的 Query/Command，遵守[共同约束](phase1-delivery-constraints.md)。本任务改造现有终端控制台与 CLI 展示；WinUI 仍归第二阶段任务，不新增图形界面框架或业务写者。
 
+结构重构安排拟追加 #35 为中心开工前置；取得补边回执后消费[中心包](center-boundary.spec.md)提供的同一 Query/Command。原 #27 前置和已创建任务的固定界面范围保持。
+
 ## 展示与操作
 
 任务列表每个 Task 一行，按中心事实显示任务状态、候选数、待处理数、交付结果与未结算资源提示。任务详情可展开全部候选并稳定选择 workflow_run_id；每候选独立显示阶段、配置/后端/目标、base/worktree、问题、PR、胜出/落选/冲突及资源结算状态。Task closed 但落选执行仍活跃或 unknown 时，在需处理和历史入口均可找到；不能只保留胜出候选。
