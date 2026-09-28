@@ -6,7 +6,7 @@
 
 硬前置：#27。传递包含 #26。消费[候选模型](task-candidates.spec.md)和[交付仲裁](candidate-delivery.spec.md)已交付的 Query/Command，遵守[共同约束](phase1-delivery-constraints.md)。本任务改造现有终端控制台与 CLI 展示；WinUI 仍归第二阶段任务，不新增图形界面框架或业务写者。
 
-结构重构安排拟追加 #35 为中心开工前置；取得补边回执后消费[中心包](center-boundary.spec.md)提供的同一 Query/Command。原 #27 前置和已创建任务的固定界面范围保持。
+中心已追加 #35 为开工前置，消费[中心包](center-boundary.spec.md)提供的同一 Query/Command。原 #27 前置和已创建任务的固定界面范围保持。
 
 ## 展示与操作
 

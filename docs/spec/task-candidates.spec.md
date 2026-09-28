@@ -4,9 +4,9 @@
 
 ## 范围与前置
 
-无未完成硬前置。复用已交付的[不同任务人工并行](manual-parallel-start.spec.md)、[固定 DAG](task-dag.spec.md)和[共同约束](phase1-delivery-constraints.md)。本任务交付同 Task 的多个独立 WorkflowRun、启动准入、精确命令目标、完整读模型与恢复；PR 胜出和落选结算由 #27 交付。
+原固定规格无未完成硬前置。复用已交付的[不同任务人工并行](manual-parallel-start.spec.md)、[固定 DAG](task-dag.spec.md)和[共同约束](phase1-delivery-constraints.md)。本任务交付同 Task 的多个独立 WorkflowRun、启动准入、精确命令目标、完整读模型与恢复；PR 胜出和落选结算由 #27 交付。
 
-结构重构安排拟通过中心追加 #34 为开工前置，消费[执行上下文](execution-context.spec.md)和其前置 #33 的纯规则；原已创建契约没有该边。活动运行须先满足原生安全重置条件，补边回执取得前不把拟定顺序当作已生效。本任务的候选策略、schema 转换与验收范围保持。
+中心已追加 #34 为开工前置，消费[执行上下文](execution-context.spec.md)和其前置 #33 的纯规则。追加边只改变开工资格，不重绑定原 TaskContract；本任务的候选策略、schema 转换与验收范围保持。
 
 Task 创建契约增加 execution_policy，取值 `single` / `multiple`，省略时为 single；新契约摘要包含规范化后的策略。既有固定契约原字节/摘要保留，缺字段按原 single 事实解释，不把原 Task 升成 multiple。创建后不修改策略。multiple 不设置业务数量上限；后端启动失败按该请求单独结算，不推断可用容量或引入配置数量上限。人工显式启动候选；自动派发仍按既有单活动执行策略只领取未领取 Task 的首个候选，不自动生成竞争候选。
 

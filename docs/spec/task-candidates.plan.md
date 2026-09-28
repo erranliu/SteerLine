@@ -1,6 +1,6 @@
 # Plan：多候选模型与准入
 
-任务 ID：26；任务名称：多候选模型与准入。唯一执行依据：[Spec](task-candidates.spec.md)。原固定规格无未完成硬前置；结构重构拟追加 #34 的中心开工约束，以原生回执生效，一个实现 PR 交付。
+任务 ID：26；任务名称：多候选模型与准入。唯一执行依据：[Spec](task-candidates.spec.md)。原固定规格无未完成硬前置；中心已追加 #34 的开工约束，一个实现 PR 交付。
 
 1. 审计 Task claim、workflow 唯一索引及全部命令/发布/交付入口，列出任务级与执行级目标。重点追踪 `refreshNativeSnapshot`、按 Task 查 Run 的 `Service.find`、停止/重试/输出/清理及启动后回读；保留已有按 WorkflowRun 管理的 worker 和单写者事件处理。
 2. 在已集成的 #33 规则与 #34 显式上下文边界上接入多候选查找与投影：Task 查询返回候选集合，执行操作按 workflow_run_id 及 Execution/Attempt 从属关系定位，恢复枚举全部候选；CurrentTask/SlotOccupied 等摘要不参与选取候选。明确当前 claim 与历史候选，消除“最新运行”对兄弟候选的覆盖。
