@@ -132,19 +132,22 @@ func (FileQuerySource) ReadProject(ctx context.Context, ref ProjectRef, selected
 	}
 	defer store.Close()
 	query := steerline.QueryService{Store: store, Project: c.Identity()}
-	nativeTasks, err := query.ListNativeTasks(ctx, "", 500)
-	if err != nil {
-		result.NativeTaskError, result.TaskError = err.Error(), err.Error()
-	} else {
+	nativeTasks, ready, err := readMatchedNativeTaskSnapshots(ctx,
+		func(ctx context.Context) (steerline.NativeTaskPage, error) {
+			return query.ListNativeTasks(ctx, "", 500)
+		},
+		query.ReadyNativeTaskSnapshot,
+	)
+	if nativeTasks.ProjectID != "" {
 		result.NativeTasks = &nativeTasks
-		ready, readyErr := query.ReadyNativeTaskSnapshot(ctx)
-		if readyErr != nil {
-			result.TaskError = readyErr.Error()
-		} else if ready.ProjectID != nativeTasks.ProjectID || ready.AuthorityVersion != nativeTasks.AuthorityVersion || ready.GraphRevision != nativeTasks.GraphRevision || ready.DatabaseID != nativeTasks.DatabaseID || ready.DatabaseRevision != nativeTasks.DatabaseRevision {
-			result.TaskError = "cursor_invalidated: selected task and Ready candidates use different sampled versions"
-		} else {
-			result.Tasks = nativeCandidateSnapshot(ref, result.Connection, ready)
+	}
+	if err != nil {
+		result.TaskError = err.Error()
+		if nativeTasks.ProjectID == "" {
+			result.NativeTaskError = err.Error()
 		}
+	} else {
+		result.Tasks = nativeCandidateSnapshot(ref, result.Connection, ready)
 		if selectedTaskID != "" && steerline.ValidateNativeTaskID(selectedTaskID) == nil {
 			found := false
 			for i := range nativeTasks.Tasks {
@@ -159,10 +162,8 @@ func (FileQuerySource) ReadProject(ctx context.Context, ref ProjectRef, selected
 					result.SelectedNative = &selected.Tasks[0]
 				} else if showErr == nil {
 					result.NativeTaskError = "cursor_invalidated: selected task uses a different sampled version"
-					result.TaskError = result.NativeTaskError
 				} else {
 					result.NativeTaskError = showErr.Error()
-					result.TaskError = showErr.Error()
 				}
 			}
 		}
@@ -174,6 +175,32 @@ func (FileQuerySource) ReadProject(ctx context.Context, ref ProjectRef, selected
 		result.Domain = &domain
 	}
 	return result
+}
+
+// A service heartbeat can commit between these two independent read
+// transactions. Retry within one refresh so the UI never publishes the
+// intermediate mismatch as a cached Ready list.
+func readMatchedNativeTaskSnapshots(ctx context.Context, list func(context.Context) (steerline.NativeTaskPage, error), ready func(context.Context) (steerline.NativeReadyTaskSnapshot, error)) (steerline.NativeTaskPage, steerline.NativeReadyTaskSnapshot, error) {
+	var page steerline.NativeTaskPage
+	var candidates steerline.NativeReadyTaskSnapshot
+	for range 3 {
+		if err := ctx.Err(); err != nil {
+			return page, candidates, err
+		}
+		var err error
+		page, err = list(ctx)
+		if err != nil {
+			return steerline.NativeTaskPage{}, candidates, err
+		}
+		candidates, err = ready(ctx)
+		if err != nil {
+			return page, candidates, err
+		}
+		if candidates.ProjectID == page.ProjectID && candidates.AuthorityVersion == page.AuthorityVersion && candidates.GraphRevision == page.GraphRevision && candidates.DatabaseID == page.DatabaseID && candidates.DatabaseRevision == page.DatabaseRevision {
+			return page, candidates, nil
+		}
+	}
+	return page, candidates, errors.New("cursor_invalidated: selected task and Ready candidates use different sampled versions")
 }
 
 func nativeCandidateSnapshot(ref ProjectRef, connection steerline.ServiceConnection, page steerline.NativeReadyTaskSnapshot) *steerline.TaskSnapshot {
