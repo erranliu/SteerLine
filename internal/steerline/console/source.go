@@ -29,6 +29,8 @@ type ProjectRef struct {
 }
 
 type ProjectSnapshot struct {
+	SelectedTaskID  string
+	FullReadAt      time.Time
 	Connection      steerline.ServiceConnection
 	Observation     steerline.ObservationSnapshot
 	Tasks           *steerline.TaskSnapshot
@@ -43,7 +45,7 @@ type ProjectSnapshot struct {
 }
 
 type QuerySource interface {
-	ReadProject(context.Context, ProjectRef, string) ProjectSnapshot
+	ReadProject(context.Context, ProjectRef, string, ProjectSnapshot) ProjectSnapshot
 	ReadActivity(context.Context, ProjectRef, string, string, string, string, steerline.JournalCursor) (viewer.LogBatch, error)
 	ReadConversation(context.Context, ProjectRef, steerline.ConversationFilter, string) (steerline.ConversationPage, error)
 	ReadBody(context.Context, ProjectRef, steerline.ConversationBodyRef, int64, int) (steerline.ConversationBodyPage, error)
@@ -65,8 +67,11 @@ type DecisionCommandClient interface {
 
 type FileQuerySource struct{}
 
-func (FileQuerySource) ReadProject(ctx context.Context, ref ProjectRef, selectedTaskID string) ProjectSnapshot {
-	result := ProjectSnapshot{}
+func (FileQuerySource) ReadProject(ctx context.Context, ref ProjectRef, selectedTaskID string, previous ProjectSnapshot) ProjectSnapshot {
+	if reusableProjectSnapshot(ctx, ref, selectedTaskID, previous, steerline.ProbeServiceProcess, readProjectDatabaseVersion) {
+		return previous
+	}
+	result := ProjectSnapshot{SelectedTaskID: selectedTaskID}
 	if ref.Legacy != nil {
 		legacy, err := ref.Legacy.Read(ctx)
 		result.Legacy = &legacy
@@ -172,7 +177,44 @@ func (FileQuerySource) ReadProject(ctx context.Context, ref ProjectRef, selected
 	} else {
 		result.Domain = &domain
 	}
+	if result.TaskError == "" && result.NativeTaskError == "" && result.DomainError == "" {
+		result.FullReadAt = time.Now()
+	}
 	return result
+}
+
+func reusableProjectSnapshot(ctx context.Context, ref ProjectRef, selectedTaskID string, previous ProjectSnapshot,
+	probeProcess func(*steerline.ProcessIdentity) steerline.ProcessProbe,
+	probeVersion func(context.Context, string) (string, uint64, error)) bool {
+	age := time.Since(previous.FullReadAt)
+	if previous.FullReadAt.IsZero() || age < 0 || age >= 5*time.Second ||
+		previous.SelectedTaskID != selectedTaskID || previous.Connection.State != steerline.ConnectionConnected ||
+		previous.NativeTasks == nil || previous.Tasks == nil || previous.Domain == nil ||
+		previous.Observation.Runtime == nil || previous.TaskError != "" || previous.NativeTaskError != "" || previous.DomainError != "" {
+		return false
+	}
+	if previous.NativeTasks.ProjectID != ref.Identity || previous.NativeTasks.DatabaseID == "" || previous.NativeTasks.DatabaseRevision == 0 {
+		return false
+	}
+	runtime := previous.Connection.Snapshot.Runtime
+	if runtime == nil || runtime.Repository.Identity != ref.Identity || runtime.Service.ProcessIdentity == nil ||
+		probeProcess(runtime.Service.ProcessIdentity).State != steerline.ProcessMatches {
+		return false
+	}
+	if previous.Observation.FreshnessLimit > 0 && time.Since(previous.Observation.Runtime.HeartbeatAt) >= previous.Observation.FreshnessLimit {
+		return false
+	}
+	id, revision, err := probeVersion(ctx, filepath.Join(ref.RunDir, "steerline.db"))
+	return err == nil && id == previous.NativeTasks.DatabaseID && revision == previous.NativeTasks.DatabaseRevision
+}
+
+func readProjectDatabaseVersion(ctx context.Context, path string) (string, uint64, error) {
+	reader, err := steerline.OpenSQLiteReader(path)
+	if err != nil {
+		return "", 0, err
+	}
+	defer reader.Close()
+	return reader.DatabaseVersion(ctx)
 }
 
 // A service heartbeat can commit between these two independent read

@@ -381,6 +381,7 @@ func (m Model) readProject(index int) tea.Cmd {
 	}
 	ref := m.projects[index].ref
 	selectedTaskID := selectedNativeTaskID(m.projects[index])
+	previous := m.projects[index].snapshot
 	generation := m.generation
 	m.projects[index].refreshID++
 	id := m.projects[index].refreshID
@@ -388,7 +389,7 @@ func (m Model) readProject(index int) tea.Cmd {
 	query := m.query
 	ctx := m.ctx
 	return func() tea.Msg {
-		return projectMsg{key: ref.Key, identity: ref.Identity, generation: generation, requestID: id, snapshot: query.ReadProject(ctx, ref, selectedTaskID)}
+		return projectMsg{key: ref.Key, identity: ref.Identity, generation: generation, requestID: id, snapshot: query.ReadProject(ctx, ref, selectedTaskID, previous)}
 	}
 }
 

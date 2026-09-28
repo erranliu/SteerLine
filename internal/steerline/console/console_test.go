@@ -31,7 +31,7 @@ type testQuerySource struct {
 	selected string
 }
 
-func (q *testQuerySource) ReadProject(_ context.Context, _ ProjectRef, selected string) ProjectSnapshot {
+func (q *testQuerySource) ReadProject(_ context.Context, _ ProjectRef, selected string, _ ProjectSnapshot) ProjectSnapshot {
 	q.selected = selected
 	return q.snapshot
 }
@@ -570,6 +570,48 @@ func TestRefreshTicksDoNotStackSlowProjectReads(t *testing.T) {
 	m = updated.(Model)
 	if m.projects[0].refreshID != 2 || !m.projects[0].refreshing {
 		t.Fatal("foreground reader did not restart one second after its last completed refresh")
+	}
+}
+
+func TestProjectSnapshotReuseRequiresSameLiveIdentityAndDatabaseVersion(t *testing.T) {
+	now := time.Now()
+	ref := testProject("alpha")
+	process := &steerline.ProcessIdentity{PID: 42}
+	runtime := &steerline.Runtime{Repository: steerline.Repository{Identity: ref.Identity}, Service: steerline.ServiceState{ProcessIdentity: process}, HeartbeatAt: now}
+	previous := ProjectSnapshot{
+		SelectedTaskID: "14", FullReadAt: now,
+		Connection:  steerline.ServiceConnection{State: steerline.ConnectionConnected, Snapshot: steerline.ObservationSnapshot{Runtime: runtime}},
+		Observation: steerline.ObservationSnapshot{Runtime: runtime, FreshnessLimit: 15 * time.Second},
+		NativeTasks: &steerline.NativeTaskPage{ProjectID: ref.Identity, DatabaseID: "database", DatabaseRevision: 7},
+		Tasks:       &steerline.TaskSnapshot{}, Domain: &steerline.DomainSnapshot{},
+	}
+	probe := func(*steerline.ProcessIdentity) steerline.ProcessProbe {
+		return steerline.ProcessProbe{State: steerline.ProcessMatches}
+	}
+	version := func(context.Context, string) (string, uint64, error) { return "database", 7, nil }
+	if !reusableProjectSnapshot(context.Background(), ref, "14", previous, probe, version) {
+		t.Fatal("unchanged verified project was fully reloaded")
+	}
+	for _, changed := range []struct {
+		name     string
+		selected string
+		snapshot ProjectSnapshot
+		probe    func(*steerline.ProcessIdentity) steerline.ProcessProbe
+		version  func(context.Context, string) (string, uint64, error)
+	}{
+		{name: "selection changed", selected: "15", snapshot: previous, probe: probe, version: version},
+		{name: "database revision changed", selected: "14", snapshot: previous, probe: probe, version: func(context.Context, string) (string, uint64, error) { return "database", 8, nil }},
+		{name: "process exited", selected: "14", snapshot: previous, probe: func(*steerline.ProcessIdentity) steerline.ProcessProbe {
+			return steerline.ProcessProbe{State: steerline.ProcessAbsent}
+		}, version: version},
+		{name: "database probe failed", selected: "14", snapshot: previous, probe: probe, version: func(context.Context, string) (string, uint64, error) { return "", 0, errors.New("unavailable") }},
+		{name: "full check expired", selected: "14", snapshot: func() ProjectSnapshot { old := previous; old.FullReadAt = now.Add(-6 * time.Second); return old }(), probe: probe, version: version},
+	} {
+		t.Run(changed.name, func(t *testing.T) {
+			if reusableProjectSnapshot(context.Background(), ref, changed.selected, changed.snapshot, changed.probe, changed.version) {
+				t.Fatal("stale or mismatched project snapshot was reused")
+			}
+		})
 	}
 }
 
