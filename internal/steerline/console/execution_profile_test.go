@@ -12,7 +12,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/steerline"
 )
 
-func TestReadyTaskShowsExecutionSettingsAndConfigMismatchBlocksStart(t *testing.T) {
+func TestExecutionSettingsOnlyAppearInStartChoiceAndConfigMismatchBlocksStart(t *testing.T) {
 	repo := filepath.Join(t.TempDir(), "repo")
 	if err := os.MkdirAll(repo, 0700); err != nil {
 		t.Fatal(err)
@@ -38,8 +38,14 @@ func TestReadyTaskShowsExecutionSettingsAndConfigMismatchBlocksStart(t *testing.
 	now := time.Now().UTC()
 	snapshot := readySnapshot(ref, now)
 	snapshot.Connection.Snapshot.Runtime.Service.ConfigDigest = cfg.LoadedConfigDigest()
-	current := strings.Join(renderExecutionProfile(ref, snapshot), "\n")
-	for _, want := range []string{"当前服务", "本地 Codex", "Agent：codex", "未在项目配置固定", "Thinking effort：high", "Sandbox：workspace-write"} {
+	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, &testControlClient{}, now)
+	mainDetail := strings.Join(renderDetail(m, m.projects[0], m.selectedRow(0), 120, 100), "\n")
+	if strings.Contains(mainDetail, "Agent：") || strings.Contains(mainDetail, "执行配置：") {
+		t.Fatalf("execution settings appeared before s: %q", mainDetail)
+	}
+	m.profileChoice = &executionProfileChoice{taskID: "task-B"}
+	current := renderExecutionProfileChoice(m, m.projects[0], 40)
+	for _, want := range []string{"本地 Codex", "Agent：codex", "未在项目配置固定", "Thinking effort：high", "Sandbox：workspace-write"} {
 		if !strings.Contains(current, want) {
 			t.Fatalf("ready task missed %q: %s", want, current)
 		}
@@ -48,13 +54,14 @@ func TestReadyTaskShowsExecutionSettingsAndConfigMismatchBlocksStart(t *testing.
 	if !executionConfigMismatch(ref, snapshot) || !strings.Contains(candidateActionReason(ref, snapshot, now), "配置不同") {
 		t.Fatal("a mismatched service config remained startable")
 	}
-	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, &testControlClient{}, now)
+	m = modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, &testControlClient{}, now)
 	updated, cmd := m.startSelected()
 	m = updated.(Model)
 	if cmd != nil || m.control.(*testControlClient).calls != 0 || !strings.Contains(m.status, "不能开始") {
 		t.Fatalf("mismatched config submitted a task: %q", m.status)
 	}
-	if detail := strings.Join(renderExecutionProfile(ref, snapshot), "\n"); strings.Contains(detail, "Agent：") || !strings.Contains(detail, "配置不同") {
+	m.profileChoice = &executionProfileChoice{taskID: "task-B"}
+	if detail := renderExecutionProfileChoice(m, m.projects[0], 40); !strings.Contains(detail, "配置不同") {
 		t.Fatalf("mismatch exposed a guessed execution profile: %q", detail)
 	}
 	updated, cmd = m.toggleMode()
@@ -74,7 +81,8 @@ func TestOrcaExecutionProfilesNameAgentModelEffortAndRemoteTarget(t *testing.T) 
 		{config: steerline.Config{TaskAuthority: "native", Host: "orca_supervised", Agent: "codex", Model: "remote-model", ReasoningEffort: "high", Sandbox: "workspace-write", Orca: steerline.OrcaConfig{Supervised: &steerline.SupervisedOrcaConfig{EnvironmentID: "remote-env", ConnectionID: "fixed-connection"}}}, want: []string{"Orca 受监管远程", "Model：remote-model", "Thinking effort：high", "目标环境：remote-env", "连接：fixed-connection"}},
 	} {
 		ref := ProjectRef{Config: sample.config}
-		shown := strings.Join(renderExecutionProfile(ref, ProjectSnapshot{}), "\n")
+		m := Model{width: 120, profileChoice: &executionProfileChoice{taskID: "task"}}
+		shown := renderExecutionProfileChoice(m, projectState{ref: ref}, 40)
 		for _, want := range sample.want {
 			if !strings.Contains(shown, want) {
 				t.Fatalf("execution profile missed %q: %s", want, shown)
