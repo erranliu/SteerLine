@@ -71,7 +71,7 @@ func render(m Model) string {
 		left := fitLines(renderRows(m, *state, leftWidth, contentHeight), leftWidth, contentHeight)
 		preview := *state
 		preview.detailScroll = 0
-		detail := renderDetail(m, preview, m.selectedRow(m.selected), rightWidth, 100000)
+		detail := renderDetailPreview(m, preview, m.selectedRow(m.selected), rightWidth, 100000)
 		if len(detail) > detailHeight {
 			detail = append(detail[:detailHeight-1], styleDim.Render("d / Enter 查看完整详情"))
 		}
@@ -389,7 +389,7 @@ func displayTaskStatus(status string) string {
 	case "Ready":
 		return "可开始"
 	case "open":
-		return "待开始"
+		return "阻塞"
 	case "in_progress":
 		return "进行中"
 	case "blocked":
@@ -677,6 +677,14 @@ func panelDisplayName(index int) string {
 }
 
 func renderDetail(m Model, state projectState, row *consoleRow, width, height int) []string {
+	return renderDetailContent(m, state, row, width, height, true)
+}
+
+func renderDetailPreview(m Model, state projectState, row *consoleRow, width, height int) []string {
+	return renderDetailContent(m, state, row, width, height, false)
+}
+
+func renderDetailContent(m Model, state projectState, row *consoleRow, width, height int, full bool) []string {
 	lines := []string{styleLabel.Render("详情")}
 	if row == nil {
 		if state.snapshotLoaded && state.selectedKey != "" {
@@ -690,7 +698,12 @@ func renderDetail(m Model, state projectState, row *consoleRow, width, height in
 		return scrollLines(wrapLines(lines, width), state.detailScroll, height)
 	}
 	if row.native != nil && row.run == nil {
-		lines = append(lines, renderNativeTaskDetail(state, *row.native)...)
+		if full {
+			lines = append(lines, renderNativeTaskDetail(state, *row.native)...)
+		} else {
+			lines = append(lines, "任务 "+safeTerminalInlineText(row.native.TaskID)+" · "+safeTerminalInlineText(row.native.Title))
+			lines = append(lines, renderNativeTaskRelations(state, *row.native)...)
+		}
 		if row.kind == rowReady {
 			lines = append(lines, renderControlAvailability(state, row, m.clock.Now())...)
 			lines = append(lines, renderActionLines(state, row.taskID)...)
@@ -715,12 +728,15 @@ func renderDetail(m Model, state projectState, row *consoleRow, width, height in
 	if state.snapshot.Connection.State == steerline.ConnectionOffline || state.snapshot.Connection.State == steerline.ConnectionNoRecord {
 		lines = append(lines, "服务入口："+safeTerminalText(serviceWindowInstruction(state.ref)), "配置："+safeTerminalText(state.ref.ConfigPath))
 	}
-	taskStatus := rowTaskStatus(*row)
-	lines = append(lines,
-		"任务 "+safeTerminalInlineText(run.TaskID)+" · "+safeTerminalInlineText(run.Title),
-		"任务状态："+safeTerminalText(taskStatus),
-		"执行状态："+safeTerminalText(displayExecutionStatus(run)),
-	)
+	lines = append(lines, "任务 "+safeTerminalInlineText(run.TaskID)+" · "+safeTerminalInlineText(run.Title))
+	if full {
+		lines = append(lines,
+			"任务状态："+safeTerminalText(rowTaskStatus(*row)),
+			"执行状态："+safeTerminalText(displayExecutionStatus(run)),
+		)
+	} else {
+		lines = append(lines, renderRunExecutionProfileSummary(state, run)...)
+	}
 	lines = append(lines, taskProgressLines(state, run)...)
 	lines = append(lines, "需要你操作："+taskNextAction(run))
 	lines = append(lines, renderActionLines(state, run.TaskID)...)
@@ -754,7 +770,9 @@ func renderDetail(m Model, state projectState, row *consoleRow, width, height in
 	lines = append(lines, renderControlAvailability(state, row, m.clock.Now())...)
 	if run.Decision != nil && run.Decision.Status == "pending" {
 		lines = append(lines, "")
-		lines = append(lines, renderDecisionIdentity(state, run, m.clock.Now())...)
+		if full {
+			lines = append(lines, renderDecisionIdentity(state, run, m.clock.Now())...)
+		}
 		lines = append(lines, "问题："+safeTerminalText(run.Decision.Request.Question), "上下文："+safeTerminalText(run.Decision.Request.Context))
 		for i, option := range run.Decision.Request.Options {
 			lines = append(lines, fmt.Sprintf("选项 %d · %s：%s", i+1, safeTerminalText(option.ID), safeTerminalText(option.Label)))
@@ -763,16 +781,21 @@ func renderDetail(m Model, state projectState, row *consoleRow, width, height in
 		lines = append(lines, decisionAnswerStatusLines(state, row)...)
 	} else if run.Decision != nil {
 		lines = append(lines, "")
-		lines = append(lines, renderDecisionIdentity(state, run, m.clock.Now())...)
+		if full {
+			lines = append(lines, renderDecisionIdentity(state, run, m.clock.Now())...)
+		}
 		lines = append(lines, "决策阶段："+decisionStatusLabel(run.Decision.Status), "当前答案："+safeTerminalText(steerline.DecisionSummary(run)))
 	} else if run.FinishTaskStatus == "waiting_decision" {
 		lines = append(lines, "待决策状态存在，但当前 decision_id/问题记录缺失或尚未同步；答案通道未启用。")
 	}
 	if state.ref.Config.TaskAuthority == "native" {
 		if task := nativeDetailForTask(state, firstText(run.DomainTaskID, run.TaskID)); task != nil {
-			lines = append(lines, "", "任务关系 · 中心只读快照")
-			lines = append(lines, renderNativeTaskDetail(state, *task)...)
+			lines = append(lines, "", "任务关系")
+			lines = append(lines, renderNativeTaskRelations(state, *task)...)
 		}
+	}
+	if !full {
+		return scrollLines(wrapLines(lines, width), state.detailScroll, height)
 	}
 	lines = append(lines, "", "技术信息", "run_id："+safeTerminalText(run.RunID))
 	lines = append(lines, "执行："+safeTerminalText(firstText(run.ExecutionStatus, "unknown"))+" · 交付："+safeTerminalText(firstText(run.FinishTaskStatus, "unknown")))
@@ -820,6 +843,11 @@ func renderNativeTaskDetail(state projectState, task steerline.NativeTaskDetail)
 		"任务 " + safeTerminalInlineText(task.TaskID) + " · " + safeTerminalInlineText(task.Title),
 		"状态：" + safeTerminalText(task.Status),
 	}
+	return append(lines, renderNativeTaskRelations(state, task)...)
+}
+
+func renderNativeTaskRelations(state projectState, task steerline.NativeTaskDetail) []string {
+	var lines []string
 	if state.snapshot.Connection.State == steerline.ConnectionOffline || state.snapshot.Connection.State == steerline.ConnectionNoRecord {
 		lines = append(lines, "离线只读快照 · 采样于 "+sampleTime(state.snapshot))
 	}
