@@ -764,6 +764,27 @@ func (t *sqliteTx) completeNativeDeliveryWorkflow(project, taskID string) error 
 	if err = json.Unmarshal(runPayload, &run); err != nil {
 		return err
 	}
+	if run.WorkflowVersion == WorkerFlowVersion {
+		var executionPayload []byte
+		if run.SelectedResult == "" || run.PRURL != proof.URL || !proof.Merged || proof.State != "merged" {
+			return nativeErr("stale_version", "selected worker flow no longer matches the merged PR")
+		}
+		if err = t.tx.QueryRowContext(t.ctx, `SELECT payload FROM executions WHERE project_identity=? AND workflow_run_id=? AND execution_id=?`, project, runID, run.SelectedResult).Scan(&executionPayload); err != nil {
+			return nativeErr("contract_mismatch", "selected worker flow has no execution")
+		}
+		var execution ExecutionRecord
+		if err = json.Unmarshal(executionPayload, &execution); err != nil {
+			return err
+		}
+		if execution.SessionID == "" || execution.Workspace.Branch == "" {
+			return nativeErr("contract_mismatch", "selected worker flow lacks its session or branch")
+		}
+		delivery := TaskDeliveryRecord{TaskID: taskID, SelectedWorkflowRunID: runID, PRURL: proof.URL, MergeCommit: proof.MergeCommit, MergedAt: proof.MergedAt}
+		if err = MarkWorkerDeliveryCommitted(TaskRecord{TaskID: taskID, Status: "closed"}, &run, delivery); err != nil {
+			return err
+		}
+		return t.PutWorkflowRun(run)
+	}
 	if run.Phase != "waiting_pr_merge" || run.SelectedResult == "" {
 		return nativeErr("stale_version", "selected workflow is no longer waiting for its PR delivery")
 	}
@@ -800,6 +821,9 @@ func (t *sqliteTx) PutWorkflowRun(v WorkflowRunRecord) error {
 	if !validWorkflowPhase(v.Phase) {
 		return fmt.Errorf("invalid workflow run phase %q", v.Phase)
 	}
+	if v.WorkflowVersion == WorkerFlowVersion && v.Phase != "queued" && v.Phase != "executing" && v.Phase != "waiting_decision" && v.Phase != "waiting_pr_merge" && v.Phase != "completed" {
+		return fmt.Errorf("invalid worker flow phase %q", v.Phase)
+	}
 	var authority string
 	authorityErr := t.tx.QueryRowContext(t.ctx, `SELECT authority FROM project_task_authorities WHERE project_identity=?`, v.ProjectIdentity).Scan(&authority)
 	if authorityErr != nil && !errors.Is(authorityErr, sql.ErrNoRows) {
@@ -823,6 +847,9 @@ func (t *sqliteTx) PutWorkflowRun(v WorkflowRunRecord) error {
 			}
 			if old.ProjectIdentity != v.ProjectIdentity || old.WorkflowRunID != v.WorkflowRunID || old.TaskID != v.TaskID || !old.CreatedAt.Equal(v.CreatedAt) || !bytes.Equal(oldPin, newPin) || old.SelectedResult != "" && old.SelectedResult != v.SelectedResult {
 				return nativeErr("immutable_task", "native workflow identity, definition, runner and selected result are fixed")
+			}
+			if old.WorkflowVersion == WorkerFlowVersion && old.PRURL != "" && old.PRURL != v.PRURL && old.PRState != "closed_unmerged" {
+				return nativeErr("immutable_task", "bound worker PR cannot change before it is closed unmerged")
 			}
 			if old.Phase == "completed" && (v.Phase != old.Phase || v.PendingDecisions != old.PendingDecisions || !v.UpdatedAt.Equal(old.UpdatedAt)) {
 				return nativeErr("immutable_task", "completed native workflow history cannot be changed")
@@ -873,6 +900,15 @@ func (t *sqliteTx) PutExecution(v ExecutionRecord) error {
 	var previous []byte
 	err = t.tx.QueryRowContext(t.ctx, `SELECT payload FROM executions WHERE project_identity=? AND execution_id=?`, v.ProjectIdentity, v.ExecutionID).Scan(&previous)
 	if err == nil && !bytes.Equal(previous, b) {
+		var old ExecutionRecord
+		if err = json.Unmarshal(previous, &old); err != nil {
+			return err
+		}
+		if old.SessionID != "" && old.SessionID != v.SessionID || v.TurnNumber < old.TurnNumber ||
+			v.TurnNumber == old.TurnNumber && old.CurrentTurnID != "" && old.CurrentTurnID != v.CurrentTurnID ||
+			v.TurnNumber == old.TurnNumber && old.LastStoppedTurnID != "" && old.LastStoppedTurnID != v.LastStoppedTurnID {
+			return nativeErr("immutable_task", "worker session or observed turn identity cannot be replaced or rewound")
+		}
 		delivered, e := t.selectedNativeDeliveryExecution(v.ProjectIdentity, v.ExecutionID)
 		if e != nil {
 			return e

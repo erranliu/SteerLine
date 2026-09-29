@@ -14,6 +14,10 @@ import (
 // compatibility read model for the existing CLI and viewer.
 const MinimalWorkflowVersion = "minimal-v1"
 
+// WorkerFlowVersion is the persisted protocol for a single resumable worker
+// session. It is intentionally distinct from the unpublished minimal-v1 format.
+const WorkerFlowVersion = "worker-flow-v1"
+
 type TaskRecord struct {
 	ProjectIdentity   string     `json:"project_identity"`
 	TaskID            string     `json:"task_id"`
@@ -161,6 +165,8 @@ type WorkflowRunRecord struct {
 	Repository           string                 `json:"repository,omitempty"`
 	Branch               string                 `json:"branch,omitempty"`
 	SelectedResult       string                 `json:"selected_result_id,omitempty"`
+	PRURL                string                 `json:"pr_url,omitempty"`
+	PRState              string                 `json:"pr_state,omitempty"`
 	PendingDecisions     int                    `json:"pending_decisions,omitempty"`
 	CreatedAt            time.Time              `json:"created_at"`
 	UpdatedAt            time.Time              `json:"updated_at"`
@@ -182,6 +188,10 @@ type ExecutionRecord struct {
 	Backend               string            `json:"backend,omitempty"`
 	Protocol              string            `json:"protocol,omitempty"`
 	Process               *ProcessIdentity  `json:"process,omitempty"`
+	SessionID             string            `json:"session_id,omitempty"`
+	CurrentTurnID         string            `json:"current_turn_id,omitempty"`
+	TurnNumber            uint64            `json:"turn_number,omitempty"`
+	LastStoppedTurnID     string            `json:"last_stopped_turn_id,omitempty"`
 	Target                ExecutionTarget   `json:"target"`
 	Workspace             WorkspaceEvidence `json:"workspace"`
 	Status                string            `json:"status"`
@@ -851,7 +861,7 @@ func validWorkflowPhase(v string) bool {
 }
 func validExecutionStatus(v string) bool {
 	switch v {
-	case "pending", "active", "waiting_decision", "succeeded", "failed", "blocked", "stopped", "abandoned":
+	case "pending", "active", "idle", "waiting_decision", "succeeded", "failed", "blocked", "stopped", "abandoned":
 		return true
 	}
 	return false

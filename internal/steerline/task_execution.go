@@ -572,7 +572,11 @@ func (c CommandService) CompleteNativeTask(ctx context.Context, config Config, t
 		if targetErr != nil || !sameRepositoryTarget(target, graph.Authority.Repository) || config.PR.ValidateRemote(target) != nil {
 			return TaskDeliveryReceipt{}, nativeErr("authority_mismatch", "PR configuration does not match the fixed native repository")
 		}
-		if info.URL != publish.PRURL || info.Repository != config.PR.Repository || info.BaseBranch != graph.Authority.Branch || info.HeadRevision != execution.CandidateRevision {
+		if workflow.WorkflowVersion == WorkerFlowVersion {
+			if err := validateWorkerPRIdentity(info, publish.PRURL, config.PR.Repository, graph.Authority.Branch, execution.Workspace.Branch); err != nil {
+				return TaskDeliveryReceipt{}, nativeErr("immutable_task", "merged PR does not belong to the selected worker execution branch")
+			}
+		} else if info.URL != publish.PRURL || info.Repository != config.PR.Repository || info.BaseBranch != graph.Authority.Branch || info.HeadRevision != execution.CandidateRevision {
 			return TaskDeliveryReceipt{}, nativeErr("immutable_task", "merged PR identity, branch or head differs from the selected task result")
 		}
 		number, err := config.PR.PRNumber(info.URL)
@@ -715,6 +719,17 @@ func latestDeliveryAttempt(attempts []StepAttemptRecord, step string) (StepAttem
 }
 
 func validateNativeDeliveryGates(task TaskRecord, contract TaskContract, workflow WorkflowRunRecord, execution ExecutionRecord, attempts []StepAttemptRecord) (StepGateResult, error) {
+	if workflow.WorkflowVersion == WorkerFlowVersion {
+		if task.ContractID != contract.ContractID || contract.Digest == "" {
+			return StepGateResult{}, nativeErr("contract_mismatch", "selected task contract is unavailable")
+		}
+		if workflow.TaskID != task.TaskID || workflow.SelectedResult != execution.ExecutionID || execution.WorkflowRunID != workflow.WorkflowRunID ||
+			workflow.PRURL == "" || execution.SessionID == "" || execution.Workspace.Branch == "" ||
+			workflow.Phase != "executing" && workflow.Phase != "waiting_decision" && workflow.Phase != "waiting_pr_merge" {
+			return StepGateResult{}, nativeErr("task_not_ready", "selected worker flow has no bound session, execution branch or PR")
+		}
+		return StepGateResult{PRURL: workflow.PRURL}, nil
+	}
 	if err := (MinimalWorkflowConfig{Definition: workflow.Definition, Steps: workflow.ProjectSteps}).Validate(); err != nil {
 		return StepGateResult{}, nativeErr("task_not_ready", "selected workflow definition or fixed steps are invalid: "+err.Error())
 	}
@@ -837,7 +852,10 @@ func (c CommandService) commitNativeDelivery(ctx context.Context, s *SQLiteStore
 		if err != nil {
 			return err
 		}
-		if currentWorkflow.WorkflowRunID != workflow.WorkflowRunID || currentWorkflow.SelectedResult != execution.ExecutionID || currentPublish.PRURL != publish.PRURL || currentExecution.CandidateRevision != execution.CandidateRevision {
+		if currentWorkflow.WorkflowRunID != workflow.WorkflowRunID || currentWorkflow.SelectedResult != execution.ExecutionID || currentPublish.PRURL != publish.PRURL ||
+			currentWorkflow.WorkflowVersion != workflow.WorkflowVersion || currentExecution.SessionID != execution.SessionID ||
+			currentExecution.Workspace.Branch != execution.Workspace.Branch ||
+			workflow.WorkflowVersion != WorkerFlowVersion && currentExecution.CandidateRevision != execution.CandidateRevision {
 			return nativeErr("immutable_task", "selected result or PR binding changed during platform verification")
 		}
 		publication, _, err := taskDiscardPlanTx(ctx, tx, c.Project, task.TaskID)
@@ -849,6 +867,12 @@ func (c CommandService) commitNativeDelivery(ctx context.Context, s *SQLiteStore
 		}
 		var reused int
 		if err = tx.tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM step_attempts a JOIN executions e ON e.project_identity=a.project_identity AND e.execution_id=a.execution_id JOIN workflow_runs w ON w.project_identity=e.project_identity AND w.workflow_run_id=e.workflow_run_id WHERE a.project_identity=? AND w.task_id<>? AND json_extract(a.payload,'$.result.pr_url')=?`, c.Project, task.TaskID, delivery.PRURL).Scan(&reused); err != nil {
+			return err
+		}
+		if reused > 0 {
+			return nativeErr("immutable_task", "PR is already bound to another native task")
+		}
+		if err = tx.tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM workflow_runs WHERE project_identity=? AND task_id<>? AND json_extract(payload,'$.pr_url')=?`, c.Project, task.TaskID, delivery.PRURL).Scan(&reused); err != nil {
 			return err
 		}
 		if reused > 0 {
