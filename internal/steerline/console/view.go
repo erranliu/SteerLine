@@ -1360,7 +1360,7 @@ func decisionAnswerAvailability(state projectState, row *consoleRow) string {
 	if run.Decision.RequestPath != "" || run.Decision.AnswerPath != "" {
 		return "问题绑定了已移除的 sidecar-answer 格式；保留状态并转入人工恢复，不导入答案文件"
 	}
-	if run.WorkflowVersion != steerline.MinimalWorkflowVersion || run.ExecutionID == "" || run.AttemptID == "" || run.Decision.AttemptID != run.AttemptID {
+	if run.WorkflowVersion != steerline.MinimalWorkflowVersion && run.WorkflowVersion != steerline.WorkerFlowVersion || run.ExecutionID == "" || run.AttemptID == "" || run.Decision.AttemptID != run.AttemptID {
 		return "问题未绑定当前 native WorkflowRun、Execution 和 attempt；保留原问题并转入只读恢复核验"
 	}
 	if run.Backend == "local" && run.Protocol != "local_process" || run.Backend == "orca" && run.Protocol != "orca_terminal_v2" && run.Protocol != "orca_supervised" || run.Backend != "local" && run.Backend != "orca" {
@@ -1374,12 +1374,18 @@ func decisionAnswerAvailability(state projectState, row *consoleRow) string {
 	if !hasCapability(runtimeState, "answer_decision") {
 		return "服务未声明 answer_decision 能力"
 	}
+	if run.WorkflowVersion == steerline.WorkerFlowVersion {
+		return "提交后核对原会话接收与工作轮次开始"
+	}
 	return "提交后先确认答案送达；应用状态仍须等待原执行的绑定证明核验"
 }
 
 func decisionAnswerStatusLines(state projectState, row *consoleRow) []string {
 	reason := decisionAnswerAvailability(state, row)
 	if strings.HasPrefix(reason, "提交后") {
+		if row != nil && row.run != nil && row.run.WorkflowVersion == steerline.WorkerFlowVersion {
+			return []string{"a 核验原会话身份并打开回答草稿 · " + reason, "显式提交后分别显示答案保存、发送回执与原会话轮次开始。"}
+		}
 		return []string{"a 核验固定后端能力并打开回答草稿 · " + reason, "显式提交后仍分别核验答案接受、后端送达、轮次启动和答案应用。"}
 	}
 	return []string{"a 不可用 · " + safeTerminalText(reason)}

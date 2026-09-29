@@ -314,6 +314,27 @@ func TestConsoleOffersBoundLocalNativeDecisionForAnswer(t *testing.T) {
 	}
 }
 
+func TestConsoleOffersWorkerFlowDecisionWithoutRecoveryActions(t *testing.T) {
+	now := time.Now().UTC()
+	ref := testProject("worker-flow-decision")
+	ref.Config.WorkflowProtocol = steerline.WorkerFlowVersion
+	snapshot, run := decisionSnapshot(ref, now)
+	run.WorkflowVersion, run.Backend, run.Protocol, run.Host = steerline.WorkerFlowVersion, "local", "local_process", "local"
+	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, &testControlClient{}, now)
+	m.projects[0].selectedKey = "run:" + run.RunID
+	updated, cmd := m.answerSelectedDecision()
+	m = updated.(Model)
+	if cmd != nil || m.answer == nil {
+		t.Fatalf("worker-flow decision was hidden: answer=%+v status=%q", m.answer, m.status)
+	}
+	m.answer = nil
+	updated, cmd = m.prepareRecoveryAction("retry_run")
+	m = updated.(Model)
+	if cmd != nil || m.confirm != nil {
+		t.Fatalf("worker flow exposed a removed retry action: confirm=%+v status=%q", m.confirm, m.status)
+	}
+}
+
 func TestRecoveryReportSubmitsRevisionBoundServiceCommand(t *testing.T) {
 	now := time.Now().UTC()
 	ref := testProject("recovery-command")
