@@ -1,13 +1,13 @@
 {
   "date": "2026-09-29",
-  "source_revision": "2cf9dab",
+  "source_revision": "f9466f2",
   "host": "192.168.0.56",
   "environment_id": "e68f4edf-8a83-42c2-a9da-6d404d3aa3d8",
   "isolated_worktree": "C:/Users/Administrator/orca/workspaces/SteerLine/worker-flow-service-validation",
   "test": "TestWorkerFlowServiceFirstFeedbackKeepsSessionAndWorkspace",
   "launcher": "WMI Win32_Process.Create outside the Orca Job Object",
   "result": "PASS",
-  "elapsed_seconds": 14.87,
+  "elapsed_seconds": 14.48,
   "verified": [
     "initial turn and one feedback retained Task, WorkflowRun, Execution, worker session and worktree identity",
     "a partial commit survived feedback without resetting HEAD",
