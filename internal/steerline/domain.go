@@ -201,7 +201,6 @@ type ExecutionTarget struct {
 	Branch                    string `json:"branch,omitempty"`
 	BaseRevision              string `json:"base_revision,omitempty"`
 	ExternalRuntime           string `json:"external_runtime,omitempty"`
-	CoordinatorTerminal       string `json:"coordinator_terminal,omitempty"`
 	OrchestrationRun          string `json:"orchestration_run,omitempty"`
 	OrchestrationRunRequestID string `json:"orchestration_run_request_id,omitempty"`
 	CoordinatorTerminal       string `json:"coordinator_terminal,omitempty"`

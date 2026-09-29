@@ -197,25 +197,13 @@ func fakeSupervisedOrca(args []string) int {
 				runtimeEpoch = "fake-remote-runtime"
 			}
 			observation := map[string]any{"exactWorker": true}
-			workerState := os.Getenv("STEERLINE_FAKE_SUPERVISED_WORKER_STATE")
-			if workerState == "" {
-				workerState = "ready"
-			}
-			workerStage := os.Getenv("STEERLINE_FAKE_SUPERVISED_WORKER_STAGE")
-			if workerStage == "" {
-				workerStage = "input_accepted"
-			}
-			liveness := os.Getenv("STEERLINE_FAKE_SUPERVISED_LIVENESS")
-			if liveness == "" {
-				liveness = "live"
-			}
 			switch os.Getenv("STEERLINE_FAKE_SUPERVISED_AGENT_WAIT") {
 			case "present":
 				observation["agentWait"] = map[string]any{"kind": "host_permission"}
 			case "none":
 				observation["agentWait"] = nil
 			}
-			return fakeSupervisedEnvelope("fake-center-runtime", map[string]any{"dispatch": map[string]any{"id": "dispatch-test", "runId": "orca-run-test", "taskId": "task-test", "status": dispatchState}, "worker": map[string]any{"dispatchId": "dispatch-test", "worktreeId": worktree, "state": workerState, "stage": workerStage}, "projection": map[string]any{"liveness": map[string]any{"verdict": liveness}, "host": map[string]any{"id": "env-home"}}, "server": map[string]any{"environmentId": "env-home"}, "remoteRuntimeEpoch": runtimeEpoch, "terminal": map[string]any{"handle": "terminal-test", "incarnationId": "inc-test", "worktreeId": worktree, "worktreePath": worktreePath, "branch": "refs/heads/erranliu/" + name, "connected": os.Getenv("STEERLINE_FAKE_SUPERVISED_TERMINAL_DISCONNECTED") != "1"}, "observation": observation})
+			return fakeSupervisedEnvelope("fake-center-runtime", map[string]any{"dispatch": map[string]any{"id": "dispatch-test", "runId": "orca-run-test", "taskId": "task-test", "status": dispatchState}, "worker": map[string]any{"dispatchId": "dispatch-test", "worktreeId": worktree}, "projection": map[string]any{"liveness": map[string]any{"verdict": "live"}, "host": map[string]any{"id": "env-home"}}, "server": map[string]any{"environmentId": "env-home"}, "remoteRuntimeEpoch": runtimeEpoch, "terminal": map[string]any{"handle": "terminal-test", "incarnationId": "inc-test", "worktreeId": worktree, "worktreePath": worktreePath, "branch": "refs/heads/erranliu/" + name}, "observation": observation})
 		case "worker-read":
 			state := os.Getenv("STEERLINE_FAKE_SUPERVISED_TUI_STATE")
 			if state != "" || os.Getenv("STEERLINE_FAKE_SUPERVISED_ENTER_MARKER") != "" {

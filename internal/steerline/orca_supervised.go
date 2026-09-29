@@ -43,16 +43,13 @@ type supervisedStartReceipt struct {
 }
 
 type supervisedWorkerObservation struct {
-	Identity          ProcessIdentity
-	Liveness          string
-	DispatchState     string
-	WorkerState       string
-	WorkerStage       string
-	TerminalConnected *bool
-	AgentWaitState    string
-	WorktreePath      string
-	Branch            string
-	ObservedAt        time.Time
+	Identity       ProcessIdentity
+	Liveness       string
+	DispatchState  string
+	AgentWaitState string
+	WorktreePath   string
+	Branch         string
+	ObservedAt     time.Time
 }
 
 type supervisedDelivery struct {
@@ -505,8 +502,6 @@ func (b orcaSupervisedBackend) showWorker(ctx context.Context, expected supervis
 		Worker struct {
 			DispatchID string `json:"dispatchId"`
 			WorktreeID string `json:"worktreeId"`
-			State      string `json:"state"`
-			Stage      string `json:"stage"`
 		} `json:"worker"`
 		Projection struct {
 			Liveness struct {
@@ -522,7 +517,6 @@ func (b orcaSupervisedBackend) showWorker(ctx context.Context, expected supervis
 		RemoteRuntimeEpoch string `json:"remoteRuntimeEpoch"`
 		Terminal           struct {
 			Handle        string          `json:"handle"`
-			Connected     *bool           `json:"connected"`
 			IncarnationID string          `json:"incarnationId"`
 			WorktreeID    string          `json:"worktreeId"`
 			WorktreePath  string          `json:"worktreePath"`
@@ -555,7 +549,7 @@ func (b orcaSupervisedBackend) showWorker(ctx context.Context, expected supervis
 			waitState = "none"
 		}
 	}
-	return supervisedWorkerObservation{Identity: identity, Liveness: result.Projection.Liveness.Verdict, DispatchState: result.Dispatch.Status, WorkerState: result.Worker.State, WorkerStage: result.Worker.Stage, TerminalConnected: result.Terminal.Connected, AgentWaitState: waitState, WorktreePath: result.Terminal.WorktreePath, Branch: strings.TrimPrefix(result.Terminal.Branch, "refs/heads/"), ObservedAt: now()}, nil
+	return supervisedWorkerObservation{Identity: identity, Liveness: result.Projection.Liveness.Verdict, DispatchState: result.Dispatch.Status, AgentWaitState: waitState, WorktreePath: result.Terminal.WorktreePath, Branch: strings.TrimPrefix(result.Terminal.Branch, "refs/heads/"), ObservedAt: now()}, nil
 }
 
 // submitAcceptedPrompt waits for the exact prompt to appear in the live Codex
