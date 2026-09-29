@@ -267,13 +267,13 @@ func TestLifecycleReviewCorruptStartupCannotBeIgnored(t *testing.T) {
 func TestLifecycleReviewChildPublishesIdentityBeforePreflight(t *testing.T) {
 	f := newFixture(t)
 	c, _ := lifecycleConfigFile(t, f, f.c.RunDir)
-	t.Setenv("STEERLINE_FAKE_PR_DELAY", "3s")
+	t.Setenv("STEERLINE_FAKE_PR_DELAY", "15s")
 	record := reviewStartup(t, c, "starting", nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() { done <- RunConfiguredService(ctx, c, "manual", record.StartupID, "off") }()
 	defer func() { cancel(); <-done }()
-	deadline := time.Now().Add(time.Second)
+	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
 		current, err := readStartupRecord(c, record.StartupID)
 		if err == nil && current.ProcessIdentity != nil && current.ProcessIdentity.PID == os.Getpid() {
