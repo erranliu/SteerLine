@@ -2,6 +2,8 @@
 
 任务 ID：34；任务名称：执行上下文封装与服务职责收缩；目标：`PHASE1-MODULARITY`。配套 [Plan](execution-context.plan.md)。状态：待实现与验收，一个独立实现 PR 交付。
 
+规格协调：#36 [持续 worker 流程](worker-flow.spec.md)改变本任务涉及的步骤派发、决策续跑及五步验收语义。二者共享接线串行集成；#36 先交付时须先协调本任务固定执行契约，再按原会话和单一主阶段定义上下文，不能只凭本文修改重绑定已创建 TaskContract。
+
 ## 范围与前置
 
 硬前置：#33。消费[执行规则包](workflow-rules.spec.md)，遵守[模块重构共同约束](modular-refactoring-constraints.md)。交付显式执行上下文和 Service 职责分工，作为 #26 的拟追加前置；本任务本身不实现同任务多候选。

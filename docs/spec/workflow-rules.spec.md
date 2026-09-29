@@ -2,6 +2,8 @@
 
 任务 ID：33；任务名称：执行规则包提取；目标：`PHASE1-MODULARITY`。配套 [Plan](workflow-rules.plan.md)。状态：待实现与验收，一个独立实现 PR 交付。
 
+规格协调：#36 [持续 worker 流程](worker-flow.spec.md)计划移除本任务当前要求保持的五步和项目验证门槛。二者共享改动串行集成；#36 先交付时，本任务须先完成固定执行契约的协调，不能按旧 WR2/WR3 重新引入被删除行为。本说明不更新已创建 TaskContract 的 Git 引用。
+
 ## 范围与前置
 
 无未完成硬前置，遵守[模块重构共同约束](modular-refactoring-constraints.md)。以当前已交付 minimal-v1 为基线，把散布于步骤推进与交付核验的纯业务判断收敛到 `internal/steerline/workflow`。本任务不改任务策略、运行并发、数据库格式或平台能力。
