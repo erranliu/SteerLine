@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -103,6 +104,7 @@ func newFixture(t *testing.T) *fixture {
 			return
 		}
 		number := strings.TrimPrefix(r.URL.Path, "/api/v1/repos/owner/repo/pulls/")
+		prNumber, _ := strconv.Atoi(number)
 		db := readFake(f.db)
 		if r.Method == http.MethodPatch {
 			db.PRState, db.PRMerged = "closed_unmerged", false
@@ -114,7 +116,7 @@ func newFixture(t *testing.T) *fixture {
 			state = "open"
 		}
 		payload := map[string]any{
-			"number": number, "html_url": f.server.URL + "/owner/repo/pulls/" + number,
+			"number": prNumber, "html_url": f.server.URL + "/owner/repo/pulls/" + number,
 			"state":  map[bool]string{true: "closed", false: state}[r.Method == http.MethodPatch],
 			"merged": db.PRMerged, "merged_at": db.PRMergedAt, "merge_commit_sha": db.PRMergeCommit,
 			"base": map[string]any{"ref": "main", "repo": map[string]string{"full_name": "owner/repo"}},

@@ -452,6 +452,7 @@ func runNativeTaskCommand(args []string) error {
 	runID := fs.String("run-id", "", "exact workflow run to abandon when reopening a task")
 	predecessors := fs.String("predecessors", "", "comma-separated native predecessor task IDs")
 	confirmedStopped := fs.Bool("confirm-process-stopped", false, "operator confirmed the old worker process stopped")
+	confirmReset := fs.Bool("confirm-unfinished-reset", false, "operator requests abandonment of an unfinished native Run after exact external-state checks")
 	cursor := fs.String("cursor", "", "native task list cursor")
 	limit := fs.Int("limit", 100, "list page size (default 100); graph/export default to 500 nodes, maximum 500")
 	status := fs.String("status", "", "filter graph nodes by native task status")
@@ -480,7 +481,7 @@ func runNativeTaskCommand(args []string) error {
 		"create":           {"config": true, "file": true, "request-id": true, "expected-authority-version": true, "by": true},
 		"accept-existing":  {"config": true, "file": true},
 		"discard":          {"config": true, "task-id": true, "request-id": true, "expected-version": true, "reason": true, "by": true},
-		"reopen":           {"config": true, "task-id": true, "run-id": true, "request-id": true, "expected-version": true, "confirm-process-stopped": true, "reason": true, "by": true},
+		"reopen":           {"config": true, "task-id": true, "run-id": true, "request-id": true, "expected-version": true, "confirm-process-stopped": true, "confirm-unfinished-reset": true, "reason": true, "by": true},
 		"add-predecessors": {"config": true, "task-id": true, "predecessors": true, "run-id": true, "request-id": true, "expected-version": true, "expected-graph-revision": true, "confirm-process-stopped": true, "reason": true, "by": true},
 		"graph":            {"config": true, "task-id": true, "cursor": true, "limit": true, "status": true, "direction": true, "depth": true},
 		"export":           {"config": true, "task-id": true, "status": true, "direction": true, "depth": true, "format": true, "output": true, "overwrite": true},
@@ -557,8 +558,8 @@ func runNativeTaskCommand(args []string) error {
 			return errors.New("task discard does not accept -file, -cursor or -expected-authority-version")
 		}
 	case "reopen":
-		if *taskID == "" || *runID == "" || *requestID == "" || *expectedVersion == 0 || !*confirmedStopped || strings.TrimSpace(*reason) == "" || strings.TrimSpace(*by) == "" {
-			return errors.New("task reopen requires -task-id, -run-id, -request-id, -expected-version, -confirm-process-stopped, -reason and -by")
+		if *taskID == "" || *runID == "" || *requestID == "" || *expectedVersion == 0 || *confirmedStopped == *confirmReset || strings.TrimSpace(*reason) == "" || strings.TrimSpace(*by) == "" {
+			return errors.New("task reopen requires -task-id, -run-id, -request-id, -expected-version, exactly one of -confirm-process-stopped or -confirm-unfinished-reset, -reason and -by")
 		}
 		if err := steerline.ValidateNativeTaskID(*taskID); err != nil {
 			return err
@@ -676,7 +677,7 @@ func runNativeTaskCommand(args []string) error {
 		}
 		return json.NewEncoder(os.Stdout).Encode(receipt)
 	case "reopen":
-		receipt, reopenErr := (steerline.CommandService{Store: store, Project: c.Identity()}).ReopenNativeTask(context.Background(), c, steerline.TaskReopenInput{TaskID: *taskID, WorkflowRunID: *runID, RequestID: *requestID, ExpectedVersion: *expectedVersion, ConfirmedProcessStopped: *confirmedStopped, Reason: *reason, RequestedBy: *by})
+		receipt, reopenErr := (steerline.CommandService{Store: store, Project: c.Identity()}).ReopenNativeTask(context.Background(), c, steerline.TaskReopenInput{TaskID: *taskID, WorkflowRunID: *runID, RequestID: *requestID, ExpectedVersion: *expectedVersion, ConfirmedProcessStopped: *confirmedStopped, ConfirmUnfinishedReset: *confirmReset, Reason: *reason, RequestedBy: *by})
 		if reopenErr != nil {
 			return reopenErr
 		}

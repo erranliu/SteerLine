@@ -944,7 +944,8 @@ func (s *Service) settleSupervisedStepResources(run *Run, attemptID, outcome str
 	if err := TransitionOperation(operation, status, settlement.PlatformRequestID, mustJSON(map[string]any{"dispatch_id": ref.External.Dispatch, "settlement": settlement, "error": errorString(settleErr)}), errorString(settleErr)); err != nil {
 		return err
 	}
-	if status != "confirmed" {
+	cleanupOnly := status != "confirmed" && supervisedStepResultRecorded(s.State.Attempts, run.ExecutionID, attemptID) && (settlement.Disposition == "retained" || settlement.Disposition == "release_pending" || settlement.Disposition == "release_unknown" || settlement.Disposition == "outcome_unknown")
+	if status != "confirmed" && !cleanupOnly {
 		reason := "remote worker release requires reconciliation: " + settleErr.Error()
 		if workflow, execution := s.minimalRecords(run); workflow != nil && execution != nil {
 			execution.Status = "blocked"
@@ -962,6 +963,10 @@ func (s *Service) settleSupervisedStepResources(run *Run, attemptID, outcome str
 	if err = s.save(); err != nil {
 		return err
 	}
+	if cleanupOnly {
+		s.note(run, "steer", "resource_release", "retained", "settled worker terminal retained for later cleanup", errorString(settleErr), map[string]any{"attempt_id": attemptID, "dispatch_id": ref.External.Dispatch})
+		return s.save()
+	}
 	if status != "confirmed" {
 		// The exact refusal and reserved Run have been saved. Other active
 		// Runs can continue; this Run still cannot pass its release gate.
@@ -970,8 +975,22 @@ func (s *Service) settleSupervisedStepResources(run *Run, attemptID, outcome str
 	return nil
 }
 
-// requireSettledSupervisedReleases fences the next step while an earlier
-// terminal release in the same execution lacks positive platform proof.
+func supervisedStepResultRecorded(attempts []StepAttemptRecord, executionID, attemptID string) bool {
+	for _, attempt := range attempts {
+		if attempt.ExecutionID == executionID && attempt.AttemptID == attemptID {
+			if attempt.Status != "succeeded" && attempt.Status != "failed" || attempt.ResultID == "" || len(attempt.Result) == 0 {
+				return false
+			}
+			var result StepGateResult
+			return json.Unmarshal(attempt.Result, &result) == nil && result.StepID == attempt.StepID && result.ResultID == attempt.ResultID
+		}
+	}
+	return false
+}
+
+// Resource cleanup is independent of a conclusive step result. A retained
+// terminal is recorded, while only the accepted result and fixed Attempt may
+// authorize the next step.
 func (s *Service) requireSettledSupervisedReleases(run *Run) error {
 	if run == nil || run.Protocol != string(ProtocolOrcaSupervised) {
 		return nil
@@ -981,11 +1000,27 @@ func (s *Service) requireSettledSupervisedReleases(run *Run) error {
 		if operation.Kind != "settle_resources" || !strings.HasPrefix(operation.IdempotencyKey, prefix) {
 			continue
 		}
-		if operation.Status != "confirmed" {
-			return &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "prior supervised worker terminal release is unresolved: " + operation.Status}
+		if operation.Status == "confirmed" {
+			if err := s.confirmedSupervisedRelease(operation, run, ""); err != nil {
+				return err
+			}
+			continue
 		}
-		if err := s.confirmedSupervisedRelease(operation, run, ""); err != nil {
-			return err
+		var requested struct {
+			Ref     ExecutionRef `json:"ref"`
+			Outcome string       `json:"outcome"`
+		}
+		if operation.ProjectIdentity != s.Config.identity || operation.PayloadDigest != operationDigest(operation.Request) || json.Unmarshal(operation.Request, &requested) != nil || requested.Ref.RunID != run.RunID || requested.Ref.Protocol != ProtocolOrcaSupervised || requested.Ref.External.Dispatch == "" || requested.Ref.External.OrchestrationRun != run.Target.OrchestrationRun || requested.Ref.Target.WorktreeID != run.Target.WorktreeID || requested.Ref.Target.Dispatch != requested.Ref.External.Dispatch || requested.Outcome != "succeeded" && requested.Outcome != "failed" || operation.IdempotencyKey != prefix+requested.Ref.AttemptID {
+			return &BackendError{Code: BackendProtocolInvalid, Diagnostic: "unreleased supervised worker operation has a conflicting identity"}
+		}
+		accepted := false
+		for _, attempt := range s.State.Attempts {
+			if attempt.ExecutionID == run.ExecutionID && attempt.AttemptID == requested.Ref.AttemptID && attempt.ExternalBinding == requested.Ref.Target {
+				accepted = supervisedStepResultRecorded(s.State.Attempts, run.ExecutionID, attempt.AttemptID)
+			}
+		}
+		if !accepted {
+			return &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "unreleased supervised worker has no accepted step result"}
 		}
 	}
 	return nil

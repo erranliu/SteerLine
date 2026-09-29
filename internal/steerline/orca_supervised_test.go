@@ -654,6 +654,10 @@ func TestSupervisedRetainedReleaseIsNotConfirmedOrReplayed(t *testing.T) {
 	if err := s.requireSettledSupervisedReleases(run); err == nil || !isBackendError(err, BackendOutcomeUnknown) {
 		t.Fatalf("next supervised step ignored the retained terminal: %v", err)
 	}
+	s.State.Attempts = append(s.State.Attempts, StepAttemptRecord{ProjectIdentity: s.Config.identity, AttemptID: ref.AttemptID, ExecutionID: run.ExecutionID, StepID: "implement", AttemptNumber: 1, Status: "succeeded", ExternalBinding: ref.Target, ResultID: ref.AttemptID, Result: mustJSON(map[string]any{"step_id": "implement", "result_id": ref.AttemptID})})
+	if err := s.requireSettledSupervisedReleases(run); err != nil {
+		t.Fatalf("an accepted step was blocked only because its terminal was retained: %v", err)
+	}
 	restarted, err := NewService(f.c)
 	if err != nil {
 		t.Fatal(err)
@@ -723,6 +727,79 @@ func TestSettledSupervisedDispatchRetainsExactBindingWithoutLiveTerminal(t *test
 	t.Setenv("STEERLINE_FAKE_SUPERVISED_WORKER_EPOCH", "replacement-remote-runtime")
 	if _, err := b.settledWorker(context.Background(), ref, "succeeded"); !isBackendError(err, BackendIdentityMismatch) {
 		t.Fatalf("replacement remote runtime was accepted: %v", err)
+	}
+}
+
+func TestRetainedWorkerReleaseDoesNotBlockAcceptedStep(t *testing.T) {
+	f := newFixture(t)
+	f.c = supervisedConfigForFixture(t, f)
+	store, err := OpenNativeTaskProject(context.Background(), &f.c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+	lock, err := LockRepository(f.c.Identity())
+	if err != nil {
+		t.Fatal(err)
+	}
+	store, err = OpenNativeTaskCommandStore(context.Background(), &f.c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	contract := nativeContract(t, f.c, f.commit, "retained-release")
+	batch, err := json.Marshal(TaskBatchInput{SchemaVersion: taskBatchSchemaVersion, ProjectID: f.c.Identity(), Tasks: []TaskBatchTask{{LocalKey: "task", TaskID: 14, Title: "Retained release", Type: "task", Contract: contract}}, Dependencies: []TaskBatchEdge{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := (CommandService{Store: store, Project: f.c.Identity()}).CreateTaskBatch(context.Background(), f.c, batch, newID(), 1, "planner"); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+	lock.Close()
+	s := f.service(t)
+	t.Cleanup(func() { _ = s.Close() })
+	t.Setenv("STEERLINE_FAKE_SUPERVISED_DISPATCH_STATE", "completed")
+	t.Setenv("STEERLINE_FAKE_SUPERVISED_RELEASE_STATE", "retained")
+	t.Setenv("STEERLINE_FAKE_SUPERVISED_RELEASE_REASON", "identity_unproven")
+	b := orcaSupervisedBackend{config: f.c}
+	started := supervisedStartReceipt{RunID: "orca-run-test", TaskID: "task-test", DispatchID: "dispatch-test", WorktreeID: "repo-test::C:/remote/steerline-run", CenterRuntimeID: "fake-center-runtime"}
+	observed, err := b.showWorker(context.Background(), started)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ref := supervisedPromptTestRef(f.c, started, observed)
+	ref.RunID, ref.AttemptID = newID(), newID()
+	if err := (executionRecords{root: f.c.RunDir}).saveBinding(ref); err != nil {
+		t.Fatal(err)
+	}
+	run := &Run{RunID: ref.RunID, ExecutionID: newID(), AttemptID: ref.AttemptID, TaskID: "14", DomainTaskID: "14", Protocol: string(ProtocolOrcaSupervised), ExecutionStatus: "pending", FinishTaskStatus: "pending", Target: ref.Target}
+	accepted := StepAttemptRecord{ProjectIdentity: s.Config.identity, AttemptID: ref.AttemptID, ExecutionID: run.ExecutionID, StepID: "implement", AttemptNumber: 1, Status: "succeeded", ExternalBinding: ref.Target, ResultID: ref.AttemptID, Result: mustJSON(map[string]any{"step_id": "implement", "result_id": ref.AttemptID})}
+	if err := s.domainStore.Transact(context.Background(), func(d DomainTx) error {
+		workflow := WorkflowRunRecord{ProjectIdentity: s.Config.identity, WorkflowRunID: ref.RunID, TaskID: run.TaskID, WorkflowVersion: MinimalWorkflowVersion, Phase: "executing", CreatedAt: now(), UpdatedAt: now()}
+		if err := d.PutWorkflowRun(workflow); err != nil {
+			return err
+		}
+		execution := ExecutionRecord{ProjectIdentity: s.Config.identity, ExecutionID: run.ExecutionID, WorkflowRunID: ref.RunID, Backend: "orca", Protocol: "orca_supervised", Status: "active", CurrentStep: "implement", CreatedAt: now(), UpdatedAt: now()}
+		if err := d.PutExecution(execution); err != nil {
+			return err
+		}
+		return d.PutStepAttempt(accepted)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	s.State.Attempts = append(s.State.Attempts, accepted)
+	if err := s.settleSupervisedStepResources(run, ref.AttemptID, "succeeded"); err != nil {
+		t.Fatalf("retained terminal blocked the accepted step: %v; attempts=%+v", err, s.State.Attempts)
+	}
+	if run.ExecutionStatus != "pending" || run.FinishTaskStatus != "pending" || len(s.State.Operations) != 1 || s.State.Operations[0].Status != "rejected" {
+		t.Fatalf("retained cleanup was not recorded independently: run=%+v operations=%+v", run, s.State.Operations)
+	}
+	if err := s.requireSettledSupervisedReleases(run); err != nil {
+		t.Fatalf("next step was blocked by retained cleanup: %v", err)
 	}
 }
 

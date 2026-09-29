@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-// TaskReopenInput abandons one stopped, unpublished native implement attempt.
+// TaskReopenInput abandons one stopped or conclusively settled undelivered Run.
 // The old workflow and its evidence remain readable under their original IDs.
 type TaskReopenInput struct {
 	TaskID                  string
@@ -21,6 +21,7 @@ type TaskReopenInput struct {
 	ExpectedGraphRevision   *uint64
 	PredecessorIDs          []string
 	ConfirmedProcessStopped bool
+	ConfirmUnfinishedReset  bool
 	Reason                  string
 	RequestedBy             string
 }
@@ -43,8 +44,8 @@ func (c CommandService) ReopenNativeTask(ctx context.Context, config Config, inp
 	if err := ValidateNativeTaskID(input.TaskID); err != nil {
 		return empty, err
 	}
-	if !stableExecutionID(input.WorkflowRunID) || !controlIDPattern.MatchString(input.RequestID) || input.ExpectedVersion == 0 || strings.TrimSpace(input.RequestedBy) == "" || !input.ConfirmedProcessStopped {
-		return empty, nativeErr("contract_mismatch", "reopen requires the exact run, request, task version, operator and stopped-process confirmation")
+	if !stableExecutionID(input.WorkflowRunID) || !controlIDPattern.MatchString(input.RequestID) || input.ExpectedVersion == 0 || strings.TrimSpace(input.RequestedBy) == "" || input.ConfirmedProcessStopped == input.ConfirmUnfinishedReset {
+		return empty, nativeErr("contract_mismatch", "reopen requires the exact run, request, task version, operator and one stopped-process or unfinished-reset confirmation")
 	}
 	reason, err := validateConfirmationBasis(input.Reason)
 	if err != nil {
@@ -57,9 +58,10 @@ func (c CommandService) ReopenNativeTask(ctx context.Context, config Config, inp
 		GraphRevision  *uint64  `json:"expected_graph_revision,omitempty"`
 		PredecessorIDs []string `json:"predecessor_ids,omitempty"`
 		Stopped        bool     `json:"confirmed_process_stopped"`
+		Reset          bool     `json:"confirm_unfinished_reset,omitempty"`
 		Reason         string   `json:"reason"`
 		RequestedBy    string   `json:"requested_by"`
-	}{input.TaskID, input.WorkflowRunID, input.ExpectedVersion, input.ExpectedGraphRevision, input.PredecessorIDs, true, reason, input.RequestedBy}))
+	}{input.TaskID, input.WorkflowRunID, input.ExpectedVersion, input.ExpectedGraphRevision, input.PredecessorIDs, input.ConfirmedProcessStopped, input.ConfirmUnfinishedReset, reason, input.RequestedBy}))
 	if previous, lookupErr := store.CommandByIdempotency(ctx, c.Project, input.RequestID); lookupErr == nil {
 		if previous.Kind != "reopen_task" || previous.TargetID != input.TaskID || previous.ExpectedVersion != input.ExpectedVersion || previous.RequestedBy != input.RequestedBy || !bytes.Equal(previous.Payload, request) || previous.Status != "accepted" {
 			return empty, nativeErr("idempotency_conflict", "reopen request ID belongs to a different or incomplete command")
@@ -98,10 +100,36 @@ func (c CommandService) ReopenNativeTask(ctx context.Context, config Config, inp
 			return empty, nativeErr("slot_busy", "another run for this task still holds an execution reservation")
 		}
 	}
-	if run == nil || runtimeState.CurrentTask != nil && *runtimeState.CurrentTask != input.TaskID || !runtimeState.SlotOccupied || run.TaskID != input.TaskID || run.DomainTaskID != input.TaskID || run.WorkflowVersion != MinimalWorkflowVersion || run.ExecutionStatus != "unknown" || run.FinishTaskStatus != "blocked" || run.Process == nil || run.Process.Kind != "orca" && run.Process.Kind != "orca_supervised" || run.Process.Terminal == "" || run.Process.RuntimeID == "" || run.Process.Incarnation == "" || run.WorktreePath == nil || deref(run.PR.URL) != "" {
-		return empty, nativeErr("immutable_task", "reopen requires the exact blocked, unpublished Orca run")
+	if run == nil || runtimeState.CurrentTask != nil && *runtimeState.CurrentTask != input.TaskID || run.TaskID != input.TaskID || run.DomainTaskID != input.TaskID || run.WorkflowVersion != MinimalWorkflowVersion {
+		return empty, nativeErr("immutable_task", "reopen requires the exact undelivered Orca run")
 	}
-	if run.Process.Kind == "orca" {
+	settled := input.ConfirmUnfinishedReset
+	unstarted := settled && run.Target.Dispatch == ""
+	if settled && (run.Protocol != string(ProtocolOrcaSupervised) || run.FinishTaskStatus == "completed" || unstarted && (run.Process != nil || run.Target.WorktreeID != "" || deref(run.PR.URL) != "") || !unstarted && run.Target.WorktreeID == "") || !settled && (!runtimeState.SlotOccupied || run.ExecutionStatus != "unknown" || run.FinishTaskStatus != "blocked" || run.WorktreePath == nil || deref(run.PR.URL) != "" || run.Process == nil || run.Process.Kind != "orca" && run.Process.Kind != "orca_supervised" || run.Process.Terminal == "" || run.Process.RuntimeID == "" || run.Process.Incarnation == "") {
+		return empty, nativeErr("immutable_task", "reopen lacks its fixed stopped process or settled Dispatch identity")
+	}
+	if unstarted {
+		for _, attempt := range runtimeState.Attempts {
+			if attempt.ExecutionID == run.ExecutionID && (attempt.ExternalBinding.Dispatch != "" || attempt.ExternalBinding.WorktreeID != "" || attempt.Status != "planned" && attempt.Status != "failed" && attempt.Status != "rejected") {
+				return empty, nativeErr("cleanup_pending", "old Run has an unverified worker Attempt")
+			}
+		}
+		for _, operation := range runtimeState.Operations {
+			if operation.Kind != "dispatch_step" && operation.Kind != "prepare_workspace" && operation.Kind != "create_orca_run" {
+				continue
+			}
+			var request struct {
+				WorkflowRunID string `json:"workflow_run_id"`
+			}
+			if json.Unmarshal(operation.Request, &request) != nil {
+				return empty, nativeErr("cleanup_pending", "external start operation has an unreadable identity")
+			}
+			if request.WorkflowRunID == run.RunID && (operation.Kind != "create_orca_run" || operation.Status != "confirmed" || run.Target.OrchestrationRun == "") {
+				return empty, nativeErr("cleanup_pending", "old Run has an unverified external start operation")
+			}
+		}
+	}
+	if !settled && run.Process.Kind == "orca" {
 		if _, statErr := os.Lstat(*run.WorktreePath); !os.IsNotExist(statErr) {
 			return empty, nativeErr("cleanup_pending", "original worktree must be removed before reopening the task")
 		}
@@ -116,7 +144,24 @@ func (c CommandService) ReopenNativeTask(ctx context.Context, config Config, inp
 			break
 		}
 	}
-	if run.Process.Kind == "orca_supervised" {
+	var settledRef ExecutionRef
+	if settled {
+		if executionConfig.hostName() != "orca_supervised" || executionConfig.Orca.Supervised == nil || !unstarted && executionConfig.Orca.Supervised.EnvironmentID != run.Target.ExecutionHost {
+			return empty, nativeErr("contract_mismatch", "old workflow has no matching pinned supervised Orca profile")
+		}
+		if !unstarted {
+			settledRef, err = settledReopenBinding(config, &runtimeState, run)
+			if err != nil {
+				return empty, err
+			}
+			if run.Process != nil && *run.Process != settledRef.External {
+				return empty, nativeErr("authority_mismatch", "active Run process differs from its final Dispatch binding")
+			}
+			if _, err = (orcaSupervisedBackend{config: executionConfig}).settledWorker(ctx, settledRef, ""); err != nil {
+				return empty, nativeErr("cleanup_pending", "original supervised Dispatch is not conclusively settled: "+err.Error())
+			}
+		}
+	} else if run.Process.Kind == "orca_supervised" {
 		if executionConfig.hostName() != "orca_supervised" || executionConfig.Orca.Supervised == nil || executionConfig.Orca.Supervised.EnvironmentID != run.Process.ExecutionHost {
 			return empty, nativeErr("contract_mismatch", "old workflow has no matching pinned supervised Orca profile")
 		}
@@ -135,6 +180,33 @@ func (c CommandService) ReopenNativeTask(ctx context.Context, config Config, inp
 			}
 		} else if term.Handle != run.Process.Terminal || term.RuntimeID != run.Process.RuntimeID || term.IncarnationID != run.Process.Incarnation || !term.exited() {
 			return empty, nativeErr("cleanup_pending", "original Orca terminal still exists or changed identity, including a detached or orphaned tab")
+		}
+	}
+	if settled {
+		if deref(run.PR.URL) == "" {
+			for _, attempt := range runtimeState.Attempts {
+				if attempt.ExecutionID == run.ExecutionID && attempt.StepID == "publish_pr" && attempt.Status != "planned" {
+					return empty, nativeErr("pending_verification", "publish_pr may have created a PR without a fixed URL")
+				}
+			}
+		} else {
+			pr := &PRClient{Config: config.PR, Runner: Runner{Dir: config.Repository, Timeout: 30 * time.Second}}
+			info, queryErr := pr.Query(ctx, *run.PR.URL)
+			if queryErr != nil {
+				return empty, nativeErr("pending_verification", "old PR merge state cannot be verified: "+queryErr.Error())
+			}
+			if info.Merged || info.State == "merged" || info.MergedAt != nil && !info.MergedAt.IsZero() || info.MergeCommit != nil && *info.MergeCommit != "" {
+				return empty, nativeErr("already_merged", "old PR was merged; reconcile delivery before resetting")
+			}
+			var candidate string
+			for _, execution := range runtimeState.Executions {
+				if execution.ExecutionID == run.ExecutionID {
+					candidate = execution.CandidateRevision
+				}
+			}
+			if info.URL != *run.PR.URL || info.Repository != config.PR.Repository || info.BaseBranch != config.Branch || candidate == "" || info.HeadRevision != candidate {
+				return empty, nativeErr("contract_mismatch", "old PR differs from the fixed repository, base, or candidate head")
+			}
 		}
 	}
 
@@ -178,8 +250,8 @@ func (c CommandService) ReopenNativeTask(ctx context.Context, config Config, inp
 				workflow = candidate
 			}
 		}
-		if workflow == nil || workflow.Phase != "blocked" || workflow.SelectedResult != "" || workflow.PendingDecisions != 0 {
-			return nativeErr("immutable_task", "old workflow is not an unpublished blocked execution")
+		if workflow == nil || settled && (workflow.Phase == "completed" || workflow.Phase == "abandoned" || deref(run.PR.URL) == "" && workflow.SelectedResult != "") || !settled && (workflow.Phase != "blocked" || workflow.SelectedResult != "" || workflow.PendingDecisions != 0) {
+			return nativeErr("immutable_task", "old workflow is not eligible for an undelivered reset")
 		}
 		var execution *ExecutionRecord
 		for i := range snapshot.Executions {
@@ -191,35 +263,76 @@ func (c CommandService) ReopenNativeTask(ctx context.Context, config Config, inp
 				execution = candidate
 			}
 		}
-		if execution == nil || execution.Status != "blocked" || execution.CurrentStep != "implement" || execution.Process == nil || *execution.Process != *run.Process {
+		if execution == nil || settled && (unstarted && (execution.Process != nil || execution.Target.Dispatch != "" || execution.Target.WorktreeID != "") || !unstarted && (execution.Process != nil && *execution.Process != settledRef.External || execution.Target.OrchestrationRun != settledRef.External.OrchestrationRun || execution.Target.WorktreeID != settledRef.External.WorktreeID)) || !settled && (execution.Status != "blocked" || execution.CurrentStep != "implement" || execution.Process == nil || *execution.Process != *run.Process) {
 			return nativeErr("immutable_task", "old implement execution or process binding changed")
 		}
 		var attempt *StepAttemptRecord
+		var settledFinal *StepAttemptRecord
 		for i := range snapshot.Attempts {
 			candidate := &snapshot.Attempts[i]
 			if candidate.ExecutionID != execution.ExecutionID {
 				continue
 			}
-			if candidate.StepID != "prepare" && candidate.StepID != "implement" {
+			if !settled && candidate.StepID != "prepare" && candidate.StepID != "implement" {
 				return nativeErr("immutable_task", "later step was dispatched; PR publication cannot be ruled out")
+			}
+			if unstarted && (candidate.ExternalBinding.Dispatch != "" || candidate.ExternalBinding.WorktreeID != "" || candidate.Status != "planned" && candidate.Status != "failed" && candidate.Status != "rejected") {
+				return nativeErr("cleanup_pending", "old Run gained an unverified worker Attempt")
+			}
+			if settled && candidate.AttemptID == settledRef.AttemptID {
+				if settledFinal != nil || candidate.ExternalBinding.Dispatch != settledRef.External.Dispatch {
+					return nativeErr("immutable_task", "final settled Attempt changed before reset")
+				}
+				settledFinal = candidate
 			}
 			if candidate.AttemptID == run.AttemptID {
 				attempt = candidate
 			}
 		}
-		if attempt == nil || attempt.StepID != "implement" || attempt.Status != "outcome_unknown" || len(attempt.Result) != 0 {
+		if attempt == nil || settled && (!unstarted && settledFinal == nil || unstarted && settledFinal != nil || attempt.StepID != execution.CurrentStep) || !settled && (attempt.StepID != "implement" || attempt.Status != "outcome_unknown" || len(attempt.Result) != 0) {
 			return nativeErr("immutable_task", "original unknown implement attempt changed")
 		}
 		for _, decision := range snapshot.Decisions {
-			if decision.WorkflowRunID == workflow.WorkflowRunID && decision.Status != "failed" && decision.Status != "superseded" {
-				return nativeErr("immutable_task", "old workflow has an unresolved decision")
+			if decision.WorkflowRunID != workflow.WorkflowRunID {
+				continue
+			}
+			if settled {
+				continue
+			}
+			if decision.Status != "failed" && decision.Status != "superseded" {
+				return nativeErr("immutable_task", "old workflow has an unresolved or applied decision")
 			}
 		}
 		stamp := time.Now().UTC()
-		if e = TransitionStepAttempt(attempt, "stopped"); e != nil {
+		if settled {
+			for _, decision := range snapshot.Decisions {
+				if decision.WorkflowRunID == workflow.WorkflowRunID && decision.Status != "failed" && decision.Status != "superseded" && decision.Status != "applied" {
+					decision.Status, decision.Version, decision.UpdatedAt = "superseded", decision.Version+1, stamp
+					if e = tx.PutDecision(decision); e != nil {
+						return e
+					}
+				}
+			}
+			workflow.PendingDecisions = 0
+			for i := range snapshot.Attempts {
+				old := &snapshot.Attempts[i]
+				if old.ExecutionID != execution.ExecutionID {
+					continue
+				}
+				if e = abandonSettledAttempt(old); e != nil {
+					return e
+				}
+				if e = tx.PutStepAttempt(*old); e != nil {
+					return e
+				}
+			}
+		} else if e = TransitionStepAttempt(attempt, "stopped"); e != nil {
 			return e
 		}
-		if e = tx.PutStepAttempt(*attempt); e != nil {
+		if !settled {
+			e = tx.PutStepAttempt(*attempt)
+		}
+		if e != nil {
 			return e
 		}
 		execution.Status, execution.UpdatedAt = "stopped", stamp
@@ -244,7 +357,11 @@ func (c CommandService) ReopenNativeTask(ctx context.Context, config Config, inp
 			return e
 		}
 		receipt = TaskReopenReceipt{RequestID: input.RequestID, TaskID: input.TaskID, TaskVersion: task.Version, GraphRevision: graphRevision, AbandonedRunID: run.RunID, Status: "open"}
-		body, _ := json.Marshal(map[string]any{"receipt": receipt, "old_execution_id": execution.ExecutionID, "old_attempt_id": attempt.AttemptID, "old_terminal": run.Process, "confirmed_process_stopped": true, "reason": reason, "requested_by": input.RequestedBy, "added_predecessors": input.PredecessorIDs})
+		oldTerminal := run.Process
+		if settled {
+			oldTerminal = &settledRef.External
+		}
+		body, _ := json.Marshal(map[string]any{"receipt": receipt, "old_execution_id": execution.ExecutionID, "old_attempt_id": attempt.AttemptID, "old_terminal": oldTerminal, "old_worktree_id": run.Target.WorktreeID, "old_pr_url": deref(run.PR.URL), "confirmed_process_stopped": input.ConfirmedProcessStopped, "confirm_unfinished_reset": settled, "reason": reason, "requested_by": input.RequestedBy, "added_predecessors": input.PredecessorIDs})
 		if _, e = tx.AppendEvent(DomainEvent{ProjectIdentity: c.Project, TaskID: input.TaskID, WorkflowRunID: run.RunID, ExecutionID: execution.ExecutionID, AttemptID: attempt.AttemptID, ExternalSource: "native-task-command", ExternalID: input.RequestID, Type: "task.reopened", ReceivedAt: stamp, Payload: body}); e != nil {
 			return e
 		}
@@ -287,6 +404,62 @@ func (c CommandService) ReopenNativeTask(ctx context.Context, config Config, inp
 		return tx.PutProjection(c.Project, runtimeState.Revision, projectionBody)
 	})
 	return receipt, err
+}
+
+// settledReopenBinding identifies the final Dispatch without borrowing a
+// newly planned step's empty process binding. The old worktree remains history.
+func settledReopenBinding(config Config, state *Runtime, run *Run) (ExecutionRef, error) {
+	var latest *StepAttemptRecord
+	for i := range state.Attempts {
+		attempt := &state.Attempts[i]
+		if attempt.ExecutionID != run.ExecutionID {
+			continue
+		}
+		if attempt.ExternalBinding.Dispatch == run.Target.Dispatch && run.Target.Dispatch != "" {
+			if latest != nil || attempt.Status == "planned" {
+				return ExecutionRef{}, nativeErr("immutable_task", "the final Dispatch is not unique or was never started")
+			}
+			latest = attempt
+		} else if attempt.ExternalBinding.Dispatch != "" && attempt.Status != "succeeded" && attempt.Status != "failed" && attempt.Status != "stopped" {
+			return ExecutionRef{}, nativeErr("immutable_task", "an earlier Dispatch is not settled")
+		} else if attempt.ExternalBinding.Dispatch == "" && attempt.Status != "planned" && attempt.Status != "succeeded" && attempt.Status != "failed" && attempt.Status != "stopped" {
+			return ExecutionRef{}, nativeErr("immutable_task", "an Attempt without a Dispatch has an uncertain side effect")
+		}
+	}
+	if latest == nil {
+		return ExecutionRef{}, nativeErr("immutable_task", "the final supervised Dispatch is missing")
+	}
+	ref, err := (executionRecords{root: config.RunDir}).loadBinding(run.RunID, latest.AttemptID)
+	if err != nil {
+		return ExecutionRef{}, nativeErr("cleanup_pending", "final Dispatch binding cannot be verified: "+err.Error())
+	}
+	if ref.Protocol != ProtocolOrcaSupervised || ref.RunID != run.RunID || ref.AttemptID != latest.AttemptID || ref.Target.OrchestrationRun != run.Target.OrchestrationRun || ref.Target.Dispatch != run.Target.Dispatch || ref.Target.WorktreeID != run.Target.WorktreeID || ref.Target.CoordinatorTerminal != run.Target.CoordinatorTerminal || ref.External.Kind != "orca_supervised" || ref.External.OrchestrationRun != run.Target.OrchestrationRun || ref.External.Task != run.Target.ExternalTask || ref.External.Dispatch != run.Target.Dispatch || ref.External.WorktreeID != run.Target.WorktreeID || ref.External.ExecutionHost != run.Target.ExecutionHost || ref.External.Terminal == "" || ref.External.Incarnation == "" {
+		return ExecutionRef{}, nativeErr("authority_mismatch", "final Dispatch binding differs from the fixed Run and worktree")
+	}
+	return ref, nil
+}
+
+func abandonSettledAttempt(attempt *StepAttemptRecord) error {
+	switch attempt.Status {
+	case "planned":
+		return TransitionStepAttempt(attempt, "failed")
+	case "dispatching", "dispatched":
+		if err := TransitionStepAttempt(attempt, "outcome_unknown"); err != nil {
+			return err
+		}
+		return TransitionStepAttempt(attempt, "stopped")
+	case "running", "waiting_decision":
+		if err := TransitionStepAttempt(attempt, "stopping"); err != nil {
+			return err
+		}
+		return TransitionStepAttempt(attempt, "stopped")
+	case "stopping", "outcome_unknown":
+		return TransitionStepAttempt(attempt, "stopped")
+	case "succeeded", "failed", "rejected", "stopped":
+		return nil
+	default:
+		return nativeErr("unsupported_schema", "old Attempt has an unsupported status")
+	}
 }
 
 // verifyStoppedSupervisedReopen does not infer safety from a missing local
