@@ -4,7 +4,17 @@
 
 ## 当前推进目标
 
-当前推进模块重构、多候选与 stable/dev 交付；有人值守[远程执行 MVP](../remote-execution.md)已在受测范围交付。#3/#4/#6 的结项证据分别见[人工决策与协议](../validation/phase1-task-closure-2026-09-28/README.md)、[远程闭环](../validation/spec03-task6-closure-2026-09-28/README.md)。长期无人值守、固定 stable 24 小时和受控提升归 #32。中心 DAG 中 #29/#24 对已交付任务的硬前置仍保留。
+当前新增单 worker 持续执行的流程精简规划，并协调模块重构、多候选与 stable/dev 交付；有人值守[远程执行 MVP](../remote-execution.md)已在受测范围交付。#3/#4/#6 的结项证据分别见[人工决策与协议](../validation/phase1-task-closure-2026-09-28/README.md)、[远程闭环](../validation/spec03-task6-closure-2026-09-28/README.md)。长期无人值守、固定 stable 24 小时和受控提升归 #32。中心 DAG 中 #29/#24 对已交付任务的硬前置仍保留。
+
+## 执行流程精简
+
+worker 负责实现、提交和创建 PR；测试、修复、审查要求来自任务 Spec/Plan。中心围绕原会话处理启动、反馈、待决策和真实 PR 交付，移除项目逻辑验证与五步编排。本文登记规划，不表示新流程已实现或该任务已在运行时中心创建。
+
+| 任务 ID | 任务名称 | 目标标识 | 剩余目标 | 硬前置 | 执行规格 |
+| --- | --- | --- | --- | --- | --- |
+| 36 | 单 worker 持续执行与统一待决策 | `WORKER-FLOW` | 五个主阶段、原会话持续反馈、移除中心项目验证、PR 观察与真实交付、当前格式恢复和双后端验收 | 无未完成硬前置；共享规格及集成冲突见执行图 | [Spec](../spec/worker-flow.spec.md) · [Plan](../spec/worker-flow.plan.md) |
+
+#36 与 #33/#34 保持旧五步行为的规格存在冲突，需要先协调再串行集成；#26/#27/#35 与 #28/#16/#21 分别涉及交付和查询/UI 接口。已有中心 TaskContract 和依赖继续保持，不通过编辑 roadmap 自动重绑定或补边。#36 合入规划后，按固定 Spec/Plan commit 另行完成中心任务登记；旧运行的自动迁移不在该任务范围内。
 
 ## 第一阶段：模块边界与结构重构
 
@@ -16,7 +26,7 @@
 | 34 | 执行上下文封装与服务职责收缩 | `PHASE1-MODULARITY` | 固定上下文、显式事件/操作路由、Service 职责与状态所有权 | `#33` | [Spec](../spec/execution-context.spec.md) · [Plan](../spec/execution-context.plan.md) |
 | 35 | 中心命令查询与SQLite边界封装 | `PHASE1-MODULARITY` | center 包、业务事务与只读查询、迁移全部 SQL 旁路及消费者 | `#27` | [Spec](../spec/center-boundary.spec.md) · [Plan](../spec/center-boundary.plan.md) |
 
-执行顺序为 #33 → #34 → #26 → #27 → #35，再由 #28/#16 消费。三项任务和全部前置已进入中心 DAG；原有依赖及任务固定契约保留。[任务创建记录](../validation/modular-refactoring-task-creation/README.md)保存创建、补边与完整回读证据。
+本组现有中心执行顺序为 #33 → #34 → #26 → #27 → #35，再由 #28/#16 消费；与 #36 的新流程语义需按上文协调，不把该顺序解释为 #36 必须先实现旧五步门槛。三项任务和全部前置已进入中心 DAG；原有依赖及任务固定契约保留。[任务创建记录](../validation/modular-refactoring-task-creation/README.md)保存创建、补边与完整回读证据。
 
 ## 第一阶段版本交付目标与推进顺序
 

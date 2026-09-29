@@ -2,6 +2,8 @@
 
 本 Spec 固定执行后端、中心状态机与远程接入的共同执行约束，由各阶段 Spec/Plan 引用和验收；它不单独启动一个实现阶段。
 
+新流程变更由 #36 [单 worker 持续执行与统一待决策](worker-flow.spec.md)独立交付。该任务范围内，本文关于中心五步编排、步骤更换 worker、项目验证/修复门槛及答案应用证明的旧要求由其 §2–§8 替代；任务/DAG、唯一写者、消息身份、当前格式恢复及真实 PR 合并仍保留。本文其余旧流程描述不能用于宣告新流程已实现，也不改写已创建任务的固定契约。
+
 远程执行分为三个 Spec：[01 Orca 远程协议验证](01-orca-remote-protocol.md) → [02 执行模型、最小状态机与适配器](02-execution-model-and-adapter.md) → [03 分阶段远程执行与 viewer 闭环](03-remote-execution-and-viewer.md)。本机双链路接口与会话契约由 [4A](pr-04a-execution-backends.spec.md)、[4B](pr-04b-conversation-events.spec.md) 定义，先落地的权威接口由后续阶段复用。
 
 本文与具体阶段 Spec 共同构成执行依据。自动派发保持单活动执行；不同任务的人工启动遵循 [人工并行启动任务](manual-parallel-start.spec.md)。共享部署、移动端和同任务多 agent 并行不因本 Spec 被隐式纳入当前阶段范围。
