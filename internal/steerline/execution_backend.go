@@ -547,11 +547,11 @@ func inspectBoundWorkspace(ctx context.Context, c Config, ref ExecutionRef) (Wor
 	if err != nil {
 		return WorkspaceInspection{}, err
 	}
-	dirty, err := runner.Output(ctx, c.Git, "status", "--porcelain")
+	dirty, err := inspectGitDirty(ctx, c, ref.WorkspacePath)
 	if err != nil {
 		return WorkspaceInspection{}, err
 	}
-	return WorkspaceInspection{Repository: c.Repository, Worktree: ref.WorkspacePath, Branch: ref.WorkspaceBranch, Base: ref.BaseCommit, Head: strings.TrimSpace(string(head)), Dirty: strings.TrimSpace(string(dirty)) != "", CheckedAt: now()}, nil
+	return WorkspaceInspection{Repository: c.Repository, Worktree: ref.WorkspacePath, Branch: ref.WorkspaceBranch, Base: ref.BaseCommit, Head: strings.TrimSpace(string(head)), Dirty: dirty, CheckedAt: now()}, nil
 }
 
 type localOutputCursor struct {

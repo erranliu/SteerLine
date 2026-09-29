@@ -169,6 +169,12 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 	if !ok || c.Project == "" || config.Identity() != c.Project {
 		return TaskClaimReceipt{}, nativeErr("authority_mismatch", "claim requires the configured native project")
 	}
+	if config.hostName() == "orca_supervised" && !config.WorkspaceDirtyIgnore.empty() {
+		return TaskClaimReceipt{}, nativeErr("host_unsupported", "supervised Orca cannot independently verify workspace_dirty_ignore paths")
+	}
+	if err := config.WorkspaceDirtyIgnore.validate(); err != nil {
+		return TaskClaimReceipt{}, nativeErr("contract_mismatch", err.Error())
+	}
 	if err := ValidateNativeTaskID(options.TaskID); err != nil {
 		return TaskClaimReceipt{}, err
 	}
@@ -301,7 +307,7 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 	}
 	runner := StepRunnerSettings{Codex: config.Codex, Sandbox: config.Sandbox, Model: config.Model, ReasoningEffort: config.ReasoningEffort, Profile: config.Profile}
 	runner.Codex.Args = append([]string(nil), config.Codex.Args...)
-	wfr := WorkflowRunRecord{ProjectIdentity: c.Project, WorkflowRunID: workflowRunID, TaskID: task.TaskID, WorkflowVersion: MinimalWorkflowVersion, ConfigDigest: config.configDigest, Definition: workflow.Definition, ProjectSteps: workflow.Steps, Runner: runner, Phase: "queued", Repository: config.Repository, Branch: config.Branch, CreatedAt: created, UpdatedAt: created}
+	wfr := WorkflowRunRecord{ProjectIdentity: c.Project, WorkflowRunID: workflowRunID, TaskID: task.TaskID, WorkflowVersion: MinimalWorkflowVersion, ConfigDigest: config.configDigest, Definition: workflow.Definition, ProjectSteps: workflow.Steps, WorkspaceDirtyIgnore: config.WorkspaceDirtyIgnore, Runner: runner, Phase: "queued", Repository: config.Repository, Branch: config.Branch, CreatedAt: created, UpdatedAt: created}
 	if options.ExecutionProfile != nil {
 		fixed := options.ExecutionProfile.Freeze()
 		wfr.ExecutionProfile = &fixed

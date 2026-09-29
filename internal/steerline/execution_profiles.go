@@ -120,7 +120,11 @@ func (c Config) ResolveExecutionProfile(id, expectedDigest string) (Config, Exec
 		if expectedDigest != "" && expectedDigest != profile.Digest() {
 			return Config{}, ExecutionProfile{}, errors.New("stale_profile: execution profile changed")
 		}
-		return c.ApplyExecutionProfile(profile), profile, nil
+		selected := c.ApplyExecutionProfile(profile)
+		if selected.hostName() == "orca_supervised" && !selected.WorkspaceDirtyIgnore.empty() {
+			return Config{}, ExecutionProfile{}, errors.New("supervised Orca cannot independently verify workspace_dirty_ignore paths")
+		}
+		return selected, profile, nil
 	}
 	return Config{}, ExecutionProfile{}, errors.New("execution profile is not configured")
 }
