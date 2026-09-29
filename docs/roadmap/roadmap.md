@@ -24,6 +24,16 @@ SteerLine 管理任务、原 worker 会话、用户反馈和真实 PR 交付。w
 - [x] **独立进程生命周期与隔离（B）**：独立宿主的服务反馈三例通过；真实服务宿主进程退出后，待答 turn 存活，新进程重接并完成原请求。
 - [ ] **并发检测环境补验**：在具备 CGO/C 编译器的环境，对 app-server 并行、恢复和回复路径运行定向 Go race detector。
 
+### 本地 Orca 原生 worker 后续验证
+
+同一 worker 的两轮真实 Codex 问答与续聊、中心重启恢复、SQLite 故障回执对账和 provider 归属回归已有[实施证据](../validation/worker-flow/orca-native-implementation-2026-09-29.json)。以下项目继续按 [Orca Spec](../spec/worker-flow-orca-native.spec.md#9-验收与交付边界) 验证，并分别记录实际结果。
+
+- [ ] **真实统一回答入口（ON3）**：通过 UI/CLI 的 `answer_decision` 对运行中的 Orca 中心提交纯文字及选项＋备注，核对回复归属原 question/message ID、重复提交不重复发送，随后继续原 Dispatch。
+- [ ] **真实消息竞争与故障（ON5、ON7）**：记录活跃 `send` 与 `worker_done` 竞争、迟到 question/旧 Dispatch、断联、agent 未识别、审批阻断及身份变化时的可观察结果；核对不串线、不替换原 worker、不误关闭其他 terminal。
+- [ ] **真实输出与清理（ON8、ON9）**：确认当前 Orca 版本可取得的有界输出和 transcript 完整度；在最终交付后核对精确 terminal close、原 worktree 内容及中心停止观察时的资源状态。无法取得完整 transcript 时如实标记。
+- [ ] **隔离仓库真实 PR 链（ON10）**：核对 provider 上的仓库、base、执行分支与 PR 身份；由用户合并测试 PR，随后确认唯一 TaskDelivery、后继 DAG 解锁和清理结果。SQLite/provider 自动化回归已通过。
+- [ ] **第二种真实 agent（ON11）**：本机具备另一种 Orca agent 后，沿相同 Run/Task/Dispatch 与问答路径验收无代码修改切换；当前仅 Codex 可用，参数转发契约已通过。
+
 ## 原生 UI 与受控规划
 
 本机 API 直接消费 #36，不等待多候选或全面代码搬包。规划权限和文档发布核验继续保留；执行界面使用五个主阶段和统一反馈。
