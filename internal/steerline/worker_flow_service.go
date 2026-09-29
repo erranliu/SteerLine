@@ -125,6 +125,27 @@ func (s *Service) waitWorkerFlow(run *Run, reason string) error {
 	return s.save()
 }
 
+// A verified open PR does not require input, but the original session remains
+// available if the user wants to request more work before merging it.
+func offerWorkerPRFeedback(run *Run, url string) error {
+	if run == nil || run.WorkflowVersion != WorkerFlowVersion || url == "" {
+		return errors.New("optional PR feedback requires a fixed worker and PR")
+	}
+	if run.Decision != nil && run.Decision.Status == "pending" {
+		return nil
+	}
+	decision, err := WriteDecisionRequest(run, DecisionRequest{
+		Question: "The worker stopped. What should it do next?",
+		Context: "The verified PR is awaiting merge. You may send further instructions to the original worker session.",
+		Options: []DecisionOption{{ID: "continue", Label: "Continue current work"}}, AllowFreeText: true,
+	})
+	if err != nil {
+		return err
+	}
+	run.Decision = decision
+	return nil
+}
+
 func (s *Service) prepareWorkerFlow(ctx context.Context, task TaskRecord, run *Run) error {
 	workflow, execution := s.minimalRecords(run)
 	attempt := s.minimalAttempt(run, run.AttemptID)
@@ -373,6 +394,9 @@ func (s *Service) finishWorkerFlow(workerErr error) error {
 	if len(outcome.PRCandidates) > 1 {
 		question = true
 	}
+	if run.Decision != nil && run.Decision.Status == "pending" && run.Decision.Request.Question != "The worker stopped. What should it do next?" {
+		question = true
+	}
 	if err := StopWorkerTurn(workflow, execution, turnID, question); err != nil {
 		return err
 	}
@@ -382,6 +406,9 @@ func (s *Service) finishWorkerFlow(workerErr error) error {
 		run.FinishTaskStatus = "waiting_pr_merge"
 		if workflow.PRURL != "" {
 			run.PR.URL, run.PR.State = ptr(workflow.PRURL), workflow.PRState
+		}
+		if err := offerWorkerPRFeedback(run, workflow.PRURL); err != nil {
+			return err
 		}
 		if issue != "" {
 			run.Error = ptr(clip(issue, 2000))
@@ -450,13 +477,19 @@ func (s *Service) pollWorkerFlowPR(ctx context.Context, run *Run, task *TaskReco
 		}
 		return s.save()
 	}
-	pendingQuestion := run.Decision != nil && run.Decision.Status == "pending" && run.Decision.Request.Question != "The worker stopped. What should it do next?"
+	pendingQuestion := run.Decision != nil && (run.Decision.Status == "answer_saved" || run.Decision.Status == "pending" && run.Decision.Request.Question != "The worker stopped. What should it do next?")
+	previousPRURL := workflow.PRURL
 	if err := BindWorkerPR(workflow, execution, info, url, s.Config.PR.Repository, pendingQuestion); err != nil {
 		return s.waitWorkerFlow(run, "Several PRs or conflicting PR identities need a user decision: "+err.Error())
 	}
-	if run.Decision != nil && run.Decision.Status == "pending" && !pendingQuestion && workflow.Phase != "waiting_decision" {
+	if run.Decision != nil && run.Decision.Status == "pending" && !pendingQuestion && previousPRURL != info.URL && workflow.Phase != "waiting_decision" {
 		run.Decision.Status = "superseded"
 		run.Decision.Version++
+	}
+	if workflow.Phase == "waiting_pr_merge" && execution.Status != "active" {
+		if err := offerWorkerPRFeedback(run, info.URL); err != nil {
+			return err
+		}
 	}
 	run.PR.URL, run.PR.State, run.PR.MergedAt, run.PR.MergeCommit, run.PR.QueryError = ptr(info.URL), info.State, info.MergedAt, info.MergeCommit, nil
 	switch workflow.Phase {
@@ -484,8 +517,15 @@ func (s *Service) applyWorkerFlowDecision(ctx context.Context, run *Run) error {
 		return nil
 	}
 	workflow, execution := s.minimalRecords(run)
-	if workflow == nil || execution == nil || workflow.Phase != "waiting_decision" {
+	if workflow == nil || execution == nil || workflow.Phase != "waiting_decision" && workflow.Phase != "waiting_pr_merge" {
 		return errors.New("saved feedback no longer belongs to a waiting worker flow")
+	}
+	if workflow.Phase == "waiting_pr_merge" {
+		workflow.Phase, workflow.UpdatedAt = "waiting_decision", now()
+		run.FinishTaskStatus = "waiting_decision"
+		if err := s.save(); err != nil {
+			return err
+		}
 	}
 	answer, err := ReadDecisionAnswer(run)
 	if err != nil {

@@ -264,7 +264,7 @@ func SubmitAnswerDecision(ctx context.Context, c Config, runID, decisionID, opti
 		}
 		return CommandRecord{}, false, fmt.Errorf("decision is already %s but its original idempotency command is missing", decisionRecord.Status)
 	}
-	if run.FinishTaskStatus != "waiting_decision" || run.Decision == nil {
+	if run.FinishTaskStatus != "waiting_decision" && !(run.WorkflowVersion == WorkerFlowVersion && run.FinishTaskStatus == "waiting_pr_merge") || run.Decision == nil {
 		return CommandRecord{}, false, fmt.Errorf("run %s is not waiting for a decision (status %s)", run.TaskID, run.FinishTaskStatus)
 	}
 	if expectedInstance != "" && serviceRuntime.Service.InstanceID != expectedInstance {
@@ -458,7 +458,7 @@ func (s *Service) applyDecisions(ctx context.Context) error {
 		return nil
 	}
 	for _, run := range s.State.Runs {
-		if run == nil || run.FinishTaskStatus != "waiting_decision" || run.Decision == nil || run.Decision.Status != "answer_saved" {
+		if run == nil || run.FinishTaskStatus != "waiting_decision" && !(run.WorkflowVersion == WorkerFlowVersion && run.FinishTaskStatus == "waiting_pr_merge") || run.Decision == nil || run.Decision.Status != "answer_saved" {
 			continue
 		}
 		blocked := false

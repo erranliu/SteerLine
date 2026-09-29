@@ -16,14 +16,15 @@ func TestWorkerFlowServiceFirstFeedbackKeepsSessionAndWorkspace(t *testing.T) {
 	}{
 		{"free_text", "", "Continue in the same worktree"},
 		{"option_with_note", "continue", "Keep the existing commit and continue"},
+		{"open_pr_feedback", "continue", "Add one more change before merge"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			testWorkerFlowServiceFirstFeedback(t, test.option, test.note)
+			testWorkerFlowServiceFirstFeedback(t, test.option, test.note, test.name == "open_pr_feedback")
 		})
 	}
 }
 
-func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string) {
+func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openPR bool) {
 	t.Setenv("STEERLINE_WORKER_FLOW_MOCK", "1")
 	ctx := context.Background()
 	c, commit, store := openDAGFixture(t)
@@ -87,7 +88,7 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string) {
 	if firstWorktree == "" {
 		t.Fatal("worker preparation lost its worktree")
 	}
-	finishTurn := func() {
+	finishTurn := func(expected string) {
 		t.Helper()
 		worker := service.workers[run.RunID]
 		if worker == nil {
@@ -107,11 +108,23 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string) {
 			t.Fatal(err)
 		}
 		service.parkWorker()
-		if run.FinishTaskStatus != "waiting_decision" || run.Decision == nil || run.Decision.Status != "pending" {
+		if run.FinishTaskStatus != expected || run.Decision == nil || run.Decision.Status != "pending" {
 			t.Fatalf("stopped worker did not reach the unified decision: %+v", run)
 		}
 	}
-	finishTurn()
+	finishTurn("waiting_decision")
+	if openPR {
+		workflow, execution := service.minimalRecords(run)
+		url := "https://git.example/org/repo/pulls/8"
+		info := PRInfo{URL: url, Repository: "org/repo", BaseBranch: "main", HeadRepository: "org/repo", HeadBranch: *run.WorktreeBranch, HeadRevision: receipt.BaseCommit, State: "open"}
+		if err := BindWorkerPR(workflow, execution, info, url, "org/repo", false); err != nil {
+			t.Fatal(err)
+		}
+		run.FinishTaskStatus, run.PR.URL, run.PR.State = "waiting_pr_merge", ptr(url), "open"
+		if err := service.save(); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if len(run.Decision.Request.Options) != 1 || run.Decision.Request.Options[0].ID != "continue" || !run.Decision.Request.AllowFreeText {
 		t.Fatalf("unified decision cannot accept both feedback forms: %+v", run.Decision.Request)
 	}
@@ -177,7 +190,11 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string) {
 	if err != nil || string(savedPrompt) != feedbackPrompt {
 		t.Fatalf("full feedback text was not sent: prompt=%q err=%v", savedPrompt, err)
 	}
-	finishTurn()
+	if openPR {
+		finishTurn("waiting_pr_merge")
+	} else {
+		finishTurn("waiting_decision")
+	}
 	events, err := os.ReadFile(filepath.Join(feedbackDir, "events.jsonl"))
 	if err != nil {
 		t.Fatal(err)
