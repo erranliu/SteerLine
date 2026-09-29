@@ -134,7 +134,10 @@ func requireWorkerFlowCapabilities(ctx context.Context, c Config) error {
 		if c.Model != "" || c.ReasoningEffort != "" || c.Profile != "" || c.Sandbox != "workspace-write" {
 			return &BackendError{Code: BackendUnsupported, Diagnostic: "Orca starts the selected agent with its own settings; model, effort, Codex profile and sandbox overrides are unavailable"}
 		}
-		_, err := workerOrcaCall(ctx, c, "status", "--json")
+		if _, err := workerOrcaCall(ctx, c, "status", "--json"); err != nil {
+			return err
+		}
+		_, err := nativeOrcaRepo(ctx, c)
 		return err
 	}
 	if c.agentName() != "codex" {

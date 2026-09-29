@@ -188,15 +188,15 @@ func restoredWorkerDecision(records []DecisionRecord, executionID string) (*Deci
 		return nil, err
 	}
 	decision := &DecisionState{ID: chosen.DecisionID, AttemptID: chosen.AttemptID, Version: chosen.Version, Request: request, Status: chosen.Status}
-	if chosen.QuestionID != chosen.DecisionID {
-		decision.ExternalQuestionID = chosen.QuestionID
+	if request.OrcaAsk != nil && request.OrcaAsk.MessageID != chosen.QuestionID {
+		return nil, errors.New("persisted Orca question differs from its decision binding")
 	}
 	if len(chosen.Answer) > 0 {
 		var answer DecisionAnswer
 		if err := json.Unmarshal(chosen.Answer, &answer); err != nil {
 			return nil, err
 		}
-		decision.OptionID, decision.Note, decision.AnsweredBy = answer.OptionID, answer.Note, answer.AnsweredBy
+		decision.OptionID, decision.Note, decision.Answers, decision.AnsweredBy = answer.OptionID, answer.Note, answer.Answers, answer.AnsweredBy
 		if !answer.AnsweredAt.IsZero() {
 			decision.AnsweredAt = &answer.AnsweredAt
 		}
@@ -843,7 +843,16 @@ func (s *Service) nativeCompleteMergedTask(ctx context.Context, run *Run) error 
 	run.Error = nil
 	s.note(run, "steer", "delivery", "completed", "native task delivered after verified PR merge", receipt.Delivery.PRURL, map[string]any{"merge_commit": receipt.Delivery.MergeCommit, "graph_revision": receipt.GraphRevision})
 	s.closeActivity(run)
-	return s.save()
+	if err := s.save(); err != nil {
+		return err
+	}
+	if run.Protocol == string(ProtocolOrcaTerminalV2) {
+		if err := s.finishNativeOrcaCleanup(ctx, run); err != nil {
+			run.LastEvent = ptr("Orca delivery completed; owned terminal cleanup needs reconciliation: " + err.Error())
+			return s.save()
+		}
+	}
+	return nil
 }
 
 func (s *Service) pollNativePRs(ctx context.Context, onlyRunID string) error {

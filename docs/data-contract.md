@@ -20,13 +20,13 @@ TaskContract 固定目标仓库、remote、base 分支以及 Spec、Plan 和其�
 
 Task 的 `discarded` 是独立终态，不伪装成 Decision 或完成。连接、进程、回执不明和清理待办保存在 Operation、Execution 与事件中，不增设第二套可写主阶段。
 
-Execution 绑定后端目标、工作区、分支、base、原生 Codex thread ID、当前／待开始／已停下 turn ID、独立的 Command ID、app-server 进程代次及 turn 序号。反馈只推进 turn 和消息身份，不替换 Execution、worker attempt 或会话。本地协议为 `local_codex_app_server_v1`。本次仅 local Codex 路径开放派发；Orca 本机与受监管远端代码保留，均在首次派发前拒绝。
+Execution 绑定后端目标、工作区、分支、base、当前／待开始／已停下 turn ID、独立的 Command ID 及 turn 序号。local Codex 的附加身份为原生 thread ID 和 app-server 进程代次，协议为 `local_codex_app_server_v1`。本机 Orca 的附加身份为原生 agent terminal/incarnation、coordinator、Run 和每轮 Task/Dispatch，协议为 `orca_terminal_v2`；agent 由 Orca 按 Profile ID 启动。反馈只推进 turn 和消息身份，不替换 Execution、worker attempt 或会话。受监管远端仍未接入 worker-flow。
 
 ## 工作区与消息
 
-初始工作区在外部创建前保存固定意图。当前 local 路径使用固定 Git worktree 和原生 Codex session；重启核对原身份，不能按同名标题或路径推断替代会话。工作开始后，中心不会因反馈、dirty 文件、项目检查结果或 PR 出现而 reset、清理或改写 worker 的提交。
+初始工作区在外部创建前保存固定意图。local 路径使用固定 Git worktree 和原生 Codex session；本机 Orca 路径由 Orca 创建 worktree 和 agent terminal，再以新 Task/Dispatch 延续同一 terminal。重启核对原身份，不能按同名标题或路径推断替代会话。工作开始后，中心不会因反馈、dirty 文件、项目检查结果或 PR 出现而 reset、清理或改写 worker 的提交。
 
-每次反馈有固定 Command ID 和 Operation。答案先在 SQLite 保存。运行中问题用原 app-server 工具请求 ID 回复，结束后反馈在原 thread 调用 `turn/start`；两者分别记录发送回执与匹配的原生工具结果／turn 事件。本地通知写入每轮 `appserver.jsonl`，完整正文由原生会话历史补读。回执不明时不更换 ID 重发。Orca 的实验性分块转运代码保留，但不属于本次可派发协议。详见 [决策与反馈](decisions.md)。
+每次反馈有固定 Command ID 和 Operation。答案先在 SQLite 保存。local 运行中问题用原 app-server 工具请求 ID 回复，结束后反馈在原 thread 调用 `turn/start`；本机 Orca 运行中问题按原 message ID `reply`，活动补充向原 Dispatch `send`，结算后反馈在原 terminal 上创建新 Task/Dispatch。平台接受回执不等于 agent 已处理。local 通知写入每轮 `appserver.jsonl`，完整正文由原生会话历史补读；Orca 输出按 worker-read 的 source、cursor 和 clipping 展示。回执不明时不更换 ID 重发。详见 [决策与反馈](decisions.md)。
 
 人工模式允许不同 Task 分别领取；自动模式仍一次占用一个活动执行。暂停派发只限制新领取，不中断当前 worker、待决策反馈或 PR 核验。
 

@@ -462,8 +462,11 @@ func (c *Config) preflightNative(ctx context.Context) error {
 	if err := validateExecutionProfiles(*c); err != nil {
 		return err
 	}
-	if c.WorkflowProtocol == WorkerFlowVersion && c.hostName() != "local" {
-		return &BackendError{Code: BackendUnsupported, Diagnostic: "only local Codex worker-flow is delivered; Orca targets are deferred"}
+	if c.WorkflowProtocol == WorkerFlowVersion && c.hostName() != "local" && c.hostName() != "orca" {
+		return &BackendError{Code: BackendUnsupported, Diagnostic: "this worker-flow host is not supported"}
+	}
+	if c.WorkflowProtocol == WorkerFlowVersion && c.hostName() == "orca" && (c.Model != "" || c.ReasoningEffort != "" || c.Profile != "" || c.Sandbox != "workspace-write") {
+		return &BackendError{Code: BackendUnsupported, Diagnostic: "Orca starts the selected agent with its own settings; model, effort, Codex profile and sandbox overrides are unavailable"}
 	}
 	if c.hostName() == "local" && c.agentName() != "codex" {
 		return errors.New("local_process currently supports only agent=codex")

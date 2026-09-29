@@ -195,23 +195,23 @@ type DecisionRequest struct {
 	Recommended   string           `json:"recommended,omitempty"`
 	AllowFreeText bool             `json:"allow_free_text,omitempty"`
 	NativeAsk     *codexAskCall    `json:"native_ask,omitempty"`
+	OrcaAsk       *orcaAskCall     `json:"orca_ask,omitempty"`
 }
 
 // DecisionState is the runtime projection of one decision. SQLite owns the
 // accepted request and answer; callers submit answers through CommandService.
 type DecisionState struct {
-	ID                 string              `json:"id"`
-	ExternalQuestionID string              `json:"external_question_id,omitempty"`
-	AttemptID          string              `json:"attempt_id,omitempty"`
-	Version            uint64              `json:"version"`
-	Request            DecisionRequest     `json:"request"`
-	Status             string              `json:"status"`
-	OptionID           string              `json:"option_id,omitempty"`
-	Note               string              `json:"note,omitempty"`
-	Answers            map[string][]string `json:"answers,omitempty"`
-	AnsweredBy         string              `json:"answered_by,omitempty"`
-	AnsweredAt         *time.Time          `json:"answered_at,omitempty"`
-	AppliedAt          *time.Time          `json:"applied_at,omitempty"`
+	ID         string              `json:"id"`
+	AttemptID  string              `json:"attempt_id,omitempty"`
+	Version    uint64              `json:"version"`
+	Request    DecisionRequest     `json:"request"`
+	Status     string              `json:"status"`
+	OptionID   string              `json:"option_id,omitempty"`
+	Note       string              `json:"note,omitempty"`
+	Answers    map[string][]string `json:"answers,omitempty"`
+	AnsweredBy string              `json:"answered_by,omitempty"`
+	AnsweredAt *time.Time          `json:"answered_at,omitempty"`
+	AppliedAt  *time.Time          `json:"applied_at,omitempty"`
 	// Decoded only to reject projections written by the old sidecar-answer
 	// implementation. These paths are never read as answer authority.
 	RequestPath string `json:"request_path,omitempty"`

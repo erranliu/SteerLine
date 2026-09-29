@@ -40,6 +40,12 @@ func validateDecisionRequest(req *DecisionRequest) error {
 			return errors.New("native decision lacks its fixed app-server request binding")
 		}
 	}
+	if req.OrcaAsk != nil {
+		ask := req.OrcaAsk
+		if req.NativeAsk != nil || ask.RunID == "" || ask.TaskID == "" || ask.DispatchID == "" || ask.MessageID == "" || len(ask.Questions) != 1 || ask.Questions[0].ID != ask.MessageID {
+			return errors.New("Orca decision lacks its original Run, Task, Dispatch or question binding")
+		}
+	}
 	if len([]rune(req.Question)) > 2000 || len([]rune(req.Context)) > 8000 {
 		return errors.New("decision question or context exceeds its protocol length limit")
 	}
@@ -119,11 +125,11 @@ func validateDecisionAnswer(req *DecisionRequest, a *DecisionAnswer) error {
 	if len([]rune(a.AnsweredBy)) > 200 {
 		return errors.New("answered_by exceeds the 200 character protocol limit")
 	}
-	if req.NativeAsk != nil {
-		if len(a.Answers) != len(req.NativeAsk.Questions) {
+	if questions := nativeDecisionQuestions(req); len(questions) > 0 {
+		if len(a.Answers) != len(questions) {
 			return errors.New("native answer must include every question ID")
 		}
-		for _, q := range req.NativeAsk.Questions {
+		for _, q := range questions {
 			values, ok := a.Answers[q.ID]
 			if !ok || len(values) == 0 || len(values) > 2 {
 				return fmt.Errorf("native answer for %q is missing or too long", q.ID)
@@ -169,9 +175,10 @@ func validateDecisionAnswer(req *DecisionRequest, a *DecisionAnswer) error {
 }
 
 func normalizeNativeDecisionAnswer(req *DecisionRequest, answer *DecisionAnswer) error {
-	if req == nil || req.NativeAsk == nil || answer == nil {
+	if req == nil || len(nativeDecisionQuestions(req)) == 0 || answer == nil {
 		return errors.New("native answer has no fixed question")
 	}
+	questions := nativeDecisionQuestions(req)
 	if len(answer.Answers) != 0 {
 		return validateDecisionAnswer(req, answer)
 	}
@@ -182,8 +189,8 @@ func normalizeNativeDecisionAnswer(req *DecisionRequest, answer *DecisionAnswer)
 			return fmt.Errorf("native multi-question answer must be JSON keyed by question ID: %w", err)
 		}
 		answer.Answers = values
-	} else if len(req.NativeAsk.Questions) == 1 {
-		q := req.NativeAsk.Questions[0]
+	} else if len(questions) == 1 {
+		q := questions[0]
 		values := []string{}
 		if answer.OptionID != "" {
 			for _, option := range q.Options {
@@ -204,6 +211,19 @@ func normalizeNativeDecisionAnswer(req *DecisionRequest, answer *DecisionAnswer)
 		return errors.New("answer all native questions using -note JSON, keyed by question ID")
 	}
 	return validateDecisionAnswer(req, answer)
+}
+
+func nativeDecisionQuestions(req *DecisionRequest) []nativeAskQuestion {
+	if req == nil {
+		return nil
+	}
+	if req.NativeAsk != nil {
+		return req.NativeAsk.Questions
+	}
+	if req.OrcaAsk != nil {
+		return req.OrcaAsk.Questions
+	}
+	return nil
 }
 
 // ReadDecisionAnswer returns the answer already committed to the current
@@ -275,7 +295,7 @@ func SubmitAnswerDecision(ctx context.Context, c Config, runID, decisionID, opti
 		requestedBy = answererName()
 	}
 	answer := DecisionAnswer{DecisionID: decisionID, RunID: run.RunID, OptionID: strings.TrimSpace(optionID), Note: note, AnsweredBy: requestedBy, ExpectedDecisionVersion: expectedDecisionVersion, ExpectedRunRevision: expectedRunRevision, ServiceInstanceID: expectedInstance}
-	if run.Decision != nil && run.Decision.ID == decisionID && run.Decision.Request.NativeAsk != nil {
+	if run.Decision != nil && run.Decision.ID == decisionID && len(nativeDecisionQuestions(&run.Decision.Request)) > 0 {
 		if err := normalizeNativeDecisionAnswer(&run.Decision.Request, &answer); err != nil {
 			return CommandRecord{}, false, err
 		}

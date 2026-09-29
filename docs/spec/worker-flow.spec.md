@@ -76,7 +76,7 @@ SteerLine 围绕同一 worker 会话管理任务的启动、观察、用户反�
 
 本次仅交付 local Codex 执行路径的开始、观察、向原会话发送消息和重接语义。Orca 本机与受监管远端的已有适配代码和平台证据保留，中心功能交付及验收均推迟；这两种目标在本次首次派发前明确拒绝，不能降级为每轮新 worker。后续交付时仍须实测所采用的平台原生接口；既有一次性步骤能力报告不构成持续会话能力证明。
 
-本机 Orca 的后续实施范围由[本机 Orca 原生编排 Spec](worker-flow-orca-native.spec.md)与[Plan](worker-flow-orca-native.plan.md)固定，平台实验已在该 Spec 记录。该补充尚待实施，不改变本文件对 #36 已交付范围的说明，也不解除受监管远端的延期边界。
+本机 Orca 的实施范围由[本机 Orca 原生编排 Spec](worker-flow-orca-native.spec.md)与[Plan](worker-flow-orca-native.plan.md)固定，平台连续对话、隔离 SQLite 回归和中心真机双轮探针已在该 Spec 记录；公共反馈入口、恢复故障与 PR 交付等验收仍待完成。该补充不改变本文件对 #36 已交付范围的说明，也不解除受监管远端的延期边界。
 
 ## 5. 用户反馈与统一待决策
 

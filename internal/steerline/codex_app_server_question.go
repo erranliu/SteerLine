@@ -9,13 +9,15 @@ import (
 
 const codexAskToolName = "steerline_ask"
 
-type codexAskQuestion struct {
+type nativeAskQuestion struct {
 	ID            string           `json:"id"`
 	Header        string           `json:"header"`
 	Question      string           `json:"question"`
 	Options       []DecisionOption `json:"options"`
 	AllowFreeText bool             `json:"allow_free_text"`
 }
+
+type codexAskQuestion = nativeAskQuestion
 
 type codexAskCall struct {
 	RequestID  json.RawMessage    `json:"request_id"`

@@ -199,6 +199,7 @@ type OrcaNativeTurn struct {
 	OutputComplete       bool     `json:"output_complete,omitempty"`
 	OutputClipping       []string `json:"output_clipping,omitempty"`
 	OutputFallbackReason string   `json:"output_fallback_reason,omitempty"`
+	OutputDigest         string   `json:"output_digest,omitempty"`
 }
 
 type ExecutionTarget struct {

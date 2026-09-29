@@ -11,7 +11,28 @@ import (
 )
 
 func (s *Service) resumeConfiguredWork(ctx context.Context) error {
-	return s.resumeWorkerFlow(ctx)
+	if err := s.resumeWorkerFlow(ctx); err != nil {
+		return err
+	}
+	for _, run := range s.State.Runs {
+		if run == nil || run.WorkflowVersion != WorkerFlowVersion || run.Protocol != string(ProtocolOrcaTerminalV2) {
+			continue
+		}
+		workflow, execution := s.workflowRecords(run)
+		if workflow == nil || execution == nil || workflow.Phase != "completed" || execution.OrcaNative == nil {
+			continue
+		}
+		if err := s.useFixedRunProfile(run); err != nil {
+			return err
+		}
+		if err := s.finishNativeOrcaCleanup(ctx, run); err != nil {
+			run.LastEvent = ptr("Orca delivery completed; owned terminal cleanup needs reconciliation: " + err.Error())
+			if saveErr := s.save(); saveErr != nil {
+				return saveErr
+			}
+		}
+	}
+	return nil
 }
 
 func (s *Service) resumeWorkerFlow(ctx context.Context) error {
@@ -58,6 +79,29 @@ func (s *Service) resumeWorkerFlow(ctx context.Context) error {
 				if err := s.prepareNativeOrcaCoordinator(ctx, run, execution); err != nil {
 					return s.nativeOrcaUncertain(run, "Original Orca Run needs reconciliation: "+err.Error())
 				}
+			}
+			if execution.PendingTurnID != "" {
+				turnID := execution.PendingTurnID
+				op := s.nativeOrcaOperation("worker-turn:" + execution.ExecutionID + ":" + turnID)
+				if op == nil {
+					return s.nativeOrcaUncertain(run, "Original Orca turn has no saved input intent")
+				}
+				var input struct {
+					Prompt string `json:"prompt"`
+				}
+				if json.Unmarshal(op.Request, &input) != nil || input.Prompt == "" {
+					return s.nativeOrcaUncertain(run, "Original Orca turn input cannot be restored")
+				}
+				if err := s.startNativeOrcaTurn(ctx, run, execution, turnID, input.Prompt); err != nil {
+					return s.nativeOrcaUncertain(run, "Original Orca Task/Dispatch needs reconciliation: "+err.Error())
+				}
+				turn := nativeOrcaCurrentTurn(execution)
+				if turn != nil && turn.DispatchID != "" && op.Status != "accepted" && op.Status != "confirmed" {
+					if err := s.changeOperation(op.OperationID, "accepted", turn.DispatchRequestID, mustJSON(*turn), ""); err != nil {
+						return err
+					}
+				}
+				return s.pollNativeOrcaWorker(ctx, run)
 			}
 			if nativeOrcaCurrentTurn(execution) == nil && workflow.Phase == "queued" {
 				return s.startInitialWorkerFlowTurn(ctx, *task, run)

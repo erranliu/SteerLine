@@ -1,8 +1,9 @@
 # Worker-flow validation status
 
-Date: 2026-09-29. The implementation PR is ready for review for **local Codex
-only**. Orca local and remote code and probes are retained but not delivered;
-dispatch rejects both before claim. No SteerLine production service or Task
+Date: 2026-09-29. The table below records the original local Codex delivery
+status. Local Codex app-server native ask was subsequently merged in PR #126.
+The current Orca native implementation is tracked in the addendum below; the
+supervised remote path remains deferred. No SteerLine production service or Task
 database was switched to the new format.
 
 | Requirement | Current evidence | Status |
@@ -27,3 +28,14 @@ passed `go test ./... -count=1 -timeout=45m -p 1 -parallel 1`, `go vet ./...`,
 Windows `go build ./...` and Linux `GOOS=linux GOARCH=amd64 go build ./...`.
 The real operator merge/DAG chain remains a pre-release acceptance item.
 Do not report all WF1–WF12 as passed.
+
+## Local Orca native addendum
+
+The [implementation evidence](orca-native-implementation-2026-09-29.json) and
+[real center probe](orca-native-center-live-2026-09-29.json) confirm native Orca
+ask/reply, SteerLine restart, two settled Task/Dispatch turns, and remembered
+context on the original terminal/incarnation. SQLite fake-provider regression
+also reconciles a lost Dispatch receipt without a duplicate injection. Public
+UI/CLI answer submission, the broader receipt-loss matrix, Orca-specific PR
+provider/merge delivery, and a second real agent remain unverified. This
+addendum does not turn those items into completed ON1–ON11 acceptance.

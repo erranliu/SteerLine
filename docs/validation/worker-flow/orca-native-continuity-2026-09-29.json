@@ -1,0 +1,35 @@
+{
+  "date": "2026-09-29",
+  "scope": "Isolated local Orca low-level native Dispatch continuation; not yet a SteerLine center end-to-end test",
+  "orca_version": "1.4.210",
+  "codex_version": "0.159.0",
+  "repository": "C:/project/SteerlineTest",
+  "run_id": "run_98af46ed9373",
+  "worktree": "sl-continuity-20260929",
+  "agent_terminal": "term_54d65e81-4462-45e5-9436-ec9135fbbec2",
+  "agent_incarnation": "c08570e7-50e6-45b5-a9d5-47c95e736ef8",
+  "coordinator_terminal": "term_d92dfd7e-a546-44a1-859e-81616ef96110",
+  "first_turn": {
+    "task": "task_5ae008cbd60b",
+    "dispatch": "ctx_13ae58eafa9d",
+    "initial_inject": "inject_rejected/no_agent_detected; no Dispatch was created",
+    "retry": "same terminal accepted native preamble and Task",
+    "done_message": "msg_338a3be1bb41",
+    "done_body": "FIRST_DONE MAPLE-732",
+    "settlement": "completed/succeeded",
+    "delivery_ack": "delivery_c2b313d52c8d"
+  },
+  "second_turn": {
+    "task": "task_51dfa7bff97d",
+    "dispatch": "ctx_418bb606c0c1",
+    "task_omitted_private_token": true,
+    "inject": "accepted on the same handle and incarnation after first worker_done settlement",
+    "done_message": "msg_c6b256417cfc",
+    "done_body": "SECOND_DONE MAPLE-732",
+    "settlement": "completed/succeeded",
+    "delivery_ack": "delivery_99faede1dd76"
+  },
+  "conclusion": "The Orca agent-first native path can continue the same Codex conversation after worker_done using a new Task/Dispatch. A previous isolated run had second-turn no_agent_detected, so this success establishes feasibility but not reliability or a center implementation pass.",
+  "coordinator_recovery_marker_probe": "A separate terminal create --shell cmd.exe --command 'echo SLCOORD:probe123' returned term_969ac773-59b0-438a-804a-fe96ced0aee4. Raw terminal read contained the marker even though shell hooks overwrote terminal show.title. The exact probe terminal was closed.",
+  "cleanup": "Both exact continuity terminal handles were closed after the second Dispatch settled. The test worktree had no tracked or untracked changes; worktree rm lost its response, then Orca worktree show returned selector_not_found and Git worktree list omitted it. An empty residual directory remained."
+}

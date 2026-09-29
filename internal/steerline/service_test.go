@@ -333,6 +333,8 @@ func fakeMain(args []string) int {
 		return fakeOrca(args[1], args[2:])
 	case "orca-supervised":
 		return fakeSupervisedOrca(args[1:])
+	case "orca-native":
+		return fakeNativeOrca(args[1], args[2:])
 	case "publish-control":
 		if len(args) != 3 {
 			return 2
