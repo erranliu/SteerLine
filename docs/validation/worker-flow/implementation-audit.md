@@ -19,13 +19,14 @@ pre-implementation audit, not WF1–WF12 acceptance evidence.
 
 | Target | Installed interface evidence | Still to prove |
 | --- | --- | --- |
-| Windows local | `codex-cli 0.157.1`; [read-only probe](local-session-probe.json) records two `codex exec --json` turns with the same native session UUID and separate processes. | Three feedback rounds through SteerLine, durable send intent and exact-session recovery after service restart. |
-| Orca local | `orca 1.4.209`; `orca terminal create` can launch an agent in a worktree, and `terminal send` returns an accepted request ID and `turn_started` stage. | Same terminal/agent identity across turns, output completion and reattachment after host restart. |
-| Orca supervised remote | Existing `StartMinimalStep` makes a per-step Task/Dispatch and `settleSupervisedStepResources` releases it after a result. | A remote original-session route with durable send/observe/reconnect; the existing five-step capability report does not prove it. |
+| Windows local | `codex-cli 0.157.1`; [read-only probe](local-session-probe.json) records two `codex exec --json` turns with the same native session UUID and separate processes. A [host probe](windows-local-host-probe.json) found the current Job Object also contains a WMI-launched child. | An independently supervised launcher, three feedback rounds through SteerLine, durable send intent and exact-session recovery after service restart. |
+| Orca local | `orca 1.4.209`; [isolated probe](orca-local-session-probe.json) records one terminal incarnation and native Codex session across the initial prompt and three accepted feedback turns, including a multiline option plus note. | SteerLine-owned send/observe/reconnect, host restart and full delivery. |
+| Orca supervised remote | Existing `StartMinimalStep` makes a per-step Task/Dispatch and `settleSupervisedStepResources` releases it after a result. An [authenticated remote probe](orca-remote-session-probe.json) shows one Orca terminal incarnation and native Codex session across an initial prompt and three feedback turns, including option plus note. | SteerLine-owned durable remote send/observe/reconnect and full delivery; the old five-step report does not prove these. |
 
 The local probe proves one same-session CLI continuation, not center delivery.
-Orca CLI help proves interface availability only. Neither constitutes WF12
-evidence. Do not switch production configuration or rewrite the 308 project's
+The Orca local and remote probes prove three same-session platform sends each,
+not center delivery. None constitutes WF12 evidence. Do not switch production
+configuration or rewrite the 308 project's
 old 17/18/19 records on this basis.
 
 ## Integration overlap

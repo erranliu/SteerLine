@@ -99,3 +99,15 @@ func TestWorkerFlowDeliveryGateUsesSessionAndPRWithoutStepResults(t *testing.T) 
 		t.Fatal("accepted delivery without a bound worker session")
 	}
 }
+
+func TestWorkerFeedbackKeepsOptionAndAdditionalText(t *testing.T) {
+	request := DecisionRequest{Options: []DecisionOption{{ID: "continue", Label: "Continue current work"}}, AllowFreeText: true}
+	answer := DecisionAnswer{OptionID: "continue", Note: "Keep the partially committed changes and fix the compiler error."}
+	message := workerFeedbackText(answer, request)
+	if message != "Selected option: Continue current work\n\nAdditional instructions:\nKeep the partially committed changes and fix the compiler error." {
+		t.Fatalf("feedback lost the option or note: %q", message)
+	}
+	if text := workerFeedbackText(DecisionAnswer{Note: "Pure text"}, request); text != "Pure text" {
+		t.Fatalf("pure text feedback changed: %q", text)
+	}
+}

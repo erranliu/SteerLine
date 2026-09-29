@@ -37,6 +37,7 @@ type Config struct {
 	Claimant                string               `json:"claimant"`
 	Git                     Command              `json:"git"`
 	Codex                   Command              `json:"codex"`
+	WorkflowProtocol        string               `json:"workflow_protocol,omitempty"`
 	WorkflowDefinition      *WorkflowDefinition  `json:"workflow_definition,omitempty"`
 	ProjectSteps            *ProjectSteps        `json:"project_steps,omitempty"`
 	WorkspaceDirtyIgnore    WorkspaceDirtyIgnore `json:"workspace_dirty_ignore,omitempty"`
@@ -238,7 +239,7 @@ func LoadConfig(path string) (Config, error) {
 	}
 	var configFields map[string]json.RawMessage
 	_ = json.Unmarshal(b, &configFields)
-	if c.WorkflowDefinition != nil {
+	if c.WorkflowDefinition != nil || c.WorkflowProtocol == WorkerFlowVersion {
 		if _, explicit := configFields["host"]; !explicit {
 			c.Host = "local"
 		}
@@ -388,6 +389,15 @@ func validateSupervisedOrcaConfig(c *Config) error {
 }
 
 func validateWorkflowConfig(c *Config, raw []byte) error {
+	if c.WorkflowProtocol == WorkerFlowVersion {
+		if c.WorkflowDefinition != nil || c.ProjectSteps != nil || !c.WorkspaceDirtyIgnore.empty() {
+			return errors.New("worker-flow-v1 does not accept workflow_definition, project_steps or workspace_dirty_ignore")
+		}
+		return nil
+	}
+	if c.WorkflowProtocol != "" && c.WorkflowProtocol != MinimalWorkflowVersion {
+		return fmt.Errorf("unsupported workflow_protocol %q", c.WorkflowProtocol)
+	}
 	if c.WorkflowDefinition == nil && c.ProjectSteps == nil {
 		return nil
 	}
@@ -517,10 +527,12 @@ func (c *Config) preflightNative(ctx context.Context, checkSteps bool) error {
 	commands := []*Command{&c.Git}
 	var workflow *MinimalWorkflowConfig
 	var err error
-	if checkSteps {
-		workflow, err = c.validateNativeWorkflow()
-	} else {
-		workflow, err = c.minimalConfig()
+	if c.WorkflowProtocol != WorkerFlowVersion {
+		if checkSteps {
+			workflow, err = c.validateNativeWorkflow()
+		} else {
+			workflow, err = c.minimalConfig()
+		}
 	}
 	if err != nil {
 		return err
@@ -613,6 +625,12 @@ func (c *Config) preflightNative(ctx context.Context, checkSteps bool) error {
 	} else if err = ensureNativeStateClean(c.RunDir, c.Repository); err != nil {
 		return err
 	}
+	if c.WorkflowProtocol == WorkerFlowVersion {
+		if c.PR.Kind == "gitea" {
+			return (&PRClient{Config: c.PR, Runner: git}).Check(ctx)
+		}
+		return nil
+	}
 	if !checkSteps {
 		return nil
 	}
@@ -670,7 +688,7 @@ func validateNativeRuntimeBinding(c Config) error {
 	if err != nil {
 		return nativeErr("unsupported_schema", "native runtime projection cannot be read")
 	}
-	if runtime.SchemaVersion != CurrentRuntimeSchema || canonical(runtime.Repository.Identity) != canonical(c.identity) || canonical(runtime.Repository.Path) != canonical(c.Repository) || runtime.Repository.Remote != c.Remote || runtime.Repository.Branch != c.Branch {
+	if runtime.SchemaVersion != runtimeSchemaFor(c) || canonical(runtime.Repository.Identity) != canonical(c.identity) || canonical(runtime.Repository.Path) != canonical(c.Repository) || runtime.Repository.Remote != c.Remote || runtime.Repository.Branch != c.Branch {
 		return nativeErr("authority_mismatch", "native runtime projection does not match the configured repository authority")
 	}
 	return nil

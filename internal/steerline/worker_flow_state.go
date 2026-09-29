@@ -28,6 +28,9 @@ func BeginWorkerTurn(workflow *WorkflowRunRecord, execution *ExecutionRecord, se
 	if sessionID == "" || turnID == "" {
 		return errors.New("worker turn start lacks native session or turn identity")
 	}
+	if execution.PendingTurnID != "" && execution.PendingTurnID != turnID {
+		return errors.New("worker turn start differs from the persisted send intent")
+	}
 	if execution.SessionID != "" && execution.SessionID != sessionID {
 		return errors.New("worker session replacement is not an ordinary continuation")
 	}
@@ -46,6 +49,7 @@ func BeginWorkerTurn(workflow *WorkflowRunRecord, execution *ExecutionRecord, se
 		return fmt.Errorf("worker turn cannot start from %s", workflow.Phase)
 	}
 	execution.SessionID = sessionID
+	execution.PendingTurnID = ""
 	execution.CurrentTurnID = turnID
 	execution.TurnNumber++
 	execution.Status = "active"

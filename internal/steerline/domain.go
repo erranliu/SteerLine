@@ -166,6 +166,7 @@ type WorkflowRunRecord struct {
 	Branch               string                 `json:"branch,omitempty"`
 	SelectedResult       string                 `json:"selected_result_id,omitempty"`
 	PRURL                string                 `json:"pr_url,omitempty"`
+	PRCandidateURL       string                 `json:"pr_candidate_url,omitempty"`
 	PRState              string                 `json:"pr_state,omitempty"`
 	PendingDecisions     int                    `json:"pending_decisions,omitempty"`
 	CreatedAt            time.Time              `json:"created_at"`
@@ -189,6 +190,7 @@ type ExecutionRecord struct {
 	Protocol              string            `json:"protocol,omitempty"`
 	Process               *ProcessIdentity  `json:"process,omitempty"`
 	SessionID             string            `json:"session_id,omitempty"`
+	PendingTurnID         string            `json:"pending_turn_id,omitempty"`
 	CurrentTurnID         string            `json:"current_turn_id,omitempty"`
 	TurnNumber            uint64            `json:"turn_number,omitempty"`
 	LastStoppedTurnID     string            `json:"last_stopped_turn_id,omitempty"`

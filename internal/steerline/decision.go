@@ -420,6 +420,15 @@ func DecisionReplyEligibility(ctx context.Context, c Config, run *Run) error {
 	if run == nil || run.Decision == nil || run.Decision.Status != "pending" {
 		return errors.New("decision is not pending on the current native run")
 	}
+	if run.WorkflowVersion == WorkerFlowVersion {
+		if !stableExecutionID(run.ExecutionID) || run.AttemptID == "" || run.Decision.AttemptID != run.AttemptID {
+			return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "feedback does not belong to the fixed worker execution"}
+		}
+		if run.SessionID != nil && !codexThreadID.MatchString(*run.SessionID) {
+			return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "saved worker session identity is invalid"}
+		}
+		return ctx.Err()
+	}
 	if run.WorkflowVersion != MinimalWorkflowVersion || !stableExecutionID(run.ExecutionID) || run.AttemptID == "" || run.Decision.AttemptID != run.AttemptID {
 		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "decision is not bound to a fixed native workflow, execution and attempt"}
 	}
@@ -461,6 +470,9 @@ func (s *Service) applyDecisions(ctx context.Context) error {
 		}
 		if blocked {
 			continue
+		}
+		if run.WorkflowVersion == WorkerFlowVersion {
+			return s.applyWorkerFlowDecision(ctx, run)
 		}
 		if run.WorkflowVersion != MinimalWorkflowVersion || !stableExecutionID(run.ExecutionID) || run.AttemptID == "" || run.Decision.AttemptID != run.AttemptID {
 			return nativeErr("unsupported_schema", "saved decision is not bound to a current minimal-v1 execution attempt")

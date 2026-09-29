@@ -51,6 +51,11 @@ func (p FixedExecutionProfile) Verify(steps ProjectSteps) bool {
 	return p.Digest != "" && p.Digest == rebuilt.Digest()
 }
 
+func (p FixedExecutionProfile) VerifyWorkerFlow() bool {
+	rebuilt := ExecutionProfile{ID: p.ID, Name: p.Name, Host: p.Host, Agent: p.Agent, Model: p.Model, ReasoningEffort: p.ReasoningEffort, Sandbox: p.Sandbox, CodexProfile: p.CodexProfile, Codex: p.Codex, Orca: p.Orca}
+	return p.Digest != "" && p.Digest == rebuilt.Digest()
+}
+
 func (c Config) ApplyFixedExecutionProfile(p FixedExecutionProfile, steps ProjectSteps) Config {
 	c.Host, c.Agent, c.Model, c.ReasoningEffort = p.Host, p.Agent, p.Model, p.ReasoningEffort
 	c.Sandbox, c.Profile, c.Codex, c.Orca = p.Sandbox, p.CodexProfile, p.Codex, p.Orca
@@ -153,8 +158,14 @@ func validateExecutionProfiles(c Config) error {
 		if p.ReasoningEffort != "" && !validReasoningEffort(p.ReasoningEffort) {
 			return fmt.Errorf("execution profile %s has invalid reasoning effort", p.ID)
 		}
-		if p.ProjectSteps == nil {
+		if c.WorkflowProtocol == WorkerFlowVersion && p.ProjectSteps != nil {
+			return fmt.Errorf("execution profile %s cannot configure project_steps in worker-flow-v1", p.ID)
+		}
+		if c.WorkflowProtocol != WorkerFlowVersion && p.ProjectSteps == nil {
 			return fmt.Errorf("execution profile %s requires fixed project_steps", p.ID)
+		}
+		if c.WorkflowProtocol == WorkerFlowVersion && p.Agent != "codex" {
+			return fmt.Errorf("execution profile %s requires codex for a resumable worker session", p.ID)
 		}
 		selected := c.ApplyExecutionProfile(p.effective())
 		if p.Host == "orca_supervised" {
@@ -169,8 +180,10 @@ func validateExecutionProfiles(c Config) error {
 				return fmt.Errorf("execution profile %s has invalid Orca wait timeout", p.ID)
 			}
 		}
-		if _, err := selected.validateNativeWorkflow(); err != nil {
-			return fmt.Errorf("execution profile %s: %w", p.ID, err)
+		if c.WorkflowProtocol != WorkerFlowVersion {
+			if _, err := selected.validateNativeWorkflow(); err != nil {
+				return fmt.Errorf("execution profile %s: %w", p.ID, err)
+			}
 		}
 	}
 	if c.DefaultExecutionProfile != "" && !ids[c.DefaultExecutionProfile] {

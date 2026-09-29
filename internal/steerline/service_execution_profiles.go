@@ -58,13 +58,22 @@ func (s *Service) executionConfigForRun(run *Run) (Config, error) {
 			return base, nil
 		}
 		fixed := *workflow.ExecutionProfile
-		if fixed.ID == "" || !fixed.Verify(workflow.ProjectSteps) {
+		profileValid := fixed.Verify(workflow.ProjectSteps)
+		if workflow.WorkflowVersion == WorkerFlowVersion {
+			profileValid = fixed.VerifyWorkerFlow()
+		}
+		if fixed.ID == "" || !profileValid {
 			return Config{}, errors.New("fixed execution profile identity is incomplete")
 		}
 		if err := workflow.WorkspaceDirtyIgnore.validate(); err != nil {
 			return Config{}, err
 		}
 		config := base.ApplyFixedExecutionProfile(fixed, workflow.ProjectSteps)
+		if workflow.WorkflowVersion == WorkerFlowVersion {
+			config.WorkflowProtocol = WorkerFlowVersion
+			config.ProjectSteps = nil
+			config.WorkflowDefinition = nil
+		}
 		config.WorkspaceDirtyIgnore = workflow.WorkspaceDirtyIgnore
 		if fixed.Host == "orca_supervised" && run.Target.CoordinatorTerminal != "" {
 			if config.Orca.Supervised == nil {
@@ -74,8 +83,10 @@ func (s *Service) executionConfigForRun(run *Run) (Config, error) {
 			coordinator.CoordinatorTerminal = run.Target.CoordinatorTerminal
 			config.Orca.Supervised = &coordinator
 		}
-		if _, err := config.validateNativeWorkflow(); err != nil {
-			return Config{}, fmt.Errorf("fixed execution profile is invalid: %w", err)
+		if workflow.WorkflowVersion != WorkerFlowVersion {
+			if _, err := config.validateNativeWorkflow(); err != nil {
+				return Config{}, fmt.Errorf("fixed execution profile is invalid: %w", err)
+			}
 		}
 		backend, protocol, err := ExecutionBackendKind(fixed.Host)
 		if err != nil || run.Host != fixed.Host || run.Agent != fixed.Agent || run.Backend != string(backend) || run.Protocol != string(protocol) || run.Target.ID != targetFor(config).ID {

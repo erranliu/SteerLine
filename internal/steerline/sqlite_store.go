@@ -299,7 +299,7 @@ func validateNativeTaskStructure(ctx context.Context, tx *sql.Tx) error {
 		return err
 	}
 	err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM task_deliveries d JOIN project_task_authorities p ON p.project_identity=d.project_identity AND p.authority='native' JOIN tasks t ON t.project_identity=d.project_identity AND t.task_id=d.task_id WHERE t.status<>'closed' OR
-		(json_type(d.evidence,'$.existing_acceptance') IS NULL AND NOT EXISTS (SELECT 1 FROM workflow_runs w JOIN executions e ON e.project_identity=w.project_identity AND e.workflow_run_id=w.workflow_run_id WHERE w.project_identity=d.project_identity AND w.workflow_run_id=d.selected_workflow_run_id AND w.task_id=d.task_id AND w.phase='completed' AND e.execution_id=json_extract(w.payload,'$.selected_result_id') AND e.status='succeeded' AND e.current_step='completed')) OR
+		(json_type(d.evidence,'$.existing_acceptance') IS NULL AND NOT EXISTS (SELECT 1 FROM workflow_runs w JOIN executions e ON e.project_identity=w.project_identity AND e.workflow_run_id=w.workflow_run_id WHERE w.project_identity=d.project_identity AND w.workflow_run_id=d.selected_workflow_run_id AND w.task_id=d.task_id AND w.phase='completed' AND e.execution_id=json_extract(w.payload,'$.selected_result_id') AND ((e.status='succeeded' AND e.current_step='completed') OR (json_extract(w.payload,'$.workflow_version')='worker-flow-v1' AND json_extract(w.payload,'$.pr_url')=d.pr_url AND COALESCE(json_extract(e.payload,'$.session_id'),'')<>'' AND COALESCE(json_extract(e.payload,'$.workspace.branch'),'')<>'')))) OR
 		(json_type(d.evidence,'$.existing_acceptance') IS NOT NULL AND (json_type(d.evidence,'$.existing_acceptance')<>'object' OR NOT EXISTS (SELECT 1 FROM workflow_runs w JOIN executions e ON e.project_identity=w.project_identity AND e.workflow_run_id=w.workflow_run_id WHERE w.project_identity=d.project_identity AND w.workflow_run_id=d.selected_workflow_run_id AND w.task_id=d.task_id AND w.phase='blocked' AND e.status='failed' AND json_extract(e.payload,'$.process') IS NULL)))`).Scan(&invalidDeliveries)
 	if err != nil {
 		return err
@@ -524,15 +524,32 @@ func (t *sqliteTx) PutTaskDelivery(v TaskDeliveryRecord) error {
 		return err
 	}
 	if evidence.ExistingAcceptance == nil {
-		if run.Phase != "waiting_pr_merge" || run.SelectedResult == "" {
-			return nativeErr("stale_version", "delivery requires the selected workflow run awaiting PR merge")
-		}
-		var selected int
-		if err := t.tx.QueryRowContext(t.ctx, `SELECT COUNT(*) FROM executions WHERE project_identity=? AND workflow_run_id=? AND execution_id=? AND status='succeeded' AND current_step='waiting_pr_merge'`, v.ProjectIdentity, v.SelectedWorkflowRunID, run.SelectedResult).Scan(&selected); err != nil {
-			return err
-		}
-		if selected != 1 {
-			return nativeErr("contract_mismatch", "delivery has no selected successful execution")
+		if run.WorkflowVersion == WorkerFlowVersion {
+			if run.SelectedResult == "" || run.PRURL != v.PRURL || run.Phase != "executing" && run.Phase != "waiting_decision" && run.Phase != "waiting_pr_merge" {
+				return nativeErr("stale_version", "delivery requires the selected worker flow and its bound PR")
+			}
+			var executionPayload []byte
+			if err := t.tx.QueryRowContext(t.ctx, `SELECT payload FROM executions WHERE project_identity=? AND workflow_run_id=? AND execution_id=?`, v.ProjectIdentity, v.SelectedWorkflowRunID, run.SelectedResult).Scan(&executionPayload); err != nil {
+				return nativeErr("contract_mismatch", "delivery has no selected worker execution")
+			}
+			var execution ExecutionRecord
+			if err := json.Unmarshal(executionPayload, &execution); err != nil {
+				return err
+			}
+			if execution.SessionID == "" || execution.Workspace.Branch == "" {
+				return nativeErr("contract_mismatch", "delivery has no bound worker session or branch")
+			}
+		} else {
+			if run.Phase != "waiting_pr_merge" || run.SelectedResult == "" {
+				return nativeErr("stale_version", "delivery requires the selected workflow run awaiting PR merge")
+			}
+			var selected int
+			if err := t.tx.QueryRowContext(t.ctx, `SELECT COUNT(*) FROM executions WHERE project_identity=? AND workflow_run_id=? AND execution_id=? AND status='succeeded' AND current_step='waiting_pr_merge'`, v.ProjectIdentity, v.SelectedWorkflowRunID, run.SelectedResult).Scan(&selected); err != nil {
+				return err
+			}
+			if selected != 1 {
+				return nativeErr("contract_mismatch", "delivery has no selected successful execution")
+			}
 		}
 	} else {
 		graph, err := taskGraphSnapshotTx(t.ctx, t, v.ProjectIdentity)
@@ -1583,20 +1600,29 @@ func (s *SQLiteStore) SaveRuntime(ctx context.Context, runtime Runtime) (Runtime
 			return nativeErr("authority_mismatch", "runtime publication requires the native task authority")
 		}
 		runtime.Revision = revision + 1
-		if runtime.SchemaVersion != 5 {
-			return fmt.Errorf("unsupported runtime schema %d; only schema 5 is accepted", runtime.SchemaVersion)
+		if runtime.SchemaVersion != CurrentRuntimeSchema && runtime.SchemaVersion != WorkerFlowRuntimeSchema {
+			return fmt.Errorf("unsupported runtime schema %d", runtime.SchemaVersion)
 		}
 		runtime.Operations = runtimeOperations(runtime)
 		for _, run := range runtime.Runs {
 			if run == nil {
 				continue
 			}
-			reconcileNativeWaitingDecision(&runtime, run)
-			var err error
-			if run.WorkflowVersion != MinimalWorkflowVersion {
-				return nativeErr("unsupported_schema", "runtime contains a workflow format outside native minimal-v1; preserve it for manual recovery")
+			if runtime.SchemaVersion == CurrentRuntimeSchema {
+				reconcileNativeWaitingDecision(&runtime, run)
 			}
-			err = persistNormalizedWorkflow(tx, project, runtime, run)
+			var err error
+			if runtime.SchemaVersion == WorkerFlowRuntimeSchema {
+				if run.WorkflowVersion != WorkerFlowVersion {
+					return nativeErr("unsupported_schema", "runtime contains a workflow outside worker-flow-v1; preserve it for manual recovery")
+				}
+				err = persistWorkerFlow(tx, project, runtime, run)
+			} else {
+				if run.WorkflowVersion != MinimalWorkflowVersion {
+					return nativeErr("unsupported_schema", "runtime contains a workflow format outside native minimal-v1; preserve it for manual recovery")
+				}
+				err = persistNormalizedWorkflow(tx, project, runtime, run)
+			}
 			if err != nil {
 				return err
 			}

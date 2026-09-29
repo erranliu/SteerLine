@@ -184,7 +184,7 @@ func LoadRuntime(path string) (*Runtime, error) {
 	if e = decode(b, &v); e != nil {
 		return nil, fmt.Errorf("invalid runtime; preserve it for manual recovery: %w", e)
 	}
-	if v.SchemaVersion != 5 {
+	if v.SchemaVersion != CurrentRuntimeSchema && v.SchemaVersion != WorkerFlowRuntimeSchema {
 		return nil, fmt.Errorf("unsupported runtime schema %d", v.SchemaVersion)
 	}
 	return &v, nil
@@ -217,7 +217,7 @@ func LoadDatabaseRuntime(c Config) (*Runtime, error) {
 	if err = decode(payload, &state); err != nil {
 		return nil, err
 	}
-	if state.SchemaVersion != 5 || state.Repository.Identity != c.Identity() {
+	if state.SchemaVersion != runtimeSchemaFor(c) || state.Repository.Identity != c.Identity() {
 		return nil, errors.New("database runtime schema or repository identity mismatch")
 	}
 	return &state, nil

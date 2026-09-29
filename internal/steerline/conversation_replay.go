@@ -95,6 +95,16 @@ func (s *Service) conversationJournalSources() []conversationJournalSource {
 				add(attempt.EventPath, attempt.AttemptID)
 			}
 		}
+		if run.WorkflowVersion == WorkerFlowVersion {
+			turnRoot := filepath.Join(root, "turns")
+			if entries, err := os.ReadDir(turnRoot); err == nil && len(entries) <= 4096 {
+				for _, entry := range entries {
+					if entry.IsDir() && stableExecutionID(entry.Name()) {
+						add(filepath.Join(turnRoot, entry.Name(), "events.jsonl"), run.AttemptID)
+					}
+				}
+			}
+		}
 	}
 	return sources
 }
