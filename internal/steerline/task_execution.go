@@ -12,7 +12,7 @@ import (
 )
 
 // TaskClaimReceipt records reservation, not worker start. The existing
-// start_task applied receipt remains gated on a persisted worker identity.
+// A claim receipt records the task reservation, not a started worker.
 type TaskClaimReceipt struct {
 	RequestID        string `json:"request_id"`
 	TaskID           string `json:"task_id"`

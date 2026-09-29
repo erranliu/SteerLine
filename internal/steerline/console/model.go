@@ -1320,8 +1320,8 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			action.Status, action.Message, action.RunID = msg.receipt.Status, msg.receipt.Message, msg.receipt.RunID
-			action.Resolved = msg.receipt.Status == "applied" || msg.receipt.Status == "rejected" || msg.receipt.Status == "failed" || msg.receipt.Status == "indeterminate"
-			if msg.receipt.Status == "applied" {
+			action.Resolved = msg.receipt.Status == "accepted" || msg.receipt.Status == "applied" || msg.receipt.Status == "rejected" || msg.receipt.Status == "failed" || msg.receipt.Status == "indeterminate"
+			if msg.receipt.Status == "accepted" || msg.receipt.Status == "applied" {
 				refreshNow = true
 			}
 			if msg.receipt.InstanceID != action.TargetInstance {
@@ -1352,7 +1352,7 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			action.Status, action.Message = "indeterminate", "结果待确认；查询原 request_id："+msg.err.Error()
 			action.Resolved = false
 		}
-		if action.Status == "applied" || action.Status == "rejected" || action.Status == "failed" {
+		if action.Status == "accepted" || action.Status == "applied" || action.Status == "rejected" || action.Status == "failed" {
 			delete(state.view.Outstanding, msg.requestID)
 		}
 		if index == m.selected {
@@ -1466,19 +1466,28 @@ func (m Model) rows(index int) []consoleRow {
 				if runsByTask[candidate.TaskID] != nil {
 					continue
 				}
+				if native := nativeByID[candidate.TaskID]; native != nil && native.Status != "open" {
+					continue
+				}
 				row := consoleRow{key: "task:" + candidate.TaskID, kind: rowReady, taskID: candidate.TaskID, title: candidate.Title, candidate: candidate, native: nativeByID[candidate.TaskID]}
 				rows = append(rows, row)
 				seenTasks[candidate.TaskID] = true
 			}
 		}
 	}
-	if state.filter == 0 && state.snapshot.NativeTasks != nil {
+	if (state.filter == 0 || state.filter == 2) && state.snapshot.NativeTasks != nil {
 		for i := range state.snapshot.NativeTasks.Tasks {
 			detail := &state.snapshot.NativeTasks.Tasks[i]
+			if state.filter == 2 && detail.Status != "in_progress" {
+				continue
+			}
 			if seenTasks[detail.TaskID] {
 				continue
 			}
 			if run := runsByTask[detail.TaskID]; run != nil {
+				if !filterAllows(state.filter, rowRun, run) {
+					continue
+				}
 				appendRun(run)
 			} else {
 				rows = append(rows, consoleRow{key: "task:" + detail.TaskID, kind: rowNative, taskID: detail.TaskID, title: detail.Title, native: detail})
@@ -1486,7 +1495,7 @@ func (m Model) rows(index int) []consoleRow {
 			seenTasks[detail.TaskID] = true
 		}
 	}
-	if state.filter == 0 && state.snapshot.SelectedNative != nil && state.selectedKey == "task:"+state.snapshot.SelectedNative.TaskID && !seenTasks[state.snapshot.SelectedNative.TaskID] {
+	if state.snapshot.SelectedNative != nil && (state.filter == 0 || state.filter == 2 && state.snapshot.SelectedNative.Status == "in_progress") && state.selectedKey == "task:"+state.snapshot.SelectedNative.TaskID && !seenTasks[state.snapshot.SelectedNative.TaskID] {
 		detail := state.snapshot.SelectedNative
 		if run := runsByTask[detail.TaskID]; run != nil {
 			appendRun(run)
@@ -1765,7 +1774,7 @@ func appendBodyPage(values []int64, offset int64) []int64 {
 func savedActions(actions map[string]*actionState, limit int) map[string]SavedAction {
 	active, terminal := make([]*actionState, 0), make([]*actionState, 0)
 	for _, action := range actions {
-		if action.Resolved || action.Status == "applied" || action.Status == "rejected" || action.Status == "failed" {
+		if action.Resolved || action.Status == "accepted" || action.Status == "applied" || action.Status == "rejected" || action.Status == "failed" {
 			terminal = append(terminal, action)
 		} else {
 			active = append(active, action)
@@ -2433,13 +2442,25 @@ func (m Model) startSelected() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	for _, action := range state.actions {
-		if action.TaskID == row.taskID && action.Status != "applied" && action.Status != "rejected" && action.Status != "failed" {
+		if action.TaskID == row.taskID && (!action.Resolved || action.Status == "accepted" && acceptedStartStillClaimed(*state, action)) {
 			m.status = "此视图已有该任务请求 · task " + row.taskID + " · request " + action.RequestID
 			return m, nil
 		}
 	}
 	m.profileChoice = &executionProfileChoice{projectKey: state.ref.Key, taskID: row.taskID, instance: runtimeState.Service.InstanceID, revision: runtimeState.Control.Revision}
 	return m, nil
+}
+
+func acceptedStartStillClaimed(state projectState, action *actionState) bool {
+	if state.snapshot.Domain == nil {
+		return true
+	}
+	for _, task := range state.snapshot.Domain.Tasks {
+		if task.TaskID == action.TaskID {
+			return task.Status != "open" || !task.UpdatedAt.After(action.UpdatedAt)
+		}
+	}
+	return true
 }
 
 func (m Model) toggleMode() (tea.Model, tea.Cmd) {
@@ -2667,7 +2688,7 @@ func (m Model) createActionWithProfile(action, taskID string, profile *steerline
 		return m, nil
 	}
 	for _, pending := range state.actions {
-		if pending.Action == action && !pending.Resolved && pending.Status != "applied" && pending.Status != "rejected" && pending.Status != "failed" {
+		if pending.Action == action && (action != "start_task" || pending.TaskID == taskID) && !pending.Resolved && pending.Status != "accepted" && pending.Status != "applied" && pending.Status != "rejected" && pending.Status != "failed" {
 			m.status = "此操作已有请求在跟踪 · request " + pending.RequestID
 			return m, nil
 		}

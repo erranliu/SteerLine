@@ -220,7 +220,7 @@ func readViewFile(path string) (ViewFile, error) {
 		}
 		for requestID, taskKey := range project.Outstanding {
 			action, exists := project.Actions[requestID]
-			if !savedRequestIDPattern.MatchString(requestID) || !exists || taskKey != "task:"+action.TaskID || action.Status == "applied" || action.Status == "rejected" || action.Status == "failed" {
+			if !savedRequestIDPattern.MatchString(requestID) || !exists || taskKey != "task:"+action.TaskID || action.Status == "accepted" || action.Status == "applied" || action.Status == "rejected" || action.Status == "failed" {
 				return ViewFile{}, errors.New("view preferences contain an invalid request identity")
 			}
 		}

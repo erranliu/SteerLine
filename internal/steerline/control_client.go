@@ -119,7 +119,7 @@ func SubmitControlTargeted(c Config, action string, payload any, requestedBy, re
 	if expectedInstance != "" && rt.Service.InstanceID != expectedInstance {
 		return ControlRequest{}, errors.New("stale_instance: service instance changed; refresh before submitting")
 	}
-	if expectedRevision != nil && action != "stop_service" && rt.Control.Revision != *expectedRevision {
+	if expectedRevision != nil && action != "stop_service" && action != "start_task" && rt.Control.Revision != *expectedRevision {
 		return ControlRequest{}, errors.New("stale_revision: control state changed; refresh before submitting")
 	}
 	return submitControlSnapshotWithID(c, rt, action, payload, requestedBy, requestID)

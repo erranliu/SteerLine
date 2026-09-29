@@ -10,7 +10,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"time"
 )
@@ -24,10 +23,14 @@ type stopAcceptance struct {
 }
 
 func (s *Service) writeReceipt(r ControlReceipt) error {
+	return writeControlReceipt(s.Config.RunDir, r)
+}
+
+func writeControlReceipt(runDir string, r ControlReceipt) error {
 	if !controlIDPattern.MatchString(r.RequestID) {
 		return errors.New("invalid receipt request ID")
 	}
-	path := controlReceiptPath(s.Config.RunDir, r.RequestID)
+	path := controlReceiptPath(runDir, r.RequestID)
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		return err
 	}
@@ -116,22 +119,7 @@ func rawRequestDigest(path string) string {
 }
 
 func (s *Service) controlDirectories() ([]string, error) {
-	root := filepath.Join(s.Config.RunDir, "control", "requests")
-	entries, err := os.ReadDir(root)
-	if os.IsNotExist(err) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	ids := make([]string, 0, len(entries))
-	for _, e := range entries {
-		if e.IsDir() && controlIDPattern.MatchString(e.Name()) {
-			ids = append(ids, e.Name())
-		}
-	}
-	sort.Strings(ids)
-	return ids, nil
+	return controlRequestIDs(s.Config.RunDir)
 }
 
 func (s *Service) nextControlRequest() (*ControlRequest, string, error) {
@@ -176,6 +164,9 @@ func (s *Service) nextControlRequest() (*ControlRequest, string, error) {
 				return nil, "", e
 			}
 			continue
+		}
+		if req.Action == "start_task" {
+			continue // The independent claim admission owns this request.
 		}
 		return &req, digest, nil
 	}

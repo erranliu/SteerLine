@@ -1719,6 +1719,15 @@ func (s *Service) run(ctx context.Context, dispatchMode string) (retErr error) {
 	if e := s.publishStartupReady(); e != nil {
 		return e
 	}
+	startAdmissionsDone := make(chan struct{})
+	go func() {
+		defer close(startAdmissionsDone)
+		runStartAdmissions(ctx, s.projectExecutionConfig(), s.domainStore, instanceID)
+	}()
+	defer func() {
+		cancel()
+		<-startAdmissionsDone
+	}()
 	if s.State.Control.Operation == nil {
 		if e := step(s.dispatch); e != nil {
 			return e

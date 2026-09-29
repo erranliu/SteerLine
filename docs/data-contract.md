@@ -65,7 +65,7 @@ TASK-DAG 更新后的协议样例见 [native-tasks-v1.sample.json](validation/ta
 
 `control.dispatch_mode` 为 `manual` 或 `auto`。native 项目从中心 `ProjectTaskAuthority` 读取模式、暂停位和 authority version；新项目为 manual/paused，`run -dispatch` 不覆盖中心设置。`dispatch_paused` 只阻止新派发，当前 worker、决策续跑和 PR 核验继续。native `control.revision` 显示中心 authority version；旧执行投影的 revision 按 service instance 隔离。心跳、日志和重复 PR 轮询不推进 authority version。`control.operation` 是服务主状态机正在执行或等待发布终态回执的 checkpoint。`control.blockers` 保留不确定的 claim/worktree/worker 等执行副作用，阻止新任务派发，直到后续人工恢复动作解除。
 
-控制 revision 按 service.instance_id 隔离，每个新实例从 1 开始；不占执行槽的其他 PR 完成不会使派发版本失效。run.control_revision 跨实例保存，并覆盖工作目录、base、进程身份等恢复证据的变化。自动派发、显式启动、在线 retry 与决策续跑共用执行守卫；决策续跑可以使用为待决策预留的槽，但不能绕过 unknown、控制 checkpoint 或 blocker。
+控制 revision 按 service.instance_id 隔离，每个新实例从 1 开始；不占执行槽的其他 PR 完成不会使派发版本失效。run.control_revision 跨实例保存，并覆盖工作目录、base、进程身份等恢复证据的变化。手动 `start_task` 请求绑定服务实例和固定方案，以任务版本、DAG 和中心 claim 事务独立仲裁，不因另一任务启动而失效；自动派发仍受单活动槽守卫。决策续跑不能绕过原执行的 unknown、checkpoint 或 blocker。
 
 ## 每项运行
 
@@ -141,7 +141,7 @@ tasks.json
 
 | action | payload | 条件与完成含义 |
 | --- | --- | --- |
-| `start_task` | `{"task_id":"..."}` | 仅 manual/未暂停/空槽；重新读取 ready 与详情后领取该任务，定向 worker 启动并身份落盘后为 applied |
+| `start_task` | `{"task_id":"...","execution_profile_id":"...","execution_profile_digest":"..."}` | 仅 manual/未暂停；请求先持久化，中心按任务版本与 DAG 领取，原子写入 Task/WorkflowRun/Execution/prepare Attempt 后返回 `accepted`。服务随后派发 prepare；另一任务的 worker 启动不阻塞本任务领取。领取前拒绝保持 Task 为 open，领取后不确定结果按原身份恢复。 |
 | `set_dispatch_mode` | `{"mode":"manual"}` 或 `{"mode":"auto"}` | 切换之后的新任务选择方式；不会自动解除暂停 |
 | `pause_dispatch` | 无 | 阻止自动领取和显式新启动，不暂停已有 worker、决策或 PR 查询 |
 | `resume_dispatch` | 无 | 解除暂停并按当前 manual/auto 模式继续 |
@@ -166,7 +166,7 @@ runtime 中的 `control.operation` 先于副作用保存；完成时把业务结
 
 原生 minimal-v1 的 `retry_run` 由当前服务创建中心 `retry_step` 事务。外层命令中断后，服务只根据固定旧 attempt 对应的中心回执与新 step attempt 判定是否已受理，不重放外层命令；计划中的步骤仍由步骤恢复流程对账。旧 `accept_result` 指令不再受理；未核实的原生 `start_task` blocker 保留并按中心 Operation/claim 核验。
 
-上表 `start_task` 对 native 项目通过 `ClaimNativeTask` 在中心事务中预留 Task claim、WorkflowRun、Execution、prepare Attempt、命令回执和 Operation；响应起初为 `claim_reserved` 且 `start_task_applied=false`。只有准备工作区并将当前 worker 身份持久化后，服务控制回执才报告 applied。native delivery 由 `CompleteNativeTask` 在事务外查询精确 PR，并在事务内重核 task version、所选运行、步骤门槛和整任务的 PR 发布绑定后写 TaskDelivery/closed；另一笔发布结果未知时，即使选用的 PR 已合并也不关闭任务。
+上表 `start_task` 对 native 项目通过 `ClaimNativeTask` 在中心事务中预留 Task claim、WorkflowRun、Execution、prepare Attempt、命令回执和 Operation；内部领取回执为 `claim_reserved` 且 `start_task_applied=false`，对控制台的 `accepted` 只证明领取，不证明 worker 已启动。服务从已保存的 planned prepare 继续启动；重启、领取回执丢失或请求重复时只按原 request ID 对账，不创建第二个 Run。native delivery 由 `CompleteNativeTask` 在事务外查询精确 PR，并在事务内重核 task version、所选运行、步骤门槛和整任务的 PR 发布绑定后写 TaskDelivery/closed；另一笔发布结果未知时，即使选用的 PR 已合并也不关闭 Task。
 
 终态回执暂时无法发布时，服务保留 completed checkpoint 并重试发布，继续监督已有 worker、响应停服；后续变更、决策续跑和 PR 结项先等待该 checkpoint 结算。runtime 自身持久化失败仍按既有规则停止服务。恢复时，缺失 applying 回执不能否认已保存的 run/领取证据；这种情况保留 indeterminate 与执行阻塞。完整历史请求只索引一次，既有终态回执不会因归档请求后来损坏而被重写。
 

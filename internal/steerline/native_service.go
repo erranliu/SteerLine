@@ -753,47 +753,72 @@ func (s *Service) dispatchNative(ctx context.Context) error {
 		if run == nil || workflow == nil || execution == nil || attempt == nil {
 			return nativeErr("inconsistent_delivery", "native claim reservation could not be reconstructed from center records")
 		}
-		intent, planErr := planWorkspace(s.Config, task.TaskID, workflow.WorkflowRunID, receipt.BaseCommit)
-		if planErr != nil {
-			return planErr
-		}
-		if execution.Target.WorktreeID != "" || execution.Target.Branch != s.Config.Branch {
-			return nativeErr("authority_mismatch", "claimed execution already has a conflicting workspace identity")
-		}
-		if s.Config.hostName() != "orca_supervised" {
-			execution.Target.WorktreeID = intent.Path
-			execution.Target.Branch = intent.Branch
-		}
-		execution.Status = "active"
-		if workflow.Phase == "queued" {
-			workflow.Phase = "executing"
-		}
-		execution.UpdatedAt = now()
-		workflow.UpdatedAt = now()
-		attempt.ExternalBinding = execution.Target
-		attempt.UpdatedAt = now()
-		run.WorkspaceIntent = intent
-		if s.Config.hostName() == "orca_supervised" {
-			run.WorktreePath, run.WorktreeBranch = nil, nil
-			run.BaseCommit = ptr(intent.BaseCommit)
-		} else {
-			run.WorktreePath, run.WorktreeBranch, run.BaseCommit = ptr(intent.Path), ptr(intent.Branch), ptr(intent.BaseCommit)
-		}
-		run.ExecutionStatus = "pending"
-		run.FinishTaskStatus = "pending"
-		s.State.SlotOccupied = true
-		s.State.CurrentTask = ptr(task.TaskID)
-		if err = s.save(); err != nil {
-			return err
-		}
 		s.lastDispatched = task.TaskID
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		return s.prepareMinimalExecution(ctx, task, run)
+		return s.startClaimedNativeTask(ctx, task, run)
 	}
 	if s.targetTask != "" {
 		return fmt.Errorf("%w: %s is not in the current ready native task set", errTaskNotReady, s.targetTask)
+	}
+	return nil
+}
+
+// startClaimedNativeTask resumes a durable, planned prepare after admission.
+// It is also used immediately after an automatic claim. External workspace
+// and worker creation only begins after the intent and step identity are saved.
+func (s *Service) startClaimedNativeTask(ctx context.Context, task TaskRecord, run *Run) error {
+	workflow, execution := s.minimalRecords(run)
+	attempt := s.minimalAttempt(run, run.AttemptID)
+	if workflow == nil || execution == nil || attempt == nil || attempt.StepID != "prepare" || attempt.Status != "planned" || workflow.Phase != "queued" {
+		return nativeErr("inconsistent_delivery", "claimed task has no planned prepare attempt")
+	}
+	base := execution.Workspace.Base
+	if base == "" {
+		base = execution.Target.BaseRevision
+	}
+	intent, err := planWorkspace(s.Config, task.TaskID, workflow.WorkflowRunID, base)
+	if err != nil {
+		return s.blockClaimedStart(run, workflow, execution, attempt, err)
+	}
+	if execution.Target.WorktreeID != "" || execution.Target.Branch != s.Config.Branch {
+		return s.blockClaimedStart(run, workflow, execution, attempt, nativeErr("authority_mismatch", "claimed execution already has a conflicting workspace identity"))
+	}
+	if s.Config.hostName() != "orca_supervised" {
+		execution.Target.WorktreeID = intent.Path
+		execution.Target.Branch = intent.Branch
+	}
+	execution.Status = "active"
+	workflow.Phase = "executing"
+	execution.UpdatedAt = now()
+	workflow.UpdatedAt = now()
+	attempt.ExternalBinding = execution.Target
+	attempt.UpdatedAt = now()
+	run.WorkspaceIntent = intent
+	if s.Config.hostName() == "orca_supervised" {
+		run.WorktreePath, run.WorktreeBranch = nil, nil
+		run.BaseCommit = ptr(intent.BaseCommit)
+	} else {
+		run.WorktreePath, run.WorktreeBranch, run.BaseCommit = ptr(intent.Path), ptr(intent.Branch), ptr(intent.BaseCommit)
+	}
+	run.ExecutionStatus, run.FinishTaskStatus = "pending", "pending"
+	s.State.SlotOccupied = true
+	s.State.CurrentTask = ptr(task.TaskID)
+	if err = s.save(); err != nil {
+		return err
+	}
+	if err = ctx.Err(); err != nil {
+		return err
+	}
+	return s.prepareMinimalExecution(ctx, task, run)
+}
+
+func (s *Service) blockClaimedStart(run *Run, workflow *WorkflowRunRecord, execution *ExecutionRecord, attempt *StepAttemptRecord, cause error) error {
+	if err := TransitionStepAttempt(attempt, "failed"); err != nil {
+		return err
+	}
+	if err := s.failMinimalStep(run, workflow, execution, attempt, cause, false); err != nil {
+		if _, settled := err.(*settledMinimalStepFailure); !settled {
+			return err
+		}
 	}
 	return nil
 }

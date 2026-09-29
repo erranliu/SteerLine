@@ -415,6 +415,45 @@ func TestEnterOnlyOpensDetailAndStartKeepsOneRequestID(t *testing.T) {
 	}
 }
 
+func TestDifferentReadyTasksCanKeepIndependentStartRequests(t *testing.T) {
+	now := time.Now().UTC()
+	ref := testProject("parallel-start")
+	snapshot := readySnapshot(ref, now)
+	snapshot.Tasks.Tasks = append(snapshot.Tasks.Tasks, steerline.TaskCandidate{TaskID: "task-C", Title: "Build C"})
+	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, &testControlClient{}, now)
+	m.profile = &viewProfile{dir: t.TempDir()}
+	start := func(taskID string) tea.Cmd {
+		t.Helper()
+		m.projects[0].selectedKey = "task:" + taskID
+		updated, cmd := m.Update(runeKey('s'))
+		m = updated.(Model)
+		if cmd != nil || m.profileChoice == nil {
+			t.Fatalf("task %s did not open its profile choice", taskID)
+		}
+		updated, cmd = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+		m = updated.(Model)
+		if cmd == nil {
+			t.Fatalf("task %s start was dropped while another start was pending: %s", taskID, m.status)
+		}
+		return cmd
+	}
+	first, second := start("task-B"), start("task-C")
+	if len(m.projects[0].actions) != 2 {
+		t.Fatalf("independent start requests were not persisted: %d", len(m.projects[0].actions))
+	}
+	rows := strings.Join(renderRows(m, m.projects[0], 90, 12), "\n")
+	if strings.Count(rows, "启动中") < 2 {
+		t.Fatalf("pending task starts were not visible: %q", rows)
+	}
+	for _, cmd := range []tea.Cmd{first, second} {
+		updated, _ := m.Update(cmd())
+		m = updated.(Model)
+	}
+	if m.control.(*testControlClient).calls != 2 {
+		t.Fatal("both immutable requests were not submitted")
+	}
+}
+
 func TestStartIsNotPublishedWhenRequestIdentityCannotBePersisted(t *testing.T) {
 	now := time.Now().UTC()
 	ref := testProject("alpha")
@@ -1354,17 +1393,17 @@ func TestLongTaskListKeepsSelectedRowInsideViewport(t *testing.T) {
 	}
 }
 
-func TestEmptyRunningFilterExplainsWhyNativeTasksAreHidden(t *testing.T) {
+func TestInProgressFilterKeepsClaimedTaskBeforeRunProjection(t *testing.T) {
 	now := time.Now().UTC()
 	ref := testProject("native")
 	snapshot := readySnapshot(ref, now)
 	snapshot.Tasks.Tasks = nil
-	snapshot.NativeTasks = &steerline.NativeTaskPage{Tasks: []steerline.NativeTaskDetail{{TaskRecord: steerline.TaskRecord{TaskID: "103", Title: "Waiting for merge", Status: "in_progress"}}}}
+	snapshot.NativeTasks = &steerline.NativeTaskPage{Tasks: []steerline.NativeTaskDetail{{TaskRecord: steerline.TaskRecord{TaskID: "103", Title: "Claimed before run projection", Status: "in_progress"}}}}
 	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, &testControlClient{}, now)
 	m.projects[0].filter = 2
-	empty := strings.Join(renderRows(m, m.projects[0], 80, 8), "\n")
-	if !strings.Contains(empty, "3 进行中") || !strings.Contains(empty, "1全部") || !strings.Contains(empty, "5待合并") || !strings.Contains(empty, "按 1 查看全部任务") || strings.Contains(empty, "当前没有 Ready 任务") {
-		t.Fatalf("empty filtered list implied the task data disappeared: %q", empty)
+	shown := strings.Join(renderRows(m, m.projects[0], 80, 8), "\n")
+	if !strings.Contains(shown, "3 进行中") || !strings.Contains(shown, "103") || !strings.Contains(shown, "Claimed before run projection") {
+		t.Fatalf("claimed task disappeared before the service projected its run: %q", shown)
 	}
 	if !strings.Contains(renderFooter(m, m.projects[0]), "1–7 筛选") || !strings.Contains(strings.Join(renderHelp(m.projects[0]), "\n"), "5 待合并") {
 		t.Fatal("the persistent footer and help omitted the filter shortcuts")

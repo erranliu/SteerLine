@@ -179,7 +179,7 @@ func validateControlRequest(req ControlRequest, instanceID, repositoryIdentity s
 	if strings.TrimSpace(req.RequestedBy) == "" {
 		return "invalid_request", errors.New("requested_by is required")
 	}
-	if req.Action != "stop_service" && req.ExpectedControlRevision != revision {
+	if req.Action != "stop_service" && req.Action != "start_task" && req.ExpectedControlRevision != revision {
 		return "stale_revision", errors.New("control state changed; refresh before retrying")
 	}
 	_, createdOffset := req.CreatedAt.Zone()
@@ -202,7 +202,7 @@ func validControlAction(action string) bool {
 
 func terminalControlStatus(status string) bool {
 	switch status {
-	case "applied", "rejected", "failed", "indeterminate":
+	case "accepted", "applied", "rejected", "failed", "indeterminate":
 		return true
 	}
 	return false

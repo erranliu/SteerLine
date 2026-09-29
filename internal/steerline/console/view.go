@@ -170,6 +170,15 @@ func renderStatusLine(m Model, state projectState) string {
 	}
 	ready, cached, running, decision, merge, attention := projectCounts(state, m.clock.Now())
 	parts := []string{"服务 " + service, "派发 " + mode, fmt.Sprintf("Ready %d", ready)}
+	starting := 0
+	for _, action := range state.actions {
+		if action.Action == "start_task" && !action.Resolved {
+			starting++
+		}
+	}
+	if starting > 0 {
+		parts = append(parts, fmt.Sprintf("启动中 %d", starting))
+	}
 	if executionConfigMismatch(state.ref, state.snapshot) {
 		parts = append(parts, "执行配置待核对")
 	}
@@ -197,9 +206,21 @@ func renderStatusLine(m Model, state projectState) string {
 }
 
 func projectCounts(state projectState, now time.Time) (ready, cached, running, decision, merge, attention int) {
+	seenRuns := map[string]bool{}
 	if state.snapshot.Tasks != nil {
 		if valid, _ := candidateFreshness(state.ref, state.snapshot, now); valid {
-			ready = len(state.snapshot.Tasks.Tasks)
+			statuses := map[string]string{}
+			if state.snapshot.Domain != nil {
+				for _, task := range state.snapshot.Domain.Tasks {
+					statuses[task.TaskID] = task.Status
+				}
+			}
+			for _, candidate := range state.snapshot.Tasks.Tasks {
+				if status := statuses[candidate.TaskID]; status != "" && status != "open" || pendingStartAction(state, candidate.TaskID) != nil {
+					continue
+				}
+				ready++
+			}
 		} else {
 			cached = len(state.snapshot.Tasks.Tasks)
 		}
@@ -209,6 +230,7 @@ func projectCounts(state projectState, now time.Time) (ready, cached, running, d
 			if run == nil {
 				continue
 			}
+			seenRuns[firstText(run.DomainTaskID, run.TaskID)] = true
 			if run.TaskStatus == "in_progress" && (run.ExecutionStatus == "pending" || run.ExecutionStatus == "running") {
 				running++
 			}
@@ -220,6 +242,13 @@ func projectCounts(state projectState, now time.Time) (ready, cached, running, d
 			}
 			if runNeedsAttention(run) {
 				attention++
+			}
+		}
+	}
+	if state.snapshot.Domain != nil {
+		for _, task := range state.snapshot.Domain.Tasks {
+			if task.Status == "in_progress" && !seenRuns[task.TaskID] {
+				running++
 			}
 		}
 	}
@@ -298,7 +327,9 @@ func renderRows(m Model, state projectState, width, height int) []string {
 	for _, row := range visible {
 		taskStatus := rowTaskStatus(row)
 		if row.kind == rowReady {
-			if valid, _ := candidateFreshness(state.ref, state.snapshot, m.clock.Now()); valid {
+			if pendingStartAction(state, row.taskID) != nil {
+				taskStatus = "启动中"
+			} else if valid, _ := candidateFreshness(state.ref, state.snapshot, m.clock.Now()); valid {
 				taskStatus = "可开始"
 			} else {
 				taskStatus = "缓存"
@@ -402,6 +433,15 @@ func displayTaskStatus(status string) string {
 		}
 		return status
 	}
+}
+
+func pendingStartAction(state projectState, taskID string) *actionState {
+	for _, action := range state.actions {
+		if action.Action == "start_task" && action.TaskID == taskID && !action.Resolved && action.Status != "rejected" && action.Status != "failed" {
+			return action
+		}
+	}
+	return nil
 }
 
 func padDisplay(value string, width int) string {
@@ -691,6 +731,9 @@ func renderDetail(m Model, state projectState, row *consoleRow, width, height in
 	}
 	if row.native != nil && row.run == nil {
 		lines = append(lines, renderNativeTaskDetail(state, *row.native)...)
+		if row.kind == rowNative && row.native.Status == "in_progress" {
+			lines = append(lines, "中心已领取；步骤详情等待服务快照同步。")
+		}
 		if row.kind == rowReady {
 			lines = append(lines, renderControlAvailability(state, row, m.clock.Now())...)
 			lines = append(lines, renderActionLines(state, row.taskID)...)
@@ -931,7 +974,9 @@ func renderControlAvailability(state projectState, row *consoleRow, now time.Tim
 	}
 	if row != nil && row.kind == rowReady {
 		reason := candidateActionReason(state.ref, state.snapshot, now)
-		if reason == "" {
+		if pendingStartAction(state, row.taskID) != nil {
+			lines = append(lines, "启动请求已提交；等待中心领取，无需重复按 s")
+		} else if reason == "" {
 			lines = append(lines, "操作：s 选择执行方案并开始任务 "+safeTerminalText(row.taskID))
 		} else {
 			lines = append(lines, "开始不可用："+displayActionReason(reason))

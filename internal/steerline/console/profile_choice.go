@@ -42,7 +42,7 @@ func (m Model) handleExecutionProfileChoice(key tea.KeyMsg) (tea.Model, tea.Cmd)
 		}
 		runtime := state.snapshot.Connection.Snapshot.Runtime
 		row := m.selectedRow(index)
-		if runtime == nil || runtime.Service.InstanceID != choice.instance || runtime.Control.Revision != choice.revision || row == nil || row.kind != rowReady || row.taskID != choice.taskID {
+		if runtime == nil || runtime.Service.InstanceID != choice.instance || row == nil || row.kind != rowReady || row.taskID != choice.taskID {
 			m.profileChoice = nil
 			m.status = "任务或服务状态已变化；请刷新后重新选择执行配置"
 			return m, m.readProject(index)

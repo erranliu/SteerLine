@@ -1738,7 +1738,7 @@ func (s *Service) resumeMinimalSteps(ctx context.Context) error {
 			continue
 		}
 		workflow, execution := s.minimalRecords(run)
-		if workflow == nil || execution == nil || workflow.Phase != "executing" || run.FinishTaskStatus == "blocked" {
+		if workflow == nil || execution == nil || workflow.Phase != "executing" && workflow.Phase != "queued" || run.FinishTaskStatus == "blocked" {
 			continue
 		}
 		var current *StepAttemptRecord
@@ -1757,6 +1757,21 @@ func (s *Service) resumeMinimalSteps(ctx context.Context) error {
 		task := nativeTaskRecord(s.State.Tasks, run.DomainTaskID)
 		if task == nil || task.Status != "in_progress" || task.Claimant != run.Claimant {
 			return nativeErr("stale_version", "native task status or claimant changed before planned step dispatch")
+		}
+		if workflow.Phase == "queued" {
+			if current.StepID != "prepare" || execution.CurrentStep != "prepare" {
+				return nativeErr("inconsistent_delivery", "queued native claim has no planned prepare step")
+			}
+			required := []string{"start", "observe", "workspace_inspection", "output_reading"}
+			if s.Config.hostName() == "orca_supervised" {
+				required = append(required, "message_inbox", "resource_settlement")
+			} else {
+				required = append(required, "stop")
+			}
+			if _, err := s.requireBackendCapabilities(ctx, backendFor(s.Config), required...); err != nil {
+				return s.blockClaimedStart(run, workflow, execution, current, err)
+			}
+			return s.startClaimedNativeTask(ctx, *task, run)
 		}
 		if current.StepID == "prepare" {
 			return s.prepareMinimalExecution(ctx, *task, run)
