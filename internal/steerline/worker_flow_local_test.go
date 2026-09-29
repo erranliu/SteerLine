@@ -39,6 +39,9 @@ func TestLocalWorkerTurnResumesExactSessionInSameWorkspace(t *testing.T) {
 	c.WorkflowProtocol, c.Host, c.Agent, c.Sandbox = WorkerFlowVersion, "local", "codex", "workspace-write"
 	c.Codex = Command{Executable: os.Args[0], Args: []string{"-test.run=^TestWorkerFlowMockCodexHelper$", "--"}}
 	c.WorktreeRoot = filepath.Join(c.RunDir, "worktrees")
+	if err := c.prepareWorktreeRoot(); err != nil {
+		t.Fatal(err)
+	}
 	run := &Run{TaskID: "8", RunID: strings.Repeat("a", 32), AttemptID: strings.Repeat("b", 32), ExecutionID: strings.Repeat("c", 32), WorkflowVersion: WorkerFlowVersion, Target: ExecutionTarget{ID: "local"}}
 	intent, err := planWorkspace(c, run.TaskID, run.RunID, base)
 	if err != nil {
