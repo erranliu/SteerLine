@@ -33,7 +33,6 @@ type Config struct {
 	Branch                  string             `json:"branch"`
 	RunDir                  string             `json:"run_dir"`
 	WorktreeRoot            string             `json:"worktree_root"`
-	RuntimeFile             string             `json:"runtime_file"`
 	Claimant                string             `json:"claimant"`
 	Git                     Command            `json:"git"`
 	Codex                   Command            `json:"codex"`
@@ -218,7 +217,7 @@ func InstallSelf() (string, error) {
 }
 
 func LoadConfig(path string) (Config, error) {
-	c := Config{Remote: "origin", RuntimeFile: "runtime.json", TaskPoll: "10s", PRPoll: "30s", Heartbeat: "5s", CommandTimeout: "30s", ShutdownGrace: "10s", Sandbox: "workspace-write", Git: Command{Executable: "git"}, Codex: Command{Executable: "codex"}, ExecutableTypes: []string{"task", "bug", "feature", "chore"}, Agent: "codex", Host: "orca", StallTimeout: "5m", Orca: OrcaConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "15m"}}
+	c := Config{Remote: "origin", TaskPoll: "10s", PRPoll: "30s", Heartbeat: "5s", CommandTimeout: "30s", ShutdownGrace: "10s", Sandbox: "workspace-write", Git: Command{Executable: "git"}, Codex: Command{Executable: "codex"}, ExecutableTypes: []string{"task", "bug", "feature", "chore"}, Agent: "codex", Host: "orca", StallTimeout: "5m", Orca: OrcaConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "15m"}}
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return c, err
@@ -261,13 +260,6 @@ func LoadConfig(path string) (Config, error) {
 		c.RunDir = filepath.Join(SteerlineStateRoot(), key)
 	} else if !filepath.IsAbs(c.RunDir) {
 		c.RunDir = filepath.Join(base, c.RunDir)
-	}
-	if filepath.Base(c.RuntimeFile) != c.RuntimeFile || c.RuntimeFile == "." {
-		return c, errors.New("runtime_file must be a filename inside run_dir")
-	}
-	switch c.RuntimeFile {
-	case "steerline.db", "steerline.db-wal", "steerline.db-shm", "service", "execution", "runs", "worktrees":
-		return c, errors.New("runtime_file conflicts with native authority or execution state")
 	}
 	err = preflightNativeStatePath(c)
 	if err != nil {
@@ -555,9 +547,6 @@ func (c *Config) preflightNative(ctx context.Context) error {
 		if closeErr := reader.Close(); closeErr != nil {
 			return closeErr
 		}
-		if err = validateNativeRuntimeBinding(*c); err != nil {
-			return err
-		}
 	} else if !os.IsNotExist(err) {
 		return err
 	} else if err = ensureNativeStateClean(c.RunDir, c.Repository); err != nil {
@@ -567,21 +556,6 @@ func (c *Config) preflightNative(ctx context.Context) error {
 		if err = (&PRClient{Config: c.PR, Runner: git}).Check(ctx); err != nil {
 			return err
 		}
-	}
-	return nil
-}
-
-func validateNativeRuntimeBinding(c Config) error {
-	path := filepath.Join(c.RunDir, c.RuntimeFile)
-	runtime, err := LoadRuntime(path)
-	if os.IsNotExist(err) || err == nil && runtime == nil {
-		return nil
-	}
-	if err != nil {
-		return nativeErr("unsupported_schema", "native runtime projection cannot be read")
-	}
-	if runtime.SchemaVersion != runtimeSchemaFor(c) || canonical(runtime.Repository.Identity) != canonical(c.identity) || canonical(runtime.Repository.Path) != canonical(c.Repository) || runtime.Repository.Remote != c.Remote || runtime.Repository.Branch != c.Branch {
-		return nativeErr("authority_mismatch", "native runtime projection does not match the configured repository authority")
 	}
 	return nil
 }

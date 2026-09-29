@@ -10,7 +10,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -249,57 +248,6 @@ func TestCommandIdempotencyAndDecisionVersionArbitration(t *testing.T) {
 	}
 }
 
-func TestRuntimeSchemasV1ThroughV4AreRejectedWithoutMutation(t *testing.T) {
-	for version := 1; version <= 4; version++ {
-		t.Run(strconv.Itoa(version), func(t *testing.T) {
-			runDir := t.TempDir()
-			path := filepath.Join(runDir, "runtime.json")
-			source, err := json.Marshal(Runtime{SchemaVersion: version})
-			if err != nil {
-				t.Fatal(err)
-			}
-			if err = os.WriteFile(path, source, 0600); err != nil {
-				t.Fatal(err)
-			}
-			if err = preflightExistingState(runDir, "runtime.json"); err == nil || !strings.Contains(err.Error(), "unsupported runtime schema") {
-				t.Fatalf("v%d was not rejected by startup preflight: %v", version, err)
-			}
-			if _, err = os.Stat(filepath.Join(runDir, "steerline.db")); !os.IsNotExist(err) {
-				t.Fatalf("preflight created or modified the database path: %v", err)
-			}
-			if _, err = LoadRuntime(path); err == nil || !strings.Contains(err.Error(), "unsupported runtime schema") {
-				t.Fatalf("v%d was accepted: %v", version, err)
-			}
-			after, err := os.ReadFile(path)
-			if err != nil || !bytes.Equal(source, after) {
-				t.Fatalf("v%d snapshot was changed while rejecting it: %v", version, err)
-			}
-		})
-	}
-}
-
-func TestPreflightRejectsRetiredFileExecutionStateWithoutMutation(t *testing.T) {
-	runDir := t.TempDir()
-	path := filepath.Join(runDir, "execution", "v1", "bindings", "retired.json")
-	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
-		t.Fatal(err)
-	}
-	original := []byte(`{"version":1,"run_id":"retired"}`)
-	if err := os.WriteFile(path, original, 0600); err != nil {
-		t.Fatal(err)
-	}
-	if err := preflightExistingState(runDir, "runtime.json"); err == nil || !strings.Contains(err.Error(), "file-based execution state is unsupported") {
-		t.Fatalf("retired file execution state was not rejected before startup: %v", err)
-	}
-	after, err := os.ReadFile(path)
-	if err != nil || !bytes.Equal(original, after) {
-		t.Fatalf("preflight changed retired execution evidence: %v", err)
-	}
-	if _, err = os.Stat(filepath.Join(runDir, "steerline.db")); !os.IsNotExist(err) {
-		t.Fatalf("preflight created a replacement database: %v", err)
-	}
-}
-
 func TestPreflightRejectsUnknownSQLiteSchemaWithoutMutation(t *testing.T) {
 	runDir := t.TempDir()
 	path := filepath.Join(runDir, "steerline.db")
@@ -314,7 +262,7 @@ func TestPreflightRejectsUnknownSQLiteSchemaWithoutMutation(t *testing.T) {
 	if err = db.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if err = preflightExistingState(runDir, "runtime.json"); err == nil || !strings.Contains(err.Error(), "unsupported SQLite schema 99") {
+	if err = validateExistingDatabase(path); err == nil || !strings.Contains(err.Error(), "unsupported SQLite schema 99") {
 		t.Fatalf("unknown database schema was accepted: %v", err)
 	}
 	reader, err := openSQLiteInspector(path)
@@ -343,12 +291,12 @@ func TestPreflightRejectsRetiredWholeRunResultCommandWithoutMutation(t *testing.
 	require(t, err)
 	require(t, store.Close())
 
-	if err = preflightExistingState(runDir, "runtime.json"); err == nil || !strings.Contains(err.Error(), "retired whole-run result commands") {
-		t.Fatalf("retired result command was not rejected during read-only preflight: %v", err)
-	}
 	reader, err := OpenSQLiteReader(databasePath)
 	require(t, err)
 	defer reader.Close()
+	if err = validateRetiredWholeRunResultCommands(ctx, reader.db); err == nil || !strings.Contains(err.Error(), "retired whole-run result commands") {
+		t.Fatalf("retired result command was not rejected during read-only preflight: %v", err)
+	}
 	saved, err := reader.Command(ctx, command.ProjectIdentity, commandID)
 	require(t, err)
 	if saved.Kind != command.Kind || saved.Status != command.Status || string(saved.Payload) != string(command.Payload) {
@@ -668,7 +616,7 @@ func seedNativeDecision(t *testing.T, db *SQLiteStore, project, runID, decisionI
 	if err != nil {
 		t.Fatalf("seed native decision graph: %v", err)
 	}
-	store := &Store{Path: filepath.Join(t.TempDir(), "runtime.json"), Domain: db, Project: project}
+	store := &Store{Domain: db, Project: project}
 	state := Runtime{SchemaVersion: WorkerFlowRuntimeSchema, Repository: Repository{Identity: project, Path: "repo", Remote: "origin", Branch: "main"}, Service: ServiceState{InstanceID: "service-instance", Status: "running", Ready: true, Claimant: "alice"}, Runs: []*Run{}, Tasks: []TaskRecord{}, WorkflowRuns: []WorkflowRunRecord{}, Executions: []ExecutionRecord{}, Attempts: []StepAttemptRecord{}, Decisions: []DecisionRecord{}, Control: ControlState{DispatchMode: "manual", Revision: 1}}
 	if err = store.Publish(&state); err != nil {
 		t.Fatalf("publish decision test projection: %v", err)

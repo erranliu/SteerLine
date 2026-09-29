@@ -700,7 +700,7 @@ func preflightNativeStatePath(c Config) error {
 	}
 	path := filepath.Join(c.RunDir, "steerline.db")
 	if _, err := os.Stat(path); err == nil {
-		if err := ensureNativeStateFilesAllowed(c.RunDir, c.RuntimeFile); err != nil {
+		if err := ensureNativeStateFilesAllowed(c.RunDir); err != nil {
 			return err
 		}
 		reader, err := openBoundNativeStore(context.Background(), c, path)
@@ -788,7 +788,7 @@ func ensureNativeStateClean(runDir, repository string) error {
 	return nil
 }
 
-func ensureNativeStateFilesAllowed(runDir, runtimeFile string) error {
+func ensureNativeStateFilesAllowed(runDir string) error {
 	entries, err := os.ReadDir(runDir)
 	if err != nil {
 		return err
@@ -821,10 +821,6 @@ func ensureNativeStateFilesAllowed(runDir, runtimeFile string) error {
 			}
 		case "execution":
 			if err := validateNativeExecutionArtifacts(filepath.Join(runDir, entry.Name())); err != nil {
-				return err
-			}
-		case runtimeFile:
-			if err := validateNativeRuntimeProjection(filepath.Join(runDir, entry.Name())); err != nil {
 				return err
 			}
 		default:
@@ -965,18 +961,6 @@ func validateNativeExecutionArtifacts(root string) error {
 		}
 	}
 	return nil
-}
-
-func validateNativeRuntimeProjection(path string) error {
-	info, err := os.Lstat(path)
-	if err != nil || !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 {
-		return nativeErr("authority_mismatch", "native runtime projection must be a regular file")
-	}
-	runtime, err := LoadRuntime(path)
-	if err != nil || runtime == nil || runtime.SchemaVersion != WorkerFlowRuntimeSchema || runtime.Repository.Identity == "" {
-		return nativeErr("unsupported_schema", "native runtime projection is unreadable or has an unsupported schema")
-	}
-	return validateNativeRuntimeProjectionData(runtime)
 }
 
 func validateNativeRuntimeProjectionData(runtime *Runtime) error {

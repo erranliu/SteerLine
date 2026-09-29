@@ -4,8 +4,8 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -48,36 +48,27 @@ func atomicWriteWith(path string, data []byte, write func(*os.File, []byte) erro
 	return replaceFile(name, path)
 }
 
-// The store owns an independent snapshot. Heartbeats never race with scheduler mutations.
-type Store struct {
-	mu                sync.Mutex
-	Path              string
-	Domain            DomainStore
-	Project           string
-	last              Runtime
-	ready             bool
-	failure           error
-	projectionFailure error
+// Domain rows own business state. The projection keeps only service and worker
+// session details that are not represented by those rows.
+func runtimeCheckpoint(v Runtime) Runtime {
+	v.Tasks, v.WorkflowRuns, v.Executions, v.Attempts, v.Decisions, v.Operations = nil, nil, nil, nil, nil, nil
+	return v
 }
 
-func (s *Store) write(v Runtime) error {
-	v.UpdatedAt = now()
-	v.HeartbeatAt = v.UpdatedAt
-	b, e := json.MarshalIndent(v, "", "  ")
-	if e == nil {
-		e = AtomicWrite(s.Path, append(b, '\n'))
-	}
-	if e != nil {
-		s.failure = fmt.Errorf("critical runtime persistence: %w", e)
-		return s.failure
-	}
-	// Detach pointers and slices from the scheduler's mutable state.
-	if e = json.Unmarshal(b, &s.last); e != nil {
-		return e
-	}
-	s.ready = true
-	return nil
+func hydrateRuntime(v *Runtime, snapshot DomainSnapshot) {
+	v.Tasks, v.WorkflowRuns, v.Executions = snapshot.Tasks, snapshot.WorkflowRuns, snapshot.Executions
+	v.Attempts, v.Decisions, v.Operations = snapshot.Attempts, snapshot.Decisions, snapshot.Operations
 }
+
+// Store serializes publication with heartbeat. SQLite is the only durable
+// runtime store.
+type Store struct {
+	mu      sync.Mutex
+	Domain  *SQLiteStore
+	Project string
+	failure error
+}
+
 func (s *Store) Publish(v *Runtime) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -88,16 +79,9 @@ func (s *Store) Publish(v *Runtime) error {
 		return errors.New("runtime projection is required")
 	}
 	value := *v
-	value.UpdatedAt = now()
-	value.HeartbeatAt = value.UpdatedAt
+	value.UpdatedAt, value.HeartbeatAt = now(), now()
 	if s.Domain != nil {
-		writer, ok := s.Domain.(interface {
-			SaveRuntime(context.Context, Runtime) (Runtime, error)
-		})
-		if !ok {
-			return errors.New("configured domain store cannot persist runtime state")
-		}
-		persisted, err := writer.SaveRuntime(context.Background(), value)
+		persisted, err := s.Domain.SaveRuntime(context.Background(), value)
 		if err != nil {
 			s.failure = fmt.Errorf("critical domain persistence: %w", err)
 			return s.failure
@@ -105,93 +89,28 @@ func (s *Store) Publish(v *Runtime) error {
 		value = persisted
 	}
 	*v = value
-	b, e := json.MarshalIndent(value, "", "  ")
-	// Even a failed file export must retain a detached committed snapshot.
-	// Heartbeat runs concurrently with scheduler mutations.
-	var snapshot Runtime
-	if e == nil {
-		e = json.Unmarshal(b, &snapshot)
-	}
-	if e == nil {
-		e = AtomicWrite(s.Path, append(b, '\n'))
-	}
-	if e != nil {
-		s.projectionFailure = fmt.Errorf("runtime projection is stale: %w", e)
-		// SQLite has already committed the authoritative state. The runtime
-		// projection is rebuildable and must never roll that transaction back.
-		if s.Domain != nil {
-			value.ProjectionError = s.projectionFailure.Error()
-			*v = value
-			snapshot.ProjectionError = value.ProjectionError
-			s.last = snapshot
-			s.ready = true
-			return nil
-		}
-		s.failure = fmt.Errorf("critical runtime persistence: %w", e)
-		return s.failure
-	}
-	s.last = snapshot
-	s.projectionFailure = nil
-	s.ready = true
 	return nil
 }
+
 func (s *Store) Heartbeat() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.failure != nil {
+	if s.failure != nil || s.Domain == nil {
 		return s.failure
 	}
-	if !s.ready {
-		return nil
+	if err := s.Domain.Transact(context.Background(), func(tx DomainTx) error {
+		return tx.(*sqliteTx).heartbeatProjection(s.Project)
+	}); err != nil {
+		s.failure = fmt.Errorf("database projection heartbeat failed: %w", err)
+		return s.failure
 	}
-	if s.Domain != nil {
-		v := s.last
-		v.UpdatedAt = now()
-		v.HeartbeatAt = v.UpdatedAt
-		v.ProjectionError = ""
-		b, marshalErr := json.MarshalIndent(v, "", "  ")
-		if marshalErr != nil {
-			return marshalErr
-		}
-		databaseErr := s.Domain.Transact(context.Background(), func(tx DomainTx) error { return tx.PutProjection(s.Project, v.Revision, b) })
-		if databaseErr != nil {
-			s.failure = fmt.Errorf("database projection heartbeat failed: %w", databaseErr)
-			return s.failure
-		}
-		if err := AtomicWrite(s.Path, append(b, '\n')); err != nil {
-			s.projectionFailure = fmt.Errorf("runtime projection is stale: %w", err)
-			return nil
-		}
-		if err := json.Unmarshal(b, &s.last); err != nil {
-			return err
-		}
-		s.projectionFailure = nil
-		return nil
-	}
-	return s.write(s.last)
-}
-func (s *Store) Err() error           { s.mu.Lock(); defer s.mu.Unlock(); return s.failure }
-func (s *Store) ProjectionErr() error { s.mu.Lock(); defer s.mu.Unlock(); return s.projectionFailure }
-func LoadRuntime(path string) (*Runtime, error) {
-	b, e := readSnapshot(path)
-	if os.IsNotExist(e) {
-		return nil, nil
-	}
-	if e != nil {
-		return nil, e
-	}
-	var v Runtime
-	if e = decode(b, &v); e != nil {
-		return nil, fmt.Errorf("invalid runtime; preserve it for manual recovery: %w", e)
-	}
-	if v.SchemaVersion != CurrentRuntimeSchema && v.SchemaVersion != WorkerFlowRuntimeSchema {
-		return nil, fmt.Errorf("unsupported runtime schema %d", v.SchemaVersion)
-	}
-	return &v, nil
+	return nil
 }
 
-// LoadDatabaseRuntime reads the committed service read model, even if exporting
-// runtime.json failed. It never creates a database or trusts a file projection.
+func (s *Store) Err() error { s.mu.Lock(); defer s.mu.Unlock(); return s.failure }
+
+// LoadDatabaseRuntime reads one SQLite snapshot, joining the compact service
+// checkpoint with the authoritative domain rows in a read transaction.
 func LoadDatabaseRuntime(c Config) (*Runtime, error) {
 	if err := requireNativeTaskAuthority(c); err != nil {
 		return nil, err
@@ -206,19 +125,62 @@ func LoadDatabaseRuntime(c Config) (*Runtime, error) {
 		return nil, err
 	}
 	defer db.Close()
-	payload, _, err := db.LoadProjection(context.Background(), c.Identity())
+	return loadRuntimeSnapshot(db, c.Identity(), true)
+}
+
+func loadObservedRuntime(c Config) (*Runtime, error) {
+	if c.Identity() == "" {
+		if err := c.ResolveIdentity(context.Background()); err != nil {
+			return nil, err
+		}
+	}
+	db, err := OpenSQLiteReader(filepath.Join(c.RunDir, "steerline.db"))
 	if err != nil {
 		return nil, err
 	}
-	if len(payload) == 0 {
-		return nil, errors.New("database runtime projection is missing")
+	defer db.Close()
+	payload, _, err := db.LoadProjection(context.Background(), c.Identity())
+	if err != nil || len(payload) == 0 {
+		return nil, err
 	}
 	var state Runtime
 	if err = decode(payload, &state); err != nil {
 		return nil, err
 	}
-	if state.SchemaVersion != runtimeSchemaFor(c) || state.Repository.Identity != c.Identity() {
-		return nil, errors.New("database runtime schema or repository identity mismatch")
+	if state.SchemaVersion != WorkerFlowRuntimeSchema {
+		return nil, fmt.Errorf("unsupported runtime schema %d", state.SchemaVersion)
 	}
+	return &state, nil
+}
+
+func loadRuntimeSnapshot(db *SQLiteStore, project string, requireIdentity bool) (*Runtime, error) {
+	ctx := context.Background()
+	tx, err := db.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	var payload []byte
+	if err = tx.QueryRowContext(ctx, `SELECT payload FROM projection WHERE project_identity=?`, project).Scan(&payload); err != nil {
+		return nil, err
+	}
+	var state Runtime
+	if err = decode(payload, &state); err != nil {
+		return nil, err
+	}
+	if state.SchemaVersion != WorkerFlowRuntimeSchema {
+		return nil, fmt.Errorf("unsupported runtime schema %d", state.SchemaVersion)
+	}
+	if requireIdentity && state.Repository.Identity != project {
+		return nil, errors.New("database runtime repository identity mismatch")
+	}
+	snapshot, err := querySnapshot(ctx, tx, project)
+	if err != nil {
+		return nil, err
+	}
+	if err = tx.Commit(); err != nil {
+		return nil, err
+	}
+	hydrateRuntime(&state, snapshot)
 	return &state, nil
 }

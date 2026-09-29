@@ -54,7 +54,6 @@ func TestCLIRejectsLegacyTaskAuthorityBeforeStateInitialization(t *testing.T) {
 		"remote":         "origin",
 		"branch":         "main",
 		"run_dir":        runDir,
-		"runtime_file":   "runtime.json",
 	})
 
 	output, err := runCLI(t, filepath.Join(temp, "home"), "run", "-config", configPath)

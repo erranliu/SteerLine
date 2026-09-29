@@ -1,61 +1,14 @@
 package console
 
 import (
-	"context"
 	"encoding/json"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/erranliu/SteerLine/internal/steerline"
 )
-
-func TestConsoleSourcePrefersCommittedDatabaseProjection(t *testing.T) {
-	repo, dir := t.TempDir(), t.TempDir()
-	git, err := exec.LookPath("git")
-	if err != nil {
-		t.Skip(err)
-	}
-	if out, err := exec.Command(git, "init", "--quiet", repo).CombinedOutput(); err != nil {
-		t.Fatalf("git init: %v %s", err, out)
-	}
-	c := steerline.Config{Repository: repo, RunDir: dir, RuntimeFile: "runtime.json", Git: steerline.Command{Executable: git}, CommandTimeout: "5s"}
-	resolved := c
-	if err = resolved.ResolveIdentity(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	db, err := steerline.OpenSQLiteStore(filepath.Join(dir, "steerline.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-	if err = db.Transact(context.Background(), func(tx steerline.DomainTx) error {
-		return tx.PutProjectTaskAuthority(steerline.ProjectTaskAuthority{ProjectIdentity: resolved.Identity(), Authority: "native", AuthorityVersion: 1, Repository: "fixture", Remote: "origin", Branch: "main", DispatchMode: "manual", DispatchPaused: true})
-	}); err != nil {
-		t.Fatal(err)
-	}
-	state := steerline.Runtime{SchemaVersion: 5, Repository: steerline.Repository{Identity: resolved.Identity()}, HeartbeatAt: time.Now().UTC()}
-	state, err = db.SaveRuntime(context.Background(), state)
-	if err != nil {
-		t.Fatal(err)
-	}
-	old := state
-	old.HeartbeatAt = old.HeartbeatAt.Add(-time.Minute)
-	bytes, err := json.Marshal(old)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = os.WriteFile(filepath.Join(dir, c.RuntimeFile), bytes, 0600); err != nil {
-		t.Fatal(err)
-	}
-	obs := newFileSource(resolved).SnapshotFromObservation(steerline.ReadObservationSnapshot(filepath.Join(dir, c.RuntimeFile), c.Heartbeat, nil))
-	if obs.Runtime == nil || obs.Runtime.Revision != state.Revision || obs.Runtime.ProjectionError == "" || !obs.Runtime.HeartbeatAt.Equal(state.HeartbeatAt) {
-		t.Fatal("equal-revision stale file masked fresh database heartbeat")
-	}
-}
 
 func TestConsoleSourceFallbackNormalizerAndLateActivitySwitch(t *testing.T) {
 	dir := t.TempDir()

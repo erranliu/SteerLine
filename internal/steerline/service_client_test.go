@@ -28,9 +28,11 @@ func TestConnectionClassifiesProcessAndSnapshotIndependently(t *testing.T) {
 	rt.Service.ControlProtocol, rt.Service.Capabilities = ControlProtocolVersion, []string{"stop_service"}
 	write := func(value Runtime) {
 		t.Helper()
-		b, e := json.Marshal(value)
+		b, e := json.Marshal(runtimeCheckpoint(value))
 		require(t, e)
-		require(t, AtomicWrite(filepath.Join(c.RunDir, c.RuntimeFile), b))
+		require(t, s.domainStore.Transact(context.Background(), func(tx DomainTx) error {
+			return tx.PutProjection(c.Identity(), value.Revision, b)
+		}))
 	}
 
 	write(rt)
@@ -342,8 +344,8 @@ func TestStartServiceReportsPreflightFailureAndPendingHandshake(t *testing.T) {
 		if record.Status != "starting" || record.ProcessIdentity == nil || probeProcess(record.ProcessIdentity).State != ProcessMatches {
 			t.Fatalf("pending startup lost process identity: %+v", record)
 		}
-		if _, err := os.Stat(filepath.Join(config.RunDir, config.RuntimeFile)); err == nil {
-			t.Fatal("preflight delay unexpectedly published runtime before acquiring service locks")
+		if got := ReadObservationSnapshot(config, nil); got.State != SnapshotNone {
+			t.Fatalf("preflight delay unexpectedly published a runtime: %+v", got)
 		}
 		if err := terminatePendingTestProcess(record.ProcessIdentity); err != nil {
 			t.Fatal(err)
@@ -385,9 +387,6 @@ func TestRunCommandRejectsLegacyTaskAuthorityBeforeWritingState(t *testing.T) {
 	output, runErr := exec.Command(buildServiceLifecycleCLI(t), "run", "-config", configPath, "-dispatch", "manual", "-console", "off").CombinedOutput()
 	if runErr == nil || !strings.Contains(string(output), "task_authority") {
 		t.Fatalf("legacy task authority was accepted: err=%v output=%s", runErr, output)
-	}
-	if _, err := os.Stat(filepath.Join(f.c.RunDir, f.c.RuntimeFile)); !os.IsNotExist(err) {
-		t.Fatalf("rejected legacy config wrote native runtime state: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(f.c.RunDir, "steerline.db")); !os.IsNotExist(err) {
 		t.Fatalf("rejected legacy config initialized a native database: %v", err)

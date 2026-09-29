@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -109,12 +108,17 @@ func TestRuntimeCorruptionNotOverwritten(t *testing.T) {
 	f := newFixture(t)
 	s := f.service(t)
 	require(t, s.Close())
-	path := filepath.Join(f.c.RunDir, f.c.RuntimeFile)
-	require(t, os.WriteFile(path, []byte("truncated{"), 0600))
+	db, err := OpenSQLiteStore(filepath.Join(f.c.RunDir, "steerline.db"))
+	require(t, err)
+	defer db.Close()
+	require(t, db.Transact(context.Background(), func(tx DomainTx) error {
+		return tx.PutProjection(f.c.Identity(), 99, []byte("truncated{"))
+	}))
 	if _, e := NewService(f.c); e == nil {
 		t.Fatal("corrupt snapshot accepted")
 	}
-	b, _ := os.ReadFile(path)
+	b, _, err := db.LoadProjection(context.Background(), f.c.Identity())
+	require(t, err)
 	if string(b) != "truncated{" {
 		t.Fatal("corrupt evidence overwritten")
 	}

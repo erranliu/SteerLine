@@ -54,7 +54,7 @@ func TestLifecycleAuditRejectedStartupPreservesOwnerFiles(t *testing.T) {
 
 func TestDirectServiceAndControlEntrypointsRejectMissingNativeAuthorityBeforeEffects(t *testing.T) {
 	runDir := filepath.Join(t.TempDir(), "state")
-	c := Config{Repository: filepath.Join(t.TempDir(), "not-a-repository"), RunDir: runDir, RuntimeFile: "runtime.json"}
+	c := Config{Repository: filepath.Join(t.TempDir(), "not-a-repository"), RunDir: runDir}
 	assertAuthorityError := func(name string, err error) {
 		t.Helper()
 		if err == nil || !strings.Contains(err.Error(), "task_authority=native") {
@@ -124,7 +124,7 @@ func TestLifecycleReviewMultipleLiveAttemptsRefuseLaunch(t *testing.T) {
 
 func TestLifecycleReviewStartedProcessEarlyExit(t *testing.T) {
 	s := controlReviewService(t)
-	require(t, os.Remove(s.store.Path))
+	removeRuntimeProjection(t, s)
 	id := &ProcessIdentity{Kind: "os", PID: 2_000_000_000, Created: "absent", Executable: "absent"}
 	record := reviewStartup(t, s.Config, "started", id)
 	result, err := waitForStartup(context.Background(), s.Config, record.StartupID, "", StartServiceOptions{WaitTimeout: 30 * time.Millisecond, PollInterval: time.Millisecond})
@@ -132,6 +132,12 @@ func TestLifecycleReviewStartedProcessEarlyExit(t *testing.T) {
 	if result.Status != "failed" {
 		t.Fatalf("known exited startup reported %s", result.Status)
 	}
+}
+
+func removeRuntimeProjection(t *testing.T, s *Service) {
+	t.Helper()
+	_, err := s.domainStore.db.Exec(`DELETE FROM projection WHERE project_identity=?`, s.Config.Identity())
+	require(t, err)
 }
 
 func TestLifecycleReviewFailedRecordMustBindProcess(t *testing.T) {
@@ -189,7 +195,7 @@ func TestLifecycleReviewCancelledLaunchDoesNotWrite(t *testing.T) {
 
 func TestLifecycleReviewWaitTimeoutDiagnosticUsesActualDuration(t *testing.T) {
 	s := controlReviewService(t)
-	require(t, os.Remove(s.store.Path))
+	removeRuntimeProjection(t, s)
 	id, err := currentProcessIdentity()
 	require(t, err)
 	record := reviewStartup(t, s.Config, "starting", id)

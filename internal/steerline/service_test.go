@@ -154,7 +154,6 @@ func newFixture(t *testing.T) *fixture {
 	if output, err := exec.Command("git", "-C", f.c.Repository, "remote", "set-url", "origin", f.server.URL+"/owner/repo.git").CombinedOutput(); err != nil {
 		t.Fatalf("set native fixture remote: %v: %s", err, output)
 	}
-	f.c.RuntimeFile = "runtime.json"
 	f.c.Claimant = "native-fixture"
 	f.c.Heartbeat, f.c.TaskPoll, f.c.PRPoll, f.c.CommandTimeout, f.c.ShutdownGrace = "100ms", "100ms", "100ms", "5s", "1s"
 	f.c.PR = PRConfig{Kind: "gitea", BaseURL: f.server.URL, Repository: "owner/repo"}

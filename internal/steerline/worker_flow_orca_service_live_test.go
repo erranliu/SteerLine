@@ -32,7 +32,7 @@ func testWorkerFlowOrcaServiceFirstFeedbackLive(t *testing.T, remote bool) {
 	}
 	t.Setenv("STEERLINE_HOME", t.TempDir())
 	ctx := context.Background()
-	c := Config{TaskAuthority: "native", WorkflowProtocol: WorkerFlowVersion, Repository: repository, Remote: "origin", Branch: "main", RuntimeFile: "runtime.json", TaskPoll: "10s", PRPoll: "30s", Heartbeat: "5s", CommandTimeout: "30s", ShutdownGrace: "10s", Sandbox: "read-only", Agent: "codex", Host: "orca", Claimant: "operator", ExecutableTypes: []string{"task"}, Git: Command{Executable: "git"}, Codex: Command{Executable: os.Args[0], Args: []string{"-test.run=^TestWorkerFlowMockCodexHelper$", "--", "wf-orca-mock"}}, Orca: OrcaConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "15m"}}
+	c := Config{TaskAuthority: "native", WorkflowProtocol: WorkerFlowVersion, Repository: repository, Remote: "origin", Branch: "main", TaskPoll: "10s", PRPoll: "30s", Heartbeat: "5s", CommandTimeout: "30s", ShutdownGrace: "10s", Sandbox: "read-only", Agent: "codex", Host: "orca", Claimant: "operator", ExecutableTypes: []string{"task"}, Git: Command{Executable: "git"}, Codex: Command{Executable: os.Args[0], Args: []string{"-test.run=^TestWorkerFlowMockCodexHelper$", "--", "wf-orca-mock"}}, Orca: OrcaConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "15m"}}
 	if remote {
 		c.Host, c.Model, c.ReasoningEffort = "orca_supervised", "gpt-6-luna", "low"
 		c.Codex.Executable = os.Getenv("STEERLINE_ORCA_REMOTE_MOCK_EXE")

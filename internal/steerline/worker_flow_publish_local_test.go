@@ -89,9 +89,9 @@ func TestLocalWorkerPublishUsesHostGitAndExactPR(t *testing.T) {
 		WorkspaceIntent: &WorkspaceIntent{Path: worktree, Branch: branch, BaseCommit: base}}
 	workflow := &WorkflowRunRecord{WorkflowRunID: runID, WorkflowVersion: WorkerFlowVersion, Branch: "main", Phase: "waiting_decision"}
 	execution := &ExecutionRecord{WorkflowRunID: runID, ExecutionID: run.ExecutionID, Workspace: WorkspaceEvidence{Worktree: worktree, Branch: branch}, CurrentTurnID: turnID, LastStoppedTurnID: turnID}
-	s := &Service{Config: c, domainStore: db, store: &Store{Path: filepath.Join(c.RunDir, c.RuntimeFile), Project: c.Identity()},
+	s := &Service{Config: c, domainStore: db, store: &Store{Project: c.Identity()},
 		prs: &PRClient{Config: c.PR, Runner: Runner{Dir: c.Repository, Timeout: 10 * time.Second}},
-		State: Runtime{SchemaVersion: runtimeSchemaFor(c), Repository: Repository{Path: c.Repository, Remote: c.Remote, Branch: c.Branch, Identity: c.Identity()},
+		State: Runtime{SchemaVersion: WorkerFlowRuntimeSchema, Repository: Repository{Path: c.Repository, Remote: c.Remote, Branch: c.Branch, Identity: c.Identity()},
 			Runs: []*Run{run}, WorkflowRuns: []WorkflowRunRecord{*workflow}, Executions: []ExecutionRecord{*execution}}}
 	workflow, execution = &s.State.WorkflowRuns[0], &s.State.Executions[0]
 	info, err := s.publishLocalWorkerRun(ctx, run, workflow, execution, turnID)

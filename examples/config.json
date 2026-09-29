@@ -4,7 +4,6 @@
   "branch": "main",
   "task_authority": "native",
   "workflow_protocol": "worker-flow-v1",
-  "runtime_file": "runtime.json",
   "git": { "executable": "git.exe", "args": [] },
   "codex": { "executable": "C:/Tools/codex/codex.exe", "args": [] },
   "executable_types": ["task", "bug", "feature", "chore"],

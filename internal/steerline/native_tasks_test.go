@@ -68,7 +68,7 @@ func nativeTaskFixture(t *testing.T) (Config, string) {
 		t.Fatalf("fixture remote: %v: %s", err, output)
 	}
 	commit := nativeSeedCommit
-	c := Config{TaskAuthority: "native", WorkflowProtocol: WorkerFlowVersion, Repository: repo, Remote: "origin", Branch: "main", RuntimeFile: "runtime.json", TaskPoll: "10s", PRPoll: "30s", Heartbeat: "5s", CommandTimeout: "10s", ShutdownGrace: "10s", Sandbox: "workspace-write", ExecutableTypes: []string{"task", "bug", "feature", "chore"}, Git: Command{Executable: "git"}}
+	c := Config{TaskAuthority: "native", WorkflowProtocol: WorkerFlowVersion, Repository: repo, Remote: "origin", Branch: "main", TaskPoll: "10s", PRPoll: "30s", Heartbeat: "5s", CommandTimeout: "10s", ShutdownGrace: "10s", Sandbox: "workspace-write", ExecutableTypes: []string{"task", "bug", "feature", "chore"}, Git: Command{Executable: "git"}}
 	key, err := repoStateKey(c)
 	if err != nil {
 		t.Fatal(err)
@@ -203,7 +203,7 @@ func TestNativeProjectInitializesOnceAndRejectsMismatchedBinding(t *testing.T) {
 	}
 	beadsConfig := c
 	beadsConfig.TaskAuthority = "beads"
-	if err = preflightExistingState(beadsConfig.RunDir, beadsConfig.RuntimeFile); err == nil || !strings.Contains(err.Error(), "authority_mismatch") {
+	if _, err = OpenNativeTaskProject(context.Background(), &beadsConfig); err == nil || !strings.Contains(err.Error(), "authority_mismatch") {
 		t.Fatalf("Beads config opened native task authority: %v", err)
 	}
 }
@@ -697,26 +697,6 @@ func TestNewServiceRejectsNonNativeAuthorityBeforeCreatingState(t *testing.T) {
 	}
 }
 
-func TestNativeRuntimeProjectionRejectsRetiredWholeRunResultWithoutMutation(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "runtime.json")
-	legacyResult := filepath.Join(t.TempDir(), "result.json")
-	runtimeState := Runtime{SchemaVersion: CurrentRuntimeSchema, Repository: Repository{Identity: "repo:current"}, Runs: []*Run{{TaskID: "1", RunID: "0123456789abcdef0123456789abcdef", WorkflowVersion: "minimal-v1", ResultPath: &legacyResult}}}
-	data, err := json.Marshal(runtimeState)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = os.WriteFile(path, data, 0600); err != nil {
-		t.Fatal(err)
-	}
-	if err = validateNativeRuntimeProjection(path); err == nil || !strings.Contains(err.Error(), "unsupported schema") {
-		t.Fatalf("old runtime schema was accepted for native recovery: %v", err)
-	}
-	after, err := os.ReadFile(path)
-	if err != nil || !bytes.Equal(data, after) {
-		t.Fatalf("runtime evidence changed after refusal: %v", err)
-	}
-}
-
 func TestNativeStoreRejectsRetiredSQLiteRunProjectionBeforeAuthorityOpen(t *testing.T) {
 	ctx := context.Background()
 	c, _ := nativeTaskFixture(t)
@@ -729,7 +709,7 @@ func TestNativeStoreRejectsRetiredSQLiteRunProjectionBeforeAuthorityOpen(t *test
 		t.Fatal(err)
 	}
 	legacyResult := filepath.Join(t.TempDir(), "result.json")
-	payload, err := json.Marshal(Runtime{SchemaVersion: CurrentRuntimeSchema, Repository: Repository{Identity: c.Identity()}, Runs: []*Run{{TaskID: "1", RunID: "0123456789abcdef0123456789abcdef", WorkflowVersion: "minimal-v1", ResultPath: &legacyResult}}})
+	payload, err := json.Marshal(Runtime{SchemaVersion: 5, Repository: Repository{Identity: c.Identity()}, Runs: []*Run{{TaskID: "1", RunID: "0123456789abcdef0123456789abcdef", WorkflowVersion: "minimal-v1", ResultPath: &legacyResult}}})
 	if err != nil {
 		t.Fatal(err)
 	}

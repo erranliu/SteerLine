@@ -1,6 +1,9 @@
 package steerline
 
 import (
+	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -28,18 +31,23 @@ type ObservationSnapshot struct {
 	Error          string
 }
 
-// ReadObservationSnapshot is a pure, read-only observation of one runtime file.
-// nowFn is injectable so freshness and future-heartbeat behavior stay testable.
-func ReadObservationSnapshot(path, heartbeat string, nowFn func() time.Time) ObservationSnapshot {
+// ReadObservationSnapshot reads the committed SQLite service checkpoint.
+// nowFn keeps freshness and future-heartbeat behavior testable.
+func ReadObservationSnapshot(c Config, nowFn func() time.Time) ObservationSnapshot {
 	if nowFn == nil {
 		nowFn = time.Now
 	}
 	now := nowFn().UTC()
-	limit := freshnessLimit(heartbeat)
-	rt, err := LoadRuntime(path)
+	limit := freshnessLimit(c.Heartbeat)
+	if _, err := os.Stat(filepath.Join(c.RunDir, "steerline.db")); errors.Is(err, os.ErrNotExist) {
+		return ObservationSnapshot{State: SnapshotNone, SampledAt: now, FreshnessLimit: limit}
+	} else if err != nil {
+		return ObservationSnapshot{State: SnapshotReadFailed, SampledAt: now, FreshnessLimit: limit, Error: err.Error()}
+	}
+	rt, err := loadObservedRuntime(c)
 	if err != nil {
 		state := SnapshotReadFailed
-		if strings.Contains(err.Error(), "unsupported runtime schema") {
+		if strings.Contains(err.Error(), "schema") {
 			state = SnapshotUnknownVersion
 		}
 		return ObservationSnapshot{State: state, SampledAt: now, FreshnessLimit: limit, Error: err.Error()}

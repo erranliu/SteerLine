@@ -1,15 +1,10 @@
 package console
 
 import (
-	"context"
-	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/erranliu/SteerLine/internal/steerline"
 )
@@ -21,7 +16,7 @@ type LogBatch struct {
 	Diagnostics []string
 }
 
-// fileSource reads the console's committed runtime projection and activity journal.
+// fileSource reads the activity journal.
 type fileSource struct {
 	cfg steerline.Config
 
@@ -31,69 +26,6 @@ type fileSource struct {
 
 func newFileSource(c steerline.Config) *fileSource {
 	return &fileSource{cfg: c, normalizers: make(map[string]steerline.Normalizer)}
-}
-
-// SnapshotFromObservation reuses a runtime file snapshot already read by a
-// caller while retaining the committed SQLite fallback and freshness checks.
-func (f *fileSource) SnapshotFromObservation(obs steerline.ObservationSnapshot) steerline.ObservationSnapshot {
-	if f.cfg.Identity() != "" {
-		if databaseObs, err := f.readDatabaseProjection(); err == nil && databaseObs.Runtime != nil {
-			if obs.Runtime == nil || databaseObs.Runtime.Revision > obs.Runtime.Revision || (databaseObs.Runtime.Revision == obs.Runtime.Revision && databaseObs.Runtime.HeartbeatAt.After(obs.Runtime.HeartbeatAt)) {
-				databaseObs.Runtime.ProjectionError = "runtime.json is missing or stale; reading the committed SQLite projection"
-				obs = databaseObs
-			}
-		}
-	}
-	return obs
-}
-
-func (f *fileSource) readDatabaseProjection() (steerline.ObservationSnapshot, error) {
-	path := filepath.Join(f.cfg.RunDir, "steerline.db")
-	if _, err := os.Stat(path); err != nil {
-		return steerline.ObservationSnapshot{}, err
-	}
-	store, err := steerline.OpenSQLiteReader(path)
-	if err != nil {
-		return steerline.ObservationSnapshot{}, err
-	}
-	defer store.Close()
-	payload, _, err := store.LoadProjection(context.Background(), f.cfg.Identity())
-	if err != nil {
-		return steerline.ObservationSnapshot{}, err
-	}
-	if len(payload) == 0 {
-		return steerline.ObservationSnapshot{}, errors.New("SQLite projection is missing")
-	}
-	var runtime steerline.Runtime
-	if err = json.Unmarshal(payload, &runtime); err != nil {
-		return steerline.ObservationSnapshot{}, err
-	}
-	if runtime.SchemaVersion != 5 {
-		return steerline.ObservationSnapshot{}, fmt.Errorf("unsupported database projection schema %d", runtime.SchemaVersion)
-	}
-	if runtime.Repository.Identity != f.cfg.Identity() {
-		return steerline.ObservationSnapshot{}, errors.New("database projection repository identity mismatch")
-	}
-	now := time.Now().UTC()
-	limit := 15 * time.Second
-	if duration, parseErr := time.ParseDuration(f.cfg.Heartbeat); parseErr == nil && duration > 0 && 3*duration > limit {
-		limit = 3 * duration
-	}
-	obs := steerline.ObservationSnapshot{Runtime: &runtime, State: steerline.SnapshotValid, SampledAt: now, FreshnessLimit: limit}
-	if runtime.HeartbeatAt.IsZero() {
-		obs.State = steerline.SnapshotStale
-		return obs, nil
-	}
-	obs.HeartbeatAge = now.Sub(runtime.HeartbeatAt.UTC())
-	if obs.HeartbeatAge < 0 {
-		obs.ClockSkew = true
-		obs.State = steerline.SnapshotStale
-		return obs, nil
-	}
-	if obs.HeartbeatAge > limit {
-		obs.State = steerline.SnapshotStale
-	}
-	return obs, nil
 }
 
 func (f *fileSource) ReadLog(logPath string, cursor steerline.JournalCursor) (LogBatch, error) {

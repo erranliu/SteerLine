@@ -73,7 +73,7 @@ Orca 报告明确的 `agentWait` 对象，或 transcript 出现远端 helper 启
 steerline watch -config <config.json> [--run-id <id|task-id>] [--follow=true] [--from-start=true] [--json] [--raw]
 ```
 
-- 不依赖服务在跑，也不改任何状态：只读 `runtime.json` 和运行文件。
+- 不依赖服务在跑，也不改任何状态：只读 SQLite 中的运行检查点和运行文件。
 - 未给 `--run-id` 时选当前 `execution_status=running` 的运行，否则选最后一个。每次调用固定所选 run 和解析出的日志路径，不会跟随 runtime 改选任务或 retry attempt。
 - 默认读 `activity.jsonl`；若不存在则回退到把 `events.jsonl` 现场归一化（兼容旧二进制与原始宿主采集）。
 - `--json` 输出稳定 schema（`activity.jsonl` 行原样透传；回退路径则输出归一化记录，并在本次调用中补齐 `v=1`、递增 `seq` 与 `ts`）。诊断始终写 stderr，不污染 JSON stdout。

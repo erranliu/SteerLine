@@ -3,6 +3,7 @@ package steerline
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -95,23 +96,15 @@ func NewService(c Config) (_ *Service, retErr error) {
 			_ = db.Close()
 		}
 	}()
-	s := &Service{Config: c, baseConfig: c, domainStore: db, store: &Store{Path: filepath.Join(c.RunDir, c.RuntimeFile), Domain: db, Project: c.identity}, prs: &PRClient{Config: c.PR, Runner: r}, activities: map[string]*ActivityWriter{}, conversationMappers: map[string]*ConversationMapper{}, workers: map[string]*Worker{}}
-	projection, _, e := db.LoadProjection(context.Background(), c.identity)
+	s := &Service{Config: c, baseConfig: c, domainStore: db, store: &Store{Domain: db, Project: c.identity}, prs: &PRClient{Config: c.PR, Runner: r}, activities: map[string]*ActivityWriter{}, conversationMappers: map[string]*ConversationMapper{}, workers: map[string]*Worker{}}
+	old, e := loadRuntimeSnapshot(db, c.identity, false)
+	if errors.Is(e, sql.ErrNoRows) {
+		old, e = nil, nil
+	}
 	if e != nil {
 		return nil, e
 	}
-	var old *Runtime
-	if len(projection) > 0 {
-		var projected Runtime
-		if e = decode(projection, &projected); e != nil {
-			return nil, fmt.Errorf("invalid SQLite runtime projection: %w", e)
-		}
-		if projected.SchemaVersion != runtimeSchemaFor(c) {
-			return nil, fmt.Errorf("unsupported SQLite runtime projection schema %d", projected.SchemaVersion)
-		}
-		old = &projected
-	}
-	s.State = Runtime{SchemaVersion: runtimeSchemaFor(c), Repository: Repository{Path: c.Repository, Remote: c.Remote, Branch: c.Branch, Identity: c.identity}, Tasks: []TaskRecord{}, WorkflowRuns: []WorkflowRunRecord{}, Executions: []ExecutionRecord{}, Attempts: []StepAttemptRecord{}, Decisions: []DecisionRecord{}, Runs: []*Run{}, Control: ControlState{DispatchMode: "auto", Revision: 1, Blockers: []ControlBlocker{}}}
+	s.State = Runtime{SchemaVersion: WorkerFlowRuntimeSchema, Repository: Repository{Path: c.Repository, Remote: c.Remote, Branch: c.Branch, Identity: c.identity}, Tasks: []TaskRecord{}, WorkflowRuns: []WorkflowRunRecord{}, Executions: []ExecutionRecord{}, Attempts: []StepAttemptRecord{}, Decisions: []DecisionRecord{}, Runs: []*Run{}, Control: ControlState{DispatchMode: "auto", Revision: 1, Blockers: []ControlBlocker{}}}
 	authority, authErr := db.nativeAuthority(context.Background(), c.identity)
 	if authErr != nil {
 		return nil, authErr
@@ -246,7 +239,7 @@ func NewService(c Config) (_ *Service, retErr error) {
 	if err := s.refreshNativeSnapshot(context.Background(), false); err != nil {
 		return nil, err
 	}
-	s.State.SchemaVersion = runtimeSchemaFor(c)
+	s.State.SchemaVersion = WorkerFlowRuntimeSchema
 	capabilities := []string{"answer_decision", "start_task", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "stop_service"}
 	s.State.Service = ServiceState{InstanceID: newID(), PID: os.Getpid(), Status: "running", Claimant: c.Claimant, Mode: "maintenance", Ready: false, ControlProtocol: ControlProtocolVersion, Capabilities: capabilities, ConfigDigest: c.configDigest, HeartbeatIntervalMS: duration(c.Heartbeat).Milliseconds()}
 	identity, err := currentProcessIdentity()
