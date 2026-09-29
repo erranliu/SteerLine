@@ -4,7 +4,7 @@
 
 ## 使用
 
-1. 保持两端 Orca 在线，远端 Git、Codex、项目检查工具和 PR 发布凭据可用。本机每个项目的专用 `remote coordinator - keep open` 终端须保持打开。
+1. 保持两端 Orca 在线，远端 Git、Codex、项目检查工具和 PR 发布凭据可用。本机项目配置指定的预检终端须保持打开；每个新运行另有由中心创建的独立协调终端。
 2. 打开 `C:\SteerlineRuntime\service-window.bat`；SteerlineTest 使用参数 `C:\SteerlineRuntime\etc\SteerlineTest.json`。保持服务窗口打开。
 3. 打开 `C:\SteerlineRuntime\console.bat`，选择 Ready 任务，按 `s`，选择“Orca 台式机64g Codex Luna xhigh”并确认。已有本机配置和自动派发默认配置保持不变。
 4. 中心控制 prepare、implement、verify、review、publish_pr；在控制台回答业务问题，在代码托管平台审阅并人工合并 PR。中心核对固定 head 的真实合并后才关闭 Task、释放 DAG 后继。

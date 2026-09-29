@@ -61,6 +61,14 @@ func (s *Service) executionConfigForRun(run *Run) (Config, error) {
 			return Config{}, errors.New("fixed execution profile identity is incomplete")
 		}
 		config := base.ApplyFixedExecutionProfile(fixed, workflow.ProjectSteps)
+		if fixed.Host == "orca_supervised" && run.Target.CoordinatorTerminal != "" {
+			if config.Orca.Supervised == nil {
+				return Config{}, errors.New("fixed supervised profile has no coordinator configuration")
+			}
+			coordinator := *config.Orca.Supervised
+			coordinator.CoordinatorTerminal = run.Target.CoordinatorTerminal
+			config.Orca.Supervised = &coordinator
+		}
 		if _, err := config.validateNativeWorkflow(); err != nil {
 			return Config{}, fmt.Errorf("fixed execution profile is invalid: %w", err)
 		}

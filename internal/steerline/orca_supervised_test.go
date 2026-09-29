@@ -89,6 +89,16 @@ func fakeSupervisedOrca(args []string) int {
 		if args[1] == "show" && os.Getenv("STEERLINE_FAKE_REOPEN") == "1" && arg(args, "--environment") == "env-home" && arg(args, "--terminal") == "terminal-reopen" {
 			return fakeSupervisedEnvelope("fake-remote-runtime", map[string]any{"terminal": map[string]any{"handle": "terminal-reopen", "incarnationId": "inc-reopen", "worktreeId": "repo-test::worktree", "connected": os.Getenv("STEERLINE_FAKE_REOPEN_TERMINAL_LIVE") == "1", "exitCause": map[string]any{"kind": "operator_close"}}})
 		}
+		if args[1] == "create" {
+			workflow := strings.TrimPrefix(arg(args, "--title"), "SteerLine coordinator ")
+			if !strings.HasPrefix(arg(args, "--title"), "SteerLine coordinator ") || !stableExecutionID(workflow) || arg(args, "--worktree") == "" {
+				return fakeOrcaErr("invalid_argument", "per-Run coordinator identity missing")
+			}
+			if os.Getenv("STEERLINE_FAKE_SUPERVISED_COORDINATOR_CREATE_LOSS") == "1" {
+				return fakeOrcaErr("transport_unavailable", "coordinator create receipt lost")
+			}
+			return fakeSupervisedEnvelope("fake-center-runtime", map[string]any{"terminal": map[string]any{"handle": "term-" + workflow, "connected": true}})
+		}
 		if args[1] == "wait" {
 			if arg(args, "--terminal") != "terminal-test" || arg(args, "--for") != "tui-idle" || arg(args, "--environment") != "env-home" {
 				return fakeOrcaErr("invalid_argument", "prompt readiness wait did not target the exact remote terminal")
@@ -113,22 +123,28 @@ func fakeSupervisedOrca(args []string) int {
 			}
 			return fakeSupervisedEnvelope("fake-remote-runtime", map[string]any{"send": map[string]any{"handle": "terminal-test", "accepted": true}})
 		}
-		if args[1] != "show" || arg(args, "--terminal") != "term-coordinator" {
+		if args[1] != "show" || !strings.HasPrefix(arg(args, "--terminal"), "term-") {
 			return fakeOrcaErr("terminal_handle_stale", "coordinator terminal missing")
 		}
-		return fakeSupervisedEnvelope("fake-center-runtime", map[string]any{"terminal": map[string]any{"handle": "term-coordinator", "connected": true, "orphaned": false}})
+		return fakeSupervisedEnvelope("fake-center-runtime", map[string]any{"terminal": map[string]any{"handle": arg(args, "--terminal"), "connected": true, "orphaned": false}})
 	case "orchestration":
 		if len(args) < 2 {
 			return fakeOrcaErr("invalid_argument", "missing orchestration verb")
 		}
 		switch args[1] {
 		case "run-create":
-			if arg(args, "--from") != "term-coordinator" || arg(args, "--retry-request") != "" || arg(args, "--objective") == "" {
+			if arg(args, "--from") == "term-coordinator" || !strings.HasPrefix(arg(args, "--from"), "term-") || arg(args, "--retry-request") != "" || arg(args, "--objective") == "" {
 				return fakeOrcaErr("invalid_argument", "missing Run identity")
 			}
 			return fakeSupervisedEnvelope("fake-center-runtime", map[string]any{"run": map[string]any{"id": "orca-run-test", "objective": arg(args, "--objective")}, "mutation": map[string]any{"requestId": "request-run-create"}})
+		case "run-show":
+			coordinator := os.Getenv("STEERLINE_FAKE_SUPERVISED_RUN_COORDINATOR")
+			if coordinator == "" {
+				coordinator = "term-coordinator"
+			}
+			return fakeSupervisedEnvelope("fake-center-runtime", map[string]any{"run": map[string]any{"id": arg(args, "--id"), "coordinator_handle": coordinator}})
 		case "worker-start":
-			if arg(args, "--from") != "term-coordinator" || arg(args, "--on") != "env-home" || arg(args, "--agent") != "codex" || arg(args, "--model") != "gpt-6-luna" || arg(args, "--effort") != "high" || arg(args, "--retry-request") != "" {
+			if !strings.HasPrefix(arg(args, "--from"), "term-") || arg(args, "--on") != "env-home" || arg(args, "--agent") != "codex" || arg(args, "--model") != "gpt-6-luna" || arg(args, "--effort") != "high" || arg(args, "--retry-request") != "" {
 				return fakeOrcaErr("invalid_argument", "launch identity/model was not fixed")
 			}
 			if marker := os.Getenv("STEERLINE_FAKE_SUPERVISED_START_MARKER"); marker != "" {
@@ -205,6 +221,13 @@ func fakeSupervisedOrca(args []string) int {
 			}
 			return fakeSupervisedEnvelope("fake-center-runtime", map[string]any{"dispatchId": arg(args, "--dispatch"), "source": "transcript", "cursor": "cursor-1", "contentComplete": true, "clipping": []string{}, "status": map[string]any{"worker": "ready", "terminal": "running", "liveness": "live"}, "transcript": map[string]any{"messages": []any{}}})
 		case "check":
+			coordinator := os.Getenv("STEERLINE_FAKE_SUPERVISED_RUN_COORDINATOR")
+			if coordinator == "" {
+				coordinator = "term-coordinator"
+			}
+			if arg(args, "--terminal") != coordinator {
+				return fakeOrcaErr("consumer_fenced", "coordinator terminal is bound to another Run")
+			}
 			if os.Getenv("STEERLINE_FAKE_SUPERVISED_DONE_WITHOUT_RESULT") == "1" {
 				return fakeSupervisedEnvelope("fake-center-runtime", map[string]any{"runId": "orca-run-test", "deliveryId": "delivery-done-without-result", "messages": []any{map[string]any{"id": "done-without-result", "type": "worker_done", "from_handle": "dispatch:dispatch-test", "to_handle": "run:orca-run-test", "body": "worker reported success without the structured result", "payload": map[string]any{"taskId": "task-test", "dispatchId": "dispatch-test", "outcome": "succeeded"}}}, "count": 1})
 			}
@@ -235,7 +258,11 @@ func fakeSupervisedOrca(args []string) int {
 			if os.Getenv("STEERLINE_FAKE_SUPERVISED_DENY_REPLY") != "" {
 				return fakeOrcaErr("unexpected_mutation", "reply was resent during read-only reconciliation")
 			}
-			if arg(args, "--run") != "orca-run-test" || arg(args, "--from") != "term-coordinator" || arg(args, "--id") == "" || arg(args, "--body") == "" {
+			coordinator := os.Getenv("STEERLINE_FAKE_SUPERVISED_RUN_COORDINATOR")
+			if coordinator == "" {
+				coordinator = "term-coordinator"
+			}
+			if arg(args, "--run") != "orca-run-test" || arg(args, "--from") != coordinator || arg(args, "--id") == "" || arg(args, "--body") == "" {
 				return fakeOrcaErr("invalid_argument", "reply lost its original question or Run")
 			}
 			return fakeSupervisedEnvelope("fake-center-runtime", map[string]any{"message": map[string]any{"from_handle": "run:orca-run-test", "to_handle": "dispatch:dispatch-test"}, "question": map[string]any{"message_id": arg(args, "--id"), "run_id": "orca-run-test", "dispatch_id": "dispatch-test", "answer_body": arg(args, "--body"), "status": "answered"}, "mutation": map[string]any{"requestId": "request-reply"}})
@@ -310,7 +337,8 @@ func TestSupervisedHostWaitAndLaunchFailureRequireManualCheck(t *testing.T) {
 		}
 	}
 	t.Setenv("STEERLINE_FAKE_SUPERVISED_AGENT_WAIT", "present")
-	ref := ExecutionRef{Version: ExecutionRecordVersion, Backend: BackendOrca, Protocol: ProtocolOrcaSupervised, Target: targetFor(c), Agent: AgentSpec{Name: "codex"}, External: ProcessIdentity{Kind: "orca_supervised", RuntimeID: "fake-remote-runtime", CoordinatorRuntimeID: "fake-center-runtime", Terminal: "terminal-test", Incarnation: "inc-test", OrchestrationRun: "orca-run-test", Task: "task-test", Dispatch: "dispatch-test", ExecutionHost: "env-home", WorktreeID: expected.WorktreeID}}
+	ref := ExecutionRef{Version: ExecutionRecordVersion, Backend: BackendOrca, Protocol: ProtocolOrcaSupervised, Target: targetFor(c), Agent: AgentSpec{Name: "codex"}, RunID: newID(), External: ProcessIdentity{Kind: "orca_supervised", RuntimeID: "fake-remote-runtime", CoordinatorRuntimeID: "fake-center-runtime", Terminal: "terminal-test", Incarnation: "inc-test", OrchestrationRun: "orca-run-test", Task: "task-test", Dispatch: "dispatch-test", ExecutionHost: "env-home", WorktreeID: expected.WorktreeID}}
+	ref.Target.CoordinatorTerminal = "term-coordinator"
 	ref.Target.OrchestrationRun, ref.Target.ExternalTask, ref.Target.Dispatch = ref.External.OrchestrationRun, ref.External.Task, ref.External.Dispatch
 	ref.Target.ExecutionHost, ref.Target.WorktreeID = ref.External.ExecutionHost, ref.External.WorktreeID
 	if observed, err := b.Observe(context.Background(), ref); err != nil || observed.Diagnostic != "host_interaction_pending" {
@@ -429,14 +457,14 @@ func TestSupervisedOrcaClientPinsLaunchAndReadsExactDispatch(t *testing.T) {
 	t.Setenv("STEERLINE_FAKE_SUPERVISED_WORKTREE_ID", "repo-test::C:/remote/spec03-test")
 	backend := orcaSupervisedBackend{config: c}
 	workflowRunID := newID()
-	runID, requestID, err := backend.createOrchestrationRun(context.Background(), workflowRunID, "spec03 fixture")
+	runID, requestID, coordinator, err := backend.createOrchestrationRun(context.Background(), workflowRunID, "spec03 fixture")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if runID != "orca-run-test" {
 		t.Fatalf("created Orca Run ID = %q", runID)
 	}
-	if requestID != "request-run-create" {
+	if requestID != "request-run-create" || coordinator != "term-"+workflowRunID {
 		t.Fatalf("Orca Run-create request ID = %q", requestID)
 	}
 	base := strings.Repeat("a", 40)
@@ -480,7 +508,7 @@ func TestSupervisedRunCreationHasSeparateDurableOperation(t *testing.T) {
 	if err := s.ensureSupervisedRun(context.Background(), run); err != nil {
 		t.Fatal(err)
 	}
-	if run.Target.OrchestrationRun != "orca-run-test" || run.Target.OrchestrationRunRequestID != "request-run-create" || len(s.State.Operations) != 1 {
+	if run.Target.OrchestrationRun != "orca-run-test" || run.Target.OrchestrationRunRequestID != "request-run-create" || run.Target.CoordinatorTerminal != "term-"+run.RunID || len(s.State.Operations) != 1 {
 		t.Fatalf("remote Run identity or operation missing: target=%+v operations=%+v", run.Target, s.State.Operations)
 	}
 	op := s.State.Operations[0]
@@ -495,6 +523,46 @@ func TestSupervisedRunCreationHasSeparateDurableOperation(t *testing.T) {
 	}
 	if len(s.State.Operations) != 1 {
 		t.Fatalf("duplicate Run-create operation was appended: %+v", s.State.Operations)
+	}
+}
+
+func TestSupervisedRunCoordinatorsAreDistinctAndFenced(t *testing.T) {
+	c := supervisedFixtureConfig(t)
+	backend := orcaSupervisedBackend{config: c}
+	a, b := newID(), newID()
+	first, err := backend.createRunCoordinator(context.Background(), a, "fake-center-runtime")
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := backend.createRunCoordinator(context.Background(), b, "fake-center-runtime")
+	if err != nil || first == second {
+		t.Fatalf("WorkflowRuns shared a coordinator: %q / %q, %v", first, second, err)
+	}
+	t.Setenv("STEERLINE_FAKE_SUPERVISED_RUN_COORDINATOR", first)
+	ref := ExecutionRef{RunID: a, Target: ExecutionTarget{CoordinatorTerminal: first}, External: ProcessIdentity{Kind: "orca_supervised", OrchestrationRun: "orca-run-test", CoordinatorRuntimeID: "fake-center-runtime"}}
+	if _, err := backend.checkDelivery(context.Background(), ref); err != nil {
+		t.Fatalf("exact coordinator was fenced: %v", err)
+	}
+	t.Setenv("STEERLINE_FAKE_SUPERVISED_RUN_COORDINATOR", second)
+	if _, err := backend.checkDelivery(context.Background(), ref); err == nil || !isBackendError(err, BackendIdentityMismatch) {
+		t.Fatalf("Run rebinding was not rejected before inbox read: %v", err)
+	}
+}
+
+func TestSupervisedCoordinatorCreateLossCannotDuplicateRun(t *testing.T) {
+	f := newFixture(t)
+	f.c = supervisedConfigForFixture(t, f)
+	s := f.service(t)
+	run := &Run{RunID: newID(), ExecutionID: newID(), TaskID: "provider-task", DomainTaskID: "business-task", Target: targetFor(f.c)}
+	t.Setenv("STEERLINE_FAKE_SUPERVISED_COORDINATOR_CREATE_LOSS", "1")
+	if err := s.ensureSupervisedRun(context.Background(), run); err == nil {
+		t.Fatal("unknown coordinator creation was accepted")
+	}
+	if len(s.State.Operations) != 1 || s.State.Operations[0].Status != "outcome_unknown" || run.Target.OrchestrationRun != "" {
+		t.Fatalf("unknown coordinator changed Run authority: %+v %+v", run.Target, s.State.Operations)
+	}
+	if err := s.ensureSupervisedRun(context.Background(), run); err == nil || len(s.State.Operations) != 1 {
+		t.Fatalf("unknown coordinator was retried with a second Run: %v", err)
 	}
 }
 
@@ -723,7 +791,8 @@ func TestSupervisedWorkerDoneWithoutStructuredResultBlocksCompletion(t *testing.
 	c := supervisedFixtureConfig(t)
 	t.Setenv("STEERLINE_FAKE_SUPERVISED_DONE_WITHOUT_RESULT", "1")
 	b := orcaSupervisedBackend{config: c}
-	ref := ExecutionRef{Version: ExecutionRecordVersion, Backend: BackendOrca, Protocol: ProtocolOrcaSupervised, Target: targetFor(c), Agent: AgentSpec{Name: "codex"}, RunID: "local-run", AttemptID: "attempt-current", External: ProcessIdentity{Kind: "orca_supervised", RuntimeID: "fake-remote-runtime", CoordinatorRuntimeID: "fake-center-runtime", Terminal: "terminal-test", Incarnation: "inc-test", OrchestrationRun: "orca-run-test", Task: "task-test", Dispatch: "dispatch-test", ExecutionHost: "env-home", WorktreeID: "repo-test::C:/remote/steerline-run"}}
+	ref := ExecutionRef{Version: ExecutionRecordVersion, Backend: BackendOrca, Protocol: ProtocolOrcaSupervised, Target: targetFor(c), Agent: AgentSpec{Name: "codex"}, RunID: newID(), AttemptID: "attempt-current", External: ProcessIdentity{Kind: "orca_supervised", RuntimeID: "fake-remote-runtime", CoordinatorRuntimeID: "fake-center-runtime", Terminal: "terminal-test", Incarnation: "inc-test", OrchestrationRun: "orca-run-test", Task: "task-test", Dispatch: "dispatch-test", ExecutionHost: "env-home", WorktreeID: "repo-test::C:/remote/steerline-run"}}
+	ref.Target.CoordinatorTerminal = "term-coordinator"
 	ref.Target.OrchestrationRun, ref.Target.ExternalTask, ref.Target.Dispatch = ref.External.OrchestrationRun, ref.External.Task, ref.External.Dispatch
 	ref.Target.ExecutionHost, ref.Target.WorktreeID = ref.External.ExecutionHost, ref.External.WorktreeID
 	input := MinimalStepInput{ProjectIdentity: "repo", TaskID: "business-task", WorkflowRunID: ref.RunID, ExecutionID: "execution-current", AttemptID: ref.AttemptID, StepID: "verify"}
@@ -866,7 +935,8 @@ func supervisedPromptTestRef(c Config, started supervisedStartReceipt, observati
 	target.WorktreeID = observation.Identity.WorktreeID
 	target.Branch = observation.Branch
 	target.BaseRevision = strings.Repeat("a", 40)
-	return ExecutionRef{Version: ExecutionRecordVersion, Backend: BackendOrca, Protocol: ProtocolOrcaSupervised, Target: target, Agent: AgentSpec{Name: "codex"}, RunID: "workflow-test", AttemptID: "attempt-test", WorkspacePath: observation.WorktreePath, WorkspaceBranch: observation.Branch, BaseCommit: target.BaseRevision, External: observation.Identity, Generation: observation.Identity.RuntimeID + ":" + observation.Identity.Incarnation}
+	target.CoordinatorTerminal = c.Orca.Supervised.CoordinatorTerminal
+	return ExecutionRef{Version: ExecutionRecordVersion, Backend: BackendOrca, Protocol: ProtocolOrcaSupervised, Target: target, Agent: AgentSpec{Name: "codex"}, RunID: newID(), AttemptID: "attempt-test", WorkspacePath: observation.WorktreePath, WorkspaceBranch: observation.Branch, BaseCommit: target.BaseRevision, External: observation.Identity, Generation: observation.Identity.RuntimeID + ":" + observation.Identity.Incarnation}
 }
 
 func TestSupervisedReplyRejectsEscapedOversizeBeforeOrcaCall(t *testing.T) {
