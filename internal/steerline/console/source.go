@@ -96,12 +96,6 @@ func (FileQuerySource) ReadProject(ctx context.Context, ref ProjectRef, selected
 	}()
 	result.Connection = <-connectionCh
 	result.Observation = result.Connection.Snapshot
-	databaseObservation := newFileSource(c).SnapshotFromObservation(result.Connection.Snapshot)
-	if databaseObservation.Runtime != nil && (result.Observation.Runtime == nil || databaseObservation.Runtime.Revision > result.Observation.Runtime.Revision || (databaseObservation.Runtime.Revision == result.Observation.Runtime.Revision && databaseObservation.Runtime.HeartbeatAt.After(result.Observation.Runtime.HeartbeatAt))) {
-		result.Observation = databaseObservation
-	} else if result.Observation.Runtime == nil && result.Observation.State == steerline.SnapshotNone {
-		result.Observation = steerline.ReadObservationSnapshot(filepath.Join(c.RunDir, c.RuntimeFile), c.Heartbeat, nil)
-	}
 	if _, statErr := os.Stat(filepath.Join(c.RunDir, "steerline.db")); statErr != nil {
 		if reader := <-readerCh; reader.store != nil {
 			_ = reader.store.Close()

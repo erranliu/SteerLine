@@ -3,7 +3,6 @@
   "remote": "origin",
   "branch": "main",
   "task_authority": "native",
-  "runtime_file": "runtime.json",
   "git": { "executable": "git" },
   "codex": { "executable": "/absolute/path/to/codex" },
   "host": "local",

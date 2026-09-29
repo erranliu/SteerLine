@@ -394,7 +394,7 @@ func connectServiceWithProbe(ctx context.Context, c Config, probe func(*ProcessI
 		connection.State, connection.Diagnostic, connection.CanStart = ConnectionIdentityError, "resolve repository identity: "+err.Error(), false
 		return connection
 	}
-	obs := ReadObservationSnapshot(filepath.Join(c.RunDir, c.RuntimeFile), c.Heartbeat, time.Now)
+	obs := ReadObservationSnapshot(c, time.Now)
 	connection.Snapshot = obs
 	if obs.State == SnapshotNone {
 		return connection

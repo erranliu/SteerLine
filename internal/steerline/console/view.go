@@ -604,9 +604,6 @@ func renderDetailContent(m Model, state projectState, row *consoleRow, width, he
 	if verified := executionVerifiedAt(state, run); verified != "未知" && verified != "—" {
 		lines = append(lines, "最后核验："+verified)
 	}
-	if runtimeState := state.snapshot.Observation.Runtime; runtimeState != nil && runtimeState.ProjectionError != "" {
-		lines = append(lines, "runtime 缓存来源："+safeTerminalText(runtimeState.ProjectionError))
-	}
 	if state.snapshot.DomainError != "" {
 		lines = append(lines, "execution/attempt 查询："+safeTerminalText(state.snapshot.DomainError))
 	}

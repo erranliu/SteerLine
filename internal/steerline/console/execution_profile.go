@@ -82,8 +82,6 @@ func fixedRunExecutionProfile(state projectState, run *steerline.Run) *steerline
 	workflows := []steerline.WorkflowRunRecord(nil)
 	if state.snapshot.Domain != nil {
 		workflows = state.snapshot.Domain.WorkflowRuns
-	} else if state.snapshot.Observation.Runtime != nil {
-		workflows = state.snapshot.Observation.Runtime.WorkflowRuns
 	}
 	for _, workflow := range workflows {
 		if workflow.WorkflowRunID != run.RunID || workflow.ExecutionProfile == nil {

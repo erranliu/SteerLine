@@ -66,6 +66,7 @@ type DomainSnapshot struct {
 	Executions      []ExecutionRecord   `json:"executions"`
 	Attempts        []StepAttemptRecord `json:"attempts"`
 	Decisions       []DecisionRecord    `json:"decisions"`
+	Operations      []OperationRecord   `json:"operations"`
 }
 
 type SQLiteStore struct {
@@ -1267,6 +1268,29 @@ func (t *sqliteTx) PutProjection(project string, revision uint64, payload []byte
 	return err
 }
 
+func (t *sqliteTx) heartbeatProjection(project string) error {
+	var payload []byte
+	var revision uint64
+	err := t.tx.QueryRowContext(t.ctx, `SELECT payload,revision FROM projection WHERE project_identity=?`, project).Scan(&payload, &revision)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	var checkpoint Runtime
+	if err = decode(payload, &checkpoint); err != nil {
+		return err
+	}
+	checkpoint.UpdatedAt = now()
+	checkpoint.HeartbeatAt = checkpoint.UpdatedAt
+	payload, err = json.Marshal(checkpoint)
+	if err != nil {
+		return err
+	}
+	return t.PutProjection(project, revision, payload)
+}
+
 func nullIfEmpty(v string) any {
 	if v == "" {
 		return nil
@@ -1311,7 +1335,7 @@ type queryContext interface {
 }
 
 func querySnapshot(ctx context.Context, db queryContext, project string) (DomainSnapshot, error) {
-	out := DomainSnapshot{ProjectIdentity: project, Tasks: []TaskRecord{}, WorkflowRuns: []WorkflowRunRecord{}, Executions: []ExecutionRecord{}, Attempts: []StepAttemptRecord{}, Decisions: []DecisionRecord{}}
+	out := DomainSnapshot{ProjectIdentity: project, Tasks: []TaskRecord{}, WorkflowRuns: []WorkflowRunRecord{}, Executions: []ExecutionRecord{}, Attempts: []StepAttemptRecord{}, Decisions: []DecisionRecord{}, Operations: []OperationRecord{}}
 	queries := []struct {
 		sql    string
 		decode func([]byte) error
@@ -1354,6 +1378,14 @@ func querySnapshot(ctx context.Context, db queryContext, project string) (Domain
 				return err
 			}
 			out.Decisions = append(out.Decisions, v)
+			return nil
+		}},
+		{`SELECT payload FROM operations WHERE project_identity=? ORDER BY operation_id`, func(b []byte) error {
+			var v OperationRecord
+			if err := json.Unmarshal(b, &v); err != nil {
+				return err
+			}
+			out.Operations = append(out.Operations, v)
 			return nil
 		}},
 	}
@@ -1596,8 +1628,8 @@ func (s *SQLiteStore) SaveRuntime(ctx context.Context, runtime Runtime) (Runtime
 		runtime.Executions = snapshot.Executions
 		runtime.Attempts = snapshot.Attempts
 		runtime.Decisions = snapshot.Decisions
-		runtime.ProjectionError = ""
-		payload, err := json.Marshal(runtime)
+		runtime.Operations = snapshot.Operations
+		payload, err := json.Marshal(runtimeCheckpoint(runtime))
 		if err != nil {
 			return err
 		}

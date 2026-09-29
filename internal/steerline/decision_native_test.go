@@ -10,7 +10,7 @@ import (
 
 func TestDecisionSubmissionRequiresNativeAuthorityBeforeStateAccess(t *testing.T) {
 	runDir := filepath.Join(t.TempDir(), "state")
-	c := Config{RunDir: runDir, RuntimeFile: "runtime.json"}
+	c := Config{RunDir: runDir}
 	if _, _, err := SubmitAnswerDecision(context.Background(), c, "run", "decision", "yes", "", "operator", 1, 1, "instance", newID()); err == nil || !strings.Contains(err.Error(), "task_authority=native") {
 		t.Fatalf("direct answer command bypassed explicit native authority: %v", err)
 	}

@@ -17,7 +17,6 @@ func minimalConfig(repo string) Config {
 		Git:              Command{Executable: "git"},
 		Remote:           "origin",
 		Branch:           "main",
-		RuntimeFile:      "runtime.json",
 		ExecutableTypes:  []string{"task"},
 		TaskPoll:         "10s",
 		PRPoll:           "10s",

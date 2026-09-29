@@ -66,7 +66,7 @@ func TestDeferredOrcaWorkerFlowCannotClaim(t *testing.T) {
 
 func TestWorkerFlowRejectsOldRuntimeBeforeWorkspacePreparation(t *testing.T) {
 	c, _, store := openDAGFixture(t)
-	old := Runtime{SchemaVersion: CurrentRuntimeSchema, Repository: Repository{Path: c.Repository, Remote: c.Remote, Branch: c.Branch, Identity: c.Identity()}}
+	old := Runtime{SchemaVersion: 5, Repository: Repository{Path: c.Repository, Remote: c.Remote, Branch: c.Branch, Identity: c.Identity()}}
 	payload, err := json.Marshal(old)
 	if err != nil {
 		t.Fatal(err)

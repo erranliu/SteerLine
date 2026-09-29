@@ -15,7 +15,7 @@ requests a normal shutdown. The console's x command also stops the service.
 Multiple projects
 -----------------
 - One config per target repo:  etc\<repo>.json
-- One state directory per repo: state\<repoKey>\ (runtime.json + runs), keyed by
+- One state directory per repo: state\<repoKey>\ (steerline.db + runs), keyed by
   the repo's Git common dir, so every worktree of the same repo shares it.
 - Run one service per project; they may run at the same time (locks are
   per-repository). A second service for the same repo is refused.

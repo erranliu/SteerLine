@@ -12,16 +12,7 @@ type Repository struct {
 	Identity string `json:"identity"`
 }
 
-const CurrentRuntimeSchema = 5
-
 const WorkerFlowRuntimeSchema = 7
-
-func runtimeSchemaFor(c Config) int {
-	if c.WorkflowProtocol == WorkerFlowVersion {
-		return WorkerFlowRuntimeSchema
-	}
-	return CurrentRuntimeSchema
-}
 
 type Runtime struct {
 	SchemaVersion     int                 `json:"schema_version"`
@@ -38,7 +29,6 @@ type Runtime struct {
 	Operations        []OperationRecord   `json:"operations,omitempty"`
 	PendingEvents     []DomainEvent       `json:"-"`
 	RejectedClaimRuns []string            `json:"-"`
-	ProjectionError   string              `json:"projection_error,omitempty"`
 	CurrentTask       *string             `json:"current_task"`
 	SlotOccupied      bool                `json:"slot_occupied"`
 	Runs              []*Run              `json:"runs"`

@@ -157,7 +157,7 @@ func (s *Service) refreshNativeSnapshot(ctx context.Context, reconstruct bool) e
 			run.PR.State, run.PR.MergedAt, run.PR.MergeCommit = "merged", ptr(delivery.MergedAt), ptr(delivery.MergeCommit)
 		}
 	}
-	s.State.SchemaVersion = runtimeSchemaFor(s.Config)
+	s.State.SchemaVersion = WorkerFlowRuntimeSchema
 	s.refreshSlotOccupancy()
 	return nil
 }

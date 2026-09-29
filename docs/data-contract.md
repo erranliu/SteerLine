@@ -6,6 +6,8 @@ SteerLine 尚未发布。当前生产配置必须显式设置 `"task_authority":
 
 SQLite schema 5 是 Task、固定 TaskContract、依赖、WorkflowRun、Execution、Decision、Operation、会话事件与 TaskDelivery 的唯一业务权威。现有 v3/v4 库只通过只读元数据检查识别并拒绝，不自动升级，也不开放业务读取；拒绝时保留数据库文件与可能仍在运行的外部执行。运行时投影为 schema 7，可在当前格式内重启恢复。旧投影、旧 WorkflowRun 或旧本地执行协议在工作区准备之前拒绝，并保留原文件及可能仍在运行的外部执行。
 
+服务与会话检查点也保存在 SQLite；检查点不复制 Task、WorkflowRun、Execution、Attempt、Decision 或 Operation 行。连接观察只读检查点，恢复和命令在同一只读事务中把检查点与领域表组合。当前配置不使用 `runtime_file`，服务不导出 `runtime.json`。
+
 TaskContract 固定目标仓库、remote、base 分支以及 Spec、Plan 和其他引用的 commit/SHA-256。领取前再次核验 Task 版本、依赖就绪、项目 authority、目标仓库和前置合并已进入当前 base。领取事务预留一个 Task、WorkflowRun、Execution 与固定 `worker` attempt；不生成 implement／verify／review／publish_pr 链。
 
 | WorkflowRun 主阶段 | 条件 |
