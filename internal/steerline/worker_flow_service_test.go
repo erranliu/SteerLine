@@ -187,7 +187,11 @@ func TestWorkerFlowServiceFirstFeedbackKeepsSessionAndWorkspace(t *testing.T) {
 	if err := service.save(); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.startOperation("start_worker_turn", "worker-turn:"+execution.ExecutionID+":"+uncertainCommand.CommandID, map[string]string{"original_request": uncertainCommand.CommandID}); err != nil {
+	operationID, err := service.startOperation("start_worker_turn", "worker-turn:"+execution.ExecutionID+":"+uncertainCommand.CommandID, map[string]string{"original_request": uncertainCommand.CommandID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := service.changeOperation(operationID, "outcome_unknown", "", nil, "feedback receipt lost"); err != nil {
 		t.Fatal(err)
 	}
 	before := len(service.State.Operations)
