@@ -522,32 +522,6 @@ func TestSupervisedOrcaClientRejectsReturnedReplacementWorktree(t *testing.T) {
 	}
 }
 
-func TestSupervisedRunCreationHasSeparateDurableOperation(t *testing.T) {
-	f := newFixture(t)
-	f.c = supervisedConfigForFixture(t, f)
-	s := f.service(t)
-	run := &Run{RunID: newID(), ExecutionID: newID(), TaskID: "provider-task", DomainTaskID: "business-task", Target: targetFor(f.c)}
-	if err := s.ensureSupervisedRun(context.Background(), run); err != nil {
-		t.Fatal(err)
-	}
-	if run.Target.OrchestrationRun != "orca-run-test" || run.Target.OrchestrationRunRequestID != "request-run-create" || run.Target.CoordinatorTerminal != "term-"+run.RunID || len(s.State.Operations) != 1 {
-		t.Fatalf("remote Run identity or operation missing: target=%+v operations=%+v", run.Target, s.State.Operations)
-	}
-	op := s.State.Operations[0]
-	if op.Kind != "create_orca_run" || op.Status != "confirmed" || op.PlatformRequestID != "request-run-create" || !strings.Contains(string(op.Receipt), "orca-run-test") {
-		t.Fatalf("Run-create receipt was not recorded: %+v", op)
-	}
-	// An uncertain replay cannot silently issue another create, even when the
-	// target binding has not yet been recovered from the remote platform.
-	run.Target.OrchestrationRun = ""
-	if err := s.ensureSupervisedRun(context.Background(), run); err == nil || !strings.Contains(err.Error(), "reconcile the original operation") {
-		t.Fatalf("duplicate Run creation was not blocked: %v", err)
-	}
-	if len(s.State.Operations) != 1 {
-		t.Fatalf("duplicate Run-create operation was appended: %+v", s.State.Operations)
-	}
-}
-
 func TestSupervisedRunCoordinatorsAreDistinctAndFenced(t *testing.T) {
 	c := supervisedFixtureConfig(t)
 	backend := orcaSupervisedBackend{config: c}
@@ -568,132 +542,6 @@ func TestSupervisedRunCoordinatorsAreDistinctAndFenced(t *testing.T) {
 	t.Setenv("STEERLINE_FAKE_SUPERVISED_RUN_COORDINATOR", second)
 	if _, err := backend.checkDelivery(context.Background(), ref); err == nil || !isBackendError(err, BackendIdentityMismatch) {
 		t.Fatalf("Run rebinding was not rejected before inbox read: %v", err)
-	}
-}
-
-func TestSupervisedCoordinatorCreateLossCannotDuplicateRun(t *testing.T) {
-	f := newFixture(t)
-	f.c = supervisedConfigForFixture(t, f)
-	s := f.service(t)
-	run := &Run{RunID: newID(), ExecutionID: newID(), TaskID: "provider-task", DomainTaskID: "business-task", Target: targetFor(f.c)}
-	t.Setenv("STEERLINE_FAKE_SUPERVISED_COORDINATOR_CREATE_LOSS", "1")
-	if err := s.ensureSupervisedRun(context.Background(), run); err == nil {
-		t.Fatal("unknown coordinator creation was accepted")
-	}
-	if len(s.State.Operations) != 1 || s.State.Operations[0].Status != "outcome_unknown" || run.Target.OrchestrationRun != "" {
-		t.Fatalf("unknown coordinator changed Run authority: %+v %+v", run.Target, s.State.Operations)
-	}
-	if err := s.ensureSupervisedRun(context.Background(), run); err == nil || len(s.State.Operations) != 1 {
-		t.Fatalf("unknown coordinator was retried with a second Run: %v", err)
-	}
-}
-
-func TestSupervisedDeliveryAckPersistsPlatformReceiptAndDeduplicates(t *testing.T) {
-	f := newFixture(t)
-	s := f.service(t)
-	ackCalls := 0
-	event := WorkerEvent{RemoteRunID: "run-orca-test", RemoteDeliveryID: "delivery-123", Acknowledge: func() (string, error) {
-		ackCalls++
-		if len(s.State.Operations) != 1 || s.State.Operations[0].Status != "in_flight" {
-			t.Fatal("in-flight ack operation was not persisted before platform ack")
-		}
-		return "request-platform-ack-123", nil
-	}}
-	if err := s.acknowledgeRemoteDelivery(event); err != nil {
-		t.Fatal(err)
-	}
-	if ackCalls != 1 || len(s.State.Operations) != 1 {
-		t.Fatalf("first Delivery acknowledgement was not singular: ackCalls=%d operations=%d", ackCalls, len(s.State.Operations))
-	}
-	operation := s.State.Operations[0]
-	if operation.Kind != "ack_orca_delivery" || operation.Status != "confirmed" || operation.PlatformRequestID != "request-platform-ack-123" || !strings.Contains(string(operation.Receipt), "delivery-123") {
-		t.Fatalf("ack receipt was not durably recorded: %+v", operation)
-	}
-	if err := s.acknowledgeRemoteDelivery(event); err != nil {
-		t.Fatal(err)
-	}
-	if ackCalls != 1 || len(s.State.Operations) != 1 {
-		t.Fatalf("replayed Delivery duplicated an ack: ackCalls=%d operations=%d", ackCalls, len(s.State.Operations))
-	}
-}
-
-func TestSupervisedRetainedReleaseIsNotConfirmedOrReplayed(t *testing.T) {
-	f := newFixture(t)
-	f.c = supervisedConfigForFixture(t, f)
-	s := f.service(t)
-	t.Cleanup(func() { _ = s.Close() })
-	t.Setenv("STEERLINE_FAKE_SUPERVISED_DISPATCH_STATE", "completed")
-	t.Setenv("STEERLINE_FAKE_SUPERVISED_RELEASE_STATE", "retained")
-	t.Setenv("STEERLINE_FAKE_SUPERVISED_RELEASE_REASON", "user_takeover")
-	marker := filepath.Join(t.TempDir(), "release-attempts.txt")
-	t.Setenv("STEERLINE_FAKE_SUPERVISED_RELEASE_MARKER", marker)
-	backend := orcaSupervisedBackend{config: f.c}
-	started := supervisedStartReceipt{RunID: "orca-run-test", TaskID: "task-test", DispatchID: "dispatch-test", WorktreeID: "repo-test::C:/remote/steerline-run", CenterRuntimeID: "fake-center-runtime"}
-	observed, err := backend.showWorker(context.Background(), started)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ref := supervisedPromptTestRef(f.c, started, observed)
-	ref.RunID, ref.AttemptID = newID(), newID()
-	if err := (executionRecords{root: f.c.RunDir}).saveBinding(ref); err != nil {
-		t.Fatal(err)
-	}
-	run := &Run{RunID: ref.RunID, ExecutionID: newID(), AttemptID: ref.AttemptID, Protocol: string(ProtocolOrcaSupervised), Target: ref.Target}
-	if err := s.settleSupervisedStepResources(run, ref.AttemptID, "succeeded"); err == nil || !isBackendError(err, BackendRejected) {
-		t.Fatalf("user-taken-over terminal release was accepted: %v", err)
-	}
-	if len(s.State.Operations) != 1 || s.State.Operations[0].Status != "rejected" || s.State.Operations[0].PlatformRequestID != "request-worker-release" || !strings.Contains(s.State.Operations[0].UnknownReason, "user_takeover") {
-		t.Fatalf("retained terminal was recorded as a successful release: %+v", s.State.Operations)
-	}
-	var recorded struct {
-		Settlement SettlementReceipt `json:"settlement"`
-	}
-	if err := json.Unmarshal(s.State.Operations[0].Receipt, &recorded); err != nil || recorded.Settlement.Disposition != "retained" || len(recorded.Settlement.ResidualResources) != 1 {
-		t.Fatalf("retained release proof was not recorded: %+v, %v", recorded, err)
-	}
-	if err := s.requireSettledSupervisedReleases(run); err == nil || !isBackendError(err, BackendOutcomeUnknown) {
-		t.Fatalf("next supervised step ignored the retained terminal: %v", err)
-	}
-	restarted, err := NewService(f.c)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = restarted.Close() })
-	if err := restarted.requireSettledSupervisedReleases(run); err == nil || !isBackendError(err, BackendOutcomeUnknown) {
-		t.Fatalf("restart forgot the retained terminal release: %v", err)
-	}
-	if err := s.settleSupervisedStepResources(run, ref.AttemptID, "succeeded"); err == nil || !isBackendError(err, BackendRejected) {
-		t.Fatalf("rejected release was replayed: %v", err)
-	}
-	attempts, err := os.ReadFile(marker)
-	if err != nil || string(attempts) != "attempt\n" {
-		t.Fatalf("release was sent more than once: %q, %v", attempts, err)
-	}
-	confirmedRequest := mustJSON(struct {
-		Ref     ExecutionRef `json:"ref"`
-		Outcome string       `json:"outcome"`
-	}{ref, "succeeded"})
-	confirmed := OperationRecord{ProjectIdentity: s.Config.identity, Kind: "settle_resources", IdempotencyKey: "release:" + run.ExecutionID + ":" + ref.AttemptID, Status: "confirmed", PayloadDigest: operationDigest(confirmedRequest), Request: confirmedRequest, PlatformRequestID: "request-worker-release", Receipt: mustJSON(map[string]any{"dispatch_id": ref.External.Dispatch, "settlement": SettlementReceipt{Disposition: "released", PlatformRequestID: "request-worker-release"}, "error": ""})}
-	s.State.Operations = []OperationRecord{confirmed}
-	if err := s.requireSettledSupervisedReleases(run); err != nil {
-		t.Fatalf("positive terminal release proof blocked the next step: %v", err)
-	}
-	s.State.Operations[0].Receipt = mustJSON(map[string]any{"dispatch_id": ref.External.Dispatch, "settlement": SettlementReceipt{Disposition: "residual", PlatformRequestID: "request-worker-release", ResidualResources: []string{"dispatch:dispatch-test"}}, "error": ""})
-	if err := s.requireSettledSupervisedReleases(run); err == nil || !isBackendError(err, BackendProtocolInvalid) {
-		t.Fatalf("old false-confirmed release proof permitted the next step: %v", err)
-	}
-	s.State.Operations[0].Receipt = mustJSON(map[string]any{"dispatch_id": "different-dispatch", "settlement": SettlementReceipt{Disposition: "released", PlatformRequestID: "request-worker-release"}, "error": ""})
-	if err := s.requireSettledSupervisedReleases(run); err == nil || !isBackendError(err, BackendProtocolInvalid) {
-		t.Fatalf("release proof for another Dispatch permitted the next step: %v", err)
-	}
-	t.Setenv("STEERLINE_FAKE_SUPERVISED_RELEASE_MARKER", "")
-	t.Setenv("STEERLINE_FAKE_SUPERVISED_RELEASE_STATE", "release_pending")
-	if receipt, err := backend.SettleResources(context.Background(), ref, "succeeded"); err == nil || !isBackendError(err, BackendOutcomeUnknown) || receipt.PlatformRequestID != "request-worker-release" {
-		t.Fatalf("pending release was treated as complete: %+v, %v", receipt, err)
-	}
-	t.Setenv("STEERLINE_FAKE_SUPERVISED_RELEASE_STATE", "released")
-	if receipt, err := backend.SettleResources(context.Background(), ref, "succeeded"); err != nil || receipt.Disposition != "released" || len(receipt.ResidualResources) != 0 {
-		t.Fatalf("released terminal was not accepted: %+v, %v", receipt, err)
 	}
 }
 
@@ -766,85 +614,6 @@ func TestSettledSupervisedObserverReplaysOriginalResultBeforeOutput(t *testing.T
 		case <-ctx.Done():
 			t.Fatal("settled result replay timed out")
 		}
-	}
-}
-
-func TestSettledSupervisedAttemptReattachesFromUnknownWithoutNewDispatch(t *testing.T) {
-	f := newFixture(t)
-	f.c = supervisedConfigForFixture(t, f)
-	s := f.service(t)
-	t.Cleanup(func() { _ = s.Close() })
-	b := orcaSupervisedBackend{config: f.c}
-	started := supervisedStartReceipt{RunID: "orca-run-test", TaskID: "task-test", DispatchID: "dispatch-test", WorktreeID: "repo-test::C:/remote/steerline-run", CenterRuntimeID: "fake-center-runtime"}
-	observed, err := b.showWorker(context.Background(), started)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ref := supervisedPromptTestRef(f.c, started, observed)
-	ref.AttemptID = newID()
-	if err := (executionRecords{root: f.c.RunDir}).saveBinding(ref); err != nil {
-		t.Fatal(err)
-	}
-	executionID := newID()
-	stepInput := MinimalStepInput{ProjectIdentity: f.c.identity, TaskID: "business-task", WorkflowRunID: ref.RunID, ExecutionID: executionID, AttemptID: ref.AttemptID, StepID: "implement"}
-	context := NativeTaskWorkerContext{SchemaVersion: NativeTaskInputSchema, ProjectID: stepInput.ProjectIdentity, TaskID: stepInput.TaskID, WorkflowRunID: stepInput.WorkflowRunID, ExecutionID: stepInput.ExecutionID, AttemptID: stepInput.AttemptID, CurrentStep: stepInput.StepID, Contract: TaskContract{ContractID: "contract-test", Digest: "digest-test"}, ContractDigest: "digest-test", StepInput: stepInput}
-	request := mustJSON(map[string]any{"input": context})
-	opID := newID()
-	s.State.Operations = append(s.State.Operations, OperationRecord{OperationID: opID, Kind: "dispatch_step", Status: "confirmed", PlatformRequestID: "request-worker-start", PayloadDigest: operationDigest(request), Request: request})
-	run := &Run{RunID: ref.RunID, ExecutionID: executionID, AttemptID: ref.AttemptID, TaskID: "provider-task", DomainTaskID: stepInput.TaskID, WorkflowVersion: MinimalWorkflowVersion, Host: "orca_supervised", Agent: "codex", Backend: string(BackendOrca), Protocol: string(ProtocolOrcaSupervised), ExecutionStatus: "unknown", FinishTaskStatus: "pending", Target: ref.Target, Process: &ref.External}
-	s.State.Runs = append(s.State.Runs, run)
-	s.State.WorkflowRuns = append(s.State.WorkflowRuns, WorkflowRunRecord{WorkflowRunID: ref.RunID, Phase: "executing"})
-	s.State.Executions = append(s.State.Executions, ExecutionRecord{ExecutionID: executionID, WorkflowRunID: ref.RunID, CurrentStep: stepInput.StepID, Status: "active"})
-	s.State.Attempts = append(s.State.Attempts, StepAttemptRecord{AttemptID: ref.AttemptID, ExecutionID: executionID, StepID: stepInput.StepID, Status: "running", OperationID: opID, ResultPath: filepath.Join(t.TempDir(), "result.json")})
-	t.Setenv("STEERLINE_FAKE_SUPERVISED_DISPATCH_STATE", "completed")
-	t.Setenv("STEERLINE_FAKE_SUPERVISED_SETTLED_NO_TERMINAL", "1")
-	t.Setenv("STEERLINE_FAKE_SUPERVISED_DENY_WORKER_READ", "1")
-	if err := s.reattachSupervisedWorker(run); err != nil {
-		t.Fatalf("settled original Dispatch was not reattached: %v", err)
-	}
-	worker := s.workers[run.RunID]
-	if worker == nil || worker.proc.Identity() != ref.External {
-		t.Fatalf("recovery lost original worker identity: %+v", worker)
-	}
-	worker.Close()
-	select {
-	case <-worker.observationDone:
-	case <-time.After(5 * time.Second):
-		t.Fatal("settled recovery observer did not stop")
-	}
-}
-
-func TestSupervisedQuestionKeepsOriginalAttemptWaiting(t *testing.T) {
-	f := newFixture(t)
-	s := f.service(t)
-	runID, executionID, attemptID := newID(), newID(), newID()
-	resultPath := filepath.Join(f.c.RunDir, "runs", runID, "result.json")
-	if err := os.MkdirAll(filepath.Dir(resultPath), 0700); err != nil {
-		t.Fatal(err)
-	}
-	run := &Run{RunID: runID, ExecutionID: executionID, AttemptID: attemptID, TaskID: "provider-task", DomainTaskID: "business-task", ResultPath: &resultPath, Protocol: string(ProtocolOrcaSupervised), ExecutionStatus: "running", FinishTaskStatus: "pending", Process: &ProcessIdentity{Kind: "orca_supervised", OrchestrationRun: "orca-run-test", Task: "task-test", Dispatch: "dispatch-test"}}
-	s.State.Runs = append(s.State.Runs, run)
-	s.State.WorkflowRuns = append(s.State.WorkflowRuns, WorkflowRunRecord{WorkflowRunID: runID, Phase: "executing"})
-	s.State.Executions = append(s.State.Executions, ExecutionRecord{ExecutionID: executionID, WorkflowRunID: runID, CurrentStep: "implement", Status: "active"})
-	s.State.Attempts = append(s.State.Attempts, StepAttemptRecord{AttemptID: attemptID, ExecutionID: executionID, StepID: "implement", Status: "running"})
-	question := OrcaInboxMessage{ID: "relay-question-1", Type: "question", FromHandle: "dispatch:dispatch-test", Payload: json.RawMessage(`{"taskId":"task-test","dispatchId":"dispatch-test","question":"Choose a route","options":["left","right"]}`)}
-	event := WorkerEvent{AttemptID: attemptID, RemoteRunID: "orca-run-test", RemoteMessages: []OrcaInboxMessage{question}}
-	if err := s.applySupervisedQuestions(run, event); err != nil {
-		t.Fatal(err)
-	}
-	if run.Decision == nil || run.Decision.ID != question.ID || run.Decision.AttemptID != attemptID || run.Decision.Request.Options[0].ID != "left" || run.FinishTaskStatus != "waiting_decision" || run.ExecutionStatus != "running" || run.Process.Dispatch != "dispatch-test" {
-		t.Fatalf("question detached from its original live attempt: %+v", run)
-	}
-	if s.State.Attempts[0].Status != "waiting_decision" || s.State.Executions[0].Status != "waiting_decision" || s.State.WorkflowRuns[0].Phase != "waiting_decision" || len(s.State.Decisions) != 1 {
-		t.Fatal("question did not transition the original workflow into a durable decision")
-	}
-	if err := s.applySupervisedQuestions(run, event); err != nil || len(s.State.Decisions) != 1 {
-		t.Fatalf("question replay was not idempotent: %v", err)
-	}
-	question.ID = "relay-question-2"
-	event.RemoteMessages = []OrcaInboxMessage{question}
-	if err := s.applySupervisedQuestions(run, event); err == nil || !isBackendError(err, BackendRejected) {
-		t.Fatalf("competing question was accepted: %v", err)
 	}
 }
 
@@ -959,49 +728,6 @@ func TestSupervisedWorkerDoneWithoutStructuredResultBlocksCompletion(t *testing.
 	}
 }
 
-func TestSupervisedDeliveryIsNotAckedWhenLocalCommitFails(t *testing.T) {
-	f := newFixture(t)
-	s := f.service(t)
-	t.Cleanup(func() { _ = s.Close() })
-	runID, executionID, attemptID := newID(), newID(), newID()
-	s.State.Runs = append(s.State.Runs, &Run{RunID: runID, ExecutionID: executionID, AttemptID: attemptID, TaskID: "task-current", DomainTaskID: "task-current"})
-	if err := s.domainStore.Close(); err != nil {
-		t.Fatal(err)
-	}
-	ackCalls := 0
-	event := WorkerEvent{
-		RunID: runID, AttemptID: attemptID, RemoteRunID: "orca-run-current", RemoteDeliveryID: "delivery-uncommitted",
-		RemoteMessages: []OrcaInboxMessage{{ID: "message-uncommitted", Type: "status", FromHandle: "dispatch:dispatch-current", Payload: mustJSON(map[string]string{"taskId": "task-current", "dispatchId": "dispatch-current"})}},
-		Acknowledge:    func() (string, error) { ackCalls++; return "unexpected-ack", nil }, Processed: make(chan error, 1),
-	}
-	if err := s.event(event); err == nil || ackCalls != 0 {
-		t.Fatalf("uncommitted remote Delivery was acknowledged: error=%v ack_calls=%d", err, ackCalls)
-	}
-	if processed := <-event.Processed; processed == nil {
-		t.Fatal("observer was told that an uncommitted Delivery was safe to ack")
-	}
-	reader, err := OpenSQLiteReader(filepath.Join(s.Config.RunDir, "steerline.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer reader.Close()
-	var persisted int
-	if err := reader.db.QueryRow(`SELECT COUNT(*) FROM events WHERE external_source=? AND external_id=?`, "orca-run:orca-run-current", "message-uncommitted").Scan(&persisted); err != nil || persisted != 0 {
-		t.Fatalf("failed local commit persisted the remote message: count=%d error=%v", persisted, err)
-	}
-}
-
-func TestMinimalImplementGateAcceptsSameCanonicalRemoteWorktree(t *testing.T) {
-	base, head := strings.Repeat("a", 40), strings.Repeat("b", 40)
-	path := "C:/Users/liuming/orca/workspaces/SteerlineTest/probe"
-	workflow := &WorkflowRunRecord{WorkflowVersion: MinimalWorkflowVersion, Definition: WorkflowDefinition{ID: MinimalWorkflowVersion, Version: MinimalWorkflowVersion}, Phase: "executing"}
-	execution := &ExecutionRecord{Status: "active", CurrentStep: "implement", Workspace: WorkspaceEvidence{Repository: "repo", Worktree: canonical(path), Branch: "erranliu/probe", Base: base, Head: base}}
-	result := StepGateResult{StepID: "implement", Succeeded: true, InputRevision: base, Revision: head, Workspace: WorkspaceEvidence{Repository: "repo", Worktree: path, Branch: "erranliu/probe", Base: base, Head: head, VerifiedAt: now()}}
-	if next, err := AdvanceMinimalExecution(workflow, execution, result, nil); err != nil || next != "verify" {
-		t.Fatalf("equivalent Windows worktree spelling blocked the candidate: next=%q err=%v", next, err)
-	}
-}
-
 func TestSupervisedTurnRequiresTranscriptOrActiveTerminalEvidence(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
@@ -1101,7 +827,7 @@ func TestSupervisedPrepareKeepsPlatformWorktreeIdentitySeparateFromPath(t *testi
 	execution := &ExecutionRecord{Target: run.Target}
 	workspace := WorkspaceEvidence{Worktree: "C:/remote/steerline-run", Branch: "erranliu/steerline-run", Base: strings.Repeat("a", 40), Head: strings.Repeat("a", 40)}
 
-	applyMinimalWorkspaceEvidence(run, execution, workspace)
+	applyWorkflowWorkspaceEvidence(run, execution, workspace)
 
 	if execution.Target.WorktreeID != worktreeID {
 		t.Fatalf("supervised target lost the exact Orca worktree ID: got %q want %q", execution.Target.WorktreeID, worktreeID)
@@ -1111,28 +837,6 @@ func TestSupervisedPrepareKeepsPlatformWorktreeIdentitySeparateFromPath(t *testi
 	}
 	if execution.Workspace.Worktree != workspace.Worktree || execution.Target.Branch != workspace.Branch || execution.Target.BaseRevision != workspace.Base {
 		t.Fatalf("supervised workspace evidence was not persisted separately: target=%+v workspace=%+v", execution.Target, execution.Workspace)
-	}
-}
-
-func TestSupervisedCandidateWorkspaceDoesNotReplacePreparedInputBeforeGate(t *testing.T) {
-	base, candidate := strings.Repeat("a", 40), strings.Repeat("b", 40)
-	definition := DefaultMinimalWorkflowDefinition(false)
-	workflow := WorkflowRunRecord{WorkflowVersion: MinimalWorkflowVersion, Definition: definition, Phase: "executing"}
-	execution := ExecutionRecord{Protocol: string(ProtocolOrcaSupervised), Status: "active", CurrentStep: "implement", Workspace: WorkspaceEvidence{Repository: "repo", Worktree: "C:/remote/project", Branch: "erranliu/worker", Base: base, Head: base}}
-	run := &Run{Protocol: string(ProtocolOrcaSupervised), Target: ExecutionTarget{WorktreeID: "repo::C:/remote/project"}}
-	workspace := WorkspaceEvidence{Repository: "repo", Worktree: "C:/remote/project", Branch: "erranliu/worker", Base: base, Head: candidate, VerifiedAt: now()}
-
-	applyMinimalWorkspaceTarget(run, &execution, workspace)
-	if execution.Workspace.Head != base {
-		t.Fatalf("live candidate replaced prepared input before gate validation: got %q want %q", execution.Workspace.Head, base)
-	}
-	result := StepGateResult{StepID: "implement", Succeeded: true, InputRevision: base, Revision: candidate, ResultID: "implement-result", Workspace: workspace}
-	if next, err := AdvanceMinimalExecution(&workflow, &execution, result, nil); err != nil || next != "verify" {
-		t.Fatalf("valid implementation against prepared HEAD was rejected: next=%q err=%v", next, err)
-	}
-	applyMinimalWorkspaceEvidence(run, &execution, workspace)
-	if execution.Workspace.Head != candidate || execution.CandidateRevision != candidate {
-		t.Fatalf("accepted candidate evidence was not persisted after its gate: workspace=%+v candidate=%q", execution.Workspace, execution.CandidateRevision)
 	}
 }
 
@@ -1181,27 +885,9 @@ func TestSupervisedWorkspaceRestoresMissingTargetFromPrepareBinding(t *testing.T
 	}
 	workspace := WorkspaceEvidence{Worktree: "C:/remote/steerline-run", Branch: "erranliu/steerline-run", Base: strings.Repeat("a", 40), Head: strings.Repeat("a", 40)}
 	execution := ExecutionRecord{Target: fixed}
-	applyMinimalWorkspaceEvidence(restoredRun, &execution, workspace)
+	applyWorkflowWorkspaceEvidence(restoredRun, &execution, workspace)
 	if execution.Target.WorktreeID != bound.WorktreeID || execution.Target.OrchestrationRun != bound.OrchestrationRun || execution.Workspace.Worktree != workspace.Worktree {
 		t.Fatalf("restored exact platform target was not persisted with workspace evidence: target=%+v workspace=%+v", execution.Target, execution.Workspace)
-	}
-}
-
-func TestConfirmMinimalAttemptRanCompletesMissingDispatchTransitions(t *testing.T) {
-	for _, start := range []string{"dispatching", "dispatched", "running"} {
-		t.Run(start, func(t *testing.T) {
-			attempt := StepAttemptRecord{Status: start}
-			if err := confirmMinimalAttemptRan(&attempt); err != nil {
-				t.Fatal(err)
-			}
-			if attempt.Status != "running" {
-				t.Fatalf("completed worker result left attempt at %q", attempt.Status)
-			}
-		})
-	}
-	attempt := StepAttemptRecord{Status: "planned"}
-	if err := confirmMinimalAttemptRan(&attempt); err == nil {
-		t.Fatal("unstarted attempt was accepted as having run")
 	}
 }
 

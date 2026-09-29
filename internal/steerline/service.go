@@ -59,13 +59,14 @@ func NewService(c Config) (_ *Service, retErr error) {
 	if err := requireNativeTaskAuthority(c); err != nil {
 		return nil, err
 	}
-	if err := validateExecutionProfiles(c); err != nil {
+	if c.WorkflowProtocol != WorkerFlowVersion {
+		return nil, nativeErr("unsupported_schema", "only worker-flow-v1 may start a service; preserve older execution state")
+	}
+	if err := validateWorkflowConfig(&c, nil); err != nil {
 		return nil, err
 	}
-	if c.WorkflowProtocol != WorkerFlowVersion {
-		if _, err := c.validateNativeWorkflow(); err != nil {
-			return nil, err
-		}
+	if err := validateExecutionProfiles(c); err != nil {
+		return nil, err
 	}
 	if err := c.ResolveIdentity(context.Background()); err != nil {
 		return nil, err
@@ -221,115 +222,13 @@ func NewService(c Config) (_ *Service, retErr error) {
 			if r.BeadsContext != nil || r.Completion != nil || r.BeadsStatus != "" || r.IdentityMapDigest != "" || r.DomainTaskID != r.TaskID || r.ResultPath != nil {
 				return nil, nativeErr("authority_mismatch", "runtime contains a retired task-source or whole-run result binding; preserve it for manual recovery")
 			}
-			if c.WorkflowProtocol == WorkerFlowVersion {
-				if r.WorkflowVersion != WorkerFlowVersion {
-					return nil, nativeErr("unsupported_schema", "worker-flow-v1 cannot open an old workflow; preserve its external session and state")
-				}
-				switch r.FinishTaskStatus {
-				case "pending", "waiting_decision", "waiting_pr_merge", "completed":
-				default:
-					return nil, nativeErr("unsupported_schema", "worker-flow-v1 run has an unsupported phase")
-				}
-				continue
-			}
-			if r.WorkflowVersion != MinimalWorkflowVersion {
-				return nil, nativeErr("unsupported_schema", "runtime contains an execution workflow outside native minimal-v1; preserve it for manual recovery")
-			}
-			if r.Host != "local" && r.Host != "orca" && r.Host != "orca_supervised" {
-				r.ExecutionStatus = "unknown"
-				s.blocked(r, "Run lacks current backend identity; preserve state without migration")
-				s.State.SlotOccupied = true
-				continue
-			}
-			switch r.ExecutionStatus {
-			case "pending", "running", "succeeded", "failed", "unknown":
-			default:
-				return nil, errors.New("invalid saved execution_status")
+			if r.WorkflowVersion != WorkerFlowVersion {
+				return nil, nativeErr("unsupported_schema", "worker-flow-v1 cannot open an old workflow; preserve its external session and state")
 			}
 			switch r.FinishTaskStatus {
-			case "pending", "waiting_pr_merge", "waiting_decision", "completed", "blocked":
+			case "pending", "waiting_decision", "waiting_pr_merge", "completed":
 			default:
-				return nil, errors.New("invalid saved finish_task_status")
-			}
-			if r.FinishTaskStatus == "waiting_pr_merge" && r.PR.URL == nil {
-				return nil, errors.New("waiting run lacks PR binding")
-			}
-			// A decision is never auto-resumed on restart after its resuming
-			// checkpoint. The fixed Operation and external target need reconciliation.
-			if r.Decision != nil && r.Decision.Status == "resuming" {
-				r.ExecutionStatus = "unknown"
-				r.FinishTaskStatus = "blocked"
-				r.Error = ptr("Interrupted while resuming a decision; manual recovery required; never auto-resumed")
-				s.State.SlotOccupied = true
-				s.State.CurrentTask = ptr(r.TaskID)
-			} else if r.FinishTaskStatus == "waiting_decision" {
-				switch {
-				case r.Decision == nil:
-					r.FinishTaskStatus = "blocked"
-					r.Error = ptr("waiting_decision run lacks decision state; manual recovery required")
-				}
-			}
-			recoverUncertainSupervised := r.Host == "orca_supervised" && r.WorkflowVersion == MinimalWorkflowVersion && r.ExecutionStatus == "unknown" && r.FinishTaskStatus == "blocked" && r.Process != nil
-			recoverSettledSupervised := r.Host == "orca_supervised" && r.WorkflowVersion == MinimalWorkflowVersion && r.ExecutionStatus == "unknown" && r.FinishTaskStatus == "pending" && r.Process != nil
-			recoverUnboundSupervised := r.Host == "orca_supervised" && r.WorkflowVersion == MinimalWorkflowVersion && r.Process == nil && (r.ExecutionStatus == "running" || r.ExecutionStatus == "unknown") && (r.FinishTaskStatus == "pending" || r.FinishTaskStatus == "blocked")
-			if r.ExecutionStatus == "pending" || r.ExecutionStatus == "running" || recoverUncertainSupervised || recoverSettledSupervised || recoverUnboundSupervised {
-				recoverPlannedStep := false
-				if r.WorkflowVersion == MinimalWorkflowVersion && r.ExecutionStatus == "pending" && r.FinishTaskStatus == "pending" {
-					for _, workflow := range s.State.WorkflowRuns {
-						if workflow.WorkflowRunID != r.RunID || workflow.Phase != "executing" {
-							continue
-						}
-						for _, execution := range s.State.Executions {
-							if execution.ExecutionID != r.ExecutionID || execution.CurrentStep == "" {
-								continue
-							}
-							for _, attempt := range s.State.Attempts {
-								if attempt.ExecutionID == execution.ExecutionID && attempt.AttemptID == r.AttemptID && attempt.StepID == execution.CurrentStep && attempt.Status == "planned" {
-									recoverPlannedStep = true
-									break
-								}
-							}
-						}
-					}
-				}
-				if !recoverPlannedStep {
-					recovered := false
-					if r.Host == "orca_supervised" && r.WorkflowVersion == MinimalWorkflowVersion && (r.ExecutionStatus == "running" || r.ExecutionStatus == "pending" && r.Process != nil || recoverUncertainSupervised || recoverSettledSupervised || recoverUnboundSupervised) {
-						if recoverErr := s.reattachSupervisedWorker(r); recoverErr == nil {
-							recovered = true
-						} else {
-							r.Error = ptr("Original supervised Dispatch could not be reattached: " + clip(recoverErr.Error(), 1200))
-						}
-					}
-					if !recovered {
-						r.ExecutionStatus = "unknown"
-						r.FinishTaskStatus = "blocked"
-						if r.Error == nil {
-							r.Error = ptr("Interrupted execution: " + s.inspectRunProcess(r) + "; manual recovery required; never auto-resumed")
-						}
-					}
-				}
-			}
-			if r.ExecutionStatus == "unknown" {
-				s.State.SlotOccupied = true
-				s.State.CurrentTask = ptr(r.TaskID)
-			}
-			if r.WorkspaceIntent != nil && r.Process != nil && r.FinishTaskStatus != "completed" {
-				err := s.inspectRunWorkspace(context.Background(), r)
-				if err != nil {
-					if worker := s.workers[r.RunID]; worker != nil {
-						worker.Close()
-						<-worker.observationDone
-						delete(s.workers, r.RunID)
-						s.worker, s.active = nil, nil
-					}
-					r.FinishTaskStatus = "blocked"
-					previous := ""
-					if r.Error != nil {
-						previous = *r.Error + "; "
-					}
-					r.Error = ptr(clip(previous+"Workspace recovery check failed: "+err.Error()+"; no recreation attempted", 2000))
-				}
+				return nil, nativeErr("unsupported_schema", "worker-flow-v1 run has an unsupported phase")
 			}
 		}
 		if err := s.restoreActiveExecutionProfile(); err != nil {
@@ -347,9 +246,6 @@ func NewService(c Config) (_ *Service, retErr error) {
 	}
 	s.State.SchemaVersion = runtimeSchemaFor(c)
 	capabilities := []string{"answer_decision", "start_task", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "stop_service"}
-	if c.WorkflowProtocol != WorkerFlowVersion {
-		capabilities = append(capabilities, "retry_run", "mark_stopped", "resolve_command")
-	}
 	s.State.Service = ServiceState{InstanceID: newID(), PID: os.Getpid(), Status: "running", Claimant: c.Claimant, Mode: "maintenance", Ready: false, ControlProtocol: ControlProtocolVersion, Capabilities: capabilities, ConfigDigest: c.configDigest, HeartbeatIntervalMS: duration(c.Heartbeat).Milliseconds()}
 	identity, err := currentProcessIdentity()
 	if err != nil {
@@ -394,54 +290,23 @@ func (s *Service) hydrateDecisionProjection(ctx context.Context) error {
 		if marshalErr != nil {
 			return marshalErr
 		}
-		var decisionAttempt, currentAttempt *StepAttemptRecord
+		attemptFound := false
 		for i := range s.State.Attempts {
 			attempt := &s.State.Attempts[i]
-			if attempt.ProjectIdentity != s.Config.identity || attempt.ExecutionID != run.ExecutionID {
-				continue
-			}
-			if attempt.AttemptID == run.Decision.AttemptID {
-				decisionAttempt = attempt
-			}
-			if attempt.AttemptID == run.AttemptID {
-				currentAttempt = attempt
+			if attempt.ProjectIdentity == s.Config.identity && attempt.ExecutionID == run.ExecutionID && attempt.AttemptID == run.Decision.AttemptID {
+				attemptFound = true
+				break
 			}
 		}
-		if decisionAttempt == nil {
+		if !attemptFound || run.Decision.AttemptID != run.AttemptID || record.WorkflowRunID != run.RunID || record.ExecutionID != run.ExecutionID || record.AttemptID != run.Decision.AttemptID || !bytes.Equal(bytes.TrimSpace(record.Request), bytes.TrimSpace(request)) {
 			return fmt.Errorf("decision %s conflicts with the runtime execution, attempt or question identity", run.Decision.ID)
 		}
-		if record.WorkflowRunID != run.RunID || record.ExecutionID != run.ExecutionID || record.AttemptID != run.Decision.AttemptID || !bytes.Equal(bytes.TrimSpace(record.Request), bytes.TrimSpace(request)) {
-			return fmt.Errorf("decision %s conflicts with the runtime execution, attempt or question identity", run.Decision.ID)
-		}
-		recoveredAnswer := false
 		if record.Status == "answer_saved" && len(record.Answer) == 0 && run.Decision.Status == "resuming" {
 			if answer, found := s.acceptedUnknownDecisionAnswer(ctx, run, record); found {
 				record.Answer = mustJSON(answer)
-				recoveredAnswer = true
-			}
-		}
-		if run.Decision.AttemptID != run.AttemptID {
-			historical := run.WorkflowVersion == MinimalWorkflowVersion && (record.Status == "applied" || record.Status == "failed" || record.Status == "superseded")
-			activeContinuation := run.WorkflowVersion == MinimalWorkflowVersion && record.Status == "reply_accepted" && currentAttempt != nil && currentAttempt.StepID == decisionAttempt.StepID && currentAttempt.AttemptNumber == decisionAttempt.AttemptNumber+1
-			uncertainContinuation := run.WorkflowVersion == MinimalWorkflowVersion && record.Status == "answer_saved" && run.Decision.Status == "resuming" && currentAttempt != nil && currentAttempt.StepID == decisionAttempt.StepID && currentAttempt.AttemptNumber == decisionAttempt.AttemptNumber+1 && savedUnknownDecisionContinuation(run, decisionAttempt, currentAttempt, record, s.State.Operations)
-			if !historical && !activeContinuation && !uncertainContinuation {
-				return fmt.Errorf("decision %s conflicts with the runtime execution, attempt or question identity", run.Decision.ID)
-			}
-			if uncertainContinuation {
-				if recoveredAnswer {
-					if err := s.domainStore.Transact(ctx, func(tx DomainTx) error { return tx.PutDecision(record) }); err != nil {
-						return fmt.Errorf("restore accepted answer for uncertain decision %s: %w", record.DecisionID, err)
-					}
-					for i := range s.State.Decisions {
-						if s.State.Decisions[i].DecisionID == record.DecisionID {
-							s.State.Decisions[i] = record
-							break
-						}
-					}
+				if err := s.domainStore.Transact(ctx, func(tx DomainTx) error { return tx.PutDecision(record) }); err != nil {
+					return fmt.Errorf("restore accepted answer for decision %s: %w", record.DecisionID, err)
 				}
-				// SQLite stores the accepted answer while the runtime keeps the
-				// interrupted resuming checkpoint. Preserve that uncertainty.
-				record.Status = "resuming"
 			}
 		}
 		run.Decision.Version = record.Version
@@ -480,34 +345,6 @@ func (s *Service) acceptedUnknownDecisionAnswer(ctx context.Context, run *Run, r
 		return DecisionAnswer{}, false
 	}
 	return answer, true
-}
-
-// Only a saved, identity-bound continuation start with a lost outcome may
-// retain a resuming Decision across restart. This does not retry that start.
-func savedUnknownDecisionContinuation(run *Run, original, current *StepAttemptRecord, record DecisionRecord, operations []OperationRecord) bool {
-	if run == nil || run.Decision == nil || original == nil || current == nil || original.Status != "succeeded" || current.Status != "outcome_unknown" || current.OperationID == "" || run.Decision.Version != record.Version || len(record.Answer) == 0 {
-		return false
-	}
-	var savedAnswer DecisionAnswer
-	if json.Unmarshal(record.Answer, &savedAnswer) != nil {
-		return false
-	}
-	for _, operation := range operations {
-		if operation.OperationID != current.OperationID {
-			continue
-		}
-		if operation.Kind != "dispatch_step" || operation.Status != "outcome_unknown" || operation.ProjectIdentity != current.ProjectIdentity || operation.PayloadDigest != operationDigest(operation.Request) {
-			return false
-		}
-		var request nativeStepDispatchOperation
-		if json.Unmarshal(operation.Request, &request) != nil {
-			return false
-		}
-		input := request.Input
-		decision := input.StepInput.Decision
-		return input.SchemaVersion == NativeTaskInputSchema && input.ProjectID == current.ProjectIdentity && input.TaskID == run.DomainTaskID && input.WorkflowRunID == run.RunID && input.ExecutionID == run.ExecutionID && input.AttemptID == current.AttemptID && input.CurrentStep == current.StepID && input.StepInput.AttemptID == current.AttemptID && input.StepInput.StepID == current.StepID && decision != nil && decision.AttemptID == original.AttemptID && decision.ExecutionID == run.ExecutionID && sameDecisionAnswer(savedAnswer, decision.Answer) && decision.AnswerSHA256 == decisionAnswerDigest(savedAnswer) && digestValue(decision.Request) == digestValue(run.Decision.Request)
-	}
-	return false
 }
 
 func runVersionShape(r *Run) any {
@@ -734,7 +571,7 @@ func (s *Service) reconcile(ctx context.Context) error {
 	if err := s.reconcileNativeCleanup(ctx); err != nil {
 		return err
 	}
-	return s.reconcileExitedNativeStep(ctx)
+	return nil
 }
 func (s *Service) setError(e error) {
 	s.State.Service.Status = "error"
@@ -876,175 +713,13 @@ func (s *Service) finished(err error) error {
 			}
 		}
 	}
-	if run != nil && run.WorkflowVersion == WorkerFlowVersion {
-		if replayErr := s.reconcileConversationRun(run); replayErr != nil {
-			s.setError(fmt.Errorf("completed conversation source replay failed: %w", replayErr))
-		}
-		return s.finishWorkerFlow(err)
-	}
-	if run == nil || run.WorkflowVersion != MinimalWorkflowVersion {
-		return nativeErr("unsupported_schema", "native service observed a run without the current minimal-v1 workflow; preserve its execution identity")
+	if run == nil || run.WorkflowVersion != WorkerFlowVersion {
+		return nativeErr("unsupported_schema", "native service observed a run without the current worker workflow; preserve its execution identity")
 	}
 	if replayErr := s.reconcileConversationRun(run); replayErr != nil {
 		s.setError(fmt.Errorf("completed conversation source replay failed: %w", replayErr))
 	}
-	attemptID := run.AttemptID
-	worker := s.worker
-	finishErr := s.finishMinimalStep(err)
-	if worker != nil && worker.proc != nil && worker.proc.Identity().Kind == "orca_supervised" && worker.RemoteOutcome != "" {
-		if settleErr := s.settleSupervisedStepResources(run, attemptID, worker.RemoteOutcome); settleErr != nil {
-			var preserved *preservedMinimalStepUnknown
-			if errors.As(settleErr, &preserved) {
-				return &preservedMinimalStepUnknown{cause: errors.Join(finishErr, settleErr)}
-			}
-			return errors.Join(finishErr, settleErr)
-		}
-	}
-	return finishErr
-}
-
-func (s *Service) settleSupervisedStepResources(run *Run, attemptID, outcome string) error {
-	if run == nil || attemptID == "" || (outcome != "succeeded" && outcome != "failed") {
-		return errors.New("supervised settlement requires an exact settled step attempt")
-	}
-	ref, err := (executionRecords{root: s.Config.RunDir}).loadBinding(run.RunID, attemptID)
-	if err != nil {
-		return err
-	}
-	if ref.Protocol != ProtocolOrcaSupervised || ref.External.Dispatch == "" {
-		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "settlement binding is not an exact supervised Dispatch"}
-	}
-	opID := "release-" + attemptID
-	idempotency := "release:" + run.ExecutionID + ":" + attemptID
-	request := mustJSON(struct {
-		Ref     ExecutionRef `json:"ref"`
-		Outcome string       `json:"outcome"`
-	}{ref, outcome})
-	digest := operationDigest(request)
-	var operation *OperationRecord
-	for i := range s.State.Operations {
-		if s.State.Operations[i].OperationID == opID {
-			operation = &s.State.Operations[i]
-			break
-		}
-	}
-	if operation == nil {
-		value := OperationRecord{ProjectIdentity: s.Config.identity, OperationID: opID, IdempotencyKey: idempotency, Kind: "settle_resources", Status: "in_flight", PayloadDigest: digest, Request: request, CreatedAt: now(), UpdatedAt: now()}
-		s.State.Operations = append(s.State.Operations, value)
-		operation = &s.State.Operations[len(s.State.Operations)-1]
-	} else if operation.IdempotencyKey != idempotency || operation.PayloadDigest != digest || operation.Kind != "settle_resources" {
-		return errors.New("supervised release operation identity conflicts with the exact attempt")
-	} else {
-		switch operation.Status {
-		case "confirmed":
-			return s.confirmedSupervisedRelease(*operation, run, ref.External.Dispatch)
-		case "rejected":
-			return &BackendError{Code: BackendRejected, Diagnostic: "original worker release was rejected: " + operation.UnknownReason}
-		case "in_flight", "accepted", "outcome_unknown":
-			return &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "original worker release needs exact request reconciliation; duplicate release refused"}
-		default:
-			return &BackendError{Code: BackendProtocolInvalid, Diagnostic: "worker release operation has an invalid status"}
-		}
-	}
-	if err = s.save(); err != nil {
-		return err
-	}
-	operation = nil
-	for i := range s.State.Operations {
-		if s.State.Operations[i].OperationID == opID {
-			operation = &s.State.Operations[i]
-			break
-		}
-	}
-	if operation == nil {
-		return errors.New("persisted supervised release operation disappeared")
-	}
-	settlement, settleErr := (orcaSupervisedBackend{config: s.Config}).SettleResources(context.Background(), ref, outcome)
-	residual := settlement.ResidualResources
-	if settleErr == nil && (settlement.Disposition != "released" || len(residual) != 0) {
-		settleErr = &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "worker release did not prove that its terminal was released: " + settlement.Disposition}
-	}
-	status := "confirmed"
-	if settleErr != nil {
-		status = "outcome_unknown"
-		var backendErr *BackendError
-		if errors.As(settleErr, &backendErr) && backendErr.Code == BackendRejected {
-			status = "rejected"
-		}
-	}
-	if err := TransitionOperation(operation, status, settlement.PlatformRequestID, mustJSON(map[string]any{"dispatch_id": ref.External.Dispatch, "settlement": settlement, "error": errorString(settleErr)}), errorString(settleErr)); err != nil {
-		return err
-	}
-	if status != "confirmed" {
-		reason := "remote worker release requires reconciliation: " + settleErr.Error()
-		if workflow, execution := s.minimalRecords(run); workflow != nil && execution != nil {
-			execution.Status = "blocked"
-			execution.UpdatedAt = now()
-			workflow.Phase = "blocked"
-			workflow.UpdatedAt = now()
-			run.ExecutionStatus = "unknown"
-			run.FinishTaskStatus = "blocked"
-			run.Error = ptr(clip(reason, 2000))
-			s.State.CurrentTask = ptr(run.TaskID)
-			s.State.SlotOccupied = true
-			s.note(run, "steer", "resource_release", "unknown", "remote worker release requires reconciliation", reason, map[string]any{"attempt_id": attemptID, "dispatch_id": ref.External.Dispatch})
-		}
-	}
-	if err = s.save(); err != nil {
-		return err
-	}
-	if status != "confirmed" {
-		// The exact refusal and reserved Run have been saved. Other active
-		// Runs can continue; this Run still cannot pass its release gate.
-		return &preservedMinimalStepUnknown{cause: settleErr}
-	}
-	return nil
-}
-
-// requireSettledSupervisedReleases fences the next step while an earlier
-// terminal release in the same execution lacks positive platform proof.
-func (s *Service) requireSettledSupervisedReleases(run *Run) error {
-	if run == nil || run.Protocol != string(ProtocolOrcaSupervised) {
-		return nil
-	}
-	prefix := "release:" + run.ExecutionID + ":"
-	for _, operation := range s.State.Operations {
-		if operation.Kind != "settle_resources" || !strings.HasPrefix(operation.IdempotencyKey, prefix) {
-			continue
-		}
-		if operation.Status != "confirmed" {
-			return &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "prior supervised worker terminal release is unresolved: " + operation.Status}
-		}
-		if err := s.confirmedSupervisedRelease(operation, run, ""); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (s *Service) confirmedSupervisedRelease(operation OperationRecord, run *Run, dispatch string) error {
-	var requested struct {
-		Ref     ExecutionRef `json:"ref"`
-		Outcome string       `json:"outcome"`
-	}
-	var recorded struct {
-		DispatchID string            `json:"dispatch_id"`
-		Settlement SettlementReceipt `json:"settlement"`
-		Error      string            `json:"error"`
-	}
-	if run == nil || operation.ProjectIdentity != s.Config.identity || operation.PayloadDigest != operationDigest(operation.Request) {
-		return &BackendError{Code: BackendProtocolInvalid, Diagnostic: "confirmed release operation lacks exact Dispatch and positive terminal release proof"}
-	}
-	if json.Unmarshal(operation.Request, &requested) != nil || json.Unmarshal(operation.Receipt, &recorded) != nil {
-		return &BackendError{Code: BackendProtocolInvalid, Diagnostic: "confirmed release operation lacks exact Dispatch and positive terminal release proof"}
-	}
-	if requested.Ref.RunID != run.RunID || requested.Ref.AttemptID == "" || requested.Ref.External.Dispatch == "" || operation.IdempotencyKey != "release:"+run.ExecutionID+":"+requested.Ref.AttemptID || requested.Outcome != "succeeded" && requested.Outcome != "failed" || dispatch != "" && requested.Ref.External.Dispatch != dispatch {
-		return &BackendError{Code: BackendProtocolInvalid, Diagnostic: "confirmed release operation lacks exact Dispatch and positive terminal release proof"}
-	}
-	if recorded.DispatchID != requested.Ref.External.Dispatch || recorded.Error != "" || recorded.Settlement.Disposition != "released" || recorded.Settlement.PlatformRequestID == "" || recorded.Settlement.PlatformRequestID != operation.PlatformRequestID || len(recorded.Settlement.ResidualResources) != 0 {
-		return &BackendError{Code: BackendProtocolInvalid, Diagnostic: "confirmed release operation lacks exact Dispatch and positive terminal release proof"}
-	}
-	return nil
+	return s.finishWorkerFlow(err)
 }
 
 func errorString(err error) string {
@@ -1101,196 +776,12 @@ func (s *Service) event(ev WorkerEvent) error {
 		}
 		return ack(nil)
 	}
-	if s.active.WorkflowVersion == WorkerFlowVersion {
-		return ack(s.eventWorkerFlow(ev))
+	if s.active.WorkflowVersion != WorkerFlowVersion {
+		return ack(nativeErr("unsupported_schema", "worker event belongs to an unsupported workflow"))
 	}
-	if s.active.Protocol == string(ProtocolOrcaSupervised) && s.active.Process != nil {
-		started := ev.TurnStarted
-		if !started {
-			for _, message := range ev.RemoteMessages {
-				if (message.Type == "status" || message.Type == "question" || message.Type == "worker_done") && message.FromHandle == "dispatch:"+s.active.Process.Dispatch && supervisedMessageMatches(message, *s.active.Process) {
-					started = true
-					break
-				}
-			}
-		}
-		if started {
-			if attempt := s.minimalAttempt(s.active, ev.AttemptID); attempt != nil && attempt.Status == "dispatched" {
-				if err := TransitionStepAttempt(attempt, "running"); err != nil {
-					return ack(err)
-				}
-				s.active.ExecutionStatus = "running"
-				s.note(s.active, "steer", "step_start", "running", "supervised step turn started", attempt.StepID, map[string]any{"attempt_id": attempt.AttemptID, "dispatch_id": s.active.Process.Dispatch})
-			}
-		}
-	}
-	s.active.LastEvent = ptr(ev.Summary)
-	if ev.Session != "" && ev.Source != "orca-terminal-v2" {
-		s.active.SessionID = ptr(ev.Session)
-	}
-	if ev.Activity.Kind != "" {
-		conversationErr := s.recordConversationEvent(s.active, ev)
-		if conversationErr != nil {
-			s.setError(fmt.Errorf("conversation event persistence failed: %w", conversationErr))
-		}
-		ackWorkerEventPersistence(ev, conversationErr)
-		if ev.Persisted != nil && conversationErr != nil {
-			return s.save()
-		}
-		s.recordActivity(s.active, ev.Activity)
-		s.emitConsole(ev.Activity)
-	} else if ev.Persisted != nil {
-		err := errors.New("conversation source event has no activity classification")
-		ackWorkerEventPersistence(ev, err)
-		return err
-	}
-	if ev.OutputCursor != "" {
-		if attempt := s.minimalAttempt(s.active, ev.AttemptID); attempt != nil {
-			attempt.OutputSource = ev.OutputSource
-			attempt.OutputCursor = ev.OutputCursor
-			attempt.UpdatedAt = now()
-		}
-	}
-	if ev.OutputGap {
-		payload, _ := json.Marshal(map[string]any{"source": ev.OutputSource, "cursor": ev.OutputCursor})
-		s.State.PendingEvents = append(s.State.PendingEvents, DomainEvent{ProjectIdentity: s.Config.identity, TaskID: s.active.DomainTaskID, WorkflowRunID: s.active.RunID, ExecutionID: s.active.ExecutionID, AttemptID: ev.AttemptID, ExternalSource: "orca-run:" + ev.RemoteRunID, ExternalID: "output-gap:" + operationDigest([]byte(ev.OutputSource+":"+ev.OutputCursor)), Type: "activity.gap", ReceivedAt: now(), Payload: payload})
-	}
-	if len(ev.RemoteMessages) > 0 && s.active.Protocol == string(ProtocolOrcaSupervised) {
-		if err := s.applySupervisedQuestions(s.active, ev); err != nil {
-			return ack(err)
-		}
-		if err := s.applySupervisedDecisionProof(s.active, ev); err != nil {
-			return ack(err)
-		}
-	}
-	return ack(s.save())
+	return ack(s.eventWorkerFlow(ev))
 }
 
-func (s *Service) applySupervisedQuestions(run *Run, ev WorkerEvent) error {
-	if run == nil || run.Process == nil || run.Process.Kind != "orca_supervised" || ev.AttemptID != run.AttemptID || ev.RemoteRunID != run.Process.OrchestrationRun {
-		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "remote question does not belong to the original supervised attempt"}
-	}
-	for _, message := range ev.RemoteMessages {
-		if message.Type != "question" || message.FromHandle != "dispatch:"+run.Process.Dispatch {
-			continue
-		}
-		payload, err := supervisedMessagePayload(message)
-		if err != nil || len(payload) == 0 || len(payload) > maxSupervisedMessageBytes {
-			return &BackendError{Code: BackendProtocolInvalid, Diagnostic: "supervised question has no valid bounded payload", Cause: err}
-		}
-		var question struct {
-			TaskID     string   `json:"taskId"`
-			DispatchID string   `json:"dispatchId"`
-			Question   string   `json:"question"`
-			Options    []string `json:"options"`
-		}
-		if err := json.Unmarshal(payload, &question); err != nil {
-			return &BackendError{Code: BackendProtocolInvalid, Diagnostic: "supervised question payload is malformed", Cause: err}
-		}
-		if question.TaskID != run.Process.Task || question.DispatchID != run.Process.Dispatch {
-			return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "supervised question payload conflicts with its Dispatch sender"}
-		}
-		if run.Decision != nil {
-			if run.Decision.ID == message.ID && run.Decision.AttemptID == ev.AttemptID {
-				continue
-			}
-			return &BackendError{Code: BackendRejected, Diagnostic: "another question is already pending for the original supervised attempt"}
-		}
-		workflow, execution := s.minimalRecords(run)
-		attempt := s.minimalAttempt(run, ev.AttemptID)
-		if workflow == nil || execution == nil || attempt == nil || attempt.Status != "running" {
-			return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "supervised question lacks its running workflow attempt"}
-		}
-		request := DecisionRequest{Question: question.Question, Options: make([]DecisionOption, 0, len(question.Options)), AllowFreeText: len(question.Options) == 0}
-		for _, option := range question.Options {
-			request.Options = append(request.Options, DecisionOption{ID: option, Label: option})
-		}
-		state, err := writeDecisionRequestWithID(run, request, message.ID)
-		if err != nil {
-			return err
-		}
-		state.AttemptID = ev.AttemptID
-		if err := SetWorkflowDecision(workflow, execution, attempt, "pending"); err != nil {
-			return err
-		}
-		run.Decision = state
-		run.FinishTaskStatus = "waiting_decision"
-		run.Error = nil
-		if err := s.syncMinimalDecision(run); err != nil {
-			return err
-		}
-		s.note(run, "steer", "decision", "pending", "remote decision requested", state.Request.Question, decisionMeta(run))
-	}
-	return nil
-}
-
-func (s *Service) applySupervisedDecisionProof(run *Run, ev WorkerEvent) error {
-	if run == nil || run.Process == nil || ev.AttemptID != run.AttemptID {
-		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "remote decision proof does not belong to the original attempt"}
-	}
-	for _, message := range ev.RemoteMessages {
-		if message.Type != "status" || message.FromHandle != "dispatch:"+run.Process.Dispatch {
-			continue
-		}
-		payload, err := supervisedMessagePayload(message)
-		if err != nil || len(payload) == 0 || len(payload) > maxSupervisedMessageBytes {
-			continue // The normal step-result parser handles malformed status.
-		}
-		var proof struct {
-			TaskID                     string `json:"taskId"`
-			DispatchID                 string `json:"dispatchId"`
-			RemoteCodexVersion         string `json:"remote_codex_version"`
-			DecisionAppliedID          string `json:"decision_applied"`
-			AppliedDecisionAttemptID   string `json:"applied_decision_attempt_id"`
-			AppliedDecisionExecutionID string `json:"applied_decision_execution_id"`
-			AppliedAnswerBody          string `json:"applied_answer_body"`
-		}
-		if json.Unmarshal(payload, &proof) != nil || proof.DecisionAppliedID == "" {
-			continue
-		}
-		answerBody := ""
-		if run.Decision != nil {
-			answerBody = run.Decision.OptionID
-			if answerBody == "" {
-				answerBody = run.Decision.Note
-			}
-		}
-		fixedConfig, configErr := s.executionConfigForRun(run)
-		if configErr != nil || fixedConfig.Orca.Supervised == nil {
-			return errors.Join(configErr, errors.New("remote decision has no fixed supervised profile"))
-		}
-		if proof.TaskID != run.Process.Task || proof.DispatchID != run.Process.Dispatch || !supervisedCodexVersionAccepted(fixedConfig.Orca.Supervised.ExpectedCodexVersion, proof.RemoteCodexVersion) || run.Decision == nil || proof.DecisionAppliedID != run.Decision.ID || run.Decision.AttemptID != ev.AttemptID || proof.AppliedDecisionAttemptID != run.Decision.AttemptID || proof.AppliedDecisionExecutionID != run.ExecutionID || answerBody == "" || proof.AppliedAnswerBody != answerBody {
-			return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "remote decision application proof conflicts with the fixed decision, attempt, execution or answer"}
-		}
-		if run.Decision.Status == "applied" {
-			continue
-		}
-		if run.Decision.Status != "reply_accepted" {
-			return &BackendError{Code: BackendRejected, Diagnostic: "remote decision application arrived before the original reply was accepted"}
-		}
-		if !minimalDecisionApplicationMatches(run, StepGateResult{AppliedDecisionID: proof.DecisionAppliedID, AppliedDecisionAttemptID: proof.AppliedDecisionAttemptID, AppliedDecisionExecutionID: proof.AppliedDecisionExecutionID, AppliedAnswerSHA256: decisionAnswerDigest(DecisionAnswer{OptionID: run.Decision.OptionID, Note: run.Decision.Note})}) {
-			return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "remote decision application does not bind the fixed answer digest"}
-		}
-		workflow, execution := s.minimalRecords(run)
-		attempt := s.minimalAttempt(run, ev.AttemptID)
-		if err := SetWorkflowDecision(workflow, execution, attempt, "applied"); err != nil {
-			return err
-		}
-		run.Decision.Status = "applied"
-		run.Decision.Version++
-		run.Decision.AppliedAt = ptr(now())
-		run.FinishTaskStatus = "pending"
-		if err := s.syncMinimalDecision(run); err != nil {
-			return err
-		}
-		s.note(run, "steer", "decision", "applied", "remote answer applied", decisionAnswerSummary(run), nil)
-	}
-	return nil
-}
-
-// acknowledgeRemoteDelivery journals the exact Orca Delivery before acking it.
-// Replays reuse the Delivery ID, so a lost ack response never invents a new
-// message or request identity.
 func (s *Service) acknowledgeRemoteDelivery(ev WorkerEvent) error {
 	if ev.Acknowledge == nil {
 		return nil
@@ -1499,9 +990,7 @@ func (s *Service) recordHistoricalWorkerEvent(ev WorkerEvent) error {
 		return err
 	}
 	dir := filepath.Join(s.Config.RunDir, "runs", ev.RunID)
-	if run.WorkflowVersion == MinimalWorkflowVersion {
-		dir = filepath.Join(dir, "steps", ev.AttemptID)
-	} else if ev.AttemptID != ev.RunID {
+	if ev.AttemptID != ev.RunID {
 		dir = filepath.Join(dir, "attempts", ev.AttemptID)
 	}
 	ev.Activity.V, ev.Activity.RunID, ev.Activity.TaskID = ActivityVersion, run.RunID, run.TaskID
@@ -1830,14 +1319,7 @@ func (s *Service) run(ctx context.Context, dispatchMode string) (retErr error) {
 }
 
 func (s *Service) finishWorkerInLoop(workerErr error) error {
-	err := s.finished(workerErr)
-	if _, settled := err.(*settledMinimalStepFailure); settled {
-		return nil
-	}
-	if _, preserved := err.(*preservedMinimalStepUnknown); preserved {
-		return nil
-	}
-	return err
+	return s.finished(workerErr)
 }
 
 func (s *Service) shutdown() {
@@ -1879,217 +1361,11 @@ func (s *Service) shutdownWorker() {
 	if s.worker == nil {
 		return
 	}
-	if s.active != nil && s.active.WorkflowVersion == WorkerFlowVersion {
-		ctx, cancel := context.WithTimeout(context.Background(), duration(s.Config.ShutdownGrace))
-		defer cancel()
-		if err := s.worker.detachLocalObservation(ctx); err != nil {
-			s.setError(fmt.Errorf("original worker observation could not be detached: %w", err))
-		} else {
-			s.worker = nil
-		}
-		return // Service stop does not stop the original worker turn.
-	}
-	if s.active != nil && s.active.Protocol == string(ProtocolOrcaSupervised) {
-		ctx, cancel := context.WithTimeout(context.Background(), duration(s.Config.ShutdownGrace))
-		defer cancel()
-		if err := s.worker.detachLocalObservation(ctx); err != nil {
-			s.preserveUnknownStop("remote observation could not be detached during service shutdown", err)
-		} else {
-			s.worker = nil
-		}
-		return // Stopping supervision must not cancel an active remote Dispatch.
-	}
-	t := time.NewTimer(duration(s.Config.ShutdownGrace))
-	defer t.Stop()
-	killed := false
-	var stopOp Operation
-	events := (<-chan WorkerEvent)(s.worker.Events)
-	for {
-		select {
-		case ev, ok := <-events:
-			if !ok {
-				events = nil
-				continue
-			}
-			s.event(ev)
-		case e := <-s.worker.Done:
-			if killed {
-				confirmed, confirmErr := s.confirmExecutionStop(stopOp)
-				if !confirmed {
-					s.worker = nil // the observer ended; the execution slot remains reserved.
-					s.preserveUnknownStop("worker observer ended without proof that the original execution stopped", confirmErr)
-					return
-				}
-				e = errors.New("worker process tree terminated during shutdown")
-			}
-			s.finished(e)
-			return
-		case <-t.C:
-			if !killed {
-				var stopErr error
-				stopOp, stopErr = s.stopActiveExecution(context.Background())
-				if stopErr != nil {
-					s.setError(stopErr)
-				}
-				killed = true
-				t.Reset(duration(s.Config.ShutdownGrace))
-				continue
-			}
-			s.preserveUnknownStop("execution stop was not confirmed before shutdown timeout", nil)
-			return
-		}
-	}
-}
-
-func (s *Service) stopActiveExecution(ctx context.Context) (Operation, error) {
-	r := s.active
-	if r == nil || s.worker == nil {
-		return Operation{}, errors.New("there is no active execution to stop")
-	}
-	config, configErr := s.executionConfigForRun(r)
-	if configErr != nil {
-		return Operation{}, configErr
-	}
-	records := executionRecords{root: config.RunDir}
-	ref, err := records.loadBinding(r.RunID, r.AttemptID)
-	if err != nil {
-		return Operation{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "active execution has no valid fixed binding", Cause: err}
-	}
-	if ref.RunID != r.RunID || ref.AttemptID != r.AttemptID || r.Process == nil || ref.External != *r.Process {
-		return Operation{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "active execution binding does not match runtime identity"}
-	}
-	backend := backendFor(config)
-	kind, protocol := backend.Identity()
-	if kind != ref.Backend || protocol != ref.Protocol {
-		return Operation{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "configured backend/protocol differs from fixed execution"}
-	}
-	opID := "stop-" + r.AttemptID
-	payload := struct {
-		Policy string
-		Grace  string
-	}{"fixed_local_execution_stop", config.ShutdownGrace}
-	op := Operation{Version: ExecutionRecordVersion, ID: opID, RunID: r.RunID, AttemptID: r.AttemptID, Backend: ref.Backend, Protocol: ref.Protocol, Target: ref.Target, Action: "stop", PayloadDigest: digestValue(payload), Status: OperationPending, StartedAt: now(), UpdatedAt: now(), Ref: &ref}
-	if old, loadErr := records.loadOperation(r.RunID, r.AttemptID, opID); loadErr == nil {
-		if old.Action != op.Action || old.PayloadDigest != op.PayloadDigest || old.Target != op.Target {
-			return Operation{}, errors.New("stop operation id conflicts with its fixed target/policy")
-		}
-		return old, nil // Never resend a persisted stop operation.
-	} else if !os.IsNotExist(loadErr) {
-		return Operation{}, loadErr
-	}
-	if err = records.saveOperation(op); err != nil {
-		return Operation{}, err
-	}
-	op.Status, op.UpdatedAt = OperationInFlight, now()
-	if err = records.saveOperation(op); err != nil {
-		return Operation{}, err
-	}
-	receipt, stopErr := backend.StopExecution(ctx, ref, op, s.worker)
-	if stopErr != nil {
-		var be *BackendError
-		if errors.As(stopErr, &be) && (be.Code == BackendOutcomeUnknown || be.Code == BackendUnreachable || be.Code == BackendIdentityMismatch) {
-			op.Status = OperationUnknown
-		} else {
-			op.Status = OperationRejected
-		}
-		op.Diagnostic, op.UpdatedAt = stopErr.Error(), now()
-		if saveErr := records.saveOperation(op); saveErr != nil {
-			return op, errors.Join(stopErr, saveErr)
-		}
-		return op, stopErr
-	}
-	switch receipt.Disposition {
-	case "confirmed":
-		op.Status = OperationConfirmed
-	case "accepted":
-		op.Status = OperationAccepted
-	case "rejected":
-		op.Status = OperationRejected
-	default:
-		op.Status = OperationUnknown
-	}
-	op.Diagnostic, op.UpdatedAt = receipt.Diagnostic, now()
-	if err = records.saveOperation(op); err != nil {
-		return op, err
-	}
-	if op.Status == OperationUnknown || op.Status == OperationRejected {
-		return op, &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "stop request did not confirm an accepted stop"}
-	}
-	return op, nil
-}
-
-func (s *Service) confirmExecutionStop(op Operation) (bool, error) {
-	config, configErr := s.executionConfigForWorkflowID(op.RunID)
-	if configErr != nil {
-		return false, configErr
-	}
-	if op.ID == "" {
-		return false, errors.New("stop operation is missing")
-	}
-	records := executionRecords{root: config.RunDir}
-	// The adapter already persisted an exact stop receipt. Orca's terminal show
-	// may later report an orphaned/disconnected tab even after ptyKilled=true;
-	// that weaker observation must not erase the durable close evidence.
-	if op.Status == OperationConfirmed {
-		persisted, err := records.loadOperation(op.RunID, op.AttemptID, op.ID)
-		if err != nil {
-			return false, err
-		}
-		if persisted.Status != OperationConfirmed || persisted.PayloadDigest != op.PayloadDigest || persisted.Target != op.Target || persisted.Ref == nil || op.Ref == nil || digestValue(*persisted.Ref) != digestValue(*op.Ref) {
-			return false, &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "exact stop confirmation was not durably saved"}
-		}
-		return true, nil
-	}
-	ref := op.Ref
-	if ref == nil {
-		loaded, err := (executionRecords{root: config.RunDir}).loadBinding(op.RunID, op.AttemptID)
-		if err != nil {
-			return false, err
-		}
-		ref = &loaded
-	}
-	backend := backendFor(config)
-	obs, err := backend.Observe(context.Background(), *ref)
-	if err != nil {
-		op.Status, op.Diagnostic, op.UpdatedAt = OperationUnknown, err.Error(), now()
-		saveErr := records.saveOperation(op)
-		return false, errors.Join(err, saveErr)
-	}
-	if obs.Liveness != "exited" {
-		op.Status, op.Diagnostic, op.UpdatedAt = OperationUnknown, "original execution has not produced stopped evidence: "+obs.Diagnostic, now()
-		saveErr := records.saveOperation(op)
-		return false, errors.Join(&BackendError{Code: BackendOutcomeUnknown, Diagnostic: op.Diagnostic}, saveErr)
-	}
-	op.Status, op.Diagnostic, op.UpdatedAt = OperationConfirmed, obs.Diagnostic, now()
-	if err = records.saveOperation(op); err != nil {
-		return false, err
-	}
-	return true, nil
-}
-
-func (s *Service) preserveUnknownStop(reason string, cause error) {
-	if s.active == nil {
+	ctx, cancel := context.WithTimeout(context.Background(), duration(s.Config.ShutdownGrace))
+	defer cancel()
+	if err := s.worker.detachLocalObservation(ctx); err != nil {
+		s.setError(fmt.Errorf("original worker observation could not be detached: %w", err))
 		return
 	}
-	r := s.active
-	if s.Config.hostName() == "orca_supervised" && s.worker != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), duration(s.Config.ShutdownGrace))
-		detachErr := backendFor(s.Config).DetachObservation(ctx, s.worker)
-		cancel()
-		if detachErr != nil {
-			reason += "; local remote observation detach failed: " + detachErr.Error()
-		}
-		s.worker = nil
-	}
-	r.ExecutionStatus = "unknown"
-	s.blocked(r, reason)
-	if cause != nil {
-		r.Error = ptr(clip(reason+": "+cause.Error(), 1000))
-	}
-	s.State.SlotOccupied, s.State.CurrentTask = true, ptr(r.TaskID)
-	s.note(r, "steer", "stop", "unknown", "execution stop unconfirmed", reason, nil)
-	s.closeActivity(r)
-	if err := s.save(); err != nil {
-		s.setError(err)
-	}
+	s.worker = nil
 }

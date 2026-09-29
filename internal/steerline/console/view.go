@@ -107,29 +107,6 @@ func renderProjectStrip(m Model) string {
 }
 
 func renderStatusLine(m Model, state projectState) string {
-	if state.ref.Legacy != nil {
-		service := projectStatus(state.ref, state.snapshot)
-		count, active := 0, 0
-		if legacy := state.snapshot.Legacy; legacy != nil {
-			count = len(legacy.Tasks)
-			for _, task := range legacy.Tasks {
-				if task.Status != "closed" {
-					active++
-				}
-			}
-			if legacy.ServiceStatus != "" {
-				service += " · " + legacy.ServiceStatus
-			}
-		}
-		parts := []string{"服务 " + service, fmt.Sprintf("旧 Beads 只读 · 未完成 %d/%d", active, count)}
-		if state.snapshot.LegacyError != "" {
-			parts = append(parts, "查询："+safeTerminalText(state.snapshot.LegacyError))
-		}
-		if m.status != "" {
-			parts = append([]string{"提示 " + safeTerminalInlineText(m.status)}, parts...)
-		}
-		return truncate(strings.Join(parts, "  |  "), m.width)
-	}
 	runtimeState := state.snapshot.Connection.Snapshot.Runtime
 	if runtimeState == nil {
 		runtimeState = state.snapshot.Observation.Runtime
@@ -233,20 +210,12 @@ func renderRows(m Model, state projectState, width, height int) []string {
 		focus = " [焦点]"
 	}
 	out := []string{styleLabel.Render(fmt.Sprintf("任务列表%s · %d 项 · %d %s", focus, len(rows), state.filter+1, filterDisplayName(state.filter)))}
-	if state.ref.Legacy == nil && height >= 6 {
+	if height >= 6 {
 		out = append(out, styleDim.Render("筛选 1全部  2Ready  3进行中  4待决策"), styleDim.Render("     5待合并  6需处理  7历史"))
 	}
 	if state.ref.Error != "" {
 		out = append(out, styleAlert.Render("配置错误："+safeTerminalText(state.ref.Error)))
 		return out
-	}
-	if state.ref.Legacy != nil {
-		if state.snapshot.LegacyError != "" {
-			out = append(out, styleAlert.Render("Beads 查询："+safeTerminalText(state.snapshot.LegacyError)))
-		}
-		if state.snapshot.Legacy != nil && state.snapshot.Legacy.RuntimeError != "" {
-			out = append(out, "旧运行投影："+safeTerminalText(state.snapshot.Legacy.RuntimeError))
-		}
 	}
 	if state.ref.Conflict != "" {
 		out = append(out, styleAlert.Render(safeTerminalText(state.ref.Conflict)))
@@ -262,8 +231,6 @@ func renderRows(m Model, state projectState, width, height int) []string {
 		switch {
 		case !state.snapshotLoaded:
 			out = append(out, "正在读取项目快照…")
-		case state.ref.Legacy != nil:
-			out = append(out, "旧 Beads 项目没有可显示的任务；检查只读查询诊断。")
 		case snapshot.Connection.State == steerline.ConnectionOffline || snapshot.Connection.State == steerline.ConnectionNoRecord:
 			out = append(out, "服务离线；已有运行和日志仍可查看。")
 			out = append(out, "服务入口："+safeTerminalText(serviceWindowInstruction(state.ref)))
@@ -338,9 +305,6 @@ func rowTaskStatus(row consoleRow) string {
 	}
 	if row.native != nil {
 		return displayTaskStatus(row.native.Status)
-	}
-	if row.legacy != nil {
-		return displayTaskStatus(row.legacy.Status)
 	}
 	if row.kind == rowReady {
 		return "可开始"
@@ -467,120 +431,6 @@ func runStatus(run *steerline.Run) string {
 	return firstText(run.ExecutionStatus, "unknown")
 }
 
-func taskProgressLines(state projectState, run *steerline.Run) []string {
-	if run == nil || run.WorkflowVersion != steerline.MinimalWorkflowVersion {
-		return nil
-	}
-	var workflows []steerline.WorkflowRunRecord
-	var executions []steerline.ExecutionRecord
-	var attempts []steerline.StepAttemptRecord
-	if state.snapshot.Domain != nil {
-		workflows, executions, attempts = state.snapshot.Domain.WorkflowRuns, state.snapshot.Domain.Executions, state.snapshot.Domain.Attempts
-	} else if rt := state.snapshot.Observation.Runtime; rt != nil {
-		workflows, executions, attempts = rt.WorkflowRuns, rt.Executions, rt.Attempts
-	}
-	var workflow *steerline.WorkflowRunRecord
-	var execution *steerline.ExecutionRecord
-	for i := range workflows {
-		if workflows[i].WorkflowRunID == run.RunID {
-			workflow = &workflows[i]
-			break
-		}
-	}
-	for i := range executions {
-		if executions[i].ExecutionID == run.ExecutionID && executions[i].WorkflowRunID == run.RunID {
-			execution = &executions[i]
-			break
-		}
-	}
-	if workflow == nil || execution == nil {
-		return []string{"步骤：当前中心记录暂不可读"}
-	}
-	latest := map[string]*steerline.StepAttemptRecord{}
-	for i := range attempts {
-		attempt := &attempts[i]
-		if attempt.ExecutionID != execution.ExecutionID {
-			continue
-		}
-		prior := latest[attempt.StepID]
-		if prior == nil || attempt.UpdatedAt.After(prior.UpdatedAt) {
-			latest[attempt.StepID] = attempt
-		}
-	}
-	steps := []struct{ id, label string }{{"prepare", "准备"}, {"implement", "实现"}, {"verify", "验证"}}
-	if workflow.Definition.ReviewRequired {
-		steps = append(steps, struct{ id, label string }{"review", "审查"})
-	}
-	steps = append(steps, struct{ id, label string }{"publish_pr", "创建 PR"})
-	parts := make([]string, 0, len(steps))
-	currentLabel := ""
-	for _, step := range steps {
-		passed := false
-		attempt := latest[step.id]
-		if attempt != nil && attempt.Status == "succeeded" {
-			switch step.id {
-			case "prepare":
-				passed = true
-			case "implement":
-				passed = execution.CandidateRevision != ""
-			case "verify":
-				passed = execution.CandidateRevision != "" && execution.VerifiedRevision == execution.CandidateRevision
-			case "review":
-				passed = execution.CandidateRevision != "" && execution.ReviewedRevision == execution.CandidateRevision
-			case "publish_pr":
-				passed = run.PR.URL != nil && *run.PR.URL != ""
-			}
-		}
-		marker := "○ "
-		if passed {
-			marker = "✓ "
-		} else if execution.CurrentStep == step.id && run.FinishTaskStatus != "completed" {
-			marker = "● "
-		}
-		parts = append(parts, marker+step.label)
-		if execution.CurrentStep == step.id {
-			currentLabel = step.label
-		}
-	}
-	lines := []string{"步骤：" + strings.Join(parts, "  →  ")}
-	if currentLabel != "" && run.FinishTaskStatus != "completed" {
-		phase := "等待步骤回执"
-		if attempt := latest[execution.CurrentStep]; attempt != nil {
-			phase = stepAttemptLabel(attempt.Status)
-		}
-		if execution.CurrentStep == "implement" && execution.RepairRounds > 0 {
-			currentLabel += fmt.Sprintf("（第 %d 轮）", execution.RepairRounds+1)
-		}
-		lines = append(lines, "当前步骤："+currentLabel+" · "+phase)
-	}
-	return lines
-}
-
-func stepAttemptLabel(status string) string {
-	switch status {
-	case "planned":
-		return "等待派发"
-	case "dispatching":
-		return "正在派发"
-	case "dispatched":
-		return "等待开始回执"
-	case "running":
-		return "执行中"
-	case "waiting_decision":
-		return "等待回答"
-	case "succeeded":
-		return "本步已完成"
-	case "failed", "rejected":
-		return "执行失败"
-	case "outcome_unknown":
-		return "结果待核实"
-	case "stopped":
-		return "已停止"
-	default:
-		return "状态待核实"
-	}
-}
-
 func taskNextAction(run *steerline.Run) string {
 	switch {
 	case run == nil:
@@ -636,9 +486,7 @@ func renderDynamicPanel(m Model, state projectState, width, height int) []string
 
 func renderNarrowPanel(m Model, state projectState, height int) []string {
 	views := "Tab 列表/动态 · d 完整详情"
-	if state.ref.Legacy == nil {
-		views += " · A活动 · c会话 · f最终回复"
-	}
+	views += " · A活动 · c会话 · f最终回复"
 	if state.focus == 0 {
 		return append([]string{"视图 任务列表  |  " + views}, renderRows(m, state, m.width, height-1)...)
 	}
@@ -693,10 +541,6 @@ func renderDetailContent(m Model, state projectState, row *consoleRow, width, he
 		lines = append(lines, renderEmptySelection(state)...)
 		return scrollLines(wrapLines(lines, width), state.detailScroll, height)
 	}
-	if row.legacy != nil {
-		lines = append(lines, renderLegacyTaskDetail(state, *row.legacy)...)
-		return scrollLines(wrapLines(lines, width), state.detailScroll, height)
-	}
 	if row.native != nil && row.run == nil {
 		if full {
 			lines = append(lines, renderNativeTaskDetail(state, *row.native)...)
@@ -737,7 +581,6 @@ func renderDetailContent(m Model, state projectState, row *consoleRow, width, he
 	} else {
 		lines = append(lines, renderRunExecutionProfileSummary(state, run)...)
 	}
-	lines = append(lines, taskProgressLines(state, run)...)
 	lines = append(lines, "需要你操作："+taskNextAction(run))
 	lines = append(lines, renderActionLines(state, run.TaskID)...)
 	if run.PR.URL != nil || run.PR.State != "" && run.PR.State != "unknown" {
@@ -990,9 +833,6 @@ func displayActionReason(reason string) string {
 const timeLayout = "2006-01-02 15:04:05"
 
 func renderEmptySelection(state projectState) []string {
-	if state.ref.Legacy != nil {
-		return []string{"旧 Beads 项目只读；请选择左侧任务查看依赖与旧运行。", "原执行仍由旧服务结算；s/m/x 在此项目不可用。", "配置路径：" + safeTerminalText(state.ref.ConfigPath)}
-	}
 	if state.snapshot.Connection.State == steerline.ConnectionOffline || state.snapshot.Connection.State == steerline.ConnectionNoRecord {
 		return []string{"服务离线 · 可以查看已有 runs 与日志", "服务入口：" + safeTerminalText(serviceWindowInstruction(state.ref)), "配置路径：" + safeTerminalText(state.ref.ConfigPath), terminalCapabilities()}
 	}
@@ -1300,35 +1140,7 @@ func renderRecoveryInspection(m Model, state projectState, width, height int) []
 	} else {
 		lines = append(lines, "PR：未绑定")
 	}
-	if state.ref.Config.WorkflowProtocol == steerline.WorkerFlowVersion {
-		lines = append(lines, "", "原 worker 会话及反馈请求按当前格式对账；需要输入时请在待决策页回复。")
-		return scrollLines(wrapLines(lines, width), state.detailScroll, height)
-	}
-	lines = append(lines, "", "可恢复动作 · 服务执行前会重新核验")
-	if report.RetryReason == "" {
-		lines = append(lines, "R retry_run · 可用 · 保留 task/run/worktree，创建新 attempt")
-	} else {
-		lines = append(lines, "R retry_run · 不可用："+safeTerminalText(report.RetryReason))
-	}
-	if strings.HasPrefix(report.MarkStoppedReason, "confirm") {
-		lines = append(lines, "M mark_stopped · 确认旧执行已停止并记录依据")
-	} else {
-		lines = append(lines, "M mark_stopped · 不可用："+safeTerminalText(report.MarkStoppedReason))
-	}
-	if len(report.Blockers) == 0 {
-		lines = append(lines, "v resolve_command · 没有 indeterminate blocker")
-	} else {
-		lines = append(lines, "Indeterminate control blockers：")
-		for i, blocker := range report.Blockers {
-			marker := "  "
-			if i == state.recoveryBlockerIndex {
-				marker = "› "
-			}
-			lines = append(lines, marker+blocker.RequestID+" · "+blocker.Action+" · "+safeTerminalText(blocker.Reason))
-		}
-		lines = append(lines, "[ / ] 选择 blocker · v 按证据解除这一条；原指令不会重放")
-	}
-	lines = append(lines, "采样报告不是通行证；revision 变化后动作会被拒绝并要求重新读取。")
+	lines = append(lines, "", "原 worker 会话及反馈请求按当前格式对账；需要输入时请在待决策页回复。")
 	return scrollLines(wrapLines(lines, width), state.detailScroll, height)
 }
 
@@ -1360,7 +1172,7 @@ func decisionAnswerAvailability(state projectState, row *consoleRow) string {
 	if run.Decision.RequestPath != "" || run.Decision.AnswerPath != "" {
 		return "问题绑定了已移除的 sidecar-answer 格式；保留状态并转入人工恢复，不导入答案文件"
 	}
-	if run.WorkflowVersion != steerline.MinimalWorkflowVersion && run.WorkflowVersion != steerline.WorkerFlowVersion || run.ExecutionID == "" || run.AttemptID == "" || run.Decision.AttemptID != run.AttemptID {
+	if run.WorkflowVersion != steerline.WorkerFlowVersion || run.ExecutionID == "" || run.AttemptID == "" || run.Decision.AttemptID != run.AttemptID {
 		return "问题未绑定当前 native WorkflowRun、Execution 和 attempt；保留原问题并转入只读恢复核验"
 	}
 	if run.Backend == "local" && run.Protocol != "local_process" || run.Backend == "orca" && run.Protocol != "orca_terminal_v2" && run.Protocol != "orca_supervised" || run.Backend != "local" && run.Backend != "orca" {
@@ -1606,42 +1418,15 @@ func renderStopConfirmation(m Model, state projectState, height int) string {
 	if m.confirm == nil {
 		return ""
 	}
-	var lines []string
-	if m.confirm.action != "stop_service" {
-		lines = []string{"恢复动作确认", "run_id：" + safeTerminalText(m.confirm.runID), "command_id：" + safeTerminalText(m.confirm.requestID), "revision：" + strconv.FormatUint(m.confirm.revision, 10), "动作：" + safeTerminalText(m.confirm.action)}
-		if m.confirm.action == "resolve_command" {
-			lines = append(lines, "原 request_id："+safeTerminalText(m.confirm.decisionID), "服务只核验并解除这一条 indeterminate blocker，不会重放原指令；若对应不确定执行，还会记录已核实的停止事实。")
-		} else {
-			lines = append(lines, "目标服务实例："+safeTerminalText(m.confirm.instance))
-		}
-		if m.confirm.requireBasis {
-			lines = append(lines, "", "请填写亲自核验的停止或解除依据（最多 2000 字符）：")
-			evidence := []rune(m.confirm.basis)
-			if m.confirm.basisCursor >= 0 && m.confirm.basisCursor <= len(evidence) {
-				evidence = append(evidence, 0)
-				copy(evidence[m.confirm.basisCursor+1:], evidence[m.confirm.basisCursor:])
-				evidence[m.confirm.basisCursor] = '│'
-			}
-			for _, line := range strings.Split(safeTerminalText(string(evidence)), "\n") {
-				lines = append(lines, line)
-			}
-			lines = append(lines, fmt.Sprintf("依据字符：%d / 2000", len([]rune(m.confirm.basis))))
-			if m.confirm.basisError != "" {
-				lines = append(lines, styleAlert.Render(safeTerminalText(m.confirm.basisError)))
-			}
-			lines = append(lines, "Enter 换行 · F2 明确确认并提交 · Esc 取消")
-		} else {
-			lines = append(lines, "Enter/y 确认 · Esc/n 取消")
-		}
-	} else {
-		grace := safeTerminalText(state.ref.Config.ShutdownGrace)
-		lines = []string{"停止服务确认", "", "目标实例：" + safeTerminalText(m.confirm.instance), "这会停止新派发，并等待当前 worker 最长 " + grace + " 后按服务策略结束；工作现场会保留。", "request_id：" + m.confirm.requestID, "", "Enter/y 确认停止 · Esc/n 取消"}
+	grace := state.ref.Config.ShutdownGrace
+	if grace == "" {
+		grace = "配置的宽限时间"
 	}
-	width := max(1, m.width-2)
+	lines := []string{"停止服务确认", "", "目标实例：" + safeTerminalText(m.confirm.instance), "这会停止新派发，并等待当前 worker 最长 " + grace + " 后按服务策略结束；工作现场会保留。", "request_id：" + m.confirm.requestID, "", "Enter/y 确认停止 · Esc/n 取消"}
+	width := max(20, m.width-4)
 	visible := fitLines(scrollLines(wrapLines(lines, width), max(0, m.confirm.scroll), height), m.width, height)
 	return strings.Join(visible, "\n")
 }
-
 func renderAnswerDialog(m Model, state projectState, height int) string {
 	dialog := m.answer
 	if dialog == nil {
@@ -1728,9 +1513,6 @@ func renderFooter(m Model, state projectState) string {
 		return "? / Esc 关闭帮助"
 	}
 	if m.confirm != nil {
-		if m.confirm.requireBasis {
-			return "输入亲自核验的依据 · F2 确认提交 · Esc 取消"
-		}
 		return "↑↓/PgUp/PgDn 阅读完整确认内容 · Enter/y 确认 · Esc/n 取消"
 	}
 	if m.answer != nil {
@@ -1740,10 +1522,7 @@ func renderFooter(m Model, state projectState) string {
 		return "↑↓/PgUp/PgDn 阅读完整详情 · d / Enter / Esc 返回 · q 退出"
 	}
 	if state.panel == 6 {
-		return "r 重新核验 · R retry · m mark-stopped · [/]选择 blocker · v resolve-command · Enter/ Esc 返回"
-	}
-	if state.ref.Legacy != nil {
-		return "←→ 项目 · Tab 列表/动态 · ↑↓ 选择/滚动 · d 详情 · q 退出"
+		return "r 重新核验 · Enter/ Esc 返回"
 	}
 	parts := []string{"←→ 项目", "Tab 列表/动态", "1–7 筛选", "↑↓ 选择/滚动", "d 详情"}
 	row := m.selectedRow(m.selected)
@@ -1768,9 +1547,6 @@ func renderFooter(m Model, state projectState) string {
 
 func renderHelp(state projectState) []string {
 	lines := []string{"快捷键", "", "←/→  切换项目", "Tab  在任务列表与任务动态间切换", "↑/↓  选择任务或滚动动态", "d/Enter  打开完整只读详情；Esc 返回", "q    退出控制台；服务继续运行"}
-	if state.ref.Legacy != nil {
-		return append(lines, "", "旧 Beads 项目只读；控制操作不可用。")
-	}
 	if state.ref.Config.WorkflowProtocol == steerline.WorkerFlowVersion {
 		return append(lines,
 			"", "任务与服务", "1 全部 · 2 Ready · 3 进行中", "4 待决策 · 5 待合并", "6 需处理 · 7 历史", "s    选择已配置方案并开始 Ready 任务", "m    切换手动/自动派发", "x    停止服务（需确认）",

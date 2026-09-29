@@ -205,7 +205,7 @@ func testWorkerFlowOrcaServiceFirstFeedbackLive(t *testing.T, remote bool) {
 		}
 		t.Fatalf("Orca terminal did not deliver the complete option and Unicode note: expected=%s observed=%s", hex.EncodeToString(sum[:]), found)
 	}
-	_, execution := service.minimalRecords(run)
+	_, execution := service.workflowRecords(run)
 	if execution == nil || execution.SessionID != firstSession || execution.TurnNumber != 2 || run.Process == nil || *run.Process != firstProcess || canonical(deref(run.WorktreePath)) != canonical(firstWorkspace) {
 		t.Fatalf("Orca feedback replaced worker identity: execution=%+v run=%+v", execution, run)
 	}

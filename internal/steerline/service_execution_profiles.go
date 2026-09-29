@@ -84,9 +84,7 @@ func (s *Service) executionConfigForRun(run *Run) (Config, error) {
 			config.Orca.Supervised = &coordinator
 		}
 		if workflow.WorkflowVersion != WorkerFlowVersion {
-			if _, err := config.validateNativeWorkflow(); err != nil {
-				return Config{}, fmt.Errorf("fixed execution profile is invalid: %w", err)
-			}
+			return Config{}, fmt.Errorf("fixed execution profile uses an unsupported workflow version")
 		}
 		backend, protocol, err := ExecutionBackendKind(fixed.Host)
 		if err != nil || run.Host != fixed.Host || run.Agent != fixed.Agent || run.Backend != string(backend) || run.Protocol != string(protocol) || run.Target.ID != targetFor(config).ID {

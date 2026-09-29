@@ -37,7 +37,7 @@ func preflightExistingState(runDir, runtimeFile string) error {
 			var header struct {
 				Version int `json:"schema_version"`
 			}
-			if json.Unmarshal(data, &header) == nil && header.Version != 5 {
+			if json.Unmarshal(data, &header) == nil && header.Version != WorkerFlowRuntimeSchema {
 				return fmt.Errorf("unsupported runtime schema %d", header.Version)
 			}
 		}
@@ -75,7 +75,7 @@ func preflightExistingState(runDir, runtimeFile string) error {
 		return err
 	}
 	if runtime != nil {
-		return errors.New("runtime v5 projection exists without its authoritative SQLite database; restore the database before starting")
+		return errors.New("runtime projection exists without its authoritative SQLite database; restore the database before starting")
 	}
 	entries, err := os.ReadDir(filepath.Join(runDir, "runs"))
 	if err != nil && !os.IsNotExist(err) {
@@ -99,12 +99,12 @@ func validateRetiredWholeRunResultCommands(ctx context.Context, db *sql.DB) erro
 }
 
 func validateExistingDatabase(databasePath string) error {
-	reader, err := OpenSQLiteReader(databasePath)
+	reader, err := openSQLiteInspector(databasePath)
 	if err != nil {
 		return nativeErr("unsupported_schema", fmt.Sprintf("cannot inspect existing SQLite state without mutation: %v", err))
 	}
 	defer reader.Close()
-	return validateDatabaseSchemaVersion(context.Background(), reader.db, true)
+	return validateDatabaseSchema(context.Background(), reader.db)
 }
 
 type schemaQuery interface {
@@ -112,33 +112,17 @@ type schemaQuery interface {
 	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
 }
 
-// Check definitions as well as the version stamp before writing existing state.
+// Check definitions as well as the version stamp before reading or writing state.
 func validateDatabaseSchema(ctx context.Context, db schemaQuery) error {
-	return validateDatabaseSchemaVersion(ctx, db, false)
-}
-
-func validateDatabaseSchemaVersion(ctx context.Context, db schemaQuery, allowCurrentUpgrade bool) error {
 	var version int
 	if err := db.QueryRowContext(ctx, `SELECT COALESCE(MAX(version),0) FROM schema_migrations`).Scan(&version); err != nil {
 		return nativeErr("unsupported_schema", "existing SQLite database has an unknown schema; preserve it for manual recovery")
 	}
-	if version != domainSchemaVersion && !(allowCurrentUpgrade && (version == 3 || version == 4)) {
+	if version != domainSchemaVersion {
 		return nativeErr("unsupported_schema", fmt.Sprintf("unsupported SQLite schema %d; only schema %d is accepted", version, domainSchemaVersion))
 	}
 	expected := map[string]string{}
-	definitions := append(append([]string{}, domainExecutionSchema...), nativeTaskSchema...)
-	if version >= 4 {
-		definitions = append(definitions, conversationSchemaV4...)
-	}
-	if version < domainSchemaVersion {
-		expectedIndex := activeWorkflowIndexV4
-		for i, stmt := range definitions {
-			if stmt == activeWorkflowIndexV5 {
-				definitions[i] = expectedIndex
-				break
-			}
-		}
-	}
+	definitions := append(append(append([]string{}, domainExecutionSchema...), nativeTaskSchema...), conversationSchema...)
 	for _, stmt := range definitions {
 		fields := strings.Fields(stmt)
 		if len(fields) < 3 || fields[0] != "CREATE" {

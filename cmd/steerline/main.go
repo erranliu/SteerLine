@@ -343,15 +343,13 @@ func runConsoleCommand(args []string) error {
 
 func runNativeTaskCommand(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: steerline task <validate|create|accept-existing|discard|reopen|graph|export|show|list> -config config.json")
+		return fmt.Errorf("usage: steerline task <validate|create|discard|add-predecessors|graph|export|show|list> -config config.json")
 	}
 	subcommand := args[0]
 	fs := flag.NewFlagSet("task "+subcommand, flag.ContinueOnError)
 	config := fs.String("config", "steerline.local.json", "configuration JSON")
 	taskID := fs.String("task-id", "", "native task ID")
-	runID := fs.String("run-id", "", "exact workflow run to abandon when reopening a task")
 	predecessors := fs.String("predecessors", "", "comma-separated native predecessor task IDs")
-	confirmedStopped := fs.Bool("confirm-process-stopped", false, "operator confirmed the old worker process stopped")
 	cursor := fs.String("cursor", "", "native task list cursor")
 	limit := fs.Int("limit", 100, "list page size (default 100); graph/export default to 500 nodes, maximum 500")
 	status := fs.String("status", "", "filter graph nodes by native task status")
@@ -367,7 +365,7 @@ func runNativeTaskCommand(args []string) error {
 	expectedGraphRevision := fs.Uint64("expected-graph-revision", 0, "sampled native graph revision")
 	reason := fs.String("reason", "", "reason for discarding or changing the task")
 	by := fs.String("by", "", "task command requester")
-	if subcommand != "show" && subcommand != "list" && subcommand != "validate" && subcommand != "create" && subcommand != "accept-existing" && subcommand != "discard" && subcommand != "add-predecessors" && subcommand != "graph" && subcommand != "export" {
+	if subcommand != "show" && subcommand != "list" && subcommand != "validate" && subcommand != "create" && subcommand != "discard" && subcommand != "add-predecessors" && subcommand != "graph" && subcommand != "export" {
 		return fmt.Errorf("unsupported task command %q", subcommand)
 	}
 	if err := fs.Parse(args[1:]); err != nil {
@@ -378,9 +376,8 @@ func runNativeTaskCommand(args []string) error {
 		"list":             {"config": true, "cursor": true, "limit": true},
 		"validate":         {"config": true, "file": true},
 		"create":           {"config": true, "file": true, "request-id": true, "expected-authority-version": true, "by": true},
-		"accept-existing":  {"config": true, "file": true},
 		"discard":          {"config": true, "task-id": true, "request-id": true, "expected-version": true, "reason": true, "by": true},
-		"add-predecessors": {"config": true, "task-id": true, "predecessors": true, "run-id": true, "request-id": true, "expected-version": true, "expected-graph-revision": true, "confirm-process-stopped": true, "reason": true, "by": true},
+		"add-predecessors": {"config": true, "task-id": true, "predecessors": true, "request-id": true, "expected-version": true, "expected-graph-revision": true, "reason": true, "by": true},
 		"graph":            {"config": true, "task-id": true, "cursor": true, "limit": true, "status": true, "direction": true, "depth": true},
 		"export":           {"config": true, "task-id": true, "status": true, "direction": true, "depth": true, "format": true, "output": true, "overwrite": true},
 	}
@@ -441,10 +438,6 @@ func runNativeTaskCommand(args []string) error {
 		if *taskID != "" || *cursor != "" {
 			return errors.New("task create does not accept -task-id or -cursor")
 		}
-	case "accept-existing":
-		if *file == "" || *taskID != "" || *cursor != "" || *requestID != "" || *expectedAuthority != 0 || *expectedVersion != 0 || *runID != "" || *by != "" {
-			return errors.New("task accept-existing accepts only -config and -file; identity and operator are fixed in the manifest")
-		}
 	case "discard":
 		if *taskID == "" || *requestID == "" || *expectedVersion == 0 || strings.TrimSpace(*reason) == "" {
 			return errors.New("task discard requires -task-id, -request-id, -expected-version and -reason")
@@ -464,9 +457,6 @@ func runNativeTaskCommand(args []string) error {
 		}
 		if err := steerline.ValidateNativeTaskID(*taskID); err != nil {
 			return err
-		}
-		if (*runID == "") != !*confirmedStopped {
-			return errors.New("task add-predecessors requires -run-id and -confirm-process-stopped together for a claimed task")
 		}
 	case "graph":
 		if *file != "" || *requestID != "" || *expectedAuthority != 0 || *expectedVersion != 0 || *reason != "" || *by != "" {
@@ -501,7 +491,7 @@ func runNativeTaskCommand(args []string) error {
 	if err != nil {
 		return err
 	}
-	if subcommand == "create" || subcommand == "accept-existing" || subcommand == "discard" || subcommand == "add-predecessors" {
+	if subcommand == "create" || subcommand == "discard" || subcommand == "add-predecessors" {
 		if err = store.Close(); err != nil {
 			return err
 		}
@@ -549,21 +539,6 @@ func runNativeTaskCommand(args []string) error {
 			return createErr
 		}
 		return json.NewEncoder(os.Stdout).Encode(receipt)
-	case "accept-existing":
-		payload, readErr := os.ReadFile(*file)
-		if readErr != nil {
-			return readErr
-		}
-		input, parseErr := steerline.DecodeExistingAcceptanceInput(payload)
-		if parseErr != nil {
-			return parseErr
-		}
-		verifier := &steerline.PRClient{Config: c.PR, Runner: steerline.Runner{Dir: c.Repository, Timeout: 30 * time.Second}}
-		receipt, completeErr := (steerline.CommandService{Store: store, Project: c.Identity()}).CompleteExistingAcceptance(context.Background(), c, input, verifier)
-		if completeErr != nil {
-			return completeErr
-		}
-		return json.NewEncoder(os.Stdout).Encode(receipt)
 	case "discard":
 		receipt, discardErr := (steerline.CommandService{Store: store, Project: c.Identity()}).DiscardNativeTask(context.Background(), c, *taskID, *requestID, *expectedVersion, *reason, *by)
 		if discardErr != nil {
@@ -575,7 +550,7 @@ func runNativeTaskCommand(args []string) error {
 		for i := range ids {
 			ids[i] = strings.TrimSpace(ids[i])
 		}
-		receipt, addErr := (steerline.CommandService{Store: store, Project: c.Identity()}).AddNativeTaskPredecessors(context.Background(), c, steerline.TaskPredecessorAddInput{TaskID: *taskID, PredecessorIDs: ids, RequestID: *requestID, ExpectedTaskVersion: *expectedVersion, ExpectedGraphRevision: *expectedGraphRevision, WorkflowRunID: *runID, ConfirmedProcessStopped: *confirmedStopped, Reason: *reason, RequestedBy: *by})
+		receipt, addErr := (steerline.CommandService{Store: store, Project: c.Identity()}).AddNativeTaskPredecessors(context.Background(), c, steerline.TaskPredecessorAddInput{TaskID: *taskID, PredecessorIDs: ids, RequestID: *requestID, ExpectedTaskVersion: *expectedVersion, ExpectedGraphRevision: *expectedGraphRevision, Reason: *reason, RequestedBy: *by})
 		if addErr != nil {
 			return addErr
 		}

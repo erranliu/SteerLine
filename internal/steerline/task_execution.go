@@ -169,11 +169,11 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 	if !ok || c.Project == "" || config.Identity() != c.Project {
 		return TaskClaimReceipt{}, nativeErr("authority_mismatch", "claim requires the configured native project")
 	}
-	if config.hostName() == "orca_supervised" && !config.WorkspaceDirtyIgnore.empty() {
-		return TaskClaimReceipt{}, nativeErr("host_unsupported", "supervised Orca cannot independently verify workspace_dirty_ignore paths")
+	if config.WorkflowProtocol != WorkerFlowVersion {
+		return TaskClaimReceipt{}, nativeErr("unsupported_schema", "only worker-flow-v1 may claim a task")
 	}
-	if err := config.WorkspaceDirtyIgnore.validate(); err != nil {
-		return TaskClaimReceipt{}, nativeErr("contract_mismatch", err.Error())
+	if err := validateWorkflowConfig(&config, nil); err != nil {
+		return TaskClaimReceipt{}, err
 	}
 	if err := ValidateNativeTaskID(options.TaskID); err != nil {
 		return TaskClaimReceipt{}, err
@@ -260,24 +260,9 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 	if err = VerifyTaskContractFiles(ctx, config, contract); err != nil {
 		return TaskClaimReceipt{}, err
 	}
-	var workflow *MinimalWorkflowConfig
-	if config.WorkflowProtocol != WorkerFlowVersion {
-		workflow, err = config.validateNativeWorkflow()
-		if err != nil || workflow == nil {
-			return TaskClaimReceipt{}, nativeErr("task_not_ready", "native claim requires project_steps with the native-task/v1 worker context")
-		}
-		if err = config.validateMinimalPreflight(*workflow); err != nil {
-			return TaskClaimReceipt{}, nativeErr("task_not_ready", "fixed workflow capability preflight failed: "+err.Error())
-		}
-	}
 	base, err := acquireNativeBase(ctx, config)
 	if err != nil {
 		return TaskClaimReceipt{}, nativeErr("task_not_ready", "fixed target branch base could not be acquired: "+err.Error())
-	}
-	if workflow != nil {
-		if err = config.validateMinimalEntriesAtBase(ctx, *workflow, base); err != nil {
-			return TaskClaimReceipt{}, nativeErr("task_not_ready", "workflow step entry is not present at the fixed base: "+err.Error())
-		}
 	}
 	predecessorMerges := map[string]string{}
 	for _, edge := range graph.Edges {
@@ -312,21 +297,13 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 	}
 	runner := StepRunnerSettings{Codex: config.Codex, Sandbox: config.Sandbox, Model: config.Model, ReasoningEffort: config.ReasoningEffort, Profile: config.Profile}
 	runner.Codex.Args = append([]string(nil), config.Codex.Args...)
-	wfr := WorkflowRunRecord{ProjectIdentity: c.Project, WorkflowRunID: workflowRunID, TaskID: task.TaskID, WorkflowVersion: MinimalWorkflowVersion, ConfigDigest: config.configDigest, Runner: runner, Phase: "queued", Repository: config.Repository, Branch: config.Branch, CreatedAt: created, UpdatedAt: created}
-	if workflow != nil {
-		wfr.Definition, wfr.ProjectSteps, wfr.WorkspaceDirtyIgnore = workflow.Definition, workflow.Steps, config.WorkspaceDirtyIgnore
-	} else {
-		wfr.WorkflowVersion, wfr.SelectedResult = WorkerFlowVersion, executionID
-	}
+	wfr := WorkflowRunRecord{ProjectIdentity: c.Project, WorkflowRunID: workflowRunID, TaskID: task.TaskID, WorkflowVersion: WorkerFlowVersion, ConfigDigest: config.configDigest, Runner: runner, Phase: "queued", Repository: config.Repository, Branch: config.Branch, SelectedResult: executionID, CreatedAt: created, UpdatedAt: created}
 	if options.ExecutionProfile != nil {
 		fixed := options.ExecutionProfile.Freeze()
 		wfr.ExecutionProfile = &fixed
 	}
-	execution := ExecutionRecord{ProjectIdentity: c.Project, ExecutionID: executionID, WorkflowRunID: workflowRunID, Agent: config.agentName(), Backend: string(backend), Protocol: string(protocol), Target: target, Workspace: WorkspaceEvidence{Repository: config.identity, Branch: config.Branch, Base: base}, Status: "pending", CurrentStep: "prepare", CreatedAt: created, UpdatedAt: created}
-	attempt := StepAttemptRecord{ProjectIdentity: c.Project, AttemptID: attemptID, ExecutionID: executionID, StepID: "prepare", AttemptNumber: 1, Status: "planned", InputRevision: base, ContractDigest: contract.Digest, ExternalBinding: target, CreatedAt: created, UpdatedAt: created}
-	if workflow == nil {
-		execution.CurrentStep, attempt.StepID = "worker", "worker"
-	}
+	execution := ExecutionRecord{ProjectIdentity: c.Project, ExecutionID: executionID, WorkflowRunID: workflowRunID, Agent: config.agentName(), Backend: string(backend), Protocol: string(protocol), Target: target, Workspace: WorkspaceEvidence{Repository: config.identity, Branch: config.Branch, Base: base}, Status: "pending", CurrentStep: "worker", CreatedAt: created, UpdatedAt: created}
+	attempt := StepAttemptRecord{ProjectIdentity: c.Project, AttemptID: attemptID, ExecutionID: executionID, StepID: "worker", AttemptNumber: 1, Status: "planned", InputRevision: base, ContractDigest: contract.Digest, ExternalBinding: target, CreatedAt: created, UpdatedAt: created}
 	nextTask := task
 	nextTask.Status, nextTask.Claimant, nextTask.Version, nextTask.UpdatedAt = "in_progress", claimant, task.Version+1, created
 	operationRequest, _ := json.Marshal(map[string]any{"task_id": task.TaskID, "task_version": options.ExpectedTaskVersion, "authority_version": options.ExpectedAuthorityVersion, "workflow_run_id": workflowRunID, "execution_id": executionID, "attempt_id": attemptID, "base_commit": base, "predecessor_merge_commits": predecessorMerges, "requested_by": options.RequestedBy})
@@ -710,83 +687,20 @@ func selectedNativeDeliveryState(snapshot DomainSnapshot, taskID, workflowRunID 
 	return *workflow, *execution, attempts, nil
 }
 
-func latestDeliveryAttempt(attempts []StepAttemptRecord, step string) (StepAttemptRecord, StepGateResult, bool) {
-	var selected StepAttemptRecord
-	var result StepGateResult
-	found := false
-	for _, attempt := range attempts {
-		if attempt.StepID != step || attempt.Status != "succeeded" || len(attempt.Result) == 0 {
-			continue
-		}
-		var candidate StepGateResult
-		if json.Unmarshal(attempt.Result, &candidate) != nil || candidate.StepID != step {
-			continue
-		}
-		if !found || attempt.AttemptNumber > selected.AttemptNumber {
-			selected = attempt
-			result = candidate
-			found = true
-		}
-	}
-	return selected, result, found
-}
-
 func validateNativeDeliveryGates(task TaskRecord, contract TaskContract, workflow WorkflowRunRecord, execution ExecutionRecord, attempts []StepAttemptRecord) (StepGateResult, error) {
-	if workflow.WorkflowVersion == WorkerFlowVersion {
-		if task.ContractID != contract.ContractID || contract.Digest == "" {
-			return StepGateResult{}, nativeErr("contract_mismatch", "selected task contract is unavailable")
-		}
-		if workflow.TaskID != task.TaskID || workflow.SelectedResult != execution.ExecutionID || execution.WorkflowRunID != workflow.WorkflowRunID ||
-			workflow.PRURL == "" || execution.SessionID == "" || execution.Workspace.Branch == "" ||
-			workflow.Phase != "executing" && workflow.Phase != "waiting_decision" && workflow.Phase != "waiting_pr_merge" {
-			return StepGateResult{}, nativeErr("task_not_ready", "selected worker flow has no bound session, execution branch or PR")
-		}
-		return StepGateResult{PRURL: workflow.PRURL}, nil
+	if workflow.WorkflowVersion != WorkerFlowVersion {
+		return StepGateResult{}, nativeErr("unsupported_schema", "selected workflow uses an unsupported protocol")
 	}
-	if err := (MinimalWorkflowConfig{Definition: workflow.Definition, Steps: workflow.ProjectSteps}).Validate(); err != nil {
-		return StepGateResult{}, nativeErr("task_not_ready", "selected workflow definition or fixed steps are invalid: "+err.Error())
-	}
-	if workflow.WorkflowVersion != MinimalWorkflowVersion || workflow.Phase != "waiting_pr_merge" || workflow.SelectedResult != execution.ExecutionID || execution.WorkflowRunID != workflow.WorkflowRunID || execution.Status != "succeeded" || execution.CurrentStep != "waiting_pr_merge" {
-		return StepGateResult{}, nativeErr("task_not_ready", "selected workflow result is not awaiting verified PR merge")
-	}
-	if !revisionPattern.MatchString(execution.CandidateRevision) || execution.VerifiedRevision != execution.CandidateRevision || execution.Workspace.Dirty || execution.Workspace.Head != execution.CandidateRevision {
-		return StepGateResult{}, nativeErr("task_not_ready", "selected execution lacks clean verification evidence for its candidate")
-	}
-	verifyAttempt, verify, ok := latestDeliveryAttempt(attempts, "verify")
-	if !ok || verifyAttempt.ContractDigest != nativeStepContractDigest(workflow.ProjectSteps, "verify") || !verify.Succeeded || verify.ResultID == "" || verify.Revision != execution.CandidateRevision || verify.Workspace.Dirty || verify.Workspace.Head != execution.CandidateRevision || verify.Workspace.VerifiedAt.IsZero() {
-		return StepGateResult{}, nativeErr("task_not_ready", "required verification result is missing or for a different revision")
-	}
-	if len(workflow.ProjectSteps.Verify.RequiredChecks) == 0 {
-		return StepGateResult{}, nativeErr("task_not_ready", "selected workflow has no fixed required verification checks")
-	}
-	failed, err := validateChecks(workflow.ProjectSteps.Verify.RequiredChecks, verify.Checks, execution.CandidateRevision)
-	if err != nil || failed {
-		return StepGateResult{}, nativeErr("task_not_ready", "fixed verification gates are not all passed for the published revision")
-	}
-	if workflow.Definition.ReviewRequired {
-		reviewAttempt, review, ok := latestDeliveryAttempt(attempts, "review")
-		if !ok || reviewAttempt.ContractDigest != nativeStepContractDigest(workflow.ProjectSteps, "review") || !review.Succeeded || review.ResultID == "" || review.ReviewVerdict != "passed" || review.Revision != execution.CandidateRevision || review.Workspace.Dirty || review.Workspace.Head != execution.CandidateRevision || execution.ReviewedRevision != execution.CandidateRevision {
-			return StepGateResult{}, nativeErr("task_not_ready", "required review is not passed for the published revision")
-		}
-	}
-	publishAttempt, publish, ok := latestDeliveryAttempt(attempts, "publish_pr")
-	if !ok || publishAttempt.ContractDigest != nativeStepContractDigest(workflow.ProjectSteps, "publish_pr") || !publish.Succeeded || publish.ResultID == "" || publish.Workspace.Dirty || publish.Workspace.Head != execution.CandidateRevision || publish.PRURL == "" || publish.PublishedHead != execution.CandidateRevision || publish.Revision != execution.CandidateRevision {
-		return StepGateResult{}, nativeErr("task_not_ready", "selected workflow has no fixed PR publication result")
-	}
-	if contract.Digest == "" || task.ContractID != contract.ContractID {
+	if task.ContractID != contract.ContractID || contract.Digest == "" {
 		return StepGateResult{}, nativeErr("contract_mismatch", "selected task contract is unavailable")
 	}
-	return publish, nil
-}
-
-func nativeStepContractDigest(steps ProjectSteps, step string) string {
-	data, err := json.Marshal(minimalStepContract(steps, step))
-	if err != nil {
-		return ""
+	if workflow.TaskID != task.TaskID || workflow.SelectedResult != execution.ExecutionID || execution.WorkflowRunID != workflow.WorkflowRunID ||
+		workflow.PRURL == "" || execution.SessionID == "" || execution.Workspace.Branch == "" ||
+		workflow.Phase != "executing" && workflow.Phase != "waiting_decision" && workflow.Phase != "waiting_pr_merge" {
+		return StepGateResult{}, nativeErr("task_not_ready", "selected worker flow has no bound session, execution branch or PR")
 	}
-	return operationDigest(data)
+	return StepGateResult{PRURL: workflow.PRURL}, nil
 }
-
 func (c CommandService) commitNativeDelivery(ctx context.Context, s *SQLiteStore, expectedAuthorityVersion uint64, task TaskRecord, workflow WorkflowRunRecord, execution ExecutionRecord, attempts []StepAttemptRecord, contract TaskContract, publish StepGateResult, delivery TaskDeliveryRecord) (TaskDeliveryReceipt, error) {
 	var receipt TaskDeliveryReceipt
 	err := s.Transact(ctx, func(domainTx DomainTx) error {

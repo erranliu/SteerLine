@@ -1028,10 +1028,10 @@ func targetFor(c Config) ExecutionTarget {
 	return ExecutionTarget{ID: "local:" + runtime.GOOS + ":" + name}
 }
 func (s *Service) readRunWorkspace(ctx context.Context, run *Run) (WorkspaceInspection, error) {
-	if run == nil || run.WorkflowVersion != MinimalWorkflowVersion {
-		return WorkspaceInspection{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "native recovery requires its fixed minimal-v1 workflow identity"}
+	if run == nil || run.WorkflowVersion != WorkerFlowVersion {
+		return WorkspaceInspection{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "workspace inspection requires its fixed worker-flow-v1 identity"}
 	}
-	w, err := s.inspectMinimalWorkspace(ctx, run)
+	w, err := s.inspectWorkflowWorkspace(ctx, run)
 	return WorkspaceInspection{Repository: w.Repository, Worktree: w.Worktree, Branch: w.Branch, Base: w.Base, Head: w.Head, Dirty: w.Dirty, CheckedAt: w.VerifiedAt}, err
 }
 

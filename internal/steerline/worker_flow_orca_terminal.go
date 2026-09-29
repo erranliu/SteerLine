@@ -161,7 +161,7 @@ func createWorkerOrcaTerminal(ctx context.Context, c Config, run *Run) (orcaTerm
 }
 
 func (s *Service) prepareWorkerOrcaTerminal(ctx context.Context, run *Run) error {
-	workflow, execution := s.minimalRecords(run)
+	workflow, execution := s.workflowRecords(run)
 	if run == nil || workflow == nil || execution == nil || workflow.WorkflowVersion != WorkerFlowVersion || run.WorktreePath == nil || run.WorktreeBranch == nil {
 		return errors.New("Orca terminal preparation lacks the fixed worker workspace")
 	}
@@ -184,7 +184,7 @@ func (s *Service) prepareWorkerOrcaTerminal(ctx context.Context, run *Run) error
 	if err != nil {
 		return err
 	}
-	_, execution = s.minimalRecords(run)
+	_, execution = s.workflowRecords(run)
 	if execution == nil {
 		return errors.New("worker execution disappeared after Orca terminal intent was saved")
 	}
