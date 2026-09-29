@@ -14,6 +14,15 @@ type Repository struct {
 
 const CurrentRuntimeSchema = 5
 
+const WorkerFlowRuntimeSchema = 6
+
+func runtimeSchemaFor(c Config) int {
+	if c.WorkflowProtocol == WorkerFlowVersion {
+		return WorkerFlowRuntimeSchema
+	}
+	return CurrentRuntimeSchema
+}
+
 type Runtime struct {
 	SchemaVersion     int                 `json:"schema_version"`
 	Revision          uint64              `json:"revision"`

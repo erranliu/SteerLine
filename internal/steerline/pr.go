@@ -17,14 +17,16 @@ import (
 )
 
 type PRInfo struct {
-	URL          string     `json:"url"`
-	Repository   string     `json:"repository"`
-	BaseBranch   string     `json:"base_branch"`
-	HeadRevision string     `json:"head_revision,omitempty"`
-	State        string     `json:"state"`
-	Merged       bool       `json:"merged"`
-	MergedAt     *time.Time `json:"merged_at"`
-	MergeCommit  *string    `json:"merge_commit"`
+	URL            string     `json:"url"`
+	Repository     string     `json:"repository"`
+	BaseBranch     string     `json:"base_branch"`
+	HeadRepository string     `json:"head_repository,omitempty"`
+	HeadBranch     string     `json:"head_branch,omitempty"`
+	HeadRevision   string     `json:"head_revision,omitempty"`
+	State          string     `json:"state"`
+	Merged         bool       `json:"merged"`
+	MergedAt       *time.Time `json:"merged_at"`
+	MergeCommit    *string    `json:"merge_commit"`
 }
 type PRClient struct {
 	Config PRConfig
@@ -169,7 +171,11 @@ func (c *PRClient) Query(ctx context.Context, raw string) (PRInfo, error) {
 				} `json:"repo"`
 			} `json:"base"`
 			Head struct {
-				SHA string `json:"sha"`
+				Ref  string `json:"ref"`
+				SHA  string `json:"sha"`
+				Repo struct {
+					FullName string `json:"full_name"`
+				} `json:"repo"`
 			} `json:"head"`
 		}
 		if e = c.get(ctx, fmt.Sprintf("repos/%s/pulls/%d", c.Config.Repository, n), &pr); e != nil {
@@ -181,7 +187,7 @@ func (c *PRClient) Query(ctx context.Context, raw string) (PRInfo, error) {
 		if *pr.Merged && pr.State != "closed" {
 			return info, errors.New("inconsistent Gitea merged/open state")
 		}
-		info = PRInfo{URL: pr.URL, Repository: pr.Base.Repo.FullName, BaseBranch: pr.Base.Ref, HeadRevision: pr.Head.SHA, State: pr.State, Merged: *pr.Merged, MergedAt: pr.MergedAt, MergeCommit: pr.MergeCommit}
+		info = PRInfo{URL: pr.URL, Repository: pr.Base.Repo.FullName, BaseBranch: pr.Base.Ref, HeadRepository: pr.Head.Repo.FullName, HeadBranch: pr.Head.Ref, HeadRevision: pr.Head.SHA, State: pr.State, Merged: *pr.Merged, MergedAt: pr.MergedAt, MergeCommit: pr.MergeCommit}
 		if info.Merged {
 			info.State = "merged"
 		} else if info.State == "closed" {
@@ -209,6 +215,23 @@ func (c *PRClient) Query(ctx context.Context, raw string) (PRInfo, error) {
 		return info, errors.New("unrecognized PR state")
 	}
 	return info, nil
+}
+
+// validateWorkerPRIdentity binds a provider-confirmed PR to the execution's
+// branch. A URL or title supplied by a worker is only a clue until this check
+// succeeds. The head SHA deliberately remains free to advance as the worker
+// pushes more commits to the same PR.
+func validateWorkerPRIdentity(info PRInfo, url, repository, baseBranch, executionBranch string) error {
+	if url == "" || repository == "" || baseBranch == "" || executionBranch == "" ||
+		info.URL != url || info.Repository != repository || info.BaseBranch != baseBranch ||
+		info.HeadRepository != repository || info.HeadBranch != executionBranch ||
+		!validCommit(info.HeadRevision) {
+		return ErrPRIdentity
+	}
+	if info.State != "open" && info.State != "closed_unmerged" && info.State != "merged" {
+		return ErrPRIdentity
+	}
+	return nil
 }
 
 // Close requests closure of the exact fixed PR and returns the provider's
@@ -289,7 +312,11 @@ func (c *PRClient) Close(ctx context.Context, raw string) (PRInfo, error) {
 				} `json:"repo"`
 			} `json:"base"`
 			Head struct {
-				SHA string `json:"sha"`
+				Ref  string `json:"ref"`
+				SHA  string `json:"sha"`
+				Repo struct {
+					FullName string `json:"full_name"`
+				} `json:"repo"`
 			} `json:"head"`
 		}
 		if readErr = json.Unmarshal(data, &payload); readErr != nil {
@@ -301,7 +328,7 @@ func (c *PRClient) Close(ctx context.Context, raw string) (PRInfo, error) {
 		} else if state == "closed" {
 			state = "closed_unmerged"
 		}
-		closed = PRInfo{URL: payload.URL, Repository: payload.Base.Repo.FullName, BaseBranch: payload.Base.Ref, HeadRevision: payload.Head.SHA, State: state, Merged: payload.Merged, MergedAt: payload.MergedAt, MergeCommit: payload.MergeCommit}
+		closed = PRInfo{URL: payload.URL, Repository: payload.Base.Repo.FullName, BaseBranch: payload.Base.Ref, HeadRepository: payload.Head.Repo.FullName, HeadBranch: payload.Head.Ref, HeadRevision: payload.Head.SHA, State: state, Merged: payload.Merged, MergedAt: payload.MergedAt, MergeCommit: payload.MergeCommit}
 	}
 	if closed.URL != raw || closed.Repository != c.Config.Repository || closed.BaseBranch != current.BaseBranch || closed.HeadRevision != current.HeadRevision || closed.Merged || closed.State != "closed_unmerged" {
 		return PRInfo{}, nativeErr("merge_state_unknown", fmt.Sprintf("PR close response does not confirm closure of the fixed unmerged PR: got=%+v expected_url=%s expected_repository=%s expected_branch=%s expected_head=%s", closed, raw, c.Config.Repository, current.BaseBranch, current.HeadRevision))

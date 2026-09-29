@@ -1,0 +1,17 @@
+{
+  "date": "2026-09-29",
+  "scope": "Windows host capability probe; not SteerLine WF12 acceptance",
+  "start_detached_process": "rejected",
+  "diagnostic": "host Job Object prevents independent service lifetime: service remains inside a Job Object (parent_in_job=true, parent_job_limit_flags=0x2800); cannot guarantee survival after the UI exits",
+  "wmi_process_create_return": 0,
+  "current_process_in_job": true,
+  "wmi_child_in_job": true,
+  "result": "The calling host routes did not prove that a Windows local worker could remain alive independently of the center. New workflow dispatch must reject this target before claiming a task until an independently supervised launcher is verified.",
+  "alternate_host": {
+    "address": "192.168.0.56",
+    "access": "authenticated Orca environment e68f4edf-8a83-42c2-a9da-6d404d3aa3d8",
+    "orca_shell_in_job": true,
+    "wmi_child_in_job": false,
+    "interpretation": "An isolated SteerLine local service can be launched outside the Orca terminal Job Object on this host; its worker restart behavior still needs a real test."
+  }
+}

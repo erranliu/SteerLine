@@ -22,7 +22,7 @@ func TestConfigKeepsOrcaCodexNativeByDefault(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.json")
 	write := func(host string) Config {
 		t.Helper()
-		data, err := json.Marshal(map[string]string{"repository": configTestRepository(t), "branch": "main", "task_authority": "native", "host": host, "agent": "codex"})
+		data, err := json.Marshal(map[string]string{"repository": configTestRepository(t), "branch": "main", "task_authority": "native", "workflow_protocol": WorkerFlowVersion, "host": host, "agent": "codex"})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -36,8 +36,8 @@ func TestConfigKeepsOrcaCodexNativeByDefault(t *testing.T) {
 		return cfg
 	}
 	orca := write("orca")
-	if orca.ReasoningEffort != "" || orca.needsCodexExecutable() {
-		t.Fatalf("Orca's native Codex path was silently converted to a local launch: %+v", orca)
+	if orca.ReasoningEffort != "" || orca.WorkflowProtocol != WorkerFlowVersion || orca.ProjectSteps != nil {
+		t.Fatalf("Orca worker flow acquired old project steps or a local model default: %+v", orca)
 	}
 	local := write("local")
 	if local.ReasoningEffort != "high" || !local.needsCodexExecutable() {

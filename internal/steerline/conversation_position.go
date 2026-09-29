@@ -49,6 +49,9 @@ func (p conversationJournalPosition) journalCursor(path string) JournalCursor {
 
 func journalGenerationForSegment(fileID, segment string) (uint64, error) {
 	prefix := "local-jsonl-v1:" + fileID
+	if strings.HasPrefix(segment, "orca-jsonl-v1:"+fileID) {
+		prefix = "orca-jsonl-v1:" + fileID
+	}
 	if segment == prefix {
 		return 1, nil
 	}

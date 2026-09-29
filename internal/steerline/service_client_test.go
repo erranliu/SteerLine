@@ -397,6 +397,9 @@ func TestRunCommandRejectsLegacyTaskAuthorityBeforeWritingState(t *testing.T) {
 func lifecycleConfigFile(t *testing.T, f *fixture, runDir string) (Config, string) {
 	t.Helper()
 	c := f.c
+	c.WorkflowProtocol = WorkerFlowVersion
+	c.WorkflowDefinition, c.ProjectSteps = nil, nil
+	c.WorkspaceDirtyIgnore = WorkspaceDirtyIgnore{}
 	c.RunDir = runDir
 	c.WorktreeRoot = ""
 	data, err := json.Marshal(c)

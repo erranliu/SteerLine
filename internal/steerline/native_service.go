@@ -48,6 +48,10 @@ func (s *Service) refreshNativeSnapshot(ctx context.Context, reconstruct bool) e
 			}
 			continue
 		}
+		if s.Config.WorkflowProtocol == WorkerFlowVersion && workflow.WorkflowVersion != WorkerFlowVersion ||
+			s.Config.WorkflowProtocol != WorkerFlowVersion && workflow.WorkflowVersion == WorkerFlowVersion {
+			return nativeErr("unsupported_schema", "workflow protocol differs from the configured runtime; preserve the original external session")
+		}
 		if settled[workflow.WorkflowRunID] {
 			continue
 		}
@@ -93,7 +97,7 @@ func (s *Service) refreshNativeSnapshot(ctx context.Context, reconstruct bool) e
 			intent := WorkspaceIntent{Path: path, Branch: branch, BaseCommit: base}
 			run.WorkspaceIntent = &intent
 			run.WorktreePath, run.WorktreeBranch, run.BaseCommit = ptr(path), ptr(branch), ptr(base)
-		} else if base != "" && execution.Backend == string(BackendLocal) {
+		} else if base != "" && (execution.Backend == string(BackendLocal) || workflow.WorkflowVersion == WorkerFlowVersion) {
 			intent, planErr := planWorkspace(s.Config, task.TaskID, workflow.WorkflowRunID, base)
 			if planErr != nil {
 				return planErr
@@ -107,14 +111,38 @@ func (s *Service) refreshNativeSnapshot(ctx context.Context, reconstruct bool) e
 		} else if !workerActive {
 			run.Process = nil
 		}
-		if workerActive && task.Status != "discarded" {
+		if workflow.WorkflowVersion == WorkerFlowVersion {
+			run.SessionID = nil
+			if execution.SessionID != "" {
+				run.SessionID = ptr(execution.SessionID)
+			}
+			run.FinishTaskStatus = nativeRuntimeFinishStatus(task, *workflow)
+			switch {
+			case task.Status == "closed":
+				run.ExecutionStatus = "succeeded"
+			case workerActive, execution.Status == "active":
+				run.ExecutionStatus = "running"
+			case execution.Status == "pending":
+				run.ExecutionStatus = "pending"
+			case execution.Status == "idle":
+				run.ExecutionStatus = "succeeded"
+			default:
+				run.ExecutionStatus = "unknown"
+			}
+			if workflow.PRURL != "" {
+				run.PR.URL = ptr(workflow.PRURL)
+				run.PR.State = workflow.PRState
+			}
+		} else if workerActive && task.Status != "discarded" {
 			run.ExecutionStatus, run.FinishTaskStatus = "running", "pending"
 		} else {
 			run.ExecutionStatus = nativeRuntimeExecutionStatus(task, *workflow, *execution, attempt)
 			run.FinishTaskStatus = nativeRuntimeFinishStatus(task, *workflow)
 		}
-		reconcileNativeWaitingDecision(&s.State, run)
-		run.Error = nil
+		if workflow.WorkflowVersion != WorkerFlowVersion {
+			reconcileNativeWaitingDecision(&s.State, run)
+			run.Error = nil
+		}
 		if run.FinishTaskStatus == "blocked" && task.Status == "discarded" {
 			run.Error = ptr("native task was discarded; cleanup is handled by its fixed external identities")
 		}
@@ -155,7 +183,7 @@ func (s *Service) refreshNativeSnapshot(ctx context.Context, reconstruct bool) e
 			}
 		}
 	}
-	s.State.SchemaVersion = CurrentRuntimeSchema
+	s.State.SchemaVersion = runtimeSchemaFor(s.Config)
 	s.refreshSlotOccupancy()
 	return nil
 }
@@ -734,14 +762,20 @@ func (s *Service) dispatchNative(ctx context.Context) error {
 		return err
 	}
 	if len(ready) > 0 {
-		required := []string{"start", "observe", "workspace_inspection", "output_reading"}
-		if s.Config.hostName() == "orca_supervised" {
-			required = append(required, "message_inbox", "resource_settlement")
+		if s.Config.WorkflowProtocol == WorkerFlowVersion {
+			if err = requireWorkerFlowCapabilities(ctx, s.Config); err != nil {
+				return err
+			}
 		} else {
-			required = append(required, "stop")
-		}
-		if _, err = s.requireBackendCapabilities(ctx, backendFor(s.Config), required...); err != nil {
-			return err
+			required := []string{"start", "observe", "workspace_inspection", "output_reading"}
+			if s.Config.hostName() == "orca_supervised" {
+				required = append(required, "message_inbox", "resource_settlement")
+			} else {
+				required = append(required, "stop")
+			}
+			if _, err = s.requireBackendCapabilities(ctx, backendFor(s.Config), required...); err != nil {
+				return err
+			}
 		}
 	}
 	for _, task := range ready {
@@ -796,9 +830,11 @@ func (s *Service) dispatchNative(ctx context.Context) error {
 			execution.Target.WorktreeID = intent.Path
 			execution.Target.Branch = intent.Branch
 		}
-		execution.Status = "active"
-		if workflow.Phase == "queued" {
-			workflow.Phase = "executing"
+		if workflow.WorkflowVersion != WorkerFlowVersion {
+			execution.Status = "active"
+			if workflow.Phase == "queued" {
+				workflow.Phase = "executing"
+			}
 		}
 		execution.UpdatedAt = now()
 		workflow.UpdatedAt = now()
@@ -821,6 +857,9 @@ func (s *Service) dispatchNative(ctx context.Context) error {
 		s.lastDispatched = task.TaskID
 		if ctx.Err() != nil {
 			return ctx.Err()
+		}
+		if workflow.WorkflowVersion == WorkerFlowVersion {
+			return s.prepareWorkerFlow(ctx, task, run)
 		}
 		return s.prepareMinimalExecution(ctx, task, run)
 	}
@@ -899,6 +938,12 @@ func (s *Service) pollNativePRs(ctx context.Context, onlyRunID string) error {
 		}
 		workflow, _ := s.minimalRecords(run)
 		if workflow == nil {
+			continue
+		}
+		if workflow.WorkflowVersion == WorkerFlowVersion {
+			if err := s.pollWorkerFlowPR(ctx, run, task, workflow); err != nil {
+				operationErr = errors.Join(operationErr, err)
+			}
 			continue
 		}
 		if task.Status == "discarded" {

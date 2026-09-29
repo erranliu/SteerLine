@@ -58,6 +58,7 @@ func TestInstallExecutableCopiesAndOverwrites(t *testing.T) {
 func TestDerivedRunDirIsStableAcrossWorktrees(t *testing.T) {
 	t.Setenv("STEERLINE_HOME", t.TempDir())
 	base, _ := nativeTaskFixture(t)
+	base.WorkflowProtocol = WorkerFlowVersion
 	base.RunDir = ""
 	base.WorktreeRoot = ""
 	load := func(repo string) Config {
@@ -101,6 +102,7 @@ func TestDerivedRunDirIsStableAcrossWorktrees(t *testing.T) {
 func TestNativeConfigRejectsASecondRunDir(t *testing.T) {
 	t.Setenv("STEERLINE_HOME", t.TempDir())
 	c, _ := nativeTaskFixture(t)
+	c.WorkflowProtocol = WorkerFlowVersion
 	c.RunDir = filepath.Join(t.TempDir(), "alternate-state")
 	b, e := json.Marshal(c)
 	if e != nil {

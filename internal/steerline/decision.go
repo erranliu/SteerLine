@@ -264,7 +264,7 @@ func SubmitAnswerDecision(ctx context.Context, c Config, runID, decisionID, opti
 		}
 		return CommandRecord{}, false, fmt.Errorf("decision is already %s but its original idempotency command is missing", decisionRecord.Status)
 	}
-	if run.FinishTaskStatus != "waiting_decision" || run.Decision == nil {
+	if run.FinishTaskStatus != "waiting_decision" && !(run.WorkflowVersion == WorkerFlowVersion && run.FinishTaskStatus == "waiting_pr_merge") || run.Decision == nil {
 		return CommandRecord{}, false, fmt.Errorf("run %s is not waiting for a decision (status %s)", run.TaskID, run.FinishTaskStatus)
 	}
 	if expectedInstance != "" && serviceRuntime.Service.InstanceID != expectedInstance {
@@ -420,6 +420,15 @@ func DecisionReplyEligibility(ctx context.Context, c Config, run *Run) error {
 	if run == nil || run.Decision == nil || run.Decision.Status != "pending" {
 		return errors.New("decision is not pending on the current native run")
 	}
+	if run.WorkflowVersion == WorkerFlowVersion {
+		if !stableExecutionID(run.ExecutionID) || run.AttemptID == "" || run.Decision.AttemptID != run.AttemptID {
+			return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "feedback does not belong to the fixed worker execution"}
+		}
+		if run.SessionID != nil && !codexThreadID.MatchString(*run.SessionID) {
+			return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "saved worker session identity is invalid"}
+		}
+		return ctx.Err()
+	}
 	if run.WorkflowVersion != MinimalWorkflowVersion || !stableExecutionID(run.ExecutionID) || run.AttemptID == "" || run.Decision.AttemptID != run.AttemptID {
 		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "decision is not bound to a fixed native workflow, execution and attempt"}
 	}
@@ -449,7 +458,7 @@ func (s *Service) applyDecisions(ctx context.Context) error {
 		return nil
 	}
 	for _, run := range s.State.Runs {
-		if run == nil || run.FinishTaskStatus != "waiting_decision" || run.Decision == nil || run.Decision.Status != "answer_saved" {
+		if run == nil || run.FinishTaskStatus != "waiting_decision" && !(run.WorkflowVersion == WorkerFlowVersion && run.FinishTaskStatus == "waiting_pr_merge") || run.Decision == nil || run.Decision.Status != "answer_saved" {
 			continue
 		}
 		blocked := false
@@ -461,6 +470,9 @@ func (s *Service) applyDecisions(ctx context.Context) error {
 		}
 		if blocked {
 			continue
+		}
+		if run.WorkflowVersion == WorkerFlowVersion {
+			return s.applyWorkerFlowDecision(ctx, run)
 		}
 		if run.WorkflowVersion != MinimalWorkflowVersion || !stableExecutionID(run.ExecutionID) || run.AttemptID == "" || run.Decision.AttemptID != run.AttemptID {
 			return nativeErr("unsupported_schema", "saved decision is not bound to a current minimal-v1 execution attempt")

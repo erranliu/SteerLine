@@ -54,6 +54,57 @@ func TestPRURLsAndRemotes(t *testing.T) {
 	}
 }
 
+func TestWorkerPRIdentityRequiresExecutionBranch(t *testing.T) {
+	url := "https://git.example/o/r/pulls/8"
+	head := strings.Repeat("a", 40)
+	base := PRInfo{URL: url, Repository: "o/r", BaseBranch: "main", HeadRepository: "o/r", HeadBranch: "codex/task-8", HeadRevision: head, State: "open"}
+	if err := validateWorkerPRIdentity(base, url, "o/r", "main", "codex/task-8"); err != nil {
+		t.Fatal(err)
+	}
+	for name, mutate := range map[string]func(*PRInfo){
+		"wrong repository":  func(p *PRInfo) { p.Repository = "o/other" },
+		"wrong base":        func(p *PRInfo) { p.BaseBranch = "develop" },
+		"fork head":         func(p *PRInfo) { p.HeadRepository = "other/r" },
+		"other task branch": func(p *PRInfo) { p.HeadBranch = "codex/task-9" },
+		"missing head":      func(p *PRInfo) { p.HeadRevision = "" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			pr := base
+			mutate(&pr)
+			if err := validateWorkerPRIdentity(pr, url, "o/r", "main", "codex/task-8"); err == nil {
+				t.Fatal("accepted a PR outside the execution branch")
+			}
+		})
+	}
+	advanced := base
+	advanced.HeadRevision = strings.Repeat("b", 40)
+	advanced.State = "merged"
+	if err := validateWorkerPRIdentity(advanced, url, "o/r", "main", "codex/task-8"); err != nil {
+		t.Fatalf("a later commit on the same PR must remain associated: %v", err)
+	}
+}
+
+func TestGiteaQueryReadsPRHeadIdentity(t *testing.T) {
+	var server *httptest.Server
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"html_url": server.URL + "/o/r/pulls/8", "number": 8, "state": "open", "merged": false,
+			"base": map[string]any{"ref": "main", "repo": map[string]string{"full_name": "o/r"}},
+			"head": map[string]any{"ref": "codex/task-8", "sha": strings.Repeat("a", 40), "repo": map[string]string{"full_name": "o/r"}},
+		})
+	}))
+	defer server.Close()
+	url := server.URL + "/o/r/pulls/8"
+	client := PRClient{Config: PRConfig{Kind: "gitea", BaseURL: server.URL, Repository: "o/r"}, Runner: Runner{Timeout: time.Second}}
+	info, err := client.Query(context.Background(), url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := validateWorkerPRIdentity(info, url, "o/r", "main", "codex/task-8"); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestRuntimeCorruptionNotOverwritten(t *testing.T) {
 	f := newFixture(t)
 	s := f.service(t)

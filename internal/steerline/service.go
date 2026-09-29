@@ -62,8 +62,10 @@ func NewService(c Config) (_ *Service, retErr error) {
 	if err := validateExecutionProfiles(c); err != nil {
 		return nil, err
 	}
-	if _, err := c.validateNativeWorkflow(); err != nil {
-		return nil, err
+	if c.WorkflowProtocol != WorkerFlowVersion {
+		if _, err := c.validateNativeWorkflow(); err != nil {
+			return nil, err
+		}
 	}
 	if err := c.ResolveIdentity(context.Background()); err != nil {
 		return nil, err
@@ -72,6 +74,9 @@ func NewService(c Config) (_ *Service, retErr error) {
 		return nil, err
 	}
 	if err := preflightNativeStatePath(c); err != nil {
+		return nil, err
+	}
+	if err := preflightWorkerFlowState(context.Background(), c); err != nil {
 		return nil, err
 	}
 	if e := c.prepareWorktreeRoot(); e != nil {
@@ -98,12 +103,12 @@ func NewService(c Config) (_ *Service, retErr error) {
 		if e = decode(projection, &projected); e != nil {
 			return nil, fmt.Errorf("invalid SQLite runtime projection: %w", e)
 		}
-		if projected.SchemaVersion != 5 {
+		if projected.SchemaVersion != runtimeSchemaFor(c) {
 			return nil, fmt.Errorf("unsupported SQLite runtime projection schema %d", projected.SchemaVersion)
 		}
 		old = &projected
 	}
-	s.State = Runtime{SchemaVersion: 5, Repository: Repository{Path: c.Repository, Remote: c.Remote, Branch: c.Branch, Identity: c.identity}, Tasks: []TaskRecord{}, WorkflowRuns: []WorkflowRunRecord{}, Executions: []ExecutionRecord{}, Attempts: []StepAttemptRecord{}, Decisions: []DecisionRecord{}, Runs: []*Run{}, Control: ControlState{DispatchMode: "auto", Revision: 1, Blockers: []ControlBlocker{}}}
+	s.State = Runtime{SchemaVersion: runtimeSchemaFor(c), Repository: Repository{Path: c.Repository, Remote: c.Remote, Branch: c.Branch, Identity: c.identity}, Tasks: []TaskRecord{}, WorkflowRuns: []WorkflowRunRecord{}, Executions: []ExecutionRecord{}, Attempts: []StepAttemptRecord{}, Decisions: []DecisionRecord{}, Runs: []*Run{}, Control: ControlState{DispatchMode: "auto", Revision: 1, Blockers: []ControlBlocker{}}}
 	authority, authErr := db.nativeAuthority(context.Background(), c.identity)
 	if authErr != nil {
 		return nil, authErr
@@ -215,6 +220,17 @@ func NewService(c Config) (_ *Service, retErr error) {
 			}
 			if r.BeadsContext != nil || r.Completion != nil || r.BeadsStatus != "" || r.IdentityMapDigest != "" || r.DomainTaskID != r.TaskID || r.ResultPath != nil {
 				return nil, nativeErr("authority_mismatch", "runtime contains a retired task-source or whole-run result binding; preserve it for manual recovery")
+			}
+			if c.WorkflowProtocol == WorkerFlowVersion {
+				if r.WorkflowVersion != WorkerFlowVersion {
+					return nil, nativeErr("unsupported_schema", "worker-flow-v1 cannot open an old workflow; preserve its external session and state")
+				}
+				switch r.FinishTaskStatus {
+				case "pending", "waiting_decision", "waiting_pr_merge", "completed":
+				default:
+					return nil, nativeErr("unsupported_schema", "worker-flow-v1 run has an unsupported phase")
+				}
+				continue
 			}
 			if r.WorkflowVersion != MinimalWorkflowVersion {
 				return nil, nativeErr("unsupported_schema", "runtime contains an execution workflow outside native minimal-v1; preserve it for manual recovery")
@@ -329,8 +345,12 @@ func NewService(c Config) (_ *Service, retErr error) {
 	if err := s.refreshNativeSnapshot(context.Background(), false); err != nil {
 		return nil, err
 	}
-	s.State.SchemaVersion = 5
-	s.State.Service = ServiceState{InstanceID: newID(), PID: os.Getpid(), Status: "running", Claimant: c.Claimant, Mode: "maintenance", Ready: false, ControlProtocol: ControlProtocolVersion, Capabilities: []string{"answer_decision", "retry_run", "mark_stopped", "resolve_command", "start_task", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "stop_service"}, ConfigDigest: c.configDigest, HeartbeatIntervalMS: duration(c.Heartbeat).Milliseconds()}
+	s.State.SchemaVersion = runtimeSchemaFor(c)
+	capabilities := []string{"answer_decision", "start_task", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "stop_service"}
+	if c.WorkflowProtocol != WorkerFlowVersion {
+		capabilities = append(capabilities, "retry_run", "mark_stopped", "resolve_command")
+	}
+	s.State.Service = ServiceState{InstanceID: newID(), PID: os.Getpid(), Status: "running", Claimant: c.Claimant, Mode: "maintenance", Ready: false, ControlProtocol: ControlProtocolVersion, Capabilities: capabilities, ConfigDigest: c.configDigest, HeartbeatIntervalMS: duration(c.Heartbeat).Milliseconds()}
 	identity, err := currentProcessIdentity()
 	if err != nil {
 		return nil, fmt.Errorf("identify service process: %w", err)
@@ -856,6 +876,12 @@ func (s *Service) finished(err error) error {
 			}
 		}
 	}
+	if run != nil && run.WorkflowVersion == WorkerFlowVersion {
+		if replayErr := s.reconcileConversationRun(run); replayErr != nil {
+			s.setError(fmt.Errorf("completed conversation source replay failed: %w", replayErr))
+		}
+		return s.finishWorkerFlow(err)
+	}
 	if run == nil || run.WorkflowVersion != MinimalWorkflowVersion {
 		return nativeErr("unsupported_schema", "native service observed a run without the current minimal-v1 workflow; preserve its execution identity")
 	}
@@ -1074,6 +1100,9 @@ func (s *Service) event(ev WorkerEvent) error {
 			return ack(s.save())
 		}
 		return ack(nil)
+	}
+	if s.active.WorkflowVersion == WorkerFlowVersion {
+		return ack(s.eventWorkerFlow(ev))
 	}
 	if s.active.Protocol == string(ProtocolOrcaSupervised) && s.active.Process != nil {
 		started := ev.TurnStarted
@@ -1700,7 +1729,7 @@ func (s *Service) run(ctx context.Context, dispatchMode string) (retErr error) {
 			return saveErr
 		}
 	}
-	if e := step(s.resumeMinimalSteps); e != nil {
+	if e := step(s.resumeConfiguredWork); e != nil {
 		return e
 	}
 	candidateErr := s.refreshCandidates(ctx)
@@ -1769,7 +1798,7 @@ func (s *Service) run(ctx context.Context, dispatchMode string) (retErr error) {
 			if s.State.Control.Operation != nil {
 				continue
 			}
-			if e := stepIfChanged(s.resumeMinimalSteps); e != nil {
+			if e := stepIfChanged(s.resumeConfiguredWork); e != nil {
 				return e
 			}
 			if len(s.workers) != 0 && s.State.Control.DispatchMode == "auto" {
@@ -1849,6 +1878,16 @@ func (s *Service) shutdown() {
 func (s *Service) shutdownWorker() {
 	if s.worker == nil {
 		return
+	}
+	if s.active != nil && s.active.WorkflowVersion == WorkerFlowVersion {
+		ctx, cancel := context.WithTimeout(context.Background(), duration(s.Config.ShutdownGrace))
+		defer cancel()
+		if err := s.worker.detachLocalObservation(ctx); err != nil {
+			s.setError(fmt.Errorf("original worker observation could not be detached: %w", err))
+		} else {
+			s.worker = nil
+		}
+		return // Service stop does not stop the original worker turn.
 	}
 	if s.active != nil && s.active.Protocol == string(ProtocolOrcaSupervised) {
 		ctx, cancel := context.WithTimeout(context.Background(), duration(s.Config.ShutdownGrace))

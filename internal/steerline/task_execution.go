@@ -260,19 +260,24 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 	if err = VerifyTaskContractFiles(ctx, config, contract); err != nil {
 		return TaskClaimReceipt{}, err
 	}
-	workflow, err := config.validateNativeWorkflow()
-	if err != nil || workflow == nil {
-		return TaskClaimReceipt{}, nativeErr("task_not_ready", "native claim requires project_steps with the native-task/v1 worker context")
-	}
-	if err = config.validateMinimalPreflight(*workflow); err != nil {
-		return TaskClaimReceipt{}, nativeErr("task_not_ready", "fixed workflow capability preflight failed: "+err.Error())
+	var workflow *MinimalWorkflowConfig
+	if config.WorkflowProtocol != WorkerFlowVersion {
+		workflow, err = config.validateNativeWorkflow()
+		if err != nil || workflow == nil {
+			return TaskClaimReceipt{}, nativeErr("task_not_ready", "native claim requires project_steps with the native-task/v1 worker context")
+		}
+		if err = config.validateMinimalPreflight(*workflow); err != nil {
+			return TaskClaimReceipt{}, nativeErr("task_not_ready", "fixed workflow capability preflight failed: "+err.Error())
+		}
 	}
 	base, err := acquireNativeBase(ctx, config)
 	if err != nil {
 		return TaskClaimReceipt{}, nativeErr("task_not_ready", "fixed target branch base could not be acquired: "+err.Error())
 	}
-	if err = config.validateMinimalEntriesAtBase(ctx, *workflow, base); err != nil {
-		return TaskClaimReceipt{}, nativeErr("task_not_ready", "workflow step entry is not present at the fixed base: "+err.Error())
+	if workflow != nil {
+		if err = config.validateMinimalEntriesAtBase(ctx, *workflow, base); err != nil {
+			return TaskClaimReceipt{}, nativeErr("task_not_ready", "workflow step entry is not present at the fixed base: "+err.Error())
+		}
 	}
 	predecessorMerges := map[string]string{}
 	for _, edge := range graph.Edges {
@@ -307,13 +312,21 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 	}
 	runner := StepRunnerSettings{Codex: config.Codex, Sandbox: config.Sandbox, Model: config.Model, ReasoningEffort: config.ReasoningEffort, Profile: config.Profile}
 	runner.Codex.Args = append([]string(nil), config.Codex.Args...)
-	wfr := WorkflowRunRecord{ProjectIdentity: c.Project, WorkflowRunID: workflowRunID, TaskID: task.TaskID, WorkflowVersion: MinimalWorkflowVersion, ConfigDigest: config.configDigest, Definition: workflow.Definition, ProjectSteps: workflow.Steps, WorkspaceDirtyIgnore: config.WorkspaceDirtyIgnore, Runner: runner, Phase: "queued", Repository: config.Repository, Branch: config.Branch, CreatedAt: created, UpdatedAt: created}
+	wfr := WorkflowRunRecord{ProjectIdentity: c.Project, WorkflowRunID: workflowRunID, TaskID: task.TaskID, WorkflowVersion: MinimalWorkflowVersion, ConfigDigest: config.configDigest, Runner: runner, Phase: "queued", Repository: config.Repository, Branch: config.Branch, CreatedAt: created, UpdatedAt: created}
+	if workflow != nil {
+		wfr.Definition, wfr.ProjectSteps, wfr.WorkspaceDirtyIgnore = workflow.Definition, workflow.Steps, config.WorkspaceDirtyIgnore
+	} else {
+		wfr.WorkflowVersion, wfr.SelectedResult = WorkerFlowVersion, executionID
+	}
 	if options.ExecutionProfile != nil {
 		fixed := options.ExecutionProfile.Freeze()
 		wfr.ExecutionProfile = &fixed
 	}
 	execution := ExecutionRecord{ProjectIdentity: c.Project, ExecutionID: executionID, WorkflowRunID: workflowRunID, Agent: config.agentName(), Backend: string(backend), Protocol: string(protocol), Target: target, Workspace: WorkspaceEvidence{Repository: config.identity, Branch: config.Branch, Base: base}, Status: "pending", CurrentStep: "prepare", CreatedAt: created, UpdatedAt: created}
 	attempt := StepAttemptRecord{ProjectIdentity: c.Project, AttemptID: attemptID, ExecutionID: executionID, StepID: "prepare", AttemptNumber: 1, Status: "planned", InputRevision: base, ContractDigest: contract.Digest, ExternalBinding: target, CreatedAt: created, UpdatedAt: created}
+	if workflow == nil {
+		execution.CurrentStep, attempt.StepID = "worker", "worker"
+	}
 	nextTask := task
 	nextTask.Status, nextTask.Claimant, nextTask.Version, nextTask.UpdatedAt = "in_progress", claimant, task.Version+1, created
 	operationRequest, _ := json.Marshal(map[string]any{"task_id": task.TaskID, "task_version": options.ExpectedTaskVersion, "authority_version": options.ExpectedAuthorityVersion, "workflow_run_id": workflowRunID, "execution_id": executionID, "attempt_id": attemptID, "base_commit": base, "predecessor_merge_commits": predecessorMerges, "requested_by": options.RequestedBy})
@@ -572,7 +585,11 @@ func (c CommandService) CompleteNativeTask(ctx context.Context, config Config, t
 		if targetErr != nil || !sameRepositoryTarget(target, graph.Authority.Repository) || config.PR.ValidateRemote(target) != nil {
 			return TaskDeliveryReceipt{}, nativeErr("authority_mismatch", "PR configuration does not match the fixed native repository")
 		}
-		if info.URL != publish.PRURL || info.Repository != config.PR.Repository || info.BaseBranch != graph.Authority.Branch || info.HeadRevision != execution.CandidateRevision {
+		if workflow.WorkflowVersion == WorkerFlowVersion {
+			if err := validateWorkerPRIdentity(info, publish.PRURL, config.PR.Repository, graph.Authority.Branch, execution.Workspace.Branch); err != nil {
+				return TaskDeliveryReceipt{}, nativeErr("immutable_task", "merged PR does not belong to the selected worker execution branch")
+			}
+		} else if info.URL != publish.PRURL || info.Repository != config.PR.Repository || info.BaseBranch != graph.Authority.Branch || info.HeadRevision != execution.CandidateRevision {
 			return TaskDeliveryReceipt{}, nativeErr("immutable_task", "merged PR identity, branch or head differs from the selected task result")
 		}
 		number, err := config.PR.PRNumber(info.URL)
@@ -715,6 +732,17 @@ func latestDeliveryAttempt(attempts []StepAttemptRecord, step string) (StepAttem
 }
 
 func validateNativeDeliveryGates(task TaskRecord, contract TaskContract, workflow WorkflowRunRecord, execution ExecutionRecord, attempts []StepAttemptRecord) (StepGateResult, error) {
+	if workflow.WorkflowVersion == WorkerFlowVersion {
+		if task.ContractID != contract.ContractID || contract.Digest == "" {
+			return StepGateResult{}, nativeErr("contract_mismatch", "selected task contract is unavailable")
+		}
+		if workflow.TaskID != task.TaskID || workflow.SelectedResult != execution.ExecutionID || execution.WorkflowRunID != workflow.WorkflowRunID ||
+			workflow.PRURL == "" || execution.SessionID == "" || execution.Workspace.Branch == "" ||
+			workflow.Phase != "executing" && workflow.Phase != "waiting_decision" && workflow.Phase != "waiting_pr_merge" {
+			return StepGateResult{}, nativeErr("task_not_ready", "selected worker flow has no bound session, execution branch or PR")
+		}
+		return StepGateResult{PRURL: workflow.PRURL}, nil
+	}
 	if err := (MinimalWorkflowConfig{Definition: workflow.Definition, Steps: workflow.ProjectSteps}).Validate(); err != nil {
 		return StepGateResult{}, nativeErr("task_not_ready", "selected workflow definition or fixed steps are invalid: "+err.Error())
 	}
@@ -837,7 +865,10 @@ func (c CommandService) commitNativeDelivery(ctx context.Context, s *SQLiteStore
 		if err != nil {
 			return err
 		}
-		if currentWorkflow.WorkflowRunID != workflow.WorkflowRunID || currentWorkflow.SelectedResult != execution.ExecutionID || currentPublish.PRURL != publish.PRURL || currentExecution.CandidateRevision != execution.CandidateRevision {
+		if currentWorkflow.WorkflowRunID != workflow.WorkflowRunID || currentWorkflow.SelectedResult != execution.ExecutionID || currentPublish.PRURL != publish.PRURL ||
+			currentWorkflow.WorkflowVersion != workflow.WorkflowVersion || currentExecution.SessionID != execution.SessionID ||
+			currentExecution.Workspace.Branch != execution.Workspace.Branch ||
+			workflow.WorkflowVersion != WorkerFlowVersion && currentExecution.CandidateRevision != execution.CandidateRevision {
 			return nativeErr("immutable_task", "selected result or PR binding changed during platform verification")
 		}
 		publication, _, err := taskDiscardPlanTx(ctx, tx, c.Project, task.TaskID)
@@ -849,6 +880,12 @@ func (c CommandService) commitNativeDelivery(ctx context.Context, s *SQLiteStore
 		}
 		var reused int
 		if err = tx.tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM step_attempts a JOIN executions e ON e.project_identity=a.project_identity AND e.execution_id=a.execution_id JOIN workflow_runs w ON w.project_identity=e.project_identity AND w.workflow_run_id=e.workflow_run_id WHERE a.project_identity=? AND w.task_id<>? AND json_extract(a.payload,'$.result.pr_url')=?`, c.Project, task.TaskID, delivery.PRURL).Scan(&reused); err != nil {
+			return err
+		}
+		if reused > 0 {
+			return nativeErr("immutable_task", "PR is already bound to another native task")
+		}
+		if err = tx.tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM workflow_runs WHERE project_identity=? AND task_id<>? AND json_extract(payload,'$.pr_url')=?`, c.Project, task.TaskID, delivery.PRURL).Scan(&reused); err != nil {
 			return err
 		}
 		if reused > 0 {

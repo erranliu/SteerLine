@@ -1,0 +1,13 @@
+{
+  "date": "2026-09-29",
+  "scope": "Isolated SQLite Task and SteerLine Service on a registered Orca local test repository clone",
+  "repository": "C:/Users/lmas1/.codex/validation/worker-flow-orca-test-repo",
+  "test": "TestWorkerFlowOrcaLocalServiceFirstFeedbackLive",
+  "result": "PASS",
+  "verified": [
+    "one Task/WorkflowRun/Execution/worker attempt prepared one Orca terminal",
+    "the first stopped turn entered a pending unified Decision and survived center restart",
+    "an option-plus-note answer started a second turn in the same terminal, native session, execution and worktree"
+  ],
+  "limits": "The child Codex JSON stream was a mock test binary. The separate Orca adapter probe used real Codex CLI on this host. A later long Unicode note test found an extra UTF-8 BOM at child stdin and remains unresolved. Orca is not delivered. No PR was created or merged."
+}

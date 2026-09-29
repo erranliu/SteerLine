@@ -1,5 +1,7 @@
 # 有人值守的远程执行 MVP
 
+> 本页记录旧 minimal-v1 远端试验，不是当前 worker-flow-v1 的操作说明。Orca 本机和受监管远端的适配代码与平台探针保留，但当前生产派发在首次领取前拒绝这两种目标；功能交付与验收已推迟。
+
 当前最小交付使用一个本机 SteerLine 中心，通过 Orca 在已认证的 Windows 远端运行 Codex。初始交付目标为台式机64g，中心 Orca 1.4.209、远端 1.4.215，命名方案固定 `gpt-6-luna` / `xhigh`。远端不运行 SteerLine 服务。使用范围和门槛见 [Spec 03](spec/03-remote-execution-and-viewer.md#有人值守-mvp-交付边界)。
 
 ## 使用

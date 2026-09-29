@@ -177,6 +177,9 @@ func (s *Service) bindLocalCodexHistory(run *Run, source WorkerEvent) error {
 		return nil
 	}
 	logPath := s.localConversationLogPath(run, source.AttemptID)
+	if run.WorkflowVersion == WorkerFlowVersion {
+		logPath = s.workerFlowSourcePath(run, source.SourceIdentity)
+	}
 	if logPath == "" {
 		return errors.New("Codex session lacks its attempt source path")
 	}
@@ -206,6 +209,33 @@ func (s *Service) localConversationLogPath(run *Run, attemptID string) string {
 		}
 	}
 	return path
+}
+
+func (s *Service) workerFlowSourcePath(run *Run, sourceIdentity string) string {
+	if run == nil || run.WorkflowVersion != WorkerFlowVersion || sourceIdentity == "" {
+		return ""
+	}
+	root := filepath.Join(s.Config.RunDir, "runs", run.RunID, "turns")
+	entries, err := os.ReadDir(root)
+	if err != nil || len(entries) > 4096 {
+		return ""
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() || !stableExecutionID(entry.Name()) {
+			continue
+		}
+		dir := filepath.Join(root, entry.Name())
+		data, err := os.ReadFile(filepath.Join(dir, ConversationSourceMarkerName))
+		if err != nil {
+			continue
+		}
+		var marker ConversationSourceMarker
+		if json.Unmarshal(data, &marker) == nil && marker.validate() == nil && marker.SourceIdentity == sourceIdentity &&
+			marker.ProjectID == s.Config.identity && marker.WorkflowID == run.RunID && marker.ExecutionID == run.ExecutionID && marker.AttemptID == run.AttemptID {
+			return filepath.Join(dir, "events.jsonl")
+		}
+	}
+	return ""
 }
 
 func writeCodexHistoryBinding(path string, b codexHistoryBinding) error {

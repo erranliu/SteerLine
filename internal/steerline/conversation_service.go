@@ -105,6 +105,9 @@ func (s *Service) recordConversationEvent(run *Run, source WorkerEvent) (retErr 
 	}
 	if source.Source == "codex-jsonl" && source.SourceIdentity != "" {
 		path := s.localConversationLogPath(run, attemptID)
+		if run.WorkflowVersion == WorkerFlowVersion {
+			path = s.workerFlowSourcePath(run, source.SourceIdentity)
+		}
 		if path == "" {
 			return errors.New("Codex conversation source path is unavailable")
 		}

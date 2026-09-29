@@ -157,6 +157,9 @@ func (s *Service) applyServiceCommand(ctx context.Context, command CommandRecord
 	if s.State.Service.Status != "running" || !s.State.Service.Ready {
 		return reject("stale_instance", "service is not ready to accept recovery changes")
 	}
+	if s.projectExecutionConfig().WorkflowProtocol == WorkerFlowVersion {
+		return reject("unsupported_command", "worker-flow-v1 uses the decision feedback entry for unfinished work")
+	}
 	if s.State.Control.Operation != nil {
 		return reject("slot_busy", "another control operation is still applying")
 	}

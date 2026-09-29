@@ -1355,6 +1355,18 @@ func taskDiscardPlanFromSnapshot(snapshot DomainSnapshot, taskID string) (taskDi
 	prs := map[string]bool{}
 	acceptedPR := map[string]bool{}
 	plannedWithoutAction := map[string]bool{}
+	if active := latestNativeWorkflow(snapshot.WorkflowRuns, taskID); active != nil && active.WorkflowVersion == WorkerFlowVersion {
+		if active.PRURL != "" {
+			prs[active.PRURL] = true
+			if active.PRState == "" || active.PRState == "unknown" {
+				plan.UncertainPR = true
+			}
+		} else if active.Phase != "queued" {
+			// A started worker may have published a PR before the center saw a
+			// link. Discard cannot assume that no external PR exists.
+			plan.UncertainPR = true
+		}
+	}
 	for _, execution := range executions {
 		if execution.Workspace.Worktree != "" || execution.Target.WorktreeID != "" {
 			id := execution.Target.WorktreeID

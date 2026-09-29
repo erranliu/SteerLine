@@ -1,0 +1,10 @@
+{
+  "probe": "read-only local Codex CLI resume",
+  "date": "2026-09-29",
+  "codex_cli": "0.157.1",
+  "session_id": "01a0eb39-a1a2-7770-8313-1f122c5822c4",
+  "initial_final": "FIRST_TURN_OK",
+  "resumed_final": "SECOND_TURN_OK",
+  "same_session": true,
+  "scope": "platform interface only; not SteerLine WF2/WF12 acceptance"
+}

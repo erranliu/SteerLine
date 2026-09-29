@@ -1054,6 +1054,9 @@ func RunConfiguredService(ctx context.Context, c Config, mode, startupID, consol
 	if err := requireNativeTaskAuthority(c); err != nil {
 		return err
 	}
+	if c.WorkflowProtocol != WorkerFlowVersion {
+		return nativeErr("unsupported_schema", "the old five-step workflow is not a production service protocol; preserve its runtime and external execution")
+	}
 	if mode != "manual" && mode != "auto" {
 		return errors.New("dispatch mode must be manual or auto")
 	}

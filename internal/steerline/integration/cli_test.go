@@ -85,10 +85,11 @@ func TestTaskCLIProcessUsesNativeAuthorityWithoutInitializingMissingRead(t *test
 	home := filepath.Join(temp, "home")
 	t.Setenv("STEERLINE_HOME", home)
 	writeConfig(t, configPath, map[string]any{
-		"repository":     repo,
-		"remote":         "origin",
-		"branch":         "main",
-		"task_authority": "native",
+		"repository":        repo,
+		"remote":            "origin",
+		"branch":            "main",
+		"task_authority":    "native",
+		"workflow_protocol": steerline.WorkerFlowVersion,
 	})
 	config, err := steerline.LoadConfig(configPath)
 	if err != nil {

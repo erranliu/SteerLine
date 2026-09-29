@@ -37,6 +37,7 @@ type Config struct {
 	Claimant                string               `json:"claimant"`
 	Git                     Command              `json:"git"`
 	Codex                   Command              `json:"codex"`
+	WorkflowProtocol        string               `json:"workflow_protocol,omitempty"`
 	WorkflowDefinition      *WorkflowDefinition  `json:"workflow_definition,omitempty"`
 	ProjectSteps            *ProjectSteps        `json:"project_steps,omitempty"`
 	WorkspaceDirtyIgnore    WorkspaceDirtyIgnore `json:"workspace_dirty_ignore,omitempty"`
@@ -236,9 +237,12 @@ func LoadConfig(path string) (Config, error) {
 	if c.TaskAuthority != "native" {
 		return c, errors.New("task_authority must be explicitly set to native; Beads is not supported")
 	}
+	if c.WorkflowProtocol != WorkerFlowVersion {
+		return c, errors.New("workflow_protocol must be worker-flow-v1; old workflow configurations are unsupported and their external state is preserved")
+	}
 	var configFields map[string]json.RawMessage
 	_ = json.Unmarshal(b, &configFields)
-	if c.WorkflowDefinition != nil {
+	if c.WorkflowDefinition != nil || c.WorkflowProtocol == WorkerFlowVersion {
 		if _, explicit := configFields["host"]; !explicit {
 			c.Host = "local"
 		}
@@ -387,49 +391,12 @@ func validateSupervisedOrcaConfig(c *Config) error {
 	return nil
 }
 
-func validateWorkflowConfig(c *Config, raw []byte) error {
-	if c.WorkflowDefinition == nil && c.ProjectSteps == nil {
-		return nil
+func validateWorkflowConfig(c *Config, _ []byte) error {
+	if c.WorkflowProtocol != WorkerFlowVersion {
+		return errors.New("only worker-flow-v1 is supported")
 	}
-	if c.WorkflowDefinition == nil || c.ProjectSteps == nil {
-		return errors.New("workflow_definition and project_steps must be configured together")
-	}
-	var root map[string]json.RawMessage
-	if err := json.Unmarshal(raw, &root); err != nil {
-		return err
-	}
-	var definition map[string]json.RawMessage
-	if err := json.Unmarshal(root["workflow_definition"], &definition); err != nil {
-		return errors.New("workflow_definition must be an object")
-	}
-	if _, ok := definition["review_required"]; !ok {
-		return errors.New("workflow_definition.review_required must be fixed explicitly before dispatch")
-	}
-	if _, ok := definition["max_repair_rounds"]; !ok {
-		c.WorkflowDefinition.MaxRepairRounds = 2
-	}
-	config := MinimalWorkflowConfig{Definition: *c.WorkflowDefinition, Steps: *c.ProjectSteps}
-	if err := config.Validate(); err != nil {
-		return err
-	}
-	for name, contract := range map[string]StepContract{"implement": config.Steps.Implement, "verify": config.Steps.Verify, "review": config.Steps.Review, "publish_pr": config.Steps.PublishPR} {
-		if !config.Definition.ReviewRequired && name == "review" {
-			continue
-		}
-		if strings.HasPrefix(contract.Entry, "builtin:") {
-			continue
-		}
-		entry := filepath.Clean(filepath.Join(c.Repository, filepath.FromSlash(contract.Entry)))
-		if !inside(c.Repository, entry) {
-			return fmt.Errorf("%s entry escapes the repository", name)
-		}
-		info, err := os.Stat(entry)
-		if err != nil {
-			return fmt.Errorf("%s entry %q: %w", name, contract.Entry, err)
-		}
-		if info.IsDir() {
-			return fmt.Errorf("%s entry must be a file", name)
-		}
+	if c.WorkflowDefinition != nil || c.ProjectSteps != nil || !c.WorkspaceDirtyIgnore.empty() {
+		return errors.New("worker-flow-v1 does not accept workflow_definition, project_steps or workspace_dirty_ignore")
 	}
 	return nil
 }
@@ -511,16 +478,21 @@ func (c *Config) preflightNative(ctx context.Context, checkSteps bool) error {
 	if err := validateExecutionProfiles(*c); err != nil {
 		return err
 	}
+	if c.WorkflowProtocol == WorkerFlowVersion && c.hostName() != "local" {
+		return &BackendError{Code: BackendUnsupported, Diagnostic: "only local Codex worker-flow is delivered; Orca targets are deferred"}
+	}
 	if c.hostName() == "local" && c.agentName() != "codex" {
 		return errors.New("local_process currently supports only agent=codex")
 	}
 	commands := []*Command{&c.Git}
 	var workflow *MinimalWorkflowConfig
 	var err error
-	if checkSteps {
-		workflow, err = c.validateNativeWorkflow()
-	} else {
-		workflow, err = c.minimalConfig()
+	if c.WorkflowProtocol != WorkerFlowVersion {
+		if checkSteps {
+			workflow, err = c.validateNativeWorkflow()
+		} else {
+			workflow, err = c.minimalConfig()
+		}
 	}
 	if err != nil {
 		return err
@@ -613,6 +585,12 @@ func (c *Config) preflightNative(ctx context.Context, checkSteps bool) error {
 	} else if err = ensureNativeStateClean(c.RunDir, c.Repository); err != nil {
 		return err
 	}
+	if c.WorkflowProtocol == WorkerFlowVersion {
+		if c.PR.Kind == "gitea" {
+			return (&PRClient{Config: c.PR, Runner: git}).Check(ctx)
+		}
+		return nil
+	}
 	if !checkSteps {
 		return nil
 	}
@@ -670,7 +648,7 @@ func validateNativeRuntimeBinding(c Config) error {
 	if err != nil {
 		return nativeErr("unsupported_schema", "native runtime projection cannot be read")
 	}
-	if runtime.SchemaVersion != CurrentRuntimeSchema || canonical(runtime.Repository.Identity) != canonical(c.identity) || canonical(runtime.Repository.Path) != canonical(c.Repository) || runtime.Repository.Remote != c.Remote || runtime.Repository.Branch != c.Branch {
+	if runtime.SchemaVersion != runtimeSchemaFor(c) || canonical(runtime.Repository.Identity) != canonical(c.identity) || canonical(runtime.Repository.Path) != canonical(c.Repository) || runtime.Repository.Remote != c.Remote || runtime.Repository.Branch != c.Branch {
 		return nativeErr("authority_mismatch", "native runtime projection does not match the configured repository authority")
 	}
 	return nil
