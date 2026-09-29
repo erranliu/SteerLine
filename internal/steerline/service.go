@@ -136,6 +136,11 @@ func NewService(c Config) (_ *Service, retErr error) {
 		s.State.Attempts = old.Attempts
 		s.State.Decisions = old.Decisions
 		s.State.Operations = old.Operations
+		authoritative, err := db.Query(context.Background(), c.identity)
+		if err != nil {
+			return nil, err
+		}
+		s.State.Runs = pruneSettledDiscardedRuns(s.State.Runs, old.SlotOccupied, old.CurrentTask, settledDiscardedWorkflowIDs(authoritative))
 		if s.State.Control.DispatchMode != "manual" && s.State.Control.DispatchMode != "auto" || s.State.Control.Revision == 0 {
 			return nil, nativeErr("unsupported_schema", "invalid native runtime v5 control state; preserve the snapshot")
 		}

@@ -38,6 +38,61 @@ func openDomainTestStore(t *testing.T) *SQLiteStore {
 	return s
 }
 
+func TestSQLitePreservesAbandonedHistoricalExecution(t *testing.T) {
+	ctx := context.Background()
+	s := openDomainTestStore(t)
+	project := "repo:abandoned-history"
+	err := s.Transact(ctx, func(tx DomainTx) error {
+		if err := tx.PutProjectTaskAuthority(ProjectTaskAuthority{ProjectIdentity: project, Authority: "native", AuthorityVersion: 1, Repository: "repo", Remote: "origin", Branch: "main", DispatchMode: "manual", DispatchPaused: true}); err != nil {
+			return err
+		}
+		stamp := now()
+		task := TaskRecord{ProjectIdentity: project, TaskID: "14", Title: "historical task", Type: "task", Priority: 2, BatchID: "batch", ContractID: "contract", Source: "native", Status: "discarded", Version: 1, CreatedAt: stamp, UpdatedAt: stamp, DiscardedAt: &stamp, DiscardReason: "retired", DiscardedBy: "tester", DiscardRequestID: "discard-request"}
+		if _, err := tx.(*sqliteTx).tx.ExecContext(ctx, `INSERT INTO tasks(project_identity,task_id,status,version,payload) VALUES(?,?,?,?,?)`, project, task.TaskID, task.Status, task.Version, mustJSON(task)); err != nil {
+			return err
+		}
+		if _, err := tx.(*sqliteTx).tx.ExecContext(ctx, `INSERT INTO task_contracts(project_identity,contract_id,task_id,digest,payload) VALUES(?,?,?,?,?)`, project, task.ContractID, task.TaskID, strings.Repeat("a", 64), []byte(`{"contract_id":"contract"}`)); err != nil {
+			return err
+		}
+		if _, err := tx.(*sqliteTx).tx.ExecContext(ctx, `INSERT INTO task_batches(project_identity,batch_id,schema_version,payload_digest,created_at,command_id,task_ids) VALUES(?,?,?,?,?,?,?)`, project, task.BatchID, "task-batch/v1", strings.Repeat("b", 64), now().UTC().Format(time.RFC3339Nano), strings.Repeat("c", 32), []byte(`{"local":"14"}`)); err != nil {
+			return err
+		}
+		if err := tx.PutWorkflowRun(WorkflowRunRecord{ProjectIdentity: project, WorkflowRunID: "old-run", TaskID: "14", WorkflowVersion: MinimalWorkflowVersion, Phase: "abandoned"}); err != nil {
+			return err
+		}
+		if err := tx.PutExecution(ExecutionRecord{ProjectIdentity: project, ExecutionID: "old-execution", WorkflowRunID: "old-run", Status: "abandoned", CurrentStep: "implement"}); err != nil {
+			return err
+		}
+		return tx.PutStepAttempt(StepAttemptRecord{ProjectIdentity: project, AttemptID: "old-attempt", ExecutionID: "old-execution", StepID: "implement", AttemptNumber: 1, Status: "abandoned"})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := s.Query(ctx, project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(snapshot.Executions) != 1 || snapshot.Executions[0].Status != "abandoned" || len(snapshot.Attempts) != 1 || snapshot.Attempts[0].Status != "abandoned" {
+		t.Fatalf("historical abandoned state changed: %+v", snapshot)
+	}
+	if err := TransitionStepAttempt(&snapshot.Attempts[0], "running"); err == nil {
+		t.Fatal("abandoned historical attempt resumed")
+	}
+	runtime := Runtime{Tasks: snapshot.Tasks, WorkflowRuns: snapshot.WorkflowRuns, Executions: snapshot.Executions, Attempts: snapshot.Attempts}
+	runtime.WorkflowRuns[0].Phase = "blocked" // A stale projection must not override the stored terminal phase.
+	run := &Run{TaskID: "14", DomainTaskID: "14", RunID: "old-run", ExecutionID: "old-execution", AttemptID: "old-attempt", WorkflowVersion: MinimalWorkflowVersion, FinishTaskStatus: "blocked", ExecutionStatus: "failed"}
+	if err := s.Transact(ctx, func(tx DomainTx) error { return persistNormalizedWorkflow(tx, project, runtime, run) }); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err = s.Query(ctx, project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snapshot.WorkflowRuns[0].Phase != "abandoned" || snapshot.Executions[0].Status != "abandoned" || snapshot.Attempts[0].Status != "abandoned" {
+		t.Fatalf("runtime publication rewrote abandoned history: %+v", snapshot)
+	}
+}
+
 func TestConversationSchemaUpgradesCurrentCenterDatabase(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "steerline.db")
 	raw, err := sql.Open("sqlite", path)

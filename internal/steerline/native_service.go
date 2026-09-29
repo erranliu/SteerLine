@@ -18,6 +18,8 @@ func (s *Service) refreshNativeSnapshot(ctx context.Context, reconstruct bool) e
 	if err != nil {
 		return err
 	}
+	settled := settledDiscardedWorkflowIDs(snapshot)
+	s.State.Runs = pruneSettledDiscardedRuns(s.State.Runs, s.State.SlotOccupied, s.State.CurrentTask, settled)
 	for _, task := range snapshot.Tasks {
 		if task.Source != "native" || task.ExternalProvider != "" || task.ExternalProject != "" || task.ExternalID != "" || task.IdentityMapDigest != "" {
 			return nativeErr("authority_mismatch", "native center contains a non-native task identity; preserve it for manual recovery")
@@ -44,6 +46,9 @@ func (s *Service) refreshNativeSnapshot(ctx context.Context, reconstruct bool) e
 			if task.Status == "in_progress" {
 				return nativeErr("inconsistent_delivery", "claimed native task has no persisted WorkflowRun")
 			}
+			continue
+		}
+		if settled[workflow.WorkflowRunID] {
 			continue
 		}
 		execution := latestWorkflowExecution(snapshot.Executions, workflow.WorkflowRunID)
@@ -153,6 +158,33 @@ func (s *Service) refreshNativeSnapshot(ctx context.Context, reconstruct bool) e
 	s.State.SchemaVersion = CurrentRuntimeSchema
 	s.refreshSlotOccupancy()
 	return nil
+}
+
+func settledDiscardedWorkflowIDs(snapshot DomainSnapshot) map[string]bool {
+	discarded := make(map[string]bool)
+	for _, task := range snapshot.Tasks {
+		if task.Status == "discarded" {
+			discarded[task.TaskID] = true
+		}
+	}
+	settled := make(map[string]bool)
+	for _, workflow := range snapshot.WorkflowRuns {
+		if workflow.Phase == "abandoned" && discarded[workflow.TaskID] {
+			settled[workflow.WorkflowRunID] = true
+		}
+	}
+	return settled
+}
+
+func pruneSettledDiscardedRuns(runs []*Run, occupied bool, currentTask *string, settled map[string]bool) []*Run {
+	remaining := make([]*Run, 0, len(runs))
+	for _, run := range runs {
+		if run != nil && settled[run.RunID] && !(occupied && currentTask != nil && *currentTask == run.TaskID) {
+			continue
+		}
+		remaining = append(remaining, run)
+	}
+	return remaining
 }
 
 func latestNativePublication(attempts []StepAttemptRecord, executionID string) (StepGateResult, bool) {
