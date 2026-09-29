@@ -989,6 +989,51 @@ func TestRunStatusKeepsBusinessExecutionAndUnknownAxesSeparate(t *testing.T) {
 	}
 }
 
+func TestTaskRemainsInProgressAcrossWorkflowStepHandoff(t *testing.T) {
+	now := time.Now().UTC()
+	ref := testProject("progress")
+	snapshot := readySnapshot(ref, now)
+	run := &steerline.Run{TaskID: "task-B", RunID: "run-B", ExecutionID: "execution-B", TaskStatus: "in_progress", WorkflowVersion: steerline.MinimalWorkflowVersion, ExecutionStatus: "pending", FinishTaskStatus: "pending"}
+	snapshot.Observation.Runtime.Runs = []*steerline.Run{run}
+	snapshot.Domain = &steerline.DomainSnapshot{
+		WorkflowRuns: []steerline.WorkflowRunRecord{{WorkflowRunID: run.RunID, Definition: steerline.WorkflowDefinition{ReviewRequired: true}}},
+		Executions:   []steerline.ExecutionRecord{{ExecutionID: run.ExecutionID, WorkflowRunID: run.RunID, CurrentStep: "implement"}},
+		Attempts: []steerline.StepAttemptRecord{
+			{ExecutionID: run.ExecutionID, StepID: "prepare", Status: "succeeded", UpdatedAt: now.Add(-time.Minute)},
+			{ExecutionID: run.ExecutionID, StepID: "implement", Status: "dispatching", UpdatedAt: now},
+		},
+	}
+	state := projectState{ref: ref, snapshot: snapshot}
+	if got := runStatus(run); got != "进行中" {
+		t.Fatalf("step handoff showed task as %q", got)
+	}
+	if !filterAllows(2, rowRun, run) {
+		t.Fatal("step handoff disappeared from the in-progress filter")
+	}
+	_, _, running, _, _, _ := projectCounts(state, now)
+	if running != 1 {
+		t.Fatalf("step handoff disappeared from the project count: %d", running)
+	}
+	progress := strings.Join(taskProgressLines(state, run), "\n")
+	for _, want := range []string{"✓ 准备", "● 实现", "○ 验证", "○ 审查", "○ 创建 PR", "当前步骤：实现 · 正在派发"} {
+		if !strings.Contains(progress, want) {
+			t.Fatalf("progress missed %q: %s", want, progress)
+		}
+	}
+}
+
+func TestTaskDetailOnlyShowsItsOwnControlReceipt(t *testing.T) {
+	now := time.Now().UTC()
+	state := projectState{actions: map[string]*actionState{
+		"own-request":   {RequestID: "own-request", TaskID: "task-A", Status: "accepted", Message: "开始请求已接受", UpdatedAt: now},
+		"other-request": {RequestID: "other-request", TaskID: "task-B", Status: "failed", Message: "其他任务失败", UpdatedAt: now.Add(time.Minute)},
+	}}
+	shown := strings.Join(renderActionLines(state, "task-A"), "\n")
+	if !strings.Contains(shown, "本任务操作回执") || !strings.Contains(shown, "开始请求已接受") || strings.Contains(shown, "其他任务失败") || strings.Contains(shown, "own-request") {
+		t.Fatalf("task receipt was not scoped or was too technical: %q", shown)
+	}
+}
+
 func stringPointer(value string) *string { return &value }
 
 func TestViewProfilesSeparateLiveWindowsAndRecoverAfterClose(t *testing.T) {
@@ -1318,7 +1363,7 @@ func TestEmptyRunningFilterExplainsWhyNativeTasksAreHidden(t *testing.T) {
 	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, &testControlClient{}, now)
 	m.projects[0].filter = 2
 	empty := strings.Join(renderRows(m, m.projects[0], 80, 8), "\n")
-	if !strings.Contains(empty, "3 运行中") || !strings.Contains(empty, "1全部") || !strings.Contains(empty, "5待合并") || !strings.Contains(empty, "按 1 查看全部任务") || strings.Contains(empty, "当前没有 Ready 任务") {
+	if !strings.Contains(empty, "3 进行中") || !strings.Contains(empty, "1全部") || !strings.Contains(empty, "5待合并") || !strings.Contains(empty, "按 1 查看全部任务") || strings.Contains(empty, "当前没有 Ready 任务") {
 		t.Fatalf("empty filtered list implied the task data disappeared: %q", empty)
 	}
 	if !strings.Contains(renderFooter(m, m.projects[0]), "1–7 筛选") || !strings.Contains(strings.Join(renderHelp(m.projects[0]), "\n"), "5 待合并") {
@@ -1417,14 +1462,14 @@ func TestNativeTaskViewKeepsOffPageSelectionAndEscapesText(t *testing.T) {
 		t.Fatal("offline native detail lost its sample label")
 	}
 	runSnapshot := snapshot
-	runSnapshot.Observation.Runtime.Runs = []*steerline.Run{{RunID: "run-501", TaskID: "501", DomainTaskID: "501", TaskStatus: "open", ExecutionStatus: "running"}}
+	runSnapshot.Observation.Runtime.Runs = []*steerline.Run{{RunID: "run-501", TaskID: "501", DomainTaskID: "501", TaskStatus: "in_progress", ExecutionStatus: "running"}}
 	m.projects[0].snapshot = runSnapshot
 	m.projects[0].selectedKey = "run:run-501"
 	if selectedNativeTaskID(m.projects[0]) != "501" {
 		t.Fatal("selected native run did not retain its task identity")
 	}
 	runDetail := strings.Join(renderDetail(m, m.projects[0], m.selectedRow(0), 120, 200), "\n")
-	if !strings.Contains(runDetail, "任务关系 · 中心只读快照") || !strings.Contains(runDetail, "discarded_predecessor") || !strings.Contains(runDetail, "任务状态：open") {
+	if !strings.Contains(runDetail, "任务关系 · 中心只读快照") || !strings.Contains(runDetail, "discarded_predecessor") || !strings.Contains(runDetail, "任务状态：进行中") {
 		t.Fatalf("selected native run lost its task relationship: %q", runDetail)
 	}
 	querySource := &testQuerySource{snapshot: runSnapshot}
@@ -1500,8 +1545,7 @@ func TestControlRequestIDFromErrorRemainsQueryOnly(t *testing.T) {
 	if m.projects[0].actions[requestID].Status != "indeterminate" {
 		t.Fatal("uncertain publication must remain indeterminate")
 	}
-	updated, reconcile := m.reconcileLatest()
-	m = updated.(Model)
+	reconcile := m.pollAction(0, m.projects[0].actions[requestID])
 	if reconcile == nil || control.calls != 1 {
 		t.Fatal("reconciliation must query the same ID without publishing again")
 	}

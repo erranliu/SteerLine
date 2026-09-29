@@ -1,7 +1,6 @@
 package console
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/erranliu/SteerLine/internal/steerline"
@@ -53,46 +52,6 @@ func executionEffortLabel(c steerline.Config) string {
 		return c.ReasoningEffort
 	}
 	return "默认强度（未固定，由目标 agent 决定）"
-}
-
-func renderExecutionProfile(ref ProjectRef, snapshot ProjectSnapshot) []string {
-	if ref.Legacy != nil || ref.Error != "" || ref.Config.TaskAuthority != "native" {
-		return nil
-	}
-	if executionConfigMismatch(ref, snapshot) {
-		return []string{"", "执行配置：" + executionConfigChanged}
-	}
-	if len(ref.Config.ExecutionProfiles) > 0 {
-		lines := []string{"", fmt.Sprintf("执行配置：%d 套；按 s 选择后确认", len(ref.Config.AvailableExecutionProfiles()))}
-		if id := ref.Config.DefaultProfileID(); id != "" {
-			lines = append(lines, "自动派发默认："+safeTerminalInlineText(id))
-		}
-		return lines
-	}
-	label := "执行配置 · 配置预览；服务未连接"
-	if snapshot.Connection.State == steerline.ConnectionConnected && snapshot.Connection.Snapshot.Runtime != nil {
-		label = "执行配置 · 当前服务"
-		if ref.Config.LoadedConfigDigest() == "" || snapshot.Connection.Snapshot.Runtime.Service.ConfigDigest == "" {
-			label = "执行配置 · 服务版本未核对"
-		}
-	}
-	c := ref.Config
-	lines := []string{"", label,
-		"位置：" + safeTerminalInlineText(executionHostLabel(c)),
-		"Agent：" + safeTerminalInlineText(executionAgentName(c)),
-		"Model：" + safeTerminalInlineText(executionModelLabel(c)),
-		"Thinking effort：" + safeTerminalInlineText(executionEffortLabel(c)),
-		"Sandbox：" + safeTerminalInlineText(c.Sandbox),
-	}
-	if c.Profile != "" && executionAgentName(c) == "codex" {
-		lines = append(lines, "Codex profile："+safeTerminalInlineText(c.Profile))
-	}
-	if c.Host == "orca_supervised" && c.Orca.Supervised != nil {
-		lines = append(lines,
-			"目标环境："+safeTerminalInlineText(c.Orca.Supervised.EnvironmentID),
-			"连接："+safeTerminalInlineText(c.Orca.Supervised.ConnectionID))
-	}
-	return lines
 }
 
 func renderFixedRunExecutionProfile(state projectState, run *steerline.Run) []string {
