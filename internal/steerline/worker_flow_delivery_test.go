@@ -58,7 +58,7 @@ func TestWorkerFlowDeliveryCommitsWithoutStepGatesAndUnlocksSuccessor(t *testing
 		t.Fatal(err)
 	}
 	delivery := TaskDeliveryRecord{ProjectIdentity: c.Identity(), TaskID: "8", SelectedWorkflowRunID: wf.WorkflowRunID, PRInstance: proof.PRInstance, PRRepository: proof.Repository, PRNumber: 8, PRURL: url, MergeCommit: commit, MergedAt: mergedAt, RecordedAt: created, Evidence: evidence}
-	receipt, err := commands.commitNativeDelivery(ctx, store, graph.Authority.AuthorityVersion, claimed, wf, execution, nil, contract, StepGateResult{PRURL: url}, delivery)
+	receipt, err := commands.commitNativeDelivery(ctx, store, graph.Authority.AuthorityVersion, claimed, wf, execution, contract, url, delivery)
 	if err != nil || receipt.Status != "closed" {
 		t.Fatalf("commit without step results: receipt=%+v error=%v", receipt, err)
 	}
@@ -134,7 +134,9 @@ func TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged(t *testing.T)
 		"wrong task branch": func(info *PRInfo) { info.HeadBranch = "codex/task-9" },
 		"wrong repository":  func(info *PRInfo) { info.Repository = "other/repo" },
 		"wrong base":        func(info *PRInfo) { info.BaseBranch = "develop" },
-		"closed unmerged":  func(info *PRInfo) { info.State, info.Merged, info.MergedAt, info.MergeCommit = "closed_unmerged", false, nil, nil },
+		"closed unmerged": func(info *PRInfo) {
+			info.State, info.Merged, info.MergedAt, info.MergeCommit = "closed_unmerged", false, nil, nil
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			candidate := good

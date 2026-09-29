@@ -228,7 +228,6 @@ type orcaProcess struct {
 	term          orcaTerminal
 	ref           ExecutionRef
 	outputSegment string
-	launcher      *orcaStepLauncher
 	cancel        context.CancelFunc
 	once          sync.Once
 }

@@ -1353,15 +1353,17 @@ func taskDiscardPlanFromSnapshot(snapshot DomainSnapshot, taskID string) (taskDi
 	}
 	plan := taskDiscardPlan{CleanupPending: []string{}}
 	prs := map[string]bool{}
-	acceptedPR := map[string]bool{}
-	plannedWithoutAction := map[string]bool{}
-	if active := latestNativeWorkflow(snapshot.WorkflowRuns, taskID); active != nil && active.WorkflowVersion == WorkerFlowVersion {
-		if active.PRURL != "" {
-			prs[active.PRURL] = true
-			if active.PRState == "" || active.PRState == "unknown" {
-				plan.UncertainPR = true
-			}
-		} else if active.Phase != "queued" {
+	for _, run := range snapshot.WorkflowRuns {
+		if run.TaskID != taskID || run.PRURL == "" || run.PRState == "closed_unmerged" {
+			continue
+		}
+		prs[run.PRURL] = true
+		if run.PRState == "" || run.PRState == "unknown" {
+			plan.UncertainPR = true
+		}
+	}
+	if active := latestNativeWorkflow(snapshot.WorkflowRuns, taskID); active != nil {
+		if active.PRURL == "" && active.Phase != "queued" {
 			// A started worker may have published a PR before the center saw a
 			// link. Discard cannot assume that no external PR exists.
 			plan.UncertainPR = true
@@ -1377,47 +1379,6 @@ func taskDiscardPlanFromSnapshot(snapshot DomainSnapshot, taskID string) (taskDi
 		}
 		if execution.Status == "active" || execution.Status == "waiting_decision" || execution.Status == "blocked" || execution.Status == "pending" {
 			plan.CleanupPending = append(plan.CleanupPending, "execution_stop_manual:"+execution.ExecutionID)
-		}
-	}
-	for _, attempt := range snapshot.Attempts {
-		if _, owned := executions[attempt.ExecutionID]; !owned {
-			continue
-		}
-		var result StepGateResult
-		resultValid := len(attempt.Result) > 0 && json.Unmarshal(attempt.Result, &result) == nil
-		if attempt.StepID != "publish_pr" {
-			if resultValid && result.PRURL != "" {
-				plan.UncertainPR = true
-			}
-			continue
-		}
-		if attempt.Status == "planned" && attempt.OperationID == "" && len(attempt.Result) == 0 {
-			plannedWithoutAction[attempt.ExecutionID] = true
-		}
-		acceptedPublish := attempt.Status == "succeeded" && resultValid && result.Succeeded && result.StepID == "publish_pr" && result.PRURL != "" && result.ResultID != "" && result.ResultID == attempt.ResultID && validCommit(result.PublishedHead) && result.Revision == result.PublishedHead
-		if resultValid && result.PRURL != "" {
-			prs[result.PRURL] = true
-			if acceptedPublish {
-				acceptedPR[attempt.ExecutionID] = true
-			} else {
-				plan.UncertainPR = true
-			}
-		}
-		switch attempt.Status {
-		case "dispatching", "dispatched", "running", "stopping", "outcome_unknown":
-			plan.UncertainPR = true
-		case "succeeded":
-			if !acceptedPublish {
-				plan.UncertainPR = true
-			}
-		}
-		if attempt.OperationID != "" && len(attempt.Result) == 0 || len(attempt.Result) > 0 && !resultValid {
-			plan.UncertainPR = true
-		}
-	}
-	for id, execution := range executions {
-		if execution.CurrentStep == "waiting_pr_merge" && !acceptedPR[id] || execution.CurrentStep == "publish_pr" && !acceptedPR[id] && !plannedWithoutAction[id] {
-			plan.UncertainPR = true
 		}
 	}
 	if len(prs) > 1 {

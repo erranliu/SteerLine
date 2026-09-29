@@ -29,11 +29,11 @@ func TestWorkerFlowConfigRejectsOldProjectGates(t *testing.T) {
 		return LoadConfig(path)
 	}
 	loaded, err := write(base)
-	if err != nil || loaded.WorkflowProtocol != WorkerFlowVersion || loaded.ProjectSteps != nil {
+	if err != nil || loaded.WorkflowProtocol != WorkerFlowVersion {
 		t.Fatalf("new format was not accepted: config=%+v error=%v", loaded, err)
 	}
 	for name, field := range map[string]any{
-		"workflow_definition":    map[string]any{"id": MinimalWorkflowVersion},
+		"workflow_definition":    map[string]any{"id": "minimal-v1"},
 		"project_steps":          map[string]any{},
 		"workspace_dirty_ignore": map[string]any{"paths": []string{"*.meta"}},
 	} {

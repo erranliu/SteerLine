@@ -128,7 +128,7 @@ func TestSQLiteRejectsParallelExecutionsInOneWorkflow(t *testing.T) {
 		if err := tx.PutTask(TaskRecord{ProjectIdentity: project, TaskID: "17", Status: "in_progress", Version: 1}); err != nil {
 			return err
 		}
-		if err := tx.PutWorkflowRun(WorkflowRunRecord{ProjectIdentity: project, WorkflowRunID: "wf-1", TaskID: "17", WorkflowVersion: MinimalWorkflowVersion, Phase: "executing"}); err != nil {
+		if err := tx.PutWorkflowRun(WorkflowRunRecord{ProjectIdentity: project, WorkflowRunID: "wf-1", TaskID: "17", WorkflowVersion: "minimal-v1", Phase: "executing"}); err != nil {
 			return err
 		}
 		for _, id := range []string{"exec-a"} {
@@ -647,7 +647,7 @@ func seedNativeDecision(t *testing.T, db *SQLiteStore, project, runID, decisionI
 		if _, err = raw.ExecContext(ctx, `INSERT INTO task_batches(project_identity,batch_id,schema_version,payload_digest,created_at,command_id,task_ids) VALUES(?,?,?,?,?,?,?)`, project, task.BatchID, "task-batch/v1", strings.Repeat("b", 64), nowTime.UTC().Format(time.RFC3339Nano), strings.Repeat("c", 32), batchIDs); err != nil {
 			return err
 		}
-		workflow := WorkflowRunRecord{ProjectIdentity: project, WorkflowRunID: runID, TaskID: task.TaskID, WorkflowVersion: MinimalWorkflowVersion, Definition: WorkflowDefinition{ID: MinimalWorkflowVersion, Version: MinimalWorkflowVersion}, Phase: "waiting_decision", CreatedAt: nowTime, UpdatedAt: nowTime}
+		workflow := WorkflowRunRecord{ProjectIdentity: project, WorkflowRunID: runID, TaskID: task.TaskID, WorkflowVersion: WorkerFlowVersion, Phase: "waiting_decision", CreatedAt: nowTime, UpdatedAt: nowTime}
 		workflowPayload, err := json.Marshal(workflow)
 		if err != nil {
 			return err
@@ -669,7 +669,7 @@ func seedNativeDecision(t *testing.T, db *SQLiteStore, project, runID, decisionI
 		t.Fatalf("seed native decision graph: %v", err)
 	}
 	store := &Store{Path: filepath.Join(t.TempDir(), "runtime.json"), Domain: db, Project: project}
-	state := Runtime{SchemaVersion: 5, Repository: Repository{Identity: project, Path: "repo", Remote: "origin", Branch: "main"}, Service: ServiceState{InstanceID: "service-instance", Status: "running", Ready: true, Claimant: "alice"}, Runs: []*Run{}, Tasks: []TaskRecord{}, WorkflowRuns: []WorkflowRunRecord{}, Executions: []ExecutionRecord{}, Attempts: []StepAttemptRecord{}, Decisions: []DecisionRecord{}, Control: ControlState{DispatchMode: "manual", Revision: 1}}
+	state := Runtime{SchemaVersion: WorkerFlowRuntimeSchema, Repository: Repository{Identity: project, Path: "repo", Remote: "origin", Branch: "main"}, Service: ServiceState{InstanceID: "service-instance", Status: "running", Ready: true, Claimant: "alice"}, Runs: []*Run{}, Tasks: []TaskRecord{}, WorkflowRuns: []WorkflowRunRecord{}, Executions: []ExecutionRecord{}, Attempts: []StepAttemptRecord{}, Decisions: []DecisionRecord{}, Control: ControlState{DispatchMode: "manual", Revision: 1}}
 	if err = store.Publish(&state); err != nil {
 		t.Fatalf("publish decision test projection: %v", err)
 	}

@@ -410,7 +410,7 @@ func TestNativeTaskCASGuardsAndDeliveryProjection(t *testing.T) {
 	if err = store.Transact(ctx, func(tx DomainTx) error { return tx.UpdateNativeTaskCAS(closed, 2) }); err == nil {
 		t.Fatal("unverified delivery closed a task")
 	}
-	run := WorkflowRunRecord{ProjectIdentity: project, WorkflowRunID: "wf-7", TaskID: "7", WorkflowVersion: MinimalWorkflowVersion, Phase: "waiting_pr_merge", SelectedResult: "exec-7", CreatedAt: created, UpdatedAt: created}
+	run := WorkflowRunRecord{ProjectIdentity: project, WorkflowRunID: "wf-7", TaskID: "7", WorkflowVersion: "minimal-v1", Phase: "waiting_pr_merge", SelectedResult: "exec-7", CreatedAt: created, UpdatedAt: created}
 	execution := ExecutionRecord{ProjectIdentity: project, ExecutionID: "exec-7", WorkflowRunID: "wf-7", Status: "succeeded", CurrentStep: "waiting_pr_merge", CreatedAt: created, UpdatedAt: created}
 	err = store.Transact(ctx, func(tx DomainTx) error {
 		if err := tx.PutWorkflowRun(run); err != nil {
@@ -700,7 +700,7 @@ func TestNewServiceRejectsNonNativeAuthorityBeforeCreatingState(t *testing.T) {
 func TestNativeRuntimeProjectionRejectsRetiredWholeRunResultWithoutMutation(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "runtime.json")
 	legacyResult := filepath.Join(t.TempDir(), "result.json")
-	runtimeState := Runtime{SchemaVersion: CurrentRuntimeSchema, Repository: Repository{Identity: "repo:current"}, Runs: []*Run{{TaskID: "1", RunID: "0123456789abcdef0123456789abcdef", WorkflowVersion: MinimalWorkflowVersion, ResultPath: &legacyResult}}}
+	runtimeState := Runtime{SchemaVersion: CurrentRuntimeSchema, Repository: Repository{Identity: "repo:current"}, Runs: []*Run{{TaskID: "1", RunID: "0123456789abcdef0123456789abcdef", WorkflowVersion: "minimal-v1", ResultPath: &legacyResult}}}
 	data, err := json.Marshal(runtimeState)
 	if err != nil {
 		t.Fatal(err)
@@ -729,7 +729,7 @@ func TestNativeStoreRejectsRetiredSQLiteRunProjectionBeforeAuthorityOpen(t *test
 		t.Fatal(err)
 	}
 	legacyResult := filepath.Join(t.TempDir(), "result.json")
-	payload, err := json.Marshal(Runtime{SchemaVersion: CurrentRuntimeSchema, Repository: Repository{Identity: c.Identity()}, Runs: []*Run{{TaskID: "1", RunID: "0123456789abcdef0123456789abcdef", WorkflowVersion: MinimalWorkflowVersion, ResultPath: &legacyResult}}})
+	payload, err := json.Marshal(Runtime{SchemaVersion: CurrentRuntimeSchema, Repository: Repository{Identity: c.Identity()}, Runs: []*Run{{TaskID: "1", RunID: "0123456789abcdef0123456789abcdef", WorkflowVersion: "minimal-v1", ResultPath: &legacyResult}}})
 	if err != nil {
 		t.Fatal(err)
 	}
