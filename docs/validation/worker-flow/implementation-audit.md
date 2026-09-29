@@ -19,7 +19,7 @@ pre-implementation audit, not WF1–WF12 acceptance evidence.
 
 | Target | Installed interface evidence | Still to prove |
 | --- | --- | --- |
-| Windows local | `codex-cli 0.157.1`; [read-only probe](local-session-probe.json) records two `codex exec --json` turns with the same native session UUID and separate processes. A [host probe](windows-local-host-probe.json) found the current Job Object also contains a WMI-launched child. | An independently supervised launcher, three feedback rounds through SteerLine, durable send intent and exact-session recovery after service restart. |
+| Windows local | `codex-cli 0.157.1`; [read-only probe](local-session-probe.json) records two `codex exec --json` turns with the same native session UUID and separate processes. A [host probe](windows-local-host-probe.json) found the calling Job Object also contains a WMI-launched child. An [alternate-host probe](windows-local-detached-probe.json) passed exact-session adapter continuation on `192.168.0.56`. | Three feedback rounds through SteerLine, durable send intent and exact-session recovery after service restart. |
 | Orca local | `orca 1.4.209`; [isolated probe](orca-local-session-probe.json) records one terminal incarnation and native Codex session across the initial prompt and three accepted feedback turns, including a multiline option plus note. | SteerLine-owned send/observe/reconnect, host restart and full delivery. |
 | Orca supervised remote | Existing `StartMinimalStep` makes a per-step Task/Dispatch and `settleSupervisedStepResources` releases it after a result. An [authenticated remote probe](orca-remote-session-probe.json) shows one Orca terminal incarnation and native Codex session across an initial prompt and three feedback turns, including option plus note. | SteerLine-owned durable remote send/observe/reconnect and full delivery; the old five-step report does not prove these. |
 
@@ -31,7 +31,7 @@ old 17/18/19 records on this basis.
 
 ## Integration overlap
 
-At audit time, PR #115 (`codex/settled-run-reopen`) touches service recovery,
-and PR #116 (`codex/durable-start-admission`) touches claim, dispatch, console
-and service startup. Both are open. Integrate those changes serially before
-claiming worker-flow validation on the final branch.
+At the initial audit, PR #115 (`codex/settled-run-reopen`) touched service
+recovery, and PR #116 (`codex/durable-start-admission`) touched claim, dispatch,
+console and service startup. Both were later closed without merging. This
+branch was rebased onto `origin/main` after that decision.

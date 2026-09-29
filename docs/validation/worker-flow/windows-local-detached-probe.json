@@ -1,0 +1,18 @@
+{
+  "date": "2026-09-29",
+  "scope": "Windows local adapter capability test on an isolated alternate host; not a SteerLine WF12 service-delivery test",
+  "host": "192.168.0.56",
+  "access": "authenticated Orca environment e68f4edf-8a83-42c2-a9da-6d404d3aa3d8",
+  "source_commit": "03e8e64",
+  "launcher": "WMI child outside the Orca terminal Job Object",
+  "test": "TestLocalWorkerTurnResumesExactSessionInSameWorkspace",
+  "result": "PASS",
+  "test_duration_seconds": 1.59,
+  "proof": "Two local Codex-style turns used the same native session ID and fixed worktree; the second invocation used exact-session resume.",
+  "remote_summary_path": "C:/Users/Administrator/AppData/Local/Temp/wf-wmi-probe-20260929/summary.json",
+  "remote_log_path": "C:/Users/Administrator/AppData/Local/Temp/wf-wmi-probe-20260929/go-test.txt",
+  "limits": [
+    "The worker in this test is a controlled Codex JSONL fixture, not an actual implementation worker.",
+    "Service restart, feedback Command reconciliation, PR merge and DAG release were not exercised."
+  ]
+}
