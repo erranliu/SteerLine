@@ -159,8 +159,8 @@ func TestWorkerFlowServiceFirstFeedbackKeepsSessionAndWorkspace(t *testing.T) {
 	workflow, execution := service.minimalRecords(run)
 	if workflow == nil || execution == nil || workflow.WorkflowRunID != receipt.WorkflowRunID || execution.ExecutionID != receipt.ExecutionID ||
 		run.AttemptID != receipt.AttemptID || execution.SessionID != workerFlowMockSession || execution.TurnNumber != 2 ||
-		deref(run.WorktreePath) != firstWorktree || len(service.State.Attempts) != 1 {
-		t.Fatalf("feedback replaced the fixed worker: workflow=%+v execution=%+v run=%+v", workflow, execution, run)
+		canonical(deref(run.WorktreePath)) != canonical(firstWorktree) || len(service.State.Attempts) != 1 {
+		t.Fatalf("feedback replaced the fixed worker: workflow=%q/%q execution=%q/%q session=%q turn=%d attempt=%q/%q worktree=%q/%q attempts=%d", workflow.WorkflowRunID, receipt.WorkflowRunID, execution.ExecutionID, receipt.ExecutionID, execution.SessionID, execution.TurnNumber, run.AttemptID, receipt.AttemptID, deref(run.WorktreePath), firstWorktree, len(service.State.Attempts))
 	}
 	currentHead, err := exec.Command("git", "-C", firstWorktree, "rev-parse", "HEAD").Output()
 	if err != nil || strings.TrimSpace(string(currentHead)) != strings.TrimSpace(string(head)) {
