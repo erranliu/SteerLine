@@ -142,6 +142,11 @@ func (s *Service) prepareWorkerFlow(ctx context.Context, task TaskRecord, run *R
 	if err != nil {
 		return err
 	}
+	workflow, execution = s.minimalRecords(run)
+	attempt = s.minimalAttempt(run, run.AttemptID)
+	if workflow == nil || execution == nil || attempt == nil {
+		return errors.New("worker claim disappeared after preparation intent was saved")
+	}
 	if err = prepareWorktreeOnly(ctx, s.Config, run); err != nil {
 		_ = s.changeOperation(opID, "outcome_unknown", "", nil, err.Error())
 		run.ExecutionStatus = "unknown"
@@ -194,6 +199,11 @@ func (s *Service) startWorkerFlowTurn(ctx context.Context, run *Run, prompt, tur
 	}{run.ExecutionID, execution.SessionID, turnID, prompt})
 	if err != nil {
 		return err
+	}
+	workflow, execution = s.minimalRecords(run)
+	attempt = s.minimalAttempt(run, run.AttemptID)
+	if workflow == nil || execution == nil || attempt == nil {
+		return errors.New("worker turn disappeared after send intent was saved")
 	}
 	worker, events, err := startLocalWorkerTurn(ctx, s.Config, run, execution, turnID, prompt)
 	if err != nil {
