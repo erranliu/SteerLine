@@ -340,6 +340,9 @@ func (s *Service) inspectMinimalWorkspace(ctx context.Context, run *Run) (Worksp
 	}
 	backend := backendFor(c)
 	kind, protocol := backend.Identity()
+	if kind == BackendLocal && run.Protocol == string(ProtocolLocalCodexAppServer) {
+		protocol = ProtocolLocalCodexAppServer
+	}
 	if string(kind) != run.Backend || string(protocol) != run.Protocol || run.Target.ID != targetFor(c).ID {
 		return WorkspaceEvidence{}, UnsupportedAdapterOperation("InspectWorkspace", "configured target differs from the native execution identity")
 	}

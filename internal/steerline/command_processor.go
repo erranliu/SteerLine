@@ -121,7 +121,7 @@ func (s *Service) processPendingCommandsTracked(ctx context.Context, processed *
 					if err = decode(record.Answer, &saved); err != nil {
 						return fmt.Errorf("decode accepted decision answer: %w", err)
 					}
-					run.Decision.OptionID, run.Decision.Note, run.Decision.AnsweredBy = saved.OptionID, saved.Note, saved.AnsweredBy
+					run.Decision.OptionID, run.Decision.Note, run.Decision.Answers, run.Decision.AnsweredBy = saved.OptionID, saved.Note, saved.Answers, saved.AnsweredBy
 					run.Decision.AnsweredAt = &saved.AnsweredAt
 				}
 				s.note(run, "steer", "decision", "answer_saved", "decision answer saved", decisionAnswerSummary(run), decisionAnswerMeta(run))

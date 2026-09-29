@@ -4,7 +4,7 @@ SteerLine 尚未发布。当前生产配置必须显式设置 `"task_authority":
 
 ## 权威与身份
 
-SQLite 是 Task、固定 TaskContract、依赖、WorkflowRun、Execution、Decision、Operation、会话事件与 TaskDelivery 的唯一业务权威。运行时投影为 schema 6，可在当前格式内重启恢复。旧投影或旧 WorkflowRun 在工作区准备之前拒绝，并保留原文件及可能仍在运行的外部执行。
+SQLite 是 Task、固定 TaskContract、依赖、WorkflowRun、Execution、Decision、Operation、会话事件与 TaskDelivery 的唯一业务权威。运行时投影为 schema 7，可在当前格式内重启恢复。旧投影、旧 WorkflowRun 或旧本地执行协议在工作区准备之前拒绝，并保留原文件及可能仍在运行的外部执行。
 
 TaskContract 固定目标仓库、remote、base 分支以及 Spec、Plan 和其他引用的 commit/SHA-256。领取前再次核验 Task 版本、依赖就绪、项目 authority、目标仓库和前置合并已进入当前 base。领取事务预留一个 Task、WorkflowRun、Execution 与固定 `worker` attempt；不生成 implement／verify／review／publish_pr 链。
 
@@ -12,19 +12,19 @@ TaskContract 固定目标仓库、remote、base 分支以及 Spec、Plan 和其�
 | --- | --- |
 | `queued` | 领取已落盘，准备工作区或首次会话 |
 | `executing` | 原 worker 正处理任务或反馈轮次 |
-| `waiting_decision` | 原轮次停下，需要输入或外部结果无法自动核实 |
+| `waiting_decision` | Codex 原轮次正在等待工具问题的回答，或轮次结束后需要反馈／外部结果无法自动核实 |
 | `waiting_pr_merge` | 有已核实的 PR，worker 当前轮次已停下 |
 | `completed` | 真实合并已核验，TaskDelivery 和 Task closed 已同事务提交 |
 
 Task 的 `discarded` 是独立终态，不伪装成 Decision 或完成。连接、进程、回执不明和清理待办保存在 Operation、Execution 与事件中，不增设第二套可写主阶段。
 
-Execution 绑定后端目标、工作区、分支、base、原生 Codex `session_id`、当前／待开始／已停下 turn ID 及 turn 序号。反馈只推进 turn 和消息身份，不替换 Execution、worker attempt 或会话。本次仅 local Codex 路径开放派发；Orca 本机与受监管远端代码保留，均在首次派发前拒绝。
+Execution 绑定后端目标、工作区、分支、base、原生 Codex thread ID、当前／待开始／已停下 turn ID、独立的 Command ID、app-server 进程代次及 turn 序号。反馈只推进 turn 和消息身份，不替换 Execution、worker attempt 或会话。本地协议为 `local_codex_app_server_v1`。本次仅 local Codex 路径开放派发；Orca 本机与受监管远端代码保留，均在首次派发前拒绝。
 
 ## 工作区与消息
 
 初始工作区在外部创建前保存固定意图。当前 local 路径使用固定 Git worktree 和原生 Codex session；重启核对原身份，不能按同名标题或路径推断替代会话。工作开始后，中心不会因反馈、dirty 文件、项目检查结果或 PR 出现而 reset、清理或改写 worker 的提交。
 
-每次反馈有固定 Command ID 和 `start_worker_turn` Operation。答案先在 SQLite 保存，外部输入回执和原 session 的 turn.started 分别记录。local worker 的结构化 Codex JSON 输出写入中心 journal 与会话事件；回执不明时不更换 ID 重发。Orca 的实验性分块转运代码保留，但不属于本次可派发协议。详见 [决策与反馈](decisions.md)。
+每次反馈有固定 Command ID 和 Operation。答案先在 SQLite 保存。运行中问题用原 app-server 工具请求 ID 回复，结束后反馈在原 thread 调用 `turn/start`；两者分别记录发送回执与匹配的原生工具结果／turn 事件。本地通知写入每轮 `appserver.jsonl`，完整正文由原生会话历史补读。回执不明时不更换 ID 重发。Orca 的实验性分块转运代码保留，但不属于本次可派发协议。详见 [决策与反馈](decisions.md)。
 
 人工模式允许不同 Task 分别领取；自动模式仍一次占用一个活动执行。暂停派发只限制新领取，不中断当前 worker、待决策反馈或 PR 核验。
 

@@ -1,17 +1,22 @@
 package steerline
 
 import (
-	"context"
+	"bufio"
+	"crypto/sha1"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
+	"net"
+	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -39,6 +44,22 @@ func TestWorkerFlowMockCodexHelper(t *testing.T) {
 	if os.Getenv("STEERLINE_WORKER_FLOW_MOCK") != "1" && !strings.Contains(args, " wf-orca-mock ") {
 		return
 	}
+	if strings.Contains(args, " --version") {
+		fmt.Fprintln(os.Stdout, "codex-cli mock-1")
+		os.Exit(0)
+	}
+	if strings.Contains(args, " app-server ") && strings.Contains(args, " --help") {
+		fmt.Fprintln(os.Stdout, "Codex app-server --listen ADDRESS")
+		os.Exit(0)
+	}
+	if strings.Contains(args, " app-server ") && strings.Contains(args, " --stdio") {
+		mockAppServerStdio()
+		os.Exit(0)
+	}
+	if strings.Contains(args, " app-server ") && strings.Contains(args, " --listen ") {
+		mockAppServerMain()
+		os.Exit(0)
+	}
 	if strings.Contains(args, " resume ") && !strings.Contains(args, " resume "+workerFlowMockSession+" ") {
 		os.Exit(2)
 	}
@@ -65,59 +86,168 @@ func TestWorkerFlowMockCodexHelper(t *testing.T) {
 	os.Exit(0)
 }
 
-func TestLocalWorkerTurnResumesExactSessionInSameWorkspace(t *testing.T) {
-	t.Setenv("STEERLINE_WORKER_FLOW_MOCK", "1")
-	c, base := nativeTaskFixture(t)
-	if err := c.ResolveIdentity(context.Background()); err != nil {
-		t.Fatal(err)
+func mockAppServerStdio() {
+	scanner := bufio.NewScanner(os.Stdin)
+	for scanner.Scan() {
+		var message struct {
+			ID     json.RawMessage `json:"id"`
+			Method string          `json:"method"`
+		}
+		if json.Unmarshal(scanner.Bytes(), &message) != nil || len(message.ID) == 0 {
+			continue
+		}
+		if message.Method == "initialize" {
+			fmt.Fprintln(os.Stdout, string(mustJSON(map[string]any{"id": message.ID, "result": map[string]string{"userAgent": "mock-app-server", "codexHome": os.TempDir(), "platformOs": "windows"}})))
+		}
 	}
-	c.WorkflowProtocol, c.Host, c.Agent, c.Sandbox = WorkerFlowVersion, "local", "codex", "workspace-write"
-	c.Codex = Command{Executable: os.Args[0], Args: []string{"-test.run=^TestWorkerFlowMockCodexHelper$", "--"}}
-	c.WorktreeRoot = filepath.Join(c.RunDir, "worktrees")
-	if err := c.prepareWorktreeRoot(); err != nil {
-		t.Fatal(err)
+}
+
+type mockAppServerState struct {
+	mu    sync.Mutex
+	cwd   string
+	turns []map[string]any
+}
+
+func mockAppServerMain() {
+	endpoint := ""
+	for i, arg := range os.Args {
+		if arg == "--listen" && i+1 < len(os.Args) {
+			endpoint = os.Args[i+1]
+		}
 	}
-	run := &Run{TaskID: "8", RunID: strings.Repeat("a", 32), AttemptID: strings.Repeat("b", 32), ExecutionID: strings.Repeat("c", 32), WorkflowVersion: WorkerFlowVersion, Target: ExecutionTarget{ID: "local"}}
-	intent, err := planWorkspace(c, run.TaskID, run.RunID, base)
+	u, err := url.Parse(endpoint)
+	if err != nil || u.Scheme != "ws" || u.Host == "" {
+		os.Exit(21)
+	}
+	listener, err := net.Listen("tcp", u.Host)
 	if err != nil {
-		t.Fatal(err)
+		os.Exit(22)
 	}
-	run.WorkspaceIntent = intent
-	if err := prepareWorktreeOnly(context.Background(), c, run); err != nil {
-		t.Fatal(err)
-	}
-	run.WorktreePath, run.WorktreeBranch = ptr(intent.Path), ptr(intent.Branch)
-	execution := &ExecutionRecord{ExecutionID: run.ExecutionID, WorkflowRunID: run.RunID, Workspace: WorkspaceEvidence{Worktree: intent.Path, Branch: intent.Branch}}
-	for number := 1; number <= 2; number++ {
-		turnID := strings.Repeat(fmt.Sprint(number), 32)
-		worker, path, err := startLocalWorkerTurn(context.Background(), c, run, execution, turnID, "continue")
+	state := &mockAppServerState{}
+	for {
+		conn, err := listener.Accept()
 		if err != nil {
-			if errors.Is(err, errDetachUnsupported) && os.Getenv("STEERLINE_REQUIRE_DETACHED_TESTS") != "1" {
-				t.Skipf("host cannot retain the local worker across service exit: %v", err)
+			return
+		}
+		go mockAppServerConnection(conn, state)
+	}
+}
+
+func mockAppServerConnection(conn net.Conn, state *mockAppServerState) {
+	defer conn.Close()
+	reader := bufio.NewReader(conn)
+	request, err := http.ReadRequest(reader)
+	if err != nil || request.Header.Get("Upgrade") != "websocket" {
+		return
+	}
+	accept := sha1.Sum([]byte(request.Header.Get("Sec-WebSocket-Key") + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"))
+	if _, err := io.WriteString(conn, "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: "+base64.StdEncoding.EncodeToString(accept[:])+"\r\n\r\n"); err != nil {
+		return
+	}
+	send := func(value any) error {
+		payload := mustJSON(value)
+		frame := []byte{0x81}
+		switch {
+		case len(payload) < 126:
+			frame = append(frame, byte(len(payload)))
+		case len(payload) <= 65535:
+			frame = append(frame, 126, byte(len(payload)>>8), byte(len(payload)))
+		default:
+			frame = append(frame, 127, 0, 0, 0, 0, byte(len(payload)>>24), byte(len(payload)>>16), byte(len(payload)>>8), byte(len(payload)))
+		}
+		_, err := conn.Write(append(frame, payload...))
+		return err
+	}
+	for {
+		header := make([]byte, 2)
+		if _, err := io.ReadFull(reader, header); err != nil {
+			return
+		}
+		if header[0]&0xf != 1 || header[1]&0x80 == 0 {
+			return
+		}
+		size := uint64(header[1] & 0x7f)
+		if size == 126 {
+			var value uint16
+			if binary.Read(reader, binary.BigEndian, &value) != nil {
+				return
 			}
-			t.Fatal(err)
+			size = uint64(value)
+		} else if size == 127 && binary.Read(reader, binary.BigEndian, &size) != nil {
+			return
 		}
-		var observedSession string
-		for event := range worker.Events {
-			if event.Session != "" {
-				observedSession = event.Session
+		if size > maxCodexSocketMessage {
+			return
+		}
+		mask := make([]byte, 4)
+		if _, err := io.ReadFull(reader, mask); err != nil {
+			return
+		}
+		payload := make([]byte, size)
+		if _, err := io.ReadFull(reader, payload); err != nil {
+			return
+		}
+		for i := range payload {
+			payload[i] ^= mask[i%4]
+		}
+		var message struct {
+			ID     json.RawMessage `json:"id"`
+			Method string          `json:"method"`
+			Params json.RawMessage `json:"params"`
+		}
+		if json.Unmarshal(payload, &message) != nil {
+			return
+		}
+		if len(message.ID) == 0 {
+			continue
+		}
+		response := map[string]any{"id": message.ID}
+		switch message.Method {
+		case "initialize":
+			response["result"] = map[string]string{"userAgent": "mock-app-server", "codexHome": os.TempDir(), "platformOs": "windows"}
+		case "thread/start", "thread/resume":
+			var params struct {
+				Cwd string `json:"cwd"`
 			}
-			if event.Persisted != nil {
-				event.Persisted <- nil
+			_ = json.Unmarshal(message.Params, &params)
+			state.mu.Lock()
+			if state.cwd == "" {
+				state.cwd = params.Cwd
 			}
+			cwd := state.cwd
+			state.mu.Unlock()
+			response["result"] = map[string]any{"thread": map[string]any{"id": workerFlowMockSession, "cwd": cwd}}
+		case "thread/read":
+			state.mu.Lock()
+			response["result"] = map[string]any{"thread": map[string]any{"id": workerFlowMockSession, "cwd": state.cwd, "turns": append([]map[string]any(nil), state.turns...)}}
+			state.mu.Unlock()
+		case "turn/start":
+			var params struct {
+				Input []struct {
+					Text string `json:"text"`
+				} `json:"input"`
+			}
+			_ = json.Unmarshal(message.Params, &params)
+			state.mu.Lock()
+			turnID := fmt.Sprintf("00000000-0000-0000-0000-%012d", len(state.turns)+1)
+			text := "turn done"
+			if len(params.Input) != 0 {
+				text = params.Input[0].Text
+			}
+			item := map[string]any{"type": "agentMessage", "id": "message-" + turnID, "phase": "final_answer", "text": text}
+			turn := map[string]any{"id": turnID, "status": "completed", "completedAt": 1, "items": []any{item}}
+			state.turns = append(state.turns, turn)
+			state.mu.Unlock()
+			response["result"] = map[string]any{"turn": map[string]any{"id": turnID, "status": "inProgress"}}
+			if send(response) != nil || send(map[string]any{"method": "turn/started", "params": map[string]any{"threadId": workerFlowMockSession, "turn": map[string]any{"id": turnID}}}) != nil || send(map[string]any{"method": "item/completed", "params": map[string]any{"threadId": workerFlowMockSession, "turnId": turnID, "item": item}}) != nil || send(map[string]any{"method": "turn/completed", "params": map[string]any{"threadId": workerFlowMockSession, "turn": turn}}) != nil {
+				return
+			}
+			continue
+		default:
+			response["error"] = map[string]any{"code": -32601, "message": "unsupported mock method"}
 		}
-		if err := <-worker.Done; err != nil {
-			t.Fatal(err)
-		}
-		if observedSession != workerFlowMockSession || filepath.Base(path) != "events.jsonl" {
-			t.Fatalf("turn %d lost session/log identity: %s %s", number, observedSession, path)
-		}
-		outcome, err := readWorkerTurnOutcome(path)
-		if err != nil || !outcome.Started || !outcome.Completed || outcome.SessionID != workerFlowMockSession || outcome.LastMessage != "turn done" {
-			t.Fatalf("turn %d has incomplete observed outcome: %+v %v", number, outcome, err)
-		}
-		if number == 1 {
-			execution.SessionID = observedSession
+		if send(response) != nil {
+			return
 		}
 	}
 }

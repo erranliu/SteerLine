@@ -24,14 +24,16 @@ type Service struct {
 	prs             *PRClient
 	// worker and active are the run currently being handled by the serial state
 	// machine. workers owns all live observers, keyed by authoritative run ID.
-	worker         *Worker
-	active         *Run
-	workers        map[string]*Worker
-	workerMessages chan workerMessage
-	runContext     context.Context
-	forwarders     sync.WaitGroup
-	forwardMu      sync.Mutex
-	forwardedDone  []workerMessage
+	worker              *Worker
+	active              *Run
+	workers             map[string]*Worker
+	appServerLaunching  map[string]string // In-flight goroutines, never persisted execution authority.
+	appServerRecovering map[string]bool
+	workerMessages      chan workerMessage
+	runContext          context.Context
+	forwarders          sync.WaitGroup
+	forwardMu           sync.Mutex
+	forwardedDone       []workerMessage
 	// activities holds one journal per run so PR and delivery events always land in
 	// their own run's file, even after the worker exited.
 	activities                 map[string]*ActivityWriter
@@ -456,6 +458,7 @@ func (s *Service) hydrateDecisionProjection(ctx context.Context) error {
 			}
 			run.Decision.OptionID = answer.OptionID
 			run.Decision.Note = answer.Note
+			run.Decision.Answers = answer.Answers
 			run.Decision.AnsweredBy = answer.AnsweredBy
 			if !answer.AnsweredAt.IsZero() {
 				answeredAt := answer.AnsweredAt
@@ -470,7 +473,7 @@ func (s *Service) acceptedUnknownDecisionAnswer(ctx context.Context, run *Run, r
 	if s == nil || s.domainStore == nil || run == nil || run.Decision == nil || record.Status != "answer_saved" || len(record.Answer) != 0 {
 		return DecisionAnswer{}, false
 	}
-	expected := DecisionAnswer{DecisionID: record.DecisionID, RunID: run.RunID, OptionID: run.Decision.OptionID, Note: run.Decision.Note}
+	expected := DecisionAnswer{DecisionID: record.DecisionID, RunID: run.RunID, OptionID: run.Decision.OptionID, Note: run.Decision.Note, Answers: run.Decision.Answers}
 	command, err := s.domainStore.CommandByIdempotency(ctx, s.Config.identity, decisionAnswerKey(expected))
 	if err != nil || command.ProjectIdentity != s.Config.identity || command.Kind != "answer_decision" || command.TargetID != record.DecisionID || command.Status != "accepted" || len(command.Payload) == 0 {
 		return DecisionAnswer{}, false
@@ -1960,6 +1963,9 @@ func (s *Service) stopActiveExecution(ctx context.Context) (Operation, error) {
 	}
 	backend := backendFor(config)
 	kind, protocol := backend.Identity()
+	if kind == BackendLocal && r.Protocol == string(ProtocolLocalCodexAppServer) {
+		protocol = ProtocolLocalCodexAppServer
+	}
 	if kind != ref.Backend || protocol != ref.Protocol {
 		return Operation{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "configured backend/protocol differs from fixed execution"}
 	}

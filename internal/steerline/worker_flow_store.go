@@ -46,6 +46,11 @@ func preflightWorkerFlowState(ctx context.Context, c Config) error {
 			return nativeErr("unsupported_schema", "worker-flow-v1 refuses an old WorkflowRun; preserve the original state and external session")
 		}
 	}
+	for _, execution := range snapshot.Executions {
+		if execution.Backend == string(BackendLocal) && execution.Protocol != string(ProtocolLocalCodexAppServer) {
+			return nativeErr("unsupported_schema", "worker-flow-v1 refuses an old local execution protocol; preserve its external process and state")
+		}
+	}
 	return nil
 }
 
@@ -120,7 +125,7 @@ func persistWorkerFlow(tx DomainTx, project string, runtime Runtime, run *Run) e
 		}
 		var answer []byte
 		if run.Decision.Status != "pending" {
-			value := DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, OptionID: run.Decision.OptionID, Note: run.Decision.Note, AnsweredBy: run.Decision.AnsweredBy}
+			value := DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, OptionID: run.Decision.OptionID, Note: run.Decision.Note, Answers: run.Decision.Answers, AnsweredBy: run.Decision.AnsweredBy}
 			if run.Decision.AnsweredAt != nil {
 				value.AnsweredAt = *run.Decision.AnsweredAt
 			}
