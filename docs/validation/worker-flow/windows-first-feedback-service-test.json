@@ -1,0 +1,17 @@
+{
+  "date": "2026-09-29",
+  "source_revision": "633fa6b",
+  "host": "192.168.0.56",
+  "environment_id": "e68f4edf-8a83-42c2-a9da-6d404d3aa3d8",
+  "isolated_worktree": "C:/Users/Administrator/orca/workspaces/SteerLine/worker-flow-service-validation",
+  "test": "TestWorkerFlowServiceFirstFeedbackKeepsSessionAndWorkspace",
+  "launcher": "WMI Win32_Process.Create outside the Orca Job Object",
+  "result": "PASS",
+  "elapsed_seconds": 6.60,
+  "verified": [
+    "initial turn and one feedback retained Task, WorkflowRun, Execution, worker session and worktree identity",
+    "a partial commit survived feedback without resetting HEAD",
+    "a stopped turn with no PR entered the unified pending Decision"
+  ],
+  "scope": "Isolated mock Codex service test. This does not prove an actual operator merge or any Orca center adapter."
+}

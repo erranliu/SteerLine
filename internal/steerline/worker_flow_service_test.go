@@ -51,7 +51,7 @@ func TestWorkerFlowServiceFirstFeedbackKeepsSessionAndWorkspace(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer service.Close()
+	defer func() { _ = service.Close() }()
 	run := service.find("8")
 	if run == nil || run.RunID != receipt.WorkflowRunID || run.ExecutionID != receipt.ExecutionID || run.AttemptID != receipt.AttemptID {
 		t.Fatalf("fixed claim did not reconstruct: run=%+v receipt=%+v", run, receipt)
@@ -98,6 +98,18 @@ func TestWorkerFlowServiceFirstFeedbackKeepsSessionAndWorkspace(t *testing.T) {
 		}
 	}
 	finishTurn()
+	firstSession := deref(run.SessionID)
+	if err := service.Close(); err != nil {
+		t.Fatal(err)
+	}
+	service, err = NewService(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	run = service.find("8")
+	if run == nil || run.RunID != receipt.WorkflowRunID || run.ExecutionID != receipt.ExecutionID || deref(run.SessionID) != firstSession || run.Decision == nil || run.Decision.Status != "pending" {
+		t.Fatalf("current-format restart lost the waiting worker: run=%+v", run)
+	}
 	partial := filepath.Join(firstWorktree, "partial.txt")
 	if err := os.WriteFile(partial, []byte("partially committed\n"), 0600); err != nil {
 		t.Fatal(err)
@@ -152,5 +164,38 @@ func TestWorkerFlowServiceFirstFeedbackKeepsSessionAndWorkspace(t *testing.T) {
 	currentHead, err := exec.Command("git", "-C", firstWorktree, "rev-parse", "HEAD").Output()
 	if err != nil || strings.TrimSpace(string(currentHead)) != strings.TrimSpace(string(head)) {
 		t.Fatal("feedback reset the partially committed HEAD")
+	}
+	// The next answer has an accepted command, but its send receipt is lost.
+	// Reconciliation must preserve the original request without launching it again.
+	uncertain := DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, Note: "Do not send twice", AnsweredBy: "operator", ExpectedDecisionVersion: run.Decision.Version, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: service.State.Service.InstanceID}
+	uncertainPayload, err := json.Marshal(uncertain)
+	if err != nil {
+		t.Fatal(err)
+	}
+	uncertainCommand, _, err := (CommandService{Store: service.domainStore, Project: c.Identity()}).AnswerDecisionWithID(ctx, strings.Repeat("2", 32), uncertain.DecisionID, run.Decision.Version, decisionAnswerKey(uncertain), uncertain.AnsweredBy, uncertainPayload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	uncertainRecord, _, err := (CommandService{Store: service.domainStore, Project: c.Identity()}).AcceptAnswer(ctx, uncertainCommand, uncertain)
+	if err != nil {
+		t.Fatal(err)
+	}
+	run.Decision.Version, run.Decision.Status = uncertainRecord.Version, uncertainRecord.Status
+	run.Decision.Note, run.Decision.AnsweredBy = uncertain.Note, uncertain.AnsweredBy
+	run.Decision.AnsweredAt = &uncertainRecord.UpdatedAt
+	if err := service.save(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.startOperation("start_worker_turn", "worker-turn:"+execution.ExecutionID+":"+uncertainCommand.CommandID, map[string]string{"original_request": uncertainCommand.CommandID}); err != nil {
+		t.Fatal(err)
+	}
+	before := len(service.State.Operations)
+	for i := 0; i < 2; i++ {
+		if err := service.applyWorkerFlowDecision(ctx, run); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(service.State.Operations) != before || service.workers[run.RunID] != nil || execution.TurnNumber != 2 || run.Error == nil || !strings.Contains(*run.Error, "no duplicate message") {
+		t.Fatalf("uncertain feedback was resent or lost: operations=%d/%d execution=%+v run=%+v", before, len(service.State.Operations), execution, run)
 	}
 }

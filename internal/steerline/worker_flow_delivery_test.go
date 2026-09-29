@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -75,6 +76,95 @@ func TestWorkerFlowDeliveryCommitsWithoutStepGatesAndUnlocksSuccessor(t *testing
 	ready, err := (QueryService{Store: store, Project: c.Identity()}).ReadyNativeTasks(ctx)
 	if err != nil || len(ready) != 1 || ready[0].TaskID != "9" {
 		t.Fatalf("successor was not released: ready=%+v error=%v", ready, err)
+	}
+}
+
+func TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged(t *testing.T) {
+	ctx := context.Background()
+	c, commit := nativeTaskFixture(t)
+	if out, err := exec.Command("git", "-C", c.Repository, "remote", "set-url", "origin", "https://forge.invalid/org/repo.git").CombinedOutput(); err != nil {
+		t.Fatalf("set isolated remote: %v: %s", err, out)
+	}
+	c.WorkflowProtocol = WorkerFlowVersion
+	c.PR = PRConfig{Kind: "command", BaseURL: "https://forge.invalid", Repository: "org/repo"}
+	project, err := OpenNativeTaskProject(ctx, &c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := project.Close(); err != nil {
+		t.Fatal(err)
+	}
+	store, err := OpenSQLiteStore(filepath.Join(c.RunDir, "steerline.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	commands := CommandService{Store: store, Project: c.Identity()}
+	input := taskBatchFixture(t, c, commit, batchTasks(8, 9), []TaskBatchEdge{{Predecessor: TaskBatchReference{LocalKey: "k8"}, Successor: TaskBatchReference{LocalKey: "k9"}}})
+	if _, err := commands.CreateTaskBatch(ctx, c, input, strings.Repeat("8", 32), 1, "operator"); err != nil {
+		t.Fatal(err)
+	}
+	graph, err := store.taskGraphSnapshot(ctx, c.Identity())
+	if err != nil {
+		t.Fatal(err)
+	}
+	task := graph.ByID["8"]
+	at := time.Now().UTC()
+	url := "https://forge.invalid/org/repo/pulls/8"
+	wf := WorkflowRunRecord{ProjectIdentity: c.Identity(), WorkflowRunID: "worker-flow-wf-8", TaskID: "8", WorkflowVersion: WorkerFlowVersion, Phase: "waiting_pr_merge", Repository: c.Repository, Branch: "main", SelectedResult: "worker-flow-exec-8", PRURL: url, PRState: "open", CreatedAt: at, UpdatedAt: at}
+	execution := ExecutionRecord{ProjectIdentity: c.Identity(), ExecutionID: wf.SelectedResult, WorkflowRunID: wf.WorkflowRunID, Agent: "codex", Status: "idle", SessionID: "session-8", Workspace: WorkspaceEvidence{Branch: "codex/task-8"}, CreatedAt: at, UpdatedAt: at}
+	claimed := task
+	claimed.Status, claimed.Claimant, claimed.Version, claimed.UpdatedAt = "in_progress", "operator", task.Version+1, at
+	if err := store.Transact(ctx, func(domainTx DomainTx) error {
+		tx := domainTx.(*sqliteTx)
+		if err := tx.UpdateNativeTaskCAS(claimed, task.Version); err != nil {
+			return err
+		}
+		if err := tx.PutWorkflowRun(wf); err != nil {
+			return err
+		}
+		return tx.PutExecution(execution)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	mergedAt, mergeCommit := at.Add(time.Minute), commit
+	good := PRInfo{URL: url, Repository: "org/repo", BaseBranch: "main", HeadRepository: "org/repo", HeadBranch: "codex/task-8", HeadRevision: commit, State: "merged", Merged: true, MergedAt: &mergedAt, MergeCommit: &mergeCommit}
+	verifier := &fixedTaskDeliveryVerifier{info: good}
+	for name, alter := range map[string]func(*PRInfo){
+		"wrong task branch": func(info *PRInfo) { info.HeadBranch = "codex/task-9" },
+		"wrong repository":  func(info *PRInfo) { info.Repository = "other/repo" },
+		"wrong base":        func(info *PRInfo) { info.BaseBranch = "develop" },
+		"closed unmerged":  func(info *PRInfo) { info.State, info.Merged, info.MergedAt, info.MergeCommit = "closed_unmerged", false, nil, nil },
+	} {
+		t.Run(name, func(t *testing.T) {
+			candidate := good
+			alter(&candidate)
+			verifier.info = candidate
+			if _, err := commands.CompleteNativeTask(ctx, c, "8", claimed.Version, wf.WorkflowRunID, verifier); err == nil {
+				t.Fatal("unowned or unmerged PR completed the task")
+			}
+			page, err := (QueryService{Store: store, Project: c.Identity()}).ShowNativeTask(ctx, "8")
+			if err != nil || len(page.Tasks) != 1 || page.Tasks[0].Status != "in_progress" || page.Tasks[0].Delivery != nil {
+				t.Fatalf("rejected PR changed delivery: page=%+v err=%v", page, err)
+			}
+		})
+	}
+	verifier.info = good
+	first, err := commands.CompleteNativeTask(ctx, c, "8", claimed.Version, wf.WorkflowRunID, verifier)
+	if err != nil || first.Status != "closed" {
+		t.Fatalf("verified merge did not complete: receipt=%+v err=%v", first, err)
+	}
+	second, err := commands.CompleteNativeTask(ctx, c, "8", claimed.Version, wf.WorkflowRunID, verifier)
+	if err != nil || second.Delivery.MergeCommit != first.Delivery.MergeCommit {
+		t.Fatalf("merge replay differed: receipt=%+v err=%v", second, err)
+	}
+	var deliveries int
+	if err := store.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM task_deliveries WHERE project_identity=? AND task_id=?`, c.Identity(), "8").Scan(&deliveries); err != nil || deliveries != 1 {
+		t.Fatalf("merge wrote %d deliveries: %v", deliveries, err)
+	}
+	ready, err := (QueryService{Store: store, Project: c.Identity()}).ReadyNativeTasks(ctx)
+	if err != nil || len(ready) != 1 || ready[0].TaskID != "9" {
+		t.Fatalf("merge did not unlock successor once: ready=%+v err=%v", ready, err)
 	}
 }
 
