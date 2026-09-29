@@ -25,6 +25,10 @@
 | 52 | 文档审阅与确认原生界面 | `#44`、`#48` | [Spec](phase2-review-ui.spec.md) | [Plan](phase2-review-ui.plan.md) |
 | 53 | 第二阶段完整闭环验收 | `#49`、`#50`、`#51`、`#52`、`#42` | [Spec](phase2-integration.spec.md) | [Plan](phase2-integration.plan.md) |
 
+## 本机 Orca 接入补充
+
+[本机 Orca 原生编排 Spec](worker-flow-orca-native.spec.md) / [Plan](worker-flow-orca-native.plan.md) 承接 #36 延期的本机 Orca 接入。状态：待实施，尚未分配 Task ID；Spec 内记录 2026-09-29 的平台实验、低层 Dispatch 选型及中心验收边界。当前功能支持状态以已交付实现为准。
+
 ## 共同约束
 
 - [执行架构](execution-architecture.spec.md)与[原生任务](native-task-constraints.md)：身份、单写者、当前格式恢复和真实交付；被 #36 替代的旧执行语义不继续要求。
