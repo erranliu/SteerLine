@@ -3,12 +3,9 @@ package steerline
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 )
 
 func (s *Service) recordConversationEvent(run *Run, source WorkerEvent) (retErr error) {
@@ -238,32 +235,4 @@ func conversationExternalRef(identity *ProcessIdentity) string {
 		return fmt.Sprintf("process:%d@%s", identity.PID, identity.Created)
 	}
 	return ""
-}
-
-func (s *Service) recordMinimalExecutionResult(run *Run, envelope MinimalStepResultEnvelope, path string) error {
-	if run == nil || s.domainStore == nil {
-		return nil
-	}
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return err
-	}
-	sum := sha256.Sum256(raw)
-	digest := hex.EncodeToString(sum[:])
-	segment := "step-result-v1:" + digest
-	event := ConversationEvent{
-		Version: ConversationVersion, ProjectID: s.Config.identity, TaskID: envelope.TaskID,
-		WorkflowID: envelope.WorkflowRunID, ExecutionID: envelope.ExecutionID, AttemptID: envelope.AttemptID,
-		Backend: BackendKind(run.Backend), Protocol: ExecutionProtocol(run.Protocol), Agent: run.Agent,
-		TargetID: run.Target.ID, ExternalRef: conversationExternalRef(run.Process),
-		Source: "steerline-step-result", SourceSegment: segment, SourceIdentity: "step-result:" + envelope.ExecutionID + ":" + envelope.AttemptID,
-		SessionQuality: IdentityUnknown, TurnQuality: IdentityUnknown, ItemQuality: IdentityUnknown,
-		SourceEventID: "sha256:" + digest, SourceEventQuality: IdentityDerived,
-		Type: ConversationExecutionResult, Phase: MessagePhaseUnknown, ReceivedAt: now(),
-		Attributes: map[string]any{"step_id": envelope.Result.StepID, "succeeded": envelope.Result.Succeeded, "content_kind": "structured_step_result", "result_id": envelope.Result.ResultID},
-		Evidence:   map[string]string{"source_record": "step-result.json", "result_sha256": digest, "authority": "structured-result-only"},
-	}
-	checkpoint := ConversationCheckpoint{ProjectID: event.ProjectID, ExecutionID: event.ExecutionID, AttemptID: event.AttemptID, Source: event.Source, SourceSegment: segment, SourceIdentity: event.SourceIdentity, Generation: digest, Cursor: digest, LocalSeq: 1}
-	_, err = s.domainStore.CommitConversation(context.Background(), []ConversationWrite{{Event: event, Raw: raw}}, checkpoint)
-	return err
 }

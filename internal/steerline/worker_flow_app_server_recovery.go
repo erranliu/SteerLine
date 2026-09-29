@@ -172,7 +172,7 @@ func (s *Service) resumeAppServerWorkers(ctx context.Context) error {
 			continue
 		}
 		task := nativeTaskRecord(s.State.Tasks, run.DomainTaskID)
-		workflow, execution := s.minimalRecords(run)
+		workflow, execution := s.workflowRecords(run)
 		if task == nil || workflow == nil || execution == nil || task.Status != "in_progress" || workflow.Phase == "completed" || execution.PendingCommandID == "" && (execution.CurrentTurnID == "" || execution.CurrentTurnID == execution.LastStoppedTurnID) {
 			continue
 		}
@@ -253,7 +253,7 @@ func (s *Service) applyAppServerRecovery(result appServerRecoveryResult) error {
 		return err
 	}
 	defer s.parkWorker()
-	workflow, execution := s.minimalRecords(run)
+	workflow, execution := s.workflowRecords(run)
 	if workflow == nil || execution == nil || execution.ExecutionID != result.execution.ExecutionID {
 		return errors.New("app-server recovery changed the fixed execution")
 	}
@@ -287,7 +287,7 @@ func (s *Service) applyAppServerRecovery(result appServerRecoveryResult) error {
 	if err := s.reconcileAppServerReplyFromJournal(run, workflow, execution); err != nil {
 		return s.waitWorkerFlow(run, "Original Codex answer cannot be reconciled: "+err.Error())
 	}
-	workflow, execution = s.minimalRecords(run)
+	workflow, execution = s.workflowRecords(run)
 	if result.completed {
 		s.active, s.worker = run, nil
 		return s.finishWorkerFlow(nil)
@@ -300,7 +300,7 @@ func (s *Service) applyAppServerRecovery(result appServerRecoveryResult) error {
 		if err := s.save(); err != nil {
 			return err
 		}
-		workflow, execution = s.minimalRecords(run)
+		workflow, execution = s.workflowRecords(run)
 		run.Decision = nil
 	}
 	execution.Status, run.ExecutionStatus, run.Error = "active", "running", nil
@@ -345,7 +345,7 @@ func (s *Service) reconcileAppServerReplyFromJournal(run *Run, workflow *Workflo
 	if err := s.save(); err != nil {
 		return err
 	}
-	workflow, execution = s.minimalRecords(run)
+	workflow, execution = s.workflowRecords(run)
 	if len(execution.PendingAsks) > 0 {
 		next := execution.PendingAsks[0]
 		execution.PendingAsks = execution.PendingAsks[1:]

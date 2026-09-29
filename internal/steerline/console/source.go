@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/steerline"
-	"github.com/erranliu/SteerLine/internal/steerline/viewer"
 )
 
 // ProjectRef is the identity of a console view. ConfigPath and RunDir are both
@@ -21,7 +20,6 @@ type ProjectRef struct {
 	Name       string
 	ConfigPath string
 	Config     steerline.Config
-	Legacy     *steerline.LegacyBeadsProject
 	Identity   string
 	RunDir     string
 	Error      string
@@ -40,13 +38,11 @@ type ProjectSnapshot struct {
 	NativeTaskError string
 	Domain          *steerline.DomainSnapshot
 	DomainError     string
-	Legacy          *steerline.LegacyBeadsSnapshot
-	LegacyError     string
 }
 
 type QuerySource interface {
 	ReadProject(context.Context, ProjectRef, string, ProjectSnapshot) ProjectSnapshot
-	ReadActivity(context.Context, ProjectRef, string, string, string, string, steerline.JournalCursor) (viewer.LogBatch, error)
+	ReadActivity(context.Context, ProjectRef, string, string, string, string, steerline.JournalCursor) (LogBatch, error)
 	ReadConversation(context.Context, ProjectRef, steerline.ConversationFilter, string) (steerline.ConversationPage, error)
 	ReadBody(context.Context, ProjectRef, steerline.ConversationBodyRef, int64, int) (steerline.ConversationBodyPage, error)
 	ReadCapabilities(context.Context, ProjectRef, steerline.BackendKind, steerline.ExecutionProtocol, string, string, string, string, string) ([]steerline.ConversationCapabilityReport, error)
@@ -62,7 +58,6 @@ type DecisionCommandClient interface {
 	DecisionEligibility(context.Context, ProjectRef, *steerline.Run) error
 	SubmitDecision(context.Context, ProjectRef, steerline.DecisionAnswer, string, string) (steerline.CommandRecord, bool, error)
 	DecisionCommand(context.Context, ProjectRef, string) (steerline.CommandRecord, error)
-	SubmitServiceAction(context.Context, ProjectRef, string, string, string, uint64, string, any) (steerline.CommandRecord, bool, error)
 }
 
 type FileQuerySource struct{}
@@ -72,14 +67,6 @@ func (FileQuerySource) ReadProject(ctx context.Context, ref ProjectRef, selected
 		return previous
 	}
 	result := ProjectSnapshot{SelectedTaskID: selectedTaskID}
-	if ref.Legacy != nil {
-		legacy, err := ref.Legacy.Read(ctx)
-		result.Legacy = &legacy
-		if err != nil {
-			result.LegacyError = err.Error()
-		}
-		return result
-	}
 	if ref.Error != "" {
 		result.TaskError, result.DomainError = ref.Error, ref.Error
 		return result
@@ -109,7 +96,7 @@ func (FileQuerySource) ReadProject(ctx context.Context, ref ProjectRef, selected
 	}()
 	result.Connection = <-connectionCh
 	result.Observation = result.Connection.Snapshot
-	databaseObservation := viewer.NewFileSource(c).SnapshotFromObservation(result.Connection.Snapshot)
+	databaseObservation := newFileSource(c).SnapshotFromObservation(result.Connection.Snapshot)
 	if databaseObservation.Runtime != nil && (result.Observation.Runtime == nil || databaseObservation.Runtime.Revision > result.Observation.Runtime.Revision || (databaseObservation.Runtime.Revision == result.Observation.Runtime.Revision && databaseObservation.Runtime.HeartbeatAt.After(result.Observation.Runtime.HeartbeatAt))) {
 		result.Observation = databaseObservation
 	} else if result.Observation.Runtime == nil && result.Observation.State == steerline.SnapshotNone {
@@ -267,17 +254,17 @@ func nativeTaskTypeExecutable(types []string, taskType string) bool {
 	return false
 }
 
-func (FileQuerySource) ReadActivity(ctx context.Context, ref ProjectRef, runID, executionID, attemptID, currentPath string, cursor steerline.JournalCursor) (viewer.LogBatch, error) {
+func (FileQuerySource) ReadActivity(ctx context.Context, ref ProjectRef, runID, executionID, attemptID, currentPath string, cursor steerline.JournalCursor) (LogBatch, error) {
 	path := currentPath
 	if path == "" {
 		store, err := steerline.OpenSQLiteReader(filepath.Join(ref.RunDir, "steerline.db"))
 		if err != nil {
-			return viewer.LogBatch{}, err
+			return LogBatch{}, err
 		}
 		domain, err := store.Query(ctx, ref.Identity)
 		_ = store.Close()
 		if err != nil {
-			return viewer.LogBatch{}, err
+			return LogBatch{}, err
 		}
 		for _, attempt := range domain.Attempts {
 			if attempt.ExecutionID == executionID && attempt.AttemptID == attemptID {
@@ -286,16 +273,16 @@ func (FileQuerySource) ReadActivity(ctx context.Context, ref ProjectRef, runID, 
 			}
 		}
 		if path == "" {
-			return viewer.LogBatch{}, fmt.Errorf("attempt %s has no queryable activity record", attemptID)
+			return LogBatch{}, fmt.Errorf("attempt %s has no queryable activity record", attemptID)
 		}
 		if !filepath.IsAbs(path) {
 			path = filepath.Join(ref.RunDir, path)
 		}
 	}
 	if strings.TrimSpace(runID) == "" || strings.TrimSpace(path) == "" {
-		return viewer.LogBatch{}, errors.New("activity query identity or record path is missing")
+		return LogBatch{}, errors.New("activity query identity or record path is missing")
 	}
-	return viewer.NewFileSource(ref.Config).ReadLog(path, cursor, false)
+	return newFileSource(ref.Config).ReadLog(path, cursor)
 }
 
 func (FileQuerySource) ReadConversation(ctx context.Context, ref ProjectRef, filter steerline.ConversationFilter, cursor string) (steerline.ConversationPage, error) {
@@ -362,9 +349,6 @@ func (FileControlClient) DecisionEligibility(ctx context.Context, ref ProjectRef
 }
 
 func (FileControlClient) Submit(ctx context.Context, ref ProjectRef, action string, payload any, requestID, instance string, revision *uint64) (steerline.ControlRequest, error) {
-	if ref.Legacy != nil {
-		return steerline.ControlRequest{}, errors.New("old Beads project is read-only in this console")
-	}
 	if err := ctx.Err(); err != nil {
 		return steerline.ControlRequest{}, err
 	}
@@ -389,9 +373,6 @@ func (FileControlClient) Request(ctx context.Context, ref ProjectRef, requestID 
 }
 
 func (FileControlClient) SubmitDecision(ctx context.Context, ref ProjectRef, answer steerline.DecisionAnswer, requestedBy, commandID string) (steerline.CommandRecord, bool, error) {
-	if ref.Legacy != nil {
-		return steerline.CommandRecord{}, false, errors.New("old Beads project is read-only in this console")
-	}
 	if err := ctx.Err(); err != nil {
 		return steerline.CommandRecord{}, false, err
 	}
@@ -411,19 +392,6 @@ func (FileControlClient) DecisionCommand(ctx context.Context, ref ProjectRef, co
 	}
 	defer db.Close()
 	return db.Command(ctx, ref.Identity, commandID)
-}
-
-func (FileControlClient) SubmitServiceAction(ctx context.Context, ref ProjectRef, kind, targetID, requestedBy string, expectedRevision uint64, commandID string, payload any) (steerline.CommandRecord, bool, error) {
-	if ref.Legacy != nil {
-		return steerline.CommandRecord{}, false, errors.New("old Beads project is read-only in this console")
-	}
-	if err := ctx.Err(); err != nil {
-		return steerline.CommandRecord{}, false, err
-	}
-	if ref.Error != "" {
-		return steerline.CommandRecord{}, false, errors.New(ref.Error)
-	}
-	return steerline.SubmitServiceCommand(ctx, ref.Config, kind, targetID, requestedBy, commandID, expectedRevision, payload)
 }
 
 func candidateFreshness(ref ProjectRef, snapshot ProjectSnapshot, now time.Time) (bool, string) {

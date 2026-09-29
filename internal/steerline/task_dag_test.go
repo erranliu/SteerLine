@@ -420,12 +420,6 @@ func TestNativeClaimAllowsManualParallelButKeepsAutoSlot(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer store.Close()
-	step := func() StepContract {
-		return StepContract{Provider: "command", Entry: "builtin:verify", Version: MinimalWorkflowVersion, InputSchema: NativeTaskInputSchema, OutputSchema: MinimalStepOutputSchema, ExecutionSite: "local", Timeout: time.Minute, Command: []string{"git", "--version"}}
-	}
-	c.WorkflowDefinition = ptr(DefaultMinimalWorkflowDefinition(false))
-	c.ProjectSteps = &ProjectSteps{Implement: step(), Verify: step(), PublishPR: step()}
-	c.ProjectSteps.Verify.RequiredChecks = []string{"unit"}
 	commands := CommandService{Store: store, Project: c.Identity()}
 	payload := taskBatchFixture(t, c, commit, batchTasks(80, 81, 82, 83), nil)
 	if _, err = commands.CreateTaskBatch(ctx, c, payload, strings.Repeat("b", 32), 1, "planner"); err != nil {
@@ -487,7 +481,7 @@ func TestNativeClaimAllowsManualParallelButKeepsAutoSlot(t *testing.T) {
 		t.Fatalf("native claim initialized workspace repository with a non-identity path: %+v", snapshot.Executions)
 	}
 	alteredWorkflow := page.Tasks[0].WorkflowRuns[0]
-	alteredWorkflow.Definition.ReviewRequired = true
+	alteredWorkflow.Runner.Model = "changed-after-claim"
 	if err = store.Transact(ctx, func(tx DomainTx) error { return tx.PutWorkflowRun(alteredWorkflow) }); err == nil || !strings.Contains(err.Error(), "immutable_task") {
 		t.Fatalf("claim workflow gates were edited after reservation: %v", err)
 	}
@@ -568,8 +562,8 @@ func TestNativeClaimBlocksWhenFetchedBaseMissesPredecessorMerge(t *testing.T) {
 	}
 	task := page.Tasks[0].TaskRecord
 	created := time.Now().UTC()
-	run := WorkflowRunRecord{ProjectIdentity: c.Identity(), WorkflowRunID: "wf-120", TaskID: "120", WorkflowVersion: MinimalWorkflowVersion, Phase: "waiting_pr_merge", SelectedResult: "exec-120", CreatedAt: created, UpdatedAt: created}
-	execution := ExecutionRecord{ProjectIdentity: c.Identity(), ExecutionID: "exec-120", WorkflowRunID: "wf-120", Status: "succeeded", CurrentStep: "waiting_pr_merge", CreatedAt: created, UpdatedAt: created}
+	run := WorkflowRunRecord{ProjectIdentity: c.Identity(), WorkflowRunID: "wf-120", TaskID: "120", WorkflowVersion: WorkerFlowVersion, Phase: "waiting_pr_merge", SelectedResult: "exec-120", PRURL: "https://forge.invalid/org/repo/pulls/120", PRState: "merged", CreatedAt: created, UpdatedAt: created}
+	execution := ExecutionRecord{ProjectIdentity: c.Identity(), ExecutionID: "exec-120", WorkflowRunID: "wf-120", Status: "succeeded", CurrentStep: "worker", SessionID: "session-120", Workspace: WorkspaceEvidence{Branch: "codex/task-120"}, CreatedAt: created, UpdatedAt: created}
 	mergeCommit := strings.Repeat("f", 40)
 	mergedAt := created.Add(-time.Minute)
 	prURL := "https://forge.invalid/org/repo/pulls/120"
@@ -601,10 +595,6 @@ func TestNativeClaimBlocksWhenFetchedBaseMissesPredecessorMerge(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	step := deliveryStepContract()
-	c.WorkflowDefinition = ptr(DefaultMinimalWorkflowDefinition(false))
-	c.ProjectSteps = &ProjectSteps{Implement: step, Verify: step, PublishPR: step}
-	c.ProjectSteps.Verify.RequiredChecks = []string{"unit"}
 	_, err = commands.ClaimNativeTask(ctx, c, TaskClaimOptions{TaskID: "121", RequestID: strings.Repeat("6", 32), ExpectedTaskVersion: 1, ExpectedAuthorityVersion: 2, RequestedBy: "operator", Explicit: true})
 	if err == nil || !strings.Contains(err.Error(), "base_missing_delivery") {
 		t.Fatalf("task started from a base without its predecessor merge: %v", err)
@@ -647,10 +637,6 @@ func TestNativeClaimCompetitionCreatesOnlyOneWorkflowReservation(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	step := deliveryStepContract()
-	c.WorkflowDefinition = ptr(DefaultMinimalWorkflowDefinition(false))
-	c.ProjectSteps = &ProjectSteps{Implement: step, Verify: step, PublishPR: step}
-	c.ProjectSteps.Verify.RequiredChecks = []string{"unit"}
 	commands := CommandService{Store: store, Project: c.Identity()}
 	if _, err = commands.CreateTaskBatch(ctx, c, taskBatchFixture(t, c, commit, batchTasks(82), nil), strings.Repeat("8", 32), 2, "planner"); err != nil {
 		t.Fatal(err)
@@ -697,289 +683,6 @@ func (v *fixedTaskDeliveryVerifier) Query(ctx context.Context, url string) (PRIn
 		v.onQuery()
 	}
 	return v.info, v.err
-}
-
-func TestNativeDeliveryNeedsExactMergedPRAndReleasesSuccessorOnce(t *testing.T) {
-	ctx := context.Background()
-	c, commit := nativeTaskFixture(t)
-	remoteURL := "https://forge.invalid/org/repo.git"
-	if out, err := exec.Command("git", "-C", c.Repository, "remote", "set-url", "origin", remoteURL).CombinedOutput(); err != nil {
-		t.Fatalf("set fixture remote: %v: %s", err, out)
-	}
-	reader, err := OpenNativeTaskProject(ctx, &c)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = reader.Close(); err != nil {
-		t.Fatal(err)
-	}
-	store, err := OpenSQLiteStore(filepath.Join(c.RunDir, "steerline.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer store.Close()
-	steps := ProjectSteps{Implement: deliveryStepContract(), Verify: deliveryStepContract(), PublishPR: deliveryStepContract()}
-	steps.Verify.RequiredChecks = []string{"unit"}
-	definition := DefaultMinimalWorkflowDefinition(false)
-	c.WorkflowDefinition = &definition
-	c.ProjectSteps = &steps
-	c.PR = PRConfig{Kind: "command", BaseURL: "https://forge.invalid", Repository: "org/repo"}
-	commands := CommandService{Store: store, Project: c.Identity()}
-	payload := taskBatchFixture(t, c, commit, batchTasks(90, 91), []TaskBatchEdge{{Predecessor: TaskBatchReference{LocalKey: "k90"}, Successor: TaskBatchReference{LocalKey: "k91"}}})
-	if _, err = commands.CreateTaskBatch(ctx, c, payload, strings.Repeat("e", 32), 1, "planner"); err != nil {
-		t.Fatal(err)
-	}
-	page, err := (QueryService{Store: store, Project: c.Identity()}).ShowNativeTask(ctx, "90")
-	if err != nil {
-		t.Fatal(err)
-	}
-	task := page.Tasks[0].TaskRecord
-	nowAt := time.Now().UTC()
-	workspace := WorkspaceEvidence{Repository: c.Repository, Worktree: filepath.Join(c.RunDir, "worktrees", "native-90"), Branch: "codex/90", Base: commit, Head: commit, Dirty: false, VerifiedAt: nowAt}
-	wfr := WorkflowRunRecord{ProjectIdentity: c.Identity(), WorkflowRunID: "wf-90", TaskID: "90", WorkflowVersion: MinimalWorkflowVersion, Definition: definition, ProjectSteps: steps, Phase: "waiting_pr_merge", Repository: c.Repository, Branch: c.Branch, SelectedResult: "exec-90", CreatedAt: nowAt, UpdatedAt: nowAt}
-	execution := ExecutionRecord{ProjectIdentity: c.Identity(), ExecutionID: "exec-90", WorkflowRunID: "wf-90", Status: "succeeded", CurrentStep: "waiting_pr_merge", CandidateRevision: commit, VerifiedRevision: commit, Workspace: workspace, CreatedAt: nowAt, UpdatedAt: nowAt}
-	url := "https://forge.invalid/org/repo/pulls/90"
-	verifyResult, _ := json.Marshal(StepGateResult{StepID: "verify", Succeeded: true, Revision: commit, ResultID: "verify-90", Checks: []CheckEvidence{{Name: "unit", Status: "passed", Revision: commit}}, Workspace: workspace})
-	publishResult, _ := json.Marshal(StepGateResult{StepID: "publish_pr", Succeeded: true, Revision: commit, PublishedHead: commit, PRURL: url, ResultID: "publish-90", Workspace: workspace})
-	verifyAttempt := StepAttemptRecord{ProjectIdentity: c.Identity(), AttemptID: "verify-attempt-90", ExecutionID: execution.ExecutionID, StepID: "verify", AttemptNumber: 1, Status: "succeeded", ContractDigest: nativeStepContractDigest(steps, "verify"), ResultID: "verify-90", Result: verifyResult, CreatedAt: nowAt, UpdatedAt: nowAt}
-	publishAttempt := StepAttemptRecord{ProjectIdentity: c.Identity(), AttemptID: "publish-attempt-90", ExecutionID: execution.ExecutionID, StepID: "publish_pr", AttemptNumber: 1, Status: "succeeded", ContractDigest: nativeStepContractDigest(steps, "publish_pr"), ResultID: "publish-90", Result: publishResult, CreatedAt: nowAt, UpdatedAt: nowAt}
-	task.Status = "in_progress"
-	task.Claimant = "worker"
-	task.Version++
-	task.UpdatedAt = nowAt
-	if err = store.Transact(ctx, func(domainTx DomainTx) error {
-		tx := domainTx.(*sqliteTx)
-		if e := tx.PutWorkflowRun(wfr); e != nil {
-			return e
-		}
-		if e := tx.PutExecution(execution); e != nil {
-			return e
-		}
-		if e := tx.PutStepAttempt(verifyAttempt); e != nil {
-			return e
-		}
-		if e := tx.PutStepAttempt(publishAttempt); e != nil {
-			return e
-		}
-		return tx.UpdateNativeTaskCAS(task, 1)
-	}); err != nil {
-		t.Fatal(err)
-	}
-	mergedAt := nowAt.Add(time.Minute)
-	mergeCommit := commit
-	verifier := &fixedTaskDeliveryVerifier{info: PRInfo{URL: url, Repository: "org/repo", BaseBranch: "main", HeadRevision: commit, State: "open"}}
-	if _, err = commands.CompleteNativeTask(ctx, c, "90", task.Version, wfr.WorkflowRunID, verifier); err == nil || !strings.Contains(err.Error(), "task_not_ready") {
-		t.Fatalf("open PR closed the task: %v", err)
-	}
-	page, err = (QueryService{Store: store, Project: c.Identity()}).ShowNativeTask(ctx, "90")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if page.Tasks[0].Status != "in_progress" || page.Tasks[0].Delivery != nil {
-		t.Fatalf("unmerged PR mutated task delivery: %+v", page.Tasks[0])
-	}
-	verifier.info.Merged = true
-	verifier.info.State = "merged"
-	verifier.info.MergedAt = &mergedAt
-	verifier.info.MergeCommit = &mergeCommit
-	unknownPublication := StepAttemptRecord{ProjectIdentity: c.Identity(), AttemptID: "unknown-publish-attempt-90", ExecutionID: execution.ExecutionID, StepID: "publish_pr", AttemptNumber: 2, OperationID: "unknown-publish-operation-90", Status: "outcome_unknown", CreatedAt: nowAt, UpdatedAt: nowAt}
-	if err = store.Transact(ctx, func(tx DomainTx) error { return tx.PutStepAttempt(unknownPublication) }); err != nil {
-		t.Fatal(err)
-	}
-	callsBeforeUnknown := verifier.calls
-	if _, err = commands.CompleteNativeTask(ctx, c, "90", task.Version, wfr.WorkflowRunID, verifier); err == nil || !strings.Contains(err.Error(), "merge_state_unknown") || verifier.calls != callsBeforeUnknown {
-		t.Fatalf("unresolved second publication entered PR delivery: calls=%d err=%v", verifier.calls, err)
-	}
-	if _, err = store.db.ExecContext(ctx, `DELETE FROM step_attempts WHERE project_identity=? AND attempt_id=?`, c.Identity(), unknownPublication.AttemptID); err != nil {
-		t.Fatal(err)
-	}
-	racePublication := unknownPublication
-	racePublication.AttemptID, racePublication.AttemptNumber = "racing-publish-attempt-90", 3
-	verifier.onQuery = func() {
-		if e := store.Transact(ctx, func(tx DomainTx) error { return tx.PutStepAttempt(racePublication) }); e != nil {
-			t.Fatal(e)
-		}
-	}
-	if _, err = commands.CompleteNativeTask(ctx, c, "90", task.Version, wfr.WorkflowRunID, verifier); err == nil || !strings.Contains(err.Error(), "merge_state_unknown") {
-		t.Fatalf("publication changed after PR lookup but before delivery transaction: %v", err)
-	}
-	verifier.onQuery = nil
-	if _, err = store.db.ExecContext(ctx, `DELETE FROM step_attempts WHERE project_identity=? AND attempt_id=?`, c.Identity(), racePublication.AttemptID); err != nil {
-		t.Fatal(err)
-	}
-	if _, err = store.db.ExecContext(ctx, `CREATE TRIGGER fail_native_delivery BEFORE INSERT ON task_deliveries BEGIN SELECT RAISE(ABORT,'injected delivery failure'); END`); err != nil {
-		t.Fatal(err)
-	}
-	if _, err = commands.CompleteNativeTask(ctx, c, "90", task.Version, wfr.WorkflowRunID, verifier); err == nil || !strings.Contains(err.Error(), "injected delivery failure") {
-		t.Fatalf("delivery insert failure did not roll back closure: %v", err)
-	}
-	page, err = (QueryService{Store: store, Project: c.Identity()}).ShowNativeTask(ctx, "91")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if page.Tasks[0].DependencyReady || len(page.Tasks[0].UnmetPredecessors) != 1 {
-		t.Fatalf("failed delivery released its successor: %+v", page.Tasks[0])
-	}
-	if _, err = store.db.ExecContext(ctx, `DROP TRIGGER fail_native_delivery`); err != nil {
-		t.Fatal(err)
-	}
-	delivery, err := commands.CompleteNativeTask(ctx, c, "90", task.Version, wfr.WorkflowRunID, verifier)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if delivery.Status != "closed" || delivery.GraphRevision != 2 || delivery.Delivery.MergeCommit != commit {
-		t.Fatalf("verified delivery was not committed: %+v", delivery)
-	}
-	page, err = (QueryService{Store: store, Project: c.Identity()}).ShowNativeTask(ctx, "91")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !page.Tasks[0].DependencyReady || len(page.Tasks[0].UnmetPredecessors) != 0 {
-		t.Fatalf("predecessor delivery did not release the successor: %+v", page.Tasks[0])
-	}
-	beforeCalls := verifier.calls
-	again, err := commands.CompleteNativeTask(ctx, c, "90", task.Version, wfr.WorkflowRunID, verifier)
-	if err != nil || again.Delivery.MergeCommit != commit || verifier.calls != beforeCalls {
-		t.Fatalf("duplicate delivery did not return saved evidence: %+v / %v", again, err)
-	}
-	drifted := c
-	drifted.Branch = "other"
-	again, err = commands.CompleteNativeTask(ctx, drifted, "90", task.Version, wfr.WorkflowRunID, nil)
-	if err != nil || again.Delivery.MergeCommit != commit || again.GraphRevision != delivery.GraphRevision {
-		t.Fatalf("configuration drift prevented reading a committed delivery: %+v / %v", again, err)
-	}
-	candidates, err := (QueryService{Store: store, Project: c.Identity()}).ReadyNativeTasks(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(candidates) != 1 || candidates[0].TaskID != "91" {
-		t.Fatalf("delivery did not create one successor candidate: %+v", candidates)
-	}
-	if err = store.Transact(ctx, func(domainTx DomainTx) error {
-		graph, e := taskGraphSnapshotTx(ctx, domainTx.(*sqliteTx), c.Identity())
-		if e != nil {
-			return e
-		}
-		ready, _ := taskDependencyState(graph.ByID["91"], graph)
-		if !ready {
-			return nativeErr("task_not_ready", "transactional claim snapshot did not observe predecessor delivery")
-		}
-		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if err = store.Close(); err != nil {
-		t.Fatal(err)
-	}
-	reopened, err := OpenSQLiteStore(filepath.Join(c.RunDir, "steerline.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer reopened.Close()
-	page, err = (QueryService{Store: reopened, Project: c.Identity()}).ShowNativeTask(ctx, "91")
-	if err != nil || !page.Tasks[0].DependencyReady || len(page.Tasks[0].UnmetPredecessors) != 0 {
-		t.Fatalf("restarted projection lost committed delivery readiness: %+v / %v", page, err)
-	}
-	completed, err := (QueryService{Store: reopened, Project: c.Identity()}).ShowNativeTask(ctx, "90")
-	if err != nil {
-		t.Fatal(err)
-	}
-	alteredRun := completed.Tasks[0].WorkflowRuns[0]
-	alteredRun.Phase = "queued"
-	if err = reopened.Transact(ctx, func(tx DomainTx) error { return tx.PutWorkflowRun(alteredRun) }); err == nil || !strings.Contains(err.Error(), "immutable_task") {
-		t.Fatalf("delivered native workflow was reopened: %v", err)
-	}
-	alteredExecution := execution
-	alteredExecution.Status = "pending"
-	if err = reopened.Transact(ctx, func(tx DomainTx) error { return tx.PutExecution(alteredExecution) }); err == nil || !strings.Contains(err.Error(), "immutable_task") {
-		t.Fatalf("selected delivered execution was rewritten: %v", err)
-	}
-	alteredAttempt := verifyAttempt
-	alteredAttempt.Status = "failed"
-	if err = reopened.Transact(ctx, func(tx DomainTx) error { return tx.PutStepAttempt(alteredAttempt) }); err == nil || !strings.Contains(err.Error(), "immutable_task") {
-		t.Fatalf("selected delivered gate evidence was rewritten: %v", err)
-	}
-	lateAttempt := verifyAttempt
-	lateAttempt.AttemptID, lateAttempt.AttemptNumber, lateAttempt.Status = "late-verify-attempt-90", 2, "failed"
-	lateAttempt.ResultID, lateAttempt.Result = "", nil
-	if err = reopened.Transact(ctx, func(tx DomainTx) error { return tx.PutStepAttempt(lateAttempt) }); err != nil {
-		t.Fatalf("late result could not be retained as separate history: %v", err)
-	}
-	if _, err = reopened.db.ExecContext(ctx, `UPDATE task_deliveries SET evidence=? WHERE project_identity=? AND task_id=?`, []byte(`{"state":"open"}`), c.Identity(), "90"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err = (QueryService{Store: reopened, Project: c.Identity()}).ShowNativeTask(ctx, "91"); err == nil || !strings.Contains(err.Error(), "inconsistent_delivery") {
-		t.Fatalf("corrupt delivery evidence was treated as successor readiness: %v", err)
-	}
-	if _, err = (QueryService{Store: reopened, Project: c.Identity()}).ReadyNativeTasks(ctx); err == nil || !strings.Contains(err.Error(), "inconsistent_delivery") {
-		t.Fatalf("ready snapshot trusted corrupt delivery evidence: %v", err)
-	}
-	if _, err = (CommandService{Store: reopened, Project: c.Identity()}).ClaimNativeTask(ctx, c, TaskClaimOptions{TaskID: "91", RequestID: strings.Repeat("9", 32), ExpectedTaskVersion: 1, ExpectedAuthorityVersion: 1, RequestedBy: "operator", Explicit: true}); err == nil || !strings.Contains(err.Error(), "inconsistent_delivery") {
-		t.Fatalf("claim admitted a predecessor with corrupt delivery evidence: %v", err)
-	}
-}
-
-func deliveryStepContract() StepContract {
-	return StepContract{Provider: "command", Entry: "builtin:verify", Version: MinimalWorkflowVersion, InputSchema: NativeTaskInputSchema, OutputSchema: MinimalStepOutputSchema, ExecutionSite: "local", Timeout: time.Minute, Command: []string{"git", "--version"}}
-}
-
-func TestInconsistentDeliveryStaysVisibleAndBlocksSuccessorClaim(t *testing.T) {
-	ctx := context.Background()
-	c, commit, store := openDAGFixture(t)
-	commands := CommandService{Store: store, Project: c.Identity()}
-	batch := taskBatchFixture(t, c, commit, batchTasks(200, 201), []TaskBatchEdge{{Predecessor: TaskBatchReference{LocalKey: "k200"}, Successor: TaskBatchReference{LocalKey: "k201"}}})
-	if _, err := commands.CreateTaskBatch(ctx, c, batch, strings.Repeat("e", 32), 1, "planner"); err != nil {
-		t.Fatal(err)
-	}
-	authority, err := store.nativeAuthority(ctx, c.Identity())
-	if err != nil {
-		t.Fatal(err)
-	}
-	authority.AuthorityVersion++
-	authority.DispatchPaused = false
-	if err = store.Transact(ctx, func(tx DomainTx) error {
-		return tx.UpdateProjectTaskAuthorityCAS(authority, authority.AuthorityVersion-1)
-	}); err != nil {
-		t.Fatal(err)
-	}
-	root, err := (QueryService{Store: store, Project: c.Identity()}).ShowNativeTask(ctx, "200")
-	if err != nil {
-		t.Fatal(err)
-	}
-	corrupt := root.Tasks[0].TaskRecord
-	corrupt.Status, corrupt.Claimant, corrupt.Version, corrupt.UpdatedAt = "closed", "worker", 2, time.Now().UTC()
-	body, _ := json.Marshal(corrupt)
-	if _, err = store.db.ExecContext(ctx, `UPDATE tasks SET status=?,version=?,payload=? WHERE project_identity=? AND task_id=?`, corrupt.Status, corrupt.Version, body, c.Identity(), corrupt.TaskID); err != nil {
-		t.Fatal(err)
-	}
-	root, err = (QueryService{Store: store, Project: c.Identity()}).ShowNativeTask(ctx, "200")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !hasString(root.Tasks[0].StartupBlockers, "inconsistent_delivery") || root.Tasks[0].Delivery != nil {
-		t.Fatalf("closed task without delivery was hidden: %+v", root.Tasks[0])
-	}
-	successor, err := (QueryService{Store: store, Project: c.Identity()}).ShowNativeTask(ctx, "201")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if successor.Tasks[0].DependencyReady || len(successor.Tasks[0].UnmetPredecessors) != 1 || successor.Tasks[0].UnmetPredecessors[0].Blocker != "inconsistent_delivery" {
-		t.Fatalf("missing predecessor delivery released successor: %+v", successor.Tasks[0])
-	}
-	if _, err = commands.ClaimNativeTask(ctx, c, TaskClaimOptions{TaskID: "201", RequestID: strings.Repeat("f", 32), ExpectedTaskVersion: 1, ExpectedAuthorityVersion: 2, RequestedBy: "operator", Explicit: true}); err == nil || !strings.Contains(err.Error(), "inconsistent_delivery") {
-		t.Fatalf("inconsistent predecessor entered claim: %v", err)
-	}
-	if _, err = commands.CompleteNativeTask(ctx, c, "200", 2, "missing-run", &fixedTaskDeliveryVerifier{}); err == nil || !strings.Contains(err.Error(), "inconsistent_delivery") {
-		t.Fatalf("closed task without delivery was reported complete: %v", err)
-	}
-	corrupt.Status = "open"
-	body, _ = json.Marshal(corrupt)
-	if _, err = store.db.ExecContext(ctx, `UPDATE tasks SET payload=? WHERE project_identity=? AND task_id=?`, body, c.Identity(), corrupt.TaskID); err != nil {
-		t.Fatal(err)
-	}
-	if _, err = (QueryService{Store: store, Project: c.Identity()}).ShowNativeTask(ctx, "201"); err == nil || !strings.Contains(err.Error(), "contract_mismatch") {
-		t.Fatalf("successor read trusted a predecessor whose payload disagreed with its stored status: %v", err)
-	}
 }
 
 func TestTaskDiscardRequestPersistsUnknownAndThenDiscardsOnlyAfterUnmergedProof(t *testing.T) {
@@ -1029,9 +732,8 @@ func TestTaskDiscardRequestPersistsUnknownAndThenDiscardsOnlyAfterUnmergedProof(
 	}
 	task := page.Tasks[0].TaskRecord
 	createdAt := time.Now().UTC()
-	workflow := WorkflowRunRecord{ProjectIdentity: c.Identity(), WorkflowRunID: "wf-71", TaskID: "71", WorkflowVersion: MinimalWorkflowVersion, Phase: "blocked", CreatedAt: createdAt, UpdatedAt: createdAt}
-	execution := ExecutionRecord{ProjectIdentity: c.Identity(), ExecutionID: "exec-71", WorkflowRunID: "wf-71", Status: "blocked", CurrentStep: "publish_pr", CreatedAt: createdAt, UpdatedAt: createdAt}
-	attempt := StepAttemptRecord{ProjectIdentity: c.Identity(), AttemptID: "attempt-71", ExecutionID: "exec-71", StepID: "publish_pr", AttemptNumber: 1, OperationID: "publish-op-71", Status: "outcome_unknown", CreatedAt: createdAt, UpdatedAt: createdAt}
+	workflow := WorkflowRunRecord{ProjectIdentity: c.Identity(), WorkflowRunID: "wf-71", TaskID: "71", WorkflowVersion: WorkerFlowVersion, Phase: "executing", SelectedResult: "exec-71", CreatedAt: createdAt, UpdatedAt: createdAt}
+	execution := ExecutionRecord{ProjectIdentity: c.Identity(), ExecutionID: "exec-71", WorkflowRunID: "wf-71", Status: "blocked", CurrentStep: "worker", CreatedAt: createdAt, UpdatedAt: createdAt}
 	task.Status = "in_progress"
 	task.Claimant = "worker"
 	task.Version++
@@ -1041,9 +743,6 @@ func TestTaskDiscardRequestPersistsUnknownAndThenDiscardsOnlyAfterUnmergedProof(
 			return e
 		}
 		if e := tx.PutExecution(execution); e != nil {
-			return e
-		}
-		if e := tx.PutStepAttempt(attempt); e != nil {
 			return e
 		}
 		return tx.UpdateNativeTaskCAS(task, page.Tasks[0].Version)
@@ -1132,26 +831,24 @@ func TestTaskDiscardRequiresPreciseUnmergedPRAndRetainsUnknownIntent(t *testing.
 	for _, id := range []string{"90", "91", "92", "94", "95"} {
 		seedPublishedForDiscard(t, ctx, c, store, id, commit, server.URL+"/org/repo/pulls/"+id)
 	}
-	// The first PR URL cannot settle a later publish attempt whose outcome is unknown.
-	unknownAttempt := StepAttemptRecord{ProjectIdentity: c.Identity(), AttemptID: "publish-unknown-94", ExecutionID: "exec-94", StepID: "publish_pr", AttemptNumber: 2, OperationID: "publish-op-unknown-94", Status: "outcome_unknown", CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}
-	if err = store.Transact(ctx, func(tx DomainTx) error { return tx.PutStepAttempt(unknownAttempt) }); err != nil {
-		t.Fatal(err)
-	}
-	var publishBody []byte
-	if err = store.db.QueryRowContext(ctx, `SELECT payload FROM step_attempts WHERE project_identity=? AND attempt_id=?`, c.Identity(), "publish-95").Scan(&publishBody); err != nil {
-		t.Fatal(err)
-	}
-	var incomplete StepAttemptRecord
-	if err = json.Unmarshal(publishBody, &incomplete); err != nil {
-		t.Fatal(err)
-	}
-	var incompleteResult StepGateResult
-	if err = json.Unmarshal(incomplete.Result, &incompleteResult); err != nil {
-		t.Fatal(err)
-	}
-	incompleteResult.ResultID = ""
-	incomplete.Result, _ = json.Marshal(incompleteResult)
-	if err = store.Transact(ctx, func(tx DomainTx) error { return tx.PutStepAttempt(incomplete) }); err != nil {
+	// An unresolved PR binding cannot be used as permission to discard.
+	if err = store.Transact(ctx, func(tx DomainTx) error {
+		for _, id := range []string{"94", "95"} {
+			var body []byte
+			if err := tx.(*sqliteTx).tx.QueryRowContext(ctx, `SELECT payload FROM workflow_runs WHERE project_identity=? AND workflow_run_id=?`, c.Identity(), "wf-"+id).Scan(&body); err != nil {
+				return err
+			}
+			var workflow WorkflowRunRecord
+			if err := json.Unmarshal(body, &workflow); err != nil {
+				return err
+			}
+			workflow.PRState = "unknown"
+			if err := tx.PutWorkflowRun(workflow); err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
 		t.Fatal(err)
 	}
 	open, err := commands.DiscardNativeTask(ctx, c, "90", strings.Repeat("1", 32), 2, "discard open PR", "operator")
@@ -1221,11 +918,11 @@ func TestTaskDiscardRequiresPreciseUnmergedPRAndRetainsUnknownIntent(t *testing.
 	}
 	secondUnknown, err := commands.DiscardNativeTask(ctx, c, "94", strings.Repeat("4", 32), 2, "another publication is unresolved", "operator")
 	if err != nil || secondUnknown.Status != "pending_verification" || secondUnknown.Code != "merge_state_unknown" {
-		t.Fatalf("known PR URL cleared a separate unknown publication: %+v / %v", secondUnknown, err)
+		t.Fatalf("unknown PR binding was treated as safe to discard: %+v / %v", secondUnknown, err)
 	}
 	incompleteReceipt, err := commands.DiscardNativeTask(ctx, c, "95", strings.Repeat("5", 32), 2, "publication result identity is missing", "operator")
 	if err != nil || incompleteReceipt.Status != "pending_verification" || incompleteReceipt.Code != "merge_state_unknown" {
-		t.Fatalf("incomplete published result was treated as a conclusive PR binding: %+v / %v", incompleteReceipt, err)
+		t.Fatalf("unresolved PR binding was treated as conclusive: %+v / %v", incompleteReceipt, err)
 	}
 	operation, err := lookupOperation(ctx, store, c.Identity(), strings.Repeat("4", 32))
 	if err != nil {
@@ -1263,9 +960,9 @@ func TestTaskDiscardDuringActiveExecutionKeepsSlotAndCleanupIdentity(t *testing.
 	contract := page.Tasks[0].Contract
 	created := time.Now().UTC()
 	workspace := WorkspaceEvidence{Repository: c.Repository, Worktree: "tree-72", Branch: "codex/72", Base: commit, Head: commit, VerifiedAt: created}
-	run := WorkflowRunRecord{ProjectIdentity: c.Identity(), WorkflowRunID: "wf-72", TaskID: "72", WorkflowVersion: MinimalWorkflowVersion, Phase: "executing", CreatedAt: created, UpdatedAt: created}
-	execution := ExecutionRecord{ProjectIdentity: c.Identity(), ExecutionID: "exec-72", WorkflowRunID: run.WorkflowRunID, Status: "active", CurrentStep: "implement", Workspace: workspace, CreatedAt: created, UpdatedAt: created}
-	attempt := StepAttemptRecord{ProjectIdentity: c.Identity(), AttemptID: "attempt-72", ExecutionID: execution.ExecutionID, StepID: "implement", AttemptNumber: 1, Status: "running", OperationID: "implement-op-72", ContractDigest: contract.Digest, CreatedAt: created, UpdatedAt: created}
+	run := WorkflowRunRecord{ProjectIdentity: c.Identity(), WorkflowRunID: "wf-72", TaskID: "72", WorkflowVersion: WorkerFlowVersion, Phase: "executing", SelectedResult: "exec-72", CreatedAt: created, UpdatedAt: created}
+	execution := ExecutionRecord{ProjectIdentity: c.Identity(), ExecutionID: "exec-72", WorkflowRunID: run.WorkflowRunID, Status: "active", CurrentStep: "worker", Workspace: workspace, CreatedAt: created, UpdatedAt: created}
+	attempt := StepAttemptRecord{ProjectIdentity: c.Identity(), AttemptID: "attempt-72", ExecutionID: execution.ExecutionID, StepID: "worker", AttemptNumber: 1, Status: "running", ContractDigest: contract.Digest, CreatedAt: created, UpdatedAt: created}
 	task.Status = "in_progress"
 	task.Claimant = "worker"
 	task.Version++
@@ -1289,14 +986,14 @@ func TestTaskDiscardDuringActiveExecutionKeepsSlotAndCleanupIdentity(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	if receipt.Status != "discarded" || !hasString(receipt.CleanupPending, "execution_stop_manual:exec-72") || !hasString(receipt.CleanupPending, "workspace_cleanup:tree-72") {
+	if receipt.Status != "pending_verification" || !hasString(receipt.CleanupPending, "execution_stop_manual:exec-72") || !hasString(receipt.CleanupPending, "workspace_cleanup:tree-72") {
 		t.Fatalf("active execution identity or cleanup was lost: %+v", receipt)
 	}
 	page, err = (QueryService{Store: store, Project: c.Identity()}).ShowNativeTask(ctx, "72")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if page.Tasks[0].Status != "discarded" || len(page.Tasks[0].WorkflowRuns) != 1 {
+	if page.Tasks[0].Status != "in_progress" || len(page.Tasks[0].WorkflowRuns) != 1 {
 		t.Fatalf("active run was removed by discard: %+v", page.Tasks[0])
 	}
 	var slots int
@@ -1312,16 +1009,12 @@ func seedPublishedForDiscard(t *testing.T, ctx context.Context, c Config, store 
 		t.Fatal(err)
 	}
 	task := page.Tasks[0].TaskRecord
-	contract := page.Tasks[0].Contract
 	created := time.Now().UTC()
 	runID := "wf-" + taskID
 	executionID := "exec-" + taskID
-	attemptID := "publish-" + taskID
 	workspace := WorkspaceEvidence{Repository: c.Repository, Worktree: "tree-" + taskID, Branch: "codex/" + taskID, Base: commit, Head: commit, VerifiedAt: created}
-	run := WorkflowRunRecord{ProjectIdentity: c.Identity(), WorkflowRunID: runID, TaskID: taskID, WorkflowVersion: MinimalWorkflowVersion, Phase: "waiting_pr_merge", SelectedResult: executionID, CreatedAt: created, UpdatedAt: created}
-	execution := ExecutionRecord{ProjectIdentity: c.Identity(), ExecutionID: executionID, WorkflowRunID: runID, Status: "succeeded", CurrentStep: "waiting_pr_merge", CandidateRevision: commit, Workspace: workspace, CreatedAt: created, UpdatedAt: created}
-	result, _ := json.Marshal(StepGateResult{StepID: "publish_pr", Succeeded: true, Revision: commit, PublishedHead: commit, PRURL: prURL, ResultID: "result-" + taskID, Workspace: workspace})
-	attempt := StepAttemptRecord{ProjectIdentity: c.Identity(), AttemptID: attemptID, ExecutionID: executionID, StepID: "publish_pr", AttemptNumber: 1, Status: "succeeded", ContractDigest: contract.Digest, ResultID: "result-" + taskID, Result: result, CreatedAt: created, UpdatedAt: created}
+	run := WorkflowRunRecord{ProjectIdentity: c.Identity(), WorkflowRunID: runID, TaskID: taskID, WorkflowVersion: WorkerFlowVersion, Phase: "waiting_pr_merge", SelectedResult: executionID, PRURL: prURL, PRState: "open", CreatedAt: created, UpdatedAt: created}
+	execution := ExecutionRecord{ProjectIdentity: c.Identity(), ExecutionID: executionID, WorkflowRunID: runID, Status: "idle", CurrentStep: "worker", SessionID: "session-" + taskID, Workspace: workspace, CreatedAt: created, UpdatedAt: created}
 	task.Status = "in_progress"
 	task.Claimant = "worker"
 	task.Version++
@@ -1332,9 +1025,6 @@ func seedPublishedForDiscard(t *testing.T, ctx context.Context, c Config, store 
 			return e
 		}
 		if e := tx.PutExecution(execution); e != nil {
-			return e
-		}
-		if e := tx.PutStepAttempt(attempt); e != nil {
 			return e
 		}
 		return tx.UpdateNativeTaskCAS(task, 1)

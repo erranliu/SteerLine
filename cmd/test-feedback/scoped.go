@@ -22,7 +22,7 @@ import (
 
 const corePackage = "github.com/erranliu/SteerLine/internal/steerline"
 
-var quickTests = []string{"TestNativeMinimalClosedLoopSmoke", "TestNativeDeliveryNeedsExactMergedPRAndReleasesSuccessorOnce"}
+var quickTests = []string{"TestWorkerFlowClaimNeedsNoProjectSteps", "TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged"}
 var quickPackages = []string{corePackage, corePackage + "/taskgraph", corePackage + "/remoteprotocol"}
 
 //go:embed testdata/core-test-weights.json
@@ -377,7 +377,7 @@ func activeRealSwitches() []string {
 		if !ok || value == "" || value == "0" || strings.EqualFold(value, "false") {
 			continue
 		}
-		for _, prefix := range []string{"STEERLINE_REAL_", "STEERLINE_NATIVE_", "STEERLINE_LOCAL_CAPABILITY_", "STEERLINE_LIVE_", "STEERLINE_RUN_WINDOW_", "STEERLINE_VIEWER_", "STEERLINE_FOREGROUND_VIEWER_", "STEERLINE_WINDOW_PROBE_", "STEERLINE_CODEX_HISTORY_NATIVE_"} {
+		for _, prefix := range []string{"STEERLINE_REAL_", "STEERLINE_NATIVE_", "STEERLINE_LOCAL_CAPABILITY_", "STEERLINE_LIVE_", "STEERLINE_RUN_WINDOW_", "STEERLINE_WINDOW_PROBE_", "STEERLINE_CODEX_HISTORY_NATIVE_"} {
 			if strings.HasPrefix(name, prefix) {
 				set[name] = true
 			}

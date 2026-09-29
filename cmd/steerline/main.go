@@ -18,7 +18,6 @@ import (
 
 	"github.com/erranliu/SteerLine/internal/steerline"
 	consoleui "github.com/erranliu/SteerLine/internal/steerline/console"
-	"github.com/erranliu/SteerLine/internal/steerline/viewer"
 )
 
 func main() {
@@ -29,7 +28,7 @@ func main() {
 }
 func run() error {
 	if len(os.Args) < 2 {
-		return fmt.Errorf("usage: steerline <console|run|start-service|stop-service|check|control|tasks|task|stop|watch|answer|certify-backend|home|install|launchers|projects> [-config config.json]")
+		return fmt.Errorf("usage: steerline <console|run|start-service|stop-service|check|control|tasks|task|stop|answer|certify-backend|home|install|launchers|projects> [-config config.json]")
 	}
 	if os.Args[1] == "task" {
 		return runNativeTaskCommand(os.Args[2:])
@@ -40,7 +39,7 @@ func run() error {
 	command := os.Args[1]
 	fs := flag.NewFlagSet(command, flag.ContinueOnError)
 	config := fs.String("config", "steerline.local.json", "configuration JSON")
-	runID := fs.String("run-id", "", "run to watch or answer")
+	runID := fs.String("run-id", "", "run to answer")
 	dispatchMode := fs.String("dispatch", "auto", "run dispatch mode: auto|manual")
 	startupID := fs.String("startup-id", "", "internal startup attempt ID")
 	taskID := fs.String("task-id", "", "control start_task target")
@@ -53,14 +52,9 @@ func run() error {
 	note := fs.String("note", "", "answer: optional human note")
 	by := fs.String("by", "", "answer: who answered (defaults to the OS user)")
 	proj := fs.String("project", "", "projects: project name or number")
-	action := fs.String("action", "", "control action or projects: watch|run|stop|home|list")
+	action := fs.String("action", "", "control action or projects: console|run|stop|home|list")
 	console := fs.String("console", "", "service console rendering: pretty|summary|json|off (default pretty on a terminal)")
 	serviceWindow := fs.Bool("service-window", false, "run inside a required visible Windows service window")
-	follow := fs.Bool("follow", true, "watch: keep following new activity")
-	fromStart := fs.Bool("from-start", true, "watch: replay existing activity before following")
-	jsonOut := fs.Bool("json", false, "watch: emit stable activity JSONL")
-	rawEvents := fs.Bool("raw", false, "watch: emit the raw agent event stream")
-	noTUI := fs.Bool("no-tui", false, "watch: force streaming output even on a terminal")
 	if e := fs.Parse(os.Args[2:]); e != nil {
 		return e
 	}
@@ -70,7 +64,7 @@ func run() error {
 	if command == "codex-session-launch" {
 		return steerline.RunCodexSessionLauncher(context.Background(), *config)
 	}
-	if command != "run" && command != "start-service" && command != "stop-service" && command != "check" && command != "stop" && command != "control" && command != "tasks" && command != "answer" && command != "watch" && command != "certify-backend" && command != "home" && command != "install" && command != "launchers" && command != "projects" {
+	if command != "run" && command != "start-service" && command != "stop-service" && command != "check" && command != "stop" && command != "control" && command != "tasks" && command != "answer" && command != "certify-backend" && command != "home" && command != "install" && command != "launchers" && command != "projects" {
 		return fmt.Errorf("unknown command %q", command)
 	}
 	if command == "run" && *dispatchMode != "manual" && *dispatchMode != "auto" {
@@ -265,12 +259,6 @@ func run() error {
 		}
 		return nil
 	}
-	if command == "watch" {
-		if useWatchTUI(viewer.IsInteractive(), *jsonOut, *rawEvents, *noTUI, *follow, *fromStart) {
-			return viewer.Run(ctx, c, viewer.Options{RunID: *runID, Color: steerline.ColorEnabled()})
-		}
-		return steerline.Watch(ctx, c, *runID, steerline.WatchOptions{Follow: *follow, FromStart: *fromStart, JSON: *jsonOut, Raw: *rawEvents, Color: steerline.ColorEnabled()})
-	}
 	if command == "run" {
 		if *serviceWindow {
 			projectName := strings.TrimSuffix(filepath.Base(*config), filepath.Ext(*config))
@@ -341,7 +329,7 @@ func runConsoleCommand(args []string) error {
 	if fs.NArg() != 0 {
 		return errors.New("unexpected positional arguments")
 	}
-	if !viewer.IsInteractive() {
+	if !stdinIsTTY() || !stdoutIsTTY() {
 		return errors.New("console requires an interactive terminal")
 	}
 	projects, err := consoleui.LoadProjects(*config)
@@ -355,15 +343,13 @@ func runConsoleCommand(args []string) error {
 
 func runNativeTaskCommand(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: steerline task <validate|create|accept-existing|discard|reopen|graph|export|show|list> -config config.json")
+		return fmt.Errorf("usage: steerline task <validate|create|discard|add-predecessors|graph|export|show|list> -config config.json")
 	}
 	subcommand := args[0]
 	fs := flag.NewFlagSet("task "+subcommand, flag.ContinueOnError)
 	config := fs.String("config", "steerline.local.json", "configuration JSON")
 	taskID := fs.String("task-id", "", "native task ID")
-	runID := fs.String("run-id", "", "exact workflow run to abandon when reopening a task")
 	predecessors := fs.String("predecessors", "", "comma-separated native predecessor task IDs")
-	confirmedStopped := fs.Bool("confirm-process-stopped", false, "operator confirmed the old worker process stopped")
 	cursor := fs.String("cursor", "", "native task list cursor")
 	limit := fs.Int("limit", 100, "list page size (default 100); graph/export default to 500 nodes, maximum 500")
 	status := fs.String("status", "", "filter graph nodes by native task status")
@@ -379,7 +365,7 @@ func runNativeTaskCommand(args []string) error {
 	expectedGraphRevision := fs.Uint64("expected-graph-revision", 0, "sampled native graph revision")
 	reason := fs.String("reason", "", "reason for discarding or changing the task")
 	by := fs.String("by", "", "task command requester")
-	if subcommand != "show" && subcommand != "list" && subcommand != "validate" && subcommand != "create" && subcommand != "accept-existing" && subcommand != "discard" && subcommand != "add-predecessors" && subcommand != "graph" && subcommand != "export" {
+	if subcommand != "show" && subcommand != "list" && subcommand != "validate" && subcommand != "create" && subcommand != "discard" && subcommand != "add-predecessors" && subcommand != "graph" && subcommand != "export" {
 		return fmt.Errorf("unsupported task command %q", subcommand)
 	}
 	if err := fs.Parse(args[1:]); err != nil {
@@ -390,9 +376,8 @@ func runNativeTaskCommand(args []string) error {
 		"list":             {"config": true, "cursor": true, "limit": true},
 		"validate":         {"config": true, "file": true},
 		"create":           {"config": true, "file": true, "request-id": true, "expected-authority-version": true, "by": true},
-		"accept-existing":  {"config": true, "file": true},
 		"discard":          {"config": true, "task-id": true, "request-id": true, "expected-version": true, "reason": true, "by": true},
-		"add-predecessors": {"config": true, "task-id": true, "predecessors": true, "run-id": true, "request-id": true, "expected-version": true, "expected-graph-revision": true, "confirm-process-stopped": true, "reason": true, "by": true},
+		"add-predecessors": {"config": true, "task-id": true, "predecessors": true, "request-id": true, "expected-version": true, "expected-graph-revision": true, "reason": true, "by": true},
 		"graph":            {"config": true, "task-id": true, "cursor": true, "limit": true, "status": true, "direction": true, "depth": true},
 		"export":           {"config": true, "task-id": true, "status": true, "direction": true, "depth": true, "format": true, "output": true, "overwrite": true},
 	}
@@ -453,10 +438,6 @@ func runNativeTaskCommand(args []string) error {
 		if *taskID != "" || *cursor != "" {
 			return errors.New("task create does not accept -task-id or -cursor")
 		}
-	case "accept-existing":
-		if *file == "" || *taskID != "" || *cursor != "" || *requestID != "" || *expectedAuthority != 0 || *expectedVersion != 0 || *runID != "" || *by != "" {
-			return errors.New("task accept-existing accepts only -config and -file; identity and operator are fixed in the manifest")
-		}
 	case "discard":
 		if *taskID == "" || *requestID == "" || *expectedVersion == 0 || strings.TrimSpace(*reason) == "" {
 			return errors.New("task discard requires -task-id, -request-id, -expected-version and -reason")
@@ -476,9 +457,6 @@ func runNativeTaskCommand(args []string) error {
 		}
 		if err := steerline.ValidateNativeTaskID(*taskID); err != nil {
 			return err
-		}
-		if (*runID == "") != !*confirmedStopped {
-			return errors.New("task add-predecessors requires -run-id and -confirm-process-stopped together for a claimed task")
 		}
 	case "graph":
 		if *file != "" || *requestID != "" || *expectedAuthority != 0 || *expectedVersion != 0 || *reason != "" || *by != "" {
@@ -513,7 +491,7 @@ func runNativeTaskCommand(args []string) error {
 	if err != nil {
 		return err
 	}
-	if subcommand == "create" || subcommand == "accept-existing" || subcommand == "discard" || subcommand == "add-predecessors" {
+	if subcommand == "create" || subcommand == "discard" || subcommand == "add-predecessors" {
 		if err = store.Close(); err != nil {
 			return err
 		}
@@ -561,21 +539,6 @@ func runNativeTaskCommand(args []string) error {
 			return createErr
 		}
 		return json.NewEncoder(os.Stdout).Encode(receipt)
-	case "accept-existing":
-		payload, readErr := os.ReadFile(*file)
-		if readErr != nil {
-			return readErr
-		}
-		input, parseErr := steerline.DecodeExistingAcceptanceInput(payload)
-		if parseErr != nil {
-			return parseErr
-		}
-		verifier := &steerline.PRClient{Config: c.PR, Runner: steerline.Runner{Dir: c.Repository, Timeout: 30 * time.Second}}
-		receipt, completeErr := (steerline.CommandService{Store: store, Project: c.Identity()}).CompleteExistingAcceptance(context.Background(), c, input, verifier)
-		if completeErr != nil {
-			return completeErr
-		}
-		return json.NewEncoder(os.Stdout).Encode(receipt)
 	case "discard":
 		receipt, discardErr := (steerline.CommandService{Store: store, Project: c.Identity()}).DiscardNativeTask(context.Background(), c, *taskID, *requestID, *expectedVersion, *reason, *by)
 		if discardErr != nil {
@@ -587,7 +550,7 @@ func runNativeTaskCommand(args []string) error {
 		for i := range ids {
 			ids[i] = strings.TrimSpace(ids[i])
 		}
-		receipt, addErr := (steerline.CommandService{Store: store, Project: c.Identity()}).AddNativeTaskPredecessors(context.Background(), c, steerline.TaskPredecessorAddInput{TaskID: *taskID, PredecessorIDs: ids, RequestID: *requestID, ExpectedTaskVersion: *expectedVersion, ExpectedGraphRevision: *expectedGraphRevision, WorkflowRunID: *runID, ConfirmedProcessStopped: *confirmedStopped, Reason: *reason, RequestedBy: *by})
+		receipt, addErr := (steerline.CommandService{Store: store, Project: c.Identity()}).AddNativeTaskPredecessors(context.Background(), c, steerline.TaskPredecessorAddInput{TaskID: *taskID, PredecessorIDs: ids, RequestID: *requestID, ExpectedTaskVersion: *expectedVersion, ExpectedGraphRevision: *expectedGraphRevision, Reason: *reason, RequestedBy: *by})
 		if addErr != nil {
 			return addErr
 		}
@@ -656,12 +619,8 @@ func taskExportTargetsNativeState(destination, runDir string) bool {
 	return false
 }
 
-func useWatchTUI(tty, jsonOut, raw, noTUI, follow, fromStart bool) bool {
-	return tty && !jsonOut && !raw && !noTUI && follow && fromStart
-}
-
 // runProjects picks a project under <STEERLINE_HOME>\etc and re-execs this
-// binary with the chosen action, so run/watch reuse their normal code paths
+// binary with the chosen action, so run reuses its normal code path
 // while several projects can be launched side by side.
 func runProjects(project, action string) error {
 	act, e := pickAction(action)
@@ -735,32 +694,30 @@ func pickAction(action string) (string, error) {
 	switch action {
 	case "console", "1":
 		return "console", nil
-	case "watch", "run", "stop", "home", "list":
+	case "run", "stop", "home", "list":
 		return action, nil
 	case "":
 	default:
-		return "", fmt.Errorf("unknown action %q (console|watch|run|stop|home|list)", action)
+		return "", fmt.Errorf("unknown action %q (console|run|stop|home|list)", action)
 	}
 	if !stdinIsTTY() {
 		return "console", nil
 	}
-	fmt.Println("Actions:  1) console   2) watch logs   3) run service   4) stop service   5) home   6) list")
-	line, e := readLine("action (1-6): ")
+	fmt.Println("Actions:  1) console   2) run service   3) stop service   4) home   5) list")
+	line, e := readLine("action (1-5): ")
 	if e != nil {
 		return "", e
 	}
 	switch strings.TrimSpace(line) {
 	case "1", "console":
 		return "console", nil
-	case "2", "viewer", "watch":
-		return "watch", nil
-	case "3", "run":
+	case "2", "run":
 		return "run", nil
-	case "4", "stop":
+	case "3", "stop":
 		return "stop", nil
-	case "5", "home":
+	case "4", "home":
 		return "home", nil
-	case "6", "list":
+	case "5", "list":
 		return "list", nil
 	}
 	return "", fmt.Errorf("invalid action %q", line)
@@ -779,6 +736,11 @@ func printProjects(projects []steerline.ProjectInfo) {
 
 func stdinIsTTY() bool {
 	info, e := os.Stdin.Stat()
+	return e == nil && info.Mode()&os.ModeCharDevice != 0
+}
+
+func stdoutIsTTY() bool {
+	info, e := os.Stdout.Stat()
 	return e == nil && info.Mode()&os.ModeCharDevice != 0
 }
 

@@ -421,7 +421,7 @@ func (s *Service) applyControlAction(ctx context.Context, req ControlRequest, pa
 			if run.RunID != op.RunID {
 				return errAlreadyManaged
 			}
-			workflow, execution := s.minimalRecords(run)
+			workflow, execution := s.workflowRecords(run)
 			if workflow == nil || workflow.ExecutionProfile != nil && (workflow.ExecutionProfile.ID != profileID || workflow.ExecutionProfile.Digest != payload.ExecutionProfileDigest) {
 				return nativeErr("contract_mismatch", "reserved start request differs from the fixed execution profile")
 			}
@@ -433,26 +433,21 @@ func (s *Service) applyControlAction(ctx context.Context, req ControlRequest, pa
 				return nil
 			}
 			task := nativeTaskRecord(s.State.Tasks, payload.TaskID)
-			attempt := s.minimalAttempt(run, run.AttemptID)
+			attempt := s.workflowAttempt(run, run.AttemptID)
 			if task == nil || workflow == nil || execution == nil || attempt == nil {
 				return nativeErr("inconsistent_delivery", "reserved native start request cannot be recovered from center records")
 			}
 			if attempt.Status != "planned" {
 				return nativeErr("outcome_unknown", "reserved native start request has no replayable planned attempt; fixed worker identity is retained")
 			}
-			var err error
-			if attempt.StepID == "prepare" {
-				err = s.prepareMinimalExecution(ctx, *task, run)
-			} else {
-				err = s.startMinimalStep(ctx, *task, run, attempt)
+			if workflow.WorkflowVersion != WorkerFlowVersion || attempt.StepID != "worker" {
+				return nativeErr("unsupported_schema", "reserved start request has an unsupported workflow")
 			}
+			err := s.resumeWorkerFlow(ctx)
 			if err != nil {
 				return err
 			}
-			if s.worker == nil || s.active != run || run.Process == nil {
-				return nativeErr("outcome_unknown", "native start did not retain a verifiable worker identity")
-			}
-			result.Message = "native task worker identity is persisted and running"
+			result.Message = "native task worker reservation was resumed"
 			return nil
 		}
 		if err := s.selectDispatchProfile(profileID, payload.ExecutionProfileDigest); err != nil {

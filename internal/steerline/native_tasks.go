@@ -653,13 +653,6 @@ func openBoundNativeStore(ctx context.Context, c Config, path string) (_ *SQLite
 			_ = db.Close()
 		}
 	}()
-	if err = validateDatabaseSchemaVersion(ctx, db.db, true); err != nil {
-		return nil, err
-	}
-	var schemaVersion int
-	if err = db.db.QueryRowContext(ctx, `SELECT COALESCE(MAX(version),0) FROM schema_migrations`).Scan(&schemaVersion); err != nil || schemaVersion != 4 && schemaVersion != domainSchemaVersion {
-		return nil, nativeErr("unsupported_schema", "bound native reader requires the current database or its immediately preceding format")
-	}
 	if err = validateRetiredWholeRunResultCommands(ctx, db.db); err != nil {
 		return nil, err
 	}
@@ -980,14 +973,14 @@ func validateNativeRuntimeProjection(path string) error {
 		return nativeErr("authority_mismatch", "native runtime projection must be a regular file")
 	}
 	runtime, err := LoadRuntime(path)
-	if err != nil || runtime == nil || runtime.SchemaVersion != CurrentRuntimeSchema && runtime.SchemaVersion != WorkerFlowRuntimeSchema || runtime.Repository.Identity == "" {
+	if err != nil || runtime == nil || runtime.SchemaVersion != WorkerFlowRuntimeSchema || runtime.Repository.Identity == "" {
 		return nativeErr("unsupported_schema", "native runtime projection is unreadable or has an unsupported schema")
 	}
 	return validateNativeRuntimeProjectionData(runtime)
 }
 
 func validateNativeRuntimeProjectionData(runtime *Runtime) error {
-	if runtime == nil || runtime.SchemaVersion != CurrentRuntimeSchema && runtime.SchemaVersion != WorkerFlowRuntimeSchema || runtime.Repository.Identity == "" {
+	if runtime == nil || runtime.SchemaVersion != WorkerFlowRuntimeSchema || runtime.Repository.Identity == "" {
 		return nativeErr("unsupported_schema", "native runtime projection is unreadable or has an unsupported schema")
 	}
 	for _, task := range runtime.Tasks {
@@ -999,7 +992,7 @@ func validateNativeRuntimeProjectionData(runtime *Runtime) error {
 		if run != nil && (run.BeadsContext != nil || run.Completion != nil || run.BeadsStatus != "" || run.IdentityMapDigest != "" || run.DomainTaskID != run.TaskID || run.ResultPath != nil) {
 			return nativeErr("authority_mismatch", "native runtime projection contains a retired task-source or whole-run result binding")
 		}
-		if run != nil && (runtime.SchemaVersion == CurrentRuntimeSchema && run.WorkflowVersion != MinimalWorkflowVersion || runtime.SchemaVersion == WorkerFlowRuntimeSchema && run.WorkflowVersion != WorkerFlowVersion) {
+		if run != nil && run.WorkflowVersion != WorkerFlowVersion {
 			return nativeErr("unsupported_schema", "native runtime projection contains a non-native workflow version")
 		}
 	}

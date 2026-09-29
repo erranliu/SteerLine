@@ -41,7 +41,6 @@ const (
 	rowReady rowKind = iota
 	rowRun
 	rowNative
-	rowLegacy
 )
 
 type consoleRow struct {
@@ -52,7 +51,6 @@ type consoleRow struct {
 	run       *steerline.Run
 	candidate *steerline.TaskCandidate
 	native    *steerline.NativeTaskDetail
-	legacy    *steerline.LegacyBeadsTask
 }
 
 type actionState struct {
@@ -112,7 +110,6 @@ type projectState struct {
 	activityKey        string
 	activityCursor     steerline.JournalCursor
 	activityEvents     []steerline.ActivityEvent
-	activityRaw        []string
 	activityError      string
 	activityInFlight   bool
 	activityGeneration uint64
@@ -219,7 +216,7 @@ func LoadProjects(configPath string) ([]ProjectRef, error) {
 		config, loadErr := steerline.LoadConfig(absolute)
 		name := strings.TrimSuffix(filepath.Base(absolute), filepath.Ext(absolute))
 		if loadErr != nil {
-			return []ProjectRef{legacyProjectRef(name, absolute, loadErr)}, nil
+			return []ProjectRef{invalidProjectRef(name, absolute, loadErr)}, nil
 		}
 		refs = append(refs, makeProjectRef(name, absolute, config))
 	} else {
@@ -230,12 +227,12 @@ func LoadProjects(configPath string) ([]ProjectRef, error) {
 		for _, project := range projects {
 			path, _ := filepath.Abs(project.ConfigPath)
 			if project.Err != nil {
-				refs = append(refs, legacyProjectRef(project.Name, path, project.Err))
+				refs = append(refs, invalidProjectRef(project.Name, path, project.Err))
 				continue
 			}
 			config, loadErr := steerline.LoadConfig(path)
 			if loadErr != nil {
-				refs = append(refs, legacyProjectRef(project.Name, path, loadErr))
+				refs = append(refs, invalidProjectRef(project.Name, path, loadErr))
 				continue
 			}
 			refs = append(refs, makeProjectRef(project.Name, path, config))
@@ -260,17 +257,9 @@ func LoadProjects(configPath string) ([]ProjectRef, error) {
 	return refs, nil
 }
 
-func legacyProjectRef(name, path string, configErr error) ProjectRef {
-	legacy, err := steerline.LoadLegacyBeadsProject(path)
-	if err == nil {
-		key, _ := absoluteViewKey(path, legacy.RunDir)
-		return ProjectRef{Key: key, Name: name, ConfigPath: path, RunDir: legacy.RunDir, Legacy: legacy}
-	}
+func invalidProjectRef(name, path string, configErr error) ProjectRef {
 	key, _ := absoluteViewKey(path, "")
-	if errors.Is(err, steerline.ErrNotLegacyBeadsConfig) {
-		return ProjectRef{Key: key, Name: name, ConfigPath: path, Error: configErr.Error()}
-	}
-	return ProjectRef{Key: key, Name: name, ConfigPath: path, Error: "旧 Beads 配置：" + err.Error()}
+	return ProjectRef{Key: key, Name: name, ConfigPath: path, Error: configErr.Error()}
 }
 
 func makeProjectRef(name, path string, config steerline.Config) ProjectRef {
@@ -405,7 +394,7 @@ func (m Model) readActivity(index int, runID, executionID, attemptID, path, key 
 	query, ctx, ref := m.query, m.ctx, state.ref
 	return func() tea.Msg {
 		batch, err := query.ReadActivity(ctx, ref, runID, executionID, attemptID, path, base)
-		return activityResultMsg{projectKey: ref.Key, identity: ref.Identity, key: key, generation: generation, base: base, batchActivity: batch.Activity, raw: batch.Raw, next: batch.Cursor, reset: batch.Reset, diagnostics: batch.Diagnostics, err: err}
+		return activityResultMsg{projectKey: ref.Key, identity: ref.Identity, key: key, generation: generation, base: base, batchActivity: batch.Activity, next: batch.Cursor, reset: batch.Reset, diagnostics: batch.Diagnostics, err: err}
 	}
 }
 
@@ -520,7 +509,7 @@ func (m Model) pollAction(index int, action *actionState) tea.Cmd {
 	query := m.control
 	ctx := m.ctx
 	requestID := action.RequestID
-	if action.Action == "answer_decision" || validRecoveryAction(action.Action) {
+	if action.Action == "answer_decision" {
 		decisionQuery, ok := query.(DecisionCommandClient)
 		return func() tea.Msg {
 			if !ok {
@@ -554,7 +543,6 @@ type activityResultMsg struct {
 	generation                uint64
 	base                      steerline.JournalCursor
 	batchActivity             []steerline.ActivityEvent
-	raw                       []string
 	next                      steerline.JournalCursor
 	reset                     bool
 	diagnostics               []string
@@ -604,37 +592,6 @@ func (m Model) submitDecisionCommand(index int, answer steerline.DecisionAnswer,
 			message.command = &command
 		}
 		return message
-	}
-}
-
-func (m Model) submitServiceAction(index int, action, targetID, requestedBy, commandID string, revision uint64, body any) tea.Cmd {
-	state := &m.projects[index]
-	ref := state.ref
-	query, ok := m.control.(DecisionCommandClient)
-	ctx := m.ctx
-	return func() tea.Msg {
-		if !ok {
-			return actionSubmittedMsg{projectKey: ref.Key, identity: ref.Identity, instance: "", requestID: commandID, taskID: targetID, action: action, err: errors.New("service command submission is unavailable")}
-		}
-		command, _, err := query.SubmitServiceAction(ctx, ref, action, targetID, requestedBy, revision, commandID, body)
-		instance := ""
-		if runtimeState := state.snapshot.Connection.Snapshot.Runtime; runtimeState != nil {
-			instance = runtimeState.Service.InstanceID
-		}
-		message := actionSubmittedMsg{projectKey: ref.Key, identity: ref.Identity, instance: instance, requestID: commandID, taskID: targetID, action: action, err: err}
-		if err == nil {
-			message.command = &command
-		}
-		return message
-	}
-}
-
-func validRecoveryAction(action string) bool {
-	switch action {
-	case "retry_run", "mark_stopped", "resolve_command":
-		return true
-	default:
-		return false
 	}
 }
 
@@ -795,16 +752,7 @@ func applyDecisionCommandResult(state *projectState, action *actionState, comman
 	case "pending", "in_flight":
 		action.Message, action.Resolved = "答案已提交；等待服务接受", false
 	case "accepted":
-		switch action.Action {
-		case "answer_decision":
-			action.Message = "答案已保存；服务将单独核验原执行与续跑条件"
-		case "retry_run":
-			action.Message = "新 attempt 已启动并保存执行身份"
-		case "mark_stopped":
-			action.Message = "原执行停止事实已记录；任务和工作目录保留"
-		case "resolve_command":
-			action.Message = "指定 blocker 已按证据解除；原指令未重放"
-		}
+		action.Message = "答案已保存；服务将单独核验原执行与续跑条件"
 		action.Resolved = true
 		return true, false
 	case "rejected":
@@ -893,12 +841,6 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			interval := 5 * time.Second
 			if i == m.selected {
 				interval = time.Second
-			}
-			if state.ref.Legacy != nil {
-				interval = 15 * time.Second
-				if i == m.selected {
-					interval = 5 * time.Second
-				}
 			}
 			if !state.refreshing && (state.lastRefresh.IsZero() || now.Sub(state.lastRefresh) >= interval) {
 				cmds = append(cmds, m.readProject(i))
@@ -1035,10 +977,9 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if msg.reset {
-			state.activityEvents, state.activityRaw = nil, nil
+			state.activityEvents = nil
 		}
 		state.activityEvents = append(state.activityEvents, msg.batchActivity...)
-		state.activityRaw = append(state.activityRaw, msg.raw...)
 		if len(state.activityEvents) > 4000 {
 			excess := len(state.activityEvents) - 4000
 			if !state.view.Follow {
@@ -1050,9 +991,6 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 			state.activityEvents = state.activityEvents[excess:]
-		}
-		if len(state.activityRaw) > 4000 {
-			state.activityRaw = state.activityRaw[len(state.activityRaw)-4000:]
 		}
 		state.activityCursor = msg.next
 		state.activityError = strings.Join(msg.diagnostics, "; ")
@@ -1215,7 +1153,7 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		if action == nil {
 			return m, nil
 		}
-		if action.Action == "answer_decision" || validRecoveryAction(action.Action) {
+		if action.Action == "answer_decision" {
 			action.InFlight = false
 			action.UpdatedAt = m.clock.Now()
 			if msg.command != nil && msg.command.CommandID != action.RequestID {
@@ -1287,7 +1225,7 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		if action == nil {
 			return m, nil
 		}
-		if action.Action == "answer_decision" || validRecoveryAction(action.Action) {
+		if action.Action == "answer_decision" {
 			action.InFlight = false
 			action.UpdatedAt = m.clock.Now()
 			refreshNow, reopen := applyDecisionCommandResult(state, action, msg.command, msg.err)
@@ -1494,12 +1432,6 @@ func (m Model) rows(index int) []consoleRow {
 			rows = append(rows, consoleRow{key: "task:" + detail.TaskID, kind: rowNative, taskID: detail.TaskID, title: detail.Title, native: detail})
 		}
 	}
-	if state.filter == 0 && state.ref.Legacy != nil && state.snapshot.Legacy != nil {
-		for i := range state.snapshot.Legacy.Tasks {
-			task := &state.snapshot.Legacy.Tasks[i]
-			rows = append(rows, consoleRow{key: "legacy:" + task.ID, kind: rowLegacy, taskID: task.ID, title: task.Title, legacy: task})
-		}
-	}
 	if runtime := state.snapshot.Observation.Runtime; runtime != nil {
 		for _, run := range runtime.Runs {
 			if run == nil || shownRuns[run.RunID] || !filterAllows(state.filter, rowRun, run) {
@@ -1646,7 +1578,7 @@ func (m Model) refreshSelectedLogs(index int) (Model, tea.Cmd) {
 	row := m.selectedRow(index)
 	if row == nil || row.run == nil {
 		state.activityKey, state.conversationKey = "", ""
-		state.activityEvents, state.activityRaw = nil, nil
+		state.activityEvents = nil
 		state.conversationEvents = nil
 		return m, nil
 	}
@@ -1665,7 +1597,7 @@ func (m Model) refreshSelectedLogs(index int) (Model, tea.Cmd) {
 	activityKey := strings.Join([]string{run.RunID, run.ExecutionID, attemptID, activityPath}, "\x00")
 	if state.activityKey != activityKey {
 		state.activityKey, state.activityCursor = activityKey, steerline.JournalCursor{}
-		state.activityEvents, state.activityRaw, state.activityError = nil, nil, ""
+		state.activityEvents, state.activityError = nil, ""
 		state.activityGeneration++
 	}
 	conversationKey := strings.Join([]string{run.ExecutionID, attemptID}, "\x00")
@@ -1870,10 +1802,6 @@ func (m Model) changeFilter(filter int) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	state := &m.projects[m.selected]
-	if state.ref.Legacy != nil && filter != 0 {
-		m.status = "旧 Beads 项目仅提供只读全量任务列表"
-		return m, nil
-	}
 	if state.filter == filter {
 		return m, nil
 	}
@@ -1944,12 +1872,6 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case "r":
 			return m.inspectSelectedRecovery()
-		case "R":
-			return m.prepareRecoveryAction("retry_run")
-		case "m":
-			return m.prepareRecoveryAction("mark_stopped")
-		case "v":
-			return m.prepareRecoveryAction("resolve_command")
 		case "[", "]":
 			if state.recoveryReport != nil && len(state.recoveryReport.Blockers) > 0 {
 				count := len(state.recoveryReport.Blockers)
@@ -2272,135 +2194,28 @@ func moveRuneCursorVertical(text []rune, cursor int, down bool) int {
 
 func (m Model) handleConfirm(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	confirm := m.confirm
-	if confirm.requireBasis {
-		switch key.String() {
-		case "esc", "ctrl+c":
-			m.confirm = nil
-			return m, nil
-		case "f2":
-			basis := strings.TrimSpace(confirm.basis)
-			if basis == "" {
-				confirm.basisError = "请填写亲自核验的停止或解除依据；未提交命令"
-				return m, nil
-			}
-			if len([]rune(basis)) > 2000 {
-				confirm.basisError = "依据超过 2000 字符；内容未截断，请编辑后再提交"
-				return m, nil
-			}
-			confirm.basis = basis
-			m.confirm = nil
-			return m.beginRecoveryAction(confirm)
-		case "pgup":
-			confirm.scroll = max(0, confirm.scroll-8)
-			return m, nil
-		case "pgdown":
-			confirm.scroll += 8
-			return m, nil
-		case "up", "down":
-			confirm.basisCursor = moveRuneCursorVertical([]rune(confirm.basis), confirm.basisCursor, key.String() == "down")
-			confirm.scroll = 1 << 20
-			return m, nil
-		case "left":
-			confirm.basisCursor = max(0, confirm.basisCursor-1)
-			return m, nil
-		case "right":
-			confirm.basisCursor = min(len([]rune(confirm.basis)), confirm.basisCursor+1)
-			return m, nil
-		case "home":
-			confirm.basisCursor = runeLineStart([]rune(confirm.basis), confirm.basisCursor)
-			return m, nil
-		case "end":
-			confirm.basisCursor = runeLineEnd([]rune(confirm.basis), confirm.basisCursor)
-			return m, nil
-		case "backspace":
-			if confirm.basisCursor > 0 {
-				text := []rune(confirm.basis)
-				confirm.basis = string(append(text[:confirm.basisCursor-1], text[confirm.basisCursor:]...))
-				confirm.basisCursor--
-			}
-			confirm.basisError = ""
-			confirm.scroll = 1 << 20
-			return m, nil
-		case "delete":
-			text := []rune(confirm.basis)
-			if confirm.basisCursor < len(text) {
-				confirm.basis = string(append(text[:confirm.basisCursor], text[confirm.basisCursor+1:]...))
-			}
-			confirm.basisError = ""
-			confirm.scroll = 1 << 20
-			return m, nil
-		case "enter":
-			insertRecoveryBasisRunes(confirm, []rune{'\n'})
-			return m, nil
-		}
-		if key.Type == tea.KeyRunes {
-			insertRecoveryBasisRunes(confirm, key.Runes)
-		}
-		return m, nil
-	}
 	switch key.String() {
 	case "up":
 		confirm.scroll = max(0, confirm.scroll-1)
-		return m, nil
 	case "down":
 		confirm.scroll++
-		return m, nil
 	case "pgup":
 		confirm.scroll = max(0, confirm.scroll-8)
-		return m, nil
 	case "pgdown":
 		confirm.scroll += 8
-		return m, nil
 	case "esc", "n":
 		m.confirm = nil
-		return m, nil
 	case "enter", "y":
 		m.confirm = nil
-		if confirm.action != "stop_service" {
-			return m.beginRecoveryAction(confirm)
-		}
 		return m.beginAction(confirm.projectKey, confirm.instance, confirm.revision, confirm.action, confirm.taskID, confirm.requestID)
-	default:
-		return m, nil
 	}
+	return m, nil
 }
-
-func insertRecoveryBasisRunes(confirm *confirmAction, input []rune) {
-	if confirm == nil || len(input) == 0 {
-		return
-	}
-	filtered := make([]rune, 0, len(input))
-	for _, r := range input {
-		if r == '\r' {
-			r = '\n'
-		}
-		if r == '\n' || r == '\t' || r >= 0x20 && r != 0x7f {
-			filtered = append(filtered, r)
-		}
-	}
-	if len(filtered) == 0 {
-		return
-	}
-	text := []rune(confirm.basis)
-	confirm.basisCursor = min(max(0, confirm.basisCursor), len(text))
-	joined := make([]rune, 0, len(text)+len(filtered))
-	joined = append(joined, text[:confirm.basisCursor]...)
-	joined = append(joined, filtered...)
-	joined = append(joined, text[confirm.basisCursor:]...)
-	confirm.basis, confirm.basisCursor = string(joined), confirm.basisCursor+len(filtered)
-	confirm.basisError = ""
-	confirm.scroll = 1 << 20
-}
-
 func (m Model) startSelected() (tea.Model, tea.Cmd) {
 	if m.selected < 0 || m.selected >= len(m.projects) {
 		return m, nil
 	}
 	state := &m.projects[m.selected]
-	if state.ref.Legacy != nil {
-		m.status = "旧 Beads 项目只读；原执行由旧服务结算，切换到 native 后才能在此启动"
-		return m, nil
-	}
 	row := m.selectedRow(m.selected)
 	if row == nil || row.kind != rowReady || row.candidate == nil {
 		m.status = "请选择 Ready 候选后再开始"
@@ -2508,134 +2323,6 @@ func (m Model) inspectSelectedRecovery() (tea.Model, tea.Cmd) {
 		report, err := steerline.InspectRecovery(ctx, ref.Config, runID)
 		return recoveryInspectionMsg{projectKey: ref.Key, identity: ref.Identity, runID: runID, generation: generation, report: report, err: err}
 	}
-}
-
-func (m Model) prepareRecoveryAction(action string) (tea.Model, tea.Cmd) {
-	if m.selected < 0 || m.selected >= len(m.projects) {
-		return m, nil
-	}
-	state := &m.projects[m.selected]
-	if state.ref.Config.WorkflowProtocol == steerline.WorkerFlowVersion {
-		m.status = "当前 worker 流程只保留原会话与待决策反馈；此恢复动作不可用"
-		return m, nil
-	}
-	report := state.recoveryReport
-	if report == nil || report.RunID == "" {
-		m.status = "先读取当前只读恢复报告"
-		return m, nil
-	}
-	runtimeState := state.snapshot.Connection.Snapshot.Runtime
-	if runtimeState == nil || !state.snapshot.Connection.CanControl {
-		m.status = "服务未就绪；恢复命令不会提交"
-		return m, nil
-	}
-	requestID := steerline.NewControlRequestID()
-	confirm := &confirmAction{projectKey: state.ref.Key, instance: runtimeState.Service.InstanceID, action: action, taskID: report.TaskID, runID: report.RunID, requestID: requestID}
-	switch action {
-	case "retry_run":
-		if report.RetryReason != "" {
-			m.status = "retry_run 不可用：" + report.RetryReason
-			return m, nil
-		}
-		if !hasCapability(runtimeState, action) {
-			m.status = "服务未声明 retry_run 能力"
-			return m, nil
-		}
-		confirm.revision = report.RunRevision
-	case "mark_stopped":
-		if !strings.HasPrefix(report.MarkStoppedReason, "confirm") {
-			m.status = "mark_stopped 不可用：" + report.MarkStoppedReason
-			return m, nil
-		}
-		if !hasCapability(runtimeState, action) {
-			m.status = "服务未声明 mark_stopped 能力"
-			return m, nil
-		}
-		confirm.revision, confirm.requireBasis = report.RunRevision, true
-	case "resolve_command":
-		if len(report.Blockers) == 0 || state.recoveryBlockerIndex < 0 || state.recoveryBlockerIndex >= len(report.Blockers) {
-			m.status = "没有可解除的 control blocker"
-			return m, nil
-		}
-		if !hasCapability(runtimeState, action) {
-			m.status = "服务未声明 resolve_command 能力"
-			return m, nil
-		}
-		blocker := report.Blockers[state.recoveryBlockerIndex]
-		confirm.taskID, confirm.runID = blocker.TaskID, blocker.RunID
-		confirm.decisionID = blocker.RequestID
-		confirm.revision = runtimeState.Control.Revision
-		confirm.requireBasis = true
-	default:
-		m.status = "不支持的恢复动作：" + action
-		return m, nil
-	}
-	m.confirm = confirm
-	return m, nil
-}
-
-func (m Model) beginRecoveryAction(confirm *confirmAction) (tea.Model, tea.Cmd) {
-	if confirm == nil {
-		return m, nil
-	}
-	if confirm.requireBasis && (strings.TrimSpace(confirm.basis) == "" || len([]rune(strings.TrimSpace(confirm.basis))) > 2000) {
-		confirm.basisError = "恢复依据必须由操作者填写，且不超过 2000 字符；未提交命令"
-		m.confirm = confirm
-		return m, nil
-	}
-	index := m.projectIndex(confirm.projectKey)
-	if index < 0 || index != m.selected {
-		m.status = "恢复目标项目已切换；请回到该项目重新读取报告"
-		return m, nil
-	}
-	state := &m.projects[index]
-	runtimeState := state.snapshot.Connection.Snapshot.Runtime
-	if runtimeState == nil || runtimeState.Service.InstanceID != confirm.instance || !state.snapshot.Connection.CanControl {
-		m.status = "stale_instance：服务实例已变化；未提交恢复命令"
-		state.lastRefresh = time.Time{}
-		return m, m.readProject(index)
-	}
-	targetID := confirm.runID
-	if confirm.action == "resolve_command" {
-		targetID = confirm.decisionID
-		if runtimeState.Control.Revision != confirm.revision {
-			m.status = "stale_revision：control blocker 已变化；未提交恢复命令"
-			return m.inspectSelectedRecovery()
-		}
-	} else {
-		var run *steerline.Run
-		for _, candidate := range runtimeState.Runs {
-			if candidate != nil && candidate.RunID == confirm.runID {
-				run = candidate
-				break
-			}
-		}
-		if run == nil || run.ControlRevision != confirm.revision {
-			m.status = "stale_revision：run 已变化；未提交恢复命令，请重新核验"
-			return m.inspectSelectedRecovery()
-		}
-	}
-	if !hasCapability(runtimeState, confirm.action) {
-		m.status = "服务未声明 " + confirm.action + " 能力"
-		return m, nil
-	}
-	requestedBy := steerline.DefaultRequestedBy()
-	body := steerline.RecoveryCommandBody{ConfirmedProcessStopped: confirm.action == "mark_stopped" || confirm.action == "retry_run", ConfirmationBasis: confirm.basis}
-	if confirm.action == "resolve_command" {
-		body.ConfirmationBasis = confirm.basis
-	}
-	action := &actionState{RequestID: confirm.requestID, Action: confirm.action, TaskID: confirm.taskID, RunID: confirm.runID, DecisionID: targetID, DecisionRevision: confirm.revision, Status: "submitting", Message: "保存 command_id 并提交恢复命令", TargetInstance: confirm.instance, UpdatedAt: m.clock.Now()}
-	state.actions[confirm.requestID] = action
-	state.view.Outstanding[confirm.requestID] = "recovery:" + confirm.runID
-	if err := m.saveProjectView(index); err != nil {
-		delete(state.actions, confirm.requestID)
-		delete(state.view.Outstanding, confirm.requestID)
-		m.status = "未提交恢复命令：无法先保存 command_id"
-		return m, nil
-	}
-	m.confirm = nil
-	m.status = fmt.Sprintf("恢复命令已发布 · %s · command_id %s", confirm.action, confirm.requestID)
-	return m, m.submitServiceAction(index, confirm.action, targetID, requestedBy, confirm.requestID, confirm.revision, body)
 }
 
 func (m *Model) readyControlTarget() (*projectState, *steerline.Runtime) {
@@ -3238,18 +2925,6 @@ func terminalCapabilities() string {
 func projectStatus(ref ProjectRef, snapshot ProjectSnapshot) string {
 	if ref.Error != "" {
 		return "配置错误"
-	}
-	if ref.Legacy != nil {
-		if snapshot.LegacyError != "" {
-			return "旧任务查询失败"
-		}
-		if snapshot.Legacy == nil {
-			return "旧任务读取中"
-		}
-		if snapshot.Legacy.ServiceLiveness == "live" {
-			return "旧服务活动"
-		}
-		return "旧 Beads 只读"
 	}
 	if ref.Conflict != "" {
 		return "关联冲突"

@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -56,6 +55,9 @@ type fixture struct {
 func TestMain(m *testing.M) {
 	if os.Getenv("STEERLINE_LIFECYCLE_EXIT_EARLY") == "1" {
 		os.Exit(23)
+	}
+	if os.Getenv("STEERLINE_TEST_HOST_GH_FILE") != "" {
+		os.Exit(fakeHostGH(os.Args[1:]))
 	}
 	for i, arg := range os.Args {
 		if arg == "--fake" {
@@ -157,12 +159,7 @@ func newFixture(t *testing.T) *fixture {
 	f.c.Heartbeat, f.c.TaskPoll, f.c.PRPoll, f.c.CommandTimeout, f.c.ShutdownGrace = "100ms", "100ms", "100ms", "5s", "1s"
 	f.c.PR = PRConfig{Kind: "gitea", BaseURL: f.server.URL, Repository: "owner/repo"}
 	f.c.Codex = Command{Executable: executable, Args: []string{"--fake", "codex"}}
-	f.c.WorkflowDefinition = &WorkflowDefinition{ID: MinimalWorkflowVersion, Version: MinimalWorkflowVersion, ReviewRequired: false, MaxRepairRounds: 1}
-	step := func(name string) StepContract {
-		return StepContract{Provider: "command", Entry: "builtin:" + name, Version: "fixture-v1", InputSchema: NativeTaskInputSchema, OutputSchema: MinimalStepOutputSchema, ExecutionSite: "local", Timeout: 5 * time.Second, Command: []string{git, "status", "--porcelain"}}
-	}
-	f.c.ProjectSteps = &ProjectSteps{Implement: step("implement"), Verify: step("verify"), PublishPR: step("publish_pr")}
-	f.c.ProjectSteps.Verify.RequiredChecks = []string{"unit"}
+	f.c.WorkflowProtocol = WorkerFlowVersion
 	if err = f.c.ResolveIdentity(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -337,8 +334,6 @@ func fakeMain(args []string) int {
 		return fakeOrca(args[1], args[2:])
 	case "orca-supervised":
 		return fakeSupervisedOrca(args[1:])
-	case "native-step":
-		return fakeNativeMinimalStep()
 	case "publish-control":
 		if len(args) != 3 {
 			return 2
@@ -382,76 +377,6 @@ func fakeMain(args []string) int {
 		return 0
 	}
 	return 2
-}
-
-func fakeNativeMinimalStep() int {
-	if _, ok := os.LookupEnv("BEADS_DIR"); ok {
-		fmt.Fprintln(os.Stderr, "native worker inherited BEADS_DIR")
-		return 31
-	}
-	if _, ok := os.LookupEnv("BEADS_ACTOR"); ok {
-		fmt.Fprintln(os.Stderr, "native worker inherited BEADS_ACTOR")
-		return 32
-	}
-	raw, err := io.ReadAll(io.LimitReader(os.Stdin, 1<<20))
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 33
-	}
-	var input NativeTaskWorkerContext
-	if err = json.Unmarshal(raw, &input); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 33
-	}
-	if input.SchemaVersion != NativeTaskInputSchema || input.ProjectID == "" || input.TaskID == "" || input.Contract.Digest != input.ContractDigest || input.CurrentStep == "" || input.StepInput.TaskID != input.TaskID {
-		fmt.Fprintln(os.Stderr, "native-task/v1 context is incomplete")
-		return 34
-	}
-	if os.Getenv("STEERLINE_FAKE_NATIVE_STEP_FAIL") == input.CurrentStep {
-		marker := os.Getenv("STEERLINE_FAKE_NATIVE_STEP_FAIL_MARKER")
-		if marker == "" {
-			return 38
-		}
-		if _, err := os.Stat(marker); os.IsNotExist(err) {
-			if err = os.WriteFile(marker, []byte(input.AttemptID), 0600); err != nil {
-				fmt.Fprintln(os.Stderr, err)
-				return 39
-			}
-			return 38
-		}
-	}
-	result := StepGateResult{StepID: input.CurrentStep, Succeeded: true, InputRevision: input.StepInput.InputRevision, Workspace: input.StepInput.Workspace, ResultID: newID(), PrerequisiteIDs: append([]string(nil), input.StepInput.PrerequisiteResultIDs...)}
-	if os.Getenv("STEERLINE_FAKE_NATIVE_STEP_DECISION") == input.CurrentStep && input.StepInput.Decision == nil {
-		result.Decision = &DecisionRequest{Question: "Choose the implementation path", Options: []DecisionOption{{ID: "keep", Label: "Keep current plan"}}}
-	}
-	if decision := input.StepInput.Decision; decision != nil {
-		result.AppliedDecisionID = decision.Answer.DecisionID
-		result.AppliedDecisionAttemptID = decision.AttemptID
-		result.AppliedDecisionExecutionID = decision.ExecutionID
-		result.AppliedAnswerSHA256 = decision.AnswerSHA256
-	}
-	switch input.CurrentStep {
-	case "implement":
-		result.Revision = input.StepInput.Workspace.Head
-	case "verify":
-		result.Revision = input.StepInput.CandidateRevision
-		for _, name := range input.StepInput.ProjectSteps.Verify.RequiredChecks {
-			result.Checks = append(result.Checks, CheckEvidence{Name: name, Status: "passed", Revision: result.Revision})
-		}
-	case "publish_pr":
-		result.Revision = input.StepInput.CandidateRevision
-		result.PublishedHead = result.Revision
-		result.PRURL = "https://forge.invalid/org/repo/pulls/" + input.TaskID
-	default:
-		fmt.Fprintln(os.Stderr, "unsupported native test step", input.CurrentStep)
-		return 35
-	}
-	envelope := MinimalStepResultEnvelope{SchemaVersion: 1, ProjectIdentity: input.ProjectID, TaskID: input.TaskID, WorkflowRunID: input.WorkflowRunID, ExecutionID: input.ExecutionID, AttemptID: input.AttemptID, Result: result}
-	if err := json.NewEncoder(os.Stdout).Encode(envelope); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 36
-	}
-	return 0
 }
 
 func require(t *testing.T, err error) {

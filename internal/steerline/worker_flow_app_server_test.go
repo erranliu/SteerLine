@@ -196,7 +196,7 @@ func appServerAuditService(t *testing.T) (*Service, *Run) {
 
 func TestAppServerUnknownTurnDoesNotOfferPostTurnFeedback(t *testing.T) {
 	service, run := appServerAuditService(t)
-	workflow, execution := service.minimalRecords(run)
+	workflow, execution := service.workflowRecords(run)
 	execution.SessionID, execution.CurrentTurnID, execution.CurrentCommandID = workerFlowMockSession, "00000000-0000-0000-0000-000000000001", newID()
 	execution.Status, workflow.Phase = "blocked", "executing"
 	run.SessionID, run.ExecutionStatus = ptr(execution.SessionID), "unknown"
@@ -211,7 +211,7 @@ func TestAppServerUnknownTurnDoesNotOfferPostTurnFeedback(t *testing.T) {
 	if err := service.applyAppServerRecovery(appServerRecoveryResult{runID: run.RunID, execution: *execution, worker: worker}); err != nil {
 		t.Fatal(err)
 	}
-	workflow, execution = service.minimalRecords(run)
+	workflow, execution = service.workflowRecords(run)
 	if execution.Status != "active" || run.ExecutionStatus != "running" || workflow.Phase != "executing" || run.Error != nil {
 		t.Fatalf("recovered active turn retained its blocked state: %+v %+v", execution, run)
 	}
@@ -220,7 +220,7 @@ func TestAppServerUnknownTurnDoesNotOfferPostTurnFeedback(t *testing.T) {
 
 func TestAppServerSlowRecoveryLeavesServiceWriterAvailable(t *testing.T) {
 	service, run := appServerAuditService(t)
-	workflow, execution := service.minimalRecords(run)
+	workflow, execution := service.workflowRecords(run)
 	identity, err := currentProcessIdentity()
 	if err != nil {
 		t.Fatal(err)
@@ -292,7 +292,7 @@ func TestAppServerServiceTwoTurnsPersistNativeReceipts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, execution := service.minimalRecords(run)
+	_, execution := service.workflowRecords(run)
 	execution.Process, run.Process = identity, identity
 	execution.AppServerEndpoint, execution.AppServerGeneration = "ws://"+listener.Addr().String(), "generation"
 	execution.Workspace.Worktree, run.WorktreePath = workspace, &workspace
@@ -340,7 +340,7 @@ func TestAppServerServiceTwoTurnsPersistNativeReceipts(t *testing.T) {
 			t.Fatal(err)
 		}
 		service.active, service.worker = nil, nil
-		_, execution = service.minimalRecords(run)
+		_, execution = service.workflowRecords(run)
 		if execution.TurnNumber != uint64(i) || execution.CurrentCommandID != commandID || execution.CurrentTurnID == previousTurn || execution.CurrentTurnID != execution.LastStoppedTurnID || execution.SessionID != workerFlowMockSession || execution.Status != "idle" || run.Decision == nil {
 			t.Fatalf("turn %d receipt was not persisted: %+v", i, execution)
 		}
@@ -350,7 +350,7 @@ func TestAppServerServiceTwoTurnsPersistNativeReceipts(t *testing.T) {
 
 func TestAppServerAnswerRecoveryPersistsBeforeNextQuestion(t *testing.T) {
 	service, run := appServerAuditService(t)
-	workflow, execution := service.minimalRecords(run)
+	workflow, execution := service.workflowRecords(run)
 	execution.SessionID, execution.CurrentTurnID, execution.CurrentCommandID = workerFlowMockSession, "00000000-0000-0000-0000-000000000001", newID()
 	execution.Status, workflow.Phase = "active", "waiting_decision"
 	run.FinishTaskStatus, run.ExecutionStatus = "waiting_decision", "running"
@@ -367,7 +367,7 @@ func TestAppServerAnswerRecoveryPersistsBeforeNextQuestion(t *testing.T) {
 	if _, err := service.startOperation("reply_appserver_question", "appserver-answer:"+execution.ExecutionID+":"+firstID, map[string]string{"call": "first"}); err != nil {
 		t.Fatal(err)
 	}
-	workflow, execution = service.minimalRecords(run)
+	workflow, execution = service.workflowRecords(run)
 	next := ask
 	next.CallID, next.RequestID = "second", json.RawMessage(`1`)
 	execution.PendingAsks = []codexAskCall{next}

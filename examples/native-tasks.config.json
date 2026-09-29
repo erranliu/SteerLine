@@ -8,43 +8,7 @@
   "codex": { "executable": "/absolute/path/to/codex" },
   "host": "local",
   "agent": "codex",
-  "workflow_definition": {
-    "id": "minimal-v1",
-    "version": "minimal-v1",
-    "review_required": false,
-    "max_repair_rounds": 2
-  },
-  "project_steps": {
-    "implement": {
-      "provider": "agent_skill",
-      "entry": "builtin:implement",
-      "version": "minimal-v1",
-      "input_schema": "native-task/v1",
-      "output_schema": "steerline/minimal-step-result/v1",
-      "execution_site": "local",
-      "timeout": "30m"
-    },
-    "verify": {
-      "provider": "command",
-      "entry": "scripts/steerline-verify.py",
-      "command": ["python", "scripts/steerline-verify.py"],
-      "version": "minimal-v1",
-      "input_schema": "native-task/v1",
-      "output_schema": "steerline/minimal-step-result/v1",
-      "execution_site": "local",
-      "timeout": "15m",
-      "required_checks": ["unit", "lint"]
-    },
-    "publish_pr": {
-      "provider": "agent_skill",
-      "entry": ".agents/skills/steerline-publish-pr/SKILL.md",
-      "version": "minimal-v1",
-      "input_schema": "native-task/v1",
-      "output_schema": "steerline/minimal-step-result/v1",
-      "execution_site": "local",
-      "timeout": "15m"
-    }
-  },
+  "workflow_protocol": "worker-flow-v1",
   "executable_types": ["task", "bug", "feature", "chore"],
   "pr": {
     "kind": "gitea",

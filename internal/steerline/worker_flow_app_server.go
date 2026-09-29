@@ -48,7 +48,7 @@ func (s *Service) recordAppServerTurnStarted(run *Run, workflow *WorkflowRunReco
 	}
 	execution.CurrentCommandID, execution.PendingCommandID = commandID, ""
 	if fresh {
-		if attempt := s.minimalAttempt(run, run.AttemptID); attempt != nil {
+		if attempt := s.workflowAttempt(run, run.AttemptID); attempt != nil {
 			attempt.Status, attempt.UpdatedAt = "running", now()
 		}
 		if run.Decision != nil && run.Decision.Status == "answer_saved" && run.Decision.Request.NativeAsk == nil {

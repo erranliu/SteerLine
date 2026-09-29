@@ -38,62 +38,9 @@ func openDomainTestStore(t *testing.T) *SQLiteStore {
 	return s
 }
 
-func TestSQLitePreservesAbandonedHistoricalExecution(t *testing.T) {
-	ctx := context.Background()
-	s := openDomainTestStore(t)
-	project := "repo:abandoned-history"
-	err := s.Transact(ctx, func(tx DomainTx) error {
-		if err := tx.PutProjectTaskAuthority(ProjectTaskAuthority{ProjectIdentity: project, Authority: "native", AuthorityVersion: 1, Repository: "repo", Remote: "origin", Branch: "main", DispatchMode: "manual", DispatchPaused: true}); err != nil {
-			return err
-		}
-		stamp := now()
-		task := TaskRecord{ProjectIdentity: project, TaskID: "14", Title: "historical task", Type: "task", Priority: 2, BatchID: "batch", ContractID: "contract", Source: "native", Status: "discarded", Version: 1, CreatedAt: stamp, UpdatedAt: stamp, DiscardedAt: &stamp, DiscardReason: "retired", DiscardedBy: "tester", DiscardRequestID: "discard-request"}
-		if _, err := tx.(*sqliteTx).tx.ExecContext(ctx, `INSERT INTO tasks(project_identity,task_id,status,version,payload) VALUES(?,?,?,?,?)`, project, task.TaskID, task.Status, task.Version, mustJSON(task)); err != nil {
-			return err
-		}
-		if _, err := tx.(*sqliteTx).tx.ExecContext(ctx, `INSERT INTO task_contracts(project_identity,contract_id,task_id,digest,payload) VALUES(?,?,?,?,?)`, project, task.ContractID, task.TaskID, strings.Repeat("a", 64), []byte(`{"contract_id":"contract"}`)); err != nil {
-			return err
-		}
-		if _, err := tx.(*sqliteTx).tx.ExecContext(ctx, `INSERT INTO task_batches(project_identity,batch_id,schema_version,payload_digest,created_at,command_id,task_ids) VALUES(?,?,?,?,?,?,?)`, project, task.BatchID, "task-batch/v1", strings.Repeat("b", 64), now().UTC().Format(time.RFC3339Nano), strings.Repeat("c", 32), []byte(`{"local":"14"}`)); err != nil {
-			return err
-		}
-		if err := tx.PutWorkflowRun(WorkflowRunRecord{ProjectIdentity: project, WorkflowRunID: "old-run", TaskID: "14", WorkflowVersion: MinimalWorkflowVersion, Phase: "abandoned"}); err != nil {
-			return err
-		}
-		if err := tx.PutExecution(ExecutionRecord{ProjectIdentity: project, ExecutionID: "old-execution", WorkflowRunID: "old-run", Status: "abandoned", CurrentStep: "implement"}); err != nil {
-			return err
-		}
-		return tx.PutStepAttempt(StepAttemptRecord{ProjectIdentity: project, AttemptID: "old-attempt", ExecutionID: "old-execution", StepID: "implement", AttemptNumber: 1, Status: "abandoned"})
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	snapshot, err := s.Query(ctx, project)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(snapshot.Executions) != 1 || snapshot.Executions[0].Status != "abandoned" || len(snapshot.Attempts) != 1 || snapshot.Attempts[0].Status != "abandoned" {
-		t.Fatalf("historical abandoned state changed: %+v", snapshot)
-	}
-	if err := TransitionStepAttempt(&snapshot.Attempts[0], "running"); err == nil {
-		t.Fatal("abandoned historical attempt resumed")
-	}
-	runtime := Runtime{Tasks: snapshot.Tasks, WorkflowRuns: snapshot.WorkflowRuns, Executions: snapshot.Executions, Attempts: snapshot.Attempts}
-	runtime.WorkflowRuns[0].Phase = "blocked" // A stale projection must not override the stored terminal phase.
-	run := &Run{TaskID: "14", DomainTaskID: "14", RunID: "old-run", ExecutionID: "old-execution", AttemptID: "old-attempt", WorkflowVersion: MinimalWorkflowVersion, FinishTaskStatus: "blocked", ExecutionStatus: "failed"}
-	if err := s.Transact(ctx, func(tx DomainTx) error { return persistNormalizedWorkflow(tx, project, runtime, run) }); err != nil {
-		t.Fatal(err)
-	}
-	snapshot, err = s.Query(ctx, project)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if snapshot.WorkflowRuns[0].Phase != "abandoned" || snapshot.Executions[0].Status != "abandoned" || snapshot.Attempts[0].Status != "abandoned" {
-		t.Fatalf("runtime publication rewrote abandoned history: %+v", snapshot)
-	}
-}
+const oldActiveWorkflowIndex = `CREATE UNIQUE INDEX one_active_workflow_per_task ON workflow_runs(project_identity,task_id) WHERE phase <> 'completed'`
 
-func TestConversationSchemaUpgradesCurrentCenterDatabase(t *testing.T) {
+func TestSQLiteV3IsRejectedWithoutUpgrade(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "steerline.db")
 	raw, err := sql.Open("sqlite", path)
 	require(t, err)
@@ -103,7 +50,7 @@ func TestConversationSchemaUpgradesCurrentCenterDatabase(t *testing.T) {
 	require(t, err)
 	for _, stmt := range append(append([]string{}, domainExecutionSchema...), nativeTaskSchema...) {
 		if stmt == activeWorkflowIndexV5 {
-			stmt = activeWorkflowIndexV4
+			stmt = oldActiveWorkflowIndex
 		}
 		_, err = tx.Exec(stmt)
 		require(t, err)
@@ -112,32 +59,10 @@ func TestConversationSchemaUpgradesCurrentCenterDatabase(t *testing.T) {
 	require(t, err)
 	require(t, tx.Commit())
 	require(t, raw.Close())
-	require(t, validateExistingDatabase(path))
-	reader, err := OpenSQLiteReader(path)
-	require(t, err)
-	if err = validateDatabaseSchema(context.Background(), reader.db); err == nil {
-		t.Fatal("schema 3 was exposed as the current native task schema before upgrade")
-	}
-	require(t, reader.Close())
-	store, err := OpenSQLiteStore(path)
-	require(t, err)
-	defer store.Close()
-	var version int
-	require(t, store.db.QueryRow(`SELECT MAX(version) FROM schema_migrations`).Scan(&version))
-	if version != domainSchemaVersion {
-		t.Fatalf("conversation upgrade wrote schema %d", version)
-	}
-	for _, name := range []string{"conversation_events", "conversation_bodies", "conversation_source_cursors", "conversation_native_source_idx"} {
-		var count int
-		require(t, store.db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE name=?`, name).Scan(&count))
-		if count != 1 {
-			t.Fatalf("conversation upgrade lacks %s", name)
-		}
-	}
-	require(t, validateDatabaseSchema(context.Background(), store.db))
+	assertOldSQLiteRejectedUnchanged(t, path, 3)
 }
 
-func TestNativeWorkflowIndexUpgradesCurrentCenterDatabase(t *testing.T) {
+func TestSQLiteV4IsRejectedWithoutUpgrade(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "steerline.db")
 	store, err := OpenSQLiteStore(path)
 	require(t, err)
@@ -146,22 +71,52 @@ func TestNativeWorkflowIndexUpgradesCurrentCenterDatabase(t *testing.T) {
 	require(t, err)
 	_, err = raw.Exec(`DROP INDEX one_active_workflow_per_task`)
 	require(t, err)
-	_, err = raw.Exec(activeWorkflowIndexV4)
+	_, err = raw.Exec(oldActiveWorkflowIndex)
 	require(t, err)
 	_, err = raw.Exec(`DELETE FROM schema_migrations WHERE version=?`, domainSchemaVersion)
 	require(t, err)
 	_, err = raw.Exec(`INSERT INTO schema_migrations(version,applied_at) VALUES(4,?)`, now().Format(time.RFC3339Nano))
 	require(t, err)
 	require(t, raw.Close())
-	require(t, validateExistingDatabase(path))
-	store, err = OpenSQLiteStore(path)
+	assertOldSQLiteRejectedUnchanged(t, path, 4)
+	reader, err := openSQLiteInspector(path)
 	require(t, err)
-	defer store.Close()
-	require(t, validateDatabaseSchema(context.Background(), store.db))
+	defer reader.Close()
 	var definition string
-	require(t, store.db.QueryRow(`SELECT sql FROM sqlite_master WHERE name='one_active_workflow_per_task'`).Scan(&definition))
-	if strings.Join(strings.Fields(definition), " ") != activeWorkflowIndexV5 {
-		t.Fatalf("native workflow index was not upgraded: %s", definition)
+	require(t, reader.db.QueryRow(`SELECT sql FROM sqlite_master WHERE name='one_active_workflow_per_task'`).Scan(&definition))
+	if strings.Join(strings.Fields(definition), " ") != oldActiveWorkflowIndex {
+		t.Fatalf("old workflow index changed during rejection: %s", definition)
+	}
+}
+
+func assertOldSQLiteRejectedUnchanged(t *testing.T, path string, version int) {
+	t.Helper()
+	before, err := os.ReadFile(path)
+	require(t, err)
+	for _, open := range []func(string) (*SQLiteStore, error){OpenSQLiteReader, OpenSQLiteStore} {
+		store, openErr := open(path)
+		if store != nil {
+			_ = store.Close()
+		}
+		if openErr == nil || !strings.Contains(openErr.Error(), fmt.Sprintf("unsupported SQLite schema %d", version)) {
+			t.Fatalf("schema %d was admitted: %v", version, openErr)
+		}
+	}
+	if err = validateExistingDatabase(path); err == nil || !strings.Contains(err.Error(), fmt.Sprintf("unsupported SQLite schema %d", version)) {
+		t.Fatalf("schema %d passed preflight: %v", version, err)
+	}
+	after, err := os.ReadFile(path)
+	require(t, err)
+	if !bytes.Equal(before, after) {
+		t.Fatalf("schema %d database changed during rejection", version)
+	}
+	reader, err := openSQLiteInspector(path)
+	require(t, err)
+	defer reader.Close()
+	var got int
+	require(t, reader.db.QueryRow(`SELECT MAX(version) FROM schema_migrations`).Scan(&got))
+	if got != version {
+		t.Fatalf("schema version changed: got %d, want %d", got, version)
 	}
 }
 
@@ -173,7 +128,7 @@ func TestSQLiteRejectsParallelExecutionsInOneWorkflow(t *testing.T) {
 		if err := tx.PutTask(TaskRecord{ProjectIdentity: project, TaskID: "17", Status: "in_progress", Version: 1}); err != nil {
 			return err
 		}
-		if err := tx.PutWorkflowRun(WorkflowRunRecord{ProjectIdentity: project, WorkflowRunID: "wf-1", TaskID: "17", WorkflowVersion: MinimalWorkflowVersion, Phase: "executing"}); err != nil {
+		if err := tx.PutWorkflowRun(WorkflowRunRecord{ProjectIdentity: project, WorkflowRunID: "wf-1", TaskID: "17", WorkflowVersion: "minimal-v1", Phase: "executing"}); err != nil {
 			return err
 		}
 		for _, id := range []string{"exec-a"} {
@@ -294,95 +249,6 @@ func TestCommandIdempotencyAndDecisionVersionArbitration(t *testing.T) {
 	}
 }
 
-func TestMinimalWorkflowRevisionGatesAndRepairLimit(t *testing.T) {
-	run := &WorkflowRunRecord{WorkflowVersion: MinimalWorkflowVersion, Definition: WorkflowDefinition{ID: MinimalWorkflowVersion, Version: MinimalWorkflowVersion, ReviewRequired: true, MaxRepairRounds: 1}, Phase: "executing"}
-	base := strings.Repeat("a", 40)
-	prepared := WorkspaceEvidence{Repository: "repo", Worktree: "tree", Branch: "codex/test", Base: base, Head: base, VerifiedAt: time.Now().UTC()}
-	exec := &ExecutionRecord{Status: "active", Protocol: string(ProtocolOrcaSupervised), CurrentStep: "prepare", Workspace: WorkspaceEvidence{Repository: "repo", Worktree: "tree", Branch: "codex/test", Base: base}}
-	if step, err := AdvanceMinimalExecution(run, exec, StepGateResult{StepID: "prepare", Succeeded: true, Workspace: prepared}, nil); err != nil || step != "implement" {
-		t.Fatalf("prepare gate: %q %v", step, err)
-	}
-	exec.CurrentStep = "implement"
-	commit := strings.Repeat("b", 40)
-	verified := time.Now().UTC()
-	implement := StepGateResult{StepID: "implement", Succeeded: true, InputRevision: base, Revision: commit, Workspace: WorkspaceEvidence{Repository: "repo", Worktree: "tree", Branch: "codex/test", Base: exec.Workspace.Base, Head: commit, VerifiedAt: verified}}
-	for _, test := range []struct {
-		name       string
-		mutate     func(*StepGateResult)
-		wantErrSub string
-	}{
-		{name: "input revision", mutate: func(v *StepGateResult) { v.InputRevision = strings.Repeat("c", 40) }, wantErrSub: "implement input revision"},
-		{name: "repository", mutate: func(v *StepGateResult) { v.Workspace.Repository = "other-repo" }, wantErrSub: "implement workspace repository"},
-		{name: "worktree", mutate: func(v *StepGateResult) { v.Workspace.Worktree = "other-tree" }, wantErrSub: "implement worktree"},
-		{name: "branch", mutate: func(v *StepGateResult) { v.Workspace.Branch = "other-branch" }, wantErrSub: "implement branch"},
-		{name: "base", mutate: func(v *StepGateResult) { v.Workspace.Base = strings.Repeat("c", 40) }, wantErrSub: "implement base revision"},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			badRun, badExec, badResult := *run, *exec, implement
-			test.mutate(&badResult)
-			if _, err := AdvanceMinimalExecution(&badRun, &badExec, badResult, nil); err == nil || !strings.Contains(err.Error(), test.wantErrSub) {
-				t.Fatalf("mismatched implement %s receipt was not rejected precisely: %v", test.name, err)
-			}
-		})
-	}
-	if step, err := AdvanceMinimalExecution(run, exec, implement, nil); err != nil || step != "verify" {
-		t.Fatalf("implement gate: %q %v", step, err)
-	}
-	exec.CurrentStep = "verify"
-	failedExit := 1
-	failedPassed := false
-	verify := StepGateResult{StepID: "verify", Succeeded: true, Revision: commit, Workspace: implement.Workspace, ResultID: "verify-1", Checks: []CheckEvidence{{Name: "unit", Status: "failed", Revision: commit, Command: "go test ./...", ScriptVersion: "fixture/v1", ExitCode: &failedExit, Passed: &failedPassed, EvidenceRef: "fixture:unit", ActualCommit: commit}}}
-	badVerify := verify
-	badVerify.Checks = nil
-	if _, err := AdvanceMinimalExecution(run, exec, badVerify, []string{"unit"}); err == nil || !strings.Contains(err.Error(), "no conclusive execution receipt") {
-		t.Fatalf("verify advanced without the required check receipt: %v", err)
-	}
-	badVerify = verify
-	badVerify.Checks = append([]CheckEvidence(nil), verify.Checks...)
-	badVerify.Checks[0].EvidenceRef = ""
-	if _, err := AdvanceMinimalExecution(run, exec, badVerify, []string{"unit"}); err == nil {
-		t.Fatal("verify passed without a script evidence reference")
-	}
-	badVerify = verify
-	badVerify.Checks = append([]CheckEvidence(nil), verify.Checks...)
-	badVerify.Checks[0].ActualCommit = base
-	if _, err := AdvanceMinimalExecution(run, exec, badVerify, []string{"unit"}); err == nil {
-		t.Fatal("verify passed with check evidence from another commit")
-	}
-	badVerify = verify
-	badVerify.Checks = append([]CheckEvidence(nil), verify.Checks...)
-	badVerify.Checks[0].Status = "passed"
-	if _, err := AdvanceMinimalExecution(run, exec, badVerify, []string{"unit"}); err == nil {
-		t.Fatal("verify passed with a failed exit code")
-	}
-	if step, err := AdvanceMinimalExecution(run, exec, verify, []string{"unit"}); err != nil || step != "implement" || exec.RepairRounds != 1 {
-		t.Fatalf("failed deterministic check did not enter repair: step=%q err=%v rounds=%d", step, err, exec.RepairRounds)
-	}
-	verify.Checks[0].Status = "passed"
-	passedExit := 0
-	passed := true
-	verify.Checks[0].ExitCode = &passedExit
-	verify.Checks[0].Passed = &passed
-	exec.CurrentStep = "verify"
-	if step, err := AdvanceMinimalExecution(run, exec, verify, []string{"unit"}); err != nil || step != "review" {
-		t.Fatalf("verify gate: %q %v", step, err)
-	}
-	exec.CurrentStep = "review"
-	if step, err := AdvanceMinimalExecution(run, exec, StepGateResult{StepID: "review", Succeeded: true, Revision: strings.Repeat("c", 40), ReviewVerdict: "passed", ResultID: "review-bad", Workspace: implement.Workspace}, nil); err == nil || step != "" {
-		t.Fatal("review of a different revision must be rejected")
-	}
-	if step, err := AdvanceMinimalExecution(run, exec, StepGateResult{StepID: "review", Succeeded: true, Revision: commit, ReviewVerdict: "passed", ResultID: "review-1", Workspace: implement.Workspace}, nil); err != nil || step != "publish_pr" {
-		t.Fatalf("review gate: %q %v", step, err)
-	}
-	exec.CurrentStep = "publish_pr"
-	if _, err := AdvanceMinimalExecution(run, exec, StepGateResult{StepID: "publish_pr", Succeeded: true, Revision: commit, Workspace: implement.Workspace, PublishedHead: strings.Repeat("c", 40), PRURL: "https://example.test/pr/1"}, nil); err == nil {
-		t.Fatal("published head mismatch passed")
-	}
-	if step, err := AdvanceMinimalExecution(run, exec, StepGateResult{StepID: "publish_pr", Succeeded: true, Revision: commit, Workspace: implement.Workspace, PublishedHead: commit, PRURL: "https://example.test/pr/1"}, nil); err != nil || step != "waiting_pr_merge" {
-		t.Fatalf("publish gate: %q %v", step, err)
-	}
-}
-
 func TestRuntimeSchemasV1ThroughV4AreRejectedWithoutMutation(t *testing.T) {
 	for version := 1; version <= 4; version++ {
 		t.Run(strconv.Itoa(version), func(t *testing.T) {
@@ -451,7 +317,7 @@ func TestPreflightRejectsUnknownSQLiteSchemaWithoutMutation(t *testing.T) {
 	if err = preflightExistingState(runDir, "runtime.json"); err == nil || !strings.Contains(err.Error(), "unsupported SQLite schema 99") {
 		t.Fatalf("unknown database schema was accepted: %v", err)
 	}
-	reader, err := OpenSQLiteReader(path)
+	reader, err := openSQLiteInspector(path)
 	require(t, err)
 	defer reader.Close()
 	var version, tableCount int
@@ -781,7 +647,7 @@ func seedNativeDecision(t *testing.T, db *SQLiteStore, project, runID, decisionI
 		if _, err = raw.ExecContext(ctx, `INSERT INTO task_batches(project_identity,batch_id,schema_version,payload_digest,created_at,command_id,task_ids) VALUES(?,?,?,?,?,?,?)`, project, task.BatchID, "task-batch/v1", strings.Repeat("b", 64), nowTime.UTC().Format(time.RFC3339Nano), strings.Repeat("c", 32), batchIDs); err != nil {
 			return err
 		}
-		workflow := WorkflowRunRecord{ProjectIdentity: project, WorkflowRunID: runID, TaskID: task.TaskID, WorkflowVersion: MinimalWorkflowVersion, Definition: WorkflowDefinition{ID: MinimalWorkflowVersion, Version: MinimalWorkflowVersion}, Phase: "waiting_decision", CreatedAt: nowTime, UpdatedAt: nowTime}
+		workflow := WorkflowRunRecord{ProjectIdentity: project, WorkflowRunID: runID, TaskID: task.TaskID, WorkflowVersion: WorkerFlowVersion, Phase: "waiting_decision", CreatedAt: nowTime, UpdatedAt: nowTime}
 		workflowPayload, err := json.Marshal(workflow)
 		if err != nil {
 			return err
@@ -803,7 +669,7 @@ func seedNativeDecision(t *testing.T, db *SQLiteStore, project, runID, decisionI
 		t.Fatalf("seed native decision graph: %v", err)
 	}
 	store := &Store{Path: filepath.Join(t.TempDir(), "runtime.json"), Domain: db, Project: project}
-	state := Runtime{SchemaVersion: 5, Repository: Repository{Identity: project, Path: "repo", Remote: "origin", Branch: "main"}, Service: ServiceState{InstanceID: "service-instance", Status: "running", Ready: true, Claimant: "alice"}, Runs: []*Run{}, Tasks: []TaskRecord{}, WorkflowRuns: []WorkflowRunRecord{}, Executions: []ExecutionRecord{}, Attempts: []StepAttemptRecord{}, Decisions: []DecisionRecord{}, Control: ControlState{DispatchMode: "manual", Revision: 1}}
+	state := Runtime{SchemaVersion: WorkerFlowRuntimeSchema, Repository: Repository{Identity: project, Path: "repo", Remote: "origin", Branch: "main"}, Service: ServiceState{InstanceID: "service-instance", Status: "running", Ready: true, Claimant: "alice"}, Runs: []*Run{}, Tasks: []TaskRecord{}, WorkflowRuns: []WorkflowRunRecord{}, Executions: []ExecutionRecord{}, Attempts: []StepAttemptRecord{}, Decisions: []DecisionRecord{}, Control: ControlState{DispatchMode: "manual", Revision: 1}}
 	if err = store.Publish(&state); err != nil {
 		t.Fatalf("publish decision test projection: %v", err)
 	}

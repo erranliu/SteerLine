@@ -65,6 +65,8 @@ func SpawnerFor(c Config) Spawner {
 // or process group (Linux). This preserves the pre-P1 behavior exactly.
 type LocalSpawner struct{}
 
+const maxWorkerOutputBytes = 2 << 20
+
 type maxOutputWriter struct {
 	writer    io.Writer
 	remaining int64
@@ -72,7 +74,7 @@ type maxOutputWriter struct {
 
 func (w *maxOutputWriter) Write(data []byte) (int, error) {
 	if int64(len(data)) > w.remaining {
-		return 0, fmt.Errorf("minimal step output exceeds %d bytes", minimalStepOutputMax)
+		return 0, fmt.Errorf("worker output exceeds %d bytes", maxWorkerOutputBytes)
 	}
 	n, err := w.writer.Write(data)
 	w.remaining -= int64(n)
@@ -194,7 +196,7 @@ func (LocalSpawner) Start(ctx context.Context, spec SpawnSpec) (*Worker, error) 
 			defer reader.Close()
 			writer := io.Writer(logFile)
 			if outputFile != nil {
-				writer = io.MultiWriter(logFile, &maxOutputWriter{writer: outputFile, remaining: minimalStepOutputMax})
+				writer = io.MultiWriter(logFile, &maxOutputWriter{writer: outputFile, remaining: maxWorkerOutputBytes})
 			}
 			scanErr = streamWorkerEventsWithEmit(io.TeeReader(reader, writer), NewCodexNormalizer(), func(ev WorkerEvent) {
 				ev.RunID, ev.AttemptID = spec.RunID, spec.AttemptID

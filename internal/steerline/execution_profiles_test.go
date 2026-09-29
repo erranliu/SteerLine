@@ -9,27 +9,13 @@ import (
 	"runtime"
 	"strings"
 	"testing"
-	"time"
 )
-
-func testProfileSteps(site string) *ProjectSteps {
-	step := StepContract{Provider: "command", Entry: "tools/mock.py", Version: "minimal-v1", InputSchema: NativeTaskInputSchema, OutputSchema: MinimalStepOutputSchema, ExecutionSite: site, Timeout: time.Minute, Command: []string{"python", "tools/mock.py"}}
-	steps := &ProjectSteps{Implement: step, Verify: step, PublishPR: step}
-	steps.Verify.RequiredChecks = []string{"mock"}
-	return steps
-}
 
 func TestConfigLoadsLocalAndRemoteOrcaProfilesWithoutProbingTargets(t *testing.T) {
 	if runtime.GOOS != "windows" {
 		t.Skip("local Orca terminal target uses Windows cmd.exe")
 	}
 	base, _ := nativeTaskFixture(t)
-	if err := os.MkdirAll(filepath.Join(base.Repository, "tools"), 0700); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(base.Repository, "tools", "mock.py"), []byte("print('mock')\n"), 0600); err != nil {
-		t.Fatal(err)
-	}
 	localOrca := ExecutionProfile{ID: "orca-local", Name: "Orca 本机", Host: "orca", Agent: "codex", Model: "chosen-model", ReasoningEffort: "high", Sandbox: "workspace-write", Codex: Command{Executable: "codex"}, Orca: OrcaConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "15m"}}
 	remoteOrca := ExecutionProfile{ID: "orca-remote", Name: "Orca 远程", Host: "orca_supervised", Agent: "codex", Model: "chosen-model", ReasoningEffort: "xhigh", Sandbox: "workspace-write", Codex: Command{Executable: "codex"}, Orca: OrcaConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "15m", Supervised: &SupervisedOrcaConfig{ConnectionID: "connection", EnvironmentID: "environment", RepositorySelector: "repo", CoordinatorTerminal: "terminal", PollInterval: "5s", CapabilityReportVersion: 1}}}
 	input := map[string]any{"repository": base.Repository, "branch": "main", "task_authority": "native", "workflow_protocol": WorkerFlowVersion, "host": "local", "agent": "codex", "sandbox": "workspace-write", "execution_profiles": []ExecutionProfile{localOrca, remoteOrca}, "default_execution_profile": ProjectExecutionProfileID}
@@ -51,18 +37,12 @@ func TestConfigLoadsLocalAndRemoteOrcaProfilesWithoutProbingTargets(t *testing.T
 	}
 	for _, profile := range loaded.ExecutionProfiles {
 		selected, chosen, err := loaded.ResolveExecutionProfile(profile.ID, profile.Digest())
-		if err != nil || selected.Host != profile.Host || chosen.ProjectSteps != nil {
+		if err != nil || selected.Host != profile.Host {
 			t.Fatalf("Orca profile changed route: %+v / %v", chosen, err)
 		}
 		if profile.StaticUnavailableReason() == "" {
 			t.Fatalf("deferred Orca worker-flow profile remained selectable: %+v", profile)
 		}
-	}
-	localOrca.ProjectSteps = testProfileSteps("local")
-	input["execution_profiles"] = []ExecutionProfile{localOrca, remoteOrca}
-	write()
-	if _, err := LoadConfig(path); err == nil || !strings.Contains(err.Error(), "cannot configure project_steps") {
-		t.Fatalf("worker-flow profile with old project steps was accepted: %v", err)
 	}
 }
 
@@ -72,12 +52,7 @@ func TestNativeClaimPersistsChosenExecutionProfile(t *testing.T) {
 	if out, err := exec.Command("git", "-C", base.Repository, "push", "origin", "main").CombinedOutput(); err != nil {
 		t.Fatalf("push fixture base: %v: %s", err, out)
 	}
-	base.WorkflowDefinition = ptr(DefaultMinimalWorkflowDefinition(false))
-	step := StepContract{Provider: "command", Entry: "builtin:verify", Version: MinimalWorkflowVersion, InputSchema: NativeTaskInputSchema, OutputSchema: MinimalStepOutputSchema, ExecutionSite: "local", Timeout: time.Minute, Command: []string{"git", "--version"}}
-	base.ProjectSteps = &ProjectSteps{Implement: step, Verify: step, PublishPR: step}
-	base.ProjectSteps.Verify.RequiredChecks = []string{"unit"}
-	base.WorkspaceDirtyIgnore = WorkspaceDirtyIgnore{Extensions: []string{".meta"}}
-	profile := ExecutionProfile{ID: "local-strong", Name: "本地高强度", Host: "local", Agent: "codex", Model: "chosen-model", ReasoningEffort: "xhigh", Sandbox: "danger-full-access", Codex: Command{Executable: "git"}, ProjectSteps: base.ProjectSteps}
+	profile := ExecutionProfile{ID: "local-strong", Name: "本地高强度", Host: "local", Agent: "codex", Model: "chosen-model", ReasoningEffort: "xhigh", Sandbox: "danger-full-access", Codex: Command{Executable: "git"}}
 	base.ExecutionProfiles = []ExecutionProfile{profile}
 	reader, err := OpenNativeTaskProject(ctx, &base)
 	if err != nil {
@@ -118,14 +93,13 @@ func TestNativeClaimPersistsChosenExecutionProfile(t *testing.T) {
 		t.Fatalf("selected claim did not persist a workflow: %+v / %v", snapshot, err)
 	}
 	wf, execution := snapshot.WorkflowRuns[0], snapshot.Executions[0]
-	if wf.ExecutionProfile == nil || wf.ExecutionProfile.ID != profile.ID || !wf.ExecutionProfile.Verify(wf.ProjectSteps) || wf.Runner.Model != "chosen-model" || wf.Runner.ReasoningEffort != "xhigh" || execution.Backend != string(BackendLocal) || len(wf.WorkspaceDirtyIgnore.Extensions) != 1 || wf.WorkspaceDirtyIgnore.Extensions[0] != ".meta" {
+	if wf.WorkflowVersion != WorkerFlowVersion || wf.ExecutionProfile == nil || wf.ExecutionProfile.ID != profile.ID || !wf.ExecutionProfile.VerifyWorkerFlow() || wf.Runner.Model != "chosen-model" || wf.Runner.ReasoningEffort != "xhigh" || execution.Backend != string(BackendLocal) || execution.CurrentStep != "worker" {
 		t.Fatalf("chosen execution route was not fixed in the claim: %+v / %+v", wf, execution)
 	}
 	base.ExecutionProfiles[0].Model = "later-edit"
-	base.WorkspaceDirtyIgnore = WorkspaceDirtyIgnore{}
 	run := &Run{RunID: wf.WorkflowRunID, Host: "local", Agent: "codex", Backend: execution.Backend, Protocol: execution.Protocol, Target: execution.Target}
 	service := &Service{Config: base, baseConfig: base, State: Runtime{Runs: []*Run{run}, WorkflowRuns: snapshot.WorkflowRuns}}
-	if err := service.useFixedRunProfile(run); err != nil || service.Config.Model != "chosen-model" || len(service.Config.WorkspaceDirtyIgnore.Extensions) != 1 {
+	if err := service.useFixedRunProfile(run); err != nil || service.Config.Model != "chosen-model" || service.Config.Sandbox != "danger-full-access" {
 		t.Fatalf("recovery adopted the edited preset: %+v / %v", service.Config, err)
 	}
 }
@@ -133,9 +107,7 @@ func TestNativeClaimPersistsChosenExecutionProfile(t *testing.T) {
 func TestAutomaticDispatchRequiresAnExplicitDefaultWithMultipleProfiles(t *testing.T) {
 	ctx := context.Background()
 	base, _ := nativeTaskFixture(t)
-	base.WorkflowDefinition = ptr(DefaultMinimalWorkflowDefinition(false))
-	base.ProjectSteps = testProfileSteps("local")
-	base.ExecutionProfiles = []ExecutionProfile{{ID: "other", Name: "另一个本地配置", Host: "local", Agent: "codex", Sandbox: "workspace-write", Codex: Command{Executable: "codex"}, ProjectSteps: testProfileSteps("local")}}
+	base.ExecutionProfiles = []ExecutionProfile{{ID: "other", Name: "另一个本地配置", Host: "local", Agent: "codex", Sandbox: "workspace-write", Codex: Command{Executable: "codex"}}}
 	reader, err := OpenNativeTaskProject(ctx, &base)
 	if err != nil {
 		t.Fatal(err)
@@ -226,69 +198,11 @@ func TestWorkerFlowClaimsFreezeIndependentLocalProfiles(t *testing.T) {
 		if run == nil {
 			t.Fatalf("task %s lost its claimed worker flow", taskID)
 		}
-		workflow, execution := reopened.minimalRecords(run)
+		workflow, execution := reopened.workflowRecords(run)
 		fixed, err := reopened.executionConfigForRun(run)
 		if err != nil || workflow == nil || workflow.WorkflowVersion != WorkerFlowVersion || workflow.ExecutionProfile == nil || workflow.ExecutionProfile.ID != c.ExecutionProfiles[index].ID || execution == nil || execution.ExecutionID != workflow.SelectedResult || fixed.Model != c.ExecutionProfiles[index].Model || len(reopened.State.Attempts) != 2 {
 			t.Fatalf("task %s adopted another local profile or step chain: workflow=%+v execution=%+v config=%+v err=%v", taskID, workflow, execution, fixed, err)
 		}
-	}
-}
-
-func TestExecutionProfilesSelectAndFreezeOneTaskRoute(t *testing.T) {
-	base := Config{Repository: "C:/repo", Host: "local", Agent: "codex", Model: "base-model", Sandbox: "workspace-write", Codex: Command{Executable: "codex"}, WorkflowDefinition: ptr(DefaultMinimalWorkflowDefinition(false)), ProjectSteps: testProfileSteps("local")}
-	profile := ExecutionProfile{ID: "review-heavy", Name: "高强度本地", Host: "local", Agent: "codex", Model: "chosen-model", ReasoningEffort: "xhigh", Sandbox: "danger-full-access", Codex: Command{Executable: "codex"}, ProjectSteps: testProfileSteps("local")}
-	base.ExecutionProfiles = []ExecutionProfile{profile}
-	if base.DefaultProfileID() != "" {
-		t.Fatal("multiple profiles gained an implicit auto-dispatch choice")
-	}
-	if _, _, err := base.ResolveExecutionProfile(profile.ID, strings.Repeat("0", 64)); err == nil {
-		t.Fatal("stale profile digest was accepted")
-	}
-	selected, chosen, err := base.ResolveExecutionProfile(profile.ID, profile.Digest())
-	if err != nil || selected.Model != "chosen-model" || selected.ReasoningEffort != "xhigh" || !chosen.MatchesConfig(selected) {
-		t.Fatalf("wrong selected profile: %+v / %v", selected, err)
-	}
-	fixed := chosen.Freeze()
-	if !fixed.Verify(*chosen.ProjectSteps) {
-		t.Fatal("fixed profile digest did not include the fixed steps")
-	}
-	run := &Run{RunID: strings.Repeat("a", 32), Host: "local", Agent: "codex", Backend: string(BackendLocal), Protocol: string(ProtocolLocalProcess), Target: targetFor(selected)}
-	s := &Service{Config: base, baseConfig: base, State: Runtime{Runs: []*Run{run}, WorkflowRuns: []WorkflowRunRecord{{WorkflowRunID: run.RunID, ProjectSteps: *chosen.ProjectSteps, ExecutionProfile: &fixed}}}}
-	s.baseConfig.ExecutionProfiles = nil
-	s.baseConfig.Model = "new-default"
-	if err := s.useFixedRunProfile(run); err != nil || s.Config.Model != "chosen-model" || s.Config.Sandbox != "danger-full-access" {
-		t.Fatalf("running task adopted edited config: %+v / %v", s.Config, err)
-	}
-	s.State.WorkflowRuns[0].ExecutionProfile.Model = "tampered"
-	if err := s.useFixedRunProfile(run); err == nil {
-		t.Fatal("tampered fixed route was accepted on recovery")
-	}
-}
-
-func TestMixedTaskHistoriesKeepTheirOwnBackendRoutes(t *testing.T) {
-	if runtime.GOOS != "windows" {
-		t.Skip("Orca terminal target uses Windows cmd.exe")
-	}
-	base := Config{Repository: "C:/repo", Host: "local", Agent: "codex", Sandbox: "workspace-write", WorkflowDefinition: ptr(DefaultMinimalWorkflowDefinition(false)), ProjectSteps: testProfileSteps("local")}
-	orca := ExecutionProfile{ID: "orca-local", Name: "Orca 本机", Host: "orca", Agent: "codex", Model: "orca-model", Sandbox: "workspace-write", Orca: OrcaConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "15m"}, ProjectSteps: testProfileSteps("target")}
-	base.ExecutionProfiles = []ExecutionProfile{orca}
-	localFixed, orcaFixed := base.projectExecutionProfile().Freeze(), orca.Freeze()
-	localRun := &Run{RunID: strings.Repeat("a", 32), Host: "local", Agent: "codex", Backend: string(BackendLocal), Protocol: string(ProtocolLocalProcess), Target: targetFor(base)}
-	orcaConfig := base.ApplyExecutionProfile(orca)
-	orcaRun := &Run{RunID: strings.Repeat("b", 32), Host: "orca", Agent: "codex", Backend: string(BackendOrca), Protocol: string(ProtocolOrcaTerminalV2), Target: targetFor(orcaConfig)}
-	s := &Service{Config: orcaConfig, baseConfig: base, State: Runtime{Runs: []*Run{localRun, orcaRun}, WorkflowRuns: []WorkflowRunRecord{{WorkflowRunID: localRun.RunID, ProjectSteps: *base.ProjectSteps, ExecutionProfile: &localFixed}, {WorkflowRunID: orcaRun.RunID, ProjectSteps: *orca.ProjectSteps, ExecutionProfile: &orcaFixed}}}}
-	for _, sample := range []struct {
-		run  *Run
-		host string
-	}{{localRun, "local"}, {orcaRun, "orca"}} {
-		config, err := s.executionConfigForRun(sample.run)
-		if err != nil || config.Host != sample.host || hostForExecution(sample.run.Backend, sample.run.Protocol) != sample.host {
-			t.Fatalf("historical run used another task's route: run=%s host=%q err=%v", sample.run.RunID, config.Host, err)
-		}
-	}
-	localRun.ExecutionStatus, orcaRun.ExecutionStatus = "running", "running"
-	if err := s.restoreActiveExecutionProfile(); err != nil || s.Config.Host != base.Host {
-		t.Fatalf("multiple active routes changed the project control configuration: host=%q err=%v", s.Config.Host, err)
 	}
 }
 
@@ -305,8 +219,8 @@ func TestStartPayloadRequiresCompleteExecutionProfileSelection(t *testing.T) {
 	}
 }
 
-func TestUnsupportedAgentSkillProfileIsMarkedUnavailable(t *testing.T) {
-	profile := ExecutionProfile{ID: "orca-pi", Name: "Orca Pi", Host: "orca", Agent: "pi", ProjectSteps: &ProjectSteps{Implement: StepContract{Provider: "agent_skill"}}}
+func TestUnsupportedLocalAgentProfileIsMarkedUnavailable(t *testing.T) {
+	profile := ExecutionProfile{ID: "local-pi", Name: "Local Pi", Host: "local", Agent: "pi"}
 	if reason := profile.StaticUnavailableReason(); !strings.Contains(reason, "codex") {
 		t.Fatalf("unsupported native agent was shown as selectable: %q", reason)
 	}

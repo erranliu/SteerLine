@@ -1,6 +1,6 @@
 # 本地 app-server 迁移验收状态（2026-09-29）
 
-实现已接入 `worker-flow-v1` 本地派发，协议为 `local_codex_app_server_v1`。状态仍为实施中；以下区分真实 Codex、模拟回归和未完成的交付门槛。
+实现已接入 `worker-flow-v1` 本地派发，协议为 `local_codex_app_server_v1`。按用户确认，实现 PR 可合并；未完成验收转入 [Spec](../../spec/local-codex-app-server.spec.md#第一阶段残留2026-09-29) 和 [Roadmap 第一阶段残留](../../roadmap/roadmap.md#第一阶段残留)，以下保持真实、模拟及未测证据的区分。
 
 | Spec 验收组 | 当前证据 | 状态 |
 | --- | --- | --- |
@@ -9,3 +9,5 @@
 | C 既有契约回归 | `go test ./... -count=1` 全量通过；旧本地协议拒绝测试证明拒绝前未准备工作区、未改写 Execution。`go vet ./...`、Windows 与 Linux 构建通过。 | 自动回归通过；按 Spec 未改交付逻辑，无需重做人工真实合并。 |
 
 当前真机 Codex CLI 为 `0.157.1`，app-server `initialize.userAgent` 为 `Codex Desktop/0.158.0-alpha.2.1`。npm 包装器与原生可执行文件版本核对已通过。真实探针验证了协议能力，尚不能替代服务级 A/B 门槛。
+
+同步主线 `f026fe6` 后，改用当前 worker-flow 接口并适配宿主 PR 发布的原生 turn 身份；修正最小测试入口引用的已删除测试。最小入口加 app-server/worker-flow/宿主发布定向回归通过（61.1 秒，无跳过），`cmd/test-feedback` 测试、全部包编译、`go vet ./...`、Windows/Linux 构建通过。全量测试证据来自同步前；同步后未重复全量。定向选择排除了需特殊宿主的服务反馈用例及另行启用的 Orca 真机用例，前者仍列在 B 残留。

@@ -1,6 +1,6 @@
 # Hosting 红线：中心管业务，执行端管现场
 
-SteerLine 的任务、步骤和交付只使用中心 native 权威。本机 Codex 与已支持的 Orca 后端执行同一 `minimal-v1` 步骤契约；目标远程路径使用受监管 worker、Dispatch 和消息协议，按 [执行架构 Spec](spec/execution-architecture.spec.md)、[远程协议 Spec](spec/01-orca-remote-protocol.md)与[远程闭环 Spec](spec/03-remote-execution-and-viewer.md)实施。当前本机与 Orca 接线见 [Hosting 规范](spec/hosting-spec.md)。
+SteerLine 的任务与交付只使用中心 native 权威。当前正式服务仅派发 `worker-flow-v1`，由同一 worker 会话处理实现、反馈和 PR 关联。Orca 平台适配与探针仍保留，当前不开放首次领取；历史远端设计见 [执行架构 Spec](spec/execution-architecture.spec.md)与[远程闭环 Spec](spec/03-remote-execution-and-viewer.md)。
 
 ## 权威边界
 
@@ -17,7 +17,7 @@ Orca 的 Run/Task/Dispatch 是执行身份，不等同于 SteerLine 的业务 Ta
 
 - 中心先持久化任务/步骤身份、固定仓库与 base、执行目标和外部动作意图，再调用后端；实际 worktree、Dispatch 和回执由执行端提供。远端路径属于远端，中心不能按本机路径读取远端文件或默认共享磁盘，远端也无需部署 SteerLine 服务。
 - 后端失联、请求响应丢失或执行可能仍活跃时保留原身份与资源占用，先对账，不盲目重派，也不自动切到另一后端。后端适配器只返回平台事实，不领取或关闭业务任务。
-- 中心按 prepare、implement、verify、按配置 review、publish_pr 的固定顺序推进。agent、技能和脚本只完成被派发步骤；自然语言总结、worker_done 或步骤回执本身均不能证明任务完成。步骤回执、代码 revision、PR head 和真实合并事实须由中心分别核验。
+- 中心固定任务、工作区、会话和 PR 身份，worker 在原会话中持续工作。自然语言总结、worker_done 或 PR 已创建均不能证明任务完成；中心仍须核验真实合并事实。
 - worker 的业务问题绑定原 Execution、Attempt 和 decision ID；答案保存、平台接受和实际应用分别记录。登录、信任目录与宿主权限提示交人处理，不伪装成业务问题。
 
 ## 生命周期与能力
@@ -26,7 +26,7 @@ Orca 的 Run/Task/Dispatch 是执行身份，不等同于 SteerLine 的业务 Ta
 - 当前受监管远程路径不提供生产取消；取消请求明确返回不支持并提示人工处理，不发送未经验证的 stop，也不凭 terminal handle 兜底关闭。已结算执行按后端协议释放资源，默认保留工作区与产物。
 - 仅启用对应目标与版本组合已实测的能力。首版远程版本、消息上限和剩余验收以远程 Spec 为准；未知能力保持不可用，不用提示词补足平台证据。
 
-## 当前 PR 4A 执行后端
+## 历史 PR 4A/4B 执行后端记录
 
 当前本机执行接入：local Codex 和 Orca terminal v2 共用 native Service 派发与步骤状态机，分别通过适配器提供固定执行身份、工作区事实、原始输出、观察与停止。runtime v5 是当前 SQLite 数据库的读投影；不可变 binding 和后端 Operation 保存在 `steerline.db`，`execution/v1/` 只保存能力证据。v1–v4 与旧文件式执行状态不自动迁移。Orca 使用中心准备并核验的 worktree；固定步骤 launcher 与其摘要先持久化，之后才创建绑定到该 worktree 的 terminal。精确终端/进程身份停止证明必须按 Operation 对账，才能释放执行槽。
 

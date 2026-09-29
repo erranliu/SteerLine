@@ -102,7 +102,7 @@ func TestNativeAuditPaginationBoundsAndDatabaseIdentity(t *testing.T) {
 	require(t, err)
 }
 
-func TestNativeAuditReadersCoexistWithWriterAndViewerUsesNative(t *testing.T) {
+func TestNativeAuditReadersCoexistWithWriter(t *testing.T) {
 	ctx := context.Background()
 	c, _ := nativeTaskFixture(t)
 	reader, err := OpenNativeTaskProject(ctx, &c)
@@ -124,11 +124,6 @@ func TestNativeAuditReadersCoexistWithWriterAndViewerUsesNative(t *testing.T) {
 	require(t, err)
 	if len(page.Tasks) != 3 {
 		t.Fatal("read failed while writer owns repository")
-	}
-	detail, err := LoadTaskDetail(ctx, c, "2")
-	require(t, err)
-	if detail.ID != "2" || !strings.Contains(detail.Description, "Sampled:") {
-		t.Fatalf("native viewer detail is incomplete: %+v", detail)
 	}
 	// Every read rechecks the binding rather than relying on an earlier handle.
 	_, err = writer.db.Exec(`UPDATE project_task_authorities SET branch='other'`)

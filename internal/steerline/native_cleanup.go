@@ -201,8 +201,8 @@ func commitNativePRCleanupReceipt(ctx context.Context, tx *sqliteTx, project str
 	if err := tx.tx.QueryRowContext(ctx, `SELECT payload FROM executions WHERE project_identity=? AND execution_id=? AND workflow_run_id=?`, project, evidence.ExecutionID, evidence.WorkflowRunID).Scan(&executionPayload); err != nil {
 		return nativeErr("contract_mismatch", "native PR cleanup execution is not bound to the fixed workflow")
 	}
-	if err := tx.tx.QueryRowContext(ctx, `SELECT payload FROM step_attempts WHERE project_identity=? AND attempt_id=? AND execution_id=? AND step_id='publish_pr'`, project, evidence.AttemptID, evidence.ExecutionID).Scan(&attemptPayload); err != nil {
-		return nativeErr("contract_mismatch", "native PR cleanup attempt is not the fixed publish_pr step")
+	if err := tx.tx.QueryRowContext(ctx, `SELECT payload FROM step_attempts WHERE project_identity=? AND attempt_id=? AND execution_id=? AND step_id='worker'`, project, evidence.AttemptID, evidence.ExecutionID).Scan(&attemptPayload); err != nil {
+		return nativeErr("contract_mismatch", "native PR cleanup attempt is not the fixed worker attempt")
 	}
 	var workflow WorkflowRunRecord
 	var execution ExecutionRecord
@@ -216,9 +216,8 @@ func commitNativePRCleanupReceipt(ctx context.Context, tx *sqliteTx, project str
 	if err := json.Unmarshal(attemptPayload, &attempt); err != nil {
 		return err
 	}
-	var result StepGateResult
-	if workflow.TaskID != task.TaskID || execution.ExecutionID != evidence.ExecutionID || execution.WorkflowRunID != evidence.WorkflowRunID || execution.CandidateRevision != evidence.HeadRevision || attempt.Status != "succeeded" || json.Unmarshal(attempt.Result, &result) != nil || result.StepID != "publish_pr" || result.PRURL != evidence.PRURL || result.PublishedHead != evidence.HeadRevision || result.ResultID != attempt.ResultID {
-		return nativeErr("authority_mismatch", "native PR cleanup receipt does not match the task's fixed publication result")
+	if workflow.WorkflowVersion != WorkerFlowVersion || workflow.TaskID != task.TaskID || workflow.Repository != evidence.Repository || workflow.Branch != evidence.BaseBranch || workflow.SelectedResult != evidence.ExecutionID || workflow.PRURL != evidence.PRURL || execution.ExecutionID != evidence.ExecutionID || execution.WorkflowRunID != evidence.WorkflowRunID || execution.SessionID == "" || execution.Workspace.Branch == "" || attempt.StepID != "worker" || attempt.ExecutionID != evidence.ExecutionID || attempt.AttemptID != evidence.AttemptID {
+		return nativeErr("authority_mismatch", "native PR cleanup receipt does not match the fixed worker flow and PR")
 	}
 	var authorityBranch string
 	if err := tx.tx.QueryRowContext(ctx, `SELECT branch FROM project_task_authorities WHERE project_identity=? AND authority='native'`, project).Scan(&authorityBranch); err != nil || authorityBranch != evidence.BaseBranch {

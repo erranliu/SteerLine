@@ -54,27 +54,14 @@ func (s *Service) executionConfigForRun(run *Run) (Config, error) {
 			if len(base.ExecutionProfiles) > 0 && (run.ExecutionStatus == "pending" || run.ExecutionStatus == "running" || run.ExecutionStatus == "unknown" || run.FinishTaskStatus == "waiting_decision") {
 				return Config{}, errors.New("active run has no fixed execution profile; preserve its original service configuration")
 			}
-			base.WorkspaceDirtyIgnore = workflow.WorkspaceDirtyIgnore
 			return base, nil
 		}
 		fixed := *workflow.ExecutionProfile
-		profileValid := fixed.Verify(workflow.ProjectSteps)
-		if workflow.WorkflowVersion == WorkerFlowVersion {
-			profileValid = fixed.VerifyWorkerFlow()
-		}
-		if fixed.ID == "" || !profileValid {
+		if fixed.ID == "" || !fixed.VerifyWorkerFlow() {
 			return Config{}, errors.New("fixed execution profile identity is incomplete")
 		}
-		if err := workflow.WorkspaceDirtyIgnore.validate(); err != nil {
-			return Config{}, err
-		}
-		config := base.ApplyFixedExecutionProfile(fixed, workflow.ProjectSteps)
-		if workflow.WorkflowVersion == WorkerFlowVersion {
-			config.WorkflowProtocol = WorkerFlowVersion
-			config.ProjectSteps = nil
-			config.WorkflowDefinition = nil
-		}
-		config.WorkspaceDirtyIgnore = workflow.WorkspaceDirtyIgnore
+		config := base.ApplyFixedExecutionProfile(fixed)
+		config.WorkflowProtocol = WorkerFlowVersion
 		if fixed.Host == "orca_supervised" && run.Target.CoordinatorTerminal != "" {
 			if config.Orca.Supervised == nil {
 				return Config{}, errors.New("fixed supervised profile has no coordinator configuration")
@@ -84,9 +71,7 @@ func (s *Service) executionConfigForRun(run *Run) (Config, error) {
 			config.Orca.Supervised = &coordinator
 		}
 		if workflow.WorkflowVersion != WorkerFlowVersion {
-			if _, err := config.validateNativeWorkflow(); err != nil {
-				return Config{}, fmt.Errorf("fixed execution profile is invalid: %w", err)
-			}
+			return Config{}, fmt.Errorf("fixed execution profile uses an unsupported workflow version")
 		}
 		backend, protocol, err := ExecutionBackendKind(fixed.Host)
 		if workflow.WorkflowVersion == WorkerFlowVersion && backend == string(BackendLocal) {

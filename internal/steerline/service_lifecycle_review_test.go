@@ -64,8 +64,6 @@ func TestDirectServiceAndControlEntrypointsRejectMissingNativeAuthorityBeforeEff
 	assertAuthorityError("RunConfiguredService", RunConfiguredService(context.Background(), c, "manual", "", "off"))
 	_, stopErr := StopService(context.Background(), c, "operator", time.Second)
 	assertAuthorityError("StopService", stopErr)
-	_, _, submitErr := SubmitServiceCommand(context.Background(), c, "retry_run", "run", "operator", newID(), 1, RecoveryCommandBody{})
-	assertAuthorityError("SubmitServiceCommand", submitErr)
 	if _, err := ControlSnapshot(c); err == nil || !strings.Contains(err.Error(), "task_authority=native") {
 		t.Fatalf("ControlSnapshot did not reject missing native authority: %v", err)
 	}
@@ -87,7 +85,6 @@ func TestDirectServiceAndControlEntrypointsRejectMissingNativeAuthorityBeforeEff
 func TestRunConfiguredServiceRejectsBeadsBeforeCreatingStartupEvidence(t *testing.T) {
 	f := newFixture(t)
 	f.c.WorkflowProtocol = WorkerFlowVersion
-	f.c.WorkflowDefinition, f.c.ProjectSteps = nil, nil
 	sentinel := filepath.Join(f.c.Repository, ".beads")
 	require(t, os.Mkdir(sentinel, 0700))
 	err := RunConfiguredService(context.Background(), f.c, "manual", "", "off")

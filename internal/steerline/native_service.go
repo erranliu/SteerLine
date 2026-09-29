@@ -48,8 +48,7 @@ func (s *Service) refreshNativeSnapshot(ctx context.Context, reconstruct bool) e
 			}
 			continue
 		}
-		if s.Config.WorkflowProtocol == WorkerFlowVersion && workflow.WorkflowVersion != WorkerFlowVersion ||
-			s.Config.WorkflowProtocol != WorkerFlowVersion && workflow.WorkflowVersion == WorkerFlowVersion {
+		if workflow.WorkflowVersion != WorkerFlowVersion {
 			return nativeErr("unsupported_schema", "workflow protocol differs from the configured runtime; preserve the original external session")
 		}
 		if settled[workflow.WorkflowRunID] {
@@ -97,7 +96,7 @@ func (s *Service) refreshNativeSnapshot(ctx context.Context, reconstruct bool) e
 			intent := WorkspaceIntent{Path: path, Branch: branch, BaseCommit: base}
 			run.WorkspaceIntent = &intent
 			run.WorktreePath, run.WorktreeBranch, run.BaseCommit = ptr(path), ptr(branch), ptr(base)
-		} else if base != "" && (execution.Backend == string(BackendLocal) || workflow.WorkflowVersion == WorkerFlowVersion) {
+		} else if base != "" {
 			intent, planErr := planWorkspace(s.Config, task.TaskID, workflow.WorkflowRunID, base)
 			if planErr != nil {
 				return planErr
@@ -111,54 +110,32 @@ func (s *Service) refreshNativeSnapshot(ctx context.Context, reconstruct bool) e
 		} else if !workerActive {
 			run.Process = nil
 		}
-		if workflow.WorkflowVersion == WorkerFlowVersion {
-			run.SessionID = nil
-			if execution.SessionID != "" {
-				run.SessionID = ptr(execution.SessionID)
-			}
-			run.FinishTaskStatus = nativeRuntimeFinishStatus(task, *workflow)
-			switch {
-			case task.Status == "closed":
-				run.ExecutionStatus = "succeeded"
-			case workerActive, execution.Status == "active":
-				run.ExecutionStatus = "running"
-			case execution.Status == "pending":
-				run.ExecutionStatus = "pending"
-			case execution.Status == "idle":
-				run.ExecutionStatus = "succeeded"
-			default:
-				run.ExecutionStatus = "unknown"
-			}
-			if workflow.PRURL != "" {
-				run.PR.URL = ptr(workflow.PRURL)
-				run.PR.State = workflow.PRState
-			}
-		} else if workerActive && task.Status != "discarded" {
-			run.ExecutionStatus, run.FinishTaskStatus = "running", "pending"
-		} else {
-			run.ExecutionStatus = nativeRuntimeExecutionStatus(task, *workflow, *execution, attempt)
-			run.FinishTaskStatus = nativeRuntimeFinishStatus(task, *workflow)
+		run.SessionID = nil
+		if execution.SessionID != "" {
+			run.SessionID = ptr(execution.SessionID)
 		}
-		if workflow.WorkflowVersion != WorkerFlowVersion {
-			reconcileNativeWaitingDecision(&s.State, run)
-			run.Error = nil
+		run.FinishTaskStatus = nativeRuntimeFinishStatus(task, *workflow)
+		switch {
+		case task.Status == "closed":
+			run.ExecutionStatus = "succeeded"
+		case workerActive, execution.Status == "active":
+			run.ExecutionStatus = "running"
+		case execution.Status == "pending":
+			run.ExecutionStatus = "pending"
+		case execution.Status == "idle":
+			run.ExecutionStatus = "succeeded"
+		default:
+			run.ExecutionStatus = "unknown"
+		}
+		if workflow.PRURL != "" {
+			run.PR.URL = ptr(workflow.PRURL)
+			run.PR.State = workflow.PRState
 		}
 		if run.FinishTaskStatus == "blocked" && task.Status == "discarded" {
 			run.Error = ptr("native task was discarded; cleanup is handled by its fixed external identities")
 		}
 		if run.FinishTaskStatus == "blocked" && run.ExecutionStatus == "unknown" && run.Error == nil {
 			run.Error = ptr("native worker outcome is uncertain; original attempt and resource identity are retained")
-		}
-		if attempt != nil && attempt.StepID == "publish_pr" && len(attempt.Result) > 0 {
-			var result StepGateResult
-			if json.Unmarshal(attempt.Result, &result) == nil && result.PRURL != "" {
-				run.PR.URL = ptr(result.PRURL)
-			}
-		}
-		if run.PR.URL == nil {
-			if publication, ok := latestNativePublication(snapshot.Attempts, execution.ExecutionID); ok {
-				run.PR.URL = ptr(publication.PRURL)
-			}
 		}
 		if task.Status == "closed" {
 			page, queryErr := (QueryService{Store: s.domainStore, Project: s.Config.identity}).ShowNativeTask(ctx, task.TaskID)
@@ -173,14 +150,11 @@ func (s *Service) refreshNativeSnapshot(ctx context.Context, reconstruct bool) e
 			if err := json.Unmarshal(delivery.Evidence, &proof); err != nil {
 				return nativeErr("inconsistent_delivery", "closed native task has unreadable delivery evidence")
 			}
-			if proof.ExistingAcceptance == nil {
-				run.PR.URL = ptr(delivery.PRURL)
-				run.PR.State, run.PR.MergedAt, run.PR.MergeCommit = "merged", ptr(delivery.MergedAt), ptr(delivery.MergeCommit)
-			} else {
-				// The merged implementation predates this Run. Keep its failed,
-				// unpublished candidate history distinct from TaskDelivery.
-				run.PR = PRState{State: "unknown"}
+			if proof.ExistingAcceptance != nil {
+				return nativeErr("unsupported_schema", "worker-flow-v1 cannot load an old acceptance delivery")
 			}
+			run.PR.URL = ptr(delivery.PRURL)
+			run.PR.State, run.PR.MergedAt, run.PR.MergeCommit = "merged", ptr(delivery.MergedAt), ptr(delivery.MergeCommit)
 		}
 	}
 	s.State.SchemaVersion = runtimeSchemaFor(s.Config)
@@ -213,25 +187,6 @@ func pruneSettledDiscardedRuns(runs []*Run, occupied bool, currentTask *string, 
 		remaining = append(remaining, run)
 	}
 	return remaining
-}
-
-func latestNativePublication(attempts []StepAttemptRecord, executionID string) (StepGateResult, bool) {
-	var selected StepAttemptRecord
-	var result StepGateResult
-	found := false
-	for _, attempt := range attempts {
-		if attempt.ExecutionID != executionID || attempt.StepID != "publish_pr" || attempt.Status != "succeeded" || len(attempt.Result) == 0 {
-			continue
-		}
-		var candidate StepGateResult
-		if json.Unmarshal(attempt.Result, &candidate) != nil || candidate.StepID != "publish_pr" || candidate.PRURL == "" || candidate.ResultID != attempt.ResultID {
-			continue
-		}
-		if !found || attempt.AttemptNumber > selected.AttemptNumber {
-			selected, result, found = attempt, candidate, true
-		}
-	}
-	return result, found
 }
 
 func latestNativeWorkflow(workflows []WorkflowRunRecord, taskID string) *WorkflowRunRecord {
@@ -291,49 +246,6 @@ func latestNativeExecutionAttempt(attempts []StepAttemptRecord, executionID stri
 		}
 	}
 	return latest
-}
-
-func nativeRuntimeExecutionStatus(task TaskRecord, workflow WorkflowRunRecord, execution ExecutionRecord, attempt *StepAttemptRecord) string {
-	if task.Status == "closed" && workflow.Phase == "blocked" {
-		if execution.Status == "failed" || execution.Status == "stopped" {
-			return "failed"
-		}
-		return "unknown"
-	}
-	if task.Status == "closed" {
-		return "succeeded"
-	}
-	if workflow.Phase == "waiting_decision" && execution.Status == "waiting_decision" {
-		return "succeeded"
-	}
-	switch execution.Status {
-	case "failed":
-		return "failed"
-	case "blocked", "waiting_decision":
-		return "unknown"
-	case "succeeded":
-		return "succeeded"
-	case "stopped":
-		return "failed"
-	}
-	if workflow.Phase == "waiting_pr_merge" {
-		return "succeeded"
-	}
-	if attempt != nil {
-		switch attempt.Status {
-		case "planned", "rejected", "failed":
-			if attempt.Status == "failed" || attempt.Status == "rejected" {
-				return "failed"
-			}
-			return "pending"
-		case "running", "dispatched", "dispatching", "outcome_unknown", "waiting_decision":
-			return "unknown"
-		}
-	}
-	if execution.Status == "pending" || execution.Status == "active" {
-		return "pending"
-	}
-	return "unknown"
 }
 
 func (s *Service) reconcileNativeCleanup(ctx context.Context) error {
@@ -454,27 +366,20 @@ func (s *Service) reconcileNativePRCleanup(ctx context.Context, task TaskRecord,
 	if run == nil {
 		return nativeErr("inconsistent_delivery", "discarded PR cleanup has no reconstructed workflow run")
 	}
-	workflow, execution := s.minimalRecords(run)
-	if workflow == nil || execution == nil {
-		return nativeErr("inconsistent_delivery", "discarded PR cleanup lacks its fixed workflow and execution")
-	}
-	publication, ok := latestNativePublication(s.State.Attempts, execution.ExecutionID)
-	if !ok || publication.PRURL != prURL || publication.PublishedHead != execution.CandidateRevision {
-		return nativeErr("authority_mismatch", "discarded PR cleanup URL differs from the fixed publish_pr result")
+	workflow, execution := s.workflowRecords(run)
+	attempt := s.workflowAttempt(run, run.AttemptID)
+	if workflow == nil || execution == nil || attempt == nil || workflow.WorkflowVersion != WorkerFlowVersion || attempt.StepID != "worker" || workflow.PRURL != prURL || execution.SessionID == "" {
+		return nativeErr("authority_mismatch", "discarded PR cleanup lacks its fixed worker flow, session and PR URL")
 	}
 	info, err := s.prs.Query(ctx, prURL)
 	if err != nil || info.State == "unknown" {
 		return errors.Join(err, nativeErr("merge_state_unknown", "discarded PR state could not be verified"))
 	}
-	if info.Merged || info.State == "merged" {
-		_, conflictErr := (CommandService{Store: s.domainStore, Project: s.Config.identity}).CompleteNativeTask(ctx, s.Config, task.TaskID, task.Version, workflow.WorkflowRunID, s.prs)
-		if conflictErr == nil {
-			return nativeErr("inconsistent_delivery", "discarded task unexpectedly received a normal delivery")
-		}
-		return conflictErr
+	if err := validateWorkerPRIdentity(info, prURL, s.Config.PR.Repository, workflow.Branch, execution.Workspace.Branch); err != nil {
+		return err
 	}
-	if info.URL != prURL || info.Repository != s.Config.PR.Repository || info.BaseBranch != s.Config.Branch || info.HeadRevision != execution.CandidateRevision {
-		return nativeErr("authority_mismatch", "discarded PR provider returned a different URL, repository, branch or head")
+	if info.Merged || info.State == "merged" {
+		return nativeErr("task_discarded", "discarded task PR is already merged; preserve delivery evidence for manual recovery")
 	}
 	if info.State == "open" {
 		info, err = s.prs.Close(ctx, prURL)
@@ -482,33 +387,18 @@ func (s *Service) reconcileNativePRCleanup(ctx context.Context, task TaskRecord,
 			return err
 		}
 	}
+	if err := validateWorkerPRIdentity(info, prURL, s.Config.PR.Repository, workflow.Branch, execution.Workspace.Branch); err != nil {
+		return err
+	}
 	if info.State != "closed_unmerged" || info.Merged {
 		return nativeErr("merge_state_unknown", "discarded PR closure did not produce a verified closed_unmerged receipt")
 	}
-	evidence := NativePRCleanupReceipt{WorkflowRunID: workflow.WorkflowRunID, ExecutionID: execution.ExecutionID, AttemptID: latestNativePublicationAttemptID(s.State.Attempts, execution.ExecutionID), PRURL: info.URL, Repository: info.Repository, BaseBranch: info.BaseBranch, HeadRevision: info.HeadRevision, State: info.State, Merged: info.Merged, ObservedAt: now()}
-	if evidence.AttemptID == "" {
-		return nativeErr("inconsistent_delivery", "discarded PR cleanup cannot identify its publication attempt")
-	}
+	evidence := NativePRCleanupReceipt{WorkflowRunID: workflow.WorkflowRunID, ExecutionID: execution.ExecutionID, AttemptID: attempt.AttemptID, PRURL: info.URL, Repository: info.Repository, BaseBranch: info.BaseBranch, HeadRevision: info.HeadRevision, State: info.State, Merged: info.Merged, ObservedAt: now()}
 	data, _ := json.Marshal(evidence)
 	requestID := digestValue(struct{ TaskID, Item string }{task.TaskID, cleanupItem})[:32]
 	_, err = (CommandService{Store: s.domainStore, Project: s.Config.identity}).RecordNativeCleanupReceipt(ctx, task.TaskID, requestID, task.Version, cleanupItem, s.Config.Claimant, data)
 	return err
 }
-
-func latestNativePublicationAttemptID(attempts []StepAttemptRecord, executionID string) string {
-	var selected StepAttemptRecord
-	found := false
-	for _, attempt := range attempts {
-		if attempt.ExecutionID == executionID && attempt.StepID == "publish_pr" && attempt.Status == "succeeded" && (!found || attempt.AttemptNumber > selected.AttemptNumber) {
-			selected, found = attempt, true
-		}
-	}
-	if found {
-		return selected.AttemptID
-	}
-	return ""
-}
-
 func (s *Service) reconcileNativeWorkspaceCleanup(ctx context.Context, task TaskRecord, cleanupItem string) error {
 	path := strings.TrimPrefix(cleanupItem, "workspace_cleanup:")
 	root, err := filepath.EvalSymlinks(s.Config.WorktreeRoot)
@@ -814,8 +704,8 @@ func (s *Service) dispatchNative(ctx context.Context) error {
 			return err
 		}
 		run := s.find(task.TaskID)
-		workflow, execution := s.minimalRecords(run)
-		attempt := s.minimalAttempt(run, run.AttemptID)
+		workflow, execution := s.workflowRecords(run)
+		attempt := s.workflowAttempt(run, run.AttemptID)
 		if run == nil || workflow == nil || execution == nil || attempt == nil {
 			return nativeErr("inconsistent_delivery", "native claim reservation could not be reconstructed from center records")
 		}
@@ -829,12 +719,6 @@ func (s *Service) dispatchNative(ctx context.Context) error {
 		if s.Config.hostName() != "orca_supervised" {
 			execution.Target.WorktreeID = intent.Path
 			execution.Target.Branch = intent.Branch
-		}
-		if workflow.WorkflowVersion != WorkerFlowVersion {
-			execution.Status = "active"
-			if workflow.Phase == "queued" {
-				workflow.Phase = "executing"
-			}
 		}
 		execution.UpdatedAt = now()
 		workflow.UpdatedAt = now()
@@ -858,10 +742,7 @@ func (s *Service) dispatchNative(ctx context.Context) error {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		if workflow.WorkflowVersion == WorkerFlowVersion {
-			return s.prepareWorkerFlow(ctx, task, run)
-		}
-		return s.prepareMinimalExecution(ctx, task, run)
+		return s.prepareWorkerFlow(ctx, task, run)
 	}
 	if s.targetTask != "" {
 		return fmt.Errorf("%w: %s is not in the current ready native task set", errTaskNotReady, s.targetTask)
@@ -896,7 +777,7 @@ func (s *Service) nativeCompleteMergedTask(ctx context.Context, run *Run) error 
 		return nativeErr("merge_state_unknown", "native task has no fixed PR URL")
 	}
 	task := nativeTaskRecord(s.State.Tasks, run.DomainTaskID)
-	workflow, _ := s.minimalRecords(run)
+	workflow, _ := s.workflowRecords(run)
 	if task == nil || workflow == nil {
 		return nativeErr("inconsistent_delivery", "native delivery task or workflow record is missing")
 	}
@@ -936,70 +817,15 @@ func (s *Service) pollNativePRs(ctx context.Context, onlyRunID string) error {
 		if task == nil {
 			continue
 		}
-		workflow, _ := s.minimalRecords(run)
+		workflow, _ := s.workflowRecords(run)
 		if workflow == nil {
 			continue
 		}
-		if workflow.WorkflowVersion == WorkerFlowVersion {
-			if err := s.pollWorkerFlowPR(ctx, run, task, workflow); err != nil {
-				operationErr = errors.Join(operationErr, err)
-			}
-			continue
+		if workflow.WorkflowVersion != WorkerFlowVersion {
+			return nativeErr("unsupported_schema", "PR polling found an unsupported workflow")
 		}
-		if task.Status == "discarded" {
-			if run.PR.URL == nil {
-				continue
-			}
-			_, err := (CommandService{Store: s.domainStore, Project: s.Config.identity}).CompleteNativeTask(ctx, s.Config, task.TaskID, task.Version, workflow.WorkflowRunID, s.prs)
-			if err != nil && !isNativeErrorCode(err, "task_discarded") {
-				operationErr = errors.Join(operationErr, err)
-			}
-			continue
-		}
-		if task.Status != "in_progress" || run.FinishTaskStatus != "waiting_pr_merge" || run.PR.URL == nil {
-			continue
-		}
-		info, err := s.prs.Query(ctx, *run.PR.URL)
-		queried := now()
-		run.PR.QueriedAt = &queried
-		if err != nil {
-			run.PR.State = "unknown"
-			run.PR.QueryError = ptr(clip(err.Error(), 1000))
-			if saveErr := s.save(); saveErr != nil {
-				return saveErr
-			}
-			operationErr = errors.Join(operationErr, nativeErr("merge_state_unknown", "PR merge state could not be verified: "+clip(err.Error(), 1000)))
-			continue
-		}
-		run.PR.QueryError = nil
-		run.PR.State, run.PR.MergedAt, run.PR.MergeCommit = info.State, info.MergedAt, info.MergeCommit
-		if info.BaseBranch != s.Config.Branch {
-			run.FinishTaskStatus = "blocked"
-			run.Error = ptr("PR target branch differs from the fixed native project branch")
-			if err = s.save(); err != nil {
-				return err
-			}
-			operationErr = errors.Join(operationErr, nativeErr("immutable_task", *run.Error))
-			continue
-		}
-		if err = s.save(); err != nil {
-			return err
-		}
-		switch info.State {
-		case "merged":
-			if err = s.nativeCompleteMergedTask(ctx, run); err != nil {
-				run.Error = ptr("PR merged; center delivery transaction will retry: " + clip(err.Error(), 1000))
-				operationErr = errors.Join(operationErr, err)
-				if saveErr := s.save(); saveErr != nil {
-					return saveErr
-				}
-			}
-		case "closed_unmerged":
-			run.FinishTaskStatus = "blocked"
-			run.Error = ptr("PR closed without merge; native task remains in progress for manual recovery")
-			if err = s.save(); err != nil {
-				return err
-			}
+		if err := s.pollWorkerFlowPR(ctx, run, task, workflow); err != nil {
+			operationErr = errors.Join(operationErr, err)
 		}
 	}
 	return operationErr

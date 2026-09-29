@@ -123,27 +123,6 @@ func closeConsoleWindowForTests(hwnd uint64) error {
 	return nil
 }
 
-func TestWindowsForegroundViewerHelper(t *testing.T) {
-	configPath := os.Getenv("STEERLINE_FOREGROUND_VIEWER_CONFIG")
-	if configPath == "" {
-		return
-	}
-	config, err := LoadConfig(configPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	connection := ConnectService(context.Background(), config)
-	if connection.State != ConnectionConnected {
-		t.Fatalf("viewer could not connect: %+v", connection)
-	}
-	if err := os.WriteFile(os.Getenv("STEERLINE_FOREGROUND_VIEWER_READY"), []byte("connected"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	for {
-		time.Sleep(time.Second)
-	}
-}
-
 func TestWindowsStartServiceRequiresVisibleWindow(t *testing.T) {
 	f := newFixture(t)
 	_, configPath := lifecycleConfigFile(t, f, f.c.RunDir)

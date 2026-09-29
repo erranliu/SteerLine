@@ -1,6 +1,6 @@
 # Plan：本机 Codex app-server 执行迁移
 
-执行依据：[Spec](local-codex-app-server.spec.md)。按以下顺序实施，一个实现 PR 交付。
+执行依据：[Spec](local-codex-app-server.spec.md)。按以下顺序实施，一个实现 PR 交付。实现已完成；按用户确认，未完成的服务级真机及生命周期验收转入 [第一阶段残留](../roadmap/roadmap.md#第一阶段残留)，不阻塞实现 PR 合并。
 
 1. **验证最小执行与恢复链。** 在目标 Windows/Codex 版本核对生成 schema。已验证建 thread、启动 turn、Default 模式 `steerline_ask` 原生工具请求、WebSocket 断开重接后由独立连接回复原请求并完成原 turn。第一条 turn 待答时第二个独立 app-server 已完成，第一条仍保持 `inProgress`。内置 `request_user_input` 在 Default 模式不可用，按 Spec 使用 `dynamicTools`；当前证据表明无需额外宿主。SteerLine 服务退出后的双任务真机闭环仍需在可脱离 Job Object 的宿主验证。
 
@@ -10,4 +10,4 @@
 
 4. **接入统一决策。** 扩展现有 Decision 请求/答案 DTO 以保留原生多题和请求身份；查询与运行投影不得覆盖同时待答的请求。两类反馈共用 `answer_decision`，分别回复原请求或启动原 thread 的新 turn。更新控制台提示、送达进度和失效反馈处理；等待回答时保留 active turn。恢复采用有界逐执行核验，核验结束后允许其他合格任务继续。执行验收 A 的一条双任务真机闭环，其余输入和故障分支按 B 自动验证。
 
-5. **回归与交付。** 完成 A–C 三组验收；C 复用现有 PR/TaskDelivery 回归，未修改交付逻辑时不另设人工合并验收。先做定向测试，最终候选再运行完整 Go 测试、`go vet` 和 Windows/Linux 构建；真机闭环已通过后，仅在新改动或失败影响其结论时补验。证据保存在 `docs/validation/local-codex-app-server/`，标明真实、模拟和未测范围。更新 [数据契约](../data-contract.md)、[决策说明](../decisions.md)、[会话事件说明](../conversation-events.md)和受影响运行说明；执行 `git diff --check`。所需能力和验收未通过前不启用新本地路径。
+5. **回归与交付。** A–C 三组验收按 Spec 记录已通过证据和第一阶段残留；C 复用现有 PR/TaskDelivery 回归，未修改交付逻辑时不另设人工合并验收。实现审计已完成完整 Go 测试，主线同步按当前 AGENTS.md 使用最小入口与定向测试，并运行 `go vet` 和 Windows/Linux 构建；仅在新改动或失败影响结论时补验。证据保存在 `docs/validation/local-codex-app-server/`，标明真实、模拟和未测范围。更新 [数据契约](../data-contract.md)、[决策说明](../decisions.md)、[会话事件说明](../conversation-events.md)和受影响运行说明；执行 `git diff --check`。本次实现可合并并使用新本地路径，残留验收在第一阶段集成验收前完成。

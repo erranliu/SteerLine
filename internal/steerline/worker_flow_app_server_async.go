@@ -72,7 +72,7 @@ func (s *Service) handleAppServerLaunchMessage(runID string, message *appServerL
 		return err
 	}
 	defer s.parkWorker()
-	workflow, execution := s.minimalRecords(run)
+	workflow, execution := s.workflowRecords(run)
 	if workflow == nil || execution == nil || execution.ExecutionID != message.execution.ExecutionID || execution.PendingCommandID != message.commandID || run.AttemptID != message.run.AttemptID || run.TaskStatus == "closed" || run.TaskStatus == "discarded" {
 		return ErrWorkerTurnStale
 	}
@@ -115,7 +115,7 @@ func (s *Service) handleAppServerLaunchMessage(runID string, message *appServerL
 	}
 	execution.PendingTurnID = message.turnID
 	run.ExecutionStatus = "pending"
-	if attempt := s.minimalAttempt(run, run.AttemptID); attempt != nil {
+	if attempt := s.workflowAttempt(run, run.AttemptID); attempt != nil {
 		if attempt.EventPath == "" {
 			attempt.EventPath = message.events
 			run.LogPath = ptr(message.events)

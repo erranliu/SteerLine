@@ -11,10 +11,7 @@ import (
 )
 
 func (s *Service) resumeConfiguredWork(ctx context.Context) error {
-	if s.projectExecutionConfig().WorkflowProtocol == WorkerFlowVersion {
-		return s.resumeWorkerFlow(ctx)
-	}
-	return s.resumeMinimalSteps(ctx)
+	return s.resumeWorkerFlow(ctx)
 }
 
 func (s *Service) resumeWorkerFlow(ctx context.Context) error {
@@ -26,7 +23,7 @@ func (s *Service) resumeWorkerFlow(ctx context.Context) error {
 			continue
 		}
 		task := nativeTaskRecord(s.State.Tasks, run.DomainTaskID)
-		workflow, execution := s.minimalRecords(run)
+		workflow, execution := s.workflowRecords(run)
 		if task == nil || workflow == nil || execution == nil || task.Status != "in_progress" || workflow.Phase == "completed" {
 			continue
 		}
@@ -35,6 +32,13 @@ func (s *Service) resumeWorkerFlow(ctx context.Context) error {
 		}
 		if run.Protocol == string(ProtocolLocalCodexAppServer) && (execution.PendingCommandID != "" || execution.CurrentTurnID != "" && execution.CurrentTurnID != execution.LastStoppedTurnID) {
 			// Active local turns were checked concurrently before this pass.
+			continue
+		}
+		reconciled, err := s.reconcileLocalWorkerPublication(ctx, run)
+		if err != nil {
+			return s.waitWorkerFlow(run, "Host publication needs reconciliation: "+err.Error())
+		}
+		if reconciled {
 			continue
 		}
 		if execution.Process != nil && execution.Process.Kind == "orca" && (execution.PendingTurnID != "" || execution.CurrentTurnID != execution.LastStoppedTurnID) {
@@ -133,11 +137,11 @@ func (s *Service) resumeWorkerFlow(ctx context.Context) error {
 				return s.waitWorkerFlow(run, "Original workspace cannot be inspected: "+err.Error())
 			}
 			run.WorktreePath, run.WorktreeBranch, run.BaseCommit = ptr(run.WorkspaceIntent.Path), ptr(run.WorkspaceIntent.Branch), ptr(run.WorkspaceIntent.BaseCommit)
-			workspace, err := s.inspectMinimalWorkspace(ctx, run)
+			workspace, err := s.inspectWorkflowWorkspace(ctx, run)
 			if err != nil {
 				return s.waitWorkerFlow(run, "Original workspace identity is unresolved: "+err.Error())
 			}
-			applyMinimalWorkspaceEvidence(run, execution, workspace)
+			applyWorkflowWorkspaceEvidence(run, execution, workspace)
 			if preparation.Status != "confirmed" {
 				if err := s.changeOperation(preparation.OperationID, "confirmed", "", mustJSON(workspace), ""); err != nil {
 					return err
@@ -155,7 +159,7 @@ func (s *Service) resumeWorkerFlow(ctx context.Context) error {
 }
 
 func (s *Service) waitWorkerFlow(run *Run, reason string) error {
-	workflow, execution := s.minimalRecords(run)
+	workflow, execution := s.workflowRecords(run)
 	if workflow == nil || execution == nil || workflow.WorkflowVersion != WorkerFlowVersion {
 		return errors.New("worker flow wait has no fixed execution")
 	}
@@ -221,8 +225,8 @@ func offerWorkerPRFeedback(run *Run, url string) error {
 }
 
 func (s *Service) prepareWorkerFlow(ctx context.Context, task TaskRecord, run *Run) error {
-	workflow, execution := s.minimalRecords(run)
-	attempt := s.minimalAttempt(run, run.AttemptID)
+	workflow, execution := s.workflowRecords(run)
+	attempt := s.workflowAttempt(run, run.AttemptID)
 	if workflow == nil || execution == nil || attempt == nil || workflow.WorkflowVersion != WorkerFlowVersion || attempt.StepID != "worker" || run.WorkspaceIntent == nil {
 		return nativeErr("inconsistent_delivery", "worker preparation has no fixed claim and workspace intent")
 	}
@@ -251,8 +255,8 @@ func (s *Service) prepareWorkerFlow(ctx context.Context, task TaskRecord, run *R
 	if err != nil {
 		return err
 	}
-	workflow, execution = s.minimalRecords(run)
-	attempt = s.minimalAttempt(run, run.AttemptID)
+	workflow, execution = s.workflowRecords(run)
+	attempt = s.workflowAttempt(run, run.AttemptID)
 	if workflow == nil || execution == nil || attempt == nil {
 		return errors.New("worker claim disappeared after preparation intent was saved")
 	}
@@ -269,14 +273,14 @@ func (s *Service) prepareWorkerFlow(ctx context.Context, task TaskRecord, run *R
 	}
 	if s.Config.hostName() != "orca_supervised" {
 		run.WorktreePath, run.WorktreeBranch, run.BaseCommit = ptr(run.WorkspaceIntent.Path), ptr(run.WorkspaceIntent.Branch), ptr(run.WorkspaceIntent.BaseCommit)
-		workspace, inspectErr := s.inspectMinimalWorkspace(ctx, run)
+		workspace, inspectErr := s.inspectWorkflowWorkspace(ctx, run)
 		if inspectErr != nil {
 			_ = s.changeOperation(opID, "outcome_unknown", "", nil, inspectErr.Error())
 			run.ExecutionStatus = "unknown"
 			execution.Status = "blocked"
 			return s.waitWorkerFlow(run, "Workspace identity could not be verified: "+inspectErr.Error())
 		}
-		applyMinimalWorkspaceEvidence(run, execution, workspace)
+		applyWorkflowWorkspaceEvidence(run, execution, workspace)
 		if err = s.changeOperation(opID, "confirmed", "", mustJSON(workspace), ""); err != nil {
 			return err
 		}
@@ -294,7 +298,7 @@ func (s *Service) startInitialWorkerFlowTurn(ctx context.Context, task TaskRecor
 	if err != nil {
 		return s.waitWorkerFlow(run, "Fixed task contract is unavailable: "+err.Error())
 	}
-	prompt, err := workerFlowPrompt(task, contract)
+	prompt, err := workerFlowPrompt(task, contract, s.Config.hostName() == "local")
 	if err != nil {
 		return s.waitWorkerFlow(run, err.Error())
 	}
@@ -302,14 +306,17 @@ func (s *Service) startInitialWorkerFlowTurn(ctx context.Context, task TaskRecor
 }
 
 func (s *Service) startWorkerFlowTurn(ctx context.Context, run *Run, prompt, turnID string) error {
-	workflow, execution := s.minimalRecords(run)
-	attempt := s.minimalAttempt(run, run.AttemptID)
+	workflow, execution := s.workflowRecords(run)
+	attempt := s.workflowAttempt(run, run.AttemptID)
 	if workflow == nil || execution == nil || attempt == nil || workflow.WorkflowVersion != WorkerFlowVersion || !stableExecutionID(turnID) ||
 		execution.PendingTurnID != "" || execution.PendingCommandID != "" || execution.SessionID != "" && execution.CurrentTurnID != "" && execution.LastStoppedTurnID != execution.CurrentTurnID {
 		return errors.New("worker turn cannot start without one idle original session")
 	}
 	if execution.SessionID == "" && execution.TurnNumber != 0 {
 		return errors.New("worker session was lost; replacement is not allowed")
+	}
+	if s.Config.hostName() == "local" {
+		prompt += localWorkerPublishInstruction(run.RunID)
 	}
 	execution.PendingTurnID = turnID
 	if run.Protocol == string(ProtocolLocalCodexAppServer) {
@@ -325,8 +332,8 @@ func (s *Service) startWorkerFlowTurn(ctx context.Context, run *Run, prompt, tur
 	if err != nil {
 		return err
 	}
-	workflow, execution = s.minimalRecords(run)
-	attempt = s.minimalAttempt(run, run.AttemptID)
+	workflow, execution = s.workflowRecords(run)
+	attempt = s.workflowAttempt(run, run.AttemptID)
 	if workflow == nil || execution == nil || attempt == nil {
 		return errors.New("worker turn disappeared after send intent was saved")
 	}
@@ -360,8 +367,8 @@ func (s *Service) startWorkerFlowTurn(ctx context.Context, run *Run, prompt, tur
 			return s.save()
 		}
 		worker, events, platformRequestID, err = startAppServerWorkerTurn(ctx, s.Config, run, execution, turnID, prompt, persistThread)
-		workflow, execution = s.minimalRecords(run)
-		attempt = s.minimalAttempt(run, run.AttemptID)
+		workflow, execution = s.workflowRecords(run)
+		attempt = s.workflowAttempt(run, run.AttemptID)
 		if err == nil {
 			execution.PendingTurnID = platformRequestID
 		}
@@ -401,7 +408,7 @@ func (s *Service) startWorkerFlowTurn(ctx context.Context, run *Run, prompt, tur
 func (s *Service) eventWorkerFlow(ev WorkerEvent) (resultErr error) {
 	defer func() { ackWorkerEventPersistence(ev, resultErr) }()
 	run := s.active
-	workflow, execution := s.minimalRecords(run)
+	workflow, execution := s.workflowRecords(run)
 	if run == nil || workflow == nil || execution == nil || workflow.WorkflowVersion != WorkerFlowVersion {
 		return errors.New("worker event has no fixed worker-flow execution")
 	}
@@ -447,7 +454,7 @@ func (s *Service) eventWorkerFlow(ev WorkerEvent) (resultErr error) {
 		if err := BeginWorkerTurn(workflow, execution, execution.SessionID, turnID); err != nil {
 			return err
 		}
-		if attempt := s.minimalAttempt(run, run.AttemptID); attempt != nil {
+		if attempt := s.workflowAttempt(run, run.AttemptID); attempt != nil {
 			attempt.Status, attempt.UpdatedAt = "running", now()
 		}
 		if run.Decision != nil && run.Decision.Status == "answer_saved" {
@@ -557,7 +564,7 @@ func (s *Service) eventWorkerFlow(ev WorkerEvent) (resultErr error) {
 				if err := s.save(); err != nil {
 					return err
 				}
-				workflow, execution = s.minimalRecords(run)
+				workflow, execution = s.workflowRecords(run)
 				if len(execution.PendingAsks) > 0 {
 					next := execution.PendingAsks[0]
 					execution.PendingAsks = execution.PendingAsks[1:]
@@ -594,7 +601,7 @@ func (s *Service) eventWorkerFlow(ev WorkerEvent) (resultErr error) {
 
 func (s *Service) finishWorkerFlow(workerErr error) error {
 	run := s.active
-	workflow, execution := s.minimalRecords(run)
+	workflow, execution := s.workflowRecords(run)
 	if run == nil || workflow == nil || execution == nil || workflow.WorkflowVersion != WorkerFlowVersion {
 		return errors.New("finished worker lacks its fixed execution")
 	}
@@ -676,7 +683,7 @@ func (s *Service) finishWorkerFlow(workerErr error) error {
 			if err := s.save(); err != nil {
 				return err
 			}
-			workflow, execution = s.minimalRecords(run)
+			workflow, execution = s.workflowRecords(run)
 			run.Decision = nil
 		} else if run.Decision.Status == "answer_saved" {
 			if err := StopWorkerTurn(workflow, execution, turnID, true); err != nil {
@@ -736,6 +743,23 @@ func (s *Service) finishWorkerFlow(workerErr error) error {
 		run.ExecutionStatus = "failed"
 	} else {
 		run.ExecutionStatus = "succeeded"
+	}
+	if workflow.Phase == "waiting_pr_merge" {
+		run.FinishTaskStatus = "waiting_pr_merge"
+	} else {
+		run.FinishTaskStatus = "waiting_decision"
+	}
+	if s.Config.hostName() == "local" && outcome.NativeStatus == "completed" && localWorkerRequestedPublish(outcome.LastMessage, run.RunID) {
+		runID := run.RunID
+		_, publishErr := s.publishLocalWorkerRun(context.Background(), run, workflow, execution, turnID)
+		run = s.localWorkerRun(runID)
+		workflow, execution = s.workflowRecords(run)
+		if run == nil || workflow == nil || execution == nil {
+			return errors.New("fixed worker execution disappeared during host publication")
+		}
+		if publishErr != nil {
+			issue = strings.TrimSpace(issue + "; host publication failed: " + publishErr.Error())
+		}
 	}
 	if workflow.Phase == "waiting_pr_merge" {
 		run.FinishTaskStatus = "waiting_pr_merge"
@@ -851,7 +875,7 @@ func (s *Service) applyWorkerFlowDecision(ctx context.Context, run *Run) error {
 	if run == nil || run.WorkflowVersion != WorkerFlowVersion || run.Decision == nil || run.Decision.Status != "answer_saved" {
 		return nil
 	}
-	workflow, execution := s.minimalRecords(run)
+	workflow, execution := s.workflowRecords(run)
 	if workflow == nil || execution == nil || workflow.Phase != "waiting_decision" && workflow.Phase != "waiting_pr_merge" {
 		return errors.New("saved feedback no longer belongs to a waiting worker flow")
 	}
