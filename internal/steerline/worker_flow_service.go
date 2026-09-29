@@ -307,7 +307,7 @@ func (s *Service) prepareWorkerFlow(ctx context.Context, task TaskRecord, run *R
 	}
 	if s.Config.hostName() == "orca" {
 		if err := s.prepareNativeOrcaWorker(ctx, run); err != nil {
-			return s.waitWorkerFlow(run, "Native Orca worker preparation needs reconciliation: "+err.Error())
+			return s.nativeOrcaUncertain(run, "Native Orca worker preparation needs reconciliation: "+err.Error())
 		}
 		return s.startInitialWorkerFlowTurn(ctx, task, run)
 	}
@@ -427,7 +427,7 @@ func (s *Service) startWorkerFlowTurn(ctx context.Context, run *Run, prompt, tur
 		if err := s.startNativeOrcaTurn(ctx, run, execution, turnID, prompt); err != nil {
 			_ = s.changeOperation(opID, "outcome_unknown", "", nil, err.Error())
 			run.ExecutionStatus = "unknown"
-			return s.waitWorkerFlow(run, "Native Orca Dispatch needs reconciliation: "+err.Error())
+			return s.nativeOrcaUncertain(run, "Native Orca Dispatch needs reconciliation: "+err.Error())
 		}
 		attempt.Status, attempt.UpdatedAt = "dispatched", now()
 		run.ExecutionStatus = "pending"

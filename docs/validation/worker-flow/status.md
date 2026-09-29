@@ -37,6 +37,6 @@ ask/reply, SteerLine restart, two settled Task/Dispatch turns, and remembered
 context on the original terminal/incarnation. SQLite fake-provider regression
 uses the public answer command, confirms duplicate submission reuses its
 command, and reconciles a lost Dispatch receipt without duplicate injection.
-Real interactive UI/CLI answer use, the broader receipt-loss matrix, Orca-specific PR
+Real interactive UI/CLI answer use, Orca-specific PR
 provider/merge delivery, and a second real agent remain unverified. This
 addendum does not turn those items into completed ON1–ON11 acceptance.

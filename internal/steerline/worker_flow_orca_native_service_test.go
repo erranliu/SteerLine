@@ -25,6 +25,9 @@ func TestNativeOrcaCenterReusesWorkerAfterRestartAndSettlement(t *testing.T) {
 		t.Fatal(err)
 	}
 	stateDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(stateDir, "native-orca.json"), []byte(`{"LoseWorktreeOnce":true,"LoseCoordinatorOnce":true,"LoseRunOnce":true,"LoseAckOnce":true}`), 0600); err != nil {
+		t.Fatal(err)
+	}
 	c.Host, c.Agent, c.Sandbox, c.Claimant = "orca", "codex", "workspace-write", "operator"
 	c.Orca = OrcaConfig{Executable: exe, Args: []string{"--fake", "orca-native", stateDir}, Shell: "cmd.exe", WaitTimeout: "2s"}
 	c.configDigest = digestValue(c) // The production CLI obtains this from LoadConfig.
@@ -64,9 +67,24 @@ func TestNativeOrcaCenterReusesWorkerAfterRestartAndSettlement(t *testing.T) {
 	if err := s.prepareWorkerFlow(ctx, *task, run); err != nil {
 		t.Fatal(err)
 	}
+	if run.Process != nil || run.Target.Dispatch != "" {
+		t.Fatal("lost worktree creation receipt was guessed before reconciliation")
+	}
+	for i := 0; i < 3; i++ {
+		if err := s.resumeWorkerFlow(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if run.Process == nil || run.Process.Kind != "orca-native" || run.Target.Dispatch != "ctx-1" || run.SessionID != nil {
 		_, execution := s.workflowRecords(run)
 		t.Fatalf("first Orca Dispatch was not bound: error=%q process=%+v execution_process=%+v orca_state=%+v target=%+v", deref(run.Error), run.Process, execution.Process, execution.OrcaNative, run.Target)
+	}
+	if err := s.pollNativeOrcaWorker(ctx, run); err != nil {
+		t.Fatal(err)
+	}
+	_, execution := s.workflowRecords(run)
+	if execution.OrcaNative.DeliveryID != "delivery-ask-1" {
+		t.Fatal("lost acknowledgement response did not retain the original Delivery")
 	}
 	if err := s.pollNativeOrcaWorker(ctx, run); err != nil {
 		t.Fatal(err)
@@ -90,6 +108,20 @@ func TestNativeOrcaCenterReusesWorkerAfterRestartAndSettlement(t *testing.T) {
 	if run == nil || run.Process == nil || *run.Process != original || execution.SessionID != session || *run.WorktreePath != workspace || run.Decision == nil || run.Decision.Status != "pending" || orcaQuestionID(run.Decision) != "msg-ask-1" {
 		t.Fatalf("center restart lost the original Orca conversation: %+v / %+v", run, execution)
 	}
+	replyStatePath := filepath.Join(stateDir, "native-orca.json")
+	replyData, err := os.ReadFile(replyStatePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var replyFake fakeNativeOrcaState
+	if err := json.Unmarshal(replyData, &replyFake); err != nil {
+		t.Fatal(err)
+	}
+	replyFake.LoseReplyOnce = true
+	replyData, _ = json.Marshal(replyFake)
+	if err := AtomicWrite(replyStatePath, replyData); err != nil {
+		t.Fatal(err)
+	}
 	s.State.Service.Ready = true
 	if err := s.save(); err != nil {
 		t.Fatal(err)
@@ -99,6 +131,12 @@ func TestNativeOrcaCenterReusesWorkerAfterRestartAndSettlement(t *testing.T) {
 		t.Fatalf("native Orca answer was not submitted through the shared command path: %+v / %v", command, err)
 	}
 	if err := s.processCommandsAndDecisions(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if run.Decision.Status != "answer_saved" || run.Target.Dispatch != "ctx-1" {
+		t.Fatalf("lost reply receipt was treated as confirmed: decision=%+v target=%+v", run.Decision, run.Target)
+	}
+	if err := s.applyDecisions(ctx); err != nil {
 		t.Fatal(err)
 	}
 	if run.Target.Dispatch != "ctx-1" || run.Decision.Status != "reply_accepted" {
@@ -196,6 +234,7 @@ func TestNativeOrcaCenterReusesWorkerAfterRestartAndSettlement(t *testing.T) {
 		t.Fatal(err)
 	}
 	fake.EscalationAt = 4
+	fake.LoseSendOnce = true
 	data, _ = json.Marshal(fake)
 	if err := AtomicWrite(statePath, data); err != nil {
 		t.Fatal(err)
@@ -225,6 +264,12 @@ func TestNativeOrcaCenterReusesWorkerAfterRestartAndSettlement(t *testing.T) {
 	if err := s.processCommandsAndDecisions(ctx); err != nil {
 		t.Fatal(err)
 	}
+	if run.Decision.Status != "answer_saved" || run.Target.Dispatch != "ctx-4" {
+		t.Fatal("lost send receipt was treated as confirmed or retargeted")
+	}
+	if err := s.applyDecisions(ctx); err != nil {
+		t.Fatal(err)
+	}
 	if run.Target.Dispatch != "ctx-4" || run.Decision.Status != "reply_accepted" {
 		t.Fatal("active feedback did not stay on the original Dispatch")
 	}
@@ -234,6 +279,39 @@ func TestNativeOrcaCenterReusesWorkerAfterRestartAndSettlement(t *testing.T) {
 	workflow, execution = s.workflowRecords(run)
 	if execution.TurnNumber != 4 || execution.OrcaNative.Turns[3].DispatchID != "ctx-4" || workflow.Phase != "waiting_decision" {
 		t.Fatal("active feedback caused an extra worker or lost settlement")
+	}
+	data, err = os.ReadFile(statePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(data, &fake); err != nil {
+		t.Fatal(err)
+	}
+	fake.LoseTaskAt = 5
+	data, _ = json.Marshal(fake)
+	if err := AtomicWrite(statePath, data); err != nil {
+		t.Fatal(err)
+	}
+	answer = DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, OptionID: "continue", Note: "Recover Task creation before Dispatch", AnsweredBy: "operator"}
+	run.Decision.Status, run.Decision.OptionID, run.Decision.Note, run.Decision.AnsweredBy = "answer_saved", answer.OptionID, answer.Note, answer.AnsweredBy
+	answered = now()
+	run.Decision.AnsweredAt = &answered
+	run.Decision.Version++
+	if err := s.save(); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.applyNativeOrcaDecision(ctx, run, workflow, execution, answer, strings.Repeat("2", 32)); err != nil {
+		t.Fatal(err)
+	}
+	if run.Target.Dispatch == "ctx-5" || execution.PendingTurnID == "" {
+		t.Fatal("lost Task receipt was guessed rather than reconciled")
+	}
+	if err := s.resumeWorkerFlow(ctx); err != nil {
+		t.Fatal(err)
+	}
+	workflow, execution = s.workflowRecords(run)
+	if execution.TurnNumber != 5 || len(execution.OrcaNative.Turns) != 5 || execution.OrcaNative.Turns[4].DispatchID != "ctx-5" || workflow.Phase != "waiting_decision" {
+		t.Fatalf("lost Task receipt did not recover in original worker: workflow=%+v execution=%+v", workflow, execution)
 	}
 	data, err = os.ReadFile(statePath)
 	if err != nil {
@@ -258,11 +336,35 @@ func TestNativeOrcaCenterReusesWorkerAfterRestartAndSettlement(t *testing.T) {
 	if err := s.applyNativeOrcaDecision(ctx, run, workflow, execution, answer, strings.Repeat("1", 32)); err != nil {
 		t.Fatal(err)
 	}
-	if run.Decision.Status != "answer_saved" || run.Target.Dispatch != "ctx-4" || run.Error == nil || !strings.Contains(*run.Error, "original Orca session is unavailable") {
+	if run.Decision.Status != "answer_saved" || run.Target.Dispatch != "ctx-5" || run.Error == nil || !strings.Contains(*run.Error, "original Orca session is unavailable") {
 		t.Fatalf("replacement agent did not retain feedback and original binding: decision=%+v target=%+v error=%q", run.Decision, run.Target, deref(run.Error))
 	}
 	data, err = os.ReadFile(statePath)
-	if err != nil || !strings.Contains(string(data), `"Dispatches":4`) || !strings.Contains(string(data), `"Replies":1`) || !strings.Contains(string(data), `"Sends":1`) {
+	if err != nil || !strings.Contains(string(data), `"Dispatches":5`) || !strings.Contains(string(data), `"Replies":1`) || !strings.Contains(string(data), `"Sends":1`) || !strings.Contains(string(data), `"Tasks":[`) {
 		t.Fatalf("fake Orca duplicated a Dispatch or reply during recovery: %s / %v", data, err)
+	}
+	// Reset this fake observation to the original terminal identity to exercise
+	// terminal-close recovery independently of the replacement-agent case.
+	if err := json.Unmarshal(data, &fake); err != nil {
+		t.Fatal(err)
+	}
+	fake.AgentIncarnation = ""
+	fake.LoseCloseOnce = true
+	data, _ = json.Marshal(fake)
+	if err := AtomicWrite(statePath, data); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.closeNativeOrcaTerminal(ctx, execution, *execution.Process, "agent"); err == nil {
+		t.Fatal("lost terminal-close response was treated as confirmed")
+	}
+	if err := s.closeNativeOrcaTerminal(ctx, execution, *execution.Process, "agent"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.closeNativeOrcaTerminal(ctx, execution, execution.OrcaNative.Coordinator, "coordinator"); err != nil {
+		t.Fatal(err)
+	}
+	data, err = os.ReadFile(statePath)
+	if err != nil || json.Unmarshal(data, &fake) != nil || !fake.ClosedAgent || !fake.ClosedCoordinator {
+		t.Fatalf("exact fake Orca terminals were not closed: %s / %v", data, err)
 	}
 }

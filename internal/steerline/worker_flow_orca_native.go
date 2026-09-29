@@ -1292,6 +1292,24 @@ func (s *Service) ackNativeOrcaDelivery(ctx context.Context, run *Run, execution
 	if op != nil && op.Status == "confirmed" {
 		return nil
 	}
+	if op != nil {
+		// The ack response may have been lost after Orca advanced its FIFO.
+		// Read the original Run before deciding whether another ack is needed.
+		observed, err := workerOrcaCall(ctx, s.Config, "orchestration", "check", "--terminal", state.Coordinator.Terminal, "--run", execution.Target.OrchestrationRun, "--json")
+		if err != nil {
+			return err
+		}
+		var current struct {
+			RunID      string `json:"runId"`
+			DeliveryID string `json:"deliveryId"`
+		}
+		if err := json.Unmarshal(observed.Result, &current); err != nil || observed.Meta.RuntimeID != state.Coordinator.RuntimeID || current.RunID != execution.Target.OrchestrationRun {
+			return errors.New("Orca Delivery recovery changed coordinator or Run")
+		}
+		if current.DeliveryID != deliveryID {
+			return s.changeOperation(op.OperationID, "confirmed", op.PlatformRequestID, mustJSON(map[string]string{"delivery_id": deliveryID, "proof": "absent_from_original_run_fifo"}), "")
+		}
+	}
 	opID := ""
 	if op == nil {
 		var err error

@@ -12,16 +12,31 @@ import (
 type fakeNativeOrcaState struct {
 	Name, Base, Agent, AgentIncarnation, Comment, Path, Branch, Repo string
 	Created, Coordinator                                             bool
+	LoseWorktreeOnce                                                 bool
+	LoseCoordinatorOnce                                              bool
+	LoseRunOnce                                                      bool
 	Tasks                                                            []string
 	Dispatches                                                       int
 	LoseDispatchAt                                                   int
+	LoseTaskAt                                                       int
 	EscalationAt                                                     int
 	ForceSourceChange                                                bool
 	TranscriptAfterSwitch                                            bool
 	ReportSourceChanged                                              bool
 	Acked                                                            map[string]bool
+	LoseAckOnce                                                      bool
+	LoseCloseOnce                                                    bool
+	ClosedAgent                                                      bool
+	ClosedCoordinator                                                bool
 	Replies                                                          int
+	ReplyBody                                                        string
+	LoseReplyOnce                                                    bool
 	Sends                                                            int
+	SendSubject                                                      string
+	SendBody                                                         string
+	LoseSendOnce                                                     bool
+	RunObjective                                                     string
+	CoordinatorMarker                                                string
 }
 
 func fakeNativeOrca(stateDir string, args []string) int {
@@ -83,7 +98,12 @@ func fakeNativeOrca(stateDir string, args []string) int {
 				return fakeOrcaErr("invalid_argument", "bad worktree")
 			}
 			state.Created = true
+			lost := state.LoseWorktreeOnce
+			state.LoseWorktreeOnce = false
 			save()
+			if lost {
+				return fakeOrcaErr("runtime_unavailable", "worktree and agent were created but response was lost")
+			}
 			return fakeOrcaOK(map[string]any{"worktree": worktree(), "agentTerminalHandle": "term-agent"})
 		}
 	}
@@ -91,51 +111,104 @@ func fakeNativeOrca(stateDir string, args []string) int {
 		switch args[1] {
 		case "create":
 			state.Coordinator = true
+			state.CoordinatorMarker = strings.TrimPrefix(arg(args, "--command"), "echo ")
+			lost := state.LoseCoordinatorOnce
+			state.LoseCoordinatorOnce = false
 			save()
+			if lost {
+				return fakeOrcaErr("runtime_unavailable", "coordinator was created but response was lost")
+			}
 			return fakeOrcaOK(map[string]any{"terminal": map[string]any{"handle": "term-coordinator"}})
 		case "show":
 			handle := arg(args, "--terminal")
-			if handle == "term-agent" && state.Created || handle == "term-coordinator" && state.Coordinator {
+			if handle == "term-agent" && state.Created && !state.ClosedAgent || handle == "term-coordinator" && state.Coordinator && !state.ClosedCoordinator {
 				return fakeOrcaOK(map[string]any{"terminal": terminal(handle)})
 			}
 			return fakeOrcaErr("terminal_not_found", "missing terminal")
 		case "list":
 			rows := []any{}
-			if strings.Contains(arg(args, "--worktree"), "worker") && state.Created {
+			if strings.Contains(arg(args, "--worktree"), "worker") && state.Created && !state.ClosedAgent {
 				rows = append(rows, terminal("term-agent"))
 			}
-			if strings.Contains(arg(args, "--worktree"), filepath.ToSlash(state.Repo)) && state.Coordinator {
+			if strings.Contains(arg(args, "--worktree"), filepath.ToSlash(state.Repo)) && state.Coordinator && !state.ClosedCoordinator {
 				rows = append(rows, terminal("term-coordinator"))
 			}
 			return fakeOrcaOK(map[string]any{"terminals": rows, "truncated": false})
 		case "read":
-			return fakeOrcaOK(map[string]any{"terminal": map[string]any{"handle": arg(args, "--terminal"), "tail": []string{"SLCOORD:probe"}}})
+			return fakeOrcaOK(map[string]any{"terminal": map[string]any{"handle": arg(args, "--terminal"), "tail": []string{state.CoordinatorMarker}}})
+		case "close":
+			handle := arg(args, "--terminal")
+			if handle == "term-agent" && !state.ClosedAgent {
+				state.ClosedAgent = true
+			} else if handle == "term-coordinator" && !state.ClosedCoordinator {
+				state.ClosedCoordinator = true
+			} else {
+				return fakeOrcaErr("terminal_not_found", "terminal already closed")
+			}
+			lost := state.LoseCloseOnce
+			state.LoseCloseOnce = false
+			save()
+			if lost {
+				return fakeOrcaErr("runtime_unavailable", "terminal closed but response was lost")
+			}
+			return fakeOrcaOK(map[string]any{"close": map[string]any{"handle": handle, "ptyKilled": true}})
 		}
 	}
 	if len(args) > 1 && args[0] == "orchestration" {
 		switch args[1] {
 		case "run-create":
+			state.RunObjective = arg(args, "--objective")
+			lost := state.LoseRunOnce
+			state.LoseRunOnce = false
+			save()
+			if lost {
+				return fakeOrcaErr("runtime_unavailable", "Run was created but response was lost")
+			}
 			return fakeOrcaOK(map[string]any{"run": map[string]any{"id": "run-fake"}, "mutation": map[string]any{"requestId": "request-run"}})
 		case "reply":
 			if arg(args, "--id") != "msg-ask-1" || state.Dispatches != 1 {
 				return fakeOrcaErr("invalid_argument", "wrong question")
 			}
 			state.Replies++
+			state.ReplyBody = arg(args, "--body")
+			lost := state.LoseReplyOnce
+			state.LoseReplyOnce = false
 			save()
+			if lost {
+				return fakeOrcaErr("runtime_unavailable", "reply was accepted but response was lost")
+			}
 			return fakeOrcaOK(map[string]any{"question": map[string]any{"message_id": "msg-ask-1", "dispatch_id": "ctx-1", "answer_body": arg(args, "--body")}, "mutation": map[string]any{"requestId": "request-reply-1"}})
+		case "inbox":
+			messages := []any{}
+			if state.Replies > 0 {
+				messages = append(messages, map[string]any{"id": "msg-reply-1", "run_id": "run-fake", "from_handle": "run:run-fake", "to_handle": "dispatch:ctx-1", "thread_id": "msg-ask-1", "body": state.ReplyBody, "type": "status"})
+			}
+			if state.Sends > 0 {
+				messages = append(messages, map[string]any{"id": "msg-send-1", "run_id": "run-fake", "from_handle": "run:run-fake", "to_handle": fmt.Sprintf("dispatch:ctx-%d", state.EscalationAt), "subject": state.SendSubject, "body": state.SendBody, "type": "status"})
+			}
+			return fakeOrcaOK(map[string]any{"messages": messages, "count": len(messages)})
 		case "send":
 			if arg(args, "--to") != fmt.Sprintf("dispatch:ctx-%d", state.EscalationAt) || arg(args, "--run") != "run-fake" {
 				return fakeOrcaErr("invalid_argument", "wrong active Dispatch")
 			}
 			state.Sends++
+			state.SendSubject, state.SendBody = arg(args, "--subject"), arg(args, "--body")
+			lost := state.LoseSendOnce
+			state.LoseSendOnce = false
 			save()
+			if lost {
+				return fakeOrcaErr("runtime_unavailable", "send was accepted but response was lost")
+			}
 			return fakeOrcaOK(map[string]any{"message": map[string]any{"id": fmt.Sprintf("msg-send-%d", state.Sends), "to_handle": arg(args, "--to")}, "mutation": map[string]any{"requestId": fmt.Sprintf("request-send-%d", state.Sends)}})
 		case "run-list":
-			return fakeOrcaOK(map[string]any{"runs": []any{map[string]any{"id": "run-fake", "objective": arg(args, "--objective"), "coordinator_handle": "term-coordinator"}}})
+			return fakeOrcaOK(map[string]any{"runs": []any{map[string]any{"id": "run-fake", "objective": state.RunObjective, "coordinator_handle": "term-coordinator"}}})
 		case "task-create":
 			state.Tasks = append(state.Tasks, arg(args, "--spec"))
 			save()
 			n := len(state.Tasks)
+			if n == state.LoseTaskAt {
+				return fakeOrcaErr("runtime_unavailable", "Task was created but response was lost")
+			}
 			return fakeOrcaOK(map[string]any{"task": map[string]any{"id": fmt.Sprintf("task-%d", n)}, "mutation": map[string]any{"requestId": fmt.Sprintf("request-task-%d", n)}})
 		case "task-list":
 			rows := []any{}
@@ -163,7 +236,12 @@ func fakeNativeOrca(stateDir string, args []string) int {
 		case "check":
 			if ack := arg(args, "--ack"); ack != "" {
 				state.Acked[ack] = true
+				lost := state.LoseAckOnce
+				state.LoseAckOnce = false
 				save()
+				if lost {
+					return fakeOrcaErr("runtime_unavailable", "Delivery was acknowledged but response was lost")
+				}
 				return fakeOrcaOK(map[string]any{"runId": "run-fake", "acknowledged": ack, "mutation": map[string]any{"requestId": "request-ack-" + ack}})
 			}
 			if state.Dispatches == 1 && state.Replies == 0 && !state.Acked["delivery-ask-1"] {
