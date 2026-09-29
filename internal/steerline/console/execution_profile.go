@@ -55,6 +55,27 @@ func executionEffortLabel(c steerline.Config) string {
 }
 
 func renderFixedRunExecutionProfile(state projectState, run *steerline.Run) []string {
+	fixed := fixedRunExecutionProfile(state, run)
+	if fixed == nil {
+		return nil
+	}
+	config := steerline.Config{Host: fixed.Host, Agent: fixed.Agent, Model: fixed.Model, ReasoningEffort: fixed.ReasoningEffort}
+	return []string{
+		"执行方案：" + safeTerminalInlineText(fixed.Name) + " [" + safeTerminalInlineText(fixed.ID) + "] · " + safeTerminalInlineText(executionHostLabel(config)),
+		"Agent / Model / Thinking：" + safeTerminalInlineText(fixed.Agent) + " / " + safeTerminalInlineText(executionModelLabel(config)) + " / " + safeTerminalInlineText(executionEffortLabel(config)),
+	}
+}
+
+func renderRunExecutionProfileSummary(state projectState, run *steerline.Run) []string {
+	fixed := fixedRunExecutionProfile(state, run)
+	if fixed == nil {
+		return nil
+	}
+	config := steerline.Config{Host: fixed.Host, Agent: fixed.Agent, Model: fixed.Model, ReasoningEffort: fixed.ReasoningEffort}
+	return []string{"执行方案：" + safeTerminalInlineText(executionHostLabel(config)) + " · " + safeTerminalInlineText(executionAgentName(config)) + " · " + safeTerminalInlineText(executionModelLabel(config)) + " · " + safeTerminalInlineText(executionEffortLabel(config))}
+}
+
+func fixedRunExecutionProfile(state projectState, run *steerline.Run) *steerline.FixedExecutionProfile {
 	if run == nil {
 		return nil
 	}
@@ -68,12 +89,7 @@ func renderFixedRunExecutionProfile(state projectState, run *steerline.Run) []st
 		if workflow.WorkflowRunID != run.RunID || workflow.ExecutionProfile == nil {
 			continue
 		}
-		fixed := workflow.ExecutionProfile
-		config := steerline.Config{Host: fixed.Host, Agent: fixed.Agent, Model: fixed.Model, ReasoningEffort: fixed.ReasoningEffort}
-		return []string{
-			"执行方案：" + safeTerminalInlineText(fixed.Name) + " [" + safeTerminalInlineText(fixed.ID) + "] · " + safeTerminalInlineText(executionHostLabel(config)),
-			"Agent / Model / Thinking：" + safeTerminalInlineText(fixed.Agent) + " / " + safeTerminalInlineText(executionModelLabel(config)) + " / " + safeTerminalInlineText(executionEffortLabel(config)),
-		}
+		return workflow.ExecutionProfile
 	}
 	return nil
 }

@@ -142,6 +142,60 @@ func TestCompletedTaskShowsHistoricalExecutionInFourColumns(t *testing.T) {
 	}
 }
 
+func TestTaskPreviewKeepsOneIdentityAndShowsFixedExecutionPlan(t *testing.T) {
+	now := time.Now().UTC()
+	ref := testProject("native")
+	ref.Config.TaskAuthority = "native"
+	snapshot := readySnapshot(ref, now)
+	snapshot.Tasks = nil
+	run := &steerline.Run{TaskID: "102", DomainTaskID: "102", RunID: "run-102", Title: "进行中的任务", TaskStatus: "in_progress", ExecutionStatus: "running"}
+	snapshot.Observation.Runtime.Runs = []*steerline.Run{run}
+	snapshot.NativeTasks = &steerline.NativeTaskPage{Tasks: []steerline.NativeTaskDetail{{TaskRecord: steerline.TaskRecord{TaskID: "102", Title: run.Title, Status: "in_progress"}, Successors: []string{"104"}}}}
+	fixed := (steerline.ExecutionProfile{ID: "orca-local", Name: "本机执行", Host: "orca", Agent: "codex", Model: "gpt-6-luna", ReasoningEffort: "xhigh"}).Freeze()
+	snapshot.Domain = &steerline.DomainSnapshot{WorkflowRuns: []steerline.WorkflowRunRecord{{WorkflowRunID: run.RunID, ExecutionProfile: &fixed}}}
+	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, &testControlClient{}, now)
+	m.projects[0].selectedKey = "run:" + run.RunID
+	row := m.selectedRow(0)
+	if row == nil || row.run == nil {
+		t.Fatal("running task was not selected")
+	}
+	preview := strings.Join(renderDetailPreview(m, m.projects[0], row, 120, 100), "\n")
+	for _, want := range []string{"执行方案：Orca 本机终端 · codex · gpt-6-luna · xhigh", "任务关系", "后继任务：104"} {
+		if !strings.Contains(preview, want) {
+			t.Fatalf("task preview lost %q: %s", want, preview)
+		}
+	}
+	for _, hidden := range []string{"任务状态：", "执行状态：", "run_id：", "中心只读快照"} {
+		if strings.Contains(preview, hidden) {
+			t.Fatalf("task preview repeated %q: %s", hidden, preview)
+		}
+	}
+	full := strings.Join(renderDetail(m, m.projects[0], row, 120, 100), "\n")
+	if strings.Count(full, "任务 102 · 进行中的任务") != 1 || !strings.Contains(full, "任务状态：进行中") || !strings.Contains(full, "执行状态：执行中") || !strings.Contains(full, "run_id：run-102") {
+		t.Fatalf("full detail lost facts or repeated task identity: %s", full)
+	}
+}
+
+func TestOpenTaskDisplaysAsBlockedWithoutChangingPendingExecution(t *testing.T) {
+	if displayTaskStatus("open") != "阻塞" || displayExecutionStatus(&steerline.Run{ExecutionStatus: "pending"}) != "待开始" {
+		t.Fatal("task and execution statuses were conflated")
+	}
+}
+
+func TestPendingDecisionPreviewHidesRunIdentity(t *testing.T) {
+	now := time.Now().UTC()
+	ref := testProject("decision")
+	snapshot, run := decisionSnapshot(ref, now)
+	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, &testControlClient{}, now)
+	m.projects[0].selectedKey = "run:" + run.RunID
+	row := m.selectedRow(0)
+	preview := strings.Join(renderDetailPreview(m, m.projects[0], row, 120, 200), "\n")
+	full := strings.Join(renderDetail(m, m.projects[0], row, 120, 200), "\n")
+	if strings.Contains(preview, "run_id：") || !strings.Contains(preview, "问题：") || !strings.Contains(full, "run_id："+run.RunID) {
+		t.Fatalf("decision preview/full identity mismatch: preview=%s full=%s", preview, full)
+	}
+}
+
 func TestClosedTaskWithUncertainExecutionStillNeedsAttention(t *testing.T) {
 	now := time.Now().UTC()
 	run := &steerline.Run{TaskStatus: "closed", ExecutionStatus: "unknown", FinishTaskStatus: "blocked"}

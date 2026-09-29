@@ -1469,7 +1469,7 @@ func TestNativeTaskViewKeepsOffPageSelectionAndEscapesText(t *testing.T) {
 		t.Fatal("selected native run did not retain its task identity")
 	}
 	runDetail := strings.Join(renderDetail(m, m.projects[0], m.selectedRow(0), 120, 200), "\n")
-	if !strings.Contains(runDetail, "任务关系 · 中心只读快照") || !strings.Contains(runDetail, "discarded_predecessor") || !strings.Contains(runDetail, "任务状态：进行中") {
+	if !strings.Contains(runDetail, "任务关系") || strings.Contains(runDetail, "中心只读快照") || !strings.Contains(runDetail, "discarded_predecessor") || !strings.Contains(runDetail, "任务状态：进行中") {
 		t.Fatalf("selected native run lost its task relationship: %q", runDetail)
 	}
 	querySource := &testQuerySource{snapshot: runSnapshot}
