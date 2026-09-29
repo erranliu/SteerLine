@@ -130,11 +130,18 @@ func workerFlowPrompt(task TaskRecord, contract TaskContract, localPublish bool)
 }
 
 func requireWorkerFlowCapabilities(ctx context.Context, c Config) error {
+	if c.hostName() == "orca" {
+		if c.Model != "" || c.ReasoningEffort != "" || c.Profile != "" || c.Sandbox != "workspace-write" {
+			return &BackendError{Code: BackendUnsupported, Diagnostic: "Orca starts the selected agent with its own settings; model, effort, Codex profile and sandbox overrides are unavailable"}
+		}
+		_, err := workerOrcaCall(ctx, c, "status", "--json")
+		return err
+	}
 	if c.agentName() != "codex" {
 		return &BackendError{Code: BackendUnsupported, Diagnostic: "resumable worker flow requires Codex"}
 	}
 	if c.hostName() != "local" {
-		return &BackendError{Code: BackendUnsupported, Diagnostic: "Orca worker-flow delivery is deferred; only local Codex may claim a task in this release"}
+		return &BackendError{Code: BackendUnsupported, Diagnostic: "this worker-flow host is not supported"}
 	}
 	command := c.Codex
 	if err := resolveCommand(&command); err != nil {

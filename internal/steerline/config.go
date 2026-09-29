@@ -300,6 +300,9 @@ func LoadConfig(path string) (Config, error) {
 		}
 	}
 	if c.Host == "orca" {
+		if c.WorkflowProtocol == WorkerFlowVersion && (c.Model != "" || c.Profile != "" || c.ReasoningEffort != "" || c.Sandbox != "workspace-write") {
+			return c, errors.New("Orca worker-flow uses Orca agent launch settings; model, profile, effort and sandbox overrides are unavailable")
+		}
 		if c.agentName() != "codex" && (c.Model != "" || c.Profile != "" || c.ReasoningEffort != "") {
 			return c, errors.New("orca model, profile and reasoning_effort overrides require agent=codex")
 		}
