@@ -4,6 +4,8 @@
 
 下文的 `#数字` 均指任务 ID。“直接开工前置”列出必须已有的实现或证据；“集成与交付条件”说明何时才能验收并交给后续任务。共享接口的并行准备不等于允许越过各 Spec 的硬前置。
 
+本图保留已登记任务的实际固定关系。#36 后推荐的裁减与目标图见[精简审查](worker-flow-review.md)：取消 #33、吸收 #34 必要部分、合并 #26/#27、后移 #35，本机 API 的后继版本从 #36 接入。该建议尚未取得旧任务处置和新图登记回执，不把下面的旧边静默删除。
+
 ## 跨链路的接口与并行条件
 
 - **#6 与当前执行接口的共享修改**：Service、配置、worker 上下文、Query/Command、Task DTO 和测试夹具存在共同修改面。独立协议样例可并行；涉及共同接口的修改串行集成，后集成方校验接口并运行受影响回归。`#6` 只接 native，不增加既有运行时任务的可变依赖。
@@ -15,8 +17,8 @@
 | --- | --- | --- | --- | --- |
 | 36 | 单 worker 持续执行与统一待决策 | `WORKER-FLOW` · [Spec](../spec/worker-flow.spec.md) · [Plan](../spec/worker-flow.plan.md) | 无未完成硬前置；复用已交付 Task/DAG、会话、Query/Command 与 PR provider | WF1–WF12；同 worker 多轮反馈、统一待决策、移除项目逻辑验证、真实 PR 合并与当前格式恢复。与下列共享修改串行集成 |
 
-- **语义冲突 #33/#34**：原固定契约要求保持五步与 applied 门槛，#36 明确删除这些中心业务门槛。#33/#34 先交付时，#36 消费其包和上下文；#36 先交付时，旧任务先完成执行规格协调。不存在通过新增一条依赖边就自动更新任务契约的效果。
-- **共享修改 #26/#27/#35**：候选/交付/SQLite 封装的身份与唯一 TaskDelivery 继续复用；其步骤证据假设按 #36 Spec §2 协调，不同时写同一生产接线。#36 不交付多候选或替代这些任务的封装范围。
+- **语义冲突 #33/#34**：原固定契约要求保持五步与 applied 门槛，#36 明确删除这些门槛。精简审查建议取消 #33、将 #34 的必要路由/上下文工作归入 #36；旧任务仍需正式处置，不通过新增依赖边改写契约。
+- **共享修改 #26/#27/#35**：建议候选创建与交付合并重新规划，全面 SQL 封装后移；身份和唯一 TaskDelivery 继续复用。#36 不交付多候选或全面 center 搬包，共享生产接线仍须串行集成。
 - **接口消费者 #28/#16/#21**：消费五阶段主状态、原会话反馈和 PR DTO；不用 failed/unknown 或 retry 按钮建立另一套主流程。实现前固定消费者适用的新执行契约，现有已创建 TaskContract 不被本文改变。
 - **验收及独立工作 #29/#32/#24、#30/#31**：前一组按最终固定流程验证交付；后一组版本隔离可在独立资源准备，共享恢复/配置入口串行集成。已测旧步骤后端不能直接认证持续会话能力。
 
@@ -27,13 +29,13 @@
 - [执行控制台与轮次折叠](../spec/pr-04-console.spec.md)及[验收报告](../validation/pr-04c-console.md)：#3 的决策卡片、UI 状态与精确折叠已有受测证据；#6 复用相同的查询与能力展示边界。
 - [双执行后端](../spec/pr-04a-execution-backends.spec.md)与[Windows 验收报告](../validation/pr-04a-execution-backends.md)：`#3` 的本机 Orca 验收和 `#6` 复用固定 ExecutionRef、Operation、能力报告、ReadOutput 及双后端操作边界；会话 phase/turn、资源结算与 Linux 原生验收不在该后端 Spec 的交付范围内。
 - [会话事件](../spec/pr-04b-conversation-events.spec.md)与[本机验收报告](../validation/pr-04b-conversation-events-2026-09-24.md)：`#3`/`#6` 复用统一会话 DTO、完整正文、分页、来源缺口与版本化能力报告；精确 turn/phase/final 仅在报告列明的本机 Codex/Orca 范围内通过。
-- [中心执行模型](../spec/02-execution-model-and-adapter.md)：`#3`/`#6` 复用 WorkflowRun/Execution/StepAttempt、SQLite 单写者、Query/Command、Operation 和 minimal-v1 流程；当前有人值守远端原生闭环已由 #6 真实交付。
-- [人工决策与恢复](../spec/pr-05-intervention.spec.md)与[原中心结项](../validation/phase1-task-closure-2026-09-28/README.md)：#6 复用已验收的 SQLite CommandService、固定答案和应用证明；#3 已完成原中心 Task Delivery。
+- [中心执行模型](../spec/02-execution-model-and-adapter.md)：已有 SQLite 单写者、Task/WorkflowRun/Execution、Query/Command 和 Operation 可复用；#36 替换 minimal-v1 的 StepAttempt 业务链。旧远端闭环证据不代验持续会话。
+- [人工决策与恢复](../spec/pr-05-intervention.spec.md)与[原中心结项](../validation/phase1-task-closure-2026-09-28/README.md)：复用持久输入、原请求和目标身份；#36 替换应用证明和专用恢复入口，后继界面消费新反馈契约。
 - [原生项目接入](../spec/beads-exit.spec.md)与[验收记录](../validation/beads-exit/README.md)：`#6` 沿用固定 worker 上下文，已按独立远端门槛结项。
 - [统一观察契约](../spec/pr-01-observation.spec.md)：#3 沿用已测选择、游标、来源换代及 raw 读取；未来受影响平台版本按能力重新核验。
 - [服务控制协议](../spec/pr-02-control.spec.md)与[服务窗口生命周期](../spec/pr-03-service-lifecycle.spec.md)：#3 沿用请求/实例身份、回执、连接分类和停止确认；关闭控制台不停服，关闭服务窗口结束服务。Linux detached 原生会话生命周期仍未实测，不属于当前 Windows #3 关闭前置。
 - [真实远端能力报告](../spec/orca-probe/remote-capability-report-2026-09-23.json)与[字段映射](../spec/orca-probe/field-mapping.md)：`#4`/`#6` 复用已实测派发、身份、问答和恢复语义；远端精确会话能力仍须独立验证，不能从本机 `#1` 的验收外推。
-- [verify 结果校验器](../../internal/steerline/remoteprotocol/verify_result.go)：已接入中心；P13 正负向真机 verify 回执及任务 103 的三项实际检查证明固定候选门槛，未测无效结果仍按各自条件核对。
+- [verify 结果校验器](../../internal/steerline/remoteprotocol/verify_result.go)：属于已交付旧步骤流程的记录；#36 移除这类中心项目检查门槛，后继规划不再把它作为必须复用的接口。
 
 Spec 完成交付后从未完成表移出；仍有消费者时只保留必要交接。本图不记录 PR、提交或文档维护历史。
 
@@ -49,11 +51,11 @@ Spec 完成交付后从未完成表移出；仍有消费者时只保留必要交
 
 中心已创建 #33 → #34 和 #27 → #35，并追加 #34 → #26、#35 → #28、#35 → #16。原 #26 → #27、#27 → #28、#26 → #16 继续保留，全部为完整交付后的 AND 硬前置；追加关系没有重绑定原执行契约。
 
-代码集成顺序为 #33 → #34 → #26 → #27 → #35 → #28/#16。#30/#31 独立推进；与本组共用 Service/SQLite/启动恢复入口时串行集成并回归此前已交付的边界。
+当前已登记顺序为 #33 → #34 → #26 → #27 → #35 → #28/#16；其五步保持和全面拆包前置按精简审查待重新规划，不再作为新目标的默认推荐顺序。#30 可独立准备，#31 的持续会话维护条件需要重定；共享 Service/SQLite/恢复入口继续串行集成。
 
 ## 第一阶段新增范围与第二阶段的交接
 
-[第一阶段版本交付方案](phase-1-delivery.md)的 #26–#32 已有独立规格和中心任务；原有依赖已回读核验，结构重构新增前置在表中单独标注。`#33/#30` 可使用独立资源推进，#26 遵守新增重构顺序；共用 Service/SQLite、构建产物或真实 Orca 宿主的集成和故障注入串行协调。规格必须先集成到执行目标分支才能按原固定契约开始实现。
+[第一阶段版本交付方案](phase-1-delivery.md)保留多候选和版本隔离目标。下面的 #26–#32 是已有规格和中心任务的记录；原有依赖已回读核验，结构重构前置在表中标注。推荐先以 #36 收敛执行语义，按精简审查重新固定受影响范围；#30 可独立准备。新规格必须先集成到执行目标分支再登记，不凭规划文字改变现有资格。
 
 | 任务 ID | 任务名称 | 目标 / 执行 Spec | 直接开工前置 | 集成与交付条件 |
 | --- | --- | --- | --- | --- |
