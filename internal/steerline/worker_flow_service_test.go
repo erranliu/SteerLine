@@ -197,6 +197,6 @@ func TestWorkerFlowServiceFirstFeedbackKeepsSessionAndWorkspace(t *testing.T) {
 		}
 	}
 	if len(service.State.Operations) != before || service.workers[run.RunID] != nil || execution.TurnNumber != 2 || run.Error == nil || !strings.Contains(*run.Error, "no duplicate message") {
-		t.Fatalf("uncertain feedback was resent or lost: operations=%d/%d execution=%+v run=%+v", before, len(service.State.Operations), execution, run)
+		t.Fatalf("uncertain feedback was resent or lost: operations=%d/%d worker=%t turn=%d decision=%s error=%q", before, len(service.State.Operations), service.workers[run.RunID] != nil, execution.TurnNumber, run.Decision.Status, deref(run.Error))
 	}
 }
