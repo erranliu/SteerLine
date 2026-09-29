@@ -4,21 +4,9 @@
 
 下文的 `#数字` 均指任务 ID。“直接开工前置”列出必须已有的实现或证据；“集成与交付条件”说明何时才能验收并交给后续任务。共享接口的并行准备不等于允许越过各 Spec 的硬前置。
 
-## 已结项的远端链路前置
-
-| 原 Task | 完成依据 | 保留边界 |
-| --- | --- | --- |
-| #3 人工决策与恢复 | [H-A1–H-A16 与原中心 Delivery](../validation/phase1-task-closure-2026-09-28/README.md) | 直接本机 Codex 续跑仍 unsupported；发送回执不等于答案应用证明。 |
-| #4 Orca 远程协议 | [P01–P13 与原中心 Delivery](../validation/phase1-task-closure-2026-09-28/README.md) | 远程取消仍 unsupported；新目标或版本族须定向认证。 |
-| #6 分阶段远程闭环 | [最终故障范围](../validation/spec03-final-scope-audit-2026-09-28.md)、[4 秒 viewer 样本](../validation/spec03-viewer-task105-2026-09-28/README.md)与[原 Task PR #110 Delivery](../validation/spec03-task6-closure-2026-09-28/README.md) | 长期无人值守、固定 stable 24 小时及受控提升仍归 #32。 |
-
 ## 跨链路的接口与并行条件
 
 - **#6 与当前执行接口的共享修改**：Service、配置、worker 上下文、Query/Command、Task DTO 和测试夹具存在共同修改面。独立协议样例可并行；涉及共同接口的修改串行集成，后集成方校验接口并运行受影响回归。`#6` 只接 native，不增加既有运行时任务的可变依赖。
-- **#3/#4 与 #6 的交付资源**：三项原中心 Delivery 已完成；后续若共享 Service、SQLite、CLI 构建或 Orca 宿主，仍须串行集成。已测调用路径变更时只重跑受影响项。
-- **#3 的原生验收**：绑定答案应用、同 attempt 恢复、回执丢失、活跃 worker 身份变化拒绝、可执行恢复确认和 SteerlineTest Task 104 精确 turn/final 折叠均有回执，见[验证记录](../validation/pr-05-intervention.md)。早期失败任务保持原历史；95012 的下游 publish unknown 不算 Task Delivery。
-- **#4 与本机工作**：新目标或受影响路径的定向远端探测可与 `#3` 的本机工作并行，探测与适配器集成不能同时占用同一真实远端测试执行资源。本机 `#1` 的精确 turn/phase 及 `#3` 的应用证明验收不代替远端能力证据；远端分页/恢复证据也不代替远端精确会话验证。
-- **#6 复用已交付的原生接入**：远程闭环沿用 `#9` 的中心任务权威、固定执行上下文和恢复接口；当前支持范围已按 `#4`/`#6` 独立门槛结项，不扩大版本、消息大小或取消能力。
 - **接口前置与硬前置**：接口固定后可以准备独立样本、只读展示或测试；需要真实平台、数据库或 UI 的集成验收仍须等待对应前置实现。并行建议不改变各 Spec/Plan 明定的串行交付要求；调整顺序时先修订受影响的 Spec/Plan。
 
 ## 后续仍依赖的已交付基础
@@ -48,18 +36,18 @@ Spec 完成交付后从未完成表移出；仍有消费者时只保留必要交
 
 中心已创建 #33 → #34 和 #27 → #35，并追加 #34 → #26、#35 → #28、#35 → #16。原 #26 → #27、#27 → #28、#26 → #16 继续保留，全部为完整交付后的 AND 硬前置；追加关系没有重绑定原执行契约。
 
-代码集成顺序为 #33 → #34 → #26 → #27 → #35 → #28/#16。#30/#31 独立推进；与本组共用 Service/SQLite/启动恢复入口时串行集成并回归此前已交付的边界。#3/#4 的正常 Task Delivery 与 #6 的剩余验收在固定版本和隔离资源上继续推进。
+代码集成顺序为 #33 → #34 → #26 → #27 → #35 → #28/#16。#30/#31 独立推进；与本组共用 Service/SQLite/启动恢复入口时串行集成并回归此前已交付的边界。
 
 ## 第一阶段新增范围与第二阶段的交接
 
-[第一阶段版本交付方案](phase-1-delivery.md)的 #26–#32 已有独立规格和中心任务；原有依赖已回读核验，结构重构新增前置在表中单独标注。`#3/#4` 的正常 Task Delivery、`#6` 的剩余原生验收与 `#33/#30` 可使用独立资源推进，#26 遵守新增重构顺序；共用 Service/SQLite、构建产物或真实 Orca 宿主的集成和故障注入串行协调。规格必须先集成到执行目标分支才能按原固定契约开始实现。
+[第一阶段版本交付方案](phase-1-delivery.md)的 #26–#32 已有独立规格和中心任务；原有依赖已回读核验，结构重构新增前置在表中单独标注。`#33/#30` 可使用独立资源推进，#26 遵守新增重构顺序；共用 Service/SQLite、构建产物或真实 Orca 宿主的集成和故障注入串行协调。规格必须先集成到执行目标分支才能按原固定契约开始实现。
 
 | 任务 ID | 任务名称 | 目标 / 执行 Spec | 直接开工前置 | 集成与交付条件 |
 | --- | --- | --- | --- | --- |
 | 26 | 多候选模型与准入 | `PHASE1-CANDIDATES` · [Spec](../spec/task-candidates.spec.md) · [Plan](../spec/task-candidates.plan.md) | `#34`（中心追加） | 交付精确候选身份/Query/Command；multiple 发布在 #27 仲裁交付前受控拒绝 |
 | 27 | PR 胜出与落选候选对账 | `PHASE1-CANDIDATES` · [Spec](../spec/candidate-delivery.spec.md) · [Plan](../spec/candidate-delivery.plan.md) | `#26` | 唯一交付、在途冻结、迟到冲突和 closed 后资源对账通过 |
 | 28 | 候选观察界面 | `PHASE1-CANDIDATES` · [Spec](../spec/candidate-console.spec.md) · [Plan](../spec/candidate-console.plan.md) | `#27`、`#35`（后者为中心追加） | 真实 Windows TUI 展示/输入和中心命令身份通过；跨主机 agent 证据不在本任务代验 |
-| 29 | 多候选本机与远端真机验收 | `PHASE1-CANDIDATES` · [Spec](../spec/candidate-native-acceptance.spec.md) · [Plan](../spec/candidate-native-acceptance.plan.md) | `#28`、`#3`、`#4`、`#6` | 当前认证目标上两后端双候选/后继真实合并及故障恢复均通过 |
+| 29 | 多候选本机与远端真机验收 | `PHASE1-CANDIDATES` · [Spec](../spec/candidate-native-acceptance.spec.md) · [Plan](../spec/candidate-native-acceptance.plan.md) | `#28`；`#3`、`#4`、`#6` 已交付 | 当前认证目标上两后端双候选/后继真实合并及故障恢复均通过 |
 | 30 | 固定版本与双入口 | `PHASE1-RUNTIME` · [Spec](../spec/versioned-runtime.spec.md) · [Plan](../spec/versioned-runtime.plan.md) | 无未完成硬前置 | 不可变版本、固定入口与实例身份通过；切换资格由 #31 接入 |
 | 31 | dev 隔离与 stable 提升 | `PHASE1-RUNTIME` · [Spec](../spec/runtime-isolation-promotion.spec.md) · [Plan](../spec/runtime-isolation-promotion.plan.md) | `#30` | home/仓库隔离、受控提升、失败继续和当前格式恢复通过 |
 | 32 | 第一阶段集成验收 | `PHASE1-DELIVERY` · [Spec](../spec/phase1-release-acceptance.spec.md) · [Plan](../spec/phase1-release-acceptance.plan.md) | `#29`、`#31` | 固定组合构建真实两链、24 小时运行、dev 并行及提升验收通过 |
@@ -107,7 +95,7 @@ flowchart LR
 | 21 | 执行与待处理原生界面 | `PHASE2` · [Spec](../spec/phase2-execution-ui.spec.md) · [Plan](../spec/phase2-execution-ui.plan.md) | `#15`、`#16` | 未通过的第一阶段能力保持不可用；本任务交付不代替 #24 完整后端验收。 |
 | 22 | 规划对话原生界面 | `PHASE2` · [Spec](../spec/phase2-conversation-ui.spec.md) · [Plan](../spec/phase2-conversation-ui.plan.md) | `#15`、`#18` | 真实会话/工具经 #18；不等 #19，但无审阅发布副作用入口。 |
 | 23 | 文档审阅与确认原生界面 | `PHASE2` · [Spec](../spec/phase2-review-ui.spec.md) · [Plan](../spec/phase2-review-ui.plan.md) | `#15`、`#19` | 使用 #19/#17 已交付的真实版本查询；与另一文档页面可分头开发，共享 WinUI 导航串行集成。 |
-| 24 | 第二阶段完整闭环验收 | `PHASE2` · [Spec](../spec/phase2-integration.spec.md) · [Plan](../spec/phase2-integration.plan.md) | `#20`、`#21`、`#22`、`#23`、`#3`、`#4`、`#6`，另有中心追加的 `#32` | 全部前置真实交付；本任务逐项完成两后端和跨组件故障验收，不以样例代替。 |
+| 24 | 第二阶段完整闭环验收 | `PHASE2` · [Spec](../spec/phase2-integration.spec.md) · [Plan](../spec/phase2-integration.plan.md) | `#20`、`#21`、`#22`、`#23`、中心追加的 `#32`；`#3`、`#4`、`#6` 已交付 | 全部前置真实交付；本任务逐项完成两后端和跨组件故障验收，不以样例代替。 |
 
 ```mermaid
 flowchart LR
@@ -137,5 +125,5 @@ flowchart LR
 - 规划 worktree、提案、ID 预留、正式/草稿读模型与写入 owner/generation 由 #17 单独实现；#18/#19 共同消费，不各建状态或锁。#19 推进正式版本，#20/#23 的真实交付等待它完成。
 - #16 只拥有传输、认证和既有执行映射；#17/#18/#19 分别拥有自身业务 handler、DTO 和恢复。共同信封已在 [Spec 共同约束](../spec/phase2-constraints.md)中固定，不能将 #16 的内部里程碑当作放行。
 - #18/#19 在 Service、Query/Command、SQLite 接线处串行集成；#20/#21/#22/#23 在 WinUI 导航、连接与输入公共组件处串行集成。独立业务文件可并行开发，后合入方重跑受影响消费者。
-- #3/#4/#6 与第二阶段共用测试宿主、二进制、远端资源时分时验收；隔离工作区不隔离全局 CLI 配置、进程或真实 Orca runtime。不得在另一项验收途中替换它使用的构建或重启共享宿主。
+- 第二阶段复用已交付远端链路的测试宿主、二进制或远端资源时分时验收；隔离工作区不隔离全局 CLI 配置、进程或真实 Orca runtime。不得在另一项验收途中替换它使用的构建或重启共享宿主。
 - #24 是最终验收的唯一任务归属，不承担各上游任务缺失的实现。各组件交付与完整产品交付分别记录；任务创建时保留上述固定 AND 依赖，不新增部分完成放行机制。
