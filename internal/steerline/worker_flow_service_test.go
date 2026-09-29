@@ -15,6 +15,7 @@ func TestWorkerFlowServiceFirstFeedbackKeepsSessionAndWorkspace(t *testing.T) {
 	ctx := context.Background()
 	c, commit, store := openDAGFixture(t)
 	c.WorkflowProtocol, c.Host, c.Agent, c.Sandbox = WorkerFlowVersion, "local", "codex", "workspace-write"
+	c.Claimant = "operator"
 	c.Codex = Command{Executable: os.Args[0], Args: []string{"-test.run=^TestWorkerFlowMockCodexHelper$", "--"}}
 	c.WorktreeRoot = filepath.Join(c.RunDir, "worktrees")
 	if err := c.prepareWorktreeRoot(); err != nil {
