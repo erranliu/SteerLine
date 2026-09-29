@@ -183,11 +183,6 @@ func validateExecutionProfiles(c Config) error {
 				return fmt.Errorf("execution profile %s has invalid Orca wait timeout", p.ID)
 			}
 		}
-		if c.WorkflowProtocol != WorkerFlowVersion {
-			if _, err := selected.validateNativeWorkflow(); err != nil {
-				return fmt.Errorf("execution profile %s: %w", p.ID, err)
-			}
-		}
 	}
 	if c.DefaultExecutionProfile != "" && !ids[c.DefaultExecutionProfile] {
 		return errors.New("default_execution_profile is not configured")

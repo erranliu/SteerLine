@@ -21,7 +21,6 @@ import (
 
 const domainSchemaVersion = 5
 
-const activeWorkflowIndexV4 = `CREATE UNIQUE INDEX one_active_workflow_per_task ON workflow_runs(project_identity,task_id) WHERE phase <> 'completed'`
 const activeWorkflowIndexV5 = `CREATE UNIQUE INDEX one_active_workflow_per_task ON workflow_runs(project_identity,task_id) WHERE phase NOT IN ('completed','abandoned')`
 
 type DomainTx interface {
@@ -79,11 +78,14 @@ func OpenSQLiteStore(path string) (*SQLiteStore, error) {
 	if path == "" {
 		return nil, errors.New("sqlite path is required")
 	}
+	createNew := false
 	if _, err := os.Stat(path); err == nil {
 		if err = validateExistingDatabase(path); err != nil {
 			return nil, err
 		}
-	} else if !os.IsNotExist(err) {
+	} else if os.IsNotExist(err) {
+		createNew = true
+	} else {
 		return nil, err
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
@@ -99,7 +101,7 @@ func OpenSQLiteStore(path string) (*SQLiteStore, error) {
 	// Windows when a caller forgets to close an otherwise idle Service.
 	db.SetMaxIdleConns(0)
 	store := &SQLiteStore{db: db}
-	if err := store.migrate(context.Background()); err != nil {
+	if err := store.ensureSchema(context.Background(), createNew); err != nil {
 		db.Close()
 		return nil, err
 	}
@@ -107,6 +109,20 @@ func OpenSQLiteStore(path string) (*SQLiteStore, error) {
 }
 
 func OpenSQLiteReader(path string) (*SQLiteStore, error) {
+	reader, err := openSQLiteInspector(path)
+	if err != nil {
+		return nil, err
+	}
+	if err = validateDatabaseSchema(context.Background(), reader.db); err != nil {
+		_ = reader.Close()
+		return nil, err
+	}
+	return reader, nil
+}
+
+// openSQLiteInspector reads only metadata needed to reject an unsupported file.
+// Callers must validate the current schema before exposing business data.
+func openSQLiteInspector(path string) (*SQLiteStore, error) {
 	if path == "" {
 		return nil, errors.New("sqlite path is required")
 	}
@@ -134,55 +150,48 @@ func OpenSQLiteReader(path string) (*SQLiteStore, error) {
 
 func (s *SQLiteStore) Close() error { return s.db.Close() }
 
-func (s *SQLiteStore) migrate(ctx context.Context) error {
+func (s *SQLiteStore) ensureSchema(ctx context.Context, createNew bool) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
-	if _, err = tx.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)`); err != nil {
+	var tableCount int
+	if err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='schema_migrations'`).Scan(&tableCount); err != nil {
 		return err
 	}
-	var version int
-	err = tx.QueryRowContext(ctx, `SELECT COALESCE(MAX(version), 0) FROM schema_migrations`).Scan(&version)
-	if err != nil {
+	if tableCount == 1 {
+		var version int
+		if err = tx.QueryRowContext(ctx, `SELECT COALESCE(MAX(version), 0) FROM schema_migrations`).Scan(&version); err != nil {
+			return nativeErr("unsupported_schema", "SQLite schema version cannot be inspected")
+		}
+		if version != domainSchemaVersion {
+			return nativeErr("unsupported_schema", fmt.Sprintf("unsupported SQLite schema %d; preserve existing state", version))
+		}
+		if err = validateDatabaseSchema(ctx, tx); err != nil {
+			return err
+		}
+		return tx.Commit()
+	}
+	if !createNew {
+		return nativeErr("unsupported_schema", "existing SQLite database lacks a schema version; preserve it")
+	}
+	if err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'`).Scan(&tableCount); err != nil {
 		return err
 	}
-	if version != 0 && version != 3 && version != 4 && version != domainSchemaVersion {
-		return nativeErr("unsupported_schema", fmt.Sprintf("unsupported SQLite schema %d; preserve existing state", version))
+	if tableCount != 0 {
+		return nativeErr("unsupported_schema", "SQLite database gained tables before initialization; preserve it")
 	}
-	if version == 0 {
-		for _, stmt := range append(append(append([]string{}, domainExecutionSchema...), nativeTaskSchema...), conversationSchemaV4...) {
-			if _, err = tx.ExecContext(ctx, stmt); err != nil {
-				return fmt.Errorf("create domain schema: %w", err)
-			}
-		}
-		if _, err = tx.ExecContext(ctx, `INSERT INTO schema_migrations(version, applied_at) VALUES(?, ?)`, domainSchemaVersion, now().Format(time.RFC3339Nano)); err != nil {
-			return err
-		}
-		version = domainSchemaVersion
+	if _, err = tx.ExecContext(ctx, `CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)`); err != nil {
+		return err
 	}
-	if version == 3 {
-		for _, stmt := range conversationSchemaV4 {
-			if _, err = tx.ExecContext(ctx, stmt); err != nil {
-				return fmt.Errorf("create conversation schema: %w", err)
-			}
+	for _, stmt := range append(append(append([]string{}, domainExecutionSchema...), nativeTaskSchema...), conversationSchema...) {
+		if _, err = tx.ExecContext(ctx, stmt); err != nil {
+			return fmt.Errorf("create domain schema: %w", err)
 		}
-		if _, err = tx.ExecContext(ctx, `INSERT INTO schema_migrations(version, applied_at) VALUES(?, ?)`, 4, now().Format(time.RFC3339Nano)); err != nil {
-			return err
-		}
-		version = 4
 	}
-	if version == 4 {
-		if _, err = tx.ExecContext(ctx, `DROP INDEX one_active_workflow_per_task`); err != nil {
-			return fmt.Errorf("replace native workflow index: %w", err)
-		}
-		if _, err = tx.ExecContext(ctx, activeWorkflowIndexV5); err != nil {
-			return fmt.Errorf("create native workflow index: %w", err)
-		}
-		if _, err = tx.ExecContext(ctx, `INSERT INTO schema_migrations(version, applied_at) VALUES(?, ?)`, domainSchemaVersion, now().Format(time.RFC3339Nano)); err != nil {
-			return err
-		}
+	if _, err = tx.ExecContext(ctx, `INSERT INTO schema_migrations(version, applied_at) VALUES(?, ?)`, domainSchemaVersion, now().Format(time.RFC3339Nano)); err != nil {
+		return err
 	}
 	return tx.Commit()
 }
@@ -235,7 +244,7 @@ var domainExecutionSchema = []string{
 	`CREATE TABLE projection (project_identity TEXT PRIMARY KEY, revision INTEGER NOT NULL, payload BLOB NOT NULL, updated_at TEXT NOT NULL)`,
 }
 
-var conversationSchemaV4 = []string{
+var conversationSchema = []string{
 	`CREATE TABLE conversation_events (event_id INTEGER PRIMARY KEY AUTOINCREMENT, project_identity TEXT NOT NULL, task_id TEXT NOT NULL DEFAULT '', workflow_run_id TEXT NOT NULL DEFAULT '', execution_id TEXT NOT NULL, attempt_id TEXT NOT NULL, source_event_key TEXT NOT NULL, source TEXT NOT NULL, source_segment TEXT NOT NULL, session_id TEXT NOT NULL DEFAULT '', turn_id TEXT NOT NULL DEFAULT '', item_key TEXT NOT NULL DEFAULT '', event_type TEXT NOT NULL, phase TEXT NOT NULL DEFAULT 'unknown', final_availability TEXT NOT NULL DEFAULT '', received_at TEXT NOT NULL, payload_bytes INTEGER NOT NULL, payload BLOB NOT NULL, UNIQUE(project_identity,source_event_key))`,
 	`CREATE INDEX conversation_execution_idx ON conversation_events(project_identity,execution_id,attempt_id,event_id)`,
 	`CREATE INDEX conversation_turn_idx ON conversation_events(project_identity,execution_id,attempt_id,session_id,turn_id,event_id)`,
@@ -523,65 +532,22 @@ func (t *sqliteTx) PutTaskDelivery(v TaskDeliveryRecord) error {
 	if err := json.Unmarshal(v.Evidence, &evidence); err != nil {
 		return err
 	}
-	if evidence.ExistingAcceptance == nil {
-		if run.WorkflowVersion == WorkerFlowVersion {
-			if run.SelectedResult == "" || run.PRURL != v.PRURL || run.Phase != "executing" && run.Phase != "waiting_decision" && run.Phase != "waiting_pr_merge" {
-				return nativeErr("stale_version", "delivery requires the selected worker flow and its bound PR")
-			}
-			var executionPayload []byte
-			if err := t.tx.QueryRowContext(t.ctx, `SELECT payload FROM executions WHERE project_identity=? AND workflow_run_id=? AND execution_id=?`, v.ProjectIdentity, v.SelectedWorkflowRunID, run.SelectedResult).Scan(&executionPayload); err != nil {
-				return nativeErr("contract_mismatch", "delivery has no selected worker execution")
-			}
-			var execution ExecutionRecord
-			if err := json.Unmarshal(executionPayload, &execution); err != nil {
-				return err
-			}
-			if execution.SessionID == "" || execution.Workspace.Branch == "" {
-				return nativeErr("contract_mismatch", "delivery has no bound worker session or branch")
-			}
-		} else {
-			if run.Phase != "waiting_pr_merge" || run.SelectedResult == "" {
-				return nativeErr("stale_version", "delivery requires the selected workflow run awaiting PR merge")
-			}
-			var selected int
-			if err := t.tx.QueryRowContext(t.ctx, `SELECT COUNT(*) FROM executions WHERE project_identity=? AND workflow_run_id=? AND execution_id=? AND status='succeeded' AND current_step='waiting_pr_merge'`, v.ProjectIdentity, v.SelectedWorkflowRunID, run.SelectedResult).Scan(&selected); err != nil {
-				return err
-			}
-			if selected != 1 {
-				return nativeErr("contract_mismatch", "delivery has no selected successful execution")
-			}
-		}
-	} else {
-		graph, err := taskGraphSnapshotTx(t.ctx, t, v.ProjectIdentity)
-		if err != nil {
-			return err
-		}
-		task, ok := graph.ByID[v.TaskID]
-		if !ok {
-			return nativeErr("task_not_found", "existing acceptance task disappeared")
-		}
-		contract, err := nativeContractForTaskTx(t.ctx, t, v.ProjectIdentity, task)
-		if err != nil {
-			return err
-		}
-		if _, err = existingAcceptanceGatePrefix(v.TaskID, contract); err != nil || evidence.ExistingAcceptance.ContractDigest != contract.Digest {
-			return nativeErr("contract_mismatch", "existing acceptance differs from the fixed Task contract")
-		}
-		var projection []byte
-		if err = t.tx.QueryRowContext(t.ctx, `SELECT payload FROM projection WHERE project_identity=?`, v.ProjectIdentity).Scan(&projection); err != nil {
-			return err
-		}
-		var runtimeState Runtime
-		if err = json.Unmarshal(projection, &runtimeState); err != nil {
-			return err
-		}
-		snapshot, err := querySnapshot(t.ctx, t.tx, v.ProjectIdentity)
-		if err != nil {
-			return err
-		}
-		if _, _, _, err = existingAcceptanceRunState(snapshot, runtimeState, v.TaskID, v.SelectedWorkflowRunID); err != nil {
-			return err
-		}
+	if evidence.ExistingAcceptance != nil || run.WorkflowVersion != WorkerFlowVersion {
+		return nativeErr("unsupported_schema", "delivery requires a worker-flow-v1 run")
+	}
+	if run.SelectedResult == "" || run.PRURL != v.PRURL || run.Phase != "executing" && run.Phase != "waiting_decision" && run.Phase != "waiting_pr_merge" {
+		return nativeErr("stale_version", "delivery requires the selected worker flow and its bound PR")
+	}
+	var executionPayload []byte
+	if err := t.tx.QueryRowContext(t.ctx, "SELECT payload FROM executions WHERE project_identity=? AND workflow_run_id=? AND execution_id=?", v.ProjectIdentity, v.SelectedWorkflowRunID, run.SelectedResult).Scan(&executionPayload); err != nil {
+		return nativeErr("contract_mismatch", "delivery has no selected worker execution")
+	}
+	var execution ExecutionRecord
+	if err := json.Unmarshal(executionPayload, &execution); err != nil {
+		return err
+	}
+	if execution.SessionID == "" || execution.Workspace.Branch == "" {
+		return nativeErr("contract_mismatch", "delivery has no bound worker session or branch")
 	}
 	_, err = t.tx.ExecContext(t.ctx, `INSERT INTO task_deliveries(project_identity,task_id,selected_workflow_run_id,pr_instance,pr_repository,pr_number,pr_url,merge_commit,merged_at,recorded_at,evidence) VALUES(?,?,?,?,?,?,?,?,?,?,?)`, v.ProjectIdentity, v.TaskID, v.SelectedWorkflowRunID, v.PRInstance, v.PRRepository, v.PRNumber, v.PRURL, v.MergeCommit, v.MergedAt.UTC().Format(time.RFC3339Nano), v.RecordedAt.UTC().Format(time.RFC3339Nano), []byte(v.Evidence))
 	return err
@@ -601,8 +567,8 @@ func validateNativeTaskDelivery(v TaskDeliveryRecord, targetBranch string) error
 	if !evidence.Merged || evidence.State != "merged" || evidence.PRInstance != v.PRInstance || evidence.URL != v.PRURL || evidence.Repository != v.PRRepository || evidence.PRNumber != v.PRNumber || evidence.MergeCommit != v.MergeCommit || !evidence.MergedAt.Equal(v.MergedAt) || evidence.BaseBranch != targetBranch {
 		return nativeErr("inconsistent_delivery", "native task delivery PR evidence differs from its fixed identity")
 	}
-	if err := validateExistingAcceptanceProof(evidence); err != nil {
-		return err
+	if evidence.ExistingAcceptance != nil {
+		return nativeErr("unsupported_schema", "old acceptance delivery is unsupported")
 	}
 	return nil
 }
@@ -773,9 +739,7 @@ func (t *sqliteTx) completeNativeDeliveryWorkflow(project, taskID string) error 
 		return nativeErr("inconsistent_delivery", "task delivery evidence is unreadable")
 	}
 	if proof.ExistingAcceptance != nil {
-		// This delivery accepts implementation merged before the Task existed.
-		// Preserve the blocked workflow and failed execution as historical facts.
-		return nil
+		return nativeErr("unsupported_schema", "old acceptance delivery is unsupported")
 	}
 	var run WorkflowRunRecord
 	if err = json.Unmarshal(runPayload, &run); err != nil {
@@ -802,33 +766,7 @@ func (t *sqliteTx) completeNativeDeliveryWorkflow(project, taskID string) error 
 		}
 		return t.PutWorkflowRun(run)
 	}
-	if run.Phase != "waiting_pr_merge" || run.SelectedResult == "" {
-		return nativeErr("stale_version", "selected workflow is no longer waiting for its PR delivery")
-	}
-	var executionPayload []byte
-	if err = t.tx.QueryRowContext(t.ctx, `SELECT payload FROM executions WHERE project_identity=? AND workflow_run_id=? AND execution_id=? AND status='succeeded' AND current_step='waiting_pr_merge'`, project, runID, run.SelectedResult).Scan(&executionPayload); err != nil {
-		return nativeErr("contract_mismatch", "selected workflow has no successful PR-ready execution")
-	}
-	var execution ExecutionRecord
-	if err = json.Unmarshal(executionPayload, &execution); err != nil {
-		return err
-	}
-	run.Phase, run.UpdatedAt = "completed", now()
-	runPayload, err = encodePayload(run)
-	if err != nil {
-		return err
-	}
-	result, err := t.tx.ExecContext(t.ctx, `UPDATE workflow_runs SET phase='completed',payload=? WHERE project_identity=? AND workflow_run_id=? AND task_id=? AND phase='waiting_pr_merge'`, runPayload, project, runID, taskID)
-	if err = requireIdentityWrite(result, err, "stale_version: selected workflow changed during delivery"); err != nil {
-		return err
-	}
-	execution.CurrentStep, execution.UpdatedAt = "completed", now()
-	executionPayload, err = encodePayload(execution)
-	if err != nil {
-		return err
-	}
-	result, err = t.tx.ExecContext(t.ctx, `UPDATE executions SET current_step='completed',payload=? WHERE project_identity=? AND execution_id=? AND workflow_run_id=? AND status='succeeded' AND current_step='waiting_pr_merge'`, executionPayload, project, execution.ExecutionID, runID)
-	return requireIdentityWrite(result, err, "stale_version: selected execution changed during delivery")
+	return nativeErr("unsupported_schema", "delivery completion requires worker-flow-v1")
 }
 
 func (t *sqliteTx) PutWorkflowRun(v WorkflowRunRecord) error {
@@ -1600,7 +1538,7 @@ func (s *SQLiteStore) SaveRuntime(ctx context.Context, runtime Runtime) (Runtime
 			return nativeErr("authority_mismatch", "runtime publication requires the native task authority")
 		}
 		runtime.Revision = revision + 1
-		if runtime.SchemaVersion != CurrentRuntimeSchema && runtime.SchemaVersion != WorkerFlowRuntimeSchema {
+		if runtime.SchemaVersion != WorkerFlowRuntimeSchema {
 			return fmt.Errorf("unsupported runtime schema %d", runtime.SchemaVersion)
 		}
 		runtime.Operations = runtimeOperations(runtime)
@@ -1608,21 +1546,10 @@ func (s *SQLiteStore) SaveRuntime(ctx context.Context, runtime Runtime) (Runtime
 			if run == nil {
 				continue
 			}
-			if runtime.SchemaVersion == CurrentRuntimeSchema {
-				reconcileNativeWaitingDecision(&runtime, run)
+			if run.WorkflowVersion != WorkerFlowVersion {
+				return nativeErr("unsupported_schema", "runtime contains a workflow outside worker-flow-v1; preserve it for manual recovery")
 			}
-			var err error
-			if runtime.SchemaVersion == WorkerFlowRuntimeSchema {
-				if run.WorkflowVersion != WorkerFlowVersion {
-					return nativeErr("unsupported_schema", "runtime contains a workflow outside worker-flow-v1; preserve it for manual recovery")
-				}
-				err = persistWorkerFlow(tx, project, runtime, run)
-			} else {
-				if run.WorkflowVersion != MinimalWorkflowVersion {
-					return nativeErr("unsupported_schema", "runtime contains a workflow format outside native minimal-v1; preserve it for manual recovery")
-				}
-				err = persistNormalizedWorkflow(tx, project, runtime, run)
-			}
+			err := persistWorkerFlow(tx, project, runtime, run)
 			if err != nil {
 				return err
 			}
@@ -1687,33 +1614,6 @@ func (s *SQLiteStore) SaveRuntime(ctx context.Context, runtime Runtime) (Runtime
 
 // A native question can be saved with its Decision and StepAttempt before the
 // Run projection catches up. Restore only the matching current wait.
-func reconcileNativeWaitingDecision(runtime *Runtime, run *Run) {
-	if runtime == nil || run == nil || run.Decision == nil || run.FinishTaskStatus != "pending" || run.ExecutionStatus != "running" && run.ExecutionStatus != "pending" || run.Decision.AttemptID != run.AttemptID {
-		return
-	}
-	switch run.Decision.Status {
-	case "pending", "answer_saved", "reply_accepted":
-	default:
-		return
-	}
-	matchedAttempt := false
-	for _, attempt := range runtime.Attempts {
-		if attempt.AttemptID == run.AttemptID && attempt.ExecutionID == run.ExecutionID && attempt.Status == "waiting_decision" {
-			matchedAttempt = true
-			break
-		}
-	}
-	if !matchedAttempt {
-		return
-	}
-	for _, decision := range runtime.Decisions {
-		if decision.DecisionID == run.Decision.ID && decision.WorkflowRunID == run.RunID && decision.ExecutionID == run.ExecutionID && decision.AttemptID == run.AttemptID && decision.Status == run.Decision.Status {
-			run.FinishTaskStatus = "waiting_decision"
-			return
-		}
-	}
-}
-
 func (t *sqliteTx) discardUnclaimedWorkflow(project, runID string) error {
 	var taskID string
 	if err := t.tx.QueryRowContext(t.ctx, `SELECT task_id FROM workflow_runs WHERE project_identity=? AND workflow_run_id=? AND phase IN ('queued','executing')`, project, runID).Scan(&taskID); err != nil {
@@ -1737,157 +1637,6 @@ func (t *sqliteTx) discardUnclaimedWorkflow(project, runID string) error {
 	}
 	_, err := t.tx.ExecContext(t.ctx, `DELETE FROM tasks WHERE project_identity=? AND task_id=? AND NOT EXISTS (SELECT 1 FROM workflow_runs WHERE project_identity=? AND task_id=?)`, project, taskID, project, taskID)
 	return err
-}
-
-func persistNormalizedWorkflow(tx DomainTx, project string, runtime Runtime, run *Run) error {
-	var task *TaskRecord
-	for i := range runtime.Tasks {
-		if runtime.Tasks[i].TaskID == run.DomainTaskID {
-			task = &runtime.Tasks[i]
-			break
-		}
-	}
-	if task == nil {
-		return fmt.Errorf("minimal-v1 run %s lacks its Task record", run.RunID)
-	}
-	var workflow *WorkflowRunRecord
-	for i := range runtime.WorkflowRuns {
-		if runtime.WorkflowRuns[i].WorkflowRunID == run.RunID {
-			workflow = &runtime.WorkflowRuns[i]
-			break
-		}
-	}
-	if workflow == nil {
-		return fmt.Errorf("minimal-v1 run %s lacks its WorkflowRun record", run.RunID)
-	}
-	var authority string
-	if err := tx.(*sqliteTx).tx.QueryRowContext(tx.(*sqliteTx).ctx, `SELECT authority FROM project_task_authorities WHERE project_identity=?`, project).Scan(&authority); err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return err
-	}
-	if authority != "native" {
-		return nativeErr("authority_mismatch", "normalized runtime publication requires the native task authority")
-	}
-	var savedPhase string
-	if err := tx.(*sqliteTx).tx.QueryRowContext(tx.(*sqliteTx).ctx, `SELECT phase FROM workflow_runs WHERE project_identity=? AND workflow_run_id=?`, project, run.RunID).Scan(&savedPhase); err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return err
-	}
-	if savedPhase == "abandoned" {
-		// The center has already settled this historical run. A stale runtime
-		// projection must not turn it back into an active blocked workflow.
-		return nil
-	}
-	if task.Status == "closed" && workflow.Phase == "completed" && run.FinishTaskStatus == "completed" {
-		// CompleteNativeTask already committed the selected delivery, closed task,
-		// and immutable completed workflow in its center transaction.
-		return nil
-	}
-	var executionIDs = map[string]bool{}
-	for i := range runtime.Executions {
-		execution := &runtime.Executions[i]
-		if execution.WorkflowRunID != run.RunID {
-			continue
-		}
-		executionIDs[execution.ExecutionID] = true
-		if run.FinishTaskStatus == "waiting_decision" {
-			execution.Status = "waiting_decision"
-		}
-		if run.FinishTaskStatus == "waiting_pr_merge" {
-			execution.Status = "succeeded"
-			execution.CurrentStep = "waiting_pr_merge"
-			workflow.SelectedResult = execution.ExecutionID
-		}
-		if run.FinishTaskStatus == "completed" {
-			execution.Status = "succeeded"
-			execution.CurrentStep = "completed"
-			workflow.Phase = "completed"
-		}
-		if run.FinishTaskStatus == "blocked" {
-			if task.Status == "discarded" && execution.Status == "stopped" {
-				// A confirmed native discard stop has already settled the fixed
-				// execution resource; the task remains discarded and blocked.
-			} else if run.ExecutionStatus == "unknown" {
-				execution.Status = "blocked"
-			} else {
-				execution.Status = "failed"
-			}
-			workflow.Phase = "blocked"
-		}
-		if run.FinishTaskStatus == "waiting_decision" {
-			workflow.Phase = "waiting_decision"
-		}
-		if run.FinishTaskStatus == "waiting_pr_merge" {
-			workflow.Phase = "waiting_pr_merge"
-		}
-		if run.ExecutionStatus == "running" && run.FinishTaskStatus == "pending" {
-			execution.Status = "active"
-			workflow.Phase = "executing"
-		}
-		execution.UpdatedAt = now()
-	}
-	if len(executionIDs) == 0 {
-		return fmt.Errorf("minimal-v1 workflow %s has no Execution", run.RunID)
-	}
-	if run.FinishTaskStatus == "completed" && task.Status != "closed" {
-		return nativeErr("inconsistent_delivery", "completed runtime projection lacks the center-owned closed task")
-	}
-	workflow.UpdatedAt = now()
-	if err := tx.PutWorkflowRun(*workflow); err != nil {
-		return err
-	}
-	for i := range runtime.Executions {
-		execution := runtime.Executions[i]
-		if executionIDs[execution.ExecutionID] {
-			if err := tx.PutExecution(execution); err != nil {
-				return err
-			}
-		}
-	}
-	for _, attempt := range runtime.Attempts {
-		if executionIDs[attempt.ExecutionID] {
-			if err := tx.PutStepAttempt(attempt); err != nil {
-				return err
-			}
-		}
-	}
-	for _, decision := range runtime.Decisions {
-		if decision.WorkflowRunID == run.RunID {
-			if err := tx.PutDecision(decision); err != nil {
-				return err
-			}
-		}
-	}
-	if run.Decision != nil {
-		request, err := json.Marshal(run.Decision.Request)
-		if err != nil {
-			return err
-		}
-		var answer []byte
-		if run.Decision.Status == "answer_saved" || run.Decision.Status == "resuming" || run.Decision.Status == "reply_accepted" || run.Decision.Status == "applied" || run.Decision.Status == "failed" {
-			value := DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, OptionID: run.Decision.OptionID, Note: run.Decision.Note, AnsweredBy: run.Decision.AnsweredBy}
-			if run.Decision.AnsweredAt != nil {
-				value.AnsweredAt = *run.Decision.AnsweredAt
-			}
-			answer, err = json.Marshal(value)
-			if err != nil {
-				return err
-			}
-		}
-		status := run.Decision.Status
-		if status == "resuming" {
-			status = "answer_saved"
-		}
-		created := now()
-		for _, old := range runtime.Decisions {
-			if old.DecisionID == run.Decision.ID {
-				created = old.CreatedAt
-				break
-			}
-		}
-		if err = tx.PutDecision(DecisionRecord{ProjectIdentity: project, DecisionID: run.Decision.ID, Scope: "execution", WorkflowRunID: run.RunID, ExecutionID: run.ExecutionID, AttemptID: run.Decision.AttemptID, QuestionID: run.Decision.ID, Request: request, Answer: answer, AnsweredBy: run.Decision.AnsweredBy, Status: status, Version: run.Decision.Version, CreatedAt: created, UpdatedAt: now()}); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func runtimeOperations(runtime Runtime) []OperationRecord {

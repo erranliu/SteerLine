@@ -125,16 +125,8 @@ func (c CommandService) AddNativeTaskPredecessors(ctx context.Context, config Co
 	if err != nil {
 		return empty, err
 	}
-	if input.WorkflowRunID != "" {
-		graphRevision := input.ExpectedGraphRevision
-		reopened, err := c.ReopenNativeTask(ctx, config, TaskReopenInput{TaskID: input.TaskID, WorkflowRunID: input.WorkflowRunID, RequestID: input.RequestID, ExpectedVersion: input.ExpectedTaskVersion, ExpectedGraphRevision: &graphRevision, PredecessorIDs: input.PredecessorIDs, ConfirmedProcessStopped: input.ConfirmedProcessStopped, Reason: input.Reason, RequestedBy: input.RequestedBy})
-		if err != nil {
-			return empty, err
-		}
-		return TaskPredecessorAddReceipt{RequestID: input.RequestID, TaskID: input.TaskID, PredecessorIDs: input.PredecessorIDs, TaskVersion: reopened.TaskVersion, GraphRevision: reopened.GraphRevision, AbandonedRunID: reopened.AbandonedRunID, Status: "open"}, nil
-	}
-	if input.ConfirmedProcessStopped {
-		return empty, nativeErr("invalid_batch", "stopped-process confirmation requires the exact workflow run ID")
+	if input.WorkflowRunID != "" || input.ConfirmedProcessStopped {
+		return empty, nativeErr("unsupported_schema", "reopening a claimed task through the old workflow is unsupported")
 	}
 	request, _ := CanonicalJSON(mustJSON(input))
 	replay := func(command CommandRecord) (TaskPredecessorAddReceipt, error) {
@@ -264,4 +256,10 @@ func (t *sqliteTx) bumpNativeOpenTaskVersionCAS(next TaskRecord, expectedVersion
 	}
 	result, err := t.tx.ExecContext(t.ctx, `UPDATE tasks SET version=?,payload=? WHERE project_identity=? AND task_id=? AND status='open' AND version=?`, next.Version, body, next.ProjectIdentity, next.TaskID, expectedVersion)
 	return requireIdentityWrite(result, err, "stale_version: task changed before predecessor addition")
+}
+
+func sameTaskRecord(a, b TaskRecord) bool {
+	x, _ := json.Marshal(a)
+	y, _ := json.Marshal(b)
+	return bytes.Equal(x, y)
 }

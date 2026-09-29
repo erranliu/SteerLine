@@ -114,7 +114,7 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openP
 	}
 	finishTurn("waiting_decision")
 	if openPR {
-		workflow, execution := service.minimalRecords(run)
+		workflow, execution := service.workflowRecords(run)
 		url := "https://git.example/org/repo/pulls/8"
 		info := PRInfo{URL: url, Repository: "org/repo", BaseBranch: "main", HeadRepository: "org/repo", HeadBranch: *run.WorktreeBranch, HeadRevision: receipt.BaseCommit, State: "open"}
 		if err := BindWorkerPR(workflow, execution, info, url, "org/repo", false); err != nil {
@@ -203,7 +203,7 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openP
 	if !strings.Contains(string(events), string(encodedFeedback)) {
 		t.Fatalf("worker did not receive the full feedback: %q", events)
 	}
-	workflow, execution := service.minimalRecords(run)
+	workflow, execution := service.workflowRecords(run)
 	if workflow == nil || execution == nil || workflow.WorkflowRunID != receipt.WorkflowRunID || execution.ExecutionID != receipt.ExecutionID ||
 		run.AttemptID != receipt.AttemptID || execution.SessionID != workerFlowMockSession || execution.TurnNumber != 2 ||
 		canonical(deref(run.WorktreePath)) != canonical(firstWorktree) || len(service.State.Attempts) != 1 {

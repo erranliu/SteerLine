@@ -465,13 +465,13 @@ func (c *Config) Preflight(ctx context.Context, checkSkills bool) error {
 	if err := requireNativeTaskAuthority(*c); err != nil {
 		return err
 	}
-	return c.preflightNative(ctx, checkSkills)
+	return c.preflightNative(ctx)
 }
 
 // preflightNative validates a native project without resolving or invoking a
 // Beads executable. A check never initializes a database or adopts an existing
 // state directory.
-func (c *Config) preflightNative(ctx context.Context, checkSteps bool) error {
+func (c *Config) preflightNative(ctx context.Context) error {
 	if err := requireNativeTaskAuthority(*c); err != nil {
 		return err
 	}
@@ -485,18 +485,7 @@ func (c *Config) preflightNative(ctx context.Context, checkSteps bool) error {
 		return errors.New("local_process currently supports only agent=codex")
 	}
 	commands := []*Command{&c.Git}
-	var workflow *MinimalWorkflowConfig
 	var err error
-	if c.WorkflowProtocol != WorkerFlowVersion {
-		if checkSteps {
-			workflow, err = c.validateNativeWorkflow()
-		} else {
-			workflow, err = c.minimalConfig()
-		}
-	}
-	if err != nil {
-		return err
-	}
 	if c.needsCodexExecutable() {
 		commands = append(commands, &c.Codex)
 	}
@@ -584,52 +573,6 @@ func (c *Config) preflightNative(ctx context.Context, checkSteps bool) error {
 		return err
 	} else if err = ensureNativeStateClean(c.RunDir, c.Repository); err != nil {
 		return err
-	}
-	if c.WorkflowProtocol == WorkerFlowVersion {
-		if c.PR.Kind == "gitea" {
-			return (&PRClient{Config: c.PR, Runner: git}).Check(ctx)
-		}
-		return nil
-	}
-	if !checkSteps {
-		return nil
-	}
-	if err = c.validateMinimalPreflight(*workflow); err != nil {
-		return err
-	}
-	base, err := git.Output(ctx, c.Git, "rev-parse", "HEAD^{commit}")
-	if err != nil {
-		return err
-	}
-	baseCommit := strings.TrimSpace(string(base))
-	if err = c.validateMinimalEntriesAtBase(ctx, *workflow, baseCommit); err != nil {
-		return err
-	}
-	steps := []struct {
-		name     string
-		contract StepContract
-	}{
-		{"implement", workflow.Steps.Implement},
-		{"verify", workflow.Steps.Verify},
-		{"publish_pr", workflow.Steps.PublishPR},
-	}
-	if workflow.Definition.ReviewRequired {
-		steps = append(steps, struct {
-			name     string
-			contract StepContract
-		}{"review", workflow.Steps.Review})
-	}
-	for _, step := range steps {
-		if strings.HasPrefix(step.contract.Entry, "builtin:") {
-			continue
-		}
-		content, readErr := git.Output(ctx, c.Git, "show", baseCommit+":"+filepath.ToSlash(step.contract.Entry))
-		if readErr != nil {
-			return fmt.Errorf("%s entry %q cannot be read from pinned base: %w", step.name, step.contract.Entry, readErr)
-		}
-		if err = rejectLegacyStepDependencies(step.name, content); err != nil {
-			return err
-		}
 	}
 	if c.PR.Kind == "gitea" {
 		if err = (&PRClient{Config: c.PR, Runner: git}).Check(ctx); err != nil {

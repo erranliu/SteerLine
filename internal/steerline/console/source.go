@@ -21,7 +21,6 @@ type ProjectRef struct {
 	Name       string
 	ConfigPath string
 	Config     steerline.Config
-	Legacy     *steerline.LegacyBeadsProject
 	Identity   string
 	RunDir     string
 	Error      string
@@ -40,8 +39,6 @@ type ProjectSnapshot struct {
 	NativeTaskError string
 	Domain          *steerline.DomainSnapshot
 	DomainError     string
-	Legacy          *steerline.LegacyBeadsSnapshot
-	LegacyError     string
 }
 
 type QuerySource interface {
@@ -62,7 +59,6 @@ type DecisionCommandClient interface {
 	DecisionEligibility(context.Context, ProjectRef, *steerline.Run) error
 	SubmitDecision(context.Context, ProjectRef, steerline.DecisionAnswer, string, string) (steerline.CommandRecord, bool, error)
 	DecisionCommand(context.Context, ProjectRef, string) (steerline.CommandRecord, error)
-	SubmitServiceAction(context.Context, ProjectRef, string, string, string, uint64, string, any) (steerline.CommandRecord, bool, error)
 }
 
 type FileQuerySource struct{}
@@ -72,14 +68,6 @@ func (FileQuerySource) ReadProject(ctx context.Context, ref ProjectRef, selected
 		return previous
 	}
 	result := ProjectSnapshot{SelectedTaskID: selectedTaskID}
-	if ref.Legacy != nil {
-		legacy, err := ref.Legacy.Read(ctx)
-		result.Legacy = &legacy
-		if err != nil {
-			result.LegacyError = err.Error()
-		}
-		return result
-	}
 	if ref.Error != "" {
 		result.TaskError, result.DomainError = ref.Error, ref.Error
 		return result
@@ -362,9 +350,6 @@ func (FileControlClient) DecisionEligibility(ctx context.Context, ref ProjectRef
 }
 
 func (FileControlClient) Submit(ctx context.Context, ref ProjectRef, action string, payload any, requestID, instance string, revision *uint64) (steerline.ControlRequest, error) {
-	if ref.Legacy != nil {
-		return steerline.ControlRequest{}, errors.New("old Beads project is read-only in this console")
-	}
 	if err := ctx.Err(); err != nil {
 		return steerline.ControlRequest{}, err
 	}
@@ -389,9 +374,6 @@ func (FileControlClient) Request(ctx context.Context, ref ProjectRef, requestID 
 }
 
 func (FileControlClient) SubmitDecision(ctx context.Context, ref ProjectRef, answer steerline.DecisionAnswer, requestedBy, commandID string) (steerline.CommandRecord, bool, error) {
-	if ref.Legacy != nil {
-		return steerline.CommandRecord{}, false, errors.New("old Beads project is read-only in this console")
-	}
 	if err := ctx.Err(); err != nil {
 		return steerline.CommandRecord{}, false, err
 	}
@@ -411,19 +393,6 @@ func (FileControlClient) DecisionCommand(ctx context.Context, ref ProjectRef, co
 	}
 	defer db.Close()
 	return db.Command(ctx, ref.Identity, commandID)
-}
-
-func (FileControlClient) SubmitServiceAction(ctx context.Context, ref ProjectRef, kind, targetID, requestedBy string, expectedRevision uint64, commandID string, payload any) (steerline.CommandRecord, bool, error) {
-	if ref.Legacy != nil {
-		return steerline.CommandRecord{}, false, errors.New("old Beads project is read-only in this console")
-	}
-	if err := ctx.Err(); err != nil {
-		return steerline.CommandRecord{}, false, err
-	}
-	if ref.Error != "" {
-		return steerline.CommandRecord{}, false, errors.New(ref.Error)
-	}
-	return steerline.SubmitServiceCommand(ctx, ref.Config, kind, targetID, requestedBy, commandID, expectedRevision, payload)
 }
 
 func candidateFreshness(ref ProjectRef, snapshot ProjectSnapshot, now time.Time) (bool, string) {

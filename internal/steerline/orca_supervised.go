@@ -879,8 +879,8 @@ func (s *Service) reattachSupervisedWorker(run *Run) error {
 	previous := s.Config
 	s.Config = config
 	defer func() { s.Config = previous; s.worker, s.active = nil, nil }()
-	workflow, execution := s.minimalRecords(run)
-	attempt := s.minimalAttempt(run, run.AttemptID)
+	workflow, execution := s.workflowRecords(run)
+	attempt := s.workflowAttempt(run, run.AttemptID)
 	if workflow == nil || execution == nil || attempt == nil || attempt.ResultPath == "" || attempt.OperationID == "" || attempt.Status != "dispatched" && attempt.Status != "running" && attempt.Status != "waiting_decision" && !(uncertainStart && attempt.Status == "outcome_unknown") && !(unboundStart && attempt.Status == "dispatching") {
 		return errors.New("supervised recovery lacks its current workflow, attempt, or result path")
 	}

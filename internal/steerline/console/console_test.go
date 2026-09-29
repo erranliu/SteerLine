@@ -117,7 +117,7 @@ func testProject(key string) ProjectRef {
 func readySnapshot(ref ProjectRef, now time.Time) ProjectSnapshot {
 	last := now.Add(-time.Second)
 	runtime := &steerline.Runtime{
-		SchemaVersion: 5,
+		SchemaVersion: steerline.WorkerFlowRuntimeSchema,
 		Repository:    steerline.Repository{Identity: ref.Identity},
 		Service:       steerline.ServiceState{InstanceID: "instance-" + ref.Name, Capabilities: []string{"start_task", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "stop_service"}},
 		Control:       steerline.ControlState{DispatchMode: "manual", Revision: 7},
@@ -148,7 +148,7 @@ func decisionSnapshot(ref ProjectRef, now time.Time) (ProjectSnapshot, *steerlin
 	for i := range options {
 		options[i] = steerline.DecisionOption{ID: fmt.Sprintf("o%d", i), Label: fmt.Sprintf("选项 %d", i+1), Detail: fmt.Sprintf("详细说明 %02d：完整内容", i+1)}
 	}
-	run := &steerline.Run{TaskID: "task-decision", RunID: "0123456789abcdef0123456789abcdef", AttemptID: "fedcba9876543210fedcba9876543210", ControlRevision: 9, WorkflowVersion: steerline.MinimalWorkflowVersion, ExecutionID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", Host: "orca", Backend: "orca", Protocol: "orca_terminal_v2", FinishTaskStatus: "waiting_decision", ExecutionStatus: "succeeded", Decision: &steerline.DecisionState{ID: "decision-0123456789abcdef0123456789ab", AttemptID: "fedcba9876543210fedcba9876543210", Version: 3, Status: "pending", Request: steerline.DecisionRequest{Question: strings.Repeat("问题", 24), Context: "背景第一行\n背景第二行", Options: options, Recommended: "o10", AllowFreeText: true}}}
+	run := &steerline.Run{TaskID: "task-decision", RunID: "0123456789abcdef0123456789abcdef", AttemptID: "fedcba9876543210fedcba9876543210", ControlRevision: 9, WorkflowVersion: steerline.WorkerFlowVersion, ExecutionID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", Host: "local", Backend: "local", Protocol: "local_process", FinishTaskStatus: "waiting_decision", ExecutionStatus: "succeeded", Decision: &steerline.DecisionState{ID: "decision-0123456789abcdef0123456789ab", AttemptID: "fedcba9876543210fedcba9876543210", Version: 3, Status: "pending", Request: steerline.DecisionRequest{Question: strings.Repeat("问题", 24), Context: "背景第一行\n背景第二行", Options: options, Recommended: "o10", AllowFreeText: true}}}
 	runtime.Runs = []*steerline.Run{run}
 	snapshot.Connection.Snapshot.Runtime = runtime
 	snapshot.Observation.Runtime = runtime
@@ -221,7 +221,11 @@ func TestDecisionAnswerEditorHandlesTwelveOptionsUnicodePasteAndStableCommandID(
 	if _, ok := persisted.Projects[ref.Key].Actions[requestID]; !ok {
 		t.Fatal("answer command ID was not persisted before publication")
 	}
-	if strings.Contains(string(m.profileViewBytes(t)), "漢字") {
+	viewBytes, readErr := os.ReadFile(m.profile.path())
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	if strings.Contains(string(viewBytes), "漢字") {
 		t.Fatal("UI view preferences stored the answer body")
 	}
 	message := cmd()
@@ -233,45 +237,6 @@ func TestDecisionAnswerEditorHandlesTwelveOptionsUnicodePasteAndStableCommandID(
 	if m.projects[0].actions[requestID].Status != "pending" {
 		t.Fatalf("pending command was not tracked by its stable ID: %+v", m.projects[0].actions[requestID])
 	}
-}
-
-func TestSupervisedDecisionUsesBoundAnswerCommand(t *testing.T) {
-	now := time.Date(2026, 9, 28, 5, 42, 0, 0, time.UTC)
-	ref := testProject("supervised-decision")
-	snapshot, run := decisionSnapshot(ref, now)
-	run.Host, run.Protocol = "orca_supervised", "orca_supervised"
-	control := &testControlClient{}
-	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, control, now)
-	m.profile = &viewProfile{dir: t.TempDir()}
-	m.projects[0].selectedKey = "run:" + run.RunID
-	row := &consoleRow{kind: rowRun, run: run}
-	if reason := decisionAnswerAvailability(m.projects[0], row); !strings.HasPrefix(reason, "提交后") {
-		t.Fatalf("supervised answer was unavailable despite the live command capability: %s", reason)
-	}
-	updated, cmd := m.answerSelectedDecision()
-	m = updated.(Model)
-	if cmd != nil || m.answer == nil {
-		t.Fatalf("supervised answer draft did not open: dialog=%+v cmd=%v", m.answer, cmd)
-	}
-	updated, cmd = m.handleDecisionAnswerKey(tea.KeyMsg{Type: tea.KeyF2})
-	m = updated.(Model)
-	if cmd == nil {
-		t.Fatal("supervised answer was not submitted through CommandService")
-	}
-	updated, _ = m.Update(cmd())
-	m = updated.(Model)
-	if control.decisionCalls != 1 || control.decisionAnswer.RunID != run.RunID || control.decisionAnswer.DecisionID != run.Decision.ID || control.decisionAnswer.OptionID != "o10" || control.decisionAnswer.ExpectedRunRevision != run.ControlRevision {
-		t.Fatalf("supervised answer lost its original execution identity: %+v", control.decisionAnswer)
-	}
-}
-
-func (m *Model) profileViewBytes(t *testing.T) []byte {
-	t.Helper()
-	data, err := os.ReadFile(m.profile.path())
-	if err != nil {
-		t.Fatal(err)
-	}
-	return data
 }
 
 func TestDecisionAnswerDraftSurvivesStaleRevisionAndLengthRejection(t *testing.T) {
@@ -300,20 +265,6 @@ func TestDecisionAnswerDraftSurvivesStaleRevisionAndLengthRejection(t *testing.T
 	}
 }
 
-func TestConsoleOffersBoundLocalNativeDecisionForAnswer(t *testing.T) {
-	now := time.Now().UTC()
-	ref := testProject("local-decision")
-	snapshot, run := decisionSnapshot(ref, now)
-	run.Backend, run.Protocol, run.Host = "local", "local_process", "local"
-	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, &testControlClient{}, now)
-	m.projects[0].selectedKey = "run:" + run.RunID
-	updated, cmd := m.answerSelectedDecision()
-	m = updated.(Model)
-	if cmd != nil || m.answer == nil || !strings.Contains(m.status, "决策草稿已打开") {
-		t.Fatalf("console rejected a fixed local native decision: dialog=%+v status=%q", m.answer, m.status)
-	}
-}
-
 func TestConsoleOffersWorkerFlowDecisionWithoutRecoveryActions(t *testing.T) {
 	now := time.Now().UTC()
 	ref := testProject("worker-flow-decision")
@@ -326,56 +277,6 @@ func TestConsoleOffersWorkerFlowDecisionWithoutRecoveryActions(t *testing.T) {
 	m = updated.(Model)
 	if cmd != nil || m.answer == nil {
 		t.Fatalf("worker-flow decision was hidden: answer=%+v status=%q", m.answer, m.status)
-	}
-	m.answer = nil
-	updated, cmd = m.prepareRecoveryAction("retry_run")
-	m = updated.(Model)
-	if cmd != nil || m.confirm != nil {
-		t.Fatalf("worker flow exposed a removed retry action: confirm=%+v status=%q", m.confirm, m.status)
-	}
-}
-
-func TestRecoveryReportSubmitsRevisionBoundServiceCommand(t *testing.T) {
-	now := time.Now().UTC()
-	ref := testProject("recovery-command")
-	snapshot, run := decisionSnapshot(ref, now)
-	runtimeState := snapshot.Connection.Snapshot.Runtime
-	runtimeState.Service.Capabilities = append(runtimeState.Service.Capabilities, "retry_run")
-	run.Decision, run.FinishTaskStatus, run.ExecutionStatus = nil, "blocked", "failed"
-	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, &testControlClient{}, now)
-	m.projects[0].selectedKey = "run:" + run.RunID
-	m.projects[0].panel = 6
-	m.projects[0].recoveryRunID = run.RunID
-	m.projects[0].recoveryReport = &steerline.RecoveryInspection{RunID: run.RunID, TaskID: run.TaskID, RunRevision: run.ControlRevision, ServiceInstanceID: runtimeState.Service.InstanceID, RetryReason: ""}
-	updated, cmd := m.prepareRecoveryAction("retry_run")
-	m = updated.(Model)
-	if cmd != nil || m.confirm == nil || m.confirm.action != "retry_run" {
-		t.Fatalf("retry did not show its action confirmation: confirm=%+v cmd=%v", m.confirm, cmd)
-	}
-	updated, cmd = m.handleConfirm(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
-	m = updated.(Model)
-	if cmd == nil || len(m.projects[0].actions) != 1 {
-		t.Fatalf("retry command was not staged after confirmation: cmd=%v actions=%d", cmd, len(m.projects[0].actions))
-	}
-	var commandID string
-	for id, action := range m.projects[0].actions {
-		if action.Action == "retry_run" {
-			commandID = id
-			break
-		}
-	}
-	if commandID == "" || m.projects[0].view.Outstanding[commandID] == "" {
-		t.Fatal("retry command ID was not retained before publication")
-	}
-	message := cmd()
-	updated, _ = m.Update(message)
-	m = updated.(Model)
-	if m.control.(*testControlClient).decisionCommand.CommandID != commandID || m.control.(*testControlClient).decisionCommand.Kind != "retry_run" || m.control.(*testControlClient).decisionCommand.ExpectedVersion != run.ControlRevision {
-		t.Fatalf("recovery command was not bound to its report revision: %+v", m.control.(*testControlClient).decisionCommand)
-	}
-	var body steerline.RecoveryCommandBody
-	if err := json.Unmarshal(m.control.(*testControlClient).decisionCommand.Payload, &body); err != nil || !body.ConfirmedProcessStopped {
-		t.Fatalf("explicit retry confirmation missing from service command: %+v %v", body, err)
 	}
 }
 
@@ -801,63 +702,6 @@ func TestSessionScrollAnchorMovesToGroupHeaderWhenAutoFoldHidesItem(t *testing.T
 	}
 }
 
-func TestRecoveryStopAndResolveRequireWrittenOperatorEvidence(t *testing.T) {
-	now := time.Now().UTC()
-	ref := testProject("recovery-evidence")
-	snapshot, run := decisionSnapshot(ref, now)
-	runtimeState := snapshot.Connection.Snapshot.Runtime
-	runtimeState.Service.Capabilities = append(runtimeState.Service.Capabilities, "mark_stopped", "resolve_command")
-	run.Decision, run.ExecutionStatus, run.FinishTaskStatus = nil, "unknown", "blocked"
-	control := &testControlClient{}
-	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, control, now)
-	m.projects[0].selectedKey = "run:" + run.RunID
-	m.projects[0].panel = 6
-	m.projects[0].recoveryRunID = run.RunID
-	blockerID := steerline.NewControlRequestID()
-	m.projects[0].recoveryReport = &steerline.RecoveryInspection{RunID: run.RunID, TaskID: run.TaskID, RunRevision: run.ControlRevision, ServiceInstanceID: runtimeState.Service.InstanceID, MarkStoppedReason: "confirm that the original execution stopped", Blockers: []steerline.ControlBlocker{{RequestID: blockerID, Action: "start_task", TaskID: run.TaskID, RunID: run.RunID, AttemptID: run.AttemptID}}}
-	updated, cmd := m.prepareRecoveryAction("mark_stopped")
-	m = updated.(Model)
-	if cmd != nil || m.confirm == nil || !m.confirm.requireBasis || m.confirm.basis != "" {
-		t.Fatalf("mark-stopped supplied fabricated operator evidence: confirm=%+v cmd=%v", m.confirm, cmd)
-	}
-	updated, cmd = m.handleConfirm(tea.KeyMsg{Type: tea.KeyF2})
-	m = updated.(Model)
-	if cmd != nil || m.confirm == nil || m.confirm.basisError == "" {
-		t.Fatal("mark-stopped submitted without written evidence")
-	}
-	m.confirm.basis = strings.Repeat("界", 2001)
-	m.confirm.basisCursor = 2001
-	updated, cmd = m.handleConfirm(tea.KeyMsg{Type: tea.KeyF2})
-	m = updated.(Model)
-	if cmd != nil || m.confirm == nil || len([]rune(m.confirm.basis)) != 2001 || !strings.Contains(m.confirm.basisError, "2000") {
-		t.Fatal("overlong recovery evidence was clipped or submitted")
-	}
-	m.confirm.basis, m.confirm.basisCursor = "", 0
-	basis := "我核对原执行进程已停止，终端句柄不可再观察。"
-	updated, _ = m.handleConfirm(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(basis)})
-	m = updated.(Model)
-	updated, cmd = m.handleConfirm(tea.KeyMsg{Type: tea.KeyF2})
-	m = updated.(Model)
-	if cmd == nil || m.confirm != nil {
-		t.Fatal("written stop evidence did not reach the explicit submit action")
-	}
-	_ = cmd()
-	var body steerline.RecoveryCommandBody
-	if err := json.Unmarshal(control.decisionCommand.Payload, &body); err != nil || body.ConfirmationBasis != basis || !body.ConfirmedProcessStopped {
-		t.Fatalf("submitted stop evidence differs from the operator text: body=%+v err=%v", body, err)
-	}
-	updated, cmd = m.prepareRecoveryAction("resolve_command")
-	m = updated.(Model)
-	if cmd != nil || m.confirm == nil || !m.confirm.requireBasis || m.confirm.basis != "" {
-		t.Fatalf("resolve-command supplied fabricated operator evidence: confirm=%+v cmd=%v", m.confirm, cmd)
-	}
-	updated, cmd = m.handleConfirm(tea.KeyMsg{Type: tea.KeyF2})
-	m = updated.(Model)
-	if cmd != nil || m.confirm == nil || m.confirm.basisError == "" {
-		t.Fatal("resolve-command submitted without written evidence")
-	}
-}
-
 func TestConsoleNativeLocalAndOrcaFixtureUseSameFoldScript(t *testing.T) {
 	raw, err := os.ReadFile(filepath.Join("..", "..", "..", "docs", "validation", "pr-04b-public-history-native-2026-09-25.json"))
 	if err != nil {
@@ -1006,39 +850,6 @@ func TestRunStatusKeepsBusinessExecutionAndUnknownAxesSeparate(t *testing.T) {
 	for _, tc := range cases {
 		if got := runStatus(tc.run); !strings.HasPrefix(got, tc.want) {
 			t.Fatalf("runStatus(%+v)=%q, want prefix %q", tc.run, got, tc.want)
-		}
-	}
-}
-
-func TestTaskRemainsInProgressAcrossWorkflowStepHandoff(t *testing.T) {
-	now := time.Now().UTC()
-	ref := testProject("progress")
-	snapshot := readySnapshot(ref, now)
-	run := &steerline.Run{TaskID: "task-B", RunID: "run-B", ExecutionID: "execution-B", TaskStatus: "in_progress", WorkflowVersion: steerline.MinimalWorkflowVersion, ExecutionStatus: "pending", FinishTaskStatus: "pending"}
-	snapshot.Observation.Runtime.Runs = []*steerline.Run{run}
-	snapshot.Domain = &steerline.DomainSnapshot{
-		WorkflowRuns: []steerline.WorkflowRunRecord{{WorkflowRunID: run.RunID, Definition: steerline.WorkflowDefinition{ReviewRequired: true}}},
-		Executions:   []steerline.ExecutionRecord{{ExecutionID: run.ExecutionID, WorkflowRunID: run.RunID, CurrentStep: "implement"}},
-		Attempts: []steerline.StepAttemptRecord{
-			{ExecutionID: run.ExecutionID, StepID: "prepare", Status: "succeeded", UpdatedAt: now.Add(-time.Minute)},
-			{ExecutionID: run.ExecutionID, StepID: "implement", Status: "dispatching", UpdatedAt: now},
-		},
-	}
-	state := projectState{ref: ref, snapshot: snapshot}
-	if got := runStatus(run); got != "进行中" {
-		t.Fatalf("step handoff showed task as %q", got)
-	}
-	if !filterAllows(2, rowRun, run) {
-		t.Fatal("step handoff disappeared from the in-progress filter")
-	}
-	_, _, running, _, _, _ := projectCounts(state, now)
-	if running != 1 {
-		t.Fatalf("step handoff disappeared from the project count: %d", running)
-	}
-	progress := strings.Join(taskProgressLines(state, run), "\n")
-	for _, want := range []string{"✓ 准备", "● 实现", "○ 验证", "○ 审查", "○ 创建 PR", "当前步骤：实现 · 正在派发"} {
-		if !strings.Contains(progress, want) {
-			t.Fatalf("progress missed %q: %s", want, progress)
 		}
 	}
 }
