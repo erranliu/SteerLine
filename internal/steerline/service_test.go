@@ -57,6 +57,9 @@ func TestMain(m *testing.M) {
 	if os.Getenv("STEERLINE_LIFECYCLE_EXIT_EARLY") == "1" {
 		os.Exit(23)
 	}
+	if os.Getenv("STEERLINE_TEST_HOST_GH_FILE") != "" {
+		os.Exit(fakeHostGH(os.Args[1:]))
+	}
 	for i, arg := range os.Args {
 		if arg == "--fake" {
 			os.Exit(fakeMain(os.Args[i+1:]))

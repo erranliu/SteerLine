@@ -1,0 +1,180 @@
+package steerline
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"strings"
+)
+
+// The final line is an explicit handoff from the sandboxed worker. Only the
+// center may use its GitHub credentials to publish the fixed execution branch.
+func localWorkerPublishInstruction(runID string) string {
+	return "\nLocal publication: stage only the files you intend to deliver. Do not commit, push, or create a PR from this Codex session. When the task is ready for a draft PR, end your final reply with this exact line (outside a code block):\nSTEERLINE_PUBLISH_READY " + runID + "\nIf you still need input or the work is incomplete, omit that line.\n"
+}
+
+func localWorkerRequestedPublish(message, runID string) bool {
+	if !stableExecutionID(runID) {
+		return false
+	}
+	lines := strings.Split(strings.TrimSpace(message), "\n")
+	return len(lines) > 0 && strings.TrimSpace(lines[len(lines)-1]) == "STEERLINE_PUBLISH_READY "+runID
+}
+
+// publishLocalWorkerRun executes Git and GitHub operations in the service's
+// host identity. The worker supplies only staged content and an exact run-ID
+// handoff; it never receives the host's credentials.
+func (s *Service) publishLocalWorkerRun(ctx context.Context, run *Run, workflow *WorkflowRunRecord, execution *ExecutionRecord, turnID string) (PRInfo, error) {
+	var info PRInfo
+	if run == nil || workflow == nil || execution == nil || run.WorkspaceIntent == nil || run.WorktreePath == nil ||
+		workflow.WorkflowRunID != run.RunID || execution.WorkflowRunID != run.RunID || !stableExecutionID(turnID) ||
+		s.Config.hostName() != "local" || s.Config.PR.Kind != "command" ||
+		strings.TrimSuffix(s.Config.PR.BaseURL, "/") != "https://github.com" || s.Config.PR.Query.Executable == "" {
+		return info, errors.New("local host publication requires a fixed GitHub command provider and worker execution")
+	}
+	if canonical(*run.WorktreePath) != canonical(run.WorkspaceIntent.Path) || run.WorktreeBranch == nil ||
+		*run.WorktreeBranch != run.WorkspaceIntent.Branch || execution.Workspace.Branch != *run.WorktreeBranch ||
+		workflow.Branch == "" || s.Config.PR.Repository == "" {
+		return info, errors.New("local host publication workspace or target branch differs from the fixed execution")
+	}
+	git := gitRunner(s.Config, *run.WorktreePath)
+	gitText := func(args ...string) (string, error) {
+		out, err := git.Output(ctx, s.Config.Git, args...)
+		return strings.TrimSpace(string(out)), err
+	}
+	common, err := gitText("rev-parse", "--path-format=absolute", "--git-common-dir")
+	if err != nil || canonical(common) != canonical(s.Config.identity) {
+		return info, errors.Join(err, errors.New("local publication Git common directory changed"))
+	}
+	branch, err := gitText("symbolic-ref", "--quiet", "--short", "HEAD")
+	if err != nil || branch != *run.WorktreeBranch {
+		return info, errors.Join(err, errors.New("local publication branch changed"))
+	}
+	startingHead, err := gitText("rev-parse", "HEAD")
+	if err != nil || !validCommit(startingHead) {
+		return info, errors.Join(err, errors.New("local publication HEAD is unavailable"))
+	}
+	if _, err = gitText("merge-base", "--is-ancestor", run.WorkspaceIntent.BaseCommit, "HEAD"); err != nil {
+		return info, fmt.Errorf("local publication branch no longer descends from its fixed base: %w", err)
+	}
+	unstaged, err := gitText("diff", "--name-only")
+	if err != nil || unstaged != "" {
+		return info, errors.Join(err, errors.New("local publication has unstaged changes"))
+	}
+	untracked, err := gitText("ls-files", "--others", "--exclude-standard")
+	if err != nil || untracked != "" {
+		return info, errors.Join(err, errors.New("local publication has untracked files"))
+	}
+	staged, err := gitText("diff", "--cached", "--name-only")
+	if err != nil {
+		return info, err
+	}
+	if staged == "" && startingHead == run.WorkspaceIntent.BaseCommit {
+		return info, errors.New("local publication has no staged changes or candidate commit")
+	}
+	indexTree, err := gitText("write-tree")
+	if err != nil || !validCommit(indexTree) {
+		return info, errors.Join(err, errors.New("local publication index tree is unavailable"))
+	}
+	opID, err := s.startOperation("publish_local_worker", "local-publish:"+run.RunID+":"+turnID, struct {
+		RunID        string `json:"run_id"`
+		TurnID       string `json:"turn_id"`
+		Branch       string `json:"branch"`
+		StartingHead string `json:"starting_head"`
+		IndexTree    string `json:"index_tree"`
+	}{run.RunID, turnID, branch, startingHead, indexTree})
+	if err != nil {
+		return info, err // An earlier uncertain publication must be reconciled, not repeated.
+	}
+	confirmed := false
+	defer func() {
+		if !confirmed {
+			_ = s.changeOperation(opID, "outcome_unknown", "", nil, "local GitHub publication requires reconciliation")
+		}
+	}()
+	if staged != "" {
+		if _, err = gitText("commit", "-m", "SteerLine task "+run.TaskID); err != nil {
+			return info, fmt.Errorf("host Git commit failed: %w", err)
+		}
+	}
+	head, err := gitText("rev-parse", "HEAD")
+	if err != nil || !validCommit(head) {
+		return info, errors.Join(err, errors.New("host commit head is unavailable"))
+	}
+	if _, err = gitText("push", s.Config.Remote, "HEAD:refs/heads/"+branch); err != nil {
+		return info, fmt.Errorf("host Git push failed: %w", err)
+	}
+	url, err := s.localWorkerPRURL(ctx, run, workflow, head)
+	if err != nil {
+		return info, err
+	}
+	info, err = s.prs.Query(ctx, url)
+	if err != nil || info.HeadRevision != head {
+		return PRInfo{}, errors.Join(err, errors.New("published PR head does not match the fixed local commit"))
+	}
+	if err = BindWorkerPR(workflow, execution, info, url, s.Config.PR.Repository, false); err != nil {
+		return PRInfo{}, err
+	}
+	if err = s.changeOperation(opID, "confirmed", url, mustJSON(info), ""); err != nil {
+		return PRInfo{}, err
+	}
+	confirmed = true
+	return info, nil
+}
+
+func (s *Service) localWorkerPRURL(ctx context.Context, run *Run, workflow *WorkflowRunRecord, head string) (string, error) {
+	repo := s.Config.PR.Repository
+	owner, _, ok := strings.Cut(repo, "/")
+	if !ok || owner == "" {
+		return "", errors.New("local GitHub publication repository is invalid")
+	}
+	gh := Command{Executable: s.Config.PR.Query.Executable}
+	runner := Runner{Dir: *run.WorktreePath, Timeout: duration(s.Config.CommandTimeout)}
+	endpoint := fmt.Sprintf("repos/%s/pulls?state=all&head=%s:%s&per_page=100", repo, owner, *run.WorktreeBranch)
+	out, err := runner.Output(ctx, gh, "api", endpoint)
+	if err != nil {
+		return "", fmt.Errorf("query exact branch PR before publication: %w", err)
+	}
+	var prs []struct {
+		URL   string `json:"html_url"`
+		State string `json:"state"`
+		Head  struct {
+			Ref  string `json:"ref"`
+			SHA  string `json:"sha"`
+			Repo struct {
+				FullName string `json:"full_name"`
+			} `json:"repo"`
+		} `json:"head"`
+		Base struct {
+			Ref string `json:"ref"`
+		} `json:"base"`
+	}
+	if err = json.Unmarshal(out, &prs); err != nil {
+		return "", fmt.Errorf("decode exact branch PR query: %w", err)
+	}
+	var existing string
+	for _, pr := range prs {
+		if pr.Head.Ref != *run.WorktreeBranch || pr.Head.Repo.FullName != repo || pr.Base.Ref != workflow.Branch {
+			continue
+		}
+		if pr.Head.SHA != head || pr.State != "open" || existing != "" {
+			return "", errors.New("fixed branch already has an incompatible or ambiguous PR")
+		}
+		existing = pr.URL
+	}
+	if existing != "" {
+		return existing, nil
+	}
+	created, err := runner.Output(ctx, gh, "pr", "create", "--repo", repo, "--base", workflow.Branch,
+		"--head", *run.WorktreeBranch, "--draft", "--title", "SteerLine task "+run.TaskID,
+		"--body", "SteerLine worker-flow run "+run.RunID)
+	if err != nil {
+		return "", fmt.Errorf("create draft PR from fixed branch: %w", err)
+	}
+	url := strings.TrimSpace(string(created))
+	if _, err = s.Config.PR.PRNumber(url); err != nil {
+		return "", fmt.Errorf("created PR URL is invalid: %w", err)
+	}
+	return url, nil
+}

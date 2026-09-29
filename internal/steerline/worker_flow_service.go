@@ -260,7 +260,7 @@ func (s *Service) startInitialWorkerFlowTurn(ctx context.Context, task TaskRecor
 	if err != nil {
 		return s.waitWorkerFlow(run, "Fixed task contract is unavailable: "+err.Error())
 	}
-	prompt, err := workerFlowPrompt(task, contract)
+	prompt, err := workerFlowPrompt(task, contract, s.Config.hostName() == "local")
 	if err != nil {
 		return s.waitWorkerFlow(run, err.Error())
 	}
@@ -276,6 +276,9 @@ func (s *Service) startWorkerFlowTurn(ctx context.Context, run *Run, prompt, tur
 	}
 	if execution.SessionID == "" && execution.TurnNumber != 0 {
 		return errors.New("worker session was lost; replacement is not allowed")
+	}
+	if s.Config.hostName() == "local" {
+		prompt += localWorkerPublishInstruction(run.RunID)
 	}
 	execution.PendingTurnID = turnID
 	opID, err := s.startOperation("start_worker_turn", "worker-turn:"+run.ExecutionID+":"+turnID, struct {
@@ -490,6 +493,11 @@ func (s *Service) finishWorkerFlow(workerErr error) error {
 	}
 	if err := StopWorkerTurn(workflow, execution, turnID, question); err != nil {
 		return err
+	}
+	if s.Config.hostName() == "local" && localWorkerRequestedPublish(outcome.LastMessage, run.RunID) {
+		if _, err := s.publishLocalWorkerRun(context.Background(), run, workflow, execution, turnID); err != nil {
+			issue = strings.TrimSpace(issue + "; host publication failed: " + err.Error())
+		}
 	}
 	run.EndedAt = ptr(now())
 	run.ExecutionStatus = "succeeded"
