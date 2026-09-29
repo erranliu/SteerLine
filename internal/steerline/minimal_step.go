@@ -450,7 +450,7 @@ func writeNativeMinimalPrompt(path string, input NativeTaskWorkerContext, contra
 	prompt := fmt.Sprintf("Execute only native task step %q. Read the fixed contract and follow project entry %q at version %q. Input is one JSON object with schema_version %q. Return one JSON object matching the supplied output schema, without Markdown or extra text. Do not claim or close tasks, update center state, dispatch another step, or merge a pull request.\n\n%s\n", input.CurrentStep, contract.Entry, contract.Version, NativeTaskInputSchema, string(data))
 	prompt += "Pinned reference SHA-256 values cover the raw Git blob bytes at each reference's commit and path. Hash those bytes directly (for example, Python subprocess.check_output for git show COMMIT:PATH); do not hash the checked-out file or text passed through a shell, because line-ending conversion changes its bytes.\n"
 	if input.CurrentStep == "implement" {
-		prompt += "Before reporting success, commit the implementation on the assigned branch. Check that HEAD is the new candidate commit, the worktree is clean, and its diff from the fixed base satisfies the task contract. Set result.revision and result.workspace.head to that exact commit and result.workspace.dirty to false. If any check fails, report succeeded=false; never report success for uncommitted changes.\n"
+		prompt += "Before reporting success, commit the implementation on the assigned branch. Check that HEAD is the new candidate commit and its diff from the fixed base satisfies the task contract. Report the actual raw Git status in result.workspace.dirty; the center independently decides whether workspace changes affect the execution gate. Set result.revision and result.workspace.head to the exact candidate commit. Report succeeded=false if the implementation or commit is incomplete.\n"
 	}
 	if input.StepInput.Decision != nil {
 		prompt += "After applying the supplied human answer, include result.applied_decision_id equal to decision.answer.decision_id as application evidence.\n"
@@ -990,7 +990,19 @@ func (s *Service) finishMinimalStep(exitErr error) error {
 	if err != nil {
 		return s.failMinimalStep(run, workflow, execution, attempt, fmt.Errorf("workspace inspection failed after step: %w", err), attempt.StepID == "publish_pr")
 	}
-	if err = validateMinimalWorkspaceReceipt(envelope.Result.Workspace, workspace); err != nil {
+	receiptWorkspace := workspace
+	if run.Protocol != string(ProtocolOrcaSupervised) {
+		c, configErr := s.executionConfigForRun(run)
+		if configErr != nil {
+			return s.failMinimalStep(run, workflow, execution, attempt, configErr, false)
+		}
+		c.WorkspaceDirtyIgnore = WorkspaceDirtyIgnore{}
+		receiptWorkspace.Dirty, err = inspectGitDirty(context.Background(), c, deref(run.WorktreePath))
+		if err != nil {
+			return s.failMinimalStep(run, workflow, execution, attempt, fmt.Errorf("raw workspace inspection failed: %w", err), false)
+		}
+	}
+	if err = validateMinimalWorkspaceReceipt(envelope.Result.Workspace, receiptWorkspace); err != nil {
 		return s.failMinimalStep(run, workflow, execution, attempt, err, attempt.StepID == "publish_pr")
 	}
 	if run.Protocol == string(ProtocolOrcaSupervised) {

@@ -75,6 +75,7 @@ func TestNativeClaimPersistsChosenExecutionProfile(t *testing.T) {
 	step := StepContract{Provider: "command", Entry: "builtin:verify", Version: MinimalWorkflowVersion, InputSchema: NativeTaskInputSchema, OutputSchema: MinimalStepOutputSchema, ExecutionSite: "local", Timeout: time.Minute, Command: []string{"git", "--version"}}
 	base.ProjectSteps = &ProjectSteps{Implement: step, Verify: step, PublishPR: step}
 	base.ProjectSteps.Verify.RequiredChecks = []string{"unit"}
+	base.WorkspaceDirtyIgnore = WorkspaceDirtyIgnore{Extensions: []string{".meta"}}
 	profile := ExecutionProfile{ID: "local-strong", Name: "本地高强度", Host: "local", Agent: "codex", Model: "chosen-model", ReasoningEffort: "xhigh", Sandbox: "danger-full-access", Codex: Command{Executable: "git"}, ProjectSteps: base.ProjectSteps}
 	base.ExecutionProfiles = []ExecutionProfile{profile}
 	reader, err := OpenNativeTaskProject(ctx, &base)
@@ -116,13 +117,14 @@ func TestNativeClaimPersistsChosenExecutionProfile(t *testing.T) {
 		t.Fatalf("selected claim did not persist a workflow: %+v / %v", snapshot, err)
 	}
 	wf, execution := snapshot.WorkflowRuns[0], snapshot.Executions[0]
-	if wf.ExecutionProfile == nil || wf.ExecutionProfile.ID != profile.ID || !wf.ExecutionProfile.Verify(wf.ProjectSteps) || wf.Runner.Model != "chosen-model" || wf.Runner.ReasoningEffort != "xhigh" || execution.Backend != string(BackendLocal) {
+	if wf.ExecutionProfile == nil || wf.ExecutionProfile.ID != profile.ID || !wf.ExecutionProfile.Verify(wf.ProjectSteps) || wf.Runner.Model != "chosen-model" || wf.Runner.ReasoningEffort != "xhigh" || execution.Backend != string(BackendLocal) || len(wf.WorkspaceDirtyIgnore.Extensions) != 1 || wf.WorkspaceDirtyIgnore.Extensions[0] != ".meta" {
 		t.Fatalf("chosen execution route was not fixed in the claim: %+v / %+v", wf, execution)
 	}
 	base.ExecutionProfiles[0].Model = "later-edit"
+	base.WorkspaceDirtyIgnore = WorkspaceDirtyIgnore{}
 	run := &Run{RunID: wf.WorkflowRunID, Host: "local", Agent: "codex", Backend: execution.Backend, Protocol: execution.Protocol, Target: execution.Target}
 	service := &Service{Config: base, baseConfig: base, State: Runtime{Runs: []*Run{run}, WorkflowRuns: snapshot.WorkflowRuns}}
-	if err := service.useFixedRunProfile(run); err != nil || service.Config.Model != "chosen-model" {
+	if err := service.useFixedRunProfile(run); err != nil || service.Config.Model != "chosen-model" || len(service.Config.WorkspaceDirtyIgnore.Extensions) != 1 {
 		t.Fatalf("recovery adopted the edited preset: %+v / %v", service.Config, err)
 	}
 }

@@ -54,13 +54,18 @@ func (s *Service) executionConfigForRun(run *Run) (Config, error) {
 			if len(base.ExecutionProfiles) > 0 && (run.ExecutionStatus == "pending" || run.ExecutionStatus == "running" || run.ExecutionStatus == "unknown" || run.FinishTaskStatus == "waiting_decision") {
 				return Config{}, errors.New("active run has no fixed execution profile; preserve its original service configuration")
 			}
+			base.WorkspaceDirtyIgnore = workflow.WorkspaceDirtyIgnore
 			return base, nil
 		}
 		fixed := *workflow.ExecutionProfile
 		if fixed.ID == "" || !fixed.Verify(workflow.ProjectSteps) {
 			return Config{}, errors.New("fixed execution profile identity is incomplete")
 		}
+		if err := workflow.WorkspaceDirtyIgnore.validate(); err != nil {
+			return Config{}, err
+		}
 		config := base.ApplyFixedExecutionProfile(fixed, workflow.ProjectSteps)
+		config.WorkspaceDirtyIgnore = workflow.WorkspaceDirtyIgnore
 		if fixed.Host == "orca_supervised" && run.Target.CoordinatorTerminal != "" {
 			if config.Orca.Supervised == nil {
 				return Config{}, errors.New("fixed supervised profile has no coordinator configuration")

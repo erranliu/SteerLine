@@ -117,6 +117,8 @@ PR 4B 的 `ConversationEvent` 是 4C 控制台读取会话事实的公共 DTO。
 
 准备 worktree 时 execution_status=pending；创建或接入检查失败为 failed/blocked；遗留 pending/running 为 unknown/blocked。重启只核对目录、共享 Git 元数据、分支和起点祖先关系，不重建、不重跑。实际工作目录等字段只在创建及 native Task/worktree 身份核验通过后写入；创建后检查失败时，目录可能已存在，应查看 workspace_intent 和 error。
 
+项目配置可用 `workspace_dirty_ignore` 指定工作树干净判断要排除的仓库相对文件/目录 `paths`（目录以 `/` 结尾）及 `extensions`（例如 `.meta`）。规则在领取时固定到 WorkflowRun，适用于该执行的准备、步骤结算、恢复及交付前工作树检查；Git HEAD、分支、base 和必需检查仍须独立通过。worker 回执报告原始 Git dirty，中心核对原始状态后才按固定规则计算有效 dirty；规则不放进 agent 输入，也不修改 Git 忽略文件或决定 PR 内容。未配置时所有已跟踪和未跟踪改动都计为 dirty。当前受监管远端 Orca 无法独立核验远端改动路径，带此配置的远端领取明确拒绝。
+
 当前 native minimal-v1 不接受旧 one-shot Run 或 whole-run result 作为交付事实。包含这些绑定的投影会在恢复前被拒绝并保留现场。
 
 PR 查询失败会清除 state 的可信结论并写 unknown，但保留过去读到的合并字段用于诊断；读者必须同时看 state、queried_at 和 query_error。程序不会仅凭缓存的 merged_at 关闭任务。

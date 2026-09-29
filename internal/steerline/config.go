@@ -27,35 +27,36 @@ type Skill struct {
 	Invocation string `json:"invocation"`
 }
 type Config struct {
-	Repository              string              `json:"repository"`
-	TaskAuthority           string              `json:"task_authority,omitempty"`
-	Remote                  string              `json:"remote"`
-	Branch                  string              `json:"branch"`
-	RunDir                  string              `json:"run_dir"`
-	WorktreeRoot            string              `json:"worktree_root"`
-	RuntimeFile             string              `json:"runtime_file"`
-	Claimant                string              `json:"claimant"`
-	Git                     Command             `json:"git"`
-	Codex                   Command             `json:"codex"`
-	WorkflowDefinition      *WorkflowDefinition `json:"workflow_definition,omitempty"`
-	ProjectSteps            *ProjectSteps       `json:"project_steps,omitempty"`
-	ExecutableTypes         []string            `json:"executable_types"`
-	TaskPoll                string              `json:"task_poll"`
-	PRPoll                  string              `json:"pr_poll"`
-	Heartbeat               string              `json:"heartbeat"`
-	CommandTimeout          string              `json:"command_timeout"`
-	ShutdownGrace           string              `json:"shutdown_grace"`
-	Model                   string              `json:"model"`
-	ReasoningEffort         string              `json:"reasoning_effort"`
-	Sandbox                 string              `json:"sandbox"`
-	Profile                 string              `json:"profile"`
-	Agent                   string              `json:"agent"`
-	Host                    string              `json:"host"`
-	ExecutionProfiles       []ExecutionProfile  `json:"execution_profiles,omitempty"`
-	DefaultExecutionProfile string              `json:"default_execution_profile,omitempty"`
-	StallTimeout            string              `json:"stall_timeout"`
-	Orca                    OrcaConfig          `json:"orca"`
-	PR                      PRConfig            `json:"pr"`
+	Repository              string               `json:"repository"`
+	TaskAuthority           string               `json:"task_authority,omitempty"`
+	Remote                  string               `json:"remote"`
+	Branch                  string               `json:"branch"`
+	RunDir                  string               `json:"run_dir"`
+	WorktreeRoot            string               `json:"worktree_root"`
+	RuntimeFile             string               `json:"runtime_file"`
+	Claimant                string               `json:"claimant"`
+	Git                     Command              `json:"git"`
+	Codex                   Command              `json:"codex"`
+	WorkflowDefinition      *WorkflowDefinition  `json:"workflow_definition,omitempty"`
+	ProjectSteps            *ProjectSteps        `json:"project_steps,omitempty"`
+	WorkspaceDirtyIgnore    WorkspaceDirtyIgnore `json:"workspace_dirty_ignore,omitempty"`
+	ExecutableTypes         []string             `json:"executable_types"`
+	TaskPoll                string               `json:"task_poll"`
+	PRPoll                  string               `json:"pr_poll"`
+	Heartbeat               string               `json:"heartbeat"`
+	CommandTimeout          string               `json:"command_timeout"`
+	ShutdownGrace           string               `json:"shutdown_grace"`
+	Model                   string               `json:"model"`
+	ReasoningEffort         string               `json:"reasoning_effort"`
+	Sandbox                 string               `json:"sandbox"`
+	Profile                 string               `json:"profile"`
+	Agent                   string               `json:"agent"`
+	Host                    string               `json:"host"`
+	ExecutionProfiles       []ExecutionProfile   `json:"execution_profiles,omitempty"`
+	DefaultExecutionProfile string               `json:"default_execution_profile,omitempty"`
+	StallTimeout            string               `json:"stall_timeout"`
+	Orca                    OrcaConfig           `json:"orca"`
+	PR                      PRConfig             `json:"pr"`
 	identity                string
 	workerEnv               map[string]string
 	configDigest            string
@@ -227,6 +228,9 @@ func LoadConfig(path string) (Config, error) {
 	digest := sha256.Sum256(b)
 	c.configDigest = hex.EncodeToString(digest[:])
 	if err = decode(b, &c); err != nil {
+		return c, err
+	}
+	if err = c.WorkspaceDirtyIgnore.validate(); err != nil {
 		return c, err
 	}
 	if c.TaskAuthority != "native" {

@@ -80,7 +80,7 @@ prepare 包括中心领取、确定 base 和通过执行适配器准备工作区
 
 默认要求 review；只有派发前显式固定 `review_required=false` 才可跳过，不能自动降低目标项目既有审查要求。运行中更改全局配置不改变该次流程的门槛。
 
-首版 revision 使用候选 commit SHA；验证/审查/发布前均检查代码输入没有未提交变更。生成的构建日志等输出可按固定配置排除，未跟踪的代码输入不得被排除。代码变化使旧 verify/review 结果失效，必须重新验证；旧事件保留供审计。
+首版 revision 使用候选 commit SHA；验证/审查/发布前均检查候选 HEAD 和工作树状态。默认所有已跟踪和未跟踪变更都使工作树为 dirty；项目可在固定 WorkflowRun 中声明精确文件/目录或扩展名排除规则，仅用于干净判断。中心核对原始 Git 状态和固定规则，不把规则交给执行 agent；排除的文件仍由 Git 提交决定是否进入 PR。代码变化使旧 verify/review 结果失效，必须重新验证；旧事件保留供审计。
 
 verify 检查失败或 review 请求改动时，中心可以派发 implement 修复：固定输入包含失败结果，生成新 attempt，修复后重新走 verify 和 review。`max_repair_rounds` 随流程固定，默认 2；耗尽后 blocked，等待人工处理。基础设施故障、结果丢失及身份不明不触发自动代码修复。publish_pr 的不确定结果必须先查询同次发布副作用，不能借修复循环再建 PR。
 
