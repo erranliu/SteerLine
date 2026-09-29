@@ -15,8 +15,9 @@ func TestReadyStartChoosesConfiguredProfileAndBindsRequest(t *testing.T) {
 	now := time.Now().UTC()
 	ref := testProject("profiles")
 	ref.Config.TaskAuthority = "native"
+	ref.Config.WorkflowProtocol = steerline.WorkerFlowVersion
 	ref.Config.Host, ref.Config.Agent, ref.Config.Sandbox = "local", "codex", "workspace-write"
-	other := steerline.ExecutionProfile{ID: "orca-local", Name: "Orca 本机", Host: "orca", Agent: "codex", Model: "chosen-model", ReasoningEffort: "xhigh", Sandbox: "workspace-write", Orca: steerline.OrcaConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "15m"}}
+	other := steerline.ExecutionProfile{ID: "local-strong", Name: "本地 Codex 高强度", Host: "local", Agent: "codex", Model: "chosen-model", ReasoningEffort: "xhigh", Sandbox: "workspace-write"}
 	ref.Config.ExecutionProfiles = []steerline.ExecutionProfile{other}
 	control := &testControlClient{}
 	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{readySnapshot(ref, now)}, control, now)
@@ -28,7 +29,7 @@ func TestReadyStartChoosesConfiguredProfileAndBindsRequest(t *testing.T) {
 	}
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
 	m = updated.(Model)
-	if view := m.View(); !strings.Contains(view, "Orca 本机") || !strings.Contains(view, "chosen-model") || !strings.Contains(view, "xhigh") {
+	if view := m.View(); !strings.Contains(view, "本地 Codex 高强度") || !strings.Contains(view, "chosen-model") || !strings.Contains(view, "xhigh") {
 		t.Fatalf("configured profile was not reviewable: %s", view)
 	}
 	updated, cmd = m.Update(tea.KeyMsg{Type: tea.KeyEnter})

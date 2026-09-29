@@ -11,19 +11,20 @@ import (
 
 func minimalConfig(repo string) Config {
 	return Config{
-		TaskAuthority:   "native",
-		Repository:      repo,
-		Git:             Command{Executable: "git"},
-		Remote:          "origin",
-		Branch:          "main",
-		RuntimeFile:     "runtime.json",
-		ExecutableTypes: []string{"task"},
-		TaskPoll:        "10s",
-		PRPoll:          "10s",
-		Heartbeat:       "5s",
-		CommandTimeout:  "30s",
-		ShutdownGrace:   "10s",
-		Sandbox:         "workspace-write",
+		TaskAuthority:    "native",
+		WorkflowProtocol: WorkerFlowVersion,
+		Repository:       repo,
+		Git:              Command{Executable: "git"},
+		Remote:           "origin",
+		Branch:           "main",
+		RuntimeFile:      "runtime.json",
+		ExecutableTypes:  []string{"task"},
+		TaskPoll:         "10s",
+		PRPoll:           "10s",
+		Heartbeat:        "5s",
+		CommandTimeout:   "30s",
+		ShutdownGrace:    "10s",
+		Sandbox:          "workspace-write",
 	}
 }
 
