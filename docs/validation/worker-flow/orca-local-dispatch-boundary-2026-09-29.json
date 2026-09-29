@@ -1,0 +1,117 @@
+{
+  "date": "2026-09-29",
+  "scope": "Isolated local Orca 1.4.210 orchestration Dispatch continuation boundary on SteerlineTest; no repository changes",
+  "run_id": "run_a5a276030cb7",
+  "supervised_agent_probe": {
+    "dispatch_id": "ctx_021efc952f5d",
+    "agent": "codex",
+    "worker_start": "outcome_unknown/turn_start_unobserved: input accepted, turn start not verified",
+    "active_guidance": "orchestration send to dispatch accepted as msg_11f690036796; agent consumption was not verified",
+    "stop": "worker-stop returned stopped/closed_agent_terminal with ptyKilled=true",
+    "after_stop": "orchestration send to the same dispatch returned dispatch_inactive; Orca said the worker will never read that mailbox",
+    "settlement": "worker-release returned released"
+  },
+  "successful_settlement_probe": {
+    "method": "Unsupervised shell Dispatch in the same isolated Run; tests the Orca Dispatch mailbox lifecycle, not an agent session",
+    "dispatch_id": "ctx_06d97e8927c6",
+    "worker_done": "Exact assignee sent worker_done succeeded; Orca reported lifecycle.action=completed",
+    "after_completion": "orchestration send to the same dispatch returned dispatch_inactive; Orca said the worker will never read that mailbox",
+    "resource": "worker-release returned retained/no_owned_resource; the shell terminal was then closed explicitly"
+  },
+  "same_agent_terminal_probe": {
+    "run_id": "run_5afe9db5cfc2",
+    "dispatch_id": "ctx_9bce98f2fd6a",
+    "agent_terminal_handle": "term_44539a1c-5cc4-4d7c-be0b-57dda8dcd6b3",
+    "worker_start": "worker-start --terminal on a prestarted Codex agent terminal returned ready/input_accepted/turn_started; worker-show confirmed the exact terminal handle and process incarnation",
+    "agent_result": "Codex displayed Reconnecting and Request timed out, returned to its idle prompt, and did not send worker_done",
+    "settlement": "No synthetic worker_done was accepted: Orca rejected a CLI attempt without the Dispatch capability. worker-stop fenced the Dispatch but reported stop_unknown because this was an external terminal; the exact terminal was closed explicitly, and worker-show then reported process_exited/failed.",
+    "reuse_after_settlement": "Not exercised: no successful agent worker_done occurred. The version-matched Orca coordinator-loop reference prescribes worker-show on the settled Dispatch, then worker-start --task <next_task_id> --terminal <agent_terminal_handle> to transfer cleanup ownership to a new Dispatch using the same exact agent terminal.",
+    "cleanup": "The terminal and coordinator terminal were closed. Orca deregistered and Git removed the clean isolated sl-reuse-20260929 worktree; an empty residual directory was removed. Historical Run and Dispatch records remain."
+  },
+  "repeat_probe": {
+    "run_id": "run_222443abbaea",
+    "worktree": "sl-reuse-claude-20260929",
+    "claude_start": "Orca created an agent terminal, but Claude exited with api.anthropic.com ERR_BAD_REQUEST before a Task could be dispatched.",
+    "codex_new_terminal_dispatch": {
+      "dispatch_id": "ctx_9c569711a785",
+      "result": "worker-start --agent codex accepted input but returned outcome_unknown/turn_start_unobserved. The terminal displayed a Codex CLI auto-update and exited to the shell without processing the Task. The exact Dispatch was stopped and released."
+    },
+    "codex_existing_terminal_dispatch": {
+      "dispatch_id": "ctx_26c3aecb579a",
+      "result": "A separately started Codex terminal displayed an idle prompt and agentIdentity=codex, but worker-start --terminal failed at agent_readiness/timeout before sending Task input. worker-show reported no owned resource. A direct terminal send later observed turn_started but Codex remained in Reconnecting with Request timed out."
+    },
+    "result": "No actual worker_done was produced, so a settled first Dispatch followed by a second Dispatch on the same live agent terminal remains unverified in this environment.",
+    "cleanup": "Both worker attempts were fenced or failed and released according to their receipts. The external Codex terminal and coordinator terminal were closed. The clean isolated worktree was removed from Orca and Git; an empty residual directory was removed."
+  },
+  "codex_only_retest": {
+    "run_id": "run_61be178f6320",
+    "orca_version": "1.4.210",
+    "codex_version": "codex-cli 0.159.0",
+    "worktree": "sl-reuse-codex-20260929b",
+    "agent_terminal_handle": "term_4510c380-03d1-4b2f-aa8c-10c82fac552e",
+    "agent_terminal_incarnation": "75ef3459-440f-49b1-9f9e-c393ed40f2f0",
+    "connectivity_probe": "A direct Orca terminal send was accepted with turn_started. Codex initially showed Reconnecting/Request timed out, then returned the exact CONNECTED token after about 1m42s without file changes.",
+    "existing_terminal_dispatch": "worker-start --terminal produced Task task_35318c5e408a / Dispatch ctx_91ac567fe173 but failed at agent_readiness/timeout before Task input. terminal show still reported connected writable agentIdentity=codex and an idle prompt. terminal wait --for tui-idle also timed out after the successful model response. This failed Dispatch had no owned terminal resource and was released as retained/no_owned_resource.",
+    "fresh_terminal_dispatch": "worker-start --agent codex produced Task task_d3f1ed4e6f44 / Dispatch ctx_6a626e1e9271 but also failed at agent_readiness/timeout before Task input. Its created terminal was released with closed_agent_terminal and archived terminal output.",
+    "result": "The model connection eventually worked, but Orca did not report agent readiness for either prestarted or newly created Codex terminal. No worker_done occurred, so two settled Dispatches on the same terminal remain unverified. The correlation with Codex 0.159.0 is observed, not a proven cause.",
+    "cleanup": "The external agent terminal and coordinator terminal were closed. Orca and Git removed the clean isolated worktree; the empty residual directory was removed. Historical Run/Task/Dispatch records remain."
+  },
+  "extended_readiness_retest": {
+    "run_id": "run_69b760833048",
+    "task_id": "task_8fc81ff801a8",
+    "dispatch_id": "ctx_484422be7e32",
+    "command": "worker-start --agent codex --timeout-ms 180000 on a clean isolated Orca worktree",
+    "result": "The created Codex terminal was connected with agentIdentity=codex, but worker-start returned failed/agent_readiness/timeout after the extended wait. Its receipt said the terminal never ran the Task and named worker-release.",
+    "cleanup": "worker-release returned released/closed_agent_terminal and captured terminal output. The auto-created shell terminal and coordinator terminal were closed. The worktree was clean and was removed from Orca and Git; no residual directory remained."
+  },
+  "low_level_codex_retest": {
+    "run_id": "run_0b94c448bc6e",
+    "orca_version": "1.4.210",
+    "codex_version": "codex-cli 0.159.0",
+    "worktree": "sl-ready-marker-20260929",
+    "official_issue": "https://github.com/stablyai/orca/issues/22825 reports the same visible-idle/agent_readiness false timeout on Orca 1.4.211 and Codex 0.157.0; our local internal root cause was not independently proven",
+    "readiness_workarounds": "A plain raw ready marker and codex --no-alt-screen each still left terminal wait --for tui-idle timed out. worker-start --terminal after the first completed Dispatch failed at agent_readiness/timeout without injecting the second Task; worker-release returned retained/no_owned_resource.",
+    "first_dispatch": {
+      "task_id": "task_09c6bc554bd8",
+      "dispatch_id": "ctx_c852e8ae0be1",
+      "terminal_handle": "term_cb3036f4-b110-42d1-a15e-268f20f6fad2",
+      "incarnation": "292b3213-61f8-42b3-a776-23d6e4c17189",
+      "protocol": "Low-level dispatch --inject delivered the native Orca preamble. Codex sent ask question msg_b5dde19fb75a; coordinator replied to that exact message with REPLY_BOUNDARY_OK; Codex sent real worker_done succeeded msg_7d89f4cbc8f3 and Orca marked the Task/Dispatch completed.",
+      "ownership": "worker-show reported unsupervised and no owned terminal resource"
+    },
+    "second_dispatch": {
+      "task_id": "task_b5049678d445",
+      "dispatch_id": "ctx_9d338ddec47a",
+      "terminal_handle": "term_cb3036f4-b110-42d1-a15e-268f20f6fad2",
+      "incarnation": "292b3213-61f8-42b3-a776-23d6e4c17189",
+      "protocol": "A new low-level native Task/Dispatch was injected into the same live Codex terminal. Codex recalled REPLY_BOUNDARY_OK from the previous turn and sent real worker_done succeeded msg_581723e12aad containing SECOND_SETTLED; Orca marked this new Task/Dispatch completed.",
+      "old_mailbox": "Sending to dispatch:ctx_c852e8ae0be1 returned dispatch_inactive",
+      "ownership": "worker-release returned retained/no_owned_resource, so the operator explicitly closed the exact test terminal"
+    },
+    "approval_boundary": "An earlier Codex test got an interactive command approval. Orca terminal send refused to answer it with agent_prompt_blocked; the controlled test terminal was closed, and its Dispatch became failed/operator_close. The successful pair used codex -a never -s danger-full-access in an isolated no-file-change worktree.",
+    "cleanup": "All three test worktree terminals and the coordinator terminal were closed. Test-generated debug.log was removed after inspection. Orca worktree rm lost its connection before returning, but Git worktree list no longer included the worktree and Orca worktree show returned selector_not_found. An empty residual directory remained in use by another process."
+  },
+  "orca_agent_first_retest": {
+    "worktree": "sl-agent-first-20260929",
+    "creation": "orca worktree create --agent codex --setup skip returned agentTerminalHandle term_3d8bf15e-12fb-46a3-af6f-fa8c892e6e36; terminal show reported agentIdentity=codex",
+    "run_id": "run_5fec6e0f43af",
+    "task_id": "task_8338b5c40eb8",
+    "dispatch_id": "ctx_2b18d674da48",
+    "startup_detection": "First dispatch --inject returned inject_rejected/no_agent_detected while the startup screen already showed Codex. After additional observation and a timed-out tui-idle wait, retrying dispatch --inject to the same terminal succeeded; no Task attempt had been created by the rejected preflight.",
+    "result": "The Orca-launched Codex agent read the native preamble, ran orchestration check without command approval, and sent real worker_done succeeded msg_b24c029de152 containing AGENT_FIRST_OK. Orca marked the Task/Dispatch completed; worker-release returned retained/no_owned_resource because the low-level worker was unsupervised.",
+    "cleanup": "The exact agent and coordinator terminals were closed. Git worktree list omitted the worktree and Orca worktree show returned selector_not_found after worktree rm lost its response. The empty residual directory was removed after checking that it remained inside the test workspace."
+  },
+  "conclusion": "A completed Dispatch cannot receive old-mailbox follow-up, but the same agent session can take a new Orca Task/Dispatch. Native ask/reply, real worker_done settlement, and same-terminal second worker_done succeeded with low-level dispatch --inject. This path is unsupervised: Orca does not own or close the terminal. The documented supervised worker-start --terminal path remains blocked by agent_readiness/timeout on this local Orca/Codex version.",
+  "limits": [
+    "The supervised Codex turn did not reach a verified start, so a successful agent worker_done and subsequent reuse of that agent session were not tested.",
+    "The active message had an accepted Orca mutation receipt, not proof that the agent read or applied it.",
+    "The original probe did not re-dispatch its agent terminal; the shell terminal was correctly rejected as agent_unconfigured.",
+    "A later probe verified worker-start --terminal can dispatch to a live prestarted Codex terminal, but Codex connectivity prevented a completed first turn and second Dispatch on that terminal.",
+    "The repeat probe also failed to reach a real worker_done because Claude could not connect and Codex either exited during auto-update or timed out at readiness/model request.",
+    "The Codex-only retest proves direct terminal model response but not Orca worker-start readiness or settlement. It does not establish that the Codex CLI update caused the readiness timeout.",
+    "Extending worker-start readiness timeout to 180 seconds did not remove the blocker.",
+    "The successful two-Dispatch test used Orca's unsupervised low-level path, so it does not verify worker-start's supervised terminal resource transfer or release.",
+    "Only Codex is installed locally; a second agent was not tested. Low-level worktree create --agent can choose Orca-supported agents by configuration, but switching agent without code changes still needs implementation and acceptance testing."
+  ],
+  "cleanup": "Historical probes and their exact cleanup are recorded in each section. All terminals from the latest low-level and agent-first tests were closed; Orca and Git deregistered both clean test worktrees. The latest low-level test left one empty residual directory locked by another process; the agent-first residual directory was removed. Historical Run/Task/Dispatch records remain in Orca."
+}
