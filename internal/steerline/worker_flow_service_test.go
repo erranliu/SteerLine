@@ -95,7 +95,8 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openP
 		t.Helper()
 		worker := service.workers[run.RunID]
 		if worker == nil {
-			t.Fatal("original worker observer is missing")
+			_, execution := service.workflowRecords(run)
+			t.Fatalf("original worker observer is missing: task=%s execution_status=%s pending_command=%s reason=%q", run.TaskID, execution.Status, execution.PendingCommandID, deref(run.Error))
 		}
 		if err := service.selectWorker(run); err != nil {
 			t.Fatal(err)
@@ -196,9 +197,10 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openP
 		t.Fatal(err)
 	}
 	feedbackPrompt := workerFeedbackText(answer, run.Decision.Request)
+	fullPrompt := feedbackPrompt + localWorkerPublishInstruction(run.RunID)
 	feedbackDir := filepath.Join(c.RunDir, "runs", run.RunID, "turns", command.CommandID)
 	savedPrompt, err := os.ReadFile(filepath.Join(feedbackDir, "prompt.txt"))
-	if err != nil || string(savedPrompt) != feedbackPrompt {
+	if err != nil || string(savedPrompt) != fullPrompt {
 		t.Fatalf("full feedback text was not sent: prompt=%q err=%v", savedPrompt, err)
 	}
 	if openPR {
@@ -210,7 +212,7 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openP
 	if err != nil {
 		t.Fatal(err)
 	}
-	encodedFeedback, _ := json.Marshal(feedbackPrompt)
+	encodedFeedback, _ := json.Marshal(fullPrompt)
 	if !strings.Contains(string(events), string(encodedFeedback)) {
 		t.Fatalf("worker did not receive the full feedback: %q", events)
 	}
