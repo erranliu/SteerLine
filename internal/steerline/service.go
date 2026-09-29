@@ -249,8 +249,9 @@ func NewService(c Config) (_ *Service, retErr error) {
 				}
 			}
 			recoverUncertainSupervised := r.Host == "orca_supervised" && r.WorkflowVersion == MinimalWorkflowVersion && r.ExecutionStatus == "unknown" && r.FinishTaskStatus == "blocked" && r.Process != nil
+			recoverSettledSupervised := r.Host == "orca_supervised" && r.WorkflowVersion == MinimalWorkflowVersion && r.ExecutionStatus == "unknown" && r.FinishTaskStatus == "pending" && r.Process != nil
 			recoverUnboundSupervised := r.Host == "orca_supervised" && r.WorkflowVersion == MinimalWorkflowVersion && r.Process == nil && (r.ExecutionStatus == "running" || r.ExecutionStatus == "unknown") && (r.FinishTaskStatus == "pending" || r.FinishTaskStatus == "blocked")
-			if r.ExecutionStatus == "pending" || r.ExecutionStatus == "running" || recoverUncertainSupervised || recoverUnboundSupervised {
+			if r.ExecutionStatus == "pending" || r.ExecutionStatus == "running" || recoverUncertainSupervised || recoverSettledSupervised || recoverUnboundSupervised {
 				recoverPlannedStep := false
 				if r.WorkflowVersion == MinimalWorkflowVersion && r.ExecutionStatus == "pending" && r.FinishTaskStatus == "pending" {
 					for _, workflow := range s.State.WorkflowRuns {
@@ -272,7 +273,7 @@ func NewService(c Config) (_ *Service, retErr error) {
 				}
 				if !recoverPlannedStep {
 					recovered := false
-					if r.Host == "orca_supervised" && r.WorkflowVersion == MinimalWorkflowVersion && (r.ExecutionStatus == "running" || r.ExecutionStatus == "pending" && r.Process != nil || recoverUncertainSupervised || recoverUnboundSupervised) {
+					if r.Host == "orca_supervised" && r.WorkflowVersion == MinimalWorkflowVersion && (r.ExecutionStatus == "running" || r.ExecutionStatus == "pending" && r.Process != nil || recoverUncertainSupervised || recoverSettledSupervised || recoverUnboundSupervised) {
 						if recoverErr := s.reattachSupervisedWorker(r); recoverErr == nil {
 							recovered = true
 						} else {
@@ -861,6 +862,10 @@ func (s *Service) finished(err error) error {
 	finishErr := s.finishMinimalStep(err)
 	if worker != nil && worker.proc != nil && worker.proc.Identity().Kind == "orca_supervised" && worker.RemoteOutcome != "" {
 		if settleErr := s.settleSupervisedStepResources(run, attemptID, worker.RemoteOutcome); settleErr != nil {
+			var preserved *preservedMinimalStepUnknown
+			if errors.As(settleErr, &preserved) {
+				return &preservedMinimalStepUnknown{cause: errors.Join(finishErr, settleErr)}
+			}
 			return errors.Join(finishErr, settleErr)
 		}
 	}
@@ -958,7 +963,9 @@ func (s *Service) settleSupervisedStepResources(run *Run, attemptID, outcome str
 		return err
 	}
 	if status != "confirmed" {
-		return settleErr
+		// The exact refusal and reserved Run have been saved. Other active
+		// Runs can continue; this Run still cannot pass its release gate.
+		return &preservedMinimalStepUnknown{cause: settleErr}
 	}
 	return nil
 }
