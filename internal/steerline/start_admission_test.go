@@ -204,3 +204,34 @@ func TestStartAdmissionUsesTaskCASInsteadOfGlobalControlRevision(t *testing.T) {
 		t.Fatalf("mode change lost its global revision guard: %s / %v", code, err)
 	}
 }
+
+func TestExpiredStartCannotClaimAfterSlowPreflight(t *testing.T) {
+	f := newFixture(t)
+	s := f.service(t)
+	defer s.Close()
+	contract := nativeContract(t, f.c, f.commit, "expired-start")
+	batch, err := json.Marshal(TaskBatchInput{SchemaVersion: taskBatchSchemaVersion, ProjectID: f.c.Identity(), Tasks: []TaskBatchTask{{LocalKey: "expired", TaskID: 704, Title: "Expired start", Type: "task", Contract: contract}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = seedExecutionProfileTasks(t, f.c, s.domainStore, batch); err != nil {
+		t.Fatal(err)
+	}
+	authority, err := s.domainStore.nativeAuthority(context.Background(), f.c.Identity())
+	if err != nil {
+		t.Fatal(err)
+	}
+	manual, unpaused := "manual", false
+	authority, err = (CommandService{Store: s.domainStore, Project: f.c.Identity()}).SetNativeDispatchState(context.Background(), NativeDispatchUpdate{RequestID: newID(), ExpectedAuthorityVersion: authority.AuthorityVersion, Mode: &manual, Paused: &unpaused, RequestedBy: "operator"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = (CommandService{Store: s.domainStore, Project: f.c.Identity()}).ClaimNativeTask(context.Background(), f.c, TaskClaimOptions{TaskID: "704", RequestID: newID(), ExpectedTaskVersion: 1, ExpectedAuthorityVersion: authority.AuthorityVersion, RequestedBy: "operator", Explicit: true, ExpiresAt: now().Add(-time.Second)})
+	if !isNativeErrorCode(err, "expired") {
+		t.Fatalf("expired instruction claimed a task: %v", err)
+	}
+	snapshot, err := s.domainStore.Query(context.Background(), f.c.Identity())
+	if err != nil || len(snapshot.Tasks) != 1 || snapshot.Tasks[0].Status != "open" || len(snapshot.WorkflowRuns) != 0 {
+		t.Fatalf("expired start changed center authority: %+v / %v", snapshot, err)
+	}
+}

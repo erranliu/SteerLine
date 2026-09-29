@@ -157,7 +157,7 @@ func admitStartRequest(ctx context.Context, config Config, store *SQLiteStore, i
 	claim, err := (CommandService{Store: store, Project: config.identity}).ClaimNativeTask(ctx, selected, TaskClaimOptions{
 		TaskID: payload.TaskID, RequestID: req.RequestID, ExpectedTaskVersion: task.Version,
 		ExpectedAuthorityVersion: graph.Authority.AuthorityVersion, RequestedBy: req.RequestedBy,
-		Explicit: true, ExecutionProfile: &profile,
+		Explicit: true, ExecutionProfile: &profile, ExpiresAt: req.ExpiresAt,
 	})
 	if err == nil {
 		return finish("accepted", "claim_reserved", "任务已领取，正在准备执行", &claim)

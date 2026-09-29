@@ -11,8 +11,7 @@ import (
 	"time"
 )
 
-// TaskClaimReceipt records reservation, not worker start. The existing
-// A claim receipt records the task reservation, not a started worker.
+// TaskClaimReceipt records the task reservation, not a started worker.
 type TaskClaimReceipt struct {
 	RequestID        string `json:"request_id"`
 	TaskID           string `json:"task_id"`
@@ -34,6 +33,7 @@ type TaskClaimOptions struct {
 	Explicit                 bool
 	WorkflowRunID            string
 	ExecutionProfile         *ExecutionProfile
+	ExpiresAt                time.Time
 }
 
 type NativeDispatchUpdate struct {
@@ -322,6 +322,9 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 		tx, ok := domainTx.(*sqliteTx)
 		if !ok {
 			return errors.New("claim requires the center SQLite transaction")
+		}
+		if !options.ExpiresAt.IsZero() && !time.Now().UTC().Before(options.ExpiresAt) {
+			return nativeErr("expired", "start request expired before task claim")
 		}
 		if old, found, e := lookupTaskBatchCommandTx(ctx, tx, c.Project, options.RequestID); e != nil {
 			return e
