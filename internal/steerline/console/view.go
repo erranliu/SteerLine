@@ -1300,6 +1300,10 @@ func renderRecoveryInspection(m Model, state projectState, width, height int) []
 	} else {
 		lines = append(lines, "PR：未绑定")
 	}
+	if state.ref.Config.WorkflowProtocol == steerline.WorkerFlowVersion {
+		lines = append(lines, "", "原 worker 会话及反馈请求按当前格式对账；需要输入时请在待决策页回复。")
+		return scrollLines(wrapLines(lines, width), state.detailScroll, height)
+	}
 	lines = append(lines, "", "可恢复动作 · 服务执行前会重新核验")
 	if report.RetryReason == "" {
 		lines = append(lines, "R retry_run · 可用 · 保留 task/run/worktree，创建新 attempt")
@@ -1760,6 +1764,11 @@ func renderHelp(state projectState) []string {
 	lines := []string{"快捷键", "", "←/→  切换项目", "Tab  在任务列表与任务动态间切换", "↑/↓  选择任务或滚动动态", "d/Enter  打开完整只读详情；Esc 返回", "q    退出控制台；服务继续运行"}
 	if state.ref.Legacy != nil {
 		return append(lines, "", "旧 Beads 项目只读；控制操作不可用。")
+	}
+	if state.ref.Config.WorkflowProtocol == steerline.WorkerFlowVersion {
+		return append(lines,
+			"", "任务与服务", "1 全部 · 2 Ready · 3 进行中", "4 待决策 · 5 待合并", "6 需处理 · 7 历史", "s    选择已配置方案并开始 Ready 任务", "m    切换手动/自动派发", "x    停止服务（需确认）",
+			"", "运行与会话", "A/c/f  活动 / 会话 / 最终回复", "a    回答当前待决策问题", "v/u    决策历史 / 执行核验", ", / .  选择轮次", "e / =  折叠 / 保持展开", "y / n  更多会话 / 下一条最终回复")
 	}
 	return append(lines,
 		"", "任务与服务", "1 全部 · 2 Ready · 3 进行中", "4 待决策 · 5 待合并", "6 需处理 · 7 历史", "s    选择已配置方案并开始 Ready 任务", "m    切换手动/自动派发", "x    停止服务（需确认）",

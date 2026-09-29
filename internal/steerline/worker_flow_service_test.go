@@ -112,15 +112,8 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string) {
 		}
 	}
 	finishTurn()
-	if option != "" {
-		decision, err := WriteDecisionRequest(run, DecisionRequest{Question: "How should the worker continue?", Options: []DecisionOption{{ID: "continue", Label: "Continue current work"}}, AllowFreeText: true})
-		if err != nil {
-			t.Fatal(err)
-		}
-		run.Decision = decision
-		if err := service.save(); err != nil {
-			t.Fatal(err)
-		}
+	if len(run.Decision.Request.Options) != 1 || run.Decision.Request.Options[0].ID != "continue" || !run.Decision.Request.AllowFreeText {
+		t.Fatalf("unified decision cannot accept both feedback forms: %+v", run.Decision.Request)
 	}
 	firstSession := deref(run.SessionID)
 	if err := service.Close(); err != nil {

@@ -14,6 +14,23 @@ import (
 
 const workerFlowMockSession = "00000000-0000-0000-0000-000000000008"
 
+func TestWorkerTurnFindsPRBeforeFinalMessage(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "events.jsonl")
+	events := `{"type":"thread.started","thread_id":"00000000-0000-0000-0000-000000000008"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"type":"agent_message","text":"Created https://git.example/o/r/pulls/8."}}
+{"type":"item.completed","item":{"type":"agent_message","text":"Work is ready."}}
+{"type":"turn.completed"}
+`
+	if err := os.WriteFile(path, []byte(events), 0600); err != nil {
+		t.Fatal(err)
+	}
+	outcome, err := readWorkerTurnOutcome(path)
+	if err != nil || !outcome.Completed || outcome.LastMessage != "Work is ready." || len(outcome.PRCandidates) != 1 || outcome.PRCandidates[0] != "https://git.example/o/r/pulls/8" {
+		t.Fatalf("lost an earlier PR clue: outcome=%+v err=%v", outcome, err)
+	}
+}
+
 func TestWorkerFlowMockCodexHelper(t *testing.T) {
 	if os.Getenv("STEERLINE_WORKER_FLOW_MOCK") != "1" {
 		return

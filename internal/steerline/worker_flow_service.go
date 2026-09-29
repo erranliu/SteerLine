@@ -107,7 +107,7 @@ func (s *Service) waitWorkerFlow(run *Run, reason string) error {
 		return nil
 	}
 	if run.Decision == nil || run.Decision.Status != "pending" && run.Decision.Status != "answer_saved" {
-		request := DecisionRequest{Question: "The worker stopped. What should it do next?", Context: clip(reason, 7000), AllowFreeText: true}
+		request := DecisionRequest{Question: "The worker stopped. What should it do next?", Context: clip(reason, 7000), Options: []DecisionOption{{ID: "continue", Label: "Continue current work"}}, AllowFreeText: true}
 		decision, err := WriteDecisionRequest(run, request)
 		if err != nil {
 			return err
@@ -397,7 +397,7 @@ func (s *Service) finishWorkerFlow(workerErr error) error {
 		context += "\n\nStop reason: " + issue
 	}
 	if question {
-		decision, err := WriteDecisionRequest(run, DecisionRequest{Question: clip(strings.TrimSpace(outcome.LastMessage), 1800), Context: clip(context, 7000), AllowFreeText: true})
+		decision, err := WriteDecisionRequest(run, DecisionRequest{Question: clip(strings.TrimSpace(outcome.LastMessage), 1800), Context: clip(context, 7000), Options: []DecisionOption{{ID: "continue", Label: "Continue current work"}}, AllowFreeText: true})
 		if err == nil {
 			run.Decision = decision
 		}

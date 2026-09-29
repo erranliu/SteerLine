@@ -2515,6 +2515,10 @@ func (m Model) prepareRecoveryAction(action string) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	state := &m.projects[m.selected]
+	if state.ref.Config.WorkflowProtocol == steerline.WorkerFlowVersion {
+		m.status = "当前 worker 流程只保留原会话与待决策反馈；此恢复动作不可用"
+		return m, nil
+	}
 	report := state.recoveryReport
 	if report == nil || report.RunID == "" {
 		m.status = "先读取当前只读恢复报告"

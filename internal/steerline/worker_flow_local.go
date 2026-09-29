@@ -39,6 +39,15 @@ func workerPRClues(text string) []string {
 
 func readWorkerTurnOutcome(eventsPath string) (workerTurnOutcome, error) {
 	var outcome workerTurnOutcome
+	seenPR := map[string]bool{}
+	addPRClues := func(message string) {
+		for _, url := range workerPRClues(message) {
+			if !seenPR[url] {
+				seenPR[url] = true
+				outcome.PRCandidates = append(outcome.PRCandidates, url)
+			}
+		}
+	}
 	file, err := os.Open(eventsPath)
 	if err != nil {
 		return outcome, err
@@ -79,6 +88,7 @@ func readWorkerTurnOutcome(eventsPath string) (workerTurnOutcome, error) {
 		case "item.completed":
 			if event.Item.Type == "agent_message" && event.Item.Text != "" {
 				outcome.LastMessage = event.Item.Text
+				addPRClues(event.Item.Text)
 			}
 		}
 	}
@@ -89,9 +99,9 @@ func readWorkerTurnOutcome(eventsPath string) (workerTurnOutcome, error) {
 	if info, err := os.Stat(lastPath); err == nil && info.Size() <= 1<<20 {
 		if data, err := os.ReadFile(lastPath); err == nil && strings.TrimSpace(string(data)) != "" {
 			outcome.LastMessage = string(data)
+			addPRClues(outcome.LastMessage)
 		}
 	}
-	outcome.PRCandidates = workerPRClues(outcome.LastMessage)
 	return outcome, nil
 }
 

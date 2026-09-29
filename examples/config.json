@@ -3,55 +3,10 @@
   "remote": "origin",
   "branch": "main",
   "task_authority": "native",
+  "workflow_protocol": "worker-flow-v1",
   "runtime_file": "runtime.json",
   "git": { "executable": "git.exe", "args": [] },
   "codex": { "executable": "C:/Tools/codex/codex.exe", "args": [] },
-  "workflow_definition": {
-    "id": "minimal-v1",
-    "version": "minimal-v1",
-    "review_required": true,
-    "max_repair_rounds": 2
-  },
-  "project_steps": {
-    "implement": {
-      "provider": "agent_skill",
-      "entry": "builtin:implement",
-      "version": "minimal-v1",
-      "input_schema": "native-task/v1",
-      "output_schema": "steerline/minimal-step-result/v1",
-      "execution_site": "local",
-      "timeout": "30m"
-    },
-    "verify": {
-      "provider": "command",
-      "entry": "scripts/steerline-verify.py",
-      "command": ["python.exe", "scripts/steerline-verify.py"],
-      "version": "minimal-v1",
-      "input_schema": "native-task/v1",
-      "output_schema": "steerline/minimal-step-result/v1",
-      "execution_site": "local",
-      "timeout": "15m",
-      "required_checks": ["unit", "lint"]
-    },
-    "review": {
-      "provider": "agent_skill",
-      "entry": "builtin:review",
-      "version": "minimal-v1",
-      "input_schema": "native-task/v1",
-      "output_schema": "steerline/minimal-step-result/v1",
-      "execution_site": "local",
-      "timeout": "15m"
-    },
-    "publish_pr": {
-      "provider": "agent_skill",
-      "entry": ".agents/skills/steerline-publish-pr/SKILL.md",
-      "version": "minimal-v1",
-      "input_schema": "native-task/v1",
-      "output_schema": "steerline/minimal-step-result/v1",
-      "execution_site": "local",
-      "timeout": "15m"
-    }
-  },
   "executable_types": ["task", "bug", "feature", "chore"],
   "task_poll": "10s",
   "pr_poll": "30s",
