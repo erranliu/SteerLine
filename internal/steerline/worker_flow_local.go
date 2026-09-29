@@ -15,6 +15,7 @@ import (
 
 type workerTurnOutcome struct {
 	SessionID    string
+	NativeStatus string
 	Started      bool
 	Completed    bool
 	LastMessage  string
@@ -83,6 +84,7 @@ func readWorkerTurnOutcome(eventsPath string) (workerTurnOutcome, error) {
 			outcome.Started = true
 		case "turn.completed":
 			outcome.Completed = true
+			outcome.NativeStatus = "completed"
 		case "turn.failed", "error":
 			outcome.Failure = event.Error.Message
 		case "item.completed":
@@ -139,10 +141,20 @@ func requireWorkerFlowCapabilities(ctx context.Context, c Config) error {
 		return err
 	}
 	c.Codex = command
-	probe := append(append([]string(nil), command.Args...), "exec", "resume", "--help")
-	out, err := (Runner{Dir: c.Repository, Timeout: duration(c.CommandTimeout)}).Output(ctx, Command{Executable: command.Executable, Args: probe})
-	if err != nil || !strings.Contains(string(out), "SESSION_ID") {
-		return &BackendError{Code: BackendUnsupported, Diagnostic: "configured Codex executable does not expose exact-session resume", Cause: err}
+	nativeExecutable, err := codexAppServerExecutable(command)
+	if err != nil {
+		return &BackendError{Code: BackendUnsupported, Diagnostic: "local Codex app-server needs a directly bound native process", Cause: err}
+	}
+	runner := Runner{Dir: c.Repository, Timeout: duration(c.CommandTimeout)}
+	configuredVersion, configuredErr := runner.Output(ctx, Command{Executable: command.Executable, Args: append(append([]string(nil), command.Args...), "--version")})
+	nativeVersion, nativeErr := runner.Output(ctx, Command{Executable: nativeExecutable, Args: append(append([]string(nil), command.Args...), "--version")})
+	if configuredErr != nil || nativeErr != nil || strings.TrimSpace(string(configuredVersion)) == "" || strings.TrimSpace(string(configuredVersion)) != strings.TrimSpace(string(nativeVersion)) {
+		return &BackendError{Code: BackendUnsupported, Diagnostic: "configured Codex and native app-server versions differ or cannot be verified", Cause: errors.Join(configuredErr, nativeErr)}
+	}
+	probe := append(append([]string(nil), command.Args...), "app-server", "--help")
+	out, err := runner.Output(ctx, Command{Executable: nativeExecutable, Args: probe})
+	if err != nil || !strings.Contains(string(out), "--listen") {
+		return &BackendError{Code: BackendUnsupported, Diagnostic: "configured Codex executable does not expose app-server WebSocket transport", Cause: err}
 	}
 	if !nativeCodexHistoryAvailable(ctx, c) {
 		return &BackendError{Code: BackendUnsupported, Diagnostic: "configured Codex session history cannot be read for exact turn reconciliation"}
@@ -154,7 +166,7 @@ func requireWorkerFlowCapabilities(ctx context.Context, c Config) error {
 	defer os.Remove(probeFile.Name())
 	defer probeFile.Close()
 	probeArgs := append(append([]string(nil), c.Codex.Args...), "--version")
-	process := exec.CommandContext(ctx, c.Codex.Executable, probeArgs...)
+	process := exec.CommandContext(ctx, nativeExecutable, probeArgs...)
 	process.Dir, process.Stdout, process.Stderr = c.Repository, probeFile, probeFile
 	if _, err := startDetachedProcess(process); err != nil {
 		return &BackendError{Code: BackendUnsupported, Diagnostic: "local host cannot retain a worker process when the center stops", Cause: err}
@@ -163,54 +175,4 @@ func requireWorkerFlowCapabilities(ctx context.Context, c Config) error {
 		return &BackendError{Code: BackendUnsupported, Diagnostic: "detached Codex capability probe failed", Cause: err}
 	}
 	return nil
-}
-
-// startLocalWorkerTurn is called only after the caller has saved a fixed turn
-// intent. A later invocation must provide the original native session ID; it
-// never uses Codex's ambiguous --last selector or creates a replacement.
-func startLocalWorkerTurn(ctx context.Context, c Config, run *Run, execution *ExecutionRecord, turnID, prompt string) (*Worker, string, error) {
-	if run == nil || execution == nil || run.WorkflowVersion != WorkerFlowVersion || run.RunID != execution.WorkflowRunID ||
-		run.ExecutionID != execution.ExecutionID || run.AttemptID == "" || !stableExecutionID(turnID) ||
-		run.WorktreePath == nil || run.WorktreeBranch == nil || c.hostName() != "local" || c.agentName() != "codex" ||
-		strings.TrimSpace(prompt) == "" || c.Codex.Executable == "" {
-		return nil, "", errors.New("local worker turn lacks its persisted session, workspace or message identity")
-	}
-	if execution.SessionID != "" && !codexThreadID.MatchString(execution.SessionID) {
-		return nil, "", errors.New("saved local worker session ID is not native Codex identity")
-	}
-	if canonical(execution.Workspace.Worktree) != canonical(*run.WorktreePath) || execution.Workspace.Branch != *run.WorktreeBranch {
-		return nil, "", fmt.Errorf("worker turn workspace differs from the saved execution: execution=%q/%q run=%q/%q", execution.Workspace.Worktree, execution.Workspace.Branch, *run.WorktreePath, *run.WorktreeBranch)
-	}
-	dir := filepath.Join(c.RunDir, "runs", run.RunID, "turns", turnID)
-	if err := os.MkdirAll(dir, 0700); err != nil {
-		return nil, "", err
-	}
-	events := filepath.Join(dir, "events.jsonl")
-	stderr := filepath.Join(dir, "stderr.log")
-	lastMessage := filepath.Join(dir, "last-message.txt")
-	args := append([]string(nil), c.Codex.Args...)
-	args = append(args, "exec", "--json", "--output-last-message", lastMessage, "--sandbox", c.Sandbox, "-C", *run.WorktreePath)
-	writeArgs, err := codexLinkedWorktreeWriteArgs(ctx, c, *run.WorktreePath)
-	if err != nil {
-		return nil, "", err
-	}
-	args = append(args, writeArgs...)
-	if c.Model != "" {
-		args = append(args, "--model", c.Model)
-	}
-	if c.ReasoningEffort != "" {
-		args = append(args, "--config", "model_reasoning_effort="+c.ReasoningEffort)
-	}
-	if c.Profile != "" {
-		args = append(args, "--profile", c.Profile)
-	}
-	if execution.SessionID != "" {
-		args = append(args, "resume", execution.SessionID)
-	}
-	args = append(args, "-")
-	worker, err := startDurableLocalWorker(ctx, c, run, turnID, prompt, events, stderr, args)
-	if err != nil {
-		return nil, "", err
-	}
-	return worker, events, nil
 }

@@ -16,6 +16,14 @@ SteerLine 管理任务、原 worker 会话、用户反馈和真实 PR 交付。w
 | 41 | dev 隔离与 stable 提升 | 独立 home、静止可恢复会话下的受控提升 | `#40`、`#36` | [Spec](../spec/runtime-isolation-promotion.spec.md) · [Plan](../spec/runtime-isolation-promotion.plan.md) |
 | 42 | 第一阶段集成验收 | 版本组合、stable 24 小时、dev 并行和提升恢复 | `#39`、`#41` | [Spec](../spec/phase1-release-acceptance.spec.md) · [Plan](../spec/phase1-release-acceptance.plan.md) |
 
+## 第一阶段残留
+
+本地 Codex app-server 迁移实现可合并，以下未验收项在 #42 第一阶段集成验收前补齐，不计作已通过。范围和通过条件以 [迁移 Spec](../spec/local-codex-app-server.spec.md#第一阶段残留2026-09-29) 为准，证据更新至 [验收状态](../validation/local-codex-app-server/status.md)。
+
+- [ ] **服务级双任务真机闭环（A）**：真实 SteerLine 服务覆盖并行、运行中问答、原 thread/worktree 结束后反馈和重启恢复；核对原生身份、冻结配置、事件、提示及答案只投递目标请求一次。
+- [ ] **独立进程生命周期与隔离（B）**：在支持脱离当前 Job Object 限制的宿主补跑服务反馈测试，验证服务退出后 turn/待答请求存活、重接续轮及完整双任务隔离。
+- [ ] **并发检测环境补验**：在具备 CGO/C 编译器的环境，对 app-server 并行、恢复和回复路径运行定向 Go race detector。
+
 ## 原生 UI 与受控规划
 
 本机 API 直接消费 #36，不等待多候选或全面代码搬包。规划权限和文档发布核验继续保留；执行界面使用五个主阶段和统一反馈。

@@ -76,6 +76,9 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openP
 		t.Fatal("claimed task disappeared")
 	}
 	if err = service.prepareWorkerFlow(ctx, *task, run); err != nil {
+		if os.Getenv("STEERLINE_REQUIRE_DETACHED_TESTS") != "1" && strings.Contains(err.Error(), errDetachUnsupported.Error()) {
+			t.Skipf("host cannot retain a worker across service exit: %v", err)
+		}
 		t.Fatal(err)
 	}
 	if service.workers[run.RunID] == nil {
@@ -113,6 +116,14 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openP
 		}
 	}
 	finishTurn("waiting_decision")
+	if run.Process != nil {
+		pid := run.Process.PID
+		t.Cleanup(func() {
+			if process, err := os.FindProcess(pid); err == nil {
+				_ = process.Kill()
+			}
+		})
+	}
 	if openPR {
 		workflow, execution := service.workflowRecords(run)
 		url := "https://git.example/org/repo/pulls/8"
@@ -195,7 +206,7 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openP
 	} else {
 		finishTurn("waiting_decision")
 	}
-	events, err := os.ReadFile(filepath.Join(feedbackDir, "events.jsonl"))
+	events, err := os.ReadFile(filepath.Join(feedbackDir, "appserver.jsonl"))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -119,5 +120,66 @@ func TestFreshWorkerFlowRuntimeUsesDistinctFormat(t *testing.T) {
 	defer reopened.Close()
 	if reopened.State.SchemaVersion != WorkerFlowRuntimeSchema {
 		t.Fatalf("reopened runtime used schema %d", reopened.State.SchemaVersion)
+	}
+}
+
+func TestWorkerFlowRejectsOldLocalExecutionProtocol(t *testing.T) {
+	c, commit, store := openDAGFixture(t)
+	ctx := context.Background()
+	c.WorkflowProtocol, c.Host, c.Agent, c.Claimant = WorkerFlowVersion, "local", "codex", "operator"
+	if out, err := exec.Command("git", "-C", c.Repository, "push", "--quiet", "origin", "HEAD:refs/heads/main").CombinedOutput(); err != nil {
+		t.Fatalf("push fixture base: %v: %s", err, out)
+	}
+	commands := CommandService{Store: store, Project: c.Identity()}
+	if _, err := commands.CreateTaskBatch(ctx, c, taskBatchFixture(t, c, commit, batchTasks(8), nil), strings.Repeat("c", 32), 1, "operator"); err != nil {
+		t.Fatal(err)
+	}
+	authority, err := store.nativeAuthority(ctx, c.Identity())
+	if err != nil {
+		t.Fatal(err)
+	}
+	authority.AuthorityVersion++
+	authority.DispatchPaused = false
+	if err := store.Transact(ctx, func(tx DomainTx) error {
+		return tx.(*sqliteTx).UpdateProjectTaskAuthorityCAS(authority, authority.AuthorityVersion-1)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	receipt, err := commands.ClaimNativeTask(ctx, c, TaskClaimOptions{TaskID: "8", RequestID: strings.Repeat("d", 32), ExpectedTaskVersion: 1, ExpectedAuthorityVersion: authority.AuthorityVersion, RequestedBy: "operator", Explicit: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	reader, err := OpenSQLiteReader(filepath.Join(c.RunDir, "steerline.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reader.Close()
+	snapshot, err := reader.Query(ctx, c.Identity())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var old ExecutionRecord
+	for _, execution := range snapshot.Executions {
+		if execution.ExecutionID == receipt.ExecutionID {
+			old = execution
+		}
+	}
+	if old.ExecutionID == "" {
+		t.Fatal("claimed execution is missing")
+	}
+	old.Protocol = string(ProtocolLocalProcess)
+	if err := store.Transact(ctx, func(tx DomainTx) error { return tx.PutExecution(old) }); err != nil {
+		t.Fatal(err)
+	}
+	workspaceRoot := filepath.Join(c.RunDir, "worktrees")
+	if _, err := NewService(c); err == nil || !strings.Contains(err.Error(), "unsupported_schema") {
+		t.Fatalf("old local execution was not rejected: %v", err)
+	}
+	if _, err := os.Stat(workspaceRoot); !os.IsNotExist(err) {
+		t.Fatalf("old local execution preflight prepared a workspace: %v", err)
+	}
+	snapshot, err = reader.Query(ctx, c.Identity())
+	if err != nil || len(snapshot.Executions) != 1 || snapshot.Executions[0].Protocol != old.Protocol {
+		t.Fatalf("rejected old execution was changed: %+v %v", snapshot.Executions, err)
 	}
 }

@@ -37,7 +37,8 @@ func (s *Service) localWorkerRun(runID string) *Run {
 func (s *Service) publishLocalWorkerRun(ctx context.Context, run *Run, workflow *WorkflowRunRecord, execution *ExecutionRecord, turnID string) (PRInfo, error) {
 	var info PRInfo
 	if run == nil || workflow == nil || execution == nil || run.WorkspaceIntent == nil || run.WorktreePath == nil ||
-		workflow.WorkflowRunID != run.RunID || execution.WorkflowRunID != run.RunID || !stableExecutionID(turnID) ||
+		workflow.WorkflowRunID != run.RunID || execution.WorkflowRunID != run.RunID || run.Protocol != string(ProtocolLocalCodexAppServer) || !codexThreadID.MatchString(turnID) ||
+		execution.CurrentTurnID != turnID || execution.LastStoppedTurnID != turnID ||
 		s.Config.hostName() != "local" || s.Config.PR.Kind != "command" ||
 		strings.TrimSuffix(s.Config.PR.BaseURL, "/") != "https://github.com" || s.Config.PR.Query.Executable == "" {
 		return info, errors.New("local host publication requires a fixed GitHub command provider and worker execution")
@@ -234,7 +235,7 @@ func (s *Service) reconcileLocalWorkerPublication(ctx context.Context, run *Run)
 		StartingHead string `json:"starting_head"`
 		IndexTree    string `json:"index_tree"`
 	}
-	if err := json.Unmarshal(op.Request, &intent); err != nil || intent.RunID != run.RunID || !stableExecutionID(intent.TurnID) ||
+	if err := json.Unmarshal(op.Request, &intent); err != nil || intent.RunID != run.RunID || run.Protocol != string(ProtocolLocalCodexAppServer) || !codexThreadID.MatchString(intent.TurnID) ||
 		run.WorktreePath == nil || run.WorktreeBranch == nil || intent.Branch != *run.WorktreeBranch ||
 		!validCommit(intent.StartingHead) || !validCommit(intent.IndexTree) {
 		return false, errors.Join(err, errors.New("saved local publication intent is invalid"))

@@ -569,7 +569,7 @@ func (s *Service) reconcileExitedNativeExecution(ctx context.Context, taskID, cl
 		Policy string
 		Grace  string
 	}{"fixed_local_execution_stop", s.Config.ShutdownGrace}
-	op := Operation{Version: ExecutionRecordVersion, ID: opID, RunID: workflowRunID, AttemptID: attempt.AttemptID, Backend: BackendLocal, Protocol: ProtocolLocalProcess, Target: ref.Target, Action: "stop", PayloadDigest: digestValue(payload), Status: OperationConfirmed, StartedAt: now(), UpdatedAt: now(), Diagnostic: observation.Diagnostic, Ref: &ref}
+	op := Operation{Version: ExecutionRecordVersion, ID: opID, RunID: workflowRunID, AttemptID: attempt.AttemptID, Backend: BackendLocal, Protocol: ref.Protocol, Target: ref.Target, Action: "stop", PayloadDigest: digestValue(payload), Status: OperationConfirmed, StartedAt: now(), UpdatedAt: now(), Diagnostic: observation.Diagnostic, Ref: &ref}
 	records := executionRecords{root: s.Config.RunDir}
 	if old, loadErr := records.loadOperation(workflowRunID, attempt.AttemptID, opID); loadErr == nil {
 		if old.PayloadDigest != op.PayloadDigest || old.Ref == nil || digestValue(*old.Ref) != digestValue(ref) {

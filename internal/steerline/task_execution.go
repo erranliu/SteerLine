@@ -284,6 +284,9 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 	if err != nil {
 		return TaskClaimReceipt{}, err
 	}
+	if config.WorkflowProtocol == WorkerFlowVersion && backend == string(BackendLocal) {
+		protocol = string(ProtocolLocalCodexAppServer)
+	}
 	target := targetFor(config)
 	target.Branch, target.BaseRevision = config.Branch, base
 	claimant := strings.TrimSpace(config.Claimant)

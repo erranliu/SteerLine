@@ -174,7 +174,7 @@ func validReasoningEffort(value string) bool {
 
 func hostForExecution(backend, protocol string) string {
 	switch {
-	case backend == string(BackendLocal) && protocol == string(ProtocolLocalProcess):
+	case backend == string(BackendLocal) && (protocol == string(ProtocolLocalProcess) || protocol == string(ProtocolLocalCodexAppServer)):
 		return "local"
 	case backend == string(BackendOrca) && protocol == string(ProtocolOrcaTerminalV2):
 		return "orca"

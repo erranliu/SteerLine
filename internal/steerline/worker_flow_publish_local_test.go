@@ -65,7 +65,7 @@ func TestLocalWorkerPublishUsesHostGitAndExactPR(t *testing.T) {
 	}
 	t.Setenv("STEERLINE_TEST_HOST_GH_FILE", filepath.Join(t.TempDir(), "pr.json"))
 	c.PR = PRConfig{Kind: "command", BaseURL: "https://github.com", Repository: "owner/repo", Query: Command{Executable: exe, Args: []string{"api", "repos/{repository}/pulls/{number}"}}}
-	runID, turnID := strings.Repeat("a", 32), strings.Repeat("b", 32)
+	runID, turnID := strings.Repeat("a", 32), "00000000-0000-0000-0000-000000000001"
 	branch := "codex/101-" + runID[:12]
 	worktree := filepath.Join(t.TempDir(), "worker")
 	git := func(dir string, args ...string) string {
@@ -85,7 +85,7 @@ func TestLocalWorkerPublishUsesHostGitAndExactPR(t *testing.T) {
 		t.Fatal(err)
 	}
 	git(worktree, "add", "publish.txt")
-	run := &Run{TaskID: "101", RunID: runID, AttemptID: strings.Repeat("d", 32), ExecutionID: strings.Repeat("c", 32), WorkflowVersion: WorkerFlowVersion, FinishTaskStatus: "waiting_decision", WorktreePath: &worktree, WorktreeBranch: &branch,
+	run := &Run{TaskID: "101", RunID: runID, AttemptID: strings.Repeat("d", 32), ExecutionID: strings.Repeat("c", 32), WorkflowVersion: WorkerFlowVersion, Protocol: string(ProtocolLocalCodexAppServer), FinishTaskStatus: "waiting_decision", WorktreePath: &worktree, WorktreeBranch: &branch,
 		WorkspaceIntent: &WorkspaceIntent{Path: worktree, Branch: branch, BaseCommit: base}}
 	workflow := &WorkflowRunRecord{WorkflowRunID: runID, WorkflowVersion: WorkerFlowVersion, Branch: "main", Phase: "waiting_decision"}
 	execution := &ExecutionRecord{WorkflowRunID: runID, ExecutionID: run.ExecutionID, Workspace: WorkspaceEvidence{Worktree: worktree, Branch: branch}, CurrentTurnID: turnID, LastStoppedTurnID: turnID}

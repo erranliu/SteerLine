@@ -7,6 +7,7 @@ import (
 )
 
 type WorkerEvent struct {
+	AppServer        *codexAppEnvelope
 	RunID            string
 	AttemptID        string
 	Source           string

@@ -8,11 +8,34 @@ import (
 // workerMessage is delivered to the single service state machine. Worker
 // observers may run concurrently, but only that state machine changes runs.
 type workerMessage struct {
-	runID  string
-	worker *Worker
-	event  *WorkerEvent
-	done   bool
-	err    error
+	runID    string
+	worker   *Worker
+	event    *WorkerEvent
+	done     bool
+	err      error
+	launch   *appServerLaunchMessage
+	reply    *appServerReplyMessage
+	recovery *appServerRecoveryResult
+}
+
+type appServerLaunchMessage struct {
+	phase     string
+	commandID string
+	opID      string
+	run       Run
+	execution ExecutionRecord
+	worker    *Worker
+	events    string
+	turnID    string
+	err       error
+	ack       chan error
+}
+
+type appServerReplyMessage struct {
+	decisionID string
+	opID       string
+	callID     string
+	err        error
 }
 
 func (s *Service) registerWorker(run *Run, worker *Worker) {
@@ -135,7 +158,20 @@ func (s *Service) parkWorker() {
 }
 
 func (s *Service) handleWorkerMessage(message workerMessage) error {
+	if message.recovery != nil {
+		delete(s.appServerRecovering, message.runID)
+		return s.applyAppServerRecovery(*message.recovery)
+	}
+	if message.launch != nil {
+		return s.handleAppServerLaunchMessage(message.runID, message.launch)
+	}
+	if message.reply != nil {
+		return s.handleAppServerReplyMessage(message.runID, message.reply)
+	}
 	if s.workers[message.runID] != message.worker {
+		if message.event != nil {
+			rejectUndeliveredWorkerEvent(*message.event, ErrWorkerTurnStale)
+		}
 		return nil // A late observer message cannot change a replacement attempt.
 	}
 	var run *Run

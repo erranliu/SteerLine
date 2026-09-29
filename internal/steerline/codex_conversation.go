@@ -47,7 +47,7 @@ func (b codexHistoryBinding) validate() error {
 	if b.Backend != BackendLocal && b.Backend != BackendOrca {
 		return errors.New("Codex history backend is unsupported")
 	}
-	if b.Backend == BackendLocal && b.Protocol != ProtocolLocalProcess || b.Backend == BackendOrca && b.Protocol != ProtocolOrcaTerminalV2 {
+	if b.Backend == BackendLocal && b.Protocol != ProtocolLocalProcess && b.Protocol != ProtocolLocalCodexAppServer || b.Backend == BackendOrca && b.Protocol != ProtocolOrcaTerminalV2 {
 		return errors.New("Codex history protocol does not match backend")
 	}
 	return nil
@@ -318,7 +318,11 @@ func (s *Service) codexHistorySources() []codexHistoryBinding {
 
 		for _, attempt := range s.State.Attempts {
 			if attempt.ExecutionID == run.ExecutionID {
-				add(attempt.EventPath, attempt.AttemptID, attempt.AttemptID != run.AttemptID || run.EndedAt != nil)
+				ended := attempt.AttemptID != run.AttemptID || run.EndedAt != nil
+				if run.WorkflowVersion == WorkerFlowVersion && attempt.AttemptID == run.AttemptID {
+					ended = run.TaskStatus == "closed" || run.TaskStatus == "discarded"
+				}
+				add(attempt.EventPath, attempt.AttemptID, ended)
 			}
 		}
 	}

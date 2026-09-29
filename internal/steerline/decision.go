@@ -19,7 +19,7 @@ import (
 var ErrAnswerConflict = errors.New("answer_conflict: this decision already has a different accepted answer")
 
 func sameDecisionAnswer(a, b DecisionAnswer) bool {
-	return a.DecisionID == b.DecisionID && a.RunID == b.RunID && strings.TrimSpace(a.OptionID) == strings.TrimSpace(b.OptionID) && strings.TrimSpace(a.Note) == strings.TrimSpace(b.Note)
+	return a.DecisionID == b.DecisionID && a.RunID == b.RunID && strings.TrimSpace(a.OptionID) == strings.TrimSpace(b.OptionID) && strings.TrimSpace(a.Note) == strings.TrimSpace(b.Note) && digestValue(a.Answers) == digestValue(b.Answers)
 }
 
 func validateDecisionRequest(req *DecisionRequest) error {
@@ -33,6 +33,12 @@ func validateDecisionRequest(req *DecisionRequest) error {
 	}
 	if req.Question == "" {
 		return errors.New("decision question is empty")
+	}
+	if req.NativeAsk != nil {
+		ask := req.NativeAsk
+		if !codexThreadID.MatchString(ask.ThreadID) || !codexThreadID.MatchString(ask.TurnID) || ask.CallID == "" || ask.Generation == "" || len(ask.RequestID) == 0 || !json.Valid(ask.RequestID) || len(ask.Questions) == 0 || len(ask.Questions) > 3 {
+			return errors.New("native decision lacks its fixed app-server request binding")
+		}
 	}
 	if len([]rune(req.Question)) > 2000 || len([]rune(req.Context)) > 8000 {
 		return errors.New("decision question or context exceeds its protocol length limit")
@@ -113,6 +119,35 @@ func validateDecisionAnswer(req *DecisionRequest, a *DecisionAnswer) error {
 	if len([]rune(a.AnsweredBy)) > 200 {
 		return errors.New("answered_by exceeds the 200 character protocol limit")
 	}
+	if req.NativeAsk != nil {
+		if len(a.Answers) != len(req.NativeAsk.Questions) {
+			return errors.New("native answer must include every question ID")
+		}
+		for _, q := range req.NativeAsk.Questions {
+			values, ok := a.Answers[q.ID]
+			if !ok || len(values) == 0 || len(values) > 2 {
+				return fmt.Errorf("native answer for %q is missing or too long", q.ID)
+			}
+			for _, value := range values {
+				if strings.TrimSpace(value) == "" || !utf8.ValidString(value) || len([]rune(value)) > 4000 {
+					return fmt.Errorf("native answer for %q is invalid", q.ID)
+				}
+			}
+			if len(q.Options) > 0 && !q.AllowFreeText {
+				offered := false
+				for _, option := range q.Options {
+					if values[0] == option.ID || values[0] == option.Label {
+						offered = true
+						break
+					}
+				}
+				if !offered {
+					return fmt.Errorf("native answer for %q is not offered", q.ID)
+				}
+			}
+		}
+		return nil
+	}
 	if len(req.Options) > 0 {
 		if a.OptionID == "" {
 			if req.AllowFreeText && a.Note != "" {
@@ -133,6 +168,44 @@ func validateDecisionAnswer(req *DecisionRequest, a *DecisionAnswer) error {
 	return nil
 }
 
+func normalizeNativeDecisionAnswer(req *DecisionRequest, answer *DecisionAnswer) error {
+	if req == nil || req.NativeAsk == nil || answer == nil {
+		return errors.New("native answer has no fixed question")
+	}
+	if len(answer.Answers) != 0 {
+		return validateDecisionAnswer(req, answer)
+	}
+	note := strings.TrimSpace(answer.Note)
+	if strings.HasPrefix(note, "{") {
+		var values map[string][]string
+		if err := decode([]byte(note), &values); err != nil {
+			return fmt.Errorf("native multi-question answer must be JSON keyed by question ID: %w", err)
+		}
+		answer.Answers = values
+	} else if len(req.NativeAsk.Questions) == 1 {
+		q := req.NativeAsk.Questions[0]
+		values := []string{}
+		if answer.OptionID != "" {
+			for _, option := range q.Options {
+				if option.ID == answer.OptionID {
+					values = append(values, option.Label)
+					break
+				}
+			}
+			if len(values) == 0 {
+				return errors.New("native answer option is not offered")
+			}
+		}
+		if note != "" {
+			values = append(values, note)
+		}
+		answer.Answers = map[string][]string{q.ID: values}
+	} else {
+		return errors.New("answer all native questions using -note JSON, keyed by question ID")
+	}
+	return validateDecisionAnswer(req, answer)
+}
+
 // ReadDecisionAnswer returns the answer already committed to the current
 // service projection. A pending decision has no answer; clients cannot create
 // one by writing a file.
@@ -143,7 +216,7 @@ func ReadDecisionAnswer(r *Run) (DecisionAnswer, error) {
 	if r.Decision.Status == "pending" {
 		return DecisionAnswer{}, errors.New("decision has no accepted answer")
 	}
-	a := DecisionAnswer{DecisionID: r.Decision.ID, RunID: r.RunID, OptionID: r.Decision.OptionID, Note: r.Decision.Note, AnsweredBy: r.Decision.AnsweredBy}
+	a := DecisionAnswer{DecisionID: r.Decision.ID, RunID: r.RunID, OptionID: r.Decision.OptionID, Note: r.Decision.Note, Answers: r.Decision.Answers, AnsweredBy: r.Decision.AnsweredBy}
 	if r.Decision.AnsweredAt != nil {
 		a.AnsweredAt = *r.Decision.AnsweredAt
 	}
@@ -202,6 +275,11 @@ func SubmitAnswerDecision(ctx context.Context, c Config, runID, decisionID, opti
 		requestedBy = answererName()
 	}
 	answer := DecisionAnswer{DecisionID: decisionID, RunID: run.RunID, OptionID: strings.TrimSpace(optionID), Note: note, AnsweredBy: requestedBy, ExpectedDecisionVersion: expectedDecisionVersion, ExpectedRunRevision: expectedRunRevision, ServiceInstanceID: expectedInstance}
+	if run.Decision != nil && run.Decision.ID == decisionID && run.Decision.Request.NativeAsk != nil {
+		if err := normalizeNativeDecisionAnswer(&run.Decision.Request, &answer); err != nil {
+			return CommandRecord{}, false, err
+		}
+	}
 	key := decisionAnswerKey(answer)
 	reader, err := OpenSQLiteReader(filepath.Join(c.RunDir, "steerline.db"))
 	if err != nil {
@@ -403,7 +481,10 @@ func decisionAnswerMeta(r *Run) map[string]any {
 }
 
 func decisionAnswerDigest(answer DecisionAnswer) string {
-	return digestValue(struct{ OptionID, Note string }{strings.TrimSpace(answer.OptionID), strings.TrimSpace(answer.Note)})
+	return digestValue(struct {
+		OptionID, Note string
+		Answers        map[string][]string
+	}{strings.TrimSpace(answer.OptionID), strings.TrimSpace(answer.Note), answer.Answers})
 }
 
 func (s *Service) requireDecisionReplyCapability(ctx context.Context, run *Run) error {
@@ -452,7 +533,9 @@ func (s *Service) applyDecisions(ctx context.Context) error {
 		if run.WorkflowVersion != WorkerFlowVersion {
 			return nativeErr("unsupported_schema", "saved decision is not bound to a current worker execution")
 		}
-		return s.applyWorkerFlowDecision(ctx, run)
+		if err := s.applyWorkerFlowDecision(ctx, run); err != nil {
+			return err
+		}
 	}
 	return nil
 }

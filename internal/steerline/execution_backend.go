@@ -23,12 +23,13 @@ type BackendKind string
 type ExecutionProtocol string
 
 const (
-	BackendLocal           BackendKind       = "local"
-	BackendOrca            BackendKind       = "orca"
-	ProtocolLocalProcess   ExecutionProtocol = "local_process"
-	ProtocolOrcaTerminalV2 ExecutionProtocol = "orca_terminal_v2"
-	ProtocolOrcaSupervised ExecutionProtocol = "orca_supervised"
-	ExecutionRecordVersion                   = 1
+	BackendLocal                BackendKind       = "local"
+	BackendOrca                 BackendKind       = "orca"
+	ProtocolLocalProcess        ExecutionProtocol = "local_process"
+	ProtocolLocalCodexAppServer ExecutionProtocol = "local_codex_app_server_v1"
+	ProtocolOrcaTerminalV2      ExecutionProtocol = "orca_terminal_v2"
+	ProtocolOrcaSupervised      ExecutionProtocol = "orca_supervised"
+	ExecutionRecordVersion                        = 1
 )
 
 type AgentSpec struct {
@@ -363,7 +364,7 @@ func validateExecutionRef(ref ExecutionRef) error {
 		return errors.New("execution binding lacks a verified target, agent or workspace")
 	}
 	switch {
-	case ref.Backend == BackendLocal && ref.Protocol == ProtocolLocalProcess:
+	case ref.Backend == BackendLocal && (ref.Protocol == ProtocolLocalProcess || ref.Protocol == ProtocolLocalCodexAppServer):
 		if ref.WorkspacePath == "" || ref.WorkspaceBranch == "" || ref.External.Kind != "os" || ref.External.PID <= 0 || ref.External.Created == "" || ref.External.Executable == "" {
 			return errors.New("local execution binding lacks a verified process identity")
 		}
@@ -505,7 +506,7 @@ func (b localExecutionBackend) Probe(ctx context.Context, target ExecutionTarget
 	return capabilityReport(BackendLocal, ProtocolLocalProcess, target, agent, version), nil
 }
 func (b localExecutionBackend) Observe(ctx context.Context, ref ExecutionRef) (Observation, error) {
-	if ref.Backend != BackendLocal || ref.Protocol != ProtocolLocalProcess || ref.Target != targetFor(b.config) {
+	if ref.Backend != BackendLocal || ref.Protocol != ProtocolLocalProcess && ref.Protocol != ProtocolLocalCodexAppServer || ref.Target != targetFor(b.config) {
 		return Observation{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "fixed local process target changed"}
 	}
 	if err := ctx.Err(); err != nil {
@@ -523,7 +524,7 @@ func (b localExecutionBackend) Observe(ctx context.Context, ref ExecutionRef) (O
 	return Observation{Liveness: liveness, Connection: "connected", ObservedAt: now(), Source: "os-process-probe", Diagnostic: label}, nil
 }
 func (b localExecutionBackend) InspectWorkspace(ctx context.Context, ref ExecutionRef) (WorkspaceInspection, error) {
-	if ref.Backend != BackendLocal || ref.Protocol != ProtocolLocalProcess || ref.Target != targetFor(b.config) {
+	if ref.Backend != BackendLocal || ref.Protocol != ProtocolLocalProcess && ref.Protocol != ProtocolLocalCodexAppServer || ref.Target != targetFor(b.config) {
 		return WorkspaceInspection{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "local workspace target differs from the fixed execution"}
 	}
 	return inspectBoundWorkspace(ctx, b.config, ref)
@@ -668,7 +669,7 @@ func readOutputPrefix(f *os.File, offset int64) (string, error) {
 	return hex.EncodeToString(hash.Sum(nil)), nil
 }
 func (b localExecutionBackend) StopExecution(ctx context.Context, ref ExecutionRef, _ Operation, worker *Worker) (StopReceipt, error) {
-	if ref.Backend != BackendLocal || ref.Protocol != ProtocolLocalProcess || ref.Target != targetFor(b.config) {
+	if ref.Backend != BackendLocal || (ref.Protocol != ProtocolLocalProcess && ref.Protocol != ProtocolLocalCodexAppServer) || ref.Target != targetFor(b.config) {
 		return StopReceipt{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "fixed local process target changed"}
 	}
 	if worker == nil || worker.proc == nil || worker.proc.Identity() != ref.External {
