@@ -1,6 +1,6 @@
 {
   "date": "2026-09-29",
-  "base": "abf6b25 (origin/main after local Codex native ask merge)",
+  "base": "6bfac1a (origin/main after local Codex native ask and runtime-state consolidation merges)",
   "state": "implementation in progress; real center ask/reply/restart/two-turn continuation passed; remaining acceptance items listed below",
   "platform_continuity": "orca-native-continuity-2026-09-29.json: real Orca 1.4.210 and Codex CLI 0.159.0, two settled Dispatches on one agent terminal/incarnation; second task recalled a token only given in first task",
   "center_live": "orca-native-center-live-2026-09-29.json: actual SteerLine Service, SQLite claim, Orca agent launcher, native ask/reply, service restart, worker_done, second Task/Dispatch on original terminal, second worker_done and recalled phrase; passed in 223.32s",
@@ -10,6 +10,9 @@
     "TestNativeTaskCASGuardsAndDeliveryProjection fixture updated to the current worker-flow-v1 delivery contract; the earlier minimal-v1 fixture failed the existing delivery schema guard on origin/main",
     "go test ./internal/steerline -count=1 -timeout=15m: passed in 222.823s (the new Orca/provider case was separately passed after this package run began)",
     "go test ./internal/steerline -run '^TestNativeOrcaPRBindingUsesProviderAndRetainsSession$' -count=1: passed",
+    "after rebase to origin/main 6bfac1a: go test ./internal/steerline -run 'TestWorkerFlow|TestConfig|TestDecision|TestOrca|TestNativeOrca' -count=1 -timeout=15m passed in 58.824s",
+    "after rebase to origin/main 6bfac1a: go test ./internal/steerline -count=1 -timeout=15m passed in 230.891s",
+    "after rebase to origin/main 6bfac1a: go run ./cmd/test-feedback -quick passed",
     "go test ./internal/steerline -run 'TestWorkerFlow|TestConfig|TestDecision|TestOrca|TestNativeOrca' -count=1: passed",
     "go run ./cmd/test-feedback -quick: passed"
   ],
