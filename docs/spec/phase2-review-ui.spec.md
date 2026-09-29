@@ -1,13 +1,13 @@
 # Spec：文档审阅与确认原生界面
 
-任务 ID：23；任务名称：文档审阅与确认原生界面；目标：`PHASE2`。状态：规格已编写，尚未实现或验收。配套 [Plan](phase2-review-ui.plan.md)。本任务由一个独立实现 PR 交付。
+任务 ID：52；任务名称：文档审阅与确认原生界面；目标：`PHASE2`。状态：规格已编写，尚未实现或验收。配套 [Plan](phase2-review-ui.plan.md)。本任务由一个独立实现 PR 交付。
 
 ## 范围与前置
 
-硬前置：#15、#19。依赖 [WinUI 基座](phase2-winui-foundation.spec.md)和[正式文档发布](phase2-document-publish.spec.md)，通过 #19 获得 #17 的提案与 ID 预留能力。遵守[共同约束](phase2-constraints.md)。
+硬前置：#44、#48。依赖 [WinUI 基座](phase2-winui-foundation.spec.md)和[正式文档发布](phase2-document-publish.spec.md)，通过 #48 获得 #46 的提案与 ID 预留能力。遵守[共同约束](phase2-constraints.md)。
 交付人工审阅与确认页面，独立于规划对话实现；可从受控提案列表或 proposal 深链接进入。页面只提交已有领域命令，不解析数据库或自行生成任务 ID。
 
-本任务同时提供规划初始化与“同步目标分支”入口，调用 #17 的人工 register/sync，显示固定目录/分支和现有 owner；分叉或外部修改保留诊断，不在 UI 中 reset。用户可从讨论建议或手工表单新建 task_batch/documents_only 提案，确认目标路径、拟定任务/依赖或产品文档范围后调用 proposal.create；模型建议不自动建提案。审阅 UI 与对话 UI 通过 proposal_id 深链接连接，单独验收可用手工提案输入。
+本任务同时提供规划初始化与“同步目标分支”入口，调用 #46 的人工 register/sync，显示固定目录/分支和现有 owner；分叉或外部修改保留诊断，不在 UI 中 reset。用户可从讨论建议或手工表单新建 task_batch/documents_only 提案，确认目标路径、拟定任务/依赖或产品文档范围后调用 proposal.create；模型建议不自动建提案。审阅 UI 与对话 UI 通过 proposal_id 深链接连接，单独验收可用手工提案输入。
 
 ## 受控流程
 

@@ -1,17 +1,17 @@
 # Spec：正式文档发布与任务创建
 
-任务 ID：19；任务名称：正式文档发布与任务创建；目标：`PHASE2`。状态：规格已编写，尚未实现或验收。配套 [Plan](phase2-document-publish.plan.md)。本任务由一个独立实现 PR 交付。
+任务 ID：48；任务名称：正式文档发布与任务创建；目标：`PHASE2`。状态：规格已编写，尚未实现或验收。配套 [Plan](phase2-document-publish.plan.md)。本任务由一个独立实现 PR 交付。
 
 ## 范围与前置
 
-硬前置：#17。依赖[规划提案与受控草稿](phase2-planning-drafts.spec.md)，遵守[共同约束](phase2-constraints.md)、[任务契约](task-core.spec.md)和[固定 DAG](task-dag.spec.md)。
+硬前置：#46。依赖[规划提案与受控草稿](phase2-planning-drafts.spec.md)，遵守[共同约束](phase2-constraints.md)、[任务契约](task-core.spec.md)和[固定 DAG](task-dag.spec.md)。
 交付 documents_only 与 task_batch 两种发布、固定 Git 文档版本、中心创建和全部部分失败恢复。不自动开始任务，不自动合并任何 PR。
 
 ## 确认和准备
 
 planning.proposal.publish 命令固定 proposal/version、base_document_version、完整 candidate manifest 摘要、验证回执和人工确认 actor；planning.publication.reconcile 只能核实原 publication。planning.publication.cancel 仅用于下面规定的中心创建尚未开始的人工取消，不撤回已发布文档。查询 /planning/publications/{id} 返回原请求、阶段、Git/中心各自结果、can_cancel 和下一步原因。agent 不可调用以上命令。
 
-取得 #17 publishing guard，拒绝未结算 turn/编辑/预留或其他发布。再次检查 worktree HEAD/index/文件、正式快照及候选摘要、任务定义和依赖资格。重用已创建任务的编号、修改已创建契约、外部差异或失效基线均拒绝。限定候选 Markdown 与服务生成的身份 JSON，不把 untracked 代码或用户暂存文件纳入提交。
+取得 #46 publishing guard，拒绝未结算 turn/编辑/预留或其他发布。再次检查 worktree HEAD/index/文件、正式快照及候选摘要、任务定义和依赖资格。重用已创建任务的编号、修改已创建契约、外部差异或失效基线均拒绝。限定候选 Markdown 与服务生成的身份 JSON，不把 untracked 代码或用户暂存文件纳入提交。
 
 ## 完整版本发布算法
 
@@ -27,13 +27,13 @@ planning.proposal.publish 命令固定 proposal/version、base_document_version�
 
 执行任务的 base 将从项目绑定的目标分支取得，其 Spec/Plan 和共同引用必须与固定契约内容一致。规划分支 commit 不自动满足该条件。
 
-task_batch 发布后回读固定目标分支的实际 commit，同时核验原规划发布 commit 是该目标 commit 的祖先，以及全部契约 blob 摘要完全一致。首版只接受保留原规划提交的 merge/fast-forward 集成；只复制文件、squash 或 cherry-pick 即使内容相同也不能放行，返回 integration_ancestry_mismatch 并保留等待状态。确认前及等待页都要解释这一要求，确保后续 #17 fast-forward 同步可行。不自动合并、推送或改写主线，也不先创建可能自动派发的任务。
+task_batch 发布后回读固定目标分支的实际 commit，同时核验原规划发布 commit 是该目标 commit 的祖先，以及全部契约 blob 摘要完全一致。首版只接受保留原规划提交的 merge/fast-forward 集成；只复制文件、squash 或 cherry-pick 即使内容相同也不能放行，返回 integration_ancestry_mismatch 并保留等待状态。确认前及等待页都要解释这一要求，确保后续 #46 fast-forward 同步可行。不自动合并、推送或改写主线，也不先创建可能自动派发的任务。
 
 未满足集成条件时为 awaiting_spec_integration，显示原规划 commit、目标分支和差异；原 publication 持有 guard、正式历史可读。人可继续集成，也可按下述受控 cancel 结束等待；不能在没有结束路径的状态永久占用规划写入。
 
 目标分支通过祖先和内容两项校验后，以该固定 commit 生成 task-batch/v1 输入并持久化完整 payload、摘要和原中心 create request，再运行要求已提交 blob 的最终 task validate、调用既有 CreateTaskBatch。状态/依赖仍由中心事务重新核验；重启不能从更新的目标 HEAD 重新生成同 request 的不同 payload。创建响应丢失先按 request_id 查同一回执，禁止第二请求或占号。只有文档发布、目标规格核验和中心创建全部确认才 applied。
 
-已确定无中心创建副作用的最终拒绝，先结算所有 Git/文件/index 动作并核实原预留 ID 未创建为中心任务，原 publication 终态为 rejected。提案转为 needs_review，保留已发布 commit、旧确认和拒绝原因，再按原 owner/generation 释放 guard。#17 明确允许人修订这种提案：基于当前正式版本增加 proposal.version、清空旧校验/确认，保留同一交付的原数字并建立新 publication；旧 publication 不重开，已生效文档历史不倒退。部分副作用或中心结果未知时仍不能解锁。applied 也仅在全部动作结算后释放原 guard。
+已确定无中心创建副作用的最终拒绝，先结算所有 Git/文件/index 动作并核实原预留 ID 未创建为中心任务，原 publication 终态为 rejected。提案转为 needs_review，保留已发布 commit、旧确认和拒绝原因，再按原 owner/generation 释放 guard。#46 明确允许人修订这种提案：基于当前正式版本增加 proposal.version、清空旧校验/确认，保留同一交付的原数字并建立新 publication；旧 publication 不重开，已生效文档历史不倒退。部分副作用或中心结果未知时仍不能解锁。applied 也仅在全部动作结算后释放原 guard。
 
 cancel 只允许 awaiting_spec_integration，或尚未登记中心创建意图的 awaiting_task_create。服务事务核 expected_version、原 owner、Git/index 已结算且没有中心创建 intent/在途请求；与准备中心创建的事务竞争至多一方成功，并核实原任务 ID 尚未创建。成功时 publication 为 cancelled_before_create，提案为 needs_review，保留 Git 提交和占号，再释放原 guard。迟到的 reconcile 看到终态不得继续创建。创建意图已经登记或结果未知时返回 cancel_not_eligible，须先按原请求对账，不能用取消代替任务丢弃。
 
@@ -45,7 +45,7 @@ cancel 只允许 awaiting_spec_integration，或尚未登记中心创建意图�
 | --- | --- |
 | DP1 | documents_only 完整发布不占号；task_batch 全文件固定且不改变既有契约 |
 | DP2 | tree/commit、ref CAS、文件物化、实际 index 替换与正式指针前后注入崩溃；恢复后 HEAD/index/文件一致，连续发布和同步不出现意外 dirty 状态 |
-| DP3 | 发布与按 #17 契约建立的 turn/edit owner 竞争、外部改动和旧 generation 全部拒绝；未知 owner 不释放。此处用服务消费者夹具，不依赖 #18；真实 Codex 交叉验收归 #24 |
+| DP3 | 发布与按 #46 契约建立的 turn/edit owner 竞争、外部改动和旧 generation 全部拒绝；未知 owner 不释放。此处用服务消费者夹具，不依赖 #47；真实 Codex 交叉验收归 #53 |
 | DP4 | 未集成或同内容 squash/cherry-pick 不创建；保留规划提交的人工 merge/fast-forward 且 blob 一致后才按原 ID 创建，并可再次同步 |
 | DP5 | Git 已完成/中心未完成、中心已完成/回执丢失均按原操作结算，只有一个 commit 身份与一个 batch |
 | DP6 | UI/离线查询同时读新旧版本与结果待核实状态一致；草稿、正式、已创建三个事实不混同 |

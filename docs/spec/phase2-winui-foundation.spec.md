@@ -1,6 +1,6 @@
 # Spec：WinUI 基座与原生输入
 
-任务 ID：15；任务名称：WinUI 基座与原生输入；目标：`PHASE2`。状态：规格已编写，尚未实现或验收。配套 [Plan](phase2-winui-foundation.plan.md)。本任务由一个独立实现 PR 交付。
+任务 ID：44；任务名称：WinUI 基座与原生输入；目标：`PHASE2`。状态：规格已编写，尚未实现或验收。配套 [Plan](phase2-winui-foundation.plan.md)。本任务由一个独立实现 PR 交付。
 
 ## 范围与前置
 

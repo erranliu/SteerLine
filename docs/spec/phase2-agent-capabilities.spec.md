@@ -1,6 +1,6 @@
 # Spec：Codex 规划主 agent 能力验证
 
-任务 ID：14；任务名称：Codex 规划主 agent 能力验证；目标：`PHASE2`。状态：规格已编写，尚未实现或验收。配套 [Plan](phase2-agent-capabilities.plan.md)。本任务由一个独立实现 PR 交付。
+任务 ID：43；任务名称：Codex 规划主 agent 能力验证；目标：`PHASE2`。状态：规格已编写，尚未实现或验收。配套 [Plan](phase2-agent-capabilities.plan.md)。本任务由一个独立实现 PR 交付。
 
 ## 范围与前置
 

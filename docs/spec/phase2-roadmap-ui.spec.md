@@ -1,10 +1,10 @@
 # Spec：Roadmap 与 DAG 原生浏览
 
-任务 ID：20；任务名称：Roadmap 与 DAG 原生浏览；目标：`PHASE2`。状态：规格已编写，尚未实现或验收。配套 [Plan](phase2-roadmap-ui.plan.md)。本任务由一个独立实现 PR 交付。
+任务 ID：49；任务名称：Roadmap 与 DAG 原生浏览；目标：`PHASE2`。状态：规格已编写，尚未实现或验收。配套 [Plan](phase2-roadmap-ui.plan.md)。本任务由一个独立实现 PR 交付。
 
 ## 范围与前置
 
-硬前置：#15、#19。依赖 [WinUI 基座](phase2-winui-foundation.spec.md)、[正式文档发布](phase2-document-publish.spec.md)，通过后者取得 #17 的真实规划查询。遵守[共同约束](phase2-constraints.md)和[图查询契约](dag-view.spec.md)。交付原生 Roadmap 与 DAG 浏览，不创建任务或编辑运行时依赖。
+硬前置：#44、#48。依赖 [WinUI 基座](phase2-winui-foundation.spec.md)、[正式文档发布](phase2-document-publish.spec.md)，通过后者取得 #46 的真实规划查询。遵守[共同约束](phase2-constraints.md)和[图查询契约](dag-view.spec.md)。交付原生 Roadmap 与 DAG 浏览，不创建任务或编辑运行时依赖。
 
 ## Roadmap 页面
 
@@ -23,7 +23,7 @@
 | 编号 | 通过条件 |
 | --- | --- |
 | RV1 | 真实服务下目标、全文、Spec/Plan、任务/运行/PR 关联和未知关联均正确 |
-| RV2 | #19 发布前后与故障中切换页面只显示完整文档版本，草稿和 pending 不混成正式 DAG |
+| RV2 | #48 发布前后与故障中切换页面只显示完整文档版本，草稿和 pending 不混成正式 DAG |
 | RV3 | 大图分页、深度截断、丢弃前置及未交付阻塞与中心一致 |
 | RV4 | 项目切换、重连、游标失效、关闭重开和跨页返回保留合理视图状态 |
 | RV5 | Windows 原生宽窄窗口/键盘导航可用，浏览全程无业务命令副作用 |

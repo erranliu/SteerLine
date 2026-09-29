@@ -1,0 +1,98 @@
+{
+  "worker_flow_task_id": 36,
+  "merged_tasks": {
+    "old_task_ids": [
+      26,
+      27
+    ],
+    "new_task_id": 37,
+    "name": "多候选会话与唯一PR交付"
+  },
+  "retired_without_replacement": [
+    33,
+    34,
+    35
+  ],
+  "replacements": [
+    {
+      "old_task_id": 28,
+      "new_task_id": 38,
+      "name": "候选观察界面"
+    },
+    {
+      "old_task_id": 29,
+      "new_task_id": 39,
+      "name": "多候选本机与远端真机验收"
+    },
+    {
+      "old_task_id": 30,
+      "new_task_id": 40,
+      "name": "固定版本与双入口"
+    },
+    {
+      "old_task_id": 31,
+      "new_task_id": 41,
+      "name": "dev 隔离与 stable 提升"
+    },
+    {
+      "old_task_id": 32,
+      "new_task_id": 42,
+      "name": "第一阶段集成验收"
+    },
+    {
+      "old_task_id": 14,
+      "new_task_id": 43,
+      "name": "Codex 规划主 agent 能力验证"
+    },
+    {
+      "old_task_id": 15,
+      "new_task_id": 44,
+      "name": "WinUI 基座与原生输入"
+    },
+    {
+      "old_task_id": 16,
+      "new_task_id": 45,
+      "name": "本机客户端协议与历史查询"
+    },
+    {
+      "old_task_id": 17,
+      "new_task_id": 46,
+      "name": "规划提案与受控草稿"
+    },
+    {
+      "old_task_id": 18,
+      "new_task_id": 47,
+      "name": "Codex 规划会话服务"
+    },
+    {
+      "old_task_id": 19,
+      "new_task_id": 48,
+      "name": "正式文档发布与任务创建"
+    },
+    {
+      "old_task_id": 20,
+      "new_task_id": 49,
+      "name": "Roadmap 与 DAG 原生浏览"
+    },
+    {
+      "old_task_id": 21,
+      "new_task_id": 50,
+      "name": "执行与待处理原生界面"
+    },
+    {
+      "old_task_id": 22,
+      "new_task_id": 51,
+      "name": "规划对话原生界面"
+    },
+    {
+      "old_task_id": 23,
+      "new_task_id": 52,
+      "name": "文档审阅与确认原生界面"
+    },
+    {
+      "old_task_id": 24,
+      "new_task_id": 53,
+      "name": "第二阶段完整闭环验收"
+    }
+  ]
+}
