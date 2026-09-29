@@ -74,6 +74,14 @@ func TestManualStartAdmissionsClaimIndependentTasksBeforeWorkersStart(t *testing
 		}
 		return req
 	}
+	uncertified := submit(map[string]string{"task_id": "703"})
+	uncertifiedCtx, stopUncertified := context.WithTimeout(context.Background(), 10*time.Second)
+	uncertifiedReceipt, err := WaitControlReceipt(uncertifiedCtx, f.c, uncertified.RequestID, 20*time.Millisecond)
+	stopUncertified()
+	if err != nil || uncertifiedReceipt.Status != "rejected" || uncertifiedReceipt.Code != "capability_unavailable" {
+		t.Fatalf("uncertified target changed task before claim: %+v / %v", uncertifiedReceipt, err)
+	}
+	seedFakeCapabilities(t, f.c)
 	first := submit(map[string]string{"task_id": "701"})
 	second := submit(map[string]string{"task_id": "702"})
 	rejected := submit(map[string]string{"task_id": "703", "execution_profile_id": "missing", "execution_profile_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"})

@@ -154,6 +154,16 @@ func admitStartRequest(ctx context.Context, config Config, store *SQLiteStore, i
 	if !ok || task.Status != "open" {
 		return finish("rejected", "task_not_ready", "任务已不是可开始状态", nil)
 	}
+	required := []string{"start", "observe", "workspace_inspection", "output_reading"}
+	if selected.hostName() == "orca_supervised" {
+		required = append(required, "message_inbox", "resource_settlement")
+	} else {
+		required = append(required, "stop")
+	}
+	preflight := &Service{Config: selected}
+	if _, err := preflight.requireBackendCapabilities(ctx, backendFor(selected), required...); err != nil {
+		return finish("rejected", "capability_unavailable", err.Error(), nil)
+	}
 	claim, err := (CommandService{Store: store, Project: config.identity}).ClaimNativeTask(ctx, selected, TaskClaimOptions{
 		TaskID: payload.TaskID, RequestID: req.RequestID, ExpectedTaskVersion: task.Version,
 		ExpectedAuthorityVersion: graph.Authority.AuthorityVersion, RequestedBy: req.RequestedBy,
