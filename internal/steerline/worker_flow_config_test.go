@@ -3,6 +3,7 @@ package steerline
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -44,6 +45,19 @@ func TestWorkerFlowConfigRejectsOldProjectGates(t *testing.T) {
 			value[name] = field
 			if _, err := write(value); err == nil {
 				t.Fatal("obsolete project work gate was accepted")
+			}
+		})
+	}
+}
+
+func TestDeferredOrcaWorkerFlowCannotClaim(t *testing.T) {
+	for _, host := range []string{"orca", "orca_supervised"} {
+		t.Run(host, func(t *testing.T) {
+			c := Config{WorkflowProtocol: WorkerFlowVersion, Host: host, Agent: "codex"}
+			err := requireWorkerFlowCapabilities(context.Background(), c)
+			var backend *BackendError
+			if !errors.As(err, &backend) || backend.Code != BackendUnsupported {
+				t.Fatalf("deferred Orca target reached an external claim path: %v", err)
 			}
 		})
 	}

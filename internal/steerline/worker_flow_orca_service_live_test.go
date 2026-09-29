@@ -2,6 +2,8 @@ package steerline
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"os"
 	"os/exec"
@@ -129,7 +131,7 @@ func testWorkerFlowOrcaServiceFirstFeedbackLive(t *testing.T, remote bool) {
 		t.Helper()
 		worker := service.workers[run.RunID]
 		if worker == nil {
-			t.Fatalf("original Orca worker observer is missing: %+v", run)
+			t.Fatalf("original Orca worker observer is missing: finish=%q execution=%q reason=%q", run.FinishTaskStatus, run.ExecutionStatus, deref(run.Error))
 		}
 		if err := service.selectWorker(run); err != nil {
 			t.Fatal(err)
@@ -155,11 +157,23 @@ func testWorkerFlowOrcaServiceFirstFeedbackLive(t *testing.T, remote bool) {
 	}
 	finish()
 	firstProcess, firstSession, firstWorkspace := *run.Process, deref(run.SessionID), deref(run.WorktreePath)
+	if err := service.Close(); err != nil {
+		t.Fatal(err)
+	}
+	service, err = NewService(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	run = service.find("9001")
+	if run == nil || run.RunID != receipt.WorkflowRunID || run.Process == nil || *run.Process != firstProcess || deref(run.SessionID) != firstSession || run.Decision == nil || run.Decision.Status != "pending" {
+		t.Fatalf("Orca center restart lost the original waiting worker: run=%+v", run)
+	}
 	service.State.Service.Ready, service.State.Service.Status = true, "running"
 	if err := service.save(); err != nil {
 		t.Fatal(err)
 	}
-	answer := DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, OptionID: "continue", Note: "Keep the original Orca terminal and worktree", AnsweredBy: "operator", ExpectedDecisionVersion: run.Decision.Version, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: service.State.Service.InstanceID}
+	answer := DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, OptionID: "continue", Note: strings.Repeat("续", 200), AnsweredBy: "operator", ExpectedDecisionVersion: run.Decision.Version, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: service.State.Service.InstanceID}
+	feedbackText := workerFeedbackText(answer, run.Decision.Request)
 	payload, _ := json.Marshal(answer)
 	command, _, err := commands.AnswerDecisionWithID(ctx, strings.Repeat("c", 32), answer.DecisionID, answer.ExpectedDecisionVersion, decisionAnswerKey(answer), answer.AnsweredBy, payload)
 	if err != nil {
@@ -178,6 +192,19 @@ func testWorkerFlowOrcaServiceFirstFeedbackLive(t *testing.T, remote bool) {
 		t.Fatal(err)
 	}
 	finish()
+	journal := filepath.Join(orcaTurnPath(c, run.RunID, command.CommandID), "events.jsonl")
+	events, err := os.ReadFile(journal)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sum := sha256.Sum256([]byte(feedbackText))
+	if !strings.Contains(string(events), "received_sha256:"+hex.EncodeToString(sum[:])) {
+		found := "missing"
+		if index := strings.Index(string(events), "received_sha256:"); index >= 0 {
+			found = string(events)[index:min(len(events), index+500)]
+		}
+		t.Fatalf("Orca terminal did not deliver the complete option and Unicode note: expected=%s observed=%s", hex.EncodeToString(sum[:]), found)
+	}
 	_, execution := service.minimalRecords(run)
 	if execution == nil || execution.SessionID != firstSession || execution.TurnNumber != 2 || run.Process == nil || *run.Process != firstProcess || canonical(deref(run.WorktreePath)) != canonical(firstWorkspace) {
 		t.Fatalf("Orca feedback replaced worker identity: execution=%+v run=%+v", execution, run)

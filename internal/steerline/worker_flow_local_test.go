@@ -2,6 +2,9 @@ package steerline
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -46,7 +49,14 @@ func TestWorkerFlowMockCodexHelper(t *testing.T) {
 	if err != nil {
 		os.Exit(4)
 	}
-	echo, _ := json.Marshal(map[string]any{"type": "item.completed", "item": map[string]string{"id": "received-prompt", "type": "agent_message", "text": string(prompt)}})
+	received := string(prompt)
+	if strings.Contains(args, " wf-orca-mock ") {
+		withoutPipelineNewline := strings.TrimSuffix(strings.ReplaceAll(string(prompt), "\r\n", "\n"), "\n")
+		sum := sha256.Sum256([]byte(withoutPipelineNewline))
+		start, end := prompt[:min(96, len(prompt))], prompt[max(0, len(prompt)-96):]
+		received = fmt.Sprintf("received_sha256:%s bytes:%d prefix_b64:%s suffix_b64:%s", hex.EncodeToString(sum[:]), len(prompt), base64.StdEncoding.EncodeToString(start), base64.StdEncoding.EncodeToString(end))
+	}
+	echo, _ := json.Marshal(map[string]any{"type": "item.completed", "item": map[string]string{"id": "received-prompt", "type": "agent_message", "text": received}})
 	_, _ = fmt.Fprintln(os.Stdout, `{"type":"thread.started","thread_id":"`+workerFlowMockSession+`"}`)
 	_, _ = fmt.Fprintln(os.Stdout, `{"type":"turn.started"}`)
 	_, _ = fmt.Fprintln(os.Stdout, string(echo))

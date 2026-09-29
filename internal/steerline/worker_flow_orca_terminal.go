@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-const workerOrcaPromptChunkBytes = 2048
+const workerOrcaPromptChunkBytes = 512
 
 func workerOrcaPromptRoot(executionID, turnID string) string {
 	return "SteerLineWorkerFlow\\" + executionID + "\\" + turnID
@@ -310,7 +310,7 @@ func workerOrcaTurnCommand(c Config, executionID, worktree, sessionID, turnID, p
 	}
 	args = append(args, "-")
 	var script strings.Builder
-	script.WriteString("$OutputEncoding = [Text.UTF8Encoding]::new()\n")
+	script.WriteString("$OutputEncoding = [Text.UTF8Encoding]::new($false)\n")
 	script.WriteString("$root = Join-Path ([IO.Path]::GetTempPath()) ")
 	script.WriteString(powershellLiteral(workerOrcaPromptRoot(executionID, turnID)))
 	script.WriteString("\n$stream = [IO.MemoryStream]::new()\n")

@@ -1,43 +1,34 @@
-# 人工决策与应用证明
+# 决策与反馈
 
-SQLite 是当前问题、答案、命令和决策状态的唯一业务权威。控制台与 CLI 都向当前 `CommandService` 提交 `answer_decision`；服务离线时只提供读取与诊断，不写答案文件或维护路径。写入 `decision.answer.json` 不会授权续跑，旧 sidecar 决策投影会被服务明确拒绝且不会导入。
+SteerLine 当前使用 `worker-flow-v1`。SQLite 中的 Decision、Command、Operation 是问题、答案和发送进度的业务权威。控制台与 CLI 通过同一 `answer_decision` 命令提交；服务离线时只能读取和诊断。
 
-## 问题与回答
+## 问题与答案
 
-每个问题有新的 `decision_id`，绑定原 workflow run、execution、attempt 和问题版本。问题正文、上下文、最多 12 个选项、选项详情和推荐项完整保存在 `DecisionRecord`。同一问题的答案 first-wins：相同 option/note 重交返回原命令结果；内容不同返回 `answer_conflict`。答案不允许覆盖，重新提问必须使用新的 `decision_id`。
+一个未完成的 worker 轮次停下且没有可交付 PR 时，中心为原 WorkflowRun、Execution 和固定 worker attempt 创建一个 pending Decision。worker 明确提出的问题优先显示。PR 已核实并等待合并时，也可向原会话追加反馈。
+
+每个 Decision 有独立 `decision_id` 和版本。请求保存完整问题、上下文、选项与详情，始终允许自由文字。答案可为纯文字，也可同时包含选项与备注。选项和备注会一起送达原会话；中心不解释“继续”为重派某个技术步骤。
 
 ```powershell
 steerline answer -config .\service.json `
   -run-id <run-id|task-id> -decision-id <decision-id> `
-  [-option <option-id>] [-note "多行补充说明"] [-by "<name>"] [-wait]
+  [-option <option-id>] [-note "完整反馈"] [-by "<name>"] [-wait]
 ```
 
-有声明选项且 `allow_free_text=false` 时必须选择一个选项；`note` 可补充说明。有选项且 `allow_free_text=true` 时还可提交自定义答复，此时 `option_id` 为空且 `note` 非空。没有选项的问题也要求非空说明。问题文本与答案说明按协议长度校验；超限会拒绝，绝不静默截短。
+同一问题的答案 first-wins。相同内容和请求 ID 的重交返回原记录；不同内容返回冲突。客户端提交时绑定服务实例、run revision、decision version 和原 attempt；SQLite 事务在保存答案前重新核验这些身份。旧草稿不会静默发给后续轮次或另一任务。
 
-命令目标绑定服务实例、`decision_id`、显示的 decision version 和 `run.control_revision`。服务在 SQLite 事务中重新核对 pending 状态、问题/attempt/execution 身份、实例与运行 revision，再同时保存 first-wins 答案和命令接受事实。旧草稿冲突时保留给操作者检查，不把答案应用到后续问题。
+## 送达事实
 
-答案接受后，中心服务核对原 workflow/execution/attempt、当前 workspace 和原 StepAttempt，再事务性地完成等待中的 attempt 并为同一固定步骤预留新 attempt。新 worker 仍绑定原 WorkflowRun/Execution；不创建替代 Task 或第二条 workflow。local 与受支持 Orca 使用同一中心转移，后端过程/终端身份仍须匹配原 ExecutionRef。
-
-## 持久状态与证明
-
-| 状态 | 可核验含义 |
+| 记录 | 含义 |
 | --- | --- |
-| `pending` | 问题已保存在 SQLite，尚无被服务接受的答案 |
-| `answer_saved` | 当前 `CommandService` 已接受固定答案；不代表后端已收到 |
-| `resuming` | 服务已保存续跑/worker 准备意图；重启后不自动重发 |
-| `reply_accepted` | 后端接受了输入；决策仍待应用证明 |
-| `applied` | 验证了绑定原 decision、原 decision attempt、execution 和固定答案摘要的证明 |
-| `failed` | 原执行结束但无有效应用证明，或续跑明确失败；原问题、答案和 Operation 留档 |
-| `superseded` | 历史问题由新的 decision_id 取代；旧答案不变 |
+| `pending` | 等待用户输入 |
+| `answer_saved` | 答案和命令已保存，尚不能断言 worker 收到 |
+| `reply_accepted` | 原会话已观察到本次反馈对应的工作轮次 |
+| `superseded` | 新问题取代旧问题，历史答案保留 |
 
-minimal-v1 步骤结果要求 `applied_decision_id`、`applied_decision_attempt_id`、`applied_decision_execution_id` 和 `applied_answer_sha256` 同时匹配原决策、被暂停的 attempt、固定 execution 和答案摘要。步骤 envelope 自身还必须绑定本次 workflow/execution/resumed step attempt。进程存活、答案命令回执、自然语言总结或 PR 结果都不足以证明应用；旧 attempt 的迟到结果不会解锁新的决策。
+外部发送前，中心保存固定的 turn／Command ID 和 Operation 意图。收到平台回执后记录接受事实；以原生 Codex session ID、turn 开始事件和固定工作区身份确认续聊。回执不明时沿原请求和原终端查询，不用新 ID 盲发第二次。平台无法证明投递时保留原答案与不确定原因。
 
-受监管 Orca 的 `question` message ID 是 Decision ID，原 Attempt 和 Dispatch 在等待期间保持活跃。回答命令经服务保存后，用独立的 `reply_orca_question` Operation 调用 Orca `reply`；回执必须匹配原 question、Run、Dispatch、答案及平台 request ID。worker 以 `ask --json` 保存原问题 ID，收到答案后在同一 Attempt 发送 `decision_applied` status。回执丢失时，服务只读检查 Orca inbox 中原 question thread 的唯一答案消息；无法唯一确认就保持 `outcome_unknown`，不另开 worker 或重发答案。
+worker 处理反馈时，中心保持同一个 Execution、逻辑 session、worktree 和分支。轮次停止后如仍需输入，创建新的 Decision；真实 PR 合并或明确丢弃优先于未投递反馈。中心不要求 worker 回传 `applied_decision_id` 或答案摘要，也不把已保存／已接受误写成“已落实”。
 
-远端 `decision_applied` 必须同时回传原 Attempt/Execution ID 与实际应用的答案正文。中心逐字比对已保存答案，再按本页固定摘要规则核验应用证明；只含 question ID 的旧探测回执不构成当前完整证明，生产远端能力保持未认证。选项附备注在当前 Orca reply 格式下无法同时交付，中心保留 `answer_saved` 并在发送前明确阻断。
+本次交付的 local 路径使用固定 Codex session 的 `exec resume`。Orca 本机与受监管远端适配代码和试验结果保留，但两种目标在本次首次派发前拒绝，功能与进一步验收后续完成。终端静默不能作为轮次停止证明。
 
-## 历史与恢复
-
-历史页按 `decision_id` 展示本轮所有问题和已接受答案；折叠、展开、session/turn 结束只改变视图，不消费问题或修改决策。当前问题卡片留在折叠区外，UI 还分别呈现答案已保存、后端已接受、轮次已开始、已应用、失败与待核实。
-
-retry、mark-stopped 和 resolve-command 通过同一 SQLite `CommandService` 在线提交。whole-run `accept-result` 已从当前 CLI、控制台和服务能力中移除；native step 必须通过原 attempt 和 Operation 对账。执行结果不确定时保留原 command/request id、回执和 blocker；重启不重放 worker start 或 terminal send。历史设计和验证仍见 [PR 5 Spec](spec/pr-05-intervention.spec.md) 与 [验证报告](validation/pr-05-intervention.md)。
+`retry_run`、`mark_stopped`、`resolve_command` 不属于当前用户反馈入口。当前格式重启保留原 Decision、Command、Operation 和外部身份；无法自动核实的副作用保持待决策及诊断事实。

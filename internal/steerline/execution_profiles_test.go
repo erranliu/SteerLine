@@ -30,11 +30,9 @@ func TestConfigLoadsLocalAndRemoteOrcaProfilesWithoutProbingTargets(t *testing.T
 	if err := os.WriteFile(filepath.Join(base.Repository, "tools", "mock.py"), []byte("print('mock')\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	definition := DefaultMinimalWorkflowDefinition(false)
-	localSteps := testProfileSteps("local")
-	localOrca := ExecutionProfile{ID: "orca-local", Name: "Orca 本机", Host: "orca", Agent: "codex", Model: "chosen-model", ReasoningEffort: "high", Sandbox: "workspace-write", Codex: Command{Executable: "codex"}, Orca: OrcaConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "15m"}, ProjectSteps: testProfileSteps("target")}
-	remoteOrca := ExecutionProfile{ID: "orca-remote", Name: "Orca 远程", Host: "orca_supervised", Agent: "codex", Model: "chosen-model", ReasoningEffort: "xhigh", Sandbox: "workspace-write", Codex: Command{Executable: "codex"}, Orca: OrcaConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "15m", Supervised: &SupervisedOrcaConfig{ConnectionID: "connection", EnvironmentID: "environment", RepositorySelector: "repo", CoordinatorTerminal: "terminal", PollInterval: "5s", CapabilityReportVersion: 1}}, ProjectSteps: testProfileSteps("target")}
-	input := map[string]any{"repository": base.Repository, "branch": "main", "task_authority": "native", "host": "local", "agent": "codex", "sandbox": "workspace-write", "workflow_definition": definition, "project_steps": localSteps, "execution_profiles": []ExecutionProfile{localOrca, remoteOrca}, "default_execution_profile": ProjectExecutionProfileID}
+	localOrca := ExecutionProfile{ID: "orca-local", Name: "Orca 本机", Host: "orca", Agent: "codex", Model: "chosen-model", ReasoningEffort: "high", Sandbox: "workspace-write", Codex: Command{Executable: "codex"}, Orca: OrcaConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "15m"}}
+	remoteOrca := ExecutionProfile{ID: "orca-remote", Name: "Orca 远程", Host: "orca_supervised", Agent: "codex", Model: "chosen-model", ReasoningEffort: "xhigh", Sandbox: "workspace-write", Codex: Command{Executable: "codex"}, Orca: OrcaConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "15m", Supervised: &SupervisedOrcaConfig{ConnectionID: "connection", EnvironmentID: "environment", RepositorySelector: "repo", CoordinatorTerminal: "terminal", PollInterval: "5s", CapabilityReportVersion: 1}}}
+	input := map[string]any{"repository": base.Repository, "branch": "main", "task_authority": "native", "workflow_protocol": WorkerFlowVersion, "host": "local", "agent": "codex", "sandbox": "workspace-write", "execution_profiles": []ExecutionProfile{localOrca, remoteOrca}, "default_execution_profile": ProjectExecutionProfileID}
 	path := filepath.Join(t.TempDir(), "config.json")
 	write := func() {
 		t.Helper()
@@ -53,15 +51,18 @@ func TestConfigLoadsLocalAndRemoteOrcaProfilesWithoutProbingTargets(t *testing.T
 	}
 	for _, profile := range loaded.ExecutionProfiles {
 		selected, chosen, err := loaded.ResolveExecutionProfile(profile.ID, profile.Digest())
-		if err != nil || selected.Host != profile.Host || chosen.ProjectSteps.Implement.ExecutionSite != "target" {
+		if err != nil || selected.Host != profile.Host || chosen.ProjectSteps != nil {
 			t.Fatalf("Orca profile changed route: %+v / %v", chosen, err)
+		}
+		if profile.StaticUnavailableReason() == "" {
+			t.Fatalf("deferred Orca worker-flow profile remained selectable: %+v", profile)
 		}
 	}
 	localOrca.ProjectSteps = testProfileSteps("local")
 	input["execution_profiles"] = []ExecutionProfile{localOrca, remoteOrca}
 	write()
-	if _, err := LoadConfig(path); err == nil || !strings.Contains(err.Error(), "execution_site=target") {
-		t.Fatalf("Orca profile with local steps was accepted: %v", err)
+	if _, err := LoadConfig(path); err == nil || !strings.Contains(err.Error(), "cannot configure project_steps") {
+		t.Fatalf("worker-flow profile with old project steps was accepted: %v", err)
 	}
 }
 

@@ -86,6 +86,8 @@ func TestDirectServiceAndControlEntrypointsRejectMissingNativeAuthorityBeforeEff
 
 func TestRunConfiguredServiceRejectsBeadsBeforeCreatingStartupEvidence(t *testing.T) {
 	f := newFixture(t)
+	f.c.WorkflowProtocol = WorkerFlowVersion
+	f.c.WorkflowDefinition, f.c.ProjectSteps = nil, nil
 	sentinel := filepath.Join(f.c.Repository, ".beads")
 	require(t, os.Mkdir(sentinel, 0700))
 	err := RunConfiguredService(context.Background(), f.c, "manual", "", "off")

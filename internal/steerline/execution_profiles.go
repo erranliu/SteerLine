@@ -72,6 +72,9 @@ func (p ExecutionProfile) MatchesConfig(c Config) bool {
 }
 
 func (p ExecutionProfile) StaticUnavailableReason() string {
+	if p.ProjectSteps == nil && p.Host != "local" {
+		return "Orca worker-flow 本次延期交付；只开放本地 Codex"
+	}
 	if p.Host == "local" && p.Agent != "codex" {
 		return "本地执行后端目前只支持 codex agent"
 	}

@@ -29,7 +29,7 @@ func main() {
 }
 func run() error {
 	if len(os.Args) < 2 {
-		return fmt.Errorf("usage: steerline <console|run|start-service|stop-service|retry|check|control|tasks|task|stop|watch|answer|mark-stopped|certify-backend|home|install|launchers|projects> [-config config.json]")
+		return fmt.Errorf("usage: steerline <console|run|start-service|stop-service|check|control|tasks|task|stop|watch|answer|certify-backend|home|install|launchers|projects> [-config config.json]")
 	}
 	if os.Args[1] == "task" {
 		return runNativeTaskCommand(os.Args[2:])
@@ -40,7 +40,7 @@ func run() error {
 	command := os.Args[1]
 	fs := flag.NewFlagSet(command, flag.ContinueOnError)
 	config := fs.String("config", "steerline.local.json", "configuration JSON")
-	runID := fs.String("run-id", "", "manual recovery run ID, run to watch, or run to answer")
+	runID := fs.String("run-id", "", "run to watch or answer")
 	dispatchMode := fs.String("dispatch", "auto", "run dispatch mode: auto|manual")
 	startupID := fs.String("startup-id", "", "internal startup attempt ID")
 	taskID := fs.String("task-id", "", "control start_task target")
@@ -48,12 +48,10 @@ func run() error {
 	requestID := fs.String("request-id", "", "control request to query")
 	waitReceipt := fs.Bool("wait", false, "control: wait for a terminal receipt")
 	evidence := fs.String("evidence", "", "certify-backend: comma-separated Windows native evidence JSON files")
-	confirmed := fs.Bool("confirm-process-stopped", false, "operator verified that the old process tree is stopped")
 	option := fs.String("option", "", "answer: chosen decision option id")
 	decisionID := fs.String("decision-id", "", "answer: pending decision id (defaults to the run's pending decision)")
 	note := fs.String("note", "", "answer: optional human note")
 	by := fs.String("by", "", "answer: who answered (defaults to the OS user)")
-	reason := fs.String("reason", "", "recovery: explicit evidence or basis for the operator confirmation")
 	proj := fs.String("project", "", "projects: project name or number")
 	action := fs.String("action", "", "control action or projects: watch|run|stop|home|list")
 	console := fs.String("console", "", "service console rendering: pretty|summary|json|off (default pretty on a terminal)")
@@ -72,7 +70,7 @@ func run() error {
 	if command == "codex-session-launch" {
 		return steerline.RunCodexSessionLauncher(context.Background(), *config)
 	}
-	if command != "run" && command != "start-service" && command != "stop-service" && command != "retry" && command != "check" && command != "stop" && command != "control" && command != "tasks" && command != "answer" && command != "mark-stopped" && command != "watch" && command != "certify-backend" && command != "home" && command != "install" && command != "launchers" && command != "projects" {
+	if command != "run" && command != "start-service" && command != "stop-service" && command != "check" && command != "stop" && command != "control" && command != "tasks" && command != "answer" && command != "watch" && command != "certify-backend" && command != "home" && command != "install" && command != "launchers" && command != "projects" {
 		return fmt.Errorf("unknown command %q", command)
 	}
 	if command == "run" && *dispatchMode != "manual" && *dispatchMode != "auto" {
@@ -80,9 +78,6 @@ func run() error {
 	}
 	if *serviceWindow && command != "run" {
 		return fmt.Errorf("-service-window is only valid with run")
-	}
-	if command == "retry" && (!*confirmed || *runID == "") {
-		return fmt.Errorf("retry requires -run-id and -confirm-process-stopped")
 	}
 	if command == "install" {
 		dst, e := steerline.InstallSelf()
@@ -115,12 +110,6 @@ func run() error {
 	}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
-	if command == "retry" || command == "mark-stopped" {
-		if command == "mark-stopped" && (!*confirmed || *runID == "" || strings.TrimSpace(*reason) == "") {
-			return fmt.Errorf("mark-stopped requires -run-id, -confirm-process-stopped and -reason")
-		}
-		return submitRecoveryCommand(ctx, c, command, *runID, *confirmed, *reason, *by, *waitReceipt)
-	}
 	if command == "certify-backend" {
 		if strings.TrimSpace(*evidence) == "" {
 			return fmt.Errorf("certify-backend requires -evidence")
@@ -294,91 +283,14 @@ func run() error {
 		}
 		return steerline.RunConfiguredService(ctx, c, *dispatchMode, *startupID, *console)
 	}
-	if e = c.Preflight(ctx, command == "retry" || command == "check"); e != nil {
-		return e
-	}
 	if command == "check" {
-		fmt.Println("Configuration, native authority binding, Git, PR provider and project step contracts verified; no task claimed.")
-		return nil
-	}
-	lock, e := steerline.LockRepository(c.Identity())
-	if e != nil {
-		return e
-	}
-	defer lock.Close()
-	runLock, e := steerline.LockRepository(c.RunDir)
-	if e != nil {
-		return e
-	}
-	defer runLock.Close()
-	s, e := steerline.NewService(c)
-	if e != nil {
-		return e
-	}
-	if *console != "" {
-		s.Console = *console
-	} else if steerline.ConsoleDefault() != "" {
-		s.Console = steerline.ConsoleDefault()
-	}
-	fmt.Printf("Steerline M0 running: %s -> %s/%s; Ctrl+C or steerline stop to exit\n", c.Repository, c.Remote, c.Branch)
-	return s.RunWithDispatch(ctx, *dispatchMode)
-}
-
-func submitRecoveryCommand(ctx context.Context, c steerline.Config, command, runID string, confirmed bool, reason, requestedBy string, wait bool) error {
-	if err := c.ResolveIdentity(ctx); err != nil {
-		return err
-	}
-	runtimeState, err := steerline.LoadDatabaseRuntime(c)
-	if err != nil {
-		return err
-	}
-	if runtimeState == nil {
-		return errors.New("no current runtime projection; recovery commands require the live service")
-	}
-	var target *steerline.Run
-	for _, run := range runtimeState.Runs {
-		if run != nil && run.RunID == runID {
-			target = run
-			break
+		if e = c.Preflight(ctx, true); e != nil {
+			return e
 		}
-	}
-	if target == nil {
-		return fmt.Errorf("run %s not found", runID)
-	}
-	kind := ""
-	var body any
-	switch command {
-	case "retry":
-		kind = "retry_run"
-		body = map[string]any{"confirmed_process_stopped": confirmed, "confirmation_basis": strings.TrimSpace(reason)}
-	case "mark-stopped":
-		kind = "mark_stopped"
-		body = map[string]any{"confirmed_process_stopped": true, "confirmation_basis": strings.TrimSpace(reason)}
-	default:
-		return fmt.Errorf("unsupported recovery command %q", command)
-	}
-	if requestedBy == "" {
-		requestedBy = steerline.DefaultRequestedBy()
-	}
-	commandID := steerline.NewControlRequestID()
-	queued, _, err := steerline.SubmitServiceCommand(ctx, c, kind, runID, requestedBy, commandID, target.ControlRevision, body)
-	if err != nil {
-		return err
-	}
-	fmt.Println("command_id", queued.CommandID)
-	if !wait {
+		fmt.Println("Worker-flow configuration, native authority binding, Git and PR provider verified; no task claimed.")
 		return nil
 	}
-	result, err := waitServiceCommand(ctx, c, queued.CommandID, 2*time.Minute)
-	if err != nil {
-		return err
-	}
-	data, _ := json.Marshal(result)
-	fmt.Println(string(data))
-	if result.Status != "accepted" {
-		return fmt.Errorf("recovery command is %s: %s", result.Status, strings.TrimSpace(string(result.Result)))
-	}
-	return nil
+	return fmt.Errorf("unsupported command %q", command)
 }
 
 func waitServiceCommand(ctx context.Context, c steerline.Config, commandID string, timeout time.Duration) (steerline.CommandRecord, error) {
@@ -465,9 +377,9 @@ func runNativeTaskCommand(args []string) error {
 	expectedAuthority := fs.Uint64("expected-authority-version", 0, "sampled native project authority version")
 	expectedVersion := fs.Uint64("expected-version", 0, "expected native task version")
 	expectedGraphRevision := fs.Uint64("expected-graph-revision", 0, "sampled native graph revision")
-	reason := fs.String("reason", "", "reason for discarding or reopening the task")
+	reason := fs.String("reason", "", "reason for discarding or changing the task")
 	by := fs.String("by", "", "task command requester")
-	if subcommand != "show" && subcommand != "list" && subcommand != "validate" && subcommand != "create" && subcommand != "accept-existing" && subcommand != "discard" && subcommand != "reopen" && subcommand != "add-predecessors" && subcommand != "graph" && subcommand != "export" {
+	if subcommand != "show" && subcommand != "list" && subcommand != "validate" && subcommand != "create" && subcommand != "accept-existing" && subcommand != "discard" && subcommand != "add-predecessors" && subcommand != "graph" && subcommand != "export" {
 		return fmt.Errorf("unsupported task command %q", subcommand)
 	}
 	if err := fs.Parse(args[1:]); err != nil {
@@ -480,7 +392,6 @@ func runNativeTaskCommand(args []string) error {
 		"create":           {"config": true, "file": true, "request-id": true, "expected-authority-version": true, "by": true},
 		"accept-existing":  {"config": true, "file": true},
 		"discard":          {"config": true, "task-id": true, "request-id": true, "expected-version": true, "reason": true, "by": true},
-		"reopen":           {"config": true, "task-id": true, "run-id": true, "request-id": true, "expected-version": true, "confirm-process-stopped": true, "reason": true, "by": true},
 		"add-predecessors": {"config": true, "task-id": true, "predecessors": true, "run-id": true, "request-id": true, "expected-version": true, "expected-graph-revision": true, "confirm-process-stopped": true, "reason": true, "by": true},
 		"graph":            {"config": true, "task-id": true, "cursor": true, "limit": true, "status": true, "direction": true, "depth": true},
 		"export":           {"config": true, "task-id": true, "status": true, "direction": true, "depth": true, "format": true, "output": true, "overwrite": true},
@@ -556,10 +467,6 @@ func runNativeTaskCommand(args []string) error {
 		if *file != "" || *cursor != "" || *expectedAuthority != 0 {
 			return errors.New("task discard does not accept -file, -cursor or -expected-authority-version")
 		}
-	case "reopen":
-		if *taskID == "" || *runID == "" || *requestID == "" || *expectedVersion == 0 || !*confirmedStopped || strings.TrimSpace(*reason) == "" || strings.TrimSpace(*by) == "" {
-			return errors.New("task reopen requires -task-id, -run-id, -request-id, -expected-version, -confirm-process-stopped, -reason and -by")
-		}
 		if err := steerline.ValidateNativeTaskID(*taskID); err != nil {
 			return err
 		}
@@ -606,7 +513,7 @@ func runNativeTaskCommand(args []string) error {
 	if err != nil {
 		return err
 	}
-	if subcommand == "create" || subcommand == "accept-existing" || subcommand == "discard" || subcommand == "reopen" || subcommand == "add-predecessors" {
+	if subcommand == "create" || subcommand == "accept-existing" || subcommand == "discard" || subcommand == "add-predecessors" {
 		if err = store.Close(); err != nil {
 			return err
 		}
@@ -673,12 +580,6 @@ func runNativeTaskCommand(args []string) error {
 		receipt, discardErr := (steerline.CommandService{Store: store, Project: c.Identity()}).DiscardNativeTask(context.Background(), c, *taskID, *requestID, *expectedVersion, *reason, *by)
 		if discardErr != nil {
 			return discardErr
-		}
-		return json.NewEncoder(os.Stdout).Encode(receipt)
-	case "reopen":
-		receipt, reopenErr := (steerline.CommandService{Store: store, Project: c.Identity()}).ReopenNativeTask(context.Background(), c, steerline.TaskReopenInput{TaskID: *taskID, WorkflowRunID: *runID, RequestID: *requestID, ExpectedVersion: *expectedVersion, ConfirmedProcessStopped: *confirmedStopped, Reason: *reason, RequestedBy: *by})
-		if reopenErr != nil {
-			return reopenErr
 		}
 		return json.NewEncoder(os.Stdout).Encode(receipt)
 	case "add-predecessors":

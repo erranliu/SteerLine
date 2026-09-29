@@ -1233,6 +1233,7 @@ func TestLoadConfigRequiresExplicitRemoteCancellationFalse(t *testing.T) {
 	if err = json.Unmarshal(encoded, &config); err != nil {
 		t.Fatal(err)
 	}
+	config["workflow_protocol"] = json.RawMessage(`"worker-flow-v1"`)
 	var orca map[string]json.RawMessage
 	if err = json.Unmarshal(config["orca"], &orca); err != nil {
 		t.Fatal(err)

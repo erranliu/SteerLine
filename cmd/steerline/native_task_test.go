@@ -47,7 +47,7 @@ func TestNativeTaskBatchCLIValidatesCreatesAndDiscardsFixedTaskIDs(t *testing.T)
 	}
 	commit := strings.TrimSpace(string(head))
 	configPath := filepath.Join(t.TempDir(), "native.json")
-	configJSON, _ := json.Marshal(map[string]any{"repository": repo, "remote": "origin", "branch": "main", "task_authority": "native", "executable_types": []string{"task"}})
+	configJSON, _ := json.Marshal(map[string]any{"repository": repo, "remote": "origin", "branch": "main", "task_authority": "native", "workflow_protocol": steerline.WorkerFlowVersion, "executable_types": []string{"task"}})
 	if err = os.WriteFile(configPath, configJSON, 0600); err != nil {
 		t.Fatal(err)
 	}
