@@ -1,4 +1,4 @@
-package viewer
+package console
 
 import (
 	"context"
@@ -13,7 +13,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/steerline"
 )
 
-func TestFileSourceResolvesIdentityForDatabaseRecovery(t *testing.T) {
+func TestConsoleSourcePrefersCommittedDatabaseProjection(t *testing.T) {
 	repo, dir := t.TempDir(), t.TempDir()
 	git, err := exec.LookPath("git")
 	if err != nil {
@@ -42,11 +42,6 @@ func TestFileSourceResolvesIdentityForDatabaseRecovery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	source := NewFileSource(c) // same unresolved Config supplied by the CLI
-	obs := source.Snapshot()
-	if obs.Runtime == nil || obs.Runtime.Revision != state.Revision || obs.Runtime.ProjectionError == "" {
-		t.Fatalf("viewer did not recover from database: %+v", obs)
-	}
 	old := state
 	old.HeartbeatAt = old.HeartbeatAt.Add(-time.Minute)
 	bytes, err := json.Marshal(old)
@@ -56,45 +51,20 @@ func TestFileSourceResolvesIdentityForDatabaseRecovery(t *testing.T) {
 	if err = os.WriteFile(filepath.Join(dir, c.RuntimeFile), bytes, 0600); err != nil {
 		t.Fatal(err)
 	}
-	obs = source.Snapshot()
-	if obs.Runtime == nil || !obs.Runtime.HeartbeatAt.Equal(state.HeartbeatAt) {
+	obs := newFileSource(resolved).SnapshotFromObservation(steerline.ReadObservationSnapshot(filepath.Join(dir, c.RuntimeFile), c.Heartbeat, nil))
+	if obs.Runtime == nil || obs.Runtime.Revision != state.Revision || obs.Runtime.ProjectionError == "" || !obs.Runtime.HeartbeatAt.Equal(state.HeartbeatAt) {
 		t.Fatal("equal-revision stale file masked fresh database heartbeat")
 	}
 }
 
-func TestFileSourceRetainsLastGoodSnapshotWithFailureTimestamp(t *testing.T) {
-	dir := t.TempDir()
-	runtimePath := filepath.Join(dir, "runtime.json")
-	rt := steerline.Runtime{SchemaVersion: 5, HeartbeatAt: time.Now().UTC(), Runs: []*steerline.Run{{RunID: "r", TaskID: "t"}}}
-	b, err := json.Marshal(rt)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = os.WriteFile(runtimePath, b, 0600); err != nil {
-		t.Fatal(err)
-	}
-	source := NewFileSource(steerline.Config{RunDir: dir, RuntimeFile: "runtime.json", Heartbeat: "1s"})
-	first := source.Snapshot()
-	if first.Runtime == nil || first.State != steerline.SnapshotValid {
-		t.Fatalf("initial snapshot: %+v", first)
-	}
-	if err = os.WriteFile(runtimePath, []byte(`{"schema_version":5,`), 0600); err != nil {
-		t.Fatal(err)
-	}
-	failed := source.Snapshot()
-	if failed.Runtime == nil || failed.State != steerline.SnapshotReadFailed || failed.Error == "" || !failed.SampledAt.Equal(first.SampledAt) {
-		t.Fatalf("last good snapshot/time/error not retained: %+v", failed)
-	}
-}
-
-func TestFileSourceFallbackNormalizerAndLateActivitySwitch(t *testing.T) {
+func TestConsoleSourceFallbackNormalizerAndLateActivitySwitch(t *testing.T) {
 	dir := t.TempDir()
 	logPath := filepath.Join(dir, "events.jsonl")
 	if err := os.WriteFile(logPath, []byte(`{"type":"session","version":1,"session_id":"p"}`+"\n"+`not-json`+"\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	source := NewFileSource(steerline.Config{})
-	fallback, err := source.ReadLog(logPath, steerline.JournalCursor{}, false)
+	source := newFileSource(steerline.Config{})
+	fallback, err := source.ReadLog(logPath, steerline.JournalCursor{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -109,7 +79,7 @@ func TestFileSourceFallbackNormalizerAndLateActivitySwitch(t *testing.T) {
 	if err = os.WriteFile(activityPath, []byte(activity), 0600); err != nil {
 		t.Fatal(err)
 	}
-	switched, err := source.ReadLog(logPath, fallback.Cursor, false)
+	switched, err := source.ReadLog(logPath, fallback.Cursor)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -121,14 +91,14 @@ func TestFileSourceFallbackNormalizerAndLateActivitySwitch(t *testing.T) {
 	}
 }
 
-func TestFileSourceDiagnosesBadActivityAndKeepsFollowingValidLine(t *testing.T) {
+func TestConsoleSourceDiagnosesBadActivityAndKeepsFollowingValidLine(t *testing.T) {
 	dir := t.TempDir()
 	logPath := filepath.Join(dir, "events.jsonl")
 	activityPath := steerline.ActivityPath(logPath)
 	if err := os.WriteFile(activityPath, []byte("{bad json}\nnull\n"+`{"v":1,"seq":1,"kind":"claim"}`+"\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	batch, err := NewFileSource(steerline.Config{}).ReadLog(logPath, steerline.JournalCursor{}, false)
+	batch, err := newFileSource(steerline.Config{}).ReadLog(logPath, steerline.JournalCursor{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -137,13 +107,13 @@ func TestFileSourceDiagnosesBadActivityAndKeepsFollowingValidLine(t *testing.T) 
 	}
 }
 
-func TestFileSourceInvalidSequenceCannotEraseValidEvents(t *testing.T) {
+func TestConsoleSourceInvalidSequenceCannotEraseValidEvents(t *testing.T) {
 	logPath := filepath.Join(t.TempDir(), "events.jsonl")
 	body := "{\"seq\":10,\"kind\":\"claim\"}\n{\"seq\":1}\n{\"seq\":11,\"kind\":\"message\"}\n"
 	if err := os.WriteFile(steerline.ActivityPath(logPath), []byte(body), 0600); err != nil {
 		t.Fatal(err)
 	}
-	batch, err := NewFileSource(steerline.Config{}).ReadLog(logPath, steerline.JournalCursor{}, false)
+	batch, err := newFileSource(steerline.Config{}).ReadLog(logPath, steerline.JournalCursor{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -152,20 +122,20 @@ func TestFileSourceInvalidSequenceCannotEraseValidEvents(t *testing.T) {
 	}
 }
 
-func TestFileSourceFreshReplayResetsNormalizer(t *testing.T) {
+func TestConsoleSourceFreshReplayResetsNormalizer(t *testing.T) {
 	logPath := filepath.Join(t.TempDir(), "events.jsonl")
-	source := NewFileSource(steerline.Config{})
+	source := newFileSource(steerline.Config{})
 	if err := os.WriteFile(logPath, []byte("{\"type\":\"thread.started\",\"thread_id\":\"old\"}\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := source.ReadLog(logPath, steerline.JournalCursor{}, false); err != nil {
+	if _, err := source.ReadLog(logPath, steerline.JournalCursor{}); err != nil {
 		t.Fatal(err)
 	}
 	// A new visit starts at zero even if the same inode was rewritten while away.
 	if err := os.WriteFile(logPath, []byte("{\"type\":\"session\",\"version\":1}\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	batch, err := source.ReadLog(logPath, steerline.JournalCursor{}, false)
+	batch, err := source.ReadLog(logPath, steerline.JournalCursor{})
 	if err != nil {
 		t.Fatal(err)
 	}

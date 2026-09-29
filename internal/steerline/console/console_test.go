@@ -15,7 +15,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/erranliu/SteerLine/internal/steerline"
-	"github.com/erranliu/SteerLine/internal/steerline/viewer"
 )
 
 type testClock struct{ now time.Time }
@@ -25,7 +24,7 @@ func (c *testClock) After(time.Duration) <-chan time.Time { return make(chan tim
 
 type testQuerySource struct {
 	snapshot ProjectSnapshot
-	activity viewer.LogBatch
+	activity LogBatch
 	page     steerline.ConversationPage
 	body     steerline.ConversationBodyPage
 	selected string
@@ -35,7 +34,7 @@ func (q *testQuerySource) ReadProject(_ context.Context, _ ProjectRef, selected 
 	q.selected = selected
 	return q.snapshot
 }
-func (q *testQuerySource) ReadActivity(context.Context, ProjectRef, string, string, string, string, steerline.JournalCursor) (viewer.LogBatch, error) {
+func (q *testQuerySource) ReadActivity(context.Context, ProjectRef, string, string, string, string, steerline.JournalCursor) (LogBatch, error) {
 	return q.activity, nil
 }
 func (q *testQuerySource) ReadConversation(context.Context, ProjectRef, steerline.ConversationFilter, string) (steerline.ConversationPage, error) {

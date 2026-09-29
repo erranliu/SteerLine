@@ -187,7 +187,7 @@ func TestOpenActivityCreatesRunDir(t *testing.T) {
 		t.Fatal(e)
 	}
 	s.closeActivity(r)
-	if !fileExists(activityPath(logPath)) {
+	if _, err := os.Stat(activityPath(logPath)); err != nil {
 		t.Fatal("activity.jsonl was not created")
 	}
 }

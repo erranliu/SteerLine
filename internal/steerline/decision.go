@@ -153,7 +153,7 @@ func ReadDecisionAnswer(r *Run) (DecisionAnswer, error) {
 	return a, nil
 }
 
-// AnswerOptions is the CLI/viewer entry point for answering a pending decision.
+// AnswerOptions is the CLI entry point for answering a pending decision.
 type AnswerOptions struct {
 	RunID           string
 	DecisionID      string
