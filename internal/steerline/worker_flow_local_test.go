@@ -2,8 +2,10 @@ package steerline
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -23,8 +25,14 @@ func TestWorkerFlowMockCodexHelper(t *testing.T) {
 	if !strings.Contains(args, " resume ") && strings.Contains(args, workerFlowMockSession) {
 		os.Exit(3)
 	}
+	prompt, err := io.ReadAll(os.Stdin)
+	if err != nil {
+		os.Exit(4)
+	}
+	echo, _ := json.Marshal(map[string]any{"type": "item.completed", "item": map[string]string{"id": "received-prompt", "type": "agent_message", "text": string(prompt)}})
 	_, _ = fmt.Fprintln(os.Stdout, `{"type":"thread.started","thread_id":"`+workerFlowMockSession+`"}`)
 	_, _ = fmt.Fprintln(os.Stdout, `{"type":"turn.started"}`)
+	_, _ = fmt.Fprintln(os.Stdout, string(echo))
 	_, _ = fmt.Fprintln(os.Stdout, `{"type":"item.completed","item":{"id":"item-1","type":"agent_message","text":"turn done"}}`)
 	_, _ = fmt.Fprintln(os.Stdout, `{"type":"turn.completed"}`)
 	os.Exit(0)

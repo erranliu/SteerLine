@@ -11,6 +11,19 @@ import (
 )
 
 func TestWorkerFlowServiceFirstFeedbackKeepsSessionAndWorkspace(t *testing.T) {
+	for _, test := range []struct {
+		name, option, note string
+	}{
+		{"free_text", "", "Continue in the same worktree"},
+		{"option_with_note", "continue", "Keep the existing commit and continue"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			testWorkerFlowServiceFirstFeedback(t, test.option, test.note)
+		})
+	}
+}
+
+func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string) {
 	t.Setenv("STEERLINE_WORKER_FLOW_MOCK", "1")
 	ctx := context.Background()
 	c, commit, store := openDAGFixture(t)
@@ -99,6 +112,16 @@ func TestWorkerFlowServiceFirstFeedbackKeepsSessionAndWorkspace(t *testing.T) {
 		}
 	}
 	finishTurn()
+	if option != "" {
+		decision, err := WriteDecisionRequest(run, DecisionRequest{Question: "How should the worker continue?", Options: []DecisionOption{{ID: "continue", Label: "Continue current work"}}, AllowFreeText: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		run.Decision = decision
+		if err := service.save(); err != nil {
+			t.Fatal(err)
+		}
+	}
 	firstSession := deref(run.SessionID)
 	if err := service.Close(); err != nil {
 		t.Fatal(err)
@@ -129,7 +152,7 @@ func TestWorkerFlowServiceFirstFeedbackKeepsSessionAndWorkspace(t *testing.T) {
 	if err := service.save(); err != nil {
 		t.Fatal(err)
 	}
-	answer := DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, Note: "Continue in the same worktree", AnsweredBy: "operator", ExpectedDecisionVersion: run.Decision.Version, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: service.State.Service.InstanceID}
+	answer := DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, OptionID: option, Note: note, AnsweredBy: "operator", ExpectedDecisionVersion: run.Decision.Version, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: service.State.Service.InstanceID}
 	payload, err := json.Marshal(answer)
 	if err != nil {
 		t.Fatal(err)
@@ -155,7 +178,21 @@ func TestWorkerFlowServiceFirstFeedbackKeepsSessionAndWorkspace(t *testing.T) {
 	if err := service.applyWorkerFlowDecision(ctx, run); err != nil {
 		t.Fatal(err)
 	}
+	feedbackPrompt := workerFeedbackText(answer, run.Decision.Request)
+	feedbackDir := filepath.Join(c.RunDir, "runs", run.RunID, "turns", command.CommandID)
+	savedPrompt, err := os.ReadFile(filepath.Join(feedbackDir, "prompt.txt"))
+	if err != nil || string(savedPrompt) != feedbackPrompt {
+		t.Fatalf("full feedback text was not sent: prompt=%q err=%v", savedPrompt, err)
+	}
 	finishTurn()
+	events, err := os.ReadFile(filepath.Join(feedbackDir, "events.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	encodedFeedback, _ := json.Marshal(feedbackPrompt)
+	if !strings.Contains(string(events), string(encodedFeedback)) {
+		t.Fatalf("worker did not receive the full feedback: %q", events)
+	}
 	workflow, execution := service.minimalRecords(run)
 	if workflow == nil || execution == nil || workflow.WorkflowRunID != receipt.WorkflowRunID || execution.ExecutionID != receipt.ExecutionID ||
 		run.AttemptID != receipt.AttemptID || execution.SessionID != workerFlowMockSession || execution.TurnNumber != 2 ||
