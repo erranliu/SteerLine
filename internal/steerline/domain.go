@@ -11,7 +11,7 @@ import (
 )
 
 // Domain entities are the durable center model. Runtime/Run below remains a
-// compatibility read model for the existing CLI and viewer.
+// read model for the existing CLI and console.
 const MinimalWorkflowVersion = "minimal-v1"
 
 // WorkerFlowVersion is the persisted protocol for a single resumable worker

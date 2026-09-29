@@ -110,7 +110,6 @@ type projectState struct {
 	activityKey        string
 	activityCursor     steerline.JournalCursor
 	activityEvents     []steerline.ActivityEvent
-	activityRaw        []string
 	activityError      string
 	activityInFlight   bool
 	activityGeneration uint64
@@ -395,7 +394,7 @@ func (m Model) readActivity(index int, runID, executionID, attemptID, path, key 
 	query, ctx, ref := m.query, m.ctx, state.ref
 	return func() tea.Msg {
 		batch, err := query.ReadActivity(ctx, ref, runID, executionID, attemptID, path, base)
-		return activityResultMsg{projectKey: ref.Key, identity: ref.Identity, key: key, generation: generation, base: base, batchActivity: batch.Activity, raw: batch.Raw, next: batch.Cursor, reset: batch.Reset, diagnostics: batch.Diagnostics, err: err}
+		return activityResultMsg{projectKey: ref.Key, identity: ref.Identity, key: key, generation: generation, base: base, batchActivity: batch.Activity, next: batch.Cursor, reset: batch.Reset, diagnostics: batch.Diagnostics, err: err}
 	}
 }
 
@@ -544,7 +543,6 @@ type activityResultMsg struct {
 	generation                uint64
 	base                      steerline.JournalCursor
 	batchActivity             []steerline.ActivityEvent
-	raw                       []string
 	next                      steerline.JournalCursor
 	reset                     bool
 	diagnostics               []string
@@ -979,10 +977,9 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if msg.reset {
-			state.activityEvents, state.activityRaw = nil, nil
+			state.activityEvents = nil
 		}
 		state.activityEvents = append(state.activityEvents, msg.batchActivity...)
-		state.activityRaw = append(state.activityRaw, msg.raw...)
 		if len(state.activityEvents) > 4000 {
 			excess := len(state.activityEvents) - 4000
 			if !state.view.Follow {
@@ -994,9 +991,6 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 			state.activityEvents = state.activityEvents[excess:]
-		}
-		if len(state.activityRaw) > 4000 {
-			state.activityRaw = state.activityRaw[len(state.activityRaw)-4000:]
 		}
 		state.activityCursor = msg.next
 		state.activityError = strings.Join(msg.diagnostics, "; ")
@@ -1584,7 +1578,7 @@ func (m Model) refreshSelectedLogs(index int) (Model, tea.Cmd) {
 	row := m.selectedRow(index)
 	if row == nil || row.run == nil {
 		state.activityKey, state.conversationKey = "", ""
-		state.activityEvents, state.activityRaw = nil, nil
+		state.activityEvents = nil
 		state.conversationEvents = nil
 		return m, nil
 	}
@@ -1603,7 +1597,7 @@ func (m Model) refreshSelectedLogs(index int) (Model, tea.Cmd) {
 	activityKey := strings.Join([]string{run.RunID, run.ExecutionID, attemptID, activityPath}, "\x00")
 	if state.activityKey != activityKey {
 		state.activityKey, state.activityCursor = activityKey, steerline.JournalCursor{}
-		state.activityEvents, state.activityRaw, state.activityError = nil, nil, ""
+		state.activityEvents, state.activityError = nil, ""
 		state.activityGeneration++
 	}
 	conversationKey := strings.Join([]string{run.ExecutionID, attemptID}, "\x00")
