@@ -386,7 +386,9 @@ func (r executionRecords) saveBinding(ref ExecutionRef) error {
 	if err := validateExecutionRef(ref); err != nil {
 		return err
 	}
+	ref.WorkspacePath = canonical(ref.WorkspacePath)
 	if old, err := r.loadBinding(ref.RunID, ref.AttemptID); err == nil {
+		old.WorkspacePath = canonical(old.WorkspacePath)
 		if digestValue(old) != digestValue(ref) {
 			return errors.New("execution binding is immutable and conflicts with existing record")
 		}

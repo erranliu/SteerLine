@@ -22,8 +22,17 @@ func TestExecutionRecordsPinBindingsAndOperations(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if digestValue(loaded) != digestValue(ref) {
+	normalized := ref
+	normalized.WorkspacePath = canonical(ref.WorkspacePath)
+	if digestValue(loaded) != digestValue(normalized) {
 		t.Fatalf("binding changed across persistence: %#v", loaded)
+	}
+	if runtime.GOOS == "windows" {
+		caseChanged := ref
+		caseChanged.WorkspacePath = strings.ToUpper(ref.WorkspacePath)
+		if err := r.saveBinding(caseChanged); err != nil {
+			t.Fatalf("same Windows workspace path conflicted after restart: %v", err)
+		}
 	}
 	changed := ref
 	changed.Target = ExecutionTarget{ID: "local:other"}

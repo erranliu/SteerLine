@@ -1,6 +1,6 @@
 # Spec：本机 Codex app-server 执行迁移
 
-状态：实现已完成，未完成验收转入第一阶段残留，不阻塞本次实现 PR 合并；完整验收仍待补齐。配套 [Plan](local-codex-app-server.plan.md)。
+状态：实现及 A/B/C 验收已完成；仅定向 Go race detector 因当前工具链限制留待补验。配套 [Plan](local-codex-app-server.plan.md)。
 
 ## 1. 范围与依据
 
@@ -61,9 +61,9 @@ RPC、观察和恢复按 Execution 独立进行，结果携带运行、原生身
 
 ### 第一阶段残留（2026-09-29）
 
-以下要求保留，按用户确认转入 [Roadmap 第一阶段残留](../roadmap/roadmap.md#第一阶段残留)，在第一阶段集成验收前补齐；PR 可合并不代表这些验证已通过。当前证据见 [验收状态](../validation/local-codex-app-server/status.md)。
+以下要求与结果同步至 [Roadmap 第一阶段残留](../roadmap/roadmap.md#第一阶段残留)。A/B 已补验，保留完成记录以明确通过边界；当前证据见 [验收状态](../validation/local-codex-app-server/status.md)。
 
-- **A：服务级双任务真机闭环。** 在支持独立子进程存活的宿主，使用真实 SteerLine 服务完成双任务执行、运行中问答、结束后原 thread/worktree 反馈及服务重启；核对原生身份、冻结配置、事件和提示，以及答案只送达目标请求一次。已有真机探针覆盖原生协议，尚未完成服务级整链。
-- **B：独立进程生命周期及隔离回归。** 当前 Windows 测试宿主的 Job Object 限制使服务反馈子进程用例跳过。需在合适宿主补验服务退出后活动 turn/待答请求存活、重启重接及反馈续轮，并核对完整双任务隔离。已有进程内 Service、SQLite 和故障注入测试不能替代这部分。
+- **A：服务级双任务真机闭环，已通过。** 真实 SteerLine Service 中第一条原生问答待答时第二任务完成；重建服务后恢复原 call/thread/turn，答案只送达原请求，结束后原 thread/worktree 的新 turn 完成。冻结配置及并行隔离由现有定向测试和本次服务级证据共同核对。
+- **B：独立进程生命周期及隔离回归，已通过。** 在 WMI 启动、确认不在 Job Object 的宿主上，服务反馈三种输入形式通过；承载服务的子进程于待答时退出后，独立 app-server 保持存活，新进程重接原请求并完成 turn。相关回执及进程身份见[补验记录](../validation/local-codex-app-server/acceptance-2026-09-29.md)。
 
 Go race detector 因当前环境缺少 CGO/C 编译器未运行，作为残留验证记录；在具备工具链的环境对并行、恢复和回复路径补跑定向检测。
