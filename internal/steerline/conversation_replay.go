@@ -37,7 +37,7 @@ func (s *Service) conversationJournalSources() []conversationJournalSource {
 	sources := []conversationJournalSource{}
 	seen := map[string]bool{}
 	for _, run := range s.State.Runs {
-		if run == nil || run.Backend != string(BackendLocal) || run.Protocol != string(ProtocolLocalProcess) || run.RunID == "" {
+		if run == nil || run.RunID == "" || !(run.Backend == string(BackendLocal) && run.Protocol == string(ProtocolLocalProcess) || run.WorkflowVersion == WorkerFlowVersion && run.Backend == string(BackendOrca) && (run.Protocol == string(ProtocolOrcaTerminalV2) || run.Protocol == string(ProtocolOrcaSupervised))) {
 			continue
 		}
 		root := filepath.Join(s.Config.RunDir, "runs", run.RunID)
@@ -64,8 +64,8 @@ func (s *Service) conversationJournalSources() []conversationJournalSource {
 			seen[clean] = true
 			source := conversationJournalSource{
 				Path: clean, RunID: run.RunID, TaskID: run.DomainTaskID, WorkflowID: run.RunID,
-				ExecutionID: run.ExecutionID, AttemptID: attempt, Backend: BackendLocal,
-				Protocol: ProtocolLocalProcess, Agent: run.Agent, TargetID: run.Target.ID,
+				ExecutionID: run.ExecutionID, AttemptID: attempt, Backend: BackendKind(run.Backend),
+				Protocol: ExecutionProtocol(run.Protocol), Agent: run.Agent, TargetID: run.Target.ID,
 				ExternalRef: conversationExternalRef(run.Process), ProjectID: s.Config.identity,
 				Ended: run.EndedAt != nil, FileID: fileID,
 				Workspace: deref(run.WorktreePath), ReaderCommand: codexReaderCommand(s.Config),
@@ -78,7 +78,7 @@ func (s *Service) conversationJournalSources() []conversationJournalSource {
 					source.Diagnostic = fmt.Sprintf("source marker is invalid: %v", decodeErr)
 				} else if validateErr := marker.validate(); validateErr != nil {
 					source.Diagnostic = validateErr.Error()
-				} else if marker.ProjectID != s.Config.identity || marker.WorkflowID != run.RunID || marker.ExecutionID != run.ExecutionID || marker.AttemptID != attempt || marker.Backend != BackendLocal || marker.Protocol != ProtocolLocalProcess || marker.Agent != run.Agent || marker.TargetID != run.Target.ID {
+				} else if marker.ProjectID != s.Config.identity || marker.WorkflowID != run.RunID || marker.ExecutionID != run.ExecutionID || marker.AttemptID != attempt || marker.Backend != BackendKind(run.Backend) || marker.Protocol != ExecutionProtocol(run.Protocol) || marker.Agent != run.Agent || marker.TargetID != run.Target.ID {
 					source.Diagnostic = "source marker identity does not match the fixed run and attempt"
 				} else {
 					source.ExpectedFileID = marker.SourceIdentity
@@ -143,7 +143,7 @@ func (s *Service) runConversationReplayQueue(ctx context.Context, requests <-cha
 }
 
 func (s *Service) reconcileConversationRun(run *Run) error {
-	if run == nil || run.Backend != string(BackendLocal) || run.Protocol != string(ProtocolLocalProcess) {
+	if run == nil || !(run.Backend == string(BackendLocal) && run.Protocol == string(ProtocolLocalProcess) || run.WorkflowVersion == WorkerFlowVersion && run.Backend == string(BackendOrca) && (run.Protocol == string(ProtocolOrcaTerminalV2) || run.Protocol == string(ProtocolOrcaSupervised))) {
 		return nil
 	}
 	if s.conversationReplayRequests == nil {
@@ -177,7 +177,11 @@ func (s *Service) replayConversationJournal(ctx context.Context, source conversa
 	if err != nil {
 		return err
 	}
-	segment := "local-jsonl-v1:" + source.FileID
+	segmentPrefix := "local-jsonl-v1:"
+	if source.Backend == BackendOrca {
+		segmentPrefix = "orca-jsonl-v1:"
+	}
+	segment := segmentPrefix + source.FileID
 	generation := source.FileID
 	knownSegment := false
 	var prior *ConversationCheckpoint
@@ -260,7 +264,7 @@ func (s *Service) replayConversationJournal(ctx context.Context, source conversa
 				source.FileID = batch.Cursor.FileID
 			}
 			generation = fmt.Sprintf("%s:%d", source.FileID, batch.Cursor.Generation)
-			segment = "local-jsonl-v1:" + generation
+			segment = segmentPrefix + generation
 			mapper, sourceSeq = &ConversationMapper{}, 0
 			gap := ConversationEvent{
 				Version: ConversationVersion, ProjectID: source.ProjectID, TaskID: source.TaskID,

@@ -97,7 +97,7 @@ func (s *Service) refreshNativeSnapshot(ctx context.Context, reconstruct bool) e
 			intent := WorkspaceIntent{Path: path, Branch: branch, BaseCommit: base}
 			run.WorkspaceIntent = &intent
 			run.WorktreePath, run.WorktreeBranch, run.BaseCommit = ptr(path), ptr(branch), ptr(base)
-		} else if base != "" && execution.Backend == string(BackendLocal) {
+		} else if base != "" && (execution.Backend == string(BackendLocal) || workflow.WorkflowVersion == WorkerFlowVersion) {
 			intent, planErr := planWorkspace(s.Config, task.TaskID, workflow.WorkflowRunID, base)
 			if planErr != nil {
 				return planErr

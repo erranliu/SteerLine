@@ -81,6 +81,10 @@ func startDurableLocalWorker(ctx context.Context, c Config, run *Run, turnID, pr
 }
 
 func observeDurableWorker(ctx context.Context, worker *Worker, path, sourceIdentity, runID, attemptID string, waited <-chan error) {
+	observeDurableWorkerSegment(ctx, worker, path, sourceIdentity, "local-jsonl-v1:"+sourceIdentity, runID, attemptID, waited)
+}
+
+func observeDurableWorkerSegment(ctx context.Context, worker *Worker, path, sourceIdentity, segment, runID, attemptID string, waited <-chan error) {
 	defer close(worker.observationDone)
 	defer close(worker.Events)
 	cursor := JournalCursor{}
@@ -103,7 +107,7 @@ func observeDurableWorker(ctx context.Context, worker *Worker, path, sourceIdent
 		for _, record := range batch.Records {
 			seq++
 			if record.Oversized {
-				if !deliverDurableWorkerEvent(ctx, worker, WorkerEvent{RunID: runID, AttemptID: attemptID, Source: "codex-jsonl", SourceSegment: "local-jsonl-v1:" + sourceIdentity, SourceIdentity: sourceIdentity, SourceSeq: seq, SourceOffset: record.Offset, SourceLength: record.Length, SourceGap: true, Diagnostic: "oversized worker event", Activity: ActivityEvent{Source: "codex", Kind: "unknown", Title: "oversized worker event"}}) {
+				if !deliverDurableWorkerEvent(ctx, worker, WorkerEvent{RunID: runID, AttemptID: attemptID, Source: "codex-jsonl", SourceSegment: segment, SourceIdentity: sourceIdentity, SourceSeq: seq, SourceOffset: record.Offset, SourceLength: record.Length, SourceGap: true, Diagnostic: "oversized worker event", Activity: ActivityEvent{Source: "codex", Kind: "unknown", Title: "oversized worker event"}}) {
 					return
 				}
 				continue
@@ -113,7 +117,7 @@ func observeDurableWorker(ctx context.Context, worker *Worker, path, sourceIdent
 			accepted := true
 			emitWorkerLine(line, raw, NewCodexNormalizer(), seq, record.Offset, record.Length, func(event WorkerEvent) {
 				event.RunID, event.AttemptID, event.Source = runID, attemptID, "codex-jsonl"
-				event.SourceSegment, event.SourceIdentity = "local-jsonl-v1:"+sourceIdentity, sourceIdentity
+				event.SourceSegment, event.SourceIdentity = segment, sourceIdentity
 				if accepted {
 					accepted = deliverDurableWorkerEvent(ctx, worker, event)
 				}

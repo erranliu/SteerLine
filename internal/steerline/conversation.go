@@ -456,7 +456,9 @@ func (e ConversationEvent) validate() error {
 }
 
 func (m ConversationSourceMarker) validate() error {
-	if m.Version != 1 || m.ProjectID == "" || m.WorkflowID == "" || m.ExecutionID == "" || m.AttemptID == "" || m.Backend != BackendLocal || m.Protocol != ProtocolLocalProcess || m.Agent == "" || m.TargetID == "" || m.Source != "codex-jsonl" || m.SourceSegment == "" || m.SourceIdentity == "" || m.SourceSegment != "local-jsonl-v1:"+m.SourceIdentity || m.RecordName != "events.jsonl" || m.CreatedAt.IsZero() {
+	local := m.Backend == BackendLocal && m.Protocol == ProtocolLocalProcess && m.SourceSegment == "local-jsonl-v1:"+m.SourceIdentity
+	orca := m.Backend == BackendOrca && (m.Protocol == ProtocolOrcaTerminalV2 || m.Protocol == ProtocolOrcaSupervised) && m.SourceSegment == "orca-jsonl-v1:"+m.SourceIdentity
+	if m.Version != 1 || m.ProjectID == "" || m.WorkflowID == "" || m.ExecutionID == "" || m.AttemptID == "" || !local && !orca || m.Agent == "" || m.TargetID == "" || m.Source != "codex-jsonl" || m.SourceIdentity == "" || m.RecordName != "events.jsonl" || m.CreatedAt.IsZero() {
 		return errors.New("conversation source marker is incomplete or unsupported")
 	}
 	return nil

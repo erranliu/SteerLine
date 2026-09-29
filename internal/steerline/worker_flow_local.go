@@ -124,8 +124,15 @@ func workerFlowPrompt(task TaskRecord, contract TaskContract) (string, error) {
 }
 
 func requireWorkerFlowCapabilities(ctx context.Context, c Config) error {
-	if c.agentName() != "codex" || c.hostName() != "local" {
-		return &BackendError{Code: BackendUnsupported, Diagnostic: "this target has no verified same-session worker-flow adapter"}
+	if c.agentName() != "codex" {
+		return &BackendError{Code: BackendUnsupported, Diagnostic: "resumable worker flow requires Codex"}
+	}
+	if c.hostName() == "orca_supervised" {
+		_, err := probeSupervisedOrcaTarget(ctx, c)
+		return err
+	}
+	if c.hostName() != "local" && c.hostName() != "orca" {
+		return &BackendError{Code: BackendUnsupported, Diagnostic: "this target has no same-session worker-flow adapter"}
 	}
 	command := c.Codex
 	if err := resolveCommand(&command); err != nil {
@@ -136,6 +143,12 @@ func requireWorkerFlowCapabilities(ctx context.Context, c Config) error {
 	out, err := (Runner{Dir: c.Repository, Timeout: duration(c.CommandTimeout)}).Output(ctx, Command{Executable: command.Executable, Args: probe})
 	if err != nil || !strings.Contains(string(out), "SESSION_ID") {
 		return &BackendError{Code: BackendUnsupported, Diagnostic: "configured Codex executable does not expose exact-session resume", Cause: err}
+	}
+	if c.hostName() == "orca" {
+		if _, err := workerOrcaCall(ctx, c, "status", "--json"); err != nil {
+			return &BackendError{Code: BackendUnreachable, Diagnostic: "Orca worker terminal is unavailable", Cause: err}
+		}
+		return nil
 	}
 	if !nativeCodexHistoryAvailable(ctx, c) {
 		return &BackendError{Code: BackendUnsupported, Diagnostic: "configured Codex session history cannot be read for exact turn reconciliation"}

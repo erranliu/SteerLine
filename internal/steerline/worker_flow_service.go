@@ -29,6 +29,34 @@ func (s *Service) resumeWorkerFlow(ctx context.Context) error {
 		if err := s.useFixedRunProfile(run); err != nil {
 			return err
 		}
+		if execution.Process != nil && execution.Process.Kind == "orca" && (execution.PendingTurnID != "" || execution.CurrentTurnID != execution.LastStoppedTurnID) {
+			turnID := execution.PendingTurnID
+			if turnID == "" {
+				turnID = execution.CurrentTurnID
+			}
+			events := filepath.Join(orcaTurnPath(s.Config, run.RunID, turnID), "events.jsonl")
+			if exited, err := readOrcaTurnExit(events, turnID); err != nil {
+				return s.waitWorkerFlow(run, "Original Orca turn exit evidence is invalid: "+err.Error())
+			} else if exited != nil {
+				s.active, s.worker = run, nil
+				finishErr := s.finishWorkerFlow(nil)
+				s.parkWorker()
+				return finishErr
+			}
+			term, err := showWorkerOrcaTerminal(ctx, s.Config, execution.Process.Terminal)
+			if err != nil {
+				return s.waitWorkerFlow(run, "Original Orca terminal is unavailable: "+err.Error())
+			}
+			if err := verifyWorkerOrcaTerminal(term, run, execution.Process); err != nil {
+				return s.waitWorkerFlow(run, err.Error())
+			}
+			worker, err := resumeWorkerOrcaTurn(s.Config, run, turnID)
+			if err != nil {
+				return s.waitWorkerFlow(run, "Original Orca turn journal cannot be reattached: "+err.Error())
+			}
+			s.registerWorker(run, worker)
+			return nil
+		}
 		if execution.Process != nil && (execution.PendingTurnID != "" || execution.CurrentTurnID != execution.LastStoppedTurnID) {
 			switch inspectProcess(execution.Process) {
 			case "matching process still exists":
@@ -75,22 +103,42 @@ func (s *Service) resumeWorkerFlow(ctx context.Context) error {
 		if run.WorkspaceIntent == nil {
 			return s.waitWorkerFlow(run, "Saved workspace preparation has no fixed worktree identity")
 		}
-		if _, err := os.Lstat(run.WorkspaceIntent.Path); os.IsNotExist(err) && preparation.Status != "confirmed" {
-			if err := prepareWorktreeOnly(ctx, s.Config, run); err != nil {
-				return s.waitWorkerFlow(run, "Original workspace preparation cannot be reconciled: "+err.Error())
+		if s.Config.hostName() == "orca_supervised" {
+			if execution.Workspace.Worktree == "" {
+				if err := s.recoverRemoteWorkerWorkspace(ctx, run, execution, preparation); err != nil {
+					return s.waitWorkerFlow(run, "Original remote worktree cannot be reconciled: "+err.Error())
+				}
+			} else {
+				run.WorktreePath, run.WorktreeBranch, run.BaseCommit = ptr(execution.Workspace.Worktree), ptr(execution.Workspace.Branch), ptr(execution.Workspace.Base)
+				if preparation.Status != "confirmed" {
+					if err := s.changeOperation(preparation.OperationID, "confirmed", preparation.PlatformRequestID, mustJSON(execution.Workspace), ""); err != nil {
+						return err
+					}
+				}
 			}
-		} else if err != nil {
-			return s.waitWorkerFlow(run, "Original workspace cannot be inspected: "+err.Error())
+		} else {
+			if _, err := os.Lstat(run.WorkspaceIntent.Path); os.IsNotExist(err) && preparation.Status != "confirmed" {
+				if err := prepareWorktreeOnly(ctx, s.Config, run); err != nil {
+					return s.waitWorkerFlow(run, "Original workspace preparation cannot be reconciled: "+err.Error())
+				}
+			} else if err != nil {
+				return s.waitWorkerFlow(run, "Original workspace cannot be inspected: "+err.Error())
+			}
+			run.WorktreePath, run.WorktreeBranch, run.BaseCommit = ptr(run.WorkspaceIntent.Path), ptr(run.WorkspaceIntent.Branch), ptr(run.WorkspaceIntent.BaseCommit)
+			workspace, err := s.inspectMinimalWorkspace(ctx, run)
+			if err != nil {
+				return s.waitWorkerFlow(run, "Original workspace identity is unresolved: "+err.Error())
+			}
+			applyMinimalWorkspaceEvidence(run, execution, workspace)
+			if preparation.Status != "confirmed" {
+				if err := s.changeOperation(preparation.OperationID, "confirmed", "", mustJSON(workspace), ""); err != nil {
+					return err
+				}
+			}
 		}
-		run.WorktreePath, run.WorktreeBranch, run.BaseCommit = ptr(run.WorkspaceIntent.Path), ptr(run.WorkspaceIntent.Branch), ptr(run.WorkspaceIntent.BaseCommit)
-		workspace, err := s.inspectMinimalWorkspace(ctx, run)
-		if err != nil {
-			return s.waitWorkerFlow(run, "Original workspace identity is unresolved: "+err.Error())
-		}
-		applyMinimalWorkspaceEvidence(run, execution, workspace)
-		if preparation.Status != "confirmed" {
-			if err := s.changeOperation(preparation.OperationID, "confirmed", "", mustJSON(workspace), ""); err != nil {
-				return err
+		if s.Config.hostName() == "orca" || s.Config.hostName() == "orca_supervised" {
+			if err := s.prepareWorkerOrcaTerminal(ctx, run); err != nil {
+				return s.waitWorkerFlow(run, "Original Orca terminal cannot be reconciled: "+err.Error())
 			}
 		}
 		return s.startInitialWorkerFlowTurn(ctx, *task, run)
@@ -136,8 +184,8 @@ func offerWorkerPRFeedback(run *Run, url string) error {
 	}
 	decision, err := WriteDecisionRequest(run, DecisionRequest{
 		Question: "The worker stopped. What should it do next?",
-		Context: "The verified PR is awaiting merge. You may send further instructions to the original worker session.",
-		Options: []DecisionOption{{ID: "continue", Label: "Continue current work"}}, AllowFreeText: true,
+		Context:  "The verified PR is awaiting merge. You may send further instructions to the original worker session.",
+		Options:  []DecisionOption{{ID: "continue", Label: "Continue current work"}}, AllowFreeText: true,
 	})
 	if err != nil {
 		return err
@@ -152,14 +200,23 @@ func (s *Service) prepareWorkerFlow(ctx context.Context, task TaskRecord, run *R
 	if workflow == nil || execution == nil || attempt == nil || workflow.WorkflowVersion != WorkerFlowVersion || attempt.StepID != "worker" || run.WorkspaceIntent == nil {
 		return nativeErr("inconsistent_delivery", "worker preparation has no fixed claim and workspace intent")
 	}
-	if s.Config.hostName() != "local" {
+	if s.Config.hostName() != "local" && s.Config.hostName() != "orca" && s.Config.hostName() != "orca_supervised" {
 		return &BackendError{Code: BackendUnsupported, Diagnostic: "same-session worker continuation is unavailable for this target"}
+	}
+	remoteName := ""
+	if s.Config.hostName() == "orca_supervised" {
+		var nameErr error
+		remoteName, nameErr = workerOrcaWorktreeName(run.RunID)
+		if nameErr != nil {
+			return nameErr
+		}
 	}
 	opID, err := s.startOperation("prepare_workspace", "worker-workspace:"+execution.ExecutionID, struct {
 		WorkflowRunID string          `json:"workflow_run_id"`
 		ExecutionID   string          `json:"execution_id"`
+		RemoteName    string          `json:"remote_name,omitempty"`
 		Workspace     WorkspaceIntent `json:"workspace"`
-	}{workflow.WorkflowRunID, execution.ExecutionID, *run.WorkspaceIntent})
+	}{workflow.WorkflowRunID, execution.ExecutionID, remoteName, *run.WorkspaceIntent})
 	if err != nil {
 		return err
 	}
@@ -168,23 +225,35 @@ func (s *Service) prepareWorkerFlow(ctx context.Context, task TaskRecord, run *R
 	if workflow == nil || execution == nil || attempt == nil {
 		return errors.New("worker claim disappeared after preparation intent was saved")
 	}
-	if err = prepareWorktreeOnly(ctx, s.Config, run); err != nil {
+	if s.Config.hostName() == "orca_supervised" {
+		err = s.prepareRemoteWorkerWorkspace(ctx, run, execution, opID)
+	} else {
+		err = prepareWorktreeOnly(ctx, s.Config, run)
+	}
+	if err != nil {
 		_ = s.changeOperation(opID, "outcome_unknown", "", nil, err.Error())
 		run.ExecutionStatus = "unknown"
 		execution.Status = "blocked"
 		return s.waitWorkerFlow(run, "Workspace preparation needs reconciliation: "+err.Error())
 	}
-	run.WorktreePath, run.WorktreeBranch, run.BaseCommit = ptr(run.WorkspaceIntent.Path), ptr(run.WorkspaceIntent.Branch), ptr(run.WorkspaceIntent.BaseCommit)
-	workspace, err := s.inspectMinimalWorkspace(ctx, run)
-	if err != nil {
-		_ = s.changeOperation(opID, "outcome_unknown", "", nil, err.Error())
-		run.ExecutionStatus = "unknown"
-		execution.Status = "blocked"
-		return s.waitWorkerFlow(run, "Workspace identity could not be verified: "+err.Error())
+	if s.Config.hostName() != "orca_supervised" {
+		run.WorktreePath, run.WorktreeBranch, run.BaseCommit = ptr(run.WorkspaceIntent.Path), ptr(run.WorkspaceIntent.Branch), ptr(run.WorkspaceIntent.BaseCommit)
+		workspace, inspectErr := s.inspectMinimalWorkspace(ctx, run)
+		if inspectErr != nil {
+			_ = s.changeOperation(opID, "outcome_unknown", "", nil, inspectErr.Error())
+			run.ExecutionStatus = "unknown"
+			execution.Status = "blocked"
+			return s.waitWorkerFlow(run, "Workspace identity could not be verified: "+inspectErr.Error())
+		}
+		applyMinimalWorkspaceEvidence(run, execution, workspace)
+		if err = s.changeOperation(opID, "confirmed", "", mustJSON(workspace), ""); err != nil {
+			return err
+		}
 	}
-	applyMinimalWorkspaceEvidence(run, execution, workspace)
-	if err = s.changeOperation(opID, "confirmed", "", mustJSON(workspace), ""); err != nil {
-		return err
+	if s.Config.hostName() == "orca" || s.Config.hostName() == "orca_supervised" {
+		if err := s.prepareWorkerOrcaTerminal(ctx, run); err != nil {
+			return s.waitWorkerFlow(run, "Original Orca terminal preparation is unverified: "+err.Error())
+		}
 	}
 	return s.startInitialWorkerFlowTurn(ctx, task, run)
 }
@@ -226,9 +295,16 @@ func (s *Service) startWorkerFlowTurn(ctx context.Context, run *Run, prompt, tur
 	if workflow == nil || execution == nil || attempt == nil {
 		return errors.New("worker turn disappeared after send intent was saved")
 	}
-	worker, events, err := startLocalWorkerTurn(ctx, s.Config, run, execution, turnID, prompt)
+	var worker *Worker
+	var events, platformRequestID string
+	if s.Config.hostName() == "local" {
+		worker, events, err = startLocalWorkerTurn(ctx, s.Config, run, execution, turnID, prompt)
+		platformRequestID = turnID
+	} else {
+		worker, events, platformRequestID, err = startWorkerOrcaTurn(ctx, s.Config, run, execution, turnID, prompt)
+	}
 	if err != nil {
-		_ = s.changeOperation(opID, "outcome_unknown", "", nil, err.Error())
+		_ = s.changeOperation(opID, "outcome_unknown", platformRequestID, nil, err.Error())
 		run.ExecutionStatus = "unknown"
 		return s.waitWorkerFlow(run, "Original worker turn start is unverified: "+err.Error())
 	}
@@ -241,7 +317,7 @@ func (s *Service) startWorkerFlowTurn(ctx context.Context, run *Run, prompt, tur
 	}
 	attempt.Status = "dispatched"
 	attempt.UpdatedAt = now()
-	if err := s.setOperationState(opID, "accepted", turnID, mustJSON(identity), ""); err != nil {
+	if err := s.setOperationState(opID, "accepted", platformRequestID, mustJSON(identity), ""); err != nil {
 		return err
 	}
 	if err := s.save(); err != nil {
@@ -298,7 +374,11 @@ func (s *Service) eventWorkerFlow(ev WorkerEvent) error {
 		}
 		for _, op := range s.State.Operations {
 			if op.IdempotencyKey == "worker-turn:"+run.ExecutionID+":"+turnID {
-				if err := s.setOperationState(op.OperationID, "confirmed", turnID, mustJSON(map[string]string{"session_id": execution.SessionID, "turn_id": turnID}), ""); err != nil {
+				requestID := op.PlatformRequestID
+				if requestID == "" {
+					requestID = turnID
+				}
+				if err := s.setOperationState(op.OperationID, "confirmed", requestID, mustJSON(map[string]string{"session_id": execution.SessionID, "turn_id": turnID}), ""); err != nil {
 					return err
 				}
 				break
@@ -358,7 +438,11 @@ func (s *Service) finishWorkerFlow(workerErr error) error {
 		run.SessionID = ptr(outcome.SessionID)
 		for _, operation := range s.State.Operations {
 			if operation.IdempotencyKey == "worker-turn:"+run.ExecutionID+":"+turnID && operation.Status != "confirmed" {
-				if err := s.setOperationState(operation.OperationID, "confirmed", turnID, mustJSON(map[string]string{"session_id": outcome.SessionID, "turn_id": turnID}), ""); err != nil {
+				requestID := operation.PlatformRequestID
+				if requestID == "" {
+					requestID = turnID
+				}
+				if err := s.setOperationState(operation.OperationID, "confirmed", requestID, mustJSON(map[string]string{"session_id": outcome.SessionID, "turn_id": turnID}), ""); err != nil {
 					return err
 				}
 				break
@@ -369,6 +453,16 @@ func (s *Service) finishWorkerFlow(workerErr error) error {
 		execution.Status = "idle"
 		run.ExecutionStatus = "unknown"
 		return s.waitWorkerFlow(run, "The original worker process exited without a confirmed completed turn; its output and session are retained")
+	}
+	if run.Decision != nil && run.Decision.Status == "answer_saved" {
+		answer, answerErr := ReadDecisionAnswer(run)
+		if answerErr == nil {
+			command, commandErr := s.domainStore.CommandByIdempotency(context.Background(), s.Config.identity, decisionAnswerKey(answer))
+			if commandErr == nil && command.CommandID == turnID && command.Kind == "answer_decision" {
+				run.Decision.Status = "reply_accepted"
+				run.Decision.Version++
+			}
+		}
 	}
 	issue := ""
 	if workerErr != nil {

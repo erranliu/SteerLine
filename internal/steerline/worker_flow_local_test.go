@@ -32,10 +32,10 @@ func TestWorkerTurnFindsPRBeforeFinalMessage(t *testing.T) {
 }
 
 func TestWorkerFlowMockCodexHelper(t *testing.T) {
-	if os.Getenv("STEERLINE_WORKER_FLOW_MOCK") != "1" {
+	args := strings.Join(os.Args, " ")
+	if os.Getenv("STEERLINE_WORKER_FLOW_MOCK") != "1" && !strings.Contains(args, " wf-orca-mock ") {
 		return
 	}
-	args := strings.Join(os.Args, " ")
 	if strings.Contains(args, " resume ") && !strings.Contains(args, " resume "+workerFlowMockSession+" ") {
 		os.Exit(2)
 	}
