@@ -85,19 +85,21 @@ func TestLocalWorkerPublishUsesHostGitAndExactPR(t *testing.T) {
 		t.Fatal(err)
 	}
 	git(worktree, "add", "publish.txt")
-	run := &Run{TaskID: "101", RunID: runID, ExecutionID: strings.Repeat("c", 32), WorktreePath: &worktree, WorktreeBranch: &branch,
+	run := &Run{TaskID: "101", RunID: runID, AttemptID: strings.Repeat("d", 32), ExecutionID: strings.Repeat("c", 32), WorkflowVersion: WorkerFlowVersion, FinishTaskStatus: "waiting_decision", WorktreePath: &worktree, WorktreeBranch: &branch,
 		WorkspaceIntent: &WorkspaceIntent{Path: worktree, Branch: branch, BaseCommit: base}}
 	workflow := &WorkflowRunRecord{WorkflowRunID: runID, WorkflowVersion: WorkerFlowVersion, Branch: "main", Phase: "waiting_decision"}
 	execution := &ExecutionRecord{WorkflowRunID: runID, ExecutionID: run.ExecutionID, Workspace: WorkspaceEvidence{Worktree: worktree, Branch: branch}, CurrentTurnID: turnID, LastStoppedTurnID: turnID}
-	s := &Service{Config: c, domainStore: db, store: &Store{Path: filepath.Join(c.RunDir, c.RuntimeFile), Domain: db, Project: c.Identity()},
-		prs:   &PRClient{Config: c.PR, Runner: Runner{Dir: c.Repository, Timeout: 10 * time.Second}},
-		State: Runtime{SchemaVersion: runtimeSchemaFor(c), Repository: Repository{Path: c.Repository, Remote: c.Remote, Branch: c.Branch, Identity: c.Identity()}}}
+	s := &Service{Config: c, domainStore: db, store: &Store{Path: filepath.Join(c.RunDir, c.RuntimeFile), Project: c.Identity()},
+		prs: &PRClient{Config: c.PR, Runner: Runner{Dir: c.Repository, Timeout: 10 * time.Second}},
+		State: Runtime{SchemaVersion: runtimeSchemaFor(c), Repository: Repository{Path: c.Repository, Remote: c.Remote, Branch: c.Branch, Identity: c.Identity()},
+			Runs: []*Run{run}, WorkflowRuns: []WorkflowRunRecord{*workflow}, Executions: []ExecutionRecord{*execution}}}
+	workflow, execution = &s.State.WorkflowRuns[0], &s.State.Executions[0]
 	info, err := s.publishLocalWorkerRun(ctx, run, workflow, execution, turnID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info.URL != "https://github.com/owner/repo/pull/1" || workflow.PRURL != info.URL || workflow.Phase != "waiting_pr_merge" {
-		t.Fatalf("host publication did not bind exact draft PR: info=%+v workflow=%+v", info, workflow)
+	if info.URL != "https://github.com/owner/repo/pull/1" || s.State.WorkflowRuns[0].PRURL != info.URL || s.State.WorkflowRuns[0].Phase != "waiting_pr_merge" {
+		t.Fatalf("host publication did not bind exact draft PR: info=%+v workflow=%+v", info, s.State.WorkflowRuns[0])
 	}
 	head := git(worktree, "rev-parse", "HEAD")
 	if head == base || info.HeadRevision != head || git(worktree, "status", "--porcelain") != "" {
@@ -105,6 +107,13 @@ func TestLocalWorkerPublishUsesHostGitAndExactPR(t *testing.T) {
 	}
 	if _, err := s.publishLocalWorkerRun(ctx, run, workflow, execution, turnID); err == nil {
 		t.Fatal("same turn repeated its confirmed publication")
+	}
+	s.State.Operations[0].Status = "in_flight"
+	s.State.WorkflowRuns[0].Phase, s.State.WorkflowRuns[0].PRURL = "waiting_decision", ""
+	run.FinishTaskStatus, run.PR.URL = "waiting_decision", nil
+	reconciled, err := s.reconcileLocalWorkerPublication(ctx, run)
+	if err != nil || !reconciled || s.State.Operations[0].Status != "confirmed" || s.State.WorkflowRuns[0].PRURL != info.URL {
+		t.Fatalf("uncertain host publication did not reconcile the same PR: reconciled=%t err=%v operation=%+v workflow=%+v", reconciled, err, s.State.Operations[0], s.State.WorkflowRuns[0])
 	}
 }
 

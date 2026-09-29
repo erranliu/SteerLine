@@ -22,6 +22,15 @@ func localWorkerRequestedPublish(message, runID string) bool {
 	return len(lines) > 0 && strings.TrimSpace(lines[len(lines)-1]) == "STEERLINE_PUBLISH_READY "+runID
 }
 
+func (s *Service) localWorkerRun(runID string) *Run {
+	for _, run := range s.State.Runs {
+		if run != nil && run.RunID == runID {
+			return run
+		}
+	}
+	return nil
+}
+
 // publishLocalWorkerRun executes Git and GitHub operations in the service's
 // host identity. The worker supplies only staged content and an exact run-ID
 // handoff; it never receives the host's credentials.
@@ -87,6 +96,11 @@ func (s *Service) publishLocalWorkerRun(ctx context.Context, run *Run, workflow 
 	if err != nil {
 		return info, err // An earlier uncertain publication must be reconciled, not repeated.
 	}
+	run = s.localWorkerRun(run.RunID)
+	workflow, execution = s.workflowRecords(run)
+	if run == nil || workflow == nil || execution == nil {
+		return info, errors.New("fixed worker execution disappeared after publication intent was saved")
+	}
 	confirmed := false
 	defer func() {
 		if !confirmed {
@@ -116,6 +130,8 @@ func (s *Service) publishLocalWorkerRun(ctx context.Context, run *Run, workflow 
 	if err = BindWorkerPR(workflow, execution, info, url, s.Config.PR.Repository, false); err != nil {
 		return PRInfo{}, err
 	}
+	run.FinishTaskStatus = "waiting_pr_merge"
+	run.PR.URL, run.PR.State = ptr(info.URL), info.State
 	if err = s.changeOperation(opID, "confirmed", url, mustJSON(info), ""); err != nil {
 		return PRInfo{}, err
 	}
@@ -124,6 +140,27 @@ func (s *Service) publishLocalWorkerRun(ctx context.Context, run *Run, workflow 
 }
 
 func (s *Service) localWorkerPRURL(ctx context.Context, run *Run, workflow *WorkflowRunRecord, head string) (string, error) {
+	existing, err := s.findLocalWorkerPRURL(ctx, run, workflow, head)
+	if err != nil || existing != "" {
+		return existing, err
+	}
+	repo := s.Config.PR.Repository
+	gh := Command{Executable: s.Config.PR.Query.Executable}
+	runner := Runner{Dir: *run.WorktreePath, Timeout: duration(s.Config.CommandTimeout)}
+	created, err := runner.Output(ctx, gh, "pr", "create", "--repo", repo, "--base", workflow.Branch,
+		"--head", *run.WorktreeBranch, "--draft", "--title", "SteerLine task "+run.TaskID,
+		"--body", "SteerLine worker-flow run "+run.RunID)
+	if err != nil {
+		return "", fmt.Errorf("create draft PR from fixed branch: %w", err)
+	}
+	url := strings.TrimSpace(string(created))
+	if _, err = s.Config.PR.PRNumber(url); err != nil {
+		return "", fmt.Errorf("created PR URL is invalid: %w", err)
+	}
+	return url, nil
+}
+
+func (s *Service) findLocalWorkerPRURL(ctx context.Context, run *Run, workflow *WorkflowRunRecord, head string) (string, error) {
 	repo := s.Config.PR.Repository
 	owner, _, ok := strings.Cut(repo, "/")
 	if !ok || owner == "" {
@@ -166,15 +203,96 @@ func (s *Service) localWorkerPRURL(ctx context.Context, run *Run, workflow *Work
 	if existing != "" {
 		return existing, nil
 	}
-	created, err := runner.Output(ctx, gh, "pr", "create", "--repo", repo, "--base", workflow.Branch,
-		"--head", *run.WorktreeBranch, "--draft", "--title", "SteerLine task "+run.TaskID,
-		"--body", "SteerLine worker-flow run "+run.RunID)
-	if err != nil {
-		return "", fmt.Errorf("create draft PR from fixed branch: %w", err)
+	return "", nil
+}
+
+// A service exit can happen after the host has pushed or created the PR but
+// before it has saved the receipt. Reconcile only observed, exact identities;
+// never issue another create from an uncertain publication operation.
+func (s *Service) reconcileLocalWorkerPublication(ctx context.Context, run *Run) (bool, error) {
+	if run == nil || s.Config.hostName() != "local" {
+		return false, nil
 	}
-	url := strings.TrimSpace(string(created))
-	if _, err = s.Config.PR.PRNumber(url); err != nil {
-		return "", fmt.Errorf("created PR URL is invalid: %w", err)
+	var op *OperationRecord
+	for i := range s.State.Operations {
+		candidate := &s.State.Operations[i]
+		if candidate.Kind == "publish_local_worker" && strings.HasPrefix(candidate.IdempotencyKey, "local-publish:"+run.RunID+":") &&
+			(candidate.Status == "in_flight" || candidate.Status == "outcome_unknown") {
+			if op != nil {
+				return false, errors.New("several local publication operations need manual reconciliation")
+			}
+			op = candidate
+		}
 	}
-	return url, nil
+	if op == nil {
+		return false, nil
+	}
+	var intent struct {
+		RunID        string `json:"run_id"`
+		TurnID       string `json:"turn_id"`
+		Branch       string `json:"branch"`
+		StartingHead string `json:"starting_head"`
+		IndexTree    string `json:"index_tree"`
+	}
+	if err := json.Unmarshal(op.Request, &intent); err != nil || intent.RunID != run.RunID || !stableExecutionID(intent.TurnID) ||
+		run.WorktreePath == nil || run.WorktreeBranch == nil || intent.Branch != *run.WorktreeBranch ||
+		!validCommit(intent.StartingHead) || !validCommit(intent.IndexTree) {
+		return false, errors.Join(err, errors.New("saved local publication intent is invalid"))
+	}
+	workflow, execution := s.workflowRecords(run)
+	if workflow == nil || execution == nil || execution.LastStoppedTurnID != intent.TurnID ||
+		workflow.Phase != "waiting_decision" || run.FinishTaskStatus != "waiting_decision" {
+		return false, errors.New("saved local publication no longer matches the stopped worker turn")
+	}
+	git := gitRunner(s.Config, *run.WorktreePath)
+	gitText := func(args ...string) (string, error) {
+		out, err := git.Output(ctx, s.Config.Git, args...)
+		return strings.TrimSpace(string(out)), err
+	}
+	common, err := gitText("rev-parse", "--path-format=absolute", "--git-common-dir")
+	if err != nil || canonical(common) != canonical(s.Config.identity) {
+		return false, errors.Join(err, errors.New("recovery Git common directory changed"))
+	}
+	branch, err := gitText("symbolic-ref", "--quiet", "--short", "HEAD")
+	if err != nil || branch != intent.Branch {
+		return false, errors.Join(err, errors.New("recovery branch changed"))
+	}
+	head, err := gitText("rev-parse", "HEAD")
+	if err != nil || !validCommit(head) {
+		return false, errors.Join(err, errors.New("recovery commit is unavailable"))
+	}
+	tree, err := gitText("rev-parse", "HEAD^{tree}")
+	if err != nil || tree != intent.IndexTree {
+		return false, errors.Join(err, errors.New("recovery commit tree differs from the saved staged content"))
+	}
+	if _, err = gitText("merge-base", "--is-ancestor", intent.StartingHead, "HEAD"); err != nil {
+		return false, fmt.Errorf("recovery commit changed ancestry: %w", err)
+	}
+	remote, err := gitText("ls-remote", s.Config.Remote, "refs/heads/"+intent.Branch)
+	if err != nil || !strings.HasPrefix(remote, head+"\trefs/heads/"+intent.Branch) {
+		return false, errors.Join(err, errors.New("fixed remote branch does not match the local candidate"))
+	}
+	url, err := s.findLocalWorkerPRURL(ctx, run, workflow, head)
+	if err != nil || url == "" {
+		return false, errors.Join(err, errors.New("fixed remote branch has no verified PR; publication remains uncertain"))
+	}
+	info, err := s.prs.Query(ctx, url)
+	if err != nil || info.HeadRevision != head {
+		return false, errors.Join(err, errors.New("recovered PR head does not match the fixed commit"))
+	}
+	if err = BindWorkerPR(workflow, execution, info, url, s.Config.PR.Repository, false); err != nil {
+		return false, err
+	}
+	run.FinishTaskStatus = "waiting_pr_merge"
+	run.PR.URL, run.PR.State = ptr(info.URL), info.State
+	if err = offerWorkerPRFeedback(run, url); err != nil {
+		return false, err
+	}
+	if err = s.setOperationState(op.OperationID, "confirmed", url, mustJSON(info), ""); err != nil {
+		return false, err
+	}
+	if err = s.save(); err != nil {
+		return false, err
+	}
+	return true, nil
 }

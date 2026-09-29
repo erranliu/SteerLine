@@ -26,6 +26,13 @@ func (s *Service) resumeWorkerFlow(ctx context.Context) error {
 		if err := s.useFixedRunProfile(run); err != nil {
 			return err
 		}
+		reconciled, err := s.reconcileLocalWorkerPublication(ctx, run)
+		if err != nil {
+			return s.waitWorkerFlow(run, "Host publication needs reconciliation: "+err.Error())
+		}
+		if reconciled {
+			continue
+		}
 		if execution.Process != nil && execution.Process.Kind == "orca" && (execution.PendingTurnID != "" || execution.CurrentTurnID != execution.LastStoppedTurnID) {
 			turnID := execution.PendingTurnID
 			if turnID == "" {
@@ -494,13 +501,25 @@ func (s *Service) finishWorkerFlow(workerErr error) error {
 	if err := StopWorkerTurn(workflow, execution, turnID, question); err != nil {
 		return err
 	}
-	if s.Config.hostName() == "local" && localWorkerRequestedPublish(outcome.LastMessage, run.RunID) {
-		if _, err := s.publishLocalWorkerRun(context.Background(), run, workflow, execution, turnID); err != nil {
-			issue = strings.TrimSpace(issue + "; host publication failed: " + err.Error())
-		}
-	}
 	run.EndedAt = ptr(now())
 	run.ExecutionStatus = "succeeded"
+	if workflow.Phase == "waiting_pr_merge" {
+		run.FinishTaskStatus = "waiting_pr_merge"
+	} else {
+		run.FinishTaskStatus = "waiting_decision"
+	}
+	if s.Config.hostName() == "local" && localWorkerRequestedPublish(outcome.LastMessage, run.RunID) {
+		runID := run.RunID
+		_, publishErr := s.publishLocalWorkerRun(context.Background(), run, workflow, execution, turnID)
+		run = s.localWorkerRun(runID)
+		workflow, execution = s.workflowRecords(run)
+		if run == nil || workflow == nil || execution == nil {
+			return errors.New("fixed worker execution disappeared during host publication")
+		}
+		if publishErr != nil {
+			issue = strings.TrimSpace(issue + "; host publication failed: " + publishErr.Error())
+		}
+	}
 	if workflow.Phase == "waiting_pr_merge" {
 		run.FinishTaskStatus = "waiting_pr_merge"
 		if workflow.PRURL != "" {
