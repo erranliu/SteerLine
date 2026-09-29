@@ -829,7 +829,7 @@ func TransitionStepAttempt(attempt *StepAttemptRecord, next string) error {
 
 func validStepAttemptStatus(v string) bool {
 	switch v {
-	case "planned", "dispatching", "dispatched", "running", "waiting_decision", "succeeded", "failed", "rejected", "stopping", "stopped", "outcome_unknown":
+	case "planned", "dispatching", "dispatched", "running", "waiting_decision", "succeeded", "failed", "rejected", "stopping", "stopped", "outcome_unknown", "abandoned":
 		return true
 	}
 	return false
@@ -851,7 +851,7 @@ func validWorkflowPhase(v string) bool {
 }
 func validExecutionStatus(v string) bool {
 	switch v {
-	case "pending", "active", "waiting_decision", "succeeded", "failed", "blocked", "stopped":
+	case "pending", "active", "waiting_decision", "succeeded", "failed", "blocked", "stopped", "abandoned":
 		return true
 	}
 	return false

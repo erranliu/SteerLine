@@ -1705,6 +1705,15 @@ func persistNormalizedWorkflow(tx DomainTx, project string, runtime Runtime, run
 	if authority != "native" {
 		return nativeErr("authority_mismatch", "normalized runtime publication requires the native task authority")
 	}
+	var savedPhase string
+	if err := tx.(*sqliteTx).tx.QueryRowContext(tx.(*sqliteTx).ctx, `SELECT phase FROM workflow_runs WHERE project_identity=? AND workflow_run_id=?`, project, run.RunID).Scan(&savedPhase); err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return err
+	}
+	if savedPhase == "abandoned" {
+		// The center has already settled this historical run. A stale runtime
+		// projection must not turn it back into an active blocked workflow.
+		return nil
+	}
 	if task.Status == "closed" && workflow.Phase == "completed" && run.FinishTaskStatus == "completed" {
 		// CompleteNativeTask already committed the selected delivery, closed task,
 		// and immutable completed workflow in its center transaction.
