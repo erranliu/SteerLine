@@ -3,13 +3,52 @@ package steerline
 import (
 	"context"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
+
+func TestNativeOrcaPRBindingUsesProviderAndRetainsSession(t *testing.T) {
+	ctx := context.Background()
+	state, headBranch := "open", "codex/task-8"
+	var server *httptest.Server
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/repos/org/repo/pulls/8" {
+			http.NotFound(w, r)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"html_url": server.URL + "/org/repo/pulls/8", "number": 8, "state": state, "merged": false,
+			"base": map[string]any{"ref": "main", "repo": map[string]string{"full_name": "org/repo"}},
+			"head": map[string]any{"ref": headBranch, "sha": strings.Repeat("a", 40), "repo": map[string]string{"full_name": "org/repo"}},
+		})
+	}))
+	defer server.Close()
+	url := server.URL + "/org/repo/pulls/8"
+	config := PRConfig{Kind: "gitea", BaseURL: server.URL, Repository: "org/repo"}
+	s := Service{Config: Config{PR: config}, prs: &PRClient{Config: config, Runner: Runner{Timeout: 5 * time.Second}}}
+	workflow := WorkflowRunRecord{WorkflowRunID: "wf-8", WorkflowVersion: WorkerFlowVersion, Phase: "executing", Branch: "main"}
+	execution := ExecutionRecord{ExecutionID: "exec-8", WorkflowRunID: workflow.WorkflowRunID, SessionID: "orca-session-8", Workspace: WorkspaceEvidence{Branch: "codex/task-8"}, CurrentTurnID: "turn-8", LastStoppedTurnID: "turn-8"}
+	run := Run{}
+	headBranch = "codex/other-task"
+	if err := s.bindNativeOrcaPR(ctx, &run, &workflow, &execution, "PR: "+url); err == nil || workflow.PRURL != "" || run.PR.URL != nil {
+		t.Fatalf("unowned PR was bound: workflow=%+v run=%+v error=%v", workflow, run, err)
+	}
+	headBranch = "codex/task-8"
+	if err := s.bindNativeOrcaPR(ctx, &run, &workflow, &execution, "PR: "+url); err != nil || workflow.PRURL != url || workflow.Phase != "waiting_pr_merge" {
+		t.Fatalf("provider-verified PR was not bound: workflow=%+v error=%v", workflow, err)
+	}
+	state = "closed"
+	if err := s.bindNativeOrcaPR(ctx, &run, &workflow, &execution, "PR: "+url); err != nil || workflow.PRState != "closed_unmerged" || workflow.Phase != "waiting_decision" || execution.SessionID != "orca-session-8" || execution.CurrentTurnID != "turn-8" {
+		t.Fatalf("unmerged PR did not return the original session to feedback: workflow=%+v execution=%+v error=%v", workflow, execution, err)
+	}
+}
 
 func TestNativeOrcaCenterReusesWorkerAfterRestartAndSettlement(t *testing.T) {
 	if runtime.GOOS != "windows" {
