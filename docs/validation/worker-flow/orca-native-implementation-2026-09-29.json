@@ -4,7 +4,7 @@
   "state": "implementation in progress; real center ask/reply/restart/two-turn continuation passed; remaining acceptance items listed below",
   "platform_continuity": "orca-native-continuity-2026-09-29.json: real Orca 1.4.210 and Codex CLI 0.159.0, two settled Dispatches on one agent terminal/incarnation; second task recalled a token only given in first task",
   "center_live": "orca-native-center-live-2026-09-29.json: actual SteerLine Service, SQLite claim, Orca agent launcher, native ask/reply, service restart, worker_done, second Task/Dispatch on original terminal, second worker_done and recalled phrase; passed in 223.32s",
-  "sqlite_center_regression": "TestNativeOrcaCenterReusesWorkerAfterRestartAndSettlement: fake Orca agent creation, question, Delivery ack, center restart, reply to original question, worker_done, second Task/Dispatch on original terminal, second worker_done, third Dispatch accepted with lost response then recovered by exact worker-show without duplicate injection; no Codex session ID synthesized",
+  "sqlite_center_regression": "TestNativeOrcaCenterReusesWorkerAfterRestartAndSettlement: fake Orca agent creation, question, Delivery ack, center restart, public SubmitDecisionAnswer accepted and applied to the original question, duplicate submission reused the command, worker_done, second Task/Dispatch on original terminal, second worker_done, third Dispatch accepted with lost response then recovered by exact worker-show without duplicate injection, fourth active Dispatch escalation followed by public answer/send on that same Dispatch and worker_done, replacement terminal incarnation retained feedback without another Task/Dispatch; no Codex session ID synthesized",
   "other_tests": [
     "go test ./internal/steerline -run 'TestWorkerFlow|TestConfig|TestDecision|TestOrca|TestNativeOrca' -count=1: passed",
     "go run ./cmd/test-feedback -quick: passed"
@@ -12,12 +12,12 @@
   "acceptance": {
     "ON1": "automated profile agent selection and unsupported override checks covered; second real agent unavailable",
     "ON2": "fake and real center Dispatch with Orca agent launcher covered",
-    "ON3": "shared answer shape, fake center and real center reply across restart covered; public UI/CLI answer pending",
+    "ON3": "shared answer shape, public answer command in fake center, duplicate idempotency and real center reply across restart covered; real interactive UI/CLI invocation pending",
     "ON4": "real center ask/reply/done, second Task/Dispatch and remembered token on original terminal/incarnation passed; no file change in probe",
-    "ON5": "late message and same-dispatch routing unit coverage; live send/done race pending",
+    "ON5": "late message unit coverage and active same-Dispatch send via public command in fake center passed; real send/done race pending",
     "ON6": "SQLite and real center restart with pending question passed; lost Dispatch response recovered without duplicate injection in fake; other receipt-loss faults pending",
-    "ON7": "identity and no_agent_detected handling implemented; targeted fault matrix pending",
-    "ON8": "worker-read source/cursor/clipping implementation covered by center fake basic response; source_changed fault pending",
+    "ON7": "replacement incarnation retained feedback and prevented new Task/Dispatch in fake center; real no_agent_detected retry observed in platform probe; broader fault matrix pending",
+    "ON8": "worker-read terminal fallback, cursor and source_changed retry to complete transcript covered by center fake; complete live transcript unavailable",
     "ON9": "exact terminal cleanup implemented; final delivery live check pending",
     "ON10": "existing PR/DAG regression retained; Orca-specific provider and human merge chain pending",
     "ON11": "codex/opencode agent ID contract covered; second real agent unavailable"

@@ -10,13 +10,18 @@ import (
 )
 
 type fakeNativeOrcaState struct {
-	Name, Base, Agent, Comment, Path, Branch, Repo string
-	Created, Coordinator                           bool
-	Tasks                                          []string
-	Dispatches                                     int
-	LoseDispatchAt                                 int
-	Acked                                          map[string]bool
-	Replies                                        int
+	Name, Base, Agent, AgentIncarnation, Comment, Path, Branch, Repo string
+	Created, Coordinator                                             bool
+	Tasks                                                            []string
+	Dispatches                                                       int
+	LoseDispatchAt                                                   int
+	EscalationAt                                                     int
+	ForceSourceChange                                                bool
+	TranscriptAfterSwitch                                            bool
+	ReportSourceChanged                                              bool
+	Acked                                                            map[string]bool
+	Replies                                                          int
+	Sends                                                            int
 }
 
 func fakeNativeOrca(stateDir string, args []string) int {
@@ -46,7 +51,11 @@ func fakeNativeOrca(stateDir string, args []string) int {
 	}
 	terminal := func(handle string) map[string]any {
 		if handle == "term-agent" {
-			return map[string]any{"handle": handle, "incarnationId": "inc-agent", "worktreeId": worktreeID(), "worktreePath": filepath.ToSlash(state.Path), "branch": "refs/heads/" + state.Branch, "connected": true, "agentIdentity": state.Agent}
+			incarnation := state.AgentIncarnation
+			if incarnation == "" {
+				incarnation = "inc-agent"
+			}
+			return map[string]any{"handle": handle, "incarnationId": incarnation, "worktreeId": worktreeID(), "worktreePath": filepath.ToSlash(state.Path), "branch": "refs/heads/" + state.Branch, "connected": true, "agentIdentity": state.Agent}
 		}
 		return map[string]any{"handle": handle, "incarnationId": "inc-coordinator", "worktreeId": "fake-repo::" + filepath.ToSlash(state.Repo), "worktreePath": filepath.ToSlash(state.Repo), "branch": "refs/heads/main", "connected": true}
 	}
@@ -114,6 +123,13 @@ func fakeNativeOrca(stateDir string, args []string) int {
 			state.Replies++
 			save()
 			return fakeOrcaOK(map[string]any{"question": map[string]any{"message_id": "msg-ask-1", "dispatch_id": "ctx-1", "answer_body": arg(args, "--body")}, "mutation": map[string]any{"requestId": "request-reply-1"}})
+		case "send":
+			if arg(args, "--to") != fmt.Sprintf("dispatch:ctx-%d", state.EscalationAt) || arg(args, "--run") != "run-fake" {
+				return fakeOrcaErr("invalid_argument", "wrong active Dispatch")
+			}
+			state.Sends++
+			save()
+			return fakeOrcaOK(map[string]any{"message": map[string]any{"id": fmt.Sprintf("msg-send-%d", state.Sends), "to_handle": arg(args, "--to")}, "mutation": map[string]any{"requestId": fmt.Sprintf("request-send-%d", state.Sends)}})
 		case "run-list":
 			return fakeOrcaOK(map[string]any{"runs": []any{map[string]any{"id": "run-fake", "objective": arg(args, "--objective"), "coordinator_handle": "term-coordinator"}}})
 		case "task-create":
@@ -155,7 +171,12 @@ func fakeNativeOrca(stateDir string, args []string) int {
 				message := map[string]any{"id": "msg-ask-1", "from_handle": "dispatch:ctx-1", "type": "question", "body": "Which approach?", "payload": string(payload)}
 				return fakeOrcaOK(map[string]any{"runId": "run-fake", "deliveryId": "delivery-ask-1", "messages": []any{message}})
 			}
-			if state.Dispatches > 0 && (state.Dispatches > 1 || state.Replies > 0) && !state.Acked[fmt.Sprintf("delivery-done-%d", state.Dispatches)] {
+			if state.Dispatches == state.EscalationAt && state.Sends == 0 && !state.Acked[fmt.Sprintf("delivery-escalation-%d", state.EscalationAt)] {
+				n := state.Dispatches
+				message := map[string]any{"id": fmt.Sprintf("msg-escalation-%d", n), "from_handle": fmt.Sprintf("dispatch:ctx-%d", n), "type": "escalation", "subject": "Need more guidance", "body": "Send guidance to the current Dispatch"}
+				return fakeOrcaOK(map[string]any{"runId": "run-fake", "deliveryId": fmt.Sprintf("delivery-escalation-%d", n), "messages": []any{message}})
+			}
+			if state.Dispatches > 0 && (state.Dispatches > 1 || state.Replies > 0) && (state.Dispatches != state.EscalationAt || state.Sends > 0) && !state.Acked[fmt.Sprintf("delivery-done-%d", state.Dispatches)] {
 				n := state.Dispatches
 				payload, _ := json.Marshal(map[string]any{"taskId": fmt.Sprintf("task-%d", n), "dispatchId": fmt.Sprintf("ctx-%d", n), "outcome": "succeeded"})
 				message := map[string]any{"id": fmt.Sprintf("msg-%d", n), "from_handle": "term-agent", "type": "worker_done", "body": fmt.Sprintf("DONE %d", n), "payload": string(payload)}
@@ -164,6 +185,19 @@ func fakeNativeOrca(stateDir string, args []string) int {
 			return fakeOrcaOK(map[string]any{"runId": "run-fake", "messages": []any{}})
 		case "worker-read":
 			n, _ := strconv.Atoi(strings.TrimPrefix(arg(args, "--dispatch"), "ctx-"))
+			if arg(args, "--cursor") != "" && state.ForceSourceChange {
+				state.ForceSourceChange = false
+				state.TranscriptAfterSwitch = true
+				state.ReportSourceChanged = true
+				save()
+				return fakeOrcaErr("source_changed", "worker-read source_changed; restart without cursor")
+			}
+			if state.TranscriptAfterSwitch {
+				changed := state.ReportSourceChanged
+				state.ReportSourceChanged = false
+				save()
+				return fakeOrcaOK(map[string]any{"dispatchId": arg(args, "--dispatch"), "source": "transcript", "nextCursor": fmt.Sprintf("transcript-cursor-%d", n), "contentComplete": true, "sourceChanged": changed, "transcript": map[string]any{"text": fmt.Sprintf("complete fake output %d", n)}})
+			}
 			return fakeOrcaOK(map[string]any{"dispatchId": arg(args, "--dispatch"), "source": "terminal", "cursor": fmt.Sprintf("cursor-%d", n), "contentComplete": false, "clipping": []string{"terminal_fallback"}, "fallbackReason": "session_not_reported", "terminal": map[string]any{"tail": []string{fmt.Sprintf("fake output %d", n)}}})
 		case "worker-show":
 			n, _ := strconv.Atoi(strings.TrimPrefix(arg(args, "--dispatch"), "ctx-"))

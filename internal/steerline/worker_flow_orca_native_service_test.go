@@ -27,6 +27,7 @@ func TestNativeOrcaCenterReusesWorkerAfterRestartAndSettlement(t *testing.T) {
 	stateDir := t.TempDir()
 	c.Host, c.Agent, c.Sandbox, c.Claimant = "orca", "codex", "workspace-write", "operator"
 	c.Orca = OrcaConfig{Executable: exe, Args: []string{"--fake", "orca-native", stateDir}, Shell: "cmd.exe", WaitTimeout: "2s"}
+	c.configDigest = digestValue(c) // The production CLI obtains this from LoadConfig.
 	commands := CommandService{Store: store, Project: c.Identity()}
 	input := taskBatchFixture(t, c, commit, batchTasks(808), nil)
 	validation, err := commands.ValidateTaskBatch(ctx, c, input)
@@ -89,34 +90,51 @@ func TestNativeOrcaCenterReusesWorkerAfterRestartAndSettlement(t *testing.T) {
 	if run == nil || run.Process == nil || *run.Process != original || execution.SessionID != session || *run.WorktreePath != workspace || run.Decision == nil || run.Decision.Status != "pending" || orcaQuestionID(run.Decision) != "msg-ask-1" {
 		t.Fatalf("center restart lost the original Orca conversation: %+v / %+v", run, execution)
 	}
-	answer := DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, Note: "Keep this session", AnsweredBy: "operator"}
-	if err := normalizeNativeDecisionAnswer(&run.Decision.Request, &answer); err != nil {
-		t.Fatal(err)
-	}
-	run.Decision.Status, run.Decision.OptionID, run.Decision.Note, run.Decision.AnsweredBy = "answer_saved", answer.OptionID, answer.Note, answer.AnsweredBy
-	run.Decision.Answers = answer.Answers
-	answered := now()
-	run.Decision.AnsweredAt = &answered
-	run.Decision.Version++
+	s.State.Service.Ready = true
 	if err := s.save(); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.applyNativeOrcaDecision(ctx, run, workflow, execution, answer, strings.Repeat("c", 32)); err != nil {
+	command, created, err := SubmitDecisionAnswer(ctx, s.Config, AnswerOptions{RunID: "808", DecisionID: run.Decision.ID, Note: "Keep this session", By: "operator"})
+	if err != nil || !created || command.Status != "pending" {
+		t.Fatalf("native Orca answer was not submitted through the shared command path: %+v / %v", command, err)
+	}
+	if err := s.processCommandsAndDecisions(ctx); err != nil {
 		t.Fatal(err)
 	}
 	if run.Target.Dispatch != "ctx-1" || run.Decision.Status != "reply_accepted" {
 		t.Fatalf("reply did not target the original question/Dispatch: target=%+v decision=%+v", run.Target, run.Decision)
 	}
+	repeated, created, err := SubmitDecisionAnswer(ctx, s.Config, AnswerOptions{RunID: "808", DecisionID: run.Decision.ID, Note: "Keep this session", By: "operator"})
+	if err != nil || created || repeated.CommandID != command.CommandID {
+		t.Fatalf("repeated public answer was not idempotent: first=%+v repeated=%+v created=%v error=%v", command, repeated, created, err)
+	}
+	firstStatePath := filepath.Join(stateDir, "native-orca.json")
+	firstData, err := os.ReadFile(firstStatePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var firstFake fakeNativeOrcaState
+	if err := json.Unmarshal(firstData, &firstFake); err != nil {
+		t.Fatal(err)
+	}
+	firstFake.ForceSourceChange = true
+	firstData, _ = json.Marshal(firstFake)
+	if err := AtomicWrite(firstStatePath, firstData); err != nil {
+		t.Fatal(err)
+	}
 	if err := s.pollNativeOrcaWorker(ctx, run); err != nil {
 		t.Fatal(err)
 	}
 	workflow, execution = s.workflowRecords(run)
+	if attempt := s.workflowAttempt(run, run.AttemptID); attempt == nil || attempt.OutputSource != "transcript" || execution.OrcaNative.Turns[0].OutputSource != "transcript" || !execution.OrcaNative.Turns[0].OutputComplete {
+		t.Fatalf("source_changed was not retried from the new source: attempt=%+v turn=%+v", attempt, execution.OrcaNative.Turns[0])
+	}
 	if workflow.Phase != "waiting_decision" || execution.LastStoppedTurnID == "" || run.Decision == nil || run.Decision.Status != "pending" {
 		t.Fatalf("first Orca settlement did not produce feedback Decision: workflow=%+v execution=%+v decision=%+v", workflow, execution, run.Decision)
 	}
-	answer = DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, OptionID: "continue", Note: "Continue in the same session", AnsweredBy: "operator"}
+	answer := DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, OptionID: "continue", Note: "Continue in the same session", AnsweredBy: "operator"}
 	run.Decision.Status, run.Decision.OptionID, run.Decision.Note, run.Decision.AnsweredBy = "answer_saved", answer.OptionID, answer.Note, answer.AnsweredBy
-	answered = now()
+	answered := now()
 	run.Decision.AnsweredAt = &answered
 	run.Decision.Version++
 	if err := s.save(); err != nil {
@@ -171,7 +189,80 @@ func TestNativeOrcaCenterReusesWorkerAfterRestartAndSettlement(t *testing.T) {
 		t.Fatalf("lost Dispatch receipt was not reconciled from the original agent: workflow=%+v execution=%+v", workflow, execution)
 	}
 	data, err = os.ReadFile(statePath)
-	if err != nil || !strings.Contains(string(data), `"Dispatches":3`) || !strings.Contains(string(data), `"Replies":1`) {
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(data, &fake); err != nil {
+		t.Fatal(err)
+	}
+	fake.EscalationAt = 4
+	data, _ = json.Marshal(fake)
+	if err := AtomicWrite(statePath, data); err != nil {
+		t.Fatal(err)
+	}
+	answer = DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, OptionID: "continue", Note: "Start one more Dispatch", AnsweredBy: "operator"}
+	run.Decision.Status, run.Decision.OptionID, run.Decision.Note, run.Decision.AnsweredBy = "answer_saved", answer.OptionID, answer.Note, answer.AnsweredBy
+	answered = now()
+	run.Decision.AnsweredAt = &answered
+	run.Decision.Version++
+	if err := s.save(); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.applyNativeOrcaDecision(ctx, run, workflow, execution, answer, strings.Repeat("f", 32)); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.pollNativeOrcaWorker(ctx, run); err != nil {
+		t.Fatal(err)
+	}
+	workflow, execution = s.workflowRecords(run)
+	if run.Target.Dispatch != "ctx-4" || run.Decision == nil || run.Decision.Status != "pending" || orcaQuestionID(run.Decision) != "" || execution.LastStoppedTurnID == execution.CurrentTurnID {
+		t.Fatalf("active Orca escalation did not keep the current Dispatch: target=%+v decision=%+v execution=%+v", run.Target, run.Decision, execution)
+	}
+	command, created, err = SubmitDecisionAnswer(ctx, s.Config, AnswerOptions{RunID: "808", DecisionID: run.Decision.ID, Option: "continue", Note: "Continue current work", By: "operator"})
+	if err != nil || !created {
+		t.Fatalf("active send answer was not accepted: %+v / %v", command, err)
+	}
+	if err := s.processCommandsAndDecisions(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if run.Target.Dispatch != "ctx-4" || run.Decision.Status != "reply_accepted" {
+		t.Fatal("active feedback did not stay on the original Dispatch")
+	}
+	if err := s.pollNativeOrcaWorker(ctx, run); err != nil {
+		t.Fatal(err)
+	}
+	workflow, execution = s.workflowRecords(run)
+	if execution.TurnNumber != 4 || execution.OrcaNative.Turns[3].DispatchID != "ctx-4" || workflow.Phase != "waiting_decision" {
+		t.Fatal("active feedback caused an extra worker or lost settlement")
+	}
+	data, err = os.ReadFile(statePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(data, &fake); err != nil {
+		t.Fatal(err)
+	}
+	fake.AgentIncarnation = "replaced-agent"
+	data, _ = json.Marshal(fake)
+	if err := AtomicWrite(statePath, data); err != nil {
+		t.Fatal(err)
+	}
+	answer = DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, OptionID: "continue", Note: "Do not replace the lost worker", AnsweredBy: "operator"}
+	run.Decision.Status, run.Decision.OptionID, run.Decision.Note, run.Decision.AnsweredBy = "answer_saved", answer.OptionID, answer.Note, answer.AnsweredBy
+	answered = now()
+	run.Decision.AnsweredAt = &answered
+	run.Decision.Version++
+	if err := s.save(); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.applyNativeOrcaDecision(ctx, run, workflow, execution, answer, strings.Repeat("1", 32)); err != nil {
+		t.Fatal(err)
+	}
+	if run.Decision.Status != "answer_saved" || run.Target.Dispatch != "ctx-4" || run.Error == nil || !strings.Contains(*run.Error, "original Orca session is unavailable") {
+		t.Fatalf("replacement agent did not retain feedback and original binding: decision=%+v target=%+v error=%q", run.Decision, run.Target, deref(run.Error))
+	}
+	data, err = os.ReadFile(statePath)
+	if err != nil || !strings.Contains(string(data), `"Dispatches":4`) || !strings.Contains(string(data), `"Replies":1`) || !strings.Contains(string(data), `"Sends":1`) {
 		t.Fatalf("fake Orca duplicated a Dispatch or reply during recovery: %s / %v", data, err)
 	}
 }
