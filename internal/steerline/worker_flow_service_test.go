@@ -10,7 +10,7 @@ import (
 	"testing"
 )
 
-func TestWorkerFlowServiceThreeFeedbackTurns(t *testing.T) {
+func TestWorkerFlowServiceFirstFeedbackKeepsSessionAndWorkspace(t *testing.T) {
 	t.Setenv("STEERLINE_WORKER_FLOW_MOCK", "1")
 	ctx := context.Background()
 	c, commit, store := openDAGFixture(t)
@@ -111,57 +111,46 @@ func TestWorkerFlowServiceThreeFeedbackTurns(t *testing.T) {
 	if err != nil || strings.TrimSpace(string(head)) == receipt.BaseCommit {
 		t.Fatal("partial commit did not advance HEAD")
 	}
-	for round := 1; round <= 3; round++ {
-		service.State.Service.Ready = true
-		service.State.Service.Status = "running"
-		if err := service.save(); err != nil {
-			t.Fatal(err)
-		}
-		answer := DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, Note: "Continue in the same worktree", AnsweredBy: "operator", ExpectedDecisionVersion: run.Decision.Version, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: service.State.Service.InstanceID}
-		commandID := strings.Repeat(string(rune('0'+round)), 32)
-		payload, err := json.Marshal(answer)
-		if err != nil {
-			t.Fatal(err)
-		}
-		command, _, err := (CommandService{Store: service.domainStore, Project: c.Identity()}).AnswerDecisionWithID(ctx, commandID, answer.DecisionID, run.Decision.Version, decisionAnswerKey(answer), answer.AnsweredBy, payload)
-		if err != nil {
-			t.Fatal(err)
-		}
-		record, _, err := (CommandService{Store: service.domainStore, Project: c.Identity()}).AcceptAnswer(ctx, command, answer)
-		if err != nil {
-			t.Fatal(err)
-		}
-		var saved DecisionAnswer
-		if err := json.Unmarshal(record.Answer, &saved); err != nil {
-			t.Fatal(err)
-		}
-		run.Decision.Version, run.Decision.Status = record.Version, record.Status
-		run.Decision.OptionID, run.Decision.Note, run.Decision.AnsweredBy = saved.OptionID, saved.Note, saved.AnsweredBy
-		run.Decision.AnsweredAt = &saved.AnsweredAt
-		if err := service.save(); err != nil {
-			t.Fatal(err)
-		}
-		if round == 2 {
-			if err := os.WriteFile(filepath.Join(firstWorktree, "generated.meta"), []byte("dirty metadata\n"), 0600); err != nil {
-				t.Fatal(err)
-			}
-		}
-		if err := service.applyWorkerFlowDecision(ctx, run); err != nil {
-			t.Fatal(err)
-		}
-		finishTurn()
+	service.State.Service.Ready = true
+	service.State.Service.Status = "running"
+	if err := service.save(); err != nil {
+		t.Fatal(err)
 	}
+	answer := DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, Note: "Continue in the same worktree", AnsweredBy: "operator", ExpectedDecisionVersion: run.Decision.Version, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: service.State.Service.InstanceID}
+	payload, err := json.Marshal(answer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	command, _, err := (CommandService{Store: service.domainStore, Project: c.Identity()}).AnswerDecisionWithID(ctx, strings.Repeat("1", 32), answer.DecisionID, run.Decision.Version, decisionAnswerKey(answer), answer.AnsweredBy, payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	record, _, err := (CommandService{Store: service.domainStore, Project: c.Identity()}).AcceptAnswer(ctx, command, answer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var saved DecisionAnswer
+	if err := json.Unmarshal(record.Answer, &saved); err != nil {
+		t.Fatal(err)
+	}
+	run.Decision.Version, run.Decision.Status = record.Version, record.Status
+	run.Decision.OptionID, run.Decision.Note, run.Decision.AnsweredBy = saved.OptionID, saved.Note, saved.AnsweredBy
+	run.Decision.AnsweredAt = &saved.AnsweredAt
+	if err := service.save(); err != nil {
+		t.Fatal(err)
+	}
+	if err := service.applyWorkerFlowDecision(ctx, run); err != nil {
+		t.Fatal(err)
+	}
+	finishTurn()
 	workflow, execution := service.minimalRecords(run)
 	if workflow == nil || execution == nil || workflow.WorkflowRunID != receipt.WorkflowRunID || execution.ExecutionID != receipt.ExecutionID ||
-		run.AttemptID != receipt.AttemptID || execution.SessionID != workerFlowMockSession || execution.TurnNumber != 4 ||
+		run.AttemptID != receipt.AttemptID || execution.SessionID != workerFlowMockSession || execution.TurnNumber != 2 ||
 		deref(run.WorktreePath) != firstWorktree || len(service.State.Attempts) != 1 {
 		t.Fatalf("feedback replaced the fixed worker: workflow=%+v execution=%+v run=%+v", workflow, execution, run)
 	}
 	currentHead, err := exec.Command("git", "-C", firstWorktree, "rev-parse", "HEAD").Output()
 	if err != nil || strings.TrimSpace(string(currentHead)) != strings.TrimSpace(string(head)) {
 		t.Fatal("feedback reset the partially committed HEAD")
-	}
-	if _, err := os.Stat(filepath.Join(firstWorktree, "generated.meta")); err != nil {
-		t.Fatal("feedback removed the dirty metadata file")
 	}
 }

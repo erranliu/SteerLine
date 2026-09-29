@@ -162,7 +162,7 @@ func startLocalWorkerTurn(ctx context.Context, c Config, run *Run, execution *Ex
 		return nil, "", errors.New("saved local worker session ID is not native Codex identity")
 	}
 	if canonical(execution.Workspace.Worktree) != canonical(*run.WorktreePath) || execution.Workspace.Branch != *run.WorktreeBranch {
-		return nil, "", errors.New("worker turn workspace differs from the saved execution")
+		return nil, "", fmt.Errorf("worker turn workspace differs from the saved execution: execution=%q/%q run=%q/%q", execution.Workspace.Worktree, execution.Workspace.Branch, *run.WorktreePath, *run.WorktreeBranch)
 	}
 	dir := filepath.Join(c.RunDir, "runs", run.RunID, "turns", turnID)
 	if err := os.MkdirAll(dir, 0700); err != nil {

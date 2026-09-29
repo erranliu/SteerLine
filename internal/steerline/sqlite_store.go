@@ -923,7 +923,7 @@ func (t *sqliteTx) PutExecution(v ExecutionRecord) error {
 		}
 		if old.SessionID != "" && old.SessionID != v.SessionID || v.TurnNumber < old.TurnNumber ||
 			v.TurnNumber == old.TurnNumber && old.CurrentTurnID != "" && old.CurrentTurnID != v.CurrentTurnID ||
-			v.TurnNumber == old.TurnNumber && old.LastStoppedTurnID != "" && old.LastStoppedTurnID != v.LastStoppedTurnID {
+			v.TurnNumber == old.TurnNumber && old.LastStoppedTurnID != "" && old.LastStoppedTurnID != v.LastStoppedTurnID && v.LastStoppedTurnID != v.CurrentTurnID {
 			return nativeErr("immutable_task", "worker session or observed turn identity cannot be replaced or rewound")
 		}
 		delivered, e := t.selectedNativeDeliveryExecution(v.ProjectIdentity, v.ExecutionID)
