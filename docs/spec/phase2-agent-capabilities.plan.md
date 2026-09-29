@@ -1,6 +1,6 @@
 # Plan：Codex 规划主 agent 能力验证
 
-任务 ID：14；任务名称：Codex 规划主 agent 能力验证；目标：`PHASE2`。唯一执行依据：[Spec](phase2-agent-capabilities.spec.md)。一个独立实现 PR 交付。
+任务 ID：43；任务名称：Codex 规划主 agent 能力验证；目标：`PHASE2`。唯一执行依据：[Spec](phase2-agent-capabilities.spec.md)。一个独立实现 PR 交付。
 
 硬前置：无。
 

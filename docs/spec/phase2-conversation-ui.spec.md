@@ -1,10 +1,10 @@
 # Spec：规划对话原生界面
 
-任务 ID：22；任务名称：规划对话原生界面；目标：`PHASE2`。状态：规格已编写，尚未实现或验收。配套 [Plan](phase2-conversation-ui.plan.md)。本任务由一个独立实现 PR 交付。
+任务 ID：51；任务名称：规划对话原生界面；目标：`PHASE2`。状态：规格已编写，尚未实现或验收。配套 [Plan](phase2-conversation-ui.plan.md)。本任务由一个独立实现 PR 交付。
 
 ## 范围与前置
 
-硬前置：#15、#18。依赖 [WinUI 基座](phase2-winui-foundation.spec.md)和[规划会话服务](phase2-planning-sessions.spec.md)，遵守[共同约束](phase2-constraints.md)。交付可实际讨论目标、读文档和产生受控草稿的规划对话页；文档人工审阅与发布按钮由独立任务交付。
+硬前置：#44、#47。依赖 [WinUI 基座](phase2-winui-foundation.spec.md)和[规划会话服务](phase2-planning-sessions.spec.md)，遵守[共同约束](phase2-constraints.md)。交付可实际讨论目标、读文档和产生受控草稿的规划对话页；文档人工审阅与发布按钮由独立任务交付。
 
 ## 页面与输入
 

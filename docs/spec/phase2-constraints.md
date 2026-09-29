@@ -4,7 +4,7 @@
 
 ## 权威与固定依赖
 
-Go 服务复用现有 SQLite、QueryService/CommandService、Operation 和规范事件/正文存储。UI 是 C# WinUI 3 客户端，主 agent 仅支持本机 Codex app-server；任务 worker 继续使用现有 local Codex / Orca 后端。规划 session、任务 Execution 和外部 thread 身份分开。主 agent 不直接启动任务、创建 DAG、运行实现或调用子 agent。
+Go 服务复用现有 SQLite、QueryService/CommandService、Operation 和规范事件/正文存储。UI 是 C# WinUI 3 客户端，主 agent 仅支持本机 Codex app-server；任务 worker 使用 #36 持续会话的 local Codex / Orca 后端。规划 session、任务 Execution 和外部 thread 身份分开。主 agent 不直接启动任务、创建 DAG、运行实现或调用子 agent。
 
 适用[执行共同约束](execution-architecture.spec.md)、[原生任务共同约束](native-task-constraints.md)、[服务生命周期](pr-03-service-lifecycle.spec.md)、[会话契约](pr-04b-conversation-events.spec.md)、[固定 DAG](task-dag.spec.md)。当前开发版本不建设旧状态迁移或自动覆盖；当前格式重启、幂等、交付核验必须保留。引用历史 Spec 时只复用当前有效接口，历史兼容说明不扩展本组任务范围。
 
@@ -12,7 +12,7 @@ Go 服务复用现有 SQLite、QueryService/CommandService、Operation 和规范
 
 ## 公共传输契约
 
-本机产品协议版本为 steerline-client/v1；HTTP 路由以 /v1/projects/{project_id} 为根。该版本与 Codex JSON-RPC、Orca 和 native-task/v1 分开。服务发现和认证由本机客户端协议任务实现；业务 DTO 和路由由所属领域任务实现，传输层不提前伪造未交付领域。
+本机产品协议版本为 steerline-client/v1；HTTP 路由以 /v1/projects/{project_id} 为根。该版本与 Codex JSON-RPC、Orca 和 #36 的 worker 协议版本分开。服务发现和认证由本机客户端协议任务实现；业务 DTO 和路由由所属领域任务实现，传输层不提前伪造未交付领域。
 
 读响应携带 project_id、service_instance_id（离线为 null）、sampled_at、来源标志 live/offline、对象版本；多对象结果区分 database_revision、document_version 与各自游标，不制造跨 Git/SQLite 的全局原子快照。列表 items、next_cursor、has_more 显式返回；游标失效返回 cursor_invalidated，客户端刷新而不拼接新旧分页。
 

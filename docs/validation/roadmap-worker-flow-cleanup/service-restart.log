@@ -1,0 +1,8 @@
+[service-window] Keep this window open or minimized while the service runs.
+[service-window] Ctrl+C requests shutdown. Closing with X ends it abruptly.
+SteerLine starting · dispatch manual · startup cbf9352d1f0b8b68ec8c1e4b282b4c6f
+steerline: critical domain persistence: invalid step attempt status "abandoned"
+
+[service-window] service exited with code 1.
+[service-window] Reopen this launcher to restart with the current config.
+Press any key to continue . . . 

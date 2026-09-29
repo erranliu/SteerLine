@@ -1,0 +1,10 @@
+{
+  "request_id": "085e176f629b481e90049127636791b7",
+  "task_id": "30",
+  "status": "discarded",
+  "graph_revision": 37,
+  "cleanup_pending": [
+    "workspace_cleanup:30162573-cc04-416e-bef4-226c418dde1f::C:/Users/Administrator/orca/workspaces/SteerLine/steerline-965aa400646f",
+    "workspace_cleanup:30162573-cc04-416e-bef4-226c418dde1f::C:/Users/Administrator/orca/workspaces/SteerLine/steerline-a189b2ee950b"
+  ]
+}

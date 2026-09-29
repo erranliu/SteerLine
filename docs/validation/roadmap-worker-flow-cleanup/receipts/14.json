@@ -1,0 +1,11 @@
+{
+  "request_id": "8f3dbd7783c34885b5553e766e29d9bf",
+  "task_id": "14",
+  "status": "discarded",
+  "graph_revision": 22,
+  "cleanup_pending": [
+    "workspace_cleanup:30162573-cc04-416e-bef4-226c418dde1f::C:/Users/Administrator/orca/workspaces/SteerLine/steerline-752d3210250b",
+    "workspace_cleanup:30162573-cc04-416e-bef4-226c418dde1f::C:/Users/Administrator/orca/workspaces/SteerLine/steerline-f59943a649ed",
+    "workspace_cleanup:c:\\steerlineruntime\\state\\steerline-e6a8a7b6252f\\worktrees\\e7af7868bce90918afb7306240951fca"
+  ]
+}

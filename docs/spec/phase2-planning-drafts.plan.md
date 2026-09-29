@@ -1,12 +1,12 @@
 # Plan：规划提案与受控草稿
 
-任务 ID：17；任务名称：规划提案与受控草稿；目标：`PHASE2`。唯一执行依据：[Spec](phase2-planning-drafts.spec.md)。一个独立实现 PR 交付。
+任务 ID：46；任务名称：规划提案与受控草稿；目标：`PHASE2`。唯一执行依据：[Spec](phase2-planning-drafts.spec.md)。一个独立实现 PR 交付。
 
-硬前置：#16。全部按原任务交付核验，不能按接口里程碑提前执行。
+硬前置：#45。全部按原任务交付核验，不能按接口里程碑提前执行。
 
 ## 实施顺序
 
-1. 以 #16 当前接口建立规划领域表和 DTO；实现 RegisterPlanningWorkspace、人工 fast-forward 同步、固定 Git 文档基线及离线读模型。
+1. 以 #45 当前接口建立规划领域表和 DTO；实现 RegisterPlanningWorkspace、人工 fast-forward 同步、固定 Git 文档基线及离线读模型。
 2. 先实现共用 guard 与持久 owner/generation，使用模拟 turn/publish 消费者验证争抢、旧 token 与恢复阻塞，后继直接调用同一入口。
 3. 扩展共享 Git ref 分配器为按 request 摘要的原子批次预留，接 SQLite Operation；验证与现有 CLI 同时占号及各个响应丢失窗口。
 4. 实现提案生命周期、受管正文版本与草稿投影，接路径/配额和既有 DAG/任务结构校验。

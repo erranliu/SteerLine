@@ -1,0 +1,101 @@
+[
+  {
+    "task_id": "14",
+    "added_predecessors": null,
+    "confirm_unfinished_reset": true,
+    "confirmed_process_stopped": false,
+    "old_attempt_id": "3374b8e0a66778ffcbc4b96fa7e05a76",
+    "old_execution_id": "1dad77e8eda9b4d09a3061b3d19ff9a2",
+    "old_pr_url": "",
+    "old_terminal": {
+      "kind": "orca_supervised",
+      "terminal": "term_f3feb3f8-1068-4767-8e27-c147442607db",
+      "runtime_id": "b77f34d6-2f87-4533-ae03-f5d69555c5dc",
+      "incarnation": "7fb27479-8a44-477b-974f-25e34ad291ad",
+      "coordinator_runtime_id": "baf46a9c-923a-4bf1-b595-b866b5555e2e",
+      "orchestration_run": "run_2e1731b1b69c",
+      "task": "task_161878eb946e",
+      "dispatch": "ctx_b4d79263d0ec",
+      "execution_host": "e68f4edf-8a83-42c2-a9da-6d404d3aa3d8",
+      "worktree_id": "30162573-cc04-416e-bef4-226c418dde1f::C:/Users/Administrator/orca/workspaces/SteerLine/steerline-f59943a649ed"
+    },
+    "old_worker_state": "settled_abandoned",
+    "old_worktree_id": "30162573-cc04-416e-bef4-226c418dde1f::C:/Users/Administrator/orca/workspaces/SteerLine/steerline-f59943a649ed",
+    "reason": "User requested a fresh isolated execution; abandon old Run and retain old resources",
+    "receipt": {
+      "request_id": "f07459ca77c34d8ea5a97d87a722e610",
+      "task_id": "14",
+      "task_version": 7,
+      "graph_revision": 19,
+      "abandoned_run_id": "f59943a649ed4ccdc0f59acb46b38437",
+      "status": "open"
+    },
+    "requested_by": "lmas1"
+  },
+  {
+    "task_id": "15",
+    "added_predecessors": null,
+    "confirm_unfinished_reset": true,
+    "confirmed_process_stopped": false,
+    "old_attempt_id": "506f4ec02b879ebf65ac65e5a8a44ff1",
+    "old_execution_id": "e98cd1d02ab5bdf7d89e2f06a675d64e",
+    "old_pr_url": "",
+    "old_terminal": {
+      "kind": "orca_supervised",
+      "terminal": "term_e1e79299-4a1d-42c9-bcc0-05d9762f3095",
+      "runtime_id": "b77f34d6-2f87-4533-ae03-f5d69555c5dc",
+      "incarnation": "d10b4196-858c-42f6-9d4a-b49787101fe7",
+      "coordinator_runtime_id": "baf46a9c-923a-4bf1-b595-b866b5555e2e",
+      "orchestration_run": "run_98835a94c458",
+      "task": "task_42ebf72b9668",
+      "dispatch": "ctx_74e5a111d175",
+      "execution_host": "e68f4edf-8a83-42c2-a9da-6d404d3aa3d8",
+      "worktree_id": "30162573-cc04-416e-bef4-226c418dde1f::C:/Users/Administrator/orca/workspaces/SteerLine/steerline-9417f8837468"
+    },
+    "old_worker_state": "settled_abandoned",
+    "old_worktree_id": "30162573-cc04-416e-bef4-226c418dde1f::C:/Users/Administrator/orca/workspaces/SteerLine/steerline-9417f8837468",
+    "reason": "User requested a fresh isolated execution; abandon old Run and retain old resources",
+    "receipt": {
+      "request_id": "fdf42ac6a1bb44f2810c0814388315a6",
+      "task_id": "15",
+      "task_version": 5,
+      "graph_revision": 20,
+      "abandoned_run_id": "9417f8837468c626c3c4555d5ca4b947",
+      "status": "open"
+    },
+    "requested_by": "lmas1"
+  },
+  {
+    "task_id": "30",
+    "added_predecessors": null,
+    "confirm_unfinished_reset": true,
+    "confirmed_process_stopped": false,
+    "old_attempt_id": "701d2123e7db41a36d29ea95a1e6b69a",
+    "old_execution_id": "4a35687421d8cc33f55899e885263466",
+    "old_pr_url": "",
+    "old_terminal": {
+      "kind": "orca_supervised",
+      "terminal": "term_62d9ca68-b5be-4400-b198-79fd96214c50",
+      "runtime_id": "b77f34d6-2f87-4533-ae03-f5d69555c5dc",
+      "incarnation": "21f87445-37ad-4e60-bcbe-1ab3ac5adaa6",
+      "coordinator_runtime_id": "baf46a9c-923a-4bf1-b595-b866b5555e2e",
+      "orchestration_run": "run_5b3382fc9ab2",
+      "task": "task_01006be44e23",
+      "dispatch": "ctx_f73922c720d0",
+      "execution_host": "e68f4edf-8a83-42c2-a9da-6d404d3aa3d8",
+      "worktree_id": "30162573-cc04-416e-bef4-226c418dde1f::C:/Users/Administrator/orca/workspaces/SteerLine/steerline-965aa400646f"
+    },
+    "old_worker_state": "settled_abandoned",
+    "old_worktree_id": "30162573-cc04-416e-bef4-226c418dde1f::C:/Users/Administrator/orca/workspaces/SteerLine/steerline-965aa400646f",
+    "reason": "User requested a fresh isolated execution; abandon old Run and retain old resources",
+    "receipt": {
+      "request_id": "1935cddd55324a0a9f5a029e186e9219",
+      "task_id": "30",
+      "task_version": 5,
+      "graph_revision": 21,
+      "abandoned_run_id": "965aa400646f9355d355ef1ef4457f4b",
+      "status": "open"
+    },
+    "requested_by": "lmas1"
+  }
+]

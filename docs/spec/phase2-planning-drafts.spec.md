@@ -1,10 +1,10 @@
 # Spec：规划提案与受控草稿
 
-任务 ID：17；任务名称：规划提案与受控草稿；目标：`PHASE2`。状态：规格已编写，尚未实现或验收。配套 [Plan](phase2-planning-drafts.plan.md)。本任务由一个独立实现 PR 交付。
+任务 ID：46；任务名称：规划提案与受控草稿；目标：`PHASE2`。状态：规格已编写，尚未实现或验收。配套 [Plan](phase2-planning-drafts.plan.md)。本任务由一个独立实现 PR 交付。
 
 ## 范围与前置
 
-硬前置：#16。依赖 [本机客户端协议](phase2-local-api.spec.md)，遵守[共同约束](phase2-constraints.md)。
+硬前置：#45。依赖 [本机客户端协议](phase2-local-api.spec.md)，遵守[共同约束](phase2-constraints.md)。
 本任务是规划领域权威：固定 worktree、提案与 ID 预留、草稿/校验、正式文档只读快照和共享写入仲裁均在此实现。SQLite 仍是业务单写存储，Git shared ref 仍是任务数字分配权威。会话进程和正式发布由后继实现。
 
 ## 固定规划工作区及统一写入 guard

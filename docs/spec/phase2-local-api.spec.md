@@ -1,10 +1,10 @@
 # Spec：本机客户端协议与历史查询
 
-任务 ID：16；任务名称：本机客户端协议与历史查询；目标：`PHASE2`。状态：规格已编写，尚未实现或验收。配套 [Plan](phase2-local-api.plan.md)。本任务由一个独立实现 PR 交付。
+任务 ID：45；任务名称：本机客户端协议与历史查询；目标：`PHASE2`。状态：规格已编写，尚未实现或验收。配套 [Plan](phase2-local-api.plan.md)。本任务由一个独立实现 PR 交付。
 
 ## 范围与前置
 
-原固定规格无硬前置；中心已追加 #26/#35。取得前置交付后消费[中心边界](center-boundary.spec.md)的同一 Query/Command，不扩大本任务原固定 HTTP/离线协议范围。
+硬前置：#36 [持续 worker 流程](worker-flow.spec.md)。消费已有 Query/Command、五阶段状态和原会话反馈，不以多候选交付或全面 SQL 搬包为前置。
 遵守[第二阶段共同约束](phase2-constraints.md)。交付现有执行能力的本机协议适配和离线查询；规划提案、会话和发布的业务模型由其所属任务实现，本任务只提供固定接线方式和 unsupported 响应。
 
 ## 连接和认证
@@ -17,7 +17,7 @@ Go 服务取得现有项目锁并完成恢复后，在 127.0.0.1 随机端口提
 
 实现项目下 GET /tasks、/tasks/{id}、/graph、/executions/{id}、/decisions、/conversation、/bodies、/commands/{request_id}；复用现有查询的筛选、稳定身份、正文分页、图截断和能力原因。HTTP 不读取活动文件投影作为业务权威。
 
-POST /commands 接公共信封，首批 action 只映射现有 start_task、派发模式/暂停、回答、允许的恢复与控制命令，不放宽原资格；精确 action 名称映射在实现的机器可读契约表中列出并测试。目标不明确、expected_version 缺失及未知字段拒绝。规划领域未装配时返回 unsupported，不存一个永远不能执行的 accepted 命令。保留原 CommandService 幂等与查询身份。
+POST /commands 接公共信封，首批 action 只映射现有 start_task、派发模式/暂停、原会话完整反馈、明确丢弃与服务控制命令，不引入项目验证或专用恢复流程；精确 action 名称映射在实现的机器可读契约表中列出并测试。目标不明确、expected_version 缺失及未知字段拒绝。规划领域未装配时返回 unsupported，不存一个永远不能执行的 accepted 命令。保留原 CommandService 幂等与查询身份。
 
 GET /commands/{request_id} 对当前项目权威确无记录返回明确 command_not_found；查库失败/身份冲突/离线返回对应诊断，不能伪装为不存在。按共同契约允许原信封幂等补交：请求记录的唯一事务仲裁先于任何外部副作用，迟到原提交与补交竞争不重复启动；已经登记的未知外部结果保持原记录并进入对账，不因 HTTP 重传再调用后端。
 
@@ -27,7 +27,7 @@ GET /events?cursor=... 提供持久查询游标的 SSE 提示；授权走请求�
 
 新增 CLI 只读客户端查询入口，以 JSON 从 stdin 接收同等查询目标和游标，stdout 仅返回同 DTO；命令/变更输入明确拒绝。按只读模式打开当前数据库，不创建库、迁移表、开调度或消费命令，缺文件/旧 schema 返回诊断。在线与离线的同一固定快照除来源/实例/采样字段外内容一致；领域扩展也从同一查询实现注册。
 
-契约样例、错误及 JSON schema 存放在 docs/spec/phase2-client/，由本任务实现时交付；包含既有执行 DTO 和共同信封。规划领域由后续任务增加自己的 schema/handler，不能要求本任务先交付未来业务。
+契约样例、错误及 JSON schema 存放在 docs/spec/phase2-client/，由本任务实现时交付；包含 #36 的执行/会话/PR DTO 和共同信封；尚未提供的多候选能力明确 unsupported。规划领域由后续任务增加自己的 schema/handler，不能要求本任务先交付未来业务。
 
 ## 验收
 

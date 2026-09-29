@@ -1,6 +1,6 @@
 # 第二阶段产品与 UI 规划
 
-本目录描述[产品愿景第二阶段](../roadmap/product-vision.md)：“人与主 agent 受控推进 roadmap”。已选范围已形成 #14–#24 的独立 [Spec/Plan](../spec/README.md)，任务及硬前置见[执行依赖图](../roadmap/execution-map.md)。本目录保留产品与交互说明，不代替执行规格；第一阶段的 #3/#4/#6 剩余验收及新增交付目标见[调整方案](../roadmap/phase-1-delivery.md)。
+本目录描述[产品愿景第二阶段](../roadmap/product-vision.md)：“人与主 agent 受控推进 roadmap”。已选范围已形成 #43–#53 的独立 [Spec/Plan](../spec/README.md)，任务及硬前置见[执行依赖图](../roadmap/execution-map.md)。本目录保留产品与交互说明，不代替执行规格；第一阶段的持续会话、多候选及版本交付目标见[调整方案](../roadmap/phase-1-delivery.md)。
 
 ## 当前文档
 
