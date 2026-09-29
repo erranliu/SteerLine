@@ -123,11 +123,10 @@ func applyWorkerOrcaWorkspace(c Config, run *Run, execution *ExecutionRecord, wo
 		return errors.New("remote worker worktree identity is incomplete")
 	}
 	path := filepath.FromSlash(worktree.Path)
-	run.WorkspaceIntent = &WorkspaceIntent{Path: path, Branch: branch, BaseCommit: base}
-	run.WorktreePath, run.WorktreeBranch, run.BaseCommit = ptr(path), ptr(branch), ptr(base)
-	run.Target.WorktreeID, run.Target.Branch = worktree.ID, branch
+	execution.WorkspaceIntent = &WorkspaceIntent{Path: path, Branch: branch, BaseCommit: base}
 	execution.Target.WorktreeID, execution.Target.Branch = worktree.ID, branch
 	execution.Workspace = WorkspaceEvidence{Repository: c.identity, Worktree: path, Branch: branch, Base: base, Head: base, VerifiedAt: time.Now().UTC()}
+	refreshExecutionView(run, execution)
 	return nil
 }
 

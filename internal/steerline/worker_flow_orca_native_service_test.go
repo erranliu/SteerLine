@@ -210,10 +210,11 @@ func TestNativeOrcaCenterReusesWorkerAfterRestartAndSettlement(t *testing.T) {
 		t.Fatalf("first Orca settlement did not produce feedback Decision: workflow=%+v execution=%+v decision=%+v", workflow, execution, run.Decision)
 	}
 	answer := DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, OptionID: "continue", Note: "Continue in the same session", AnsweredBy: "operator"}
-	run.Decision.Status, run.Decision.OptionID, run.Decision.Note, run.Decision.AnsweredBy = "answer_saved", answer.OptionID, answer.Note, answer.AnsweredBy
-	answered := now()
-	run.Decision.AnsweredAt = &answered
-	run.Decision.Version++
+	record := s.decisionRecord(run)
+	record.Status, record.Version, record.AnsweredBy = "answer_saved", record.Version+1, answer.AnsweredBy
+	answer.AnsweredAt = now()
+	record.Answer = mustJSON(answer)
+	s.refreshRun(run)
 	if err := s.save(); err != nil {
 		t.Fatal(err)
 	}
@@ -245,10 +246,11 @@ func TestNativeOrcaCenterReusesWorkerAfterRestartAndSettlement(t *testing.T) {
 		t.Fatal(err)
 	}
 	answer = DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, OptionID: "continue", Note: "Recover the original Dispatch after its receipt is lost", AnsweredBy: "operator"}
-	run.Decision.Status, run.Decision.OptionID, run.Decision.Note, run.Decision.AnsweredBy = "answer_saved", answer.OptionID, answer.Note, answer.AnsweredBy
-	answered = now()
-	run.Decision.AnsweredAt = &answered
-	run.Decision.Version++
+	record = s.decisionRecord(run)
+	record.Status, record.Version, record.AnsweredBy = "answer_saved", record.Version+1, answer.AnsweredBy
+	answer.AnsweredAt = now()
+	record.Answer = mustJSON(answer)
+	s.refreshRun(run)
 	if err := s.save(); err != nil {
 		t.Fatal(err)
 	}
@@ -279,10 +281,11 @@ func TestNativeOrcaCenterReusesWorkerAfterRestartAndSettlement(t *testing.T) {
 		t.Fatal(err)
 	}
 	answer = DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, OptionID: "continue", Note: "Start one more Dispatch", AnsweredBy: "operator"}
-	run.Decision.Status, run.Decision.OptionID, run.Decision.Note, run.Decision.AnsweredBy = "answer_saved", answer.OptionID, answer.Note, answer.AnsweredBy
-	answered = now()
-	run.Decision.AnsweredAt = &answered
-	run.Decision.Version++
+	record = s.decisionRecord(run)
+	record.Status, record.Version, record.AnsweredBy = "answer_saved", record.Version+1, answer.AnsweredBy
+	answer.AnsweredAt = now()
+	record.Answer = mustJSON(answer)
+	s.refreshRun(run)
 	if err := s.save(); err != nil {
 		t.Fatal(err)
 	}
@@ -332,10 +335,11 @@ func TestNativeOrcaCenterReusesWorkerAfterRestartAndSettlement(t *testing.T) {
 		t.Fatal(err)
 	}
 	answer = DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, OptionID: "continue", Note: "Recover Task creation before Dispatch", AnsweredBy: "operator"}
-	run.Decision.Status, run.Decision.OptionID, run.Decision.Note, run.Decision.AnsweredBy = "answer_saved", answer.OptionID, answer.Note, answer.AnsweredBy
-	answered = now()
-	run.Decision.AnsweredAt = &answered
-	run.Decision.Version++
+	record = s.decisionRecord(run)
+	record.Status, record.Version, record.AnsweredBy = "answer_saved", record.Version+1, answer.AnsweredBy
+	answer.AnsweredAt = now()
+	record.Answer = mustJSON(answer)
+	s.refreshRun(run)
 	if err := s.save(); err != nil {
 		t.Fatal(err)
 	}
@@ -365,10 +369,11 @@ func TestNativeOrcaCenterReusesWorkerAfterRestartAndSettlement(t *testing.T) {
 		t.Fatal(err)
 	}
 	answer = DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, OptionID: "continue", Note: "Do not replace the lost worker", AnsweredBy: "operator"}
-	run.Decision.Status, run.Decision.OptionID, run.Decision.Note, run.Decision.AnsweredBy = "answer_saved", answer.OptionID, answer.Note, answer.AnsweredBy
-	answered = now()
-	run.Decision.AnsweredAt = &answered
-	run.Decision.Version++
+	record = s.decisionRecord(run)
+	record.Status, record.Version, record.AnsweredBy = "answer_saved", record.Version+1, answer.AnsweredBy
+	answer.AnsweredAt = now()
+	record.Answer = mustJSON(answer)
+	s.refreshRun(run)
 	if err := s.save(); err != nil {
 		t.Fatal(err)
 	}

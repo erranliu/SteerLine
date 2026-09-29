@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-func (s *Service) refreshNativeSnapshot(ctx context.Context, reconstruct bool) error {
+func (s *Service) refreshNativeSnapshot(ctx context.Context) error {
 	if s.domainStore == nil {
 		return errors.New("native service store is required")
 	}
@@ -18,217 +18,30 @@ func (s *Service) refreshNativeSnapshot(ctx context.Context, reconstruct bool) e
 	if err != nil {
 		return err
 	}
-	settled := settledDiscardedWorkflowIDs(snapshot)
-	s.State.Runs = pruneSettledDiscardedRuns(s.State.Runs, s.State.SlotOccupied, s.State.CurrentTask, settled)
 	for _, task := range snapshot.Tasks {
 		if task.Source != "native" || task.ExternalProvider != "" || task.ExternalProject != "" || task.ExternalID != "" || task.IdentityMapDigest != "" {
-			return nativeErr("authority_mismatch", "native center contains a non-native task identity; preserve it for manual recovery")
+			return nativeErr("authority_mismatch", "non-native task identity")
+		}
+		if task.Status == "in_progress" && latestNativeWorkflow(snapshot.WorkflowRuns, task.TaskID) == nil {
+			return nativeErr("inconsistent_delivery", "claimed task has no workflow")
+		}
+	}
+	for _, workflow := range snapshot.WorkflowRuns {
+		if workflow.WorkflowVersion != WorkerFlowVersion {
+			return nativeErr("unsupported_schema", "unsupported workflow version")
 		}
 	}
 	authority, err := s.domainStore.nativeAuthority(ctx, s.Config.identity)
 	if err != nil {
 		return err
 	}
-	s.State.Tasks = snapshot.Tasks
-	s.State.WorkflowRuns = snapshot.WorkflowRuns
-	s.State.Executions = snapshot.Executions
-	s.State.Attempts = snapshot.Attempts
-	s.State.Decisions = snapshot.Decisions
-	s.State.Control.DispatchMode = authority.DispatchMode
-	s.State.Control.DispatchPaused = authority.DispatchPaused
-	s.State.Control.Revision = authority.AuthorityVersion
-	for _, task := range snapshot.Tasks {
-		if task.Status == "open" {
-			continue
-		}
-		workflow := latestNativeWorkflow(snapshot.WorkflowRuns, task.TaskID)
-		if workflow == nil {
-			if task.Status == "in_progress" {
-				return nativeErr("inconsistent_delivery", "claimed native task has no persisted WorkflowRun")
-			}
-			continue
-		}
-		if workflow.WorkflowVersion != WorkerFlowVersion {
-			return nativeErr("unsupported_schema", "workflow protocol differs from the configured runtime; preserve the original external session")
-		}
-		if settled[workflow.WorkflowRunID] {
-			continue
-		}
-		execution := latestWorkflowExecution(snapshot.Executions, workflow.WorkflowRunID)
-		if execution == nil {
-			return nativeErr("inconsistent_delivery", "native WorkflowRun has no persisted Execution")
-		}
-		attempt := latestCurrentNativeAttempt(snapshot.Attempts, execution)
-		run := s.find(task.TaskID)
-		if run == nil {
-			run = &Run{TaskID: task.TaskID, DomainTaskID: task.TaskID, Title: task.Title, RunID: workflow.WorkflowRunID, Claimant: task.Claimant, Host: hostForExecution(execution.Backend, execution.Protocol), Backend: execution.Backend, Protocol: execution.Protocol, Agent: execution.Agent, Target: execution.Target, WorkflowVersion: workflow.WorkflowVersion, WorkflowConfigDigest: workflow.ConfigDigest, ExecutionID: execution.ExecutionID, PR: PRState{State: "unknown"}}
-			s.State.Runs = append(s.State.Runs, run)
-		}
-		run.TaskID, run.DomainTaskID, run.Title = task.TaskID, task.TaskID, task.Title
-		run.RunID, run.ExecutionID = workflow.WorkflowRunID, execution.ExecutionID
-		run.Claimant, run.Host = task.Claimant, hostForExecution(execution.Backend, execution.Protocol)
-		run.TaskStatus = task.Status
-		run.Backend, run.Protocol, run.Agent = execution.Backend, execution.Protocol, execution.Agent
-		run.Target = execution.Target
-		run.WorkflowVersion, run.WorkflowConfigDigest = workflow.WorkflowVersion, workflow.ConfigDigest
-		if attempt != nil {
-			run.AttemptID, run.DomainAttemptNumber = attempt.AttemptID, attempt.AttemptNumber
-		} else {
-			if last := latestNativeExecutionAttempt(snapshot.Attempts, execution.ExecutionID); last != nil {
-				run.AttemptID, run.DomainAttemptNumber = last.AttemptID, last.AttemptNumber
-			} else {
-				run.AttemptID = ""
-			}
-		}
-		base := execution.Workspace.Base
-		if base == "" {
-			base = execution.Target.BaseRevision
-		}
-		path := execution.Workspace.Worktree
-		if path == "" {
-			path = execution.Target.WorktreeID
-		}
-		branch := execution.Workspace.Branch
-		if branch == "" {
-			branch = execution.Target.Branch
-		}
-		if path != "" && branch != "" && base != "" {
-			intent := WorkspaceIntent{Path: path, Branch: branch, BaseCommit: base}
-			run.WorkspaceIntent = &intent
-			run.WorktreePath, run.WorktreeBranch, run.BaseCommit = ptr(path), ptr(branch), ptr(base)
-		} else if base != "" {
-			intent, planErr := planWorkspace(s.Config, task.TaskID, workflow.WorkflowRunID, base)
-			if planErr != nil {
-				return planErr
-			}
-			run.WorkspaceIntent = intent
-			run.WorktreePath, run.WorktreeBranch, run.BaseCommit = ptr(intent.Path), ptr(intent.Branch), ptr(intent.BaseCommit)
-		}
-		workerActive := s.workers[run.RunID] != nil
-		if execution.Process != nil {
-			run.Process = execution.Process
-		} else if !workerActive {
-			run.Process = nil
-		}
-		run.SessionID = nil
-		if execution.SessionID != "" && (execution.Process == nil || execution.Process.Kind != "orca-native") {
-			run.SessionID = ptr(execution.SessionID)
-		}
-		if run.Decision == nil && workflow.Phase == "waiting_decision" || run.Decision == nil && workflow.Phase == "waiting_pr_merge" {
-			if restored, restoreErr := restoredWorkerDecision(snapshot.Decisions, execution.ExecutionID); restoreErr != nil {
-				return restoreErr
-			} else if restored != nil {
-				run.Decision = restored
-			}
-		}
-		run.FinishTaskStatus = nativeRuntimeFinishStatus(task, *workflow)
-		switch {
-		case task.Status == "closed":
-			run.ExecutionStatus = "succeeded"
-		case workerActive, execution.Status == "active":
-			run.ExecutionStatus = "running"
-		case execution.Status == "pending":
-			run.ExecutionStatus = "pending"
-		case execution.Status == "idle":
-			run.ExecutionStatus = "succeeded"
-		default:
-			run.ExecutionStatus = "unknown"
-		}
-		if workflow.PRURL != "" {
-			run.PR.URL = ptr(workflow.PRURL)
-			run.PR.State = workflow.PRState
-		}
-		if run.FinishTaskStatus == "blocked" && task.Status == "discarded" {
-			run.Error = ptr("native task was discarded; cleanup is handled by its fixed external identities")
-		}
-		if run.FinishTaskStatus == "blocked" && run.ExecutionStatus == "unknown" && run.Error == nil {
-			run.Error = ptr("native worker outcome is uncertain; original attempt and resource identity are retained")
-		}
-		if task.Status == "closed" {
-			page, queryErr := (QueryService{Store: s.domainStore, Project: s.Config.identity}).ShowNativeTask(ctx, task.TaskID)
-			if queryErr != nil {
-				return queryErr
-			}
-			if len(page.Tasks) != 1 || page.Tasks[0].Delivery == nil {
-				return nativeErr("inconsistent_delivery", "closed native task has no delivery evidence")
-			}
-			delivery := page.Tasks[0].Delivery
-			var proof TaskDeliveryEvidence
-			if err := json.Unmarshal(delivery.Evidence, &proof); err != nil {
-				return nativeErr("inconsistent_delivery", "closed native task has unreadable delivery evidence")
-			}
-			if proof.ExistingAcceptance != nil {
-				return nativeErr("unsupported_schema", "worker-flow-v1 cannot load an old acceptance delivery")
-			}
-			run.PR.URL = ptr(delivery.PRURL)
-			run.PR.State, run.PR.MergedAt, run.PR.MergeCommit = "merged", ptr(delivery.MergedAt), ptr(delivery.MergeCommit)
-		}
-	}
+	hydrateRuntime(&s.State, snapshot)
+	s.State.Control.DispatchMode, s.State.Control.DispatchPaused, s.State.Control.Revision = authority.DispatchMode, authority.DispatchPaused, authority.AuthorityVersion
 	s.State.SchemaVersion = WorkerFlowRuntimeSchema
-	s.refreshSlotOccupancy()
-	return nil
-}
-
-func restoredWorkerDecision(records []DecisionRecord, executionID string) (*DecisionState, error) {
-	var chosen *DecisionRecord
-	for i := range records {
-		record := &records[i]
-		if record.ExecutionID != executionID {
-			continue
-		}
-		if chosen == nil || record.UpdatedAt.After(chosen.UpdatedAt) {
-			chosen = record
-		}
+	if s.store != nil {
+		s.store.baseline = domainFingerprints(s.State)
 	}
-	if chosen == nil {
-		return nil, nil
-	}
-	var request DecisionRequest
-	if err := json.Unmarshal(chosen.Request, &request); err != nil {
-		return nil, err
-	}
-	decision := &DecisionState{ID: chosen.DecisionID, AttemptID: chosen.AttemptID, Version: chosen.Version, Request: request, Status: chosen.Status}
-	if request.OrcaAsk != nil && request.OrcaAsk.MessageID != chosen.QuestionID {
-		return nil, errors.New("persisted Orca question differs from its decision binding")
-	}
-	if len(chosen.Answer) > 0 {
-		var answer DecisionAnswer
-		if err := json.Unmarshal(chosen.Answer, &answer); err != nil {
-			return nil, err
-		}
-		decision.OptionID, decision.Note, decision.Answers, decision.AnsweredBy = answer.OptionID, answer.Note, answer.Answers, answer.AnsweredBy
-		if !answer.AnsweredAt.IsZero() {
-			decision.AnsweredAt = &answer.AnsweredAt
-		}
-	}
-	return decision, nil
-}
-
-func settledDiscardedWorkflowIDs(snapshot DomainSnapshot) map[string]bool {
-	discarded := make(map[string]bool)
-	for _, task := range snapshot.Tasks {
-		if task.Status == "discarded" {
-			discarded[task.TaskID] = true
-		}
-	}
-	settled := make(map[string]bool)
-	for _, workflow := range snapshot.WorkflowRuns {
-		if workflow.Phase == "abandoned" && discarded[workflow.TaskID] {
-			settled[workflow.WorkflowRunID] = true
-		}
-	}
-	return settled
-}
-
-func pruneSettledDiscardedRuns(runs []*Run, occupied bool, currentTask *string, settled map[string]bool) []*Run {
-	remaining := make([]*Run, 0, len(runs))
-	for _, run := range runs {
-		if run != nil && settled[run.RunID] && !(occupied && currentTask != nil && *currentTask == run.TaskID) {
-			continue
-		}
-		remaining = append(remaining, run)
-	}
-	return remaining
+	return projectRuntime(&s.State)
 }
 
 func latestNativeWorkflow(workflows []WorkflowRunRecord, taskID string) *WorkflowRunRecord {
@@ -301,12 +114,13 @@ func (s *Service) reconcileNativeCleanup(ctx context.Context) error {
 			if strings.HasPrefix(item, "pull_request_close:") {
 				if err := s.reconcileNativePRCleanup(ctx, task, item); err != nil {
 					if run := s.find(task.TaskID); run != nil {
-						run.Error = ptr("discarded PR cleanup requires reconciliation: " + clip(err.Error(), 1000))
+						s.executionRecord(run).Error = ptr("discarded PR cleanup requires reconciliation: " + clip(err.Error(), 1000))
+						s.refreshRun(run)
 					}
 					cleanupErr = errors.Join(cleanupErr, err)
 					continue
 				}
-				if err := s.refreshNativeSnapshot(ctx, true); err != nil {
+				if err := s.refreshNativeSnapshot(ctx); err != nil {
 					return err
 				}
 				return nil
@@ -323,13 +137,14 @@ func (s *Service) reconcileNativeCleanup(ctx context.Context) error {
 					continue
 				}
 				if err := s.reconcileNativeWorkspaceCleanup(ctx, task, item); err == nil {
-					if err := s.refreshNativeSnapshot(ctx, true); err != nil {
+					if err := s.refreshNativeSnapshot(ctx); err != nil {
 						return err
 					}
 					return nil
 				} else {
 					if run := s.find(task.TaskID); run != nil {
-						run.Error = ptr("discarded workspace cleanup requires reconciliation: " + clip(err.Error(), 1000))
+						s.executionRecord(run).Error = ptr("discarded workspace cleanup requires reconciliation: " + clip(err.Error(), 1000))
+						s.refreshRun(run)
 					}
 					cleanupErr = errors.Join(cleanupErr, err)
 					continue
@@ -352,32 +167,37 @@ func (s *Service) reconcileNativeCleanup(ctx context.Context) error {
 				}
 				defer s.parkWorker()
 				if _, err := s.requireBackendCapabilities(ctx, backendFor(s.Config), "stop", "observe"); err != nil {
-					run.Error = ptr("discarded task worker remains active; verified local stop capability is unavailable: " + clip(err.Error(), 1000))
+					s.executionRecord(run).Error = ptr("discarded task worker remains active; verified local stop capability is unavailable: " + clip(err.Error(), 1000))
+					s.refreshRun(run)
 					continue
 				}
 				op, stopErr := s.stopActiveExecution(ctx)
 				if stopErr != nil {
-					run.Error = ptr("discarded task worker stop requires reconciliation: " + clip(stopErr.Error(), 1000))
+					s.executionRecord(run).Error = ptr("discarded task worker stop requires reconciliation: " + clip(stopErr.Error(), 1000))
+					s.refreshRun(run)
 					continue
 				}
 				if op.Status != OperationConfirmed {
 					backend := backendFor(s.Config)
 					observation, observeErr := backend.Observe(ctx, *op.Ref)
 					if observeErr != nil || observation.Liveness != "exited" {
-						run.Error = ptr("discarded task worker stop is awaiting confirmed process absence")
+						s.executionRecord(run).Error = ptr("discarded task worker stop is awaiting confirmed process absence")
+						s.refreshRun(run)
 						continue
 					}
 					confirmed, confirmErr := s.confirmExecutionStop(op)
 					if !confirmed {
-						run.Error = ptr("discarded task worker stop is not confirmed: " + clip(fmt.Sprint(confirmErr), 1000))
+						s.executionRecord(run).Error = ptr("discarded task worker stop is not confirmed: " + clip(fmt.Sprint(confirmErr), 1000))
+						s.refreshRun(run)
 						continue
 					}
 				}
 				if err := s.recordNativeStopCleanup(ctx, task.TaskID, item, op); err != nil {
-					run.Error = ptr("discarded task stop receipt could not be committed: " + clip(err.Error(), 1000))
+					s.executionRecord(run).Error = ptr("discarded task stop receipt could not be committed: " + clip(err.Error(), 1000))
+					s.refreshRun(run)
 					continue
 				}
-				if err := s.refreshNativeSnapshot(ctx, true); err != nil {
+				if err := s.refreshNativeSnapshot(ctx); err != nil {
 					return err
 				}
 				if s.active != nil && s.active.RunID == op.RunID && s.active.AttemptID == op.AttemptID {
@@ -660,7 +480,7 @@ func (s *Service) dispatchNative(ctx context.Context) error {
 	if !s.explicitDispatch && len(s.workers) != 0 {
 		return nil
 	}
-	if err := s.refreshNativeSnapshot(ctx, true); err != nil {
+	if err := s.refreshNativeSnapshot(ctx); err != nil {
 		return err
 	}
 	if !s.explicitDispatch && (s.State.Control.DispatchMode != "auto" || s.State.Control.DispatchPaused) {
@@ -742,7 +562,7 @@ func (s *Service) dispatchNative(ctx context.Context) error {
 		if receipt.Status != "claim_reserved" || receipt.StartTaskApplied {
 			return nativeErr("inconsistent_delivery", "native claim returned an invalid reservation status")
 		}
-		if err = s.refreshNativeSnapshot(ctx, true); err != nil {
+		if err = s.refreshNativeSnapshot(ctx); err != nil {
 			return err
 		}
 		run := s.find(task.TaskID)
@@ -751,9 +571,9 @@ func (s *Service) dispatchNative(ctx context.Context) error {
 		if run == nil || workflow == nil || execution == nil || attempt == nil {
 			return nativeErr("inconsistent_delivery", "native claim reservation could not be reconstructed from center records")
 		}
-		intent, planErr := planWorkspace(s.Config, task.TaskID, workflow.WorkflowRunID, receipt.BaseCommit)
-		if planErr != nil {
-			return planErr
+		intent := execution.WorkspaceIntent
+		if intent == nil {
+			return nativeErr("inconsistent_delivery", "claimed execution lacks its workspace intent")
 		}
 		if execution.Target.WorktreeID != "" || execution.Target.Branch != s.Config.Branch {
 			return nativeErr("authority_mismatch", "claimed execution already has a conflicting workspace identity")
@@ -766,15 +586,10 @@ func (s *Service) dispatchNative(ctx context.Context) error {
 		workflow.UpdatedAt = now()
 		attempt.ExternalBinding = execution.Target
 		attempt.UpdatedAt = now()
-		run.WorkspaceIntent = intent
-		if s.Config.hostName() == "orca_supervised" {
-			run.WorktreePath, run.WorktreeBranch = nil, nil
-			run.BaseCommit = ptr(intent.BaseCommit)
-		} else {
-			run.WorktreePath, run.WorktreeBranch, run.BaseCommit = ptr(intent.Path), ptr(intent.Branch), ptr(intent.BaseCommit)
-		}
-		run.ExecutionStatus = "pending"
-		run.FinishTaskStatus = "pending"
+		execution.WorkspaceIntent = intent
+		s.refreshRun(run)
+		s.executionRecord(run).Status = "pending"
+		s.refreshRun(run)
 		s.State.SlotOccupied = true
 		s.State.CurrentTask = ptr(task.TaskID)
 		if err = s.save(); err != nil {
@@ -830,17 +645,15 @@ func (s *Service) nativeCompleteMergedTask(ctx context.Context, run *Run) error 
 	if receipt.Status != "closed" || receipt.Delivery.TaskID != run.DomainTaskID {
 		return nativeErr("inconsistent_delivery", "native delivery transaction returned an invalid task receipt")
 	}
-	if err = s.refreshNativeSnapshot(ctx, false); err != nil {
+	if err = s.refreshNativeSnapshot(ctx); err != nil {
 		return err
 	}
 	run = s.find(receipt.TaskID)
 	if run == nil {
 		return nativeErr("inconsistent_delivery", "closed native task disappeared from the execution projection")
 	}
-	run.ExecutionStatus = "succeeded"
-	run.FinishTaskStatus = "completed"
-	run.PR.State, run.PR.MergedAt, run.PR.MergeCommit = "merged", ptr(receipt.Delivery.MergedAt), ptr(receipt.Delivery.MergeCommit)
-	run.Error = nil
+	s.executionRecord(run).Error = nil
+	s.refreshRun(run)
 	s.note(run, "steer", "delivery", "completed", "native task delivered after verified PR merge", receipt.Delivery.PRURL, map[string]any{"merge_commit": receipt.Delivery.MergeCommit, "graph_revision": receipt.GraphRevision})
 	s.closeActivity(run)
 	if err := s.save(); err != nil {
@@ -848,7 +661,8 @@ func (s *Service) nativeCompleteMergedTask(ctx context.Context, run *Run) error 
 	}
 	if run.Protocol == string(ProtocolOrcaTerminalV2) {
 		if err := s.finishNativeOrcaCleanup(ctx, run); err != nil {
-			run.LastEvent = ptr("Orca delivery completed; owned terminal cleanup needs reconciliation: " + err.Error())
+			s.executionRecord(run).LastEvent = ptr("Orca delivery completed; owned terminal cleanup needs reconciliation: " + err.Error())
+			s.refreshRun(run)
 			return s.save()
 		}
 	}

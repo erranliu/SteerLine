@@ -91,7 +91,7 @@ func (s *Service) handleAppServerLaunchMessage(runID string, message *appServerL
 		execution.AppServerEndpoint = message.execution.AppServerEndpoint
 		execution.AppServerGeneration = message.execution.AppServerGeneration
 		execution.SessionID = message.execution.SessionID
-		run.Process, run.SessionID = execution.Process, ptr(execution.SessionID)
+		s.refreshRun(run)
 		return s.save()
 	}
 	if message.phase != "turn_result" {
@@ -102,23 +102,26 @@ func (s *Service) handleAppServerLaunchMessage(runID string, message *appServerL
 			execution.Process = message.execution.Process
 			execution.AppServerEndpoint = message.execution.AppServerEndpoint
 			execution.AppServerGeneration = message.execution.AppServerGeneration
-			run.Process = execution.Process
+			s.refreshRun(run)
 		}
 		if err := s.setOperationState(message.opID, "outcome_unknown", message.turnID, nil, message.err.Error()); err != nil {
 			return err
 		}
-		execution.Status, run.ExecutionStatus = "blocked", "unknown"
+		execution.Status = "blocked"
+		s.refreshRun(run)
 		return s.waitWorkerFlow(run, "Original worker turn start is unverified: "+message.err.Error())
 	}
 	if message.worker == nil || !codexThreadID.MatchString(message.turnID) || execution.Process == nil || message.worker.proc.Identity() != *execution.Process || message.execution.SessionID != execution.SessionID || message.execution.AppServerGeneration != execution.AppServerGeneration {
 		return errors.New("app-server turn result differs from its fixed thread/process")
 	}
 	execution.PendingTurnID = message.turnID
-	run.ExecutionStatus = "pending"
+	execution.Status = "pending"
+	s.refreshRun(run)
 	if attempt := s.workflowAttempt(run, run.AttemptID); attempt != nil {
 		if attempt.EventPath == "" {
 			attempt.EventPath = message.events
-			run.LogPath = ptr(message.events)
+			execution.LogPath = ptr(message.events)
+			s.refreshRun(run)
 		}
 		attempt.Status, attempt.UpdatedAt = "dispatched", now()
 	}

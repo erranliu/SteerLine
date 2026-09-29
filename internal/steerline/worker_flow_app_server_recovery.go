@@ -267,7 +267,7 @@ func (s *Service) applyAppServerRecovery(result appServerRecoveryResult) error {
 		execution.Process = result.execution.Process
 		execution.AppServerEndpoint = result.execution.AppServerEndpoint
 		execution.AppServerGeneration = result.execution.AppServerGeneration
-		run.Process = execution.Process
+		s.refreshRun(run)
 	}
 	if result.err != nil {
 		execution.Status = "blocked"
@@ -277,7 +277,7 @@ func (s *Service) applyAppServerRecovery(result appServerRecoveryResult) error {
 		return s.waitWorkerFlow(run, "Original app-server thread identity changed during recovery")
 	}
 	execution.SessionID = result.execution.SessionID
-	run.SessionID = ptr(execution.SessionID)
+	s.refreshRun(run)
 	if execution.PendingCommandID != "" {
 		execution.PendingTurnID = result.execution.PendingTurnID
 		if err := s.recordAppServerTurnStarted(run, workflow, execution, execution.PendingTurnID); err != nil {
@@ -295,17 +295,18 @@ func (s *Service) applyAppServerRecovery(result appServerRecoveryResult) error {
 	if run.Decision != nil && run.Decision.Status == "pending" && run.Decision.Request.NativeAsk == nil {
 		// A prior connection failure is no longer a reason to request post-turn
 		// feedback. Keep the resolved record before exposing native questions.
-		run.Decision.Status = "superseded"
-		run.Decision.Version++
+		s.setDecisionStatus(run, "superseded")
 		if err := s.save(); err != nil {
 			return err
 		}
 		workflow, execution = s.workflowRecords(run)
-		run.Decision = nil
+		s.setRunDecision(run, nil)
 	}
-	execution.Status, run.ExecutionStatus, run.Error = "active", "running", nil
+	execution.Status, execution.Error = "active", nil
+	s.refreshRun(run)
 	if run.Decision == nil || run.Decision.Status != "pending" && run.Decision.Status != "answer_saved" {
-		workflow.Phase, run.FinishTaskStatus = "executing", "pending"
+		workflow.Phase = "executing"
+		s.refreshRun(run)
 	}
 	if err := s.save(); err != nil {
 		return err
@@ -340,8 +341,7 @@ func (s *Service) reconcileAppServerReplyFromJournal(run *Run, workflow *Workflo
 			return err
 		}
 	}
-	run.Decision.Status = "reply_accepted"
-	run.Decision.Version++
+	s.setDecisionStatus(run, "reply_accepted")
 	if err := s.save(); err != nil {
 		return err
 	}
@@ -353,13 +353,12 @@ func (s *Service) reconcileAppServerReplyFromJournal(run *Run, workflow *Workflo
 		if err != nil {
 			return err
 		}
-		run.Decision = decision
-		run.FinishTaskStatus = "waiting_decision"
+		s.setRunDecision(run, decision)
 	} else if workflow.Phase == "waiting_decision" {
 		if err := ContinueWorkerQuestion(workflow, execution, execution.CurrentTurnID); err != nil {
 			return err
 		}
-		run.FinishTaskStatus = "pending"
+		s.refreshRun(run)
 	}
 	return s.save()
 }

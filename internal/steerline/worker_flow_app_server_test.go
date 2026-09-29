@@ -81,17 +81,25 @@ func TestAppServerPendingFeedbackRecoveryUsesNewTurnReceipt(t *testing.T) {
 func TestAppServerStartReplayPreservesNativeSavedAnswer(t *testing.T) {
 	first, second := "00000000-0000-0000-0000-000000000001", "00000000-0000-0000-0000-000000000002"
 	commandID := newID()
-	run := &Run{RunID: newID(), ExecutionID: newID(), Decision: &DecisionState{Status: "answer_saved"}}
+	run := &Run{RunID: newID(), ExecutionID: newID(), AttemptID: newID(), Decision: &DecisionState{Status: "answer_saved"}}
 	workflow := &WorkflowRunRecord{WorkflowRunID: run.RunID, WorkflowVersion: WorkerFlowVersion, Phase: "waiting_decision"}
-	execution := &ExecutionRecord{ExecutionID: run.ExecutionID, WorkflowRunID: run.RunID, SessionID: workerFlowMockSession, CurrentTurnID: first, LastStoppedTurnID: first, PendingTurnID: second, PendingCommandID: commandID, TurnNumber: 1}
+	execution := &ExecutionRecord{ExecutionID: run.ExecutionID, WorkflowRunID: run.RunID, CurrentStep: "worker", SessionID: workerFlowMockSession, CurrentTurnID: first, LastStoppedTurnID: first, PendingTurnID: second, PendingCommandID: commandID, TurnNumber: 1}
 	service := &Service{State: Runtime{Operations: []OperationRecord{{OperationID: newID(), IdempotencyKey: "worker-turn:" + run.ExecutionID + ":" + commandID, Status: "outcome_unknown"}}}}
+	run.TaskID, run.DomainTaskID, workflow.TaskID = "task", "task", "task"
+	service.State.Tasks = []TaskRecord{{TaskID: "task", Status: "in_progress"}}
+	service.State.Attempts = []StepAttemptRecord{{ExecutionID: run.ExecutionID, AttemptID: run.AttemptID, StepID: "worker", AttemptNumber: 1}}
+	service.State.WorkflowRuns, service.State.Executions = []WorkflowRunRecord{*workflow}, []ExecutionRecord{*execution}
+	workflow, execution = &service.State.WorkflowRuns[0], &service.State.Executions[0]
+	run.Decision.ID, run.Decision.Version = newID(), 1
+	run.Decision.AttemptID = run.AttemptID
+	service.setRunDecision(run, run.Decision)
 	if err := service.recordAppServerTurnStarted(run, workflow, execution, second); err != nil {
 		t.Fatal(err)
 	}
 	if execution.CurrentCommandID != commandID || execution.CurrentTurnID != second || execution.PendingCommandID != "" || execution.TurnNumber != 2 || run.Decision.Status != "reply_accepted" || service.State.Operations[0].Status != "confirmed" {
 		t.Fatalf("second turn receipt was not applied: %+v %+v", execution, run.Decision)
 	}
-	run.Decision = &DecisionState{Status: "answer_saved", Request: DecisionRequest{NativeAsk: &codexAskCall{CallID: "pending"}}}
+	service.setRunDecision(run, &DecisionState{ID: newID(), AttemptID: run.AttemptID, Version: 1, Status: "answer_saved", Request: DecisionRequest{NativeAsk: &codexAskCall{CallID: "pending"}}})
 	workflow.Phase = "waiting_decision"
 	run.FinishTaskStatus = "waiting_decision"
 	if err := service.recordAppServerTurnStarted(run, workflow, execution, second); err != nil {
@@ -361,8 +369,11 @@ func TestAppServerAnswerRecoveryPersistsBeforeNextQuestion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	run.Decision.Status, run.Decision.Answers, run.Decision.AnsweredBy = "answer_saved", map[string][]string{"choice": {"A"}}, "tester"
-	run.Decision.AnsweredAt = ptr(now())
+	service.setRunDecision(run, run.Decision)
+	record := service.decisionRecord(run)
+	record.Status, record.AnsweredBy = "answer_saved", "tester"
+	record.Answer = mustJSON(DecisionAnswer{DecisionID: record.DecisionID, RunID: run.RunID, Answers: map[string][]string{"choice": {"A"}}, AnsweredBy: "tester", AnsweredAt: now()})
+	service.refreshRun(run)
 	firstID := run.Decision.ID
 	if _, err := service.startOperation("reply_appserver_question", "appserver-answer:"+execution.ExecutionID+":"+firstID, map[string]string{"call": "first"}); err != nil {
 		t.Fatal(err)

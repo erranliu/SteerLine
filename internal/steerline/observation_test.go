@@ -53,7 +53,7 @@ func TestObservationReadsOneSQLiteRuntimeAndClassifiesHeartbeat(t *testing.T) {
 	if err = json.Unmarshal(payload, &checkpoint); err != nil {
 		t.Fatal(err)
 	}
-	for _, key := range []string{"tasks", "workflow_runs", "executions", "attempts", "decisions", "operations"} {
+	for _, key := range []string{"runs", "current_task", "slot_occupied", "control", "tasks", "workflow_runs", "executions", "attempts", "decisions", "operations"} {
 		if _, duplicated := checkpoint[key]; duplicated {
 			t.Fatalf("SQLite checkpoint duplicates %s domain rows", key)
 		}
@@ -62,7 +62,7 @@ func TestObservationReadsOneSQLiteRuntimeAndClassifiesHeartbeat(t *testing.T) {
 	if err != nil || len(loaded.Operations) != 1 || loaded.Operations[0].OperationID != operation.OperationID {
 		t.Fatalf("domain operation was not joined into runtime: %+v / %v", loaded, err)
 	}
-	if got := ReadObservationSnapshot(c, clock); got.State != SnapshotValid || got.FreshnessLimit != 15*time.Second || len(got.Runtime.Operations) != 0 {
+	if got := ReadObservationSnapshot(c, clock); got.State != SnapshotValid || got.FreshnessLimit != 15*time.Second || len(got.Runtime.Operations) != 1 {
 		t.Fatalf("fresh heartbeat classification: %+v", got)
 	}
 	if err = (&Store{Domain: db, Project: c.Identity()}).Heartbeat(); err != nil {
@@ -72,7 +72,7 @@ func TestObservationReadsOneSQLiteRuntimeAndClassifiesHeartbeat(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var beat Runtime
+	var beat ServiceCheckpoint
 	if err = json.Unmarshal(updated, &beat); err != nil || !beat.HeartbeatAt.After(state.HeartbeatAt) || beat.Revision != revision {
 		t.Fatalf("SQLite heartbeat did not update the same checkpoint: %+v / %v", beat, err)
 	}
@@ -90,7 +90,9 @@ func TestObservationReadsOneSQLiteRuntimeAndClassifiesHeartbeat(t *testing.T) {
 		t.Fatalf("future heartbeat classification: %+v", got)
 	}
 	state.SchemaVersion = 4
-	body, err := json.Marshal(state)
+	checkpointValue := runtimeCheckpoint(state)
+	checkpointValue.SchemaVersion = 4
+	body, err := json.Marshal(checkpointValue)
 	if err != nil {
 		t.Fatal(err)
 	}

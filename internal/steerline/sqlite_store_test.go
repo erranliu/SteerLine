@@ -119,6 +119,19 @@ func assertOldSQLiteRejectedUnchanged(t *testing.T, path string, version int) {
 	}
 }
 
+func TestSQLiteV5IsRejectedWithoutUpgrade(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "steerline.db")
+	store, err := OpenSQLiteStore(path)
+	require(t, err)
+	require(t, store.Close())
+	raw, err := sql.Open("sqlite", path)
+	require(t, err)
+	_, err = raw.Exec(`UPDATE schema_migrations SET version=5 WHERE version=?`, domainSchemaVersion)
+	require(t, err)
+	require(t, raw.Close())
+	assertOldSQLiteRejectedUnchanged(t, path, 5)
+}
+
 func TestSQLiteRejectsParallelExecutionsInOneWorkflow(t *testing.T) {
 	ctx := context.Background()
 	s := openDomainTestStore(t)
@@ -186,18 +199,18 @@ func TestCommandIdempotencyAndDecisionVersionArbitration(t *testing.T) {
 	project := "repo:commands"
 	request := DecisionRequest{Question: "choose", AllowFreeText: true}
 	run := &Run{TaskID: "task", RunID: "wf", DomainTaskID: "task", ExecutionID: "exec", AttemptID: "attempt", ControlRevision: 5, Host: "orca", Backend: string(BackendOrca), Protocol: string(ProtocolOrcaTerminalV2), WorkflowVersion: "legacy-v1", ExecutionStatus: "succeeded", FinishTaskStatus: "waiting_decision", Decision: &DecisionState{ID: "decision", AttemptID: "attempt", Version: 1, Status: "pending", Request: request}}
-	projection := Runtime{SchemaVersion: 5, Revision: 1, Repository: Repository{Identity: project}, Service: ServiceState{InstanceID: "service", Status: "running", Ready: true}, Runs: []*Run{run}}
+	projection := ServiceCheckpoint{SchemaVersion: WorkerFlowRuntimeSchema, Revision: 1, Repository: Repository{Identity: project}, Service: ServiceState{InstanceID: "service", Status: "running", Ready: true}}
 	err := s.Transact(ctx, func(tx DomainTx) error {
 		if err := tx.PutTask(TaskRecord{ProjectIdentity: project, TaskID: "task", Status: "in_progress", Version: 1}); err != nil {
 			return err
 		}
-		if err := tx.PutWorkflowRun(WorkflowRunRecord{ProjectIdentity: project, WorkflowRunID: "wf", TaskID: "task", Phase: "executing"}); err != nil {
+		if err := tx.PutWorkflowRun(WorkflowRunRecord{ProjectIdentity: project, WorkflowRunID: "wf", TaskID: "task", Phase: "waiting_decision"}); err != nil {
 			return err
 		}
-		if err := tx.PutExecution(ExecutionRecord{ProjectIdentity: project, ExecutionID: "exec", WorkflowRunID: "wf", Status: "waiting_decision", CurrentStep: "implement"}); err != nil {
+		if err := tx.PutExecution(ExecutionRecord{ProjectIdentity: project, ExecutionID: "exec", WorkflowRunID: "wf", Status: "idle", CurrentStep: "worker", DecisionID: "decision"}); err != nil {
 			return err
 		}
-		if err := tx.PutStepAttempt(StepAttemptRecord{ProjectIdentity: project, AttemptID: "attempt", ExecutionID: "exec", StepID: "implement", AttemptNumber: 1, Status: "waiting_decision"}); err != nil {
+		if err := tx.PutStepAttempt(StepAttemptRecord{ProjectIdentity: project, AttemptID: "attempt", ExecutionID: "exec", StepID: "worker", AttemptNumber: 1, Status: "waiting_decision"}); err != nil {
 			return err
 		}
 		if err := tx.PutDecision(DecisionRecord{ProjectIdentity: project, DecisionID: "decision", Scope: "execution", WorkflowRunID: "wf", ExecutionID: "exec", AttemptID: "attempt", QuestionID: "q1", Status: "pending", Version: 1, Request: mustJSON(request)}); err != nil {
@@ -209,6 +222,7 @@ func TestCommandIdempotencyAndDecisionVersionArbitration(t *testing.T) {
 		t.Fatal(err)
 	}
 	commands := CommandService{Store: s, Project: project}
+	require(t, s.db.QueryRow(`SELECT control_revision FROM workflow_runs WHERE project_identity=? AND workflow_run_id=?`, project, "wf").Scan(&run.ControlRevision))
 	answer := DecisionAnswer{DecisionID: "decision", RunID: "wf", Note: "yes", AnsweredBy: "alice", ExpectedDecisionVersion: 1, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: projection.Service.InstanceID}
 	first, created, err := commands.AnswerDecision(ctx, "decision", 1, "answer-key-a", "alice", mustJSON(answer))
 	if err != nil {

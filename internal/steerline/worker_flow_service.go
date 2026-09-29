@@ -26,7 +26,8 @@ func (s *Service) resumeConfiguredWork(ctx context.Context) error {
 			return err
 		}
 		if err := s.finishNativeOrcaCleanup(ctx, run); err != nil {
-			run.LastEvent = ptr("Orca delivery completed; owned terminal cleanup needs reconciliation: " + err.Error())
+			execution.LastEvent = ptr("Orca delivery completed; owned terminal cleanup needs reconciliation: " + err.Error())
+			s.refreshRun(run)
 			if saveErr := s.save(); saveErr != nil {
 				return saveErr
 			}
@@ -188,7 +189,7 @@ func (s *Service) resumeWorkerFlow(ctx context.Context) error {
 					return s.waitWorkerFlow(run, "Original remote worktree cannot be reconciled: "+err.Error())
 				}
 			} else {
-				run.WorktreePath, run.WorktreeBranch, run.BaseCommit = ptr(execution.Workspace.Worktree), ptr(execution.Workspace.Branch), ptr(execution.Workspace.Base)
+				s.refreshRun(run)
 				if preparation.Status != "confirmed" {
 					if err := s.changeOperation(preparation.OperationID, "confirmed", preparation.PlatformRequestID, mustJSON(execution.Workspace), ""); err != nil {
 						return err
@@ -203,7 +204,7 @@ func (s *Service) resumeWorkerFlow(ctx context.Context) error {
 			} else if err != nil {
 				return s.waitWorkerFlow(run, "Original workspace cannot be inspected: "+err.Error())
 			}
-			run.WorktreePath, run.WorktreeBranch, run.BaseCommit = ptr(run.WorkspaceIntent.Path), ptr(run.WorkspaceIntent.Branch), ptr(run.WorkspaceIntent.BaseCommit)
+			s.refreshRun(run)
 			workspace, err := s.inspectWorkflowWorkspace(ctx, run)
 			if err != nil {
 				return s.waitWorkerFlow(run, "Original workspace identity is unresolved: "+err.Error())
@@ -244,7 +245,7 @@ func (s *Service) waitWorkerFlow(run *Run, reason string) error {
 		if err != nil {
 			return err
 		}
-		run.Decision = decision
+		s.setRunDecision(run, decision)
 	}
 	workflow.Phase, workflow.UpdatedAt = "waiting_decision", now()
 	if unresolvedNativeTurn && (run.Decision == nil || run.Decision.Status != "pending" && run.Decision.Status != "answer_saved") {
@@ -257,11 +258,8 @@ func (s *Service) waitWorkerFlow(run *Run, reason string) error {
 		execution.Status = "idle"
 	}
 	execution.UpdatedAt = now()
-	run.FinishTaskStatus = "waiting_decision"
-	if workflow.Phase != "waiting_decision" {
-		run.FinishTaskStatus = "pending"
-	}
-	run.Error = ptr(clip(reason, 2000))
+	execution.Error = ptr(clip(reason, 2000))
+	s.refreshRun(run)
 	if unresolvedNativeTurn && workflow.Phase != "waiting_decision" {
 		s.note(run, "steer", "worker", "unknown", "original worker turn needs reconciliation", reason, nil)
 	} else {
@@ -272,7 +270,7 @@ func (s *Service) waitWorkerFlow(run *Run, reason string) error {
 
 // A verified open PR does not require input, but the original session remains
 // available if the user wants to request more work before merging it.
-func offerWorkerPRFeedback(run *Run, url string) error {
+func (s *Service) offerWorkerPRFeedback(run *Run, url string) error {
 	if run == nil || run.WorkflowVersion != WorkerFlowVersion || url == "" {
 		return errors.New("optional PR feedback requires a fixed worker and PR")
 	}
@@ -287,7 +285,7 @@ func offerWorkerPRFeedback(run *Run, url string) error {
 	if err != nil {
 		return err
 	}
-	run.Decision = decision
+	s.setRunDecision(run, decision)
 	return nil
 }
 
@@ -340,17 +338,17 @@ func (s *Service) prepareWorkerFlow(ctx context.Context, task TaskRecord, run *R
 	}
 	if err != nil {
 		_ = s.changeOperation(opID, "outcome_unknown", "", nil, err.Error())
-		run.ExecutionStatus = "unknown"
 		execution.Status = "blocked"
+		s.refreshRun(run)
 		return s.waitWorkerFlow(run, "Workspace preparation needs reconciliation: "+err.Error())
 	}
 	if s.Config.hostName() != "orca_supervised" {
-		run.WorktreePath, run.WorktreeBranch, run.BaseCommit = ptr(run.WorkspaceIntent.Path), ptr(run.WorkspaceIntent.Branch), ptr(run.WorkspaceIntent.BaseCommit)
+		s.refreshRun(run)
 		workspace, inspectErr := s.inspectWorkflowWorkspace(ctx, run)
 		if inspectErr != nil {
 			_ = s.changeOperation(opID, "outcome_unknown", "", nil, inspectErr.Error())
-			run.ExecutionStatus = "unknown"
 			execution.Status = "blocked"
+			s.refreshRun(run)
 			return s.waitWorkerFlow(run, "Workspace identity could not be verified: "+inspectErr.Error())
 		}
 		applyWorkflowWorkspaceEvidence(run, execution, workspace)
@@ -426,11 +424,13 @@ func (s *Service) startWorkerFlowTurn(ctx context.Context, run *Run, prompt, tur
 	if s.Config.hostName() == "orca" {
 		if err := s.startNativeOrcaTurn(ctx, run, execution, turnID, prompt); err != nil {
 			_ = s.changeOperation(opID, "outcome_unknown", "", nil, err.Error())
-			run.ExecutionStatus = "unknown"
+			execution.Status = "blocked"
+			s.refreshRun(run)
 			return s.nativeOrcaUncertain(run, "Native Orca Dispatch needs reconciliation: "+err.Error())
 		}
 		attempt.Status, attempt.UpdatedAt = "dispatched", now()
-		run.ExecutionStatus = "pending"
+		execution.Status = "pending"
+		s.refreshRun(run)
 		current := nativeOrcaCurrentTurn(execution)
 		if err := s.changeOperation(opID, "accepted", current.DispatchRequestID, mustJSON(*current), ""); err != nil {
 			return err
@@ -467,18 +467,21 @@ func (s *Service) startWorkerFlowTurn(ctx context.Context, run *Run, prompt, tur
 		if stateErr := s.setOperationState(opID, "outcome_unknown", platformRequestID, nil, err.Error()); stateErr != nil {
 			return stateErr
 		}
-		run.ExecutionStatus = "unknown"
+		execution.Status = "blocked"
+		s.refreshRun(run)
 		if run.Protocol == string(ProtocolLocalCodexAppServer) {
 			execution.Status = "blocked"
 		}
 		return s.waitWorkerFlow(run, "Original worker turn start is unverified: "+err.Error())
 	}
 	identity := worker.proc.Identity()
-	run.Process, execution.Process = &identity, &identity
-	run.ExecutionStatus = "pending"
+	execution.Process = &identity
+	execution.Status = "pending"
+	s.refreshRun(run)
 	if attempt.EventPath == "" {
 		attempt.EventPath = events
-		run.LogPath = ptr(events)
+		execution.LogPath = ptr(events)
+		s.refreshRun(run)
 	}
 	attempt.Status = "dispatched"
 	attempt.UpdatedAt = now()
@@ -518,7 +521,7 @@ func (s *Service) eventWorkerFlow(ev WorkerEvent) (resultErr error) {
 			return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "worker event changed the original Codex session"}
 		}
 		execution.SessionID = ev.Session
-		run.SessionID = ptr(ev.Session)
+		s.refreshRun(run)
 	}
 	if ev.Activity.Kind == "turn" && ev.Activity.Status == "started" && run.Protocol == string(ProtocolLocalCodexAppServer) {
 		var params struct {
@@ -546,8 +549,7 @@ func (s *Service) eventWorkerFlow(ev WorkerEvent) (resultErr error) {
 			attempt.Status, attempt.UpdatedAt = "running", now()
 		}
 		if run.Decision != nil && run.Decision.Status == "answer_saved" {
-			run.Decision.Status = "reply_accepted"
-			run.Decision.Version++
+			s.setDecisionStatus(run, "reply_accepted")
 		}
 		for _, op := range s.State.Operations {
 			if op.IdempotencyKey == "worker-turn:"+run.ExecutionID+":"+commandID {
@@ -561,9 +563,11 @@ func (s *Service) eventWorkerFlow(ev WorkerEvent) (resultErr error) {
 				break
 			}
 		}
-		run.ExecutionStatus, run.FinishTaskStatus, run.Error = "running", "pending", nil
-		run.StartedAt = ptr(now())
-		run.EndedAt = nil
+		execution.Status, execution.Error = "active", nil
+		execution.TurnStartedAt = ptr(now())
+		s.refreshRun(run)
+		execution.TurnEndedAt = nil
+		s.refreshRun(run)
 	}
 	if ev.AppServer != nil && ev.AppServer.Method == "item/tool/call" {
 		call, err := parseCodexAskCall(*ev.AppServer, execution.SessionID, execution.CurrentTurnID)
@@ -589,14 +593,14 @@ func (s *Service) eventWorkerFlow(ev WorkerEvent) (resultErr error) {
 					if err != nil {
 						return err
 					}
-					run.Decision = decision
+					s.setRunDecision(run, decision)
 				}
 			}
 		}
 		if err := NoteWorkerQuestion(workflow, execution, execution.CurrentTurnID); err != nil {
 			return err
 		}
-		run.FinishTaskStatus = "waiting_decision"
+		s.refreshRun(run)
 		s.note(run, "steer", "decision", "pending", "Codex is waiting for an answer in the current turn", call.CallID, decisionMeta(run))
 	}
 	if ev.AppServer != nil && ev.AppServer.Method == "item/completed" && run.Decision != nil && run.Decision.Request.NativeAsk != nil {
@@ -647,8 +651,7 @@ func (s *Service) eventWorkerFlow(ev WorkerEvent) (resultErr error) {
 				if !confirmed {
 					return errors.New("Codex tool completed without the original saved reply intent")
 				}
-				run.Decision.Status = "reply_accepted"
-				run.Decision.Version++
+				s.setDecisionStatus(run, "reply_accepted")
 				if err := s.save(); err != nil {
 					return err
 				}
@@ -660,20 +663,21 @@ func (s *Service) eventWorkerFlow(ev WorkerEvent) (resultErr error) {
 					if err != nil {
 						return err
 					}
-					run.Decision = decision
-					run.FinishTaskStatus = "waiting_decision"
+					s.setRunDecision(run, decision)
 				} else {
 					if err := ContinueWorkerQuestion(workflow, execution, execution.CurrentTurnID); err != nil {
 						return err
 					}
-					run.FinishTaskStatus = "pending"
+					s.refreshRun(run)
 				}
 			} else if params.Item.Status == "failed" || params.Item.Success != nil && !*params.Item.Success {
-				run.Error = ptr("Codex rejected the saved answer for its original tool call")
+				execution.Error = ptr("Codex rejected the saved answer for its original tool call")
+				s.refreshRun(run)
 			}
 		}
 	}
-	run.LastEvent = ptr(ev.Summary)
+	execution.LastEvent = ptr(ev.Summary)
+	s.refreshRun(run)
 	if ev.Activity.Kind != "" {
 		if err := s.recordConversationEvent(run, ev); err != nil {
 			return err
@@ -728,14 +732,15 @@ func (s *Service) finishWorkerFlow(workerErr error) error {
 		if run.Protocol == string(ProtocolLocalCodexAppServer) {
 			execution.Status = "blocked"
 		}
-		run.ExecutionStatus = "unknown"
+		execution.Status = "blocked"
+		s.refreshRun(run)
 		return s.waitWorkerFlow(run, reason)
 	}
 	if execution.CurrentTurnID == "" {
 		if err := BeginWorkerTurn(workflow, execution, outcome.SessionID, turnID); err != nil {
 			return s.waitWorkerFlow(run, "Original turn start could not be reconciled: "+err.Error())
 		}
-		run.SessionID = ptr(outcome.SessionID)
+		s.refreshRun(run)
 		for _, operation := range s.State.Operations {
 			commandID := turnID
 			if run.Protocol == string(ProtocolLocalCodexAppServer) {
@@ -758,7 +763,8 @@ func (s *Service) finishWorkerFlow(workerErr error) error {
 		if run.Protocol == string(ProtocolLocalCodexAppServer) {
 			execution.Status = "blocked"
 		}
-		run.ExecutionStatus = "unknown"
+		execution.Status = "blocked"
+		s.refreshRun(run)
 		return s.waitWorkerFlow(run, "The original worker process exited without a confirmed completed turn; its output and session are retained")
 	}
 	if run.Protocol == string(ProtocolLocalCodexAppServer) {
@@ -766,20 +772,21 @@ func (s *Service) finishWorkerFlow(workerErr error) error {
 	}
 	if run.Protocol == string(ProtocolLocalCodexAppServer) && run.Decision != nil && run.Decision.Request.NativeAsk != nil {
 		if run.Decision.Status == "pending" {
-			run.Decision.Status = "superseded"
-			run.Decision.Version++
+			s.setDecisionStatus(run, "superseded")
 			if err := s.save(); err != nil {
 				return err
 			}
 			workflow, execution = s.workflowRecords(run)
-			run.Decision = nil
+			s.setRunDecision(run, nil)
 		} else if run.Decision.Status == "answer_saved" {
 			if err := StopWorkerTurn(workflow, execution, turnID, true); err != nil {
 				return err
 			}
-			run.EndedAt = ptr(now())
-			run.ExecutionStatus = "unknown"
-			run.Error = ptr("Native turn ended before the original answer delivery was confirmed; the saved answer and request are retained")
+			execution.TurnEndedAt = ptr(now())
+			execution.Status = "blocked"
+			s.refreshRun(run)
+			execution.Error = ptr("Native turn ended before the original answer delivery was confirmed; the saved answer and request are retained")
+			s.refreshRun(run)
 			return s.save()
 		}
 	}
@@ -788,8 +795,7 @@ func (s *Service) finishWorkerFlow(workerErr error) error {
 		if answerErr == nil {
 			command, commandErr := s.domainStore.CommandByIdempotency(context.Background(), s.Config.identity, decisionAnswerKey(answer))
 			if commandErr == nil && command.Kind == "answer_decision" && (command.CommandID == turnID || run.Protocol == string(ProtocolLocalCodexAppServer) && command.CommandID == execution.CurrentCommandID) {
-				run.Decision.Status = "reply_accepted"
-				run.Decision.Version++
+				s.setDecisionStatus(run, "reply_accepted")
 			}
 		}
 	}
@@ -826,17 +832,16 @@ func (s *Service) finishWorkerFlow(workerErr error) error {
 	if err := StopWorkerTurn(workflow, execution, turnID, question); err != nil {
 		return err
 	}
-	run.EndedAt = ptr(now())
+	execution.TurnEndedAt = ptr(now())
+	s.refreshRun(run)
 	if run.Protocol == string(ProtocolLocalCodexAppServer) && outcome.NativeStatus != "completed" {
-		run.ExecutionStatus = "failed"
+		execution.LastTurnOutcome = "failed"
+		s.refreshRun(run)
 	} else {
-		run.ExecutionStatus = "succeeded"
+		execution.LastTurnOutcome = "succeeded"
+		s.refreshRun(run)
 	}
-	if workflow.Phase == "waiting_pr_merge" {
-		run.FinishTaskStatus = "waiting_pr_merge"
-	} else {
-		run.FinishTaskStatus = "waiting_decision"
-	}
+	s.refreshRun(run)
 	if s.Config.hostName() == "local" && outcome.NativeStatus == "completed" && localWorkerRequestedPublish(outcome.LastMessage, run.RunID) {
 		runID := run.RunID
 		_, publishErr := s.publishLocalWorkerRun(context.Background(), run, workflow, execution, turnID)
@@ -850,15 +855,12 @@ func (s *Service) finishWorkerFlow(workerErr error) error {
 		}
 	}
 	if workflow.Phase == "waiting_pr_merge" {
-		run.FinishTaskStatus = "waiting_pr_merge"
-		if workflow.PRURL != "" {
-			run.PR.URL, run.PR.State = ptr(workflow.PRURL), workflow.PRState
-		}
-		if err := offerWorkerPRFeedback(run, workflow.PRURL); err != nil {
+		if err := s.offerWorkerPRFeedback(run, workflow.PRURL); err != nil {
 			return err
 		}
 		if issue != "" {
-			run.Error = ptr(clip(issue, 2000))
+			execution.Error = ptr(clip(issue, 2000))
+			s.refreshRun(run)
 		}
 		s.note(run, "steer", "worker", "stopped", "worker turn ended with a verified PR", workflow.PRURL, map[string]any{"turn_id": turnID})
 		return s.save()
@@ -873,7 +875,7 @@ func (s *Service) finishWorkerFlow(workerErr error) error {
 	if question {
 		decision, err := WriteDecisionRequest(run, DecisionRequest{Question: clip(strings.TrimSpace(outcome.LastMessage), 1800), Context: clip(context, 7000), Options: []DecisionOption{{ID: "continue", Label: "Continue current work"}}, AllowFreeText: true})
 		if err == nil {
-			run.Decision = decision
+			s.setRunDecision(run, decision)
 		}
 	}
 	return s.waitWorkerFlow(run, context)
@@ -905,9 +907,11 @@ func (s *Service) pollWorkerFlowPR(ctx context.Context, run *Run, task *TaskReco
 	}
 	queried := now()
 	info, err := s.prs.Query(ctx, url)
-	run.PR.QueriedAt = &queried
+	workflow.PRQueriedAt = &queried
+	s.refreshRun(run)
 	if err != nil {
-		run.PR.QueryError = ptr(clip(err.Error(), 1000))
+		workflow.PRQueryError = ptr(clip(err.Error(), 1000))
+		s.refreshRun(run)
 		if workflow.PRURL == "" && workflow.Phase != "executing" {
 			return s.waitWorkerFlow(run, "PR link could not be verified; the center will retry: "+err.Error())
 		}
@@ -918,7 +922,8 @@ func (s *Service) pollWorkerFlowPR(ctx context.Context, run *Run, task *TaskReco
 		return nativeErr("inconsistent_delivery", "linked PR has no selected worker execution")
 	}
 	if err := validateWorkerPRIdentity(info, url, s.Config.PR.Repository, workflow.Branch, execution.Workspace.Branch); err != nil {
-		run.PR.QueryError = ptr("PR does not belong to the fixed task execution branch")
+		workflow.PRQueryError = ptr("PR does not belong to the fixed task execution branch")
+		s.refreshRun(run)
 		if workflow.Phase != "executing" {
 			return s.waitWorkerFlow(run, "PR link is for a different repository, base or worker branch")
 		}
@@ -930,23 +935,15 @@ func (s *Service) pollWorkerFlowPR(ctx context.Context, run *Run, task *TaskReco
 		return s.waitWorkerFlow(run, "Several PRs or conflicting PR identities need a user decision: "+err.Error())
 	}
 	if run.Decision != nil && run.Decision.Status == "pending" && !pendingQuestion && previousPRURL != info.URL && workflow.Phase != "waiting_decision" {
-		run.Decision.Status = "superseded"
-		run.Decision.Version++
+		s.setDecisionStatus(run, "superseded")
 	}
 	if workflow.Phase == "waiting_pr_merge" && execution.Status != "active" {
-		if err := offerWorkerPRFeedback(run, info.URL); err != nil {
+		if err := s.offerWorkerPRFeedback(run, info.URL); err != nil {
 			return err
 		}
 	}
-	run.PR.URL, run.PR.State, run.PR.MergedAt, run.PR.MergeCommit, run.PR.QueryError = ptr(info.URL), info.State, info.MergedAt, info.MergeCommit, nil
-	switch workflow.Phase {
-	case "waiting_pr_merge":
-		run.FinishTaskStatus = "waiting_pr_merge"
-	case "waiting_decision":
-		run.FinishTaskStatus = "waiting_decision"
-	default:
-		run.FinishTaskStatus = "pending"
-	}
+	workflow.PRURL, workflow.PRState, workflow.PRMergedAt, workflow.PRMergeCommit, workflow.PRQueryError = info.URL, info.State, info.MergedAt, info.MergeCommit, nil
+	s.refreshRun(run)
 	if err := s.save(); err != nil {
 		return err
 	}
@@ -969,7 +966,7 @@ func (s *Service) applyWorkerFlowDecision(ctx context.Context, run *Run) error {
 	}
 	if workflow.Phase == "waiting_pr_merge" {
 		workflow.Phase, workflow.UpdatedAt = "waiting_decision", now()
-		run.FinishTaskStatus = "waiting_decision"
+		s.refreshRun(run)
 		if err := s.save(); err != nil {
 			return err
 		}
@@ -986,7 +983,8 @@ func (s *Service) applyWorkerFlowDecision(ctx context.Context, run *Run) error {
 		return s.applyNativeOrcaDecision(ctx, run, workflow, execution, answer, command.CommandID)
 	}
 	if execution.SessionID == "" || run.SessionID == nil || *run.SessionID != execution.SessionID {
-		run.Error = ptr("Feedback is saved, but the original worker session is not yet available for delivery")
+		execution.Error = ptr("Feedback is saved, but the original worker session is not yet available for delivery")
+		s.refreshRun(run)
 		return s.save()
 	}
 	if run.Decision.Request.NativeAsk != nil {
@@ -1005,7 +1003,8 @@ func (s *Service) applyWorkerFlowDecision(ctx context.Context, run *Run) error {
 		if operation.Status == "confirmed" || operation.Status == "accepted" || operation.Status == "in_flight" {
 			return nil // The original request may have started. Never resend.
 		}
-		run.Error = ptr("Feedback delivery remains unverified at the original request ID; no duplicate message was sent")
+		execution.Error = ptr("Feedback delivery remains unverified at the original request ID; no duplicate message was sent")
+		s.refreshRun(run)
 		return s.save()
 	}
 	return s.startWorkerFlowTurn(ctx, run, workerFeedbackText(answer, run.Decision.Request), command.CommandID)

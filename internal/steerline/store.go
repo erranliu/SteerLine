@@ -48,25 +48,20 @@ func atomicWriteWith(path string, data []byte, write func(*os.File, []byte) erro
 	return replaceFile(name, path)
 }
 
-// Domain rows own business state. The projection keeps only service and worker
-// session details that are not represented by those rows.
-func runtimeCheckpoint(v Runtime) Runtime {
-	v.Tasks, v.WorkflowRuns, v.Executions, v.Attempts, v.Decisions, v.Operations = nil, nil, nil, nil, nil, nil
-	return v
-}
-
 func hydrateRuntime(v *Runtime, snapshot DomainSnapshot) {
 	v.Tasks, v.WorkflowRuns, v.Executions = snapshot.Tasks, snapshot.WorkflowRuns, snapshot.Executions
 	v.Attempts, v.Decisions, v.Operations = snapshot.Attempts, snapshot.Decisions, snapshot.Operations
+	v.Deliveries = snapshot.Deliveries
 }
 
 // Store serializes publication with heartbeat. SQLite is the only durable
 // runtime store.
 type Store struct {
-	mu      sync.Mutex
-	Domain  *SQLiteStore
-	Project string
-	failure error
+	mu       sync.Mutex
+	Domain   *SQLiteStore
+	Project  string
+	failure  error
+	baseline map[string]string
 }
 
 func (s *Store) Publish(v *Runtime) error {
@@ -81,12 +76,13 @@ func (s *Store) Publish(v *Runtime) error {
 	value := *v
 	value.UpdatedAt, value.HeartbeatAt = now(), now()
 	if s.Domain != nil {
-		persisted, err := s.Domain.SaveRuntime(context.Background(), value)
+		persisted, err := s.Domain.saveRuntime(context.Background(), value, s.baseline)
 		if err != nil {
 			s.failure = fmt.Errorf("critical domain persistence: %w", err)
 			return s.failure
 		}
 		value = persisted
+		s.baseline = domainFingerprints(value)
 	}
 	*v = value
 	return nil
@@ -139,18 +135,11 @@ func loadObservedRuntime(c Config) (*Runtime, error) {
 		return nil, err
 	}
 	defer db.Close()
-	payload, _, err := db.LoadProjection(context.Background(), c.Identity())
-	if err != nil || len(payload) == 0 {
-		return nil, err
+	value, err := loadRuntimeSnapshot(db, c.Identity(), false)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
 	}
-	var state Runtime
-	if err = decode(payload, &state); err != nil {
-		return nil, err
-	}
-	if state.SchemaVersion != WorkerFlowRuntimeSchema {
-		return nil, fmt.Errorf("unsupported runtime schema %d", state.SchemaVersion)
-	}
-	return &state, nil
+	return value, err
 }
 
 func loadRuntimeSnapshot(db *SQLiteStore, project string, requireIdentity bool) (*Runtime, error) {
@@ -164,10 +153,11 @@ func loadRuntimeSnapshot(db *SQLiteStore, project string, requireIdentity bool) 
 	if err = tx.QueryRowContext(ctx, `SELECT payload FROM projection WHERE project_identity=?`, project).Scan(&payload); err != nil {
 		return nil, err
 	}
-	var state Runtime
-	if err = decode(payload, &state); err != nil {
+	var checkpoint ServiceCheckpoint
+	if err = decode(payload, &checkpoint); err != nil {
 		return nil, err
 	}
+	state := runtimeFromCheckpoint(checkpoint)
 	if state.SchemaVersion != WorkerFlowRuntimeSchema {
 		return nil, fmt.Errorf("unsupported runtime schema %d", state.SchemaVersion)
 	}
@@ -178,9 +168,20 @@ func loadRuntimeSnapshot(db *SQLiteStore, project string, requireIdentity bool) 
 	if err != nil {
 		return nil, err
 	}
+	var paused int
+	if err = tx.QueryRowContext(ctx, `SELECT dispatch_mode,dispatch_paused,authority_version FROM project_task_authorities WHERE project_identity=?`, project).Scan(&state.Control.DispatchMode, &paused, &state.Control.Revision); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, errors.New("runtime checkpoint has no task authority")
+		}
+		return nil, err
+	}
+	state.Control.DispatchPaused = paused != 0
 	if err = tx.Commit(); err != nil {
 		return nil, err
 	}
 	hydrateRuntime(&state, snapshot)
+	if err = projectRuntime(&state); err != nil {
+		return nil, err
+	}
 	return &state, nil
 }
