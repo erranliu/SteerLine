@@ -1,4 +1,4 @@
-package viewer
+package console
 
 import (
 	"context"
@@ -14,48 +14,28 @@ import (
 	"github.com/erranliu/SteerLine/internal/steerline"
 )
 
-// Source is the read-mostly data the viewer needs. Answers go through the
-// versioned command queue for the current database format.
-type Source interface {
-	Snapshot() steerline.ObservationSnapshot
-	ReadLog(logPath string, cursor steerline.JournalCursor, raw bool) (LogBatch, error)
-	TaskDetail(taskID string) (steerline.TaskDetail, error)
-	Answer(run *steerline.Run, optionID, note, by string) error
-}
-
 type LogBatch struct {
 	Cursor      steerline.JournalCursor
 	Reset       bool
 	Activity    []steerline.ActivityEvent
-	Raw         []string
 	Diagnostics []string
 }
 
-// FileSource reads the same journal framing used by `steerline watch`.
-type FileSource struct {
+// fileSource reads the console's committed runtime projection and activity journal.
+type fileSource struct {
 	cfg steerline.Config
 
 	mu          sync.Mutex
-	last        *steerline.ObservationSnapshot
 	normalizers map[string]steerline.Normalizer
 }
 
-func NewFileSource(c steerline.Config) *FileSource {
-	// LoadConfig intentionally performs no repository probing. Resolve the
-	// read-only identity here so the normal viewer entry can use SQLite too.
-	if c.Identity() == "" && c.Repository != "" {
-		_ = c.ResolveIdentity(context.Background())
-	}
-	return &FileSource{cfg: c, normalizers: make(map[string]steerline.Normalizer)}
-}
-
-func (f *FileSource) Snapshot() steerline.ObservationSnapshot {
-	return f.SnapshotFromObservation(steerline.ReadObservationSnapshot(filepath.Join(f.cfg.RunDir, f.cfg.RuntimeFile), f.cfg.Heartbeat, nil))
+func newFileSource(c steerline.Config) *fileSource {
+	return &fileSource{cfg: c, normalizers: make(map[string]steerline.Normalizer)}
 }
 
 // SnapshotFromObservation reuses a runtime file snapshot already read by a
 // caller while retaining the committed SQLite fallback and freshness checks.
-func (f *FileSource) SnapshotFromObservation(obs steerline.ObservationSnapshot) steerline.ObservationSnapshot {
+func (f *fileSource) SnapshotFromObservation(obs steerline.ObservationSnapshot) steerline.ObservationSnapshot {
 	if f.cfg.Identity() != "" {
 		if databaseObs, err := f.readDatabaseProjection(); err == nil && databaseObs.Runtime != nil {
 			if obs.Runtime == nil || databaseObs.Runtime.Revision > obs.Runtime.Revision || (databaseObs.Runtime.Revision == obs.Runtime.Revision && databaseObs.Runtime.HeartbeatAt.After(obs.Runtime.HeartbeatAt)) {
@@ -64,35 +44,10 @@ func (f *FileSource) SnapshotFromObservation(obs steerline.ObservationSnapshot) 
 			}
 		}
 	}
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	if obs.Runtime != nil && (obs.State == steerline.SnapshotValid || obs.State == steerline.SnapshotStale) {
-		copy := cloneRuntime(obs.Runtime)
-		obs.Runtime = copy
-		stored := obs
-		f.last = &stored
-		return obs
-	}
-	if f.last != nil && (obs.State == steerline.SnapshotReadFailed || obs.State == steerline.SnapshotUnknownVersion || obs.State == steerline.SnapshotNone) {
-		observedAt := obs.SampledAt
-		if obs.State == steerline.SnapshotNone {
-			obs.State = steerline.SnapshotReadFailed
-			obs.Error = "runtime snapshot disappeared; showing the last successful snapshot"
-		}
-		obs.Runtime = cloneRuntime(f.last.Runtime)
-		obs.SampledAt = f.last.SampledAt
-		if obs.Runtime != nil && !obs.Runtime.HeartbeatAt.IsZero() {
-			obs.HeartbeatAge = observedAt.Sub(obs.Runtime.HeartbeatAt.UTC())
-			obs.ClockSkew = obs.HeartbeatAge < 0
-			if obs.ClockSkew {
-				obs.HeartbeatAge = 0
-			}
-		}
-	}
 	return obs
 }
 
-func (f *FileSource) readDatabaseProjection() (steerline.ObservationSnapshot, error) {
+func (f *fileSource) readDatabaseProjection() (steerline.ObservationSnapshot, error) {
 	path := filepath.Join(f.cfg.RunDir, "steerline.db")
 	if _, err := os.Stat(path); err != nil {
 		return steerline.ObservationSnapshot{}, err
@@ -141,52 +96,24 @@ func (f *FileSource) readDatabaseProjection() (steerline.ObservationSnapshot, er
 	return obs, nil
 }
 
-func cloneRuntime(rt *steerline.Runtime) *steerline.Runtime {
-	if rt == nil {
-		return nil
-	}
-	b, err := json.Marshal(rt)
-	if err != nil {
-		return rt
-	}
-	var copy steerline.Runtime
-	if json.Unmarshal(b, &copy) != nil {
-		return rt
-	}
-	return &copy
-}
-
-func (f *FileSource) TaskDetail(taskID string) (steerline.TaskDetail, error) {
-	return steerline.LoadTaskDetail(context.Background(), f.cfg, taskID)
-}
-
-func (f *FileSource) ReadLog(logPath string, cursor steerline.JournalCursor, raw bool) (LogBatch, error) {
+func (f *fileSource) ReadLog(logPath string, cursor steerline.JournalCursor) (LogBatch, error) {
 	if strings.TrimSpace(logPath) == "" {
 		return LogBatch{}, fmt.Errorf("empty run log path")
 	}
 	path := logPath
 	activityFile := false
-	if !raw {
-		candidate := steerline.ActivityPath(logPath)
-		if _, err := os.Stat(candidate); err == nil {
-			path, activityFile = candidate, true
-		}
+	candidate := steerline.ActivityPath(logPath)
+	if _, err := os.Stat(candidate); err == nil {
+		path, activityFile = candidate, true
 	}
 	framed, err := steerline.ReadJournalBatch(path, cursor, steerline.JournalOptions{
 		FromStart: !cursor.Initialized,
 		Activity:  activityFile,
-		KeepCR:    raw,
 	})
 	if err != nil {
 		return LogBatch{}, err
 	}
 	batch := LogBatch{Cursor: framed.Cursor, Reset: framed.Reset, Diagnostics: append([]string(nil), framed.Diagnostics...)}
-	if raw {
-		for _, line := range framed.Lines {
-			batch.Raw = append(batch.Raw, string(line))
-		}
-		return batch, nil
-	}
 	if activityFile {
 		for _, line := range framed.Lines {
 			ev, err := steerline.DecodeActivityLine(line)
@@ -214,7 +141,7 @@ func (f *FileSource) ReadLog(logPath string, cursor steerline.JournalCursor, raw
 	return batch, nil
 }
 
-func (f *FileSource) normalizerFor(path string, cursor steerline.JournalCursor, firstRecord []byte, reset bool) steerline.Normalizer {
+func (f *fileSource) normalizerFor(path string, cursor steerline.JournalCursor, firstRecord []byte, reset bool) steerline.Normalizer {
 	key := fmt.Sprintf("%s|%s|%d", path, cursor.FileID, cursor.Generation)
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -245,7 +172,7 @@ func (f *FileSource) normalizerFor(path string, cursor steerline.JournalCursor, 
 	return n
 }
 
-func (f *FileSource) storeNormalizer(path string, cursor steerline.JournalCursor, normalizer steerline.Normalizer) {
+func (f *fileSource) storeNormalizer(path string, cursor steerline.JournalCursor, normalizer steerline.Normalizer) {
 	if normalizer == nil {
 		return
 	}
@@ -256,20 +183,4 @@ func (f *FileSource) storeNormalizer(path string, cursor steerline.JournalCursor
 		f.normalizers = make(map[string]steerline.Normalizer)
 	}
 	f.normalizers[key] = normalizer
-}
-
-func (f *FileSource) Answer(run *steerline.Run, optionID, note, by string) error {
-	if run == nil {
-		return fmt.Errorf("run is required")
-	}
-	if by == "" {
-		by = steerline.AnswererName()
-	}
-	decisionID := ""
-	var version uint64
-	if run.Decision != nil {
-		decisionID = run.Decision.ID
-		version = run.Decision.Version
-	}
-	return steerline.AnswerDecision(f.cfg, steerline.AnswerOptions{RunID: run.RunID, DecisionID: decisionID, ExpectedVersion: version, Option: optionID, Note: note, By: by})
 }

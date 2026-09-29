@@ -176,7 +176,7 @@ func sanitizeName(s string) string {
 }
 
 // InstallExecutable copies a built binary into <STEERLINE_HOME>\bin so the
-// service and viewer always run one stable binary regardless of which source
+// service and console always run one stable binary regardless of which source
 // worktree built it.
 func InstallExecutable(src string) (string, error) {
 	if resolved, e := filepath.EvalSymlinks(src); e == nil {

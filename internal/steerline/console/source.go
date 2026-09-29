@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/steerline"
-	"github.com/erranliu/SteerLine/internal/steerline/viewer"
 )
 
 // ProjectRef is the identity of a console view. ConfigPath and RunDir are both
@@ -46,7 +45,7 @@ type ProjectSnapshot struct {
 
 type QuerySource interface {
 	ReadProject(context.Context, ProjectRef, string, ProjectSnapshot) ProjectSnapshot
-	ReadActivity(context.Context, ProjectRef, string, string, string, string, steerline.JournalCursor) (viewer.LogBatch, error)
+	ReadActivity(context.Context, ProjectRef, string, string, string, string, steerline.JournalCursor) (LogBatch, error)
 	ReadConversation(context.Context, ProjectRef, steerline.ConversationFilter, string) (steerline.ConversationPage, error)
 	ReadBody(context.Context, ProjectRef, steerline.ConversationBodyRef, int64, int) (steerline.ConversationBodyPage, error)
 	ReadCapabilities(context.Context, ProjectRef, steerline.BackendKind, steerline.ExecutionProtocol, string, string, string, string, string) ([]steerline.ConversationCapabilityReport, error)
@@ -109,7 +108,7 @@ func (FileQuerySource) ReadProject(ctx context.Context, ref ProjectRef, selected
 	}()
 	result.Connection = <-connectionCh
 	result.Observation = result.Connection.Snapshot
-	databaseObservation := viewer.NewFileSource(c).SnapshotFromObservation(result.Connection.Snapshot)
+	databaseObservation := newFileSource(c).SnapshotFromObservation(result.Connection.Snapshot)
 	if databaseObservation.Runtime != nil && (result.Observation.Runtime == nil || databaseObservation.Runtime.Revision > result.Observation.Runtime.Revision || (databaseObservation.Runtime.Revision == result.Observation.Runtime.Revision && databaseObservation.Runtime.HeartbeatAt.After(result.Observation.Runtime.HeartbeatAt))) {
 		result.Observation = databaseObservation
 	} else if result.Observation.Runtime == nil && result.Observation.State == steerline.SnapshotNone {
@@ -267,17 +266,17 @@ func nativeTaskTypeExecutable(types []string, taskType string) bool {
 	return false
 }
 
-func (FileQuerySource) ReadActivity(ctx context.Context, ref ProjectRef, runID, executionID, attemptID, currentPath string, cursor steerline.JournalCursor) (viewer.LogBatch, error) {
+func (FileQuerySource) ReadActivity(ctx context.Context, ref ProjectRef, runID, executionID, attemptID, currentPath string, cursor steerline.JournalCursor) (LogBatch, error) {
 	path := currentPath
 	if path == "" {
 		store, err := steerline.OpenSQLiteReader(filepath.Join(ref.RunDir, "steerline.db"))
 		if err != nil {
-			return viewer.LogBatch{}, err
+			return LogBatch{}, err
 		}
 		domain, err := store.Query(ctx, ref.Identity)
 		_ = store.Close()
 		if err != nil {
-			return viewer.LogBatch{}, err
+			return LogBatch{}, err
 		}
 		for _, attempt := range domain.Attempts {
 			if attempt.ExecutionID == executionID && attempt.AttemptID == attemptID {
@@ -286,16 +285,16 @@ func (FileQuerySource) ReadActivity(ctx context.Context, ref ProjectRef, runID, 
 			}
 		}
 		if path == "" {
-			return viewer.LogBatch{}, fmt.Errorf("attempt %s has no queryable activity record", attemptID)
+			return LogBatch{}, fmt.Errorf("attempt %s has no queryable activity record", attemptID)
 		}
 		if !filepath.IsAbs(path) {
 			path = filepath.Join(ref.RunDir, path)
 		}
 	}
 	if strings.TrimSpace(runID) == "" || strings.TrimSpace(path) == "" {
-		return viewer.LogBatch{}, errors.New("activity query identity or record path is missing")
+		return LogBatch{}, errors.New("activity query identity or record path is missing")
 	}
-	return viewer.NewFileSource(ref.Config).ReadLog(path, cursor, false)
+	return newFileSource(ref.Config).ReadLog(path, cursor)
 }
 
 func (FileQuerySource) ReadConversation(ctx context.Context, ref ProjectRef, filter steerline.ConversationFilter, cursor string) (steerline.ConversationPage, error) {
