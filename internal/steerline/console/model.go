@@ -1443,10 +1443,6 @@ func (m Model) rows(index int) []consoleRow {
 		}
 	}
 	shownRuns := map[string]bool{}
-	appendRun := func(run *steerline.Run) {
-		rows = append(rows, consoleRow{key: "run:" + run.RunID, kind: rowRun, taskID: run.TaskID, title: run.Title, run: run})
-		shownRuns[run.RunID] = true
-	}
 	nativeByID := map[string]*steerline.NativeTaskDetail{}
 	if state.snapshot.NativeTasks != nil {
 		for i := range state.snapshot.NativeTasks.Tasks {
@@ -1457,6 +1453,10 @@ func (m Model) rows(index int) []consoleRow {
 	if state.snapshot.SelectedNative != nil {
 		detail := state.snapshot.SelectedNative
 		nativeByID[detail.TaskID] = detail
+	}
+	appendRun := func(run *steerline.Run) {
+		rows = append(rows, consoleRow{key: "run:" + run.RunID, kind: rowRun, taskID: run.TaskID, title: run.Title, run: run, native: nativeByID[firstText(run.DomainTaskID, run.TaskID)]})
+		shownRuns[run.RunID] = true
 	}
 	seenTasks := map[string]bool{}
 	if state.snapshot.Tasks != nil {
@@ -1534,7 +1534,7 @@ func filterAllows(filter int, kind rowKind, run *steerline.Run) bool {
 	case 5:
 		return runNeedsAttention(run)
 	case 6:
-		return run != nil && runStatus(run) == "completed"
+		return run != nil && (run.TaskStatus == "closed" && !runNeedsAttention(run) || runStatus(run) == "completed")
 	}
 	return true
 }

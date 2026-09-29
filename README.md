@@ -6,6 +6,10 @@ SteerLine 是一款面向工程 AGI 的研究型软件开发工具。它以 road
 
 [产品愿景](docs/roadmap/product-vision.md) · [当前 Roadmap](docs/roadmap/roadmap.md)
 
+## 构建
+
+在 Windows 上，双击仓库根目录的 `build.bat` 即可构建；窗口会显示结果并等待按键关闭。命令行可运行 `./build.ps1`，或调用 `build.bat --no-pause`。脚本从仓库根目录构建 `cmd/steerline`，固定输出到 `bin/steerline.exe`；构建失败时保留原文件，目标程序仍在运行时拒绝替换。此命令只生成本地二进制，不安装到 `STEERLINE_HOME`，也不切换运行中的服务。正式的 stable/dev 固定版本发布与选择由[固定版本 Spec](docs/spec/versioned-runtime.spec.md)定义，目前尚未交付。
+
 ## 执行控制台
 
 运行 `steerline console` 打开控制台。默认读取 `<STEERLINE_HOME>/etc/*.json` 中的项目配置；使用 `steerline console -config <path>` 打开一份显式配置，也可用 `-run-id <run-id|task-id>` 定位当前项目中已有的运行。Windows 安装目录提供 `console.bat`；`steerline projects` 菜单也可进入同一控制台。安装目录只保留 `console.bat` 和 `service-window.bat` 两个批处理入口；后者默认使用 `etc\SteerLine.json`，其他 native 项目可传配置路径。
@@ -18,7 +22,7 @@ SteerLine 是一款面向工程 AGI 的研究型软件开发工具。它以 road
 
 native 项目控制台还会显示中心任务关系、阻塞原因、Spec 路径和交付定位；离线详情显示采样时间，Ready 缓存不会变成启动许可。完整固定引用保留在中心任务契约中。命令行可用 `steerline task graph -config <path> -task-id <id> -direction upstream -depth 3` 查询关系，或用 `steerline task export -config <path> -format json -output <path>` 导出；覆盖已有导出文件需显式传 `-overwrite`。
 
-控制台宽屏首屏左侧显示任务列表，右侧上方显示只读任务详情、下方显示任务动态；选中行以 `▸` 标记。`Tab` 仅在列表与动态之间切换焦点，详情随选中任务更新；`d` 或 Enter 可阅读完整详情。窄屏在列表与动态之间切换。任务详情显示 Spec 路径，不展开 Plan、文档 SHA 或提交号；这些固定引用仍在中心任务契约中。按 `?` 查看完整快捷键。项目左右切换时，标题始终显示当前项目编号和名称，后台项目的提示不会覆盖当前项目。
+控制台宽屏首屏左侧显示任务列表，按任务编号、任务状态、执行状态、任务名称四列排列；列表获得更多宽度，右侧上方显示只读任务详情、下方显示任务动态。已完成任务的旧失败执行标为“失败（历史）”，仍有未核实执行的任务保留“需处理”。选中行以 `▸` 标记。`Tab` 仅在列表与动态之间切换焦点，详情随选中任务更新；`d` 或 Enter 可阅读完整详情。窄屏在列表与动态之间切换。任务详情显示 Spec 路径，不展开 Plan、文档 SHA 或提交号；这些固定引用仍在中心任务契约中。按 `?` 查看完整快捷键。项目左右切换时，标题始终显示当前项目编号和名称，后台项目的提示不会覆盖当前项目。
 
 选中 Ready 任务按 `s` 后，方案选择页显示执行位置、Agent、Model、Thinking effort 和 Sandbox；Orca 远程还显示固定环境与连接。项目没有显式指定模型时标明由 Codex 配置决定。控制台与服务的配置版本不一致时，阻止启动与自动派发。
 

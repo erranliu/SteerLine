@@ -86,10 +86,76 @@ func TestColumnsAlignWithChineseAndLongTaskTitles(t *testing.T) {
 		}
 	}
 	for _, width := range []int{34, 80} {
-		row := renderTaskListRow("n308-28", strings.Repeat("中文任务", 20), "blocked", width)
-		if lipgloss.Width(row) > width || !strings.Contains(row, "blocked") || !strings.Contains(row, "n308-28") {
-			t.Fatalf("task row lost state or identity at %d columns: %q", width, row)
+		row := renderTaskListRow("n308-28", strings.Repeat("中文任务", 20), "已完成", "失败（历史）", width)
+		if lipgloss.Width(row) > width || !strings.Contains(row, "已完成") || !strings.Contains(row, "n308-28") || !strings.Contains(row, "失败") {
+			t.Fatalf("task row lost columns at %d columns: %q", width, row)
 		}
+	}
+}
+
+func TestCompletedTaskShowsHistoricalExecutionInFourColumns(t *testing.T) {
+	now := time.Now().UTC()
+	ref := testProject("steer")
+	snapshot := readySnapshot(ref, now)
+	snapshot.Tasks = nil
+	run := &steerline.Run{TaskID: "3", RunID: "run-3", Title: "人工决策与恢复闭环", TaskStatus: "closed", ExecutionStatus: "failed", FinishTaskStatus: "blocked", EndedAt: &now}
+	snapshot.Observation.Runtime.Runs = []*steerline.Run{run}
+	snapshot.NativeTasks = &steerline.NativeTaskPage{Tasks: []steerline.NativeTaskDetail{{TaskRecord: steerline.TaskRecord{TaskID: "3", Title: run.Title, Status: "closed"}}}}
+	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, &testControlClient{}, now)
+	m.projects[0].selectedKey = "run:run-3"
+	m.width = 100
+	rows := m.rows(0)
+	if len(rows) != 1 || rowTaskStatus(rows[0]) != "已完成" || rowExecutionStatus(rows[0]) != "失败（历史）" {
+		t.Fatalf("closed task columns: %+v", rows)
+	}
+	list := strings.Join(renderRows(m, m.projects[0], listPanelWidth(m), 12), "\n")
+	for _, want := range []string{"任务编号", "任务状态", "执行状态", "任务名称", "已完成", "失败（历史）", run.Title} {
+		if !strings.Contains(list, want) {
+			t.Fatalf("four-column list lost %q:\n%s", want, list)
+		}
+	}
+	header := ""
+	for _, line := range strings.Split(list, "\n") {
+		if strings.Contains(line, "任务编号") {
+			header = line
+			break
+		}
+	}
+	if !(strings.Index(header, "任务编号") < strings.Index(header, "任务状态") && strings.Index(header, "任务状态") < strings.Index(header, "执行状态") && strings.Index(header, "执行状态") < strings.Index(header, "任务名称")) {
+		t.Fatalf("list columns are out of order: %q", header)
+	}
+	detail := strings.Join(renderDetail(m, m.projects[0], &rows[0], 80, 80), "\n")
+	for _, want := range []string{"任务状态：已完成", "执行状态：失败（历史）", "需要你操作：无"} {
+		if !strings.Contains(detail, want) {
+			t.Fatalf("completed task detail lost %q:\n%s", want, detail)
+		}
+	}
+	if listPanelWidth(m) < 55 || activityPanelWidth(m) < 40 {
+		t.Fatalf("panel widths do not fit four columns: list=%d detail=%d", listPanelWidth(m), activityPanelWidth(m))
+	}
+	_, _, _, _, _, attention := projectCounts(m.projects[0], now)
+	if attention != 0 || filterAllows(5, rowRun, run) || !filterAllows(6, rowRun, run) || taskNextAction(run) != "无" {
+		t.Fatalf("settled historical failure still needs action: attention=%d", attention)
+	}
+	if run.ExecutionStatus != "failed" || run.FinishTaskStatus != "blocked" {
+		t.Fatal("historical execution facts were rewritten")
+	}
+}
+
+func TestClosedTaskWithUncertainExecutionStillNeedsAttention(t *testing.T) {
+	now := time.Now().UTC()
+	run := &steerline.Run{TaskStatus: "closed", ExecutionStatus: "unknown", FinishTaskStatus: "blocked"}
+	if !runNeedsAttention(run) || !filterAllows(5, rowRun, run) || filterAllows(6, rowRun, run) {
+		t.Fatal("unknown execution disappeared from attention")
+	}
+	run.ExecutionStatus, run.EndedAt = "failed", nil
+	if !runNeedsAttention(run) {
+		t.Fatal("unterminated failed execution was treated as history")
+	}
+	run.EndedAt = &now
+	run.Error = stringPointer("unresolved external resource")
+	if !runNeedsAttention(run) {
+		t.Fatal("failed execution with an unresolved error was treated as history")
 	}
 }
 

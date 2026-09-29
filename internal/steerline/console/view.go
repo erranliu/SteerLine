@@ -212,10 +212,10 @@ func projectCounts(state projectState, now time.Time) (ready, cached, running, d
 			if run.TaskStatus == "in_progress" && (run.ExecutionStatus == "pending" || run.ExecutionStatus == "running") {
 				running++
 			}
-			if run.FinishTaskStatus == "waiting_decision" {
+			if run.FinishTaskStatus == "waiting_decision" && run.TaskStatus != "closed" {
 				decision++
 			}
-			if run.FinishTaskStatus == "waiting_pr_merge" {
+			if run.FinishTaskStatus == "waiting_pr_merge" && run.TaskStatus != "closed" {
 				merge++
 			}
 			if runNeedsAttention(run) {
@@ -287,28 +287,27 @@ func renderRows(m Model, state projectState, width, height int) []string {
 	if len(out) >= height {
 		out = out[:max(0, height-1)]
 	}
+	if len(out)+1 < height {
+		taskHeader, executionHeader := "任务状态", "执行状态"
+		if width-2 < 48 {
+			taskHeader, executionHeader = "状态", "执行"
+		}
+		out = append(out, renderTaskListRow("任务编号", "任务名称", taskHeader, executionHeader, max(1, width-2)))
+	}
 	visible := contentWindow(rows, state.selectedKey, max(1, height-len(out)))
 	for _, row := range visible {
-		stateText := ""
-		switch row.kind {
-		case rowReady:
-			valid, _ := candidateFreshness(state.ref, state.snapshot, m.clock.Now())
-			if valid {
-				stateText = "Ready"
+		taskStatus := rowTaskStatus(row)
+		if row.kind == rowReady {
+			if valid, _ := candidateFreshness(state.ref, state.snapshot, m.clock.Now()); valid {
+				taskStatus = "可开始"
 			} else {
-				stateText = "缓存"
+				taskStatus = "缓存"
 			}
-		case rowNative:
-			stateText = row.native.Status
-		case rowLegacy:
-			stateText = row.legacy.Status
-		default:
-			stateText = runStatus(row.run)
 		}
-		line := renderTaskListRow(row.taskID, row.title, displayTaskStatus(stateText), max(1, width-2))
+		line := renderTaskListRow(row.taskID, row.title, taskStatus, rowExecutionStatus(row), max(1, width-2))
 		if row.key == state.selectedKey {
 			line = styleSelected.Render("▸ " + line)
-		} else if row.kind == rowReady && stateText == "缓存" {
+		} else if row.kind == rowReady && taskStatus == "缓存" {
 			line = "  " + styleDim.Render(line)
 		} else {
 			line = "  " + line
@@ -318,15 +317,71 @@ func renderRows(m Model, state projectState, width, height int) []string {
 	return out
 }
 
-func renderTaskListRow(id, title, status string, width int) string {
-	statusWidth, idWidth := 9, 12
-	if width < 40 {
-		statusWidth, idWidth = 7, 8
+func renderTaskListRow(id, title, taskStatus, executionStatus string, width int) string {
+	idWidth, taskWidth, executionWidth := 8, 8, 14
+	if width < 48 {
+		taskWidth, executionWidth = 6, 8
+		if executionStatus == "失败（历史）" {
+			executionStatus = "失败"
+		}
 	}
-	label := padDisplay(truncate(safeTerminalInlineText(status), statusWidth), statusWidth)
 	identity := padDisplay(truncate(safeTerminalInlineText(id), idWidth), idWidth)
-	titleWidth := max(1, width-statusWidth-idWidth-2)
-	return truncate(label+" "+identity+" "+truncate(safeTerminalInlineText(title), titleWidth), width)
+	task := padDisplay(truncate(safeTerminalInlineText(taskStatus), taskWidth), taskWidth)
+	execution := padDisplay(truncate(safeTerminalInlineText(executionStatus), executionWidth), executionWidth)
+	titleWidth := max(1, width-idWidth-taskWidth-executionWidth-3)
+	return truncate(identity+" "+task+" "+execution+" "+truncate(safeTerminalInlineText(title), titleWidth), width)
+}
+
+func rowTaskStatus(row consoleRow) string {
+	if row.run != nil && row.run.TaskStatus != "" {
+		return displayTaskStatus(row.run.TaskStatus)
+	}
+	if row.native != nil {
+		return displayTaskStatus(row.native.Status)
+	}
+	if row.legacy != nil {
+		return displayTaskStatus(row.legacy.Status)
+	}
+	if row.kind == rowReady {
+		return "可开始"
+	}
+	return "未知"
+}
+
+func rowExecutionStatus(row consoleRow) string {
+	if row.run == nil {
+		return "—"
+	}
+	return displayExecutionStatus(row.run)
+}
+
+func displayExecutionStatus(run *steerline.Run) string {
+	if run == nil {
+		return "—"
+	}
+	if historicalFailedRun(run) {
+		return "失败（历史）"
+	}
+	switch run.ExecutionStatus {
+	case "pending":
+		return "待开始"
+	case "running":
+		return "执行中"
+	case "unknown":
+		return "待核实"
+	case "failed":
+		return "失败"
+	case "blocked":
+		return "阻塞"
+	case "succeeded":
+		return "成功"
+	case "completed":
+		return "已完成"
+	case "":
+		return "—"
+	default:
+		return run.ExecutionStatus
+	}
 }
 
 func displayTaskStatus(status string) string {
@@ -530,7 +585,7 @@ func taskNextAction(run *steerline.Run) string {
 	switch {
 	case run == nil:
 		return "无"
-	case run.FinishTaskStatus == "waiting_decision":
+	case run.FinishTaskStatus == "waiting_decision" && run.TaskStatus != "closed":
 		return "回答当前问题（按 a）"
 	case runNeedsAttention(run):
 		return "查看错误与恢复核验（按 u）"
@@ -545,7 +600,22 @@ func runNeedsAttention(run *steerline.Run) bool {
 	if run == nil {
 		return false
 	}
+	if historicalFailedRun(run) {
+		return false
+	}
+	if run.TaskStatus == "closed" && (run.ExecutionStatus == "pending" || run.ExecutionStatus == "running") {
+		return true
+	}
 	return run.FinishTaskStatus == "waiting_decision" || run.ExecutionStatus == "unknown" || run.ExecutionStatus == "failed" || run.ExecutionStatus == "blocked" || run.FinishTaskStatus == "blocked" || (run.Error != nil && strings.TrimSpace(*run.Error) != "") || (run.PR.QueryError != nil && strings.TrimSpace(*run.PR.QueryError) != "")
+}
+
+func historicalFailedRun(run *steerline.Run) bool {
+	return run != nil &&
+		run.TaskStatus == "closed" && run.EndedAt != nil &&
+		(run.ExecutionStatus == "failed" || run.ExecutionStatus == "blocked") &&
+		run.FinishTaskStatus == "blocked" && run.Decision == nil &&
+		(run.Error == nil || strings.TrimSpace(*run.Error) == "") &&
+		(run.PR.QueryError == nil || strings.TrimSpace(*run.PR.QueryError) == "")
 }
 
 func renderDynamicPanel(m Model, state projectState, width, height int) []string {
@@ -619,7 +689,7 @@ func renderDetail(m Model, state projectState, row *consoleRow, width, height in
 		lines = append(lines, renderLegacyTaskDetail(state, *row.legacy)...)
 		return scrollLines(wrapLines(lines, width), state.detailScroll, height)
 	}
-	if row.native != nil {
+	if row.native != nil && row.run == nil {
 		lines = append(lines, renderNativeTaskDetail(state, *row.native)...)
 		if row.kind == rowReady {
 			lines = append(lines, renderControlAvailability(state, row, m.clock.Now())...)
@@ -645,13 +715,11 @@ func renderDetail(m Model, state projectState, row *consoleRow, width, height in
 	if state.snapshot.Connection.State == steerline.ConnectionOffline || state.snapshot.Connection.State == steerline.ConnectionNoRecord {
 		lines = append(lines, "服务入口："+safeTerminalText(serviceWindowInstruction(state.ref)), "配置："+safeTerminalText(state.ref.ConfigPath))
 	}
-	taskStatus := displayTaskStatus(firstText(run.TaskStatus, "unknown"))
-	if current := displayTaskStatus(runStatus(run)); current != taskStatus && current != "已完成" {
-		taskStatus += " · " + current
-	}
+	taskStatus := rowTaskStatus(*row)
 	lines = append(lines,
 		"任务 "+safeTerminalInlineText(run.TaskID)+" · "+safeTerminalInlineText(run.Title),
 		"任务状态："+safeTerminalText(taskStatus),
+		"执行状态："+safeTerminalText(displayExecutionStatus(run)),
 	)
 	lines = append(lines, taskProgressLines(state, run)...)
 	lines = append(lines, "需要你操作："+taskNextAction(run))
@@ -1746,12 +1814,12 @@ func compactLayout(m Model) bool {
 }
 
 func listPanelWidth(m Model) int {
-	left := m.width * 38 / 100
-	if left < 34 {
-		left = 34
+	left := m.width * 55 / 100
+	if left < 55 {
+		left = 55
 	}
-	if left > 60 {
-		left = 60
+	if left > 90 {
+		left = 90
 	}
 	return left
 }
