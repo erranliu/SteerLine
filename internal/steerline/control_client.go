@@ -105,9 +105,9 @@ func SubmitControlWithID(c Config, action string, payload any, requestedBy, requ
 	return SubmitControlTargeted(c, action, payload, requestedBy, requestID, "", nil)
 }
 
-// SubmitControlTargeted binds a UI action to the service instance and optional
-// control revision it displayed. A restart or intervening control change is
-// reported to the caller instead of silently retargeting the action.
+// SubmitControlTargeted binds a UI action to the service instance. Mode changes
+// also bind the displayed control revision; a manual start uses the task's
+// authoritative claim CAS so another task's start cannot stale its request.
 func SubmitControlTargeted(c Config, action string, payload any, requestedBy, requestID, expectedInstance string, expectedRevision *uint64) (ControlRequest, error) {
 	if !controlIDPattern.MatchString(requestID) {
 		return ControlRequest{}, errors.New("request ID must be 32 lowercase hexadecimal characters")
@@ -223,6 +223,9 @@ func ReadControlReceipt(c Config, id string) (*ControlReceipt, error) {
 	}
 	if receipt.Version != ControlProtocolVersion || (receipt.Status != "applying" && !terminalControlStatus(receipt.Status)) {
 		return nil, errors.New("invalid control receipt version or status")
+	}
+	if receipt.Status == "accepted" && receipt.Action != "start_task" {
+		return nil, errors.New("accepted control receipt is only valid for a claimed start_task")
 	}
 	return &receipt, nil
 }

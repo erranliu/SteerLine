@@ -364,8 +364,8 @@ func TestSupervisedOrcaRealNativeTaskLifecycle(t *testing.T) {
 			receiptCtx, receiptCancel := context.WithTimeout(ctx, 5*time.Minute)
 			defer receiptCancel()
 			receipt, receiptErr := WaitControlReceipt(receiptCtx, c, request.RequestID, 100*time.Millisecond)
-			if receiptErr != nil || receipt.Status != "applied" {
-				t.Fatalf("native DAG predecessor was not started: %+v %v", receipt, receiptErr)
+			if receiptErr != nil || receipt.Status != "accepted" {
+				t.Fatalf("native DAG predecessor was not claimed: %+v %v", receipt, receiptErr)
 			}
 		}
 	}

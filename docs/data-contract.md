@@ -63,7 +63,7 @@ TASK-DAG 更新后的协议样例见 [native-tasks-v1.sample.json](validation/ta
 | runs | array | 本服务管理的全部运行概要，初始为空数组 |
 | control | object | 派发模式、暂停、控制版本、单条 operation checkpoint 和未决副作用阻塞 |
 
-`control.dispatch_mode` 为 `manual` 或 `auto`。native 项目从中心 `ProjectTaskAuthority` 读取模式、暂停位和 authority version；新项目为 manual/paused，`run -dispatch` 不覆盖中心设置。`dispatch_paused` 只阻止新派发，当前 worker、决策续跑和 PR 核验继续。native `control.revision` 显示中心 authority version；旧执行投影的 revision 按 service instance 隔离。心跳、日志和重复 PR 轮询不推进 authority version。`control.operation` 是服务主状态机正在执行或等待发布终态回执的 checkpoint。`control.blockers` 保留不确定的 claim/worktree/worker 等执行副作用，阻止新任务派发，直到后续人工恢复动作解除。
+`control.dispatch_mode` 为 `manual` 或 `auto`。native 项目从中心 `ProjectTaskAuthority` 读取模式、暂停位和 authority version；新项目为 manual/paused，`run -dispatch` 不覆盖中心设置。`dispatch_paused` 只阻止新派发，当前 worker、决策续跑和 PR 核验继续。native `control.revision` 显示中心 authority version；旧执行投影的 revision 按 service instance 隔离。心跳、日志和重复 PR 轮询不推进 authority version。手动 `start_task` 由独立的中心 claim 命令及 Operation 持久化；`control.operation` 保留服务主状态机其他控制动作的 checkpoint。`control.blockers` 保留不确定的 claim/worktree/worker 等执行副作用，阻止不安全的后续派发，直到恢复核验解除。
 
 控制 revision 按 service.instance_id 隔离，每个新实例从 1 开始；不占执行槽的其他 PR 完成不会使派发版本失效。run.control_revision 跨实例保存，并覆盖工作目录、base、进程身份等恢复证据的变化。手动 `start_task` 请求绑定服务实例和固定方案，以任务版本、DAG 和中心 claim 事务独立仲裁，不因另一任务启动而失效；自动派发仍受单活动槽守卫。决策续跑不能绕过原执行的 unknown、checkpoint 或 blocker。
 

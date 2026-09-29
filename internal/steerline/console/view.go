@@ -172,7 +172,7 @@ func renderStatusLine(m Model, state projectState) string {
 	parts := []string{"服务 " + service, "派发 " + mode, fmt.Sprintf("Ready %d", ready)}
 	starting := 0
 	for _, action := range state.actions {
-		if action.Action == "start_task" && !action.Resolved {
+		if action.Action == "start_task" && !action.Resolved && action.Status != "indeterminate" {
 			starting++
 		}
 	}
@@ -327,8 +327,12 @@ func renderRows(m Model, state projectState, width, height int) []string {
 	for _, row := range visible {
 		taskStatus := rowTaskStatus(row)
 		if row.kind == rowReady {
-			if pendingStartAction(state, row.taskID) != nil {
-				taskStatus = "启动中"
+			if action := pendingStartAction(state, row.taskID); action != nil {
+				if action.Status == "indeterminate" {
+					taskStatus = "待核实"
+				} else {
+					taskStatus = "启动中"
+				}
 			} else if valid, _ := candidateFreshness(state.ref, state.snapshot, m.clock.Now()); valid {
 				taskStatus = "可开始"
 			} else {
@@ -974,8 +978,12 @@ func renderControlAvailability(state projectState, row *consoleRow, now time.Tim
 	}
 	if row != nil && row.kind == rowReady {
 		reason := candidateActionReason(state.ref, state.snapshot, now)
-		if pendingStartAction(state, row.taskID) != nil {
-			lines = append(lines, "启动请求已提交；等待中心领取，无需重复按 s")
+		if action := pendingStartAction(state, row.taskID); action != nil {
+			if action.Status == "indeterminate" {
+				lines = append(lines, "启动请求结果待核实；正在按原 request_id 对账，无需重复按 s")
+			} else {
+				lines = append(lines, "启动请求已提交；等待中心领取，无需重复按 s")
+			}
 		} else if reason == "" {
 			lines = append(lines, "操作：s 选择执行方案并开始任务 "+safeTerminalText(row.taskID))
 		} else {

@@ -255,7 +255,7 @@ func NewService(c Config) (_ *Service, retErr error) {
 				recoverPlannedStep := false
 				if r.WorkflowVersion == MinimalWorkflowVersion && r.ExecutionStatus == "pending" && r.FinishTaskStatus == "pending" {
 					for _, workflow := range s.State.WorkflowRuns {
-						if workflow.WorkflowRunID != r.RunID || workflow.Phase != "executing" {
+						if workflow.WorkflowRunID != r.RunID || workflow.Phase != "executing" && workflow.Phase != "queued" {
 							continue
 						}
 						for _, execution := range s.State.Executions {
@@ -263,7 +263,8 @@ func NewService(c Config) (_ *Service, retErr error) {
 								continue
 							}
 							for _, attempt := range s.State.Attempts {
-								if attempt.ExecutionID == execution.ExecutionID && attempt.AttemptID == r.AttemptID && attempt.StepID == execution.CurrentStep && attempt.Status == "planned" {
+								queuedPrepare := workflow.Phase == "queued" && attempt.StepID == "prepare" && attempt.OperationID == "" && r.Process == nil
+								if attempt.ExecutionID == execution.ExecutionID && attempt.AttemptID == r.AttemptID && attempt.StepID == execution.CurrentStep && attempt.Status == "planned" && (workflow.Phase == "executing" || queuedPrepare) {
 									recoverPlannedStep = true
 									break
 								}

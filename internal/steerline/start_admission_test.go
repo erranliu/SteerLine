@@ -87,6 +87,11 @@ func TestManualStartAdmissionsClaimIndependentTasksBeforeWorkersStart(t *testing
 	if err != nil || secondReceipt.Status != "accepted" || secondReceipt.RunID == "" || secondReceipt.RunID == firstReceipt.RunID {
 		t.Fatalf("second claim did not get its own run: %+v / %v", secondReceipt, err)
 	}
+	duplicate := submit(map[string]string{"task_id": "701"})
+	duplicateReceipt, err := WaitControlReceipt(waitCtx, f.c, duplicate.RequestID, 20*time.Millisecond)
+	if err != nil || duplicateReceipt.Status != "rejected" {
+		t.Fatalf("another request claimed the same task twice: %+v / %v", duplicateReceipt, err)
+	}
 	rejectedReceipt, err := WaitControlReceipt(waitCtx, f.c, rejected.RequestID, 20*time.Millisecond)
 	if err != nil || rejectedReceipt.Status != "rejected" || rejectedReceipt.Code != "stale_profile" {
 		t.Fatalf("pre-claim failure was not reported: %+v / %v", rejectedReceipt, err)
@@ -140,7 +145,6 @@ func TestManualStartAdmissionsClaimIndependentTasksBeforeWorkersStart(t *testing
 	}
 	s = nil
 	f.c.TaskPoll = "100ms"
-	t.Setenv("STEERLINE_FAKE_NATIVE_STEP_WAIT", "30s")
 	seedFakeCapabilities(t, f.c)
 	restarted := f.service(t)
 	defer restarted.Close()
@@ -159,7 +163,7 @@ func TestManualStartAdmissionsClaimIndependentTasksBeforeWorkersStart(t *testing
 		state, readErr := LoadDatabaseRuntime(f.c)
 		if readErr == nil && state != nil {
 			for _, workflow := range state.WorkflowRuns {
-				if (workflow.WorkflowRunID == firstReceipt.RunID || workflow.WorkflowRunID == secondReceipt.RunID) && workflow.Phase == "executing" {
+				if (workflow.WorkflowRunID == firstReceipt.RunID || workflow.WorkflowRunID == secondReceipt.RunID) && workflow.Phase == "executing" && state.Service.Ready {
 					started = true
 				}
 			}
@@ -171,5 +175,32 @@ func TestManualStartAdmissionsClaimIndependentTasksBeforeWorkersStart(t *testing
 	}
 	if !started {
 		t.Fatal("restarted service did not advance a queued prepare")
+	}
+	current, err := LoadDatabaseRuntime(f.c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	created := now()
+	third := ControlRequest{ProtocolVersion: ControlProtocolVersion, RequestID: newID(), RepositoryIdentity: f.c.Identity(), InstanceID: current.Service.InstanceID, Action: "start_task", Payload: mustJSON(map[string]string{"task_id": "703"}), RequestedBy: "operator", CreatedAt: created, ExpiresAt: created.Add(2 * time.Minute), ExpectedControlRevision: current.Control.Revision}
+	if err := publishControlRequest(f.c.RunDir, third); err != nil {
+		t.Fatal(err)
+	}
+	thirdWaitCtx, stopThird := context.WithTimeout(context.Background(), 10*time.Second)
+	defer stopThird()
+	thirdReceipt, err := WaitControlReceipt(thirdWaitCtx, f.c, third.RequestID, 20*time.Millisecond)
+	if err != nil || thirdReceipt.Status != "accepted" || thirdReceipt.RunID == "" {
+		t.Fatalf("earlier step processing blocked a later independent claim: %+v / %v", thirdReceipt, err)
+	}
+}
+
+func TestStartAdmissionUsesTaskCASInsteadOfGlobalControlRevision(t *testing.T) {
+	created := now()
+	req := ControlRequest{ProtocolVersion: ControlProtocolVersion, RequestID: newID(), RepositoryIdentity: "repo", InstanceID: "instance", Action: "start_task", RequestedBy: "operator", CreatedAt: created, ExpiresAt: created.Add(time.Minute), ExpectedControlRevision: 3}
+	if code, err := validateControlRequest(req, "instance", "repo", 4, created); err != nil {
+		t.Fatalf("another task's control revision rejected this start: %s / %v", code, err)
+	}
+	req.Action = "set_dispatch_mode"
+	if code, err := validateControlRequest(req, "instance", "repo", 4, created); err == nil || code != "stale_revision" {
+		t.Fatalf("mode change lost its global revision guard: %s / %v", code, err)
 	}
 }

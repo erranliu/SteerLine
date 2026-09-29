@@ -19,22 +19,33 @@ func runStartAdmissions(ctx context.Context, config Config, store *SQLiteStore, 
 	ticker := time.NewTicker(200 * time.Millisecond)
 	defer ticker.Stop()
 	inFlight := map[string]bool{}
+	seen := map[string]bool{}
 	done := make(chan string)
 	var workers sync.WaitGroup
 	scan := func() {
+		if ctx.Err() != nil {
+			return
+		}
 		ids, err := controlRequestIDs(config.RunDir)
 		if err != nil {
 			return
 		}
 		for _, id := range ids {
-			if inFlight[id] {
+			if inFlight[id] || seen[id] {
 				continue
 			}
-			if _, err := ReadControlReceipt(config, id); err == nil || !os.IsNotExist(err) {
+			if _, err := ReadControlReceipt(config, id); err == nil {
+				seen[id] = true
+				continue
+			} else if !os.IsNotExist(err) {
 				continue
 			}
 			req, err := readControlRequest(controlRequestPath(config.RunDir, id))
-			if err != nil || req.RequestID != id || req.Action != "start_task" {
+			if err != nil || req.RequestID != id {
+				continue
+			}
+			if req.Action != "start_task" {
+				seen[id] = true
 				continue
 			}
 			inFlight[id] = true
@@ -82,6 +93,9 @@ func controlRequestIDs(runDir string) ([]string, error) {
 }
 
 func admitStartRequest(ctx context.Context, config Config, store *SQLiteStore, instanceID string, req ControlRequest) error {
+	if ctx.Err() != nil {
+		return nil
+	}
 	path := controlRequestPath(config.RunDir, req.RequestID)
 	digest := rawRequestDigest(path)
 	receipt := ControlReceipt{Version: ControlProtocolVersion, RequestID: req.RequestID, RequestDigest: digest, InstanceID: req.InstanceID, Action: req.Action, RequestedBy: req.RequestedBy, SubmittedAt: req.CreatedAt}
@@ -112,8 +126,11 @@ func admitStartRequest(ctx context.Context, config Config, store *SQLiteStore, i
 		return finish("failed", "read_failed", err.Error(), nil)
 	}
 	var runtime Runtime
-	if json.Unmarshal(projection, &runtime) != nil || runtime.Service.InstanceID != instanceID || runtime.Service.ConfigDigest != config.LoadedConfigDigest() || !runtime.Service.Ready || runtime.Service.Status != "running" || runtime.Service.Mode != "scheduler" {
+	if json.Unmarshal(projection, &runtime) != nil || runtime.Service.InstanceID != instanceID || runtime.Service.ConfigDigest != config.LoadedConfigDigest() {
 		return finish("rejected", "stale_instance", "服务实例或执行配置已变化，请刷新后重试", nil)
+	}
+	if !runtime.Service.Ready || runtime.Service.Status != "running" && runtime.Service.Status != "error" || runtime.Service.Mode != "scheduler" {
+		return nil // A transient service checkpoint must not consume the request.
 	}
 	if runtime.Control.Operation != nil {
 		return nil // Let a mode or stop checkpoint settle before admitting new work.
