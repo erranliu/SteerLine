@@ -1,6 +1,6 @@
 # Spec：单 worker 持续执行与统一待决策
 
-任务 ID：36；任务名称：单 worker 持续执行与统一待决策；目标：`WORKER-FLOW`。配套 [Plan](worker-flow.plan.md)。状态：待实现与验收，一个独立实现 PR 交付。日期：2026-09-29。
+任务 ID：36；任务名称：单 worker 持续执行与统一待决策；目标：`WORKER-FLOW`。配套 [Plan](worker-flow.plan.md)。状态：local Codex 实现候选，PR #121；发布前人工合并链及列明的延期项仍未验收。日期：2026-09-29。
 
 ## 1. 目标与职责
 
