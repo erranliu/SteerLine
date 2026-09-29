@@ -167,124 +167,70 @@ func TestAutomaticDispatchRequiresAnExplicitDefaultWithMultipleProfiles(t *testi
 	service.Close()
 }
 
-func TestServiceStartControlDispatchesChosenProfile(t *testing.T) {
-	t.Setenv("STEERLINE_FAKE_NATIVE_STEP_DECISION", "implement")
-	f := newFixture(t)
-	f.c.configDigest = strings.Repeat("f", 64)
-	executable, err := os.Executable()
+func TestWorkerFlowClaimsFreezeIndependentLocalProfiles(t *testing.T) {
+	ctx := context.Background()
+	c, commit, store := openDAGFixture(t)
+	c.WorkflowProtocol, c.Claimant = WorkerFlowVersion, "operator"
+	c.ExecutionProfiles = []ExecutionProfile{
+		{ID: "local-first", Name: "First local", Host: "local", Agent: "codex", Model: "first-model", ReasoningEffort: "high", Sandbox: "workspace-write", Codex: Command{Executable: "codex"}},
+		{ID: "local-second", Name: "Second local", Host: "local", Agent: "codex", Model: "second-model", ReasoningEffort: "xhigh", Sandbox: "workspace-write", Codex: Command{Executable: "codex"}},
+	}
+	if out, err := exec.Command("git", "-C", c.Repository, "push", "--quiet", "origin", "HEAD:refs/heads/main").CombinedOutput(); err != nil {
+		t.Fatalf("push isolated fixture: %v: %s", err, out)
+	}
+	commands := CommandService{Store: store, Project: c.Identity()}
+	input := taskBatchFixture(t, c, commit, batchTasks(611, 612), nil)
+	validation, err := commands.ValidateTaskBatch(ctx, c, input)
+	if err != nil || !validation.Valid {
+		t.Fatalf("validate fixed tasks: %+v %v", validation, err)
+	}
+	if _, err := commands.CreateTaskBatch(ctx, c, input, strings.Repeat("d", 32), validation.AuthorityVersion, "operator"); err != nil {
+		t.Fatal(err)
+	}
+	authority, err := store.nativeAuthority(ctx, c.Identity())
 	if err != nil {
 		t.Fatal(err)
 	}
-	step := func(name string) StepContract {
-		return StepContract{Provider: "command", Entry: "builtin:" + name, Version: "selected-profile-v1", InputSchema: NativeTaskInputSchema, OutputSchema: MinimalStepOutputSchema, ExecutionSite: "local", Timeout: 10 * time.Second, Command: []string{executable, "--fake", "native-step"}}
-	}
-	f.c.ProjectSteps = &ProjectSteps{Implement: step("implement"), Verify: step("verify"), PublishPR: step("publish_pr")}
-	f.c.ProjectSteps.Verify.RequiredChecks = []string{"unit"}
-	profile := ExecutionProfile{ID: "local-selected", Name: "已选本地方案", Host: "local", Agent: "codex", Model: "selected-model", ReasoningEffort: "xhigh", Sandbox: "workspace-write", Codex: f.c.Codex, ProjectSteps: f.c.ProjectSteps}
-	otherProfile := profile
-	otherProfile.ID, otherProfile.Name, otherProfile.Model = "local-other", "另一套本地方案", "other-model"
-	f.c.ExecutionProfiles = []ExecutionProfile{profile, otherProfile}
-	service := f.service(t)
-	defer service.Close()
-	observerCtx, stopObservers := context.WithCancel(context.Background())
-	defer stopObservers()
-	service.runContext = observerCtx
-	service.workerMessages = make(chan workerMessage, 128)
-	service.State.Service.Mode, service.State.Service.Ready = "scheduler", true
-	if err = service.save(); err != nil {
+	authority.AuthorityVersion++
+	authority.DispatchPaused = false
+	if err := store.Transact(ctx, func(tx DomainTx) error {
+		return tx.(*sqliteTx).UpdateProjectTaskAuthorityCAS(authority, authority.AuthorityVersion-1)
+	}); err != nil {
 		t.Fatal(err)
 	}
-	contract := nativeContract(t, service.Config, f.commit, "selected-profile-contract")
-	otherContract := nativeContract(t, service.Config, f.commit, "other-profile-contract")
-	batch, err := json.Marshal(TaskBatchInput{SchemaVersion: taskBatchSchemaVersion, ProjectID: service.Config.Identity(), Tasks: []TaskBatchTask{{LocalKey: "selected", TaskID: 611, Title: "Selected profile", Type: "task", Contract: contract}, {LocalKey: "other", TaskID: 612, Title: "Other profile", Type: "task", Contract: otherContract}}, Dependencies: []TaskBatchEdge{}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	commands := CommandService{Store: service.domainStore, Project: service.Config.Identity()}
-	if _, err = seedExecutionProfileTasks(t, service.Config, service.domainStore, batch); err != nil {
-		t.Fatal(err)
-	}
-	authority, err := service.domainStore.nativeAuthority(context.Background(), service.Config.Identity())
-	if err != nil {
-		t.Fatal(err)
-	}
-	manual, unpaused := "manual", false
-	if _, err = commands.SetNativeDispatchState(context.Background(), NativeDispatchUpdate{RequestID: newID(), ExpectedAuthorityVersion: authority.AuthorityVersion, Mode: &manual, Paused: &unpaused, RequestedBy: "operator"}); err != nil {
-		t.Fatal(err)
-	}
-	seedFakeCapabilities(t, service.Config)
-	requestID := newID()
-	req := ControlRequest{Action: "start_task", RequestID: requestID}
-	payload := ControlPayload{TaskID: "611", ExecutionProfileID: profile.ID, ExecutionProfileDigest: profile.Digest()}
-	op := &ControlOperation{RequestID: requestID, Action: "start_task", TaskID: payload.TaskID, RunID: newID(), Phase: "applying"}
-	service.State.Control.Operation = op
-	if err = service.save(); err != nil {
-		t.Fatal(err)
-	}
-	if err = service.applyControlAction(context.Background(), req, payload, op, &ControlReceipt{}); err != nil {
-		t.Fatal(err)
-	}
-	if service.worker == nil || service.Config.Model != "selected-model" {
-		t.Fatal("start control did not launch the selected execution route")
-	}
-	run := service.find("611")
-	workflow, execution := service.minimalRecords(run)
-	if workflow == nil || workflow.ExecutionProfile == nil || workflow.ExecutionProfile.ID != profile.ID || execution == nil || execution.Backend != string(BackendLocal) {
-		t.Fatalf("service did not persist selected route: %+v / %+v", workflow, execution)
-	}
-	firstWorker := service.worker
-	service.State.Control.Operation = nil
-	secondRequestID := newID()
-	secondPayload := ControlPayload{TaskID: "612", ExecutionProfileID: otherProfile.ID, ExecutionProfileDigest: otherProfile.Digest()}
-	secondOperation := &ControlOperation{RequestID: secondRequestID, Action: "start_task", TaskID: secondPayload.TaskID, RunID: newID(), Phase: "applying"}
-	service.State.Control.Operation = secondOperation
-	if err = service.save(); err != nil {
-		t.Fatal(err)
-	}
-	if err = service.applyControlAction(context.Background(), ControlRequest{Action: "start_task", RequestID: secondRequestID}, secondPayload, secondOperation, &ControlReceipt{}); err != nil {
-		t.Fatal(err)
-	}
-	secondRun := service.find("612")
-	if secondRun == nil || service.workers[run.RunID] != firstWorker || service.workers[secondRun.RunID] == nil || service.workers[secondRun.RunID] == firstWorker || service.Config.Model != "other-model" {
-		t.Fatal("independent manual tasks did not retain distinct simultaneous workers and profiles")
-	}
-	settled := map[string]bool{}
-	for len(settled) != 2 {
-		select {
-		case message := <-service.workerMessages:
-			if err = service.handleWorkerMessage(message); err != nil {
-				t.Fatal(err)
-			}
-			if message.done {
-				settled[message.runID] = true
-			}
-		case <-time.After(15 * time.Second):
-			t.Fatalf("parallel observers did not settle: %+v", settled)
+	for index, taskID := range []string{"611", "612"} {
+		profile := c.ExecutionProfiles[index]
+		selected := c.ApplyExecutionProfile(profile)
+		receipt, err := commands.ClaimNativeTask(ctx, selected, TaskClaimOptions{TaskID: taskID, RequestID: strings.Repeat(string(rune('e'+index)), 32), ExpectedTaskVersion: 1, ExpectedAuthorityVersion: authority.AuthorityVersion, RequestedBy: "operator", Explicit: true, ExecutionProfile: &profile})
+		if err != nil || receipt.Status != "claim_reserved" {
+			t.Fatalf("claim task %s with local profile: receipt=%+v err=%v", taskID, receipt, err)
 		}
 	}
-	service.State.Control.Operation = nil
-	if err = service.save(); err != nil {
-		t.Fatal(err)
-	}
-	if err = service.Close(); err != nil {
-		t.Fatal(err)
-	}
-	edited := f.c
-	edited.ExecutionProfiles = append([]ExecutionProfile(nil), f.c.ExecutionProfiles...)
-	edited.ExecutionProfiles[0].Model = "later-project-edit"
-	edited.configDigest = strings.Repeat("d", 64)
-	restarted, err := NewService(edited)
+	service, err := NewService(c)
 	if err != nil {
-		t.Fatalf("restart failed for fixed profile: %v", err)
+		t.Fatal(err)
 	}
-	defer restarted.Close()
-	fixedFirst, err := restarted.executionConfigForRun(restarted.find("611"))
-	if err != nil || fixedFirst.Model != "selected-model" || fixedFirst.ReasoningEffort != "xhigh" {
-		t.Fatalf("restart adopted edited settings for first run: model=%q effort=%q err=%v", fixedFirst.Model, fixedFirst.ReasoningEffort, err)
+	if err := service.Close(); err != nil {
+		t.Fatal(err)
 	}
-	fixedSecond, err := restarted.executionConfigForRun(restarted.find("612"))
-	if err != nil || fixedSecond.Model != "other-model" {
-		t.Fatalf("restart adopted another run's settings: model=%q err=%v", fixedSecond.Model, err)
+	edited := c
+	edited.ExecutionProfiles = append([]ExecutionProfile(nil), c.ExecutionProfiles...)
+	edited.ExecutionProfiles[0].Model = "later-project-edit"
+	reopened, err := NewService(edited)
+	if err != nil {
+		t.Fatalf("current-format restart changed the fixed local profiles: %v", err)
+	}
+	defer reopened.Close()
+	for index, taskID := range []string{"611", "612"} {
+		run := reopened.find(taskID)
+		if run == nil {
+			t.Fatalf("task %s lost its claimed worker flow", taskID)
+		}
+		workflow, execution := reopened.minimalRecords(run)
+		fixed, err := reopened.executionConfigForRun(run)
+		if err != nil || workflow == nil || workflow.WorkflowVersion != WorkerFlowVersion || workflow.ExecutionProfile == nil || workflow.ExecutionProfile.ID != c.ExecutionProfiles[index].ID || execution == nil || execution.ExecutionID != workflow.SelectedResult || fixed.Model != c.ExecutionProfiles[index].Model || len(reopened.State.Attempts) != 2 {
+			t.Fatalf("task %s adopted another local profile or step chain: workflow=%+v execution=%+v config=%+v err=%v", taskID, workflow, execution, fixed, err)
+		}
 	}
 }
 
