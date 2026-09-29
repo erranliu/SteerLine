@@ -552,6 +552,56 @@ func (b orcaSupervisedBackend) showWorker(ctx context.Context, expected supervis
 	return supervisedWorkerObservation{Identity: identity, Liveness: result.Projection.Liveness.Verdict, DispatchState: result.Dispatch.Status, AgentWaitState: waitState, WorktreePath: result.Terminal.WorktreePath, Branch: strings.TrimPrefix(result.Terminal.Branch, "refs/heads/"), ObservedAt: now()}, nil
 }
 
+// A settled Dispatch no longer has to expose its former live terminal in
+// worker-show. Check its durable identities before recovering its inbox or
+// releasing its resources; the original terminal identity remains in ref.
+func (b orcaSupervisedBackend) settledWorker(ctx context.Context, ref ExecutionRef, outcome string) (string, error) {
+	if err := validateSupervisedRef(b.config, ref); err != nil {
+		return "", err
+	}
+	out, callErr := (orcaClient{cfg: b.config}).call(ctx, positiveDuration(b.config.CommandTimeout, 30*time.Second), "orchestration", "worker-show", "--dispatch", ref.External.Dispatch, "--json")
+	env, parseErr := parseEnvelope(out)
+	if callErr != nil || parseErr != nil {
+		return "", &BackendError{Code: BackendUnreachable, Diagnostic: "settled supervised Dispatch inspection failed", Cause: errors.Join(callErr, parseErr)}
+	}
+	var result struct {
+		Dispatch struct {
+			ID, RunID, TaskID, Status string
+		} `json:"dispatch"`
+		Worker struct {
+			DispatchID, WorktreeID, AgentTerminalHandle, State string
+		} `json:"worker"`
+		Projection struct {
+			Host struct {
+				ID string `json:"id"`
+			} `json:"host"`
+		} `json:"projection"`
+		Server struct {
+			EnvironmentID string `json:"environmentId"`
+		} `json:"server"`
+		RemoteRuntimeEpoch string `json:"remoteRuntimeEpoch"`
+	}
+	if err := json.Unmarshal(env.Result, &result); err != nil {
+		return "", &BackendError{Code: BackendProtocolInvalid, Diagnostic: "settled supervised worker-show response is malformed", Cause: err}
+	}
+	if env.Meta.RuntimeID != ref.External.CoordinatorRuntimeID || result.Dispatch.ID != ref.External.Dispatch || result.Dispatch.RunID != ref.External.OrchestrationRun || result.Dispatch.TaskID != ref.External.Task || result.Worker.DispatchID != ref.External.Dispatch || result.Worker.WorktreeID != ref.External.WorktreeID || result.Worker.AgentTerminalHandle != ref.External.Terminal || result.Server.EnvironmentID != ref.External.ExecutionHost || result.Projection.Host.ID != ref.External.ExecutionHost || result.RemoteRuntimeEpoch != ref.External.RuntimeID {
+		return "", &BackendError{Code: BackendIdentityMismatch, Diagnostic: "settled Dispatch differs from the original Run, worker, host, or terminal binding"}
+	}
+	state := ""
+	switch {
+	case result.Dispatch.Status == "completed" && result.Worker.State == "succeeded":
+		state = "succeeded"
+	case result.Dispatch.Status == "failed" && result.Worker.State == "failed":
+		state = "failed"
+	default:
+		return "", &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "original supervised Dispatch has not settled conclusively"}
+	}
+	if outcome != "" && state != outcome {
+		return "", &BackendError{Code: BackendIdentityMismatch, Diagnostic: "settled Dispatch outcome differs from accepted worker_done"}
+	}
+	return state, nil
+}
+
 // submitAcceptedPrompt waits for the exact prompt to appear in the live Codex
 // composer, submits it once, then waits for explicit turn-start evidence. An
 // active or uncertain terminal is never sent another Enter.
@@ -810,7 +860,7 @@ func (b orcaSupervisedBackend) StartMinimalStep(ctx context.Context, task TaskRe
 	}
 	observerCtx, cancelObserver := context.WithCancel(context.Background())
 	worker := &Worker{proc: &supervisedProcess{identity: observation.Identity, cancel: cancelObserver}, Events: make(chan WorkerEvent, 16), Done: make(chan error, 1), cancelObservation: cancelObserver, observationDone: make(chan struct{})}
-	go b.observeWorker(observerCtx, worker, ref, attempt, input, resultPath)
+	go b.observeWorker(observerCtx, worker, ref, attempt, input, resultPath, false)
 	return StartReceipt{Disposition: "accepted", PlatformRequestID: started.PlatformRequestID, Worker: worker, Ref: ref, Run: r}, nil
 }
 
@@ -878,6 +928,14 @@ func (s *Service) reattachSupervisedWorker(run *Run) error {
 	}
 	started := supervisedStartReceipt{RunID: ref.External.OrchestrationRun, TaskID: ref.External.Task, DispatchID: ref.External.Dispatch, WorktreeID: ref.Target.WorktreeID, CenterRuntimeID: ref.External.CoordinatorRuntimeID, PlatformRequestID: operation.PlatformRequestID}
 	observation, err := backend.showWorker(context.Background(), started)
+	settledRecovery := false
+	if err != nil && !unboundStart && !uncertainStart && run.FinishTaskStatus == "pending" && (attempt.Status == "running" || attempt.Status == "dispatched") {
+		if outcome, settledErr := backend.settledWorker(context.Background(), ref, ""); settledErr == nil {
+			observation = supervisedWorkerObservation{Identity: ref.External, Liveness: "exited", DispatchState: map[string]string{"succeeded": "completed", "failed": "failed"}[outcome]}
+			err = nil
+			settledRecovery = true
+		}
+	}
 	if err != nil {
 		return err
 	}
@@ -952,7 +1010,7 @@ func (s *Service) reattachSupervisedWorker(run *Run) error {
 	worker := &Worker{proc: &supervisedProcess{identity: ref.External, cancel: cancelObserver}, Events: make(chan WorkerEvent, 16), Done: make(chan error, 1), cancelObservation: cancelObserver, observationDone: make(chan struct{})}
 	s.worker, s.active = worker, run
 	s.registerWorker(run, worker)
-	go backend.observeWorker(observerCtx, worker, ref, *attempt, input, attempt.ResultPath)
+	go backend.observeWorker(observerCtx, worker, ref, *attempt, input, attempt.ResultPath, settledRecovery)
 	return nil
 }
 
@@ -1324,7 +1382,7 @@ func (p *supervisedProcess) Identity() ProcessIdentity { return p.identity }
 func (p *supervisedProcess) Kill()                     { p.Close() } // Stops only the local observer; remote cancel is unsupported.
 func (p *supervisedProcess) Close()                    { p.once.Do(p.cancel) }
 
-func (b orcaSupervisedBackend) observeWorker(ctx context.Context, worker *Worker, ref ExecutionRef, attempt StepAttemptRecord, input MinimalStepInput, resultPath string) {
+func (b orcaSupervisedBackend) observeWorker(ctx context.Context, worker *Worker, ref ExecutionRef, attempt StepAttemptRecord, input MinimalStepInput, resultPath string, settledRecovery bool) {
 	defer close(worker.Events)
 	defer close(worker.observationDone)
 	identity := ref.External
@@ -1341,37 +1399,39 @@ func (b orcaSupervisedBackend) observeWorker(ctx context.Context, worker *Worker
 			finish(&BackendError{Code: BackendOutcomeUnknown, Diagnostic: "supervised observer detached while remote worker may still be live", Cause: ctx.Err()})
 			return
 		}
-		output, outputErr := b.ReadOutput(ctx, ref, outputCursor, 100)
-		turnEvidence := outputErr == nil && !turnStartedObserved && supervisedTranscriptTurnStarted(output)
-		if outputErr == nil && (output.NextCursor != outputCursor || output.Source != outputSource || output.Gap || output.SourceChanged || turnEvidence) {
-			activity := supervisedOutputActivity(output, input.WorkflowRunID, input.TaskID)
-			event := WorkerEvent{RunID: input.WorkflowRunID, AttemptID: attempt.AttemptID, Summary: activity.Title, Activity: activity, RemoteRunID: identity.OrchestrationRun, OutputSource: output.Source, OutputCursor: output.NextCursor, OutputGap: output.Gap || output.SourceChanged, TurnStarted: turnEvidence, Processed: make(chan error, 1)}
-			if activity.Kind == "" {
-				event.Activity = ActivityEvent{}
-			}
-			select {
-			case worker.Events <- event:
-			case <-ctx.Done():
-				finish(&BackendError{Code: BackendOutcomeUnknown, Diagnostic: "supervised output arrived while observation was detached", Cause: ctx.Err()})
-				return
-			}
-			select {
-			case persistErr := <-event.Processed:
-				if persistErr != nil {
-					finish(&BackendError{Code: BackendOutcomeUnknown, Diagnostic: "supervised output was read but its cursor was not durably saved", Cause: persistErr})
+		if !settledRecovery {
+			output, outputErr := b.ReadOutput(ctx, ref, outputCursor, 100)
+			turnEvidence := outputErr == nil && !turnStartedObserved && supervisedTranscriptTurnStarted(output)
+			if outputErr == nil && (output.NextCursor != outputCursor || output.Source != outputSource || output.Gap || output.SourceChanged || turnEvidence) {
+				activity := supervisedOutputActivity(output, input.WorkflowRunID, input.TaskID)
+				event := WorkerEvent{RunID: input.WorkflowRunID, AttemptID: attempt.AttemptID, Summary: activity.Title, Activity: activity, RemoteRunID: identity.OrchestrationRun, OutputSource: output.Source, OutputCursor: output.NextCursor, OutputGap: output.Gap || output.SourceChanged, TurnStarted: turnEvidence, Processed: make(chan error, 1)}
+				if activity.Kind == "" {
+					event.Activity = ActivityEvent{}
+				}
+				select {
+				case worker.Events <- event:
+				case <-ctx.Done():
+					finish(&BackendError{Code: BackendOutcomeUnknown, Diagnostic: "supervised output arrived while observation was detached", Cause: ctx.Err()})
 					return
 				}
-				outputCursor, outputSource = output.NextCursor, output.Source
-				turnStartedObserved = turnStartedObserved || turnEvidence
-			case <-ctx.Done():
-				finish(&BackendError{Code: BackendOutcomeUnknown, Diagnostic: "supervised output cursor persistence was interrupted", Cause: ctx.Err()})
-				return
-			}
-		} else if outputErr != nil {
-			var outputBackendErr *BackendError
-			if errors.As(outputErr, &outputBackendErr) && (outputBackendErr.Code == BackendIdentityMismatch || outputBackendErr.Code == BackendProtocolInvalid) {
-				finish(outputErr)
-				return
+				select {
+				case persistErr := <-event.Processed:
+					if persistErr != nil {
+						finish(&BackendError{Code: BackendOutcomeUnknown, Diagnostic: "supervised output was read but its cursor was not durably saved", Cause: persistErr})
+						return
+					}
+					outputCursor, outputSource = output.NextCursor, output.Source
+					turnStartedObserved = turnStartedObserved || turnEvidence
+				case <-ctx.Done():
+					finish(&BackendError{Code: BackendOutcomeUnknown, Diagnostic: "supervised output cursor persistence was interrupted", Cause: ctx.Err()})
+					return
+				}
+			} else if outputErr != nil {
+				var outputBackendErr *BackendError
+				if errors.As(outputErr, &outputBackendErr) && (outputBackendErr.Code == BackendIdentityMismatch || outputBackendErr.Code == BackendProtocolInvalid) {
+					finish(outputErr)
+					return
+				}
 			}
 		}
 		delivery, err := b.checkDelivery(ctx, ref)
@@ -1467,6 +1527,16 @@ func (b orcaSupervisedBackend) observeWorker(ctx context.Context, worker *Worker
 			}
 		}
 		if delivery.TimedOut {
+			if settledRecovery {
+				if settledWithoutMessageAt.IsZero() {
+					settledWithoutMessageAt = now()
+				}
+				if now().Sub(settledWithoutMessageAt) >= time.Minute {
+					finish(&BackendError{Code: BackendOutcomeUnknown, Diagnostic: "settled supervised Dispatch has no matching result in its original coordinator inbox"})
+					return
+				}
+				continue
+			}
 			expected := supervisedStartReceipt{RunID: identity.OrchestrationRun, TaskID: identity.Task, DispatchID: identity.Dispatch, WorktreeID: identity.WorktreeID, CenterRuntimeID: identity.CoordinatorRuntimeID}
 			observation, inspectErr := b.showWorker(ctx, expected)
 			if inspectErr != nil {
@@ -1912,12 +1982,8 @@ func (b orcaSupervisedBackend) SettleResources(ctx context.Context, ref Executio
 	if outcome != "succeeded" && outcome != "failed" {
 		return SettlementReceipt{}, &BackendError{Code: BackendRejected, Diagnostic: "supervised resource release requires an accepted worker_done outcome"}
 	}
-	show, err := b.showWorker(ctx, supervisedStartReceipt{RunID: ref.External.OrchestrationRun, TaskID: ref.External.Task, DispatchID: ref.External.Dispatch, WorktreeID: ref.External.WorktreeID, CenterRuntimeID: ref.External.CoordinatorRuntimeID})
-	if err != nil {
-		return SettlementReceipt{}, err
-	}
-	if show.DispatchState != "completed" && show.DispatchState != "failed" {
-		return SettlementReceipt{ResidualResources: []string{"dispatch:" + ref.External.Dispatch}}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "supervised worker is not settled; release refused"}
+	if _, err := b.settledWorker(ctx, ref, outcome); err != nil {
+		return SettlementReceipt{ResidualResources: []string{"dispatch:" + ref.External.Dispatch}}, err
 	}
 	out, callErr := (orcaClient{cfg: b.config}).call(ctx, positiveDuration(b.config.CommandTimeout, 30*time.Second), "orchestration", "worker-release", "--dispatch", ref.External.Dispatch, "--json")
 	env, parseErr := parseEnvelope(out)
