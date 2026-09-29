@@ -398,8 +398,6 @@ func lifecycleConfigFile(t *testing.T, f *fixture, runDir string) (Config, strin
 	t.Helper()
 	c := f.c
 	c.WorkflowProtocol = WorkerFlowVersion
-	c.WorkflowDefinition, c.ProjectSteps = nil, nil
-	c.WorkspaceDirtyIgnore = WorkspaceDirtyIgnore{}
 	c.RunDir = runDir
 	c.WorktreeRoot = ""
 	data, err := json.Marshal(c)

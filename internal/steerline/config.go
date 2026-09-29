@@ -27,37 +27,34 @@ type Skill struct {
 	Invocation string `json:"invocation"`
 }
 type Config struct {
-	Repository              string               `json:"repository"`
-	TaskAuthority           string               `json:"task_authority,omitempty"`
-	Remote                  string               `json:"remote"`
-	Branch                  string               `json:"branch"`
-	RunDir                  string               `json:"run_dir"`
-	WorktreeRoot            string               `json:"worktree_root"`
-	RuntimeFile             string               `json:"runtime_file"`
-	Claimant                string               `json:"claimant"`
-	Git                     Command              `json:"git"`
-	Codex                   Command              `json:"codex"`
-	WorkflowProtocol        string               `json:"workflow_protocol,omitempty"`
-	WorkflowDefinition      *WorkflowDefinition  `json:"workflow_definition,omitempty"`
-	ProjectSteps            *ProjectSteps        `json:"project_steps,omitempty"`
-	WorkspaceDirtyIgnore    WorkspaceDirtyIgnore `json:"workspace_dirty_ignore,omitempty"`
-	ExecutableTypes         []string             `json:"executable_types"`
-	TaskPoll                string               `json:"task_poll"`
-	PRPoll                  string               `json:"pr_poll"`
-	Heartbeat               string               `json:"heartbeat"`
-	CommandTimeout          string               `json:"command_timeout"`
-	ShutdownGrace           string               `json:"shutdown_grace"`
-	Model                   string               `json:"model"`
-	ReasoningEffort         string               `json:"reasoning_effort"`
-	Sandbox                 string               `json:"sandbox"`
-	Profile                 string               `json:"profile"`
-	Agent                   string               `json:"agent"`
-	Host                    string               `json:"host"`
-	ExecutionProfiles       []ExecutionProfile   `json:"execution_profiles,omitempty"`
-	DefaultExecutionProfile string               `json:"default_execution_profile,omitempty"`
-	StallTimeout            string               `json:"stall_timeout"`
-	Orca                    OrcaConfig           `json:"orca"`
-	PR                      PRConfig             `json:"pr"`
+	Repository              string             `json:"repository"`
+	TaskAuthority           string             `json:"task_authority,omitempty"`
+	Remote                  string             `json:"remote"`
+	Branch                  string             `json:"branch"`
+	RunDir                  string             `json:"run_dir"`
+	WorktreeRoot            string             `json:"worktree_root"`
+	RuntimeFile             string             `json:"runtime_file"`
+	Claimant                string             `json:"claimant"`
+	Git                     Command            `json:"git"`
+	Codex                   Command            `json:"codex"`
+	WorkflowProtocol        string             `json:"workflow_protocol,omitempty"`
+	ExecutableTypes         []string           `json:"executable_types"`
+	TaskPoll                string             `json:"task_poll"`
+	PRPoll                  string             `json:"pr_poll"`
+	Heartbeat               string             `json:"heartbeat"`
+	CommandTimeout          string             `json:"command_timeout"`
+	ShutdownGrace           string             `json:"shutdown_grace"`
+	Model                   string             `json:"model"`
+	ReasoningEffort         string             `json:"reasoning_effort"`
+	Sandbox                 string             `json:"sandbox"`
+	Profile                 string             `json:"profile"`
+	Agent                   string             `json:"agent"`
+	Host                    string             `json:"host"`
+	ExecutionProfiles       []ExecutionProfile `json:"execution_profiles,omitempty"`
+	DefaultExecutionProfile string             `json:"default_execution_profile,omitempty"`
+	StallTimeout            string             `json:"stall_timeout"`
+	Orca                    OrcaConfig         `json:"orca"`
+	PR                      PRConfig           `json:"pr"`
 	identity                string
 	workerEnv               map[string]string
 	configDigest            string
@@ -231,9 +228,6 @@ func LoadConfig(path string) (Config, error) {
 	if err = decode(b, &c); err != nil {
 		return c, err
 	}
-	if err = c.WorkspaceDirtyIgnore.validate(); err != nil {
-		return c, err
-	}
 	if c.TaskAuthority != "native" {
 		return c, errors.New("task_authority must be explicitly set to native; Beads is not supported")
 	}
@@ -242,10 +236,8 @@ func LoadConfig(path string) (Config, error) {
 	}
 	var configFields map[string]json.RawMessage
 	_ = json.Unmarshal(b, &configFields)
-	if c.WorkflowDefinition != nil || c.WorkflowProtocol == WorkerFlowVersion {
-		if _, explicit := configFields["host"]; !explicit {
-			c.Host = "local"
-		}
+	if _, explicit := configFields["host"]; !explicit {
+		c.Host = "local"
 	}
 	if c.hostName() == "local" && c.agentName() == "codex" && c.ReasoningEffort == "" {
 		c.ReasoningEffort = "high"
@@ -394,9 +386,6 @@ func validateSupervisedOrcaConfig(c *Config) error {
 func validateWorkflowConfig(c *Config, _ []byte) error {
 	if c.WorkflowProtocol != WorkerFlowVersion {
 		return errors.New("only worker-flow-v1 is supported")
-	}
-	if c.WorkflowDefinition != nil || c.ProjectSteps != nil || !c.WorkspaceDirtyIgnore.empty() {
-		return errors.New("worker-flow-v1 does not accept workflow_definition, project_steps or workspace_dirty_ignore")
 	}
 	return nil
 }
@@ -597,15 +586,6 @@ func validateNativeRuntimeBinding(c Config) error {
 	return nil
 }
 
-var legacyStepDependency = regexp.MustCompile(`(?im)(?:\bBEADS_(?:DIR|ACTOR)\b|\b(?:bd|bv)\s+(?:ready|list|show|update|close|ready|dep|sync|refresh)\b|steerline:(?:start|finish)-v1|\bcompletion-(?:request|result)\b|\b(?:invoke|run|call)\s+(?:the\s+)?(?:old\s+)?completion\b)`)
-
-func rejectLegacyStepDependencies(step string, content []byte) error {
-	if match := legacyStepDependency.Find(content); match != nil {
-		return fmt.Errorf("%s step entry depends on a legacy Beads/start-finish/completion interface (%q); native project_steps must return only this step's facts", step, strings.TrimSpace(string(match)))
-	}
-	return nil
-}
-
 func requireNativeTaskAuthority(c Config) error {
 	if c.TaskAuthority != "native" {
 		return errors.New("task_authority=native is required; Beads is not an active product task source")
@@ -614,22 +594,7 @@ func requireNativeTaskAuthority(c Config) error {
 }
 
 func (c Config) requiresLocalCodex() bool {
-	if c.hostName() != "local" {
-		return false
-	}
-	if c.ProjectSteps == nil || c.WorkflowDefinition == nil {
-		return true
-	}
-	steps := []StepContract{c.ProjectSteps.Implement, c.ProjectSteps.Verify, c.ProjectSteps.PublishPR}
-	if c.WorkflowDefinition.ReviewRequired {
-		steps = append(steps, c.ProjectSteps.Review)
-	}
-	for _, step := range steps {
-		if step.Provider == "agent_skill" {
-			return true
-		}
-	}
-	return false
+	return c.hostName() == "local"
 }
 
 func inside(root, path string) bool {

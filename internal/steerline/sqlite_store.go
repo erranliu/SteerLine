@@ -834,12 +834,10 @@ func nativeWorkflowPin(v WorkflowRunRecord) ([]byte, error) {
 	return encodePayload(struct {
 		WorkflowVersion string
 		ConfigDigest    string
-		Definition      WorkflowDefinition
-		ProjectSteps    ProjectSteps
 		Runner          StepRunnerSettings
 		Repository      string
 		Branch          string
-	}{v.WorkflowVersion, v.ConfigDigest, v.Definition, v.ProjectSteps, v.Runner, v.Repository, v.Branch})
+	}{v.WorkflowVersion, v.ConfigDigest, v.Runner, v.Repository, v.Branch})
 }
 func (t *sqliteTx) PutExecution(v ExecutionRecord) error {
 	if v.ProjectIdentity == "" || v.ExecutionID == "" || v.WorkflowRunID == "" || v.Status == "" {

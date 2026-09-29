@@ -2,8 +2,6 @@ package steerline
 
 import (
 	"context"
-	"encoding/json"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -70,110 +68,5 @@ func TestNativePredecessorAdditionRejectsDeliveredAndDiscardedSuccessor(t *testi
 	delete(graph.Deliveries, "2")
 	if err := validateNativePredecessorAddition(graph, "2", []string{"1"}); err == nil || !strings.Contains(err.Error(), "task_discarded") {
 		t.Fatalf("discarded successor accepted: %v", err)
-	}
-}
-
-func TestAddNativeTaskPredecessorsReopensOnlySettledExecution(t *testing.T) {
-	ctx := context.Background()
-	c, commit := nativeTaskFixture(t)
-	stateDir := filepath.Join(t.TempDir(), "orca")
-	orca := orcaTestConfig(t, stateDir, "local")
-	c.Host, c.Agent, c.Orca = "orca", "codex", orca.Orca
-	c.configDigest = strings.Repeat("a", 64)
-	reader, err := OpenNativeTaskProject(ctx, &c)
-	require(t, err)
-	require(t, reader.Close())
-	lock, err := LockRepository(c.Identity())
-	require(t, err)
-	defer lock.Close()
-	store, err := OpenNativeTaskCommandStore(ctx, &c)
-	require(t, err)
-	defer store.Close()
-	batch := taskBatchFixture(t, c, commit, batchTasks(201, 202), nil)
-	commands := CommandService{Store: store, Project: c.Identity()}
-	_, err = commands.CreateTaskBatch(ctx, c, batch, newID(), 1, "planner")
-	require(t, err)
-	page, err := (QueryService{Store: store, Project: c.Identity()}).ShowNativeTask(ctx, "202")
-	require(t, err)
-	task := page.Tasks[0].TaskRecord
-	task.Status, task.Claimant, task.Version, task.UpdatedAt = "in_progress", "operator", 2, now()
-	runID, executionID, attemptID := newID(), newID(), newID()
-	proc := ProcessIdentity{Kind: "orca", Terminal: "bound-add-predecessor", RuntimeID: "fake-runtime", Incarnation: "inc-bound-add", Executable: c.Orca.Executable}
-	profile := ExecutionProfile{ID: "orca-test", Name: "Orca test", Host: "orca", Agent: "codex", Orca: c.Orca, Codex: Command{Executable: "codex"}, Sandbox: "danger-full-access", ProjectSteps: &ProjectSteps{}}
-	workflow := WorkflowRunRecord{ProjectIdentity: c.Identity(), WorkflowRunID: runID, TaskID: "202", WorkflowVersion: MinimalWorkflowVersion, ConfigDigest: c.configDigest, ExecutionProfile: ptr(profile.Freeze()), Phase: "blocked", Repository: c.Repository, Branch: c.Branch, CreatedAt: now(), UpdatedAt: now()}
-	execution := ExecutionRecord{ProjectIdentity: c.Identity(), ExecutionID: executionID, WorkflowRunID: runID, Backend: "orca", Protocol: "orca_terminal_v2", Process: &proc, Status: "blocked", CurrentStep: "implement", CreatedAt: now(), UpdatedAt: now()}
-	attempt := StepAttemptRecord{ProjectIdentity: c.Identity(), AttemptID: attemptID, ExecutionID: executionID, StepID: "implement", AttemptNumber: 1, Status: "outcome_unknown", CreatedAt: now(), UpdatedAt: now()}
-	worktree := filepath.Join(c.RunDir, "worktrees", runID)
-	run := &Run{TaskID: "202", DomainTaskID: "202", RunID: runID, ExecutionID: executionID, AttemptID: attemptID, WorkflowVersion: MinimalWorkflowVersion, ExecutionStatus: "unknown", FinishTaskStatus: "blocked", Process: &proc, WorktreePath: &worktree}
-	runtimeState := Runtime{SchemaVersion: 5, Revision: 1, Repository: Repository{Identity: c.Identity()}, Runs: []*Run{run}, CurrentTask: ptr("202"), SlotOccupied: true, WorkflowRuns: []WorkflowRunRecord{workflow}}
-	require(t, store.Transact(ctx, func(d DomainTx) error {
-		tx := d.(*sqliteTx)
-		if e := tx.UpdateNativeTaskCAS(task, 1); e != nil {
-			return e
-		}
-		if e := tx.PutWorkflowRun(workflow); e != nil {
-			return e
-		}
-		if e := tx.PutExecution(execution); e != nil {
-			return e
-		}
-		if e := tx.PutStepAttempt(attempt); e != nil {
-			return e
-		}
-		body, e := json.Marshal(runtimeState)
-		if e != nil {
-			return e
-		}
-		return tx.PutProjection(c.Identity(), 1, body)
-	}))
-	if err := store.Transact(ctx, func(d DomainTx) error {
-		return d.PutTaskDependency(TaskDependencyRecord{ProjectIdentity: c.Identity(), PredecessorID: "201", SuccessorID: "202"})
-	}); err == nil || !strings.Contains(err.Error(), "immutable_task") {
-		t.Fatalf("direct edge insertion into a claimed task was accepted: %v", err)
-	}
-	input := TaskPredecessorAddInput{TaskID: "202", PredecessorIDs: []string{"201"}, RequestID: newID(), ExpectedTaskVersion: 2, ExpectedGraphRevision: 1, WorkflowRunID: runID, ConfirmedProcessStopped: true, Reason: "old worker exited and the new dependency changes its base", RequestedBy: "operator"}
-	require(t, os.MkdirAll(stateDir, 0700))
-	require(t, writeFakeOrcaState(stateDir, fakeOrcaState{Handle: proc.Terminal, Incarnation: proc.Incarnation}))
-	t.Setenv("STEERLINE_FAKE_ORCA_ORPHANED", "1")
-	if _, err := commands.AddNativeTaskPredecessors(ctx, c, input); err == nil {
-		t.Fatal("unsettled Orca terminal was reset")
-	}
-	t.Setenv("STEERLINE_FAKE_ORCA_ORPHANED", "0")
-	require(t, os.Remove(fakeOrcaStatePath(stateDir, proc.Terminal)))
-	run.PR.URL = ptr("https://forge.invalid/org/repo/pulls/1")
-	runtimeState.Revision = 2
-	require(t, store.Transact(ctx, func(d DomainTx) error {
-		body, e := json.Marshal(runtimeState)
-		if e != nil {
-			return e
-		}
-		return d.PutProjection(c.Identity(), 2, body)
-	}))
-	if _, err := commands.AddNativeTaskPredecessors(ctx, c, input); err == nil {
-		t.Fatal("published PR was reset")
-	}
-	run.PR.URL = nil
-	runtimeState.Revision = 3
-	require(t, store.Transact(ctx, func(d DomainTx) error {
-		body, e := json.Marshal(runtimeState)
-		if e != nil {
-			return e
-		}
-		return d.PutProjection(c.Identity(), 3, body)
-	}))
-	receipt, err := commands.AddNativeTaskPredecessors(ctx, c, input)
-	require(t, err)
-	if receipt.Status != "open" || receipt.TaskVersion != 3 || receipt.GraphRevision != 2 || receipt.AbandonedRunID != runID {
-		t.Fatalf("unexpected reset receipt: %+v", receipt)
-	}
-	replayed, err := commands.AddNativeTaskPredecessors(ctx, c, input)
-	require(t, err)
-	if replayed.GraphRevision != receipt.GraphRevision || replayed.AbandonedRunID != runID {
-		t.Fatalf("reset did not replay: %+v / %+v", replayed, receipt)
-	}
-	page, err = (QueryService{Store: store, Project: c.Identity()}).ShowNativeTask(ctx, "202")
-	require(t, err)
-	if page.Tasks[0].Status != "open" || page.Tasks[0].DependencyReady || len(page.Tasks[0].WorkflowRuns) != 1 || page.Tasks[0].WorkflowRuns[0].Phase != "abandoned" {
-		t.Fatalf("old run was not preserved while new predecessor blocked claim: %+v", page.Tasks[0])
 	}
 }

@@ -9,27 +9,13 @@ import (
 	"runtime"
 	"strings"
 	"testing"
-	"time"
 )
-
-func testProfileSteps(site string) *ProjectSteps {
-	step := StepContract{Provider: "command", Entry: "tools/mock.py", Version: "minimal-v1", InputSchema: NativeTaskInputSchema, OutputSchema: MinimalStepOutputSchema, ExecutionSite: site, Timeout: time.Minute, Command: []string{"python", "tools/mock.py"}}
-	steps := &ProjectSteps{Implement: step, Verify: step, PublishPR: step}
-	steps.Verify.RequiredChecks = []string{"mock"}
-	return steps
-}
 
 func TestConfigLoadsLocalAndRemoteOrcaProfilesWithoutProbingTargets(t *testing.T) {
 	if runtime.GOOS != "windows" {
 		t.Skip("local Orca terminal target uses Windows cmd.exe")
 	}
 	base, _ := nativeTaskFixture(t)
-	if err := os.MkdirAll(filepath.Join(base.Repository, "tools"), 0700); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(base.Repository, "tools", "mock.py"), []byte("print('mock')\n"), 0600); err != nil {
-		t.Fatal(err)
-	}
 	localOrca := ExecutionProfile{ID: "orca-local", Name: "Orca 本机", Host: "orca", Agent: "codex", Model: "chosen-model", ReasoningEffort: "high", Sandbox: "workspace-write", Codex: Command{Executable: "codex"}, Orca: OrcaConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "15m"}}
 	remoteOrca := ExecutionProfile{ID: "orca-remote", Name: "Orca 远程", Host: "orca_supervised", Agent: "codex", Model: "chosen-model", ReasoningEffort: "xhigh", Sandbox: "workspace-write", Codex: Command{Executable: "codex"}, Orca: OrcaConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "15m", Supervised: &SupervisedOrcaConfig{ConnectionID: "connection", EnvironmentID: "environment", RepositorySelector: "repo", CoordinatorTerminal: "terminal", PollInterval: "5s", CapabilityReportVersion: 1}}}
 	input := map[string]any{"repository": base.Repository, "branch": "main", "task_authority": "native", "workflow_protocol": WorkerFlowVersion, "host": "local", "agent": "codex", "sandbox": "workspace-write", "execution_profiles": []ExecutionProfile{localOrca, remoteOrca}, "default_execution_profile": ProjectExecutionProfileID}
@@ -51,18 +37,12 @@ func TestConfigLoadsLocalAndRemoteOrcaProfilesWithoutProbingTargets(t *testing.T
 	}
 	for _, profile := range loaded.ExecutionProfiles {
 		selected, chosen, err := loaded.ResolveExecutionProfile(profile.ID, profile.Digest())
-		if err != nil || selected.Host != profile.Host || chosen.ProjectSteps != nil {
+		if err != nil || selected.Host != profile.Host {
 			t.Fatalf("Orca profile changed route: %+v / %v", chosen, err)
 		}
 		if profile.StaticUnavailableReason() == "" {
 			t.Fatalf("deferred Orca worker-flow profile remained selectable: %+v", profile)
 		}
-	}
-	localOrca.ProjectSteps = testProfileSteps("local")
-	input["execution_profiles"] = []ExecutionProfile{localOrca, remoteOrca}
-	write()
-	if _, err := LoadConfig(path); err == nil || !strings.Contains(err.Error(), "cannot configure project_steps") {
-		t.Fatalf("worker-flow profile with old project steps was accepted: %v", err)
 	}
 }
 
@@ -127,9 +107,7 @@ func TestNativeClaimPersistsChosenExecutionProfile(t *testing.T) {
 func TestAutomaticDispatchRequiresAnExplicitDefaultWithMultipleProfiles(t *testing.T) {
 	ctx := context.Background()
 	base, _ := nativeTaskFixture(t)
-	base.WorkflowDefinition = ptr(DefaultMinimalWorkflowDefinition(false))
-	base.ProjectSteps = testProfileSteps("local")
-	base.ExecutionProfiles = []ExecutionProfile{{ID: "other", Name: "另一个本地配置", Host: "local", Agent: "codex", Sandbox: "workspace-write", Codex: Command{Executable: "codex"}, ProjectSteps: testProfileSteps("local")}}
+	base.ExecutionProfiles = []ExecutionProfile{{ID: "other", Name: "另一个本地配置", Host: "local", Agent: "codex", Sandbox: "workspace-write", Codex: Command{Executable: "codex"}}}
 	reader, err := OpenNativeTaskProject(ctx, &base)
 	if err != nil {
 		t.Fatal(err)
@@ -241,8 +219,8 @@ func TestStartPayloadRequiresCompleteExecutionProfileSelection(t *testing.T) {
 	}
 }
 
-func TestUnsupportedAgentSkillProfileIsMarkedUnavailable(t *testing.T) {
-	profile := ExecutionProfile{ID: "orca-pi", Name: "Orca Pi", Host: "orca", Agent: "pi", ProjectSteps: &ProjectSteps{Implement: StepContract{Provider: "agent_skill"}}}
+func TestUnsupportedLocalAgentProfileIsMarkedUnavailable(t *testing.T) {
+	profile := ExecutionProfile{ID: "local-pi", Name: "Local Pi", Host: "local", Agent: "pi"}
 	if reason := profile.StaticUnavailableReason(); !strings.Contains(reason, "codex") {
 		t.Fatalf("unsupported native agent was shown as selectable: %q", reason)
 	}

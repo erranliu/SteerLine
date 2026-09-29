@@ -10,24 +10,22 @@ import (
 
 const ProjectExecutionProfileID = "project-default"
 
-// ExecutionProfile is one complete, named execution route for every step of a
-// native task. Repository authority, PR provider, and task DAG stay project-wide.
+// ExecutionProfile is one complete, named execution route for a native task.
+// Repository authority, PR provider, and task DAG stay project-wide.
 type ExecutionProfile struct {
-	ID              string        `json:"id"`
-	Name            string        `json:"name"`
-	Host            string        `json:"host"`
-	Agent           string        `json:"agent"`
-	Model           string        `json:"model,omitempty"`
-	ReasoningEffort string        `json:"reasoning_effort,omitempty"`
-	Sandbox         string        `json:"sandbox"`
-	CodexProfile    string        `json:"profile,omitempty"`
-	Codex           Command       `json:"codex"`
-	Orca            OrcaConfig    `json:"orca,omitempty"`
-	ProjectSteps    *ProjectSteps `json:"project_steps"`
+	ID              string     `json:"id"`
+	Name            string     `json:"name"`
+	Host            string     `json:"host"`
+	Agent           string     `json:"agent"`
+	Model           string     `json:"model,omitempty"`
+	ReasoningEffort string     `json:"reasoning_effort,omitempty"`
+	Sandbox         string     `json:"sandbox"`
+	CodexProfile    string     `json:"profile,omitempty"`
+	Codex           Command    `json:"codex"`
+	Orca            OrcaConfig `json:"orca,omitempty"`
 }
 
-// FixedExecutionProfile is stored with a WorkflowRun. ProjectSteps are already
-// fixed in that record, so only the execution route is stored here.
+// FixedExecutionProfile is stored with a WorkflowRun.
 type FixedExecutionProfile struct {
 	ID              string     `json:"id"`
 	Name            string     `json:"name"`
@@ -46,20 +44,14 @@ func (p ExecutionProfile) Freeze() FixedExecutionProfile {
 	return FixedExecutionProfile{ID: p.ID, Name: p.Name, Digest: p.Digest(), Host: p.Host, Agent: p.Agent, Model: p.Model, ReasoningEffort: p.ReasoningEffort, Sandbox: p.Sandbox, CodexProfile: p.CodexProfile, Codex: p.Codex, Orca: p.Orca}
 }
 
-func (p FixedExecutionProfile) Verify(steps ProjectSteps) bool {
-	rebuilt := ExecutionProfile{ID: p.ID, Name: p.Name, Host: p.Host, Agent: p.Agent, Model: p.Model, ReasoningEffort: p.ReasoningEffort, Sandbox: p.Sandbox, CodexProfile: p.CodexProfile, Codex: p.Codex, Orca: p.Orca, ProjectSteps: &steps}
-	return p.Digest != "" && p.Digest == rebuilt.Digest()
-}
-
 func (p FixedExecutionProfile) VerifyWorkerFlow() bool {
 	rebuilt := ExecutionProfile{ID: p.ID, Name: p.Name, Host: p.Host, Agent: p.Agent, Model: p.Model, ReasoningEffort: p.ReasoningEffort, Sandbox: p.Sandbox, CodexProfile: p.CodexProfile, Codex: p.Codex, Orca: p.Orca}
 	return p.Digest != "" && p.Digest == rebuilt.Digest()
 }
 
-func (c Config) ApplyFixedExecutionProfile(p FixedExecutionProfile, steps ProjectSteps) Config {
+func (c Config) ApplyFixedExecutionProfile(p FixedExecutionProfile) Config {
 	c.Host, c.Agent, c.Model, c.ReasoningEffort = p.Host, p.Agent, p.Model, p.ReasoningEffort
 	c.Sandbox, c.Profile, c.Codex, c.Orca = p.Sandbox, p.CodexProfile, p.Codex, p.Orca
-	c.ProjectSteps = &steps
 	return c
 }
 
@@ -72,20 +64,11 @@ func (p ExecutionProfile) MatchesConfig(c Config) bool {
 }
 
 func (p ExecutionProfile) StaticUnavailableReason() string {
-	if p.ProjectSteps == nil && p.Host != "local" {
+	if p.Host != "local" {
 		return "Orca worker-flow 本次延期交付；只开放本地 Codex"
 	}
 	if p.Host == "local" && p.Agent != "codex" {
 		return "本地执行后端目前只支持 codex agent"
-	}
-	if p.ProjectSteps == nil || p.Agent == "codex" {
-		return ""
-	}
-	steps := []StepContract{p.ProjectSteps.Implement, p.ProjectSteps.Verify, p.ProjectSteps.PublishPR, p.ProjectSteps.Review}
-	for _, step := range steps {
-		if step.Provider == "agent_skill" {
-			return "当前 native agent_skill 步骤只支持 codex"
-		}
 	}
 	return ""
 }
@@ -98,7 +81,7 @@ func (p ExecutionProfile) effective() ExecutionProfile {
 }
 
 func (c Config) projectExecutionProfile() ExecutionProfile {
-	return ExecutionProfile{ID: ProjectExecutionProfileID, Name: "项目默认", Host: c.hostName(), Agent: c.agentName(), Model: c.Model, ReasoningEffort: c.ReasoningEffort, Sandbox: c.Sandbox, CodexProfile: c.Profile, Codex: c.Codex, Orca: c.Orca, ProjectSteps: c.ProjectSteps}
+	return ExecutionProfile{ID: ProjectExecutionProfileID, Name: "项目默认", Host: c.hostName(), Agent: c.agentName(), Model: c.Model, ReasoningEffort: c.ReasoningEffort, Sandbox: c.Sandbox, CodexProfile: c.Profile, Codex: c.Codex, Orca: c.Orca}
 }
 
 func (c Config) AvailableExecutionProfiles() []ExecutionProfile {
@@ -129,9 +112,6 @@ func (c Config) ResolveExecutionProfile(id, expectedDigest string) (Config, Exec
 			return Config{}, ExecutionProfile{}, errors.New("stale_profile: execution profile changed")
 		}
 		selected := c.ApplyExecutionProfile(profile)
-		if selected.hostName() == "orca_supervised" && !selected.WorkspaceDirtyIgnore.empty() {
-			return Config{}, ExecutionProfile{}, errors.New("supervised Orca cannot independently verify workspace_dirty_ignore paths")
-		}
 		return selected, profile, nil
 	}
 	return Config{}, ExecutionProfile{}, errors.New("execution profile is not configured")
@@ -140,7 +120,6 @@ func (c Config) ResolveExecutionProfile(id, expectedDigest string) (Config, Exec
 func (c Config) ApplyExecutionProfile(p ExecutionProfile) Config {
 	c.Host, c.Agent, c.Model, c.ReasoningEffort = p.Host, p.Agent, p.Model, p.ReasoningEffort
 	c.Sandbox, c.Profile, c.Codex, c.Orca = p.Sandbox, p.CodexProfile, p.Codex, p.Orca
-	c.ProjectSteps = p.ProjectSteps
 	return c
 }
 
@@ -161,13 +140,7 @@ func validateExecutionProfiles(c Config) error {
 		if p.ReasoningEffort != "" && !validReasoningEffort(p.ReasoningEffort) {
 			return fmt.Errorf("execution profile %s has invalid reasoning effort", p.ID)
 		}
-		if c.WorkflowProtocol == WorkerFlowVersion && p.ProjectSteps != nil {
-			return fmt.Errorf("execution profile %s cannot configure project_steps in worker-flow-v1", p.ID)
-		}
-		if c.WorkflowProtocol != WorkerFlowVersion && p.ProjectSteps == nil {
-			return fmt.Errorf("execution profile %s requires fixed project_steps", p.ID)
-		}
-		if c.WorkflowProtocol == WorkerFlowVersion && p.Agent != "codex" {
+		if p.Agent != "codex" {
 			return fmt.Errorf("execution profile %s requires codex for a resumable worker session", p.ID)
 		}
 		selected := c.ApplyExecutionProfile(p.effective())

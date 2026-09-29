@@ -420,12 +420,6 @@ func TestNativeClaimAllowsManualParallelButKeepsAutoSlot(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer store.Close()
-	step := func() StepContract {
-		return StepContract{Provider: "command", Entry: "builtin:verify", Version: MinimalWorkflowVersion, InputSchema: NativeTaskInputSchema, OutputSchema: MinimalStepOutputSchema, ExecutionSite: "local", Timeout: time.Minute, Command: []string{"git", "--version"}}
-	}
-	c.WorkflowDefinition = ptr(DefaultMinimalWorkflowDefinition(false))
-	c.ProjectSteps = &ProjectSteps{Implement: step(), Verify: step(), PublishPR: step()}
-	c.ProjectSteps.Verify.RequiredChecks = []string{"unit"}
 	commands := CommandService{Store: store, Project: c.Identity()}
 	payload := taskBatchFixture(t, c, commit, batchTasks(80, 81, 82, 83), nil)
 	if _, err = commands.CreateTaskBatch(ctx, c, payload, strings.Repeat("b", 32), 1, "planner"); err != nil {
@@ -487,7 +481,7 @@ func TestNativeClaimAllowsManualParallelButKeepsAutoSlot(t *testing.T) {
 		t.Fatalf("native claim initialized workspace repository with a non-identity path: %+v", snapshot.Executions)
 	}
 	alteredWorkflow := page.Tasks[0].WorkflowRuns[0]
-	alteredWorkflow.Definition.ReviewRequired = true
+	alteredWorkflow.Runner.Model = "changed-after-claim"
 	if err = store.Transact(ctx, func(tx DomainTx) error { return tx.PutWorkflowRun(alteredWorkflow) }); err == nil || !strings.Contains(err.Error(), "immutable_task") {
 		t.Fatalf("claim workflow gates were edited after reservation: %v", err)
 	}
@@ -568,8 +562,8 @@ func TestNativeClaimBlocksWhenFetchedBaseMissesPredecessorMerge(t *testing.T) {
 	}
 	task := page.Tasks[0].TaskRecord
 	created := time.Now().UTC()
-	run := WorkflowRunRecord{ProjectIdentity: c.Identity(), WorkflowRunID: "wf-120", TaskID: "120", WorkflowVersion: MinimalWorkflowVersion, Phase: "waiting_pr_merge", SelectedResult: "exec-120", CreatedAt: created, UpdatedAt: created}
-	execution := ExecutionRecord{ProjectIdentity: c.Identity(), ExecutionID: "exec-120", WorkflowRunID: "wf-120", Status: "succeeded", CurrentStep: "waiting_pr_merge", CreatedAt: created, UpdatedAt: created}
+	run := WorkflowRunRecord{ProjectIdentity: c.Identity(), WorkflowRunID: "wf-120", TaskID: "120", WorkflowVersion: WorkerFlowVersion, Phase: "waiting_pr_merge", SelectedResult: "exec-120", PRURL: "https://forge.invalid/org/repo/pulls/120", PRState: "merged", CreatedAt: created, UpdatedAt: created}
+	execution := ExecutionRecord{ProjectIdentity: c.Identity(), ExecutionID: "exec-120", WorkflowRunID: "wf-120", Status: "succeeded", CurrentStep: "worker", SessionID: "session-120", Workspace: WorkspaceEvidence{Branch: "codex/task-120"}, CreatedAt: created, UpdatedAt: created}
 	mergeCommit := strings.Repeat("f", 40)
 	mergedAt := created.Add(-time.Minute)
 	prURL := "https://forge.invalid/org/repo/pulls/120"
@@ -601,10 +595,6 @@ func TestNativeClaimBlocksWhenFetchedBaseMissesPredecessorMerge(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	step := deliveryStepContract()
-	c.WorkflowDefinition = ptr(DefaultMinimalWorkflowDefinition(false))
-	c.ProjectSteps = &ProjectSteps{Implement: step, Verify: step, PublishPR: step}
-	c.ProjectSteps.Verify.RequiredChecks = []string{"unit"}
 	_, err = commands.ClaimNativeTask(ctx, c, TaskClaimOptions{TaskID: "121", RequestID: strings.Repeat("6", 32), ExpectedTaskVersion: 1, ExpectedAuthorityVersion: 2, RequestedBy: "operator", Explicit: true})
 	if err == nil || !strings.Contains(err.Error(), "base_missing_delivery") {
 		t.Fatalf("task started from a base without its predecessor merge: %v", err)
@@ -647,10 +637,6 @@ func TestNativeClaimCompetitionCreatesOnlyOneWorkflowReservation(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	step := deliveryStepContract()
-	c.WorkflowDefinition = ptr(DefaultMinimalWorkflowDefinition(false))
-	c.ProjectSteps = &ProjectSteps{Implement: step, Verify: step, PublishPR: step}
-	c.ProjectSteps.Verify.RequiredChecks = []string{"unit"}
 	commands := CommandService{Store: store, Project: c.Identity()}
 	if _, err = commands.CreateTaskBatch(ctx, c, taskBatchFixture(t, c, commit, batchTasks(82), nil), strings.Repeat("8", 32), 2, "planner"); err != nil {
 		t.Fatal(err)
@@ -697,10 +683,6 @@ func (v *fixedTaskDeliveryVerifier) Query(ctx context.Context, url string) (PRIn
 		v.onQuery()
 	}
 	return v.info, v.err
-}
-
-func deliveryStepContract() StepContract {
-	return StepContract{Provider: "command", Entry: "builtin:verify", Version: MinimalWorkflowVersion, InputSchema: NativeTaskInputSchema, OutputSchema: MinimalStepOutputSchema, ExecutionSite: "local", Timeout: time.Minute, Command: []string{"git", "--version"}}
 }
 
 func TestTaskDiscardRequestPersistsUnknownAndThenDiscardsOnlyAfterUnmergedProof(t *testing.T) {
@@ -750,9 +732,8 @@ func TestTaskDiscardRequestPersistsUnknownAndThenDiscardsOnlyAfterUnmergedProof(
 	}
 	task := page.Tasks[0].TaskRecord
 	createdAt := time.Now().UTC()
-	workflow := WorkflowRunRecord{ProjectIdentity: c.Identity(), WorkflowRunID: "wf-71", TaskID: "71", WorkflowVersion: MinimalWorkflowVersion, Phase: "blocked", CreatedAt: createdAt, UpdatedAt: createdAt}
-	execution := ExecutionRecord{ProjectIdentity: c.Identity(), ExecutionID: "exec-71", WorkflowRunID: "wf-71", Status: "blocked", CurrentStep: "publish_pr", CreatedAt: createdAt, UpdatedAt: createdAt}
-	attempt := StepAttemptRecord{ProjectIdentity: c.Identity(), AttemptID: "attempt-71", ExecutionID: "exec-71", StepID: "publish_pr", AttemptNumber: 1, OperationID: "publish-op-71", Status: "outcome_unknown", CreatedAt: createdAt, UpdatedAt: createdAt}
+	workflow := WorkflowRunRecord{ProjectIdentity: c.Identity(), WorkflowRunID: "wf-71", TaskID: "71", WorkflowVersion: WorkerFlowVersion, Phase: "executing", SelectedResult: "exec-71", CreatedAt: createdAt, UpdatedAt: createdAt}
+	execution := ExecutionRecord{ProjectIdentity: c.Identity(), ExecutionID: "exec-71", WorkflowRunID: "wf-71", Status: "blocked", CurrentStep: "worker", CreatedAt: createdAt, UpdatedAt: createdAt}
 	task.Status = "in_progress"
 	task.Claimant = "worker"
 	task.Version++
@@ -762,9 +743,6 @@ func TestTaskDiscardRequestPersistsUnknownAndThenDiscardsOnlyAfterUnmergedProof(
 			return e
 		}
 		if e := tx.PutExecution(execution); e != nil {
-			return e
-		}
-		if e := tx.PutStepAttempt(attempt); e != nil {
 			return e
 		}
 		return tx.UpdateNativeTaskCAS(task, page.Tasks[0].Version)
@@ -853,26 +831,24 @@ func TestTaskDiscardRequiresPreciseUnmergedPRAndRetainsUnknownIntent(t *testing.
 	for _, id := range []string{"90", "91", "92", "94", "95"} {
 		seedPublishedForDiscard(t, ctx, c, store, id, commit, server.URL+"/org/repo/pulls/"+id)
 	}
-	// The first PR URL cannot settle a later publish attempt whose outcome is unknown.
-	unknownAttempt := StepAttemptRecord{ProjectIdentity: c.Identity(), AttemptID: "publish-unknown-94", ExecutionID: "exec-94", StepID: "publish_pr", AttemptNumber: 2, OperationID: "publish-op-unknown-94", Status: "outcome_unknown", CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}
-	if err = store.Transact(ctx, func(tx DomainTx) error { return tx.PutStepAttempt(unknownAttempt) }); err != nil {
-		t.Fatal(err)
-	}
-	var publishBody []byte
-	if err = store.db.QueryRowContext(ctx, `SELECT payload FROM step_attempts WHERE project_identity=? AND attempt_id=?`, c.Identity(), "publish-95").Scan(&publishBody); err != nil {
-		t.Fatal(err)
-	}
-	var incomplete StepAttemptRecord
-	if err = json.Unmarshal(publishBody, &incomplete); err != nil {
-		t.Fatal(err)
-	}
-	var incompleteResult StepGateResult
-	if err = json.Unmarshal(incomplete.Result, &incompleteResult); err != nil {
-		t.Fatal(err)
-	}
-	incompleteResult.ResultID = ""
-	incomplete.Result, _ = json.Marshal(incompleteResult)
-	if err = store.Transact(ctx, func(tx DomainTx) error { return tx.PutStepAttempt(incomplete) }); err != nil {
+	// An unresolved PR binding cannot be used as permission to discard.
+	if err = store.Transact(ctx, func(tx DomainTx) error {
+		for _, id := range []string{"94", "95"} {
+			var body []byte
+			if err := tx.(*sqliteTx).tx.QueryRowContext(ctx, `SELECT payload FROM workflow_runs WHERE project_identity=? AND workflow_run_id=?`, c.Identity(), "wf-"+id).Scan(&body); err != nil {
+				return err
+			}
+			var workflow WorkflowRunRecord
+			if err := json.Unmarshal(body, &workflow); err != nil {
+				return err
+			}
+			workflow.PRState = "unknown"
+			if err := tx.PutWorkflowRun(workflow); err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
 		t.Fatal(err)
 	}
 	open, err := commands.DiscardNativeTask(ctx, c, "90", strings.Repeat("1", 32), 2, "discard open PR", "operator")
@@ -942,11 +918,11 @@ func TestTaskDiscardRequiresPreciseUnmergedPRAndRetainsUnknownIntent(t *testing.
 	}
 	secondUnknown, err := commands.DiscardNativeTask(ctx, c, "94", strings.Repeat("4", 32), 2, "another publication is unresolved", "operator")
 	if err != nil || secondUnknown.Status != "pending_verification" || secondUnknown.Code != "merge_state_unknown" {
-		t.Fatalf("known PR URL cleared a separate unknown publication: %+v / %v", secondUnknown, err)
+		t.Fatalf("unknown PR binding was treated as safe to discard: %+v / %v", secondUnknown, err)
 	}
 	incompleteReceipt, err := commands.DiscardNativeTask(ctx, c, "95", strings.Repeat("5", 32), 2, "publication result identity is missing", "operator")
 	if err != nil || incompleteReceipt.Status != "pending_verification" || incompleteReceipt.Code != "merge_state_unknown" {
-		t.Fatalf("incomplete published result was treated as a conclusive PR binding: %+v / %v", incompleteReceipt, err)
+		t.Fatalf("unresolved PR binding was treated as conclusive: %+v / %v", incompleteReceipt, err)
 	}
 	operation, err := lookupOperation(ctx, store, c.Identity(), strings.Repeat("4", 32))
 	if err != nil {
@@ -984,9 +960,9 @@ func TestTaskDiscardDuringActiveExecutionKeepsSlotAndCleanupIdentity(t *testing.
 	contract := page.Tasks[0].Contract
 	created := time.Now().UTC()
 	workspace := WorkspaceEvidence{Repository: c.Repository, Worktree: "tree-72", Branch: "codex/72", Base: commit, Head: commit, VerifiedAt: created}
-	run := WorkflowRunRecord{ProjectIdentity: c.Identity(), WorkflowRunID: "wf-72", TaskID: "72", WorkflowVersion: MinimalWorkflowVersion, Phase: "executing", CreatedAt: created, UpdatedAt: created}
-	execution := ExecutionRecord{ProjectIdentity: c.Identity(), ExecutionID: "exec-72", WorkflowRunID: run.WorkflowRunID, Status: "active", CurrentStep: "implement", Workspace: workspace, CreatedAt: created, UpdatedAt: created}
-	attempt := StepAttemptRecord{ProjectIdentity: c.Identity(), AttemptID: "attempt-72", ExecutionID: execution.ExecutionID, StepID: "implement", AttemptNumber: 1, Status: "running", OperationID: "implement-op-72", ContractDigest: contract.Digest, CreatedAt: created, UpdatedAt: created}
+	run := WorkflowRunRecord{ProjectIdentity: c.Identity(), WorkflowRunID: "wf-72", TaskID: "72", WorkflowVersion: WorkerFlowVersion, Phase: "executing", SelectedResult: "exec-72", CreatedAt: created, UpdatedAt: created}
+	execution := ExecutionRecord{ProjectIdentity: c.Identity(), ExecutionID: "exec-72", WorkflowRunID: run.WorkflowRunID, Status: "active", CurrentStep: "worker", Workspace: workspace, CreatedAt: created, UpdatedAt: created}
+	attempt := StepAttemptRecord{ProjectIdentity: c.Identity(), AttemptID: "attempt-72", ExecutionID: execution.ExecutionID, StepID: "worker", AttemptNumber: 1, Status: "running", ContractDigest: contract.Digest, CreatedAt: created, UpdatedAt: created}
 	task.Status = "in_progress"
 	task.Claimant = "worker"
 	task.Version++
@@ -1010,14 +986,14 @@ func TestTaskDiscardDuringActiveExecutionKeepsSlotAndCleanupIdentity(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	if receipt.Status != "discarded" || !hasString(receipt.CleanupPending, "execution_stop_manual:exec-72") || !hasString(receipt.CleanupPending, "workspace_cleanup:tree-72") {
+	if receipt.Status != "pending_verification" || !hasString(receipt.CleanupPending, "execution_stop_manual:exec-72") || !hasString(receipt.CleanupPending, "workspace_cleanup:tree-72") {
 		t.Fatalf("active execution identity or cleanup was lost: %+v", receipt)
 	}
 	page, err = (QueryService{Store: store, Project: c.Identity()}).ShowNativeTask(ctx, "72")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if page.Tasks[0].Status != "discarded" || len(page.Tasks[0].WorkflowRuns) != 1 {
+	if page.Tasks[0].Status != "in_progress" || len(page.Tasks[0].WorkflowRuns) != 1 {
 		t.Fatalf("active run was removed by discard: %+v", page.Tasks[0])
 	}
 	var slots int
@@ -1033,16 +1009,12 @@ func seedPublishedForDiscard(t *testing.T, ctx context.Context, c Config, store 
 		t.Fatal(err)
 	}
 	task := page.Tasks[0].TaskRecord
-	contract := page.Tasks[0].Contract
 	created := time.Now().UTC()
 	runID := "wf-" + taskID
 	executionID := "exec-" + taskID
-	attemptID := "publish-" + taskID
 	workspace := WorkspaceEvidence{Repository: c.Repository, Worktree: "tree-" + taskID, Branch: "codex/" + taskID, Base: commit, Head: commit, VerifiedAt: created}
-	run := WorkflowRunRecord{ProjectIdentity: c.Identity(), WorkflowRunID: runID, TaskID: taskID, WorkflowVersion: MinimalWorkflowVersion, Phase: "waiting_pr_merge", SelectedResult: executionID, CreatedAt: created, UpdatedAt: created}
-	execution := ExecutionRecord{ProjectIdentity: c.Identity(), ExecutionID: executionID, WorkflowRunID: runID, Status: "succeeded", CurrentStep: "waiting_pr_merge", CandidateRevision: commit, Workspace: workspace, CreatedAt: created, UpdatedAt: created}
-	result, _ := json.Marshal(StepGateResult{StepID: "publish_pr", Succeeded: true, Revision: commit, PublishedHead: commit, PRURL: prURL, ResultID: "result-" + taskID, Workspace: workspace})
-	attempt := StepAttemptRecord{ProjectIdentity: c.Identity(), AttemptID: attemptID, ExecutionID: executionID, StepID: "publish_pr", AttemptNumber: 1, Status: "succeeded", ContractDigest: contract.Digest, ResultID: "result-" + taskID, Result: result, CreatedAt: created, UpdatedAt: created}
+	run := WorkflowRunRecord{ProjectIdentity: c.Identity(), WorkflowRunID: runID, TaskID: taskID, WorkflowVersion: WorkerFlowVersion, Phase: "waiting_pr_merge", SelectedResult: executionID, PRURL: prURL, PRState: "open", CreatedAt: created, UpdatedAt: created}
+	execution := ExecutionRecord{ProjectIdentity: c.Identity(), ExecutionID: executionID, WorkflowRunID: runID, Status: "idle", CurrentStep: "worker", SessionID: "session-" + taskID, Workspace: workspace, CreatedAt: created, UpdatedAt: created}
 	task.Status = "in_progress"
 	task.Claimant = "worker"
 	task.Version++
@@ -1053,9 +1025,6 @@ func seedPublishedForDiscard(t *testing.T, ctx context.Context, c Config, store 
 			return e
 		}
 		if e := tx.PutExecution(execution); e != nil {
-			return e
-		}
-		if e := tx.PutStepAttempt(attempt); e != nil {
 			return e
 		}
 		return tx.UpdateNativeTaskCAS(task, 1)

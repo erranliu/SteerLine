@@ -4,18 +4,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"path/filepath"
 	"regexp"
-	"strings"
 	"time"
 )
 
 // Domain entities are the durable center model. Runtime/Run below remains a
 // read model for the existing CLI and console.
-const MinimalWorkflowVersion = "minimal-v1"
-
-// WorkerFlowVersion is the persisted protocol for a single resumable worker
-// session. It is intentionally distinct from the unpublished minimal-v1 format.
+// WorkerFlowVersion is the persisted protocol for a single resumable worker session.
 const WorkerFlowVersion = "worker-flow-v1"
 
 type TaskRecord struct {
@@ -121,34 +116,24 @@ type TaskDeliveryEvidence struct {
 	ExistingAcceptance *json.RawMessage `json:"existing_acceptance,omitempty"`
 }
 
-type WorkflowDefinition struct {
-	ID              string `json:"id"`
-	Version         string `json:"version"`
-	ReviewRequired  bool   `json:"review_required"`
-	MaxRepairRounds int    `json:"max_repair_rounds"`
-}
-
 type WorkflowRunRecord struct {
-	ProjectIdentity      string                 `json:"project_identity"`
-	WorkflowRunID        string                 `json:"workflow_run_id"`
-	TaskID               string                 `json:"task_id"`
-	WorkflowVersion      string                 `json:"workflow_version"`
-	ConfigDigest         string                 `json:"config_digest,omitempty"`
-	ExecutionProfile     *FixedExecutionProfile `json:"execution_profile,omitempty"`
-	Definition           WorkflowDefinition     `json:"workflow_definition"`
-	ProjectSteps         ProjectSteps           `json:"project_steps,omitempty"`
-	WorkspaceDirtyIgnore WorkspaceDirtyIgnore   `json:"workspace_dirty_ignore,omitempty"`
-	Runner               StepRunnerSettings     `json:"runner"`
-	Phase                string                 `json:"phase"`
-	Repository           string                 `json:"repository,omitempty"`
-	Branch               string                 `json:"branch,omitempty"`
-	SelectedResult       string                 `json:"selected_result_id,omitempty"`
-	PRURL                string                 `json:"pr_url,omitempty"`
-	PRCandidateURL       string                 `json:"pr_candidate_url,omitempty"`
-	PRState              string                 `json:"pr_state,omitempty"`
-	PendingDecisions     int                    `json:"pending_decisions,omitempty"`
-	CreatedAt            time.Time              `json:"created_at"`
-	UpdatedAt            time.Time              `json:"updated_at"`
+	ProjectIdentity  string                 `json:"project_identity"`
+	WorkflowRunID    string                 `json:"workflow_run_id"`
+	TaskID           string                 `json:"task_id"`
+	WorkflowVersion  string                 `json:"workflow_version"`
+	ConfigDigest     string                 `json:"config_digest,omitempty"`
+	ExecutionProfile *FixedExecutionProfile `json:"execution_profile,omitempty"`
+	Runner           StepRunnerSettings     `json:"runner"`
+	Phase            string                 `json:"phase"`
+	Repository       string                 `json:"repository,omitempty"`
+	Branch           string                 `json:"branch,omitempty"`
+	SelectedResult   string                 `json:"selected_result_id,omitempty"`
+	PRURL            string                 `json:"pr_url,omitempty"`
+	PRCandidateURL   string                 `json:"pr_candidate_url,omitempty"`
+	PRState          string                 `json:"pr_state,omitempty"`
+	PendingDecisions int                    `json:"pending_decisions,omitempty"`
+	CreatedAt        time.Time              `json:"created_at"`
+	UpdatedAt        time.Time              `json:"updated_at"`
 }
 
 type StepRunnerSettings struct {
@@ -299,211 +284,7 @@ type CommandRecord struct {
 	UpdatedAt       time.Time `json:"updated_at"`
 }
 
-type StepContract struct {
-	Provider       string            `json:"provider"`
-	Entry          string            `json:"entry"`
-	Version        string            `json:"version"`
-	InputSchema    string            `json:"input_schema"`
-	OutputSchema   string            `json:"output_schema"`
-	ExecutionSite  string            `json:"execution_site"`
-	Timeout        time.Duration     `json:"timeout"`
-	Command        []string          `json:"command,omitempty"`
-	Environment    map[string]string `json:"environment,omitempty"`
-	RequiredChecks []string          `json:"required_checks,omitempty"`
-}
-
-func (c *StepContract) UnmarshalJSON(data []byte) error {
-	type rawContract struct {
-		Provider       string            `json:"provider"`
-		Entry          string            `json:"entry"`
-		Version        string            `json:"version"`
-		InputSchema    string            `json:"input_schema"`
-		OutputSchema   string            `json:"output_schema"`
-		ExecutionSite  string            `json:"execution_site"`
-		Timeout        json.RawMessage   `json:"timeout"`
-		Command        []string          `json:"command,omitempty"`
-		Environment    map[string]string `json:"environment,omitempty"`
-		RequiredChecks []string          `json:"required_checks,omitempty"`
-	}
-	var raw rawContract
-	if err := decode(data, &raw); err != nil {
-		return err
-	}
-	timeout := time.Duration(0)
-	if len(raw.Timeout) > 0 {
-		var text string
-		if json.Unmarshal(raw.Timeout, &text) == nil {
-			parsed, err := time.ParseDuration(text)
-			if err != nil {
-				return err
-			}
-			timeout = parsed
-		} else {
-			var number int64
-			if err := json.Unmarshal(raw.Timeout, &number); err != nil {
-				return errors.New("step timeout must be a duration string or nanoseconds")
-			}
-			timeout = time.Duration(number)
-		}
-	}
-	*c = StepContract{Provider: raw.Provider, Entry: raw.Entry, Version: raw.Version, InputSchema: raw.InputSchema, OutputSchema: raw.OutputSchema, ExecutionSite: raw.ExecutionSite, Timeout: timeout, Command: raw.Command, Environment: raw.Environment, RequiredChecks: raw.RequiredChecks}
-	return nil
-}
-
-type ProjectSteps struct {
-	Implement StepContract `json:"implement"`
-	Verify    StepContract `json:"verify"`
-	Review    StepContract `json:"review"`
-	PublishPR StepContract `json:"publish_pr"`
-}
-
-type MinimalWorkflowConfig struct {
-	Definition WorkflowDefinition `json:"workflow_definition"`
-	Steps      ProjectSteps       `json:"project_steps"`
-}
-
-func (c MinimalWorkflowConfig) Validate() error {
-	if c.Definition.ID != MinimalWorkflowVersion || c.Definition.Version != MinimalWorkflowVersion {
-		return errors.New("workflow_definition must pin minimal-v1")
-	}
-	if c.Definition.MaxRepairRounds < 0 {
-		return errors.New("max_repair_rounds cannot be negative")
-	}
-	for id, step := range map[string]StepContract{
-		"implement": c.Steps.Implement, "verify": c.Steps.Verify,
-		"publish_pr": c.Steps.PublishPR,
-	} {
-		if err := validateStepContract(id, step); err != nil {
-			return err
-		}
-		if step.InputSchema != MinimalStepInputSchema && step.InputSchema != NativeTaskInputSchema || step.OutputSchema != MinimalStepOutputSchema {
-			return fmt.Errorf("%s must use the minimal-v1 input/output schemas", id)
-		}
-	}
-	if c.Definition.ReviewRequired {
-		if err := validateStepContract("review", c.Steps.Review); err != nil {
-			return err
-		}
-		if c.Steps.Review.InputSchema != MinimalStepInputSchema && c.Steps.Review.InputSchema != NativeTaskInputSchema || c.Steps.Review.OutputSchema != MinimalStepOutputSchema {
-			return errors.New("review must use the minimal-v1 input/output schemas")
-		}
-	}
-	if len(c.Steps.Verify.RequiredChecks) == 0 {
-		return errors.New("verify contract requires a fixed nonempty required_checks list")
-	}
-	if c.Steps.Verify.Provider != "command" {
-		return errors.New("verify requires a deterministic command provider")
-	}
-	seen := map[string]bool{}
-	for _, check := range c.Steps.Verify.RequiredChecks {
-		if strings.TrimSpace(check) == "" || seen[check] {
-			return errors.New("verify required_checks must contain unique nonempty names")
-		}
-		seen[check] = true
-	}
-	return nil
-}
-
-func DefaultMinimalWorkflowDefinition(reviewRequired bool) WorkflowDefinition {
-	return WorkflowDefinition{ID: MinimalWorkflowVersion, Version: MinimalWorkflowVersion, ReviewRequired: reviewRequired, MaxRepairRounds: 2}
-}
-
-func validateStepContract(id string, c StepContract) error {
-	if c.Provider != "agent_skill" && c.Provider != "command" {
-		return fmt.Errorf("%s provider must be agent_skill or command", id)
-	}
-	if c.Entry == "" || c.Version == "" || c.InputSchema == "" || c.OutputSchema == "" || c.ExecutionSite == "" {
-		return fmt.Errorf("%s contract is incomplete", id)
-	}
-	if c.Timeout <= 0 {
-		return fmt.Errorf("%s timeout must be positive", id)
-	}
-	entry := strings.ReplaceAll(c.Entry, "\\", "/")
-	if !strings.HasPrefix(entry, "builtin:") && (filepath.IsAbs(c.Entry) || strings.HasPrefix(entry, "/") || strings.Contains("/"+entry+"/", "/../") || entry == "..") {
-		return fmt.Errorf("%s entry must be a repository-relative or builtin entry", id)
-	}
-	if c.ExecutionSite != "local" && c.ExecutionSite != "target" {
-		return fmt.Errorf("%s execution_site must be local or target", id)
-	}
-	if c.Provider == "command" && len(c.Command) == 0 {
-		return fmt.Errorf("%s command must be an executable and argument array", id)
-	}
-	if c.Provider == "command" && strings.TrimSpace(c.Command[0]) == "" {
-		return fmt.Errorf("%s command executable is empty", id)
-	}
-	if c.Provider == "agent_skill" && len(c.Command) != 0 {
-		return fmt.Errorf("%s agent_skill cannot carry a command", id)
-	}
-	if c.Provider == "agent_skill" && strings.HasPrefix(c.Entry, "builtin:") && (c.Entry != "builtin:"+id || (id != "implement" && id != "review") || c.Version != MinimalWorkflowVersion) {
-		return fmt.Errorf("%s has no built-in agent entry %q; configure a repository entry", id, c.Entry)
-	}
-	return nil
-}
-
 var revisionPattern = regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`)
-
-type StepGateResult struct {
-	StepID                     string            `json:"step_id"`
-	Succeeded                  bool              `json:"succeeded"`
-	InputRevision              string            `json:"input_revision,omitempty"`
-	Revision                   string            `json:"revision,omitempty"`
-	BaseAncestor               *bool             `json:"base_ancestor,omitempty"`
-	Workspace                  WorkspaceEvidence `json:"workspace,omitempty"`
-	Checks                     []CheckEvidence   `json:"checks,omitempty"`
-	ReviewVerdict              string            `json:"review_verdict,omitempty"`
-	PRURL                      string            `json:"pr_url,omitempty"`
-	PublishedHead              string            `json:"published_head,omitempty"`
-	ResultID                   string            `json:"result_id,omitempty"`
-	FailureKind                string            `json:"failure_kind,omitempty"`
-	PrerequisiteIDs            []string          `json:"prerequisite_result_ids,omitempty"`
-	Decision                   *DecisionRequest  `json:"decision,omitempty"`
-	AppliedDecisionID          string            `json:"applied_decision_id,omitempty"`
-	AppliedDecisionAttemptID   string            `json:"applied_decision_attempt_id,omitempty"`
-	AppliedDecisionExecutionID string            `json:"applied_decision_execution_id,omitempty"`
-	AppliedAnswerSHA256        string            `json:"applied_answer_sha256,omitempty"`
-}
-
-type CheckEvidence struct {
-	Name          string `json:"name"`
-	Status        string `json:"status"`
-	Revision      string `json:"revision"`
-	Command       string `json:"command"`
-	ScriptVersion string `json:"script_version"`
-	ExitCode      *int   `json:"exit_code"`
-	Passed        *bool  `json:"passed"`
-	EvidenceRef   string `json:"evidence_ref"`
-	ActualCommit  string `json:"actual_commit"`
-}
-
-// AdvanceMinimalExecution validates one committed step result and computes the
-// next center-owned step. It never treats a worker's success as task completion.
-var allowedAttemptTransitions = map[string]map[string]bool{
-	"planned":          {"dispatching": true, "failed": true},
-	"dispatching":      {"dispatched": true, "rejected": true, "outcome_unknown": true},
-	"dispatched":       {"running": true, "failed": true, "outcome_unknown": true},
-	"running":          {"waiting_decision": true, "succeeded": true, "failed": true, "stopping": true, "outcome_unknown": true},
-	"waiting_decision": {"running": true, "succeeded": true, "failed": true, "outcome_unknown": true, "stopping": true},
-	"stopping":         {"stopped": true, "running": true, "outcome_unknown": true},
-	"outcome_unknown":  {"dispatched": true, "running": true, "succeeded": true, "failed": true, "stopped": true},
-}
-
-func TransitionStepAttempt(attempt *StepAttemptRecord, next string) error {
-	if attempt == nil {
-		return errors.New("step attempt is required")
-	}
-	if !validStepAttemptStatus(next) {
-		return fmt.Errorf("invalid step attempt status %q", next)
-	}
-	if attempt.Status == next {
-		return nil
-	}
-	if !allowedAttemptTransitions[attempt.Status][next] {
-		return fmt.Errorf("step attempt transition %s -> %s is not allowed", attempt.Status, next)
-	}
-	attempt.Status = next
-	attempt.UpdatedAt = now()
-	return nil
-}
 
 func validStepAttemptStatus(v string) bool {
 	switch v {

@@ -90,12 +90,12 @@ func TestWorkerFlowDeliveryGateUsesSessionAndPRWithoutStepResults(t *testing.T) 
 	contract := TaskContract{ContractID: "contract-8", Digest: "fixed-digest"}
 	wf := WorkflowRunRecord{WorkflowRunID: "wf-8", TaskID: task.TaskID, WorkflowVersion: WorkerFlowVersion, Phase: "waiting_pr_merge", SelectedResult: "exec-8", PRURL: "https://git.example/o/r/pulls/8"}
 	exec := ExecutionRecord{ExecutionID: "exec-8", WorkflowRunID: wf.WorkflowRunID, SessionID: "session-8", Workspace: WorkspaceEvidence{Branch: "codex/task-8", Dirty: true}, Status: "idle"}
-	publish, err := validateNativeDeliveryGates(task, contract, wf, exec, nil)
-	if err != nil || publish.PRURL != wf.PRURL {
-		t.Fatalf("workflow requires an obsolete step result: publish=%+v error=%v", publish, err)
+	prURL, err := validateNativeDeliveryGates(task, contract, wf, exec)
+	if err != nil || prURL != wf.PRURL {
+		t.Fatalf("workflow requires an obsolete step result: prURL=%q error=%v", prURL, err)
 	}
 	exec.SessionID = ""
-	if _, err := validateNativeDeliveryGates(task, contract, wf, exec, nil); err == nil {
+	if _, err := validateNativeDeliveryGates(task, contract, wf, exec); err == nil {
 		t.Fatal("accepted delivery without a bound worker session")
 	}
 }

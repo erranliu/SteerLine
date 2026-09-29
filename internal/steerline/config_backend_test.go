@@ -36,7 +36,7 @@ func TestConfigKeepsOrcaCodexNativeByDefault(t *testing.T) {
 		return cfg
 	}
 	orca := write("orca")
-	if orca.ReasoningEffort != "" || orca.WorkflowProtocol != WorkerFlowVersion || orca.ProjectSteps != nil {
+	if orca.ReasoningEffort != "" || orca.WorkflowProtocol != WorkerFlowVersion {
 		t.Fatalf("Orca worker flow acquired old project steps or a local model default: %+v", orca)
 	}
 	local := write("local")
