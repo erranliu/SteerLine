@@ -64,8 +64,8 @@ func (p ExecutionProfile) MatchesConfig(c Config) bool {
 }
 
 func (p ExecutionProfile) StaticUnavailableReason() string {
-	if p.Host != "local" {
-		return "Orca worker-flow 本次延期交付；只开放本地 Codex"
+	if p.Host == "orca_supervised" {
+		return "受监管远端尚未接入单 worker 流程"
 	}
 	if p.Host == "local" && p.Agent != "codex" {
 		return "本地执行后端目前只支持 codex agent"
@@ -140,8 +140,11 @@ func validateExecutionProfiles(c Config) error {
 		if p.ReasoningEffort != "" && !validReasoningEffort(p.ReasoningEffort) {
 			return fmt.Errorf("execution profile %s has invalid reasoning effort", p.ID)
 		}
-		if p.Agent != "codex" {
+		if p.Host == "local" && p.Agent != "codex" {
 			return fmt.Errorf("execution profile %s requires codex for a resumable worker session", p.ID)
+		}
+		if p.Host == "orca" && (p.Model != "" || p.ReasoningEffort != "" || p.CodexProfile != "" || p.Sandbox != "workspace-write") {
+			return fmt.Errorf("execution profile %s: Orca agent launch settings are managed by Orca; model, effort, Codex profile and sandbox overrides are unavailable", p.ID)
 		}
 		selected := c.ApplyExecutionProfile(p.effective())
 		if p.Host == "orca_supervised" {

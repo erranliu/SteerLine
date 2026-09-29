@@ -195,6 +195,7 @@ type DecisionRequest struct {
 	Recommended   string           `json:"recommended,omitempty"`
 	AllowFreeText bool             `json:"allow_free_text,omitempty"`
 	NativeAsk     *codexAskCall    `json:"native_ask,omitempty"`
+	OrcaAsk       *orcaAskCall     `json:"orca_ask,omitempty"`
 }
 
 // DecisionState is the runtime projection of one decision. SQLite owns the

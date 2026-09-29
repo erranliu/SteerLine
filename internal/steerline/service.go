@@ -415,8 +415,59 @@ func (s *Service) save() error {
 			run.ControlRevision = before.ControlRevision + 1
 		}
 	}
+	// SaveRuntime returns fresh authoritative slices. Keep in-flight workflow
+	// record pointers valid across the publication when identities are stable.
+	workflows, executions, attempts := s.State.WorkflowRuns, s.State.Executions, s.State.Attempts
 	if err := s.store.Publish(&s.State); err != nil {
 		return err
+	}
+	if len(workflows) == len(s.State.WorkflowRuns) {
+		stable := true
+		for i := range workflows {
+			stable = stable && workflows[i].WorkflowRunID == s.State.WorkflowRuns[i].WorkflowRunID
+		}
+		if stable {
+			copy(workflows, s.State.WorkflowRuns)
+			s.State.WorkflowRuns = workflows
+		}
+	}
+	if len(executions) == len(s.State.Executions) {
+		stable := true
+		for i := range executions {
+			stable = stable && executions[i].ExecutionID == s.State.Executions[i].ExecutionID
+		}
+		if stable {
+			for i := range executions {
+				prior, persisted := &executions[i], &s.State.Executions[i]
+				if prior.OrcaNative != nil && persisted.OrcaNative != nil {
+					turns := prior.OrcaNative.Turns
+					if len(turns) == len(persisted.OrcaNative.Turns) {
+						matching := true
+						for j := range turns {
+							matching = matching && turns[j].TurnID == persisted.OrcaNative.Turns[j].TurnID
+						}
+						if matching {
+							copy(turns, persisted.OrcaNative.Turns)
+							persisted.OrcaNative.Turns = turns
+						}
+					}
+					*prior.OrcaNative = *persisted.OrcaNative
+					persisted.OrcaNative = prior.OrcaNative
+				}
+				*prior = *persisted
+			}
+			s.State.Executions = executions
+		}
+	}
+	if len(attempts) == len(s.State.Attempts) {
+		stable := true
+		for i := range attempts {
+			stable = stable && attempts[i].AttemptID == s.State.Attempts[i].AttemptID
+		}
+		if stable {
+			copy(attempts, s.State.Attempts)
+			s.State.Attempts = attempts
+		}
 	}
 	b, _ := json.Marshal(s.State)
 	var prev Runtime

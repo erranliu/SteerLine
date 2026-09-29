@@ -1,6 +1,6 @@
 # Plan：本机 Orca 原生编排接入单 worker
 
-目标：`WORKER-FLOW-ORCA-NATIVE`。唯一执行依据：[Spec](worker-flow-orca-native.spec.md)。状态：待实施。依赖当前 `worker-flow-v1` 基线，一个实现 PR 交付；不创建或改写生产 Task。
+目标：`WORKER-FLOW-ORCA-NATIVE`。唯一执行依据：[Spec](worker-flow-orca-native.spec.md)。状态：实施中。依赖当前 `worker-flow-v1` 基线，一个实现 PR 交付；不创建或改写生产 Task。
 
 ## 1. 固定接口和替换范围
 

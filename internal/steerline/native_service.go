@@ -111,8 +111,15 @@ func (s *Service) refreshNativeSnapshot(ctx context.Context, reconstruct bool) e
 			run.Process = nil
 		}
 		run.SessionID = nil
-		if execution.SessionID != "" {
+		if execution.SessionID != "" && (execution.Process == nil || execution.Process.Kind != "orca-native") {
 			run.SessionID = ptr(execution.SessionID)
+		}
+		if run.Decision == nil && workflow.Phase == "waiting_decision" || run.Decision == nil && workflow.Phase == "waiting_pr_merge" {
+			if restored, restoreErr := restoredWorkerDecision(snapshot.Decisions, execution.ExecutionID); restoreErr != nil {
+				return restoreErr
+			} else if restored != nil {
+				run.Decision = restored
+			}
 		}
 		run.FinishTaskStatus = nativeRuntimeFinishStatus(task, *workflow)
 		switch {
@@ -160,6 +167,41 @@ func (s *Service) refreshNativeSnapshot(ctx context.Context, reconstruct bool) e
 	s.State.SchemaVersion = WorkerFlowRuntimeSchema
 	s.refreshSlotOccupancy()
 	return nil
+}
+
+func restoredWorkerDecision(records []DecisionRecord, executionID string) (*DecisionState, error) {
+	var chosen *DecisionRecord
+	for i := range records {
+		record := &records[i]
+		if record.ExecutionID != executionID {
+			continue
+		}
+		if chosen == nil || record.UpdatedAt.After(chosen.UpdatedAt) {
+			chosen = record
+		}
+	}
+	if chosen == nil {
+		return nil, nil
+	}
+	var request DecisionRequest
+	if err := json.Unmarshal(chosen.Request, &request); err != nil {
+		return nil, err
+	}
+	decision := &DecisionState{ID: chosen.DecisionID, AttemptID: chosen.AttemptID, Version: chosen.Version, Request: request, Status: chosen.Status}
+	if request.OrcaAsk != nil && request.OrcaAsk.MessageID != chosen.QuestionID {
+		return nil, errors.New("persisted Orca question differs from its decision binding")
+	}
+	if len(chosen.Answer) > 0 {
+		var answer DecisionAnswer
+		if err := json.Unmarshal(chosen.Answer, &answer); err != nil {
+			return nil, err
+		}
+		decision.OptionID, decision.Note, decision.Answers, decision.AnsweredBy = answer.OptionID, answer.Note, answer.Answers, answer.AnsweredBy
+		if !answer.AnsweredAt.IsZero() {
+			decision.AnsweredAt = &answer.AnsweredAt
+		}
+	}
+	return decision, nil
 }
 
 func settledDiscardedWorkflowIDs(snapshot DomainSnapshot) map[string]bool {
@@ -801,7 +843,16 @@ func (s *Service) nativeCompleteMergedTask(ctx context.Context, run *Run) error 
 	run.Error = nil
 	s.note(run, "steer", "delivery", "completed", "native task delivered after verified PR merge", receipt.Delivery.PRURL, map[string]any{"merge_commit": receipt.Delivery.MergeCommit, "graph_revision": receipt.GraphRevision})
 	s.closeActivity(run)
-	return s.save()
+	if err := s.save(); err != nil {
+		return err
+	}
+	if run.Protocol == string(ProtocolOrcaTerminalV2) {
+		if err := s.finishNativeOrcaCleanup(ctx, run); err != nil {
+			run.LastEvent = ptr("Orca delivery completed; owned terminal cleanup needs reconciliation: " + err.Error())
+			return s.save()
+		}
+	}
+	return nil
 }
 
 func (s *Service) pollNativePRs(ctx context.Context, onlyRunID string) error {

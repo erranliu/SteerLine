@@ -11,7 +11,28 @@ import (
 )
 
 func (s *Service) resumeConfiguredWork(ctx context.Context) error {
-	return s.resumeWorkerFlow(ctx)
+	if err := s.resumeWorkerFlow(ctx); err != nil {
+		return err
+	}
+	for _, run := range s.State.Runs {
+		if run == nil || run.WorkflowVersion != WorkerFlowVersion || run.Protocol != string(ProtocolOrcaTerminalV2) {
+			continue
+		}
+		workflow, execution := s.workflowRecords(run)
+		if workflow == nil || execution == nil || workflow.Phase != "completed" || execution.OrcaNative == nil {
+			continue
+		}
+		if err := s.useFixedRunProfile(run); err != nil {
+			return err
+		}
+		if err := s.finishNativeOrcaCleanup(ctx, run); err != nil {
+			run.LastEvent = ptr("Orca delivery completed; owned terminal cleanup needs reconciliation: " + err.Error())
+			if saveErr := s.save(); saveErr != nil {
+				return saveErr
+			}
+		}
+	}
+	return nil
 }
 
 func (s *Service) resumeWorkerFlow(ctx context.Context) error {
@@ -40,6 +61,52 @@ func (s *Service) resumeWorkerFlow(ctx context.Context) error {
 		}
 		if reconciled {
 			continue
+		}
+		if s.Config.hostName() == "orca" {
+			if execution.Process == nil {
+				if execution.OrcaNative != nil {
+					return s.nativeOrcaUncertain(run, "Original Orca agent creation has no confirmed terminal; preserve the worktree")
+				}
+				return s.prepareWorkerFlow(ctx, *task, run)
+			}
+			if execution.Process.Kind != "orca-native" {
+				return s.nativeOrcaUncertain(run, "Old shell-based Orca execution cannot be resumed as a native Dispatch")
+			}
+			if err := s.verifyNativeOrcaWorker(ctx, run, execution); err != nil {
+				return s.nativeOrcaUncertain(run, "Original Orca agent session is unavailable: "+err.Error())
+			}
+			if execution.Target.OrchestrationRun == "" {
+				if err := s.prepareNativeOrcaCoordinator(ctx, run, execution); err != nil {
+					return s.nativeOrcaUncertain(run, "Original Orca Run needs reconciliation: "+err.Error())
+				}
+			}
+			if execution.PendingTurnID != "" {
+				turnID := execution.PendingTurnID
+				op := s.nativeOrcaOperation("worker-turn:" + execution.ExecutionID + ":" + turnID)
+				if op == nil {
+					return s.nativeOrcaUncertain(run, "Original Orca turn has no saved input intent")
+				}
+				var input struct {
+					Prompt string `json:"prompt"`
+				}
+				if json.Unmarshal(op.Request, &input) != nil || input.Prompt == "" {
+					return s.nativeOrcaUncertain(run, "Original Orca turn input cannot be restored")
+				}
+				if err := s.startNativeOrcaTurn(ctx, run, execution, turnID, input.Prompt); err != nil {
+					return s.nativeOrcaUncertain(run, "Original Orca Task/Dispatch needs reconciliation: "+err.Error())
+				}
+				turn := nativeOrcaCurrentTurn(execution)
+				if turn != nil && turn.DispatchID != "" && op.Status != "accepted" && op.Status != "confirmed" {
+					if err := s.changeOperation(op.OperationID, "accepted", turn.DispatchRequestID, mustJSON(*turn), ""); err != nil {
+						return err
+					}
+				}
+				return s.pollNativeOrcaWorker(ctx, run)
+			}
+			if nativeOrcaCurrentTurn(execution) == nil && workflow.Phase == "queued" {
+				return s.startInitialWorkerFlowTurn(ctx, *task, run)
+			}
+			return s.pollNativeOrcaWorker(ctx, run)
 		}
 		if execution.Process != nil && execution.Process.Kind == "orca" && (execution.PendingTurnID != "" || execution.CurrentTurnID != execution.LastStoppedTurnID) {
 			turnID := execution.PendingTurnID
@@ -238,6 +305,12 @@ func (s *Service) prepareWorkerFlow(ctx context.Context, task TaskRecord, run *R
 			return err
 		}
 	}
+	if s.Config.hostName() == "orca" {
+		if err := s.prepareNativeOrcaWorker(ctx, run); err != nil {
+			return s.nativeOrcaUncertain(run, "Native Orca worker preparation needs reconciliation: "+err.Error())
+		}
+		return s.startInitialWorkerFlowTurn(ctx, task, run)
+	}
 	remoteName := ""
 	if s.Config.hostName() == "orca_supervised" {
 		var nameErr error
@@ -349,6 +422,21 @@ func (s *Service) startWorkerFlowTurn(ctx context.Context, run *Run, prompt, tur
 			s.launchAppServerTurn(s.runContext, config, copyRun, copyExecution, turnID, prompt, opID)
 		}()
 		return nil
+	}
+	if s.Config.hostName() == "orca" {
+		if err := s.startNativeOrcaTurn(ctx, run, execution, turnID, prompt); err != nil {
+			_ = s.changeOperation(opID, "outcome_unknown", "", nil, err.Error())
+			run.ExecutionStatus = "unknown"
+			return s.nativeOrcaUncertain(run, "Native Orca Dispatch needs reconciliation: "+err.Error())
+		}
+		attempt.Status, attempt.UpdatedAt = "dispatched", now()
+		run.ExecutionStatus = "pending"
+		current := nativeOrcaCurrentTurn(execution)
+		if err := s.changeOperation(opID, "accepted", current.DispatchRequestID, mustJSON(*current), ""); err != nil {
+			return err
+		}
+		s.note(run, "steer", "worker", "accepted", "native Orca Dispatch input accepted", current.DispatchID, map[string]any{"task_id": current.TaskID, "turn_id": turnID})
+		return s.save()
 	}
 	var worker *Worker
 	var events, platformRequestID string
@@ -893,6 +981,9 @@ func (s *Service) applyWorkerFlowDecision(ctx context.Context, run *Run) error {
 	command, err := s.domainStore.CommandByIdempotency(ctx, s.Config.identity, decisionAnswerKey(answer))
 	if err != nil || command.Kind != "answer_decision" || command.TargetID != answer.DecisionID || command.Status != "accepted" || !stableExecutionID(command.CommandID) {
 		return errors.Join(err, errors.New("saved worker feedback has no fixed accepted command identity"))
+	}
+	if s.Config.hostName() == "orca" {
+		return s.applyNativeOrcaDecision(ctx, run, workflow, execution, answer, command.CommandID)
 	}
 	if execution.SessionID == "" || run.SessionID == nil || *run.SessionID != execution.SessionID {
 		run.Error = ptr("Feedback is saved, but the original worker session is not yet available for delivery")

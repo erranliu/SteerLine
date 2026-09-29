@@ -410,8 +410,8 @@ func TestNativeTaskCASGuardsAndDeliveryProjection(t *testing.T) {
 	if err = store.Transact(ctx, func(tx DomainTx) error { return tx.UpdateNativeTaskCAS(closed, 2) }); err == nil {
 		t.Fatal("unverified delivery closed a task")
 	}
-	run := WorkflowRunRecord{ProjectIdentity: project, WorkflowRunID: "wf-7", TaskID: "7", WorkflowVersion: "minimal-v1", Phase: "waiting_pr_merge", SelectedResult: "exec-7", CreatedAt: created, UpdatedAt: created}
-	execution := ExecutionRecord{ProjectIdentity: project, ExecutionID: "exec-7", WorkflowRunID: "wf-7", Status: "succeeded", CurrentStep: "waiting_pr_merge", CreatedAt: created, UpdatedAt: created}
+	run := WorkflowRunRecord{ProjectIdentity: project, WorkflowRunID: "wf-7", TaskID: "7", WorkflowVersion: WorkerFlowVersion, Phase: "waiting_pr_merge", SelectedResult: "exec-7", PRURL: "https://forge.invalid/org/repo/pulls/4", CreatedAt: created, UpdatedAt: created}
+	execution := ExecutionRecord{ProjectIdentity: project, ExecutionID: "exec-7", WorkflowRunID: "wf-7", SessionID: "session-7", Workspace: WorkspaceEvidence{Branch: "codex/task-7"}, Status: "succeeded", CurrentStep: "waiting_pr_merge", CreatedAt: created, UpdatedAt: created}
 	err = store.Transact(ctx, func(tx DomainTx) error {
 		if err := tx.PutWorkflowRun(run); err != nil {
 			return err

@@ -91,8 +91,9 @@ type orcaEnvelope struct {
 	OK     bool            `json:"ok"`
 	Result json.RawMessage `json:"result"`
 	Error  *struct {
-		Code    string `json:"code"`
-		Message string `json:"message"`
+		Code    string          `json:"code"`
+		Message string          `json:"message"`
+		Data    json.RawMessage `json:"data,omitempty"`
 	} `json:"error"`
 	Meta struct {
 		RuntimeID string `json:"runtimeId"`

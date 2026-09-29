@@ -51,14 +51,14 @@ func TestWorkerFlowConfigRejectsOldProjectGates(t *testing.T) {
 	}
 }
 
-func TestDeferredOrcaWorkerFlowCannotClaim(t *testing.T) {
+func TestUnsupportedOrcaWorkerFlowConfigurationCannotClaim(t *testing.T) {
 	for _, host := range []string{"orca", "orca_supervised"} {
 		t.Run(host, func(t *testing.T) {
 			c := Config{WorkflowProtocol: WorkerFlowVersion, Host: host, Agent: "codex"}
 			err := requireWorkerFlowCapabilities(context.Background(), c)
 			var backend *BackendError
 			if !errors.As(err, &backend) || backend.Code != BackendUnsupported {
-				t.Fatalf("deferred Orca target reached an external claim path: %v", err)
+				t.Fatalf("unsupported Orca configuration reached an external claim path: %v", err)
 			}
 		})
 	}

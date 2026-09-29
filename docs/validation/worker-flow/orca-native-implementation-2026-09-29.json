@@ -1,0 +1,32 @@
+{
+  "date": "2026-09-29",
+  "base": "6bfac1a (origin/main after local Codex native ask and runtime-state consolidation merges)",
+  "state": "implementation in progress; real center ask/reply/restart/two-turn continuation passed; remaining acceptance items listed below",
+  "platform_continuity": "orca-native-continuity-2026-09-29.json: real Orca 1.4.210 and Codex CLI 0.159.0, two settled Dispatches on one agent terminal/incarnation; second task recalled a token only given in first task",
+  "center_live": "orca-native-center-live-2026-09-29.json: actual SteerLine Service, SQLite claim, Orca agent launcher, native ask/reply, service restart, worker_done, second Task/Dispatch on original terminal, second worker_done and recalled phrase; passed in 223.32s",
+  "sqlite_center_regression": "TestNativeOrcaCenterReusesWorkerAfterRestartAndSettlement: lost worktree/agent, coordinator and Run creation responses recovered from exact provider identity; native question and lost Delivery-ack response recovered from the original Run FIFO; center restart; public SubmitDecisionAnswer with lost reply response recovered from original inbox; duplicate submission reused the command; worker_done and second Task/Dispatch on original terminal; third Dispatch lost response recovered by exact worker-show without duplicate injection; fourth active Dispatch escalation with lost send response recovered from original inbox; fifth Task creation lost response recovered from exact task-list; replacement terminal incarnation retained feedback without another Task/Dispatch; exact terminal close response loss recovered from absence in original runtime; no Codex session ID synthesized",
+  "provider_regression": "TestNativeOrcaPRBindingUsesProviderAndRetainsSession: the Orca PR clue is rejected when the provider head branch differs, an owned open PR is bound to the existing execution, and a closed-unmerged PR returns the same session to feedback; TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged separately verifies wrong PR rejection, one merged delivery and DAG successor unlock",
+  "other_tests": [
+    "TestNativeTaskCASGuardsAndDeliveryProjection fixture updated to the current worker-flow-v1 delivery contract; the earlier minimal-v1 fixture failed the existing delivery schema guard on origin/main",
+    "go test ./internal/steerline -count=1 -timeout=15m: passed in 222.823s (the new Orca/provider case was separately passed after this package run began)",
+    "go test ./internal/steerline -run '^TestNativeOrcaPRBindingUsesProviderAndRetainsSession$' -count=1: passed",
+    "after rebase to origin/main 6bfac1a: go test ./internal/steerline -run 'TestWorkerFlow|TestConfig|TestDecision|TestOrca|TestNativeOrca' -count=1 -timeout=15m passed in 58.824s",
+    "after rebase to origin/main 6bfac1a: go test ./internal/steerline -count=1 -timeout=15m passed in 230.891s",
+    "after rebase to origin/main 6bfac1a: go run ./cmd/test-feedback -quick passed",
+    "go test ./internal/steerline -run 'TestWorkerFlow|TestConfig|TestDecision|TestOrca|TestNativeOrca' -count=1: passed",
+    "go run ./cmd/test-feedback -quick: passed"
+  ],
+  "acceptance": {
+    "ON1": "automated profile agent selection and unsupported override checks covered; second real agent unavailable",
+    "ON2": "fake and real center Dispatch with Orca agent launcher covered",
+    "ON3": "shared answer shape, public answer command in fake center, duplicate idempotency and real center reply across restart covered; real interactive UI/CLI invocation pending",
+    "ON4": "real center ask/reply/done, second Task/Dispatch and remembered token on original terminal/incarnation passed; no file change in probe",
+    "ON5": "late message unit coverage and active same-Dispatch send via public command in fake center passed; real send/done race pending",
+    "ON6": "SQLite and real center restart with pending question passed; fake lost worktree/agent, coordinator, Run, Task, Dispatch, reply, send, Delivery ack and terminal-close responses reconciled without duplicate side effects",
+    "ON7": "replacement incarnation retained feedback and prevented new Task/Dispatch in fake center; real no_agent_detected retry observed in platform probe; broader fault matrix pending",
+    "ON8": "worker-read terminal fallback, cursor and source_changed retry to complete transcript covered by center fake; complete live transcript unavailable",
+    "ON9": "exact terminal close and lost-close-response recovery passed in fake center; final delivery live check pending",
+    "ON10": "Orca-specific provider binding and closed-unmerged continuation plus shared SQLite/provider wrong-PR, unique merge delivery and DAG regression passed; isolated real PR/human merge chain pending",
+    "ON11": "codex/opencode agent ID contract covered; second real agent unavailable"
+  }
+}

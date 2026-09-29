@@ -141,7 +141,11 @@ func persistWorkerFlow(tx DomainTx, project string, runtime Runtime, run *Run) e
 				break
 			}
 		}
-		if err := tx.PutDecision(DecisionRecord{ProjectIdentity: project, DecisionID: run.Decision.ID, Scope: "execution", WorkflowRunID: run.RunID, ExecutionID: run.ExecutionID, AttemptID: run.AttemptID, QuestionID: run.Decision.ID, Request: request, Answer: answer, AnsweredBy: run.Decision.AnsweredBy, Status: run.Decision.Status, Version: run.Decision.Version, CreatedAt: created, UpdatedAt: now()}); err != nil {
+		questionID := run.Decision.ID
+		if run.Decision.Request.OrcaAsk != nil {
+			questionID = run.Decision.Request.OrcaAsk.MessageID
+		}
+		if err := tx.PutDecision(DecisionRecord{ProjectIdentity: project, DecisionID: run.Decision.ID, Scope: "execution", WorkflowRunID: run.RunID, ExecutionID: run.ExecutionID, AttemptID: run.AttemptID, QuestionID: questionID, Request: request, Answer: answer, AnsweredBy: run.Decision.AnsweredBy, Status: run.Decision.Status, Version: run.Decision.Version, CreatedAt: created, UpdatedAt: now()}); err != nil {
 			return err
 		}
 	}

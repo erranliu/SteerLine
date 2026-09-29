@@ -11,13 +11,15 @@ import (
 )
 
 type workerOrcaWorktree struct {
-	ID          string `json:"id"`
-	RepoID      string `json:"repoId"`
-	Path        string `json:"path"`
-	Branch      string `json:"branch"`
-	Head        string `json:"head"`
-	DisplayName string `json:"displayName"`
-	BaseRef     string `json:"baseRef"`
+	ID               string `json:"id"`
+	RepoID           string `json:"repoId"`
+	Path             string `json:"path"`
+	Branch           string `json:"branch"`
+	Head             string `json:"head"`
+	DisplayName      string `json:"displayName"`
+	BaseRef          string `json:"baseRef"`
+	Comment          string `json:"comment,omitempty"`
+	CreatedWithAgent string `json:"createdWithAgent,omitempty"`
 }
 
 func workerOrcaCall(ctx context.Context, c Config, args ...string) (orcaEnvelope, error) {
