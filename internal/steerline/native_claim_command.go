@@ -68,7 +68,7 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 	if err != nil {
 		return TaskClaimReceipt{}, err
 	}
-	if old, found, e := lookupTaskBatchCommand(ctx, sqlite, c.Project, options.RequestID); e != nil {
+	if old, found, e := sqlite.lookupNativeCommand(ctx, c.Project, options.RequestID); e != nil {
 		return TaskClaimReceipt{}, e
 	} else if found {
 		return replayTaskClaim(old, requestPayload, options.TaskID, options.RequestedBy)
@@ -182,7 +182,7 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 	operationRequest, _ := json.Marshal(map[string]any{"task_id": task.TaskID, "task_version": options.ExpectedTaskVersion, "authority_version": options.ExpectedAuthorityVersion, "workflow_run_id": workflowRunID, "execution_id": executionID, "attempt_id": attemptID, "base_commit": base, "predecessor_merge_commits": predecessorMerges, "requested_by": options.RequestedBy})
 	var receipt TaskClaimReceipt
 	err = sqlite.transactSQLite(ctx, func(tx *sqliteTx) error {
-		if old, found, e := lookupTaskBatchCommandTx(ctx, tx, c.Project, options.RequestID); e != nil {
+		if old, found, e := tx.lookupNativeCommand(ctx, c.Project, options.RequestID); e != nil {
 			return e
 		} else if found {
 			r, e := replayTaskClaim(old, requestPayload, options.TaskID, options.RequestedBy)

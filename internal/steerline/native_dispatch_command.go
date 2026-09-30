@@ -49,7 +49,7 @@ func (c CommandService) SetNativeDispatchState(ctx context.Context, update Nativ
 	if err != nil {
 		return ProjectTaskAuthority{}, err
 	}
-	if old, found, lookupErr := lookupTaskBatchCommand(ctx, sqlite, c.Project, update.RequestID); lookupErr != nil {
+	if old, found, lookupErr := sqlite.lookupNativeCommand(ctx, c.Project, update.RequestID); lookupErr != nil {
 		return ProjectTaskAuthority{}, lookupErr
 	} else if found {
 		return replayNativeDispatchState(old, requestPayload, c.Project, update.RequestedBy)
@@ -72,7 +72,7 @@ func (c CommandService) SetNativeDispatchState(ctx context.Context, update Nativ
 	next.UpdatedAt = time.Now().UTC()
 	var result ProjectTaskAuthority
 	err = sqlite.transactSQLite(ctx, func(tx *sqliteTx) error {
-		if old, found, lookupErr := lookupTaskBatchCommandTx(ctx, tx, c.Project, update.RequestID); lookupErr != nil {
+		if old, found, lookupErr := tx.lookupNativeCommand(ctx, c.Project, update.RequestID); lookupErr != nil {
 			return lookupErr
 		} else if found {
 			value, replayErr := replayNativeDispatchState(old, requestPayload, c.Project, update.RequestedBy)

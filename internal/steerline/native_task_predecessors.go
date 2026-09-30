@@ -75,7 +75,7 @@ func (c CommandService) AddNativeTaskPredecessors(ctx context.Context, config Co
 	}
 	var receipt TaskPredecessorAddReceipt
 	err = store.transactSQLite(ctx, func(tx *sqliteTx) error {
-		if previous, found, lookupErr := lookupTaskBatchCommandTx(ctx, tx, c.Project, input.RequestID); lookupErr != nil {
+		if previous, found, lookupErr := tx.lookupNativeCommand(ctx, c.Project, input.RequestID); lookupErr != nil {
 			return lookupErr
 		} else if found {
 			var replayErr error

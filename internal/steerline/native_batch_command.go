@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
-	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -81,7 +80,7 @@ func (c CommandService) CreateTaskBatch(ctx context.Context, config Config, data
 	if strings.TrimSpace(requestedBy) == "" {
 		requestedBy = DefaultRequestedBy()
 	}
-	if existing, found, e := lookupTaskBatchCommand(ctx, sqlite, c.Project, requestID); e != nil {
+	if existing, found, e := sqlite.lookupNativeCommand(ctx, c.Project, requestID); e != nil {
 		return TaskBatchReceipt{}, e
 	} else if found {
 		return replayTaskBatch(existing, canonicalPayload, batch.ProjectID, requestedBy)
@@ -99,7 +98,7 @@ func (c CommandService) CreateTaskBatch(ctx context.Context, config Config, data
 	payloadDigest := digestCanonical(canonicalPayload)
 	var receipt TaskBatchReceipt
 	err = c.Store.transactSQLite(ctx, func(tx *sqliteTx) error {
-		if old, found, e := lookupTaskBatchCommandTx(ctx, tx, c.Project, requestID); e != nil {
+		if old, found, e := tx.lookupNativeCommand(ctx, c.Project, requestID); e != nil {
 			return e
 		} else if found {
 			r, e := replayTaskBatch(old, canonicalPayload, batch.ProjectID, requestedBy)
@@ -188,36 +187,6 @@ func resolveTaskBatchEdges(batch TaskBatchInput) []TaskDependencyRecord {
 
 func taskBatchValidationError(issues []TaskBatchIssue, cycle []string) error {
 	return task.BatchValidationError(issues, cycle)
-}
-
-func lookupTaskBatchCommand(ctx context.Context, s *SQLiteStore, project, id string) (CommandRecord, bool, error) {
-	var out CommandRecord
-	var created, updated string
-	err := s.db.QueryRowContext(ctx, `SELECT project_identity,command_id,kind,target_id,expected_version,idempotency_key,requested_by,payload,status,result,created_at,updated_at FROM commands WHERE project_identity=? AND idempotency_key=?`, project, id).Scan(&out.ProjectIdentity, &out.CommandID, &out.Kind, &out.TargetID, &out.ExpectedVersion, &out.IdempotencyKey, &out.RequestedBy, &out.Payload, &out.Status, &out.Result, &created, &updated)
-	if errors.Is(err, sql.ErrNoRows) {
-		return out, false, nil
-	}
-	if err != nil {
-		return out, false, err
-	}
-	out.CreatedAt, _ = time.Parse(time.RFC3339Nano, created)
-	out.UpdatedAt, _ = time.Parse(time.RFC3339Nano, updated)
-	return out, true, nil
-}
-
-func lookupTaskBatchCommandTx(ctx context.Context, t *sqliteTx, project, id string) (CommandRecord, bool, error) {
-	var out CommandRecord
-	var created, updated string
-	err := t.tx.QueryRowContext(ctx, `SELECT project_identity,command_id,kind,target_id,expected_version,idempotency_key,requested_by,payload,status,result,created_at,updated_at FROM commands WHERE project_identity=? AND idempotency_key=?`, project, id).Scan(&out.ProjectIdentity, &out.CommandID, &out.Kind, &out.TargetID, &out.ExpectedVersion, &out.IdempotencyKey, &out.RequestedBy, &out.Payload, &out.Status, &out.Result, &created, &updated)
-	if errors.Is(err, sql.ErrNoRows) {
-		return out, false, nil
-	}
-	if err != nil {
-		return out, false, err
-	}
-	out.CreatedAt, _ = time.Parse(time.RFC3339Nano, created)
-	out.UpdatedAt, _ = time.Parse(time.RFC3339Nano, updated)
-	return out, true, nil
 }
 
 func replayTaskBatch(old CommandRecord, payload []byte, project, requestedBy string) (TaskBatchReceipt, error) {

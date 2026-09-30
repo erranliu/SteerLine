@@ -67,7 +67,7 @@ func (c CommandService) RecordNativeCleanupReceipt(ctx context.Context, taskID, 
 	if err != nil {
 		return TaskRecord{}, err
 	}
-	if old, found, lookupErr := lookupTaskBatchCommand(ctx, sqlite, c.Project, requestID); lookupErr != nil {
+	if old, found, lookupErr := sqlite.lookupNativeCommand(ctx, c.Project, requestID); lookupErr != nil {
 		return TaskRecord{}, lookupErr
 	} else if found {
 		return replayNativeCleanupReceipt(old, request, c.Project, taskID, requestedBy)
@@ -75,7 +75,7 @@ func (c CommandService) RecordNativeCleanupReceipt(ctx context.Context, taskID, 
 	nowAt := time.Now().UTC()
 	var result TaskRecord
 	err = sqlite.transactSQLite(ctx, func(tx *sqliteTx) error {
-		if old, found, lookupErr := lookupTaskBatchCommandTx(ctx, tx, c.Project, requestID); lookupErr != nil {
+		if old, found, lookupErr := tx.lookupNativeCommand(ctx, c.Project, requestID); lookupErr != nil {
 			return lookupErr
 		} else if found {
 			replayed, replayErr := replayNativeCleanupReceipt(old, request, c.Project, taskID, requestedBy)

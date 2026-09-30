@@ -63,7 +63,7 @@ func (c CommandService) DiscardNativeTask(ctx context.Context, config Config, ta
 	if err != nil {
 		return TaskDiscardReceipt{}, err
 	}
-	if old, found, e := lookupTaskBatchCommand(ctx, sqlite, c.Project, requestID); e != nil {
+	if old, found, e := sqlite.lookupNativeCommand(ctx, c.Project, requestID); e != nil {
 		return TaskDiscardReceipt{}, e
 	} else if found {
 		if old.Kind != "discard_task" || old.TargetID != taskID || old.ExpectedVersion != expectedVersion || old.RequestedBy != requestedBy || !bytes.Equal(old.Payload, canonicalRequest) {
@@ -97,7 +97,7 @@ func (c CommandService) DiscardNativeTask(ctx context.Context, config Config, ta
 	canonicalIntent, _ := CanonicalJSON(intentBytes)
 	var staged OperationRecord
 	err = sqlite.transactSQLite(ctx, func(tx *sqliteTx) error {
-		if old, found, e := lookupTaskBatchCommandTx(ctx, tx, c.Project, requestID); e != nil {
+		if old, found, e := tx.lookupNativeCommand(ctx, c.Project, requestID); e != nil {
 			return e
 		} else if found {
 			if old.Kind != "discard_task" || old.TargetID != taskID || old.ExpectedVersion != expectedVersion || old.RequestedBy != requestedBy || !bytes.Equal(old.Payload, canonicalRequest) {
@@ -143,7 +143,7 @@ func (c CommandService) DiscardNativeTask(ctx context.Context, config Config, ta
 		return e
 	})
 	if replay, ok := err.(taskBatchReplay); ok && replay.Receipt.Status == "accepted" {
-		old, found, e := lookupTaskBatchCommand(ctx, sqlite, c.Project, requestID)
+		old, found, e := sqlite.lookupNativeCommand(ctx, c.Project, requestID)
 		if e != nil {
 			return TaskDiscardReceipt{}, e
 		}
