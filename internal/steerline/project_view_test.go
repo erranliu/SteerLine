@@ -4,7 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"path/filepath"
 	"testing"
+	"time"
 )
 
 func requireProjectView(t *testing.T, view ProjectView) {
@@ -141,5 +143,43 @@ func TestProjectViewConnectionUsesSampledRuntime(t *testing.T) {
 	})
 	if unknown.State != ConnectionUnknown || unknown.CanControl {
 		t.Fatal("sampled runtime replaced the independent process check")
+	}
+}
+
+func TestProjectViewConnectionRechecksHeartbeatAtUse(t *testing.T) {
+	ctx := context.Background()
+	service := controlReviewService(t)
+	view, err := (QueryService{Store: service.domainStore, Project: service.Config.Identity()}).ReadProjectView(ctx, "", 500)
+	require(t, err)
+	requireProjectView(t, view)
+	for _, test := range []struct {
+		name      string
+		heartbeat time.Time
+		sampledAt time.Time
+		want      ServiceConnectionState
+		clockSkew bool
+	}{
+		{name: "expired since sampling", heartbeat: now().Add(-time.Hour), sampledAt: now().Add(-time.Hour).Add(time.Second), want: ConnectionStale},
+		{name: "heartbeat after sampling began", heartbeat: now(), sampledAt: now().Add(-time.Second), want: ConnectionConnected},
+		{name: "future heartbeat", heartbeat: now().Add(time.Hour), sampledAt: now(), want: ConnectionStale, clockSkew: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			runtime := *view.Runtime
+			runtime.HeartbeatAt = test.heartbeat
+			observation := ObserveRuntimeSnapshot(service.Config, &runtime, nil, test.sampledAt)
+			connection := ConnectServiceFromSnapshot(ctx, service.Config, observation)
+			if connection.State != test.want || connection.Snapshot.ClockSkew != test.clockSkew ||
+				!connection.Snapshot.SampledAt.Equal(test.sampledAt) || connection.Snapshot.Runtime != &runtime ||
+				connection.CanControl != (test.want == ConnectionConnected) {
+				t.Fatalf("connection trusted an outdated freshness classification: %+v", connection)
+			}
+		})
+	}
+	observation := ObserveRuntimeSnapshot(service.Config, view.Runtime, nil, view.SampledAt)
+	invalid := service.Config
+	invalid.Git.Executable = filepath.Join(t.TempDir(), "missing-git")
+	connection := ConnectServiceFromSnapshot(ctx, invalid, observation)
+	if connection.State != ConnectionIdentityError || connection.CanControl || connection.CanStart || connection.Snapshot.Runtime != observation.Runtime {
+		t.Fatal("failed identity check discarded the supplied read-only snapshot")
 	}
 }

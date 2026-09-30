@@ -188,14 +188,22 @@ func querySnapshot(ctx context.Context, db queryContext, project string) (Domain
 	return out, nil
 }
 
-func (s *SQLiteStore) Events(ctx context.Context, project, execution, attempt string, after int64, limit int) ([]DomainEvent, error) {
+// Events reads bounded metadata and materializes only the inline bodies that
+// fit payloadBudget. A zero budget reads metadata only, including lookahead.
+func (s *SQLiteStore) Events(ctx context.Context, project, execution, attempt string, after int64, limit, payloadBudget int) ([]DomainEvent, error) {
 	if limit < 1 {
 		limit = 200
 	}
 	if limit > 1000 {
 		limit = 1000
 	}
-	query := `SELECT event_id,project_identity,task_id,workflow_run_id,execution_id,attempt_id,external_source,external_id,type,received_at,payload_bytes,payload_digest,CASE WHEN payload_bytes <= 1048576 THEN payload ELSE X'' END FROM events WHERE project_identity=? AND event_id>?`
+	if payloadBudget < 0 {
+		return nil, errors.New("event payload budget cannot be negative")
+	}
+	payloadBudget = min(payloadBudget, MaxEventPageBytes)
+	// The window sums metadata before looking up payloads, so a batch of large
+	// events does not load bodies that the page will immediately discard.
+	query := `WITH batch AS (SELECT event_id,payload_bytes FROM events WHERE project_identity=? AND event_id>?`
 	args := []any{project, after}
 	if execution != "" {
 		query += ` AND execution_id=?`
@@ -205,8 +213,12 @@ func (s *SQLiteStore) Events(ctx context.Context, project, execution, attempt st
 		query += ` AND attempt_id=?`
 		args = append(args, attempt)
 	}
-	query += ` ORDER BY event_id LIMIT ?`
-	args = append(args, limit)
+	query += ` ORDER BY event_id LIMIT ?), bounded AS (
+		SELECT event_id,SUM(CASE WHEN payload_bytes<=? THEN payload_bytes ELSE 0 END) OVER (ORDER BY event_id) AS inline_bytes FROM batch
+	) SELECT e.event_id,e.project_identity,e.task_id,e.workflow_run_id,e.execution_id,e.attempt_id,e.external_source,e.external_id,e.type,e.received_at,e.payload_bytes,e.payload_digest,
+		CASE WHEN e.payload_bytes<=? AND b.inline_bytes<=? THEN e.payload ELSE X'' END
+		FROM bounded b JOIN events e ON e.event_id=b.event_id ORDER BY e.event_id`
+	args = append(args, limit, MaxEventPageBytes, MaxEventPageBytes, payloadBudget)
 	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err

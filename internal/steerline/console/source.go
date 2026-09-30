@@ -102,6 +102,7 @@ func (FileQuerySource) ReadProject(ctx context.Context, ref ProjectRef, selected
 	}
 	result.Observation = steerline.ObserveRuntimeSnapshot(c, view.Runtime, view.RuntimeError, view.SampledAt)
 	result.Connection = steerline.ConnectServiceFromSnapshot(ctx, c, result.Observation)
+	result.Observation = result.Connection.Snapshot
 	result.NativeTasks, result.SelectedNative, result.Domain = view.Tasks, view.SelectedTask, view.Domain
 	if view.TaskError != nil {
 		result.TaskError = view.TaskError.Error()

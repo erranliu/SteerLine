@@ -33,7 +33,7 @@ func TestWorkerCommitWritesOnlyDeclaredRowsAndCheckpoint(t *testing.T) {
 	if snapshot.Executions[0].LastEvent == nil || *snapshot.Executions[0].LastEvent != "committed worker diagnostic" {
 		t.Fatal("declared execution was not persisted")
 	}
-	events, err := s.domainStore.Events(ctx, s.Config.identity, run.ExecutionID, run.AttemptID, 0, 100)
+	events, err := s.domainStore.Events(ctx, s.Config.identity, run.ExecutionID, run.AttemptID, 0, 100, MaxEventPageBytes)
 	require(t, err)
 	if len(events) == 0 {
 		t.Fatal("worker event was not persisted")

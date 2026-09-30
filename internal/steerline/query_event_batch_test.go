@@ -9,12 +9,19 @@ import (
 
 type countingEventStore struct {
 	DomainStore
-	calls int
+	calls               int
+	maxPayloadBytesRead int
 }
 
-func (s *countingEventStore) Events(ctx context.Context, project, execution, attempt string, after int64, limit int) ([]DomainEvent, error) {
+func (s *countingEventStore) Events(ctx context.Context, project, execution, attempt string, after int64, limit, payloadBudget int) ([]DomainEvent, error) {
 	s.calls++
-	return s.DomainStore.Events(ctx, project, execution, attempt, after, limit)
+	events, err := s.DomainStore.Events(ctx, project, execution, attempt, after, limit, payloadBudget)
+	bytes := 0
+	for _, event := range events {
+		bytes += len(event.Payload)
+	}
+	s.maxPayloadBytesRead = max(s.maxPayloadBytesRead, bytes)
+	return events, err
 }
 
 func TestQueryEventBatchPagingPreservesByteBoundary(t *testing.T) {
@@ -101,5 +108,37 @@ func TestQueryEventBatchReadCountAndPageLimit(t *testing.T) {
 				t.Fatal("count-limited page did not continue exactly once to the end")
 			}
 		})
+	}
+}
+
+func TestQueryEventBatchDoesNotPrefetchUnusedLargeBodies(t *testing.T) {
+	ctx := context.Background()
+	store := openDomainTestStore(t)
+	const project = "event-payload-budget"
+	body := []byte(strings.Repeat("a", MaxEventPageBytes))
+	ids := []int64{}
+	require(t, store.Transact(ctx, func(tx DomainTx) error {
+		for i := 0; i < 4; i++ {
+			id, err := tx.AppendEvent(DomainEvent{ProjectIdentity: project, ExecutionID: "execution", ExternalSource: "budget", ExternalID: fmt.Sprint(i), Type: "message", Payload: body})
+			if err != nil {
+				return err
+			}
+			ids = append(ids, id)
+		}
+		return nil
+	}))
+	counted := &countingEventStore{DomainStore: store}
+	query := QueryService{Store: counted, Project: project}
+	cursor := ""
+	for i, id := range ids {
+		page, err := query.ReadEvents(ctx, EventFilter{ExecutionID: "execution"}, cursor, 200)
+		require(t, err)
+		if len(page.Events) != 1 || page.Events[0].EventID != id || page.Events[0].PayloadOmitted || len(page.Events[0].Payload) != MaxEventPageBytes || page.HasMore != (i < len(ids)-1) {
+			t.Fatal("byte-bounded batches skipped or omitted a usable event body")
+		}
+		if counted.maxPayloadBytesRead > MaxEventPageBytes {
+			t.Fatalf("batch allocated %d bytes for a %d-byte page", counted.maxPayloadBytesRead, MaxEventPageBytes)
+		}
+		cursor = page.NextCursor
 	}
 }

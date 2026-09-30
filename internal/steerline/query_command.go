@@ -123,7 +123,7 @@ func (q QueryService) ReadEvents(ctx context.Context, filter EventFilter, cursor
 	page := EventPage{Events: []DomainEvent{}}
 	for len(page.Events) < limit {
 		batchSize := min(eventReadBatchSize, limit-len(page.Events))
-		events, err := q.Store.Events(ctx, q.Project, filter.ExecutionID, filter.AttemptID, after, batchSize)
+		events, err := q.Store.Events(ctx, q.Project, filter.ExecutionID, filter.AttemptID, after, batchSize, MaxEventPageBytes-page.PayloadBytes)
 		if err != nil {
 			return EventPage{}, err
 		}
@@ -135,7 +135,7 @@ func (q QueryService) ReadEvents(ctx context.Context, filter EventFilter, cursor
 				ev.Payload = nil
 				ev.PayloadOmitted = true
 			}
-			if !ev.PayloadOmitted && page.PayloadBytes+len(ev.Payload) > MaxEventPageBytes {
+			if ev.PayloadBytes <= MaxEventPageBytes && page.PayloadBytes+ev.PayloadBytes > MaxEventPageBytes {
 				page.HasMore = true
 				break
 			}
@@ -149,7 +149,7 @@ func (q QueryService) ReadEvents(ctx context.Context, filter EventFilter, cursor
 	}
 	if len(page.Events) > 0 {
 		if !page.HasMore && len(page.Events) == limit {
-			more, err := q.Store.Events(ctx, q.Project, filter.ExecutionID, filter.AttemptID, after, 1)
+			more, err := q.Store.Events(ctx, q.Project, filter.ExecutionID, filter.AttemptID, after, 1, 0)
 			if err != nil {
 				return EventPage{}, err
 			}

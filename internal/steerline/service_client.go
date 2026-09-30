@@ -403,7 +403,7 @@ func connectServiceWithProbe(ctx context.Context, c Config, probe func(*ProcessI
 // Control commands still perform their own admission checks.
 func ConnectServiceFromSnapshot(ctx context.Context, c Config, obs ObservationSnapshot) ServiceConnection {
 	if err := c.ResolveIdentity(ctx); err != nil {
-		return ServiceConnection{State: ConnectionIdentityError, Diagnostic: "resolve repository identity: " + err.Error()}
+		return ServiceConnection{State: ConnectionIdentityError, Snapshot: obs, Diagnostic: "resolve repository identity: " + err.Error()}
 	}
 	return connectServiceFromSnapshot(ctx, c, obs, probeProcess)
 }
@@ -457,6 +457,15 @@ func connectServiceFromSnapshot(ctx context.Context, c Config, obs ObservationSn
 		connection.Process = ProcessProbe{State: ProcessUnknown, Reason: "runtime has no internally consistent service process identity"}
 	} else {
 		connection.Process = probe(rt.Service.ProcessIdentity)
+	}
+	// Database sampling can finish long after it began, or the caller can reuse
+	// an older observation. Freshness belongs to this connection check, while
+	// SampledAt continues to identify the supplied database sample.
+	if obs.State == SnapshotValid || obs.State == SnapshotStale {
+		sampledAt := obs.SampledAt
+		obs = ObserveRuntimeSnapshot(c, rt, nil, time.Now())
+		obs.SampledAt = sampledAt
+		connection.Snapshot = obs
 	}
 	if connection.Process.State == ProcessAbsent || connection.Process.State == ProcessReused {
 		if !instanceBound {

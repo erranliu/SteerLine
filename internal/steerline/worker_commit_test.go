@@ -34,7 +34,7 @@ func TestWorkerCommitRollsBackRecordsReceiptsEventsAndCheckpoint(t *testing.T) {
 	if revision != nextRevision || !bytes.Equal(before, after) || recordFingerprint(original) != recordFingerprint(durable) {
 		t.Fatal("failed checkpoint changed durable business state or receipt")
 	}
-	events, err := service.domainStore.Events(ctx, service.Config.Identity(), run.RunID, "", 0, 1000)
+	events, err := service.domainStore.Events(ctx, service.Config.Identity(), run.RunID, "", 0, 1000, MaxEventPageBytes)
 	require(t, err)
 	for _, saved := range events {
 		if saved.ExternalID == event.ExternalID {
@@ -74,7 +74,7 @@ func TestCheckpointAndReadViewsCannotPublishWorkerCandidates(t *testing.T) {
 	if recordFingerprint(durable) != original || len(service.pendingEvents) != 1 {
 		t.Fatal("checkpoint or heartbeat wrote or consumed business candidates")
 	}
-	events, err := service.domainStore.Events(ctx, service.Config.Identity(), "", "", 0, 1000)
+	events, err := service.domainStore.Events(ctx, service.Config.Identity(), "", "", 0, 1000, MaxEventPageBytes)
 	require(t, err)
 	for _, event := range events {
 		if event.ExternalSource == "unpublished" {
