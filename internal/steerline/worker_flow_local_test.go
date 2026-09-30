@@ -9,6 +9,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
+	"github.com/erranliu/SteerLine/internal/steerline/workerflow"
 	"io"
 	"net"
 	"net/http"
@@ -27,12 +29,12 @@ func TestWorkerFlowPromptIncludesFixedWorkflowRunID(t *testing.T) {
 	contract := TaskContract{ContractID: "fixed", Branch: "main", SpecRef: FileReference{Path: "docs/spec/task.spec.md"}, PlanRef: FileReference{Path: "docs/spec/task.plan.md"}}
 	runID := strings.Repeat("a", 32)
 	for _, localPublish := range []bool{false, true} {
-		prompt, err := workerFlowPrompt(task, contract, runID, localPublish)
+		prompt, err := workerflow.Prompt(task, contract, runID, localPublish)
 		if err != nil || !strings.Contains(prompt, "Fixed SteerLine workflow_run_id: "+runID) || strings.Contains(prompt, "Orca Run, Task and Dispatch IDs are separate") == localPublish {
 			t.Fatalf("worker prompt omitted its fixed center identity: %q / %v", prompt, err)
 		}
 	}
-	if _, err := workerFlowPrompt(task, contract, "", false); err == nil {
+	if _, err := workerflow.Prompt(task, contract, "", false); err == nil {
 		t.Fatal("worker prompt accepted a missing workflow run ID")
 	}
 }
@@ -48,7 +50,7 @@ func TestWorkerTurnFindsPRBeforeFinalMessage(t *testing.T) {
 	if err := os.WriteFile(path, []byte(events), 0600); err != nil {
 		t.Fatal(err)
 	}
-	outcome, err := readWorkerTurnOutcome(path)
+	outcome, err := codexworker.ReadExecOutcome(path)
 	if err != nil || !outcome.Completed || outcome.LastMessage != "Work is ready." || len(outcome.PRCandidates) != 1 || outcome.PRCandidates[0] != "https://git.example/o/r/pulls/8" {
 		t.Fatalf("lost an earlier PR clue: outcome=%+v err=%v", outcome, err)
 	}

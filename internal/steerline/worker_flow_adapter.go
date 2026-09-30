@@ -4,9 +4,50 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
+	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
+	"os/exec"
 
 	"github.com/erranliu/SteerLine/internal/steerline/workerflow"
 )
+
+type workerFeedbackRoute string
+
+const (
+	feedbackLocalAppServer workerFeedbackRoute = "local_app_server"
+	feedbackNativeOrca     workerFeedbackRoute = "native_orca"
+	feedbackSupervisedOrca workerFeedbackRoute = "supervised_orca"
+)
+
+// workerFeedbackRouteFor binds feedback to the execution recorded at claim
+// time, including projects that do not use named execution profiles.
+func workerFeedbackRouteFor(config Config, run *Run, execution *ExecutionRecord) (workerFeedbackRoute, error) {
+	if run == nil || execution == nil {
+		return "", &BackendError{Code: BackendIdentityMismatch, Diagnostic: "worker feedback has no fixed run or execution"}
+	}
+	backend, protocol, err := ExecutionBackendKind(config.hostName())
+	if err != nil {
+		return "", err
+	}
+	if backend == string(BackendLocal) {
+		protocol = string(ProtocolLocalCodexAppServer)
+	}
+	if run.Host != config.hostName() || run.Agent != config.agentName() || execution.Agent != run.Agent ||
+		run.Backend != backend || execution.Backend != backend || run.Protocol != protocol || execution.Protocol != protocol ||
+		run.Target.ID == "" || run.Target.ID != execution.Target.ID || run.Target.ID != targetFor(config).ID {
+		return "", &BackendError{Code: BackendIdentityMismatch, Diagnostic: "fixed worker feedback target differs from its persisted execution"}
+	}
+	switch ExecutionProtocol(protocol) {
+	case ProtocolLocalCodexAppServer:
+		return feedbackLocalAppServer, nil
+	case ProtocolOrcaTerminalV2:
+		return feedbackNativeOrca, nil
+	case ProtocolOrcaSupervised:
+		return feedbackSupervisedOrca, nil
+	default:
+		return "", fmt.Errorf("unsupported worker feedback protocol %q", protocol)
+	}
+}
 
 // The service is the only writer. Mode selection carries no Service reference.
 func (s *Service) workerFlowMode(run *Run) (workerflow.Mode, error) {
@@ -200,4 +241,43 @@ func (s *Service) acceptStartedWorkerTurn(run *Run, worker *Worker, events, plat
 	s.registerWorker(run, worker)
 	s.note(run, "steer", "worker", "accepted", "original worker turn accepted", commandID, map[string]any{"session_id": execution.SessionID, "turn_number": execution.TurnNumber + 1})
 	return nil
+}
+
+func requireWorkerFlowCapabilities(ctx context.Context, c Config) error {
+	if c.hostName() == "orca" {
+		if c.Profile != "" || c.Sandbox != "workspace-write" || (c.Model == "") != (c.ReasoningEffort == "") {
+			return &BackendError{Code: BackendUnsupported, Diagnostic: "Orca requires workspace-write, no Codex profile, and model with reasoning_effort together"}
+		}
+		if err := orcaworker.CheckStatus(ctx, orcaWorkerCaller(c)); err != nil {
+			return err
+		}
+		_, err := nativeOrcaRepo(ctx, c)
+		return err
+	}
+	if c.agentName() != "codex" {
+		return &BackendError{Code: BackendUnsupported, Diagnostic: "resumable worker flow requires Codex"}
+	}
+	if c.hostName() != "local" {
+		return &BackendError{Code: BackendUnsupported, Diagnostic: "this worker-flow host is not supported"}
+	}
+	command := c.Codex
+	if err := resolveCommand(&command); err != nil {
+		return err
+	}
+	c.Codex = command
+	runner := Runner{Dir: c.Repository, Timeout: duration(c.CommandTimeout)}
+	err := codexworker.ProbeCapabilities(ctx, codexworker.ProbeConfig{
+		Executable: command.Executable, Args: command.Args, Repository: c.Repository, RunDir: c.RunDir,
+	}, codexworker.ProbePort{
+		Output: func(ctx context.Context, executable string, args []string) ([]byte, error) {
+			return runner.Output(ctx, Command{Executable: executable, Args: args})
+		},
+		HistoryAvailable: func(ctx context.Context) bool { return nativeCodexHistoryAvailable(ctx, c) },
+		StartDetached:    func(cmd *exec.Cmd) error { _, err := startDetachedProcess(cmd); return err },
+	})
+	var unsupported *codexworker.ProbeError
+	if errors.As(err, &unsupported) {
+		return &BackendError{Code: BackendUnsupported, Diagnostic: unsupported.Diagnostic, Cause: unsupported.Cause}
+	}
+	return err
 }

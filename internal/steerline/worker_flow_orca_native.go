@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	"path/filepath"
 	"strings"
 	"time"
@@ -982,7 +983,7 @@ func (s *Service) pollNativeOrcaWorker(ctx context.Context, run *Run) error {
 }
 
 func (s *Service) bindNativeOrcaPR(ctx context.Context, run *Run, workflow *WorkflowRunRecord, execution *ExecutionRecord, body string) error {
-	return s.bindNativeOrcaPRCandidates(ctx, run, workflow, execution, workerPRClues(body))
+	return s.bindNativeOrcaPRCandidates(ctx, run, workflow, execution, codexworker.PRClues(body))
 }
 
 func (s *Service) bindNativeOrcaPRCandidates(ctx context.Context, run *Run, workflow *WorkflowRunRecord, execution *ExecutionRecord, urls []string) error {
