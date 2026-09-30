@@ -6,7 +6,7 @@
 
 | 范围 | 方法与结果 |
 | --- | --- |
-| Windows 受限 Job 内启动与停服 | `TestWindowsOwnedWorkerRunsInJobAndStopsWithOwner` 在本机创建受管进程，`IsProcessInJob=true`，关闭归属 Job 后原进程退出。worker 启动不依赖 `CREATE_BREAKAWAY_FROM_JOB`；独立服务启动的脱离核验仍然严格。 |
+| Windows 受限 Job 内启动与停服 | `TestWindowsOwnedWorkerRunsInJobAndStopsWithOwner` 在本机创建受管父子进程树，确认子进程属于同一 Job；关闭归属 Job 后父子进程均退出。worker 启动不依赖 `CREATE_BREAKAWAY_FROM_JOB`；独立服务启动的脱离核验仍然严格。 |
 | 本地停服人工继续 | `STEERLINE_WORKER_RECOVERY_LIVE=1 go test ./internal/steerline -run '^TestLocalCodexManualRecoveryLive$' -count=1 -timeout=12m -v` 通过。子进程在原生问题待答时 `os.Exit`，原受管 app-server 随归属 Job 关闭。重开只创建待决策记录，没有新 worker/turn；人工选择“原 Codex 会话继续”后创建新 Attempt/进程，恢复原 thread，完成不同的新 turn。 |
 | 本地进程与原生身份 | 最新主线真机输出：旧 PID `44576`、新 PID `32712`；thread `01a0f0e0-7863-7180-8297-2b74b7ffa2d3`；旧 turn `01a0f0e0-79cb-7b03-ac0f-1098470ca286`、新 turn `01a0f0e0-a547-77c2-8380-7c6e33d7e2fb`；旧 Attempt `049af837bad13737be3cae2597896f16`、新 Attempt `ae57f3d35b03806dca804d5911b29774`。旧问题为“Should I reply A or B?”；旧原生 request 不被重用。测试结束清理新进程。 |
 | 本地模式、历史与重复 | `TestWorkerFlowServiceFirstFeedbackKeepsSessionAndWorkspace` 覆盖自由文字、选项加备注、等待合并 PR 的反馈及明确的“新会话继续”。断言当前 HEAD/工作区保留、旧新 `process.json` 分属各 Attempt、旧 Attempt 保存进程/thread、迟到旧事件不能推进新 Attempt、重复应用不增建 Attempt。“新会话继续”在 mock 中以新 Attempt 的 `thread/start` 回执核对；mock 返回固定 thread ID，因此不作为不同真实 UUID 的证明。 |
@@ -26,4 +26,4 @@ Orca agent/terminal 已退出、runtime 或 incarnation 无法核实时，当前
 
 ## 质量审计补验
 
-审计发现领取事务与随后 Service 保存之间存在窗口：若此时退出，未保存服务归属的 Execution 可能被下一个实例当作首次启动。现在领取事务直接写入服务实例；缺少归属的已领取 Execution 进入人工恢复门槛。已接受的旧答案也会先经过来源 Attempt、恢复版本和服务实例时间核验，再允许从等待 PR 合并阶段进入反馈阶段。核验未知的 Orca agent 现在进入统一待决策并保持不可回复；原轮次 `worker-turn` 操作结果不明时，人工继续不能跳过该操作。相关定向测试和 quick 入口在本次审计后通过。
+审计发现领取事务与随后 Service 保存之间存在窗口：若此时退出，未保存服务归属的 Execution 可能被下一个实例当作首次启动。现在领取事务直接写入服务实例；缺少归属的已领取 Execution 进入人工恢复门槛。已接受的旧答案也会先经过来源 Attempt、恢复版本和服务实例时间核验，再允许从等待 PR 合并阶段进入反馈阶段。核验未知的 Orca agent 现在进入统一待决策并保持不可回复；原轮次 `worker-turn` 操作结果不明时，人工继续不能跳过该操作。Windows 受管 Job 定向测试又验证了关闭归属后子进程一同退出。相关定向测试和 quick 入口在本次审计后通过。
