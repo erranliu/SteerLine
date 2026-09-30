@@ -21,3 +21,7 @@
 - `git diff --check`：通过。
 
 EW1 对应依赖检查与唯一生产接线；EW2 对应有效 linked worktree、外仓身份拒绝及固定清理核验；EW3 对应四个 Git 目录与 argv 分离、准备事实和清理部分回执对账。没有运行真实 Orca、真实 Codex 权限变更或全平台故障矩阵。
+
+## 独立复审修复
+
+协调 session 发现 `Prepare` 在创建后只通过 `Inspect` 验证 base ancestry，丢失原实现的新工作区 HEAD 必须等于 pinned base 的检查。真实 `post-checkout` hook 追加提交可以复现错误确认。现已在确认准备成功前调用严格初始身份校验，失败仍保留注册、分支与实际 HEAD 事实；不 reset 或重建现场。`TestPrepareRejectsHeadChangedByCheckoutHook` 在修复前失败、修复后通过，workspace 包及三条受影响中心定向测试通过。

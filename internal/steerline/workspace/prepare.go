@@ -64,6 +64,10 @@ func Prepare(ctx context.Context, git Git, repository Repository, root string, i
 		result = observePreparation(ctx, git, repository, intent, result)
 		return result, err
 	}
+	if err := Verify(ctx, git, repository, intent, true); err != nil {
+		result = observePreparation(ctx, git, repository, intent, result)
+		return result, err
+	}
 	inspection, err := Inspect(ctx, git, repository, intent)
 	if err != nil {
 		result = observePreparation(ctx, git, repository, intent, result)

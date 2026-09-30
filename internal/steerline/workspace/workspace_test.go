@@ -116,3 +116,37 @@ func prepareGitFixture(t *testing.T, git Git, path string) {
 		}
 	}
 }
+
+func TestPrepareRejectsHeadChangedByCheckoutHook(t *testing.T) {
+	ctx := context.Background()
+	git := Git{Command: execution.LaunchCommand{Executable: "git"}, Timeout: 15 * time.Second, Start: func(cmd *exec.Cmd) (execution.StopHandle, error) {
+		if err := cmd.Start(); err != nil {
+			return nil, err
+		}
+		return testProcess{cmd.Process}, nil
+	}}
+	root := t.TempDir()
+	path := filepath.Join(root, "repository")
+	prepareGitFixture(t, git, path)
+	repository, err := ResolveRepository(ctx, git, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	head, err := git.Output(ctx, path, "rev-parse", "HEAD")
+	if err != nil {
+		t.Fatal(err)
+	}
+	hook := []byte("#!/bin/sh\ngit -c user.name=Fixture -c user.email=fixture@example.invalid commit --allow-empty -q -m hook\n")
+	if err := os.WriteFile(filepath.Join(repository.CommonDir, "hooks", "post-checkout"), hook, 0700); err != nil {
+		t.Fatal(err)
+	}
+	worktreeRoot := filepath.Join(root, "worktrees")
+	intent := &Intent{Path: filepath.Join(worktreeRoot, "hook-run"), Branch: "codex/hook", BaseCommit: strings.TrimSpace(string(head))}
+	result, err := Prepare(ctx, git, repository, worktreeRoot, intent)
+	if err == nil || result.Status == execution.OperationConfirmed {
+		t.Fatalf("changed initial HEAD was accepted: result=%+v err=%v", result, err)
+	}
+	if !result.PathCreated || !result.WorktreeRegistered || !result.BranchPresent || result.Inspection == nil || result.Inspection.Head == intent.BaseCommit {
+		t.Fatalf("changed workspace evidence was lost: %+v", result)
+	}
+}
