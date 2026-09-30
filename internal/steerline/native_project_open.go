@@ -59,9 +59,9 @@ func OpenNativeTaskProject(ctx context.Context, c *Config) (*SQLiteStore, error)
 		return nil, err
 	}
 	authority := ProjectTaskAuthority{ProjectIdentity: c.Identity(), Authority: "native", AuthorityVersion: 1, GraphRevision: 0, Repository: targetRepository, Remote: c.Remote, Branch: c.Branch, DispatchMode: "manual", DispatchPaused: true, CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}
-	err = db.Transact(ctx, func(tx DomainTx) error {
+	err = db.transactSQLite(ctx, func(tx *sqliteTx) error {
 		var count int
-		if err := tx.(*sqliteTx).tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM tasks`).Scan(&count); err != nil {
+		if err := tx.tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM tasks`).Scan(&count); err != nil {
 			return err
 		}
 		if count != 0 {

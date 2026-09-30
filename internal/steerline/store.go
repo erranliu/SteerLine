@@ -94,8 +94,8 @@ func (s *Store) Heartbeat() error {
 	if s.failure != nil || s.Domain == nil {
 		return s.failure
 	}
-	if err := s.Domain.Transact(context.Background(), func(tx DomainTx) error {
-		return tx.(*sqliteTx).heartbeatProjection(s.Project)
+	if err := s.Domain.transactSQLite(context.Background(), func(tx *sqliteTx) error {
+		return tx.heartbeatProjection(s.Project)
 	}); err != nil {
 		s.failure = fmt.Errorf("database projection heartbeat failed: %w", err)
 		return s.failure

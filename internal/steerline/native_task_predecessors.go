@@ -74,8 +74,7 @@ func (c CommandService) AddNativeTaskPredecessors(ctx context.Context, config Co
 		return empty, err
 	}
 	var receipt TaskPredecessorAddReceipt
-	err = store.Transact(ctx, func(domainTx DomainTx) error {
-		tx := domainTx.(*sqliteTx)
+	err = store.transactSQLite(ctx, func(tx *sqliteTx) error {
 		if previous, found, lookupErr := lookupTaskBatchCommandTx(ctx, tx, c.Project, input.RequestID); lookupErr != nil {
 			return lookupErr
 		} else if found {

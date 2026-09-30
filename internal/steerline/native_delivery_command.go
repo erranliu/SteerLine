@@ -164,8 +164,7 @@ func (c CommandService) recordDiscardedMergeConflict(ctx context.Context, s *SQL
 	if err != nil {
 		return err
 	}
-	err = s.Transact(ctx, func(domainTx DomainTx) error {
-		tx := domainTx.(*sqliteTx)
+	err = s.transactSQLite(ctx, func(tx *sqliteTx) error {
 		graph, e := taskGraphSnapshotTx(ctx, tx, c.Project)
 		if e != nil {
 			return e
@@ -234,11 +233,7 @@ func validateNativeDeliveryGates(record TaskRecord, contract TaskContract, workf
 
 func (c CommandService) commitNativeDelivery(ctx context.Context, s *SQLiteStore, expectedAuthorityVersion uint64, task TaskRecord, workflow WorkflowRunRecord, execution ExecutionRecord, contract TaskContract, prURL string, delivery TaskDeliveryRecord) (TaskDeliveryReceipt, error) {
 	var receipt TaskDeliveryReceipt
-	err := s.Transact(ctx, func(domainTx DomainTx) error {
-		tx, ok := domainTx.(*sqliteTx)
-		if !ok {
-			return errors.New("delivery requires the center SQLite transaction")
-		}
+	err := s.transactSQLite(ctx, func(tx *sqliteTx) error {
 		graph, err := taskGraphSnapshotTx(ctx, tx, c.Project)
 		if err != nil {
 			return err

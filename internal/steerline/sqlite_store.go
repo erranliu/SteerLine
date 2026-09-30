@@ -143,6 +143,15 @@ func openSQLiteInspector(path string) (*SQLiteStore, error) {
 func (s *SQLiteStore) Close() error { return s.db.Close() }
 
 func (s *SQLiteStore) Transact(ctx context.Context, fn func(DomainTx) error) error {
+	if fn == nil {
+		return s.transactSQLite(ctx, nil)
+	}
+	return s.transactSQLite(ctx, func(tx *sqliteTx) error { return fn(tx) })
+}
+
+// transactSQLite gives center-owned writes the concrete transaction they need.
+// Transact retains the DomainStore contract for callers using only DomainTx.
+func (s *SQLiteStore) transactSQLite(ctx context.Context, fn func(*sqliteTx) error) error {
 	if s.readOnly {
 		return errors.New("SQLite reader is read-only")
 	}
