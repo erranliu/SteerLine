@@ -2,9 +2,7 @@ package steerline
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
-	"path/filepath"
 	"strings"
 
 	"github.com/erranliu/SteerLine/internal/steerline/workerflow"
@@ -280,31 +278,24 @@ func (s *Service) eventWorkerFlowFor(run *Run, ev WorkerEvent) (resultErr error)
 		}
 		return nil
 	}
-	if ev.Session != "" {
-		if !codexThreadID.MatchString(ev.Session) || execution.SessionID != "" && execution.SessionID != ev.Session {
-			return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "worker event changed the original Codex session"}
-		}
-		execution.SessionID = ev.Session
+	mode, err := s.workerFlowMode(run)
+	if err != nil {
+		return err
+	}
+	fact, err := decodeWorkerFlowEvent(mode, ev, execution, run.Decision != nil && run.Decision.Request.NativeAsk != nil)
+	if err != nil {
+		return err
+	}
+	if fact.SessionID != "" {
+		execution.SessionID = fact.SessionID
 		s.refreshRun(run)
 	}
-	if ev.Activity.Kind == "turn" && ev.Activity.Status == "started" && run.Protocol == string(ProtocolLocalCodexAppServer) {
-		var params struct {
-			ThreadID string `json:"threadId"`
-			Turn     struct {
-				ID string `json:"id"`
-			} `json:"turn"`
-		}
-		if ev.AppServer == nil || json.Unmarshal(ev.AppServer.Params, &params) != nil || params.ThreadID != execution.SessionID {
-			return errors.New("app-server turn start changed its fixed thread")
-		}
-		if err := s.recordAppServerTurnStarted(run, workflow, execution, params.Turn.ID); err != nil {
+	if fact.StartedTurnID != "" && fact.Question == nil && mode == workerflow.LocalCodex {
+		if err := s.recordAppServerTurnStarted(run, workflow, execution, fact.StartedTurnID); err != nil {
 			return err
 		}
-	} else if ev.Activity.Kind == "turn" && ev.Activity.Status == "started" {
-		turnID := execution.PendingTurnID
-		if turnID == "" {
-			turnID = execution.CurrentTurnID
-		}
+	} else if fact.StartedTurnID != "" {
+		turnID := fact.StartedTurnID
 		commandID := turnID
 		if err := BeginWorkerTurn(workflow, execution, execution.SessionID, turnID); err != nil {
 			return err
@@ -333,12 +324,8 @@ func (s *Service) eventWorkerFlowFor(run *Run, ev WorkerEvent) (resultErr error)
 		execution.TurnEndedAt = nil
 		s.refreshRun(run)
 	}
-	if ev.AppServer != nil && ev.AppServer.Method == "item/tool/call" {
-		call, err := parseCodexAskCall(*ev.AppServer, execution.SessionID, execution.CurrentTurnID)
-		if err != nil {
-			return err
-		}
-		call.Generation = execution.AppServerGeneration
+	if fact.Question != nil {
+		call := *fact.Question
 		if run.Decision != nil && run.Decision.Request.NativeAsk != nil && run.Decision.Request.NativeAsk.CallID == call.CallID {
 			// Replayed notification for the original request.
 		} else {
@@ -367,44 +354,16 @@ func (s *Service) eventWorkerFlowFor(run *Run, ev WorkerEvent) (resultErr error)
 		s.refreshRun(run)
 		s.note(run, "steer", "decision", "pending", "Codex is waiting for an answer in the current turn", call.CallID, decisionMeta(run))
 	}
-	if ev.AppServer != nil && ev.AppServer.Method == "item/completed" && run.Decision != nil && run.Decision.Request.NativeAsk != nil {
-		var params struct {
-			ThreadID string `json:"threadId"`
-			TurnID   string `json:"turnId"`
-			Item     struct {
-				ID           string `json:"id"`
-				Type         string `json:"type"`
-				Status       string `json:"status"`
-				Success      *bool  `json:"success"`
-				ContentItems []struct {
-					Type string `json:"type"`
-					Text string `json:"text"`
-				} `json:"contentItems"`
-			} `json:"item"`
-		}
-		if json.Unmarshal(ev.AppServer.Params, &params) != nil || params.ThreadID != execution.SessionID || params.TurnID != execution.CurrentTurnID {
-			return errors.New("app-server tool completion changed native identity")
-		}
+	if fact.ToolReply != nil && run.Decision != nil && run.Decision.Request.NativeAsk != nil {
+		reply := fact.ToolReply
 		ask := run.Decision.Request.NativeAsk
-		if params.Item.Type == "dynamicToolCall" && params.Item.ID == ask.CallID {
-			matchedAnswer := false
-			for _, content := range params.Item.ContentItems {
-				if content.Type == "inputText" {
-					var body struct {
-						Answers map[string][]string `json:"answers"`
-					}
-					if json.Unmarshal([]byte(content.Text), &body) == nil && digestValue(body.Answers) == digestValue(run.Decision.Answers) {
-						matchedAnswer = true
-						break
-					}
-				}
-			}
-			if run.Decision.Status == "answer_saved" && params.Item.Status == "completed" && params.Item.Success != nil && *params.Item.Success && matchedAnswer {
+		if reply.CallID == ask.CallID {
+			if run.Decision.Status == "answer_saved" && reply.Status == "completed" && reply.Success != nil && *reply.Success && reply.matchesAnswers(run.Decision.Answers) {
 				confirmed := false
 				for _, op := range s.State.Operations {
 					if op.IdempotencyKey == "appserver-answer:"+execution.ExecutionID+":"+run.Decision.ID && (op.Status == "in_flight" || op.Status == "accepted" || op.Status == "outcome_unknown" || op.Status == "confirmed") {
 						if op.Status != "confirmed" {
-							if err := s.setOperationState(op.OperationID, "confirmed", ask.CallID, mustJSON(map[string]any{"tool_item_id": params.Item.ID, "native_status": params.Item.Status, "success": true}), ""); err != nil {
+							if err := s.setOperationState(op.OperationID, "confirmed", ask.CallID, mustJSON(map[string]any{"tool_item_id": reply.CallID, "native_status": reply.Status, "success": true}), ""); err != nil {
 								return err
 							}
 						}
@@ -434,7 +393,7 @@ func (s *Service) eventWorkerFlowFor(run *Run, ev WorkerEvent) (resultErr error)
 					}
 					s.refreshRun(run)
 				}
-			} else if params.Item.Status == "failed" || params.Item.Success != nil && !*params.Item.Success {
+			} else if reply.Status == "failed" || reply.Success != nil && !*reply.Success {
 				execution.Error = ptr("Codex rejected the saved answer for its original tool call")
 				s.refreshRun(run)
 			}
@@ -468,77 +427,44 @@ func (s *Service) finishWorkerFlowFor(run *Run, workerErr error) error {
 	if task := nativeTaskRecord(s.State.Tasks, run.DomainTaskID); task != nil && (task.Status == "closed" || task.Status == "discarded") {
 		return nil // A late process exit cannot reopen a terminal Task.
 	}
-	turnID := execution.CurrentTurnID
-	if turnID == "" {
-		turnID = execution.PendingTurnID
+	mode, err := s.workerFlowMode(run)
+	if err != nil {
+		return err
 	}
-	if run.Protocol == string(ProtocolLocalCodexAppServer) && !codexThreadID.MatchString(turnID) || run.Protocol != string(ProtocolLocalCodexAppServer) && !stableExecutionID(turnID) {
-		return s.waitWorkerFlow(run, "The original worker exited without a saved turn identity")
-	}
-	events := filepath.Join(c.RunDir, "runs", run.RunID, "turns", turnID, "events.jsonl")
-	var outcome workerTurnOutcome
-	var readErr error
-	if run.Protocol == string(ProtocolLocalCodexAppServer) {
-		commandID := execution.CurrentCommandID
-		if commandID == "" {
-			commandID = execution.PendingCommandID
-		}
-		if !stableExecutionID(commandID) || !codexThreadID.MatchString(turnID) {
-			return s.waitWorkerFlow(run, "Original app-server turn lacks a fixed command or native turn identity")
-		}
-		events = filepath.Join(c.RunDir, "runs", run.RunID, "turns", commandID, "appserver.jsonl")
-		outcome, readErr = readAppServerTurnOutcome(events, execution.SessionID, turnID)
-	} else {
-		outcome, readErr = readWorkerTurnOutcome(events)
-	}
-	if readErr != nil || !outcome.Started || outcome.SessionID == "" || execution.SessionID != "" && execution.SessionID != outcome.SessionID {
-		reason := "The original worker exited, but its turn output is insufficient to determine the result"
-		if readErr != nil {
-			reason += ": " + readErr.Error()
-		}
-		execution.Status = "idle"
-		if run.Protocol == string(ProtocolLocalCodexAppServer) {
-			execution.Status = "blocked"
-		}
+	evidence, readErr := readWorkerTurnEvidence(fixed, mode)
+	if readErr != nil {
 		execution.Status = "blocked"
 		s.refreshRun(run)
-		return s.waitWorkerFlow(run, reason)
+		return s.waitWorkerFlow(run, readErr.Error())
 	}
+	turnID := evidence.TurnID
 	if execution.CurrentTurnID == "" {
-		if err := BeginWorkerTurn(workflow, execution, outcome.SessionID, turnID); err != nil {
+		if err := BeginWorkerTurn(workflow, execution, evidence.SessionID, turnID); err != nil {
 			return s.waitWorkerFlow(run, "Original turn start could not be reconciled: "+err.Error())
 		}
 		s.refreshRun(run)
 		for _, operation := range s.State.Operations {
-			commandID := turnID
-			if run.Protocol == string(ProtocolLocalCodexAppServer) {
-				commandID = execution.PendingCommandID
-			}
-			if operation.IdempotencyKey == "worker-turn:"+run.ExecutionID+":"+commandID && operation.Status != "confirmed" {
+			if operation.IdempotencyKey == "worker-turn:"+run.ExecutionID+":"+evidence.CommandID && operation.Status != "confirmed" {
 				requestID := operation.PlatformRequestID
 				if requestID == "" {
 					requestID = turnID
 				}
-				if err := s.setOperationState(operation.OperationID, "confirmed", requestID, mustJSON(map[string]string{"session_id": outcome.SessionID, "turn_id": turnID}), ""); err != nil {
+				if err := s.setOperationState(operation.OperationID, "confirmed", requestID, mustJSON(map[string]string{"session_id": evidence.SessionID, "turn_id": turnID}), ""); err != nil {
 					return err
 				}
 				break
 			}
 		}
 	}
-	if !outcome.Completed {
-		execution.Status = "idle"
-		if run.Protocol == string(ProtocolLocalCodexAppServer) {
-			execution.Status = "blocked"
-		}
+	if !evidence.Completed {
 		execution.Status = "blocked"
 		s.refreshRun(run)
 		return s.waitWorkerFlow(run, "The original worker process exited without a confirmed completed turn; its output and session are retained")
 	}
-	if run.Protocol == string(ProtocolLocalCodexAppServer) {
+	if evidence.LocalCodex {
 		execution.PendingAsks = nil // Requests from a terminal turn cannot enter a later turn.
 	}
-	if run.Protocol == string(ProtocolLocalCodexAppServer) && run.Decision != nil && run.Decision.Request.NativeAsk != nil {
+	if evidence.LocalCodex && run.Decision != nil && run.Decision.Request.NativeAsk != nil {
 		if run.Decision.Status == "pending" {
 			s.setDecisionStatus(run, "superseded")
 			if err := s.save(); err != nil {
@@ -562,7 +488,7 @@ func (s *Service) finishWorkerFlowFor(run *Run, workerErr error) error {
 		answer, answerErr := ReadDecisionAnswer(run)
 		if answerErr == nil {
 			command, commandErr := s.domainStore.CommandByIdempotency(context.Background(), c.identity, decisionAnswerKey(answer))
-			if commandErr == nil && command.Kind == "answer_decision" && (command.CommandID == turnID || run.Protocol == string(ProtocolLocalCodexAppServer) && command.CommandID == execution.CurrentCommandID) {
+			if commandErr == nil && command.Kind == "answer_decision" && (command.CommandID == turnID || evidence.LocalCodex && command.CommandID == execution.CurrentCommandID) {
 				s.setDecisionStatus(run, "reply_accepted")
 			}
 		}
@@ -571,14 +497,11 @@ func (s *Service) finishWorkerFlowFor(run *Run, workerErr error) error {
 	if workerErr != nil {
 		issue = workerErr.Error()
 	}
-	if outcome.Failure != "" {
-		issue = strings.TrimSpace(issue + "; " + outcome.Failure)
+	if evidence.Failure != "" {
+		issue = strings.TrimSpace(issue + "; " + evidence.Failure)
 	}
-	if run.Protocol == string(ProtocolLocalCodexAppServer) && outcome.NativeStatus != "completed" {
-		outcome.PRCandidates = nil
-	}
-	if len(outcome.PRCandidates) == 1 {
-		candidate := outcome.PRCandidates[0]
+	if len(evidence.PRCandidates) == 1 {
+		candidate := evidence.PRCandidates[0]
 		workflow.PRCandidateURL = candidate
 		info, err := s.prs.Query(context.Background(), candidate)
 		if err == nil {
@@ -587,30 +510,24 @@ func (s *Service) finishWorkerFlowFor(run *Run, workerErr error) error {
 		if err != nil {
 			issue = strings.TrimSpace(issue + "; PR link is not verified: " + err.Error())
 		}
-	} else if len(outcome.PRCandidates) > 1 {
-		issue = strings.TrimSpace(issue + "; several PR links were reported: " + strings.Join(outcome.PRCandidates, ", "))
+	} else if len(evidence.PRCandidates) > 1 {
+		issue = strings.TrimSpace(issue + "; several PR links were reported: " + strings.Join(evidence.PRCandidates, ", "))
 	}
-	question := run.Protocol != string(ProtocolLocalCodexAppServer) && (strings.HasSuffix(strings.TrimSpace(outcome.LastMessage), "?") || strings.HasSuffix(strings.TrimSpace(outcome.LastMessage), "？"))
-	if len(outcome.PRCandidates) > 1 {
+	question := evidence.QuestionHint
+	if len(evidence.PRCandidates) > 1 {
 		question = true
 	}
 	if run.Decision != nil && run.Decision.Status == "pending" && run.Decision.Request.Question != "The worker stopped. What should it do next?" {
 		question = true
 	}
-	if err := StopWorkerTurn(workflow, execution, turnID, question); err != nil {
+	turnOutcome := "failed"
+	if evidence.Succeeded {
+		turnOutcome = "succeeded"
+	}
+	if err := s.stopVerifiedWorkerTurn(run, workflow, execution, turnID, turnOutcome, question); err != nil {
 		return err
 	}
-	execution.TurnEndedAt = ptr(now())
-	s.refreshRun(run)
-	if run.Protocol == string(ProtocolLocalCodexAppServer) && outcome.NativeStatus != "completed" {
-		execution.LastTurnOutcome = "failed"
-		s.refreshRun(run)
-	} else {
-		execution.LastTurnOutcome = "succeeded"
-		s.refreshRun(run)
-	}
-	s.refreshRun(run)
-	if c.hostName() == "local" && outcome.NativeStatus == "completed" && localWorkerRequestedPublish(outcome.LastMessage, run.RunID) {
+	if evidence.PublishRequested {
 		runID := run.RunID
 		_, publishErr := s.publishLocalWorkerRun(context.Background(), run, workflow, execution, turnID)
 		run = s.localWorkerRun(runID)
@@ -622,31 +539,7 @@ func (s *Service) finishWorkerFlowFor(run *Run, workerErr error) error {
 			issue = strings.TrimSpace(issue + "; host publication failed: " + publishErr.Error())
 		}
 	}
-	if workflow.Phase == "waiting_pr_merge" {
-		if err := s.offerWorkerPRFeedback(run, workflow.PRURL); err != nil {
-			return err
-		}
-		if issue != "" {
-			execution.Error = ptr(clip(issue, 2000))
-			s.refreshRun(run)
-		}
-		s.note(run, "steer", "worker", "stopped", "worker turn ended with a verified PR", workflow.PRURL, map[string]any{"turn_id": turnID})
-		return s.save()
-	}
-	context := strings.TrimSpace(outcome.LastMessage)
-	if context == "" {
-		context = "The worker stopped without a final reply."
-	}
-	if issue != "" {
-		context += "\n\nStop reason: " + issue
-	}
-	if question {
-		decision, err := WriteDecisionRequest(run, DecisionRequest{Question: clip(strings.TrimSpace(outcome.LastMessage), 1800), Context: clip(context, 7000), Options: []DecisionOption{{ID: "continue", Label: "Continue current work"}}, AllowFreeText: true})
-		if err == nil {
-			s.setRunDecision(run, decision)
-		}
-	}
-	return s.waitWorkerFlow(run, context)
+	return s.resolveStoppedWorkerTurn(run, workflow, execution, stoppedWorkerResolution{TurnID: turnID, LastMessage: evidence.LastMessage, Issue: issue, Question: question, RecordPRStop: true})
 }
 
 func (s *Service) pollWorkerFlowPR(ctx context.Context, run *Run, task *TaskRecord, workflow *WorkflowRunRecord) error {

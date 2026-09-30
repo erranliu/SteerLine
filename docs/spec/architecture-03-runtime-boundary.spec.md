@@ -1,6 +1,6 @@
 # Spec：架构收口 PR 3 — 移除隐式写回与读写模型收口
 
-状态：待实施；未分配 Task ID。日期：2026-09-30。审计基线：`main@6f78a15`。硬前置：[PR 2：worker 生命周期显式原子提交](architecture-02-worker-commit.spec.md) 已合入；继承 [PR 1](architecture-01-worker-protocol.spec.md) 的协议边界。本 Spec 由本系列最后一个实现 PR 交付。
+状态：待实施；未分配 Task ID。日期：2026-09-30。审计基线：`main@4e786d7`。硬前置：[PR 2：worker 生命周期显式原子提交](architecture-02-worker-commit.spec.md) 已合入；继承 [PR 1](architecture-01-worker-protocol.spec.md) 的协议边界。本 Spec 由本系列最后一个实现 PR 交付。
 
 ## 1. 目标与依据
 

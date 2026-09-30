@@ -1,6 +1,6 @@
 # Spec：架构收口 PR 2 — worker 生命周期显式原子提交
 
-状态：待实施；未分配 Task ID。日期：2026-09-30。审计基线：`main@6f78a15`。硬前置：[PR 1：worker 协议与终态边界](architecture-01-worker-protocol.spec.md) 已合入；本 Spec 由一个实现 PR 交付，后继为 [PR 3](architecture-03-runtime-boundary.spec.md)。
+状态：待实施；未分配 Task ID。日期：2026-09-30。审计基线：`main@4e786d7`。硬前置：[PR 1：worker 协议与终态边界](architecture-01-worker-protocol.spec.md) 已合入；本 Spec 由一个实现 PR 交付，后继为 [PR 3](architecture-03-runtime-boundary.spec.md)。
 
 ## 1. 目标与依据
 
