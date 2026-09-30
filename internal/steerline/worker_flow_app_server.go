@@ -10,6 +10,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"time"
+
+	"github.com/erranliu/SteerLine/internal/steerline/codexapp"
 )
 
 func appServerAskDecision(run *Run, call codexAskCall) (*DecisionState, error) {
@@ -225,12 +227,12 @@ func startAppServerWorkerTurn(ctx context.Context, c Config, run *Run, execution
 	return worker, journalPath, turn.Turn.ID, nil
 }
 
-func connectWorkerAppServer(ctx context.Context, endpoint string) (*codexAppClient, error) {
+func connectWorkerAppServer(ctx context.Context, endpoint string) (*codexapp.Client, error) {
 	deadline := time.Now().Add(10 * time.Second)
 	var err error
 	for time.Now().Before(deadline) {
-		var client *codexAppClient
-		client, err = openCodexAppClient(ctx, endpoint)
+		var client *codexapp.Client
+		client, err = codexapp.Open(ctx, endpoint)
 		if err == nil {
 			return client, nil
 		}
@@ -242,7 +244,7 @@ func connectWorkerAppServer(ctx context.Context, endpoint string) (*codexAppClie
 	return nil, fmt.Errorf("app-server did not become ready at its fixed endpoint: %w", err)
 }
 
-func observeAppServerWorker(ctx context.Context, worker *Worker, client *codexAppClient, journal *os.File, runID, attemptID, threadID, turnID string, replay []codexAppEnvelope) {
+func observeAppServerWorker(ctx context.Context, worker *Worker, client *codexapp.Client, journal *os.File, runID, attemptID, threadID, turnID string, replay []codexapp.Envelope) {
 	defer close(worker.observationDone)
 	defer close(worker.Events)
 	defer client.Close()
@@ -256,7 +258,7 @@ func observeAppServerWorker(ctx context.Context, worker *Worker, client *codexAp
 		select {
 		case <-ctx.Done():
 			return
-		case envelope, ok := <-client.notifications:
+		case envelope, ok := <-client.Notifications():
 			if !ok {
 				worker.Done <- errors.New("app-server observation ended before native turn completion")
 				return
@@ -354,7 +356,7 @@ func readAppServerTurnOutcome(path, threadID, turnID string) (workerTurnOutcome,
 	defer file.Close()
 	decoder := json.NewDecoder(file)
 	for decoder.More() {
-		var event codexAppEnvelope
+		var event codexapp.Envelope
 		if err := decoder.Decode(&event); err != nil {
 			return outcome, err
 		}
@@ -551,8 +553,8 @@ func reattachAppServerWorker(ctx context.Context, c Config, run *Run, execution 
 		return nil, false, err
 	}
 	if nativeTurn.CompletedAt != nil && nativeTurn.Status != "inProgress" {
-		start := codexAppEnvelope{Method: "turn/started", Params: mustJSON(map[string]any{"threadId": execution.SessionID, "turn": map[string]any{"id": turnID}})}
-		completed := codexAppEnvelope{Method: "turn/completed", Params: mustJSON(map[string]any{"threadId": execution.SessionID, "turn": nativeTurn})}
+		start := codexapp.Envelope{Method: "turn/started", Params: mustJSON(map[string]any{"threadId": execution.SessionID, "turn": map[string]any{"id": turnID}})}
+		completed := codexapp.Envelope{Method: "turn/completed", Params: mustJSON(map[string]any{"threadId": execution.SessionID, "turn": nativeTurn})}
 		if _, err = journal.Write(append(mustJSON(start), '\n')); err == nil {
 			_, err = journal.Write(append(mustJSON(completed), '\n'))
 		}

@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/erranliu/SteerLine/internal/steerline/codexapp"
 )
 
 func TestAppServerPendingFeedbackRecoveryUsesNewTurnReceipt(t *testing.T) {
@@ -386,7 +388,7 @@ func TestAppServerAnswerRecoveryPersistsBeforeNextQuestion(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		t.Fatal(err)
 	}
-	event := codexAppEnvelope{Method: "item/completed", Params: mustJSON(map[string]any{"threadId": ask.ThreadID, "turnId": ask.TurnID, "item": map[string]any{"id": ask.CallID, "type": "dynamicToolCall", "status": "completed", "success": true, "contentItems": []any{map[string]string{"type": "inputText", "text": `{"answers":{"choice":["A"]}}`}}}})}
+	event := codexapp.Envelope{Method: "item/completed", Params: mustJSON(map[string]any{"threadId": ask.ThreadID, "turnId": ask.TurnID, "item": map[string]any{"id": ask.CallID, "type": "dynamicToolCall", "status": "completed", "success": true, "contentItems": []any{map[string]string{"type": "inputText", "text": `{"answers":{"choice":["A"]}}`}}}})}
 	if err := AtomicWrite(path, append(mustJSON(event), '\n')); err != nil {
 		t.Fatal(err)
 	}
@@ -411,7 +413,7 @@ func TestAppServerAnswerRecoveryPersistsBeforeNextQuestion(t *testing.T) {
 func TestAppServerOutcomeUsesNativeTurnAndEarlierPRItem(t *testing.T) {
 	thread, turn := "00000000-0000-0000-0000-000000000001", "00000000-0000-0000-0000-000000000002"
 	path := filepath.Join(t.TempDir(), "appserver.jsonl")
-	events := []codexAppEnvelope{
+	events := []codexapp.Envelope{
 		{Method: "turn/started", Params: mustJSON(map[string]any{"threadId": thread, "turn": map[string]any{"id": turn}})},
 		{Method: "item/completed", Params: mustJSON(map[string]any{"threadId": thread, "turnId": turn, "item": map[string]any{"type": "agentMessage", "text": "PR https://git.example/o/r/pulls/8"}})},
 		{Method: "turn/completed", Params: mustJSON(map[string]any{"threadId": thread, "turn": map[string]any{"id": turn, "status": "completed", "items": []any{map[string]any{"type": "agentMessage", "phase": "final_answer", "text": "Done"}}}})},
@@ -449,10 +451,10 @@ func TestNativeDecisionRequiresAllQuestionIDs(t *testing.T) {
 func TestAppServerRecoveryReplaysOnlyUnresolvedQuestion(t *testing.T) {
 	thread, turn := "00000000-0000-0000-0000-000000000001", "00000000-0000-0000-0000-000000000002"
 	path := filepath.Join(t.TempDir(), "appserver.jsonl")
-	makeCall := func(id string) codexAppEnvelope {
-		return codexAppEnvelope{ID: json.RawMessage(`0`), Method: "item/tool/call", Params: mustJSON(map[string]any{"threadId": thread, "turnId": turn, "callId": id, "tool": codexAskToolName, "arguments": map[string]any{"questions": []any{map[string]any{"id": "choice", "header": "Choice", "question": "Continue?", "options": []any{map[string]any{"id": "yes", "label": "Yes"}}, "allow_free_text": false}}}})}
+	makeCall := func(id string) codexapp.Envelope {
+		return codexapp.Envelope{ID: json.RawMessage(`0`), Method: "item/tool/call", Params: mustJSON(map[string]any{"threadId": thread, "turnId": turn, "callId": id, "tool": codexAskToolName, "arguments": map[string]any{"questions": []any{map[string]any{"id": "choice", "header": "Choice", "question": "Continue?", "options": []any{map[string]any{"id": "yes", "label": "Yes"}}, "allow_free_text": false}}}})}
 	}
-	events := []codexAppEnvelope{makeCall("resolved"), {Method: "item/completed", Params: mustJSON(map[string]any{"threadId": thread, "turnId": turn, "item": map[string]any{"type": "dynamicToolCall", "id": "resolved"}})}, makeCall("pending")}
+	events := []codexapp.Envelope{makeCall("resolved"), {Method: "item/completed", Params: mustJSON(map[string]any{"threadId": thread, "turnId": turn, "item": map[string]any{"type": "dynamicToolCall", "id": "resolved"}})}, makeCall("pending")}
 	var raw []byte
 	for _, event := range events {
 		raw = append(raw, append(mustJSON(event), '\n')...)
@@ -476,7 +478,7 @@ func TestAppServerAnswerEvidenceRequiresMatchingNativeContent(t *testing.T) {
 	thread, turn := "00000000-0000-0000-0000-000000000001", "00000000-0000-0000-0000-000000000002"
 	path := filepath.Join(t.TempDir(), "appserver.jsonl")
 	call := codexAskCall{ThreadID: thread, TurnID: turn, CallID: "call-1"}
-	completed := codexAppEnvelope{Method: "item/completed", Params: mustJSON(map[string]any{"threadId": thread, "turnId": turn, "item": map[string]any{"id": call.CallID, "type": "dynamicToolCall", "status": "completed", "success": true, "contentItems": []any{map[string]string{"type": "inputText", "text": `{"answers":{"choice":["A"]}}`}}}})}
+	completed := codexapp.Envelope{Method: "item/completed", Params: mustJSON(map[string]any{"threadId": thread, "turnId": turn, "item": map[string]any{"id": call.CallID, "type": "dynamicToolCall", "status": "completed", "success": true, "contentItems": []any{map[string]string{"type": "inputText", "text": `{"answers":{"choice":["A"]}}`}}}})}
 	if err := os.WriteFile(path, append(mustJSON(completed), '\n'), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -534,7 +536,7 @@ func TestMockAppServerThreadAndTurnContract(t *testing.T) {
 		select {
 		case <-ctx.Done():
 			t.Fatal("mock turn did not complete")
-		case event := <-client.notifications:
+		case event := <-client.Notifications():
 			if event.Method == "turn/completed" {
 				return
 			}

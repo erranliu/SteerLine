@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"time"
+
+	"github.com/erranliu/SteerLine/internal/steerline/codexapp"
 )
 
 type WorkerEvent struct {
-	AppServer        *codexAppEnvelope
+	AppServer        *codexapp.Envelope
 	RunID            string
 	AttemptID        string
 	Source           string

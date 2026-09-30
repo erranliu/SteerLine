@@ -1,4 +1,4 @@
-package steerline
+package codexapp
 
 import (
 	"bufio"
@@ -22,14 +22,14 @@ import (
 
 // codexSocket is a deliberately small RFC 6455 text client. Codex's loopback
 // listener rejects Origin headers, which the x/net websocket client always
-// sends. The socket is owned by one Execution and never shared across tasks.
+// sends. Each Client owns its own socket.
 type codexSocket struct {
 	conn    net.Conn
 	read    *bufio.Reader
 	writeMu sync.Mutex
 }
 
-const maxCodexSocketMessage = 16 << 20
+const maxMessageSize = 16 << 20
 
 func dialCodexSocket(ctx context.Context, endpoint string) (*codexSocket, error) {
 	u, err := url.Parse(endpoint)
@@ -90,7 +90,7 @@ func dialCodexSocket(ctx context.Context, endpoint string) (*codexSocket, error)
 func (s *codexSocket) Close() error { return s.conn.Close() }
 
 func (s *codexSocket) sendFrame(op byte, payload []byte) error {
-	if len(payload) > maxCodexSocketMessage {
+	if len(payload) > maxMessageSize {
 		return errors.New("Codex app-server message exceeds limit")
 	}
 	s.writeMu.Lock()
@@ -149,7 +149,7 @@ func (s *codexSocket) Receive() (json.RawMessage, error) {
 				return nil, err
 			}
 		}
-		if size > maxCodexSocketMessage {
+		if size > maxMessageSize {
 			return nil, errors.New("Codex app-server frame exceeds limit")
 		}
 		payload := make([]byte, size)

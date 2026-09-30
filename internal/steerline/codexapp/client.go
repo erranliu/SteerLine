@@ -1,4 +1,4 @@
-package steerline
+package codexapp
 
 import (
 	"context"
@@ -8,7 +8,8 @@ import (
 	"sync"
 )
 
-type codexAppEnvelope struct {
+// Envelope is one app-server JSON-RPC message or notification.
+type Envelope struct {
 	ID     json.RawMessage `json:"id,omitempty"`
 	Method string          `json:"method,omitempty"`
 	Params json.RawMessage `json:"params,omitempty"`
@@ -19,27 +20,28 @@ type codexAppEnvelope struct {
 	} `json:"error,omitempty"`
 }
 
-// codexAppClient owns a single app-server connection. Its reader dispatches
-// replies independently of notifications, so a pending question on one task
-// cannot stall an RPC or notification from another Execution.
-type codexAppClient struct {
+// Client owns a single app-server connection. Its reader dispatches
+// replies independently of notifications, so a pending question does not
+// stall another RPC or notification.
+type Client struct {
 	socket        *codexSocket
 	mu            sync.Mutex
 	next          uint64
-	pending       map[string]chan codexAppEnvelope
-	notifications chan codexAppEnvelope
+	pending       map[string]chan Envelope
+	notifications chan Envelope
 	done          chan struct{}
 	closing       chan struct{}
 	closeOnce     sync.Once
 	err           error
 }
 
-func openCodexAppClient(ctx context.Context, endpoint string) (*codexAppClient, error) {
+// Open connects to and initializes one app-server session.
+func Open(ctx context.Context, endpoint string) (*Client, error) {
 	socket, err := dialCodexSocket(ctx, endpoint)
 	if err != nil {
 		return nil, err
 	}
-	c := &codexAppClient{socket: socket, pending: make(map[string]chan codexAppEnvelope), notifications: make(chan codexAppEnvelope, 128), done: make(chan struct{}), closing: make(chan struct{})}
+	c := &Client{socket: socket, pending: make(map[string]chan Envelope), notifications: make(chan Envelope, 128), done: make(chan struct{}), closing: make(chan struct{})}
 	go c.read()
 	var result struct {
 		UserAgent  string `json:"userAgent"`
@@ -61,12 +63,15 @@ func openCodexAppClient(ctx context.Context, endpoint string) (*codexAppClient, 
 	return c, nil
 }
 
-func (c *codexAppClient) Close() {
+func (c *Client) Close() {
 	c.closeOnce.Do(func() { close(c.closing); _ = c.socket.Close() })
 	<-c.done
 }
 
-func (c *codexAppClient) read() {
+// Notifications returns the client's read-only notification stream.
+func (c *Client) Notifications() <-chan Envelope { return c.notifications }
+
+func (c *Client) read() {
 	defer close(c.done)
 	defer close(c.notifications)
 	for {
@@ -77,7 +82,7 @@ func (c *codexAppClient) read() {
 			c.mu.Unlock()
 			return
 		}
-		var envelope codexAppEnvelope
+		var envelope Envelope
 		if err := json.Unmarshal(line, &envelope); err != nil {
 			c.mu.Lock()
 			c.err = err
@@ -102,7 +107,7 @@ func (c *codexAppClient) read() {
 	}
 }
 
-func (c *codexAppClient) Call(ctx context.Context, method string, params any, result any) error {
+func (c *Client) Call(ctx context.Context, method string, params any, result any) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -113,7 +118,7 @@ func (c *codexAppClient) Call(ctx context.Context, method string, params any, re
 	c.next++
 	id := c.next
 	key := fmt.Sprint(id)
-	reply := make(chan codexAppEnvelope, 1)
+	reply := make(chan Envelope, 1)
 	c.pending[key] = reply
 	c.mu.Unlock()
 	defer func() { c.mu.Lock(); delete(c.pending, key); c.mu.Unlock() }()
@@ -142,7 +147,7 @@ func (c *codexAppClient) Call(ctx context.Context, method string, params any, re
 	}
 }
 
-func (c *codexAppClient) ReplyRequest(id json.RawMessage, result any) error {
+func (c *Client) ReplyRequest(id json.RawMessage, result any) error {
 	if len(id) == 0 || !json.Valid(id) {
 		return errors.New("Codex request has no valid JSON-RPC identity")
 	}
@@ -152,7 +157,7 @@ func (c *codexAppClient) ReplyRequest(id json.RawMessage, result any) error {
 	}{id, result})
 }
 
-func (c *codexAppClient) RejectRequest(id json.RawMessage, reason string) error {
+func (c *Client) RejectRequest(id json.RawMessage, reason string) error {
 	if len(id) == 0 || !json.Valid(id) {
 		return errors.New("Codex request has no valid JSON-RPC identity")
 	}

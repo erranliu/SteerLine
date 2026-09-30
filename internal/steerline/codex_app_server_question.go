@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/erranliu/SteerLine/internal/steerline/codexapp"
 )
 
 const codexAskToolName = "steerline_ask"
@@ -37,7 +39,7 @@ func codexAskDynamicTool() any {
 	return map[string]any{"type": "function", "name": codexAskToolName, "description": "Ask the user for a decision needed to continue the current task. Include every related question in one call, offer clear options when useful, and wait for the response. Use only when the user must decide.", "inputSchema": map[string]any{"type": "object", "additionalProperties": false, "properties": map[string]any{"questions": map[string]any{"type": "array", "minItems": 1, "maxItems": 3, "items": question}}, "required": []string{"questions"}}}
 }
 
-func parseCodexAskCall(envelope codexAppEnvelope, expectedThread, expectedTurn string) (codexAskCall, error) {
+func parseCodexAskCall(envelope codexapp.Envelope, expectedThread, expectedTurn string) (codexAskCall, error) {
 	var call codexAskCall
 	if envelope.Method != "item/tool/call" || len(envelope.ID) == 0 || !json.Valid(envelope.ID) || !codexThreadID.MatchString(expectedThread) || !codexThreadID.MatchString(expectedTurn) {
 		return call, errors.New("Codex ask event lacks a fixed native request or turn")
