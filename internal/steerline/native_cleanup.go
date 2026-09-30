@@ -74,11 +74,7 @@ func (c CommandService) RecordNativeCleanupReceipt(ctx context.Context, taskID, 
 	}
 	nowAt := time.Now().UTC()
 	var result TaskRecord
-	err = sqlite.Transact(ctx, func(domainTx DomainTx) error {
-		tx, ok := domainTx.(*sqliteTx)
-		if !ok {
-			return nativeErr("authority_mismatch", "cleanup receipt requires the center SQLite transaction")
-		}
+	err = sqlite.transactSQLite(ctx, func(tx *sqliteTx) error {
 		if old, found, lookupErr := lookupTaskBatchCommandTx(ctx, tx, c.Project, requestID); lookupErr != nil {
 			return lookupErr
 		} else if found {

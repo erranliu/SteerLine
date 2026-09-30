@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -97,11 +96,7 @@ func (c CommandService) DiscardNativeTask(ctx context.Context, config Config, ta
 	intentBytes, _ := json.Marshal(intent)
 	canonicalIntent, _ := CanonicalJSON(intentBytes)
 	var staged OperationRecord
-	err = sqlite.Transact(ctx, func(domainTx DomainTx) error {
-		tx, ok := domainTx.(*sqliteTx)
-		if !ok {
-			return errors.New("discard requires the center SQLite transaction")
-		}
+	err = sqlite.transactSQLite(ctx, func(tx *sqliteTx) error {
 		if old, found, e := lookupTaskBatchCommandTx(ctx, tx, c.Project, requestID); e != nil {
 			return e
 		} else if found {
@@ -352,8 +347,7 @@ func persistDiscardPending(ctx context.Context, s *SQLiteStore, project, request
 	if err != nil {
 		return TaskDiscardReceipt{}, err
 	}
-	err = s.Transact(ctx, func(domainTx DomainTx) error {
-		tx := domainTx.(*sqliteTx)
+	err = s.transactSQLite(ctx, func(tx *sqliteTx) error {
 		op.Status = "outcome_unknown"
 		op.Receipt = checkpoint
 		op.UnknownReason = message
@@ -375,8 +369,7 @@ func persistDiscardPending(ctx context.Context, s *SQLiteStore, project, request
 
 func (c CommandService) commitDiscard(ctx context.Context, s *SQLiteStore, requestID string, op OperationRecord, intent taskDiscardIntent, info *PRInfo, expectedPRRepository string) (TaskDiscardReceipt, error) {
 	var receipt TaskDiscardReceipt
-	err := s.Transact(ctx, func(domainTx DomainTx) error {
-		tx := domainTx.(*sqliteTx)
+	err := s.transactSQLite(ctx, func(tx *sqliteTx) error {
 		graph, e := taskGraphSnapshotTx(ctx, tx, c.Project)
 		if e != nil {
 			return e

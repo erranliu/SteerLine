@@ -98,11 +98,7 @@ func (c CommandService) CreateTaskBatch(ctx context.Context, config Config, data
 	}
 	payloadDigest := digestCanonical(canonicalPayload)
 	var receipt TaskBatchReceipt
-	err = c.Store.Transact(ctx, func(domainTx DomainTx) error {
-		tx, ok := domainTx.(*sqliteTx)
-		if !ok {
-			return errors.New("task batch command requires the center SQLite transaction")
-		}
+	err = c.Store.transactSQLite(ctx, func(tx *sqliteTx) error {
 		if old, found, e := lookupTaskBatchCommandTx(ctx, tx, c.Project, requestID); e != nil {
 			return e
 		} else if found {

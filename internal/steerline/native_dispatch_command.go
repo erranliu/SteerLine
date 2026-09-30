@@ -71,11 +71,7 @@ func (c CommandService) SetNativeDispatchState(ctx context.Context, update Nativ
 	}
 	next.UpdatedAt = time.Now().UTC()
 	var result ProjectTaskAuthority
-	err = sqlite.Transact(ctx, func(domainTx DomainTx) error {
-		tx, ok := domainTx.(*sqliteTx)
-		if !ok {
-			return nativeErr("authority_mismatch", "dispatch control requires a center SQLite transaction")
-		}
+	err = sqlite.transactSQLite(ctx, func(tx *sqliteTx) error {
 		if old, found, lookupErr := lookupTaskBatchCommandTx(ctx, tx, c.Project, update.RequestID); lookupErr != nil {
 			return lookupErr
 		} else if found {

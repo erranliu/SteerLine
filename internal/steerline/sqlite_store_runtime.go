@@ -20,13 +20,13 @@ func (s *SQLiteStore) saveRuntime(ctx context.Context, runtime Runtime, baseline
 		return runtime, errors.New("runtime repository identity is required for SQLite persistence")
 	}
 	pendingEvents := append([]DomainEvent(nil), runtime.PendingEvents...)
-	err := s.Transact(ctx, func(tx DomainTx) error {
+	err := s.transactSQLite(ctx, func(tx *sqliteTx) error {
 		var revision uint64
-		if err := tx.(*sqliteTx).tx.QueryRowContext(ctx, `SELECT COALESCE(MAX(revision),0) FROM projection WHERE project_identity=?`, project).Scan(&revision); err != nil {
+		if err := tx.tx.QueryRowContext(ctx, `SELECT COALESCE(MAX(revision),0) FROM projection WHERE project_identity=?`, project).Scan(&revision); err != nil {
 			return err
 		}
 		var authority string
-		authorityErr := tx.(*sqliteTx).tx.QueryRowContext(ctx, `SELECT authority FROM project_task_authorities WHERE project_identity=?`, project).Scan(&authority)
+		authorityErr := tx.tx.QueryRowContext(ctx, `SELECT authority FROM project_task_authorities WHERE project_identity=?`, project).Scan(&authority)
 		if authorityErr != nil && !errors.Is(authorityErr, sql.ErrNoRows) {
 			return authorityErr
 		}
@@ -41,7 +41,7 @@ func (s *SQLiteStore) saveRuntime(ctx context.Context, runtime Runtime, baseline
 		changed := func(key string, value any) bool { return baseline == nil || baseline[key] != recordFingerprint(value) }
 		for _, record := range runtime.WorkflowRuns {
 			if changed("workflow:"+record.WorkflowRunID, record) {
-				if err := tx.(*sqliteTx).checkPublicationBaseline("workflow_runs", "workflow_run_id", project, record.WorkflowRunID, "workflow:"+record.WorkflowRunID, baseline); err != nil {
+				if err := tx.checkPublicationBaseline("workflow_runs", "workflow_run_id", project, record.WorkflowRunID, "workflow:"+record.WorkflowRunID, baseline); err != nil {
 					return err
 				}
 				if err := tx.PutWorkflowRun(record); err != nil {
@@ -51,7 +51,7 @@ func (s *SQLiteStore) saveRuntime(ctx context.Context, runtime Runtime, baseline
 		}
 		for _, record := range runtime.Executions {
 			if changed("execution:"+record.ExecutionID, record) {
-				if err := tx.(*sqliteTx).checkPublicationBaseline("executions", "execution_id", project, record.ExecutionID, "execution:"+record.ExecutionID, baseline); err != nil {
+				if err := tx.checkPublicationBaseline("executions", "execution_id", project, record.ExecutionID, "execution:"+record.ExecutionID, baseline); err != nil {
 					return err
 				}
 				if err := tx.PutExecution(record); err != nil {
@@ -61,7 +61,7 @@ func (s *SQLiteStore) saveRuntime(ctx context.Context, runtime Runtime, baseline
 		}
 		for _, record := range runtime.Attempts {
 			if changed("attempt:"+record.AttemptID, record) {
-				if err := tx.(*sqliteTx).checkPublicationBaseline("step_attempts", "attempt_id", project, record.AttemptID, "attempt:"+record.AttemptID, baseline); err != nil {
+				if err := tx.checkPublicationBaseline("step_attempts", "attempt_id", project, record.AttemptID, "attempt:"+record.AttemptID, baseline); err != nil {
 					return err
 				}
 				if err := tx.PutStepAttempt(record); err != nil {
@@ -71,7 +71,7 @@ func (s *SQLiteStore) saveRuntime(ctx context.Context, runtime Runtime, baseline
 		}
 		for _, record := range runtime.Decisions {
 			if changed("decision:"+record.DecisionID, record) {
-				if err := tx.(*sqliteTx).checkPublicationBaseline("decisions", "decision_id", project, record.DecisionID, "decision:"+record.DecisionID, baseline); err != nil {
+				if err := tx.checkPublicationBaseline("decisions", "decision_id", project, record.DecisionID, "decision:"+record.DecisionID, baseline); err != nil {
 					return err
 				}
 				if err := tx.PutDecision(record); err != nil {
@@ -98,7 +98,7 @@ func (s *SQLiteStore) saveRuntime(ctx context.Context, runtime Runtime, baseline
 		}
 		for i := range runtime.WorkflowRuns {
 			record := &runtime.WorkflowRuns[i]
-			if err := tx.(*sqliteTx).tx.QueryRowContext(ctx, `SELECT control_revision FROM workflow_runs WHERE project_identity=? AND workflow_run_id=?`, project, record.WorkflowRunID).Scan(&record.ControlRevision); err != nil {
+			if err := tx.tx.QueryRowContext(ctx, `SELECT control_revision FROM workflow_runs WHERE project_identity=? AND workflow_run_id=?`, project, record.WorkflowRunID).Scan(&record.ControlRevision); err != nil {
 				return err
 			}
 		}
