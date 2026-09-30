@@ -1,6 +1,6 @@
 # worker 环境就绪实现候选验收
 
-日期：2026-09-30。依据：[Spec](../../spec/worker-environment-readiness.spec.md)、[Plan](../../spec/worker-environment-readiness.plan.md)。状态：审计修复及真实服务闭环通过；实现 PR160 待审阅。
+日期：2026-09-30。依据：PR154 原范围的 [Spec](../../spec/worker-environment-readiness.spec.md)、[Plan](../../spec/worker-environment-readiness.plan.md)。状态：审计修复及真实服务闭环通过；实现 PR160 待审阅。
 
 ## 已取得的证据
 
@@ -52,3 +52,11 @@ go test ./internal/steerline -run "^TestWorkerEnvironmentNativeReadinessLive$" -
 真实入口可传 `STEERLINE_READINESS_LIVE_STATE_ROOT` 继续原隔离状态的对账，不创建替代 Execution。成功后的已结算、由本次中心创建的 agent/coordinator terminal 已按原身份关闭。
 
 [审计定向回归](audit-focused.jsonl)、[审计 quick 摘要](audit-quick/summary.json)与 `orcaworker` 包回归通过；不运行全量测试。目录信任依据[OpenAI 官方配置参考](https://learn.chatgpt.com/docs/config-file/config-reference#configtoml)的 `projects.<path>.trust_level`，仅限此测试克隆。
+
+## 合并主分支后的定向验证
+
+已整合 `4b94d82` 的 worker 生命周期重构及 `4a84aa1` 的执行配置隔离规划。readiness 的准备、派发和观察逻辑移入主分支拆分后的入口；中心 Decision/Operation 修改使用私有 domain 候选与显式提交，保留只读 Runtime 边界。测试在命令处理重新加载记录后取得最新权威对象，本地 sandbox 默认值与 Orca 显式配置分别验证。
+
+ER1–ER4、新故障恢复、冻结资源、原 terminal 对账/重启、worker 显式提交与回滚、项目查询快照/事件批读、本地 Windows sandbox 及 Profile 定向回归通过。`orcaworker`、`codexapp`、`codexworker` 包测试、控制台 Profile/项目查询测试、quick、vet、CLI 构建和 diff 检查通过；未运行全量测试。此次冲突整合未重跑真机入口，前述真实记录对应原审计版本。
+
+PR161 新增的 #59 权限编译/快照接线仍待其前置完成；上述结果覆盖 PR154 的实现及主分支代码整合，不作为新增接线的完成证据。
