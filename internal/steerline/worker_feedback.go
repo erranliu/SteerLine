@@ -167,7 +167,7 @@ func (s *Service) applyWorkerFlowDecision(ctx context.Context, run *Run) error {
 			return err
 		}
 	}
-	if route == workerflow.NativeOrca {
+	if route == workerflow.NativeOrca || route == workerflow.SupervisedOrca {
 		return s.applyNativeOrcaDecision(ctx, run, workflow, execution, answer, command.CommandID)
 	}
 	return s.deliverResumableWorkerFeedback(ctx, run, execution, answer, command.CommandID, route)

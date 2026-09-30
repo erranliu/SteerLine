@@ -93,6 +93,13 @@ func (s *Service) prepareNativeOrcaWorkerFlow(ctx context.Context, task TaskReco
 }
 
 func (s *Service) prepareSupervisedOrcaWorker(ctx context.Context, task TaskRecord, run *Run) error {
+	fixed, err := s.workerFlowContext(run)
+	if err != nil {
+		return err
+	}
+	if err := requireWorkerFlowCapabilities(ctx, fixed.config); err != nil {
+		return err
+	}
 	return s.prepareWorkerWorkspace(ctx, task, run, true)
 }
 
@@ -159,11 +166,18 @@ func (s *Service) startSupervisedOrcaWorkerTurn(ctx context.Context, run *Run, t
 	if err != nil {
 		return err
 	}
-	worker, events, platformRequestID, err := startWorkerOrcaTurn(ctx, fixed.config, run, fixed.execution, turnID, prompt)
-	if err != nil {
-		return s.failStartedWorkerTurn(run, opID, platformRequestID, err)
+	if err := s.startRemoteOrcaTurn(ctx, run, fixed.execution, turnID, prompt); err != nil {
+		_ = s.changeWorkerOperation(run, opID, "outcome_unknown", "", nil, err.Error())
+		return s.nativeOrcaUncertain(run, "Remote Orca start requires reconciliation: "+err.Error())
 	}
-	return s.acceptStartedWorkerTurn(run, worker, events, platformRequestID, opID, turnID, false)
+	turn := nativeOrcaCurrentTurn(fixed.execution)
+	if turn == nil || turn.DispatchID == "" {
+		return errors.New("remote worker has no accepted Dispatch")
+	}
+	fixed.attempt.Status, fixed.attempt.UpdatedAt = "dispatched", now()
+	fixed.execution.Status = "pending"
+	s.refreshRun(run)
+	return s.changeWorkerOperation(run, opID, "accepted", turn.DispatchRequestID, mustJSON(*turn), "")
 }
 
 func (s *Service) failStartedWorkerTurn(run *Run, opID, platformRequestID string, startErr error) error {
@@ -218,6 +232,14 @@ func (s *Service) acceptStartedWorkerTurn(run *Run, worker *Worker, events, plat
 }
 
 func requireWorkerFlowCapabilities(ctx context.Context, c Config) error {
+	if c.hostName() == "orca_supervised" {
+		if c.agentName() != "codex" || c.Model == "" || c.ReasoningEffort == "" || c.Sandbox != "workspace-write" || c.Profile != "" || c.Orca.Supervised == nil {
+			return &BackendError{Code: BackendUnsupported, Diagnostic: "remote Orca requires Codex, model/effort, workspace-write and a fixed supervised target"}
+		}
+		_, err := probeSupervisedOrcaTarget(ctx, c)
+		return err
+	}
+
 	if c.hostName() == "orca" {
 		if c.Profile != "" || c.Sandbox != "workspace-write" || (c.Model == "") != (c.ReasoningEffort == "") {
 			return &BackendError{Code: BackendUnsupported, Diagnostic: "Orca requires workspace-write, no Codex profile, and model with reasoning_effort together"}

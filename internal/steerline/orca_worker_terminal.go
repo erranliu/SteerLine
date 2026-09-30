@@ -3,7 +3,6 @@ package steerline
 import (
 	"context"
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -29,67 +28,6 @@ func verifyWorkerOrcaTerminal(term orcaTerminal, run *Run, expected *ProcessIden
 	}
 	if expected != nil && (expected.Kind != "orca" || expected.Terminal != term.Handle || expected.RuntimeID != term.RuntimeID || expected.Incarnation != term.IncarnationID) {
 		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "Orca terminal runtime, handle or incarnation changed"}
-	}
-	return nil
-}
-
-func createWorkerOrcaTerminal(ctx context.Context, c Config, run *Run) (orcaTerminal, error) {
-	if run == nil || run.WorktreePath == nil || run.WorktreeBranch == nil || !stableExecutionID(run.RunID) {
-		return orcaTerminal{}, errors.New("worker terminal lacks a fixed run and workspace")
-	}
-	terminal, err := orcaworker.CreateTerminal(ctx, orcaWorkerMetaCaller(c), *run.WorktreePath, run.RunID)
-	if err != nil {
-		return orcaTerminal{}, workerOrcaBackendError(err)
-	}
-	if err := verifyWorkerOrcaTerminal(terminal, run, nil); err != nil {
-		return orcaTerminal{}, err
-	}
-	return terminal, nil
-}
-
-func (s *Service) prepareWorkerOrcaTerminal(ctx context.Context, run *Run) error {
-	fixed, configErr := s.workerFlowContext(run)
-	if configErr != nil {
-		return configErr
-	}
-	fixedConfig := fixed.config
-	workflow, execution := s.workflowRecords(run)
-	if run == nil || workflow == nil || execution == nil || workflow.WorkflowVersion != WorkerFlowVersion || run.WorktreePath == nil || run.WorktreeBranch == nil {
-		return errors.New("Orca terminal preparation lacks the fixed worker workspace")
-	}
-	if execution.Process != nil {
-		term, err := showWorkerOrcaTerminal(ctx, fixedConfig, execution.Process.Terminal)
-		if err != nil {
-			return err
-		}
-		if err := verifyWorkerOrcaTerminal(term, run, execution.Process); err != nil {
-			return err
-		}
-		s.refreshRun(run)
-		return nil
-	}
-	opID, err := s.startWorkerOperation(run, "prepare_worker_terminal", "worker-terminal:"+execution.ExecutionID, struct {
-		ExecutionID string `json:"execution_id"`
-		Workspace   string `json:"workspace"`
-		Branch      string `json:"branch"`
-	}{execution.ExecutionID, *run.WorktreePath, *run.WorktreeBranch})
-	if err != nil {
-		return err
-	}
-	_, execution = s.workflowRecords(run)
-	if execution == nil {
-		return errors.New("worker execution disappeared after Orca terminal intent was saved")
-	}
-	term, err := createWorkerOrcaTerminal(ctx, fixedConfig, run)
-	if err != nil {
-		_ = s.changeWorkerOperation(run, opID, "outcome_unknown", "", nil, err.Error())
-		return err
-	}
-	identity := workerOrcaIdentity(term, fixedConfig)
-	execution.Process = &identity
-	s.refreshRun(run)
-	if err := s.changeWorkerOperation(run, opID, "confirmed", "", mustJSON(identity), ""); err != nil {
-		return fmt.Errorf("Orca terminal created but its identity could not be persisted: %w", err)
 	}
 	return nil
 }
@@ -130,22 +68,11 @@ func (p *workerOrcaProcess) Kill() {
 	_, _ = orcaworker.CloseTerminal(ctx, orcaWorkerMetaCaller(p.config), p.identity.Terminal, p.identity.RuntimeID)
 }
 
-func workerOrcaRemoteRepoPath(ctx context.Context, c Config, worktreeID string) (string, error) {
-	path, err := orcaworker.RemoteRepoPath(ctx, orcaWorkerCaller(c), worktreeID)
-	return path, workerOrcaBackendError(err)
-}
-
 func workerOrcaWriteDirs(ctx context.Context, c Config, run *Run) ([]string, error) {
 	if c.Sandbox != "workspace-write" {
 		return nil, nil
 	}
-	if c.hostName() == "orca_supervised" {
-		path, err := workerOrcaRemoteRepoPath(ctx, c, run.Target.WorktreeID)
-		if err != nil {
-			return nil, err
-		}
-		return []string{path}, nil
-	}
+
 	args, err := codexLinkedWorktreeWriteArgs(ctx, c, *run.WorktreePath)
 	if err != nil {
 		return nil, err
@@ -161,6 +88,9 @@ func workerOrcaWriteDirs(ctx context.Context, c Config, run *Run) ([]string, err
 }
 
 func startWorkerOrcaTurn(ctx context.Context, c Config, run *Run, execution *ExecutionRecord, turnID, prompt string) (*Worker, string, string, error) {
+	if c.hostName() != "orca" {
+		return nil, "", "", &BackendError{Code: BackendUnsupported, Diagnostic: "remote workers require the supervised Dispatch protocol"}
+	}
 	if run == nil || execution == nil || run.Process == nil || run.WorktreePath == nil || run.WorktreeBranch == nil || run.RunID != execution.WorkflowRunID || run.ExecutionID != execution.ExecutionID || !stableExecutionID(turnID) {
 		return nil, "", "", errors.New("Orca turn has no fixed worker, workspace or process")
 	}

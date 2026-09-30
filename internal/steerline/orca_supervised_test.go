@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 	"os"
 	"path/filepath"
 	"strings"
@@ -411,9 +412,16 @@ func TestSupervisedOrcaExecutionBindingRequiresExactDispatchIdentity(t *testing.
 func TestSupervisedOrcaClientPinsLaunchAndReadsExactDispatch(t *testing.T) {
 	c := supervisedFixtureConfig(t)
 	t.Setenv("STEERLINE_FAKE_SUPERVISED_WORKTREE_ID", "repo-test::C:/remote/spec03-test")
-	backend := orcaSupervisedBackend{config: c}
 	workflowRunID := newID()
-	runID, requestID, coordinator, err := backend.createOrchestrationRun(context.Background(), workflowRunID, "spec03 fixture")
+	client := remoteWorkerClient(c)
+	coordinator, err := client.CreateCoordinator(context.Background(), workflowRunID, "fake-center-runtime")
+	if err != nil {
+		t.Fatal(err)
+	}
+	receipt, err := orcaworker.CreateRun(context.Background(), client.CenterCall, "remote worker fixture", coordinator, "fake-center-runtime")
+	runID, requestID := receipt.ID, receipt.RequestID
+	c.Orca.Supervised.CoordinatorTerminal = coordinator
+	backend := orcaSupervisedBackend{config: c}
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -423,8 +431,7 @@ func TestSupervisedOrcaClientPinsLaunchAndReadsExactDispatch(t *testing.T) {
 	if requestID != "request-run-create" || coordinator != "term-"+workflowRunID {
 		t.Fatalf("Orca Run-create request ID = %q", requestID)
 	}
-	base := strings.Repeat("a", 40)
-	started, err := backend.startWorker(context.Background(), runID, newID(), "prepare", "verify workspace", "new-top-level", "spec03-test", "id:repo-test", base)
+	started, err := remoteWorkerClient(c).StartTask(context.Background(), runID, "task-test", "repo-test::C:/remote/spec03-test", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -449,8 +456,8 @@ func TestSupervisedOrcaClientPinsLaunchAndReadsExactDispatch(t *testing.T) {
 
 func TestSupervisedOrcaClientRejectsReturnedReplacementWorktree(t *testing.T) {
 	c := supervisedFixtureConfig(t)
-	backend := orcaSupervisedBackend{config: c}
-	_, err := backend.startWorker(context.Background(), "orca-run-test", newID(), "verify", "read only", "id:repo-test::C:/remote/expected", "", "", "")
+	_, err := remoteWorkerClient(c).StartTask(context.Background(), "orca-run-test", "task-test", "repo-test::C:/remote/expected", nil)
+	err = remoteWorkerError(err)
 	if err == nil || !isBackendError(err, BackendIdentityMismatch) {
 		t.Fatalf("replacement worktree error = %v", err)
 	}

@@ -75,9 +75,6 @@ func (p ExecutionProfile) StaticUnavailableReason() string {
 			return err.Error()
 		}
 	}
-	if p.Host == "orca_supervised" {
-		return "受监管远端尚未接入单 worker 流程"
-	}
 	if p.Host == "local" && p.Agent != "codex" {
 		return "本地执行后端目前只支持 codex agent"
 	}

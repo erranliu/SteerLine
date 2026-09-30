@@ -1,12 +1,12 @@
 # SteerLine 当前代码架构图
 
-快照日期：2026-09-30。源码基线：`ba0992b`（含 PR #157），含 PR #158 的 worker 收尾改动。
+快照日期：2026-09-30。源码基线：`9811ddc`（含 PR #158），含远程 Orca worker 接入改动。
 
 本文描述当前检出的代码：系统边界、实际 Go 包依赖、核心包内部职责、任务执行、人工决策、数据模型、日志与恢复。图中的职责分组不代表已拆成独立包或服务。箭头含义在各图前说明；未来方案与当前可启动路径分开列出。
 
 ## 1. 系统与进程总览
 
-实线表示当前调用或数据通路，虚线表示存在代码但当前不能启动的执行路径。CLI 和控制台可以是不同进程；`run` 在独立服务进程中运行。查询经 Go 读取 SQLite，当前客户端控制协议主要使用文件请求/回执和数据库命令，而不是第二阶段计划中的 HTTP/SSE。
+实线表示当前调用或数据通路。CLI 和控制台可以是不同进程；`run` 在独立服务进程中运行。查询经 Go 读取 SQLite，当前客户端控制协议主要使用文件请求/回执和数据库命令，而不是第二阶段计划中的 HTTP/SSE。
 
 ```mermaid
 flowchart TB
@@ -41,16 +41,17 @@ flowchart TB
     subgraph Execution["外部执行与交付"]
         Local["codexworker → codexapp<br/>Codex app-server<br/>回环 WebSocket / JSON-RPC"]
         Orca["orcaworker + Orca CLI<br/>本机 runtime<br/>coordinator / task / dispatch / terminal"]
-        Remote["orca_supervised<br/>配置、适配、核验代码存在<br/>worker-flow-v1 入口阻止启动"]
+        Remote["orca_remote_worker + Orca CLI<br/>中心 Run / inbox，远端 workspace / agent<br/>固定 peer / Task / Dispatch / incarnation"]
         Git["Git repository / worktree / branch"]
         PR["PRClient<br/>Gitea API / command provider"]
         Provider["代码托管平台<br/>PR 与合并证据"]
     end
     Service <--> Local
     Service <--> Orca
-    Service -.-> Remote
+    Service <--> Remote
     Local --> Git
     Orca --> Git
+    Remote --> RemoteGit["远端 Git worktree"]
     Service -->|准备工作区 / 本机受控发布| Git
     Service --> PR
     PR --> Provider
@@ -69,7 +70,7 @@ flowchart TB
 
 ```mermaid
 flowchart LR
-    CLI["cmd/steerline"] --> Core["internal/steerline<br/>112 个非测试 Go 文件"]
+    CLI["cmd/steerline"] --> Core["internal/steerline<br/>114 个非测试 Go 文件"]
     CLI --> Console["console"]
     Console --> Core
 
@@ -79,6 +80,8 @@ flowchart LR
     Core --> CW["codexworker"]
     Core --> CA["codexapp"]
     Core --> OW["orcaworker"]
+    Core --> RW["orca_remote_worker"]
+    RW --> OW
     Task --> Graph["taskgraph"]
     TaskView --> Task
     TaskView --> Graph
@@ -93,7 +96,7 @@ flowchart LR
 | 包 | 当前职责 | 非测试 Go 文件 |
 | --- | --- | ---: |
 | `cmd/steerline` | 产品命令入口、服务启动、控制台和任务命令路由 | 1 |
-| `internal/steerline` | 服务编排、业务持久化、平台适配接线、查询和控制 | 112 |
+| `internal/steerline` | 服务编排、业务持久化、平台适配接线、查询和控制 | 114 |
 | `console` | TUI 状态、导航、任务列表、活动/会话/正文、执行方案和决策编辑 | 14 |
 | `task` | 任务契约、批次、状态、依赖资格、交付和命令规则 | 10 |
 | `taskgraph` | DAG 校验、遍历、前后置关系和图算法 | 1 |
@@ -102,11 +105,12 @@ flowchart LR
 | `codexapp` | Codex app-server 参数、客户端、原生问题与 WebSocket 协议 | 7 |
 | `codexworker` | app-server 启动、连接、能力探测、轮次观察、journal 与回答 | 11 |
 | `orcaworker` | Orca task/dispatch、terminal、消息、pull/relay、输出与工作区协议 | 17 |
+| `orca_remote_worker` | 远端预检、启动/复用、观察、mailbox、工作区和清理协议 | 9 |
 | `cmd/orca-probe` | 只读能力探测与脱敏证据采集 | 1 |
 | `cmd/test-feedback` | 最小/定向/全量测试调度、日志与反馈报告 | 4 |
 | `internal/testfeedback` | Go test JSON 结果汇总 | 1 |
 
-合计 **13 个包目录、186 个非测试 Go 文件**。统计覆盖 `cmd/` 与 `internal/`；不含 `_test.go`、测试数据、脚本和文档。核心包仍集中承载多项职责，不能将上述逻辑边界理解为微服务或已经完成的全面拆包。
+合计 **14 个包目录、197 个非测试 Go 文件**。统计覆盖 `cmd/` 与 `internal/`；不含 `_test.go`、测试数据、脚本和文档。核心包仍集中承载多项职责，不能将上述逻辑边界理解为微服务或已经完成的全面拆包。
 
 ## 3. 核心包内部职责与接线
 
@@ -154,7 +158,7 @@ flowchart TB
 | 图与候选读取 | `native_graph_*.go`、`native_readiness*.go`、`native_task_page*.go` | 使用事务快照和游标；展示 Ready 缓存不是领取许可 |
 | 单 worker 生命周期 | `worker_start.go`、`worker_events.go`、`worker_completion.go`、`worker_state.go`、`worker_mode.go`、`worker_resume.go` | Session、Turn、Execution、Attempt 和 Operation 必须对应持久身份 |
 | 本机 Codex | `codex_worker*.go`、`codex_history.go`、`codexworker/`、`codexapp/` | 实际 worker 经回环 WebSocket 连接 app-server；不是第二阶段规划会话的 stdio 方案 |
-| Orca | `orca_worker*.go`、`orca.go`、`orcaexec.go`、`orcaworker/` | coordinator、runtime、task、dispatch、terminal 与消息回执分别核验 |
+| Orca | `orca_worker*.go`、`orca_remote*.go`、`orca.go`、`orcaexec.go`、`orcaworker/`、`orca_remote_worker/` | coordinator、runtime、task、dispatch、terminal 与消息回执分别核验 |
 | 工作区与发布 | `workspace*.go`、`worker_publish_local.go`、`codex_git_sandbox.go` | 本机 worker 发出发布就绪标记后，中心校验并办理发布 |
 | PR 与交付 | `pr.go`、`native_delivery_command.go`、`task/delivery*.go` | 合并事实先外部查询，再事务内重检并写交付与 closed 状态 |
 | 决策与干预 | `decision.go`、`worker_feedback.go`、`service_commit.go`、`operation.go` | 保存答案、送达回执、原会话新轮次开始是不同事实 |
@@ -380,7 +384,7 @@ Service 将私有领域工作副本、已提交快照和私有工作 Run 分开�
 
 ## 9. 快照验证与维护
 
-包依赖图由非测试源码的项目内 import 提取并人工对照入口。系统、执行与存储图对照当前关键代码和 schema，不依据未来 Spec 推断已交付能力。本轮收尾同步更新当前源码接线与文件索引。整合 PR #157 后，项目 `-quick` 入口（现已覆盖 `workerflow`）及附加的 13 个定向用例通过（执行 98.3 秒），覆盖私有 actor 视图、两轮续聊、问题回复恢复、重启不重发、原子绑定/停止回执和原生事件身份；`codexworker`、`orcaworker` 与测试入口自身的测试、受影响命令编译、`go vet` 和差异检查通过。未运行全量测试或真机认证。
+包依赖图由非测试源码的项目内 import 提取并人工对照入口。系统、执行与存储图对照当前关键代码和 schema，不依据未来 Spec 推断已交付能力。本轮收尾同步更新当前源码接线与文件索引。整合 PR #157 后，项目 `-quick` 入口（现已覆盖 `workerflow`）及附加的 13 个定向用例通过（执行 98.3 秒），覆盖私有 actor 视图、两轮续聊、问题回复恢复、重启不重发、原子绑定/停止回执和原生事件身份；`codexworker`、`orcaworker` 与测试入口自身的测试、受影响命令编译、`go vet` 和差异检查通过。本次远程改动的最小入口通过 32 条测试记录（含子用例），附加定向回归通过 24 条；条件真机 P10 用例未启用而跳过。本地 Orca 复用与远程当前 Dispatch 检查分别通过单独回归。远程覆盖两轮续聊、重启恢复、丢失启动/回复/ack 回执与替换会话拒绝，远端 PR 合并后走统一 TaskDelivery 并清理已结算资源。未运行全量测试；当前远端连接不可达，未声称本轮双机认证。
 
 维护时优先核对：入口命令、包 import、可启动执行模式、schema、checkpoint、控制协议、外部进程通信和交付事务。新增生产源码后应同步下面的全量文件索引；生产支持范围有变化时同步图 1、图 4 和第 8 节。
 
@@ -474,6 +478,8 @@ Service 将私有领域工作副本、已提交快照和私有工作 Run 分开�
 | [observation.go](../../internal/steerline/observation.go) |
 | [operation.go](../../internal/steerline/operation.go) |
 | [orca.go](../../internal/steerline/orca.go) |
+| [orca_remote_adapter.go](../../internal/steerline/orca_remote_adapter.go) |
+| [orca_remote_service.go](../../internal/steerline/orca_remote_service.go) |
 | [orca_supervised.go](../../internal/steerline/orca_supervised.go) |
 | [orca_version.go](../../internal/steerline/orca_version.go) |
 | [orca_worker_dispatch.go](../../internal/steerline/orca_worker_dispatch.go) |
@@ -572,6 +578,20 @@ Service 将私有领域工作副本、已提交快照和私有工作 Run 分开�
 | [profile_choice.go](../../internal/steerline/console/profile_choice.go) |
 | [source.go](../../internal/steerline/console/source.go) |
 | [view.go](../../internal/steerline/console/view.go) |
+
+### internal/steerline/orca_remote_worker
+
+| 源文件 |
+| --- |
+| [messaging.go](../../internal/steerline/orca_remote_worker/messaging.go) |
+| [observation.go](../../internal/steerline/orca_remote_worker/observation.go) |
+| [output.go](../../internal/steerline/orca_remote_worker/output.go) |
+| [preflight.go](../../internal/steerline/orca_remote_worker/preflight.go) |
+| [run.go](../../internal/steerline/orca_remote_worker/run.go) |
+| [start.go](../../internal/steerline/orca_remote_worker/start.go) |
+| [types.go](../../internal/steerline/orca_remote_worker/types.go) |
+| [version.go](../../internal/steerline/orca_remote_worker/version.go) |
+| [worker.go](../../internal/steerline/orca_remote_worker/worker.go) |
 
 ### internal/steerline/orcaworker
 

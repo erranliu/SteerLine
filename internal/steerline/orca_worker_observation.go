@@ -150,7 +150,7 @@ func (s *Service) pollNativeOrcaWorker(ctx context.Context, run *Run) error {
 			return err
 		}
 	}
-	if turn.DoneMessageID == "" {
+	if turn.DoneMessageID == "" && fixedConfig.hostName() != "orca_supervised" {
 		if execution.RecoveryRequired {
 			path, pathErr := nativeOrcaRelayPath(execution.Workspace.Worktree, run.RunID, turn.TurnID)
 			if pathErr != nil {
@@ -368,6 +368,8 @@ func (s *Service) finishNativeOrcaTurn(ctx context.Context, run *Run, workflow *
 	if err := s.resolveStoppedWorkerTurn(run, workflow, execution, stoppedWorkerResolution{TurnID: turn.TurnID, WaitReason: "The original Orca Dispatch settled (" + settlement.Outcome + "). Send feedback to continue the same agent session."}); err != nil {
 		return err
 	}
-	removeNativeOrcaRelayRequest(execution.Workspace.Worktree, run.RunID, turn.TurnID)
+	if fixed.config.hostName() != "orca_supervised" {
+		removeNativeOrcaRelayRequest(execution.Workspace.Worktree, run.RunID, turn.TurnID)
+	}
 	return nil
 }

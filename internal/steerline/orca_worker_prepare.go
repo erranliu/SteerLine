@@ -540,6 +540,9 @@ func (s *Service) bindNativeOrcaCoordinator(ctx context.Context, run *Run, execu
 }
 
 func (s *Service) verifyNativeOrcaWorker(ctx context.Context, run *Run, execution *ExecutionRecord) error {
+	if run.Protocol == string(ProtocolOrcaSupervised) {
+		return s.verifyRemoteOrcaWorker(ctx, run, execution)
+	}
 	fixed, configErr := s.workerFlowContext(run)
 	if configErr != nil {
 		return configErr

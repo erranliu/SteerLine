@@ -963,6 +963,20 @@ func (s *Service) inspectRunProcess(run *Run) string {
 	records := executionRecords{root: c.RunDir}
 	ref, err := records.loadBinding(run.RunID, run.AttemptID)
 	if err == nil {
+		if ref.Protocol == ProtocolOrcaSupervised {
+			execution := s.executionRecord(run)
+			if execution == nil || execution.Process == nil || *execution.Process != *run.Process ||
+				!sameSupervisedBaseTarget(ref.Target, execution.Target) || ref.External.Kind != "orca_supervised" ||
+				ref.External.RuntimeID != run.Process.RuntimeID || ref.External.CoordinatorRuntimeID != run.Process.CoordinatorRuntimeID ||
+				ref.External.Terminal != run.Process.Terminal || ref.External.Incarnation != run.Process.Incarnation ||
+				ref.External.ExecutionHost != run.Process.ExecutionHost || ref.External.WorktreeID != run.Process.WorktreeID ||
+				ref.WorkspacePath != execution.Workspace.Worktree || ref.WorkspaceBranch != execution.Workspace.Branch || ref.BaseCommit != execution.Workspace.Base {
+				return "remote session conflicts with its original execution binding"
+			}
+			// The session binding stays immutable across turns. Inspect the current
+			// Dispatch stored by the center's committed worker transition.
+			ref = remoteExecutionRef(run, execution)
+		}
 		if ref.External != *run.Process || ref.Backend == "" || ref.Protocol == "" || ref.Target.ID == "" {
 			return "execution binding conflicts with runtime identity"
 		}

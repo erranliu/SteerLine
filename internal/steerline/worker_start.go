@@ -81,7 +81,7 @@ func (s *Service) prepareWorkerWorkspace(ctx context.Context, task TaskRecord, r
 		}
 	}
 	if remote {
-		if err := s.prepareWorkerOrcaTerminal(ctx, run); err != nil {
+		if err := s.prepareRemoteOrcaCoordinator(ctx, run); err != nil {
 			return s.waitWorkerFlow(run, "Original Orca terminal preparation is unverified: "+err.Error())
 		}
 	}
