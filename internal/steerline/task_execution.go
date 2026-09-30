@@ -9,21 +9,13 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	taskdomain "github.com/erranliu/SteerLine/internal/steerline/task"
 )
 
 // TaskClaimReceipt records reservation, not worker start. The existing
 // start_task applied receipt remains gated on a persisted worker identity.
-type TaskClaimReceipt struct {
-	RequestID        string `json:"request_id"`
-	TaskID           string `json:"task_id"`
-	TaskVersion      uint64 `json:"task_version"`
-	WorkflowRunID    string `json:"workflow_run_id"`
-	ExecutionID      string `json:"execution_id"`
-	AttemptID        string `json:"attempt_id"`
-	BaseCommit       string `json:"base_commit"`
-	Status           string `json:"status"`
-	StartTaskApplied bool   `json:"start_task_applied"`
-}
+type TaskClaimReceipt = taskdomain.TaskClaimReceipt
 
 type TaskClaimOptions struct {
 	TaskID                   string
@@ -311,8 +303,10 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 		return TaskClaimReceipt{}, err
 	}
 	attempt := StepAttemptRecord{ProjectIdentity: c.Project, AttemptID: attemptID, ExecutionID: executionID, StepID: "worker", AttemptNumber: 1, Status: "planned", InputRevision: base, ContractDigest: contract.Digest, ExternalBinding: target, CreatedAt: created, UpdatedAt: created}
-	nextTask := task
-	nextTask.Status, nextTask.Claimant, nextTask.Version, nextTask.UpdatedAt = "in_progress", claimant, task.Version+1, created
+	nextTask, err := taskdomain.Claim(task, claimant, created)
+	if err != nil {
+		return TaskClaimReceipt{}, err
+	}
 	operationRequest, _ := json.Marshal(map[string]any{"task_id": task.TaskID, "task_version": options.ExpectedTaskVersion, "authority_version": options.ExpectedAuthorityVersion, "workflow_run_id": workflowRunID, "execution_id": executionID, "attempt_id": attemptID, "base_commit": base, "predecessor_merge_commits": predecessorMerges, "requested_by": options.RequestedBy})
 	var receipt TaskClaimReceipt
 	err = sqlite.Transact(ctx, func(domainTx DomainTx) error {
@@ -411,15 +405,7 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 }
 
 func nativeDependencyClaimError(blockers []TaskDependencyStatus) error {
-	for _, blocker := range blockers {
-		switch blocker.Blocker {
-		case "discarded_predecessor":
-			return nativeErr("discarded_predecessor", "a discarded predecessor blocks this task")
-		case "inconsistent_delivery":
-			return nativeErr("inconsistent_delivery", "a predecessor's state conflicts with its delivery record")
-		}
-	}
-	return nativeErr("task_not_ready", "one or more predecessors lack verified delivery")
+	return taskdomain.DependencyClaimError(blockers)
 }
 
 func replayTaskClaim(old CommandRecord, payload []byte, taskID string, requestedBy string) (TaskClaimReceipt, error) {
@@ -478,14 +464,7 @@ type TaskDeliveryVerifier interface {
 	Query(context.Context, string) (PRInfo, error)
 }
 
-type TaskDeliveryReceipt struct {
-	TaskID        string             `json:"task_id"`
-	TaskVersion   uint64             `json:"task_version"`
-	WorkflowRunID string             `json:"workflow_run_id"`
-	GraphRevision uint64             `json:"graph_revision"`
-	Status        string             `json:"status"`
-	Delivery      TaskDeliveryRecord `json:"delivery"`
-}
+type TaskDeliveryReceipt = taskdomain.TaskDeliveryReceipt
 
 // CompleteNativeTask verifies the exact selected PR outside SQLite, then
 // rechecks the task, selected workflow result and fixed gate evidence in one
@@ -684,20 +663,21 @@ func selectedNativeDeliveryState(snapshot DomainSnapshot, taskID, workflowRunID 
 	return *workflow, *execution, nil
 }
 
-func validateNativeDeliveryGates(task TaskRecord, contract TaskContract, workflow WorkflowRunRecord, execution ExecutionRecord) (string, error) {
-	if workflow.WorkflowVersion != WorkerFlowVersion {
-		return "", nativeErr("unsupported_schema", "selected workflow uses an unsupported protocol")
-	}
-	if task.ContractID != contract.ContractID || contract.Digest == "" {
-		return "", nativeErr("contract_mismatch", "selected task contract is unavailable")
-	}
-	if workflow.TaskID != task.TaskID || workflow.SelectedResult != execution.ExecutionID || execution.WorkflowRunID != workflow.WorkflowRunID ||
-		workflow.PRURL == "" || execution.SessionID == "" || execution.Workspace.Branch == "" ||
-		workflow.Phase != "executing" && workflow.Phase != "waiting_decision" && workflow.Phase != "waiting_pr_merge" {
-		return "", nativeErr("task_not_ready", "selected worker flow has no bound session, execution branch or PR")
-	}
-	return workflow.PRURL, nil
+func validateNativeDeliveryGates(record TaskRecord, contract TaskContract, workflow WorkflowRunRecord, execution ExecutionRecord) (string, error) {
+	return taskdomain.DeliveryPR(record, contract, taskdomain.DeliveryGate{
+		WorkflowVersion:     workflow.WorkflowVersion,
+		WorkflowTaskID:      workflow.TaskID,
+		SelectedExecutionID: workflow.SelectedResult,
+		ExecutionID:         execution.ExecutionID,
+		ExecutionWorkflowID: execution.WorkflowRunID,
+		WorkflowRunID:       workflow.WorkflowRunID,
+		PRURL:               workflow.PRURL,
+		SessionID:           execution.SessionID,
+		WorkspaceBranch:     execution.Workspace.Branch,
+		Phase:               workflow.Phase,
+	}, WorkerFlowVersion)
 }
+
 func (c CommandService) commitNativeDelivery(ctx context.Context, s *SQLiteStore, expectedAuthorityVersion uint64, task TaskRecord, workflow WorkflowRunRecord, execution ExecutionRecord, contract TaskContract, prURL string, delivery TaskDeliveryRecord) (TaskDeliveryReceipt, error) {
 	var receipt TaskDeliveryReceipt
 	err := s.Transact(ctx, func(domainTx DomainTx) error {
@@ -797,10 +777,10 @@ func (c CommandService) commitNativeDelivery(ctx context.Context, s *SQLiteStore
 			}
 			return err
 		}
-		next := current
-		next.Status = "closed"
-		next.Version++
-		next.UpdatedAt = time.Now().UTC()
+		next, err := taskdomain.CompleteDelivery(current, delivery, graph.Authority.Branch, time.Now().UTC())
+		if err != nil {
+			return err
+		}
 		if err = tx.UpdateNativeTaskCAS(next, current.Version); err != nil {
 			return err
 		}

@@ -9,30 +9,19 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
-	"io"
 	"net/url"
 	"os"
-	"path"
 	"path/filepath"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
-	"unicode/utf8"
+
+	"github.com/erranliu/SteerLine/internal/steerline/task"
 )
 
 const nativeTaskProtocol = "native-tasks/v1"
 
-var canonicalNativeTaskIDPattern = regexp.MustCompile(`^(0|[1-9][0-9]*)$`)
-
-func canonicalDecimalID(value string) bool {
-	if !canonicalNativeTaskIDPattern.MatchString(value) {
-		return false
-	}
-	_, err := strconv.ParseUint(value, 10, 63)
-	return err == nil
-}
+func canonicalDecimalID(value string) bool { return task.CanonicalDecimalID(value) }
 
 type NativeTaskCapabilities struct {
 	DependencyReadiness string `json:"dependency_readiness"`
@@ -54,12 +43,7 @@ type NativeTaskDetail struct {
 	StartupBlockers   []string               `json:"startup_blockers"`
 }
 
-type TaskDependencyStatus struct {
-	TaskID    string `json:"task_id"`
-	Status    string `json:"status"`
-	Delivered bool   `json:"delivered"`
-	Blocker   string `json:"blocker,omitempty"`
-}
+type TaskDependencyStatus = task.TaskDependencyStatus
 
 type NativeTaskPage struct {
 	Protocol         string                 `json:"protocol"`
@@ -94,20 +78,11 @@ type nativeTaskCursor struct {
 	Offset           int    `json:"o"`
 }
 
-type NativeTaskError struct {
-	Code    string `json:"code"`
-	Message string `json:"message"`
-}
+type NativeTaskError = task.Error
 
-func (e *NativeTaskError) Error() string   { return e.Code + ": " + e.Message }
-func nativeErr(code, message string) error { return &NativeTaskError{Code: code, Message: message} }
+func nativeErr(code, message string) error { return &task.Error{Code: code, Message: message} }
 
-func ValidateNativeTaskID(id string) error {
-	if !canonicalDecimalID(id) {
-		return nativeErr("contract_mismatch", "task ID must be a canonical nonnegative decimal number")
-	}
-	return nil
-}
+func ValidateNativeTaskID(id string) error { return task.ValidateID(id) }
 
 func (q QueryService) ListNativeTasks(ctx context.Context, cursor string, limit int) (NativeTaskPage, error) {
 	if q.Store == nil || q.Project == "" {
@@ -1011,112 +986,12 @@ func sameRepositoryTarget(a, b string) bool {
 	return a == b
 }
 
-func validSHA256(s string) bool {
-	if len(s) != 64 {
-		return false
-	}
-	_, err := hex.DecodeString(s)
-	return err == nil
-}
-func validCommit(s string) bool {
-	if len(s) != 40 && len(s) != 64 {
-		return false
-	}
-	_, err := hex.DecodeString(s)
-	return err == nil
-}
+func validSHA256(s string) bool { return task.ValidSHA256(s) }
+func validCommit(s string) bool { return task.ValidCommit(s) }
 
-func TaskContractDigest(v TaskContract) (string, error) {
-	v.Digest = ""
-	b, err := json.Marshal(v)
-	if err != nil {
-		return "", err
-	}
-	canonical, err := CanonicalJSON(b)
-	if err != nil {
-		return "", err
-	}
-	sum := sha256.Sum256(canonical)
-	return hex.EncodeToString(sum[:]), nil
-}
-
-func ValidateTaskContract(v TaskContract) error {
-	if v.ContractID == "" || v.Repository == "" || v.Remote == "" || v.Branch == "" {
-		return nativeErr("contract_mismatch", "contract ID and repository target are required")
-	}
-	if v.SpecRef.Path == v.PlanRef.Path {
-		return nativeErr("contract_mismatch", "contract must pin exactly one independent Spec and one distinct Plan")
-	}
-	if len(v.AcceptanceRefs) == 0 {
-		return nativeErr("contract_mismatch", "contract requires at least one acceptance reference")
-	}
-	refs := []FileReference{v.SpecRef, v.PlanRef}
-	refs = append(refs, v.CommonRefs...)
-	refs = append(refs, v.AcceptanceRefs...)
-	for _, ref := range refs {
-		if err := validateFileReferenceShape(ref); err != nil {
-			return err
-		}
-	}
-	for _, ref := range v.CommonRefs {
-		if ref.Path == v.SpecRef.Path || ref.Path == v.PlanRef.Path || !sharedContractPath(ref.Path) {
-			return nativeErr("contract_mismatch", "common_refs may contain only shared constraints or protocols")
-		}
-	}
-	for _, ref := range v.AcceptanceRefs {
-		if !strings.HasSuffix(strings.ToLower(ref.Path), ".md") {
-			return nativeErr("contract_mismatch", "acceptance reference must point to a Markdown document")
-		}
-		if ref == v.SpecRef || ref == v.PlanRef {
-			continue
-		}
-		if ref.Path == v.SpecRef.Path || ref.Path == v.PlanRef.Path || (taskDocumentPath(ref.Path) && !sharedContractPath(ref.Path)) {
-			return nativeErr("contract_mismatch", "acceptance_refs cannot add another task's Spec/Plan or another version of the fixed documents")
-		}
-	}
-	digest, err := TaskContractDigest(v)
-	if err != nil {
-		return err
-	}
-	if !strings.EqualFold(digest, v.Digest) {
-		return nativeErr("contract_mismatch", "contract canonical digest does not match its content")
-	}
-	return nil
-}
-
-func taskDocumentPath(name string) bool {
-	name = strings.ToLower(name)
-	return strings.HasSuffix(name, ".spec.md") || strings.HasSuffix(name, ".plan.md")
-}
-
-// Shared documentation uses constraint/protocol paths; the execution
-// architecture is the repository's established shared .spec.md document.
-// This structural convention does not prove semantic specification quality.
-func sharedContractPath(name string) bool {
-	name = strings.ToLower(name)
-	if path.Base(name) == "execution-architecture.spec.md" {
-		return true
-	}
-	if taskDocumentPath(name) {
-		return false
-	}
-	for _, part := range strings.FieldsFunc(name, func(r rune) bool { return r == '/' || r == '-' || r == '_' || r == '.' }) {
-		if part == "constraint" || part == "constraints" || part == "protocol" || part == "protocols" {
-			return true
-		}
-	}
-	return false
-}
-
-func validateFileReferenceShape(ref FileReference) error {
-	if ref.Path == "" || strings.Contains(ref.Path, "\\") || path.IsAbs(ref.Path) || filepath.IsAbs(ref.Path) || regexp.MustCompile(`^[A-Za-z]:`).MatchString(ref.Path) || path.Clean(ref.Path) != ref.Path || ref.Path == "." || strings.HasPrefix(ref.Path, "../") || ref.Path == ".." {
-		return nativeErr("contract_mismatch", "specification path must be a normalized repository-relative path")
-	}
-	if !validCommit(ref.Commit) || !validSHA256(ref.SHA256) {
-		return nativeErr("contract_mismatch", "file reference requires a full commit and SHA-256 blob digest")
-	}
-	return nil
-}
+func TaskContractDigest(v TaskContract) (string, error)  { return task.ContractDigest(v) }
+func ValidateTaskContract(v TaskContract) error          { return task.ValidateContract(v) }
+func validateFileReferenceShape(ref FileReference) error { return task.ValidateFileReference(ref) }
 
 // VerifyTaskContractFiles validates pinned committed blobs. TASK-DAG must also
 // check the actual execution workspace before claim/implementation; this check
@@ -1202,103 +1077,10 @@ func readCommittedRegularFile(ctx context.Context, r Runner, git Command, ref Fi
 }
 
 func ValidateTaskContractJSON(data []byte) (TaskContract, error) {
-	if _, err := CanonicalJSON(data); err != nil {
-		return TaskContract{}, nativeErr("contract_mismatch", err.Error())
-	}
-	var v TaskContract
-	d := json.NewDecoder(bytes.NewReader(data))
-	d.DisallowUnknownFields()
-	if err := d.Decode(&v); err != nil {
-		return v, nativeErr("contract_mismatch", err.Error())
-	}
-	var extra any
-	if err := d.Decode(&extra); err != io.EOF {
-		return v, nativeErr("contract_mismatch", "expected one JSON value")
-	}
-	return v, ValidateTaskContract(v)
+	return task.ValidateContractJSON(data)
 }
 
-// CanonicalJSON rejects duplicate object keys and emits sorted-key, UTF-8 JSON
-// with no insignificant whitespace. Array order is preserved.
-func CanonicalJSON(data []byte) ([]byte, error) {
-	if !utf8.Valid(data) {
-		return nil, errors.New("canonical JSON input must be valid UTF-8")
-	}
-	d := json.NewDecoder(bytes.NewReader(data))
-	d.UseNumber()
-	v, err := readJSONValue(d)
-	if err != nil {
-		return nil, err
-	}
-	var extra any
-	if err = d.Decode(&extra); err != io.EOF {
-		if err == nil {
-			return nil, errors.New("multiple JSON values")
-		}
-		return nil, err
-	}
-	var out bytes.Buffer
-	e := json.NewEncoder(&out)
-	e.SetEscapeHTML(false)
-	if err = e.Encode(v); err != nil {
-		return nil, err
-	}
-	return bytes.TrimSuffix(out.Bytes(), []byte{'\n'}), nil
-}
-
-func readJSONValue(d *json.Decoder) (any, error) {
-	t, err := d.Token()
-	if err != nil {
-		return nil, err
-	}
-	delim, ok := t.(json.Delim)
-	if !ok {
-		return t, nil
-	}
-	switch delim {
-	case '{':
-		m := map[string]any{}
-		for d.More() {
-			kt, err := d.Token()
-			if err != nil {
-				return nil, err
-			}
-			key, ok := kt.(string)
-			if !ok {
-				return nil, errors.New("object key is not a string")
-			}
-			if _, exists := m[key]; exists {
-				return nil, fmt.Errorf("duplicate JSON object key %q", key)
-			}
-			value, err := readJSONValue(d)
-			if err != nil {
-				return nil, err
-			}
-			m[key] = value
-		}
-		end, err := d.Token()
-		if err != nil || end != json.Delim('}') {
-			return nil, errors.New("invalid JSON object")
-		}
-		return m, nil
-	case '[':
-		a := []any{}
-		for d.More() {
-			value, err := readJSONValue(d)
-			if err != nil {
-				return nil, err
-			}
-			a = append(a, value)
-		}
-		end, err := d.Token()
-		if err != nil || end != json.Delim(']') {
-			return nil, errors.New("invalid JSON array")
-		}
-		return a, nil
-	default:
-		return nil, errors.New("unexpected JSON delimiter")
-	}
-}
+func CanonicalJSON(data []byte) ([]byte, error) { return task.CanonicalJSON(data) }
 
 func (s *SQLiteStore) nativeAuthority(ctx context.Context, project string) (ProjectTaskAuthority, error) {
 	var v ProjectTaskAuthority

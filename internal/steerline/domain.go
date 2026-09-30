@@ -2,119 +2,25 @@ package steerline
 
 import (
 	"encoding/json"
-	"errors"
-	"fmt"
 	"regexp"
 	"time"
+
+	"github.com/erranliu/SteerLine/internal/steerline/task"
 )
 
-// Domain entities are the durable center model. Runtime/Run below remains a
-// read model for the existing CLI and console.
+// Task records are defined in task. The remaining domain entities are durable
+// center records; Runtime/Run remains a CLI and console read model.
 // WorkerFlowVersion is the persisted protocol for a single resumable worker session.
 const WorkerFlowVersion = "worker-flow-v1"
 
-type TaskRecord struct {
-	ProjectIdentity   string     `json:"project_identity"`
-	TaskID            string     `json:"task_id"`
-	ExternalProvider  string     `json:"external_provider,omitempty"`
-	ExternalProject   string     `json:"external_project,omitempty"`
-	ExternalID        string     `json:"external_id,omitempty"`
-	IdentityMapDigest string     `json:"identity_map_digest,omitempty"`
-	BatchID           string     `json:"batch_id,omitempty"`
-	Title             string     `json:"title"`
-	Type              string     `json:"type,omitempty"`
-	Priority          int        `json:"priority,omitempty"`
-	GoalIDs           []string   `json:"goal_ids,omitempty"`
-	ContractID        string     `json:"contract_id,omitempty"`
-	Claimant          string     `json:"claimant,omitempty"`
-	Source            string     `json:"source"`
-	Status            string     `json:"status"`
-	Version           uint64     `json:"version"`
-	CreatedAt         time.Time  `json:"created_at"`
-	UpdatedAt         time.Time  `json:"updated_at"`
-	DiscardedAt       *time.Time `json:"discarded_at,omitempty"`
-	DiscardReason     string     `json:"discard_reason,omitempty"`
-	DiscardedBy       string     `json:"discarded_by,omitempty"`
-	DiscardRequestID  string     `json:"discard_request_id,omitempty"`
-	CleanupPending    []string   `json:"cleanup_pending,omitempty"`
-}
-
-// FileReference pins a contract document to an immutable commit and the
-// SHA-256 of the committed blob bytes.
-type FileReference struct {
-	Path   string `json:"path"`
-	Commit string `json:"commit"`
-	SHA256 string `json:"sha256"`
-}
-
-type TaskContract struct {
-	ContractID     string          `json:"contract_id"`
-	Repository     string          `json:"repository"`
-	Remote         string          `json:"remote"`
-	Branch         string          `json:"branch"`
-	SpecRef        FileReference   `json:"spec_ref"`
-	PlanRef        FileReference   `json:"plan_ref"`
-	CommonRefs     []FileReference `json:"common_refs"`
-	AcceptanceRefs []FileReference `json:"acceptance_refs"`
-	Digest         string          `json:"digest"`
-}
-
-type ProjectTaskAuthority struct {
-	ProjectIdentity  string    `json:"project_id"`
-	Authority        string    `json:"authority"`
-	AuthorityVersion uint64    `json:"authority_version"`
-	GraphRevision    uint64    `json:"graph_revision"`
-	Repository       string    `json:"repository"`
-	Remote           string    `json:"remote"`
-	Branch           string    `json:"branch"`
-	DispatchMode     string    `json:"dispatch_mode"`
-	DispatchPaused   bool      `json:"dispatch_paused"`
-	CreatedAt        time.Time `json:"created_at"`
-	UpdatedAt        time.Time `json:"updated_at"`
-}
-
-type TaskBatchRecord struct {
-	BatchID         string            `json:"batch_id"`
-	ProjectIdentity string            `json:"project_id"`
-	SchemaVersion   string            `json:"schema_version"`
-	PayloadDigest   string            `json:"payload_digest"`
-	CreatedAt       time.Time         `json:"created_at"`
-	CommandID       string            `json:"command_id"`
-	TaskIDs         map[string]string `json:"task_ids"`
-}
-
-type TaskDependencyRecord struct {
-	ProjectIdentity string `json:"project_id"`
-	PredecessorID   string `json:"predecessor_id"`
-	SuccessorID     string `json:"successor_id"`
-}
-
-type TaskDeliveryRecord struct {
-	ProjectIdentity       string          `json:"project_id"`
-	TaskID                string          `json:"task_id"`
-	SelectedWorkflowRunID string          `json:"selected_workflow_run_id"`
-	PRInstance            string          `json:"pr_instance"`
-	PRRepository          string          `json:"pr_repository"`
-	PRNumber              int64           `json:"pr_number"`
-	PRURL                 string          `json:"pr_url"`
-	MergeCommit           string          `json:"merge_commit"`
-	MergedAt              time.Time       `json:"merged_at"`
-	RecordedAt            time.Time       `json:"recorded_at"`
-	Evidence              json.RawMessage `json:"evidence,omitempty"`
-}
-
-type TaskDeliveryEvidence struct {
-	PRInstance         string           `json:"pr_instance"`
-	URL                string           `json:"url"`
-	Repository         string           `json:"repository"`
-	PRNumber           int64            `json:"number"`
-	BaseBranch         string           `json:"base_branch"`
-	State              string           `json:"state"`
-	Merged             bool             `json:"merged"`
-	MergedAt           time.Time        `json:"merged_at"`
-	MergeCommit        string           `json:"merge_commit"`
-	ExistingAcceptance *json.RawMessage `json:"existing_acceptance,omitempty"`
-}
+type TaskRecord = task.TaskRecord
+type FileReference = task.FileReference
+type TaskContract = task.TaskContract
+type ProjectTaskAuthority = task.ProjectTaskAuthority
+type TaskBatchRecord = task.TaskBatchRecord
+type TaskDependencyRecord = task.TaskDependencyRecord
+type TaskDeliveryRecord = task.TaskDeliveryRecord
+type TaskDeliveryEvidence = task.TaskDeliveryEvidence
 
 type WorkflowRunRecord struct {
 	ControlRevision  uint64                 `json:"-"`
@@ -341,13 +247,7 @@ func validStepAttemptStatus(v string) bool {
 	return false
 }
 
-func validTaskStatus(v string) bool {
-	switch v {
-	case "open", "in_progress", "discarded", "closed":
-		return true
-	}
-	return false
-}
+func validTaskStatus(v string) bool { return task.ValidStatus(v) }
 func validWorkflowPhase(v string) bool {
 	switch v {
 	case "queued", "executing", "waiting_decision", "waiting_pr_merge", "completing", "completed", "blocked", "abandoned":
@@ -377,25 +277,6 @@ func validOperationStatus(v string) bool {
 	return false
 }
 
-func SetTaskStatus(task *TaskRecord, next string, mergedPR bool) error {
-	if task == nil {
-		return errors.New("task is required")
-	}
-	if !validTaskStatus(next) {
-		return fmt.Errorf("invalid task status %q", next)
-	}
-	allowed := map[string]map[string]bool{"open": {"in_progress": true, "discarded": true}, "in_progress": {"discarded": true, "closed": true}, "discarded": {}, "closed": {}}
-	if task.Status == next {
-		return nil
-	}
-	if !allowed[task.Status][next] {
-		return fmt.Errorf("task transition %s -> %s is not allowed", task.Status, next)
-	}
-	if next == "discarded" && mergedPR {
-		return errors.New("task with a merged pull request cannot be discarded")
-	}
-	task.Status = next
-	task.Version++
-	task.UpdatedAt = now()
-	return nil
+func SetTaskStatus(record *TaskRecord, next string, mergedPR bool) error {
+	return task.SetStatus(record, next, mergedPR, now())
 }

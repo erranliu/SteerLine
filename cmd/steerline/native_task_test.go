@@ -19,6 +19,16 @@ import (
 
 func TestNativeTaskBatchCLIValidatesCreatesAndDiscardsFixedTaskIDs(t *testing.T) {
 	t.Setenv("STEERLINE_HOME", t.TempDir())
+	global, err := json.Marshal(map[string]any{
+		"execution_profiles":        []map[string]any{{"id": "local", "name": "Local Codex", "host": "local", "agent": "codex", "sandbox": "workspace-write", "codex": map[string]string{"executable": "codex"}}},
+		"default_execution_profile": "local",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(steerline.GlobalExecutionConfigPath(), global, 0600); err != nil {
+		t.Fatal(err)
+	}
 	repo := filepath.Join(t.TempDir(), "repo")
 	remoteURL := "https://forge.invalid/org/repo.git"
 	for _, args := range [][]string{{"init", "--quiet", "-b", "main", repo}, {"-C", repo, "remote", "add", "origin", remoteURL}} {
