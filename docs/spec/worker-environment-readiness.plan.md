@@ -1,21 +1,21 @@
 # Plan：worker 环境就绪与宿主阻断恢复
 
-目标：`WORKER-ENVIRONMENT-READINESS`。唯一执行依据：[Spec](worker-environment-readiness.spec.md)。状态：PR154 原范围已实施并通过最小验收，PR160 待审阅；#59 新权限接线待前置完成。日期：2026-09-30。未分配原生 Task ID；一个实现 PR 交付。最终权限接线及交付前置：[#59](execution-isolation-06-policy.spec.md) 合入；准备性探针与观察工作可独立开展。
+目标：`WORKER-ENVIRONMENT-READINESS`。唯一执行依据：[Spec](worker-environment-readiness.spec.md)。状态：原范围已交付，真实服务闭环及定向验收通过。日期：2026-09-30。原实现 PR160 已合入；以下保留原实施/验证及后续迁移交接，项目策略接线由 [#59](execution-isolation-06-policy.spec.md) 独立交付。
 
-实施基线：PR160 完成 PR154 提交的冻结权限、原会话探针和宿主恢复范围，证据见[验收记录](../validation/worker-environment-readiness/README.md)。后续执行配置隔离规划将权限编译与快照所有者移交给 #59；本文保留该新接线要求，原验收不证明 #59 接线已完成。当前准备/派发/观察代码已整合到 `orca_worker_prepare.go`、`orca_worker_dispatch.go`、`orca_worker_observation.go` 和 `worker_environment.go`。
+原范围完成冻结权限、原会话探针和宿主恢复，见[验收记录](../validation/worker-environment-readiness/README.md)。当前入口包括 worker_environment 与 Orca prepare/dispatch/observation。#57/#58 承接平台操作与中心准备规则，#59 改变授权来源，不把已交付能力重新排成等待 #59 的任务。
 
 ## 1. 核实接口并收敛证据
 
-围绕 Spec §3–§5 核对安装版本 Codex、Orca 原生轮次、terminal agentWait/退出、worker-read 输出及请求恢复能力。#59 统一收口有/无 model 的受管权限与审批配置，本任务接收实际启动设置，不重复编译参数。原生 poll 的 inbox/relay、无 Dispatch 和上轮结算后的宿主观察入口，按实施时适配器接口核对，不另建后端框架。
+原实现核对 Codex/Orca 版本、原生轮次、terminal 等待/退出、输出及恢复能力，已统一有/无 model 的受管命令和安全 args。后续迁移复用这些入口、实际启动设置、工具解析与原 native 身份，不重做后端框架。
 
-只补证一个关键边界：同一 Orca agent 会话的命令工具探针及准备轮次结算，能否提供 Spec 要求的执行证据。现有 `WorkerOutput.Transcript` 是原始 JSON，`Terminal.Tail` 是屏幕文本，均不是现成的类型化工具成功事件。核对实际版本的 transcript schema 和来源可信度，识别工具调用/结果并绑定探针摘要及 nonce；在平台适配层提供事实，不要求 Orca 提供 Codex UUID。成功文件、assistant 正文和宿主命令均不能单独作为执行证明。
+原实现已补证同一 agent 会话的工具调用/结果、原子收据与准备结算，平台层按已核实 transcript/wrapper 解析并绑定脚本摘要和 nonce，屏幕文本不单独作为成功证明。后续搬包复用已有解码器和对应 fixture，不退回 Service 字符串解析，也不为使用公共契约要求 Orca 提供 Codex UUID。
 
-在这一步先完成最小原会话探针实验；若平台不能给出所需证据，记录具体缺失并将实施标记为阻塞，不开展一套只会拒绝执行的“完整实现”，也不宣称交付。本文定义的是实现目标，不宣称相关平台接口已经全部验证。
+后续版本/权限设置变化只重验受影响边界，现有证据不自动认证未知版本或新策略摘要。成功文件、assistant 正文和宿主命令仍不能替代原生工具证据；不要重复原已通过的完整服务实验，也不能将它直接当成 #59 项目策略已接通。
 
 | 代码入口 | 本次职责 |
 | --- | --- |
-| #59 的项目配置、权限编译、快照与查询入口 | 复用冻结要求/资源与不可用原因；本任务增加准备和宿主阻断诊断 |
-| #57/#58 的固定命令、原生准备与绑定入口 | 使用 #59 的有/无 model 受管命令，保存本任务原会话准备身份和工具事实 |
+| 现有 execution_profiles、native_claim_command、orcaworker/command.go 与 worker_environment；后续 #57/#59 迁移 | 当前冻结 Profile、受管命令及资源；#59 改为项目策略来源，保留诊断与校验 |
+| 现有 Orca prepare/dispatch；后续 #58 迁移平台操作 | 同一有/无 model 受管入口，保存原会话准备身份、工具/收据与结算事实 |
 | `orca_worker_prepare.go`、`orca_worker_dispatch.go`、`orca_worker_observation.go`、`orca_worker_relay.go` 及 #58 迁移后的入口 | readiness 与 business 轮次区分、独立观察、原生结算与恢复对账 |
 | `internal/steerline/orcaworker/terminal.go`、`output.go`、`conversation_service.go` | 原 terminal 等待/退出事实、工具证据及来源，复用现有会话事件 |
 | `domain.go`、`worker_state.go`、`model.go`、现有 CommandService/Operation/store | 原生轮次类型、准备事实、blocker、反馈中的中心动作及权威事务提交 |
@@ -25,7 +25,7 @@
 
 ## 2. 冻结权限并持久化准备事实
 
-接收 [#59](execution-isolation-06-policy.spec.md) 的权限编译、参数冲突拒绝和两阶段快照，作为本步骤最终权限接线前置；不另实现 Profile 顶层 sandbox 或第二份安全参数解析。原会话准备/宿主观察 fixture 可独立开展。领取前复用其无启动副作用的策略/CLI 检查并查询 Orca 连通性，核对固定项目策略和 Profile digest，不改选配置。Windows Orca Codex 有/无 model 均使用同一受管命令与显式 codex.windows_sandbox；资源绑定追加实际 runtime、根目录及命令证据，不预填未知路径。
+原实现领取前校验现行 Profile、CLI 和 Orca 连通性，冻结显式 windows_sandbox 与 managed approval/权限契约摘要；有/无 model 使用同一命令，资源绑定追加实际 runtime、根目录与命令，不预填未知路径。后续 #59 用新项目策略替代该配置来源，复用现有参数拒绝与准备接线，不创建第二份快照或解析器；这项迁移不反向阻塞本 Plan 的已交付范围。
 
 在现有 `domain.go` 原生轮次记录区分 `readiness` 与 `business`，保存准备 nonce、输入摘要、开始/截止时间、收据校验、工具证据和结算结果。明确当前原生准备/业务轮与业务轮计数、业务反馈目标的关联：准备轮次不能成为业务的 CurrentTurn/LastStoppedTurn 或消费业务反馈，原会话仍最多一个活动/未知原生 Dispatch。不同准备意图使用新 nonce，同一意图重启保留原值。阻断字段保存 reason/source/confidence/observed identity/time，关联已有 Decision 和恢复 Operation；原 question/message、已保存答案及投递状态分别保留。只增加实现所需的字段，不提前设计跨 agent 健康服务或成功缓存。
 

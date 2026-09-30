@@ -28,7 +28,9 @@
 
 ## 启动命令交接
 
-Codex CLI argv、model/effort、现有 sandbox 参数、Git 附加目录与 profile 处理由 Codex 层生成。Orca shell 包装暂留原包。本任务提供 #54 的固定启动命令契约，供 #58 使用；命令序列应与搬迁前保持一致，不在本轮补上新的权限策略。
+Codex CLI argv、model/effort、现有 sandbox 参数、Git 附加目录与 profile 处理由 Codex 层生成。Orca shell 包装暂留原包。本任务迁入已有 `orcaworker.FixedAgentCommand` 的 Codex 参数决定及 `ValidateManagedArgs`，由同一个 Codex 生产者提供 #54 的固定命令契约，#58 只接 shell/terminal。命令、参数顺序及权限契约摘要与当前保持一致，不在本轮补上新的项目策略。
+
+Windows Orca 当前有/无 model 均受管，model/effort 可分别省略；保留 approval=never、strict-config、固定 Git 根、排除隐式临时根及原 args 安全集合，不能恢复 opaque agent 分支或 model/effort 成对必填。原生启动设置在环境绑定中仍可与命令/根目录逐次对照；搬包不改变冻结摘要、probe 脚本或收据关联。
 
 特别保留主干本地 Windows 设置：受限 local 缺省 elevated 在摘要前规范化并冻结，workspace-write + unelevated 领取前拒绝，read-only 的显式 unelevated 保持可用。`codexapp.LocalSandboxArgs` 的实现解释移入 codexworker 权限层并更新调用/测试，codexapp 只序列化已编译原生参数；不复制另一份 Windows 校验，前五轮配置字段仍保持当前表示。
 
@@ -41,6 +43,6 @@ Codex CLI argv、model/effort、现有 sandbox 参数、Git 附加目录与 prof
 | CX1 | codexworker 不依赖父包/SQL，中心的 Codex 生命周期和恢复业务消费者不解析原生协议或日志格式 |
 | CX2 | 两轮反馈保留同一逻辑会话与工作区，原生回执可恢复，回答证据不匹配及旧轮次回执拒绝 |
 | CX3 | 停服观察不自动发送已保存输入，意图写入失败不启动/发送；新会话选择仍需原人工授权 |
-| CX4 | 固定 CLI/app-server 参数与 local Windows 默认/拒绝/冻结语义保持，向 #58 提供独立 argv，原生传输与项目决策分开 |
+| CX4 | 固定 CLI/app-server、local Windows 规则及 Orca 无 model 受管/独立 effort/安全 args 语义保持，命令和冻结证据不漂移 |
 
 使用既有 fake app-server 与命令 fixture。无行为变化不要求新真机认证；若实施中必须改变启动行为，须单独说明原因并补必要隔离证据，不能当作机械迁移隐藏。

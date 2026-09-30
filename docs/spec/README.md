@@ -31,7 +31,7 @@
 
 ## worker 环境就绪与宿主恢复
 
-[worker 环境就绪与宿主阻断恢复 Spec](worker-environment-readiness.spec.md) / [Plan](worker-environment-readiness.plan.md)。状态：PR154 原范围已实施，审计修复与真实服务闭环通过，PR160 待审阅；#59 新权限接线待前置完成；未分配 Task ID，一个实现 PR 交付。[验收记录](../validation/worker-environment-readiness/README.md)。补充本机 Orca + Codex 的冻结权限、原会话工具探针、独立宿主等待观察与原身份恢复，沿用 #36 的五主阶段及原生编排边界。
+[worker 环境就绪与宿主阻断恢复 Spec](worker-environment-readiness.spec.md) / [Plan](worker-environment-readiness.plan.md) 原范围已交付，[验收记录](../validation/worker-environment-readiness/README.md)供后续迁移复用。#57/#58 迁移既有受管启动、平台事实及中心准备边界，#59 改为项目策略来源，不重新建设或反向阻塞已交付的就绪能力。
 
 ## 架构审计收口（3 个 PR）
 
