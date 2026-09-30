@@ -9,36 +9,13 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
 
-// orcaTerminal is the subset of `orca terminal show/create/list` fields the
-// scheduler reads. Orca owns execution facts; Steerline only diagnoses them.
-type orcaTerminal struct {
-	Handle          string                 `json:"handle"`
-	Title           string                 `json:"title"`
-	WorktreeID      string                 `json:"worktreeId"`
-	WorktreePath    string                 `json:"worktreePath"`
-	Branch          string                 `json:"branch"`
-	Status          string                 `json:"status"`
-	Connected       bool                   `json:"connected"`
-	Orphaned        bool                   `json:"orphaned"`
-	IncarnationID   string                 `json:"incarnationId"`
-	ExecutionHostID string                 `json:"executionHostId"`
-	AgentIdentity   string                 `json:"agentIdentity"`
-	LastOutputAt    int64                  `json:"lastOutputAt"`
-	AgentWait       *json.RawMessage       `json:"agentWait"`
-	ExitCause       *orcaTerminalExitCause `json:"exitCause,omitempty"`
-	RuntimeID       string                 `json:"-"`
-}
-
-type orcaTerminalExitCause struct {
-	Kind     string `json:"kind"`
-	ExitCode *int   `json:"exitCode,omitempty"`
-}
-
-func (t orcaTerminal) exited() bool {
-	return t.Status == "exited" || t.ExitCause != nil && t.ExitCause.Kind == "exited"
-}
+// Orca terminal facts are owned by the platform adapter.
+type orcaTerminal = orcaworker.Terminal
+type orcaTerminalExitCause = orcaworker.TerminalExitCause
 
 type orcaObservationGate struct {
 	token chan struct{}
@@ -281,7 +258,7 @@ func inspectOrcaTerminal(c Config, old *ProcessIdentity) string {
 	if term.Orphaned {
 		return "orca terminal orphaned"
 	}
-	if term.exited() {
+	if term.Exited() {
 		return "orca terminal exited"
 	}
 	if !term.Connected {

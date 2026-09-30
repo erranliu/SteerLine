@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -58,24 +57,8 @@ func stageWorkerOrcaPrompt(ctx context.Context, c Config, identity ProcessIdenti
 }
 
 func showWorkerOrcaTerminal(ctx context.Context, c Config, handle string) (orcaTerminal, error) {
-	if handle == "" {
-		return orcaTerminal{}, errors.New("worker terminal handle is empty")
-	}
-	env, err := workerOrcaCall(ctx, c, "terminal", "show", "--terminal", handle, "--json")
-	if err != nil {
-		return orcaTerminal{}, err
-	}
-	var result struct {
-		Terminal orcaTerminal `json:"terminal"`
-	}
-	if err := json.Unmarshal(env.Result, &result); err != nil {
-		return orcaTerminal{}, err
-	}
-	result.Terminal.RuntimeID = env.Meta.RuntimeID
-	if result.Terminal.Handle != handle || result.Terminal.RuntimeID == "" || result.Terminal.IncarnationID == "" || result.Terminal.Orphaned || !result.Terminal.Connected || result.Terminal.exited() {
-		return orcaTerminal{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "original worker terminal is missing, disconnected or replaced"}
-	}
-	return result.Terminal, nil
+	terminal, err := orcaworker.ShowTerminal(ctx, orcaWorkerMetaCaller(c), handle)
+	return terminal, workerOrcaBackendError(err)
 }
 
 func verifyWorkerOrcaTerminal(term orcaTerminal, run *Run, expected *ProcessIdentity) error {
@@ -94,25 +77,14 @@ func createWorkerOrcaTerminal(ctx context.Context, c Config, run *Run) (orcaTerm
 	if run == nil || run.WorktreePath == nil || run.WorktreeBranch == nil || !stableExecutionID(run.RunID) {
 		return orcaTerminal{}, errors.New("worker terminal lacks a fixed run and workspace")
 	}
-	title := "SteerLine-" + run.RunID
-	env, err := workerOrcaCall(ctx, c, "terminal", "create", "--worktree", "path:"+filepath.ToSlash(*run.WorktreePath), "--title", title, "--shell", "cmd.exe", "--command", "echo SLREADY:"+run.RunID, "--json")
+	terminal, err := orcaworker.CreateTerminal(ctx, orcaWorkerMetaCaller(c), *run.WorktreePath, run.RunID)
 	if err != nil {
-		return orcaTerminal{}, &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "Orca may have created the fixed worker terminal", Cause: err}
+		return orcaTerminal{}, workerOrcaBackendError(err)
 	}
-	var result struct {
-		Terminal orcaTerminal `json:"terminal"`
-	}
-	if err := json.Unmarshal(env.Result, &result); err != nil || result.Terminal.Handle == "" {
-		return orcaTerminal{}, &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "Orca terminal creation omitted its handle", Cause: err}
-	}
-	term, err := showWorkerOrcaTerminal(ctx, c, result.Terminal.Handle)
-	if err != nil {
+	if err := verifyWorkerOrcaTerminal(terminal, run, nil); err != nil {
 		return orcaTerminal{}, err
 	}
-	if err := verifyWorkerOrcaTerminal(term, run, nil); err != nil {
-		return orcaTerminal{}, err
-	}
-	return term, nil
+	return terminal, nil
 }
 
 func (s *Service) prepareWorkerOrcaTerminal(ctx context.Context, run *Run) error {
@@ -166,82 +138,20 @@ func workerOrcaIdentity(term orcaTerminal, c Config) ProcessIdentity {
 	return ProcessIdentity{Kind: "orca", Terminal: term.Handle, RuntimeID: term.RuntimeID, Incarnation: term.IncarnationID, Executable: c.Orca.Executable}
 }
 
-type workerOrcaOutput struct {
-	Rows       []string
-	NextCursor int64
-	Oldest     int64
+type workerOrcaOutput = orcaworker.Output
+
+func workerOrcaTerminalIdentity(identity ProcessIdentity) orcaworker.TerminalIdentity {
+	return orcaworker.TerminalIdentity{Kind: identity.Kind, Handle: identity.Terminal, RuntimeID: identity.RuntimeID, Incarnation: identity.Incarnation}
 }
 
 func readWorkerOrcaOutput(ctx context.Context, c Config, identity ProcessIdentity, cursor int64) (workerOrcaOutput, error) {
-	if cursor < 0 || identity.Kind != "orca" || identity.Terminal == "" || identity.RuntimeID == "" || identity.Incarnation == "" {
-		return workerOrcaOutput{}, errors.New("Orca output has no fixed terminal or cursor identity")
-	}
-	term, err := showWorkerOrcaTerminal(ctx, c, identity.Terminal)
-	if err != nil {
-		return workerOrcaOutput{}, err
-	}
-	if term.RuntimeID != identity.RuntimeID || term.IncarnationID != identity.Incarnation {
-		return workerOrcaOutput{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "Orca output terminal was replaced"}
-	}
-	env, err := workerOrcaCall(ctx, c, "terminal", "read", "--terminal", identity.Terminal, "--cursor", strconv.FormatInt(cursor, 10), "--limit", "100", "--json")
-	if err != nil {
-		return workerOrcaOutput{}, err
-	}
-	if env.Meta.RuntimeID != identity.RuntimeID {
-		return workerOrcaOutput{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "Orca output came from another runtime"}
-	}
-	var result struct {
-		Terminal struct {
-			Handle       string   `json:"handle"`
-			Tail         []string `json:"tail"`
-			OldestCursor string   `json:"oldestCursor"`
-			NextCursor   string   `json:"nextCursor"`
-			Source       string   `json:"source"`
-		} `json:"terminal"`
-	}
-	if err := json.Unmarshal(env.Result, &result); err != nil {
-		return workerOrcaOutput{}, err
-	}
-	oldest, oldErr := strconv.ParseInt(result.Terminal.OldestCursor, 10, 64)
-	next, nextErr := strconv.ParseInt(result.Terminal.NextCursor, 10, 64)
-	if oldErr != nil || nextErr != nil || result.Terminal.Handle != identity.Terminal || result.Terminal.Source != "stream" || oldest > cursor || next < cursor || next-cursor != int64(len(result.Terminal.Tail)) {
-		return workerOrcaOutput{}, &BackendError{Code: BackendProtocolInvalid, Diagnostic: "Orca worker output cursor has a gap or malformed response"}
-	}
-	return workerOrcaOutput{Rows: result.Terminal.Tail, NextCursor: next, Oldest: oldest}, nil
+	output, err := orcaworker.ReadOutput(ctx, orcaWorkerMetaCaller(c), workerOrcaTerminalIdentity(identity), cursor)
+	return output, workerOrcaBackendError(err)
 }
 
 func sendWorkerOrcaCommand(ctx context.Context, c Config, identity ProcessIdentity, command string) (string, error) {
-	if identity.Kind != "orca" || identity.Terminal == "" || command == "" {
-		return "", errors.New("Orca send lacks fixed terminal or command")
-	}
-	term, err := showWorkerOrcaTerminal(ctx, c, identity.Terminal)
-	if err != nil {
-		return "", err
-	}
-	if term.RuntimeID != identity.RuntimeID || term.IncarnationID != identity.Incarnation {
-		return "", &BackendError{Code: BackendIdentityMismatch, Diagnostic: "worker send targets a replaced Orca terminal"}
-	}
-	env, err := workerOrcaCall(ctx, c, "terminal", "send", "--terminal", identity.Terminal, "--text", command, "--enter", "--json")
-	if err != nil {
-		return "", &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "Orca worker command send has an uncertain receipt", Cause: err}
-	}
-	if env.Meta.RuntimeID != identity.RuntimeID {
-		return "", &BackendError{Code: BackendIdentityMismatch, Diagnostic: "worker send receipt came from another runtime"}
-	}
-	var result struct {
-		Send struct {
-			Handle   string `json:"handle"`
-			Accepted bool   `json:"accepted"`
-			Prompt   struct {
-				RequestID          string `json:"requestId"`
-				ProcessIncarnation string `json:"processIncarnation"`
-			} `json:"prompt"`
-		} `json:"send"`
-	}
-	if err := json.Unmarshal(env.Result, &result); err != nil || result.Send.Handle != identity.Terminal || !result.Send.Accepted || result.Send.Prompt.ProcessIncarnation != identity.Incarnation {
-		return "", &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "Orca did not confirm input acceptance on the original terminal", Cause: err}
-	}
-	return result.Send.Prompt.RequestID, nil
+	requestID, err := orcaworker.SendCommand(ctx, orcaWorkerMetaCaller(c), workerOrcaTerminalIdentity(identity), command)
+	return requestID, workerOrcaBackendError(err)
 }
 
 type workerOrcaProcess struct {
