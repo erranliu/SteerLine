@@ -25,7 +25,8 @@ Directory
 ---------
   bin\steerline.exe   the one binary that runs. Upgrade: build in any worktree,
                       then run  bin\steerline.exe install
-  etc\<repo>.json      configs (run_dir may be omitted and is then derived)
+  execution.json        shared execution profiles and default profile
+  etc\<repo>.json      project configs (run_dir may be omitted and is then derived)
   state\<repoKey>\     per-repo state and data
   backup\              old configs and runtime snapshots
 

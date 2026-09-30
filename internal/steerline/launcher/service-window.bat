@@ -7,6 +7,7 @@ rem Closing the window with X is an abrupt exit.
 
 set "SHOME=%~dp0"
 if "%SHOME:~-1%"=="\" set "SHOME=%SHOME:~0,-1%"
+set "STEERLINE_HOME=%SHOME%"
 set "BIN=%SHOME%\bin\steerline.exe"
 set "CFG=%~1"
 if "%CFG%"=="" set "CFG=%STEERLINE_CONFIG%"
