@@ -64,7 +64,7 @@ func TestNativeOrcaFixedLunaLaunchReconcilesOriginalTerminal(t *testing.T) {
 		t.Fatal(err)
 	}
 	stateDir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(stateDir, "native-orca.json"), []byte(`{"LoseFixedTerminalOnce":true,"RelayMode":true,"RelayHideDoneOnce":true}`), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(stateDir, "native-orca.json"), []byte(`{"LoseFixedTerminalOnce":true,"RelayMode":true,"RelayHideDoneOnce":true,"PendingPaste":true}`), 0600); err != nil {
 		t.Fatal(err)
 	}
 	c.Host, c.Agent, c.Model, c.ReasoningEffort, c.Sandbox, c.Claimant = "orca", "codex", "gpt-6-luna", "xhigh", "workspace-write", "operator"
@@ -126,7 +126,7 @@ func TestNativeOrcaFixedLunaLaunchReconcilesOriginalTerminal(t *testing.T) {
 	if err := json.Unmarshal(data, &state); err != nil {
 		t.Fatal(err)
 	}
-	if !state.FixedAgentTerminalCreated || state.CreatedWithAgent != "" || !strings.Contains(state.FixedAgentCommand, "'gpt-6-luna'") || !strings.Contains(state.FixedAgentCommand, "'model_reasoning_effort=xhigh'") || !strings.Contains(state.FixedAgentCommand, "'sandbox_workspace_write.network_access=true'") || strings.Count(state.FixedAgentCommand, "'--add-dir'") != 4 || state.Dispatches != 1 {
+	if !state.FixedAgentTerminalCreated || state.CreatedWithAgent != "" || !strings.Contains(state.FixedAgentCommand, "'gpt-6-luna'") || !strings.Contains(state.FixedAgentCommand, "'model_reasoning_effort=xhigh'") || !strings.Contains(state.FixedAgentCommand, "'sandbox_workspace_write.network_access=true'") || strings.Count(state.FixedAgentCommand, "'--add-dir'") != 4 || state.Dispatches != 1 || state.PasteSubmissions != 1 || state.PendingPaste {
 		t.Fatalf("fixed Orca launch was not preserved: %+v", state)
 	}
 	workflow, execution := s.workflowRecords(run)

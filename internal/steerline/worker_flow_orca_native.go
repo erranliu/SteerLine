@@ -564,6 +564,18 @@ func (s *Service) startNativeOrcaTurn(ctx context.Context, run *Run, execution *
 	if err := s.changeOperation(dispatchOp, "accepted", receipt.RequestID, receipt.Payload, ""); err != nil {
 		return err
 	}
+	if orcaworker.PromptAwaitingSubmission(receipt.Payload, execution.Process.Incarnation) {
+		if err := s.verifyNativeOrcaWorker(ctx, run, execution); err != nil {
+			return err
+		}
+		submitted, err := orcaworker.SubmitPendingPaste(ctx, orcaWorkerMetaCaller(fixedConfig), workerOrcaTerminalIdentity(*execution.Process))
+		if err != nil {
+			return workerOrcaBackendError(err)
+		}
+		if submitted {
+			s.note(run, "steer", "worker", "accepted", "submitted pending Orca prompt", execution.Target.Dispatch, nil)
+		}
+	}
 	return nil
 }
 
