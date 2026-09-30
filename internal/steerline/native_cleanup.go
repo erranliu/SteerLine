@@ -10,14 +10,16 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 type NativeStopCleanupReceipt struct {
-	WorkflowRunID string      `json:"workflow_run_id"`
-	ExecutionID   string      `json:"execution_id"`
-	AttemptID     string      `json:"attempt_id"`
-	Operation     Operation   `json:"operation"`
-	Observation   Observation `json:"observation"`
+	WorkflowRunID string                   `json:"workflow_run_id"`
+	ExecutionID   string                   `json:"execution_id"`
+	AttemptID     string                   `json:"attempt_id"`
+	Operation     executionapi.Operation   `json:"operation"`
+	Observation   executionapi.Observation `json:"observation"`
 }
 
 type NativePRCleanupReceipt struct {
@@ -246,7 +248,7 @@ func commitNativeWorkspaceCleanupReceipt(ctx context.Context, tx *sqliteTx, proj
 	if fixedWorktree == "" {
 		fixedWorktree = execution.Workspace.Worktree
 	}
-	if workflow.TaskID != task.TaskID || execution.WorkflowRunID != evidence.WorkflowRunID || execution.Backend != string(BackendLocal) || execution.Target.ID != evidence.Repository || fixedWorktree == "" || canonical(fixedWorktree) != canonical(evidence.Worktree) || execution.Workspace.Worktree != "" && canonical(execution.Workspace.Worktree) != canonical(evidence.Worktree) || execution.Target.Branch != evidence.Branch || execution.Target.BaseRevision != evidence.BaseCommit {
+	if workflow.TaskID != task.TaskID || execution.WorkflowRunID != evidence.WorkflowRunID || execution.Backend != string(executionapi.BackendLocal) || execution.Target.ID != evidence.Repository || fixedWorktree == "" || canonical(fixedWorktree) != canonical(evidence.Worktree) || execution.Workspace.Worktree != "" && canonical(execution.Workspace.Worktree) != canonical(evidence.Worktree) || execution.Target.Branch != evidence.Branch || execution.Target.BaseRevision != evidence.BaseCommit {
 		return nativeErr("authority_mismatch", "native workspace cleanup receipt differs from the fixed local execution")
 	}
 	if _, err := os.Lstat(evidence.Worktree); !os.IsNotExist(err) {
@@ -261,7 +263,7 @@ func commitNativeExecutionStopReceipt(ctx context.Context, tx *sqliteTx, project
 		return nativeErr("contract_mismatch", "native stop receipt does not match the pending execution identity")
 	}
 	op := evidence.Operation
-	if op.Status != OperationConfirmed || op.Action != "stop" || op.RunID != evidence.WorkflowRunID || op.AttemptID != evidence.AttemptID || op.Ref == nil || op.Ref.RunID != op.RunID || op.Ref.AttemptID != op.AttemptID || op.Ref.External.Kind != "os" {
+	if op.Status != executionapi.OperationConfirmed || op.Action != "stop" || op.RunID != evidence.WorkflowRunID || op.AttemptID != evidence.AttemptID || op.Ref == nil || op.Ref.RunID != op.RunID || op.Ref.AttemptID != op.AttemptID || op.Ref.External.Kind != "os" {
 		return nativeErr("contract_mismatch", "native stop receipt lacks a confirmed fixed local worker identity")
 	}
 	if evidence.Observation.Liveness != "exited" || evidence.Observation.ObservedAt.IsZero() || evidence.Observation.Source == "" {
@@ -282,7 +284,7 @@ func commitNativeExecutionStopReceipt(ctx context.Context, tx *sqliteTx, project
 	if err := json.Unmarshal(executionPayload, &execution); err != nil {
 		return err
 	}
-	if workflow.TaskID != task.TaskID || execution.ExecutionID != evidence.ExecutionID || execution.WorkflowRunID != evidence.WorkflowRunID || execution.Process == nil || *execution.Process != op.Ref.External || execution.Target.ID != op.Ref.Target.ID || execution.Backend != string(BackendLocal) || execution.Protocol != string(op.Protocol) || (op.Protocol != ProtocolLocalProcess && op.Protocol != ProtocolLocalCodexAppServer) {
+	if workflow.TaskID != task.TaskID || execution.ExecutionID != evidence.ExecutionID || execution.WorkflowRunID != evidence.WorkflowRunID || execution.Process == nil || *execution.Process != op.Ref.External || execution.Target.ID != op.Ref.Target.ID || execution.Backend != string(executionapi.BackendLocal) || execution.Protocol != string(op.Protocol) || (op.Protocol != executionapi.ProtocolLocalProcess && op.Protocol != executionapi.ProtocolLocalCodexAppServer) {
 		return nativeErr("authority_mismatch", "native stop receipt does not match the center's fixed execution identity")
 	}
 	var attemptPayload []byte

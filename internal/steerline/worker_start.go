@@ -3,6 +3,8 @@ package steerline
 import (
 	"context"
 	"errors"
+
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/workerflow"
 )
 
@@ -42,10 +44,10 @@ func (s *Service) prepareWorkerWorkspace(ctx context.Context, task TaskRecord, r
 		}
 	}
 	opID, err := s.startWorkerOperation(run, "prepare_workspace", "worker-workspace:"+execution.ExecutionID, struct {
-		WorkflowRunID string          `json:"workflow_run_id"`
-		ExecutionID   string          `json:"execution_id"`
-		RemoteName    string          `json:"remote_name,omitempty"`
-		Workspace     WorkspaceIntent `json:"workspace"`
+		WorkflowRunID string                       `json:"workflow_run_id"`
+		ExecutionID   string                       `json:"execution_id"`
+		RemoteName    string                       `json:"remote_name,omitempty"`
+		Workspace     executionapi.WorkspaceIntent `json:"workspace"`
 	}{workflow.WorkflowRunID, execution.ExecutionID, remoteName, *run.WorkspaceIntent})
 	if err != nil {
 		return err

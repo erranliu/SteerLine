@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
 
@@ -508,7 +509,7 @@ func (s *Service) acknowledgeRemoteDelivery(run *Run, ev WorkerEvent) error {
 		return nil
 	}
 	if ev.RemoteRunID == "" || ev.RemoteDeliveryID == "" {
-		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "remote Delivery acknowledgement lacks exact Run/Delivery identity"}
+		return &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "remote Delivery acknowledgement lacks exact Run/Delivery identity"}
 	}
 	idempotencyKey := "orca-delivery-ack:" + ev.RemoteRunID + ":" + ev.RemoteDeliveryID
 	request := mustJSON(struct {
@@ -535,13 +536,13 @@ func (s *Service) acknowledgeRemoteDelivery(run *Run, ev WorkerEvent) error {
 		case "confirmed":
 			return nil
 		case "rejected":
-			return &BackendError{Code: BackendRejected, Diagnostic: "the exact Orca Delivery acknowledgement was previously rejected: " + operation.UnknownReason}
+			return &executionapi.BackendError{Code: executionapi.BackendRejected, Diagnostic: "the exact Orca Delivery acknowledgement was previously rejected: " + operation.UnknownReason}
 		case "in_flight":
-			return &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "the exact Orca Delivery acknowledgement is already in flight"}
+			return &executionapi.BackendError{Code: executionapi.BackendOutcomeUnknown, Diagnostic: "the exact Orca Delivery acknowledgement is already in flight"}
 		case "outcome_unknown":
 			// Ack is idempotent by the exact Delivery ID; retry only that ID.
 		default:
-			return &BackendError{Code: BackendProtocolInvalid, Diagnostic: "Orca Delivery acknowledgement has an invalid persisted operation status"}
+			return &executionapi.BackendError{Code: executionapi.BackendProtocolInvalid, Diagnostic: "Orca Delivery acknowledgement has an invalid persisted operation status"}
 		}
 	} else {
 		value := OperationRecord{ProjectIdentity: s.Config.identity, OperationID: operationID, IdempotencyKey: idempotencyKey, Kind: "ack_orca_delivery", Status: "in_flight", PayloadDigest: digest, Request: request, CreatedAt: now(), UpdatedAt: now()}
@@ -567,8 +568,8 @@ func (s *Service) acknowledgeRemoteDelivery(run *Run, ev WorkerEvent) error {
 	operation.Receipt = receipt
 	operation.UpdatedAt = now()
 	if ackErr != nil {
-		var backendErr *BackendError
-		if errors.As(ackErr, &backendErr) && (backendErr.Code == BackendOutcomeUnknown || backendErr.Code == BackendUnreachable || backendErr.Code == BackendIdentityMismatch || backendErr.Code == BackendProtocolInvalid) {
+		var backendErr *executionapi.BackendError
+		if errors.As(ackErr, &backendErr) && (backendErr.Code == executionapi.BackendOutcomeUnknown || backendErr.Code == executionapi.BackendUnreachable || backendErr.Code == executionapi.BackendIdentityMismatch || backendErr.Code == executionapi.BackendProtocolInvalid) {
 			operation.Status = "outcome_unknown"
 		} else {
 			operation.Status = "rejected"
@@ -599,7 +600,7 @@ func ackWorkerEventPersistence(ev WorkerEvent, err error) {
 
 func (s *Service) persistRemoteWorkerMessages(ev WorkerEvent) error {
 	if !stableExecutionID(ev.RunID) || !stableExecutionID(ev.AttemptID) || ev.RemoteRunID == "" {
-		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "remote inbox batch lacks fixed local Run/attempt or external Orca Run identity"}
+		return &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "remote inbox batch lacks fixed local Run/attempt or external Orca Run identity"}
 	}
 	var run *Run
 	for _, candidate := range s.runs {
@@ -609,7 +610,7 @@ func (s *Service) persistRemoteWorkerMessages(ev WorkerEvent) error {
 		}
 	}
 	if run == nil {
-		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "remote inbox batch belongs to an unknown local Run"}
+		return &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "remote inbox batch belongs to an unknown local Run"}
 	}
 	taskID := run.DomainTaskID
 	if taskID == "" {
@@ -618,7 +619,7 @@ func (s *Service) persistRemoteWorkerMessages(ev WorkerEvent) error {
 	source := "orca-run:" + ev.RemoteRunID
 	for _, message := range ev.RemoteMessages {
 		if message.ID == "" || message.Type == "" {
-			return &BackendError{Code: BackendProtocolInvalid, Diagnostic: "remote inbox message lacks a stable ID or type"}
+			return &executionapi.BackendError{Code: executionapi.BackendProtocolInvalid, Diagnostic: "remote inbox message lacks a stable ID or type"}
 		}
 		duplicate := false
 		for _, existing := range s.pendingEvents {

@@ -14,6 +14,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 type PRInfo struct {
@@ -257,7 +259,7 @@ func (c *PRClient) Close(ctx context.Context, raw string) (PRInfo, error) {
 	var closed PRInfo
 	if c.Config.Kind == "command" {
 		if c.Config.Close.Executable == "" {
-			return PRInfo{}, UnsupportedAdapterOperation("ClosePR", "command PR provider has no fixed close command")
+			return PRInfo{}, executionapi.UnsupportedAdapterOperation("ClosePR", "command PR provider has no fixed close command")
 		}
 		args := make([]string, len(c.Config.Close.Args))
 		for i, arg := range c.Config.Close.Args {

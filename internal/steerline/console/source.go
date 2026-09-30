@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/steerline"
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 // ProjectRef is the identity of a console view. ConfigPath and RunDir are both
@@ -45,7 +46,7 @@ type QuerySource interface {
 	ReadActivity(context.Context, ProjectRef, string, string, string, string, steerline.JournalCursor) (LogBatch, error)
 	ReadConversation(context.Context, ProjectRef, steerline.ConversationFilter, string) (steerline.ConversationPage, error)
 	ReadBody(context.Context, ProjectRef, steerline.ConversationBodyRef, int64, int) (steerline.ConversationBodyPage, error)
-	ReadCapabilities(context.Context, ProjectRef, steerline.BackendKind, steerline.ExecutionProtocol, string, string, string, string, string) ([]steerline.ConversationCapabilityReport, error)
+	ReadCapabilities(context.Context, ProjectRef, executionapi.BackendKind, executionapi.ExecutionProtocol, string, string, string, string, string) ([]steerline.ConversationCapabilityReport, error)
 }
 
 type ControlClient interface {
@@ -126,7 +127,7 @@ func (FileQuerySource) ReadProject(ctx context.Context, ref ProjectRef, selected
 }
 
 func reusableProjectSnapshot(ctx context.Context, ref ProjectRef, selectedTaskID string, previous ProjectSnapshot,
-	probeProcess func(*steerline.ProcessIdentity) steerline.ProcessProbe,
+	probeProcess func(*executionapi.ProcessIdentity) steerline.ProcessProbe,
 	probeVersion func(context.Context, string) (string, uint64, error)) bool {
 	age := time.Since(previous.FullReadAt)
 	if previous.FullReadAt.IsZero() || age < 0 || age >= 5*time.Second ||
@@ -236,7 +237,7 @@ func (FileQuerySource) ReadBody(ctx context.Context, ref ProjectRef, body steerl
 	return (steerline.ConversationQueryService{Store: store, Project: ref.Identity}).ReadMessageBody(ctx, body, offset, limit)
 }
 
-func (FileQuerySource) ReadCapabilities(ctx context.Context, ref ProjectRef, backend steerline.BackendKind, protocol steerline.ExecutionProtocol, targetID, executionID, attemptID, source, sourceIdentity string) ([]steerline.ConversationCapabilityReport, error) {
+func (FileQuerySource) ReadCapabilities(ctx context.Context, ref ProjectRef, backend executionapi.BackendKind, protocol executionapi.ExecutionProtocol, targetID, executionID, attemptID, source, sourceIdentity string) ([]steerline.ConversationCapabilityReport, error) {
 	store, err := steerline.OpenSQLiteReader(filepath.Join(ref.RunDir, "steerline.db"))
 	if err != nil {
 		return nil, err

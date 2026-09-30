@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 var commitHash = regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`)
@@ -52,16 +54,16 @@ func gitRunner(c Config, dir string) Runner {
 	return Runner{Dir: dir, Timeout: duration(c.CommandTimeout), Env: map[string]string{"GIT_TERMINAL_PROMPT": "0"}}
 }
 
-func planWorkspace(c Config, taskID, runID, base string) (*WorkspaceIntent, error) {
+func planWorkspace(c Config, taskID, runID, base string) (*executionapi.WorkspaceIntent, error) {
 	if !regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]*$`).MatchString(taskID) || strings.Contains(taskID, "..") {
 		return nil, errors.New("task ID cannot safely form a branch name")
 	}
 	if !regexp.MustCompile(`^[0-9a-f]{32}$`).MatchString(runID) || !commitHash.MatchString(base) {
 		return nil, errors.New("invalid workspace identity")
 	}
-	return &WorkspaceIntent{Path: filepath.Join(c.WorktreeRoot, runID), Branch: "codex/" + taskID + "-" + runID[:12], BaseCommit: base}, nil
+	return &executionapi.WorkspaceIntent{Path: filepath.Join(c.WorktreeRoot, runID), Branch: "codex/" + taskID + "-" + runID[:12], BaseCommit: base}, nil
 }
-func verifyWorkspace(ctx context.Context, c Config, i *WorkspaceIntent, initial bool) error {
+func verifyWorkspace(ctx context.Context, c Config, i *executionapi.WorkspaceIntent, initial bool) error {
 	if i == nil || !filepath.IsAbs(i.Path) || i.Branch == "" || !commitHash.MatchString(i.BaseCommit) {
 		return errors.New("incomplete workspace intent")
 	}

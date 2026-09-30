@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
 
@@ -217,7 +218,7 @@ func (s *Service) pollNativeOrcaWorker(ctx context.Context, run *Run) (retErr er
 						}
 						s.setRunDecision(run, nil)
 					}
-					decision, err := WriteDecisionRequest(run, DecisionRequest{Question: "Forward the original Orca worker result?", Context: clip(contextText, 7000), Options: []DecisionOption{{ID: "forward_result", Label: "转发原结果"}}, AllowFreeText: true})
+					decision, err := WriteDecisionRequest(run, DecisionRequest{Question: "Forward the original Orca worker result?", Context: clip(contextText, 7000), Options: []executionapi.DecisionOption{{ID: "forward_result", Label: "转发原结果"}}, AllowFreeText: true})
 					if err != nil {
 						return err
 					}

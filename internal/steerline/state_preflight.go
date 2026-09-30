@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 func validateRetiredWholeRunResultCommands(ctx context.Context, db *sql.DB) error {
@@ -126,10 +128,10 @@ func preflightWorkerFlowState(ctx context.Context, c Config) error {
 		}
 	}
 	for _, execution := range snapshot.Executions {
-		if execution.Backend == string(BackendLocal) && execution.Protocol != string(ProtocolLocalCodexAppServer) {
+		if execution.Backend == string(executionapi.BackendLocal) && execution.Protocol != string(executionapi.ProtocolLocalCodexAppServer) {
 			return nativeErr("unsupported_schema", "worker-flow-v1 refuses an old local execution protocol; preserve its external process and state")
 		}
-		if execution.Backend == string(BackendOrca) && execution.Agent == "codex" && (c.managedWindowsOrca() || execution.Environment != nil) {
+		if execution.Backend == string(executionapi.BackendOrca) && execution.Agent == "codex" && (c.managedWindowsOrca() || execution.Environment != nil) {
 			env := execution.Environment
 			if env == nil || env.Preparation == nil || !stableExecutionID(env.Preparation.TurnID) || !stableExecutionID(env.Preparation.Nonce) || env.Preparation.StartedAt.IsZero() || !env.Preparation.Deadline.After(env.Preparation.StartedAt) {
 				return nativeErr("unsupported_schema", "managed Orca execution lacks its frozen readiness intent")

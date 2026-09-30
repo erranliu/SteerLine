@@ -3,6 +3,8 @@ package contracts
 import (
 	"encoding/json"
 	"time"
+
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 type Repository struct {
@@ -50,19 +52,19 @@ type Runtime struct {
 	Control       ControlState         `json:"control"`
 }
 type ServiceState struct {
-	Mode                string           `json:"mode"`
-	InstanceID          string           `json:"instance_id"`
-	PID                 int              `json:"pid"`
-	Status              string           `json:"status"`
-	Claimant            string           `json:"claimant"`
-	Error               *string          `json:"error"`
-	ProcessIdentity     *ProcessIdentity `json:"process_identity"`
-	StartupID           *string          `json:"startup_id"`
-	ConfigDigest        string           `json:"config_digest"`
-	Ready               bool             `json:"ready"`
-	ControlProtocol     int              `json:"control_protocol"`
-	Capabilities        []string         `json:"capabilities"`
-	HeartbeatIntervalMS int64            `json:"heartbeat_interval_ms"`
+	Mode                string                        `json:"mode"`
+	InstanceID          string                        `json:"instance_id"`
+	PID                 int                           `json:"pid"`
+	Status              string                        `json:"status"`
+	Claimant            string                        `json:"claimant"`
+	Error               *string                       `json:"error"`
+	ProcessIdentity     *executionapi.ProcessIdentity `json:"process_identity"`
+	StartupID           *string                       `json:"startup_id"`
+	ConfigDigest        string                        `json:"config_digest"`
+	Ready               bool                          `json:"ready"`
+	ControlProtocol     int                           `json:"control_protocol"`
+	Capabilities        []string                      `json:"capabilities"`
+	HeartbeatIntervalMS int64                         `json:"heartbeat_interval_ms"`
 }
 
 type ControlState struct {
@@ -117,64 +119,49 @@ type TaskCandidate struct {
 // PID/Created/Executable; Orca terminal-v2 uses Terminal/RuntimeID/Incarnation;
 // supervised Orca uses coordinator/remote runtime epochs and exact Run/Task/
 // Dispatch/execution-host/worktree identity. Kind names the protocol family.
-type ProcessIdentity struct {
-	Kind                 string `json:"kind,omitempty"`
-	PID                  int    `json:"pid,omitempty"`
-	Created              string `json:"created,omitempty"`
-	Executable           string `json:"executable,omitempty"`
-	Terminal             string `json:"terminal,omitempty"`
-	RuntimeID            string `json:"runtime_id,omitempty"`
-	Incarnation          string `json:"incarnation,omitempty"`
-	CoordinatorRuntimeID string `json:"coordinator_runtime_id,omitempty"`
-	OrchestrationRun     string `json:"orchestration_run,omitempty"`
-	Task                 string `json:"task,omitempty"`
-	Dispatch             string `json:"dispatch,omitempty"`
-	ExecutionHost        string `json:"execution_host,omitempty"`
-	WorktreeID           string `json:"worktree_id,omitempty"`
-}
 type Run struct {
-	RecoveryRequired     bool                    `json:"recovery_required,omitempty"`
-	RecoveryState        string                  `json:"recovery_state,omitempty"`
-	RecoveryVersion      uint64                  `json:"recovery_version,omitempty"`
-	ManualStop           *ManualStopConfirmation `json:"manual_stop,omitempty"`
-	TaskID               string                  `json:"task_id"`
-	DomainTaskID         string                  `json:"domain_task_id,omitempty"`
-	IdentityMapDigest    string                  `json:"identity_map_digest,omitempty"`
-	DomainAttemptNumber  int                     `json:"domain_attempt_number,omitempty"`
-	WorkflowVersion      string                  `json:"workflow_version,omitempty"`
-	WorkflowConfigDigest string                  `json:"workflow_config_digest,omitempty"`
-	ExecutionID          string                  `json:"execution_id,omitempty"`
-	StepResultPath       *string                 `json:"step_result_path,omitempty"`
-	Title                string                  `json:"title"`
-	RunID                string                  `json:"run_id"`
-	AttemptID            string                  `json:"attempt_id,omitempty"`
-	ControlRevision      uint64                  `json:"control_revision,omitempty"`
-	Claimant             string                  `json:"claimant"`
-	Host                 string                  `json:"host,omitempty"`
-	Backend              string                  `json:"backend,omitempty"`
-	Protocol             string                  `json:"protocol,omitempty"`
-	Agent                string                  `json:"agent,omitempty"`
-	Target               ExecutionTarget         `json:"target,omitempty"`
-	TaskStatus           string                  `json:"task_status,omitempty"`
-	BeadsStatus          string                  `json:"beads_status,omitempty"`
-	ExecutionStatus      string                  `json:"execution_status"`
-	FinishTaskStatus     string                  `json:"finish_task_status"`
-	SessionID            *string                 `json:"codex_session_id"`
-	Process              *ProcessIdentity        `json:"process"`
-	StartedAt            *time.Time              `json:"started_at"`
-	EndedAt              *time.Time              `json:"ended_at"`
-	WorktreePath         *string                 `json:"worktree_path"`
-	WorktreeBranch       *string                 `json:"worktree_branch"`
-	WorkspaceIntent      *WorkspaceIntent        `json:"workspace_intent"`
-	Completion           *LegacyCompletionConfig `json:"completion,omitempty"`
-	BeadsContext         *LegacyBeadsContext     `json:"beads_context,omitempty"`
-	BaseCommit           *string                 `json:"base_commit"`
-	PR                   PRState                 `json:"pr"`
-	LastEvent            *string                 `json:"last_event"`
-	LogPath              *string                 `json:"log_path"`
-	ResultPath           *string                 `json:"result_path"`
-	Summary              *string                 `json:"summary"`
-	Error                *string                 `json:"error"`
+	RecoveryRequired     bool                          `json:"recovery_required,omitempty"`
+	RecoveryState        string                        `json:"recovery_state,omitempty"`
+	RecoveryVersion      uint64                        `json:"recovery_version,omitempty"`
+	ManualStop           *ManualStopConfirmation       `json:"manual_stop,omitempty"`
+	TaskID               string                        `json:"task_id"`
+	DomainTaskID         string                        `json:"domain_task_id,omitempty"`
+	IdentityMapDigest    string                        `json:"identity_map_digest,omitempty"`
+	DomainAttemptNumber  int                           `json:"domain_attempt_number,omitempty"`
+	WorkflowVersion      string                        `json:"workflow_version,omitempty"`
+	WorkflowConfigDigest string                        `json:"workflow_config_digest,omitempty"`
+	ExecutionID          string                        `json:"execution_id,omitempty"`
+	StepResultPath       *string                       `json:"step_result_path,omitempty"`
+	Title                string                        `json:"title"`
+	RunID                string                        `json:"run_id"`
+	AttemptID            string                        `json:"attempt_id,omitempty"`
+	ControlRevision      uint64                        `json:"control_revision,omitempty"`
+	Claimant             string                        `json:"claimant"`
+	Host                 string                        `json:"host,omitempty"`
+	Backend              string                        `json:"backend,omitempty"`
+	Protocol             string                        `json:"protocol,omitempty"`
+	Agent                string                        `json:"agent,omitempty"`
+	Target               executionapi.ExecutionTarget  `json:"target,omitempty"`
+	TaskStatus           string                        `json:"task_status,omitempty"`
+	BeadsStatus          string                        `json:"beads_status,omitempty"`
+	ExecutionStatus      string                        `json:"execution_status"`
+	FinishTaskStatus     string                        `json:"finish_task_status"`
+	SessionID            *string                       `json:"codex_session_id"`
+	Process              *executionapi.ProcessIdentity `json:"process"`
+	StartedAt            *time.Time                    `json:"started_at"`
+	EndedAt              *time.Time                    `json:"ended_at"`
+	WorktreePath         *string                       `json:"worktree_path"`
+	WorktreeBranch       *string                       `json:"worktree_branch"`
+	WorkspaceIntent      *executionapi.WorkspaceIntent `json:"workspace_intent"`
+	Completion           *LegacyCompletionConfig       `json:"completion,omitempty"`
+	BeadsContext         *LegacyBeadsContext           `json:"beads_context,omitempty"`
+	BaseCommit           *string                       `json:"base_commit"`
+	PR                   PRState                       `json:"pr"`
+	LastEvent            *string                       `json:"last_event"`
+	LogPath              *string                       `json:"log_path"`
+	ResultPath           *string                       `json:"result_path"`
+	Summary              *string                       `json:"summary"`
+	Error                *string                       `json:"error"`
 	// Decision is set when the agent raised a structured question and the run is
 	// paused as finish_task_status=waiting_decision until a human answers.
 	Decision *DecisionState `json:"decision,omitempty"`
@@ -199,24 +186,17 @@ type ManualStopConfirmation struct {
 }
 
 // DecisionOption is one choice an agent offers when it needs a human decision.
-type DecisionOption struct {
-	ID       string `json:"id"`
-	Label    string `json:"label"`
-	Detail   string `json:"detail,omitempty"`
-	Receiver string `json:"receiver,omitempty"`
-	Action   string `json:"action,omitempty"`
-}
 
 // DecisionRequest is the structured question carried in an R-a result.
 type DecisionRequest struct {
-	Question      string            `json:"question"`
-	Context       string            `json:"context,omitempty"`
-	Options       []DecisionOption  `json:"options"`
-	Recommended   string            `json:"recommended,omitempty"`
-	AllowFreeText bool              `json:"allow_free_text,omitempty"`
-	NativeAsk     *CodexAskCall     `json:"native_ask,omitempty"`
-	OrcaAsk       *OrcaAskCall      `json:"orca_ask,omitempty"`
-	HostTarget    *HostActionTarget `json:"host_target,omitempty"`
+	Question      string                        `json:"question"`
+	Context       string                        `json:"context,omitempty"`
+	Options       []executionapi.DecisionOption `json:"options"`
+	Recommended   string                        `json:"recommended,omitempty"`
+	AllowFreeText bool                          `json:"allow_free_text,omitempty"`
+	NativeAsk     *CodexAskCall                 `json:"native_ask,omitempty"`
+	OrcaAsk       *OrcaAskCall                  `json:"orca_ask,omitempty"`
+	HostTarget    *HostActionTarget             `json:"host_target,omitempty"`
 }
 
 // DecisionState is the runtime projection of one decision. SQLite owns the
@@ -259,11 +239,6 @@ type DecisionAnswer struct {
 
 // Intent is durable before Git creates anything; actual workspace fields stay null
 // until creation and verification succeed.
-type WorkspaceIntent struct {
-	Path       string `json:"path"`
-	Branch     string `json:"branch"`
-	BaseCommit string `json:"base_commit"`
-}
 type PRState struct {
 	URL          *string    `json:"url"`
 	HeadRevision *string    `json:"head_revision,omitempty"`

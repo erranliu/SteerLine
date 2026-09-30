@@ -3,6 +3,8 @@ package contracts
 import (
 	"encoding/json"
 	"time"
+
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 type Command struct {
@@ -57,28 +59,20 @@ type ControlReceipt struct {
 }
 
 type CodexAskCall struct {
-	RequestID  json.RawMessage     `json:"request_id"`
-	ThreadID   string              `json:"thread_id"`
-	TurnID     string              `json:"turn_id"`
-	CallID     string              `json:"call_id"`
-	Generation string              `json:"generation,omitempty"`
-	Questions  []NativeAskQuestion `json:"questions"`
+	RequestID  json.RawMessage         `json:"request_id"`
+	ThreadID   string                  `json:"thread_id"`
+	TurnID     string                  `json:"turn_id"`
+	CallID     string                  `json:"call_id"`
+	Generation string                  `json:"generation,omitempty"`
+	Questions  []executionapi.Question `json:"questions"`
 }
 
 type OrcaAskCall struct {
-	RunID      string              `json:"run_id"`
-	TaskID     string              `json:"task_id"`
-	DispatchID string              `json:"dispatch_id"`
-	MessageID  string              `json:"message_id"`
-	Questions  []NativeAskQuestion `json:"questions"`
-}
-
-type NativeAskQuestion struct {
-	ID            string           `json:"id"`
-	Header        string           `json:"header"`
-	Question      string           `json:"question"`
-	Options       []DecisionOption `json:"options"`
-	AllowFreeText bool             `json:"allow_free_text"`
+	RunID      string                  `json:"run_id"`
+	TaskID     string                  `json:"task_id"`
+	DispatchID string                  `json:"dispatch_id"`
+	MessageID  string                  `json:"message_id"`
+	Questions  []executionapi.Question `json:"questions"`
 }
 
 type FixedExecutionProfile struct {

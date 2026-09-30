@@ -5,12 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	remote "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker"
 	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
 
-func remoteExecutionRef(run *Run, execution *ExecutionRecord) ExecutionRef {
-	ref := ExecutionRef{Version: ExecutionRecordVersion, Backend: BackendOrca, Protocol: ProtocolOrcaSupervised, Agent: AgentSpec{Name: execution.Agent}, RunID: run.RunID, AttemptID: run.AttemptID, Target: execution.Target, WorkspacePath: execution.Workspace.Worktree, WorkspaceBranch: execution.Workspace.Branch, BaseCommit: execution.Workspace.Base}
+func remoteExecutionRef(run *Run, execution *ExecutionRecord) executionapi.ExecutionRef {
+	ref := executionapi.ExecutionRef{Version: executionapi.ExecutionRecordVersion, Backend: executionapi.BackendOrca, Protocol: executionapi.ProtocolOrcaSupervised, Agent: executionapi.AgentSpec{Name: execution.Agent}, RunID: run.RunID, AttemptID: run.AttemptID, Target: execution.Target, WorkspacePath: execution.Workspace.Worktree, WorkspaceBranch: execution.Workspace.Branch, BaseCommit: execution.Workspace.Base}
 	if execution.Process != nil {
 		ref.External = *execution.Process
 	}
@@ -78,7 +79,7 @@ func (s *Service) prepareRemoteOrcaCoordinator(ctx context.Context, run *Run) er
 		if err != nil {
 			return remoteWorkerError(err)
 		}
-		state.Coordinator = ProcessIdentity(identity)
+		state.Coordinator = executionapi.ProcessIdentity(identity)
 		execution.Target.CoordinatorTerminal = handle
 		s.refreshRun(run)
 		if err := s.changeWorkerOperation(run, op.OperationID, "confirmed", op.PlatformRequestID, mustJSON(state.Coordinator), ""); err != nil {
@@ -184,9 +185,9 @@ func (s *Service) startRemoteOrcaTurn(ctx context.Context, run *Run, execution *
 			return intentErr
 		}
 		op = s.operationByKey(key)
-		var previous *remote.Identity
+		var previous *executionapi.ProcessIdentity
 		if execution.Process != nil {
-			identity := remote.Identity(*execution.Process)
+			identity := executionapi.ProcessIdentity(*execution.Process)
 			previous = &identity
 		}
 		started, err = client.StartTask(ctx, execution.Target.OrchestrationRun, turn.TaskID, execution.Target.WorktreeID, previous)
@@ -205,8 +206,8 @@ func (s *Service) startRemoteOrcaTurn(ctx context.Context, run *Run, execution *
 	if show.Liveness != "live" || show.WorktreePath != execution.Workspace.Worktree || show.Branch != execution.Workspace.Branch {
 		return errors.New("remote worker is not live on its fixed workspace/branch")
 	}
-	identity := ProcessIdentity(show.Identity)
-	if execution.Process != nil && remote.SessionID(remote.Identity(*execution.Process)) != remote.SessionID(show.Identity) {
+	identity := executionapi.ProcessIdentity(show.Identity)
+	if execution.Process != nil && remote.SessionID(executionapi.ProcessIdentity(*execution.Process)) != remote.SessionID(show.Identity) {
 		return errors.New("remote continuation replaced the original agent session")
 	}
 	firstBinding := execution.Process == nil
@@ -360,7 +361,7 @@ func (s *Service) finishRemoteOrcaCleanup(ctx context.Context, run *Run) error {
 		}
 		op = s.operationByKey(key)
 	}
-	receipt, err := client.CloseCoordinator(ctx, ref, remote.Identity(execution.OrcaNative.Coordinator), uncertain)
+	receipt, err := client.CloseCoordinator(ctx, ref, executionapi.ProcessIdentity(execution.OrcaNative.Coordinator), uncertain)
 	if err != nil {
 		_ = s.changeWorkerOperation(run, op.OperationID, "outcome_unknown", "", nil, err.Error())
 		return err

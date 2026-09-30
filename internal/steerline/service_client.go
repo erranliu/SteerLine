@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 type ProcessProbeState string
@@ -65,21 +67,21 @@ type ServiceConnection struct {
 // StartupRecord binds a startup attempt to the service process and its target
 // configuration. It is diagnostic evidence, not runtime or task state.
 type StartupRecord struct {
-	Version            int              `json:"version"`
-	StartupID          string           `json:"startup_id"`
-	Status             string           `json:"status"`
-	StartedAt          time.Time        `json:"started_at"`
-	UpdatedAt          time.Time        `json:"updated_at"`
-	RepositoryIdentity string           `json:"repository_identity"`
-	RepositoryPath     string           `json:"repository_path"`
-	RunDir             string           `json:"run_dir"`
-	Remote             string           `json:"remote"`
-	Branch             string           `json:"branch"`
-	Claimant           string           `json:"claimant"`
-	ConfigDigest       string           `json:"config_digest"`
-	InstanceID         string           `json:"instance_id,omitempty"`
-	ProcessIdentity    *ProcessIdentity `json:"process_identity,omitempty"`
-	Error              string           `json:"error,omitempty"`
+	Version            int                           `json:"version"`
+	StartupID          string                        `json:"startup_id"`
+	Status             string                        `json:"status"`
+	StartedAt          time.Time                     `json:"started_at"`
+	UpdatedAt          time.Time                     `json:"updated_at"`
+	RepositoryIdentity string                        `json:"repository_identity"`
+	RepositoryPath     string                        `json:"repository_path"`
+	RunDir             string                        `json:"run_dir"`
+	Remote             string                        `json:"remote"`
+	Branch             string                        `json:"branch"`
+	Claimant           string                        `json:"claimant"`
+	ConfigDigest       string                        `json:"config_digest"`
+	InstanceID         string                        `json:"instance_id,omitempty"`
+	ProcessIdentity    *executionapi.ProcessIdentity `json:"process_identity,omitempty"`
+	Error              string                        `json:"error,omitempty"`
 }
 
 type StartServiceOptions struct {
@@ -270,12 +272,12 @@ func readStartupRecord(c Config, id string) (*StartupRecord, error) {
 }
 
 type startupProcessRecord struct {
-	Version         int             `json:"version"`
-	StartupID       string          `json:"startup_id"`
-	ProcessIdentity ProcessIdentity `json:"process_identity"`
+	Version         int                          `json:"version"`
+	StartupID       string                       `json:"startup_id"`
+	ProcessIdentity executionapi.ProcessIdentity `json:"process_identity"`
 }
 
-func recordStartupProcess(c Config, id string, identity ProcessIdentity) error {
+func recordStartupProcess(c Config, id string, identity executionapi.ProcessIdentity) error {
 	path, err := startupPath(c.RunDir, id)
 	if err != nil {
 		return err
@@ -384,11 +386,11 @@ func ConnectService(ctx context.Context, c Config) ServiceConnection {
 
 // ProbeServiceProcess checks the exact saved OS identity without running Git.
 // It is only an observation; control commands perform their own admission checks.
-func ProbeServiceProcess(identity *ProcessIdentity) ProcessProbe {
+func ProbeServiceProcess(identity *executionapi.ProcessIdentity) ProcessProbe {
 	return probeProcess(identity)
 }
 
-func connectServiceWithProbe(ctx context.Context, c Config, probe func(*ProcessIdentity) ProcessProbe) ServiceConnection {
+func connectServiceWithProbe(ctx context.Context, c Config, probe func(*executionapi.ProcessIdentity) ProcessProbe) ServiceConnection {
 	connection := ServiceConnection{State: ConnectionNoRecord, Capabilities: []string{}, CanStart: true}
 	if err := c.ResolveIdentity(ctx); err != nil {
 		connection.State, connection.Diagnostic, connection.CanStart = ConnectionIdentityError, "resolve repository identity: "+err.Error(), false
@@ -408,7 +410,7 @@ func ConnectServiceFromSnapshot(ctx context.Context, c Config, obs ObservationSn
 	return connectServiceFromSnapshot(ctx, c, obs, probeProcess)
 }
 
-func connectServiceFromSnapshot(ctx context.Context, c Config, obs ObservationSnapshot, probe func(*ProcessIdentity) ProcessProbe) ServiceConnection {
+func connectServiceFromSnapshot(ctx context.Context, c Config, obs ObservationSnapshot, probe func(*executionapi.ProcessIdentity) ProcessProbe) ServiceConnection {
 	connection := ServiceConnection{State: ConnectionNoRecord, Capabilities: []string{}, CanStart: true}
 	connection.Snapshot = obs
 	if obs.State == SnapshotNone {

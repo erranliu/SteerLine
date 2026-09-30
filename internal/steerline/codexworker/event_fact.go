@@ -3,30 +3,14 @@ package codexworker
 import (
 	"encoding/json"
 	"errors"
-	"reflect"
 
 	"github.com/erranliu/SteerLine/internal/steerline/codexapp"
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
-type ToolReplyFact struct {
-	ThreadID, TurnID, CallID, Status string
-	Success                          *bool
-	Answers                          []map[string][]string
-}
-
-func (f ToolReplyFact) MatchesAnswers(expected map[string][]string) bool {
-	for _, answers := range f.Answers {
-		if reflect.DeepEqual(answers, expected) {
-			return true
-		}
-	}
-	return false
-}
-
 type EventFact struct {
-	StartedTurnID string
-	Question      *AskEnvelope
-	ToolReply     *ToolReplyFact
+	executionapi.EventFact
+	Question *AskEnvelope
 }
 
 // DecodeEvent checks native identities before exposing facts to the center.
@@ -74,14 +58,12 @@ func DecodeEvent(envelope codexapp.Envelope, threadID, turnID string, inspectRep
 		if params.Item.Type != "dynamicToolCall" {
 			return fact, nil
 		}
-		reply := ToolReplyFact{ThreadID: params.ThreadID, TurnID: params.TurnID, CallID: params.Item.ID, Status: params.Item.Status, Success: params.Item.Success}
+		reply := executionapi.ToolReplyFact{ThreadID: params.ThreadID, TurnID: params.TurnID, CallID: params.Item.ID, Status: params.Item.Status, Success: params.Item.Success}
 		for _, content := range params.Item.ContentItems {
 			if content.Type != "inputText" {
 				continue
 			}
-			var body struct {
-				Answers map[string][]string `json:"answers"`
-			}
+			var body executionapi.Answer
 			if json.Unmarshal([]byte(content.Text), &body) == nil {
 				reply.Answers = append(reply.Answers, body.Answers)
 			}
@@ -91,23 +73,36 @@ func DecodeEvent(envelope codexapp.Envelope, threadID, turnID string, inspectRep
 	return fact, nil
 }
 
-type AskOption struct {
-	ID     string `json:"id"`
-	Label  string `json:"label"`
-	Detail string `json:"detail"`
-}
-type AskQuestion struct {
-	ID            string      `json:"id"`
-	Header        string      `json:"header"`
-	Question      string      `json:"question"`
-	Options       []AskOption `json:"options"`
-	AllowFreeText bool        `json:"allow_free_text"`
-}
-
-func DecodeQuestions(arguments json.RawMessage) ([]AskQuestion, error) {
+func DecodeQuestions(arguments json.RawMessage) ([]executionapi.Question, error) {
+	// Decode the native schema before converting to common values. Receiver
+	// and Action belong to center-generated choices, never native tool input.
 	var body struct {
-		Questions []AskQuestion `json:"questions"`
+		Questions []struct {
+			ID            string `json:"id"`
+			Header        string `json:"header"`
+			Question      string `json:"question"`
+			AllowFreeText bool   `json:"allow_free_text"`
+			Options       []struct {
+				ID     string `json:"id"`
+				Label  string `json:"label"`
+				Detail string `json:"detail"`
+			} `json:"options"`
+		} `json:"questions"`
 	}
 	err := json.Unmarshal(arguments, &body)
-	return body.Questions, err
+	if body.Questions == nil {
+		return nil, err
+	}
+	questions := make([]executionapi.Question, len(body.Questions))
+	for i, wire := range body.Questions {
+		question := executionapi.Question{ID: wire.ID, Header: wire.Header, Question: wire.Question, AllowFreeText: wire.AllowFreeText}
+		if wire.Options != nil {
+			question.Options = make([]executionapi.DecisionOption, len(wire.Options))
+			for j, option := range wire.Options {
+				question.Options[j] = executionapi.DecisionOption{ID: option.ID, Label: option.Label, Detail: option.Detail}
+			}
+		}
+		questions[i] = question
+	}
+	return questions, err
 }

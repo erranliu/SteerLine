@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/erranliu/SteerLine/internal/steerline/codexapp"
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
 
@@ -42,7 +43,7 @@ type WorkerEvent struct {
 type OrcaInboxMessage = orcaworker.Message
 
 type Worker struct {
-	proc              process
+	proc              executionapi.StopHandle
 	Events            chan WorkerEvent
 	Done              chan error
 	cancelObservation context.CancelFunc

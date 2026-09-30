@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 func (s *Service) workflowRecords(run *Run) (*WorkflowRunRecord, *ExecutionRecord) {
@@ -51,7 +53,7 @@ func (s *Service) inspectWorkflowWorkspace(ctx context.Context, run *Run) (Works
 	if configErr != nil {
 		return WorkspaceEvidence{}, configErr
 	}
-	if run.Backend == string(BackendOrca) && run.Protocol == string(ProtocolOrcaSupervised) {
+	if run.Backend == string(executionapi.BackendOrca) && run.Protocol == string(executionapi.ProtocolOrcaSupervised) {
 		execution := s.executionRecord(run)
 		if execution == nil || execution.Process == nil {
 			return WorkspaceEvidence{}, errors.New("supervised workspace has no execution binding")
@@ -61,7 +63,7 @@ func (s *Service) inspectWorkflowWorkspace(ctx context.Context, run *Run) (Works
 		if target.ID != fixed.ID || target.ConnectionID != fixed.ConnectionID || target.ExternalRuntime != fixed.ExternalRuntime {
 			return WorkspaceEvidence{}, nativeErr("authority_mismatch", "supervised target differs from its fixed execution")
 		}
-		ref := ExecutionRef{Version: ExecutionRecordVersion, Backend: BackendOrca, Protocol: ProtocolOrcaSupervised, Target: target, RunID: run.RunID, AttemptID: run.AttemptID, External: *execution.Process, WorkspacePath: execution.Workspace.Worktree, WorkspaceBranch: execution.Workspace.Branch, BaseCommit: execution.Workspace.Base}
+		ref := executionapi.ExecutionRef{Version: executionapi.ExecutionRecordVersion, Backend: executionapi.BackendOrca, Protocol: executionapi.ProtocolOrcaSupervised, Target: target, RunID: run.RunID, AttemptID: run.AttemptID, External: *execution.Process, WorkspacePath: execution.Workspace.Worktree, WorkspaceBranch: execution.Workspace.Branch, BaseCommit: execution.Workspace.Base}
 		inspection, err := (orcaSupervisedBackend{config: c}).InspectWorkspace(ctx, ref)
 		if err != nil {
 			return WorkspaceEvidence{}, err
@@ -77,13 +79,13 @@ func (s *Service) inspectWorkflowWorkspace(ctx context.Context, run *Run) (Works
 	}
 	backend := backendFor(c)
 	kind, protocol := backend.Identity()
-	if kind == BackendLocal && run.Protocol == string(ProtocolLocalCodexAppServer) {
-		protocol = ProtocolLocalCodexAppServer
+	if kind == executionapi.BackendLocal && run.Protocol == string(executionapi.ProtocolLocalCodexAppServer) {
+		protocol = executionapi.ProtocolLocalCodexAppServer
 	}
 	if string(kind) != run.Backend || string(protocol) != run.Protocol || run.Target.ID != targetFor(c).ID {
-		return WorkspaceEvidence{}, UnsupportedAdapterOperation("InspectWorkspace", "configured target differs from the native execution identity")
+		return WorkspaceEvidence{}, executionapi.UnsupportedAdapterOperation("InspectWorkspace", "configured target differs from the native execution identity")
 	}
-	inspection, err := backend.InspectWorkspace(ctx, ExecutionRef{Version: ExecutionRecordVersion, Backend: kind, Protocol: protocol, Target: targetFor(c), RunID: run.RunID, AttemptID: run.AttemptID, WorkspacePath: worktree, WorkspaceBranch: *run.WorktreeBranch, BaseCommit: *run.BaseCommit})
+	inspection, err := backend.InspectWorkspace(ctx, executionapi.ExecutionRef{Version: executionapi.ExecutionRecordVersion, Backend: kind, Protocol: protocol, Target: targetFor(c), RunID: run.RunID, AttemptID: run.AttemptID, WorkspacePath: worktree, WorkspaceBranch: *run.WorktreeBranch, BaseCommit: *run.BaseCommit})
 	if err != nil {
 		return WorkspaceEvidence{}, err
 	}
@@ -101,7 +103,7 @@ func applyWorkflowWorkspaceEvidence(run *Run, execution *ExecutionRecord, worksp
 }
 
 func applyWorkflowWorkspaceTarget(run *Run, execution *ExecutionRecord, workspace WorkspaceEvidence) {
-	if execution.Protocol != string(ProtocolOrcaSupervised) {
+	if execution.Protocol != string(executionapi.ProtocolOrcaSupervised) {
 		execution.Target.WorktreeID = workspace.Worktree
 	}
 	execution.Target.Branch = workspace.Branch

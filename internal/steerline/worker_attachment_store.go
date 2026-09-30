@@ -4,20 +4,22 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
-func (t *sqliteTx) putExecutionBinding(ref ExecutionRef) error {
+func (t *sqliteTx) putExecutionBinding(ref executionapi.ExecutionRef) error {
 	if err := validateExecutionRef(ref); err != nil {
 		return err
 	}
 	var body []byte
 	err := t.tx.QueryRowContext(t.ctx, `SELECT payload FROM execution_bindings WHERE run_id=? AND attempt_id=? AND record_id='binding'`, ref.RunID, ref.AttemptID).Scan(&body)
 	if err == nil {
-		var old ExecutionRef
+		var old executionapi.ExecutionRef
 		if err := json.Unmarshal(body, &old); err != nil {
 			return err
 		}
-		if ref.Protocol != ProtocolOrcaSupervised {
+		if ref.Protocol != executionapi.ProtocolOrcaSupervised {
 			old.WorkspacePath, ref.WorkspacePath = canonical(old.WorkspacePath), canonical(ref.WorkspacePath)
 		}
 		if digestValue(old) != digestValue(ref) {
@@ -36,14 +38,14 @@ func (t *sqliteTx) putExecutionBinding(ref ExecutionRef) error {
 	return err
 }
 
-func (t *sqliteTx) putExecutionOperation(op Operation, expected string) error {
+func (t *sqliteTx) putExecutionOperation(op executionapi.Operation, expected string) error {
 	if err := validateExecutionOperation(op); err != nil {
 		return err
 	}
 	var body []byte
 	err := t.tx.QueryRowContext(t.ctx, `SELECT payload FROM execution_operations WHERE run_id=? AND attempt_id=? AND record_id=?`, op.RunID, op.AttemptID, op.ID).Scan(&body)
 	if err == nil {
-		var old Operation
+		var old executionapi.Operation
 		if err := json.Unmarshal(body, &old); err != nil {
 			return err
 		}
@@ -69,11 +71,11 @@ func (t *sqliteTx) putExecutionOperation(op Operation, expected string) error {
 	return err
 }
 
-func (s *Service) commitWorkerBinding(run *Run, ref ExecutionRef) error {
+func (s *Service) commitWorkerBinding(run *Run, ref executionapi.ExecutionRef) error {
 	return s.commitWorkerAttached(run, workerCommitAttachment{Binding: &ref})
 }
-func (s *Service) commitExecutionOperation(run *Run, op Operation, expected string) error {
-	var before *Operation
+func (s *Service) commitExecutionOperation(run *Run, op executionapi.Operation, expected string) error {
+	var before *executionapi.Operation
 	if expected != "" {
 		saved, err := (executionRecords{root: s.Config.RunDir}).loadOperation(op.RunID, op.AttemptID, op.ID)
 		if err != nil {
@@ -84,5 +86,5 @@ func (s *Service) commitExecutionOperation(run *Run, op Operation, expected stri
 		}
 		before = &saved
 	}
-	return s.commitWorkerAttached(run, workerCommitAttachment{ExecutionOperation: &recordWrite[Operation]{Before: before, After: op}})
+	return s.commitWorkerAttached(run, workerCommitAttachment{ExecutionOperation: &recordWrite[executionapi.Operation]{Before: before, After: op}})
 }

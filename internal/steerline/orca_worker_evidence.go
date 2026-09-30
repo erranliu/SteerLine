@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
 
@@ -30,7 +30,7 @@ func readNativeOrcaDelivery(ctx context.Context, c Config, execution *ExecutionR
 	}
 	if c.hostName() == "orca_supervised" {
 		client := remoteClientForExecution(c, execution)
-		ref := ExecutionRef{RunID: execution.WorkflowRunID, Target: execution.Target, External: *execution.Process}
+		ref := executionapi.ExecutionRef{RunID: execution.WorkflowRunID, Target: execution.Target, External: *execution.Process}
 		value, err := client.Check(ctx, remoteWorkerRef(ref))
 		return nativeOrcaDeliveryFact{DeliveryID: value.ID, Messages: value.Messages}, remoteWorkerError(err)
 	}
@@ -56,16 +56,16 @@ func decodeNativeOrcaMessage(message OrcaInboxMessage, runID string, turn OrcaNa
 	fact := nativeOrcaMessageFact{Kind: wire.Kind, MessageID: wire.MessageID, TaskID: wire.TaskID, DispatchID: wire.DispatchID, Outcome: wire.Outcome}
 	switch wire.Kind {
 	case "question":
-		request := DecisionRequest{Question: clip(wire.Question.Text, 1800), Context: clip(message.Body, 7000), AllowFreeText: true}
+		request := DecisionRequest{Question: clip(wire.Question.Question, 1800), Context: clip(message.Body, 7000), AllowFreeText: true}
 		for _, option := range wire.Question.Options {
-			request.Options = append(request.Options, DecisionOption{ID: option.ID, Label: option.Label, Detail: option.Detail})
+			request.Options = append(request.Options, executionapi.DecisionOption{ID: option.ID, Label: option.Label, Detail: option.Detail})
 		}
-		request.OrcaAsk = &orcaAskCall{RunID: runID, TaskID: wire.TaskID, DispatchID: wire.DispatchID, MessageID: wire.MessageID, Questions: []nativeAskQuestion{{ID: wire.MessageID, Header: "Orca", Question: request.Question, Options: request.Options, AllowFreeText: true}}}
+		request.OrcaAsk = &orcaAskCall{RunID: runID, TaskID: wire.TaskID, DispatchID: wire.DispatchID, MessageID: wire.MessageID, Questions: []executionapi.Question{{ID: wire.MessageID, Header: "Orca", Question: request.Question, Options: request.Options, AllowFreeText: true}}}
 		fact.Question = &request
 	case "worker_done", "status":
-		fact.PRCandidates = codexworker.PRClues(message.Body)
+		fact.PRCandidates = wire.PRCandidates
 	case "escalation":
-		request := DecisionRequest{Question: clip("Orca worker escalation: "+message.Subject, 1800), Context: clip(message.Body, 7000), Options: []DecisionOption{{ID: "continue", Label: "Continue current work"}}, AllowFreeText: true}
+		request := DecisionRequest{Question: clip("Orca worker escalation: "+message.Subject, 1800), Context: clip(message.Body, 7000), Options: []executionapi.DecisionOption{{ID: "continue", Label: "Continue current work"}}, AllowFreeText: true}
 		fact.Question = &request
 	}
 	return fact, true, nil
@@ -83,7 +83,7 @@ func readNativeOrcaSettlement(ctx context.Context, c Config, execution *Executio
 		return fact, errors.New("Orca settlement has no fixed execution identity")
 	}
 	if c.hostName() == "orca_supervised" {
-		ref := ExecutionRef{Backend: BackendOrca, Protocol: ProtocolOrcaSupervised, Target: execution.Target, External: *execution.Process}
+		ref := executionapi.ExecutionRef{Backend: executionapi.BackendOrca, Protocol: executionapi.ProtocolOrcaSupervised, Target: execution.Target, External: *execution.Process}
 		value, err := remoteClientForExecution(c, execution).Settlement(ctx, remoteWorkerRef(ref), turn.Outcome)
 		return nativeOrcaSettlement{Outcome: value, DispatchID: turn.DispatchID, RuntimeID: execution.Process.CoordinatorRuntimeID}, remoteWorkerError(err)
 	}
@@ -110,7 +110,7 @@ func verifyNativeOrcaActiveDispatch(ctx context.Context, c Config, execution *Ex
 		return errors.New("stopped-center Orca Dispatch has no fixed identity")
 	}
 	if c.hostName() == "orca_supervised" {
-		value, err := (orcaSupervisedBackend{config: c}).Observe(ctx, ExecutionRef{Backend: BackendOrca, Protocol: ProtocolOrcaSupervised, Target: execution.Target, External: *execution.Process})
+		value, err := (orcaSupervisedBackend{config: c}).Observe(ctx, executionapi.ExecutionRef{Backend: executionapi.BackendOrca, Protocol: executionapi.ProtocolOrcaSupervised, Target: execution.Target, External: *execution.Process})
 		if err != nil {
 			return err
 		}

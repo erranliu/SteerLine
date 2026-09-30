@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
 
@@ -15,7 +16,7 @@ type workerOrcaWorktree = orcaworker.Worktree
 
 func workerOrcaWorkspaceError(err error) error {
 	if errors.Is(err, orcaworker.ErrWorktreeIdentity) {
-		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: err.Error()}
+		return &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: err.Error()}
 	}
 	return err
 }
@@ -23,7 +24,7 @@ func workerOrcaWorkspaceError(err error) error {
 func workerOrcaBackendError(err error) error {
 	var platform *orcaworker.PlatformError
 	if errors.As(err, &platform) {
-		return &BackendError{Code: BackendErrorCode(platform.Code), Diagnostic: platform.Diagnostic, Cause: platform.Cause}
+		return &executionapi.BackendError{Code: executionapi.BackendErrorCode(platform.Code), Diagnostic: platform.Diagnostic, Cause: platform.Cause}
 	}
 	return err
 }
@@ -85,7 +86,7 @@ func applyWorkerOrcaWorkspace(c Config, run *Run, execution *ExecutionRecord, wo
 		return errors.New("remote worker worktree identity is incomplete")
 	}
 	path := worktree.Path
-	execution.WorkspaceIntent = &WorkspaceIntent{Path: path, Branch: branch, BaseCommit: base}
+	execution.WorkspaceIntent = &executionapi.WorkspaceIntent{Path: path, Branch: branch, BaseCommit: base}
 	execution.Target.WorktreeID, execution.Target.Branch = worktree.ID, branch
 	execution.Workspace = WorkspaceEvidence{Repository: c.identity, Worktree: path, Branch: branch, Base: base, Head: base, VerifiedAt: time.Now().UTC()}
 	refreshExecutionView(run, execution)
@@ -114,7 +115,7 @@ func (s *Service) prepareRemoteWorkerWorkspace(ctx context.Context, run *Run, ex
 		execution.OrcaNative = &OrcaNativeExecution{RemoteRuntimeID: pair.RemoteRuntime}
 	}
 	if execution.OrcaNative.RemoteRuntimeID != pair.RemoteRuntime {
-		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "original remote workspace runtime changed"}
+		return &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "original remote workspace runtime changed"}
 	}
 	if err := s.commitWorker(run); err != nil {
 		return err
@@ -152,7 +153,7 @@ func (s *Service) recoverRemoteWorkerWorkspace(ctx context.Context, run *Run, ex
 		return err
 	}
 	if execution.OrcaNative == nil || execution.OrcaNative.RemoteRuntimeID != pair.RemoteRuntime {
-		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "original remote workspace runtime is unverified"}
+		return &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "original remote workspace runtime is unverified"}
 	}
 	worktree, found, err := remoteWorkerClient(fixedConfig).FindWorktree(ctx, pair, name, run.WorkspaceIntent.BaseCommit)
 	if err != nil {

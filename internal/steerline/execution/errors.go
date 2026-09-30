@@ -1,9 +1,34 @@
-package steerline
+package execution
 
 import (
 	"errors"
-	"fmt"
+	"strconv"
 )
+
+type BackendErrorCode string
+
+const (
+	BackendUnsupported      BackendErrorCode = "unsupported"
+	BackendRejected         BackendErrorCode = "rejected"
+	BackendUnreachable      BackendErrorCode = "unreachable"
+	BackendIdentityMismatch BackendErrorCode = "identity_mismatch"
+	BackendProtocolInvalid  BackendErrorCode = "protocol_invalid"
+	BackendOutcomeUnknown   BackendErrorCode = "outcome_unknown"
+)
+
+type BackendError struct {
+	Code       BackendErrorCode
+	Diagnostic string
+	Cause      error
+}
+
+func (e *BackendError) Error() string {
+	if e.Cause != nil {
+		return string(e.Code) + ": " + e.Diagnostic + ": " + e.Cause.Error()
+	}
+	return string(e.Code) + ": " + e.Diagnostic
+}
+func (e *BackendError) Unwrap() error { return e.Cause }
 
 type AdapterErrorKind string
 
@@ -25,9 +50,9 @@ type AdapterError struct {
 
 func (e *AdapterError) Error() string {
 	if e.Cause != nil {
-		return fmt.Sprintf("%s %s: %s: %v", e.Kind, e.Operation, e.Diagnostic, e.Cause)
+		return string(e.Kind) + " " + e.Operation + ": " + e.Diagnostic + ": " + e.Cause.Error()
 	}
-	return fmt.Sprintf("%s %s: %s", e.Kind, e.Operation, e.Diagnostic)
+	return string(e.Kind) + " " + e.Operation + ": " + e.Diagnostic
 }
 func (e *AdapterError) Unwrap() error { return e.Cause }
 func UnsupportedAdapterOperation(operation, diagnostic string) error {
@@ -47,6 +72,6 @@ func ExecutionBackendKind(host string) (backend, protocol string, err error) {
 	case "orca_supervised":
 		return string(BackendOrca), string(ProtocolOrcaSupervised), nil
 	default:
-		return "", "", fmt.Errorf("unsupported execution host %q; fallback is disabled", host)
+		return "", "", errors.New("unsupported execution host " + strconv.Quote(host) + "; fallback is disabled")
 	}
 }

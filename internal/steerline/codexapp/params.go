@@ -3,28 +3,24 @@ package codexapp
 import (
 	"errors"
 	"fmt"
+
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
-// LaunchCommand identifies the direct app-server process and its arguments.
-type LaunchCommand struct {
-	Executable string
-	Args       []string
-}
-
-func AppServerLaunch(executable string, args []string, profile, endpoint string) (LaunchCommand, error) {
+func AppServerLaunch(executable string, args []string, profile, endpoint string) (executionapi.LaunchCommand, error) {
 	if executable == "" || endpoint == "" {
-		return LaunchCommand{}, errors.New("Codex app-server command is incomplete")
+		return executionapi.LaunchCommand{}, errors.New("Codex app-server command is incomplete")
 	}
 	native, err := NativeExecutable(executable)
 	if err != nil {
-		return LaunchCommand{}, err
+		return executionapi.LaunchCommand{}, err
 	}
 	launchArgs := append([]string(nil), args...)
 	if profile != "" {
 		launchArgs = append(launchArgs, "--profile", profile)
 	}
 	launchArgs = append(launchArgs, "app-server", "--listen", endpoint)
-	return LaunchCommand{Executable: native, Args: launchArgs}, nil
+	return executionapi.LaunchCommand{Executable: native, Args: launchArgs}, nil
 }
 
 func ThreadStartParams(worktree, sandbox, model string, dynamicTools []any) (map[string]any, error) {

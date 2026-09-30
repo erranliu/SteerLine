@@ -26,7 +26,6 @@ type StepRunnerSettings = contracts.StepRunnerSettings
 type ExecutionRecord = contracts.ExecutionRecord
 type OrcaNativeExecution = contracts.OrcaNativeExecution
 type OrcaNativeTurn = contracts.OrcaNativeTurn
-type ExecutionTarget = contracts.ExecutionTarget
 type WorkspaceEvidence = contracts.WorkspaceEvidence
 type StepAttemptRecord = contracts.StepAttemptRecord
 type DecisionRecord = contracts.DecisionRecord

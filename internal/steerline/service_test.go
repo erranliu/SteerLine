@@ -15,6 +15,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 // fakeDB is the isolated PR-provider state used by native workflow tests.
@@ -423,7 +425,7 @@ func seedFakeCapabilities(t *testing.T, c Config) {
 	evidence := path + "#sha256=" + hex.EncodeToString(sum[:])
 	backend, protocol := backendFor(c).Identity()
 	version := "fake-codex/1"
-	if backend == BackendOrca {
+	if backend == executionapi.BackendOrca {
 		version = "fake-orca/1"
 	}
 	report := capabilityReport(backend, protocol, targetFor(c), agentFor(c), version)
@@ -433,10 +435,10 @@ func seedFakeCapabilities(t *testing.T, c Config) {
 			continue
 		}
 		if name == "resource_settlement" {
-			report.Capabilities[i].Status = CapabilityUnsupported
+			report.Capabilities[i].Status = executionapi.CapabilityUnsupported
 			continue
 		}
-		report.Capabilities[i].Status = CapabilityVerified
+		report.Capabilities[i].Status = executionapi.CapabilityVerified
 		report.Capabilities[i].Evidence = evidence
 	}
 	if err := (executionRecords{root: c.RunDir}).saveCapabilityReport(report); err != nil {

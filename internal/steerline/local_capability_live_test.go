@@ -12,6 +12,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 // TestLiveLocalCapabilityEvidence is an opt-in probe for the installed Codex
@@ -67,8 +69,8 @@ func TestLiveLocalCapabilityEvidence(t *testing.T) {
 			}
 		}
 	}()
-	ref := ExecutionRef{Version: ExecutionRecordVersion, Backend: BackendLocal, Protocol: ProtocolLocalProcess, Target: target, Agent: agentFor(c), RunID: runID, AttemptID: runID, External: worker.proc.Identity()}
-	var first OutputBatch
+	ref := executionapi.ExecutionRef{Version: executionapi.ExecutionRecordVersion, Backend: executionapi.BackendLocal, Protocol: executionapi.ProtocolLocalProcess, Target: target, Agent: agentFor(c), RunID: runID, AttemptID: runID, External: worker.proc.Identity()}
+	var first executionapi.OutputBatch
 	for {
 		first, err = backend.ReadOutput(ctx, ref, "", 1<<20)
 		if err == nil && len(first.Data) > 0 {
@@ -82,7 +84,7 @@ func TestLiveLocalCapabilityEvidence(t *testing.T) {
 	if _, err = backend.Observe(ctx, ref); err != nil {
 		t.Fatal(err)
 	}
-	stop, err := backend.StopExecution(ctx, ref, Operation{}, worker)
+	stop, err := backend.StopExecution(ctx, ref, executionapi.Operation{}, worker.proc)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +94,7 @@ func TestLiveLocalCapabilityEvidence(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal("local worker did not exit after stop")
 	}
-	stop, err = backend.StopExecution(ctx, ref, Operation{}, worker)
+	stop, err = backend.StopExecution(ctx, ref, executionapi.Operation{}, worker.proc)
 	if err != nil || stop.Disposition != "confirmed" {
 		t.Fatalf("original local process stop was not confirmed: %+v / %v", stop, err)
 	}
@@ -107,11 +109,11 @@ func TestLiveLocalCapabilityEvidence(t *testing.T) {
 	sum := sha256.Sum256(read.Data)
 	evidence := map[string]any{
 		"version": 1, "captured_at": time.Now().UTC(), "platform": runtime.GOOS + "/" + runtime.GOARCH,
-		"backend": BackendLocal, "protocol": ProtocolLocalProcess, "target_id": target.ID,
+		"backend": executionapi.BackendLocal, "protocol": executionapi.ProtocolLocalProcess, "target_id": target.ID,
 		"agent": "codex", "codex_version": probe.PlatformVersion,
 		"run_id": runID, "process_identity": ref.External,
 		"output_sha256": hex.EncodeToString(sum[:]), "output_bytes": len(read.Data), "output_source": read.Source,
-		"stop_status": OperationConfirmed, "process_absent": true,
+		"stop_status": executionapi.OperationConfirmed, "process_absent": true,
 	}
 	body, err := json.MarshalIndent(evidence, "", "  ")
 	if err != nil {

@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 func Preflight(ctx context.Context, c Config) (PreflightResult, error) {
@@ -46,7 +48,7 @@ func Preflight(ctx context.Context, c Config) (PreflightResult, error) {
 		return PreflightResult{}, errors.New("remote Orca runtime is not ready or omitted its version/identity")
 	}
 	if c.ExpectedRemoteRuntime != "" && remoteStatus.RuntimeID != c.ExpectedRemoteRuntime {
-		return PreflightResult{}, &Error{Code: BackendIdentityMismatch, Diagnostic: "original remote runtime epoch changed"}
+		return PreflightResult{}, &Error{Code: executionapi.BackendIdentityMismatch, Diagnostic: "original remote runtime epoch changed"}
 	}
 	if !sameOrcaVersionFamily(centerVersion, remoteStatus.AppVersion) {
 		return PreflightResult{}, fmt.Errorf("Orca version-family mismatch: center=%s remote=%s", centerVersion, remoteStatus.AppVersion)

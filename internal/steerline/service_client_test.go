@@ -13,6 +13,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 func TestConnectionClassifiesProcessAndSnapshotIndependently(t *testing.T) {
@@ -40,7 +42,7 @@ func TestConnectionClassifiesProcessAndSnapshotIndependently(t *testing.T) {
 	if connected.State != ConnectionConnected || !connected.CanControl || !connected.IdentityMatched {
 		t.Fatalf("connected process classified as %+v", connected)
 	}
-	denied := connectServiceWithProbe(context.Background(), c, func(*ProcessIdentity) ProcessProbe {
+	denied := connectServiceWithProbe(context.Background(), c, func(*executionapi.ProcessIdentity) ProcessProbe {
 		return ProcessProbe{State: ProcessUnknown, Reason: "access denied"}
 	})
 	if denied.State != ConnectionUnknown || denied.CanStart || denied.CanControl || denied.CanStop || !strings.Contains(denied.Diagnostic, "access denied") {
@@ -117,7 +119,7 @@ func TestConnectionClassifiesProcessAndSnapshotIndependently(t *testing.T) {
 	wrongRepo := rt
 	wrongRepo.Repository.Identity = filepath.Join(filepath.Dir(c.Repository), "other.git")
 	wrongRepo.Service.PID = 2_000_000_000
-	wrongRepo.Service.ProcessIdentity = &ProcessIdentity{Kind: "os", PID: wrongRepo.Service.PID, Created: "unused", Executable: "unused"}
+	wrongRepo.Service.ProcessIdentity = &executionapi.ProcessIdentity{Kind: "os", PID: wrongRepo.Service.PID, Created: "unused", Executable: "unused"}
 	write(wrongRepo)
 	if got := ConnectService(context.Background(), c); got.State != ConnectionIdentityError || got.CanStart {
 		t.Fatalf("mismatched repository must not be treated as offline: %+v", got)
@@ -216,7 +218,7 @@ func TestWaitForStartupMarksConfirmedEarlyExit(t *testing.T) {
 	_, logPath, err := createStartupAttempt(config, id, true)
 	require(t, err)
 	record := initialStartupRecord(config, id)
-	record.ProcessIdentity = &ProcessIdentity{Kind: "os", PID: 2_000_000_000, Created: "no-such-process", Executable: "no-such-executable"}
+	record.ProcessIdentity = &executionapi.ProcessIdentity{Kind: "os", PID: 2_000_000_000, Created: "no-such-process", Executable: "no-such-executable"}
 	require(t, writeStartupRecord(config, record))
 	result, err := waitForStartup(context.Background(), config, id, logPath, StartServiceOptions{WaitTimeout: time.Second, PollInterval: 10 * time.Millisecond})
 	if err != nil || result.Status != "failed" || !strings.Contains(result.Error, "exited before") {
@@ -320,7 +322,7 @@ func TestStartServiceReportsPreflightFailureAndPendingHandshake(t *testing.T) {
 	})
 
 	t.Run("timeout keeps startup identity and does not repeat launch", func(t *testing.T) {
-		var pendingIdentity *ProcessIdentity
+		var pendingIdentity *executionapi.ProcessIdentity
 		t.Cleanup(func() {
 			if pendingIdentity != nil {
 				_ = terminatePendingTestProcess(pendingIdentity)
@@ -444,7 +446,7 @@ var (
 	lifecycleCLIBuildErr  error
 )
 
-func terminatePendingTestProcess(identity *ProcessIdentity) error {
+func terminatePendingTestProcess(identity *executionapi.ProcessIdentity) error {
 	if identity == nil || probeProcess(identity).State != ProcessMatches {
 		return fmt.Errorf("refusing to terminate a process without its matching test identity")
 	}

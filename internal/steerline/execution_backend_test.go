@@ -10,11 +10,13 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 func TestExecutionRecordsPinBindingsAndOperations(t *testing.T) {
 	r := executionRecords{root: t.TempDir()}
-	ref := ExecutionRef{Version: 1, Backend: BackendLocal, Protocol: ProtocolLocalProcess, Target: ExecutionTarget{ID: "local:test"}, Agent: AgentSpec{Name: "codex"}, RunID: newID(), AttemptID: newID(), WorkspacePath: t.TempDir(), WorkspaceBranch: "codex/test", BaseCommit: "0123456789abcdef0123456789abcdef01234567", External: ProcessIdentity{Kind: "os", PID: 42, Created: "creation-1", Executable: "codex"}, Generation: "creation-1"}
+	ref := executionapi.ExecutionRef{Version: 1, Backend: executionapi.BackendLocal, Protocol: executionapi.ProtocolLocalProcess, Target: executionapi.ExecutionTarget{ID: "local:test"}, Agent: executionapi.AgentSpec{Name: "codex"}, RunID: newID(), AttemptID: newID(), WorkspacePath: t.TempDir(), WorkspaceBranch: "codex/test", BaseCommit: "0123456789abcdef0123456789abcdef01234567", External: executionapi.ProcessIdentity{Kind: "os", PID: 42, Created: "creation-1", Executable: "codex"}, Generation: "creation-1"}
 	if err := r.saveBinding(ref); err != nil {
 		t.Fatal(err)
 	}
@@ -35,21 +37,21 @@ func TestExecutionRecordsPinBindingsAndOperations(t *testing.T) {
 		}
 	}
 	changed := ref
-	changed.Target = ExecutionTarget{ID: "local:other"}
+	changed.Target = executionapi.ExecutionTarget{ID: "local:other"}
 	if err := r.saveBinding(changed); err == nil {
 		t.Fatal("expected immutable binding conflict")
 	}
 
-	op := Operation{Version: 1, ID: "start-" + ref.RunID, RunID: ref.RunID, AttemptID: ref.AttemptID, Backend: ref.Backend, Protocol: ref.Protocol, Target: ref.Target, Action: "start", PayloadDigest: digestValue("fixed"), Status: OperationPending}
+	op := executionapi.Operation{Version: 1, ID: "start-" + ref.RunID, RunID: ref.RunID, AttemptID: ref.AttemptID, Backend: ref.Backend, Protocol: ref.Protocol, Target: ref.Target, Action: "start", PayloadDigest: digestValue("fixed"), Status: executionapi.OperationPending}
 	if err := r.saveOperation(op); err != nil {
 		t.Fatal(err)
 	}
-	op.Status = OperationInFlight
+	op.Status = executionapi.OperationInFlight
 	if err := r.saveOperation(op); err != nil {
 		t.Fatal(err)
 	}
 	loadedOp, err := r.loadOperation(op.RunID, op.AttemptID, op.ID)
-	if err != nil || loadedOp.Status != OperationInFlight {
+	if err != nil || loadedOp.Status != executionapi.OperationInFlight {
 		t.Fatalf("operation update not persisted: %#v, %v", loadedOp, err)
 	}
 	op.PayloadDigest = digestValue("different")
@@ -67,10 +69,10 @@ func TestExecutionBackendCommonCapabilityContract(t *testing.T) {
 		t.Fatal(err)
 	}
 	c := Config{Host: "local", Repository: t.TempDir(), CommandTimeout: "5s", Codex: Command{Executable: exe, Args: []string{"--fake", "codex"}}, Orca: OrcaConfig{Executable: exe, Args: []string{"--fake", "orca", t.TempDir()}}}
-	backends := []ExecutionBackend{localExecutionBackend{config: c}, orcaTerminalBackend{config: c}}
+	backends := []executionapi.ExecutionBackend{localExecutionBackend{config: c}, orcaTerminalBackend{config: c}}
 	for _, backend := range backends {
 		kind, protocol := backend.Identity()
-		report, err := backend.Probe(context.Background(), ExecutionTarget{ID: "fixture"}, AgentSpec{Name: "codex"})
+		report, err := backend.Probe(context.Background(), executionapi.ExecutionTarget{ID: "fixture"}, executionapi.AgentSpec{Name: "codex"})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -78,7 +80,7 @@ func TestExecutionBackendCommonCapabilityContract(t *testing.T) {
 			t.Fatalf("probe lost fixed backend identity: %#v", report)
 		}
 		for _, capability := range report.Capabilities {
-			if capability.Status == CapabilityVerified {
+			if capability.Status == executionapi.CapabilityVerified {
 				t.Fatalf("static declaration claimed verification: %#v", capability)
 			}
 		}
@@ -87,7 +89,7 @@ func TestExecutionBackendCommonCapabilityContract(t *testing.T) {
 
 func TestCapabilityReportRejectsRetiredWholeRunActions(t *testing.T) {
 	for _, name := range []string{"reply_continue", "retry"} {
-		report := CapabilityReport{Version: 1, Backend: BackendLocal, Protocol: ProtocolLocalProcess, Target: ExecutionTarget{ID: "local"}, Agent: AgentSpec{Name: "codex"}, PlatformVersion: "fixture", CheckedAt: now(), Capabilities: []Capability{{Name: name, Status: CapabilityUnsupported}}}
+		report := executionapi.CapabilityReport{Version: 1, Backend: executionapi.BackendLocal, Protocol: executionapi.ProtocolLocalProcess, Target: executionapi.ExecutionTarget{ID: "local"}, Agent: executionapi.AgentSpec{Name: "codex"}, PlatformVersion: "fixture", CheckedAt: now(), Capabilities: []executionapi.Capability{{Name: name, Status: executionapi.CapabilityUnsupported}}}
 		if err := (executionRecords{root: t.TempDir()}).saveCapabilityReport(report); err == nil {
 			t.Fatalf("capability report retained retired whole-run action %q", name)
 		}
@@ -126,10 +128,10 @@ func TestLocalObservationRejectsReusedPIDIdentity(t *testing.T) {
 	}
 	identity.Created = "different-process-generation"
 	cfg := Config{Host: "local"}
-	ref := ExecutionRef{Backend: BackendLocal, Protocol: ProtocolLocalProcess, Target: targetFor(cfg), External: *identity}
+	ref := executionapi.ExecutionRef{Backend: executionapi.BackendLocal, Protocol: executionapi.ProtocolLocalProcess, Target: targetFor(cfg), External: *identity}
 	_, err = (localExecutionBackend{config: cfg}).Observe(context.Background(), ref)
-	var backendErr *BackendError
-	if !errors.As(err, &backendErr) || backendErr.Code != BackendIdentityMismatch {
+	var backendErr *executionapi.BackendError
+	if !errors.As(err, &backendErr) || backendErr.Code != executionapi.BackendIdentityMismatch {
 		t.Fatalf("reused PID identity was accepted: %v", err)
 	}
 }
@@ -148,7 +150,7 @@ func TestLocalReadOutputUsesBoundedExecutionCursor(t *testing.T) {
 	}
 	cfg := Config{Host: "local", RunDir: runDir}
 	backend := localExecutionBackend{config: cfg}
-	ref := ExecutionRef{Backend: BackendLocal, Protocol: ProtocolLocalProcess, Target: targetFor(cfg), RunID: runID, AttemptID: attemptID}
+	ref := executionapi.ExecutionRef{Backend: executionapi.BackendLocal, Protocol: executionapi.ProtocolLocalProcess, Target: targetFor(cfg), RunID: runID, AttemptID: attemptID}
 	first, err := backend.ReadOutput(context.Background(), ref, "", 4)
 	if err != nil || string(first.Data) != "abcd" || first.NextCursor == "" {
 		t.Fatalf("first bounded read: %#v, %v", first, err)
@@ -205,11 +207,11 @@ func TestNativeEvidenceCertificationRequiresFixedTargetAndVersion(t *testing.T) 
 		t.Fatal(err)
 	}
 	for _, name := range []string{"start", "observe", "stop", "output_reading"} {
-		if capabilityStatus(report, name) != CapabilityVerified {
+		if capabilityStatus(report, name) != executionapi.CapabilityVerified {
 			t.Fatalf("%s not verified from native evidence: %#v", name, report)
 		}
 	}
-	if capabilityStatus(report, "retry") != CapabilityNotTested {
+	if capabilityStatus(report, "retry") != executionapi.CapabilityNotTested {
 		t.Fatalf("legacy backend retry capability was retained: %#v", report.Capabilities)
 	}
 	evidence["target_id"] = "different-target"
@@ -262,7 +264,7 @@ func TestOrcaCertificationRequiresAgentAndTerminalEvidence(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, name := range []string{"start", "observe", "stop", "output_reading", "workspace_inspection"} {
-		if capabilityStatus(report, name) != CapabilityVerified {
+		if capabilityStatus(report, name) != executionapi.CapabilityVerified {
 			t.Fatalf("%s not verified: %#v", name, report)
 		}
 	}
@@ -274,19 +276,19 @@ func TestOrcaObservationRejectsReplacedIncarnationAndConnection(t *testing.T) {
 	if err := writeFakeOrcaState(dir, fakeOrcaState{Handle: "term-fixed", Incarnation: "inc-original"}); err != nil {
 		t.Fatal(err)
 	}
-	ref := ExecutionRef{Backend: BackendOrca, Protocol: ProtocolOrcaTerminalV2, Target: targetFor(cfg), Agent: AgentSpec{Name: "codex"}, External: ProcessIdentity{Kind: "orca", Terminal: "term-fixed", RuntimeID: "fake-runtime", Incarnation: "inc-original"}}
+	ref := executionapi.ExecutionRef{Backend: executionapi.BackendOrca, Protocol: executionapi.ProtocolOrcaTerminalV2, Target: targetFor(cfg), Agent: executionapi.AgentSpec{Name: "codex"}, External: executionapi.ProcessIdentity{Kind: "orca", Terminal: "term-fixed", RuntimeID: "fake-runtime", Incarnation: "inc-original"}}
 	backend := orcaTerminalBackend{config: cfg}
 	if obs, err := backend.Observe(context.Background(), ref); err != nil || obs.Liveness != "live" {
 		t.Fatalf("fixed terminal was not live: %#v, %v", obs, err)
 	}
 	t.Setenv("STEERLINE_FAKE_ORCA_INCARNATION", "inc-replacement")
-	var mismatch *BackendError
-	if _, err := backend.Observe(context.Background(), ref); !errors.As(err, &mismatch) || mismatch.Code != BackendIdentityMismatch {
+	var mismatch *executionapi.BackendError
+	if _, err := backend.Observe(context.Background(), ref); !errors.As(err, &mismatch) || mismatch.Code != executionapi.BackendIdentityMismatch {
 		t.Fatalf("replacement incarnation was accepted: %v", err)
 	}
 	t.Setenv("STEERLINE_FAKE_ORCA_INCARNATION", "")
 	cfg.Orca.Args = append(cfg.Orca.Args, "different-connection")
-	if _, err := (orcaTerminalBackend{config: cfg}).Observe(context.Background(), ref); !errors.As(err, &mismatch) || mismatch.Code != BackendIdentityMismatch {
+	if _, err := (orcaTerminalBackend{config: cfg}).Observe(context.Background(), ref); !errors.As(err, &mismatch) || mismatch.Code != executionapi.BackendIdentityMismatch {
 		t.Fatalf("changed connection was accepted: %v", err)
 	}
 }

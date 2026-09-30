@@ -2,6 +2,7 @@ package steerline
 
 import (
 	"errors"
+
 	"github.com/erranliu/SteerLine/internal/steerline/workerflow"
 )
 
@@ -28,7 +29,7 @@ func (s *Service) eventWorkerFlowFor(run *Run, ev WorkerEvent) (resultErr error)
 	if err != nil {
 		return err
 	}
-	fact, err := decodeWorkerFlowEvent(mode, ev, execution, run.Decision != nil && run.Decision.Request.NativeAsk != nil)
+	fact, err := decodeWorkerFlowEvent(mode, ev, workerSessionContext(run, execution), run.Decision != nil && run.Decision.Request.NativeAsk != nil)
 	if err != nil {
 		return err
 	}

@@ -12,6 +12,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 const codexHistoryBindingFile = "codex-history.v1.json"
@@ -23,31 +25,31 @@ func localCodexHistoryBindingPath(dir, session string) string {
 var codexThreadID = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 
 type codexHistoryBinding struct {
-	Version     int               `json:"v"`
-	ProjectID   string            `json:"project_id"`
-	TaskID      string            `json:"task_id"`
-	WorkflowID  string            `json:"workflow_id"`
-	ExecutionID string            `json:"execution_id"`
-	AttemptID   string            `json:"attempt_id"`
-	Backend     BackendKind       `json:"backend"`
-	Protocol    ExecutionProtocol `json:"protocol"`
-	TargetID    string            `json:"target_id"`
-	ExternalRef string            `json:"external_ref"`
-	Workspace   string            `json:"workspace"`
-	SessionID   string            `json:"session_id"`
-	Command     Command           `json:"command"`
-	Home        string            `json:"codex_home,omitempty"`
-	Ended       bool              `json:"-"`
+	Version     int                            `json:"v"`
+	ProjectID   string                         `json:"project_id"`
+	TaskID      string                         `json:"task_id"`
+	WorkflowID  string                         `json:"workflow_id"`
+	ExecutionID string                         `json:"execution_id"`
+	AttemptID   string                         `json:"attempt_id"`
+	Backend     executionapi.BackendKind       `json:"backend"`
+	Protocol    executionapi.ExecutionProtocol `json:"protocol"`
+	TargetID    string                         `json:"target_id"`
+	ExternalRef string                         `json:"external_ref"`
+	Workspace   string                         `json:"workspace"`
+	SessionID   string                         `json:"session_id"`
+	Command     Command                        `json:"command"`
+	Home        string                         `json:"codex_home,omitempty"`
+	Ended       bool                           `json:"-"`
 }
 
 func (b codexHistoryBinding) validate() error {
 	if b.Version != 1 || b.ProjectID == "" || b.ExecutionID == "" || b.AttemptID == "" || b.WorkflowID == "" || !filepath.IsAbs(b.Workspace) || b.Command.Executable == "" || !codexThreadID.MatchString(b.SessionID) {
 		return errors.New("Codex conversation binding is incomplete")
 	}
-	if b.Backend != BackendLocal && b.Backend != BackendOrca {
+	if b.Backend != executionapi.BackendLocal && b.Backend != executionapi.BackendOrca {
 		return errors.New("Codex history backend is unsupported")
 	}
-	if b.Backend == BackendLocal && b.Protocol != ProtocolLocalProcess && b.Protocol != ProtocolLocalCodexAppServer || b.Backend == BackendOrca && b.Protocol != ProtocolOrcaTerminalV2 {
+	if b.Backend == executionapi.BackendLocal && b.Protocol != executionapi.ProtocolLocalProcess && b.Protocol != executionapi.ProtocolLocalCodexAppServer || b.Backend == executionapi.BackendOrca && b.Protocol != executionapi.ProtocolOrcaTerminalV2 {
 		return errors.New("Codex history protocol does not match backend")
 	}
 	return nil
@@ -115,7 +117,7 @@ func RunCodexSessionLauncher(ctx context.Context, requestPath string) error {
 	if err != nil {
 		return err
 	}
-	if b.Version != 1 || b.Backend != BackendOrca || b.Protocol != ProtocolOrcaTerminalV2 || b.SessionID != "" || b.Command.Executable == "" || canonical(cwd) != canonical(b.Workspace) || !filepath.IsAbs(requestPath) || canonical(filepath.Dir(request.BindingPath)) != canonical(filepath.Dir(requestPath)) || filepath.Base(request.BindingPath) != codexHistoryBindingFile {
+	if b.Version != 1 || b.Backend != executionapi.BackendOrca || b.Protocol != executionapi.ProtocolOrcaTerminalV2 || b.SessionID != "" || b.Command.Executable == "" || canonical(cwd) != canonical(b.Workspace) || !filepath.IsAbs(requestPath) || canonical(filepath.Dir(request.BindingPath)) != canonical(filepath.Dir(requestPath)) || filepath.Base(request.BindingPath) != codexHistoryBindingFile {
 		return errors.New("invalid Codex session launch binding")
 	}
 	if _, err = os.Stat(request.BindingPath); !os.IsNotExist(err) {
@@ -173,7 +175,7 @@ func RunCodexSessionLauncher(ctx context.Context, requestPath string) error {
 }
 
 func (s *Service) bindLocalCodexHistory(run *Run, source WorkerEvent) error {
-	if source.Source != "codex-jsonl" || !codexThreadID.MatchString(source.Session) || run.Backend != string(BackendLocal) {
+	if source.Source != "codex-jsonl" || !codexThreadID.MatchString(source.Session) || run.Backend != string(executionapi.BackendLocal) {
 		return nil
 	}
 	logPath := s.localConversationLogPath(run, source.AttemptID)
@@ -189,7 +191,7 @@ func (s *Service) bindLocalCodexHistory(run *Run, source WorkerEvent) error {
 	} else if err = json.Unmarshal(raw, &marker); err != nil {
 		return err
 	}
-	if marker.validate() != nil || marker.SourceIdentity != source.SourceIdentity || marker.ProjectID != s.Config.identity || marker.WorkflowID != run.RunID || marker.ExecutionID != run.ExecutionID || marker.AttemptID != source.AttemptID || marker.Backend != BackendLocal || marker.Protocol != ProtocolLocalProcess || marker.TargetID != run.Target.ID {
+	if marker.validate() != nil || marker.SourceIdentity != source.SourceIdentity || marker.ProjectID != s.Config.identity || marker.WorkflowID != run.RunID || marker.ExecutionID != run.ExecutionID || marker.AttemptID != source.AttemptID || marker.Backend != executionapi.BackendLocal || marker.Protocol != executionapi.ProtocolLocalProcess || marker.TargetID != run.Target.ID {
 		return errors.New("Codex session does not match its source marker")
 	}
 	command := marker.ReaderCommand
@@ -204,7 +206,7 @@ func (s *Service) bindLocalCodexHistory(run *Run, source WorkerEvent) error {
 		}
 		command = codexReaderCommand(fixed)
 	}
-	b := codexHistoryBinding{Version: 1, ProjectID: marker.ProjectID, TaskID: run.DomainTaskID, WorkflowID: marker.WorkflowID, ExecutionID: marker.ExecutionID, AttemptID: marker.AttemptID, Backend: BackendLocal, Protocol: ProtocolLocalProcess, TargetID: marker.TargetID, ExternalRef: conversationExternalRef(run.Process), Workspace: deref(run.WorktreePath), SessionID: source.Session, Command: command, Home: marker.CodexHome}
+	b := codexHistoryBinding{Version: 1, ProjectID: marker.ProjectID, TaskID: run.DomainTaskID, WorkflowID: marker.WorkflowID, ExecutionID: marker.ExecutionID, AttemptID: marker.AttemptID, Backend: executionapi.BackendLocal, Protocol: executionapi.ProtocolLocalProcess, TargetID: marker.TargetID, ExternalRef: conversationExternalRef(run.Process), Workspace: deref(run.WorktreePath), SessionID: source.Session, Command: command, Home: marker.CodexHome}
 	path := localCodexHistoryBindingPath(filepath.Dir(logPath), b.SessionID)
 	return writeCodexHistoryBinding(path, b)
 }
@@ -312,11 +314,11 @@ func (s *Service) codexHistorySources() []codexHistoryBinding {
 					continue
 				}
 				var b codexHistoryBinding
-				if json.Unmarshal(raw, &b) != nil || b.validate() != nil || b.ProjectID != s.Config.identity || b.WorkflowID != run.RunID || b.ExecutionID != run.ExecutionID || b.AttemptID != attempt || b.TargetID != run.Target.ID || b.Backend != BackendKind(run.Backend) || b.Protocol != ExecutionProtocol(run.Protocol) || canonical(b.Workspace) != canonical(deref(run.WorktreePath)) || b.Backend == BackendOrca && name != codexHistoryBindingFile || b.Backend == BackendLocal && name != filepath.Base(localCodexHistoryBindingPath(dir, b.SessionID)) {
+				if json.Unmarshal(raw, &b) != nil || b.validate() != nil || b.ProjectID != s.Config.identity || b.WorkflowID != run.RunID || b.ExecutionID != run.ExecutionID || b.AttemptID != attempt || b.TargetID != run.Target.ID || b.Backend != executionapi.BackendKind(run.Backend) || b.Protocol != executionapi.ExecutionProtocol(run.Protocol) || canonical(b.Workspace) != canonical(deref(run.WorktreePath)) || b.Backend == executionapi.BackendOrca && name != codexHistoryBindingFile || b.Backend == executionapi.BackendLocal && name != filepath.Base(localCodexHistoryBindingPath(dir, b.SessionID)) {
 					s.reportInvalidCodexBinding(run, attempt, bindingPath, errors.New("binding identity differs from recorded execution"))
 					continue
 				}
-				if b.Backend == BackendOrca && b.ExternalRef == "" {
+				if b.Backend == executionapi.BackendOrca && b.ExternalRef == "" {
 					continue
 				} // Launcher has not yet completed the terminal binding.
 				b.Ended = ended
@@ -343,7 +345,7 @@ func (s *Service) reportInvalidCodexBinding(run *Run, attempt, path string, caus
 	if s.domainStore == nil {
 		return
 	}
-	e := ConversationEvent{Version: ConversationVersion, ProjectID: s.Config.identity, TaskID: run.DomainTaskID, WorkflowID: run.RunID, ExecutionID: run.ExecutionID, AttemptID: attempt, Backend: BackendKind(run.Backend), Protocol: ExecutionProtocol(run.Protocol), Agent: run.Agent, TargetID: run.Target.ID, Source: "codex-app-server", SourceSegment: "invalid-binding-v1:" + attempt, SessionQuality: IdentityUnknown, TurnQuality: IdentityUnknown, ItemQuality: IdentityUnknown, SourceEventQuality: IdentityDerived, SourceEventID: "binding:" + digestValue(struct{ Path, Reason string }{path, cause.Error()}), Type: ConversationGap, Phase: MessagePhaseUnknown, Status: "source_unavailable", Diagnostic: err.Error(), ReceivedAt: now()}
+	e := ConversationEvent{Version: ConversationVersion, ProjectID: s.Config.identity, TaskID: run.DomainTaskID, WorkflowID: run.RunID, ExecutionID: run.ExecutionID, AttemptID: attempt, Backend: executionapi.BackendKind(run.Backend), Protocol: executionapi.ExecutionProtocol(run.Protocol), Agent: run.Agent, TargetID: run.Target.ID, Source: "codex-app-server", SourceSegment: "invalid-binding-v1:" + attempt, SessionQuality: IdentityUnknown, TurnQuality: IdentityUnknown, ItemQuality: IdentityUnknown, SourceEventQuality: IdentityDerived, SourceEventID: "binding:" + digestValue(struct{ Path, Reason string }{path, cause.Error()}), Type: ConversationGap, Phase: MessagePhaseUnknown, Status: "source_unavailable", Diagnostic: err.Error(), ReceivedAt: now()}
 	_, _ = s.domainStore.CommitConversation(context.Background(), []ConversationWrite{{Event: e}}, ConversationCheckpoint{})
 }
 
@@ -522,23 +524,23 @@ func (s *Service) collectCodexHistoryPage(ctx context.Context, b codexHistoryBin
 
 func (s *Service) recordCodexHistoryCapabilities(ctx context.Context, b codexHistoryBinding, client *codexHistoryClient, page codexHistoryPage, hadCheckpoint bool) error {
 	values := map[string]ConversationCapability{
-		"turn_boundaries":      {Name: "turn_boundaries", Status: CapabilityNotTested, Evidence: "No completed native turn observed yet"},
-		"message_phase":        {Name: "message_phase", Status: CapabilityNotTested, Evidence: "No phase-bearing assistant message observed yet"},
-		"final_content":        {Name: "final_content", Status: CapabilityNotTested, Evidence: "No complete native final message observed yet"},
-		"stable_item_identity": {Name: "stable_item_identity", Status: CapabilityNotTested, Evidence: "No native item observed yet"},
-		"incremental_read":     {Name: "incremental_read", Status: CapabilityNotTested, Evidence: "A saved turn cursor has not been resumed yet"},
-		"history_replay":       {Name: "history_replay", Status: CapabilityNotTested, Evidence: "A persisted checkpoint has not been replayed yet"},
-		"input_wait":           {Name: "input_wait", Status: CapabilityNotTested, Evidence: "A host input-wait object has not been observed"},
+		"turn_boundaries":      {Name: "turn_boundaries", Status: executionapi.CapabilityNotTested, Evidence: "No completed native turn observed yet"},
+		"message_phase":        {Name: "message_phase", Status: executionapi.CapabilityNotTested, Evidence: "No phase-bearing assistant message observed yet"},
+		"final_content":        {Name: "final_content", Status: executionapi.CapabilityNotTested, Evidence: "No complete native final message observed yet"},
+		"stable_item_identity": {Name: "stable_item_identity", Status: executionapi.CapabilityNotTested, Evidence: "No native item observed yet"},
+		"incremental_read":     {Name: "incremental_read", Status: executionapi.CapabilityNotTested, Evidence: "A saved turn cursor has not been resumed yet"},
+		"history_replay":       {Name: "history_replay", Status: executionapi.CapabilityNotTested, Evidence: "A persisted checkpoint has not been replayed yet"},
+		"input_wait":           {Name: "input_wait", Status: executionapi.CapabilityNotTested, Evidence: "A host input-wait object has not been observed"},
 	}
-	if b.Backend == BackendLocal {
-		values["input_wait"] = ConversationCapability{Name: "input_wait", Status: CapabilityUnsupported, Evidence: "local_process Reply is unsupported by the execution backend"}
+	if b.Backend == executionapi.BackendLocal {
+		values["input_wait"] = ConversationCapability{Name: "input_wait", Status: executionapi.CapabilityUnsupported, Evidence: "local_process Reply is unsupported by the execution backend"}
 	}
 	for _, turn := range page.Data {
 		if turn.CompletedAt != nil {
-			values["turn_boundaries"] = ConversationCapability{Name: "turn_boundaries", Status: CapabilityVerified, Evidence: "Native turn ID, terminal status and completedAt were observed through full turn history"}
+			values["turn_boundaries"] = ConversationCapability{Name: "turn_boundaries", Status: executionapi.CapabilityVerified, Evidence: "Native turn ID, terminal status and completedAt were observed through full turn history"}
 		}
 		if len(turn.Items) > 0 {
-			values["stable_item_identity"] = ConversationCapability{Name: "stable_item_identity", Status: CapabilityVerified, Evidence: "Native session, turn and item IDs were observed through full turn history"}
+			values["stable_item_identity"] = ConversationCapability{Name: "stable_item_identity", Status: executionapi.CapabilityVerified, Evidence: "Native session, turn and item IDs were observed through full turn history"}
 		}
 		for _, raw := range turn.Items {
 			var item struct {
@@ -550,18 +552,18 @@ func (s *Service) recordCodexHistoryCapabilities(ctx context.Context, b codexHis
 				return err
 			}
 			if item.Type == "agentMessage" && (item.Phase == string(MessagePhaseCommentary) || item.Phase == string(MessagePhaseFinalAnswer)) {
-				values["message_phase"] = ConversationCapability{Name: "message_phase", Status: CapabilityVerified, Evidence: "Native agentMessage.phase was observed through full turn history"}
+				values["message_phase"] = ConversationCapability{Name: "message_phase", Status: executionapi.CapabilityVerified, Evidence: "Native agentMessage.phase was observed through full turn history"}
 				if item.Phase == string(MessagePhaseFinalAnswer) && turn.CompletedAt != nil && item.Text != nil {
-					values["final_content"] = ConversationCapability{Name: "final_content", Status: CapabilityVerified, Evidence: "A completed native final_answer item has a persisted full body reference"}
+					values["final_content"] = ConversationCapability{Name: "final_content", Status: executionapi.CapabilityVerified, Evidence: "A completed native final_answer item has a persisted full body reference"}
 				}
 			}
 		}
 	}
 	if hadCheckpoint && (page.NextCursor != nil || page.BackwardsCursor != nil) {
-		values["incremental_read"] = ConversationCapability{Name: "incremental_read", Status: CapabilityVerified, Evidence: "A persisted opaque turn cursor was resumed with a bounded full-item page"}
+		values["incremental_read"] = ConversationCapability{Name: "incremental_read", Status: executionapi.CapabilityVerified, Evidence: "A persisted opaque turn cursor was resumed with a bounded full-item page"}
 	}
 	if hadCheckpoint && len(page.Data) > 0 {
-		values["history_replay"] = ConversationCapability{Name: "history_replay", Status: CapabilityVerified, Evidence: "A new public app-server process replayed native history from the persisted source checkpoint"}
+		values["history_replay"] = ConversationCapability{Name: "history_replay", Status: executionapi.CapabilityVerified, Evidence: "A new public app-server process replayed native history from the persisted source checkpoint"}
 	}
 	version := clip(client.userAgent, 256)
 	reports, err := s.domainStore.ConversationCapabilityReports(ctx, b.Backend, b.Protocol, b.TargetID, 100)
@@ -578,17 +580,17 @@ func (s *Service) recordCodexHistoryCapabilities(ctx context.Context, b codexHis
 	if previous != nil && previous.AgentVersion == version {
 		for _, old := range previous.Capabilities {
 			current, ok := values[old.Name]
-			if ok && current.Status == CapabilityNotTested && old.Status != CapabilityNotTested {
+			if ok && current.Status == executionapi.CapabilityNotTested && old.Status != executionapi.CapabilityNotTested {
 				values[old.Name] = old
 			}
-			if ok && old.Status == CapabilityVerified && current.Status != CapabilityVerified {
+			if ok && old.Status == executionapi.CapabilityVerified && current.Status != executionapi.CapabilityVerified {
 				values[old.Name] = old
 			}
 		}
 	}
 	names := []string{"turn_boundaries", "message_phase", "final_content", "stable_item_identity", "incremental_read", "history_replay", "input_wait"}
 	platformVersion := version
-	if b.Backend == BackendOrca {
+	if b.Backend == executionapi.BackendOrca {
 		config, configErr := s.executionConfigForWorkflowID(b.WorkflowID)
 		if configErr != nil {
 			return configErr
@@ -605,7 +607,7 @@ func (s *Service) recordCodexHistoryCapabilities(ctx context.Context, b codexHis
 			return errors.New("Orca capability version probe returned no version")
 		}
 	}
-	report := ConversationCapabilityReport{Version: 1, Backend: b.Backend, Protocol: b.Protocol, Agent: "codex", AgentVersion: version, PlatformVersion: platformVersion, Target: ExecutionTarget{ID: b.TargetID}, ExecutionID: b.ExecutionID, AttemptID: b.AttemptID, Source: "codex-app-server", SourceIdentity: b.identity(), CheckedAt: now(), Capabilities: make([]ConversationCapability, 0, len(names))}
+	report := ConversationCapabilityReport{Version: 1, Backend: b.Backend, Protocol: b.Protocol, Agent: "codex", AgentVersion: version, PlatformVersion: platformVersion, Target: executionapi.ExecutionTarget{ID: b.TargetID}, ExecutionID: b.ExecutionID, AttemptID: b.AttemptID, Source: "codex-app-server", SourceIdentity: b.identity(), CheckedAt: now(), Capabilities: make([]ConversationCapability, 0, len(names))}
 	for _, name := range names {
 		report.Capabilities = append(report.Capabilities, values[name])
 	}

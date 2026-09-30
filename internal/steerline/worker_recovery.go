@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/workerflow"
 )
 
@@ -50,7 +51,7 @@ func (s *Service) beginLocalRecoveryAttempt(ctx context.Context, run *Run, mode 
 		return err
 	}
 	execution, old := fixed.execution, fixed.attempt
-	if run.Protocol != string(ProtocolLocalCodexAppServer) || !execution.RecoveryRequired ||
+	if run.Protocol != string(executionapi.ProtocolLocalCodexAppServer) || !execution.RecoveryRequired ||
 		(execution.RecoveryState != "interrupted" && execution.RecoveryState != "completed") ||
 		execution.Process == nil || inspectProcess(execution.Process) != "process absent" {
 		return errors.New("the original worker process and its descendants are not confirmed stopped")
@@ -145,7 +146,7 @@ func (s *Service) refreshSavedRecoveryDecision(run *Run, preserveNative bool, re
 			return s.waitWorkerFlow(run, "Original answer send has an unknown outcome; reconcile its native result before confirming again")
 		}
 	}
-	if s.domainStore != nil && (old.Request.OrcaAsk != nil || run.Protocol == string(ProtocolOrcaTerminalV2)) {
+	if s.domainStore != nil && (old.Request.OrcaAsk != nil || run.Protocol == string(executionapi.ProtocolOrcaTerminalV2)) {
 		oldAnswer := DecisionAnswer{DecisionID: old.ID, RunID: run.RunID, OptionID: old.OptionID, Note: old.Note, Answers: old.Answers, SourceAttemptID: old.SourceAttemptID, ExpectedRecoveryVersion: old.RecoveryVersion}
 		if command, err := s.domainStore.CommandByIdempotency(context.Background(), s.Config.identity, decisionAnswerKey(oldAnswer)); err == nil {
 			for _, op := range s.domain.Operations {
@@ -238,9 +239,9 @@ func (s *Service) startManuallyRecoveredInitialCodex(ctx context.Context, run *R
 	if execution.Workspace.Worktree == "" {
 		if preparation == nil {
 			opID, err := s.startWorkerOperation(run, "prepare_workspace", key, struct {
-				WorkflowRunID string          `json:"workflow_run_id"`
-				ExecutionID   string          `json:"execution_id"`
-				Workspace     WorkspaceIntent `json:"workspace"`
+				WorkflowRunID string                       `json:"workflow_run_id"`
+				ExecutionID   string                       `json:"execution_id"`
+				Workspace     executionapi.WorkspaceIntent `json:"workspace"`
 			}{run.RunID, execution.ExecutionID, *run.WorkspaceIntent})
 			if err != nil {
 				return err
@@ -348,7 +349,7 @@ func (s *Service) resumeConfiguredWork(ctx context.Context) error {
 		return err
 	}
 	for _, run := range s.runs {
-		if run == nil || run.WorkflowVersion != WorkerFlowVersion || (run.Protocol != string(ProtocolOrcaTerminalV2) && run.Protocol != string(ProtocolOrcaSupervised)) {
+		if run == nil || run.WorkflowVersion != WorkerFlowVersion || (run.Protocol != string(executionapi.ProtocolOrcaTerminalV2) && run.Protocol != string(executionapi.ProtocolOrcaSupervised)) {
 			continue
 		}
 		workflow, execution := s.workflowRecords(run)
@@ -356,7 +357,7 @@ func (s *Service) resumeConfiguredWork(ctx context.Context) error {
 			continue
 		}
 		var cleanupErr error
-		if run.Protocol == string(ProtocolOrcaSupervised) {
+		if run.Protocol == string(executionapi.ProtocolOrcaSupervised) {
 			cleanupErr = s.finishRemoteOrcaCleanup(ctx, run)
 		} else {
 			cleanupErr = s.finishNativeOrcaCleanup(ctx, run)

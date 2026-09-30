@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/erranliu/SteerLine/internal/steerline/codexapp"
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 func ThreadParams(worktree, sandbox, model string, dynamicTools []any) (map[string]any, error) {
@@ -12,10 +13,9 @@ func ThreadParams(worktree, sandbox, model string, dynamicTools []any) (map[stri
 }
 
 type TurnParamsInput struct {
-	Worktree        string
-	ThreadID        string
-	CommandID       string
-	Prompt          string
+	Worktree string
+	ThreadID string
+	executionapi.TurnInput
 	Sandbox         string
 	Model           string
 	ReasoningEffort string

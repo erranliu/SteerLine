@@ -16,6 +16,7 @@ import (
 	"time"
 	"unsafe"
 
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"golang.org/x/sys/windows"
 )
 
@@ -173,10 +174,10 @@ func probeLockFile(path string) (bool, error) {
 type childProcess struct {
 	mu       sync.Mutex
 	job      windows.Handle
-	identity ProcessIdentity
+	identity executionapi.ProcessIdentity
 }
 
-func (p *childProcess) Identity() ProcessIdentity { return p.identity }
+func (p *childProcess) Identity() executionapi.ProcessIdentity { return p.identity }
 func (p *childProcess) Kill() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -261,11 +262,11 @@ func startProcess(cmd *exec.Cmd) (*childProcess, error) {
 
 // A managed worker's descendants remain in its non-breakaway, kill-on-close
 // Job. Closing the owning handle (including on service exit) ends that tree.
-func workerTreeAbsent(identity ProcessIdentity) bool {
+func workerTreeAbsent(identity executionapi.ProcessIdentity) bool {
 	return inspectProcess(&identity) == "process absent"
 }
 
-func startDetachedProcess(cmd *exec.Cmd) (ProcessIdentity, error) {
+func startDetachedProcess(cmd *exec.Cmd) (executionapi.ProcessIdentity, error) {
 	// CREATE_BREAKAWAY_FROM_JOB is required because the caller may be a UI in a
 	// kill-on-close job. IsProcessInJob below verifies the result before we claim
 	// the service is detached. DETACHED_PROCESS also prevents console inheritance.
@@ -276,16 +277,16 @@ func startDetachedProcess(cmd *exec.Cmd) (ProcessIdentity, error) {
 	if err := cmd.Start(); err != nil {
 		if errors.Is(err, windows.ERROR_ACCESS_DENIED) {
 			if inJob, _, e := currentJobDiagnostics(); e == nil && inJob {
-				return ProcessIdentity{}, fmt.Errorf("%w: create detached process: %v", errDetachUnsupported, err)
+				return executionapi.ProcessIdentity{}, fmt.Errorf("%w: create detached process: %v", errDetachUnsupported, err)
 			}
 		}
-		return ProcessIdentity{}, fmt.Errorf("cannot detach service from caller job or console: %w", err)
+		return executionapi.ProcessIdentity{}, fmt.Errorf("cannot detach service from caller job or console: %w", err)
 	}
 	h, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION|windows.SYNCHRONIZE, false, uint32(cmd.Process.Pid))
 	if err != nil {
 		_ = cmd.Process.Kill()
 		_ = cmd.Wait()
-		return ProcessIdentity{}, fmt.Errorf("cannot verify detached service process: %w", err)
+		return executionapi.ProcessIdentity{}, fmt.Errorf("cannot verify detached service process: %w", err)
 	}
 	defer windows.CloseHandle(h)
 	var inJob uint32
@@ -293,7 +294,7 @@ func startDetachedProcess(cmd *exec.Cmd) (ProcessIdentity, error) {
 	if ok == 0 {
 		_ = cmd.Process.Kill()
 		_ = cmd.Wait()
-		return ProcessIdentity{}, fmt.Errorf("cannot verify service Job Object isolation: %w", callErr)
+		return executionapi.ProcessIdentity{}, fmt.Errorf("cannot verify service Job Object isolation: %w", callErr)
 	}
 	if inJob != 0 {
 		_ = cmd.Process.Kill()
@@ -306,13 +307,13 @@ func startDetachedProcess(cmd *exec.Cmd) (ProcessIdentity, error) {
 		if parentErr != nil {
 			detail += ", parent_job_query_error=" + parentErr.Error()
 		}
-		return ProcessIdentity{}, fmt.Errorf("%w: %s); cannot guarantee survival after the UI exits", errDetachUnsupported, detail)
+		return executionapi.ProcessIdentity{}, fmt.Errorf("%w: %s); cannot guarantee survival after the UI exits", errDetachUnsupported, detail)
 	}
 	id, err := identityFromHandle(h, cmd.Process.Pid)
 	if err != nil {
 		_ = cmd.Process.Kill()
 		_ = cmd.Wait()
-		return ProcessIdentity{}, fmt.Errorf("cannot identify detached service process: %w", err)
+		return executionapi.ProcessIdentity{}, fmt.Errorf("cannot identify detached service process: %w", err)
 	}
 	// No service instruction (including recovery of existing workers) may run
 	// until we know this process can survive the launcher. A failed isolation
@@ -320,7 +321,7 @@ func startDetachedProcess(cmd *exec.Cmd) (ProcessIdentity, error) {
 	if err = resumeDetachedProcess(cmd.Process.Pid); err != nil {
 		_ = cmd.Process.Kill()
 		_ = cmd.Wait()
-		return ProcessIdentity{}, fmt.Errorf("cannot resume detached service: %w", err)
+		return executionapi.ProcessIdentity{}, fmt.Errorf("cannot resume detached service: %w", err)
 	}
 	return id, nil
 }
@@ -383,19 +384,19 @@ func processInAnyJob(process windows.Handle) (bool, error) {
 	return inJob != 0, nil
 }
 
-func identityFromHandle(h windows.Handle, pid int) (ProcessIdentity, error) {
+func identityFromHandle(h windows.Handle, pid int) (executionapi.ProcessIdentity, error) {
 	var created, exit, kernel, user windows.Filetime
 	if e := windows.GetProcessTimes(h, &created, &exit, &kernel, &user); e != nil {
-		return ProcessIdentity{}, e
+		return executionapi.ProcessIdentity{}, e
 	}
 	b := make([]uint16, 32768)
 	n := uint32(len(b))
 	if e := windows.QueryFullProcessImageName(h, 0, &b[0], &n); e != nil {
-		return ProcessIdentity{}, e
+		return executionapi.ProcessIdentity{}, e
 	}
-	return ProcessIdentity{Kind: "os", PID: pid, Created: fmt.Sprintf("%08x%08x", created.HighDateTime, created.LowDateTime), Executable: canonical(windows.UTF16ToString(b[:n]))}, nil
+	return executionapi.ProcessIdentity{Kind: "os", PID: pid, Created: fmt.Sprintf("%08x%08x", created.HighDateTime, created.LowDateTime), Executable: canonical(windows.UTF16ToString(b[:n]))}, nil
 }
-func currentProcessIdentity() (*ProcessIdentity, error) {
+func currentProcessIdentity() (*executionapi.ProcessIdentity, error) {
 	h, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, uint32(os.Getpid()))
 	if err != nil {
 		return nil, err
@@ -407,7 +408,7 @@ func currentProcessIdentity() (*ProcessIdentity, error) {
 	}
 	return &id, nil
 }
-func inspectProcess(old *ProcessIdentity) string {
+func inspectProcess(old *executionapi.ProcessIdentity) string {
 	probe := probeProcess(old)
 	switch probe.State {
 	case ProcessAbsent:
@@ -421,7 +422,7 @@ func inspectProcess(old *ProcessIdentity) string {
 	}
 }
 
-func probeProcess(old *ProcessIdentity) ProcessProbe {
+func probeProcess(old *executionapi.ProcessIdentity) ProcessProbe {
 	if old == nil || old.PID <= 0 || old.Kind != "os" || old.Created == "" || old.Executable == "" {
 		return ProcessProbe{State: ProcessUnknown, Reason: "process identity is missing or unsupported"}
 	}

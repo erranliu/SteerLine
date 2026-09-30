@@ -70,7 +70,7 @@ flowchart TB
 
 ```mermaid
 flowchart LR
-    CLI["cmd/steerline"] --> Core["internal/steerline<br/>112 个非测试 Go 文件"]
+    CLI["cmd/steerline"] --> Core["internal/steerline<br/>111 个非测试 Go 文件"]
     CLI --> Console["console"]
     Console --> Core
 
@@ -100,6 +100,13 @@ flowchart LR
     TaskView --> Graph
     Flow --> Task
     CW --> CA
+    Core --> Execution["execution 公共契约"]
+    Console --> Execution
+    CW --> Execution
+    CA --> Execution
+    OW --> Execution
+    Contracts --> Execution
+    RW --> Execution
 
     Feedback["cmd/test-feedback"] --> Core
     Feedback --> Summary["internal/testfeedback"]
@@ -109,7 +116,7 @@ flowchart LR
 | 包 | 当前职责 | 非测试 Go 文件 |
 | --- | --- | ---: |
 | `cmd/steerline` | 产品命令入口、服务启动、控制台和任务命令路由 | 1 |
-| `internal/steerline` | 服务编排、业务持久化、平台适配接线、查询和控制 | 112 |
+| `internal/steerline` | 服务编排、业务持久化、平台适配接线、查询和控制 | 111 |
 | `console` | TUI 状态、导航、任务列表、活动/会话/正文、执行方案和决策编辑 | 14 |
 | `contracts` | 共享持久记录、运行视图、执行配置与查询 DTO，严格 JSON 解码 | 7 |
 | `query` | 按消费者分开的只读接口、事件/任务分页、DAG 与 Ready 查询规则 | 4 |
@@ -118,6 +125,7 @@ flowchart LR
 | `taskgraph` | DAG 校验、遍历、前后置关系和图算法 | 1 |
 | `taskview` | 任务展示、分页和投影规则 | 3 |
 | `workerflow` | 单个可续聊 worker 的纯状态规则、模式选择和提示构造 | 4 |
+| `execution` | 公共执行身份、输入/回答、事实、回执、能力、工作区与错误；无业务写库权 | 7 |
 | `codexapp` | Codex app-server 参数、客户端、原生问题与 WebSocket 协议 | 7 |
 | `codexworker` | app-server 启动、连接、能力探测、轮次观察、journal 与回答 | 11 |
 | `orcaworker` | Orca task/dispatch、terminal、消息、relay、输出与工作区协议、环境就绪证据 | 16 |
@@ -126,7 +134,7 @@ flowchart LR
 | `cmd/test-feedback` | 最小/定向/全量测试调度、日志与反馈报告 | 4 |
 | `internal/testfeedback` | Go test JSON 结果汇总 | 1 |
 
-合计 **17 个包目录、210 个非测试 Go 文件**。统计覆盖 `cmd/` 与 `internal/`；不含 `_test.go`、测试数据、脚本和文档。核心包仍集中承载多项职责，不能将上述逻辑边界理解为微服务或已经完成的全面拆包。
+合计 **18 个包目录、216 个非测试 Go 文件**。统计覆盖 `cmd/` 与 `internal/`；不含 `_test.go`、测试数据、脚本和文档。核心包仍集中承载多项职责，不能将上述逻辑边界理解为微服务或已经完成的全面拆包。
 
 ## 3. 核心包内部职责与接线
 
@@ -425,7 +433,7 @@ Service 将私有领域工作副本、已提交快照和私有工作 Run 分开�
 
 ## 附录：全部非测试 Go 源文件索引
 
-下列索引覆盖 `cmd/` 与 `internal/` 中全部非测试 `.go` 文件，按真实包目录分组。每个包的文件名可定位到上面对应职责；中心接线与独立包边界见第 3 节。
+下列索引覆盖 `cmd/` 与 `internal/` 中全部非测试 `.go` 文件，按真实包目录分组。
 
 ### cmd/orca-probe
 
@@ -453,7 +461,6 @@ Service 将私有领域工作副本、已提交快照和私有工作 Run 分开�
 | 源文件 |
 | --- |
 | [activity.go](../../internal/steerline/activity.go) |
-| [adapter_error.go](../../internal/steerline/adapter_error.go) |
 | [codex_conversation.go](../../internal/steerline/codex_conversation.go) |
 | [codex_git_sandbox.go](../../internal/steerline/codex_git_sandbox.go) |
 | [codex_history.go](../../internal/steerline/codex_history.go) |
@@ -623,6 +630,18 @@ Service 将私有领域工作副本、已提交快照和私有工作 Run 分开�
 | [records.go](../../internal/steerline/contracts/records.go) |
 | [runtime.go](../../internal/steerline/contracts/runtime.go) |
 | [snapshot.go](../../internal/steerline/contracts/snapshot.go) |
+
+### internal/steerline/execution
+
+| 源文件 |
+| --- |
+| [backend.go](../../internal/steerline/execution/backend.go) |
+| [capability.go](../../internal/steerline/execution/capability.go) |
+| [errors.go](../../internal/steerline/execution/errors.go) |
+| [event.go](../../internal/steerline/execution/event.go) |
+| [operation.go](../../internal/steerline/execution/operation.go) |
+| [session.go](../../internal/steerline/execution/session.go) |
+| [workspace.go](../../internal/steerline/execution/workspace.go) |
 
 ### internal/steerline/orca_remote_worker
 

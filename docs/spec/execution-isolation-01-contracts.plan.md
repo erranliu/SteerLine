@@ -1,6 +1,6 @@
 # Plan 公共执行契约归包
 
-任务 ID：54；任务名称：公共执行契约归包；目标：`EXECUTION-ISOLATION`。状态：待实施。唯一执行依据：[Spec](execution-isolation-01-contracts.spec.md)。无本系列未完成硬前置，一个实现 PR 交付。
+任务 ID：54；任务名称：公共执行契约归包；目标：`EXECUTION-ISOLATION`。状态：已实施，待合入。唯一执行依据：[Spec](execution-isolation-01-contracts.spec.md)。无本系列未完成硬前置，一个实现 PR 交付。
 
 ## 迁移步骤
 
@@ -24,3 +24,15 @@ go test ./internal/steerline -count=1 -run '^(TestExecutionBackendCommonCapabili
 ## 交付
 
 记录类型迁移、消费者、未迁移实现与 #55/#56/#57/#58 接口。合入后 #55/#56 可分别开工；此 Plan 不承担后续权限配置或最终后端注册。
+
+## 实施结果（2026-09-30）
+
+已将共同契约迁入 `execution` 并更新中心、控制台及适配器消费者，删除原定义和无人消费的 StartReceipt；原生问题路由与业务派生判断留在中心桥。原六项回归名称未改变，持久记录/能力 fixture 仍在主包；新增公共包纯测试与必要来源断言，没有重复执行搬迁矩阵。复用项目 `-quick` 并补两项原子绑定/停止接线、一项监督路径结算和一个控制台答案编辑用例，全部通过。
+
+最终命令、实际测试数量、类型所有者和 #55/#56/#57/#58 的剩余接线见[验证与交接记录](../validation/execution-isolation-01-contracts/README.md)。权限、发布责任、恢复和配置行为保持，未启动真实 agent、运行全量或修改中心 Task。
+
+交付前整合主干 PR160（`c2c9f95`），保留环境就绪字段及检查，公共选项同步 Receiver/Action；追加两项宿主等待/冻结资源接线和准备成功子用例均通过。最终摘要已更新为整合后的结果。
+
+质量审计修复 Codex wire 选项解释与 Orca 观察器清理边界，并整合 PR163/PR165（`a458ce7`）：共享持久记录直接使用唯一公共执行类型，保留最新 Query/SQLite 接线。相关包、事务内项目快照、控制台及更新后的最小入口验证通过；详情见[最终审计记录](../validation/execution-isolation-01-contracts/audit.md)。
+
+后续整合 PR162（`930a4d6`），远端新后端引用唯一共有身份/目标/协议/错误分类，保留独立 Dispatch 生命周期及主干删除项。旧监督 exec journal 用例跟随删除，调用方句柄清理断言并入既有停止回执用例；最小回归与远端两轮/问题回执用例通过。详情见[冲突整合记录](../validation/execution-isolation-01-contracts/conflict-pr162.md)。

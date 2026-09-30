@@ -11,6 +11,7 @@ import (
 
 	"github.com/erranliu/SteerLine/internal/steerline/codexapp"
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 func appServerAskDecision(run *Run, call codexAskCall) (*DecisionState, error) {
@@ -18,10 +19,10 @@ func appServerAskDecision(run *Run, call codexAskCall) (*DecisionState, error) {
 }
 
 type appServerProcessReceipt struct {
-	Endpoint   string          `json:"endpoint"`
-	Generation string          `json:"generation"`
-	Identity   ProcessIdentity `json:"identity"`
-	Managed    bool            `json:"managed"`
+	Endpoint   string                       `json:"endpoint"`
+	Generation string                       `json:"generation"`
+	Identity   executionapi.ProcessIdentity `json:"identity"`
+	Managed    bool                         `json:"managed"`
 }
 
 func appServerDirectory(c Config, run *Run) string {
@@ -75,7 +76,7 @@ func (s *Service) recordAppServerTurnStarted(run *Run, workflow *WorkflowRunReco
 }
 
 func startAppServerWorkerTurn(ctx context.Context, c Config, run *Run, execution *ExecutionRecord, commandID, prompt string, persistThread func() error) (*Worker, string, string, error) {
-	if run == nil || execution == nil || run.WorkflowVersion != WorkerFlowVersion || run.Protocol != string(ProtocolLocalCodexAppServer) || run.WorktreePath == nil || run.AttemptID == "" || !stableExecutionID(commandID) || prompt == "" || c.Codex.Executable == "" {
+	if run == nil || execution == nil || run.WorkflowVersion != WorkerFlowVersion || run.Protocol != string(executionapi.ProtocolLocalCodexAppServer) || run.WorktreePath == nil || run.AttemptID == "" || !stableExecutionID(commandID) || prompt == "" || c.Codex.Executable == "" {
 		return nil, "", "", errors.New("app-server worker turn lacks its fixed execution, workspace or command")
 	}
 	if run.ExecutionID != execution.ExecutionID || run.RunID != execution.WorkflowRunID || canonical(*run.WorktreePath) != canonical(execution.Workspace.Worktree) {
@@ -160,7 +161,7 @@ func startAppServerWorkerTurn(ctx context.Context, c Config, run *Run, execution
 			return nil, "", "", err
 		}
 	}
-	binding := codexHistoryBinding{Version: 1, ProjectID: c.identity, TaskID: run.DomainTaskID, WorkflowID: run.RunID, ExecutionID: run.ExecutionID, AttemptID: run.AttemptID, Backend: BackendLocal, Protocol: ProtocolLocalCodexAppServer, TargetID: run.Target.ID, ExternalRef: conversationExternalRef(execution.Process), Workspace: *run.WorktreePath, SessionID: execution.SessionID, Command: codexReaderCommand(c), Home: codexEnvironmentHome()}
+	binding := codexHistoryBinding{Version: 1, ProjectID: c.identity, TaskID: run.DomainTaskID, WorkflowID: run.RunID, ExecutionID: run.ExecutionID, AttemptID: run.AttemptID, Backend: executionapi.BackendLocal, Protocol: executionapi.ProtocolLocalCodexAppServer, TargetID: run.Target.ID, ExternalRef: conversationExternalRef(execution.Process), Workspace: *run.WorktreePath, SessionID: execution.SessionID, Command: codexReaderCommand(c), Home: codexEnvironmentHome()}
 	if err := writeCodexHistoryBinding(localCodexHistoryBindingPath(dir, execution.SessionID), binding); err != nil {
 		return nil, "", "", err
 	}
@@ -172,8 +173,8 @@ func startAppServerWorkerTurn(ctx context.Context, c Config, run *Run, execution
 		return nil, "", "", fmt.Errorf("app-server thread was created but its SQLite receipt is unverified: %w", err)
 	}
 	params, err := codexworker.TurnParams(ctx, codexworker.TurnParamsInput{
-		Worktree: *run.WorktreePath, ThreadID: execution.SessionID, CommandID: commandID,
-		Prompt: prompt, Sandbox: c.Sandbox, Model: c.Model, ReasoningEffort: c.ReasoningEffort,
+		Worktree: *run.WorktreePath, ThreadID: execution.SessionID,
+		TurnInput: executionapi.TurnInput{CommandID: commandID, Prompt: prompt}, Sandbox: c.Sandbox, Model: c.Model, ReasoningEffort: c.ReasoningEffort,
 	}, func(ctx context.Context, worktree string) ([]string, error) {
 		return codexLinkedWorktreeWriteArgs(ctx, c, worktree)
 	})
@@ -192,7 +193,7 @@ func startAppServerWorkerTurn(ctx context.Context, c Config, run *Run, execution
 		return nil, "", "", err
 	}
 	observeCtx, cancel := context.WithCancel(context.Background())
-	var workerProcess process = &durableWorkerProcess{identity: *execution.Process, process: nativeProcess}
+	var workerProcess executionapi.StopHandle = &durableWorkerProcess{identity: *execution.Process, process: nativeProcess}
 	if owned != nil {
 		workerProcess = owned
 	}
@@ -209,7 +210,7 @@ func connectWorkerAppServer(ctx context.Context, endpoint string) (*codexapp.Cli
 
 func (s *Service) interruptOwnedLocalTurn(runID string, owned *childProcess) {
 	for _, run := range s.runs {
-		if run == nil || run.RunID != runID || run.Protocol != string(ProtocolLocalCodexAppServer) {
+		if run == nil || run.RunID != runID || run.Protocol != string(executionapi.ProtocolLocalCodexAppServer) {
 			continue
 		}
 		execution := s.executionRecord(run)
@@ -433,7 +434,7 @@ func (s *Service) handleAppServerLaunchMessage(runID string, message *appServerL
 			break
 		}
 	}
-	if run == nil || run.Protocol != string(ProtocolLocalCodexAppServer) {
+	if run == nil || run.Protocol != string(executionapi.ProtocolLocalCodexAppServer) {
 		return errors.New("app-server launch no longer belongs to a local execution")
 	}
 	fixed, err := s.workerFlowContext(run)
@@ -452,7 +453,7 @@ func (s *Service) handleAppServerLaunchMessage(runID string, message *appServerL
 		if execution.Process != nil && *execution.Process != *message.execution.Process || execution.SessionID != "" && execution.SessionID != message.execution.SessionID {
 			return errors.New("app-server thread receipt conflicts with its fixed execution")
 		}
-		ref := ExecutionRef{Version: ExecutionRecordVersion, Backend: BackendLocal, Protocol: ProtocolLocalCodexAppServer, Target: targetFor(c), Agent: agentFor(c), RunID: run.RunID, AttemptID: run.AttemptID, WorkspacePath: deref(run.WorktreePath), WorkspaceBranch: deref(run.WorktreeBranch), BaseCommit: deref(run.BaseCommit), External: *message.execution.Process, Generation: message.execution.AppServerGeneration}
+		ref := executionapi.ExecutionRef{Version: executionapi.ExecutionRecordVersion, Backend: executionapi.BackendLocal, Protocol: executionapi.ProtocolLocalCodexAppServer, Target: targetFor(c), Agent: agentFor(c), RunID: run.RunID, AttemptID: run.AttemptID, WorkspacePath: deref(run.WorktreePath), WorkspaceBranch: deref(run.WorktreeBranch), BaseCommit: deref(run.BaseCommit), External: *message.execution.Process, Generation: message.execution.AppServerGeneration}
 		execution.Process = message.execution.Process
 		execution.AppServerEndpoint = message.execution.AppServerEndpoint
 		execution.AppServerGeneration = message.execution.AppServerGeneration

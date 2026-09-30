@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 func (s *Service) recordConversationEvent(run *Run, source WorkerEvent) (retErr error) {
@@ -76,7 +78,7 @@ func (s *Service) recordConversationEvent(run *Run, source WorkerEvent) (retErr 
 	event := ConversationEvent{
 		Version: ConversationVersion, ProjectID: s.Config.identity, TaskID: run.DomainTaskID,
 		WorkflowID: run.RunID, ExecutionID: executionID, AttemptID: attemptID,
-		Backend: BackendKind(run.Backend), Protocol: ExecutionProtocol(run.Protocol), Agent: run.Agent,
+		Backend: executionapi.BackendKind(run.Backend), Protocol: executionapi.ExecutionProtocol(run.Protocol), Agent: run.Agent,
 		TargetID: run.Target.ID, ExternalRef: conversationExternalRef(run.Process),
 		Source: "codex-jsonl", SourceSegment: segment, SourceIdentity: sourceIdentity, SourceCursor: string(checkpointCursor), SessionQuality: IdentityUnknown,
 		TurnQuality: IdentityUnknown, ItemQuality: IdentityUnknown, SourceEventQuality: IdentityDerived,
@@ -178,7 +180,7 @@ func (s *Service) recordOrcaTerminalEvent(run *Run, source WorkerEvent) error {
 	event := ConversationEvent{
 		Version: ConversationVersion, ProjectID: s.Config.identity, TaskID: run.DomainTaskID,
 		WorkflowID: run.RunID, ExecutionID: executionID, AttemptID: attemptID,
-		Backend: BackendOrca, Protocol: ProtocolOrcaTerminalV2, Agent: run.Agent,
+		Backend: executionapi.BackendOrca, Protocol: executionapi.ProtocolOrcaTerminalV2, Agent: run.Agent,
 		TargetID: run.Target.ID, ExternalRef: conversationExternalRef(run.Process),
 		Source: "orca-terminal-v2", SourceSegment: segment, SourceIdentity: source.SourceIdentity,
 		SourceCursor: source.SourceCursor, SessionID: source.Session, SessionQuality: IdentityUnknown, TurnQuality: IdentityUnknown, ItemQuality: IdentityUnknown,
@@ -224,7 +226,7 @@ func (s *Service) recordOrcaTerminalEvent(run *Run, source WorkerEvent) error {
 	return err
 }
 
-func conversationExternalRef(identity *ProcessIdentity) string {
+func conversationExternalRef(identity *executionapi.ProcessIdentity) string {
 	if identity == nil {
 		return ""
 	}

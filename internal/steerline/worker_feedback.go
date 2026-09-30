@@ -3,6 +3,8 @@ package steerline
 import (
 	"context"
 	"errors"
+
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/workerflow"
 )
 
@@ -14,17 +16,17 @@ func (s *Service) waitWorkerFlow(run *Run, reason string, operationIDs ...string
 	if workflow.Phase == "completed" || run.TaskStatus == "closed" || run.TaskStatus == "discarded" {
 		return nil
 	}
-	unresolvedNativeTurn := run.Protocol == string(ProtocolLocalCodexAppServer) && !execution.RecoveryRequired && (execution.PendingCommandID != "" || execution.CurrentTurnID != "" && execution.CurrentTurnID != execution.LastStoppedTurnID)
+	unresolvedNativeTurn := run.Protocol == string(executionapi.ProtocolLocalCodexAppServer) && !execution.RecoveryRequired && (execution.PendingCommandID != "" || execution.CurrentTurnID != "" && execution.CurrentTurnID != execution.LastStoppedTurnID)
 	if !unresolvedNativeTurn && (run.Decision == nil || run.Decision.Status != "pending" && run.Decision.Status != "answer_saved") {
 		contextText := reason
-		if run.Protocol == string(ProtocolLocalCodexAppServer) && execution.CurrentTurnID != "" && execution.CurrentTurnID == execution.LastStoppedTurnID {
+		if run.Protocol == string(executionapi.ProtocolLocalCodexAppServer) && execution.CurrentTurnID != "" && execution.CurrentTurnID == execution.LastStoppedTurnID {
 			contextText = "本轮已结束，提交后将在原 Codex 会话开始下一轮。\n\n" + reason
 		}
-		options := []DecisionOption{{ID: "continue", Label: "Continue current work"}}
-		if execution.RecoveryRequired && (execution.RecoveryState == "interrupted" || execution.RecoveryState == "completed") && run.Protocol == string(ProtocolLocalCodexAppServer) && execution.Process != nil {
-			options = []DecisionOption{{ID: "continue", Label: "原 Codex 会话继续", Detail: "在新的本地进程中核实并恢复原 thread"}, {ID: "new_session", Label: "新会话继续", Detail: "使用现有工作区和持久历史作为上下文"}}
-		} else if execution.RecoveryRequired && execution.RecoveryState == "interrupted" && run.Protocol == string(ProtocolLocalCodexAppServer) {
-			options = []DecisionOption{{ID: "continue", Label: "开始本地 Codex 执行", Detail: "先核实或准备原任务的工作区"}}
+		options := []executionapi.DecisionOption{{ID: "continue", Label: "Continue current work"}}
+		if execution.RecoveryRequired && (execution.RecoveryState == "interrupted" || execution.RecoveryState == "completed") && run.Protocol == string(executionapi.ProtocolLocalCodexAppServer) && execution.Process != nil {
+			options = []executionapi.DecisionOption{{ID: "continue", Label: "原 Codex 会话继续", Detail: "在新的本地进程中核实并恢复原 thread"}, {ID: "new_session", Label: "新会话继续", Detail: "使用现有工作区和持久历史作为上下文"}}
+		} else if execution.RecoveryRequired && execution.RecoveryState == "interrupted" && run.Protocol == string(executionapi.ProtocolLocalCodexAppServer) {
+			options = []executionapi.DecisionOption{{ID: "continue", Label: "开始本地 Codex 执行", Detail: "先核实或准备原任务的工作区"}}
 		}
 		question := "The worker stopped. What should it do next?"
 		if execution.RecoveryRequired && (execution.RecoveryState == "unverified" || execution.RecoveryState == "") {
@@ -51,7 +53,7 @@ func (s *Service) waitWorkerFlow(run *Run, reason string, operationIDs ...string
 			workflow.Phase = "queued"
 		}
 	}
-	if execution.Status == "active" && run.Protocol != string(ProtocolLocalCodexAppServer) {
+	if execution.Status == "active" && run.Protocol != string(executionapi.ProtocolLocalCodexAppServer) {
 		execution.Status = "idle"
 	}
 	execution.UpdatedAt = now()

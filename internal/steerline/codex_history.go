@@ -10,6 +10,8 @@ import (
 	"os/exec"
 	"sync"
 	"time"
+
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 // codexHistoryClient only uses the public app-server protocol. It never opens
@@ -18,7 +20,7 @@ type codexHistoryClient struct {
 	input      io.WriteCloser
 	lines      chan []byte
 	done       chan struct{}
-	proc       process
+	proc       executionapi.StopHandle
 	mu         sync.Mutex
 	next       int
 	err        error

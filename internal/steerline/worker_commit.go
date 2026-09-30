@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 // recordWrite declares one record and the exact value read before computing it.
@@ -19,8 +21,8 @@ type recordWrite[T any] struct {
 // workerCommit is the bounded write set of one worker transition. Operations
 // and events may also be committed independently by their service owners.
 type workerCommit struct {
-	Binding            *ExecutionRef
-	ExecutionOperation *recordWrite[Operation]
+	Binding            *executionapi.ExecutionRef
+	ExecutionOperation *recordWrite[executionapi.Operation]
 	Project            string
 	TaskID             string
 	WorkflowID         string
@@ -119,7 +121,7 @@ func (s *SQLiteStore) commitWorker(ctx context.Context, request workerCommit) (w
 				v.After.ProjectIdentity != request.Project || v.After.StepID != "worker" ||
 				request.Attempt == nil || request.Attempt.Before != nil || request.Attempt.After.AttemptNumber != v.Before.AttemptNumber+1 ||
 				request.Execution == nil || request.Execution.Before == nil || request.Execution.After.CurrentAttemptID != request.AttemptID ||
-				request.Execution.Before.Protocol != string(ProtocolLocalCodexAppServer) || !request.Execution.Before.RecoveryRequired ||
+				request.Execution.Before.Protocol != string(executionapi.ProtocolLocalCodexAppServer) || !request.Execution.Before.RecoveryRequired ||
 				request.Execution.Before.RecoveryState != "interrupted" && request.Execution.Before.RecoveryState != "completed" ||
 				v.After.InputRevision != v.Before.InputRevision || v.After.ContractDigest != v.Before.ContractDigest ||
 				request.Attempt.After.InputRevision != v.Before.InputRevision || request.Attempt.After.ContractDigest != v.Before.ContractDigest ||
@@ -253,7 +255,7 @@ func (s *SQLiteStore) commitWorker(ctx context.Context, request workerCommit) (w
 				return errors.New("execution binding differs from the committed receipt")
 			}
 			execution := request.Execution.After
-			if string(ref.Backend) != execution.Backend || string(ref.Protocol) != execution.Protocol || ref.Agent.Name != execution.Agent || ref.Target.ID != execution.Target.ID || ref.Target.ConnectionID != execution.Target.ConnectionID || ref.Target.ExternalRuntime != execution.Target.ExternalRuntime || ref.Protocol == ProtocolLocalCodexAppServer && ref.Generation != execution.AppServerGeneration {
+			if string(ref.Backend) != execution.Backend || string(ref.Protocol) != execution.Protocol || ref.Agent.Name != execution.Agent || ref.Target.ID != execution.Target.ID || ref.Target.ConnectionID != execution.Target.ConnectionID || ref.Target.ExternalRuntime != execution.Target.ExternalRuntime || ref.Protocol == executionapi.ProtocolLocalCodexAppServer && ref.Generation != execution.AppServerGeneration {
 				return errors.New("execution binding changed the fixed backend or generation")
 			}
 			if err := tx.putExecutionBinding(*ref); err != nil {

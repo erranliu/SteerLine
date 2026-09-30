@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 type environmentFixture struct {
@@ -156,7 +158,7 @@ func TestWorkerEnvironmentER2HostWaitPreservesQuestionAndPR(t *testing.T) {
 	f.poll(t)
 	wf, e := f.service.workflowRecords(f.run)
 	turn := nativeOrcaCurrentTurn(e)
-	question, err := WriteDecisionRequest(f.run, DecisionRequest{Question: "Business question", AllowFreeText: true, OrcaAsk: &orcaAskCall{RunID: e.Target.OrchestrationRun, TaskID: turn.TaskID, DispatchID: turn.DispatchID, MessageID: "original-question", Questions: []nativeAskQuestion{{ID: "original-question", Question: "Business question", AllowFreeText: true}}}})
+	question, err := WriteDecisionRequest(f.run, DecisionRequest{Question: "Business question", AllowFreeText: true, OrcaAsk: &orcaAskCall{RunID: e.Target.OrchestrationRun, TaskID: turn.TaskID, DispatchID: turn.DispatchID, MessageID: "original-question", Questions: []executionapi.Question{{ID: "original-question", Question: "Business question", AllowFreeText: true}}}})
 	require(t, err)
 	f.service.setRunDecision(f.run, question)
 	require(t, f.service.commitWorker(f.run))

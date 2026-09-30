@@ -3,6 +3,8 @@ package steerline
 import (
 	"encoding/json"
 	"errors"
+
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 func copyDomainSnapshot(snapshot DomainSnapshot) (DomainSnapshot, error) {
@@ -103,8 +105,8 @@ func (s *Service) commitWorker(run *Run, operationIDs ...string) error {
 }
 
 type workerCommitAttachment struct {
-	Binding            *ExecutionRef
-	ExecutionOperation *recordWrite[Operation]
+	Binding            *executionapi.ExecutionRef
+	ExecutionOperation *recordWrite[executionapi.Operation]
 }
 
 func (s *Service) commitWorkerAttached(run *Run, attachment workerCommitAttachment, operationIDs ...string) error {

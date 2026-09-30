@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 func (s *Service) processPendingCommands(ctx context.Context) error {
@@ -75,7 +77,7 @@ func (s *Service) processPendingCommands(ctx context.Context) error {
 			if run := s.findDecision(command.TargetID); run != nil && run.Decision != nil && run.Decision.Status == "pending" {
 				if err = s.requireDecisionReplyCapability(ctx, run); err != nil {
 					code := "rejected"
-					var backendErr *BackendError
+					var backendErr *executionapi.BackendError
 					if errors.As(err, &backendErr) {
 						code = string(backendErr.Code)
 					}

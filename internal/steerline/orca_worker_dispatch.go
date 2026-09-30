@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	remote "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker"
 	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
@@ -34,14 +35,14 @@ func findNativeOrcaSend(ctx context.Context, c Config, runID, dispatchID, subjec
 	return orcaworker.FindSend(ctx, orcaWorkerCaller(c), runID, dispatchID, subject, body)
 }
 
-func verifyRecoveredNativeOrcaDispatch(ctx context.Context, c Config, dispatchID, taskID, runID string, identity ProcessIdentity) error {
+func verifyRecoveredNativeOrcaDispatch(ctx context.Context, c Config, dispatchID, taskID, runID string, identity executionapi.ProcessIdentity) error {
 	err := orcaworker.VerifyRecoveredDispatch(ctx, orcaWorkerMetaCaller(c), orcaworker.DispatchIdentity{
 		DispatchID: dispatchID, TaskID: taskID, RunID: runID,
 		RuntimeID: identity.RuntimeID, Terminal: identity.Terminal,
 		Incarnation: identity.Incarnation, WorktreeID: identity.WorktreeID,
 	})
 	if errors.Is(err, orcaworker.ErrDispatchIdentity) {
-		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: err.Error()}
+		return &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: err.Error()}
 	}
 	return err
 }
@@ -71,7 +72,7 @@ func (s *Service) startNativeOrcaTurn(ctx context.Context, run *Run, execution *
 		return err
 	}
 	if len([]byte(prompt)) > 16<<10 || len([]rune(prompt)) > 12000 {
-		return &BackendError{Code: BackendRejected, Diagnostic: "Orca native task spec exceeds the conservative Windows command-line bound"}
+		return &executionapi.BackendError{Code: executionapi.BackendRejected, Diagnostic: "Orca native task spec exceeds the conservative Windows command-line bound"}
 	}
 	if execution.OrcaNative.Coordinator.Terminal == "" || execution.Target.OrchestrationRun == "" {
 		return errors.New("Orca coordinator and Run are not prepared")
@@ -101,7 +102,7 @@ func (s *Service) startNativeOrcaTurn(ctx context.Context, run *Run, execution *
 				return err
 			}
 			if id == "" {
-				return &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "original Orca Task creation has no unique matching Task"}
+				return &executionapi.BackendError{Code: executionapi.BackendOutcomeUnknown, Diagnostic: "original Orca Task creation has no unique matching Task"}
 			}
 			if purpose == "readiness" {
 				intentAt = op.CreatedAt
@@ -153,10 +154,10 @@ func (s *Service) startNativeOrcaTurn(ctx context.Context, run *Run, execution *
 	if op := s.operationByKey(dispatchKey); op != nil {
 		id, runID, handle, incarnation, err := findNativeOrcaDispatch(ctx, fixedConfig, taskID)
 		if err != nil {
-			return &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "original Orca Dispatch creation is unverified", Cause: err}
+			return &executionapi.BackendError{Code: executionapi.BackendOutcomeUnknown, Diagnostic: "original Orca Dispatch creation is unverified", Cause: err}
 		}
 		if runID != execution.Target.OrchestrationRun || handle != execution.Process.Terminal || !strings.HasSuffix(incarnation, ":"+execution.Process.Incarnation) {
-			return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "recovered Orca Dispatch targets a different worker or Run"}
+			return &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "recovered Orca Dispatch targets a different worker or Run"}
 		}
 		if err := verifyRecoveredNativeOrcaDispatch(ctx, fixedConfig, id, taskID, runID, *execution.Process); err != nil {
 			return err
@@ -257,7 +258,7 @@ func nativeOrcaSessionIdentity(execution *ExecutionRecord) (string, error) {
 		return "", fmt.Errorf("native Orca session origin is incomplete")
 	}
 	if execution.Process.Kind == "orca_supervised" {
-		return remote.SessionID(remote.Identity(*execution.Process)), nil
+		return remote.SessionID(executionapi.ProcessIdentity(*execution.Process)), nil
 	}
 	return nativeOrcaSession(*execution.Process), nil
 }

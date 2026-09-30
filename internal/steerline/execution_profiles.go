@@ -10,6 +10,7 @@ import (
 
 	"github.com/erranliu/SteerLine/internal/steerline/codexapp"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 const ProjectExecutionProfileID = "project-default"
@@ -242,11 +243,11 @@ func validReasoningEffort(value string) bool {
 
 func hostForExecution(backend, protocol string) string {
 	switch {
-	case backend == string(BackendLocal) && (protocol == string(ProtocolLocalProcess) || protocol == string(ProtocolLocalCodexAppServer)):
+	case backend == string(executionapi.BackendLocal) && (protocol == string(executionapi.ProtocolLocalProcess) || protocol == string(executionapi.ProtocolLocalCodexAppServer)):
 		return "local"
-	case backend == string(BackendOrca) && protocol == string(ProtocolOrcaTerminalV2):
+	case backend == string(executionapi.BackendOrca) && protocol == string(executionapi.ProtocolOrcaTerminalV2):
 		return "orca"
-	case backend == string(BackendOrca) && protocol == string(ProtocolOrcaSupervised):
+	case backend == string(executionapi.BackendOrca) && protocol == string(executionapi.ProtocolOrcaSupervised):
 		return "orca_supervised"
 	default:
 		return ""

@@ -1,6 +1,10 @@
 package contracts
 
-import "time"
+import (
+	"time"
+
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+)
 
 type ProbeIdentity struct {
 	Execution     string `json:"execution"`
@@ -51,17 +55,17 @@ type HostFact struct {
 }
 
 type WorkerEnvironment struct {
-	OriginalTerminal   *ProcessIdentity      `json:"original_terminal,omitempty"`
-	ProfileDigest      string                `json:"profile_digest"`
-	LaunchCommand      string                `json:"launch_command,omitempty"`
-	WriteRoots         []string              `json:"write_roots,omitempty"`
-	Runtime            string                `json:"runtime,omitempty"`
-	Preparation        *WorkerPreparation    `json:"preparation"`
-	History            []WorkerPreparation   `json:"history,omitempty"`
-	Blocker            *WorkerHostBlocker    `json:"blocker,omitempty"`
-	DeferredDecisionID string                `json:"deferred_decision_id,omitempty"`
-	DeferredFeedback   []EnvironmentFeedback `json:"deferred_feedback,omitempty"`
-	Ready              bool                  `json:"ready"`
+	OriginalTerminal   *executionapi.ProcessIdentity `json:"original_terminal,omitempty"`
+	ProfileDigest      string                        `json:"profile_digest"`
+	LaunchCommand      string                        `json:"launch_command,omitempty"`
+	WriteRoots         []string                      `json:"write_roots,omitempty"`
+	Runtime            string                        `json:"runtime,omitempty"`
+	Preparation        *WorkerPreparation            `json:"preparation"`
+	History            []WorkerPreparation           `json:"history,omitempty"`
+	Blocker            *WorkerHostBlocker            `json:"blocker,omitempty"`
+	DeferredDecisionID string                        `json:"deferred_decision_id,omitempty"`
+	DeferredFeedback   []EnvironmentFeedback         `json:"deferred_feedback,omitempty"`
+	Ready              bool                          `json:"ready"`
 }
 
 type EnvironmentFeedback struct {

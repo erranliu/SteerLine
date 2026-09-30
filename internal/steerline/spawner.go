@@ -13,15 +13,9 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
-)
 
-// process is the host-neutral handle for a running worker. Local uses an OS
-// process; Orca uses a terminal handle. Neither call site needs to know which.
-type process interface {
-	Identity() ProcessIdentity
-	Kill()
-	Close()
-}
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+)
 
 // SpawnSpec is everything a host needs to run one worker. It contains no
 // scheduling or recovery authority: the scheduler keeps ownership.
@@ -102,7 +96,7 @@ func (LocalSpawner) Start(ctx context.Context, spec SpawnSpec) (*Worker, error) 
 	}
 	spec.SourceIdentity = sourceIdentity
 	if spec.ConversationJSONL {
-		marker := ConversationSourceMarker{Version: 1, ProjectID: spec.ProjectID, WorkflowID: spec.WorkflowID, ExecutionID: spec.ExecutionID, AttemptID: spec.AttemptID, Backend: BackendLocal, Protocol: ProtocolLocalProcess, Agent: spec.Agent, TargetID: spec.TargetID, Source: "codex-jsonl", SourceSegment: "local-jsonl-v1:" + sourceIdentity, SourceIdentity: sourceIdentity, RecordName: "events.jsonl", CreatedAt: now()}
+		marker := ConversationSourceMarker{Version: 1, ProjectID: spec.ProjectID, WorkflowID: spec.WorkflowID, ExecutionID: spec.ExecutionID, AttemptID: spec.AttemptID, Backend: executionapi.BackendLocal, Protocol: executionapi.ProtocolLocalProcess, Agent: spec.Agent, TargetID: spec.TargetID, Source: "codex-jsonl", SourceSegment: "local-jsonl-v1:" + sourceIdentity, SourceIdentity: sourceIdentity, RecordName: "events.jsonl", CreatedAt: now()}
 		marker.ReaderCommand, marker.CodexHome = spec.ConversationReader, codexEnvironmentHome()
 		if home, ok := spec.Env["CODEX_HOME"]; ok {
 			marker.CodexHome = home

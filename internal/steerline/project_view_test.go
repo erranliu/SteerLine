@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 func requireProjectView(t *testing.T, view ProjectView) {
@@ -146,7 +148,7 @@ func TestProjectViewConnectionUsesSampledRuntime(t *testing.T) {
 	if current := ConnectService(ctx, service.Config); current.State != ConnectionInitializing {
 		t.Fatal("fixture did not publish a different service checkpoint")
 	}
-	unknown := connectServiceFromSnapshot(ctx, service.Config, observation, func(*ProcessIdentity) ProcessProbe {
+	unknown := connectServiceFromSnapshot(ctx, service.Config, observation, func(*executionapi.ProcessIdentity) ProcessProbe {
 		return ProcessProbe{State: ProcessUnknown, Reason: "unavailable"}
 	})
 	if unknown.State != ConnectionUnknown || unknown.CanControl {

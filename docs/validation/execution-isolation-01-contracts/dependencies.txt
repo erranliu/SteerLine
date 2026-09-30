@@ -1,0 +1,11 @@
+Direct imports:
+context
+errors
+reflect
+regexp
+strconv
+strings
+time
+
+Non-standard transitive dependencies (including self):
+github.com/erranliu/SteerLine/internal/steerline/execution

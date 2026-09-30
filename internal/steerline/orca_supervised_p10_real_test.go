@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 // TestSupervisedOrcaRealP10ReplyGate exercises the actual supervised reply
@@ -52,7 +54,7 @@ func TestSupervisedOrcaRealP10ReplyGate(t *testing.T) {
 	target.Dispatch = started.DispatchID
 	target.ExecutionHost = observed.Identity.ExecutionHost
 	target.WorktreeID = started.WorktreeID
-	ref := ExecutionRef{RunID: need("STEERLINE_REAL_P10_WORKFLOW_RUN_ID"), Version: ExecutionRecordVersion, Backend: BackendOrca, Protocol: ProtocolOrcaSupervised, Target: target, External: observed.Identity}
+	ref := executionapi.ExecutionRef{RunID: need("STEERLINE_REAL_P10_WORKFLOW_RUN_ID"), Version: executionapi.ExecutionRecordVersion, Backend: executionapi.BackendOrca, Protocol: executionapi.ProtocolOrcaSupervised, Target: target, External: observed.Identity}
 	questionID := need("STEERLINE_REAL_P10_QUESTION_ID")
 	oversized := "x" + strings.Repeat("\n", 4200)
 	serialized, err := json.Marshal(struct {
@@ -65,7 +67,7 @@ func TestSupervisedOrcaRealP10ReplyGate(t *testing.T) {
 	if err != nil || len(serialized) <= maxSupervisedMessageBytes {
 		t.Fatalf("probe answer did not exceed the serialized limit: bytes=%d error=%v", len(serialized), err)
 	}
-	if _, err = remoteWorkerClient(c).Reply(ctx, remoteWorkerRef(ref), questionID, oversized); !isBackendError(remoteWorkerError(err), BackendRejected) || !strings.Contains(err.Error(), "serialized message exceeds") {
+	if _, err = remoteWorkerClient(c).Reply(ctx, remoteWorkerRef(ref), questionID, oversized); !isBackendError(remoteWorkerError(err), executionapi.BackendRejected) || !strings.Contains(err.Error(), "serialized message exceeds") {
 		t.Fatalf("oversized answer did not fail before Orca send: %v", err)
 	}
 	t.Logf("oversized serialized reply rejected before observation/send: %d bytes, question=%s, dispatch=%s", len(serialized), questionID, started.DispatchID)

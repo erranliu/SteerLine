@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 func TestDecisionSubmissionRequiresNativeAuthorityBeforeStateAccess(t *testing.T) {
@@ -23,7 +25,7 @@ func TestDecisionSubmissionRequiresNativeAuthorityBeforeStateAccess(t *testing.T
 }
 
 func TestNativeDecisionRequestAndAnswerValidation(t *testing.T) {
-	request := DecisionRequest{Question: "  choose  ", Options: []DecisionOption{{ID: " keep ", Label: " Keep "}, {ID: "replace", Label: "Replace"}}, Recommended: "keep", AllowFreeText: true}
+	request := DecisionRequest{Question: "  choose  ", Options: []executionapi.DecisionOption{{ID: " keep ", Label: " Keep "}, {ID: "replace", Label: "Replace"}}, Recommended: "keep", AllowFreeText: true}
 	if err := validateDecisionRequest(&request); err != nil {
 		t.Fatal(err)
 	}
@@ -34,10 +36,10 @@ func TestNativeDecisionRequestAndAnswerValidation(t *testing.T) {
 	invalid := []DecisionRequest{
 		{},
 		{Question: "question"},
-		{Question: "question", Options: []DecisionOption{{ID: "", Label: "missing id"}}},
-		{Question: "question", Options: []DecisionOption{{ID: "same", Label: "one"}, {ID: "same", Label: "two"}}},
-		{Question: "question", Options: []DecisionOption{{ID: "keep", Label: "Keep"}}, Recommended: "other"},
-		{Question: strings.Repeat("界", 2001), Options: []DecisionOption{{ID: "keep", Label: "Keep"}}},
+		{Question: "question", Options: []executionapi.DecisionOption{{ID: "", Label: "missing id"}}},
+		{Question: "question", Options: []executionapi.DecisionOption{{ID: "same", Label: "one"}, {ID: "same", Label: "two"}}},
+		{Question: "question", Options: []executionapi.DecisionOption{{ID: "keep", Label: "Keep"}}, Recommended: "other"},
+		{Question: strings.Repeat("界", 2001), Options: []executionapi.DecisionOption{{ID: "keep", Label: "Keep"}}},
 	}
 	for i, candidate := range invalid {
 		originalQuestion := candidate.Question
