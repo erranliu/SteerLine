@@ -38,8 +38,11 @@ func (q QueryService) ReadyNativeTaskSnapshot(ctx context.Context) (NativeReadyT
 	if err != nil {
 		return NativeReadyTaskSnapshot{}, err
 	}
-	ready := task.ReadyTasks(graph)
-	return NativeReadyTaskSnapshot{ProjectID: q.Project, AuthorityVersion: graph.Authority.AuthorityVersion, GraphRevision: graph.Authority.GraphRevision, DatabaseID: graph.DatabaseID, DatabaseRevision: graph.DatabaseRevision, SampledAt: graph.SampledAt, Tasks: ready}, nil
+	return nativeReadyTaskSnapshot(graph), nil
+}
+
+func nativeReadyTaskSnapshot(graph taskGraphSnapshot) NativeReadyTaskSnapshot {
+	return NativeReadyTaskSnapshot{ProjectID: graph.Authority.ProjectIdentity, AuthorityVersion: graph.Authority.AuthorityVersion, GraphRevision: graph.Authority.GraphRevision, DatabaseID: graph.DatabaseID, DatabaseRevision: graph.DatabaseRevision, SampledAt: graph.SampledAt, Tasks: task.ReadyTasks(graph)}
 }
 
 // ReadyNativeTasks preserves the candidate API used by dispatch and control.

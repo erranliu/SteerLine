@@ -164,12 +164,33 @@ func loadRuntimeSnapshot(db *SQLiteStore, project string, requireIdentity bool) 
 		return nil, err
 	}
 	defer tx.Rollback()
+	state, err := readRuntimeCheckpointTx(ctx, tx, project, requireIdentity)
+	if err != nil {
+		return nil, err
+	}
+	snapshot, err := querySnapshot(ctx, tx, project)
+	if err != nil {
+		return nil, err
+	}
+	if err = tx.Commit(); err != nil {
+		return nil, err
+	}
+	hydrateRuntime(state, snapshot)
+	if err = projectRuntime(state); err != nil {
+		return nil, err
+	}
+	return state, nil
+}
+
+// readRuntimeCheckpointTx reads only service metadata; callers hydrate it with
+// domain records from the same transaction before exposing a Runtime.
+func readRuntimeCheckpointTx(ctx context.Context, tx *sql.Tx, project string, requireIdentity bool) (*Runtime, error) {
 	var payload []byte
-	if err = tx.QueryRowContext(ctx, `SELECT payload FROM projection WHERE project_identity=?`, project).Scan(&payload); err != nil {
+	if err := tx.QueryRowContext(ctx, `SELECT payload FROM projection WHERE project_identity=?`, project).Scan(&payload); err != nil {
 		return nil, err
 	}
 	var checkpoint ServiceCheckpoint
-	if err = decode(payload, &checkpoint); err != nil {
+	if err := decode(payload, &checkpoint); err != nil {
 		return nil, err
 	}
 	state := runtimeFromCheckpoint(checkpoint)
@@ -179,24 +200,13 @@ func loadRuntimeSnapshot(db *SQLiteStore, project string, requireIdentity bool) 
 	if requireIdentity && state.Repository.Identity != project {
 		return nil, errors.New("database runtime repository identity mismatch")
 	}
-	snapshot, err := querySnapshot(ctx, tx, project)
-	if err != nil {
-		return nil, err
-	}
 	var paused int
-	if err = tx.QueryRowContext(ctx, `SELECT dispatch_mode,dispatch_paused,authority_version FROM project_task_authorities WHERE project_identity=?`, project).Scan(&state.Control.DispatchMode, &paused, &state.Control.Revision); err != nil {
+	if err := tx.QueryRowContext(ctx, `SELECT dispatch_mode,dispatch_paused,authority_version FROM project_task_authorities WHERE project_identity=?`, project).Scan(&state.Control.DispatchMode, &paused, &state.Control.Revision); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, errors.New("runtime checkpoint has no task authority")
 		}
 		return nil, err
 	}
 	state.Control.DispatchPaused = paused != 0
-	if err = tx.Commit(); err != nil {
-		return nil, err
-	}
-	hydrateRuntime(&state, snapshot)
-	if err = projectRuntime(&state); err != nil {
-		return nil, err
-	}
 	return &state, nil
 }

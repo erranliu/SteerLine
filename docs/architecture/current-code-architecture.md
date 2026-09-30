@@ -1,6 +1,6 @@
 # SteerLine 当前代码架构图
 
-快照日期：2026-09-30。源码基线：`ba0992b`（含 PR #157），含 PR #158 的 worker 收尾改动。
+快照日期：2026-09-30。源码基线：`9811ddc`（含 PR #158），叠加组合查询快照与事件批量分页改动。
 
 本文描述当前检出的代码：系统边界、实际 Go 包依赖、核心包内部职责、任务执行、人工决策、数据模型、日志与恢复。图中的职责分组不代表已拆成独立包或服务。箭头含义在各图前说明；未来方案与当前可启动路径分开列出。
 
@@ -69,7 +69,7 @@ flowchart TB
 
 ```mermaid
 flowchart LR
-    CLI["cmd/steerline"] --> Core["internal/steerline<br/>112 个非测试 Go 文件"]
+    CLI["cmd/steerline"] --> Core["internal/steerline<br/>113 个非测试 Go 文件"]
     CLI --> Console["console"]
     Console --> Core
 
@@ -93,7 +93,7 @@ flowchart LR
 | 包 | 当前职责 | 非测试 Go 文件 |
 | --- | --- | ---: |
 | `cmd/steerline` | 产品命令入口、服务启动、控制台和任务命令路由 | 1 |
-| `internal/steerline` | 服务编排、业务持久化、平台适配接线、查询和控制 | 112 |
+| `internal/steerline` | 服务编排、业务持久化、平台适配接线、查询和控制 | 113 |
 | `console` | TUI 状态、导航、任务列表、活动/会话/正文、执行方案和决策编辑 | 14 |
 | `task` | 任务契约、批次、状态、依赖资格、交付和命令规则 | 10 |
 | `taskgraph` | DAG 校验、遍历、前后置关系和图算法 | 1 |
@@ -106,7 +106,7 @@ flowchart LR
 | `cmd/test-feedback` | 最小/定向/全量测试调度、日志与反馈报告 | 4 |
 | `internal/testfeedback` | Go test JSON 结果汇总 | 1 |
 
-合计 **13 个包目录、186 个非测试 Go 文件**。统计覆盖 `cmd/` 与 `internal/`；不含 `_test.go`、测试数据、脚本和文档。核心包仍集中承载多项职责，不能将上述逻辑边界理解为微服务或已经完成的全面拆包。
+合计 **13 个包目录、187 个非测试 Go 文件**。统计覆盖 `cmd/` 与 `internal/`；不含 `_test.go`、测试数据、脚本和文档。核心包仍集中承载多项职责，不能将上述逻辑边界理解为微服务或已经完成的全面拆包。
 
 ## 3. 核心包内部职责与接线
 
@@ -358,6 +358,8 @@ Service 将私有领域工作副本、已提交快照和私有工作 Run 分开�
 
 读取视图在同一事务中组合业务记录和 checkpoint。会话事件及来源游标持久化后可以补读，正文按身份与版本定位；来源没有明确 turn 终态或 final 时，界面显示未识别或能力原因。重启恢复还需核验进程身份、app-server generation、固定工作区、Orca dispatch 和未完成 Operation，不能只从日志推测是否完成。
 
+`QueryService.ReadProjectView` 在一笔 SQLite 读事务内组合任务页、完整 Ready 候选、选中任务（含页外选择）、领域记录和服务 checkpoint，复用现有任务、DAG 与 Runtime 投影规则。TUI 直接消费组合结果，不再分别读取列表与 Ready 后重试版本匹配；服务连接依据同一 Runtime 样本执行独立的进程与配置核验。分区读取错误仍可保留可用的只读数据，控制和领取继续自行校验。领域事件分页每批最多读取 32 条，保留每页 1 MiB 正文上限、超大正文引用和按最后实际返回事件推进的游标。
+
 ## 8. 工具、依赖与尚未交付的边界
 
 | 项目 | 当前定位 |
@@ -383,6 +385,8 @@ Service 将私有领域工作副本、已提交快照和私有工作 Run 分开�
 包依赖图由非测试源码的项目内 import 提取并人工对照入口。系统、执行与存储图对照当前关键代码和 schema，不依据未来 Spec 推断已交付能力。本轮收尾同步更新当前源码接线与文件索引。整合 PR #157 后，项目 `-quick` 入口（现已覆盖 `workerflow`）及附加的 13 个定向用例通过（执行 98.3 秒），覆盖私有 actor 视图、两轮续聊、问题回复恢复、重启不重发、原子绑定/停止回执和原生事件身份；`codexworker`、`orcaworker` 与测试入口自身的测试、受影响命令编译、`go vet` 和差异检查通过。未运行全量测试或真机认证。
 
 维护时优先核对：入口命令、包 import、可启动执行模式、schema、checkpoint、控制协议、外部进程通信和交付事务。新增生产源码后应同步下面的全量文件索引；生产支持范围有变化时同步图 1、图 4 和第 8 节。
+
+组合查询快照与事件批量分页改动通过项目 `-quick` 入口及相关定向查询、DAG、连接和观察用例，控制台包测试与受影响包 `go vet` 通过。新增用例在固定 WAL 读快照期间提交新任务状态、DAG 和 checkpoint，确认当前视图不混入新版本，下一次刷新才采用新记录；覆盖页外选择、缺少 checkpoint、读取错误、大正文引用、字节边界和游标连续性。200 条小事件的分页读取从 201 次数据库查询降为 8 次；每页最多 1000 条时从 1001 次降为 33 次。未运行全量测试或真机认证。
 
 ## 附录：全部非测试 Go 源文件索引
 
@@ -488,6 +492,7 @@ Service 将私有领域工作副本、已提交快照和私有工作 Run 分开�
 | [platform_windows.go](../../internal/steerline/platform_windows.go) |
 | [pr.go](../../internal/steerline/pr.go) |
 | [projects.go](../../internal/steerline/projects.go) |
+| [project_view.go](../../internal/steerline/project_view.go) |
 | [query_command.go](../../internal/steerline/query_command.go) |
 | [recovery.go](../../internal/steerline/recovery.go) |
 | [render.go](../../internal/steerline/render.go) |

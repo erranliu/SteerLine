@@ -395,6 +395,21 @@ func connectServiceWithProbe(ctx context.Context, c Config, probe func(*ProcessI
 		return connection
 	}
 	obs := ReadObservationSnapshot(c, time.Now)
+	return connectServiceFromSnapshot(ctx, c, obs, probe)
+}
+
+// ConnectServiceFromSnapshot checks process and configuration identity against
+// the supplied committed observation, without sampling the database again.
+// Control commands still perform their own admission checks.
+func ConnectServiceFromSnapshot(ctx context.Context, c Config, obs ObservationSnapshot) ServiceConnection {
+	if err := c.ResolveIdentity(ctx); err != nil {
+		return ServiceConnection{State: ConnectionIdentityError, Diagnostic: "resolve repository identity: " + err.Error()}
+	}
+	return connectServiceFromSnapshot(ctx, c, obs, probeProcess)
+}
+
+func connectServiceFromSnapshot(ctx context.Context, c Config, obs ObservationSnapshot, probe func(*ProcessIdentity) ProcessProbe) ServiceConnection {
+	connection := ServiceConnection{State: ConnectionNoRecord, Capabilities: []string{}, CanStart: true}
 	connection.Snapshot = obs
 	if obs.State == SnapshotNone {
 		return connection
