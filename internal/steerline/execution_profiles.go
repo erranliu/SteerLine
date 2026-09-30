@@ -4,8 +4,11 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"runtime"
 	"strings"
 	"time"
+
+	"github.com/erranliu/SteerLine/internal/steerline/codexapp"
 )
 
 const ProjectExecutionProfileID = "project-default"
@@ -20,6 +23,7 @@ type ExecutionProfile struct {
 	Model           string     `json:"model,omitempty"`
 	ReasoningEffort string     `json:"reasoning_effort,omitempty"`
 	Sandbox         string     `json:"sandbox"`
+	WindowsSandbox  string     `json:"windows_sandbox,omitempty"`
 	CodexProfile    string     `json:"profile,omitempty"`
 	Codex           Command    `json:"codex"`
 	Orca            OrcaConfig `json:"orca,omitempty"`
@@ -35,27 +39,29 @@ type FixedExecutionProfile struct {
 	Model           string     `json:"model,omitempty"`
 	ReasoningEffort string     `json:"reasoning_effort,omitempty"`
 	Sandbox         string     `json:"sandbox"`
+	WindowsSandbox  string     `json:"windows_sandbox,omitempty"`
 	CodexProfile    string     `json:"profile,omitempty"`
 	Codex           Command    `json:"codex"`
 	Orca            OrcaConfig `json:"orca,omitempty"`
 }
 
 func (p ExecutionProfile) Freeze() FixedExecutionProfile {
-	return FixedExecutionProfile{ID: p.ID, Name: p.Name, Digest: p.Digest(), Host: p.Host, Agent: p.Agent, Model: p.Model, ReasoningEffort: p.ReasoningEffort, Sandbox: p.Sandbox, CodexProfile: p.CodexProfile, Codex: p.Codex, Orca: p.Orca}
+	p = p.withWindowsSandboxDefault()
+	return FixedExecutionProfile{ID: p.ID, Name: p.Name, Digest: p.Digest(), Host: p.Host, Agent: p.Agent, Model: p.Model, ReasoningEffort: p.ReasoningEffort, Sandbox: p.Sandbox, WindowsSandbox: p.WindowsSandbox, CodexProfile: p.CodexProfile, Codex: p.Codex, Orca: p.Orca}
 }
 
 func (p FixedExecutionProfile) VerifyWorkerFlow() bool {
-	rebuilt := ExecutionProfile{ID: p.ID, Name: p.Name, Host: p.Host, Agent: p.Agent, Model: p.Model, ReasoningEffort: p.ReasoningEffort, Sandbox: p.Sandbox, CodexProfile: p.CodexProfile, Codex: p.Codex, Orca: p.Orca}
+	rebuilt := ExecutionProfile{ID: p.ID, Name: p.Name, Host: p.Host, Agent: p.Agent, Model: p.Model, ReasoningEffort: p.ReasoningEffort, Sandbox: p.Sandbox, WindowsSandbox: p.WindowsSandbox, CodexProfile: p.CodexProfile, Codex: p.Codex, Orca: p.Orca}
 	return p.Digest != "" && p.Digest == rebuilt.Digest()
 }
 
 func (c Config) ApplyFixedExecutionProfile(p FixedExecutionProfile) Config {
 	c.Host, c.Agent, c.Model, c.ReasoningEffort = p.Host, p.Agent, p.Model, p.ReasoningEffort
-	c.Sandbox, c.Profile, c.Codex, c.Orca = p.Sandbox, p.CodexProfile, p.Codex, p.Orca
+	c.Sandbox, c.WindowsSandbox, c.Profile, c.Codex, c.Orca = p.Sandbox, p.WindowsSandbox, p.CodexProfile, p.Codex, p.Orca
 	return c
 }
 
-func (p ExecutionProfile) Digest() string { return digestValue(p) }
+func (p ExecutionProfile) Digest() string { return digestValue(p.withWindowsSandboxDefault()) }
 
 func (p ExecutionProfile) MatchesConfig(c Config) bool {
 	actual := c.projectExecutionProfile()
@@ -64,6 +70,11 @@ func (p ExecutionProfile) MatchesConfig(c Config) bool {
 }
 
 func (p ExecutionProfile) StaticUnavailableReason() string {
+	if p.Host == "local" && p.Agent == "codex" {
+		if _, err := codexapp.LocalSandboxArgs(runtime.GOOS, p.Sandbox, p.WindowsSandbox, p.Codex.Args); err != nil {
+			return err.Error()
+		}
+	}
 	if p.Host == "orca_supervised" {
 		return "受监管远端尚未接入单 worker 流程"
 	}
@@ -73,7 +84,15 @@ func (p ExecutionProfile) StaticUnavailableReason() string {
 	return ""
 }
 
+func (p ExecutionProfile) withWindowsSandboxDefault() ExecutionProfile {
+	if runtime.GOOS == "windows" && p.Host == "local" && p.Agent == "codex" && p.Sandbox != "danger-full-access" && p.WindowsSandbox == "" {
+		p.WindowsSandbox = "elevated"
+	}
+	return p
+}
+
 func (p ExecutionProfile) effective() ExecutionProfile {
+	p = p.withWindowsSandboxDefault()
 	if p.Host == "local" && p.Agent == "codex" && p.ReasoningEffort == "" {
 		p.ReasoningEffort = "high"
 	}
@@ -81,7 +100,7 @@ func (p ExecutionProfile) effective() ExecutionProfile {
 }
 
 func (c Config) projectExecutionProfile() ExecutionProfile {
-	return ExecutionProfile{ID: ProjectExecutionProfileID, Name: "项目默认", Host: c.hostName(), Agent: c.agentName(), Model: c.Model, ReasoningEffort: c.ReasoningEffort, Sandbox: c.Sandbox, CodexProfile: c.Profile, Codex: c.Codex, Orca: c.Orca}
+	return ExecutionProfile{ID: ProjectExecutionProfileID, Name: "项目默认", Host: c.hostName(), Agent: c.agentName(), Model: c.Model, ReasoningEffort: c.ReasoningEffort, Sandbox: c.Sandbox, WindowsSandbox: c.WindowsSandbox, CodexProfile: c.Profile, Codex: c.Codex, Orca: c.Orca}
 }
 
 func (c Config) AvailableExecutionProfiles() []ExecutionProfile {
@@ -132,7 +151,7 @@ func (c Config) ResolveExecutionProfile(id, expectedDigest string) (Config, Exec
 
 func (c Config) ApplyExecutionProfile(p ExecutionProfile) Config {
 	c.Host, c.Agent, c.Model, c.ReasoningEffort = p.Host, p.Agent, p.Model, p.ReasoningEffort
-	c.Sandbox, c.Profile, c.Codex, c.Orca = p.Sandbox, p.CodexProfile, p.Codex, p.Orca
+	c.Sandbox, c.WindowsSandbox, c.Profile, c.Codex, c.Orca = p.Sandbox, p.WindowsSandbox, p.CodexProfile, p.Codex, p.Orca
 	return c
 }
 
@@ -152,6 +171,9 @@ func validateExecutionProfiles(c Config) error {
 		}
 		if p.Agent == "" || p.Sandbox != "read-only" && p.Sandbox != "workspace-write" && p.Sandbox != "danger-full-access" {
 			return fmt.Errorf("execution profile %s requires an agent and valid sandbox", p.ID)
+		}
+		if p.WindowsSandbox != "" && p.WindowsSandbox != "elevated" && p.WindowsSandbox != "unelevated" {
+			return fmt.Errorf("execution profile %s has invalid windows_sandbox", p.ID)
 		}
 		if p.ReasoningEffort != "" && !validReasoningEffort(p.ReasoningEffort) {
 			return fmt.Errorf("execution profile %s has invalid reasoning effort", p.ID)

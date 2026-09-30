@@ -5,28 +5,35 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 
 	"github.com/erranliu/SteerLine/internal/steerline/codexapp"
 )
 
 type LaunchConfig struct {
-	Executable string
-	Args       []string
-	Profile    string
-	Workspace  string
-	ServerDir  string
+	Executable     string
+	Args           []string
+	Profile        string
+	Workspace      string
+	ServerDir      string
+	Sandbox        string
+	WindowsSandbox string
 }
 
 // LaunchServer starts the fixed native app-server. The caller supplies its
 // platform process starter and persists the returned identity before a turn.
 func LaunchServer[T any](config LaunchConfig, start func(*exec.Cmd) (T, error), environment func([]string) []string) (identity T, process *os.Process, endpoint string, err error) {
+	args, err := codexapp.LocalSandboxArgs(runtime.GOOS, config.Sandbox, config.WindowsSandbox, config.Args)
+	if err != nil {
+		return identity, nil, "", err
+	}
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		return identity, nil, "", err
 	}
 	endpoint = "ws://" + listener.Addr().String()
 	_ = listener.Close()
-	launch, err := codexapp.AppServerLaunch(config.Executable, config.Args, config.Profile, endpoint)
+	launch, err := codexapp.AppServerLaunch(config.Executable, args, config.Profile, endpoint)
 	if err != nil {
 		return identity, nil, "", err
 	}
