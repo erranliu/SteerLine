@@ -964,6 +964,17 @@ func (s *Service) applyWorkerFlowDecision(ctx context.Context, run *Run) error {
 	if workflow == nil || execution == nil || workflow.Phase != "waiting_decision" && workflow.Phase != "waiting_pr_merge" {
 		return errors.New("saved feedback no longer belongs to a waiting worker flow")
 	}
+	config, err := s.executionConfigForRun(run)
+	if err != nil {
+		return err
+	}
+	route, err := workerFeedbackRouteFor(config, run, execution)
+	if err != nil {
+		return err
+	}
+	previousConfig := s.Config
+	s.Config = config
+	defer func() { s.Config = previousConfig }()
 	if workflow.Phase == "waiting_pr_merge" {
 		decision := s.decisionRecord(run)
 		key := "workflow:" + workflow.WorkflowRunID
@@ -992,51 +1003,8 @@ func (s *Service) applyWorkerFlowDecision(ctx context.Context, run *Run) error {
 	if err != nil || command.Kind != "answer_decision" || command.TargetID != answer.DecisionID || command.Status != "accepted" || !stableExecutionID(command.CommandID) {
 		return errors.Join(err, errors.New("saved worker feedback has no fixed accepted command identity"))
 	}
-	if s.Config.hostName() == "orca" {
+	if route == feedbackNativeOrca {
 		return s.applyNativeOrcaDecision(ctx, run, workflow, execution, answer, command.CommandID)
 	}
-	if execution.SessionID == "" || run.SessionID == nil || *run.SessionID != execution.SessionID {
-		execution.Error = ptr("Feedback is saved, but the original worker session is not yet available for delivery")
-		s.refreshRun(run)
-		return s.save()
-	}
-	if run.Decision.Request.NativeAsk != nil {
-		if s.workerMessages != nil && s.workers[run.RunID] == nil {
-			return nil // Recovery must attach the original observer before replying.
-		}
-		return s.replyAppServerAsk(ctx, run, execution, answer)
-	}
-	if execution.Status == "active" || s.workers[run.RunID] != nil {
-		return nil // Preserve the answer until the original turn stops.
-	}
-	for _, operation := range s.State.Operations {
-		if operation.IdempotencyKey != "worker-turn:"+execution.ExecutionID+":"+command.CommandID {
-			continue
-		}
-		if operation.Status == "confirmed" || operation.Status == "accepted" || operation.Status == "in_flight" {
-			return nil // The original request may have started. Never resend.
-		}
-		execution.Error = ptr("Feedback delivery remains unverified at the original request ID; no duplicate message was sent")
-		s.refreshRun(run)
-		return s.save()
-	}
-	return s.startWorkerFlowTurn(ctx, run, workerFeedbackText(answer, run.Decision.Request), command.CommandID)
-}
-
-func workerFeedbackText(answer DecisionAnswer, request DecisionRequest) string {
-	if answer.OptionID == "" {
-		return answer.Note
-	}
-	label := answer.OptionID
-	for _, option := range request.Options {
-		if option.ID == answer.OptionID {
-			label = option.Label
-			break
-		}
-	}
-	message := "Selected option: " + label
-	if answer.Note != "" {
-		message += "\n\nAdditional instructions:\n" + answer.Note
-	}
-	return message
+	return s.deliverResumableWorkerFeedback(ctx, run, execution, answer, command.CommandID, route)
 }

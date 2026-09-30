@@ -24,6 +24,19 @@ func TestWorkerFeedbackPhaseCommitIsDurableAndRejectsStaleActor(t *testing.T) {
 	require(t, err)
 	_, beforeRevision, err := service.domainStore.DatabaseVersion(ctx)
 	require(t, err)
+	baseConfig := service.baseConfig
+	service.baseConfig.Host = "orca"
+	beforeOperations := len(service.State.Operations)
+	err = service.applyWorkerFlowDecision(ctx, run)
+	service.baseConfig = baseConfig
+	if !feedbackIdentityMismatch(err) {
+		t.Fatalf("configuration drift reached feedback delivery: %v", err)
+	}
+	_, rejectedRevision, err := service.domainStore.DatabaseVersion(ctx)
+	require(t, err)
+	if rejectedRevision != beforeRevision || workflow.Phase != "waiting_pr_merge" || len(service.State.Operations) != beforeOperations {
+		t.Fatal("configuration drift changed the workflow or created an operation")
+	}
 
 	committed, err := service.domainStore.commitWorkerFeedbackPhase(ctx, expectedWorkflow, expectedExecution, expectedDecision)
 	require(t, err)
@@ -50,7 +63,6 @@ func TestWorkerFeedbackPhaseCommitIsDurableAndRejectsStaleActor(t *testing.T) {
 	if !isNativeErrorCode(err, "stale_revision") {
 		t.Fatalf("stale feedback transition was accepted: %v", err)
 	}
-	beforeOperations := len(service.State.Operations)
 	if err = service.applyWorkerFlowDecision(ctx, run); !isNativeErrorCode(err, "stale_revision") {
 		t.Fatalf("stale actor reached feedback delivery: %v", err)
 	}
