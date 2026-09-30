@@ -8,8 +8,9 @@ import (
 )
 
 type Command struct {
-	Executable string   `json:"executable"`
-	Args       []string `json:"args"`
+	WindowsSandbox string   `json:"windows_sandbox,omitempty"`
+	Executable     string   `json:"executable"`
+	Args           []string `json:"args"`
 }
 
 type OrcaConfig struct {
@@ -76,17 +77,36 @@ type OrcaAskCall struct {
 }
 
 type FixedExecutionProfile struct {
-	ID              string     `json:"id"`
-	Name            string     `json:"name"`
-	Digest          string     `json:"digest"`
-	Host            string     `json:"host"`
-	Agent           string     `json:"agent"`
-	Model           string     `json:"model,omitempty"`
-	ReasoningEffort string     `json:"reasoning_effort,omitempty"`
-	Sandbox         string     `json:"sandbox"`
-	WindowsSandbox  string     `json:"windows_sandbox,omitempty"`
-	ApprovalPolicy  string     `json:"approval_policy,omitempty"`
-	CodexProfile    string     `json:"profile,omitempty"`
-	Codex           Command    `json:"codex"`
-	Orca            OrcaConfig `json:"orca,omitempty"`
+	Version               int                          `json:"version"`
+	ExecutionPolicy       executionapi.ExecutionPolicy `json:"execution_policy"`
+	PolicyDigest          string                       `json:"policy_digest"`
+	AcceptedConfigVersion string                       `json:"accepted_config_version"`
+	PolicySource          string                       `json:"policy_source"`
+	ID                    string                       `json:"id"`
+	Name                  string                       `json:"name"`
+	Digest                string                       `json:"digest"`
+	Host                  string                       `json:"host"`
+	Agent                 string                       `json:"agent"`
+	Model                 string                       `json:"model,omitempty"`
+	ReasoningEffort       string                       `json:"reasoning_effort,omitempty"`
+	Sandbox               string                       `json:"sandbox"`
+	WindowsSandbox        string                       `json:"windows_sandbox,omitempty"`
+	ApprovalPolicy        string                       `json:"approval_policy,omitempty"`
+	CodexProfile          string                       `json:"profile,omitempty"`
+	Codex                 Command                      `json:"codex"`
+	Orca                  OrcaConfig                   `json:"orca,omitempty"`
+}
+
+// PolicyResources is the resource stage of the same execution snapshot.
+// Native configuration verification does not assert successful worker tools.
+type PolicyResources struct {
+	Version        int                        `json:"version"`
+	Digest         string                     `json:"digest"`
+	ProfileDigest  string                     `json:"profile_digest"`
+	NativeVersion  string                     `json:"native_version"`
+	Contract       string                     `json:"contract"`
+	Workspace      string                     `json:"workspace"`
+	WriteRoots     []string                   `json:"write_roots"`
+	TemporaryRoots []string                   `json:"temporary_roots"`
+	Settings       executionapi.LaunchCommand `json:"settings"`
 }

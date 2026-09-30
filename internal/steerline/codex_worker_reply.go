@@ -14,11 +14,25 @@ func (s *Service) replyAppServerAsk(ctx context.Context, run *Run, execution *Ex
 	if run == nil || run.Decision == nil || run.Decision.Request.NativeAsk == nil || execution == nil {
 		return errors.New("saved native answer has no fixed request")
 	}
+	fixed, err := s.workerFlowContext(run)
+	if err != nil {
+		return err
+	}
+	args, err := codexLinkedWorktreeWriteArgs(ctx, fixed.config, execution.Workspace.Worktree)
+	if err != nil {
+		return err
+	}
+	if execution.PolicyResources == nil {
+		return errors.New("original permission resources are missing")
+	}
+	if err := bindPolicyResources(ctx, fixed.config, execution, execution.Workspace.Worktree, args); err != nil {
+		return err
+	}
 	ask := run.Decision.Request.NativeAsk
 	if run.Decision.ID != answer.DecisionID {
 		return &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "native answer changed its fixed decision"}
 	}
-	if err := codexBackend(s.Config, run).ValidateReply(codexBinding(execution), ask.Generation, ask.ThreadID, ask.TurnID, execution.CurrentTurnID, execution.LastStoppedTurnID); err != nil {
+	if err := codexBackend(fixed.config, run).ValidateReply(codexBinding(execution), ask.Generation, ask.ThreadID, ask.TurnID, execution.CurrentTurnID, execution.LastStoppedTurnID); err != nil {
 		return err
 	}
 	key := "appserver-answer:" + execution.ExecutionID + ":" + answer.DecisionID

@@ -31,7 +31,7 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openP
 	c, commit, store := openDAGFixture(t)
 	c.WorkflowProtocol, c.Host, c.Agent, c.Sandbox = WorkerFlowVersion, "local", "codex", "workspace-write"
 	c.Claimant = "operator"
-	c.Codex = Command{Executable: os.Args[0], Args: []string{"-test.run=^TestWorkerFlowMockCodexHelper$", "--"}}
+	c.Codex = Command{Executable: os.Args[0]}
 	c.WorktreeRoot = filepath.Join(c.RunDir, "worktrees")
 	if err := c.prepareWorktreeRoot(); err != nil {
 		t.Fatal(err)

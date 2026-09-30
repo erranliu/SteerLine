@@ -17,6 +17,7 @@ type ManagedCommandOptions struct {
 	ReasoningEffort  string
 	Executable       string
 	Args             []string
+	Policy           executionapi.ExecutionPolicy
 	Sandbox          string
 	WindowsSandbox   string
 }
@@ -25,6 +26,11 @@ func ManagedCommand(options ManagedCommandOptions) (executionapi.LaunchCommand, 
 	if options.Host != "orca" || options.Agent != "codex" || options.Executable == "" || options.Sandbox != "workspace-write" || !ValidWindowsSandbox(options.WindowsSandbox) {
 		return executionapi.LaunchCommand{}, errors.New("managed Orca launch requires Codex, executable, workspace-write and explicit windows_sandbox (elevated or unelevated)")
 	}
+	permissions, err := CompilePolicy(options.Policy, runtime.GOOS, options.Host, options.Agent, options.WindowsSandbox, "", options.Args)
+	if err != nil {
+		return executionapi.LaunchCommand{}, err
+	}
+	options.Sandbox, options.WindowsSandbox = permissions.Sandbox, permissions.WindowsSandbox
 	args := append([]string(nil), options.Args...)
 	if err := ValidateManagedArgs(args); err != nil {
 		return executionapi.LaunchCommand{}, err
@@ -35,11 +41,8 @@ func ManagedCommand(options ManagedCommandOptions) (executionapi.LaunchCommand, 
 	if options.ReasoningEffort != "" {
 		args = append(args, "--config", "model_reasoning_effort="+options.ReasoningEffort)
 	}
-	args = append(args, "--strict-config", "--sandbox", options.Sandbox, "--ask-for-approval", "never", "--config", "windows.sandbox="+options.WindowsSandbox,
-		"--config", "sandbox_workspace_write.writable_roots=[]", "--config", "sandbox_workspace_write.exclude_tmpdir_env_var=true", "--config", "sandbox_workspace_write.exclude_slash_tmp=true")
-	if runtime.GOOS == "windows" {
-		args = append(args, "--config", "sandbox_workspace_write.network_access=true")
-	}
+	args = append(args, "--strict-config")
+	args = append(args, permissions.Args()...)
 	for _, root := range options.WriteRoots {
 		args = append(args, "--add-dir", root)
 	}

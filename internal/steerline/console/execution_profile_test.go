@@ -15,7 +15,7 @@ import (
 func TestExecutionSettingsOnlyAppearInStartChoiceAndConfigMismatchBlocksStart(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("STEERLINE_HOME", home)
-	global, err := json.Marshal(map[string]any{"execution_profiles": []map[string]any{{"id": "local", "name": "Local Codex", "host": "local", "agent": "codex", "sandbox": "workspace-write", "codex": map[string]string{"executable": "codex"}}}})
+	global, err := json.Marshal(map[string]any{"execution_profiles": []map[string]any{{"id": "local", "name": "Local Codex", "host": "local", "agent": "codex", "codex": map[string]string{"executable": "codex"}}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -30,7 +30,7 @@ func TestExecutionSettingsOnlyAppearInStartChoiceAndConfigMismatchBlocksStart(t 
 		t.Fatalf("git init: %v: %s", err, out)
 	}
 	path := filepath.Join(t.TempDir(), "project.json")
-	data, err := json.Marshal(map[string]string{"repository": repo, "branch": "main", "task_authority": "native", "workflow_protocol": steerline.WorkerFlowVersion})
+	data, err := json.Marshal(map[string]any{"execution_policy": map[string]any{"filesystem": map[string]any{"read_scope": "host", "write_scope": "workspace", "git_metadata_write": true}, "network": "allow", "escalation": "deny"}, "repository": repo, "branch": "main", "task_authority": "native", "workflow_protocol": steerline.WorkerFlowVersion})
 	if err != nil {
 		t.Fatal(err)
 	}

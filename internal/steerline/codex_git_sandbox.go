@@ -3,7 +3,6 @@ package steerline
 import (
 	"context"
 	"errors"
-	"runtime"
 
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	"github.com/erranliu/SteerLine/internal/steerline/workspace"
@@ -12,7 +11,7 @@ import (
 // Windows workspace-write needs Git's shared objects, refs and reflogs, plus
 // this linked worktree's admin directory to stage and commit from a Codex step.
 func codexLinkedWorktreeWriteArgs(ctx context.Context, c Config, worktree string) ([]string, error) {
-	if runtime.GOOS != "windows" || c.Sandbox != "workspace-write" {
+	if c.Sandbox != "workspace-write" || !c.ExecutionPolicy.Filesystem.GitMetadataWrite {
 		return nil, nil
 	}
 	if c.identity == "" {

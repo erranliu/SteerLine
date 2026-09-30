@@ -243,6 +243,9 @@ func (s *Service) acceptStartedWorkerTurn(run *Run, worker *Worker, events, plat
 }
 
 func requireWorkerFlowCapabilities(ctx context.Context, c Config) error {
+	if err := validateWorkflowConfig(&c, nil); err != nil {
+		return err
+	}
 	if c.hostName() == "orca_supervised" {
 		if c.agentName() != "codex" || c.Model == "" || c.ReasoningEffort == "" || c.Sandbox != "workspace-write" || c.Profile != "" || c.Orca.Supervised == nil {
 			return &executionapi.BackendError{Code: executionapi.BackendUnsupported, Diagnostic: "remote Orca requires Codex, model/effort, workspace-write and a fixed supervised target"}
@@ -279,7 +282,7 @@ func requireWorkerFlowCapabilities(ctx context.Context, c Config) error {
 	if c.hostName() != "local" {
 		return &executionapi.BackendError{Code: executionapi.BackendUnsupported, Diagnostic: "this worker-flow host is not supported"}
 	}
-	if err := (codexworker.Config{Args: c.Codex.Args, Sandbox: c.Sandbox, WindowsSandbox: c.WindowsSandbox, ReasoningEffort: c.ReasoningEffort}).Validate(runtime.GOOS); err != nil {
+	if err := (codexworker.Config{Policy: c.ExecutionPolicy, Args: c.Codex.Args, Sandbox: c.Sandbox, WindowsSandbox: c.WindowsSandbox, ReasoningEffort: c.ReasoningEffort}).Validate(runtime.GOOS); err != nil {
 		return err
 	}
 	command := c.Codex

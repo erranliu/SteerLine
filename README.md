@@ -38,4 +38,4 @@ native 项目控制台还会显示中心任务关系、阻塞原因、Spec 路�
 
 [会话事件与完整正文](docs/conversation-events.md) · [Activity 读取契约](docs/activity.md)
 
-Windows Orca Codex 受管方案还要求显式 `windows_sandbox`，先在原会话核验 readiness 探针与原生结算，再派发业务。宿主等待通过中心待决策显示来源及可信程度，提供打开原 terminal、重新检查动作。此实现已通过审计定向回归及隔离真机闭环，详见[环境验收记录](docs/validation/worker-environment-readiness/README.md)。
+Windows Orca Codex 受管方案还要求显式 `codex.windows_sandbox`，先在原会话核验 readiness 探针与原生结算，再派发业务。宿主等待通过中心待决策显示来源及可信程度，提供打开原 terminal、重新检查动作。此实现已通过审计定向回归及隔离真机闭环，详见[环境验收记录](docs/validation/worker-environment-readiness/README.md)。

@@ -1,6 +1,7 @@
 package console
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/erranliu/SteerLine/internal/steerline"
@@ -64,7 +65,24 @@ func renderFixedRunExecutionProfile(state projectState, run *steerline.Run) []st
 		"执行方案：" + safeTerminalInlineText(fixed.Name) + " [" + safeTerminalInlineText(fixed.ID) + "] · " + safeTerminalInlineText(executionHostLabel(config)),
 		"Agent / Model / Thinking：" + safeTerminalInlineText(fixed.Agent) + " / " + safeTerminalInlineText(executionModelLabel(config)) + " / " + safeTerminalInlineText(executionEffortLabel(config)),
 	}
-	if fixed.Host == "orca" && fixed.Agent == "codex" {
+	lines = append(lines, fmt.Sprintf("项目要求：读取 %s · 写入 %s · Git %t · 网络 %s · 越权 %s", fixed.ExecutionPolicy.Filesystem.ReadScope, fixed.ExecutionPolicy.Filesystem.WriteScope, fixed.ExecutionPolicy.Filesystem.GitMetadataWrite, fixed.ExecutionPolicy.Network, fixed.ExecutionPolicy.Escalation), "受理版本："+safeTerminalInlineText(fixed.AcceptedConfigVersion)+" · 来源："+safeTerminalInlineText(fixed.PolicySource))
+	if state.snapshot.Domain != nil {
+		for _, execution := range state.snapshot.Domain.Executions {
+			if execution.ExecutionID != run.ExecutionID {
+				continue
+			}
+			status := "资源与工具未核验"
+			if resource := execution.PolicyResources; resource != nil {
+				status = "原生设置已核验；工具未核验"
+				lines = append(lines, "原生版本："+safeTerminalInlineText(resource.NativeVersion)+" · 写根："+safeTerminalInlineText(strings.Join(resource.WriteRoots, ", ")), "临时写根：无（隐式临时目录已排除）")
+			}
+			if execution.Environment != nil && execution.Environment.Ready {
+				status = "原会话工具与准备结算已核验"
+			}
+			lines = append(lines, "权限核验："+status)
+		}
+	}
+	if fixed.Agent == "codex" {
 		lines = append(lines, "冻结权限："+safeTerminalInlineText(fixed.Sandbox)+" · Windows "+safeTerminalInlineText(fixed.WindowsSandbox)+" · Approval "+safeTerminalInlineText(fixed.ApprovalPolicy))
 		if state.snapshot.Domain != nil {
 			for _, execution := range state.snapshot.Domain.Executions {

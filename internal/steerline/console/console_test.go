@@ -1059,7 +1059,7 @@ func TestViewFileKeepsRequestIdentityWithoutCachingReceiptText(t *testing.T) {
 func TestLoadProjectsSupportsZeroPartialAndExplicitConfigs(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("STEERLINE_HOME", home)
-	global, err := json.Marshal(map[string]any{"execution_profiles": []map[string]any{{"id": "local", "name": "Local Codex", "host": "local", "agent": "codex", "sandbox": "workspace-write", "codex": map[string]string{"executable": "codex"}}}})
+	global, err := json.Marshal(map[string]any{"execution_profiles": []map[string]any{{"id": "local", "name": "Local Codex", "host": "local", "agent": "codex", "codex": map[string]string{"executable": "codex"}}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1106,7 +1106,7 @@ func TestLoadProjectsSupportsZeroPartialAndExplicitConfigs(t *testing.T) {
 
 func writeConsoleTestConfig(t *testing.T, path, repository, runDir string) {
 	t.Helper()
-	data, err := json.Marshal(map[string]string{"repository": repository, "branch": "main", "task_authority": "native", "workflow_protocol": steerline.WorkerFlowVersion})
+	data, err := json.Marshal(map[string]any{"execution_policy": map[string]any{"filesystem": map[string]any{"read_scope": "host", "write_scope": "workspace", "git_metadata_write": true}, "network": "allow", "escalation": "deny"}, "repository": repository, "branch": "main", "task_authority": "native", "workflow_protocol": steerline.WorkerFlowVersion})
 	if err != nil {
 		t.Fatal(err)
 	}

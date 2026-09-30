@@ -50,7 +50,11 @@ func TestWorkerFlowRejectsConfigDriftBeforePreparationOrTurnIntent(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	service.baseConfig.Host = "orca"
+	service.baseConfig.ExecutionPolicy.Network = "deny"
+	if fixed, err := service.executionConfigForRun(run); err != nil || fixed.ExecutionPolicy.Network != "allow" {
+		t.Fatalf("current config changed original policy: %v", err)
+	}
+	service.workflowRecord(run).ExecutionProfile.Host = "orca"
 	for _, action := range []func() error{
 		func() error { return service.prepareWorkerFlow(ctx, *task, run) },
 		func() error { return service.startWorkerFlowTurn(ctx, run, "fixed prompt", newID()) },

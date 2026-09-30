@@ -15,10 +15,10 @@ func TestLaunchServerFixesWindowsSandboxBeforeStarting(t *testing.T) {
 	}
 	called := false
 	sentinel := errors.New("captured launch")
-	config := LaunchConfig{Executable: os.Args[0], Workspace: t.TempDir(), ServerDir: t.TempDir(), Sandbox: "workspace-write", WindowsSandbox: "elevated"}
+	config := LaunchConfig{Policy: policyFixture(), Executable: os.Args[0], Workspace: t.TempDir(), ServerDir: t.TempDir(), Sandbox: "workspace-write", WindowsSandbox: "elevated"}
 	_, _, _, err := LaunchServer(config, func(cmd *exec.Cmd) (int, error) {
 		called = true
-		if !strings.Contains(strings.Join(cmd.Args, " "), `--config windows.sandbox="elevated" app-server --listen`) {
+		if !strings.Contains(strings.Join(cmd.Args, " "), `--config windows.sandbox=elevated`) {
 			t.Fatalf("missing fixed mode: %v", cmd.Args)
 		}
 		return 0, sentinel

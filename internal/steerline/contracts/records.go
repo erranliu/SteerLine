@@ -52,6 +52,7 @@ type StepRunnerSettings struct {
 }
 
 type ExecutionRecord struct {
+	PolicyResources        *PolicyResources              `json:"policy_resources,omitempty"`
 	RecoveryRequired       bool                          `json:"recovery_required,omitempty"`
 	RecoveryVersion        uint64                        `json:"recovery_version,omitempty"`
 	RecoveryState          string                        `json:"recovery_state,omitempty"`

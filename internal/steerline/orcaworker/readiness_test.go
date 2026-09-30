@@ -64,6 +64,9 @@ func TestAgentInputNeverTargetsTrustMenuOrParentShell(t *testing.T) {
 	}{{"idle", "screen", []string{"› Ask Codex to do anything", "? for shortcuts"}, true, ""}, {"alternate_prompt", "screen", []string{"› Find a bug in this repository", "GPT-6.1-Sol medium · repo", "? for shortcuts"}, true, ""}, {"busy", "screen", []string{"• Working (2s • esc to interrupt)", "› Ask Codex to do anything", "? for shortcuts"}, false, "agent_input_unverified"}, {"shell_spoof", "screen", []string{"PS C:\\repo>", "› Ask Codex to do anything"}, false, "agent_input_unverified"}, {"trust", "screen", []string{"Trust this folder?", "› 1. Trust and continue", "2. Quit"}, false, "host_wait"}, {"stale_identity", "stream", []string{"PS C:\\repo>", "› Ask Codex to do anything"}, false, "agent_input_unverified"}} {
 		t.Run(tc.name, func(t *testing.T) {
 			call := func(_ context.Context, args ...string) (Result, error) {
+				if len(args) > 1 && args[1] == "read" && !strings.Contains(strings.Join(args, " "), "--screen") {
+					t.Fatal("input observation did not request rendered screen")
+				}
 				payload := map[string]any{"terminal": map[string]any{"handle": "original", "incarnationId": "inc", "connected": true, "source": tc.source, "tail": tc.tail}}
 				data, _ := json.Marshal(payload)
 				return Result{RuntimeID: "runtime", Payload: data}, nil

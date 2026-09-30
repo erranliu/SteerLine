@@ -45,16 +45,27 @@ func (s *Service) executionConfigForRun(run *Run) (Config, error) {
 			continue
 		}
 		if workflow.ExecutionProfile == nil {
-			if len(base.ExecutionProfiles) > 0 && (run.ExecutionStatus == "pending" || run.ExecutionStatus == "running" || run.ExecutionStatus == "unknown" || run.FinishTaskStatus == "waiting_decision") {
-				return Config{}, errors.New("active run has no fixed execution profile; preserve its original service configuration")
-			}
-			return base, nil
+			return Config{}, errors.New("execution snapshot v2 is required; preserve original state and external session")
 		}
 		fixed := *workflow.ExecutionProfile
-		if fixed.ID == "" || !verifyFixedExecutionProfile(fixed) {
-			return Config{}, errors.New("fixed execution profile identity is incomplete")
+		if fixed.ID == "" || !verifyFixedExecutionProfile(fixed) || workflow.ConfigDigest != fixed.AcceptedConfigVersion {
+			return Config{}, &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "fixed execution profile identity is incomplete"}
 		}
 		config := base.ApplyFixedExecutionProfile(fixed)
+		if err := validateWorkflowConfig(&config, nil); err != nil {
+			return Config{}, err
+		}
+		for _, e := range s.domain.Executions {
+			if e.WorkflowRunID == workflow.WorkflowRunID && e.PolicyResources == nil && (e.Process != nil || e.SessionID != "") {
+				return Config{}, errors.New("bound execution lost its original policy resource snapshot")
+			}
+			if e.WorkflowRunID == workflow.WorkflowRunID && e.PolicyResources != nil {
+				if err := verifyPolicyResources(e.PolicyResources, fixed.Digest, e.Workspace.Worktree); err != nil {
+					return Config{}, err
+				}
+				config.Codex.Executable = e.PolicyResources.Settings.Executable
+			}
+		}
 		config.WorkflowProtocol = WorkerFlowVersion
 		if fixed.Host == "orca_supervised" && run.Target.CoordinatorTerminal != "" {
 			if config.Orca.Supervised == nil {

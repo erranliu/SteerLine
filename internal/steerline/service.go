@@ -156,7 +156,7 @@ func NewService(c Config) (_ *Service, retErr error) {
 	}
 	s.State.SchemaVersion = WorkerFlowRuntimeSchema
 	capabilities := []string{"answer_decision", "start_task", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "stop_service"}
-	s.State.Service = ServiceState{InstanceID: newID(), PID: os.Getpid(), Status: "running", Claimant: c.Claimant, Mode: "maintenance", Ready: false, ControlProtocol: ControlProtocolVersion, Capabilities: capabilities, ConfigDigest: c.configDigest, HeartbeatIntervalMS: duration(c.Heartbeat).Milliseconds()}
+	s.State.Service = ServiceState{ExecutionPolicy: c.ExecutionPolicy, PolicySource: c.policySource, InstanceID: newID(), PID: os.Getpid(), Status: "running", Claimant: c.Claimant, Mode: "maintenance", Ready: false, ControlProtocol: ControlProtocolVersion, Capabilities: capabilities, ConfigDigest: c.configDigest, HeartbeatIntervalMS: duration(c.Heartbeat).Milliseconds()}
 	identity, err := currentProcessIdentity()
 	if err != nil {
 		return nil, fmt.Errorf("identify service process: %w", err)

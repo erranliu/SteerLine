@@ -66,7 +66,7 @@ func (s *Service) recordAppServerTurnStarted(run *Run, workflow *WorkflowRunReco
 }
 
 func codexBackend(c Config, run *Run) codexworker.Backend {
-	return codexworker.Backend{Config: codexworker.Config{Executable: c.Codex.Executable, Args: c.Codex.Args, Profile: c.Profile, Sandbox: c.Sandbox, WindowsSandbox: c.WindowsSandbox, Model: c.Model, ReasoningEffort: c.ReasoningEffort, Workspace: deref(run.WorktreePath), RunDir: c.RunDir, RunID: run.RunID, ServerDir: appServerDirectory(c, run), Environment: func(base []string) []string {
+	return codexworker.Backend{Config: codexworker.Config{Policy: c.ExecutionPolicy, Executable: c.Codex.Executable, Args: c.Codex.Args, Profile: c.Profile, Sandbox: c.Sandbox, WindowsSandbox: c.WindowsSandbox, Model: c.Model, ReasoningEffort: c.ReasoningEffort, Workspace: deref(run.WorktreePath), RunDir: c.RunDir, RunID: run.RunID, ServerDir: appServerDirectory(c, run), Environment: func(base []string) []string {
 		return unsetEnv(overrideEnv(base, map[string]string{"STEERLINE_WORKFLOW_RUN_ID": run.RunID, "STEERLINE_EXECUTION_ID": run.ExecutionID}), []string{"BEADS_*", "BD_*"})
 	}}, Process: codexworker.ProcessPort{Start: codexProcessStart, Inspect: inspectProcess, NewGeneration: newID, WriteAtomic: AtomicWrite}}
 }
@@ -85,6 +85,17 @@ func startAppServerWorkerTurn(ctx context.Context, c Config, run *Run, execution
 	}
 	if run.ExecutionID != execution.ExecutionID || run.RunID != execution.WorkflowRunID || canonical(*run.WorktreePath) != canonical(execution.Workspace.Worktree) {
 		return nil, "", "", errors.New("app-server execution/workspace identity mismatch")
+	}
+	var linkedArgs []string
+	var err error
+	if c.Sandbox == "workspace-write" {
+		linkedArgs, err = codexLinkedWorktreeWriteArgs(ctx, c, *run.WorktreePath)
+		if err != nil {
+			return nil, "", "", err
+		}
+	}
+	if err = bindPolicyResources(ctx, c, execution, *run.WorktreePath, linkedArgs); err != nil {
+		return nil, "", "", err
 	}
 	backend := codexBackend(c, run)
 	input := executionapi.TurnInput{CommandID: commandID, Prompt: prompt}
@@ -105,13 +116,7 @@ func startAppServerWorkerTurn(ctx context.Context, c Config, run *Run, execution
 	if err = persistThread(); err != nil {
 		return nil, "", "", fmt.Errorf("app-server thread was created but its SQLite receipt is unverified: %w", err)
 	}
-	var linkedArgs []string
-	if c.Sandbox == "workspace-write" {
-		linkedArgs, err = codexLinkedWorktreeWriteArgs(ctx, c, *run.WorktreePath)
-		if err != nil {
-			return nil, "", "", err
-		}
-	}
+
 	observer, turnID, err := backend.StartTurn(ctx, session, input, linkedArgs)
 	if err != nil {
 		return nil, "", turnID, err

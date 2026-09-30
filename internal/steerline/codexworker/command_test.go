@@ -2,13 +2,12 @@ package codexworker
 
 import (
 	"reflect"
-	"runtime"
 	"strings"
 	"testing"
 )
 
 func TestManagedOrcaLaunchFreezesPermissionsAndRejectsArgs(t *testing.T) {
-	base := ManagedCommandOptions{Host: "orca", Agent: "codex", Executable: "codex.exe", Sandbox: "workspace-write", WindowsSandbox: "unelevated"}
+	base := ManagedCommandOptions{Policy: policyFixture(), Host: "orca", Agent: "codex", Executable: "codex.exe", Sandbox: "workspace-write", WindowsSandbox: "unelevated"}
 	for _, model := range []string{"", "chosen-model"} {
 		options := base
 		options.Model = model
@@ -40,15 +39,17 @@ func TestManagedOrcaLaunchFreezesPermissionsAndRejectsArgs(t *testing.T) {
 }
 
 func TestManagedCommandIndependentEffortAndOrderedPermissionArgs(t *testing.T) {
-	options := ManagedCommandOptions{Host: "orca", Agent: "codex", Executable: "codex.exe", Args: []string{"--no-alt-screen", "--search"}, ReasoningEffort: "high", Sandbox: "workspace-write", WindowsSandbox: "elevated", WorkingDirectory: "C:/worker's checkout", WriteRoots: []string{"C:/repo/.git/objects"}}
+	options := ManagedCommandOptions{Policy: policyFixture(), Host: "orca", Agent: "codex", Executable: "codex.exe", Args: []string{"--no-alt-screen", "--search"}, ReasoningEffort: "high", Sandbox: "workspace-write", WindowsSandbox: "elevated", WorkingDirectory: "C:/worker's checkout", WriteRoots: []string{"C:/repo/.git/objects"}}
 	command, err := ManagedCommand(options)
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"--no-alt-screen", "--search", "--config", "model_reasoning_effort=high", "--strict-config", "--sandbox", "workspace-write", "--ask-for-approval", "never", "--config", "windows.sandbox=elevated", "--config", "sandbox_workspace_write.writable_roots=[]", "--config", "sandbox_workspace_write.exclude_tmpdir_env_var=true", "--config", "sandbox_workspace_write.exclude_slash_tmp=true"}
-	if runtime.GOOS == "windows" {
-		want = append(want, "--config", "sandbox_workspace_write.network_access=true")
+	want := []string{"--no-alt-screen", "--search", "--config", "model_reasoning_effort=high", "--strict-config"}
+	permissions, err := CompilePolicy(options.Policy, "windows", "orca", "codex", "elevated", "", options.Args)
+	if err != nil {
+		t.Fatal(err)
 	}
+	want = append(want, permissions.Args()...)
 	want = append(want, "--add-dir", options.WriteRoots[0], "--cd", options.WorkingDirectory)
 	if command.Executable != options.Executable || command.WorkingDirectory != options.WorkingDirectory || !reflect.DeepEqual(command.Args, want) {
 		t.Fatalf("fixed command drifted: %+v", command)

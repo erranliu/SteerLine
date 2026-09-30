@@ -123,11 +123,25 @@ func preflightWorkerFlowState(ctx context.Context, c Config) error {
 		return err
 	}
 	for _, workflow := range snapshot.WorkflowRuns {
-		if workflow.WorkflowVersion != WorkerFlowVersion {
+		if workflow.WorkflowVersion != WorkerFlowVersion || workflow.ExecutionProfile == nil || !verifyFixedExecutionProfile(*workflow.ExecutionProfile) || workflow.ConfigDigest != workflow.ExecutionProfile.AcceptedConfigVersion {
 			return nativeErr("unsupported_schema", "worker-flow-v1 refuses an old WorkflowRun; preserve the original state and external session")
 		}
 	}
 	for _, execution := range snapshot.Executions {
+		if execution.Process != nil || execution.SessionID != "" {
+			if execution.PolicyResources == nil {
+				return nativeErr("unsupported_schema", "bound execution requires its original policy resource snapshot; preserve external state")
+			}
+			matched := false
+			for _, workflow := range snapshot.WorkflowRuns {
+				if workflow.WorkflowRunID == execution.WorkflowRunID && workflow.ExecutionProfile != nil && verifyPolicyResources(execution.PolicyResources, workflow.ExecutionProfile.Digest, execution.Workspace.Worktree) == nil {
+					matched = true
+				}
+			}
+			if !matched {
+				return nativeErr("unsupported_schema", "execution policy resources differ from the original snapshot")
+			}
+		}
 		if execution.Backend == string(executionapi.BackendLocal) && execution.Protocol != string(executionapi.ProtocolLocalCodexAppServer) {
 			return nativeErr("unsupported_schema", "worker-flow-v1 refuses an old local execution protocol; preserve its external process and state")
 		}
