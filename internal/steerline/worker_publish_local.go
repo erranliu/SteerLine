@@ -36,10 +36,12 @@ func (s *Service) publishLocalWorkerRun(ctx context.Context, run *Run, workflow 
 	if canonical(*run.WorktreePath) != canonical(run.WorkspaceIntent.Path) || run.WorktreeBranch == nil || *run.WorktreeBranch != run.WorkspaceIntent.Branch || execution.Workspace.Branch != *run.WorktreeBranch || workflow.Branch == "" {
 		return empty, errors.New("local host publication workspace or target branch differs from the fixed execution")
 	}
-	client := publication.NewClient(c.PR, gitRunner(c, *run.WorktreePath), duration(c.CommandTimeout))
-	publisher := publication.HostPublisher{Git: gitRunner(c, *run.WorktreePath), GitCommand: c.Git, PR: client}
+
+	client := publication.NewClient(c.PR, Runner{Dir: *run.WorktreePath, Timeout: duration(c.CommandTimeout), Env: map[string]string{"GIT_TERMINAL_PROMPT": "0"}}, duration(c.CommandTimeout))
+	publisher := publication.HostPublisher{Git: Runner{Dir: *run.WorktreePath, Timeout: duration(c.CommandTimeout), Env: map[string]string{"GIT_TERMINAL_PROMPT": "0"}}, GitCommand: c.Git, PR: client}
 	request := publication.Request{Version: 1, RunID: run.RunID, ExecutionID: execution.ExecutionID, TurnID: turnID, TaskID: run.TaskID, Workspace: *run.WorkspaceIntent, GitCommonDir: c.identity, Remote: c.Remote, BaseBranch: workflow.Branch, Provider: publication.ProviderIdentity(c.PR)}
 	request, err := publisher.Preflight(ctx, request)
+
 	if err != nil {
 		return empty, err
 	}
@@ -117,7 +119,7 @@ func (s *Service) reconcileLocalWorkerPublication(ctx context.Context, run *Run)
 	if workflow == nil || execution == nil || execution.LastStoppedTurnID != request.TurnID || request.ExecutionID != execution.ExecutionID || request.TaskID != run.TaskID || request.BaseBranch != workflow.Branch || request.Remote != c.Remote || request.GitCommonDir != c.identity || !request.Provider.Matches(c.PR) || workflow.Phase != "waiting_decision" || run.FinishTaskStatus != "waiting_decision" || op.IdempotencyKey != "local-publish:"+run.RunID+":"+request.TurnID {
 		return false, errors.New("saved local publication no longer matches the stopped worker turn")
 	}
-	git := gitRunner(c, *run.WorktreePath)
+	git := Runner{Dir: *run.WorktreePath, Timeout: duration(c.CommandTimeout), Env: map[string]string{"GIT_TERMINAL_PROMPT": "0"}}
 	gitText := func(args ...string) (string, error) {
 		out, e := git.Output(ctx, c.Git, args...)
 		return strings.TrimSpace(string(out)), e

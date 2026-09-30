@@ -832,6 +832,23 @@ func TestTaskDiscardRequiresPreciseUnmergedPRAndRetainsUnknownIntent(t *testing.
 	for _, id := range []string{"90", "91", "92", "94", "95"} {
 		seedPublishedForDiscard(t, ctx, c, store, id, commit, server.URL+"/org/repo/pulls/"+id)
 	}
+	workspacePath := filepath.Join(c.RunDir, "worktrees", "wf-90")
+	if err = store.Transact(ctx, func(tx DomainTx) error {
+		var payload []byte
+		if err := tx.(*sqliteTx).tx.QueryRowContext(ctx, `SELECT payload FROM executions WHERE project_identity=? AND execution_id=?`, c.Identity(), "exec-90").Scan(&payload); err != nil {
+			return err
+		}
+		var execution ExecutionRecord
+		if err := json.Unmarshal(payload, &execution); err != nil {
+			return err
+		}
+		execution.Target.ID, execution.Target.WorktreeID = c.Identity(), workspacePath
+		execution.Target.Branch, execution.Target.BaseRevision = "codex/90", commit
+		execution.Workspace.Worktree = workspacePath
+		return tx.PutExecution(execution)
+	}); err != nil {
+		t.Fatal(err)
+	}
 	// An unresolved PR binding cannot be used as permission to discard.
 	if err = store.Transact(ctx, func(tx DomainTx) error {
 		for _, id := range []string{"94", "95"} {
@@ -856,8 +873,30 @@ func TestTaskDiscardRequiresPreciseUnmergedPRAndRetainsUnknownIntent(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	if open.Status != "discarded" || !hasString(open.CleanupPending, "pull_request_close:"+server.URL+"/org/repo/pulls/90") || !hasString(open.CleanupPending, "workspace_cleanup:tree-90") {
+	cleanupItem := "workspace_cleanup:" + workspacePath
+	if open.Status != "discarded" || !hasString(open.CleanupPending, "pull_request_close:"+server.URL+"/org/repo/pulls/90") || !hasString(open.CleanupPending, cleanupItem) {
 		t.Fatalf("open PR and workspace cleanup were hidden: %+v", open)
+	}
+	partialCleanup := NativeWorkspaceCleanupReceipt{WorkflowRunID: "wf-90", ExecutionID: "exec-90", Repository: c.Identity(), Worktree: workspacePath, Branch: "codex/90", BaseCommit: commit, WorktreeGone: true, ObservedAt: time.Now().UTC()}
+	partialJSON, _ := json.Marshal(partialCleanup)
+	cleanupRequestID := digestValue(struct{ TaskID, Item string }{"90", cleanupItem})[:32]
+	cleanupPage, queryErr := (NewQueryService(store, c.Identity())).ShowNativeTask(ctx, "90")
+	if queryErr != nil {
+		t.Fatal(queryErr)
+	}
+	if err = commands.RecordNativeWorkspaceCleanupProgress(ctx, "90", cleanupRequestID, cleanupPage.Tasks[0].Version, cleanupItem, "operator", partialJSON); err != nil {
+		t.Fatal(err)
+	}
+	var operationPayload []byte
+	if err = store.db.QueryRowContext(ctx, `SELECT payload FROM operations WHERE project_identity=? AND idempotency_key=?`, c.Identity(), "native-cleanup-progress:"+cleanupRequestID).Scan(&operationPayload); err != nil {
+		t.Fatal(err)
+	}
+	var partialOperation OperationRecord
+	if err = json.Unmarshal(operationPayload, &partialOperation); err != nil || partialOperation.Status != "outcome_unknown" || string(partialOperation.Receipt) != string(partialJSON) {
+		t.Fatalf("partial workspace cleanup facts were not retained: %+v err=%v", partialOperation, err)
+	}
+	if len(open.CleanupPending) == 0 || !hasString(open.CleanupPending, cleanupItem) {
+		t.Fatalf("partial cleanup incorrectly settled its pending task item: %+v", open.CleanupPending)
 	}
 	mergedAt := time.Now().UTC()
 	lateURL := server.URL + "/org/repo/pulls/90"

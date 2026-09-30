@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	"github.com/erranliu/SteerLine/internal/steerline/workspace"
 )
 
 func (s *Service) refreshNativeSnapshot(ctx context.Context) error {
@@ -291,19 +292,15 @@ func (s *Service) reconcileNativePRCleanup(ctx context.Context, task TaskRecord,
 }
 func (s *Service) reconcileNativeWorkspaceCleanup(ctx context.Context, task TaskRecord, cleanupItem string) error {
 	path := strings.TrimPrefix(cleanupItem, "workspace_cleanup:")
-	root, err := filepath.EvalSymlinks(s.Config.WorktreeRoot)
-	if err != nil {
-		return err
-	}
-	resolved, err := resolveProspectivePath(path)
-	if err != nil || canonical(filepath.Dir(resolved)) != canonical(root) {
-		return nativeErr("authority_mismatch", "discarded workspace cleanup path no longer matches worktree_root")
-	}
 	var execution *ExecutionRecord
 	var workflow *WorkflowRunRecord
 	for i := range s.domain.Executions {
 		candidate := &s.domain.Executions[i]
-		if canonical(candidate.Target.WorktreeID) != canonical(resolved) && canonical(candidate.Workspace.Worktree) != canonical(resolved) {
+		matches := candidate.Target.WorktreeID == path || candidate.Workspace.Worktree == path
+		if !matches && filepath.IsAbs(path) && hostForExecution(candidate.Backend, candidate.Protocol) == "local" {
+			matches = canonical(candidate.Target.WorktreeID) == canonical(path) || canonical(candidate.Workspace.Worktree) == canonical(path)
+		}
+		if !matches {
 			continue
 		}
 		for j := range s.domain.WorkflowRuns {
@@ -319,61 +316,29 @@ func (s *Service) reconcileNativeWorkspaceCleanup(ctx context.Context, task Task
 	if hostForExecution(execution.Backend, execution.Protocol) != "local" {
 		return executionapi.UnsupportedAdapterOperation("WorkspaceCleanup", "remote native worktree cleanup is unavailable")
 	}
-	branch := execution.Target.Branch
-	if _, err = (Runner{Dir: s.Config.Repository, Timeout: duration(s.Config.CommandTimeout)}).Output(ctx, s.Config.Git, "check-ref-format", "refs/heads/"+branch); err != nil {
-		return nativeErr("authority_mismatch", "discarded workspace branch identity is invalid")
+	if !filepath.IsAbs(path) {
+		return nativeErr("authority_mismatch", "discarded local workspace cleanup path is not absolute")
 	}
-	git := gitRunner(s.Config, s.Config.Repository)
-	worktrees, err := git.Output(ctx, s.Config.Git, "worktree", "list", "--porcelain", "-z")
+	if err := s.Config.prepareWorktreeRoot(); err != nil {
+		return err
+	}
+	resolved, err := resolveProspectivePath(path)
+	if err != nil || canonical(filepath.Dir(resolved)) != canonical(s.Config.WorktreeRoot) {
+		return nativeErr("authority_mismatch", "discarded workspace cleanup path no longer matches worktree_root")
+	}
+	intent := &executionapi.WorkspaceIntent{Path: resolved, Branch: execution.Target.Branch, BaseCommit: execution.Target.BaseRevision}
+	repository, err := workspaceRepository(s.Config)
 	if err != nil {
 		return err
 	}
-	registered := false
-	for _, record := range strings.Split(string(worktrees), "\x00") {
-		if strings.HasPrefix(record, "worktree ") && canonical(strings.TrimPrefix(record, "worktree ")) == canonical(resolved) {
-			registered = true
-			break
-		}
-	}
-	if registered {
-		intent := executionapi.WorkspaceIntent{Path: resolved, Branch: branch, BaseCommit: execution.Target.BaseRevision}
-		if err = verifyWorkspace(ctx, s.Config, &intent, false); err != nil {
-			return fmt.Errorf("discarded workspace identity could not be verified: %w", err)
-		}
-		if _, err = git.Output(ctx, s.Config.Git, "worktree", "remove", "--force", "--", resolved); err != nil {
-			return err
-		}
-	} else if _, statErr := os.Lstat(resolved); statErr == nil {
-		return nativeErr("authority_mismatch", "discarded workspace path exists but is not the fixed Git worktree")
-	} else if !os.IsNotExist(statErr) {
-		return statErr
-	}
-	refs, err := git.Output(ctx, s.Config.Git, "for-each-ref", "--format=%(refname)", "refs/heads/"+branch)
-	if err != nil {
-		return err
-	}
-	branchExists := strings.TrimSpace(string(refs)) != ""
-	if branchExists {
-		if _, err = git.Output(ctx, s.Config.Git, "branch", "-D", "--", branch); err != nil {
-			return err
-		}
-	}
-	worktrees, err = git.Output(ctx, s.Config.Git, "worktree", "list", "--porcelain", "-z")
-	if err != nil {
-		return err
-	}
-	for _, record := range strings.Split(string(worktrees), "\x00") {
-		if strings.HasPrefix(record, "worktree ") && canonical(strings.TrimPrefix(record, "worktree ")) == canonical(resolved) {
-			return nativeErr("outcome_unknown", "discarded worktree remains registered after cleanup")
-		}
-	}
-	refs, err = git.Output(ctx, s.Config.Git, "for-each-ref", "--format=%(refname)", "refs/heads/"+branch)
-	if err != nil || strings.TrimSpace(string(refs)) != "" {
-		return nativeErr("outcome_unknown", "discarded workspace branch remains after cleanup")
-	}
-	receipt := NativeWorkspaceCleanupReceipt{WorkflowRunID: workflow.WorkflowRunID, ExecutionID: execution.ExecutionID, Repository: execution.Target.ID, Worktree: resolved, Branch: branch, BaseCommit: execution.Target.BaseRevision, WorktreeGone: true, BranchGone: true, ObservedAt: now()}
+	result, err := workspace.Cleanup(ctx, workspaceGit(s.Config), repository, s.Config.WorktreeRoot, intent)
+	receipt := NativeWorkspaceCleanupReceipt{WorkflowRunID: workflow.WorkflowRunID, ExecutionID: execution.ExecutionID, Repository: execution.Target.ID, Worktree: resolved, Branch: intent.Branch, BaseCommit: intent.BaseCommit, WorktreeGone: result.WorktreeGone, BranchGone: result.BranchGone, ObservedAt: now()}
 	data, _ := json.Marshal(receipt)
 	requestID := digestValue(struct{ TaskID, Item string }{task.TaskID, cleanupItem})[:32]
+	if err != nil {
+		progressErr := (CommandService{Store: s.domainStore, Project: s.Config.identity}).RecordNativeWorkspaceCleanupProgress(ctx, task.TaskID, requestID, task.Version, cleanupItem, s.Config.Claimant, data)
+		return errors.Join(err, progressErr)
+	}
 	_, err = (CommandService{Store: s.domainStore, Project: s.Config.identity}).RecordNativeCleanupReceipt(ctx, task.TaskID, requestID, task.Version, cleanupItem, s.Config.Claimant, data)
 	return err
 }

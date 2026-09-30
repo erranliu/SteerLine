@@ -17,6 +17,7 @@ import (
 	"time"
 
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	"github.com/erranliu/SteerLine/internal/steerline/workspace"
 )
 
 func executionStopperFor(c Config) (executionapi.ExecutionStopper, error) {
@@ -343,19 +344,15 @@ func inspectBoundWorkspace(ctx context.Context, c Config, ref executionapi.Execu
 		}
 	}
 	intent := &executionapi.WorkspaceIntent{Path: ref.WorkspacePath, Branch: ref.WorkspaceBranch, BaseCommit: ref.BaseCommit}
-	if err := verifyWorkspace(ctx, c, intent, false); err != nil {
-		return executionapi.WorkspaceInspection{}, err
-	}
-	runner := gitRunner(c, ref.WorkspacePath)
-	head, err := runner.Output(ctx, c.Git, "rev-parse", "HEAD")
+	repository, err := workspaceRepository(c)
 	if err != nil {
 		return executionapi.WorkspaceInspection{}, err
 	}
-	dirty, err := inspectGitDirty(ctx, c, ref.WorkspacePath)
+	inspection, err := workspace.Inspect(ctx, workspaceGit(c), repository, intent)
 	if err != nil {
 		return executionapi.WorkspaceInspection{}, err
 	}
-	return executionapi.WorkspaceInspection{Repository: c.Repository, Worktree: ref.WorkspacePath, Branch: ref.WorkspaceBranch, Base: ref.BaseCommit, Head: strings.TrimSpace(string(head)), Dirty: dirty, CheckedAt: now()}, nil
+	return inspection, nil
 }
 
 type localOutputCursor struct {

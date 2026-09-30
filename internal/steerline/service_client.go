@@ -9,8 +9,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"time"
+
+	"github.com/erranliu/SteerLine/internal/steerline/workspace"
 
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
@@ -188,24 +189,11 @@ func expectedClaimant(c Config) string {
 }
 
 func resolveRepositoryPath(ctx context.Context, c Config) (string, error) {
-	timeout := duration(c.CommandTimeout)
-	if timeout <= 0 {
-		timeout = 30 * time.Second
-	}
-	r := Runner{Dir: c.Repository, Timeout: timeout}
-	out, err := r.Output(ctx, c.Git, "rev-parse", "--show-toplevel")
+	repository, err := workspace.ResolveRepository(ctx, workspaceGit(c), c.Repository)
 	if err != nil {
 		return "", err
 	}
-	p := strings.TrimSpace(string(out))
-	if p == "" {
-		return "", errors.New("git returned an empty repository path")
-	}
-	resolved, err := filepath.EvalSymlinks(p)
-	if err != nil {
-		return "", err
-	}
-	return canonical(resolved), nil
+	return canonical(repository.Path), nil
 }
 
 func expectedRunDir(c Config) (string, error) {

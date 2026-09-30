@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
-	"strings"
 
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
+	"github.com/erranliu/SteerLine/internal/steerline/workspace"
 )
 
 // Orca's Windows named pipe is inaccessible to commands in Codex's
@@ -26,14 +26,18 @@ func ensureNativeOrcaRelayIgnored(ctx context.Context, c Config, worktree string
 	if c.identity == "" || !filepath.IsAbs(worktree) {
 		return errors.New("native Orca relay ignore has no fixed repository/worktree")
 	}
-	out, err := gitRunner(c, worktree).Output(ctx, c.Git, "rev-parse", "--path-format=absolute", "--git-path", "info/exclude")
+	repository, err := workspaceRepository(c)
 	if err != nil {
 		return err
 	}
-	if canonical(strings.TrimSpace(string(out))) != canonical(filepath.Join(c.identity, "info", "exclude")) {
+	exclude, err := workspace.ResolveInfoExclude(ctx, workspaceGit(c), repository, worktree)
+	if err != nil {
+		return err
+	}
+	if canonical(exclude) != canonical(filepath.Join(repository.CommonDir, "info", "exclude")) {
 		return errors.New("native Orca relay exclude is outside the fixed repository")
 	}
-	return orcaworker.EnsureRelayIgnored(c.identity)
+	return orcaworker.EnsureRelayIgnored(repository.CommonDir)
 }
 
 func nativeOrcaRelayPath(worktree, runID, turnID string) (string, error) {
