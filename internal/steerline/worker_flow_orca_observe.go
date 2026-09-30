@@ -1,9 +1,7 @@
 package steerline
 
 import (
-	"bufio"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,19 +10,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
-
-type workerOrcaTurnCursor struct {
-	Version int   `json:"version"`
-	Cursor  int64 `json:"cursor"`
-}
-
-type workerOrcaTurnExit struct {
-	Version  int    `json:"version"`
-	TurnID   string `json:"turn_id"`
-	Cursor   int64  `json:"cursor"`
-	ExitCode int    `json:"exit_code"`
-}
 
 func currentWorkerOrcaCursor(ctx context.Context, c Config, identity ProcessIdentity) (int64, error) {
 	env, err := workerOrcaCall(ctx, c, "terminal", "read", "--terminal", identity.Terminal, "--json")
@@ -84,79 +72,10 @@ func prepareOrcaTurnJournal(c Config, run *Run, turnID string, cursor int64) (st
 	if err := AtomicWrite(filepath.Join(dir, ConversationSourceMarkerName), append(mustJSON(marker), '\n')); err != nil {
 		return "", "", err
 	}
-	if err := AtomicWrite(filepath.Join(dir, "orca-cursor.json"), append(mustJSON(workerOrcaTurnCursor{Version: 1, Cursor: cursor}), '\n')); err != nil {
+	if err := AtomicWrite(filepath.Join(dir, "orca-cursor.json"), append(mustJSON(orcaworker.TurnCursor{Version: 1, Cursor: cursor}), '\n')); err != nil {
 		return "", "", err
 	}
 	return events, identity, nil
-}
-
-func loadOrcaTurnCursor(events string) (int64, error) {
-	dir := filepath.Dir(events)
-	raw, err := os.ReadFile(filepath.Join(dir, "orca-cursor.json"))
-	if err != nil {
-		return 0, err
-	}
-	var start workerOrcaTurnCursor
-	if err := json.Unmarshal(raw, &start); err != nil || start.Version != 1 || start.Cursor < 0 {
-		return 0, errors.Join(err, errors.New("saved Orca turn cursor is invalid"))
-	}
-	file, err := os.Open(events)
-	if err != nil {
-		return 0, err
-	}
-	defer file.Close()
-	cursor := start.Cursor
-	scanner := bufio.NewScanner(file)
-	scanner.Buffer(make([]byte, 64<<10), JournalMaxRecord)
-	for scanner.Scan() {
-		var event struct {
-			OrcaCursor *int64 `json:"orca_cursor"`
-		}
-		if err := json.Unmarshal(scanner.Bytes(), &event); err != nil || event.OrcaCursor == nil || *event.OrcaCursor < cursor {
-			return 0, errors.Join(err, errors.New("Orca worker journal has an invalid or repeated source cursor"))
-		}
-		cursor = *event.OrcaCursor + 1
-	}
-	return cursor, scanner.Err()
-}
-
-func readOrcaTurnExit(events, turnID string) (*workerOrcaTurnExit, error) {
-	raw, err := os.ReadFile(filepath.Join(filepath.Dir(events), "orca-exit.json"))
-	if os.IsNotExist(err) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	var result workerOrcaTurnExit
-	if err := json.Unmarshal(raw, &result); err != nil || result.Version != 1 || result.TurnID != turnID || result.Cursor < 0 || result.ExitCode < 0 {
-		return nil, errors.Join(err, errors.New("saved Orca turn exit marker is invalid"))
-	}
-	return &result, nil
-}
-
-func appendOrcaTurnEvent(events string, rowCursor int64, encoded string) error {
-	decoded, err := base64.StdEncoding.DecodeString(encoded)
-	if err != nil || len(decoded) == 0 || len(decoded) > JournalMaxRecord {
-		return errors.Join(err, errors.New("Orca worker output has invalid encoded Codex event"))
-	}
-	var event map[string]json.RawMessage
-	if err := json.Unmarshal(decoded, &event); err != nil || event == nil || event["type"] == nil {
-		return errors.Join(err, errors.New("Orca worker output is not a Codex JSON event"))
-	}
-	event["orca_cursor"] = json.RawMessage(strconv.FormatInt(rowCursor, 10))
-	line, err := json.Marshal(event)
-	if err != nil {
-		return err
-	}
-	file, err := os.OpenFile(events, os.O_WRONLY|os.O_APPEND, 0600)
-	if err != nil {
-		return err
-	}
-	if _, err := file.Write(append(line, '\n')); err == nil {
-		err = file.Sync()
-	}
-	return errors.Join(err, file.Close())
 }
 
 func pullWorkerOrcaTurn(ctx context.Context, c Config, identity ProcessIdentity, turnID, events string, done chan<- error) {
@@ -166,7 +85,7 @@ func pullWorkerOrcaTurn(ctx context.Context, c Config, identity ProcessIdentity,
 		case <-ctx.Done():
 		}
 	}
-	if exited, err := readOrcaTurnExit(events, turnID); err != nil {
+	if exited, err := orcaworker.ReadTurnExit(events, turnID); err != nil {
 		finish(err)
 		return
 	} else if exited != nil {
@@ -177,7 +96,7 @@ func pullWorkerOrcaTurn(ctx context.Context, c Config, identity ProcessIdentity,
 		}
 		return
 	}
-	cursor, err := loadOrcaTurnCursor(events)
+	cursor, err := orcaworker.LoadTurnCursor(events)
 	if err != nil {
 		finish(err)
 		return
@@ -196,7 +115,7 @@ func pullWorkerOrcaTurn(ctx context.Context, c Config, identity ProcessIdentity,
 			rowCursor := cursor + int64(i)
 			line := strings.TrimSpace(raw)
 			if encoded, ok := strings.CutPrefix(line, "SLJSON:"+turnID+":"); ok {
-				if err := appendOrcaTurnEvent(events, rowCursor, encoded); err != nil {
+				if err := orcaworker.AppendTurnEvent(events, rowCursor, encoded); err != nil {
 					finish(err)
 					return
 				}
@@ -208,7 +127,7 @@ func pullWorkerOrcaTurn(ctx context.Context, c Config, identity ProcessIdentity,
 					finish(errors.Join(err, errors.New("Orca worker turn has invalid exit status")))
 					return
 				}
-				marker := workerOrcaTurnExit{Version: 1, TurnID: turnID, Cursor: rowCursor, ExitCode: code}
+				marker := orcaworker.TurnExit{Version: 1, TurnID: turnID, Cursor: rowCursor, ExitCode: code}
 				if err := AtomicWrite(filepath.Join(filepath.Dir(events), "orca-exit.json"), append(mustJSON(marker), '\n')); err != nil {
 					finish(err)
 					return

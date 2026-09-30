@@ -1,6 +1,10 @@
 package steerline
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/erranliu/SteerLine/internal/steerline/workerflow"
+)
 
 func TestWorkerFlowAdapterUsesFixedProtocol(t *testing.T) {
 	run := &Run{RunID: "run", ExecutionID: "execution", AttemptID: "attempt", Protocol: string(ProtocolLocalCodexAppServer)}
@@ -12,20 +16,20 @@ func TestWorkerFlowAdapterUsesFixedProtocol(t *testing.T) {
 			Attempts:     []StepAttemptRecord{{AttemptID: "attempt", ExecutionID: "execution"}},
 		},
 	}
-	adapter, err := service.adapterForWorkerFlow(run)
+	mode, err := service.workerFlowMode(run)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := adapter.(codexAppWorkerAdapter); !ok {
-		t.Fatalf("local fixed protocol chose %T", adapter)
+	if mode != workerflow.LocalCodex {
+		t.Fatalf("local fixed protocol chose %v", mode)
 	}
-	adapter.stageIntent(&service.State.Executions[0], "command")
+	service.State.Executions[0].PendingTurnID, service.State.Executions[0].PendingCommandID = mode.PendingIdentity("command")
 	if service.State.Executions[0].PendingCommandID != "command" || service.State.Executions[0].PendingTurnID != "" {
 		t.Fatal("Codex command identity was treated as a native turn receipt")
 	}
 	wrong := *run
 	wrong.Protocol = string(ProtocolOrcaTerminalV2)
-	if _, err := service.adapterForWorkerFlow(&wrong); err == nil {
+	if _, err := service.workerFlowMode(&wrong); err == nil {
 		t.Fatal("local execution accepted an Orca protocol adapter")
 	}
 }

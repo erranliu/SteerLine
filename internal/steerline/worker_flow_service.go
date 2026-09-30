@@ -6,6 +6,8 @@ import (
 	"errors"
 	"path/filepath"
 	"strings"
+
+	"github.com/erranliu/SteerLine/internal/steerline/workerflow"
 )
 
 func (s *Service) resumeConfiguredWork(ctx context.Context) error {
@@ -44,11 +46,11 @@ func (s *Service) resumeWorkerFlow(ctx context.Context) error {
 		if task == nil || workflow == nil || execution == nil || task.Status != "in_progress" || workflow.Phase == "completed" {
 			continue
 		}
-		adapter, err := s.adapterForWorkerFlow(run)
+		adapter, err := s.workerFlowMode(run)
 		if err != nil {
 			return err
 		}
-		continueScan, err := adapter.resume(ctx, task, run)
+		continueScan, err := s.resumeWorkerFlowByMode(ctx, task, run, adapter)
 		if err != nil {
 			return err
 		}
@@ -130,11 +132,11 @@ func (s *Service) prepareWorkerFlow(ctx context.Context, task TaskRecord, run *R
 	if fixed.workflow.WorkflowVersion != WorkerFlowVersion || fixed.attempt.StepID != "worker" || run.WorkspaceIntent == nil {
 		return nativeErr("inconsistent_delivery", "worker preparation has no fixed claim and workspace intent")
 	}
-	adapter, err := s.adapterForWorkerFlow(run)
+	adapter, err := s.workerFlowMode(run)
 	if err != nil {
 		return err
 	}
-	return adapter.prepare(ctx, task, run)
+	return s.prepareWorkerFlowByMode(ctx, task, run, adapter)
 }
 
 func (s *Service) prepareWorkerWorkspace(ctx context.Context, task TaskRecord, run *Run, remote bool) error {
@@ -234,12 +236,14 @@ func (s *Service) startWorkerFlowTurn(ctx context.Context, run *Run, prompt, tur
 	if attempt.StepID != "worker" {
 		return errors.New("worker turn has no fixed worker attempt")
 	}
-	adapter, err := s.adapterForWorkerFlow(run)
+	adapter, err := s.workerFlowMode(run)
 	if err != nil {
 		return err
 	}
-	prompt = adapter.preparePrompt(run, prompt)
-	adapter.stageIntent(execution, turnID)
+	if adapter == workerflow.LocalCodex {
+		prompt += localWorkerPublishInstruction(run.RunID)
+	}
+	execution.PendingTurnID, execution.PendingCommandID = adapter.PendingIdentity(turnID)
 	opID, err := s.startOperation("start_worker_turn", "worker-turn:"+run.ExecutionID+":"+turnID, struct {
 		ExecutionID string `json:"execution_id"`
 		SessionID   string `json:"session_id,omitempty"`
@@ -252,7 +256,7 @@ func (s *Service) startWorkerFlowTurn(ctx context.Context, run *Run, prompt, tur
 	if _, err := s.workerFlowContext(run); err != nil {
 		return errors.New("worker turn disappeared after send intent was saved")
 	}
-	return adapter.startTurn(ctx, run, turnID, prompt, opID)
+	return s.startWorkerTurnByMode(ctx, run, turnID, prompt, opID, adapter)
 }
 
 func (s *Service) eventWorkerFlowFor(run *Run, ev WorkerEvent) (resultErr error) {
@@ -779,22 +783,4 @@ func (s *Service) applyWorkerFlowDecision(ctx context.Context, run *Run) error {
 		return s.applyNativeOrcaDecision(ctx, run, workflow, execution, answer, command.CommandID)
 	}
 	return s.deliverResumableWorkerFeedback(ctx, run, execution, answer, command.CommandID, route)
-}
-
-func workerFeedbackText(answer DecisionAnswer, request DecisionRequest) string {
-	if answer.OptionID == "" {
-		return answer.Note
-	}
-	label := answer.OptionID
-	for _, option := range request.Options {
-		if option.ID == answer.OptionID {
-			label = option.Label
-			break
-		}
-	}
-	message := "Selected option: " + label
-	if answer.Note != "" {
-		message += "\n\nAdditional instructions:\n" + answer.Note
-	}
-	return message
 }

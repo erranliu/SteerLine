@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+
+	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
+	"github.com/erranliu/SteerLine/internal/steerline/workerflow"
 )
 
 // resume returns true only when the center should inspect another run.
-func (a codexAppWorkerAdapter) resume(ctx context.Context, task *TaskRecord, run *Run) (bool, error) {
-	s := a.service
+func (s *Service) resumeCodexWorker(ctx context.Context, task *TaskRecord, run *Run) (bool, error) {
 	_, execution := s.workflowRecords(run)
 	if execution.PendingCommandID != "" || execution.CurrentTurnID != "" && execution.CurrentTurnID != execution.LastStoppedTurnID {
 		// Active local turns were checked concurrently before this pass.
@@ -25,8 +27,7 @@ func (a codexAppWorkerAdapter) resume(ctx context.Context, task *TaskRecord, run
 	return s.resumeWorkspaceWorker(ctx, task, run, false)
 }
 
-func (a nativeOrcaWorkerAdapter) resume(ctx context.Context, task *TaskRecord, run *Run) (bool, error) {
-	s := a.service
+func (s *Service) resumeNativeOrcaWorker(ctx context.Context, task *TaskRecord, run *Run) (bool, error) {
 	workflow, execution := s.workflowRecords(run)
 	if execution.Process == nil {
 		if execution.OrcaNative != nil {
@@ -74,8 +75,8 @@ func (a nativeOrcaWorkerAdapter) resume(ctx context.Context, task *TaskRecord, r
 	return false, s.pollNativeOrcaWorker(ctx, run)
 }
 
-func (a supervisedOrcaWorkerAdapter) resume(ctx context.Context, task *TaskRecord, run *Run) (bool, error) {
-	return a.service.resumeWorkspaceWorker(ctx, task, run, true)
+func (s *Service) resumeSupervisedOrcaWorker(ctx context.Context, task *TaskRecord, run *Run) (bool, error) {
+	return s.resumeWorkspaceWorker(ctx, task, run, true)
 }
 
 func (s *Service) resumeWorkspaceWorker(ctx context.Context, task *TaskRecord, run *Run, remote bool) (bool, error) {
@@ -90,7 +91,7 @@ func (s *Service) resumeWorkspaceWorker(ctx context.Context, task *TaskRecord, r
 			turnID = execution.CurrentTurnID
 		}
 		events := filepath.Join(orcaTurnPath(c, run.RunID, turnID), "events.jsonl")
-		if exited, err := readOrcaTurnExit(events, turnID); err != nil {
+		if exited, err := orcaworker.ReadTurnExit(events, turnID); err != nil {
 			return false, s.waitWorkerFlow(run, "Original Orca turn exit evidence is invalid: "+err.Error())
 		} else if exited != nil {
 			return false, s.finishWorkerFlowFor(run, nil)
@@ -185,4 +186,17 @@ func (s *Service) resumeWorkspaceWorker(ctx context.Context, task *TaskRecord, r
 		}
 	}
 	return false, s.startInitialWorkerFlowTurn(ctx, *task, run)
+}
+
+func (s *Service) resumeWorkerFlowByMode(ctx context.Context, task *TaskRecord, run *Run, mode workerflow.Mode) (bool, error) {
+	switch mode {
+	case workerflow.LocalCodex:
+		return s.resumeCodexWorker(ctx, task, run)
+	case workerflow.NativeOrca:
+		return s.resumeNativeOrcaWorker(ctx, task, run)
+	case workerflow.SupervisedOrca:
+		return s.resumeSupervisedOrcaWorker(ctx, task, run)
+	default:
+		return false, nativeErr("unsupported_schema", "unknown worker mode")
+	}
 }

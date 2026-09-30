@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
 
 // Native Orca Dispatches are unsupervised. The center owns the exact agent
@@ -101,186 +103,23 @@ func nativeOrcaCoordinatorMarker(executionID string) string {
 }
 
 func nativeOrcaTerminalHasMarker(ctx context.Context, c Config, handle, marker string) (bool, error) {
-	env, err := workerOrcaCall(ctx, c, "terminal", "read", "--terminal", handle, "--limit", "1000", "--json")
-	if err != nil {
-		return false, err
-	}
-	var result struct {
-		Terminal struct {
-			Handle string   `json:"handle"`
-			Tail   []string `json:"tail"`
-		} `json:"terminal"`
-	}
-	if err := json.Unmarshal(env.Result, &result); err != nil || result.Terminal.Handle != handle {
-		return false, errors.Join(err, errors.New("Orca terminal marker read changed handle"))
-	}
-	for _, line := range result.Terminal.Tail {
-		if strings.Contains(line, marker) {
-			return true, nil
-		}
-	}
-	return false, nil
+	return orcaworker.TerminalHasMarker(ctx, orcaWorkerCaller(c), handle, marker)
 }
-
 func findNativeOrcaRun(ctx context.Context, c Config, objective, coordinator string) (string, error) {
-	cursor := ""
-	found := ""
-	for page := 0; page < 100; page++ {
-		args := []string{"orchestration", "run-list", "--limit", "1000", "--json"}
-		if cursor != "" {
-			args = append(args, "--cursor", cursor)
-		}
-		env, err := workerOrcaCall(ctx, c, args...)
-		if err != nil {
-			return "", err
-		}
-		var listing struct {
-			Runs []struct {
-				ID          string `json:"id"`
-				Objective   string `json:"objective"`
-				Coordinator string `json:"coordinator_handle"`
-			} `json:"runs"`
-			NextCursor string `json:"nextCursor"`
-		}
-		if err := json.Unmarshal(env.Result, &listing); err != nil {
-			return "", err
-		}
-		for _, candidate := range listing.Runs {
-			if candidate.Objective == objective && candidate.Coordinator == coordinator {
-				if found != "" {
-					return "", errors.New("more than one Orca Run has the fixed execution identity")
-				}
-				found = candidate.ID
-			}
-		}
-		if listing.NextCursor == "" {
-			return found, nil
-		}
-		if listing.NextCursor == cursor {
-			return "", errors.New("Orca Run pagination did not advance")
-		}
-		cursor = listing.NextCursor
-	}
-	return "", errors.New("Orca Run inventory exceeded its recovery bound")
+	return orcaworker.FindRun(ctx, orcaWorkerCaller(c), objective, coordinator)
 }
-
 func findNativeOrcaTask(ctx context.Context, c Config, runID, coordinator, spec string) (string, error) {
-	env, err := workerOrcaCall(ctx, c, "orchestration", "task-list", "--run", runID, "--json")
-	if err != nil {
-		return "", err
-	}
-	var listing struct {
-		RunID string `json:"runId"`
-		Tasks []struct {
-			ID      string `json:"id"`
-			RunID   string `json:"run_id"`
-			Spec    string `json:"spec"`
-			Creator string `json:"created_by_terminal_handle"`
-		} `json:"tasks"`
-		Count int `json:"count"`
-	}
-	if err := json.Unmarshal(env.Result, &listing); err != nil || listing.RunID != runID || listing.Count != len(listing.Tasks) {
-		return "", errors.Join(err, errors.New("Orca Task inventory is incomplete or changed Run"))
-	}
-	found := ""
-	for _, candidate := range listing.Tasks {
-		if candidate.RunID == runID && candidate.Spec == spec && candidate.Creator == coordinator {
-			if found != "" {
-				return "", errors.New("more than one Orca Task matches the original turn spec")
-			}
-			found = candidate.ID
-		}
-	}
-	return found, nil
+	return orcaworker.FindTask(ctx, orcaWorkerCaller(c), runID, coordinator, spec)
 }
-
 func findNativeOrcaDispatch(ctx context.Context, c Config, taskID string) (string, string, string, string, error) {
-	env, err := workerOrcaCall(ctx, c, "orchestration", "dispatch-show", "--task", taskID, "--json")
-	if err != nil {
-		return "", "", "", "", err
-	}
-	var result struct {
-		Dispatch struct {
-			ID          string `json:"id"`
-			TaskID      string `json:"task_id"`
-			RunID       string `json:"run_id"`
-			Assignee    string `json:"assignee_handle"`
-			Incarnation string `json:"process_incarnation"`
-		} `json:"dispatch"`
-	}
-	if err := json.Unmarshal(env.Result, &result); err != nil {
-		return "", "", "", "", err
-	}
-	if result.Dispatch.ID == "" || result.Dispatch.TaskID != taskID {
-		return "", "", "", "", errors.New("Orca Dispatch is missing or changed Task")
-	}
-	return result.Dispatch.ID, result.Dispatch.RunID, result.Dispatch.Assignee, result.Dispatch.Incarnation, nil
+	return orcaworker.FindDispatch(ctx, orcaWorkerCaller(c), taskID)
 }
-
 func findNativeOrcaReply(ctx context.Context, c Config, runID, dispatchID, questionID, answer string) (string, error) {
-	env, err := workerOrcaCall(ctx, c, "orchestration", "inbox", "--limit", "1000", "--full", "--json")
-	if err != nil {
-		return "", err
-	}
-	var result struct {
-		Messages []struct {
-			ID     string `json:"id"`
-			RunID  string `json:"run_id"`
-			From   string `json:"from_handle"`
-			To     string `json:"to_handle"`
-			Thread string `json:"thread_id"`
-			Body   string `json:"body"`
-			Type   string `json:"type"`
-		} `json:"messages"`
-	}
-	if err := json.Unmarshal(env.Result, &result); err != nil {
-		return "", err
-	}
-	found := ""
-	for _, message := range result.Messages {
-		if message.RunID != runID || message.Thread != questionID || message.From != "run:"+runID || message.To != "dispatch:"+dispatchID || message.Type != "status" {
-			continue
-		}
-		if message.Body != answer || message.ID == "" || found != "" {
-			return "", errors.New("original Orca question has conflicting or duplicate reply history")
-		}
-		found = message.ID
-	}
-	return found, nil
+	return orcaworker.FindReply(ctx, orcaWorkerCaller(c), runID, dispatchID, questionID, answer)
 }
-
 func findNativeOrcaSend(ctx context.Context, c Config, runID, dispatchID, subject, body string) (string, error) {
-	env, err := workerOrcaCall(ctx, c, "orchestration", "inbox", "--limit", "1000", "--full", "--json")
-	if err != nil {
-		return "", err
-	}
-	var result struct {
-		Messages []struct {
-			ID      string `json:"id"`
-			RunID   string `json:"run_id"`
-			From    string `json:"from_handle"`
-			To      string `json:"to_handle"`
-			Subject string `json:"subject"`
-			Body    string `json:"body"`
-			Type    string `json:"type"`
-		} `json:"messages"`
-	}
-	if err := json.Unmarshal(env.Result, &result); err != nil {
-		return "", err
-	}
-	found := ""
-	for _, message := range result.Messages {
-		if message.RunID != runID || message.From != "run:"+runID || message.To != "dispatch:"+dispatchID || message.Subject != subject || message.Type != "status" {
-			continue
-		}
-		if message.Body != body || message.ID == "" || found != "" {
-			return "", errors.New("Orca feedback has conflicting or duplicate send history")
-		}
-		found = message.ID
-	}
-	return found, nil
+	return orcaworker.FindSend(ctx, orcaWorkerCaller(c), runID, dispatchID, subject, body)
 }
-
 func verifyRecoveredNativeOrcaDispatch(ctx context.Context, c Config, dispatchID, taskID, runID string, identity ProcessIdentity) error {
 	env, err := workerOrcaCall(ctx, c, "orchestration", "worker-show", "--dispatch", dispatchID, "--json")
 	if err != nil {

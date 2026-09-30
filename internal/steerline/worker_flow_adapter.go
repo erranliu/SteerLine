@@ -4,81 +4,72 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
+	"github.com/erranliu/SteerLine/internal/steerline/workerflow"
 )
 
-// workerFlowAdapter is selected from the persisted execution protocol.
-// Its methods run on the service writer; background observers only send facts.
-type workerFlowAdapter interface {
-	prepare(context.Context, TaskRecord, *Run) error
-	resume(context.Context, *TaskRecord, *Run) (bool, error)
-	preparePrompt(*Run, string) string
-	stageIntent(*ExecutionRecord, string)
-	startTurn(context.Context, *Run, string, string, string) error
-	sendFeedback(context.Context, *Run, *WorkflowRunRecord, *ExecutionRecord, DecisionAnswer, string) error
+// The service is the only writer. Mode selection carries no Service reference.
+func (s *Service) workerFlowMode(run *Run) (workerflow.Mode, error) {
+	fixed, err := s.workerFlowContext(run)
+	if err != nil {
+		return 0, err
+	}
+	mode, err := workerflow.SelectMode(run.Protocol, fixed.config.hostName())
+	if err != nil {
+		return 0, nativeErr("unsupported_schema", err.Error())
+	}
+	return mode, nil
 }
 
-type codexAppWorkerAdapter struct{ service *Service }
-type nativeOrcaWorkerAdapter struct{ service *Service }
-type supervisedOrcaWorkerAdapter struct{ service *Service }
+func (s *Service) prepareWorkerFlowByMode(ctx context.Context, task TaskRecord, run *Run, mode workerflow.Mode) error {
+	switch mode {
+	case workerflow.LocalCodex:
+		return s.prepareCodexWorker(ctx, task, run)
+	case workerflow.NativeOrca:
+		return s.prepareNativeOrcaWorkerFlow(ctx, task, run)
+	case workerflow.SupervisedOrca:
+		return s.prepareSupervisedOrcaWorker(ctx, task, run)
+	default:
+		return nativeErr("unsupported_schema", "unknown worker mode")
+	}
+}
 
-func (a codexAppWorkerAdapter) prepare(ctx context.Context, task TaskRecord, run *Run) error {
-	fixed, err := a.service.workerFlowContext(run)
+func (s *Service) startWorkerTurnByMode(ctx context.Context, run *Run, turnID, prompt, opID string, mode workerflow.Mode) error {
+	switch mode {
+	case workerflow.LocalCodex:
+		return s.startCodexWorkerTurn(ctx, run, turnID, prompt, opID)
+	case workerflow.NativeOrca:
+		return s.startNativeOrcaWorkerTurn(ctx, run, turnID, prompt, opID)
+	case workerflow.SupervisedOrca:
+		return s.startSupervisedOrcaWorkerTurn(ctx, run, turnID, prompt, opID)
+	default:
+		return nativeErr("unsupported_schema", "unknown worker mode")
+	}
+}
+
+func (s *Service) prepareCodexWorker(ctx context.Context, task TaskRecord, run *Run) error {
+	fixed, err := s.workerFlowContext(run)
 	if err != nil {
 		return err
 	}
 	if err := requireWorkerFlowCapabilities(ctx, fixed.config); err != nil {
 		return err
 	}
-	return a.service.prepareWorkerWorkspace(ctx, task, run, false)
+	return s.prepareWorkerWorkspace(ctx, task, run, false)
 }
 
-func (a nativeOrcaWorkerAdapter) prepare(ctx context.Context, task TaskRecord, run *Run) error {
-	if err := a.service.prepareNativeOrcaWorker(ctx, run); err != nil {
-		return a.service.nativeOrcaUncertain(run, "Native Orca worker preparation needs reconciliation: "+err.Error())
+func (s *Service) prepareNativeOrcaWorkerFlow(ctx context.Context, task TaskRecord, run *Run) error {
+	if err := s.prepareNativeOrcaWorker(ctx, run); err != nil {
+		return s.nativeOrcaUncertain(run, "Native Orca worker preparation needs reconciliation: "+err.Error())
 	}
-	return a.service.startInitialWorkerFlowTurn(ctx, task, run)
+	return s.startInitialWorkerFlowTurn(ctx, task, run)
 }
 
-func (a supervisedOrcaWorkerAdapter) prepare(ctx context.Context, task TaskRecord, run *Run) error {
-	return a.service.prepareWorkerWorkspace(ctx, task, run, true)
+func (s *Service) prepareSupervisedOrcaWorker(ctx context.Context, task TaskRecord, run *Run) error {
+	return s.prepareWorkerWorkspace(ctx, task, run, true)
 }
 
-func (s *Service) adapterForWorkerFlow(run *Run) (workerFlowAdapter, error) {
-	fixed, err := s.workerFlowContext(run)
-	if err != nil {
-		return nil, err
-	}
-	switch {
-	case run.Protocol == string(ProtocolLocalCodexAppServer) && fixed.config.hostName() == "local":
-		return codexAppWorkerAdapter{service: s}, nil
-	case run.Protocol == string(ProtocolOrcaTerminalV2) && fixed.config.hostName() == "orca":
-		return nativeOrcaWorkerAdapter{service: s}, nil
-	case run.Protocol == string(ProtocolOrcaSupervised) && fixed.config.hostName() == "orca_supervised":
-		return supervisedOrcaWorkerAdapter{service: s}, nil
-	default:
-		return nil, nativeErr("unsupported_schema", "fixed worker protocol does not match its execution host")
-	}
-}
-
-func (codexAppWorkerAdapter) preparePrompt(run *Run, prompt string) string {
-	return prompt + localWorkerPublishInstruction(run.RunID)
-}
-func (nativeOrcaWorkerAdapter) preparePrompt(_ *Run, prompt string) string     { return prompt }
-func (supervisedOrcaWorkerAdapter) preparePrompt(_ *Run, prompt string) string { return prompt }
-
-func (codexAppWorkerAdapter) stageIntent(execution *ExecutionRecord, commandID string) {
-	execution.PendingTurnID = "" // A Command ID is not a native turn receipt.
-	execution.PendingCommandID = commandID
-}
-func (nativeOrcaWorkerAdapter) stageIntent(execution *ExecutionRecord, turnID string) {
-	execution.PendingTurnID = turnID
-}
-func (supervisedOrcaWorkerAdapter) stageIntent(execution *ExecutionRecord, turnID string) {
-	execution.PendingTurnID = turnID
-}
-
-func (a codexAppWorkerAdapter) startTurn(ctx context.Context, run *Run, commandID, prompt, opID string) error {
-	s := a.service
+func (s *Service) startCodexWorkerTurn(ctx context.Context, run *Run, commandID, prompt, opID string) error {
 	fixed, err := s.workerFlowContext(run)
 	if err != nil {
 		return err
@@ -114,8 +105,7 @@ func (a codexAppWorkerAdapter) startTurn(ctx context.Context, run *Run, commandI
 	return s.acceptStartedWorkerTurn(run, worker, events, platformRequestID, opID, commandID, true)
 }
 
-func (a nativeOrcaWorkerAdapter) startTurn(ctx context.Context, run *Run, turnID, prompt, opID string) error {
-	s := a.service
+func (s *Service) startNativeOrcaWorkerTurn(ctx context.Context, run *Run, turnID, prompt, opID string) error {
 	fixed, err := s.workerFlowContext(run)
 	if err != nil {
 		return err
@@ -140,8 +130,7 @@ func (a nativeOrcaWorkerAdapter) startTurn(ctx context.Context, run *Run, turnID
 	return s.save()
 }
 
-func (a supervisedOrcaWorkerAdapter) startTurn(ctx context.Context, run *Run, turnID, prompt, opID string) error {
-	s := a.service
+func (s *Service) startSupervisedOrcaWorkerTurn(ctx context.Context, run *Run, turnID, prompt, opID string) error {
 	fixed, err := s.workerFlowContext(run)
 	if err != nil {
 		return err
@@ -197,43 +186,4 @@ func (s *Service) acceptStartedWorkerTurn(run *Run, worker *Worker, events, plat
 	s.registerWorker(run, worker)
 	s.note(run, "steer", "worker", "accepted", "original worker turn accepted", commandID, map[string]any{"session_id": execution.SessionID, "turn_number": execution.TurnNumber + 1})
 	return nil
-}
-
-func (a nativeOrcaWorkerAdapter) sendFeedback(ctx context.Context, run *Run, workflow *WorkflowRunRecord, execution *ExecutionRecord, answer DecisionAnswer, commandID string) error {
-	return a.service.applyNativeOrcaDecision(ctx, run, workflow, execution, answer, commandID)
-}
-func (a codexAppWorkerAdapter) sendFeedback(ctx context.Context, run *Run, workflow *WorkflowRunRecord, execution *ExecutionRecord, answer DecisionAnswer, commandID string) error {
-	return a.service.sendOriginalWorkerFeedback(ctx, run, workflow, execution, answer, commandID)
-}
-func (a supervisedOrcaWorkerAdapter) sendFeedback(ctx context.Context, run *Run, workflow *WorkflowRunRecord, execution *ExecutionRecord, answer DecisionAnswer, commandID string) error {
-	return a.service.sendOriginalWorkerFeedback(ctx, run, workflow, execution, answer, commandID)
-}
-
-func (s *Service) sendOriginalWorkerFeedback(ctx context.Context, run *Run, workflow *WorkflowRunRecord, execution *ExecutionRecord, answer DecisionAnswer, commandID string) error {
-	if execution.SessionID == "" || run.SessionID == nil || *run.SessionID != execution.SessionID {
-		execution.Error = ptr("Feedback is saved, but the original worker session is not yet available for delivery")
-		s.refreshRun(run)
-		return s.save()
-	}
-	if run.Decision.Request.NativeAsk != nil {
-		if s.workerMessages != nil && s.workers[run.RunID] == nil {
-			return nil // Recovery must attach the original observer before replying.
-		}
-		return s.replyAppServerAsk(ctx, run, execution, answer)
-	}
-	if execution.Status == "active" || s.workers[run.RunID] != nil {
-		return nil // Preserve the answer until the original turn stops.
-	}
-	for _, operation := range s.State.Operations {
-		if operation.IdempotencyKey != "worker-turn:"+execution.ExecutionID+":"+commandID {
-			continue
-		}
-		if operation.Status == "confirmed" || operation.Status == "accepted" || operation.Status == "in_flight" {
-			return nil // The original request may have started. Never resend.
-		}
-		execution.Error = ptr("Feedback delivery remains unverified at the original request ID; no duplicate message was sent")
-		s.refreshRun(run)
-		return s.save()
-	}
-	return s.startWorkerFlowTurn(ctx, run, workerFeedbackText(answer, run.Decision.Request), commandID)
 }
