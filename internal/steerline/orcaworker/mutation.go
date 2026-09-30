@@ -5,6 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"path/filepath"
+	"strings"
+	"time"
+
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 var ErrAgentHandleOmitted = errors.New("Orca did not return the created agent terminal handle")
@@ -93,11 +97,57 @@ func Dispatch(ctx context.Context, call MetaCall, taskID, terminal, runID, coord
 }
 
 func NoAgentDetected(result Result) bool {
-	if result.ErrorCode != "inject_rejected" {
+	if result.CallUncertain || result.ErrorCode != "inject_rejected" {
 		return false
 	}
 	var rejected struct {
 		Reason string `json:"reason"`
 	}
 	return json.Unmarshal(result.ErrorData, &rejected) == nil && rejected.Reason == "no_agent_detected"
+}
+
+func DispatchToAgent(ctx context.Context, call MetaCall, taskID, runID, coordinator string, identity executionapi.ProcessIdentity, path, branch, agent string, timeout time.Duration, managed bool, coordinatorIdentity executionapi.ProcessIdentity, repository string) (Result, error) {
+	deadline := time.Now().Add(timeout)
+	for {
+		result, err := Dispatch(ctx, call, taskID, identity.Terminal, runID, coordinator)
+		if err == nil || !NoAgentDetected(result) || managed || time.Now().After(deadline) {
+			return result, err
+		}
+		if err := VerifyAgentTerminal(ctx, call, identity, path, branch, agent); err != nil {
+			return result, err
+		}
+		if coordinatorIdentity.Terminal != "" {
+			if err := VerifyCoordinatorTerminal(ctx, call, coordinatorIdentity, repository); err != nil {
+				return result, err
+			}
+		}
+		select {
+		case <-ctx.Done():
+			return result, ctx.Err()
+		case <-time.After(time.Second):
+		}
+	}
+}
+func FeedbackDispatchInactive(err error) bool {
+	var callErr *CallError
+	return errors.As(err, &callErr) && !callErr.Result.CallUncertain && callErr.Result.ErrorCode == "dispatch_inactive"
+}
+
+func RecoverDispatch(ctx context.Context, call MetaCall, taskID, runID string, identity executionapi.ProcessIdentity) (string, error) {
+	payload := func(ctx context.Context, args ...string) (json.RawMessage, error) {
+		v, e := call(ctx, args...)
+		return v.Payload, e
+	}
+	id, actual, handle, incarnation, err := FindDispatch(ctx, payload, taskID)
+	if err != nil {
+		return "", &executionapi.BackendError{Code: executionapi.BackendOutcomeUnknown, Diagnostic: "original Orca Dispatch creation is unverified", Cause: err}
+	}
+	if actual != runID || handle != identity.Terminal || !strings.HasSuffix(incarnation, ":"+identity.Incarnation) {
+		return "", &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "recovered Orca Dispatch targets a different worker or Run"}
+	}
+	err = VerifyRecoveredDispatch(ctx, call, DispatchIdentity{DispatchID: id, TaskID: taskID, RunID: runID, RuntimeID: identity.RuntimeID, Terminal: identity.Terminal, Incarnation: identity.Incarnation, WorktreeID: identity.WorktreeID})
+	if errors.Is(err, ErrDispatchIdentity) {
+		err = &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: err.Error()}
+	}
+	return id, err
 }

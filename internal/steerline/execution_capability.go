@@ -13,6 +13,7 @@ import (
 	"time"
 
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	remote "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker"
 )
 
 type nativeCapabilityEvidence struct {
@@ -102,7 +103,7 @@ func CertifyExecutionBackend(ctx context.Context, c Config, paths []string) (exe
 		}
 		versionMatches := version == probe.PlatformVersion
 		if probe.Backend == executionapi.BackendOrca && !versionMatches {
-			versionMatches = sameOrcaVersionFamily(version, probe.PlatformVersion)
+			versionMatches = remote.SameVersionFamily(version, probe.PlatformVersion)
 		}
 		if evidence.Version != 1 || evidence.CapturedAt.IsZero() || evidence.Platform != runtime.GOOS+"/"+runtime.GOARCH || evidence.Backend != probe.Backend || evidence.Protocol != probe.Protocol || evidence.TargetID != probe.Target.ID || evidence.Agent != probe.Agent.Name || !versionMatches {
 			return executionapi.CapabilityReport{}, fmt.Errorf("native evidence identity, target, platform or version differs from current backend: %s", path)

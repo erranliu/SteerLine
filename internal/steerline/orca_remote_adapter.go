@@ -11,14 +11,9 @@ import (
 
 type supervisedPreflight = remote.PreflightResult
 type supervisedStartReceipt = remote.StartReceipt
-type supervisedWorkerObservation struct {
-	Identity                                                      executionapi.ProcessIdentity
-	Liveness, DispatchState, AgentWaitState, WorktreePath, Branch string
-	ObservedAt                                                    time.Time
-}
 
 func remoteWorkerConfig(c Config) remote.Config {
-	cfg := remote.Config{Repository: c.Repository, ProjectID: c.identity, Agent: c.agentName(), Model: c.Model, ReasoningEffort: c.ReasoningEffort, CommandTimeout: c.CommandTimeout, Call: (orcaClient{cfg: c}).call, Origin: func(ctx context.Context) ([]byte, error) {
+	cfg := remote.Config{Repository: c.Repository, ProjectID: c.identity, Agent: c.agentName(), Model: c.Model, ReasoningEffort: c.ReasoningEffort, CommandTimeout: c.CommandTimeout, Call: nativeOrcaClient(c).Raw, Origin: func(ctx context.Context) ([]byte, error) {
 		return (Runner{Dir: c.Repository, Timeout: positiveDuration(c.CommandTimeout, 30*time.Second)}).Output(ctx, c.Git, "remote", "get-url", c.Remote)
 	}}
 	if sc := c.Orca.Supervised; sc != nil {
@@ -35,7 +30,7 @@ func remoteWorkerError(err error) error {
 	return err
 }
 func remoteWorkerRef(ref executionapi.ExecutionRef) remote.Ref {
-	return remote.Ref{Backend: ref.Backend, Protocol: ref.Protocol, RunID: ref.RunID, Target: ref.Target, External: ref.External, WorkspacePath: ref.WorkspacePath, WorkspaceBranch: ref.WorkspaceBranch, BaseCommit: ref.BaseCommit}
+	return remote.FromExecutionRef(ref)
 }
 func probeSupervisedOrcaTarget(ctx context.Context, c Config) (supervisedPreflight, error) {
 	if err := validateSupervisedOrcaConfig(&c); err != nil {
@@ -43,14 +38,6 @@ func probeSupervisedOrcaTarget(ctx context.Context, c Config) (supervisedPreflig
 	}
 	v, e := remote.Preflight(ctx, remoteWorkerConfig(c))
 	return v, remoteWorkerError(e)
-}
-func (b orcaSupervisedBackend) showWorker(ctx context.Context, expected supervisedStartReceipt) (supervisedWorkerObservation, error) {
-	v, e := remoteWorkerClient(b.config).Show(ctx, expected)
-	return supervisedWorkerObservation{Identity: executionapi.ProcessIdentity(v.Identity), Liveness: v.Liveness, DispatchState: v.DispatchState, AgentWaitState: v.AgentWaitState, WorktreePath: v.WorktreePath, Branch: v.Branch, ObservedAt: v.ObservedAt}, remoteWorkerError(e)
-}
-func (b orcaSupervisedBackend) inspectSupervisedWorktree(ctx context.Context, pair supervisedPreflight, id, path, branch, base, head string) (executionapi.WorkspaceInspection, error) {
-	v, e := remoteWorkerClient(b.config).InspectWorktree(ctx, pair, id, path, branch, base, head)
-	return executionapi.WorkspaceInspection(v), remoteWorkerError(e)
 }
 
 const maxSupervisedMessageBytes = remote.MaxMessageBytes

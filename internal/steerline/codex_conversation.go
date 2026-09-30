@@ -434,7 +434,7 @@ func (s *Service) recordCodexHistoryCapabilities(ctx context.Context, b codexwor
 		if config.Orca.Executable == "" {
 			return errors.New("Orca capability report lacks a configured version probe")
 		}
-		response, probeErr := (orcaClient{cfg: config}).call(ctx, positiveDuration(config.CommandTimeout, 30*time.Second), "--version")
+		response, probeErr := nativeOrcaClient(config).Raw(ctx, positiveDuration(config.CommandTimeout, 30*time.Second), "--version")
 		if probeErr != nil {
 			return fmt.Errorf("Orca capability version probe failed: %w", probeErr)
 		}

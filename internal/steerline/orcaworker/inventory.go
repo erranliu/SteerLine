@@ -62,10 +62,11 @@ func samePath(a, b string) bool {
 }
 
 type Result struct {
-	Payload   json.RawMessage
-	RuntimeID string
-	ErrorCode string
-	ErrorData json.RawMessage
+	Payload       json.RawMessage
+	RuntimeID     string
+	ErrorCode     string
+	ErrorData     json.RawMessage
+	CallUncertain bool
 }
 
 type MetaCall func(context.Context, ...string) (Result, error)

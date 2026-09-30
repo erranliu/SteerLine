@@ -40,7 +40,7 @@ func TestManagedOrcaLaunchFreezesPermissionsAndRejectsArgs(t *testing.T) {
 }
 
 func TestManagedCommandIndependentEffortAndOrderedPermissionArgs(t *testing.T) {
-	options := ManagedCommandOptions{Host: "orca", Agent: "codex", Executable: "codex.exe", Args: []string{"--no-alt-screen", "--search"}, ReasoningEffort: "high", Sandbox: "workspace-write", WindowsSandbox: "elevated"}
+	options := ManagedCommandOptions{Host: "orca", Agent: "codex", Executable: "codex.exe", Args: []string{"--no-alt-screen", "--search"}, ReasoningEffort: "high", Sandbox: "workspace-write", WindowsSandbox: "elevated", WorkingDirectory: "C:/worker's checkout", WriteRoots: []string{"C:/repo/.git/objects"}}
 	command, err := ManagedCommand(options)
 	if err != nil {
 		t.Fatal(err)
@@ -49,7 +49,8 @@ func TestManagedCommandIndependentEffortAndOrderedPermissionArgs(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		want = append(want, "--config", "sandbox_workspace_write.network_access=true")
 	}
-	if command.Executable != options.Executable || !reflect.DeepEqual(command.Args, want) {
+	want = append(want, "--add-dir", options.WriteRoots[0], "--cd", options.WorkingDirectory)
+	if command.Executable != options.Executable || command.WorkingDirectory != options.WorkingDirectory || !reflect.DeepEqual(command.Args, want) {
 		t.Fatalf("fixed command drifted: %+v", command)
 	}
 	options.Args[0] = "changed"

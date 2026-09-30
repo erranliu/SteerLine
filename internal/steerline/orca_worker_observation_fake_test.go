@@ -125,7 +125,7 @@ func fakeNativeOrca(stateDir string, args []string) int {
 			if state.Name == "" || state.Base == "" || os.MkdirAll(filepath.Dir(state.Path), 0700) != nil {
 				return fakeOrcaErr("invalid_argument", "bad worktree")
 			}
-			if out, err := exec.Command("git", "-C", state.Repo, "worktree", "add", "--detach", state.Path, state.Base).CombinedOutput(); err != nil {
+			if out, err := exec.Command("git", "-C", state.Repo, "worktree", "add", "-b", state.Branch, state.Path, state.Base).CombinedOutput(); err != nil {
 				return fakeOrcaErr("invalid_argument", "cannot create test linked worktree: "+string(out))
 			}
 			state.Created = true

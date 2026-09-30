@@ -11,13 +11,6 @@ import (
 
 func FixedAgentTitle(executionID string) string { return "SteerLine agent " + executionID }
 
-func AppendPowerShellArgs(command string, args []string) string {
-	for _, arg := range args {
-		command += " " + powershellLiteral(arg)
-	}
-	return command
-}
-
 func stableID(value string) bool {
 	if len(value) != 32 {
 		return false

@@ -6,6 +6,7 @@ import (
 	"errors"
 
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	remote "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker"
 	"github.com/erranliu/SteerLine/internal/steerline/workspace"
 )
 
@@ -61,7 +62,7 @@ func (s *Service) inspectWorkflowWorkspace(ctx context.Context, run *Run) (Works
 			return WorkspaceEvidence{}, nativeErr("authority_mismatch", "supervised target differs from its fixed execution")
 		}
 		ref := executionapi.ExecutionRef{Version: executionapi.ExecutionRecordVersion, Backend: executionapi.BackendOrca, Protocol: executionapi.ProtocolOrcaSupervised, Target: target, RunID: run.RunID, AttemptID: run.AttemptID, External: *execution.Process, WorkspacePath: execution.Workspace.Worktree, WorkspaceBranch: execution.Workspace.Branch, BaseCommit: execution.Workspace.Base}
-		inspection, err := (orcaSupervisedBackend{config: c}).InspectWorkspace(ctx, ref)
+		inspection, err := (remote.NewBackend(remoteWorkerConfig(c))).InspectWorkspace(ctx, ref)
 		if err != nil {
 			return WorkspaceEvidence{}, err
 		}

@@ -156,3 +156,33 @@ func (b Client) InspectWorktree(ctx context.Context, pair PreflightResult, workt
 	}
 	return Workspace{Repository: b.config.ProjectID, Worktree: result.Worktree.Path, Branch: branch, Base: base, Head: result.Worktree.Head, Dirty: false, CheckedAt: now()}, nil
 }
+
+func (b Client) VerifyWorker(ctx context.Context, ref Ref) error {
+	if err := validateSupervisedRef(b.config, ref); err != nil {
+		return err
+	}
+	if _, err := b.VerifyCoordinator(ctx, ref); err != nil {
+		return err
+	}
+	show, err := b.Show(ctx, StartReceipt{RunID: ref.External.OrchestrationRun, TaskID: ref.External.Task, DispatchID: ref.External.Dispatch, WorktreeID: ref.External.WorktreeID, CenterRuntimeID: ref.External.CoordinatorRuntimeID})
+	if err != nil {
+		return err
+	}
+	if show.Identity != ref.External || show.Liveness != "live" || show.WorktreePath != ref.WorkspacePath || show.Branch != ref.WorkspaceBranch {
+		return &Error{Code: executionapi.BackendIdentityMismatch, Diagnostic: "remote agent/session/workspace identity changed or is unverified"}
+	}
+	return nil
+}
+func (b Client) BindStart(ctx context.Context, started StartReceipt, previous *executionapi.ProcessIdentity, path, branch string) (executionapi.ProcessIdentity, error) {
+	show, err := b.Show(ctx, started)
+	if err != nil {
+		return executionapi.ProcessIdentity{}, err
+	}
+	if show.Liveness != "live" || show.WorktreePath != path || show.Branch != branch {
+		return executionapi.ProcessIdentity{}, errors.New("remote worker is not live on its fixed workspace/branch")
+	}
+	if previous != nil && SessionID(*previous) != SessionID(show.Identity) {
+		return executionapi.ProcessIdentity{}, errors.New("remote continuation replaced the original agent session")
+	}
+	return show.Identity, nil
+}

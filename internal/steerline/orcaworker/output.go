@@ -87,3 +87,11 @@ func VerifySettledDispatch(ctx context.Context, call MetaCall, expected Dispatch
 	}
 	return result.Dispatch.Status, nil
 }
+
+// DisplayContent is presentation evidence; it never determines a business outcome.
+func (output WorkerOutput) DisplayContent() string {
+	if output.Source == "transcript" && len(output.Transcript) > 0 {
+		return string(output.Transcript)
+	}
+	return strings.Join(output.Terminal.Tail, "\n")
+}

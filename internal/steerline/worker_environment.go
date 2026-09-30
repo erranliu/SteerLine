@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
@@ -347,7 +346,7 @@ func (s *Service) applyEnvironmentAction(ctx context.Context, run *Run, answer D
 			return errors.New("original terminal cannot be located")
 		}
 		// Switching is a locating UI action; it grants no permissions.
-		_, err = workerOrcaCall(ctx, fixed.config, "terminal", "switch", "--terminal", identity.Terminal, "--json")
+		_, err = nativeOrcaClient(fixed.config).MetaCall(ctx, "terminal", "switch", "--terminal", identity.Terminal, "--json")
 		if err != nil {
 			return err
 		}
@@ -385,11 +384,8 @@ func (s *Service) applyEnvironmentAction(ctx context.Context, run *Run, answer D
 			key += fmt.Sprintf(":retry:%d", turn.InjectionAttempts)
 		}
 		if original := s.operationByKey(key); original != nil && original.Status != "rejected" {
-			id, runID, handle, incarnation, err := findNativeOrcaDispatch(ctx, fixed.config, turn.TaskID)
-			if err != nil || runID != execution.Target.OrchestrationRun || handle != execution.Process.Terminal || !strings.HasSuffix(incarnation, ":"+execution.Process.Incarnation) {
-				return s.renewEnvironmentDecision(run)
-			}
-			if err := verifyRecoveredNativeOrcaDispatch(ctx, fixed.config, id, turn.TaskID, runID, *execution.Process); err != nil {
+			id, err := orcaworker.RecoverDispatch(ctx, orcaWorkerMetaCaller(fixed.config), turn.TaskID, execution.Target.OrchestrationRun, *execution.Process)
+			if err != nil {
 				return s.renewEnvironmentDecision(run)
 			}
 			turn.DispatchID = id
@@ -402,7 +398,7 @@ func (s *Service) applyEnvironmentAction(ctx context.Context, run *Run, answer D
 		}
 	}
 	if turn != nil && turn.DispatchID != "" {
-		if err := verifyRecoveredNativeOrcaDispatch(ctx, fixed.config, turn.DispatchID, turn.TaskID, execution.Target.OrchestrationRun, *execution.Process); err != nil {
+		if err := orcaworker.VerifyRecoveredDispatch(ctx, orcaWorkerMetaCaller(fixed.config), orcaworker.DispatchIdentity{DispatchID: turn.DispatchID, TaskID: turn.TaskID, RunID: execution.Target.OrchestrationRun, RuntimeID: execution.Process.RuntimeID, Terminal: execution.Process.Terminal, Incarnation: execution.Process.Incarnation, WorktreeID: execution.Process.WorktreeID}); err != nil {
 			return s.renewEnvironmentDecision(run)
 		}
 	}

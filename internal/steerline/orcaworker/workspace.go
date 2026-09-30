@@ -6,6 +6,9 @@ import (
 	"errors"
 	"path/filepath"
 	"strings"
+	"time"
+
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 var ErrWorktreeIdentity = errors.New("Orca worktree does not match the fixed name, repository, base and branch")
@@ -20,6 +23,16 @@ type Worktree struct {
 	BaseRef          string `json:"baseRef"`
 	Comment          string `json:"comment,omitempty"`
 	CreatedWithAgent string `json:"createdWithAgent,omitempty"`
+}
+
+// WorkspaceBinding preserves native path values, including remote paths whose
+// syntax belongs to a different host. Local filesystem validation is separate.
+func WorkspaceBinding(value Worktree, repository, base string) (executionapi.WorkspaceInspection, error) {
+	branch := strings.TrimPrefix(value.Branch, "refs/heads/")
+	if branch == "" || value.Path == "" || value.Head != base {
+		return executionapi.WorkspaceInspection{}, errors.New("remote worker worktree identity is incomplete")
+	}
+	return executionapi.WorkspaceInspection{Repository: repository, Worktree: value.Path, Branch: branch, Base: base, Head: base, CheckedAt: time.Now().UTC()}, nil
 }
 
 func ValidateWorktree(value Worktree, name, repoID, base string) error {

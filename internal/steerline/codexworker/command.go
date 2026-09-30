@@ -9,14 +9,16 @@ import (
 )
 
 type ManagedCommandOptions struct {
-	Host            string
-	Agent           string
-	Model           string
-	ReasoningEffort string
-	Executable      string
-	Args            []string
-	Sandbox         string
-	WindowsSandbox  string
+	WorkingDirectory string
+	WriteRoots       []string
+	Host             string
+	Agent            string
+	Model            string
+	ReasoningEffort  string
+	Executable       string
+	Args             []string
+	Sandbox          string
+	WindowsSandbox   string
 }
 
 func ManagedCommand(options ManagedCommandOptions) (executionapi.LaunchCommand, error) {
@@ -38,7 +40,13 @@ func ManagedCommand(options ManagedCommandOptions) (executionapi.LaunchCommand, 
 	if runtime.GOOS == "windows" {
 		args = append(args, "--config", "sandbox_workspace_write.network_access=true")
 	}
-	return executionapi.LaunchCommand{Executable: options.Executable, Args: args}, nil
+	for _, root := range options.WriteRoots {
+		args = append(args, "--add-dir", root)
+	}
+	if options.WorkingDirectory != "" {
+		args = append(args, "--cd", options.WorkingDirectory)
+	}
+	return executionapi.LaunchCommand{Executable: options.Executable, Args: args, WorkingDirectory: options.WorkingDirectory}, nil
 }
 
 // The managed launcher accepts only standalone presentation switches. This

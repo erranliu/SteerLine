@@ -43,8 +43,7 @@ func TestSupervisedOrcaRealP10ReplyGate(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	b := orcaSupervisedBackend{config: c}
-	observed, err := b.showWorker(ctx, started)
+	observed, err := remoteWorkerClient(c).Show(ctx, started)
 	if err != nil || observed.Liveness != "live" {
 		t.Fatalf("exact home worker is not live: observation=%+v error=%v", observed, err)
 	}

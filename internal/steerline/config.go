@@ -18,6 +18,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	remote "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker"
 	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	"github.com/erranliu/SteerLine/internal/steerline/workspace"
 )
@@ -339,38 +340,14 @@ func LoadConfig(path string) (Config, error) {
 }
 
 func validateSupervisedOrcaConfig(c *Config) error {
-	if c == nil || c.agentName() != "codex" {
+	if c == nil {
 		return errors.New("orca_supervised currently requires agent=codex")
 	}
-	if c.Model == "" || c.ReasoningEffort == "" {
-		return errors.New("orca_supervised requires explicit model and reasoning_effort; the remote Orca default is never inherited")
+	selected := remote.Selection{Agent: c.agentName(), Model: c.Model, ReasoningEffort: c.ReasoningEffort, Executable: c.Orca.Executable, Shell: c.Orca.Shell, WaitTimeout: c.Orca.WaitTimeout}
+	if sc := c.Orca.Supervised; sc != nil {
+		selected.Settings = &remote.SelectionSettings{Settings: remoteWorkerConfig(*c).Settings, RemoteCancelAvailable: sc.RemoteCancelAvailable, CapabilityReportVersion: sc.CapabilityReportVersion}
 	}
-	if c.Orca.Supervised == nil {
-		return errors.New("orca_supervised requires an explicit orca.supervised configuration")
-	}
-	supervised := c.Orca.Supervised
-	if strings.TrimSpace(supervised.ConnectionID) == "" || strings.TrimSpace(supervised.EnvironmentID) == "" || strings.TrimSpace(supervised.RepositorySelector) == "" || strings.TrimSpace(supervised.CoordinatorTerminal) == "" {
-		return errors.New("orca.supervised requires fixed connection_id, environment_id, repository_selector, and coordinator_terminal")
-	}
-	if supervised.RemoteCancelAvailable {
-		return errors.New("orca_supervised remote cancellation is fixed unavailable")
-	}
-	if strings.TrimSpace(supervised.PollInterval) == "" {
-		return errors.New("orca.supervised.poll_interval must be explicit")
-	}
-	if d, e := time.ParseDuration(supervised.PollInterval); e != nil || d <= 0 {
-		return errors.New("orca.supervised.poll_interval must be a positive duration")
-	}
-	if supervised.CapabilityReportVersion != 1 {
-		return errors.New("orca.supervised.capability_report_version must explicitly pin version 1")
-	}
-	if c.Orca.Executable == "" || c.Orca.Shell == "" {
-		return errors.New("orca.executable and orca.shell are required")
-	}
-	if d, e := time.ParseDuration(c.Orca.WaitTimeout); e != nil || d <= 0 {
-		return errors.New("orca.wait_timeout must be a positive duration")
-	}
-	return nil
+	return selected.Validate()
 }
 
 func validateWorkflowConfig(c *Config, _ []byte) error {

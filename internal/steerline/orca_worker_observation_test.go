@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
 
 func TestWorkerOrcaWorktreeNameIncludesTaskNumberAndRunIdentity(t *testing.T) {
@@ -107,7 +109,7 @@ func TestFixedOrcaAgentTerminalRejectsReplacedIncarnation(t *testing.T) {
 	}
 	op := &OperationRecord{Receipt: receipt}
 	live := []orcaTerminal{{Handle: "term-original", IncarnationID: "inc-replacement", WorktreeID: "repo::worktree", Title: "renamed"}}
-	if terminal, err := fixedOrcaAgentTerminal(live, op, title, "repo::worktree"); err == nil || terminal.Handle != "" || !strings.Contains(err.Error(), "incarnation changed") {
+	if terminal, err := orcaworker.FixedAgentTerminal(live, op.Receipt, title, "repo::worktree"); err == nil || terminal.Handle != "" || !strings.Contains(err.Error(), "incarnation changed") {
 		t.Fatalf("replacement terminal was adopted: %+v / %v", terminal, err)
 	}
 }

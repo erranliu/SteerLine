@@ -28,7 +28,7 @@ func orcaVersionFamily(version string) (string, bool) {
 	return fmt.Sprintf("%d.%d", major, minor), true
 }
 
-func sameOrcaVersionFamily(a, b string) bool {
+func SameVersionFamily(a, b string) bool {
 	aFamily, aOK := orcaVersionFamily(a)
 	bFamily, bOK := orcaVersionFamily(b)
 	return aOK && bOK && aFamily == bFamily

@@ -23,28 +23,12 @@ func findNativeOrcaTask(ctx context.Context, c Config, runID, coordinator, spec 
 	return orcaworker.FindTask(ctx, orcaWorkerCaller(c), runID, coordinator, spec)
 }
 
-func findNativeOrcaDispatch(ctx context.Context, c Config, taskID string) (string, string, string, string, error) {
-	return orcaworker.FindDispatch(ctx, orcaWorkerCaller(c), taskID)
-}
-
 func findNativeOrcaReply(ctx context.Context, c Config, runID, dispatchID, questionID, answer string) (string, error) {
 	return orcaworker.FindReply(ctx, orcaWorkerCaller(c), runID, dispatchID, questionID, answer)
 }
 
 func findNativeOrcaSend(ctx context.Context, c Config, runID, dispatchID, subject, body string) (string, error) {
 	return orcaworker.FindSend(ctx, orcaWorkerCaller(c), runID, dispatchID, subject, body)
-}
-
-func verifyRecoveredNativeOrcaDispatch(ctx context.Context, c Config, dispatchID, taskID, runID string, identity executionapi.ProcessIdentity) error {
-	err := orcaworker.VerifyRecoveredDispatch(ctx, orcaWorkerMetaCaller(c), orcaworker.DispatchIdentity{
-		DispatchID: dispatchID, TaskID: taskID, RunID: runID,
-		RuntimeID: identity.RuntimeID, Terminal: identity.Terminal,
-		Incarnation: identity.Incarnation, WorktreeID: identity.WorktreeID,
-	})
-	if errors.Is(err, orcaworker.ErrDispatchIdentity) {
-		return &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: err.Error()}
-	}
-	return err
 }
 
 func (s *Service) startNativeOrcaTurn(ctx context.Context, run *Run, execution *ExecutionRecord, turnID, prompt string) error {
@@ -152,14 +136,8 @@ func (s *Service) startNativeOrcaTurn(ctx context.Context, run *Run, execution *
 		dispatchKey = "orca-native-dispatch:" + execution.ExecutionID + ":" + turnID + fmt.Sprintf(":retry:%d", current.InjectionAttempts)
 	}
 	if op := s.operationByKey(dispatchKey); op != nil {
-		id, runID, handle, incarnation, err := findNativeOrcaDispatch(ctx, fixedConfig, taskID)
+		id, err := orcaworker.RecoverDispatch(ctx, orcaWorkerMetaCaller(fixedConfig), taskID, execution.Target.OrchestrationRun, *execution.Process)
 		if err != nil {
-			return &executionapi.BackendError{Code: executionapi.BackendOutcomeUnknown, Diagnostic: "original Orca Dispatch creation is unverified", Cause: err}
-		}
-		if runID != execution.Target.OrchestrationRun || handle != execution.Process.Terminal || !strings.HasSuffix(incarnation, ":"+execution.Process.Incarnation) {
-			return &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "recovered Orca Dispatch targets a different worker or Run"}
-		}
-		if err := verifyRecoveredNativeOrcaDispatch(ctx, fixedConfig, id, taskID, runID, *execution.Process); err != nil {
 			return err
 		}
 		current.DispatchID, current.DispatchRequestID = id, op.PlatformRequestID
@@ -185,33 +163,14 @@ func (s *Service) startNativeOrcaTurn(ctx context.Context, run *Run, execution *
 	if err != nil {
 		return err
 	}
-	deadline := time.Now().Add(positiveDuration(fixedConfig.Orca.WaitTimeout, 2*time.Minute))
-	var env orcaworker.Result
-	for {
-		env, err = orcaworker.Dispatch(ctx, orcaWorkerMetaCaller(fixedConfig), taskID, execution.Process.Terminal, execution.Target.OrchestrationRun, state.Coordinator.Terminal)
-		if err == nil {
-			break
+	env, err := orcaworker.DispatchToAgent(ctx, orcaWorkerMetaCaller(fixedConfig), taskID, execution.Target.OrchestrationRun, state.Coordinator.Terminal, *execution.Process, execution.Workspace.Worktree, execution.Workspace.Branch, fixedConfig.agentName(), positiveDuration(fixedConfig.Orca.WaitTimeout, 2*time.Minute), execution.Environment != nil, state.Coordinator, fixedConfig.Repository)
+	if err != nil {
+		status := "outcome_unknown"
+		if orcaworker.NoAgentDetected(env) {
+			status = "rejected"
 		}
-		if !orcaworker.NoAgentDetected(env) {
-			_ = s.changeWorkerOperation(run, dispatchOp, "outcome_unknown", "", nil, err.Error())
-			return err
-		}
-		if execution.Environment != nil {
-			_ = s.changeWorkerOperation(run, dispatchOp, "rejected", "", nil, "native inject rejected before input: no agent detected")
-			return err
-		}
-		if time.Now().After(deadline) {
-			_ = s.changeWorkerOperation(run, dispatchOp, "rejected", "", nil, err.Error())
-			return err
-		}
-		if err := s.verifyNativeOrcaWorker(ctx, run, execution); err != nil {
-			return err
-		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(time.Second):
-		}
+		_ = s.changeWorkerOperation(run, dispatchOp, status, "", nil, err.Error())
+		return workerOrcaBackendError(err)
 	}
 	receipt, err := orcaworker.DispatchReceipt(env, taskID, execution.Target.OrchestrationRun, state.Coordinator.RuntimeID)
 	if err != nil {
@@ -260,7 +219,7 @@ func nativeOrcaSessionIdentity(execution *ExecutionRecord) (string, error) {
 	if execution.Process.Kind == "orca_supervised" {
 		return remote.SessionID(executionapi.ProcessIdentity(*execution.Process)), nil
 	}
-	return nativeOrcaSession(*execution.Process), nil
+	return orcaworker.SessionID(*execution.Process), nil
 }
 
 func (s *Service) beginNativeOrcaTurn(run *Run, workflow *WorkflowRunRecord, execution *ExecutionRecord, turn *OrcaNativeTurn) error {
@@ -493,7 +452,7 @@ func (s *Service) sendNativeOrcaFeedbackToDecision(ctx context.Context, run *Run
 	if err != nil {
 		var callErr *orcaworker.CallError
 		if errors.As(err, &callErr) {
-			if callErr.Result.ErrorCode == "dispatch_inactive" {
+			if orcaworker.FeedbackDispatchInactive(err) {
 				_ = s.changeWorkerOperation(run, opID, "rejected", "", nil, err.Error())
 				execution.Error = ptr("Original Orca Dispatch is inactive; feedback remains saved until settlement is confirmed")
 				s.refreshRun(run)

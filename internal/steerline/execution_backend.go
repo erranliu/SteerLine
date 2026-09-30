@@ -17,6 +17,8 @@ import (
 	"time"
 
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	remote "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker"
+	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 	"github.com/erranliu/SteerLine/internal/steerline/workspace"
 )
 
@@ -25,7 +27,7 @@ func executionStopperFor(c Config) (executionapi.ExecutionStopper, error) {
 	case "local":
 		return localExecutionBackend{config: c}, nil
 	case "orca":
-		return orcaTerminalBackend{config: c}, nil
+		return orcaworker.NewBackend(nativeOrcaConfig(c)), nil
 	}
 	return nil, unsupported("StopExecution")
 }
@@ -492,96 +494,6 @@ func (b localExecutionBackend) StopExecution(ctx context.Context, ref executiona
 	return executionapi.StopReceipt{Disposition: "accepted"}, nil
 }
 
-type orcaTerminalBackend struct{ config Config }
-
-func (b orcaTerminalBackend) Identity() (executionapi.BackendKind, executionapi.ExecutionProtocol) {
-	return executionapi.BackendOrca, executionapi.ProtocolOrcaTerminalV2
-}
-func (b orcaTerminalBackend) Probe(ctx context.Context, target executionapi.ExecutionTarget, agent executionapi.AgentSpec) (executionapi.CapabilityReport, error) {
-	if agent.Name == "" {
-		return executionapi.CapabilityReport{}, &executionapi.BackendError{Code: executionapi.BackendRejected, Diagnostic: "Orca agent is required"}
-	}
-	out, err := (orcaClient{cfg: b.config}).call(ctx, positiveDuration(b.config.CommandTimeout, 30*time.Second), "--version")
-	if err != nil {
-		return executionapi.CapabilityReport{}, &executionapi.BackendError{Code: executionapi.BackendUnreachable, Diagnostic: "Orca version probe failed", Cause: err}
-	}
-	version := strings.TrimSpace(string(out))
-	if version == "" {
-		return executionapi.CapabilityReport{}, &executionapi.BackendError{Code: executionapi.BackendProtocolInvalid, Diagnostic: "Orca version probe returned no version"}
-	}
-	report := capabilityReport(executionapi.BackendOrca, executionapi.ProtocolOrcaTerminalV2, target, agent, version)
-	if b.config.needsCodexExecutable() {
-		out, err := (Runner{Dir: b.config.Repository, Timeout: positiveDuration(b.config.CommandTimeout, 30*time.Second)}).Output(ctx, b.config.Codex, "--version")
-		if err != nil || strings.TrimSpace(string(out)) == "" {
-			return executionapi.CapabilityReport{}, &executionapi.BackendError{Code: executionapi.BackendUnreachable, Diagnostic: "Orca Codex override version probe failed", Cause: err}
-		}
-		report.AgentVersion = strings.TrimSpace(string(out))
-	}
-	return report, nil
-}
-func (b orcaTerminalBackend) Observe(ctx context.Context, ref executionapi.ExecutionRef) (executionapi.Observation, error) {
-	old := ref.External
-	if old.Kind != "orca" || old.Terminal == "" {
-		return executionapi.Observation{}, &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "Orca terminal binding is incomplete"}
-	}
-	if targetFor(b.config) != ref.Target {
-		return executionapi.Observation{}, &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "configured Orca connection differs from the fixed execution target"}
-	}
-	if err := ctx.Err(); err != nil {
-		return executionapi.Observation{}, err
-	}
-	term, e := inspectBoundOrcaTerminal(ctx, b.config, old)
-	if e != nil {
-		return executionapi.Observation{}, e
-	}
-	life := "live"
-	if term.Exited() {
-		life = "exited"
-	} else if !term.Connected {
-		life = "unverifiable"
-	}
-	return executionapi.Observation{Liveness: life, Connection: map[bool]string{true: "connected", false: "unreachable"}[term.Connected], ObservedAt: now(), Source: "orca-terminal-v2", Diagnostic: term.Status}, nil
-}
-func (b orcaTerminalBackend) InspectWorkspace(ctx context.Context, ref executionapi.ExecutionRef) (executionapi.WorkspaceInspection, error) {
-	if ref.Backend != executionapi.BackendOrca || ref.Protocol != executionapi.ProtocolOrcaTerminalV2 || ref.Target != targetFor(b.config) {
-		return executionapi.WorkspaceInspection{}, &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "Orca workspace target differs from the fixed execution"}
-	}
-	// terminal-v2 worktrees live on this configured host. Future supervised
-	// targets must implement their own remote inspection instead of using Git here.
-	return inspectBoundWorkspace(ctx, b.config, ref)
-}
-
-func (b orcaTerminalBackend) StopExecution(ctx context.Context, ref executionapi.ExecutionRef, _ executionapi.Operation, handle executionapi.StopHandle) (executionapi.StopReceipt, error) {
-	obs, err := b.Observe(ctx, ref)
-	if err != nil {
-		return executionapi.StopReceipt{}, err
-	}
-	if obs.Liveness == "exited" {
-		return executionapi.StopReceipt{Disposition: "confirmed", Diagnostic: obs.Diagnostic}, nil
-	}
-	if obs.Liveness != "live" {
-		return executionapi.StopReceipt{}, &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "Orca terminal is not verifiably live"}
-	}
-	if handle != nil && handle.Identity() != ref.External {
-		return executionapi.StopReceipt{}, &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "Orca observer handle does not match the fixed terminal identity"}
-	}
-	closeReceipt, err := (orcaClient{cfg: b.config}).closeTerminalChecked(ctx, ref.External.Terminal, ref.External.RuntimeID)
-	if err != nil {
-		return executionapi.StopReceipt{}, err
-	}
-	if closeReceipt.Disposition == "confirmed" {
-		return closeReceipt, nil
-	}
-	obs, err = b.Observe(ctx, ref)
-	if err != nil {
-		return executionapi.StopReceipt{}, &executionapi.BackendError{Code: executionapi.BackendOutcomeUnknown, Diagnostic: "terminal close was accepted but stop could not be confirmed", Cause: err}
-	}
-	if obs.Liveness == "exited" {
-		return executionapi.StopReceipt{Disposition: "confirmed", Diagnostic: obs.Diagnostic}, nil
-	}
-	return executionapi.StopReceipt{Disposition: "accepted", Diagnostic: "close accepted; terminal exit is not yet confirmed"}, nil
-}
-
 func capabilityReport(backend executionapi.BackendKind, protocol executionapi.ExecutionProtocol, target executionapi.ExecutionTarget, agent executionapi.AgentSpec, version string) executionapi.CapabilityReport {
 	caps := []executionapi.Capability{{Name: "start", Status: executionapi.CapabilityNotTested}, {Name: "observe", Status: executionapi.CapabilityNotTested}, {Name: "stop", Status: executionapi.CapabilityNotTested}, {Name: "detach_observation", Status: executionapi.CapabilityNotTested}, {Name: "operation_reconciliation", Status: executionapi.CapabilityNotTested}, {Name: "workspace_inspection", Status: executionapi.CapabilityNotTested}, {Name: "output_reading", Status: executionapi.CapabilityNotTested}, {Name: "output_turns", Status: executionapi.CapabilityNotTested}, {Name: "output_final_answer", Status: executionapi.CapabilityNotTested}, {Name: "resource_settlement", Status: executionapi.CapabilityUnsupported}}
 	return executionapi.CapabilityReport{Version: 1, Backend: backend, Protocol: protocol, Target: target, Agent: agent, PlatformVersion: version, CheckedAt: now(), Capabilities: caps}
@@ -592,10 +504,10 @@ func retiredExecutionCapabilityName(name string) bool {
 }
 func backendFor(c Config) executionapi.ExecutionBackend {
 	if c.hostName() == "orca_supervised" {
-		return orcaSupervisedBackend{config: c}
+		return remote.NewBackend(remoteWorkerConfig(c))
 	}
 	if c.hostName() == "orca" {
-		return orcaTerminalBackend{config: c}
+		return orcaworker.NewBackend(nativeOrcaConfig(c))
 	}
 	return localExecutionBackend{config: c}
 }
@@ -650,7 +562,7 @@ func (s *Service) inspectRunProcess(run *Run) string {
 		if ref.Protocol == executionapi.ProtocolOrcaSupervised {
 			execution := s.executionRecord(run)
 			if execution == nil || execution.Process == nil || *execution.Process != *run.Process ||
-				!sameSupervisedBaseTarget(ref.Target, execution.Target) || ref.External.Kind != "orca_supervised" ||
+				!remote.SameBaseTarget(ref.Target, execution.Target) || ref.External.Kind != "orca_supervised" ||
 				ref.External.RuntimeID != run.Process.RuntimeID || ref.External.CoordinatorRuntimeID != run.Process.CoordinatorRuntimeID ||
 				ref.External.Terminal != run.Process.Terminal || ref.External.Incarnation != run.Process.Incarnation ||
 				ref.External.ExecutionHost != run.Process.ExecutionHost || ref.External.WorktreeID != run.Process.WorktreeID ||
@@ -664,7 +576,7 @@ func (s *Service) inspectRunProcess(run *Run) string {
 		if ref.External != *run.Process || ref.Backend == "" || ref.Protocol == "" || ref.Target.ID == "" {
 			return "execution binding conflicts with runtime identity"
 		}
-		if ref.Protocol == executionapi.ProtocolOrcaSupervised && !sameSupervisedBaseTarget(ref.Target, targetFor(c)) || ref.Protocol != executionapi.ProtocolOrcaSupervised && ref.Target != targetFor(c) {
+		if ref.Protocol == executionapi.ProtocolOrcaSupervised && !remote.SameBaseTarget(ref.Target, targetFor(c)) || ref.Protocol != executionapi.ProtocolOrcaSupervised && ref.Target != targetFor(c) {
 			return "execution target changed; refusing to inspect through a replacement backend connection"
 		}
 		backend := backendFor(c)
