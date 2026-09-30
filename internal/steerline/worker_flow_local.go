@@ -10,6 +10,7 @@ import (
 
 	"github.com/erranliu/SteerLine/internal/steerline/codexapp"
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
+	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
 
 type workerTurnOutcome = codexworker.Outcome
@@ -50,7 +51,7 @@ func requireWorkerFlowCapabilities(ctx context.Context, c Config) error {
 		if c.Profile != "" || c.Sandbox != "workspace-write" || (c.Model == "") != (c.ReasoningEffort == "") {
 			return &BackendError{Code: BackendUnsupported, Diagnostic: "Orca requires workspace-write, no Codex profile, and model with reasoning_effort together"}
 		}
-		if _, err := workerOrcaCall(ctx, c, "status", "--json"); err != nil {
+		if err := orcaworker.CheckStatus(ctx, orcaWorkerCaller(c)); err != nil {
 			return err
 		}
 		_, err := nativeOrcaRepo(ctx, c)

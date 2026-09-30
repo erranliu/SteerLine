@@ -2,10 +2,9 @@ package steerline
 
 import (
 	"context"
-	"encoding/json"
-	"time"
 
 	"github.com/erranliu/SteerLine/internal/steerline/codexapp"
+	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
 
 type WorkerEvent struct {
@@ -40,15 +39,8 @@ type WorkerEvent struct {
 	Processed        chan error             `json:"-"`
 }
 
-type OrcaInboxMessage struct {
-	ID         string          `json:"id"`
-	FromHandle string          `json:"from_handle,omitempty"`
-	Type       string          `json:"type"`
-	Subject    string          `json:"subject"`
-	Body       string          `json:"body"`
-	Payload    json.RawMessage `json:"payload,omitempty"`
-	CreatedAt  time.Time       `json:"created_at,omitempty"`
-}
+type OrcaInboxMessage = orcaworker.Message
+
 type Worker struct {
 	proc              process
 	Events            chan WorkerEvent

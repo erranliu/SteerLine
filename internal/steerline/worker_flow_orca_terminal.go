@@ -2,7 +2,6 @@ package steerline
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"path/filepath"
@@ -167,32 +166,12 @@ func (p *workerOrcaProcess) Kill() {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), positiveDuration(p.config.CommandTimeout, 30*time.Second))
 	defer cancel()
-	_, _ = workerOrcaCall(ctx, p.config, "terminal", "close", "--terminal", p.identity.Terminal, "--json")
+	_, _ = orcaworker.CloseTerminal(ctx, orcaWorkerMetaCaller(p.config), p.identity.Terminal, p.identity.RuntimeID)
 }
 
 func workerOrcaRemoteRepoPath(ctx context.Context, c Config, worktreeID string) (string, error) {
-	repoID, _, found := strings.Cut(worktreeID, "::")
-	if !found || repoID == "" {
-		return "", errors.New("remote Orca worktree has no registered repository identity")
-	}
-	env, err := workerOrcaCall(ctx, c, "repo", "show", "--repo", "id:"+repoID, "--json")
-	if err != nil {
-		return "", err
-	}
-	var result struct {
-		Repo struct {
-			ID   string `json:"id"`
-			Path string `json:"path"`
-			Kind string `json:"kind"`
-		} `json:"repo"`
-	}
-	if err := json.Unmarshal(env.Result, &result); err != nil {
-		return "", err
-	}
-	if result.Repo.ID != repoID || result.Repo.Kind != "git" || !filepath.IsAbs(filepath.FromSlash(result.Repo.Path)) {
-		return "", &BackendError{Code: BackendIdentityMismatch, Diagnostic: "remote worktree repository path is not verified"}
-	}
-	return filepath.FromSlash(result.Repo.Path), nil
+	path, err := orcaworker.RemoteRepoPath(ctx, orcaWorkerCaller(c), worktreeID)
+	return path, workerOrcaBackendError(err)
 }
 
 func workerOrcaWriteDirs(ctx context.Context, c Config, run *Run) ([]string, error) {

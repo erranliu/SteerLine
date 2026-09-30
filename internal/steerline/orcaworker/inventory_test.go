@@ -63,3 +63,12 @@ func TestRecoveredDispatchRequiresExactInjectedIdentity(t *testing.T) {
 		t.Fatalf("replaced worker terminal was accepted: %v", err)
 	}
 }
+
+func TestListTerminalsRejectsMissingRuntime(t *testing.T) {
+	call := func(context.Context, ...string) (Result, error) {
+		return Result{Payload: json.RawMessage(`{"terminals":[{"handle":"terminal"}]}`)}, nil
+	}
+	if _, _, err := ListTerminals(context.Background(), call, "path:C:/repo"); err == nil {
+		t.Fatal("terminal inventory without runtime identity was accepted")
+	}
+}

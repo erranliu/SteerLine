@@ -40,34 +40,12 @@ func nativeOrcaSession(p ProcessIdentity) string {
 	return "orca-terminal:" + p.RuntimeID + ":" + p.Terminal + ":" + p.Incarnation
 }
 
-func nativeOrcaResult[T any](env orcaEnvelope) (T, error) {
-	var value T
-	if err := json.Unmarshal(env.Result, &value); err != nil {
-		return value, err
-	}
-	return value, nil
-}
-
 func nativeOrcaRepo(ctx context.Context, c Config) (string, error) {
-	env, err := workerOrcaCall(ctx, c, "repo", "list", "--json")
-	if err != nil {
-		return "", err
+	repoID, err := orcaworker.FindRepo(ctx, orcaWorkerCaller(c), c.Repository)
+	if errors.Is(err, orcaworker.ErrRepoUnavailable) {
+		return "", &BackendError{Code: BackendUnsupported, Diagnostic: err.Error()}
 	}
-	var listing struct {
-		Repos []struct{ ID, Path, Kind string } `json:"repos"`
-	}
-	listing, err = nativeOrcaResult[struct {
-		Repos []struct{ ID, Path, Kind string } `json:"repos"`
-	}](env)
-	if err != nil {
-		return "", err
-	}
-	for _, repo := range listing.Repos {
-		if repo.Kind == "git" && repo.ID != "" && canonical(filepath.FromSlash(repo.Path)) == canonical(c.Repository) {
-			return repo.ID, nil
-		}
-	}
-	return "", &BackendError{Code: BackendUnsupported, Diagnostic: "fixed repository is not registered with local Orca"}
+	return repoID, err
 }
 
 func (s *Service) nativeOrcaOperation(key string) *OperationRecord {
@@ -80,18 +58,7 @@ func (s *Service) nativeOrcaOperation(key string) *OperationRecord {
 }
 
 func nativeOrcaTerminals(ctx context.Context, c Config, worktree string) ([]orcaTerminal, string, error) {
-	env, err := workerOrcaCall(ctx, c, "terminal", "list", "--worktree", worktree, "--limit", "1000", "--json")
-	if err != nil {
-		return nil, "", err
-	}
-	var result struct {
-		Terminals []orcaTerminal `json:"terminals"`
-		Truncated bool           `json:"truncated"`
-	}
-	if err := json.Unmarshal(env.Result, &result); err != nil || result.Truncated || env.Meta.RuntimeID == "" {
-		return nil, "", errors.Join(err, errors.New("Orca terminal inventory is incomplete"))
-	}
-	return result.Terminals, env.Meta.RuntimeID, nil
+	return orcaworker.ListTerminals(ctx, orcaWorkerMetaCaller(c), worktree)
 }
 
 func nativeOrcaWorktreeComment(executionID string) string {
@@ -257,49 +224,29 @@ func (s *Service) prepareNativeOrcaWorker(ctx context.Context, run *Run) error {
 	if err != nil {
 		return err
 	}
-	env, callErr := workerOrcaCall(ctx, fixedConfig, "worktree", "create", "--repo", "id:"+repoID, "--name", name, "--base-branch", base, "--no-parent", "--setup", "skip", "--agent", fixedConfig.agentName(), "--comment", nativeOrcaWorktreeComment(execution.ExecutionID), "--json")
+	platform, callErr := orcaworker.CreateNativeWorktree(ctx, orcaWorkerMetaCaller(fixedConfig), repoID, name, base, fixedConfig.agentName(), nativeOrcaWorktreeComment(execution.ExecutionID))
 	if callErr != nil {
 		_ = s.changeOperation(opID, "outcome_unknown", "", nil, callErr.Error())
 		return &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "Orca worktree/agent creation has no confirmed receipt; do not create another agent", Cause: callErr}
 	}
-	var result struct {
-		Worktree            workerOrcaWorktree `json:"worktree"`
-		AgentTerminalHandle string             `json:"agentTerminalHandle"`
-		StartupTerminal     struct {
-			Handle string `json:"handle"`
-		} `json:"startupTerminal"`
-	}
-	result, err = nativeOrcaResult[struct {
-		Worktree            workerOrcaWorktree `json:"worktree"`
-		AgentTerminalHandle string             `json:"agentTerminalHandle"`
-		StartupTerminal     struct {
-			Handle string `json:"handle"`
-		} `json:"startupTerminal"`
-	}](env)
+	receipt, err := orcaworker.ParseNativeWorktreeReceipt(platform, name, repoID, base)
 	if err != nil {
+		if errors.Is(err, orcaworker.ErrAgentHandleOmitted) {
+			_ = s.changeOperation(opID, "outcome_unknown", "", platform.Payload, "agent handle omitted")
+			return err
+		}
 		_ = s.changeOperation(opID, "outcome_unknown", "", nil, err.Error())
+		return workerOrcaWorkspaceError(err)
+	}
+	handle := receipt.Handle
+	if err := s.changeOperation(opID, "accepted", "", platform.Payload, ""); err != nil {
 		return err
 	}
-	if err := validateWorkerOrcaWorktree(result.Worktree, name, repoID, base); err != nil {
-		_ = s.changeOperation(opID, "outcome_unknown", "", nil, err.Error())
+	if err := s.bindNativeOrcaAgent(ctx, run, execution, receipt.Worktree, handle, repoID, base); err != nil {
+		_ = s.changeOperation(opID, "outcome_unknown", "", platform.Payload, err.Error())
 		return err
 	}
-	handle := result.AgentTerminalHandle
-	if handle == "" {
-		handle = result.StartupTerminal.Handle
-	}
-	if handle == "" {
-		_ = s.changeOperation(opID, "outcome_unknown", "", env.Result, "agent handle omitted")
-		return errors.New("Orca did not return the created agent terminal handle")
-	}
-	if err := s.changeOperation(opID, "accepted", "", env.Result, ""); err != nil {
-		return err
-	}
-	if err := s.bindNativeOrcaAgent(ctx, run, execution, result.Worktree, handle, repoID, base); err != nil {
-		_ = s.changeOperation(opID, "outcome_unknown", "", env.Result, err.Error())
-		return err
-	}
-	if err := s.changeOperation(opID, "confirmed", "", env.Result, ""); err != nil {
+	if err := s.changeOperation(opID, "confirmed", "", platform.Payload, ""); err != nil {
 		return err
 	}
 	return s.prepareNativeOrcaCoordinator(ctx, run, execution)
@@ -370,28 +317,23 @@ func (s *Service) prepareNativeOrcaCoordinator(ctx context.Context, run *Run, ex
 			if err != nil {
 				return err
 			}
-			env, err := workerOrcaCall(ctx, fixedConfig, "terminal", "create", "--worktree", "path:"+filepath.ToSlash(fixedConfig.Repository), "--title", title, "--shell", "cmd.exe", "--command", "echo "+marker, "--json")
+			platform, err := orcaworker.CreateCoordinatorTerminal(ctx, orcaWorkerMetaCaller(fixedConfig), fixedConfig.Repository, title, marker)
 			if err != nil {
 				_ = s.changeOperation(opID, "outcome_unknown", "", nil, err.Error())
 				return err
 			}
-			var result struct {
-				Terminal orcaTerminal `json:"terminal"`
-			}
-			result, err = nativeOrcaResult[struct {
-				Terminal orcaTerminal `json:"terminal"`
-			}](env)
-			if err != nil || result.Terminal.Handle == "" {
-				_ = s.changeOperation(opID, "outcome_unknown", "", env.Result, "coordinator handle omitted")
-				return errors.New("Orca coordinator creation has no exact handle")
-			}
-			if err := s.changeOperation(opID, "accepted", "", env.Result, ""); err != nil {
+			handle, err := orcaworker.ParseCoordinatorTerminalReceipt(platform)
+			if err != nil {
+				_ = s.changeOperation(opID, "outcome_unknown", "", platform.Payload, "coordinator handle omitted")
 				return err
 			}
-			if err := s.bindNativeOrcaCoordinator(ctx, run, execution, result.Terminal.Handle); err != nil {
+			if err := s.changeOperation(opID, "accepted", "", platform.Payload, ""); err != nil {
 				return err
 			}
-			if err := s.changeOperation(opID, "confirmed", "", env.Result, ""); err != nil {
+			if err := s.bindNativeOrcaCoordinator(ctx, run, execution, handle); err != nil {
+				return err
+			}
+			if err := s.changeOperation(opID, "confirmed", "", platform.Payload, ""); err != nil {
 				return err
 			}
 		}
@@ -422,35 +364,19 @@ func (s *Service) prepareNativeOrcaCoordinator(ctx context.Context, run *Run, ex
 		if err != nil {
 			return err
 		}
-		env, err := workerOrcaCall(ctx, fixedConfig, "orchestration", "run-create", "--objective", objective, "--from", state.Coordinator.Terminal, "--json")
+		receipt, err := orcaworker.CreateRun(ctx, orcaWorkerMetaCaller(fixedConfig), objective, state.Coordinator.Terminal, state.Coordinator.RuntimeID)
 		if err != nil {
-			_ = s.changeOperation(opID, "outcome_unknown", "", nil, err.Error())
+			var callErr *orcaworker.CallError
+			if errors.As(err, &callErr) {
+				_ = s.changeOperation(opID, "outcome_unknown", "", nil, err.Error())
+			}
 			return err
 		}
-		var result struct {
-			Run struct {
-				ID string `json:"id"`
-			} `json:"run"`
-			Mutation struct {
-				RequestID string `json:"requestId"`
-			} `json:"mutation"`
-		}
-		result, err = nativeOrcaResult[struct {
-			Run struct {
-				ID string `json:"id"`
-			} `json:"run"`
-			Mutation struct {
-				RequestID string `json:"requestId"`
-			} `json:"mutation"`
-		}](env)
-		if err != nil || result.Run.ID == "" || result.Mutation.RequestID == "" || env.Meta.RuntimeID != state.Coordinator.RuntimeID {
-			return errors.New("Orca Run receipt lacks exact runtime, Run or request identity")
-		}
-		execution.Target.OrchestrationRun = result.Run.ID
-		execution.Target.OrchestrationRunRequestID = result.Mutation.RequestID
-		execution.Target.OrchestrationRun = result.Run.ID
+		execution.Target.OrchestrationRun = receipt.ID
+		execution.Target.OrchestrationRunRequestID = receipt.RequestID
+		execution.Target.OrchestrationRun = receipt.ID
 		s.refreshRun(run)
-		if err := s.changeOperation(opID, "confirmed", result.Mutation.RequestID, env.Result, ""); err != nil {
+		if err := s.changeOperation(opID, "confirmed", receipt.RequestID, receipt.Payload, ""); err != nil {
 			return err
 		}
 	}
@@ -563,26 +489,18 @@ func (s *Service) startNativeOrcaTurn(ctx context.Context, run *Run, execution *
 			if err != nil {
 				return err
 			}
-			env, err := workerOrcaCall(ctx, fixedConfig, "orchestration", "task-create", "--spec", prompt, "--task-title", run.Title, "--run", execution.Target.OrchestrationRun, "--from", state.Coordinator.Terminal, "--json")
+			receipt, err := orcaworker.CreateTask(ctx, orcaWorkerMetaCaller(fixedConfig), prompt, run.Title, execution.Target.OrchestrationRun, state.Coordinator.Terminal, state.Coordinator.RuntimeID)
 			if err != nil {
-				_ = s.changeOperation(taskOp, "outcome_unknown", "", nil, err.Error())
+				var callErr *orcaworker.CallError
+				if errors.As(err, &callErr) {
+					_ = s.changeOperation(taskOp, "outcome_unknown", "", nil, err.Error())
+				}
 				return err
 			}
-			var task struct {
-				Task struct {
-					ID string `json:"id"`
-				} `json:"task"`
-				Mutation struct {
-					RequestID string `json:"requestId"`
-				} `json:"mutation"`
-			}
-			if err := json.Unmarshal(env.Result, &task); err != nil || task.Task.ID == "" || task.Mutation.RequestID == "" || env.Meta.RuntimeID != state.Coordinator.RuntimeID {
-				return errors.New("Orca Task receipt lacks exact Task/request/runtime identity")
-			}
-			state.Turns = append(state.Turns, OrcaNativeTurn{TurnID: turnID, TaskID: task.Task.ID, TaskRequestID: task.Mutation.RequestID})
-			execution.Target.ExternalTask = task.Task.ID
+			state.Turns = append(state.Turns, OrcaNativeTurn{TurnID: turnID, TaskID: receipt.ID, TaskRequestID: receipt.RequestID})
+			execution.Target.ExternalTask = receipt.ID
 			s.refreshRun(run)
-			if err := s.changeOperation(taskOp, "confirmed", task.Mutation.RequestID, env.Result, ""); err != nil {
+			if err := s.changeOperation(taskOp, "confirmed", receipt.RequestID, receipt.Payload, ""); err != nil {
 				return err
 			}
 		}
@@ -613,19 +531,13 @@ func (s *Service) startNativeOrcaTurn(ctx context.Context, run *Run, execution *
 		return err
 	}
 	deadline := time.Now().Add(positiveDuration(fixedConfig.Orca.WaitTimeout, 2*time.Minute))
-	var env orcaEnvelope
+	var env orcaworker.Result
 	for {
-		env, err = workerOrcaCall(ctx, fixedConfig, "orchestration", "dispatch", "--task", taskID, "--to", execution.Process.Terminal, "--run", execution.Target.OrchestrationRun, "--from", state.Coordinator.Terminal, "--inject", "--json")
+		env, err = orcaworker.Dispatch(ctx, orcaWorkerMetaCaller(fixedConfig), taskID, execution.Process.Terminal, execution.Target.OrchestrationRun, state.Coordinator.Terminal)
 		if err == nil {
 			break
 		}
-		var rejected struct {
-			Reason string `json:"reason"`
-		}
-		if env.Error != nil {
-			_ = json.Unmarshal(env.Error.Data, &rejected)
-		}
-		if env.Error == nil || env.Error.Code != "inject_rejected" || rejected.Reason != "no_agent_detected" {
+		if !orcaworker.NoAgentDetected(env) {
 			_ = s.changeOperation(dispatchOp, "outcome_unknown", "", nil, err.Error())
 			return err
 		}
@@ -642,32 +554,13 @@ func (s *Service) startNativeOrcaTurn(ctx context.Context, run *Run, execution *
 		case <-time.After(time.Second):
 		}
 	}
-	var dispatched struct {
-		Dispatch struct {
-			ID     string `json:"id"`
-			TaskID string `json:"task_id"`
-			RunID  string `json:"run_id"`
-		} `json:"dispatch"`
-		Mutation struct {
-			RequestID string `json:"requestId"`
-		} `json:"mutation"`
+	receipt, err := orcaworker.DispatchReceipt(env, taskID, execution.Target.OrchestrationRun, state.Coordinator.RuntimeID)
+	if err != nil {
+		return err
 	}
-	dispatched, err = nativeOrcaResult[struct {
-		Dispatch struct {
-			ID     string `json:"id"`
-			TaskID string `json:"task_id"`
-			RunID  string `json:"run_id"`
-		} `json:"dispatch"`
-		Mutation struct {
-			RequestID string `json:"requestId"`
-		} `json:"mutation"`
-	}](env)
-	if err != nil || dispatched.Dispatch.ID == "" || dispatched.Mutation.RequestID == "" || env.Meta.RuntimeID != state.Coordinator.RuntimeID || dispatched.Dispatch.TaskID != "" && dispatched.Dispatch.TaskID != taskID || dispatched.Dispatch.RunID != "" && dispatched.Dispatch.RunID != execution.Target.OrchestrationRun {
-		return errors.New("Orca Dispatch receipt lacks exact identity")
-	}
-	current.DispatchID, current.DispatchRequestID = dispatched.Dispatch.ID, dispatched.Mutation.RequestID
+	current.DispatchID, current.DispatchRequestID = receipt.ID, receipt.RequestID
 	s.bindNativeOrcaDispatch(run, execution, current)
-	if err := s.changeOperation(dispatchOp, "accepted", dispatched.Mutation.RequestID, env.Result, ""); err != nil {
+	if err := s.changeOperation(dispatchOp, "accepted", receipt.RequestID, receipt.Payload, ""); err != nil {
 		return err
 	}
 	return nil
@@ -810,35 +703,16 @@ func (s *Service) applyNativeOrcaDecision(ctx context.Context, run *Run, workflo
 		if err != nil {
 			return err
 		}
-		env, err := workerOrcaCall(ctx, fixedConfig, "orchestration", "reply", "--id", orcaQuestionID(run.Decision), "--body", body, "--run", execution.Target.OrchestrationRun, "--from", execution.OrcaNative.Coordinator.Terminal, "--json")
+		receipt, err := orcaworker.ReplyQuestion(ctx, orcaWorkerMetaCaller(fixedConfig), orcaQuestionID(run.Decision), body, execution.Target.OrchestrationRun, execution.OrcaNative.Coordinator.Terminal, turn.DispatchID, execution.OrcaNative.Coordinator.RuntimeID)
 		if err != nil {
-			_ = s.changeOperation(opID, "outcome_unknown", "", nil, err.Error())
-			return s.nativeOrcaUncertain(run, "Orca reply outcome needs reconciliation: "+err.Error())
-		}
-		var result struct {
-			Question struct {
-				MessageID  string `json:"message_id"`
-				DispatchID string `json:"dispatch_id"`
-				AnswerBody string `json:"answer_body"`
-			} `json:"question"`
-			Mutation struct {
-				RequestID string `json:"requestId"`
-			} `json:"mutation"`
-		}
-		result, err = nativeOrcaResult[struct {
-			Question struct {
-				MessageID  string `json:"message_id"`
-				DispatchID string `json:"dispatch_id"`
-				AnswerBody string `json:"answer_body"`
-			} `json:"question"`
-			Mutation struct {
-				RequestID string `json:"requestId"`
-			} `json:"mutation"`
-		}](env)
-		if err != nil || result.Mutation.RequestID == "" || env.Meta.RuntimeID != execution.OrcaNative.Coordinator.RuntimeID || result.Question.MessageID != orcaQuestionID(run.Decision) || result.Question.DispatchID != turn.DispatchID || result.Question.AnswerBody != body {
+			var callErr *orcaworker.CallError
+			if errors.As(err, &callErr) {
+				_ = s.changeOperation(opID, "outcome_unknown", "", nil, err.Error())
+				return s.nativeOrcaUncertain(run, "Orca reply outcome needs reconciliation: "+err.Error())
+			}
 			return s.nativeOrcaUncertain(run, "Orca reply receipt lacks its original request identity")
 		}
-		if err := s.changeOperation(opID, "confirmed", result.Mutation.RequestID, env.Result, ""); err != nil {
+		if err := s.changeOperation(opID, "confirmed", receipt.RequestID, receipt.Payload, ""); err != nil {
 			return err
 		}
 		s.setDecisionStatus(run, "reply_accepted")
@@ -913,39 +787,22 @@ func (s *Service) sendNativeOrcaFeedback(ctx context.Context, run *Run, workflow
 	if err != nil {
 		return err
 	}
-	env, err := workerOrcaCall(ctx, fixedConfig, "orchestration", "send", "--subject", name, "--body", body, "--type", "status", "--to", "dispatch:"+turn.DispatchID, "--run", execution.Target.OrchestrationRun, "--from", execution.OrcaNative.Coordinator.Terminal, "--json")
+	receipt, err := orcaworker.SendFeedback(ctx, orcaWorkerMetaCaller(fixedConfig), name, body, turn.DispatchID, execution.Target.OrchestrationRun, execution.OrcaNative.Coordinator.Terminal, execution.OrcaNative.Coordinator.RuntimeID)
 	if err != nil {
-		if env.Error != nil && env.Error.Code == "dispatch_inactive" {
-			_ = s.changeOperation(opID, "rejected", "", nil, err.Error())
-			execution.Error = ptr("Original Orca Dispatch is inactive; feedback remains saved until settlement is confirmed")
-			s.refreshRun(run)
-			return s.save()
+		var callErr *orcaworker.CallError
+		if errors.As(err, &callErr) {
+			if callErr.Result.ErrorCode == "dispatch_inactive" {
+				_ = s.changeOperation(opID, "rejected", "", nil, err.Error())
+				execution.Error = ptr("Original Orca Dispatch is inactive; feedback remains saved until settlement is confirmed")
+				s.refreshRun(run)
+				return s.save()
+			}
+			_ = s.changeOperation(opID, "outcome_unknown", "", nil, err.Error())
+			return s.nativeOrcaUncertain(run, "Orca send receipt is unknown: "+err.Error())
 		}
-		_ = s.changeOperation(opID, "outcome_unknown", "", nil, err.Error())
-		return s.nativeOrcaUncertain(run, "Orca send receipt is unknown: "+err.Error())
-	}
-	var result struct {
-		Message struct {
-			ID       string `json:"id"`
-			ToHandle string `json:"to_handle"`
-		} `json:"message"`
-		Mutation struct {
-			RequestID string `json:"requestId"`
-		} `json:"mutation"`
-	}
-	result, err = nativeOrcaResult[struct {
-		Message struct {
-			ID       string `json:"id"`
-			ToHandle string `json:"to_handle"`
-		} `json:"message"`
-		Mutation struct {
-			RequestID string `json:"requestId"`
-		} `json:"mutation"`
-	}](env)
-	if err != nil || result.Mutation.RequestID == "" || result.Message.ID == "" || result.Message.ToHandle != "dispatch:"+turn.DispatchID || env.Meta.RuntimeID != execution.OrcaNative.Coordinator.RuntimeID {
 		return s.nativeOrcaUncertain(run, "Orca accepted feedback without an exact Dispatch receipt")
 	}
-	if err := s.changeOperation(opID, "confirmed", result.Mutation.RequestID, env.Result, ""); err != nil {
+	if err := s.changeOperation(opID, "confirmed", receipt.RequestID, receipt.Payload, ""); err != nil {
 		return err
 	}
 	s.setDecisionStatus(run, "reply_accepted")
@@ -1164,15 +1021,11 @@ func (s *Service) ackNativeOrcaDelivery(ctx context.Context, run *Run, execution
 	if op != nil {
 		// The ack response may have been lost after Orca advanced its FIFO.
 		// Read the original Run before deciding whether another ack is needed.
-		observed, err := workerOrcaCall(ctx, fixedConfig, "orchestration", "check", "--terminal", state.Coordinator.Terminal, "--run", execution.Target.OrchestrationRun, "--json")
+		current, err := orcaworker.CheckInbox(ctx, orcaWorkerMetaCaller(fixedConfig), state.Coordinator.Terminal, execution.Target.OrchestrationRun)
 		if err != nil {
 			return err
 		}
-		var current struct {
-			RunID      string `json:"runId"`
-			DeliveryID string `json:"deliveryId"`
-		}
-		if err := json.Unmarshal(observed.Result, &current); err != nil || observed.Meta.RuntimeID != state.Coordinator.RuntimeID || current.RunID != execution.Target.OrchestrationRun {
+		if current.RuntimeID != state.Coordinator.RuntimeID || current.RunID != execution.Target.OrchestrationRun {
 			return errors.New("Orca Delivery recovery changed coordinator or Run")
 		}
 		if current.DeliveryID != deliveryID {
@@ -1189,27 +1042,15 @@ func (s *Service) ackNativeOrcaDelivery(ctx context.Context, run *Run, execution
 	} else {
 		opID = op.OperationID
 	}
-	env, err := workerOrcaCall(ctx, fixedConfig, "orchestration", "check", "--terminal", state.Coordinator.Terminal, "--run", execution.Target.OrchestrationRun, "--ack", deliveryID, "--json")
+	receipt, err := orcaworker.AckInbox(ctx, orcaWorkerMetaCaller(fixedConfig), state.Coordinator.Terminal, execution.Target.OrchestrationRun, deliveryID, state.Coordinator.RuntimeID)
 	if err != nil {
-		_ = s.changeOperation(opID, "outcome_unknown", "", nil, err.Error())
+		var callErr *orcaworker.CallError
+		if errors.As(err, &callErr) {
+			_ = s.changeOperation(opID, "outcome_unknown", "", nil, err.Error())
+		}
 		return err
 	}
-	var result struct {
-		Acknowledged string `json:"acknowledged"`
-		Mutation     struct {
-			RequestID string `json:"requestId"`
-		} `json:"mutation"`
-	}
-	result, err = nativeOrcaResult[struct {
-		Acknowledged string `json:"acknowledged"`
-		Mutation     struct {
-			RequestID string `json:"requestId"`
-		} `json:"mutation"`
-	}](env)
-	if err != nil || env.Meta.RuntimeID != state.Coordinator.RuntimeID || result.Acknowledged != deliveryID || result.Mutation.RequestID == "" {
-		return errors.New("Orca did not acknowledge the saved Delivery")
-	}
-	return s.changeOperation(opID, "confirmed", result.Mutation.RequestID, env.Result, "")
+	return s.changeOperation(opID, "confirmed", receipt.RequestID, receipt.Payload, "")
 }
 
 func (s *Service) readNativeOrcaOutput(ctx context.Context, run *Run, execution *ExecutionRecord, turn *OrcaNativeTurn) error {
@@ -1222,48 +1063,12 @@ func (s *Service) readNativeOrcaOutput(ctx context.Context, run *Run, execution 
 	if attempt == nil {
 		return errors.New("worker output has no attempt")
 	}
-	args := []string{"orchestration", "worker-read", "--dispatch", turn.DispatchID, "--source", "auto", "--limit", "100", "--json"}
-	if attempt.OutputCursor != "" {
-		args = append(args, "--cursor", attempt.OutputCursor)
-	}
-	env, err := workerOrcaCall(ctx, fixedConfig, args...)
-	if err != nil && strings.Contains(err.Error(), "source_changed") {
+	result, resetCursor, err := orcaworker.ReadWorkerOutput(ctx, orcaWorkerMetaCaller(fixedConfig), turn.DispatchID, attempt.OutputCursor, execution.OrcaNative.Coordinator.RuntimeID)
+	if resetCursor {
 		attempt.OutputCursor = ""
-		env, err = workerOrcaCall(ctx, fixedConfig, "orchestration", "worker-read", "--dispatch", turn.DispatchID, "--source", "auto", "--limit", "100", "--json")
 	}
 	if err != nil {
 		return err
-	}
-	var result struct {
-		DispatchID      string   `json:"dispatchId"`
-		Source          string   `json:"source"`
-		Cursor          string   `json:"cursor"`
-		NextCursor      string   `json:"nextCursor"`
-		SourceChanged   bool     `json:"sourceChanged"`
-		ContentComplete bool     `json:"contentComplete"`
-		Clipping        []string `json:"clipping"`
-		FallbackReason  string   `json:"fallbackReason"`
-		Terminal        struct {
-			Tail []string `json:"tail"`
-		} `json:"terminal"`
-		Transcript json.RawMessage `json:"transcript"`
-	}
-	result, err = nativeOrcaResult[struct {
-		DispatchID      string   `json:"dispatchId"`
-		Source          string   `json:"source"`
-		Cursor          string   `json:"cursor"`
-		NextCursor      string   `json:"nextCursor"`
-		SourceChanged   bool     `json:"sourceChanged"`
-		ContentComplete bool     `json:"contentComplete"`
-		Clipping        []string `json:"clipping"`
-		FallbackReason  string   `json:"fallbackReason"`
-		Terminal        struct {
-			Tail []string `json:"tail"`
-		} `json:"terminal"`
-		Transcript json.RawMessage `json:"transcript"`
-	}](env)
-	if err != nil || result.DispatchID != turn.DispatchID || result.Source == "" || env.Meta.RuntimeID != execution.OrcaNative.Coordinator.RuntimeID {
-		return errors.New("Orca worker-read changed source identity")
 	}
 	attempt.OutputSource = result.Source
 	attempt.OutputCursor = result.NextCursor
@@ -1372,21 +1177,15 @@ func (s *Service) closeNativeOrcaTerminal(ctx context.Context, execution *Execut
 	} else {
 		opID = op.OperationID
 	}
-	env, err := workerOrcaCall(ctx, fixedConfig, "terminal", "close", "--terminal", identity.Terminal, "--json")
+	receipt, err := orcaworker.CloseTerminal(ctx, orcaWorkerMetaCaller(fixedConfig), identity.Terminal, identity.RuntimeID)
 	if err != nil {
-		_ = s.changeOperation(opID, "outcome_unknown", "", nil, err.Error())
-		return err
+		var callErr *orcaworker.CallError
+		if errors.As(err, &callErr) {
+			_ = s.changeOperation(opID, "outcome_unknown", "", nil, err.Error())
+		}
+		return workerOrcaBackendError(err)
 	}
-	var result struct {
-		Close struct {
-			Handle    string `json:"handle"`
-			PTYKilled bool   `json:"ptyKilled"`
-		} `json:"close"`
-	}
-	if err := json.Unmarshal(env.Result, &result); err != nil || env.Meta.RuntimeID != identity.RuntimeID || result.Close.Handle != identity.Terminal || !result.Close.PTYKilled {
-		return &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "Orca terminal close lacks proof for the original process"}
-	}
-	return s.changeOperation(opID, "confirmed", "", env.Result, "")
+	return s.changeOperation(opID, "confirmed", "", receipt, "")
 }
 
 func (s *Service) finishNativeOrcaCleanup(ctx context.Context, run *Run) error {
@@ -1409,16 +1208,11 @@ func (s *Service) finishNativeOrcaCleanup(ctx context.Context, run *Run) error {
 	if state.Coordinator.Terminal == "" || execution.Target.OrchestrationRun == "" {
 		return nil
 	}
-	env, err := workerOrcaCall(ctx, fixedConfig, "orchestration", "check", "--terminal", state.Coordinator.Terminal, "--run", execution.Target.OrchestrationRun, "--json")
+	delivery, err := orcaworker.CheckInbox(ctx, orcaWorkerMetaCaller(fixedConfig), state.Coordinator.Terminal, execution.Target.OrchestrationRun)
 	if err != nil {
 		return err
 	}
-	var delivery struct {
-		RunID      string             `json:"runId"`
-		DeliveryID string             `json:"deliveryId"`
-		Messages   []OrcaInboxMessage `json:"messages"`
-	}
-	if err := json.Unmarshal(env.Result, &delivery); err != nil || env.Meta.RuntimeID != state.Coordinator.RuntimeID || delivery.RunID != execution.Target.OrchestrationRun || delivery.DeliveryID != "" || len(delivery.Messages) != 0 {
+	if delivery.RuntimeID != state.Coordinator.RuntimeID || delivery.RunID != execution.Target.OrchestrationRun || delivery.DeliveryID != "" || len(delivery.Messages) != 0 {
 		return &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "Orca coordinator inbox is not drained after delivery"}
 	}
 	return s.closeNativeOrcaTerminal(ctx, execution, state.Coordinator, "coordinator")

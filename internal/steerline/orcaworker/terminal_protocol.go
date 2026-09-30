@@ -136,3 +136,45 @@ func SendCommand(ctx context.Context, call MetaCall, identity TerminalIdentity, 
 	}
 	return result.Send.Prompt.RequestID, nil
 }
+
+func CurrentCursor(ctx context.Context, call MetaCall, handle, runtimeID string) (int64, error) {
+	envelope, err := call(ctx, "terminal", "read", "--terminal", handle, "--json")
+	if err != nil {
+		return 0, err
+	}
+	if envelope.RuntimeID != runtimeID {
+		return 0, &PlatformError{Code: "identity_mismatch", Diagnostic: "worker output cursor came from another Orca runtime"}
+	}
+	var result struct {
+		Terminal struct {
+			Handle     string `json:"handle"`
+			NextCursor string `json:"nextCursor"`
+			Source     string `json:"source"`
+		} `json:"terminal"`
+	}
+	if err := json.Unmarshal(envelope.Payload, &result); err != nil {
+		return 0, err
+	}
+	cursor, err := strconv.ParseInt(result.Terminal.NextCursor, 10, 64)
+	if err != nil || cursor < 0 || result.Terminal.Handle != handle || result.Terminal.Source != "stream" {
+		return 0, &PlatformError{Code: "protocol_invalid", Diagnostic: "worker terminal did not return a usable output cursor"}
+	}
+	return cursor, nil
+}
+
+func CloseTerminal(ctx context.Context, call MetaCall, handle, runtimeID string) (json.RawMessage, error) {
+	envelope, err := call(ctx, "terminal", "close", "--terminal", handle, "--json")
+	if err != nil {
+		return nil, &CallError{Cause: err, Result: envelope}
+	}
+	var result struct {
+		Close struct {
+			Handle    string `json:"handle"`
+			PTYKilled bool   `json:"ptyKilled"`
+		} `json:"close"`
+	}
+	if err := json.Unmarshal(envelope.Payload, &result); err != nil || envelope.RuntimeID != runtimeID || result.Close.Handle != handle || !result.Close.PTYKilled {
+		return nil, &PlatformError{Code: "outcome_unknown", Diagnostic: "Orca terminal close lacks proof for the original process"}
+	}
+	return envelope.Payload, nil
+}

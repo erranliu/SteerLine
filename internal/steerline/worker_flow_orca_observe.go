@@ -2,7 +2,6 @@ package steerline
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -15,28 +14,8 @@ import (
 )
 
 func currentWorkerOrcaCursor(ctx context.Context, c Config, identity ProcessIdentity) (int64, error) {
-	env, err := workerOrcaCall(ctx, c, "terminal", "read", "--terminal", identity.Terminal, "--json")
-	if err != nil {
-		return 0, err
-	}
-	if env.Meta.RuntimeID != identity.RuntimeID {
-		return 0, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "worker output cursor came from another Orca runtime"}
-	}
-	var result struct {
-		Terminal struct {
-			Handle     string `json:"handle"`
-			NextCursor string `json:"nextCursor"`
-			Source     string `json:"source"`
-		} `json:"terminal"`
-	}
-	if err := json.Unmarshal(env.Result, &result); err != nil {
-		return 0, err
-	}
-	cursor, err := strconv.ParseInt(result.Terminal.NextCursor, 10, 64)
-	if err != nil || cursor < 0 || result.Terminal.Handle != identity.Terminal || result.Terminal.Source != "stream" {
-		return 0, &BackendError{Code: BackendProtocolInvalid, Diagnostic: "worker terminal did not return a usable output cursor"}
-	}
-	return cursor, nil
+	cursor, err := orcaworker.CurrentCursor(ctx, orcaWorkerMetaCaller(c), identity.Terminal, identity.RuntimeID)
+	return cursor, workerOrcaBackendError(err)
 }
 
 func orcaTurnPath(c Config, runID, turnID string) string {

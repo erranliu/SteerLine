@@ -4,7 +4,18 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 )
+
+type Message struct {
+	ID         string          `json:"id"`
+	FromHandle string          `json:"from_handle,omitempty"`
+	Type       string          `json:"type"`
+	Subject    string          `json:"subject"`
+	Body       string          `json:"body"`
+	Payload    json.RawMessage `json:"payload,omitempty"`
+	CreatedAt  time.Time       `json:"created_at,omitempty"`
+}
 
 type QuestionOption struct {
 	ID     string `json:"id"`
