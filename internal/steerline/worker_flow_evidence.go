@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	"path/filepath"
 	"strings"
 
@@ -163,7 +164,7 @@ func readWorkerTurnEvidence(fixed workerFlowContext, mode workerflow.Mode) (work
 		return fact, errors.New("The original worker exited without a saved turn identity")
 	}
 	fact.CommandID = fact.TurnID
-	var outcome workerTurnOutcome
+	var outcome codexworker.Outcome
 	var err error
 	if fact.LocalCodex {
 		fact.CommandID = execution.CurrentCommandID
@@ -179,7 +180,7 @@ func readWorkerTurnEvidence(fixed workerFlowContext, mode workerflow.Mode) (work
 	} else if mode == workerflow.SupervisedOrca {
 		path := filepath.Join(c.RunDir, "runs", run.RunID, "turns", fact.TurnID, "events.jsonl")
 		fact.SourcePath = path
-		outcome, err = readWorkerTurnOutcome(path)
+		outcome, err = codexworker.ReadExecOutcome(path)
 	} else {
 		return fact, errors.New("native Orca settlement requires its Dispatch adapter")
 	}

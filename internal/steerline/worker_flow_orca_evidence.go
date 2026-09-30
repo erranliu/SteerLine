@@ -3,6 +3,7 @@ package steerline
 import (
 	"context"
 	"errors"
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 
 	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
@@ -57,9 +58,9 @@ func decodeNativeOrcaMessage(message OrcaInboxMessage, runID string, turn OrcaNa
 			return fact, true, err
 		}
 		fact.Outcome = outcome
-		fact.PRCandidates = workerPRClues(message.Body)
+		fact.PRCandidates = codexworker.PRClues(message.Body)
 	case "status":
-		fact.PRCandidates = workerPRClues(message.Body)
+		fact.PRCandidates = codexworker.PRClues(message.Body)
 	case "escalation":
 		question := DecisionRequest{Question: clip("Orca worker escalation: "+message.Subject, 1800), Context: clip(message.Body, 7000), Options: []DecisionOption{{ID: "continue", Label: "Continue current work"}}, AllowFreeText: true}
 		fact.Question = &question

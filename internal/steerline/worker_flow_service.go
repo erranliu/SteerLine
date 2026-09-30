@@ -211,7 +211,7 @@ func (s *Service) startInitialWorkerFlowTurn(ctx context.Context, task TaskRecor
 	if err != nil {
 		return s.waitWorkerFlow(run, "Fixed task contract is unavailable: "+err.Error())
 	}
-	prompt, err := workerFlowPrompt(task, contract, run.RunID, c.hostName() == "local")
+	prompt, err := workerflow.Prompt(task, contract, run.RunID, c.hostName() == "local")
 	if err != nil {
 		return s.waitWorkerFlow(run, err.Error())
 	}

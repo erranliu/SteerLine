@@ -123,7 +123,7 @@ func startAppServerWorkerTurn(ctx context.Context, c Config, run *Run, execution
 		}
 	}()
 	if execution.SessionID == "" {
-		params, err := codexAppThreadStart(c, *run.WorktreePath, []any{codexapp.AskDynamicTool()})
+		params, err := codexworker.ThreadParams(*run.WorktreePath, c.Sandbox, c.Model, []any{codexapp.AskDynamicTool()})
 		if err != nil {
 			return nil, "", "", err
 		}
@@ -151,7 +151,12 @@ func startAppServerWorkerTurn(ctx context.Context, c Config, run *Run, execution
 	if err := persistThread(); err != nil {
 		return nil, "", "", fmt.Errorf("app-server thread was created but its SQLite receipt is unverified: %w", err)
 	}
-	params, err := codexAppTurnStart(ctx, c, *run.WorktreePath, execution.SessionID, commandID, prompt)
+	params, err := codexworker.TurnParams(ctx, codexworker.TurnParamsInput{
+		Worktree: *run.WorktreePath, ThreadID: execution.SessionID, CommandID: commandID,
+		Prompt: prompt, Sandbox: c.Sandbox, Model: c.Model, ReasoningEffort: c.ReasoningEffort,
+	}, func(ctx context.Context, worktree string) ([]string, error) {
+		return codexLinkedWorktreeWriteArgs(ctx, c, worktree)
+	})
 	if err != nil {
 		return nil, "", "", err
 	}
@@ -202,7 +207,7 @@ func observeAppServerWorker(ctx context.Context, worker *Worker, client *codexap
 	}
 }
 
-func readAppServerTurnOutcome(path, threadID, turnID string) (workerTurnOutcome, error) {
+func readAppServerTurnOutcome(path, threadID, turnID string) (codexworker.Outcome, error) {
 	return codexworker.ReadAppServerOutcome(path, threadID, turnID)
 }
 

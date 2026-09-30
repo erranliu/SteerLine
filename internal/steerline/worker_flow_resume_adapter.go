@@ -3,6 +3,7 @@ package steerline
 import (
 	"context"
 	"encoding/json"
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	"os"
 	"path/filepath"
 
@@ -128,7 +129,7 @@ func (s *Service) resumeWorkspaceWorker(ctx context.Context, task *TaskRecord, r
 	}
 	if execution.PendingTurnID != "" {
 		events := filepath.Join(c.RunDir, "runs", run.RunID, "turns", execution.PendingTurnID, "events.jsonl")
-		if outcome, err := readWorkerTurnOutcome(events); err == nil && outcome.Completed && outcome.SessionID != "" {
+		if outcome, err := codexworker.ReadExecOutcome(events); err == nil && outcome.Completed && outcome.SessionID != "" {
 			return false, s.finishWorkerFlowFor(run, nil)
 		}
 		if workflow.Phase != "waiting_decision" {

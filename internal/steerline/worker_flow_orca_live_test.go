@@ -2,6 +2,7 @@ package steerline
 
 import (
 	"context"
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	"os"
 	"path/filepath"
 	"strings"
@@ -53,7 +54,7 @@ func TestWorkerFlowOrcaTurnAdapterLive(t *testing.T) {
 		if err := <-worker.Done; err != nil {
 			t.Fatal(err)
 		}
-		outcome, err := readWorkerTurnOutcome(events)
+		outcome, err := codexworker.ReadExecOutcome(events)
 		if err != nil || !outcome.Started || !outcome.Completed || outcome.LastMessage != marker || !codexThreadID.MatchString(outcome.SessionID) {
 			t.Fatalf("Orca worker turn %d did not complete on the original session: outcome=%+v err=%v", i+1, outcome, err)
 		}
