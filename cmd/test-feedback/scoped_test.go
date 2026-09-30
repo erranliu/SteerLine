@@ -120,7 +120,11 @@ func TestScopedCoverageRejectsMissingDuplicateAndTruncatedEvents(t *testing.T) {
 			if err := os.WriteFile(path, []byte(tc.events), 0600); err != nil {
 				t.Fatal(err)
 			}
-			rulesRaw := []byte(packageEvent("start", quickPackages[1]) + packageEvent("pass", quickPackages[1]) + packageEvent("start", quickPackages[2]) + packageEvent("pass", quickPackages[2]))
+			var rulesRaw []byte
+			for _, pkg := range quickPackages[1:] {
+				rulesRaw = append(rulesRaw, packageEvent("start", pkg)...)
+				rulesRaw = append(rulesRaw, packageEvent("pass", pkg)...)
+			}
 			rulesPath := filepath.Join(root, "rules.jsonl")
 			if err := os.WriteFile(rulesPath, rulesRaw, 0600); err != nil {
 				t.Fatal(err)
