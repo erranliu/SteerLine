@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/erranliu/SteerLine/internal/steerline/task"
 )
 
 func (t *sqliteTx) PutProjectTaskAuthority(v ProjectTaskAuthority) error {
@@ -233,23 +235,7 @@ func (t *sqliteTx) PutTaskDelivery(v TaskDeliveryRecord) error {
 }
 
 func validateNativeTaskDelivery(v TaskDeliveryRecord, targetBranch string) error {
-	if v.ProjectIdentity == "" || v.TaskID == "" || v.SelectedWorkflowRunID == "" || v.PRInstance == "" || v.PRRepository == "" || v.PRNumber <= 0 || v.PRURL == "" || !validCommit(v.MergeCommit) || v.MergedAt.IsZero() || v.RecordedAt.IsZero() {
-		return nativeErr("inconsistent_delivery", "native task delivery has incomplete fixed identity")
-	}
-	if len(v.Evidence) == 0 || !json.Valid(v.Evidence) {
-		return nativeErr("inconsistent_delivery", "native task delivery has no readable PR merge evidence")
-	}
-	var evidence TaskDeliveryEvidence
-	if err := json.Unmarshal(v.Evidence, &evidence); err != nil {
-		return nativeErr("inconsistent_delivery", "native task delivery PR merge evidence has an invalid shape")
-	}
-	if !evidence.Merged || evidence.State != "merged" || evidence.PRInstance != v.PRInstance || evidence.URL != v.PRURL || evidence.Repository != v.PRRepository || evidence.PRNumber != v.PRNumber || evidence.MergeCommit != v.MergeCommit || !evidence.MergedAt.Equal(v.MergedAt) || evidence.BaseBranch != targetBranch {
-		return nativeErr("inconsistent_delivery", "native task delivery PR evidence differs from its fixed identity")
-	}
-	if evidence.ExistingAcceptance != nil {
-		return nativeErr("unsupported_schema", "old acceptance delivery is unsupported")
-	}
-	return nil
+	return task.ValidateDelivery(v, targetBranch)
 }
 
 func (t *sqliteTx) PutTask(v TaskRecord) error {
