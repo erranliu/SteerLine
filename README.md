@@ -20,6 +20,8 @@ SteerLine 是一款面向工程 AGI 的研究型软件开发工具。它以 road
 
 当前生产配置使用 `worker-flow-v1` 和中心 native Task。旧配置或运行状态在外部副作用前拒绝；需要人工核实旧现场，不自动迁移或接管原 worker。
 
+业务状态只持久化在 SQLite 的 Task、WorkflowRun、Execution、Attempt、Decision、Operation 和交付记录中。服务 checkpoint 只保存服务实例、心跳、未完成控制操作及认领前的预留；Runtime/Run 是在同一读取事务中生成的视图，不参与业务写回。工作区准备意图、轮次观察及当前决策绑定由 Execution 保存；回答事务直接校验 WorkflowRun 的持久控制版本，心跳和日志更新不会改变该版本。当前数据库 schema 为 6，checkpoint schema 为 8，旧格式直接拒绝，不自动迁移。
+
 native 项目控制台还会显示中心任务关系、阻塞原因、Spec 路径和交付定位；离线详情显示采样时间，Ready 缓存不会变成启动许可。完整固定引用保留在中心任务契约中。命令行可用 `steerline task graph -config <path> -task-id <id> -direction upstream -depth 3` 查询关系，或用 `steerline task export -config <path> -format json -output <path>` 导出；覆盖已有导出文件需显式传 `-overwrite`。
 
 控制台宽屏首屏左侧显示任务列表，按任务编号、任务状态、执行状态、任务名称四列排列；列表获得更多宽度，右侧上方显示只读任务摘要、下方显示任务动态。未进入可开始候选的 open 任务显示“阻塞”；已完成任务的旧失败执行标为“失败（历史）”，仍有未核实执行的任务保留“需处理”。选中行以 `▸` 标记。`Tab` 仅在列表与动态之间切换焦点，摘要随选中任务更新，运行中的任务显示已固定执行方案的位置、agent、模型和推理强度；`d` 或 Enter 可阅读包含状态和运行 ID 的完整详情。窄屏在列表与动态之间切换。任务详情显示 Spec 路径，不展开 Plan、文档 SHA 或提交号；这些固定引用仍在中心任务契约中。按 `?` 查看完整快捷键。项目左右切换时，标题始终显示当前项目编号和名称，后台项目的提示不会覆盖当前项目。

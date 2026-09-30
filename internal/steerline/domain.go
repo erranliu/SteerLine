@@ -117,6 +117,7 @@ type TaskDeliveryEvidence struct {
 }
 
 type WorkflowRunRecord struct {
+	ControlRevision  uint64                 `json:"-"`
 	ProjectIdentity  string                 `json:"project_identity"`
 	WorkflowRunID    string                 `json:"workflow_run_id"`
 	TaskID           string                 `json:"task_id"`
@@ -131,6 +132,10 @@ type WorkflowRunRecord struct {
 	PRURL            string                 `json:"pr_url,omitempty"`
 	PRCandidateURL   string                 `json:"pr_candidate_url,omitempty"`
 	PRState          string                 `json:"pr_state,omitempty"`
+	PRQueriedAt      *time.Time             `json:"pr_queried_at,omitempty"`
+	PRQueryError     *string                `json:"pr_query_error,omitempty"`
+	PRMergedAt       *time.Time             `json:"pr_merged_at,omitempty"`
+	PRMergeCommit    *string                `json:"pr_merge_commit,omitempty"`
 	PendingDecisions int                    `json:"pending_decisions,omitempty"`
 	CreatedAt        time.Time              `json:"created_at"`
 	UpdatedAt        time.Time              `json:"updated_at"`
@@ -145,35 +150,45 @@ type StepRunnerSettings struct {
 }
 
 type ExecutionRecord struct {
-	ProjectIdentity       string               `json:"project_identity"`
-	ExecutionID           string               `json:"execution_id"`
-	WorkflowRunID         string               `json:"workflow_run_id"`
-	Agent                 string               `json:"agent,omitempty"`
-	Backend               string               `json:"backend,omitempty"`
-	Protocol              string               `json:"protocol,omitempty"`
-	Process               *ProcessIdentity     `json:"process,omitempty"`
-	OrcaNative            *OrcaNativeExecution `json:"orca_native,omitempty"`
-	SessionID             string               `json:"session_id,omitempty"`
-	AppServerEndpoint     string               `json:"app_server_endpoint,omitempty"`
-	AppServerGeneration   string               `json:"app_server_generation,omitempty"`
-	PendingCommandID      string               `json:"pending_command_id,omitempty"`
-	CurrentCommandID      string               `json:"current_command_id,omitempty"`
-	PendingAsks           []codexAskCall       `json:"pending_asks,omitempty"`
-	PendingTurnID         string               `json:"pending_turn_id,omitempty"`
-	CurrentTurnID         string               `json:"current_turn_id,omitempty"`
-	TurnNumber            uint64               `json:"turn_number,omitempty"`
-	LastStoppedTurnID     string               `json:"last_stopped_turn_id,omitempty"`
-	Target                ExecutionTarget      `json:"target"`
-	Workspace             WorkspaceEvidence    `json:"workspace"`
-	Status                string               `json:"status"`
-	CurrentStep           string               `json:"current_step,omitempty"`
-	CandidateRevision     string               `json:"candidate_revision,omitempty"`
-	VerifiedRevision      string               `json:"verified_revision,omitempty"`
-	ReviewedRevision      string               `json:"reviewed_revision,omitempty"`
-	RepairPrerequisiteIDs []string             `json:"repair_prerequisite_result_ids,omitempty"`
-	RepairRounds          int                  `json:"repair_rounds"`
-	CreatedAt             time.Time            `json:"created_at"`
-	UpdatedAt             time.Time            `json:"updated_at"`
+	WorkspaceIntent       *WorkspaceIntent        `json:"workspace_intent,omitempty"`
+	TurnStartedAt         *time.Time              `json:"turn_started_at,omitempty"`
+	TurnEndedAt           *time.Time              `json:"turn_ended_at,omitempty"`
+	LastTurnOutcome       string                  `json:"last_turn_outcome,omitempty"`
+	LogPath               *string                 `json:"log_path,omitempty"`
+	LastEvent             *string                 `json:"last_event,omitempty"`
+	Summary               *string                 `json:"summary,omitempty"`
+	Error                 *string                 `json:"error,omitempty"`
+	ManualStop            *ManualStopConfirmation `json:"manual_stop,omitempty"`
+	ProjectIdentity       string                  `json:"project_identity"`
+	ExecutionID           string                  `json:"execution_id"`
+	WorkflowRunID         string                  `json:"workflow_run_id"`
+	Agent                 string                  `json:"agent,omitempty"`
+	Backend               string                  `json:"backend,omitempty"`
+	Protocol              string                  `json:"protocol,omitempty"`
+	Process               *ProcessIdentity        `json:"process,omitempty"`
+	OrcaNative            *OrcaNativeExecution    `json:"orca_native,omitempty"`
+	SessionID             string                  `json:"session_id,omitempty"`
+	DecisionID            string                  `json:"decision_id,omitempty"`
+	AppServerEndpoint     string                  `json:"app_server_endpoint,omitempty"`
+	AppServerGeneration   string                  `json:"app_server_generation,omitempty"`
+	PendingCommandID      string                  `json:"pending_command_id,omitempty"`
+	CurrentCommandID      string                  `json:"current_command_id,omitempty"`
+	PendingAsks           []codexAskCall          `json:"pending_asks,omitempty"`
+	PendingTurnID         string                  `json:"pending_turn_id,omitempty"`
+	CurrentTurnID         string                  `json:"current_turn_id,omitempty"`
+	TurnNumber            uint64                  `json:"turn_number,omitempty"`
+	LastStoppedTurnID     string                  `json:"last_stopped_turn_id,omitempty"`
+	Target                ExecutionTarget         `json:"target"`
+	Workspace             WorkspaceEvidence       `json:"workspace"`
+	Status                string                  `json:"status"`
+	CurrentStep           string                  `json:"current_step,omitempty"`
+	CandidateRevision     string                  `json:"candidate_revision,omitempty"`
+	VerifiedRevision      string                  `json:"verified_revision,omitempty"`
+	ReviewedRevision      string                  `json:"reviewed_revision,omitempty"`
+	RepairPrerequisiteIDs []string                `json:"repair_prerequisite_result_ids,omitempty"`
+	RepairRounds          int                     `json:"repair_rounds"`
+	CreatedAt             time.Time               `json:"created_at"`
+	UpdatedAt             time.Time               `json:"updated_at"`
 }
 
 // OrcaNativeExecution stores provider identities and observation positions.

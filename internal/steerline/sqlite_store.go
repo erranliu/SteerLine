@@ -19,7 +19,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const domainSchemaVersion = 5
+const domainSchemaVersion = 6
 
 const activeWorkflowIndexV5 = `CREATE UNIQUE INDEX one_active_workflow_per_task ON workflow_runs(project_identity,task_id) WHERE phase NOT IN ('completed','abandoned')`
 
@@ -60,13 +60,14 @@ type DomainStore interface {
 }
 
 type DomainSnapshot struct {
-	ProjectIdentity string              `json:"project_identity"`
-	Tasks           []TaskRecord        `json:"tasks"`
-	WorkflowRuns    []WorkflowRunRecord `json:"workflow_runs"`
-	Executions      []ExecutionRecord   `json:"executions"`
-	Attempts        []StepAttemptRecord `json:"attempts"`
-	Decisions       []DecisionRecord    `json:"decisions"`
-	Operations      []OperationRecord   `json:"operations"`
+	Deliveries      []TaskDeliveryRecord `json:"deliveries"`
+	ProjectIdentity string               `json:"project_identity"`
+	Tasks           []TaskRecord         `json:"tasks"`
+	WorkflowRuns    []WorkflowRunRecord  `json:"workflow_runs"`
+	Executions      []ExecutionRecord    `json:"executions"`
+	Attempts        []StepAttemptRecord  `json:"attempts"`
+	Decisions       []DecisionRecord     `json:"decisions"`
+	Operations      []OperationRecord    `json:"operations"`
 }
 
 type SQLiteStore struct {
@@ -224,7 +225,7 @@ var domainExecutionSchema = []string{
 	`CREATE TABLE execution_operations (run_id TEXT NOT NULL, attempt_id TEXT NOT NULL, record_id TEXT NOT NULL, payload BLOB NOT NULL, PRIMARY KEY(run_id,attempt_id,record_id))`,
 	`CREATE TABLE tasks (project_identity TEXT NOT NULL, task_id TEXT NOT NULL, external_provider TEXT NOT NULL DEFAULT '', external_project TEXT NOT NULL DEFAULT '', external_id TEXT NOT NULL DEFAULT '', status TEXT NOT NULL, version INTEGER NOT NULL, payload BLOB NOT NULL, PRIMARY KEY(project_identity, task_id))`,
 	`CREATE UNIQUE INDEX task_external_identity ON tasks(project_identity,external_provider,external_project,external_id) WHERE external_id <> ''`,
-	`CREATE TABLE workflow_runs (project_identity TEXT NOT NULL, workflow_run_id TEXT NOT NULL, task_id TEXT NOT NULL, phase TEXT NOT NULL, payload BLOB NOT NULL, PRIMARY KEY(project_identity, workflow_run_id), FOREIGN KEY(project_identity, task_id) REFERENCES tasks(project_identity, task_id))`,
+	`CREATE TABLE workflow_runs (project_identity TEXT NOT NULL, workflow_run_id TEXT NOT NULL, task_id TEXT NOT NULL, phase TEXT NOT NULL, control_revision INTEGER NOT NULL DEFAULT 1 CHECK(control_revision>0), payload BLOB NOT NULL, PRIMARY KEY(project_identity, workflow_run_id), FOREIGN KEY(project_identity, task_id) REFERENCES tasks(project_identity, task_id))`,
 	`CREATE INDEX workflow_runs_task_idx ON workflow_runs(project_identity, task_id)`,
 	activeWorkflowIndexV5,
 	`CREATE TABLE executions (project_identity TEXT NOT NULL, execution_id TEXT NOT NULL, workflow_run_id TEXT NOT NULL, status TEXT NOT NULL, current_step TEXT NOT NULL DEFAULT '', target_json BLOB NOT NULL, payload BLOB NOT NULL, PRIMARY KEY(project_identity, execution_id), FOREIGN KEY(project_identity, workflow_run_id) REFERENCES workflow_runs(project_identity, workflow_run_id))`,
@@ -823,6 +824,9 @@ func (t *sqliteTx) PutWorkflowRun(v WorkflowRunRecord) error {
 			}
 		}
 	}
+	if err := t.advanceControlRevision("workflow_runs", "workflow_run_id", v.ProjectIdentity, v.WorkflowRunID, v.WorkflowRunID, v); err != nil {
+		return err
+	}
 	b, err := encodePayload(v)
 	if err != nil {
 		return err
@@ -867,10 +871,13 @@ func (t *sqliteTx) PutExecution(v ExecutionRecord) error {
 		if e != nil {
 			return e
 		}
-		if delivered {
+		if delivered && deliveredExecutionFingerprint(old) != deliveredExecutionFingerprint(v) {
 			return nativeErr("immutable_task", "selected delivered execution history cannot be changed")
 		}
 	} else if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return err
+	}
+	if err := t.advanceControlRevision("executions", "execution_id", v.ProjectIdentity, v.ExecutionID, v.WorkflowRunID, v); err != nil {
 		return err
 	}
 	target, err := encodePayload(v.Target)
@@ -959,6 +966,9 @@ func (t *sqliteTx) PutDecision(v DecisionRecord) error {
 	}
 	if !validDecisionStatus(v.Status) {
 		return fmt.Errorf("invalid decision status %q", v.Status)
+	}
+	if err := t.advanceControlRevision("decisions", "decision_id", v.ProjectIdentity, v.DecisionID, v.WorkflowRunID, v); err != nil {
+		return err
 	}
 	b, err := encodePayload(v)
 	if err != nil {
@@ -1199,22 +1209,30 @@ func (t *sqliteTx) AcceptDecisionAnswer(command CommandRecord, answer DecisionAn
 	if err = t.tx.QueryRowContext(t.ctx, `SELECT payload FROM projection WHERE project_identity=?`, command.ProjectIdentity).Scan(&projectionBytes); err != nil {
 		return record, false, fmt.Errorf("load current service projection: %w", err)
 	}
-	var projection Runtime
+	var projection ServiceCheckpoint
 	if err = decode(projectionBytes, &projection); err != nil {
 		return record, false, fmt.Errorf("decode current service projection: %w", err)
 	}
 	if projection.Service.InstanceID != answer.ServiceInstanceID || projection.Service.Status != "running" || !projection.Service.Ready {
 		return record, false, errors.New("stale_instance: answer targets a service instance that is no longer ready")
 	}
-	var target *Run
-	for _, run := range projection.Runs {
-		if run != nil && run.RunID == answer.RunID {
-			target = run
-			break
-		}
+	var revision uint64
+	var phase string
+	var executionBytes []byte
+	err = t.tx.QueryRowContext(t.ctx, `SELECT w.control_revision,w.phase,e.payload FROM workflow_runs w JOIN executions e ON e.project_identity=w.project_identity AND e.workflow_run_id=w.workflow_run_id WHERE w.project_identity=? AND w.workflow_run_id=? AND e.execution_id=?`, command.ProjectIdentity, answer.RunID, record.ExecutionID).Scan(&revision, &phase, &executionBytes)
+	if err != nil {
+		return record, false, errors.New("stale_revision: decision workflow or execution no longer exists")
 	}
-	if target == nil || target.ControlRevision != answer.ExpectedRunRevision || target.FinishTaskStatus != "waiting_decision" && !(target.WorkflowVersion == WorkerFlowVersion && target.FinishTaskStatus == "waiting_pr_merge") || target.Decision == nil || target.Decision.ID != command.TargetID || target.Decision.Status != "pending" || target.Decision.Version != command.ExpectedVersion || target.AttemptID == "" || target.Decision.AttemptID != target.AttemptID || target.Decision.AttemptID != record.AttemptID || target.ExecutionID != record.ExecutionID {
+	var execution ExecutionRecord
+	if err = decode(executionBytes, &execution); err != nil {
+		return record, false, err
+	}
+	if revision != answer.ExpectedRunRevision || phase != "waiting_decision" && phase != "waiting_pr_merge" || execution.DecisionID != record.DecisionID || record.WorkflowRunID != answer.RunID || execution.CurrentStep != "worker" {
 		return record, false, errors.New("stale_revision: decision or run identity changed; refresh before answering")
+	}
+	var currentAttempt string
+	if err = t.tx.QueryRowContext(t.ctx, `SELECT attempt_id FROM step_attempts WHERE project_identity=? AND execution_id=? AND step_id=? ORDER BY attempt_number DESC LIMIT 1`, command.ProjectIdentity, record.ExecutionID, execution.CurrentStep).Scan(&currentAttempt); err != nil || currentAttempt != record.AttemptID {
+		return record, false, errors.New("stale_revision: decision attempt changed")
 	}
 	var request DecisionRequest
 	if err = decode(record.Request, &request); err != nil {
@@ -1278,7 +1296,7 @@ func (t *sqliteTx) heartbeatProjection(project string) error {
 	if err != nil {
 		return err
 	}
-	var checkpoint Runtime
+	var checkpoint ServiceCheckpoint
 	if err = decode(payload, &checkpoint); err != nil {
 		return err
 	}
@@ -1348,14 +1366,6 @@ func querySnapshot(ctx context.Context, db queryContext, project string) (Domain
 			out.Tasks = append(out.Tasks, v)
 			return nil
 		}},
-		{`SELECT payload FROM workflow_runs WHERE project_identity=? ORDER BY workflow_run_id`, func(b []byte) error {
-			var v WorkflowRunRecord
-			if err := json.Unmarshal(b, &v); err != nil {
-				return err
-			}
-			out.WorkflowRuns = append(out.WorkflowRuns, v)
-			return nil
-		}},
 		{`SELECT payload FROM executions WHERE project_identity=? ORDER BY execution_id`, func(b []byte) error {
 			var v ExecutionRecord
 			if err := json.Unmarshal(b, &v); err != nil {
@@ -1410,6 +1420,50 @@ func querySnapshot(ctx context.Context, db queryContext, project string) (Domain
 		if err != nil {
 			return out, err
 		}
+	}
+	rows, err := db.QueryContext(ctx, `SELECT payload,control_revision FROM workflow_runs WHERE project_identity=? ORDER BY workflow_run_id`, project)
+	if err != nil {
+		return out, err
+	}
+	for rows.Next() {
+		var b []byte
+		var record WorkflowRunRecord
+		if err = rows.Scan(&b, &record.ControlRevision); err != nil {
+			rows.Close()
+			return out, err
+		}
+		if err = json.Unmarshal(b, &record); err != nil {
+			rows.Close()
+			return out, err
+		}
+		out.WorkflowRuns = append(out.WorkflowRuns, record)
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return out, err
+	}
+	rows, err = db.QueryContext(ctx, `SELECT task_id,selected_workflow_run_id,pr_instance,pr_repository,pr_number,pr_url,merge_commit,merged_at,recorded_at,evidence FROM task_deliveries WHERE project_identity=? ORDER BY task_id`, project)
+	if err != nil {
+		return out, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		record := TaskDeliveryRecord{ProjectIdentity: project}
+		var merged, recorded string
+		if err = rows.Scan(&record.TaskID, &record.SelectedWorkflowRunID, &record.PRInstance, &record.PRRepository, &record.PRNumber, &record.PRURL, &record.MergeCommit, &merged, &recorded, &record.Evidence); err != nil {
+			return out, err
+		}
+		if record.MergedAt, err = time.Parse(time.RFC3339Nano, merged); err != nil {
+			return out, err
+		}
+		if record.RecordedAt, err = time.Parse(time.RFC3339Nano, recorded); err != nil {
+			return out, err
+		}
+		out.Deliveries = append(out.Deliveries, record)
+	}
+	if err = rows.Err(); err != nil {
+		return out, err
 	}
 	return out, nil
 }
@@ -1549,6 +1603,10 @@ func (s *SQLiteStore) CommandByIdempotency(ctx context.Context, project, idempot
 }
 
 func (s *SQLiteStore) SaveRuntime(ctx context.Context, runtime Runtime) (Runtime, error) {
+	return s.saveRuntime(ctx, runtime, nil)
+}
+
+func (s *SQLiteStore) saveRuntime(ctx context.Context, runtime Runtime, baseline map[string]string) (Runtime, error) {
 	project := runtime.Repository.Identity
 	if project == "" {
 		return runtime, errors.New("runtime repository identity is required for SQLite persistence")
@@ -1572,16 +1630,45 @@ func (s *SQLiteStore) SaveRuntime(ctx context.Context, runtime Runtime) (Runtime
 			return fmt.Errorf("unsupported runtime schema %d", runtime.SchemaVersion)
 		}
 		runtime.Operations = runtimeOperations(runtime)
-		for _, run := range runtime.Runs {
-			if run == nil {
-				continue
+		changed := func(key string, value any) bool { return baseline == nil || baseline[key] != recordFingerprint(value) }
+		for _, record := range runtime.WorkflowRuns {
+			if changed("workflow:"+record.WorkflowRunID, record) {
+				if err := tx.(*sqliteTx).checkPublicationBaseline("workflow_runs", "workflow_run_id", project, record.WorkflowRunID, "workflow:"+record.WorkflowRunID, baseline); err != nil {
+					return err
+				}
+				if err := tx.PutWorkflowRun(record); err != nil {
+					return err
+				}
 			}
-			if run.WorkflowVersion != WorkerFlowVersion {
-				return nativeErr("unsupported_schema", "runtime contains a workflow outside worker-flow-v1; preserve it for manual recovery")
+		}
+		for _, record := range runtime.Executions {
+			if changed("execution:"+record.ExecutionID, record) {
+				if err := tx.(*sqliteTx).checkPublicationBaseline("executions", "execution_id", project, record.ExecutionID, "execution:"+record.ExecutionID, baseline); err != nil {
+					return err
+				}
+				if err := tx.PutExecution(record); err != nil {
+					return err
+				}
 			}
-			err := persistWorkerFlow(tx, project, runtime, run)
-			if err != nil {
-				return err
+		}
+		for _, record := range runtime.Attempts {
+			if changed("attempt:"+record.AttemptID, record) {
+				if err := tx.(*sqliteTx).checkPublicationBaseline("step_attempts", "attempt_id", project, record.AttemptID, "attempt:"+record.AttemptID, baseline); err != nil {
+					return err
+				}
+				if err := tx.PutStepAttempt(record); err != nil {
+					return err
+				}
+			}
+		}
+		for _, record := range runtime.Decisions {
+			if changed("decision:"+record.DecisionID, record) {
+				if err := tx.(*sqliteTx).checkPublicationBaseline("decisions", "decision_id", project, record.DecisionID, "decision:"+record.DecisionID, baseline); err != nil {
+					return err
+				}
+				if err := tx.PutDecision(record); err != nil {
+					return err
+				}
 			}
 		}
 		for _, operation := range runtime.Operations {
@@ -1593,24 +1680,6 @@ func (s *SQLiteStore) SaveRuntime(ctx context.Context, runtime Runtime) (Runtime
 				return errors.New("runtime contains a second identity for an existing operation intent")
 			}
 		}
-		for _, runID := range runtime.RejectedClaimRuns {
-			confirmed := false
-			for _, operation := range runtime.Operations {
-				var claim struct {
-					RunID string `json:"run_id"`
-				}
-				if operation.Kind == "claim_task" && operation.Status == "rejected" && json.Unmarshal(operation.Request, &claim) == nil && claim.RunID == runID {
-					confirmed = true
-					break
-				}
-			}
-			if !confirmed {
-				return errors.New("cannot discard workflow without a rejected claim receipt")
-			}
-			if err := tx.(*sqliteTx).discardUnclaimedWorkflow(project, runID); err != nil {
-				return err
-			}
-		}
 		for _, event := range pendingEvents {
 			if event.ProjectIdentity == "" {
 				event.ProjectIdentity = project
@@ -1619,16 +1688,12 @@ func (s *SQLiteStore) SaveRuntime(ctx context.Context, runtime Runtime) (Runtime
 				return err
 			}
 		}
-		snapshot, err := querySnapshot(ctx, tx.(*sqliteTx).tx, project)
-		if err != nil {
-			return err
+		for i := range runtime.WorkflowRuns {
+			record := &runtime.WorkflowRuns[i]
+			if err := tx.(*sqliteTx).tx.QueryRowContext(ctx, `SELECT control_revision FROM workflow_runs WHERE project_identity=? AND workflow_run_id=?`, project, record.WorkflowRunID).Scan(&record.ControlRevision); err != nil {
+				return err
+			}
 		}
-		runtime.Tasks = snapshot.Tasks
-		runtime.WorkflowRuns = snapshot.WorkflowRuns
-		runtime.Executions = snapshot.Executions
-		runtime.Attempts = snapshot.Attempts
-		runtime.Decisions = snapshot.Decisions
-		runtime.Operations = snapshot.Operations
 		payload, err := json.Marshal(runtimeCheckpoint(runtime))
 		if err != nil {
 			return err
@@ -1637,36 +1702,8 @@ func (s *SQLiteStore) SaveRuntime(ctx context.Context, runtime Runtime) (Runtime
 	})
 	if err == nil {
 		runtime.PendingEvents = nil
-		runtime.RejectedClaimRuns = nil
 	}
 	return runtime, err
-}
-
-// A native question can be saved with its Decision and StepAttempt before the
-// Run projection catches up. Restore only the matching current wait.
-func (t *sqliteTx) discardUnclaimedWorkflow(project, runID string) error {
-	var taskID string
-	if err := t.tx.QueryRowContext(t.ctx, `SELECT task_id FROM workflow_runs WHERE project_identity=? AND workflow_run_id=? AND phase IN ('queued','executing')`, project, runID).Scan(&taskID); err != nil {
-		return err
-	}
-	var effects int
-	if err := t.tx.QueryRowContext(t.ctx, `SELECT COUNT(*) FROM executions e LEFT JOIN step_attempts a ON a.project_identity=e.project_identity AND a.execution_id=e.execution_id WHERE e.project_identity=? AND e.workflow_run_id=? AND (e.status <> 'pending' OR a.status <> 'planned')`, project, runID).Scan(&effects); err != nil {
-		return err
-	}
-	if effects != 0 {
-		return errors.New("cannot discard a workflow whose execution may have started")
-	}
-	if _, err := t.tx.ExecContext(t.ctx, `DELETE FROM step_attempts WHERE project_identity=? AND execution_id IN (SELECT execution_id FROM executions WHERE project_identity=? AND workflow_run_id=?)`, project, project, runID); err != nil {
-		return err
-	}
-	if _, err := t.tx.ExecContext(t.ctx, `DELETE FROM executions WHERE project_identity=? AND workflow_run_id=?`, project, runID); err != nil {
-		return err
-	}
-	if _, err := t.tx.ExecContext(t.ctx, `DELETE FROM workflow_runs WHERE project_identity=? AND workflow_run_id=?`, project, runID); err != nil {
-		return err
-	}
-	_, err := t.tx.ExecContext(t.ctx, `DELETE FROM tasks WHERE project_identity=? AND task_id=? AND NOT EXISTS (SELECT 1 FROM workflow_runs WHERE project_identity=? AND task_id=?)`, project, taskID, project, taskID)
-	return err
 }
 
 func runtimeOperations(runtime Runtime) []OperationRecord {

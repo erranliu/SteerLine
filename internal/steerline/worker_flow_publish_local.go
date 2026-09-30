@@ -131,8 +131,7 @@ func (s *Service) publishLocalWorkerRun(ctx context.Context, run *Run, workflow 
 	if err = BindWorkerPR(workflow, execution, info, url, s.Config.PR.Repository, false); err != nil {
 		return PRInfo{}, err
 	}
-	run.FinishTaskStatus = "waiting_pr_merge"
-	run.PR.URL, run.PR.State = ptr(info.URL), info.State
+	s.refreshRun(run)
 	if err = s.changeOperation(opID, "confirmed", url, mustJSON(info), ""); err != nil {
 		return PRInfo{}, err
 	}
@@ -284,9 +283,8 @@ func (s *Service) reconcileLocalWorkerPublication(ctx context.Context, run *Run)
 	if err = BindWorkerPR(workflow, execution, info, url, s.Config.PR.Repository, false); err != nil {
 		return false, err
 	}
-	run.FinishTaskStatus = "waiting_pr_merge"
-	run.PR.URL, run.PR.State = ptr(info.URL), info.State
-	if err = offerWorkerPRFeedback(run, url); err != nil {
+	s.refreshRun(run)
+	if err = s.offerWorkerPRFeedback(run, url); err != nil {
 		return false, err
 	}
 	if err = s.setOperationState(op.OperationID, "confirmed", url, mustJSON(info), ""); err != nil {

@@ -87,12 +87,12 @@ func TestLocalWorkerPublishUsesHostGitAndExactPR(t *testing.T) {
 	git(worktree, "add", "publish.txt")
 	run := &Run{TaskID: "101", RunID: runID, AttemptID: strings.Repeat("d", 32), ExecutionID: strings.Repeat("c", 32), WorkflowVersion: WorkerFlowVersion, Protocol: string(ProtocolLocalCodexAppServer), FinishTaskStatus: "waiting_decision", WorktreePath: &worktree, WorktreeBranch: &branch,
 		WorkspaceIntent: &WorkspaceIntent{Path: worktree, Branch: branch, BaseCommit: base}}
-	workflow := &WorkflowRunRecord{WorkflowRunID: runID, WorkflowVersion: WorkerFlowVersion, Branch: "main", Phase: "waiting_decision"}
-	execution := &ExecutionRecord{WorkflowRunID: runID, ExecutionID: run.ExecutionID, Workspace: WorkspaceEvidence{Worktree: worktree, Branch: branch}, CurrentTurnID: turnID, LastStoppedTurnID: turnID}
+	workflow := &WorkflowRunRecord{TaskID: run.TaskID, WorkflowRunID: runID, WorkflowVersion: WorkerFlowVersion, Branch: "main", Phase: "waiting_decision"}
+	execution := &ExecutionRecord{Protocol: run.Protocol, Backend: string(BackendLocal), CurrentStep: "worker", Status: "idle", WorkspaceIntent: run.WorkspaceIntent, WorkflowRunID: runID, ExecutionID: run.ExecutionID, Workspace: WorkspaceEvidence{Worktree: worktree, Branch: branch}, CurrentTurnID: turnID, LastStoppedTurnID: turnID}
 	s := &Service{Config: c, domainStore: db, store: &Store{Project: c.Identity()},
 		prs: &PRClient{Config: c.PR, Runner: Runner{Dir: c.Repository, Timeout: 10 * time.Second}},
 		State: Runtime{SchemaVersion: WorkerFlowRuntimeSchema, Repository: Repository{Path: c.Repository, Remote: c.Remote, Branch: c.Branch, Identity: c.Identity()},
-			Runs: []*Run{run}, WorkflowRuns: []WorkflowRunRecord{*workflow}, Executions: []ExecutionRecord{*execution}}}
+			Tasks: []TaskRecord{{TaskID: run.TaskID, Status: "in_progress"}}, Attempts: []StepAttemptRecord{{AttemptID: run.AttemptID, ExecutionID: run.ExecutionID, StepID: "worker", AttemptNumber: 1}}, Runs: []*Run{run}, WorkflowRuns: []WorkflowRunRecord{*workflow}, Executions: []ExecutionRecord{*execution}}}
 	workflow, execution = &s.State.WorkflowRuns[0], &s.State.Executions[0]
 	info, err := s.publishLocalWorkerRun(ctx, run, workflow, execution, turnID)
 	if err != nil {

@@ -83,16 +83,12 @@ func (s *Service) processPendingCommandsTracked(ctx context.Context, processed *
 				if record.WorkflowRunID != run.RunID || record.ExecutionID != run.ExecutionID || record.AttemptID != run.Decision.AttemptID {
 					return fmt.Errorf("accepted decision %s no longer matches the runtime identity", command.TargetID)
 				}
-				run.Decision.Version = record.Version
-				run.Decision.Status = record.Status
-				if len(record.Answer) > 0 {
-					var saved DecisionAnswer
-					if err = decode(record.Answer, &saved); err != nil {
-						return fmt.Errorf("decode accepted decision answer: %w", err)
-					}
-					run.Decision.OptionID, run.Decision.Note, run.Decision.Answers, run.Decision.AnsweredBy = saved.OptionID, saved.Note, saved.Answers, saved.AnsweredBy
-					run.Decision.AnsweredAt = &saved.AnsweredAt
+				*s.decisionRecord(run) = record
+				if s.store.baseline == nil {
+					s.store.baseline = domainFingerprints(s.State)
 				}
+				s.store.baseline["decision:"+record.DecisionID] = recordFingerprint(record)
+				s.refreshRun(run)
 				s.note(run, "steer", "decision", "answer_saved", "decision answer saved", decisionAnswerSummary(run), decisionAnswerMeta(run))
 				if err = s.save(); err != nil {
 					return err

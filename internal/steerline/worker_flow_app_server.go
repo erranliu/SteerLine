@@ -52,11 +52,12 @@ func (s *Service) recordAppServerTurnStarted(run *Run, workflow *WorkflowRunReco
 			attempt.Status, attempt.UpdatedAt = "running", now()
 		}
 		if run.Decision != nil && run.Decision.Status == "answer_saved" && run.Decision.Request.NativeAsk == nil {
-			run.Decision.Status = "reply_accepted"
-			run.Decision.Version++
+			s.setDecisionStatus(run, "reply_accepted")
 		}
-		run.ExecutionStatus, run.FinishTaskStatus, run.Error = "running", "pending", nil
-		run.StartedAt, run.EndedAt = ptr(now()), nil
+		execution.Status, execution.Error = "active", nil
+		s.refreshRun(run)
+		execution.TurnStartedAt, execution.TurnEndedAt = ptr(now()), nil
+		s.refreshRun(run)
 	}
 	if operation.Status == "confirmed" {
 		return nil
@@ -187,7 +188,7 @@ func startAppServerWorkerTurn(ctx context.Context, c Config, run *Run, execution
 	if err := writeCodexHistoryBinding(localCodexHistoryBindingPath(dir, execution.SessionID), binding); err != nil {
 		return nil, "", "", err
 	}
-	run.Process, run.SessionID = execution.Process, ptr(execution.SessionID)
+	refreshExecutionView(run, execution)
 	if persistThread == nil {
 		return nil, "", "", errors.New("app-server thread cannot be sent without a durable execution receipt")
 	}

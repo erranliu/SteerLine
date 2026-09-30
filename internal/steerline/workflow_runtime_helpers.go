@@ -52,29 +52,16 @@ func (s *Service) inspectWorkflowWorkspace(ctx context.Context, run *Run) (Works
 		return WorkspaceEvidence{}, configErr
 	}
 	if run.Backend == string(BackendOrca) && run.Protocol == string(ProtocolOrcaSupervised) {
-		if err := restoreSupervisedTarget(run, s.State.Attempts, targetFor(c), executionRecords{root: c.RunDir}); err != nil {
-			return WorkspaceEvidence{}, err
+		execution := s.executionRecord(run)
+		if execution == nil || execution.Process == nil {
+			return WorkspaceEvidence{}, errors.New("supervised workspace has no execution binding")
 		}
-		records := executionRecords{root: c.RunDir}
-		bindingAttemptID := run.AttemptID
-		ref, err := records.loadBinding(run.RunID, bindingAttemptID)
-		if os.IsNotExist(err) {
-			// A newly planned step has no binding yet. Reuse the most recent
-			// settled attempt's exact Dispatch only for read-only workspace facts.
-			var latest StepAttemptRecord
-			for _, candidate := range s.State.Attempts {
-				if candidate.ExecutionID == run.ExecutionID && candidate.ExternalBinding.WorktreeID == run.Target.WorktreeID && candidate.ExternalBinding.Dispatch != "" && (latest.UpdatedAt.IsZero() || candidate.UpdatedAt.After(latest.UpdatedAt)) {
-					latest = candidate
-				}
-			}
-			if latest.AttemptID != "" {
-				bindingAttemptID = latest.AttemptID
-				ref, err = records.loadBinding(run.RunID, bindingAttemptID)
-			}
+		target := execution.Target
+		fixed := targetFor(c)
+		if target.ID != fixed.ID || target.ConnectionID != fixed.ConnectionID || target.ExternalRuntime != fixed.ExternalRuntime {
+			return WorkspaceEvidence{}, nativeErr("authority_mismatch", "supervised target differs from its fixed execution")
 		}
-		if err != nil {
-			return WorkspaceEvidence{}, err
-		}
+		ref := ExecutionRef{Version: ExecutionRecordVersion, Backend: BackendOrca, Protocol: ProtocolOrcaSupervised, Target: target, RunID: run.RunID, AttemptID: run.AttemptID, External: *execution.Process, WorkspacePath: execution.Workspace.Worktree, WorkspaceBranch: execution.Workspace.Branch, BaseCommit: execution.Workspace.Base}
 		inspection, err := (orcaSupervisedBackend{config: c}).InspectWorkspace(ctx, ref)
 		if err != nil {
 			return WorkspaceEvidence{}, err
@@ -106,68 +93,19 @@ func (s *Service) inspectWorkflowWorkspace(ctx context.Context, run *Run) (Works
 	return WorkspaceEvidence{Repository: c.identity, Worktree: canonical(worktree), Branch: inspection.Branch, Base: inspection.Base, Head: inspection.Head, Dirty: inspection.Dirty, VerifiedAt: inspection.CheckedAt}, nil
 }
 
-func restoreSupervisedTarget(run *Run, attempts []StepAttemptRecord, fixedTarget ExecutionTarget, records executionRecords) error {
-	if run.Target.ID != "" && run.Target.ID != fixedTarget.ID {
-		return nativeErr("authority_mismatch", fmt.Sprintf("supervised execution target ID %q differs from configured target %q", run.Target.ID, fixedTarget.ID))
-	}
-	if run.Target.ConnectionID != "" && run.Target.ConnectionID != fixedTarget.ConnectionID || run.Target.ExternalRuntime != "" && run.Target.ExternalRuntime != fixedTarget.ExternalRuntime {
-		return nativeErr("authority_mismatch", "runtime target connection differs from the configured supervised target")
-	}
-	var recovered *ExecutionTarget
-	for i := range attempts {
-		attempt := &attempts[i]
-		binding := attempt.ExternalBinding
-		if attempt.ExecutionID != run.ExecutionID || attempt.StepID != "prepare" {
-			continue
-		}
-		if binding.WorktreeID == "" || binding.OrchestrationRun == "" || binding.Dispatch == "" {
-			ref, err := records.loadBinding(run.RunID, attempt.AttemptID)
-			if err != nil {
-				continue
-			}
-			binding = ref.Target
-		}
-		if binding.ID == "" || binding.WorktreeID == "" || binding.OrchestrationRun == "" || binding.Dispatch == "" {
-			continue
-		}
-		if binding.ID != fixedTarget.ID || binding.ConnectionID != fixedTarget.ConnectionID || binding.ExternalRuntime != fixedTarget.ExternalRuntime {
-			return nativeErr("authority_mismatch", "persisted prepare binding differs from the configured supervised target")
-		}
-		if recovered != nil && (recovered.WorktreeID != binding.WorktreeID || recovered.OrchestrationRun != binding.OrchestrationRun || recovered.Dispatch != binding.Dispatch) {
-			return nativeErr("authority_mismatch", "persisted prepare bindings disagree on the fixed supervised worktree")
-		}
-		copy := binding
-		recovered = &copy
-	}
-	if recovered == nil {
-		return UnsupportedAdapterOperation("InspectWorkspace", "supervised execution lacks its exact fixed prepare binding")
-	}
-	if run.Target.WorktreeID != "" && run.Target.WorktreeID != recovered.WorktreeID ||
-		run.Target.OrchestrationRun != "" && run.Target.OrchestrationRun != recovered.OrchestrationRun {
-		return nativeErr("authority_mismatch", "runtime target conflicts with its fixed prepare binding")
-	}
-	if run.Target.WorktreeID != "" && run.Target.OrchestrationRun != "" {
-		return nil
-	}
-	run.Target = *recovered
-	return nil
-}
-
 func applyWorkflowWorkspaceEvidence(run *Run, execution *ExecutionRecord, workspace WorkspaceEvidence) {
 	applyWorkflowWorkspaceTarget(run, execution, workspace)
 	execution.Workspace = workspace
 	execution.UpdatedAt = now()
+	refreshExecutionView(run, execution)
 }
 
 func applyWorkflowWorkspaceTarget(run *Run, execution *ExecutionRecord, workspace WorkspaceEvidence) {
-	if run.Protocol == string(ProtocolOrcaSupervised) {
-		execution.Target = run.Target
-	} else {
+	if execution.Protocol != string(ProtocolOrcaSupervised) {
 		execution.Target.WorktreeID = workspace.Worktree
 	}
 	execution.Target.Branch = workspace.Branch
 	execution.Target.BaseRevision = workspace.Base
-	run.Target = execution.Target
 }
 
 func prepareWorktreeOnly(ctx context.Context, c Config, run *Run) error {

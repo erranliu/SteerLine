@@ -541,7 +541,8 @@ func TestSupervisedReplyRejectsEscapedOversizeBeforeOrcaCall(t *testing.T) {
 func TestSupervisedPrepareKeepsPlatformWorktreeIdentitySeparateFromPath(t *testing.T) {
 	const worktreeID = "repo-test::C:/remote/steerline-run"
 	run := &Run{Protocol: string(ProtocolOrcaSupervised), Target: ExecutionTarget{WorktreeID: worktreeID}}
-	execution := &ExecutionRecord{Target: run.Target}
+	execution := &ExecutionRecord{Protocol: run.Protocol, Target: run.Target}
+	run.Target.WorktreeID = "incorrect-view-only-id"
 	workspace := WorkspaceEvidence{Worktree: "C:/remote/steerline-run", Branch: "erranliu/steerline-run", Base: strings.Repeat("a", 40), Head: strings.Repeat("a", 40)}
 
 	applyWorkflowWorkspaceEvidence(run, execution, workspace)
@@ -554,57 +555,6 @@ func TestSupervisedPrepareKeepsPlatformWorktreeIdentitySeparateFromPath(t *testi
 	}
 	if execution.Workspace.Worktree != workspace.Worktree || execution.Target.Branch != workspace.Branch || execution.Target.BaseRevision != workspace.Base {
 		t.Fatalf("supervised workspace evidence was not persisted separately: target=%+v workspace=%+v", execution.Target, execution.Workspace)
-	}
-}
-
-func TestSupervisedWorkspaceRestoresMissingTargetFromPrepareBinding(t *testing.T) {
-	fixed := ExecutionTarget{ID: "supervised:test", ConnectionID: "connection-test", ExternalRuntime: "environment-test"}
-	bound := fixed
-	bound.WorktreeID = "repo-test::C:/remote/steerline-run"
-	bound.OrchestrationRun, bound.ExternalTask, bound.Dispatch = "run-test", "task-test", "dispatch-test"
-	run := &Run{ExecutionID: "execution-test", Target: fixed}
-	attempts := []StepAttemptRecord{{ExecutionID: run.ExecutionID, StepID: "prepare", ExternalBinding: bound}}
-	records := executionRecords{root: t.TempDir()}
-
-	if err := restoreSupervisedTarget(run, attempts, fixed, records); err != nil {
-		t.Fatal(err)
-	}
-	if run.Target != bound {
-		t.Fatalf("fixed prepare binding was not restored: got %+v want %+v", run.Target, bound)
-	}
-	stepTarget := bound
-	stepTarget.ExternalTask, stepTarget.Dispatch = "task-implement", "dispatch-implement"
-	stepRun := &Run{ExecutionID: run.ExecutionID, Target: stepTarget}
-	if err := restoreSupervisedTarget(stepRun, attempts, fixed, records); err != nil {
-		t.Fatal(err)
-	}
-	if stepRun.Target.ExternalTask != "task-implement" || stepRun.Target.Dispatch != "dispatch-implement" {
-		t.Fatalf("later step Dispatch identity was replaced with the prepare Dispatch: %+v", stepRun.Target)
-	}
-
-	run.Target.WorktreeID = "repo-test::C:/remote/other"
-	if err := restoreSupervisedTarget(run, attempts, fixed, records); err == nil || !isNativeErrorCode(err, "authority_mismatch") {
-		t.Fatalf("conflicting runtime worktree identity was not rejected: %v", err)
-	}
-
-	workflowID, attemptID := newID(), newID()
-	ref := ExecutionRef{Version: ExecutionRecordVersion, Backend: BackendOrca, Protocol: ProtocolOrcaSupervised, Target: bound, Agent: AgentSpec{Name: "codex"}, RunID: workflowID, AttemptID: attemptID, WorkspacePath: "C:/remote/steerline-run", WorkspaceBranch: "erranliu/steerline-run", BaseCommit: strings.Repeat("a", 40), External: ProcessIdentity{Kind: "orca_supervised", RuntimeID: "remote-runtime", CoordinatorRuntimeID: "center-runtime", Terminal: "terminal-test", Incarnation: "inc-test", OrchestrationRun: bound.OrchestrationRun, Task: bound.ExternalTask, Dispatch: bound.Dispatch, ExecutionHost: "environment-test", WorktreeID: bound.WorktreeID}}
-	if err := records.saveBinding(ref); err != nil {
-		t.Fatal(err)
-	}
-	missingRuntimeBinding := StepAttemptRecord{ExecutionID: "execution-test", AttemptID: attemptID, StepID: "prepare"}
-	restoredRun := &Run{RunID: workflowID, ExecutionID: "execution-test", Protocol: string(ProtocolOrcaSupervised), Target: fixed}
-	if err := restoreSupervisedTarget(restoredRun, []StepAttemptRecord{missingRuntimeBinding}, fixed, records); err != nil {
-		t.Fatal(err)
-	}
-	if restoredRun.Target != bound {
-		t.Fatalf("exact durable binding was not restored from its record: got %+v want %+v", restoredRun.Target, bound)
-	}
-	workspace := WorkspaceEvidence{Worktree: "C:/remote/steerline-run", Branch: "erranliu/steerline-run", Base: strings.Repeat("a", 40), Head: strings.Repeat("a", 40)}
-	execution := ExecutionRecord{Target: fixed}
-	applyWorkflowWorkspaceEvidence(restoredRun, &execution, workspace)
-	if execution.Target.WorktreeID != bound.WorktreeID || execution.Target.OrchestrationRun != bound.OrchestrationRun || execution.Workspace.Worktree != workspace.Worktree {
-		t.Fatalf("restored exact platform target was not persisted with workspace evidence: target=%+v workspace=%+v", execution.Target, execution.Workspace)
 	}
 }
 

@@ -963,26 +963,6 @@ func validateNativeExecutionArtifacts(root string) error {
 	return nil
 }
 
-func validateNativeRuntimeProjectionData(runtime *Runtime) error {
-	if runtime == nil || runtime.SchemaVersion != WorkerFlowRuntimeSchema || runtime.Repository.Identity == "" {
-		return nativeErr("unsupported_schema", "native runtime projection is unreadable or has an unsupported schema")
-	}
-	for _, task := range runtime.Tasks {
-		if task.Source != "native" || task.ExternalProvider != "" || task.ExternalProject != "" || task.ExternalID != "" || task.IdentityMapDigest != "" {
-			return nativeErr("authority_mismatch", "native runtime projection contains a non-native task identity")
-		}
-	}
-	for _, run := range runtime.Runs {
-		if run != nil && (run.BeadsContext != nil || run.Completion != nil || run.BeadsStatus != "" || run.IdentityMapDigest != "" || run.DomainTaskID != run.TaskID || run.ResultPath != nil) {
-			return nativeErr("authority_mismatch", "native runtime projection contains a retired task-source or whole-run result binding")
-		}
-		if run != nil && run.WorkflowVersion != WorkerFlowVersion {
-			return nativeErr("unsupported_schema", "native runtime projection contains a non-native workflow version")
-		}
-	}
-	return nil
-}
-
 func validateNativeSQLiteRuntimeProjection(ctx context.Context, db *sql.DB) error {
 	rows, err := db.QueryContext(ctx, `SELECT payload FROM projection`)
 	if err != nil {
@@ -994,13 +974,11 @@ func validateNativeSQLiteRuntimeProjection(ctx context.Context, db *sql.DB) erro
 		if err = rows.Scan(&payload); err != nil {
 			return nativeErr("unsupported_schema", "cannot read the saved runtime projection without mutation")
 		}
-		var runtime Runtime
-		if err = decode(payload, &runtime); err != nil {
-			return nativeErr("unsupported_schema", "saved runtime projection is unreadable; preserve it for manual recovery")
+		var checkpoint ServiceCheckpoint
+		if err = decode(payload, &checkpoint); err != nil || checkpoint.SchemaVersion != WorkerFlowRuntimeSchema || checkpoint.Repository.Identity == "" {
+			return nativeErr("unsupported_schema", "unsupported service checkpoint; preserve the database")
 		}
-		if err = validateNativeRuntimeProjectionData(&runtime); err != nil {
-			return err
-		}
+
 	}
 	if err = rows.Err(); err != nil {
 		return nativeErr("unsupported_schema", "cannot inspect the saved runtime projection without mutation")
@@ -1321,7 +1299,7 @@ func containsReference(refs []FileReference, target FileReference) bool {
 	return false
 }
 func hasAcceptanceHeading(b []byte) bool {
-	re := regexp.MustCompile(`(?im)^#{1,6}[ \t]+[^\r\n]*(验收|acceptance)[^\r\n]*$`)
+	re := regexp.MustCompile(`(?im)^#{1,6}[ \t]+[^\r\n]*(楠屾敹|acceptance)[^\r\n]*$`)
 	return re.Match(b)
 }
 

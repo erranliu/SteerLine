@@ -12,27 +12,43 @@ type Repository struct {
 	Identity string `json:"identity"`
 }
 
-const WorkerFlowRuntimeSchema = 7
+const WorkerFlowRuntimeSchema = 8
 
+// ServiceCheckpoint contains only service-owned recovery state. Task and worker
+// state is read from domain rows in the same transaction as this checkpoint.
+type ServiceCheckpoint struct {
+	SchemaVersion int               `json:"schema_version"`
+	Revision      uint64            `json:"revision"`
+	UpdatedAt     time.Time         `json:"updated_at"`
+	HeartbeatAt   time.Time         `json:"heartbeat_at"`
+	Service       ServiceState      `json:"service"`
+	Repository    Repository        `json:"repository"`
+	Operation     *ControlOperation `json:"operation,omitempty"`
+	Blockers      []ControlBlocker  `json:"blockers,omitempty"`
+	ReservedTask  *string           `json:"reserved_task,omitempty"`
+}
+
+// Runtime is a sampled client view plus the service actor's working domain rows.
+// Only ServiceCheckpoint is serialized into the projection table.
 type Runtime struct {
-	SchemaVersion     int                 `json:"schema_version"`
-	Revision          uint64              `json:"revision"`
-	UpdatedAt         time.Time           `json:"updated_at"`
-	HeartbeatAt       time.Time           `json:"heartbeat_at"`
-	Service           ServiceState        `json:"service"`
-	Repository        Repository          `json:"repository"`
-	Tasks             []TaskRecord        `json:"tasks,omitempty"`
-	WorkflowRuns      []WorkflowRunRecord `json:"workflow_runs,omitempty"`
-	Executions        []ExecutionRecord   `json:"executions,omitempty"`
-	Attempts          []StepAttemptRecord `json:"attempts,omitempty"`
-	Decisions         []DecisionRecord    `json:"decisions,omitempty"`
-	Operations        []OperationRecord   `json:"operations,omitempty"`
-	PendingEvents     []DomainEvent       `json:"-"`
-	RejectedClaimRuns []string            `json:"-"`
-	CurrentTask       *string             `json:"current_task"`
-	SlotOccupied      bool                `json:"slot_occupied"`
-	Runs              []*Run              `json:"runs"`
-	Control           ControlState        `json:"control"`
+	SchemaVersion int                  `json:"schema_version"`
+	Revision      uint64               `json:"revision"`
+	UpdatedAt     time.Time            `json:"updated_at"`
+	HeartbeatAt   time.Time            `json:"heartbeat_at"`
+	Service       ServiceState         `json:"service"`
+	Repository    Repository           `json:"repository"`
+	Tasks         []TaskRecord         `json:"tasks,omitempty"`
+	WorkflowRuns  []WorkflowRunRecord  `json:"workflow_runs,omitempty"`
+	Executions    []ExecutionRecord    `json:"executions,omitempty"`
+	Attempts      []StepAttemptRecord  `json:"attempts,omitempty"`
+	Decisions     []DecisionRecord     `json:"decisions,omitempty"`
+	Operations    []OperationRecord    `json:"operations,omitempty"`
+	Deliveries    []TaskDeliveryRecord `json:"-"`
+	PendingEvents []DomainEvent        `json:"-"`
+	CurrentTask   *string              `json:"current_task"`
+	SlotOccupied  bool                 `json:"slot_occupied"`
+	Runs          []*Run               `json:"runs"`
+	Control       ControlState         `json:"control"`
 }
 type ServiceState struct {
 	Mode                string           `json:"mode"`

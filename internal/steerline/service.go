@@ -45,7 +45,6 @@ type Service struct {
 	Console           string
 	consoleOut        io.Writer
 	consoleSequence   uint64
-	versionPrevious   *Runtime
 	controlSeen       map[string]string
 	stopControl       *ControlRequest
 	stopAcceptedAt    *time.Time
@@ -117,43 +116,8 @@ func NewService(c Config) (_ *Service, retErr error) {
 		if old.Repository.Identity != c.identity || old.Repository.Remote != c.Remote || old.Repository.Branch != c.Branch {
 			return nil, nativeErr("authority_mismatch", "runtime repository or branch differs from the native authority; preserve state")
 		}
-		baselineBytes, _ := json.Marshal(old)
-		var baseline Runtime
-		_ = json.Unmarshal(baselineBytes, &baseline)
-		if baseline.Control.DispatchMode == "" {
-			baseline.Control.DispatchMode = "auto"
-		}
-		baseline.Control.Revision = 1
-		if baseline.Control.Blockers == nil {
-			baseline.Control.Blockers = []ControlBlocker{}
-		}
-		s.versionPrevious = &baseline
-		s.State.Runs = old.Runs
-		s.State.Control = old.Control
-		s.State.Revision = old.Revision
-		s.State.Tasks = old.Tasks
-		s.State.WorkflowRuns = old.WorkflowRuns
-		s.State.Executions = old.Executions
-		s.State.Attempts = old.Attempts
-		s.State.Decisions = old.Decisions
-		s.State.Operations = old.Operations
-		authoritative, err := db.Query(context.Background(), c.identity)
-		if err != nil {
-			return nil, err
-		}
-		s.State.Runs = pruneSettledDiscardedRuns(s.State.Runs, old.SlotOccupied, old.CurrentTask, settledDiscardedWorkflowIDs(authoritative))
-		if s.State.Control.DispatchMode != "manual" && s.State.Control.DispatchMode != "auto" || s.State.Control.Revision == 0 {
-			return nil, nativeErr("unsupported_schema", "invalid native runtime v5 control state; preserve the snapshot")
-		}
-		s.State.Control.DispatchMode = authority.DispatchMode
-		s.State.Control.DispatchPaused = authority.DispatchPaused
-		s.State.Control.Revision = authority.AuthorityVersion
-		if s.State.Control.Blockers == nil {
-			s.State.Control.Blockers = []ControlBlocker{}
-		}
-		if err := s.hydrateDecisionProjection(context.Background()); err != nil {
-			return nil, fmt.Errorf("read authoritative decision state: %w", err)
-		}
+		s.State = *old
+		s.State.Control.DispatchMode, s.State.Control.DispatchPaused, s.State.Control.Revision = authority.DispatchMode, authority.DispatchPaused, authority.AuthorityVersion
 		if op := s.State.Control.Operation; op != nil {
 			if !controlIDPattern.MatchString(op.RequestID) || !validControlAction(op.Action) || (op.Phase != "applying" && op.Phase != "completed") || len(op.RequestDigest) != 64 || op.Action == "start_task" && (!controlIDPattern.MatchString(op.RunID) || op.TaskID == "") || op.Phase == "completed" && op.Result == nil {
 				return nil, errors.New("invalid runtime control operation; preserve the snapshot for recovery")
@@ -162,68 +126,12 @@ func NewService(c Config) (_ *Service, retErr error) {
 				return nil, errors.New("completed control receipt does not match its operation")
 			}
 		}
-		seen := map[string]bool{}
-		for _, r := range s.State.Runs {
-			if r == nil || r.TaskID == "" || r.RunID == "" || seen[r.TaskID] || r.Claimant != c.Claimant {
-				return nil, errors.New("invalid or duplicate saved run")
+		for _, run := range s.State.Runs {
+			if run.WorkflowVersion != WorkerFlowVersion {
+				return nil, nativeErr("unsupported_schema", "unsupported workflow version")
 			}
-			if err := s.useFixedRunProfile(r); err != nil {
+			if err := s.useFixedRunProfile(run); err != nil {
 				return nil, err
-			}
-			seen[r.TaskID] = true
-			if r.ManualStop != nil && (!manuallyStopped(r) || r.ExecutionStatus != "failed" && r.ExecutionStatus != "succeeded") {
-				return nil, errors.New("invalid manual stop confirmation for current attempt")
-
-			}
-			if r.Backend == "" || r.Protocol == "" || r.ExecutionID == "" {
-				for _, execution := range s.State.Executions {
-					if execution.WorkflowRunID == r.RunID {
-						if r.ExecutionID == "" {
-							r.ExecutionID = execution.ExecutionID
-						}
-						if r.Backend == "" {
-							r.Backend = execution.Backend
-						}
-						if r.Protocol == "" {
-							r.Protocol = execution.Protocol
-						}
-						if r.Agent == "" {
-							r.Agent = execution.Agent
-						}
-						if r.Target.ID == "" {
-							r.Target = execution.Target
-						}
-						break
-					}
-				}
-			}
-			if r.WorkflowVersion == "" {
-				for _, workflow := range s.State.WorkflowRuns {
-					if workflow.WorkflowRunID == r.RunID {
-						r.WorkflowVersion = workflow.WorkflowVersion
-						break
-					}
-				}
-			}
-			if r.AttemptID == "" || r.ControlRevision == 0 || r.DomainTaskID == "" || r.Backend == "" || r.Protocol == "" || r.WorkflowVersion == "" || r.ExecutionID == "" {
-				return nil, fmt.Errorf("runtime v5 run %s is missing execution identity fields: attempt_id=%t control_revision=%t task_id=%t backend=%t protocol=%t workflow_version=%t execution_id=%t", r.RunID, r.AttemptID != "", r.ControlRevision != 0, r.DomainTaskID != "", r.Backend != "", r.Protocol != "", r.WorkflowVersion != "", r.ExecutionID != "")
-			}
-			if r.Decision != nil && r.Decision.Version == 0 {
-				return nil, errors.New("runtime v5 decision is missing its version")
-			}
-			if r.Decision != nil && (r.Decision.RequestPath != "" || r.Decision.AnswerPath != "") {
-				return nil, errors.New("decision state uses the removed sidecar-answer format; preserve it for manual recovery, no answer file will be imported")
-			}
-			if r.BeadsContext != nil || r.Completion != nil || r.BeadsStatus != "" || r.IdentityMapDigest != "" || r.DomainTaskID != r.TaskID || r.ResultPath != nil {
-				return nil, nativeErr("authority_mismatch", "runtime contains a retired task-source or whole-run result binding; preserve it for manual recovery")
-			}
-			if r.WorkflowVersion != WorkerFlowVersion {
-				return nil, nativeErr("unsupported_schema", "worker-flow-v1 cannot open an old workflow; preserve its external session and state")
-			}
-			switch r.FinishTaskStatus {
-			case "pending", "waiting_decision", "waiting_pr_merge", "completed":
-			default:
-				return nil, nativeErr("unsupported_schema", "worker-flow-v1 run has an unsupported phase")
 			}
 		}
 		if err := s.restoreActiveExecutionProfile(); err != nil {
@@ -236,7 +144,7 @@ func NewService(c Config) (_ *Service, retErr error) {
 			s.State.SlotOccupied = false
 		}
 	}
-	if err := s.refreshNativeSnapshot(context.Background(), false); err != nil {
+	if err := s.refreshNativeSnapshot(context.Background()); err != nil {
 		return nil, err
 	}
 	s.State.SchemaVersion = WorkerFlowRuntimeSchema
@@ -260,221 +168,19 @@ func (s *Service) Close() error {
 	return s.domainStore.Close()
 }
 
-func (s *Service) hydrateDecisionProjection(ctx context.Context) error {
-	snapshot, err := s.domainStore.Query(ctx, s.Config.identity)
-	if err != nil {
+func (s *Service) save() error {
+	if err := projectRuntime(&s.State); err != nil {
 		return err
 	}
-	s.State.Decisions = snapshot.Decisions
-	records := make(map[string]DecisionRecord, len(snapshot.Decisions))
-	for _, record := range snapshot.Decisions {
-		records[record.DecisionID] = record
-	}
-	for _, run := range s.State.Runs {
-		if run == nil || run.Decision == nil {
-			continue
-		}
-		record, ok := records[run.Decision.ID]
-		if !ok {
-			continue
-		}
-		if record.Version == 0 || !validDecisionStatus(record.Status) {
-			return fmt.Errorf("decision %s has invalid authoritative version or status", run.Decision.ID)
-		}
-		request, marshalErr := json.Marshal(run.Decision.Request)
-		if marshalErr != nil {
-			return marshalErr
-		}
-		attemptFound := false
-		for i := range s.State.Attempts {
-			attempt := &s.State.Attempts[i]
-			if attempt.ProjectIdentity == s.Config.identity && attempt.ExecutionID == run.ExecutionID && attempt.AttemptID == run.Decision.AttemptID {
-				attemptFound = true
-				break
-			}
-		}
-		if !attemptFound || run.Decision.AttemptID != run.AttemptID || record.WorkflowRunID != run.RunID || record.ExecutionID != run.ExecutionID || record.AttemptID != run.Decision.AttemptID || !bytes.Equal(bytes.TrimSpace(record.Request), bytes.TrimSpace(request)) {
-			return fmt.Errorf("decision %s conflicts with the runtime execution, attempt or question identity", run.Decision.ID)
-		}
-		if record.Status == "answer_saved" && len(record.Answer) == 0 && run.Decision.Status == "resuming" {
-			if answer, found := s.acceptedUnknownDecisionAnswer(ctx, run, record); found {
-				record.Answer = mustJSON(answer)
-				if err := s.domainStore.Transact(ctx, func(tx DomainTx) error { return tx.PutDecision(record) }); err != nil {
-					return fmt.Errorf("restore accepted answer for decision %s: %w", record.DecisionID, err)
-				}
-			}
-		}
-		run.Decision.Version = record.Version
-		run.Decision.Status = record.Status
-		if len(record.Answer) > 0 {
-			var answer DecisionAnswer
-			if err = decode(record.Answer, &answer); err != nil {
-				return fmt.Errorf("decision %s has an invalid saved answer: %w", record.DecisionID, err)
-			}
-			if answer.DecisionID != record.DecisionID || answer.RunID != run.RunID || validateDecisionAnswer(&run.Decision.Request, &answer) != nil {
-				return fmt.Errorf("decision %s saved answer does not match its fixed identity or question", record.DecisionID)
-			}
-			run.Decision.OptionID = answer.OptionID
-			run.Decision.Note = answer.Note
-			run.Decision.Answers = answer.Answers
-			run.Decision.AnsweredBy = answer.AnsweredBy
-			if !answer.AnsweredAt.IsZero() {
-				answeredAt := answer.AnsweredAt
-				run.Decision.AnsweredAt = &answeredAt
-			}
-		}
-	}
-	return nil
-}
-
-func (s *Service) acceptedUnknownDecisionAnswer(ctx context.Context, run *Run, record DecisionRecord) (DecisionAnswer, bool) {
-	if s == nil || s.domainStore == nil || run == nil || run.Decision == nil || record.Status != "answer_saved" || len(record.Answer) != 0 {
-		return DecisionAnswer{}, false
-	}
-	expected := DecisionAnswer{DecisionID: record.DecisionID, RunID: run.RunID, OptionID: run.Decision.OptionID, Note: run.Decision.Note, Answers: run.Decision.Answers}
-	command, err := s.domainStore.CommandByIdempotency(ctx, s.Config.identity, decisionAnswerKey(expected))
-	if err != nil || command.ProjectIdentity != s.Config.identity || command.Kind != "answer_decision" || command.TargetID != record.DecisionID || command.Status != "accepted" || len(command.Payload) == 0 {
-		return DecisionAnswer{}, false
-	}
-	var answer DecisionAnswer
-	if json.Unmarshal(command.Payload, &answer) != nil || !sameDecisionAnswer(answer, expected) || answer.AnsweredBy == "" || answer.AnsweredBy != run.Decision.AnsweredBy || validateDecisionAnswer(&run.Decision.Request, &answer) != nil {
-		return DecisionAnswer{}, false
-	}
-	return answer, true
-}
-
-func runVersionShape(r *Run) any {
-	if r == nil {
-		return nil
-	}
-	decisionID, decisionStatus := "", ""
-	if r.Decision != nil {
-		decisionID, decisionStatus = r.Decision.ID, r.Decision.Status
-	}
-	prURL := ""
-	if r.PR.URL != nil {
-		prURL = *r.PR.URL
-	}
-	return struct {
-		TaskID, RunID, AttemptID, Execution, Finish, DecisionID, DecisionStatus, PRURL, Host string
-		WorktreePath, WorktreeBranch, BaseCommit                                             *string
-		Process                                                                              *ProcessIdentity
-		WorkspaceIntent                                                                      *WorkspaceIntent
-		ManualStop                                                                           *ManualStopConfirmation
-	}{r.TaskID, r.RunID, r.AttemptID, r.ExecutionStatus, r.FinishTaskStatus, decisionID, decisionStatus, prURL, r.Host, r.WorktreePath, r.WorktreeBranch, r.BaseCommit, r.Process, r.WorkspaceIntent, r.ManualStop}
-}
-func controlVersionShape(r Runtime) any {
-	type runShape struct{ TaskID, RunID, Execution, Finish, Decision string }
-	runs := make([]runShape, 0, len(r.Runs))
-	for _, run := range r.Runs {
-		if run != nil {
-			if run.ExecutionStatus != "pending" && run.ExecutionStatus != "running" && run.ExecutionStatus != "unknown" && run.FinishTaskStatus != "waiting_decision" {
-				continue // Delivery progress without a slot reservation is unrelated.
-			}
-			d := ""
-			if run.Decision != nil {
-				d = run.Decision.Status
-			}
-			runs = append(runs, runShape{run.TaskID, run.RunID, run.ExecutionStatus, run.FinishTaskStatus, d})
-		}
-	}
-	return struct {
-		Slot, Paused bool
-		Mode         string
-		Current      *string
-		Operation    *ControlOperation
-		Blockers     []ControlBlocker
-		Runs         []runShape
-	}{r.SlotOccupied, r.Control.DispatchPaused, r.Control.DispatchMode, r.CurrentTask, r.Control.Operation, r.Control.Blockers, runs}
-}
-func jsonShape(v any) string { b, _ := json.Marshal(v); return string(b) }
-func (s *Service) save() error {
-	s.refreshSlotOccupancy()
 	authority, err := s.domainStore.nativeAuthority(context.Background(), s.Config.identity)
 	if err != nil {
 		return err
 	}
 	s.State.Control.DispatchMode, s.State.Control.DispatchPaused, s.State.Control.Revision = authority.DispatchMode, authority.DispatchPaused, authority.AuthorityVersion
-	oldRuns := map[string]*Run{}
-	if s.versionPrevious != nil {
-		for _, run := range s.versionPrevious.Runs {
-			if run != nil {
-				oldRuns[run.RunID] = run
-			}
-		}
-	}
-	for _, run := range s.State.Runs {
-		if run == nil {
-			continue
-		}
-		if before := oldRuns[run.RunID]; before == nil {
-			if run.ControlRevision == 0 {
-				run.ControlRevision = 1
-			}
-		} else if jsonShape(runVersionShape(before)) != jsonShape(runVersionShape(run)) {
-			run.ControlRevision = before.ControlRevision + 1
-		}
-	}
-	// SaveRuntime returns fresh authoritative slices. Keep in-flight workflow
-	// record pointers valid across the publication when identities are stable.
-	workflows, executions, attempts := s.State.WorkflowRuns, s.State.Executions, s.State.Attempts
 	if err := s.store.Publish(&s.State); err != nil {
 		return err
 	}
-	if len(workflows) == len(s.State.WorkflowRuns) {
-		stable := true
-		for i := range workflows {
-			stable = stable && workflows[i].WorkflowRunID == s.State.WorkflowRuns[i].WorkflowRunID
-		}
-		if stable {
-			copy(workflows, s.State.WorkflowRuns)
-			s.State.WorkflowRuns = workflows
-		}
-	}
-	if len(executions) == len(s.State.Executions) {
-		stable := true
-		for i := range executions {
-			stable = stable && executions[i].ExecutionID == s.State.Executions[i].ExecutionID
-		}
-		if stable {
-			for i := range executions {
-				prior, persisted := &executions[i], &s.State.Executions[i]
-				if prior.OrcaNative != nil && persisted.OrcaNative != nil {
-					turns := prior.OrcaNative.Turns
-					if len(turns) == len(persisted.OrcaNative.Turns) {
-						matching := true
-						for j := range turns {
-							matching = matching && turns[j].TurnID == persisted.OrcaNative.Turns[j].TurnID
-						}
-						if matching {
-							copy(turns, persisted.OrcaNative.Turns)
-							persisted.OrcaNative.Turns = turns
-						}
-					}
-					*prior.OrcaNative = *persisted.OrcaNative
-					persisted.OrcaNative = prior.OrcaNative
-				}
-				*prior = *persisted
-			}
-			s.State.Executions = executions
-		}
-	}
-	if len(attempts) == len(s.State.Attempts) {
-		stable := true
-		for i := range attempts {
-			stable = stable && attempts[i].AttemptID == s.State.Attempts[i].AttemptID
-		}
-		if stable {
-			copy(attempts, s.State.Attempts)
-			s.State.Attempts = attempts
-		}
-	}
-	b, _ := json.Marshal(s.State)
-	var prev Runtime
-	if json.Unmarshal(b, &prev) == nil {
-		s.versionPrevious = &prev
-	}
-	return nil
+	return projectRuntime(&s.State)
 }
 
 // activityWriter returns the lazily-opened journal for one run. Opening is
@@ -612,7 +318,7 @@ func (s *Service) find(id string) *Run {
 	return nil
 }
 func (s *Service) reconcile(ctx context.Context) error {
-	if err := s.refreshNativeSnapshot(ctx, true); err != nil {
+	if err := s.refreshNativeSnapshot(ctx); err != nil {
 		return err
 	}
 	if err := s.reconcileNativeCleanup(ctx); err != nil {
@@ -623,10 +329,6 @@ func (s *Service) reconcile(ctx context.Context) error {
 func (s *Service) setError(e error) {
 	s.State.Service.Status = "error"
 	s.State.Service.Error = ptr(clip(e.Error(), 2000))
-}
-func (s *Service) blocked(r *Run, msg string) {
-	r.FinishTaskStatus = "blocked"
-	r.Error = ptr(clip(msg, 2000))
 }
 func (s *Service) dispatch(ctx context.Context) error {
 	return s.dispatchNative(ctx)
@@ -685,23 +387,8 @@ func (s *Service) executionSlotReason(ignoreRequestID string, resumingDecision b
 }
 
 func (s *Service) refreshSlotOccupancy() {
-	occupied := s.worker != nil || len(s.workers) != 0 || s.State.Control.Operation != nil || len(s.State.Control.Blockers) > 0
-	activeTasks := make([]string, 0, 2)
-	for _, r := range s.State.Runs {
-		if r != nil && (r.ExecutionStatus == "unknown" || r.ExecutionStatus == "pending" || r.ExecutionStatus == "running" || r.FinishTaskStatus == "waiting_decision") {
-			occupied = true
-			activeTasks = append(activeTasks, r.TaskID)
-		}
-	}
-	if len(activeTasks) == 1 {
-		s.State.CurrentTask = ptr(activeTasks[0])
-	} else if len(activeTasks) > 1 {
-		s.State.CurrentTask = nil
-	}
-	if s.State.SlotOccupied && s.State.CurrentTask != nil && s.find(*s.State.CurrentTask) == nil {
-		occupied = true // Reservation saved before the first run/claim exists.
-	}
-	s.State.SlotOccupied = occupied
+	projectSlot(&s.State)
+	s.State.SlotOccupied = s.State.SlotOccupied || s.worker != nil || len(s.workers) != 0
 }
 func (s *Service) refreshCandidates(ctx context.Context) error {
 	queried := now()
@@ -723,19 +410,6 @@ func (s *Service) refreshCandidates(ctx context.Context) error {
 	s.candidateSnapshot = &TaskSnapshot{Version: 1, InstanceID: s.State.Service.InstanceID, RepositoryIdentity: s.State.Repository.Identity, QueriedAt: queried, LastSuccessAt: &queried, BlockReason: blockReason, Tasks: candidates}
 	return nil
 }
-func (s *Service) preparationFailed(r *Run, reason string) error {
-	r.ExecutionStatus = "failed"
-	r.EndedAt = ptr(now())
-	s.blocked(r, reason)
-	s.State.SlotOccupied = false
-	s.State.CurrentTask = nil
-	s.note(r, "steer", "prepare", "failed", "worktree preparation failed", reason, nil)
-	s.closeActivity(r)
-	return s.save()
-}
-
-// verifyHandoff checks the result's workspace/base claims against the scheduler
-// record. It applies to every outcome that carries workspace facts.
 func decisionMeta(r *Run) map[string]any {
 	if r.Decision == nil {
 		return nil
@@ -1091,7 +765,7 @@ func (s *Service) run(ctx context.Context, dispatchMode string) (retErr error) {
 	}()
 	defer s.closeAllActivities()
 	s.State.Service.Mode = "scheduler"
-	if err := s.refreshNativeSnapshot(ctx, true); err != nil {
+	if err := s.refreshNativeSnapshot(ctx); err != nil {
 		return err
 	}
 	s.State.Service.Ready = false

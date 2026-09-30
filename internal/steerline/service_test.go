@@ -26,21 +26,14 @@ type fakeDB struct {
 	PRMergeCommit  string
 }
 
-func TestPruneSettledDiscardedRuns(t *testing.T) {
-	snapshot := DomainSnapshot{
-		Tasks:        []TaskRecord{{TaskID: "14", Status: "discarded"}, {TaskID: "17", Status: "in_progress"}, {TaskID: "18", Status: "discarded"}},
+func TestProjectRuntimeOmitsSettledDiscardedRuns(t *testing.T) {
+	state := Runtime{Tasks: []TaskRecord{{TaskID: "14", Status: "discarded"}, {TaskID: "17", Status: "in_progress"}, {TaskID: "18", Status: "discarded"}},
 		WorkflowRuns: []WorkflowRunRecord{{TaskID: "14", WorkflowRunID: "old", Phase: "abandoned"}, {TaskID: "17", WorkflowRunID: "active", Phase: "executing"}, {TaskID: "18", WorkflowRunID: "pending-stop", Phase: "blocked"}},
-	}
-	settled := settledDiscardedWorkflowIDs(snapshot)
-	runs := []*Run{{TaskID: "14", RunID: "old"}, {TaskID: "17", RunID: "active"}, {TaskID: "18", RunID: "pending-stop"}}
-	remaining := pruneSettledDiscardedRuns(runs, false, nil, settled)
-	if len(remaining) != 2 || remaining[0].RunID != "active" || remaining[1].RunID != "pending-stop" {
-		t.Fatalf("wrong runs retained after authoritative settlement: %+v", remaining)
-	}
-	reserved := "14"
-	remaining = pruneSettledDiscardedRuns(runs, true, &reserved, settled)
-	if len(remaining) != 3 {
-		t.Fatalf("occupied external run was hidden: %+v", remaining)
+		Executions:   []ExecutionRecord{{WorkflowRunID: "active", ExecutionID: "active-execution", Status: "active"}, {WorkflowRunID: "pending-stop", ExecutionID: "stopping-execution", Status: "blocked"}},
+		SlotOccupied: true, CurrentTask: ptr("14")}
+	require(t, projectRuntime(&state))
+	if len(state.Runs) != 2 || state.Runs[0].RunID != "active" || state.Runs[1].RunID != "pending-stop" || !state.SlotOccupied || state.CurrentTask != nil {
+		t.Fatalf("settled discarded run or reservation remained: %+v", state)
 	}
 }
 

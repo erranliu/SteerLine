@@ -53,7 +53,8 @@ func (s *Service) replyAppServerAsk(ctx context.Context, run *Run, execution *Ex
 	err = sendAppServerAskReply(ctx, execution.AppServerEndpoint, execution.Workspace.Worktree, *ask, answer.Answers)
 	if err != nil {
 		_ = s.changeOperation(opID, "outcome_unknown", ask.CallID, nil, err.Error())
-		run.Error = ptr("Original Codex question reply is unverified: " + err.Error())
+		execution.Error = ptr("Original Codex question reply is unverified: " + err.Error())
+		s.refreshRun(run)
 		return s.save()
 	}
 	if err := s.setOperationState(opID, "accepted", ask.CallID, mustJSON(map[string]any{"request_id": ask.RequestID, "call_id": ask.CallID, "sent_at": now()}), ""); err != nil {
@@ -109,7 +110,8 @@ func (s *Service) handleAppServerReplyMessage(runID string, message *appServerRe
 			if err := s.changeOperation(op.OperationID, "outcome_unknown", message.callID, nil, message.err.Error()); err != nil {
 				return err
 			}
-			run.Error = ptr("Original Codex question reply is unverified: " + message.err.Error())
+			s.executionRecord(run).Error = ptr("Original Codex question reply is unverified: " + message.err.Error())
+			s.refreshRun(run)
 			return s.save()
 		}
 		if err := s.setOperationState(message.opID, "accepted", message.callID, mustJSON(map[string]any{"call_id": message.callID, "sent_at": now()}), ""); err != nil {
