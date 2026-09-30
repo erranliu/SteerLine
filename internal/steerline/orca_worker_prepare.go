@@ -21,8 +21,18 @@ func nativeOrcaFixedAgentCommand(c Config) (string, error) {
 }
 
 func nativeOrcaCommand(c Config, path string, roots []string) (string, error) {
+	if path != "" {
+		if err := codexworker.ValidateManagedArgs(c.Codex.Args); err != nil {
+			return "", err
+		}
+		native, err := codexworker.NativeExecutable(c.Codex.Executable)
+		if err != nil {
+			return "", err
+		}
+		c.Codex.Executable = native
+	}
 	command, err := codexworker.ManagedCommand(codexworker.ManagedCommandOptions{
-		WorkingDirectory: path, WriteRoots: roots, Host: c.hostName(), Agent: c.agentName(), Model: c.Model, ReasoningEffort: c.ReasoningEffort,
+		Policy: c.ExecutionPolicy, WorkingDirectory: path, WriteRoots: roots, Host: c.hostName(), Agent: c.agentName(), Model: c.Model, ReasoningEffort: c.ReasoningEffort,
 		Executable: c.Codex.Executable, Args: c.Codex.Args, Sandbox: c.Sandbox, WindowsSandbox: c.WindowsSandbox,
 	})
 	if err != nil {
@@ -144,6 +154,12 @@ func (s *Service) prepareNativeOrcaFixedAgentTerminal(ctx context.Context, run *
 	for i := 1; i < len(writeArgs); i += 2 {
 		roots = append(roots, writeArgs[i])
 	}
+	execution.Workspace = WorkspaceEvidence{Repository: fixedConfig.identity, Worktree: worktree.Path, Branch: strings.TrimPrefix(worktree.Branch, "refs/heads/"), Base: base, Head: base, VerifiedAt: now()}
+	if err := bindPolicyResources(ctx, fixedConfig, execution, worktree.Path, writeArgs); err != nil {
+		return err
+	}
+	execution.PolicyResources.ProfileDigest = fixed.workflow.ExecutionProfile.Digest
+	execution.PolicyResources.Digest = policyResourceDigest(*execution.PolicyResources)
 	command, err := nativeOrcaCommand(fixedConfig, worktree.Path, roots)
 	if err != nil {
 		return err
@@ -505,6 +521,12 @@ func (s *Service) verifyNativeOrcaWorker(ctx context.Context, run *Run, executio
 		}
 		args, err := codexLinkedWorktreeWriteArgs(ctx, fixedConfig, env.WriteRoots[0])
 		if err != nil {
+			return err
+		}
+		if execution.PolicyResources == nil {
+			return errors.New("original permission resource snapshot is missing")
+		}
+		if err := bindPolicyResources(ctx, fixedConfig, execution, env.WriteRoots[0], args); err != nil {
 			return err
 		}
 		roots := []string{env.WriteRoots[0]}

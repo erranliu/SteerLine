@@ -112,6 +112,9 @@ func TestWorkerReceiptFailureRetainsIntentAndCancelsUnregisteredObserver(t *test
 	s, run := appServerAuditService(t)
 	commandID, turnID := newID(), "00000000-0000-0000-0000-000000000001"
 	execution := s.executionRecord(run)
+	workflow, _ := s.workflowRecords(run)
+	execution.Workspace.Worktree = run.WorkspaceIntent.Path
+	execution.PolicyResources = policyResourceReceiptFixture(workflow.ExecutionProfile.Digest, execution.Workspace.Worktree)
 	execution.PendingCommandID, execution.SessionID = commandID, workerFlowMockSession
 	opID, err := s.startWorkerOperation(run, "start_worker_turn", "worker-turn:"+run.ExecutionID+":"+commandID, map[string]string{"command_id": commandID})
 	require(t, err)
@@ -145,12 +148,15 @@ func TestAppServerFailedLaunchKeepsPartialSessionBinding(t *testing.T) {
 	s, run := appServerAuditService(t)
 	commandID := newID()
 	execution := s.executionRecord(run)
+	workflow, _ := s.workflowRecords(run)
+	execution.Workspace.Worktree = run.WorkspaceIntent.Path
 	execution.PendingCommandID = commandID
 	opID, err := s.startWorkerOperation(run, "start_worker_turn", "worker-turn:"+run.ExecutionID+":"+commandID, map[string]string{"command_id": commandID})
 	require(t, err)
 	identity, err := currentProcessIdentity()
 	require(t, err)
 	partial := *s.executionRecord(run)
+	partial.PolicyResources = policyResourceReceiptFixture(workflow.ExecutionProfile.Digest, partial.Workspace.Worktree)
 	partial.Process = identity
 	partial.AppServerEndpoint, partial.AppServerGeneration = "ws://127.0.0.1:12345", "partial-generation"
 	partial.SessionID = workerFlowMockSession

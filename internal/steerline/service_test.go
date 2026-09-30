@@ -60,6 +60,26 @@ func TestMain(m *testing.M) {
 			os.Exit(fakeMain(os.Args[i+1:]))
 		}
 	}
+	if len(os.Args) > 1 && os.Args[1] == "--version" {
+		fmt.Println("codex-cli 0.159.2")
+		os.Exit(0)
+	}
+	if len(os.Args) > 1 && os.Args[1] == "--help" {
+		fmt.Println("--strict-config --sandbox --ask-for-approval never --config")
+		os.Exit(0)
+	}
+	if strings.Contains(strings.Join(os.Args[1:], " "), "app-server") && !strings.HasPrefix(os.Args[1], "-test") {
+		if strings.Contains(strings.Join(os.Args[1:], " "), "--help") {
+			fmt.Println("app-server --listen")
+			os.Exit(0)
+		}
+		if strings.Contains(strings.Join(os.Args[1:], " "), "--stdio") {
+			mockAppServerStdio()
+			os.Exit(0)
+		}
+		mockAppServerMain()
+		os.Exit(0)
+	}
 	code := m.Run()
 	if testArtifactsDir != "" {
 		_ = os.RemoveAll(testArtifactsDir)
@@ -153,7 +173,7 @@ func newFixture(t *testing.T) *fixture {
 	f.c.Claimant = "native-fixture"
 	f.c.Heartbeat, f.c.TaskPoll, f.c.PRPoll, f.c.CommandTimeout, f.c.ShutdownGrace = "100ms", "100ms", "100ms", "5s", "1s"
 	f.c.PR = publication.Config{Kind: "gitea", BaseURL: f.server.URL, Repository: "owner/repo"}
-	f.c.Codex = Command{Executable: executable, Args: []string{"--fake", "codex"}}
+	f.c.Codex = Command{Executable: executable}
 	f.c.WorkflowProtocol = WorkerFlowVersion
 	if err = f.c.ResolveIdentity(context.Background()); err != nil {
 		t.Fatal(err)

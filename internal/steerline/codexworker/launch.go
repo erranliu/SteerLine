@@ -1,6 +1,7 @@
 package codexworker
 
 import (
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"net"
 	"os"
 	"os/exec"
@@ -9,6 +10,7 @@ import (
 )
 
 type LaunchConfig struct {
+	Policy         executionapi.ExecutionPolicy
 	Executable     string
 	Args           []string
 	Profile        string
@@ -21,7 +23,12 @@ type LaunchConfig struct {
 // LaunchServer starts the fixed native app-server. The caller supplies its
 // platform process starter and persists the returned identity before a turn.
 func LaunchServer[T any](config LaunchConfig, start func(*exec.Cmd) (T, error), environment func([]string) []string) (identity T, process *os.Process, endpoint string, err error) {
-	args, err := LocalSandboxArgs(runtime.GOOS, config.Sandbox, config.WindowsSandbox, config.Args)
+	permissions, err := CompilePolicy(config.Policy, runtime.GOOS, "local", "codex", config.WindowsSandbox, config.Profile, config.Args)
+	if err != nil {
+		return identity, nil, "", err
+	}
+	args := append(append([]string(nil), config.Args...), permissions.Args()...)
+	err = ValidateManagedArgs(config.Args)
 	if err != nil {
 		return identity, nil, "", err
 	}

@@ -38,7 +38,7 @@ func newEnvironmentFixture(t *testing.T, state fakeNativeOrcaState, model string
 	if model != "" {
 		c.ReasoningEffort = "high"
 	}
-	c.Codex = Command{Executable: exe}
+	c.Codex = Command{Executable: exe, WindowsSandbox: "unelevated"}
 	c.Orca = OrcaConfig{Executable: exe, Args: []string{"--fake", "orca-native", stateDir}, Shell: "powershell.exe", WaitTimeout: "2m"}
 	c.configDigest = digestValue(c)
 	commands := CommandService{Store: store, Project: c.Identity()}
@@ -144,7 +144,7 @@ func TestWorkerEnvironmentER1ProbeAndSettlementGate(t *testing.T) {
 					}
 				}
 			}
-			if !strings.Contains(state.FixedAgentCommand, "'never'") || !strings.Contains(state.FixedAgentCommand, "'windows.sandbox=unelevated'") || state.CreatedWithAgent != "" {
+			if !strings.Contains(state.FixedAgentCommand, "'approval_policy=never'") || !strings.Contains(state.FixedAgentCommand, "'windows.sandbox=unelevated'") || state.CreatedWithAgent != "" {
 				t.Fatalf("managed permissions missing: %+v", state)
 			}
 			if strings.Contains(state.FixedAgentCommand, "'--model'") {

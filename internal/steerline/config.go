@@ -28,6 +28,9 @@ type Skill struct {
 	Invocation string `json:"invocation"`
 }
 type Config struct {
+	fixedProfileDigest      string
+	ExecutionPolicy         executionapi.ExecutionPolicy `json:"execution_policy"`
+	policySource            string
 	Repository              string             `json:"repository"`
 	TaskAuthority           string             `json:"task_authority,omitempty"`
 	Remote                  string             `json:"remote"`
@@ -46,8 +49,8 @@ type Config struct {
 	ShutdownGrace           string             `json:"shutdown_grace"`
 	Model                   string             `json:"model"`
 	ReasoningEffort         string             `json:"reasoning_effort"`
-	Sandbox                 string             `json:"sandbox"`
-	WindowsSandbox          string             `json:"windows_sandbox,omitempty"`
+	Sandbox                 string             `json:"-"`
+	WindowsSandbox          string             `json:"-"`
 	Profile                 string             `json:"profile"`
 	Agent                   string             `json:"agent"`
 	Host                    string             `json:"host"`
@@ -173,7 +176,7 @@ func InstallSelf() (string, error) {
 }
 
 func LoadConfig(path string) (Config, error) {
-	c := Config{Remote: "origin", TaskPoll: "10s", PRPoll: "30s", Heartbeat: "5s", CommandTimeout: "30s", ShutdownGrace: "10s", Sandbox: "workspace-write", Git: Command{Executable: "git"}, Codex: Command{Executable: "codex"}, ExecutableTypes: []string{"task", "bug", "feature", "chore"}, Agent: "codex", Host: "orca", StallTimeout: "5m", Orca: OrcaConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "15m"}}
+	c := Config{Remote: "origin", TaskPoll: "10s", PRPoll: "30s", Heartbeat: "5s", CommandTimeout: "30s", ShutdownGrace: "10s", Git: Command{Executable: "git"}, Codex: Command{Executable: "codex"}, ExecutableTypes: []string{"task", "bug", "feature", "chore"}, Agent: "codex", Host: "orca", StallTimeout: "5m", Orca: OrcaConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "15m"}}
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return c, err
@@ -187,6 +190,10 @@ func LoadConfig(path string) (Config, error) {
 	if c.WorkflowProtocol != WorkerFlowVersion {
 		return c, errors.New("workflow_protocol must be worker-flow-v1; old workflow configurations are unsupported and their external state is preserved")
 	}
+	if err := c.ExecutionPolicy.Validate(); err != nil {
+		return c, err
+	}
+	c.policySource, _ = filepath.Abs(path)
 	var configFields map[string]json.RawMessage
 	_ = json.Unmarshal(b, &configFields)
 	for _, field := range []string{"host", "agent", "model", "reasoning_effort", "sandbox", "windows_sandbox", "profile", "codex", "orca", "execution_profiles", "default_execution_profile"} {
@@ -226,6 +233,9 @@ func LoadConfig(path string) (Config, error) {
 	c.ExecutionProfiles = global.ExecutionProfiles
 	c.DefaultExecutionProfile = global.DefaultProfile
 	c.globalExecution = true
+	if err := validateExecutionProfiles(c); err != nil {
+		return c, err
+	}
 	initial := global.ExecutionProfiles[0].effective()
 	if global.DefaultProfile != "" {
 		for _, profile := range global.ExecutionProfiles {
@@ -280,9 +290,7 @@ func LoadConfig(path string) (Config, error) {
 			return c, fmt.Errorf("invalid positive duration %q", v)
 		}
 	}
-	if !codexworker.ValidSandbox(c.Sandbox) {
-		return c, errors.New("sandbox must be read-only, workspace-write or explicitly configured danger-full-access")
-	}
+
 	if c.ReasoningEffort != "" && !codexworker.ValidReasoningEffort(c.ReasoningEffort) {
 		return c, fmt.Errorf("invalid reasoning_effort %q", c.ReasoningEffort)
 	}
@@ -301,7 +309,7 @@ func LoadConfig(path string) (Config, error) {
 				return c, err
 			}
 		}
-		if c.WorkflowProtocol == WorkerFlowVersion && (c.Profile != "" || c.Sandbox != "workspace-write") {
+		if c.WorkflowProtocol == WorkerFlowVersion && c.Profile != "" {
 			return c, errors.New("Orca worker-flow requires workspace-write and no Codex profile")
 		}
 		if c.agentName() != "codex" && (c.Model != "" || c.Profile != "" || c.ReasoningEffort != "") {
@@ -330,7 +338,7 @@ func LoadConfig(path string) (Config, error) {
 			return c, fmt.Errorf("invalid executable type %q", s)
 		}
 	}
-	if err = validateWorkflowConfig(&c, b); err != nil {
+	if err := c.ExecutionPolicy.Validate(); err != nil {
 		return c, err
 	}
 	if err = validateExecutionProfiles(c); err != nil {
@@ -351,19 +359,32 @@ func validateSupervisedOrcaConfig(c *Config) error {
 }
 
 func validateWorkflowConfig(c *Config, _ []byte) error {
-	if c.hostName() == "local" && c.agentName() == "codex" {
-		if _, err := codexworker.LocalSandboxArgs(runtime.GOOS, c.Sandbox, c.WindowsSandbox, c.Codex.Args); err != nil {
-			return err
-		}
-		if codexworker.ValidSandbox(c.Sandbox) {
-			c.WindowsSandbox = codexworker.LocalWindowsSandboxDefault(runtime.GOOS, c.Sandbox, c.WindowsSandbox)
-		}
-	}
 	if c.WorkflowProtocol != WorkerFlowVersion {
 		return errors.New("only worker-flow-v1 is supported")
 	}
+	if c.ReasoningEffort != "" && !codexworker.ValidReasoningEffort(c.ReasoningEffort) {
+		return errors.New("invalid reasoning_effort")
+	}
+	if c.Model != strings.TrimSpace(c.Model) || strings.ContainsAny(c.Model, "\r\n\x00") {
+		return errors.New("invalid model")
+	}
+	if c.hostName() == "orca_supervised" {
+		return remote.CheckPolicy(c.ExecutionPolicy, remoteWorkerConfig(*c).Settings)
+	}
+	if c.hostName() == "orca" {
+		if err := validateLocalOrcaTargetArgs(c.Orca.Args); err != nil {
+			return err
+		}
+	}
+	permissions, err := codexworker.CompilePolicy(c.ExecutionPolicy, runtime.GOOS, c.hostName(), c.agentName(), c.Codex.WindowsSandbox, c.Profile, c.Codex.Args)
+	if err != nil {
+		return err
+	}
+	c.Sandbox, c.WindowsSandbox = permissions.Sandbox, permissions.WindowsSandbox
+	c.Codex.WindowsSandbox = permissions.WindowsSandbox
 	return nil
 }
+
 func duration(s string) time.Duration { d, _ := time.ParseDuration(s); return d }
 func (c Config) Identity() string     { return c.identity }
 

@@ -57,11 +57,15 @@ func TurnStartParams(worktree, threadID, commandID, prompt, sandbox, model, effo
 	switch sandbox {
 	case "read-only":
 		policy["type"] = "readOnly"
+		policy["networkAccess"] = false
 	case "danger-full-access":
 		policy["type"] = "dangerFullAccess"
 	case "workspace-write":
 		policy["type"] = "workspaceWrite"
 		policy["writableRoots"] = append([]string(nil), writableRoots...)
+		policy["networkAccess"] = true
+		policy["excludeTmpdirEnvVar"] = true
+		policy["excludeSlashTmp"] = true
 	default:
 		return nil, fmt.Errorf("unsupported Codex sandbox %q", sandbox)
 	}

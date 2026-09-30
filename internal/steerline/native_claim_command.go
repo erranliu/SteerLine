@@ -84,6 +84,10 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 		return replayTaskClaim(old, requestPayload, options.TaskID, options.RequestedBy)
 	}
 
+	if _, err := policyNativeVersion(ctx, config); err != nil {
+		return TaskClaimReceipt{}, err
+	}
+
 	graph, err := sqlite.taskGraphSnapshot(ctx, c.Project)
 	if err != nil {
 		return TaskClaimReceipt{}, err
@@ -174,12 +178,12 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 	}
 	runner := StepRunnerSettings{Codex: config.Codex, Sandbox: config.Sandbox, WindowsSandbox: config.WindowsSandbox, Model: config.Model, ReasoningEffort: config.ReasoningEffort, Profile: config.Profile}
 	runner.Codex.Args = append([]string(nil), config.Codex.Args...)
-	wfr := WorkflowRunRecord{ProjectIdentity: c.Project, WorkflowRunID: workflowRunID, TaskID: task.TaskID, WorkflowVersion: WorkerFlowVersion, ConfigDigest: config.configDigest, Runner: runner, Phase: "queued", Repository: config.Repository, Branch: config.Branch, SelectedResult: executionID, CreatedAt: created, UpdatedAt: created}
+	wfr := WorkflowRunRecord{ProjectIdentity: c.Project, WorkflowRunID: workflowRunID, TaskID: task.TaskID, WorkflowVersion: WorkerFlowVersion, ConfigDigest: config.acceptedConfigVersion(), Runner: runner, Phase: "queued", Repository: config.Repository, Branch: config.Branch, SelectedResult: executionID, CreatedAt: created, UpdatedAt: created}
 	if options.ExecutionProfile != nil {
 		fixed := options.ExecutionProfile.Freeze()
 		wfr.ExecutionProfile = &fixed
 	}
-	if config.managedWindowsOrca() && wfr.ExecutionProfile == nil {
+	if wfr.ExecutionProfile == nil {
 		fixed := config.projectExecutionProfile().Freeze()
 		wfr.ExecutionProfile = &fixed
 	}

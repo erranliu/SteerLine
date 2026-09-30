@@ -7,7 +7,7 @@ import (
 )
 
 func TestLocalWindowsSandboxProfileFreezesAndRestores(t *testing.T) {
-	profile := ExecutionProfile{ID: "local", Name: "Local", Host: "local", Agent: "codex", Sandbox: "workspace-write", WindowsSandbox: "elevated"}
+	profile := (Config{ExecutionPolicy: workspacePolicyFixture()}).bindProjectPolicy(ExecutionProfile{ID: "local", Name: "Local", Host: "local", Agent: "codex", Sandbox: "workspace-write", Codex: Command{WindowsSandbox: "elevated"}})
 	fixed := profile.Freeze()
 	if fixed.WindowsSandbox != "elevated" || !verifyFixedExecutionProfile(fixed) {
 		t.Fatalf("bad frozen profile: %+v", fixed)
@@ -21,11 +21,11 @@ func TestLocalWindowsSandboxProfileFreezesAndRestores(t *testing.T) {
 		t.Fatal("sandbox mode drift was accepted")
 	}
 	if runtime.GOOS == "windows" {
-		profile.WindowsSandbox = ""
+		profile.Codex.WindowsSandbox, profile.WindowsSandbox = "", ""
 		if profile.effective().WindowsSandbox != "elevated" || profile.Freeze().WindowsSandbox != "elevated" {
 			t.Fatal("default mode was not frozen")
 		}
-		profile.WindowsSandbox = "unelevated"
+		profile.Codex.WindowsSandbox = "unelevated"
 		if !strings.Contains(profile.StaticUnavailableReason(), "split writable roots") {
 			t.Fatal("unsupported profile was offered")
 		}
@@ -34,7 +34,7 @@ func TestLocalWindowsSandboxProfileFreezesAndRestores(t *testing.T) {
 			t.Fatal("claim validation accepted unsupported sandbox")
 		}
 	}
-	profile.Host, profile.WindowsSandbox = "orca", ""
+	profile.Host, profile.Codex.WindowsSandbox, profile.WindowsSandbox = "orca", "", ""
 	if profile.effective().WindowsSandbox != "" || profile.Freeze().WindowsSandbox != "" {
 		t.Fatal("local default changed Orca path")
 	}

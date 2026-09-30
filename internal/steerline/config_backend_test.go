@@ -25,11 +25,11 @@ func TestConfigKeepsOrcaCodexNativeByDefault(t *testing.T) {
 		t.Helper()
 		profile := ExecutionProfile{ID: "selected", Name: "Selected", Host: host, Agent: "codex", Sandbox: "workspace-write", Codex: Command{Executable: "codex"}, Orca: OrcaConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "15m"}}
 		if host == "orca" {
-			profile.WindowsSandbox = "unelevated"
+			profile.Codex.WindowsSandbox = "unelevated"
 			profile.Orca.Shell = "powershell.exe"
 		}
 		writeGlobalExecutionFixture(t, []ExecutionProfile{profile}, "selected")
-		data, err := json.Marshal(map[string]string{"repository": configTestRepository(t), "branch": "main", "task_authority": "native", "workflow_protocol": WorkerFlowVersion})
+		data, err := json.Marshal(map[string]any{"execution_policy": workspacePolicyFixture(), "repository": configTestRepository(t), "branch": "main", "task_authority": "native", "workflow_protocol": WorkerFlowVersion})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -71,7 +71,7 @@ func TestConfigRejectsRemovedOrcaFallback(t *testing.T) {
 
 func TestConfigRequiresAnExplicitTaskAuthority(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.json")
-	data, err := json.Marshal(map[string]string{"repository": t.TempDir(), "run_dir": t.TempDir(), "branch": "main"})
+	data, err := json.Marshal(map[string]any{"execution_policy": workspacePolicyFixture(), "repository": t.TempDir(), "run_dir": t.TempDir(), "branch": "main"})
 	if err != nil {
 		t.Fatal(err)
 	}

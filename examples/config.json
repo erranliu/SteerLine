@@ -4,8 +4,16 @@
   "branch": "main",
   "task_authority": "native",
   "workflow_protocol": "worker-flow-v1",
-  "git": { "executable": "git.exe", "args": [] },
-  "executable_types": ["task", "bug", "feature", "chore"],
+  "git": {
+    "executable": "git.exe",
+    "args": []
+  },
+  "executable_types": [
+    "task",
+    "bug",
+    "feature",
+    "chore"
+  ],
   "task_poll": "10s",
   "pr_poll": "30s",
   "heartbeat": "5s",
@@ -17,5 +25,14 @@
     "base_url": "https://gitea.example.com",
     "repository": "owner/my-existing-repo",
     "token_env": "GITEA_TOKEN"
+  },
+  "execution_policy": {
+    "filesystem": {
+      "read_scope": "host",
+      "write_scope": "workspace",
+      "git_metadata_write": true
+    },
+    "network": "allow",
+    "escalation": "deny"
   }
 }

@@ -19,11 +19,11 @@ func TestConfigLoadsLocalAndRemoteOrcaProfilesWithoutProbingTargets(t *testing.T
 	}
 	base, _ := nativeTaskFixture(t)
 	t.Setenv("STEERLINE_HOME", t.TempDir())
-	localOrca := ExecutionProfile{ID: "orca-local", Name: "Orca 本机", Host: "orca", Agent: "codex", Sandbox: "workspace-write", WindowsSandbox: "unelevated", Codex: Command{Executable: "codex"}, Orca: OrcaConfig{Executable: "orca", Shell: "powershell.exe", WaitTimeout: "15m"}}
+	localOrca := ExecutionProfile{ID: "orca-local", Name: "Orca 本机", Host: "orca", Agent: "codex", Sandbox: "workspace-write", Codex: Command{WindowsSandbox: "unelevated", Executable: "codex"}, Orca: OrcaConfig{Executable: "orca", Shell: "powershell.exe", WaitTimeout: "15m"}}
 	remoteOrca := ExecutionProfile{ID: "orca-remote", Name: "Orca 远程", Host: "orca_supervised", Agent: "codex", Model: "chosen-model", ReasoningEffort: "xhigh", Sandbox: "workspace-write", Codex: Command{Executable: "codex"}, Orca: OrcaConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "15m", Supervised: &SupervisedOrcaConfig{ConnectionID: "connection", EnvironmentID: "environment", RepositorySelector: "repo", CoordinatorTerminal: "terminal", PollInterval: "5s", CapabilityReportVersion: 1}}}
 	local := ExecutionProfile{ID: "local", Name: "本地", Host: "local", Agent: "codex", Sandbox: "workspace-write", Codex: Command{Executable: "codex"}}
 	writeGlobalExecutionFixture(t, []ExecutionProfile{local, localOrca, remoteOrca}, "local")
-	input := map[string]any{"repository": base.Repository, "branch": "main", "task_authority": "native", "workflow_protocol": WorkerFlowVersion}
+	input := map[string]any{"execution_policy": workspacePolicyFixture(), "repository": base.Repository, "branch": "main", "task_authority": "native", "workflow_protocol": WorkerFlowVersion}
 	path := filepath.Join(t.TempDir(), "config.json")
 	write := func() {
 		t.Helper()
@@ -42,6 +42,12 @@ func TestConfigLoadsLocalAndRemoteOrcaProfilesWithoutProbingTargets(t *testing.T
 	}
 	for _, profile := range loaded.AvailableExecutionProfiles() {
 		selected, chosen, err := loaded.ResolveExecutionProfile(profile.ID, profile.Digest())
+		if profile.Host == "orca_supervised" {
+			if err == nil || !strings.Contains(err.Error(), "requested execution_policy") {
+				t.Fatalf("unproven remote policy was accepted: %v", err)
+			}
+			continue
+		}
 		if err != nil || selected.Host != profile.Host {
 			t.Fatalf("Orca profile changed route: %+v / %v", chosen, err)
 		}
@@ -57,7 +63,7 @@ func TestNativeClaimPersistsChosenExecutionProfile(t *testing.T) {
 	if out, err := exec.Command("git", "-C", base.Repository, "push", "origin", "main").CombinedOutput(); err != nil {
 		t.Fatalf("push fixture base: %v: %s", err, out)
 	}
-	profile := ExecutionProfile{ID: "local-strong", Name: "本地高强度", Host: "local", Agent: "codex", Model: "chosen-model", ReasoningEffort: "xhigh", Sandbox: "danger-full-access", WindowsSandbox: "elevated", Codex: Command{Executable: "git"}}
+	profile := ExecutionProfile{ID: "local-strong", Name: "本地高强度", Host: "local", Agent: "codex", Model: "chosen-model", ReasoningEffort: "xhigh", Sandbox: "danger-full-access", Codex: Command{WindowsSandbox: "elevated", Executable: os.Args[0]}}
 	base.ExecutionProfiles = []ExecutionProfile{profile}
 	reader, err := OpenNativeTaskProject(ctx, &base)
 	if err != nil {
@@ -86,7 +92,7 @@ func TestNativeClaimPersistsChosenExecutionProfile(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	selected, fixedChoice, err := base.ResolveExecutionProfile(profile.ID, profile.Digest())
+	selected, fixedChoice, err := base.ResolveExecutionProfile(profile.ID, base.bindProjectPolicy(profile).Digest())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +111,7 @@ func TestNativeClaimPersistsChosenExecutionProfile(t *testing.T) {
 	run := &Run{RunID: wf.WorkflowRunID, Host: "local", Agent: "codex", Backend: execution.Backend, Protocol: execution.Protocol, Target: execution.Target}
 	service := &Service{Config: base, baseConfig: base, State: Runtime{}, domain: DomainSnapshot{WorkflowRuns: snapshot.WorkflowRuns}, runs: []*Run{run}}
 	fixed, err := service.executionConfigForRun(run)
-	if err != nil || fixed.Model != "chosen-model" || fixed.Sandbox != "danger-full-access" {
+	if err != nil || fixed.Model != "chosen-model" || fixed.Sandbox != "workspace-write" {
 		t.Fatalf("recovery adopted the edited preset: %+v / %v", fixed, err)
 	}
 }
@@ -177,7 +183,7 @@ func TestWorkerFlowClaimsFreezeIndependentLocalProfiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	for index, taskID := range []string{"611", "612"} {
-		profile := c.ExecutionProfiles[index]
+		profile := c.bindProjectPolicy(c.ExecutionProfiles[index])
 		selected := c.ApplyExecutionProfile(profile)
 		receipt, err := commands.ClaimNativeTask(ctx, selected, TaskClaimOptions{TaskID: taskID, RequestID: strings.Repeat(string(rune('e'+index)), 32), ExpectedTaskVersion: 1, ExpectedAuthorityVersion: authority.AuthorityVersion, RequestedBy: "operator", Explicit: true, ExecutionProfile: &profile})
 		if err != nil || receipt.Status != "claim_reserved" {

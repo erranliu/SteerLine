@@ -14,7 +14,7 @@ type Repository struct {
 	Identity string `json:"identity"`
 }
 
-const WorkerFlowRuntimeSchema = 10
+const WorkerFlowRuntimeSchema = 11
 
 // ServiceCheckpoint contains only service-owned recovery state. Task and worker
 // state is read from domain rows in the same transaction as this checkpoint.
@@ -52,6 +52,8 @@ type Runtime struct {
 	Control       ControlState         `json:"control"`
 }
 type ServiceState struct {
+	ExecutionPolicy     executionapi.ExecutionPolicy  `json:"execution_policy"`
+	PolicySource        string                        `json:"policy_source"`
 	Mode                string                        `json:"mode"`
 	InstanceID          string                        `json:"instance_id"`
 	PID                 int                           `json:"pid"`

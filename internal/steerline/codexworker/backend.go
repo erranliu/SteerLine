@@ -95,7 +95,7 @@ func (b Backend) PrepareSession(ctx context.Context, fixed Binding, input execut
 		}
 	} else {
 		var endpoint string
-		h.process, _, endpoint, err = LaunchServer(LaunchConfig{Executable: b.Config.Executable, Args: b.Config.Args, Profile: b.Config.Profile, Sandbox: b.Config.Sandbox, WindowsSandbox: b.Config.WindowsSandbox, Workspace: b.Config.Workspace, ServerDir: b.Config.ServerDir}, b.Process.Start, b.Config.Environment)
+		h.process, _, endpoint, err = LaunchServer(LaunchConfig{Policy: b.Config.Policy, Executable: b.Config.Executable, Args: b.Config.Args, Profile: b.Config.Profile, Sandbox: b.Config.Sandbox, WindowsSandbox: b.Config.WindowsSandbox, Workspace: b.Config.Workspace, ServerDir: b.Config.ServerDir}, b.Process.Start, b.Config.Environment)
 		if err != nil {
 			return nil, receipt, err
 		}

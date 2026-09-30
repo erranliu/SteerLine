@@ -66,7 +66,7 @@ func (s *Service) recordAppServerTurnStarted(run *Run, workflow *WorkflowRunReco
 }
 
 func codexBackend(c Config, run *Run) codexworker.Backend {
-	return codexworker.Backend{Config: codexworker.Config{Executable: c.Codex.Executable, Args: c.Codex.Args, Profile: c.Profile, Sandbox: c.Sandbox, WindowsSandbox: c.WindowsSandbox, Model: c.Model, ReasoningEffort: c.ReasoningEffort, Workspace: deref(run.WorktreePath), RunDir: c.RunDir, RunID: run.RunID, ServerDir: appServerDirectory(c, run), Environment: func(base []string) []string {
+	return codexworker.Backend{Config: codexworker.Config{Policy: c.ExecutionPolicy, Executable: c.Codex.Executable, Args: c.Codex.Args, Profile: c.Profile, Sandbox: c.Sandbox, WindowsSandbox: c.WindowsSandbox, Model: c.Model, ReasoningEffort: c.ReasoningEffort, Workspace: deref(run.WorktreePath), RunDir: c.RunDir, RunID: run.RunID, ServerDir: appServerDirectory(c, run), Environment: func(base []string) []string {
 		return unsetEnv(overrideEnv(base, map[string]string{"STEERLINE_WORKFLOW_RUN_ID": run.RunID, "STEERLINE_EXECUTION_ID": run.ExecutionID}), []string{"BEADS_*", "BD_*"})
 	}}, Process: codexworker.ProcessPort{Start: codexProcessStart, Inspect: inspectProcess, NewGeneration: newID, WriteAtomic: AtomicWrite}}
 }
@@ -85,6 +85,17 @@ func startAppServerWorkerTurn(ctx context.Context, c Config, run *Run, execution
 	}
 	if run.ExecutionID != execution.ExecutionID || run.RunID != execution.WorkflowRunID || canonical(*run.WorktreePath) != canonical(execution.Workspace.Worktree) {
 		return nil, "", "", errors.New("app-server execution/workspace identity mismatch")
+	}
+	var linkedArgs []string
+	var err error
+	if c.Sandbox == "workspace-write" {
+		linkedArgs, err = codexLinkedWorktreeWriteArgs(ctx, c, *run.WorktreePath)
+		if err != nil {
+			return nil, "", "", err
+		}
+	}
+	if err = bindPolicyResources(ctx, c, execution, *run.WorktreePath, linkedArgs); err != nil {
+		return nil, "", "", err
 	}
 	backend := codexBackend(c, run)
 	input := executionapi.TurnInput{CommandID: commandID, Prompt: prompt}
@@ -105,13 +116,7 @@ func startAppServerWorkerTurn(ctx context.Context, c Config, run *Run, execution
 	if err = persistThread(); err != nil {
 		return nil, "", "", fmt.Errorf("app-server thread was created but its SQLite receipt is unverified: %w", err)
 	}
-	var linkedArgs []string
-	if c.Sandbox == "workspace-write" {
-		linkedArgs, err = codexLinkedWorktreeWriteArgs(ctx, c, *run.WorktreePath)
-		if err != nil {
-			return nil, "", "", err
-		}
-	}
+
 	observer, turnID, err := backend.StartTurn(ctx, session, input, linkedArgs)
 	if err != nil {
 		return nil, "", turnID, err
@@ -272,12 +277,26 @@ func (s *Service) handleAppServerLaunchMessage(runID string, message *appServerL
 	if workflow == nil || execution == nil || execution.ExecutionID != message.execution.ExecutionID || execution.PendingCommandID != message.commandID || run.AttemptID != message.run.AttemptID || run.TaskStatus == "closed" || run.TaskStatus == "discarded" {
 		return ErrWorkerTurnStale
 	}
+	acceptResources := func() error {
+		resource := message.execution.PolicyResources
+		if err := verifyPolicyResources(resource, workflow.ExecutionProfile.Digest, execution.Workspace.Worktree); err != nil {
+			return err
+		}
+		if execution.PolicyResources != nil && execution.PolicyResources.Digest != resource.Digest {
+			return ErrWorkerTurnStale
+		}
+		execution.PolicyResources = resource
+		return nil
+	}
 	if message.phase == "thread_ready" {
 		if message.execution.Process == nil || !codexworker.ValidNativeID(message.execution.SessionID) || message.execution.AppServerEndpoint == "" || message.execution.AppServerGeneration == "" {
 			return errors.New("app-server thread receipt is incomplete")
 		}
 		if execution.Process != nil && *execution.Process != *message.execution.Process || execution.SessionID != "" && execution.SessionID != message.execution.SessionID {
 			return errors.New("app-server thread receipt conflicts with its fixed execution")
+		}
+		if err := acceptResources(); err != nil {
+			return err
 		}
 		ref := executionapi.ExecutionRef{Version: executionapi.ExecutionRecordVersion, Backend: executionapi.BackendLocal, Protocol: executionapi.ProtocolLocalCodexAppServer, Target: targetFor(c), Agent: agentFor(c), RunID: run.RunID, AttemptID: run.AttemptID, WorkspacePath: deref(run.WorktreePath), WorkspaceBranch: deref(run.WorktreeBranch), BaseCommit: deref(run.BaseCommit), External: *message.execution.Process, Generation: message.execution.AppServerGeneration}
 		execution.Process = message.execution.Process
@@ -300,6 +319,9 @@ func (s *Service) handleAppServerLaunchMessage(runID string, message *appServerL
 			}
 			if message.execution.SessionID != "" && !codexworker.ValidNativeID(message.execution.SessionID) {
 				return errors.New("partial app-server thread identity is invalid")
+			}
+			if err := acceptResources(); err != nil {
+				return err
 			}
 			execution.Process = message.execution.Process
 			execution.AppServerEndpoint = message.execution.AppServerEndpoint

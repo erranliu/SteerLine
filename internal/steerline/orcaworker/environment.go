@@ -18,7 +18,7 @@ func InspectAgentInput(ctx context.Context, call MetaCall, identity TerminalIden
 	if err != nil || fact.Reason != "" {
 		return fact, false, err
 	}
-	envelope, err := call(ctx, "terminal", "read", "--terminal", identity.Handle, "--json")
+	envelope, err := call(ctx, "terminal", "read", "--terminal", identity.Handle, "--screen", "--json")
 	if err != nil {
 		return fact, false, err
 	}

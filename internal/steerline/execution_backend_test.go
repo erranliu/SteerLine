@@ -69,7 +69,7 @@ func TestExecutionBackendCommonCapabilityContract(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	c := Config{Host: "local", Repository: t.TempDir(), CommandTimeout: "5s", Codex: Command{Executable: exe, Args: []string{"--fake", "codex"}}, Orca: OrcaConfig{Executable: exe, Args: []string{"--fake", "orca", t.TempDir()}}}
+	c := Config{Host: "local", Repository: t.TempDir(), CommandTimeout: "5s", Codex: Command{Executable: exe}, Orca: OrcaConfig{Executable: exe, Args: []string{"--fake", "orca", t.TempDir()}}}
 	backends := []executionapi.ExecutionBackend{localExecutionBackend{config: c}, orcaworker.NewBackend(nativeOrcaConfig(c))}
 	for _, backend := range backends {
 		kind, protocol := backend.Identity()

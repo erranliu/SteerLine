@@ -1,10 +1,14 @@
 package codexworker
 
-import "fmt"
+import (
+	"fmt"
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+)
 
 // Config is the native implementation input assembled from frozen records.
 // It is never embedded in contracts or read from mutable project state.
 type Config struct {
+	Policy          executionapi.ExecutionPolicy
 	Executable      string
 	Args            []string
 	Profile         string
@@ -42,13 +46,20 @@ func LocalReasoningEffortDefault(effort string) string {
 	return effort
 }
 func (c Config) Validate(goos string) error {
+	permissions, err := CompilePolicy(c.Policy, goos, "local", "codex", c.WindowsSandbox, c.Profile, c.Args)
+	if err != nil {
+		return err
+	}
+	if c.Sandbox != permissions.Sandbox || c.WindowsSandbox != permissions.WindowsSandbox {
+		return fmt.Errorf("native Codex settings differ from execution_policy")
+	}
 	if !ValidSandbox(c.Sandbox) {
 		return fmt.Errorf("unsupported Codex sandbox %q", c.Sandbox)
 	}
 	if c.ReasoningEffort != "" && !ValidReasoningEffort(c.ReasoningEffort) {
 		return fmt.Errorf("invalid reasoning_effort %q", c.ReasoningEffort)
 	}
-	_, err := LocalSandboxArgs(goos, c.Sandbox, c.WindowsSandbox, c.Args)
+	_, err = LocalSandboxArgs(goos, c.Sandbox, c.WindowsSandbox, c.Args)
 	return err
 }
 

@@ -42,6 +42,9 @@ func ProbeCapabilities(ctx context.Context, config ProbeConfig, port ProbePort) 
 	if configuredErr != nil || nativeErr != nil || strings.TrimSpace(string(configuredVersion)) == "" || strings.TrimSpace(string(configuredVersion)) != strings.TrimSpace(string(nativeVersion)) {
 		return &ProbeError{Diagnostic: "configured Codex and native app-server versions differ or cannot be verified", Cause: errors.Join(configuredErr, nativeErr)}
 	}
+	if err := VerifyPolicyVersion(string(nativeVersion)); err != nil {
+		return err
+	}
 	out, err := port.Output(ctx, nativeExecutable, append(append([]string(nil), config.Args...), "app-server", "--help"))
 	if err != nil || !strings.Contains(string(out), "--listen") {
 		return &ProbeError{Diagnostic: "configured Codex executable does not expose app-server WebSocket transport", Cause: err}
@@ -69,6 +72,13 @@ func ProbeCapabilities(ctx context.Context, config ProbeConfig, port ProbePort) 
 }
 
 func ProbeManagedCLI(ctx context.Context, command contracts.Command, output func(context.Context, string, []string) ([]byte, error)) error {
+	version, err := output(ctx, command.Executable, []string{"--version"})
+	if err != nil {
+		return err
+	}
+	if err := VerifyPolicyVersion(string(version)); err != nil {
+		return err
+	}
 	help, err := output(ctx, command.Executable, []string{"--help"})
 	if err != nil {
 		return err
