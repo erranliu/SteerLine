@@ -126,7 +126,7 @@ func TestNativeOrcaFixedLunaLaunchReconcilesOriginalTerminal(t *testing.T) {
 	if err := json.Unmarshal(data, &state); err != nil {
 		t.Fatal(err)
 	}
-	if !state.FixedAgentTerminalCreated || state.CreatedWithAgent != "" || !strings.Contains(state.FixedAgentCommand, "'gpt-6-luna'") || !strings.Contains(state.FixedAgentCommand, "'model_reasoning_effort=xhigh'") || !strings.Contains(state.FixedAgentCommand, "'sandbox_workspace_write.network_access=true'") || strings.Count(state.FixedAgentCommand, "'--add-dir'") != 2 || state.Dispatches != 1 {
+	if !state.FixedAgentTerminalCreated || state.CreatedWithAgent != "" || !strings.Contains(state.FixedAgentCommand, "'gpt-6-luna'") || !strings.Contains(state.FixedAgentCommand, "'model_reasoning_effort=xhigh'") || !strings.Contains(state.FixedAgentCommand, "'sandbox_workspace_write.network_access=true'") || strings.Count(state.FixedAgentCommand, "'--add-dir'") != 4 || state.Dispatches != 1 {
 		t.Fatalf("fixed Orca launch was not preserved: %+v", state)
 	}
 	workflow, execution := s.workflowRecords(run)

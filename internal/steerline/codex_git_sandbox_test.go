@@ -42,7 +42,9 @@ func TestCodexLinkedWorktreeWriteArgsOnlyGrantsFixedGitPaths(t *testing.T) {
 	}
 	admin := runGit("-C", worktree, "rev-parse", "--absolute-git-dir")
 	objects := filepath.Join(c.Identity(), "objects")
-	if len(args) != 4 || args[0] != "--add-dir" || canonical(args[1]) != canonical(objects) || args[2] != "--add-dir" || canonical(args[3]) != canonical(admin) {
+	refs := filepath.Join(c.Identity(), "refs")
+	logs := filepath.Join(c.Identity(), "logs")
+	if len(args) != 8 || args[0] != "--add-dir" || canonical(args[1]) != canonical(objects) || args[2] != "--add-dir" || canonical(args[3]) != canonical(refs) || args[4] != "--add-dir" || canonical(args[5]) != canonical(logs) || args[6] != "--add-dir" || canonical(args[7]) != canonical(admin) {
 		t.Fatalf("unexpected Codex Git write grants: %q", args)
 	}
 	if _, err := codexLinkedWorktreeWriteArgs(ctx, c, repo); err == nil {
