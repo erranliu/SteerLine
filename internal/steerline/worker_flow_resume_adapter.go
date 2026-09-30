@@ -75,7 +75,7 @@ func (s *Service) resumeNativeOrcaWorker(ctx context.Context, task *TaskRecord, 
 	workflow, execution := s.workflowRecords(run)
 	if execution.RecoveryRequired && execution.Process == nil {
 		execution.RecoveryState = "unverified"
-		return true, s.nativeOrcaUncertain(run, "原 Orca agent 创建状态未核实；重开服务不会自动准备或派发")
+		return true, s.waitWorkerFlow(run, "原 Orca agent 创建状态未核实；重开服务不会自动准备或派发")
 	}
 	if execution.Process == nil {
 		if execution.OrcaNative != nil {
@@ -93,6 +93,9 @@ func (s *Service) resumeNativeOrcaWorker(ctx context.Context, task *TaskRecord, 
 	}
 	if err := s.verifyNativeOrcaWorker(ctx, run, execution); err != nil {
 		execution.RecoveryState = "unverified"
+		if execution.RecoveryRequired {
+			return true, s.waitWorkerFlow(run, "Original Orca agent session is unavailable: "+err.Error())
+		}
 		return false, s.nativeOrcaUncertain(run, "Original Orca agent session is unavailable: "+err.Error())
 	}
 	if execution.RecoveryRequired {

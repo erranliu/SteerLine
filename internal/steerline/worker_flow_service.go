@@ -12,17 +12,6 @@ import (
 // answer or dispatch intent may write to an external worker. The gate is part
 // of the Execution row, so an abrupt process exit has the same startup rule.
 func (s *Service) adoptOrGateServiceExecutions() {
-	for _, run := range s.State.Runs {
-		if run == nil || run.WorkflowVersion != WorkerFlowVersion {
-			continue
-		}
-		execution := s.executionRecord(run)
-		if execution == nil || execution.OwnerServiceInstanceID != "" {
-			continue
-		}
-		execution.OwnerServiceInstanceID = s.State.Service.InstanceID
-		s.refreshRun(run)
-	}
 	s.markServiceRecoveryGateForPriorOwner()
 }
 
@@ -32,7 +21,7 @@ func (s *Service) markServiceRecoveryGateForPriorOwner() {
 			continue
 		}
 		execution := s.executionRecord(run)
-		if execution != nil && execution.OwnerServiceInstanceID != "" && execution.OwnerServiceInstanceID != s.State.Service.InstanceID {
+		if execution != nil && execution.OwnerServiceInstanceID != s.State.Service.InstanceID {
 			s.markOneServiceRecoveryGate(run)
 			execution.OwnerServiceInstanceID = s.State.Service.InstanceID
 			s.refreshRun(run)
@@ -716,6 +705,21 @@ func (s *Service) applyWorkerFlowDecision(ctx context.Context, run *Run) error {
 	previousConfig := s.Config
 	s.Config = config
 	defer func() { s.Config = previousConfig }()
+	answer, err := ReadDecisionAnswer(run)
+	if err != nil {
+		return err
+	}
+	command, err := s.domainStore.CommandByIdempotency(ctx, c.identity, decisionAnswerKey(answer))
+	if err != nil || command.Kind != "answer_decision" || command.TargetID != answer.DecisionID || command.Status != "accepted" || !stableExecutionID(command.CommandID) {
+		return errors.Join(err, errors.New("saved worker feedback has no fixed accepted command identity"))
+	}
+	if execution.RecoveryRequired && (answer.SourceAttemptID != run.AttemptID || answer.ExpectedRecoveryVersion != execution.RecoveryVersion ||
+		execution.RecoveryMarkedAt == nil || !command.CreatedAt.After(*execution.RecoveryMarkedAt)) {
+		return nil // Prior-service input cannot advance the feedback phase or send.
+	}
+	if execution.RecoveryRequired && (execution.RecoveryState == "unverified" || execution.RecoveryState == "") {
+		return nil // Verify the original worker and pending operations first.
+	}
 	if workflow.Phase == "waiting_pr_merge" {
 		decision := s.decisionRecord(run)
 		key := "workflow:" + workflow.WorkflowRunID
@@ -736,24 +740,7 @@ func (s *Service) applyWorkerFlowDecision(ctx context.Context, run *Run) error {
 			return errors.New("committed worker feedback phase could not be projected")
 		}
 	}
-	answer, err := ReadDecisionAnswer(run)
-	if err != nil {
-		return err
-	}
-	command, err := s.domainStore.CommandByIdempotency(ctx, c.identity, decisionAnswerKey(answer))
-	if err != nil || command.Kind != "answer_decision" || command.TargetID != answer.DecisionID || command.Status != "accepted" || !stableExecutionID(command.CommandID) {
-		return errors.Join(err, errors.New("saved worker feedback has no fixed accepted command identity"))
-	}
 	if execution.RecoveryRequired {
-		if answer.SourceAttemptID != run.AttemptID || answer.ExpectedRecoveryVersion != execution.RecoveryVersion {
-			return nil // Command was accepted for an older recovery revision.
-		}
-		if execution.RecoveryMarkedAt == nil || !command.CreatedAt.After(*execution.RecoveryMarkedAt) {
-			return nil // Prior-service input is retained, never sent on restart.
-		}
-		if execution.RecoveryState == "unverified" || execution.RecoveryState == "" {
-			return nil // Observation may still reconcile the original worker.
-		}
 		if route == feedbackNativeOrca && execution.RecoveryState == "relay_pending" {
 			if answer.OptionID != "forward_result" {
 				return errors.New("Orca result relay requires explicit forwarding approval")

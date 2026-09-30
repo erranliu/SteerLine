@@ -27,18 +27,18 @@ func TestWorkerFlowServiceFirstFeedbackKeepsSessionAndWorkspace(t *testing.T) {
 	}
 }
 
-func TestServiceRecoveryGateOnlyForPriorOwner(t *testing.T) {
+func TestServiceRecoveryGateRequiresTransactionalOwner(t *testing.T) {
 	service, run := waitingDecisionService(t)
 	execution := service.executionRecord(run)
-	execution.OwnerServiceInstanceID = ""
+	execution.OwnerServiceInstanceID = service.State.Service.InstanceID
 	service.adoptOrGateServiceExecutions()
-	if execution.RecoveryRequired || execution.OwnerServiceInstanceID != service.State.Service.InstanceID {
-		t.Fatal("first service launch gated a newly claimed task")
+	if execution.RecoveryRequired {
+		t.Fatal("current service claim was gated")
 	}
-	execution.OwnerServiceInstanceID = "previous-service"
+	execution.OwnerServiceInstanceID = "" // Crash after claim, before the next service write.
 	service.adoptOrGateServiceExecutions()
 	if !execution.RecoveryRequired || execution.RecoveryVersion != 1 || execution.OwnerServiceInstanceID != service.State.Service.InstanceID {
-		t.Fatal("restart did not gate prior service execution")
+		t.Fatal("unowned persisted claim was started without a recovery decision")
 	}
 }
 
@@ -71,6 +71,12 @@ func TestRestartDoesNotSendPreviouslyAcceptedFeedback(t *testing.T) {
 	}
 	if len(service.State.Operations) != before || !service.executionRecord(run).RecoveryRequired || run.Decision.Status != "answer_saved" {
 		t.Fatal("restart sent the prior-service answer without fresh authorization")
+	}
+	workflow := service.workflowRecord(run)
+	workflow.Phase = "waiting_pr_merge"
+	service.refreshRun(run)
+	if err := service.applyDecisions(context.Background()); err != nil || workflow.Phase != "waiting_pr_merge" {
+		t.Fatalf("prior-service answer advanced PR feedback phase: %v, phase=%s", err, workflow.Phase)
 	}
 }
 
@@ -108,7 +114,8 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openP
 	}); err != nil {
 		t.Fatal(err)
 	}
-	receipt, err := commands.ClaimNativeTask(ctx, c, TaskClaimOptions{TaskID: "8", RequestID: strings.Repeat("e", 32), ExpectedTaskVersion: 1, ExpectedAuthorityVersion: authority.AuthorityVersion, RequestedBy: "operator", Explicit: true})
+	claimOwner := newID()
+	receipt, err := commands.ClaimNativeTask(ctx, c, TaskClaimOptions{TaskID: "8", RequestID: strings.Repeat("e", 32), ExpectedTaskVersion: 1, ExpectedAuthorityVersion: authority.AuthorityVersion, RequestedBy: "operator", Explicit: true, ServiceInstanceID: claimOwner})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -131,6 +138,9 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openP
 	run := service.find("8")
 	if run == nil || run.RunID != receipt.WorkflowRunID || run.ExecutionID != receipt.ExecutionID || run.AttemptID != receipt.AttemptID {
 		t.Fatalf("fixed claim did not reconstruct: run=%+v receipt=%+v", run, receipt)
+	}
+	if execution := service.executionRecord(run); execution == nil || execution.OwnerServiceInstanceID != claimOwner {
+		t.Fatal("claim did not persist service ownership atomically")
 	}
 	task := nativeTaskRecord(service.State.Tasks, "8")
 	if task == nil {

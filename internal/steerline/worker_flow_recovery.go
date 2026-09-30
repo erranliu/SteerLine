@@ -61,7 +61,7 @@ func (s *Service) beginLocalRecoveryAttempt(ctx context.Context, run *Run, mode 
 		if op.Status != "outcome_unknown" && op.Status != "in_flight" {
 			continue
 		}
-		if strings.Contains(op.IdempotencyKey, execution.ExecutionID) && !strings.HasPrefix(op.IdempotencyKey, "worker-turn:"+execution.ExecutionID+":") {
+		if strings.Contains(op.IdempotencyKey, execution.ExecutionID) {
 			return errors.New("an earlier external operation has an unknown outcome; reconcile it before continuing")
 		}
 	}
