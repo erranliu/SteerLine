@@ -29,6 +29,16 @@
 
 [本机 Orca 原生编排 Spec](worker-flow-orca-native.spec.md) / [Plan](worker-flow-orca-native.plan.md) 承接 #36 延期的本机 Orca 接入。状态：待实施，尚未分配 Task ID；Spec 内记录 2026-09-29 的平台实验、低层 Dispatch 选型及中心验收边界。当前功能支持状态以已交付实现为准。
 
+## 架构审计收口（3 个 PR）
+
+状态：待实施，未分配 Task ID；当前形成三份 Spec，按下表顺序各用一个实现 PR 交付。审计基线为 `main@6f78a15`；已合并的具体存储、typed transaction 和固定执行路由改动继续复用。验证遵循项目的最小必要范围。
+
+| 顺序 | 交付范围 | 硬前置 | Spec |
+| --- | --- | --- | --- |
+| PR 1 | worker 协议事件与轮次终态边界 | 无未完成前置 | [worker 协议与终态边界](architecture-01-worker-protocol.spec.md) |
+| PR 2 | worker 正常生命周期显式原子提交 | PR 1 合入 | [worker 生命周期显式原子提交](architecture-02-worker-commit.spec.md) |
+| PR 3 | 剩余写者迁移、删除隐式写回、读写模型与后端接口收口 | PR 2 合入 | [移除隐式写回与读写模型收口](architecture-03-runtime-boundary.spec.md) |
+
 ## 共同约束
 
 - [执行架构](execution-architecture.spec.md)与[原生任务](native-task-constraints.md)：身份、单写者、当前格式恢复和真实交付；被 #36 替代的旧执行语义不继续要求。
