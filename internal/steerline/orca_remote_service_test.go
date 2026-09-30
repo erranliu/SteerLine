@@ -3,6 +3,7 @@ package steerline
 import (
 	"context"
 	"encoding/json"
+	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -28,7 +29,7 @@ func remoteServiceFixture(t *testing.T) (*Service, *Run, string) {
 	state := remoteFixtureState{Origin: "https://git.example/org/repo.git"}
 	data, _ := json.Marshal(state)
 	require(t, os.WriteFile(filepath.Join(dir, "remote.json"), data, 0600))
-	c.PR = PRConfig{Kind: "command", BaseURL: "https://git.example", Repository: "org/repo"}
+	c.PR = publication.Config{Kind: "command", BaseURL: "https://git.example", Repository: "org/repo"}
 	c.Host, c.Agent, c.Model, c.ReasoningEffort, c.Sandbox, c.Claimant = "orca_supervised", "codex", "gpt-6-luna", "high", "workspace-write", "operator"
 	c.Orca = OrcaConfig{Executable: os.Args[0], Args: []string{"--fake", "orca-remote-worker", dir}, Shell: "powershell", WaitTimeout: "2s", Supervised: &SupervisedOrcaConfig{ConnectionID: "home-connection", EnvironmentID: "env-home", RepositorySelector: "id:repo-test", CoordinatorTerminal: "bootstrap", PollInterval: "1ms", CapabilityReportVersion: 1}}
 	project, err := OpenNativeTaskProject(ctx, &c)

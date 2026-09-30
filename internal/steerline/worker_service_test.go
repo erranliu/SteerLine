@@ -3,6 +3,7 @@ package steerline
 import (
 	"context"
 	"encoding/json"
+	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -205,7 +206,7 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openP
 		t.Fatal(err)
 	}
 	feedbackPrompt := workerFeedbackText(answer, run.Decision.Request)
-	fullPrompt := feedbackPrompt + localWorkerPublishInstruction(run.RunID)
+	fullPrompt := feedbackPrompt + publication.WorkerInstruction(run.RunID)
 	feedbackDir := filepath.Join(c.RunDir, "runs", run.RunID, "turns", command.CommandID)
 	savedPrompt, err := os.ReadFile(filepath.Join(feedbackDir, "prompt.txt"))
 	if err != nil || string(savedPrompt) != fullPrompt {

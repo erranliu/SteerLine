@@ -3,6 +3,7 @@ package steerline
 import (
 	"context"
 	"encoding/json"
+	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -86,7 +87,7 @@ func TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged(t *testing.T)
 		t.Fatalf("set isolated remote: %v: %s", err, out)
 	}
 	c.WorkflowProtocol = WorkerFlowVersion
-	c.PR = PRConfig{Kind: "command", BaseURL: "https://forge.invalid", Repository: "org/repo"}
+	c.PR = publication.Config{Kind: "command", BaseURL: "https://forge.invalid", Repository: "org/repo"}
 	project, err := OpenNativeTaskProject(ctx, &c)
 	if err != nil {
 		t.Fatal(err)

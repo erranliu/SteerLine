@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	"io"
 	"os"
 	"path/filepath"
@@ -31,7 +32,7 @@ type Service struct {
 	workerDecisionWrites map[string]bool
 	store                *Store
 	domainStore          *SQLiteStore
-	prs                  *PRClient
+	prs                  *publication.Client
 	// workers owns live observers by authoritative workflow run ID.
 	workers             map[string]*Worker
 	ownedLocalProcesses map[string]*childProcess
@@ -102,7 +103,7 @@ func NewService(c Config) (_ *Service, retErr error) {
 			_ = db.Close()
 		}
 	}()
-	s := &Service{Config: c, baseConfig: c, domainStore: db, store: &Store{Domain: db, Project: c.identity}, prs: &PRClient{Config: c.PR, Runner: r}, activities: map[string]*ActivityWriter{}, conversationMappers: map[string]*ConversationMapper{}, workers: map[string]*Worker{}, ownedLocalProcesses: map[string]*childProcess{}}
+	s := &Service{Config: c, baseConfig: c, domainStore: db, store: &Store{Domain: db, Project: c.identity}, prs: publication.NewClient(c.PR, r, r.Timeout), activities: map[string]*ActivityWriter{}, conversationMappers: map[string]*ConversationMapper{}, workers: map[string]*Worker{}, ownedLocalProcesses: map[string]*childProcess{}}
 	old, e := loadRuntimeSnapshot(db, c.identity, false)
 	if errors.Is(e, sql.ErrNoRows) {
 		old, e = nil, nil

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -109,7 +110,7 @@ func InspectRecovery(ctx context.Context, c Config, runID string) (RecoveryInspe
 
 func recoveryService(c Config, runtimeState Runtime) Service {
 	runner := Runner{Dir: c.Repository, Timeout: duration(c.CommandTimeout)}
-	return Service{Config: c, State: runtimeState, prs: &PRClient{Config: c.PR, Runner: runner}}
+	return Service{Config: c, State: runtimeState, prs: publication.NewClient(c.PR, runner, runner.Timeout)}
 }
 
 func (s *Service) inspectRecoveryClaim(ctx context.Context, run *Run, report *RecoveryInspection) {

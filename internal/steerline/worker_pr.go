@@ -3,6 +3,7 @@ package steerline
 import (
 	"context"
 	"errors"
+	"github.com/erranliu/SteerLine/internal/steerline/publication"
 
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
@@ -73,7 +74,7 @@ func (s *Service) pollWorkerFlowPR(ctx context.Context, run *Run, task *TaskReco
 	if execution == nil {
 		return nativeErr("inconsistent_delivery", "linked PR has no selected worker execution")
 	}
-	if err := validateWorkerPRIdentity(info, url, c.PR.Repository, workflow.Branch, execution.Workspace.Branch); err != nil {
+	if err := publication.ValidateWorkerPRIdentity(info, url, c.PR.Repository, workflow.Branch, execution.Workspace.Branch); err != nil {
 		workflow.PRQueryError = ptr("PR does not belong to the fixed task execution branch")
 		s.refreshRun(run)
 		if workflow.Phase != "executing" {

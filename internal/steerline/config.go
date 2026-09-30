@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -53,7 +54,7 @@ type Config struct {
 	DefaultExecutionProfile string             `json:"default_execution_profile,omitempty"`
 	StallTimeout            string             `json:"stall_timeout"`
 	Orca                    OrcaConfig         `json:"orca"`
-	PR                      PRConfig           `json:"pr"`
+	PR                      publication.Config `json:"pr"`
 	identity                string
 	workerEnv               map[string]string
 	configDigest            string
@@ -67,15 +68,6 @@ func (c Config) LoadedConfigDigest() string { return c.configDigest }
 
 // LegacyCompletionConfig is decoded only as a marker for rejecting old runtime
 // projections; it is never accepted in Config or executed.
-
-type PRConfig struct {
-	Kind       string  `json:"kind"`
-	BaseURL    string  `json:"base_url"`
-	Repository string  `json:"repository"`
-	TokenEnv   string  `json:"token_env"`
-	Query      Command `json:"query"`
-	Close      Command `json:"close,omitempty"`
-}
 
 // trimBOM removes a leading UTF-8 byte-order mark. Windows tooling (notably
 // PowerShell) prepends one when writing JSON, and encoding/json rejects it.
@@ -552,7 +544,7 @@ func (c *Config) preflightNative(ctx context.Context) error {
 		return err
 	}
 	if c.PR.Kind == "gitea" {
-		if err = (&PRClient{Config: c.PR, Runner: git}).Check(ctx); err != nil {
+		if err = (publication.NewClient(c.PR, git, git.Timeout)).Check(ctx); err != nil {
 			return err
 		}
 	}

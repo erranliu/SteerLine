@@ -3,6 +3,7 @@ package steerline
 import (
 	"errors"
 	"fmt"
+	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	"path/filepath"
 
 	"github.com/erranliu/SteerLine/internal/steerline/workerflow"
@@ -49,6 +50,6 @@ func readWorkerTurnEvidence(fixed workerFlowContext, mode workerflow.Mode) (work
 	if !fact.Succeeded {
 		fact.PRCandidates = nil
 	}
-	fact.PublishRequested = fact.Succeeded && localWorkerRequestedPublish(fact.LastMessage, run.RunID)
+	fact.PublishRequested = fact.Succeeded && publication.RequestedByWorker(fact.LastMessage, run.RunID)
 	return fact, nil
 }

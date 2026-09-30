@@ -2,6 +2,7 @@ package steerline
 
 import (
 	"errors"
+	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	"strings"
 	"time"
 
@@ -109,7 +110,7 @@ func BindWorkerPR(workflow *WorkflowRunRecord, execution *ExecutionRecord, info 
 	if err := workerFlowBinding(workflow, execution); err != nil {
 		return err
 	}
-	if err := validateWorkerPRIdentity(info, candidateURL, expectedRepository, workflow.Branch, execution.Workspace.Branch); err != nil {
+	if err := publication.ValidateWorkerPRIdentity(info, candidateURL, expectedRepository, workflow.Branch, execution.Workspace.Branch); err != nil {
 		return err
 	}
 	next, err := workerflow.BindPR(workerFlowState(workflow, execution), info.URL, info.State, pendingQuestion, time.Now().UTC())

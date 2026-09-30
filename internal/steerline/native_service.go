@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	"os"
 	"path/filepath"
 	"strings"
@@ -261,7 +262,7 @@ func (s *Service) reconcileNativePRCleanup(ctx context.Context, task TaskRecord,
 	if err != nil || info.State == "unknown" {
 		return errors.Join(err, nativeErr("merge_state_unknown", "discarded PR state could not be verified"))
 	}
-	if err := validateWorkerPRIdentity(info, prURL, s.Config.PR.Repository, workflow.Branch, execution.Workspace.Branch); err != nil {
+	if err := publication.ValidateWorkerPRIdentity(info, prURL, s.Config.PR.Repository, workflow.Branch, execution.Workspace.Branch); err != nil {
 		return err
 	}
 	if info.Merged || info.State == "merged" {
@@ -270,10 +271,14 @@ func (s *Service) reconcileNativePRCleanup(ctx context.Context, task TaskRecord,
 	if info.State == "open" {
 		info, err = s.prs.Close(ctx, prURL)
 		if err != nil {
+			var providerErr *publication.Error
+			if errors.As(err, &providerErr) {
+				return nativeErr(providerErr.Code, providerErr.Message)
+			}
 			return err
 		}
 	}
-	if err := validateWorkerPRIdentity(info, prURL, s.Config.PR.Repository, workflow.Branch, execution.Workspace.Branch); err != nil {
+	if err := publication.ValidateWorkerPRIdentity(info, prURL, s.Config.PR.Repository, workflow.Branch, execution.Workspace.Branch); err != nil {
 		return err
 	}
 	if info.State != "closed_unmerged" || info.Merged {

@@ -3,6 +3,7 @@ package steerline
 import (
 	"context"
 	"errors"
+	"github.com/erranliu/SteerLine/internal/steerline/publication"
 
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/workerflow"
@@ -145,7 +146,7 @@ func (s *Service) startWorkerFlowTurn(ctx context.Context, run *Run, prompt, tur
 		return err
 	}
 	if adapter == workerflow.LocalCodex {
-		prompt += localWorkerPublishInstruction(run.RunID)
+		prompt += publication.WorkerInstruction(run.RunID)
 	} else if adapter == workerflow.NativeOrca {
 		prompt += nativeOrcaRelayInstruction(run.RunID, turnID)
 	}

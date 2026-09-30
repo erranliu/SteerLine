@@ -3,6 +3,7 @@ package steerline
 import (
 	"context"
 	"encoding/json"
+	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -31,8 +32,8 @@ func TestNativeOrcaPRBindingUsesProviderAndRetainsSession(t *testing.T) {
 	}))
 	defer server.Close()
 	url := server.URL + "/org/repo/pulls/8"
-	config := PRConfig{Kind: "gitea", BaseURL: server.URL, Repository: "org/repo"}
-	s := Service{Config: Config{PR: config}, prs: &PRClient{Config: config, Runner: Runner{Timeout: 5 * time.Second}}}
+	config := publication.Config{Kind: "gitea", BaseURL: server.URL, Repository: "org/repo"}
+	s := Service{Config: Config{PR: config}, prs: publication.NewClient(config, Runner{Timeout: 5 * time.Second}, 5*time.Second)}
 	workflow := WorkflowRunRecord{WorkflowRunID: "wf-8", WorkflowVersion: WorkerFlowVersion, Phase: "executing", Branch: "main"}
 	execution := ExecutionRecord{ExecutionID: "exec-8", WorkflowRunID: workflow.WorkflowRunID, SessionID: "orca-session-8", Workspace: WorkspaceEvidence{Branch: "codex/task-8"}, CurrentTurnID: "turn-8", LastStoppedTurnID: "turn-8"}
 	run := Run{}
