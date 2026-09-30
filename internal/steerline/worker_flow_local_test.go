@@ -176,7 +176,7 @@ func mockAppServerConnection(conn net.Conn, state *mockAppServerState) {
 		} else if size == 127 && binary.Read(reader, binary.BigEndian, &size) != nil {
 			return
 		}
-		if size > maxCodexSocketMessage {
+		if size > 16<<20 {
 			return
 		}
 		mask := make([]byte, 4)

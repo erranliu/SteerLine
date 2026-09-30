@@ -1,4 +1,4 @@
-package steerline
+package codexapp
 
 import (
 	"bufio"
@@ -18,7 +18,7 @@ import (
 func TestCodexAppCallCancellationInterruptsBlockedWrite(t *testing.T) {
 	local, remote := net.Pipe()
 	defer remote.Close()
-	client := &codexAppClient{socket: &codexSocket{conn: local, read: bufio.NewReader(local)}, pending: make(map[string]chan codexAppEnvelope), notifications: make(chan codexAppEnvelope, 1), done: make(chan struct{}), closing: make(chan struct{})}
+	client := &Client{socket: &codexSocket{conn: local, read: bufio.NewReader(local)}, pending: make(map[string]chan Envelope), notifications: make(chan Envelope, 1), done: make(chan struct{}), closing: make(chan struct{})}
 	go client.read()
 	defer client.Close()
 	ctx, cancel := context.WithCancel(context.Background())

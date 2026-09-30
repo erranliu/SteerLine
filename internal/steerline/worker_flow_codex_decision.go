@@ -5,9 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/erranliu/SteerLine/internal/steerline/codexapp"
 )
 
-const codexAskToolName = "steerline_ask"
+const codexAskToolName = codexapp.AskToolName
 
 type nativeAskQuestion struct {
 	ID            string           `json:"id"`
@@ -28,16 +30,7 @@ type codexAskCall struct {
 	Questions  []codexAskQuestion `json:"questions"`
 }
 
-// A client-provided dynamic tool is available in Codex Default mode. The
-// built-in request_user_input tool is unavailable there on the probed release.
-// The result is still a native app-server server request bound to a live turn.
-func codexAskDynamicTool() any {
-	option := map[string]any{"type": "object", "additionalProperties": false, "properties": map[string]any{"id": map[string]any{"type": "string"}, "label": map[string]any{"type": "string"}, "detail": map[string]any{"type": "string"}}, "required": []string{"id", "label"}}
-	question := map[string]any{"type": "object", "additionalProperties": false, "properties": map[string]any{"id": map[string]any{"type": "string"}, "header": map[string]any{"type": "string"}, "question": map[string]any{"type": "string"}, "options": map[string]any{"type": "array", "items": option}, "allow_free_text": map[string]any{"type": "boolean"}}, "required": []string{"id", "header", "question", "options", "allow_free_text"}}
-	return map[string]any{"type": "function", "name": codexAskToolName, "description": "Ask the user for a decision needed to continue the current task. Include every related question in one call, offer clear options when useful, and wait for the response. Use only when the user must decide.", "inputSchema": map[string]any{"type": "object", "additionalProperties": false, "properties": map[string]any{"questions": map[string]any{"type": "array", "minItems": 1, "maxItems": 3, "items": question}}, "required": []string{"questions"}}}
-}
-
-func parseCodexAskCall(envelope codexAppEnvelope, expectedThread, expectedTurn string) (codexAskCall, error) {
+func parseCodexAskCall(envelope codexapp.Envelope, expectedThread, expectedTurn string) (codexAskCall, error) {
 	var call codexAskCall
 	if envelope.Method != "item/tool/call" || len(envelope.ID) == 0 || !json.Valid(envelope.ID) || !codexThreadID.MatchString(expectedThread) || !codexThreadID.MatchString(expectedTurn) {
 		return call, errors.New("Codex ask event lacks a fixed native request or turn")
@@ -119,8 +112,4 @@ func codexAskDecisionRequest(call codexAskCall) DecisionRequest {
 	}
 	request.Context = body.String()
 	return request
-}
-
-func codexAskToolResponse(answers map[string][]string) map[string]any {
-	return map[string]any{"contentItems": []map[string]string{{"type": "inputText", "text": string(mustJSON(map[string]any{"answers": answers}))}}, "success": true}
 }

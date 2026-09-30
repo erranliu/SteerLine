@@ -1,4 +1,4 @@
-package steerline
+package codexapp
 
 import (
 	"errors"
@@ -11,14 +11,15 @@ import (
 	"strings"
 )
 
+// NativeExecutable resolves a configured Codex command to its direct process.
 // The detached process identity must name the actual app-server process.
 // npm's codex shim launches Node, which launches another process; tracking
 // either wrapper would leave the server alive after a confirmed wrapper stop.
-func codexAppServerExecutable(command Command) (string, error) {
-	if command.Executable == "" {
+func NativeExecutable(command string) (string, error) {
+	if command == "" {
 		return "", errors.New("Codex executable is missing")
 	}
-	path, err := exec.LookPath(command.Executable)
+	path, err := exec.LookPath(command)
 	if err != nil {
 		return "", err
 	}

@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"time"
+
+	"github.com/erranliu/SteerLine/internal/steerline/codexapp"
 )
 
 func (s *Service) replyAppServerAsk(ctx context.Context, run *Run, execution *ExecutionRecord, answer DecisionAnswer) error {
@@ -67,7 +69,7 @@ func (s *Service) replyAppServerAsk(ctx context.Context, run *Run, execution *Ex
 func sendAppServerAskReply(ctx context.Context, endpoint, workspace string, ask codexAskCall, answers map[string][]string) error {
 	probeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	client, err := openCodexAppClient(probeCtx, endpoint)
+	client, err := codexapp.Open(probeCtx, endpoint)
 	if err != nil {
 		return err
 	}
@@ -85,7 +87,7 @@ func sendAppServerAskReply(ctx context.Context, endpoint, workspace string, ask 
 	if resumed.Thread.ID != ask.ThreadID || canonical(resumed.Thread.Cwd) != canonical(workspace) {
 		return errors.New("original Codex question thread/workspace changed before reply")
 	}
-	return client.ReplyRequest(ask.RequestID, codexAskToolResponse(answers))
+	return client.ReplyRequest(ask.RequestID, codexapp.AskToolResponse(answers))
 }
 
 func (s *Service) handleAppServerReplyMessage(runID string, message *appServerReplyMessage) error {

@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/erranliu/SteerLine/internal/steerline/codexapp"
 )
 
 type workerTurnOutcome struct {
@@ -151,7 +153,7 @@ func requireWorkerFlowCapabilities(ctx context.Context, c Config) error {
 		return err
 	}
 	c.Codex = command
-	nativeExecutable, err := codexAppServerExecutable(command)
+	nativeExecutable, err := codexapp.NativeExecutable(command.Executable)
 	if err != nil {
 		return &BackendError{Code: BackendUnsupported, Diagnostic: "local Codex app-server needs a directly bound native process", Cause: err}
 	}

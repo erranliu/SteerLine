@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/erranliu/SteerLine/internal/steerline/codexapp"
 )
 
 func appServerAnswerEvidence(path string, ask codexAskCall, answers map[string][]string) (bool, error) {
@@ -19,7 +21,7 @@ func appServerAnswerEvidence(path string, ask codexAskCall, answers map[string][
 	defer file.Close()
 	decoder := json.NewDecoder(file)
 	for {
-		var event codexAppEnvelope
+		var event codexapp.Envelope
 		if err := decoder.Decode(&event); err != nil {
 			if errors.Is(err, io.EOF) {
 				return false, nil
@@ -70,17 +72,17 @@ func appServerAnswerEvidence(path string, ask codexAskCall, answers map[string][
 // A crash can happen after the native request is journaled but before its
 // Decision reaches SQLite. Replay only unresolved requests from that same
 // native turn; the normal event path creates the Decision exactly once.
-func appServerPendingAskEvents(path string, run *Run, execution *ExecutionRecord, turnID string) ([]codexAppEnvelope, error) {
+func appServerPendingAskEvents(path string, run *Run, execution *ExecutionRecord, turnID string) ([]codexapp.Envelope, error) {
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
 	defer file.Close()
-	calls := make([]codexAppEnvelope, 0)
+	calls := make([]codexapp.Envelope, 0)
 	completed := map[string]bool{}
 	decoder := json.NewDecoder(file)
 	for {
-		var event codexAppEnvelope
+		var event codexapp.Envelope
 		if err := decoder.Decode(&event); err != nil {
 			if errors.Is(err, io.EOF) {
 				break
@@ -110,7 +112,7 @@ func appServerPendingAskEvents(path string, run *Run, execution *ExecutionRecord
 			}
 		}
 	}
-	var replay []codexAppEnvelope
+	var replay []codexapp.Envelope
 	for _, event := range calls {
 		call, _ := parseCodexAskCall(event, execution.SessionID, turnID)
 		if completed[call.CallID] || run.Decision != nil && run.Decision.Request.NativeAsk != nil && run.Decision.Request.NativeAsk.CallID == call.CallID {

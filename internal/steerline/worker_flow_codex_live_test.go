@@ -8,6 +8,8 @@ import (
 	"os/exec"
 	"testing"
 	"time"
+
+	"github.com/erranliu/SteerLine/internal/steerline/codexapp"
 )
 
 // Run explicitly with STEERLINE_CODEX_APP_SERVER_LIVE=1. It uses a temporary
@@ -22,7 +24,7 @@ func TestCodexAppServerNativeQuestionLive(t *testing.T) {
 	}
 	endpoint := "ws://" + listener.Addr().String()
 	listener.Close()
-	nativeExecutable, err := codexAppServerExecutable(Command{Executable: "codex"})
+	nativeExecutable, err := codexapp.NativeExecutable("codex")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,9 +42,9 @@ func TestCodexAppServerNativeQuestionLive(t *testing.T) {
 	defer func() { _ = cmd.Process.Kill(); _ = cmd.Wait() }()
 	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Minute)
 	defer cancel()
-	var client *codexAppClient
+	var client *codexapp.Client
 	for i := 0; i < 100; i++ {
-		client, err = openCodexAppClient(ctx, endpoint)
+		client, err = codexapp.Open(ctx, endpoint)
 		if err == nil {
 			break
 		}
@@ -62,7 +64,7 @@ func TestCodexAppServerNativeQuestionLive(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(workspace)
-	if err := client.Call(ctx, "thread/start", map[string]any{"cwd": workspace, "approvalPolicy": "never", "sandbox": "read-only", "model": "gpt-6-luna", "dynamicTools": []any{codexAskDynamicTool()}}, &started); err != nil {
+	if err := client.Call(ctx, "thread/start", map[string]any{"cwd": workspace, "approvalPolicy": "never", "sandbox": "read-only", "model": "gpt-6-luna", "dynamicTools": []any{codexapp.AskDynamicTool()}}, &started); err != nil {
 		t.Fatal(err)
 	}
 	var turn struct {
@@ -78,7 +80,7 @@ func TestCodexAppServerNativeQuestionLive(t *testing.T) {
 		select {
 		case <-ctx.Done():
 			t.Fatal("native request did not arrive before timeout")
-		case event, ok := <-client.notifications:
+		case event, ok := <-client.Notifications():
 			if !ok {
 				t.Fatal("Codex connection ended before native request")
 			}
@@ -143,7 +145,7 @@ func TestCodexAppServerNativeQuestionLive(t *testing.T) {
 					select {
 					case <-ctx.Done():
 						t.Fatal("independent Codex execution was blocked by the pending question")
-					case next, ok := <-secondClient.notifications:
+					case next, ok := <-secondClient.Notifications():
 						if !ok {
 							t.Fatal("independent Codex execution disconnected")
 						}
@@ -163,7 +165,7 @@ func TestCodexAppServerNativeQuestionLive(t *testing.T) {
 					}
 				}
 				t.Logf("parallel turn completed while first question remained pending: %s", secondTurn.Turn.ID)
-				reconnected, err := openCodexAppClient(ctx, endpoint)
+				reconnected, err := codexapp.Open(ctx, endpoint)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -197,7 +199,7 @@ func TestCodexAppServerNativeQuestionLive(t *testing.T) {
 				if !foundPending {
 					t.Fatal("first Codex turn did not remain pending during parallel execution")
 				}
-				replyClient, err := openCodexAppClient(ctx, endpoint)
+				replyClient, err := codexapp.Open(ctx, endpoint)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -205,14 +207,14 @@ func TestCodexAppServerNativeQuestionLive(t *testing.T) {
 				if err := replyClient.Call(ctx, "thread/resume", map[string]any{"threadId": started.Thread.ID, "cwd": workspace, "excludeTurns": true}, &resumed); err != nil {
 					t.Fatal(err)
 				}
-				if err := replyClient.ReplyRequest(event.ID, codexAskToolResponse(map[string][]string{call.Questions[0].ID: {"A"}})); err != nil {
+				if err := replyClient.ReplyRequest(event.ID, codexapp.AskToolResponse(map[string][]string{call.Questions[0].ID: {"A"}})); err != nil {
 					t.Fatal(err)
 				}
 				for {
 					select {
 					case <-ctx.Done():
 						t.Fatal("native tool response was not accepted after reconnect")
-					case next, ok := <-reconnected.notifications:
+					case next, ok := <-reconnected.Notifications():
 						if !ok {
 							t.Fatal("reconnected Codex stream ended")
 						}
@@ -245,7 +247,7 @@ func TestCodexAppServerNativeQuestionLive(t *testing.T) {
 								select {
 								case <-ctx.Done():
 									t.Fatal("feedback turn did not finish before timeout")
-								case feedback, ok := <-reconnected.notifications:
+								case feedback, ok := <-reconnected.Notifications():
 									if !ok {
 										t.Fatal("connection ended during feedback turn")
 									}
