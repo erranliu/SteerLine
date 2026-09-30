@@ -77,7 +77,7 @@ func sendAppServerAskReply(ctx context.Context, endpoint, workspace string, ask 
 
 func (s *Service) handleAppServerReplyMessage(runID string, message *appServerReplyMessage) error {
 	var run *Run
-	for _, candidate := range s.State.Runs {
+	for _, candidate := range s.runs {
 		if candidate != nil && candidate.RunID == runID {
 			run = candidate
 			break

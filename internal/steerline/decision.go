@@ -585,3 +585,10 @@ type nativeAskQuestion struct {
 	Options       []DecisionOption `json:"options"`
 	AllowFreeText bool             `json:"allow_free_text"`
 }
+
+func orcaQuestionID(decision *DecisionState) string {
+	if decision == nil || decision.Request.OrcaAsk == nil {
+		return ""
+	}
+	return decision.Request.OrcaAsk.MessageID
+}

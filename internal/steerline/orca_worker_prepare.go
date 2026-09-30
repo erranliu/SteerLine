@@ -44,7 +44,7 @@ func (s *Service) prepareNativeOrcaFixedModelWorker(ctx context.Context, run *Ru
 		return err
 	}
 	key := "orca-native-worktree:" + execution.ExecutionID
-	if op := s.nativeOrcaOperation(key); op != nil {
+	if op := s.operationByKey(key); op != nil {
 		if !exists {
 			return &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "fixed Orca worktree creation has no unique resource"}
 		}
@@ -94,7 +94,7 @@ func (s *Service) prepareNativeOrcaFixedAgentTerminal(ctx context.Context, run *
 		return err
 	}
 	key := "orca-native-agent-terminal:" + execution.ExecutionID
-	op := s.nativeOrcaOperation(key)
+	op := s.operationByKey(key)
 	terminal, err := fixedOrcaAgentTerminal(terminals, op, title, worktree.ID)
 	if err != nil {
 		return err
@@ -308,7 +308,7 @@ func (s *Service) prepareNativeOrcaWorker(ctx context.Context, run *Run) error {
 			return err
 		}
 		if fixedConfig.Model != "" {
-			if op := s.nativeOrcaOperation("orca-native-agent-terminal:" + execution.ExecutionID); op != nil && op.Status != "confirmed" {
+			if op := s.operationByKey("orca-native-agent-terminal:" + execution.ExecutionID); op != nil && op.Status != "confirmed" {
 				receipt := op.Receipt
 				if len(receipt) == 0 {
 					receipt = mustJSON(map[string]string{"terminal": execution.Process.Terminal})
@@ -337,7 +337,7 @@ func (s *Service) prepareNativeOrcaWorker(ctx context.Context, run *Run) error {
 		return err
 	}
 	key := "orca-native-worktree:" + execution.ExecutionID
-	if op := s.nativeOrcaOperation(key); op != nil {
+	if op := s.operationByKey(key); op != nil {
 		if !exists {
 			return &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "original Orca worktree creation has no unique resource; do not create another agent"}
 		}
@@ -404,7 +404,7 @@ func (s *Service) prepareNativeOrcaCoordinator(ctx context.Context, run *Run, ex
 		key := "orca-native-coordinator:" + execution.ExecutionID
 		title := "SteerLine coordinator " + run.RunID
 		marker := nativeOrcaCoordinatorMarker(execution.ExecutionID)
-		if op := s.nativeOrcaOperation(key); op != nil {
+		if op := s.operationByKey(key); op != nil {
 			handle := ""
 			if len(op.Receipt) > 0 {
 				terminal, receiptErr := orcaworker.SavedTerminal(op.Receipt)
@@ -477,7 +477,7 @@ func (s *Service) prepareNativeOrcaCoordinator(ctx context.Context, run *Run, ex
 	if execution.Target.OrchestrationRun == "" {
 		objective := "SteerLine worker " + execution.ExecutionID
 		key := "orca-native-run:" + execution.ExecutionID
-		if op := s.nativeOrcaOperation(key); op != nil {
+		if op := s.operationByKey(key); op != nil {
 			id, err := findNativeOrcaRun(ctx, fixedConfig, objective, state.Coordinator.Terminal)
 			if err != nil {
 				return err

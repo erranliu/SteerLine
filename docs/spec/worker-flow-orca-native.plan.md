@@ -11,8 +11,8 @@
 | 现有位置 | 实施改动 |
 | --- | --- |
 | `internal/steerline/config.go`、`execution_profiles.go`、`service_execution_profiles.go` | 解除本机 Orca worker-flow 拒绝和 Codex 强制绑定；明确 agent/启动设置来源及不支持的覆盖配置 |
-| `worker_flow_orca_terminal.go`、`worker_flow_local.go` | 用原生 Orca 适配替换 shell 包装 Codex exec/resume、prompt 分块和 events.jsonl；保留 local 后端自己的实现 |
-| `worker_flow_service.go`、`worker_flow_state.go`、`model.go` 及对应存储 | 保存 Orca 固定身份、原生轮次和消息映射，按后端核验会话，接入当前单写事件流 |
+| `orca_worker_terminal.go`、`worker_flow_local.go` | 用原生 Orca 适配替换 shell 包装 Codex exec/resume、prompt 分块和 events.jsonl；保留 local 后端自己的实现 |
+| `worker_start.go`、`worker_state.go`、`model.go` 及对应存储 | 保存 Orca 固定身份、原生轮次和消息映射，按后端核验会话，接入当前单写事件流 |
 | `decision.go`、反馈命令及会话读取 | 区分原问题 reply、活跃 send、结算后新 Dispatch；继续复用同一用户反馈入口 |
 | `orca_supervised.go` 及现有 Orca DTO/调用封装 | 复用与旧步骤无关的 envelope、Run/Task/Dispatch、mailbox、reader 和 request receipt 解析；不继承远端五步和结果信封门槛 |
 | 生命周期、PR 观察及 UI/DTO | 精确 terminal 清理、当前格式恢复、真实传输状态和现有 PR 交付事务接线 |

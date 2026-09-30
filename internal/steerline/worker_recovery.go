@@ -284,3 +284,109 @@ func (s *Service) startManuallyRecoveredInitialCodex(ctx context.Context, run *R
 	}
 	return s.startWorkerFlowTurn(ctx, run, prompt, commandID)
 }
+
+// Every service instance must revalidate unfinished executions before a saved
+// answer or dispatch intent may write to an external worker. The gate is part
+// of the Execution row, so an abrupt process exit has the same startup rule.
+func (s *Service) adoptOrGateServiceExecutions() error {
+	return s.markServiceRecoveryGateForPriorOwner()
+}
+
+func (s *Service) markServiceRecoveryGateForPriorOwner() error {
+	for _, run := range s.runs {
+		if run == nil || run.WorkflowVersion != WorkerFlowVersion || run.TaskStatus != "in_progress" {
+			continue
+		}
+		workflow, execution := s.workflowRecords(run)
+		if workflow == nil || execution == nil || workflow.Phase == "completed" || workflow.Phase == "abandoned" {
+			continue
+		}
+		if execution.OwnerServiceInstanceID != s.State.Service.InstanceID {
+			s.markOneServiceRecoveryGate(run)
+			execution.OwnerServiceInstanceID = s.State.Service.InstanceID
+			s.refreshRun(run)
+			if err := s.commitWorker(run); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (s *Service) markServiceRecoveryGate() error {
+	for _, run := range s.runs {
+		s.markOneServiceRecoveryGate(run)
+		if run != nil && run.TaskStatus == "in_progress" {
+			if err := s.commitWorker(run); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (s *Service) markOneServiceRecoveryGate(run *Run) {
+	if run == nil || run.WorkflowVersion != WorkerFlowVersion {
+		return
+	}
+	task := nativeTaskRecord(s.domain.Tasks, run.DomainTaskID)
+	workflow, execution := s.workflowRecords(run)
+	if task == nil || workflow == nil || execution == nil || task.Status != "in_progress" || workflow.Phase == "completed" || workflow.Phase == "abandoned" {
+		return
+	}
+	execution.RecoveryRequired = true
+	execution.RecoveryVersion++
+	execution.RecoveryState = "unverified"
+	marked := now()
+	execution.RecoveryMarkedAt = &marked
+	execution.UpdatedAt = marked
+	s.refreshRun(run)
+}
+
+func (s *Service) resumeConfiguredWork(ctx context.Context) error {
+	if err := s.resumeWorkerFlow(ctx); err != nil {
+		return err
+	}
+	for _, run := range s.runs {
+		if run == nil || run.WorkflowVersion != WorkerFlowVersion || run.Protocol != string(ProtocolOrcaTerminalV2) {
+			continue
+		}
+		workflow, execution := s.workflowRecords(run)
+		if workflow == nil || execution == nil || workflow.Phase != "completed" || execution.OrcaNative == nil {
+			continue
+		}
+		if err := s.finishNativeOrcaCleanup(ctx, run); err != nil {
+			execution.LastEvent = ptr("Orca delivery completed; owned terminal cleanup needs reconciliation: " + err.Error())
+			s.refreshRun(run)
+			if saveErr := s.commitWorker(run); saveErr != nil {
+				return saveErr
+			}
+		}
+	}
+	return nil
+}
+
+func (s *Service) resumeWorkerFlow(ctx context.Context) error {
+	if err := s.resumeAppServerWorkers(ctx); err != nil {
+		return err
+	}
+	for _, run := range s.runs {
+		if run == nil || run.WorkflowVersion != WorkerFlowVersion || s.workers[run.RunID] != nil {
+			continue
+		}
+		task := nativeTaskRecord(s.domain.Tasks, run.DomainTaskID)
+		workflow, execution := s.workflowRecords(run)
+		if task == nil || workflow == nil || execution == nil || task.Status != "in_progress" || workflow.Phase == "completed" {
+			continue
+		}
+		adapter, err := s.workerFlowMode(run)
+		if err != nil {
+			return err
+		}
+		_, err = s.resumeWorkerFlowByMode(ctx, task, run, adapter)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}

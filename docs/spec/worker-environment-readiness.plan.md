@@ -13,10 +13,10 @@
 | 代码入口 | 本次职责 |
 | --- | --- |
 | `internal/steerline/config.go`、`execution_profiles.go`、`service_execution_profiles.go` | 显式 Windows sandbox、冻结权限、静态能力检查及配置诊断 |
-| `internal/steerline/orcaworker/command.go`、`worker_flow_orca_native_model.go`、`worker_flow_orca_native.go` 的准备入口 | 有/无显式 model 统一受管启动，固定非交互权限、校验 args 冲突、保存原会话有效配置 |
-| `worker_flow_orca_native.go`、`worker_flow_orca_relay.go` | readiness 与 business 轮次区分、独立观察、原生结算与恢复对账 |
+| `internal/steerline/orcaworker/command.go`、`worker_flow_orca_native_model.go`、`orca_worker_observation.go` 的准备入口 | 有/无显式 model 统一受管启动，固定非交互权限、校验 args 冲突、保存原会话有效配置 |
+| `orca_worker_observation.go`、`orca_worker_relay.go` | readiness 与 business 轮次区分、独立观察、原生结算与恢复对账 |
 | `internal/steerline/orcaworker/terminal.go`、`output.go`、`conversation_service.go` | 原 terminal 等待/退出事实、工具证据及来源，复用现有会话事件 |
-| `domain.go`、`worker_flow_state.go`、`model.go`、现有 CommandService/Operation/store | 原生轮次类型、准备事实、blocker、反馈中的中心动作及权威事务提交 |
+| `domain.go`、`worker_state.go`、`model.go`、现有 CommandService/Operation/store | 原生轮次类型、准备事实、blocker、反馈中的中心动作及权威事务提交 |
 | 现有执行/Decision DTO 和控制台 | 冻结权限、阻断可信程度、原 terminal 与重新检查入口 |
 
 完成条件：实际命令/回执契约及最小工具证据已补证；新增字段所有者和写入事务明确；ER1–ER4 的证据来源已对应到真实入口。不复制另一套 TaskStore 或主状态。承接实施时主干已有的类型化平台事实和原子提交入口；与[协议边界](architecture-01-worker-protocol.spec.md)、[原子提交](architecture-02-worker-commit.spec.md)的收口方向一致，不另写 Service 原始协议解析或隐式全量写回路径，也不把这两个未完成 PR 任意设为本任务的硬前置。

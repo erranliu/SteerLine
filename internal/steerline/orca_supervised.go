@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
 
 const maxSupervisedMessageBytes = 8 << 10
@@ -707,14 +709,7 @@ func (b orcaSupervisedBackend) acknowledgeDelivery(ctx context.Context, ref Exec
 }
 
 func supervisedMessagePayload(message OrcaInboxMessage) ([]byte, error) {
-	if len(message.Payload) == 0 || string(message.Payload) == "null" {
-		return nil, nil
-	}
-	var text string
-	if err := json.Unmarshal(message.Payload, &text); err == nil {
-		return []byte(text), nil
-	}
-	return append([]byte(nil), message.Payload...), nil
+	return orcaworker.MessagePayload(message), nil
 }
 
 type orcaSupervisedBackend struct{ config Config }

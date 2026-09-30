@@ -1,6 +1,6 @@
 # SteerLine 当前代码架构图
 
-快照日期：2026-09-30。源码基线：`bba4936`，生成前工作区无未提交修改。
+快照日期：2026-09-30。源码基线：`ba0992b`（含 PR #157），含 PR #158 的 worker 收尾改动。
 
 本文描述当前检出的代码：系统边界、实际 Go 包依赖、核心包内部职责、任务执行、人工决策、数据模型、日志与恢复。图中的职责分组不代表已拆成独立包或服务。箭头含义在各图前说明；未来方案与当前可启动路径分开列出。
 
@@ -69,7 +69,7 @@ flowchart TB
 
 ```mermaid
 flowchart LR
-    CLI["cmd/steerline"] --> Core["internal/steerline<br/>103 个非测试 Go 文件"]
+    CLI["cmd/steerline"] --> Core["internal/steerline<br/>112 个非测试 Go 文件"]
     CLI --> Console["console"]
     Console --> Core
 
@@ -88,27 +88,25 @@ flowchart LR
     Feedback["cmd/test-feedback"] --> Core
     Feedback --> Summary["internal/testfeedback"]
     Probe["cmd/orca-probe<br/>仅使用标准库"]
-    Verify["remoteprotocol<br/>当前无生产包导入"]
 ```
 
 | 包 | 当前职责 | 非测试 Go 文件 |
 | --- | --- | ---: |
 | `cmd/steerline` | 产品命令入口、服务启动、控制台和任务命令路由 | 1 |
-| `internal/steerline` | 服务编排、业务持久化、平台适配接线、查询和控制 | 103 |
+| `internal/steerline` | 服务编排、业务持久化、平台适配接线、查询和控制 | 112 |
 | `console` | TUI 状态、导航、任务列表、活动/会话/正文、执行方案和决策编辑 | 14 |
 | `task` | 任务契约、批次、状态、依赖资格、交付和命令规则 | 10 |
 | `taskgraph` | DAG 校验、遍历、前后置关系和图算法 | 1 |
 | `taskview` | 任务展示、分页和投影规则 | 3 |
-| `workerflow` | 单个可续聊 worker 的纯状态规则、模式选择和提示构造 | 3 |
-| `codexapp` | Codex app-server 参数、客户端、原生问题与 WebSocket 协议 | 6 |
-| `codexworker` | app-server 启动、连接、能力探测、轮次观察、journal 与回答 | 10 |
-| `orcaworker` | Orca task/dispatch、terminal、消息、pull/relay、输出与工作区协议 | 14 |
-| `remoteprotocol` | 结构化远端 verify result 与固定执行证据核验；当前未接入生产包依赖 | 1 |
+| `workerflow` | 单个可续聊 worker 的纯状态规则、模式选择和提示构造 | 4 |
+| `codexapp` | Codex app-server 参数、客户端、原生问题与 WebSocket 协议 | 7 |
+| `codexworker` | app-server 启动、连接、能力探测、轮次观察、journal 与回答 | 11 |
+| `orcaworker` | Orca task/dispatch、terminal、消息、pull/relay、输出与工作区协议 | 17 |
 | `cmd/orca-probe` | 只读能力探测与脱敏证据采集 | 1 |
 | `cmd/test-feedback` | 最小/定向/全量测试调度、日志与反馈报告 | 4 |
 | `internal/testfeedback` | Go test JSON 结果汇总 | 1 |
 
-合计 **14 个包目录、172 个非测试 Go 文件**。统计覆盖 `cmd/` 与 `internal/`；不含 `_test.go`、测试数据、脚本和文档。核心包仍集中承载多项职责，不能将上述逻辑边界理解为微服务或已经完成的全面拆包。
+合计 **13 个包目录、186 个非测试 Go 文件**。统计覆盖 `cmd/` 与 `internal/`；不含 `_test.go`、测试数据、脚本和文档。核心包仍集中承载多项职责，不能将上述逻辑边界理解为微服务或已经完成的全面拆包。
 
 ## 3. 核心包内部职责与接线
 
@@ -122,14 +120,15 @@ flowchart TB
     Commands["数据库命令<br/>query_command / command_processor"] --> Service
     Service --> Native["native 调度与任务命令<br/>claim / dispatch / batch / discard / cleanup"]
     Native --> Rules["task / taskgraph<br/>契约、资格、依赖、交付规则"]
-    Service --> Flow["worker_flow_service / state<br/>续聊、事件、PR 与人工反馈"]
+    Service --> Flow["worker_start / events / completion / state<br/>续聊、事件、PR 与人工反馈"]
     Flow --> FlowRules["workerflow<br/>平台无关状态转换"]
-    Flow --> Binding["worker_flow_adapter<br/>固定执行身份与模式选择"]
-    Binding --> Local["worker_flow_app_server_*<br/>codexworker / codexapp"]
-    Binding --> Orca["worker_flow_orca_*<br/>orcaworker / orca / orcaexec"]
+    Flow --> Binding["worker_mode<br/>固定执行身份与模式选择"]
+    Binding --> Local["codex_worker*<br/>codexworker / codexapp"]
+    Binding --> Orca["orca_worker*<br/>orcaworker / orca / orcaexec"]
     Binding -.-> Supervised["orca_supervised<br/>当前启动门槛未开放"]
     Flow --> Workspace["workspace / workspace_dirty<br/>worktree 与 Git 检查"]
-    Flow --> Publish["worker_flow_publish_local<br/>受控 commit / push / draft PR"]
+    Flow --> Feedback["worker_feedback / pr<br/>人工反馈与 PR 观察"]
+    Flow --> Publish["worker_publish_local<br/>受控 commit / push / draft PR"]
     Publish --> PR["pr / native_delivery_command<br/>PR 身份、合并证据和交付"]
     Flow --> PR
     Service --> Recovery["recovery / execution_recovery<br/>app-server 与 worker 恢复对账"]
@@ -153,15 +152,17 @@ flowchart TB
 | 控制与命令 | `control_*.go`、`query_command.go`、`command_processor.go` | 控制文件绑定服务实例；数据库命令有版本和幂等身份 |
 | 任务管理 | `native_batch_command.go`、`native_claim_command.go`、`native_dispatch_command.go`、`native_task_predecessors.go`、`native_discard_command.go` | 验证固定契约、DAG 与版本；废弃后的外部清理单独对账 |
 | 图与候选读取 | `native_graph_*.go`、`native_readiness*.go`、`native_task_page*.go` | 使用事务快照和游标；展示 Ready 缓存不是领取许可 |
-| 单 worker 生命周期 | `worker_flow_service.go`、`worker_flow_state.go`、`worker_flow_adapter.go`、`worker_flow_resume_adapter.go` | Session、Turn、Execution、Attempt 和 Operation 必须对应持久身份 |
-| 本机 Codex | `worker_flow_app_server*.go`、`codex_history.go`、`codexworker/`、`codexapp/` | 实际 worker 经回环 WebSocket 连接 app-server；不是第二阶段规划会话的 stdio 方案 |
-| Orca | `worker_flow_orca*.go`、`orca.go`、`orcaexec.go`、`orcaworker/` | coordinator、runtime、task、dispatch、terminal 与消息回执分别核验 |
-| 工作区与发布 | `workspace*.go`、`worker_flow_publish_local.go`、`codex_git_sandbox.go` | 本机 worker 发出发布就绪标记后，中心校验并办理发布 |
+| 单 worker 生命周期 | `worker_start.go`、`worker_events.go`、`worker_completion.go`、`worker_state.go`、`worker_mode.go`、`worker_resume.go` | Session、Turn、Execution、Attempt 和 Operation 必须对应持久身份 |
+| 本机 Codex | `codex_worker*.go`、`codex_history.go`、`codexworker/`、`codexapp/` | 实际 worker 经回环 WebSocket 连接 app-server；不是第二阶段规划会话的 stdio 方案 |
+| Orca | `orca_worker*.go`、`orca.go`、`orcaexec.go`、`orcaworker/` | coordinator、runtime、task、dispatch、terminal 与消息回执分别核验 |
+| 工作区与发布 | `workspace*.go`、`worker_publish_local.go`、`codex_git_sandbox.go` | 本机 worker 发出发布就绪标记后，中心校验并办理发布 |
 | PR 与交付 | `pr.go`、`native_delivery_command.go`、`task/delivery*.go` | 合并事实先外部查询，再事务内重检并写交付与 closed 状态 |
-| 决策与干预 | `decision.go`、`worker_feedback_phase.go`、`operation.go` | 保存答案、送达回执、原会话新轮次开始是不同事实 |
+| 决策与干预 | `decision.go`、`worker_feedback.go`、`service_commit.go`、`operation.go` | 保存答案、送达回执、原会话新轮次开始是不同事实 |
 | 日志与会话 | `activity.go`、`journal_*.go`、`conversation*.go`、`codex_conversation.go` | 原始日志、归一事件、正文版本与最终回复分别处理 |
 | 持久化与投影 | `sqlite_store*.go`、`execution_store.go`、`store.go`、`runtime_view.go` | SQLite 业务实体是权威；checkpoint 不保存第二套业务状态 |
 | 恢复与平台 | `recovery.go`、`execution_recovery.go`、`platform_*.go`、`spawner.go` | 对账原身份；不因超时、观察断线或重启直接创建替代执行 |
+
+本轮删除旧步骤校验 `remoteprotocol`、Execution 的候选/验证/审查修订与修复轮数字段，以及 Attempt 的旧前置结果、结果 ID 和 legacy 标记。`CurrentStep` / `StepID` 仍固定为 `worker`，WorkflowRun 继续表示本次任务执行。原生事件解码位于 `codexworker/event_fact.go` 与 `orcaworker/event.go`；父包的 `worker_evidence.go`、`codex_worker_evidence.go`、`orca_worker_evidence.go` 仅负责固定记录和有类型事实的适配。中心恢复、启动、事件、结算、PR、反馈分别落在相应 `worker_*.go`，写入仍只经显式事务。
 
 ## 4. 任务从创建到交付
 
@@ -195,7 +196,7 @@ flowchart TB
 
 人工派发允许多个不同 Ready 任务并行，每个任务冻结独立执行方案与 worker 身份；同一任务不能重复领取。自动模式一次保持一个活动执行，切换自动模式不会停止已经人工启动的任务。领取、进程开始、轮次结束、PR 合并、任务交付不是同一层状态。
 
-源码：[native_service.go](../../internal/steerline/native_service.go)、[worker_flow_service.go](../../internal/steerline/worker_flow_service.go)、[workerflow/state.go](../../internal/steerline/workerflow/state.go)、[worker_flow_publish_local.go](../../internal/steerline/worker_flow_publish_local.go)、[native_delivery_command.go](../../internal/steerline/native_delivery_command.go)。
+源码：[native_service.go](../../internal/steerline/native_service.go)、[worker_start.go](../../internal/steerline/worker_start.go)、[workerflow/state.go](../../internal/steerline/workerflow/state.go)、[worker_publish_local.go](../../internal/steerline/worker_publish_local.go)、[native_delivery_command.go](../../internal/steerline/native_delivery_command.go)。
 
 ## 5. 人工决策与原会话续聊
 
@@ -232,7 +233,7 @@ sequenceDiagram
 
 配置、session、run、execution、turn 身份不匹配时拒绝发送；结果未知时保留原命令和操作身份等待对账。心跳和日志更新不会改变 WorkflowRun 的持久控制版本。
 
-源码：[query_command.go](../../internal/steerline/query_command.go)、[command_processor.go](../../internal/steerline/command_processor.go)、[worker_flow_adapter.go](../../internal/steerline/worker_flow_adapter.go)、[worker_flow_app_server_reply.go](../../internal/steerline/worker_flow_app_server_reply.go)。
+源码：[query_command.go](../../internal/steerline/query_command.go)、[command_processor.go](../../internal/steerline/command_processor.go)、[worker_mode.go](../../internal/steerline/worker_mode.go)、[codex_worker_reply.go](../../internal/steerline/codex_worker_reply.go)。
 
 ## 6. 核心数据模型
 
@@ -321,7 +322,7 @@ erDiagram
 | 会话读取位置与能力 | `conversation_source_cursors`、`conversation_capability_reports` | 恢复读取游标、来源能力及版本证据 |
 | 服务 checkpoint | `projection` | 服务实例、心跳、未完成控制操作、阻塞信息与认领前预留；不持久化第二套 Runtime/Run 业务权威 |
 
-当前 SQLite schema 为 **6**，服务 checkpoint schema 为 **8**。数据库使用 WAL、外键、busy timeout 和事务；旧格式直接拒绝，不增加迁移、双写或回退路径。
+当前 SQLite schema 为 **7**，服务 checkpoint schema 为 **9**。数据库使用 WAL、外键、busy timeout 和事务；旧格式直接拒绝，不增加迁移、双写或回退路径。
 
 源码：[domain.go](../../internal/steerline/domain.go)、[task/model.go](../../internal/steerline/task/model.go)、[sqlite_store_schema.go](../../internal/steerline/sqlite_store_schema.go)、[runtime_view.go](../../internal/steerline/runtime_view.go)。
 
@@ -333,7 +334,7 @@ erDiagram
 flowchart LR
     Codex["Codex app-server 事件"] --> Worker["codexworker journal / observe"]
     Orca["Orca 消息与 terminal 输出"] --> OW["orcaworker pull / output / relay"]
-    Worker --> Service["Service workerMessages<br/>worker_flow_evidence"]
+    Worker --> Service["Service workerMessages<br/>worker_evidence"]
     OW --> Service
     Service --> Domain[("领域 events<br/>执行 / 决策 / operation")]
     Service --> Activity["ActivityWriter<br/>activity.jsonl"]
@@ -375,12 +376,11 @@ Service 将私有领域工作副本、已提交快照和私有工作 Run 分开�
 | WinUI 3、规划主 agent、规划 worktree、受控文档发布、HTTP/JSON/SSE | 第二阶段 Spec/方案，当前 `cmd/`、`internal/` 中没有对应产品实现 |
 | stable/dev 固定版本选择与发布 | 当前只有本地构建、安装相关代码；固定版本运行交付仍为 Spec |
 | `orca_supervised` | 配置和多个适配/核验函数存在；`StaticUnavailableReason` 和 native preflight 阻止当前单 worker 启动 |
-| `remoteprotocol` | 独立结果核验包；生产源码 import 图中尚未被使用 |
 | Pi 输出归一代码 | `activity.go` 中存在归一器，不代表当前本机 worker-flow 支持 Pi 执行 |
 
 ## 9. 快照验证与维护
 
-包依赖图由非测试源码的项目内 import 提取并人工对照入口。系统、执行与存储图对照当前关键代码和 schema，不依据未来 Spec 推断已交付能力。本文仅新增说明文档，不修改业务代码，不运行全量测试。
+包依赖图由非测试源码的项目内 import 提取并人工对照入口。系统、执行与存储图对照当前关键代码和 schema，不依据未来 Spec 推断已交付能力。本轮收尾同步更新当前源码接线与文件索引。整合 PR #157 后，项目 `-quick` 入口（现已覆盖 `workerflow`）及附加的 13 个定向用例通过（执行 98.3 秒），覆盖私有 actor 视图、两轮续聊、问题回复恢复、重启不重发、原子绑定/停止回执和原生事件身份；`codexworker`、`orcaworker` 与测试入口自身的测试、受影响命令编译、`go vet` 和差异检查通过。未运行全量测试或真机认证。
 
 维护时优先核对：入口命令、包 import、可启动执行模式、schema、checkpoint、控制协议、外部进程通信和交付事务。新增生产源码后应同步下面的全量文件索引；生产支持范围有变化时同步图 1、图 4 和第 8 节。
 
@@ -419,6 +419,10 @@ Service 将私有领域工作副本、已提交快照和私有工作 Run 分开�
 | [codex_conversation.go](../../internal/steerline/codex_conversation.go) |
 | [codex_git_sandbox.go](../../internal/steerline/codex_git_sandbox.go) |
 | [codex_history.go](../../internal/steerline/codex_history.go) |
+| [codex_worker.go](../../internal/steerline/codex_worker.go) |
+| [codex_worker_evidence.go](../../internal/steerline/codex_worker_evidence.go) |
+| [codex_worker_recovery.go](../../internal/steerline/codex_worker_recovery.go) |
+| [codex_worker_reply.go](../../internal/steerline/codex_worker_reply.go) |
 | [command.go](../../internal/steerline/command.go) |
 | [command_processor.go](../../internal/steerline/command_processor.go) |
 | [config.go](../../internal/steerline/config.go) |
@@ -434,6 +438,7 @@ Service 将私有领域工作副本、已提交快照和私有工作 Run 分开�
 | [domain.go](../../internal/steerline/domain.go) |
 | [execution_backend.go](../../internal/steerline/execution_backend.go) |
 | [execution_capability.go](../../internal/steerline/execution_capability.go) |
+| [execution_helpers.go](../../internal/steerline/execution_helpers.go) |
 | [execution_profiles.go](../../internal/steerline/execution_profiles.go) |
 | [execution_recovery.go](../../internal/steerline/execution_recovery.go) |
 | [execution_store.go](../../internal/steerline/execution_store.go) |
@@ -471,6 +476,13 @@ Service 将私有领域工作副本、已提交快照和私有工作 Run 分开�
 | [orca.go](../../internal/steerline/orca.go) |
 | [orca_supervised.go](../../internal/steerline/orca_supervised.go) |
 | [orca_version.go](../../internal/steerline/orca_version.go) |
+| [orca_worker_dispatch.go](../../internal/steerline/orca_worker_dispatch.go) |
+| [orca_worker_evidence.go](../../internal/steerline/orca_worker_evidence.go) |
+| [orca_worker_observation.go](../../internal/steerline/orca_worker_observation.go) |
+| [orca_worker_prepare.go](../../internal/steerline/orca_worker_prepare.go) |
+| [orca_worker_relay.go](../../internal/steerline/orca_worker_relay.go) |
+| [orca_worker_terminal.go](../../internal/steerline/orca_worker_terminal.go) |
+| [orca_worker_workspace.go](../../internal/steerline/orca_worker_workspace.go) |
 | [orcaexec.go](../../internal/steerline/orcaexec.go) |
 | [platform_linux.go](../../internal/steerline/platform_linux.go) |
 | [platform_windows.go](../../internal/steerline/platform_windows.go) |
@@ -497,25 +509,20 @@ Service 将私有领域工作副本、已提交快照和私有工作 Run 分开�
 | [state_preflight.go](../../internal/steerline/state_preflight.go) |
 | [state_revision.go](../../internal/steerline/state_revision.go) |
 | [store.go](../../internal/steerline/store.go) |
+| [worker_attachment_store.go](../../internal/steerline/worker_attachment_store.go) |
 | [worker_commit.go](../../internal/steerline/worker_commit.go) |
-| [worker_flow_adapter.go](../../internal/steerline/worker_flow_adapter.go) |
-| [worker_flow_app_server.go](../../internal/steerline/worker_flow_app_server.go) |
-| [worker_flow_app_server_recovery.go](../../internal/steerline/worker_flow_app_server_recovery.go) |
-| [worker_flow_app_server_reply.go](../../internal/steerline/worker_flow_app_server_reply.go) |
-| [worker_flow_evidence.go](../../internal/steerline/worker_flow_evidence.go) |
-| [worker_flow_orca_dispatch.go](../../internal/steerline/worker_flow_orca_dispatch.go) |
-| [worker_flow_orca_native.go](../../internal/steerline/worker_flow_orca_native.go) |
-| [worker_flow_orca_prepare.go](../../internal/steerline/worker_flow_orca_prepare.go) |
-| [worker_flow_orca_relay.go](../../internal/steerline/worker_flow_orca_relay.go) |
-| [worker_flow_orca_terminal.go](../../internal/steerline/worker_flow_orca_terminal.go) |
-| [worker_flow_orca_workspace.go](../../internal/steerline/worker_flow_orca_workspace.go) |
-| [worker_flow_process.go](../../internal/steerline/worker_flow_process.go) |
-| [worker_flow_publish_local.go](../../internal/steerline/worker_flow_publish_local.go) |
-| [worker_flow_recovery.go](../../internal/steerline/worker_flow_recovery.go) |
-| [worker_flow_resume_adapter.go](../../internal/steerline/worker_flow_resume_adapter.go) |
-| [worker_flow_service.go](../../internal/steerline/worker_flow_service.go) |
-| [worker_flow_state.go](../../internal/steerline/worker_flow_state.go) |
-| [workflow_runtime_helpers.go](../../internal/steerline/workflow_runtime_helpers.go) |
+| [worker_completion.go](../../internal/steerline/worker_completion.go) |
+| [worker_events.go](../../internal/steerline/worker_events.go) |
+| [worker_evidence.go](../../internal/steerline/worker_evidence.go) |
+| [worker_feedback.go](../../internal/steerline/worker_feedback.go) |
+| [worker_mode.go](../../internal/steerline/worker_mode.go) |
+| [worker_pr.go](../../internal/steerline/worker_pr.go) |
+| [worker_process.go](../../internal/steerline/worker_process.go) |
+| [worker_publish_local.go](../../internal/steerline/worker_publish_local.go) |
+| [worker_recovery.go](../../internal/steerline/worker_recovery.go) |
+| [worker_resume.go](../../internal/steerline/worker_resume.go) |
+| [worker_start.go](../../internal/steerline/worker_start.go) |
+| [worker_state.go](../../internal/steerline/worker_state.go) |
 | [workspace.go](../../internal/steerline/workspace.go) |
 | [workspace_dirty.go](../../internal/steerline/workspace_dirty.go) |
 
@@ -529,16 +536,18 @@ Service 将私有领域工作副本、已提交快照和私有工作 Run 分开�
 | [executable.go](../../internal/steerline/codexapp/executable.go) |
 | [params.go](../../internal/steerline/codexapp/params.go) |
 | [transport.go](../../internal/steerline/codexapp/transport.go) |
+| [windows_sandbox.go](../../internal/steerline/codexapp/windows_sandbox.go) |
 
 ### internal/steerline/codexworker
 
 | 源文件 |
 | --- |
-| [ask_journal.go](../../internal/steerline/codexworker/ask_journal.go) |
 | [ask.go](../../internal/steerline/codexworker/ask.go) |
+| [ask_journal.go](../../internal/steerline/codexworker/ask_journal.go) |
 | [capability.go](../../internal/steerline/codexworker/capability.go) |
 | [connection.go](../../internal/steerline/codexworker/connection.go) |
 | [doc.go](../../internal/steerline/codexworker/doc.go) |
+| [event_fact.go](../../internal/steerline/codexworker/event_fact.go) |
 | [journal.go](../../internal/steerline/codexworker/journal.go) |
 | [launch.go](../../internal/steerline/codexworker/launch.go) |
 | [observe.go](../../internal/steerline/codexworker/observe.go) |
@@ -552,13 +561,13 @@ Service 将私有领域工作副本、已提交快照和私有工作 Run 分开�
 | [activity_source.go](../../internal/steerline/console/activity_source.go) |
 | [conversation.go](../../internal/steerline/console/conversation.go) |
 | [execution_profile.go](../../internal/steerline/console/execution_profile.go) |
+| [model.go](../../internal/steerline/console/model.go) |
 | [model_control.go](../../internal/steerline/console/model_control.go) |
 | [model_keys.go](../../internal/steerline/console/model_keys.go) |
 | [model_navigation.go](../../internal/steerline/console/model_navigation.go) |
 | [model_update_actions.go](../../internal/steerline/console/model_update_actions.go) |
 | [model_update_conversation.go](../../internal/steerline/console/model_update_conversation.go) |
 | [model_update_project.go](../../internal/steerline/console/model_update_project.go) |
-| [model.go](../../internal/steerline/console/model.go) |
 | [preferences.go](../../internal/steerline/console/preferences.go) |
 | [profile_choice.go](../../internal/steerline/console/profile_choice.go) |
 | [source.go](../../internal/steerline/console/source.go) |
@@ -570,24 +579,21 @@ Service 将私有领域工作副本、已提交快照和私有工作 Run 分开�
 | --- |
 | [command.go](../../internal/steerline/orcaworker/command.go) |
 | [dispatch_submit.go](../../internal/steerline/orcaworker/dispatch_submit.go) |
+| [event.go](../../internal/steerline/orcaworker/event.go) |
 | [inventory.go](../../internal/steerline/orcaworker/inventory.go) |
 | [journal.go](../../internal/steerline/orcaworker/journal.go) |
 | [message.go](../../internal/steerline/orcaworker/message.go) |
+| [message_identity.go](../../internal/steerline/orcaworker/message_identity.go) |
 | [mutation.go](../../internal/steerline/orcaworker/mutation.go) |
 | [orchestration.go](../../internal/steerline/orcaworker/orchestration.go) |
 | [output.go](../../internal/steerline/orcaworker/output.go) |
 | [prompt.go](../../internal/steerline/orcaworker/prompt.go) |
 | [pull.go](../../internal/steerline/orcaworker/pull.go) |
 | [relay.go](../../internal/steerline/orcaworker/relay.go) |
-| [terminal_protocol.go](../../internal/steerline/orcaworker/terminal_protocol.go) |
+| [saved_receipt.go](../../internal/steerline/orcaworker/saved_receipt.go) |
 | [terminal.go](../../internal/steerline/orcaworker/terminal.go) |
+| [terminal_protocol.go](../../internal/steerline/orcaworker/terminal_protocol.go) |
 | [workspace.go](../../internal/steerline/orcaworker/workspace.go) |
-
-### internal/steerline/remoteprotocol
-
-| 源文件 |
-| --- |
-| [verify_result.go](../../internal/steerline/remoteprotocol/verify_result.go) |
 
 ### internal/steerline/task
 
@@ -596,8 +602,8 @@ Service 将私有领域工作副本、已提交快照和私有工作 Run 分开�
 | [batch.go](../../internal/steerline/task/batch.go) |
 | [command_plan.go](../../internal/steerline/task/command_plan.go) |
 | [contract.go](../../internal/steerline/task/contract.go) |
-| [delivery_gate.go](../../internal/steerline/task/delivery_gate.go) |
 | [delivery.go](../../internal/steerline/task/delivery.go) |
+| [delivery_gate.go](../../internal/steerline/task/delivery_gate.go) |
 | [model.go](../../internal/steerline/task/model.go) |
 | [predecessors.go](../../internal/steerline/task/predecessors.go) |
 | [readiness.go](../../internal/steerline/task/readiness.go) |
@@ -624,6 +630,7 @@ Service 将私有领域工作副本、已提交快照和私有工作 Run 分开�
 | --- |
 | [mode.go](../../internal/steerline/workerflow/mode.go) |
 | [prompt.go](../../internal/steerline/workerflow/prompt.go) |
+| [recovery.go](../../internal/steerline/workerflow/recovery.go) |
 | [state.go](../../internal/steerline/workerflow/state.go) |
 
 ### internal/testfeedback
