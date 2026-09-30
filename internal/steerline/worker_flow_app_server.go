@@ -24,14 +24,14 @@ type appServerProcessReceipt struct {
 
 // Native start notifications can be replayed after recovery. Only the first
 // confirmed start consumes a pending Command and accepts post-turn feedback.
-func (s *Service) recordAppServerTurnStarted(run *Run, workflow *WorkflowRunRecord, execution *ExecutionRecord, turnID string) error {
+func (s *Service) recordAppServerTurnStarted(run *Run, workflow *WorkflowRunRecord, execution *ExecutionRecord, turnID string) (string, error) {
 	commandID := execution.PendingCommandID
 	fresh := commandID != ""
 	if !fresh && execution.CurrentTurnID == turnID && execution.LastStoppedTurnID != turnID {
 		commandID = execution.CurrentCommandID
 	}
 	if !stableExecutionID(commandID) || !codexThreadID.MatchString(turnID) || fresh && execution.PendingTurnID != turnID {
-		return errors.New("app-server turn start lacks its fixed command or native turn receipt")
+		return "", errors.New("app-server turn start lacks its fixed command or native turn receipt")
 	}
 	var operation *OperationRecord
 	for i := range s.State.Operations {
@@ -41,10 +41,10 @@ func (s *Service) recordAppServerTurnStarted(run *Run, workflow *WorkflowRunReco
 		}
 	}
 	if operation == nil {
-		return errors.New("app-server native turn has no saved start operation")
+		return "", errors.New("app-server native turn has no saved start operation")
 	}
 	if err := BeginWorkerTurn(workflow, execution, execution.SessionID, turnID); err != nil {
-		return err
+		return "", err
 	}
 	execution.CurrentCommandID, execution.PendingCommandID = commandID, ""
 	if fresh {
@@ -60,9 +60,9 @@ func (s *Service) recordAppServerTurnStarted(run *Run, workflow *WorkflowRunReco
 		s.refreshRun(run)
 	}
 	if operation.Status == "confirmed" {
-		return nil
+		return operation.OperationID, nil
 	}
-	return TransitionOperation(operation, "confirmed", turnID, mustJSON(map[string]string{"session_id": execution.SessionID, "turn_id": turnID}), "")
+	return operation.OperationID, TransitionOperation(operation, "confirmed", turnID, mustJSON(map[string]string{"session_id": execution.SessionID, "turn_id": turnID}), "")
 }
 
 func startAppServerWorkerTurn(ctx context.Context, c Config, run *Run, execution *ExecutionRecord, commandID, prompt string, persistThread func() error) (*Worker, string, string, error) {

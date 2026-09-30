@@ -2,6 +2,7 @@ package steerline
 
 import (
 	"context"
+	"path/filepath"
 	"testing"
 )
 
@@ -14,6 +15,7 @@ func TestWorkerCommitWritesOnlyDeclaredRowsAndCheckpoint(t *testing.T) {
 	var old ServiceCheckpoint
 	require(t, decode(before, &old))
 	unlisted := OperationRecord{ProjectIdentity: s.Config.identity, OperationID: newID(), IdempotencyKey: newID(), Kind: "unlisted", Status: "in_flight", PayloadDigest: operationDigest([]byte("{}")), Request: []byte("{}"), CreatedAt: now(), UpdatedAt: now()}
+	workerCommitsBefore := s.workerCommitCount
 	s.State.Operations = append(s.State.Operations, unlisted)
 	s.decisionRecord(run).Status = "superseded" // A modified but undeclared row stays private to the actor.
 	s.executionRecord(run).LastEvent = ptr("committed worker diagnostic")
@@ -44,10 +46,25 @@ func TestWorkerCommitWritesOnlyDeclaredRowsAndCheckpoint(t *testing.T) {
 	if checkpoint.Revision != old.Revision+1 || len(s.State.PendingEvents) != 0 {
 		t.Fatal("event and checkpoint did not commit together")
 	}
+	s.State.Service.Error = ptr("service metadata after the worker transition")
+	require(t, s.saveAfterStep(workerCommitsBefore))
+	snapshot, err = s.domainStore.Query(ctx, s.Config.identity)
+	require(t, err)
+	if snapshot.Decisions[0].Status != "pending" {
+		t.Fatal("scheduler checkpoint publication flushed an undeclared decision")
+	}
+	for _, op := range snapshot.Operations {
+		if op.OperationID == unlisted.OperationID {
+			t.Fatal("scheduler checkpoint publication flushed an undeclared operation")
+		}
+	}
+	if s.store.baseline["operation:"+unlisted.OperationID] != "" {
+		t.Fatal("checkpoint publication advanced an undeclared operation baseline")
+	}
 }
 
 func TestWorkerCommitRollsBackOnStaleRecordAndCheckpointFailure(t *testing.T) {
-	for _, stage := range []string{"stale", "checkpoint"} {
+	for _, stage := range []string{"stale", "event", "checkpoint"} {
 		t.Run(stage, func(t *testing.T) {
 			s, run := waitingDecisionService(t)
 			t.Cleanup(func() { _ = s.Close() })
@@ -60,6 +77,9 @@ func TestWorkerCommitRollsBackOnStaleRecordAndCheckpointFailure(t *testing.T) {
 				current := *s.executionRecord(run)
 				current.LastEvent = ptr("concurrent writer")
 				require(t, s.domainStore.Transact(ctx, func(tx DomainTx) error { return tx.PutExecution(current) }))
+			} else if stage == "event" {
+				_, err := s.domainStore.db.ExecContext(ctx, `CREATE TRIGGER reject_worker_event BEFORE INSERT ON events BEGIN SELECT RAISE(FAIL, 'event failure'); END`)
+				require(t, err)
 			} else {
 				_, err := s.domainStore.db.ExecContext(ctx, `CREATE TRIGGER reject_worker_checkpoint BEFORE UPDATE ON projection BEGIN SELECT RAISE(FAIL, 'checkpoint failure'); END`)
 				require(t, err)
@@ -80,6 +100,72 @@ func TestWorkerCommitRollsBackOnStaleRecordAndCheckpointFailure(t *testing.T) {
 			}
 			if len(s.State.PendingEvents) == 0 {
 				t.Fatal("failed worker commit cleared pending event")
+			}
+			if value := s.executionRecord(run).LastEvent; value != nil && *value == "must roll back" {
+				t.Fatal("actor exposed the uncommitted candidate after failure")
+			}
+		})
+	}
+}
+
+func TestWorkerReceiptFailureRetainsIntentAndCancelsUnregisteredObserver(t *testing.T) {
+	s, run := appServerAuditService(t)
+	commandID, turnID := newID(), "00000000-0000-0000-0000-000000000001"
+	execution := s.executionRecord(run)
+	execution.PendingCommandID, execution.SessionID = commandID, workerFlowMockSession
+	opID, err := s.startWorkerOperation(run, "start_worker_turn", "worker-turn:"+run.ExecutionID+":"+commandID, map[string]string{"command_id": commandID})
+	require(t, err)
+	baseline := s.store.baseline["operation:"+opID]
+	_, err = s.domainStore.db.Exec(`CREATE TRIGGER reject_worker_receipt_event BEFORE INSERT ON events BEGIN SELECT RAISE(FAIL, 'receipt event failure'); END`)
+	require(t, err)
+	identity, err := currentProcessIdentity()
+	require(t, err)
+	cancelled := false
+	worker := &Worker{proc: &durableWorkerProcess{identity: *identity}, cancelObservation: func() { cancelled = true }}
+	if err := s.acceptStartedWorkerTurn(run, worker, filepath.Join(t.TempDir(), "events.jsonl"), turnID, opID, commandID, true); err == nil {
+		t.Fatal("receipt was accepted without its event")
+	}
+	if !cancelled || s.workers[run.RunID] != nil || s.store.Err() == nil || s.store.baseline["operation:"+opID] != baseline {
+		t.Fatal("receipt failure attached an observer or advanced the persistence baseline")
+	}
+	snapshot, err := s.domainStore.Query(context.Background(), s.Config.identity)
+	require(t, err)
+	for _, op := range snapshot.Operations {
+		if op.OperationID == opID {
+			if op.Status != "in_flight" || snapshot.Executions[0].PendingTurnID != "" || snapshot.Executions[0].Process != nil {
+				t.Fatal("failed receipt transaction did not retain the original intent")
+			}
+			return
+		}
+	}
+	t.Fatal("original send intent disappeared after failed receipt commit")
+}
+
+func TestWorkerCommitRejectsSavedAnswerRegression(t *testing.T) {
+	for _, change := range []string{"status", "answer"} {
+		t.Run(change, func(t *testing.T) {
+			s, run := waitingDecisionService(t)
+			t.Cleanup(func() { _ = s.Close() })
+			record := s.decisionRecord(run)
+			answer := DecisionAnswer{DecisionID: record.DecisionID, RunID: run.RunID, Note: "keep this answer", AnsweredBy: "operator", AnsweredAt: now()}
+			record.Status, record.AnsweredBy, record.Answer = "answer_saved", "operator", mustJSON(answer)
+			record.Version++
+			require(t, s.save())
+			original := *s.decisionRecord(run)
+			if change == "status" {
+				s.setDecisionStatus(run, "pending")
+			} else {
+				answer.Note = "replacement"
+				s.decisionRecord(run).Answer = mustJSON(answer)
+				s.markWorkerDecisionWrite(original.DecisionID)
+			}
+			if err := s.commitWorker(run); err == nil {
+				t.Fatal("invalid worker change overwrote a saved answer")
+			}
+			snapshot, err := s.domainStore.Query(context.Background(), s.Config.identity)
+			require(t, err)
+			if snapshot.Decisions[0].Status != original.Status || string(snapshot.Decisions[0].Answer) != string(original.Answer) {
+				t.Fatal("rejected worker transition changed the saved answer")
 			}
 		})
 	}

@@ -1,6 +1,7 @@
 package steerline
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -114,6 +115,18 @@ func (s *SQLiteStore) commitWorkerTransition(ctx context.Context, request worker
 				if old.WorkflowRunID != request.WorkflowRunID || old.ExecutionID != request.ExecutionID || old.AttemptID != request.AttemptID {
 					return errors.New("worker decision cannot be rebound")
 				}
+				if old.Scope != v.Scope || old.QuestionID != v.QuestionID || !old.CreatedAt.Equal(v.CreatedAt) || !bytes.Equal(old.Request, v.Request) {
+					return errors.New("worker decision question identity and request are fixed")
+				}
+				if v.Version < old.Version || old.Status != v.Status && v.Version <= old.Version {
+					return errors.New("worker decision version cannot regress")
+				}
+				if old.Status != v.Status && !(old.Status == "pending" && (v.Status == "answer_saved" || v.Status == "superseded") || old.Status == "answer_saved" && (v.Status == "reply_accepted" || v.Status == "superseded")) {
+					return errors.New("worker decision status transition is not allowed")
+				}
+				if len(old.Answer) != 0 && (!bytes.Equal(old.Answer, v.Answer) || old.AnsweredBy != v.AnsweredBy) {
+					return errors.New("worker decision saved answer cannot be changed")
+				}
 			}
 		}
 		for _, read := range request.DecisionReads {
@@ -122,6 +135,13 @@ func (s *SQLiteStore) commitWorkerTransition(ctx context.Context, request worker
 			}
 			if err := checkWorkerWrite(tx, "decisions", "decision_id", request.Project, read.ID, read.Expected); err != nil {
 				return err
+			}
+			var workflowID, executionID, attemptID string
+			if err := tx.tx.QueryRowContext(ctx, `SELECT workflow_run_id,execution_id,attempt_id FROM decisions WHERE project_identity=? AND decision_id=?`, request.Project, read.ID).Scan(&workflowID, &executionID, &attemptID); err != nil {
+				return err
+			}
+			if workflowID != request.WorkflowRunID || executionID != request.ExecutionID || attemptID != request.AttemptID {
+				return errors.New("worker decision read belongs to another execution")
 			}
 		}
 		for _, o := range request.Operations {
@@ -134,8 +154,11 @@ func (s *SQLiteStore) commitWorkerTransition(ctx context.Context, request worker
 			if errors.Is(err, sql.ErrNoRows) && o.Expected == "" {
 				continue
 			}
-			if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
 				return nativeErr("stale_revision", "worker operation changed before commit")
+			}
+			if err != nil {
+				return err
 			}
 			if operationDigest(body) != o.Expected {
 				return nativeErr("stale_revision", "worker operation changed before commit")
@@ -172,7 +195,7 @@ func (s *SQLiteStore) commitWorkerTransition(ctx context.Context, request worker
 			}
 		}
 		for _, event := range request.Events {
-			if event.ProjectIdentity != request.Project || event.WorkflowRunID != request.WorkflowRunID || event.ExecutionID != request.ExecutionID || event.AttemptID != "" && event.AttemptID != request.AttemptID {
+			if event.ProjectIdentity != request.Project || event.TaskID != request.TaskID || event.WorkflowRunID != request.WorkflowRunID || event.ExecutionID != request.ExecutionID || event.AttemptID != "" && event.AttemptID != request.AttemptID {
 				return errors.New("worker event has another identity")
 			}
 			if _, err := tx.AppendEvent(event); err != nil {
@@ -207,8 +230,11 @@ func checkWorkerWrite(tx *sqliteTx, table, column, project, id, expected string)
 	if errors.Is(err, sql.ErrNoRows) && expected == "" {
 		return nil
 	}
-	if err != nil {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nativeErr("stale_revision", fmt.Sprintf("worker %s changed before commit", table))
+	}
+	if err != nil {
+		return err
 	}
 	if operationDigest(body) != expected {
 		return nativeErr("stale_revision", fmt.Sprintf("worker %s changed before commit", table))

@@ -22,6 +22,7 @@ type Service struct {
 	dispatchProfile      *ExecutionProfile
 	State                Runtime
 	workerDecisionWrites map[string]bool
+	workerCommitCount    uint64
 	store                *Store
 	domainStore          *SQLiteStore
 	prs                  *PRClient
@@ -178,6 +179,13 @@ func (s *Service) save() error {
 	}
 	s.workerDecisionWrites = nil
 	return projectRuntime(&s.State)
+}
+
+func (s *Service) saveAfterStep(workerCommitsBefore uint64) error {
+	if s.workerCommitCount == workerCommitsBefore {
+		return s.save() // Remaining service/recovery writers migrate in PR 3.
+	}
+	return s.store.PublishCheckpoint(&s.State)
 }
 
 // activityWriter returns the lazily-opened journal for one run. Opening is
@@ -874,6 +882,7 @@ func (s *Service) run(ctx context.Context, dispatchMode string) (retErr error) {
 	controlTick := time.NewTicker(500 * time.Millisecond)
 	defer controlTick.Stop()
 	stepWithChange := func(fn func(context.Context) error, onlyWhenChanged bool) error {
+		workerCommitsBefore := s.workerCommitCount
 		var before []byte
 		var beforeDatabaseID string
 		var beforeDatabaseRevision uint64
@@ -903,7 +912,7 @@ func (s *Service) run(ctx context.Context, dispatchMode string) (retErr error) {
 				return nil
 			}
 		}
-		if e := s.save(); e != nil {
+		if e := s.saveAfterStep(workerCommitsBefore); e != nil {
 			return e
 		}
 		if s.State.Service.Ready {
@@ -1017,12 +1026,8 @@ func (s *Service) run(ctx context.Context, dispatchMode string) (retErr error) {
 				return e
 			}
 		case <-controlTick.C:
-			processed := false
-			commandErr := s.processPendingCommandsTracked(ctx, &processed)
-			if processed || commandErr != nil || s.State.Service.Status != "running" || s.State.Service.Error != nil {
-				if e := step(func(context.Context) error { return commandErr }); e != nil {
-					return e
-				}
+			if e := stepIfChanged(s.processPendingCommands); e != nil {
+				return e
 			}
 			if e := s.pollControl(ctx, cancel); e != nil {
 				return e

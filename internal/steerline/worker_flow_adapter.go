@@ -178,11 +178,11 @@ func (s *Service) startNativeOrcaWorkerTurn(ctx context.Context, run *Run, turnI
 	if current == nil {
 		return errors.New("native Orca turn has no accepted Dispatch identity")
 	}
-	if err := s.changeWorkerOperation(run, opID, "accepted", current.DispatchRequestID, mustJSON(*current), ""); err != nil {
+	if err := s.setOperationState(opID, "accepted", current.DispatchRequestID, mustJSON(*current), ""); err != nil {
 		return err
 	}
 	s.note(run, "steer", "worker", "accepted", "native Orca Dispatch input accepted", current.DispatchID, map[string]any{"task_id": current.TaskID, "turn_id": turnID})
-	return s.commitWorker(run)
+	return s.commitWorker(run, opID)
 }
 
 func (s *Service) startSupervisedOrcaWorkerTurn(ctx context.Context, run *Run, turnID, prompt, opID string) error {
@@ -210,10 +210,15 @@ func (s *Service) failStartedWorkerTurn(run *Run, opID, platformRequestID string
 	return s.waitWorkerFlow(run, "Original worker turn start is unverified: "+startErr.Error(), opID)
 }
 
-func (s *Service) acceptStartedWorkerTurn(run *Run, worker *Worker, events, platformRequestID, opID, commandID string, local bool) error {
+func (s *Service) acceptStartedWorkerTurn(run *Run, worker *Worker, events, platformRequestID, opID, commandID string, local bool) (retErr error) {
 	if worker == nil {
 		return errors.New("accepted worker turn has no observer")
 	}
+	defer func() {
+		if retErr != nil && worker.cancelObservation != nil {
+			worker.cancelObservation()
+		}
+	}()
 	fixed, err := s.workerFlowContext(run)
 	if err != nil {
 		return err
@@ -235,11 +240,11 @@ func (s *Service) acceptStartedWorkerTurn(run *Run, worker *Worker, events, plat
 	if err := s.setOperationState(opID, "accepted", platformRequestID, mustJSON(identity), ""); err != nil {
 		return err
 	}
+	s.note(run, "steer", "worker", "accepted", "original worker turn accepted", commandID, map[string]any{"session_id": execution.SessionID, "turn_number": execution.TurnNumber + 1})
 	if err := s.commitWorker(run, opID); err != nil {
 		return fmt.Errorf("worker started but its exact process receipt could not be saved: %w", err)
 	}
 	s.registerWorker(run, worker)
-	s.note(run, "steer", "worker", "accepted", "original worker turn accepted", commandID, map[string]any{"session_id": execution.SessionID, "turn_number": execution.TurnNumber + 1})
 	return nil
 }
 

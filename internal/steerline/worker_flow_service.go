@@ -23,7 +23,7 @@ func (s *Service) resumeConfiguredWork(ctx context.Context) error {
 		if err := s.finishNativeOrcaCleanup(ctx, run); err != nil {
 			execution.LastEvent = ptr("Orca delivery completed; owned terminal cleanup needs reconciliation: " + err.Error())
 			s.refreshRun(run)
-			if saveErr := s.commitWorker(run); saveErr != nil {
+			if saveErr := s.save(); saveErr != nil {
 				return saveErr
 			}
 		}
@@ -292,9 +292,11 @@ func (s *Service) eventWorkerFlowFor(run *Run, ev WorkerEvent) (resultErr error)
 		s.refreshRun(run)
 	}
 	if fact.StartedTurnID != "" && fact.Question == nil && mode == workerflow.LocalCodex {
-		if err := s.recordAppServerTurnStarted(run, workflow, execution, fact.StartedTurnID); err != nil {
+		opID, err := s.recordAppServerTurnStarted(run, workflow, execution, fact.StartedTurnID)
+		if err != nil {
 			return err
 		}
+		operationIDs = append(operationIDs, opID)
 	} else if fact.StartedTurnID != "" {
 		turnID := fact.StartedTurnID
 		commandID := turnID

@@ -8,13 +8,6 @@ import (
 )
 
 func (s *Service) processPendingCommands(ctx context.Context) error {
-	return s.processPendingCommandsTracked(ctx, nil)
-}
-
-// processPendingCommandsTracked reports whether a service-owned command was
-// processed. The scheduler uses this to avoid publishing an unchanged runtime
-// on every control poll.
-func (s *Service) processPendingCommandsTracked(ctx context.Context, processed *bool) error {
 	if s.domainStore == nil {
 		return nil
 	}
@@ -34,9 +27,6 @@ func (s *Service) processPendingCommandsTracked(ctx context.Context, processed *
 					return nativeErr("unsupported_schema", "saved command uses a retired recovery action; preserve its state for manual recovery")
 				}
 				continue
-			}
-			if processed != nil {
-				*processed = true
 			}
 			var answer DecisionAnswer
 			if err = decode(command.Payload, &answer); err != nil {
@@ -84,7 +74,7 @@ func (s *Service) processPendingCommandsTracked(ctx context.Context, processed *
 					return fmt.Errorf("accepted decision %s no longer matches the runtime identity", command.TargetID)
 				}
 				*s.decisionRecord(run) = record
-				s.markWorkerDecisionWrite(record.DecisionID)
+				delete(s.workerDecisionWrites, record.DecisionID) // AcceptAnswer already committed this row.
 				revision, revisionErr := s.domainStore.workerWorkflowRevision(ctx, s.Config.identity, run.RunID)
 				if revisionErr != nil {
 					return revisionErr

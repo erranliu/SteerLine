@@ -100,8 +100,8 @@ func (s *Service) commitWorker(run *Run, operationIDs ...string) error {
 	}
 	s.State.PendingEvents = remaining
 	s.State.Revision = result.Revision
-	s.State.UpdatedAt = now()
-	s.State.HeartbeatAt = s.State.UpdatedAt
+	s.State.UpdatedAt, s.State.HeartbeatAt = request.Checkpoint.UpdatedAt, request.Checkpoint.HeartbeatAt
+	s.workerCommitCount++
 	return projectRuntime(&s.State)
 }
 

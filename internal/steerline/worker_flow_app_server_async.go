@@ -129,10 +129,10 @@ func (s *Service) handleAppServerLaunchMessage(runID string, message *appServerL
 	if err := s.setOperationState(message.opID, "accepted", message.turnID, mustJSON(*execution.Process), ""); err != nil {
 		return err
 	}
+	s.note(run, "steer", "worker", "accepted", "original worker turn accepted", message.commandID, map[string]any{"session_id": execution.SessionID, "turn_number": execution.TurnNumber + 1})
 	if err := s.commitWorker(run, message.opID); err != nil {
 		return err
 	}
 	s.registerWorker(run, message.worker)
-	s.note(run, "steer", "worker", "accepted", "original worker turn accepted", message.commandID, map[string]any{"session_id": execution.SessionID, "turn_number": execution.TurnNumber + 1})
 	return nil
 }
