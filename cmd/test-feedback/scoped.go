@@ -23,7 +23,7 @@ import (
 const corePackage = "github.com/erranliu/SteerLine/internal/steerline"
 
 var quickTests = []string{"TestWorkerFlowClaimNeedsNoProjectSteps", "TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged"}
-var quickPackages = []string{corePackage, corePackage + "/taskgraph", corePackage + "/remoteprotocol"}
+var quickPackages = []string{corePackage, corePackage + "/taskgraph", corePackage + "/taskview", corePackage + "/remoteprotocol"}
 
 //go:embed testdata/core-test-weights.json
 var weightFile embed.FS
@@ -103,7 +103,7 @@ func runScoped(opts options) int {
 		report.CoreTests = append([]string(nil), quickTests...)
 		args := []string{"go", "test", "-json", "-count=1", "-timeout=45m", "-p", "1", "-parallel", "1", "-run=" + exactPattern(quickTests), corePackage}
 		report.Groups = append(report.Groups, runGroup(ctx, opts.out, "quick-core", "", args, quickTests, []string{corePackage}, false))
-		args = []string{"go", "test", "-json", "-count=1", "-timeout=45m", "-p", "1", "-parallel", "1", quickPackages[1], quickPackages[2]}
+		args = append([]string{"go", "test", "-json", "-count=1", "-timeout=45m", "-p", "1", "-parallel", "1"}, quickPackages[1:]...)
 		report.Groups = append(report.Groups, runGroup(ctx, opts.out, "quick-rules", "", args, nil, quickPackages[1:], false))
 		if len(opts.goTestArgs) > 0 {
 			args = append([]string{"go", "test"}, opts.goTestArgs...)
