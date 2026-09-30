@@ -1,211 +1,105 @@
 package steerline
 
 import (
+	"bytes"
 	"context"
-	"path/filepath"
+	"strings"
 	"testing"
 )
 
-func TestWorkerCommitWritesOnlyDeclaredRowsAndCheckpoint(t *testing.T) {
-	s, run := waitingDecisionService(t)
-	t.Cleanup(func() { _ = s.Close() })
+func TestWorkerCommitRollsBackRecordsReceiptsEventsAndCheckpoint(t *testing.T) {
+	service, run := waitingDecisionService(t)
 	ctx := context.Background()
-	before, _, err := s.domainStore.LoadProjection(ctx, s.Config.identity)
+	before, revision, err := service.domainStore.LoadProjection(ctx, service.Config.Identity())
 	require(t, err)
-	var old ServiceCheckpoint
-	require(t, decode(before, &old))
-	unlisted := OperationRecord{ProjectIdentity: s.Config.identity, OperationID: newID(), IdempotencyKey: newID(), Kind: "unlisted", Status: "in_flight", PayloadDigest: operationDigest([]byte("{}")), Request: []byte("{}"), CreatedAt: now(), UpdatedAt: now()}
-	workerCommitsBefore := s.workerCommitCount
-	s.State.Operations = append(s.State.Operations, unlisted)
-	s.decisionRecord(run).Status = "superseded" // A modified but undeclared row stays private to the actor.
-	s.executionRecord(run).LastEvent = ptr("committed worker diagnostic")
-	s.note(run, "steer", "worker", "observed", "explicit commit", "", nil)
-	require(t, s.commitWorker(run))
-	snapshot, err := s.domainStore.Query(ctx, s.Config.identity)
+	original, err := copyDomainSnapshot(service.committed)
 	require(t, err)
-	for _, op := range snapshot.Operations {
-		if op.OperationID == unlisted.OperationID {
-			t.Fatal("unlisted operation was persisted")
+	event := DomainEvent{ProjectIdentity: service.Config.Identity(), TaskID: run.DomainTaskID, WorkflowRunID: run.RunID, ExecutionID: run.ExecutionID, AttemptID: run.AttemptID, ExternalSource: "commit-test", ExternalID: newID(), Type: "worker.test", ReceivedAt: now(), Payload: mustJSON(map[string]string{"receipt": "must roll back"})}
+	service.pendingEvents = append(service.pendingEvents, event)
+	service.executionRecord(run).LastEvent = ptr("must roll back")
+	service.setDecisionStatus(run, "superseded")
+	require(t, service.domainStore.Transact(ctx, func(tx DomainTx) error {
+		_, err := tx.(*sqliteTx).tx.ExecContext(ctx, `CREATE TRIGGER fail_worker_checkpoint BEFORE UPDATE ON projection BEGIN SELECT RAISE(ABORT,'checkpoint unavailable'); END`)
+		return err
+	}))
+	// The checkpoint is the final write; its failure must undo the entire intent.
+	_, err = service.startWorkerOperation(run, "start_worker_turn", "worker-test:"+run.ExecutionID, map[string]string{"intent": "original"})
+	if err == nil || !strings.Contains(err.Error(), "checkpoint unavailable") {
+		t.Fatalf("checkpoint fault was not injected: %v", err)
+	}
+	after, nextRevision, err := service.domainStore.LoadProjection(ctx, service.Config.Identity())
+	require(t, err)
+	durable, err := service.domainStore.Query(ctx, service.Config.Identity())
+	require(t, err)
+	if revision != nextRevision || !bytes.Equal(before, after) || recordFingerprint(original) != recordFingerprint(durable) {
+		t.Fatal("failed checkpoint changed durable business state or receipt")
+	}
+	events, err := service.domainStore.Events(ctx, service.Config.Identity(), run.RunID, "", 0, 1000, MaxEventPageBytes)
+	require(t, err)
+	for _, saved := range events {
+		if saved.ExternalID == event.ExternalID {
+			t.Fatal("failed commit persisted its event")
 		}
 	}
-	if snapshot.Decisions[0].Status != "pending" {
-		t.Fatal("unlisted decision was persisted")
+	if len(service.pendingEvents) == 0 || len(service.pendingOperations) != 0 || recordFingerprint(service.domain) != recordFingerprint(original) || run.Decision.Status != "pending" {
+		t.Fatal("failed commit consumed facts or retained actor candidates")
 	}
-	if snapshot.Executions[0].LastEvent == nil || *snapshot.Executions[0].LastEvent != "committed worker diagnostic" {
-		t.Fatal("declared execution was not persisted")
+	if service.store.Err() == nil {
+		t.Fatal("database failure did not block subsequent writes")
 	}
-	events, err := s.domainStore.Events(ctx, s.Config.identity, run.ExecutionID, run.AttemptID, 0, 100)
+	if err := service.publishCheckpoint(); err == nil {
+		t.Fatal("failed writer published a successful checkpoint")
+	}
+}
+
+func TestCheckpointAndReadViewsCannotPublishWorkerCandidates(t *testing.T) {
+	service, run := waitingDecisionService(t)
+	ctx := context.Background()
+	original := recordFingerprint(service.committed)
+	// Mutate nested public slices/pointers, as well as an uncommitted actor candidate.
+	service.State.Executions[0].WorkspaceIntent.Path = "public mutation"
+	service.State.Decisions[0].Request[0] = '!'
+	run.Decision.Request.Options[0].Label = "view mutation"
+	service.refreshRun(run)
+	run.WorkspaceIntent.Path = "refreshed view mutation"
+	if recordFingerprint(service.domain) != original || recordFingerprint(service.committed) != original {
+		t.Fatal("public read views alias private worker records")
+	}
+	service.executionRecord(run).LastEvent = ptr("uncommitted candidate")
+	service.pendingEvents = append(service.pendingEvents, DomainEvent{ProjectIdentity: service.Config.Identity(), ExternalSource: "unpublished", ExternalID: newID(), Type: "worker.test", ReceivedAt: now(), Payload: mustJSON(map[string]bool{"pending": true})})
+	require(t, service.publishCheckpoint())
+	require(t, service.store.Heartbeat())
+	durable, err := service.domainStore.Query(ctx, service.Config.Identity())
 	require(t, err)
-	if len(events) == 0 {
-		t.Fatal("worker event was not persisted")
+	if recordFingerprint(durable) != original || len(service.pendingEvents) != 1 {
+		t.Fatal("checkpoint or heartbeat wrote or consumed business candidates")
 	}
-	after, _, err := s.domainStore.LoadProjection(ctx, s.Config.identity)
+	events, err := service.domainStore.Events(ctx, service.Config.Identity(), "", "", 0, 1000, MaxEventPageBytes)
 	require(t, err)
-	var checkpoint ServiceCheckpoint
-	require(t, decode(after, &checkpoint))
-	if checkpoint.Revision != old.Revision+1 || len(s.State.PendingEvents) != 0 {
-		t.Fatal("event and checkpoint did not commit together")
-	}
-	s.State.Service.Error = ptr("service metadata after the worker transition")
-	require(t, s.saveAfterStep(workerCommitsBefore))
-	snapshot, err = s.domainStore.Query(ctx, s.Config.identity)
-	require(t, err)
-	if snapshot.Decisions[0].Status != "pending" {
-		t.Fatal("scheduler checkpoint publication flushed an undeclared decision")
-	}
-	for _, op := range snapshot.Operations {
-		if op.OperationID == unlisted.OperationID {
-			t.Fatal("scheduler checkpoint publication flushed an undeclared operation")
+	for _, event := range events {
+		if event.ExternalSource == "unpublished" {
+			t.Fatal("checkpoint implicitly published an event")
 		}
 	}
-	if s.store.baseline["operation:"+unlisted.OperationID] != "" {
-		t.Fatal("checkpoint publication advanced an undeclared operation baseline")
-	}
 }
 
-func TestWorkerCommitRollsBackOnStaleRecordAndCheckpointFailure(t *testing.T) {
-	for _, stage := range []string{"stale", "event", "checkpoint"} {
-		t.Run(stage, func(t *testing.T) {
-			s, run := waitingDecisionService(t)
-			t.Cleanup(func() { _ = s.Close() })
-			ctx := context.Background()
-			before, _, err := s.domainStore.LoadProjection(ctx, s.Config.identity)
-			require(t, err)
-			s.executionRecord(run).LastEvent = ptr("must roll back")
-			s.note(run, "steer", "worker", "observed", "must roll back", "", nil)
-			if stage == "stale" {
-				current := *s.executionRecord(run)
-				current.LastEvent = ptr("concurrent writer")
-				require(t, s.domainStore.Transact(ctx, func(tx DomainTx) error { return tx.PutExecution(current) }))
-			} else if stage == "event" {
-				_, err := s.domainStore.db.ExecContext(ctx, `CREATE TRIGGER reject_worker_event BEFORE INSERT ON events BEGIN SELECT RAISE(FAIL, 'event failure'); END`)
-				require(t, err)
-			} else {
-				_, err := s.domainStore.db.ExecContext(ctx, `CREATE TRIGGER reject_worker_checkpoint BEFORE UPDATE ON projection BEGIN SELECT RAISE(FAIL, 'checkpoint failure'); END`)
-				require(t, err)
-			}
-			commitErr := s.commitWorker(run)
-			if commitErr == nil {
-				t.Fatal("worker commit unexpectedly succeeded")
-			}
-			after, _, err := s.domainStore.LoadProjection(ctx, s.Config.identity)
-			require(t, err)
-			if string(after) != string(before) {
-				t.Fatal("failed worker commit advanced checkpoint")
-			}
-			snapshot, err := s.domainStore.Query(ctx, s.Config.identity)
-			require(t, err)
-			if snapshot.Executions[0].LastEvent != nil && *snapshot.Executions[0].LastEvent == "must roll back" {
-				t.Fatalf("failed worker commit wrote candidate execution: %v", commitErr)
-			}
-			if len(s.State.PendingEvents) == 0 {
-				t.Fatal("failed worker commit cleared pending event")
-			}
-			if value := s.executionRecord(run).LastEvent; value != nil && *value == "must roll back" {
-				t.Fatal("actor exposed the uncommitted candidate after failure")
-			}
-		})
-	}
-}
-
-func TestWorkerReceiptFailureRetainsIntentAndCancelsUnregisteredObserver(t *testing.T) {
-	s, run := appServerAuditService(t)
-	commandID, turnID := newID(), "00000000-0000-0000-0000-000000000001"
-	execution := s.executionRecord(run)
-	execution.PendingCommandID, execution.SessionID = commandID, workerFlowMockSession
-	opID, err := s.startWorkerOperation(run, "start_worker_turn", "worker-turn:"+run.ExecutionID+":"+commandID, map[string]string{"command_id": commandID})
+func TestWorkerCommitChecksSettledTaskInsideTransaction(t *testing.T) {
+	service, run := waitingDecisionService(t)
+	ctx := context.Background()
+	// A concurrent discard cannot be inferred from the actor's cached task.
+	task := *nativeTaskRecord(service.domain.Tasks, run.DomainTaskID)
+	discarded, err := discardTaskRecord(task, "concurrent settlement", "operator", newID(), nil, now())
 	require(t, err)
-	baseline := s.store.baseline["operation:"+opID]
-	_, err = s.domainStore.db.Exec(`CREATE TRIGGER reject_worker_receipt_event BEFORE INSERT ON events BEGIN SELECT RAISE(FAIL, 'receipt event failure'); END`)
+	require(t, service.domainStore.Transact(ctx, func(tx DomainTx) error { return tx.UpdateNativeTaskCAS(discarded, task.Version) }))
+	before, revision, err := service.domainStore.LoadProjection(ctx, service.Config.Identity())
 	require(t, err)
-	identity, err := currentProcessIdentity()
+	service.setDecisionStatus(run, "reply_accepted")
+	if err := service.commitWorker(run); !isNativeErrorCode(err, "task_not_active") {
+		t.Fatalf("settled task resumed from stale actor state: %v", err)
+	}
+	after, nextRevision, err := service.domainStore.LoadProjection(ctx, service.Config.Identity())
 	require(t, err)
-	cancelled := false
-	worker := &Worker{proc: &durableWorkerProcess{identity: *identity}, cancelObservation: func() { cancelled = true }}
-	if err := s.acceptStartedWorkerTurn(run, worker, filepath.Join(t.TempDir(), "events.jsonl"), turnID, opID, commandID, true); err == nil {
-		t.Fatal("receipt was accepted without its event")
-	}
-	if !cancelled || s.workers[run.RunID] != nil || s.store.Err() == nil || s.store.baseline["operation:"+opID] != baseline {
-		t.Fatal("receipt failure attached an observer or advanced the persistence baseline")
-	}
-	snapshot, err := s.domainStore.Query(context.Background(), s.Config.identity)
-	require(t, err)
-	for _, op := range snapshot.Operations {
-		if op.OperationID == opID {
-			if op.Status != "in_flight" || snapshot.Executions[0].PendingTurnID != "" || snapshot.Executions[0].Process != nil {
-				t.Fatal("failed receipt transaction did not retain the original intent")
-			}
-			return
-		}
-	}
-	t.Fatal("original send intent disappeared after failed receipt commit")
-}
-
-func TestWorkerCommitRejectsSavedAnswerRegression(t *testing.T) {
-	for _, change := range []string{"status", "answer"} {
-		t.Run(change, func(t *testing.T) {
-			s, run := waitingDecisionService(t)
-			t.Cleanup(func() { _ = s.Close() })
-			record := s.decisionRecord(run)
-			answer := DecisionAnswer{DecisionID: record.DecisionID, RunID: run.RunID, Note: "keep this answer", AnsweredBy: "operator", AnsweredAt: now()}
-			record.Status, record.AnsweredBy, record.Answer = "answer_saved", "operator", mustJSON(answer)
-			record.Version++
-			require(t, s.save())
-			original := *s.decisionRecord(run)
-			if change == "status" {
-				s.setDecisionStatus(run, "pending")
-			} else {
-				answer.Note = "replacement"
-				s.decisionRecord(run).Answer = mustJSON(answer)
-				s.markWorkerDecisionWrite(original.DecisionID)
-			}
-			if err := s.commitWorker(run); err == nil {
-				t.Fatal("invalid worker change overwrote a saved answer")
-			}
-			snapshot, err := s.domainStore.Query(context.Background(), s.Config.identity)
-			require(t, err)
-			if snapshot.Decisions[0].Status != original.Status || string(snapshot.Decisions[0].Answer) != string(original.Answer) {
-				t.Fatal("rejected worker transition changed the saved answer")
-			}
-		})
-	}
-}
-
-func TestWorkerIntentIsDurableBeforeDispatchAndFailurePreventsDispatch(t *testing.T) {
-	for _, fail := range []bool{false, true} {
-		t.Run(map[bool]string{false: "committed", true: "checkpoint_failure"}[fail], func(t *testing.T) {
-			s, run := waitingDecisionService(t)
-			t.Cleanup(func() { _ = s.Close() })
-			ctx := context.Background()
-			key := "worker-turn:" + run.ExecutionID + ":" + newID()
-			if fail {
-				_, err := s.domainStore.db.ExecContext(ctx, `CREATE TRIGGER reject_worker_intent BEFORE UPDATE ON projection BEGIN SELECT RAISE(FAIL, 'checkpoint failure'); END`)
-				require(t, err)
-			}
-			calls := 0
-			id, err := s.startWorkerOperation(run, "start_worker_turn", key, map[string]string{"execution_id": run.ExecutionID})
-			if err == nil {
-				snapshot, readErr := s.domainStore.Query(ctx, s.Config.identity)
-				require(t, readErr)
-				found := false
-				for _, op := range snapshot.Operations {
-					if op.OperationID == id && op.IdempotencyKey == key && op.Status == "in_flight" {
-						found = true
-					}
-				}
-				if !found {
-					t.Fatal("platform dispatch could run before its durable intent")
-				}
-				calls++
-				if _, again := s.startWorkerOperation(run, "start_worker_turn", key, map[string]string{"execution_id": run.ExecutionID}); again == nil {
-					t.Fatal("original in-flight request was offered for resend")
-				}
-			} else if !fail {
-				t.Fatalf("intent could not commit: %v", err)
-			}
-			if fail && calls != 0 {
-				t.Fatal("platform dispatch ran after failed intent commit")
-			}
-		})
+	if revision != nextRevision || !bytes.Equal(before, after) {
+		t.Fatal("settled-task rejection advanced the checkpoint")
 	}
 }

@@ -9,7 +9,7 @@ import (
 func TestRecoveryInspectionReadsNativeClaimFromCenter(t *testing.T) {
 	project := "repo:native-recovery"
 	task := TaskRecord{ProjectIdentity: project, TaskID: "7", Claimant: "native-claimant", Status: "in_progress"}
-	service := Service{Config: Config{identity: project}, State: Runtime{Tasks: []TaskRecord{task}}}
+	service := Service{Config: Config{identity: project}, State: Runtime{}, domain: DomainSnapshot{Tasks: []TaskRecord{task}}}
 	report := RecoveryInspection{}
 	service.inspectRecoveryClaim(context.Background(), &Run{TaskID: "7", DomainTaskID: "7"}, &report)
 	if report.NativeClaim == nil || report.NativeClaim.TaskID != task.TaskID || report.NativeClaim.Claimant != task.Claimant || report.ClaimError != "" {

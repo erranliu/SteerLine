@@ -103,20 +103,14 @@ func (s *Service) processPendingCommands(ctx context.Context) error {
 				if record.WorkflowRunID != run.RunID || record.ExecutionID != run.ExecutionID || record.AttemptID != run.Decision.AttemptID {
 					return fmt.Errorf("accepted decision %s no longer matches the runtime identity", command.TargetID)
 				}
-				*s.decisionRecord(run) = record
-				delete(s.workerDecisionWrites, record.DecisionID) // AcceptAnswer already committed this row.
-				revision, revisionErr := s.domainStore.workerWorkflowRevision(ctx, s.Config.identity, run.RunID)
-				if revisionErr != nil {
-					return revisionErr
+				if err := s.refreshNativeSnapshot(ctx); err != nil {
+					return err
 				}
-				if workflow := s.workflowRecord(run); workflow != nil {
-					workflow.ControlRevision = revision
+				run = s.findDecision(command.TargetID)
+				if run == nil {
+					return errors.New("accepted decision disappeared from its committed execution")
 				}
-				if s.store.baseline == nil {
-					s.store.baseline = domainFingerprints(s.State)
-				}
-				s.store.baseline["decision:"+record.DecisionID] = recordFingerprint(record)
-				s.refreshRun(run)
+				delete(s.workerDecisionWrites, record.DecisionID)
 				s.note(run, "steer", "decision", "answer_saved", "decision answer saved", decisionAnswerSummary(run), decisionAnswerMeta(run))
 				if err = s.commitWorker(run); err != nil {
 					return err
@@ -128,7 +122,7 @@ func (s *Service) processPendingCommands(ctx context.Context) error {
 }
 
 func (s *Service) findDecision(id string) *Run {
-	for _, run := range s.State.Runs {
+	for _, run := range s.runs {
 		if run != nil && run.Decision != nil && run.Decision.ID == id {
 			return run
 		}

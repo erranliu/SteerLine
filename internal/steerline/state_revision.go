@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"time"
 )
 
 func recordFingerprint(value any) string { return operationDigest(mustJSON(value)) }
@@ -13,46 +14,6 @@ func deliveredExecutionFingerprint(v ExecutionRecord) string {
 	v.Error, v.LastEvent, v.Summary = nil, nil, nil
 	v.UpdatedAt = v.CreatedAt
 	return recordFingerprint(v)
-}
-
-// Hashes track actor changes and detect concurrent writes during publication.
-// They contain no recovery state.
-func domainFingerprints(v Runtime) map[string]string {
-	out := make(map[string]string)
-	for _, r := range v.WorkflowRuns {
-		out["workflow:"+r.WorkflowRunID] = recordFingerprint(r)
-	}
-	for _, r := range v.Executions {
-		out["execution:"+r.ExecutionID] = recordFingerprint(r)
-	}
-	for _, r := range v.Attempts {
-		out["attempt:"+r.AttemptID] = recordFingerprint(r)
-	}
-	for _, r := range v.Decisions {
-		out["decision:"+r.DecisionID] = recordFingerprint(r)
-	}
-	for _, r := range v.Operations {
-		out["operation:"+r.OperationID] = recordFingerprint(r)
-	}
-	return out
-}
-
-func (t *sqliteTx) checkPublicationBaseline(table, column, project, id, key string, baseline map[string]string) error {
-	if baseline == nil {
-		return nil
-	}
-	var body []byte
-	err := t.tx.QueryRowContext(t.ctx, "SELECT payload FROM "+table+" WHERE project_identity=? AND "+column+"=?", project, id).Scan(&body)
-	if errors.Is(err, sql.ErrNoRows) && baseline[key] == "" {
-		return nil
-	}
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return err
-	}
-	if err != nil || operationDigest(body) != baseline[key] {
-		return nativeErr("publication_conflict", "domain record changed since the actor read: "+key)
-	}
-	return nil
 }
 
 func controlFingerprint(value any) string {
@@ -73,9 +34,14 @@ func controlFingerprint(value any) string {
 			Worktree, Branch, Base, Endpoint, Generation                          string
 			Asks                                                                  []codexAskCall
 			ManualStop                                                            *ManualStopConfirmation
+			Attempt, Owner, Recovery                                              string
+			RecoveryRequired                                                      bool
+			RecoveryVersion                                                       uint64
+			RecoveryMarkedAt                                                      *time.Time
 		}{v.Status, v.LastTurnOutcome, v.SessionID, v.DecisionID, v.CurrentStep,
 			v.PendingCommandID, v.CurrentCommandID, v.PendingTurnID, v.CurrentTurnID, v.LastStoppedTurnID, v.TurnNumber,
-			v.Process, v.Target, v.WorkspaceIntent, v.Workspace.Worktree, v.Workspace.Branch, v.Workspace.Base, v.AppServerEndpoint, v.AppServerGeneration, v.PendingAsks, v.ManualStop})
+			v.Process, v.Target, v.WorkspaceIntent, v.Workspace.Worktree, v.Workspace.Branch, v.Workspace.Base, v.AppServerEndpoint, v.AppServerGeneration, v.PendingAsks, v.ManualStop,
+			v.CurrentAttemptID, v.OwnerServiceInstanceID, v.RecoveryState, v.RecoveryRequired, v.RecoveryVersion, v.RecoveryMarkedAt})
 	case DecisionRecord:
 		return recordFingerprint(struct {
 			ID, Workflow, Execution, Attempt, Question, Status string

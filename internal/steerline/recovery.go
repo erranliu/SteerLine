@@ -111,8 +111,8 @@ func recoveryService(c Config, runtimeState Runtime) Service {
 }
 
 func (s *Service) inspectRecoveryClaim(ctx context.Context, run *Run, report *RecoveryInspection) {
-	for i := range s.State.Tasks {
-		task := &s.State.Tasks[i]
+	for i := range s.domain.Tasks {
+		task := &s.domain.Tasks[i]
 		if task.TaskID == run.DomainTaskID && task.ProjectIdentity == s.Config.identity {
 			report.NativeClaim = task
 			return
@@ -138,7 +138,7 @@ func (s *Service) recalculateCurrentReservation(settledRunID string) {
 			s.State.CurrentTask = nil
 		}
 	}
-	for _, run := range s.State.Runs {
+	for _, run := range s.runs {
 		if run != nil && (run.ExecutionStatus == "unknown" || run.ExecutionStatus == "pending" || run.ExecutionStatus == "running" || run.FinishTaskStatus == "waiting_decision") {
 			if s.State.CurrentTask == nil {
 				s.State.CurrentTask = ptr(run.TaskID)

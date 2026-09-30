@@ -7,6 +7,8 @@ import (
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/erranliu/SteerLine/internal/steerline/codexapp"
 )
 
 const ProjectExecutionProfileID = "project-default"
@@ -45,6 +47,7 @@ type FixedExecutionProfile struct {
 }
 
 func (p ExecutionProfile) Freeze() FixedExecutionProfile {
+	p = p.withWindowsSandboxDefault()
 	policy := ""
 	if p.managedOrcaPermissions() {
 		policy = "never"
@@ -65,6 +68,7 @@ func (c Config) ApplyFixedExecutionProfile(p FixedExecutionProfile) Config {
 }
 
 func (p ExecutionProfile) Digest() string {
+	p = p.withWindowsSandboxDefault()
 	if p.managedOrcaPermissions() {
 		return digestValue(struct {
 			ExecutionProfile
@@ -86,6 +90,11 @@ func (p ExecutionProfile) MatchesConfig(c Config) bool {
 }
 
 func (p ExecutionProfile) StaticUnavailableReason() string {
+	if p.Host == "local" && p.Agent == "codex" {
+		if _, err := codexapp.LocalSandboxArgs(runtime.GOOS, p.Sandbox, p.WindowsSandbox, p.Codex.Args); err != nil {
+			return err.Error()
+		}
+	}
 	if p.managedOrcaPermissions() {
 		if runtime.GOOS != "windows" {
 			return "Windows Codex 受管方案需要 Windows 宿主"
@@ -103,7 +112,15 @@ func (p ExecutionProfile) StaticUnavailableReason() string {
 	return ""
 }
 
+func (p ExecutionProfile) withWindowsSandboxDefault() ExecutionProfile {
+	if runtime.GOOS == "windows" && p.Host == "local" && p.Agent == "codex" && p.Sandbox != "danger-full-access" && p.WindowsSandbox == "" {
+		p.WindowsSandbox = "elevated"
+	}
+	return p
+}
+
 func (p ExecutionProfile) effective() ExecutionProfile {
+	p = p.withWindowsSandboxDefault()
 	if p.Host == "local" && p.Agent == "codex" && p.ReasoningEffort == "" {
 		p.ReasoningEffort = "high"
 	}
@@ -183,6 +200,9 @@ func validateExecutionProfiles(c Config) error {
 		}
 		if p.Agent == "" || p.Sandbox != "read-only" && p.Sandbox != "workspace-write" && p.Sandbox != "danger-full-access" {
 			return fmt.Errorf("execution profile %s requires an agent and valid sandbox", p.ID)
+		}
+		if p.WindowsSandbox != "" && p.WindowsSandbox != "elevated" && p.WindowsSandbox != "unelevated" {
+			return fmt.Errorf("execution profile %s has invalid windows_sandbox", p.ID)
 		}
 		if p.ReasoningEffort != "" && !validReasoningEffort(p.ReasoningEffort) {
 			return fmt.Errorf("execution profile %s has invalid reasoning effort", p.ID)

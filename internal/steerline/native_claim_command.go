@@ -171,7 +171,7 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 	if workflowRunID == "" {
 		workflowRunID = newID()
 	}
-	runner := StepRunnerSettings{Codex: config.Codex, Sandbox: config.Sandbox, Model: config.Model, ReasoningEffort: config.ReasoningEffort, Profile: config.Profile}
+	runner := StepRunnerSettings{Codex: config.Codex, Sandbox: config.Sandbox, WindowsSandbox: config.WindowsSandbox, Model: config.Model, ReasoningEffort: config.ReasoningEffort, Profile: config.Profile}
 	runner.Codex.Args = append([]string(nil), config.Codex.Args...)
 	wfr := WorkflowRunRecord{ProjectIdentity: c.Project, WorkflowRunID: workflowRunID, TaskID: task.TaskID, WorkflowVersion: WorkerFlowVersion, ConfigDigest: config.configDigest, Runner: runner, Phase: "queued", Repository: config.Repository, Branch: config.Branch, SelectedResult: executionID, CreatedAt: created, UpdatedAt: created}
 	if options.ExecutionProfile != nil {

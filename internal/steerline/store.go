@@ -6,7 +6,6 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -58,74 +57,52 @@ func hydrateRuntime(v *Runtime, snapshot DomainSnapshot) {
 // Store serializes publication with heartbeat. SQLite is the only durable
 // runtime store.
 type Store struct {
-	mu       sync.Mutex
-	Domain   *SQLiteStore
-	Project  string
-	failure  error
-	baseline map[string]string
+	mu      sync.Mutex
+	Domain  *SQLiteStore
+	Project string
+	failure error
 }
 
-func (s *Store) Publish(v *Runtime) error {
+func (s *Store) commitWorker(request workerCommit) (workerCommitResult, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.failure != nil {
+		return workerCommitResult{}, s.failure
+	}
+	if s.Domain == nil {
+		return workerCommitResult{}, errors.New("worker commitment requires a durable store")
+	}
+	result, err := s.Domain.commitWorker(context.Background(), request)
+	var conflict *NativeTaskError
+	if err != nil && !errors.As(err, &conflict) {
+		s.failure = fmt.Errorf("critical worker persistence: %w", err)
+		return result, s.failure
+	}
+	return result, err
+}
+
+func (s *Store) Publish(checkpoint *ServiceCheckpoint) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.failure != nil {
 		return s.failure
 	}
-	if v == nil {
-		return errors.New("runtime projection is required")
+	if checkpoint == nil {
+		return errors.New("service checkpoint is required")
 	}
-	value := *v
+	value := *checkpoint
 	value.UpdatedAt, value.HeartbeatAt = now(), now()
 	if s.Domain != nil {
-		persisted, err := s.Domain.saveRuntime(context.Background(), value, s.baseline)
+		committed, err := s.Domain.SaveCheckpoint(context.Background(), value)
 		if err != nil {
-			s.failure = fmt.Errorf("critical domain persistence: %w", err)
-			return s.failure
-		}
-		value = persisted
-		s.baseline = domainFingerprints(value)
-	}
-	*v = value
-	return nil
-}
-
-// PublishCheckpoint updates service metadata after an explicit worker commit.
-// It cannot flush actor domain rows, operations or pending business events.
-func (s *Store) PublishCheckpoint(v *Runtime) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.failure != nil {
-		return s.failure
-	}
-	if v == nil {
-		return errors.New("runtime projection is required")
-	}
-	checkpoint := runtimeCheckpoint(*v)
-	checkpoint.UpdatedAt, checkpoint.HeartbeatAt = now(), now()
-	if s.Domain != nil {
-		if err := s.Domain.transactSQLite(context.Background(), func(tx *sqliteTx) error {
-			var revision uint64
-			if err := tx.tx.QueryRowContext(tx.ctx, `SELECT COALESCE(MAX(revision),0) FROM projection WHERE project_identity=?`, s.Project).Scan(&revision); err != nil {
-				return err
-			}
-			if checkpoint.SchemaVersion != WorkerFlowRuntimeSchema || checkpoint.Repository.Identity != s.Project || checkpoint.Revision != revision {
-				return nativeErr("stale_revision", "service checkpoint differs from the committed worker state")
-			}
-			checkpoint.Revision = revision + 1
-			payload, err := json.Marshal(checkpoint)
-			if err != nil {
-				return err
-			}
-			return tx.PutProjection(s.Project, checkpoint.Revision, payload)
-		}); err != nil {
 			s.failure = fmt.Errorf("critical checkpoint persistence: %w", err)
 			return s.failure
 		}
+		value = committed
 	}
-	v.Revision, v.UpdatedAt, v.HeartbeatAt = checkpoint.Revision, checkpoint.UpdatedAt, checkpoint.HeartbeatAt
+	*checkpoint = value
 	return nil
 }
-
 func (s *Store) Heartbeat() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -187,12 +164,33 @@ func loadRuntimeSnapshot(db *SQLiteStore, project string, requireIdentity bool) 
 		return nil, err
 	}
 	defer tx.Rollback()
+	state, err := readRuntimeCheckpointTx(ctx, tx, project, requireIdentity)
+	if err != nil {
+		return nil, err
+	}
+	snapshot, err := querySnapshot(ctx, tx, project)
+	if err != nil {
+		return nil, err
+	}
+	if err = tx.Commit(); err != nil {
+		return nil, err
+	}
+	hydrateRuntime(state, snapshot)
+	if err = projectRuntime(state); err != nil {
+		return nil, err
+	}
+	return state, nil
+}
+
+// readRuntimeCheckpointTx reads only service metadata; callers hydrate it with
+// domain records from the same transaction before exposing a Runtime.
+func readRuntimeCheckpointTx(ctx context.Context, tx *sql.Tx, project string, requireIdentity bool) (*Runtime, error) {
 	var payload []byte
-	if err = tx.QueryRowContext(ctx, `SELECT payload FROM projection WHERE project_identity=?`, project).Scan(&payload); err != nil {
+	if err := tx.QueryRowContext(ctx, `SELECT payload FROM projection WHERE project_identity=?`, project).Scan(&payload); err != nil {
 		return nil, err
 	}
 	var checkpoint ServiceCheckpoint
-	if err = decode(payload, &checkpoint); err != nil {
+	if err := decode(payload, &checkpoint); err != nil {
 		return nil, err
 	}
 	state := runtimeFromCheckpoint(checkpoint)
@@ -202,24 +200,13 @@ func loadRuntimeSnapshot(db *SQLiteStore, project string, requireIdentity bool) 
 	if requireIdentity && state.Repository.Identity != project {
 		return nil, errors.New("database runtime repository identity mismatch")
 	}
-	snapshot, err := querySnapshot(ctx, tx, project)
-	if err != nil {
-		return nil, err
-	}
 	var paused int
-	if err = tx.QueryRowContext(ctx, `SELECT dispatch_mode,dispatch_paused,authority_version FROM project_task_authorities WHERE project_identity=?`, project).Scan(&state.Control.DispatchMode, &paused, &state.Control.Revision); err != nil {
+	if err := tx.QueryRowContext(ctx, `SELECT dispatch_mode,dispatch_paused,authority_version FROM project_task_authorities WHERE project_identity=?`, project).Scan(&state.Control.DispatchMode, &paused, &state.Control.Revision); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, errors.New("runtime checkpoint has no task authority")
 		}
 		return nil, err
 	}
 	state.Control.DispatchPaused = paused != 0
-	if err = tx.Commit(); err != nil {
-		return nil, err
-	}
-	hydrateRuntime(&state, snapshot)
-	if err = projectRuntime(&state); err != nil {
-		return nil, err
-	}
 	return &state, nil
 }

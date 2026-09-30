@@ -35,13 +35,17 @@ func (s *Service) refreshNativeSnapshot(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	hydrateRuntime(&s.State, snapshot)
+	s.domain = snapshot
+	s.workerDecisionWrites = nil
+	s.pendingOperations = nil
+	var copyErr error
+	s.committed, copyErr = copyDomainSnapshot(snapshot)
+	if copyErr != nil {
+		return copyErr
+	}
 	s.State.Control.DispatchMode, s.State.Control.DispatchPaused, s.State.Control.Revision = authority.DispatchMode, authority.DispatchPaused, authority.AuthorityVersion
 	s.State.SchemaVersion = WorkerFlowRuntimeSchema
-	if s.store != nil {
-		s.store.baseline = domainFingerprints(s.State)
-	}
-	return projectRuntime(&s.State)
+	return s.projectState()
 }
 
 func latestNativeWorkflow(workflows []WorkflowRunRecord, taskID string) *WorkflowRunRecord {
@@ -105,8 +109,8 @@ func latestNativeExecutionAttempt(attempts []StepAttemptRecord, executionID stri
 
 func (s *Service) reconcileNativeCleanup(ctx context.Context) error {
 	var cleanupErr error
-	for i := range s.State.Tasks {
-		task := s.State.Tasks[i]
+	for i := range s.domain.Tasks {
+		task := s.domain.Tasks[i]
 		if task.Status != "discarded" || len(task.CleanupPending) == 0 {
 			continue
 		}
@@ -116,6 +120,9 @@ func (s *Service) reconcileNativeCleanup(ctx context.Context) error {
 					if run := s.find(task.TaskID); run != nil {
 						s.executionRecord(run).Error = ptr("discarded PR cleanup requires reconciliation: " + clip(err.Error(), 1000))
 						s.refreshRun(run)
+						if commitErr := s.commitWorker(run); commitErr != nil {
+							return commitErr
+						}
 					}
 					cleanupErr = errors.Join(cleanupErr, err)
 					continue
@@ -145,6 +152,9 @@ func (s *Service) reconcileNativeCleanup(ctx context.Context) error {
 					if run := s.find(task.TaskID); run != nil {
 						s.executionRecord(run).Error = ptr("discarded workspace cleanup requires reconciliation: " + clip(err.Error(), 1000))
 						s.refreshRun(run)
+						if commitErr := s.commitWorker(run); commitErr != nil {
+							return commitErr
+						}
 					}
 					cleanupErr = errors.Join(cleanupErr, err)
 					continue
@@ -166,12 +176,18 @@ func (s *Service) reconcileNativeCleanup(ctx context.Context) error {
 				if _, err := s.requireBackendCapabilitiesFor(ctx, backendFor(config), targetFor(config), agentFor(config), "stop", "observe"); err != nil {
 					s.executionRecord(run).Error = ptr("discarded task worker remains active; verified local stop capability is unavailable: " + clip(err.Error(), 1000))
 					s.refreshRun(run)
+					if commitErr := s.commitWorker(run); commitErr != nil {
+						return commitErr
+					}
 					continue
 				}
 				op, stopErr := s.stopRunExecution(ctx, run, worker)
 				if stopErr != nil {
 					s.executionRecord(run).Error = ptr("discarded task worker stop requires reconciliation: " + clip(stopErr.Error(), 1000))
 					s.refreshRun(run)
+					if commitErr := s.commitWorker(run); commitErr != nil {
+						return commitErr
+					}
 					continue
 				}
 				if op.Status != OperationConfirmed {
@@ -180,18 +196,27 @@ func (s *Service) reconcileNativeCleanup(ctx context.Context) error {
 					if observeErr != nil || observation.Liveness != "exited" {
 						s.executionRecord(run).Error = ptr("discarded task worker stop is awaiting confirmed process absence")
 						s.refreshRun(run)
+						if commitErr := s.commitWorker(run); commitErr != nil {
+							return commitErr
+						}
 						continue
 					}
 					confirmed, confirmErr := s.confirmExecutionStop(op)
 					if !confirmed {
 						s.executionRecord(run).Error = ptr("discarded task worker stop is not confirmed: " + clip(fmt.Sprint(confirmErr), 1000))
 						s.refreshRun(run)
+						if commitErr := s.commitWorker(run); commitErr != nil {
+							return commitErr
+						}
 						continue
 					}
 				}
 				if err := s.recordNativeStopCleanup(ctx, task.TaskID, item, op); err != nil {
 					s.executionRecord(run).Error = ptr("discarded task stop receipt could not be committed: " + clip(err.Error(), 1000))
 					s.refreshRun(run)
+					if commitErr := s.commitWorker(run); commitErr != nil {
+						return commitErr
+					}
 					continue
 				}
 				if err := s.refreshNativeSnapshot(ctx); err != nil {
@@ -201,7 +226,7 @@ func (s *Service) reconcileNativeCleanup(ctx context.Context) error {
 					delete(s.workers, run.RunID)
 					s.State.CurrentTask = nil
 					s.State.SlotOccupied = false
-					if err := s.save(); err != nil {
+					if err := s.publishCheckpoint(); err != nil {
 						return err
 					}
 				}
@@ -269,14 +294,14 @@ func (s *Service) reconcileNativeWorkspaceCleanup(ctx context.Context, task Task
 	}
 	var execution *ExecutionRecord
 	var workflow *WorkflowRunRecord
-	for i := range s.State.Executions {
-		candidate := &s.State.Executions[i]
+	for i := range s.domain.Executions {
+		candidate := &s.domain.Executions[i]
 		if canonical(candidate.Target.WorktreeID) != canonical(resolved) && canonical(candidate.Workspace.Worktree) != canonical(resolved) {
 			continue
 		}
-		for j := range s.State.WorkflowRuns {
-			if s.State.WorkflowRuns[j].WorkflowRunID == candidate.WorkflowRunID && s.State.WorkflowRuns[j].TaskID == task.TaskID {
-				execution, workflow = candidate, &s.State.WorkflowRuns[j]
+		for j := range s.domain.WorkflowRuns {
+			if s.domain.WorkflowRuns[j].WorkflowRunID == candidate.WorkflowRunID && s.domain.WorkflowRuns[j].TaskID == task.TaskID {
+				execution, workflow = candidate, &s.domain.WorkflowRuns[j]
 				break
 			}
 		}
@@ -368,11 +393,11 @@ func (s *Service) recordNativeStopCleanup(ctx context.Context, taskID, cleanupIt
 	if err != nil || observation.Liveness != "exited" {
 		return errors.Join(err, nativeErr("outcome_unknown", "fixed local execution is not confirmed absent"))
 	}
-	evidence := NativeStopCleanupReceipt{WorkflowRunID: op.RunID, ExecutionID: nativeExecutionIDForAttempt(s.State.Attempts, op.AttemptID), AttemptID: op.AttemptID, Operation: persisted, Observation: observation}
+	evidence := NativeStopCleanupReceipt{WorkflowRunID: op.RunID, ExecutionID: nativeExecutionIDForAttempt(s.domain.Attempts, op.AttemptID), AttemptID: op.AttemptID, Operation: persisted, Observation: observation}
 	if evidence.ExecutionID == "" {
 		return nativeErr("contract_mismatch", "stop attempt is not bound to a native execution")
 	}
-	task := nativeTaskRecord(s.State.Tasks, taskID)
+	task := nativeTaskRecord(s.domain.Tasks, taskID)
 	if task == nil {
 		return nativeErr("task_not_found", "discarded native task disappeared during stop reconciliation")
 	}
@@ -384,9 +409,9 @@ func (s *Service) recordNativeStopCleanup(ctx context.Context, taskID, cleanupIt
 
 func (s *Service) reconcileExitedNativeExecution(ctx context.Context, taskID, cleanupItem, executionID string) error {
 	var execution *ExecutionRecord
-	for i := range s.State.Executions {
-		if s.State.Executions[i].ExecutionID == executionID {
-			execution = &s.State.Executions[i]
+	for i := range s.domain.Executions {
+		if s.domain.Executions[i].ExecutionID == executionID {
+			execution = &s.domain.Executions[i]
 			break
 		}
 	}
@@ -402,8 +427,8 @@ func (s *Service) reconcileExitedNativeExecution(ctx context.Context, taskID, cl
 		return configErr
 	}
 	var attempt *StepAttemptRecord
-	for i := range s.State.Attempts {
-		candidate := &s.State.Attempts[i]
+	for i := range s.domain.Attempts {
+		candidate := &s.domain.Attempts[i]
 		if candidate.ExecutionID == executionID && candidate.Status != "succeeded" && candidate.Status != "failed" && candidate.Status != "rejected" && candidate.Status != "stopped" {
 			if attempt == nil || candidate.AttemptNumber > attempt.AttemptNumber {
 				attempt = candidate
@@ -429,7 +454,9 @@ func (s *Service) reconcileExitedNativeExecution(ctx context.Context, taskID, cl
 	}{"fixed_local_execution_stop", s.Config.ShutdownGrace}
 	op := Operation{Version: ExecutionRecordVersion, ID: opID, RunID: workflowRunID, AttemptID: attempt.AttemptID, Backend: BackendLocal, Protocol: ref.Protocol, Target: ref.Target, Action: "stop", PayloadDigest: digestValue(payload), Status: OperationConfirmed, StartedAt: now(), UpdatedAt: now(), Diagnostic: observation.Diagnostic, Ref: &ref}
 	records := executionRecords{root: s.Config.RunDir}
+	expectedOperation := ""
 	if old, loadErr := records.loadOperation(workflowRunID, attempt.AttemptID, opID); loadErr == nil {
+		expectedOperation = recordFingerprint(old)
 		if old.PayloadDigest != op.PayloadDigest || old.Ref == nil || digestValue(*old.Ref) != digestValue(ref) {
 			return nativeErr("authority_mismatch", "saved local stop operation differs from the fixed execution identity")
 		}
@@ -440,7 +467,7 @@ func (s *Service) reconcileExitedNativeExecution(ctx context.Context, taskID, cl
 	} else if !os.IsNotExist(loadErr) {
 		return loadErr
 	}
-	if err := records.saveOperation(op); err != nil {
+	if err := s.commitExecutionOperation(s.localWorkerRun(workflowRunID), op, expectedOperation); err != nil {
 		return err
 	}
 	return s.recordNativeStopCleanup(ctx, taskID, cleanupItem, op)
@@ -632,7 +659,7 @@ func (s *Service) nativeCompleteMergedTask(ctx context.Context, run *Run) error 
 	if run == nil || run.PR.URL == nil {
 		return nativeErr("merge_state_unknown", "native task has no fixed PR URL")
 	}
-	task := nativeTaskRecord(s.State.Tasks, run.DomainTaskID)
+	task := nativeTaskRecord(s.domain.Tasks, run.DomainTaskID)
 	workflow, _ := s.workflowRecords(run)
 	if task == nil || workflow == nil {
 		return nativeErr("inconsistent_delivery", "native delivery task or workflow record is missing")
@@ -655,14 +682,14 @@ func (s *Service) nativeCompleteMergedTask(ctx context.Context, run *Run) error 
 	s.refreshRun(run)
 	s.note(run, "steer", "delivery", "completed", "native task delivered after verified PR merge", receipt.Delivery.PRURL, map[string]any{"merge_commit": receipt.Delivery.MergeCommit, "graph_revision": receipt.GraphRevision})
 	s.closeActivity(run)
-	if err := s.save(); err != nil {
+	if err := s.commitWorker(run); err != nil {
 		return err
 	}
 	if run.Protocol == string(ProtocolOrcaTerminalV2) {
 		if err := s.finishNativeOrcaCleanup(ctx, run); err != nil {
 			s.executionRecord(run).LastEvent = ptr("Orca delivery completed; owned terminal cleanup needs reconciliation: " + err.Error())
 			s.refreshRun(run)
-			return s.save()
+			return s.commitWorker(run)
 		}
 	}
 	return nil
@@ -670,14 +697,14 @@ func (s *Service) nativeCompleteMergedTask(ctx context.Context, run *Run) error 
 
 func (s *Service) pollNativePRs(ctx context.Context, onlyRunID string) error {
 	var operationErr error
-	for _, run := range s.State.Runs {
+	for _, run := range s.runs {
 		if run == nil || onlyRunID != "" && run.RunID != onlyRunID {
 			continue
 		}
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		task := nativeTaskRecord(s.State.Tasks, run.DomainTaskID)
+		task := nativeTaskRecord(s.domain.Tasks, run.DomainTaskID)
 		if task == nil {
 			continue
 		}

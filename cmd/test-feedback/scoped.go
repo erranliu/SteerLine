@@ -23,7 +23,7 @@ import (
 const corePackage = "github.com/erranliu/SteerLine/internal/steerline"
 
 var quickTests = []string{"TestWorkerFlowClaimNeedsNoProjectSteps", "TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged"}
-var quickPackages = []string{corePackage, corePackage + "/taskgraph", corePackage + "/taskview", corePackage + "/remoteprotocol"}
+var quickPackages = []string{corePackage, corePackage + "/taskgraph", corePackage + "/taskview", corePackage + "/workerflow"}
 
 //go:embed testdata/core-test-weights.json
 var weightFile embed.FS

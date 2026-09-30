@@ -127,12 +127,7 @@ type StopReceipt struct {
 	Disposition string `json:"disposition"`
 	Diagnostic  string `json:"diagnostic,omitempty"`
 }
-type SettlementReceipt struct {
-	Disposition       string   `json:"disposition"`
-	PlatformRequestID string   `json:"platform_request_id,omitempty"`
-	ResidualResources []string `json:"residual_resources,omitempty"`
-	Diagnostic        string   `json:"diagnostic,omitempty"`
-}
+
 type OutputBatch struct {
 	Data          []byte    `json:"data"`
 	Source        string    `json:"source"`
@@ -167,18 +162,30 @@ func (e *BackendError) Error() string {
 }
 func (e *BackendError) Unwrap() error { return e.Cause }
 
-// ExecutionBackend is the shared boundary for platform operations. Optional
-// operations return a typed unsupported error; they never succeed as no-ops.
-type ExecutionBackend interface {
+type ExecutionProbe interface {
 	Identity() (BackendKind, ExecutionProtocol)
 	Probe(context.Context, ExecutionTarget, AgentSpec) (CapabilityReport, error)
+}
+
+// Observation and workspace consumers do not require cancellation support.
+type ExecutionBackend interface {
+	ExecutionProbe
 	Observe(context.Context, ExecutionRef) (Observation, error)
 	InspectWorkspace(context.Context, ExecutionRef) (WorkspaceInspection, error)
-	ReadOutput(context.Context, ExecutionRef, string, int) (OutputBatch, error)
+}
+
+type ExecutionStopper interface {
 	StopExecution(context.Context, ExecutionRef, Operation, *Worker) (StopReceipt, error)
-	DetachObservation(context.Context, *Worker) error
-	SettleResources(context.Context, ExecutionRef, string) (SettlementReceipt, error)
-	ReconcileOperation(context.Context, Operation) (Operation, error)
+}
+
+func executionStopperFor(c Config) (ExecutionStopper, error) {
+	switch c.hostName() {
+	case "local":
+		return localExecutionBackend{config: c}, nil
+	case "orca":
+		return orcaTerminalBackend{config: c}, nil
+	}
+	return nil, unsupported("StopExecution")
 }
 
 type WorkspaceInspection struct {
@@ -330,11 +337,11 @@ func capabilityStatus(report CapabilityReport, name string) CapabilityStatus {
 	return CapabilityNotTested
 }
 
-func (s *Service) requireBackendCapabilities(ctx context.Context, backend ExecutionBackend, names ...string) (CapabilityReport, error) {
+func (s *Service) requireBackendCapabilities(ctx context.Context, backend ExecutionProbe, names ...string) (CapabilityReport, error) {
 	return s.requireBackendCapabilitiesFor(ctx, backend, targetFor(s.Config), agentFor(s.Config), names...)
 }
 
-func (s *Service) requireBackendCapabilitiesFor(ctx context.Context, backend ExecutionBackend, target ExecutionTarget, agent AgentSpec, names ...string) (CapabilityReport, error) {
+func (s *Service) requireBackendCapabilitiesFor(ctx context.Context, backend ExecutionProbe, target ExecutionTarget, agent AgentSpec, names ...string) (CapabilityReport, error) {
 	probe, err := backend.Probe(ctx, target, agent)
 	if err != nil {
 		return CapabilityReport{}, err
@@ -382,26 +389,6 @@ func validateExecutionRef(ref ExecutionRef) error {
 	return nil
 }
 
-func (r executionRecords) saveBinding(ref ExecutionRef) error {
-	if err := validateExecutionRef(ref); err != nil {
-		return err
-	}
-	ref.WorkspacePath = canonical(ref.WorkspacePath)
-	if old, err := r.loadBinding(ref.RunID, ref.AttemptID); err == nil {
-		old.WorkspacePath = canonical(old.WorkspacePath)
-		if digestValue(old) != digestValue(ref) {
-			return errors.New("execution binding is immutable and conflicts with existing record")
-		}
-		return nil
-	} else if !os.IsNotExist(err) {
-		return err
-	}
-	b, err := json.MarshalIndent(ref, "", "  ")
-	if err != nil {
-		return err
-	}
-	return r.writeRecord("execution_bindings", ref.RunID, ref.AttemptID, "binding", b)
-}
 func (r executionRecords) loadBinding(run, attempt string) (ExecutionRef, error) {
 	if !stableExecutionID(run) || !stableExecutionID(attempt) {
 		return ExecutionRef{}, errors.New("invalid execution binding path identity")
@@ -448,23 +435,6 @@ func validateExecutionOperation(op Operation) error {
 	return nil
 }
 
-func (r executionRecords) saveOperation(op Operation) error {
-	if err := validateExecutionOperation(op); err != nil {
-		return err
-	}
-	if old, err := r.loadOperation(op.RunID, op.AttemptID, op.ID); err == nil {
-		if old.PayloadDigest != op.PayloadDigest || old.Action != op.Action || old.Backend != op.Backend || old.Protocol != op.Protocol || old.Target != op.Target {
-			return errors.New("operation id reused with different fixed payload")
-		}
-	} else if !os.IsNotExist(err) {
-		return err
-	}
-	b, err := json.MarshalIndent(op, "", "  ")
-	if err != nil {
-		return err
-	}
-	return r.writeRecord("execution_operations", op.RunID, op.AttemptID, op.ID, b)
-}
 func (r executionRecords) loadOperation(run, attempt, id string) (Operation, error) {
 	if !stableExecutionID(run) || !stableExecutionID(attempt) || !stableOperationID(id) {
 		return Operation{}, errors.New("invalid operation path identity")
@@ -692,42 +662,6 @@ func (b localExecutionBackend) StopExecution(ctx context.Context, ref ExecutionR
 	}
 	worker.Kill()
 	return StopReceipt{Disposition: "accepted"}, nil
-}
-func (b localExecutionBackend) DetachObservation(ctx context.Context, w *Worker) error {
-	return w.detachLocalObservation(ctx)
-}
-func (b localExecutionBackend) SettleResources(context.Context, ExecutionRef, string) (SettlementReceipt, error) {
-	return SettlementReceipt{}, unsupported("SettleResources")
-}
-func reconcileRecordedOperation(ctx context.Context, root string, expected Operation) (Operation, error) {
-	if err := ctx.Err(); err != nil {
-		return Operation{}, err
-	}
-	records := executionRecords{root: root}
-	old, err := records.loadOperation(expected.RunID, expected.AttemptID, expected.ID)
-	if err != nil {
-		return Operation{}, err
-	}
-	if old.PayloadDigest != expected.PayloadDigest || old.Action != expected.Action || old.Backend != expected.Backend || old.Protocol != expected.Protocol || old.Target != expected.Target {
-		return Operation{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "operation identity or fixed payload changed"}
-	}
-	if old.Ref != nil {
-		bound, bindErr := records.loadBinding(old.RunID, old.AttemptID)
-		if bindErr != nil {
-			return Operation{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "operation ref has no valid execution binding", Cause: bindErr}
-		}
-		if digestValue(bound) != digestValue(*old.Ref) {
-			return Operation{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "operation ref conflicts with the persisted binding"}
-		}
-	}
-	if old.Status == OperationInFlight || old.Status == OperationUnknown {
-		return old, &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "platform request has no verified query/replay capability; original outcome remains unknown"}
-	}
-	return old, nil
-}
-
-func (b localExecutionBackend) ReconcileOperation(ctx context.Context, op Operation) (Operation, error) {
-	return reconcileRecordedOperation(ctx, b.config.RunDir, op)
 }
 
 type orcaTerminalBackend struct{ config Config }
@@ -962,31 +896,6 @@ func (b orcaTerminalBackend) StopExecution(ctx context.Context, ref ExecutionRef
 		return StopReceipt{Disposition: "confirmed", Diagnostic: obs.Diagnostic}, nil
 	}
 	return StopReceipt{Disposition: "accepted", Diagnostic: "close accepted; terminal exit is not yet confirmed"}, nil
-}
-func (b orcaTerminalBackend) DetachObservation(ctx context.Context, w *Worker) error {
-	if w == nil {
-		return nil
-	}
-	proc, ok := w.proc.(*orcaProcess)
-	if !ok {
-		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "worker does not belong to Orca terminal v2"}
-	}
-	proc.Close() // cancels only the local observer; it does not close the Orca terminal.
-	if w.observationDone == nil {
-		return unsupported("Orca observation completion signal")
-	}
-	select {
-	case <-w.observationDone:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-}
-func (b orcaTerminalBackend) SettleResources(context.Context, ExecutionRef, string) (SettlementReceipt, error) {
-	return SettlementReceipt{}, unsupported("SettleResources")
-}
-func (b orcaTerminalBackend) ReconcileOperation(ctx context.Context, op Operation) (Operation, error) {
-	return reconcileRecordedOperation(ctx, b.config.RunDir, op)
 }
 
 func capabilityReport(backend BackendKind, protocol ExecutionProtocol, target ExecutionTarget, agent AgentSpec, version string) CapabilityReport {

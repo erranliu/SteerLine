@@ -38,7 +38,7 @@ func (s *Service) executionConfigForRun(run *Run) (Config, error) {
 	if run == nil {
 		return base, nil
 	}
-	for _, workflow := range s.State.WorkflowRuns {
+	for _, workflow := range s.domain.WorkflowRuns {
 		if workflow.WorkflowRunID != run.RunID {
 			continue
 		}
@@ -78,7 +78,7 @@ func (s *Service) executionConfigForRun(run *Run) (Config, error) {
 }
 
 func (s *Service) executionConfigForWorkflowID(id string) (Config, error) {
-	for _, run := range s.State.Runs {
+	for _, run := range s.runs {
 		if run != nil && run.RunID == id {
 			return s.executionConfigForRun(run)
 		}

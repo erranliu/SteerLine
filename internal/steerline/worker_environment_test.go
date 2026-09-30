@@ -66,7 +66,7 @@ func newEnvironmentFixture(t *testing.T, state fakeNativeOrcaState, model string
 
 func (f *environmentFixture) prepare(t *testing.T) {
 	t.Helper()
-	task := nativeTaskRecord(f.service.State.Tasks, "8154")
+	task := nativeTaskRecord(f.service.domain.Tasks, "8154")
 	require(t, f.service.prepareWorkerFlow(context.Background(), *task, f.run))
 }
 func (f *environmentFixture) poll(t *testing.T) {
@@ -100,7 +100,7 @@ func (f *environmentFixture) answer(t *testing.T, option, note string) {
 	}
 	s := f.service
 	s.State.Service.Ready = true
-	require(t, s.save())
+	require(t, s.publishCheckpoint())
 	answer := DecisionAnswer{DecisionID: decision.ID, RunID: f.run.RunID, OptionID: option, Note: note, AnsweredBy: "operator", ExpectedDecisionVersion: decision.Version, ExpectedRunRevision: f.run.ControlRevision, ServiceInstanceID: s.State.Service.InstanceID, SourceAttemptID: f.run.AttemptID, ExpectedRecoveryVersion: f.run.RecoveryVersion}
 	commands := CommandService{Store: s.domainStore, Project: s.Config.identity}
 	command, _, err := commands.AnswerDecisionWithID(context.Background(), newID(), decision.ID, decision.Version, decisionAnswerKey(answer), answer.AnsweredBy, mustJSON(answer))
@@ -179,11 +179,13 @@ func TestWorkerEnvironmentER2HostWaitPreservesQuestionAndPR(t *testing.T) {
 	}
 	note := "  保留原问题，不要重派任务。  "
 	f.answer(t, "", note)
+	wf, e = f.service.workflowRecords(f.run)
 	if f.state(t).Sends != 0 || len(e.Environment.DeferredFeedback) != 1 || f.run.Decision.Status != "pending" {
 		t.Fatal("host-wait feedback was sent or blocked further center actions")
 	}
 	f.update(t, func(s *fakeNativeOrcaState) { s.HostWait = nil; s.InboxUnavailable = false })
 	f.recheck(t)
+	wf, e = f.service.workflowRecords(f.run)
 	if state := f.state(t); state.Sends != 1 || state.SendBody != note || len(e.Environment.DeferredFeedback) != 0 || f.run.Decision == nil || orcaQuestionID(f.run.Decision) != "original-question" {
 		t.Fatalf("deferred feedback lost original text or question: sends=%d body=%q queue=%+v decision=%+v event=%q turn=%+v", state.Sends, state.SendBody, e.Environment.DeferredFeedback, f.run.Decision, deref(e.LastEvent), nativeOrcaCurrentTurn(e))
 	}
@@ -218,6 +220,8 @@ func TestWorkerEnvironmentER3RecheckKeepsOriginalDispatch(t *testing.T) {
 	}
 	f.update(t, func(s *fakeNativeOrcaState) { s.HostWait = nil })
 	f.recheck(t)
+	_, e = f.service.workflowRecords(f.run)
+	turn = nativeOrcaCurrentTurn(e)
 	if *e.Process != original || turn.DispatchID != originalDispatch || f.state(t).Dispatches != 1 {
 		t.Fatal("active original Dispatch was replaced")
 	}
@@ -260,6 +264,7 @@ func TestWorkerEnvironmentER4DeadlineRestartAndLostReceipt(t *testing.T) {
 		t.Fatalf("late success auto-dispatched or failed to record history: execution=%+v preparation=%+v turn=%+v error=%s state=%+v", e, e.Environment.Preparation, nativeOrcaCurrentTurn(e), deref(e.Error), f.state(t))
 	}
 	f.recheck(t)
+	_, e = s.workflowRecords(f.run)
 	if f.state(t).Dispatches != 2 || !e.Environment.Ready {
 		t.Fatalf("explicit recheck failed to accept original complete facts: %+v", e)
 	}
@@ -275,6 +280,7 @@ func TestWorkerEnvironmentER4DeadlineRestartAndLostReceipt(t *testing.T) {
 		t.Fatal("business dispatched more than once")
 	}
 	f.recheck(t)
+	_, e = s.workflowRecords(f.run)
 	if e.Environment.Blocker != nil || s.workflowRecord(f.run).Phase != "executing" || f.state(t).Dispatches != 2 {
 		t.Fatal("verified business start did not reconcile without reinjection")
 	}
@@ -291,6 +297,7 @@ func TestEnvironmentRecheckCannotClearNewFaultObservedDuringPoll(t *testing.T) {
 	oldBlocker := e.Environment.Blocker.ID
 	f.update(t, func(state *fakeNativeOrcaState) { state.HostWait = nil; state.ReadinessMode = "tool_failure" })
 	f.recheck(t)
+	e = f.service.executionRecord(f.run)
 	if e.Environment.Blocker == nil || e.Environment.Blocker.ID == oldBlocker || e.Environment.Blocker.Fact.Reason != "tool_initialization_failed" || f.run.Decision == nil || f.run.Decision.Status != "pending" || f.state(t).Dispatches != 1 {
 		t.Fatalf("old recheck cleared newer fault: %+v / %+v", e.Environment, f.run.Decision)
 	}

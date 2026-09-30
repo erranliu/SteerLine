@@ -395,6 +395,21 @@ func connectServiceWithProbe(ctx context.Context, c Config, probe func(*ProcessI
 		return connection
 	}
 	obs := ReadObservationSnapshot(c, time.Now)
+	return connectServiceFromSnapshot(ctx, c, obs, probe)
+}
+
+// ConnectServiceFromSnapshot checks process and configuration identity against
+// the supplied committed observation, without sampling the database again.
+// Control commands still perform their own admission checks.
+func ConnectServiceFromSnapshot(ctx context.Context, c Config, obs ObservationSnapshot) ServiceConnection {
+	if err := c.ResolveIdentity(ctx); err != nil {
+		return ServiceConnection{State: ConnectionIdentityError, Snapshot: obs, Diagnostic: "resolve repository identity: " + err.Error()}
+	}
+	return connectServiceFromSnapshot(ctx, c, obs, probeProcess)
+}
+
+func connectServiceFromSnapshot(ctx context.Context, c Config, obs ObservationSnapshot, probe func(*ProcessIdentity) ProcessProbe) ServiceConnection {
+	connection := ServiceConnection{State: ConnectionNoRecord, Capabilities: []string{}, CanStart: true}
 	connection.Snapshot = obs
 	if obs.State == SnapshotNone {
 		return connection
@@ -421,7 +436,8 @@ func connectServiceWithProbe(ctx context.Context, c Config, probe func(*ProcessI
 		connection.State, connection.Diagnostic, connection.CanStart = ConnectionIdentityError, "resolve configured run_dir: "+err.Error(), false
 		return connection
 	}
-	if canonical(rt.Repository.Identity) != canonical(c.identity) || canonical(rt.Repository.Path) != canonical(repositoryPath) || rt.Repository.Remote != c.Remote || rt.Repository.Branch != c.Branch || rt.Service.Claimant != expectedClaimant(c) {
+	snapshotRepositoryPath, pathErr := filepath.EvalSymlinks(rt.Repository.Path)
+	if pathErr != nil || canonical(rt.Repository.Identity) != canonical(c.identity) || canonical(snapshotRepositoryPath) != canonical(repositoryPath) || rt.Repository.Remote != c.Remote || rt.Repository.Branch != c.Branch || rt.Service.Claimant != expectedClaimant(c) {
 		connection.State = ConnectionIdentityError
 		connection.Diagnostic = "runtime repository, remote/branch or claimant does not match this configuration"
 		connection.CanStart = false
@@ -441,6 +457,15 @@ func connectServiceWithProbe(ctx context.Context, c Config, probe func(*ProcessI
 		connection.Process = ProcessProbe{State: ProcessUnknown, Reason: "runtime has no internally consistent service process identity"}
 	} else {
 		connection.Process = probe(rt.Service.ProcessIdentity)
+	}
+	// Database sampling can finish long after it began, or the caller can reuse
+	// an older observation. Freshness belongs to this connection check, while
+	// SampledAt continues to identify the supplied database sample.
+	if obs.State == SnapshotValid || obs.State == SnapshotStale {
+		sampledAt := obs.SampledAt
+		obs = ObserveRuntimeSnapshot(c, rt, nil, time.Now())
+		obs.SampledAt = sampledAt
+		connection.Snapshot = obs
 	}
 	if connection.Process.State == ProcessAbsent || connection.Process.State == ProcessReused {
 		if !instanceBound {

@@ -112,12 +112,16 @@ func (q QueryService) ListNativeTasks(ctx context.Context, cursor string, limit 
 	if expectedDB != 0 && (page.AuthorityVersion != expectedAuthority || page.GraphRevision != expectedGraph) {
 		return NativeTaskPage{}, nativeErr("cursor_invalidated", "project authority changed between pages")
 	}
+	setNativeTaskPageCursor(&page, offset)
+	return page, nil
+}
+
+func setNativeTaskPageCursor(page *NativeTaskPage, offset int) {
 	if page.HasMore {
 		c := nativeTaskCursor{Version: 1, ProjectID: page.ProjectID, AuthorityVersion: page.AuthorityVersion, GraphRevision: page.GraphRevision, DatabaseID: page.DatabaseID, DatabaseRevision: page.DatabaseRevision, Offset: offset + len(page.Tasks)}
 		b, _ := json.Marshal(c)
 		page.NextCursor = base64.RawURLEncoding.EncodeToString(b)
 	}
-	return page, nil
 }
 
 func (q QueryService) ShowNativeTask(ctx context.Context, id string) (NativeTaskPage, error) {
@@ -138,6 +142,19 @@ func (q QueryService) ShowNativeTask(ctx context.Context, id string) (NativeTask
 }
 
 func (s *SQLiteStore) NativeTaskPage(ctx context.Context, project, taskID, expectedDatabaseID string, expectedDB uint64, offset, limit int) (NativeTaskPage, error) {
+	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return NativeTaskPage{}, err
+	}
+	defer tx.Rollback()
+	page, err := s.nativeTaskPageTx(ctx, tx, project, taskID, expectedDatabaseID, expectedDB, offset, limit)
+	if err != nil {
+		return page, err
+	}
+	return page, tx.Commit()
+}
+
+func (s *SQLiteStore) nativeTaskPageTx(ctx context.Context, tx *sql.Tx, project, taskID, expectedDatabaseID string, expectedDB uint64, offset, limit int) (NativeTaskPage, error) {
 	page := NativeTaskPage{Protocol: nativeTaskProtocol, ProjectID: project, Tasks: []NativeTaskDetail{}, Capabilities: NativeTaskCapabilities{DependencyReadiness: "provided", DependencyBlockers: "provided", StartupBlockers: "provided"}}
 	if offset < 0 {
 		return page, nativeErr("cursor_invalidated", "negative page offset")
@@ -145,11 +162,7 @@ func (s *SQLiteStore) NativeTaskPage(ctx context.Context, project, taskID, expec
 	if project == "" {
 		return page, nativeErr("authority_mismatch", "project identity is required")
 	}
-	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
-	if err != nil {
-		return page, err
-	}
-	defer tx.Rollback()
+	var err error
 	var schemaVersion int
 	if err = tx.QueryRowContext(ctx, `SELECT COALESCE(MAX(version),0) FROM schema_migrations`).Scan(&schemaVersion); err != nil || schemaVersion != domainSchemaVersion {
 		if expectedDB != 0 {
@@ -323,9 +336,6 @@ func (s *SQLiteStore) NativeTaskPage(ctx context.Context, project, taskID, expec
 			detail.Delivery = &delivery
 		}
 		page.Tasks = append(page.Tasks, detail)
-	}
-	if err = tx.Commit(); err != nil {
-		return page, err
 	}
 	return page, nil
 }

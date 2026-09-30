@@ -609,7 +609,7 @@ func TestConversationLiveSourceFailureKeepsGapAndMapperPosition(t *testing.T) {
 	defer store.Close()
 	executionID, taskID := newID(), "501"
 	run := &Run{TaskID: taskID, RunID: runID, AttemptID: runID, ExecutionID: executionID, DomainTaskID: taskID, WorkflowVersion: "minimal-v1", Backend: string(BackendLocal), Protocol: string(ProtocolLocalProcess), Agent: "codex", Target: ExecutionTarget{ID: "local"}, LogPath: &path}
-	s := &Service{Config: Config{RunDir: root, identity: "project"}, domainStore: store, State: Runtime{Runs: []*Run{run}}}
+	s := &Service{Config: Config{RunDir: root, identity: "project"}, domainStore: store, State: Runtime{}, runs: []*Run{run}}
 	segment := "local-jsonl-v1:" + fileID
 	first := WorkerEvent{RunID: runID, AttemptID: runID, Source: "codex-jsonl", SourceSegment: segment, SourceIdentity: fileID, SourceSeq: 1, SourceOffset: 0, SourceLength: int64(len(firstRaw)), Raw: firstRaw}
 	require(t, s.recordConversationEvent(run, first))
@@ -738,10 +738,7 @@ func TestConversationJournalReplayIsBoundedAndIdempotent(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer store.Close()
-	service := &Service{Config: Config{RunDir: projectRoot, identity: "project", Codex: Command{Executable: "codex"}}, domainStore: store, State: Runtime{
-		Runs:     []*Run{{TaskID: taskID, RunID: runID, AttemptID: attemptID, ExecutionID: executionID, DomainTaskID: taskID, WorkflowVersion: "minimal-v1", Backend: string(BackendLocal), Protocol: string(ProtocolLocalProcess), Agent: "codex", Target: ExecutionTarget{ID: "local-test"}, WorktreePath: &projectRoot, LogPath: &path, EndedAt: ptr(time.Now().UTC())}},
-		Attempts: []StepAttemptRecord{{ProjectIdentity: "project", AttemptID: attemptID, ExecutionID: executionID, StepID: "implement", EventPath: path, Status: "succeeded"}},
-	}}
+	service := &Service{Config: Config{RunDir: projectRoot, identity: "project", Codex: Command{Executable: "codex"}}, domainStore: store, State: Runtime{}, domain: DomainSnapshot{Attempts: []StepAttemptRecord{{ProjectIdentity: "project", AttemptID: attemptID, ExecutionID: executionID, StepID: "implement", EventPath: path, Status: "succeeded"}}}, runs: []*Run{{TaskID: taskID, RunID: runID, AttemptID: attemptID, ExecutionID: executionID, DomainTaskID: taskID, WorkflowVersion: "minimal-v1", Backend: string(BackendLocal), Protocol: string(ProtocolLocalProcess), Agent: "codex", Target: ExecutionTarget{ID: "local-test"}, WorktreePath: &projectRoot, LogPath: &path, EndedAt: ptr(time.Now().UTC())}}}
 	oldRunID := newID()
 	oldRoot := filepath.Join(projectRoot, "runs", oldRunID)
 	if err = os.MkdirAll(oldRoot, 0700); err != nil {

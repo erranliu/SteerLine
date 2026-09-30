@@ -164,7 +164,7 @@ func (s *Service) advanceOrcaPreparation(ctx context.Context, run *Run) error {
 			return s.reconcileEnvironmentBusinessIntent(ctx, run)
 		}
 		if execution.TurnNumber == 0 && execution.PendingTurnID == "" {
-			task := nativeTaskRecord(s.State.Tasks, run.TaskID)
+			task := nativeTaskRecord(s.domain.Tasks, run.TaskID)
 			if task == nil {
 				return errors.New("readiness execution lost its task")
 			}
@@ -235,7 +235,7 @@ func (s *Service) reconcileEnvironmentBusinessIntent(ctx context.Context, run *R
 		return err
 	}
 	e := fixed.execution
-	op := s.nativeOrcaOperation("worker-turn:" + e.ExecutionID + ":" + e.PendingTurnID)
+	op := s.operationByKey("worker-turn:" + e.ExecutionID + ":" + e.PendingTurnID)
 	if op == nil {
 		return s.blockWorkerEnvironment(run, orcaworker.HostFact{Reason: "business_dispatch_unverified", Confidence: "unverified", Source: "business.operation"})
 	}
@@ -356,14 +356,14 @@ func (s *Service) applyEnvironmentAction(ctx context.Context, run *Run, answer D
 	actionDecisionID := run.Decision.ID
 	actionDecisionVersion := run.Decision.Version
 	key := "environment-recheck:" + execution.ExecutionID + ":" + blocker.ID
-	op := s.nativeOrcaOperation(key)
+	op := s.operationByKey(key)
 	if op == nil {
 		id, err := s.startWorkerOperation(run, "environment_recheck", key, *target)
 		if err != nil {
 			return err
 		}
 		blocker.RecheckOperationID = id
-		op = s.nativeOrcaOperation(key)
+		op = s.operationByKey(key)
 	}
 	if op.Status == "confirmed" {
 		return nil
@@ -383,7 +383,7 @@ func (s *Service) applyEnvironmentAction(ctx context.Context, run *Run, answer D
 		if turn.InjectionAttempts > 0 {
 			key += fmt.Sprintf(":retry:%d", turn.InjectionAttempts)
 		}
-		if original := s.nativeOrcaOperation(key); original != nil && original.Status != "rejected" {
+		if original := s.operationByKey(key); original != nil && original.Status != "rejected" {
 			id, runID, handle, incarnation, err := findNativeOrcaDispatch(ctx, fixed.config, turn.TaskID)
 			if err != nil || runID != execution.Target.OrchestrationRun || handle != execution.Process.Terminal || !strings.HasSuffix(incarnation, ":"+execution.Process.Incarnation) {
 				return s.renewEnvironmentDecision(run)
@@ -477,9 +477,9 @@ func (s *Service) reconcileEnvironmentQuestion(ctx context.Context, run *Run) (b
 		return true, nil
 	}
 	var record *DecisionRecord
-	for i := range s.State.Decisions {
-		if s.State.Decisions[i].DecisionID == env.DeferredDecisionID {
-			record = &s.State.Decisions[i]
+	for i := range s.domain.Decisions {
+		if s.domain.Decisions[i].DecisionID == env.DeferredDecisionID {
+			record = &s.domain.Decisions[i]
 			break
 		}
 	}
@@ -512,7 +512,7 @@ func (s *Service) reconcileEnvironmentQuestion(ctx context.Context, run *Run) (b
 		if err != nil {
 			return false, err
 		}
-		op := s.nativeOrcaOperation("orca-native-reply:" + e.ExecutionID + ":" + command.CommandID)
+		op := s.operationByKey("orca-native-reply:" + e.ExecutionID + ":" + command.CommandID)
 		if op != nil {
 			if op.Status != "confirmed" && op.Status != "accepted" {
 				config, err := s.executionConfigForRun(run)
@@ -588,9 +588,9 @@ func (s *Service) flushEnvironmentFeedback(ctx context.Context, run *Run) error 
 	}
 	feedback := env.DeferredFeedback[0]
 	var record *DecisionRecord
-	for i := range s.State.Decisions {
-		if s.State.Decisions[i].DecisionID == feedback.DecisionID {
-			record = &s.State.Decisions[i]
+	for i := range s.domain.Decisions {
+		if s.domain.Decisions[i].DecisionID == feedback.DecisionID {
+			record = &s.domain.Decisions[i]
 			break
 		}
 	}
@@ -613,7 +613,7 @@ func (s *Service) flushEnvironmentFeedback(ctx context.Context, run *Run) error 
 	if err != nil {
 		return err
 	}
-	op := s.nativeOrcaOperation("orca-native-send:" + e.ExecutionID + ":" + feedback.CommandID)
+	op := s.operationByKey("orca-native-send:" + e.ExecutionID + ":" + feedback.CommandID)
 	if turn == nil || turn.Settled || turn.Purpose != "business" || nativeOrcaCurrentTurn(e).TurnID != turn.TurnID {
 		// Unknown delivery stays bound to its old Dispatch and only reads history.
 		if op != nil && op.Status != "confirmed" && op.Status != "accepted" && op.Status != "rejected" && turn != nil {

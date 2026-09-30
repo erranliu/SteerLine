@@ -72,7 +72,7 @@ func TestWorkerEnvironmentNativeReadinessLive(t *testing.T) {
 	run := s.find("9001154")
 	t.Logf("isolated state retained at %s; workflow=%s execution=%s", stateRoot, run.RunID, run.ExecutionID)
 	if !resume {
-		require(t, s.prepareWorkerFlow(ctx, *nativeTaskRecord(s.State.Tasks, run.TaskID), run))
+		require(t, s.prepareWorkerFlow(ctx, *nativeTaskRecord(s.domain.Tasks, run.TaskID), run))
 	} else {
 		require(t, s.resumeConfiguredWork(ctx))
 	}
@@ -87,7 +87,7 @@ func TestWorkerEnvironmentNativeReadinessLive(t *testing.T) {
 			// This test requests a metadata/operation recheck, never authorizes or
 			// manipulates an OS menu, replaces a session, or changes its profile.
 			s.State.Service.Ready = true
-			require(t, s.save())
+			require(t, s.publishCheckpoint())
 			d := run.Decision
 			a := DecisionAnswer{DecisionID: d.ID, RunID: run.RunID, OptionID: "recheck_environment", AnsweredBy: "acceptance", ExpectedDecisionVersion: d.Version, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: s.State.Service.InstanceID, SourceAttemptID: run.AttemptID, ExpectedRecoveryVersion: run.RecoveryVersion}
 			_, _, err = commands.AnswerDecisionWithID(ctx, newID(), d.ID, d.Version, decisionAnswerKey(a), a.AnsweredBy, mustJSON(a))
@@ -113,8 +113,8 @@ func TestWorkerEnvironmentNativeReadinessLive(t *testing.T) {
 			}
 			t.Logf("real readiness and business settled: %s / %s", e.OrcaNative.Turns[0].DispatchID, e.OrcaNative.Turns[1].DispatchID)
 			// Exact settled resources were created by this isolated center.
-			require(t, s.closeNativeOrcaTerminal(ctx, e, *e.Process, "agent"))
-			require(t, s.closeNativeOrcaTerminal(ctx, e, e.OrcaNative.Coordinator, "coordinator"))
+			require(t, s.closeNativeOrcaTerminal(ctx, run, e, *e.Process, "agent"))
+			require(t, s.closeNativeOrcaTerminal(ctx, run, e, e.OrcaNative.Coordinator, "coordinator"))
 			return
 		}
 		time.Sleep(time.Second)

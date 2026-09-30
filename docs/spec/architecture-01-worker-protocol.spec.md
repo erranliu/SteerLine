@@ -1,6 +1,6 @@
 # Spec：架构收口 PR 1 — worker 协议与终态边界
 
-状态：实现候选，待 PR 评审；未分配 Task ID。日期：2026-09-30。审计基线：`main@4e786d7`，包含已合并的 #136–#143。本系列按本文 → [PR 2](architecture-02-worker-commit.spec.md) → [PR 3](architecture-03-runtime-boundary.spec.md) 交付，每份 Spec 对应一个实现 PR；实施时从最新主干承接已合入改动。
+状态：已由 #147 合入主干；未分配 Task ID。日期：2026-09-30。审计基线：`main@4e786d7`，包含已合并的 #136–#143。本系列按本文 → [PR 2](architecture-02-worker-commit.spec.md) → [PR 3](architecture-03-runtime-boundary.spec.md) 交付，每份 Spec 对应一个实现 PR；实施时从最新主干承接已合入改动。
 
 ## 1. 目标与依据
 
@@ -50,7 +50,7 @@
 
 先定义事实类型和各模式的转换入口，再迁移 app-server 事件、日志终态以及 Orca question/reply/done 解析，最后接入中心共用转换。复用 `codexworker`、`orcaworker`、现有 app-server/Orca 适配文件与 `workerflow`；仅在确有依赖需要时新增包。
 
-重点检查 `worker_flow_service.go`、`worker_flow_orca_native.go`、`worker_flow_app_server_recovery.go`、`worker_flow_resume_adapter.go` 和现有证据包。文件移动不是完成条件：中心的事件/终态业务路径不得再判断原生 method、解析平台 JSON、拼接平台日志路径或用平台文本格式推导业务事实。
+重点检查 `worker_start.go`、`orca_worker_observation.go`、`codex_worker_recovery.go`、`worker_resume.go` 和现有证据包。文件移动不是完成条件：中心的事件/终态业务路径不得再判断原生 method、解析平台 JSON、拼接平台日志路径或用平台文本格式推导业务事实。
 
 准备和启动中的平台 I/O 继续由已有适配入口承接；不建设通用插件注册、事件总线或另一套工作流引擎。本 PR 不新增执行模式、公共 API、数据库格式或能力认证。
 

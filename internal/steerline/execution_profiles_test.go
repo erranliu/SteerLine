@@ -13,11 +13,11 @@ import (
 
 func TestConfigLoadsLocalAndRemoteOrcaProfilesWithoutProbingTargets(t *testing.T) {
 	if runtime.GOOS != "windows" {
-		t.Skip("local Orca terminal target uses Windows cmd.exe")
+		t.Skip("local Orca terminal target uses Windows PowerShell")
 	}
 	base, _ := nativeTaskFixture(t)
 	t.Setenv("STEERLINE_HOME", t.TempDir())
-	localOrca := ExecutionProfile{ID: "orca-local", Name: "Orca 本机", Host: "orca", Agent: "codex", Sandbox: "workspace-write", Codex: Command{Executable: "codex"}, Orca: OrcaConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "15m"}}
+	localOrca := ExecutionProfile{ID: "orca-local", Name: "Orca 本机", Host: "orca", Agent: "codex", Sandbox: "workspace-write", WindowsSandbox: "unelevated", Codex: Command{Executable: "codex"}, Orca: OrcaConfig{Executable: "orca", Shell: "powershell.exe", WaitTimeout: "15m"}}
 	remoteOrca := ExecutionProfile{ID: "orca-remote", Name: "Orca 远程", Host: "orca_supervised", Agent: "codex", Model: "chosen-model", ReasoningEffort: "xhigh", Sandbox: "workspace-write", Codex: Command{Executable: "codex"}, Orca: OrcaConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "15m", Supervised: &SupervisedOrcaConfig{ConnectionID: "connection", EnvironmentID: "environment", RepositorySelector: "repo", CoordinatorTerminal: "terminal", PollInterval: "5s", CapabilityReportVersion: 1}}}
 	local := ExecutionProfile{ID: "local", Name: "本地", Host: "local", Agent: "codex", Sandbox: "workspace-write", Codex: Command{Executable: "codex"}}
 	writeGlobalExecutionFixture(t, []ExecutionProfile{local, localOrca, remoteOrca}, "local")
@@ -55,7 +55,7 @@ func TestNativeClaimPersistsChosenExecutionProfile(t *testing.T) {
 	if out, err := exec.Command("git", "-C", base.Repository, "push", "origin", "main").CombinedOutput(); err != nil {
 		t.Fatalf("push fixture base: %v: %s", err, out)
 	}
-	profile := ExecutionProfile{ID: "local-strong", Name: "本地高强度", Host: "local", Agent: "codex", Model: "chosen-model", ReasoningEffort: "xhigh", Sandbox: "danger-full-access", Codex: Command{Executable: "git"}}
+	profile := ExecutionProfile{ID: "local-strong", Name: "本地高强度", Host: "local", Agent: "codex", Model: "chosen-model", ReasoningEffort: "xhigh", Sandbox: "danger-full-access", WindowsSandbox: "elevated", Codex: Command{Executable: "git"}}
 	base.ExecutionProfiles = []ExecutionProfile{profile}
 	reader, err := OpenNativeTaskProject(ctx, &base)
 	if err != nil {
@@ -96,12 +96,12 @@ func TestNativeClaimPersistsChosenExecutionProfile(t *testing.T) {
 		t.Fatalf("selected claim did not persist a workflow: %+v / %v", snapshot, err)
 	}
 	wf, execution := snapshot.WorkflowRuns[0], snapshot.Executions[0]
-	if wf.WorkflowVersion != WorkerFlowVersion || wf.ExecutionProfile == nil || wf.ExecutionProfile.ID != profile.ID || !wf.ExecutionProfile.VerifyWorkerFlow() || wf.Runner.Model != "chosen-model" || wf.Runner.ReasoningEffort != "xhigh" || execution.Backend != string(BackendLocal) || execution.CurrentStep != "worker" {
+	if wf.WorkflowVersion != WorkerFlowVersion || wf.ExecutionProfile == nil || wf.ExecutionProfile.ID != profile.ID || !wf.ExecutionProfile.VerifyWorkerFlow() || wf.Runner.Model != "chosen-model" || wf.Runner.ReasoningEffort != "xhigh" || wf.Runner.WindowsSandbox != "elevated" || wf.ExecutionProfile.WindowsSandbox != "elevated" || execution.Backend != string(BackendLocal) || execution.CurrentStep != "worker" {
 		t.Fatalf("chosen execution route was not fixed in the claim: %+v / %+v", wf, execution)
 	}
 	base.ExecutionProfiles[0].Model = "later-edit"
 	run := &Run{RunID: wf.WorkflowRunID, Host: "local", Agent: "codex", Backend: execution.Backend, Protocol: execution.Protocol, Target: execution.Target}
-	service := &Service{Config: base, baseConfig: base, State: Runtime{Runs: []*Run{run}, WorkflowRuns: snapshot.WorkflowRuns}}
+	service := &Service{Config: base, baseConfig: base, State: Runtime{}, domain: DomainSnapshot{WorkflowRuns: snapshot.WorkflowRuns}, runs: []*Run{run}}
 	fixed, err := service.executionConfigForRun(run)
 	if err != nil || fixed.Model != "chosen-model" || fixed.Sandbox != "danger-full-access" {
 		t.Fatalf("recovery adopted the edited preset: %+v / %v", fixed, err)
@@ -204,7 +204,7 @@ func TestWorkerFlowClaimsFreezeIndependentLocalProfiles(t *testing.T) {
 		}
 		workflow, execution := reopened.workflowRecords(run)
 		fixed, err := reopened.executionConfigForRun(run)
-		if err != nil || workflow == nil || workflow.WorkflowVersion != WorkerFlowVersion || workflow.ExecutionProfile == nil || workflow.ExecutionProfile.ID != c.ExecutionProfiles[index].ID || execution == nil || execution.ExecutionID != workflow.SelectedResult || fixed.Model != c.ExecutionProfiles[index].Model || len(reopened.State.Attempts) != 2 {
+		if err != nil || workflow == nil || workflow.WorkflowVersion != WorkerFlowVersion || workflow.ExecutionProfile == nil || workflow.ExecutionProfile.ID != c.ExecutionProfiles[index].ID || execution == nil || execution.ExecutionID != workflow.SelectedResult || fixed.Model != c.ExecutionProfiles[index].Model || len(reopened.domain.Attempts) != 2 {
 			t.Fatalf("task %s adopted another local profile or step chain: workflow=%+v execution=%+v config=%+v err=%v", taskID, workflow, execution, fixed, err)
 		}
 	}

@@ -14,6 +14,8 @@ const (
 	DefaultEventPageSize = 200
 	MaxEventPageSize     = 1000
 	MaxEventPageBytes    = 1 << 20
+	// Bound transient payload allocation as well as the returned page size.
+	eventReadBatchSize = 32
 )
 
 type QueryService struct {
@@ -120,29 +122,34 @@ func (q QueryService) ReadEvents(ctx context.Context, filter EventFilter, cursor
 	}
 	page := EventPage{Events: []DomainEvent{}}
 	for len(page.Events) < limit {
-		events, err := q.Store.Events(ctx, q.Project, filter.ExecutionID, filter.AttemptID, after, 1)
+		batchSize := min(eventReadBatchSize, limit-len(page.Events))
+		events, err := q.Store.Events(ctx, q.Project, filter.ExecutionID, filter.AttemptID, after, batchSize, MaxEventPageBytes-page.PayloadBytes)
 		if err != nil {
 			return EventPage{}, err
 		}
 		if len(events) == 0 {
 			break
 		}
-		ev := events[0]
-		if ev.PayloadBytes > MaxEventPageBytes {
-			ev.Payload = nil
-			ev.PayloadOmitted = true
+		for _, ev := range events {
+			if ev.PayloadBytes > MaxEventPageBytes {
+				ev.Payload = nil
+				ev.PayloadOmitted = true
+			}
+			if ev.PayloadBytes <= MaxEventPageBytes && page.PayloadBytes+ev.PayloadBytes > MaxEventPageBytes {
+				page.HasMore = true
+				break
+			}
+			page.Events = append(page.Events, ev)
+			page.PayloadBytes += len(ev.Payload)
+			after = ev.EventID
 		}
-		if !ev.PayloadOmitted && page.PayloadBytes+len(ev.Payload) > MaxEventPageBytes {
-			page.HasMore = true
+		if page.HasMore || len(events) < batchSize {
 			break
 		}
-		page.Events = append(page.Events, ev)
-		page.PayloadBytes += len(ev.Payload)
-		after = ev.EventID
 	}
 	if len(page.Events) > 0 {
 		if !page.HasMore && len(page.Events) == limit {
-			more, err := q.Store.Events(ctx, q.Project, filter.ExecutionID, filter.AttemptID, after, 1)
+			more, err := q.Store.Events(ctx, q.Project, filter.ExecutionID, filter.AttemptID, after, 1, 0)
 			if err != nil {
 				return EventPage{}, err
 			}

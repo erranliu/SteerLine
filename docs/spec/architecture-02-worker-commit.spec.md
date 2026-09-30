@@ -1,6 +1,6 @@
 # Spec：架构收口 PR 2 — worker 生命周期显式原子提交
 
-状态：实现候选，待 PR 评审；未分配 Task ID。日期：2026-09-30。审计基线：`main@bba4936`。硬前置：[PR 1：worker 协议与终态边界](architecture-01-worker-protocol.spec.md) 已合入；本 Spec 由一个实现 PR 交付，后继为 [PR 3](architecture-03-runtime-boundary.spec.md)。
+状态：已由 #152 合入主干；未分配 Task ID。日期：2026-09-30。审计基线：`main@bba4936`。硬前置：[PR 1：worker 协议与终态边界](architecture-01-worker-protocol.spec.md) 已合入；本 Spec 由一个实现 PR 交付，后继为 [PR 3](architecture-03-runtime-boundary.spec.md)。
 
 ## 1. 目标与依据
 
@@ -75,3 +75,7 @@ worker 每次业务转换明确声明读取前提、修改记录、操作和事�
 ## 7. 完成条件
 
 正常 worker 生命周期不再依赖 Runtime 指纹扫描保存业务变更。每个外部动作都能定位到其已提交意图和回执写入点，每个业务转换都能说明读前提与写集合。[PR 3](architecture-03-runtime-boundary.spec.md) 据此完成剩余调用点迁移和读写模型分离。
+
+## 后续收口（2026-09-30）
+
+[PR 3](architecture-03-runtime-boundary.spec.md) 承接 #152 和 #150 的当前代码，删除过渡 Runtime 写回及 baseline；显式提交仍保留问题/答案不可变、固定身份、控制版本、权威版本和回执前提校验。恢复、历史事件、Delivery ack、终态诊断与资源清理也经显式事务提交，checkpoint/heartbeat 只发布服务元数据。手动恢复支持在同一事务退休旧 Attempt 并选择下一代，未提交候选与公开视图隔离。

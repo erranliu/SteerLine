@@ -552,7 +552,7 @@ func (s *Service) applyDecisions(ctx context.Context) error {
 	if s.State.Control.Operation != nil {
 		return nil
 	}
-	for _, run := range s.State.Runs {
+	for _, run := range s.runs {
 		if run == nil || run.FinishTaskStatus != "waiting_decision" && run.FinishTaskStatus != "waiting_pr_merge" || run.Decision == nil || run.Decision.Status != "answer_saved" {
 			continue
 		}
@@ -574,4 +574,29 @@ func (s *Service) applyDecisions(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+// Native Orca Dispatches are unsupervised. The center owns the exact agent
+// terminal created with the worktree and never uses Codex's exec protocol.
+type orcaAskCall struct {
+	RunID      string              `json:"run_id"`
+	TaskID     string              `json:"task_id"`
+	DispatchID string              `json:"dispatch_id"`
+	MessageID  string              `json:"message_id"`
+	Questions  []nativeAskQuestion `json:"questions"`
+}
+
+type nativeAskQuestion struct {
+	ID            string           `json:"id"`
+	Header        string           `json:"header"`
+	Question      string           `json:"question"`
+	Options       []DecisionOption `json:"options"`
+	AllowFreeText bool             `json:"allow_free_text"`
+}
+
+func orcaQuestionID(decision *DecisionState) string {
+	if decision == nil || decision.Request.OrcaAsk == nil {
+		return ""
+	}
+	return decision.Request.OrcaAsk.MessageID
 }

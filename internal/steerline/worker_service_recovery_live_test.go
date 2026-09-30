@@ -51,7 +51,7 @@ func TestLocalCodexManualRecoveryLive(t *testing.T) {
 	}
 	defer func() {
 		service.shutdown()
-		for _, execution := range service.State.Executions {
+		for _, execution := range service.domain.Executions {
 			if execution.Process == nil {
 				continue
 			}
@@ -67,7 +67,7 @@ func TestLocalCodexManualRecoveryLive(t *testing.T) {
 	}
 	oldAttempt := run.AttemptID
 	service.markServiceRecoveryGate()
-	if err := service.save(); err != nil {
+	if err := service.commitWorker(run); err != nil {
 		t.Fatal(err)
 	}
 	if err := service.resumeConfiguredWork(ctx); err != nil {
@@ -80,11 +80,11 @@ func TestLocalCodexManualRecoveryLive(t *testing.T) {
 		execution.Workspace.Worktree != receipt.Workspace || !strings.Contains(run.Decision.Request.Context, "Should I reply A or B?") {
 		t.Fatalf("reopen did not wait for manual recovery: state=%q worker=%t decision=%+v", execution.RecoveryState, service.workers[run.RunID] != nil, run.Decision)
 	}
-	if len(service.State.Attempts) != 1 {
+	if len(service.domain.Attempts) != 1 {
 		t.Fatal("reopen created a worker generation without user input")
 	}
 	service.State.Service.Ready, service.State.Service.Status = true, "running"
-	if err := service.save(); err != nil {
+	if err := service.commitWorker(run); err != nil {
 		t.Fatal(err)
 	}
 	answer := DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, OptionID: "continue", Note: "The old question asked A or B. Choose A. Inspect the current worktree first, then reply with A only.", AnsweredBy: "operator", ExpectedDecisionVersion: run.Decision.Version, ExpectedRunRevision: run.ControlRevision, SourceAttemptID: run.AttemptID, ExpectedRecoveryVersion: run.RecoveryVersion, ServiceInstanceID: service.State.Service.InstanceID}
@@ -98,9 +98,10 @@ func TestLocalCodexManualRecoveryLive(t *testing.T) {
 		t.Fatal(err)
 	}
 	*service.decisionRecord(run) = record
-	service.store.baseline["decision:"+record.DecisionID] = recordFingerprint(record)
+	require(t, service.refreshNativeSnapshot(context.Background()))
+	execution = service.executionRecord(run)
 	service.refreshRun(run)
-	if err := service.save(); err != nil {
+	if err := service.commitWorker(run); err != nil {
 		t.Fatal(err)
 	}
 	if err := service.applyWorkerFlowDecision(ctx, run); err != nil {
@@ -109,7 +110,7 @@ func TestLocalCodexManualRecoveryLive(t *testing.T) {
 	worker := service.workers[run.RunID]
 	_, execution = service.workflowRecords(run)
 	if worker == nil || execution.Process == nil || *execution.Process == receipt.Process || run.AttemptID == oldAttempt ||
-		len(service.State.Attempts) != 2 || execution.SessionID != receipt.ThreadID ||
+		len(service.domain.Attempts) != 2 || execution.SessionID != receipt.ThreadID ||
 		execution.Workspace.Worktree != receipt.Workspace || execution.PendingCommandID == "" && execution.CurrentCommandID == "" {
 		t.Fatalf("manual continuation did not bind a new process and Attempt: worker=%t attempt=%s state=%q", worker != nil, run.AttemptID, execution.RecoveryState)
 	}

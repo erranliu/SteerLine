@@ -13,18 +13,26 @@ import (
 type taskGraphSnapshot = task.Snapshot
 
 func (s *SQLiteStore) taskGraphSnapshot(ctx context.Context, project string) (taskGraphSnapshot, error) {
+	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return taskGraphSnapshot{}, err
+	}
+	defer tx.Rollback()
+	out, err := s.taskGraphSnapshotReadTx(ctx, tx, project)
+	if err != nil {
+		return out, err
+	}
+	return out, tx.Commit()
+}
+
+func (s *SQLiteStore) taskGraphSnapshotReadTx(ctx context.Context, tx *sql.Tx, project string) (taskGraphSnapshot, error) {
 	out := taskGraphSnapshot{ByID: map[string]TaskRecord{}, RepositoryTaskIDs: map[string]bool{}, ContractIDs: map[string]bool{}, Deliveries: map[string]TaskDeliveryRecord{}, SampledAt: time.Now().UTC()}
 	if project == "" {
 		return out, nativeErr("authority_mismatch", "project identity is required")
 	}
-	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
-	if err != nil {
-		return out, err
-	}
-	defer tx.Rollback()
 	var paused int
 	var created, updated string
-	err = tx.QueryRowContext(ctx, `SELECT authority,authority_version,graph_revision,repository,remote,branch,dispatch_mode,dispatch_paused,created_at,updated_at FROM project_task_authorities WHERE project_identity=?`, project).Scan(&out.Authority.Authority, &out.Authority.AuthorityVersion, &out.Authority.GraphRevision, &out.Authority.Repository, &out.Authority.Remote, &out.Authority.Branch, &out.Authority.DispatchMode, &paused, &created, &updated)
+	err := tx.QueryRowContext(ctx, `SELECT authority,authority_version,graph_revision,repository,remote,branch,dispatch_mode,dispatch_paused,created_at,updated_at FROM project_task_authorities WHERE project_identity=?`, project).Scan(&out.Authority.Authority, &out.Authority.AuthorityVersion, &out.Authority.GraphRevision, &out.Authority.Repository, &out.Authority.Remote, &out.Authority.Branch, &out.Authority.DispatchMode, &paused, &created, &updated)
 	if errors.Is(err, sql.ErrNoRows) {
 		return out, nativeErr("authority_mismatch", "project has no native task authority")
 	}
@@ -163,9 +171,6 @@ func (s *SQLiteStore) taskGraphSnapshot(ctx context.Context, project string) (ta
 		return out, err
 	}
 	rows.Close()
-	if err = tx.Commit(); err != nil {
-		return out, err
-	}
 	return out, nil
 }
 

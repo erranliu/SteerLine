@@ -24,9 +24,14 @@ func (s *Service) stopRunExecution(ctx context.Context, r *Run, worker *Worker) 
 	}
 	backend := backendFor(config)
 	kind, protocol := backend.Identity()
+	if kind == BackendLocal && ref.Protocol == ProtocolLocalCodexAppServer {
+		protocol = ref.Protocol
+	}
 	if kind != ref.Backend || protocol != ref.Protocol {
 		return Operation{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "configured backend/protocol differs from fixed execution"}
 	}
+	stopper,stopperErr:=executionStopperFor(config)
+	if stopperErr!=nil{return Operation{},stopperErr}
 	opID := "stop-" + r.AttemptID
 	payload := struct {
 		Policy string
@@ -41,14 +46,16 @@ func (s *Service) stopRunExecution(ctx context.Context, r *Run, worker *Worker) 
 	} else if !os.IsNotExist(loadErr) {
 		return Operation{}, loadErr
 	}
-	if err = records.saveOperation(op); err != nil {
+	if err = s.commitExecutionOperation(r, op, ""); err != nil {
 		return Operation{}, err
 	}
+	expected := recordFingerprint(op)
 	op.Status, op.UpdatedAt = OperationInFlight, now()
-	if err = records.saveOperation(op); err != nil {
+	if err = s.commitExecutionOperation(r, op, expected); err != nil {
 		return Operation{}, err
 	}
-	receipt, stopErr := backend.StopExecution(ctx, ref, op, worker)
+	receipt, stopErr := stopper.StopExecution(ctx, ref, op, worker)
+	expected = recordFingerprint(op)
 	if stopErr != nil {
 		var be *BackendError
 		if errors.As(stopErr, &be) && (be.Code == BackendOutcomeUnknown || be.Code == BackendUnreachable || be.Code == BackendIdentityMismatch) {
@@ -57,7 +64,7 @@ func (s *Service) stopRunExecution(ctx context.Context, r *Run, worker *Worker) 
 			op.Status = OperationRejected
 		}
 		op.Diagnostic, op.UpdatedAt = stopErr.Error(), now()
-		if saveErr := records.saveOperation(op); saveErr != nil {
+		if saveErr := s.commitExecutionOperation(r, op, expected); saveErr != nil {
 			return op, errors.Join(stopErr, saveErr)
 		}
 		return op, stopErr
@@ -73,7 +80,7 @@ func (s *Service) stopRunExecution(ctx context.Context, r *Run, worker *Worker) 
 		op.Status = OperationUnknown
 	}
 	op.Diagnostic, op.UpdatedAt = receipt.Diagnostic, now()
-	if err = records.saveOperation(op); err != nil {
+	if err = s.commitExecutionOperation(r, op, expected); err != nil {
 		return op, err
 	}
 	if op.Status == OperationUnknown || op.Status == OperationRejected {
@@ -91,6 +98,15 @@ func (s *Service) confirmExecutionStop(op Operation) (bool, error) {
 		return false, errors.New("stop operation is missing")
 	}
 	records := executionRecords{root: config.RunDir}
+	run := s.localWorkerRun(op.RunID)
+	if run == nil {
+		return false, errors.New("execution stop has no fixed workflow")
+	}
+	saved, readErr := records.loadOperation(op.RunID, op.AttemptID, op.ID)
+	if readErr != nil {
+		return false, readErr
+	}
+	expected := recordFingerprint(saved)
 	// The adapter already persisted an exact stop receipt. Orca's terminal show
 	// may later report an orphaned/disconnected tab even after ptyKilled=true;
 	// that weaker observation must not erase the durable close evidence.
@@ -116,16 +132,16 @@ func (s *Service) confirmExecutionStop(op Operation) (bool, error) {
 	obs, err := backend.Observe(context.Background(), *ref)
 	if err != nil {
 		op.Status, op.Diagnostic, op.UpdatedAt = OperationUnknown, err.Error(), now()
-		saveErr := records.saveOperation(op)
+		saveErr := s.commitExecutionOperation(run, op, expected)
 		return false, errors.Join(err, saveErr)
 	}
 	if obs.Liveness != "exited" {
 		op.Status, op.Diagnostic, op.UpdatedAt = OperationUnknown, "original execution has not produced stopped evidence: "+obs.Diagnostic, now()
-		saveErr := records.saveOperation(op)
+		saveErr := s.commitExecutionOperation(run, op, expected)
 		return false, errors.Join(&BackendError{Code: BackendOutcomeUnknown, Diagnostic: op.Diagnostic}, saveErr)
 	}
 	op.Status, op.Diagnostic, op.UpdatedAt = OperationConfirmed, obs.Diagnostic, now()
-	if err = records.saveOperation(op); err != nil {
+	if err = s.commitExecutionOperation(run, op, expected); err != nil {
 		return false, err
 	}
 	return true, nil

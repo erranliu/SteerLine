@@ -16,6 +16,8 @@ import (
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/erranliu/SteerLine/internal/steerline/codexapp"
 )
 
 type Command struct {
@@ -426,6 +428,14 @@ func validateSupervisedOrcaConfig(c *Config) error {
 }
 
 func validateWorkflowConfig(c *Config, _ []byte) error {
+	if c.hostName() == "local" && c.agentName() == "codex" {
+		if _, err := codexapp.LocalSandboxArgs(runtime.GOOS, c.Sandbox, c.WindowsSandbox, c.Codex.Args); err != nil {
+			return err
+		}
+		if runtime.GOOS == "windows" && c.WindowsSandbox == "" && (c.Sandbox == "workspace-write" || c.Sandbox == "read-only") {
+			c.WindowsSandbox = "elevated"
+		}
+	}
 	if c.WorkflowProtocol != WorkerFlowVersion {
 		return errors.New("only worker-flow-v1 is supported")
 	}
@@ -503,6 +513,9 @@ func (c *Config) Preflight(ctx context.Context, checkSkills bool) error {
 // Beads executable. A check never initializes a database or adopts an existing
 // state directory.
 func (c *Config) preflightNative(ctx context.Context) error {
+	if err := validateWorkflowConfig(c, nil); err != nil {
+		return err
+	}
 	if err := requireNativeTaskAuthority(*c); err != nil {
 		return err
 	}

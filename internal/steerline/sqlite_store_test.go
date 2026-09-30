@@ -16,14 +16,17 @@ import (
 	"time"
 )
 
-func TestRuntimeProjectionOmitsCenterOwnedControlCommands(t *testing.T) {
-	runtime := Runtime{Repository: Repository{Identity: "native-project"}, Control: ControlState{Operation: &ControlOperation{RequestID: strings.Repeat("a", 32), Action: "set_dispatch_mode", Phase: "applying", RequestDigest: strings.Repeat("b", 64)}}}
-	if operations := runtimeOperations(runtime); len(operations) != 0 {
-		t.Fatalf("native center control was projected as a second operation: %+v", operations)
-	}
-	runtime.Control.Operation.Action = "stop_service"
-	if operations := runtimeOperations(runtime); len(operations) != 1 || operations[0].Kind != "stop_service" {
-		t.Fatalf("service stop operation was omitted from the native runtime projection: %+v", operations)
+func TestCheckpointDoesNotSynthesizeControlOperations(t *testing.T) {
+	service, _ := appServerAuditService(t)
+	before := recordFingerprint(service.committed.Operations)
+	for _, action := range []string{"set_dispatch_mode", "stop_service"} {
+		service.State.Control.Operation = &ControlOperation{RequestID: newID(), Action: action, Phase: "applying", RequestDigest: strings.Repeat("b", 64)}
+		require(t, service.publishCheckpoint())
+		snapshot, err := service.domainStore.Query(context.Background(), service.Config.Identity())
+		require(t, err)
+		if recordFingerprint(snapshot.Operations) != before {
+			t.Fatal("checkpoint synthesized a business operation from its read metadata")
+		}
 	}
 }
 
@@ -632,7 +635,8 @@ func seedNativeDecision(t *testing.T, db *SQLiteStore, project, runID, decisionI
 	}
 	store := &Store{Domain: db, Project: project}
 	state := Runtime{SchemaVersion: WorkerFlowRuntimeSchema, Repository: Repository{Identity: project, Path: "repo", Remote: "origin", Branch: "main"}, Service: ServiceState{InstanceID: "service-instance", Status: "running", Ready: true, Claimant: "alice"}, Runs: []*Run{}, Tasks: []TaskRecord{}, WorkflowRuns: []WorkflowRunRecord{}, Executions: []ExecutionRecord{}, Attempts: []StepAttemptRecord{}, Decisions: []DecisionRecord{}, Control: ControlState{DispatchMode: "manual", Revision: 1}}
-	if err = store.Publish(&state); err != nil {
+	checkpoint := runtimeCheckpoint(state)
+	if err = store.Publish(&checkpoint); err != nil {
 		t.Fatalf("publish decision test projection: %v", err)
 	}
 }
