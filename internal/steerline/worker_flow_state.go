@@ -12,7 +12,7 @@ var ErrWorkerTurnStale = workerflow.ErrTurnStale
 func workerFlowState(workflow *WorkflowRunRecord, execution *ExecutionRecord) workerflow.State {
 	return workerflow.State{
 		WorkflowRunID: workflow.WorkflowRunID, TaskID: workflow.TaskID, WorkflowVersion: workflow.WorkflowVersion,
-		Phase: workflow.Phase, Branch: workflow.Branch, PRURL: workflow.PRURL, PRState: workflow.PRState,
+		Phase: workflow.Phase, PRURL: workflow.PRURL, PRState: workflow.PRState,
 		WorkflowUpdatedAt: workflow.UpdatedAt, ExecutionID: execution.ExecutionID,
 		ExecutionWorkflowRunID: execution.WorkflowRunID, SessionID: execution.SessionID,
 		PendingTurnID: execution.PendingTurnID, CurrentTurnID: execution.CurrentTurnID,

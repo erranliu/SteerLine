@@ -194,7 +194,15 @@ func (s *Service) bindLocalCodexHistory(run *Run, source WorkerEvent) error {
 	}
 	command := marker.ReaderCommand
 	if command.Executable == "" {
-		command = codexReaderCommand(s.Config)
+		fixed := s.projectExecutionConfig()
+		if run.WorkflowVersion == WorkerFlowVersion {
+			var err error
+			fixed, err = s.executionConfigForRun(run)
+			if err != nil {
+				return err
+			}
+		}
+		command = codexReaderCommand(fixed)
 	}
 	b := codexHistoryBinding{Version: 1, ProjectID: marker.ProjectID, TaskID: run.DomainTaskID, WorkflowID: marker.WorkflowID, ExecutionID: marker.ExecutionID, AttemptID: marker.AttemptID, Backend: BackendLocal, Protocol: ProtocolLocalProcess, TargetID: marker.TargetID, ExternalRef: conversationExternalRef(run.Process), Workspace: deref(run.WorktreePath), SessionID: source.Session, Command: command, Home: marker.CodexHome}
 	path := localCodexHistoryBindingPath(filepath.Dir(logPath), b.SessionID)

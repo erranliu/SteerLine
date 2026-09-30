@@ -163,7 +163,7 @@ func (s *Service) reconcileNativeCleanup(ctx context.Context) error {
 					continue // Remote cancellation is not available; keep the exact manual item.
 				}
 				worker := s.workers[run.RunID]
-				if _, err := s.requireBackendCapabilities(ctx, backendFor(config), "stop", "observe"); err != nil {
+				if _, err := s.requireBackendCapabilitiesFor(ctx, backendFor(config), targetFor(config), agentFor(config), "stop", "observe"); err != nil {
 					s.executionRecord(run).Error = ptr("discarded task worker remains active; verified local stop capability is unavailable: " + clip(err.Error(), 1000))
 					s.refreshRun(run)
 					continue
@@ -523,7 +523,7 @@ func (s *Service) dispatchNative(ctx context.Context) error {
 			} else {
 				required = append(required, "stop")
 			}
-			if _, err = s.requireBackendCapabilities(ctx, backendFor(c), required...); err != nil {
+			if _, err = s.requireBackendCapabilitiesFor(ctx, backendFor(c), targetFor(c), agentFor(c), required...); err != nil {
 				return err
 			}
 		}

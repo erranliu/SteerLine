@@ -160,8 +160,8 @@ func (s *Service) handleWorkerMessage(message workerMessage) error {
 			break
 		}
 	}
-	if _, err := s.workerFlowContext(run); err != nil {
-		return err
+	if run == nil || run.RunID != message.runID {
+		return errors.New("worker message has no fixed workflow run")
 	}
 	if message.event != nil {
 		if message.event.RunID != "" && message.event.RunID != message.runID {

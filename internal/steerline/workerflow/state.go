@@ -14,14 +14,14 @@ var ErrTurnStale = errors.New("worker turn is no longer current")
 
 // State is a transient view of the authoritative workflow and execution.
 type State struct {
-	WorkflowRunID, TaskID, WorkflowVersion, Phase, Branch string
-	PRURL, PRState                                        string
-	WorkflowUpdatedAt                                     time.Time
-	ExecutionID, ExecutionWorkflowRunID                   string
-	SessionID, PendingTurnID, CurrentTurnID               string
-	LastStoppedTurnID, ExecutionStatus                    string
-	TurnNumber                                            uint64
-	ExecutionUpdatedAt                                    time.Time
+	WorkflowRunID, TaskID, WorkflowVersion, Phase string
+	PRURL, PRState                                string
+	WorkflowUpdatedAt                             time.Time
+	ExecutionID, ExecutionWorkflowRunID           string
+	SessionID, PendingTurnID, CurrentTurnID       string
+	LastStoppedTurnID, ExecutionStatus            string
+	TurnNumber                                    uint64
+	ExecutionUpdatedAt                            time.Time
 }
 
 func (s State) validBinding() error {

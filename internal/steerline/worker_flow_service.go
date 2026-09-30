@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 )
@@ -46,175 +44,17 @@ func (s *Service) resumeWorkerFlow(ctx context.Context) error {
 		if task == nil || workflow == nil || execution == nil || task.Status != "in_progress" || workflow.Phase == "completed" {
 			continue
 		}
-		fixed, contextErr := s.workerFlowContext(run)
-		if contextErr != nil {
-			return contextErr
-		}
-		c := fixed.config
-		if run.Protocol == string(ProtocolLocalCodexAppServer) && (execution.PendingCommandID != "" || execution.CurrentTurnID != "" && execution.CurrentTurnID != execution.LastStoppedTurnID) {
-			// Active local turns were checked concurrently before this pass.
-			continue
-		}
-		reconciled, err := s.reconcileLocalWorkerPublication(ctx, run)
+		adapter, err := s.adapterForWorkerFlow(run)
 		if err != nil {
-			return s.waitWorkerFlow(run, "Host publication needs reconciliation: "+err.Error())
+			return err
 		}
-		if reconciled {
-			continue
+		continueScan, err := adapter.resume(ctx, task, run)
+		if err != nil {
+			return err
 		}
-		if c.hostName() == "orca" {
-			if execution.Process == nil {
-				if execution.OrcaNative != nil {
-					return s.nativeOrcaUncertain(run, "Original Orca agent creation has no confirmed terminal; preserve the worktree")
-				}
-				return s.prepareWorkerFlow(ctx, *task, run)
-			}
-			if execution.Process.Kind != "orca-native" {
-				return s.nativeOrcaUncertain(run, "Old shell-based Orca execution cannot be resumed as a native Dispatch")
-			}
-			if err := s.verifyNativeOrcaWorker(ctx, run, execution); err != nil {
-				return s.nativeOrcaUncertain(run, "Original Orca agent session is unavailable: "+err.Error())
-			}
-			if execution.Target.OrchestrationRun == "" {
-				if err := s.prepareNativeOrcaCoordinator(ctx, run, execution); err != nil {
-					return s.nativeOrcaUncertain(run, "Original Orca Run needs reconciliation: "+err.Error())
-				}
-			}
-			if execution.PendingTurnID != "" {
-				turnID := execution.PendingTurnID
-				op := s.nativeOrcaOperation("worker-turn:" + execution.ExecutionID + ":" + turnID)
-				if op == nil {
-					return s.nativeOrcaUncertain(run, "Original Orca turn has no saved input intent")
-				}
-				var input struct {
-					Prompt string `json:"prompt"`
-				}
-				if json.Unmarshal(op.Request, &input) != nil || input.Prompt == "" {
-					return s.nativeOrcaUncertain(run, "Original Orca turn input cannot be restored")
-				}
-				if err := s.startNativeOrcaTurn(ctx, run, execution, turnID, input.Prompt); err != nil {
-					return s.nativeOrcaUncertain(run, "Original Orca Task/Dispatch needs reconciliation: "+err.Error())
-				}
-				turn := nativeOrcaCurrentTurn(execution)
-				if turn != nil && turn.DispatchID != "" && op.Status != "accepted" && op.Status != "confirmed" {
-					if err := s.changeOperation(op.OperationID, "accepted", turn.DispatchRequestID, mustJSON(*turn), ""); err != nil {
-						return err
-					}
-				}
-				return s.pollNativeOrcaWorker(ctx, run)
-			}
-			if nativeOrcaCurrentTurn(execution) == nil && workflow.Phase == "queued" {
-				return s.startInitialWorkerFlowTurn(ctx, *task, run)
-			}
-			return s.pollNativeOrcaWorker(ctx, run)
-		}
-		if execution.Process != nil && execution.Process.Kind == "orca" && (execution.PendingTurnID != "" || execution.CurrentTurnID != execution.LastStoppedTurnID) {
-			turnID := execution.PendingTurnID
-			if turnID == "" {
-				turnID = execution.CurrentTurnID
-			}
-			events := filepath.Join(orcaTurnPath(c, run.RunID, turnID), "events.jsonl")
-			if exited, err := readOrcaTurnExit(events, turnID); err != nil {
-				return s.waitWorkerFlow(run, "Original Orca turn exit evidence is invalid: "+err.Error())
-			} else if exited != nil {
-				finishErr := s.finishWorkerFlowFor(run, nil)
-				return finishErr
-			}
-			term, err := showWorkerOrcaTerminal(ctx, c, execution.Process.Terminal)
-			if err != nil {
-				return s.waitWorkerFlow(run, "Original Orca terminal is unavailable: "+err.Error())
-			}
-			if err := verifyWorkerOrcaTerminal(term, run, execution.Process); err != nil {
-				return s.waitWorkerFlow(run, err.Error())
-			}
-			worker, err := resumeWorkerOrcaTurn(c, run, turnID)
-			if err != nil {
-				return s.waitWorkerFlow(run, "Original Orca turn journal cannot be reattached: "+err.Error())
-			}
-			s.registerWorker(run, worker)
+		if !continueScan {
 			return nil
 		}
-		if execution.Process != nil && (execution.PendingTurnID != "" || execution.CurrentTurnID != execution.LastStoppedTurnID) {
-			switch inspectProcess(execution.Process) {
-			case "matching process still exists":
-				// The center has no right to restart a live original process.
-				return nil
-			case "process absent":
-				err := s.finishWorkerFlowFor(run, nil)
-				return err
-			default:
-				execution.Status = "blocked"
-				return s.waitWorkerFlow(run, "Original worker process identity cannot be verified; its session and files are retained")
-			}
-		}
-		if execution.PendingTurnID != "" {
-			// A saved start may have succeeded without its process receipt.
-			// A complete journal can reconcile it without another send.
-			events := filepath.Join(c.RunDir, "runs", run.RunID, "turns", execution.PendingTurnID, "events.jsonl")
-			if outcome, err := readWorkerTurnOutcome(events); err == nil && outcome.Completed && outcome.SessionID != "" {
-				finishErr := s.finishWorkerFlowFor(run, nil)
-				return finishErr
-			}
-			if workflow.Phase != "waiting_decision" {
-				return s.waitWorkerFlow(run, "Worker turn start has no confirmed process receipt; original request remains unverified")
-			}
-			return nil
-		}
-		if workflow.Phase != "queued" {
-			continue
-		}
-		var preparation *OperationRecord
-		for i := range s.State.Operations {
-			if s.State.Operations[i].IdempotencyKey == "worker-workspace:"+execution.ExecutionID {
-				preparation = &s.State.Operations[i]
-				break
-			}
-		}
-		if preparation == nil {
-			return s.prepareWorkerFlow(ctx, *task, run)
-		}
-		if run.WorkspaceIntent == nil {
-			return s.waitWorkerFlow(run, "Saved workspace preparation has no fixed worktree identity")
-		}
-		if c.hostName() == "orca_supervised" {
-			if execution.Workspace.Worktree == "" {
-				if err := s.recoverRemoteWorkerWorkspace(ctx, run, execution, preparation); err != nil {
-					return s.waitWorkerFlow(run, "Original remote worktree cannot be reconciled: "+err.Error())
-				}
-			} else {
-				s.refreshRun(run)
-				if preparation.Status != "confirmed" {
-					if err := s.changeOperation(preparation.OperationID, "confirmed", preparation.PlatformRequestID, mustJSON(execution.Workspace), ""); err != nil {
-						return err
-					}
-				}
-			}
-		} else {
-			if _, err := os.Lstat(run.WorkspaceIntent.Path); os.IsNotExist(err) && preparation.Status != "confirmed" {
-				if err := prepareWorktreeOnly(ctx, c, run); err != nil {
-					return s.waitWorkerFlow(run, "Original workspace preparation cannot be reconciled: "+err.Error())
-				}
-			} else if err != nil {
-				return s.waitWorkerFlow(run, "Original workspace cannot be inspected: "+err.Error())
-			}
-			s.refreshRun(run)
-			workspace, err := s.inspectWorkflowWorkspace(ctx, run)
-			if err != nil {
-				return s.waitWorkerFlow(run, "Original workspace identity is unresolved: "+err.Error())
-			}
-			applyWorkflowWorkspaceEvidence(run, execution, workspace)
-			if preparation.Status != "confirmed" {
-				if err := s.changeOperation(preparation.OperationID, "confirmed", "", mustJSON(workspace), ""); err != nil {
-					return err
-				}
-			}
-		}
-		if c.hostName() == "orca" || c.hostName() == "orca_supervised" {
-			if err := s.prepareWorkerOrcaTerminal(ctx, run); err != nil {
-				return s.waitWorkerFlow(run, "Original Orca terminal cannot be reconciled: "+err.Error())
-			}
-		}
-		return s.startInitialWorkerFlowTurn(ctx, *task, run)
 	}
 	return nil
 }
@@ -287,26 +127,27 @@ func (s *Service) prepareWorkerFlow(ctx context.Context, task TaskRecord, run *R
 	if err != nil {
 		return err
 	}
-	workflow, execution, attempt, c := fixed.workflow, fixed.execution, fixed.attempt, fixed.config
-	if workflow.WorkflowVersion != WorkerFlowVersion || attempt.StepID != "worker" || run.WorkspaceIntent == nil {
+	if fixed.workflow.WorkflowVersion != WorkerFlowVersion || fixed.attempt.StepID != "worker" || run.WorkspaceIntent == nil {
 		return nativeErr("inconsistent_delivery", "worker preparation has no fixed claim and workspace intent")
 	}
-	if c.hostName() != "local" && c.hostName() != "orca" && c.hostName() != "orca_supervised" {
-		return &BackendError{Code: BackendUnsupported, Diagnostic: "same-session worker continuation is unavailable for this target"}
+	adapter, err := s.adapterForWorkerFlow(run)
+	if err != nil {
+		return err
 	}
-	if c.hostName() == "local" {
-		if err := requireWorkerFlowCapabilities(ctx, c); err != nil {
-			return err
-		}
+	return adapter.prepare(ctx, task, run)
+}
+
+func (s *Service) prepareWorkerWorkspace(ctx context.Context, task TaskRecord, run *Run, remote bool) error {
+	fixed, err := s.workerFlowContext(run)
+	if err != nil {
+		return err
 	}
-	if c.hostName() == "orca" {
-		if err := s.prepareNativeOrcaWorker(ctx, run); err != nil {
-			return s.nativeOrcaUncertain(run, "Native Orca worker preparation needs reconciliation: "+err.Error())
-		}
-		return s.startInitialWorkerFlowTurn(ctx, task, run)
+	workflow, execution, attempt, c := fixed.workflow, fixed.execution, fixed.attempt, fixed.config
+	if run.WorkspaceIntent == nil {
+		return nativeErr("inconsistent_delivery", "worker preparation has no fixed workspace intent")
 	}
 	remoteName := ""
-	if c.hostName() == "orca_supervised" {
+	if remote {
 		var nameErr error
 		remoteName, nameErr = workerOrcaWorktreeName(run.RunID)
 		if nameErr != nil {
@@ -327,7 +168,7 @@ func (s *Service) prepareWorkerFlow(ctx context.Context, task TaskRecord, run *R
 	if workflow == nil || execution == nil || attempt == nil {
 		return errors.New("worker claim disappeared after preparation intent was saved")
 	}
-	if c.hostName() == "orca_supervised" {
+	if remote {
 		err = s.prepareRemoteWorkerWorkspace(ctx, run, execution, opID)
 	} else {
 		err = prepareWorktreeOnly(ctx, c, run)
@@ -338,7 +179,7 @@ func (s *Service) prepareWorkerFlow(ctx context.Context, task TaskRecord, run *R
 		s.refreshRun(run)
 		return s.waitWorkerFlow(run, "Workspace preparation needs reconciliation: "+err.Error())
 	}
-	if c.hostName() != "orca_supervised" {
+	if !remote {
 		s.refreshRun(run)
 		workspace, inspectErr := s.inspectWorkflowWorkspace(ctx, run)
 		if inspectErr != nil {
@@ -352,7 +193,7 @@ func (s *Service) prepareWorkerFlow(ctx context.Context, task TaskRecord, run *R
 			return err
 		}
 	}
-	if c.hostName() == "orca" || c.hostName() == "orca_supervised" {
+	if remote {
 		if err := s.prepareWorkerOrcaTerminal(ctx, run); err != nil {
 			return s.waitWorkerFlow(run, "Original Orca terminal preparation is unverified: "+err.Error())
 		}
@@ -382,22 +223,23 @@ func (s *Service) startWorkerFlowTurn(ctx context.Context, run *Run, prompt, tur
 	if err != nil {
 		return err
 	}
-	workflow, execution, attempt, c := fixed.workflow, fixed.execution, fixed.attempt, fixed.config
-	if workflow == nil || execution == nil || attempt == nil || workflow.WorkflowVersion != WorkerFlowVersion || !stableExecutionID(turnID) ||
+	workflow, execution, attempt := fixed.workflow, fixed.execution, fixed.attempt
+	if workflow.WorkflowVersion != WorkerFlowVersion || !stableExecutionID(turnID) ||
 		execution.PendingTurnID != "" || execution.PendingCommandID != "" || execution.SessionID != "" && execution.CurrentTurnID != "" && execution.LastStoppedTurnID != execution.CurrentTurnID {
 		return errors.New("worker turn cannot start without one idle original session")
 	}
 	if execution.SessionID == "" && execution.TurnNumber != 0 {
 		return errors.New("worker session was lost; replacement is not allowed")
 	}
-	if c.hostName() == "local" {
-		prompt += localWorkerPublishInstruction(run.RunID)
+	if attempt.StepID != "worker" {
+		return errors.New("worker turn has no fixed worker attempt")
 	}
-	execution.PendingTurnID = turnID
-	if run.Protocol == string(ProtocolLocalCodexAppServer) {
-		execution.PendingTurnID = "" // A Command ID is never a native turn receipt.
-		execution.PendingCommandID = turnID
+	adapter, err := s.adapterForWorkerFlow(run)
+	if err != nil {
+		return err
 	}
+	prompt = adapter.preparePrompt(run, prompt)
+	adapter.stageIntent(execution, turnID)
 	opID, err := s.startOperation("start_worker_turn", "worker-turn:"+run.ExecutionID+":"+turnID, struct {
 		ExecutionID string `json:"execution_id"`
 		SessionID   string `json:"session_id,omitempty"`
@@ -407,97 +249,10 @@ func (s *Service) startWorkerFlowTurn(ctx context.Context, run *Run, prompt, tur
 	if err != nil {
 		return err
 	}
-	workflow, execution = s.workflowRecords(run)
-	attempt = s.workflowAttempt(run, run.AttemptID)
-	if workflow == nil || execution == nil || attempt == nil {
+	if _, err := s.workerFlowContext(run); err != nil {
 		return errors.New("worker turn disappeared after send intent was saved")
 	}
-	if run.Protocol == string(ProtocolLocalCodexAppServer) && s.workerMessages != nil {
-		copyRun, copyExecution, config := *run, *execution, c
-		if s.appServerLaunching == nil {
-			s.appServerLaunching = make(map[string]string)
-		}
-		s.appServerLaunching[run.RunID] = turnID
-		s.forwarders.Add(1)
-		go func() {
-			defer s.forwarders.Done()
-			s.launchAppServerTurn(s.runContext, config, copyRun, copyExecution, turnID, prompt, opID)
-		}()
-		return nil
-	}
-	if c.hostName() == "orca" {
-		if err := s.startNativeOrcaTurn(ctx, run, execution, turnID, prompt); err != nil {
-			_ = s.changeOperation(opID, "outcome_unknown", "", nil, err.Error())
-			execution.Status = "blocked"
-			s.refreshRun(run)
-			return s.nativeOrcaUncertain(run, "Native Orca Dispatch needs reconciliation: "+err.Error())
-		}
-		attempt.Status, attempt.UpdatedAt = "dispatched", now()
-		execution.Status = "pending"
-		s.refreshRun(run)
-		current := nativeOrcaCurrentTurn(execution)
-		if err := s.changeOperation(opID, "accepted", current.DispatchRequestID, mustJSON(*current), ""); err != nil {
-			return err
-		}
-		s.note(run, "steer", "worker", "accepted", "native Orca Dispatch input accepted", current.DispatchID, map[string]any{"task_id": current.TaskID, "turn_id": turnID})
-		return s.save()
-	}
-	var worker *Worker
-	var events, platformRequestID string
-	if c.hostName() == "local" {
-		if run.Protocol != string(ProtocolLocalCodexAppServer) {
-			return nativeErr("unsupported_schema", "old local worker protocol is unsupported; preserve its external process and state")
-		}
-		persistThread := func() error {
-			if execution.Process == nil || execution.AppServerGeneration == "" {
-				return errors.New("app-server thread has no verified process generation")
-			}
-			ref := ExecutionRef{Version: ExecutionRecordVersion, Backend: BackendLocal, Protocol: ProtocolLocalCodexAppServer, Target: targetFor(c), Agent: agentFor(c), RunID: run.RunID, AttemptID: run.AttemptID, WorkspacePath: deref(run.WorktreePath), WorkspaceBranch: deref(run.WorktreeBranch), BaseCommit: deref(run.BaseCommit), External: *execution.Process, Generation: execution.AppServerGeneration}
-			if err := (executionRecords{root: c.RunDir}).saveBinding(ref); err != nil {
-				return err
-			}
-			return s.save()
-		}
-		worker, events, platformRequestID, err = startAppServerWorkerTurn(ctx, c, run, execution, turnID, prompt, persistThread)
-		workflow, execution = s.workflowRecords(run)
-		attempt = s.workflowAttempt(run, run.AttemptID)
-		if err == nil {
-			execution.PendingTurnID = platformRequestID
-		}
-	} else {
-		worker, events, platformRequestID, err = startWorkerOrcaTurn(ctx, c, run, execution, turnID, prompt)
-	}
-	if err != nil {
-		if stateErr := s.setOperationState(opID, "outcome_unknown", platformRequestID, nil, err.Error()); stateErr != nil {
-			return stateErr
-		}
-		execution.Status = "blocked"
-		s.refreshRun(run)
-		if run.Protocol == string(ProtocolLocalCodexAppServer) {
-			execution.Status = "blocked"
-		}
-		return s.waitWorkerFlow(run, "Original worker turn start is unverified: "+err.Error())
-	}
-	identity := worker.proc.Identity()
-	execution.Process = &identity
-	execution.Status = "pending"
-	s.refreshRun(run)
-	if attempt.EventPath == "" {
-		attempt.EventPath = events
-		execution.LogPath = ptr(events)
-		s.refreshRun(run)
-	}
-	attempt.Status = "dispatched"
-	attempt.UpdatedAt = now()
-	if err := s.setOperationState(opID, "accepted", platformRequestID, mustJSON(identity), ""); err != nil {
-		return err
-	}
-	if err := s.save(); err != nil {
-		return fmt.Errorf("worker started but its exact process receipt could not be saved: %w", err)
-	}
-	s.registerWorker(run, worker)
-	s.note(run, "steer", "worker", "accepted", "original worker turn accepted", turnID, map[string]any{"session_id": execution.SessionID, "turn_number": execution.TurnNumber + 1})
-	return nil
+	return adapter.startTurn(ctx, run, turnID, prompt, opID)
 }
 
 func (s *Service) eventWorkerFlowFor(run *Run, ev WorkerEvent) (resultErr error) {
@@ -1024,4 +779,22 @@ func (s *Service) applyWorkerFlowDecision(ctx context.Context, run *Run) error {
 		return s.applyNativeOrcaDecision(ctx, run, workflow, execution, answer, command.CommandID)
 	}
 	return s.deliverResumableWorkerFeedback(ctx, run, execution, answer, command.CommandID, route)
+}
+
+func workerFeedbackText(answer DecisionAnswer, request DecisionRequest) string {
+	if answer.OptionID == "" {
+		return answer.Note
+	}
+	label := answer.OptionID
+	for _, option := range request.Options {
+		if option.ID == answer.OptionID {
+			label = option.Label
+			break
+		}
+	}
+	message := "Selected option: " + label
+	if answer.Note != "" {
+		message += "\n\nAdditional instructions:\n" + answer.Note
+	}
+	return message
 }
