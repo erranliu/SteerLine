@@ -7,12 +7,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 	"io"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
 
 type Service struct {
@@ -392,7 +393,7 @@ func (s *Service) refreshSlotOccupancy() {
 }
 func (s *Service) refreshCandidates(ctx context.Context) error {
 	queried := now()
-	tasks, err := (QueryService{Store: s.domainStore, Project: s.Config.identity}).ReadyNativeTasks(ctx)
+	tasks, err := (NewQueryService(s.domainStore, s.Config.identity)).ReadyNativeTasks(ctx)
 	if err != nil {
 		return err
 	}

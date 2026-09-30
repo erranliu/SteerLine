@@ -118,7 +118,7 @@ func TestTaskCLIProcessUsesNativeAuthorityWithoutInitializingMissingRead(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
-	before, err := (steerline.QueryService{Store: store, Project: config.Identity()}).ListNativeTasks(context.Background(), "", 100)
+	before, err := (steerline.NewQueryService(store, config.Identity())).ListNativeTasks(context.Background(), "", 100)
 	if err != nil {
 		_ = store.Close()
 		t.Fatal(err)
@@ -150,7 +150,7 @@ func TestTaskCLIProcessUsesNativeAuthorityWithoutInitializingMissingRead(t *test
 		t.Fatalf("native authority did not survive CLI process: %v", err)
 	}
 	defer reader.Close()
-	after, err := (steerline.QueryService{Store: reader, Project: config.Identity()}).ListNativeTasks(context.Background(), "", 100)
+	after, err := (steerline.NewQueryService(reader, config.Identity())).ListNativeTasks(context.Background(), "", 100)
 	if err != nil || after.DatabaseID != before.DatabaseID || after.DatabaseRevision != before.DatabaseRevision {
 		t.Fatalf("CLI reads changed or lost persisted task state: before=%+v after=%+v err=%v", before, after, err)
 	}

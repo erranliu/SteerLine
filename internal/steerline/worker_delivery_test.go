@@ -62,7 +62,7 @@ func TestWorkerFlowDeliveryCommitsWithoutStepGatesAndUnlocksSuccessor(t *testing
 	if err != nil || receipt.Status != "closed" {
 		t.Fatalf("commit without step results: receipt=%+v error=%v", receipt, err)
 	}
-	page, err := (QueryService{Store: store, Project: c.Identity()}).ShowNativeTask(ctx, "8")
+	page, err := (NewQueryService(store, c.Identity())).ShowNativeTask(ctx, "8")
 	if err != nil || len(page.Tasks) != 1 || page.Tasks[0].Status != "closed" || page.Tasks[0].Delivery == nil {
 		t.Fatalf("missing committed delivery: page=%+v error=%v", page, err)
 	}
@@ -73,7 +73,7 @@ func TestWorkerFlowDeliveryCommitsWithoutStepGatesAndUnlocksSuccessor(t *testing
 	if latest := latestNativeWorkflow(snapshot.WorkflowRuns, "8"); latest == nil || latest.Phase != "completed" {
 		t.Fatalf("workflow did not complete with delivery: %+v", latest)
 	}
-	ready, err := (QueryService{Store: store, Project: c.Identity()}).ReadyNativeTasks(ctx)
+	ready, err := (NewQueryService(store, c.Identity())).ReadyNativeTasks(ctx)
 	if err != nil || len(ready) != 1 || ready[0].TaskID != "9" {
 		t.Fatalf("successor was not released: ready=%+v error=%v", ready, err)
 	}
@@ -145,7 +145,7 @@ func TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged(t *testing.T)
 			if _, err := commands.CompleteNativeTask(ctx, c, "8", claimed.Version, wf.WorkflowRunID, verifier); err == nil {
 				t.Fatal("unowned or unmerged PR completed the task")
 			}
-			page, err := (QueryService{Store: store, Project: c.Identity()}).ShowNativeTask(ctx, "8")
+			page, err := (NewQueryService(store, c.Identity())).ShowNativeTask(ctx, "8")
 			if err != nil || len(page.Tasks) != 1 || page.Tasks[0].Status != "in_progress" || page.Tasks[0].Delivery != nil {
 				t.Fatalf("rejected PR changed delivery: page=%+v err=%v", page, err)
 			}
@@ -164,7 +164,7 @@ func TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged(t *testing.T)
 	if err := store.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM task_deliveries WHERE project_identity=? AND task_id=?`, c.Identity(), "8").Scan(&deliveries); err != nil || deliveries != 1 {
 		t.Fatalf("merge wrote %d deliveries: %v", deliveries, err)
 	}
-	ready, err := (QueryService{Store: store, Project: c.Identity()}).ReadyNativeTasks(ctx)
+	ready, err := (NewQueryService(store, c.Identity())).ReadyNativeTasks(ctx)
 	if err != nil || len(ready) != 1 || ready[0].TaskID != "9" {
 		t.Fatalf("merge did not unlock successor once: ready=%+v err=%v", ready, err)
 	}

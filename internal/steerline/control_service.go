@@ -374,7 +374,7 @@ func (s *Service) validateReadyTarget(ctx context.Context, taskID string) error 
 	if s.find(taskID) != nil {
 		return errAlreadyManaged
 	}
-	ready, err := (QueryService{Store: s.domainStore, Project: s.Config.identity}).ReadyNativeTasks(ctx)
+	ready, err := (NewQueryService(s.domainStore, s.Config.identity)).ReadyNativeTasks(ctx)
 	if err != nil {
 		return fmt.Errorf("native task readiness could not be verified: %w", err)
 	}
