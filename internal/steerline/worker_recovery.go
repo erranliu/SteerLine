@@ -247,9 +247,14 @@ func (s *Service) startManuallyRecoveredInitialCodex(ctx context.Context, run *R
 				return err
 			}
 			if _, err := os.Lstat(run.WorkspaceIntent.Path); os.IsNotExist(err) {
-				if err := prepareWorktreeOnly(ctx, fixed.config, run); err != nil {
-					_ = s.changeWorkerOperation(run, opID, "outcome_unknown", "", nil, err.Error())
-					return s.waitWorkerFlow(run, "Original workspace preparation needs reconciliation: "+err.Error())
+				preparation, prepareErr := prepareWorktree(ctx, fixed.config, run)
+				if prepareErr != nil {
+					status := string(preparation.Status)
+					if status != string(executionapi.OperationRejected) {
+						status = "outcome_unknown"
+					}
+					_ = s.changeWorkerOperation(run, opID, status, "", mustJSON(preparation), prepareErr.Error())
+					return s.waitWorkerFlow(run, "Original workspace preparation needs reconciliation: "+prepareErr.Error())
 				}
 			} else if err != nil {
 				return err

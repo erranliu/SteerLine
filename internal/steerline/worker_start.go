@@ -60,7 +60,18 @@ func (s *Service) prepareWorkerWorkspace(ctx context.Context, task TaskRecord, r
 	if remote {
 		err = s.prepareRemoteWorkerWorkspace(ctx, run, execution, opID)
 	} else {
-		err = prepareWorktreeOnly(ctx, c, run)
+		preparation, prepareErr := prepareWorktree(ctx, c, run)
+		err = prepareErr
+		if err != nil {
+			status := string(preparation.Status)
+			if status != string(executionapi.OperationRejected) {
+				status = "outcome_unknown"
+			}
+			_ = s.changeWorkerOperation(run, opID, status, "", mustJSON(preparation), err.Error())
+			execution.Status = "blocked"
+			s.refreshRun(run)
+			return s.waitWorkerFlow(run, "Workspace preparation needs reconciliation: "+err.Error())
+		}
 	}
 	if err != nil {
 		_ = s.changeWorkerOperation(run, opID, "outcome_unknown", "", nil, err.Error())

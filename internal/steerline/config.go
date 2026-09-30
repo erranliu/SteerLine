@@ -18,6 +18,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/steerline/codexapp"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	"github.com/erranliu/SteerLine/internal/steerline/workspace"
 )
 
 type Skill struct {
@@ -107,12 +108,11 @@ func SteerlineStateRoot() string        { return filepath.Join(SteerlineHome(), 
 // common dir, so every worktree and clone of the same repository maps to one
 // state directory.
 func repoStateKey(c Config) (string, error) {
-	r := Runner{Dir: c.Repository, Timeout: duration(c.CommandTimeout)}
-	out, e := r.Output(context.Background(), c.Git, "rev-parse", "--path-format=absolute", "--git-common-dir")
+	repository, e := workspace.ResolveRepository(context.Background(), workspaceGit(c), c.Repository)
 	if e != nil {
 		return "", e
 	}
-	common := strings.TrimSpace(string(out))
+	common := repository.CommonDir
 	if common == "" {
 		return "", errors.New("git returned an empty common dir")
 	}
@@ -406,24 +406,11 @@ func (c Config) Identity() string     { return c.identity }
 // or create runtime directories. Control clients use it without constructing a
 // Service or taking ownership of scheduler state.
 func (c *Config) ResolveIdentity(ctx context.Context) error {
-	timeout := duration(c.CommandTimeout)
-	if timeout <= 0 {
-		timeout = 30 * time.Second
-	}
-	r := Runner{Dir: c.Repository, Timeout: timeout}
-	common, err := r.Output(ctx, c.Git, "rev-parse", "--path-format=absolute", "--git-common-dir")
+	repository, err := workspace.ResolveRepository(ctx, workspaceGit(*c), c.Repository)
 	if err != nil {
 		return err
 	}
-	path := strings.TrimSpace(string(common))
-	if path == "" {
-		return errors.New("git returned an empty common dir")
-	}
-	resolved, err := filepath.EvalSymlinks(path)
-	if err != nil {
-		return err
-	}
-	identity := canonical(resolved)
+	identity := canonical(repository.CommonDir)
 	if c.identity != "" && canonical(c.identity) != identity {
 		return errors.New("configured repository identity changed after it was resolved")
 	}
@@ -505,24 +492,12 @@ func (c *Config) preflightNative(ctx context.Context) error {
 			return fmt.Errorf("orca host is not reachable: %w", err)
 		}
 	}
-	root, err := git.Output(ctx, c.Git, "rev-parse", "--show-toplevel")
+	repository, err := workspace.ResolveRepository(ctx, workspaceGit(*c), c.Repository)
 	if err != nil {
 		return err
 	}
-	c.Repository, err = filepath.EvalSymlinks(strings.TrimSpace(string(root)))
-	if err != nil {
-		return err
-	}
+	c.Repository, c.identity = repository.Path, canonical(repository.CommonDir)
 	git.Dir = c.Repository
-	common, err := git.Output(ctx, c.Git, "rev-parse", "--path-format=absolute", "--git-common-dir")
-	if err != nil {
-		return err
-	}
-	c.identity, err = filepath.EvalSymlinks(strings.TrimSpace(string(common)))
-	if err != nil {
-		return err
-	}
-	c.identity = canonical(c.identity)
 	if c.hostName() == "orca" {
 		if err = validateOrcaRepositoryRegistration(ctx, *c); err != nil {
 			return err

@@ -55,7 +55,7 @@ func (s *Service) publishLocalWorkerRun(ctx context.Context, run *Run, workflow 
 		workflow.Branch == "" || c.PR.Repository == "" {
 		return info, errors.New("local host publication workspace or target branch differs from the fixed execution")
 	}
-	git := gitRunner(c, *run.WorktreePath)
+	git := Runner{Dir: *run.WorktreePath, Timeout: duration(c.CommandTimeout), Env: map[string]string{"GIT_TERMINAL_PROMPT": "0"}}
 	gitText := func(args ...string) (string, error) {
 		out, err := git.Output(ctx, c.Git, args...)
 		return strings.TrimSpace(string(out)), err
@@ -269,7 +269,7 @@ func (s *Service) reconcileLocalWorkerPublication(ctx context.Context, run *Run)
 		workflow.Phase != "waiting_decision" || run.FinishTaskStatus != "waiting_decision" {
 		return false, errors.New("saved local publication no longer matches the stopped worker turn")
 	}
-	git := gitRunner(c, *run.WorktreePath)
+	git := Runner{Dir: *run.WorktreePath, Timeout: duration(c.CommandTimeout), Env: map[string]string{"GIT_TERMINAL_PROMPT": "0"}}
 	gitText := func(args ...string) (string, error) {
 		out, err := git.Output(ctx, c.Git, args...)
 		return strings.TrimSpace(string(out)), err
