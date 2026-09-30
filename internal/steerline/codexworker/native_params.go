@@ -1,4 +1,4 @@
-package codexapp
+package codexworker
 
 import (
 	"errors"

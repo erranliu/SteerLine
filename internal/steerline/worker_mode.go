@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
-	"strings"
+	"runtime"
 
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
@@ -257,16 +257,13 @@ func requireWorkerFlowCapabilities(ctx context.Context, c Config) error {
 				return &executionapi.BackendError{Code: executionapi.BackendUnsupported, Diagnostic: err.Error(), Cause: err}
 			}
 			runner := Runner{Dir: c.Repository, Timeout: duration(c.CommandTimeout)}
-			help, err := runner.Output(ctx, Command{Executable: c.Codex.Executable}, "--help")
-			if err != nil {
+			if err := codexworker.ProbeManagedCLI(ctx, c.Codex, func(ctx context.Context, executable string, args []string) ([]byte, error) {
+				return runner.Output(ctx, Command{Executable: executable, Args: args})
+			}); err != nil {
 				return err
 			}
-			for _, flag := range []string{"--strict-config", "--sandbox", "--ask-for-approval", "never", "--config"} {
-				if !strings.Contains(string(help), flag) {
-					return fmt.Errorf("Codex CLI does not support managed launch parameter %s", flag)
-				}
-			}
 		}
+
 		if c.Profile != "" || c.Sandbox != "workspace-write" {
 			return &executionapi.BackendError{Code: executionapi.BackendUnsupported, Diagnostic: "Orca requires workspace-write and no Codex profile"}
 		}
@@ -281,6 +278,9 @@ func requireWorkerFlowCapabilities(ctx context.Context, c Config) error {
 	}
 	if c.hostName() != "local" {
 		return &executionapi.BackendError{Code: executionapi.BackendUnsupported, Diagnostic: "this worker-flow host is not supported"}
+	}
+	if err := (codexworker.Config{Args: c.Codex.Args, Sandbox: c.Sandbox, WindowsSandbox: c.WindowsSandbox, ReasoningEffort: c.ReasoningEffort}).Validate(runtime.GOOS); err != nil {
+		return err
 	}
 	command := c.Codex
 	if err := resolveCommand(&command); err != nil {

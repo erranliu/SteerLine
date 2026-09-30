@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/erranliu/SteerLine/internal/steerline/codexapp"
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
@@ -45,7 +45,7 @@ func (p ExecutionProfile) Freeze() FixedExecutionProfile {
 
 func verifyFixedExecutionProfile(p FixedExecutionProfile) bool {
 	rebuilt := ExecutionProfile{ID: p.ID, Name: p.Name, Host: p.Host, Agent: p.Agent, Model: p.Model, ReasoningEffort: p.ReasoningEffort, Sandbox: p.Sandbox, WindowsSandbox: p.WindowsSandbox, CodexProfile: p.CodexProfile, Codex: p.Codex, Orca: p.Orca}
-	return p.Digest != "" && p.Digest == rebuilt.Digest() && (!rebuilt.managedOrcaPermissions() || p.ApprovalPolicy == "never" && (p.WindowsSandbox == "elevated" || p.WindowsSandbox == "unelevated"))
+	return p.Digest != "" && p.Digest == rebuilt.Digest() && (!rebuilt.managedOrcaPermissions() || p.ApprovalPolicy == "never" && codexworker.ValidWindowsSandbox(p.WindowsSandbox))
 }
 
 func (c Config) ApplyFixedExecutionProfile(p FixedExecutionProfile) Config {
@@ -79,7 +79,7 @@ func (p ExecutionProfile) MatchesConfig(c Config) bool {
 
 func (p ExecutionProfile) StaticUnavailableReason() string {
 	if p.Host == "local" && p.Agent == "codex" {
-		if _, err := codexapp.LocalSandboxArgs(runtime.GOOS, p.Sandbox, p.WindowsSandbox, p.Codex.Args); err != nil {
+		if _, err := codexworker.LocalSandboxArgs(runtime.GOOS, p.Sandbox, p.WindowsSandbox, p.Codex.Args); err != nil {
 			return err.Error()
 		}
 	}
@@ -98,8 +98,8 @@ func (p ExecutionProfile) StaticUnavailableReason() string {
 }
 
 func (p ExecutionProfile) withWindowsSandboxDefault() ExecutionProfile {
-	if runtime.GOOS == "windows" && p.Host == "local" && p.Agent == "codex" && p.Sandbox != "danger-full-access" && p.WindowsSandbox == "" {
-		p.WindowsSandbox = "elevated"
+	if p.Host == "local" && p.Agent == "codex" {
+		p.WindowsSandbox = codexworker.LocalWindowsSandboxDefault(runtime.GOOS, p.Sandbox, p.WindowsSandbox)
 	}
 	return p
 }
@@ -107,7 +107,7 @@ func (p ExecutionProfile) withWindowsSandboxDefault() ExecutionProfile {
 func (p ExecutionProfile) effective() ExecutionProfile {
 	p = p.withWindowsSandboxDefault()
 	if p.Host == "local" && p.Agent == "codex" && p.ReasoningEffort == "" {
-		p.ReasoningEffort = "high"
+		p.ReasoningEffort = codexworker.LocalReasoningEffortDefault(p.ReasoningEffort)
 	}
 	return p
 }
@@ -183,13 +183,13 @@ func validateExecutionProfiles(c Config) error {
 		if p.Host != "local" && p.Host != "orca" && p.Host != "orca_supervised" {
 			return fmt.Errorf("execution profile %s has an unsupported host", p.ID)
 		}
-		if p.Agent == "" || p.Sandbox != "read-only" && p.Sandbox != "workspace-write" && p.Sandbox != "danger-full-access" {
+		if p.Agent == "" || !codexworker.ValidSandbox(p.Sandbox) {
 			return fmt.Errorf("execution profile %s requires an agent and valid sandbox", p.ID)
 		}
-		if p.WindowsSandbox != "" && p.WindowsSandbox != "elevated" && p.WindowsSandbox != "unelevated" {
+		if p.WindowsSandbox != "" && !codexworker.ValidWindowsSandbox(p.WindowsSandbox) {
 			return fmt.Errorf("execution profile %s has invalid windows_sandbox", p.ID)
 		}
-		if p.ReasoningEffort != "" && !validReasoningEffort(p.ReasoningEffort) {
+		if p.ReasoningEffort != "" && !codexworker.ValidReasoningEffort(p.ReasoningEffort) {
 			return fmt.Errorf("execution profile %s has invalid reasoning effort", p.ID)
 		}
 		if p.Host == "local" && p.Agent != "codex" {
@@ -230,15 +230,6 @@ func validateExecutionProfiles(c Config) error {
 		return errors.New("default_execution_profile is not configured")
 	}
 	return nil
-}
-
-func validReasoningEffort(value string) bool {
-	switch value {
-	case "none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra":
-		return true
-	default:
-		return false
-	}
 }
 
 func hostForExecution(backend, protocol string) string {

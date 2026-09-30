@@ -4,10 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
-	"strings"
 
-	"github.com/erranliu/SteerLine/internal/steerline/codexapp"
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
@@ -18,8 +15,11 @@ func (s *Service) replyAppServerAsk(ctx context.Context, run *Run, execution *Ex
 		return errors.New("saved native answer has no fixed request")
 	}
 	ask := run.Decision.Request.NativeAsk
-	if execution.Process == nil || inspectProcess(execution.Process) != "matching process still exists" || execution.AppServerEndpoint == "" || execution.AppServerGeneration != ask.Generation || execution.SessionID != ask.ThreadID || execution.CurrentTurnID != ask.TurnID || execution.LastStoppedTurnID == ask.TurnID || run.Decision.ID != answer.DecisionID {
-		return &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "native answer no longer belongs to the live original app-server request"}
+	if run.Decision.ID != answer.DecisionID {
+		return &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "native answer changed its fixed decision"}
+	}
+	if err := codexBackend(s.Config, run).ValidateReply(codexBinding(execution), ask.Generation, ask.ThreadID, ask.TurnID, execution.CurrentTurnID, execution.LastStoppedTurnID); err != nil {
+		return err
 	}
 	key := "appserver-answer:" + execution.ExecutionID + ":" + answer.DecisionID
 	for _, op := range s.domain.Operations {
@@ -110,88 +110,6 @@ func (s *Service) handleAppServerReplyMessage(runID string, message *appServerRe
 		return s.commitWorker(run, message.opID)
 	}
 	return errors.New("original Codex question reply operation disappeared")
-}
-
-const codexAskToolName = codexapp.AskToolName
-
-func parseCodexAskCall(envelope codexapp.Envelope, expectedThread, expectedTurn string) (codexAskCall, error) {
-	wire, err := codexworker.ParseAskEnvelope(envelope, expectedThread, expectedTurn)
-	if err != nil {
-		return codexAskCall{}, err
-	}
-	return codexAskCallFromEnvelope(wire)
-}
-
-func codexAskCallFromEnvelope(wire codexworker.AskEnvelope) (codexAskCall, error) {
-	questions, err := codexworker.DecodeQuestions(wire.Arguments)
-	if err != nil {
-		return codexAskCall{}, fmt.Errorf("Codex ask arguments: %w", err)
-	}
-	var args struct{ Questions []executionapi.Question }
-	for _, q := range questions {
-		question := executionapi.Question{ID: q.ID, Header: q.Header, Question: q.Question, AllowFreeText: q.AllowFreeText}
-		for _, o := range q.Options {
-			question.Options = append(question.Options, executionapi.DecisionOption{ID: o.ID, Label: o.Label, Detail: o.Detail})
-		}
-		args.Questions = append(args.Questions, question)
-	}
-	if len(args.Questions) == 0 || len(args.Questions) > 3 {
-		return codexAskCall{}, errors.New("Codex ask needs one to three questions")
-	}
-	seen := map[string]bool{}
-	for i := range args.Questions {
-		q := &args.Questions[i]
-		q.ID = strings.TrimSpace(q.ID)
-		q.Header = strings.TrimSpace(q.Header)
-		q.Question = strings.TrimSpace(q.Question)
-		if q.ID == "" || len(q.ID) > 128 || seen[q.ID] || q.Header == "" || len([]rune(q.Header)) > 40 || q.Question == "" || len([]rune(q.Question)) > 2000 {
-			return codexAskCall{}, fmt.Errorf("Codex ask question %d has invalid identity or text", i+1)
-		}
-		seen[q.ID] = true
-		req := DecisionRequest{Question: q.Question, Options: q.Options, AllowFreeText: q.AllowFreeText}
-		if err := validateDecisionRequest(&req); err != nil {
-			return codexAskCall{}, fmt.Errorf("Codex ask question %q: %w", q.ID, err)
-		}
-		q.Options = req.Options
-	}
-	call := codexAskCall{RequestID: wire.RequestID, ThreadID: wire.ThreadID, TurnID: wire.TurnID, CallID: wire.CallID, Questions: args.Questions}
-	request := codexAskDecisionRequest(call)
-	request.NativeAsk = nil // The process generation is attached by the service writer.
-	if err := validateDecisionRequest(&request); err != nil {
-		return codexAskCall{}, fmt.Errorf("Codex ask cannot be displayed completely: %w", err)
-	}
-	return call, nil
-}
-
-func codexAskDecisionRequest(call codexAskCall) DecisionRequest {
-	request := DecisionRequest{Context: "Codex 正在等待回答；提交后会继续当前轮次。", AllowFreeText: true, NativeAsk: &call}
-	if len(call.Questions) == 1 {
-		q := call.Questions[0]
-		request.Question = q.Question
-		request.Options = append([]executionapi.DecisionOption(nil), q.Options...)
-		request.AllowFreeText = q.AllowFreeText
-		return request
-	}
-	request.Question = fmt.Sprintf("Codex 有 %d 个问题需要回答", len(call.Questions))
-	var body strings.Builder
-	body.WriteString(request.Context)
-	body.WriteString(" 多题请在备注中提交 JSON，例如 {\"question_id\":[\"answer\"]}，每个问题 ID 都须填写。")
-	for _, q := range call.Questions {
-		fmt.Fprintf(&body, "\n\n[%s] %s：%s", q.ID, q.Header, q.Question)
-		for _, option := range q.Options {
-			fmt.Fprintf(&body, "\n- %s：%s", option.ID, option.Label)
-			if option.Detail != "" {
-				fmt.Fprintf(&body, " — %s", option.Detail)
-			}
-		}
-		if q.AllowFreeText {
-			body.WriteString("\n允许自由文字回答。")
-		} else {
-			body.WriteString("\n请选择以上选项，可附加备注。")
-		}
-	}
-	request.Context = body.String()
-	return request
 }
 
 type codexAskCall = contracts.CodexAskCall

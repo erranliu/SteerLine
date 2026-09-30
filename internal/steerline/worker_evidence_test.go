@@ -28,7 +28,7 @@ func TestWorkerProtocolFactsPreserveOriginalNativeIdentity(t *testing.T) {
 		}
 	}
 	question := started
-	question.AppServer = &codexapp.Envelope{ID: json.RawMessage(`17`), Method: "item/tool/call", Params: mustJSON(map[string]any{"threadId": thread, "turnId": turn, "callId": "ask-original", "tool": codexAskToolName, "arguments": map[string]any{"questions": []any{map[string]any{"id": "choice", "header": "Choice", "question": "Continue?", "allow_free_text": true, "options": []any{map[string]string{"id": "yes", "label": "Yes"}}}}}})}
+	question.AppServer = &codexapp.Envelope{ID: json.RawMessage(`17`), Method: "item/tool/call", Params: mustJSON(map[string]any{"threadId": thread, "turnId": turn, "callId": "ask-original", "tool": codexapp.AskToolName, "arguments": map[string]any{"questions": []any{map[string]any{"id": "choice", "header": "Choice", "question": "Continue?", "allow_free_text": true, "options": []any{map[string]string{"id": "yes", "label": "Yes"}}}}}})}
 	fact, err = decodeWorkerFlowEvent(workerflow.LocalCodex, question, workerSessionContext(nil, execution), false)
 	if err != nil || fact.Question == nil || fact.Question.Generation != "generation-1" || fact.Question.ThreadID != thread || fact.Question.TurnID != turn || string(fact.Question.RequestID) != "17" || len(fact.Question.Questions) != 1 || !fact.Question.Questions[0].AllowFreeText || len(fact.Question.Questions[0].Options) != 1 || fact.SourceEventID != started.SourceEventID {
 		t.Fatalf("common question lost its source or original answer route: %+v / %v", fact, err)

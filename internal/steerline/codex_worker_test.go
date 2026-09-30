@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/steerline/codexapp"
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
@@ -46,7 +47,7 @@ func TestAppServerPendingFeedbackRecoveryUsesNewTurnReceipt(t *testing.T) {
 			if err := os.MkdirAll(serverDir, 0700); err != nil {
 				t.Fatal(err)
 			}
-			if err := AtomicWrite(filepath.Join(serverDir, "process.json"), mustJSON(appServerProcessReceipt{Endpoint: execution.AppServerEndpoint, Generation: execution.AppServerGeneration, Identity: *identity})); err != nil {
+			if err := AtomicWrite(filepath.Join(serverDir, "process.json"), mustJSON(codexworker.ProcessReceipt{Endpoint: execution.AppServerEndpoint, Generation: execution.AppServerGeneration, Identity: *identity})); err != nil {
 				t.Fatal(err)
 			}
 			turnDir := filepath.Join(c.RunDir, "runs", run.RunID, "turns", execution.PendingCommandID)
@@ -261,7 +262,7 @@ func TestAppServerSlowRecoveryLeavesServiceWriterAvailable(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		t.Fatal(err)
 	}
-	if err := AtomicWrite(path, mustJSON(appServerProcessReceipt{Endpoint: execution.AppServerEndpoint, Generation: execution.AppServerGeneration, Identity: *identity})); err != nil {
+	if err := AtomicWrite(path, mustJSON(codexworker.ProcessReceipt{Endpoint: execution.AppServerEndpoint, Generation: execution.AppServerGeneration, Identity: *identity})); err != nil {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -338,7 +339,7 @@ func testAppServerServiceTwoTurns(t *testing.T, async bool) {
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		t.Fatal(err)
 	}
-	if err := AtomicWrite(path, mustJSON(appServerProcessReceipt{Endpoint: execution.AppServerEndpoint, Generation: execution.AppServerGeneration, Identity: *identity})); err != nil {
+	if err := AtomicWrite(path, mustJSON(codexworker.ProcessReceipt{Endpoint: execution.AppServerEndpoint, Generation: execution.AppServerGeneration, Identity: *identity})); err != nil {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -500,7 +501,7 @@ func TestAppServerRecoveryReplaysOnlyUnresolvedQuestion(t *testing.T) {
 	thread, turn := "00000000-0000-0000-0000-000000000001", "00000000-0000-0000-0000-000000000002"
 	path := filepath.Join(t.TempDir(), "appserver.jsonl")
 	makeCall := func(id string) codexapp.Envelope {
-		return codexapp.Envelope{ID: json.RawMessage(`0`), Method: "item/tool/call", Params: mustJSON(map[string]any{"threadId": thread, "turnId": turn, "callId": id, "tool": codexAskToolName, "arguments": map[string]any{"questions": []any{map[string]any{"id": "choice", "header": "Choice", "question": "Continue?", "options": []any{map[string]any{"id": "yes", "label": "Yes"}}, "allow_free_text": false}}}})}
+		return codexapp.Envelope{ID: json.RawMessage(`0`), Method: "item/tool/call", Params: mustJSON(map[string]any{"threadId": thread, "turnId": turn, "callId": id, "tool": codexapp.AskToolName, "arguments": map[string]any{"questions": []any{map[string]any{"id": "choice", "header": "Choice", "question": "Continue?", "options": []any{map[string]any{"id": "yes", "label": "Yes"}}, "allow_free_text": false}}}})}
 	}
 	events := []codexapp.Envelope{makeCall("resolved"), {Method: "item/completed", Params: mustJSON(map[string]any{"threadId": thread, "turnId": turn, "item": map[string]any{"type": "dynamicToolCall", "id": "resolved"}})}, makeCall("pending")}
 	var raw []byte
@@ -516,7 +517,7 @@ func TestAppServerRecoveryReplaysOnlyUnresolvedQuestion(t *testing.T) {
 	if err != nil || len(replay) != 1 {
 		t.Fatalf("unresolved request not recovered: %d %v", len(replay), err)
 	}
-	call, err := parseCodexAskCall(replay[0], thread, turn)
+	call, err := codexworker.ParseAskCall(replay[0], thread, turn)
 	if err != nil || call.CallID != "pending" {
 		t.Fatalf("wrong native request replayed: %+v %v", call, err)
 	}
@@ -555,7 +556,7 @@ func TestMockAppServerThreadAndTurnContract(t *testing.T) {
 	defer func() { _ = cmd.Process.Kill(); _ = cmd.Wait() }()
 	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
 	defer cancel()
-	client, err := connectWorkerAppServer(ctx, endpoint)
+	client, err := codexworker.ConnectAppServer(ctx, endpoint)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -577,7 +578,7 @@ func TestMockAppServerThreadAndTurnContract(t *testing.T) {
 	if err := client.Call(ctx, "turn/start", map[string]any{"threadId": started.Thread.ID, "input": []map[string]string{{"type": "text", "text": "hello"}}}, &turn); err != nil {
 		t.Fatal(err)
 	}
-	if started.Thread.ID != workerFlowMockSession || !codexThreadID.MatchString(turn.Turn.ID) || turn.Turn.ID == started.Thread.ID {
+	if started.Thread.ID != workerFlowMockSession || !codexworker.ValidNativeID(turn.Turn.ID) || turn.Turn.ID == started.Thread.ID {
 		t.Fatalf("mock native identities are invalid: %s %s", started.Thread.ID, turn.Turn.ID)
 	}
 	for {

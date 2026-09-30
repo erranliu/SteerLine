@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
@@ -78,7 +79,7 @@ func TestCodexHistoryServerHelper(t *testing.T) {
 				os.Exit(3)
 			}
 			if strings.TrimSpace(string(stage)) == "cursor-too-long" {
-				result = map[string]any{"data": []any{first}, "nextCursor": nil, "backwardsCursor": strings.Repeat("x", maxCodexHistoryCursorBytes+1)}
+				result = map[string]any{"data": []any{first}, "nextCursor": nil, "backwardsCursor": strings.Repeat("x", codexworker.MaxHistoryCursorBytes+1)}
 			}
 		default:
 			os.Exit(4)
@@ -100,7 +101,7 @@ func TestCodexHistoryReconcilesLateFinalInEarlierTurn(t *testing.T) {
 	store, err := OpenSQLiteStore(filepath.Join(root, "history.db"))
 	require(t, err)
 	defer store.Close()
-	b := codexHistoryBinding{Version: 1, ProjectID: "project", WorkflowID: "workflow", ExecutionID: "execution", AttemptID: "attempt", Backend: executionapi.BackendLocal, Protocol: executionapi.ProtocolLocalProcess, TargetID: "local", Workspace: workspace, SessionID: "00000000-0000-0000-0000-000000000001", Command: Command{Executable: os.Args[0], Args: []string{"-test.run=^TestCodexHistoryServerHelper$"}}}
+	b := codexworker.HistoryBinding{Version: 1, ProjectID: "project", WorkflowID: "workflow", ExecutionID: "execution", AttemptID: "attempt", Backend: executionapi.BackendLocal, Protocol: executionapi.ProtocolLocalProcess, TargetID: "local", Workspace: workspace, SessionID: "00000000-0000-0000-0000-000000000001", Command: Command{Executable: os.Args[0], Args: []string{"-test.run=^TestCodexHistoryServerHelper$"}}}
 	s := &Service{domainStore: store}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -108,7 +109,7 @@ func TestCodexHistoryReconcilesLateFinalInEarlierTurn(t *testing.T) {
 		_, err = s.collectCodexHistoryPage(ctx, b)
 		require(t, err)
 	}
-	cp, err := store.ConversationCheckpoint(ctx, b.ProjectID, b.ExecutionID, b.AttemptID, "codex-app-server", b.identity())
+	cp, err := store.ConversationCheckpoint(ctx, b.ProjectID, b.ExecutionID, b.AttemptID, "codex-app-server", b.Identity())
 	require(t, err)
 	var saved codexHistoryCursor
 	require(t, json.Unmarshal([]byte(cp.Cursor), &saved))
@@ -120,7 +121,7 @@ func TestCodexHistoryReconcilesLateFinalInEarlierTurn(t *testing.T) {
 		_, err = s.collectCodexHistoryPage(ctx, b)
 		require(t, err)
 	}
-	cp, err = store.ConversationCheckpoint(ctx, b.ProjectID, b.ExecutionID, b.AttemptID, "codex-app-server", b.identity())
+	cp, err = store.ConversationCheckpoint(ctx, b.ProjectID, b.ExecutionID, b.AttemptID, "codex-app-server", b.Identity())
 	require(t, err)
 	saved = codexHistoryCursor{}
 	require(t, json.Unmarshal([]byte(cp.Cursor), &saved))
@@ -168,13 +169,13 @@ func TestCodexHistoryReconcilesFinalTextArrivingAfterTerminalStatus(t *testing.T
 	store, err := OpenSQLiteStore(filepath.Join(root, "history.db"))
 	require(t, err)
 	defer store.Close()
-	binding := codexHistoryBinding{Version: 1, ProjectID: "project", WorkflowID: "workflow", ExecutionID: "execution", AttemptID: "attempt", Backend: executionapi.BackendLocal, Protocol: executionapi.ProtocolLocalProcess, TargetID: "local", Workspace: workspace, SessionID: "00000000-0000-0000-0000-000000000001", Command: Command{Executable: os.Args[0], Args: []string{"-test.run=^TestCodexHistoryServerHelper$"}}}
+	binding := codexworker.HistoryBinding{Version: 1, ProjectID: "project", WorkflowID: "workflow", ExecutionID: "execution", AttemptID: "attempt", Backend: executionapi.BackendLocal, Protocol: executionapi.ProtocolLocalProcess, TargetID: "local", Workspace: workspace, SessionID: "00000000-0000-0000-0000-000000000001", Command: Command{Executable: os.Args[0], Args: []string{"-test.run=^TestCodexHistoryServerHelper$"}}}
 	service := &Service{domainStore: store}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	_, err = service.collectCodexHistoryPage(ctx, binding)
 	require(t, err)
-	checkpoint, err := store.ConversationCheckpoint(ctx, binding.ProjectID, binding.ExecutionID, binding.AttemptID, "codex-app-server", binding.identity())
+	checkpoint, err := store.ConversationCheckpoint(ctx, binding.ProjectID, binding.ExecutionID, binding.AttemptID, "codex-app-server", binding.Identity())
 	require(t, err)
 	var saved codexHistoryCursor
 	require(t, json.Unmarshal([]byte(checkpoint.Cursor), &saved))
@@ -205,7 +206,7 @@ func TestCodexHistoryReconcilesFinalTextArrivingAfterTerminalStatus(t *testing.T
 		_, err = service.collectCodexHistoryPage(ctx, binding)
 		require(t, err)
 	}
-	checkpoint, err = store.ConversationCheckpoint(ctx, binding.ProjectID, binding.ExecutionID, binding.AttemptID, "codex-app-server", binding.identity())
+	checkpoint, err = store.ConversationCheckpoint(ctx, binding.ProjectID, binding.ExecutionID, binding.AttemptID, "codex-app-server", binding.Identity())
 	require(t, err)
 	saved = codexHistoryCursor{}
 	require(t, json.Unmarshal([]byte(checkpoint.Cursor), &saved))
@@ -255,7 +256,7 @@ func TestCodexHistoryEmptyPageDoesNotHideRawProgress(t *testing.T) {
 	raw := conversationTestWrite("raw-progress", 1, "complete", []byte("progress before native history"), []byte("raw-progress"))
 	_, err = store.CommitConversation(context.Background(), []ConversationWrite{raw}, ConversationCheckpoint{})
 	require(t, err)
-	binding := codexHistoryBinding{Version: 1, ProjectID: "project", WorkflowID: "workflow", ExecutionID: "execution", AttemptID: "attempt", Backend: executionapi.BackendLocal, Protocol: executionapi.ProtocolLocalProcess, TargetID: "local", Workspace: workspace, SessionID: "00000000-0000-0000-0000-000000000001", Command: Command{Executable: os.Args[0], Args: []string{"-test.run=^TestCodexHistoryServerHelper$"}}}
+	binding := codexworker.HistoryBinding{Version: 1, ProjectID: "project", WorkflowID: "workflow", ExecutionID: "execution", AttemptID: "attempt", Backend: executionapi.BackendLocal, Protocol: executionapi.ProtocolLocalProcess, TargetID: "local", Workspace: workspace, SessionID: "00000000-0000-0000-0000-000000000001", Command: Command{Executable: os.Args[0], Args: []string{"-test.run=^TestCodexHistoryServerHelper$"}}}
 	service := &Service{domainStore: store}
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
@@ -305,14 +306,14 @@ func TestCodexHistoryDisconnectKeepsVisibleGapAndCheckpoint(t *testing.T) {
 	store, err := OpenSQLiteStore(filepath.Join(root, "history.db"))
 	require(t, err)
 	defer store.Close()
-	binding := codexHistoryBinding{Version: 1, ProjectID: "project", WorkflowID: "workflow", ExecutionID: "execution", AttemptID: "attempt", Backend: executionapi.BackendLocal, Protocol: executionapi.ProtocolLocalProcess, TargetID: "local", Workspace: workspace, SessionID: "00000000-0000-0000-0000-000000000001", Command: Command{Executable: os.Args[0], Args: []string{"-test.run=^TestCodexHistoryServerHelper$"}}}
+	binding := codexworker.HistoryBinding{Version: 1, ProjectID: "project", WorkflowID: "workflow", ExecutionID: "execution", AttemptID: "attempt", Backend: executionapi.BackendLocal, Protocol: executionapi.ProtocolLocalProcess, TargetID: "local", Workspace: workspace, SessionID: "00000000-0000-0000-0000-000000000001", Command: Command{Executable: os.Args[0], Args: []string{"-test.run=^TestCodexHistoryServerHelper$"}}}
 	service := &Service{domainStore: store}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	requests := make(chan []codexHistoryBinding, 4)
+	requests := make(chan []codexworker.HistoryBinding, 4)
 	errorsOut := make(chan error, 4)
 	go service.runCodexHistoryCollector(ctx, requests, errorsOut)
-	requests <- []codexHistoryBinding{binding}
+	requests <- []codexworker.HistoryBinding{binding}
 	select {
 	case err := <-errorsOut:
 		if err == nil {
@@ -328,12 +329,12 @@ func TestCodexHistoryDisconnectKeepsVisibleGapAndCheckpoint(t *testing.T) {
 	if len(page.Events) != 1 || page.Events[0].Type != ConversationGap || page.Events[0].Status != "source_unavailable" {
 		t.Fatalf("disconnect did not leave a visible source gap: %+v", page.Events)
 	}
-	if _, err = store.ConversationCheckpoint(ctx, binding.ProjectID, binding.ExecutionID, binding.AttemptID, "codex-app-server", binding.identity()); err == nil {
+	if _, err = store.ConversationCheckpoint(ctx, binding.ProjectID, binding.ExecutionID, binding.AttemptID, "codex-app-server", binding.Identity()); err == nil {
 		t.Fatal("disconnect advanced the conversation checkpoint")
 	}
 	require(t, os.WriteFile(stage, []byte("late"), 0600))
 	for i := 0; i < 3; i++ {
-		requests <- []codexHistoryBinding{binding}
+		requests <- []codexworker.HistoryBinding{binding}
 	}
 	deadline := time.Now().Add(5 * time.Second)
 	finals := 0
@@ -354,7 +355,7 @@ func TestCodexHistoryDisconnectKeepsVisibleGapAndCheckpoint(t *testing.T) {
 	if finals != 2 || len(page.Events) < 7 || page.Events[0].Type != ConversationGap {
 		t.Fatalf("recovered history did not preserve the old gap: %+v", page.Events)
 	}
-	checkpoint, err := store.ConversationCheckpoint(ctx, binding.ProjectID, binding.ExecutionID, binding.AttemptID, "codex-app-server", binding.identity())
+	checkpoint, err := store.ConversationCheckpoint(ctx, binding.ProjectID, binding.ExecutionID, binding.AttemptID, "codex-app-server", binding.Identity())
 	require(t, err)
 	if checkpoint.Cursor == "" {
 		t.Fatal("recovered history did not advance its checkpoint")
@@ -371,7 +372,7 @@ func TestCodexHistoryRejectsOversizedOpaqueCursor(t *testing.T) {
 	store, err := OpenSQLiteStore(filepath.Join(root, "history.db"))
 	require(t, err)
 	defer store.Close()
-	b := codexHistoryBinding{Version: 1, ProjectID: "project", WorkflowID: "workflow", ExecutionID: "execution", AttemptID: "attempt", Backend: executionapi.BackendLocal, Protocol: executionapi.ProtocolLocalProcess, TargetID: "local", Workspace: workspace, SessionID: "00000000-0000-0000-0000-000000000001", Command: Command{Executable: os.Args[0], Args: []string{"-test.run=^TestCodexHistoryServerHelper$"}}}
+	b := codexworker.HistoryBinding{Version: 1, ProjectID: "project", WorkflowID: "workflow", ExecutionID: "execution", AttemptID: "attempt", Backend: executionapi.BackendLocal, Protocol: executionapi.ProtocolLocalProcess, TargetID: "local", Workspace: workspace, SessionID: "00000000-0000-0000-0000-000000000001", Command: Command{Executable: os.Args[0], Args: []string{"-test.run=^TestCodexHistoryServerHelper$"}}}
 	if _, err = (&Service{domainStore: store}).collectCodexHistoryPage(context.Background(), b); err == nil || !strings.Contains(err.Error(), "bounded source limit") {
 		t.Fatalf("oversized cursor was accepted: %v", err)
 	}
@@ -394,15 +395,15 @@ func TestCodexHistoryCollectorPrioritizesActiveAndBoundsHistoricalWork(t *testin
 	require(t, err)
 	defer store.Close()
 	s := &Service{domainStore: store}
-	sources := make([]codexHistoryBinding, 0, 6)
+	sources := make([]codexworker.HistoryBinding, 0, 6)
 	for i := 0; i < 5; i++ {
-		sources = append(sources, codexHistoryBinding{Version: 1, ProjectID: "project", WorkflowID: "workflow", ExecutionID: fmt.Sprintf("execution-%d", i), AttemptID: fmt.Sprintf("attempt-%d", i), Backend: executionapi.BackendLocal, Protocol: executionapi.ProtocolLocalProcess, TargetID: "local", Workspace: workspace, SessionID: fmt.Sprintf("00000000-0000-0000-0000-%012d", i+1), Command: Command{Executable: os.Args[0], Args: []string{"-test.run=^TestCodexHistoryServerHelper$"}}, Ended: true})
+		sources = append(sources, codexworker.HistoryBinding{Version: 1, ProjectID: "project", WorkflowID: "workflow", ExecutionID: fmt.Sprintf("execution-%d", i), AttemptID: fmt.Sprintf("attempt-%d", i), Backend: executionapi.BackendLocal, Protocol: executionapi.ProtocolLocalProcess, TargetID: "local", Workspace: workspace, SessionID: fmt.Sprintf("00000000-0000-0000-0000-%012d", i+1), Command: Command{Executable: os.Args[0], Args: []string{"-test.run=^TestCodexHistoryServerHelper$"}}, Ended: true})
 	}
 	active := sources[0]
 	active.ExecutionID, active.AttemptID, active.SessionID, active.Ended = "execution-active", "attempt-active", "00000000-0000-0000-0000-000000000099", false
 	sources = append(sources, active)
 	ctx, cancel := context.WithCancel(context.Background())
-	requests := make(chan []codexHistoryBinding, 1)
+	requests := make(chan []codexworker.HistoryBinding, 1)
 	errorsOut := make(chan error, 10)
 	done := make(chan struct{})
 	go func() { defer close(done); s.runCodexHistoryCollector(ctx, requests, errorsOut) }()
@@ -435,8 +436,8 @@ func TestCodexHistoryNativeFixtures(t *testing.T) {
 	require(t, err)
 	var fixture struct {
 		Samples []struct {
-			Backend executionapi.BackendKind `json:"backend"`
-			Thread  codexHistoryThread       `json:"thread"`
+			Backend executionapi.BackendKind  `json:"backend"`
+			Thread  codexworker.HistoryThread `json:"thread"`
 		} `json:"samples"`
 	}
 	require(t, json.Unmarshal(raw, &fixture))
@@ -454,7 +455,7 @@ func TestCodexHistoryNativeFixtures(t *testing.T) {
 			}
 			var all []ConversationWrite
 			for _, turn := range sample.Thread.Turns {
-				writes, mapErr := mapCodexHistoryTurn(base, turn, uint64(len(all)+1))
+				writes, mapErr := codexworker.MapHistoryTurn(base, turn, uint64(len(all)+1))
 				require(t, mapErr)
 				all = append(all, writes...)
 			}
@@ -504,14 +505,14 @@ func TestCodexHistoryRealLocalToolInterleaveFixture(t *testing.T) {
 	raw, err := os.ReadFile(filepath.Join("..", "..", "docs", "validation", "pr-04b-local-tool-interleave-2026-09-25.json"))
 	require(t, err)
 	var fixture struct {
-		Thread codexHistoryThread `json:"thread"`
+		Thread codexworker.HistoryThread `json:"thread"`
 	}
 	require(t, json.Unmarshal(raw, &fixture))
 	if len(fixture.Thread.Turns) != 1 {
 		t.Fatal("real local tool fixture must contain exactly one turn")
 	}
 	base := ConversationEvent{ProjectID: "project", ExecutionID: "execution", AttemptID: "attempt", Backend: executionapi.BackendLocal, Protocol: executionapi.ProtocolLocalProcess, Agent: "codex", SourceSegment: "native", SourceIdentity: "native", SessionID: fixture.Thread.ID}
-	writes, err := mapCodexHistoryTurn(base, fixture.Thread.Turns[0], 1)
+	writes, err := codexworker.MapHistoryTurn(base, fixture.Thread.Turns[0], 1)
 	require(t, err)
 	store, err := OpenSQLiteStore(filepath.Join(t.TempDir(), "history.db"))
 	require(t, err)
@@ -556,7 +557,7 @@ func TestCodexHistoryRealSourceReplacement(t *testing.T) {
 	}
 	raw, err := os.ReadFile(path)
 	require(t, err)
-	var bindings []codexHistoryBinding
+	var bindings []codexworker.HistoryBinding
 	require(t, json.Unmarshal(raw, &bindings))
 	if len(bindings) != 2 || bindings[0].Backend != executionapi.BackendLocal || bindings[1].Backend != executionapi.BackendLocal || bindings[0].ProjectID != bindings[1].ProjectID || bindings[0].ExecutionID != bindings[1].ExecutionID || bindings[0].AttemptID != bindings[1].AttemptID || canonical(bindings[0].Workspace) != canonical(bindings[1].Workspace) || bindings[0].SessionID == bindings[1].SessionID {
 		t.Fatal("replacement acceptance needs two distinct real sessions bound to one local attempt and workspace")
@@ -604,7 +605,7 @@ func TestCodexHistoryRealSourceReplacement(t *testing.T) {
 		if sessions[binding.SessionID] != 1 || gaps[binding.SessionID] != 1 || finals[binding.SessionID] < 1 {
 			t.Fatalf("real source %s was hidden or crossed: sessions=%v gaps=%v finals=%v", binding.SessionID, sessions, gaps, finals)
 		}
-		cp, cpErr := store.ConversationCheckpoint(ctx, binding.ProjectID, binding.ExecutionID, binding.AttemptID, "codex-app-server", binding.identity())
+		cp, cpErr := store.ConversationCheckpoint(ctx, binding.ProjectID, binding.ExecutionID, binding.AttemptID, "codex-app-server", binding.Identity())
 		require(t, cpErr)
 		if cp.Cursor == "" {
 			t.Fatalf("real source %s has no own checkpoint", binding.SessionID)
@@ -627,14 +628,14 @@ func TestCodexHistoryRealCancelledTurnFixture(t *testing.T) {
 	raw, err := os.ReadFile(filepath.Join("..", "..", "docs", "validation", "pr-04b-native-cancelled-2026-09-25.json"))
 	require(t, err)
 	var fixture struct {
-		Thread codexHistoryThread `json:"thread"`
+		Thread codexworker.HistoryThread `json:"thread"`
 	}
 	require(t, json.Unmarshal(raw, &fixture))
 	if len(fixture.Thread.Turns) != 1 || fixture.Thread.Turns[0].CompletedAt == nil {
 		t.Fatal("real cancelled turn lacks a native completion timestamp")
 	}
 	base := ConversationEvent{ProjectID: "project", ExecutionID: "execution", AttemptID: "attempt", Backend: executionapi.BackendLocal, Protocol: executionapi.ProtocolLocalProcess, Agent: "codex", SourceSegment: "native", SourceIdentity: "native", SessionID: fixture.Thread.ID}
-	writes, err := mapCodexHistoryTurn(base, fixture.Thread.Turns[0], 1)
+	writes, err := codexworker.MapHistoryTurn(base, fixture.Thread.Turns[0], 1)
 	require(t, err)
 	if len(writes) != 2 || writes[0].Event.Type != ConversationTurnStarted || writes[1].Event.Type != ConversationTurnCancelled || writes[1].Event.Status != "interrupted" || writes[1].Event.FinalAvailability != FinalAbsent || writes[1].Event.TurnID != writes[0].Event.TurnID {
 		t.Fatalf("real terminal cancellation or absent final was misrepresented: %+v", writes)
@@ -645,14 +646,14 @@ func TestCodexHistoryRealFailedTurnFixture(t *testing.T) {
 	raw, err := os.ReadFile(filepath.Join("..", "..", "docs", "validation", "pr-04b-native-failed-2026-09-25.json"))
 	require(t, err)
 	var fixture struct {
-		Thread codexHistoryThread `json:"thread"`
+		Thread codexworker.HistoryThread `json:"thread"`
 	}
 	require(t, json.Unmarshal(raw, &fixture))
 	if len(fixture.Thread.Turns) != 1 || fixture.Thread.Turns[0].CompletedAt == nil || fixture.Thread.Turns[0].Status != "failed" {
 		t.Fatal("real failed turn lacks native terminal evidence")
 	}
 	base := ConversationEvent{ProjectID: "project", ExecutionID: "execution", AttemptID: "attempt", Backend: executionapi.BackendLocal, Protocol: executionapi.ProtocolLocalProcess, Agent: "codex", SourceSegment: "native", SourceIdentity: "native", SessionID: fixture.Thread.ID}
-	writes, err := mapCodexHistoryTurn(base, fixture.Thread.Turns[0], 1)
+	writes, err := codexworker.MapHistoryTurn(base, fixture.Thread.Turns[0], 1)
 	require(t, err)
 	if len(writes) != 3 || writes[0].Event.Type != ConversationTurnStarted || writes[1].Event.Type != ConversationObservation || writes[2].Event.Type != ConversationTurnFailed || writes[2].Event.Status != "failed" || writes[2].Event.FinalAvailability != FinalAbsent {
 		t.Fatalf("real native failure or missing final was misrepresented: %+v", writes)
@@ -681,7 +682,7 @@ func TestCodexHistoryRealFailedAcceptance(t *testing.T) {
 	}
 	raw, err := os.ReadFile(path)
 	require(t, err)
-	var binding codexHistoryBinding
+	var binding codexworker.HistoryBinding
 	require(t, json.Unmarshal(raw, &binding))
 	if binding.Backend != executionapi.BackendLocal || binding.Home == "" {
 		t.Fatal("failed-turn acceptance requires an isolated local Codex home")
@@ -725,26 +726,26 @@ func TestCodexHistoryRealFailedAcceptance(t *testing.T) {
 func TestCodexHistoryTurnCompletionAndLateFinal(t *testing.T) {
 	base := ConversationEvent{ProjectID: "p", ExecutionID: "e", AttemptID: "a", SourceSegment: "s", SessionID: "session"}
 	completedAt := int64(1)
-	turn := codexHistoryTurn{ID: "turn", Status: "completed", CompletedAt: &completedAt, Items: []json.RawMessage{json.RawMessage(`{"id":"message","type":"agentMessage","text":"unknown"}`)}}
-	first, err := mapCodexHistoryTurn(base, turn, 1)
+	turn := codexworker.HistoryTurn{ID: "turn", Status: "completed", CompletedAt: &completedAt, Items: []json.RawMessage{json.RawMessage(`{"id":"message","type":"agentMessage","text":"unknown"}`)}}
+	first, err := codexworker.MapHistoryTurn(base, turn, 1)
 	require(t, err)
 	if first[len(first)-1].Event.FinalAvailability != FinalUnknown {
 		t.Fatal("missing phase was called an absent final")
 	}
 	turn.Items = append(turn.Items, json.RawMessage(`{"id":"final","type":"agentMessage","phase":"final_answer","text":"late final"}`))
-	late, err := mapCodexHistoryTurn(base, turn, 10)
+	late, err := codexworker.MapHistoryTurn(base, turn, 10)
 	require(t, err)
 	if late[len(late)-1].Event.FinalAvailability != FinalAvailable || late[len(late)-1].Event.SourceEventID == first[len(first)-1].Event.SourceEventID {
 		t.Fatal("late native final cannot reconcile its original turn")
 	}
 	turn.Status = "interrupted"
-	cancelled, err := mapCodexHistoryTurn(base, turn, 20)
+	cancelled, err := codexworker.MapHistoryTurn(base, turn, 20)
 	require(t, err)
 	if cancelled[len(cancelled)-1].Event.Type != ConversationTurnCancelled {
 		t.Fatal("interrupted native turn was not cancelled")
 	}
 	turn.CompletedAt = nil
-	active, err := mapCodexHistoryTurn(base, turn, 30)
+	active, err := codexworker.MapHistoryTurn(base, turn, 30)
 	require(t, err)
 	for _, write := range active {
 		if write.Event.Type == ConversationTurnCancelled || write.Event.Type == ConversationTurnCompleted {
@@ -756,14 +757,14 @@ func TestCodexHistoryTurnCompletionAndLateFinal(t *testing.T) {
 func TestCodexHistoryMissingTextDoesNotClaimFinalBody(t *testing.T) {
 	base := ConversationEvent{ProjectID: "project", ExecutionID: "execution", AttemptID: "attempt", SourceSegment: "native", SessionID: "session"}
 	completedAt := int64(1)
-	missing := codexHistoryTurn{ID: "missing-turn", Status: "completed", CompletedAt: &completedAt, Items: []json.RawMessage{json.RawMessage(`{"id":"missing-final","type":"agentMessage","phase":"final_answer"}`)}}
-	writes, err := mapCodexHistoryTurn(base, missing, 1)
+	missing := codexworker.HistoryTurn{ID: "missing-turn", Status: "completed", CompletedAt: &completedAt, Items: []json.RawMessage{json.RawMessage(`{"id":"missing-final","type":"agentMessage","phase":"final_answer"}`)}}
+	writes, err := codexworker.MapHistoryTurn(base, missing, 1)
 	require(t, err)
 	if len(writes) != 3 || writes[1].BodyMode != "" || writes[1].Event.FinalAvailability != FinalUnknown || writes[2].Event.FinalAvailability != FinalUnknown {
 		t.Fatalf("native final without text was claimed as complete: %+v", writes)
 	}
-	empty := codexHistoryTurn{ID: "empty-turn", Status: "completed", CompletedAt: &completedAt, Items: []json.RawMessage{json.RawMessage(`{"id":"empty-final","type":"agentMessage","phase":"final_answer","text":""}`)}}
-	writes, err = mapCodexHistoryTurn(base, empty, 10)
+	empty := codexworker.HistoryTurn{ID: "empty-turn", Status: "completed", CompletedAt: &completedAt, Items: []json.RawMessage{json.RawMessage(`{"id":"empty-final","type":"agentMessage","phase":"final_answer","text":""}`)}}
+	writes, err = codexworker.MapHistoryTurn(base, empty, 10)
 	require(t, err)
 	if len(writes) != 3 || writes[1].BodyMode != "complete" || writes[1].Event.FinalAvailability != FinalAvailable || writes[2].Event.FinalAvailability != FinalAvailable {
 		t.Fatalf("explicit empty native final was not complete: %+v", writes)
@@ -826,7 +827,7 @@ func TestCodexHistoryCanonicalSourceKeepsRawReadable(t *testing.T) {
 }
 
 func TestCodexHistoryBindingCannotChangeAttempt(t *testing.T) {
-	b := codexHistoryBinding{Version: 1, ProjectID: "p", WorkflowID: "w", ExecutionID: "e", AttemptID: "a", Backend: executionapi.BackendLocal, Protocol: executionapi.ProtocolLocalProcess, TargetID: "local", Workspace: t.TempDir(), SessionID: "00000000-0000-0000-0000-000000000001", Command: Command{Executable: "codex"}}
+	b := codexworker.HistoryBinding{Version: 1, ProjectID: "p", WorkflowID: "w", ExecutionID: "e", AttemptID: "a", Backend: executionapi.BackendLocal, Protocol: executionapi.ProtocolLocalProcess, TargetID: "local", Workspace: t.TempDir(), SessionID: "00000000-0000-0000-0000-000000000001", Command: Command{Executable: "codex"}}
 	path := filepath.Join(t.TempDir(), codexHistoryBindingFile)
 	require(t, writeCodexHistoryBinding(path, b))
 	b.AttemptID = "replacement"
@@ -841,7 +842,7 @@ func TestCodexHistorySourceDiscoveryRejectsWrongWorkspace(t *testing.T) {
 	logPath := filepath.Join(root, "runs", workflowID, "events.jsonl")
 	require(t, os.MkdirAll(filepath.Dir(logPath), 0700))
 	require(t, os.WriteFile(logPath, []byte("{}\n"), 0600))
-	b := codexHistoryBinding{Version: 1, ProjectID: "p", WorkflowID: workflowID, ExecutionID: executionID, AttemptID: attemptID, Backend: executionapi.BackendLocal, Protocol: executionapi.ProtocolLocalProcess, TargetID: "local", Workspace: workspace, SessionID: "00000000-0000-0000-0000-000000000001", Command: Command{Executable: "codex"}}
+	b := codexworker.HistoryBinding{Version: 1, ProjectID: "p", WorkflowID: workflowID, ExecutionID: executionID, AttemptID: attemptID, Backend: executionapi.BackendLocal, Protocol: executionapi.ProtocolLocalProcess, TargetID: "local", Workspace: workspace, SessionID: "00000000-0000-0000-0000-000000000001", Command: Command{Executable: "codex"}}
 	require(t, writeCodexHistoryBinding(localCodexHistoryBindingPath(filepath.Dir(logPath), b.SessionID), b))
 	s := &Service{Config: Config{RunDir: root, identity: "p"}, State: Runtime{}, domain: DomainSnapshot{Attempts: []StepAttemptRecord{{ProjectIdentity: "p", AttemptID: attemptID, ExecutionID: executionID, StepID: "implement", EventPath: logPath}}}, runs: []*Run{{TaskID: "1", DomainTaskID: "1", RunID: workflowID, WorkflowVersion: "minimal-v1", ExecutionID: executionID, AttemptID: attemptID, Agent: "codex", Backend: string(executionapi.BackendLocal), Protocol: string(executionapi.ProtocolLocalProcess), Target: executionapi.ExecutionTarget{ID: "local"}, WorktreePath: &workspace, LogPath: &logPath}}}
 	if len(s.codexHistorySources()) != 1 {
@@ -870,7 +871,7 @@ func TestCodexHistoryNativeAcceptance(t *testing.T) {
 	}
 	raw, err := os.ReadFile(path)
 	require(t, err)
-	var bindings []codexHistoryBinding
+	var bindings []codexworker.HistoryBinding
 	require(t, json.Unmarshal(raw, &bindings))
 	if len(bindings) != 2 {
 		t.Fatal("acceptance requires local and Orca probe sessions")
@@ -938,7 +939,7 @@ func TestCodexHistoryNativeAcceptance(t *testing.T) {
 			}
 			reports, reportErr := store.ConversationCapabilityReports(ctx, binding.Backend, binding.Protocol, binding.TargetID, 1)
 			require(t, reportErr)
-			if len(reports) != 1 || reports[0].AgentVersion == "" || reports[0].PlatformVersion == "" || reports[0].PlatformVersion == "windows" || reports[0].ExecutionID != binding.ExecutionID || reports[0].AttemptID != binding.AttemptID || reports[0].SourceIdentity != binding.identity() {
+			if len(reports) != 1 || reports[0].AgentVersion == "" || reports[0].PlatformVersion == "" || reports[0].PlatformVersion == "windows" || reports[0].ExecutionID != binding.ExecutionID || reports[0].AttemptID != binding.AttemptID || reports[0].SourceIdentity != binding.Identity() {
 				t.Fatal("native capability report lacks actual agent version")
 			}
 			statuses := map[string]executionapi.CapabilityStatus{}
@@ -956,7 +957,7 @@ func TestCodexHistoryNativeAcceptance(t *testing.T) {
 			if binding.Backend == executionapi.BackendLocal && statuses["input_wait"] != executionapi.CapabilityUnsupported {
 				t.Fatal("unsupported local reply was overclaimed")
 			}
-			checkpoint, err := store.ConversationCheckpoint(ctx, binding.ProjectID, binding.ExecutionID, binding.AttemptID, "codex-app-server", binding.identity())
+			checkpoint, err := store.ConversationCheckpoint(ctx, binding.ProjectID, binding.ExecutionID, binding.AttemptID, "codex-app-server", binding.Identity())
 			require(t, err)
 			require(t, store.Close())
 			store, err = OpenSQLiteStore(dbPath)
@@ -968,7 +969,7 @@ func TestCodexHistoryNativeAcceptance(t *testing.T) {
 				_, err = service.collectCodexHistoryPage(ctx, binding)
 				require(t, err)
 			}
-			replayedCheckpoint, checkpointErr := store.ConversationCheckpoint(ctx, binding.ProjectID, binding.ExecutionID, binding.AttemptID, "codex-app-server", binding.identity())
+			replayedCheckpoint, checkpointErr := store.ConversationCheckpoint(ctx, binding.ProjectID, binding.ExecutionID, binding.AttemptID, "codex-app-server", binding.Identity())
 			require(t, checkpointErr)
 			if replayedCheckpoint.LocalSeq != checkpoint.LocalSeq || replayedCheckpoint.Cursor != checkpoint.Cursor {
 				t.Fatal("unchanged native history advanced the persisted source position")

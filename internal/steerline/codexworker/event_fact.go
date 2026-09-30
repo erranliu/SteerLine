@@ -5,12 +5,13 @@ import (
 	"errors"
 
 	"github.com/erranliu/SteerLine/internal/steerline/codexapp"
+	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 type EventFact struct {
 	executionapi.EventFact
-	Question *AskEnvelope
+	Question *contracts.CodexAskCall
 }
 
 // DecodeEvent checks native identities before exposing facts to the center.
@@ -29,7 +30,7 @@ func DecodeEvent(envelope codexapp.Envelope, threadID, turnID string, inspectRep
 		}
 		fact.StartedTurnID = params.Turn.ID
 	case "item/tool/call":
-		call, err := ParseAskEnvelope(envelope, threadID, turnID)
+		call, err := ParseAskCall(envelope, threadID, turnID)
 		if err != nil {
 			return fact, err
 		}

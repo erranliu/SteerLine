@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,9 +15,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/erranliu/SteerLine/internal/steerline/codexapp"
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	"github.com/erranliu/SteerLine/internal/steerline/workspace"
 )
 
@@ -279,15 +279,11 @@ func LoadConfig(path string) (Config, error) {
 			return c, fmt.Errorf("invalid positive duration %q", v)
 		}
 	}
-	if c.Sandbox != "read-only" && c.Sandbox != "workspace-write" && c.Sandbox != "danger-full-access" {
+	if !codexworker.ValidSandbox(c.Sandbox) {
 		return c, errors.New("sandbox must be read-only, workspace-write or explicitly configured danger-full-access")
 	}
-	if c.ReasoningEffort != "" {
-		switch c.ReasoningEffort {
-		case "none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra":
-		default:
-			return c, fmt.Errorf("invalid reasoning_effort %q", c.ReasoningEffort)
-		}
+	if c.ReasoningEffort != "" && !codexworker.ValidReasoningEffort(c.ReasoningEffort) {
+		return c, fmt.Errorf("invalid reasoning_effort %q", c.ReasoningEffort)
 	}
 	// Empty means "use the default" so programmatic Configs stay valid.
 	if c.Host != "" && c.Host != "local" && c.Host != "orca" && c.Host != "orca_supervised" {
@@ -379,11 +375,11 @@ func validateSupervisedOrcaConfig(c *Config) error {
 
 func validateWorkflowConfig(c *Config, _ []byte) error {
 	if c.hostName() == "local" && c.agentName() == "codex" {
-		if _, err := codexapp.LocalSandboxArgs(runtime.GOOS, c.Sandbox, c.WindowsSandbox, c.Codex.Args); err != nil {
+		if _, err := codexworker.LocalSandboxArgs(runtime.GOOS, c.Sandbox, c.WindowsSandbox, c.Codex.Args); err != nil {
 			return err
 		}
-		if runtime.GOOS == "windows" && c.WindowsSandbox == "" && (c.Sandbox == "workspace-write" || c.Sandbox == "read-only") {
-			c.WindowsSandbox = "elevated"
+		if codexworker.ValidSandbox(c.Sandbox) {
+			c.WindowsSandbox = codexworker.LocalWindowsSandboxDefault(runtime.GOOS, c.Sandbox, c.WindowsSandbox)
 		}
 	}
 	if c.WorkflowProtocol != WorkerFlowVersion {

@@ -7,12 +7,11 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
@@ -22,65 +21,10 @@ func localCodexHistoryBindingPath(dir, session string) string {
 	return filepath.Join(dir, "codex-history."+session+".v1.json")
 }
 
-var codexThreadID = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
-
-type codexHistoryBinding struct {
-	Version     int                            `json:"v"`
-	ProjectID   string                         `json:"project_id"`
-	TaskID      string                         `json:"task_id"`
-	WorkflowID  string                         `json:"workflow_id"`
-	ExecutionID string                         `json:"execution_id"`
-	AttemptID   string                         `json:"attempt_id"`
-	Backend     executionapi.BackendKind       `json:"backend"`
-	Protocol    executionapi.ExecutionProtocol `json:"protocol"`
-	TargetID    string                         `json:"target_id"`
-	ExternalRef string                         `json:"external_ref"`
-	Workspace   string                         `json:"workspace"`
-	SessionID   string                         `json:"session_id"`
-	Command     Command                        `json:"command"`
-	Home        string                         `json:"codex_home,omitempty"`
-	Ended       bool                           `json:"-"`
-}
-
-func (b codexHistoryBinding) validate() error {
-	if b.Version != 1 || b.ProjectID == "" || b.ExecutionID == "" || b.AttemptID == "" || b.WorkflowID == "" || !filepath.IsAbs(b.Workspace) || b.Command.Executable == "" || !codexThreadID.MatchString(b.SessionID) {
-		return errors.New("Codex conversation binding is incomplete")
-	}
-	if b.Backend != executionapi.BackendLocal && b.Backend != executionapi.BackendOrca {
-		return errors.New("Codex history backend is unsupported")
-	}
-	if b.Backend == executionapi.BackendLocal && b.Protocol != executionapi.ProtocolLocalProcess && b.Protocol != executionapi.ProtocolLocalCodexAppServer || b.Backend == executionapi.BackendOrca && b.Protocol != executionapi.ProtocolOrcaTerminalV2 {
-		return errors.New("Codex history protocol does not match backend")
-	}
-	return nil
-}
-func (b codexHistoryBinding) identity() string {
-	return "codex-app-server-v1:" + digestValue(struct {
-		Session, Home, Workspace string
-		Command                  Command
-	}{b.SessionID, b.Home, canonical(b.Workspace), b.Command})
-}
-func (b codexHistoryBinding) event() ConversationEvent {
-	return ConversationEvent{Version: 1, ProjectID: b.ProjectID, TaskID: b.TaskID, WorkflowID: b.WorkflowID, ExecutionID: b.ExecutionID, AttemptID: b.AttemptID, Backend: b.Backend, Protocol: b.Protocol, Agent: "codex", TargetID: b.TargetID, ExternalRef: b.ExternalRef, Source: "codex-app-server", SourceSegment: b.identity(), SourceIdentity: b.identity(), SessionID: b.SessionID, SessionQuality: IdentityNative, TurnQuality: IdentityUnknown, ItemQuality: IdentityUnknown, SourceEventQuality: IdentityDerived, Phase: MessagePhaseUnknown, ReceivedAt: now()}
-}
 func codexReaderCommand(c Config) Command {
-	command := c.Codex
-	command.Args = append([]string(nil), command.Args...)
-	if c.Profile != "" {
-		command.Args = append(command.Args, "--profile", c.Profile)
-	}
-	return command
+	return codexworker.ReaderCommand(c.Codex, c.Profile)
 }
-
-func codexEnvironmentHome() string {
-	if path := os.Getenv("CODEX_HOME"); path != "" {
-		return path
-	}
-	if path, err := os.UserHomeDir(); err == nil {
-		return filepath.Join(path, ".codex")
-	}
-	return ""
-}
+func codexEnvironmentHome() string { return codexworker.EnvironmentHome() }
 func nativeCodexHistoryAvailable(ctx context.Context, c Config) bool {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
@@ -92,90 +36,12 @@ func nativeCodexHistoryAvailable(ctx context.Context, c Config) bool {
 	return true
 }
 
-// The launcher runs inside Orca's terminal environment, which may use a managed
-// CODEX_HOME. Only a non-model bootstrap user item is injected to persist the new
-// empty session. Every assistant phase below still comes from native history.
-type codexSessionLaunch struct {
-	Binding     codexHistoryBinding `json:"binding"`
-	BindingPath string              `json:"binding_path"`
-	Args        []string            `json:"args"`
-	Prompt      string              `json:"prompt"`
-	Sandbox     string              `json:"sandbox"`
-}
-
 func RunCodexSessionLauncher(ctx context.Context, requestPath string) error {
-	raw, err := os.ReadFile(requestPath)
-	if err != nil {
-		return err
-	}
-	var request codexSessionLaunch
-	if err = json.Unmarshal(raw, &request); err != nil {
-		return err
-	}
-	b := request.Binding
-	cwd, err := os.Getwd()
-	if err != nil {
-		return err
-	}
-	if b.Version != 1 || b.Backend != executionapi.BackendOrca || b.Protocol != executionapi.ProtocolOrcaTerminalV2 || b.SessionID != "" || b.Command.Executable == "" || canonical(cwd) != canonical(b.Workspace) || !filepath.IsAbs(requestPath) || canonical(filepath.Dir(request.BindingPath)) != canonical(filepath.Dir(requestPath)) || filepath.Base(request.BindingPath) != codexHistoryBindingFile {
-		return errors.New("invalid Codex session launch binding")
-	}
-	if _, err = os.Stat(request.BindingPath); !os.IsNotExist(err) {
-		return errors.New("Codex session binding already exists; refusing another launch")
-	}
-	b.Home = codexEnvironmentHome()
-	setupCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-	client, err := openCodexHistory(setupCtx, b.Command, cwd, b.Home)
-	if err != nil {
-		return err
-	}
-	params := map[string]any{"cwd": cwd, "ephemeral": false}
-	if request.Sandbox != "" {
-		params["sandbox"] = request.Sandbox
-	}
-	result, err := client.call(setupCtx, "thread/start", params)
-	if err != nil {
-		client.Close()
-		return err
-	}
-	var started struct {
-		Thread codexHistoryThread `json:"thread"`
-	}
-	if err = json.Unmarshal(result, &started); err != nil {
-		client.Close()
-		return err
-	}
-	b.SessionID = started.Thread.ID
-	if err = b.validate(); err != nil {
-		client.Close()
-		return err
-	}
-	_, err = client.call(setupCtx, "thread/inject_items", map[string]any{"threadId": b.SessionID, "items": []any{map[string]any{"type": "message", "role": "user", "content": []any{map[string]string{"type": "input_text", "text": "SteerLine prepared this session for execution " + b.ExecutionID + ", attempt " + b.AttemptID + ". Await the task instruction."}}}}})
-	client.Close()
-	if err != nil {
-		return err
-	}
-	encoded, err := json.MarshalIndent(b, "", "  ")
-	if err != nil {
-		return err
-	}
-	if err = AtomicWrite(request.BindingPath, append(encoded, '\n')); err != nil {
-		return err
-	}
-	args := append(append([]string{}, b.Command.Args...), "resume", "--include-non-interactive", b.SessionID)
-	args = append(args, request.Args...)
-	args = append(args, request.Prompt)
-	cmd := exec.Command(b.Command.Executable, args...)
-	cmd.Dir = cwd
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	return codexworker.RunSessionLauncher(ctx, requestPath, codexProcessStart, AtomicWrite)
 }
 
 func (s *Service) bindLocalCodexHistory(run *Run, source WorkerEvent) error {
-	if source.Source != "codex-jsonl" || !codexThreadID.MatchString(source.Session) || run.Backend != string(executionapi.BackendLocal) {
+	if source.Source != "codex-jsonl" || !codexworker.ValidNativeID(source.Session) || run.Backend != string(executionapi.BackendLocal) {
 		return nil
 	}
 	logPath := s.localConversationLogPath(run, source.AttemptID)
@@ -206,7 +72,7 @@ func (s *Service) bindLocalCodexHistory(run *Run, source WorkerEvent) error {
 		}
 		command = codexReaderCommand(fixed)
 	}
-	b := codexHistoryBinding{Version: 1, ProjectID: marker.ProjectID, TaskID: run.DomainTaskID, WorkflowID: marker.WorkflowID, ExecutionID: marker.ExecutionID, AttemptID: marker.AttemptID, Backend: executionapi.BackendLocal, Protocol: executionapi.ProtocolLocalProcess, TargetID: marker.TargetID, ExternalRef: conversationExternalRef(run.Process), Workspace: deref(run.WorktreePath), SessionID: source.Session, Command: command, Home: marker.CodexHome}
+	b := codexworker.HistoryBinding{Version: 1, ProjectID: marker.ProjectID, TaskID: run.DomainTaskID, WorkflowID: marker.WorkflowID, ExecutionID: marker.ExecutionID, AttemptID: marker.AttemptID, Backend: executionapi.BackendLocal, Protocol: executionapi.ProtocolLocalProcess, TargetID: marker.TargetID, ExternalRef: conversationExternalRef(run.Process), Workspace: deref(run.WorktreePath), SessionID: source.Session, Command: command, Home: marker.CodexHome}
 	path := localCodexHistoryBindingPath(filepath.Dir(logPath), b.SessionID)
 	return writeCodexHistoryBinding(path, b)
 }
@@ -248,28 +114,12 @@ func (s *Service) workerFlowSourcePath(run *Run, sourceIdentity string) string {
 	return ""
 }
 
-func writeCodexHistoryBinding(path string, b codexHistoryBinding) error {
-	if old, err := os.ReadFile(path); err == nil {
-		var previous codexHistoryBinding
-		if json.Unmarshal(old, &previous) != nil || previous.identity() != b.identity() || previous.ProjectID != b.ProjectID || previous.WorkflowID != b.WorkflowID || previous.ExecutionID != b.ExecutionID || previous.AttemptID != b.AttemptID || previous.Backend != b.Backend || previous.Protocol != b.Protocol || previous.TargetID != b.TargetID {
-			return errors.New("Codex session changed within the same attempt")
-		}
-		return nil
-	} else if !os.IsNotExist(err) {
-		return err
-	}
-	if err := b.validate(); err != nil {
-		return err
-	}
-	raw, err := json.MarshalIndent(b, "", "  ")
-	if err != nil {
-		return err
-	}
-	return AtomicWrite(path, append(raw, '\n'))
+func writeCodexHistoryBinding(path string, b codexworker.HistoryBinding) error {
+	return codexworker.WriteHistoryBinding(path, b, AtomicWrite)
 }
 
-func (s *Service) codexHistorySources() []codexHistoryBinding {
-	sources := []codexHistoryBinding{}
+func (s *Service) codexHistorySources() []codexworker.HistoryBinding {
+	sources := []codexworker.HistoryBinding{}
 	seen := map[string]bool{}
 	for _, run := range s.runs {
 		if run == nil || run.Agent != "codex" {
@@ -299,7 +149,7 @@ func (s *Service) codexHistorySources() []codexHistoryBinding {
 						continue
 					}
 					session := strings.TrimSuffix(strings.TrimPrefix(name, "codex-history."), ".v1.json")
-					if !codexThreadID.MatchString(session) {
+					if !codexworker.ValidNativeID(session) {
 						continue
 					}
 				}
@@ -308,13 +158,8 @@ func (s *Service) codexHistorySources() []codexHistoryBinding {
 					s.reportInvalidCodexBinding(run, attempt, bindingPath, errors.New("binding is not a regular file"))
 					continue
 				}
-				raw, readErr := os.ReadFile(bindingPath)
-				if readErr != nil {
-					s.reportInvalidCodexBinding(run, attempt, bindingPath, readErr)
-					continue
-				}
-				var b codexHistoryBinding
-				if json.Unmarshal(raw, &b) != nil || b.validate() != nil || b.ProjectID != s.Config.identity || b.WorkflowID != run.RunID || b.ExecutionID != run.ExecutionID || b.AttemptID != attempt || b.TargetID != run.Target.ID || b.Backend != executionapi.BackendKind(run.Backend) || b.Protocol != executionapi.ExecutionProtocol(run.Protocol) || canonical(b.Workspace) != canonical(deref(run.WorktreePath)) || b.Backend == executionapi.BackendOrca && name != codexHistoryBindingFile || b.Backend == executionapi.BackendLocal && name != filepath.Base(localCodexHistoryBindingPath(dir, b.SessionID)) {
+				b, readErr := codexworker.ReadHistoryBinding(bindingPath)
+				if readErr != nil || b.ProjectID != s.Config.identity || b.WorkflowID != run.RunID || b.ExecutionID != run.ExecutionID || b.AttemptID != attempt || b.TargetID != run.Target.ID || b.Backend != executionapi.BackendKind(run.Backend) || b.Protocol != executionapi.ExecutionProtocol(run.Protocol) || canonical(b.Workspace) != canonical(deref(run.WorktreePath)) || b.Backend == executionapi.BackendOrca && name != codexHistoryBindingFile || b.Backend == executionapi.BackendLocal && name != filepath.Base(localCodexHistoryBindingPath(dir, b.SessionID)) {
 					s.reportInvalidCodexBinding(run, attempt, bindingPath, errors.New("binding identity differs from recorded execution"))
 					continue
 				}
@@ -365,11 +210,11 @@ type codexPendingTurn struct {
 	Digest string `json:"digest"`
 }
 
-func (s *Service) collectCodexHistoryPage(ctx context.Context, b codexHistoryBinding) (bool, error) {
-	if err := b.validate(); err != nil {
+func (s *Service) collectCodexHistoryPage(ctx context.Context, b codexworker.HistoryBinding) (bool, error) {
+	if err := b.Validate(); err != nil {
 		return false, err
 	}
-	cp, err := s.domainStore.ConversationCheckpoint(ctx, b.ProjectID, b.ExecutionID, b.AttemptID, "codex-app-server", b.identity())
+	cp, err := s.domainStore.ConversationCheckpoint(ctx, b.ProjectID, b.ExecutionID, b.AttemptID, "codex-app-server", b.Identity())
 	hadCheckpoint := err == nil
 	var cursor codexHistoryCursor
 	previousCursor := ""
@@ -401,7 +246,7 @@ func (s *Service) collectCodexHistoryPage(ctx context.Context, b codexHistoryBin
 		return false, err
 	}
 	defer client.Close()
-	if err = client.readMetadata(ctx, b.SessionID, b.Workspace); err != nil {
+	if err = client.ReadMetadata(ctx, b.SessionID, b.Workspace); err != nil {
 		return false, err
 	}
 	readCursor := cursor.Cursor
@@ -414,14 +259,14 @@ func (s *Service) collectCodexHistoryPage(ctx context.Context, b codexHistoryBin
 	} else if len(cursor.Pending) > 0 {
 		cursor.ReadPending = true
 	}
-	page, err := client.readPage(ctx, b.SessionID, readCursor)
+	page, err := client.ReadPage(ctx, b.SessionID, readCursor)
 	if err != nil {
 		return false, err
 	}
 	if pendingIndex >= 0 && (len(page.Data) != 1 || page.Data[0].ID != cursor.Pending[pendingIndex].ID) {
 		return false, errors.New("Codex pending turn cursor changed its native identity")
 	}
-	base := b.event()
+	base := b.Event()
 	var writes []ConversationWrite
 	if cursor.Sequence == 0 && len(page.Data) > 0 {
 		e := base
@@ -440,28 +285,17 @@ func (s *Service) collectCodexHistoryPage(ctx context.Context, b codexHistoryBin
 		digest := digestValue(turn)
 		unchanged := pendingIndex >= 0 && cursor.Pending[pendingIndex].Digest == digest || pendingIndex < 0 && cursor.LastTurnID == turn.ID && cursor.LastDigest == digest
 		if !unchanged {
-			mapped, mapErr := mapCodexHistoryTurn(base, turn, cursor.Sequence+uint64(len(writes))+1)
+			mapped, mapErr := codexworker.MapHistoryTurn(base, turn, cursor.Sequence+uint64(len(writes))+1)
 			if mapErr != nil {
 				return false, mapErr
 			}
 			writes = append(writes, mapped...)
 		}
-		hasFinal := false
-		for _, raw := range turn.Items {
-			var item struct {
-				Type  string  `json:"type"`
-				Phase string  `json:"phase"`
-				Text  *string `json:"text"`
-			}
-			if err := json.Unmarshal(raw, &item); err != nil {
-				return false, err
-			}
-			if item.Type == "agentMessage" && item.Phase == string(MessagePhaseFinalAnswer) && item.Text != nil {
-				hasFinal = true
-				break
-			}
+		native, err := codexworker.InspectHistoryTurn(turn)
+		if err != nil {
+			return false, err
 		}
-		terminal := turn.CompletedAt != nil && (turn.Status == "completed" || turn.Status == "failed" || turn.Status == "interrupted")
+		hasFinal, terminal := native.HasFinal, native.Terminal
 		if pendingIndex >= 0 && hasFinal {
 			cursor.Pending = append(cursor.Pending[:pendingIndex], cursor.Pending[pendingIndex+1:]...)
 			if len(cursor.Pending) == 0 {
@@ -503,7 +337,7 @@ func (s *Service) collectCodexHistoryPage(ctx context.Context, b codexHistoryBin
 	if len(raw) > MaxEventPageBytes {
 		return false, errors.New("Codex source cursor exceeds the persisted budget")
 	}
-	cp = ConversationCheckpoint{ProjectID: b.ProjectID, ExecutionID: b.ExecutionID, AttemptID: b.AttemptID, Source: base.Source, SourceSegment: b.identity(), SourceIdentity: b.identity(), Generation: b.SessionID, Cursor: string(raw), LocalSeq: cursor.Sequence}
+	cp = ConversationCheckpoint{ProjectID: b.ProjectID, ExecutionID: b.ExecutionID, AttemptID: b.AttemptID, Source: base.Source, SourceSegment: b.Identity(), SourceIdentity: b.Identity(), Generation: b.SessionID, Cursor: string(raw), LocalSeq: cursor.Sequence}
 	// Prefix batches are replayable by native event identity. The source cursor
 	// advances only with the last committed batch, after every referenced body.
 	for len(writes) > 128 {
@@ -518,11 +352,18 @@ func (s *Service) collectCodexHistoryPage(ctx context.Context, b codexHistoryBin
 	if err == nil {
 		err = s.recordCodexHistoryCapabilities(ctx, b, client, page, hadCheckpoint)
 	}
-	settled := pendingIndex < 0 && len(cursor.Pending) == 0 && len(page.Data) > 0 && page.Data[0].CompletedAt != nil && (page.Data[0].Status == "completed" || page.Data[0].Status == "failed" || page.Data[0].Status == "interrupted")
+	settled := false
+	if len(page.Data) > 0 {
+		native, inspectErr := codexworker.InspectHistoryTurn(page.Data[0])
+		if inspectErr != nil {
+			return false, inspectErr
+		}
+		settled = pendingIndex < 0 && len(cursor.Pending) == 0 && native.Terminal
+	}
 	return page.NextCursor == nil && settled, err
 }
 
-func (s *Service) recordCodexHistoryCapabilities(ctx context.Context, b codexHistoryBinding, client *codexHistoryClient, page codexHistoryPage, hadCheckpoint bool) error {
+func (s *Service) recordCodexHistoryCapabilities(ctx context.Context, b codexworker.HistoryBinding, client *codexworker.HistoryClient, page codexworker.HistoryPage, hadCheckpoint bool) error {
 	values := map[string]ConversationCapability{
 		"turn_boundaries":      {Name: "turn_boundaries", Status: executionapi.CapabilityNotTested, Evidence: "No completed native turn observed yet"},
 		"message_phase":        {Name: "message_phase", Status: executionapi.CapabilityNotTested, Evidence: "No phase-bearing assistant message observed yet"},
@@ -542,22 +383,17 @@ func (s *Service) recordCodexHistoryCapabilities(ctx context.Context, b codexHis
 		if len(turn.Items) > 0 {
 			values["stable_item_identity"] = ConversationCapability{Name: "stable_item_identity", Status: executionapi.CapabilityVerified, Evidence: "Native session, turn and item IDs were observed through full turn history"}
 		}
-		for _, raw := range turn.Items {
-			var item struct {
-				Type  string  `json:"type"`
-				Phase string  `json:"phase"`
-				Text  *string `json:"text"`
-			}
-			if err := json.Unmarshal(raw, &item); err != nil {
-				return err
-			}
-			if item.Type == "agentMessage" && (item.Phase == string(MessagePhaseCommentary) || item.Phase == string(MessagePhaseFinalAnswer)) {
-				values["message_phase"] = ConversationCapability{Name: "message_phase", Status: executionapi.CapabilityVerified, Evidence: "Native agentMessage.phase was observed through full turn history"}
-				if item.Phase == string(MessagePhaseFinalAnswer) && turn.CompletedAt != nil && item.Text != nil {
-					values["final_content"] = ConversationCapability{Name: "final_content", Status: executionapi.CapabilityVerified, Evidence: "A completed native final_answer item has a persisted full body reference"}
-				}
-			}
+		native, err := codexworker.InspectHistoryTurn(turn)
+		if err != nil {
+			return err
 		}
+		if native.HasPhase {
+			values["message_phase"] = ConversationCapability{Name: "message_phase", Status: executionapi.CapabilityVerified, Evidence: "Native agentMessage.phase was observed through full turn history"}
+		}
+		if native.CompleteFinal {
+			values["final_content"] = ConversationCapability{Name: "final_content", Status: executionapi.CapabilityVerified, Evidence: "A completed native final_answer item has a persisted full body reference"}
+		}
+
 	}
 	if hadCheckpoint && (page.NextCursor != nil || page.BackwardsCursor != nil) {
 		values["incremental_read"] = ConversationCapability{Name: "incremental_read", Status: executionapi.CapabilityVerified, Evidence: "A persisted opaque turn cursor was resumed with a bounded full-item page"}
@@ -565,14 +401,14 @@ func (s *Service) recordCodexHistoryCapabilities(ctx context.Context, b codexHis
 	if hadCheckpoint && len(page.Data) > 0 {
 		values["history_replay"] = ConversationCapability{Name: "history_replay", Status: executionapi.CapabilityVerified, Evidence: "A new public app-server process replayed native history from the persisted source checkpoint"}
 	}
-	version := clip(client.userAgent, 256)
+	version := clip(client.UserAgent(), 256)
 	reports, err := s.domainStore.ConversationCapabilityReports(ctx, b.Backend, b.Protocol, b.TargetID, 100)
 	if err != nil {
 		return err
 	}
 	var previous *ConversationCapabilityReport
 	for i := range reports {
-		if reports[i].ExecutionID == b.ExecutionID && reports[i].AttemptID == b.AttemptID && reports[i].SourceIdentity == b.identity() {
+		if reports[i].ExecutionID == b.ExecutionID && reports[i].AttemptID == b.AttemptID && reports[i].SourceIdentity == b.Identity() {
 			previous = &reports[i]
 			break
 		}
@@ -607,7 +443,7 @@ func (s *Service) recordCodexHistoryCapabilities(ctx context.Context, b codexHis
 			return errors.New("Orca capability version probe returned no version")
 		}
 	}
-	report := ConversationCapabilityReport{Version: 1, Backend: b.Backend, Protocol: b.Protocol, Agent: "codex", AgentVersion: version, PlatformVersion: platformVersion, Target: executionapi.ExecutionTarget{ID: b.TargetID}, ExecutionID: b.ExecutionID, AttemptID: b.AttemptID, Source: "codex-app-server", SourceIdentity: b.identity(), CheckedAt: now(), Capabilities: make([]ConversationCapability, 0, len(names))}
+	report := ConversationCapabilityReport{Version: 1, Backend: b.Backend, Protocol: b.Protocol, Agent: "codex", AgentVersion: version, PlatformVersion: platformVersion, Target: executionapi.ExecutionTarget{ID: b.TargetID}, ExecutionID: b.ExecutionID, AttemptID: b.AttemptID, Source: "codex-app-server", SourceIdentity: b.Identity(), CheckedAt: now(), Capabilities: make([]ConversationCapability, 0, len(names))}
 	for _, name := range names {
 		report.Capabilities = append(report.Capabilities, values[name])
 	}
@@ -626,7 +462,7 @@ func (s *Service) recordCodexHistoryCapabilities(ctx context.Context, b codexHis
 	return s.domainStore.SaveConversationCapabilityReport(ctx, report)
 }
 
-func (s *Service) runCodexHistoryCollector(ctx context.Context, requests <-chan []codexHistoryBinding, errorsOut chan<- error) {
+func (s *Service) runCodexHistoryCollector(ctx context.Context, requests <-chan []codexworker.HistoryBinding, errorsOut chan<- error) {
 	finished := map[string]bool{}
 	activeIndex, historicalIndex := 0, 0
 	for {
@@ -634,7 +470,7 @@ func (s *Service) runCodexHistoryCollector(ctx context.Context, requests <-chan 
 		case <-ctx.Done():
 			return
 		case sources := <-requests:
-			active, historical := []codexHistoryBinding{}, []codexHistoryBinding{}
+			active, historical := []codexworker.HistoryBinding{}, []codexworker.HistoryBinding{}
 			for _, source := range sources {
 				if source.Ended {
 					historical = append(historical, source)
@@ -645,18 +481,18 @@ func (s *Service) runCodexHistoryCollector(ctx context.Context, requests <-chan 
 			for i, j := 0, len(historical)-1; i < j; i, j = i+1, j-1 {
 				historical[i], historical[j] = historical[j], historical[i]
 			}
-			pick := func(group []codexHistoryBinding, next *int) (codexHistoryBinding, bool) {
+			pick := func(group []codexworker.HistoryBinding, next *int) (codexworker.HistoryBinding, bool) {
 				for i := 0; i < len(group); i++ {
 					index := (*next + i) % len(group)
 					source := group[index]
-					if !finished[source.identity()+":"+source.AttemptID] {
+					if !finished[source.Identity()+":"+source.AttemptID] {
 						*next = index + 1
 						return source, true
 					}
 				}
-				return codexHistoryBinding{}, false
+				return codexworker.HistoryBinding{}, false
 			}
-			selected := make([]codexHistoryBinding, 0, 2)
+			selected := make([]codexworker.HistoryBinding, 0, 2)
 			if source, ok := pick(active, &activeIndex); ok {
 				selected = append(selected, source)
 			}
@@ -664,7 +500,7 @@ func (s *Service) runCodexHistoryCollector(ctx context.Context, requests <-chan 
 				selected = append(selected, source)
 			}
 			for _, source := range selected {
-				key := source.identity() + ":" + source.AttemptID
+				key := source.Identity() + ":" + source.AttemptID
 				readCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 				settled, err := s.collectCodexHistoryPage(readCtx, source)
 				cancel()
@@ -672,7 +508,7 @@ func (s *Service) runCodexHistoryCollector(ctx context.Context, requests <-chan 
 					if ctx.Err() != nil {
 						return
 					}
-					e := source.event()
+					e := source.Event()
 					e.Type = ConversationGap
 					e.Status = "source_unavailable"
 					e.SourceEventID = "read-error:" + digestValue(err.Error())

@@ -44,8 +44,8 @@ func decodeWorkerFlowEvent(mode workerflow.Mode, ev WorkerEvent, execution *exec
 		return fact, errors.New("Orca messages require their fixed Dispatch adapter")
 	}
 	if ev.Session != "" {
-		if !codexThreadID.MatchString(ev.Session) || execution.SessionID != "" && execution.SessionID != ev.Session {
-			return fact, &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "worker event changed the original Codex session"}
+		if err := codexworker.ValidateSession(ev.Session, execution.SessionID); err != nil {
+			return fact, err
 		}
 		fact.SessionID = ev.Session
 	}
@@ -61,10 +61,7 @@ func decodeWorkerFlowEvent(mode workerflow.Mode, ev WorkerEvent, execution *exec
 	}
 	fact.StartedTurnID, fact.ToolReply = native.StartedTurnID, native.ToolReply
 	if native.Question != nil {
-		call, err := codexAskCallFromEnvelope(*native.Question)
-		if err != nil {
-			return fact, err
-		}
+		call := *native.Question
 		call.Generation = execution.Generation
 		fact.Question = &call
 	}

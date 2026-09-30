@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
@@ -17,10 +18,14 @@ func nativeOrcaFixedAgentTitle(executionID string) string {
 }
 
 func nativeOrcaFixedAgentCommand(c Config) (string, error) {
-	return orcaworker.FixedAgentCommand(orcaworker.FixedAgentOptions{
+	command, err := codexworker.ManagedCommand(codexworker.ManagedCommandOptions{
 		Host: c.hostName(), Agent: c.agentName(), Model: c.Model, ReasoningEffort: c.ReasoningEffort,
-		Executable: c.Codex.Executable, Args: c.Codex.Args, Sandbox: c.Sandbox, WindowsSandbox: c.WindowsSandbox, Shell: c.Orca.Shell,
+		Executable: c.Codex.Executable, Args: c.Codex.Args, Sandbox: c.Sandbox, WindowsSandbox: c.WindowsSandbox,
 	})
+	if err != nil {
+		return "", err
+	}
+	return orcaworker.WrapAgentCommand(command, c.Orca.Shell)
 }
 
 // A fixed Orca model needs a launch command: worktree create --agent only
