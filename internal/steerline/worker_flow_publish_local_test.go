@@ -56,8 +56,8 @@ func fakeHostGH(args []string) int {
 
 func TestLocalWorkerPublishUsesHostGitAndExactPR(t *testing.T) {
 	ctx := context.Background()
-	c, base, db := openDAGFixture(t)
-	c.Host, c.Agent = "local", "codex"
+	s, run := appServerAuditService(t)
+	c := s.Config
 	c.CommandTimeout = "10s"
 	exe, err := os.Executable()
 	if err != nil {
@@ -65,9 +65,8 @@ func TestLocalWorkerPublishUsesHostGitAndExactPR(t *testing.T) {
 	}
 	t.Setenv("STEERLINE_TEST_HOST_GH_FILE", filepath.Join(t.TempDir(), "pr.json"))
 	c.PR = PRConfig{Kind: "command", BaseURL: "https://github.com", Repository: "owner/repo", Query: Command{Executable: exe, Args: []string{"api", "repos/{repository}/pulls/{number}"}}}
-	runID, turnID := strings.Repeat("a", 32), "00000000-0000-0000-0000-000000000001"
-	branch := "codex/101-" + runID[:12]
-	worktree := filepath.Join(t.TempDir(), "worker")
+	turnID := "00000000-0000-0000-0000-000000000001"
+	branch, worktree := run.WorkspaceIntent.Branch, filepath.Join(t.TempDir(), "worker")
 	git := func(dir string, args ...string) string {
 		t.Helper()
 		cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
@@ -77,6 +76,7 @@ func TestLocalWorkerPublishUsesHostGitAndExactPR(t *testing.T) {
 		}
 		return strings.TrimSpace(string(out))
 	}
+	base := git(c.Repository, "rev-parse", "HEAD")
 	git(c.Repository, "worktree", "add", "-b", branch, worktree, base)
 	git(worktree, "config", "user.name", "Fixture")
 	git(worktree, "config", "user.email", "fixture@example.invalid")
@@ -85,15 +85,15 @@ func TestLocalWorkerPublishUsesHostGitAndExactPR(t *testing.T) {
 		t.Fatal(err)
 	}
 	git(worktree, "add", "publish.txt")
-	run := &Run{TaskID: "101", RunID: runID, AttemptID: strings.Repeat("d", 32), ExecutionID: strings.Repeat("c", 32), WorkflowVersion: WorkerFlowVersion, Protocol: string(ProtocolLocalCodexAppServer), FinishTaskStatus: "waiting_decision", WorktreePath: &worktree, WorktreeBranch: &branch,
-		WorkspaceIntent: &WorkspaceIntent{Path: worktree, Branch: branch, BaseCommit: base}}
-	workflow := &WorkflowRunRecord{TaskID: run.TaskID, WorkflowRunID: runID, WorkflowVersion: WorkerFlowVersion, Branch: "main", Phase: "waiting_decision"}
-	execution := &ExecutionRecord{Protocol: run.Protocol, Backend: string(BackendLocal), CurrentStep: "worker", Status: "idle", WorkspaceIntent: run.WorkspaceIntent, WorkflowRunID: runID, ExecutionID: run.ExecutionID, Workspace: WorkspaceEvidence{Worktree: worktree, Branch: branch}, CurrentTurnID: turnID, LastStoppedTurnID: turnID}
-	s := &Service{Config: c, domainStore: db, store: &Store{Project: c.Identity()},
-		prs: &PRClient{Config: c.PR, Runner: Runner{Dir: c.Repository, Timeout: 10 * time.Second}},
-		State: Runtime{SchemaVersion: WorkerFlowRuntimeSchema, Repository: Repository{Path: c.Repository, Remote: c.Remote, Branch: c.Branch, Identity: c.Identity()},
-			Tasks: []TaskRecord{{TaskID: run.TaskID, Status: "in_progress"}}, Attempts: []StepAttemptRecord{{AttemptID: run.AttemptID, ExecutionID: run.ExecutionID, StepID: "worker", AttemptNumber: 1}}, Runs: []*Run{run}, WorkflowRuns: []WorkflowRunRecord{*workflow}, Executions: []ExecutionRecord{*execution}}}
-	workflow, execution = &s.State.WorkflowRuns[0], &s.State.Executions[0]
+	s.Config.PR, s.baseConfig.PR = c.PR, c.PR
+	s.prs = &PRClient{Config: c.PR, Runner: Runner{Dir: c.Repository, Timeout: 10 * time.Second}}
+	workflow, execution := s.workflowRecords(run)
+	workflow.Phase = "waiting_decision"
+	execution.WorkspaceIntent = &WorkspaceIntent{Path: worktree, Branch: branch, BaseCommit: base}
+	execution.Status, execution.SessionID, execution.CurrentTurnID, execution.LastStoppedTurnID, execution.TurnNumber = "idle", workerFlowMockSession, turnID, turnID, 1
+	execution.Workspace = WorkspaceEvidence{Worktree: worktree, Branch: branch, Base: base}
+	s.refreshRun(run)
+	require(t, s.commitWorker(run))
 	info, err := s.publishLocalWorkerRun(ctx, run, workflow, execution, turnID)
 	if err != nil {
 		t.Fatal(err)
@@ -108,12 +108,22 @@ func TestLocalWorkerPublishUsesHostGitAndExactPR(t *testing.T) {
 	if _, err := s.publishLocalWorkerRun(ctx, run, workflow, execution, turnID); err == nil {
 		t.Fatal("same turn repeated its confirmed publication")
 	}
-	s.State.Operations[0].Status = "in_flight"
+	publication := -1
+	for i := range s.State.Operations {
+		if s.State.Operations[i].IdempotencyKey == "local-publish:"+run.RunID+":"+turnID {
+			publication = i
+			break
+		}
+	}
+	if publication < 0 {
+		t.Fatal("publication operation is unavailable")
+	}
+	s.State.Operations[publication].Status = "in_flight"
 	s.State.WorkflowRuns[0].Phase, s.State.WorkflowRuns[0].PRURL = "waiting_decision", ""
 	run.FinishTaskStatus, run.PR.URL = "waiting_decision", nil
 	reconciled, err := s.reconcileLocalWorkerPublication(ctx, run)
-	if err != nil || !reconciled || s.State.Operations[0].Status != "confirmed" || s.State.WorkflowRuns[0].PRURL != info.URL {
-		t.Fatalf("uncertain host publication did not reconcile the same PR: reconciled=%t err=%v operation=%+v workflow=%+v", reconciled, err, s.State.Operations[0], s.State.WorkflowRuns[0])
+	if err != nil || !reconciled || s.State.Operations[publication].Status != "confirmed" || s.State.WorkflowRuns[0].PRURL != info.URL {
+		t.Fatalf("uncertain host publication did not reconcile the same PR: reconciled=%t err=%v operation=%+v workflow=%+v", reconciled, err, s.State.Operations[publication], s.State.WorkflowRuns[0])
 	}
 }
 

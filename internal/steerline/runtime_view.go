@@ -267,6 +267,7 @@ func (s *Service) setRunDecision(run *Run, decision *DecisionState) {
 		s.refreshRun(run)
 		return
 	}
+	s.markWorkerDecisionWrite(decision.ID)
 	record := DecisionRecord{ProjectIdentity: s.Config.identity, DecisionID: decision.ID, Scope: "execution",
 		WorkflowRunID: run.RunID, ExecutionID: run.ExecutionID, AttemptID: decision.AttemptID, QuestionID: decision.ID,
 		Request: mustJSON(decision.Request), Status: decision.Status, Version: decision.Version, CreatedAt: now(), UpdatedAt: now()}
@@ -301,5 +302,13 @@ func (s *Service) decisionRecord(run *Run) *DecisionRecord {
 func (s *Service) setDecisionStatus(run *Run, status string) {
 	record := s.decisionRecord(run)
 	record.Status, record.Version, record.UpdatedAt = status, record.Version+1, now()
+	s.markWorkerDecisionWrite(record.DecisionID)
 	s.refreshRun(run)
+}
+
+func (s *Service) markWorkerDecisionWrite(id string) {
+	if s.workerDecisionWrites == nil {
+		s.workerDecisionWrites = make(map[string]bool)
+	}
+	s.workerDecisionWrites[id] = true
 }

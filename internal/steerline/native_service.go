@@ -590,7 +590,7 @@ func (s *Service) dispatchNative(ctx context.Context) error {
 		s.refreshRun(run)
 		s.State.SlotOccupied = true
 		s.State.CurrentTask = ptr(task.TaskID)
-		if err = s.save(); err != nil {
+		if err = s.commitWorker(run); err != nil {
 			return err
 		}
 		s.lastDispatched = task.TaskID

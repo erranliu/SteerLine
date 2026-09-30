@@ -49,7 +49,7 @@ func (s *Service) prepareNativeOrcaFixedModelWorker(ctx context.Context, run *Ru
 			return &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "fixed Orca worktree creation has no unique resource"}
 		}
 		if op.Status != "confirmed" {
-			if err := s.changeOperation(op.OperationID, "confirmed", op.PlatformRequestID, mustJSON(worktree), ""); err != nil {
+			if err := s.changeWorkerOperation(run, op.OperationID, "confirmed", op.PlatformRequestID, mustJSON(worktree), ""); err != nil {
 				return err
 			}
 		}
@@ -57,22 +57,22 @@ func (s *Service) prepareNativeOrcaFixedModelWorker(ctx context.Context, run *Ru
 		if exists {
 			return errors.New("fixed Orca worktree exists without its creation intent")
 		}
-		opID, err := s.startOperation("orca_native_worktree", key, map[string]string{"repo_id": repoID, "name": name, "base": base, "comment": nativeOrcaWorktreeComment(execution.ExecutionID)})
+		opID, err := s.startWorkerOperation(run, "orca_native_worktree", key, map[string]string{"repo_id": repoID, "name": name, "base": base, "comment": nativeOrcaWorktreeComment(execution.ExecutionID)})
 		if err != nil {
 			return err
 		}
 		platform, callErr := orcaworker.CreateFixedWorktree(ctx, orcaWorkerMetaCaller(fixedConfig), repoID, name, base, nativeOrcaWorktreeComment(execution.ExecutionID))
 		if callErr != nil {
-			_ = s.changeOperation(opID, "outcome_unknown", "", nil, callErr.Error())
+			_ = s.changeWorkerOperation(run, opID, "outcome_unknown", "", nil, callErr.Error())
 			return &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "fixed Orca worktree creation needs reconciliation", Cause: callErr}
 		}
 		parsedWorktree, err := orcaworker.ParseFixedWorktreeReceipt(platform, name, repoID, base)
 		if err != nil {
-			_ = s.changeOperation(opID, "outcome_unknown", "", platform.Payload, "fixed worktree receipt is incomplete")
+			_ = s.changeWorkerOperation(run, opID, "outcome_unknown", "", platform.Payload, "fixed worktree receipt is incomplete")
 			return &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "fixed Orca worktree receipt is incomplete", Cause: err}
 		}
 		worktree = parsedWorktree
-		if err := s.changeOperation(opID, "confirmed", "", platform.Payload, ""); err != nil {
+		if err := s.changeWorkerOperation(run, opID, "confirmed", "", platform.Payload, ""); err != nil {
 			return err
 		}
 	}
@@ -113,7 +113,7 @@ func (s *Service) prepareNativeOrcaFixedAgentTerminal(ctx context.Context, run *
 					Terminal orcaTerminal `json:"terminal"`
 				}{Terminal: terminal})
 			}
-			if err := s.changeOperation(op.OperationID, "confirmed", op.PlatformRequestID, receipt, ""); err != nil {
+			if err := s.changeWorkerOperation(run, op.OperationID, "confirmed", op.PlatformRequestID, receipt, ""); err != nil {
 				return err
 			}
 		}
@@ -131,28 +131,28 @@ func (s *Service) prepareNativeOrcaFixedAgentTerminal(ctx context.Context, run *
 		return err
 	}
 	command = orcaworker.AppendPowerShellArgs(command, writeArgs)
-	opID, err := s.startOperation("orca_native_agent_terminal", key, map[string]string{"worktree": worktree.ID, "title": title, "model": fixedConfig.Model, "effort": fixedConfig.ReasoningEffort, "command": command})
+	opID, err := s.startWorkerOperation(run, "orca_native_agent_terminal", key, map[string]string{"worktree": worktree.ID, "title": title, "model": fixedConfig.Model, "effort": fixedConfig.ReasoningEffort, "command": command})
 	if err != nil {
 		return err
 	}
 	platform, callErr := orcaworker.CreateFixedAgentTerminal(ctx, orcaWorkerMetaCaller(fixedConfig), worktree.ID, title, fixedConfig.Orca.Shell, command)
 	if callErr != nil {
-		_ = s.changeOperation(opID, "outcome_unknown", "", nil, callErr.Error())
+		_ = s.changeWorkerOperation(run, opID, "outcome_unknown", "", nil, callErr.Error())
 		return &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "fixed Orca agent launch needs reconciliation", Cause: callErr}
 	}
 	parsedTerminal, err := orcaworker.ParseFixedAgentTerminalReceipt(platform, worktree.ID, title)
 	if err != nil {
-		_ = s.changeOperation(opID, "outcome_unknown", "", platform.Payload, "fixed agent terminal creation receipt is incomplete")
+		_ = s.changeWorkerOperation(run, opID, "outcome_unknown", "", platform.Payload, "fixed agent terminal creation receipt is incomplete")
 		return &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "fixed Orca agent launch receipt is incomplete", Cause: err}
 	}
-	if err := s.changeOperation(opID, "accepted", "", platform.Payload, ""); err != nil {
+	if err := s.changeWorkerOperation(run, opID, "accepted", "", platform.Payload, ""); err != nil {
 		return err
 	}
 	if err := s.waitAndBindNativeOrcaFixedAgent(ctx, run, execution, worktree, parsedTerminal.Handle, repoID, base); err != nil {
-		_ = s.changeOperation(opID, "outcome_unknown", "", platform.Payload, err.Error())
+		_ = s.changeWorkerOperation(run, opID, "outcome_unknown", "", platform.Payload, err.Error())
 		return err
 	}
-	if err := s.changeOperation(opID, "confirmed", "", platform.Payload, ""); err != nil {
+	if err := s.changeWorkerOperation(run, opID, "confirmed", "", platform.Payload, ""); err != nil {
 		return err
 	}
 	return s.prepareNativeOrcaCoordinator(ctx, run, execution)

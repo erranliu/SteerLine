@@ -93,7 +93,7 @@ func (s *Service) handleAppServerLaunchMessage(runID string, message *appServerL
 		execution.AppServerGeneration = message.execution.AppServerGeneration
 		execution.SessionID = message.execution.SessionID
 		s.refreshRun(run)
-		return s.save()
+		return s.commitWorker(run)
 	}
 	if message.phase != "turn_result" {
 		return fmt.Errorf("unknown app-server launch phase %q", message.phase)
@@ -110,7 +110,7 @@ func (s *Service) handleAppServerLaunchMessage(runID string, message *appServerL
 		}
 		execution.Status = "blocked"
 		s.refreshRun(run)
-		return s.waitWorkerFlow(run, "Original worker turn start is unverified: "+message.err.Error())
+		return s.waitWorkerFlow(run, "Original worker turn start is unverified: "+message.err.Error(), message.opID)
 	}
 	if message.worker == nil || !codexThreadID.MatchString(message.turnID) || execution.Process == nil || message.worker.proc.Identity() != *execution.Process || message.execution.SessionID != execution.SessionID || message.execution.AppServerGeneration != execution.AppServerGeneration {
 		return errors.New("app-server turn result differs from its fixed thread/process")
@@ -129,10 +129,10 @@ func (s *Service) handleAppServerLaunchMessage(runID string, message *appServerL
 	if err := s.setOperationState(message.opID, "accepted", message.turnID, mustJSON(*execution.Process), ""); err != nil {
 		return err
 	}
-	if err := s.save(); err != nil {
+	s.note(run, "steer", "worker", "accepted", "original worker turn accepted", message.commandID, map[string]any{"session_id": execution.SessionID, "turn_number": execution.TurnNumber + 1})
+	if err := s.commitWorker(run, message.opID); err != nil {
 		return err
 	}
 	s.registerWorker(run, message.worker)
-	s.note(run, "steer", "worker", "accepted", "original worker turn accepted", message.commandID, map[string]any{"session_id": execution.SessionID, "turn_number": execution.TurnNumber + 1})
 	return nil
 }

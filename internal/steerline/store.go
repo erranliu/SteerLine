@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -85,6 +86,43 @@ func (s *Store) Publish(v *Runtime) error {
 		s.baseline = domainFingerprints(value)
 	}
 	*v = value
+	return nil
+}
+
+// PublishCheckpoint updates service metadata after an explicit worker commit.
+// It cannot flush actor domain rows, operations or pending business events.
+func (s *Store) PublishCheckpoint(v *Runtime) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.failure != nil {
+		return s.failure
+	}
+	if v == nil {
+		return errors.New("runtime projection is required")
+	}
+	checkpoint := runtimeCheckpoint(*v)
+	checkpoint.UpdatedAt, checkpoint.HeartbeatAt = now(), now()
+	if s.Domain != nil {
+		if err := s.Domain.transactSQLite(context.Background(), func(tx *sqliteTx) error {
+			var revision uint64
+			if err := tx.tx.QueryRowContext(tx.ctx, `SELECT COALESCE(MAX(revision),0) FROM projection WHERE project_identity=?`, s.Project).Scan(&revision); err != nil {
+				return err
+			}
+			if checkpoint.SchemaVersion != WorkerFlowRuntimeSchema || checkpoint.Repository.Identity != s.Project || checkpoint.Revision != revision {
+				return nativeErr("stale_revision", "service checkpoint differs from the committed worker state")
+			}
+			checkpoint.Revision = revision + 1
+			payload, err := json.Marshal(checkpoint)
+			if err != nil {
+				return err
+			}
+			return tx.PutProjection(s.Project, checkpoint.Revision, payload)
+		}); err != nil {
+			s.failure = fmt.Errorf("critical checkpoint persistence: %w", err)
+			return s.failure
+		}
+	}
+	v.Revision, v.UpdatedAt, v.HeartbeatAt = checkpoint.Revision, checkpoint.UpdatedAt, checkpoint.HeartbeatAt
 	return nil
 }
 

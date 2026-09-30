@@ -95,7 +95,7 @@ func TestAppServerStartReplayPreservesNativeSavedAnswer(t *testing.T) {
 	run.Decision.ID, run.Decision.Version = newID(), 1
 	run.Decision.AttemptID = run.AttemptID
 	service.setRunDecision(run, run.Decision)
-	if err := service.recordAppServerTurnStarted(run, workflow, execution, second); err != nil {
+	if _, err := service.recordAppServerTurnStarted(run, workflow, execution, second); err != nil {
 		t.Fatal(err)
 	}
 	if execution.CurrentCommandID != commandID || execution.CurrentTurnID != second || execution.PendingCommandID != "" || execution.TurnNumber != 2 || run.Decision.Status != "reply_accepted" || service.State.Operations[0].Status != "confirmed" {
@@ -104,7 +104,7 @@ func TestAppServerStartReplayPreservesNativeSavedAnswer(t *testing.T) {
 	service.setRunDecision(run, &DecisionState{ID: newID(), AttemptID: run.AttemptID, Version: 1, Status: "answer_saved", Request: DecisionRequest{NativeAsk: &codexAskCall{CallID: "pending"}}})
 	workflow.Phase = "waiting_decision"
 	run.FinishTaskStatus = "waiting_decision"
-	if err := service.recordAppServerTurnStarted(run, workflow, execution, second); err != nil {
+	if _, err := service.recordAppServerTurnStarted(run, workflow, execution, second); err != nil {
 		t.Fatal(err)
 	}
 	if execution.TurnNumber != 2 || run.Decision.Status != "answer_saved" || workflow.Phase != "waiting_decision" || run.FinishTaskStatus != "waiting_decision" {
@@ -335,6 +335,9 @@ func TestAppServerServiceTwoTurnsPersistNativeReceipts(t *testing.T) {
 		if worker == nil {
 			t.Fatalf("no observer after start: %s", deref(run.Error))
 		}
+		if len(service.State.PendingEvents) != 0 {
+			t.Fatal("accepted worker event was left outside its receipt transaction")
+		}
 		for {
 			select {
 			case <-ctx.Done():
@@ -362,6 +365,28 @@ func TestAppServerServiceTwoTurnsPersistNativeReceipts(t *testing.T) {
 		}
 		previousTurn = execution.CurrentTurnID
 	}
+}
+
+func TestAppServerStartedEventCommitsOperationReceipt(t *testing.T) {
+	service, run := appServerAuditService(t)
+	_, execution := service.workflowRecords(run)
+	commandID, turnID := newID(), "00000000-0000-0000-0000-000000000001"
+	execution.SessionID, execution.PendingCommandID, execution.PendingTurnID = workerFlowMockSession, commandID, turnID
+	opID, err := service.startWorkerOperation(run, "start_worker_turn", "worker-turn:"+run.ExecutionID+":"+commandID, map[string]string{"command_id": commandID})
+	require(t, err)
+	event := WorkerEvent{AppServer: &codexapp.Envelope{Method: "turn/started", Params: mustJSON(map[string]any{"threadId": workerFlowMockSession, "turn": map[string]string{"id": turnID}})}}
+	require(t, service.eventWorkerFlowFor(run, event))
+	snapshot, err := service.domainStore.Query(context.Background(), service.Config.identity)
+	require(t, err)
+	for _, op := range snapshot.Operations {
+		if op.OperationID == opID {
+			if op.Status != "confirmed" || snapshot.Executions[0].CurrentTurnID != turnID || snapshot.Executions[0].PendingCommandID != "" {
+				t.Fatalf("native start and operation were not committed together: operation=%s execution=%+v", op.Status, snapshot.Executions[0])
+			}
+			return
+		}
+	}
+	t.Fatal("original start operation disappeared")
 }
 
 func TestAppServerAnswerRecoveryPersistsBeforeNextQuestion(t *testing.T) {

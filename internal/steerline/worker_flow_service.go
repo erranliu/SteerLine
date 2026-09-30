@@ -59,7 +59,7 @@ func (s *Service) resumeWorkerFlow(ctx context.Context) error {
 	return nil
 }
 
-func (s *Service) waitWorkerFlow(run *Run, reason string) error {
+func (s *Service) waitWorkerFlow(run *Run, reason string, operationIDs ...string) error {
 	workflow, execution := s.workflowRecords(run)
 	if workflow == nil || execution == nil || workflow.WorkflowVersion != WorkerFlowVersion {
 		return errors.New("worker flow wait has no fixed execution")
@@ -98,7 +98,7 @@ func (s *Service) waitWorkerFlow(run *Run, reason string) error {
 	} else {
 		s.note(run, "steer", "decision", "pending", "worker needs input", reason, decisionMeta(run))
 	}
-	return s.save()
+	return s.commitWorker(run, operationIDs...)
 }
 
 // A verified open PR does not require input, but the original session remains
@@ -154,7 +154,7 @@ func (s *Service) prepareWorkerWorkspace(ctx context.Context, task TaskRecord, r
 			return nameErr
 		}
 	}
-	opID, err := s.startOperation("prepare_workspace", "worker-workspace:"+execution.ExecutionID, struct {
+	opID, err := s.startWorkerOperation(run, "prepare_workspace", "worker-workspace:"+execution.ExecutionID, struct {
 		WorkflowRunID string          `json:"workflow_run_id"`
 		ExecutionID   string          `json:"execution_id"`
 		RemoteName    string          `json:"remote_name,omitempty"`
@@ -174,7 +174,7 @@ func (s *Service) prepareWorkerWorkspace(ctx context.Context, task TaskRecord, r
 		err = prepareWorktreeOnly(ctx, c, run)
 	}
 	if err != nil {
-		_ = s.changeOperation(opID, "outcome_unknown", "", nil, err.Error())
+		_ = s.changeWorkerOperation(run, opID, "outcome_unknown", "", nil, err.Error())
 		execution.Status = "blocked"
 		s.refreshRun(run)
 		return s.waitWorkerFlow(run, "Workspace preparation needs reconciliation: "+err.Error())
@@ -183,13 +183,13 @@ func (s *Service) prepareWorkerWorkspace(ctx context.Context, task TaskRecord, r
 		s.refreshRun(run)
 		workspace, inspectErr := s.inspectWorkflowWorkspace(ctx, run)
 		if inspectErr != nil {
-			_ = s.changeOperation(opID, "outcome_unknown", "", nil, inspectErr.Error())
+			_ = s.changeWorkerOperation(run, opID, "outcome_unknown", "", nil, inspectErr.Error())
 			execution.Status = "blocked"
 			s.refreshRun(run)
 			return s.waitWorkerFlow(run, "Workspace identity could not be verified: "+inspectErr.Error())
 		}
 		applyWorkflowWorkspaceEvidence(run, execution, workspace)
-		if err = s.changeOperation(opID, "confirmed", "", mustJSON(workspace), ""); err != nil {
+		if err = s.changeWorkerOperation(run, opID, "confirmed", "", mustJSON(workspace), ""); err != nil {
 			return err
 		}
 	}
@@ -244,7 +244,7 @@ func (s *Service) startWorkerFlowTurn(ctx context.Context, run *Run, prompt, tur
 		prompt += nativeOrcaRelayInstruction(run.RunID, turnID)
 	}
 	execution.PendingTurnID, execution.PendingCommandID = adapter.PendingIdentity(turnID)
-	opID, err := s.startOperation("start_worker_turn", "worker-turn:"+run.ExecutionID+":"+turnID, struct {
+	opID, err := s.startWorkerOperation(run, "start_worker_turn", "worker-turn:"+run.ExecutionID+":"+turnID, struct {
 		ExecutionID string `json:"execution_id"`
 		SessionID   string `json:"session_id,omitempty"`
 		TurnID      string `json:"turn_id"`
@@ -286,14 +286,17 @@ func (s *Service) eventWorkerFlowFor(run *Run, ev WorkerEvent) (resultErr error)
 	if err != nil {
 		return err
 	}
+	var operationIDs []string
 	if fact.SessionID != "" {
 		execution.SessionID = fact.SessionID
 		s.refreshRun(run)
 	}
 	if fact.StartedTurnID != "" && fact.Question == nil && mode == workerflow.LocalCodex {
-		if err := s.recordAppServerTurnStarted(run, workflow, execution, fact.StartedTurnID); err != nil {
+		opID, err := s.recordAppServerTurnStarted(run, workflow, execution, fact.StartedTurnID)
+		if err != nil {
 			return err
 		}
+		operationIDs = append(operationIDs, opID)
 	} else if fact.StartedTurnID != "" {
 		turnID := fact.StartedTurnID
 		commandID := turnID
@@ -315,6 +318,7 @@ func (s *Service) eventWorkerFlowFor(run *Run, ev WorkerEvent) (resultErr error)
 				if err := s.setOperationState(op.OperationID, "confirmed", requestID, mustJSON(map[string]string{"session_id": execution.SessionID, "turn_id": turnID}), ""); err != nil {
 					return err
 				}
+				operationIDs = append(operationIDs, op.OperationID)
 				break
 			}
 		}
@@ -366,6 +370,7 @@ func (s *Service) eventWorkerFlowFor(run *Run, ev WorkerEvent) (resultErr error)
 							if err := s.setOperationState(op.OperationID, "confirmed", ask.CallID, mustJSON(map[string]any{"tool_item_id": reply.CallID, "native_status": reply.Status, "success": true}), ""); err != nil {
 								return err
 							}
+							operationIDs = append(operationIDs, op.OperationID)
 						}
 						confirmed = true
 						break
@@ -375,9 +380,10 @@ func (s *Service) eventWorkerFlowFor(run *Run, ev WorkerEvent) (resultErr error)
 					return errors.New("Codex tool completed without the original saved reply intent")
 				}
 				s.setDecisionStatus(run, "reply_accepted")
-				if err := s.save(); err != nil {
+				if err := s.commitWorker(run, operationIDs...); err != nil {
 					return err
 				}
+				operationIDs = nil
 				workflow, execution = s.workflowRecords(run)
 				if len(execution.PendingAsks) > 0 {
 					next := execution.PendingAsks[0]
@@ -411,7 +417,7 @@ func (s *Service) eventWorkerFlowFor(run *Run, ev WorkerEvent) (resultErr error)
 		err := errors.New("worker source event lacks activity classification")
 		return err
 	}
-	return s.save()
+	return s.commitWorker(run, operationIDs...)
 }
 
 func (s *Service) finishWorkerFlowFor(run *Run, workerErr error) error {
@@ -452,6 +458,9 @@ func (s *Service) finishWorkerFlowFor(run *Run, workerErr error) error {
 				if err := s.setOperationState(operation.OperationID, "confirmed", requestID, mustJSON(map[string]string{"session_id": evidence.SessionID, "turn_id": turnID}), ""); err != nil {
 					return err
 				}
+				if err := s.commitWorker(run, operation.OperationID); err != nil {
+					return err
+				}
 				break
 			}
 		}
@@ -467,7 +476,7 @@ func (s *Service) finishWorkerFlowFor(run *Run, workerErr error) error {
 	if evidence.LocalCodex && run.Decision != nil && run.Decision.Request.NativeAsk != nil {
 		if run.Decision.Status == "pending" {
 			s.setDecisionStatus(run, "superseded")
-			if err := s.save(); err != nil {
+			if err := s.commitWorker(run); err != nil {
 				return err
 			}
 			workflow, execution = s.workflowRecords(run)
@@ -481,7 +490,7 @@ func (s *Service) finishWorkerFlowFor(run *Run, workerErr error) error {
 			s.refreshRun(run)
 			execution.Error = ptr("Native turn ended before the original answer delivery was confirmed; the saved answer and request are retained")
 			s.refreshRun(run)
-			return s.save()
+			return s.commitWorker(run)
 		}
 	}
 	if run.Decision != nil && run.Decision.Status == "answer_saved" {
@@ -581,7 +590,7 @@ func (s *Service) pollWorkerFlowPR(ctx context.Context, run *Run, task *TaskReco
 		if workflow.PRURL == "" && workflow.Phase != "executing" {
 			return s.waitWorkerFlow(run, "PR link could not be verified; the center will retry: "+err.Error())
 		}
-		return s.save()
+		return s.commitWorker(run)
 	}
 	execution := s.executionRecord(run)
 	if execution == nil {
@@ -593,7 +602,7 @@ func (s *Service) pollWorkerFlowPR(ctx context.Context, run *Run, task *TaskReco
 		if workflow.Phase != "executing" {
 			return s.waitWorkerFlow(run, "PR link is for a different repository, base or worker branch")
 		}
-		return s.save()
+		return s.commitWorker(run)
 	}
 	pendingQuestion := run.Decision != nil && (run.Decision.Status == "answer_saved" || run.Decision.Status == "pending" && run.Decision.Request.Question != "The worker stopped. What should it do next?")
 	previousPRURL := workflow.PRURL
@@ -610,7 +619,7 @@ func (s *Service) pollWorkerFlowPR(ctx context.Context, run *Run, task *TaskReco
 	}
 	workflow.PRURL, workflow.PRState, workflow.PRMergedAt, workflow.PRMergeCommit, workflow.PRQueryError = info.URL, info.State, info.MergedAt, info.MergeCommit, nil
 	s.refreshRun(run)
-	if err := s.save(); err != nil {
+	if err := s.commitWorker(run); err != nil {
 		return err
 	}
 	if info.State == "merged" {
@@ -655,14 +664,18 @@ func (s *Service) applyWorkerFlowDecision(ctx context.Context, run *Run) error {
 		if err := s.store.Err(); err != nil {
 			return err
 		}
-		committed, err := s.domainStore.commitWorkerFeedbackPhase(ctx, *workflow, *execution, *decision)
-		if err != nil {
+		previousWorkflow := *workflow
+		if err := BeginWorkerFeedbackDelivery(workflow, *execution, *decision, now()); err != nil {
 			return err
 		}
-		*workflow = committed
-		s.store.baseline[key] = recordFingerprint(committed)
 		s.refreshRun(run)
-		if run.ControlRevision != committed.ControlRevision || run.FinishTaskStatus != "waiting_decision" {
+		if err := s.commitWorker(run); err != nil {
+			*workflow = previousWorkflow
+			s.refreshRun(run)
+			return err
+		}
+		workflow, execution = s.workflowRecords(run)
+		if workflow == nil || execution == nil || run.ControlRevision != workflow.ControlRevision || run.FinishTaskStatus != "waiting_decision" {
 			return errors.New("committed worker feedback phase could not be projected")
 		}
 	}

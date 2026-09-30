@@ -169,7 +169,7 @@ func (s *Service) resolveStoppedWorkerTurn(run *Run, workflow *WorkflowRunRecord
 		if resolution.RecordPRStop {
 			s.note(run, "steer", "worker", "stopped", "worker turn ended with a verified PR", workflow.PRURL, map[string]any{"turn_id": resolution.TurnID})
 		}
-		return s.save()
+		return s.commitWorker(run)
 	}
 	context := resolution.WaitReason
 	if context == "" {

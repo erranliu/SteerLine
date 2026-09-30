@@ -34,7 +34,7 @@ func (s *Service) replyAppServerAsk(ctx context.Context, run *Run, execution *Ex
 		RequestID   json.RawMessage     `json:"request_id"`
 		Answers     map[string][]string `json:"answers"`
 	}{execution.ExecutionID, ask.Generation, ask.ThreadID, ask.TurnID, ask.CallID, ask.RequestID, answer.Answers}
-	opID, err := s.startOperation("reply_appserver_question", key, request)
+	opID, err := s.startWorkerOperation(run, "reply_appserver_question", key, request)
 	if err != nil {
 		return err
 	}
@@ -56,16 +56,16 @@ func (s *Service) replyAppServerAsk(ctx context.Context, run *Run, execution *Ex
 	}
 	err = sendAppServerAskReply(ctx, execution.AppServerEndpoint, execution.Workspace.Worktree, *ask, answer.Answers)
 	if err != nil {
-		_ = s.changeOperation(opID, "outcome_unknown", ask.CallID, nil, err.Error())
+		_ = s.changeWorkerOperation(run, opID, "outcome_unknown", ask.CallID, nil, err.Error())
 		execution.Error = ptr("Original Codex question reply is unverified: " + err.Error())
 		s.refreshRun(run)
-		return s.save()
+		return s.commitWorker(run)
 	}
 	if err := s.setOperationState(opID, "accepted", ask.CallID, mustJSON(map[string]any{"request_id": ask.RequestID, "call_id": ask.CallID, "sent_at": now()}), ""); err != nil {
 		return err
 	}
 	s.note(run, "steer", "decision", "reply_sent", "answer sent to the original Codex tool request", ask.CallID, nil)
-	return s.save()
+	return s.commitWorker(run, opID)
 }
 
 func sendAppServerAskReply(ctx context.Context, endpoint, workspace string, ask codexAskCall, answers map[string][]string) error {
@@ -94,18 +94,18 @@ func (s *Service) handleAppServerReplyMessage(runID string, message *appServerRe
 			return nil // The matching native tool item arrived before the send result.
 		}
 		if message.err != nil {
-			if err := s.changeOperation(op.OperationID, "outcome_unknown", message.callID, nil, message.err.Error()); err != nil {
+			if err := s.changeWorkerOperation(run, op.OperationID, "outcome_unknown", message.callID, nil, message.err.Error()); err != nil {
 				return err
 			}
 			s.executionRecord(run).Error = ptr("Original Codex question reply is unverified: " + message.err.Error())
 			s.refreshRun(run)
-			return s.save()
+			return s.commitWorker(run)
 		}
 		if err := s.setOperationState(message.opID, "accepted", message.callID, mustJSON(map[string]any{"call_id": message.callID, "sent_at": now()}), ""); err != nil {
 			return err
 		}
 		s.note(run, "steer", "decision", "reply_sent", "answer sent to the original Codex tool request", message.callID, nil)
-		return s.save()
+		return s.commitWorker(run, message.opID)
 	}
 	return errors.New("original Codex question reply operation disappeared")
 }

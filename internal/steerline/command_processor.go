@@ -8,13 +8,6 @@ import (
 )
 
 func (s *Service) processPendingCommands(ctx context.Context) error {
-	return s.processPendingCommandsTracked(ctx, nil)
-}
-
-// processPendingCommandsTracked reports whether a service-owned command was
-// processed. The scheduler uses this to avoid publishing an unchanged runtime
-// on every control poll.
-func (s *Service) processPendingCommandsTracked(ctx context.Context, processed *bool) error {
 	if s.domainStore == nil {
 		return nil
 	}
@@ -34,9 +27,6 @@ func (s *Service) processPendingCommandsTracked(ctx context.Context, processed *
 					return nativeErr("unsupported_schema", "saved command uses a retired recovery action; preserve its state for manual recovery")
 				}
 				continue
-			}
-			if processed != nil {
-				*processed = true
 			}
 			var answer DecisionAnswer
 			if err = decode(command.Payload, &answer); err != nil {
@@ -84,13 +74,21 @@ func (s *Service) processPendingCommandsTracked(ctx context.Context, processed *
 					return fmt.Errorf("accepted decision %s no longer matches the runtime identity", command.TargetID)
 				}
 				*s.decisionRecord(run) = record
+				delete(s.workerDecisionWrites, record.DecisionID) // AcceptAnswer already committed this row.
+				revision, revisionErr := s.domainStore.workerWorkflowRevision(ctx, s.Config.identity, run.RunID)
+				if revisionErr != nil {
+					return revisionErr
+				}
+				if workflow := s.workflowRecord(run); workflow != nil {
+					workflow.ControlRevision = revision
+				}
 				if s.store.baseline == nil {
 					s.store.baseline = domainFingerprints(s.State)
 				}
 				s.store.baseline["decision:"+record.DecisionID] = recordFingerprint(record)
 				s.refreshRun(run)
 				s.note(run, "steer", "decision", "answer_saved", "decision answer saved", decisionAnswerSummary(run), decisionAnswerMeta(run))
-				if err = s.save(); err != nil {
+				if err = s.commitWorker(run); err != nil {
 					return err
 				}
 			}
