@@ -501,7 +501,7 @@ func (s *Service) recoverControlOperation() error {
 		req = ControlRequest{RequestID: op.RequestID, InstanceID: "unknown", Action: op.Action, RequestedBy: "unknown"}
 	}
 	hasRunEvidence := false
-	for _, run := range s.State.Runs {
+	for _, run := range s.runs {
 		if run != nil && run.RunID == op.RunID {
 			hasRunEvidence = true
 		}

@@ -16,7 +16,7 @@ type workerFlowEventFact struct {
 	SessionID     string
 	StartedTurnID string
 	Question      *codexAskCall
-	ToolReply     *codexworker.ToolReply
+	ToolReply     *codexworker.ToolReplyFact
 }
 
 func decodeWorkerFlowEvent(mode workerflow.Mode, ev WorkerEvent, execution *ExecutionRecord, inspectReply bool) (workerFlowEventFact, error) {
@@ -56,8 +56,8 @@ func decodeWorkerFlowEvent(mode workerflow.Mode, ev WorkerEvent, execution *Exec
 		return fact, err
 	}
 	fact.StartedTurnID, fact.ToolReply = native.StartedTurnID, native.ToolReply
-	if native.Ask != nil {
-		call, err := codexAskFromEnvelope(*native.Ask)
+	if native.Question != nil {
+		call, err := codexAskCallFromEnvelope(*native.Question)
 		if err != nil {
 			return fact, err
 		}

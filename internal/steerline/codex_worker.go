@@ -208,7 +208,7 @@ func connectWorkerAppServer(ctx context.Context, endpoint string) (*codexapp.Cli
 }
 
 func (s *Service) interruptOwnedLocalTurn(runID string, owned *childProcess) {
-	for _, run := range s.State.Runs {
+	for _, run := range s.runs {
 		if run == nil || run.RunID != runID || run.Protocol != string(ProtocolLocalCodexAppServer) {
 			continue
 		}
@@ -427,7 +427,7 @@ func (s *Service) handleAppServerLaunchMessage(runID string, message *appServerL
 		defer func() { message.ack <- retErr }()
 	}
 	var run *Run
-	for _, candidate := range s.State.Runs {
+	for _, candidate := range s.runs {
 		if candidate != nil && candidate.RunID == runID {
 			run = candidate
 			break
@@ -453,15 +453,12 @@ func (s *Service) handleAppServerLaunchMessage(runID string, message *appServerL
 			return errors.New("app-server thread receipt conflicts with its fixed execution")
 		}
 		ref := ExecutionRef{Version: ExecutionRecordVersion, Backend: BackendLocal, Protocol: ProtocolLocalCodexAppServer, Target: targetFor(c), Agent: agentFor(c), RunID: run.RunID, AttemptID: run.AttemptID, WorkspacePath: deref(run.WorktreePath), WorkspaceBranch: deref(run.WorktreeBranch), BaseCommit: deref(run.BaseCommit), External: *message.execution.Process, Generation: message.execution.AppServerGeneration}
-		if err := (executionRecords{root: c.RunDir}).saveBinding(ref); err != nil {
-			return err
-		}
 		execution.Process = message.execution.Process
 		execution.AppServerEndpoint = message.execution.AppServerEndpoint
 		execution.AppServerGeneration = message.execution.AppServerGeneration
 		execution.SessionID = message.execution.SessionID
 		s.refreshRun(run)
-		return s.commitWorker(run)
+		return s.commitWorkerBinding(run, ref)
 	}
 	if message.phase != "turn_result" {
 		return fmt.Errorf("unknown app-server launch phase %q", message.phase)

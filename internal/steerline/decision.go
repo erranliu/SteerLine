@@ -544,7 +544,7 @@ func (s *Service) applyDecisions(ctx context.Context) error {
 	if s.State.Control.Operation != nil {
 		return nil
 	}
-	for _, run := range s.State.Runs {
+	for _, run := range s.runs {
 		if run == nil || run.FinishTaskStatus != "waiting_decision" && run.FinishTaskStatus != "waiting_pr_merge" || run.Decision == nil || run.Decision.Status != "answer_saved" {
 			continue
 		}

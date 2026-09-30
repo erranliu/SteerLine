@@ -943,65 +943,6 @@ func (b orcaSupervisedBackend) findAnsweredQuestion(ctx context.Context, ref Exe
 	}
 	return found, nil
 }
-func (orcaSupervisedBackend) StopExecution(context.Context, ExecutionRef, Operation, *Worker) (StopReceipt, error) {
-	return StopReceipt{}, unsupported("remote cancellation is disabled for supervised Orca")
-}
-func (b orcaSupervisedBackend) SettleResources(ctx context.Context, ref ExecutionRef, outcome string) (SettlementReceipt, error) {
-	if err := validateSupervisedRef(b.config, ref); err != nil {
-		return SettlementReceipt{}, err
-	}
-	if outcome != "succeeded" && outcome != "failed" {
-		return SettlementReceipt{}, &BackendError{Code: BackendRejected, Diagnostic: "supervised resource release requires an accepted worker_done outcome"}
-	}
-	if _, err := b.settledWorker(ctx, ref, outcome); err != nil {
-		return SettlementReceipt{ResidualResources: []string{"dispatch:" + ref.External.Dispatch}}, err
-	}
-	out, callErr := (orcaClient{cfg: b.config}).call(ctx, positiveDuration(b.config.CommandTimeout, 30*time.Second), "orchestration", "worker-release", "--dispatch", ref.External.Dispatch, "--json")
-	env, parseErr := parseEnvelope(out)
-	if parseErr != nil {
-		return SettlementReceipt{Disposition: "outcome_unknown", ResidualResources: []string{"dispatch:" + ref.External.Dispatch}}, &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "settled worker release outcome is uncertain; reconcile the exact Dispatch", Cause: errors.Join(callErr, parseErr)}
-	}
-	if env.Meta.RuntimeID != ref.External.CoordinatorRuntimeID {
-		return SettlementReceipt{Disposition: "outcome_unknown", ResidualResources: []string{"dispatch:" + ref.External.Dispatch}}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "worker release receipt came from a different coordinator runtime"}
-	}
-	var result struct {
-		DispatchID string   `json:"dispatchId"`
-		State      string   `json:"state"`
-		Reason     string   `json:"reason"`
-		Residual   []string `json:"residualResources"`
-		Mutation   struct {
-			RequestID string `json:"requestId"`
-		} `json:"mutation"`
-	}
-	if err := json.Unmarshal(env.Result, &result); err != nil || result.DispatchID != ref.External.Dispatch {
-		return SettlementReceipt{Disposition: "outcome_unknown", ResidualResources: []string{"dispatch:" + ref.External.Dispatch}}, &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "worker release receipt does not identify the exact Dispatch", Cause: err}
-	}
-	receipt := SettlementReceipt{Disposition: result.State, PlatformRequestID: result.Mutation.RequestID, ResidualResources: result.Residual, Diagnostic: result.Reason}
-	if result.State != "released" && result.State != "already_released" && len(receipt.ResidualResources) == 0 {
-		receipt.ResidualResources = []string{"dispatch:" + ref.External.Dispatch}
-	}
-	if callErr != nil {
-		receipt.Disposition = "outcome_unknown"
-		return receipt, &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "worker release command returned an uncertain outcome", Cause: callErr}
-	}
-	switch result.State {
-	case "released", "already_released":
-		if result.Mutation.RequestID == "" || len(result.Residual) != 0 {
-			receipt.Disposition = "outcome_unknown"
-			return receipt, &BackendError{Code: BackendProtocolInvalid, Diagnostic: "worker release receipt lacks a request ID or retains resources"}
-		}
-		receipt.Disposition = "released"
-		return receipt, nil
-	case "retained":
-		return receipt, &BackendError{Code: BackendRejected, Diagnostic: "Orca retained the settled worker terminal: " + result.Reason}
-	case "release_pending", "release_unknown":
-		receipt.Disposition = "outcome_unknown"
-		return receipt, &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "worker release requires reconciliation: " + result.State}
-	default:
-		receipt.Disposition = "outcome_unknown"
-		return receipt, &BackendError{Code: BackendProtocolInvalid, Diagnostic: "worker release returned an unsupported state: " + result.State}
-	}
-}
 
 func validateSupervisedRef(c Config, ref ExecutionRef) error {
 	if ref.Backend != BackendOrca || ref.Protocol != ProtocolOrcaSupervised || !sameSupervisedBaseTarget(ref.Target, targetFor(c)) || ref.Target.OrchestrationRun != ref.External.OrchestrationRun || ref.Target.ExternalTask != ref.External.Task || ref.Target.Dispatch != ref.External.Dispatch || ref.Target.ExecutionHost != ref.External.ExecutionHost || ref.Target.WorktreeID != ref.External.WorktreeID || ref.External.Kind != "orca_supervised" || ref.External.RuntimeID == "" || ref.External.CoordinatorRuntimeID == "" || ref.External.OrchestrationRun == "" || ref.External.Task == "" || ref.External.Dispatch == "" || ref.External.ExecutionHost == "" || ref.External.WorktreeID == "" {

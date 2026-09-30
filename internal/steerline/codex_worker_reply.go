@@ -77,7 +77,7 @@ func sendAppServerAskReply(ctx context.Context, endpoint, workspace string, ask 
 
 func (s *Service) handleAppServerReplyMessage(runID string, message *appServerReplyMessage) error {
 	var run *Run
-	for _, candidate := range s.State.Runs {
+	for _, candidate := range s.runs {
 		if candidate != nil && candidate.RunID == runID {
 			run = candidate
 			break
@@ -128,15 +128,21 @@ func parseCodexAskCall(envelope codexapp.Envelope, expectedThread, expectedTurn 
 	if err != nil {
 		return codexAskCall{}, err
 	}
-	return codexAskFromEnvelope(wire)
+	return codexAskCallFromEnvelope(wire)
 }
 
-func codexAskFromEnvelope(wire codexworker.AskEnvelope) (codexAskCall, error) {
-	var args struct {
-		Questions []codexAskQuestion `json:"questions"`
-	}
-	if err := decode(wire.Arguments, &args); err != nil {
+func codexAskCallFromEnvelope(wire codexworker.AskEnvelope) (codexAskCall, error) {
+	questions, err := codexworker.DecodeQuestions(wire.Arguments)
+	if err != nil {
 		return codexAskCall{}, fmt.Errorf("Codex ask arguments: %w", err)
+	}
+	var args struct{ Questions []codexAskQuestion }
+	for _, q := range questions {
+		question := codexAskQuestion{ID: q.ID, Header: q.Header, Question: q.Question, AllowFreeText: q.AllowFreeText}
+		for _, o := range q.Options {
+			question.Options = append(question.Options, DecisionOption{ID: o.ID, Label: o.Label, Detail: o.Detail})
+		}
+		args.Questions = append(args.Questions, question)
 	}
 	if len(args.Questions) == 0 || len(args.Questions) > 3 {
 		return codexAskCall{}, errors.New("Codex ask needs one to three questions")

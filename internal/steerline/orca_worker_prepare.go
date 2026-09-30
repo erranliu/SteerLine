@@ -2,7 +2,6 @@ package steerline
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"path/filepath"
@@ -164,13 +163,11 @@ func (s *Service) prepareNativeOrcaFixedAgentTerminal(ctx context.Context, run *
 func fixedOrcaAgentTerminal(terminals []orcaTerminal, op *OperationRecord, title, worktreeID string) (orcaTerminal, error) {
 	var expected orcaTerminal
 	if op != nil && len(op.Receipt) != 0 {
-		var receipt struct {
-			Terminal orcaTerminal `json:"terminal"`
-		}
-		if err := json.Unmarshal(op.Receipt, &receipt); err != nil {
+		terminal, err := orcaworker.SavedTerminal(op.Receipt)
+		if err != nil {
 			return orcaTerminal{}, &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "fixed Orca agent launch receipt is invalid", Cause: err}
 		}
-		expected = receipt.Terminal
+		expected = terminal
 		if expected.Handle == "" || expected.IncarnationID == "" || expected.WorktreeID != worktreeID || expected.Title != title {
 			return orcaTerminal{}, &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "fixed Orca agent launch receipt does not match the original intent"}
 		}
@@ -344,18 +341,9 @@ func (s *Service) prepareNativeOrcaWorker(ctx context.Context, run *Run) error {
 		if !exists {
 			return &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "original Orca worktree creation has no unique resource; do not create another agent"}
 		}
-		var receipt struct {
-			AgentTerminalHandle string `json:"agentTerminalHandle"`
-			StartupTerminal     struct {
-				Handle string `json:"handle"`
-			} `json:"startupTerminal"`
-		}
-		if len(op.Receipt) > 0 && json.Unmarshal(op.Receipt, &receipt) != nil {
+		handle, receiptErr := orcaworker.SavedAgentHandle(op.Receipt)
+		if receiptErr != nil {
 			return errors.New("saved Orca agent receipt cannot be decoded")
-		}
-		handle := receipt.AgentTerminalHandle
-		if handle == "" {
-			handle = receipt.StartupTerminal.Handle
 		}
 		if err := s.bindNativeOrcaAgent(ctx, run, execution, worktree, handle, repoID, base); err != nil {
 			return err
@@ -419,13 +407,11 @@ func (s *Service) prepareNativeOrcaCoordinator(ctx context.Context, run *Run, ex
 		if op := s.operationByKey(key); op != nil {
 			handle := ""
 			if len(op.Receipt) > 0 {
-				var receipt struct {
-					Terminal orcaTerminal `json:"terminal"`
+				terminal, receiptErr := orcaworker.SavedTerminal(op.Receipt)
+				if receiptErr != nil {
+					return receiptErr
 				}
-				if err := json.Unmarshal(op.Receipt, &receipt); err != nil {
-					return err
-				}
-				handle = receipt.Terminal.Handle
+				handle = terminal.Handle
 			}
 			if handle == "" {
 				terms, runtimeID, err := nativeOrcaTerminals(ctx, fixedConfig, "path:"+filepath.ToSlash(fixedConfig.Repository))

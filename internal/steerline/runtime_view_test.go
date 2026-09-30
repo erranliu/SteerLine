@@ -22,9 +22,18 @@ func TestRuntimeViewCannotWriteBusinessState(t *testing.T) {
 	_, execution := service.workflowRecords(run)
 	originalIntent := *execution.WorkspaceIntent
 	revision := run.ControlRevision
-	run.FinishTaskStatus, run.ExecutionStatus, run.Decision.Status = "completed", "failed", "superseded"
-	run.WorkspaceIntent.Path = "view-only-path"
-	run.PR.URL = ptr("view-only-pr")
+	view := service.State.Runs[0]
+	if view == run {
+		t.Fatal("public Run aliases the working actor projection")
+	}
+	view.FinishTaskStatus, view.ExecutionStatus, view.Decision.Status = "completed", "failed", "superseded"
+	view.WorkspaceIntent.Path = "view-only-path"
+	view.PR.URL = ptr("view-only-pr")
+	service.State.Executions[0].WorkspaceIntent.Path = "record-view-only"
+	service.State.Decisions[0].Status = "superseded"
+	if run.Decision.Status != "pending" || *execution.WorkspaceIntent != originalIntent {
+		t.Fatal("published view changed worker input before a commit")
+	}
 	execution.LastEvent = ptr("new diagnostic")
 	require(t, service.publishCheckpoint())
 	if service.executionRecord(run).LastEvent != nil && *service.executionRecord(run).LastEvent == "new diagnostic" {

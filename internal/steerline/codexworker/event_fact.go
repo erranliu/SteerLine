@@ -1,42 +1,35 @@
 package codexworker
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
+	"reflect"
 
 	"github.com/erranliu/SteerLine/internal/steerline/codexapp"
 )
 
-// EventFact carries verified native evidence without business records.
-type EventFact struct {
-	StartedTurnID string
-	Ask           *AskEnvelope
-	ToolReply     *ToolReply
+type ToolReplyFact struct {
+	ThreadID, TurnID, CallID, Status string
+	Success                          *bool
+	Answers                          []map[string][]string
 }
 
-type ToolReply struct {
-	ThreadID string
-	TurnID   string
-	CallID   string
-	Status   string
-	Success  *bool
-	Answers  []map[string][]string
-}
-
-func (f ToolReply) MatchesAnswers(expected map[string][]string) bool {
-	want, _ := json.Marshal(expected)
+func (f ToolReplyFact) MatchesAnswers(expected map[string][]string) bool {
 	for _, answers := range f.Answers {
-		got, _ := json.Marshal(answers)
-		if bytes.Equal(got, want) {
+		if reflect.DeepEqual(answers, expected) {
 			return true
 		}
 	}
 	return false
 }
 
-// DecodeEvent checks the fixed thread/turn before exposing a native fact.
-// Ask argument content is validated by the center's Decision rules.
+type EventFact struct {
+	StartedTurnID string
+	Question      *AskEnvelope
+	ToolReply     *ToolReplyFact
+}
+
+// DecodeEvent checks native identities before exposing facts to the center.
 func DecodeEvent(envelope codexapp.Envelope, threadID, turnID string, inspectReply bool) (EventFact, error) {
 	var fact EventFact
 	switch envelope.Method {
@@ -52,14 +45,14 @@ func DecodeEvent(envelope codexapp.Envelope, threadID, turnID string, inspectRep
 		}
 		fact.StartedTurnID = params.Turn.ID
 	case "item/tool/call":
-		ask, err := ParseAskEnvelope(envelope, threadID, turnID)
+		call, err := ParseAskEnvelope(envelope, threadID, turnID)
 		if err != nil {
 			return fact, err
 		}
-		fact.Ask = &ask
+		fact.Question = &call
 	case "item/completed":
 		if !inspectReply {
-			break
+			return fact, nil
 		}
 		var params struct {
 			ThreadID string `json:"threadId"`
@@ -79,9 +72,9 @@ func DecodeEvent(envelope codexapp.Envelope, threadID, turnID string, inspectRep
 			return fact, errors.New("app-server tool completion changed native identity")
 		}
 		if params.Item.Type != "dynamicToolCall" {
-			break
+			return fact, nil
 		}
-		reply := ToolReply{ThreadID: params.ThreadID, TurnID: params.TurnID, CallID: params.Item.ID, Status: params.Item.Status, Success: params.Item.Success}
+		reply := ToolReplyFact{ThreadID: params.ThreadID, TurnID: params.TurnID, CallID: params.Item.ID, Status: params.Item.Status, Success: params.Item.Success}
 		for _, content := range params.Item.ContentItems {
 			if content.Type != "inputText" {
 				continue
@@ -96,4 +89,25 @@ func DecodeEvent(envelope codexapp.Envelope, threadID, turnID string, inspectRep
 		fact.ToolReply = &reply
 	}
 	return fact, nil
+}
+
+type AskOption struct {
+	ID     string `json:"id"`
+	Label  string `json:"label"`
+	Detail string `json:"detail"`
+}
+type AskQuestion struct {
+	ID            string      `json:"id"`
+	Header        string      `json:"header"`
+	Question      string      `json:"question"`
+	Options       []AskOption `json:"options"`
+	AllowFreeText bool        `json:"allow_free_text"`
+}
+
+func DecodeQuestions(arguments json.RawMessage) ([]AskQuestion, error) {
+	var body struct {
+		Questions []AskQuestion `json:"questions"`
+	}
+	err := json.Unmarshal(arguments, &body)
+	return body.Questions, err
 }

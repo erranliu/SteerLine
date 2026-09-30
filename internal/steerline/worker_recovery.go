@@ -293,7 +293,7 @@ func (s *Service) adoptOrGateServiceExecutions() error {
 }
 
 func (s *Service) markServiceRecoveryGateForPriorOwner() error {
-	for _, run := range s.State.Runs {
+	for _, run := range s.runs {
 		if run == nil || run.WorkflowVersion != WorkerFlowVersion || run.TaskStatus != "in_progress" {
 			continue
 		}
@@ -314,7 +314,7 @@ func (s *Service) markServiceRecoveryGateForPriorOwner() error {
 }
 
 func (s *Service) markServiceRecoveryGate() error {
-	for _, run := range s.State.Runs {
+	for _, run := range s.runs {
 		s.markOneServiceRecoveryGate(run)
 		if run != nil && run.TaskStatus == "in_progress" {
 			if err := s.commitWorker(run); err != nil {
@@ -347,7 +347,7 @@ func (s *Service) resumeConfiguredWork(ctx context.Context) error {
 	if err := s.resumeWorkerFlow(ctx); err != nil {
 		return err
 	}
-	for _, run := range s.State.Runs {
+	for _, run := range s.runs {
 		if run == nil || run.WorkflowVersion != WorkerFlowVersion || run.Protocol != string(ProtocolOrcaTerminalV2) {
 			continue
 		}
@@ -370,7 +370,7 @@ func (s *Service) resumeWorkerFlow(ctx context.Context) error {
 	if err := s.resumeAppServerWorkers(ctx); err != nil {
 		return err
 	}
-	for _, run := range s.State.Runs {
+	for _, run := range s.runs {
 		if run == nil || run.WorkflowVersion != WorkerFlowVersion || s.workers[run.RunID] != nil {
 			continue
 		}

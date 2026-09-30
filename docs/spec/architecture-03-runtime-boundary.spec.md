@@ -1,6 +1,6 @@
 # Spec：架构收口 PR 3 — 移除隐式写回与读写模型收口
 
-状态：实现候选，待评审；未分配 Task ID。日期：2026-09-30。审计基线：`main@a05f797`。承接已合入的 #151、#152 与 #150；本轮 Runtime 边界、剩余显式提交及适配层清理由同一个实现 PR 交付。
+状态：实现候选，待本 PR 评审；未分配 Task ID。日期：2026-09-30。实施基线：`main@d809a45`，承接已合入的 #147、#152 与 #156；本 PR 补齐最终读视图、协议事实和绑定/停止事务边界。
 
 ## 1. 目标与依据
 
@@ -80,7 +80,7 @@ PR 描述附最终写入入口与后端职责映射，说明 PR 2 剩余项全�
 
 达到以上条件后，本轮架构审计的高优先级建议完成。不以顺带完成新的 UI、多候选、性能优化或既有未认证平台能力作为本系列门槛。
 
-## 合并实施记录（2026-09-30）
+## #156 基础实施记录（2026-09-30）
 
 本项承接已合入的 [PR 2](architecture-02-worker-commit.spec.md)，按用户要求在同一个后续 PR 收完剩余写回与结构清理，不保留 Runtime 隐式写回的过渡入口。
 
@@ -129,3 +129,27 @@ Windows 的服务连接检查先解析 checkpoint 中的仓库路径，避免同
 - cmd/steerline 的 TestWaitServiceCommandResolvesIdentityAndKeepsPolling（Windows 临时 SQLite 文件清理时仍被占用）
 
 原始日志与 summary 保留在本机临时目录 steerline-workerflow-integrated-full-20260930、steerline-workerflow-integrated-quick-20260930；没有把日志或可执行文件加入仓库。未启用真机认证开关，模拟验证不等于真机验收。
+
+## 最终收口补充（承接 #156）
+
+实施基线为 `main@d809a45`。#156 已删除隐式 Runtime 写回、发布基线和剩余业务写入依赖，本次补齐以下边界：
+
+| 验收项 | 最终实现与证据 |
+| --- | --- |
+| RB1–RB2 | `Service.runs` 保存私有工作投影；`projectState` 重新构造公开 Runtime/Run，嵌套记录和 Run 指针均不与 actor 共用。checkpoint 只接受 `ServiceCheckpoint`，并发答案从数据库权威记录读取。`TestRuntimeViewCannotWriteBusinessState` 覆盖发布前的指针隔离与发布后的业务表不变 |
+| RB3 | 复用 #156 的原服务归属、恢复版本、原请求核验及旧/新 Attempt 原子切换。定向验证本地恢复与新会话授权、原生 Orca 改名终端恢复及受监督 Dispatch 原身份核验 |
+| RB4 | `workerCommit.Binding` 和 `ExecutionOperation` 显式声明绑定及停止记录；`putExecutionBinding` / `putExecutionOperation` 与 Execution、事件、checkpoint 同事务提交。停止先提交原意图，未知结果保留原 Ref；回执提交失败整笔回滚 |
+| RB5 | 生产无 `saveRuntime`、`SaveRuntime`、`Store.baseline`、`domainFingerprints` 或 Runtime.PendingEvents。底层绑定/操作建数 helper 移到测试夹具，生产写入只经命令或声明事务 |
+| RB6 | `ExecutionProbe`、观察/工作区用 `ExecutionBackend` 与 `ExecutionStopper` 按消费者分开。删除无生产调用方的资源结算要求；不支持停止的模式在意图写入前明确拒绝。Codex 事件和问题载荷、Orca 消息身份及原生保存回执解析位于协议包 |
+
+绑定验证固定 backend、protocol、agent、target、process、workspace 与 generation；停止记录验证原 Run/Attempt/Ref、请求摘要、前值及合法状态转换。未增加旧版本读取或迁移路径。
+
+当前主干的业务写入由 `CommandService` 类型化事务和 `Service.commitDeclared` / `SQLiteStore.commitWorker` 承担；服务发布由 `publishCheckpoint` / `SaveCheckpoint` 承担，heartbeat 只更新 projection。以上入口完成本系列高优先级审计项的实现收口；合并后可将本项状态改为已交付。
+
+本次在上述基线上验证：
+
+- `TestWorkerBindingRollsBackWithItsCheckpoint`、`TestExecutionStopIntentAndUnknownReceiptUseOriginalBinding`、`TestRuntimeViewCannotWriteBusinessState`、`TestAppServerServiceTwoTurnsPersistNativeReceipts`：通过。
+- `TestDeadWorkerRecoveryPreservesDecisionAndFreshAnswer`、`TestWorkerFlowServiceFirstFeedbackKeepsSessionAndWorkspace`、原生 Orca 改名终端/原会话恢复、受监督原 Dispatch 与 unsupported 停止用例：通过。
+- `go test ./internal/steerline/codexworker ./internal/steerline/orcaworker ./internal/steerline/workerflow -count=1`：通过。
+- `go run ./cmd/test-feedback -quick -out <临时目录>`：通过，准备 1.1 秒、执行 11.4 秒；报告位于本机临时目录 `steerline-pr3-final-quick`。
+- `go test ./... -run '^$'`：所有包编译通过，不执行完整测试套件。本次未运行全量或真机认证。

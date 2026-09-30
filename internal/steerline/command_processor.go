@@ -122,7 +122,7 @@ func (s *Service) processPendingCommands(ctx context.Context) error {
 }
 
 func (s *Service) findDecision(id string) *Run {
-	for _, run := range s.State.Runs {
+	for _, run := range s.runs {
 		if run != nil && run.Decision != nil && run.Decision.ID == id {
 			return run
 		}

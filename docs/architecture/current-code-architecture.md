@@ -1,6 +1,6 @@
 # SteerLine 当前代码架构图
 
-快照日期：2026-09-30。源码基线：`d809a45`（PR #156），含本轮 worker 收尾改动。
+快照日期：2026-09-30。源码基线：`ba0992b`（含 PR #157），含 PR #158 的 worker 收尾改动。
 
 本文描述当前检出的代码：系统边界、实际 Go 包依赖、核心包内部职责、任务执行、人工决策、数据模型、日志与恢复。图中的职责分组不代表已拆成独立包或服务。箭头含义在各图前说明；未来方案与当前可启动路径分开列出。
 
@@ -69,7 +69,7 @@ flowchart TB
 
 ```mermaid
 flowchart LR
-    CLI["cmd/steerline"] --> Core["internal/steerline<br/>111 个非测试 Go 文件"]
+    CLI["cmd/steerline"] --> Core["internal/steerline<br/>112 个非测试 Go 文件"]
     CLI --> Console["console"]
     Console --> Core
 
@@ -93,7 +93,7 @@ flowchart LR
 | 包 | 当前职责 | 非测试 Go 文件 |
 | --- | --- | ---: |
 | `cmd/steerline` | 产品命令入口、服务启动、控制台和任务命令路由 | 1 |
-| `internal/steerline` | 服务编排、业务持久化、平台适配接线、查询和控制 | 111 |
+| `internal/steerline` | 服务编排、业务持久化、平台适配接线、查询和控制 | 112 |
 | `console` | TUI 状态、导航、任务列表、活动/会话/正文、执行方案和决策编辑 | 14 |
 | `task` | 任务契约、批次、状态、依赖资格、交付和命令规则 | 10 |
 | `taskgraph` | DAG 校验、遍历、前后置关系和图算法 | 1 |
@@ -101,12 +101,12 @@ flowchart LR
 | `workerflow` | 单个可续聊 worker 的纯状态规则、模式选择和提示构造 | 4 |
 | `codexapp` | Codex app-server 参数、客户端、原生问题与 WebSocket 协议 | 7 |
 | `codexworker` | app-server 启动、连接、能力探测、轮次观察、journal 与回答 | 11 |
-| `orcaworker` | Orca task/dispatch、terminal、消息、pull/relay、输出与工作区协议 | 15 |
+| `orcaworker` | Orca task/dispatch、terminal、消息、pull/relay、输出与工作区协议 | 17 |
 | `cmd/orca-probe` | 只读能力探测与脱敏证据采集 | 1 |
 | `cmd/test-feedback` | 最小/定向/全量测试调度、日志与反馈报告 | 4 |
 | `internal/testfeedback` | Go test JSON 结果汇总 | 1 |
 
-合计 **13 个包目录、183 个非测试 Go 文件**。统计覆盖 `cmd/` 与 `internal/`；不含 `_test.go`、测试数据、脚本和文档。核心包仍集中承载多项职责，不能将上述逻辑边界理解为微服务或已经完成的全面拆包。
+合计 **13 个包目录、186 个非测试 Go 文件**。统计覆盖 `cmd/` 与 `internal/`；不含 `_test.go`、测试数据、脚本和文档。核心包仍集中承载多项职责，不能将上述逻辑边界理解为微服务或已经完成的全面拆包。
 
 ## 3. 核心包内部职责与接线
 
@@ -162,7 +162,7 @@ flowchart TB
 | 持久化与投影 | `sqlite_store*.go`、`execution_store.go`、`store.go`、`runtime_view.go` | SQLite 业务实体是权威；checkpoint 不保存第二套业务状态 |
 | 恢复与平台 | `recovery.go`、`execution_recovery.go`、`platform_*.go`、`spawner.go` | 对账原身份；不因超时、观察断线或重启直接创建替代执行 |
 
-本轮删除旧步骤校验 `remoteprotocol`、Execution 的候选/验证/审查修订与修复轮数字段，以及 Attempt 的旧前置结果、结果 ID 和 legacy 标记。`CurrentStep` / `StepID` 仍固定为 `worker`，WorkflowRun 继续表示本次任务执行。原生事件解码位于 `codexworker/event.go` 与 `orcaworker/event.go`；父包的 `worker_evidence.go`、`codex_worker_evidence.go`、`orca_worker_evidence.go` 仅负责固定记录和有类型事实的适配。中心恢复、启动、事件、结算、PR、反馈分别落在相应 `worker_*.go`，写入仍只经显式事务。
+本轮删除旧步骤校验 `remoteprotocol`、Execution 的候选/验证/审查修订与修复轮数字段，以及 Attempt 的旧前置结果、结果 ID 和 legacy 标记。`CurrentStep` / `StepID` 仍固定为 `worker`，WorkflowRun 继续表示本次任务执行。原生事件解码位于 `codexworker/event_fact.go` 与 `orcaworker/event.go`；父包的 `worker_evidence.go`、`codex_worker_evidence.go`、`orca_worker_evidence.go` 仅负责固定记录和有类型事实的适配。中心恢复、启动、事件、结算、PR、反馈分别落在相应 `worker_*.go`，写入仍只经显式事务。
 
 ## 4. 任务从创建到交付
 
@@ -354,7 +354,7 @@ flowchart LR
     Replay --> Mapper
 ```
 
-Service 将私有领域工作副本和已提交快照分开；公开 Runtime/Run 由已提交记录深复制构建。worker 转换通过 `service_commit.go` / `worker_commit.go` 声明记录前值、操作和事件；业务记录与 checkpoint 在同一事务提交。`publishCheckpoint` 与 heartbeat 只写服务快照，不扫描业务字段。手动本地恢复在一笔提交中退休旧 Attempt、创建新 Attempt 并切换 Execution 当前代次。
+Service 将私有领域工作副本、已提交快照和私有工作 Run 分开；公开 Runtime/Run 由已提交记录深复制构建，不复用工作 Run 的指针。worker 转换通过 `service_commit.go` / `worker_commit.go` 声明记录前值、操作和事件；业务记录与 checkpoint 在同一事务提交。执行绑定与停止意图/回执也作为明确的附属写集合在该事务中提交。`publishCheckpoint` 与 heartbeat 只写服务快照，不扫描业务字段。手动本地恢复在一笔提交中退休旧 Attempt、创建新 Attempt 并切换 Execution 当前代次。
 
 读取视图在同一事务中组合业务记录和 checkpoint。会话事件及来源游标持久化后可以补读，正文按身份与版本定位；来源没有明确 turn 终态或 final 时，界面显示未识别或能力原因。重启恢复还需核验进程身份、app-server generation、固定工作区、Orca dispatch 和未完成 Operation，不能只从日志推测是否完成。
 
@@ -380,7 +380,7 @@ Service 将私有领域工作副本和已提交快照分开；公开 Runtime/Run
 
 ## 9. 快照验证与维护
 
-包依赖图由非测试源码的项目内 import 提取并人工对照入口。系统、执行与存储图对照当前关键代码和 schema，不依据未来 Spec 推断已交付能力。本轮收尾同步更新当前源码接线与文件索引。项目 `-quick` 入口（现已覆盖 `workerflow`）及附加的 12 个定向用例通过，覆盖原生事件身份、两轮续聊、问题回复恢复、PR 归属、显式写集合/回滚和读视图隔离；`codexworker`、`orcaworker` 与测试入口自身的测试、受影响命令编译、`go vet` 和差异检查通过。未运行全量测试或真机认证。
+包依赖图由非测试源码的项目内 import 提取并人工对照入口。系统、执行与存储图对照当前关键代码和 schema，不依据未来 Spec 推断已交付能力。本轮收尾同步更新当前源码接线与文件索引。整合 PR #157 后，项目 `-quick` 入口（现已覆盖 `workerflow`）及附加的 13 个定向用例通过（执行 98.3 秒），覆盖私有 actor 视图、两轮续聊、问题回复恢复、重启不重发、原子绑定/停止回执和原生事件身份；`codexworker`、`orcaworker` 与测试入口自身的测试、受影响命令编译、`go vet` 和差异检查通过。未运行全量测试或真机认证。
 
 维护时优先核对：入口命令、包 import、可启动执行模式、schema、checkpoint、控制协议、外部进程通信和交付事务。新增生产源码后应同步下面的全量文件索引；生产支持范围有变化时同步图 1、图 4 和第 8 节。
 
@@ -509,6 +509,7 @@ Service 将私有领域工作副本和已提交快照分开；公开 Runtime/Run
 | [state_preflight.go](../../internal/steerline/state_preflight.go) |
 | [state_revision.go](../../internal/steerline/state_revision.go) |
 | [store.go](../../internal/steerline/store.go) |
+| [worker_attachment_store.go](../../internal/steerline/worker_attachment_store.go) |
 | [worker_commit.go](../../internal/steerline/worker_commit.go) |
 | [worker_completion.go](../../internal/steerline/worker_completion.go) |
 | [worker_events.go](../../internal/steerline/worker_events.go) |
@@ -546,7 +547,7 @@ Service 将私有领域工作副本和已提交快照分开；公开 Runtime/Run
 | [capability.go](../../internal/steerline/codexworker/capability.go) |
 | [connection.go](../../internal/steerline/codexworker/connection.go) |
 | [doc.go](../../internal/steerline/codexworker/doc.go) |
-| [event.go](../../internal/steerline/codexworker/event.go) |
+| [event_fact.go](../../internal/steerline/codexworker/event_fact.go) |
 | [journal.go](../../internal/steerline/codexworker/journal.go) |
 | [launch.go](../../internal/steerline/codexworker/launch.go) |
 | [observe.go](../../internal/steerline/codexworker/observe.go) |
@@ -582,12 +583,14 @@ Service 将私有领域工作副本和已提交快照分开；公开 Runtime/Run
 | [inventory.go](../../internal/steerline/orcaworker/inventory.go) |
 | [journal.go](../../internal/steerline/orcaworker/journal.go) |
 | [message.go](../../internal/steerline/orcaworker/message.go) |
+| [message_identity.go](../../internal/steerline/orcaworker/message_identity.go) |
 | [mutation.go](../../internal/steerline/orcaworker/mutation.go) |
 | [orchestration.go](../../internal/steerline/orcaworker/orchestration.go) |
 | [output.go](../../internal/steerline/orcaworker/output.go) |
 | [prompt.go](../../internal/steerline/orcaworker/prompt.go) |
 | [pull.go](../../internal/steerline/orcaworker/pull.go) |
 | [relay.go](../../internal/steerline/orcaworker/relay.go) |
+| [saved_receipt.go](../../internal/steerline/orcaworker/saved_receipt.go) |
 | [terminal.go](../../internal/steerline/orcaworker/terminal.go) |
 | [terminal_protocol.go](../../internal/steerline/orcaworker/terminal_protocol.go) |
 | [workspace.go](../../internal/steerline/orcaworker/workspace.go) |

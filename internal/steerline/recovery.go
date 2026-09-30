@@ -138,7 +138,7 @@ func (s *Service) recalculateCurrentReservation(settledRunID string) {
 			s.State.CurrentTask = nil
 		}
 	}
-	for _, run := range s.State.Runs {
+	for _, run := range s.runs {
 		if run != nil && (run.ExecutionStatus == "unknown" || run.ExecutionStatus == "pending" || run.ExecutionStatus == "running" || run.FinishTaskStatus == "waiting_decision") {
 			if s.State.CurrentTask == nil {
 				s.State.CurrentTask = ptr(run.TaskID)

@@ -23,7 +23,7 @@ func localWorkerRequestedPublish(message, runID string) bool {
 }
 
 func (s *Service) localWorkerRun(runID string) *Run {
-	for _, run := range s.State.Runs {
+	for _, run := range s.runs {
 		if run != nil && run.RunID == runID {
 			return run
 		}

@@ -11,7 +11,7 @@ func TestDecodeEventKeepsAskAndReplyOnOriginalTurn(t *testing.T) {
 	thread, turn := "00000000-0000-0000-0000-000000000001", "00000000-0000-0000-0000-000000000002"
 	params, _ := json.Marshal(map[string]any{"threadId": thread, "turnId": turn, "callId": "call-original", "tool": codexapp.AskToolName, "arguments": map[string]any{"questions": []any{map[string]string{"id": "choice", "question": "Which path?"}}}})
 	fact, err := DecodeEvent(codexapp.Envelope{ID: json.RawMessage(`17`), Method: "item/tool/call", Params: params}, thread, turn, false)
-	if err != nil || fact.Ask == nil || fact.Ask.ThreadID != thread || fact.Ask.TurnID != turn || fact.Ask.CallID != "call-original" || string(fact.Ask.RequestID) != "17" {
+	if err != nil || fact.Question == nil || fact.Question.ThreadID != thread || fact.Question.TurnID != turn || fact.Question.CallID != "call-original" || string(fact.Question.RequestID) != "17" {
 		t.Fatalf("ask lost its original request: %+v / %v", fact, err)
 	}
 	for _, tc := range []struct {

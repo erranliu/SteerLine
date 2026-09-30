@@ -120,10 +120,7 @@ func (s *Service) startCodexWorkerTurn(ctx context.Context, run *Run, commandID,
 			return errors.New("app-server thread has no verified process generation")
 		}
 		ref := ExecutionRef{Version: ExecutionRecordVersion, Backend: BackendLocal, Protocol: ProtocolLocalCodexAppServer, Target: targetFor(fixed.config), Agent: agentFor(fixed.config), RunID: run.RunID, AttemptID: run.AttemptID, WorkspacePath: deref(run.WorktreePath), WorkspaceBranch: deref(run.WorktreeBranch), BaseCommit: deref(run.BaseCommit), External: *execution.Process, Generation: execution.AppServerGeneration}
-		if err := (executionRecords{root: fixed.config.RunDir}).saveBinding(ref); err != nil {
-			return err
-		}
-		return s.commitWorker(run)
+		return s.commitWorkerBinding(run, ref)
 	}
 	worker, events, platformRequestID, err := startAppServerWorkerTurn(ctx, fixed.config, run, fixed.execution, commandID, prompt, persistThread)
 	if err != nil {

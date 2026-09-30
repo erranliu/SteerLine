@@ -26,8 +26,32 @@ func (s *Service) projectState() error {
 	if err != nil {
 		return err
 	}
-	hydrateRuntime(&s.State, copy)
-	return projectRuntime(&s.State)
+	checkpoint := runtimeCheckpoint(s.State)
+	var metadata ServiceCheckpoint
+	if err := json.Unmarshal(mustJSON(checkpoint), &metadata); err != nil {
+		return err
+	}
+	view := runtimeFromCheckpoint(metadata)
+	view.Control.DispatchMode, view.Control.DispatchPaused, view.Control.Revision = s.State.Control.DispatchMode, s.State.Control.DispatchPaused, s.State.Control.Revision
+	hydrateRuntime(&view, copy)
+	if err := projectRuntime(&view); err != nil {
+		return err
+	}
+	s.State = view
+	return s.projectActor()
+}
+
+// Working projections are private to the single center actor. Public Runtime
+// objects are built from committed rows and share no Run pointers with them.
+func (s *Service) projectActor() error {
+	view := runtimeFromCheckpoint(runtimeCheckpoint(s.State))
+	hydrateRuntime(&view, s.domain)
+	view.Runs = s.runs
+	if err := projectRuntime(&view); err != nil {
+		return err
+	}
+	s.runs = view.Runs
+	return nil
 }
 
 func snapshotWorkflow(snapshot *DomainSnapshot, id string) *WorkflowRunRecord {
@@ -75,6 +99,15 @@ func snapshotOperation(snapshot *DomainSnapshot, id string) *OperationRecord {
 // execution, current attempt, declared decisions, operation receipts and events.
 // It never examines other workers or discovers writes through fingerprints.
 func (s *Service) commitWorker(run *Run, operationIDs ...string) error {
+	return s.commitWorkerAttached(run, workerCommitAttachment{}, operationIDs...)
+}
+
+type workerCommitAttachment struct {
+	Binding            *ExecutionRef
+	ExecutionOperation *recordWrite[Operation]
+}
+
+func (s *Service) commitWorkerAttached(run *Run, attachment workerCommitAttachment, operationIDs ...string) error {
 	if run == nil || s.domainStore == nil {
 		return errors.New("worker commitment requires a run and store")
 	}
@@ -85,6 +118,7 @@ func (s *Service) commitWorker(run *Run, operationIDs ...string) error {
 		return errors.New("worker commitment has no authoritative fixed records")
 	}
 	request := workerCommit{Project: workflow.ProjectIdentity, TaskID: workflow.TaskID,
+		Binding: attachment.Binding, ExecutionOperation: attachment.ExecutionOperation,
 		WorkflowID: workflow.WorkflowRunID, ExecutionID: execution.ExecutionID, AttemptID: attempt.AttemptID,
 		ControlRevision:   before.ControlRevision,
 		AuthorityRevision: s.State.Control.Revision,
