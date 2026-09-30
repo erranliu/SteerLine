@@ -45,6 +45,33 @@ type queryContext interface {
 	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
 }
 
+type commandRowQuerier interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}
+
+func readNativeCommandByKey(ctx context.Context, query commandRowQuerier, project, key string) (CommandRecord, bool, error) {
+	var command CommandRecord
+	var created, updated string
+	err := query.QueryRowContext(ctx, `SELECT project_identity,command_id,kind,target_id,expected_version,idempotency_key,requested_by,payload,status,result,created_at,updated_at FROM commands WHERE project_identity=? AND idempotency_key=?`, project, key).Scan(&command.ProjectIdentity, &command.CommandID, &command.Kind, &command.TargetID, &command.ExpectedVersion, &command.IdempotencyKey, &command.RequestedBy, &command.Payload, &command.Status, &command.Result, &created, &updated)
+	if errors.Is(err, sql.ErrNoRows) {
+		return command, false, nil
+	}
+	if err != nil {
+		return command, false, err
+	}
+	command.CreatedAt, _ = time.Parse(time.RFC3339Nano, created)
+	command.UpdatedAt, _ = time.Parse(time.RFC3339Nano, updated)
+	return command, true, nil
+}
+
+func (s *SQLiteStore) lookupNativeCommand(ctx context.Context, project, key string) (CommandRecord, bool, error) {
+	return readNativeCommandByKey(ctx, s.db, project, key)
+}
+
+func (t *sqliteTx) lookupNativeCommand(ctx context.Context, project, key string) (CommandRecord, bool, error) {
+	return readNativeCommandByKey(ctx, t.tx, project, key)
+}
+
 func querySnapshot(ctx context.Context, db queryContext, project string) (DomainSnapshot, error) {
 	out := DomainSnapshot{ProjectIdentity: project, Tasks: []TaskRecord{}, WorkflowRuns: []WorkflowRunRecord{}, Executions: []ExecutionRecord{}, Attempts: []StepAttemptRecord{}, Decisions: []DecisionRecord{}, Operations: []OperationRecord{}}
 	queries := []struct {
