@@ -43,9 +43,9 @@ func (s *Service) recordAppServerTurnStarted(run *Run, workflow *WorkflowRunReco
 		return "", errors.New("app-server turn start lacks its fixed command or native turn receipt")
 	}
 	var operation *OperationRecord
-	for i := range s.State.Operations {
-		if s.State.Operations[i].IdempotencyKey == "worker-turn:"+run.ExecutionID+":"+commandID {
-			operation = &s.State.Operations[i]
+	for i := range s.domain.Operations {
+		if s.domain.Operations[i].IdempotencyKey == "worker-turn:"+run.ExecutionID+":"+commandID {
+			operation = &s.domain.Operations[i]
 			break
 		}
 	}
@@ -373,4 +373,110 @@ func reattachAppServerWorker(ctx context.Context, c Config, run *Run, execution 
 	go observeAppServerWorker(observeCtx, worker, client, journal, run.RunID, run.AttemptID, execution.SessionID, turnID, replay)
 	closeClient = false
 	return worker, false, nil
+}
+
+// Network I/O belongs to the Execution. Only handleAppServerLaunchMessage
+// writes the service projection and SQLite, including the mandatory receipt
+// barrier between thread/start and turn/start.
+func (s *Service) launchAppServerTurn(ctx context.Context, config Config, run Run, execution ExecutionRecord, commandID, prompt, opID string) {
+	timeout := positiveDuration(config.CommandTimeout, 30*time.Second)
+	if timeout > 30*time.Second {
+		timeout = 30 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	persistThread := func() error {
+		ack := make(chan error, 1)
+		message := &appServerLaunchMessage{phase: "thread_ready", commandID: commandID, opID: opID, run: run, execution: execution, ack: ack}
+		select {
+		case s.workerMessages <- workerMessage{runID: run.RunID, launch: message}:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+		select {
+		case err := <-ack:
+			return err
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	worker, events, turnID, err := startAppServerWorkerTurn(ctx, config, &run, &execution, commandID, prompt, persistThread)
+	message := &appServerLaunchMessage{phase: "turn_result", commandID: commandID, opID: opID, run: run, execution: execution, worker: worker, events: events, turnID: turnID, err: err}
+	select {
+	case s.workerMessages <- workerMessage{runID: run.RunID, launch: message}:
+	case <-s.runContext.Done():
+		if worker != nil {
+			_ = worker.detachLocalObservation(context.Background())
+		}
+	}
+}
+
+func (s *Service) handleAppServerLaunchMessage(runID string, message *appServerLaunchMessage) (retErr error) {
+	if message == nil || message.commandID == "" || message.opID == "" {
+		return errors.New("app-server launch message lacks its fixed command")
+	}
+	defer func() {
+		if message.phase == "turn_result" && s.appServerLaunching[runID] == message.commandID {
+			delete(s.appServerLaunching, runID)
+		}
+		if message.worker != nil && s.workers[runID] != message.worker {
+			_ = message.worker.detachLocalObservation(context.Background())
+		}
+	}()
+	if message.ack != nil {
+		defer func() { message.ack <- retErr }()
+	}
+	var run *Run
+	for _, candidate := range s.State.Runs {
+		if candidate != nil && candidate.RunID == runID {
+			run = candidate
+			break
+		}
+	}
+	if run == nil || run.Protocol != string(ProtocolLocalCodexAppServer) {
+		return errors.New("app-server launch no longer belongs to a local execution")
+	}
+	fixed, err := s.workerFlowContext(run)
+	if err != nil {
+		return err
+	}
+	c := fixed.config
+	workflow, execution := s.workflowRecords(run)
+	if workflow == nil || execution == nil || execution.ExecutionID != message.execution.ExecutionID || execution.PendingCommandID != message.commandID || run.AttemptID != message.run.AttemptID || run.TaskStatus == "closed" || run.TaskStatus == "discarded" {
+		return ErrWorkerTurnStale
+	}
+	if message.phase == "thread_ready" {
+		if message.execution.Process == nil || !codexThreadID.MatchString(message.execution.SessionID) || message.execution.AppServerEndpoint == "" || message.execution.AppServerGeneration == "" {
+			return errors.New("app-server thread receipt is incomplete")
+		}
+		if execution.Process != nil && *execution.Process != *message.execution.Process || execution.SessionID != "" && execution.SessionID != message.execution.SessionID {
+			return errors.New("app-server thread receipt conflicts with its fixed execution")
+		}
+		ref := ExecutionRef{Version: ExecutionRecordVersion, Backend: BackendLocal, Protocol: ProtocolLocalCodexAppServer, Target: targetFor(c), Agent: agentFor(c), RunID: run.RunID, AttemptID: run.AttemptID, WorkspacePath: deref(run.WorktreePath), WorkspaceBranch: deref(run.WorktreeBranch), BaseCommit: deref(run.BaseCommit), External: *message.execution.Process, Generation: message.execution.AppServerGeneration}
+		if err := (executionRecords{root: c.RunDir}).saveBinding(ref); err != nil {
+			return err
+		}
+		execution.Process = message.execution.Process
+		execution.AppServerEndpoint = message.execution.AppServerEndpoint
+		execution.AppServerGeneration = message.execution.AppServerGeneration
+		execution.SessionID = message.execution.SessionID
+		s.refreshRun(run)
+		return s.commitWorker(run)
+	}
+	if message.phase != "turn_result" {
+		return fmt.Errorf("unknown app-server launch phase %q", message.phase)
+	}
+	if message.err != nil {
+		if execution.Process == nil && message.execution.Process != nil {
+			execution.Process = message.execution.Process
+			execution.AppServerEndpoint = message.execution.AppServerEndpoint
+			execution.AppServerGeneration = message.execution.AppServerGeneration
+			s.refreshRun(run)
+		}
+		return s.failStartedWorkerTurn(run, message.opID, message.turnID, message.err)
+	}
+	if message.worker == nil || !codexThreadID.MatchString(message.turnID) || execution.Process == nil || message.worker.proc.Identity() != *execution.Process || message.execution.SessionID != execution.SessionID || message.execution.AppServerGeneration != execution.AppServerGeneration {
+		return errors.New("app-server turn result differs from its fixed thread/process")
+	}
+	return s.acceptStartedWorkerTurn(run, message.worker, message.events, message.turnID, message.opID, message.commandID, true)
 }

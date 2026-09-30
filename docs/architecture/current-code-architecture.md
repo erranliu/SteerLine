@@ -353,6 +353,8 @@ flowchart LR
     Replay --> Mapper
 ```
 
+Service 将私有领域工作副本和已提交快照分开；公开 Runtime/Run 由已提交记录深复制构建。worker 转换通过 `service_commit.go` / `worker_commit.go` 声明记录前值、操作和事件；业务记录与 checkpoint 在同一事务提交。`publishCheckpoint` 与 heartbeat 只写服务快照，不扫描业务字段。手动本地恢复在一笔提交中退休旧 Attempt、创建新 Attempt 并切换 Execution 当前代次。
+
 读取视图在同一事务中组合业务记录和 checkpoint。会话事件及来源游标持久化后可以补读，正文按身份与版本定位；来源没有明确 turn 终态或 final 时，界面显示未识别或能力原因。重启恢复还需核验进程身份、app-server generation、固定工作区、Orca dispatch 和未完成 Operation，不能只从日志推测是否完成。
 
 ## 8. 工具、依赖与尚未交付的边界
@@ -413,21 +415,21 @@ flowchart LR
 | --- |
 | [activity.go](../../internal/steerline/activity.go) |
 | [adapter_error.go](../../internal/steerline/adapter_error.go) |
+| [codex.go](../../internal/steerline/codex.go) |
 | [codex_conversation.go](../../internal/steerline/codex_conversation.go) |
 | [codex_git_sandbox.go](../../internal/steerline/codex_git_sandbox.go) |
 | [codex_history.go](../../internal/steerline/codex_history.go) |
-| [codex.go](../../internal/steerline/codex.go) |
-| [command_processor.go](../../internal/steerline/command_processor.go) |
 | [command.go](../../internal/steerline/command.go) |
+| [command_processor.go](../../internal/steerline/command_processor.go) |
 | [config.go](../../internal/steerline/config.go) |
 | [control_client.go](../../internal/steerline/control_client.go) |
 | [control_protocol.go](../../internal/steerline/control_protocol.go) |
 | [control_service.go](../../internal/steerline/control_service.go) |
+| [conversation.go](../../internal/steerline/conversation.go) |
 | [conversation_position.go](../../internal/steerline/conversation_position.go) |
 | [conversation_replay.go](../../internal/steerline/conversation_replay.go) |
 | [conversation_service.go](../../internal/steerline/conversation_service.go) |
 | [conversation_store.go](../../internal/steerline/conversation_store.go) |
-| [conversation.go](../../internal/steerline/conversation.go) |
 | [decision.go](../../internal/steerline/decision.go) |
 | [domain.go](../../internal/steerline/domain.go) |
 | [execution_backend.go](../../internal/steerline/execution_backend.go) |
@@ -444,8 +446,8 @@ flowchart LR
 | [native_authority.go](../../internal/steerline/native_authority.go) |
 | [native_batch_command.go](../../internal/steerline/native_batch_command.go) |
 | [native_claim_command.go](../../internal/steerline/native_claim_command.go) |
-| [native_cleanup_stop.go](../../internal/steerline/native_cleanup_stop.go) |
 | [native_cleanup.go](../../internal/steerline/native_cleanup.go) |
+| [native_cleanup_stop.go](../../internal/steerline/native_cleanup_stop.go) |
 | [native_contract_files.go](../../internal/steerline/native_contract_files.go) |
 | [native_delivery_command.go](../../internal/steerline/native_delivery_command.go) |
 | [native_discard_command.go](../../internal/steerline/native_discard_command.go) |
@@ -456,19 +458,19 @@ flowchart LR
 | [native_graph_snapshot.go](../../internal/steerline/native_graph_snapshot.go) |
 | [native_graph_types.go](../../internal/steerline/native_graph_types.go) |
 | [native_project_open.go](../../internal/steerline/native_project_open.go) |
-| [native_readiness_query.go](../../internal/steerline/native_readiness_query.go) |
 | [native_readiness.go](../../internal/steerline/native_readiness.go) |
+| [native_readiness_query.go](../../internal/steerline/native_readiness_query.go) |
 | [native_repository_target.go](../../internal/steerline/native_repository_target.go) |
 | [native_service.go](../../internal/steerline/native_service.go) |
 | [native_state_preflight.go](../../internal/steerline/native_state_preflight.go) |
-| [native_task_page_queries.go](../../internal/steerline/native_task_page_queries.go) |
 | [native_task_page.go](../../internal/steerline/native_task_page.go) |
+| [native_task_page_queries.go](../../internal/steerline/native_task_page_queries.go) |
 | [native_task_predecessors.go](../../internal/steerline/native_task_predecessors.go) |
 | [observation.go](../../internal/steerline/observation.go) |
 | [operation.go](../../internal/steerline/operation.go) |
+| [orca.go](../../internal/steerline/orca.go) |
 | [orca_supervised.go](../../internal/steerline/orca_supervised.go) |
 | [orca_version.go](../../internal/steerline/orca_version.go) |
-| [orca.go](../../internal/steerline/orca.go) |
 | [orcaexec.go](../../internal/steerline/orcaexec.go) |
 | [platform_linux.go](../../internal/steerline/platform_linux.go) |
 | [platform_windows.go](../../internal/steerline/platform_windows.go) |
@@ -478,42 +480,44 @@ flowchart LR
 | [recovery.go](../../internal/steerline/recovery.go) |
 | [render.go](../../internal/steerline/render.go) |
 | [runtime_view.go](../../internal/steerline/runtime_view.go) |
+| [service.go](../../internal/steerline/service.go) |
 | [service_client.go](../../internal/steerline/service_client.go) |
+| [service_commit.go](../../internal/steerline/service_commit.go) |
 | [service_execution_profiles.go](../../internal/steerline/service_execution_profiles.go) |
 | [service_workers.go](../../internal/steerline/service_workers.go) |
-| [service.go](../../internal/steerline/service.go) |
 | [spawner.go](../../internal/steerline/spawner.go) |
+| [sqlite_store.go](../../internal/steerline/sqlite_store.go) |
+| [sqlite_store_checkpoint.go](../../internal/steerline/sqlite_store_checkpoint.go) |
 | [sqlite_store_read.go](../../internal/steerline/sqlite_store_read.go) |
-| [sqlite_store_runtime.go](../../internal/steerline/sqlite_store_runtime.go) |
 | [sqlite_store_schema.go](../../internal/steerline/sqlite_store_schema.go) |
+| [sqlite_store_write.go](../../internal/steerline/sqlite_store_write.go) |
 | [sqlite_store_write_commands.go](../../internal/steerline/sqlite_store_write_commands.go) |
 | [sqlite_store_write_execution.go](../../internal/steerline/sqlite_store_write_execution.go) |
 | [sqlite_store_write_native.go](../../internal/steerline/sqlite_store_write_native.go) |
-| [sqlite_store_write.go](../../internal/steerline/sqlite_store_write.go) |
-| [sqlite_store.go](../../internal/steerline/sqlite_store.go) |
 | [state_preflight.go](../../internal/steerline/state_preflight.go) |
 | [state_revision.go](../../internal/steerline/state_revision.go) |
 | [store.go](../../internal/steerline/store.go) |
-| [worker_feedback_phase.go](../../internal/steerline/worker_feedback_phase.go) |
+| [worker_commit.go](../../internal/steerline/worker_commit.go) |
 | [worker_flow_adapter.go](../../internal/steerline/worker_flow_adapter.go) |
-| [worker_flow_app_server_async.go](../../internal/steerline/worker_flow_app_server_async.go) |
+| [worker_flow_app_server.go](../../internal/steerline/worker_flow_app_server.go) |
 | [worker_flow_app_server_recovery.go](../../internal/steerline/worker_flow_app_server_recovery.go) |
 | [worker_flow_app_server_reply.go](../../internal/steerline/worker_flow_app_server_reply.go) |
-| [worker_flow_app_server.go](../../internal/steerline/worker_flow_app_server.go) |
 | [worker_flow_evidence.go](../../internal/steerline/worker_flow_evidence.go) |
-| [worker_flow_orca_native_model.go](../../internal/steerline/worker_flow_orca_native_model.go) |
+| [worker_flow_orca_dispatch.go](../../internal/steerline/worker_flow_orca_dispatch.go) |
 | [worker_flow_orca_native.go](../../internal/steerline/worker_flow_orca_native.go) |
+| [worker_flow_orca_prepare.go](../../internal/steerline/worker_flow_orca_prepare.go) |
 | [worker_flow_orca_relay.go](../../internal/steerline/worker_flow_orca_relay.go) |
 | [worker_flow_orca_terminal.go](../../internal/steerline/worker_flow_orca_terminal.go) |
 | [worker_flow_orca_workspace.go](../../internal/steerline/worker_flow_orca_workspace.go) |
 | [worker_flow_process.go](../../internal/steerline/worker_flow_process.go) |
 | [worker_flow_publish_local.go](../../internal/steerline/worker_flow_publish_local.go) |
+| [worker_flow_recovery.go](../../internal/steerline/worker_flow_recovery.go) |
 | [worker_flow_resume_adapter.go](../../internal/steerline/worker_flow_resume_adapter.go) |
 | [worker_flow_service.go](../../internal/steerline/worker_flow_service.go) |
 | [worker_flow_state.go](../../internal/steerline/worker_flow_state.go) |
 | [workflow_runtime_helpers.go](../../internal/steerline/workflow_runtime_helpers.go) |
-| [workspace_dirty.go](../../internal/steerline/workspace_dirty.go) |
 | [workspace.go](../../internal/steerline/workspace.go) |
+| [workspace_dirty.go](../../internal/steerline/workspace_dirty.go) |
 
 ### internal/steerline/codexapp
 

@@ -40,6 +40,9 @@ func (s *Service) resumeCodexWorker(ctx context.Context, task *TaskRecord, run *
 				execution.RecoveryState = "unverified"
 			}
 			s.refreshRun(run)
+			if err := s.commitWorker(run); err != nil {
+				return true, err
+			}
 			if run.Decision != nil && run.Decision.Status == "answer_saved" {
 				return true, s.refreshSavedRecoveryDecision(run, false, "服务重开后请确认旧答案；原轮次不会自动继续。")
 			}
@@ -47,7 +50,7 @@ func (s *Service) resumeCodexWorker(ctx context.Context, task *TaskRecord, run *
 				if record := s.decisionRecord(run); record != nil && (record.RecoveryVersion != execution.RecoveryVersion || record.RecoveryState != execution.RecoveryState) {
 					oldID := record.DecisionID
 					s.setDecisionStatus(run, "superseded")
-					if err := s.save(); err != nil {
+					if err := s.commitWorker(run); err != nil {
 						return true, err
 					}
 					s.setRunDecision(run, nil)
@@ -56,7 +59,8 @@ func (s *Service) resumeCodexWorker(ctx context.Context, task *TaskRecord, run *
 					}
 					if next := s.decisionRecord(run); next != nil {
 						next.RecoveryOfDecision = oldID
-						return true, s.save()
+						s.markWorkerDecisionWrite(next.DecisionID)
+						return true, s.commitWorker(run)
 					}
 				}
 			}
@@ -99,7 +103,13 @@ func (s *Service) resumeNativeOrcaWorker(ctx context.Context, task *TaskRecord, 
 		return false, s.nativeOrcaUncertain(run, "Original Orca agent session is unavailable: "+err.Error())
 	}
 	if execution.RecoveryRequired {
-		execution.RecoveryState = "live"
+		if execution.RecoveryState != "live" {
+			execution.RecoveryState = "live"
+			s.refreshRun(run)
+			if err := s.commitWorker(run); err != nil {
+				return true, err
+			}
+		}
 		if run.Decision != nil && run.Decision.Status == "answer_saved" {
 			if err := s.refreshSavedRecoveryDecision(run, run.Decision.Request.OrcaAsk != nil, "服务重开后保留了原 Orca 输入；请重新确认后才投递。 "); err != nil {
 				return true, err
@@ -132,7 +142,7 @@ func (s *Service) resumeNativeOrcaWorker(ctx context.Context, task *TaskRecord, 
 		}
 		turn := nativeOrcaCurrentTurn(execution)
 		if turn != nil && turn.DispatchID != "" && op.Status != "accepted" && op.Status != "confirmed" {
-			if err := s.changeOperation(op.OperationID, "accepted", turn.DispatchRequestID, mustJSON(*turn), ""); err != nil {
+			if err := s.changeWorkerOperation(run, op.OperationID, "accepted", turn.DispatchRequestID, mustJSON(*turn), ""); err != nil {
 				return false, err
 			}
 		}
@@ -201,7 +211,7 @@ func (s *Service) resumeWorkspaceWorker(ctx context.Context, task *TaskRecord, r
 			return false, s.waitWorkerFlow(run, "Original worker process identity cannot be verified; its session and files are retained")
 		}
 	}
-	if execution.PendingTurnID != "" {
+	if remote && execution.PendingTurnID != "" {
 		events := filepath.Join(c.RunDir, "runs", run.RunID, "turns", execution.PendingTurnID, "events.jsonl")
 		if outcome, err := codexworker.ReadExecOutcome(events); err == nil && outcome.Completed && outcome.SessionID != "" {
 			return false, s.finishWorkerFlowFor(run, nil)
@@ -218,9 +228,9 @@ func (s *Service) resumeWorkspaceWorker(ctx context.Context, task *TaskRecord, r
 		return true, s.waitWorkerFlow(run, "原 worker 已停，等待手动继续")
 	}
 	var preparation *OperationRecord
-	for i := range s.State.Operations {
-		if s.State.Operations[i].IdempotencyKey == "worker-workspace:"+execution.ExecutionID {
-			preparation = &s.State.Operations[i]
+	for i := range s.domain.Operations {
+		if s.domain.Operations[i].IdempotencyKey == "worker-workspace:"+execution.ExecutionID {
+			preparation = &s.domain.Operations[i]
 			break
 		}
 	}
@@ -238,7 +248,7 @@ func (s *Service) resumeWorkspaceWorker(ctx context.Context, task *TaskRecord, r
 		} else {
 			s.refreshRun(run)
 			if preparation.Status != "confirmed" {
-				if err := s.changeOperation(preparation.OperationID, "confirmed", preparation.PlatformRequestID, mustJSON(execution.Workspace), ""); err != nil {
+				if err := s.changeWorkerOperation(run, preparation.OperationID, "confirmed", preparation.PlatformRequestID, mustJSON(execution.Workspace), ""); err != nil {
 					return false, err
 				}
 			}
@@ -258,7 +268,7 @@ func (s *Service) resumeWorkspaceWorker(ctx context.Context, task *TaskRecord, r
 		}
 		applyWorkflowWorkspaceEvidence(run, execution, workspace)
 		if preparation.Status != "confirmed" {
-			if err := s.changeOperation(preparation.OperationID, "confirmed", "", mustJSON(workspace), ""); err != nil {
+			if err := s.changeWorkerOperation(run, preparation.OperationID, "confirmed", "", mustJSON(workspace), ""); err != nil {
 				return false, err
 			}
 		}

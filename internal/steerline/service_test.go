@@ -244,7 +244,7 @@ func controlReviewService(t *testing.T) *Service {
 	service.State.Service.PID = identity.PID
 	service.State.Service.ProcessIdentity = identity
 	service.State.Service.ConfigDigest = service.Config.configDigest
-	if err := service.save(); err != nil {
+	if err := service.publishCheckpoint(); err != nil {
 		t.Fatal(err)
 	}
 	return service

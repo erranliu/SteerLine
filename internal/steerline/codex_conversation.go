@@ -211,7 +211,7 @@ func (s *Service) bindLocalCodexHistory(run *Run, source WorkerEvent) error {
 
 func (s *Service) localConversationLogPath(run *Run, attemptID string) string {
 	path := deref(run.LogPath)
-	for _, attempt := range s.State.Attempts {
+	for _, attempt := range s.domain.Attempts {
 		if attempt.AttemptID == attemptID && attempt.ExecutionID == run.ExecutionID && attempt.EventPath != "" {
 			return attempt.EventPath
 		}
@@ -324,7 +324,7 @@ func (s *Service) codexHistorySources() []codexHistoryBinding {
 			}
 		}
 
-		for _, attempt := range s.State.Attempts {
+		for _, attempt := range s.domain.Attempts {
 			if attempt.ExecutionID == run.ExecutionID {
 				ended := attempt.AttemptID != run.AttemptID || run.EndedAt != nil
 				if run.WorkflowVersion == WorkerFlowVersion && attempt.AttemptID == run.AttemptID {

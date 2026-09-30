@@ -111,8 +111,8 @@ func recoveryService(c Config, runtimeState Runtime) Service {
 }
 
 func (s *Service) inspectRecoveryClaim(ctx context.Context, run *Run, report *RecoveryInspection) {
-	for i := range s.State.Tasks {
-		task := &s.State.Tasks[i]
+	for i := range s.domain.Tasks {
+		task := &s.domain.Tasks[i]
 		if task.TaskID == run.DomainTaskID && task.ProjectIdentity == s.Config.identity {
 			report.NativeClaim = task
 			return

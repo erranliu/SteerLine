@@ -73,9 +73,9 @@ func TestAppServerServiceParallelRecoveryLive(t *testing.T) {
 		}
 		_, execution := service.workflowRecords(run)
 		applyWorkflowWorkspaceEvidence(run, execution, workspace)
-	}
-	if err := service.save(); err != nil {
-		t.Fatal(err)
+		if err := service.commitWorker(run); err != nil {
+			t.Fatal(err)
+		}
 	}
 	processes := make([]ProcessIdentity, 0, 2)
 	t.Cleanup(func() {
@@ -151,7 +151,7 @@ func TestAppServerServiceParallelRecoveryLive(t *testing.T) {
 		decision.Version, decision.Status = record.Version, record.Status
 		decision.Answers, decision.Note, decision.AnsweredBy = input.Answers, input.Note, input.AnsweredBy
 		decision.AnsweredAt = &record.UpdatedAt
-		if err := service.save(); err != nil {
+		if err := service.publishCheckpoint(); err != nil {
 			t.Fatal(err)
 		}
 		if err := service.applyWorkerFlowDecision(ctx, run); err != nil {
@@ -229,7 +229,7 @@ func TestAppServerServiceParallelRecoveryLive(t *testing.T) {
 		t.Fatalf("restart failed to reattach original question: task=%s decision=%s ask=%s/%s execution=%s thread=%s/%s turn=%s/%s stopped=%s worker=%t reason=%q", run8.TaskStatus, decisionStatus, ask, callID, execution8.Status, execution8.SessionID, firstThread, execution8.CurrentTurnID, firstTurn, execution8.LastStoppedTurnID, service.workers[run8.RunID] != nil, deref(run8.Error))
 	}
 	service.State.Service.Ready, service.State.Service.Status = true, "running"
-	if err := service.save(); err != nil {
+	if err := service.publishCheckpoint(); err != nil {
 		t.Fatal(err)
 	}
 	answer(run8, map[string][]string{"choice": {"A"}}, "")
@@ -327,7 +327,7 @@ func TestAppServerHostExitHelper(t *testing.T) {
 	}
 	_, execution := service.workflowRecords(run)
 	applyWorkflowWorkspaceEvidence(run, execution, workspace)
-	if err := service.save(); err != nil {
+	if err := service.commitWorker(run); err != nil {
 		t.Fatal(err)
 	}
 	if err := service.startWorkerFlowTurn(ctx, run, "Call steerline_ask with one question (id choice, header Choice, question Should I reply A or B?, options A and B, allow_free_text false). Wait for the answer. Then reply with the chosen letter only.", newID()); err != nil {
@@ -427,7 +427,7 @@ func TestAppServerHostExitRecoveryLive(t *testing.T) {
 	}
 	defer worker.detachLocalObservation(context.Background())
 	service.State.Service.Ready, service.State.Service.Status = true, "running"
-	if err := service.save(); err != nil {
+	if err := service.publishCheckpoint(); err != nil {
 		t.Fatal(err)
 	}
 	answer := DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, Answers: map[string][]string{"choice": {"A"}}, AnsweredBy: "operator", ExpectedDecisionVersion: run.Decision.Version, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: service.State.Service.InstanceID}
@@ -442,7 +442,7 @@ func TestAppServerHostExitRecoveryLive(t *testing.T) {
 	run.Decision.Version, run.Decision.Status = record.Version, record.Status
 	run.Decision.Answers, run.Decision.AnsweredBy = answer.Answers, answer.AnsweredBy
 	run.Decision.AnsweredAt = &record.UpdatedAt
-	if err := service.save(); err != nil {
+	if err := service.publishCheckpoint(); err != nil {
 		t.Fatal(err)
 	}
 	if err := service.applyWorkerFlowDecision(ctx, run); err != nil {

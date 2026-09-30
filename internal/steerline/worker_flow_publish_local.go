@@ -237,8 +237,8 @@ func (s *Service) reconcileLocalWorkerPublication(ctx context.Context, run *Run)
 		return false, nil
 	}
 	var op *OperationRecord
-	for i := range s.State.Operations {
-		candidate := &s.State.Operations[i]
+	for i := range s.domain.Operations {
+		candidate := &s.domain.Operations[i]
 		if candidate.Kind == "publish_local_worker" && strings.HasPrefix(candidate.IdempotencyKey, "local-publish:"+run.RunID+":") &&
 			(candidate.Status == "in_flight" || candidate.Status == "outcome_unknown") {
 			if op != nil {

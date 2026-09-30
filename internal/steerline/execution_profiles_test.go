@@ -101,7 +101,7 @@ func TestNativeClaimPersistsChosenExecutionProfile(t *testing.T) {
 	}
 	base.ExecutionProfiles[0].Model = "later-edit"
 	run := &Run{RunID: wf.WorkflowRunID, Host: "local", Agent: "codex", Backend: execution.Backend, Protocol: execution.Protocol, Target: execution.Target}
-	service := &Service{Config: base, baseConfig: base, State: Runtime{Runs: []*Run{run}, WorkflowRuns: snapshot.WorkflowRuns}}
+	service := &Service{Config: base, baseConfig: base, State: Runtime{Runs: []*Run{run}}, domain: DomainSnapshot{WorkflowRuns: snapshot.WorkflowRuns}}
 	fixed, err := service.executionConfigForRun(run)
 	if err != nil || fixed.Model != "chosen-model" || fixed.Sandbox != "danger-full-access" {
 		t.Fatalf("recovery adopted the edited preset: %+v / %v", fixed, err)
@@ -204,7 +204,7 @@ func TestWorkerFlowClaimsFreezeIndependentLocalProfiles(t *testing.T) {
 		}
 		workflow, execution := reopened.workflowRecords(run)
 		fixed, err := reopened.executionConfigForRun(run)
-		if err != nil || workflow == nil || workflow.WorkflowVersion != WorkerFlowVersion || workflow.ExecutionProfile == nil || workflow.ExecutionProfile.ID != c.ExecutionProfiles[index].ID || execution == nil || execution.ExecutionID != workflow.SelectedResult || fixed.Model != c.ExecutionProfiles[index].Model || len(reopened.State.Attempts) != 2 {
+		if err != nil || workflow == nil || workflow.WorkflowVersion != WorkerFlowVersion || workflow.ExecutionProfile == nil || workflow.ExecutionProfile.ID != c.ExecutionProfiles[index].ID || execution == nil || execution.ExecutionID != workflow.SelectedResult || fixed.Model != c.ExecutionProfiles[index].Model || len(reopened.domain.Attempts) != 2 {
 			t.Fatalf("task %s adopted another local profile or step chain: workflow=%+v execution=%+v config=%+v err=%v", taskID, workflow, execution, fixed, err)
 		}
 	}

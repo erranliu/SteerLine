@@ -40,7 +40,7 @@ func TestObservationReadsOneSQLiteRuntimeAndClassifiesHeartbeat(t *testing.T) {
 	state := Runtime{SchemaVersion: WorkerFlowRuntimeSchema, Repository: Repository{Identity: c.Identity(), Path: c.Repository, Remote: c.Remote, Branch: c.Branch}, HeartbeatAt: nowTime.Add(-5 * time.Second), Runs: []*Run{}}
 	save := func() {
 		t.Helper()
-		if _, err := db.SaveRuntime(context.Background(), state); err != nil {
+		if _, err := db.SaveCheckpoint(context.Background(), runtimeCheckpoint(state)); err != nil {
 			t.Fatal(err)
 		}
 	}

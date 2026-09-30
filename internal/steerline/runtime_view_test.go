@@ -19,16 +19,16 @@ func waitingDecisionService(t *testing.T) (*Service, *Run) {
 
 func TestRuntimeViewCannotWriteBusinessState(t *testing.T) {
 	service, run := waitingDecisionService(t)
-	workflow, execution := service.workflowRecords(run)
+	_, execution := service.workflowRecords(run)
 	originalIntent := *execution.WorkspaceIntent
 	revision := run.ControlRevision
 	run.FinishTaskStatus, run.ExecutionStatus, run.Decision.Status = "completed", "failed", "superseded"
 	run.WorkspaceIntent.Path = "view-only-path"
 	run.PR.URL = ptr("view-only-pr")
 	execution.LastEvent = ptr("new diagnostic")
-	require(t, service.save())
-	if workflow != service.workflowRecord(run) || execution != service.executionRecord(run) {
-		t.Fatal("publication replaced actor domain records")
+	require(t, service.publishCheckpoint())
+	if service.executionRecord(run).LastEvent != nil && *service.executionRecord(run).LastEvent == "new diagnostic" {
+		t.Fatal("checkpoint publication committed a worker candidate")
 	}
 	if run.FinishTaskStatus != "waiting_decision" || run.ExecutionStatus != "succeeded" || run.Decision.Status != "pending" || run.PR.URL != nil || *run.WorkspaceIntent != originalIntent || run.ControlRevision != revision {
 		t.Fatalf("view became authority or diagnostic changed revision: %+v", run)
@@ -43,7 +43,7 @@ func TestRuntimeViewCannotWriteBusinessState(t *testing.T) {
 	require(t, service.store.Heartbeat())
 	loaded, err := LoadDatabaseRuntime(service.Config)
 	require(t, err)
-	if loaded.Runs[0].ControlRevision != revision || loaded.Runs[0].LastEvent == nil || *loaded.Runs[0].LastEvent != "new diagnostic" {
+	if loaded.Runs[0].ControlRevision != revision || loaded.Runs[0].LastEvent != nil && *loaded.Runs[0].LastEvent == "new diagnostic" {
 		t.Fatal("coherent runtime read lost domain observation or heartbeat changed revision")
 	}
 }
@@ -81,7 +81,7 @@ func TestAnswerChecksDomainRevisionBeforeCheckpointPublication(t *testing.T) {
 	}
 }
 
-func TestWorkerCommitPreservesExternallyAcceptedDecision(t *testing.T) {
+func TestPublicationPreservesExternallyAcceptedDecision(t *testing.T) {
 	service, run := waitingDecisionService(t)
 	ctx := context.Background()
 	commands := CommandService{Store: service.domainStore, Project: service.Config.Identity()}
@@ -91,13 +91,11 @@ func TestWorkerCommitPreservesExternallyAcceptedDecision(t *testing.T) {
 	_, _, err = commands.AcceptAnswer(ctx, command, answer)
 	require(t, err)
 	service.executionRecord(run).LastEvent = ptr("actor diagnostic after external answer")
-	if err := service.commitWorker(run); !isNativeErrorCode(err, "stale_revision") {
-		t.Fatalf("stale worker actor did not stop before overwriting the answer: %v", err)
-	}
+	require(t, service.publishCheckpoint())
 	loaded, err := LoadDatabaseRuntime(service.Config)
 	require(t, err)
 	if loaded.Runs[0].Decision.Status != "answer_saved" || loaded.Runs[0].Decision.Note != answer.Note {
-		t.Fatal("worker commit overwrote the externally saved answer")
+		t.Fatal("publication overwrote committed answer with actor's stale copy")
 	}
 }
 
@@ -114,15 +112,15 @@ func TestWorkerCommitRejectsConflictingDecisionAtomically(t *testing.T) {
 	require(t, err)
 	service.setDecisionStatus(run, "superseded")
 	service.executionRecord(run).LastEvent = ptr("must roll back")
-	if err = service.commitWorker(run); !isNativeErrorCode(err, "stale_revision") {
-		t.Fatalf("conflicting worker commit was not rejected: %v", err)
+	if err = service.commitWorker(run); err == nil || !strings.Contains(err.Error(), "stale_revision") {
+		t.Fatalf("conflicting publication was not rejected: %v", err)
 	}
 	after, nextRevision, err := service.domainStore.LoadProjection(ctx, service.Config.Identity())
 	require(t, err)
 	loaded, err := LoadDatabaseRuntime(service.Config)
 	require(t, err)
 	if !bytes.Equal(before, after) || revision != nextRevision || loaded.Runs[0].Decision.Status != "answer_saved" || loaded.Runs[0].Decision.Note != answer.Note || loaded.Runs[0].LastEvent != nil && *loaded.Runs[0].LastEvent == "must roll back" {
-		t.Fatal("conflicting worker commit changed committed state")
+		t.Fatal("conflicting publication changed committed state")
 	}
 }
 
@@ -148,19 +146,24 @@ func TestRuntimeViewRejectsInvalidWorkerAttempts(t *testing.T) {
 			t.Fatalf("accepted %d worker attempts: %v", count, err)
 		}
 	}
-	state := service.State
-	old := state.Attempts[0]
-	old.Status = "stopped"
-	next := old
-	next.AttemptID, next.AttemptNumber, next.Status = newID(), old.AttemptNumber+1, "planned"
-	state.Attempts = []StepAttemptRecord{old, next}
-	for i := range state.Executions {
-		if state.Executions[i].ExecutionID == run.ExecutionID {
-			state.Executions[i].CurrentAttemptID = next.AttemptID
-			state.Executions[i].DecisionID = ""
-		}
+}
+
+func TestWorkerCommitPreservesExternallyAcceptedDecision(t *testing.T) {
+	service, run := waitingDecisionService(t)
+	ctx := context.Background()
+	commands := CommandService{Store: service.domainStore, Project: service.Config.Identity()}
+	answer := DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, Note: "keep this answer", AnsweredBy: "operator", ExpectedDecisionVersion: run.Decision.Version, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: service.State.Service.InstanceID}
+	command, _, err := commands.AnswerDecision(ctx, answer.DecisionID, answer.ExpectedDecisionVersion, newID(), answer.AnsweredBy, mustJSON(answer))
+	require(t, err)
+	_, _, err = commands.AcceptAnswer(ctx, command, answer)
+	require(t, err)
+	service.executionRecord(run).LastEvent = ptr("actor diagnostic after external answer")
+	if err := service.commitWorker(run); !isNativeErrorCode(err, "stale_revision") {
+		t.Fatalf("stale worker actor did not stop before overwriting the answer: %v", err)
 	}
-	if err := projectRuntime(&state); err != nil || state.Runs[0].AttemptID != next.AttemptID {
-		t.Fatalf("valid successor attempt was not projected: %v", err)
+	loaded, err := LoadDatabaseRuntime(service.Config)
+	require(t, err)
+	if loaded.Runs[0].Decision.Status != "answer_saved" || loaded.Runs[0].Decision.Note != answer.Note {
+		t.Fatal("worker commit overwrote the externally saved answer")
 	}
 }

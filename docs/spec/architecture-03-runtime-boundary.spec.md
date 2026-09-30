@@ -1,6 +1,6 @@
 # Spec：架构收口 PR 3 — 移除隐式写回与读写模型收口
 
-状态：待实施；未分配 Task ID。日期：2026-09-30。审计基线：`main@4e786d7`。硬前置：[PR 2：worker 生命周期显式原子提交](architecture-02-worker-commit.spec.md) 已合入；继承 [PR 1](architecture-01-worker-protocol.spec.md) 的协议边界。本 Spec 由本系列最后一个实现 PR 交付。
+状态：实现候选，待评审；未分配 Task ID。日期：2026-09-30。审计基线：`main@a05f797`。承接已合入的 #151、#152 与 #150；本轮 Runtime 边界、剩余显式提交及适配层清理由同一个实现 PR 交付。
 
 ## 1. 目标与依据
 
@@ -79,3 +79,53 @@ PR 描述附最终写入入口与后端职责映射，说明 PR 2 剩余项全�
 | 中心生命周期混入平台协议 | PR 1 提供事实边界；本 PR 完成实际后端接口及依赖收口，中心只处理业务关联、转换和副作用编排 |
 
 达到以上条件后，本轮架构审计的高优先级建议完成。不以顺带完成新的 UI、多候选、性能优化或既有未认证平台能力作为本系列门槛。
+
+## 合并实施记录（2026-09-30）
+
+本项承接已合入的 [PR 2](architecture-02-worker-commit.spec.md)，按用户要求在同一个后续 PR 收完剩余写回与结构清理，不保留 Runtime 隐式写回的过渡入口。
+
+| 写入归属 | 最终入口 |
+| --- | --- |
+| 固定 worker 生命周期、恢复、终态诊断和精确资源清理回执 | `Service.commitWorker` → `Store.commitWorker` → `SQLiteStore.commitWorker` |
+| 历史 worker 活动事件 | `Service.commitEvents` → 同一显式事务 |
+| 远端 Delivery ack 意图与回执 | `Service.commitOperation` → 同一显式事务 |
+| 原生 Task、领取/交付、答案接收、调度控制与清理结果 | 现有 `CommandService` 类型化事务 |
+| 服务控制恢复元数据与 checkpoint | `Service.publishCheckpoint` → `SaveCheckpoint` |
+| heartbeat | `Store.Heartbeat`，仅更新已有 projection |
+
+本地恢复将退休旧 Attempt、新 Attempt 和 Execution 当前代次与 checkpoint 原子提交；恢复核实结果也直接持久化，不依赖后续服务发布。
+
+Service 私有 `domain` / `committed` 与公开 Runtime 通过深复制隔离。公开业务字段及未提交候选不能经 checkpoint 落盘，重启验证先初始化私有快照，再检查固定执行配置。
+
+原生 Orca 的工作区/agent/coordinator 准备收在 `worker_flow_orca_prepare.go`，Task/Dispatch 和反馈收在 `worker_flow_orca_dispatch.go`，inbox/输出/轮次结算留在 `worker_flow_orca_native.go`，精确终端关闭与交付后清理收在既有 terminal 文件。共享 Operation 查询和问题结构分别移入 operation/decision，消除跨模式的命名和类型归属。
+
+`ExecutionBackend` 移除无生产消费者的 ReadOutput、DetachObservation、ReconcileOperation 要求；输出读取保留在具体后端及协议适配层，移除无调用方的通用恢复/脱离转发方法。明确 unsupported 行为继续保留。
+
+Windows 的服务连接检查先解析 checkpoint 中的仓库路径，避免同一仓库的 8.3 短路径和完整路径导致原生反馈被错误拒绝；固定仓库、remote、branch、claimant 校验保留。
+
+### 整合主干后的验证
+
+基线为 main@a05f797（含 #150、#151、#152）。执行了：
+
+- 项目快速入口：go run ./cmd/test-feedback -quick，通过，准备 0.7 秒、执行 15.7 秒。
+- go vet ./internal/steerline/... 与 git diff --check，通过。
+- worker 提交声明/回滚、问题及答案不可变、回执失败不注册观察者、Task 终态保护、公开视图别名隔离、恢复代次原子切换、Orca 重启与精确关闭、同步及异步 app-server 两轮、原生问题回复恢复等针对性验证。
+- 因为整合同时涉及服务恢复、持久化、原生交付和三种适配路径，扩大到项目提供的三进程入口：go run ./cmd/test-feedback -workers 3，准备 4.9 秒、执行 237.1 秒。
+
+该次全量结果为失败：核心顶层 269 通过、19 跳过、12 失败；其他包顶层 132 通过、1 失败。其中两个 fixture 仍使用旧单 Attempt 错误文案/未提交的答案构造，已改为检查当前代次关联、通过真实 CommandService 接收答案，并定向重跑。没有增加测试跳过或把全量失败改写为通过。
+
+剩余 11 个失败均在未修改的 main@a05f797 独立重现：
+
+- TestConnectionClassifiesProcessAndSnapshotIndependently
+- TestLifecycleReviewMultipleLiveAttemptsRefuseLaunch
+- TestLifecycleReviewOfflineWithHeldLockCannotRestart
+- TestWindowsPendingStartupPreservesMismatchClassification（config 子例）
+- TestLifecycleReviewChildPublishesIdentityBeforePreflight
+- TestLifecycleReviewExistingServiceDoesNotNeedInstalledBinary
+- TestLifecycleReviewStopReportsExitWithoutReceipt
+- TestNativeStoreRejectsRetiredSQLiteRunProjectionBeforeAuthorityOpen
+- TestStartServiceReobservesExistingPendingAttempt
+- TestStartupIDAndOutputPathValidation
+- cmd/steerline 的 TestWaitServiceCommandResolvesIdentityAndKeepsPolling（Windows 临时 SQLite 文件清理时仍被占用）
+
+原始日志与 summary 保留在本机临时目录 steerline-workerflow-integrated-full-20260930、steerline-workerflow-integrated-quick-20260930；没有把日志或可执行文件加入仓库。未启用真机认证开关，模拟验证不等于真机验收。

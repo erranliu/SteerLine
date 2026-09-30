@@ -108,7 +108,7 @@ func TestFreshWorkerFlowRuntimeUsesDistinctFormat(t *testing.T) {
 	if service.State.SchemaVersion != WorkerFlowRuntimeSchema {
 		t.Fatalf("new runtime used schema %d", service.State.SchemaVersion)
 	}
-	if err := service.save(); err != nil {
+	if err := service.publishCheckpoint(); err != nil {
 		t.Fatal(err)
 	}
 	if err := service.Close(); err != nil {

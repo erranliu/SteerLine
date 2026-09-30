@@ -14,7 +14,7 @@ import (
 // Operations are bound by their saved request and exact identity components,
 // including host publication which is keyed by WorkflowRun rather than Execution.
 func (s *Service) hasUnknownWorkerOperation(run *Run) bool {
-	for _, op := range s.State.Operations {
+	for _, op := range s.domain.Operations {
 		if op.Status != "outcome_unknown" && op.Status != "in_flight" {
 			continue
 		}
@@ -93,7 +93,7 @@ func (s *Service) beginLocalRecoveryAttempt(ctx context.Context, run *Run, mode 
 	}
 	created := now()
 	newAttemptID := newID()
-	s.State.Attempts = append(s.State.Attempts, StepAttemptRecord{
+	s.domain.Attempts = append(s.domain.Attempts, StepAttemptRecord{
 		ProjectIdentity: old.ProjectIdentity, AttemptID: newAttemptID, ExecutionID: old.ExecutionID,
 		StepID: "worker", AttemptNumber: old.AttemptNumber + 1, Status: "planned",
 		InputRevision: old.InputRevision, ContractDigest: old.ContractDigest,
@@ -114,7 +114,7 @@ func (s *Service) beginLocalRecoveryAttempt(ctx context.Context, run *Run, mode 
 	}
 	execution.UpdatedAt = created
 	s.refreshRun(run)
-	return s.save()
+	return s.commitWorker(run)
 }
 
 // A saved answer from a previous service instance is historical input. A new
@@ -132,13 +132,13 @@ func (s *Service) refreshSavedRecoveryDecision(run *Run, preserveNative bool, re
 		execution.RecoveryMarkedAt != nil && old.AnsweredAt != nil && old.AnsweredAt.After(*execution.RecoveryMarkedAt) {
 		return nil // This answer already authorizes the current recovery revision.
 	}
-	for _, op := range s.State.Operations {
+	for _, op := range s.domain.Operations {
 		if op.IdempotencyKey != "appserver-answer:"+execution.ExecutionID+":"+old.ID {
 			continue
 		}
 		if op.Status == "confirmed" {
 			s.setDecisionStatus(run, "reply_accepted")
-			return s.save()
+			return s.commitWorker(run)
 		}
 		if op.Status == "in_flight" || op.Status == "accepted" || op.Status == "outcome_unknown" {
 			execution.RecoveryState = "unverified"
@@ -148,12 +148,12 @@ func (s *Service) refreshSavedRecoveryDecision(run *Run, preserveNative bool, re
 	if s.domainStore != nil && (old.Request.OrcaAsk != nil || run.Protocol == string(ProtocolOrcaTerminalV2)) {
 		oldAnswer := DecisionAnswer{DecisionID: old.ID, RunID: run.RunID, OptionID: old.OptionID, Note: old.Note, Answers: old.Answers, SourceAttemptID: old.SourceAttemptID, ExpectedRecoveryVersion: old.RecoveryVersion}
 		if command, err := s.domainStore.CommandByIdempotency(context.Background(), s.Config.identity, decisionAnswerKey(oldAnswer)); err == nil {
-			for _, op := range s.State.Operations {
+			for _, op := range s.domain.Operations {
 				if op.IdempotencyKey == "orca-native-reply:"+execution.ExecutionID+":"+command.CommandID ||
 					op.IdempotencyKey == "orca-native-send:"+execution.ExecutionID+":"+command.CommandID {
 					if op.Status == "confirmed" {
 						s.setDecisionStatus(run, "reply_accepted")
-						return s.save()
+						return s.commitWorker(run)
 					}
 					if op.Status != "in_flight" && op.Status != "accepted" && op.Status != "outcome_unknown" {
 						continue
@@ -169,7 +169,7 @@ func (s *Service) refreshSavedRecoveryDecision(run *Run, preserveNative bool, re
 		oldInput += "\nNative answers: " + string(mustJSON(old.Answers))
 	}
 	s.setDecisionStatus(run, "superseded")
-	if err := s.save(); err != nil {
+	if err := s.commitWorker(run); err != nil {
 		return err
 	}
 	s.setRunDecision(run, nil)
@@ -188,10 +188,11 @@ func (s *Service) refreshSavedRecoveryDecision(run *Run, preserveNative bool, re
 	}
 	if record := s.decisionRecord(run); record != nil {
 		record.RecoveryOfDecision = old.ID
+		s.markWorkerDecisionWrite(record.DecisionID)
 		record.RecoveryVersion = execution.RecoveryVersion
 		record.RecoveryState = execution.RecoveryState
 	}
-	return s.save()
+	return s.commitWorker(run)
 }
 
 func (s *Service) startManuallyRecoveredInitialCodex(ctx context.Context, run *Run, answer DecisionAnswer, commandID string) error {
@@ -210,7 +211,7 @@ func (s *Service) startManuallyRecoveredInitialCodex(ctx context.Context, run *R
 	if s.hasUnknownWorkerOperation(run) {
 		return s.waitWorkerFlow(run, "An earlier external operation has an unknown outcome; reconcile it before continuing")
 	}
-	task := nativeTaskRecord(s.State.Tasks, run.DomainTaskID)
+	task := nativeTaskRecord(s.domain.Tasks, run.DomainTaskID)
 	if task == nil {
 		return errors.New("fixed task is unavailable")
 	}
@@ -225,9 +226,9 @@ func (s *Service) startManuallyRecoveredInitialCodex(ctx context.Context, run *R
 	prompt += "\n\nThe service reopened before the first worker turn. Inspect the current worktree before acting.\n\n" + workerFeedbackText(answer, run.Decision.Request)
 	key := "worker-workspace:" + execution.ExecutionID
 	var preparation *OperationRecord
-	for i := range s.State.Operations {
-		if s.State.Operations[i].IdempotencyKey == key {
-			preparation = &s.State.Operations[i]
+	for i := range s.domain.Operations {
+		if s.domain.Operations[i].IdempotencyKey == key {
+			preparation = &s.domain.Operations[i]
 			break
 		}
 	}
@@ -236,7 +237,7 @@ func (s *Service) startManuallyRecoveredInitialCodex(ctx context.Context, run *R
 	}
 	if execution.Workspace.Worktree == "" {
 		if preparation == nil {
-			opID, err := s.startOperation("prepare_workspace", key, struct {
+			opID, err := s.startWorkerOperation(run, "prepare_workspace", key, struct {
 				WorkflowRunID string          `json:"workflow_run_id"`
 				ExecutionID   string          `json:"execution_id"`
 				Workspace     WorkspaceIntent `json:"workspace"`
@@ -246,7 +247,7 @@ func (s *Service) startManuallyRecoveredInitialCodex(ctx context.Context, run *R
 			}
 			if _, err := os.Lstat(run.WorkspaceIntent.Path); os.IsNotExist(err) {
 				if err := prepareWorktreeOnly(ctx, fixed.config, run); err != nil {
-					_ = s.changeOperation(opID, "outcome_unknown", "", nil, err.Error())
+					_ = s.changeWorkerOperation(run, opID, "outcome_unknown", "", nil, err.Error())
 					return s.waitWorkerFlow(run, "Original workspace preparation needs reconciliation: "+err.Error())
 				}
 			} else if err != nil {
@@ -254,11 +255,11 @@ func (s *Service) startManuallyRecoveredInitialCodex(ctx context.Context, run *R
 			}
 			workspace, err := s.inspectWorkflowWorkspace(ctx, run)
 			if err != nil {
-				_ = s.changeOperation(opID, "outcome_unknown", "", nil, err.Error())
+				_ = s.changeWorkerOperation(run, opID, "outcome_unknown", "", nil, err.Error())
 				return s.waitWorkerFlow(run, "Original workspace identity is unverified: "+err.Error())
 			}
 			applyWorkflowWorkspaceEvidence(run, execution, workspace)
-			if err := s.changeOperation(opID, "confirmed", "", mustJSON(workspace), ""); err != nil {
+			if err := s.changeWorkerOperation(run, opID, "confirmed", "", mustJSON(workspace), ""); err != nil {
 				return err
 			}
 		} else {
@@ -278,7 +279,7 @@ func (s *Service) startManuallyRecoveredInitialCodex(ctx context.Context, run *R
 	s.setRunDecision(run, nil)
 	execution.RecoveryRequired = false
 	execution.RecoveryState = "resuming"
-	if err := s.save(); err != nil {
+	if err := s.commitWorker(run); err != nil {
 		return err
 	}
 	return s.startWorkerFlowTurn(ctx, run, prompt, commandID)

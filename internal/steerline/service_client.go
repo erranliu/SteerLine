@@ -421,7 +421,8 @@ func connectServiceWithProbe(ctx context.Context, c Config, probe func(*ProcessI
 		connection.State, connection.Diagnostic, connection.CanStart = ConnectionIdentityError, "resolve configured run_dir: "+err.Error(), false
 		return connection
 	}
-	if canonical(rt.Repository.Identity) != canonical(c.identity) || canonical(rt.Repository.Path) != canonical(repositoryPath) || rt.Repository.Remote != c.Remote || rt.Repository.Branch != c.Branch || rt.Service.Claimant != expectedClaimant(c) {
+	snapshotRepositoryPath, pathErr := filepath.EvalSymlinks(rt.Repository.Path)
+	if pathErr != nil || canonical(rt.Repository.Identity) != canonical(c.identity) || canonical(snapshotRepositoryPath) != canonical(repositoryPath) || rt.Repository.Remote != c.Remote || rt.Repository.Branch != c.Branch || rt.Service.Claimant != expectedClaimant(c) {
 		connection.State = ConnectionIdentityError
 		connection.Diagnostic = "runtime repository, remote/branch or claimant does not match this configuration"
 		connection.CanStart = false

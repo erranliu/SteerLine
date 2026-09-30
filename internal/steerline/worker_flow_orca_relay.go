@@ -52,7 +52,7 @@ func (s *Service) relayNativeOrcaDone(ctx context.Context, run *Run, execution *
 		return err
 	}
 	key := "orca-native-relay-done:" + execution.ExecutionID + ":" + turn.TurnID
-	if s.nativeOrcaOperation(key) != nil {
+	if s.operationByKey(key) != nil {
 		removeNativeOrcaRelayRequest(execution.Workspace.Worktree, run.RunID, turn.TurnID)
 		return &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "Orca result relay was already attempted, but the original Run inbox has no worker_done; preserve the Dispatch for reconciliation"}
 	}

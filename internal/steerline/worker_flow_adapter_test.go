@@ -14,11 +14,9 @@ func TestWorkerFlowAdapterUsesFixedProtocol(t *testing.T) {
 	run := &Run{RunID: "run", ExecutionID: "execution", AttemptID: "attempt", Host: "local", Agent: "codex", Backend: string(BackendLocal), Protocol: string(ProtocolLocalCodexAppServer), Target: target}
 	service := Service{
 		Config: config,
-		State: Runtime{
-			WorkflowRuns: []WorkflowRunRecord{{WorkflowRunID: "run", WorkflowVersion: WorkerFlowVersion}},
-			Executions:   []ExecutionRecord{{ExecutionID: "execution", WorkflowRunID: "run", Agent: "codex", Backend: string(BackendLocal), Protocol: string(ProtocolLocalCodexAppServer), Target: target}},
-			Attempts:     []StepAttemptRecord{{AttemptID: "attempt", ExecutionID: "execution"}},
-		},
+		domain: DomainSnapshot{WorkflowRuns: []WorkflowRunRecord{{WorkflowRunID: "run", WorkflowVersion: WorkerFlowVersion}},
+			Executions: []ExecutionRecord{{ExecutionID: "execution", WorkflowRunID: "run", Agent: "codex", Backend: string(BackendLocal), Protocol: string(ProtocolLocalCodexAppServer), Target: target}},
+			Attempts:   []StepAttemptRecord{{AttemptID: "attempt", ExecutionID: "execution"}}},
 	}
 	mode, err := service.workerFlowMode(run)
 	if err != nil {
@@ -27,8 +25,8 @@ func TestWorkerFlowAdapterUsesFixedProtocol(t *testing.T) {
 	if mode != workerflow.LocalCodex {
 		t.Fatalf("local fixed protocol chose %v", mode)
 	}
-	service.State.Executions[0].PendingTurnID, service.State.Executions[0].PendingCommandID = mode.PendingIdentity("command")
-	if service.State.Executions[0].PendingCommandID != "command" || service.State.Executions[0].PendingTurnID != "" {
+	service.domain.Executions[0].PendingTurnID, service.domain.Executions[0].PendingCommandID = mode.PendingIdentity("command")
+	if service.domain.Executions[0].PendingCommandID != "command" || service.domain.Executions[0].PendingTurnID != "" {
 		t.Fatal("Codex command identity was treated as a native turn receipt")
 	}
 	wrong := *run
@@ -41,12 +39,12 @@ func TestWorkerFlowAdapterUsesFixedProtocol(t *testing.T) {
 func TestWorkerFlowRejectsConfigDriftBeforePreparationOrTurnIntent(t *testing.T) {
 	service, run := appServerAuditService(t)
 	ctx := context.Background()
-	task := nativeTaskRecord(service.State.Tasks, run.TaskID)
+	task := nativeTaskRecord(service.domain.Tasks, run.TaskID)
 	if task == nil {
 		t.Fatal("claimed native task is missing")
 	}
 	_, execution := service.workflowRecords(run)
-	beforeOperations := len(service.State.Operations)
+	beforeOperations := len(service.domain.Operations)
 	_, beforeRevision, err := service.domainStore.DatabaseVersion(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -66,7 +64,50 @@ func TestWorkerFlowRejectsConfigDriftBeforePreparationOrTurnIntent(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if afterRevision != beforeRevision || len(service.State.Operations) != beforeOperations || execution.PendingTurnID != "" || execution.PendingCommandID != "" {
-		t.Fatalf("rejected route changed durable or actor state: revision=%d/%d operations=%d/%d pending=%q/%q", beforeRevision, afterRevision, beforeOperations, len(service.State.Operations), execution.PendingTurnID, execution.PendingCommandID)
+	if afterRevision != beforeRevision || len(service.domain.Operations) != beforeOperations || execution.PendingTurnID != "" || execution.PendingCommandID != "" {
+		t.Fatalf("rejected route changed durable or actor state: revision=%d/%d operations=%d/%d pending=%q/%q", beforeRevision, afterRevision, beforeOperations, len(service.domain.Operations), execution.PendingTurnID, execution.PendingCommandID)
 	}
+}
+
+func TestWorkerFlowModeUsesFixedExecutionIdentity(t *testing.T) {
+	for _, test := range []struct {
+		host     string
+		protocol ExecutionProtocol
+		want     workerflow.Mode
+	}{
+		{"local", ProtocolLocalCodexAppServer, workerflow.LocalCodex},
+		{"orca", ProtocolOrcaTerminalV2, workerflow.NativeOrca},
+		{"orca_supervised", ProtocolOrcaSupervised, workerflow.SupervisedOrca},
+	} {
+		t.Run(test.host, func(t *testing.T) {
+			config := Config{Host: test.host, Agent: "codex", Orca: OrcaConfig{Executable: "orca", Supervised: &SupervisedOrcaConfig{ConnectionID: "fixed-connection", EnvironmentID: "fixed-environment"}}}
+			backend, _, err := ExecutionBackendKind(test.host)
+			require(t, err)
+			target := targetFor(config)
+			run := &Run{Host: test.host, Agent: "codex", Backend: backend, Protocol: string(test.protocol), Target: target}
+			execution := &ExecutionRecord{Agent: "codex", Backend: backend, Protocol: string(test.protocol), Target: target}
+			mode, err := workerFlowModeFor(config, run, execution)
+			require(t, err)
+			if mode != test.want {
+				t.Fatalf("mode = %v, want %v", mode, test.want)
+			}
+			changed := config
+			changed.Host = "local"
+			if test.host == "local" {
+				changed.Host = "orca"
+			}
+			if _, err := workerFlowModeFor(changed, run, execution); !feedbackIdentityMismatch(err) {
+				t.Fatalf("replacement host routed fixed feedback: %v", err)
+			}
+			execution.Protocol = string(ProtocolLocalProcess)
+			if _, err := workerFlowModeFor(config, run, execution); !feedbackIdentityMismatch(err) {
+				t.Fatalf("replacement protocol routed fixed feedback: %v", err)
+			}
+		})
+	}
+}
+
+func feedbackIdentityMismatch(err error) bool {
+	var backendErr *BackendError
+	return errors.As(err, &backendErr) && backendErr.Code == BackendIdentityMismatch
 }

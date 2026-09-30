@@ -6,11 +6,9 @@ func TestWorkerFlowContextKeepsFixedRunAndCopiesConfig(t *testing.T) {
 	run := &Run{RunID: "run", ExecutionID: "execution", AttemptID: "attempt"}
 	service := Service{
 		Config: Config{Repository: "repo", Codex: Command{Args: []string{"original"}}, workerEnv: map[string]string{"A": "original"}, Orca: OrcaConfig{Supervised: &SupervisedOrcaConfig{CoordinatorTerminal: "original"}}},
-		State: Runtime{
-			WorkflowRuns: []WorkflowRunRecord{{WorkflowRunID: "run", WorkflowVersion: WorkerFlowVersion}},
-			Executions:   []ExecutionRecord{{ExecutionID: "execution", WorkflowRunID: "run"}},
-			Attempts:     []StepAttemptRecord{{AttemptID: "attempt", ExecutionID: "execution"}},
-		},
+		domain: DomainSnapshot{WorkflowRuns: []WorkflowRunRecord{{WorkflowRunID: "run", WorkflowVersion: WorkerFlowVersion}},
+			Executions: []ExecutionRecord{{ExecutionID: "execution", WorkflowRunID: "run"}},
+			Attempts:   []StepAttemptRecord{{AttemptID: "attempt", ExecutionID: "execution"}}},
 	}
 	fixed, err := service.workerFlowContext(run)
 	if err != nil || fixed.run != run || fixed.execution.ExecutionID != "execution" {
@@ -42,9 +40,9 @@ func TestWorkerFlowContextsDoNotExchangeExecutionProfiles(t *testing.T) {
 		selected := base.ApplyFixedExecutionProfile(fixed)
 		run := &Run{RunID: id, ExecutionID: id + "-execution", AttemptID: id + "-attempt", Host: "local", Agent: "codex", Backend: string(BackendLocal), Protocol: string(ProtocolLocalCodexAppServer), Target: targetFor(selected), ExecutionStatus: "pending"}
 		service.State.Runs = append(service.State.Runs, run)
-		service.State.WorkflowRuns = append(service.State.WorkflowRuns, WorkflowRunRecord{WorkflowRunID: id, WorkflowVersion: WorkerFlowVersion, ExecutionProfile: &fixed})
-		service.State.Executions = append(service.State.Executions, ExecutionRecord{ExecutionID: run.ExecutionID, WorkflowRunID: id})
-		service.State.Attempts = append(service.State.Attempts, StepAttemptRecord{AttemptID: run.AttemptID, ExecutionID: run.ExecutionID})
+		service.domain.WorkflowRuns = append(service.domain.WorkflowRuns, WorkflowRunRecord{WorkflowRunID: id, WorkflowVersion: WorkerFlowVersion, ExecutionProfile: &fixed})
+		service.domain.Executions = append(service.domain.Executions, ExecutionRecord{ExecutionID: run.ExecutionID, WorkflowRunID: id})
+		service.domain.Attempts = append(service.domain.Attempts, StepAttemptRecord{AttemptID: run.AttemptID, ExecutionID: run.ExecutionID})
 	}
 	first, err := service.workerFlowContext(service.State.Runs[0])
 	if err != nil {

@@ -102,7 +102,7 @@ func (s *Service) conversationJournalSources() []conversationJournalSource {
 			}
 			sources = append(sources, source)
 		}
-		for _, attempt := range s.State.Attempts {
+		for _, attempt := range s.domain.Attempts {
 			if run.ExecutionID != "" && attempt.ExecutionID == run.ExecutionID && attempt.EventPath != "" {
 				add(attempt.EventPath, attempt.AttemptID)
 			}

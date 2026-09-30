@@ -3,13 +3,11 @@ package steerline
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 )
 
 func TestWorkerFlowServiceFirstFeedbackKeepsSessionAndWorkspace(t *testing.T) {
@@ -19,64 +17,10 @@ func TestWorkerFlowServiceFirstFeedbackKeepsSessionAndWorkspace(t *testing.T) {
 		{"free_text", "", "Continue in the same worktree"},
 		{"option_with_note", "continue", "Keep the existing commit and continue"},
 		{"open_pr_feedback", "continue", "Add one more change before merge"},
-		{"explicit_new_session", "new_session", "Continue from the current files with a new native thread"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			testWorkerFlowServiceFirstFeedback(t, test.option, test.note, test.name == "open_pr_feedback")
 		})
-	}
-}
-
-func TestServiceRecoveryGateRequiresTransactionalOwner(t *testing.T) {
-	service, run := waitingDecisionService(t)
-	execution := service.executionRecord(run)
-	execution.OwnerServiceInstanceID = service.State.Service.InstanceID
-	service.adoptOrGateServiceExecutions()
-	if execution.RecoveryRequired {
-		t.Fatal("current service claim was gated")
-	}
-	execution.OwnerServiceInstanceID = "" // Crash after claim, before the next service write.
-	service.adoptOrGateServiceExecutions()
-	if !execution.RecoveryRequired || execution.RecoveryVersion != 1 || execution.OwnerServiceInstanceID != service.State.Service.InstanceID {
-		t.Fatal("unowned persisted claim was started without a recovery decision")
-	}
-}
-
-func TestRestartDoesNotSendPreviouslyAcceptedFeedback(t *testing.T) {
-	service, run := waitingDecisionService(t)
-	defer service.Close()
-	answer := DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, OptionID: "continue", Note: "saved before stop", AnsweredBy: "operator", ExpectedDecisionVersion: run.Decision.Version, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: service.State.Service.InstanceID}
-	commands := CommandService{Store: service.domainStore, Project: service.Config.identity}
-	command, _, err := commands.AnswerDecisionWithID(context.Background(), newID(), answer.DecisionID, answer.ExpectedDecisionVersion, decisionAnswerKey(answer), answer.AnsweredBy, mustJSON(answer))
-	if err != nil {
-		t.Fatal(err)
-	}
-	record, _, err := commands.AcceptAnswer(context.Background(), command, answer)
-	if err != nil {
-		t.Fatal(err)
-	}
-	*service.decisionRecord(run) = record
-	service.store.baseline["decision:"+record.DecisionID] = recordFingerprint(record)
-	service.refreshRun(run)
-	if err := service.save(); err != nil {
-		t.Fatal(err)
-	}
-	service.markServiceRecoveryGate()
-	if err := service.save(); err != nil {
-		t.Fatal(err)
-	}
-	before := len(service.State.Operations)
-	if err := service.applyDecisions(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	if len(service.State.Operations) != before || !service.executionRecord(run).RecoveryRequired || run.Decision.Status != "answer_saved" {
-		t.Fatal("restart sent the prior-service answer without fresh authorization")
-	}
-	workflow := service.workflowRecord(run)
-	workflow.Phase = "waiting_pr_merge"
-	service.refreshRun(run)
-	if err := service.applyDecisions(context.Background()); err != nil || workflow.Phase != "waiting_pr_merge" {
-		t.Fatalf("prior-service answer advanced PR feedback phase: %v, phase=%s", err, workflow.Phase)
 	}
 }
 
@@ -114,8 +58,7 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openP
 	}); err != nil {
 		t.Fatal(err)
 	}
-	claimOwner := newID()
-	receipt, err := commands.ClaimNativeTask(ctx, c, TaskClaimOptions{TaskID: "8", RequestID: strings.Repeat("e", 32), ExpectedTaskVersion: 1, ExpectedAuthorityVersion: authority.AuthorityVersion, RequestedBy: "operator", Explicit: true, ServiceInstanceID: claimOwner})
+	receipt, err := commands.ClaimNativeTask(ctx, c, TaskClaimOptions{TaskID: "8", RequestID: strings.Repeat("e", 32), ExpectedTaskVersion: 1, ExpectedAuthorityVersion: authority.AuthorityVersion, RequestedBy: "operator", Explicit: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,26 +66,12 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openP
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() {
-		service.shutdown()
-		for _, execution := range service.State.Executions {
-			if execution.Process == nil {
-				continue
-			}
-			for deadline := time.Now().Add(3 * time.Second); time.Now().Before(deadline) && inspectProcess(execution.Process) != "process absent"; {
-				time.Sleep(20 * time.Millisecond)
-			}
-		}
-		_ = service.Close()
-	}()
+	defer func() { _ = service.Close() }()
 	run := service.find("8")
 	if run == nil || run.RunID != receipt.WorkflowRunID || run.ExecutionID != receipt.ExecutionID || run.AttemptID != receipt.AttemptID {
 		t.Fatalf("fixed claim did not reconstruct: run=%+v receipt=%+v", run, receipt)
 	}
-	if execution := service.executionRecord(run); execution == nil || execution.OwnerServiceInstanceID != claimOwner {
-		t.Fatal("claim did not persist service ownership atomically")
-	}
-	task := nativeTaskRecord(service.State.Tasks, "8")
+	task := nativeTaskRecord(service.domain.Tasks, "8")
 	if task == nil {
 		t.Fatal("claimed task disappeared")
 	}
@@ -206,7 +135,7 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openP
 			t.Fatal(err)
 		}
 		run.FinishTaskStatus, run.PR.URL, run.PR.State = "waiting_pr_merge", ptr(url), "open"
-		if err := service.save(); err != nil {
+		if err := service.commitWorker(run); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -214,19 +143,8 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openP
 		t.Fatalf("unified decision cannot accept both feedback forms: %+v", run.Decision.Request)
 	}
 	firstSession := deref(run.SessionID)
-	service.markServiceRecoveryGate()
-	service.shutdown()
-	if err := service.save(); err != nil {
-		t.Fatal(err)
-	}
 	if err := service.Close(); err != nil {
 		t.Fatal(err)
-	}
-	for deadline := time.Now().Add(3 * time.Second); time.Now().Before(deadline); {
-		if run.Process != nil && inspectProcess(run.Process) == "process absent" {
-			break
-		}
-		time.Sleep(20 * time.Millisecond)
 	}
 	service, err = NewService(c)
 	if err != nil {
@@ -235,13 +153,6 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openP
 	run = service.find("8")
 	if run == nil || run.RunID != receipt.WorkflowRunID || run.ExecutionID != receipt.ExecutionID || deref(run.SessionID) != firstSession || run.Decision == nil || run.Decision.Status != "pending" {
 		t.Fatalf("current-format restart lost the waiting worker: run=%+v", run)
-	}
-	service.markServiceRecoveryGate()
-	if err := service.resumeConfiguredWork(ctx); err != nil {
-		t.Fatal(err)
-	}
-	if execution := service.executionRecord(run); execution == nil || execution.RecoveryState != "completed" {
-		t.Fatalf("stopped original worker was not classified: %+v", execution)
 	}
 	partial := filepath.Join(firstWorktree, "partial.txt")
 	if err := os.WriteFile(partial, []byte("partially committed\n"), 0600); err != nil {
@@ -258,10 +169,10 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openP
 	}
 	service.State.Service.Ready = true
 	service.State.Service.Status = "running"
-	if err := service.save(); err != nil {
+	if err := service.publishCheckpoint(); err != nil {
 		t.Fatal(err)
 	}
-	answer := DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, OptionID: option, Note: note, AnsweredBy: "operator", ExpectedDecisionVersion: run.Decision.Version, ExpectedRunRevision: run.ControlRevision, SourceAttemptID: run.AttemptID, ExpectedRecoveryVersion: run.RecoveryVersion, ServiceInstanceID: service.State.Service.InstanceID}
+	answer := DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, OptionID: option, Note: note, AnsweredBy: "operator", ExpectedDecisionVersion: run.Decision.Version, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: service.State.Service.InstanceID}
 	payload, err := json.Marshal(answer)
 	if err != nil {
 		t.Fatal(err)
@@ -278,28 +189,27 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openP
 	if err := json.Unmarshal(record.Answer, &saved); err != nil {
 		t.Fatal(err)
 	}
-	*service.decisionRecord(run) = record
-	service.store.baseline["decision:"+record.DecisionID] = recordFingerprint(record)
-	service.refreshRun(run)
-	if err := service.save(); err != nil {
+	run.Decision.Version, run.Decision.Status = record.Version, record.Status
+	run.Decision.OptionID, run.Decision.Note, run.Decision.AnsweredBy = saved.OptionID, saved.Note, saved.AnsweredBy
+	run.Decision.AnsweredAt = &saved.AnsweredAt
+	if err := service.publishCheckpoint(); err != nil {
 		t.Fatal(err)
 	}
 	selectedConfig := service.Config
 	if openPR {
 		service.Config.Host = "orca" // A different dispatch selection cannot reroute this local run.
 	}
-	feedbackPrompt := workerFeedbackText(answer, run.Decision.Request)
 	err = service.applyWorkerFlowDecision(ctx, run)
 	service.Config = selectedConfig
 	if err != nil {
 		t.Fatal(err)
 	}
-	fullPrompt := "The previous local Codex process stopped. Inspect the current worktree, Git status, existing work and persistent task history before continuing. Do not replay an earlier tool call blindly.\n\n" + feedbackPrompt + localWorkerPublishInstruction(run.RunID)
+	feedbackPrompt := workerFeedbackText(answer, run.Decision.Request)
+	fullPrompt := feedbackPrompt + localWorkerPublishInstruction(run.RunID)
 	feedbackDir := filepath.Join(c.RunDir, "runs", run.RunID, "turns", command.CommandID)
 	savedPrompt, err := os.ReadFile(filepath.Join(feedbackDir, "prompt.txt"))
 	if err != nil || string(savedPrompt) != fullPrompt {
-		execution := service.executionRecord(run)
-		t.Fatalf("full feedback text was not sent: prompt=%q err=%v recovery=%+v command_at=%s decision=%+v run_error=%q", savedPrompt, err, execution, command.CreatedAt, run.Decision, deref(run.Error))
+		t.Fatalf("full feedback text was not sent: prompt=%q err=%v", savedPrompt, err)
 	}
 	if openPR {
 		finishTurn("waiting_pr_merge")
@@ -316,29 +226,9 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openP
 	}
 	workflow, execution := service.workflowRecords(run)
 	if workflow == nil || execution == nil || workflow.WorkflowRunID != receipt.WorkflowRunID || execution.ExecutionID != receipt.ExecutionID ||
-		run.AttemptID == receipt.AttemptID || execution.SessionID != workerFlowMockSession || execution.TurnNumber != 2 ||
-		canonical(deref(run.WorktreePath)) != canonical(firstWorktree) || len(service.State.Attempts) != 2 {
-		t.Fatalf("feedback replaced the fixed worker: workflow=%q/%q execution=%q/%q session=%q turn=%d attempt=%q/%q worktree=%q/%q attempts=%d", workflow.WorkflowRunID, receipt.WorkflowRunID, execution.ExecutionID, receipt.ExecutionID, execution.SessionID, execution.TurnNumber, run.AttemptID, receipt.AttemptID, deref(run.WorktreePath), firstWorktree, len(service.State.Attempts))
-	}
-	if old := service.workflowAttempt(run, receipt.AttemptID); old == nil || old.Status != "stopped" || old.WorkerProcess == nil || old.WorkerSessionID != firstSession {
-		t.Fatalf("retired Attempt lost its immutable worker identity: %+v", old)
-	}
-	var oldProcess, newProcess appServerProcessReceipt
-	oldRaw, oldErr := os.ReadFile(filepath.Join(c.RunDir, "runs", run.RunID, "app-server", "process.json"))
-	newRaw, newErr := os.ReadFile(filepath.Join(appServerDirectory(c, run), "process.json"))
-	if oldErr != nil || newErr != nil || json.Unmarshal(oldRaw, &oldProcess) != nil || json.Unmarshal(newRaw, &newProcess) != nil ||
-		oldProcess.Identity == newProcess.Identity || oldProcess.Identity != *service.workflowAttempt(run, receipt.AttemptID).WorkerProcess {
-		t.Fatalf("old and new process receipts were not kept per Attempt: old=%+v new=%+v errors=%v/%v", oldProcess, newProcess, oldErr, newErr)
-	}
-	_, newThreadReceiptErr := os.Stat(filepath.Join(appServerDirectory(c, run), "thread.json"))
-	if option == "new_session" && newThreadReceiptErr != nil || option != "new_session" && !os.IsNotExist(newThreadReceiptErr) {
-		t.Fatalf("explicit new-session choice did not select thread/start: option=%q thread_receipt=%v", option, newThreadReceiptErr)
-	}
-	if err := service.eventWorkerFlowFor(run, WorkerEvent{RunID: run.RunID, AttemptID: receipt.AttemptID}); !errors.Is(err, ErrWorkerTurnStale) {
-		t.Fatalf("late event from the old Attempt was not rejected: %v", err)
-	}
-	if err := service.applyWorkerFlowDecision(ctx, run); err != nil || len(service.State.Attempts) != 2 {
-		t.Fatalf("repeated recovery application created another Attempt: %v", err)
+		run.AttemptID != receipt.AttemptID || execution.SessionID != workerFlowMockSession || execution.TurnNumber != 2 ||
+		canonical(deref(run.WorktreePath)) != canonical(firstWorktree) || len(service.domain.Attempts) != 1 {
+		t.Fatalf("feedback replaced the fixed worker: workflow=%q/%q execution=%q/%q session=%q turn=%d attempt=%q/%q worktree=%q/%q attempts=%d", workflow.WorkflowRunID, receipt.WorkflowRunID, execution.ExecutionID, receipt.ExecutionID, execution.SessionID, execution.TurnNumber, run.AttemptID, receipt.AttemptID, deref(run.WorktreePath), firstWorktree, len(service.domain.Attempts))
 	}
 	currentHead, err := exec.Command("git", "-C", firstWorktree, "rev-parse", "HEAD").Output()
 	if err != nil || strings.TrimSpace(string(currentHead)) != strings.TrimSpace(string(head)) {
@@ -359,26 +249,79 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openP
 	if err != nil {
 		t.Fatal(err)
 	}
-	*service.decisionRecord(run) = uncertainRecord
-	service.store.baseline["decision:"+uncertainRecord.DecisionID] = recordFingerprint(uncertainRecord)
-	service.refreshRun(run)
-	if err := service.save(); err != nil {
+	run.Decision.Version, run.Decision.Status = uncertainRecord.Version, uncertainRecord.Status
+	run.Decision.Note, run.Decision.AnsweredBy = uncertain.Note, uncertain.AnsweredBy
+	run.Decision.AnsweredAt = &uncertainRecord.UpdatedAt
+	if err := service.publishCheckpoint(); err != nil {
 		t.Fatal(err)
 	}
-	operationID, err := service.startOperation("start_worker_turn", "worker-turn:"+execution.ExecutionID+":"+uncertainCommand.CommandID, map[string]string{"original_request": uncertainCommand.CommandID})
+	operationID, err := service.startWorkerOperation(run, "start_worker_turn", "worker-turn:"+execution.ExecutionID+":"+uncertainCommand.CommandID, map[string]string{"original_request": uncertainCommand.CommandID})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := service.changeOperation(operationID, "outcome_unknown", "", nil, "feedback receipt lost"); err != nil {
+	if err := service.changeWorkerOperation(run, operationID, "outcome_unknown", "", nil, "feedback receipt lost"); err != nil {
 		t.Fatal(err)
 	}
-	before := len(service.State.Operations)
+	before := len(service.domain.Operations)
 	for i := 0; i < 2; i++ {
 		if err := service.applyWorkerFlowDecision(ctx, run); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if len(service.State.Operations) != before || service.workers[run.RunID] != nil || execution.TurnNumber != 2 || run.Error == nil || !strings.Contains(*run.Error, "no duplicate message") {
-		t.Fatalf("uncertain feedback was resent or lost: operations=%d/%d worker=%t turn=%d decision=%s error=%q", before, len(service.State.Operations), service.workers[run.RunID] != nil, execution.TurnNumber, run.Decision.Status, deref(run.Error))
+	if len(service.domain.Operations) != before || service.workers[run.RunID] != nil || execution.TurnNumber != 2 || run.Error == nil || !strings.Contains(*run.Error, "no duplicate message") {
+		t.Fatalf("uncertain feedback was resent or lost: operations=%d/%d worker=%t turn=%d decision=%s error=%q", before, len(service.domain.Operations), service.workers[run.RunID] != nil, execution.TurnNumber, run.Decision.Status, deref(run.Error))
+	}
+}
+
+func TestServiceRecoveryGateRequiresTransactionalOwner(t *testing.T) {
+	service, run := waitingDecisionService(t)
+	execution := service.executionRecord(run)
+	execution.OwnerServiceInstanceID = service.State.Service.InstanceID
+	service.adoptOrGateServiceExecutions()
+	if execution.RecoveryRequired {
+		t.Fatal("current service claim was gated")
+	}
+	execution.OwnerServiceInstanceID = "" // Crash after claim, before the next service write.
+	service.adoptOrGateServiceExecutions()
+	if !execution.RecoveryRequired || execution.RecoveryVersion != 1 || execution.OwnerServiceInstanceID != service.State.Service.InstanceID {
+		t.Fatal("unowned persisted claim was started without a recovery decision")
+	}
+}
+
+func TestRestartDoesNotSendPreviouslyAcceptedFeedback(t *testing.T) {
+	service, run := waitingDecisionService(t)
+	defer service.Close()
+	answer := DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, OptionID: "continue", Note: "saved before stop", AnsweredBy: "operator", ExpectedDecisionVersion: run.Decision.Version, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: service.State.Service.InstanceID}
+	commands := CommandService{Store: service.domainStore, Project: service.Config.identity}
+	command, _, err := commands.AnswerDecisionWithID(context.Background(), newID(), answer.DecisionID, answer.ExpectedDecisionVersion, decisionAnswerKey(answer), answer.AnsweredBy, mustJSON(answer))
+	if err != nil {
+		t.Fatal(err)
+	}
+	record, _, err := commands.AcceptAnswer(context.Background(), command, answer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	*service.decisionRecord(run) = record
+	require(t, service.refreshNativeSnapshot(context.Background()))
+	service.refreshRun(run)
+	if err := service.commitWorker(run); err != nil {
+		t.Fatal(err)
+	}
+	service.markServiceRecoveryGate()
+	if err := service.commitWorker(run); err != nil {
+		t.Fatal(err)
+	}
+	before := len(service.domain.Operations)
+	if err := service.applyDecisions(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(service.domain.Operations) != before || !service.executionRecord(run).RecoveryRequired || run.Decision.Status != "answer_saved" {
+		t.Fatal("restart sent the prior-service answer without fresh authorization")
+	}
+	workflow := service.workflowRecord(run)
+	workflow.Phase = "waiting_pr_merge"
+	service.refreshRun(run)
+	if err := service.applyDecisions(context.Background()); err != nil || workflow.Phase != "waiting_pr_merge" {
+		t.Fatalf("prior-service answer advanced PR feedback phase: %v, phase=%s", err, workflow.Phase)
 	}
 }

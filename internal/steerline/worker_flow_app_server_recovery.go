@@ -112,7 +112,7 @@ func (s *Service) resumeAppServerWorkers(ctx context.Context) error {
 		if run == nil || run.WorkflowVersion != WorkerFlowVersion || run.Protocol != string(ProtocolLocalCodexAppServer) || s.workers[run.RunID] != nil || s.appServerLaunching[run.RunID] != "" || s.appServerRecovering[run.RunID] {
 			continue
 		}
-		task := nativeTaskRecord(s.State.Tasks, run.DomainTaskID)
+		task := nativeTaskRecord(s.domain.Tasks, run.DomainTaskID)
 		workflow, execution := s.workflowRecords(run)
 		if task == nil || workflow == nil || execution == nil || task.Status != "in_progress" || workflow.Phase == "completed" || execution.PendingCommandID == "" && (execution.CurrentTurnID == "" || execution.CurrentTurnID == execution.LastStoppedTurnID) {
 			continue
@@ -233,7 +233,7 @@ func (s *Service) applyAppServerRecovery(result appServerRecoveryResult) error {
 			if err := s.finishWorkerFlowFor(run, nil); err != nil {
 				return err
 			}
-			return s.save()
+			return s.commitWorker(run)
 		}
 		execution.PendingAsks = nil
 		execution.Status = "blocked"
@@ -251,7 +251,7 @@ func (s *Service) applyAppServerRecovery(result appServerRecoveryResult) error {
 			oldDecisionID = run.Decision.ID
 			priorQuestion = run.Decision.Request.Question + "\n" + run.Decision.Request.Context
 			s.setDecisionStatus(run, "superseded")
-			if err := s.save(); err != nil {
+			if err := s.commitWorker(run); err != nil {
 				return err
 			}
 			s.setRunDecision(run, nil)
@@ -261,7 +261,8 @@ func (s *Service) applyAppServerRecovery(result appServerRecoveryResult) error {
 		}
 		if record := s.decisionRecord(run); record != nil && oldDecisionID != "" {
 			record.RecoveryOfDecision = oldDecisionID
-			return s.save()
+			s.markWorkerDecisionWrite(record.DecisionID)
+			return s.commitWorker(run)
 		}
 		return nil
 	}
@@ -302,7 +303,7 @@ func (s *Service) applyAppServerRecovery(result appServerRecoveryResult) error {
 		// A prior connection failure is no longer a reason to request post-turn
 		// feedback. Keep the resolved record before exposing native questions.
 		s.setDecisionStatus(run, "superseded")
-		if err := s.save(); err != nil {
+		if err := s.commitWorker(run); err != nil {
 			return err
 		}
 		workflow, execution = s.workflowRecords(run)
@@ -314,7 +315,7 @@ func (s *Service) applyAppServerRecovery(result appServerRecoveryResult) error {
 		workflow.Phase = "executing"
 		s.refreshRun(run)
 	}
-	if err := s.save(); err != nil {
+	if err := s.commitWorker(run); err != nil {
 		return err
 	}
 	s.registerWorker(run, result.worker)
@@ -337,9 +338,9 @@ func (s *Service) reconcileAppServerReplyFromJournal(run *Run, workflow *Workflo
 	}
 	key := "appserver-answer:" + execution.ExecutionID + ":" + run.Decision.ID
 	var operation *OperationRecord
-	for i := range s.State.Operations {
-		if s.State.Operations[i].IdempotencyKey == key {
-			operation = &s.State.Operations[i]
+	for i := range s.domain.Operations {
+		if s.domain.Operations[i].IdempotencyKey == key {
+			operation = &s.domain.Operations[i]
 			break
 		}
 	}
@@ -347,12 +348,12 @@ func (s *Service) reconcileAppServerReplyFromJournal(run *Run, workflow *Workflo
 		return errors.New("matching Codex tool result has no fixed reply operation")
 	}
 	if operation.Status != "confirmed" {
-		if err := s.setOperationState(operation.OperationID, "confirmed", ask.CallID, mustJSON(map[string]any{"tool_item_id": ask.CallID, "recovered": true}), ""); err != nil {
+		if err := s.stageWorkerOperation(run, operation.OperationID, "confirmed", ask.CallID, mustJSON(map[string]any{"tool_item_id": ask.CallID, "recovered": true}), ""); err != nil {
 			return err
 		}
 	}
 	s.setDecisionStatus(run, "reply_accepted")
-	if err := s.save(); err != nil {
+	if err := s.commitWorker(run); err != nil {
 		return err
 	}
 	workflow, execution = s.workflowRecords(run)
@@ -370,5 +371,5 @@ func (s *Service) reconcileAppServerReplyFromJournal(run *Run, workflow *Workflo
 		}
 		s.refreshRun(run)
 	}
-	return s.save()
+	return s.commitWorker(run)
 }

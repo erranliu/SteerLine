@@ -20,7 +20,7 @@ func (s *Service) replyAppServerAsk(ctx context.Context, run *Run, execution *Ex
 		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "native answer no longer belongs to the live original app-server request"}
 	}
 	key := "appserver-answer:" + execution.ExecutionID + ":" + answer.DecisionID
-	for _, op := range s.State.Operations {
+	for _, op := range s.domain.Operations {
 		if op.IdempotencyKey == key {
 			return nil /* The original reply may already be applying; reconcile, never resend. */
 		}
@@ -86,7 +86,7 @@ func (s *Service) handleAppServerReplyMessage(runID string, message *appServerRe
 	if run == nil || run.TaskStatus == "closed" || run.TaskStatus == "discarded" || run.Decision == nil || run.Decision.Status != "answer_saved" || run.Decision.ID != message.decisionID || run.Decision.Request.NativeAsk == nil || run.Decision.Request.NativeAsk.CallID != message.callID {
 		return nil // A terminal or replaced Decision cannot be changed by a late reply result.
 	}
-	for _, op := range s.State.Operations {
+	for _, op := range s.domain.Operations {
 		if op.OperationID != message.opID {
 			continue
 		}
@@ -111,14 +111,6 @@ func (s *Service) handleAppServerReplyMessage(runID string, message *appServerRe
 }
 
 const codexAskToolName = codexapp.AskToolName
-
-type nativeAskQuestion struct {
-	ID            string           `json:"id"`
-	Header        string           `json:"header"`
-	Question      string           `json:"question"`
-	Options       []DecisionOption `json:"options"`
-	AllowFreeText bool             `json:"allow_free_text"`
-}
 
 type codexAskQuestion = nativeAskQuestion
 

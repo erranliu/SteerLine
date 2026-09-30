@@ -951,12 +951,6 @@ func (b orcaSupervisedBackend) findAnsweredQuestion(ctx context.Context, ref Exe
 func (orcaSupervisedBackend) StopExecution(context.Context, ExecutionRef, Operation, *Worker) (StopReceipt, error) {
 	return StopReceipt{}, unsupported("remote cancellation is disabled for supervised Orca")
 }
-func (orcaSupervisedBackend) DetachObservation(_ context.Context, worker *Worker) error {
-	if worker != nil {
-		worker.Close()
-	}
-	return nil
-}
 func (b orcaSupervisedBackend) SettleResources(ctx context.Context, ref ExecutionRef, outcome string) (SettlementReceipt, error) {
 	if err := validateSupervisedRef(b.config, ref); err != nil {
 		return SettlementReceipt{}, err
@@ -1031,8 +1025,4 @@ func savedSupervisedTargetConflicts(saved, bound ExecutionTarget) bool {
 		saved.Dispatch != "" && saved.Dispatch != bound.Dispatch ||
 		saved.ExecutionHost != "" && saved.ExecutionHost != bound.ExecutionHost ||
 		saved.WorktreeID != "" && saved.WorktreeID != bound.WorktreeID
-}
-
-func (b orcaSupervisedBackend) ReconcileOperation(ctx context.Context, op Operation) (Operation, error) {
-	return reconcileRecordedOperation(ctx, b.config.RunDir, op)
 }

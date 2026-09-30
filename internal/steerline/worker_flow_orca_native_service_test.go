@@ -100,7 +100,7 @@ func TestNativeOrcaFixedLunaLaunchReconcilesOriginalTerminal(t *testing.T) {
 	}
 	defer func() { _ = s.Close() }()
 	run := s.find("809")
-	task := nativeTaskRecord(s.State.Tasks, "809")
+	task := nativeTaskRecord(s.domain.Tasks, "809")
 	if run == nil || task == nil {
 		t.Fatal("claimed task was not reconstructed")
 	}
@@ -157,7 +157,7 @@ func TestNativeOrcaFixedLunaLaunchReconcilesOriginalTerminal(t *testing.T) {
 	workflow, execution = s.workflowRecords(run)
 	turn = nativeOrcaCurrentTurn(execution)
 	s.markServiceRecoveryGate()
-	if err := s.save(); err != nil {
+	if err := s.commitWorker(run); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.resumeConfiguredWork(ctx); err != nil {
@@ -169,7 +169,7 @@ func TestNativeOrcaFixedLunaLaunchReconcilesOriginalTerminal(t *testing.T) {
 		t.Fatalf("Orca restart forwarded a result without manual approval: relay_done=%t decision=%+v state=%q error=%v", state.RelayDone, run.Decision, execution.RecoveryState, err)
 	}
 	s.State.Service.Ready, s.State.Service.Status = true, "running"
-	if err := s.save(); err != nil {
+	if err := s.commitWorker(run); err != nil {
 		t.Fatal(err)
 	}
 	answer := DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, OptionID: "forward_result", AnsweredBy: "operator", ExpectedDecisionVersion: run.Decision.Version, ExpectedRunRevision: run.ControlRevision, SourceAttemptID: run.AttemptID, ExpectedRecoveryVersion: run.RecoveryVersion, ServiceInstanceID: s.State.Service.InstanceID}
@@ -182,9 +182,11 @@ func TestNativeOrcaFixedLunaLaunchReconcilesOriginalTerminal(t *testing.T) {
 		t.Fatal(err)
 	}
 	*s.decisionRecord(run) = accepted
-	s.store.baseline["decision:"+accepted.DecisionID] = recordFingerprint(accepted)
+	require(t, s.refreshNativeSnapshot(context.Background()))
+	workflow, execution = s.workflowRecords(run)
+	turn = nativeOrcaCurrentTurn(execution)
 	s.refreshRun(run)
-	if err := s.save(); err != nil {
+	if err := s.commitWorker(run); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.applyWorkerFlowDecision(ctx, run); err != nil {
@@ -211,7 +213,7 @@ func TestNativeOrcaFixedLunaLaunchReconcilesOriginalTerminal(t *testing.T) {
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		t.Fatalf("accepted relay file was not removed: %v", err)
 	}
-	for _, op := range s.State.Operations {
+	for _, op := range s.domain.Operations {
 		if strings.Contains(string(op.Request), "dcap_fake") || strings.Contains(string(op.Receipt), "dcap_fake") {
 			t.Fatal("Dispatch capability leaked into the operation journal")
 		}
@@ -268,7 +270,7 @@ func TestNativeOrcaFixedLunaLaunchReconcilesRenamedTerminalAfterRestart(t *testi
 		t.Fatal(err)
 	}
 	run := s.find("810")
-	task := nativeTaskRecord(s.State.Tasks, "810")
+	task := nativeTaskRecord(s.domain.Tasks, "810")
 	if run == nil || task == nil {
 		t.Fatal("claimed task was not reconstructed")
 	}
@@ -276,7 +278,7 @@ func TestNativeOrcaFixedLunaLaunchReconcilesRenamedTerminalAfterRestart(t *testi
 		t.Fatalf("unidentified agent was bound before its identity appeared: %v / %+v", err, run.Process)
 	}
 	_, execution := s.workflowRecords(run)
-	op := s.nativeOrcaOperation("orca-native-agent-terminal:" + execution.ExecutionID)
+	op := s.operationByKey("orca-native-agent-terminal:" + execution.ExecutionID)
 	if op == nil || op.Status != "outcome_unknown" || len(op.Receipt) == 0 {
 		t.Fatalf("accepted terminal receipt was not retained: %+v", op)
 	}
@@ -317,7 +319,7 @@ func TestNativeOrcaFixedLunaLaunchReconcilesRenamedTerminalAfterRestart(t *testi
 	if err := s.verifyNativeOrcaWorker(ctx, run, execution); err != nil {
 		t.Fatalf("renamed original terminal failed identity verification: %v", err)
 	}
-	op = s.nativeOrcaOperation("orca-native-agent-terminal:" + execution.ExecutionID)
+	op = s.operationByKey("orca-native-agent-terminal:" + execution.ExecutionID)
 	if op == nil || op.Status != "confirmed" || len(op.Receipt) == 0 {
 		t.Fatalf("terminal creation proof was not confirmed: %+v", op)
 	}
@@ -382,7 +384,7 @@ func TestNativeOrcaCenterReusesWorkerAfterRestartAndSettlement(t *testing.T) {
 	}
 	defer func() { _ = s.Close() }()
 	run := s.find("808")
-	task := nativeTaskRecord(s.State.Tasks, "808")
+	task := nativeTaskRecord(s.domain.Tasks, "808")
 	if run == nil || task == nil {
 		t.Fatal("claimed task was not reconstructed")
 	}
@@ -431,7 +433,7 @@ func TestNativeOrcaCenterReusesWorkerAfterRestartAndSettlement(t *testing.T) {
 		t.Fatalf("center restart lost the original Orca conversation: %+v / %+v", run, execution)
 	}
 	s.markServiceRecoveryGate()
-	if err := s.save(); err != nil {
+	if err := s.commitWorker(run); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.resumeConfiguredWork(ctx); err != nil {
@@ -466,7 +468,7 @@ func TestNativeOrcaCenterReusesWorkerAfterRestartAndSettlement(t *testing.T) {
 		t.Fatal(err)
 	}
 	s.State.Service.Ready = true
-	if err := s.save(); err != nil {
+	if err := s.publishCheckpoint(); err != nil {
 		t.Fatal(err)
 	}
 	command, created, err := SubmitDecisionAnswer(ctx, s.Config, AnswerOptions{RunID: "808", DecisionID: run.Decision.ID, Note: "Keep this session", By: "operator"})
@@ -518,8 +520,9 @@ func TestNativeOrcaCenterReusesWorkerAfterRestartAndSettlement(t *testing.T) {
 	record.Status, record.Version, record.AnsweredBy = "answer_saved", record.Version+1, answer.AnsweredBy
 	answer.AnsweredAt = now()
 	record.Answer = mustJSON(answer)
+	s.markWorkerDecisionWrite(record.DecisionID)
 	s.refreshRun(run)
-	if err := s.save(); err != nil {
+	if err := s.commitWorker(run); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.applyNativeOrcaDecision(ctx, run, workflow, execution, answer, strings.Repeat("d", 32)); err != nil {
@@ -554,8 +557,9 @@ func TestNativeOrcaCenterReusesWorkerAfterRestartAndSettlement(t *testing.T) {
 	record.Status, record.Version, record.AnsweredBy = "answer_saved", record.Version+1, answer.AnsweredBy
 	answer.AnsweredAt = now()
 	record.Answer = mustJSON(answer)
+	s.markWorkerDecisionWrite(record.DecisionID)
 	s.refreshRun(run)
-	if err := s.save(); err != nil {
+	if err := s.commitWorker(run); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.applyNativeOrcaDecision(ctx, run, workflow, execution, answer, strings.Repeat("e", 32)); err != nil {
@@ -589,8 +593,9 @@ func TestNativeOrcaCenterReusesWorkerAfterRestartAndSettlement(t *testing.T) {
 	record.Status, record.Version, record.AnsweredBy = "answer_saved", record.Version+1, answer.AnsweredBy
 	answer.AnsweredAt = now()
 	record.Answer = mustJSON(answer)
+	s.markWorkerDecisionWrite(record.DecisionID)
 	s.refreshRun(run)
-	if err := s.save(); err != nil {
+	if err := s.commitWorker(run); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.applyNativeOrcaDecision(ctx, run, workflow, execution, answer, strings.Repeat("f", 32)); err != nil {
@@ -643,8 +648,9 @@ func TestNativeOrcaCenterReusesWorkerAfterRestartAndSettlement(t *testing.T) {
 	record.Status, record.Version, record.AnsweredBy = "answer_saved", record.Version+1, answer.AnsweredBy
 	answer.AnsweredAt = now()
 	record.Answer = mustJSON(answer)
+	s.markWorkerDecisionWrite(record.DecisionID)
 	s.refreshRun(run)
-	if err := s.save(); err != nil {
+	if err := s.commitWorker(run); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.applyNativeOrcaDecision(ctx, run, workflow, execution, answer, strings.Repeat("2", 32)); err != nil {
@@ -681,8 +687,9 @@ func TestNativeOrcaCenterReusesWorkerAfterRestartAndSettlement(t *testing.T) {
 	record.Status, record.Version, record.AnsweredBy = "answer_saved", record.Version+1, answer.AnsweredBy
 	answer.AnsweredAt = now()
 	record.Answer = mustJSON(answer)
+	s.markWorkerDecisionWrite(record.DecisionID)
 	s.refreshRun(run)
-	if err := s.save(); err != nil {
+	if err := s.commitWorker(run); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.applyNativeOrcaDecision(ctx, run, workflow, execution, answer, strings.Repeat("1", 32)); err != nil {
@@ -706,13 +713,13 @@ func TestNativeOrcaCenterReusesWorkerAfterRestartAndSettlement(t *testing.T) {
 	if err := AtomicWrite(statePath, data); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.closeNativeOrcaTerminal(ctx, execution, *execution.Process, "agent"); err == nil {
+	if err := s.closeNativeOrcaTerminal(ctx, run, execution, *execution.Process, "agent"); err == nil {
 		t.Fatal("lost terminal-close response was treated as confirmed")
 	}
-	if err := s.closeNativeOrcaTerminal(ctx, execution, *execution.Process, "agent"); err != nil {
+	if err := s.closeNativeOrcaTerminal(ctx, run, execution, *execution.Process, "agent"); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.closeNativeOrcaTerminal(ctx, execution, execution.OrcaNative.Coordinator, "coordinator"); err != nil {
+	if err := s.closeNativeOrcaTerminal(ctx, run, execution, execution.OrcaNative.Coordinator, "coordinator"); err != nil {
 		t.Fatal(err)
 	}
 	data, err = os.ReadFile(statePath)

@@ -11,23 +11,15 @@ import (
 	"github.com/erranliu/SteerLine/internal/steerline/workerflow"
 )
 
-type workerFeedbackRoute string
-
-const (
-	feedbackLocalAppServer workerFeedbackRoute = "local_app_server"
-	feedbackNativeOrca     workerFeedbackRoute = "native_orca"
-	feedbackSupervisedOrca workerFeedbackRoute = "supervised_orca"
-)
-
-// workerFeedbackRouteFor binds feedback to the execution recorded at claim
-// time, including projects that do not use named execution profiles.
-func workerFeedbackRouteFor(config Config, run *Run, execution *ExecutionRecord) (workerFeedbackRoute, error) {
+// workerFlowModeFor binds every worker action to the execution recorded at
+// claim time, including projects that do not use named execution profiles.
+func workerFlowModeFor(config Config, run *Run, execution *ExecutionRecord) (workerflow.Mode, error) {
 	if run == nil || execution == nil {
-		return "", &BackendError{Code: BackendIdentityMismatch, Diagnostic: "worker feedback has no fixed run or execution"}
+		return 0, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "worker flow has no fixed run or execution"}
 	}
 	backend, protocol, err := ExecutionBackendKind(config.hostName())
 	if err != nil {
-		return "", err
+		return 0, nativeErr("unsupported_schema", err.Error())
 	}
 	if backend == string(BackendLocal) {
 		protocol = string(ProtocolLocalCodexAppServer)
@@ -35,18 +27,13 @@ func workerFeedbackRouteFor(config Config, run *Run, execution *ExecutionRecord)
 	if run.Host != config.hostName() || run.Agent != config.agentName() || execution.Agent != run.Agent ||
 		run.Backend != backend || execution.Backend != backend || run.Protocol != protocol || execution.Protocol != protocol ||
 		run.Target.ID == "" || run.Target.ID != execution.Target.ID || run.Target.ID != targetFor(config).ID {
-		return "", &BackendError{Code: BackendIdentityMismatch, Diagnostic: "fixed worker feedback target differs from its persisted execution"}
+		return 0, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "fixed worker target differs from its persisted execution"}
 	}
-	switch ExecutionProtocol(protocol) {
-	case ProtocolLocalCodexAppServer:
-		return feedbackLocalAppServer, nil
-	case ProtocolOrcaTerminalV2:
-		return feedbackNativeOrca, nil
-	case ProtocolOrcaSupervised:
-		return feedbackSupervisedOrca, nil
-	default:
-		return "", fmt.Errorf("unsupported worker feedback protocol %q", protocol)
+	mode, err := workerflow.SelectMode(run.Protocol, config.hostName())
+	if err != nil {
+		return 0, nativeErr("unsupported_schema", err.Error())
 	}
+	return mode, nil
 }
 
 // The service is the only writer. Mode selection carries no Service reference.
@@ -55,25 +42,10 @@ func (s *Service) workerFlowMode(run *Run) (workerflow.Mode, error) {
 	if err != nil {
 		return 0, err
 	}
-	backend, protocol, err := ExecutionBackendKind(fixed.config.hostName())
-	if err != nil {
-		return 0, nativeErr("unsupported_schema", err.Error())
-	}
-	if backend == string(BackendLocal) {
-		protocol = string(ProtocolLocalCodexAppServer)
-	}
-	if fixed.workflow.WorkflowVersion != WorkerFlowVersion || run.Host != fixed.config.hostName() ||
-		run.Agent != fixed.config.agentName() || fixed.execution.Agent != run.Agent ||
-		run.Backend != backend || fixed.execution.Backend != backend ||
-		run.Protocol != protocol || fixed.execution.Protocol != protocol ||
-		run.Target.ID == "" || run.Target.ID != fixed.execution.Target.ID || run.Target.ID != targetFor(fixed.config).ID {
+	if fixed.workflow.WorkflowVersion != WorkerFlowVersion {
 		return 0, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "fixed worker target differs from its persisted execution"}
 	}
-	mode, err := workerflow.SelectMode(run.Protocol, fixed.config.hostName())
-	if err != nil {
-		return 0, nativeErr("unsupported_schema", err.Error())
-	}
-	return mode, nil
+	return workerFlowModeFor(fixed.config, run, fixed.execution)
 }
 
 func (s *Service) prepareWorkerFlowByMode(ctx context.Context, task TaskRecord, run *Run, mode workerflow.Mode) error {
@@ -352,14 +324,14 @@ func copyWorkerFlowConfig(c Config) Config {
 	return c
 }
 
-func (s *Service) deliverResumableWorkerFeedback(ctx context.Context, run *Run, execution *ExecutionRecord, answer DecisionAnswer, commandID string, route workerFeedbackRoute) error {
+func (s *Service) deliverResumableWorkerFeedback(ctx context.Context, run *Run, execution *ExecutionRecord, answer DecisionAnswer, commandID string, route workerflow.Mode) error {
 	if execution.SessionID == "" || run.SessionID == nil || *run.SessionID != execution.SessionID {
 		execution.Error = ptr("Feedback is saved, but the original worker session is not yet available for delivery")
 		s.refreshRun(run)
 		return s.commitWorker(run)
 	}
 	if run.Decision.Request.NativeAsk != nil {
-		if route != feedbackLocalAppServer {
+		if route != workerflow.LocalCodex {
 			return &BackendError{Code: BackendUnsupported, Diagnostic: "native Codex question belongs to a different worker feedback protocol"}
 		}
 		if s.workerMessages != nil && s.workers[run.RunID] == nil {
@@ -370,7 +342,7 @@ func (s *Service) deliverResumableWorkerFeedback(ctx context.Context, run *Run, 
 	if execution.Status == "active" || s.workers[run.RunID] != nil {
 		return nil // Preserve the answer until the original turn stops.
 	}
-	for _, operation := range s.State.Operations {
+	for _, operation := range s.domain.Operations {
 		if operation.IdempotencyKey != "worker-turn:"+execution.ExecutionID+":"+commandID {
 			continue
 		}
