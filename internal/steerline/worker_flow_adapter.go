@@ -14,6 +14,20 @@ func (s *Service) workerFlowMode(run *Run) (workerflow.Mode, error) {
 	if err != nil {
 		return 0, err
 	}
+	backend, protocol, err := ExecutionBackendKind(fixed.config.hostName())
+	if err != nil {
+		return 0, nativeErr("unsupported_schema", err.Error())
+	}
+	if backend == string(BackendLocal) {
+		protocol = string(ProtocolLocalCodexAppServer)
+	}
+	if fixed.workflow.WorkflowVersion != WorkerFlowVersion || run.Host != fixed.config.hostName() ||
+		run.Agent != fixed.config.agentName() || fixed.execution.Agent != run.Agent ||
+		run.Backend != backend || fixed.execution.Backend != backend ||
+		run.Protocol != protocol || fixed.execution.Protocol != protocol ||
+		run.Target.ID == "" || run.Target.ID != fixed.execution.Target.ID || run.Target.ID != targetFor(fixed.config).ID {
+		return 0, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "fixed worker target differs from its persisted execution"}
+	}
 	mode, err := workerflow.SelectMode(run.Protocol, fixed.config.hostName())
 	if err != nil {
 		return 0, nativeErr("unsupported_schema", err.Error())

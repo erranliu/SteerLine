@@ -322,7 +322,13 @@ func TestAppServerServiceTwoTurnsPersistNativeReceipts(t *testing.T) {
 	previousTurn := ""
 	for i := 1; i <= 2; i++ {
 		commandID := newID()
-		if err := service.startWorkerFlowTurn(ctx, run, "complete this turn", commandID); err != nil {
+		selectedConfig := service.Config
+		if i == 1 {
+			service.Config.Host = "orca" // Current dispatch selection cannot replace this local run.
+		}
+		err := service.startWorkerFlowTurn(ctx, run, "complete this turn", commandID)
+		service.Config = selectedConfig
+		if err != nil {
 			t.Fatal(err)
 		}
 		worker := service.workers[run.RunID]

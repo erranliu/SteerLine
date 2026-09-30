@@ -75,7 +75,13 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openP
 	if task == nil {
 		t.Fatal("claimed task disappeared")
 	}
-	if err = service.prepareWorkerFlow(ctx, *task, run); err != nil {
+	preparationConfig := service.Config
+	if openPR {
+		service.Config.Host = "orca" // Initial preparation uses the run's fixed host.
+	}
+	err = service.prepareWorkerFlow(ctx, *task, run)
+	service.Config = preparationConfig
+	if err != nil {
 		if os.Getenv("STEERLINE_REQUIRE_DETACHED_TESTS") != "1" && strings.Contains(err.Error(), errDetachUnsupported.Error()) {
 			t.Skipf("host cannot retain a worker across service exit: %v", err)
 		}
