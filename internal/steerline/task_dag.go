@@ -502,57 +502,31 @@ func (q QueryService) TaskGraph(ctx context.Context, cursor string, limit int) (
 }
 
 func nativeStartupBlockers(task TaskRecord, graph taskGraphSnapshot) []string {
-	blockers := []string{}
-	if nativeDeliveryInconsistent(task, graph) {
-		blockers = append(blockers, "inconsistent_delivery")
-	}
-	if task.Status != "open" {
-		blockers = append(blockers, "task_not_open")
-	}
-	if graph.Authority.DispatchPaused {
-		blockers = append(blockers, "dispatch_paused")
-	}
-	if graph.ExecutionSlotBusy && graph.Authority.DispatchMode == "auto" {
-		blockers = append(blockers, "execution_slot_busy")
-	}
-	return blockers
+	_, delivered := graph.Deliveries[task.TaskID]
+	return nativeStartupBlockersFor(task.Status, delivered, graph.Authority.DispatchPaused, graph.Authority.DispatchMode, graph.ExecutionSlotBusy)
 }
 
 func nativeDeliveryInconsistent(task TaskRecord, graph taskGraphSnapshot) bool {
 	_, delivered := graph.Deliveries[task.TaskID]
-	return (task.Status == "closed") != delivered
+	return nativeDeliveryInconsistentStatus(task.Status, delivered)
 }
 
 func taskDependencyState(task TaskRecord, graph taskGraphSnapshot) (bool, []TaskDependencyStatus) {
-	ready := task.Status == "open" && !nativeDeliveryInconsistent(task, graph)
-	blockers := []TaskDependencyStatus{}
+	predecessors := []TaskDependencyStatus{}
 	for _, edge := range graph.Edges {
 		if edge.SuccessorID != task.TaskID {
 			continue
 		}
 		pred, ok := graph.ByID[edge.PredecessorID]
 		if !ok {
-			blockers = append(blockers, TaskDependencyStatus{TaskID: edge.PredecessorID, Blocker: "inconsistent_delivery"})
-			ready = false
+			predecessors = append(predecessors, TaskDependencyStatus{TaskID: edge.PredecessorID})
 			continue
 		}
-		delivered := false
-		if _, ok = graph.Deliveries[edge.PredecessorID]; ok {
-			delivered = true
-		}
-		state := TaskDependencyStatus{TaskID: pred.TaskID, Status: pred.Status, Delivered: delivered}
-		if pred.Status == "discarded" {
-			state.Blocker = "discarded_predecessor"
-		} else if pred.Status == "closed" && !delivered || delivered && pred.Status != "closed" {
-			state.Blocker = "inconsistent_delivery"
-		} else if !delivered {
-			state.Blocker = "predecessor_not_delivered"
-		}
-		if state.Blocker != "" {
-			blockers = append(blockers, state)
-			ready = false
-		}
+		_, delivered := graph.Deliveries[edge.PredecessorID]
+		predecessors = append(predecessors, TaskDependencyStatus{TaskID: pred.TaskID, Status: pred.Status, Delivered: delivered})
 	}
+	_, delivered := graph.Deliveries[task.TaskID]
+	ready, _, blockers := nativeDependencyState(task.Status, delivered, predecessors)
 	return ready, blockers
 }
 
