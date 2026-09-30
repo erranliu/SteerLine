@@ -29,6 +29,8 @@ steerline answer -config .\service.json `
 
 worker 处理反馈时，中心保持同一个 Execution、逻辑 session、worktree 和分支。轮次停止后如仍需输入，创建新的 Decision；真实 PR 合并或明确丢弃优先于未投递反馈。中心不要求 worker 回传 `applied_decision_id` 或答案摘要，也不把已保存／已接受误写成“已落实”。
 
-local 路径使用每 Execution 独立的 Codex app-server 和固定 thread；重启重新连接原请求，或在确认轮次已结束后于原 thread 开始下一轮。本机 Orca 路径重启核实原 agent terminal/incarnation、coordinator 和 Run；仅在当前 Dispatch 结算后向原 terminal 注入下一轮。受监管远端仍未接入。进程退出或终端静默不能作为轮次停止证明。
+local 路径使用受服务管理的 Codex app-server 和固定 thread；服务重开先核验原进程、thread、turn 与问题。原请求仍有效时，新提交的答案可投递原请求；原进程退出后旧请求失效，需通过新的恢复 Decision 人工继续。核实旧进程树已停止后，新的 Attempt 使用新进程恢复原 thread；新会话需要明确选择。本机 Orca 路径重启核实原 agent terminal/incarnation、coordinator 和 Run；仅在当前 Dispatch 结算后向原 terminal 注入下一轮。结果 relay 文件在重开后等待人工确认，不自动 `worker_done`。受监管远端仍未接入。进程退出或终端静默不能作为轮次成功停止的证明。详见[停服恢复 Spec](spec/worker-service-recovery.spec.md)。
 
 `retry_run`、`mark_stopped`、`resolve_command` 不属于当前用户反馈入口。当前格式重启保留原 Decision、Command、Operation 和外部身份；无法自动核实的副作用保持待决策及诊断事实。
+
+Execution 的恢复门槛和版本每次换服务实例重新建立；第一次接管新领取任务只登记所属实例。先前已保存但未送达的答案保留为历史 Decision，新确认创建关联 Decision，不改写原 first-wins 答案。状态未核实、旧 reply/send 的结果不明或旧进程树仍可能写入时，答复入口不可执行。普通反馈复用仍存活的 worker；重建进程会创建新 Attempt，原 Attempt 的进程、会话和回执保持可查。

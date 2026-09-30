@@ -142,8 +142,23 @@ func TestRuntimeViewRejectsInvalidWorkerAttempts(t *testing.T) {
 		for i := 0; i < count; i++ {
 			state.Attempts = append(state.Attempts, StepAttemptRecord{ExecutionID: run.ExecutionID, StepID: "worker", AttemptID: newID(), AttemptNumber: i + 1})
 		}
-		if err := projectRuntime(&state); err == nil || !strings.Contains(err.Error(), "exactly one stable worker attempt") {
+		if err := projectRuntime(&state); err == nil {
 			t.Fatalf("accepted %d worker attempts: %v", count, err)
 		}
+	}
+	state := service.State
+	old := state.Attempts[0]
+	old.Status = "stopped"
+	next := old
+	next.AttemptID, next.AttemptNumber, next.Status = newID(), old.AttemptNumber+1, "planned"
+	state.Attempts = []StepAttemptRecord{old, next}
+	for i := range state.Executions {
+		if state.Executions[i].ExecutionID == run.ExecutionID {
+			state.Executions[i].CurrentAttemptID = next.AttemptID
+			state.Executions[i].DecisionID = ""
+		}
+	}
+	if err := projectRuntime(&state); err != nil || state.Runs[0].AttemptID != next.AttemptID {
+		t.Fatalf("valid successor attempt was not projected: %v", err)
 	}
 }

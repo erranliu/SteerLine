@@ -28,7 +28,7 @@ Task、WorkflowRun、Execution、会话/轮次、用户消息和外部平台身�
 
 原生任务复用中心状态机与 SQLite，任务 DAG 决定任务间资格，WorkflowRun/Execution 管理持续会话及交付。创建任务与加入 DAG 为同一事务，交付契约随创建固定；未交付任务可按[追加前置 Spec](../spec/native-task-add-predecessors.spec.md)只增加依赖。PR 合并前可受控丢弃，但不释放后继或抹去执行事实。已合并 PR 的任务不可丢弃或补前置。新规划改变固定交付范围或要移除旧前置时，须重新规划受影响任务，不能用普通反馈或追加边改写旧契约。
 
-用户可通过 Codex 分析并人工处置任务与成果，系统不承诺自动修复任意人工改动。当前格式重启、原请求对账和同会话继续必须支持。关系视图和 UI 均不成为业务写者。
+用户可通过 Codex 分析并人工处置任务与成果，系统不承诺自动修复任意人工改动。当前格式重启先核验原请求及执行事实；仍存活的原会话可接回观察，已终止的本地 worker 由用户明确选择后在新 Attempt 继续。原 thread 无法核实时，新会话也必须明确选择。关系视图和 UI 均不成为业务写者。具体边界见[停服恢复 Spec](../spec/worker-service-recovery.spec.md)。
 
 共同要求：[原生任务共同约束](../spec/native-task-constraints.md)。独立执行规格：[任务模型](../spec/task-core.spec.md)、[固定 DAG](../spec/task-dag.spec.md)、[原生接入](../spec/beads-exit.spec.md)、[关系视图](../spec/dag-view.spec.md)；各有同名配套 Plan，每任务一个独立实现 PR。现有 Beads 代码只作为重构输入，不形成需要长期维护的生产兼容路径。
 

@@ -17,7 +17,7 @@ func TestPrepareTurnNeverOverwritesOriginalJournal(t *testing.T) {
 		t.Fatal(err)
 	}
 	called := false
-	_, err := PrepareTurn(root, "run", "command", "prompt", func(string, []byte) error {
+	_, err := PrepareTurn(root, "run", "command", filepath.Join(root, "runs", "run", "app-server"), "prompt", func(string, []byte) error {
 		called = true
 		return nil
 	})

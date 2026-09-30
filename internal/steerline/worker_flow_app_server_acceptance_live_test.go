@@ -10,12 +10,11 @@ import (
 	"time"
 )
 
-// This opt-in test uses two real Codex app-server processes and isolated Git
-// fixtures. Run it on a host that permits detached processes to outlive the
-// service; normal unit suites keep using the in-process protocol mock.
+// Historical detached-process acceptance. The current local worker lifecycle
+// is verified by TestLocalCodexManualRecoveryLive.
 func TestAppServerServiceParallelRecoveryLive(t *testing.T) {
-	if os.Getenv("STEERLINE_APP_SERVER_SERVICE_LIVE") != "1" {
-		t.Skip("real service-level Codex acceptance is opt-in")
+	if os.Getenv("STEERLINE_APP_SERVER_SERVICE_LIVE_LEGACY") != "1" {
+		t.Skip("historical detached-process acceptance")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
@@ -259,9 +258,8 @@ type appServerHostExitReceipt struct {
 	Workspace string          `json:"workspace"`
 }
 
-// The helper exits the entire service-owning process while Codex is awaiting
-// a tool response. Its detached app-server must remain available to a new
-// process, which is verified by TestAppServerHostExitRecoveryLive.
+// The helper exits the service-owning process while Codex awaits a tool
+// response. TestLocalCodexManualRecoveryLive verifies the managed worker exit.
 func TestAppServerHostExitHelper(t *testing.T) {
 	root := os.Getenv("STEERLINE_APP_SERVER_HOST_EXIT_ROOT")
 	if os.Getenv("STEERLINE_APP_SERVER_HOST_EXIT_HELPER") != "1" || root == "" {
@@ -366,8 +364,8 @@ func TestAppServerHostExitHelper(t *testing.T) {
 }
 
 func TestAppServerHostExitRecoveryLive(t *testing.T) {
-	if os.Getenv("STEERLINE_APP_SERVER_SERVICE_LIVE") != "1" {
-		t.Skip("real host-exit recovery is opt-in")
+	if os.Getenv("STEERLINE_APP_SERVER_SERVICE_LIVE_LEGACY") != "1" {
+		t.Skip("historical detached-process acceptance")
 	}
 	root, err := os.MkdirTemp("", "sl-host-exit-")
 	if err != nil {

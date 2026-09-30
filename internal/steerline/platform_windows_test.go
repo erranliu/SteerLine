@@ -15,6 +15,7 @@ import (
 	"syscall"
 	"testing"
 	"time"
+	"unsafe"
 
 	"golang.org/x/sys/windows"
 )
@@ -89,6 +90,35 @@ func TestLifecycleReviewExitedProcessWithRetainedHandle(t *testing.T) {
 	if probe := probeProcess(&identity); probe.State != ProcessAbsent {
 		t.Fatalf("retained exited process handle reported alive: %+v", probe)
 	}
+}
+
+func TestWindowsOwnedWorkerRunsInJobAndStopsWithOwner(t *testing.T) {
+	exe, err := os.Executable()
+	require(t, err)
+	cmd := exec.Command(exe, "--fake", "sleep")
+	owned, err := startProcess(cmd)
+	require(t, err)
+	defer func() { owned.Close(); _ = cmd.Wait() }()
+	identity := owned.Identity()
+	if inspectProcess(&identity) != "matching process still exists" {
+		t.Fatal("owned worker identity is not live")
+	}
+	handle, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, uint32(identity.PID))
+	require(t, err)
+	var inJob uint32
+	ok, _, callErr := windows.NewLazySystemDLL("kernel32.dll").NewProc("IsProcessInJob").Call(uintptr(handle), 0, uintptr(unsafe.Pointer(&inJob)))
+	windows.CloseHandle(handle)
+	if ok == 0 || inJob == 0 {
+		t.Fatalf("owned worker did not enter a Job Object: ok=%d in_job=%d err=%v", ok, inJob, callErr)
+	}
+	owned.Close()
+	for deadline := time.Now().Add(3 * time.Second); time.Now().Before(deadline); {
+		if workerTreeAbsent(identity) {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatal("closing the owner did not terminate the worker")
 }
 
 func currentConsoleWindowForTests() uintptr {

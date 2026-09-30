@@ -2,13 +2,16 @@ package steerline
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"os"
 	"path/filepath"
 	"sync"
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/steerline/codexapp"
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
+	"github.com/erranliu/SteerLine/internal/steerline/workerflow"
 )
 
 func appServerAnswerEvidence(path string, ask codexAskCall, answers map[string][]string) (bool, error) {
@@ -50,6 +53,7 @@ type appServerRecoveryResult struct {
 	execution ExecutionRecord
 	worker    *Worker
 	completed bool
+	dead      bool
 	err       error
 }
 
@@ -61,7 +65,28 @@ func recoverAppServerExecution(ctx context.Context, config Config, run Run, exec
 	probeCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	worker, completed, err := reattachAppServerWorker(probeCtx, config, &run, &execution)
-	return appServerRecoveryResult{runID: run.RunID, execution: execution, worker: worker, completed: completed, err: err}
+	result := appServerRecoveryResult{runID: run.RunID, execution: execution, worker: worker, completed: completed, err: err}
+	if err != nil && execution.Process != nil && inspectProcess(execution.Process) == "process absent" {
+		var receipt appServerProcessReceipt
+		raw, readErr := os.ReadFile(filepath.Join(appServerDirectory(config, &run), "process.json"))
+		result.dead = readErr == nil && json.Unmarshal(raw, &receipt) == nil && receipt.Managed && receipt.Identity == *execution.Process
+		if !result.dead {
+			return result
+		}
+		commandID := execution.CurrentCommandID
+		turnID := execution.CurrentTurnID
+		if execution.PendingCommandID != "" {
+			commandID, turnID = execution.PendingCommandID, execution.PendingTurnID
+		}
+		if stableExecutionID(commandID) && codexThreadID.MatchString(execution.SessionID) && codexThreadID.MatchString(turnID) {
+			journal := filepath.Join(config.RunDir, "runs", run.RunID, "turns", commandID, "appserver.jsonl")
+			if outcome, readErr := readAppServerTurnOutcome(journal, execution.SessionID, turnID); readErr == nil && outcome.Completed {
+				result.completed = true
+				result.err = nil
+			}
+		}
+	}
+	return result
 }
 
 // Probe every unsettled local Execution at once. Results are applied only by
@@ -183,7 +208,59 @@ func (s *Service) applyAppServerRecovery(result appServerRecoveryResult) error {
 		execution.AppServerGeneration = result.execution.AppServerGeneration
 		s.refreshRun(run)
 	}
+	if result.dead {
+		if owned := s.ownedLocalProcesses[run.RunID]; owned != nil {
+			if owned.Identity() != *execution.Process {
+				return s.waitWorkerFlow(run, "Original managed process identity changed during recovery")
+			}
+			owned.Close()
+			delete(s.ownedLocalProcesses, run.RunID)
+		}
+		if !workerTreeAbsent(*execution.Process) {
+			execution.RecoveryState = string(workerflow.RecoveryUnverified)
+			return s.waitWorkerFlow(run, "Original worker descendants may still write to the worktree")
+		}
+		execution.RecoveryState = string(workerflow.ClassifyRecovery(workerflow.RecoveryFacts{WorkerAbsent: true, WritersAbsent: true, Completed: result.completed}))
+		if result.completed {
+			if execution.SessionID == "" {
+				execution.SessionID = result.execution.SessionID
+			}
+			if execution.PendingTurnID == "" {
+				execution.PendingTurnID = result.execution.PendingTurnID
+			}
+			if err := s.finishWorkerFlowFor(run, nil); err != nil {
+				return err
+			}
+			return s.save()
+		}
+		execution.PendingAsks = nil
+		execution.Status = "blocked"
+		s.refreshRun(run)
+		if run.Decision != nil && run.Decision.Status == "answer_saved" {
+			return s.refreshSavedRecoveryDecision(run, false, "原 Codex worker 已退出，旧请求已失效。请确认带入新轮次的输入。")
+		}
+		oldDecisionID := ""
+		priorQuestion := ""
+		if run.Decision != nil && run.Decision.Status == "pending" {
+			oldDecisionID = run.Decision.ID
+			priorQuestion = run.Decision.Request.Question + "\n" + run.Decision.Request.Context
+			s.setDecisionStatus(run, "superseded")
+			if err := s.save(); err != nil {
+				return err
+			}
+			s.setRunDecision(run, nil)
+		}
+		if err := s.waitWorkerFlow(run, "原 Codex worker 已退出，原轮次没有可信完成结果。请核对当前工作区后手动继续。\n\n原问题："+priorQuestion); err != nil {
+			return err
+		}
+		if record := s.decisionRecord(run); record != nil && oldDecisionID != "" {
+			record.RecoveryOfDecision = oldDecisionID
+			return s.save()
+		}
+		return nil
+	}
 	if result.err != nil {
+		execution.RecoveryState = string(workerflow.RecoveryUnverified)
 		execution.Status = "blocked"
 		return s.waitWorkerFlow(run, "Original app-server turn cannot be reconciled: "+result.err.Error())
 	}
@@ -191,6 +268,7 @@ func (s *Service) applyAppServerRecovery(result appServerRecoveryResult) error {
 		return s.waitWorkerFlow(run, "Original app-server thread identity changed during recovery")
 	}
 	execution.SessionID = result.execution.SessionID
+	execution.RecoveryState = string(workerflow.ClassifyRecovery(workerflow.RecoveryFacts{WorkerLive: true, QuestionPending: run.Decision != nil && run.Decision.Request.NativeAsk != nil}))
 	s.refreshRun(run)
 	if execution.PendingCommandID != "" {
 		execution.PendingTurnID = result.execution.PendingTurnID
@@ -200,6 +278,11 @@ func (s *Service) applyAppServerRecovery(result appServerRecoveryResult) error {
 	}
 	if err := s.reconcileAppServerReplyFromJournal(run, workflow, execution); err != nil {
 		return s.waitWorkerFlow(run, "Original Codex answer cannot be reconciled: "+err.Error())
+	}
+	if run.Decision != nil && run.Decision.Status == "answer_saved" {
+		if err := s.refreshSavedRecoveryDecision(run, run.Decision.Request.NativeAsk != nil, "服务重开后保留了旧答案；请重新确认后才投递。 "); err != nil {
+			return err
+		}
 	}
 	workflow, execution = s.workflowRecords(run)
 	if result.completed {

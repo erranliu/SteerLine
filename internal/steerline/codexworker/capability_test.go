@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-func TestProbeRejectsVersionMismatchBeforeDetachedStart(t *testing.T) {
+func TestProbeRejectsVersionMismatchBeforeManagedStart(t *testing.T) {
 	executable, err := os.Executable()
 	if err != nil {
 		t.Fatal(err)
@@ -24,10 +24,10 @@ func TestProbeRejectsVersionMismatchBeforeDetachedStart(t *testing.T) {
 			return []byte("different native version"), nil
 		},
 		HistoryAvailable: func(context.Context) bool { return true },
-		StartDetached:    func(*exec.Cmd) error { started = true; return nil },
+		StartManaged:     func(*exec.Cmd) (func(), error) { started = true; return func() {}, nil },
 	})
 	var unsupported *ProbeError
 	if !errors.As(err, &unsupported) || started || outputs != 2 {
-		t.Fatalf("mismatched Codex binaries reached detached start: %v, started=%v, probes=%d", err, started, outputs)
+		t.Fatalf("mismatched Codex binaries reached managed start: %v, started=%v, probes=%d", err, started, outputs)
 	}
 }

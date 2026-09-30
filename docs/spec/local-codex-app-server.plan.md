@@ -1,5 +1,7 @@
 # Plan：本机 Codex app-server 执行迁移
 
+适用说明（2026-09-30）：本 Plan 的独立进程存活及重接验收属于历史范围；当前本地 worker 由服务管理，停服后的人工继续按[新 Plan](worker-service-recovery.plan.md)实施。
+
 执行依据：[Spec](local-codex-app-server.spec.md)。按以下顺序实施，一个实现 PR 交付。实现及 A/B/C 验收已完成；当前环境缺少定向 race detector 工具链，记录在 [第一阶段残留](../roadmap/roadmap.md#第一阶段残留)。
 
 1. **验证最小执行与恢复链。** 在目标 Windows/Codex 版本核对生成 schema。已验证建 thread、启动 turn、Default 模式 `steerline_ask` 原生工具请求、WebSocket 断开重接后由独立连接回复原请求并完成原 turn。第一条 turn 待答时第二个独立 app-server 已完成，第一条仍保持 `inProgress`。内置 `request_user_input` 在 Default 模式不可用，按 Spec 使用 `dynamicTools`。后续在独立宿主上完成 SteerLine 服务级双任务及宿主进程退出后的重启验收。

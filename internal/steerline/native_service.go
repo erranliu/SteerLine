@@ -581,6 +581,7 @@ func (s *Service) dispatchNative(ctx context.Context) error {
 			execution.Target.Branch = intent.Branch
 		}
 		execution.UpdatedAt = now()
+		execution.OwnerServiceInstanceID = s.State.Service.InstanceID
 		workflow.UpdatedAt = now()
 		attempt.ExternalBinding = execution.Target
 		attempt.UpdatedAt = now()

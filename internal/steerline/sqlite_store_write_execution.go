@@ -99,9 +99,11 @@ func (t *sqliteTx) PutExecution(v ExecutionRecord) error {
 		if err = json.Unmarshal(previous, &old); err != nil {
 			return err
 		}
-		if old.SessionID != "" && old.SessionID != v.SessionID || v.TurnNumber < old.TurnNumber ||
-			v.TurnNumber == old.TurnNumber && old.CurrentTurnID != "" && old.CurrentTurnID != v.CurrentTurnID ||
-			v.TurnNumber == old.TurnNumber && old.LastStoppedTurnID != "" && old.LastStoppedTurnID != v.LastStoppedTurnID && v.LastStoppedTurnID != v.CurrentTurnID {
+		newWorkerGeneration := old.CurrentAttemptID != "" && v.CurrentAttemptID != old.CurrentAttemptID &&
+			v.RecoveryVersion >= old.RecoveryVersion && v.RecoveryState == "resuming"
+		if !newWorkerGeneration && old.SessionID != "" && old.SessionID != v.SessionID || v.TurnNumber < old.TurnNumber ||
+			!newWorkerGeneration && v.TurnNumber == old.TurnNumber && old.CurrentTurnID != "" && old.CurrentTurnID != v.CurrentTurnID ||
+			!newWorkerGeneration && v.TurnNumber == old.TurnNumber && old.LastStoppedTurnID != "" && old.LastStoppedTurnID != v.LastStoppedTurnID && v.LastStoppedTurnID != v.CurrentTurnID {
 			return nativeErr("immutable_task", "worker session or observed turn identity cannot be replaced or rewound")
 		}
 		delivered, e := t.selectedNativeDeliveryExecution(v.ProjectIdentity, v.ExecutionID)
@@ -141,6 +143,15 @@ func (t *sqliteTx) PutStepAttempt(v StepAttemptRecord) error {
 		return err
 	}
 	if err == nil && !bytes.Equal(previous, b) {
+		var old StepAttemptRecord
+		if err := json.Unmarshal(previous, &old); err != nil {
+			return err
+		}
+		if old.WorkerProcess != nil && (v.WorkerProcess == nil || *old.WorkerProcess != *v.WorkerProcess) ||
+			old.WorkerSessionID != "" && old.WorkerSessionID != v.WorkerSessionID ||
+			old.Status == "stopped" && v.Status != "stopped" {
+			return nativeErr("immutable_task", "retired worker Attempt identity or status cannot be replaced")
+		}
 		delivered, e := t.selectedNativeDeliveryExecution(v.ProjectIdentity, v.ExecutionID)
 		if e != nil {
 			return e
