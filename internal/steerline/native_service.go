@@ -454,7 +454,9 @@ func (s *Service) reconcileExitedNativeExecution(ctx context.Context, taskID, cl
 	}{"fixed_local_execution_stop", s.Config.ShutdownGrace}
 	op := Operation{Version: ExecutionRecordVersion, ID: opID, RunID: workflowRunID, AttemptID: attempt.AttemptID, Backend: BackendLocal, Protocol: ref.Protocol, Target: ref.Target, Action: "stop", PayloadDigest: digestValue(payload), Status: OperationConfirmed, StartedAt: now(), UpdatedAt: now(), Diagnostic: observation.Diagnostic, Ref: &ref}
 	records := executionRecords{root: s.Config.RunDir}
+	expectedOperation := ""
 	if old, loadErr := records.loadOperation(workflowRunID, attempt.AttemptID, opID); loadErr == nil {
+		expectedOperation = recordFingerprint(old)
 		if old.PayloadDigest != op.PayloadDigest || old.Ref == nil || digestValue(*old.Ref) != digestValue(ref) {
 			return nativeErr("authority_mismatch", "saved local stop operation differs from the fixed execution identity")
 		}
@@ -465,7 +467,7 @@ func (s *Service) reconcileExitedNativeExecution(ctx context.Context, taskID, cl
 	} else if !os.IsNotExist(loadErr) {
 		return loadErr
 	}
-	if err := records.saveOperation(op); err != nil {
+	if err := s.commitExecutionOperation(s.localWorkerRun(workflowRunID), op, expectedOperation); err != nil {
 		return err
 	}
 	return s.recordNativeStopCleanup(ctx, taskID, cleanupItem, op)
@@ -695,7 +697,7 @@ func (s *Service) nativeCompleteMergedTask(ctx context.Context, run *Run) error 
 
 func (s *Service) pollNativePRs(ctx context.Context, onlyRunID string) error {
 	var operationErr error
-	for _, run := range s.State.Runs {
+	for _, run := range s.runs {
 		if run == nil || onlyRunID != "" && run.RunID != onlyRunID {
 			continue
 		}

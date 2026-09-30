@@ -1,6 +1,6 @@
 # Spec：架构收口 PR 1 — worker 协议与终态边界
 
-状态：实现候选，待 PR 评审；未分配 Task ID。日期：2026-09-30。审计基线：`main@4e786d7`，包含已合并的 #136–#143。本系列按本文 → [PR 2](architecture-02-worker-commit.spec.md) → [PR 3](architecture-03-runtime-boundary.spec.md) 交付，每份 Spec 对应一个实现 PR；实施时从最新主干承接已合入改动。
+状态：已由 #147 合入主干；未分配 Task ID。日期：2026-09-30。审计基线：`main@4e786d7`，包含已合并的 #136–#143。本系列按本文 → [PR 2](architecture-02-worker-commit.spec.md) → [PR 3](architecture-03-runtime-boundary.spec.md) 交付，每份 Spec 对应一个实现 PR；实施时从最新主干承接已合入改动。
 
 ## 1. 目标与依据
 

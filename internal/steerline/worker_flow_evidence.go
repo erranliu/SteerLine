@@ -2,7 +2,6 @@ package steerline
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
@@ -25,23 +24,7 @@ type workerFlowEventFact struct {
 	ToolReply     *workerToolReplyFact
 }
 
-type workerToolReplyFact struct {
-	ThreadID string
-	TurnID   string
-	CallID   string
-	Status   string
-	Success  *bool
-	Answers  []map[string][]string
-}
-
-func (f workerToolReplyFact) matchesAnswers(expected map[string][]string) bool {
-	for _, answers := range f.Answers {
-		if digestValue(answers) == digestValue(expected) {
-			return true
-		}
-	}
-	return false
-}
+type workerToolReplyFact = codexworker.ToolReplyFact
 
 func decodeWorkerFlowEvent(mode workerflow.Mode, ev WorkerEvent, execution *ExecutionRecord, inspectReply bool) (workerFlowEventFact, error) {
 	fact := workerFlowEventFact{Source: ev.Source, SourceEventID: ev.SourceEventID, SourceCursor: ev.SourceCursor}
@@ -75,62 +58,18 @@ func decodeWorkerFlowEvent(mode workerflow.Mode, ev WorkerEvent, execution *Exec
 		}
 		return fact, nil
 	}
-	switch ev.AppServer.Method {
-	case "turn/started":
-		var params struct {
-			ThreadID string `json:"threadId"`
-			Turn     struct {
-				ID string `json:"id"`
-			} `json:"turn"`
-		}
-		if json.Unmarshal(ev.AppServer.Params, &params) != nil || params.ThreadID != execution.SessionID || !codexThreadID.MatchString(params.Turn.ID) {
-			return fact, errors.New("app-server turn start changed its fixed thread")
-		}
-		fact.StartedTurnID = params.Turn.ID
-	case "item/tool/call":
-		call, err := parseCodexAskCall(*ev.AppServer, execution.SessionID, execution.CurrentTurnID)
+	wire, err := codexworker.DecodeEvent(*ev.AppServer, execution.SessionID, execution.CurrentTurnID, inspectReply)
+	if err != nil {
+		return fact, err
+	}
+	fact.StartedTurnID, fact.ToolReply = wire.StartedTurnID, wire.ToolReply
+	if wire.Question != nil {
+		call, err := codexAskCallFromEnvelope(*wire.Question)
 		if err != nil {
 			return fact, err
 		}
 		call.Generation = execution.AppServerGeneration
 		fact.Question = &call
-	case "item/completed":
-		if !inspectReply {
-			break
-		}
-		var params struct {
-			ThreadID string `json:"threadId"`
-			TurnID   string `json:"turnId"`
-			Item     struct {
-				ID           string `json:"id"`
-				Type         string `json:"type"`
-				Status       string `json:"status"`
-				Success      *bool  `json:"success"`
-				ContentItems []struct {
-					Type string `json:"type"`
-					Text string `json:"text"`
-				} `json:"contentItems"`
-			} `json:"item"`
-		}
-		if json.Unmarshal(ev.AppServer.Params, &params) != nil || params.ThreadID != execution.SessionID || params.TurnID != execution.CurrentTurnID {
-			return fact, errors.New("app-server tool completion changed native identity")
-		}
-		if params.Item.Type != "dynamicToolCall" {
-			break
-		}
-		reply := workerToolReplyFact{ThreadID: params.ThreadID, TurnID: params.TurnID, CallID: params.Item.ID, Status: params.Item.Status, Success: params.Item.Success}
-		for _, content := range params.Item.ContentItems {
-			if content.Type != "inputText" {
-				continue
-			}
-			var body struct {
-				Answers map[string][]string `json:"answers"`
-			}
-			if json.Unmarshal([]byte(content.Text), &body) == nil {
-				reply.Answers = append(reply.Answers, body.Answers)
-			}
-		}
-		fact.ToolReply = &reply
 	}
 	return fact, nil
 }

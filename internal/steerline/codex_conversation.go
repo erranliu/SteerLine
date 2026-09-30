@@ -269,7 +269,7 @@ func writeCodexHistoryBinding(path string, b codexHistoryBinding) error {
 func (s *Service) codexHistorySources() []codexHistoryBinding {
 	sources := []codexHistoryBinding{}
 	seen := map[string]bool{}
-	for _, run := range s.State.Runs {
+	for _, run := range s.runs {
 		if run == nil || run.Agent != "codex" {
 			continue
 		}

@@ -130,11 +130,9 @@ func TestAppServerRejectedEventReleasesObserver(t *testing.T) {
 
 func TestAppServerRecoveryDoesNotRaceInFlightLaunch(t *testing.T) {
 	run := &Run{RunID: newID(), ExecutionID: newID(), DomainTaskID: "8", Protocol: string(ProtocolLocalCodexAppServer), WorkflowVersion: WorkerFlowVersion}
-	service := &Service{appServerLaunching: map[string]string{run.RunID: newID()}, State: Runtime{
-		Runs: []*Run{run},
-	}, domain: DomainSnapshot{Tasks: []TaskRecord{{TaskID: "8", Status: "in_progress"}},
+	service := &Service{appServerLaunching: map[string]string{run.RunID: newID()}, State: Runtime{}, domain: DomainSnapshot{Tasks: []TaskRecord{{TaskID: "8", Status: "in_progress"}},
 		WorkflowRuns: []WorkflowRunRecord{{WorkflowRunID: run.RunID, WorkflowVersion: WorkerFlowVersion, Phase: "queued"}},
-		Executions:   []ExecutionRecord{{ExecutionID: run.ExecutionID, WorkflowRunID: run.RunID, PendingCommandID: newID()}}},
+		Executions:   []ExecutionRecord{{ExecutionID: run.ExecutionID, WorkflowRunID: run.RunID, PendingCommandID: newID()}}}, runs: []*Run{run},
 	}
 	before := digestValue(struct {
 		View   Runtime
@@ -154,7 +152,7 @@ func TestAppServerRecoveryDoesNotRaceInFlightLaunch(t *testing.T) {
 func TestAppServerLateReplyCannotModifyTerminalTask(t *testing.T) {
 	for _, status := range []string{"closed", "discarded"} {
 		run := &Run{RunID: newID(), TaskStatus: status, Decision: &DecisionState{ID: newID(), Status: "answer_saved", Request: DecisionRequest{NativeAsk: &codexAskCall{CallID: "original"}}}}
-		service := &Service{State: Runtime{Runs: []*Run{run}}, domain: DomainSnapshot{Operations: []OperationRecord{{OperationID: "reply", Status: "in_flight"}}}}
+		service := &Service{State: Runtime{}, domain: DomainSnapshot{Operations: []OperationRecord{{OperationID: "reply", Status: "in_flight"}}}, runs: []*Run{run}}
 		before := digestValue(struct {
 			View   Runtime
 			Domain DomainSnapshot

@@ -95,7 +95,7 @@ func recoverAppServerExecution(ctx context.Context, config Config, run Run, exec
 // the identity checks for unrelated tasks.
 func (s *Service) resumeAppServerWorkers(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
-	results := make(chan appServerRecoveryResult, len(s.State.Runs))
+	results := make(chan appServerRecoveryResult, len(s.runs))
 	var probes sync.WaitGroup
 	defer func() {
 		cancel()
@@ -108,7 +108,7 @@ func (s *Service) resumeAppServerWorkers(ctx context.Context) error {
 		}
 	}()
 	count := 0
-	for _, run := range s.State.Runs {
+	for _, run := range s.runs {
 		if run == nil || run.WorkflowVersion != WorkerFlowVersion || run.Protocol != string(ProtocolLocalCodexAppServer) || s.workers[run.RunID] != nil || s.appServerLaunching[run.RunID] != "" || s.appServerRecovering[run.RunID] {
 			continue
 		}
@@ -178,7 +178,7 @@ func (s *Service) applyAppServerRecovery(result appServerRecoveryResult) error {
 		}
 	}()
 	var run *Run
-	for _, candidate := range s.State.Runs {
+	for _, candidate := range s.runs {
 		if candidate != nil && candidate.RunID == result.runID {
 			run = candidate
 			break

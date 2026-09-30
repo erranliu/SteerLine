@@ -101,7 +101,7 @@ func TestNativeClaimPersistsChosenExecutionProfile(t *testing.T) {
 	}
 	base.ExecutionProfiles[0].Model = "later-edit"
 	run := &Run{RunID: wf.WorkflowRunID, Host: "local", Agent: "codex", Backend: execution.Backend, Protocol: execution.Protocol, Target: execution.Target}
-	service := &Service{Config: base, baseConfig: base, State: Runtime{Runs: []*Run{run}}, domain: DomainSnapshot{WorkflowRuns: snapshot.WorkflowRuns}}
+	service := &Service{Config: base, baseConfig: base, State: Runtime{}, domain: DomainSnapshot{WorkflowRuns: snapshot.WorkflowRuns}, runs: []*Run{run}}
 	fixed, err := service.executionConfigForRun(run)
 	if err != nil || fixed.Model != "chosen-model" || fixed.Sandbox != "danger-full-access" {
 		t.Fatalf("recovery adopted the edited preset: %+v / %v", fixed, err)

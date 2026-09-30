@@ -386,7 +386,7 @@ func TestSupervisedOrcaRequiresPinnedModelAndKeepsStopUnsupported(t *testing.T) 
 	if _, err = records.loadCapabilityReport(report); err != nil {
 		t.Fatalf("load capability report without a Codex CLI pin: %v", err)
 	}
-	if _, err = (orcaSupervisedBackend{}).StopExecution(context.Background(), ExecutionRef{}, Operation{}, nil); err == nil || !isBackendError(err, BackendUnsupported) {
+	if _, err = executionStopperFor(Config{Host: "orca_supervised"}); err == nil || !isBackendError(err, BackendUnsupported) {
 		t.Fatalf("StopExecution error = %v", err)
 	}
 }
@@ -495,9 +495,6 @@ func TestSettledSupervisedDispatchRetainsExactBindingWithoutLiveTerminal(t *test
 	}
 	if state, err := b.settledWorker(context.Background(), ref, "succeeded"); err != nil || state != "succeeded" {
 		t.Fatalf("durable settled Dispatch was rejected: %q, %v", state, err)
-	}
-	if receipt, err := b.SettleResources(context.Background(), ref, "succeeded"); err != nil || receipt.Disposition != "released" {
-		t.Fatalf("exact settled worker could not be released: %+v, %v", receipt, err)
 	}
 	if _, err := b.settledWorker(context.Background(), ref, "failed"); !isBackendError(err, BackendIdentityMismatch) {
 		t.Fatalf("conflicting worker_done outcome was accepted: %v", err)

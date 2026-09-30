@@ -36,7 +36,7 @@ type conversationJournalSource struct {
 func (s *Service) conversationJournalSources() []conversationJournalSource {
 	sources := []conversationJournalSource{}
 	seen := map[string]bool{}
-	for _, run := range s.State.Runs {
+	for _, run := range s.runs {
 		if run == nil || run.RunID == "" || !(run.Backend == string(BackendLocal) && run.Protocol == string(ProtocolLocalProcess) || run.WorkflowVersion == WorkerFlowVersion && run.Backend == string(BackendOrca) && (run.Protocol == string(ProtocolOrcaTerminalV2) || run.Protocol == string(ProtocolOrcaSupervised))) {
 			continue
 		}
