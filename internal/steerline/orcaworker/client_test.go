@@ -57,3 +57,27 @@ func TestTerminalObservationRejectsFailedTransportWithValidPayload(t *testing.T)
 		t.Fatalf("failed observation was accepted: %v", err)
 	}
 }
+
+func TestMutationRejectionDoesNotHideTransportTimeout(t *testing.T) {
+	for _, code := range []string{"inject_rejected", "dispatch_inactive"} {
+		t.Run(code, func(t *testing.T) {
+			client := New(Config{Output: func(context.Context, time.Duration, ...string) ([]byte, error) {
+				return []byte(`{"ok":false,"error":{"code":"` + code + `","message":"rejected","data":{"reason":"no_agent_detected"}}}`), context.DeadlineExceeded
+			}})
+			result, err := client.MetaCall(context.Background(), "orchestration", "dispatch")
+			if !errors.Is(err, context.DeadlineExceeded) {
+				t.Fatal("timeout evidence was lost")
+			}
+			if NoAgentDetected(result) || FeedbackDispatchInactive(&CallError{Cause: err, Result: result}) {
+				t.Fatal("uncertain transport was treated as a conclusive rejection")
+			}
+			client = New(Config{Output: func(context.Context, time.Duration, ...string) ([]byte, error) {
+				return []byte(`{"ok":false,"error":{"code":"` + code + `","message":"rejected","data":{"reason":"no_agent_detected"}}}`), nil
+			}})
+			result, err = client.MetaCall(context.Background(), "orchestration", "dispatch")
+			if code == "inject_rejected" && !NoAgentDetected(result) || code == "dispatch_inactive" && !FeedbackDispatchInactive(&CallError{Cause: err, Result: result}) {
+				t.Fatal("verified platform rejection was lost")
+			}
+		})
+	}
+}

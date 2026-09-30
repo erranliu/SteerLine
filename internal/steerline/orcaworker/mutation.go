@@ -97,7 +97,7 @@ func Dispatch(ctx context.Context, call MetaCall, taskID, terminal, runID, coord
 }
 
 func NoAgentDetected(result Result) bool {
-	if result.ErrorCode != "inject_rejected" {
+	if result.CallUncertain || result.ErrorCode != "inject_rejected" {
 		return false
 	}
 	var rejected struct {
@@ -130,7 +130,7 @@ func DispatchToAgent(ctx context.Context, call MetaCall, taskID, runID, coordina
 }
 func FeedbackDispatchInactive(err error) bool {
 	var callErr *CallError
-	return errors.As(err, &callErr) && callErr.Result.ErrorCode == "dispatch_inactive"
+	return errors.As(err, &callErr) && !callErr.Result.CallUncertain && callErr.Result.ErrorCode == "dispatch_inactive"
 }
 
 func RecoverDispatch(ctx context.Context, call MetaCall, taskID, runID string, identity executionapi.ProcessIdentity) (string, error) {

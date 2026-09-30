@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"os/exec"
 	"strings"
 	"sync"
 	"time"
@@ -36,6 +37,10 @@ func (c Client) MetaCall(ctx context.Context, args ...string) (Result, error) {
 	out, callErr := c.Raw(ctx, positiveDuration(c.config.CommandTimeout, 30*time.Second), args...)
 	env, parseErr := ParseEnvelope(out)
 	result := Result{Payload: env.Result, RuntimeID: env.Meta.RuntimeID}
+	// A completed nonzero CLI exit may carry a valid platform rejection. A
+	// timeout/cancellation or interrupted transport cannot prove non-delivery.
+	var exit *exec.ExitError
+	result.CallUncertain = callErr != nil && (!errors.As(callErr, &exit) || !exit.Exited())
 	if env.Error != nil {
 		result.ErrorCode, result.ErrorData = env.Error.Code, env.Error.Data
 	}
