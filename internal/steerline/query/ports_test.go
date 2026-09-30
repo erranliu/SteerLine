@@ -10,6 +10,7 @@ import (
 
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	"github.com/erranliu/SteerLine/internal/steerline/task"
+	"github.com/erranliu/SteerLine/internal/steerline/taskview"
 )
 
 // This reader has task capabilities only: no SQLite, command or event methods.
@@ -53,6 +54,21 @@ func TestTaskQueriesUseOnlyTaskReader(t *testing.T) {
 	}
 }
 
+func TestReadyQueriesRejectMissingCapabilityAndProject(t *testing.T) {
+	reader := &taskReader{}
+	for _, service := range []Service{{Project: "project"}, {Tasks: reader}} {
+		if _, err := service.ReadyNativeTaskSnapshot(context.Background()); err == nil {
+			t.Fatal("ready snapshot accepted a missing capability or project")
+		}
+		if _, err := service.ReadyNativeTasks(context.Background()); err == nil {
+			t.Fatal("ready list accepted a missing capability or project")
+		}
+	}
+	if reader.reads != 0 {
+		t.Fatal("incomplete query configuration reached storage")
+	}
+}
+
 func TestTaskCursorRemainsStrictWithoutSQLite(t *testing.T) {
 	reader := &taskReader{}
 	service := Service{Project: "project", Tasks: reader}
@@ -64,6 +80,44 @@ func TestTaskCursorRemainsStrictWithoutSQLite(t *testing.T) {
 	var coded *task.Error
 	if !errors.As(err, &coded) || coded.Code != "cursor_invalidated" || reader.reads != 0 {
 		t.Fatalf("unknown cursor field reached storage: reads=%d err=%v", reader.reads, err)
+	}
+}
+
+func TestTaskQueriesRejectReaderScopeAndCursorDrift(t *testing.T) {
+	reader := &taskReader{page: contracts.NativeTaskPage{ProjectID: "project", DatabaseID: strings.Repeat("a", 32), DatabaseRevision: 8, AuthorityVersion: 2, GraphRevision: 3, HasMore: true, Tasks: []contracts.NativeTaskDetail{{TaskRecord: task.TaskRecord{TaskID: "1"}}}}}
+	service := Service{Project: "project", Tasks: reader}
+	first, err := service.ListNativeTasks(context.Background(), "", 1)
+	if err != nil || first.NextCursor == "" {
+		t.Fatalf("initial page: %+v %v", first, err)
+	}
+	for _, changed := range []contracts.NativeTaskPage{
+		{ProjectID: "project", DatabaseID: strings.Repeat("b", 32), DatabaseRevision: 8, AuthorityVersion: 2, GraphRevision: 3},
+		{ProjectID: "project", DatabaseID: strings.Repeat("a", 32), DatabaseRevision: 9, AuthorityVersion: 2, GraphRevision: 3},
+	} {
+		reader.page = changed
+		_, err := service.ListNativeTasks(context.Background(), first.NextCursor, 1)
+		var coded *task.Error
+		if !errors.As(err, &coded) || coded.Code != "cursor_invalidated" {
+			t.Fatalf("different database sample was accepted: %+v %v", changed, err)
+		}
+	}
+	reader.page.ProjectID = "other"
+	if _, err := service.ListNativeTasks(context.Background(), "", 1); err == nil {
+		t.Fatal("task page accepted another project")
+	}
+	reader.page = first
+	if _, err := service.ShowNativeTask(context.Background(), "2"); err == nil {
+		t.Fatal("task detail accepted another task")
+	}
+	reader.graph.Authority.ProjectIdentity = "other"
+	if _, err := service.ReadyNativeTaskSnapshot(context.Background()); err == nil {
+		t.Fatal("ready snapshot accepted another project")
+	}
+	if _, err := service.TaskGraph(context.Background(), "", 1); err == nil {
+		t.Fatal("graph page accepted another project")
+	}
+	if _, err := service.QueryTaskGraph(context.Background(), taskview.Filter{}); err == nil {
+		t.Fatal("graph projection accepted another project")
 	}
 }
 

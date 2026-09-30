@@ -100,6 +100,9 @@ func renderExecutionProfileChoice(m Model, state projectState, height int) strin
 	if profile.CodexProfile != "" {
 		lines = append(lines, "  Codex profile："+safeTerminalInlineText(profile.CodexProfile))
 	}
+	if profile.Host == "orca" && profile.Agent == "codex" {
+		lines = append(lines, "  Windows sandbox："+safeTerminalInlineText(profile.WindowsSandbox), "  Approval policy：never")
+	}
 	if reason := profile.StaticUnavailableReason(); reason != "" {
 		lines = append(lines, "  不可用："+safeTerminalText(reason))
 	}

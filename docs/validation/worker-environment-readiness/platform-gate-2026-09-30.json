@@ -1,0 +1,62 @@
+{
+  "source": "transcript",
+  "task_id": "task_8f6b5770df8d",
+  "model_source": "launcher default",
+  "codex_version": "0.159.2",
+  "source_exact": true,
+  "sandbox": "workspace-write",
+  "messages": [
+    {
+      "id": "ctc_0e25fc130cf2e2a9016abcb44e6ba487d0bf52f92d7e9f333c",
+      "role": "assistant",
+      "blocks": [
+        {
+          "type": "tool-call",
+          "name": "exec",
+          "input": "text(await tools.exec_command({cmd:\"pwsh.exe -NoProfile -File .steerline-readiness-gate/probe.ps1\",\"max_output_tokens\":2000}));\n",
+          "callId": "call_3A9PR2VduCggjxdADclANc5J"
+        }
+      ],
+      "timestamp": 1790751825070,
+      "source": "transcript"
+    },
+    {
+      "id": "ctco_01a0f120-6d69-70f1-b39a-dcf13374c3b5",
+      "role": "tool",
+      "blocks": [
+        {
+          "type": "tool-result",
+          "output": "Script completed\nWall time 4.3 seconds\nOutput:\n{\"chunk_id\":\"b7b46c\",\"wall_time_seconds\":2.1900538,\"exit_code\":0,\"original_token_count\":28,\"output\":\"SLREADINESS:f13f0d58d1e74db1bbb570e552e96280:6f8b540ce231ce1149a370e8f39a1240e0250b3b05cbb6aeb421df6da4844e14\\r\\n\"}"
+        }
+      ],
+      "timestamp": 1790751829353,
+      "source": "transcript"
+    }
+  ],
+  "runtime_id": "6b6cb0e7-667c-4cfd-bd68-d0cc4500b246",
+  "terminal": "term_b8c376f0-02fe-4844-9580-7c85afb6b92c",
+  "captured_at": "2026-09-30T07:08:21.1388281Z",
+  "orca_version": "1.4.209",
+  "windows_sandbox": "unelevated",
+  "source_identity": "Brbu04vTK_kZiowuoVl_9nQXW0tIlsHc",
+  "command": "pwsh.exe -NoProfile -File .steerline-readiness-gate/probe.ps1",
+  "run_id": "run_97a5672dade2",
+  "dispatch_id": "ctx_728be2cc6e14",
+  "settlement_message_id": "msg_22e16b04246a",
+  "worktree": "C:/Users/lmas1/orca/workspaces/SteerlineTest/pr154-readiness-gate-0930",
+  "probe_sha256": "6f8b540ce231ce1149a370e8f39a1240e0250b3b05cbb6aeb421df6da4844e14",
+  "incarnation": "9c494658-974b-487e-a54d-c9b5fdedad6d",
+  "approval_policy": "never",
+  "settlement_request_id": "3e0ac6fd-186a-4f92-afb8-a596a883cb4b",
+  "receipt": {
+    "turn": "readiness-1",
+    "execution": "pr154-gate",
+    "input_sha256": "102bb1bb93b15f3a7d8a8f3086129fd00c2a334b56c9dcc8e7311a7e12a77fe4",
+    "delete": true,
+    "nonce": "f13f0d58d1e74db1bbb570e552e96280",
+    "write": true,
+    "read": true,
+    "cwd": "C:\\Users\\lmas1\\orca\\workspaces\\SteerlineTest\\pr154-readiness-gate-0930",
+    "git_head": "9380908528dcdd1046f59aa2672090ba5456c1e7"
+  }
+}

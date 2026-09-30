@@ -24,6 +24,10 @@ func TestConfigKeepsOrcaCodexNativeByDefault(t *testing.T) {
 	write := func(host string) Config {
 		t.Helper()
 		profile := ExecutionProfile{ID: "selected", Name: "Selected", Host: host, Agent: "codex", Sandbox: "workspace-write", Codex: Command{Executable: "codex"}, Orca: OrcaConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "15m"}}
+		if host == "orca" {
+			profile.WindowsSandbox = "unelevated"
+			profile.Orca.Shell = "powershell.exe"
+		}
 		writeGlobalExecutionFixture(t, []ExecutionProfile{profile}, "selected")
 		data, err := json.Marshal(map[string]string{"repository": configTestRepository(t), "branch": "main", "task_authority": "native", "workflow_protocol": WorkerFlowVersion})
 		if err != nil {

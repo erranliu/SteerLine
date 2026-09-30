@@ -1,6 +1,6 @@
 # 执行依赖与交接
 
-本图对应[主 roadmap](roadmap.md)中的 18 项活动规划。每项执行以独立 Spec/Plan 为准，运行时资格以中心 DAG 为权威。
+本图对应[主 roadmap](roadmap.md)中的 26 项活动规划。每项执行以独立 Spec/Plan 为准，运行时资格以中心 DAG 为权威。
 
 ## 固定前置
 
@@ -68,3 +68,41 @@ flowchart LR
 #36 验单 worker 持续交互；#39 验多候选竞争；#42 验固定版本、24 小时和提升组合；#53 验完整规划/UI/执行闭环。上游证据可复用，接口或平台改变的部分定向重验，不重复构造已删除的五步与答案应用证明矩阵。
 
 不同任务人工并行和自动派发策略沿既有能力；共享工作区、平台宿主、构建或 SQLite 接线时串行协调。新任务只有固定前置整体交付后可领取，没有接口提前完成的放行状态。
+
+## 执行配置隔离
+
+目标：`EXECUTION-ISOLATION`。各任务的硬前置如下；准备性阅读与低层实验不构成提前领取资格。承接主干已完成的 worker 事实、协调器、显式提交及只读 Runtime，迁移所有者不重建这些机制。
+
+| 任务 ID | 任务名称 | 交付范围 | 硬前置 | 执行规格 |
+| --- | --- | --- | --- | --- |
+| 54 | 公共执行契约归包 | 共同类型、事实与接口归包 | 无本系列前置 | [Spec](../spec/execution-isolation-01-contracts.spec.md) · [Plan](../spec/execution-isolation-01-contracts.plan.md) |
+| 55 | 工作区与 Git 资源迁移 | Git/worktree 操作与资源解析分离 | #54 | [Spec](../spec/execution-isolation-02-workspace.spec.md) · [Plan](../spec/execution-isolation-02-workspace.plan.md) |
+| 56 | 发布与 PR 实现迁移 | 发布操作及 provider 与中心事务分离 | #54 | [Spec](../spec/execution-isolation-03-publication.spec.md) · [Plan](../spec/execution-isolation-03-publication.plan.md) |
+| 57 | Codex 执行适配器迁移 | Codex 操作、命令与恢复证据归适配器 | #55、#56 | [Spec](../spec/execution-isolation-04-codex.spec.md) · [Plan](../spec/execution-isolation-04-codex.plan.md) |
+| 58 | Orca 执行适配器迁移 | Orca 资源、派发、观察与对账归适配器 | #57 | [Spec](../spec/execution-isolation-05-orca.spec.md) · [Plan](../spec/execution-isolation-05-orca.plan.md) |
+| 59 | 项目执行权限策略 | 项目权限、参数映射、冻结与必要原生证据 | #58 | [Spec](../spec/execution-isolation-06-policy.spec.md) · [Plan](../spec/execution-isolation-06-policy.plan.md) |
+| 60 | 项目发布责任契约 | 显式 publisher、支持矩阵及执行冻结 | #58 | [Spec](../spec/execution-isolation-07-publish-policy.spec.md) · [Plan](../spec/execution-isolation-07-publish-policy.plan.md) |
+| 61 | 执行需求与配置注册收口 | 需求匹配、实现注册与配置隔离收口 | #59、#60 | [Spec](../spec/execution-isolation-08-resolution.spec.md) · [Plan](../spec/execution-isolation-08-resolution.plan.md) |
+
+```mermaid
+flowchart LR
+    E54["#54 公共契约"] --> E55["#55 工作区"]
+    E54 --> E56["#56 发布实现"]
+    E55 --> E57["#57 Codex"]
+    E56 --> E57
+    E57 --> E58["#58 Orca"]
+    E58 --> E59["#59 权限"]
+    E58 --> E60["#60 发布责任"]
+    E59 --> E61["#61 需求与注册"]
+    E60 --> E61
+```
+
+| 所有者与组合 | 接口交接及开工条件 | 共享冲突与集成规则 |
+| --- | --- | --- |
+| #54 → #55/#56 | 公共工作区、操作、事件和请求契约；#54 合入后可完整并行 | 公共类型集中修改；准备、Git 和发布中心接线由集成人串行处理 |
+| #55/#56 → #57 | 规范资源、PR/provider 与发布请求，前置整体合入 | #57 不复制资源解析或发布事务 |
+| #57 → #58 | Codex 固定 executable/argv、会话与回执；#58 领取等待 #57 | #54 后可整理 Orca 低层 fixture；完整接线基于已合入 #57 |
+| #58 → #59/#60 | 完整两类适配器；#58 合入后可并行开发各自策略 | 同一个执行快照、完整摘要、项目配置和 UI 串行集成；发布纯值归 execution，后合入方保留全部字段及版本拒绝 |
+| #59/#60 → #61 | 实际权限和 publisher 的支持矩阵、冻结与展示；两前置均合入 | #61 只做需求/注册和最终调用检查，不补欠缺上游行为 |
+
+worker 环境就绪使用 #59 的权限编译和快照；准备/宿主恢复功能可独立准备，最终权限接线等待 #59 合入。既有架构三项的事实、事务或 Runtime 收口与本系列共享文件时串行集成，不自动建立未核实的全系列硬前置。

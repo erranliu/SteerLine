@@ -2,6 +2,7 @@ package steerline
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"path/filepath"
@@ -17,7 +18,7 @@ func nativeOrcaFixedAgentTitle(executionID string) string {
 func nativeOrcaFixedAgentCommand(c Config) (string, error) {
 	return orcaworker.FixedAgentCommand(orcaworker.FixedAgentOptions{
 		Host: c.hostName(), Agent: c.agentName(), Model: c.Model, ReasoningEffort: c.ReasoningEffort,
-		Executable: c.Codex.Executable, Args: c.Codex.Args, Sandbox: c.Sandbox, Shell: c.Orca.Shell,
+		Executable: c.Codex.Executable, Args: c.Codex.Args, Sandbox: c.Sandbox, WindowsSandbox: c.WindowsSandbox, Shell: c.Orca.Shell,
 	})
 }
 
@@ -131,6 +132,17 @@ func (s *Service) prepareNativeOrcaFixedAgentTerminal(ctx context.Context, run *
 		return err
 	}
 	command = orcaworker.AppendPowerShellArgs(command, writeArgs)
+	command = orcaworker.AppendPowerShellArgs(command, []string{"--cd", worktree.Path})
+	if env := execution.Environment; env != nil {
+		if env.LaunchCommand != "" && env.LaunchCommand != command {
+			return errors.New("managed Orca launch evidence differs from original command")
+		}
+		env.LaunchCommand = command
+		env.WriteRoots = []string{worktree.Path}
+		for i := 1; i < len(writeArgs); i += 2 {
+			env.WriteRoots = append(env.WriteRoots, writeArgs[i])
+		}
+	}
 	opID, err := s.startWorkerOperation(run, "orca_native_agent_terminal", key, map[string]string{"worktree": worktree.ID, "title": title, "model": fixedConfig.Model, "effort": fixedConfig.ReasoningEffort, "command": command})
 	if err != nil {
 		return err
@@ -144,6 +156,10 @@ func (s *Service) prepareNativeOrcaFixedAgentTerminal(ctx context.Context, run *
 	if err != nil {
 		_ = s.changeWorkerOperation(run, opID, "outcome_unknown", "", platform.Payload, "fixed agent terminal creation receipt is incomplete")
 		return &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "fixed Orca agent launch receipt is incomplete", Cause: err}
+	}
+	if env := execution.Environment; env != nil {
+		env.Runtime = platform.RuntimeID
+		env.OriginalTerminal = &ProcessIdentity{Kind: "orca-native", Terminal: parsedTerminal.Handle, RuntimeID: platform.RuntimeID, Incarnation: parsedTerminal.IncarnationID, WorktreeID: worktree.ID}
 	}
 	if err := s.changeWorkerOperation(run, opID, "accepted", "", platform.Payload, ""); err != nil {
 		return err
@@ -197,6 +213,9 @@ func (s *Service) waitAndBindNativeOrcaFixedAgent(ctx context.Context, run *Run,
 		return configErr
 	}
 	fixedConfig := fixed.config
+	if execution.Environment != nil {
+		return s.bindNativeOrcaAgent(ctx, run, execution, worktree, handle, repoID, base)
+	}
 	deadline := time.Now().Add(min(positiveDuration(fixedConfig.Orca.WaitTimeout, 30*time.Second), 30*time.Second))
 	for {
 		err := s.bindNativeOrcaAgent(ctx, run, execution, worktree, handle, repoID, base)
@@ -253,7 +272,7 @@ func (s *Service) bindNativeOrcaAgent(ctx context.Context, run *Run, execution *
 	}
 	fixedConfig := fixed.config
 	createdWithExpectedAgent := worktree.CreatedWithAgent == fixedConfig.agentName()
-	if fixedConfig.Model != "" {
+	if fixedConfig.managedWindowsOrca() || fixedConfig.Model != "" {
 		createdWithExpectedAgent = worktree.CreatedWithAgent == ""
 	}
 	if worktree.Comment != nativeOrcaWorktreeComment(execution.ExecutionID) || !createdWithExpectedAgent {
@@ -285,6 +304,9 @@ func (s *Service) bindNativeOrcaAgent(ctx context.Context, run *Run, execution *
 	identity := workerOrcaIdentity(term, fixedConfig)
 	identity.Kind, identity.WorktreeID = "orca-native", worktree.ID
 	execution.Process = &identity
+	if execution.Environment != nil {
+		execution.Environment.Runtime = identity.RuntimeID
+	}
 	s.refreshRun(run)
 	execution.OrcaNative = &OrcaNativeExecution{RepositoryID: repoID}
 	return s.commitWorker(run)
@@ -307,7 +329,7 @@ func (s *Service) prepareNativeOrcaWorker(ctx context.Context, run *Run) error {
 		if err := s.verifyNativeOrcaWorker(ctx, run, execution); err != nil {
 			return err
 		}
-		if fixedConfig.Model != "" {
+		if fixedConfig.managedWindowsOrca() || fixedConfig.Model != "" {
 			if op := s.operationByKey("orca-native-agent-terminal:" + execution.ExecutionID); op != nil && op.Status != "confirmed" {
 				receipt := op.Receipt
 				if len(receipt) == 0 {
@@ -320,7 +342,7 @@ func (s *Service) prepareNativeOrcaWorker(ctx context.Context, run *Run) error {
 		}
 		return s.prepareNativeOrcaCoordinator(ctx, run, execution)
 	}
-	if fixedConfig.Model != "" {
+	if fixedConfig.managedWindowsOrca() || fixedConfig.Model != "" {
 		return s.prepareNativeOrcaFixedModelWorker(ctx, run, execution)
 	}
 	repoID, err := nativeOrcaRepo(ctx, fixedConfig)
@@ -534,7 +556,6 @@ func (s *Service) bindNativeOrcaCoordinator(ctx context.Context, run *Run, execu
 	}
 	execution.OrcaNative.Coordinator = ProcessIdentity{Kind: "orca-native-coordinator", Terminal: term.Handle, RuntimeID: term.RuntimeID, Incarnation: term.IncarnationID, Executable: fixedConfig.Orca.Executable}
 	execution.Target.CoordinatorTerminal = term.Handle
-	execution.Target.CoordinatorTerminal = term.Handle
 	s.refreshRun(run)
 	return s.commitWorker(run)
 }
@@ -557,6 +578,33 @@ func (s *Service) verifyNativeOrcaWorker(ctx context.Context, run *Run, executio
 	}
 	if term.RuntimeID != execution.Process.RuntimeID || term.IncarnationID != execution.Process.Incarnation || term.WorktreeID != execution.Process.WorktreeID || term.AgentIdentity != fixedConfig.agentName() {
 		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "original Orca agent terminal or agent has changed"}
+	}
+	if env := execution.Environment; env != nil {
+		if env.Runtime != execution.Process.RuntimeID || len(env.WriteRoots) == 0 || canonical(env.WriteRoots[0]) != canonical(execution.Workspace.Worktree) {
+			return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "managed Orca resource permission identity changed"}
+		}
+		command, err := nativeOrcaFixedAgentCommand(fixedConfig)
+		if err != nil {
+			return err
+		}
+		args, err := codexLinkedWorktreeWriteArgs(ctx, fixedConfig, env.WriteRoots[0])
+		if err != nil {
+			return err
+		}
+		roots := []string{env.WriteRoots[0]}
+		for i := 1; i < len(args); i += 2 {
+			roots = append(roots, args[i])
+		}
+		command = orcaworker.AppendPowerShellArgs(command, args)
+		command = orcaworker.AppendPowerShellArgs(command, []string{"--cd", env.WriteRoots[0]})
+		if digestValue(roots) != digestValue(env.WriteRoots) || command != env.LaunchCommand {
+			return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "managed Orca launch command or write roots changed"}
+		}
+		op := s.operationByKey("orca-native-agent-terminal:" + execution.ExecutionID)
+		var request map[string]string
+		if op == nil || json.Unmarshal(op.Request, &request) != nil || request["command"] != command || request["worktree"] != execution.Process.WorktreeID {
+			return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "managed Orca launch differs from its original operation"}
+		}
 	}
 	coordinator := execution.OrcaNative.Coordinator
 	if coordinator.Terminal != "" {

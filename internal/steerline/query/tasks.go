@@ -56,8 +56,11 @@ func (q Service) ListNativeTasks(ctx context.Context, cursor string, limit int) 
 	if err != nil {
 		return contracts.NativeTaskPage{}, err
 	}
-	if expectedDB != 0 && (page.AuthorityVersion != expectedAuthority || page.GraphRevision != expectedGraph) {
-		return contracts.NativeTaskPage{}, nativeErr("cursor_invalidated", "project authority changed between pages")
+	if page.ProjectID != q.Project {
+		return contracts.NativeTaskPage{}, nativeErr("authority_mismatch", "task page belongs to another project")
+	}
+	if expectedDB != 0 && (page.DatabaseID != expectedDatabaseID || page.DatabaseRevision != expectedDB || page.AuthorityVersion != expectedAuthority || page.GraphRevision != expectedGraph) {
+		return contracts.NativeTaskPage{}, nativeErr("cursor_invalidated", "database or project authority changed between pages")
 	}
 	SetTaskPageCursor(&page, offset)
 	return page, nil
@@ -82,8 +85,14 @@ func (q Service) ShowNativeTask(ctx context.Context, id string) (contracts.Nativ
 	if err != nil {
 		return contracts.NativeTaskPage{}, err
 	}
+	if page.ProjectID != q.Project {
+		return contracts.NativeTaskPage{}, nativeErr("authority_mismatch", "task detail belongs to another project")
+	}
 	if len(page.Tasks) == 0 {
 		return contracts.NativeTaskPage{}, nativeErr("task_not_found", "native task was not found")
+	}
+	if len(page.Tasks) != 1 || page.Tasks[0].TaskID != id {
+		return contracts.NativeTaskPage{}, nativeErr("contract_mismatch", "task detail differs from the requested task")
 	}
 	return page, nil
 }
@@ -96,7 +105,7 @@ func (q Service) TaskGraph(ctx context.Context, cursor string, limit int) (taskv
 	if err != nil {
 		return taskview.Page{}, err
 	}
-	snapshot, err := q.Tasks.TaskGraphSnapshot(ctx, q.Project)
+	snapshot, err := q.readTaskGraph(ctx)
 	if err != nil {
 		return taskview.Page{}, err
 	}
@@ -111,7 +120,7 @@ func (q Service) QueryTaskGraph(ctx context.Context, filter taskview.Filter) (ta
 	if err != nil {
 		return taskview.Page{}, err
 	}
-	snapshot, err := q.Tasks.TaskGraphSnapshot(ctx, q.Project)
+	snapshot, err := q.readTaskGraph(ctx)
 	if err != nil {
 		return taskview.Page{}, err
 	}
@@ -119,11 +128,25 @@ func (q Service) QueryTaskGraph(ctx context.Context, filter taskview.Filter) (ta
 }
 
 func (q Service) ReadyNativeTaskSnapshot(ctx context.Context) (contracts.NativeReadyTaskSnapshot, error) {
-	graph, err := q.Tasks.TaskGraphSnapshot(ctx, q.Project)
+	if q.Tasks == nil || q.Project == "" {
+		return contracts.NativeReadyTaskSnapshot{}, errors.New("query service store and project identity are required")
+	}
+	graph, err := q.readTaskGraph(ctx)
 	if err != nil {
 		return contracts.NativeReadyTaskSnapshot{}, err
 	}
 	return ReadySnapshot(graph), nil
+}
+
+func (q Service) readTaskGraph(ctx context.Context) (task.Snapshot, error) {
+	snapshot, err := q.Tasks.TaskGraphSnapshot(ctx, q.Project)
+	if err != nil {
+		return task.Snapshot{}, err
+	}
+	if snapshot.Authority.ProjectIdentity != q.Project {
+		return task.Snapshot{}, nativeErr("authority_mismatch", "task graph belongs to another project")
+	}
+	return snapshot, nil
 }
 
 func ReadySnapshot(graph task.Snapshot) contracts.NativeReadyTaskSnapshot {

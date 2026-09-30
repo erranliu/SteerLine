@@ -53,7 +53,6 @@ func (s *Service) relayNativeOrcaDone(ctx context.Context, run *Run, execution *
 	}
 	key := "orca-native-relay-done:" + execution.ExecutionID + ":" + turn.TurnID
 	if s.operationByKey(key) != nil {
-		removeNativeOrcaRelayRequest(execution.Workspace.Worktree, run.RunID, turn.TurnID)
 		return &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "Orca result relay was already attempted, but the original Run inbox has no worker_done; preserve the Dispatch for reconciliation"}
 	}
 	request, err := readNativeOrcaDoneRequest(path, execution.Workspace.Worktree, run, turn)
@@ -83,7 +82,8 @@ func (s *Service) relayNativeOrcaDone(ctx context.Context, run *Run, execution *
 	if err != nil {
 		return err
 	}
-	defer removeNativeOrcaRelayRequest(execution.Workspace.Worktree, run.RunID, turn.TurnID)
+	// Keep the original bounded request until its native result and settlement
+	// have been stored. Unknown delivery never deletes the only worker evidence.
 	receipt, err := orcaworker.SendDone(ctx, orcaWorkerMetaCaller(fixed.config), *request, execution.Target.OrchestrationRun, execution.Process.Terminal, execution.Process.RuntimeID)
 	if err != nil {
 		_ = s.changeWorkerOperation(run, opID, "outcome_unknown", "", nil, err.Error())

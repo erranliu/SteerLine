@@ -91,6 +91,7 @@ type FixedExecutionProfile struct {
 	ReasoningEffort string     `json:"reasoning_effort,omitempty"`
 	Sandbox         string     `json:"sandbox"`
 	WindowsSandbox  string     `json:"windows_sandbox,omitempty"`
+	ApprovalPolicy  string     `json:"approval_policy,omitempty"`
 	CodexProfile    string     `json:"profile,omitempty"`
 	Codex           Command    `json:"codex"`
 	Orca            OrcaConfig `json:"orca,omitempty"`

@@ -30,3 +30,5 @@ type PRState = contracts.PRState
 
 func ptr[T any](v T) *T { return &v }
 func now() time.Time    { return time.Now().UTC() }
+
+type HostActionTarget = contracts.HostActionTarget

@@ -74,6 +74,7 @@ type ExecutionRecord struct {
 	Protocol               string                  `json:"protocol,omitempty"`
 	Process                *ProcessIdentity        `json:"process,omitempty"`
 	OrcaNative             *OrcaNativeExecution    `json:"orca_native,omitempty"`
+	Environment            *WorkerEnvironment      `json:"environment,omitempty"`
 	SessionID              string                  `json:"session_id,omitempty"`
 	DecisionID             string                  `json:"decision_id,omitempty"`
 	AppServerEndpoint      string                  `json:"app_server_endpoint,omitempty"`
@@ -104,19 +105,24 @@ type OrcaNativeExecution struct {
 }
 
 type OrcaNativeTurn struct {
-	TurnID               string   `json:"turn_id"`
-	TaskID               string   `json:"task_id"`
-	DispatchID           string   `json:"dispatch_id"`
-	TaskRequestID        string   `json:"task_request_id,omitempty"`
-	DispatchRequestID    string   `json:"dispatch_request_id,omitempty"`
-	DoneMessageID        string   `json:"done_message_id,omitempty"`
-	Outcome              string   `json:"outcome,omitempty"`
-	OutputSource         string   `json:"output_source,omitempty"`
-	OutputCursor         string   `json:"output_cursor,omitempty"`
-	OutputComplete       bool     `json:"output_complete,omitempty"`
-	OutputClipping       []string `json:"output_clipping,omitempty"`
-	OutputFallbackReason string   `json:"output_fallback_reason,omitempty"`
-	OutputDigest         string   `json:"output_digest,omitempty"`
+	ToolContext          ToolContext `json:"tool_context,omitempty"`
+	InjectionAttempts    int         `json:"injection_attempts,omitempty"`
+	Purpose              string      `json:"purpose,omitempty"`
+	IntentAt             time.Time   `json:"intent_at"`
+	Settled              bool        `json:"settled,omitempty"`
+	TurnID               string      `json:"turn_id"`
+	TaskID               string      `json:"task_id"`
+	DispatchID           string      `json:"dispatch_id"`
+	TaskRequestID        string      `json:"task_request_id,omitempty"`
+	DispatchRequestID    string      `json:"dispatch_request_id,omitempty"`
+	DoneMessageID        string      `json:"done_message_id,omitempty"`
+	Outcome              string      `json:"outcome,omitempty"`
+	OutputSource         string      `json:"output_source,omitempty"`
+	OutputCursor         string      `json:"output_cursor,omitempty"`
+	OutputComplete       bool        `json:"output_complete,omitempty"`
+	OutputClipping       []string    `json:"output_clipping,omitempty"`
+	OutputFallbackReason string      `json:"output_fallback_reason,omitempty"`
+	OutputDigest         string      `json:"output_digest,omitempty"`
 }
 
 type ExecutionTarget struct {

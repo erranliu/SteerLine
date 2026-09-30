@@ -10,6 +10,9 @@ import (
 type WorkerOutput struct {
 	DispatchID      string   `json:"dispatchId"`
 	Source          string   `json:"source"`
+	SourceIdentity  string   `json:"sourceIdentity"`
+	SourceExact     bool     `json:"sourceExact"`
+	Provider        string   `json:"provider"`
 	Cursor          string   `json:"cursor"`
 	NextCursor      string   `json:"nextCursor"`
 	SourceChanged   bool     `json:"sourceChanged"`
@@ -22,8 +25,9 @@ type WorkerOutput struct {
 	Transcript json.RawMessage `json:"transcript"`
 }
 
-// ReadWorkerOutput retries once without the old cursor only when Orca reports
-// a changed source. resetCursor remains true even if the retry fails.
+// Cursors pin their source. Besides explicit source_changed recovery, recheck
+// auto selection once when a terminal fallback cursor could hide a newly
+// reported exact transcript. A failed refresh leaves the usable old page intact.
 func ReadWorkerOutput(ctx context.Context, call MetaCall, dispatchID, cursor, runtimeID string) (output WorkerOutput, resetCursor bool, err error) {
 	args := []string{"orchestration", "worker-read", "--dispatch", dispatchID, "--source", "auto", "--limit", "100", "--json"}
 	if cursor != "" {
@@ -39,6 +43,18 @@ func ReadWorkerOutput(ctx context.Context, call MetaCall, dispatchID, cursor, ru
 	}
 	if err := json.Unmarshal(envelope.Payload, &output); err != nil || output.DispatchID != dispatchID || output.Source == "" || envelope.RuntimeID != runtimeID {
 		return WorkerOutput{}, resetCursor, errors.New("Orca worker-read changed source identity")
+	}
+	if !resetCursor && cursor != "" && output.Source == "terminal" {
+		fresh, refreshErr := call(ctx, "orchestration", "worker-read", "--dispatch", dispatchID, "--source", "auto", "--limit", "100", "--json")
+		if refreshErr == nil {
+			var candidate WorkerOutput
+			if json.Unmarshal(fresh.Payload, &candidate) != nil || candidate.DispatchID != dispatchID || fresh.RuntimeID != runtimeID {
+				return output, false, errors.New("Orca refreshed output changed source identity")
+			}
+			if candidate.Source == "transcript" && candidate.SourceExact {
+				return candidate, true, nil
+			}
+		}
 	}
 	return output, resetCursor, nil
 }

@@ -1,6 +1,6 @@
 # SteerLine 当前代码架构图
 
-快照日期：2026-09-30。源码基线：`4b94d82`（含 PR #159），叠加查询、数据契约与 SQLite 只读适配拆包改动。
+快照日期：2026-09-30。源码基线：`c2c9f95`（含 PR #160 的环境就绪与 PR #161 的隔离规划），叠加查询拆包及审计修复。
 
 本文描述当前检出的代码：系统边界、实际 Go 包依赖、核心包内部职责、任务执行、人工决策、数据模型、日志与恢复。图中的职责分组不代表已拆成独立包或服务。箭头含义在各图前说明；未来方案与当前可启动路径分开列出。
 
@@ -69,7 +69,7 @@ flowchart TB
 
 ```mermaid
 flowchart LR
-    CLI["cmd/steerline"] --> Core["internal/steerline<br/>110 个非测试 Go 文件"]
+    CLI["cmd/steerline"] --> Core["internal/steerline<br/>111 个非测试 Go 文件"]
     CLI --> Console["console"]
     Console --> Core
 
@@ -91,6 +91,7 @@ flowchart LR
     Core --> CW["codexworker"]
     Core --> CA["codexapp"]
     Core --> OW["orcaworker"]
+    OW --> Contracts
     Task --> Graph["taskgraph"]
     TaskView --> Task
     TaskView --> Graph
@@ -105,9 +106,9 @@ flowchart LR
 | 包 | 当前职责 | 非测试 Go 文件 |
 | --- | --- | ---: |
 | `cmd/steerline` | 产品命令入口、服务启动、控制台和任务命令路由 | 1 |
-| `internal/steerline` | 服务编排、业务持久化、平台适配接线、查询和控制 | 110 |
+| `internal/steerline` | 服务编排、业务持久化、平台适配接线、查询和控制 | 111 |
 | `console` | TUI 状态、导航、任务列表、活动/会话/正文、执行方案和决策编辑 | 14 |
-| `contracts` | 共享持久记录、运行视图、执行配置与查询 DTO，严格 JSON 解码 | 6 |
+| `contracts` | 共享持久记录、运行视图、执行配置与查询 DTO，严格 JSON 解码 | 7 |
 | `query` | 按消费者分开的只读接口、事件/任务分页、DAG 与 Ready 查询规则 | 4 |
 | `sqlite` | 领域、事件、命令、任务、DAG、checkpoint 与组合快照的 SQLite 只读适配 | 6 |
 | `task` | 任务契约、批次、状态、依赖资格、交付和命令规则 | 10 |
@@ -116,12 +117,12 @@ flowchart LR
 | `workerflow` | 单个可续聊 worker 的纯状态规则、模式选择和提示构造 | 4 |
 | `codexapp` | Codex app-server 参数、客户端、原生问题与 WebSocket 协议 | 7 |
 | `codexworker` | app-server 启动、连接、能力探测、轮次观察、journal 与回答 | 11 |
-| `orcaworker` | Orca task/dispatch、terminal、消息、pull/relay、输出与工作区协议 | 17 |
+| `orcaworker` | Orca task/dispatch、terminal、消息、pull/relay、输出与工作区协议、环境就绪证据 | 19 |
 | `cmd/orca-probe` | 只读能力探测与脱敏证据采集 | 1 |
 | `cmd/test-feedback` | 最小/定向/全量测试调度、日志与反馈报告 | 4 |
 | `internal/testfeedback` | Go test JSON 结果汇总 | 1 |
 
-合计 **16 个包目录、200 个非测试 Go 文件**。统计覆盖 `cmd/` 与 `internal/`；不含 `_test.go`、测试数据、脚本和文档。核心包仍集中承载多项职责，不能将上述逻辑边界理解为微服务或已经完成的全面拆包。
+合计 **16 个包目录、204 个非测试 Go 文件**。统计覆盖 `cmd/` 与 `internal/`；不含 `_test.go`、测试数据、脚本和文档。核心包仍集中承载多项职责，不能将上述逻辑边界理解为微服务或已经完成的全面拆包。
 
 ## 3. 核心包内部职责与接线
 
@@ -403,7 +404,12 @@ Service 将私有领域工作副本、已提交快照和私有工作 Run 分开�
 
 ## 9. 快照验证与维护
 
-查询、数据契约与 SQLite 只读适配拆包通过扩展后的 `-quick` 入口及定向验证；contracts、query、sqlite 包测试、控制台与 CLI 集成测试、测试入口覆盖检查和受影响包 `go vet` 通过。独立能力用例只注入任务或事件 Reader，确认查询不要求 SQLite 或无关读写能力；真实 SQLite 用例核对页外选择、正文预算、固定目标、只读数据库版本及原始 checkpoint 与中心投影的分工。架构包依赖、200 个生产源码索引和相对链接已核对。未运行全量测试或真机认证。
+本次审计补充了 Ready 查询的缺失读能力/项目检查，以及任务查询返回值的项目、任务 ID 和 cursor 数据库身份/版本校验；替换 Reader 不能绕过这些查询规则。整合主干环境就绪后，ProbeIdentity、ProbeReceipt、ToolContext、HostFact 等共享证据 DTO 位于 contracts，Orca 包仅通过类型别名使用，contracts 继续不依赖平台适配。当前 SQLite schema 为 8、Runtime schema 为 10，与主干格式一致。
+
+审计回归、新包用例、收窄后的 `-quick` 入口、环境就绪模拟验证、控制台与 CLI 集成测试、`go vet`、共享 DTO 字段/JSON 标签及依赖边界核对通过。首次定向筛选中的真机就绪验收因未启用专用开关而跳过；最终最小入口只选择模拟用例，未运行全量测试或真机认证。
+
+
+查询、数据契约与 SQLite 只读适配拆包通过扩展后的 `-quick` 入口及定向验证；contracts、query、sqlite 包测试、控制台与 CLI 集成测试、测试入口覆盖检查和受影响包 `go vet` 通过。独立能力用例只注入任务或事件 Reader，确认查询不要求 SQLite 或无关读写能力；真实 SQLite 用例核对页外选择、正文预算、固定目标、只读数据库版本及原始 checkpoint 与中心投影的分工。架构包依赖、204 个生产源码索引和相对链接已核对。未运行全量测试或真机认证。
 
 包依赖图由非测试源码的项目内 import 提取并人工对照入口。系统、执行与存储图对照当前关键代码和 schema，不依据未来 Spec 推断已交付能力。本轮收尾同步更新当前源码接线与文件索引。整合 PR #157 后，项目 `-quick` 入口（现已覆盖 `workerflow`）及附加的 13 个定向用例通过（执行 98.3 秒），覆盖私有 actor 视图、两轮续聊、问题回复恢复、重启不重发、原子绑定/停止回执和原生事件身份；`codexworker`、`orcaworker` 与测试入口自身的测试、受影响命令编译、`go vet` 和差异检查通过。未运行全量测试或真机认证。
 
@@ -537,6 +543,7 @@ Service 将私有领域工作副本、已提交快照和私有工作 Run 分开�
 | [worker_attachment_store.go](../../internal/steerline/worker_attachment_store.go) |
 | [worker_commit.go](../../internal/steerline/worker_commit.go) |
 | [worker_completion.go](../../internal/steerline/worker_completion.go) |
+| [worker_environment.go](../../internal/steerline/worker_environment.go) |
 | [worker_events.go](../../internal/steerline/worker_events.go) |
 | [worker_evidence.go](../../internal/steerline/worker_evidence.go) |
 | [worker_feedback.go](../../internal/steerline/worker_feedback.go) |
@@ -602,6 +609,7 @@ Service 将私有领域工作副本、已提交快照和私有工作 Run 分开�
 
 | 源文件 |
 | --- |
+| [environment.go](../../internal/steerline/contracts/environment.go) |
 | [execution.go](../../internal/steerline/contracts/execution.go) |
 | [json.go](../../internal/steerline/contracts/json.go) |
 | [query.go](../../internal/steerline/contracts/query.go) |
@@ -615,6 +623,7 @@ Service 将私有领域工作副本、已提交快照和私有工作 Run 分开�
 | --- |
 | [command.go](../../internal/steerline/orcaworker/command.go) |
 | [dispatch_submit.go](../../internal/steerline/orcaworker/dispatch_submit.go) |
+| [environment.go](../../internal/steerline/orcaworker/environment.go) |
 | [event.go](../../internal/steerline/orcaworker/event.go) |
 | [inventory.go](../../internal/steerline/orcaworker/inventory.go) |
 | [journal.go](../../internal/steerline/orcaworker/journal.go) |
@@ -625,6 +634,7 @@ Service 将私有领域工作副本、已提交快照和私有工作 Run 分开�
 | [output.go](../../internal/steerline/orcaworker/output.go) |
 | [prompt.go](../../internal/steerline/orcaworker/prompt.go) |
 | [pull.go](../../internal/steerline/orcaworker/pull.go) |
+| [readiness.go](../../internal/steerline/orcaworker/readiness.go) |
 | [relay.go](../../internal/steerline/orcaworker/relay.go) |
 | [saved_receipt.go](../../internal/steerline/orcaworker/saved_receipt.go) |
 | [terminal.go](../../internal/steerline/orcaworker/terminal.go) |

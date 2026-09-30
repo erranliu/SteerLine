@@ -34,6 +34,11 @@ type DomainEvent = contracts.DomainEvent
 type OperationRecord = contracts.OperationRecord
 type CommandRecord = contracts.CommandRecord
 
+type WorkerEnvironment = contracts.WorkerEnvironment
+type EnvironmentFeedback = contracts.EnvironmentFeedback
+type WorkerPreparation = contracts.WorkerPreparation
+type WorkerHostBlocker = contracts.WorkerHostBlocker
+
 var revisionPattern = regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`)
 
 func validStepAttemptStatus(v string) bool {

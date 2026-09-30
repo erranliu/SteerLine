@@ -42,7 +42,8 @@ func (c CommandService) AnswerDecisionWithID(ctx context.Context, commandID, dec
 		return CommandRecord{}, false, err
 	}
 	value.OptionID = strings.TrimSpace(value.OptionID)
-	value.Note = strings.TrimSpace(value.Note)
+	// The accepting service validates against the authoritative request. Preserve
+	// host-blocked feedback verbatim here, before its receiver is known.
 	value.AnsweredBy = strings.TrimSpace(value.AnsweredBy)
 	if value.AnsweredAt.IsZero() {
 		value.AnsweredAt = time.Now().UTC()
