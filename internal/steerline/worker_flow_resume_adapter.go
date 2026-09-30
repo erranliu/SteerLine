@@ -82,10 +82,6 @@ func (s *Service) resumeNativeOrcaWorker(ctx context.Context, task *TaskRecord, 
 }
 
 func (s *Service) resumeSupervisedOrcaWorker(ctx context.Context, task *TaskRecord, run *Run) (bool, error) {
-	return s.resumeWorkspaceWorker(ctx, task, run, true)
-}
-
-func (s *Service) resumeWorkspaceWorker(ctx context.Context, task *TaskRecord, run *Run, remote bool) (bool, error) {
 	fixed, err := s.workerFlowContext(run)
 	if err != nil {
 		return false, err
@@ -137,6 +133,15 @@ func (s *Service) resumeWorkspaceWorker(ctx context.Context, task *TaskRecord, r
 		}
 		return false, nil
 	}
+	return s.resumeWorkspaceWorker(ctx, task, run, true)
+}
+
+func (s *Service) resumeWorkspaceWorker(ctx context.Context, task *TaskRecord, run *Run, remote bool) (bool, error) {
+	fixed, err := s.workerFlowContext(run)
+	if err != nil {
+		return false, err
+	}
+	workflow, execution, c := fixed.workflow, fixed.execution, fixed.config
 	if workflow.Phase != "queued" {
 		return true, nil
 	}

@@ -70,3 +70,46 @@ func TestWorkerFlowRejectsConfigDriftBeforePreparationOrTurnIntent(t *testing.T)
 		t.Fatalf("rejected route changed durable or actor state: revision=%d/%d operations=%d/%d pending=%q/%q", beforeRevision, afterRevision, beforeOperations, len(service.State.Operations), execution.PendingTurnID, execution.PendingCommandID)
 	}
 }
+
+func TestWorkerFlowModeUsesFixedExecutionIdentity(t *testing.T) {
+	for _, test := range []struct {
+		host     string
+		protocol ExecutionProtocol
+		want     workerflow.Mode
+	}{
+		{"local", ProtocolLocalCodexAppServer, workerflow.LocalCodex},
+		{"orca", ProtocolOrcaTerminalV2, workerflow.NativeOrca},
+		{"orca_supervised", ProtocolOrcaSupervised, workerflow.SupervisedOrca},
+	} {
+		t.Run(test.host, func(t *testing.T) {
+			config := Config{Host: test.host, Agent: "codex", Orca: OrcaConfig{Executable: "orca", Supervised: &SupervisedOrcaConfig{ConnectionID: "fixed-connection", EnvironmentID: "fixed-environment"}}}
+			backend, _, err := ExecutionBackendKind(test.host)
+			require(t, err)
+			target := targetFor(config)
+			run := &Run{Host: test.host, Agent: "codex", Backend: backend, Protocol: string(test.protocol), Target: target}
+			execution := &ExecutionRecord{Agent: "codex", Backend: backend, Protocol: string(test.protocol), Target: target}
+			mode, err := workerFlowModeFor(config, run, execution)
+			require(t, err)
+			if mode != test.want {
+				t.Fatalf("mode = %v, want %v", mode, test.want)
+			}
+			changed := config
+			changed.Host = "local"
+			if test.host == "local" {
+				changed.Host = "orca"
+			}
+			if _, err := workerFlowModeFor(changed, run, execution); !feedbackIdentityMismatch(err) {
+				t.Fatalf("replacement host routed fixed feedback: %v", err)
+			}
+			execution.Protocol = string(ProtocolLocalProcess)
+			if _, err := workerFlowModeFor(config, run, execution); !feedbackIdentityMismatch(err) {
+				t.Fatalf("replacement protocol routed fixed feedback: %v", err)
+			}
+		})
+	}
+}
+
+func feedbackIdentityMismatch(err error) bool {
+	var backendErr *BackendError
+	return errors.As(err, &backendErr) && backendErr.Code == BackendIdentityMismatch
+}

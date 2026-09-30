@@ -281,6 +281,18 @@ func TestAppServerSlowRecoveryLeavesServiceWriterAvailable(t *testing.T) {
 }
 
 func TestAppServerServiceTwoTurnsPersistNativeReceipts(t *testing.T) {
+	for _, test := range []struct {
+		name  string
+		async bool
+	}{{"synchronous", false}, {"service_messages", true}} {
+		t.Run(test.name, func(t *testing.T) {
+			testAppServerServiceTwoTurns(t, test.async)
+		})
+	}
+}
+
+func testAppServerServiceTwoTurns(t *testing.T, async bool) {
+	t.Helper()
 	service, run := appServerAuditService(t)
 	workspace := t.TempDir()
 	state := &mockAppServerState{cwd: workspace}
@@ -319,6 +331,10 @@ func TestAppServerServiceTwoTurnsPersistNativeReceipts(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+	if async {
+		service.runContext = ctx
+		service.workerMessages = make(chan workerMessage, 64)
+	}
 	previousTurn := ""
 	for i := 1; i <= 2; i++ {
 		commandID := newID()
@@ -331,30 +347,44 @@ func TestAppServerServiceTwoTurnsPersistNativeReceipts(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		worker := service.workers[run.RunID]
-		if worker == nil {
-			t.Fatalf("no observer after start: %s", deref(run.Error))
-		}
-		for {
-			select {
-			case <-ctx.Done():
-				t.Fatal("service observer did not complete")
-			case event, ok := <-worker.Events:
-				if !ok {
-					goto finished
-				}
-				if err := service.eventForRun(run, event); err != nil {
-					t.Fatal(err)
+		if async {
+			for stopped := false; !stopped; {
+				select {
+				case <-ctx.Done():
+					t.Fatal("service launch/observer did not complete")
+				case message := <-service.workerMessages:
+					if err := service.handleWorkerMessage(message); err != nil {
+						t.Fatal(err)
+					}
+					stopped = message.done
 				}
 			}
-		}
-	finished:
-		if err := <-worker.Done; err != nil {
-			t.Fatal(err)
-		}
-		delete(service.workers, run.RunID)
-		if err := service.finishWorkerFlowFor(run, nil); err != nil {
-			t.Fatal(err)
+		} else {
+			worker := service.workers[run.RunID]
+			if worker == nil {
+				t.Fatalf("no observer after start: %s", deref(run.Error))
+			}
+			for {
+				select {
+				case <-ctx.Done():
+					t.Fatal("service observer did not complete")
+				case event, ok := <-worker.Events:
+					if !ok {
+						goto finished
+					}
+					if err := service.eventForRun(run, event); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+		finished:
+			if err := <-worker.Done; err != nil {
+				t.Fatal(err)
+			}
+			delete(service.workers, run.RunID)
+			if err := service.finishWorkerFlowFor(run, nil); err != nil {
+				t.Fatal(err)
+			}
 		}
 		_, execution = service.workflowRecords(run)
 		if execution.TurnNumber != uint64(i) || execution.CurrentCommandID != commandID || execution.CurrentTurnID == previousTurn || execution.CurrentTurnID != execution.LastStoppedTurnID || execution.SessionID != workerFlowMockSession || execution.Status != "idle" || run.Decision == nil {

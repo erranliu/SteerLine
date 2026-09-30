@@ -635,16 +635,12 @@ func (s *Service) applyWorkerFlowDecision(ctx context.Context, run *Run) error {
 	if workflow == nil || execution == nil || workflow.Phase != "waiting_decision" && workflow.Phase != "waiting_pr_merge" {
 		return errors.New("saved feedback no longer belongs to a waiting worker flow")
 	}
-	config, err := s.executionConfigForRun(run)
-	if err != nil {
-		return err
-	}
-	route, err := workerFeedbackRouteFor(config, run, execution)
+	mode, err := s.workerFlowMode(run)
 	if err != nil {
 		return err
 	}
 	previousConfig := s.Config
-	s.Config = config
+	s.Config = c
 	defer func() { s.Config = previousConfig }()
 	if workflow.Phase == "waiting_pr_merge" {
 		decision := s.decisionRecord(run)
@@ -674,8 +670,8 @@ func (s *Service) applyWorkerFlowDecision(ctx context.Context, run *Run) error {
 	if err != nil || command.Kind != "answer_decision" || command.TargetID != answer.DecisionID || command.Status != "accepted" || !stableExecutionID(command.CommandID) {
 		return errors.Join(err, errors.New("saved worker feedback has no fixed accepted command identity"))
 	}
-	if route == feedbackNativeOrca {
+	if mode == workerflow.NativeOrca {
 		return s.applyNativeOrcaDecision(ctx, run, workflow, execution, answer, command.CommandID)
 	}
-	return s.deliverResumableWorkerFeedback(ctx, run, execution, answer, command.CommandID, route)
+	return s.deliverResumableWorkerFeedback(ctx, run, execution, answer, command.CommandID, mode)
 }
