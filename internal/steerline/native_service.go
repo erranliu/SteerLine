@@ -687,8 +687,14 @@ func (s *Service) nativeCompleteMergedTask(ctx context.Context, run *Run) error 
 	if err := s.commitWorker(run); err != nil {
 		return err
 	}
-	if run.Protocol == string(executionapi.ProtocolOrcaTerminalV2) {
-		if err := s.finishNativeOrcaCleanup(ctx, run); err != nil {
+	if run.Protocol == string(executionapi.ProtocolOrcaTerminalV2) || run.Protocol == string(executionapi.ProtocolOrcaSupervised) {
+		var cleanupErr error
+		if run.Protocol == string(executionapi.ProtocolOrcaSupervised) {
+			cleanupErr = s.finishRemoteOrcaCleanup(ctx, run)
+		} else {
+			cleanupErr = s.finishNativeOrcaCleanup(ctx, run)
+		}
+		if err := cleanupErr; err != nil {
 			s.executionRecord(run).LastEvent = ptr("Orca delivery completed; owned terminal cleanup needs reconciliation: " + err.Error())
 			s.refreshRun(run)
 			return s.commitWorker(run)

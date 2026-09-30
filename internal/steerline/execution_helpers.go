@@ -71,7 +71,7 @@ func (s *Service) inspectWorkflowWorkspace(ctx context.Context, run *Run) (Works
 		if execution := s.executionRecord(run); execution != nil {
 			inspection.Dirty = execution.Workspace.Dirty
 		}
-		return WorkspaceEvidence{Repository: inspection.Repository, Worktree: canonical(inspection.Worktree), Branch: inspection.Branch, Base: inspection.Base, Head: inspection.Head, Dirty: inspection.Dirty, VerifiedAt: inspection.CheckedAt}, nil
+		return WorkspaceEvidence{Repository: inspection.Repository, Worktree: inspection.Worktree, Branch: inspection.Branch, Base: inspection.Base, Head: inspection.Head, Dirty: inspection.Dirty, VerifiedAt: inspection.CheckedAt}, nil
 	}
 	worktree := *run.WorktreePath
 	if canonical(worktree) != canonical(run.WorkspaceIntent.Path) || *run.WorktreeBranch != run.WorkspaceIntent.Branch || *run.BaseCommit != run.WorkspaceIntent.BaseCommit {

@@ -28,6 +28,12 @@ func readNativeOrcaDelivery(ctx context.Context, c Config, execution *ExecutionR
 	if execution == nil || execution.OrcaNative == nil || execution.OrcaNative.Coordinator.Terminal == "" || execution.Target.OrchestrationRun == "" {
 		return fact, errors.New("native Orca inbox has no bound coordinator/Run")
 	}
+	if c.hostName() == "orca_supervised" {
+		client := remoteClientForExecution(c, execution)
+		ref := executionapi.ExecutionRef{RunID: execution.WorkflowRunID, Target: execution.Target, External: *execution.Process}
+		value, err := client.Check(ctx, remoteWorkerRef(ref))
+		return nativeOrcaDeliveryFact{DeliveryID: value.ID, Messages: value.Messages}, remoteWorkerError(err)
+	}
 	delivery, err := orcaworker.CheckInbox(ctx, orcaWorkerMetaCaller(c), execution.OrcaNative.Coordinator.Terminal, execution.Target.OrchestrationRun)
 	if err != nil {
 		return fact, err
@@ -76,6 +82,11 @@ func readNativeOrcaSettlement(ctx context.Context, c Config, execution *Executio
 	if execution == nil || execution.OrcaNative == nil || execution.Process == nil || turn == nil {
 		return fact, errors.New("Orca settlement has no fixed execution identity")
 	}
+	if c.hostName() == "orca_supervised" {
+		ref := executionapi.ExecutionRef{Backend: executionapi.BackendOrca, Protocol: executionapi.ProtocolOrcaSupervised, Target: execution.Target, External: *execution.Process}
+		value, err := remoteClientForExecution(c, execution).Settlement(ctx, remoteWorkerRef(ref), turn.Outcome)
+		return nativeOrcaSettlement{Outcome: value, DispatchID: turn.DispatchID, RuntimeID: execution.Process.CoordinatorRuntimeID}, remoteWorkerError(err)
+	}
 	status, err := orcaworker.VerifySettledDispatch(ctx, orcaWorkerMetaCaller(c), orcaworker.DispatchIdentity{
 		DispatchID: turn.DispatchID, TaskID: turn.TaskID, RunID: execution.Target.OrchestrationRun,
 		RuntimeID: execution.OrcaNative.Coordinator.RuntimeID, Terminal: execution.Process.Terminal,
@@ -97,6 +108,16 @@ func readNativeOrcaSettlement(ctx context.Context, c Config, execution *Executio
 func verifyNativeOrcaActiveDispatch(ctx context.Context, c Config, execution *ExecutionRecord, turn *OrcaNativeTurn) error {
 	if execution == nil || execution.Process == nil || turn == nil {
 		return errors.New("stopped-center Orca Dispatch has no fixed identity")
+	}
+	if c.hostName() == "orca_supervised" {
+		value, err := (orcaSupervisedBackend{config: c}).Observe(ctx, executionapi.ExecutionRef{Backend: executionapi.BackendOrca, Protocol: executionapi.ProtocolOrcaSupervised, Target: execution.Target, External: *execution.Process})
+		if err != nil {
+			return err
+		}
+		if value.Liveness != "live" {
+			return errors.New("remote Dispatch liveness is unverified")
+		}
+		return nil
 	}
 	status, err := orcaworker.VerifyActiveDispatch(ctx, orcaWorkerMetaCaller(c), orcaworker.DispatchIdentity{
 		DispatchID: turn.DispatchID, TaskID: turn.TaskID, RunID: execution.Target.OrchestrationRun,

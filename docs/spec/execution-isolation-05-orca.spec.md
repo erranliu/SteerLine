@@ -6,7 +6,7 @@
 
 将中心 Orca 资源、终端、派发、观察、消息和对账操作移入 `orcaworker`，遵守[共同约束](execution-isolation-constraints.md)。覆盖 native 以及已有 supervised 实现的所有者整理，不启用当前不可启动的路径，不增加另一种 agent 认证。
 
-新增 `backend.go`、`config.go`、`events.go`，复用 workspace/terminal/orchestration/dispatch/message/pull/relay/output/journal 文件。主要迁移 `orca_worker_prepare.go`、`orca_worker_dispatch.go`、`orca_worker_observation.go`、`orca_worker_evidence.go`、`orca_worker_terminal.go`、`orca_worker_workspace.go`、`orca_worker_relay.go`、`orca.go`、`orcaexec.go`、`orca_supervised.go` 与 `execution_backend.go` 中的 Orca I/O 和证据解释。沿用原生 event/message_identity/saved_receipt 实现，必要 CLI 小输入归包，不能导入主包 Config/Runner。
+新增 `backend.go`、`config.go`、`events.go`，复用 workspace/terminal/orchestration/dispatch/message/relay/output 文件。主要迁移 `orca_worker_prepare.go`、`orca_worker_dispatch.go`、`orca_worker_observation.go`、`orca_worker_evidence.go`、`orca_worker_terminal.go`、`orca_worker_workspace.go`、`orca_worker_relay.go`、`orca.go`、`orca_supervised.go` 与 `execution_backend.go` 中的 Orca I/O 和证据解释。沿用原生 event/message_identity/saved_receipt 实现，必要 CLI 小输入归包，不能导入主包 Config/Runner。
 
 ## 资源与派发契约
 

@@ -6,7 +6,7 @@
 
 1. 从当时最新主线读取前置实现及 Spec，确认中心 SQLite、Task/WorkflowRun、QueryService、CommandService 和 Operation/outbox 已交付，并核对其复用的双后端契约；不额外要求独立 4A/4B 阶段先于中心模型落地。前置未完成时只做文档/样本准备，不先造第二套存储或调度器。
 2. 记录当前数据库、runtime/候选投影、命令、工作流、会话和技能上下文的接口。固定 native-tasks/v1 基础查询协议；后继命令/导出协议由各自 Spec 定义，不在本任务实现。
-3. 盘点当前 `beads.go`、`service.go`、`config.go`、`workspace.go`、`codex.go`、`completion.go`、`prompt.tmpl`、`result.schema.json`、`control_service.go`、`retry.go`、viewer 和 CLI 中的任务源耦合。前置重构已移动文件时，按职责更新清单，不把旧文件名当作创建重复实现的理由。
+3. 盘点当前 `beads.go`、`service.go`、`config.go`、`workspace.go`、`worker_types.go`、`completion.go`、`prompt.tmpl`、`result.schema.json`、`control_service.go`、`retry.go`、viewer 和 CLI 中的任务源耦合。前置重构已移动文件时，按职责更新清单，不把旧文件名当作创建重复实现的理由。
 4. 固定本任务输出的 Task/权威与基础查询边界，记录后继对事务和身份的需求；不在本任务实施创建入图、丢弃、派发上下文或图形展示。
 5. 准备相互隔离的临时 Git 仓库、测试数据库、PR 平台替身和 worker 调用记录器。真实验证另用专门测试仓库/worktree，不能领取生产任务；把拆分、回退和任意依赖修改列为无产品入口的边界检查。
 

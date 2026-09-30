@@ -326,6 +326,8 @@ func fakeMain(args []string) int {
 		return 0
 	case "orca":
 		return fakeOrca(args[1], args[2:])
+	case "orca-remote-worker":
+		return fakeRemoteOrca(args[1], args[2:])
 	case "orca-supervised":
 		return fakeSupervisedOrca(args[1:])
 	case "orca-native":

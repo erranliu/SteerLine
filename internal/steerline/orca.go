@@ -147,10 +147,6 @@ func parseEnvelope(b []byte) (orcaEnvelope, error) {
 	return e, nil
 }
 
-func (c orcaClient) closeTerminal(ctx context.Context, handle string) {
-	_, _ = c.call(ctx, positiveDuration(c.cfg.CommandTimeout, 30*time.Second), "terminal", "close", "--terminal", handle, "--json")
-}
-
 func (c orcaClient) closeTerminalChecked(ctx context.Context, handle, runtimeID string) (executionapi.StopReceipt, error) {
 	if strings.TrimSpace(handle) == "" {
 		return executionapi.StopReceipt{}, &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "cannot close an empty terminal handle"}
@@ -198,72 +194,4 @@ func (c orcaClient) showTerminal(ctx context.Context, handle string) (orcaTermin
 	}
 	res.Terminal.RuntimeID = env.Meta.RuntimeID
 	return res.Terminal, nil
-}
-
-// orcaProcess is the host handle for an Orca-launched agent. Kill closes the
-// terminal (which ends the agent tree); Close only releases the local context.
-type orcaProcess struct {
-	cfg           Config
-	term          orcaTerminal
-	ref           executionapi.ExecutionRef
-	outputSegment string
-	cancel        context.CancelFunc
-	once          sync.Once
-}
-
-func (p *orcaProcess) client() orcaClient { return orcaClient{cfg: p.cfg} }
-
-func (p *orcaProcess) Identity() executionapi.ProcessIdentity {
-	return executionapi.ProcessIdentity{Kind: "orca", Terminal: p.term.Handle, RuntimeID: p.term.RuntimeID, Incarnation: p.term.IncarnationID, Executable: p.cfg.Orca.Executable}
-}
-
-func (p *orcaProcess) Kill() {
-	p.once.Do(func() {
-		if p.term.Handle != "" {
-			p.client().closeTerminal(context.Background(), p.term.Handle)
-		}
-	})
-	if p.cancel != nil {
-		p.cancel()
-	}
-}
-
-func (p *orcaProcess) Close() {
-	if p.cancel != nil {
-		p.cancel()
-	}
-}
-
-// inspectProcessWithConfig dispatches recovery inspection by identity kind. It
-// only ever diagnoses; it never adopts or resumes a worker.
-func inspectProcessWithConfig(c Config, old *executionapi.ProcessIdentity) string {
-	if old != nil && old.Kind == "orca" {
-		return inspectOrcaTerminal(c, old)
-	}
-	return inspectProcess(old)
-}
-
-func inspectOrcaTerminal(c Config, old *executionapi.ProcessIdentity) string {
-	if old.Terminal == "" {
-		return "orca terminal identity unavailable"
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), positiveDuration(c.CommandTimeout, 30*time.Second))
-	defer cancel()
-	term, e := orcaClient{cfg: c}.showTerminal(ctx, old.Terminal)
-	if e != nil {
-		return "orca terminal unverifiable (handle stale or runtime unreachable)"
-	}
-	if old.Incarnation != "" && term.IncarnationID != "" && old.Incarnation != term.IncarnationID {
-		return "orca terminal replaced (incarnation changed)"
-	}
-	if term.Orphaned {
-		return "orca terminal orphaned"
-	}
-	if term.Exited() {
-		return "orca terminal exited"
-	}
-	if !term.Connected {
-		return "orca terminal not connected"
-	}
-	return "matching process still exists"
 }

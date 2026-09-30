@@ -13,7 +13,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"strings"
 	"time"
 
@@ -555,145 +554,6 @@ func (b orcaTerminalBackend) InspectWorkspace(ctx context.Context, ref execution
 	return inspectBoundWorkspace(ctx, b.config, ref)
 }
 
-type orcaOutputCursor struct {
-	Version     int    `json:"v"`
-	RunID       string `json:"r"`
-	AttemptID   string `json:"a"`
-	Target      string `json:"t"`
-	Runtime     string `json:"u"`
-	Terminal    string `json:"h"`
-	Incarnation string `json:"i"`
-	Source      string `json:"s"`
-	Position    string `json:"p"`
-}
-
-func platformCursor(raw json.RawMessage) (string, error) {
-	if len(raw) == 0 || string(raw) == "null" {
-		return "", nil
-	}
-	var value string
-	if err := json.Unmarshal(raw, &value); err == nil {
-		return value, nil
-	}
-	var number int64
-	if err := json.Unmarshal(raw, &number); err == nil && number >= 0 {
-		return strconv.FormatInt(number, 10), nil
-	}
-	return "", &executionapi.BackendError{Code: executionapi.BackendProtocolInvalid, Diagnostic: "Orca returned an invalid output cursor"}
-}
-
-func (b orcaTerminalBackend) ReadOutput(ctx context.Context, ref executionapi.ExecutionRef, cursor string, limit int) (executionapi.OutputBatch, error) {
-	if ref.Backend != executionapi.BackendOrca || ref.Protocol != executionapi.ProtocolOrcaTerminalV2 || ref.Target != targetFor(b.config) || ref.External.Kind != "orca" || ref.External.Terminal == "" || ref.External.RuntimeID == "" || ref.External.Incarnation == "" {
-		return executionapi.OutputBatch{}, &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "output ref lacks the fixed Orca terminal identity"}
-	}
-	if limit <= 0 || limit > 1000 {
-		return executionapi.OutputBatch{}, &executionapi.BackendError{Code: executionapi.BackendProtocolInvalid, Diagnostic: "Orca output limit must be 1–1000 rows"}
-	}
-	position := ""
-	previousSource := ""
-	if cursor != "" {
-		token, err := base64.RawURLEncoding.DecodeString(cursor)
-		if err != nil {
-			return executionapi.OutputBatch{}, &executionapi.BackendError{Code: executionapi.BackendProtocolInvalid, Diagnostic: "invalid Orca output cursor", Cause: err}
-		}
-		var saved orcaOutputCursor
-		if err = json.Unmarshal(token, &saved); err != nil || saved.Version != 1 || saved.RunID != ref.RunID || saved.AttemptID != ref.AttemptID || saved.Target != ref.Target.ID || saved.Runtime != ref.External.RuntimeID || saved.Terminal != ref.External.Terminal || saved.Incarnation != ref.External.Incarnation || saved.Source == "" {
-			return executionapi.OutputBatch{}, &executionapi.BackendError{Code: executionapi.BackendProtocolInvalid, Diagnostic: "Orca output cursor is malformed or belongs to another source"}
-		}
-		position, previousSource = saved.Position, saved.Source
-	}
-	if _, err := b.Observe(ctx, ref); err != nil {
-		return executionapi.OutputBatch{}, err
-	}
-	changed := false
-	for attempt := 0; attempt < 2; attempt++ {
-		args := []string{"terminal", "read", "--terminal", ref.External.Terminal, "--limit", strconv.Itoa(limit), "--json"}
-		// Orca's omitted-cursor read is a tail preview. An initial collection
-		// must request cursor zero to page every row still retained upstream.
-		readPosition := position
-		if readPosition == "" {
-			readPosition = "0"
-		}
-		args = append(args, "--cursor", readPosition)
-		out, callErr := (orcaClient{cfg: b.config}).call(ctx, positiveDuration(b.config.CommandTimeout, 30*time.Second), args...)
-		env, err := parseEnvelope(out)
-		if callErr != nil {
-			return executionapi.OutputBatch{}, &executionapi.BackendError{Code: executionapi.BackendUnreachable, Diagnostic: "Orca terminal output could not be read", Cause: errors.Join(callErr, err)}
-		}
-		if err != nil {
-			return executionapi.OutputBatch{}, &executionapi.BackendError{Code: executionapi.BackendProtocolInvalid, Diagnostic: "Orca terminal output response is invalid", Cause: err}
-		}
-		if env.Meta.RuntimeID == "" || env.Meta.RuntimeID != ref.External.RuntimeID {
-			return executionapi.OutputBatch{}, &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "Orca output came from a different runtime"}
-		}
-		var result struct {
-			Source       string          `json:"source"`
-			Tail         []string        `json:"tail"`
-			NextCursor   json.RawMessage `json:"nextCursor"`
-			OldestCursor json.RawMessage `json:"oldestCursor"`
-		}
-		var wrapped struct {
-			Terminal json.RawMessage `json:"terminal"`
-		}
-		if err = json.Unmarshal(env.Result, &wrapped); err != nil {
-			return executionapi.OutputBatch{}, &executionapi.BackendError{Code: executionapi.BackendProtocolInvalid, Diagnostic: "Orca terminal output envelope is invalid", Cause: err}
-		}
-		payload := env.Result
-		if len(wrapped.Terminal) != 0 {
-			payload = wrapped.Terminal
-		}
-		if err = json.Unmarshal(payload, &result); err != nil {
-			return executionapi.OutputBatch{}, &executionapi.BackendError{Code: executionapi.BackendProtocolInvalid, Diagnostic: "Orca terminal output payload is invalid", Cause: err}
-		}
-		if result.Source == "" {
-			return executionapi.OutputBatch{}, &executionapi.BackendError{Code: executionapi.BackendProtocolInvalid, Diagnostic: "Orca output source is unavailable; source-bound paging cannot be verified"}
-		}
-		if previousSource != "" && previousSource != result.Source {
-			changed = true
-			position = ""
-			previousSource = result.Source
-			continue
-		}
-		if len(result.Tail) > limit {
-			return executionapi.OutputBatch{}, &executionapi.BackendError{Code: executionapi.BackendProtocolInvalid, Diagnostic: "Orca output exceeded the requested row bound"}
-		}
-		data := []byte(strings.Join(result.Tail, "\n"))
-		if len(data) > 1<<20 {
-			return executionapi.OutputBatch{}, &executionapi.BackendError{Code: executionapi.BackendProtocolInvalid, Diagnostic: "Orca output exceeded the 1 MiB batch bound"}
-		}
-		next, err := platformCursor(result.NextCursor)
-		if err != nil {
-			return executionapi.OutputBatch{}, err
-		}
-		oldest, err := platformCursor(result.OldestCursor)
-		if err != nil {
-			return executionapi.OutputBatch{}, err
-		}
-		if next == "" {
-			return executionapi.OutputBatch{}, &executionapi.BackendError{Code: executionapi.BackendProtocolInvalid, Diagnostic: "Orca output omitted nextCursor"}
-		}
-		gap := false
-		if position == "" && oldest != "" {
-			if have, parseErr := strconv.ParseInt(oldest, 10, 64); parseErr == nil {
-				gap = have > 0
-			} else {
-				gap = true
-			}
-		} else if position != "" && oldest != "" {
-			want, werr := strconv.ParseInt(position, 10, 64)
-			have, herr := strconv.ParseInt(oldest, 10, 64)
-			if werr == nil && herr == nil && want < have {
-				gap = true
-			}
-		}
-		if _, err = b.Observe(ctx, ref); err != nil {
-			return executionapi.OutputBatch{}, err
-		}
-		token, _ := json.Marshal(orcaOutputCursor{Version: 1, RunID: ref.RunID, AttemptID: ref.AttemptID, Target: ref.Target.ID, Runtime: ref.External.RuntimeID, Terminal: ref.External.Terminal, Incarnation: ref.External.Incarnation, Source: result.Source, Position: next})
-		return executionapi.OutputBatch{Data: data, Source: result.Source, RetainedFrom: oldest, ObservedAt: now(), NextCursor: base64.RawURLEncoding.EncodeToString(token), Gap: gap, SourceChanged: changed}, nil
-	}
-	return executionapi.OutputBatch{}, &executionapi.BackendError{Code: executionapi.BackendProtocolInvalid, Diagnostic: "Orca output source changed repeatedly during one read"}
-}
 func (b orcaTerminalBackend) StopExecution(ctx context.Context, ref executionapi.ExecutionRef, _ executionapi.Operation, handle executionapi.StopHandle) (executionapi.StopReceipt, error) {
 	obs, err := b.Observe(ctx, ref)
 	if err != nil {
@@ -711,11 +571,6 @@ func (b orcaTerminalBackend) StopExecution(ctx context.Context, ref executionapi
 	closeReceipt, err := (orcaClient{cfg: b.config}).closeTerminalChecked(ctx, ref.External.Terminal, ref.External.RuntimeID)
 	if err != nil {
 		return executionapi.StopReceipt{}, err
-	}
-	// Terminal close is the only remote stop operation. Detach only this
-	// backend's observer: a generic handle's Close may itself kill a process.
-	if observer, ok := handle.(*orcaProcess); ok {
-		observer.Close()
 	}
 	if closeReceipt.Disposition == "confirmed" {
 		return closeReceipt, nil
@@ -795,6 +650,20 @@ func (s *Service) inspectRunProcess(run *Run) string {
 	records := executionRecords{root: c.RunDir}
 	ref, err := records.loadBinding(run.RunID, run.AttemptID)
 	if err == nil {
+		if ref.Protocol == executionapi.ProtocolOrcaSupervised {
+			execution := s.executionRecord(run)
+			if execution == nil || execution.Process == nil || *execution.Process != *run.Process ||
+				!sameSupervisedBaseTarget(ref.Target, execution.Target) || ref.External.Kind != "orca_supervised" ||
+				ref.External.RuntimeID != run.Process.RuntimeID || ref.External.CoordinatorRuntimeID != run.Process.CoordinatorRuntimeID ||
+				ref.External.Terminal != run.Process.Terminal || ref.External.Incarnation != run.Process.Incarnation ||
+				ref.External.ExecutionHost != run.Process.ExecutionHost || ref.External.WorktreeID != run.Process.WorktreeID ||
+				ref.WorkspacePath != execution.Workspace.Worktree || ref.WorkspaceBranch != execution.Workspace.Branch || ref.BaseCommit != execution.Workspace.Base {
+				return "remote session conflicts with its original execution binding"
+			}
+			// The session binding stays immutable across turns. Inspect the current
+			// Dispatch stored by the center's committed worker transition.
+			ref = remoteExecutionRef(run, execution)
+		}
 		if ref.External != *run.Process || ref.Backend == "" || ref.Protocol == "" || ref.Target.ID == "" {
 			return "execution binding conflicts with runtime identity"
 		}

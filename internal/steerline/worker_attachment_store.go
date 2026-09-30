@@ -19,7 +19,9 @@ func (t *sqliteTx) putExecutionBinding(ref executionapi.ExecutionRef) error {
 		if err := json.Unmarshal(body, &old); err != nil {
 			return err
 		}
-		old.WorkspacePath, ref.WorkspacePath = canonical(old.WorkspacePath), canonical(ref.WorkspacePath)
+		if ref.Protocol != executionapi.ProtocolOrcaSupervised {
+			old.WorkspacePath, ref.WorkspacePath = canonical(old.WorkspacePath), canonical(ref.WorkspacePath)
+		}
 		if digestValue(old) != digestValue(ref) {
 			return errors.New("execution binding is immutable and conflicts with existing record")
 		}

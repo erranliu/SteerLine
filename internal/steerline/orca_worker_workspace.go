@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -18,9 +17,6 @@ type workerOrcaWorktree = orcaworker.Worktree
 func workerOrcaWorkspaceError(err error) error {
 	if errors.Is(err, orcaworker.ErrWorktreeIdentity) {
 		return &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: err.Error()}
-	}
-	if errors.Is(err, orcaworker.ErrWorktreeOutcomeUnknown) {
-		return &executionapi.BackendError{Code: executionapi.BackendOutcomeUnknown, Diagnostic: orcaworker.ErrWorktreeOutcomeUnknown.Error(), Cause: err}
 	}
 	return err
 }
@@ -37,7 +33,7 @@ func workerOrcaCall(ctx context.Context, c Config, args ...string) (orcaEnvelope
 	if c.hostName() != "orca" && c.hostName() != "orca_supervised" {
 		return orcaEnvelope{}, errors.New("worker Orca call has no Orca execution target")
 	}
-	if c.hostName() == "orca_supervised" {
+	if c.hostName() == "orca_supervised" && (len(args) == 0 || args[0] != "orchestration") {
 		if c.Orca.Supervised == nil || c.Orca.Supervised.EnvironmentID == "" {
 			return orcaEnvelope{}, errors.New("remote worker has no fixed Orca environment")
 		}
@@ -76,16 +72,9 @@ func workerOrcaWorktreeName(taskID, runID string) (string, error) {
 	return "sl-" + taskID + "-" + runID, nil
 }
 
-func validateWorkerOrcaWorktree(value workerOrcaWorktree, name, repoID, base string) error {
-	return workerOrcaWorkspaceError(orcaworker.ValidateWorktree(value, name, repoID, base))
-}
 func findWorkerOrcaWorktree(ctx context.Context, c Config, repoID, name, base string) (workerOrcaWorktree, bool, error) {
 	worktree, found, err := orcaworker.FindWorktree(ctx, orcaWorkerCaller(c), repoID, name, base)
 	return worktree, found, workerOrcaWorkspaceError(err)
-}
-func createWorkerOrcaWorktree(ctx context.Context, c Config, repoID, name, base string) (workerOrcaWorktree, error) {
-	worktree, err := orcaworker.CreateWorktree(ctx, orcaWorkerCaller(c), repoID, name, base)
-	return worktree, workerOrcaWorkspaceError(err)
 }
 
 func applyWorkerOrcaWorkspace(c Config, run *Run, execution *ExecutionRecord, worktree workerOrcaWorktree, base string) error {
@@ -96,7 +85,7 @@ func applyWorkerOrcaWorkspace(c Config, run *Run, execution *ExecutionRecord, wo
 	if branch == "" || worktree.Path == "" || worktree.Head != base {
 		return errors.New("remote worker worktree identity is incomplete")
 	}
-	path := filepath.FromSlash(worktree.Path)
+	path := worktree.Path
 	execution.WorkspaceIntent = &executionapi.WorkspaceIntent{Path: path, Branch: branch, BaseCommit: base}
 	execution.Target.WorktreeID, execution.Target.Branch = worktree.ID, branch
 	execution.Workspace = WorkspaceEvidence{Repository: c.identity, Worktree: path, Branch: branch, Base: base, Head: base, VerifiedAt: time.Now().UTC()}
@@ -122,7 +111,16 @@ func (s *Service) prepareRemoteWorkerWorkspace(ctx context.Context, run *Run, ex
 	if err != nil {
 		return err
 	}
-	worktree, err := createWorkerOrcaWorktree(ctx, fixedConfig, pair.RepositoryID, name, base)
+	if execution.OrcaNative == nil {
+		execution.OrcaNative = &OrcaNativeExecution{RemoteRuntimeID: pair.RemoteRuntime}
+	}
+	if execution.OrcaNative.RemoteRuntimeID != pair.RemoteRuntime {
+		return &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "original remote workspace runtime changed"}
+	}
+	if err := s.commitWorker(run); err != nil {
+		return err
+	}
+	worktree, err := remoteWorkerClient(fixedConfig).CreateWorktree(ctx, pair, name, base)
 	if err != nil {
 		return err
 	}
@@ -154,7 +152,10 @@ func (s *Service) recoverRemoteWorkerWorkspace(ctx context.Context, run *Run, ex
 	if err != nil {
 		return err
 	}
-	worktree, found, err := findWorkerOrcaWorktree(ctx, fixedConfig, pair.RepositoryID, name, run.WorkspaceIntent.BaseCommit)
+	if execution.OrcaNative == nil || execution.OrcaNative.RemoteRuntimeID != pair.RemoteRuntime {
+		return &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "original remote workspace runtime is unverified"}
+	}
+	worktree, found, err := remoteWorkerClient(fixedConfig).FindWorktree(ctx, pair, name, run.WorkspaceIntent.BaseCommit)
 	if err != nil {
 		return err
 	}

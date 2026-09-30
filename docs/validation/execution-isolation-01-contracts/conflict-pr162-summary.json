@@ -1,0 +1,74 @@
+{
+  "source": "Final minimal verification after resolving PR162 merge conflicts",
+  "date": "2026-09-30",
+  "base_commit": "930a4d6611c1800feff06a8b1ec351b2ac926d8b",
+  "passed": true,
+  "scope": "quick",
+  "execution_seconds": 57.2167043,
+  "groups": [
+    {
+      "id": "quick-core",
+      "command": [
+        "go",
+        "test",
+        "-json",
+        "-count=1",
+        "-timeout=45m",
+        "-p",
+        "1",
+        "-parallel",
+        "1",
+        "-run=^(TestWorkerFlowClaimNeedsNoProjectSteps|TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged)$",
+        "github.com/erranliu/SteerLine/internal/steerline"
+      ],
+      "exit_code": 0,
+      "passed": true,
+      "test_count_including_subtests": 6,
+      "failed_tests": 0,
+      "skipped_tests": 0
+    },
+    {
+      "id": "quick-rules",
+      "command": [
+        "go",
+        "test",
+        "-json",
+        "-count=1",
+        "-timeout=45m",
+        "-p",
+        "1",
+        "-parallel",
+        "1",
+        "github.com/erranliu/SteerLine/internal/steerline/taskgraph",
+        "github.com/erranliu/SteerLine/internal/steerline/taskview",
+        "github.com/erranliu/SteerLine/internal/steerline/workerflow",
+        "github.com/erranliu/SteerLine/internal/steerline/contracts",
+        "github.com/erranliu/SteerLine/internal/steerline/query",
+        "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+        "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker"
+      ],
+      "exit_code": 0,
+      "passed": true,
+      "test_count_including_subtests": 33,
+      "failed_tests": 0,
+      "skipped_tests": 0
+    },
+    {
+      "id": "quick-targeted",
+      "command": [
+        "go",
+        "test",
+        "./internal/steerline",
+        "-count=1",
+        "-run",
+        "^(TestExecutionBackendCommonCapabilityContract|TestExecutionRecordsPinBindingsAndOperations|TestOperationRecordRejectsCorruptionBeforeUse|TestWorkerProtocolFactsPreserveOriginalNativeIdentity|TestNativeOrcaFactsRejectOldDispatchAndKeepCurrentOutcome|TestWorkerFlowModeUsesFixedExecutionIdentity|TestWorkerBindingRollsBackWithItsCheckpoint|TestExecutionStopIntentAndUnknownReceiptUseOriginalBinding|TestOrcaStopExecutionConfirmsFixedTerminalExit|TestOrcaStopFailureDoesNotConfirmExit|TestRemoteOrcaTwoTurnsKeepSessionAndRequireMergedDelivery|TestRemoteOrcaQuestionLostReplyAndAckAreReconciled)$",
+        "-json"
+      ],
+      "exit_code": 0,
+      "passed": true,
+      "test_count_including_subtests": 15,
+      "failed_tests": 0,
+      "skipped_tests": 0
+    }
+  ]
+}

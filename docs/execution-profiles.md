@@ -29,9 +29,49 @@ Orca 本机 Codex 方案使用 `host=orca`、`agent=codex`、`sandbox=workspace-
 
 有无显式 model 都使用同一受管命令，冻结 `approval_policy=never`、Windows sandbox、严格配置校验及 linked worktree 写入根目录。原始 `codex.args` 当前只允许独立的 `--no-alt-screen`、`--no-daemon`、`--search`；子命令、配置/Profile 注入、权限覆盖与目录扩张均在资源创建前拒绝。领取前的 CLI/Orca 查询不初始化沙箱；领取后在原 terminal 上运行 readiness 工具探针，核对真实工具事件、原子收据及原生成功结算后，才派发一次业务任务。
 
-控制台显示冻结权限、环境核验及阻断来源。宿主等待时，文字保留原目标而不注入菜单；中心选项可打开原 terminal 或重新检查。重新检查先对账原操作，不用新会话替换丢失会话，不延长旧准备期限。运行中的 Execution 不受配置文件编辑影响。其他 agent 与 local 的执行/恢复语义保持原入口；受监管远端尚未接入。
+控制台显示冻结权限、环境核验及阻断来源。宿主等待时，文字保留原目标而不注入菜单；中心选项可打开原 terminal 或重新检查。重新检查先对账原操作，不用新会话替换丢失会话，不延长旧准备期限。运行中的 Execution 不受配置文件编辑影响。其他 agent 与 local 的执行/恢复语义保持原入口；远程方案见下节。
 
 本次已完成审计修复及隔离真机服务闭环；[验收记录](validation/worker-environment-readiness/README.md)区分真实工具证据、受控故障回归及已通过的真机服务闭环。
+
+## 远程 Orca worker
+
+远程方案与本地 Codex、本地 Orca 共用 Task、Decision、Operation 和 PR 交付规则。Run 与协调 inbox 位于中心，工作区与 agent 位于指定远端。首次创建远端工作区和 worker，后续轮次复用同一终端与 incarnation；不创建本地替代执行。
+
+在全局文件的 `execution_profiles` 中添加以下方案，替换连接、仓库与协调终端的真实标识：
+
+```json
+{
+  "id": "orca-remote",
+  "name": "远程 Orca Codex",
+  "host": "orca_supervised",
+  "agent": "codex",
+  "model": "<明确模型>",
+  "reasoning_effort": "high",
+  "sandbox": "workspace-write",
+  "orca": {
+    "executable": "<本机 Orca 原生可执行文件>",
+    "shell": "powershell",
+    "wait_timeout": "2m",
+    "supervised": {
+      "connection_id": "<environment list 返回的 pairedDeviceId>",
+      "environment_id": "<已保存的 environment ID>",
+      "repository_selector": "id:<远端 repo ID>",
+      "coordinator_terminal": "<中心已打开的 bootstrap terminal handle>",
+      "poll_interval": "2s",
+      "capability_report_version": 1,
+      "remote_cancel_available": false
+    }
+  }
+}
+```
+
+领取前检查两端 Orca 的版本族、连接身份、远端仓库的 Git remote 与所需 federation 能力，固定模型与推理强度。配置中的协调终端用于预检，每次 WorkflowRun 另建独立的中心协调终端。远端必须已具备 Codex、项目工具和 PR 发布权限。
+
+原生 question 进入共享 Decision；活动 Dispatch 的反馈通过消息投递，已结算轮次的反馈通过原终端开启下一轮。输入回执丢失时只核对原 Task/Dispatch 或 question history，不重复启动或回答。中心重启保留原执行并重新核验，旧服务保存的未投递输入需要重新确认；断连或身份变化保留资源并显示未核实。远端路径按执行主机返回值保存，不按中心操作系统转换。
+
+`worker_done` 只证明轮次结算。提供方证明对应 PR 已合并后才写 TaskDelivery、关闭 Task，并 release 已结算 worker 和关闭排空的中心协调终端；远端 worktree 保留。远程取消仍不可用，停止中心监督不会被显示为远端进程已经退出。
+
+当前实现已通过隔离协议与 Service 测试。2026-09-30 保存的“台式机64g”连接不可达，本次未完成双机真机验收。
 
 ## Windows 本地 Codex 沙箱
 

@@ -1,19 +1,13 @@
 package codexworker
 
 import (
-	"bufio"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"os"
-	"path/filepath"
-	"strings"
 
 	"github.com/erranliu/SteerLine/internal/steerline/codexapp"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
-
-const maxJournalRecord = 8 << 20
 
 type Outcome struct {
 	SessionID    string
@@ -23,75 +17,6 @@ type Outcome struct {
 	LastMessage  string
 	Failure      string
 	PRCandidates []string
-}
-
-func ReadExecOutcome(eventsPath string) (Outcome, error) {
-	var outcome Outcome
-	seenPR := map[string]bool{}
-	addPRClues := func(message string) {
-		for _, url := range executionapi.PRClues(message) {
-			if !seenPR[url] {
-				seenPR[url] = true
-				outcome.PRCandidates = append(outcome.PRCandidates, url)
-			}
-		}
-	}
-	file, err := os.Open(eventsPath)
-	if err != nil {
-		return outcome, err
-	}
-	defer file.Close()
-	scanner := bufio.NewScanner(file)
-	scanner.Buffer(make([]byte, 64<<10), maxJournalRecord)
-	for lines := 0; scanner.Scan(); lines++ {
-		if lines >= 100000 {
-			return outcome, errors.New("worker turn journal exceeds its observation limit")
-		}
-		var event struct {
-			Type     string `json:"type"`
-			ThreadID string `json:"thread_id"`
-			Error    struct {
-				Message string `json:"message"`
-			} `json:"error"`
-			Item struct {
-				Type string `json:"type"`
-				Text string `json:"text"`
-			} `json:"item"`
-		}
-		if err := json.Unmarshal(scanner.Bytes(), &event); err != nil {
-			return outcome, fmt.Errorf("worker turn journal has unreadable output: %w", err)
-		}
-		switch event.Type {
-		case "thread.started":
-			if outcome.SessionID != "" && outcome.SessionID != event.ThreadID {
-				return outcome, errors.New("worker turn changed native session identity")
-			}
-			outcome.SessionID = event.ThreadID
-		case "turn.started":
-			outcome.Started = true
-		case "turn.completed":
-			outcome.Completed = true
-			outcome.NativeStatus = "completed"
-		case "turn.failed", "error":
-			outcome.Failure = event.Error.Message
-		case "item.completed":
-			if event.Item.Type == "agent_message" && event.Item.Text != "" {
-				outcome.LastMessage = event.Item.Text
-				addPRClues(event.Item.Text)
-			}
-		}
-	}
-	if err := scanner.Err(); err != nil {
-		return outcome, err
-	}
-	lastPath := filepath.Join(filepath.Dir(eventsPath), "last-message.txt")
-	if info, err := os.Stat(lastPath); err == nil && info.Size() <= 1<<20 {
-		if data, err := os.ReadFile(lastPath); err == nil && strings.TrimSpace(string(data)) != "" {
-			outcome.LastMessage = string(data)
-			addPRClues(outcome.LastMessage)
-		}
-	}
-	return outcome, nil
 }
 
 func ReadAppServerOutcome(path, threadID, turnID string) (Outcome, error) {
