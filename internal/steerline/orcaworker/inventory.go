@@ -4,11 +4,140 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"path/filepath"
+	"runtime"
 	"strings"
 )
 
 // Call provides only verified Orca result bytes; the caller owns host selection.
 type Call func(context.Context, ...string) (json.RawMessage, error)
+
+var ErrRepoUnavailable = errors.New("fixed repository is not registered with local Orca")
+
+func CheckStatus(ctx context.Context, call Call) error {
+	_, err := call(ctx, "status", "--json")
+	return err
+}
+
+func FindRepo(ctx context.Context, call Call, repository string) (string, error) {
+	raw, err := call(ctx, "repo", "list", "--json")
+	if err != nil {
+		return "", err
+	}
+	var listing struct {
+		Repos []struct{ ID, Path, Kind string } `json:"repos"`
+	}
+	if err := json.Unmarshal(raw, &listing); err != nil {
+		return "", err
+	}
+	for _, repo := range listing.Repos {
+		if repo.Kind == "git" && repo.ID != "" && samePath(filepath.FromSlash(repo.Path), repository) {
+			return repo.ID, nil
+		}
+	}
+	return "", ErrRepoUnavailable
+}
+
+func ListTerminals(ctx context.Context, call MetaCall, worktree string) ([]Terminal, string, error) {
+	envelope, err := call(ctx, "terminal", "list", "--worktree", worktree, "--limit", "1000", "--json")
+	if err != nil {
+		return nil, "", err
+	}
+	var result struct {
+		Terminals []Terminal `json:"terminals"`
+		Truncated bool       `json:"truncated"`
+	}
+	if err := json.Unmarshal(envelope.Payload, &result); err != nil || result.Truncated || envelope.RuntimeID == "" {
+		return nil, "", errors.Join(err, errors.New("Orca terminal inventory is incomplete"))
+	}
+	return result.Terminals, envelope.RuntimeID, nil
+}
+
+func RemoteRepoPath(ctx context.Context, call Call, worktreeID string) (string, error) {
+	repoID, _, found := strings.Cut(worktreeID, "::")
+	if !found || repoID == "" {
+		return "", errors.New("remote Orca worktree has no registered repository identity")
+	}
+	raw, err := call(ctx, "repo", "show", "--repo", "id:"+repoID, "--json")
+	if err != nil {
+		return "", err
+	}
+	var result struct {
+		Repo struct {
+			ID   string `json:"id"`
+			Path string `json:"path"`
+			Kind string `json:"kind"`
+		} `json:"repo"`
+	}
+	if err := json.Unmarshal(raw, &result); err != nil {
+		return "", err
+	}
+	if result.Repo.ID != repoID || result.Repo.Kind != "git" || !filepath.IsAbs(filepath.FromSlash(result.Repo.Path)) {
+		return "", &PlatformError{Code: "identity_mismatch", Diagnostic: "remote worktree repository path is not verified"}
+	}
+	return filepath.FromSlash(result.Repo.Path), nil
+}
+
+func samePath(a, b string) bool {
+	a, b = filepath.Clean(a), filepath.Clean(b)
+	if runtime.GOOS == "windows" {
+		return strings.ToLower(a) == strings.ToLower(b)
+	}
+	return a == b
+}
+
+type Result struct {
+	Payload   json.RawMessage
+	RuntimeID string
+	ErrorCode string
+	ErrorData json.RawMessage
+}
+
+type MetaCall func(context.Context, ...string) (Result, error)
+
+var ErrDispatchIdentity = errors.New("recovered Orca Dispatch has no exact injected worker identity")
+
+type DispatchIdentity struct {
+	DispatchID  string
+	TaskID      string
+	RunID       string
+	RuntimeID   string
+	Terminal    string
+	Incarnation string
+	WorktreeID  string
+}
+
+func VerifyRecoveredDispatch(ctx context.Context, call MetaCall, expected DispatchIdentity) error {
+	envelope, err := call(ctx, "orchestration", "worker-show", "--dispatch", expected.DispatchID, "--json")
+	if err != nil {
+		return err
+	}
+	var result struct {
+		Dispatch struct {
+			ID     string `json:"id"`
+			TaskID string `json:"taskId"`
+			RunID  string `json:"runId"`
+			Status string `json:"status"`
+		} `json:"dispatch"`
+		Worker struct {
+			DispatchID    string `json:"dispatchId"`
+			Stage         string `json:"stage"`
+			AgentTerminal string `json:"agentTerminalHandle"`
+		} `json:"worker"`
+		Terminal struct {
+			Handle      string `json:"handle"`
+			Incarnation string `json:"incarnationId"`
+			WorktreeID  string `json:"worktreeId"`
+		} `json:"terminal"`
+	}
+	if err := json.Unmarshal(envelope.Payload, &result); err != nil {
+		return err
+	}
+	if envelope.RuntimeID != expected.RuntimeID || result.Dispatch.ID != expected.DispatchID || result.Dispatch.TaskID != expected.TaskID || result.Dispatch.RunID != expected.RunID || result.Worker.DispatchID != expected.DispatchID || result.Worker.Stage != "injected" || result.Worker.AgentTerminal != expected.Terminal || result.Terminal.Handle != expected.Terminal || result.Terminal.Incarnation != expected.Incarnation || result.Terminal.WorktreeID != expected.WorktreeID {
+		return ErrDispatchIdentity
+	}
+	return nil
+}
 
 func TerminalHasMarker(ctx context.Context, call Call, handle, marker string) (bool, error) {
 	raw, err := call(ctx, "terminal", "read", "--terminal", handle, "--limit", "1000", "--json")

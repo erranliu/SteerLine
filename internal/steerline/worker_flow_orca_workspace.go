@@ -24,6 +24,14 @@ func workerOrcaWorkspaceError(err error) error {
 	return err
 }
 
+func workerOrcaBackendError(err error) error {
+	var platform *orcaworker.PlatformError
+	if errors.As(err, &platform) {
+		return &BackendError{Code: BackendErrorCode(platform.Code), Diagnostic: platform.Diagnostic, Cause: platform.Cause}
+	}
+	return err
+}
+
 func workerOrcaCall(ctx context.Context, c Config, args ...string) (orcaEnvelope, error) {
 	if c.hostName() != "orca" && c.hostName() != "orca_supervised" {
 		return orcaEnvelope{}, errors.New("worker Orca call has no Orca execution target")
@@ -46,6 +54,17 @@ func orcaWorkerCaller(c Config) orcaworker.Call {
 	return func(ctx context.Context, args ...string) (json.RawMessage, error) {
 		env, err := workerOrcaCall(ctx, c, args...)
 		return env.Result, err
+	}
+}
+
+func orcaWorkerMetaCaller(c Config) orcaworker.MetaCall {
+	return func(ctx context.Context, args ...string) (orcaworker.Result, error) {
+		env, err := workerOrcaCall(ctx, c, args...)
+		result := orcaworker.Result{Payload: env.Result, RuntimeID: env.Meta.RuntimeID}
+		if env.Error != nil {
+			result.ErrorCode, result.ErrorData = env.Error.Code, env.Error.Data
+		}
+		return result, err
 	}
 }
 

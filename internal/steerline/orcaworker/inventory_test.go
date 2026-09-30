@@ -49,3 +49,26 @@ func TestCreateWorktreePreservesUnknownReceipt(t *testing.T) {
 		t.Fatalf("expected one create and one read only recovery probe, got %d calls", callCount)
 	}
 }
+
+func TestRecoveredDispatchRequiresExactInjectedIdentity(t *testing.T) {
+	expected := DispatchIdentity{DispatchID: "dispatch", TaskID: "task", RunID: "run", RuntimeID: "runtime", Terminal: "terminal", Incarnation: "incarnation", WorktreeID: "worktree"}
+	call := func(context.Context, ...string) (Result, error) {
+		return Result{RuntimeID: "runtime", Payload: json.RawMessage(`{"dispatch":{"id":"dispatch","taskId":"task","runId":"run"},"worker":{"dispatchId":"dispatch","stage":"injected","agentTerminalHandle":"terminal"},"terminal":{"handle":"terminal","incarnationId":"incarnation","worktreeId":"worktree"}}`)}, nil
+	}
+	if err := VerifyRecoveredDispatch(context.Background(), call, expected); err != nil {
+		t.Fatal(err)
+	}
+	expected.Incarnation = "replacement"
+	if err := VerifyRecoveredDispatch(context.Background(), call, expected); !errors.Is(err, ErrDispatchIdentity) {
+		t.Fatalf("replaced worker terminal was accepted: %v", err)
+	}
+}
+
+func TestListTerminalsRejectsMissingRuntime(t *testing.T) {
+	call := func(context.Context, ...string) (Result, error) {
+		return Result{Payload: json.RawMessage(`{"terminals":[{"handle":"terminal"}]}`)}, nil
+	}
+	if _, _, err := ListTerminals(context.Background(), call, "path:C:/repo"); err == nil {
+		t.Fatal("terminal inventory without runtime identity was accepted")
+	}
+}

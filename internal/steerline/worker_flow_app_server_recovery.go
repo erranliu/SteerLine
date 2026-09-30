@@ -2,120 +2,33 @@ package steerline
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
-	"io"
-	"os"
 	"path/filepath"
 	"sync"
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/steerline/codexapp"
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 )
 
 func appServerAnswerEvidence(path string, ask codexAskCall, answers map[string][]string) (bool, error) {
-	file, err := os.Open(path)
-	if err != nil {
-		return false, err
-	}
-	defer file.Close()
-	decoder := json.NewDecoder(file)
-	for {
-		var event codexapp.Envelope
-		if err := decoder.Decode(&event); err != nil {
-			if errors.Is(err, io.EOF) {
-				return false, nil
-			}
-			return false, err
-		}
-		if event.Method != "item/completed" {
-			continue
-		}
-		var params struct {
-			ThreadID string `json:"threadId"`
-			TurnID   string `json:"turnId"`
-			Item     struct {
-				ID           string `json:"id"`
-				Type         string `json:"type"`
-				Status       string `json:"status"`
-				Success      *bool  `json:"success"`
-				ContentItems []struct {
-					Type string `json:"type"`
-					Text string `json:"text"`
-				} `json:"contentItems"`
-			} `json:"item"`
-		}
-		if err := json.Unmarshal(event.Params, &params); err != nil {
-			return false, err
-		}
-		if params.ThreadID != ask.ThreadID || params.TurnID != ask.TurnID || params.Item.ID != ask.CallID || params.Item.Type != "dynamicToolCall" {
-			continue
-		}
-		if params.Item.Status != "completed" || params.Item.Success == nil || !*params.Item.Success {
-			return false, nil
-		}
-		for _, item := range params.Item.ContentItems {
-			if item.Type != "inputText" {
-				continue
-			}
-			var body struct {
-				Answers map[string][]string `json:"answers"`
-			}
-			if json.Unmarshal([]byte(item.Text), &body) == nil && digestValue(body.Answers) == digestValue(answers) {
-				return true, nil
-			}
-		}
-		return false, nil
-	}
+	return codexworker.AnswerEvidence(path, ask.ThreadID, ask.TurnID, ask.CallID, answers)
 }
 
-// A crash can happen after the native request is journaled but before its
-// Decision reaches SQLite. Replay only unresolved requests from that same
-// native turn; the normal event path creates the Decision exactly once.
+// A crash can happen after a native request is journaled but before its
+// Decision reaches SQLite. Replay only requests not completed or persisted.
 func appServerPendingAskEvents(path string, run *Run, execution *ExecutionRecord, turnID string) ([]codexapp.Envelope, error) {
-	file, err := os.Open(path)
+	journal, err := codexworker.ReadAskJournal(path, execution.SessionID, turnID, func(event codexapp.Envelope) error {
+		_, err := parseCodexAskCall(event, execution.SessionID, turnID)
+		return err
+	})
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
-	calls := make([]codexapp.Envelope, 0)
-	completed := map[string]bool{}
-	decoder := json.NewDecoder(file)
-	for {
-		var event codexapp.Envelope
-		if err := decoder.Decode(&event); err != nil {
-			if errors.Is(err, io.EOF) {
-				break
-			}
-			return nil, err
-		}
-		switch event.Method {
-		case "item/tool/call":
-			if _, err := parseCodexAskCall(event, execution.SessionID, turnID); err != nil {
-				return nil, err
-			}
-			calls = append(calls, event)
-		case "item/completed":
-			var params struct {
-				ThreadID string `json:"threadId"`
-				TurnID   string `json:"turnId"`
-				Item     struct {
-					ID   string `json:"id"`
-					Type string `json:"type"`
-				} `json:"item"`
-			}
-			if json.Unmarshal(event.Params, &params) != nil {
-				return nil, errors.New("app-server journal has invalid completed item")
-			}
-			if params.ThreadID == execution.SessionID && params.TurnID == turnID && params.Item.Type == "dynamicToolCall" {
-				completed[params.Item.ID] = true
-			}
-		}
-	}
 	var replay []codexapp.Envelope
-	for _, event := range calls {
+	for _, event := range journal.Calls {
 		call, _ := parseCodexAskCall(event, execution.SessionID, turnID)
-		if completed[call.CallID] || run.Decision != nil && run.Decision.Request.NativeAsk != nil && run.Decision.Request.NativeAsk.CallID == call.CallID {
+		if journal.Completed[call.CallID] || run.Decision != nil && run.Decision.Request.NativeAsk != nil && run.Decision.Request.NativeAsk.CallID == call.CallID {
 			continue
 		}
 		known := false

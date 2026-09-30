@@ -5,34 +5,20 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"runtime"
-	"strings"
 	"time"
+
+	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
 
 func nativeOrcaFixedAgentTitle(executionID string) string {
-	return "SteerLine agent " + executionID
+	return orcaworker.FixedAgentTitle(executionID)
 }
 
 func nativeOrcaFixedAgentCommand(c Config) (string, error) {
-	if c.hostName() != "orca" || c.agentName() != "codex" || c.Model == "" || c.ReasoningEffort == "" || c.Codex.Executable == "" || c.Sandbox != "workspace-write" {
-		return "", errors.New("fixed Orca agent launch requires Codex, model, effort, executable and workspace-write")
-	}
-	if c.Orca.Shell != "powershell.exe" && c.Orca.Shell != "pwsh.exe" {
-		return "", errors.New("fixed Orca agent launch requires a PowerShell terminal")
-	}
-	args := append([]string(nil), c.Codex.Args...)
-	args = append(args, "--model", c.Model, "--config", "model_reasoning_effort="+c.ReasoningEffort, "--sandbox", c.Sandbox)
-	if runtime.GOOS == "windows" {
-		// The worker must reach its Git/PR remote while the Codex workspace
-		// sandbox still limits filesystem writes.
-		args = append(args, "--config", "sandbox_workspace_write.network_access=true")
-	}
-	parts := []string{"&", powershellLiteral(c.Codex.Executable)}
-	for _, arg := range args {
-		parts = append(parts, powershellLiteral(arg))
-	}
-	return strings.Join(parts, " "), nil
+	return orcaworker.FixedAgentCommand(orcaworker.FixedAgentOptions{
+		Host: c.hostName(), Agent: c.agentName(), Model: c.Model, ReasoningEffort: c.ReasoningEffort,
+		Executable: c.Codex.Executable, Args: c.Codex.Args, Sandbox: c.Sandbox, Shell: c.Orca.Shell,
+	})
 }
 
 // A fixed Orca model needs a launch command: worktree create --agent only
@@ -75,23 +61,18 @@ func (s *Service) prepareNativeOrcaFixedModelWorker(ctx context.Context, run *Ru
 		if err != nil {
 			return err
 		}
-		env, callErr := workerOrcaCall(ctx, fixedConfig, "worktree", "create", "--repo", "id:"+repoID, "--name", name, "--base-branch", base, "--no-parent", "--setup", "skip", "--comment", nativeOrcaWorktreeComment(execution.ExecutionID), "--json")
+		platform, callErr := orcaworker.CreateFixedWorktree(ctx, orcaWorkerMetaCaller(fixedConfig), repoID, name, base, nativeOrcaWorktreeComment(execution.ExecutionID))
 		if callErr != nil {
 			_ = s.changeOperation(opID, "outcome_unknown", "", nil, callErr.Error())
 			return &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "fixed Orca worktree creation needs reconciliation", Cause: callErr}
 		}
-		var result struct {
-			Worktree workerOrcaWorktree `json:"worktree"`
-		}
-		result, err = nativeOrcaResult[struct {
-			Worktree workerOrcaWorktree `json:"worktree"`
-		}](env)
-		if err != nil || validateWorkerOrcaWorktree(result.Worktree, name, repoID, base) != nil || result.Worktree.CreatedWithAgent != "" {
-			_ = s.changeOperation(opID, "outcome_unknown", "", env.Result, "fixed worktree receipt is incomplete")
+		parsedWorktree, err := orcaworker.ParseFixedWorktreeReceipt(platform, name, repoID, base)
+		if err != nil {
+			_ = s.changeOperation(opID, "outcome_unknown", "", platform.Payload, "fixed worktree receipt is incomplete")
 			return &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "fixed Orca worktree receipt is incomplete", Cause: err}
 		}
-		worktree = result.Worktree
-		if err := s.changeOperation(opID, "confirmed", "", env.Result, ""); err != nil {
+		worktree = parsedWorktree
+		if err := s.changeOperation(opID, "confirmed", "", platform.Payload, ""); err != nil {
 			return err
 		}
 	}
@@ -149,36 +130,29 @@ func (s *Service) prepareNativeOrcaFixedAgentTerminal(ctx context.Context, run *
 	if err != nil {
 		return err
 	}
-	for _, arg := range writeArgs {
-		command += " " + powershellLiteral(arg)
-	}
+	command = orcaworker.AppendPowerShellArgs(command, writeArgs)
 	opID, err := s.startOperation("orca_native_agent_terminal", key, map[string]string{"worktree": worktree.ID, "title": title, "model": fixedConfig.Model, "effort": fixedConfig.ReasoningEffort, "command": command})
 	if err != nil {
 		return err
 	}
-	env, callErr := workerOrcaCall(ctx, fixedConfig, "terminal", "create", "--worktree", "id:"+worktree.ID, "--title", title, "--shell", fixedConfig.Orca.Shell, "--command", command, "--json")
+	platform, callErr := orcaworker.CreateFixedAgentTerminal(ctx, orcaWorkerMetaCaller(fixedConfig), worktree.ID, title, fixedConfig.Orca.Shell, command)
 	if callErr != nil {
 		_ = s.changeOperation(opID, "outcome_unknown", "", nil, callErr.Error())
 		return &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "fixed Orca agent launch needs reconciliation", Cause: callErr}
 	}
-	var result struct {
-		Terminal orcaTerminal `json:"terminal"`
-	}
-	result, err = nativeOrcaResult[struct {
-		Terminal orcaTerminal `json:"terminal"`
-	}](env)
-	if err != nil || result.Terminal.Handle == "" || result.Terminal.IncarnationID == "" || result.Terminal.WorktreeID != worktree.ID || result.Terminal.Title != title {
-		_ = s.changeOperation(opID, "outcome_unknown", "", env.Result, "fixed agent terminal creation receipt is incomplete")
+	parsedTerminal, err := orcaworker.ParseFixedAgentTerminalReceipt(platform, worktree.ID, title)
+	if err != nil {
+		_ = s.changeOperation(opID, "outcome_unknown", "", platform.Payload, "fixed agent terminal creation receipt is incomplete")
 		return &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "fixed Orca agent launch receipt is incomplete", Cause: err}
 	}
-	if err := s.changeOperation(opID, "accepted", "", env.Result, ""); err != nil {
+	if err := s.changeOperation(opID, "accepted", "", platform.Payload, ""); err != nil {
 		return err
 	}
-	if err := s.waitAndBindNativeOrcaFixedAgent(ctx, run, execution, worktree, result.Terminal.Handle, repoID, base); err != nil {
-		_ = s.changeOperation(opID, "outcome_unknown", "", env.Result, err.Error())
+	if err := s.waitAndBindNativeOrcaFixedAgent(ctx, run, execution, worktree, parsedTerminal.Handle, repoID, base); err != nil {
+		_ = s.changeOperation(opID, "outcome_unknown", "", platform.Payload, err.Error())
 		return err
 	}
-	if err := s.changeOperation(opID, "confirmed", "", env.Result, ""); err != nil {
+	if err := s.changeOperation(opID, "confirmed", "", platform.Payload, ""); err != nil {
 		return err
 	}
 	return s.prepareNativeOrcaCoordinator(ctx, run, execution)

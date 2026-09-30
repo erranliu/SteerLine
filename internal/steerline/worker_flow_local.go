@@ -3,13 +3,11 @@ package steerline
 import (
 	"context"
 	"errors"
-	"fmt"
-	"os"
 	"os/exec"
-	"strings"
 
-	"github.com/erranliu/SteerLine/internal/steerline/codexapp"
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
+	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
+	"github.com/erranliu/SteerLine/internal/steerline/workerflow"
 )
 
 type workerTurnOutcome = codexworker.Outcome
@@ -20,29 +18,7 @@ func readWorkerTurnOutcome(path string) (workerTurnOutcome, error) {
 }
 
 func workerFlowPrompt(task TaskRecord, contract TaskContract, workflowRunID string, localPublish bool) (string, error) {
-	if task.TaskID == "" || task.Title == "" || contract.ContractID == "" || contract.SpecRef.Path == "" || contract.PlanRef.Path == "" || !stableExecutionID(workflowRunID) {
-		return "", errors.New("worker instruction requires a fixed task, Spec, Plan and workflow run")
-	}
-	var prompt strings.Builder
-	fmt.Fprintf(&prompt, "SteerLine task %s: %s\nFixed SteerLine workflow_run_id: %s\n", task.TaskID, task.Title, workflowRunID)
-	if !localPublish {
-		prompt.WriteString("Orca Run, Task and Dispatch IDs are separate from this ID.\n")
-	}
-	prompt.WriteString("\n")
-	if localPublish {
-		fmt.Fprintf(&prompt, "Follow the fixed task contract and the project's instructions. Read each reference from its listed Git commit and check its SHA-256. Implement and verify the task, then stage only the intended changes. SteerLine will commit, push, and create a draft PR targeting %s from the host after your explicit publication request. Keep working in this same session when the user sends feedback.\n\n", contract.Branch)
-	} else {
-		fmt.Fprintf(&prompt, "Follow the fixed task contract and the project's instructions. Read each reference from its listed Git commit and check its SHA-256. Implement the task, commit the code, create a PR targeting %s, and report its URL. Keep working in this same session when the user sends feedback.\n\n", contract.Branch)
-	}
-	fmt.Fprintf(&prompt, "Spec: %s at %s (SHA-256 %s)\n", contract.SpecRef.Path, contract.SpecRef.Commit, contract.SpecRef.SHA256)
-	fmt.Fprintf(&prompt, "Plan: %s at %s (SHA-256 %s)\n", contract.PlanRef.Path, contract.PlanRef.Commit, contract.PlanRef.SHA256)
-	for _, ref := range contract.CommonRefs {
-		fmt.Fprintf(&prompt, "Common instruction: %s at %s (SHA-256 %s)\n", ref.Path, ref.Commit, ref.SHA256)
-	}
-	for _, ref := range contract.AcceptanceRefs {
-		fmt.Fprintf(&prompt, "Acceptance reference: %s at %s (SHA-256 %s)\n", ref.Path, ref.Commit, ref.SHA256)
-	}
-	return prompt.String(), nil
+	return workerflow.Prompt(task, contract, workflowRunID, localPublish)
 }
 
 func requireWorkerFlowCapabilities(ctx context.Context, c Config) error {
@@ -50,7 +26,7 @@ func requireWorkerFlowCapabilities(ctx context.Context, c Config) error {
 		if c.Profile != "" || c.Sandbox != "workspace-write" || (c.Model == "") != (c.ReasoningEffort == "") {
 			return &BackendError{Code: BackendUnsupported, Diagnostic: "Orca requires workspace-write, no Codex profile, and model with reasoning_effort together"}
 		}
-		if _, err := workerOrcaCall(ctx, c, "status", "--json"); err != nil {
+		if err := orcaworker.CheckStatus(ctx, orcaWorkerCaller(c)); err != nil {
 			return err
 		}
 		_, err := nativeOrcaRepo(ctx, c)
@@ -67,38 +43,19 @@ func requireWorkerFlowCapabilities(ctx context.Context, c Config) error {
 		return err
 	}
 	c.Codex = command
-	nativeExecutable, err := codexapp.NativeExecutable(command.Executable)
-	if err != nil {
-		return &BackendError{Code: BackendUnsupported, Diagnostic: "local Codex app-server needs a directly bound native process", Cause: err}
-	}
 	runner := Runner{Dir: c.Repository, Timeout: duration(c.CommandTimeout)}
-	configuredVersion, configuredErr := runner.Output(ctx, Command{Executable: command.Executable, Args: append(append([]string(nil), command.Args...), "--version")})
-	nativeVersion, nativeErr := runner.Output(ctx, Command{Executable: nativeExecutable, Args: append(append([]string(nil), command.Args...), "--version")})
-	if configuredErr != nil || nativeErr != nil || strings.TrimSpace(string(configuredVersion)) == "" || strings.TrimSpace(string(configuredVersion)) != strings.TrimSpace(string(nativeVersion)) {
-		return &BackendError{Code: BackendUnsupported, Diagnostic: "configured Codex and native app-server versions differ or cannot be verified", Cause: errors.Join(configuredErr, nativeErr)}
+	err := codexworker.ProbeCapabilities(ctx, codexworker.ProbeConfig{
+		Executable: command.Executable, Args: command.Args, Repository: c.Repository, RunDir: c.RunDir,
+	}, codexworker.ProbePort{
+		Output: func(ctx context.Context, executable string, args []string) ([]byte, error) {
+			return runner.Output(ctx, Command{Executable: executable, Args: args})
+		},
+		HistoryAvailable: func(ctx context.Context) bool { return nativeCodexHistoryAvailable(ctx, c) },
+		StartDetached:    func(cmd *exec.Cmd) error { _, err := startDetachedProcess(cmd); return err },
+	})
+	var unsupported *codexworker.ProbeError
+	if errors.As(err, &unsupported) {
+		return &BackendError{Code: BackendUnsupported, Diagnostic: unsupported.Diagnostic, Cause: unsupported.Cause}
 	}
-	probe := append(append([]string(nil), command.Args...), "app-server", "--help")
-	out, err := runner.Output(ctx, Command{Executable: nativeExecutable, Args: probe})
-	if err != nil || !strings.Contains(string(out), "--listen") {
-		return &BackendError{Code: BackendUnsupported, Diagnostic: "configured Codex executable does not expose app-server WebSocket transport", Cause: err}
-	}
-	if !nativeCodexHistoryAvailable(ctx, c) {
-		return &BackendError{Code: BackendUnsupported, Diagnostic: "configured Codex session history cannot be read for exact turn reconciliation"}
-	}
-	probeFile, err := os.CreateTemp(c.RunDir, "worker-detach-probe-*.log")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(probeFile.Name())
-	defer probeFile.Close()
-	probeArgs := append(append([]string(nil), c.Codex.Args...), "--version")
-	process := exec.CommandContext(ctx, nativeExecutable, probeArgs...)
-	process.Dir, process.Stdout, process.Stderr = c.Repository, probeFile, probeFile
-	if _, err := startDetachedProcess(process); err != nil {
-		return &BackendError{Code: BackendUnsupported, Diagnostic: "local host cannot retain a worker process when the center stops", Cause: err}
-	}
-	if err := process.Wait(); err != nil {
-		return &BackendError{Code: BackendUnsupported, Diagnostic: "detached Codex capability probe failed", Cause: err}
-	}
-	return nil
+	return err
 }

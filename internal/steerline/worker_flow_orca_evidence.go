@@ -2,8 +2,9 @@ package steerline
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
+
+	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
 
 type nativeOrcaMessageFact struct {
@@ -26,21 +27,15 @@ func readNativeOrcaDelivery(ctx context.Context, c Config, execution *ExecutionR
 	if execution == nil || execution.OrcaNative == nil || execution.OrcaNative.Coordinator.Terminal == "" || execution.Target.OrchestrationRun == "" {
 		return fact, errors.New("native Orca inbox has no bound coordinator/Run")
 	}
-	env, err := workerOrcaCall(ctx, c, "orchestration", "check", "--terminal", execution.OrcaNative.Coordinator.Terminal, "--run", execution.Target.OrchestrationRun, "--json")
+	delivery, err := orcaworker.CheckInbox(ctx, orcaWorkerMetaCaller(c), execution.OrcaNative.Coordinator.Terminal, execution.Target.OrchestrationRun)
 	if err != nil {
 		return fact, err
 	}
-	if env.Meta.RuntimeID != execution.OrcaNative.Coordinator.RuntimeID {
+	if delivery.RuntimeID != execution.OrcaNative.Coordinator.RuntimeID {
 		return fact, errors.New("Orca coordinator runtime changed")
 	}
-	var delivery struct {
-		RunID          string             `json:"runId"`
-		DeliveryID     string             `json:"deliveryId"`
-		Messages       []OrcaInboxMessage `json:"messages"`
-		ConnectionLost bool               `json:"connectionLost"`
-	}
-	if err := json.Unmarshal(env.Result, &delivery); err != nil || delivery.RunID != execution.Target.OrchestrationRun || delivery.ConnectionLost || len(delivery.Messages) > 0 && delivery.DeliveryID == "" {
-		return fact, errors.Join(err, errors.New("Orca inbox delivery identity is unverified"))
+	if delivery.RunID != execution.Target.OrchestrationRun || delivery.ConnectionLost || len(delivery.Messages) > 0 && delivery.DeliveryID == "" {
+		return fact, errors.New("Orca inbox delivery identity is unverified")
 	}
 	fact.DeliveryID, fact.Messages = delivery.DeliveryID, delivery.Messages
 	return fact, nil
@@ -83,40 +78,21 @@ func readNativeOrcaSettlement(ctx context.Context, c Config, execution *Executio
 	if execution == nil || execution.OrcaNative == nil || execution.Process == nil || turn == nil {
 		return fact, errors.New("Orca settlement has no fixed execution identity")
 	}
-	env, err := workerOrcaCall(ctx, c, "orchestration", "worker-show", "--dispatch", turn.DispatchID, "--json")
+	status, err := orcaworker.VerifySettledDispatch(ctx, orcaWorkerMetaCaller(c), orcaworker.DispatchIdentity{
+		DispatchID: turn.DispatchID, TaskID: turn.TaskID, RunID: execution.Target.OrchestrationRun,
+		RuntimeID: execution.OrcaNative.Coordinator.RuntimeID, Terminal: execution.Process.Terminal,
+		Incarnation: execution.Process.Incarnation, WorktreeID: execution.Process.WorktreeID,
+	})
 	if err != nil {
 		return fact, err
 	}
-	var result struct {
-		Dispatch struct {
-			ID     string `json:"id"`
-			RunID  string `json:"runId"`
-			TaskID string `json:"taskId"`
-			Status string `json:"status"`
-		} `json:"dispatch"`
-		Worker struct {
-			DispatchID          string `json:"dispatchId"`
-			AgentTerminalHandle string `json:"agentTerminalHandle"`
-		} `json:"worker"`
-		Terminal struct {
-			Handle        string `json:"handle"`
-			IncarnationID string `json:"incarnationId"`
-			WorktreeID    string `json:"worktreeId"`
-		} `json:"terminal"`
-	}
-	if err := json.Unmarshal(env.Result, &result); err != nil {
-		return fact, err
-	}
-	if env.Meta.RuntimeID != execution.OrcaNative.Coordinator.RuntimeID || result.Dispatch.ID != turn.DispatchID || result.Dispatch.TaskID != turn.TaskID || result.Dispatch.RunID != execution.Target.OrchestrationRun || result.Worker.DispatchID != turn.DispatchID || result.Worker.AgentTerminalHandle != execution.Process.Terminal || result.Terminal.Handle != execution.Process.Terminal || result.Terminal.IncarnationID != execution.Process.Incarnation || result.Terminal.WorktreeID != execution.Process.WorktreeID {
-		return fact, errors.New("Orca settled Dispatch identity differs from the fixed worker")
-	}
-	if turn.Outcome == "succeeded" && result.Dispatch.Status != "completed" || turn.Outcome == "failed" && result.Dispatch.Status != "failed" {
+	if turn.Outcome == "succeeded" && status != "completed" || turn.Outcome == "failed" && status != "failed" {
 		return fact, errors.New("Orca worker_done and Dispatch settlement disagree")
 	}
 	if turn.Outcome != "succeeded" && turn.Outcome != "failed" {
 		return fact, errors.New("Orca worker_done has no verified outcome")
 	}
-	fact.Outcome, fact.DispatchID, fact.RuntimeID = turn.Outcome, turn.DispatchID, env.Meta.RuntimeID
+	fact.Outcome, fact.DispatchID, fact.RuntimeID = turn.Outcome, turn.DispatchID, execution.OrcaNative.Coordinator.RuntimeID
 	return fact, nil
 }
 
@@ -124,22 +100,17 @@ func verifyNativeOrcaActiveDispatch(ctx context.Context, c Config, execution *Ex
 	if execution == nil || execution.Process == nil || turn == nil {
 		return errors.New("stopped-center Orca Dispatch has no fixed identity")
 	}
-	env, err := workerOrcaCall(ctx, c, "orchestration", "worker-show", "--dispatch", turn.DispatchID, "--json")
+	status, err := orcaworker.VerifyActiveDispatch(ctx, orcaWorkerMetaCaller(c), orcaworker.DispatchIdentity{
+		DispatchID: turn.DispatchID, TaskID: turn.TaskID, RunID: execution.Target.OrchestrationRun,
+		RuntimeID: execution.Process.RuntimeID, Terminal: execution.Process.Terminal,
+	})
+	if errors.Is(err, orcaworker.ErrActiveDispatchIdentity) {
+		return errors.New("stopped-center Orca Dispatch could not be verified as still active")
+	}
 	if err != nil {
 		return err
 	}
-	var current struct {
-		Dispatch struct {
-			ID     string `json:"id"`
-			RunID  string `json:"runId"`
-			TaskID string `json:"taskId"`
-			Status string `json:"status"`
-		} `json:"dispatch"`
-		Worker struct {
-			AgentTerminalHandle string `json:"agentTerminalHandle"`
-		} `json:"worker"`
-	}
-	if json.Unmarshal(env.Result, &current) != nil || env.Meta.RuntimeID != execution.Process.RuntimeID || current.Dispatch.ID != turn.DispatchID || current.Dispatch.RunID != execution.Target.OrchestrationRun || current.Dispatch.TaskID != turn.TaskID || current.Dispatch.Status != "dispatched" || current.Worker.AgentTerminalHandle != execution.Process.Terminal {
+	if status != "dispatched" {
 		return errors.New("stopped-center Orca Dispatch could not be verified as still active")
 	}
 	return nil

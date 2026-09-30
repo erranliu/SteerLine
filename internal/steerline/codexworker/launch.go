@@ -1,0 +1,48 @@
+package codexworker
+
+import (
+	"net"
+	"os"
+	"os/exec"
+	"path/filepath"
+
+	"github.com/erranliu/SteerLine/internal/steerline/codexapp"
+)
+
+type LaunchConfig struct {
+	Executable string
+	Args       []string
+	Profile    string
+	Workspace  string
+	ServerDir  string
+}
+
+// LaunchServer starts the fixed native app-server. The caller supplies its
+// platform process starter and persists the returned identity before a turn.
+func LaunchServer[T any](config LaunchConfig, start func(*exec.Cmd) (T, error), environment func([]string) []string) (identity T, process *os.Process, endpoint string, err error) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return identity, nil, "", err
+	}
+	endpoint = "ws://" + listener.Addr().String()
+	_ = listener.Close()
+	launch, err := codexapp.AppServerLaunch(config.Executable, config.Args, config.Profile, endpoint)
+	if err != nil {
+		return identity, nil, "", err
+	}
+	output, err := os.OpenFile(filepath.Join(config.ServerDir, "appserver.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+	if err != nil {
+		return identity, nil, "", err
+	}
+	cmd := exec.Command(launch.Executable, launch.Args...)
+	cmd.Dir = config.Workspace
+	cmd.Env = environment(cmd.Environ())
+	cmd.Stdout, cmd.Stderr = output, output
+	identity, err = start(cmd)
+	_ = output.Close()
+	if err != nil {
+		return identity, nil, "", err
+	}
+	go func() { _ = cmd.Wait() }()
+	return identity, cmd.Process, endpoint, nil
+}

@@ -246,11 +246,11 @@ func TestOrcaTerminalExitCauseConfirmsCommandExit(t *testing.T) {
 	if err := json.Unmarshal([]byte(`{"handle":"term-exit","connected":false,"exitCause":{"kind":"exited","exitCode":0}}`), &term); err != nil {
 		t.Fatal(err)
 	}
-	if !term.exited() {
+	if !term.Exited() {
 		t.Fatalf("Orca exitCause was not treated as terminal exit evidence: %+v", term)
 	}
 	term = orcaTerminal{Status: "running", Connected: true}
-	if term.exited() {
+	if term.Exited() {
 		t.Fatal("live Orca terminal was misclassified as exited")
 	}
 }
