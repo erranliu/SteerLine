@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
@@ -309,22 +310,12 @@ func streamWorkerEventsWithEmit(reader io.Reader, normalizer Normalizer, emit fu
 }
 
 func emitWorkerLine(line, rawRecord []byte, normalizer Normalizer, sourceSeq uint64, sourceOffset, sourceLength int64, emit func(WorkerEvent)) {
-	var event struct {
-		Type     string `json:"type"`
-		ThreadID string `json:"thread_id"`
-		Item     struct {
-			Type string `json:"type"`
-		} `json:"item"`
-	}
-	if e := json.Unmarshal(line, &event); e != nil {
+	event, err := codexworker.DecodeExecLine(line)
+	if err != nil {
 		emit(WorkerEvent{Summary: "unparsed raw event", Activity: ActivityEvent{Source: normalizer.Name(), Kind: "unknown", Title: "unparsed raw event", Meta: map[string]any{"raw_sha256": hashJournalBytes(line), "raw_bytes": len(line)}}, Raw: append([]byte(nil), rawRecord...), SourceSeq: sourceSeq, SourceOffset: sourceOffset, SourceLength: sourceLength, SourceSegment: "local-jsonl-v1"})
 		return
 	}
-	summary := clip(event.Type+" "+event.Item.Type, 512)
-	session := ""
-	if event.Type == "thread.started" {
-		session = event.ThreadID
-	}
+	summary, session := event.Summary, event.SessionID
 	activities := normalizer.Normalize(line)
 	if len(activities) == 0 {
 		activities = []ActivityEvent{{Source: normalizer.Name(), Kind: "unknown", Title: event.Type, Raw: cloneRaw(line)}}

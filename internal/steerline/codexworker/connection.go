@@ -130,17 +130,10 @@ type TurnSnapshot struct {
 // ReadTurnSnapshot verifies a native turn in the original thread and
 // workspace before recovery decides whether to attach or settle it.
 func ReadTurnSnapshot(ctx context.Context, client *codexapp.Client, threadID, workspace, turnID string) (TurnSnapshot, error) {
-	var resumed struct {
-		Thread struct {
-			ID  string `json:"id"`
-			Cwd string `json:"cwd"`
-		} `json:"thread"`
-	}
-	if err := client.Call(ctx, "thread/resume", map[string]any{"threadId": threadID, "cwd": workspace, "excludeTurns": true}, &resumed); err != nil {
+	// The native resume request attaches this connection to the original thread.
+	// It contains no input and never creates or starts a turn.
+	if err := ResumeThread(ctx, client, threadID, workspace); err != nil {
 		return TurnSnapshot{}, err
-	}
-	if resumed.Thread.ID != threadID || !sameWorkspace(resumed.Thread.Cwd, workspace) {
-		return TurnSnapshot{}, errors.New("resumed app-server thread/workspace changed")
 	}
 	var read struct {
 		Thread struct {

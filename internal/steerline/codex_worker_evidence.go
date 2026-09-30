@@ -3,9 +3,10 @@ package steerline
 import (
 	"errors"
 	"fmt"
-	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	"path/filepath"
 
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
+	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	"github.com/erranliu/SteerLine/internal/steerline/workerflow"
 )
 
@@ -24,7 +25,7 @@ func readWorkerTurnEvidence(fixed workerFlowContext, mode workerflow.Mode) (work
 	if fact.TurnID == "" {
 		fact.TurnID = execution.PendingTurnID
 	}
-	if !codexThreadID.MatchString(fact.TurnID) {
+	if !codexworker.ValidNativeID(fact.TurnID) {
 		return fact, errors.New("The original worker exited without a saved turn identity")
 	}
 	fact.CommandID = execution.CurrentCommandID
@@ -44,7 +45,7 @@ func readWorkerTurnEvidence(fixed workerFlowContext, mode workerflow.Mode) (work
 		return fact, errors.New("The original worker exited, but its turn output is insufficient to determine the result")
 	}
 	fact.SessionID, fact.Started, fact.Completed = outcome.SessionID, outcome.Started, outcome.Completed
-	fact.Succeeded = outcome.NativeStatus == "completed"
+	fact.Succeeded = outcome.Succeeded
 	fact.LastMessage, fact.Failure = outcome.LastMessage, outcome.Failure
 	fact.PRCandidates = outcome.PRCandidates
 	if !fact.Succeeded {

@@ -13,6 +13,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
@@ -33,13 +34,13 @@ func (s *SQLiteStore) CommitConversation(ctx context.Context, writes []Conversat
 	out := make([]ConversationEvent, 0, len(writes))
 	for _, write := range writes {
 		ev := write.Event
-		if err := ev.validate(); err != nil {
+		if err := ev.Validate(); err != nil {
 			return nil, err
 		}
 		if checkpoint.ProjectID != "" && (checkpoint.ProjectID != ev.ProjectID || checkpoint.ExecutionID != ev.ExecutionID || checkpoint.AttemptID != ev.AttemptID || checkpoint.Source != ev.Source || checkpoint.SourceSegment != ev.SourceSegment) {
 			return nil, errors.New("conversation event and source checkpoint identities differ")
 		}
-		key := ev.sourceKey()
+		key := ev.SourceKey()
 		var existingID int64
 		err := tx.QueryRowContext(ctx, `SELECT event_id FROM conversation_events WHERE project_identity=? AND source_event_key=?`, ev.ProjectID, key).Scan(&existingID)
 		if err == nil {
@@ -543,8 +544,8 @@ func (s *SQLiteStore) ConversationSourceCheckpoints(ctx context.Context, project
 	return out, rows.Err()
 }
 
-func (s *SQLiteStore) RestoreConversationMapper(ctx context.Context, project, execution, attempt, source, segment string) (*ConversationMapper, error) {
-	mapper := &ConversationMapper{turnFinalSeen: map[string]bool{}}
+func (s *SQLiteStore) RestoreConversationMapper(ctx context.Context, project, execution, attempt, source, segment string) (*codexworker.ConversationMapper, error) {
+	mapper := &codexworker.ConversationMapper{}
 	var payload []byte
 	err := s.db.QueryRowContext(ctx, `SELECT payload FROM conversation_events WHERE project_identity=? AND execution_id=? AND attempt_id=? AND source=? AND source_segment=? AND event_type=? ORDER BY event_id DESC LIMIT 1`, project, execution, attempt, source, segment, ConversationSession).Scan(&payload)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
@@ -555,7 +556,7 @@ func (s *SQLiteStore) RestoreConversationMapper(ctx context.Context, project, ex
 		if err = json.Unmarshal(payload, &event); err != nil {
 			return nil, err
 		}
-		mapper.sessionID, mapper.sessionQuality = event.SessionID, event.SessionQuality
+		mapper.RestoreSession(event)
 	}
 	payload = nil
 	err = s.db.QueryRowContext(ctx, `SELECT payload FROM conversation_events WHERE project_identity=? AND execution_id=? AND attempt_id=? AND source=? AND source_segment=? AND event_type=? ORDER BY event_id DESC LIMIT 1`, project, execution, attempt, source, segment, ConversationTurnStarted).Scan(&payload)
@@ -567,13 +568,13 @@ func (s *SQLiteStore) RestoreConversationMapper(ctx context.Context, project, ex
 		if err = json.Unmarshal(payload, &event); err != nil {
 			return nil, err
 		}
-		mapper.currentTurn, mapper.turnQuality = event.TurnID, event.TurnQuality
+
 		var count int
-		err = s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM conversation_events WHERE project_identity=? AND execution_id=? AND attempt_id=? AND source=? AND source_segment=? AND turn_id=? AND event_type=? AND phase=?`, project, execution, attempt, source, segment, mapper.currentTurn, ConversationMessageComplete, MessagePhaseFinalAnswer).Scan(&count)
+		err = s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM conversation_events WHERE project_identity=? AND execution_id=? AND attempt_id=? AND source=? AND source_segment=? AND turn_id=? AND event_type=? AND phase=?`, project, execution, attempt, source, segment, event.TurnID, ConversationMessageComplete, MessagePhaseFinalAnswer).Scan(&count)
 		if err != nil {
 			return nil, err
 		}
-		mapper.turnFinalSeen[mapper.currentTurn] = count > 0
+		mapper.RestoreTurn(event, count > 0)
 	}
 	return mapper, nil
 }

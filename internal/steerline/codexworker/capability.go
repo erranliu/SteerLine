@@ -2,12 +2,13 @@ package codexworker
 
 import (
 	"context"
-	"errors"
 	"os"
 	"os/exec"
 	"strings"
 
-	"github.com/erranliu/SteerLine/internal/steerline/codexapp"
+	"errors"
+	"fmt"
+	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 type ProbeConfig struct {
@@ -32,7 +33,7 @@ func (e *ProbeError) Error() string { return e.Diagnostic }
 func (e *ProbeError) Unwrap() error { return e.Cause }
 
 func ProbeCapabilities(ctx context.Context, config ProbeConfig, port ProbePort) error {
-	nativeExecutable, err := codexapp.NativeExecutable(config.Executable)
+	nativeExecutable, err := NativeExecutable(config.Executable)
 	if err != nil {
 		return &ProbeError{Diagnostic: "local Codex app-server needs a directly bound native process", Cause: err}
 	}
@@ -63,6 +64,19 @@ func ProbeCapabilities(ctx context.Context, config ProbeConfig, port ProbePort) 
 	defer closeOwned()
 	if err := process.Wait(); err != nil {
 		return &ProbeError{Diagnostic: "owned Codex capability probe failed", Cause: err}
+	}
+	return nil
+}
+
+func ProbeManagedCLI(ctx context.Context, command contracts.Command, output func(context.Context, string, []string) ([]byte, error)) error {
+	help, err := output(ctx, command.Executable, []string{"--help"})
+	if err != nil {
+		return err
+	}
+	for _, flag := range []string{"--strict-config", "--sandbox", "--ask-for-approval", "never", "--config"} {
+		if !strings.Contains(string(help), flag) {
+			return fmt.Errorf("Codex CLI does not support managed launch parameter %s", flag)
+		}
 	}
 	return nil
 }

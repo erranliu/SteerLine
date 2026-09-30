@@ -1,6 +1,6 @@
 # Spec Codex 执行适配器迁移
 
-任务 ID：57；任务名称：Codex 执行适配器迁移；目标：`EXECUTION-ISOLATION`。状态：待实施。配套 [Plan](execution-isolation-04-codex.plan.md)。硬前置：[#55](execution-isolation-02-workspace.spec.md)、[#56](execution-isolation-03-publication.spec.md) 合入，一个实现 PR 交付。
+任务 ID：57；任务名称：Codex 执行适配器迁移；目标：`EXECUTION-ISOLATION`。状态：已实施，待合入。配套 [Plan](execution-isolation-04-codex.plan.md)。硬前置：[#55](execution-isolation-02-workspace.spec.md)、[#56](execution-isolation-03-publication.spec.md) 合入，一个实现 PR 交付。
 
 ## 目标与范围
 
@@ -50,3 +50,7 @@ Windows Orca 当前有/无 model 均受管，model/effort 可分别省略；保�
 | CX4 | 固定 CLI/app-server、local Windows 规则及 Orca 无 model 受管/独立 effort/安全 args 语义保持，命令和冻结证据不漂移 |
 
 使用既有 fake app-server 与命令 fixture。无行为变化不要求新真机认证；若实施中必须改变启动行为，须单独说明原因并补必要隔离证据，不能当作机械迁移隐藏。
+
+## 实施记录
+
+最终所有者、迁移测试路径、实际最小验证及基线剩余项见[验收记录](../validation/execution-isolation-04-codex/README.md)。

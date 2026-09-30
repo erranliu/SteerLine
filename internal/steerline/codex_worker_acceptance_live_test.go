@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
@@ -86,7 +87,7 @@ func TestAppServerServiceParallelRecoveryLive(t *testing.T) {
 		}
 		for _, runID := range []string{run8.RunID, run9.RunID} {
 			path := filepath.Join(c.RunDir, "runs", runID, "app-server", "process.json")
-			var receipt appServerProcessReceipt
+			var receipt codexworker.ProcessReceipt
 			if data, err := os.ReadFile(path); err == nil && json.Unmarshal(data, &receipt) == nil {
 				processes = append(processes, receipt.Identity)
 			}
@@ -379,7 +380,7 @@ func TestAppServerHostExitRecoveryLive(t *testing.T) {
 			if err != nil || entry.IsDir() || entry.Name() != "process.json" {
 				return nil
 			}
-			var processReceipt appServerProcessReceipt
+			var processReceipt codexworker.ProcessReceipt
 			if data, err := os.ReadFile(path); err == nil && json.Unmarshal(data, &processReceipt) == nil && inspectProcess(&processReceipt.Identity) == "matching process still exists" {
 				if process, err := os.FindProcess(processReceipt.Identity.PID); err == nil {
 					_ = process.Kill()

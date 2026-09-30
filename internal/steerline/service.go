@@ -7,15 +7,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	"io"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
+	"github.com/erranliu/SteerLine/internal/steerline/publication"
 )
 
 type Service struct {
@@ -46,7 +47,7 @@ type Service struct {
 	// activities holds one journal per run so PR and delivery events always land in
 	// their own run's file, even after the worker exited.
 	activities                 map[string]*ActivityWriter
-	conversationMappers        map[string]*ConversationMapper
+	conversationMappers        map[string]*codexworker.ConversationMapper
 	conversationReplayRequests chan []conversationJournalSource
 	conversationReplayErrors   chan error
 	// Console selects service-side rendering: "", "off", "pretty", "summary" or "json".
@@ -103,7 +104,7 @@ func NewService(c Config) (_ *Service, retErr error) {
 			_ = db.Close()
 		}
 	}()
-	s := &Service{Config: c, baseConfig: c, domainStore: db, store: &Store{Domain: db, Project: c.identity}, prs: publication.NewClient(c.PR, r, r.Timeout), activities: map[string]*ActivityWriter{}, conversationMappers: map[string]*ConversationMapper{}, workers: map[string]*Worker{}, ownedLocalProcesses: map[string]*childProcess{}}
+	s := &Service{Config: c, baseConfig: c, domainStore: db, store: &Store{Domain: db, Project: c.identity}, prs: publication.NewClient(c.PR, r, r.Timeout), activities: map[string]*ActivityWriter{}, conversationMappers: map[string]*codexworker.ConversationMapper{}, workers: map[string]*Worker{}, ownedLocalProcesses: map[string]*childProcess{}}
 	old, e := loadRuntimeSnapshot(db, c.identity, false)
 	if errors.Is(e, sql.ErrNoRows) {
 		old, e = nil, nil
@@ -779,7 +780,7 @@ func (s *Service) run(ctx context.Context, dispatchMode string) (retErr error) {
 	if len(replaySources) > 0 {
 		s.conversationReplayRequests <- replaySources
 	}
-	historyRequests := make(chan []codexHistoryBinding, 1)
+	historyRequests := make(chan []codexworker.HistoryBinding, 1)
 	historyDone := make(chan struct{})
 	codexHistoryDone = historyDone
 	go func() {

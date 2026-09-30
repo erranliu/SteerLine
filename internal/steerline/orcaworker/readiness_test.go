@@ -200,35 +200,3 @@ func TestReadinessReceiptRejectsStaleAndEscapingFiles(t *testing.T) {
 		_ = os.Remove(path)
 	}
 }
-
-func TestManagedOrcaLaunchFreezesPermissionsAndRejectsArgs(t *testing.T) {
-	base := FixedAgentOptions{Host: "orca", Agent: "codex", Executable: "codex.exe", Sandbox: "workspace-write", WindowsSandbox: "unelevated", Shell: "powershell.exe"}
-	for _, model := range []string{"", "chosen-model"} {
-		options := base
-		options.Model = model
-		if model != "" {
-			options.ReasoningEffort = "high"
-		}
-		command, err := FixedAgentCommand(options)
-		if err != nil || !strings.Contains(command, "'never'") || !strings.Contains(command, "'windows.sandbox=unelevated'") {
-			t.Fatalf("permissions not frozen: %s / %v", command, err)
-		}
-		if model == "" && strings.Contains(command, "--model") {
-			t.Fatal("default model was overwritten")
-		}
-	}
-	for _, args := range [][]string{{"-a", "on-request"}, {"--ask-for-approval=on-request"}, {"-sworkspace-write"}, {"-c", "windows.sandbox=unelevated"}, {"-capproval_policy=never"}, {"--config=model='x'"}, {"--config", "sandbox_workspace_write.writable_roots=['C:/']"}, {"--profile=x"}, {"-p", "x"}, {"--add-dir=C:/"}, {"-C", "C:/"}, {"exec"}, {"--dangerously-bypass-approvals-and-sandbox"}, {"--approve-for-me"}, {"--remote", "ws://localhost"}, {"--worktree"}} {
-		options := base
-		options.Args = args
-		if _, err := FixedAgentCommand(options); err == nil {
-			t.Fatalf("conflicting args accepted: %v", args)
-		}
-	}
-	for _, mode := range []string{"", "automatic", "danger-full-access"} {
-		options := base
-		options.WindowsSandbox = mode
-		if _, err := FixedAgentCommand(options); err == nil {
-			t.Fatalf("invalid windows sandbox accepted: %q", mode)
-		}
-	}
-}

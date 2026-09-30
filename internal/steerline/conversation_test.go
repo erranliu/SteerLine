@@ -16,11 +16,12 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 func TestConversationMapperKeepsTurnAndPhaseEvidenceExplicit(t *testing.T) {
-	mapper := &ConversationMapper{}
+	mapper := &codexworker.ConversationMapper{}
 	base := ConversationEvent{ProjectID: "project", ExecutionID: "execution", AttemptID: "attempt", SourceSegment: "local-jsonl-v1", SourceEventQuality: IdentityDerived, SessionQuality: IdentityUnknown, TurnQuality: IdentityUnknown, ItemQuality: IdentityUnknown}
 	mapLine := func(seq uint64, start int64, line string) ConversationEvent {
 		event := base
@@ -64,7 +65,7 @@ func TestConversationMissingTextPreservesSnapshotAndEmptyFinal(t *testing.T) {
 	store, err := OpenSQLiteStore(filepath.Join(t.TempDir(), "conversation.db"))
 	require(t, err)
 	defer store.Close()
-	mapper := &ConversationMapper{}
+	mapper := &codexworker.ConversationMapper{}
 	lines := []string{
 		`{"type":"turn.started"}`,
 		`{"type":"item.updated","item":{"id":"message","type":"agent_message","text":"kept"}}`,
@@ -106,7 +107,7 @@ func TestConversationMapperNativeCodexTwoTurnFixture(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	mapper := &ConversationMapper{}
+	mapper := &codexworker.ConversationMapper{}
 	var starts, completions []ConversationEvent
 	var messages []ConversationEvent
 	var offset int64
@@ -622,7 +623,7 @@ func TestConversationLiveSourceFailureKeepsGapAndMapperPosition(t *testing.T) {
 		t.Fatal("source beyond the durable file was committed")
 	}
 	mapper := s.conversationMappers[runID+":"+runID+":"+segment]
-	if mapper == nil || mapper.currentTurn != "" {
+	if mapper == nil || mapper.CurrentTurn() != "" {
 		t.Fatal("failed source read advanced the in-memory turn mapper")
 	}
 	cp, err := store.ConversationCheckpoint(ctx, "project", executionID, runID, "codex-jsonl", segment)

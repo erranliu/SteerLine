@@ -10,18 +10,20 @@ import (
 )
 
 type ObservationEvent struct {
-	Envelope codexapp.Envelope
-	Forward  bool
-	Kind     string
-	Status   string
-	Title    string
+	Persisted chan error
+	Summary   string
+	Envelope  codexapp.Envelope
+	Forward   bool
+	Kind      string
+	Status    string
+	Title     string
 }
 
 // Observe journals native notifications before reporting them to the service.
 // The deliver callback must not return true until the event is durable.
 func Observe(ctx context.Context, client *codexapp.Client, journal *os.File, threadID, turnID string, replay []codexapp.Envelope, validateAsk func(codexapp.Envelope) error, deliver func(ObservationEvent) bool) (completed bool, err error) {
 	for _, envelope := range replay {
-		if !deliver(ObservationEvent{Envelope: envelope, Forward: true, Kind: "question", Status: "pending", Title: "Codex needs a decision"}) {
+		if !deliver(ObservationEvent{Envelope: envelope, Summary: envelope.Method, Forward: true, Kind: "question", Status: "pending", Title: "Codex needs a decision"}) {
 			return false, nil
 		}
 	}
@@ -43,7 +45,7 @@ func Observe(ctx context.Context, client *codexapp.Client, journal *os.File, thr
 			if err := journal.Sync(); err != nil {
 				return false, err
 			}
-			event := ObservationEvent{Envelope: envelope, Forward: true}
+			event := ObservationEvent{Envelope: envelope, Summary: envelope.Method, Forward: true}
 			if envelope.Method == "item/tool/call" {
 				if err := validateAsk(envelope); err != nil {
 					if rejectErr := client.RejectRequest(envelope.ID, "SteerLine rejected an unsupported or malformed native question"); rejectErr != nil {

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/steerline/codexapp"
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 )
 
 // Run explicitly with STEERLINE_CODEX_APP_SERVER_LIVE=1. It uses a temporary
@@ -24,7 +25,7 @@ func TestCodexAppServerNativeQuestionLive(t *testing.T) {
 	}
 	endpoint := "ws://" + listener.Addr().String()
 	listener.Close()
-	nativeExecutable, err := codexapp.NativeExecutable("codex")
+	nativeExecutable, err := codexworker.NativeExecutable("codex")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,7 +98,7 @@ func TestCodexAppServerNativeQuestionLive(t *testing.T) {
 				if params.ThreadID != started.Thread.ID || params.TurnID != turn.Turn.ID || params.Tool != "steerline_ask" || len(params.Arguments) == 0 || len(event.ID) == 0 {
 					t.Fatalf("native request identity invalid: %+v", event)
 				}
-				call, err := parseCodexAskCall(event, started.Thread.ID, turn.Turn.ID)
+				call, err := codexworker.ParseAskCall(event, started.Thread.ID, turn.Turn.ID)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -115,7 +116,7 @@ func TestCodexAppServerNativeQuestionLive(t *testing.T) {
 					t.Fatal(err)
 				}
 				defer func() { _ = secondCmd.Process.Kill(); _ = secondCmd.Wait() }()
-				secondClient, err := connectWorkerAppServer(ctx, secondEndpoint)
+				secondClient, err := codexworker.ConnectAppServer(ctx, secondEndpoint)
 				if err != nil {
 					t.Fatal(err)
 				}

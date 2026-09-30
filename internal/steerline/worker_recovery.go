@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
-	"path/filepath"
 	"strings"
 
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/workerflow"
 )
@@ -56,7 +56,7 @@ func (s *Service) beginLocalRecoveryAttempt(ctx context.Context, run *Run, mode 
 		execution.Process == nil || inspectProcess(execution.Process) != "process absent" {
 		return errors.New("the original worker process and its descendants are not confirmed stopped")
 	}
-	if mode == "continue" && !codexThreadID.MatchString(execution.SessionID) {
+	if mode == "continue" && !codexworker.ValidNativeID(execution.SessionID) {
 		return errors.New("the original Codex thread identity is unavailable; choose a new session")
 	}
 	if execution.Workspace.Worktree == "" || run.WorktreePath == nil || canonical(*run.WorktreePath) != canonical(execution.Workspace.Worktree) {
@@ -67,9 +67,7 @@ func (s *Service) beginLocalRecoveryAttempt(ctx context.Context, run *Run, mode 
 		return errors.New("the original worktree and branch could not be reverified")
 	}
 	applyWorkflowWorkspaceEvidence(run, execution, workspace)
-	var receipt appServerProcessReceipt
-	raw, err := os.ReadFile(filepath.Join(appServerDirectory(fixed.config, run), "process.json"))
-	if err != nil || json.Unmarshal(raw, &receipt) != nil || !receipt.Managed || receipt.Identity != *execution.Process {
+	if !codexBackend(fixed.config, run).ManagedProcessAbsent(codexBinding(execution)) {
 		return errors.New("the original process tree is not proven to be service managed")
 	}
 	if owned := s.ownedLocalProcesses[run.RunID]; owned != nil {

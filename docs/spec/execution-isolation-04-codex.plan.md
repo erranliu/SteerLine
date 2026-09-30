@@ -1,6 +1,6 @@
 # Plan Codex 执行适配器迁移
 
-任务 ID：57；任务名称：Codex 执行适配器迁移；目标：`EXECUTION-ISOLATION`。状态：待实施。唯一执行依据：[Spec](execution-isolation-04-codex.spec.md)。硬前置：#55、#56 合入，一个实现 PR 交付。
+任务 ID：57；任务名称：Codex 执行适配器迁移；目标：`EXECUTION-ISOLATION`。状态：已实施，待合入。唯一执行依据：[Spec](execution-isolation-04-codex.spec.md)。硬前置：#55、#56 合入，一个实现 PR 交付。
 
 ## 迁移步骤
 
@@ -24,3 +24,7 @@ CX1 用传递依赖/调用审查；CX2 用两轮和答案/旧回执；CX3 用人
 ## 交付
 
 列出每类平台调用、业务提交和原生证据的最终所有者，交接配置、固定命令、事件与未知请求对账给 #58。本轮原生消费者必须全部迁完，不能只靠文件改名或给中心调用追加 helper 宣告完成。
+
+## 实施记录
+
+最终所有者、迁移测试路径、实际最小验证及基线剩余项见[验收记录](../validation/execution-isolation-04-codex/README.md)。

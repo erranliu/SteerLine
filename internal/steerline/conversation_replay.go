@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
@@ -185,7 +186,7 @@ func (s *Service) reconcileConversationRun(run *Run) error {
 func (s *Service) replayConversationJournal(ctx context.Context, source conversationJournalSource) error {
 	const batchRecords = 256
 	readCursor := JournalCursor{}
-	mapper := &ConversationMapper{}
+	mapper := &codexworker.ConversationMapper{}
 	var sourceSeq uint64
 	checkpoints, err := s.domainStore.ConversationSourceCheckpoints(ctx, source.ProjectID, source.ExecutionID, source.AttemptID, "codex-jsonl")
 	if err != nil {
@@ -279,7 +280,7 @@ func (s *Service) replayConversationJournal(ctx context.Context, source conversa
 			}
 			generation = fmt.Sprintf("%s:%d", source.FileID, batch.Cursor.Generation)
 			segment = segmentPrefix + generation
-			mapper, sourceSeq = &ConversationMapper{}, 0
+			mapper, sourceSeq = &codexworker.ConversationMapper{}, 0
 			gap := ConversationEvent{
 				Version: ConversationVersion, ProjectID: source.ProjectID, TaskID: source.TaskID,
 				WorkflowID: source.WorkflowID, ExecutionID: source.ExecutionID, AttemptID: source.AttemptID,
@@ -333,8 +334,8 @@ func (s *Service) replayConversationJournal(ctx context.Context, source conversa
 			}
 			raw := append(append([]byte(nil), record.Data...), '\n')
 			mapped := mapper.MapCodexJSONL(base, raw)
-			if mapped.Event.Type == ConversationSession && codexThreadID.MatchString(mapped.Event.SessionID) {
-				binding := codexHistoryBinding{Version: 1, ProjectID: source.ProjectID, TaskID: source.TaskID, WorkflowID: source.WorkflowID, ExecutionID: source.ExecutionID, AttemptID: source.AttemptID, Backend: source.Backend, Protocol: source.Protocol, TargetID: source.TargetID, ExternalRef: source.ExternalRef, Workspace: source.Workspace, SessionID: mapped.Event.SessionID, Command: source.ReaderCommand, Home: source.CodexHome}
+			if mapped.Event.Type == ConversationSession && codexworker.ValidNativeID(mapped.Event.SessionID) {
+				binding := codexworker.HistoryBinding{Version: 1, ProjectID: source.ProjectID, TaskID: source.TaskID, WorkflowID: source.WorkflowID, ExecutionID: source.ExecutionID, AttemptID: source.AttemptID, Backend: source.Backend, Protocol: source.Protocol, TargetID: source.TargetID, ExternalRef: source.ExternalRef, Workspace: source.Workspace, SessionID: mapped.Event.SessionID, Command: source.ReaderCommand, Home: source.CodexHome}
 				if err = writeCodexHistoryBinding(localCodexHistoryBindingPath(filepath.Dir(source.Path), binding.SessionID), binding); err != nil {
 					return err
 				}
@@ -373,7 +374,7 @@ func (s *Service) replayConversationJournal(ctx context.Context, source conversa
 	}
 }
 
-func (s *Service) replayConversationTail(ctx context.Context, source conversationJournalSource, segment, generation string, mapper *ConversationMapper, data []byte, start int64, oldSeq uint64) error {
+func (s *Service) replayConversationTail(ctx context.Context, source conversationJournalSource, segment, generation string, mapper *codexworker.ConversationMapper, data []byte, start int64, oldSeq uint64) error {
 	sequence := oldSeq + 1
 	raw := append([]byte(nil), data...)
 	end := start + int64(len(raw))

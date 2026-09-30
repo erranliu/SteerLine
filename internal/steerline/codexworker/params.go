@@ -4,12 +4,11 @@ import (
 	"context"
 	"errors"
 
-	"github.com/erranliu/SteerLine/internal/steerline/codexapp"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 func ThreadParams(worktree, sandbox, model string, dynamicTools []any) (map[string]any, error) {
-	return codexapp.ThreadStartParams(worktree, sandbox, model, dynamicTools)
+	return ThreadStartParams(worktree, sandbox, model, dynamicTools)
 }
 
 type TurnParamsInput struct {
@@ -31,12 +30,12 @@ func TurnParams(ctx context.Context, input TurnParamsInput, linkedWorktreeArgs f
 		if err != nil {
 			return nil, err
 		}
-		roots, err = codexapp.WritableRoots(args)
+		roots, err = WritableRoots(args)
 		if err != nil {
 			return nil, err
 		}
 	}
-	return codexapp.TurnStartParams(input.Worktree, input.ThreadID, input.CommandID, input.Prompt, input.Sandbox, input.Model, input.ReasoningEffort, roots)
+	return TurnStartParams(input.Worktree, input.ThreadID, input.CommandID, input.Prompt, input.Sandbox, input.Model, input.ReasoningEffort, roots)
 }
 
 func stableCommandID(value string) bool {

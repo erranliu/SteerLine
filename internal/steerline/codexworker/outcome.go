@@ -14,6 +14,7 @@ type Outcome struct {
 	NativeStatus string
 	Started      bool
 	Completed    bool
+	Succeeded    bool
 	LastMessage  string
 	Failure      string
 	PRCandidates []string
@@ -93,6 +94,7 @@ func ReadAppServerOutcome(path, threadID, turnID string) (Outcome, error) {
 			outcome.SessionID = threadID
 			outcome.Completed = true
 			outcome.NativeStatus = p.Turn.Status
+			outcome.Succeeded = p.Turn.Status == "completed"
 			if p.Turn.Status != "completed" {
 				outcome.Failure = "native turn ended with status " + p.Turn.Status
 			}

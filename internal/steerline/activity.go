@@ -11,6 +11,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
+	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 // ActivityVersion is the stable schema version of activity.jsonl. Consumers must
@@ -25,22 +28,7 @@ const (
 
 // ActivityEvent is one normalized record. Field semantics are documented in
 // docs/activity.md and are intentionally independent of the underlying runner.
-type ActivityEvent struct {
-	V         int             `json:"v"`
-	Seq       uint64          `json:"seq"`
-	TS        time.Time       `json:"ts"`
-	Source    string          `json:"source"`
-	RunID     string          `json:"run_id,omitempty"`
-	TaskID    string          `json:"task_id,omitempty"`
-	ItemID    string          `json:"item_id,omitempty"`
-	Kind      string          `json:"kind"`
-	Status    string          `json:"status,omitempty"`
-	Title     string          `json:"title,omitempty"`
-	Detail    string          `json:"detail,omitempty"`
-	ElapsedMS int64           `json:"elapsed_ms,omitempty"`
-	Meta      map[string]any  `json:"meta,omitempty"`
-	Raw       json.RawMessage `json:"raw,omitempty"`
-}
+type ActivityEvent = contracts.ActivityEvent
 
 // DecodeActivityLine validates one normalized journal object while tolerating
 // unknown fields and unknown kind values for forward compatibility.
@@ -262,141 +250,7 @@ func rawToText(raw json.RawMessage) string {
 	return string(raw)
 }
 
-// ---- Codex ----
-
-type codexExecEvent struct {
-	Type     string `json:"type"`
-	ThreadID string `json:"thread_id"`
-	Message  string `json:"message"`
-	Error    *struct {
-		Message string `json:"message"`
-	} `json:"error"`
-	Usage map[string]any `json:"usage"`
-	Item  struct {
-		ID               string `json:"id"`
-		Type             string `json:"type"`
-		Text             string `json:"text"`
-		Message          string `json:"message"`
-		Command          string `json:"command"`
-		AggregatedOutput string `json:"aggregated_output"`
-		ExitCode         *int   `json:"exit_code"`
-		Status           string `json:"status"`
-		Changes          []struct {
-			Path string `json:"path"`
-			Kind string `json:"kind"`
-		} `json:"changes"`
-	} `json:"item"`
-}
-
-type codexNormalizer struct {
-	started map[string]time.Time
-}
-
-func NewCodexNormalizer() Normalizer { return &codexNormalizer{started: map[string]time.Time{}} }
-
-func (n *codexNormalizer) Name() string { return "codex" }
-
-func (n *codexNormalizer) Detect(line []byte) bool {
-	var probe struct {
-		Type string `json:"type"`
-	}
-	if json.Unmarshal(line, &probe) != nil {
-		return false
-	}
-	return probe.Type == "thread.started"
-}
-
-func (n *codexNormalizer) Normalize(line []byte) []ActivityEvent {
-	var e codexExecEvent
-	if json.Unmarshal(line, &e) != nil {
-		return []ActivityEvent{{Source: "codex", Kind: "unknown", Title: "unparsed raw event", Raw: cloneRaw(line)}}
-	}
-	raw := cloneRaw(line)
-	switch e.Type {
-	case "thread.started":
-		return []ActivityEvent{{Source: "codex", Kind: "session", Status: "info", Title: "codex session", Meta: map[string]any{"thread_id": e.ThreadID}}}
-	case "turn.started":
-		return []ActivityEvent{{Source: "codex", Kind: "turn", Status: "started"}}
-	case "turn.completed":
-		return []ActivityEvent{{Source: "codex", Kind: "usage", Status: "completed", Meta: map[string]any{"usage": e.Usage}}}
-	case "turn.failed":
-		msg := ""
-		if e.Error != nil {
-			msg = e.Error.Message
-		}
-		return []ActivityEvent{{Source: "codex", Kind: "error", Status: "failed", Title: "turn failed", Detail: msg, Raw: raw}}
-	case "error":
-		return []ActivityEvent{{Source: "codex", Kind: "error", Status: "failed", Detail: e.Message, Raw: raw}}
-	case "item.started", "item.updated", "item.completed":
-		return []ActivityEvent{n.item(e, raw)}
-	}
-	return []ActivityEvent{{Source: "codex", Kind: "unknown", Title: e.Type, Raw: raw}}
-}
-
-func (n *codexNormalizer) item(e codexExecEvent, raw json.RawMessage) ActivityEvent {
-	it := e.Item
-	status := it.Status
-	if status == "" {
-		switch e.Type {
-		case "item.started":
-			status = "started"
-		case "item.completed":
-			status = "completed"
-		default:
-			status = "running"
-		}
-	}
-	var elapsed int64
-	if it.ID != "" {
-		switch e.Type {
-		case "item.started":
-			n.started[it.ID] = time.Now()
-		case "item.completed":
-			if t, ok := n.started[it.ID]; ok {
-				elapsed = time.Since(t).Milliseconds()
-				delete(n.started, it.ID)
-			}
-		}
-	}
-	ev := ActivityEvent{Source: "codex", ItemID: it.ID, Status: status, ElapsedMS: elapsed}
-	switch it.Type {
-	case "agent_message":
-		ev.Kind = "message"
-		ev.Detail = it.Text
-	case "reasoning":
-		ev.Kind = "reasoning"
-		ev.Status = "info"
-		ev.Detail = it.Text
-	case "command_execution":
-		ev.Kind = "command"
-		ev.Title = firstLine(it.Command, activityTitleMax)
-		ev.Detail = it.AggregatedOutput
-		if it.ExitCode != nil {
-			ev.Meta = map[string]any{"exit_code": *it.ExitCode}
-			if *it.ExitCode != 0 && e.Type == "item.completed" {
-				ev.Status = "failed"
-			}
-		}
-	case "file_change":
-		ev.Kind = "file_change"
-		paths := make([]string, 0, len(it.Changes))
-		for _, c := range it.Changes {
-			paths = append(paths, strings.TrimSpace(c.Kind+" "+c.Path))
-		}
-		ev.Title = strings.Join(paths, ", ")
-		ev.Meta = map[string]any{"changes": it.Changes}
-	case "error":
-		ev.Kind = "error"
-		ev.Status = "failed"
-		ev.Detail = it.Message
-		ev.Raw = raw
-	default:
-		ev.Kind = "unknown"
-		ev.Title = it.Type
-		ev.Raw = raw
-	}
-	return ev
-}
+func NewCodexNormalizer() Normalizer { return codexworker.NewNormalizer() }
 
 // ---- pi ----
 

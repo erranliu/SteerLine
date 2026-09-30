@@ -2,9 +2,7 @@ package steerline
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
-	"os"
 	"path/filepath"
 	"sync"
 	"time"
@@ -21,32 +19,8 @@ func appServerAnswerEvidence(path string, ask codexAskCall, answers map[string][
 
 // A crash can happen after a native request is journaled but before its
 // Decision reaches SQLite. Replay only requests not completed or persisted.
-func appServerPendingAskEvents(path string, run *Run, execution *ExecutionRecord, turnID string) ([]codexapp.Envelope, error) {
-	journal, err := codexworker.ReadAskJournal(path, execution.SessionID, turnID, func(event codexapp.Envelope) error {
-		_, err := parseCodexAskCall(event, execution.SessionID, turnID)
-		return err
-	})
-	if err != nil {
-		return nil, err
-	}
-	var replay []codexapp.Envelope
-	for _, event := range journal.Calls {
-		call, _ := parseCodexAskCall(event, execution.SessionID, turnID)
-		if journal.Completed[call.CallID] || run.Decision != nil && run.Decision.Request.NativeAsk != nil && run.Decision.Request.NativeAsk.CallID == call.CallID {
-			continue
-		}
-		known := false
-		for _, pending := range execution.PendingAsks {
-			if pending.CallID == call.CallID {
-				known = true
-				break
-			}
-		}
-		if !known {
-			replay = append(replay, event)
-		}
-	}
-	return replay, nil
+func appServerPendingAskEvents(path string, run *Run, e *ExecutionRecord, turnID string) ([]codexapp.Envelope, error) {
+	return codexworker.PendingAskEvents(path, e.SessionID, turnID, knownCodexAsks(run, e))
 }
 
 type appServerRecoveryResult struct {
@@ -66,28 +40,13 @@ func recoverAppServerExecution(ctx context.Context, config Config, run Run, exec
 	}
 	probeCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	worker, completed, err := reattachAppServerWorker(probeCtx, config, &run, &execution)
-	result := appServerRecoveryResult{runID: run.RunID, attemptID: run.AttemptID, execution: execution, worker: worker, completed: completed, err: err}
-	if err != nil && execution.Process != nil && inspectProcess(execution.Process) == "process absent" {
-		var receipt appServerProcessReceipt
-		raw, readErr := os.ReadFile(filepath.Join(appServerDirectory(config, &run), "process.json"))
-		result.dead = readErr == nil && json.Unmarshal(raw, &receipt) == nil && receipt.Managed && receipt.Identity == *execution.Process
-		if !result.dead {
-			return result
-		}
-		commandID := execution.CurrentCommandID
-		turnID := execution.CurrentTurnID
-		if execution.PendingCommandID != "" {
-			commandID, turnID = execution.PendingCommandID, execution.PendingTurnID
-		}
-		if stableExecutionID(commandID) && codexThreadID.MatchString(execution.SessionID) && codexThreadID.MatchString(turnID) {
-			journal := filepath.Join(config.RunDir, "runs", run.RunID, "turns", commandID, "appserver.jsonl")
-			if outcome, readErr := readAppServerTurnOutcome(journal, execution.SessionID, turnID); readErr == nil && outcome.Completed {
-				result.completed = true
-				result.err = nil
-			}
-		}
+	commandID, turnID := execution.CurrentCommandID, execution.CurrentTurnID
+	if execution.PendingCommandID != "" {
+		commandID, turnID = execution.PendingCommandID, execution.PendingTurnID
 	}
+	native, err := codexBackend(config, &run).Recover(probeCtx, codexBinding(&execution), commandID, turnID, knownCodexAsks(&run, &execution))
+	worker := applyCodexRecovery(&run, &execution, native)
+	result := appServerRecoveryResult{runID: run.RunID, attemptID: run.AttemptID, execution: execution, worker: worker, completed: native.Completed, dead: native.Dead, err: err}
 	return result
 }
 

@@ -4,10 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	"strings"
 
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	"github.com/erranliu/SteerLine/internal/steerline/publication"
 )
 
 func (s *Service) localWorkerRun(runID string) *Run {
@@ -29,7 +30,7 @@ func (s *Service) publishLocalWorkerRun(ctx context.Context, run *Run, workflow 
 		return empty, configErr
 	}
 	c := fixed.config
-	if run == nil || workflow == nil || execution == nil || run.WorkspaceIntent == nil || run.WorktreePath == nil || workflow.WorkflowRunID != run.RunID || execution.WorkflowRunID != run.RunID || run.Protocol != string(executionapi.ProtocolLocalCodexAppServer) || !codexThreadID.MatchString(turnID) || execution.CurrentTurnID != turnID || execution.LastStoppedTurnID != turnID || c.hostName() != "local" {
+	if run == nil || workflow == nil || execution == nil || run.WorkspaceIntent == nil || run.WorktreePath == nil || workflow.WorkflowRunID != run.RunID || execution.WorkflowRunID != run.RunID || run.Protocol != string(executionapi.ProtocolLocalCodexAppServer) || !codexworker.ValidNativeID(turnID) || execution.CurrentTurnID != turnID || execution.LastStoppedTurnID != turnID || c.hostName() != "local" {
 		return empty, errors.New("local host publication requires a fixed GitHub command provider and worker execution")
 	}
 	if canonical(*run.WorktreePath) != canonical(run.WorkspaceIntent.Path) || run.WorktreeBranch == nil || *run.WorktreeBranch != run.WorkspaceIntent.Branch || execution.Workspace.Branch != *run.WorktreeBranch || workflow.Branch == "" {

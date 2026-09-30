@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
@@ -34,7 +35,7 @@ func (s *Service) recordConversationEvent(run *Run, source WorkerEvent) (retErr 
 	segment := nonEmpty(source.SourceSegment, "local-jsonl-v1:"+source.SourceIdentity)
 	mapperKey := run.RunID + ":" + attemptID + ":" + segment
 	if s.conversationMappers == nil {
-		s.conversationMappers = map[string]*ConversationMapper{}
+		s.conversationMappers = map[string]*codexworker.ConversationMapper{}
 	}
 	mapper := s.conversationMappers[mapperKey]
 	if mapper == nil {
@@ -45,16 +46,10 @@ func (s *Service) recordConversationEvent(run *Run, source WorkerEvent) (retErr 
 		}
 		s.conversationMappers[mapperKey] = mapper
 	}
-	previousMapper := *mapper
-	if mapper.turnFinalSeen != nil {
-		previousMapper.turnFinalSeen = make(map[string]bool, len(mapper.turnFinalSeen))
-		for key, seen := range mapper.turnFinalSeen {
-			previousMapper.turnFinalSeen[key] = seen
-		}
-	}
+	previousMapper := mapper.Clone()
 	defer func() {
 		if retErr != nil {
-			*mapper = previousMapper
+			*mapper = *previousMapper
 		}
 	}()
 	checkpointCursor, err := json.Marshal(struct {
