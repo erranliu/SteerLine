@@ -49,6 +49,13 @@ func orcaWorkerCaller(c Config) orcaworker.Call {
 	}
 }
 
+func orcaWorkerMetaCaller(c Config) orcaworker.MetaCall {
+	return func(ctx context.Context, args ...string) (orcaworker.Result, error) {
+		env, err := workerOrcaCall(ctx, c, args...)
+		return orcaworker.Result{Payload: env.Result, RuntimeID: env.Meta.RuntimeID}, err
+	}
+}
+
 func workerOrcaWorktreeName(runID string) (string, error) {
 	if !stableExecutionID(runID) {
 		return "", errors.New("Orca worktree requires a stable workflow identity")

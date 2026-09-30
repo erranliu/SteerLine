@@ -10,6 +10,57 @@ import (
 // Call provides only verified Orca result bytes; the caller owns host selection.
 type Call func(context.Context, ...string) (json.RawMessage, error)
 
+type Result struct {
+	Payload   json.RawMessage
+	RuntimeID string
+}
+
+type MetaCall func(context.Context, ...string) (Result, error)
+
+var ErrDispatchIdentity = errors.New("recovered Orca Dispatch has no exact injected worker identity")
+
+type DispatchIdentity struct {
+	DispatchID  string
+	TaskID      string
+	RunID       string
+	RuntimeID   string
+	Terminal    string
+	Incarnation string
+	WorktreeID  string
+}
+
+func VerifyRecoveredDispatch(ctx context.Context, call MetaCall, expected DispatchIdentity) error {
+	envelope, err := call(ctx, "orchestration", "worker-show", "--dispatch", expected.DispatchID, "--json")
+	if err != nil {
+		return err
+	}
+	var result struct {
+		Dispatch struct {
+			ID     string `json:"id"`
+			TaskID string `json:"taskId"`
+			RunID  string `json:"runId"`
+			Status string `json:"status"`
+		} `json:"dispatch"`
+		Worker struct {
+			DispatchID    string `json:"dispatchId"`
+			Stage         string `json:"stage"`
+			AgentTerminal string `json:"agentTerminalHandle"`
+		} `json:"worker"`
+		Terminal struct {
+			Handle      string `json:"handle"`
+			Incarnation string `json:"incarnationId"`
+			WorktreeID  string `json:"worktreeId"`
+		} `json:"terminal"`
+	}
+	if err := json.Unmarshal(envelope.Payload, &result); err != nil {
+		return err
+	}
+	if envelope.RuntimeID != expected.RuntimeID || result.Dispatch.ID != expected.DispatchID || result.Dispatch.TaskID != expected.TaskID || result.Dispatch.RunID != expected.RunID || result.Worker.DispatchID != expected.DispatchID || result.Worker.Stage != "injected" || result.Worker.AgentTerminal != expected.Terminal || result.Terminal.Handle != expected.Terminal || result.Terminal.Incarnation != expected.Incarnation || result.Terminal.WorktreeID != expected.WorktreeID {
+		return ErrDispatchIdentity
+	}
+	return nil
+}
+
 func TerminalHasMarker(ctx context.Context, call Call, handle, marker string) (bool, error) {
 	raw, err := call(ctx, "terminal", "read", "--terminal", handle, "--limit", "1000", "--json")
 	if err != nil {

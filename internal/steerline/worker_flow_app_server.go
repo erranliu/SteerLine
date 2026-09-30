@@ -156,34 +156,17 @@ func startAppServerWorkerTurn(ctx context.Context, c Config, run *Run, execution
 		if err != nil {
 			return nil, "", "", err
 		}
-		var response struct {
-			Thread struct {
-				ID  string `json:"id"`
-				Cwd string `json:"cwd"`
-			} `json:"thread"`
-		}
-		if err := client.Call(ctx, "thread/start", params, &response); err != nil {
+		response, err := codexworker.StartThread(ctx, client, params, *run.WorktreePath)
+		if err != nil {
 			return nil, "", "", err
-		}
-		if !codexThreadID.MatchString(response.Thread.ID) || canonical(response.Thread.Cwd) != canonical(*run.WorktreePath) {
-			return nil, "", "", errors.New("app-server created a different thread/workspace")
 		}
 		if err := AtomicWrite(filepath.Join(serverDir, "thread.json"), append(mustJSON(response), '\n')); err != nil {
 			return nil, "", "", err
 		}
 		execution.SessionID = response.Thread.ID
 	} else {
-		var response struct {
-			Thread struct {
-				ID  string `json:"id"`
-				Cwd string `json:"cwd"`
-			} `json:"thread"`
-		}
-		if err := client.Call(ctx, "thread/resume", map[string]any{"threadId": execution.SessionID, "cwd": *run.WorktreePath, "excludeTurns": true}, &response); err != nil {
+		if err := codexworker.ResumeThread(ctx, client, execution.SessionID, *run.WorktreePath); err != nil {
 			return nil, "", "", err
-		}
-		if response.Thread.ID != execution.SessionID || canonical(response.Thread.Cwd) != canonical(*run.WorktreePath) {
-			return nil, "", "", errors.New("app-server resumed a different thread/workspace")
 		}
 	}
 	binding := codexHistoryBinding{Version: 1, ProjectID: c.identity, TaskID: run.DomainTaskID, WorkflowID: run.RunID, ExecutionID: run.ExecutionID, AttemptID: run.AttemptID, Backend: BackendLocal, Protocol: ProtocolLocalCodexAppServer, TargetID: run.Target.ID, ExternalRef: conversationExternalRef(execution.Process), Workspace: *run.WorktreePath, SessionID: execution.SessionID, Command: codexReaderCommand(c), Home: codexEnvironmentHome()}
@@ -201,17 +184,9 @@ func startAppServerWorkerTurn(ctx context.Context, c Config, run *Run, execution
 	if err != nil {
 		return nil, "", "", err
 	}
-	var turn struct {
-		Turn struct {
-			ID     string `json:"id"`
-			Status string `json:"status"`
-		} `json:"turn"`
-	}
-	if err := client.Call(ctx, "turn/start", params, &turn); err != nil {
+	turn, err := codexworker.StartTurn(ctx, client, params)
+	if err != nil {
 		return nil, "", "", err
-	}
-	if !codexThreadID.MatchString(turn.Turn.ID) || turn.Turn.Status == "" {
-		return nil, "", "", errors.New("app-server omitted native turn identity/status")
 	}
 	if err := AtomicWrite(filepath.Join(dir, "turn-start.json"), append(mustJSON(turn), '\n')); err != nil {
 		return nil, "", "", err
@@ -236,92 +211,23 @@ func observeAppServerWorker(ctx context.Context, worker *Worker, client *codexap
 	defer close(worker.Events)
 	defer client.Close()
 	defer journal.Close()
-	for _, envelope := range replay {
-		if !deliverDurableWorkerEvent(ctx, worker, WorkerEvent{RunID: runID, AttemptID: attemptID, Source: "codex-app-server", Session: threadID, AppServer: &envelope, Summary: envelope.Method, Activity: ActivityEvent{Source: "codex", Kind: "question", Status: "pending", Title: "Codex needs a decision"}}) {
-			return
+	completed, err := codexworker.Observe(ctx, client, journal, threadID, turnID, replay, func(envelope codexapp.Envelope) error {
+		_, err := parseCodexAskCall(envelope, threadID, turnID)
+		return err
+	}, func(observed codexworker.ObservationEvent) bool {
+		event := WorkerEvent{
+			RunID: runID, AttemptID: attemptID, Source: "codex-app-server", Session: threadID,
+			Summary:  observed.Envelope.Method,
+			Activity: ActivityEvent{Source: "codex", Kind: observed.Kind, Status: observed.Status, Title: observed.Title},
 		}
-	}
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case envelope, ok := <-client.Notifications():
-			if !ok {
-				worker.Done <- errors.New("app-server observation ended before native turn completion")
-				return
-			}
-			line := append(mustJSON(envelope), '\n')
-			if _, err := journal.Write(line); err != nil {
-				worker.Done <- err
-				return
-			}
-			if err := journal.Sync(); err != nil {
-				worker.Done <- err
-				return
-			}
-			event := WorkerEvent{RunID: runID, AttemptID: attemptID, Source: "codex-app-server", Session: threadID, AppServer: &envelope, Summary: envelope.Method}
-			if envelope.Method == "item/tool/call" {
-				if _, err := parseCodexAskCall(envelope, threadID, turnID); err != nil {
-					if rejectErr := client.RejectRequest(envelope.ID, "SteerLine rejected an unsupported or malformed native question"); rejectErr != nil {
-						worker.Done <- errors.Join(err, rejectErr)
-						return
-					}
-					event.AppServer = nil
-					event.Activity = ActivityEvent{Source: "codex", Kind: "question", Status: "rejected", Title: "Unsupported Codex question"}
-					if !deliverDurableWorkerEvent(ctx, worker, event) {
-						if ctx.Err() == nil {
-							worker.Done <- errors.New("unsupported Codex question could not be recorded")
-						}
-						return
-					}
-					continue
-				}
-			}
-			if len(envelope.ID) != 0 && envelope.Method != "item/tool/call" {
-				if err := client.RejectRequest(envelope.ID, "SteerLine cannot authorize this native Codex host request"); err != nil {
-					worker.Done <- err
-					return
-				}
-				event.Activity = ActivityEvent{Source: "codex", Kind: "approval", Status: "rejected", Title: "Unsupported Codex host request"}
-				if !deliverDurableWorkerEvent(ctx, worker, event) {
-					if ctx.Err() == nil {
-						worker.Done <- errors.New("unsupported Codex host request could not be recorded")
-					}
-					return
-				}
-				continue
-			}
-			switch envelope.Method {
-			case "turn/started":
-				event.Activity = ActivityEvent{Source: "codex", Kind: "turn", Status: "started", Title: "Codex turn started"}
-			case "item/tool/call":
-				event.Activity = ActivityEvent{Source: "codex", Kind: "question", Status: "pending", Title: "Codex needs a decision"}
-			case "item/completed":
-				var params struct {
-					Item struct {
-						Type string `json:"type"`
-					} `json:"item"`
-				}
-				if json.Unmarshal(envelope.Params, &params) != nil || params.Item.Type != "dynamicToolCall" {
-					continue
-				}
-				event.Activity = ActivityEvent{Source: "codex", Kind: "question", Status: "completed", Title: "Codex decision tool completed"}
-			case "turn/completed":
-				event.Activity = ActivityEvent{Source: "codex", Kind: "turn", Status: "completed", Title: "Codex turn completed"}
-			default:
-				continue
-			}
-			if !deliverDurableWorkerEvent(ctx, worker, event) {
-				if ctx.Err() == nil {
-					worker.Done <- errors.New("Codex app-server event could not be committed")
-				}
-				return
-			}
-			if envelope.Method == "turn/completed" {
-				worker.Done <- nil
-				return
-			}
+		if observed.Forward {
+			envelope := observed.Envelope
+			event.AppServer = &envelope
 		}
+		return deliverDurableWorkerEvent(ctx, worker, event)
+	})
+	if err != nil || completed {
+		worker.Done <- err
 	}
 }
 
@@ -401,52 +307,9 @@ func reattachAppServerWorker(ctx context.Context, c Config, run *Run, execution 
 			client.Close()
 		}
 	}()
-	var resumed struct {
-		Thread struct {
-			ID  string `json:"id"`
-			Cwd string `json:"cwd"`
-		} `json:"thread"`
-	}
-	if err := client.Call(ctx, "thread/resume", map[string]any{"threadId": execution.SessionID, "cwd": *run.WorktreePath, "excludeTurns": true}, &resumed); err != nil {
+	nativeTurn, err := codexworker.ReadTurnSnapshot(ctx, client, execution.SessionID, *run.WorktreePath, turnID)
+	if err != nil {
 		return nil, false, err
-	}
-	if resumed.Thread.ID != execution.SessionID || canonical(resumed.Thread.Cwd) != canonical(*run.WorktreePath) {
-		return nil, false, errors.New("resumed app-server thread/workspace changed")
-	}
-	var read struct {
-		Thread struct {
-			ID    string            `json:"id"`
-			Cwd   string            `json:"cwd"`
-			Turns []json.RawMessage `json:"turns"`
-		} `json:"thread"`
-	}
-	if err := client.Call(ctx, "thread/read", map[string]any{"threadId": execution.SessionID, "includeTurns": true}, &read); err != nil {
-		return nil, false, err
-	}
-	if read.Thread.ID != execution.SessionID || canonical(read.Thread.Cwd) != canonical(*run.WorktreePath) {
-		return nil, false, errors.New("app-server turn snapshot changed thread/workspace")
-	}
-	var nativeTurn struct {
-		ID          string            `json:"id"`
-		Status      string            `json:"status"`
-		Items       []json.RawMessage `json:"items"`
-		CompletedAt *int64            `json:"completedAt"`
-	}
-	found := false
-	for _, raw := range read.Thread.Turns {
-		var candidate struct {
-			ID string `json:"id"`
-		}
-		if json.Unmarshal(raw, &candidate) == nil && candidate.ID == turnID {
-			if json.Unmarshal(raw, &nativeTurn) != nil {
-				return nil, false, errors.New("native turn snapshot is invalid")
-			}
-			found = true
-			break
-		}
-	}
-	if !found {
-		return nil, false, errors.New("original native turn is absent from its fixed thread")
 	}
 	journalPath := filepath.Join(dir, "appserver.jsonl")
 	journal, err := os.OpenFile(journalPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)

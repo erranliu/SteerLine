@@ -121,35 +121,15 @@ func findNativeOrcaSend(ctx context.Context, c Config, runID, dispatchID, subjec
 	return orcaworker.FindSend(ctx, orcaWorkerCaller(c), runID, dispatchID, subject, body)
 }
 func verifyRecoveredNativeOrcaDispatch(ctx context.Context, c Config, dispatchID, taskID, runID string, identity ProcessIdentity) error {
-	env, err := workerOrcaCall(ctx, c, "orchestration", "worker-show", "--dispatch", dispatchID, "--json")
-	if err != nil {
-		return err
+	err := orcaworker.VerifyRecoveredDispatch(ctx, orcaWorkerMetaCaller(c), orcaworker.DispatchIdentity{
+		DispatchID: dispatchID, TaskID: taskID, RunID: runID,
+		RuntimeID: identity.RuntimeID, Terminal: identity.Terminal,
+		Incarnation: identity.Incarnation, WorktreeID: identity.WorktreeID,
+	})
+	if errors.Is(err, orcaworker.ErrDispatchIdentity) {
+		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: err.Error()}
 	}
-	var result struct {
-		Dispatch struct {
-			ID     string `json:"id"`
-			TaskID string `json:"taskId"`
-			RunID  string `json:"runId"`
-			Status string `json:"status"`
-		} `json:"dispatch"`
-		Worker struct {
-			DispatchID    string `json:"dispatchId"`
-			Stage         string `json:"stage"`
-			AgentTerminal string `json:"agentTerminalHandle"`
-		} `json:"worker"`
-		Terminal struct {
-			Handle      string `json:"handle"`
-			Incarnation string `json:"incarnationId"`
-			WorktreeID  string `json:"worktreeId"`
-		} `json:"terminal"`
-	}
-	if err := json.Unmarshal(env.Result, &result); err != nil {
-		return err
-	}
-	if env.Meta.RuntimeID != identity.RuntimeID || result.Dispatch.ID != dispatchID || result.Dispatch.TaskID != taskID || result.Dispatch.RunID != runID || result.Worker.DispatchID != dispatchID || result.Worker.Stage != "injected" || result.Worker.AgentTerminal != identity.Terminal || result.Terminal.Handle != identity.Terminal || result.Terminal.Incarnation != identity.Incarnation || result.Terminal.WorktreeID != identity.WorktreeID {
-		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "recovered Orca Dispatch has no exact injected worker identity"}
-	}
-	return nil
+	return err
 }
 
 func (s *Service) bindNativeOrcaAgent(ctx context.Context, run *Run, execution *ExecutionRecord, worktree workerOrcaWorktree, handle, repoID, base string) error {
@@ -719,37 +699,13 @@ func nativeOrcaQuestion(message OrcaInboxMessage, runID string, turn OrcaNativeT
 		question = strings.TrimSpace(message.Subject)
 	}
 	request := DecisionRequest{Question: clip(question, 1800), Context: clip(message.Body, 7000), AllowFreeText: true}
-	payload, err := supervisedMessagePayload(message)
-	if err == nil {
-		var body struct {
-			Question string            `json:"question"`
-			Options  []json.RawMessage `json:"options"`
+	if payload, err := supervisedMessagePayload(message); err == nil {
+		parsed := orcaworker.ParseQuestion(payload)
+		if strings.TrimSpace(parsed.Text) != "" {
+			request.Question = clip(parsed.Text, 1800)
 		}
-		if json.Unmarshal(payload, &body) == nil {
-			if strings.TrimSpace(body.Question) != "" {
-				request.Question = clip(body.Question, 1800)
-			}
-			for i, raw := range body.Options {
-				var label string
-				if json.Unmarshal(raw, &label) != nil {
-					var option struct {
-						ID     string `json:"id"`
-						Label  string `json:"label"`
-						Detail string `json:"detail"`
-					}
-					if json.Unmarshal(raw, &option) != nil {
-						continue
-					}
-					if option.ID == "" {
-						option.ID = fmt.Sprintf("option-%d", i+1)
-					}
-					if option.Label != "" {
-						request.Options = append(request.Options, DecisionOption{ID: option.ID, Label: option.Label, Detail: option.Detail})
-					}
-				} else if label != "" {
-					request.Options = append(request.Options, DecisionOption{ID: fmt.Sprintf("option-%d", i+1), Label: label})
-				}
-			}
+		for _, option := range parsed.Options {
+			request.Options = append(request.Options, DecisionOption{ID: option.ID, Label: option.Label, Detail: option.Detail})
 		}
 	}
 	request.OrcaAsk = &orcaAskCall{RunID: runID, TaskID: turn.TaskID, DispatchID: turn.DispatchID, MessageID: message.ID, Questions: []nativeAskQuestion{{ID: message.ID, Header: "Orca", Question: request.Question, Options: request.Options, AllowFreeText: true}}}
@@ -757,21 +713,8 @@ func nativeOrcaQuestion(message OrcaInboxMessage, runID string, turn OrcaNativeT
 }
 
 func nativeOrcaMessageMatches(message OrcaInboxMessage, turn OrcaNativeTurn, agentTerminal string) bool {
-	if message.FromHandle != "dispatch:"+turn.DispatchID && message.FromHandle != agentTerminal {
-		return false
-	}
 	payload, err := supervisedMessagePayload(message)
-	if err != nil {
-		return false
-	}
-	if len(payload) == 0 && (message.Type == "status" || message.Type == "escalation") && message.FromHandle == "dispatch:"+turn.DispatchID {
-		return true
-	}
-	var identity struct {
-		TaskID     string `json:"taskId"`
-		DispatchID string `json:"dispatchId"`
-	}
-	return json.Unmarshal(payload, &identity) == nil && identity.TaskID == turn.TaskID && identity.DispatchID == turn.DispatchID
+	return err == nil && orcaworker.MessageMatches(message.FromHandle, message.Type, payload, turn.TaskID, turn.DispatchID, agentTerminal)
 }
 
 func nativeOrcaDoneOutcome(message OrcaInboxMessage, turn OrcaNativeTurn) (string, error) {
@@ -779,18 +722,7 @@ func nativeOrcaDoneOutcome(message OrcaInboxMessage, turn OrcaNativeTurn) (strin
 	if err != nil {
 		return "", err
 	}
-	var result struct {
-		TaskID     string `json:"taskId"`
-		DispatchID string `json:"dispatchId"`
-		Outcome    string `json:"outcome"`
-	}
-	if err := json.Unmarshal(payload, &result); err != nil {
-		return "", err
-	}
-	if result.TaskID != turn.TaskID || result.DispatchID != turn.DispatchID || result.Outcome != "succeeded" && result.Outcome != "failed" {
-		return "", errors.New("worker_done does not match the current Orca Task/Dispatch")
-	}
-	return result.Outcome, nil
+	return orcaworker.DoneOutcome(payload, turn.TaskID, turn.DispatchID)
 }
 
 func nativeOrcaSessionIdentity(execution *ExecutionRecord) (string, error) {
