@@ -193,7 +193,13 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openP
 	if err := service.save(); err != nil {
 		t.Fatal(err)
 	}
-	if err := service.applyWorkerFlowDecision(ctx, run); err != nil {
+	selectedConfig := service.Config
+	if openPR {
+		service.Config.Host = "orca" // A different dispatch selection cannot reroute this local run.
+	}
+	err = service.applyWorkerFlowDecision(ctx, run)
+	service.Config = selectedConfig
+	if err != nil {
 		t.Fatal(err)
 	}
 	feedbackPrompt := workerFeedbackText(answer, run.Decision.Request)
