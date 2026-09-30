@@ -106,8 +106,12 @@ func PrepareProbe(p ProbeIdentity) (command, inputDigest, scriptDigest string, e
 		return "", "", "", err
 	}
 	defer root.Close()
-	if err = root.MkdirAll(dir, 0700); err != nil {
-		return "", "", "", err
+	parent := ""
+	for _, part := range strings.Split(dir, string(filepath.Separator)) {
+		parent = filepath.Join(parent, part)
+		if err = root.Mkdir(parent, 0700); err != nil && !errors.Is(err, os.ErrExist) {
+			return "", "", "", err
+		}
 	}
 	input, err := json.Marshal(p)
 	if err != nil {
@@ -122,7 +126,12 @@ func PrepareProbe(p ProbeIdentity) (command, inputDigest, scriptDigest string, e
 		if err = noLinks(p.Worktree, path); err != nil {
 			return "", "", "", err
 		}
-		old, readErr := root.ReadFile(path)
+		reader, readErr := root.Open(path)
+		var old []byte
+		if readErr == nil {
+			old, readErr = io.ReadAll(io.LimitReader(reader, int64(len(f.data)+1)))
+			readErr = errors.Join(readErr, reader.Close())
+		}
 		if readErr == nil {
 			if string(old) != string(f.data) {
 				return "", "", "", errors.New("original readiness input changed")
@@ -223,15 +232,22 @@ type ProbeToolEvidence struct {
 }
 
 var singleCommandWrapper = regexp.MustCompile(`(?s)^\s*text\(\s*await\s+tools\.exec_command\(\s*(\{.*\})\s*\)\s*\)\s*;?\s*$`)
+var savedCommandWrapper = regexp.MustCompile(`(?s)^\s*(?:const|let)\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*=\s*await\s+tools\.exec_command\(\s*(\{.*\})\s*\)\s*;\s*(?:store\(\s*"[^"\r\n]*"\s*,\s*([A-Za-z_$][A-Za-z0-9_$]*)\s*\)\s*;\s*)?text\(\s*([A-Za-z_$][A-Za-z0-9_$]*)\s*\)\s*;?\s*$`)
 var commandObjectKeys = regexp.MustCompile(`([,{]\s*)(cmd|max_output_tokens|yield_time_ms|workdir|shell|login|tty)\s*:`)
 
 func commandInvocation(name, input string) (string, bool) {
 	if name == "exec" {
 		match := singleCommandWrapper.FindStringSubmatch(input)
-		if len(match) != 2 {
-			return "", false
+		if len(match) == 2 {
+			input = match[1]
+		} else {
+			stored := savedCommandWrapper.FindStringSubmatch(input)
+			if len(stored) != 5 || stored[1] != stored[4] || stored[3] != "" && stored[3] != stored[1] {
+				return "", false
+			}
+			input = stored[2]
 		}
-		input = commandObjectKeys.ReplaceAllString(match[1], `$1"$2":`)
+		input = commandObjectKeys.ReplaceAllString(input, `$1"$2":`)
 	} else if name != "exec_command" {
 		return "", false
 	}
@@ -338,6 +354,9 @@ func ObserveToolInitialization(output WorkerOutput, taskID string, intentMillis 
 // command call, with an independently matching nonce + script hash and exit 0.
 // Persist this small pending association across pages and discard on source gaps.
 func ObserveProbe(output WorkerOutput, command, nonce, scriptDigest string, prior ProbeToolEvidence) (ProbeToolEvidence, error) {
+	if prior.FailureCode != "" {
+		return prior, nil
+	}
 	if output.Source != "transcript" || !output.SourceExact || output.Provider != "codex" || output.SourceIdentity == "" {
 		return prior, nil
 	}
@@ -378,7 +397,7 @@ func ObserveProbe(output WorkerOutput, command, nonce, scriptDigest string, prio
 				if json.Unmarshal([]byte(resultText), &result) != nil && strings.Contains(resultText, "helper_unknown_error") && strings.Contains(resultText, "setup refresh had errors") {
 					prior.FailureCode = "tool_initialization_failed"
 					prior.MessageID = message.ID
-					continue
+					return prior, nil
 				}
 				if json.Unmarshal([]byte(resultText), &result) == nil && result.ExitCode != nil && *result.ExitCode == 0 && strings.TrimSpace(result.Output) == marker && (block.CallID == "" || block.CallID == prior.CallID) {
 					prior.Verified, prior.MessageID = true, message.ID

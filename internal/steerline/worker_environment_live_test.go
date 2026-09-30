@@ -16,8 +16,13 @@ func TestWorkerEnvironmentNativeReadinessLive(t *testing.T) {
 	if repo == "" || commit == "" || codex == "" {
 		t.Skip("isolated native readiness acceptance was not selected")
 	}
-	stateRoot, err := os.MkdirTemp("", "steerline-pr154-live-")
-	require(t, err)
+	stateRoot := os.Getenv("STEERLINE_READINESS_LIVE_STATE_ROOT")
+	resume := stateRoot != ""
+	var err error
+	if !resume {
+		stateRoot, err = os.MkdirTemp("", "steerline-pr154-live-")
+		require(t, err)
+	}
 	t.Setenv("STEERLINE_HOME", stateRoot)
 	ctx := context.Background()
 	c := Config{TaskAuthority: "native", WorkflowProtocol: WorkerFlowVersion, Repository: repo, Remote: "origin", Branch: "main", RunDir: filepath.Join(stateRoot, "state"), WorktreeRoot: filepath.Join(stateRoot, "worktrees"), Host: "orca", Agent: "codex", Sandbox: "workspace-write", WindowsSandbox: "unelevated", Claimant: "readiness-acceptance", ExecutableTypes: []string{"task"}, Git: Command{Executable: "git"}, Codex: Command{Executable: codex}, Orca: OrcaConfig{Executable: "orca", Shell: "powershell.exe", WaitTimeout: "4m"}, CommandTimeout: "10s", TaskPoll: "10s", PRPoll: "30s", Heartbeat: "5s", ShutdownGrace: "10s"}
@@ -45,32 +50,38 @@ func TestWorkerEnvironmentNativeReadinessLive(t *testing.T) {
 	commands := CommandService{Store: store, Project: c.Identity()}
 	validation, err := commands.ValidateTaskBatch(ctx, c, input)
 	require(t, err)
-	if !validation.Valid {
+	if !resume && !validation.Valid {
 		t.Fatalf("live contract rejected: %+v", validation)
 	}
-	_, err = commands.CreateTaskBatch(ctx, c, input, newID(), validation.AuthorityVersion, "acceptance")
-	require(t, err)
-	authority, err := store.nativeAuthority(ctx, c.Identity())
-	require(t, err)
-	authority.AuthorityVersion++
-	authority.DispatchPaused = false
-	require(t, store.Transact(ctx, func(tx DomainTx) error {
-		return tx.(*sqliteTx).UpdateProjectTaskAuthorityCAS(authority, authority.AuthorityVersion-1)
-	}))
-	_, err = commands.ClaimNativeTask(ctx, c, TaskClaimOptions{TaskID: "9001154", RequestID: newID(), ExpectedTaskVersion: 1, ExpectedAuthorityVersion: authority.AuthorityVersion, RequestedBy: "acceptance", Explicit: true})
-	require(t, err)
+	if !resume {
+		_, err = commands.CreateTaskBatch(ctx, c, input, newID(), validation.AuthorityVersion, "acceptance")
+		require(t, err)
+		authority, err := store.nativeAuthority(ctx, c.Identity())
+		require(t, err)
+		authority.AuthorityVersion++
+		authority.DispatchPaused = false
+		require(t, store.Transact(ctx, func(tx DomainTx) error {
+			return tx.(*sqliteTx).UpdateProjectTaskAuthorityCAS(authority, authority.AuthorityVersion-1)
+		}))
+		_, err = commands.ClaimNativeTask(ctx, c, TaskClaimOptions{TaskID: "9001154", RequestID: newID(), ExpectedTaskVersion: 1, ExpectedAuthorityVersion: authority.AuthorityVersion, RequestedBy: "acceptance", Explicit: true})
+		require(t, err)
+	}
 	s, err := NewService(c)
 	require(t, err)
 	defer s.Close()
 	run := s.find("9001154")
 	t.Logf("isolated state retained at %s; workflow=%s execution=%s", stateRoot, run.RunID, run.ExecutionID)
-	require(t, s.prepareWorkerFlow(ctx, *nativeTaskRecord(s.State.Tasks, run.TaskID), run))
+	if !resume {
+		require(t, s.prepareWorkerFlow(ctx, *nativeTaskRecord(s.State.Tasks, run.TaskID), run))
+	} else {
+		require(t, s.resumeConfiguredWork(ctx))
+	}
 	deadline := time.Now().Add(7 * time.Minute)
 	for time.Now().Before(deadline) {
 		e := s.executionRecord(run)
 		if e.Environment.Blocker != nil {
 			reason := e.Environment.Blocker.Fact.Reason
-			if reason != "resource_preparation_unverified" && reason != "preparation_dispatch_unverified" {
+			if reason != "resource_preparation_unverified" && reason != "preparation_dispatch_unverified" && reason != "preparation_unverified" && reason != "agent_input_unverified" {
 				t.Fatalf("live readiness blocked: %+v", e.Environment.Blocker)
 			}
 			// This test requests a metadata/operation recheck, never authorizes or

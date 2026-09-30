@@ -280,6 +280,32 @@ func TestWorkerEnvironmentER4DeadlineRestartAndLostReceipt(t *testing.T) {
 	}
 }
 
+func TestEnvironmentRecheckCannotClearNewFaultObservedDuringPoll(t *testing.T) {
+	f := newEnvironmentFixture(t, fakeNativeOrcaState{ReadinessMode: "hold"}, "")
+	f.prepare(t)
+	f.update(t, func(state *fakeNativeOrcaState) {
+		state.HostWait = json.RawMessage(`{"kind":"approval","source":"structured"}`)
+	})
+	require(t, f.service.observeWorkerEnvironment(context.Background(), f.run))
+	e := f.service.executionRecord(f.run)
+	oldBlocker := e.Environment.Blocker.ID
+	f.update(t, func(state *fakeNativeOrcaState) { state.HostWait = nil; state.ReadinessMode = "tool_failure" })
+	f.recheck(t)
+	if e.Environment.Blocker == nil || e.Environment.Blocker.ID == oldBlocker || e.Environment.Blocker.Fact.Reason != "tool_initialization_failed" || f.run.Decision == nil || f.run.Decision.Status != "pending" || f.state(t).Dispatches != 1 {
+		t.Fatalf("old recheck cleared newer fault: %+v / %+v", e.Environment, f.run.Decision)
+	}
+}
+
+func TestManagedOrcaFrozenResourceEvidenceIsVerifiedBeforeInput(t *testing.T) {
+	f := newEnvironmentFixture(t, fakeNativeOrcaState{ReadinessMode: "hold"}, "")
+	f.prepare(t)
+	e := f.service.executionRecord(f.run)
+	e.Environment.WriteRoots = append(e.Environment.WriteRoots, "C:/")
+	if err := f.service.verifyNativeOrcaWorker(context.Background(), f.run, e); err == nil {
+		t.Fatal("changed writable roots were accepted")
+	}
+}
+
 func testManagedLaunchRecovery(t *testing.T, renamed bool) {
 	f := newEnvironmentFixture(t, fakeNativeOrcaState{LoseFixedTerminalOnce: !renamed, RenameFixedAgentAfterCreate: renamed}, "gpt-6-luna")
 	f.prepare(t)

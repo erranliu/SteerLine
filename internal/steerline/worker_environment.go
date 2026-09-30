@@ -283,7 +283,7 @@ func (s *Service) finishOrcaPreparation(ctx context.Context, run *Run, execution
 		}
 		s.restoreEnvironmentDecision(run)
 	}
-	if !now().Before(p.Deadline) && execution.Environment.Blocker == nil {
+	if !now().Before(p.Deadline) && !execution.Environment.Ready && execution.Environment.Blocker == nil {
 		if err := s.blockWorkerEnvironment(run, orcaworker.HostFact{Reason: "preparation_unverified", Confidence: "unverified", Source: "preparation.deadline", Turn: turn.TurnID}); err != nil {
 			return err
 		}
@@ -353,6 +353,8 @@ func (s *Service) applyEnvironmentAction(ctx context.Context, run *Run, answer D
 		return s.renewEnvironmentDecision(run)
 	}
 	blocker := env.Blocker
+	actionDecisionID := run.Decision.ID
+	actionDecisionVersion := run.Decision.Version
 	key := "environment-recheck:" + execution.ExecutionID + ":" + blocker.ID
 	op := s.nativeOrcaOperation(key)
 	if op == nil {
@@ -404,6 +406,11 @@ func (s *Service) applyEnvironmentAction(ctx context.Context, run *Run, answer D
 		}
 	}
 	if turn != nil && turn.Purpose == "readiness" && !env.Preparation.Invalidated {
+		// An explicit recheck may reread a settled probe's historical tool records
+		// when earlier bounded/unsupported pages provided no tool proof.
+		if turn.Settled && !env.Preparation.Evidence.Verified && env.Preparation.Evidence.CallID == "" {
+			turn.OutputCursor = ""
+		}
 		if err := s.pollNativeOrcaWorker(ctx, run); err != nil {
 			return err
 		}
@@ -418,6 +425,10 @@ func (s *Service) applyEnvironmentAction(ctx context.Context, run *Run, answer D
 		if execution.CurrentTurnID != turn.TurnID && !turn.Settled {
 			return s.renewEnvironmentDecision(run)
 		}
+	}
+	// Polling can install a newer blocker; an old action cannot clear it.
+	if env.Blocker == nil || env.Blocker.ID != blocker.ID || run.Decision == nil || run.Decision.ID != actionDecisionID || run.Decision.Version != actionDecisionVersion || environmentTurn(execution) != target.TurnID {
+		return s.changeWorkerOperation(run, op.OperationID, "confirmed", commandID, mustJSON(map[string]string{"result": "stale_target", "blocker_id": blocker.ID}), "")
 	}
 	// Reconcile original resource/Dispatch operations through their exact saved
 	// keys. No retry creates another terminal or Task when a result is unknown.

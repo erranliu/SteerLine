@@ -31,7 +31,7 @@
 
 ## worker 环境就绪与宿主恢复
 
-[worker 环境就绪与宿主阻断恢复 Spec](worker-environment-readiness.spec.md) / [Plan](worker-environment-readiness.plan.md)。状态：实现候选，真机服务闭环待验证；未分配 Task ID，一个实现 PR 交付。[验收记录](../validation/worker-environment-readiness/README.md)。补充本机 Orca + Codex 的冻结权限、原会话工具探针、独立宿主等待观察与原身份恢复，沿用 #36 的五主阶段及原生编排边界。
+[worker 环境就绪与宿主阻断恢复 Spec](worker-environment-readiness.spec.md) / [Plan](worker-environment-readiness.plan.md)。状态：已实施，审计修复与真实服务闭环通过，PR160 待审阅；未分配 Task ID，一个实现 PR 交付。[验收记录](../validation/worker-environment-readiness/README.md)。补充本机 Orca + Codex 的冻结权限、原会话工具探针、独立宿主等待观察与原身份恢复，沿用 #36 的五主阶段及原生编排边界。
 
 ## 架构审计收口（3 个 PR）
 

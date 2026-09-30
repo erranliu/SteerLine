@@ -30,4 +30,4 @@ Orca 本机 Codex 方案使用 `host=orca`、`agent=codex`、`sandbox=workspace-
 
 控制台显示冻结权限、环境核验及阻断来源。宿主等待时，文字保留原目标而不注入菜单；中心选项可打开原 terminal 或重新检查。重新检查先对账原操作，不用新会话替换丢失会话，不延长旧准备期限。运行中的 Execution 不受配置文件编辑影响。其他 agent 与 local 的执行/恢复语义保持原入口；受监管远端尚未接入。
 
-本次仍为实现候选；[验收记录](validation/worker-environment-readiness/README.md)区分真实工具证据、受控故障回归及尚未通过的真机服务闭环。
+本次已完成审计修复及隔离真机服务闭环；[验收记录](validation/worker-environment-readiness/README.md)区分真实工具证据、受控故障回归及已通过的真机服务闭环。

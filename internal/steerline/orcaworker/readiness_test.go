@@ -61,7 +61,7 @@ func TestAgentInputNeverTargetsTrustMenuOrParentShell(t *testing.T) {
 		tail         []string
 		ready        bool
 		reason       string
-	}{{"idle", "screen", []string{"› Ask Codex to do anything"}, true, ""}, {"trust", "screen", []string{"Trust this folder?", "› 1. Trust and continue", "2. Quit"}, false, "host_wait"}, {"stale_identity", "stream", []string{"PS C:\\repo>", "› Ask Codex to do anything"}, false, "agent_input_unverified"}} {
+	}{{"idle", "screen", []string{"› Ask Codex to do anything", "? for shortcuts"}, true, ""}, {"alternate_prompt", "screen", []string{"› Find a bug in this repository", "GPT-6.1-Sol medium · repo", "? for shortcuts"}, true, ""}, {"busy", "screen", []string{"• Working (2s • esc to interrupt)", "› Ask Codex to do anything", "? for shortcuts"}, false, "agent_input_unverified"}, {"shell_spoof", "screen", []string{"PS C:\\repo>", "› Ask Codex to do anything"}, false, "agent_input_unverified"}, {"trust", "screen", []string{"Trust this folder?", "› 1. Trust and continue", "2. Quit"}, false, "host_wait"}, {"stale_identity", "stream", []string{"PS C:\\repo>", "› Ask Codex to do anything"}, false, "agent_input_unverified"}} {
 		t.Run(tc.name, func(t *testing.T) {
 			call := func(_ context.Context, args ...string) (Result, error) {
 				payload := map[string]any{"terminal": map[string]any{"handle": "original", "incarnationId": "inc", "connected": true, "source": tc.source, "tail": tc.tail}}
@@ -73,6 +73,53 @@ func TestAgentInputNeverTargetsTrustMenuOrParentShell(t *testing.T) {
 				t.Fatalf("input qualification: %+v / %v / %v", fact, ready, err)
 			}
 		})
+	}
+}
+
+func TestProbeInitializationFailureCannotBeOverwrittenByRetry(t *testing.T) {
+	command, nonce, digest := "powershell.exe -File probe.ps1", strings.Repeat("a", 32), strings.Repeat("b", 64)
+	invocation, _ := json.Marshal(map[string]string{"cmd": command})
+	success, _ := json.Marshal(map[string]any{"exit_code": 0, "output": "SLREADINESS:" + nonce + ":" + digest})
+	call := map[string]any{"role": "assistant", "source": "transcript", "blocks": []any{map[string]string{"type": "tool-call", "name": "exec_command", "input": string(invocation), "callId": "call"}}}
+	result := func(text string) any {
+		return map[string]any{"role": "tool", "source": "transcript", "blocks": []any{map[string]string{"type": "tool-result", "output": text}}}
+	}
+	data, _ := json.Marshal(map[string]any{"messages": []any{call, result("helper_unknown_error: setup refresh had errors"), call, result(string(success))}})
+	output := WorkerOutput{Source: "transcript", SourceExact: true, Provider: "codex", SourceIdentity: "source", Transcript: data}
+	fact, err := ObserveProbe(output, command, nonce, digest, ProbeToolEvidence{})
+	if err != nil || fact.FailureCode == "" || fact.Verified {
+		t.Fatalf("confirmed fault was overwritten: %+v / %v", fact, err)
+	}
+	data, _ = json.Marshal(map[string]any{"messages": []any{call, result(string(success))}})
+	output.Transcript = data
+	fact, err = ObserveProbe(output, command, nonce, digest, fact)
+	if err != nil || fact.FailureCode == "" || fact.Verified {
+		t.Fatal("later page erased confirmed initialization fault")
+	}
+}
+
+func TestActualSavedCommandWrapperProvidesProbeEvidence(t *testing.T) {
+	data, err := os.ReadFile("../../../docs/validation/worker-environment-readiness/platform-wrapper-audit-2026-09-30.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fixture struct {
+		Command, Nonce, Digest string
+		Messages               json.RawMessage
+	}
+	if err := json.Unmarshal(data, &fixture); err != nil {
+		t.Fatal(err)
+	}
+	transcript, _ := json.Marshal(map[string]any{"messages": fixture.Messages})
+	output := WorkerOutput{Source: "transcript", SourceExact: true, Provider: "codex", SourceIdentity: "source", Transcript: transcript}
+	fact, err := ObserveProbe(output, fixture.Command, fixture.Nonce, fixture.Digest, ProbeToolEvidence{})
+	if err != nil || !fact.Verified {
+		t.Fatalf("real saved wrapper rejected: %+v / %v", fact, err)
+	}
+	for _, input := range []string{`const r = await tools.exec_command({cmd:"probe"});r={exit_code:0};text(r);`, `const r = await tools.exec_command({cmd:"probe"});text(fake);`, `const r = await tools.exec_command({cmd:"probe"});store("key",fake);text(r);`} {
+		if _, ok := commandInvocation("exec", input); ok {
+			t.Fatalf("modified result wrapper accepted: %s", input)
+		}
 	}
 }
 

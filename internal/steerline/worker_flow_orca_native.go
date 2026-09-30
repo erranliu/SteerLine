@@ -403,7 +403,6 @@ func (s *Service) bindNativeOrcaCoordinator(ctx context.Context, run *Run, execu
 	}
 	execution.OrcaNative.Coordinator = ProcessIdentity{Kind: "orca-native-coordinator", Terminal: term.Handle, RuntimeID: term.RuntimeID, Incarnation: term.IncarnationID, Executable: fixedConfig.Orca.Executable}
 	execution.Target.CoordinatorTerminal = term.Handle
-	execution.Target.CoordinatorTerminal = term.Handle
 	s.refreshRun(run)
 	return s.commitWorker(run)
 }
@@ -426,6 +425,33 @@ func (s *Service) verifyNativeOrcaWorker(ctx context.Context, run *Run, executio
 	}
 	if term.RuntimeID != execution.Process.RuntimeID || term.IncarnationID != execution.Process.Incarnation || term.WorktreeID != execution.Process.WorktreeID || term.AgentIdentity != fixedConfig.agentName() {
 		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "original Orca agent terminal or agent has changed"}
+	}
+	if env := execution.Environment; env != nil {
+		if env.Runtime != execution.Process.RuntimeID || len(env.WriteRoots) == 0 || canonical(env.WriteRoots[0]) != canonical(execution.Workspace.Worktree) {
+			return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "managed Orca resource permission identity changed"}
+		}
+		command, err := nativeOrcaFixedAgentCommand(fixedConfig)
+		if err != nil {
+			return err
+		}
+		args, err := codexLinkedWorktreeWriteArgs(ctx, fixedConfig, env.WriteRoots[0])
+		if err != nil {
+			return err
+		}
+		roots := []string{env.WriteRoots[0]}
+		for i := 1; i < len(args); i += 2 {
+			roots = append(roots, args[i])
+		}
+		command = orcaworker.AppendPowerShellArgs(command, args)
+		command = orcaworker.AppendPowerShellArgs(command, []string{"--cd", env.WriteRoots[0]})
+		if digestValue(roots) != digestValue(env.WriteRoots) || command != env.LaunchCommand {
+			return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "managed Orca launch command or write roots changed"}
+		}
+		op := s.nativeOrcaOperation("orca-native-agent-terminal:" + execution.ExecutionID)
+		var request map[string]string
+		if op == nil || json.Unmarshal(op.Request, &request) != nil || request["command"] != command || request["worktree"] != execution.Process.WorktreeID {
+			return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "managed Orca launch differs from its original operation"}
+		}
 	}
 	coordinator := execution.OrcaNative.Coordinator
 	if coordinator.Terminal != "" {

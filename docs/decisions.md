@@ -41,4 +41,4 @@ Windows Orca Codex 的环境阻断也通过 `answer_decision` 呈现。选项声
 
 宿主等待期间的普通文字原样保存为待投递反馈，并提供新的中心动作 Decision；原 worker question/message ID、答案与发送事实保持独立。恢复后只向仍有效的原 Dispatch 投递一次；原目标过期则保留并提示，结果未知的旧发送只对账。中心动作附带备注保存在原接受记录中，不作为 worker 指令注入。准备问题使用原 message ID 回复，但不进入业务执行或计数。
 
-受管环境重启恢复原准备期限、nonce、工具/收据事实和 Operation。原结果 relay 沿已保存操作对账；已核实原身份、尚未尝试转发的 worker 声明可走原 relay，未知回执不再次发送。其他 Orca agent 与 local 的原停服恢复入口不变。真实成功链路尚待[验收记录](validation/worker-environment-readiness/README.md)所列前提完成。
+受管环境重启恢复原准备期限、nonce、工具/收据事实和 Operation。原结果 relay 沿已保存操作对账；已核实原身份、尚未尝试转发的 worker 声明可走原 relay，未知回执不再次发送。其他 Orca agent 与 local 的原停服恢复入口不变。真实成功链路及原身份对账已通过，见[验收记录](validation/worker-environment-readiness/README.md)。

@@ -1,6 +1,6 @@
 # Plan：worker 环境就绪与宿主阻断恢复
 
-目标：`WORKER-ENVIRONMENT-READINESS`。唯一执行依据：[Spec](worker-environment-readiness.spec.md)。状态：待实施。日期：2026-09-30。未分配原生 Task ID；基于当前 worker-flow 和本机 Orca 原生实现，一个实现 PR 交付。
+目标：`WORKER-ENVIRONMENT-READINESS`。唯一执行依据：[Spec](worker-environment-readiness.spec.md)。状态：已实施并通过最小验收，PR160 待审阅。日期：2026-09-30。未分配原生 Task ID；基于当前 worker-flow 和本机 Orca 原生实现，一个实现 PR 交付。
 
 ## 1. 核实接口并收敛证据
 

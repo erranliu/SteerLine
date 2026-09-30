@@ -186,7 +186,7 @@ func fakeNativeOrca(stateDir string, args []string) int {
 			return fakeOrcaOK(map[string]any{"terminals": rows, "truncated": false})
 		case "read":
 			if state.EnvironmentMode && arg(args, "--terminal") == "term-agent" {
-				return fakeOrcaOK(map[string]any{"terminal": map[string]any{"handle": "term-agent", "source": "screen", "tail": []string{"› Ask Codex to do anything"}}})
+				return fakeOrcaOK(map[string]any{"terminal": map[string]any{"handle": "term-agent", "source": "screen", "tail": []string{"› Ask Codex to do anything", "? for shortcuts"}}})
 			}
 			if arg(args, "--terminal") == "term-agent" && state.PendingPaste {
 				return fakeOrcaOK(map[string]any{"terminal": map[string]any{"handle": "term-agent", "source": "screen", "tail": []string{"› [Pasted Content 6859 chars]"}}})

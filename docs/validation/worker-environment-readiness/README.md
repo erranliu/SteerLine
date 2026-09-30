@@ -1,6 +1,6 @@
 # worker 环境就绪实现候选验收
 
-日期：2026-09-30。依据：[Spec](../../spec/worker-environment-readiness.spec.md)、[Plan](../../spec/worker-environment-readiness.plan.md)。状态：代码候选；真实服务准备→业务闭环未通过，不标记交付完成。
+日期：2026-09-30。依据：[Spec](../../spec/worker-environment-readiness.spec.md)、[Plan](../../spec/worker-environment-readiness.plan.md)。状态：审计修复及真实服务闭环通过；实现 PR160 待审阅。
 
 ## 已取得的证据
 
@@ -17,7 +17,7 @@ ER1–ER4 使用同一 Orca fake 补充故障、重复操作和重启断言；�
 
 独立克隆：`C:\Users\lmas1\AppData\Local\Temp\steerline-pr154-repo-b370dd5c94174d778657b3d8a7bec29c`。未通过的原记录保留在 `C:\Users\lmas1\AppData\Local\Temp\steerline-pr154-live-2353153982`；原 terminal 为 `term_29693900-97a7-44e1-bd46-6eff693e4e90`，incarnation 为 `6b0080f8-9043-483a-aef1-d760a9e3c22b`，Dispatch 为 `ctx_a0671c814e9c`。未知 Dispatch 不自动结算、重派或用替代会话恢复。
 
-目录信任仍待用户确认/原生处理。最终受管参数增加了严格配置、明确写入根及临时目录排除，尚未取得这份最终命令的真实准备→业务成功记录。平台门槛样本证明真实工具事件和原生结算可取得，不能替代最终服务闭环。
+本次按用户继续验证的指示，仅为独立测试克隆补齐目录信任（未改 sandbox/approval）。此前的实现候选尚未通过最终命令的真实闭环；本次审计使用同一原 Execution 补齐了这项验证，详见下方记录。
 
 ## 最小复测入口
 
@@ -34,3 +34,21 @@ go test ./internal/steerline -run "^TestWorkerEnvironmentNativeReadinessLive$" -
 ```
 
 成功要求真实准备工具证据与原生成功结算，然后在原 terminal/incarnation 上恰好一个不同的业务 Task/Dispatch，并取得业务工具执行及结算；不发布或合并测试 PR。失败保留原资源/状态，不放宽 sandbox 或 approval policy。
+
+## 审计修复与真实闭环
+
+本次审计确认并修复以下问题：
+
+- 重新检查的轮询可产生新 blocker/Decision；结果提交重新核对原目标、Decision 版本及 blocker，不清除更新的故障。
+- 原准备轮的工具初始化失败成为不可被同轮后续成功覆盖的事实；晚到成功经明确接纳后不会因原 deadline 再次误阻断。
+- 输入入口检查支持不同 Codex 占位词，排除 busy/hook 画面及父 shell；不把启动入口检查视作工具就绪证明。
+- 修复 Go 1.24 声明与 Go 1.25 `os.Root` 方法调用不一致，使用有界读取及逐级 rooted mkdir；包回归、vet 和 CLI 构建通过。
+- 每次原会话核验对照冻结 Profile、原启动 Operation、实际命令及 linked worktree 写入根；当前格式拒绝缺收据/工具证据的 ready 记录。
+- Orca 的 cursor 会固定早期 terminal fallback，即使随后出现精确 transcript 也不必报告 source_changed。适配层用一次有界无旧 cursor 查询发现新增 transcript，单次刷新断线保留可用旧页。
+- 真实 Codex 命令工具 wrapper 可将返回值保存为局部变量并 `store` 后 `text`。解析支持已补证的原样返回形式，拒绝结果改写/变量替换；[真实样本](platform-wrapper-audit-2026-09-30.json)纳入回归。
+
+[真实服务记录](native-live-audit-2026-09-30.json)证明最终受管命令下的工具探针、原子收据、原生成功结算及一次业务派发/结算均通过。原 workflow 为 `f9177c604bddbe728d1425d3f0d90a2d`，Execution 为 `7cdad1492cbc3705cb76fbea5e412e04`；准备 Dispatch `ctx_d148cb51743f`，业务 Dispatch `ctx_4038aece5b9c`。两轮保持原 terminal `term_dbaa38e1-9ef8-4b9b-b771-0ba0b840651b` 和 incarnation `65e5fa7d-f88d-4a0f-84c0-3be032be5fd2`。先前超时不重置原 nonce/deadline；显式重新检查接纳原轮完整成功事实，没有重新探针、领取或启动 agent。
+
+真实入口可传 `STEERLINE_READINESS_LIVE_STATE_ROOT` 继续原隔离状态的对账，不创建替代 Execution。成功后的已结算、由本次中心创建的 agent/coordinator terminal 已按原身份关闭。
+
+[审计定向回归](audit-focused.jsonl)、[审计 quick 摘要](audit-quick/summary.json)与 `orcaworker` 包回归通过；不运行全量测试。目录信任依据[OpenAI 官方配置参考](https://learn.chatgpt.com/docs/config-file/config-reference#configtoml)的 `projects.<path>.trust_level`，仅限此测试克隆。

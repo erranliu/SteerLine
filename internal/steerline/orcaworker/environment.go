@@ -47,8 +47,10 @@ func InspectAgentInput(ctx context.Context, call MetaCall, identity TerminalIden
 			fact.Reason, fact.Confidence, fact.Detail = "host_wait", "suspected", "原 Codex 显示目录信任菜单；请在原生界面处理。"
 			return fact, false, nil
 		}
+		busy := strings.Contains(text, "esc to interrupt") || strings.Contains(text, "working (") || strings.Contains(text, "running hook")
+		codexChrome := strings.Contains(text, "? for shortcuts") || strings.Contains(text, "gpt-")
 		for _, line := range result.Terminal.Tail {
-			if strings.HasPrefix(strings.TrimSpace(line), "› Ask Codex") {
+			if !busy && codexChrome && strings.HasPrefix(strings.TrimSpace(line), "› ") {
 				return fact, true, nil
 			}
 		}
