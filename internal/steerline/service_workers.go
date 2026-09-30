@@ -160,7 +160,7 @@ func (s *Service) handleWorkerMessage(message workerMessage) error {
 		return nil // A late observer message cannot change a replacement attempt.
 	}
 	var run *Run
-	for _, candidate := range s.State.Runs {
+	for _, candidate := range s.runs {
 		if candidate != nil && candidate.RunID == message.runID {
 			run = candidate
 			break

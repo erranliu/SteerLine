@@ -19,22 +19,24 @@ type recordWrite[T any] struct {
 // workerCommit is the bounded write set of one worker transition. Operations
 // and events may also be committed independently by their service owners.
 type workerCommit struct {
-	Project           string
-	TaskID            string
-	WorkflowID        string
-	ExecutionID       string
-	AttemptID         string
-	ControlRevision   uint64
-	AuthorityRevision uint64
-	ExpectedAttemptID string
-	Workflow          *recordWrite[WorkflowRunRecord]
-	Execution         *recordWrite[ExecutionRecord]
-	Attempt           *recordWrite[StepAttemptRecord]
-	RetiredAttempt    *recordWrite[StepAttemptRecord]
-	Decisions         []recordWrite[DecisionRecord]
-	Operations        []recordWrite[OperationRecord]
-	Events            []DomainEvent
-	Checkpoint        ServiceCheckpoint
+	Binding            *ExecutionRef
+	ExecutionOperation *recordWrite[Operation]
+	Project            string
+	TaskID             string
+	WorkflowID         string
+	ExecutionID        string
+	AttemptID          string
+	ControlRevision    uint64
+	AuthorityRevision  uint64
+	ExpectedAttemptID  string
+	Workflow           *recordWrite[WorkflowRunRecord]
+	Execution          *recordWrite[ExecutionRecord]
+	Attempt            *recordWrite[StepAttemptRecord]
+	RetiredAttempt     *recordWrite[StepAttemptRecord]
+	Decisions          []recordWrite[DecisionRecord]
+	Operations         []recordWrite[OperationRecord]
+	Events             []DomainEvent
+	Checkpoint         ServiceCheckpoint
 }
 
 type workerCommitResult struct {
@@ -243,6 +245,30 @@ func (s *SQLiteStore) commitWorker(ctx context.Context, request workerCommit) (w
 				return errors.New("worker event has a different binding")
 			}
 			if _, err := tx.AppendEvent(event); err != nil {
+				return err
+			}
+		}
+		if ref := request.Binding; ref != nil {
+			if request.Execution == nil || ref.RunID != request.WorkflowID || ref.AttemptID != request.AttemptID || request.Execution.After.Process == nil || ref.External != *request.Execution.After.Process || ref.WorkspacePath != request.Execution.After.Workspace.Worktree || ref.WorkspaceBranch != request.Execution.After.Workspace.Branch || ref.BaseCommit != request.Execution.After.Workspace.Base {
+				return errors.New("execution binding differs from the committed receipt")
+			}
+			execution := request.Execution.After
+			if string(ref.Backend) != execution.Backend || string(ref.Protocol) != execution.Protocol || ref.Agent.Name != execution.Agent || ref.Target.ID != execution.Target.ID || ref.Target.ConnectionID != execution.Target.ConnectionID || ref.Target.ExternalRuntime != execution.Target.ExternalRuntime || ref.Protocol == ProtocolLocalCodexAppServer && ref.Generation != execution.AppServerGeneration {
+				return errors.New("execution binding changed the fixed backend or generation")
+			}
+			if err := tx.putExecutionBinding(*ref); err != nil {
+				return err
+			}
+		}
+		if write := request.ExecutionOperation; write != nil {
+			if write.After.RunID != request.WorkflowID || write.After.AttemptID != request.AttemptID || write.After.Ref == nil || request.Execution == nil || request.Execution.After.Process == nil || write.After.Ref.External != *request.Execution.After.Process {
+				return errors.New("execution operation differs from its original worker")
+			}
+			expected := ""
+			if write.Before != nil {
+				expected = recordFingerprint(*write.Before)
+			}
+			if err := tx.putExecutionOperation(write.After, expected); err != nil {
 				return err
 			}
 		}

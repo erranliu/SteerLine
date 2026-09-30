@@ -7,10 +7,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 )
@@ -23,6 +23,7 @@ type Service struct {
 	State                Runtime
 	domain               DomainSnapshot
 	committed            DomainSnapshot
+	runs                 []*Run
 	pendingEvents        []DomainEvent
 	pendingOperations    map[string]string
 	workerDecisionWrites map[string]bool
@@ -121,6 +122,7 @@ func NewService(c Config) (_ *Service, retErr error) {
 			return nil, nativeErr("authority_mismatch", "runtime repository or branch differs from the native authority; preserve state")
 		}
 		s.State = *old
+		s.runs = old.Runs
 		s.State.Control.DispatchMode, s.State.Control.DispatchPaused, s.State.Control.Revision = authority.DispatchMode, authority.DispatchPaused, authority.AuthorityVersion
 		if op := s.State.Control.Operation; op != nil {
 			if !controlIDPattern.MatchString(op.RequestID) || !validControlAction(op.Action) || (op.Phase != "applying" && op.Phase != "completed") || len(op.RequestDigest) != 64 || op.Action == "start_task" && (!controlIDPattern.MatchString(op.RunID) || op.TaskID == "") || op.Phase == "completed" && op.Result == nil {
@@ -140,7 +142,7 @@ func NewService(c Config) (_ *Service, retErr error) {
 	if err := s.refreshNativeSnapshot(context.Background()); err != nil {
 		return nil, err
 	}
-	for _, run := range s.State.Runs {
+	for _, run := range s.runs {
 		if run.WorkflowVersion != WorkerFlowVersion {
 			return nil, nativeErr("unsupported_schema", "unsupported workflow version")
 		}
@@ -308,7 +310,7 @@ func (s *Service) emitConsole(ev ActivityEvent) {
 	}
 }
 func (s *Service) find(id string) *Run {
-	for _, r := range s.State.Runs {
+	for _, r := range s.runs {
 		if r.TaskID == id {
 			return r
 		}
@@ -362,7 +364,7 @@ func (s *Service) executionSlotReason(ignoreRequestID string, resumingDecision b
 	if len(s.State.Control.Blockers) > 0 {
 		return s.State.Control.Blockers[0].Reason
 	}
-	for _, run := range s.State.Runs {
+	for _, run := range s.runs {
 		if run == nil {
 			continue
 		}
@@ -373,7 +375,7 @@ func (s *Service) executionSlotReason(ignoreRequestID string, resumingDecision b
 			return "execution preparation or supervision is still active"
 		}
 	}
-	for _, run := range s.State.Runs {
+	for _, run := range s.runs {
 		if run != nil && !resumingDecision && run.FinishTaskStatus == "waiting_decision" {
 			return "waiting for a human decision"
 		}
@@ -599,7 +601,7 @@ func (s *Service) persistRemoteWorkerMessages(ev WorkerEvent) error {
 		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "remote inbox batch lacks fixed local Run/attempt or external Orca Run identity"}
 	}
 	var run *Run
-	for _, candidate := range s.State.Runs {
+	for _, candidate := range s.runs {
 		if candidate != nil && candidate.RunID == ev.RunID {
 			run = candidate
 			break
@@ -632,19 +634,7 @@ func (s *Service) persistRemoteWorkerMessages(ev WorkerEvent) error {
 			return err
 		}
 		messageAttempt := ""
-		messageTaskID, messageDispatchID := "", ""
-		if messagePayload, payloadErr := supervisedMessagePayload(message); payloadErr == nil && len(messagePayload) > 0 {
-			var identity struct {
-				TaskID     string `json:"taskId"`
-				DispatchID string `json:"dispatchId"`
-			}
-			if json.Unmarshal(messagePayload, &identity) == nil {
-				messageTaskID, messageDispatchID = identity.TaskID, identity.DispatchID
-			}
-		}
-		if messageDispatchID == "" && strings.HasPrefix(message.FromHandle, "dispatch:") {
-			messageDispatchID = strings.TrimPrefix(message.FromHandle, "dispatch:")
-		}
+		messageTaskID, messageDispatchID := orcaworker.MessageIdentity(message)
 		if messageDispatchID != "" {
 			for _, attempt := range s.domain.Attempts {
 				if attempt.ExecutionID != run.ExecutionID || attempt.ExternalBinding.Dispatch != messageDispatchID {
@@ -679,7 +669,7 @@ func (s *Service) recordHistoricalWorkerEvent(ev WorkerEvent) error {
 		return nil
 	}
 	var run *Run
-	for _, candidate := range s.State.Runs {
+	for _, candidate := range s.runs {
 		if candidate != nil && candidate.RunID == ev.RunID {
 			run = candidate
 			break
@@ -1058,7 +1048,7 @@ func (s *Service) shutdown() {
 			break
 		}
 		var run *Run
-		for _, candidate := range s.State.Runs {
+		for _, candidate := range s.runs {
 			if candidate != nil && candidate.RunID == runID {
 				run = candidate
 				break
