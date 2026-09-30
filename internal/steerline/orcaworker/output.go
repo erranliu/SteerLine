@@ -10,6 +10,9 @@ import (
 type WorkerOutput struct {
 	DispatchID      string   `json:"dispatchId"`
 	Source          string   `json:"source"`
+	SourceIdentity  string   `json:"sourceIdentity"`
+	SourceExact     bool     `json:"sourceExact"`
+	Provider        string   `json:"provider"`
 	Cursor          string   `json:"cursor"`
 	NextCursor      string   `json:"nextCursor"`
 	SourceChanged   bool     `json:"sourceChanged"`

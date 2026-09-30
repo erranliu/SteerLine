@@ -111,7 +111,9 @@ func writeDecisionRequestWithID(r *Run, req DecisionRequest, decisionID string) 
 
 func validateDecisionAnswer(req *DecisionRequest, a *DecisionAnswer) error {
 	a.OptionID = strings.TrimSpace(a.OptionID)
-	a.Note = strings.TrimSpace(a.Note)
+	if req.HostTarget == nil {
+		a.Note = strings.TrimSpace(a.Note)
+	}
 	a.AnsweredBy = strings.TrimSpace(a.AnsweredBy)
 	if a.AnsweredBy == "" {
 		return errors.New("answer requires answered_by")
@@ -528,6 +530,12 @@ func DecisionReplyEligibility(ctx context.Context, c Config, run *Run) error {
 	if run.WorkflowVersion != WorkerFlowVersion || !stableExecutionID(run.ExecutionID) || run.AttemptID == "" || run.Decision.AttemptID != run.AttemptID {
 		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "feedback does not belong to the fixed worker execution"}
 	}
+	if target := run.Decision.Request.HostTarget; target != nil {
+		if target.ExecutionID != run.ExecutionID || !stableExecutionID(target.TurnID) || !stableExecutionID(target.BlockerID) {
+			return errors.New("host action has an invalid fixed execution target")
+		}
+		return ctx.Err()
+	}
 	if run.RecoveryRequired && (run.RecoveryState == "unverified" || run.RecoveryState == "" ||
 		run.RecoveryState == "interrupted" && run.Decision.Request.NativeAsk != nil) {
 		return &BackendError{Code: BackendUnsupported, Diagnostic: "original worker state or native question is not verified; wait for a recovery decision"}
@@ -555,7 +563,7 @@ func (s *Service) applyDecisions(ctx context.Context) error {
 				break
 			}
 		}
-		if blocked {
+		if blocked && run.Decision.Request.HostTarget == nil {
 			continue
 		}
 		if run.WorkflowVersion != WorkerFlowVersion {

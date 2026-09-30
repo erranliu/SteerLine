@@ -62,7 +62,7 @@ func (s *Service) processPendingCommands(ctx context.Context) error {
 				command.Status = "in_flight"
 			}
 			if run := s.findDecision(command.TargetID); run != nil {
-				if execution := s.executionRecord(run); execution != nil && execution.RecoveryRequired &&
+				if execution := s.executionRecord(run); execution != nil && run.Decision.Request.HostTarget == nil && execution.RecoveryRequired &&
 					(execution.RecoveryState == "unverified" || execution.RecoveryState == "" ||
 						execution.RecoveryState == "interrupted" && run.Decision.Request.NativeAsk != nil) {
 					result, _ := json.Marshal(map[string]string{"code": "recovery_unverified", "error": "the original worker or request is not verified for this answer; review the recovery decision"})

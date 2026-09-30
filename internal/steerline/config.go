@@ -46,6 +46,7 @@ type Config struct {
 	Model                   string             `json:"model"`
 	ReasoningEffort         string             `json:"reasoning_effort"`
 	Sandbox                 string             `json:"sandbox"`
+	WindowsSandbox          string             `json:"windows_sandbox,omitempty"`
 	Profile                 string             `json:"profile"`
 	Agent                   string             `json:"agent"`
 	Host                    string             `json:"host"`
@@ -235,7 +236,7 @@ func LoadConfig(path string) (Config, error) {
 	}
 	var configFields map[string]json.RawMessage
 	_ = json.Unmarshal(b, &configFields)
-	for _, field := range []string{"host", "agent", "model", "reasoning_effort", "sandbox", "profile", "codex", "orca", "execution_profiles", "default_execution_profile"} {
+	for _, field := range []string{"host", "agent", "model", "reasoning_effort", "sandbox", "windows_sandbox", "profile", "codex", "orca", "execution_profiles", "default_execution_profile"} {
 		if _, present := configFields[field]; present {
 			return c, fmt.Errorf("%s belongs in global execution config %s", field, GlobalExecutionConfigPath())
 		}
@@ -346,8 +347,13 @@ func LoadConfig(path string) (Config, error) {
 		}
 	}
 	if c.Host == "orca" {
-		if c.WorkflowProtocol == WorkerFlowVersion && (c.Profile != "" || c.Sandbox != "workspace-write" || (c.Model == "") != (c.ReasoningEffort == "")) {
-			return c, errors.New("Orca worker-flow requires workspace-write, no Codex profile, and model with reasoning_effort together")
+		if c.WorkflowProtocol == WorkerFlowVersion && c.managedWindowsOrca() {
+			if _, err := nativeOrcaFixedAgentCommand(c); err != nil {
+				return c, err
+			}
+		}
+		if c.WorkflowProtocol == WorkerFlowVersion && (c.Profile != "" || c.Sandbox != "workspace-write") {
+			return c, errors.New("Orca worker-flow requires workspace-write and no Codex profile")
 		}
 		if c.agentName() != "codex" && (c.Model != "" || c.Profile != "" || c.ReasoningEffort != "") {
 			return c, errors.New("orca model, profile and reasoning_effort overrides require agent=codex")
@@ -472,7 +478,7 @@ func (c Config) agentName() string {
 	return c.Agent
 }
 func (c Config) needsCodexExecutable() bool {
-	return c.requiresLocalCodex() || c.hostName() == "orca" && c.agentName() == "codex" && (c.Model != "" || c.ReasoningEffort != "" || c.Profile != "")
+	return c.requiresLocalCodex() || c.managedWindowsOrca() || c.hostName() == "orca" && c.agentName() == "codex" && (c.Model != "" || c.ReasoningEffort != "" || c.Profile != "")
 }
 func resolveCommand(c *Command) error {
 	p, e := exec.LookPath(c.Executable)
@@ -506,8 +512,8 @@ func (c *Config) preflightNative(ctx context.Context) error {
 	if c.WorkflowProtocol == WorkerFlowVersion && c.hostName() != "local" && c.hostName() != "orca" {
 		return &BackendError{Code: BackendUnsupported, Diagnostic: "this worker-flow host is not supported"}
 	}
-	if c.WorkflowProtocol == WorkerFlowVersion && c.hostName() == "orca" && (c.Profile != "" || c.Sandbox != "workspace-write" || (c.Model == "") != (c.ReasoningEffort == "")) {
-		return &BackendError{Code: BackendUnsupported, Diagnostic: "Orca requires workspace-write, no Codex profile, and model with reasoning_effort together"}
+	if c.WorkflowProtocol == WorkerFlowVersion && c.hostName() == "orca" && (c.Profile != "" || c.Sandbox != "workspace-write") {
+		return &BackendError{Code: BackendUnsupported, Diagnostic: "Orca requires workspace-write and no Codex profile"}
 	}
 	if c.hostName() == "local" && c.agentName() != "codex" {
 		return errors.New("local_process currently supports only agent=codex")
@@ -621,4 +627,8 @@ func (c Config) requiresLocalCodex() bool {
 func inside(root, path string) bool {
 	rel, e := filepath.Rel(root, path)
 	return e == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && !filepath.IsAbs(rel)
+}
+
+func (c Config) managedWindowsOrca() bool {
+	return runtime.GOOS == "windows" && c.hostName() == "orca" && c.agentName() == "codex"
 }

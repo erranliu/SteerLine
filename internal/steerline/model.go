@@ -12,7 +12,7 @@ type Repository struct {
 	Identity string `json:"identity"`
 }
 
-const WorkerFlowRuntimeSchema = 9
+const WorkerFlowRuntimeSchema = 10
 
 // ServiceCheckpoint contains only service-owned recovery state. Task and worker
 // state is read from domain rows in the same transaction as this checkpoint.
@@ -201,20 +201,29 @@ type ManualStopConfirmation struct {
 
 // DecisionOption is one choice an agent offers when it needs a human decision.
 type DecisionOption struct {
-	ID     string `json:"id"`
-	Label  string `json:"label"`
-	Detail string `json:"detail,omitempty"`
+	ID       string `json:"id"`
+	Label    string `json:"label"`
+	Detail   string `json:"detail,omitempty"`
+	Receiver string `json:"receiver,omitempty"`
+	Action   string `json:"action,omitempty"`
 }
 
 // DecisionRequest is the structured question carried in an R-a result.
 type DecisionRequest struct {
-	Question      string           `json:"question"`
-	Context       string           `json:"context,omitempty"`
-	Options       []DecisionOption `json:"options"`
-	Recommended   string           `json:"recommended,omitempty"`
-	AllowFreeText bool             `json:"allow_free_text,omitempty"`
-	NativeAsk     *codexAskCall    `json:"native_ask,omitempty"`
-	OrcaAsk       *orcaAskCall     `json:"orca_ask,omitempty"`
+	Question      string            `json:"question"`
+	Context       string            `json:"context,omitempty"`
+	Options       []DecisionOption  `json:"options"`
+	Recommended   string            `json:"recommended,omitempty"`
+	AllowFreeText bool              `json:"allow_free_text,omitempty"`
+	NativeAsk     *codexAskCall     `json:"native_ask,omitempty"`
+	OrcaAsk       *orcaAskCall      `json:"orca_ask,omitempty"`
+	HostTarget    *HostActionTarget `json:"host_target,omitempty"`
+}
+
+type HostActionTarget struct {
+	ExecutionID string `json:"execution_id"`
+	TurnID      string `json:"turn_id"`
+	BlockerID   string `json:"blocker_id"`
 }
 
 // DecisionState is the runtime projection of one decision. SQLite owns the

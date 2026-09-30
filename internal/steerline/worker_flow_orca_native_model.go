@@ -17,7 +17,7 @@ func nativeOrcaFixedAgentTitle(executionID string) string {
 func nativeOrcaFixedAgentCommand(c Config) (string, error) {
 	return orcaworker.FixedAgentCommand(orcaworker.FixedAgentOptions{
 		Host: c.hostName(), Agent: c.agentName(), Model: c.Model, ReasoningEffort: c.ReasoningEffort,
-		Executable: c.Codex.Executable, Args: c.Codex.Args, Sandbox: c.Sandbox, Shell: c.Orca.Shell,
+		Executable: c.Codex.Executable, Args: c.Codex.Args, Sandbox: c.Sandbox, WindowsSandbox: c.WindowsSandbox, Shell: c.Orca.Shell,
 	})
 }
 
@@ -131,6 +131,17 @@ func (s *Service) prepareNativeOrcaFixedAgentTerminal(ctx context.Context, run *
 		return err
 	}
 	command = orcaworker.AppendPowerShellArgs(command, writeArgs)
+	command = orcaworker.AppendPowerShellArgs(command, []string{"--cd", worktree.Path})
+	if env := execution.Environment; env != nil {
+		if env.LaunchCommand != "" && env.LaunchCommand != command {
+			return errors.New("managed Orca launch evidence differs from original command")
+		}
+		env.LaunchCommand = command
+		env.WriteRoots = []string{worktree.Path}
+		for i := 1; i < len(writeArgs); i += 2 {
+			env.WriteRoots = append(env.WriteRoots, writeArgs[i])
+		}
+	}
 	opID, err := s.startWorkerOperation(run, "orca_native_agent_terminal", key, map[string]string{"worktree": worktree.ID, "title": title, "model": fixedConfig.Model, "effort": fixedConfig.ReasoningEffort, "command": command})
 	if err != nil {
 		return err
@@ -144,6 +155,10 @@ func (s *Service) prepareNativeOrcaFixedAgentTerminal(ctx context.Context, run *
 	if err != nil {
 		_ = s.changeWorkerOperation(run, opID, "outcome_unknown", "", platform.Payload, "fixed agent terminal creation receipt is incomplete")
 		return &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "fixed Orca agent launch receipt is incomplete", Cause: err}
+	}
+	if env := execution.Environment; env != nil {
+		env.Runtime = platform.RuntimeID
+		env.OriginalTerminal = &ProcessIdentity{Kind: "orca-native", Terminal: parsedTerminal.Handle, RuntimeID: platform.RuntimeID, Incarnation: parsedTerminal.IncarnationID, WorktreeID: worktree.ID}
 	}
 	if err := s.changeWorkerOperation(run, opID, "accepted", "", platform.Payload, ""); err != nil {
 		return err
@@ -199,6 +214,9 @@ func (s *Service) waitAndBindNativeOrcaFixedAgent(ctx context.Context, run *Run,
 		return configErr
 	}
 	fixedConfig := fixed.config
+	if execution.Environment != nil {
+		return s.bindNativeOrcaAgent(ctx, run, execution, worktree, handle, repoID, base)
+	}
 	deadline := time.Now().Add(min(positiveDuration(fixedConfig.Orca.WaitTimeout, 30*time.Second), 30*time.Second))
 	for {
 		err := s.bindNativeOrcaAgent(ctx, run, execution, worktree, handle, repoID, base)

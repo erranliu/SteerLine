@@ -20,7 +20,7 @@ SteerLine 是一款面向工程 AGI 的研究型软件开发工具。它以 road
 
 当前生产配置使用 `worker-flow-v1` 和中心 native Task。旧配置或运行状态在外部副作用前拒绝；需要人工核实旧现场，不自动迁移或接管原 worker。
 
-业务状态只持久化在 SQLite 的 Task、WorkflowRun、Execution、Attempt、Decision、Operation 和交付记录中。服务 checkpoint 只保存服务实例、心跳、未完成控制操作及认领前的预留；Runtime/Run 是在同一读取事务中生成的视图，不参与业务写回。工作区准备意图、轮次观察及当前决策绑定由 Execution 保存；回答事务直接校验 WorkflowRun 的持久控制版本，心跳和日志更新不会改变该版本。当前数据库 schema 为 6，checkpoint schema 为 8，旧格式直接拒绝，不自动迁移。
+业务状态只持久化在 SQLite 的 Task、WorkflowRun、Execution、Attempt、Decision、Operation 和交付记录中。服务 checkpoint 只保存服务实例、心跳、未完成控制操作及认领前的预留；Runtime/Run 是在同一读取事务中生成的视图，不参与业务写回。工作区准备意图、轮次观察及当前决策绑定由 Execution 保存；回答事务直接校验 WorkflowRun 的持久控制版本，心跳和日志更新不会改变该版本。当前数据库 schema 为 8，checkpoint schema 为 10，旧格式直接拒绝，不自动迁移。
 
 native 项目控制台还会显示中心任务关系、阻塞原因、Spec 路径和交付定位；离线详情显示采样时间，Ready 缓存不会变成启动许可。完整固定引用保留在中心任务契约中。命令行可用 `steerline task graph -config <path> -task-id <id> -direction upstream -depth 3` 查询关系，或用 `steerline task export -config <path> -format json -output <path>` 导出；覆盖已有导出文件需显式传 `-overwrite`。
 
@@ -37,3 +37,5 @@ native 项目控制台还会显示中心任务关系、阻塞原因、Spec 路�
 键盘：`Tab` 在任务列表与动态之间切换焦点，`↑/↓` 选择任务或滚动动态，`←/→` 切项目，`d`/Enter 打开完整只读详情、Esc 返回，`A/c/f` 切活动/会话/最终回复；`a` 在有待决策问题时回答，否则切到活动。`v` 看决策历史，`u` 看执行核验，`,/.` 选择轮次，`e` 折叠/展开已验证轮次，`=` 保持当前轮展开，`o` 阅读过程正文，`n` 读取下一条 final，`y` 读取下一页会话记录，`q` 只退出控制台。
 
 [会话事件与完整正文](docs/conversation-events.md) · [Activity 读取契约](docs/activity.md)
+
+Windows Orca Codex 受管方案还要求显式 `windows_sandbox`，先在原会话核验 readiness 探针与原生结算，再派发业务。宿主等待通过中心待决策显示来源及可信程度，提供打开原 terminal、重新检查动作。此实现仍处于真机闭环验证阶段，详见[环境验收记录](docs/validation/worker-environment-readiness/README.md)。

@@ -121,7 +121,10 @@ func (s *SQLiteStore) commitWorkerTransition(ctx context.Context, request worker
 				if v.Version < old.Version || old.Status != v.Status && v.Version <= old.Version {
 					return errors.New("worker decision version cannot regress")
 				}
-				if old.Status != v.Status && !(old.Status == "pending" && (v.Status == "answer_saved" || v.Status == "superseded") || old.Status == "answer_saved" && (v.Status == "reply_accepted" || v.Status == "superseded")) {
+				var originalRequest DecisionRequest
+				_ = json.Unmarshal(old.Request, &originalRequest)
+				centerActionApplied := originalRequest.HostTarget != nil && originalRequest.HostTarget.ExecutionID == request.ExecutionID && old.Status == "answer_saved" && v.Status == "applied"
+				if old.Status != v.Status && !(old.Status == "pending" && (v.Status == "answer_saved" || v.Status == "superseded") || old.Status == "answer_saved" && (v.Status == "reply_accepted" || v.Status == "superseded") || centerActionApplied) {
 					return errors.New("worker decision status transition is not allowed")
 				}
 				if len(old.Answer) != 0 && (!bytes.Equal(old.Answer, v.Answer) || old.AnsweredBy != v.AnsweredBy) {

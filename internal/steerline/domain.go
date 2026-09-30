@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 	"github.com/erranliu/SteerLine/internal/steerline/task"
 	"github.com/erranliu/SteerLine/internal/steerline/workerflow"
 )
@@ -80,6 +81,7 @@ type ExecutionRecord struct {
 	Protocol               string                  `json:"protocol,omitempty"`
 	Process                *ProcessIdentity        `json:"process,omitempty"`
 	OrcaNative             *OrcaNativeExecution    `json:"orca_native,omitempty"`
+	Environment            *WorkerEnvironment      `json:"environment,omitempty"`
 	SessionID              string                  `json:"session_id,omitempty"`
 	DecisionID             string                  `json:"decision_id,omitempty"`
 	AppServerEndpoint      string                  `json:"app_server_endpoint,omitempty"`
@@ -115,19 +117,70 @@ type OrcaNativeExecution struct {
 }
 
 type OrcaNativeTurn struct {
-	TurnID               string   `json:"turn_id"`
-	TaskID               string   `json:"task_id"`
-	DispatchID           string   `json:"dispatch_id"`
-	TaskRequestID        string   `json:"task_request_id,omitempty"`
-	DispatchRequestID    string   `json:"dispatch_request_id,omitempty"`
-	DoneMessageID        string   `json:"done_message_id,omitempty"`
-	Outcome              string   `json:"outcome,omitempty"`
-	OutputSource         string   `json:"output_source,omitempty"`
-	OutputCursor         string   `json:"output_cursor,omitempty"`
-	OutputComplete       bool     `json:"output_complete,omitempty"`
-	OutputClipping       []string `json:"output_clipping,omitempty"`
-	OutputFallbackReason string   `json:"output_fallback_reason,omitempty"`
-	OutputDigest         string   `json:"output_digest,omitempty"`
+	ToolContext          orcaworker.ToolContext `json:"tool_context,omitempty"`
+	InjectionAttempts    int                    `json:"injection_attempts,omitempty"`
+	Purpose              string                 `json:"purpose,omitempty"`
+	IntentAt             time.Time              `json:"intent_at"`
+	Settled              bool                   `json:"settled,omitempty"`
+	TurnID               string                 `json:"turn_id"`
+	TaskID               string                 `json:"task_id"`
+	DispatchID           string                 `json:"dispatch_id"`
+	TaskRequestID        string                 `json:"task_request_id,omitempty"`
+	DispatchRequestID    string                 `json:"dispatch_request_id,omitempty"`
+	DoneMessageID        string                 `json:"done_message_id,omitempty"`
+	Outcome              string                 `json:"outcome,omitempty"`
+	OutputSource         string                 `json:"output_source,omitempty"`
+	OutputCursor         string                 `json:"output_cursor,omitempty"`
+	OutputComplete       bool                   `json:"output_complete,omitempty"`
+	OutputClipping       []string               `json:"output_clipping,omitempty"`
+	OutputFallbackReason string                 `json:"output_fallback_reason,omitempty"`
+	OutputDigest         string                 `json:"output_digest,omitempty"`
+}
+
+// Environment preparation and host blocking belong to Execution. They do not
+// add business steps, replace the workflow, or advance business turn counters.
+type WorkerEnvironment struct {
+	OriginalTerminal   *ProcessIdentity      `json:"original_terminal,omitempty"`
+	ProfileDigest      string                `json:"profile_digest"`
+	LaunchCommand      string                `json:"launch_command,omitempty"`
+	WriteRoots         []string              `json:"write_roots,omitempty"`
+	Runtime            string                `json:"runtime,omitempty"`
+	Preparation        *WorkerPreparation    `json:"preparation"`
+	History            []WorkerPreparation   `json:"history,omitempty"`
+	Blocker            *WorkerHostBlocker    `json:"blocker,omitempty"`
+	DeferredDecisionID string                `json:"deferred_decision_id,omitempty"`
+	DeferredFeedback   []EnvironmentFeedback `json:"deferred_feedback,omitempty"`
+	Ready              bool                  `json:"ready"`
+}
+
+type EnvironmentFeedback struct {
+	DecisionID string `json:"decision_id"`
+	TurnID     string `json:"turn_id"`
+	CommandID  string `json:"command_id"`
+}
+
+type WorkerPreparation struct {
+	TurnID       string                       `json:"turn_id"`
+	Nonce        string                       `json:"nonce"`
+	StartedAt    time.Time                    `json:"started_at"`
+	Deadline     time.Time                    `json:"deadline"`
+	Probe        orcaworker.ProbeIdentity     `json:"probe"`
+	Command      string                       `json:"command,omitempty"`
+	InputDigest  string                       `json:"input_digest,omitempty"`
+	ScriptDigest string                       `json:"script_digest,omitempty"`
+	Receipt      *orcaworker.ProbeReceipt     `json:"receipt,omitempty"`
+	Evidence     orcaworker.ProbeToolEvidence `json:"evidence"`
+	Verified     bool                         `json:"verified"`
+	Invalidated  bool                         `json:"invalidated,omitempty"`
+}
+
+type WorkerHostBlocker struct {
+	ID                 string              `json:"id"`
+	Fact               orcaworker.HostFact `json:"fact"`
+	ObservedAt         time.Time           `json:"observed_at"`
+	TurnID             string              `json:"turn_id"`
+	DecisionID         string              `json:"decision_id,omitempty"`
+	RecheckOperationID string              `json:"recheck_operation_id,omitempty"`
 }
 
 type ExecutionTarget struct {

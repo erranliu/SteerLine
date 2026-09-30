@@ -286,6 +286,9 @@ func (s *Service) startWorkerFlowTurn(ctx context.Context, run *Run, prompt, tur
 		return err
 	}
 	workflow, execution, attempt := fixed.workflow, fixed.execution, fixed.attempt
+	if execution.Environment != nil && (!execution.Environment.Ready || execution.Environment.Blocker != nil) {
+		return errors.New("business input requires verified readiness and no host blocker")
+	}
 	if execution.RecoveryRequired {
 		return errors.New("worker turn requires a fresh manual recovery decision")
 	}
@@ -727,6 +730,23 @@ func (s *Service) applyWorkerFlowDecision(ctx context.Context, run *Run) error {
 	command, err := s.domainStore.CommandByIdempotency(ctx, c.identity, decisionAnswerKey(answer))
 	if err != nil || command.Kind != "answer_decision" || command.TargetID != answer.DecisionID || command.Status != "accepted" || !stableExecutionID(command.CommandID) {
 		return errors.Join(err, errors.New("saved worker feedback has no fixed accepted command identity"))
+	}
+	if route == feedbackNativeOrca && run.Decision.Request.HostTarget != nil {
+		return s.applyEnvironmentAction(ctx, run, answer, command.CommandID)
+	}
+	if route == feedbackNativeOrca && execution.Environment != nil {
+		if err := s.observeWorkerEnvironment(ctx, run); err != nil {
+			return err
+		}
+		if execution.Environment.Blocker != nil {
+			return nil
+		}
+		if !execution.Environment.Ready {
+			return s.advanceOrcaPreparation(ctx, run)
+		}
+	}
+	if execution.Environment != nil && execution.Environment.Blocker != nil {
+		return nil
 	}
 	if execution.RecoveryRequired && (answer.SourceAttemptID != run.AttemptID || answer.ExpectedRecoveryVersion != execution.RecoveryVersion ||
 		execution.RecoveryMarkedAt == nil || !command.CreatedAt.After(*execution.RecoveryMarkedAt)) {

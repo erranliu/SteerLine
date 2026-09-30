@@ -40,6 +40,11 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 	if err := validateWorkflowConfig(&config, nil); err != nil {
 		return TaskClaimReceipt{}, err
 	}
+	if config.managedWindowsOrca() {
+		if _, err := nativeOrcaFixedAgentCommand(config); err != nil {
+			return TaskClaimReceipt{}, err
+		}
+	}
 	if err := ValidateNativeTaskID(options.TaskID); err != nil {
 		return TaskClaimReceipt{}, err
 	}
@@ -173,7 +178,17 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 		fixed := options.ExecutionProfile.Freeze()
 		wfr.ExecutionProfile = &fixed
 	}
+	if config.managedWindowsOrca() && wfr.ExecutionProfile == nil {
+		fixed := config.projectExecutionProfile().Freeze()
+		wfr.ExecutionProfile = &fixed
+	}
 	execution := ExecutionRecord{ProjectIdentity: c.Project, ExecutionID: executionID, CurrentAttemptID: attemptID, OwnerServiceInstanceID: options.ServiceInstanceID, WorkflowRunID: workflowRunID, Agent: config.agentName(), Backend: string(backend), Protocol: string(protocol), Target: target, Workspace: WorkspaceEvidence{Repository: config.identity, Branch: config.Branch, Base: base}, Status: "pending", CurrentStep: "worker", CreatedAt: created, UpdatedAt: created}
+	if config.managedWindowsOrca() {
+		if _, err := nativeOrcaFixedAgentCommand(config); err != nil {
+			return TaskClaimReceipt{}, err
+		}
+		execution.Environment = &WorkerEnvironment{ProfileDigest: wfr.ExecutionProfile.Digest, Preparation: &WorkerPreparation{TurnID: newID(), Nonce: newID(), StartedAt: created, Deadline: created.Add(positiveDuration(config.Orca.WaitTimeout, 2*time.Minute))}}
+	}
 	execution.WorkspaceIntent, err = planWorkspace(config, task.TaskID, workflowRunID, base)
 	if err != nil {
 		return TaskClaimReceipt{}, err
@@ -203,6 +218,9 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 		currentTask, ok := current.ByID[task.TaskID]
 		if !ok {
 			return nativeErr("task_not_found", "native task was not found")
+		}
+		if options.ExecutionProfile != nil && (!options.ExecutionProfile.MatchesConfig(config) || wfr.ExecutionProfile.Digest != options.ExecutionProfile.Digest()) {
+			return nativeErr("stale_profile", "selected Profile digest changed before atomic claim")
 		}
 		if current.Authority.AuthorityVersion != options.ExpectedAuthorityVersion || current.Authority.GraphRevision != graph.Authority.GraphRevision || currentTask.Version != options.ExpectedTaskVersion || currentTask.Status != "open" {
 			return nativeErr("stale_version", "task or project authority changed during claim preflight")
