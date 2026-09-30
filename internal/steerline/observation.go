@@ -45,6 +45,14 @@ func ReadObservationSnapshot(c Config, nowFn func() time.Time) ObservationSnapsh
 		return ObservationSnapshot{State: SnapshotReadFailed, SampledAt: now, FreshnessLimit: limit, Error: err.Error()}
 	}
 	rt, err := loadObservedRuntime(c)
+	return ObserveRuntimeSnapshot(c, rt, err, now)
+}
+
+// ObserveRuntimeSnapshot applies freshness to an already sampled database
+// runtime. It does not read storage or infer whether the service process lives.
+func ObserveRuntimeSnapshot(c Config, rt *Runtime, err error, sampledAt time.Time) ObservationSnapshot {
+	now := sampledAt.UTC()
+	limit := freshnessLimit(c.Heartbeat)
 	if err != nil {
 		state := SnapshotReadFailed
 		if strings.Contains(err.Error(), "schema") {

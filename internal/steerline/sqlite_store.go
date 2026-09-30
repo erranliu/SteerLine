@@ -41,7 +41,7 @@ type DomainStore interface {
 	Transact(context.Context, func(DomainTx) error) error
 	LoadProjection(context.Context, string) ([]byte, uint64, error)
 	Query(context.Context, string) (DomainSnapshot, error)
-	Events(context.Context, string, string, string, int64, int) ([]DomainEvent, error)
+	Events(context.Context, string, string, string, int64, int, int) ([]DomainEvent, error)
 	EventPayload(context.Context, string, int64, int64, int) ([]byte, int64, string, error)
 	Commands(context.Context, string, string, int) ([]CommandRecord, error)
 	Command(context.Context, string, string) (CommandRecord, error)

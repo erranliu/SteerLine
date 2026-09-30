@@ -43,6 +43,21 @@
 | PR 2 | worker 正常生命周期显式原子提交 | PR 1 合入 | [worker 生命周期显式原子提交](architecture-02-worker-commit.spec.md) |
 | PR 3 | 剩余写者迁移、删除隐式写回、读写模型与后端接口收口 | PR 2 合入 | [移除隐式写回与读写模型收口](architecture-03-runtime-boundary.spec.md) |
 
+## 执行配置隔离
+
+目标：`EXECUTION-ISOLATION`。每项独立 Spec、Plan 和实现 PR，范围与并行条件以各自契约为准；公共定义见[执行配置隔离共同约束](execution-isolation-constraints.md)。
+
+| 任务 ID | 任务名称 | 硬前置 | Spec | Plan |
+| --- | --- | --- | --- | --- |
+| 54 | 公共执行契约归包 | 无本系列前置 | [Spec](execution-isolation-01-contracts.spec.md) | [Plan](execution-isolation-01-contracts.plan.md) |
+| 55 | 工作区与 Git 资源迁移 | #54 | [Spec](execution-isolation-02-workspace.spec.md) | [Plan](execution-isolation-02-workspace.plan.md) |
+| 56 | 发布与 PR 实现迁移 | #54 | [Spec](execution-isolation-03-publication.spec.md) | [Plan](execution-isolation-03-publication.plan.md) |
+| 57 | Codex 执行适配器迁移 | #55、#56 | [Spec](execution-isolation-04-codex.spec.md) | [Plan](execution-isolation-04-codex.plan.md) |
+| 58 | Orca 执行适配器迁移 | #57 | [Spec](execution-isolation-05-orca.spec.md) | [Plan](execution-isolation-05-orca.plan.md) |
+| 59 | 项目执行权限策略 | #58 | [Spec](execution-isolation-06-policy.spec.md) | [Plan](execution-isolation-06-policy.plan.md) |
+| 60 | 项目发布责任契约 | #58 | [Spec](execution-isolation-07-publish-policy.spec.md) | [Plan](execution-isolation-07-publish-policy.plan.md) |
+| 61 | 执行需求与配置注册收口 | #59、#60 | [Spec](execution-isolation-08-resolution.spec.md) | [Plan](execution-isolation-08-resolution.plan.md) |
+
 ## 共同约束
 
 - [执行架构](execution-architecture.spec.md)与[原生任务](native-task-constraints.md)：身份、单写者、当前格式恢复和真实交付；被 #36 替代的旧执行语义不继续要求。

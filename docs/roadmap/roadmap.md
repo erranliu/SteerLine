@@ -61,3 +61,18 @@ SteerLine 管理任务、原 worker 会话、用户反馈和真实 PR 交付。w
 ## 规划约束
 
 [架构约束](architecture-constraints.md) · [控制台约束](console-constraints.md) · [第一阶段交付](phase-1-delivery.md)
+
+## 执行配置隔离规划
+
+[项目执行抽象与配置隔离规划](execution-isolation.md) 描述目标分包与并行安排。#54–#58 保持现有行为并迁移职责，#59–#61 接通项目策略和配置隔离；每项各交付一个实现 PR。共同执行要求见[共同约束](../spec/execution-isolation-constraints.md)。
+
+| 任务 ID | 任务名称 | 交付范围 | 硬前置 | 执行规格 |
+| --- | --- | --- | --- | --- |
+| 54 | 公共执行契约归包 | 共同类型、事实与接口归包 | 无本系列前置 | [Spec](../spec/execution-isolation-01-contracts.spec.md) · [Plan](../spec/execution-isolation-01-contracts.plan.md) |
+| 55 | 工作区与 Git 资源迁移 | Git/worktree 操作与资源解析分离 | #54 | [Spec](../spec/execution-isolation-02-workspace.spec.md) · [Plan](../spec/execution-isolation-02-workspace.plan.md) |
+| 56 | 发布与 PR 实现迁移 | 发布操作及 provider 与中心事务分离 | #54 | [Spec](../spec/execution-isolation-03-publication.spec.md) · [Plan](../spec/execution-isolation-03-publication.plan.md) |
+| 57 | Codex 执行适配器迁移 | Codex 操作、命令与恢复证据归适配器 | #55、#56 | [Spec](../spec/execution-isolation-04-codex.spec.md) · [Plan](../spec/execution-isolation-04-codex.plan.md) |
+| 58 | Orca 执行适配器迁移 | Orca 资源、派发、观察与对账归适配器 | #57 | [Spec](../spec/execution-isolation-05-orca.spec.md) · [Plan](../spec/execution-isolation-05-orca.plan.md) |
+| 59 | 项目执行权限策略 | 项目权限、参数映射、冻结与必要原生证据 | #58 | [Spec](../spec/execution-isolation-06-policy.spec.md) · [Plan](../spec/execution-isolation-06-policy.plan.md) |
+| 60 | 项目发布责任契约 | 显式 publisher、支持矩阵及执行冻结 | #58 | [Spec](../spec/execution-isolation-07-publish-policy.spec.md) · [Plan](../spec/execution-isolation-07-publish-policy.plan.md) |
+| 61 | 执行需求与配置注册收口 | 需求匹配、实现注册与配置隔离收口 | #59、#60 | [Spec](../spec/execution-isolation-08-resolution.spec.md) · [Plan](../spec/execution-isolation-08-resolution.plan.md) |
