@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -151,7 +152,7 @@ func newFixture(t *testing.T) *fixture {
 	}
 	f.c.Claimant = "native-fixture"
 	f.c.Heartbeat, f.c.TaskPoll, f.c.PRPoll, f.c.CommandTimeout, f.c.ShutdownGrace = "100ms", "100ms", "100ms", "5s", "1s"
-	f.c.PR = PRConfig{Kind: "gitea", BaseURL: f.server.URL, Repository: "owner/repo"}
+	f.c.PR = publication.Config{Kind: "gitea", BaseURL: f.server.URL, Repository: "owner/repo"}
 	f.c.Codex = Command{Executable: executable, Args: []string{"--fake", "codex"}}
 	f.c.WorkflowProtocol = WorkerFlowVersion
 	if err = f.c.ResolveIdentity(context.Background()); err != nil {

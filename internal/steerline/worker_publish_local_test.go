@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -35,6 +36,11 @@ func fakeHostGH(args []string) int {
 		return 0
 	}
 	if len(args) >= 2 && args[0] == "pr" && args[1] == "create" {
+		countPath := file + ".creates"
+		count, _ := os.ReadFile(countPath)
+		if err := os.WriteFile(countPath, []byte(strings.TrimSpace(string(count))+"x"), 0600); err != nil {
+			return 1
+		}
 		head, err := exec.Command("git", "rev-parse", "HEAD").Output()
 		if err != nil {
 			return 1
@@ -54,7 +60,19 @@ func fakeHostGH(args []string) int {
 	return 2
 }
 
-func TestLocalWorkerPublishUsesHostGitAndExactPR(t *testing.T) {
+type localWorkerPublicationFixture struct {
+	ctx      context.Context
+	s        *Service
+	run      *Run
+	c        Config
+	base     string
+	turnID   string
+	worktree string
+	git      func(string, ...string) string
+}
+
+func newLocalWorkerPublicationFixture(t *testing.T) localWorkerPublicationFixture {
+	t.Helper()
 	ctx := context.Background()
 	s, run := appServerAuditService(t)
 	c := s.Config
@@ -65,17 +83,16 @@ func TestLocalWorkerPublishUsesHostGitAndExactPR(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("STEERLINE_TEST_HOST_GH_FILE", filepath.Join(t.TempDir(), "pr.json"))
-	c.PR = PRConfig{Kind: "command", BaseURL: "https://github.com", Repository: "owner/repo", Query: Command{Executable: exe, Args: []string{"api", "repos/{repository}/pulls/{number}"}}}
+	c.PR = publication.Config{Kind: "command", BaseURL: "https://github.com", Repository: "owner/repo", Query: Command{Executable: exe, Args: []string{"api", "repos/{repository}/pulls/{number}"}}}
 	turnID := "00000000-0000-0000-0000-000000000001"
-	branch := run.WorkspaceIntent.Branch
-	worktree := run.WorkspaceIntent.Path
+	branch, worktree := run.WorkspaceIntent.Branch, run.WorkspaceIntent.Path
 	require(t, c.prepareWorktreeRoot())
 	git := func(dir string, args ...string) string {
 		t.Helper()
 		cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			t.Fatalf("git %v: %v: %s", args, err, out)
+		out, e := cmd.CombinedOutput()
+		if e != nil {
+			t.Fatalf("git %v: %v: %s", args, e, out)
 		}
 		return strings.TrimSpace(string(out))
 	}
@@ -88,7 +105,7 @@ func TestLocalWorkerPublishUsesHostGitAndExactPR(t *testing.T) {
 	}
 	git(worktree, "add", "publish.txt")
 	s.Config, s.baseConfig = c, c
-	s.prs = &PRClient{Config: c.PR, Runner: Runner{Dir: c.Repository, Timeout: 10 * time.Second}}
+	s.prs = publication.NewClient(c.PR, Runner{Dir: c.Repository, Timeout: 10 * time.Second}, 10*time.Second)
 	workflow, execution := s.workflowRecords(run)
 	workflow.Phase = "waiting_decision"
 	execution.Status, execution.CurrentTurnID, execution.LastStoppedTurnID = "idle", turnID, turnID
@@ -96,6 +113,30 @@ func TestLocalWorkerPublishUsesHostGitAndExactPR(t *testing.T) {
 	execution.Target.WorktreeID, execution.Target.Branch = worktree, branch
 	s.refreshRun(run)
 	require(t, s.commitWorker(run))
+	return localWorkerPublicationFixture{ctx: ctx, s: s, run: run, c: c, base: base, turnID: turnID, worktree: worktree, git: git}
+}
+
+func TestLocalPublicationIntentMustCommitBeforeHostAction(t *testing.T) {
+	f := newLocalWorkerPublicationFixture(t)
+	t.Cleanup(func() { _ = f.s.Close() })
+	workflow, execution := f.s.workflowRecords(f.run)
+	_, err := f.s.domainStore.db.ExecContext(f.ctx, `CREATE TRIGGER reject_publication_intent BEFORE UPDATE ON projection BEGIN SELECT RAISE(ABORT, 'publication intent checkpoint failure'); END`)
+	require(t, err)
+	if _, err = f.s.publishLocalWorkerRun(f.ctx, f.run, workflow, execution, f.turnID); err == nil || !strings.Contains(err.Error(), "publication intent checkpoint failure") {
+		t.Fatalf("publication intent fault was not injected: %v", err)
+	}
+	if got := f.git(f.worktree, "rev-parse", "HEAD"); got != f.base || !strings.Contains(f.git(f.worktree, "status", "--porcelain"), "publish.txt") {
+		t.Fatalf("failed publication intent changed Git candidate: head=%s base=%s", got, f.base)
+	}
+	if _, err = os.Stat(os.Getenv("STEERLINE_TEST_HOST_GH_FILE") + ".creates"); !os.IsNotExist(err) {
+		t.Fatalf("GitHub create ran before durable intent: stat error=%v", err)
+	}
+}
+
+func TestLocalWorkerPublishUsesHostGitAndExactPR(t *testing.T) {
+	f := newLocalWorkerPublicationFixture(t)
+	ctx, s, run, c, base, turnID, worktree, git := f.ctx, f.s, f.run, f.c, f.base, f.turnID, f.worktree, f.git
+	workflow, execution := s.workflowRecords(run)
 	beforeWorkflow := *workflow
 	info, err := s.publishLocalWorkerRun(ctx, run, workflow, execution, turnID)
 	if err != nil {
@@ -131,13 +172,17 @@ func TestLocalWorkerPublishUsesHostGitAndExactPR(t *testing.T) {
 	if err != nil || !reconciled || s.operationByKey(originalOperation.IdempotencyKey).Status != "confirmed" || s.domain.WorkflowRuns[0].PRURL != info.URL {
 		t.Fatalf("uncertain host publication did not reconcile the same PR: reconciled=%t err=%v operation=%+v workflow=%+v", reconciled, err, s.operationByKey(originalOperation.IdempotencyKey), s.domain.WorkflowRuns[0])
 	}
+	creates, err := os.ReadFile(os.Getenv("STEERLINE_TEST_HOST_GH_FILE") + ".creates")
+	if err != nil || string(creates) != "x" {
+		t.Fatalf("uncertain publication created another PR: count=%q err=%v", creates, err)
+	}
 }
 
 func TestLocalWorkerPublishMarkerMustBeFinalAndBound(t *testing.T) {
 	runID := strings.Repeat("a", 32)
-	if !localWorkerRequestedPublish("Done.\nSTEERLINE_PUBLISH_READY "+runID+"\n", runID) ||
-		localWorkerRequestedPublish("STEERLINE_PUBLISH_READY "+runID+"\nmore text", runID) ||
-		localWorkerRequestedPublish("STEERLINE_PUBLISH_READY "+strings.Repeat("b", 32), runID) {
+	if !publication.RequestedByWorker("Done.\nSTEERLINE_PUBLISH_READY "+runID+"\n", runID) ||
+		publication.RequestedByWorker("STEERLINE_PUBLISH_READY "+runID+"\nmore text", runID) ||
+		publication.RequestedByWorker("STEERLINE_PUBLISH_READY "+strings.Repeat("b", 32), runID) {
 		t.Fatal("local publication marker was not exact")
 	}
 }

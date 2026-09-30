@@ -3,6 +3,7 @@ package steerline
 import (
 	"context"
 	"encoding/json"
+	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	"net/http"
 	"net/http/httptest"
 	"os/exec"
@@ -677,7 +678,7 @@ type fixedTaskDeliveryVerifier struct {
 func (v *fixedTaskDeliveryVerifier) Query(ctx context.Context, url string) (PRInfo, error) {
 	v.calls++
 	if url != v.info.URL {
-		return PRInfo{}, ErrPRIdentity
+		return PRInfo{}, publication.ErrPRIdentity
 	}
 	if v.onQuery != nil {
 		v.onQuery()
@@ -822,7 +823,7 @@ func TestTaskDiscardRequiresPreciseUnmergedPRAndRetainsUnknownIntent(t *testing.
 		t.Fatal(err)
 	}
 	defer store.Close()
-	c.PR = PRConfig{Kind: "gitea", BaseURL: server.URL, Repository: "org/repo"}
+	c.PR = publication.Config{Kind: "gitea", BaseURL: server.URL, Repository: "org/repo"}
 	commands := CommandService{Store: store, Project: c.Identity()}
 	payload := taskBatchFixture(t, c, commit, batchTasks(90, 91, 92, 94, 95), nil)
 	if _, err = commands.CreateTaskBatch(ctx, c, payload, strings.Repeat("f", 32), 1, "planner"); err != nil {
@@ -866,7 +867,7 @@ func TestTaskDiscardRequiresPreciseUnmergedPRAndRetainsUnknownIntent(t *testing.
 	if err = store.Transact(ctx, func(tx DomainTx) error { return tx.PutTaskDelivery(lateDelivery) }); err == nil || !strings.Contains(err.Error(), "task_discarded") {
 		t.Fatalf("late merge created a normal delivery for discarded task: %v", err)
 	}
-	verifier := &PRClient{Config: c.PR, Runner: Runner{Dir: c.Repository, Timeout: duration(c.CommandTimeout)}}
+	verifier := publication.NewClient(c.PR, Runner{Dir: c.Repository, Timeout: duration(c.CommandTimeout)}, duration(c.CommandTimeout))
 	statesMu.Lock()
 	states["90"] = "unknown"
 	statesMu.Unlock()

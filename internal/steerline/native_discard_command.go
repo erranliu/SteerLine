@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	"sort"
 	"strings"
 	"time"
@@ -212,7 +213,7 @@ func (c CommandService) DiscardNativeTask(ctx context.Context, config Config, ta
 		if targetErr != nil || config.PR.ValidateRemote(target) != nil {
 			return persistDiscardPending(ctx, sqlite, c.Project, requestID, staged, intent, "merge_state_unknown", "PR provider configuration does not match the fixed repository target")
 		}
-		client := PRClient{Config: config.PR, Runner: Runner{Dir: config.Repository, Timeout: duration(config.CommandTimeout)}}
+		client := publication.NewClient(config.PR, Runner{Dir: config.Repository, Timeout: duration(config.CommandTimeout)}, duration(config.CommandTimeout))
 		info, e := client.Query(ctx, intent.PRURL)
 		if e != nil {
 			queryErr = e

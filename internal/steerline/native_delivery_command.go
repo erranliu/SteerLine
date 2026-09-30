@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	"strings"
 	"time"
 
@@ -82,11 +83,11 @@ func (c CommandService) CompleteNativeTask(ctx context.Context, config Config, t
 	if err != nil {
 		return TaskDeliveryReceipt{}, err
 	}
-	publication, _, err := taskDiscardPlanFromSnapshot(snapshot, taskID)
+	discardPlan, _, err := taskDiscardPlanFromSnapshot(snapshot, taskID)
 	if err != nil {
 		return TaskDeliveryReceipt{}, err
 	}
-	if publication.UncertainPR || publication.PRURL != prURL {
+	if discardPlan.UncertainPR || discardPlan.PRURL != prURL {
 		return TaskDeliveryReceipt{}, nativeErr("merge_state_unknown", "task has another unresolved or mismatched PR publication")
 	}
 	if info, err := verifier.Query(ctx, prURL); err != nil {
@@ -102,7 +103,7 @@ func (c CommandService) CompleteNativeTask(ctx context.Context, config Config, t
 		if targetErr != nil || !sameRepositoryTarget(target, graph.Authority.Repository) || config.PR.ValidateRemote(target) != nil {
 			return TaskDeliveryReceipt{}, nativeErr("authority_mismatch", "PR configuration does not match the fixed native repository")
 		}
-		if err := validateWorkerPRIdentity(info, prURL, config.PR.Repository, graph.Authority.Branch, execution.Workspace.Branch); err != nil {
+		if err := publication.ValidateWorkerPRIdentity(info, prURL, config.PR.Repository, graph.Authority.Branch, execution.Workspace.Branch); err != nil {
 			return TaskDeliveryReceipt{}, nativeErr("immutable_task", "merged PR does not belong to the selected worker execution branch")
 		}
 		number, err := config.PR.PRNumber(info.URL)
@@ -306,11 +307,11 @@ func (c CommandService) commitNativeDelivery(ctx context.Context, s *SQLiteStore
 			currentExecution.Workspace.Branch != execution.Workspace.Branch {
 			return nativeErr("immutable_task", "selected result or PR binding changed during platform verification")
 		}
-		publication, _, err := taskDiscardPlanTx(ctx, tx, c.Project, task.TaskID)
+		discardPlan, _, err := taskDiscardPlanTx(ctx, tx, c.Project, task.TaskID)
 		if err != nil {
 			return err
 		}
-		if publication.UncertainPR || publication.PRURL != prURL {
+		if discardPlan.UncertainPR || discardPlan.PRURL != prURL {
 			return nativeErr("merge_state_unknown", "task publication became unresolved during PR verification")
 		}
 		var reused int
