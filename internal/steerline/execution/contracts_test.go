@@ -27,6 +27,12 @@ func TestExecutionRecordsKeepWireIdentity(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		if status == OperationAccepted {
+			wantOperation := `{"version":1,"id":"stop-attempt","run_id":"run","attempt_id":"attempt","backend":"orca","protocol":"orca_terminal_v2","target":{"id":"target"},"action":"stop","payload_digest":"fixed","status":"accepted","started_at":"0001-01-01T00:00:00Z","updated_at":"0001-01-01T00:00:00Z","ref":` + want + `}`
+			if string(data) != wantOperation {
+				t.Fatalf("operation representation changed: %s", data)
+			}
+		}
 		var restored Operation
 		if err := json.Unmarshal(data, &restored); err != nil || !reflect.DeepEqual(restored, op) {
 			t.Fatalf("operation lost its status or fixed ref: %+v / %v", restored, err)
@@ -42,7 +48,6 @@ func TestExecutionRecordsKeepWireIdentity(t *testing.T) {
 	if err != nil || string(data) != `{"id":"recheck_environment","label":"Recheck","receiver":"center","action":"recheck_environment"}` {
 		t.Fatalf("host action routing changed: %s / %v", data, err)
 	}
-
 }
 
 func TestAdapterAndBackendErrorsPreserveCause(t *testing.T) {

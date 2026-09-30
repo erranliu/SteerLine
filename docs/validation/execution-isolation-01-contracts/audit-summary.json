@@ -1,0 +1,70 @@
+{
+  "source": "Selected fields from test-feedback audit summary.json",
+  "date": "2026-09-30",
+  "audited_commit": "593a9cfd4dd2efc1d81f13cfe25a4affecee8d16",
+  "passed": true,
+  "scope": "quick",
+  "execution_seconds": 32.5471458,
+  "groups": [
+    {
+      "id": "quick-core",
+      "command": [
+        "go",
+        "test",
+        "-json",
+        "-count=1",
+        "-timeout=45m",
+        "-p",
+        "1",
+        "-parallel",
+        "1",
+        "-run=^(TestWorkerFlowClaimNeedsNoProjectSteps|TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged)$",
+        "github.com/erranliu/SteerLine/internal/steerline"
+      ],
+      "exit_code": 0,
+      "passed": true,
+      "test_count_including_subtests": 6,
+      "failed_tests": 0,
+      "skipped_tests": 0
+    },
+    {
+      "id": "quick-rules",
+      "command": [
+        "go",
+        "test",
+        "-json",
+        "-count=1",
+        "-timeout=45m",
+        "-p",
+        "1",
+        "-parallel",
+        "1",
+        "github.com/erranliu/SteerLine/internal/steerline/taskgraph",
+        "github.com/erranliu/SteerLine/internal/steerline/taskview",
+        "github.com/erranliu/SteerLine/internal/steerline/workerflow"
+      ],
+      "exit_code": 0,
+      "passed": true,
+      "test_count_including_subtests": 23,
+      "failed_tests": 0,
+      "skipped_tests": 0
+    },
+    {
+      "id": "quick-targeted",
+      "command": [
+        "go",
+        "test",
+        "./internal/steerline",
+        "-count=1",
+        "-run",
+        "^(TestExecutionBackendCommonCapabilityContract|TestExecutionRecordsPinBindingsAndOperations|TestOperationRecordRejectsCorruptionBeforeUse|TestWorkerProtocolFactsPreserveOriginalNativeIdentity|TestNativeOrcaFactsRejectOldDispatchAndKeepCurrentOutcome|TestWorkerFlowModeUsesFixedExecutionIdentity|TestWorkerBindingRollsBackWithItsCheckpoint|TestExecutionStopIntentAndUnknownReceiptUseOriginalBinding|TestOrcaStopOnlyReleasesOwnedObserver|TestOrcaStopExecutionConfirmsFixedTerminalExit|TestOrcaStopFailureDoesNotConfirmExit)$",
+        "-json"
+      ],
+      "exit_code": 0,
+      "passed": true,
+      "test_count_including_subtests": 16,
+      "failed_tests": 0,
+      "skipped_tests": 0
+    }
+  ]
+}

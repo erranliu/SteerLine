@@ -74,9 +74,35 @@ func DecodeEvent(envelope codexapp.Envelope, threadID, turnID string, inspectRep
 }
 
 func DecodeQuestions(arguments json.RawMessage) ([]executionapi.Question, error) {
+	// Decode the native schema before converting to common values. Receiver
+	// and Action belong to center-generated choices, never native tool input.
 	var body struct {
-		Questions []executionapi.Question `json:"questions"`
+		Questions []struct {
+			ID            string `json:"id"`
+			Header        string `json:"header"`
+			Question      string `json:"question"`
+			AllowFreeText bool   `json:"allow_free_text"`
+			Options       []struct {
+				ID     string `json:"id"`
+				Label  string `json:"label"`
+				Detail string `json:"detail"`
+			} `json:"options"`
+		} `json:"questions"`
 	}
 	err := json.Unmarshal(arguments, &body)
-	return body.Questions, err
+	if body.Questions == nil {
+		return nil, err
+	}
+	questions := make([]executionapi.Question, len(body.Questions))
+	for i, wire := range body.Questions {
+		question := executionapi.Question{ID: wire.ID, Header: wire.Header, Question: wire.Question, AllowFreeText: wire.AllowFreeText}
+		if wire.Options != nil {
+			question.Options = make([]executionapi.DecisionOption, len(wire.Options))
+			for j, option := range wire.Options {
+				question.Options[j] = executionapi.DecisionOption{ID: option.ID, Label: option.Label, Detail: option.Detail}
+			}
+		}
+		questions[i] = question
+	}
+	return questions, err
 }

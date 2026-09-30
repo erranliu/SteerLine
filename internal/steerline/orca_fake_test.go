@@ -521,6 +521,50 @@ func TestOrcaStopExecutionConfirmsFixedTerminalExit(t *testing.T) {
 	}
 }
 
+type orcaStopHandleFixture struct {
+	identity executionapi.ProcessIdentity
+	closed   bool
+	killed   bool
+}
+
+func (h *orcaStopHandleFixture) Identity() executionapi.ProcessIdentity { return h.identity }
+func (h *orcaStopHandleFixture) Kill()                                  { h.killed = true }
+func (h *orcaStopHandleFixture) Close()                                 { h.closed = true }
+
+func TestOrcaStopOnlyReleasesOwnedObserver(t *testing.T) {
+	for _, owned := range []bool{false, true} {
+		name := "unowned_handle"
+		if owned {
+			name = "owned_observer"
+		}
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			cfg := orcaTestConfig(t, dir, "fail")
+			terminal := "terminal-stop-owned"
+			require(t, writeFakeOrcaState(dir, fakeOrcaState{Handle: terminal, Incarnation: "inc-stop"}))
+			identity := executionapi.ProcessIdentity{Kind: "orca", Terminal: terminal, RuntimeID: "fake-runtime", Incarnation: "inc-stop", Executable: cfg.Orca.Executable}
+			ref := executionapi.ExecutionRef{Backend: executionapi.BackendOrca, Protocol: executionapi.ProtocolOrcaTerminalV2, Target: targetFor(cfg), External: identity}
+			observerContext, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			foreign := &orcaStopHandleFixture{identity: identity}
+			var handle executionapi.StopHandle = foreign
+			if owned {
+				handle = &orcaProcess{cfg: cfg, term: orcaTerminal{Handle: terminal, RuntimeID: identity.RuntimeID, IncarnationID: identity.Incarnation}, cancel: cancel}
+			}
+			receipt, err := (orcaTerminalBackend{config: cfg}).StopExecution(context.Background(), ref, executionapi.Operation{}, handle)
+			if err != nil || receipt.Disposition != "confirmed" {
+				t.Fatalf("original terminal stop failed: %+v / %v", receipt, err)
+			}
+			if foreign.closed || foreign.killed {
+				t.Fatal("terminal stop invoked cleanup on an unowned handle")
+			}
+			if owned && observerContext.Err() != context.Canceled {
+				t.Fatal("terminal stop did not detach its owned observer")
+			}
+		})
+	}
+}
+
 func TestOrcaStopFailureDoesNotConfirmExit(t *testing.T) {
 	dir := t.TempDir()
 	cfg := orcaTestConfig(t, dir, "fail")

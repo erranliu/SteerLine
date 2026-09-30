@@ -26,3 +26,7 @@
 原六个 Plan 回归名与包路径全部保留。整合 PR160 时保留新增的 Receiver/Action、环境记录和恢复检查，公共选项新增相应 JSON 断言；追加两项已有宿主等待/冻结资源回归，并单独运行 `TestWorkerEnvironmentER1ProbeAndSettlementGate/success`，通过。另复用 `TestWorkerBindingRollsBackWithItsCheckpoint`、`TestExecutionStopIntentAndUnknownReceiptUseOriginalBinding`、`TestSupervisedTurnEvidenceRetainsQuestionAndEarlierPR` 及一个已有控制台答案编辑 fixture。新增公共包三项纯测试只覆盖搬迁相关的 JSON 表示、错误链与 PRClues；原 Codex/Orca fixture 增补公共问题、来源/日志定位和 input_accepted 不等于 turn_started 的断言。原生解析 fixture 留在适配包，持久记录和事务回归留在中心，没有重复迁移整套矩阵。
 
 EC1 对应依赖与唯一所有者检查；EC2 对应固定绑定、能力、记录损坏、错误链及原子停止；EC3 对应两平台原身份/问题/终态 fixture 和监督路径 journal 结算。绑定 schema、操作表示、权限配置、消息持久化后确认顺序和人工恢复门槛保持。未运行全量测试、真实 agent 或真机认证；没有部署或修改中心任务数据库。
+
+## 实现质量审计
+
+完成[代码审计与两处直接修复](audit.md)，追加的最小验证见[审计测试摘要](audit-summary.json)。原实现的验证摘要保留，新增结果单独记录。

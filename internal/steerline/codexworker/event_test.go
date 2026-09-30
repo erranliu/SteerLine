@@ -7,6 +7,23 @@ import (
 	"github.com/erranliu/SteerLine/internal/steerline/codexapp"
 )
 
+func TestDecodeQuestionsKeepsCenterActionsOutOfNativeContent(t *testing.T) {
+	for _, actionFields := range []string{
+		`"receiver":"center","action":"open_terminal"`,
+		`"receiver":42,"action":{"unexpected":true}`,
+	} {
+		payload := json.RawMessage(`{"questions":[{"id":"choice","header":"Choice","question":"Continue?","allow_free_text":true,"options":[{"id":"yes","label":"Yes","detail":"Keep working",` + actionFields + `}]}]}`)
+		questions, err := DecodeQuestions(payload)
+		if err != nil || len(questions) != 1 || len(questions[0].Options) != 1 {
+			t.Fatalf("unknown native fields changed question decoding: %+v / %v", questions, err)
+		}
+		option := questions[0].Options[0]
+		if option.ID != "yes" || option.Label != "Yes" || option.Detail != "Keep working" || option.Receiver != "" || option.Action != "" {
+			t.Fatalf("native content acquired center action authority: %+v", option)
+		}
+	}
+}
+
 func TestDecodeEventKeepsAskAndReplyOnOriginalTurn(t *testing.T) {
 	thread, turn := "00000000-0000-0000-0000-000000000001", "00000000-0000-0000-0000-000000000002"
 	params, _ := json.Marshal(map[string]any{"threadId": thread, "turnId": turn, "callId": "call-original", "tool": codexapp.AskToolName, "arguments": map[string]any{"questions": []any{map[string]string{"id": "choice", "question": "Which path?"}}}})

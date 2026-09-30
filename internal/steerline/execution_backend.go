@@ -712,8 +712,10 @@ func (b orcaTerminalBackend) StopExecution(ctx context.Context, ref executionapi
 	if err != nil {
 		return executionapi.StopReceipt{}, err
 	}
-	if handle != nil {
-		handle.Close()
+	// Terminal close is the only remote stop operation. Detach only this
+	// backend's observer: a generic handle's Close may itself kill a process.
+	if observer, ok := handle.(*orcaProcess); ok {
+		observer.Close()
 	}
 	if closeReceipt.Disposition == "confirmed" {
 		return closeReceipt, nil
