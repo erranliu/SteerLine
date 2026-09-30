@@ -36,9 +36,9 @@ func TestPublicationSecretsRejectedBeforeFreeze(t *testing.T) {
 			t.Fatalf("secret URL not rejected/redacted: %v", err)
 		}
 	}
-	for _, args := range [][]string{{"--token", "secret-canary"}, {"-c", "http.extraHeader=Authorization: secret-canary"}, {"--url=https://user:secret-canary@forge.invalid"}} {
+	for _, args := range [][]string{{"--token", "secret-canary"}, {"-c", "http.extraHeader=Authorization: secret-canary"}, {"--url=https://user:secret-canary@forge.invalid"}, {"--header", "X-API-Key: a9N2v7L8p4Q6"}, {"--api-key", "a9N2v7L8p4Q6"}, {"--auth-key=a9N2v7L8p4Q6"}} {
 		err := ValidateNonSecret(Config{Query: contracts.Command{Executable: "gh", Args: args}}, contracts.Command{})
-		if err == nil || strings.Contains(err.Error(), "secret-canary") {
+		if err == nil || strings.Contains(err.Error(), "secret-canary") || strings.Contains(err.Error(), "a9N2v7L8p4Q6") {
 			t.Fatalf("secret argv not rejected/redacted: %v", err)
 		}
 	}

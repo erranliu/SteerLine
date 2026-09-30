@@ -15,11 +15,13 @@
 ```powershell
 go test ./internal/steerline/publication ./internal/steerline/workerflow -count=1
 go list -deps ./internal/steerline/workerflow
-go test ./internal/steerline -count=1 -run '^(TestLocalWorkerPublishUsesHostGitAndExactPR|TestLocalWorkerPublishMarkerMustBeFinalAndBound|TestNativeOrcaPRBindingUsesProviderAndRetainsSession|TestRemoteOrcaTwoTurnsKeepSessionAndRequireMergedDelivery|TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged|TestNativeClaimPersistsChosenExecutionProfile)$'
+go test ./internal/steerline -count=1 -run '^(TestLocalWorkerPublishUsesHostGitAndExactPR|TestLocalWorkerPublishMarkerMustBeFinalAndBound|TestNativeOrcaPRBindingUsesProviderAndRetainsSession|TestRemotePublicationClaimRequiresPermissionEvidence|TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged|TestNativeClaimPersistsChosenExecutionProfile)$'
 go test ./internal/steerline/console -count=1 -run '^TestRunDetailUsesItsFixedProfileAfterProjectConfigChanges$'
 ```
 
 PP1 用最小 publisher/profile/provider 表驱动检查；PP2 复用提示、marker/native PR fixture 并检查传递依赖；PP3 在同一领取/恢复 fixture 修改当前 publisher/provider/remote 配置，确认原执行仍使用原目标及引用；PP4 复用错误 PR/合并门槛。同一 fixture 复用多个断言，不新增发布端到端矩阵或真实 provider 副作用。
+
+串行集成 #59 后，默认远程目标缺少权限落实 producer，原 `TestRemoteOrcaTwoTurnsKeepSessionAndRequireMergedDelivery` 会在领取前拒绝；协调 session 在 #59 基线和本轮均已实际运行并复现同一失败，原测试及两轮流程保留，不计为通过。当前最小验收改核对发布能力仍支持、实际 Claim 因请求权限缺证拒绝且不探测工具/远端或写入执行状态；远程协议包验证原 session/terminal 和续聊边界。不放宽 #59 或增加本轮未授权的远程权限实现，具体记录见本轮验收文档。
 
 ## 交付
 

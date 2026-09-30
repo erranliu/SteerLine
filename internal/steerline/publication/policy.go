@@ -58,7 +58,7 @@ func ValidateURL(raw string) error {
 	return nil
 }
 
-var secretArgument = regexp.MustCompile(`(?i)(token|password|passwd|secret|authorization|credential|extraheader|access[_-]?key|private[_-]?key|bearer|^--?user(?:=|$)|^-u$)`)
+var secretArgument = regexp.MustCompile(`(?i)(token|password|passwd|secret|authorization|authentication|credential|extraheader|api[._-]?key|auth[._-]?key|access[_-]?key|private[_-]?key|bearer|^--?user(?:=|$)|^-u$)`)
 var envName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
 func ValidateNonSecret(c Config, git contracts.Command) error {

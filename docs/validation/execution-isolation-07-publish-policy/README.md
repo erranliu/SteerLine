@@ -46,3 +46,11 @@ unsupported: requested execution_policy (read=host write=workspace git=true netw
 ## 自审修复
 
 补齐直接 CompleteNativeTask/DiscardNativeTask 和只读 InspectRecovery 的原 provider 来源；发布前再次检查工作区 fetch/push URL 和完整 provider 请求摘要；对后续输入检查实际 worktree 的 remote。冻结命令参数拷贝避免当前配置的 slice 修改损坏原记录；host worker 环境排除 token、SSH/工具认证与 Git 配置环境引用值。保留原权限资源核验、来源/受理版本、人工恢复门槛与事务所有者。
+
+## 协调 session 独立复审
+
+发现 API-key/auth-key 凭据参数遗漏：`X-API-Key`、`--api-key`、`--auth-key` 在凭据值不含 token/secret 等词时可以通过非秘密检查并进入冻结记录。原 canary 恰好含 secret，不能覆盖此问题。现补齐鉴权键匹配，用无敏感关键词的 canary 复现修复前失败、修复后拒绝且诊断不回显。
+
+协调 session 在 #59 完整交付分支和本轮分别运行原远程两轮 Service 用例，均在相同权限缺证门槛拒绝（5.77s、4.85s）；未改旧测试、删除原流程或计作通过。这与本轮只显式化已有发布能力、不能新增远程权限 producer 的范围相符。Plan 最小入口因此明确改验证真实 Claim 的权限缺证拒绝，且 Git/版本/远端不可调用、执行/Operation 状态不变；同时检查远程 worker 发布能力仍支持，原协议包的续聊与身份边界通过。
+
+调整后的六项中心验收及冻结/重启两项回归全部通过（合计八项，45.851s）；publication/workerflow/远程协议包、console 固定值展示、传递依赖及 diff 检查通过。原远程两轮 Service 成功场景仍未得到通过证据，远程权限落实限制保留。未执行真实 provider 副作用或全量测试。

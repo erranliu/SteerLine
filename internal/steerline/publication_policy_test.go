@@ -153,3 +153,26 @@ func TestPublicationAndPermissionChecksRemainCombined(t *testing.T) {
 		t.Fatalf("publication bypassed network deny: %v", err)
 	}
 }
+
+func TestRemotePublicationClaimRequiresPermissionEvidence(t *testing.T) {
+	c, _, store := openDAGFixture(t)
+	c.Host, c.Agent = "orca_supervised", "codex"
+	c.PublicationPolicy.Publisher = executionapi.PublisherWorker
+	c.PR = publication.Config{Kind: "gitea", BaseURL: "https://forge.invalid", Repository: "org/repo"}
+	c.Orca.Supervised = &SupervisedOrcaConfig{ConnectionID: "peer", EnvironmentID: "remote-env", RepositorySelector: "id:repo", ExpectedCodexVersion: "0.159.2"}
+	// Missing enforcement evidence must reject before Git, version, or remote
+	// probes, even though this route's existing worker publication is supported.
+	c.Git.Executable, c.Codex.Executable = "must-not-be-called", "must-not-be-called"
+	require(t, publication.CheckPolicy(c.PublicationPolicy, c.Host, c.Agent, c.PR))
+	before, err := store.Query(context.Background(), c.Identity())
+	require(t, err)
+	_, err = (CommandService{Store: store, Project: c.Identity()}).ClaimNativeTask(context.Background(), c, TaskClaimOptions{TaskID: "60", RequestID: newID(), ExpectedTaskVersion: 1, ExpectedAuthorityVersion: 1})
+	if err == nil || !strings.Contains(err.Error(), "enforcement evidence") || strings.Contains(err.Error(), "must-not-be-called") {
+		t.Fatalf("remote publication bypassed its permission admission gate: %v", err)
+	}
+	after, queryErr := store.Query(context.Background(), c.Identity())
+	require(t, queryErr)
+	if digestValue(before.WorkflowRuns) != digestValue(after.WorkflowRuns) || digestValue(before.Executions) != digestValue(after.Executions) || digestValue(before.Operations) != digestValue(after.Operations) {
+		t.Fatal("rejected remote policy wrote claim or operation state")
+	}
+}
