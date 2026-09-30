@@ -777,7 +777,7 @@ func (c CommandService) commitNativeDelivery(ctx context.Context, s *SQLiteStore
 			}
 			return err
 		}
-		next, err := taskdomain.Close(current, time.Now().UTC())
+		next, err := taskdomain.CompleteDelivery(current, delivery, graph.Authority.Branch, time.Now().UTC())
 		if err != nil {
 			return err
 		}

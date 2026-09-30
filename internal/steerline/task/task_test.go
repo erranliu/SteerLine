@@ -149,12 +149,22 @@ func TestBatchPlanAndTaskClaimKeepFixedValues(t *testing.T) {
 	if plan.Tasks[0].Status != "open" {
 		t.Fatal("claim mutated the sampled task record")
 	}
-	closed, err := Close(claimed, at.Add(2*time.Minute))
+	proof := TaskDeliveryEvidence{PRInstance: "github", URL: "https://example.test/repo/pull/7", Repository: "example/repo", PRNumber: 7, BaseBranch: "main", State: "merged", Merged: true, MergedAt: at, MergeCommit: strings.Repeat("c", 40)}
+	proofJSON, err := json.Marshal(proof)
+	if err != nil {
+		t.Fatal(err)
+	}
+	delivery := TaskDeliveryRecord{ProjectIdentity: "project", TaskID: "7", SelectedWorkflowRunID: "run-7", PRInstance: proof.PRInstance, PRRepository: proof.Repository, PRNumber: proof.PRNumber, PRURL: proof.URL, MergeCommit: proof.MergeCommit, MergedAt: at, RecordedAt: at, Evidence: proofJSON}
+	closed, err := CompleteDelivery(claimed, delivery, "main", at.Add(2*time.Minute))
 	if err != nil || closed.Status != "closed" || closed.Version != 3 {
 		t.Fatalf("delivery did not advance the claimed task: %+v, %v", closed, err)
 	}
-	if _, err := Close(plan.Tasks[0], at); err == nil {
+	if _, err := CompleteDelivery(plan.Tasks[0], delivery, "main", at); err == nil {
 		t.Fatal("open task was closed without a claim")
+	}
+	delivery.TaskID = "other"
+	if _, err := CompleteDelivery(claimed, delivery, "main", at); err == nil {
+		t.Fatal("delivery for another task was accepted")
 	}
 	cleanup := []string{"workspace_cleanup:one"}
 	if _, err := Discard(claimed, "stopped", "operator", "request", cleanup, true, at); err == nil {
@@ -167,5 +177,8 @@ func TestBatchPlanAndTaskClaimKeepFixedValues(t *testing.T) {
 	cleanup[0] = "changed"
 	if discarded.CleanupPending[0] != "workspace_cleanup:one" {
 		t.Fatal("discard shares its cleanup list with the caller")
+	}
+	if _, err := Discard(discarded, "again", "operator", "second-request", nil, false, at.Add(4*time.Minute)); err == nil {
+		t.Fatal("already discarded task accepted a second discard")
 	}
 }
