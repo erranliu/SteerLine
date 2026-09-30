@@ -102,6 +102,47 @@ func TestNativeAuditPaginationBoundsAndDatabaseIdentity(t *testing.T) {
 	require(t, err)
 }
 
+func TestNativeAuditPageBatchesRelationsAcrossPageBoundary(t *testing.T) {
+	ctx := context.Background()
+	c, commit, store := openDAGFixture(t)
+	seedNativeGraphForView(t, c, commit, store, 402, []TaskDependencyRecord{{ProjectIdentity: c.Identity(), PredecessorID: "1", SuccessorID: "402"}})
+	q := QueryService{Store: store, Project: c.Identity()}
+	first, err := q.ListNativeTasks(ctx, "", 1)
+	require(t, err)
+	second, err := q.ListNativeTasks(ctx, first.NextCursor, 401)
+	require(t, err)
+	if len(second.Tasks) != 401 || second.Tasks[0].TaskID != "2" || second.Tasks[400].TaskID != "402" || second.HasMore {
+		t.Fatalf("paged task order or batch boundary changed: first=%+v second-count=%d", first, len(second.Tasks))
+	}
+	last := second.Tasks[400]
+	if last.DependencyReady || len(last.UnmetPredecessors) != 1 || last.UnmetPredecessors[0].TaskID != "1" || last.UnmetPredecessors[0].Blocker != "predecessor_not_delivered" {
+		t.Fatalf("off-page predecessor was not loaded: %+v", last)
+	}
+	graph, err := q.TaskGraph(ctx, "", 500)
+	require(t, err)
+	if graph.Nodes[401].DependencyReady != last.DependencyReady || len(graph.Nodes[401].Blockers) != len(last.UnmetPredecessors) || graph.Nodes[401].Blockers[0] != last.UnmetPredecessors[0] {
+		t.Fatalf("DAG and task page disagree on readiness: %+v / %+v", graph.Nodes[401], last)
+	}
+}
+
+func TestNativeAuditPageDecodesOnlyDirectPredecessors(t *testing.T) {
+	ctx := context.Background()
+	store, project, _ := nativeAuditStore(t)
+	require(t, store.Transact(ctx, func(tx DomainTx) error {
+		if err := tx.PutTaskDependency(TaskDependencyRecord{ProjectIdentity: project, PredecessorID: "2", SuccessorID: "10"}); err != nil {
+			return err
+		}
+		return tx.PutTaskDependency(TaskDependencyRecord{ProjectIdentity: project, PredecessorID: "10", SuccessorID: "99"})
+	}))
+	_, err := store.db.ExecContext(ctx, `UPDATE tasks SET payload='invalid JSON' WHERE project_identity=? AND task_id='2'`, project)
+	require(t, err)
+	page, err := (QueryService{Store: store, Project: project}).ShowNativeTask(ctx, "99")
+	require(t, err)
+	if len(page.Tasks) != 1 || len(page.Tasks[0].UnmetPredecessors) != 1 || page.Tasks[0].UnmetPredecessors[0].TaskID != "10" {
+		t.Fatalf("task detail lost its direct predecessor: %+v", page.Tasks)
+	}
+}
+
 func TestNativeAuditReadersCoexistWithWriter(t *testing.T) {
 	ctx := context.Background()
 	c, _ := nativeTaskFixture(t)
