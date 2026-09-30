@@ -10,85 +10,24 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/steerline/task"
 	"github.com/erranliu/SteerLine/internal/steerline/taskgraph"
 )
 
-const taskBatchSchemaVersion = "task-batch/v1"
+const taskBatchSchemaVersion = task.BatchSchemaVersion
 
-// TaskBatchInput is a creation command. It is never stored as an editable task
-// state; the normalized payload digest and resolved identity map are persisted.
-type TaskBatchInput struct {
-	SchemaVersion string          `json:"schema_version"`
-	ProjectID     string          `json:"project_id"`
-	Tasks         []TaskBatchTask `json:"tasks"`
-	Dependencies  []TaskBatchEdge `json:"dependencies"`
-}
-
-type TaskBatchTask struct {
-	LocalKey string       `json:"local_key"`
-	TaskID   int64        `json:"task_id"`
-	Title    string       `json:"title"`
-	Type     string       `json:"type"`
-	Priority *int         `json:"priority,omitempty"`
-	Contract TaskContract `json:"contract"`
-	GoalIDs  []string     `json:"goal_ids,omitempty"`
-}
-
-type TaskBatchReference struct {
-	LocalKey string `json:"local_key,omitempty"`
-	TaskID   *int64 `json:"task_id,omitempty"`
-}
-
-type TaskBatchEdge struct {
-	Predecessor TaskBatchReference `json:"predecessor"`
-	Successor   TaskBatchReference `json:"successor"`
-}
-
-type TaskBatchIssue struct {
-	Code    string `json:"code"`
-	Node    string `json:"node,omitempty"`
-	Message string `json:"message"`
-}
-
-type TaskBatchValidation struct {
-	Valid            bool             `json:"valid"`
-	ProjectID        string           `json:"project_id"`
-	TaskCount        int              `json:"task_count"`
-	DependencyCount  int              `json:"dependency_count"`
-	AuthorityVersion uint64           `json:"authority_version"`
-	GraphRevision    uint64           `json:"graph_revision"`
-	DatabaseRevision uint64           `json:"database_revision"`
-	DatabaseID       string           `json:"database_id"`
-	SampledAt        time.Time        `json:"sampled_at"`
-	Cycle            []string         `json:"cycle,omitempty"`
-	Issues           []TaskBatchIssue `json:"issues"`
-}
-
-type TaskBatchReceipt struct {
-	RequestID     string            `json:"request_id"`
-	BatchID       string            `json:"batch_id"`
-	TaskIDs       map[string]string `json:"task_ids"`
-	GraphRevision uint64            `json:"graph_revision"`
-	PayloadDigest string            `json:"payload_digest"`
-	Status        string            `json:"status"`
-	DispatchNote  string            `json:"dispatch_note"`
-}
-
-type TaskDiscardReceipt struct {
-	RequestID      string   `json:"request_id"`
-	TaskID         string   `json:"task_id"`
-	Status         string   `json:"status"`
-	Code           string   `json:"code,omitempty"`
-	Message        string   `json:"message,omitempty"`
-	GraphRevision  uint64   `json:"graph_revision"`
-	CleanupPending []string `json:"cleanup_pending,omitempty"`
-}
+type TaskBatchInput = task.TaskBatchInput
+type TaskBatchTask = task.TaskBatchTask
+type TaskBatchReference = task.TaskBatchReference
+type TaskBatchEdge = task.TaskBatchEdge
+type TaskBatchIssue = task.TaskBatchIssue
+type TaskBatchValidation = task.TaskBatchValidation
+type TaskBatchReceipt = task.TaskBatchReceipt
+type TaskDiscardReceipt = task.TaskDiscardReceipt
 
 type taskDiscardIntent struct {
 	TaskID          string   `json:"task_id"`
@@ -160,75 +99,10 @@ type taskGraphCursor struct {
 	Offset           int    `json:"o"`
 }
 
-type taskGraphSnapshot struct {
-	Authority         ProjectTaskAuthority
-	DatabaseID        string
-	DatabaseRevision  uint64
-	SampledAt         time.Time
-	Tasks             []TaskRecord
-	ByID              map[string]TaskRecord
-	RepositoryTaskIDs map[string]bool
-	ContractIDs       map[string]bool
-	Edges             []TaskDependencyRecord
-	Deliveries        map[string]TaskDeliveryRecord
-	ExecutionSlotBusy bool
-}
+type taskGraphSnapshot = task.Snapshot
 
 func decodeTaskBatch(data []byte) (TaskBatchInput, []byte, error) {
-	canonical, err := CanonicalJSON(data)
-	if err != nil {
-		return TaskBatchInput{}, nil, nativeErr("invalid_batch", err.Error())
-	}
-	var batch TaskBatchInput
-	d := json.NewDecoder(bytes.NewReader(data))
-	d.DisallowUnknownFields()
-	if err = d.Decode(&batch); err != nil {
-		return batch, nil, nativeErr("invalid_batch", err.Error())
-	}
-	var extra any
-	if err = d.Decode(&extra); err != io.EOF {
-		return batch, nil, nativeErr("invalid_batch", "expected exactly one JSON object")
-	}
-	var shape map[string]json.RawMessage
-	if err = json.Unmarshal(data, &shape); err != nil {
-		return batch, nil, nativeErr("invalid_batch", err.Error())
-	}
-	if shape["schema_version"] == nil || shape["project_id"] == nil || shape["tasks"] == nil {
-		return batch, nil, nativeErr("invalid_batch", "schema_version, project_id and tasks are required")
-	}
-	if raw := shape["dependencies"]; raw != nil && (bytes.Equal(bytes.TrimSpace(raw), []byte("null")) || len(bytes.TrimSpace(raw)) == 0 || bytes.TrimSpace(raw)[0] != '[') {
-		return batch, nil, nativeErr("invalid_batch", "dependencies must be an array when provided")
-	}
-	if batch.SchemaVersion != taskBatchSchemaVersion {
-		return batch, nil, nativeErr("invalid_batch", "schema_version must be task-batch/v1")
-	}
-	if strings.TrimSpace(batch.ProjectID) == "" || len(batch.Tasks) == 0 {
-		return batch, nil, nativeErr("invalid_batch", "project_id and a nonempty tasks array are required")
-	}
-	var taskShapes []map[string]json.RawMessage
-	if err = json.Unmarshal(shape["tasks"], &taskShapes); err != nil || len(taskShapes) != len(batch.Tasks) {
-		return batch, nil, nativeErr("invalid_batch", "tasks must be an array of objects")
-	}
-	for i, taskShape := range taskShapes {
-		for _, name := range []string{"local_key", "task_id", "title", "type", "contract"} {
-			if taskShape[name] == nil || bytes.Equal(bytes.TrimSpace(taskShape[name]), []byte("null")) {
-				return batch, nil, nativeErr("invalid_batch", fmt.Sprintf("tasks[%d].%s is required", i, name))
-			}
-		}
-		if raw := taskShape["priority"]; raw != nil && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			return batch, nil, nativeErr("invalid_batch", fmt.Sprintf("tasks[%d].priority must be an integer when provided", i))
-		}
-		if strings.TrimSpace(batch.Tasks[i].LocalKey) == "" {
-			return batch, nil, nativeErr("invalid_batch", fmt.Sprintf("tasks[%d].local_key is empty", i))
-		}
-		if batch.Tasks[i].TaskID < 0 {
-			return batch, nil, nativeErr("invalid_batch", fmt.Sprintf("tasks[%d].task_id must be a nonnegative integer", i))
-		}
-		if strings.TrimSpace(batch.Tasks[i].Title) == "" {
-			return batch, nil, nativeErr("invalid_batch", fmt.Sprintf("tasks[%d].title is empty", i))
-		}
-	}
-	return batch, canonical, nil
+	return task.DecodeBatch(data)
 }
 
 func (s *SQLiteStore) taskGraphSnapshot(ctx context.Context, project string) (taskGraphSnapshot, error) {
@@ -501,33 +375,18 @@ func (q QueryService) TaskGraph(ctx context.Context, cursor string, limit int) (
 	return page, nil
 }
 
-func nativeStartupBlockers(task TaskRecord, graph taskGraphSnapshot) []string {
-	_, delivered := graph.Deliveries[task.TaskID]
-	return nativeStartupBlockersFor(task.Status, delivered, graph.Authority.DispatchPaused, graph.Authority.DispatchMode, graph.ExecutionSlotBusy)
+func nativeStartupBlockers(record TaskRecord, graph taskGraphSnapshot) []string {
+	_, delivered := graph.Deliveries[record.TaskID]
+	return task.StartupBlockers(record.Status, delivered, graph.Authority.DispatchPaused, graph.Authority.DispatchMode, graph.ExecutionSlotBusy)
 }
 
-func nativeDeliveryInconsistent(task TaskRecord, graph taskGraphSnapshot) bool {
-	_, delivered := graph.Deliveries[task.TaskID]
-	return nativeDeliveryInconsistentStatus(task.Status, delivered)
+func nativeDeliveryInconsistent(record TaskRecord, graph taskGraphSnapshot) bool {
+	_, delivered := graph.Deliveries[record.TaskID]
+	return task.DeliveryInconsistent(record.Status, delivered)
 }
 
-func taskDependencyState(task TaskRecord, graph taskGraphSnapshot) (bool, []TaskDependencyStatus) {
-	predecessors := []TaskDependencyStatus{}
-	for _, edge := range graph.Edges {
-		if edge.SuccessorID != task.TaskID {
-			continue
-		}
-		pred, ok := graph.ByID[edge.PredecessorID]
-		if !ok {
-			predecessors = append(predecessors, TaskDependencyStatus{TaskID: edge.PredecessorID})
-			continue
-		}
-		_, delivered := graph.Deliveries[edge.PredecessorID]
-		predecessors = append(predecessors, TaskDependencyStatus{TaskID: pred.TaskID, Status: pred.Status, Delivered: delivered})
-	}
-	_, delivered := graph.Deliveries[task.TaskID]
-	ready, _, blockers := nativeDependencyState(task.Status, delivered, predecessors)
-	return ready, blockers
+func taskDependencyState(record TaskRecord, graph taskGraphSnapshot) (bool, []TaskDependencyStatus) {
+	return task.DependencyStateForTask(record, graph)
 }
 
 type NativeReadyTaskSnapshot struct {
@@ -547,24 +406,7 @@ func (q QueryService) ReadyNativeTaskSnapshot(ctx context.Context) (NativeReadyT
 	if err != nil {
 		return NativeReadyTaskSnapshot{}, err
 	}
-	ready := []TaskRecord{}
-	for _, task := range graph.Tasks {
-		if task.Status != "open" {
-			continue
-		}
-		if allowed, _ := taskDependencyState(task, graph); allowed {
-			ready = append(ready, task)
-		}
-	}
-	orderedIDs := StableTaskOrder(ready, graph.Edges)
-	readyByID := make(map[string]TaskRecord, len(ready))
-	for _, task := range ready {
-		readyByID[task.TaskID] = task
-	}
-	ready = make([]TaskRecord, 0, len(orderedIDs))
-	for _, id := range orderedIDs {
-		ready = append(ready, readyByID[id])
-	}
+	ready := task.ReadyTasks(graph)
 	return NativeReadyTaskSnapshot{ProjectID: q.Project, AuthorityVersion: graph.Authority.AuthorityVersion, GraphRevision: graph.Authority.GraphRevision, DatabaseID: graph.DatabaseID, DatabaseRevision: graph.DatabaseRevision, SampledAt: graph.SampledAt, Tasks: ready}, nil
 }
 
@@ -578,136 +420,11 @@ func (q QueryService) ReadyNativeTasks(ctx context.Context) ([]TaskRecord, error
 }
 
 func validateTaskBatchAgainstGraph(ctx context.Context, config Config, batch TaskBatchInput, graph taskGraphSnapshot, verifyFiles bool) ([]TaskBatchIssue, []string) {
-	issues := []TaskBatchIssue{}
-	issue := func(code, node, message string) {
-		issues = append(issues, TaskBatchIssue{Code: code, Node: node, Message: message})
+	var verify func(TaskContract) error = ValidateTaskContract
+	if verifyFiles {
+		verify = func(contract TaskContract) error { return VerifyTaskContractFiles(ctx, config, contract) }
 	}
-	if batch.ProjectID != graph.Authority.ProjectIdentity {
-		issue("authority_mismatch", "project_id", "batch project does not match the sampled native project")
-	}
-	allowedTypes := map[string]bool{"task": true, "bug": true, "feature": true, "chore": true}
-	configured := map[string]bool{}
-	types := config.ExecutableTypes
-	if len(types) == 0 {
-		types = []string{"task", "bug", "feature", "chore"}
-	}
-	for _, typ := range types {
-		configured[typ] = true
-	}
-	localIDs := map[string]string{}
-	batchIDs := map[string]bool{}
-	contractIDs := map[string]bool{}
-	for _, task := range batch.Tasks {
-		if _, ok := localIDs[task.LocalKey]; ok {
-			issue("invalid_batch", task.LocalKey, "local_key is duplicated")
-		} else {
-			localIDs[task.LocalKey] = strconv.FormatInt(task.TaskID, 10)
-		}
-		id := strconv.FormatInt(task.TaskID, 10)
-		if batchIDs[id] {
-			issue("invalid_batch", task.LocalKey, "task_id is duplicated in the batch")
-		}
-		batchIDs[id] = true
-		if task.TaskID < 0 {
-			issue("invalid_batch", task.LocalKey, "task_id must be a nonnegative integer")
-		}
-		if graph.RepositoryTaskIDs[id] {
-			issue("invalid_batch", task.LocalKey, "task_id is already used in the same repository identity")
-		}
-		if task.Contract.ContractID == "" || graph.ContractIDs[task.Contract.ContractID] || contractIDs[task.Contract.ContractID] {
-			issue("invalid_batch", task.LocalKey, "contract_id must be unique in this repository identity")
-		}
-		contractIDs[task.Contract.ContractID] = true
-		if strings.TrimSpace(task.Title) == "" {
-			issue("invalid_batch", task.LocalKey, "title must not be empty")
-		}
-		if !allowedTypes[task.Type] || !configured[task.Type] {
-			issue("invalid_batch", task.LocalKey, "type must be task, bug, feature or chore and enabled by the project")
-		}
-		priority := 2
-		if task.Priority != nil {
-			priority = *task.Priority
-		}
-		if priority < 0 || priority > 4 {
-			issue("invalid_batch", task.LocalKey, "priority must be an integer from 0 to 4")
-		}
-		if verifyFiles {
-			if err := VerifyTaskContractFiles(ctx, config, task.Contract); err != nil {
-				issue("contract_mismatch", task.LocalKey, err.Error())
-			}
-		} else if err := ValidateTaskContract(task.Contract); err != nil {
-			issue("contract_mismatch", task.LocalKey, err.Error())
-		}
-		if task.Contract.SpecRef.Commit != task.Contract.PlanRef.Commit {
-			issue("contract_mismatch", task.LocalKey, "Spec and Plan must be pinned to the same committed Git object")
-		}
-		for _, goal := range task.GoalIDs {
-			if strings.TrimSpace(goal) == "" {
-				issue("invalid_batch", task.LocalKey, "goal_ids cannot contain an empty value")
-			}
-		}
-	}
-	if len(batch.Tasks) == 0 {
-		issue("invalid_batch", "tasks", "tasks must be nonempty")
-	}
-	edges := append([]TaskDependencyRecord(nil), graph.Edges...)
-	seen := map[string]bool{}
-	for _, e := range graph.Edges {
-		seen[e.PredecessorID+"\x00"+e.SuccessorID] = true
-	}
-	for i, edge := range batch.Dependencies {
-		if edge.Successor.TaskID != nil || strings.TrimSpace(edge.Successor.LocalKey) == "" {
-			issue("invalid_batch", fmt.Sprintf("dependencies[%d].successor", i), "successor must contain only a batch local_key")
-			continue
-		}
-		successor, ok := localIDs[edge.Successor.LocalKey]
-		if !ok {
-			issue("invalid_batch", fmt.Sprintf("dependencies[%d].successor", i), "successor local_key is not in this batch")
-			continue
-		}
-		pred := ""
-		if strings.TrimSpace(edge.Predecessor.LocalKey) != "" && edge.Predecessor.TaskID == nil {
-			pred, ok = localIDs[edge.Predecessor.LocalKey]
-			if !ok {
-				issue("missing_predecessor", fmt.Sprintf("dependencies[%d].predecessor", i), "predecessor local_key is not in this batch")
-				continue
-			}
-		} else if strings.TrimSpace(edge.Predecessor.LocalKey) == "" && edge.Predecessor.TaskID != nil {
-			if *edge.Predecessor.TaskID < 0 {
-				issue("invalid_batch", fmt.Sprintf("dependencies[%d].predecessor", i), "predecessor task_id must be nonnegative")
-				continue
-			}
-			pred = strconv.FormatInt(*edge.Predecessor.TaskID, 10)
-			if task, exists := graph.ByID[pred]; !exists {
-				if graph.RepositoryTaskIDs[pred] {
-					issue("cross_project_dependency", fmt.Sprintf("dependencies[%d].predecessor", i), "dependencies cannot cross native project boundaries")
-				} else {
-					issue("missing_predecessor", fmt.Sprintf("dependencies[%d].predecessor", i), "predecessor is not present in the project graph")
-				}
-			} else if task.Status == "discarded" {
-				issue("discarded_predecessor", fmt.Sprintf("dependencies[%d].predecessor", i), "discarded task cannot be a new predecessor")
-			}
-		} else {
-			issue("invalid_batch", fmt.Sprintf("dependencies[%d].predecessor", i), "predecessor must contain exactly one local_key or task_id")
-			continue
-		}
-		if pred == successor {
-			issue("dependency_cycle", fmt.Sprintf("dependencies[%d]", i), "dependency cannot reference the same task")
-			continue
-		}
-		key := pred + "\x00" + successor
-		if seen[key] {
-			issue("duplicate_dependency", fmt.Sprintf("dependencies[%d]", i), "dependency edge is duplicated")
-			continue
-		}
-		seen[key] = true
-		edges = append(edges, TaskDependencyRecord{ProjectIdentity: batch.ProjectID, PredecessorID: pred, SuccessorID: successor})
-	}
-	cycle := dependencyCycle(edges)
-	if len(cycle) > 0 {
-		issue("dependency_cycle", "dependencies", "batch dependencies would create a cycle")
-	}
-	return issues, cycle
+	return task.ValidateBatchAgainstGraph(batch, graph, config.ExecutableTypes, verify)
 }
 
 type taskBatchReplay struct{ Receipt TaskBatchReceipt }
@@ -784,23 +501,17 @@ func (c CommandService) CreateTaskBatch(ctx context.Context, config Config, data
 			return nativeErr("idempotency_conflict", "request_id already belongs to another command")
 		}
 		command = createdCommand
-		mapping := make(map[string]string, len(batch.Tasks))
-		for _, task := range batch.Tasks {
-			mapping[task.LocalKey] = strconv.FormatInt(task.TaskID, 10)
-		}
 		batchID := newID()
 		createdAt := time.Now().UTC()
-		batchRecord := TaskBatchRecord{BatchID: batchID, ProjectIdentity: c.Project, SchemaVersion: taskBatchSchemaVersion, PayloadDigest: payloadDigest, CreatedAt: createdAt, CommandID: requestID, TaskIDs: mapping}
+		plan := task.PlanBatch(batch, batchID, requestID, payloadDigest, createdAt)
+		mapping := plan.Batch.TaskIDs
+		batchRecord := plan.Batch
 		if e = tx.PutTaskBatch(batchRecord, expectedAuthorityVersion, graph.Authority.GraphRevision); e != nil {
 			return e
 		}
-		for _, input := range batch.Tasks {
-			id := strconv.FormatInt(input.TaskID, 10)
-			priority := 2
-			if input.Priority != nil {
-				priority = *input.Priority
-			}
-			task := TaskRecord{ProjectIdentity: c.Project, TaskID: id, BatchID: batchID, Title: input.Title, Type: input.Type, Priority: priority, GoalIDs: append([]string(nil), input.GoalIDs...), ContractID: input.Contract.ContractID, Source: "native", Status: "open", Version: 1, CreatedAt: createdAt, UpdatedAt: createdAt}
+		for i, input := range batch.Tasks {
+			task := plan.Tasks[i]
+			id := task.TaskID
 			if e = tx.PutTask(task); e != nil {
 				return e
 			}
@@ -812,7 +523,7 @@ func (c CommandService) CreateTaskBatch(ctx context.Context, config Config, data
 				return e
 			}
 		}
-		for _, edge := range resolveTaskBatchEdges(batch) {
+		for _, edge := range plan.Edges {
 			if e = tx.PutTaskDependency(edge); e != nil {
 				if strings.Contains(strings.ToLower(e.Error()), "unique") {
 					return nativeErr("duplicate_dependency", "dependency edge is already present")
@@ -844,47 +555,15 @@ func (c CommandService) CreateTaskBatch(ctx context.Context, config Config, data
 }
 
 func resolveTaskBatchEdges(batch TaskBatchInput) []TaskDependencyRecord {
-	ids := map[string]string{}
-	for _, task := range batch.Tasks {
-		ids[task.LocalKey] = strconv.FormatInt(task.TaskID, 10)
-	}
-	out := make([]TaskDependencyRecord, 0, len(batch.Dependencies))
-	for _, edge := range batch.Dependencies {
-		pred := ""
-		if edge.Predecessor.TaskID != nil {
-			pred = strconv.FormatInt(*edge.Predecessor.TaskID, 10)
-		} else {
-			pred = ids[edge.Predecessor.LocalKey]
-		}
-		out = append(out, TaskDependencyRecord{ProjectIdentity: batch.ProjectID, PredecessorID: pred, SuccessorID: ids[edge.Successor.LocalKey]})
-	}
-	return out
-}
-
-func formatTaskBatchIssues(issues []TaskBatchIssue, cycle []string) string {
-	parts := make([]string, 0, len(issues)+1)
-	for _, issue := range issues {
-		if issue.Node != "" {
-			parts = append(parts, issue.Code+" at "+issue.Node+": "+issue.Message)
-		} else {
-			parts = append(parts, issue.Code+": "+issue.Message)
-		}
-	}
-	if len(cycle) > 0 {
-		parts = append(parts, "dependency_cycle path="+strings.Join(cycle, " -> "))
-	}
-	return strings.Join(parts, "; ")
+	return task.ResolveBatchEdges(batch)
 }
 
 func taskBatchValidationError(issues []TaskBatchIssue, cycle []string) error {
-	code := "invalid_batch"
-	if len(issues) > 0 && issues[0].Code != "" {
-		code = issues[0].Code
-	}
-	if len(cycle) > 0 {
-		code = "dependency_cycle"
-	}
-	return nativeErr(code, formatTaskBatchIssues(issues, cycle))
+	return task.BatchValidationError(issues, cycle)
+}
+
+func discardTaskRecord(record TaskRecord, reason, requestedBy, requestID string, cleanup []string, at time.Time) (TaskRecord, error) {
+	return task.Discard(record, reason, requestedBy, requestID, cleanup, false, at)
 }
 
 func lookupTaskBatchCommand(ctx context.Context, s *SQLiteStore, project, id string) (CommandRecord, bool, error) {
@@ -1472,14 +1151,10 @@ func (c CommandService) commitDiscard(ctx context.Context, s *SQLiteStore, reque
 		}
 		cleanup = uniqueSorted(cleanup)
 		discardedAt := time.Now().UTC()
-		task.Status = "discarded"
-		task.Version++
-		task.UpdatedAt = discardedAt
-		task.DiscardedAt = &discardedAt
-		task.DiscardReason = intent.Reason
-		task.DiscardedBy = intent.RequestedBy
-		task.DiscardRequestID = requestID
-		task.CleanupPending = cleanup
+		task, e = discardTaskRecord(task, intent.Reason, intent.RequestedBy, requestID, cleanup, discardedAt)
+		if e != nil {
+			return e
+		}
 		if e = tx.UpdateNativeTaskCAS(task, intent.ExpectedVersion); e != nil {
 			return e
 		}

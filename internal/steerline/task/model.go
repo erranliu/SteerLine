@@ -1,4 +1,6 @@
-// Package task owns durable task values, validation, and lifecycle rules.
+// Package task owns durable task values and the rules for batches, readiness,
+// lifecycle transitions, and delivery. The center supplies snapshots and
+// commits accepted changes in its existing transaction boundary.
 package task
 
 import (

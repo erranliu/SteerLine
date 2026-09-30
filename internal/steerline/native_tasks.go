@@ -43,12 +43,7 @@ type NativeTaskDetail struct {
 	StartupBlockers   []string               `json:"startup_blockers"`
 }
 
-type TaskDependencyStatus struct {
-	TaskID    string `json:"task_id"`
-	Status    string `json:"status"`
-	Delivered bool   `json:"delivered"`
-	Blocker   string `json:"blocker,omitempty"`
-}
+type TaskDependencyStatus = task.TaskDependencyStatus
 
 type NativeTaskPage struct {
 	Protocol         string                 `json:"protocol"`
