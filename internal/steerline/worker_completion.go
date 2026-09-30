@@ -108,10 +108,7 @@ func (s *Service) finishWorkerFlowFor(run *Run, workerErr error) error {
 	} else if len(evidence.PRCandidates) > 1 {
 		issue = strings.TrimSpace(issue + "; several PR links were reported: " + strings.Join(evidence.PRCandidates, ", "))
 	}
-	question := evidence.QuestionHint
-	if len(evidence.PRCandidates) > 1 {
-		question = true
-	}
+	question := len(evidence.PRCandidates) > 1
 	if run.Decision != nil && run.Decision.Status == "pending" && run.Decision.Request.Question != "The worker stopped. What should it do next?" {
 		question = true
 	}

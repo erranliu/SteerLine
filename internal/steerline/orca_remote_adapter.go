@@ -15,11 +15,6 @@ type supervisedWorkerObservation struct {
 	Liveness, DispatchState, AgentWaitState, WorktreePath, Branch string
 	ObservedAt                                                    time.Time
 }
-type supervisedDelivery struct {
-	ID       string
-	Messages []OrcaInboxMessage
-	TimedOut bool
-}
 
 func remoteWorkerConfig(c Config) remote.Config {
 	cfg := remote.Config{Repository: c.Repository, ProjectID: c.identity, Agent: c.agentName(), Model: c.Model, ReasoningEffort: c.ReasoningEffort, CommandTimeout: c.CommandTimeout, Call: (orcaClient{cfg: c}).call, Origin: func(ctx context.Context) ([]byte, error) {
@@ -48,37 +43,13 @@ func probeSupervisedOrcaTarget(ctx context.Context, c Config) (supervisedPreflig
 	v, e := remote.Preflight(ctx, remoteWorkerConfig(c))
 	return v, remoteWorkerError(e)
 }
-func (b orcaSupervisedBackend) createRunCoordinator(ctx context.Context, id, runtime string) (string, error) {
-	v, e := remoteWorkerClient(b.config).CreateCoordinator(ctx, id, runtime)
-	return v, remoteWorkerError(e)
-}
 func (b orcaSupervisedBackend) showWorker(ctx context.Context, expected supervisedStartReceipt) (supervisedWorkerObservation, error) {
 	v, e := remoteWorkerClient(b.config).Show(ctx, expected)
 	return supervisedWorkerObservation{Identity: ProcessIdentity(v.Identity), Liveness: v.Liveness, DispatchState: v.DispatchState, AgentWaitState: v.AgentWaitState, WorktreePath: v.WorktreePath, Branch: v.Branch, ObservedAt: v.ObservedAt}, remoteWorkerError(e)
 }
-func (b orcaSupervisedBackend) settledWorker(ctx context.Context, ref ExecutionRef, outcome string) (string, error) {
-	v, e := remoteWorkerClient(b.config).Settlement(ctx, remoteWorkerRef(ref), outcome)
-	return v, remoteWorkerError(e)
-}
 func (b orcaSupervisedBackend) inspectSupervisedWorktree(ctx context.Context, pair supervisedPreflight, id, path, branch, base, head string) (WorkspaceInspection, error) {
 	v, e := remoteWorkerClient(b.config).InspectWorktree(ctx, pair, id, path, branch, base, head)
 	return WorkspaceInspection(v), remoteWorkerError(e)
-}
-func (b orcaSupervisedBackend) checkDelivery(ctx context.Context, ref ExecutionRef) (supervisedDelivery, error) {
-	v, e := remoteWorkerClient(b.config).Check(ctx, remoteWorkerRef(ref))
-	return supervisedDelivery{ID: v.ID, Messages: v.Messages, TimedOut: v.TimedOut}, remoteWorkerError(e)
-}
-func (b orcaSupervisedBackend) replyQuestion(ctx context.Context, ref ExecutionRef, id, body string) (string, error) {
-	v, e := remoteWorkerClient(b.config).Reply(ctx, remoteWorkerRef(ref), id, body)
-	return v, remoteWorkerError(e)
-}
-func (b orcaSupervisedBackend) findAnsweredQuestion(ctx context.Context, ref ExecutionRef, id, body string) (string, error) {
-	v, e := remoteWorkerClient(b.config).FindAnswer(ctx, remoteWorkerRef(ref), id, body)
-	return v, remoteWorkerError(e)
-}
-func (b orcaSupervisedBackend) ReadOutput(ctx context.Context, ref ExecutionRef, cursor string, limit int) (OutputBatch, error) {
-	v, e := remoteWorkerClient(b.config).ReadOutput(ctx, remoteWorkerRef(ref), cursor, limit)
-	return OutputBatch{Data: v.Data, Source: v.Source, ObservedAt: v.ObservedAt, NextCursor: v.NextCursor, Gap: v.Gap, SourceChanged: v.SourceChanged}, remoteWorkerError(e)
 }
 
 const maxSupervisedMessageBytes = remote.MaxMessageBytes

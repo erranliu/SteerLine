@@ -72,13 +72,6 @@ type Workspace struct {
 	Dirty                                    bool
 	CheckedAt                                time.Time
 }
-type Output struct {
-	Data               []byte
-	Source             string
-	ObservedAt         time.Time
-	NextCursor         string
-	Gap, SourceChanged bool
-}
 type Error struct {
 	Code       string
 	Diagnostic string

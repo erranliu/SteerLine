@@ -24,26 +24,14 @@ func decodeWorkerFlowEvent(mode workerflow.Mode, ev WorkerEvent, execution *Exec
 	if execution == nil {
 		return fact, errors.New("worker event has no fixed execution")
 	}
-	if mode != workerflow.LocalCodex && mode != workerflow.SupervisedOrca {
-		return fact, errors.New("native Orca messages require the fixed Dispatch adapter")
-	}
-	if mode == workerflow.SupervisedOrca && ev.AppServer != nil {
-		return fact, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "supervised Orca event used the local app-server protocol"}
+	if mode != workerflow.LocalCodex {
+		return fact, errors.New("Orca messages require their fixed Dispatch adapter")
 	}
 	if ev.Session != "" {
 		if !codexThreadID.MatchString(ev.Session) || execution.SessionID != "" && execution.SessionID != ev.Session {
 			return fact, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "worker event changed the original Codex session"}
 		}
 		fact.SessionID = ev.Session
-	}
-	if mode != workerflow.LocalCodex {
-		if ev.Activity.Kind == "turn" && ev.Activity.Status == "started" {
-			fact.StartedTurnID = execution.PendingTurnID
-			if fact.StartedTurnID == "" {
-				fact.StartedTurnID = execution.CurrentTurnID
-			}
-		}
-		return fact, nil
 	}
 	if ev.AppServer == nil {
 		if ev.Activity.Kind == "turn" && ev.Activity.Status == "started" {
@@ -78,7 +66,6 @@ type workerTurnEvidence struct {
 	LastMessage      string
 	Failure          string
 	PRCandidates     []string
-	QuestionHint     bool
 	PublishRequested bool
 	LocalCodex       bool
 }

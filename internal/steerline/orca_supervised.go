@@ -81,11 +81,3 @@ func validateSupervisedRef(c Config, ref ExecutionRef) error {
 func sameSupervisedBaseTarget(a, b ExecutionTarget) bool {
 	return a.ID != "" && a.ID == b.ID && a.ConnectionID == b.ConnectionID && a.ExternalRuntime == b.ExternalRuntime
 }
-
-func savedSupervisedTargetConflicts(saved, bound ExecutionTarget) bool {
-	return saved.OrchestrationRun != "" && saved.OrchestrationRun != bound.OrchestrationRun ||
-		saved.ExternalTask != "" && saved.ExternalTask != bound.ExternalTask ||
-		saved.Dispatch != "" && saved.Dispatch != bound.Dispatch ||
-		saved.ExecutionHost != "" && saved.ExecutionHost != bound.ExecutionHost ||
-		saved.WorktreeID != "" && saved.WorktreeID != bound.WorktreeID
-}

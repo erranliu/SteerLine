@@ -17,9 +17,6 @@ func workerOrcaWorkspaceError(err error) error {
 	if errors.Is(err, orcaworker.ErrWorktreeIdentity) {
 		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: err.Error()}
 	}
-	if errors.Is(err, orcaworker.ErrWorktreeOutcomeUnknown) {
-		return &BackendError{Code: BackendOutcomeUnknown, Diagnostic: orcaworker.ErrWorktreeOutcomeUnknown.Error(), Cause: err}
-	}
 	return err
 }
 
@@ -74,16 +71,9 @@ func workerOrcaWorktreeName(taskID, runID string) (string, error) {
 	return "sl-" + taskID + "-" + runID, nil
 }
 
-func validateWorkerOrcaWorktree(value workerOrcaWorktree, name, repoID, base string) error {
-	return workerOrcaWorkspaceError(orcaworker.ValidateWorktree(value, name, repoID, base))
-}
 func findWorkerOrcaWorktree(ctx context.Context, c Config, repoID, name, base string) (workerOrcaWorktree, bool, error) {
 	worktree, found, err := orcaworker.FindWorktree(ctx, orcaWorkerCaller(c), repoID, name, base)
 	return worktree, found, workerOrcaWorkspaceError(err)
-}
-func createWorkerOrcaWorktree(ctx context.Context, c Config, repoID, name, base string) (workerOrcaWorktree, error) {
-	worktree, err := orcaworker.CreateWorktree(ctx, orcaWorkerCaller(c), repoID, name, base)
-	return worktree, workerOrcaWorkspaceError(err)
 }
 
 func applyWorkerOrcaWorkspace(c Config, run *Run, execution *ExecutionRecord, worktree workerOrcaWorktree, base string) error {

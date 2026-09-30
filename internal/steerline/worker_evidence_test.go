@@ -2,9 +2,6 @@ package steerline
 
 import (
 	"encoding/json"
-	"os"
-	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/erranliu/SteerLine/internal/steerline/codexapp"
@@ -53,28 +50,5 @@ func TestNativeOrcaFactsRejectOldDispatchAndKeepCurrentOutcome(t *testing.T) {
 	fact, matched, err := decodeNativeOrcaMessage(message, "run-current", turn, "term-agent")
 	if err != nil || !matched || fact.Outcome != "failed" || fact.MessageID != "msg-done" || len(fact.PRCandidates) != 1 {
 		t.Fatalf("current Dispatch evidence was lost: %+v %v", fact, err)
-	}
-}
-
-func TestSupervisedTurnEvidenceRetainsQuestionAndEarlierPR(t *testing.T) {
-	root := t.TempDir()
-	runID, turnID := strings.Repeat("1", 32), strings.Repeat("2", 32)
-	path := filepath.Join(root, "runs", runID, "turns", turnID, "events.jsonl")
-	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
-		t.Fatal(err)
-	}
-	journal := `{"type":"thread.started","thread_id":"00000000-0000-0000-0000-000000000008"}
-{"type":"turn.started"}
-{"type":"item.completed","item":{"type":"agent_message","text":"Created https://git.example/o/r/pulls/8."}}
-{"type":"item.completed","item":{"type":"agent_message","text":"Continue?"}}
-{"type":"turn.completed"}
-`
-	if err := os.WriteFile(path, []byte(journal), 0600); err != nil {
-		t.Fatal(err)
-	}
-	fixed := workerFlowContext{run: &Run{RunID: runID}, execution: &ExecutionRecord{CurrentTurnID: turnID, SessionID: "00000000-0000-0000-0000-000000000008"}, config: Config{RunDir: root}}
-	fact, err := readWorkerTurnEvidence(fixed, workerflow.SupervisedOrca)
-	if err != nil || !fact.Completed || !fact.Succeeded || !fact.QuestionHint || len(fact.PRCandidates) != 1 || fact.PRCandidates[0] != "https://git.example/o/r/pulls/8" {
-		t.Fatalf("supervised turn fact lost terminal evidence: %+v %v", fact, err)
 	}
 }

@@ -4,13 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"path/filepath"
 	"strings"
 )
 
 var ErrWorktreeIdentity = errors.New("Orca worktree does not match the fixed name, repository, base and branch")
-var ErrWorktreeOutcomeUnknown = errors.New("remote worker worktree creation has no confirmed receipt")
 
 type Worktree struct {
 	ID               string `json:"id"`
@@ -64,29 +62,4 @@ func FindWorktree(ctx context.Context, call Call, repoID, name, base string) (Wo
 		return Worktree{}, false, err
 	}
 	return *found, true, nil
-}
-
-func CreateWorktree(ctx context.Context, call Call, repoID, name, base string) (Worktree, error) {
-	if found, exists, err := FindWorktree(ctx, call, repoID, name, base); err != nil {
-		return Worktree{}, err
-	} else if exists {
-		return found, nil
-	}
-	raw, callErr := call(ctx, "worktree", "create", "--repo", "id:"+repoID, "--name", name, "--base-branch", base, "--no-parent", "--setup", "skip", "--json")
-	if callErr != nil {
-		if found, exists, err := FindWorktree(ctx, call, repoID, name, base); err == nil && exists {
-			return found, nil
-		}
-		return Worktree{}, fmt.Errorf("%w: %w", ErrWorktreeOutcomeUnknown, callErr)
-	}
-	var result struct {
-		Worktree Worktree `json:"worktree"`
-	}
-	if err := json.Unmarshal(raw, &result); err != nil {
-		return Worktree{}, err
-	}
-	if err := ValidateWorktree(result.Worktree, name, repoID, base); err != nil {
-		return Worktree{}, err
-	}
-	return result.Worktree, nil
 }

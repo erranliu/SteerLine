@@ -3,10 +3,8 @@ package steerline
 import (
 	"bufio"
 	"crypto/sha1"
-	"crypto/sha256"
 	"encoding/base64"
 	"encoding/binary"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
@@ -41,16 +39,15 @@ func TestWorkerFlowPromptIncludesFixedWorkflowRunID(t *testing.T) {
 
 func TestWorkerTurnFindsPRBeforeFinalMessage(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "events.jsonl")
-	events := `{"type":"thread.started","thread_id":"00000000-0000-0000-0000-000000000008"}
-{"type":"turn.started"}
-{"type":"item.completed","item":{"type":"agent_message","text":"Created https://git.example/o/r/pulls/8."}}
-{"type":"item.completed","item":{"type":"agent_message","text":"Work is ready."}}
-{"type":"turn.completed"}
+	events := `{"method":"turn/started","params":{"threadId":"00000000-0000-0000-0000-000000000008","turn":{"id":"turn-current"}}}
+{"method":"item/completed","params":{"threadId":"00000000-0000-0000-0000-000000000008","turnId":"turn-current","item":{"type":"agentMessage","text":"Created https://git.example/o/r/pulls/8.","phase":"commentary"}}}
+{"method":"item/completed","params":{"threadId":"00000000-0000-0000-0000-000000000008","turnId":"turn-current","item":{"type":"agentMessage","text":"Work is ready.","phase":"final_answer"}}}
+{"method":"turn/completed","params":{"threadId":"00000000-0000-0000-0000-000000000008","turn":{"id":"turn-current","status":"completed"}}}
 `
 	if err := os.WriteFile(path, []byte(events), 0600); err != nil {
 		t.Fatal(err)
 	}
-	outcome, err := codexworker.ReadExecOutcome(path)
+	outcome, err := codexworker.ReadAppServerOutcome(path, workerFlowMockSession, "turn-current")
 	if err != nil || !outcome.Completed || outcome.LastMessage != "Work is ready." || len(outcome.PRCandidates) != 1 || outcome.PRCandidates[0] != "https://git.example/o/r/pulls/8" {
 		t.Fatalf("lost an earlier PR clue: outcome=%+v err=%v", outcome, err)
 	}
@@ -58,7 +55,7 @@ func TestWorkerTurnFindsPRBeforeFinalMessage(t *testing.T) {
 
 func TestWorkerFlowMockCodexHelper(t *testing.T) {
 	args := strings.Join(os.Args, " ")
-	if os.Getenv("STEERLINE_WORKER_FLOW_MOCK") != "1" && !strings.Contains(args, " wf-orca-mock ") {
+	if os.Getenv("STEERLINE_WORKER_FLOW_MOCK") != "1" {
 		return
 	}
 	if strings.Contains(args, " --version") {
@@ -77,30 +74,7 @@ func TestWorkerFlowMockCodexHelper(t *testing.T) {
 		mockAppServerMain()
 		os.Exit(0)
 	}
-	if strings.Contains(args, " resume ") && !strings.Contains(args, " resume "+workerFlowMockSession+" ") {
-		os.Exit(2)
-	}
-	if !strings.Contains(args, " resume ") && strings.Contains(args, workerFlowMockSession) {
-		os.Exit(3)
-	}
-	prompt, err := io.ReadAll(os.Stdin)
-	if err != nil {
-		os.Exit(4)
-	}
-	received := string(prompt)
-	if strings.Contains(args, " wf-orca-mock ") {
-		withoutPipelineNewline := strings.TrimSuffix(strings.ReplaceAll(string(prompt), "\r\n", "\n"), "\n")
-		sum := sha256.Sum256([]byte(withoutPipelineNewline))
-		start, end := prompt[:min(96, len(prompt))], prompt[max(0, len(prompt)-96):]
-		received = fmt.Sprintf("received_sha256:%s bytes:%d prefix_b64:%s suffix_b64:%s", hex.EncodeToString(sum[:]), len(prompt), base64.StdEncoding.EncodeToString(start), base64.StdEncoding.EncodeToString(end))
-	}
-	echo, _ := json.Marshal(map[string]any{"type": "item.completed", "item": map[string]string{"id": "received-prompt", "type": "agent_message", "text": received}})
-	_, _ = fmt.Fprintln(os.Stdout, `{"type":"thread.started","thread_id":"`+workerFlowMockSession+`"}`)
-	_, _ = fmt.Fprintln(os.Stdout, `{"type":"turn.started"}`)
-	_, _ = fmt.Fprintln(os.Stdout, string(echo))
-	_, _ = fmt.Fprintln(os.Stdout, `{"type":"item.completed","item":{"id":"item-1","type":"agent_message","text":"turn done"}}`)
-	_, _ = fmt.Fprintln(os.Stdout, `{"type":"turn.completed"}`)
-	os.Exit(0)
+	os.Exit(2)
 }
 
 func mockAppServerStdio() {
