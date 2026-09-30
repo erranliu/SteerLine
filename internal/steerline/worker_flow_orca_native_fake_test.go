@@ -43,6 +43,7 @@ type fakeNativeOrcaState struct {
 	LoseSendOnce                                                     bool
 	RunObjective                                                     string
 	CoordinatorMarker                                                string
+	RelayMode, RelayDone, RelayHideDoneOnce                          bool
 }
 
 func fakeNativeOrca(stateDir string, args []string) int {
@@ -111,12 +112,8 @@ func fakeNativeOrca(stateDir string, args []string) int {
 			if state.Name == "" || state.Base == "" || os.MkdirAll(filepath.Dir(state.Path), 0700) != nil {
 				return fakeOrcaErr("invalid_argument", "bad worktree")
 			}
-			if state.Agent == "" {
-				if out, err := exec.Command("git", "-C", state.Repo, "worktree", "add", "--detach", state.Path, state.Base).CombinedOutput(); err != nil {
-					return fakeOrcaErr("invalid_argument", "cannot create test linked worktree: "+string(out))
-				}
-			} else if os.MkdirAll(state.Path, 0700) != nil {
-				return fakeOrcaErr("invalid_argument", "bad worktree")
+			if out, err := exec.Command("git", "-C", state.Repo, "worktree", "add", "--detach", state.Path, state.Base).CombinedOutput(); err != nil {
+				return fakeOrcaErr("invalid_argument", "cannot create test linked worktree: "+string(out))
 			}
 			state.Created = true
 			lost := state.LoseWorktreeOnce
@@ -228,6 +225,14 @@ func fakeNativeOrca(stateDir string, args []string) int {
 			}
 			return fakeOrcaOK(map[string]any{"messages": messages, "count": len(messages)})
 		case "send":
+			if state.RelayMode && arg(args, "--type") == "worker_done" {
+				if arg(args, "--from") != "term-agent" || arg(args, "--run") != "run-fake" || arg(args, "--to") != "run:run-fake" || arg(args, "--task-id") != "task-1" || arg(args, "--dispatch-id") != "ctx-1" || arg(args, "--outcome") != "failed" || arg(args, "--dispatch-capability") != "dcap_fake" {
+					return fakeOrcaErr("dispatch_capability_invalid", "relay did not present the fixed Dispatch capability")
+				}
+				state.RelayDone = true
+				save()
+				return fakeOrcaOK(map[string]any{"message": map[string]any{"id": "msg-relay-1"}, "mutation": map[string]any{"requestId": "request-relay-1"}})
+			}
 			if arg(args, "--to") != fmt.Sprintf("dispatch:ctx-%d", state.EscalationAt) || arg(args, "--run") != "run-fake" {
 				return fakeOrcaErr("invalid_argument", "wrong active Dispatch")
 			}
@@ -284,6 +289,19 @@ func fakeNativeOrca(stateDir string, args []string) int {
 				}
 				return fakeOrcaOK(map[string]any{"runId": "run-fake", "acknowledged": ack, "mutation": map[string]any{"requestId": "request-ack-" + ack}})
 			}
+			if state.RelayMode {
+				if state.RelayDone && state.RelayHideDoneOnce {
+					state.RelayHideDoneOnce = false
+					save()
+					return fakeOrcaOK(map[string]any{"runId": "run-fake", "messages": []any{}})
+				}
+				if state.RelayDone && !state.Acked["delivery-relay-1"] {
+					payload, _ := json.Marshal(map[string]any{"taskId": "task-1", "dispatchId": "ctx-1", "outcome": "failed"})
+					message := map[string]any{"id": "msg-relay-1", "from_handle": "term-agent", "type": "worker_done", "body": "Worker failed before publication", "payload": string(payload)}
+					return fakeOrcaOK(map[string]any{"runId": "run-fake", "deliveryId": "delivery-relay-1", "messages": []any{message}})
+				}
+				return fakeOrcaOK(map[string]any{"runId": "run-fake", "messages": []any{}})
+			}
 			if state.Dispatches == 1 && state.Replies == 0 && !state.Acked["delivery-ask-1"] {
 				payload, _ := json.Marshal(map[string]any{"taskId": "task-1", "dispatchId": "ctx-1", "question": "Which approach?", "options": []string{"Direct path"}})
 				message := map[string]any{"id": "msg-ask-1", "from_handle": "dispatch:ctx-1", "type": "question", "body": "Which approach?", "payload": string(payload)}
@@ -319,7 +337,14 @@ func fakeNativeOrca(stateDir string, args []string) int {
 			return fakeOrcaOK(map[string]any{"dispatchId": arg(args, "--dispatch"), "source": "terminal", "cursor": fmt.Sprintf("cursor-%d", n), "contentComplete": false, "clipping": []string{"terminal_fallback"}, "fallbackReason": "session_not_reported", "terminal": map[string]any{"tail": []string{fmt.Sprintf("fake output %d", n)}}})
 		case "worker-show":
 			n, _ := strconv.Atoi(strings.TrimPrefix(arg(args, "--dispatch"), "ctx-"))
-			return fakeOrcaOK(map[string]any{"dispatch": map[string]any{"id": fmt.Sprintf("ctx-%d", n), "runId": "run-fake", "taskId": fmt.Sprintf("task-%d", n), "status": "completed"}, "worker": map[string]any{"dispatchId": fmt.Sprintf("ctx-%d", n), "state": "unsupervised", "stage": "injected", "agentTerminalHandle": "term-agent"}, "terminal": terminal("term-agent")})
+			status := "completed"
+			if state.RelayMode {
+				status = "dispatched"
+				if state.RelayDone {
+					status = "failed"
+				}
+			}
+			return fakeOrcaOK(map[string]any{"dispatch": map[string]any{"id": fmt.Sprintf("ctx-%d", n), "runId": "run-fake", "taskId": fmt.Sprintf("task-%d", n), "status": status}, "worker": map[string]any{"dispatchId": fmt.Sprintf("ctx-%d", n), "state": "unsupervised", "stage": "injected", "agentTerminalHandle": "term-agent"}, "terminal": terminal("term-agent")})
 		}
 	}
 	return fakeOrcaErr("invalid_argument", "unhandled native Orca fixture command: "+strings.Join(args, " "))

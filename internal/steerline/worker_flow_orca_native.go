@@ -538,6 +538,9 @@ func (s *Service) startNativeOrcaTurn(ctx context.Context, run *Run, execution *
 	if err := s.verifyNativeOrcaWorker(ctx, run, execution); err != nil {
 		return err
 	}
+	if err := ensureNativeOrcaRelayIgnored(ctx, fixedConfig, execution.Workspace.Worktree); err != nil {
+		return err
+	}
 	if len([]byte(prompt)) > 16<<10 || len([]rune(prompt)) > 12000 {
 		return &BackendError{Code: BackendRejected, Diagnostic: "Orca native task spec exceeds the conservative Windows command-line bound"}
 	}
@@ -1035,9 +1038,14 @@ func (s *Service) nativeOrcaUncertain(run *Run, reason string) error {
 	if run == nil {
 		return errors.New(reason)
 	}
-	s.executionRecord(run).Error = ptr(clip(reason, 2000))
+	execution := s.executionRecord(run)
+	diagnostic := clip(reason, 2000)
+	if execution.Status == "blocked" && execution.Error != nil && *execution.Error == diagnostic {
+		return nil
+	}
+	execution.Error = ptr(diagnostic)
 	s.refreshRun(run)
-	s.executionRecord(run).Status = "blocked"
+	execution.Status = "blocked"
 	s.refreshRun(run)
 	s.note(run, "steer", "worker", "unverified", "Orca observation needs reconciliation", reason, nil)
 	return s.save()
@@ -1063,11 +1071,6 @@ func (s *Service) pollNativeOrcaWorker(ctx context.Context, run *Run) error {
 	state := execution.OrcaNative
 	if state.Coordinator.Terminal == "" || execution.Target.OrchestrationRun == "" {
 		return errors.New("native Orca inbox has no bound coordinator/Run")
-	}
-	if turn.DoneMessageID == "" {
-		if err := s.relayNativeOrcaDone(ctx, run, execution, turn); err != nil {
-			return s.nativeOrcaUncertain(run, "Orca worker result relay needs reconciliation: "+err.Error())
-		}
 	}
 	if turn.DoneMessageID == "" {
 		env, err := workerOrcaCall(ctx, fixedConfig, "orchestration", "check", "--terminal", state.Coordinator.Terminal, "--run", execution.Target.OrchestrationRun, "--json")
@@ -1172,6 +1175,14 @@ func (s *Service) pollNativeOrcaWorker(ctx context.Context, run *Run) error {
 		state.DeliveryID = ""
 		if err := s.save(); err != nil {
 			return err
+		}
+	}
+	if turn.DoneMessageID == "" {
+		if err := s.relayNativeOrcaDone(ctx, run, execution, turn); err != nil {
+			if ctx.Err() != nil {
+				return nil // Service shutdown is not a worker result failure.
+			}
+			return s.nativeOrcaUncertain(run, "Orca worker result relay needs reconciliation: "+err.Error())
 		}
 	}
 	if err := s.readNativeOrcaOutput(ctx, run, execution, turn); err != nil {

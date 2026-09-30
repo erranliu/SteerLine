@@ -64,7 +64,7 @@ func TestNativeOrcaFixedLunaLaunchReconcilesOriginalTerminal(t *testing.T) {
 		t.Fatal(err)
 	}
 	stateDir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(stateDir, "native-orca.json"), []byte(`{"LoseFixedTerminalOnce":true}`), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(stateDir, "native-orca.json"), []byte(`{"LoseFixedTerminalOnce":true,"RelayMode":true,"RelayHideDoneOnce":true}`), 0600); err != nil {
 		t.Fatal(err)
 	}
 	c.Host, c.Agent, c.Model, c.ReasoningEffort, c.Sandbox, c.Claimant = "orca", "codex", "gpt-6-luna", "xhigh", "workspace-write", "operator"
@@ -128,6 +128,48 @@ func TestNativeOrcaFixedLunaLaunchReconcilesOriginalTerminal(t *testing.T) {
 	}
 	if !state.FixedAgentTerminalCreated || state.CreatedWithAgent != "" || !strings.Contains(state.FixedAgentCommand, "'gpt-6-luna'") || !strings.Contains(state.FixedAgentCommand, "'model_reasoning_effort=xhigh'") || !strings.Contains(state.FixedAgentCommand, "'sandbox_workspace_write.network_access=true'") || strings.Count(state.FixedAgentCommand, "'--add-dir'") != 2 || state.Dispatches != 1 {
 		t.Fatalf("fixed Orca launch was not preserved: %+v", state)
+	}
+	workflow, execution := s.workflowRecords(run)
+	turn := nativeOrcaCurrentTurn(execution)
+	path, err := nativeOrcaRelayPath(execution.Workspace.Worktree, run.RunID, turn.TurnID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		t.Fatal(err)
+	}
+	request := nativeOrcaDoneRequest{WorkflowRunID: run.RunID, TurnID: turn.TurnID, TaskID: turn.TaskID, DispatchID: turn.DispatchID, DispatchCapability: "dcap_fake", Outcome: "failed", Subject: "Blocked", Body: "Worker failed before publication"}
+	data, _ = json.Marshal(request)
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := exec.Command("git", "-C", execution.Workspace.Worktree, "check-ignore", "-q", "--no-index", filepath.ToSlash(filepath.Join(".steerline-relay", run.RunID, turn.TurnID+".json"))).CombinedOutput(); err != nil {
+		t.Fatalf("relay file is not excluded from git: %v: %s", err, out)
+	}
+	if err := s.pollNativeOrcaWorker(ctx, run); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.pollNativeOrcaWorker(ctx, run); err != nil {
+		t.Fatal(err)
+	}
+	_, execution = s.workflowRecords(run)
+	if execution.Status != "blocked" || execution.Error == nil || !strings.Contains(*execution.Error, "already attempted") {
+		t.Fatalf("missing Orca worker_done was silently treated as pending: status=%s error=%v", execution.Status, execution.Error)
+	}
+	if err := s.pollNativeOrcaWorker(ctx, run); err != nil {
+		t.Fatal(err)
+	}
+	workflow, execution = s.workflowRecords(run)
+	if workflow.Phase != "waiting_decision" || execution.LastStoppedTurnID != turn.TurnID || turn.Outcome != "failed" {
+		t.Fatalf("relayed worker_done did not settle the original turn: phase=%s execution=%+v", workflow.Phase, execution)
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("accepted relay file was not removed: %v", err)
+	}
+	for _, op := range s.State.Operations {
+		if strings.Contains(string(op.Request), "dcap_fake") || strings.Contains(string(op.Receipt), "dcap_fake") {
+			t.Fatal("Dispatch capability leaked into the operation journal")
+		}
 	}
 }
 
