@@ -5,6 +5,7 @@
 ## 迁移步骤
 
 1. 接收工作区资源和发布边界，逐项列出中心 Codex I/O、证据解析、业务写入和人工授权判断。保持当前进程承载/Job Object 策略，不顺带修正服务生命周期。
+   复用 contracts 的 Command/CodexAskCall/固定记录与 execution 的身份/问题/动作；保持 contracts → execution、不引入反向依赖。远程原生 worker-start 不迁成中心命令，保留独立协议。
 2. 在 codexworker 建立固定配置与 backend，先迁参数/命令和证据，再迁执行操作。迁入 LocalSandboxArgs 与 Orca 的 Codex 参数/ValidateManagedArgs，分别保留 local Windows 规则和 Orca 无 model 受管、独立 effort、strict-config/排除临时根；shell 包装不搬入 Codex。复用原客户端和解析。
 3. 沿现有 worker_start/worker_mode 启动协调拆同步和异步接线：中心提交意图，平台返回现场句柄与回执，中心通过原子附件保存后登记 observer；失败按原操作记录未知并取消未登记现场。禁止包内直接 commitWorker 或复制另一个协调循环。
 4. 将恢复证据读取与执行性恢复拆开，中心先核对用户授权和代次。迁移实时/重放解析到同一入口，删除中心 method、JSON 和 Codex 日志格式解释。

@@ -18,6 +18,8 @@
 
 主要输入来自 `workspace.go`、`codex_git_sandbox.go`、`orca_worker_workspace.go` 的共同部分以及现有清理调用。参数只包含固定仓库/worktree 身份和必要工具配置；路径解析验证绝对路径、符号链接/重解析点与真实 Git 身份，不能拿本机路径推定远端资源。
 
+Command/业务持久记录归 contracts，WorkspaceEvidence/ExecutionTarget 等底层值归 execution；操作输入直接用既有 #54 契约或必要转换，不新增完整记录。workspace 可使用纯值，不借它导入中心、query 或 sqlite。远端工作区保留平台 ID 与原路径，不交给本机 Git 根目录解析或清理。
+
 中心的纯工作区命名/base 意图构造继续保留项目决策；本轮迁移的是执行和核验。prepareWorktreeRoot 的路径重叠规则纳入操作输入校验，不能因为拆包把它从领取前移到资源创建之后。本机清理消费 `native_cleanup.go` 的固定意图并返回事实，Task 丢弃资格与业务清理阶段不移入包内。
 
 `resources.go` 返回资源种类及规范路径，不返回 `--add-dir`。现有四组 Git 写目录的授权范围不扩大，尤其不能用整个 Git common-dir 替代指定目录。Codex 参数生成进入 `codexworker/permissions.go` 的现有行为 helper，#57 完成统一命令接线，#59 再改权限规则。

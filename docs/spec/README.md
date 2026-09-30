@@ -45,11 +45,10 @@
 
 ## 执行配置隔离
 
-目标：`EXECUTION-ISOLATION`。每项独立 Spec、Plan 和实现 PR，范围与并行条件以各自契约为准；公共定义见[执行配置隔离共同约束](execution-isolation-constraints.md)。
+目标：`EXECUTION-ISOLATION`。#54 公共契约已交付，作为后续硬前置复用，见[验收记录](../validation/execution-isolation-01-contracts/README.md)。剩余七项各交付独立 PR；承接 contracts → execution、只读 query/sqlite 和独立远程协议，不重复已落地机制。范围与并行条件见各自契约及[共同约束](execution-isolation-constraints.md)。
 
 | 任务 ID | 任务名称 | 硬前置 | Spec | Plan |
 | --- | --- | --- | --- | --- |
-| 54 | 公共执行契约归包 | 无本系列前置 | [Spec](execution-isolation-01-contracts.spec.md) | [Plan](execution-isolation-01-contracts.plan.md) |
 | 55 | 工作区与 Git 资源迁移 | #54 | [Spec](execution-isolation-02-workspace.spec.md) | [Plan](execution-isolation-02-workspace.plan.md) |
 | 56 | 发布与 PR 实现迁移 | #54 | [Spec](execution-isolation-03-publication.spec.md) | [Plan](execution-isolation-03-publication.plan.md) |
 | 57 | Codex 执行适配器迁移 | #55、#56 | [Spec](execution-isolation-04-codex.spec.md) | [Plan](execution-isolation-04-codex.plan.md) |

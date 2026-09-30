@@ -6,7 +6,9 @@
 
 把项目授权与 Codex sandbox 实现解耦，local app-server 与本机 Orca Codex 使用同一有效项目策略。遵守[共同约束](execution-isolation-constraints.md)，本轮改变配置行为并实际接通参数、冻结、拒绝和展示；不只增加 DTO，也不借此扩大其他 agent 或 supervised 支持范围。
 
-新增 `execution/policy.go`、`execution/snapshot.go` 与主包 `project_config.go`、`execution_snapshot.go` 的必要部分，权限编译归 `codexworker/permissions.go`。全局 Profile 的顶层 sandbox 不再是授权来源，Windows 实现选项归 `codexworker.Config`。
+新增 execution/policy.go 的纯值 ExecutionPolicy 及校验，contracts 冻结记录引用它；execution/snapshot.go 如需要只接最小纯输入，不导入完整业务记录。主包 project_config/execution_snapshot 负责组合/摘要，Codex 层编译权限。全局顶层 sandbox 不再是授权来源，Windows 解释归实现。
+
+现有固定 Profile、业务执行记录和环境证据归 contracts，本轮在其上扩字段并引用底层纯策略，严格解码/摘要/格式拒绝保留，不再定义同名完整快照。依赖固定为 contracts → execution；execution 不读 contracts/query/sqlite，记录组合归中心，不引入平台反向依赖。
 
 ## 项目配置契约
 
@@ -38,6 +40,8 @@
 
 本轮必须交付两条 Codex 路径的 `host` 读取、`workspace` 写入、Git 元数据写入、network allow、escalation deny 的实际支持。其余组合只有得到真实映射和必要证据才标为可用；已有其他 agent 若不能落实完整策略，领取前明确不可用，不经 opaque 启动放行。
 
+远程链路已经接通，但原生 worker-start 未证明项目文件/网络/越权策略已受管。本轮不能仅凭 profile.sandbox 或平台成功启动宣称落实；远程适配必须返回对应目标/版本的策略支持与证据，无法落实时针对所请求策略领取前拒绝，保留链路及原身份，不 blanket 禁用 remote、不降级或改成中心执行。既有远程双轮 mock 不作为权限或双机认证。
+
 ## 参数与实现配置
 
 Codex CLI/app-server 均从有效策略生成文件、网络和非交互审批参数。禁止用默认用户配置、历史批准或参数顺序决定受管权限。所有启动和后续 turn 参数使用同一快照；thread 的权限不能宽于该策略，准备与业务轮也不能不同。
@@ -48,7 +52,7 @@ Windows 本机 Orca Codex 保留显式 elevated/unelevated，当前 unelevated +
 
 删除旧顶层 windows_sandbox 和 sandbox 读取，更新当前格式及示例，不保留字段别名。本轮使用同一编译器承接 #57 已迁移的 Windows 默认/冲突检查，不再实现第二份 LocalSandboxArgs。故障不得自动换实现。model/effort 未配置时保留既有默认语义并记录观察范围，不能为了权限编译自行固定模型。
 
-Orca 已有的 managed approval=never、strict-config、安全 args、实际 Git 根、排除隐式临时根、Profile 权限契约摘要及资源绑定在本轮转换为项目策略来源，仍是唯一实现。model/effort 可分别省略。读取/恢复准备记录、原收据与 startup Operation 时使用新完整快照和真实绑定，不从当前配置补造或把旧 ProfileDigest 收据改写成新策略成功。
+本机 Orca 已有的 managed approval=never、strict-config、安全 args、Git 根、排除临时根和绑定转换为项目策略来源；本机 model/effort 可分别省略，远程继续要求显式二者。读取/恢复记录使用原快照/绑定，不用当前配置补造或改写旧收据。远程权限解释归远端协议适配，不注入本机 Windows 设置。
 
 原始 args 中覆盖权限、附加目录、工作目录、受管 model/effort、子命令、配置文件或 profile 注入，以及绕过审批/sandbox 的参数，在副作用前拒绝。覆盖长短、等号和分离值写法；可以采用经过核实的最小安全参数集合，未知参数不能绕过管理。Codex 原生 profile 覆盖本轮拒绝，不保留旧字段别名或旧顶层 sandbox 读取。
 
@@ -62,7 +66,7 @@ Orca 已有的 managed approval=never、strict-config、安全 args、实际 Git
 
 项目权限来自中心显式加载/受理的配置；仓库修改、worker 输出或运行中读取变化不得自动受理为新的授权。使用已有项目配置加载与服务入口，不新建通用权限编辑器；显式重新加载对新 Execution 生效，已有 Execution 不变。
 
-Query 和既有控制台显示项目要求、执行冻结值、额外资源、实现设置及编译/核验状态，复用 ReadProjectView 同一快照中的执行记录。配置不一致或快照不完整时保留可读信息并阻止新启动，不在展示代码另读数据库补字段。未观察到的字段标未核验，不隐藏在 model/host 名称里。更新 examples 和 execution-profiles 文档，清楚区分项目规则与全局方案。
+Query/控制台从 contracts.ProjectView 同一快照显示要求、冻结值、资源和核验状态；通过现有 query.Service 读端口与 NewQueryService 组合，SQLite 原始记录仍经中心 projectReadRecords 水合，不新增具体存储类型断言或展示端 SQL。配置不一致/部分错误阻止新启动，未观察值标未核验。更新项目/全局配置说明。
 
 ## 并行与环境就绪交接
 

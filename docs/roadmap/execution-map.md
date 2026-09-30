@@ -1,6 +1,6 @@
 # 执行依赖与交接
 
-本图对应[主 roadmap](roadmap.md)中的 26 项活动规划。每项执行以独立 Spec/Plan 为准，运行时资格以中心 DAG 为权威。
+本图对应[主 roadmap](roadmap.md)中的 25 项活动规划。每项执行以独立 Spec/Plan 为准，运行时资格以中心 DAG 为权威。
 
 ## 固定前置
 
@@ -75,7 +75,6 @@ flowchart LR
 
 | 任务 ID | 任务名称 | 交付范围 | 硬前置 | 执行规格 |
 | --- | --- | --- | --- | --- |
-| 54 | 公共执行契约归包 | 共同类型、事实与接口归包 | 无本系列前置 | [Spec](../spec/execution-isolation-01-contracts.spec.md) · [Plan](../spec/execution-isolation-01-contracts.plan.md) |
 | 55 | 工作区与 Git 资源迁移 | Git/worktree 操作与资源解析分离 | #54 | [Spec](../spec/execution-isolation-02-workspace.spec.md) · [Plan](../spec/execution-isolation-02-workspace.plan.md) |
 | 56 | 发布与 PR 实现迁移 | 发布操作及 provider 与中心事务分离 | #54 | [Spec](../spec/execution-isolation-03-publication.spec.md) · [Plan](../spec/execution-isolation-03-publication.plan.md) |
 | 57 | Codex 执行适配器迁移 | Codex 操作、命令与恢复证据归适配器 | #55、#56 | [Spec](../spec/execution-isolation-04-codex.spec.md) · [Plan](../spec/execution-isolation-04-codex.plan.md) |
@@ -102,7 +101,9 @@ flowchart LR
 | #54 → #55/#56 | 公共工作区、操作、事件和请求契约；#54 合入后可完整并行 | 公共类型集中修改；准备、Git 和发布中心接线由集成人串行处理 |
 | #55/#56 → #57 | 规范资源、PR/provider 与发布请求，前置整体合入 | #57 不复制资源解析或发布事务 |
 | #57 → #58 | 迁移现有有/无 model 受管命令、安全 args 和固定 argv；#58 领取等待 #57 | #54 后可整理原平台/准备 fixture；#58 保留中心 WorkerEnvironment 与原工具证据边界 |
-| #58 → #59/#60 | 完整两类适配器；#58 合入后可并行开发各自策略 | 同一个执行快照、完整摘要、项目配置和 UI 串行集成；发布纯值归 execution，后合入方保留全部字段及版本拒绝 |
+| #58 → #59/#60 | 本地 Codex/native/remote 原契约；#58 合入后可并行策略行为开发 | 纯策略归 execution，contracts 引用它并扩记录；共享快照/摘要/配置/UI 串行集成，保持单向依赖 |
 | #59/#60 → #61 | 实际权限和 publisher 的支持矩阵、冻结与展示；两前置均合入 | #61 只做需求/注册和最终调用检查，不补欠缺上游行为 |
 
 worker 环境就绪原范围已交付，#54 已实施的契约保持固定；#57/#58 在后续迁移中承接其平台事实与所有者，#59 改为项目策略来源。准备和宿主恢复不反向依赖未完成 #59；保留原 nonce/deadline、轮次用途、工具/收据/结算和可信中心动作，新策略冻结接线由 #59 验证。原硬前置与并行组不变。
+
+已交付 #54 的底层执行类型由 contracts 引用，01 文档不回写；它仅作为 #55/#56 必要前置保留。#59/#60/#61 的纯策略在 execution、业务冻结记录在 contracts，防止反向导入。远程协议已独立并接通，由 #58 承接原身份/回执/取消边界，认证状态与策略落实分别表达。查询/SQL 不重新拆包，剩余任务依赖不变。

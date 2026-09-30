@@ -5,9 +5,9 @@
 ## 实施步骤
 
 1. 接收 #56 发布请求/provider、#58 执行边界，按 Spec 固定现有支持矩阵，分开 query 和 create 能力。不得根据未来可能支持的组合放行。
-2. 在 execution/publication.go 定义纯值，在 publication/policy.go 实施能力匹配；接通必填 publisher 解析，替换 localPublish/host 责任推导。中心启动时匹配策略与实际路径，明确记录拒绝原因。
+2. 在 execution/publication.go 定义纯值，publication 做能力匹配；contracts 记录引用底层值，中心接通 publisher，保持 contracts → execution、不引入反向导入或发布 I/O。支持矩阵包含当前远程 worker，不把缺少双机认证误写为代码不可启动。
 3. prompt 从固定 publisher 生成责任；平台 preamble 单独构造。宿主模式接回原 marker 受理和发布意图，worker 模式仅收集候选并经相同 provider 核验。
-4. 领取与恢复接通 publisher/provider/remote/工具及认证引用冻结、完整摘要与版本拒绝；冻结前拒绝并脱敏带认证秘密的 URL/参数。provider/发布操作从当前 Execution 的固定上下文构造。扩展同一个执行配置快照；#59 尚未合入时不预填未知权限字段，后合入方保留前者全部字段和摘要校验。Query/控制台展示非秘密责任及目标。
+4. 领取/恢复接通 publisher/provider/remote/工具/引用冻结、完整摘要与版本拒绝；冻结前拒绝并脱敏秘密 URL/参数，按原执行构造 provider。与 #59 串行扩展同一个 contracts 快照，不预填未实施字段。现有 query 读端口和 ProjectView 投影展示非秘密责任/目标。
 5. 更新 examples/配置说明，删除旧布尔与隐式选择。与 #59 串行集成共享文件，保留 TaskDelivery 和当前恢复门槛。
 
 ## 验证
@@ -15,7 +15,7 @@
 ```powershell
 go test ./internal/steerline/publication ./internal/steerline/workerflow -count=1
 go list -deps ./internal/steerline/workerflow
-go test ./internal/steerline -count=1 -run '^(TestLocalWorkerPublishUsesHostGitAndExactPR|TestLocalWorkerPublishMarkerMustBeFinalAndBound|TestNativeOrcaPRBindingUsesProviderAndRetainsSession|TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged|TestNativeClaimPersistsChosenExecutionProfile)$'
+go test ./internal/steerline -count=1 -run '^(TestLocalWorkerPublishUsesHostGitAndExactPR|TestLocalWorkerPublishMarkerMustBeFinalAndBound|TestNativeOrcaPRBindingUsesProviderAndRetainsSession|TestRemoteOrcaTwoTurnsKeepSessionAndRequireMergedDelivery|TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged|TestNativeClaimPersistsChosenExecutionProfile)$'
 go test ./internal/steerline/console -count=1 -run '^TestRunDetailUsesItsFixedProfileAfterProjectConfigChanges$'
 ```
 

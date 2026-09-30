@@ -5,6 +5,7 @@
 ## 迁移步骤
 
 1. 接收 #54 的仓库、工作区和操作契约，列出 `workspace.go`、Git sandbox 与准备/清理消费者，区分中心意图和 Git I/O。
+   对照 contracts 的命令/业务记录与 execution 的工作区/目标值，保留单一定义；远端路径不进入本机解析/清理，不重复记录或查询层。
 2. 创建 workspace 包，先搬仓库身份/路径解析和 inspect，再搬 prepare/cleanup。保留领取前根目录校验与中心纯命名意图，不搬入 Task 丢弃资格。通过小输入提供 Git command、目录、预算和必要环境；不引入通用 Runner 框架或父包 Config。
 3. 把 linked worktree 的真实资源解析放入 `resources.go`，Codex argv 映射迁入 `codexworker/permissions.go`，更新本机和现有 Orca 调用。保持原可写目录与参数语义。
 4. 中心依然先保存意图再调用操作，回执不明确时保留原资源；迁移已有临时 Git fixture，删掉旧实现和重复 helper。

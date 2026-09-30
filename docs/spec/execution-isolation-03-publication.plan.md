@@ -5,6 +5,7 @@
 ## 迁移步骤
 
 1. 接收 #54 身份与工作区契约，列出 PRClient、publishLocalWorkerRun、marker、PR 关联和 TaskDelivery 的所有消费者，区分外部操作与事务。
+   共享命令/PR/交付值复用 contracts，原业务查询保持 query 读端口；外部 provider 不承担 SQL 或任务规则。
 2. 创建 publication 包，先移 PR 类型、URL/remote/分支校验和 provider，再拆发布请求、Git 操作与对账。工具配置通过小类型提供，不导入父包 Runner/Config。
 3. 中心保留 publication Operation 意图和阶段回执、BindWorkerPR 和交付事务；readiness 的完成/PR 线索不受理成业务发布，也不在发布层清除 blocker。保持 intent-before-action；未知发布只读对账 index-tree/ancestry/remote HEAD 和唯一 PR，不自动补发布。
 4. 迁移 provider 和临时 Git 纯/操作测试，中心保留一条代表性发布与交付接线；删除原外部实现。与 #55 串行集成共享 Git/中心文件。
