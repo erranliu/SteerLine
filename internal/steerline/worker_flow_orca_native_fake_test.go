@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -44,6 +45,8 @@ type fakeNativeOrcaState struct {
 	RunObjective                                                     string
 	CoordinatorMarker                                                string
 	RelayMode, RelayDone, RelayHideDoneOnce                          bool
+	PendingPaste                                                     bool
+	PasteSubmissions                                                 int
 }
 
 func fakeNativeOrca(stateDir string, args []string) int {
@@ -172,7 +175,18 @@ func fakeNativeOrca(stateDir string, args []string) int {
 			}
 			return fakeOrcaOK(map[string]any{"terminals": rows, "truncated": false})
 		case "read":
+			if arg(args, "--terminal") == "term-agent" && state.PendingPaste {
+				return fakeOrcaOK(map[string]any{"terminal": map[string]any{"handle": "term-agent", "source": "screen", "tail": []string{"› [Pasted Content 6859 chars]"}}})
+			}
 			return fakeOrcaOK(map[string]any{"terminal": map[string]any{"handle": arg(args, "--terminal"), "tail": []string{state.CoordinatorMarker}}})
+		case "send":
+			if arg(args, "--terminal") != "term-agent" || !state.PendingPaste || !slices.Contains(args, "--enter") {
+				return fakeOrcaErr("invalid_argument", "unexpected prompt submission")
+			}
+			state.PendingPaste = false
+			state.PasteSubmissions++
+			save()
+			return fakeOrcaOK(map[string]any{"send": map[string]any{"handle": "term-agent", "accepted": true, "bytesWritten": 1}})
 		case "close":
 			handle := arg(args, "--terminal")
 			if handle == "term-agent" && !state.ClosedAgent {
@@ -271,7 +285,11 @@ func fakeNativeOrca(stateDir string, args []string) int {
 			if n == state.LoseDispatchAt {
 				return fakeOrcaErr("runtime_unavailable", "Dispatch was injected but the response was lost")
 			}
-			return fakeOrcaOK(map[string]any{"dispatch": map[string]any{"id": fmt.Sprintf("ctx-%d", n), "task_id": fmt.Sprintf("task-%d", n), "run_id": "run-fake"}, "mutation": map[string]any{"requestId": fmt.Sprintf("request-dispatch-%d", n)}})
+			result := map[string]any{"dispatch": map[string]any{"id": fmt.Sprintf("ctx-%d", n), "task_id": fmt.Sprintf("task-%d", n), "run_id": "run-fake"}, "mutation": map[string]any{"requestId": fmt.Sprintf("request-dispatch-%d", n)}}
+			if state.PendingPaste {
+				result["prompt"] = map[string]any{"provider": "codex", "processIncarnation": "inc-agent", "stages": []string{"input_accepted"}}
+			}
+			return fakeOrcaOK(result)
 		case "dispatch-show":
 			n, _ := strconv.Atoi(strings.TrimPrefix(arg(args, "--task"), "task-"))
 			if n == 0 || n > state.Dispatches {
