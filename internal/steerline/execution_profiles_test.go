@@ -16,9 +16,12 @@ func TestConfigLoadsLocalAndRemoteOrcaProfilesWithoutProbingTargets(t *testing.T
 		t.Skip("local Orca terminal target uses Windows cmd.exe")
 	}
 	base, _ := nativeTaskFixture(t)
+	t.Setenv("STEERLINE_HOME", t.TempDir())
 	localOrca := ExecutionProfile{ID: "orca-local", Name: "Orca 本机", Host: "orca", Agent: "codex", Sandbox: "workspace-write", Codex: Command{Executable: "codex"}, Orca: OrcaConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "15m"}}
 	remoteOrca := ExecutionProfile{ID: "orca-remote", Name: "Orca 远程", Host: "orca_supervised", Agent: "codex", Model: "chosen-model", ReasoningEffort: "xhigh", Sandbox: "workspace-write", Codex: Command{Executable: "codex"}, Orca: OrcaConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "15m", Supervised: &SupervisedOrcaConfig{ConnectionID: "connection", EnvironmentID: "environment", RepositorySelector: "repo", CoordinatorTerminal: "terminal", PollInterval: "5s", CapabilityReportVersion: 1}}}
-	input := map[string]any{"repository": base.Repository, "branch": "main", "task_authority": "native", "workflow_protocol": WorkerFlowVersion, "host": "local", "agent": "codex", "sandbox": "workspace-write", "execution_profiles": []ExecutionProfile{localOrca, remoteOrca}, "default_execution_profile": ProjectExecutionProfileID}
+	local := ExecutionProfile{ID: "local", Name: "本地", Host: "local", Agent: "codex", Sandbox: "workspace-write", Codex: Command{Executable: "codex"}}
+	writeGlobalExecutionFixture(t, []ExecutionProfile{local, localOrca, remoteOrca}, "local")
+	input := map[string]any{"repository": base.Repository, "branch": "main", "task_authority": "native", "workflow_protocol": WorkerFlowVersion}
 	path := filepath.Join(t.TempDir(), "config.json")
 	write := func() {
 		t.Helper()
@@ -32,10 +35,10 @@ func TestConfigLoadsLocalAndRemoteOrcaProfilesWithoutProbingTargets(t *testing.T
 	}
 	write()
 	loaded, err := LoadConfig(path)
-	if err != nil || len(loaded.AvailableExecutionProfiles()) != 3 || loaded.DefaultProfileID() != ProjectExecutionProfileID {
+	if err != nil || len(loaded.AvailableExecutionProfiles()) != 3 || loaded.DefaultProfileID() != "local" {
 		t.Fatalf("configured profiles were not loaded: %+v / %v", loaded.ExecutionProfiles, err)
 	}
-	for _, profile := range loaded.ExecutionProfiles {
+	for _, profile := range loaded.AvailableExecutionProfiles() {
 		selected, chosen, err := loaded.ResolveExecutionProfile(profile.ID, profile.Digest())
 		if err != nil || selected.Host != profile.Host {
 			t.Fatalf("Orca profile changed route: %+v / %v", chosen, err)

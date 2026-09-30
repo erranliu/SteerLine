@@ -399,9 +399,11 @@ func lifecycleConfigFile(t *testing.T, f *fixture, runDir string) (Config, strin
 	c.WorkflowProtocol = WorkerFlowVersion
 	c.RunDir = runDir
 	c.WorktreeRoot = ""
-	data, err := json.Marshal(c)
-	require(t, err)
-	if err = os.MkdirAll(runDir, 0700); err != nil {
+	profile := c.projectExecutionProfile()
+	profile.ID, profile.Name = "local", "Local"
+	writeGlobalExecutionFixture(t, []ExecutionProfile{profile}, "local")
+	data := projectConfigJSON(t, c)
+	if err := os.MkdirAll(runDir, 0700); err != nil {
 		t.Fatal(err)
 	}
 	configPath := filepath.Join(filepath.Dir(runDir), "service-config.json")

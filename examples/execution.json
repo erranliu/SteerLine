@@ -1,0 +1,58 @@
+{
+  "default_execution_profile": "local-luna-medium",
+  "execution_profiles": [
+    {
+      "id": "local-luna-medium",
+      "name": "本机 Codex Luna medium",
+      "host": "local",
+      "agent": "codex",
+      "model": "gpt-6-luna",
+      "reasoning_effort": "medium",
+      "sandbox": "workspace-write",
+      "codex": { "executable": "codex.exe" }
+    },
+    {
+      "id": "local-luna-xhigh",
+      "name": "本机 Codex Luna xhigh",
+      "host": "local",
+      "agent": "codex",
+      "model": "gpt-6-luna",
+      "reasoning_effort": "xhigh",
+      "sandbox": "workspace-write",
+      "codex": { "executable": "codex.exe" }
+    },
+    {
+      "id": "orca-local-luna-xhigh",
+      "name": "本机 Orca + Codex Luna xhigh",
+      "host": "orca",
+      "agent": "codex",
+      "model": "gpt-6-luna",
+      "reasoning_effort": "xhigh",
+      "sandbox": "workspace-write",
+      "codex": { "executable": "codex.exe" },
+      "orca": { "executable": "orca.exe", "shell": "powershell.exe", "wait_timeout": "15m" }
+    },
+    {
+      "id": "orca-local-luna-medium",
+      "name": "本机 Orca + Codex Luna medium",
+      "host": "orca",
+      "agent": "codex",
+      "model": "gpt-6-luna",
+      "reasoning_effort": "medium",
+      "sandbox": "workspace-write",
+      "codex": { "executable": "codex.exe" },
+      "orca": { "executable": "orca.exe", "shell": "powershell.exe", "wait_timeout": "15m" }
+    },
+    {
+      "id": "orca-local-luna-high",
+      "name": "本机 Orca + Codex Luna high",
+      "host": "orca",
+      "agent": "codex",
+      "model": "gpt-6-luna",
+      "reasoning_effort": "high",
+      "sandbox": "workspace-write",
+      "codex": { "executable": "codex.exe" },
+      "orca": { "executable": "orca.exe", "shell": "powershell.exe", "wait_timeout": "15m" }
+    }
+  ]
+}

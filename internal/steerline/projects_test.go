@@ -1,7 +1,6 @@
 package steerline
 
 import (
-	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -40,10 +39,7 @@ func projectRepo(t *testing.T) string {
 
 func writeProjectConfig(t *testing.T, name string, c Config) {
 	t.Helper()
-	b, e := json.Marshal(c)
-	if e != nil {
-		t.Fatal(e)
-	}
+	b := projectConfigJSON(t, c)
 	if e := os.MkdirAll(SteerlineEtcDir(), 0700); e != nil {
 		t.Fatal(e)
 	}
@@ -54,6 +50,7 @@ func writeProjectConfig(t *testing.T, name string, c Config) {
 
 func TestListAndResolveProjects(t *testing.T) {
 	t.Setenv("STEERLINE_HOME", t.TempDir())
+	localGlobalExecutionFixture(t)
 	writeProjectConfig(t, "zeta", minimalConfig(projectRepo(t)))
 	writeProjectConfig(t, "alpha", minimalConfig(projectRepo(t)))
 

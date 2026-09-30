@@ -12,7 +12,7 @@ SteerLine 是一款面向工程 AGI 的研究型软件开发工具。它以 road
 
 ## 执行控制台
 
-运行 `steerline console` 打开控制台。默认读取 `<STEERLINE_HOME>/etc/*.json` 中的项目配置；使用 `steerline console -config <path>` 打开一份显式配置，也可用 `-run-id <run-id|task-id>` 定位当前项目中已有的运行。Windows 安装目录提供 `console.bat`；`steerline projects` 菜单也可进入同一控制台。安装目录只保留 `console.bat` 和 `service-window.bat` 两个批处理入口；后者默认使用 `etc\SteerLine.json`，其他 native 项目可传配置路径。
+运行 `steerline console` 打开控制台。默认读取 `<STEERLINE_HOME>/etc/*.json` 中的项目配置，并为所有项目读取 `<STEERLINE_HOME>/execution.json` 全局执行配置；使用 `steerline console -config <path>` 打开一份显式项目配置，也可用 `-run-id <run-id|task-id>` 定位当前项目中已有的运行。Windows 安装目录提供 `console.bat`；`steerline projects` 菜单也可进入同一控制台。安装目录只保留 `console.bat` 和 `service-window.bat` 两个批处理入口；后者默认使用 `etc\SteerLine.json`，其他 native 项目可传配置路径。
 
 控制台通过服务查看中心 native 任务候选、运行和回执。选择 Ready 候选按 `s` 会打开已配置执行方案列表，选定后按 Enter 才提交开始请求；在普通视图按 Enter 只打开完整只读详情。`m` 切换手动/自动派发，`x` 在确认后停止服务。Windows 服务仍需用户从固定的 `service-window.bat` 独立打开；退出控制台不会停止服务。待决策问题显示完整 question/context/选项详情和 decision_id；按 `a` 打开 Unicode 答案编辑器。选项只是预选，按 `F2` 才提交。中心分别显示答案保存、送达回执与原会话新轮次开始，不要求 agent 回传“已应用”证明。`u` 打开只读执行核验面板。
 
@@ -26,11 +26,11 @@ native 项目控制台还会显示中心任务关系、阻塞原因、Spec 路�
 
 控制台宽屏首屏左侧显示任务列表，按任务编号、任务状态、执行状态、任务名称四列排列；列表获得更多宽度，右侧上方显示只读任务摘要、下方显示任务动态。未进入可开始候选的 open 任务显示“阻塞”；已完成任务的旧失败执行标为“失败（历史）”，仍有未核实执行的任务保留“需处理”。选中行以 `▸` 标记。`Tab` 仅在列表与动态之间切换焦点，摘要随选中任务更新，运行中的任务显示已固定执行方案的位置、agent、模型和推理强度；`d` 或 Enter 可阅读包含状态和运行 ID 的完整详情。窄屏在列表与动态之间切换。任务详情显示 Spec 路径，不展开 Plan、文档 SHA 或提交号；这些固定引用仍在中心任务契约中。按 `?` 查看完整快捷键。项目左右切换时，标题始终显示当前项目编号和名称，后台项目的提示不会覆盖当前项目。
 
-选中 Ready 任务按 `s` 后，方案选择页显示执行位置、Agent、Model、Thinking effort 和 Sandbox；Orca 远程还显示固定环境与连接。项目没有显式指定模型时标明由 Codex 配置决定。控制台与服务的配置版本不一致时，阻止启动与自动派发。
+选中 Ready 任务按 `s` 后，方案选择页显示执行位置、Agent、Model、Thinking effort 和 Sandbox；Orca 远程还显示固定环境与连接。全局方案没有显式指定模型时标明由 Codex 配置决定。控制台与服务的配置版本不一致时，阻止启动与自动派发。
 
-本次只交付本机 local Codex 路径，使用固定原生 session ID 续聊。Orca 本机和受监管远端的适配代码及已有探针保留，首次派发前明确拒绝；两种功能后续另行交付与验收。
+本机 local Codex 使用固定原生 session ID 续聊。Orca 本机方案也可从全局执行配置中选择并固定 Codex 模型与推理强度，派发前须通过 Orca 连接和仓库注册检查；受监管远端方案目前仍不可启动。
 
-可在同一项目内预设多套[执行配置](docs/execution-profiles.md)。按 `s` 选择一套并确认；不同任务可以混用，本次任务的 worker 会话固定在所选配置上。附加配置存在时，自动派发需要显式指定默认配置。
+可在全局文件预设多套[执行配置](docs/execution-profiles.md)，供所有项目选用。按 `s` 选择一套并确认；不同任务可以混用，本次任务的 worker 会话固定在所选配置上。多套方案存在时，自动派发需要显式指定默认配置。
 
 项目、所选 run/attempt、活动日志、控制请求以及折叠状态按各自身份隔离。活动会话只有明确的 turn 终态才自动收起过程消息；`final_answer` 正文单独分页阅读，过程完成、执行结束和业务任务完成分别展示。来源没有确认轮次或 final 时，控制台会显示能力原因和未识别状态。
 

@@ -4,9 +4,6 @@
   "branch": "main",
   "task_authority": "native",
   "git": { "executable": "git" },
-  "codex": { "executable": "/absolute/path/to/codex" },
-  "host": "local",
-  "agent": "codex",
   "workflow_protocol": "worker-flow-v1",
   "executable_types": ["task", "bug", "feature", "chore"],
   "pr": {

@@ -85,6 +85,13 @@ func (c Config) projectExecutionProfile() ExecutionProfile {
 }
 
 func (c Config) AvailableExecutionProfiles() []ExecutionProfile {
+	if c.globalExecution {
+		out := make([]ExecutionProfile, 0, len(c.ExecutionProfiles))
+		for _, profile := range c.ExecutionProfiles {
+			out = append(out, profile.effective())
+		}
+		return out
+	}
 	out := make([]ExecutionProfile, 0, len(c.ExecutionProfiles)+1)
 	out = append(out, c.projectExecutionProfile())
 	for _, profile := range c.ExecutionProfiles {
@@ -96,6 +103,12 @@ func (c Config) AvailableExecutionProfiles() []ExecutionProfile {
 func (c Config) DefaultProfileID() string {
 	if c.DefaultExecutionProfile != "" {
 		return c.DefaultExecutionProfile
+	}
+	if c.globalExecution {
+		if len(c.ExecutionProfiles) == 1 {
+			return c.ExecutionProfiles[0].ID
+		}
+		return ""
 	}
 	if len(c.ExecutionProfiles) == 0 {
 		return ProjectExecutionProfileID
@@ -124,7 +137,10 @@ func (c Config) ApplyExecutionProfile(p ExecutionProfile) Config {
 }
 
 func validateExecutionProfiles(c Config) error {
-	ids := map[string]bool{ProjectExecutionProfileID: true}
+	ids := map[string]bool{}
+	if !c.globalExecution {
+		ids[ProjectExecutionProfileID] = true
+	}
 	pattern := regexp.MustCompile(`^[a-z][a-z0-9-]{0,63}$`)
 	for _, p := range c.ExecutionProfiles {
 		if !pattern.MatchString(p.ID) || ids[p.ID] || strings.TrimSpace(p.Name) == "" {
@@ -143,8 +159,20 @@ func validateExecutionProfiles(c Config) error {
 		if p.Host == "local" && p.Agent != "codex" {
 			return fmt.Errorf("execution profile %s requires codex for a resumable worker session", p.ID)
 		}
-		if p.Host == "orca" && (p.Model != "" || p.ReasoningEffort != "" || p.CodexProfile != "" || p.Sandbox != "workspace-write") {
-			return fmt.Errorf("execution profile %s: Orca agent launch settings are managed by Orca; model, effort, Codex profile and sandbox overrides are unavailable", p.ID)
+		if p.Host == "orca" && (p.CodexProfile != "" || p.Sandbox != "workspace-write") {
+			return fmt.Errorf("execution profile %s: Orca requires workspace-write and does not support a Codex profile override", p.ID)
+		}
+		if p.Host == "orca" && (p.Model == "") != (p.ReasoningEffort == "") {
+			return fmt.Errorf("execution profile %s: Orca model and reasoning_effort must be set together", p.ID)
+		}
+		if p.Host == "orca" && p.Model != "" && p.Agent != "codex" {
+			return fmt.Errorf("execution profile %s: Orca model and reasoning_effort overrides require codex", p.ID)
+		}
+		if p.Host == "orca" && p.Model != "" && p.Codex.Executable == "" {
+			return fmt.Errorf("execution profile %s: fixed Orca Codex launch requires codex.executable", p.ID)
+		}
+		if p.Host == "orca" && p.Model != "" && p.Orca.Shell != "powershell.exe" && p.Orca.Shell != "pwsh.exe" {
+			return fmt.Errorf("execution profile %s: fixed Orca Codex launch requires powershell.exe or pwsh.exe", p.ID)
 		}
 		selected := c.ApplyExecutionProfile(p.effective())
 		if p.Host == "orca_supervised" {

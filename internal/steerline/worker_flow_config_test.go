@@ -13,9 +13,10 @@ import (
 
 func TestWorkerFlowConfigRejectsOldProjectGates(t *testing.T) {
 	c, _ := nativeTaskFixture(t)
+	localGlobalExecutionFixture(t)
 	base := map[string]any{
 		"task_authority": "native", "repository": c.Repository, "branch": "main", "run_dir": c.RunDir,
-		"workflow_protocol": WorkerFlowVersion, "host": "local", "agent": "codex",
+		"workflow_protocol": WorkerFlowVersion,
 	}
 	write := func(value map[string]any) (Config, error) {
 		t.Helper()

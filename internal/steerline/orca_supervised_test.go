@@ -560,17 +560,20 @@ func TestSupervisedPrepareKeepsPlatformWorktreeIdentitySeparateFromPath(t *testi
 
 func TestLoadConfigRequiresExplicitRemoteCancellationFalse(t *testing.T) {
 	c := supervisedFixtureConfig(t)
-	encoded, err := json.Marshal(c)
+	t.Setenv("STEERLINE_HOME", t.TempDir())
+	c.RunDir, c.WorktreeRoot = "", ""
+	profile := c.projectExecutionProfile()
+	profile.ID, profile.Name = "remote", "Remote"
+	encoded, err := json.Marshal(profile)
 	if err != nil {
 		t.Fatal(err)
 	}
-	var config map[string]json.RawMessage
-	if err = json.Unmarshal(encoded, &config); err != nil {
+	var fields map[string]json.RawMessage
+	if err = json.Unmarshal(encoded, &fields); err != nil {
 		t.Fatal(err)
 	}
-	config["workflow_protocol"] = json.RawMessage(`"worker-flow-v1"`)
 	var orca map[string]json.RawMessage
-	if err = json.Unmarshal(config["orca"], &orca); err != nil {
+	if err = json.Unmarshal(fields["orca"], &orca); err != nil {
 		t.Fatal(err)
 	}
 	var supervised map[string]json.RawMessage
@@ -579,10 +582,13 @@ func TestLoadConfigRequiresExplicitRemoteCancellationFalse(t *testing.T) {
 	}
 	delete(supervised, "remote_cancel_available")
 	orca["supervised"], _ = json.Marshal(supervised)
-	config["orca"], _ = json.Marshal(orca)
-	withoutPolicy, _ := json.Marshal(config)
+	fields["orca"], _ = json.Marshal(orca)
+	withoutPolicy, _ := json.Marshal(map[string]any{"execution_profiles": []any{fields}, "default_execution_profile": "remote"})
 	configPath := filepath.Join(t.TempDir(), "steerline.json")
-	if err = os.WriteFile(configPath, withoutPolicy, 0600); err != nil {
+	if err = os.WriteFile(configPath, projectConfigJSON(t, c), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(GlobalExecutionConfigPath(), withoutPolicy, 0600); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = LoadConfig(configPath); err == nil || !strings.Contains(err.Error(), "explicitly set to false") {
@@ -590,9 +596,9 @@ func TestLoadConfigRequiresExplicitRemoteCancellationFalse(t *testing.T) {
 	}
 	supervised["remote_cancel_available"] = json.RawMessage("true")
 	orca["supervised"], _ = json.Marshal(supervised)
-	config["orca"], _ = json.Marshal(orca)
-	withEnabledStop, _ := json.Marshal(config)
-	if err = os.WriteFile(configPath, withEnabledStop, 0600); err != nil {
+	fields["orca"], _ = json.Marshal(orca)
+	withEnabledStop, _ := json.Marshal(map[string]any{"execution_profiles": []any{fields}, "default_execution_profile": "remote"})
+	if err = os.WriteFile(GlobalExecutionConfigPath(), withEnabledStop, 0600); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = LoadConfig(configPath); err == nil || !strings.Contains(err.Error(), "fixed unavailable") {

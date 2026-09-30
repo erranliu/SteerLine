@@ -19,10 +19,13 @@ func configTestRepository(t *testing.T) string {
 }
 
 func TestConfigKeepsOrcaCodexNativeByDefault(t *testing.T) {
+	t.Setenv("STEERLINE_HOME", t.TempDir())
 	path := filepath.Join(t.TempDir(), "config.json")
 	write := func(host string) Config {
 		t.Helper()
-		data, err := json.Marshal(map[string]string{"repository": configTestRepository(t), "branch": "main", "task_authority": "native", "workflow_protocol": WorkerFlowVersion, "host": host, "agent": "codex"})
+		profile := ExecutionProfile{ID: "selected", Name: "Selected", Host: host, Agent: "codex", Sandbox: "workspace-write", Codex: Command{Executable: "codex"}, Orca: OrcaConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "15m"}}
+		writeGlobalExecutionFixture(t, []ExecutionProfile{profile}, "selected")
+		data, err := json.Marshal(map[string]string{"repository": configTestRepository(t), "branch": "main", "task_authority": "native", "workflow_protocol": WorkerFlowVersion})
 		if err != nil {
 			t.Fatal(err)
 		}

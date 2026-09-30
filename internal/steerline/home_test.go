@@ -1,7 +1,6 @@
 package steerline
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -58,16 +57,14 @@ func TestInstallExecutableCopiesAndOverwrites(t *testing.T) {
 func TestDerivedRunDirIsStableAcrossWorktrees(t *testing.T) {
 	t.Setenv("STEERLINE_HOME", t.TempDir())
 	base, _ := nativeTaskFixture(t)
+	localGlobalExecutionFixture(t)
 	base.WorkflowProtocol = WorkerFlowVersion
 	base.RunDir = ""
 	base.WorktreeRoot = ""
 	load := func(repo string) Config {
 		c := base
 		c.Repository = repo
-		b, e := json.Marshal(c)
-		if e != nil {
-			t.Fatal(e)
-		}
+		b := projectConfigJSON(t, c)
 		p := filepath.Join(t.TempDir(), "config.json")
 		if e := os.WriteFile(p, b, 0600); e != nil {
 			t.Fatal(e)
@@ -102,17 +99,15 @@ func TestDerivedRunDirIsStableAcrossWorktrees(t *testing.T) {
 func TestNativeConfigRejectsASecondRunDir(t *testing.T) {
 	t.Setenv("STEERLINE_HOME", t.TempDir())
 	c, _ := nativeTaskFixture(t)
+	localGlobalExecutionFixture(t)
 	c.WorkflowProtocol = WorkerFlowVersion
 	c.RunDir = filepath.Join(t.TempDir(), "alternate-state")
-	b, e := json.Marshal(c)
-	if e != nil {
-		t.Fatal(e)
-	}
+	b := projectConfigJSON(t, c)
 	p := filepath.Join(t.TempDir(), "config.json")
 	if e := os.WriteFile(p, b, 0600); e != nil {
 		t.Fatal(e)
 	}
-	if _, e = LoadConfig(p); e == nil || !strings.Contains(e.Error(), "stable shared state directory") {
+	if _, e := LoadConfig(p); e == nil || !strings.Contains(e.Error(), "stable shared state directory") {
 		t.Fatalf("native config accepted a second run directory: %v", e)
 	}
 	if _, err := os.Stat(c.RunDir); !os.IsNotExist(err) {

@@ -41,7 +41,7 @@ func executionModelLabel(c steerline.Config) string {
 	if c.Model != "" {
 		return c.Model
 	}
-	return "未在项目配置固定（由 Codex 配置决定）"
+	return "未在全局配置固定（由 Codex 配置决定）"
 }
 
 func executionEffortLabel(c steerline.Config) string {
