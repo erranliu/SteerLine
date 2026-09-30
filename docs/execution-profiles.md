@@ -1,6 +1,6 @@
 # 全局执行配置
 
-所有项目共享 `<STEERLINE_HOME>/execution.json` 中的执行方案。项目文件只配置仓库、任务与 PR 等项目属性；`host`、`agent`、`codex`、`orca`、`model`、`reasoning_effort`、`sandbox`、`profile`、`execution_profiles` 和 `default_execution_profile` 都只能写在全局文件的方案中。每个项目仍有独立的服务和 native Task DAG。
+所有项目共享 `<STEERLINE_HOME>/execution.json` 中的执行方案。项目文件只配置仓库、任务与 PR 等项目属性；`host`、`agent`、`codex`、`orca`、`model`、`reasoning_effort`、`sandbox`、`windows_sandbox`、`profile`、`execution_profiles` 和 `default_execution_profile` 都只能写在全局文件的方案中。每个项目仍有独立的服务和 native Task DAG。
 
 先将 [执行配置示例](../examples/execution.json) 复制到 `<STEERLINE_HOME>/execution.json`，再按机器环境修改。至少配置一套方案；有多套方案且启用自动派发时，须指定 `default_execution_profile`。只有一套方案时，它自动成为默认方案。完整项目文件见 [项目示例](../examples/config.json)。
 
@@ -16,6 +16,7 @@
       "model": "<明确模型>",
       "reasoning_effort": "xhigh",
       "sandbox": "workspace-write",
+      "windows_sandbox": "elevated",
       "codex": {"executable": "<本机 Codex 可执行文件>"}
     }
   ]
@@ -25,3 +26,11 @@
 按 `s` 打开全局方案列表，`↑/↓` 选择，`Enter` 确认，`Esc` 取消。服务在领取前核对方案 ID、摘要、Task 资格与目标能力；同一 Task 领取时冻结方案。编辑或删除全局方案不会重定向已开始的任务。控制台和服务加载的项目或全局文件内容不同时，控制台阻止新启动和自动派发；修改配置后重启服务并重新打开控制台。
 
 Orca 本机方案可在同一全局文件中配置，五套 Luna 方案见[示例](../examples/execution.json)。使用 `host=orca`、`agent=codex`、`sandbox=workspace-write`，并填写 `orca.executable`、`orca.shell`、`orca.wait_timeout`。要固定模型与推理强度，`model` 和 `reasoning_effort` 必须一起填写，`codex.executable` 必须指向原生可执行文件，`orca.shell` 使用 `powershell.exe` 或 `pwsh.exe`。SteerLine 在 Orca 工作区中用固定命令启动该 Codex agent，启动意图与终端身份分别持久化；不支持在 Orca 方案中再叠加 Codex profile 或其他 sandbox。选择方案后，服务会检查 Orca 可连接且目标仓库已在本机 Orca 注册；检查失败时拒绝派发。受监管远端方案目前仍不可启动。
+
+## Windows 本地 Codex 沙箱
+
+Windows 本地受限方案将 `windows_sandbox` 固定为 `elevated`（省略时采用该默认值），并随执行方案摘要及 WorkflowRun 一起冻结。原生 app-server 用 `--config windows.sandbox="elevated"` 启动，不继承用户全局配置中的 `unelevated`。`workspace-write` 仍只开放原工作区和经过核验的 Git 元数据目录，不扩大为整个仓库目录或全权限。
+
+显式 `unelevated` 只可用于本地 `read-only`；本地 `workspace-write` 使用 linked worktree 的分散可写根，unelevated 无法落实此策略，控制台标记方案不可用、领取入口提前拒绝。`codex.args` 不能重复覆盖受管的 Windows sandbox 值。非 Windows 启动不注入 Windows 参数；本次字段不改变 Orca 的启动行为，Orca 就绪流程仍按其独立 Spec 实施。
+
+配置校验和成功创建 app-server 不证明实际工具已可执行。elevated 沙箱须在这台机器的原生 Codex 入口完成必要的系统设置；SteerLine 不自动配置 Windows 账户、ACL 或防火墙，不自动回退到 unelevated 或 danger-full-access。设置方式见[官方 Windows sandbox 文档](https://learn.chatgpt.com/docs/windows/windows-sandbox)。原有运行保持冻结权限，不通过编辑全局文件更换已有会话的沙箱方式。

@@ -94,6 +94,9 @@ func renderExecutionProfileChoice(m Model, state projectState, height int) strin
 		"  Model："+safeTerminalInlineText(executionModelLabel(profileConfig(profile))),
 		"  Thinking effort："+safeTerminalInlineText(executionEffortLabel(profileConfig(profile))),
 		"  Sandbox："+safeTerminalInlineText(profile.Sandbox))
+	if profile.WindowsSandbox != "" {
+		lines = append(lines, "  Windows sandbox："+safeTerminalInlineText(profile.WindowsSandbox))
+	}
 	if profile.CodexProfile != "" {
 		lines = append(lines, "  Codex profile："+safeTerminalInlineText(profile.CodexProfile))
 	}
@@ -112,5 +115,5 @@ func renderExecutionProfileChoice(m Model, state projectState, height int) strin
 }
 
 func profileConfig(profile steerline.ExecutionProfile) steerline.Config {
-	return steerline.Config{Host: profile.Host, Agent: profile.Agent, Model: profile.Model, ReasoningEffort: profile.ReasoningEffort, Sandbox: profile.Sandbox, Orca: profile.Orca}
+	return steerline.Config{Host: profile.Host, Agent: profile.Agent, Model: profile.Model, ReasoningEffort: profile.ReasoningEffort, Sandbox: profile.Sandbox, WindowsSandbox: profile.WindowsSandbox, Orca: profile.Orca}
 }

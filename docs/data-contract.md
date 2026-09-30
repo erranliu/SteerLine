@@ -43,3 +43,7 @@ worker 或用户提供的 URL 只是线索。中心经配置的 provider 查询�
 `steerline task list/show/graph/export` 只读中心权威；validate/create/discard/add-predecessors 通过固定版本与请求 ID 操作。控制台或 CLI 的 `answer_decision` 共享 CommandService 提交路径。正式服务入口只运行 `worker-flow-v1`；旧五步的 retry、mark-stopped、task reopen 和项目步骤验证器没有当前 CLI 入口。旧状态的人工核实边界见 [worker-flow Spec](spec/worker-flow.spec.md)。
 
 本任务的 [逐项验收状态](validation/worker-flow/status.md) 区分已验证、推迟和发布前人工合并链。文档中的协议定义本身不代表所有 WF1–WF12 已通过。
+
+## 本地 Windows sandbox 配置冻结
+
+`ExecutionProfile`、`FixedExecutionProfile` 和 `StepRunnerSettings` 的 `windows_sandbox` 保存原生实现方式（`elevated` / `unelevated`），与文件权限范围 `sandbox` 分开。Windows local 受限方案的有效默认值为 `elevated`，该值进入 Profile digest 并在领取时持久化。恢复读取原冻结 Profile，不使用当前全局配置改写已开始的 Execution。本地 linked-worktree workspace-write + unelevated 在领取前拒绝；参数拼接再次验证，外部进程不启动。此改动不引入数据库迁移或 Orca readiness 状态。

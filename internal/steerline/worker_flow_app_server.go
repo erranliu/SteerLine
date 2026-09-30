@@ -112,6 +112,7 @@ func startAppServerWorkerTurn(ctx context.Context, c Config, run *Run, execution
 	} else {
 		started, launched, endpoint, err := codexworker.LaunchServer(codexworker.LaunchConfig{
 			Executable: c.Codex.Executable, Args: c.Codex.Args, Profile: c.Profile,
+			Sandbox: c.Sandbox, WindowsSandbox: c.WindowsSandbox,
 			Workspace: *run.WorktreePath, ServerDir: serverDir,
 		}, startProcess, func(base []string) []string {
 			return unsetEnv(overrideEnv(base, map[string]string{"STEERLINE_WORKFLOW_RUN_ID": run.RunID, "STEERLINE_EXECUTION_ID": run.ExecutionID}), []string{"BEADS_*", "BD_*"})

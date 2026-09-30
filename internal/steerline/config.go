@@ -16,6 +16,8 @@ import (
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/erranliu/SteerLine/internal/steerline/codexapp"
 )
 
 type Command struct {
@@ -46,6 +48,7 @@ type Config struct {
 	Model                   string             `json:"model"`
 	ReasoningEffort         string             `json:"reasoning_effort"`
 	Sandbox                 string             `json:"sandbox"`
+	WindowsSandbox          string             `json:"windows_sandbox,omitempty"`
 	Profile                 string             `json:"profile"`
 	Agent                   string             `json:"agent"`
 	Host                    string             `json:"host"`
@@ -235,7 +238,7 @@ func LoadConfig(path string) (Config, error) {
 	}
 	var configFields map[string]json.RawMessage
 	_ = json.Unmarshal(b, &configFields)
-	for _, field := range []string{"host", "agent", "model", "reasoning_effort", "sandbox", "profile", "codex", "orca", "execution_profiles", "default_execution_profile"} {
+	for _, field := range []string{"host", "agent", "model", "reasoning_effort", "sandbox", "windows_sandbox", "profile", "codex", "orca", "execution_profiles", "default_execution_profile"} {
 		if _, present := configFields[field]; present {
 			return c, fmt.Errorf("%s belongs in global execution config %s", field, GlobalExecutionConfigPath())
 		}
@@ -420,6 +423,14 @@ func validateSupervisedOrcaConfig(c *Config) error {
 }
 
 func validateWorkflowConfig(c *Config, _ []byte) error {
+	if c.hostName() == "local" && c.agentName() == "codex" {
+		if _, err := codexapp.LocalSandboxArgs(runtime.GOOS, c.Sandbox, c.WindowsSandbox, c.Codex.Args); err != nil {
+			return err
+		}
+		if runtime.GOOS == "windows" && c.WindowsSandbox == "" && (c.Sandbox == "workspace-write" || c.Sandbox == "read-only") {
+			c.WindowsSandbox = "elevated"
+		}
+	}
 	if c.WorkflowProtocol != WorkerFlowVersion {
 		return errors.New("only worker-flow-v1 is supported")
 	}
@@ -497,6 +508,9 @@ func (c *Config) Preflight(ctx context.Context, checkSkills bool) error {
 // Beads executable. A check never initializes a database or adopts an existing
 // state directory.
 func (c *Config) preflightNative(ctx context.Context) error {
+	if err := validateWorkflowConfig(c, nil); err != nil {
+		return err
+	}
 	if err := requireNativeTaskAuthority(*c); err != nil {
 		return err
 	}

@@ -51,6 +51,7 @@ type WorkflowRunRecord struct {
 type StepRunnerSettings struct {
 	Codex           Command `json:"codex"`
 	Sandbox         string  `json:"sandbox"`
+	WindowsSandbox  string  `json:"windows_sandbox,omitempty"`
 	Model           string  `json:"model,omitempty"`
 	ReasoningEffort string  `json:"reasoning_effort,omitempty"`
 	Profile         string  `json:"profile,omitempty"`
