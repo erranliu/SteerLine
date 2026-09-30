@@ -1299,7 +1299,7 @@ func containsReference(refs []FileReference, target FileReference) bool {
 	return false
 }
 func hasAcceptanceHeading(b []byte) bool {
-	re := regexp.MustCompile(`(?im)^#{1,6}[ \t]+[^\r\n]*(楠屾敹|acceptance)[^\r\n]*$`)
+	re := regexp.MustCompile(`(?im)^#{1,6}[ \t]+[^\r\n]*(验收|acceptance)[^\r\n]*$`)
 	return re.Match(b)
 }
 
