@@ -168,6 +168,20 @@ func TestLocalWorkerPublishUsesHostGitAndExactPR(t *testing.T) {
 	if s.operationByKey(originalOperation.IdempotencyKey).Status != "in_flight" {
 		t.Fatalf("crash fixture did not restore intent: %+v", s.domain.Operations)
 	}
+	// Missing external evidence must leave the original request uncertain, even
+	// though the commit and pushed branch can already be verified.
+	prFile := os.Getenv("STEERLINE_TEST_HOST_GH_FILE")
+	savedPR, err := os.ReadFile(prFile)
+	require(t, err)
+	require(t, os.Remove(prFile))
+	if reconciled, err := s.reconcileLocalWorkerPublication(ctx, run); err == nil || reconciled || s.operationByKey(originalOperation.IdempotencyKey).Status != "in_flight" {
+		t.Fatalf("missing PR evidence was not kept uncertain: reconciled=%t err=%v", reconciled, err)
+	}
+	createsBefore, err := os.ReadFile(prFile + ".creates")
+	if err != nil || string(createsBefore) != "x" || git(worktree, "rev-parse", "HEAD") != head {
+		t.Fatalf("unknown publication retried host actions: count=%q err=%v", createsBefore, err)
+	}
+	require(t, os.WriteFile(prFile, savedPR, 0600))
 	reconciled, err := s.reconcileLocalWorkerPublication(ctx, run)
 	if err != nil || !reconciled || s.operationByKey(originalOperation.IdempotencyKey).Status != "confirmed" || s.domain.WorkflowRuns[0].PRURL != info.URL {
 		t.Fatalf("uncertain host publication did not reconcile the same PR: reconciled=%t err=%v operation=%+v workflow=%+v", reconciled, err, s.operationByKey(originalOperation.IdempotencyKey), s.domain.WorkflowRuns[0])

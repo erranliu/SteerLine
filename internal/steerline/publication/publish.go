@@ -165,3 +165,54 @@ func (p *HostPublisher) Publish(ctx context.Context, request Request, record fun
 	}
 	return result, nil
 }
+
+// Reconcile only queries the saved candidate and its exact remote PR. It never
+// commits, pushes, or creates a replacement for an uncertain publication.
+func (p *HostPublisher) Reconcile(ctx context.Context, request Request) (result Result, err error) {
+	result = Result{Request: request, Stage: StageCandidate}
+	if err = request.ValidateCandidate(); err != nil {
+		return result, err
+	}
+	if p.Git == nil || p.PR == nil {
+		return result, errors.New("local publisher is not configured")
+	}
+	if err = p.PR.validateHostRequest(request); err != nil {
+		return result, err
+	}
+	defer func() { err = p.PR.redact(err) }()
+	common, e := p.git(ctx, "rev-parse", "--path-format=absolute", "--git-common-dir")
+	if e != nil || canonical(common) != canonical(request.GitCommonDir) {
+		return result, errors.Join(e, errors.New("recovery Git common directory changed"))
+	}
+	branch, e := p.git(ctx, "symbolic-ref", "--quiet", "--short", "HEAD")
+	if e != nil || branch != request.Workspace.Branch {
+		return result, errors.Join(e, errors.New("recovery branch changed"))
+	}
+	head, e := p.git(ctx, "rev-parse", "HEAD")
+	if e != nil || !validCommit(head) {
+		return result, errors.Join(e, errors.New("recovery commit is unavailable"))
+	}
+	tree, e := p.git(ctx, "rev-parse", "HEAD^{tree}")
+	if e != nil || tree != request.IndexTree {
+		return result, errors.Join(e, errors.New("recovery commit tree differs from saved staged content"))
+	}
+	if _, e = p.git(ctx, "merge-base", "--is-ancestor", request.StartingHead, "HEAD"); e != nil {
+		return result, fmt.Errorf("recovery commit changed ancestry: %w", e)
+	}
+	result.Head, result.Stage = head, StageCommitted
+	remote, e := p.git(ctx, "ls-remote", request.Remote, "refs/heads/"+request.Workspace.Branch)
+	if e != nil || remote != head+"\trefs/heads/"+request.Workspace.Branch {
+		return result, errors.Join(e, errors.New("fixed remote branch does not match the local candidate"))
+	}
+	result.Stage = StagePushed
+	url, e := p.PR.Find(ctx, request, head)
+	if e != nil || url == "" {
+		return result, errors.Join(e, errors.New("fixed remote branch has no verified PR; publication remains uncertain"))
+	}
+	info, e := p.PR.Query(ctx, url)
+	if e != nil || info.HeadRevision != head {
+		return result, errors.Join(e, errors.New("recovered PR head does not match the fixed commit"))
+	}
+	result.Stage, result.PRURL, result.PR = StagePullRequest, url, &info
+	return result, nil
+}

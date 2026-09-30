@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	"strings"
 
@@ -120,42 +119,13 @@ func (s *Service) reconcileLocalWorkerPublication(ctx context.Context, run *Run)
 		return false, errors.New("saved local publication no longer matches the stopped worker turn")
 	}
 	git := Runner{Dir: *run.WorktreePath, Timeout: duration(c.CommandTimeout), Env: map[string]string{"GIT_TERMINAL_PROMPT": "0"}}
-	gitText := func(args ...string) (string, error) {
-		out, e := git.Output(ctx, c.Git, args...)
-		return strings.TrimSpace(string(out)), e
-	}
-	common, e := gitText("rev-parse", "--path-format=absolute", "--git-common-dir")
-	if e != nil || canonical(common) != canonical(request.GitCommonDir) {
-		return false, errors.Join(e, errors.New("recovery Git common directory changed"))
-	}
-	branch, e := gitText("symbolic-ref", "--quiet", "--short", "HEAD")
-	if e != nil || branch != request.Workspace.Branch {
-		return false, errors.Join(e, errors.New("recovery branch changed"))
-	}
-	head, e := gitText("rev-parse", "HEAD")
-	if e != nil || !validCommit(head) {
-		return false, errors.Join(e, errors.New("recovery commit is unavailable"))
-	}
-	tree, e := gitText("rev-parse", "HEAD^{tree}")
-	if e != nil || tree != request.IndexTree {
-		return false, errors.Join(e, errors.New("recovery commit tree differs from saved staged content"))
-	}
-	if _, e = gitText("merge-base", "--is-ancestor", request.StartingHead, "HEAD"); e != nil {
-		return false, fmt.Errorf("recovery commit changed ancestry: %w", e)
-	}
-	remote, e := gitText("ls-remote", request.Remote, "refs/heads/"+request.Workspace.Branch)
-	if e != nil || remote != head+"\trefs/heads/"+request.Workspace.Branch {
-		return false, errors.Join(e, errors.New("fixed remote branch does not match the local candidate"))
-	}
 	client := publication.NewClient(c.PR, git, duration(c.CommandTimeout))
-	url, e := client.Find(ctx, request, head)
-	if e != nil || url == "" {
-		return false, errors.Join(e, errors.New("fixed remote branch has no verified PR; publication remains uncertain"))
+	publisher := publication.HostPublisher{Git: git, GitCommand: c.Git, PR: client}
+	receipt, e := publisher.Reconcile(ctx, request)
+	if e != nil {
+		return false, e
 	}
-	info, e := client.Query(ctx, url)
-	if e != nil || info.HeadRevision != head {
-		return false, errors.Join(e, errors.New("recovered PR head does not match the fixed commit"))
-	}
+	info, url := *receipt.PR, receipt.PRURL
 	if e = BindWorkerPR(workflow, execution, info, url, c.PR.Repository, false); e != nil {
 		return false, e
 	}
@@ -163,7 +133,6 @@ func (s *Service) reconcileLocalWorkerPublication(ctx context.Context, run *Run)
 	if e = s.offerWorkerPRFeedback(run, url); e != nil {
 		return false, e
 	}
-	receipt := publication.Result{Request: request, Stage: publication.StagePullRequest, Head: head, PRURL: url, PR: &info}
 	if e = s.setOperationState(op.OperationID, "confirmed", url, mustJSON(receipt), ""); e != nil {
 		return false, e
 	}
