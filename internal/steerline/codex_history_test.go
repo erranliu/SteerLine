@@ -841,7 +841,7 @@ func TestCodexHistorySourceDiscoveryRejectsWrongWorkspace(t *testing.T) {
 	require(t, os.WriteFile(logPath, []byte("{}\n"), 0600))
 	b := codexHistoryBinding{Version: 1, ProjectID: "p", WorkflowID: workflowID, ExecutionID: executionID, AttemptID: attemptID, Backend: BackendLocal, Protocol: ProtocolLocalProcess, TargetID: "local", Workspace: workspace, SessionID: "00000000-0000-0000-0000-000000000001", Command: Command{Executable: "codex"}}
 	require(t, writeCodexHistoryBinding(localCodexHistoryBindingPath(filepath.Dir(logPath), b.SessionID), b))
-	s := &Service{Config: Config{RunDir: root, identity: "p"}, State: Runtime{Runs: []*Run{{TaskID: "1", DomainTaskID: "1", RunID: workflowID, WorkflowVersion: "minimal-v1", ExecutionID: executionID, AttemptID: attemptID, Agent: "codex", Backend: string(BackendLocal), Protocol: string(ProtocolLocalProcess), Target: ExecutionTarget{ID: "local"}, WorktreePath: &workspace, LogPath: &logPath}}, Attempts: []StepAttemptRecord{{ProjectIdentity: "p", AttemptID: attemptID, ExecutionID: executionID, StepID: "implement", EventPath: logPath}}}}
+	s := &Service{Config: Config{RunDir: root, identity: "p"}, State: Runtime{Runs: []*Run{{TaskID: "1", DomainTaskID: "1", RunID: workflowID, WorkflowVersion: "minimal-v1", ExecutionID: executionID, AttemptID: attemptID, Agent: "codex", Backend: string(BackendLocal), Protocol: string(ProtocolLocalProcess), Target: ExecutionTarget{ID: "local"}, WorktreePath: &workspace, LogPath: &logPath}}}, domain: DomainSnapshot{Attempts: []StepAttemptRecord{{ProjectIdentity: "p", AttemptID: attemptID, ExecutionID: executionID, StepID: "implement", EventPath: logPath}}}}
 	if len(s.codexHistorySources()) != 1 {
 		t.Fatal("the exact source binding was not discovered")
 	}

@@ -174,11 +174,8 @@ type ExecutionBackend interface {
 	Probe(context.Context, ExecutionTarget, AgentSpec) (CapabilityReport, error)
 	Observe(context.Context, ExecutionRef) (Observation, error)
 	InspectWorkspace(context.Context, ExecutionRef) (WorkspaceInspection, error)
-	ReadOutput(context.Context, ExecutionRef, string, int) (OutputBatch, error)
 	StopExecution(context.Context, ExecutionRef, Operation, *Worker) (StopReceipt, error)
-	DetachObservation(context.Context, *Worker) error
 	SettleResources(context.Context, ExecutionRef, string) (SettlementReceipt, error)
-	ReconcileOperation(context.Context, Operation) (Operation, error)
 }
 
 type WorkspaceInspection struct {
@@ -693,41 +690,8 @@ func (b localExecutionBackend) StopExecution(ctx context.Context, ref ExecutionR
 	worker.Kill()
 	return StopReceipt{Disposition: "accepted"}, nil
 }
-func (b localExecutionBackend) DetachObservation(ctx context.Context, w *Worker) error {
-	return w.detachLocalObservation(ctx)
-}
 func (b localExecutionBackend) SettleResources(context.Context, ExecutionRef, string) (SettlementReceipt, error) {
 	return SettlementReceipt{}, unsupported("SettleResources")
-}
-func reconcileRecordedOperation(ctx context.Context, root string, expected Operation) (Operation, error) {
-	if err := ctx.Err(); err != nil {
-		return Operation{}, err
-	}
-	records := executionRecords{root: root}
-	old, err := records.loadOperation(expected.RunID, expected.AttemptID, expected.ID)
-	if err != nil {
-		return Operation{}, err
-	}
-	if old.PayloadDigest != expected.PayloadDigest || old.Action != expected.Action || old.Backend != expected.Backend || old.Protocol != expected.Protocol || old.Target != expected.Target {
-		return Operation{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "operation identity or fixed payload changed"}
-	}
-	if old.Ref != nil {
-		bound, bindErr := records.loadBinding(old.RunID, old.AttemptID)
-		if bindErr != nil {
-			return Operation{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "operation ref has no valid execution binding", Cause: bindErr}
-		}
-		if digestValue(bound) != digestValue(*old.Ref) {
-			return Operation{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "operation ref conflicts with the persisted binding"}
-		}
-	}
-	if old.Status == OperationInFlight || old.Status == OperationUnknown {
-		return old, &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "platform request has no verified query/replay capability; original outcome remains unknown"}
-	}
-	return old, nil
-}
-
-func (b localExecutionBackend) ReconcileOperation(ctx context.Context, op Operation) (Operation, error) {
-	return reconcileRecordedOperation(ctx, b.config.RunDir, op)
 }
 
 type orcaTerminalBackend struct{ config Config }
@@ -963,32 +927,9 @@ func (b orcaTerminalBackend) StopExecution(ctx context.Context, ref ExecutionRef
 	}
 	return StopReceipt{Disposition: "accepted", Diagnostic: "close accepted; terminal exit is not yet confirmed"}, nil
 }
-func (b orcaTerminalBackend) DetachObservation(ctx context.Context, w *Worker) error {
-	if w == nil {
-		return nil
-	}
-	proc, ok := w.proc.(*orcaProcess)
-	if !ok {
-		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "worker does not belong to Orca terminal v2"}
-	}
-	proc.Close() // cancels only the local observer; it does not close the Orca terminal.
-	if w.observationDone == nil {
-		return unsupported("Orca observation completion signal")
-	}
-	select {
-	case <-w.observationDone:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-}
 func (b orcaTerminalBackend) SettleResources(context.Context, ExecutionRef, string) (SettlementReceipt, error) {
 	return SettlementReceipt{}, unsupported("SettleResources")
 }
-func (b orcaTerminalBackend) ReconcileOperation(ctx context.Context, op Operation) (Operation, error) {
-	return reconcileRecordedOperation(ctx, b.config.RunDir, op)
-}
-
 func capabilityReport(backend BackendKind, protocol ExecutionProtocol, target ExecutionTarget, agent AgentSpec, version string) CapabilityReport {
 	caps := []Capability{{Name: "start", Status: CapabilityNotTested}, {Name: "observe", Status: CapabilityNotTested}, {Name: "stop", Status: CapabilityNotTested}, {Name: "detach_observation", Status: CapabilityNotTested}, {Name: "operation_reconciliation", Status: CapabilityNotTested}, {Name: "workspace_inspection", Status: CapabilityNotTested}, {Name: "output_reading", Status: CapabilityNotTested}, {Name: "output_turns", Status: CapabilityNotTested}, {Name: "output_final_answer", Status: CapabilityNotTested}, {Name: "resource_settlement", Status: CapabilityUnsupported}}
 	return CapabilityReport{Version: 1, Backend: backend, Protocol: protocol, Target: target, Agent: agent, PlatformVersion: version, CheckedAt: now(), Capabilities: caps}

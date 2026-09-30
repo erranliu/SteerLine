@@ -92,7 +92,7 @@ func (s *Service) publishLocalWorkerRun(ctx context.Context, run *Run, workflow 
 	if err != nil || !validCommit(indexTree) {
 		return info, errors.Join(err, errors.New("local publication index tree is unavailable"))
 	}
-	opID, err := s.startOperation("publish_local_worker", "local-publish:"+run.RunID+":"+turnID, struct {
+	opID, err := s.startWorkerOperation(run, "publish_local_worker", "local-publish:"+run.RunID+":"+turnID, struct {
 		RunID        string `json:"run_id"`
 		TurnID       string `json:"turn_id"`
 		Branch       string `json:"branch"`
@@ -110,7 +110,7 @@ func (s *Service) publishLocalWorkerRun(ctx context.Context, run *Run, workflow 
 	confirmed := false
 	defer func() {
 		if !confirmed {
-			_ = s.changeOperation(opID, "outcome_unknown", "", nil, "local GitHub publication requires reconciliation")
+			_ = s.changeWorkerOperation(run, opID, "outcome_unknown", "", nil, "local GitHub publication requires reconciliation")
 		}
 	}()
 	if staged != "" {
@@ -137,7 +137,7 @@ func (s *Service) publishLocalWorkerRun(ctx context.Context, run *Run, workflow 
 		return PRInfo{}, err
 	}
 	s.refreshRun(run)
-	if err = s.changeOperation(opID, "confirmed", url, mustJSON(info), ""); err != nil {
+	if err = s.changeWorkerOperation(run, opID, "confirmed", url, mustJSON(info), ""); err != nil {
 		return PRInfo{}, err
 	}
 	confirmed = true
@@ -237,8 +237,8 @@ func (s *Service) reconcileLocalWorkerPublication(ctx context.Context, run *Run)
 		return false, nil
 	}
 	var op *OperationRecord
-	for i := range s.State.Operations {
-		candidate := &s.State.Operations[i]
+	for i := range s.domain.Operations {
+		candidate := &s.domain.Operations[i]
 		if candidate.Kind == "publish_local_worker" && strings.HasPrefix(candidate.IdempotencyKey, "local-publish:"+run.RunID+":") &&
 			(candidate.Status == "in_flight" || candidate.Status == "outcome_unknown") {
 			if op != nil {
@@ -310,10 +310,10 @@ func (s *Service) reconcileLocalWorkerPublication(ctx context.Context, run *Run)
 	if err = s.offerWorkerPRFeedback(run, url); err != nil {
 		return false, err
 	}
-	if err = s.setOperationState(op.OperationID, "confirmed", url, mustJSON(info), ""); err != nil {
+	if err = s.stageWorkerOperation(run, op.OperationID, "confirmed", url, mustJSON(info), ""); err != nil {
 		return false, err
 	}
-	if err = s.save(); err != nil {
+	if err = s.commitWorker(run); err != nil {
 		return false, err
 	}
 	return true, nil

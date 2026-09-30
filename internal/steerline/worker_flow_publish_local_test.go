@@ -56,8 +56,9 @@ func fakeHostGH(args []string) int {
 
 func TestLocalWorkerPublishUsesHostGitAndExactPR(t *testing.T) {
 	ctx := context.Background()
-	c, base, db := openDAGFixture(t)
-	c.Host, c.Agent = "local", "codex"
+	s, run := appServerAuditService(t)
+	c := s.Config
+	base := run.WorkspaceIntent.BaseCommit
 	c.CommandTimeout = "10s"
 	exe, err := os.Executable()
 	if err != nil {
@@ -65,9 +66,10 @@ func TestLocalWorkerPublishUsesHostGitAndExactPR(t *testing.T) {
 	}
 	t.Setenv("STEERLINE_TEST_HOST_GH_FILE", filepath.Join(t.TempDir(), "pr.json"))
 	c.PR = PRConfig{Kind: "command", BaseURL: "https://github.com", Repository: "owner/repo", Query: Command{Executable: exe, Args: []string{"api", "repos/{repository}/pulls/{number}"}}}
-	runID, turnID := strings.Repeat("a", 32), "00000000-0000-0000-0000-000000000001"
-	branch := "codex/101-" + runID[:12]
-	worktree := filepath.Join(t.TempDir(), "worker")
+	turnID := "00000000-0000-0000-0000-000000000001"
+	branch := run.WorkspaceIntent.Branch
+	worktree := run.WorkspaceIntent.Path
+	require(t, c.prepareWorktreeRoot())
 	git := func(dir string, args ...string) string {
 		t.Helper()
 		cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
@@ -85,21 +87,22 @@ func TestLocalWorkerPublishUsesHostGitAndExactPR(t *testing.T) {
 		t.Fatal(err)
 	}
 	git(worktree, "add", "publish.txt")
-	run := &Run{TaskID: "101", RunID: runID, AttemptID: strings.Repeat("d", 32), ExecutionID: strings.Repeat("c", 32), WorkflowVersion: WorkerFlowVersion, Protocol: string(ProtocolLocalCodexAppServer), FinishTaskStatus: "waiting_decision", WorktreePath: &worktree, WorktreeBranch: &branch,
-		WorkspaceIntent: &WorkspaceIntent{Path: worktree, Branch: branch, BaseCommit: base}}
-	workflow := &WorkflowRunRecord{TaskID: run.TaskID, WorkflowRunID: runID, WorkflowVersion: WorkerFlowVersion, Branch: "main", Phase: "waiting_decision"}
-	execution := &ExecutionRecord{Protocol: run.Protocol, Backend: string(BackendLocal), CurrentStep: "worker", Status: "idle", WorkspaceIntent: run.WorkspaceIntent, WorkflowRunID: runID, ExecutionID: run.ExecutionID, Workspace: WorkspaceEvidence{Worktree: worktree, Branch: branch}, CurrentTurnID: turnID, LastStoppedTurnID: turnID}
-	s := &Service{Config: c, domainStore: db, store: &Store{Project: c.Identity()},
-		prs: &PRClient{Config: c.PR, Runner: Runner{Dir: c.Repository, Timeout: 10 * time.Second}},
-		State: Runtime{SchemaVersion: WorkerFlowRuntimeSchema, Repository: Repository{Path: c.Repository, Remote: c.Remote, Branch: c.Branch, Identity: c.Identity()},
-			Tasks: []TaskRecord{{TaskID: run.TaskID, Status: "in_progress"}}, Attempts: []StepAttemptRecord{{AttemptID: run.AttemptID, ExecutionID: run.ExecutionID, StepID: "worker", AttemptNumber: 1}}, Runs: []*Run{run}, WorkflowRuns: []WorkflowRunRecord{*workflow}, Executions: []ExecutionRecord{*execution}}}
-	workflow, execution = &s.State.WorkflowRuns[0], &s.State.Executions[0]
+	s.Config, s.baseConfig = c, c
+	s.prs = &PRClient{Config: c.PR, Runner: Runner{Dir: c.Repository, Timeout: 10 * time.Second}}
+	workflow, execution := s.workflowRecords(run)
+	workflow.Phase = "waiting_decision"
+	execution.Status, execution.CurrentTurnID, execution.LastStoppedTurnID = "idle", turnID, turnID
+	execution.Workspace = WorkspaceEvidence{Worktree: worktree, Branch: branch, Base: base}
+	execution.Target.WorktreeID, execution.Target.Branch = worktree, branch
+	s.refreshRun(run)
+	require(t, s.commitWorker(run))
+	beforeWorkflow := *workflow
 	info, err := s.publishLocalWorkerRun(ctx, run, workflow, execution, turnID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info.URL != "https://github.com/owner/repo/pull/1" || s.State.WorkflowRuns[0].PRURL != info.URL || s.State.WorkflowRuns[0].Phase != "waiting_pr_merge" {
-		t.Fatalf("host publication did not bind exact draft PR: info=%+v workflow=%+v", info, s.State.WorkflowRuns[0])
+	if info.URL != "https://github.com/owner/repo/pull/1" || s.domain.WorkflowRuns[0].PRURL != info.URL || s.domain.WorkflowRuns[0].Phase != "waiting_pr_merge" {
+		t.Fatalf("host publication did not bind exact draft PR: info=%+v workflow=%+v", info, s.domain.WorkflowRuns[0])
 	}
 	head := git(worktree, "rev-parse", "HEAD")
 	if head == base || info.HeadRevision != head || git(worktree, "status", "--porcelain") != "" {
@@ -108,12 +111,25 @@ func TestLocalWorkerPublishUsesHostGitAndExactPR(t *testing.T) {
 	if _, err := s.publishLocalWorkerRun(ctx, run, workflow, execution, turnID); err == nil {
 		t.Fatal("same turn repeated its confirmed publication")
 	}
-	s.State.Operations[0].Status = "in_flight"
-	s.State.WorkflowRuns[0].Phase, s.State.WorkflowRuns[0].PRURL = "waiting_decision", ""
-	run.FinishTaskStatus, run.PR.URL = "waiting_decision", nil
+	// Simulate a host action completed before its database receipt was saved.
+	originalOperation := *s.operationByKey("local-publish:" + run.RunID + ":" + turnID)
+	originalOperation.Status, originalOperation.Receipt = "in_flight", nil
+	require(t, s.domainStore.Transact(ctx, func(tx DomainTx) error {
+		raw := tx.(*sqliteTx).tx
+		if err := tx.UpdateOperation(originalOperation); err != nil {
+			return err
+		}
+
+		_, err := raw.ExecContext(ctx, `UPDATE workflow_runs SET phase=?,payload=? WHERE project_identity=? AND workflow_run_id=?`, beforeWorkflow.Phase, mustJSON(beforeWorkflow), c.Identity(), run.RunID)
+		return err
+	}))
+	require(t, s.refreshNativeSnapshot(ctx))
+	if s.operationByKey(originalOperation.IdempotencyKey).Status != "in_flight" {
+		t.Fatalf("crash fixture did not restore intent: %+v", s.domain.Operations)
+	}
 	reconciled, err := s.reconcileLocalWorkerPublication(ctx, run)
-	if err != nil || !reconciled || s.State.Operations[0].Status != "confirmed" || s.State.WorkflowRuns[0].PRURL != info.URL {
-		t.Fatalf("uncertain host publication did not reconcile the same PR: reconciled=%t err=%v operation=%+v workflow=%+v", reconciled, err, s.State.Operations[0], s.State.WorkflowRuns[0])
+	if err != nil || !reconciled || s.operationByKey(originalOperation.IdempotencyKey).Status != "confirmed" || s.domain.WorkflowRuns[0].PRURL != info.URL {
+		t.Fatalf("uncertain host publication did not reconcile the same PR: reconciled=%t err=%v operation=%+v workflow=%+v", reconciled, err, s.operationByKey(originalOperation.IdempotencyKey), s.domain.WorkflowRuns[0])
 	}
 }
 

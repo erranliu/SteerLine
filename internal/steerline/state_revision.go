@@ -15,43 +15,6 @@ func deliveredExecutionFingerprint(v ExecutionRecord) string {
 	return recordFingerprint(v)
 }
 
-// Hashes track actor changes and detect concurrent writes during publication.
-// They contain no recovery state.
-func domainFingerprints(v Runtime) map[string]string {
-	out := make(map[string]string)
-	for _, r := range v.WorkflowRuns {
-		out["workflow:"+r.WorkflowRunID] = recordFingerprint(r)
-	}
-	for _, r := range v.Executions {
-		out["execution:"+r.ExecutionID] = recordFingerprint(r)
-	}
-	for _, r := range v.Attempts {
-		out["attempt:"+r.AttemptID] = recordFingerprint(r)
-	}
-	for _, r := range v.Decisions {
-		out["decision:"+r.DecisionID] = recordFingerprint(r)
-	}
-	return out
-}
-
-func (t *sqliteTx) checkPublicationBaseline(table, column, project, id, key string, baseline map[string]string) error {
-	if baseline == nil {
-		return nil
-	}
-	var body []byte
-	err := t.tx.QueryRowContext(t.ctx, "SELECT payload FROM "+table+" WHERE project_identity=? AND "+column+"=?", project, id).Scan(&body)
-	if errors.Is(err, sql.ErrNoRows) && baseline[key] == "" {
-		return nil
-	}
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return err
-	}
-	if err != nil || operationDigest(body) != baseline[key] {
-		return nativeErr("publication_conflict", "domain record changed since the actor read: "+key)
-	}
-	return nil
-}
-
 func controlFingerprint(value any) string {
 	switch v := value.(type) {
 	case WorkflowRunRecord:

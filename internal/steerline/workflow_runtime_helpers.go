@@ -15,16 +15,16 @@ func (s *Service) workflowRecords(run *Run) (*WorkflowRunRecord, *ExecutionRecor
 		return nil, nil
 	}
 	var workflow *WorkflowRunRecord
-	for i := range s.State.WorkflowRuns {
-		if s.State.WorkflowRuns[i].WorkflowRunID == run.RunID {
-			workflow = &s.State.WorkflowRuns[i]
+	for i := range s.domain.WorkflowRuns {
+		if s.domain.WorkflowRuns[i].WorkflowRunID == run.RunID {
+			workflow = &s.domain.WorkflowRuns[i]
 			break
 		}
 	}
 	var execution *ExecutionRecord
-	for i := range s.State.Executions {
-		if s.State.Executions[i].ExecutionID == run.ExecutionID && s.State.Executions[i].WorkflowRunID == run.RunID {
-			execution = &s.State.Executions[i]
+	for i := range s.domain.Executions {
+		if s.domain.Executions[i].ExecutionID == run.ExecutionID && s.domain.Executions[i].WorkflowRunID == run.RunID {
+			execution = &s.domain.Executions[i]
 			break
 		}
 	}
@@ -35,9 +35,9 @@ func (s *Service) workflowAttempt(run *Run, attemptID string) *StepAttemptRecord
 	if run == nil {
 		return nil
 	}
-	for i := range s.State.Attempts {
-		if s.State.Attempts[i].AttemptID == attemptID && s.State.Attempts[i].ExecutionID == run.ExecutionID {
-			return &s.State.Attempts[i]
+	for i := range s.domain.Attempts {
+		if s.domain.Attempts[i].AttemptID == attemptID && s.domain.Attempts[i].ExecutionID == run.ExecutionID {
+			return &s.domain.Attempts[i]
 		}
 	}
 	return nil

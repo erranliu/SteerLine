@@ -144,7 +144,7 @@ func TestLifecycleReviewFailedRecordMustBindProcess(t *testing.T) {
 	s := controlReviewService(t)
 	record := reviewStartup(t, s.Config, "failed", nil)
 	s.State.Service.StartupID = &record.StartupID
-	require(t, s.save())
+	require(t, s.publishCheckpoint())
 	connection := ConnectService(context.Background(), s.Config)
 	if connection.CanStop || connection.IdentityMatched {
 		t.Fatalf("unbound failed record authorizes a process: %+v", connection)
@@ -170,7 +170,7 @@ func TestLifecycleReviewExistingServiceDoesNotNeedInstalledBinary(t *testing.T) 
 	record.Status, record.InstanceID, record.ProcessIdentity = "started", s.State.Service.InstanceID, identity
 	require(t, writeStartupRecord(s.Config, record))
 	s.State.Service.StartupID, s.State.Service.PID, s.State.Service.ProcessIdentity = &startupID, identity.PID, identity
-	require(t, s.save())
+	require(t, s.publishCheckpoint())
 	result, err := StartService(context.Background(), configPath, StartServiceOptions{Executable: filepath.Join(t.TempDir(), "missing.exe")})
 	if err != nil || result.Status != "connected" {
 		t.Fatalf("existing compatible service needs no launch executable: %+v %v", result, err)
@@ -229,7 +229,7 @@ func TestLifecycleReviewStopPublicationKeepsObservedInstance(t *testing.T) {
 	s := controlReviewService(t)
 	observed := s.State
 	s.State.Service.InstanceID = newID()
-	require(t, s.save())
+	require(t, s.publishCheckpoint())
 	req, err := submitControlSnapshot(s.Config, &observed, "stop_service", nil, "review")
 	require(t, err)
 	if req.InstanceID != observed.Service.InstanceID {
@@ -246,7 +246,7 @@ func TestLifecycleReviewOfflineWithHeldLockCannotRestart(t *testing.T) {
 	require(t, err)
 	startup.ProcessIdentity = absent
 	require(t, writeStartupRecord(s.Config, *startup))
-	require(t, s.save())
+	require(t, s.publishCheckpoint())
 	lock, err := LockRepository(s.Config.RunDir)
 	require(t, err)
 	defer lock.Close()
@@ -302,7 +302,7 @@ func TestLifecycleReviewStopReportsExitWithoutReceipt(t *testing.T) {
 	require(t, err)
 	startup.ProcessIdentity = &identity
 	require(t, writeStartupRecord(s.Config, *startup))
-	require(t, s.save())
+	require(t, s.publishCheckpoint())
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	done := make(chan ServiceStopResult, 1)

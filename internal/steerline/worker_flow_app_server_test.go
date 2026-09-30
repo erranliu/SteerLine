@@ -86,19 +86,19 @@ func TestAppServerStartReplayPreservesNativeSavedAnswer(t *testing.T) {
 	run := &Run{RunID: newID(), ExecutionID: newID(), AttemptID: newID(), Decision: &DecisionState{Status: "answer_saved"}}
 	workflow := &WorkflowRunRecord{WorkflowRunID: run.RunID, WorkflowVersion: WorkerFlowVersion, Phase: "waiting_decision"}
 	execution := &ExecutionRecord{ExecutionID: run.ExecutionID, WorkflowRunID: run.RunID, CurrentStep: "worker", SessionID: workerFlowMockSession, CurrentTurnID: first, LastStoppedTurnID: first, PendingTurnID: second, PendingCommandID: commandID, TurnNumber: 1}
-	service := &Service{State: Runtime{Operations: []OperationRecord{{OperationID: newID(), IdempotencyKey: "worker-turn:" + run.ExecutionID + ":" + commandID, Status: "outcome_unknown"}}}}
+	service := &Service{domain: DomainSnapshot{Operations: []OperationRecord{{OperationID: newID(), IdempotencyKey: "worker-turn:" + run.ExecutionID + ":" + commandID, Status: "outcome_unknown"}}}}
 	run.TaskID, run.DomainTaskID, workflow.TaskID = "task", "task", "task"
-	service.State.Tasks = []TaskRecord{{TaskID: "task", Status: "in_progress"}}
-	service.State.Attempts = []StepAttemptRecord{{ExecutionID: run.ExecutionID, AttemptID: run.AttemptID, StepID: "worker", AttemptNumber: 1}}
-	service.State.WorkflowRuns, service.State.Executions = []WorkflowRunRecord{*workflow}, []ExecutionRecord{*execution}
-	workflow, execution = &service.State.WorkflowRuns[0], &service.State.Executions[0]
+	service.domain.Tasks = []TaskRecord{{TaskID: "task", Status: "in_progress"}}
+	service.domain.Attempts = []StepAttemptRecord{{ExecutionID: run.ExecutionID, AttemptID: run.AttemptID, StepID: "worker", AttemptNumber: 1}}
+	service.domain.WorkflowRuns, service.domain.Executions = []WorkflowRunRecord{*workflow}, []ExecutionRecord{*execution}
+	workflow, execution = &service.domain.WorkflowRuns[0], &service.domain.Executions[0]
 	run.Decision.ID, run.Decision.Version = newID(), 1
 	run.Decision.AttemptID = run.AttemptID
 	service.setRunDecision(run, run.Decision)
 	if err := service.recordAppServerTurnStarted(run, workflow, execution, second); err != nil {
 		t.Fatal(err)
 	}
-	if execution.CurrentCommandID != commandID || execution.CurrentTurnID != second || execution.PendingCommandID != "" || execution.TurnNumber != 2 || run.Decision.Status != "reply_accepted" || service.State.Operations[0].Status != "confirmed" {
+	if execution.CurrentCommandID != commandID || execution.CurrentTurnID != second || execution.PendingCommandID != "" || execution.TurnNumber != 2 || run.Decision.Status != "reply_accepted" || service.domain.Operations[0].Status != "confirmed" {
 		t.Fatalf("second turn receipt was not applied: %+v %+v", execution, run.Decision)
 	}
 	service.setRunDecision(run, &DecisionState{ID: newID(), AttemptID: run.AttemptID, Version: 1, Status: "answer_saved", Request: DecisionRequest{NativeAsk: &codexAskCall{CallID: "pending"}}})
@@ -131,16 +131,22 @@ func TestAppServerRejectedEventReleasesObserver(t *testing.T) {
 func TestAppServerRecoveryDoesNotRaceInFlightLaunch(t *testing.T) {
 	run := &Run{RunID: newID(), ExecutionID: newID(), DomainTaskID: "8", Protocol: string(ProtocolLocalCodexAppServer), WorkflowVersion: WorkerFlowVersion}
 	service := &Service{appServerLaunching: map[string]string{run.RunID: newID()}, State: Runtime{
-		Runs:         []*Run{run},
-		Tasks:        []TaskRecord{{TaskID: "8", Status: "in_progress"}},
+		Runs: []*Run{run},
+	}, domain: DomainSnapshot{Tasks: []TaskRecord{{TaskID: "8", Status: "in_progress"}},
 		WorkflowRuns: []WorkflowRunRecord{{WorkflowRunID: run.RunID, WorkflowVersion: WorkerFlowVersion, Phase: "queued"}},
-		Executions:   []ExecutionRecord{{ExecutionID: run.ExecutionID, WorkflowRunID: run.RunID, PendingCommandID: newID()}},
-	}}
-	before := digestValue(service.State)
+		Executions:   []ExecutionRecord{{ExecutionID: run.ExecutionID, WorkflowRunID: run.RunID, PendingCommandID: newID()}}},
+	}
+	before := digestValue(struct {
+		View   Runtime
+		Domain DomainSnapshot
+	}{service.State, service.domain})
 	if err := service.resumeAppServerWorkers(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if before != digestValue(service.State) {
+	if before != digestValue(struct {
+		View   Runtime
+		Domain DomainSnapshot
+	}{service.State, service.domain}) {
 		t.Fatal("recovery modified a still-running launch before its receipt")
 	}
 }
@@ -148,12 +154,18 @@ func TestAppServerRecoveryDoesNotRaceInFlightLaunch(t *testing.T) {
 func TestAppServerLateReplyCannotModifyTerminalTask(t *testing.T) {
 	for _, status := range []string{"closed", "discarded"} {
 		run := &Run{RunID: newID(), TaskStatus: status, Decision: &DecisionState{ID: newID(), Status: "answer_saved", Request: DecisionRequest{NativeAsk: &codexAskCall{CallID: "original"}}}}
-		service := &Service{State: Runtime{Runs: []*Run{run}, Operations: []OperationRecord{{OperationID: "reply", Status: "in_flight"}}}}
-		before := digestValue(service.State)
+		service := &Service{State: Runtime{Runs: []*Run{run}}, domain: DomainSnapshot{Operations: []OperationRecord{{OperationID: "reply", Status: "in_flight"}}}}
+		before := digestValue(struct {
+			View   Runtime
+			Domain DomainSnapshot
+		}{service.State, service.domain})
 		if err := service.handleAppServerReplyMessage(run.RunID, &appServerReplyMessage{decisionID: run.Decision.ID, opID: "reply", callID: "original"}); err != nil {
 			t.Fatal(err)
 		}
-		if before != digestValue(service.State) {
+		if before != digestValue(struct {
+			View   Runtime
+			Domain DomainSnapshot
+		}{service.State, service.domain}) {
 			t.Fatalf("late reply changed %s task", status)
 		}
 	}
@@ -170,6 +182,7 @@ func appServerAuditService(t *testing.T) (*Service, *Run) {
 	t.Helper()
 	c, commit, store := openDAGFixture(t)
 	c.WorkflowProtocol, c.Host, c.Agent, c.Claimant = WorkerFlowVersion, "local", "codex", "operator"
+	require(t, c.prepareWorktreeRoot())
 	ctx := context.Background()
 	if out, err := exec.Command("git", "-C", c.Repository, "push", "--quiet", "origin", "HEAD:refs/heads/main").CombinedOutput(); err != nil {
 		t.Fatalf("fixture push: %v: %s", err, out)
@@ -413,7 +426,7 @@ func TestAppServerAnswerRecoveryPersistsBeforeNextQuestion(t *testing.T) {
 	record.Answer = mustJSON(DecisionAnswer{DecisionID: record.DecisionID, RunID: run.RunID, Answers: map[string][]string{"choice": {"A"}}, AnsweredBy: "tester", AnsweredAt: now()})
 	service.refreshRun(run)
 	firstID := run.Decision.ID
-	if _, err := service.startOperation("reply_appserver_question", "appserver-answer:"+execution.ExecutionID+":"+firstID, map[string]string{"call": "first"}); err != nil {
+	if _, err := service.startWorkerOperation(run, "reply_appserver_question", "appserver-answer:"+execution.ExecutionID+":"+firstID, map[string]string{"call": "first"}); err != nil {
 		t.Fatal(err)
 	}
 	workflow, execution = service.workflowRecords(run)

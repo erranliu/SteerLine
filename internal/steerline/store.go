@@ -57,37 +57,52 @@ func hydrateRuntime(v *Runtime, snapshot DomainSnapshot) {
 // Store serializes publication with heartbeat. SQLite is the only durable
 // runtime store.
 type Store struct {
-	mu       sync.Mutex
-	Domain   *SQLiteStore
-	Project  string
-	failure  error
-	baseline map[string]string
+	mu      sync.Mutex
+	Domain  *SQLiteStore
+	Project string
+	failure error
 }
 
-func (s *Store) Publish(v *Runtime) error {
+func (s *Store) commitWorker(request workerCommit) (workerCommitResult, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.failure != nil {
+		return workerCommitResult{}, s.failure
+	}
+	if s.Domain == nil {
+		return workerCommitResult{}, errors.New("worker commitment requires a durable store")
+	}
+	result, err := s.Domain.commitWorker(context.Background(), request)
+	var conflict *NativeTaskError
+	if err != nil && !errors.As(err, &conflict) {
+		s.failure = fmt.Errorf("critical worker persistence: %w", err)
+		return result, s.failure
+	}
+	return result, err
+}
+
+func (s *Store) Publish(checkpoint *ServiceCheckpoint) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.failure != nil {
 		return s.failure
 	}
-	if v == nil {
-		return errors.New("runtime projection is required")
+	if checkpoint == nil {
+		return errors.New("service checkpoint is required")
 	}
-	value := *v
+	value := *checkpoint
 	value.UpdatedAt, value.HeartbeatAt = now(), now()
 	if s.Domain != nil {
-		persisted, err := s.Domain.saveRuntime(context.Background(), value, s.baseline)
+		committed, err := s.Domain.SaveCheckpoint(context.Background(), value)
 		if err != nil {
-			s.failure = fmt.Errorf("critical domain persistence: %w", err)
+			s.failure = fmt.Errorf("critical checkpoint persistence: %w", err)
 			return s.failure
 		}
-		value = persisted
-		s.baseline = domainFingerprints(value)
+		value = committed
 	}
-	*v = value
+	*checkpoint = value
 	return nil
 }
-
 func (s *Store) Heartbeat() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

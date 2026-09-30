@@ -102,7 +102,7 @@ func (s *Service) startNativeOrcaWorkerTurn(ctx context.Context, run *Run, turnI
 		return err
 	}
 	if err := s.startNativeOrcaTurn(ctx, run, fixed.execution, turnID, prompt); err != nil {
-		_ = s.changeOperation(opID, "outcome_unknown", "", nil, err.Error())
+		_ = s.changeWorkerOperation(run, opID, "outcome_unknown", "", nil, err.Error())
 		fixed.execution.Status = "blocked"
 		s.refreshRun(run)
 		return s.nativeOrcaUncertain(run, "Native Orca Dispatch needs reconciliation: "+err.Error())
@@ -114,11 +114,11 @@ func (s *Service) startNativeOrcaWorkerTurn(ctx context.Context, run *Run, turnI
 	if current == nil {
 		return errors.New("native Orca turn has no accepted Dispatch identity")
 	}
-	if err := s.changeOperation(opID, "accepted", current.DispatchRequestID, mustJSON(*current), ""); err != nil {
+	if err := s.changeWorkerOperation(run, opID, "accepted", current.DispatchRequestID, mustJSON(*current), ""); err != nil {
 		return err
 	}
 	s.note(run, "steer", "worker", "accepted", "native Orca Dispatch input accepted", current.DispatchID, map[string]any{"task_id": current.TaskID, "turn_id": turnID})
-	return s.save()
+	return s.commitWorker(run)
 }
 
 func (s *Service) startSupervisedOrcaWorkerTurn(ctx context.Context, run *Run, turnID, prompt, opID string) error {
@@ -134,7 +134,7 @@ func (s *Service) startSupervisedOrcaWorkerTurn(ctx context.Context, run *Run, t
 }
 
 func (s *Service) failStartedWorkerTurn(run *Run, opID, platformRequestID string, startErr error) error {
-	if err := s.setOperationState(opID, "outcome_unknown", platformRequestID, nil, startErr.Error()); err != nil {
+	if err := s.stageWorkerOperation(run, opID, "outcome_unknown", platformRequestID, nil, startErr.Error()); err != nil {
 		return err
 	}
 	fixed, err := s.workerFlowContext(run)
@@ -150,6 +150,12 @@ func (s *Service) acceptStartedWorkerTurn(run *Run, worker *Worker, events, plat
 	if worker == nil {
 		return errors.New("accepted worker turn has no observer")
 	}
+	registered := false
+	defer func() {
+		if !registered {
+			_ = worker.detachLocalObservation(context.Background())
+		}
+	}()
 	fixed, err := s.workerFlowContext(run)
 	if err != nil {
 		return err
@@ -168,14 +174,15 @@ func (s *Service) acceptStartedWorkerTurn(run *Run, worker *Worker, events, plat
 		s.refreshRun(run)
 	}
 	attempt.Status, attempt.UpdatedAt = "dispatched", now()
-	if err := s.setOperationState(opID, "accepted", platformRequestID, mustJSON(identity), ""); err != nil {
+	if err := s.stageWorkerOperation(run, opID, "accepted", platformRequestID, mustJSON(identity), ""); err != nil {
 		return err
 	}
-	if err := s.save(); err != nil {
+	s.note(run, "steer", "worker", "accepted", "original worker turn accepted", commandID, map[string]any{"session_id": execution.SessionID, "turn_number": execution.TurnNumber + 1})
+	if err := s.commitWorker(run); err != nil {
 		return fmt.Errorf("worker started but its exact process receipt could not be saved: %w", err)
 	}
 	s.registerWorker(run, worker)
-	s.note(run, "steer", "worker", "accepted", "original worker turn accepted", commandID, map[string]any{"session_id": execution.SessionID, "turn_number": execution.TurnNumber + 1})
+	registered = true
 	return nil
 }
 
@@ -281,7 +288,7 @@ func (s *Service) deliverResumableWorkerFeedback(ctx context.Context, run *Run, 
 	if execution.SessionID == "" || run.SessionID == nil || *run.SessionID != execution.SessionID {
 		execution.Error = ptr("Feedback is saved, but the original worker session is not yet available for delivery")
 		s.refreshRun(run)
-		return s.save()
+		return s.commitWorker(run)
 	}
 	if run.Decision.Request.NativeAsk != nil {
 		if mode != workerflow.LocalCodex {
@@ -295,7 +302,7 @@ func (s *Service) deliverResumableWorkerFeedback(ctx context.Context, run *Run, 
 	if execution.Status == "active" || s.workers[run.RunID] != nil {
 		return nil // Preserve the answer until the original turn stops.
 	}
-	for _, operation := range s.State.Operations {
+	for _, operation := range s.domain.Operations {
 		if operation.IdempotencyKey != "worker-turn:"+execution.ExecutionID+":"+commandID {
 			continue
 		}
@@ -304,7 +311,7 @@ func (s *Service) deliverResumableWorkerFeedback(ctx context.Context, run *Run, 
 		}
 		execution.Error = ptr("Feedback delivery remains unverified at the original request ID; no duplicate message was sent")
 		s.refreshRun(run)
-		return s.save()
+		return s.commitWorker(run)
 	}
 	return s.startWorkerFlowTurn(ctx, run, workerFeedbackText(answer, run.Decision.Request), commandID)
 }

@@ -739,9 +739,9 @@ func TestConversationJournalReplayIsBoundedAndIdempotent(t *testing.T) {
 	}
 	defer store.Close()
 	service := &Service{Config: Config{RunDir: projectRoot, identity: "project", Codex: Command{Executable: "codex"}}, domainStore: store, State: Runtime{
-		Runs:     []*Run{{TaskID: taskID, RunID: runID, AttemptID: attemptID, ExecutionID: executionID, DomainTaskID: taskID, WorkflowVersion: "minimal-v1", Backend: string(BackendLocal), Protocol: string(ProtocolLocalProcess), Agent: "codex", Target: ExecutionTarget{ID: "local-test"}, WorktreePath: &projectRoot, LogPath: &path, EndedAt: ptr(time.Now().UTC())}},
-		Attempts: []StepAttemptRecord{{ProjectIdentity: "project", AttemptID: attemptID, ExecutionID: executionID, StepID: "implement", EventPath: path, Status: "succeeded"}},
-	}}
+		Runs: []*Run{{TaskID: taskID, RunID: runID, AttemptID: attemptID, ExecutionID: executionID, DomainTaskID: taskID, WorkflowVersion: "minimal-v1", Backend: string(BackendLocal), Protocol: string(ProtocolLocalProcess), Agent: "codex", Target: ExecutionTarget{ID: "local-test"}, WorktreePath: &projectRoot, LogPath: &path, EndedAt: ptr(time.Now().UTC())}},
+	}, domain: DomainSnapshot{Attempts: []StepAttemptRecord{{ProjectIdentity: "project", AttemptID: attemptID, ExecutionID: executionID, StepID: "implement", EventPath: path, Status: "succeeded"}}},
+	}
 	oldRunID := newID()
 	oldRoot := filepath.Join(projectRoot, "runs", oldRunID)
 	if err = os.MkdirAll(oldRoot, 0700); err != nil {

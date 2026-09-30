@@ -120,7 +120,7 @@ func testWorkerFlowOrcaServiceFirstFeedbackLive(t *testing.T, remote bool) {
 			_ = exec.Command("git", "-C", c.Repository, "worktree", "remove", "--force", "--", *run.WorktreePath).Run()
 		}
 	}()
-	task := nativeTaskRecord(service.State.Tasks, "9001")
+	task := nativeTaskRecord(service.domain.Tasks, "9001")
 	if task == nil {
 		t.Fatal("isolated native task disappeared")
 	}
@@ -165,7 +165,7 @@ func testWorkerFlowOrcaServiceFirstFeedbackLive(t *testing.T, remote bool) {
 		t.Fatalf("Orca center restart lost the original waiting worker: run=%+v", run)
 	}
 	service.State.Service.Ready, service.State.Service.Status = true, "running"
-	if err := service.save(); err != nil {
+	if err := service.publishCheckpoint(); err != nil {
 		t.Fatal(err)
 	}
 	answer := DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, OptionID: "continue", Note: strings.Repeat("续", 200), AnsweredBy: "operator", ExpectedDecisionVersion: run.Decision.Version, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: service.State.Service.InstanceID}
@@ -181,7 +181,7 @@ func testWorkerFlowOrcaServiceFirstFeedbackLive(t *testing.T, remote bool) {
 	}
 	run.Decision.Version, run.Decision.Status, run.Decision.OptionID, run.Decision.Note, run.Decision.AnsweredBy = record.Version, record.Status, answer.OptionID, answer.Note, answer.AnsweredBy
 	run.Decision.AnsweredAt = &record.UpdatedAt
-	if err := service.save(); err != nil {
+	if err := service.publishCheckpoint(); err != nil {
 		t.Fatal(err)
 	}
 	if err := service.applyWorkerFlowDecision(ctx, run); err != nil {

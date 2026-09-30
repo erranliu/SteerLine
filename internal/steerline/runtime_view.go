@@ -245,11 +245,11 @@ func (s *Service) refreshRun(run *Run) {
 		return
 	}
 	workflow, execution := s.workflowRecords(run)
-	task := nativeTaskRecord(s.State.Tasks, run.TaskID)
+	task := nativeTaskRecord(s.domain.Tasks, run.TaskID)
 	if workflow == nil || execution == nil || task == nil {
 		return
 	}
-	view, err := projectRun(*task, *workflow, *execution, s.State.Attempts, s.State.Decisions, s.State.Deliveries)
+	view, err := projectRun(*task, *workflow, *execution, s.domain.Attempts, s.domain.Decisions, s.domain.Deliveries)
 	if err != nil {
 		s.setError(err)
 		return
@@ -273,16 +273,16 @@ func (s *Service) setRunDecision(run *Run, decision *DecisionState) {
 	if decision.Request.OrcaAsk != nil {
 		record.QuestionID = decision.Request.OrcaAsk.MessageID
 	}
-	for i := range s.State.Decisions {
-		if s.State.Decisions[i].DecisionID == record.DecisionID {
-			record.CreatedAt = s.State.Decisions[i].CreatedAt
-			s.State.Decisions[i] = record
+	for i := range s.domain.Decisions {
+		if s.domain.Decisions[i].DecisionID == record.DecisionID {
+			record.CreatedAt = s.domain.Decisions[i].CreatedAt
+			s.domain.Decisions[i] = record
 			execution.DecisionID = record.DecisionID
 			s.refreshRun(run)
 			return
 		}
 	}
-	s.State.Decisions = append(s.State.Decisions, record)
+	s.domain.Decisions = append(s.domain.Decisions, record)
 	execution.DecisionID = record.DecisionID
 	s.refreshRun(run)
 }
@@ -291,9 +291,9 @@ func (s *Service) decisionRecord(run *Run) *DecisionRecord {
 	if run == nil || run.Decision == nil {
 		return nil
 	}
-	for i := range s.State.Decisions {
-		if s.State.Decisions[i].DecisionID == run.Decision.ID {
-			return &s.State.Decisions[i]
+	for i := range s.domain.Decisions {
+		if s.domain.Decisions[i].DecisionID == run.Decision.ID {
+			return &s.domain.Decisions[i]
 		}
 	}
 	return nil

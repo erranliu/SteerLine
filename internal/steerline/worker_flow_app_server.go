@@ -35,9 +35,9 @@ func (s *Service) recordAppServerTurnStarted(run *Run, workflow *WorkflowRunReco
 		return errors.New("app-server turn start lacks its fixed command or native turn receipt")
 	}
 	var operation *OperationRecord
-	for i := range s.State.Operations {
-		if s.State.Operations[i].IdempotencyKey == "worker-turn:"+run.ExecutionID+":"+commandID {
-			operation = &s.State.Operations[i]
+	for i := range s.domain.Operations {
+		if s.domain.Operations[i].IdempotencyKey == "worker-turn:"+run.ExecutionID+":"+commandID {
+			operation = &s.domain.Operations[i]
 			break
 		}
 	}
@@ -63,7 +63,7 @@ func (s *Service) recordAppServerTurnStarted(run *Run, workflow *WorkflowRunReco
 	if operation.Status == "confirmed" {
 		return nil
 	}
-	return TransitionOperation(operation, "confirmed", turnID, mustJSON(map[string]string{"session_id": execution.SessionID, "turn_id": turnID}), "")
+	return s.stageWorkerOperation(run, operation.OperationID, "confirmed", turnID, mustJSON(map[string]string{"session_id": execution.SessionID, "turn_id": turnID}), "")
 }
 
 func startAppServerWorkerTurn(ctx context.Context, c Config, run *Run, execution *ExecutionRecord, commandID, prompt string, persistThread func() error) (*Worker, string, string, error) {
@@ -356,7 +356,7 @@ func (s *Service) startCodexWorkerTurn(ctx context.Context, run *Run, commandID,
 		if err := (executionRecords{root: fixed.config.RunDir}).saveBinding(ref); err != nil {
 			return err
 		}
-		return s.save()
+		return s.commitWorker(run)
 	}
 	worker, events, platformRequestID, err := startAppServerWorkerTurn(ctx, fixed.config, run, fixed.execution, commandID, prompt, persistThread)
 	if err != nil {
@@ -451,7 +451,7 @@ func (s *Service) handleAppServerLaunchMessage(runID string, message *appServerL
 		execution.AppServerGeneration = message.execution.AppServerGeneration
 		execution.SessionID = message.execution.SessionID
 		s.refreshRun(run)
-		return s.save()
+		return s.commitWorker(run)
 	}
 	if message.phase != "turn_result" {
 		return fmt.Errorf("unknown app-server launch phase %q", message.phase)

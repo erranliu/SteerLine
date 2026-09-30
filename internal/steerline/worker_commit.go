@@ -1,0 +1,233 @@
+package steerline
+
+import (
+	"context"
+	"database/sql"
+	"encoding/json"
+	"errors"
+	"fmt"
+)
+
+// recordWrite declares one record and the exact value read before computing it.
+// A nil Before declares creation. It is never populated by scanning Runtime.
+type recordWrite[T any] struct {
+	Before *T
+	After  T
+}
+
+// workerCommit is the bounded write set of one worker transition. Operations
+// and events may also be committed independently by their service owners.
+type workerCommit struct {
+	Project         string
+	TaskID          string
+	WorkflowID      string
+	ExecutionID     string
+	AttemptID       string
+	ControlRevision uint64
+	Workflow        *recordWrite[WorkflowRunRecord]
+	Execution       *recordWrite[ExecutionRecord]
+	Attempt         *recordWrite[StepAttemptRecord]
+	Decisions       []recordWrite[DecisionRecord]
+	Operations      []recordWrite[OperationRecord]
+	Events          []DomainEvent
+	Checkpoint      ServiceCheckpoint
+}
+
+type workerCommitResult struct {
+	ControlRevision uint64
+	Checkpoint      ServiceCheckpoint
+}
+
+func (s *SQLiteStore) commitWorker(ctx context.Context, request workerCommit) (workerCommitResult, error) {
+	var result workerCommitResult
+	err := s.transactSQLite(ctx, func(tx *sqliteTx) error {
+		if request.Project == "" || request.Checkpoint.Repository.Identity != request.Project {
+			return errors.New("worker commit requires its fixed project")
+		}
+		if request.WorkflowID != "" {
+			var task, execution, attempt string
+			var revision uint64
+			if err := tx.tx.QueryRowContext(ctx, `SELECT task_id,control_revision FROM workflow_runs WHERE project_identity=? AND workflow_run_id=?`, request.Project, request.WorkflowID).Scan(&task, &revision); err != nil {
+				return err
+			}
+			if task != request.TaskID || revision != request.ControlRevision {
+				return nativeErr("stale_revision", fmt.Sprintf("worker control state changed before commitment: expected=%d current=%d task=%s/%s", request.ControlRevision, revision, request.TaskID, task))
+			}
+			if err := tx.tx.QueryRowContext(ctx, `SELECT workflow_run_id FROM executions WHERE project_identity=? AND execution_id=?`, request.Project, request.ExecutionID).Scan(&execution); err != nil {
+				return err
+			}
+			if execution != request.WorkflowID {
+				return nativeErr("authority_mismatch", "worker execution belongs to another workflow")
+			}
+			if err := tx.tx.QueryRowContext(ctx, `SELECT attempt_id FROM step_attempts WHERE project_identity=? AND execution_id=? AND step_id='worker' ORDER BY attempt_number DESC LIMIT 1`, request.Project, request.ExecutionID).Scan(&attempt); err != nil {
+				return err
+			}
+			if attempt != request.AttemptID {
+				return nativeErr("stale_revision", "worker attempt changed before commitment")
+			}
+		}
+		// Check every declared precondition before any write advances a revision.
+		if request.Workflow != nil {
+			v := request.Workflow
+			if v.After.ProjectIdentity != request.Project || v.After.WorkflowRunID != request.WorkflowID || v.After.TaskID != request.TaskID {
+				return errors.New("worker workflow write has a different binding")
+			}
+			if err := checkRecordWrite(tx, "workflow_runs", "workflow_run_id", request.Project, v.After.WorkflowRunID, v.Before); err != nil {
+				return err
+			}
+		}
+		if request.Execution != nil {
+			v := request.Execution
+			if v.After.ProjectIdentity != request.Project || v.After.ExecutionID != request.ExecutionID || v.After.WorkflowRunID != request.WorkflowID {
+				return errors.New("worker execution write has a different binding")
+			}
+			if err := checkRecordWrite(tx, "executions", "execution_id", request.Project, v.After.ExecutionID, v.Before); err != nil {
+				return err
+			}
+		}
+		if request.Attempt != nil {
+			v := request.Attempt
+			if v.After.ProjectIdentity != request.Project || v.After.AttemptID != request.AttemptID || v.After.ExecutionID != request.ExecutionID || v.After.StepID != "worker" {
+				return errors.New("worker attempt write has a different binding")
+			}
+			if err := checkRecordWrite(tx, "step_attempts", "attempt_id", request.Project, v.After.AttemptID, v.Before); err != nil {
+				return err
+			}
+		}
+		for _, v := range request.Decisions {
+			if v.After.ProjectIdentity != request.Project || v.After.WorkflowRunID != request.WorkflowID || v.After.ExecutionID != request.ExecutionID || v.After.AttemptID != request.AttemptID {
+				return errors.New("worker decision write has a different binding")
+			}
+			if err := checkRecordWrite(tx, "decisions", "decision_id", request.Project, v.After.DecisionID, v.Before); err != nil {
+				return err
+			}
+		}
+		for _, v := range request.Operations {
+			if v.After.ProjectIdentity != request.Project {
+				return errors.New("operation write belongs to another project")
+			}
+			if err := checkRecordWrite(tx, "operations", "operation_id", request.Project, v.After.OperationID, v.Before); err != nil {
+				return err
+			}
+			if v.Before != nil && v.Before.Status != v.After.Status && !allowedOperationTransitions[v.Before.Status][v.After.Status] {
+				return fmt.Errorf("operation transition %s -> %s is not allowed", v.Before.Status, v.After.Status)
+			}
+			if v.Before == nil && v.After.Status != "pending" && v.After.Status != "in_flight" {
+				return errors.New("new operation requires an original pending or in-flight intent")
+			}
+		}
+		if request.WorkflowID != "" {
+			var status string
+			if err := tx.tx.QueryRowContext(ctx, `SELECT status FROM tasks WHERE project_identity=? AND task_id=?`, request.Project, request.TaskID).Scan(&status); err != nil {
+				return err
+			}
+			if status != "in_progress" {
+				// Completed/discarded tasks may retain diagnostic and cleanup
+				// receipts, but cannot restart business work or replace evidence.
+				if v := request.Workflow; v != nil && recordWriteChanged(*v) {
+					return nativeErr("task_not_active", "worker workflow is frozen after task settlement")
+				}
+				if v := request.Execution; v != nil && (v.Before == nil || deliveredExecutionFingerprint(*v.Before) != deliveredExecutionFingerprint(v.After)) {
+					return nativeErr("task_not_active", "worker execution is frozen after task settlement")
+				}
+				if v := request.Attempt; v != nil && recordWriteChanged(*v) {
+					return nativeErr("task_not_active", "worker attempt is frozen after task settlement")
+				}
+				for _, v := range request.Decisions {
+					if recordWriteChanged(v) {
+						return nativeErr("task_not_active", "worker decisions are frozen after task settlement")
+					}
+				}
+				for _, v := range request.Operations {
+					if v.Before == nil && v.After.Kind != "orca_native_terminal_close" {
+						return nativeErr("task_not_active", "settled worker cannot start another action")
+					}
+				}
+			}
+		}
+		if v := request.Workflow; v != nil && recordWriteChanged(*v) {
+			if err := tx.PutWorkflowRun(v.After); err != nil {
+				return err
+			}
+		}
+		if v := request.Execution; v != nil && recordWriteChanged(*v) {
+			if err := tx.PutExecution(v.After); err != nil {
+				return err
+			}
+		}
+		if v := request.Attempt; v != nil && recordWriteChanged(*v) {
+			if err := tx.PutStepAttempt(v.After); err != nil {
+				return err
+			}
+		}
+		for _, v := range request.Decisions {
+			if recordWriteChanged(v) {
+				if err := tx.PutDecision(v.After); err != nil {
+					return err
+				}
+			}
+		}
+		for _, v := range request.Operations {
+			if !recordWriteChanged(v) {
+				continue
+			}
+			persisted, _, err := tx.PutOperation(v.After)
+			if err != nil {
+				return err
+			}
+			if persisted.OperationID != v.After.OperationID {
+				return errors.New("operation intent already has another identity")
+			}
+		}
+		for _, event := range request.Events {
+			if event.ProjectIdentity != request.Project || request.WorkflowID != "" && event.WorkflowRunID != request.WorkflowID {
+				return errors.New("worker event has a different binding")
+			}
+			if _, err := tx.AppendEvent(event); err != nil {
+				return err
+			}
+		}
+		if request.WorkflowID != "" {
+			if err := tx.tx.QueryRowContext(ctx, `SELECT control_revision FROM workflow_runs WHERE project_identity=? AND workflow_run_id=?`, request.Project, request.WorkflowID).Scan(&result.ControlRevision); err != nil {
+				return err
+			}
+		}
+		var err error
+		result.Checkpoint, err = tx.publishCheckpoint(request.Checkpoint)
+		return err
+	})
+	return result, err
+}
+
+func recordWriteChanged[T any](write recordWrite[T]) bool {
+	return write.Before == nil || recordFingerprint(*write.Before) != recordFingerprint(write.After)
+}
+
+func checkRecordWrite[T any](tx *sqliteTx, table, column, project, id string, expected *T) error {
+	var body []byte
+	var err error
+	if table == "workflow_runs" {
+		var revision uint64
+		err = tx.tx.QueryRowContext(tx.ctx, `SELECT payload,control_revision FROM workflow_runs WHERE project_identity=? AND workflow_run_id=?`, project, id).Scan(&body, &revision)
+		if err == nil {
+			var workflow WorkflowRunRecord
+			if err = json.Unmarshal(body, &workflow); err != nil {
+				return err
+			}
+			workflow.ControlRevision = revision
+			body = mustJSON(workflow)
+		}
+	} else {
+		err = tx.tx.QueryRowContext(tx.ctx, "SELECT payload FROM "+table+" WHERE project_identity=? AND "+column+"=?", project, id).Scan(&body)
+	}
+	if errors.Is(err, sql.ErrNoRows) && expected == nil {
+		return nil
+	}
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return err
+	}
+	if err != nil || expected == nil || operationDigest(body) != recordFingerprint(*expected) {
+		return nativeErr("stale_revision", "worker record changed before commitment: "+table+":"+id)
+	}
+	return nil
+}

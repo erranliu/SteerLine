@@ -19,16 +19,16 @@ func waitingDecisionService(t *testing.T) (*Service, *Run) {
 
 func TestRuntimeViewCannotWriteBusinessState(t *testing.T) {
 	service, run := waitingDecisionService(t)
-	workflow, execution := service.workflowRecords(run)
+	_, execution := service.workflowRecords(run)
 	originalIntent := *execution.WorkspaceIntent
 	revision := run.ControlRevision
 	run.FinishTaskStatus, run.ExecutionStatus, run.Decision.Status = "completed", "failed", "superseded"
 	run.WorkspaceIntent.Path = "view-only-path"
 	run.PR.URL = ptr("view-only-pr")
 	execution.LastEvent = ptr("new diagnostic")
-	require(t, service.save())
-	if workflow != service.workflowRecord(run) || execution != service.executionRecord(run) {
-		t.Fatal("publication replaced actor domain records")
+	require(t, service.publishCheckpoint())
+	if service.executionRecord(run).LastEvent != nil && *service.executionRecord(run).LastEvent == "new diagnostic" {
+		t.Fatal("checkpoint publication committed a worker candidate")
 	}
 	if run.FinishTaskStatus != "waiting_decision" || run.ExecutionStatus != "succeeded" || run.Decision.Status != "pending" || run.PR.URL != nil || *run.WorkspaceIntent != originalIntent || run.ControlRevision != revision {
 		t.Fatalf("view became authority or diagnostic changed revision: %+v", run)
@@ -43,7 +43,7 @@ func TestRuntimeViewCannotWriteBusinessState(t *testing.T) {
 	require(t, service.store.Heartbeat())
 	loaded, err := LoadDatabaseRuntime(service.Config)
 	require(t, err)
-	if loaded.Runs[0].ControlRevision != revision || loaded.Runs[0].LastEvent == nil || *loaded.Runs[0].LastEvent != "new diagnostic" {
+	if loaded.Runs[0].ControlRevision != revision || loaded.Runs[0].LastEvent != nil && *loaded.Runs[0].LastEvent == "new diagnostic" {
 		t.Fatal("coherent runtime read lost domain observation or heartbeat changed revision")
 	}
 }
@@ -91,7 +91,7 @@ func TestPublicationPreservesExternallyAcceptedDecision(t *testing.T) {
 	_, _, err = commands.AcceptAnswer(ctx, command, answer)
 	require(t, err)
 	service.executionRecord(run).LastEvent = ptr("actor diagnostic after external answer")
-	require(t, service.save())
+	require(t, service.publishCheckpoint())
 	loaded, err := LoadDatabaseRuntime(service.Config)
 	require(t, err)
 	if loaded.Runs[0].Decision.Status != "answer_saved" || loaded.Runs[0].Decision.Note != answer.Note {
@@ -99,7 +99,7 @@ func TestPublicationPreservesExternallyAcceptedDecision(t *testing.T) {
 	}
 }
 
-func TestPublicationRejectsConflictingDecisionAtomically(t *testing.T) {
+func TestWorkerCommitRejectsConflictingDecisionAtomically(t *testing.T) {
 	service, run := waitingDecisionService(t)
 	ctx := context.Background()
 	commands := CommandService{Store: service.domainStore, Project: service.Config.Identity()}
@@ -112,7 +112,7 @@ func TestPublicationRejectsConflictingDecisionAtomically(t *testing.T) {
 	require(t, err)
 	service.setDecisionStatus(run, "superseded")
 	service.executionRecord(run).LastEvent = ptr("must roll back")
-	if err = service.save(); err == nil || !strings.Contains(err.Error(), "publication_conflict") {
+	if err = service.commitWorker(run); err == nil || !strings.Contains(err.Error(), "stale_revision") {
 		t.Fatalf("conflicting publication was not rejected: %v", err)
 	}
 	after, nextRevision, err := service.domainStore.LoadProjection(ctx, service.Config.Identity())

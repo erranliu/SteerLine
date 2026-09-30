@@ -54,7 +54,7 @@ func (s *Service) resumeNativeOrcaWorker(ctx context.Context, task *TaskRecord, 
 	}
 	if execution.PendingTurnID != "" {
 		turnID := execution.PendingTurnID
-		op := s.nativeOrcaOperation("worker-turn:" + execution.ExecutionID + ":" + turnID)
+		op := s.operationByKey("worker-turn:" + execution.ExecutionID + ":" + turnID)
 		if op == nil {
 			return false, s.nativeOrcaUncertain(run, "Original Orca turn has no saved input intent")
 		}
@@ -69,7 +69,7 @@ func (s *Service) resumeNativeOrcaWorker(ctx context.Context, task *TaskRecord, 
 		}
 		turn := nativeOrcaCurrentTurn(execution)
 		if turn != nil && turn.DispatchID != "" && op.Status != "accepted" && op.Status != "confirmed" {
-			if err := s.changeOperation(op.OperationID, "accepted", turn.DispatchRequestID, mustJSON(*turn), ""); err != nil {
+			if err := s.changeWorkerOperation(run, op.OperationID, "accepted", turn.DispatchRequestID, mustJSON(*turn), ""); err != nil {
 				return false, err
 			}
 		}
@@ -146,9 +146,9 @@ func (s *Service) resumeWorkspaceWorker(ctx context.Context, task *TaskRecord, r
 		return true, nil
 	}
 	var preparation *OperationRecord
-	for i := range s.State.Operations {
-		if s.State.Operations[i].IdempotencyKey == "worker-workspace:"+execution.ExecutionID {
-			preparation = &s.State.Operations[i]
+	for i := range s.domain.Operations {
+		if s.domain.Operations[i].IdempotencyKey == "worker-workspace:"+execution.ExecutionID {
+			preparation = &s.domain.Operations[i]
 			break
 		}
 	}
@@ -166,7 +166,7 @@ func (s *Service) resumeWorkspaceWorker(ctx context.Context, task *TaskRecord, r
 		} else {
 			s.refreshRun(run)
 			if preparation.Status != "confirmed" {
-				if err := s.changeOperation(preparation.OperationID, "confirmed", preparation.PlatformRequestID, mustJSON(execution.Workspace), ""); err != nil {
+				if err := s.changeWorkerOperation(run, preparation.OperationID, "confirmed", preparation.PlatformRequestID, mustJSON(execution.Workspace), ""); err != nil {
 					return false, err
 				}
 			}
@@ -186,7 +186,7 @@ func (s *Service) resumeWorkspaceWorker(ctx context.Context, task *TaskRecord, r
 		}
 		applyWorkflowWorkspaceEvidence(run, execution, workspace)
 		if preparation.Status != "confirmed" {
-			if err := s.changeOperation(preparation.OperationID, "confirmed", "", mustJSON(workspace), ""); err != nil {
+			if err := s.changeWorkerOperation(run, preparation.OperationID, "confirmed", "", mustJSON(workspace), ""); err != nil {
 				return false, err
 			}
 		}

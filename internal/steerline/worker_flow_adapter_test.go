@@ -14,11 +14,9 @@ func TestWorkerFlowAdapterUsesFixedProtocol(t *testing.T) {
 	run := &Run{RunID: "run", ExecutionID: "execution", AttemptID: "attempt", Host: "local", Agent: "codex", Backend: string(BackendLocal), Protocol: string(ProtocolLocalCodexAppServer), Target: target}
 	service := Service{
 		Config: config,
-		State: Runtime{
-			WorkflowRuns: []WorkflowRunRecord{{WorkflowRunID: "run", WorkflowVersion: WorkerFlowVersion}},
-			Executions:   []ExecutionRecord{{ExecutionID: "execution", WorkflowRunID: "run", Agent: "codex", Backend: string(BackendLocal), Protocol: string(ProtocolLocalCodexAppServer), Target: target}},
-			Attempts:     []StepAttemptRecord{{AttemptID: "attempt", ExecutionID: "execution"}},
-		},
+		domain: DomainSnapshot{WorkflowRuns: []WorkflowRunRecord{{WorkflowRunID: "run", WorkflowVersion: WorkerFlowVersion}},
+			Executions: []ExecutionRecord{{ExecutionID: "execution", WorkflowRunID: "run", Agent: "codex", Backend: string(BackendLocal), Protocol: string(ProtocolLocalCodexAppServer), Target: target}},
+			Attempts:   []StepAttemptRecord{{AttemptID: "attempt", ExecutionID: "execution"}}},
 	}
 	mode, err := service.workerFlowMode(run)
 	if err != nil {
@@ -27,8 +25,8 @@ func TestWorkerFlowAdapterUsesFixedProtocol(t *testing.T) {
 	if mode != workerflow.LocalCodex {
 		t.Fatalf("local fixed protocol chose %v", mode)
 	}
-	service.State.Executions[0].PendingTurnID, service.State.Executions[0].PendingCommandID = mode.PendingIdentity("command")
-	if service.State.Executions[0].PendingCommandID != "command" || service.State.Executions[0].PendingTurnID != "" {
+	service.domain.Executions[0].PendingTurnID, service.domain.Executions[0].PendingCommandID = mode.PendingIdentity("command")
+	if service.domain.Executions[0].PendingCommandID != "command" || service.domain.Executions[0].PendingTurnID != "" {
 		t.Fatal("Codex command identity was treated as a native turn receipt")
 	}
 	wrong := *run
@@ -41,12 +39,12 @@ func TestWorkerFlowAdapterUsesFixedProtocol(t *testing.T) {
 func TestWorkerFlowRejectsConfigDriftBeforePreparationOrTurnIntent(t *testing.T) {
 	service, run := appServerAuditService(t)
 	ctx := context.Background()
-	task := nativeTaskRecord(service.State.Tasks, run.TaskID)
+	task := nativeTaskRecord(service.domain.Tasks, run.TaskID)
 	if task == nil {
 		t.Fatal("claimed native task is missing")
 	}
 	_, execution := service.workflowRecords(run)
-	beforeOperations := len(service.State.Operations)
+	beforeOperations := len(service.domain.Operations)
 	_, beforeRevision, err := service.domainStore.DatabaseVersion(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -66,8 +64,8 @@ func TestWorkerFlowRejectsConfigDriftBeforePreparationOrTurnIntent(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if afterRevision != beforeRevision || len(service.State.Operations) != beforeOperations || execution.PendingTurnID != "" || execution.PendingCommandID != "" {
-		t.Fatalf("rejected route changed durable or actor state: revision=%d/%d operations=%d/%d pending=%q/%q", beforeRevision, afterRevision, beforeOperations, len(service.State.Operations), execution.PendingTurnID, execution.PendingCommandID)
+	if afterRevision != beforeRevision || len(service.domain.Operations) != beforeOperations || execution.PendingTurnID != "" || execution.PendingCommandID != "" {
+		t.Fatalf("rejected route changed durable or actor state: revision=%d/%d operations=%d/%d pending=%q/%q", beforeRevision, afterRevision, beforeOperations, len(service.domain.Operations), execution.PendingTurnID, execution.PendingCommandID)
 	}
 }
 

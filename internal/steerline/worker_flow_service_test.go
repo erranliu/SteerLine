@@ -71,7 +71,7 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openP
 	if run == nil || run.RunID != receipt.WorkflowRunID || run.ExecutionID != receipt.ExecutionID || run.AttemptID != receipt.AttemptID {
 		t.Fatalf("fixed claim did not reconstruct: run=%+v receipt=%+v", run, receipt)
 	}
-	task := nativeTaskRecord(service.State.Tasks, "8")
+	task := nativeTaskRecord(service.domain.Tasks, "8")
 	if task == nil {
 		t.Fatal("claimed task disappeared")
 	}
@@ -135,7 +135,7 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openP
 			t.Fatal(err)
 		}
 		run.FinishTaskStatus, run.PR.URL, run.PR.State = "waiting_pr_merge", ptr(url), "open"
-		if err := service.save(); err != nil {
+		if err := service.commitWorker(run); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -169,7 +169,7 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openP
 	}
 	service.State.Service.Ready = true
 	service.State.Service.Status = "running"
-	if err := service.save(); err != nil {
+	if err := service.publishCheckpoint(); err != nil {
 		t.Fatal(err)
 	}
 	answer := DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, OptionID: option, Note: note, AnsweredBy: "operator", ExpectedDecisionVersion: run.Decision.Version, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: service.State.Service.InstanceID}
@@ -192,7 +192,7 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openP
 	run.Decision.Version, run.Decision.Status = record.Version, record.Status
 	run.Decision.OptionID, run.Decision.Note, run.Decision.AnsweredBy = saved.OptionID, saved.Note, saved.AnsweredBy
 	run.Decision.AnsweredAt = &saved.AnsweredAt
-	if err := service.save(); err != nil {
+	if err := service.publishCheckpoint(); err != nil {
 		t.Fatal(err)
 	}
 	selectedConfig := service.Config
@@ -227,8 +227,8 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openP
 	workflow, execution := service.workflowRecords(run)
 	if workflow == nil || execution == nil || workflow.WorkflowRunID != receipt.WorkflowRunID || execution.ExecutionID != receipt.ExecutionID ||
 		run.AttemptID != receipt.AttemptID || execution.SessionID != workerFlowMockSession || execution.TurnNumber != 2 ||
-		canonical(deref(run.WorktreePath)) != canonical(firstWorktree) || len(service.State.Attempts) != 1 {
-		t.Fatalf("feedback replaced the fixed worker: workflow=%q/%q execution=%q/%q session=%q turn=%d attempt=%q/%q worktree=%q/%q attempts=%d", workflow.WorkflowRunID, receipt.WorkflowRunID, execution.ExecutionID, receipt.ExecutionID, execution.SessionID, execution.TurnNumber, run.AttemptID, receipt.AttemptID, deref(run.WorktreePath), firstWorktree, len(service.State.Attempts))
+		canonical(deref(run.WorktreePath)) != canonical(firstWorktree) || len(service.domain.Attempts) != 1 {
+		t.Fatalf("feedback replaced the fixed worker: workflow=%q/%q execution=%q/%q session=%q turn=%d attempt=%q/%q worktree=%q/%q attempts=%d", workflow.WorkflowRunID, receipt.WorkflowRunID, execution.ExecutionID, receipt.ExecutionID, execution.SessionID, execution.TurnNumber, run.AttemptID, receipt.AttemptID, deref(run.WorktreePath), firstWorktree, len(service.domain.Attempts))
 	}
 	currentHead, err := exec.Command("git", "-C", firstWorktree, "rev-parse", "HEAD").Output()
 	if err != nil || strings.TrimSpace(string(currentHead)) != strings.TrimSpace(string(head)) {
@@ -252,23 +252,23 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openP
 	run.Decision.Version, run.Decision.Status = uncertainRecord.Version, uncertainRecord.Status
 	run.Decision.Note, run.Decision.AnsweredBy = uncertain.Note, uncertain.AnsweredBy
 	run.Decision.AnsweredAt = &uncertainRecord.UpdatedAt
-	if err := service.save(); err != nil {
+	if err := service.publishCheckpoint(); err != nil {
 		t.Fatal(err)
 	}
-	operationID, err := service.startOperation("start_worker_turn", "worker-turn:"+execution.ExecutionID+":"+uncertainCommand.CommandID, map[string]string{"original_request": uncertainCommand.CommandID})
+	operationID, err := service.startWorkerOperation(run, "start_worker_turn", "worker-turn:"+execution.ExecutionID+":"+uncertainCommand.CommandID, map[string]string{"original_request": uncertainCommand.CommandID})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := service.changeOperation(operationID, "outcome_unknown", "", nil, "feedback receipt lost"); err != nil {
+	if err := service.changeWorkerOperation(run, operationID, "outcome_unknown", "", nil, "feedback receipt lost"); err != nil {
 		t.Fatal(err)
 	}
-	before := len(service.State.Operations)
+	before := len(service.domain.Operations)
 	for i := 0; i < 2; i++ {
 		if err := service.applyWorkerFlowDecision(ctx, run); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if len(service.State.Operations) != before || service.workers[run.RunID] != nil || execution.TurnNumber != 2 || run.Error == nil || !strings.Contains(*run.Error, "no duplicate message") {
-		t.Fatalf("uncertain feedback was resent or lost: operations=%d/%d worker=%t turn=%d decision=%s error=%q", before, len(service.State.Operations), service.workers[run.RunID] != nil, execution.TurnNumber, run.Decision.Status, deref(run.Error))
+	if len(service.domain.Operations) != before || service.workers[run.RunID] != nil || execution.TurnNumber != 2 || run.Error == nil || !strings.Contains(*run.Error, "no duplicate message") {
+		t.Fatalf("uncertain feedback was resent or lost: operations=%d/%d worker=%t turn=%d decision=%s error=%q", before, len(service.domain.Operations), service.workers[run.RunID] != nil, execution.TurnNumber, run.Decision.Status, deref(run.Error))
 	}
 }

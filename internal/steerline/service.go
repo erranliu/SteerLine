@@ -16,14 +16,18 @@ import (
 )
 
 type Service struct {
-	Config          Config
-	baseConfig      Config
-	dispatchConfig  *Config
-	dispatchProfile *ExecutionProfile
-	State           Runtime
-	store           *Store
-	domainStore     *SQLiteStore
-	prs             *PRClient
+	Config            Config
+	baseConfig        Config
+	dispatchConfig    *Config
+	dispatchProfile   *ExecutionProfile
+	State             Runtime
+	domain            DomainSnapshot
+	committed         DomainSnapshot
+	pendingEvents     []DomainEvent
+	pendingOperations map[string]string
+	store             *Store
+	domainStore       *SQLiteStore
+	prs               *PRClient
 	// workers owns live observers by authoritative workflow run ID.
 	workers             map[string]*Worker
 	appServerLaunching  map[string]string // In-flight goroutines, never persisted execution authority.
@@ -115,6 +119,9 @@ func NewService(c Config) (_ *Service, retErr error) {
 			return nil, nativeErr("authority_mismatch", "runtime repository or branch differs from the native authority; preserve state")
 		}
 		s.State = *old
+		if err := s.refreshNativeSnapshot(context.Background()); err != nil {
+			return nil, err
+		}
 		s.State.Control.DispatchMode, s.State.Control.DispatchPaused, s.State.Control.Revision = authority.DispatchMode, authority.DispatchPaused, authority.AuthorityVersion
 		if op := s.State.Control.Operation; op != nil {
 			if !controlIDPattern.MatchString(op.RequestID) || !validControlAction(op.Action) || (op.Phase != "applying" && op.Phase != "completed") || len(op.RequestDigest) != 64 || op.Action == "start_task" && (!controlIDPattern.MatchString(op.RunID) || op.TaskID == "") || op.Phase == "completed" && op.Result == nil {
@@ -163,19 +170,18 @@ func (s *Service) Close() error {
 	return s.domainStore.Close()
 }
 
-func (s *Service) save() error {
-	if err := projectRuntime(&s.State); err != nil {
+// publishCheckpoint publishes only the service checkpoint. Uncommitted business candidates
+// are discarded and cannot become durable through publication or heartbeat.
+func (s *Service) publishCheckpoint() error {
+	if err := s.projectState(); err != nil {
 		return err
 	}
-	authority, err := s.domainStore.nativeAuthority(context.Background(), s.Config.identity)
-	if err != nil {
+	checkpoint := runtimeCheckpoint(s.State)
+	if err := s.store.Publish(&checkpoint); err != nil {
 		return err
 	}
-	s.State.Control.DispatchMode, s.State.Control.DispatchPaused, s.State.Control.Revision = authority.DispatchMode, authority.DispatchPaused, authority.AuthorityVersion
-	if err := s.store.Publish(&s.State); err != nil {
-		return err
-	}
-	return projectRuntime(&s.State)
+	s.State.Revision, s.State.UpdatedAt, s.State.HeartbeatAt = checkpoint.Revision, checkpoint.UpdatedAt, checkpoint.HeartbeatAt
+	return s.refreshNativeSnapshot(context.Background())
 }
 
 // activityWriter returns the lazily-opened journal for one run. Opening is
@@ -272,7 +278,7 @@ func (s *Service) recordActivity(r *Run, ev ActivityEvent) {
 	if ev.ItemID != "" {
 		externalID = "activity-" + r.AttemptID + "-" + operationDigest([]byte(ev.Source + "\x00" + ev.ItemID))[:24]
 	}
-	s.State.PendingEvents = append(s.State.PendingEvents, DomainEvent{ProjectIdentity: s.Config.identity, TaskID: domainTask, WorkflowRunID: r.RunID, ExecutionID: executionID, AttemptID: r.AttemptID, ExternalSource: "center:" + r.RunID, ExternalID: externalID, Type: "activity." + ev.Kind, ReceivedAt: ev.TS, Payload: payload})
+	s.pendingEvents = append(s.pendingEvents, DomainEvent{ProjectIdentity: s.Config.identity, TaskID: domainTask, WorkflowRunID: r.RunID, ExecutionID: executionID, AttemptID: r.AttemptID, ExternalSource: "center:" + r.RunID, ExternalID: externalID, Type: "activity." + ev.Kind, ReceivedAt: ev.TS, Payload: payload})
 }
 
 func (s *Service) emitConsole(ev ActivityEvent) {
@@ -476,7 +482,7 @@ func (s *Service) eventForRun(run *Run, ev WorkerEvent) error {
 		err := s.recordHistoricalWorkerEvent(ev)
 		ackWorkerEventPersistence(ev, err)
 		if err == nil && len(ev.RemoteMessages) > 0 {
-			err = s.save()
+			err = s.commitEvents()
 		}
 		return ack(err)
 	}
@@ -487,7 +493,7 @@ func (s *Service) eventForRun(run *Run, ev WorkerEvent) error {
 			return ack(err)
 		}
 		if len(ev.RemoteMessages) > 0 {
-			return ack(s.save())
+			return ack(s.commitEvents())
 		}
 		return ack(nil)
 	}
@@ -512,8 +518,8 @@ func (s *Service) acknowledgeRemoteDelivery(ev WorkerEvent) error {
 	digest := operationDigest(request)
 	operationID := "ack-" + operationDigest([]byte(idempotencyKey))[:32]
 	var operation *OperationRecord
-	for i := range s.State.Operations {
-		candidate := &s.State.Operations[i]
+	for i := range s.domain.Operations {
+		candidate := &s.domain.Operations[i]
 		if candidate.OperationID != operationID && candidate.IdempotencyKey != idempotencyKey {
 			continue
 		}
@@ -538,15 +544,15 @@ func (s *Service) acknowledgeRemoteDelivery(ev WorkerEvent) error {
 		}
 	} else {
 		value := OperationRecord{ProjectIdentity: s.Config.identity, OperationID: operationID, IdempotencyKey: idempotencyKey, Kind: "ack_orca_delivery", Status: "in_flight", PayloadDigest: digest, Request: request, CreatedAt: now(), UpdatedAt: now()}
-		s.State.Operations = append(s.State.Operations, value)
-		operation = &s.State.Operations[len(s.State.Operations)-1]
-		if err := s.save(); err != nil {
+		s.domain.Operations = append(s.domain.Operations, value)
+		operation = &s.domain.Operations[len(s.domain.Operations)-1]
+		if err := s.commitOperation(operationID); err != nil {
 			return err
 		}
 		operation = nil
-		for i := range s.State.Operations {
-			if s.State.Operations[i].OperationID == operationID {
-				operation = &s.State.Operations[i]
+		for i := range s.domain.Operations {
+			if s.domain.Operations[i].OperationID == operationID {
+				operation = &s.domain.Operations[i]
 				break
 			}
 		}
@@ -567,7 +573,7 @@ func (s *Service) acknowledgeRemoteDelivery(ev WorkerEvent) error {
 			operation.Status = "rejected"
 		}
 		operation.UnknownReason = ackErr.Error()
-		if saveErr := s.save(); saveErr != nil {
+		if saveErr := s.commitOperation(operationID); saveErr != nil {
 			return errors.Join(ackErr, saveErr)
 		}
 		return ackErr
@@ -577,7 +583,7 @@ func (s *Service) acknowledgeRemoteDelivery(ev WorkerEvent) error {
 			return err
 		}
 	}
-	return s.save()
+	return s.commitOperation(operationID)
 }
 
 func ackWorkerEventPersistence(ev WorkerEvent, err error) {
@@ -614,7 +620,7 @@ func (s *Service) persistRemoteWorkerMessages(ev WorkerEvent) error {
 			return &BackendError{Code: BackendProtocolInvalid, Diagnostic: "remote inbox message lacks a stable ID or type"}
 		}
 		duplicate := false
-		for _, existing := range s.State.PendingEvents {
+		for _, existing := range s.pendingEvents {
 			if existing.ExternalSource == source && existing.ExternalID == message.ID {
 				duplicate = true
 				break
@@ -642,7 +648,7 @@ func (s *Service) persistRemoteWorkerMessages(ev WorkerEvent) error {
 			messageDispatchID = strings.TrimPrefix(message.FromHandle, "dispatch:")
 		}
 		if messageDispatchID != "" {
-			for _, attempt := range s.State.Attempts {
+			for _, attempt := range s.domain.Attempts {
 				if attempt.ExecutionID != run.ExecutionID || attempt.ExternalBinding.Dispatch != messageDispatchID {
 					continue
 				}
@@ -662,7 +668,7 @@ func (s *Service) persistRemoteWorkerMessages(ev WorkerEvent) error {
 		} else {
 			event.PayloadOmitted = true
 		}
-		s.State.PendingEvents = append(s.State.PendingEvents, event)
+		s.pendingEvents = append(s.pendingEvents, event)
 	}
 	return nil
 }
@@ -689,9 +695,9 @@ func (s *Service) recordHistoricalWorkerEvent(ev WorkerEvent) error {
 	}
 	// Keep late facts attached to their original attempt in the domain journal.
 	attempt := (*StepAttemptRecord)(nil)
-	for i := range s.State.Attempts {
-		if s.State.Attempts[i].AttemptID == ev.AttemptID && s.State.Attempts[i].ExecutionID == run.ExecutionID {
-			attempt = &s.State.Attempts[i]
+	for i := range s.domain.Attempts {
+		if s.domain.Attempts[i].AttemptID == ev.AttemptID && s.domain.Attempts[i].ExecutionID == run.ExecutionID {
+			attempt = &s.domain.Attempts[i]
 			break
 		}
 	}
@@ -716,8 +722,8 @@ func (s *Service) recordHistoricalWorkerEvent(ev WorkerEvent) error {
 	if err != nil {
 		return err
 	}
-	s.State.PendingEvents = append(s.State.PendingEvents, DomainEvent{ProjectIdentity: s.Config.identity, TaskID: run.DomainTaskID, WorkflowRunID: run.RunID, ExecutionID: run.ExecutionID, AttemptID: ev.AttemptID, ExternalSource: "center:" + run.RunID, ExternalID: newID(), Type: "activity." + ev.Activity.Kind, ReceivedAt: ev.Activity.TS, Payload: payload})
-	if err = s.save(); err != nil {
+	s.pendingEvents = append(s.pendingEvents, DomainEvent{ProjectIdentity: s.Config.identity, TaskID: run.DomainTaskID, WorkflowRunID: run.RunID, ExecutionID: run.ExecutionID, AttemptID: ev.AttemptID, ExternalSource: "center:" + run.RunID, ExternalID: newID(), Type: "activity." + ev.Activity.Kind, ReceivedAt: ev.Activity.TS, Payload: payload})
+	if err = s.commitEvents(); err != nil {
 		return err
 	}
 	w, err := OpenActivity(filepath.Join(dir, "activity.jsonl"), ev.RunID, run.TaskID)
@@ -764,7 +770,7 @@ func (s *Service) run(ctx context.Context, dispatchMode string) (retErr error) {
 	s.State.Service.Ready = false
 	s.State.Service.Status = "running"
 	s.State.Service.HeartbeatIntervalMS = duration(s.Config.Heartbeat).Milliseconds()
-	if e := s.save(); e != nil {
+	if e := s.publishCheckpoint(); e != nil {
 		return e
 	}
 	s.conversationReplayRequests = make(chan []conversationJournalSource, 16)
@@ -833,7 +839,7 @@ func (s *Service) run(ctx context.Context, dispatchMode string) (retErr error) {
 		}
 		s.State.Service.Status = "stopping"
 		s.State.Service.Ready = false
-		s.save()
+		s.publishCheckpoint()
 		if e := s.ensureStopApplyingReceipt(); e != nil {
 			retErr = errors.Join(retErr, e)
 		}
@@ -850,7 +856,7 @@ func (s *Service) run(ctx context.Context, dispatchMode string) (retErr error) {
 		if retErr != nil {
 			s.setError(retErr)
 		}
-		if e := s.save(); e != nil {
+		if e := s.publishCheckpoint(); e != nil {
 			retErr = e
 		}
 		if e := s.finalizeStopControl(); e != nil {
@@ -895,7 +901,7 @@ func (s *Service) run(ctx context.Context, dispatchMode string) (retErr error) {
 				return nil
 			}
 		}
-		if e := s.save(); e != nil {
+		if e := s.publishCheckpoint(); e != nil {
 			return e
 		}
 		if s.State.Service.Ready {
@@ -927,7 +933,7 @@ func (s *Service) run(ctx context.Context, dispatchMode string) (retErr error) {
 	}
 	if e := s.reconcile(ctx); e != nil {
 		s.setError(e)
-		if saveErr := s.save(); saveErr != nil {
+		if saveErr := s.publishCheckpoint(); saveErr != nil {
 			return saveErr
 		}
 	}
@@ -937,19 +943,19 @@ func (s *Service) run(ctx context.Context, dispatchMode string) (retErr error) {
 	candidateErr := s.refreshCandidates(ctx)
 	if candidateErr != nil {
 		s.setError(candidateErr)
-		if saveErr := s.save(); saveErr != nil {
+		if saveErr := s.publishCheckpoint(); saveErr != nil {
 			return saveErr
 		}
 	}
 	s.State.Service.Ready = false
-	if e := s.save(); e != nil {
+	if e := s.publishCheckpoint(); e != nil {
 		return e
 	}
 	if e := s.pollControl(ctx, cancel); e != nil {
 		return e
 	}
 	s.State.Service.Ready = candidateErr == nil && ctx.Err() == nil && s.State.Control.Operation == nil
-	if e := s.save(); e != nil {
+	if e := s.publishCheckpoint(); e != nil {
 		return e
 	}
 	if e := s.publishStartupReady(); e != nil {

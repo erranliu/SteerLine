@@ -44,7 +44,6 @@ type Runtime struct {
 	Decisions     []DecisionRecord     `json:"decisions,omitempty"`
 	Operations    []OperationRecord    `json:"operations,omitempty"`
 	Deliveries    []TaskDeliveryRecord `json:"-"`
-	PendingEvents []DomainEvent        `json:"-"`
 	CurrentTask   *string              `json:"current_task"`
 	SlotOccupied  bool                 `json:"slot_occupied"`
 	Runs          []*Run               `json:"runs"`

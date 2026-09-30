@@ -129,7 +129,7 @@ func (s *Service) prepareRemoteWorkerWorkspace(ctx context.Context, run *Run, ex
 		return err
 	}
 	if operationID != "" {
-		if err := s.changeOperation(operationID, "confirmed", "", mustJSON(worktree), ""); err != nil {
+		if err := s.changeWorkerOperation(run, operationID, "confirmed", "", mustJSON(worktree), ""); err != nil {
 			return fmt.Errorf("remote worktree created but receipt persistence failed: %w", err)
 		}
 	}
@@ -164,7 +164,7 @@ func (s *Service) recoverRemoteWorkerWorkspace(ctx context.Context, run *Run, ex
 		return err
 	}
 	if operation.Status != "confirmed" {
-		return s.changeOperation(operation.OperationID, "confirmed", operation.PlatformRequestID, mustJSON(worktree), "")
+		return s.changeWorkerOperation(run, operation.OperationID, "confirmed", operation.PlatformRequestID, mustJSON(worktree), "")
 	}
-	return s.save()
+	return s.commitWorker(run)
 }

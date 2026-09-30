@@ -73,7 +73,7 @@ func (s *Service) finishControl(op *ControlOperation, receipt ControlReceipt) er
 	copy := receipt
 	op.Result = &copy
 	s.State.Control.Operation = op
-	if err := s.save(); err != nil {
+	if err := s.publishCheckpoint(); err != nil {
 		return err
 	}
 	s.injectControlFault("terminal_checkpoint")
@@ -82,7 +82,7 @@ func (s *Service) finishControl(op *ControlOperation, receipt ControlReceipt) er
 	}
 	s.injectControlFault("after_terminal_receipt")
 	s.State.Control.Operation = nil
-	if err := s.save(); err != nil {
+	if err := s.publishCheckpoint(); err != nil {
 		return err
 	}
 	if s.controlSeen == nil {
@@ -277,7 +277,7 @@ func (s *Service) processNextControl(ctx context.Context, cancel context.CancelF
 	}
 	op := &ControlOperation{RequestID: req.RequestID, Action: req.Action, TaskID: payload.TaskID, Payload: append(json.RawMessage(nil), req.Payload...), Phase: "applying", RunID: runID, AttemptID: runID, RequestDigest: digest}
 	s.State.Control.Operation = op
-	if err = s.save(); err != nil {
+	if err = s.publishCheckpoint(); err != nil {
 		return err
 	}
 	s.injectControlFault("after_checkpoint")
@@ -355,7 +355,7 @@ func (s *Service) retainControlPublicationFailure(err error) error {
 		return err
 	}
 	s.setError(err)
-	return s.save()
+	return s.publishCheckpoint()
 }
 
 func controlFailureCode(err error) string {
@@ -432,7 +432,7 @@ func (s *Service) applyControlAction(ctx context.Context, req ControlRequest, pa
 				result.Message = "native task worker identity is persisted and running"
 				return nil
 			}
-			task := nativeTaskRecord(s.State.Tasks, payload.TaskID)
+			task := nativeTaskRecord(s.domain.Tasks, payload.TaskID)
 			attempt := s.workflowAttempt(run, run.AttemptID)
 			if task == nil || workflow == nil || execution == nil || attempt == nil {
 				return nativeErr("inconsistent_delivery", "reserved native start request cannot be recovered from center records")
@@ -491,7 +491,7 @@ func (s *Service) recoverControlOperation() error {
 			return err
 		}
 		s.State.Control.Operation = nil
-		return s.save()
+		return s.publishCheckpoint()
 	}
 	path := controlRequestPath(s.Config.RunDir, op.RequestID)
 	req, err := readControlRequest(path)
@@ -534,14 +534,14 @@ func (s *Service) recoverControlOperation() error {
 	receipt.AttemptID = op.AttemptID
 	receipt.ControlRevision = s.State.Control.Revision + 1
 	op.Phase, op.Result = "completed", &receipt
-	if err = s.save(); err != nil {
+	if err = s.publishCheckpoint(); err != nil {
 		return err
 	}
 	if err = s.writeReceipt(receipt); err != nil {
 		return err
 	}
 	s.State.Control.Operation = nil
-	return s.save()
+	return s.publishCheckpoint()
 }
 
 func findStopRequest(c Config, instanceID string) (*ControlRequest, string) {
@@ -615,7 +615,7 @@ func (s *Service) finalizeStopControl() error {
 	digest := rawRequestDigest(controlRequestPath(s.Config.RunDir, req.RequestID))
 	s.State.Service.Status = "stopped"
 	s.State.Service.Ready = false
-	if err := s.save(); err != nil {
+	if err := s.publishCheckpoint(); err != nil {
 		return err
 	}
 	receipt := s.baseReceipt(req, digest, "applied", "applied", "service stopped after the active operation settled")
