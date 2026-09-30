@@ -31,12 +31,20 @@ func RelayInstruction(runID, turnID string) string {
 
 // EnsureRelayIgnored updates only the verified repository's local exclude file.
 func EnsureRelayIgnored(repositoryGitDir string) error {
+	return ensureIgnored(repositoryGitDir, "/.steerline-relay/")
+}
+
+func EnsureReadinessIgnored(repositoryGitDir string) error {
+	return ensureIgnored(repositoryGitDir, "/.steerline-readiness/")
+}
+
+func ensureIgnored(repositoryGitDir, pattern string) error {
 	root, err := os.OpenRoot(repositoryGitDir)
 	if err != nil {
 		return err
 	}
 	defer root.Close()
-	const path, pattern = "info/exclude", "/.steerline-relay/"
+	const path = "info/exclude"
 	var current []byte
 	reader, err := root.Open(path)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {

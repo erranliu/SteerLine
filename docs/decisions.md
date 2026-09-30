@@ -34,3 +34,11 @@ local 路径使用受服务管理的 Codex app-server 和固定 thread；服务�
 `retry_run`、`mark_stopped`、`resolve_command` 不属于当前用户反馈入口。当前格式重启保留原 Decision、Command、Operation 和外部身份；无法自动核实的副作用保持待决策及诊断事实。
 
 Execution 的恢复门槛和版本每次换服务实例重新建立；第一次接管新领取任务只登记所属实例。先前已保存但未送达的答案保留为历史 Decision，新确认创建关联 Decision，不改写原 first-wins 答案。状态未核实、旧 reply/send 的结果不明或旧进程树仍可能写入时，答复入口不可执行。普通反馈复用仍存活的 worker；重建进程会创建新 Attempt，原 Attempt 的进程、会话和回执保持可查。
+
+## 宿主阻断的中心动作
+
+Windows Orca Codex 的环境阻断也通过 `answer_decision` 呈现。选项声明 `receiver=center` 和类型化 action，请求绑定 Execution、准备意图/turn、blocker ID；命令沿用 Decision version、WorkflowRun revision 与服务实例核验。`open_terminal` 仅定位原 UI，不代表批准或修复；`recheck_environment` 先核验原身份、等待及未知 Operation，不通过自由文字“重试”触发重新派发。
+
+宿主等待期间的普通文字原样保存为待投递反馈，并提供新的中心动作 Decision；原 worker question/message ID、答案与发送事实保持独立。恢复后只向仍有效的原 Dispatch 投递一次；原目标过期则保留并提示，结果未知的旧发送只对账。中心动作附带备注保存在原接受记录中，不作为 worker 指令注入。准备问题使用原 message ID 回复，但不进入业务执行或计数。
+
+受管环境重启恢复原准备期限、nonce、工具/收据事实和 Operation。原结果 relay 沿已保存操作对账；已核实原身份、尚未尝试转发的 worker 声明可走原 relay，未知回执不再次发送。其他 Orca agent 与 local 的原停服恢复入口不变。真实成功链路及原身份对账已通过，见[验收记录](validation/worker-environment-readiness/README.md)。

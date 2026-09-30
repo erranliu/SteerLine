@@ -1,6 +1,8 @@
 # Plan：worker 环境就绪与宿主阻断恢复
 
-目标：`WORKER-ENVIRONMENT-READINESS`。唯一执行依据：[Spec](worker-environment-readiness.spec.md)。状态：待实施。日期：2026-09-30。未分配原生 Task ID；一个实现 PR 交付。最终权限接线及交付前置：[#59](execution-isolation-06-policy.spec.md) 合入；准备性探针与观察工作可独立开展。
+目标：`WORKER-ENVIRONMENT-READINESS`。唯一执行依据：[Spec](worker-environment-readiness.spec.md)。状态：PR154 原范围已实施并通过最小验收，PR160 待审阅；#59 新权限接线待前置完成。日期：2026-09-30。未分配原生 Task ID；一个实现 PR 交付。最终权限接线及交付前置：[#59](execution-isolation-06-policy.spec.md) 合入；准备性探针与观察工作可独立开展。
+
+实施基线：PR160 完成 PR154 提交的冻结权限、原会话探针和宿主恢复范围，证据见[验收记录](../validation/worker-environment-readiness/README.md)。后续执行配置隔离规划将权限编译与快照所有者移交给 #59；本文保留该新接线要求，原验收不证明 #59 接线已完成。当前准备/派发/观察代码已整合到 `orca_worker_prepare.go`、`orca_worker_dispatch.go`、`orca_worker_observation.go` 和 `worker_environment.go`。
 
 ## 1. 核实接口并收敛证据
 

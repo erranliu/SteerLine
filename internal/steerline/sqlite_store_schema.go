@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-const domainSchemaVersion = 7
+const domainSchemaVersion = 8
 
 const activeWorkflowIndexV5 = `CREATE UNIQUE INDEX one_active_workflow_per_task ON workflow_runs(project_identity,task_id) WHERE phase NOT IN ('completed','abandoned')`
 

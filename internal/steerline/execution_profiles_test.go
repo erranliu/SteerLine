@@ -13,11 +13,11 @@ import (
 
 func TestConfigLoadsLocalAndRemoteOrcaProfilesWithoutProbingTargets(t *testing.T) {
 	if runtime.GOOS != "windows" {
-		t.Skip("local Orca terminal target uses Windows cmd.exe")
+		t.Skip("local Orca terminal target uses Windows PowerShell")
 	}
 	base, _ := nativeTaskFixture(t)
 	t.Setenv("STEERLINE_HOME", t.TempDir())
-	localOrca := ExecutionProfile{ID: "orca-local", Name: "Orca 本机", Host: "orca", Agent: "codex", Sandbox: "workspace-write", Codex: Command{Executable: "codex"}, Orca: OrcaConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "15m"}}
+	localOrca := ExecutionProfile{ID: "orca-local", Name: "Orca 本机", Host: "orca", Agent: "codex", Sandbox: "workspace-write", WindowsSandbox: "unelevated", Codex: Command{Executable: "codex"}, Orca: OrcaConfig{Executable: "orca", Shell: "powershell.exe", WaitTimeout: "15m"}}
 	remoteOrca := ExecutionProfile{ID: "orca-remote", Name: "Orca 远程", Host: "orca_supervised", Agent: "codex", Model: "chosen-model", ReasoningEffort: "xhigh", Sandbox: "workspace-write", Codex: Command{Executable: "codex"}, Orca: OrcaConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "15m", Supervised: &SupervisedOrcaConfig{ConnectionID: "connection", EnvironmentID: "environment", RepositorySelector: "repo", CoordinatorTerminal: "terminal", PollInterval: "5s", CapabilityReportVersion: 1}}}
 	local := ExecutionProfile{ID: "local", Name: "本地", Host: "local", Agent: "codex", Sandbox: "workspace-write", Codex: Command{Executable: "codex"}}
 	writeGlobalExecutionFixture(t, []ExecutionProfile{local, localOrca, remoteOrca}, "local")

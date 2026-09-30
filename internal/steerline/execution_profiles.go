@@ -40,6 +40,7 @@ type FixedExecutionProfile struct {
 	ReasoningEffort string     `json:"reasoning_effort,omitempty"`
 	Sandbox         string     `json:"sandbox"`
 	WindowsSandbox  string     `json:"windows_sandbox,omitempty"`
+	ApprovalPolicy  string     `json:"approval_policy,omitempty"`
 	CodexProfile    string     `json:"profile,omitempty"`
 	Codex           Command    `json:"codex"`
 	Orca            OrcaConfig `json:"orca,omitempty"`
@@ -47,21 +48,40 @@ type FixedExecutionProfile struct {
 
 func (p ExecutionProfile) Freeze() FixedExecutionProfile {
 	p = p.withWindowsSandboxDefault()
-	return FixedExecutionProfile{ID: p.ID, Name: p.Name, Digest: p.Digest(), Host: p.Host, Agent: p.Agent, Model: p.Model, ReasoningEffort: p.ReasoningEffort, Sandbox: p.Sandbox, WindowsSandbox: p.WindowsSandbox, CodexProfile: p.CodexProfile, Codex: p.Codex, Orca: p.Orca}
+	policy := ""
+	if p.managedOrcaPermissions() {
+		policy = "never"
+	}
+	return FixedExecutionProfile{ID: p.ID, Name: p.Name, Digest: p.Digest(), Host: p.Host, Agent: p.Agent, Model: p.Model, ReasoningEffort: p.ReasoningEffort, Sandbox: p.Sandbox, WindowsSandbox: p.WindowsSandbox, ApprovalPolicy: policy, CodexProfile: p.CodexProfile, Codex: p.Codex, Orca: p.Orca}
 }
 
 func (p FixedExecutionProfile) VerifyWorkerFlow() bool {
 	rebuilt := ExecutionProfile{ID: p.ID, Name: p.Name, Host: p.Host, Agent: p.Agent, Model: p.Model, ReasoningEffort: p.ReasoningEffort, Sandbox: p.Sandbox, WindowsSandbox: p.WindowsSandbox, CodexProfile: p.CodexProfile, Codex: p.Codex, Orca: p.Orca}
-	return p.Digest != "" && p.Digest == rebuilt.Digest()
+	return p.Digest != "" && p.Digest == rebuilt.Digest() && (!rebuilt.managedOrcaPermissions() || p.ApprovalPolicy == "never" && (p.WindowsSandbox == "elevated" || p.WindowsSandbox == "unelevated"))
 }
 
 func (c Config) ApplyFixedExecutionProfile(p FixedExecutionProfile) Config {
 	c.Host, c.Agent, c.Model, c.ReasoningEffort = p.Host, p.Agent, p.Model, p.ReasoningEffort
-	c.Sandbox, c.WindowsSandbox, c.Profile, c.Codex, c.Orca = p.Sandbox, p.WindowsSandbox, p.CodexProfile, p.Codex, p.Orca
+	c.Sandbox, c.Profile, c.Codex, c.Orca = p.Sandbox, p.CodexProfile, p.Codex, p.Orca
+	c.WindowsSandbox = p.WindowsSandbox
 	return c
 }
 
-func (p ExecutionProfile) Digest() string { return digestValue(p.withWindowsSandboxDefault()) }
+func (p ExecutionProfile) Digest() string {
+	p = p.withWindowsSandboxDefault()
+	if p.managedOrcaPermissions() {
+		return digestValue(struct {
+			ExecutionProfile
+			ApprovalPolicy     string `json:"managed_approval_policy"`
+			PermissionContract string `json:"managed_permission_contract"`
+		}{p, "never", "windows-codex-v1:explicit-linked-roots:exclude-temp:strict-config"})
+	}
+	return digestValue(p)
+}
+
+func (p ExecutionProfile) managedOrcaPermissions() bool {
+	return p.Host == "orca" && p.Agent == "codex" && (runtime.GOOS == "windows" || p.WindowsSandbox != "")
+}
 
 func (p ExecutionProfile) MatchesConfig(c Config) bool {
 	actual := c.projectExecutionProfile()
@@ -72,6 +92,14 @@ func (p ExecutionProfile) MatchesConfig(c Config) bool {
 func (p ExecutionProfile) StaticUnavailableReason() string {
 	if p.Host == "local" && p.Agent == "codex" {
 		if _, err := codexapp.LocalSandboxArgs(runtime.GOOS, p.Sandbox, p.WindowsSandbox, p.Codex.Args); err != nil {
+			return err.Error()
+		}
+	}
+	if p.managedOrcaPermissions() {
+		if runtime.GOOS != "windows" {
+			return "Windows Codex 受管方案需要 Windows 宿主"
+		}
+		if _, err := nativeOrcaFixedAgentCommand(Config{Host: p.Host, Agent: p.Agent, Model: p.Model, ReasoningEffort: p.ReasoningEffort, Sandbox: p.Sandbox, WindowsSandbox: p.WindowsSandbox, Codex: p.Codex, Orca: p.Orca}); err != nil {
 			return err.Error()
 		}
 	}
@@ -151,7 +179,8 @@ func (c Config) ResolveExecutionProfile(id, expectedDigest string) (Config, Exec
 
 func (c Config) ApplyExecutionProfile(p ExecutionProfile) Config {
 	c.Host, c.Agent, c.Model, c.ReasoningEffort = p.Host, p.Agent, p.Model, p.ReasoningEffort
-	c.Sandbox, c.WindowsSandbox, c.Profile, c.Codex, c.Orca = p.Sandbox, p.WindowsSandbox, p.CodexProfile, p.Codex, p.Orca
+	c.Sandbox, c.Profile, c.Codex, c.Orca = p.Sandbox, p.CodexProfile, p.Codex, p.Orca
+	c.WindowsSandbox = p.WindowsSandbox
 	return c
 }
 
@@ -184,9 +213,6 @@ func validateExecutionProfiles(c Config) error {
 		if p.Host == "orca" && (p.CodexProfile != "" || p.Sandbox != "workspace-write") {
 			return fmt.Errorf("execution profile %s: Orca requires workspace-write and does not support a Codex profile override", p.ID)
 		}
-		if p.Host == "orca" && (p.Model == "") != (p.ReasoningEffort == "") {
-			return fmt.Errorf("execution profile %s: Orca model and reasoning_effort must be set together", p.ID)
-		}
 		if p.Host == "orca" && p.Model != "" && p.Agent != "codex" {
 			return fmt.Errorf("execution profile %s: Orca model and reasoning_effort overrides require codex", p.ID)
 		}
@@ -197,6 +223,11 @@ func validateExecutionProfiles(c Config) error {
 			return fmt.Errorf("execution profile %s: fixed Orca Codex launch requires powershell.exe or pwsh.exe", p.ID)
 		}
 		selected := c.ApplyExecutionProfile(p.effective())
+		if p.Host == "orca" && p.Agent == "codex" && runtime.GOOS == "windows" {
+			if _, err := nativeOrcaFixedAgentCommand(selected); err != nil {
+				return fmt.Errorf("execution profile %s: %w", p.ID, err)
+			}
+		}
 		if p.Host == "orca_supervised" {
 			if err := validateSupervisedOrcaConfig(&selected); err != nil {
 				return fmt.Errorf("execution profile %s: %w", p.ID, err)

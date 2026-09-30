@@ -129,6 +129,31 @@ func preflightWorkerFlowState(ctx context.Context, c Config) error {
 		if execution.Backend == string(BackendLocal) && execution.Protocol != string(ProtocolLocalCodexAppServer) {
 			return nativeErr("unsupported_schema", "worker-flow-v1 refuses an old local execution protocol; preserve its external process and state")
 		}
+		if execution.Backend == string(BackendOrca) && execution.Agent == "codex" && (c.managedWindowsOrca() || execution.Environment != nil) {
+			env := execution.Environment
+			if env == nil || env.Preparation == nil || !stableExecutionID(env.Preparation.TurnID) || !stableExecutionID(env.Preparation.Nonce) || env.Preparation.StartedAt.IsZero() || !env.Preparation.Deadline.After(env.Preparation.StartedAt) {
+				return nativeErr("unsupported_schema", "managed Orca execution lacks its frozen readiness intent")
+			}
+			matched := false
+			for _, workflow := range snapshot.WorkflowRuns {
+				if workflow.WorkflowRunID == execution.WorkflowRunID && workflow.ExecutionProfile != nil && workflow.ExecutionProfile.VerifyWorkerFlow() && workflow.ExecutionProfile.Digest == env.ProfileDigest {
+					matched = true
+				}
+			}
+			if !matched {
+				return nativeErr("unsupported_schema", "managed Orca readiness differs from its frozen execution profile")
+			}
+			p := env.Preparation
+			if p.Verified && (p.Receipt == nil || !p.Evidence.Verified || p.Receipt.ProbeIdentity != p.Probe || p.Receipt.InputSHA256 != p.InputDigest) {
+				return nativeErr("unsupported_schema", "managed Orca readiness lacks verified receipt/tool facts")
+			}
+			if env.Ready && (!p.Verified || p.Invalidated || execution.Process == nil || execution.OrcaNative == nil) {
+				return nativeErr("unsupported_schema", "managed Orca ready state has no verified original session")
+			}
+			if execution.Process != nil && (env.Runtime != execution.Process.RuntimeID || env.LaunchCommand == "" || len(env.WriteRoots) == 0 || canonical(env.WriteRoots[0]) != canonical(execution.Workspace.Worktree)) {
+				return nativeErr("unsupported_schema", "managed Orca resource evidence is incomplete or changed")
+			}
+		}
 	}
 	return nil
 }

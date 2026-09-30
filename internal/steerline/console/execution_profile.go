@@ -60,10 +60,29 @@ func renderFixedRunExecutionProfile(state projectState, run *steerline.Run) []st
 		return nil
 	}
 	config := steerline.Config{Host: fixed.Host, Agent: fixed.Agent, Model: fixed.Model, ReasoningEffort: fixed.ReasoningEffort}
-	return []string{
+	lines := []string{
 		"执行方案：" + safeTerminalInlineText(fixed.Name) + " [" + safeTerminalInlineText(fixed.ID) + "] · " + safeTerminalInlineText(executionHostLabel(config)),
 		"Agent / Model / Thinking：" + safeTerminalInlineText(fixed.Agent) + " / " + safeTerminalInlineText(executionModelLabel(config)) + " / " + safeTerminalInlineText(executionEffortLabel(config)),
 	}
+	if fixed.Host == "orca" && fixed.Agent == "codex" {
+		lines = append(lines, "冻结权限："+safeTerminalInlineText(fixed.Sandbox)+" · Windows "+safeTerminalInlineText(fixed.WindowsSandbox)+" · Approval "+safeTerminalInlineText(fixed.ApprovalPolicy))
+		if state.snapshot.Domain != nil {
+			for _, execution := range state.snapshot.Domain.Executions {
+				if execution.ExecutionID != run.ExecutionID || execution.Environment == nil {
+					continue
+				}
+				status := "准备未核实"
+				if execution.Environment.Ready {
+					status = "工具探针与原生结算已核实"
+				}
+				lines = append(lines, "环境："+status)
+				if blocker := execution.Environment.Blocker; blocker != nil {
+					lines = append(lines, "宿主阻断："+safeTerminalInlineText(blocker.Fact.Reason)+" · "+safeTerminalInlineText(blocker.Fact.Confidence)+" · "+safeTerminalInlineText(blocker.Fact.Source))
+				}
+			}
+		}
+	}
+	return lines
 }
 
 func renderRunExecutionProfileSummary(state projectState, run *steerline.Run) []string {

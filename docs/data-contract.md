@@ -4,7 +4,7 @@ SteerLine 尚未发布。当前生产配置必须显式设置 `"task_authority":
 
 ## 权威与身份
 
-SQLite schema 7 是 Task、固定 TaskContract、依赖、WorkflowRun、Execution、Attempt、Decision、Operation、会话事件与 TaskDelivery 的唯一业务权威。旧 schema 只通过只读元数据检查识别并拒绝，不自动升级，也不开放业务读取；拒绝时保留数据库文件与可能仍在运行的外部执行。运行时投影为 schema 9。旧投影、旧 WorkflowRun 或旧本地执行协议在工作区准备之前拒绝，并保留原文件及可能仍在运行的外部执行。
+SQLite schema 8 是 Task、固定 TaskContract、依赖、WorkflowRun、Execution、Attempt、Decision、Operation、会话事件与 TaskDelivery 的唯一业务权威。旧 schema 只通过只读元数据检查识别并拒绝，不自动升级，也不开放业务读取；拒绝时保留数据库文件与可能仍在运行的外部执行。运行时投影为 schema 10。旧投影、旧 WorkflowRun 或旧本地执行协议在工作区准备之前拒绝，并保留原文件及可能仍在运行的外部执行。
 
 服务与会话检查点也保存在 SQLite；检查点不复制 Task、WorkflowRun、Execution、Attempt、Decision 或 Operation 行。连接观察只读检查点，恢复和命令在同一只读事务中把检查点与领域表组合。当前配置不使用 `runtime_file`，服务不导出 `runtime.json`。
 
@@ -20,7 +20,7 @@ TaskContract 固定目标仓库、remote、base 分支以及 Spec、Plan 和其�
 
 Task 的 `discarded` 是独立终态，不伪装成 Decision 或完成。连接、进程、回执不明和清理待办保存在 Operation、Execution 与事件中，不增设第二套可写主阶段。
 
-Execution 绑定后端目标、工作区、分支、base、当前／待开始／已停下 turn ID、独立的 Command ID 及 turn 序号，还保存当前 Attempt 指针、服务实例归属、恢复门槛、版本和核验状态。local Codex 的附加身份为原生 thread ID 和 app-server 进程代次，协议为 `local_codex_app_server_v1`。本机 Orca 的附加身份为原生 agent terminal/incarnation、coordinator、Run 和每轮 Task/Dispatch，协议为 `orca_terminal_v2`；agent 由 Orca 按 Profile ID 启动。普通反馈只推进 turn 和消息身份；确认旧 worker 终止后的人工继续可在同一 Execution 中建立下一 Attempt，旧 Attempt 保留原进程和会话身份。受监管远端仍未接入 worker-flow。
+Execution 绑定后端目标、工作区、分支、base、当前／待开始／已停下 turn ID、独立的 Command ID 及 turn 序号，还保存当前 Attempt 指针、服务实例归属、恢复门槛、版本和核验状态。local Codex 的附加身份为原生 thread ID 和 app-server 进程代次，协议为 `local_codex_app_server_v1`。本机 Orca 的附加身份为原生 agent terminal/incarnation、coordinator、Run 和每轮 Task/Dispatch，协议为 `orca_terminal_v2`；Windows Orca Codex 使用冻结权限的受管命令启动。普通反馈只推进 turn 和消息身份；确认旧 worker 终止后的人工继续可在同一 Execution 中建立下一 Attempt，旧 Attempt 保留原进程和会话身份。受监管远端仍未接入 worker-flow。
 
 ## 工作区与消息
 
@@ -43,6 +43,14 @@ worker 或用户提供的 URL 只是线索。中心经配置的 provider 查询�
 `steerline task list/show/graph/export` 只读中心权威；validate/create/discard/add-predecessors 通过固定版本与请求 ID 操作。控制台或 CLI 的 `answer_decision` 共享 CommandService 提交路径。正式服务入口只运行 `worker-flow-v1`；旧五步的 retry、mark-stopped、task reopen 和项目步骤验证器没有当前 CLI 入口。旧状态的人工核实边界见 [worker-flow Spec](spec/worker-flow.spec.md)。
 
 本任务的 [逐项验收状态](validation/worker-flow/status.md) 区分已验证、推迟和发布前人工合并链。文档中的协议定义本身不代表所有 WF1–WF12 已通过。
+
+## Windows Orca Codex 环境事实
+
+Execution 的 `environment` 保存领取时的 Profile digest、准备 turn/nonce、开始及截止时间；资源绑定后追加原 runtime、已确认 terminal/incarnation、允许写入根目录和启动命令。Profile digest 包含受管 approval policy 与权限契约版本。准备轮次标为 `readiness`，业务轮次标为 `business`；准备不改变业务 CurrentTurn/LastStoppedTurn 或计数，同会话只有一个活动或结果未知的 Dispatch。
+
+准备收据、类型化工具调用/结果证据和原生结算分别持久化，整批 Delivery 先落盘再 ack。宿主 blocker 保存 reason/confidence/source、原身份、时间及绑定目标，通过已有 Decision 与 Operation 提供中心动作；普通文字与原 worker question 分别保存。重复检查共享 blocker 的未完成 Operation；未知投递先读取原 Dispatch 历史。过期文字及问题保留历史，不改投新轮次。
+
+准备超时和首次业务启动观察超时保持原外部事实。晚到准备成功只补历史，需显式重新检查后才能接纳；正常业务执行没有额外总时限。等待 PR 合并的终端诊断不回退主阶段，已提交交付不被迟到观察重开。当前格式拒绝缺少冻结准备/资源事实的受管 Execution，不迁移旧记录。实际验收状态见[环境验收记录](validation/worker-environment-readiness/README.md)。
 
 ## 本地 Windows sandbox 配置冻结
 

@@ -31,6 +31,7 @@
       "model": "gpt-6-luna",
       "reasoning_effort": "xhigh",
       "sandbox": "workspace-write",
+      "windows_sandbox": "unelevated",
       "codex": { "executable": "codex.exe" },
       "orca": { "executable": "orca.exe", "shell": "powershell.exe", "wait_timeout": "15m" }
     },
@@ -42,6 +43,7 @@
       "model": "gpt-6-luna",
       "reasoning_effort": "medium",
       "sandbox": "workspace-write",
+      "windows_sandbox": "unelevated",
       "codex": { "executable": "codex.exe" },
       "orca": { "executable": "orca.exe", "shell": "powershell.exe", "wait_timeout": "15m" }
     },
@@ -53,6 +55,7 @@
       "model": "gpt-6-luna",
       "reasoning_effort": "high",
       "sandbox": "workspace-write",
+      "windows_sandbox": "unelevated",
       "codex": { "executable": "codex.exe" },
       "orca": { "executable": "orca.exe", "shell": "powershell.exe", "wait_timeout": "15m" }
     }

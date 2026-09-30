@@ -35,7 +35,7 @@ func TestLocalWindowsSandboxProfileFreezesAndRestores(t *testing.T) {
 		}
 	}
 	profile.Host, profile.WindowsSandbox = "orca", ""
-	if profile.effective().WindowsSandbox != "" || profile.StaticUnavailableReason() != "" {
+	if profile.effective().WindowsSandbox != "" || profile.Freeze().WindowsSandbox != "" {
 		t.Fatal("local default changed Orca path")
 	}
 }

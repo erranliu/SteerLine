@@ -2,6 +2,7 @@ package steerline
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"strings"
@@ -42,7 +43,15 @@ func (s *Service) nativeOrcaUncertain(run *Run, reason string) error {
 	return s.commitWorker(run)
 }
 
-func (s *Service) pollNativeOrcaWorker(ctx context.Context, run *Run) error {
+func (s *Service) pollNativeOrcaWorker(ctx context.Context, run *Run) (retErr error) {
+	defer func() {
+		if err := s.observeWorkerEnvironment(ctx, run); retErr == nil {
+			retErr = err
+		}
+		if retErr == nil {
+			retErr = s.flushEnvironmentFeedback(ctx, run)
+		}
+	}()
 	fixed, configErr := s.workerFlowContext(run)
 	if configErr != nil {
 		return configErr
@@ -69,7 +78,10 @@ func (s *Service) pollNativeOrcaWorker(ctx context.Context, run *Run) error {
 			if ctx.Err() != nil {
 				return nil // Service shutdown is not a worker failure.
 			}
-			return s.nativeOrcaUncertain(run, "Orca inbox is temporarily unavailable: "+err.Error())
+			if execution.Environment == nil {
+				return s.nativeOrcaUncertain(run, "Orca inbox is temporarily unavailable: "+err.Error())
+			}
+			execution.LastEvent = ptr("Orca inbox observation gap: " + clip(err.Error(), 500))
 		}
 		if len(delivery.Messages) > 0 {
 			for _, message := range delivery.Messages {
@@ -94,10 +106,14 @@ func (s *Service) pollNativeOrcaWorker(ctx context.Context, run *Run) error {
 						if err != nil {
 							return err
 						}
-						s.setRunDecision(run, decision)
+						s.setOrcaQuestion(run, decision)
 					}
-					if err := NoteWorkerQuestion(workflow, execution, turn.TurnID); err != nil {
-						return err
+					if turn.Purpose != "readiness" {
+						if err := NoteWorkerQuestion(workflow, execution, turn.TurnID); err != nil {
+							return err
+						}
+					} else {
+						workflow.Phase = "waiting_decision"
 					}
 					s.refreshRun(run)
 				case "worker_done":
@@ -105,37 +121,64 @@ func (s *Service) pollNativeOrcaWorker(ctx context.Context, run *Run) error {
 						return err
 					}
 					turn.DoneMessageID, turn.Outcome = fact.MessageID, fact.Outcome
-					if err := s.bindNativeOrcaPRCandidates(ctx, run, workflow, execution, fact.PRCandidates); err != nil {
-						execution.Error = ptr(clip(err.Error(), 2000))
-						s.refreshRun(run)
+					if turn.Purpose != "readiness" {
+						if err := s.bindNativeOrcaPRCandidates(ctx, run, workflow, execution, fact.PRCandidates); err != nil {
+							execution.Error = ptr(clip(err.Error(), 2000))
+							s.refreshRun(run)
+						}
 					}
 				case "status":
 					if err := s.beginNativeOrcaTurn(run, workflow, execution, turn); err != nil {
 						return err
 					}
-					if err := s.bindNativeOrcaPRCandidates(ctx, run, workflow, execution, fact.PRCandidates); err != nil {
-						execution.Error = ptr(clip(err.Error(), 2000))
-						s.refreshRun(run)
+					if turn.Purpose != "readiness" {
+						if err := s.bindNativeOrcaPRCandidates(ctx, run, workflow, execution, fact.PRCandidates); err != nil {
+							execution.Error = ptr(clip(err.Error(), 2000))
+							s.refreshRun(run)
+						}
 					}
 				case "escalation":
 					if err := s.beginNativeOrcaTurn(run, workflow, execution, turn); err != nil {
 						return err
 					}
-					if run.Decision == nil || run.Decision.Status != "pending" && run.Decision.Status != "answer_saved" {
+					if run.Decision == nil || run.Decision.Request.HostTarget != nil || run.Decision.Status != "pending" && run.Decision.Status != "answer_saved" {
 						decision, err := WriteDecisionRequest(run, *fact.Question)
 						if err != nil {
 							return err
 						}
-						s.setRunDecision(run, decision)
+						s.setOrcaQuestion(run, decision)
 					}
-					if err := NoteWorkerQuestion(workflow, execution, turn.TurnID); err != nil {
-						return err
+					if turn.Purpose != "readiness" {
+						if err := NoteWorkerQuestion(workflow, execution, turn.TurnID); err != nil {
+							return err
+						}
+					} else {
+						workflow.Phase = "waiting_decision"
 					}
 					s.refreshRun(run)
 				}
 				state.SeenMessages = append(state.SeenMessages, message.ID)
 			}
 			state.DeliveryID = delivery.DeliveryID
+			if turn.Purpose == "readiness" && execution.Environment != nil {
+				if err := s.readNativeOrcaOutput(ctx, run, execution, turn); err != nil {
+					if s.store.Err() != nil {
+						return s.store.Err()
+					}
+					execution.LastEvent = ptr("准备工具证据观察缺口：" + clip(err.Error(), 500))
+				}
+				p := execution.Environment.Preparation
+				if p.Receipt == nil {
+					receipt, err := orcaworker.ReadProbe(p.Probe, p.InputDigest)
+					if err != nil {
+						if err := s.blockWorkerEnvironment(run, orcaworker.HostFact{Reason: "probe_receipt_invalid", Confidence: "confirmed", Source: "readiness.receipt", Detail: err.Error(), Turn: turn.TurnID}); err != nil {
+							return err
+						}
+					} else {
+						p.Receipt = receipt
+					}
+				}
+			}
 			if err := s.commitWorker(run); err != nil {
 				return err
 			} // Entire Delivery precedes acknowledgement.
@@ -306,19 +349,53 @@ func (s *Service) readNativeOrcaOutput(ctx context.Context, run *Run, execution 
 	if attempt == nil {
 		return errors.New("worker output has no attempt")
 	}
-	result, resetCursor, err := orcaworker.ReadWorkerOutput(ctx, orcaWorkerMetaCaller(fixedConfig), turn.DispatchID, attempt.OutputCursor, execution.OrcaNative.Coordinator.RuntimeID)
+	result, resetCursor, err := orcaworker.ReadWorkerOutput(ctx, orcaWorkerMetaCaller(fixedConfig), turn.DispatchID, turn.OutputCursor, execution.OrcaNative.Coordinator.RuntimeID)
 	if resetCursor {
 		attempt.OutputCursor = ""
 	}
 	if err != nil {
 		return err
 	}
-	attempt.OutputSource = result.Source
-	attempt.OutputCursor = result.NextCursor
-	if attempt.OutputCursor == "" {
-		attempt.OutputCursor = result.Cursor
+	cursor := result.NextCursor
+	if cursor == "" {
+		cursor = result.Cursor
 	}
-	turn.OutputSource, turn.OutputCursor, turn.OutputComplete = result.Source, attempt.OutputCursor, result.ContentComplete
+	if turn.Purpose != "readiness" {
+		attempt.OutputSource, attempt.OutputCursor = result.Source, cursor
+	}
+	turn.OutputSource, turn.OutputCursor, turn.OutputComplete = result.Source, cursor, result.ContentComplete
+	if turn.Purpose == "readiness" && execution.Environment != nil {
+		p := execution.Environment.Preparation
+		if resetCursor {
+			p.Evidence = orcaworker.ProbeToolEvidence{}
+		}
+		p.Evidence, err = orcaworker.ObserveProbe(result, p.Command, p.Nonce, p.ScriptDigest, p.Evidence)
+		if err != nil {
+			return err
+		}
+		if p.Evidence.FailureCode != "" {
+			return s.blockWorkerEnvironment(run, orcaworker.HostFact{Reason: p.Evidence.FailureCode, Confidence: "confirmed", Source: "orca.transcript.tool-result", Turn: turn.TurnID})
+		}
+	}
+	if turn.Purpose == "business" && execution.Environment != nil {
+		if resetCursor {
+			turn.ToolContext = orcaworker.ToolContext{}
+		}
+		var failed bool
+		turn.ToolContext, failed, err = orcaworker.ObserveToolInitialization(result, turn.TaskID, turn.IntentAt.UnixMilli(), turn.ToolContext)
+		if err != nil {
+			return err
+		}
+		if failed {
+			return s.blockWorkerEnvironment(run, orcaworker.HostFact{Reason: "tool_initialization_failed", Confidence: "confirmed", Source: "orca.transcript.tool-result", Turn: turn.TurnID})
+		}
+		if turn.ToolContext.Started && execution.CurrentTurnID != turn.TurnID {
+			workflow := s.workflowRecord(run)
+			if err := s.beginNativeOrcaTurn(run, workflow, execution, turn); err != nil {
+				return err
+			}
+		}
+	}
 	turn.OutputClipping, turn.OutputFallbackReason = append([]string(nil), result.Clipping...), result.FallbackReason
 	content := strings.Join(result.Terminal.Tail, "\n")
 	if result.Source == "transcript" && len(result.Transcript) > 0 {
@@ -350,6 +427,27 @@ func (s *Service) finishNativeOrcaTurn(ctx context.Context, run *Run, workflow *
 	settlement, err := readNativeOrcaSettlement(ctx, fixed.config, execution, turn)
 	if err != nil {
 		return s.nativeOrcaUncertain(run, "Orca worker_done arrived but Dispatch settlement is unverified: "+err.Error())
+	}
+	turn.Settled = true
+	if execution.Environment != nil && execution.Environment.DeferredDecisionID != "" {
+		for i := range s.domain.Decisions {
+			record := &s.domain.Decisions[i]
+			if record.DecisionID != execution.Environment.DeferredDecisionID || record.Status != "pending" {
+				continue
+			}
+			var request DecisionRequest
+			_ = json.Unmarshal(record.Request, &request)
+			if request.OrcaAsk != nil && request.OrcaAsk.DispatchID == turn.DispatchID {
+				record.Status = "superseded"
+				record.Version++
+				record.UpdatedAt = now()
+				s.markWorkerDecisionWrite(record.DecisionID)
+				execution.Environment.DeferredDecisionID = ""
+			}
+		}
+	}
+	if turn.Purpose == "readiness" {
+		return s.finishOrcaPreparation(ctx, run, execution, turn, settlement.Outcome)
 	}
 	if run.Decision != nil && orcaQuestionID(run.Decision) != "" && run.Decision.Status == "answer_saved" {
 		return s.nativeOrcaUncertain(run, "Orca Dispatch settled while the original question reply remains unverified")
