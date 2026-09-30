@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 	"strings"
 	"time"
+
+	remote "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker"
+	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
 
 func nativeOrcaAnswerText(answer DecisionAnswer, request DecisionRequest) string {
@@ -59,6 +61,9 @@ func (s *Service) startNativeOrcaTurn(ctx context.Context, run *Run, execution *
 		return configErr
 	}
 	fixedConfig := fixed.config
+	if fixedConfig.hostName() == "orca_supervised" {
+		return s.startRemoteOrcaTurn(ctx, run, execution, turnID, prompt)
+	}
 	if err := s.verifyNativeOrcaWorker(ctx, run, execution); err != nil {
 		return err
 	}
@@ -248,8 +253,11 @@ func (s *Service) bindNativeOrcaDispatch(run *Run, execution *ExecutionRecord, t
 }
 
 func nativeOrcaSessionIdentity(execution *ExecutionRecord) (string, error) {
-	if execution == nil || execution.Process == nil || execution.Process.Kind != "orca-native" || execution.Process.RuntimeID == "" || execution.Process.Terminal == "" || execution.Process.Incarnation == "" {
+	if execution == nil || execution.Process == nil || (execution.Process.Kind != "orca-native" && execution.Process.Kind != "orca_supervised") || execution.Process.RuntimeID == "" || execution.Process.Terminal == "" || execution.Process.Incarnation == "" {
 		return "", fmt.Errorf("native Orca session origin is incomplete")
+	}
+	if execution.Process.Kind == "orca_supervised" {
+		return remote.SessionID(remote.Identity(*execution.Process)), nil
 	}
 	return nativeOrcaSession(*execution.Process), nil
 }
@@ -312,7 +320,7 @@ func (s *Service) applyNativeOrcaDecision(ctx context.Context, run *Run, workflo
 			}
 		}
 	}
-	if execution.Process == nil || execution.Process.Kind != "orca-native" || execution.OrcaNative == nil || turn == nil || turn.DispatchID == "" {
+	if execution.Process == nil || (execution.Process.Kind != "orca-native" && execution.Process.Kind != "orca_supervised") || execution.OrcaNative == nil || turn == nil || turn.DispatchID == "" {
 		return s.waitWorkerFlow(run, "Original Orca Dispatch identity is unavailable; feedback was retained")
 	}
 	if err := s.verifyNativeOrcaWorker(ctx, run, execution); err != nil {
@@ -330,7 +338,13 @@ func (s *Service) applyNativeOrcaDecision(ctx context.Context, run *Run, workflo
 		for _, op := range s.domain.Operations {
 			if op.IdempotencyKey == key {
 				if op.Status != "confirmed" && op.Status != "accepted" {
-					messageID, err := findNativeOrcaReply(ctx, fixedConfig, execution.Target.OrchestrationRun, turn.DispatchID, orcaQuestionID(run.Decision), nativeOrcaAnswerText(answer, run.Decision.Request))
+					var messageID string
+					var err error
+					if fixedConfig.hostName() == "orca_supervised" {
+						messageID, err = remoteClientForExecution(fixedConfig, execution).FindAnswer(ctx, remoteWorkerRef(remoteExecutionRef(run, execution)), orcaQuestionID(run.Decision), nativeOrcaAnswerText(answer, run.Decision.Request))
+					} else {
+						messageID, err = findNativeOrcaReply(ctx, fixedConfig, execution.Target.OrchestrationRun, turn.DispatchID, orcaQuestionID(run.Decision), nativeOrcaAnswerText(answer, run.Decision.Request))
+					}
 					if err != nil || messageID == "" {
 						return s.nativeOrcaUncertain(run, "Orca reply outcome is unverified; the original question was not answered twice")
 					}
@@ -351,7 +365,12 @@ func (s *Service) applyNativeOrcaDecision(ctx context.Context, run *Run, workflo
 		if err != nil {
 			return err
 		}
-		receipt, err := orcaworker.ReplyQuestion(ctx, orcaWorkerMetaCaller(fixedConfig), orcaQuestionID(run.Decision), body, execution.Target.OrchestrationRun, execution.OrcaNative.Coordinator.Terminal, turn.DispatchID, execution.OrcaNative.Coordinator.RuntimeID)
+		var receipt orcaworker.MutationReceipt
+		if fixedConfig.hostName() == "orca_supervised" {
+			receipt, err = remoteOrcaQuestionReply(ctx, fixedConfig, run, execution, orcaQuestionID(run.Decision), body)
+		} else {
+			receipt, err = orcaworker.ReplyQuestion(ctx, orcaWorkerMetaCaller(fixedConfig), orcaQuestionID(run.Decision), body, execution.Target.OrchestrationRun, execution.OrcaNative.Coordinator.Terminal, turn.DispatchID, execution.OrcaNative.Coordinator.RuntimeID)
+		}
 		if err != nil {
 			var callErr *orcaworker.CallError
 			if errors.As(err, &callErr) {

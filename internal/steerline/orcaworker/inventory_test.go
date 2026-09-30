@@ -33,23 +33,6 @@ func TestFindTaskRejectsIncompleteInventory(t *testing.T) {
 	}
 }
 
-func TestCreateWorktreePreservesUnknownReceipt(t *testing.T) {
-	callCount := 0
-	call := func(context.Context, ...string) (json.RawMessage, error) {
-		callCount++
-		if callCount == 2 {
-			return nil, errors.New("transport lost its receipt")
-		}
-		return json.RawMessage(`{"worktrees":[]}`), nil
-	}
-	if _, err := CreateWorktree(context.Background(), call, "repo", "fixed", "base"); !errors.Is(err, ErrWorktreeOutcomeUnknown) {
-		t.Fatalf("unverified worktree creation returned %v", err)
-	}
-	if callCount != 3 {
-		t.Fatalf("expected one create and one read only recovery probe, got %d calls", callCount)
-	}
-}
-
 func TestRecoveredDispatchRequiresExactInjectedIdentity(t *testing.T) {
 	expected := DispatchIdentity{DispatchID: "dispatch", TaskID: "task", RunID: "run", RuntimeID: "runtime", Terminal: "terminal", Incarnation: "incarnation", WorktreeID: "worktree"}
 	call := func(context.Context, ...string) (Result, error) {

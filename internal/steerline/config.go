@@ -479,7 +479,7 @@ func (c *Config) preflightNative(ctx context.Context) error {
 	if err := validateExecutionProfiles(*c); err != nil {
 		return err
 	}
-	if c.WorkflowProtocol == WorkerFlowVersion && c.hostName() != "local" && c.hostName() != "orca" {
+	if c.WorkflowProtocol == WorkerFlowVersion && c.hostName() != "local" && c.hostName() != "orca" && c.hostName() != "orca_supervised" {
 		return &BackendError{Code: BackendUnsupported, Diagnostic: "this worker-flow host is not supported"}
 	}
 	if c.WorkflowProtocol == WorkerFlowVersion && c.hostName() == "orca" && (c.Profile != "" || c.Sandbox != "workspace-write") {

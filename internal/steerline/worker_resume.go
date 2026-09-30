@@ -3,11 +3,8 @@ package steerline
 import (
 	"context"
 	"encoding/json"
-	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	"os"
-	"path/filepath"
 
-	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 	"github.com/erranliu/SteerLine/internal/steerline/workerflow"
 )
 
@@ -72,7 +69,7 @@ func (s *Service) resumeCodexWorker(ctx context.Context, task *TaskRecord, run *
 		}
 		return true, nil
 	}
-	return s.resumeWorkspaceWorker(ctx, task, run, false)
+	return s.resumeCodexWorkspace(ctx, task, run)
 }
 
 func (s *Service) resumeNativeOrcaWorker(ctx context.Context, task *TaskRecord, run *Run) (bool, error) {
@@ -169,17 +166,10 @@ func (s *Service) resumeNativeOrcaWorker(ctx context.Context, task *TaskRecord, 
 }
 
 func (s *Service) resumeSupervisedOrcaWorker(ctx context.Context, task *TaskRecord, run *Run) (bool, error) {
-	continued, err := s.resumeWorkspaceWorker(ctx, task, run, true)
-	if err != nil {
-		return continued, err
-	}
-	if execution := s.executionRecord(run); execution != nil && execution.RecoveryRequired && run.Decision != nil && run.Decision.Status == "answer_saved" {
-		return true, s.refreshSavedRecoveryDecision(run, false, "服务重开后保留了原 Orca 输入；请核对 terminal 状态并重新确认。")
-	}
-	return continued, nil
+	return s.resumeRemoteOrcaWorker(ctx, task, run)
 }
 
-func (s *Service) resumeWorkspaceWorker(ctx context.Context, task *TaskRecord, run *Run, remote bool) (bool, error) {
+func (s *Service) resumeCodexWorkspace(ctx context.Context, task *TaskRecord, run *Run) (bool, error) {
 	fixed, err := s.workerFlowContext(run)
 	if err != nil {
 		return false, err
@@ -188,31 +178,6 @@ func (s *Service) resumeWorkspaceWorker(ctx context.Context, task *TaskRecord, r
 	if execution.RecoveryRequired && execution.Process == nil {
 		execution.RecoveryState = "unverified"
 		return true, s.waitWorkerFlow(run, "原 worker 尚无可核实的进程或 terminal；重开服务不会自动准备工作区或发起执行")
-	}
-	if execution.Process != nil && execution.Process.Kind == "orca" && (execution.PendingTurnID != "" || execution.CurrentTurnID != execution.LastStoppedTurnID) {
-		turnID := execution.PendingTurnID
-		if turnID == "" {
-			turnID = execution.CurrentTurnID
-		}
-		events := filepath.Join(orcaTurnPath(c, run.RunID, turnID), "events.jsonl")
-		if exited, err := orcaworker.ReadTurnExit(events, turnID); err != nil {
-			return false, s.waitWorkerFlow(run, "Original Orca turn exit evidence is invalid: "+err.Error())
-		} else if exited != nil {
-			return false, s.finishWorkerFlowFor(run, nil)
-		}
-		term, err := showWorkerOrcaTerminal(ctx, c, execution.Process.Terminal)
-		if err != nil {
-			return false, s.waitWorkerFlow(run, "Original Orca terminal is unavailable: "+err.Error())
-		}
-		if err := verifyWorkerOrcaTerminal(term, run, execution.Process); err != nil {
-			return false, s.waitWorkerFlow(run, err.Error())
-		}
-		worker, err := resumeWorkerOrcaTurn(c, run, turnID)
-		if err != nil {
-			return false, s.waitWorkerFlow(run, "Original Orca turn journal cannot be reattached: "+err.Error())
-		}
-		s.registerWorker(run, worker)
-		return false, nil
 	}
 	if execution.Process != nil && (execution.PendingTurnID != "" || execution.CurrentTurnID != execution.LastStoppedTurnID) {
 		switch inspectProcess(execution.Process) {
@@ -224,16 +189,6 @@ func (s *Service) resumeWorkspaceWorker(ctx context.Context, task *TaskRecord, r
 			execution.Status = "blocked"
 			return false, s.waitWorkerFlow(run, "Original worker process identity cannot be verified; its session and files are retained")
 		}
-	}
-	if remote && execution.PendingTurnID != "" {
-		events := filepath.Join(c.RunDir, "runs", run.RunID, "turns", execution.PendingTurnID, "events.jsonl")
-		if outcome, err := codexworker.ReadExecOutcome(events); err == nil && outcome.Completed && outcome.SessionID != "" {
-			return false, s.finishWorkerFlowFor(run, nil)
-		}
-		if workflow.Phase != "waiting_decision" {
-			return false, s.waitWorkerFlow(run, "Worker turn start has no confirmed process receipt; original request remains unverified")
-		}
-		return false, nil
 	}
 	if workflow.Phase != "queued" {
 		return true, nil
@@ -254,42 +209,22 @@ func (s *Service) resumeWorkspaceWorker(ctx context.Context, task *TaskRecord, r
 	if run.WorkspaceIntent == nil {
 		return false, s.waitWorkerFlow(run, "Saved workspace preparation has no fixed worktree identity")
 	}
-	if remote {
-		if execution.Workspace.Worktree == "" {
-			if err := s.recoverRemoteWorkerWorkspace(ctx, run, execution, preparation); err != nil {
-				return false, s.waitWorkerFlow(run, "Original remote worktree cannot be reconciled: "+err.Error())
-			}
-		} else {
-			s.refreshRun(run)
-			if preparation.Status != "confirmed" {
-				if err := s.changeWorkerOperation(run, preparation.OperationID, "confirmed", preparation.PlatformRequestID, mustJSON(execution.Workspace), ""); err != nil {
-					return false, err
-				}
-			}
+	if _, err := os.Lstat(run.WorkspaceIntent.Path); os.IsNotExist(err) && preparation.Status != "confirmed" {
+		if err := prepareWorktreeOnly(ctx, c, run); err != nil {
+			return false, s.waitWorkerFlow(run, "Original workspace preparation cannot be reconciled: "+err.Error())
 		}
-	} else {
-		if _, err := os.Lstat(run.WorkspaceIntent.Path); os.IsNotExist(err) && preparation.Status != "confirmed" {
-			if err := prepareWorktreeOnly(ctx, c, run); err != nil {
-				return false, s.waitWorkerFlow(run, "Original workspace preparation cannot be reconciled: "+err.Error())
-			}
-		} else if err != nil {
-			return false, s.waitWorkerFlow(run, "Original workspace cannot be inspected: "+err.Error())
-		}
-		s.refreshRun(run)
-		workspace, err := s.inspectWorkflowWorkspace(ctx, run)
-		if err != nil {
-			return false, s.waitWorkerFlow(run, "Original workspace identity is unresolved: "+err.Error())
-		}
-		applyWorkflowWorkspaceEvidence(run, execution, workspace)
-		if preparation.Status != "confirmed" {
-			if err := s.changeWorkerOperation(run, preparation.OperationID, "confirmed", "", mustJSON(workspace), ""); err != nil {
-				return false, err
-			}
-		}
+	} else if err != nil {
+		return false, s.waitWorkerFlow(run, "Original workspace cannot be inspected: "+err.Error())
 	}
-	if remote {
-		if err := s.prepareWorkerOrcaTerminal(ctx, run); err != nil {
-			return false, s.waitWorkerFlow(run, "Original Orca terminal cannot be reconciled: "+err.Error())
+	s.refreshRun(run)
+	workspace, err := s.inspectWorkflowWorkspace(ctx, run)
+	if err != nil {
+		return false, s.waitWorkerFlow(run, "Original workspace identity is unresolved: "+err.Error())
+	}
+	applyWorkflowWorkspaceEvidence(run, execution, workspace)
+	if preparation.Status != "confirmed" {
+		if err := s.changeWorkerOperation(run, preparation.OperationID, "confirmed", "", mustJSON(workspace), ""); err != nil {
+			return false, err
 		}
 	}
 	return false, s.startInitialWorkerFlowTurn(ctx, *task, run)

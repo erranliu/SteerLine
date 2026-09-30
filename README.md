@@ -28,7 +28,7 @@ native 项目控制台还会显示中心任务关系、阻塞原因、Spec 路�
 
 选中 Ready 任务按 `s` 后，方案选择页显示执行位置、Agent、Model、Thinking effort 和 Sandbox；Orca 远程还显示固定环境与连接。全局方案没有显式指定模型时标明由 Codex 配置决定。控制台与服务的配置版本不一致时，阻止启动与自动派发。
 
-本机 local Codex 使用固定原生 session ID 续聊。Orca 本机方案也可从全局执行配置中选择并固定 Codex 模型与推理强度，派发前须通过 Orca 连接和仓库注册检查；受监管远端方案目前仍不可启动。
+本机 local Codex 使用固定原生 session ID 续聊。Orca 本机方案也可从全局执行配置中选择并固定 Codex 模型与推理强度，派发前须通过 Orca 连接和仓库注册检查；远程 Orca 使用独立 `orca_remote_worker` 包接入同一 worker 流程，领取前核验固定连接、远端仓库与协议能力；后续反馈复用原远端会话。配置见[执行方案](docs/execution-profiles.md)。
 
 可在全局文件预设多套[执行配置](docs/execution-profiles.md)，供所有项目选用。按 `s` 选择一套并确认；不同任务可以混用，本次任务的 worker 会话固定在所选配置上。多套方案存在时，自动派发需要显式指定默认配置。
 

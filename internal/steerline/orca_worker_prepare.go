@@ -295,7 +295,7 @@ func (s *Service) bindNativeOrcaAgent(ctx context.Context, run *Run, execution *
 	if err != nil {
 		return err
 	}
-	if err := verifyWorkerOrcaTerminal(term, run, nil); err != nil {
+	if err := verifyWorkerOrcaTerminal(term, run); err != nil {
 		return err
 	}
 	if term.WorktreeID != worktree.ID || term.AgentIdentity != fixedConfig.agentName() {
@@ -561,6 +561,9 @@ func (s *Service) bindNativeOrcaCoordinator(ctx context.Context, run *Run, execu
 }
 
 func (s *Service) verifyNativeOrcaWorker(ctx context.Context, run *Run, execution *ExecutionRecord) error {
+	if run.Protocol == string(ProtocolOrcaSupervised) {
+		return s.verifyRemoteOrcaWorker(ctx, run, execution)
+	}
 	fixed, configErr := s.workerFlowContext(run)
 	if configErr != nil {
 		return configErr
@@ -573,7 +576,7 @@ func (s *Service) verifyNativeOrcaWorker(ctx context.Context, run *Run, executio
 	if err != nil {
 		return err
 	}
-	if err := verifyWorkerOrcaTerminal(term, run, nil); err != nil {
+	if err := verifyWorkerOrcaTerminal(term, run); err != nil {
 		return err
 	}
 	if term.RuntimeID != execution.Process.RuntimeID || term.IncarnationID != execution.Process.Incarnation || term.WorktreeID != execution.Process.WorktreeID || term.AgentIdentity != fixedConfig.agentName() {

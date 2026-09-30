@@ -43,7 +43,7 @@ func TestConfigLoadsLocalAndRemoteOrcaProfilesWithoutProbingTargets(t *testing.T
 		if err != nil || selected.Host != profile.Host {
 			t.Fatalf("Orca profile changed route: %+v / %v", chosen, err)
 		}
-		if (profile.Host == "orca_supervised") != (profile.StaticUnavailableReason() != "") {
+		if profile.StaticUnavailableReason() != "" {
 			t.Fatalf("Orca profile availability is wrong: %+v", profile)
 		}
 	}

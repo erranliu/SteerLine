@@ -177,7 +177,7 @@ func (s *SQLiteStore) commitWorker(ctx context.Context, request workerCommit) (w
 					}
 				}
 				for _, v := range request.Operations {
-					if v.Before == nil && v.After.Kind != "orca_native_terminal_close" {
+					if v.Before == nil && v.After.Kind != "orca_native_terminal_close" && v.After.Kind != "orca_remote_release" && v.After.Kind != "orca_remote_coordinator_close" {
 						return nativeErr("task_not_active", "settled worker cannot start another action")
 					}
 				}

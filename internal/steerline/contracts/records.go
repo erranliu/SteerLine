@@ -97,11 +97,12 @@ type ExecutionRecord struct {
 // OrcaNativeExecution stores provider identities and observation positions.
 // WorkflowRun, Decision and Operation remain the authorities for business state.
 type OrcaNativeExecution struct {
-	RepositoryID string           `json:"repository_id"`
-	Coordinator  ProcessIdentity  `json:"coordinator"`
-	Turns        []OrcaNativeTurn `json:"turns,omitempty"`
-	DeliveryID   string           `json:"delivery_id,omitempty"`
-	SeenMessages []string         `json:"seen_messages,omitempty"`
+	RemoteRuntimeID string           `json:"remote_runtime_id,omitempty"`
+	RepositoryID    string           `json:"repository_id"`
+	Coordinator     ProcessIdentity  `json:"coordinator"`
+	Turns           []OrcaNativeTurn `json:"turns,omitempty"`
+	DeliveryID      string           `json:"delivery_id,omitempty"`
+	SeenMessages    []string         `json:"seen_messages,omitempty"`
 }
 
 type OrcaNativeTurn struct {

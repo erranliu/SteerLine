@@ -53,31 +53,6 @@ func ListTerminals(ctx context.Context, call MetaCall, worktree string) ([]Termi
 	return result.Terminals, envelope.RuntimeID, nil
 }
 
-func RemoteRepoPath(ctx context.Context, call Call, worktreeID string) (string, error) {
-	repoID, _, found := strings.Cut(worktreeID, "::")
-	if !found || repoID == "" {
-		return "", errors.New("remote Orca worktree has no registered repository identity")
-	}
-	raw, err := call(ctx, "repo", "show", "--repo", "id:"+repoID, "--json")
-	if err != nil {
-		return "", err
-	}
-	var result struct {
-		Repo struct {
-			ID   string `json:"id"`
-			Path string `json:"path"`
-			Kind string `json:"kind"`
-		} `json:"repo"`
-	}
-	if err := json.Unmarshal(raw, &result); err != nil {
-		return "", err
-	}
-	if result.Repo.ID != repoID || result.Repo.Kind != "git" || !filepath.IsAbs(filepath.FromSlash(result.Repo.Path)) {
-		return "", &PlatformError{Code: "identity_mismatch", Diagnostic: "remote worktree repository path is not verified"}
-	}
-	return filepath.FromSlash(result.Repo.Path), nil
-}
-
 func samePath(a, b string) bool {
 	a, b = filepath.Clean(a), filepath.Clean(b)
 	if runtime.GOOS == "windows" {
