@@ -16,7 +16,6 @@ import (
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
-	"github.com/erranliu/SteerLine/internal/steerline/publication"
 )
 
 type Service struct {
@@ -33,7 +32,6 @@ type Service struct {
 	workerDecisionWrites map[string]bool
 	store                *Store
 	domainStore          *SQLiteStore
-	prs                  *publication.Client
 	// workers owns live observers by authoritative workflow run ID.
 	workers             map[string]*Worker
 	ownedLocalProcesses map[string]*childProcess
@@ -94,7 +92,6 @@ func NewService(c Config) (_ *Service, retErr error) {
 	if e := c.prepareWorktreeRoot(); e != nil {
 		return nil, e
 	}
-	r := Runner{Dir: c.Repository, Timeout: duration(c.CommandTimeout)}
 	db, e := OpenNativeTaskCommandStore(context.Background(), &c)
 	if e != nil {
 		return nil, e
@@ -104,7 +101,7 @@ func NewService(c Config) (_ *Service, retErr error) {
 			_ = db.Close()
 		}
 	}()
-	s := &Service{Config: c, baseConfig: c, domainStore: db, store: &Store{Domain: db, Project: c.identity}, prs: publication.NewClient(c.PR, r, r.Timeout), activities: map[string]*ActivityWriter{}, conversationMappers: map[string]*codexworker.ConversationMapper{}, workers: map[string]*Worker{}, ownedLocalProcesses: map[string]*childProcess{}}
+	s := &Service{Config: c, baseConfig: c, domainStore: db, store: &Store{Domain: db, Project: c.identity}, activities: map[string]*ActivityWriter{}, conversationMappers: map[string]*codexworker.ConversationMapper{}, workers: map[string]*Worker{}, ownedLocalProcesses: map[string]*childProcess{}}
 	old, e := loadRuntimeSnapshot(db, c.identity, false)
 	if errors.Is(e, sql.ErrNoRows) {
 		old, e = nil, nil

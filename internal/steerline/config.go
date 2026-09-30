@@ -29,7 +29,9 @@ type Skill struct {
 }
 type Config struct {
 	fixedProfileDigest      string
-	ExecutionPolicy         executionapi.ExecutionPolicy `json:"execution_policy"`
+	publicationRemoteURL    string
+	PublicationPolicy       executionapi.PublicationPolicy `json:"publication_policy"`
+	ExecutionPolicy         executionapi.ExecutionPolicy   `json:"execution_policy"`
 	policySource            string
 	Repository              string             `json:"repository"`
 	TaskAuthority           string             `json:"task_authority,omitempty"`
@@ -191,6 +193,12 @@ func LoadConfig(path string) (Config, error) {
 		return c, errors.New("workflow_protocol must be worker-flow-v1; old workflow configurations are unsupported and their external state is preserved")
 	}
 	if err := c.ExecutionPolicy.Validate(); err != nil {
+		return c, err
+	}
+	if err := c.PublicationPolicy.Validate(); err != nil {
+		return c, err
+	}
+	if err := publication.ValidateNonSecret(c.PR, c.Git); err != nil {
 		return c, err
 	}
 	c.policySource, _ = filepath.Abs(path)
@@ -359,6 +367,12 @@ func validateSupervisedOrcaConfig(c *Config) error {
 }
 
 func validateWorkflowConfig(c *Config, _ []byte) error {
+	if err := publication.CheckPolicy(c.PublicationPolicy, c.hostName(), c.agentName(), c.PR); err != nil {
+		return err
+	}
+	if err := publication.ValidateNonSecret(c.PR, c.Git); err != nil {
+		return err
+	}
 	if c.WorkflowProtocol != WorkerFlowVersion {
 		return errors.New("only worker-flow-v1 is supported")
 	}

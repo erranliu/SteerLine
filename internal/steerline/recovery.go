@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -84,7 +83,10 @@ func InspectRecovery(ctx context.Context, c Config, runID string) (RecoveryInspe
 	}
 	service.inspectRecoveryClaim(ctx, run, &inspection)
 	if run.PR.URL != nil {
-		if info, queryErr := service.prs.Query(ctx, *run.PR.URL); queryErr == nil {
+		fixed, configErr := service.executionConfigForRun(run)
+		if configErr != nil {
+			inspection.PRError = configErr.Error()
+		} else if info, queryErr := publicationClient(fixed).Query(ctx, *run.PR.URL); queryErr == nil {
 			inspection.PR = &info
 		} else {
 			inspection.PRError = queryErr.Error()
@@ -109,8 +111,7 @@ func InspectRecovery(ctx context.Context, c Config, runID string) (RecoveryInspe
 }
 
 func recoveryService(c Config, runtimeState Runtime) Service {
-	runner := Runner{Dir: c.Repository, Timeout: duration(c.CommandTimeout)}
-	return Service{Config: c, State: runtimeState, prs: publication.NewClient(c.PR, runner, runner.Timeout)}
+	return Service{Config: c, State: runtimeState, domain: DomainSnapshot{Tasks: runtimeState.Tasks, WorkflowRuns: runtimeState.WorkflowRuns, Executions: runtimeState.Executions, Attempts: runtimeState.Attempts, Decisions: runtimeState.Decisions, Operations: runtimeState.Operations}, runs: runtimeState.Runs}
 }
 
 func (s *Service) inspectRecoveryClaim(ctx context.Context, run *Run, report *RecoveryInspection) {

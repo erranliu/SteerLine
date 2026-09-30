@@ -218,7 +218,7 @@ func (s *Service) startManuallyRecoveredInitialCodex(ctx context.Context, run *R
 	if err != nil {
 		return err
 	}
-	prompt, err := workerflow.Prompt(*task, contract, run.RunID, true)
+	prompt, err := workerflow.Prompt(*task, contract, run.RunID, fixed.config.PublicationPolicy)
 	if err != nil {
 		return err
 	}

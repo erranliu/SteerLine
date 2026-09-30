@@ -3,6 +3,7 @@ package steerline
 import (
 	"context"
 	"errors"
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"strings"
 )
 
@@ -98,7 +99,7 @@ func (s *Service) finishWorkerFlowFor(run *Run, workerErr error) error {
 	if len(evidence.PRCandidates) == 1 {
 		candidate := evidence.PRCandidates[0]
 		workflow.PRCandidateURL = candidate
-		info, err := s.prs.Query(context.Background(), candidate)
+		info, err := publicationClient(c).Query(context.Background(), candidate)
 		if err == nil {
 			err = BindWorkerPR(workflow, execution, info, candidate, c.PR.Repository, false)
 		}
@@ -119,7 +120,7 @@ func (s *Service) finishWorkerFlowFor(run *Run, workerErr error) error {
 	if err := s.stopVerifiedWorkerTurn(run, workflow, execution, turnID, turnOutcome, question); err != nil {
 		return err
 	}
-	if evidence.PublishRequested {
+	if evidence.PublishRequested && c.PublicationPolicy.Publisher == executionapi.PublisherHostService {
 		runID := run.RunID
 		_, publishErr := s.publishLocalWorkerRun(context.Background(), run, workflow, execution, turnID)
 		run = s.localWorkerRun(runID)

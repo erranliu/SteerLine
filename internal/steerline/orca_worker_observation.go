@@ -279,13 +279,17 @@ func (s *Service) bindNativeOrcaPRCandidates(ctx context.Context, run *Run, work
 	if len(urls) != 1 {
 		return errors.New("worker reported multiple PR links")
 	}
+	fixed, err := s.workerFlowContext(run)
+	if err != nil {
+		return err
+	}
 	workflow.PRCandidateURL = urls[0]
-	info, err := s.prs.Query(ctx, urls[0])
+	info, err := publicationClient(fixed.config).Query(ctx, urls[0])
 	if err != nil {
 		return err
 	}
 	pendingQuestion := run.Decision != nil && run.Decision.Status == "pending" && orcaQuestionID(run.Decision) != ""
-	if err := BindWorkerPR(workflow, execution, info, urls[0], s.projectExecutionConfig().PR.Repository, pendingQuestion); err != nil {
+	if err := BindWorkerPR(workflow, execution, info, urls[0], fixed.config.PR.Repository, pendingQuestion); err != nil {
 		return err
 	}
 	workflow.PRURL, workflow.PRState = info.URL, info.State

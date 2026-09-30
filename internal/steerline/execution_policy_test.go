@@ -20,7 +20,7 @@ func workspacePolicyFixture() executionapi.ExecutionPolicy {
 func TestProjectPolicyRejectsMissingOrOldConfiguration(t *testing.T) {
 	t.Setenv("STEERLINE_HOME", t.TempDir())
 	writeGlobalExecutionFixture(t, []ExecutionProfile{{ID: "local", Name: "Local", Host: "local", Agent: "codex", Codex: Command{Executable: "codex"}}}, "local")
-	body := map[string]any{"repository": configTestRepository(t), "branch": "main", "task_authority": "native", "workflow_protocol": WorkerFlowVersion}
+	body := map[string]any{"publication_policy": executionPublicationFixture(), "repository": configTestRepository(t), "branch": "main", "task_authority": "native", "workflow_protocol": WorkerFlowVersion}
 	path := filepath.Join(t.TempDir(), "project.json")
 	write := func() {
 		t.Helper()
@@ -77,7 +77,7 @@ func TestProjectPolicyClaimRejectsStaticConflictsBeforeNativeQuery(t *testing.T)
 }
 
 func TestProjectPolicyFrozenSnapshotRejectsDamageAndPreservesAuthority(t *testing.T) {
-	c := Config{ExecutionPolicy: workspacePolicyFixture(), Repository: "repository", Branch: "main", Host: "local", Agent: "codex", Codex: Command{Executable: "codex"}}
+	c := Config{PublicationPolicy: executionPublicationFixture(), PR: hostPublicationProviderFixture(), ExecutionPolicy: workspacePolicyFixture(), Repository: "repository", Branch: "main", Host: "local", Agent: "codex", Codex: Command{Executable: "codex"}}
 	original := c.projectExecutionProfile().Freeze()
 	if !verifyFixedExecutionProfile(original) {
 		t.Fatalf("valid snapshot rejected: %+v", original)
@@ -108,7 +108,7 @@ func TestProjectPolicyNativeReportsRetainOriginalSnapshotDigests(t *testing.T) {
 			Execution ExecutionRecord       `json:"execution"`
 		}
 		require(t, json.Unmarshal(raw, &report))
-		if !verifyFixedExecutionProfile(report.Profile) {
+		if !verifyHistoricalPolicyProfile(t, report.Profile) {
 			t.Fatalf("native report no longer matches final snapshot: %s", name)
 		}
 		require(t, verifyPolicyResources(report.Execution.PolicyResources, report.Profile.Digest, report.Execution.Workspace.Worktree))

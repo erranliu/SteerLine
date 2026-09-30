@@ -53,11 +53,15 @@ func TestReadyStartChoosesConfiguredProfileAndBindsRequest(t *testing.T) {
 
 func TestRunDetailUsesItsFixedProfileAfterProjectConfigChanges(t *testing.T) {
 	profile := steerline.ExecutionProfile{ID: "orca-remote", Name: "远程审查", Host: "orca_supervised", Agent: "codex", Model: "fixed-model", ReasoningEffort: "xhigh", Sandbox: "workspace-write"}
+	profile.PublicationPolicy.Publisher = "worker"
+	profile.Publication.Provider.Kind, profile.Publication.Provider.BaseURL, profile.Publication.Provider.Repository = "gitea", "https://fixed.invalid", "org/repo"
+	profile.Publication.Remote, profile.Publication.RemoteURL, profile.Publication.BaseBranch = "origin", "ssh://git@fixed.invalid/org/repo.git", "main"
+	profile.Publication.AuthenticationRefs = []string{"FIXED_TOKEN"}
 	fixed := profile.Freeze()
 	run := &steerline.Run{RunID: "run-1", TaskID: "101", Backend: "orca", Agent: "codex"}
 	state := projectState{ref: ProjectRef{Config: steerline.Config{Host: "local", Model: "new-project-default"}}, snapshot: ProjectSnapshot{Domain: &steerline.DomainSnapshot{WorkflowRuns: []steerline.WorkflowRunRecord{{WorkflowRunID: run.RunID, ExecutionProfile: &fixed}}}}}
 	shown := strings.Join(renderFixedRunExecutionProfile(state, run), "\n")
-	for _, want := range []string{"远程审查", "orca-remote", "Orca 受监管远程", "fixed-model", "xhigh"} {
+	for _, want := range []string{"远程审查", "orca-remote", "Orca 受监管远程", "fixed-model", "xhigh", "发布责任：worker", "https://fixed.invalid/org/repo", "ssh://git@fixed.invalid/org/repo.git", "FIXED_TOKEN"} {
 		if !strings.Contains(shown, want) {
 			t.Fatalf("run adopted current project defaults instead of fixed profile: %s", shown)
 		}

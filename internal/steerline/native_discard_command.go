@@ -79,6 +79,16 @@ func (c CommandService) DiscardNativeTask(ctx context.Context, config Config, ta
 			}
 		}
 	}
+	snapshot, err := sqlite.Query(ctx, c.Project)
+	if err != nil {
+		return TaskDiscardReceipt{}, err
+	}
+	if w := latestNativeWorkflow(snapshot.WorkflowRuns, taskID); w != nil {
+		config, err = fixedWorkflowPublicationConfig(config, *w)
+		if err != nil {
+			return TaskDiscardReceipt{}, err
+		}
+	}
 	authority, err := sqlite.nativeAuthority(ctx, c.Project)
 	if err != nil {
 		return TaskDiscardReceipt{}, err

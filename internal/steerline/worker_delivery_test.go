@@ -86,8 +86,12 @@ func TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged(t *testing.T)
 	if out, err := exec.Command("git", "-C", c.Repository, "remote", "set-url", "origin", "https://forge.invalid/org/repo.git").CombinedOutput(); err != nil {
 		t.Fatalf("set isolated remote: %v: %s", err, out)
 	}
+	c.Git = Command{Executable: "git"}
+	c.Host = "orca"
+	c.Codex.WindowsSandbox = "unelevated"
+	c.PublicationPolicy.Publisher = "worker"
 	c.WorkflowProtocol = WorkerFlowVersion
-	c.PR = publication.Config{Kind: "command", BaseURL: "https://forge.invalid", Repository: "org/repo"}
+	c.PR = publication.Config{Kind: "command", BaseURL: "https://forge.invalid", Repository: "org/repo", Query: Command{Executable: "gh"}}
 	project, err := OpenNativeTaskProject(ctx, &c)
 	if err != nil {
 		t.Fatal(err)
@@ -113,6 +117,9 @@ func TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged(t *testing.T)
 	at := time.Now().UTC()
 	url := "https://forge.invalid/org/repo/pulls/8"
 	wf := WorkflowRunRecord{ProjectIdentity: c.Identity(), WorkflowRunID: "worker-flow-wf-8", TaskID: "8", WorkflowVersion: WorkerFlowVersion, Phase: "waiting_pr_merge", Repository: c.Repository, Branch: "main", SelectedResult: "worker-flow-exec-8", PRURL: url, PRState: "open", CreatedAt: at, UpdatedAt: at}
+	require(t, c.bindPublicationTarget(ctx))
+	fixed := c.projectExecutionProfile().Freeze()
+	wf.ExecutionProfile, wf.ConfigDigest = &fixed, fixed.AcceptedConfigVersion
 	execution := ExecutionRecord{ProjectIdentity: c.Identity(), ExecutionID: wf.SelectedResult, WorkflowRunID: wf.WorkflowRunID, Agent: "codex", Status: "idle", SessionID: "session-8", Workspace: WorkspaceEvidence{Branch: "codex/task-8"}, CreatedAt: at, UpdatedAt: at}
 	claimed := task
 	claimed.Status, claimed.Claimant, claimed.Version, claimed.UpdatedAt = "in_progress", "operator", task.Version+1, at

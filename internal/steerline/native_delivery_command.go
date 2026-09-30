@@ -52,6 +52,27 @@ func (c CommandService) CompleteNativeTask(ctx context.Context, config Config, t
 		}
 		return TaskDeliveryReceipt{TaskID: taskID, TaskVersion: task.Version, WorkflowRunID: workflowRunID, GraphRevision: graph.Authority.GraphRevision, Status: "closed", Delivery: existing}, nil
 	}
+	snapshot, err := sqlite.Query(ctx, c.Project)
+	if err != nil {
+		return TaskDeliveryReceipt{}, err
+	}
+	found := false
+	for _, w := range snapshot.WorkflowRuns {
+		if w.WorkflowRunID == workflowRunID && w.TaskID == taskID {
+			config, err = fixedWorkflowPublicationConfig(config, w)
+			found = true
+			break
+		}
+	}
+	if err != nil {
+		return TaskDeliveryReceipt{}, err
+	}
+	if !found {
+		return TaskDeliveryReceipt{}, nativeErr("inconsistent_delivery", "original publication workflow is missing")
+	}
+	if client, ok := verifier.(*publication.Client); ok && !publication.ProviderIdentity(config.PR).Matches(client.Config) {
+		return TaskDeliveryReceipt{}, nativeErr("authority_mismatch", "PR verifier differs from the original publication provider")
+	}
 	if verifier == nil {
 		return TaskDeliveryReceipt{}, nativeErr("merge_state_unknown", "PR verifier is required")
 	}
@@ -66,10 +87,6 @@ func (c CommandService) CompleteNativeTask(ctx context.Context, config Config, t
 	}
 	if task.Status != "in_progress" || task.Version != expectedTaskVersion {
 		return TaskDeliveryReceipt{}, nativeErr("stale_version", fmt.Sprintf("task is %s at version %d", task.Status, task.Version))
-	}
-	snapshot, err := sqlite.Query(ctx, c.Project)
-	if err != nil {
-		return TaskDeliveryReceipt{}, err
 	}
 	workflow, execution, err := selectedNativeDeliveryState(snapshot, taskID, workflowRunID)
 	if err != nil {
@@ -302,7 +319,7 @@ func (c CommandService) commitNativeDelivery(ctx context.Context, s *SQLiteStore
 		if err != nil {
 			return err
 		}
-		if currentWorkflow.WorkflowRunID != workflow.WorkflowRunID || currentWorkflow.SelectedResult != execution.ExecutionID || currentPRURL != prURL ||
+		if digestValue(currentWorkflow.ExecutionProfile) != digestValue(workflow.ExecutionProfile) || digestValue(currentExecution.PolicyResources) != digestValue(execution.PolicyResources) || currentWorkflow.WorkflowRunID != workflow.WorkflowRunID || currentWorkflow.SelectedResult != execution.ExecutionID || currentPRURL != prURL ||
 			currentWorkflow.WorkflowVersion != workflow.WorkflowVersion || currentExecution.SessionID != execution.SessionID ||
 			currentExecution.Workspace.Branch != execution.Workspace.Branch {
 			return nativeErr("immutable_task", "selected result or PR binding changed during platform verification")

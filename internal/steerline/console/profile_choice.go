@@ -95,7 +95,7 @@ func renderExecutionProfileChoice(m Model, state projectState, height int) strin
 		"  Model："+safeTerminalInlineText(executionModelLabel(profileConfig(profile))),
 		"  Thinking effort："+safeTerminalInlineText(executionEffortLabel(profileConfig(profile))),
 		"  Sandbox："+safeTerminalInlineText(profile.Sandbox))
-	lines = append(lines, fmt.Sprintf("  项目要求：读 %s / 写 %s / Git %t / 网络 %s / 越权 %s", profile.ExecutionPolicy.Filesystem.ReadScope, profile.ExecutionPolicy.Filesystem.WriteScope, profile.ExecutionPolicy.Filesystem.GitMetadataWrite, profile.ExecutionPolicy.Network, profile.ExecutionPolicy.Escalation), "  受理版本："+safeTerminalInlineText(profile.AcceptedConfigVersion))
+	lines = append(lines, fmt.Sprintf("  项目要求：读 %s / 写 %s / Git %t / 网络 %s / 越权 %s", profile.ExecutionPolicy.Filesystem.ReadScope, profile.ExecutionPolicy.Filesystem.WriteScope, profile.ExecutionPolicy.Filesystem.GitMetadataWrite, profile.ExecutionPolicy.Network, profile.ExecutionPolicy.Escalation), "  受理版本："+safeTerminalInlineText(profile.AcceptedConfigVersion), "  发布责任："+safeTerminalInlineText(profile.PublicationPolicy.Publisher), "  发布 provider："+safeTerminalInlineText(profile.Publication.Provider.Kind)+" · "+safeTerminalInlineText(profile.Publication.Provider.BaseURL)+"/"+safeTerminalInlineText(profile.Publication.Provider.Repository))
 	if profile.WindowsSandbox != "" {
 		lines = append(lines, "  Windows sandbox："+safeTerminalInlineText(profile.WindowsSandbox))
 	}

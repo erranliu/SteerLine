@@ -206,7 +206,9 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openP
 		t.Fatal(err)
 	}
 	feedbackPrompt := workerFeedbackText(answer, run.Decision.Request)
-	fullPrompt := feedbackPrompt + publication.WorkerInstruction(run.RunID)
+	fixedConfig, err := service.executionConfigForRun(run)
+	require(t, err)
+	fullPrompt := feedbackPrompt + publicationTargetInstruction(fixedConfig) + publication.WorkerInstruction(run.RunID)
 	feedbackDir := filepath.Join(c.RunDir, "runs", run.RunID, "turns", command.CommandID)
 	savedPrompt, err := os.ReadFile(filepath.Join(feedbackDir, "prompt.txt"))
 	if err != nil || string(savedPrompt) != fullPrompt {

@@ -45,7 +45,7 @@ func (s *Service) pollWorkerFlowPR(ctx context.Context, run *Run, task *TaskReco
 		if workflow.PRURL == "" {
 			return nil
 		}
-		_, err := (CommandService{Store: s.domainStore, Project: c.identity}).CompleteNativeTask(ctx, c, task.TaskID, task.Version, workflow.WorkflowRunID, s.prs)
+		_, err := (CommandService{Store: s.domainStore, Project: c.identity}).CompleteNativeTask(ctx, c, task.TaskID, task.Version, workflow.WorkflowRunID, publicationClient(c))
 		if isNativeErrorCode(err, "task_discarded") {
 			return nil
 		}
@@ -59,7 +59,7 @@ func (s *Service) pollWorkerFlowPR(ctx context.Context, run *Run, task *TaskReco
 		return nil
 	}
 	queried := now()
-	info, err := s.prs.Query(ctx, url)
+	info, err := publicationClient(c).Query(ctx, url)
 	workflow.PRQueriedAt = &queried
 	s.refreshRun(run)
 	if err != nil {

@@ -155,7 +155,7 @@ func require(t *testing.T, err error) {
 }
 
 func TestPublicationRequestDigestBindsCandidate(t *testing.T) {
-	base := Request{Version: 1, RunID: strings.Repeat("a", 32), ExecutionID: "exec-1", TurnID: "00000000-0000-0000-0000-000000000001", TaskID: "42", Workspace: executionapi.WorkspaceIntent{Path: t.TempDir(), Branch: "codex/42-123456789abc", BaseCommit: strings.Repeat("b", 40)}, GitCommonDir: t.TempDir(), Remote: "origin", BaseBranch: "main", Provider: ProviderIdentity(Config{Kind: "command", BaseURL: "https://github.com", Repository: "owner/repo", Query: contracts.Command{Executable: "gh"}})}
+	base := Request{Version: 2, RunID: strings.Repeat("a", 32), ExecutionID: "exec-1", TurnID: "00000000-0000-0000-0000-000000000001", TaskID: "42", Workspace: executionapi.WorkspaceIntent{Path: t.TempDir(), Branch: "codex/42-123456789abc", BaseCommit: strings.Repeat("b", 40)}, GitCommonDir: t.TempDir(), Remote: "origin", RemoteURL: "https://github.com/owner/repo.git", BaseBranch: "main", Provider: ProviderIdentity(Config{Kind: "command", BaseURL: "https://github.com", Repository: "owner/repo", Query: contracts.Command{Executable: "gh"}})}
 	base.StartingHead, base.IndexTree = strings.Repeat("c", 40), strings.Repeat("d", 40)
 	base.Digest = requestDigest(base)
 	if err := base.ValidateCandidate(); err != nil {

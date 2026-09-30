@@ -14,14 +14,7 @@ var commitHash = regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`)
 
 func validCommit(value string) bool { return commitHash.MatchString(value) }
 
-type Config struct {
-	Kind       string            `json:"kind"`
-	BaseURL    string            `json:"base_url"`
-	Repository string            `json:"repository"`
-	TokenEnv   string            `json:"token_env"`
-	Query      contracts.Command `json:"query"`
-	Close      contracts.Command `json:"close,omitempty"`
-}
+type Config contracts.PRProviderConfig
 
 func (c Config) ValidateRemote(remote string) error {
 	if c.Kind != "gitea" && c.Kind != "command" {

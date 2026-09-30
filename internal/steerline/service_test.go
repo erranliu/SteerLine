@@ -52,7 +52,7 @@ func TestMain(m *testing.M) {
 	if os.Getenv("STEERLINE_LIFECYCLE_EXIT_EARLY") == "1" {
 		os.Exit(23)
 	}
-	if os.Getenv("STEERLINE_TEST_HOST_GH_FILE") != "" {
+	if os.Getenv("STEERLINE_TEST_HOST_GH_FILE") != "" && len(os.Args) > 1 && (os.Args[1] == "api" || os.Args[1] == "pr") {
 		os.Exit(fakeHostGH(os.Args[1:]))
 	}
 	for i, arg := range os.Args {
@@ -323,6 +323,20 @@ func fakeMain(args []string) int {
 		return 2
 	}
 	switch args[0] {
+	case "publication-git":
+		if len(args) > 3 && args[2] == "remote" && args[3] == "get-url" {
+			fmt.Println("https://github.com/owner/repo.git")
+			return 0
+		}
+		cmd := exec.Command(args[1], args[2:]...)
+		cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+		if err := cmd.Run(); err != nil {
+			if e, ok := err.(*exec.ExitError); ok {
+				return e.ExitCode()
+			}
+			return 1
+		}
+		return 0
 	case "git-proxy":
 		gitArgs := append([]string(nil), args[2:]...)
 		if len(gitArgs) > 0 && gitArgs[0] == "fetch" {

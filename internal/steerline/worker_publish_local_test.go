@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 )
 
 func fakeHostGH(args []string) int {
@@ -31,6 +30,15 @@ func fakeHostGH(args []string) int {
 				"base": map[string]string{"ref": saved.BaseBranch},
 			}})
 			return 0
+		}
+		_ = json.NewEncoder(os.Stdout).Encode(saved)
+		return 0
+	}
+	if len(args) >= 2 && args[0] == "pr" && args[1] == "close" {
+		saved.State = "closed_unmerged"
+		raw, _ := json.Marshal(saved)
+		if err := os.WriteFile(file, raw, 0600); err != nil {
+			return 1
 		}
 		_ = json.NewEncoder(os.Stdout).Encode(saved)
 		return 0
@@ -83,7 +91,7 @@ func newLocalWorkerPublicationFixture(t *testing.T) localWorkerPublicationFixtur
 		t.Fatal(err)
 	}
 	t.Setenv("STEERLINE_TEST_HOST_GH_FILE", filepath.Join(t.TempDir(), "pr.json"))
-	c.PR = publication.Config{Kind: "command", BaseURL: "https://github.com", Repository: "owner/repo", Query: Command{Executable: exe, Args: []string{"api", "repos/{repository}/pulls/{number}"}}}
+	c.PR = publication.Config{Kind: "command", BaseURL: "https://github.com", Repository: "owner/repo", Query: Command{Executable: exe, Args: []string{"api", "repos/{repository}/pulls/{number}"}}, Close: Command{Executable: exe, Args: []string{"pr", "close", "{pr_url}"}}}
 	turnID := "00000000-0000-0000-0000-000000000001"
 	branch, worktree := run.WorkspaceIntent.Branch, run.WorkspaceIntent.Path
 	require(t, c.prepareWorktreeRoot())
@@ -105,7 +113,6 @@ func newLocalWorkerPublicationFixture(t *testing.T) localWorkerPublicationFixtur
 	}
 	git(worktree, "add", "publish.txt")
 	s.Config, s.baseConfig = c, c
-	s.prs = publication.NewClient(c.PR, Runner{Dir: c.Repository, Timeout: 10 * time.Second}, 10*time.Second)
 	workflow, execution := s.workflowRecords(run)
 	workflow.Phase = "waiting_decision"
 	execution.Status, execution.CurrentTurnID, execution.LastStoppedTurnID = "idle", turnID, turnID
