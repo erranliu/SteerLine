@@ -6,6 +6,25 @@ import (
 	"testing"
 )
 
+func TestWorkerOrcaWorktreeNameIncludesTaskNumberAndRunIdentity(t *testing.T) {
+	runID := strings.Repeat("a", 32)
+	name, err := workerOrcaWorktreeName("103", runID)
+	if err != nil || name != "sl-103-"+runID {
+		t.Fatalf("worktree name = %q / %v", name, err)
+	}
+	if other, err := workerOrcaWorktreeName("104", runID); err != nil || other == name {
+		t.Fatalf("different tasks shared a worktree name: %q / %v", other, err)
+	}
+	if other, err := workerOrcaWorktreeName("103", strings.Repeat("b", 32)); err != nil || other == name {
+		t.Fatalf("different runs shared a worktree name: %q / %v", other, err)
+	}
+	for _, taskID := range []string{"", "0103", "task-103", "../103"} {
+		if _, err := workerOrcaWorktreeName(taskID, runID); err == nil {
+			t.Fatalf("invalid task number %q was accepted", taskID)
+		}
+	}
+}
+
 func TestNativeOrcaQuestionUsesSharedNativeAnswerShape(t *testing.T) {
 	turn := OrcaNativeTurn{TurnID: strings.Repeat("1", 32), TaskID: "task_first", DispatchID: "ctx_first"}
 	for _, tc := range []struct {

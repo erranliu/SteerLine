@@ -68,11 +68,11 @@ func orcaWorkerMetaCaller(c Config) orcaworker.MetaCall {
 	}
 }
 
-func workerOrcaWorktreeName(runID string) (string, error) {
-	if !stableExecutionID(runID) {
-		return "", errors.New("Orca worktree requires a stable workflow identity")
+func workerOrcaWorktreeName(taskID, runID string) (string, error) {
+	if !canonicalDecimalID(taskID) || !stableExecutionID(runID) {
+		return "", errors.New("Orca worktree requires a canonical task number and stable workflow identity")
 	}
-	return "sl-" + runID, nil
+	return "sl-" + taskID + "-" + runID, nil
 }
 
 func validateWorkerOrcaWorktree(value workerOrcaWorktree, name, repoID, base string) error {
@@ -113,7 +113,7 @@ func (s *Service) prepareRemoteWorkerWorkspace(ctx context.Context, run *Run, ex
 		return errors.New("remote worker workspace has no fixed preparation intent")
 	}
 	base := run.WorkspaceIntent.BaseCommit
-	name, err := workerOrcaWorktreeName(run.RunID)
+	name, err := workerOrcaWorktreeName(run.TaskID, run.RunID)
 	if err != nil {
 		return err
 	}
@@ -145,7 +145,7 @@ func (s *Service) recoverRemoteWorkerWorkspace(ctx context.Context, run *Run, ex
 	if fixedConfig.hostName() != "orca_supervised" || run == nil || execution == nil || operation == nil || operation.Kind != "prepare_workspace" || run.WorkspaceIntent == nil {
 		return errors.New("remote workspace recovery has no original preparation intent")
 	}
-	name, err := workerOrcaWorktreeName(run.RunID)
+	name, err := workerOrcaWorktreeName(run.TaskID, run.RunID)
 	if err != nil {
 		return err
 	}

@@ -181,7 +181,7 @@ func (s *Service) prepareNativeOrcaWorker(ctx context.Context, run *Run) error {
 	if err != nil {
 		return err
 	}
-	name, err := workerOrcaWorktreeName(run.RunID)
+	name, err := workerOrcaWorktreeName(run.TaskID, run.RunID)
 	if err != nil {
 		return err
 	}

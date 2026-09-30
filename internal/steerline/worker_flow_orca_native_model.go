@@ -34,7 +34,7 @@ func (s *Service) prepareNativeOrcaFixedModelWorker(ctx context.Context, run *Ru
 	if err != nil {
 		return err
 	}
-	name, err := workerOrcaWorktreeName(run.RunID)
+	name, err := workerOrcaWorktreeName(run.TaskID, run.RunID)
 	if err != nil {
 		return err
 	}

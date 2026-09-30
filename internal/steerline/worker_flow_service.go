@@ -149,7 +149,7 @@ func (s *Service) prepareWorkerWorkspace(ctx context.Context, task TaskRecord, r
 	remoteName := ""
 	if remote {
 		var nameErr error
-		remoteName, nameErr = workerOrcaWorktreeName(run.RunID)
+		remoteName, nameErr = workerOrcaWorktreeName(run.TaskID, run.RunID)
 		if nameErr != nil {
 			return nameErr
 		}
