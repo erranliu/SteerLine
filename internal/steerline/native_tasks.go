@@ -289,14 +289,6 @@ func (s *SQLiteStore) NativeTaskPage(ctx context.Context, project, taskID, expec
 	}
 	// Keep the whole relation snapshot, but decode only paged tasks and their
 	// predecessors so an unrelated damaged task cannot break this page.
-	statuses := map[string]string{}
-	selected := map[string]bool{}
-	relevant := []string{}
-	for _, record := range all {
-		statuses[record.TaskID] = record.Status
-		selected[record.TaskID] = true
-		relevant = append(relevant, record.TaskID)
-	}
 	edges := []TaskDependencyRecord{}
 	rows, err = tx.QueryContext(ctx, `SELECT predecessor_id,successor_id FROM task_dependencies WHERE project_identity=? ORDER BY length(predecessor_id),predecessor_id,length(successor_id),successor_id`, project)
 	if err != nil {
@@ -316,64 +308,15 @@ func (s *SQLiteStore) NativeTaskPage(ctx context.Context, project, taskID, expec
 		return page, err
 	}
 	rows.Close()
-	relevantSeen := map[string]bool{}
-	for _, id := range relevant {
-		relevantSeen[id] = true
+	relations, err := loadNativePageRelations(ctx, tx, project, targetBranch, all, edges)
+	if err != nil {
+		return page, err
 	}
+	incoming := map[string][]TaskDependencyRecord{}
+	outgoing := map[string][]string{}
 	for _, edge := range edges {
-		if selected[edge.SuccessorID] && !relevantSeen[edge.PredecessorID] {
-			relevant = append(relevant, edge.PredecessorID)
-			relevantSeen[edge.PredecessorID] = true
-		}
-	}
-	for _, id := range relevant {
-		if selected[id] {
-			continue
-		}
-		var status string
-		var version uint64
-		var body []byte
-		e := tx.QueryRowContext(ctx, `SELECT status,version,payload FROM tasks WHERE project_identity=? AND task_id=?`, project, id).Scan(&status, &version, &body)
-		if errors.Is(e, sql.ErrNoRows) {
-			continue
-		}
-		if e != nil {
-			return page, e
-		}
-		var record TaskRecord
-		if e = json.Unmarshal(body, &record); e != nil {
-			return page, e
-		}
-		if record.ProjectIdentity != project || record.TaskID != id || record.Source != "native" || !canonicalDecimalID(id) || record.Status != status || record.Version != version || !validTaskStatus(status) || version == 0 {
-			return page, nativeErr("contract_mismatch", "predecessor task identity or status differs from its stored row")
-		}
-		statuses[id] = status
-	}
-	delivered := map[string]bool{}
-	for _, id := range relevant {
-		var delivery TaskDeliveryRecord
-		var merged, recorded string
-		delivery.ProjectIdentity = project
-		delivery.TaskID = id
-		e := tx.QueryRowContext(ctx, `SELECT selected_workflow_run_id,pr_instance,pr_repository,pr_number,pr_url,merge_commit,merged_at,recorded_at,evidence FROM task_deliveries WHERE project_identity=? AND task_id=?`, project, id).Scan(&delivery.SelectedWorkflowRunID, &delivery.PRInstance, &delivery.PRRepository, &delivery.PRNumber, &delivery.PRURL, &delivery.MergeCommit, &merged, &recorded, &delivery.Evidence)
-		if errors.Is(e, sql.ErrNoRows) {
-			continue
-		}
-		if e != nil {
-			return page, e
-		}
-		delivery.MergedAt, err = time.Parse(time.RFC3339Nano, merged)
-		if err != nil {
-			return page, nativeErr("inconsistent_delivery", "native task delivery merge time is invalid")
-		}
-		delivery.RecordedAt, err = time.Parse(time.RFC3339Nano, recorded)
-		if err != nil {
-			return page, nativeErr("inconsistent_delivery", "native task delivery recording time is invalid")
-		}
-		if err = validateNativeTaskDelivery(delivery, targetBranch); err != nil {
-			return page, err
-		}
-		delivered[delivery.TaskID] = true
+		incoming[edge.SuccessorID] = append(incoming[edge.SuccessorID], edge)
+		outgoing[edge.PredecessorID] = append(outgoing[edge.PredecessorID], edge.SuccessorID)
 	}
 	var executionSlotBusy int
 	if err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM executions WHERE project_identity=? AND status IN ('pending','active','waiting_decision','blocked')`, project).Scan(&executionSlotBusy); err != nil {
@@ -381,55 +324,23 @@ func (s *SQLiteStore) NativeTaskPage(ctx context.Context, project, taskID, expec
 	}
 	for _, record := range all {
 		detail := NativeTaskDetail{TaskRecord: record, ProjectID: project, Priority: record.Priority, WorkflowRuns: []WorkflowRunRecord{}, Predecessors: []TaskDependencyStatus{}, Successors: []string{}, UnmetPredecessors: []TaskDependencyStatus{}, StartupBlockers: []string{}}
-		dependencyReady := record.Status == "open"
-		for _, edge := range edges {
-			if edge.PredecessorID == record.TaskID {
-				detail.Successors = append(detail.Successors, edge.SuccessorID)
-			}
-			if edge.SuccessorID != record.TaskID {
-				continue
-			}
-			predecessor := TaskDependencyStatus{TaskID: edge.PredecessorID, Status: statuses[edge.PredecessorID], Delivered: delivered[edge.PredecessorID]}
-			if predecessor.Status == "" {
-				predecessor.Blocker = "inconsistent_delivery"
-			} else if predecessor.Status == "discarded" {
-				predecessor.Blocker = "discarded_predecessor"
-			} else if predecessor.Status == "closed" && !predecessor.Delivered {
-				predecessor.Blocker = "inconsistent_delivery"
-			} else if predecessor.Delivered && predecessor.Status != "closed" {
-				predecessor.Blocker = "inconsistent_delivery"
-			} else if !predecessor.Delivered {
-				predecessor.Blocker = "predecessor_not_delivered"
-			}
-			detail.Predecessors = append(detail.Predecessors, predecessor)
-			if predecessor.Blocker != "" {
-				detail.UnmetPredecessors = append(detail.UnmetPredecessors, predecessor)
-				dependencyReady = false
-			}
+		detail.Successors = append(detail.Successors, outgoing[record.TaskID]...)
+		predecessors := make([]TaskDependencyStatus, 0, len(incoming[record.TaskID]))
+		for _, edge := range incoming[record.TaskID] {
+			_, delivered := relations.deliveries[edge.PredecessorID]
+			predecessors = append(predecessors, TaskDependencyStatus{TaskID: edge.PredecessorID, Status: relations.statuses[edge.PredecessorID], Delivered: delivered})
 		}
-		detail.DependencyReady = dependencyReady
-		if record.Status != "open" {
-			detail.StartupBlockers = append(detail.StartupBlockers, "task_not_open")
-		}
-		if dispatchPaused != 0 {
-			detail.StartupBlockers = append(detail.StartupBlockers, "dispatch_paused")
-		}
-		if executionSlotBusy > 0 && dispatchMode == "auto" {
-			detail.StartupBlockers = append(detail.StartupBlockers, "execution_slot_busy")
-		}
-		var contractPayload []byte
-		var contractDigest string
-		err = tx.QueryRowContext(ctx, `SELECT digest,payload FROM task_contracts WHERE project_identity=? AND contract_id=? AND task_id=?`, project, record.ContractID, record.TaskID).Scan(&contractDigest, &contractPayload)
-		if errors.Is(err, sql.ErrNoRows) {
+		delivery, hasDelivery := relations.deliveries[record.TaskID]
+		detail.DependencyReady, detail.Predecessors, detail.UnmetPredecessors = nativeDependencyState(record.Status, hasDelivery, predecessors)
+		detail.StartupBlockers = nativeStartupBlockersFor(record.Status, hasDelivery, dispatchPaused != 0, dispatchMode, executionSlotBusy > 0)
+		contractRow, ok := relations.contracts[record.TaskID]
+		if !ok {
 			return page, nativeErr("contract_mismatch", "native task has no matching fixed contract")
 		}
-		if err != nil {
+		if err = json.Unmarshal(contractRow.payload, &detail.Contract); err != nil {
 			return page, err
 		}
-		if err = json.Unmarshal(contractPayload, &detail.Contract); err != nil {
-			return page, err
-		}
-		if detail.Contract.ContractID != record.ContractID || detail.Contract.Digest != contractDigest {
+		if detail.Contract.ContractID != record.ContractID || contractRow.id != record.ContractID || detail.Contract.Digest != contractRow.digest {
 			return page, nativeErr("contract_mismatch", "task contract identity differs from task record")
 		}
 		if err = ValidateTaskContract(detail.Contract); err != nil {
@@ -438,53 +349,9 @@ func (s *SQLiteStore) NativeTaskPage(ctx context.Context, project, taskID, expec
 		if !sameRepositoryTarget(detail.Contract.Repository, targetRepository) || detail.Contract.Remote != targetRemote || detail.Contract.Branch != targetBranch {
 			return page, nativeErr("contract_mismatch", "task contract target differs from persisted project authority")
 		}
-		runRows, e := tx.QueryContext(ctx, `SELECT workflow_run_id,phase,payload FROM workflow_runs WHERE project_identity=? AND task_id=? ORDER BY workflow_run_id`, project, record.TaskID)
-		if e != nil {
-			return page, e
-		}
-		for runRows.Next() {
-			var b []byte
-			var runID, phase string
-			var run WorkflowRunRecord
-			if e = runRows.Scan(&runID, &phase, &b); e != nil {
-				runRows.Close()
-				return page, e
-			}
-			if e = json.Unmarshal(b, &run); e != nil {
-				runRows.Close()
-				return page, e
-			}
-			if run.ProjectIdentity != project || run.TaskID != record.TaskID || run.WorkflowRunID != runID || run.Phase != phase {
-				runRows.Close()
-				return page, nativeErr("contract_mismatch", "workflow payload differs from its stored task binding")
-			}
-			detail.WorkflowRuns = append(detail.WorkflowRuns, run)
-		}
-		e = runRows.Err()
-		runRows.Close()
-		if e != nil {
-			return page, e
-		}
-		var delivery TaskDeliveryRecord
-		var merged, recorded string
-		e = tx.QueryRowContext(ctx, `SELECT task_id,selected_workflow_run_id,pr_instance,pr_repository,pr_number,pr_url,merge_commit,merged_at,recorded_at,evidence FROM task_deliveries WHERE project_identity=? AND task_id=?`, project, record.TaskID).Scan(&delivery.TaskID, &delivery.SelectedWorkflowRunID, &delivery.PRInstance, &delivery.PRRepository, &delivery.PRNumber, &delivery.PRURL, &delivery.MergeCommit, &merged, &recorded, &delivery.Evidence)
-		if e == nil {
-			delivery.ProjectIdentity = project
-			delivery.MergedAt, err = time.Parse(time.RFC3339Nano, merged)
-			if err != nil {
-				return page, nativeErr("contract_mismatch", "invalid delivery merge timestamp")
-			}
-			delivery.RecordedAt, err = time.Parse(time.RFC3339Nano, recorded)
-			if err != nil {
-				return page, nativeErr("contract_mismatch", "invalid delivery recording timestamp")
-			}
+		detail.WorkflowRuns = append(detail.WorkflowRuns, relations.runs[record.TaskID]...)
+		if hasDelivery {
 			detail.Delivery = &delivery
-		} else if !errors.Is(e, sql.ErrNoRows) {
-			return page, e
-		}
-		if (record.Status == "closed") != (detail.Delivery != nil) {
-			detail.DependencyReady = false
-			detail.StartupBlockers = append(detail.StartupBlockers, "inconsistent_delivery")
 		}
 		page.Tasks = append(page.Tasks, detail)
 	}

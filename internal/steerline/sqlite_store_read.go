@@ -1,0 +1,296 @@
+package steerline
+
+import (
+	"context"
+	"database/sql"
+	"encoding/json"
+	"errors"
+	"strings"
+	"time"
+)
+
+func (s *SQLiteStore) LoadProjection(ctx context.Context, project string) ([]byte, uint64, error) {
+	var payload []byte
+	var revision uint64
+	err := s.db.QueryRowContext(ctx, `SELECT payload,revision FROM projection WHERE project_identity=?`, project).Scan(&payload, &revision)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, 0, nil
+	}
+	return payload, revision, err
+}
+
+// DatabaseVersion is a read-only cache invalidation hint. Callers must still
+// use the bound native reader before trusting task data or issuing commands.
+func (s *SQLiteStore) DatabaseVersion(ctx context.Context) (string, uint64, error) {
+	var id string
+	var revision uint64
+	err := s.db.QueryRowContext(ctx, `SELECT database_id,revision FROM database_state WHERE singleton=1`).Scan(&id, &revision)
+	return id, revision, err
+}
+
+func (s *SQLiteStore) Query(ctx context.Context, project string) (DomainSnapshot, error) {
+	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return DomainSnapshot{}, err
+	}
+	defer tx.Rollback()
+	snapshot, err := querySnapshot(ctx, tx, project)
+	if err != nil {
+		return snapshot, err
+	}
+	return snapshot, tx.Commit()
+}
+
+type queryContext interface {
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+}
+
+func querySnapshot(ctx context.Context, db queryContext, project string) (DomainSnapshot, error) {
+	out := DomainSnapshot{ProjectIdentity: project, Tasks: []TaskRecord{}, WorkflowRuns: []WorkflowRunRecord{}, Executions: []ExecutionRecord{}, Attempts: []StepAttemptRecord{}, Decisions: []DecisionRecord{}, Operations: []OperationRecord{}}
+	queries := []struct {
+		sql    string
+		decode func([]byte) error
+	}{
+		{`SELECT payload FROM tasks WHERE project_identity=? ORDER BY task_id`, func(b []byte) error {
+			var v TaskRecord
+			if err := json.Unmarshal(b, &v); err != nil {
+				return err
+			}
+			out.Tasks = append(out.Tasks, v)
+			return nil
+		}},
+		{`SELECT payload FROM executions WHERE project_identity=? ORDER BY execution_id`, func(b []byte) error {
+			var v ExecutionRecord
+			if err := json.Unmarshal(b, &v); err != nil {
+				return err
+			}
+			out.Executions = append(out.Executions, v)
+			return nil
+		}},
+		{`SELECT payload FROM step_attempts WHERE project_identity=? ORDER BY execution_id,step_id,attempt_number`, func(b []byte) error {
+			var v StepAttemptRecord
+			if err := json.Unmarshal(b, &v); err != nil {
+				return err
+			}
+			out.Attempts = append(out.Attempts, v)
+			return nil
+		}},
+		{`SELECT payload FROM decisions WHERE project_identity=? ORDER BY decision_id`, func(b []byte) error {
+			var v DecisionRecord
+			if err := json.Unmarshal(b, &v); err != nil {
+				return err
+			}
+			out.Decisions = append(out.Decisions, v)
+			return nil
+		}},
+		{`SELECT payload FROM operations WHERE project_identity=? ORDER BY operation_id`, func(b []byte) error {
+			var v OperationRecord
+			if err := json.Unmarshal(b, &v); err != nil {
+				return err
+			}
+			out.Operations = append(out.Operations, v)
+			return nil
+		}},
+	}
+	for _, q := range queries {
+		rows, err := db.QueryContext(ctx, q.sql, project)
+		if err != nil {
+			return out, err
+		}
+		for rows.Next() {
+			var b []byte
+			if err = rows.Scan(&b); err != nil {
+				rows.Close()
+				return out, err
+			}
+			if err = q.decode(b); err != nil {
+				rows.Close()
+				return out, err
+			}
+		}
+		err = rows.Err()
+		rows.Close()
+		if err != nil {
+			return out, err
+		}
+	}
+	rows, err := db.QueryContext(ctx, `SELECT payload,control_revision FROM workflow_runs WHERE project_identity=? ORDER BY workflow_run_id`, project)
+	if err != nil {
+		return out, err
+	}
+	for rows.Next() {
+		var b []byte
+		var record WorkflowRunRecord
+		if err = rows.Scan(&b, &record.ControlRevision); err != nil {
+			rows.Close()
+			return out, err
+		}
+		if err = json.Unmarshal(b, &record); err != nil {
+			rows.Close()
+			return out, err
+		}
+		out.WorkflowRuns = append(out.WorkflowRuns, record)
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return out, err
+	}
+	rows, err = db.QueryContext(ctx, `SELECT task_id,selected_workflow_run_id,pr_instance,pr_repository,pr_number,pr_url,merge_commit,merged_at,recorded_at,evidence FROM task_deliveries WHERE project_identity=? ORDER BY task_id`, project)
+	if err != nil {
+		return out, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		record := TaskDeliveryRecord{ProjectIdentity: project}
+		var merged, recorded string
+		if err = rows.Scan(&record.TaskID, &record.SelectedWorkflowRunID, &record.PRInstance, &record.PRRepository, &record.PRNumber, &record.PRURL, &record.MergeCommit, &merged, &recorded, &record.Evidence); err != nil {
+			return out, err
+		}
+		if record.MergedAt, err = time.Parse(time.RFC3339Nano, merged); err != nil {
+			return out, err
+		}
+		if record.RecordedAt, err = time.Parse(time.RFC3339Nano, recorded); err != nil {
+			return out, err
+		}
+		out.Deliveries = append(out.Deliveries, record)
+	}
+	if err = rows.Err(); err != nil {
+		return out, err
+	}
+	return out, nil
+}
+
+func (s *SQLiteStore) Events(ctx context.Context, project, execution, attempt string, after int64, limit int) ([]DomainEvent, error) {
+	if limit < 1 {
+		limit = 200
+	}
+	if limit > 1000 {
+		limit = 1000
+	}
+	query := `SELECT event_id,project_identity,task_id,workflow_run_id,execution_id,attempt_id,external_source,external_id,type,received_at,payload_bytes,payload_digest,CASE WHEN payload_bytes <= 1048576 THEN payload ELSE X'' END FROM events WHERE project_identity=? AND event_id>?`
+	args := []any{project, after}
+	if execution != "" {
+		query += ` AND execution_id=?`
+		args = append(args, execution)
+	}
+	if attempt != "" {
+		query += ` AND attempt_id=?`
+		args = append(args, attempt)
+	}
+	query += ` ORDER BY event_id LIMIT ?`
+	args = append(args, limit)
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []DomainEvent{}
+	for rows.Next() {
+		var v DomainEvent
+		var received string
+		if err = rows.Scan(&v.EventID, &v.ProjectIdentity, &v.TaskID, &v.WorkflowRunID, &v.ExecutionID, &v.AttemptID, &v.ExternalSource, &v.ExternalID, &v.Type, &received, &v.PayloadBytes, &v.PayloadDigest, &v.Payload); err != nil {
+			return nil, err
+		}
+		v.ReceivedAt, _ = time.Parse(time.RFC3339Nano, received)
+		v.PayloadOmitted = v.PayloadBytes > len(v.Payload)
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
+func (s *SQLiteStore) EventPayload(ctx context.Context, project string, eventID int64, offset int64, limit int) ([]byte, int64, string, error) {
+	if eventID <= 0 || offset < 0 {
+		return nil, 0, "", errors.New("event body reference or offset is invalid")
+	}
+	if limit < 1 {
+		limit = 256 << 10
+	}
+	if limit > 256<<10 {
+		limit = 256 << 10
+	}
+	var total int64
+	var digest string
+	var body []byte
+	err := s.db.QueryRowContext(ctx, `SELECT payload_bytes,payload_digest,substr(payload,?,?) FROM events WHERE project_identity=? AND event_id=?`, offset+1, limit, project, eventID).Scan(&total, &digest, &body)
+	return body, total, digest, err
+}
+
+func (s *SQLiteStore) Commands(ctx context.Context, project, status string, limit int) ([]CommandRecord, error) {
+	return s.commandsFiltered(ctx, project, status, limit, nil)
+}
+
+func (s *SQLiteStore) serviceCommands(ctx context.Context, project, status string, limit int) ([]CommandRecord, error) {
+	return s.commandsFiltered(ctx, project, status, limit, []string{"answer_decision", "retry_run", "mark_stopped", "resolve_command"})
+}
+
+func (s *SQLiteStore) commandsFiltered(ctx context.Context, project, status string, limit int, kinds []string) ([]CommandRecord, error) {
+	if limit < 1 {
+		limit = 200
+	}
+	if limit > 1000 {
+		limit = 1000
+	}
+	q := `SELECT command_id,kind,target_id,expected_version,idempotency_key,requested_by,payload,status,result,created_at,updated_at FROM commands WHERE project_identity=?`
+	args := []any{project}
+	if status != "" {
+		q += ` AND status=?`
+		args = append(args, status)
+	}
+	if len(kinds) > 0 {
+		q += ` AND kind IN (` + strings.TrimSuffix(strings.Repeat("?,", len(kinds)), ",") + `)`
+		for _, kind := range kinds {
+			args = append(args, kind)
+		}
+	}
+	q += ` ORDER BY created_at LIMIT ?`
+	args = append(args, limit)
+	rows, err := s.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []CommandRecord{}
+	for rows.Next() {
+		var v CommandRecord
+		var created, updated string
+		if err = rows.Scan(&v.CommandID, &v.Kind, &v.TargetID, &v.ExpectedVersion, &v.IdempotencyKey, &v.RequestedBy, &v.Payload, &v.Status, &v.Result, &created, &updated); err != nil {
+			return nil, err
+		}
+		v.ProjectIdentity = project
+		v.CreatedAt, _ = time.Parse(time.RFC3339Nano, created)
+		v.UpdatedAt, _ = time.Parse(time.RFC3339Nano, updated)
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
+func (s *SQLiteStore) Command(ctx context.Context, project, commandID string) (CommandRecord, error) {
+	var command CommandRecord
+	var created, updated string
+	err := s.db.QueryRowContext(ctx, `SELECT project_identity,command_id,kind,target_id,expected_version,idempotency_key,requested_by,payload,status,result,created_at,updated_at FROM commands WHERE project_identity=? AND command_id=?`, project, commandID).Scan(&command.ProjectIdentity, &command.CommandID, &command.Kind, &command.TargetID, &command.ExpectedVersion, &command.IdempotencyKey, &command.RequestedBy, &command.Payload, &command.Status, &command.Result, &created, &updated)
+	if err != nil {
+		return command, err
+	}
+	command.CreatedAt, err = time.Parse(time.RFC3339Nano, created)
+	if err != nil {
+		return command, err
+	}
+	command.UpdatedAt, err = time.Parse(time.RFC3339Nano, updated)
+	return command, err
+}
+
+func (s *SQLiteStore) CommandByIdempotency(ctx context.Context, project, idempotencyKey string) (CommandRecord, error) {
+	var command CommandRecord
+	var created, updated string
+	err := s.db.QueryRowContext(ctx, `SELECT project_identity,command_id,kind,target_id,expected_version,idempotency_key,requested_by,payload,status,result,created_at,updated_at FROM commands WHERE project_identity=? AND idempotency_key=?`, project, idempotencyKey).Scan(&command.ProjectIdentity, &command.CommandID, &command.Kind, &command.TargetID, &command.ExpectedVersion, &command.IdempotencyKey, &command.RequestedBy, &command.Payload, &command.Status, &command.Result, &created, &updated)
+	if err != nil {
+		return command, err
+	}
+	command.CreatedAt, err = time.Parse(time.RFC3339Nano, created)
+	if err != nil {
+		return command, err
+	}
+	command.UpdatedAt, err = time.Parse(time.RFC3339Nano, updated)
+	return command, err
+}
