@@ -12,24 +12,24 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"time"
 
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	remote "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker"
-	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 	"github.com/erranliu/SteerLine/internal/steerline/workspace"
 )
 
 func executionStopperFor(c Config) (executionapi.ExecutionStopper, error) {
-	switch c.hostName() {
-	case "local":
-		return localExecutionBackend{config: c}, nil
-	case "orca":
-		return orcaworker.NewBackend(nativeOrcaConfig(c)), nil
+	entry, err := registrationFor(c)
+	if err != nil {
+		return nil, err
 	}
-	return nil, unsupported("StopExecution")
+	stopper, ok := entry.Backend(c).(executionapi.ExecutionStopper)
+	if !ok {
+		return nil, unsupported("StopExecution")
+	}
+	return stopper, nil
 }
 
 func unsupported(name string) error {
@@ -503,13 +503,11 @@ func retiredExecutionCapabilityName(name string) bool {
 	return name == "reply_continue" || name == "retry"
 }
 func backendFor(c Config) executionapi.ExecutionBackend {
-	if c.hostName() == "orca_supervised" {
-		return remote.NewBackend(remoteWorkerConfig(c))
+	entry, err := registrationFor(c)
+	if err != nil {
+		return rejectedExecutionBackend{err}
 	}
-	if c.hostName() == "orca" {
-		return orcaworker.NewBackend(nativeOrcaConfig(c))
-	}
-	return localExecutionBackend{config: c}
+	return entry.Backend(c)
 }
 func cloneRun(r Run) Run {
 	b, _ := json.Marshal(r)
@@ -519,21 +517,11 @@ func cloneRun(r Run) Run {
 }
 func agentFor(c Config) executionapi.AgentSpec { return executionapi.AgentSpec{Name: c.agentName()} }
 func targetFor(c Config) executionapi.ExecutionTarget {
-	if c.hostName() == "orca_supervised" {
-		supervised := c.Orca.Supervised
-		if supervised == nil {
-			return executionapi.ExecutionTarget{}
-		}
-		return executionapi.ExecutionTarget{ID: "orca-supervised:" + supervised.ConnectionID, ConnectionID: supervised.ConnectionID, ExternalRuntime: supervised.EnvironmentID}
+	entry, err := registrationFor(c)
+	if err != nil {
+		return executionapi.ExecutionTarget{}
 	}
-	if c.hostName() == "orca" {
-		return executionapi.ExecutionTarget{ID: "orca:" + digestValue(struct {
-			Executable string
-			Args       []string
-		}{c.Orca.Executable, c.Orca.Args})[:24]}
-	}
-	name, _ := os.Hostname()
-	return executionapi.ExecutionTarget{ID: "local:" + runtime.GOOS + ":" + name}
+	return entry.Target(c)
 }
 func (s *Service) readRunWorkspace(ctx context.Context, run *Run) (executionapi.WorkspaceInspection, error) {
 	if run == nil || run.WorkflowVersion != WorkerFlowVersion {

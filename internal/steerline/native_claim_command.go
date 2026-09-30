@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	taskdomain "github.com/erranliu/SteerLine/internal/steerline/task"
 )
 
@@ -31,6 +30,7 @@ type TaskClaimOptions struct {
 }
 
 func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, options TaskClaimOptions) (TaskClaimReceipt, error) {
+	config = copyWorkerFlowConfig(config)
 	sqlite := c.Store
 	if sqlite == nil || c.Project == "" || config.Identity() != c.Project {
 		return TaskClaimReceipt{}, nativeErr("authority_mismatch", "claim requires the configured native project")
@@ -84,6 +84,13 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 		return replayTaskClaim(old, requestPayload, options.TaskID, options.RequestedBy)
 	}
 
+	if !config.ExecutionRequirements.Empty() {
+		evaluation, err := evaluateExecutionRequirements(ctx, config)
+		if err != nil {
+			return TaskClaimReceipt{}, err
+		}
+		config.requirementsEvaluation = &evaluation
+	}
 	if err := config.bindPublicationTarget(ctx); err != nil {
 		return TaskClaimReceipt{}, err
 	}
@@ -165,13 +172,11 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 			return TaskClaimReceipt{}, nativeErr("base_missing_delivery", "acquired branch base does not contain a verified predecessor merge commit")
 		}
 	}
-	backend, protocol, err := executionapi.ExecutionBackendKind(config.hostName())
+	entry, err := registrationFor(config)
 	if err != nil {
 		return TaskClaimReceipt{}, err
 	}
-	if config.WorkflowProtocol == WorkerFlowVersion && backend == string(executionapi.BackendLocal) {
-		protocol = string(executionapi.ProtocolLocalCodexAppServer)
-	}
+	backend, protocol := entry.Key.Backend, entry.Key.Protocol
 	target := targetFor(config)
 	target.Branch, target.BaseRevision = config.Branch, base
 	claimant := strings.TrimSpace(config.Claimant)
@@ -222,6 +227,12 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 			}
 			receipt = r
 			return taskBatchReplay{Receipt: TaskBatchReceipt{RequestID: options.RequestID, Status: "accepted"}}
+		}
+		if e := verifyClaimConfigFiles(config); e != nil {
+			return e
+		}
+		if !verifyFixedExecutionProfile(*wfr.ExecutionProfile) {
+			return nativeErr("stale_profile", "claim snapshot changed after evaluation")
 		}
 		current, e := taskGraphSnapshotTx(ctx, tx, c.Project)
 		if e != nil {

@@ -10,71 +10,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
-	"github.com/erranliu/SteerLine/internal/steerline/workerflow"
 )
-
-// workerFlowModeFor binds every worker action to the execution recorded at
-// claim time, including projects that do not use named execution profiles.
-func workerFlowModeFor(config Config, run *Run, execution *ExecutionRecord) (workerflow.Mode, error) {
-	if run == nil || execution == nil {
-		return 0, &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "worker flow has no fixed run or execution"}
-	}
-	backend, protocol, err := executionapi.ExecutionBackendKind(config.hostName())
-	if err != nil {
-		return 0, nativeErr("unsupported_schema", err.Error())
-	}
-	if backend == string(executionapi.BackendLocal) {
-		protocol = string(executionapi.ProtocolLocalCodexAppServer)
-	}
-	if run.Host != config.hostName() || run.Agent != config.agentName() || execution.Agent != run.Agent ||
-		run.Backend != backend || execution.Backend != backend || run.Protocol != protocol || execution.Protocol != protocol ||
-		run.Target.ID == "" || run.Target.ID != execution.Target.ID || run.Target.ID != targetFor(config).ID {
-		return 0, &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "fixed worker target differs from its persisted execution"}
-	}
-	mode, err := workerflow.SelectMode(run.Protocol, config.hostName())
-	if err != nil {
-		return 0, nativeErr("unsupported_schema", err.Error())
-	}
-	return mode, nil
-}
-
-// The service is the only writer. Mode selection carries no Service reference.
-func (s *Service) workerFlowMode(run *Run) (workerflow.Mode, error) {
-	fixed, err := s.workerFlowContext(run)
-	if err != nil {
-		return 0, err
-	}
-	if fixed.workflow.WorkflowVersion != WorkerFlowVersion {
-		return 0, &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "fixed worker target differs from its persisted execution"}
-	}
-	return workerFlowModeFor(fixed.config, run, fixed.execution)
-}
-
-func (s *Service) prepareWorkerFlowByMode(ctx context.Context, task TaskRecord, run *Run, mode workerflow.Mode) error {
-	switch mode {
-	case workerflow.LocalCodex:
-		return s.prepareCodexWorker(ctx, task, run)
-	case workerflow.NativeOrca:
-		return s.prepareNativeOrcaWorkerFlow(ctx, task, run)
-	case workerflow.SupervisedOrca:
-		return s.prepareSupervisedOrcaWorker(ctx, task, run)
-	default:
-		return nativeErr("unsupported_schema", "unknown worker mode")
-	}
-}
-
-func (s *Service) startWorkerTurnByMode(ctx context.Context, run *Run, turnID, prompt, opID string, mode workerflow.Mode) error {
-	switch mode {
-	case workerflow.LocalCodex:
-		return s.startCodexWorkerTurn(ctx, run, turnID, prompt, opID)
-	case workerflow.NativeOrca:
-		return s.startNativeOrcaWorkerTurn(ctx, run, turnID, prompt, opID)
-	case workerflow.SupervisedOrca:
-		return s.startSupervisedOrcaWorkerTurn(ctx, run, turnID, prompt, opID)
-	default:
-		return nativeErr("unsupported_schema", "unknown worker mode")
-	}
-}
 
 func (s *Service) prepareCodexWorker(ctx context.Context, task TaskRecord, run *Run) error {
 	fixed, err := s.workerFlowContext(run)
@@ -84,7 +20,7 @@ func (s *Service) prepareCodexWorker(ctx context.Context, task TaskRecord, run *
 	if err := requireWorkerFlowCapabilities(ctx, fixed.config); err != nil {
 		return err
 	}
-	return s.prepareWorkerWorkspace(ctx, task, run, false)
+	return s.prepareWorkerWorkspace(ctx, task, run)
 }
 
 func (s *Service) prepareNativeOrcaWorkerFlow(ctx context.Context, task TaskRecord, run *Run) error {
@@ -105,7 +41,7 @@ func (s *Service) prepareSupervisedOrcaWorker(ctx context.Context, task TaskReco
 	if err := requireWorkerFlowCapabilities(ctx, fixed.config); err != nil {
 		return err
 	}
-	return s.prepareWorkerWorkspace(ctx, task, run, true)
+	return s.prepareWorkerWorkspace(ctx, task, run)
 }
 
 func (s *Service) startCodexWorkerTurn(ctx context.Context, run *Run, commandID, prompt, opID string) error {
@@ -246,36 +182,44 @@ func requireWorkerFlowCapabilities(ctx context.Context, c Config) error {
 	if err := validateWorkflowConfig(&c, nil); err != nil {
 		return err
 	}
-	if c.hostName() == "orca_supervised" {
-		if c.agentName() != "codex" || c.Model == "" || c.ReasoningEffort == "" || c.Sandbox != "workspace-write" || c.Profile != "" || c.Orca.Supervised == nil {
-			return &executionapi.BackendError{Code: executionapi.BackendUnsupported, Diagnostic: "remote Orca requires Codex, model/effort, workspace-write and a fixed supervised target"}
-		}
-		_, err := probeSupervisedOrcaTarget(ctx, c)
+	entry, err := registrationFor(c)
+	if err != nil {
 		return err
 	}
+	return entry.Preflight(ctx, c)
+}
+func preflightRemoteWorkerFlow(ctx context.Context, c Config) error {
+	if c.agentName() != "codex" || c.Model == "" || c.ReasoningEffort == "" || c.Sandbox != "workspace-write" || c.Profile != "" || c.Orca.Supervised == nil {
+		return &executionapi.BackendError{Code: executionapi.BackendUnsupported, Diagnostic: "remote Orca requires Codex, model/effort, workspace-write and a fixed supervised target"}
+	}
+	_, err := probeSupervisedOrcaTarget(ctx, c)
+	return err
 
-	if c.hostName() == "orca" {
-		if c.managedWindowsOrca() {
-			if _, err := nativeOrcaFixedAgentCommand(c); err != nil {
-				return &executionapi.BackendError{Code: executionapi.BackendUnsupported, Diagnostic: err.Error(), Cause: err}
-			}
-			runner := Runner{Dir: c.Repository, Timeout: duration(c.CommandTimeout)}
-			if err := codexworker.ProbeManagedCLI(ctx, c.Codex, func(ctx context.Context, executable string, args []string) ([]byte, error) {
-				return runner.Output(ctx, Command{Executable: executable, Args: args})
-			}); err != nil {
-				return err
-			}
+}
+func preflightNativeWorkerFlow(ctx context.Context, c Config) error {
+	if c.managedWindowsOrca() {
+		if _, err := nativeOrcaFixedAgentCommand(c); err != nil {
+			return &executionapi.BackendError{Code: executionapi.BackendUnsupported, Diagnostic: err.Error(), Cause: err}
 		}
-
-		if c.Profile != "" || c.Sandbox != "workspace-write" {
-			return &executionapi.BackendError{Code: executionapi.BackendUnsupported, Diagnostic: "Orca requires workspace-write and no Codex profile"}
-		}
-		if err := orcaworker.CheckStatus(ctx, orcaWorkerCaller(c)); err != nil {
+		runner := Runner{Dir: c.Repository, Timeout: duration(c.CommandTimeout)}
+		if err := codexworker.ProbeManagedCLI(ctx, c.Codex, func(ctx context.Context, executable string, args []string) ([]byte, error) {
+			return runner.Output(ctx, Command{Executable: executable, Args: args})
+		}); err != nil {
 			return err
 		}
-		_, err := nativeOrcaRepo(ctx, c)
+	}
+
+	if c.Profile != "" || c.Sandbox != "workspace-write" {
+		return &executionapi.BackendError{Code: executionapi.BackendUnsupported, Diagnostic: "Orca requires workspace-write and no Codex profile"}
+	}
+	if err := orcaworker.CheckStatus(ctx, orcaWorkerCaller(c)); err != nil {
 		return err
 	}
+	_, err := nativeOrcaRepo(ctx, c)
+	return err
+
+}
+func preflightCodexWorkerFlow(ctx context.Context, c Config) error {
 	if c.agentName() != "codex" {
 		return &executionapi.BackendError{Code: executionapi.BackendUnsupported, Diagnostic: "resumable worker flow requires Codex"}
 	}
@@ -311,6 +255,7 @@ func requireWorkerFlowCapabilities(ctx context.Context, c Config) error {
 		return &executionapi.BackendError{Code: executionapi.BackendUnsupported, Diagnostic: unsupported.Diagnostic, Cause: unsupported.Cause}
 	}
 	return err
+
 }
 
 // workerFlowContext binds one persisted run to its fixed profile and records.
@@ -341,6 +286,11 @@ func (s *Service) workerFlowContext(run *Run) (workerFlowContext, error) {
 }
 
 func copyWorkerFlowConfig(c Config) Config {
+	c.ExecutionRequirements = c.ExecutionRequirements.Clone()
+	if c.requirementsEvaluation != nil {
+		e := c.requirementsEvaluation.Clone()
+		c.requirementsEvaluation = &e
+	}
 	c.ExecutableTypes = append([]string(nil), c.ExecutableTypes...)
 	c.Git.Args = append([]string(nil), c.Git.Args...)
 	c.Codex.Args = append([]string(nil), c.Codex.Args...)
@@ -348,6 +298,12 @@ func copyWorkerFlowConfig(c Config) Config {
 	profiles := make([]ExecutionProfile, len(c.ExecutionProfiles))
 	copy(profiles, c.ExecutionProfiles)
 	for i := range profiles {
+		profiles[i].ExecutionRequirements = profiles[i].ExecutionRequirements.Clone()
+		profiles[i].Publication = clonePublicationSettings(profiles[i].Publication)
+		if profiles[i].RequirementsEvaluation != nil {
+			e := profiles[i].RequirementsEvaluation.Clone()
+			profiles[i].RequirementsEvaluation = &e
+		}
 		profiles[i].Codex.Args = append([]string(nil), profiles[i].Codex.Args...)
 		profiles[i].Orca.Args = append([]string(nil), profiles[i].Orca.Args...)
 		if profiles[i].Orca.Supervised != nil {
@@ -372,16 +328,13 @@ func copyWorkerFlowConfig(c Config) Config {
 	return c
 }
 
-func (s *Service) deliverResumableWorkerFeedback(ctx context.Context, run *Run, execution *ExecutionRecord, answer DecisionAnswer, commandID string, route workerflow.Mode) error {
+func (s *Service) deliverResumableWorkerFeedback(ctx context.Context, run *Run, execution *ExecutionRecord, answer DecisionAnswer, commandID string) error {
 	if execution.SessionID == "" || run.SessionID == nil || *run.SessionID != execution.SessionID {
 		execution.Error = ptr("Feedback is saved, but the original worker session is not yet available for delivery")
 		s.refreshRun(run)
 		return s.commitWorker(run)
 	}
 	if run.Decision.Request.NativeAsk != nil {
-		if route != workerflow.LocalCodex {
-			return &executionapi.BackendError{Code: executionapi.BackendUnsupported, Diagnostic: "native Codex question belongs to a different worker feedback protocol"}
-		}
 		if s.workerMessages != nil && s.workers[run.RunID] == nil {
 			return nil // Recovery must attach the original observer before replying.
 		}
@@ -423,4 +376,60 @@ func workerFeedbackText(answer DecisionAnswer, request DecisionRequest) string {
 		message += "\n\nAdditional instructions:\n" + answer.Note
 	}
 	return message
+}
+
+func prepareLocalWorkerWorkspace(s *Service, ctx context.Context, run *Run, opID string) (bool, error) {
+	fixed, err := s.workerFlowContext(run)
+	if err != nil {
+		return false, err
+	}
+	execution := fixed.execution
+	preparation, err := prepareWorktree(ctx, fixed.config, run)
+	if err != nil {
+		status := string(preparation.Status)
+		if status != string(executionapi.OperationRejected) {
+			status = "outcome_unknown"
+		}
+		_ = s.changeWorkerOperation(run, opID, status, "", mustJSON(preparation), err.Error())
+		execution.Status = "blocked"
+		s.refreshRun(run)
+		return false, s.waitWorkerFlow(run, "Workspace preparation needs reconciliation: "+err.Error())
+	}
+	s.refreshRun(run)
+	workspace, err := s.inspectWorkflowWorkspace(ctx, run)
+	if err != nil {
+		_ = s.changeWorkerOperation(run, opID, "outcome_unknown", "", nil, err.Error())
+		execution.Status = "blocked"
+		s.refreshRun(run)
+		return false, s.waitWorkerFlow(run, "Workspace identity could not be verified: "+err.Error())
+	}
+	applyWorkflowWorkspaceEvidence(run, execution, workspace)
+	if err = s.changeWorkerOperation(run, opID, "confirmed", "", mustJSON(workspace), ""); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+func remoteWorkerWorkspaceRequest(run *Run) (workerWorkspacePreparationInput, error) {
+	input, err := workerWorkspaceRequest(run)
+	if err != nil {
+		return input, err
+	}
+	input.RemoteName, err = workerOrcaWorktreeName(run.TaskID, run.RunID)
+	return input, err
+}
+func prepareRegisteredRemoteWorkspace(s *Service, ctx context.Context, run *Run, opID string) (bool, error) {
+	fixed, err := s.workerFlowContext(run)
+	if err != nil {
+		return false, err
+	}
+	if err = s.prepareRemoteWorkerWorkspace(ctx, run, fixed.execution, opID); err != nil {
+		_ = s.changeWorkerOperation(run, opID, "outcome_unknown", "", nil, err.Error())
+		fixed.execution.Status = "blocked"
+		s.refreshRun(run)
+		return false, s.waitWorkerFlow(run, "Workspace preparation needs reconciliation: "+err.Error())
+	}
+	if err = s.prepareRemoteOrcaCoordinator(ctx, run); err != nil {
+		return false, s.waitWorkerFlow(run, "Original Orca terminal preparation is unverified: "+err.Error())
+	}
+	return true, nil
 }

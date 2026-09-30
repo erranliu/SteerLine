@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"os"
-
-	"github.com/erranliu/SteerLine/internal/steerline/workerflow"
 )
 
 // resume returns true only when the center should inspect another run.
@@ -228,18 +226,4 @@ func (s *Service) resumeCodexWorkspace(ctx context.Context, task *TaskRecord, ru
 		}
 	}
 	return false, s.startInitialWorkerFlowTurn(ctx, *task, run)
-}
-
-func (s *Service) resumeWorkerFlowByMode(ctx context.Context, task *TaskRecord, run *Run, mode workerflow.Mode) (bool, error) {
-	switch mode {
-	case workerflow.LocalCodex:
-		return s.resumeCodexWorker(ctx, task, run)
-	case workerflow.NativeOrca:
-		_, err := s.resumeNativeOrcaWorker(ctx, task, run)
-		return true, err // Poll every active Orca Run, not only the first one.
-	case workerflow.SupervisedOrca:
-		return s.resumeSupervisedOrcaWorker(ctx, task, run)
-	default:
-		return false, nativeErr("unsupported_schema", "unknown worker mode")
-	}
 }

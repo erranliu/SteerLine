@@ -45,7 +45,7 @@ func (s *Service) executionConfigForRun(run *Run) (Config, error) {
 			continue
 		}
 		if workflow.ExecutionProfile == nil {
-			return Config{}, errors.New("execution snapshot v3 is required; preserve original state and external session")
+			return Config{}, errors.New("execution snapshot v4 is required; preserve original state and external session")
 		}
 		fixed := *workflow.ExecutionProfile
 		if fixed.ID == "" || !verifyFixedExecutionProfile(fixed) || workflow.ConfigDigest != fixed.AcceptedConfigVersion {
@@ -82,9 +82,10 @@ func (s *Service) executionConfigForRun(run *Run) (Config, error) {
 		if workflow.WorkflowVersion != WorkerFlowVersion {
 			return Config{}, fmt.Errorf("fixed execution profile uses an unsupported workflow version")
 		}
-		backend, protocol, err := executionapi.ExecutionBackendKind(fixed.Host)
-		if workflow.WorkflowVersion == WorkerFlowVersion && backend == string(executionapi.BackendLocal) {
-			protocol = string(executionapi.ProtocolLocalCodexAppServer)
+		entry, err := registrationFor(config)
+		backend, protocol := executionapi.BackendKind(""), executionapi.ExecutionProtocol("")
+		if err == nil {
+			backend, protocol = entry.Key.Backend, entry.Key.Protocol
 		}
 		if err != nil || run.Host != fixed.Host || run.Agent != fixed.Agent || run.Backend != string(backend) || run.Protocol != string(protocol) || run.Target.ID != targetFor(config).ID {
 			return Config{}, errors.New("fixed execution profile differs from the persisted run identity")

@@ -5,7 +5,6 @@ import (
 	"errors"
 
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
-	"github.com/erranliu/SteerLine/internal/steerline/workerflow"
 )
 
 func (s *Service) waitWorkerFlow(run *Run, reason string, operationIDs ...string) error {
@@ -16,17 +15,20 @@ func (s *Service) waitWorkerFlow(run *Run, reason string, operationIDs ...string
 	if workflow.Phase == "completed" || run.TaskStatus == "closed" || run.TaskStatus == "discarded" {
 		return nil
 	}
-	unresolvedNativeTurn := run.Protocol == string(executionapi.ProtocolLocalCodexAppServer) && !execution.RecoveryRequired && (execution.PendingCommandID != "" || execution.CurrentTurnID != "" && execution.CurrentTurnID != execution.LastStoppedTurnID)
+	entry, err := s.workerFlowRegistration(run)
+	if err != nil {
+		return err
+	}
+	facts := workerWaitFacts{}
+	if entry.WaitFacts != nil {
+		facts = entry.WaitFacts(run, execution)
+	}
+	unresolvedNativeTurn := facts.PreserveUnresolvedTurn
 	if !unresolvedNativeTurn && (run.Decision == nil || run.Decision.Status != "pending" && run.Decision.Status != "answer_saved") {
-		contextText := reason
-		if run.Protocol == string(executionapi.ProtocolLocalCodexAppServer) && execution.CurrentTurnID != "" && execution.CurrentTurnID == execution.LastStoppedTurnID {
-			contextText = "本轮已结束，提交后将在原 Codex 会话开始下一轮。\n\n" + reason
-		}
+		contextText := facts.ContextPrefix + reason
 		options := []executionapi.DecisionOption{{ID: "continue", Label: "Continue current work"}}
-		if execution.RecoveryRequired && (execution.RecoveryState == "interrupted" || execution.RecoveryState == "completed") && run.Protocol == string(executionapi.ProtocolLocalCodexAppServer) && execution.Process != nil {
-			options = []executionapi.DecisionOption{{ID: "continue", Label: "原 Codex 会话继续", Detail: "在新的本地进程中核实并恢复原 thread"}, {ID: "new_session", Label: "新会话继续", Detail: "使用现有工作区和持久历史作为上下文"}}
-		} else if execution.RecoveryRequired && execution.RecoveryState == "interrupted" && run.Protocol == string(executionapi.ProtocolLocalCodexAppServer) {
-			options = []executionapi.DecisionOption{{ID: "continue", Label: "开始本地 Codex 执行", Detail: "先核实或准备原任务的工作区"}}
+		if facts.Options != nil {
+			options = facts.Options
 		}
 		question := "The worker stopped. What should it do next?"
 		if execution.RecoveryRequired && (execution.RecoveryState == "unverified" || execution.RecoveryState == "") {
@@ -53,7 +55,7 @@ func (s *Service) waitWorkerFlow(run *Run, reason string, operationIDs ...string
 			workflow.Phase = "queued"
 		}
 	}
-	if execution.Status == "active" && run.Protocol != string(executionapi.ProtocolLocalCodexAppServer) {
+	if execution.Status == "active" && !facts.PreserveActiveStatus {
 		execution.Status = "idle"
 	}
 	execution.UpdatedAt = now()
@@ -84,7 +86,7 @@ func (s *Service) applyWorkerFlowDecision(ctx context.Context, run *Run) error {
 	if err != nil {
 		return err
 	}
-	route, err := workerFlowModeFor(config, run, execution)
+	route, err := workerFlowRegistrationFor(config, run, execution)
 	if err != nil {
 		return err
 	}
@@ -96,18 +98,13 @@ func (s *Service) applyWorkerFlowDecision(ctx context.Context, run *Run) error {
 	if err != nil || command.Kind != "answer_decision" || command.TargetID != answer.DecisionID || command.Status != "accepted" || !stableExecutionID(command.CommandID) {
 		return errors.Join(err, errors.New("saved worker feedback has no fixed accepted command identity"))
 	}
-	if route == workerflow.NativeOrca && run.Decision.Request.HostTarget != nil {
-		return s.applyEnvironmentAction(ctx, run, answer, command.CommandID)
+	if err := s.checkCurrentExecutionRequirements(ctx, fixed); err != nil {
+		return err
 	}
-	if route == workerflow.NativeOrca && execution.Environment != nil {
-		if err := s.observeWorkerEnvironment(ctx, run); err != nil {
+	if route.PrepareFeedback != nil {
+		handled, err := route.PrepareFeedback(s, ctx, run, execution, answer, command.CommandID)
+		if handled || err != nil {
 			return err
-		}
-		if execution.Environment.Blocker != nil {
-			return nil
-		}
-		if !execution.Environment.Ready {
-			return s.advanceOrcaPreparation(ctx, run)
 		}
 	}
 	if execution.Environment != nil && execution.Environment.Blocker != nil {
@@ -148,35 +145,11 @@ func (s *Service) applyWorkerFlowDecision(ctx context.Context, run *Run) error {
 		}
 	}
 	if execution.RecoveryRequired {
-		if route == workerflow.NativeOrca && execution.RecoveryState == "relay_pending" {
-			if answer.OptionID != "forward_result" {
-				return errors.New("Orca result relay requires explicit forwarding approval")
-			}
-			s.setDecisionStatus(run, "applied")
-			s.setRunDecision(run, nil)
-			execution.RecoveryRequired = false
-			execution.RecoveryState = "running"
-			if err := s.commitWorker(run); err != nil {
+		if route.RecoverFeedback != nil {
+			handled, err := route.RecoverFeedback(s, ctx, run, execution, answer, command.CommandID)
+			if handled || err != nil {
 				return err
 			}
-			turn := nativeOrcaCurrentTurn(execution)
-			if turn == nil || turn.DispatchID == "" {
-				return errors.New("original Orca Dispatch disappeared before relay")
-			}
-			if err := s.relayNativeOrcaDone(ctx, run, execution, turn); err != nil {
-				return s.nativeOrcaUncertain(run, "Manual Orca result relay needs reconciliation: "+err.Error())
-			}
-			return nil // The original inbox will prove delivery on a later poll.
-		}
-		if route == workerflow.LocalCodex && execution.RecoveryState == "interrupted" && execution.Process == nil && execution.TurnNumber == 0 {
-			return s.startManuallyRecoveredInitialCodex(ctx, run, answer, command.CommandID)
-		}
-		if route == workerflow.LocalCodex && (execution.RecoveryState == "interrupted" || execution.RecoveryState == "completed") {
-			prompt := "The previous local Codex process stopped. Inspect the current worktree, Git status, existing work and persistent task history before continuing. Do not replay an earlier tool call blindly.\n\n" + workerFeedbackText(answer, run.Decision.Request)
-			if err := s.beginLocalRecoveryAttempt(ctx, run, answer.OptionID); err != nil {
-				return s.waitWorkerFlow(run, "手动继续条件未满足："+err.Error())
-			}
-			return s.startWorkerFlowTurn(ctx, run, prompt, command.CommandID)
 		}
 		if execution.RecoveryState != "live" && execution.RecoveryState != "running" && execution.RecoveryState != "question" {
 			return nil
@@ -186,8 +159,5 @@ func (s *Service) applyWorkerFlowDecision(ctx context.Context, run *Run) error {
 			return err
 		}
 	}
-	if route == workerflow.NativeOrca || route == workerflow.SupervisedOrca {
-		return s.applyNativeOrcaDecision(ctx, run, workflow, execution, answer, command.CommandID)
-	}
-	return s.deliverResumableWorkerFeedback(ctx, run, execution, answer, command.CommandID, route)
+	return route.DeliverFeedback(s, ctx, run, workflow, execution, answer, command.CommandID)
 }

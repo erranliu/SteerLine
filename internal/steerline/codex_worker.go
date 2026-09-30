@@ -67,9 +67,12 @@ func (s *Service) recordAppServerTurnStarted(run *Run, workflow *WorkflowRunReco
 
 func codexBackend(c Config, run *Run) codexworker.Backend {
 	return codexworker.Backend{Config: codexworker.Config{Policy: c.ExecutionPolicy, Executable: c.Codex.Executable, Args: c.Codex.Args, Profile: c.Profile, Sandbox: c.Sandbox, WindowsSandbox: c.WindowsSandbox, Model: c.Model, ReasoningEffort: c.ReasoningEffort, Workspace: deref(run.WorktreePath), RunDir: c.RunDir, RunID: run.RunID, ServerDir: appServerDirectory(c, run), Environment: func(base []string) []string {
-		blocked := append(c.publicationSettings().AuthenticationRefs, "BEADS_*", "BD_*", "GH_TOKEN", "GITHUB_TOKEN", "GITEA_TOKEN", "GIT_CONFIG_COUNT", "GIT_CONFIG_KEY_*", "GIT_CONFIG_VALUE_*")
-		return unsetEnv(overrideEnv(base, map[string]string{"STEERLINE_WORKFLOW_RUN_ID": run.RunID, "STEERLINE_EXECUTION_ID": run.ExecutionID}), blocked)
+		return workerProcessEnvironment(c, run, base)
 	}}, Process: codexworker.ProcessPort{Start: codexProcessStart, Inspect: inspectProcess, NewGeneration: newID, WriteAtomic: AtomicWrite}}
+}
+func workerProcessEnvironment(c Config, run *Run, base []string) []string {
+	blocked := append(c.publicationSettings().AuthenticationRefs, "BEADS_*", "BD_*", "GH_TOKEN", "GITHUB_TOKEN", "GITEA_TOKEN", "GIT_CONFIG_COUNT", "GIT_CONFIG_KEY_*", "GIT_CONFIG_VALUE_*")
+	return unsetEnv(overrideEnv(base, map[string]string{"STEERLINE_WORKFLOW_RUN_ID": run.RunID, "STEERLINE_EXECUTION_ID": run.ExecutionID}), blocked)
 }
 func codexBinding(e *ExecutionRecord) codexworker.Binding {
 	return codexworker.Binding{Process: e.Process, Endpoint: e.AppServerEndpoint, Generation: e.AppServerGeneration, SessionID: e.SessionID}

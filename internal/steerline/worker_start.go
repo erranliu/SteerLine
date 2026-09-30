@@ -21,87 +21,54 @@ func (s *Service) prepareWorkerFlow(ctx context.Context, task TaskRecord, run *R
 		return errors.New("existing worker execution requires a fresh manual recovery decision")
 	}
 	c := fixed.config
+	if err := s.checkCurrentExecutionRequirements(ctx, fixed); err != nil {
+		return err
+	}
 	if err := c.bindPublicationTarget(ctx); err != nil {
 		return err
 	}
-	adapter, err := s.workerFlowMode(run)
+	adapter, err := s.workerFlowRegistration(run)
 	if err != nil {
 		return err
 	}
-	return s.prepareWorkerFlowByMode(ctx, task, run, adapter)
+	return adapter.Prepare(s, ctx, task, run)
 }
 
-func (s *Service) prepareWorkerWorkspace(ctx context.Context, task TaskRecord, run *Run, remote bool) error {
-	fixed, err := s.workerFlowContext(run)
-	if err != nil {
-		return err
-	}
-	workflow, execution, attempt, c := fixed.workflow, fixed.execution, fixed.attempt, fixed.config
+type workerWorkspacePreparationInput struct {
+	WorkflowRunID string                       `json:"workflow_run_id"`
+	ExecutionID   string                       `json:"execution_id"`
+	RemoteName    string                       `json:"remote_name,omitempty"`
+	Workspace     executionapi.WorkspaceIntent `json:"workspace"`
+}
+
+func workerWorkspaceRequest(run *Run) (workerWorkspacePreparationInput, error) {
 	if run.WorkspaceIntent == nil {
-		return nativeErr("inconsistent_delivery", "worker preparation has no fixed workspace intent")
+		return workerWorkspacePreparationInput{}, nativeErr("inconsistent_delivery", "worker preparation has no fixed workspace intent")
 	}
-	remoteName := ""
-	if remote {
-		var nameErr error
-		remoteName, nameErr = workerOrcaWorktreeName(run.TaskID, run.RunID)
-		if nameErr != nil {
-			return nameErr
-		}
-	}
-	opID, err := s.startWorkerOperation(run, "prepare_workspace", "worker-workspace:"+execution.ExecutionID, struct {
-		WorkflowRunID string                       `json:"workflow_run_id"`
-		ExecutionID   string                       `json:"execution_id"`
-		RemoteName    string                       `json:"remote_name,omitempty"`
-		Workspace     executionapi.WorkspaceIntent `json:"workspace"`
-	}{workflow.WorkflowRunID, execution.ExecutionID, remoteName, *run.WorkspaceIntent})
+	return workerWorkspacePreparationInput{WorkflowRunID: run.RunID, ExecutionID: run.ExecutionID, Workspace: *run.WorkspaceIntent}, nil
+}
+func (s *Service) prepareWorkerWorkspace(ctx context.Context, task TaskRecord, run *Run) error {
+	entry, err := s.workerFlowRegistration(run)
 	if err != nil {
 		return err
 	}
-	workflow, execution = s.workflowRecords(run)
-	attempt = s.workflowAttempt(run, run.AttemptID)
-	if workflow == nil || execution == nil || attempt == nil {
+	if entry.WorkspaceRequest == nil || entry.PrepareWorkspace == nil {
+		return unsupported("workspace preparation")
+	}
+	input, err := entry.WorkspaceRequest(run)
+	if err != nil {
+		return err
+	}
+	opID, err := s.startWorkerOperation(run, "prepare_workspace", "worker-workspace:"+run.ExecutionID, input)
+	if err != nil {
+		return err
+	}
+	if _, err = s.workerFlowContext(run); err != nil {
 		return errors.New("worker claim disappeared after preparation intent was saved")
 	}
-	if remote {
-		err = s.prepareRemoteWorkerWorkspace(ctx, run, execution, opID)
-	} else {
-		preparation, prepareErr := prepareWorktree(ctx, c, run)
-		err = prepareErr
-		if err != nil {
-			status := string(preparation.Status)
-			if status != string(executionapi.OperationRejected) {
-				status = "outcome_unknown"
-			}
-			_ = s.changeWorkerOperation(run, opID, status, "", mustJSON(preparation), err.Error())
-			execution.Status = "blocked"
-			s.refreshRun(run)
-			return s.waitWorkerFlow(run, "Workspace preparation needs reconciliation: "+err.Error())
-		}
-	}
-	if err != nil {
-		_ = s.changeWorkerOperation(run, opID, "outcome_unknown", "", nil, err.Error())
-		execution.Status = "blocked"
-		s.refreshRun(run)
-		return s.waitWorkerFlow(run, "Workspace preparation needs reconciliation: "+err.Error())
-	}
-	if !remote {
-		s.refreshRun(run)
-		workspace, inspectErr := s.inspectWorkflowWorkspace(ctx, run)
-		if inspectErr != nil {
-			_ = s.changeWorkerOperation(run, opID, "outcome_unknown", "", nil, inspectErr.Error())
-			execution.Status = "blocked"
-			s.refreshRun(run)
-			return s.waitWorkerFlow(run, "Workspace identity could not be verified: "+inspectErr.Error())
-		}
-		applyWorkflowWorkspaceEvidence(run, execution, workspace)
-		if err = s.changeWorkerOperation(run, opID, "confirmed", "", mustJSON(workspace), ""); err != nil {
-			return err
-		}
-	}
-	if remote {
-		if err := s.prepareRemoteOrcaCoordinator(ctx, run); err != nil {
-			return s.waitWorkerFlow(run, "Original Orca terminal preparation is unverified: "+err.Error())
-		}
+	prepared, err := entry.PrepareWorkspace(s, ctx, run, opID)
+	if !prepared || err != nil {
+		return err
 	}
 	return s.startInitialWorkerFlowTurn(ctx, task, run)
 }
@@ -145,7 +112,7 @@ func (s *Service) startWorkerFlowTurn(ctx context.Context, run *Run, prompt, tur
 	if attempt.StepID != "worker" {
 		return errors.New("worker turn has no fixed worker attempt")
 	}
-	adapter, err := s.workerFlowMode(run)
+	adapter, err := s.workerFlowRegistration(run)
 	if err != nil {
 		return err
 	}
@@ -153,13 +120,15 @@ func (s *Service) startWorkerFlowTurn(ctx context.Context, run *Run, prompt, tur
 	if err := verifyPublicationTargetForRun(ctx, c, run); err != nil {
 		return err
 	}
+	if err := s.checkCurrentExecutionRequirements(ctx, fixed); err != nil {
+		return err
+	}
 	prompt += publicationTargetInstruction(c)
 	if fixed.config.PublicationPolicy.Publisher == executionapi.PublisherHostService {
 		prompt += publication.WorkerInstruction(run.RunID)
 	}
-	if adapter == workerflow.NativeOrca {
-		prompt += "\nOrca Run, Task and Dispatch IDs are separate from the fixed SteerLine workflow_run_id.\n"
-		prompt += nativeOrcaRelayInstruction(run.RunID, turnID)
+	if adapter.TurnInstruction != nil {
+		prompt += adapter.TurnInstruction(run.RunID, turnID)
 	}
 	execution.PendingTurnID, execution.PendingCommandID = adapter.PendingIdentity(turnID)
 	opID, err := s.startWorkerOperation(run, "start_worker_turn", "worker-turn:"+run.ExecutionID+":"+turnID, struct {
@@ -174,5 +143,5 @@ func (s *Service) startWorkerFlowTurn(ctx context.Context, run *Run, prompt, tur
 	if _, err := s.workerFlowContext(run); err != nil {
 		return errors.New("worker turn disappeared after send intent was saved")
 	}
-	return s.startWorkerTurnByMode(ctx, run, turnID, prompt, opID, adapter)
+	return adapter.Start(s, ctx, run, turnID, prompt, opID)
 }

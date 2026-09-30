@@ -1,6 +1,6 @@
 # Plan 执行需求与配置注册收口
 
-任务 ID：61；任务名称：执行需求与配置注册收口；目标：`EXECUTION-ISOLATION`。状态：待实施。唯一执行依据：[Spec](execution-isolation-08-resolution.spec.md)。硬前置：#59、#60 合入，一个实现 PR 交付。
+任务 ID：61；任务名称：执行需求与配置注册收口；目标：`EXECUTION-ISOLATION`。状态：已实现，ER4 远程 Service 成功场景仍待权限证据；见[验收记录](../validation/execution-isolation-08-resolution/README.md)。唯一执行依据：[Spec](execution-isolation-08-resolution.spec.md)。硬前置：#59、#60 合入，一个实现 PR 交付。
 
 ## 实施步骤
 
@@ -26,3 +26,9 @@ go run ./cmd/test-feedback -quick
 ## 交付
 
 PR 附最终配置归属、注册键、业务/平台/事务所有者和删除清单；明确需求存在性检查与真实权限证据的区别。更新八轮剩余规划，不重复留下已交付清单。没有生产部署、中心任务创建或数据库迁移动作。
+
+## 执行结果与验收限制
+
+实现与实际命令结果见 [#61 验收记录](../validation/execution-isolation-08-resolution/README.md)。原九项中心回归真实执行；local 两轮与 native 终端通过，远程两项在 #59 权限缺证门槛拒绝，未替换/删除原成功测试或将它们计为通过。补跑真实 Claim 权限拒绝及远程协议包验证现行边界，不代替原 ER4 三链路成功条件。该缺证门槛沿用 #60 已记录的限制，本轮遵守 Spec 不补前置权限 producer。
+
+补充定向验证包含 `TestExecutionRequirements.*`、`TestRequirementVersionParsers`、`TestEmptyExecutionRequirementsKeepMandatoryChecks`、`TestClaimRechecksAcceptedConfigFiles`、`TestExecutionRegistry.*`、`TestNativeClaimCompetitionCreatesOnlyOneWorkflowReservation` 及固定协议/事实断言。query/console fixture 保留同事务与部分错误断言；没有全量或真机重新认证。

@@ -2,8 +2,6 @@ package steerline
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -29,9 +27,12 @@ type Skill struct {
 }
 type Config struct {
 	fixedProfileDigest      string
+	requirementsEvaluation  *executionapi.RequirementsEvaluation
+	executionConfigPath     string
 	publicationRemoteURL    string
-	PublicationPolicy       executionapi.PublicationPolicy `json:"publication_policy"`
-	ExecutionPolicy         executionapi.ExecutionPolicy   `json:"execution_policy"`
+	PublicationPolicy       executionapi.PublicationPolicy     `json:"publication_policy"`
+	ExecutionPolicy         executionapi.ExecutionPolicy       `json:"execution_policy"`
+	ExecutionRequirements   executionapi.ExecutionRequirements `json:"execution_requirements,omitempty"`
 	policySource            string
 	Repository              string             `json:"repository"`
 	TaskAuthority           string             `json:"task_authority,omitempty"`
@@ -195,6 +196,9 @@ func LoadConfig(path string) (Config, error) {
 	if err := c.ExecutionPolicy.Validate(); err != nil {
 		return c, err
 	}
+	if err := c.ExecutionRequirements.Validate(); err != nil {
+		return c, err
+	}
 	if err := c.PublicationPolicy.Validate(); err != nil {
 		return c, err
 	}
@@ -202,6 +206,7 @@ func LoadConfig(path string) (Config, error) {
 		return c, err
 	}
 	c.policySource, _ = filepath.Abs(path)
+	c.executionConfigPath = GlobalExecutionConfigPath()
 	var configFields map[string]json.RawMessage
 	_ = json.Unmarshal(b, &configFields)
 	for _, field := range []string{"host", "agent", "model", "reasoning_effort", "sandbox", "windows_sandbox", "profile", "codex", "orca", "execution_profiles", "default_execution_profile"} {
@@ -254,11 +259,7 @@ func LoadConfig(path string) (Config, error) {
 		}
 	}
 	c = c.ApplyExecutionProfile(initial)
-	digest := sha256.New()
-	_, _ = digest.Write(b)
-	_, _ = digest.Write([]byte{0})
-	_, _ = digest.Write(globalBytes)
-	c.configDigest = hex.EncodeToString(digest.Sum(nil))
+	c.configDigest = loadedConfigDigest(b, globalBytes)
 	base, err := filepath.Abs(filepath.Dir(path))
 	if err != nil {
 		return c, err
@@ -367,6 +368,12 @@ func validateSupervisedOrcaConfig(c *Config) error {
 }
 
 func validateWorkflowConfig(c *Config, _ []byte) error {
+	if _, err := registrationFor(*c); err != nil {
+		return err
+	}
+	if err := c.ExecutionRequirements.Validate(); err != nil {
+		return err
+	}
 	if err := publication.CheckPolicy(c.PublicationPolicy, c.hostName(), c.agentName(), c.PR); err != nil {
 		return err
 	}

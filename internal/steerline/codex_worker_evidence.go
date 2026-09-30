@@ -7,20 +7,15 @@ import (
 
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	"github.com/erranliu/SteerLine/internal/steerline/publication"
-	"github.com/erranliu/SteerLine/internal/steerline/workerflow"
 )
 
-func readWorkerTurnEvidence(fixed workerFlowContext, mode workerflow.Mode) (workerTurnEvidence, error) {
+func readCodexWorkerTurnEvidence(fixed workerFlowContext) (workerTurnEvidence, error) {
 	run, c := fixed.run, fixed.config
 	execution := workerSessionContext(run, fixed.execution)
 	var fact workerTurnEvidence
 	if run == nil || execution == nil {
 		return fact, errors.New("worker turn has no fixed execution")
 	}
-	if mode != workerflow.LocalCodex {
-		return fact, errors.New("Orca settlement requires its Dispatch adapter")
-	}
-	fact.LocalCodex = true
 	fact.TurnID = execution.CurrentTurnID
 	if fact.TurnID == "" {
 		fact.TurnID = execution.PendingTurnID

@@ -19,11 +19,11 @@ func TestFileQuerySourceReadsCombinedProjectView(t *testing.T) {
 	if err := os.MkdirAll(steerline.SteerlineHome(), 0700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(steerline.GlobalExecutionConfigPath(), []byte(`{"execution_profiles":[{"id":"local","name":"Local Codex","host":"local","agent":"codex","sandbox":"workspace-write","codex":{"executable":"codex"}}]}`), 0600); err != nil {
+	if err := os.WriteFile(steerline.GlobalExecutionConfigPath(), []byte(`{"execution_profiles":[{"id":"local","name":"Local Codex","host":"local","agent":"codex","codex":{"executable":"codex"}}]}`), 0600); err != nil {
 		t.Fatal(err)
 	}
 	repo := filepath.Join(root, "repo")
-	for _, args := range [][]string{{"init", "--quiet", "--initial-branch=main", repo}, {"-C", repo, "remote", "add", "origin", "https://example.invalid/Org/Repo.git"}} {
+	for _, args := range [][]string{{"init", "--quiet", "--initial-branch=main", repo}, {"-C", repo, "remote", "add", "origin", "https://github.com/Org/Repo.git"}} {
 		if output, err := exec.Command("git", args...).CombinedOutput(); err != nil {
 			t.Fatalf("git fixture: %v: %s", err, output)
 		}
@@ -53,7 +53,7 @@ func TestFileQuerySourceReadsCombinedProjectView(t *testing.T) {
 		}
 		for _, id := range []string{"2", "10"} {
 			reference := steerline.FileReference{Path: "docs/task.spec.md", Commit: strings.Repeat("a", 40), SHA256: strings.Repeat("b", 64)}
-			contract := steerline.TaskContract{ContractID: "contract-" + id, Repository: "https://example.invalid/Org/Repo.git", Remote: "origin", Branch: "main", SpecRef: reference, PlanRef: steerline.FileReference{Path: "docs/task.plan.md", Commit: reference.Commit, SHA256: reference.SHA256}, AcceptanceRefs: []steerline.FileReference{reference}}
+			contract := steerline.TaskContract{ContractID: "contract-" + id, Repository: "https://github.com/Org/Repo.git", Remote: "origin", Branch: "main", SpecRef: reference, PlanRef: steerline.FileReference{Path: "docs/task.plan.md", Commit: reference.Commit, SHA256: reference.SHA256}, AcceptanceRefs: []steerline.FileReference{reference}}
 			var err error
 			contract.Digest, err = steerline.TaskContractDigest(contract)
 			if err != nil {
