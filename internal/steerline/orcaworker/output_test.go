@@ -37,3 +37,21 @@ func TestVerifySettledDispatchRejectsReplacedTerminal(t *testing.T) {
 		t.Fatal("settled Dispatch on a replaced terminal was accepted")
 	}
 }
+
+func TestReadWorkerOutputUpgradesPinnedTerminalToLateTranscript(t *testing.T) {
+	calls := 0
+	call := func(_ context.Context, args ...string) (Result, error) {
+		calls++
+		if calls == 1 {
+			return Result{RuntimeID: "runtime", Payload: json.RawMessage(`{"dispatchId":"dispatch","source":"terminal","cursor":"terminal-next"}`)}, nil
+		}
+		if args[len(args)-2] == "--cursor" {
+			t.Fatal("late source query was still pinned to terminal")
+		}
+		return Result{RuntimeID: "runtime", Payload: json.RawMessage(`{"dispatchId":"dispatch","source":"transcript","sourceExact":true,"cursor":"transcript-next"}`)}, nil
+	}
+	output, reset, err := ReadWorkerOutput(context.Background(), call, "dispatch", "terminal-old", "runtime")
+	if err != nil || !reset || output.Source != "transcript" || calls != 2 {
+		t.Fatalf("late transcript stayed invisible: %+v / %v / %v", output, reset, err)
+	}
+}

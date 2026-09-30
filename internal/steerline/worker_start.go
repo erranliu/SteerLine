@@ -111,6 +111,9 @@ func (s *Service) startWorkerFlowTurn(ctx context.Context, run *Run, prompt, tur
 		return err
 	}
 	workflow, execution, attempt := fixed.workflow, fixed.execution, fixed.attempt
+	if execution.Environment != nil && (!execution.Environment.Ready || execution.Environment.Blocker != nil) {
+		return errors.New("business input requires verified readiness and no host blocker")
+	}
 	if execution.RecoveryRequired {
 		return errors.New("worker turn requires a fresh manual recovery decision")
 	}

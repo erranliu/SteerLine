@@ -63,7 +63,7 @@ func nativeAuditStore(t *testing.T) (*SQLiteStore, string, []TaskRecord) {
 func TestNativeAuditPaginationBoundsAndDatabaseIdentity(t *testing.T) {
 	ctx := context.Background()
 	s, project, _ := nativeAuditStore(t)
-	q := QueryService{Store: s, Project: project}
+	q := NewQueryService(s, project)
 	first, err := q.ListNativeTasks(ctx, "", 1)
 	require(t, err)
 	if first.Tasks[0].TaskID != "2" || first.NextCursor == "" || first.Capabilities.StartupBlockers != "provided" {
@@ -88,7 +88,7 @@ func TestNativeAuditPaginationBoundsAndDatabaseIdentity(t *testing.T) {
 	_, err = q.ListNativeTasks(ctx, base64.RawURLEncoding.EncodeToString(raw), 500)
 	requireNativeAuditCode(t, err, "cursor_invalidated")
 	other, _, _ := nativeAuditStore(t)
-	_, err = (QueryService{Store: other, Project: project}).ListNativeTasks(ctx, first.NextCursor, 1)
+	_, err = (NewQueryService(other, project)).ListNativeTasks(ctx, first.NextCursor, 1)
 	requireNativeAuditCode(t, err, "cursor_invalidated")
 	// Corruption outside the requested page must not cause a full-project decode.
 	_, err = s.db.Exec(`UPDATE tasks SET payload='invalid JSON' WHERE task_id='99'`)
@@ -106,7 +106,7 @@ func TestNativeAuditPageBatchesRelationsAcrossPageBoundary(t *testing.T) {
 	ctx := context.Background()
 	c, commit, store := openDAGFixture(t)
 	seedNativeGraphForView(t, c, commit, store, 402, []TaskDependencyRecord{{ProjectIdentity: c.Identity(), PredecessorID: "1", SuccessorID: "402"}})
-	q := QueryService{Store: store, Project: c.Identity()}
+	q := NewQueryService(store, c.Identity())
 	first, err := q.ListNativeTasks(ctx, "", 1)
 	require(t, err)
 	second, err := q.ListNativeTasks(ctx, first.NextCursor, 401)
@@ -136,7 +136,7 @@ func TestNativeAuditPageDecodesOnlyDirectPredecessors(t *testing.T) {
 	}))
 	_, err := store.db.ExecContext(ctx, `UPDATE tasks SET payload='invalid JSON' WHERE project_identity=? AND task_id='2'`, project)
 	require(t, err)
-	page, err := (QueryService{Store: store, Project: project}).ShowNativeTask(ctx, "99")
+	page, err := (NewQueryService(store, project)).ShowNativeTask(ctx, "99")
 	require(t, err)
 	if len(page.Tasks) != 1 || len(page.Tasks[0].UnmetPredecessors) != 1 || page.Tasks[0].UnmetPredecessors[0].TaskID != "10" {
 		t.Fatalf("task detail lost its direct predecessor: %+v", page.Tasks)
@@ -161,7 +161,7 @@ func TestNativeAuditReadersCoexistWithWriter(t *testing.T) {
 	reader, err = OpenNativeTaskProject(ctx, &c)
 	require(t, err)
 	defer reader.Close()
-	page, err := (QueryService{Store: reader, Project: c.Identity()}).ListNativeTasks(ctx, "", 100)
+	page, err := (NewQueryService(reader, c.Identity())).ListNativeTasks(ctx, "", 100)
 	require(t, err)
 	if len(page.Tasks) != 3 {
 		t.Fatal("read failed while writer owns repository")
@@ -169,7 +169,7 @@ func TestNativeAuditReadersCoexistWithWriter(t *testing.T) {
 	// Every read rechecks the binding rather than relying on an earlier handle.
 	_, err = writer.db.Exec(`UPDATE project_task_authorities SET branch='other'`)
 	require(t, err)
-	_, err = (QueryService{Store: reader, Project: c.Identity()}).ListNativeTasks(ctx, "", 100)
+	_, err = (NewQueryService(reader, c.Identity())).ListNativeTasks(ctx, "", 100)
 	requireNativeAuditCode(t, err, "authority_mismatch")
 }
 
@@ -226,7 +226,7 @@ func TestNativeAuditContractRolesAndFixedReferenceVersions(t *testing.T) {
 		t.Fatal("invalid UTF-8 was silently replaced before hashing")
 	}
 	s, project, _ := nativeAuditStore(t)
-	page, err := (QueryService{Store: s, Project: project}).ShowNativeTask(context.Background(), "2")
+	page, err := (NewQueryService(s, project)).ShowNativeTask(context.Background(), "2")
 	require(t, err)
 	base := page.Tasks[0].Contract
 	// Each reference has its own fixed revision; naming and commit equality
@@ -276,7 +276,7 @@ func TestNativeAuditQueryRejectsPayloadIdentityDrift(t *testing.T) {
 			}
 			_, err := s.db.Exec(`UPDATE tasks SET payload=json_set(payload,?,?) WHERE task_id='2'`, "$."+field, value)
 			require(t, err)
-			_, err = (QueryService{Store: s, Project: project}).ShowNativeTask(context.Background(), "2")
+			_, err = (NewQueryService(s, project)).ShowNativeTask(context.Background(), "2")
 			requireNativeAuditCode(t, err, "contract_mismatch")
 		})
 	}

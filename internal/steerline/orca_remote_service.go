@@ -167,7 +167,7 @@ func (s *Service) startRemoteOrcaTurn(ctx context.Context, run *Run, execution *
 				return err
 			}
 		}
-		state.Turns = append(state.Turns, OrcaNativeTurn{TurnID: turnID, TaskID: receipt.ID, TaskRequestID: receipt.RequestID})
+		state.Turns = append(state.Turns, OrcaNativeTurn{Purpose: "business", IntentAt: now(), TurnID: turnID, TaskID: receipt.ID, TaskRequestID: receipt.RequestID})
 		turn = &state.Turns[len(state.Turns)-1]
 		if err := s.changeWorkerOperation(run, op.OperationID, "confirmed", receipt.RequestID, mustJSON(*turn), ""); err != nil {
 			return err

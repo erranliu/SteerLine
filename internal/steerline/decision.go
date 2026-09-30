@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 // Decision questions and accepted answers are records in the current SQLite
@@ -111,7 +113,9 @@ func writeDecisionRequestWithID(r *Run, req DecisionRequest, decisionID string) 
 
 func validateDecisionAnswer(req *DecisionRequest, a *DecisionAnswer) error {
 	a.OptionID = strings.TrimSpace(a.OptionID)
-	a.Note = strings.TrimSpace(a.Note)
+	if req.HostTarget == nil {
+		a.Note = strings.TrimSpace(a.Note)
+	}
 	a.AnsweredBy = strings.TrimSpace(a.AnsweredBy)
 	if a.AnsweredBy == "" {
 		return errors.New("answer requires answered_by")
@@ -528,6 +532,12 @@ func DecisionReplyEligibility(ctx context.Context, c Config, run *Run) error {
 	if run.WorkflowVersion != WorkerFlowVersion || !stableExecutionID(run.ExecutionID) || run.AttemptID == "" || run.Decision.AttemptID != run.AttemptID {
 		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "feedback does not belong to the fixed worker execution"}
 	}
+	if target := run.Decision.Request.HostTarget; target != nil {
+		if target.ExecutionID != run.ExecutionID || !stableExecutionID(target.TurnID) || !stableExecutionID(target.BlockerID) {
+			return errors.New("host action has an invalid fixed execution target")
+		}
+		return ctx.Err()
+	}
 	if run.RecoveryRequired && (run.RecoveryState == "unverified" || run.RecoveryState == "" ||
 		run.RecoveryState == "interrupted" && run.Decision.Request.NativeAsk != nil) {
 		return &BackendError{Code: BackendUnsupported, Diagnostic: "original worker state or native question is not verified; wait for a recovery decision"}
@@ -555,7 +565,7 @@ func (s *Service) applyDecisions(ctx context.Context) error {
 				break
 			}
 		}
-		if blocked {
+		if blocked && run.Decision.Request.HostTarget == nil {
 			continue
 		}
 		if run.WorkflowVersion != WorkerFlowVersion {
@@ -570,21 +580,6 @@ func (s *Service) applyDecisions(ctx context.Context) error {
 
 // Native Orca Dispatches are unsupervised. The center owns the exact agent
 // terminal created with the worktree and never uses Codex's exec protocol.
-type orcaAskCall struct {
-	RunID      string              `json:"run_id"`
-	TaskID     string              `json:"task_id"`
-	DispatchID string              `json:"dispatch_id"`
-	MessageID  string              `json:"message_id"`
-	Questions  []nativeAskQuestion `json:"questions"`
-}
-
-type nativeAskQuestion struct {
-	ID            string           `json:"id"`
-	Header        string           `json:"header"`
-	Question      string           `json:"question"`
-	Options       []DecisionOption `json:"options"`
-	AllowFreeText bool             `json:"allow_free_text"`
-}
 
 func orcaQuestionID(decision *DecisionState) string {
 	if decision == nil || decision.Request.OrcaAsk == nil {
@@ -592,3 +587,7 @@ func orcaQuestionID(decision *DecisionState) string {
 	}
 	return decision.Request.OrcaAsk.MessageID
 }
+
+type orcaAskCall = contracts.OrcaAskCall
+
+type nativeAskQuestion = contracts.NativeAskQuestion

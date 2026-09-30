@@ -42,9 +42,13 @@
 
 Codex CLI/app-server 均从有效策略生成文件、网络和非交互审批参数。禁止用默认用户配置、历史批准或参数顺序决定受管权限。所有启动和后续 turn 参数使用同一快照；thread 的权限不能宽于该策略，准备与业务轮也不能不同。
 
-将主干已有的实现字段统一迁到 `codex.windows_sandbox`。Windows 受限 local 缺省 elevated 在摘要前规范化并冻结；workspace/Git 分散根 + unelevated 必须保持领取前拒绝，none/read-only 可显式选择 unelevated。Windows 本机 Orca Codex 要求显式 elevated 或 unelevated，但选择值不代表组合受支持，分散根无法落实时同样拒绝。非 Windows 或 host 写入未使用 Windows 沙箱的场景记录不适用，不注入伪设置。
+将主干已有字段迁到 `codex.windows_sandbox`。Windows 受限 local 缺省 elevated 在摘要前规范化并冻结；local 的 workspace/Git 分散根 + unelevated 保持领取前拒绝，none/read-only 可显式选择 unelevated。这一限制只适用于已核实的 local app-server 路径，不能直接套到 Orca TUI。
+
+Windows 本机 Orca Codex 保留显式 elevated/unelevated，当前 unelevated + workspace-write 已有同原 terminal 的工具、收据、准备/业务结算证据；用对应路径/版本的映射和证据判断支持，不能借项目抽象误禁该组合或把它推定为 local 也支持。非 Windows 或 host 写入未使用 Windows 沙箱时记录不适用，不注入伪设置。
 
 删除旧顶层 windows_sandbox 和 sandbox 读取，更新当前格式及示例，不保留字段别名。本轮使用同一编译器承接 #57 已迁移的 Windows 默认/冲突检查，不再实现第二份 LocalSandboxArgs。故障不得自动换实现。model/effort 未配置时保留既有默认语义并记录观察范围，不能为了权限编译自行固定模型。
+
+Orca 已有的 managed approval=never、strict-config、安全 args、实际 Git 根、排除隐式临时根、Profile 权限契约摘要及资源绑定在本轮转换为项目策略来源，仍是唯一实现。model/effort 可分别省略。读取/恢复准备记录、原收据与 startup Operation 时使用新完整快照和真实绑定，不从当前配置补造或把旧 ProfileDigest 收据改写成新策略成功。
 
 原始 args 中覆盖权限、附加目录、工作目录、受管 model/effort、子命令、配置文件或 profile 注入，以及绕过审批/sandbox 的参数，在副作用前拒绝。覆盖长短、等号和分离值写法；可以采用经过核实的最小安全参数集合，未知参数不能绕过管理。Codex 原生 profile 覆盖本轮拒绝，不保留旧字段别名或旧顶层 sandbox 读取。
 
@@ -64,15 +68,15 @@ Query 和既有控制台显示项目要求、执行冻结值、额外资源、�
 
 可与 [#60](execution-isolation-07-publish-policy.spec.md) 并行包内开发；主包配置、快照、摘要和 UI 接线串行集成，两项各自完整生效，不等 #61 才冻结。
 
-[环境就绪 Spec](worker-environment-readiness.spec.md) 负责原会话工具探针、准备轮结算和宿主恢复。本任务交付受管权限配置、编译、冻结和冲突拒绝，该任务复用这些实现，不另扩顶层 sandbox 字段。准备功能可独立开展，最终权限接线在本任务合入后完成；本轮不实现它的 nonce/收据和宿主恢复状态机。
+[环境就绪原范围](worker-environment-readiness.spec.md)已交付受管启动、冻结、原会话探针和宿主恢复，本任务接收其实现，并将配置权威切换为项目策略；不再建设一个 managed launch、nonce/收据或恢复状态机，不把既有就绪能力反向设为等待本任务才能交付。保留准备/业务分流、宿主动作与反馈隔离、重查并发和固定期限。
 
 ## 最小验收
 
 | 编号 | 通过条件 |
 | --- | --- |
 | PO1 | 显式策略校验、支持/拒绝和 args 冲突覆盖正确；缺失/旧配置在领取及副作用前拒绝 |
-| PO2 | 两条 Codex 路径使用同一要求；有/无 model 均受管；保留 local elevated 默认与分散根 unelevated 拒绝，网络/审批/根目录设置有版本依据 |
+| PO2 | 同一项目要求分别编译到两条路径；保留 local 默认/unelevated 拒绝与 Orca 已证实的 unelevated 组合、有/无 model 受管和独立 effort |
 | PO3 | 领取/绑定两阶段冻结；配置变更不影响原执行，摘要/资源不匹配禁止启动或恢复输入，展示未核验范围 |
 | PO4 | 各完成一次 local/本机 Orca 受管工具读写及有效 Git 写目录检查；复用确定性映射核验明确 deny、不扩根及冲突拒绝，保存原身份/设置/真实工具结果 |
 
-PO1–PO3 复用参数、领取和 UI fixture，补最小表驱动策略用例。PO4 在隔离 linked worktree 使用同一类工具检查，可在本轮临时文件与索引上读写，核验有效写入根后清理，不做业务提交/推送或请求额外权限；正向工具成功不能代替设置映射与拒绝检查。不要求全部权限组合。若缺少工具来源证据，先记录缺口，不把成功编译或 assistant 正文当作完成。
+PO1–PO3 复用参数、领取、环境冻结和 UI fixture。PO4 在隔离 linked worktree 使用同类最小检查，不做业务提交/推送或请求额外权限；正向成功不代替映射与拒绝。复用已有原生工具解析/服务闭环材料须证明路径、版本、实际设置与新策略映射等价；不能改写旧收据的摘要或用旧验收直接宣告新策略接线完成，不重复完整 readiness 实验。

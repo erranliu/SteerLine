@@ -74,6 +74,20 @@ func (s *Service) resumeCodexWorker(ctx context.Context, task *TaskRecord, run *
 
 func (s *Service) resumeNativeOrcaWorker(ctx context.Context, task *TaskRecord, run *Run) (bool, error) {
 	workflow, execution := s.workflowRecords(run)
+	if execution.Environment != nil {
+		if execution.Process != nil {
+			if err := s.verifyNativeOrcaWorker(ctx, run, execution); err == nil {
+				execution.RecoveryRequired = false
+			}
+		}
+		if turn := nativeOrcaCurrentTurn(execution); turn != nil && turn.DispatchID != "" {
+			return true, s.pollNativeOrcaWorker(ctx, run)
+		}
+		if execution.Environment.Blocker != nil {
+			return true, s.observeWorkerEnvironment(ctx, run)
+		}
+		return true, s.advanceOrcaPreparation(ctx, run)
+	}
 	if execution.RecoveryRequired && execution.Process == nil {
 		execution.RecoveryState = "unverified"
 		return true, s.waitWorkerFlow(run, "原 Orca agent 创建状态未核实；重开服务不会自动准备或派发")

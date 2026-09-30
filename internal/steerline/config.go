@@ -1,14 +1,12 @@
 package steerline
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -18,12 +16,9 @@ import (
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/steerline/codexapp"
+	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
-type Command struct {
-	Executable string   `json:"executable"`
-	Args       []string `json:"args"`
-}
 type Skill struct {
 	Path       string `json:"path"`
 	Invocation string `json:"invocation"`
@@ -68,33 +63,8 @@ type Config struct {
 // presenting execution settings as current.
 func (c Config) LoadedConfigDigest() string { return c.configDigest }
 
-type OrcaConfig struct {
-	Executable   string                `json:"executable"`
-	Args         []string              `json:"args"`
-	Shell        string                `json:"shell"`
-	WaitTimeout  string                `json:"wait_timeout"`
-	KeepTerminal bool                  `json:"keep_terminal"`
-	Activate     bool                  `json:"activate"`
-	Supervised   *SupervisedOrcaConfig `json:"supervised,omitempty"`
-}
-
-type SupervisedOrcaConfig struct {
-	ConnectionID            string `json:"connection_id"`
-	EnvironmentID           string `json:"environment_id"`
-	RepositorySelector      string `json:"repository_selector"`
-	CoordinatorTerminal     string `json:"coordinator_terminal"`
-	ExpectedCodexVersion    string `json:"expected_codex_version,omitempty"` // Optional exact pin; empty accepts and records the observed CLI version.
-	PollInterval            string `json:"poll_interval"`
-	CapabilityReportVersion int    `json:"capability_report_version"`
-	RemoteCancelAvailable   bool   `json:"remote_cancel_available"`
-}
-
 // LegacyCompletionConfig is decoded only as a marker for rejecting old runtime
 // projections; it is never accepted in Config or executed.
-type LegacyCompletionConfig struct {
-	Command Command `json:"command"`
-	Timeout string  `json:"timeout"`
-}
 
 type PRConfig struct {
 	Kind       string  `json:"kind"`
@@ -107,21 +77,8 @@ type PRConfig struct {
 
 // trimBOM removes a leading UTF-8 byte-order mark. Windows tooling (notably
 // PowerShell) prepends one when writing JSON, and encoding/json rejects it.
-func trimBOM(b []byte) []byte {
-	return bytes.TrimPrefix(b, []byte{0xef, 0xbb, 0xbf})
-}
-func decode(data []byte, v any) error {
-	d := json.NewDecoder(bytes.NewReader(trimBOM(data)))
-	d.DisallowUnknownFields()
-	if err := d.Decode(v); err != nil {
-		return err
-	}
-	var extra any
-	if err := d.Decode(&extra); err != io.EOF {
-		return errors.New("expected exactly one JSON value")
-	}
-	return nil
-}
+func trimBOM(b []byte) []byte         { return contracts.TrimBOM(b) }
+func decode(data []byte, v any) error { return contracts.DecodeJSON(data, v) }
 
 // SteerlineHome is the machine-level SteerLine home shared by every source
 // worktree. STEERLINE_HOME overrides the default (C:\SteerlineRuntime on
@@ -349,8 +306,13 @@ func LoadConfig(path string) (Config, error) {
 		}
 	}
 	if c.Host == "orca" {
-		if c.WorkflowProtocol == WorkerFlowVersion && (c.Profile != "" || c.Sandbox != "workspace-write" || (c.Model == "") != (c.ReasoningEffort == "")) {
-			return c, errors.New("Orca worker-flow requires workspace-write, no Codex profile, and model with reasoning_effort together")
+		if c.WorkflowProtocol == WorkerFlowVersion && c.managedWindowsOrca() {
+			if _, err := nativeOrcaFixedAgentCommand(c); err != nil {
+				return c, err
+			}
+		}
+		if c.WorkflowProtocol == WorkerFlowVersion && (c.Profile != "" || c.Sandbox != "workspace-write") {
+			return c, errors.New("Orca worker-flow requires workspace-write and no Codex profile")
 		}
 		if c.agentName() != "codex" && (c.Model != "" || c.Profile != "" || c.ReasoningEffort != "") {
 			return c, errors.New("orca model, profile and reasoning_effort overrides require agent=codex")
@@ -483,7 +445,7 @@ func (c Config) agentName() string {
 	return c.Agent
 }
 func (c Config) needsCodexExecutable() bool {
-	return c.requiresLocalCodex() || c.hostName() == "orca" && c.agentName() == "codex" && (c.Model != "" || c.ReasoningEffort != "" || c.Profile != "")
+	return c.requiresLocalCodex() || c.managedWindowsOrca() || c.hostName() == "orca" && c.agentName() == "codex" && (c.Model != "" || c.ReasoningEffort != "" || c.Profile != "")
 }
 func resolveCommand(c *Command) error {
 	p, e := exec.LookPath(c.Executable)
@@ -520,8 +482,8 @@ func (c *Config) preflightNative(ctx context.Context) error {
 	if c.WorkflowProtocol == WorkerFlowVersion && c.hostName() != "local" && c.hostName() != "orca" && c.hostName() != "orca_supervised" {
 		return &BackendError{Code: BackendUnsupported, Diagnostic: "this worker-flow host is not supported"}
 	}
-	if c.WorkflowProtocol == WorkerFlowVersion && c.hostName() == "orca" && (c.Profile != "" || c.Sandbox != "workspace-write" || (c.Model == "") != (c.ReasoningEffort == "")) {
-		return &BackendError{Code: BackendUnsupported, Diagnostic: "Orca requires workspace-write, no Codex profile, and model with reasoning_effort together"}
+	if c.WorkflowProtocol == WorkerFlowVersion && c.hostName() == "orca" && (c.Profile != "" || c.Sandbox != "workspace-write") {
+		return &BackendError{Code: BackendUnsupported, Diagnostic: "Orca requires workspace-write and no Codex profile"}
 	}
 	if c.hostName() == "local" && c.agentName() != "codex" {
 		return errors.New("local_process currently supports only agent=codex")
@@ -635,4 +597,16 @@ func (c Config) requiresLocalCodex() bool {
 func inside(root, path string) bool {
 	rel, e := filepath.Rel(root, path)
 	return e == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && !filepath.IsAbs(rel)
+}
+
+type Command = contracts.Command
+
+type OrcaConfig = contracts.OrcaConfig
+
+type SupervisedOrcaConfig = contracts.SupervisedOrcaConfig
+
+type LegacyCompletionConfig = contracts.LegacyCompletionConfig
+
+func (c Config) managedWindowsOrca() bool {
+	return runtime.GOOS == "windows" && c.hostName() == "orca" && c.agentName() == "codex"
 }

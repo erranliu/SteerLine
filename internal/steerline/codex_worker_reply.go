@@ -5,10 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/erranliu/SteerLine/internal/steerline/codexapp"
 	"strings"
 
+	"github.com/erranliu/SteerLine/internal/steerline/codexapp"
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
+	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 func (s *Service) replyAppServerAsk(ctx context.Context, run *Run, execution *ExecutionRecord, answer DecisionAnswer) error {
@@ -114,15 +115,6 @@ const codexAskToolName = codexapp.AskToolName
 
 type codexAskQuestion = nativeAskQuestion
 
-type codexAskCall struct {
-	RequestID  json.RawMessage    `json:"request_id"`
-	ThreadID   string             `json:"thread_id"`
-	TurnID     string             `json:"turn_id"`
-	CallID     string             `json:"call_id"`
-	Generation string             `json:"generation,omitempty"`
-	Questions  []codexAskQuestion `json:"questions"`
-}
-
 func parseCodexAskCall(envelope codexapp.Envelope, expectedThread, expectedTurn string) (codexAskCall, error) {
 	wire, err := codexworker.ParseAskEnvelope(envelope, expectedThread, expectedTurn)
 	if err != nil {
@@ -202,3 +194,5 @@ func codexAskDecisionRequest(call codexAskCall) DecisionRequest {
 	request.Context = body.String()
 	return request
 }
+
+type codexAskCall = contracts.CodexAskCall

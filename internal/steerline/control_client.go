@@ -71,7 +71,7 @@ func ReadTaskSnapshot(c Config) (*TaskSnapshot, error) {
 	if err != nil {
 		return nil, err
 	}
-	ready, err := (QueryService{Store: store, Project: c.identity}).ReadyNativeTasks(context.Background())
+	ready, err := (NewQueryService(store, c.identity)).ReadyNativeTasks(context.Background())
 	if err != nil {
 		return nil, err
 	}

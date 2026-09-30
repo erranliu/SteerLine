@@ -125,7 +125,7 @@ func TestCreateTaskBatchAtomicIdempotentAndQueryable(t *testing.T) {
 	if _, err = commands.CreateTaskBatch(ctx, c, changed, requestID, validation.AuthorityVersion, "planner"); err == nil || !strings.Contains(err.Error(), "idempotency_conflict") {
 		t.Fatalf("different content reused request ID: %v", err)
 	}
-	query := QueryService{Store: store, Project: c.Identity()}
+	query := NewQueryService(store, c.Identity())
 	page, err := query.ListNativeTasks(ctx, "", 100)
 	if err != nil {
 		t.Fatal(err)
@@ -466,7 +466,7 @@ func TestNativeClaimAllowsManualParallelButKeepsAutoSlot(t *testing.T) {
 	if _, err = commands.ClaimNativeTask(ctx, c, TaskClaimOptions{TaskID: "80", RequestID: strings.Repeat("e", 32), ExpectedTaskVersion: 1, ExpectedAuthorityVersion: 2, RequestedBy: "operator", Explicit: true}); err == nil || !strings.Contains(err.Error(), "stale_version") {
 		t.Fatalf("same task received a second workflow: %v", err)
 	}
-	page, err := (QueryService{Store: store, Project: c.Identity()}).ShowNativeTask(ctx, "80")
+	page, err := (NewQueryService(store, c.Identity())).ShowNativeTask(ctx, "80")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -485,7 +485,7 @@ func TestNativeClaimAllowsManualParallelButKeepsAutoSlot(t *testing.T) {
 	if err = store.Transact(ctx, func(tx DomainTx) error { return tx.PutWorkflowRun(alteredWorkflow) }); err == nil || !strings.Contains(err.Error(), "immutable_task") {
 		t.Fatalf("claim workflow gates were edited after reservation: %v", err)
 	}
-	other, err := (QueryService{Store: store, Project: c.Identity()}).ShowNativeTask(ctx, "81")
+	other, err := (NewQueryService(store, c.Identity())).ShowNativeTask(ctx, "81")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -556,7 +556,7 @@ func TestNativeClaimBlocksWhenFetchedBaseMissesPredecessorMerge(t *testing.T) {
 	if _, err = commands.CreateTaskBatch(ctx, c, payload, strings.Repeat("5", 32), 2, "planner"); err != nil {
 		t.Fatal(err)
 	}
-	page, err := (QueryService{Store: store, Project: c.Identity()}).ShowNativeTask(ctx, "120")
+	page, err := (NewQueryService(store, c.Identity())).ShowNativeTask(ctx, "120")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -599,7 +599,7 @@ func TestNativeClaimBlocksWhenFetchedBaseMissesPredecessorMerge(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "base_missing_delivery") {
 		t.Fatalf("task started from a base without its predecessor merge: %v", err)
 	}
-	after, err := (QueryService{Store: store, Project: c.Identity()}).ShowNativeTask(ctx, "121")
+	after, err := (NewQueryService(store, c.Identity())).ShowNativeTask(ctx, "121")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -694,7 +694,7 @@ func TestTaskDiscardRequestPersistsUnknownAndThenDiscardsOnlyAfterUnmergedProof(
 	if err != nil {
 		t.Fatal(err)
 	}
-	page, err := (QueryService{Store: store, Project: c.Identity()}).ShowNativeTask(ctx, "70")
+	page, err := (NewQueryService(store, c.Identity())).ShowNativeTask(ctx, "70")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -715,7 +715,7 @@ func TestTaskDiscardRequestPersistsUnknownAndThenDiscardsOnlyAfterUnmergedProof(
 	if err != nil || replayed.Status != "discarded" || replayed.GraphRevision != discarded.GraphRevision {
 		t.Fatalf("configuration drift prevented reading a committed discard receipt: %+v / %v", replayed, err)
 	}
-	page, err = (QueryService{Store: store, Project: c.Identity()}).ShowNativeTask(ctx, "70")
+	page, err = (NewQueryService(store, c.Identity())).ShowNativeTask(ctx, "70")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -726,7 +726,7 @@ func TestTaskDiscardRequestPersistsUnknownAndThenDiscardsOnlyAfterUnmergedProof(
 	if _, err = commands.CreateTaskBatch(ctx, c, second, strings.Repeat("9", 32), 1, "planner"); err != nil {
 		t.Fatal(err)
 	}
-	page, err = (QueryService{Store: store, Project: c.Identity()}).ShowNativeTask(ctx, "71")
+	page, err = (NewQueryService(store, c.Identity())).ShowNativeTask(ctx, "71")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -756,7 +756,7 @@ func TestTaskDiscardRequestPersistsUnknownAndThenDiscardsOnlyAfterUnmergedProof(
 	if pending.Status != "pending_verification" || pending.Code != "merge_state_unknown" {
 		t.Fatalf("unknown publication was treated as safe to discard: %+v", pending)
 	}
-	page, err = (QueryService{Store: store, Project: c.Identity()}).ShowNativeTask(ctx, "71")
+	page, err = (NewQueryService(store, c.Identity())).ShowNativeTask(ctx, "71")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -898,7 +898,7 @@ func TestTaskDiscardRequiresPreciseUnmergedPRAndRetainsUnknownIntent(t *testing.
 	if err = json.Unmarshal(conflictBody, &conflict); err != nil || conflict.PRURL != server.URL+"/org/repo/pulls/90" || !conflict.MergedAt.After(conflict.DiscardedAt) {
 		t.Fatalf("late merge conflict lacks fixed PR or chronological proof: %+v / %v", conflict, err)
 	}
-	conflicted, err := (QueryService{Store: store, Project: c.Identity()}).ShowNativeTask(ctx, "90")
+	conflicted, err := (NewQueryService(store, c.Identity())).ShowNativeTask(ctx, "90")
 	if err != nil || conflicted.Tasks[0].Status != "discarded" || conflicted.Tasks[0].Delivery != nil {
 		t.Fatalf("late merge changed discarded task into normal delivery: %+v / %v", conflicted, err)
 	}
@@ -932,7 +932,7 @@ func TestTaskDiscardRequiresPreciseUnmergedPRAndRetainsUnknownIntent(t *testing.
 	if err = json.Unmarshal(operation.Receipt, &checkpoint); err != nil || checkpoint.PRURL != server.URL+"/org/repo/pulls/94" || !checkpoint.UncertainPR {
 		t.Fatalf("discard intent lost its PR binding or uncertain attempt: %+v / %v", checkpoint, err)
 	}
-	page, err := (QueryService{Store: store, Project: c.Identity()}).ListNativeTasks(ctx, "", 100)
+	page, err := (NewQueryService(store, c.Identity())).ListNativeTasks(ctx, "", 100)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -952,7 +952,7 @@ func TestTaskDiscardDuringActiveExecutionKeepsSlotAndCleanupIdentity(t *testing.
 	if _, err := commands.CreateTaskBatch(ctx, c, taskBatchFixture(t, c, commit, batchTasks(72), nil), strings.Repeat("7", 32), 1, "planner"); err != nil {
 		t.Fatal(err)
 	}
-	page, err := (QueryService{Store: store, Project: c.Identity()}).ShowNativeTask(ctx, "72")
+	page, err := (NewQueryService(store, c.Identity())).ShowNativeTask(ctx, "72")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -989,7 +989,7 @@ func TestTaskDiscardDuringActiveExecutionKeepsSlotAndCleanupIdentity(t *testing.
 	if receipt.Status != "pending_verification" || !hasString(receipt.CleanupPending, "execution_stop_manual:exec-72") || !hasString(receipt.CleanupPending, "workspace_cleanup:tree-72") {
 		t.Fatalf("active execution identity or cleanup was lost: %+v", receipt)
 	}
-	page, err = (QueryService{Store: store, Project: c.Identity()}).ShowNativeTask(ctx, "72")
+	page, err = (NewQueryService(store, c.Identity())).ShowNativeTask(ctx, "72")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1004,7 +1004,7 @@ func TestTaskDiscardDuringActiveExecutionKeepsSlotAndCleanupIdentity(t *testing.
 
 func seedPublishedForDiscard(t *testing.T, ctx context.Context, c Config, store *SQLiteStore, taskID, commit, prURL string) {
 	t.Helper()
-	page, err := (QueryService{Store: store, Project: c.Identity()}).ShowNativeTask(ctx, taskID)
+	page, err := (NewQueryService(store, c.Identity())).ShowNativeTask(ctx, taskID)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -7,6 +7,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 	"os/exec"
+	"strings"
 
 	"github.com/erranliu/SteerLine/internal/steerline/workerflow"
 )
@@ -86,6 +87,9 @@ func (s *Service) prepareCodexWorker(ctx context.Context, task TaskRecord, run *
 }
 
 func (s *Service) prepareNativeOrcaWorkerFlow(ctx context.Context, task TaskRecord, run *Run) error {
+	if execution := s.executionRecord(run); execution.Environment != nil {
+		return s.advanceOrcaPreparation(ctx, run)
+	}
 	if err := s.prepareNativeOrcaWorker(ctx, run); err != nil {
 		return s.nativeOrcaUncertain(run, "Native Orca worker preparation needs reconciliation: "+err.Error())
 	}
@@ -143,8 +147,14 @@ func (s *Service) startNativeOrcaWorkerTurn(ctx context.Context, run *Run, turnI
 	}
 	if err := s.startNativeOrcaTurn(ctx, run, fixed.execution, turnID, prompt); err != nil {
 		_ = s.changeWorkerOperation(run, opID, "outcome_unknown", "", nil, err.Error())
+		if ctx.Err() != nil {
+			return nil
+		}
 		fixed.execution.Status = "blocked"
 		s.refreshRun(run)
+		if fixed.execution.Environment != nil {
+			return s.blockWorkerEnvironment(run, orcaworker.HostFact{Reason: "business_dispatch_unverified", Confidence: "unverified", Source: "business.operation", Detail: clip(err.Error(), 1000)})
+		}
 		return s.nativeOrcaUncertain(run, "Native Orca Dispatch needs reconciliation: "+err.Error())
 	}
 	fixed.attempt.Status, fixed.attempt.UpdatedAt = "dispatched", now()
@@ -241,8 +251,23 @@ func requireWorkerFlowCapabilities(ctx context.Context, c Config) error {
 	}
 
 	if c.hostName() == "orca" {
-		if c.Profile != "" || c.Sandbox != "workspace-write" || (c.Model == "") != (c.ReasoningEffort == "") {
-			return &BackendError{Code: BackendUnsupported, Diagnostic: "Orca requires workspace-write, no Codex profile, and model with reasoning_effort together"}
+		if c.managedWindowsOrca() {
+			if _, err := nativeOrcaFixedAgentCommand(c); err != nil {
+				return &BackendError{Code: BackendUnsupported, Diagnostic: err.Error(), Cause: err}
+			}
+			runner := Runner{Dir: c.Repository, Timeout: duration(c.CommandTimeout)}
+			help, err := runner.Output(ctx, Command{Executable: c.Codex.Executable}, "--help")
+			if err != nil {
+				return err
+			}
+			for _, flag := range []string{"--strict-config", "--sandbox", "--ask-for-approval", "never", "--config"} {
+				if !strings.Contains(string(help), flag) {
+					return fmt.Errorf("Codex CLI does not support managed launch parameter %s", flag)
+				}
+			}
+		}
+		if c.Profile != "" || c.Sandbox != "workspace-write" {
+			return &BackendError{Code: BackendUnsupported, Diagnostic: "Orca requires workspace-write and no Codex profile"}
 		}
 		if err := orcaworker.CheckStatus(ctx, orcaWorkerCaller(c)); err != nil {
 			return err
@@ -376,6 +401,9 @@ func (s *Service) deliverResumableWorkerFeedback(ctx context.Context, run *Run, 
 }
 
 func workerFeedbackText(answer DecisionAnswer, request DecisionRequest) string {
+	if request.HostTarget != nil && answer.OptionID == "" {
+		return answer.Note
+	}
 	if answer.OptionID == "" {
 		return answer.Note
 	}

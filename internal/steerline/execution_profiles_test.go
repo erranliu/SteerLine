@@ -13,11 +13,11 @@ import (
 
 func TestConfigLoadsLocalAndRemoteOrcaProfilesWithoutProbingTargets(t *testing.T) {
 	if runtime.GOOS != "windows" {
-		t.Skip("local Orca terminal target uses Windows cmd.exe")
+		t.Skip("local Orca terminal target uses Windows PowerShell")
 	}
 	base, _ := nativeTaskFixture(t)
 	t.Setenv("STEERLINE_HOME", t.TempDir())
-	localOrca := ExecutionProfile{ID: "orca-local", Name: "Orca 本机", Host: "orca", Agent: "codex", Sandbox: "workspace-write", Codex: Command{Executable: "codex"}, Orca: OrcaConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "15m"}}
+	localOrca := ExecutionProfile{ID: "orca-local", Name: "Orca 本机", Host: "orca", Agent: "codex", Sandbox: "workspace-write", WindowsSandbox: "unelevated", Codex: Command{Executable: "codex"}, Orca: OrcaConfig{Executable: "orca", Shell: "powershell.exe", WaitTimeout: "15m"}}
 	remoteOrca := ExecutionProfile{ID: "orca-remote", Name: "Orca 远程", Host: "orca_supervised", Agent: "codex", Model: "chosen-model", ReasoningEffort: "xhigh", Sandbox: "workspace-write", Codex: Command{Executable: "codex"}, Orca: OrcaConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "15m", Supervised: &SupervisedOrcaConfig{ConnectionID: "connection", EnvironmentID: "environment", RepositorySelector: "repo", CoordinatorTerminal: "terminal", PollInterval: "5s", CapabilityReportVersion: 1}}}
 	local := ExecutionProfile{ID: "local", Name: "本地", Host: "local", Agent: "codex", Sandbox: "workspace-write", Codex: Command{Executable: "codex"}}
 	writeGlobalExecutionFixture(t, []ExecutionProfile{local, localOrca, remoteOrca}, "local")
@@ -96,7 +96,7 @@ func TestNativeClaimPersistsChosenExecutionProfile(t *testing.T) {
 		t.Fatalf("selected claim did not persist a workflow: %+v / %v", snapshot, err)
 	}
 	wf, execution := snapshot.WorkflowRuns[0], snapshot.Executions[0]
-	if wf.WorkflowVersion != WorkerFlowVersion || wf.ExecutionProfile == nil || wf.ExecutionProfile.ID != profile.ID || !wf.ExecutionProfile.VerifyWorkerFlow() || wf.Runner.Model != "chosen-model" || wf.Runner.ReasoningEffort != "xhigh" || wf.Runner.WindowsSandbox != "elevated" || wf.ExecutionProfile.WindowsSandbox != "elevated" || execution.Backend != string(BackendLocal) || execution.CurrentStep != "worker" {
+	if wf.WorkflowVersion != WorkerFlowVersion || wf.ExecutionProfile == nil || wf.ExecutionProfile.ID != profile.ID || !verifyFixedExecutionProfile(*wf.ExecutionProfile) || wf.Runner.Model != "chosen-model" || wf.Runner.ReasoningEffort != "xhigh" || wf.Runner.WindowsSandbox != "elevated" || wf.ExecutionProfile.WindowsSandbox != "elevated" || execution.Backend != string(BackendLocal) || execution.CurrentStep != "worker" {
 		t.Fatalf("chosen execution route was not fixed in the claim: %+v / %+v", wf, execution)
 	}
 	base.ExecutionProfiles[0].Model = "later-edit"
