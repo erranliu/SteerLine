@@ -11,48 +11,8 @@ import (
 	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
 
-func waitWorkerOrcaMarker(ctx context.Context, c Config, identity ProcessIdentity, cursor int64, marker string) error {
-	deadline, cancel := context.WithTimeout(ctx, positiveDuration(c.CommandTimeout, 30*time.Second))
-	defer cancel()
-	ticker := time.NewTicker(250 * time.Millisecond)
-	defer ticker.Stop()
-	for {
-		batch, err := readWorkerOrcaOutput(deadline, c, identity, cursor)
-		if err != nil {
-			return err
-		}
-		for _, raw := range batch.Rows {
-			if strings.TrimSpace(raw) == marker {
-				return nil
-			}
-		}
-		cursor = batch.NextCursor
-		select {
-		case <-deadline.Done():
-			return &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "Orca did not confirm the fixed prompt chunk", Cause: deadline.Err()}
-		case <-ticker.C:
-		}
-	}
-}
-
 func stageWorkerOrcaPrompt(ctx context.Context, c Config, identity ProcessIdentity, executionID, turnID, prompt string) error {
-	for index, chunk := range orcaworker.PromptChunks(prompt) {
-		command, marker, err := orcaworker.ChunkCommand(executionID, turnID, index, chunk)
-		if err != nil {
-			return err
-		}
-		cursor, err := currentWorkerOrcaCursor(ctx, c, identity)
-		if err != nil {
-			return err
-		}
-		_, sendErr := sendWorkerOrcaCommand(ctx, c, identity, command)
-		// A transport error is not evidence that input was rejected. The exact
-		// chunk marker is the only success proof; never send this chunk twice.
-		if err := waitWorkerOrcaMarker(ctx, c, identity, cursor, marker); err != nil {
-			return errors.Join(sendErr, err)
-		}
-	}
-	return nil
+	return orcaworker.StagePrompt(ctx, orcaWorkerMetaCaller(c), workerOrcaTerminalIdentity(identity), positiveDuration(c.CommandTimeout, 30*time.Second), executionID, turnID, prompt, workerOrcaBackendError)
 }
 
 func showWorkerOrcaTerminal(ctx context.Context, c Config, handle string) (orcaTerminal, error) {

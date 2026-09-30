@@ -5,36 +5,20 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"runtime"
-	"strings"
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
 
 func nativeOrcaFixedAgentTitle(executionID string) string {
-	return "SteerLine agent " + executionID
+	return orcaworker.FixedAgentTitle(executionID)
 }
 
 func nativeOrcaFixedAgentCommand(c Config) (string, error) {
-	if c.hostName() != "orca" || c.agentName() != "codex" || c.Model == "" || c.ReasoningEffort == "" || c.Codex.Executable == "" || c.Sandbox != "workspace-write" {
-		return "", errors.New("fixed Orca agent launch requires Codex, model, effort, executable and workspace-write")
-	}
-	if c.Orca.Shell != "powershell.exe" && c.Orca.Shell != "pwsh.exe" {
-		return "", errors.New("fixed Orca agent launch requires a PowerShell terminal")
-	}
-	args := append([]string(nil), c.Codex.Args...)
-	args = append(args, "--model", c.Model, "--config", "model_reasoning_effort="+c.ReasoningEffort, "--sandbox", c.Sandbox)
-	if runtime.GOOS == "windows" {
-		// The worker must reach its Git/PR remote while the Codex workspace
-		// sandbox still limits filesystem writes.
-		args = append(args, "--config", "sandbox_workspace_write.network_access=true")
-	}
-	parts := []string{"&", powershellLiteral(c.Codex.Executable)}
-	for _, arg := range args {
-		parts = append(parts, powershellLiteral(arg))
-	}
-	return strings.Join(parts, " "), nil
+	return orcaworker.FixedAgentCommand(orcaworker.FixedAgentOptions{
+		Host: c.hostName(), Agent: c.agentName(), Model: c.Model, ReasoningEffort: c.ReasoningEffort,
+		Executable: c.Codex.Executable, Args: c.Codex.Args, Sandbox: c.Sandbox, Shell: c.Orca.Shell,
+	})
 }
 
 // A fixed Orca model needs a launch command: worktree create --agent only
@@ -146,9 +130,7 @@ func (s *Service) prepareNativeOrcaFixedAgentTerminal(ctx context.Context, run *
 	if err != nil {
 		return err
 	}
-	for _, arg := range writeArgs {
-		command += " " + powershellLiteral(arg)
-	}
+	command = orcaworker.AppendPowerShellArgs(command, writeArgs)
 	opID, err := s.startOperation("orca_native_agent_terminal", key, map[string]string{"worktree": worktree.ID, "title": title, "model": fixedConfig.Model, "effort": fixedConfig.ReasoningEffort, "command": command})
 	if err != nil {
 		return err
