@@ -1,6 +1,6 @@
 # Spec：worker 环境就绪与宿主阻断恢复
 
-目标：`WORKER-ENVIRONMENT-READINESS`。配套 [Plan](worker-environment-readiness.plan.md)。状态：待实施。日期：2026-09-30。未分配原生 Task ID；一个实现 PR 交付。
+目标：`WORKER-ENVIRONMENT-READINESS`。配套 [Plan](worker-environment-readiness.plan.md)。状态：待实施。日期：2026-09-30。未分配原生 Task ID；一个实现 PR 交付。最终权限接线及交付前置：[#59 项目执行权限策略](execution-isolation-06-policy.spec.md) 合入；原会话探针和宿主观察可先独立准备。
 
 ## 1. 问题与目标
 
@@ -43,11 +43,12 @@
 
 ## 3. 冻结执行权限
 
-1. Orca Codex 启动命令显式使用 `approval_policy=never` 的受支持 CLI 配置或等价参数；和现有 local app-server 的非交互审批语义一致。不得依赖用户全局配置、历史批准或 shell 当前环境使任务碰巧可运行。
-2. Profile 增加显式 `windows_sandbox`，只接受 `elevated` 或 `unelevated`；本期 Windows Orca Codex 路径要求配置该值，不改变其他路径的必需字段。`workspace-write` 是文件权限范围，`windows_sandbox` 是 Windows 实现方式，两者分别验证。选择 `unelevated` 必须是用户配置决定，不是故障后的隐式回退。
-3. 领取时冻结有效 sandbox、Windows sandbox、approval policy、可执行文件、参数及显式 model/effort；资源绑定时追加并冻结 Orca runtime、允许写入根目录和实际启动命令证据。两类字段分别进入配置 digest 和资源身份校验，不要求领取前就知道尚未创建的 worktree/runtime。model/effort 未配置时不自行补造模型选择，记录该设置由启动器默认解析及其可观察范围。允许根目录按当前 linked worktree 规则解析并保存，不能通过探针扩大业务权限。
-4. 原始 `codex.args` 中覆盖受管权限、model/effort、工作目录或附加写入目录的参数，以及另一子命令、配置文件/Profile 注入和绕过沙箱/审批的快捷参数，都必须在外部副作用前报配置错误；覆盖长短参数、等号/分离值与 `--config` 各种受支持写法，不依靠参数顺序消除冲突。不支持受管参数的 CLI 在静态检查中明确拒绝；该检查只证明配置契约受支持，实际沙箱可用性由原会话探针证明。
-5. Profile 修改仅影响新 Execution。已经启动的会话不能通过修改文件改变权限；UI 显示该 Execution 的冻结值及实际校验状态。
+[项目执行权限策略 #59](execution-isolation-06-policy.spec.md) 统一交付项目授权、Codex 参数编译、安全 args 检查、两阶段冻结及必要展示。本文复用其已落实的策略、配置与资源绑定，不再单独扩充 Profile 顶层 sandbox 或另一套权限快照。权限接线与本任务最终交付以前置 #59 合入为条件；原会话探针、宿主观察和准备 fixture 可先独立开展，不以实验完成绕过前置。
+
+1. 本期 Orca Codex 使用 #59 支持的 workspace 写入、固定 Git 元数据、network allow 与 escalation deny 项目策略，以及显式 `codex.windows_sandbox=elevated|unelevated`。实际 CLI/approval policy 由 Codex 适配器生成，不依赖用户配置或历史批准，不在故障后降级。
+2. 领取时复用固定项目策略和方案，资源绑定时复用实际根目录、Orca runtime 和启动证据；model/effort 未配置的语义保持。准备轮和业务轮使用同一权限，不通过探针增加业务根目录。
+3. 参数冲突与版本能力拒绝由 #59 的同一编译器处理。静态检查只证明设置受支持，本文的原会话工具探针证明实际就绪；两种事实独立记录。
+4. 配置变化只影响新 Execution。本文的重新检查或宿主恢复不能重写旧快照；UI 复用冻结值，补充本任务实际准备/阻断状态。
 
 本期不改变 local 后端的启动/恢复语义。必要的共享 DTO 和固定配置字段可复用，但不能为满足 Orca 探针而重启 local worker。
 
