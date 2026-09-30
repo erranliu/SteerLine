@@ -1,5 +1,7 @@
 # Plan：本机 Orca 原生编排接入单 worker
 
+适用说明（2026-09-30）：重开后观察、结果结算与人工确认外部写入按[停服恢复 Plan](worker-service-recovery.plan.md)实施；原终端真实验收记录保持历史事实。
+
 目标：`WORKER-FLOW-ORCA-NATIVE`。唯一执行依据：[Spec](worker-flow-orca-native.spec.md)。状态：实施中。依赖当前 `worker-flow-v1` 基线，一个实现 PR 交付；不创建或改写生产 Task。
 
 ## 1. 固定接口和替换范围

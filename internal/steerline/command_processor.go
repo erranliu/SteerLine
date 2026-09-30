@@ -22,6 +22,15 @@ func (s *Service) processPendingCommands(ctx context.Context) error {
 			if err := ctx.Err(); err != nil {
 				return err
 			}
+			if run := s.findDecision(command.TargetID); run != nil {
+				if execution := s.executionRecord(run); execution != nil && execution.RecoveryRequired && execution.RecoveryMarkedAt != nil && !command.CreatedAt.After(*execution.RecoveryMarkedAt) {
+					result, _ := json.Marshal(map[string]string{"code": "stale_recovery", "error": "saved input predates service recovery; submit a new decision after reviewing the worker state"})
+					if err := service.SetStatus(ctx, command, "rejected", result); err != nil {
+						return err
+					}
+					continue
+				}
+			}
 			if command.Kind != "answer_decision" {
 				if validServiceCommandKind(command.Kind) {
 					return nativeErr("unsupported_schema", "saved command uses a retired recovery action; preserve its state for manual recovery")
@@ -36,11 +45,32 @@ func (s *Service) processPendingCommands(ctx context.Context) error {
 				}
 				continue
 			}
+			if run := s.findDecision(command.TargetID); run != nil {
+				if execution := s.executionRecord(run); execution != nil && execution.RecoveryRequired &&
+					(answer.SourceAttemptID != run.AttemptID || answer.ExpectedRecoveryVersion != execution.RecoveryVersion) {
+					result, _ := json.Marshal(map[string]string{"code": "stale_recovery", "error": "worker Attempt or recovery version changed; refresh before answering"})
+					if err := service.SetStatus(ctx, command, "rejected", result); err != nil {
+						return err
+					}
+					continue
+				}
+			}
 			if command.Status == "pending" {
 				if err = service.SetStatus(ctx, command, "in_flight", nil); err != nil {
 					return err
 				}
 				command.Status = "in_flight"
+			}
+			if run := s.findDecision(command.TargetID); run != nil {
+				if execution := s.executionRecord(run); execution != nil && execution.RecoveryRequired &&
+					(execution.RecoveryState == "unverified" || execution.RecoveryState == "" ||
+						execution.RecoveryState == "interrupted" && run.Decision.Request.NativeAsk != nil) {
+					result, _ := json.Marshal(map[string]string{"code": "recovery_unverified", "error": "the original worker or request is not verified for this answer; review the recovery decision"})
+					if err := service.SetStatus(ctx, command, "rejected", result); err != nil {
+						return err
+					}
+					continue
+				}
 			}
 			if run := s.findDecision(command.TargetID); run != nil && run.Decision != nil && run.Decision.Status == "pending" {
 				if err = s.requireDecisionReplyCapability(ctx, run); err != nil {

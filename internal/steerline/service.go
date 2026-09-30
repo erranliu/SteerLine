@@ -28,6 +28,7 @@ type Service struct {
 	prs                  *PRClient
 	// workers owns live observers by authoritative workflow run ID.
 	workers             map[string]*Worker
+	ownedLocalProcesses map[string]*childProcess
 	appServerLaunching  map[string]string // In-flight goroutines, never persisted execution authority.
 	appServerRecovering map[string]bool
 	workerMessages      chan workerMessage
@@ -95,7 +96,7 @@ func NewService(c Config) (_ *Service, retErr error) {
 			_ = db.Close()
 		}
 	}()
-	s := &Service{Config: c, baseConfig: c, domainStore: db, store: &Store{Domain: db, Project: c.identity}, prs: &PRClient{Config: c.PR, Runner: r}, activities: map[string]*ActivityWriter{}, conversationMappers: map[string]*ConversationMapper{}, workers: map[string]*Worker{}}
+	s := &Service{Config: c, baseConfig: c, domainStore: db, store: &Store{Domain: db, Project: c.identity}, prs: &PRClient{Config: c.PR, Runner: r}, activities: map[string]*ActivityWriter{}, conversationMappers: map[string]*ConversationMapper{}, workers: map[string]*Worker{}, ownedLocalProcesses: map[string]*childProcess{}}
 	old, e := loadRuntimeSnapshot(db, c.identity, false)
 	if errors.Is(e, sql.ErrNoRows) {
 		old, e = nil, nil
@@ -777,6 +778,7 @@ func (s *Service) run(ctx context.Context, dispatchMode string) (retErr error) {
 	if err := s.refreshNativeSnapshot(ctx); err != nil {
 		return err
 	}
+	s.adoptOrGateServiceExecutions()
 	s.State.Service.Ready = false
 	s.State.Service.Status = "running"
 	s.State.Service.HeartbeatIntervalMS = duration(s.Config.Heartbeat).Milliseconds()
@@ -849,6 +851,7 @@ func (s *Service) run(ctx context.Context, dispatchMode string) (retErr error) {
 		}
 		s.State.Service.Status = "stopping"
 		s.State.Service.Ready = false
+		s.markServiceRecoveryGate()
 		s.save()
 		if e := s.ensureStopApplyingReceipt(); e != nil {
 			retErr = errors.Join(retErr, e)
@@ -934,12 +937,8 @@ func (s *Service) run(ctx context.Context, dispatchMode string) (retErr error) {
 			}
 		}
 	}
-	// On startup query saved PRs, apply any already-answered decisions, then
-	// reconcile claims before any new dispatch.
+	// Recovery observes the original workers before accepting new input.
 	if e := step(s.pollPRs); e != nil {
-		return e
-	}
-	if e := step(s.processCommandsAndDecisions); e != nil {
 		return e
 	}
 	if e := s.reconcile(ctx); e != nil {
@@ -949,6 +948,9 @@ func (s *Service) run(ctx context.Context, dispatchMode string) (retErr error) {
 		}
 	}
 	if e := step(s.resumeConfiguredWork); e != nil {
+		return e
+	}
+	if e := step(s.processCommandsAndDecisions); e != nil {
 		return e
 	}
 	candidateErr := s.refreshCandidates(ctx)
@@ -1048,6 +1050,13 @@ func (s *Service) finishWorkerInLoop(run *Run, worker *Worker, workerErr error) 
 }
 
 func (s *Service) shutdown() {
+	defer func() {
+		for runID, owned := range s.ownedLocalProcesses {
+			s.interruptOwnedLocalTurn(runID, owned)
+			owned.Close()
+			delete(s.ownedLocalProcesses, runID)
+		}
+	}()
 	if s.runContext != nil && s.runContext.Err() != nil {
 		s.forwarders.Wait()
 		s.drainWorkerMessages()

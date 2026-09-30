@@ -259,6 +259,12 @@ func startProcess(cmd *exec.Cmd) (*childProcess, error) {
 	return fail(fmt.Errorf("cannot locate suspended initial thread: %w", e))
 }
 
+// A managed worker's descendants remain in its non-breakaway, kill-on-close
+// Job. Closing the owning handle (including on service exit) ends that tree.
+func workerTreeAbsent(identity ProcessIdentity) bool {
+	return inspectProcess(&identity) == "process absent"
+}
+
 func startDetachedProcess(cmd *exec.Cmd) (ProcessIdentity, error) {
 	// CREATE_BREAKAWAY_FROM_JOB is required because the caller may be a UI in a
 	// kill-on-close job. IsProcessInJob below verifies the result before we claim

@@ -32,7 +32,7 @@ Orca terminal v2 output is read on a collector goroutine bound to the fixed runt
 
 Conversation events, immutable body revisions, current message bodies, raw event bytes and source cursors live in the current `steerline.db` SQLite authority. `CommitConversation` writes normalized events, raw bytes, body revisions, dedupe identity and the source checkpoint in one transaction. A source event replay is idempotent. An out-of-order or conflicting revision retains the last known body and adds a diagnostic. Local raw JSONL replay is batched and uses the source file identity to open a new segment after replacement.
 
-The current SQLite schema is 5. Existing schema 3 or 4 databases are inspected read-only and rejected; no conversation-table or index upgrade runs on them. Initialize a new schema 5 database for current operation.
+The current SQLite schema is 7. Older databases are inspected read-only and rejected; no conversation-table or index upgrade runs on them. Initialize a new schema 7 database for current operation.
 
 The current local checkpoint records an anchored byte position. Startup verifies this format before dispatch, then resumes after the committed byte offset and restores the turn mapper from persisted events. It checks file identity, short byte anchors and same-size modification time. An unsupported older checkpoint blocks startup with its original state intact. A changed source opens a new segment with a visible gap; conflicting bytes under one event identity do not advance the cursor. Large raw records beyond 8 MiB produce an explicit gap. Worker output uses bounded backpressure so a full observation queue does not silently drop conversation events.
 

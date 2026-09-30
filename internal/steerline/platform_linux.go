@@ -90,6 +90,13 @@ func startProcess(cmd *exec.Cmd) (*childProcess, error) {
 	}
 	return &childProcess{identity: id}, nil
 }
+func workerTreeAbsent(identity ProcessIdentity) bool {
+	if inspectProcess(&identity) != "process absent" {
+		return false
+	}
+	err := syscall.Kill(-identity.PID, 0)
+	return errors.Is(err, syscall.ESRCH)
+}
 func startDetachedProcess(cmd *exec.Cmd) (ProcessIdentity, error) {
 	// A separate session detaches the service from the caller's terminal and
 	// process group. Pdeathsig is deliberately unset for this lifecycle.

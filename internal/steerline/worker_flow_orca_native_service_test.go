@@ -146,8 +146,53 @@ func TestNativeOrcaFixedLunaLaunchReconcilesOriginalTerminal(t *testing.T) {
 	if out, err := exec.Command("git", "-C", execution.Workspace.Worktree, "check-ignore", "-q", "--no-index", filepath.ToSlash(filepath.Join(".steerline-relay", run.RunID, turn.TurnID+".json"))).CombinedOutput(); err != nil {
 		t.Fatalf("relay file is not excluded from git: %v: %s", err, out)
 	}
-	if err := s.pollNativeOrcaWorker(ctx, run); err != nil {
+	if err := s.Close(); err != nil {
 		t.Fatal(err)
+	}
+	s, err = NewService(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	run = s.find("809")
+	workflow, execution = s.workflowRecords(run)
+	turn = nativeOrcaCurrentTurn(execution)
+	s.markServiceRecoveryGate()
+	if err := s.save(); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.resumeConfiguredWork(ctx); err != nil {
+		t.Fatal(err)
+	}
+	data, err = os.ReadFile(filepath.Join(stateDir, "native-orca.json"))
+	if err != nil || json.Unmarshal(data, &state) != nil || state.RelayDone || run.Decision == nil || run.Decision.Status != "pending" ||
+		len(run.Decision.Request.Options) != 1 || run.Decision.Request.Options[0].ID != "forward_result" || execution.RecoveryState != "relay_pending" {
+		t.Fatalf("Orca restart forwarded a result without manual approval: relay_done=%t decision=%+v state=%q error=%v", state.RelayDone, run.Decision, execution.RecoveryState, err)
+	}
+	s.State.Service.Ready, s.State.Service.Status = true, "running"
+	if err := s.save(); err != nil {
+		t.Fatal(err)
+	}
+	answer := DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, OptionID: "forward_result", AnsweredBy: "operator", ExpectedDecisionVersion: run.Decision.Version, ExpectedRunRevision: run.ControlRevision, SourceAttemptID: run.AttemptID, ExpectedRecoveryVersion: run.RecoveryVersion, ServiceInstanceID: s.State.Service.InstanceID}
+	approval, _, err := (CommandService{Store: s.domainStore, Project: c.Identity()}).AnswerDecisionWithID(ctx, newID(), answer.DecisionID, answer.ExpectedDecisionVersion, decisionAnswerKey(answer), answer.AnsweredBy, mustJSON(answer))
+	if err != nil {
+		t.Fatal(err)
+	}
+	accepted, _, err := (CommandService{Store: s.domainStore, Project: c.Identity()}).AcceptAnswer(ctx, approval, answer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	*s.decisionRecord(run) = accepted
+	s.store.baseline["decision:"+accepted.DecisionID] = recordFingerprint(accepted)
+	s.refreshRun(run)
+	if err := s.save(); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.applyWorkerFlowDecision(ctx, run); err != nil {
+		t.Fatal(err)
+	}
+	data, err = os.ReadFile(filepath.Join(stateDir, "native-orca.json"))
+	if err != nil || json.Unmarshal(data, &state) != nil || !state.RelayDone {
+		t.Fatalf("manual Orca relay approval was not sent once: %+v / %v", state, err)
 	}
 	if err := s.pollNativeOrcaWorker(ctx, run); err != nil {
 		t.Fatal(err)
@@ -384,6 +429,27 @@ func TestNativeOrcaCenterReusesWorkerAfterRestartAndSettlement(t *testing.T) {
 	workflow, execution = s.workflowRecords(run)
 	if run == nil || run.Process == nil || *run.Process != original || execution.SessionID != session || *run.WorktreePath != workspace || run.Decision == nil || run.Decision.Status != "pending" || orcaQuestionID(run.Decision) != "msg-ask-1" {
 		t.Fatalf("center restart lost the original Orca conversation: %+v / %+v", run, execution)
+	}
+	s.markServiceRecoveryGate()
+	if err := s.save(); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.resumeConfiguredWork(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if !execution.RecoveryRequired || execution.RecoveryState != "live" || run.Decision.Status != "pending" {
+		t.Fatalf("Orca restart did not retain its manual input gate: state=%q decision=%+v", execution.RecoveryState, run.Decision)
+	}
+	noInputData, err := os.ReadFile(filepath.Join(stateDir, "native-orca.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var noInputFake fakeNativeOrcaState
+	if err := json.Unmarshal(noInputData, &noInputFake); err != nil {
+		t.Fatal(err)
+	}
+	if noInputFake.Dispatches != 1 || noInputFake.Replies != 0 || noInputFake.Sends != 0 {
+		t.Fatalf("Orca recovery sent execution input without a new decision: %+v", noInputFake)
 	}
 	replyStatePath := filepath.Join(stateDir, "native-orca.json")
 	replyData, err := os.ReadFile(replyStatePath)

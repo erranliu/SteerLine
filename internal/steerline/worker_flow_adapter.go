@@ -278,7 +278,13 @@ func requireWorkerFlowCapabilities(ctx context.Context, c Config) error {
 			return runner.Output(ctx, Command{Executable: executable, Args: args})
 		},
 		HistoryAvailable: func(ctx context.Context) bool { return nativeCodexHistoryAvailable(ctx, c) },
-		StartDetached:    func(cmd *exec.Cmd) error { _, err := startDetachedProcess(cmd); return err },
+		StartManaged: func(cmd *exec.Cmd) (func(), error) {
+			owned, err := startProcess(cmd)
+			if err != nil {
+				return nil, err
+			}
+			return owned.Close, nil
+		},
 	})
 	var unsupported *codexworker.ProbeError
 	if errors.As(err, &unsupported) {

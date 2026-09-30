@@ -1,5 +1,7 @@
 # Spec：单 worker 持续执行与统一待决策
 
+适用说明（2026-09-30）：停服后的执行输入、原 worker 终止后的新 Attempt 与显式新会话选择，按[停服恢复 Spec](worker-service-recovery.spec.md)执行；本文普通反馈仍使用当前可核实的原会话。
+
 任务 ID：36；任务名称：单 worker 持续执行与统一待决策；目标：`WORKER-FLOW`。配套 [Plan](worker-flow.plan.md)。状态：local Codex 实现候选，PR #121；发布前人工合并链及列明的延期项仍未验收。日期：2026-09-29。
 
 ## 1. 目标与职责

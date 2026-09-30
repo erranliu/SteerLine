@@ -26,6 +26,7 @@ type TaskClaimOptions struct {
 	Explicit                 bool
 	WorkflowRunID            string
 	ExecutionProfile         *ExecutionProfile
+	ServiceInstanceID        string
 }
 
 func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, options TaskClaimOptions) (TaskClaimReceipt, error) {
@@ -44,6 +45,9 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 	}
 	if !controlIDPattern.MatchString(options.RequestID) || options.ExpectedTaskVersion == 0 || options.ExpectedAuthorityVersion == 0 || options.WorkflowRunID != "" && !stableExecutionID(options.WorkflowRunID) {
 		return TaskClaimReceipt{}, nativeErr("invalid_batch", "claim requires request ID and current task/project versions")
+	}
+	if options.ServiceInstanceID != "" && !stableExecutionID(options.ServiceInstanceID) {
+		return TaskClaimReceipt{}, nativeErr("invalid_batch", "claim service instance identity is invalid")
 	}
 	if options.ExecutionProfile != nil && !options.ExecutionProfile.MatchesConfig(config) {
 		return TaskClaimReceipt{}, nativeErr("contract_mismatch", "selected execution profile differs from the claim configuration")
@@ -169,7 +173,7 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 		fixed := options.ExecutionProfile.Freeze()
 		wfr.ExecutionProfile = &fixed
 	}
-	execution := ExecutionRecord{ProjectIdentity: c.Project, ExecutionID: executionID, WorkflowRunID: workflowRunID, Agent: config.agentName(), Backend: string(backend), Protocol: string(protocol), Target: target, Workspace: WorkspaceEvidence{Repository: config.identity, Branch: config.Branch, Base: base}, Status: "pending", CurrentStep: "worker", CreatedAt: created, UpdatedAt: created}
+	execution := ExecutionRecord{ProjectIdentity: c.Project, ExecutionID: executionID, CurrentAttemptID: attemptID, OwnerServiceInstanceID: options.ServiceInstanceID, WorkflowRunID: workflowRunID, Agent: config.agentName(), Backend: string(backend), Protocol: string(protocol), Target: target, Workspace: WorkspaceEvidence{Repository: config.identity, Branch: config.Branch, Base: base}, Status: "pending", CurrentStep: "worker", CreatedAt: created, UpdatedAt: created}
 	execution.WorkspaceIntent, err = planWorkspace(config, task.TaskID, workflowRunID, base)
 	if err != nil {
 		return TaskClaimReceipt{}, err
