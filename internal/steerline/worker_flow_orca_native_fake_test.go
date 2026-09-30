@@ -12,8 +12,10 @@ import (
 type fakeNativeOrcaState struct {
 	Name, Base, Agent, AgentIncarnation, Comment, Path, Branch, Repo string
 	CreatedWithAgent, FixedAgentTitle, FixedAgentCommand             string
+	FixedAgentCurrentTitle                                           string
 	Created, Coordinator                                             bool
 	FixedAgentTerminalCreated                                        bool
+	RenameFixedAgentAfterCreate, HoldFixedAgentIdentity              bool
 	LoseWorktreeOnce                                                 bool
 	LoseFixedTerminalOnce                                            bool
 	LoseCoordinatorOnce                                              bool
@@ -73,7 +75,14 @@ func fakeNativeOrca(stateDir string, args []string) int {
 			if incarnation == "" {
 				incarnation = "inc-agent"
 			}
-			return map[string]any{"handle": handle, "title": state.FixedAgentTitle, "incarnationId": incarnation, "worktreeId": worktreeID(), "worktreePath": filepath.ToSlash(state.Path), "branch": "refs/heads/" + state.Branch, "connected": true, "agentIdentity": state.Agent}
+			title, agent := state.FixedAgentTitle, state.Agent
+			if state.FixedAgentCurrentTitle != "" {
+				title = state.FixedAgentCurrentTitle
+			}
+			if state.HoldFixedAgentIdentity {
+				agent = ""
+			}
+			return map[string]any{"handle": handle, "title": title, "incarnationId": incarnation, "worktreeId": worktreeID(), "worktreePath": filepath.ToSlash(state.Path), "branch": "refs/heads/" + state.Branch, "connected": true, "agentIdentity": agent}
 		}
 		return map[string]any{"handle": handle, "incarnationId": "inc-coordinator", "worktreeId": "fake-repo::" + filepath.ToSlash(state.Repo), "worktreePath": filepath.ToSlash(state.Repo), "branch": "refs/heads/main", "connected": true}
 	}
@@ -121,13 +130,17 @@ func fakeNativeOrca(stateDir string, args []string) int {
 				state.FixedAgentTerminalCreated = true
 				state.Agent = "codex"
 				state.FixedAgentTitle, state.FixedAgentCommand = arg(args, "--title"), arg(args, "--command")
+				created := terminal("term-agent")
+				if state.RenameFixedAgentAfterCreate {
+					state.FixedAgentCurrentTitle = state.Name
+				}
 				lost := state.LoseFixedTerminalOnce
 				state.LoseFixedTerminalOnce = false
 				save()
 				if lost {
 					return fakeOrcaErr("runtime_unavailable", "agent terminal created but response was lost")
 				}
-				return fakeOrcaOK(map[string]any{"terminal": terminal("term-agent")})
+				return fakeOrcaOK(map[string]any{"terminal": created})
 			}
 			state.Coordinator = true
 			state.CoordinatorMarker = strings.TrimPrefix(arg(args, "--command"), "echo ")

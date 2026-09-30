@@ -131,6 +131,121 @@ func TestNativeOrcaFixedLunaLaunchReconcilesOriginalTerminal(t *testing.T) {
 	}
 }
 
+func TestNativeOrcaFixedLunaLaunchReconcilesRenamedTerminalAfterRestart(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("native Orca terminal fixture uses Windows PowerShell")
+	}
+	ctx := context.Background()
+	c, commit, store := openDAGFixture(t)
+	if out, err := exec.Command("git", "-C", c.Repository, "push", "--quiet", "origin", "HEAD:refs/heads/main").CombinedOutput(); err != nil {
+		t.Fatalf("push fixture base: %v: %s", err, out)
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	stateDir := t.TempDir()
+	statePath := filepath.Join(stateDir, "native-orca.json")
+	if err := os.WriteFile(statePath, []byte(`{"RenameFixedAgentAfterCreate":true,"HoldFixedAgentIdentity":true}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	c.Host, c.Agent, c.Model, c.ReasoningEffort, c.Sandbox, c.Claimant = "orca", "codex", "gpt-6-luna", "medium", "workspace-write", "operator"
+	c.Codex = Command{Executable: exe}
+	c.Orca = OrcaConfig{Executable: exe, Args: []string{"--fake", "orca-native", stateDir}, Shell: "powershell.exe", WaitTimeout: "1s"}
+	c.configDigest = digestValue(c)
+	commands := CommandService{Store: store, Project: c.Identity()}
+	input := taskBatchFixture(t, c, commit, batchTasks(810), nil)
+	validation, err := commands.ValidateTaskBatch(ctx, c, input)
+	if err != nil || !validation.Valid {
+		t.Fatalf("validate: %+v / %v", validation, err)
+	}
+	if _, err := commands.CreateTaskBatch(ctx, c, input, strings.Repeat("a", 32), validation.AuthorityVersion, "operator"); err != nil {
+		t.Fatal(err)
+	}
+	authority, err := store.nativeAuthority(ctx, c.Identity())
+	if err != nil {
+		t.Fatal(err)
+	}
+	authority.AuthorityVersion++
+	authority.DispatchPaused = false
+	if err := store.Transact(ctx, func(tx DomainTx) error {
+		return tx.(*sqliteTx).UpdateProjectTaskAuthorityCAS(authority, authority.AuthorityVersion-1)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := commands.ClaimNativeTask(ctx, c, TaskClaimOptions{TaskID: "810", RequestID: strings.Repeat("b", 32), ExpectedTaskVersion: 1, ExpectedAuthorityVersion: authority.AuthorityVersion, RequestedBy: "operator", Explicit: true}); err != nil {
+		t.Fatal(err)
+	}
+	s, err := NewService(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	run := s.find("810")
+	task := nativeTaskRecord(s.State.Tasks, "810")
+	if run == nil || task == nil {
+		t.Fatal("claimed task was not reconstructed")
+	}
+	if err := s.prepareWorkerFlow(ctx, *task, run); err != nil || run.Process != nil {
+		t.Fatalf("unidentified agent was bound before its identity appeared: %v / %+v", err, run.Process)
+	}
+	_, execution := s.workflowRecords(run)
+	op := s.nativeOrcaOperation("orca-native-agent-terminal:" + execution.ExecutionID)
+	if op == nil || op.Status != "outcome_unknown" || len(op.Receipt) == 0 {
+		t.Fatalf("accepted terminal receipt was not retained: %+v", op)
+	}
+	data, err := os.ReadFile(statePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var state fakeNativeOrcaState
+	if err := json.Unmarshal(data, &state); err != nil {
+		t.Fatal(err)
+	}
+	if state.FixedAgentCurrentTitle == "" || state.FixedAgentCurrentTitle == state.FixedAgentTitle {
+		t.Fatalf("fixture did not rename the accepted terminal: %+v", state)
+	}
+	state.HoldFixedAgentIdentity = false
+	data, _ = json.Marshal(state)
+	if err := os.WriteFile(statePath, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	s, err = NewService(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = s.Close() }()
+	run = s.find("810")
+	for i := 0; i < 3; i++ {
+		if err := s.resumeWorkerFlow(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_, execution = s.workflowRecords(run)
+	if run.Process == nil || run.Process.Terminal != "term-agent" || run.Target.Dispatch != "ctx-1" || execution.Process == nil {
+		t.Fatalf("renamed terminal was not rebound: process=%+v target=%+v", run.Process, run.Target)
+	}
+	if err := s.verifyNativeOrcaWorker(ctx, run, execution); err != nil {
+		t.Fatalf("renamed original terminal failed identity verification: %v", err)
+	}
+	op = s.nativeOrcaOperation("orca-native-agent-terminal:" + execution.ExecutionID)
+	if op == nil || op.Status != "confirmed" || len(op.Receipt) == 0 {
+		t.Fatalf("terminal creation proof was not confirmed: %+v", op)
+	}
+	data, err = os.ReadFile(statePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(data, &state); err != nil {
+		t.Fatal(err)
+	}
+	if !state.FixedAgentTerminalCreated || state.Dispatches != 1 {
+		t.Fatalf("renamed terminal was relaunched or dispatched twice: %+v", state)
+	}
+}
+
 func TestNativeOrcaCenterReusesWorkerAfterRestartAndSettlement(t *testing.T) {
 	if runtime.GOOS != "windows" {
 		t.Skip("native Orca shell fixture uses cmd.exe")

@@ -2,6 +2,7 @@ package steerline
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -95,32 +96,33 @@ func (s *Service) prepareNativeOrcaFixedAgentTerminal(ctx context.Context, run *
 	if err != nil {
 		return err
 	}
-	handle := ""
-	for _, terminal := range terminals {
-		if terminal.Title != title {
-			continue
-		}
-		if handle != "" || terminal.WorktreeID != worktree.ID {
-			return &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "fixed Orca agent terminal is not unique"}
-		}
-		handle = terminal.Handle
-	}
 	key := "orca-native-agent-terminal:" + execution.ExecutionID
-	if op := s.nativeOrcaOperation(key); op != nil {
-		if handle == "" {
+	op := s.nativeOrcaOperation(key)
+	terminal, err := fixedOrcaAgentTerminal(terminals, op, title, worktree.ID)
+	if err != nil {
+		return err
+	}
+	if op != nil {
+		if terminal.Handle == "" {
 			return &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "fixed Orca agent launch has no identifiable terminal"}
 		}
-		if err := s.waitAndBindNativeOrcaFixedAgent(ctx, run, execution, worktree, handle, repoID, base); err != nil {
+		if err := s.waitAndBindNativeOrcaFixedAgent(ctx, run, execution, worktree, terminal.Handle, repoID, base); err != nil {
 			return err
 		}
 		if op.Status != "confirmed" {
-			if err := s.changeOperation(op.OperationID, "confirmed", op.PlatformRequestID, mustJSON(map[string]string{"terminal": handle}), ""); err != nil {
+			receipt := op.Receipt
+			if len(receipt) == 0 {
+				receipt = mustJSON(struct {
+					Terminal orcaTerminal `json:"terminal"`
+				}{Terminal: terminal})
+			}
+			if err := s.changeOperation(op.OperationID, "confirmed", op.PlatformRequestID, receipt, ""); err != nil {
 				return err
 			}
 		}
 		return s.prepareNativeOrcaCoordinator(ctx, run, execution)
 	}
-	if handle != "" {
+	if terminal.Handle != "" {
 		return &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "fixed Orca agent terminal exists without its launch intent"}
 	}
 	command, err := nativeOrcaFixedAgentCommand(s.Config)
@@ -142,9 +144,9 @@ func (s *Service) prepareNativeOrcaFixedAgentTerminal(ctx context.Context, run *
 	result, err = nativeOrcaResult[struct {
 		Terminal orcaTerminal `json:"terminal"`
 	}](env)
-	if err != nil || result.Terminal.Handle == "" {
-		_ = s.changeOperation(opID, "outcome_unknown", "", env.Result, "agent terminal handle omitted")
-		return &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "fixed Orca agent launch omitted its terminal", Cause: err}
+	if err != nil || result.Terminal.Handle == "" || result.Terminal.IncarnationID == "" || result.Terminal.WorktreeID != worktree.ID || result.Terminal.Title != title {
+		_ = s.changeOperation(opID, "outcome_unknown", "", env.Result, "fixed agent terminal creation receipt is incomplete")
+		return &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "fixed Orca agent launch receipt is incomplete", Cause: err}
 	}
 	if err := s.changeOperation(opID, "accepted", "", env.Result, ""); err != nil {
 		return err
@@ -157,6 +159,41 @@ func (s *Service) prepareNativeOrcaFixedAgentTerminal(ctx context.Context, run *
 		return err
 	}
 	return s.prepareNativeOrcaCoordinator(ctx, run, execution)
+}
+
+// Orca may rename an agent terminal after it starts. The creation receipt is
+// the immutable link between the launch intent and the live terminal.
+func fixedOrcaAgentTerminal(terminals []orcaTerminal, op *OperationRecord, title, worktreeID string) (orcaTerminal, error) {
+	var expected orcaTerminal
+	if op != nil && len(op.Receipt) != 0 {
+		var receipt struct {
+			Terminal orcaTerminal `json:"terminal"`
+		}
+		if err := json.Unmarshal(op.Receipt, &receipt); err != nil {
+			return orcaTerminal{}, &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "fixed Orca agent launch receipt is invalid", Cause: err}
+		}
+		expected = receipt.Terminal
+		if expected.Handle == "" || expected.IncarnationID == "" || expected.WorktreeID != worktreeID || expected.Title != title {
+			return orcaTerminal{}, &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "fixed Orca agent launch receipt does not match the original intent"}
+		}
+	}
+	var matched orcaTerminal
+	for _, terminal := range terminals {
+		if expected.Handle != "" && terminal.Handle != expected.Handle {
+			continue
+		}
+		if expected.Handle == "" && terminal.Title != title {
+			continue
+		}
+		if terminal.Handle == "" || matched.Handle != "" || terminal.WorktreeID != worktreeID {
+			return orcaTerminal{}, &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "fixed Orca agent terminal is not unique"}
+		}
+		if expected.Handle != "" && terminal.IncarnationID != expected.IncarnationID {
+			return orcaTerminal{}, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "fixed Orca agent terminal incarnation changed"}
+		}
+		matched = terminal
+	}
+	return matched, nil
 }
 
 func (s *Service) waitAndBindNativeOrcaFixedAgent(ctx context.Context, run *Run, execution *ExecutionRecord, worktree workerOrcaWorktree, handle, repoID, base string) error {

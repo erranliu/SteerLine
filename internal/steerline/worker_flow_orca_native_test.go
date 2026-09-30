@@ -73,3 +73,18 @@ func TestNativeOrcaAgentSelectionUsesFrozenProfile(t *testing.T) {
 		}
 	}
 }
+
+func TestFixedOrcaAgentTerminalRejectsReplacedIncarnation(t *testing.T) {
+	title := nativeOrcaFixedAgentTitle(strings.Repeat("a", 32))
+	receipt, err := json.Marshal(map[string]any{"terminal": map[string]string{
+		"handle": "term-original", "incarnationId": "inc-original", "worktreeId": "repo::worktree", "title": title,
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	op := &OperationRecord{Receipt: receipt}
+	live := []orcaTerminal{{Handle: "term-original", IncarnationID: "inc-replacement", WorktreeID: "repo::worktree", Title: "renamed"}}
+	if terminal, err := fixedOrcaAgentTerminal(live, op, title, "repo::worktree"); err == nil || terminal.Handle != "" || !strings.Contains(err.Error(), "incarnation changed") {
+		t.Fatalf("replacement terminal was adopted: %+v / %v", terminal, err)
+	}
+}

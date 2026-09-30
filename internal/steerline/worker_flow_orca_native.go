@@ -344,9 +344,6 @@ func (s *Service) bindNativeOrcaAgent(ctx context.Context, run *Run, execution *
 	if term.WorktreeID != worktree.ID || term.AgentIdentity != s.Config.agentName() {
 		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "Orca started a different worktree or agent"}
 	}
-	if s.Config.Model != "" && term.Title != nativeOrcaFixedAgentTitle(execution.ExecutionID) {
-		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "Orca terminal does not have the fixed model launch marker"}
-	}
 	identity := workerOrcaIdentity(term, s.Config)
 	identity.Kind, identity.WorktreeID = "orca-native", worktree.ID
 	execution.Process = &identity
@@ -369,7 +366,11 @@ func (s *Service) prepareNativeOrcaWorker(ctx context.Context, run *Run) error {
 		}
 		if s.Config.Model != "" {
 			if op := s.nativeOrcaOperation("orca-native-agent-terminal:" + execution.ExecutionID); op != nil && op.Status != "confirmed" {
-				if err := s.changeOperation(op.OperationID, "confirmed", op.PlatformRequestID, mustJSON(map[string]string{"terminal": execution.Process.Terminal}), ""); err != nil {
+				receipt := op.Receipt
+				if len(receipt) == 0 {
+					receipt = mustJSON(map[string]string{"terminal": execution.Process.Terminal})
+				}
+				if err := s.changeOperation(op.OperationID, "confirmed", op.PlatformRequestID, receipt, ""); err != nil {
 					return err
 				}
 			}
@@ -650,9 +651,6 @@ func (s *Service) verifyNativeOrcaWorker(ctx context.Context, run *Run, executio
 	}
 	if term.RuntimeID != execution.Process.RuntimeID || term.IncarnationID != execution.Process.Incarnation || term.WorktreeID != execution.Process.WorktreeID || term.AgentIdentity != s.Config.agentName() {
 		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "original Orca agent terminal or agent has changed"}
-	}
-	if s.Config.Model != "" && term.Title != nativeOrcaFixedAgentTitle(execution.ExecutionID) {
-		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "original Orca fixed-model terminal has changed"}
 	}
 	coordinator := execution.OrcaNative.Coordinator
 	if coordinator.Terminal != "" {
