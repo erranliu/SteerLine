@@ -18,10 +18,13 @@ type ProviderRef struct {
 	BaseURL         string `json:"base_url"`
 	Repository      string `json:"repository"`
 	QueryExecutable string `json:"query_executable"`
+	QueryArgsDigest string `json:"query_args_digest"`
 }
 
 func ProviderIdentity(config Config) ProviderRef {
-	return ProviderRef{Kind: config.Kind, BaseURL: config.BaseURL, Repository: config.Repository, QueryExecutable: config.Query.Executable}
+	args, _ := json.Marshal(config.Query.Args)
+	digest := sha256.Sum256(args)
+	return ProviderRef{Kind: config.Kind, BaseURL: config.BaseURL, Repository: config.Repository, QueryExecutable: config.Query.Executable, QueryArgsDigest: hex.EncodeToString(digest[:])}
 }
 func (identity ProviderRef) Matches(config Config) bool { return identity == ProviderIdentity(config) }
 
@@ -63,6 +66,13 @@ func canonical(path string) string {
 	}
 	return path
 }
+func validSHA256(value string) bool {
+	if len(value) != 64 {
+		return false
+	}
+	_, err := hex.DecodeString(value)
+	return err == nil
+}
 func requestDigest(request Request) string {
 	request.Digest = ""
 	data, _ := json.Marshal(request)
@@ -77,7 +87,7 @@ func (request Request) Validate() error {
 	if !regexp.MustCompile(`^codex/[A-Za-z0-9][A-Za-z0-9._-]*-[0-9a-f]{12}$`).MatchString(request.Workspace.Branch) || strings.Contains(request.Workspace.Branch, "..") {
 		return errors.New("local publication execution branch is invalid")
 	}
-	if request.Provider.Kind != "command" || strings.TrimSuffix(request.Provider.BaseURL, "/") != "https://github.com" || request.Provider.QueryExecutable == "" || request.Provider.Repository == "" {
+	if request.Provider.Kind != "command" || strings.TrimSuffix(request.Provider.BaseURL, "/") != "https://github.com" || request.Provider.QueryExecutable == "" || request.Provider.Repository == "" || !validSHA256(request.Provider.QueryArgsDigest) {
 		return errors.New("local host publication requires a fixed GitHub command provider")
 	}
 	if (Config{Kind: request.Provider.Kind, BaseURL: request.Provider.BaseURL, Repository: request.Provider.Repository}).ValidateRemote("https://github.com/"+request.Provider.Repository+".git") != nil {

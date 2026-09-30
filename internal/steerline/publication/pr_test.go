@@ -155,7 +155,7 @@ func require(t *testing.T, err error) {
 }
 
 func TestPublicationRequestDigestBindsCandidate(t *testing.T) {
-	base := Request{Version: 1, RunID: strings.Repeat("a", 32), ExecutionID: "exec-1", TurnID: "00000000-0000-0000-0000-000000000001", TaskID: "42", Workspace: executionapi.WorkspaceIntent{Path: t.TempDir(), Branch: "codex/42-123456789abc", BaseCommit: strings.Repeat("b", 40)}, GitCommonDir: t.TempDir(), Remote: "origin", BaseBranch: "main", Provider: ProviderRef{Kind: "command", BaseURL: "https://github.com", Repository: "owner/repo", QueryExecutable: "gh"}}
+	base := Request{Version: 1, RunID: strings.Repeat("a", 32), ExecutionID: "exec-1", TurnID: "00000000-0000-0000-0000-000000000001", TaskID: "42", Workspace: executionapi.WorkspaceIntent{Path: t.TempDir(), Branch: "codex/42-123456789abc", BaseCommit: strings.Repeat("b", 40)}, GitCommonDir: t.TempDir(), Remote: "origin", BaseBranch: "main", Provider: ProviderIdentity(Config{Kind: "command", BaseURL: "https://github.com", Repository: "owner/repo", Query: contracts.Command{Executable: "gh"}})}
 	base.StartingHead, base.IndexTree = strings.Repeat("c", 40), strings.Repeat("d", 40)
 	base.Digest = requestDigest(base)
 	if err := base.ValidateCandidate(); err != nil {
@@ -164,6 +164,12 @@ func TestPublicationRequestDigestBindsCandidate(t *testing.T) {
 	base.Remote = "other"
 	if err := base.ValidateCandidate(); err == nil {
 		t.Fatal("accepted a changed publication request with the old digest")
+	}
+	provider := Config{Kind: "command", BaseURL: "https://github.com", Repository: "owner/repo", Query: contracts.Command{Executable: "gh", Args: []string{"api", "repos/{repository}/pulls/{number}"}}}
+	identity := ProviderIdentity(provider)
+	provider.Query.Args[1] = "repos/another/repository"
+	if identity.Matches(provider) {
+		t.Fatal("provider identity accepted changed PR query arguments")
 	}
 }
 
@@ -180,5 +186,29 @@ func TestCommandProviderErrorsRedactReferencedCredential(t *testing.T) {
 	_, err := client.command(context.Background(), contracts.Command{Executable: "gh"})
 	if err == nil || strings.Contains(err.Error(), secret) || !strings.Contains(err.Error(), "[REDACTED]") {
 		t.Fatalf("provider command error leaked its credential: %v", err)
+	}
+}
+
+func TestUnsupportedProviderDoesNoNetworkOperation(t *testing.T) {
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer server.Close()
+	client := NewClient(Config{Kind: "unknown", BaseURL: server.URL, Repository: "owner/repo"}, failingCommandRunner{err: errors.New("unexpected command")}, time.Second)
+	url := server.URL + "/owner/repo/pulls/1"
+	for _, call := range []func() error{
+		func() error { _, err := client.Query(context.Background(), url); return err },
+		func() error { _, err := client.Close(context.Background(), url); return err },
+		func() error { return client.Check(context.Background()) },
+	} {
+		if err := call(); err == nil {
+			t.Fatal("unknown PR provider was accepted")
+		}
+	}
+	if requests != 0 {
+		t.Fatalf("unsupported provider performed %d HTTP requests", requests)
 	}
 }

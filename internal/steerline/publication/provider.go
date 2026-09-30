@@ -43,7 +43,19 @@ type Error struct {
 func (e *Error) Error() string                 { return e.Code + ": " + e.Message }
 func providerError(code, message string) error { return &Error{Code: code, Message: message} }
 
+func (c *Client) validateKind(operation string) error {
+	switch c.Config.Kind {
+	case "command", "gitea":
+		return nil
+	default:
+		return executionapi.UnsupportedAdapterOperation(operation, "configured PR provider kind is unsupported")
+	}
+}
+
 func (c *Client) Query(ctx context.Context, raw string) (contracts.PRInfo, error) {
+	if err := c.validateKind("QueryPR"); err != nil {
+		return contracts.PRInfo{}, err
+	}
 	n, e := c.Config.PRNumber(raw)
 	if e != nil {
 		return contracts.PRInfo{}, e
@@ -125,6 +137,9 @@ func (c *Client) Query(ctx context.Context, raw string) (contracts.PRInfo, error
 // Close requests closure of the exact fixed PR and returns the provider's
 // observed state. It never closes a merged PR.
 func (c *Client) Close(ctx context.Context, raw string) (contracts.PRInfo, error) {
+	if err := c.validateKind("ClosePR"); err != nil {
+		return contracts.PRInfo{}, err
+	}
 	number, err := c.Config.PRNumber(raw)
 	if err != nil {
 		return contracts.PRInfo{}, err
