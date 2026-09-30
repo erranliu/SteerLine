@@ -53,6 +53,10 @@ func TestLocalWorkspacePrepareInspectResourcesAndCleanup(t *testing.T) {
 	if resources.Objects != filepath.Join(repository.CommonDir, "objects") || resources.Refs != filepath.Join(repository.CommonDir, "refs") || resources.Logs != filepath.Join(repository.CommonDir, "logs") || !strings.HasPrefix(resources.Admin, filepath.Join(repository.CommonDir, "worktrees")+string(filepath.Separator)) {
 		t.Fatalf("linked Git resources escaped their fixed directories: %+v", resources)
 	}
+	exclude, err := ResolveInfoExclude(ctx, git, repository, intent.Path)
+	if err != nil || exclude != filepath.Join(repository.CommonDir, "info", "exclude") {
+		t.Fatalf("resolved Git exclude=%q err=%v", exclude, err)
+	}
 	if _, err := ResolveLinkedResourcesAt(ctx, git, repository, repositoryPath); err == nil {
 		t.Fatal("main checkout received linked-worktree admin resources")
 	}

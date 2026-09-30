@@ -121,7 +121,11 @@ func ResolveInfoExclude(ctx context.Context, git Git, repository Repository, wor
 	if err != nil {
 		return "", err
 	}
-	resolved, err := resolveFuturePath(strings.TrimSpace(string(path)))
+	excludePath := strings.TrimSpace(string(path))
+	if !filepath.IsAbs(excludePath) {
+		return "", errors.New("Git returned a non-absolute exclude file path")
+	}
+	resolved, err := resolveFuturePath(excludePath)
 	if err != nil {
 		return "", err
 	}
