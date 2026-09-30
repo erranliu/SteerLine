@@ -310,10 +310,10 @@ func (s *Service) reconcileLocalWorkerPublication(ctx context.Context, run *Run)
 	if err = s.offerWorkerPRFeedback(run, url); err != nil {
 		return false, err
 	}
-	if err = s.stageWorkerOperation(run, op.OperationID, "confirmed", url, mustJSON(info), ""); err != nil {
+	if err = s.setOperationState(op.OperationID, "confirmed", url, mustJSON(info), ""); err != nil {
 		return false, err
 	}
-	if err = s.commitWorker(run); err != nil {
+	if err = s.commitWorker(run, op.OperationID); err != nil {
 		return false, err
 	}
 	return true, nil

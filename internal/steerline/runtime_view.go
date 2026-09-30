@@ -74,11 +74,12 @@ func projectRun(task TaskRecord, workflow WorkflowRunRecord, execution Execution
 				count++
 			}
 		}
-		if count != 1 {
-			return Run{}, errors.New("worker flow must retain exactly one stable worker attempt identity")
+		if count < 1 {
+			return Run{}, errors.New("worker flow has no worker attempt identity")
 		}
 	}
 	run := Run{TaskID: task.TaskID, DomainTaskID: task.TaskID, Title: task.Title, TaskStatus: task.Status,
+		RecoveryRequired: execution.RecoveryRequired, RecoveryState: execution.RecoveryState, RecoveryVersion: execution.RecoveryVersion,
 		RunID: workflow.WorkflowRunID, WorkflowVersion: workflow.WorkflowVersion, WorkflowConfigDigest: workflow.ConfigDigest,
 		ControlRevision: workflow.ControlRevision, ExecutionID: execution.ExecutionID, Claimant: task.Claimant,
 		Host: hostForExecution(execution.Backend, execution.Protocol), Backend: execution.Backend, Protocol: execution.Protocol,
@@ -89,6 +90,9 @@ func projectRun(task TaskRecord, workflow WorkflowRunRecord, execution Execution
 		PR: PRState{State: nonEmpty(workflow.PRState, "unknown"), QueriedAt: copyPtr(workflow.PRQueriedAt),
 			QueryError: copyPtr(workflow.PRQueryError), MergedAt: copyPtr(workflow.PRMergedAt), MergeCommit: copyPtr(workflow.PRMergeCommit)}}
 	if attempt := latestCurrentNativeAttempt(attempts, &execution); attempt != nil {
+		if workflow.WorkflowVersion == WorkerFlowVersion && execution.CurrentAttemptID != "" && execution.CurrentAttemptID != attempt.AttemptID {
+			return Run{}, errors.New("worker flow current attempt pointer differs from latest worker generation")
+		}
 		run.AttemptID, run.DomainAttemptNumber = attempt.AttemptID, attempt.AttemptNumber
 	}
 	if execution.SessionID != "" && (execution.Process == nil || execution.Process.Kind != "orca-native") {
@@ -193,6 +197,7 @@ func decisionView(record DecisionRecord) (*DecisionState, error) {
 			return nil, errors.New("saved answer differs from its fixed question or identity")
 		}
 		decision.OptionID, decision.Note, decision.Answers, decision.AnsweredBy = answer.OptionID, answer.Note, answer.Answers, answer.AnsweredBy
+		decision.SourceAttemptID, decision.RecoveryVersion = answer.SourceAttemptID, answer.ExpectedRecoveryVersion
 		if !answer.AnsweredAt.IsZero() {
 			decision.AnsweredAt = &answer.AnsweredAt
 		}
@@ -267,6 +272,7 @@ func (s *Service) setRunDecision(run *Run, decision *DecisionState) {
 		s.refreshRun(run)
 		return
 	}
+	s.markWorkerDecisionWrite(decision.ID)
 	record := DecisionRecord{ProjectIdentity: s.Config.identity, DecisionID: decision.ID, Scope: "execution",
 		WorkflowRunID: run.RunID, ExecutionID: run.ExecutionID, AttemptID: decision.AttemptID, QuestionID: decision.ID,
 		Request: mustJSON(decision.Request), Status: decision.Status, Version: decision.Version, CreatedAt: now(), UpdatedAt: now()}
@@ -301,5 +307,13 @@ func (s *Service) decisionRecord(run *Run) *DecisionRecord {
 func (s *Service) setDecisionStatus(run *Run, status string) {
 	record := s.decisionRecord(run)
 	record.Status, record.Version, record.UpdatedAt = status, record.Version+1, now()
+	s.markWorkerDecisionWrite(record.DecisionID)
 	s.refreshRun(run)
+}
+
+func (s *Service) markWorkerDecisionWrite(id string) {
+	if s.workerDecisionWrites == nil {
+		s.workerDecisionWrites = make(map[string]bool)
+	}
+	s.workerDecisionWrites[id] = true
 }

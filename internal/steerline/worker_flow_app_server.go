@@ -21,18 +21,26 @@ type appServerProcessReceipt struct {
 	Endpoint   string          `json:"endpoint"`
 	Generation string          `json:"generation"`
 	Identity   ProcessIdentity `json:"identity"`
+	Managed    bool            `json:"managed"`
+}
+
+func appServerDirectory(c Config, run *Run) string {
+	if run.DomainAttemptNumber > 1 {
+		return filepath.Join(c.RunDir, "runs", run.RunID, "attempts", run.AttemptID, "app-server")
+	}
+	return filepath.Join(c.RunDir, "runs", run.RunID, "app-server")
 }
 
 // Native start notifications can be replayed after recovery. Only the first
 // confirmed start consumes a pending Command and accepts post-turn feedback.
-func (s *Service) recordAppServerTurnStarted(run *Run, workflow *WorkflowRunRecord, execution *ExecutionRecord, turnID string) error {
+func (s *Service) recordAppServerTurnStarted(run *Run, workflow *WorkflowRunRecord, execution *ExecutionRecord, turnID string) (string, error) {
 	commandID := execution.PendingCommandID
 	fresh := commandID != ""
 	if !fresh && execution.CurrentTurnID == turnID && execution.LastStoppedTurnID != turnID {
 		commandID = execution.CurrentCommandID
 	}
 	if !stableExecutionID(commandID) || !codexThreadID.MatchString(turnID) || fresh && execution.PendingTurnID != turnID {
-		return errors.New("app-server turn start lacks its fixed command or native turn receipt")
+		return "", errors.New("app-server turn start lacks its fixed command or native turn receipt")
 	}
 	var operation *OperationRecord
 	for i := range s.domain.Operations {
@@ -42,10 +50,10 @@ func (s *Service) recordAppServerTurnStarted(run *Run, workflow *WorkflowRunReco
 		}
 	}
 	if operation == nil {
-		return errors.New("app-server native turn has no saved start operation")
+		return "", errors.New("app-server native turn has no saved start operation")
 	}
 	if err := BeginWorkerTurn(workflow, execution, execution.SessionID, turnID); err != nil {
-		return err
+		return "", err
 	}
 	execution.CurrentCommandID, execution.PendingCommandID = commandID, ""
 	if fresh {
@@ -61,9 +69,9 @@ func (s *Service) recordAppServerTurnStarted(run *Run, workflow *WorkflowRunReco
 		s.refreshRun(run)
 	}
 	if operation.Status == "confirmed" {
-		return nil
+		return operation.OperationID, nil
 	}
-	return s.stageWorkerOperation(run, operation.OperationID, "confirmed", turnID, mustJSON(map[string]string{"session_id": execution.SessionID, "turn_id": turnID}), "")
+	return operation.OperationID, TransitionOperation(operation, "confirmed", turnID, mustJSON(map[string]string{"session_id": execution.SessionID, "turn_id": turnID}), "")
 }
 
 func startAppServerWorkerTurn(ctx context.Context, c Config, run *Run, execution *ExecutionRecord, commandID, prompt string, persistThread func() error) (*Worker, string, string, error) {
@@ -73,12 +81,20 @@ func startAppServerWorkerTurn(ctx context.Context, c Config, run *Run, execution
 	if run.ExecutionID != execution.ExecutionID || run.RunID != execution.WorkflowRunID || canonical(*run.WorktreePath) != canonical(execution.Workspace.Worktree) {
 		return nil, "", "", errors.New("app-server execution/workspace identity mismatch")
 	}
-	paths, err := codexworker.PrepareTurn(c.RunDir, run.RunID, commandID, prompt, AtomicWrite)
+	serverDir := appServerDirectory(c, run)
+	paths, err := codexworker.PrepareTurn(c.RunDir, run.RunID, commandID, serverDir, prompt, AtomicWrite)
 	if err != nil {
 		return nil, "", "", err
 	}
-	dir, journalPath, serverDir := paths.TurnDir, paths.JournalPath, paths.ServerDir
-	var process *os.Process
+	dir, journalPath := paths.TurnDir, paths.JournalPath
+	var nativeProcess *os.Process
+	var owned *childProcess
+	transferred := false
+	defer func() {
+		if owned != nil && !transferred {
+			owned.Close()
+		}
+	}()
 	if execution.Process != nil {
 		var receipt appServerProcessReceipt
 		data, readErr := os.ReadFile(filepath.Join(serverDir, "process.json"))
@@ -89,29 +105,31 @@ func startAppServerWorkerTurn(ctx context.Context, c Config, run *Run, execution
 			return nil, "", "", errors.New("original app-server process is not verifiably live")
 		}
 		var err error
-		process, err = os.FindProcess(execution.Process.PID)
+		nativeProcess, err = os.FindProcess(execution.Process.PID)
 		if err != nil {
 			return nil, "", "", err
 		}
 	} else {
-		identity, launched, endpoint, err := codexworker.LaunchServer(codexworker.LaunchConfig{
+		started, launched, endpoint, err := codexworker.LaunchServer(codexworker.LaunchConfig{
 			Executable: c.Codex.Executable, Args: c.Codex.Args, Profile: c.Profile,
 			Workspace: *run.WorktreePath, ServerDir: serverDir,
-		}, startDetachedProcess, func(base []string) []string {
+		}, startProcess, func(base []string) []string {
 			return unsetEnv(overrideEnv(base, map[string]string{"STEERLINE_WORKFLOW_RUN_ID": run.RunID, "STEERLINE_EXECUTION_ID": run.ExecutionID}), []string{"BEADS_*", "BD_*"})
 		})
 		if err != nil {
 			return nil, "", "", err
 		}
+		owned = started
+		identity := started.Identity()
 		generation := newID()
-		receipt := appServerProcessReceipt{Endpoint: endpoint, Generation: generation, Identity: identity}
+		receipt := appServerProcessReceipt{Endpoint: endpoint, Generation: generation, Identity: identity, Managed: true}
 		if err := AtomicWrite(filepath.Join(serverDir, "process.json"), append(mustJSON(receipt), '\n')); err != nil {
 			return nil, "", "", fmt.Errorf("app-server started but its process receipt is not durable: %w", err)
 		}
 		execution.Process = &identity
 		execution.AppServerEndpoint = endpoint
 		execution.AppServerGeneration = generation
-		process = launched
+		nativeProcess = launched
 	}
 	client, err := connectWorkerAppServer(ctx, execution.AppServerEndpoint)
 	if err != nil {
@@ -173,14 +191,41 @@ func startAppServerWorkerTurn(ctx context.Context, c Config, run *Run, execution
 		return nil, "", "", err
 	}
 	observeCtx, cancel := context.WithCancel(context.Background())
-	worker := &Worker{proc: &durableWorkerProcess{identity: *execution.Process, process: process}, Events: make(chan WorkerEvent, 64), Done: make(chan error, 1), cancelObservation: cancel, observationDone: make(chan struct{})}
+	var workerProcess process = &durableWorkerProcess{identity: *execution.Process, process: nativeProcess}
+	if owned != nil {
+		workerProcess = owned
+	}
+	worker := &Worker{proc: workerProcess, Events: make(chan WorkerEvent, 64), Done: make(chan error, 1), cancelObservation: cancel, observationDone: make(chan struct{})}
 	go observeAppServerWorker(observeCtx, worker, client, journal, run.RunID, run.AttemptID, execution.SessionID, turn.Turn.ID, nil)
 	closeClient = false
+	transferred = true
 	return worker, journalPath, turn.Turn.ID, nil
 }
 
 func connectWorkerAppServer(ctx context.Context, endpoint string) (*codexapp.Client, error) {
 	return codexworker.ConnectAppServer(ctx, endpoint)
+}
+
+func (s *Service) interruptOwnedLocalTurn(runID string, owned *childProcess) {
+	for _, run := range s.State.Runs {
+		if run == nil || run.RunID != runID || run.Protocol != string(ProtocolLocalCodexAppServer) {
+			continue
+		}
+		execution := s.executionRecord(run)
+		if execution == nil || execution.Process == nil || *execution.Process != owned.Identity() ||
+			!codexThreadID.MatchString(execution.SessionID) || !codexThreadID.MatchString(execution.CurrentTurnID) ||
+			execution.CurrentTurnID == execution.LastStoppedTurnID || execution.AppServerEndpoint == "" {
+			return
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		client, err := codexapp.Open(ctx, execution.AppServerEndpoint)
+		if err == nil {
+			_ = client.Call(ctx, "turn/interrupt", map[string]string{"threadId": execution.SessionID, "turnId": execution.CurrentTurnID}, nil)
+			client.Close()
+		}
+		cancel()
+		return
+	}
 }
 
 func observeAppServerWorker(ctx context.Context, worker *Worker, client *codexapp.Client, journal *os.File, runID, attemptID, threadID, turnID string, replay []codexapp.Envelope) {
@@ -219,7 +264,7 @@ func reattachAppServerWorker(ctx context.Context, c Config, run *Run, execution 
 	if run == nil || execution == nil || run.WorktreePath == nil {
 		return nil, false, errors.New("app-server recovery lacks execution/workspace")
 	}
-	serverDir := filepath.Join(c.RunDir, "runs", run.RunID, "app-server")
+	serverDir := appServerDirectory(c, run)
 	var savedProcess appServerProcessReceipt
 	processBytes, processErr := os.ReadFile(filepath.Join(serverDir, "process.json"))
 	if processErr != nil || json.Unmarshal(processBytes, &savedProcess) != nil || savedProcess.Endpoint == "" || savedProcess.Generation == "" {
@@ -327,42 +372,6 @@ func reattachAppServerWorker(ctx context.Context, c Config, run *Run, execution 
 	go observeAppServerWorker(observeCtx, worker, client, journal, run.RunID, run.AttemptID, execution.SessionID, turnID, replay)
 	closeClient = false
 	return worker, false, nil
-}
-
-func (s *Service) startCodexWorkerTurn(ctx context.Context, run *Run, commandID, prompt, opID string) error {
-	fixed, err := s.workerFlowContext(run)
-	if err != nil {
-		return err
-	}
-	if s.workerMessages != nil {
-		copyRun, copyExecution, config := *run, *fixed.execution, fixed.config
-		if s.appServerLaunching == nil {
-			s.appServerLaunching = make(map[string]string)
-		}
-		s.appServerLaunching[run.RunID] = commandID
-		s.forwarders.Add(1)
-		go func() {
-			defer s.forwarders.Done()
-			s.launchAppServerTurn(s.runContext, config, copyRun, copyExecution, commandID, prompt, opID)
-		}()
-		return nil
-	}
-	persistThread := func() error {
-		execution := fixed.execution
-		if execution.Process == nil || execution.AppServerGeneration == "" {
-			return errors.New("app-server thread has no verified process generation")
-		}
-		ref := ExecutionRef{Version: ExecutionRecordVersion, Backend: BackendLocal, Protocol: ProtocolLocalCodexAppServer, Target: targetFor(fixed.config), Agent: agentFor(fixed.config), RunID: run.RunID, AttemptID: run.AttemptID, WorkspacePath: deref(run.WorktreePath), WorkspaceBranch: deref(run.WorktreeBranch), BaseCommit: deref(run.BaseCommit), External: *execution.Process, Generation: execution.AppServerGeneration}
-		if err := (executionRecords{root: fixed.config.RunDir}).saveBinding(ref); err != nil {
-			return err
-		}
-		return s.commitWorker(run)
-	}
-	worker, events, platformRequestID, err := startAppServerWorkerTurn(ctx, fixed.config, run, fixed.execution, commandID, prompt, persistThread)
-	if err != nil {
-		return s.failStartedWorkerTurn(run, opID, platformRequestID, err)
-	}
-	return s.acceptStartedWorkerTurn(run, worker, events, platformRequestID, opID, commandID, true)
 }
 
 // Network I/O belongs to the Execution. Only handleAppServerLaunchMessage

@@ -8,6 +8,64 @@ import (
 	"github.com/erranliu/SteerLine/internal/steerline/workerflow"
 )
 
+// Every service instance must revalidate unfinished executions before a saved
+// answer or dispatch intent may write to an external worker. The gate is part
+// of the Execution row, so an abrupt process exit has the same startup rule.
+func (s *Service) adoptOrGateServiceExecutions() error {
+	return s.markServiceRecoveryGateForPriorOwner()
+}
+
+func (s *Service) markServiceRecoveryGateForPriorOwner() error {
+	for _, run := range s.State.Runs {
+		if run == nil || run.WorkflowVersion != WorkerFlowVersion || run.TaskStatus != "in_progress" {
+			continue
+		}
+		workflow, execution := s.workflowRecords(run)
+		if workflow == nil || execution == nil || workflow.Phase == "completed" || workflow.Phase == "abandoned" {
+			continue
+		}
+		if execution.OwnerServiceInstanceID != s.State.Service.InstanceID {
+			s.markOneServiceRecoveryGate(run)
+			execution.OwnerServiceInstanceID = s.State.Service.InstanceID
+			s.refreshRun(run)
+			if err := s.commitWorker(run); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (s *Service) markServiceRecoveryGate() error {
+	for _, run := range s.State.Runs {
+		s.markOneServiceRecoveryGate(run)
+		if run != nil && run.TaskStatus == "in_progress" {
+			if err := s.commitWorker(run); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (s *Service) markOneServiceRecoveryGate(run *Run) {
+	if run == nil || run.WorkflowVersion != WorkerFlowVersion {
+		return
+	}
+	task := nativeTaskRecord(s.domain.Tasks, run.DomainTaskID)
+	workflow, execution := s.workflowRecords(run)
+	if task == nil || workflow == nil || execution == nil || task.Status != "in_progress" || workflow.Phase == "completed" || workflow.Phase == "abandoned" {
+		return
+	}
+	execution.RecoveryRequired = true
+	execution.RecoveryVersion++
+	execution.RecoveryState = "unverified"
+	marked := now()
+	execution.RecoveryMarkedAt = &marked
+	execution.UpdatedAt = marked
+	s.refreshRun(run)
+}
+
 func (s *Service) resumeConfiguredWork(ctx context.Context) error {
 	if err := s.resumeWorkerFlow(ctx); err != nil {
 		return err
@@ -48,18 +106,15 @@ func (s *Service) resumeWorkerFlow(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		continueScan, err := s.resumeWorkerFlowByMode(ctx, task, run, adapter)
+		_, err = s.resumeWorkerFlowByMode(ctx, task, run, adapter)
 		if err != nil {
 			return err
-		}
-		if !continueScan {
-			return nil
 		}
 	}
 	return nil
 }
 
-func (s *Service) waitWorkerFlow(run *Run, reason string) error {
+func (s *Service) waitWorkerFlow(run *Run, reason string, operationIDs ...string) error {
 	workflow, execution := s.workflowRecords(run)
 	if workflow == nil || execution == nil || workflow.WorkflowVersion != WorkerFlowVersion {
 		return errors.New("worker flow wait has no fixed execution")
@@ -67,18 +122,35 @@ func (s *Service) waitWorkerFlow(run *Run, reason string) error {
 	if workflow.Phase == "completed" || run.TaskStatus == "closed" || run.TaskStatus == "discarded" {
 		return nil
 	}
-	unresolvedNativeTurn := run.Protocol == string(ProtocolLocalCodexAppServer) && (execution.PendingCommandID != "" || execution.CurrentTurnID != "" && execution.CurrentTurnID != execution.LastStoppedTurnID)
+	unresolvedNativeTurn := run.Protocol == string(ProtocolLocalCodexAppServer) && !execution.RecoveryRequired && (execution.PendingCommandID != "" || execution.CurrentTurnID != "" && execution.CurrentTurnID != execution.LastStoppedTurnID)
 	if !unresolvedNativeTurn && (run.Decision == nil || run.Decision.Status != "pending" && run.Decision.Status != "answer_saved") {
 		contextText := reason
 		if run.Protocol == string(ProtocolLocalCodexAppServer) && execution.CurrentTurnID != "" && execution.CurrentTurnID == execution.LastStoppedTurnID {
 			contextText = "本轮已结束，提交后将在原 Codex 会话开始下一轮。\n\n" + reason
 		}
-		request := DecisionRequest{Question: "The worker stopped. What should it do next?", Context: clip(contextText, 7000), Options: []DecisionOption{{ID: "continue", Label: "Continue current work"}}, AllowFreeText: true}
+		options := []DecisionOption{{ID: "continue", Label: "Continue current work"}}
+		if execution.RecoveryRequired && (execution.RecoveryState == "interrupted" || execution.RecoveryState == "completed") && run.Protocol == string(ProtocolLocalCodexAppServer) && execution.Process != nil {
+			options = []DecisionOption{{ID: "continue", Label: "原 Codex 会话继续", Detail: "在新的本地进程中核实并恢复原 thread"}, {ID: "new_session", Label: "新会话继续", Detail: "使用现有工作区和持久历史作为上下文"}}
+		} else if execution.RecoveryRequired && execution.RecoveryState == "interrupted" && run.Protocol == string(ProtocolLocalCodexAppServer) {
+			options = []DecisionOption{{ID: "continue", Label: "开始本地 Codex 执行", Detail: "先核实或准备原任务的工作区"}}
+		}
+		question := "The worker stopped. What should it do next?"
+		if execution.RecoveryRequired && (execution.RecoveryState == "unverified" || execution.RecoveryState == "") {
+			question = "Worker state is unverified. Review the original execution evidence."
+			options = nil
+		}
+		request := DecisionRequest{Question: question, Context: clip(contextText, 7000), Options: options, AllowFreeText: true}
 		decision, err := WriteDecisionRequest(run, request)
 		if err != nil {
 			return err
 		}
 		s.setRunDecision(run, decision)
+		if execution.RecoveryRequired {
+			if record := s.decisionRecord(run); record != nil {
+				record.RecoveryVersion = execution.RecoveryVersion
+				record.RecoveryState = execution.RecoveryState
+			}
+		}
 	}
 	workflow.Phase, workflow.UpdatedAt = "waiting_decision", now()
 	if unresolvedNativeTurn && (run.Decision == nil || run.Decision.Status != "pending" && run.Decision.Status != "answer_saved") {
@@ -98,7 +170,7 @@ func (s *Service) waitWorkerFlow(run *Run, reason string) error {
 	} else {
 		s.note(run, "steer", "decision", "pending", "worker needs input", reason, decisionMeta(run))
 	}
-	return s.commitWorker(run)
+	return s.commitWorker(run, operationIDs...)
 }
 
 // A verified open PR does not require input, but the original session remains
@@ -129,6 +201,9 @@ func (s *Service) prepareWorkerFlow(ctx context.Context, task TaskRecord, run *R
 	}
 	if fixed.workflow.WorkflowVersion != WorkerFlowVersion || fixed.attempt.StepID != "worker" || run.WorkspaceIntent == nil {
 		return nativeErr("inconsistent_delivery", "worker preparation has no fixed claim and workspace intent")
+	}
+	if fixed.execution.RecoveryRequired {
+		return errors.New("existing worker execution requires a fresh manual recovery decision")
 	}
 	adapter, err := s.workerFlowMode(run)
 	if err != nil {
@@ -224,11 +299,14 @@ func (s *Service) startWorkerFlowTurn(ctx context.Context, run *Run, prompt, tur
 		return err
 	}
 	workflow, execution, attempt := fixed.workflow, fixed.execution, fixed.attempt
+	if execution.RecoveryRequired {
+		return errors.New("worker turn requires a fresh manual recovery decision")
+	}
 	if workflow.WorkflowVersion != WorkerFlowVersion || !stableExecutionID(turnID) ||
 		execution.PendingTurnID != "" || execution.PendingCommandID != "" || execution.SessionID != "" && execution.CurrentTurnID != "" && execution.LastStoppedTurnID != execution.CurrentTurnID {
 		return errors.New("worker turn cannot start without one idle original session")
 	}
-	if execution.SessionID == "" && execution.TurnNumber != 0 {
+	if execution.SessionID == "" && execution.TurnNumber != 0 && run.DomainAttemptNumber <= 1 {
 		return errors.New("worker session was lost; replacement is not allowed")
 	}
 	if attempt.StepID != "worker" {
@@ -286,14 +364,17 @@ func (s *Service) eventWorkerFlowFor(run *Run, ev WorkerEvent) (resultErr error)
 	if err != nil {
 		return err
 	}
+	var operationIDs []string
 	if fact.SessionID != "" {
 		execution.SessionID = fact.SessionID
 		s.refreshRun(run)
 	}
 	if fact.StartedTurnID != "" && fact.Question == nil && mode == workerflow.LocalCodex {
-		if err := s.recordAppServerTurnStarted(run, workflow, execution, fact.StartedTurnID); err != nil {
+		opID, err := s.recordAppServerTurnStarted(run, workflow, execution, fact.StartedTurnID)
+		if err != nil {
 			return err
 		}
+		operationIDs = append(operationIDs, opID)
 	} else if fact.StartedTurnID != "" {
 		turnID := fact.StartedTurnID
 		commandID := turnID
@@ -312,9 +393,10 @@ func (s *Service) eventWorkerFlowFor(run *Run, ev WorkerEvent) (resultErr error)
 				if requestID == "" {
 					requestID = turnID
 				}
-				if err := s.stageWorkerOperation(run, op.OperationID, "confirmed", requestID, mustJSON(map[string]string{"session_id": execution.SessionID, "turn_id": turnID}), ""); err != nil {
+				if err := s.setOperationState(op.OperationID, "confirmed", requestID, mustJSON(map[string]string{"session_id": execution.SessionID, "turn_id": turnID}), ""); err != nil {
 					return err
 				}
+				operationIDs = append(operationIDs, op.OperationID)
 				break
 			}
 		}
@@ -363,9 +445,10 @@ func (s *Service) eventWorkerFlowFor(run *Run, ev WorkerEvent) (resultErr error)
 				for _, op := range s.domain.Operations {
 					if op.IdempotencyKey == "appserver-answer:"+execution.ExecutionID+":"+run.Decision.ID && (op.Status == "in_flight" || op.Status == "accepted" || op.Status == "outcome_unknown" || op.Status == "confirmed") {
 						if op.Status != "confirmed" {
-							if err := s.stageWorkerOperation(run, op.OperationID, "confirmed", ask.CallID, mustJSON(map[string]any{"tool_item_id": reply.CallID, "native_status": reply.Status, "success": true}), ""); err != nil {
+							if err := s.setOperationState(op.OperationID, "confirmed", ask.CallID, mustJSON(map[string]any{"tool_item_id": reply.CallID, "native_status": reply.Status, "success": true}), ""); err != nil {
 								return err
 							}
+							operationIDs = append(operationIDs, op.OperationID)
 						}
 						confirmed = true
 						break
@@ -375,9 +458,10 @@ func (s *Service) eventWorkerFlowFor(run *Run, ev WorkerEvent) (resultErr error)
 					return errors.New("Codex tool completed without the original saved reply intent")
 				}
 				s.setDecisionStatus(run, "reply_accepted")
-				if err := s.commitWorker(run); err != nil {
+				if err := s.commitWorker(run, operationIDs...); err != nil {
 					return err
 				}
+				operationIDs = nil
 				workflow, execution = s.workflowRecords(run)
 				if len(execution.PendingAsks) > 0 {
 					next := execution.PendingAsks[0]
@@ -411,7 +495,7 @@ func (s *Service) eventWorkerFlowFor(run *Run, ev WorkerEvent) (resultErr error)
 		err := errors.New("worker source event lacks activity classification")
 		return err
 	}
-	return s.commitWorker(run)
+	return s.commitWorker(run, operationIDs...)
 }
 
 func (s *Service) finishWorkerFlowFor(run *Run, workerErr error) error {
@@ -449,7 +533,10 @@ func (s *Service) finishWorkerFlowFor(run *Run, workerErr error) error {
 				if requestID == "" {
 					requestID = turnID
 				}
-				if err := s.stageWorkerOperation(run, operation.OperationID, "confirmed", requestID, mustJSON(map[string]string{"session_id": evidence.SessionID, "turn_id": turnID}), ""); err != nil {
+				if err := s.setOperationState(operation.OperationID, "confirmed", requestID, mustJSON(map[string]string{"session_id": evidence.SessionID, "turn_id": turnID}), ""); err != nil {
+					return err
+				}
+				if err := s.commitWorker(run, operation.OperationID); err != nil {
 					return err
 				}
 				break
@@ -635,28 +722,13 @@ func (s *Service) applyWorkerFlowDecision(ctx context.Context, run *Run) error {
 	if workflow == nil || execution == nil || workflow.Phase != "waiting_decision" && workflow.Phase != "waiting_pr_merge" {
 		return errors.New("saved feedback no longer belongs to a waiting worker flow")
 	}
-	mode, err := s.workerFlowMode(run)
+	config, err := s.executionConfigForRun(run)
 	if err != nil {
 		return err
 	}
-	if workflow.Phase == "waiting_pr_merge" {
-		decision := s.decisionRecord(run)
-
-		if decision == nil || s.store == nil {
-			return errors.New("worker feedback phase has unpublished or missing actor state")
-		}
-		if err := s.store.Err(); err != nil {
-			return err
-		}
-		if err := BeginWorkerFeedbackDelivery(workflow, *execution, *decision, now()); err != nil {
-			return err
-		}
-		if err := s.commitWorker(run); err != nil {
-			return err
-		}
-		if run.FinishTaskStatus != "waiting_decision" {
-			return errors.New("committed worker feedback phase could not be projected")
-		}
+	route, err := workerFlowModeFor(config, run, execution)
+	if err != nil {
+		return err
 	}
 	answer, err := ReadDecisionAnswer(run)
 	if err != nil {
@@ -666,8 +738,81 @@ func (s *Service) applyWorkerFlowDecision(ctx context.Context, run *Run) error {
 	if err != nil || command.Kind != "answer_decision" || command.TargetID != answer.DecisionID || command.Status != "accepted" || !stableExecutionID(command.CommandID) {
 		return errors.Join(err, errors.New("saved worker feedback has no fixed accepted command identity"))
 	}
-	if mode == workerflow.NativeOrca {
+	if execution.RecoveryRequired && (answer.SourceAttemptID != run.AttemptID || answer.ExpectedRecoveryVersion != execution.RecoveryVersion ||
+		execution.RecoveryMarkedAt == nil || !command.CreatedAt.After(*execution.RecoveryMarkedAt)) {
+		return nil // Prior-service input cannot advance the feedback phase or send.
+	}
+	if execution.RecoveryRequired && (execution.RecoveryState == "unverified" || execution.RecoveryState == "") {
+		return nil // Verify the original worker and pending operations first.
+	}
+	if execution.RecoveryRequired && s.hasUnknownWorkerOperation(run) {
+		execution.RecoveryState = "unverified"
+		return s.waitWorkerFlow(run, "An earlier external operation has an unknown outcome; no recovery input was sent")
+	}
+	if workflow.Phase == "waiting_pr_merge" {
+		decision := s.decisionRecord(run)
+		if decision == nil || s.store == nil || snapshotWorkflow(&s.committed, workflow.WorkflowRunID) == nil || recordFingerprint(*snapshotWorkflow(&s.committed, workflow.WorkflowRunID)) != recordFingerprint(*workflow) {
+			return errors.New("worker feedback phase has unpublished or missing actor state")
+		}
+		if err := s.store.Err(); err != nil {
+			return err
+		}
+		previousWorkflow := *workflow
+		if err := BeginWorkerFeedbackDelivery(workflow, *execution, *decision, now()); err != nil {
+			return err
+		}
+		s.refreshRun(run)
+		if err := s.commitWorker(run); err != nil {
+			*workflow = previousWorkflow
+			s.refreshRun(run)
+			return err
+		}
+		workflow, execution = s.workflowRecords(run)
+		if workflow == nil || execution == nil || run.ControlRevision != workflow.ControlRevision || run.FinishTaskStatus != "waiting_decision" {
+			return errors.New("committed worker feedback phase could not be projected")
+		}
+	}
+	if execution.RecoveryRequired {
+		if route == workerflow.NativeOrca && execution.RecoveryState == "relay_pending" {
+			if answer.OptionID != "forward_result" {
+				return errors.New("Orca result relay requires explicit forwarding approval")
+			}
+			s.setDecisionStatus(run, "applied")
+			s.setRunDecision(run, nil)
+			execution.RecoveryRequired = false
+			execution.RecoveryState = "running"
+			if err := s.commitWorker(run); err != nil {
+				return err
+			}
+			turn := nativeOrcaCurrentTurn(execution)
+			if turn == nil || turn.DispatchID == "" {
+				return errors.New("original Orca Dispatch disappeared before relay")
+			}
+			if err := s.relayNativeOrcaDone(ctx, run, execution, turn); err != nil {
+				return s.nativeOrcaUncertain(run, "Manual Orca result relay needs reconciliation: "+err.Error())
+			}
+			return nil // The original inbox will prove delivery on a later poll.
+		}
+		if route == workerflow.LocalCodex && execution.RecoveryState == "interrupted" && execution.Process == nil && execution.TurnNumber == 0 {
+			return s.startManuallyRecoveredInitialCodex(ctx, run, answer, command.CommandID)
+		}
+		if route == workerflow.LocalCodex && (execution.RecoveryState == "interrupted" || execution.RecoveryState == "completed") {
+			prompt := "The previous local Codex process stopped. Inspect the current worktree, Git status, existing work and persistent task history before continuing. Do not replay an earlier tool call blindly.\n\n" + workerFeedbackText(answer, run.Decision.Request)
+			if err := s.beginLocalRecoveryAttempt(ctx, run, answer.OptionID); err != nil {
+				return s.waitWorkerFlow(run, "手动继续条件未满足："+err.Error())
+			}
+			return s.startWorkerFlowTurn(ctx, run, prompt, command.CommandID)
+		}
+		if execution.RecoveryState != "live" && execution.RecoveryState != "running" && execution.RecoveryState != "question" {
+			return nil
+		}
+		execution.RecoveryRequired = false
+		if err := s.commitWorker(run); err != nil {
+			return err
+		}
+	}
+	if route == workerflow.NativeOrca {
 		return s.applyNativeOrcaDecision(ctx, run, workflow, execution, answer, command.CommandID)
 	}
-	return s.deliverResumableWorkerFeedback(ctx, run, execution, answer, command.CommandID, mode)
+	return s.deliverResumableWorkerFeedback(ctx, run, execution, answer, command.CommandID, route)
 }

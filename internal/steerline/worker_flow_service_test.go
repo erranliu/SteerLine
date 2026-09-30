@@ -272,3 +272,56 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openP
 		t.Fatalf("uncertain feedback was resent or lost: operations=%d/%d worker=%t turn=%d decision=%s error=%q", before, len(service.domain.Operations), service.workers[run.RunID] != nil, execution.TurnNumber, run.Decision.Status, deref(run.Error))
 	}
 }
+
+func TestServiceRecoveryGateRequiresTransactionalOwner(t *testing.T) {
+	service, run := waitingDecisionService(t)
+	execution := service.executionRecord(run)
+	execution.OwnerServiceInstanceID = service.State.Service.InstanceID
+	service.adoptOrGateServiceExecutions()
+	if execution.RecoveryRequired {
+		t.Fatal("current service claim was gated")
+	}
+	execution.OwnerServiceInstanceID = "" // Crash after claim, before the next service write.
+	service.adoptOrGateServiceExecutions()
+	if !execution.RecoveryRequired || execution.RecoveryVersion != 1 || execution.OwnerServiceInstanceID != service.State.Service.InstanceID {
+		t.Fatal("unowned persisted claim was started without a recovery decision")
+	}
+}
+
+func TestRestartDoesNotSendPreviouslyAcceptedFeedback(t *testing.T) {
+	service, run := waitingDecisionService(t)
+	defer service.Close()
+	answer := DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, OptionID: "continue", Note: "saved before stop", AnsweredBy: "operator", ExpectedDecisionVersion: run.Decision.Version, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: service.State.Service.InstanceID}
+	commands := CommandService{Store: service.domainStore, Project: service.Config.identity}
+	command, _, err := commands.AnswerDecisionWithID(context.Background(), newID(), answer.DecisionID, answer.ExpectedDecisionVersion, decisionAnswerKey(answer), answer.AnsweredBy, mustJSON(answer))
+	if err != nil {
+		t.Fatal(err)
+	}
+	record, _, err := commands.AcceptAnswer(context.Background(), command, answer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	*service.decisionRecord(run) = record
+	require(t, service.refreshNativeSnapshot(context.Background()))
+	service.refreshRun(run)
+	if err := service.commitWorker(run); err != nil {
+		t.Fatal(err)
+	}
+	service.markServiceRecoveryGate()
+	if err := service.commitWorker(run); err != nil {
+		t.Fatal(err)
+	}
+	before := len(service.domain.Operations)
+	if err := service.applyDecisions(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(service.domain.Operations) != before || !service.executionRecord(run).RecoveryRequired || run.Decision.Status != "answer_saved" {
+		t.Fatal("restart sent the prior-service answer without fresh authorization")
+	}
+	workflow := service.workflowRecord(run)
+	workflow.Phase = "waiting_pr_merge"
+	service.refreshRun(run)
+	if err := service.applyDecisions(context.Background()); err != nil || workflow.Phase != "waiting_pr_merge" {
+		t.Fatalf("prior-service answer advanced PR feedback phase: %v, phase=%s", err, workflow.Phase)
+	}
+}

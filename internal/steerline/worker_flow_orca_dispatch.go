@@ -9,7 +9,6 @@ import (
 	"time"
 )
 
-// Dispatch intent, feedback and provider receipts share the fixed worker commitment.
 func nativeOrcaAnswerText(answer DecisionAnswer, request DecisionRequest) string {
 	if request.OrcaAsk == nil {
 		return workerFeedbackText(answer, request)
@@ -76,7 +75,7 @@ func (s *Service) startNativeOrcaTurn(ctx context.Context, run *Run, execution *
 	}
 	taskKey := "orca-native-task:" + execution.ExecutionID + ":" + turnID
 	if current == nil {
-		if op := s.operationByKey(taskKey); op != nil {
+		if op := s.nativeOrcaOperation(taskKey); op != nil {
 			id, err := findNativeOrcaTask(ctx, fixedConfig, execution.Target.OrchestrationRun, state.Coordinator.Terminal, prompt)
 			if err != nil {
 				return err
@@ -118,7 +117,7 @@ func (s *Service) startNativeOrcaTurn(ctx context.Context, run *Run, execution *
 	}
 	taskID := current.TaskID
 	dispatchKey := "orca-native-dispatch:" + execution.ExecutionID + ":" + turnID
-	if op := s.operationByKey(dispatchKey); op != nil {
+	if op := s.nativeOrcaOperation(dispatchKey); op != nil {
 		id, runID, handle, incarnation, err := findNativeOrcaDispatch(ctx, fixedConfig, taskID)
 		if err != nil {
 			return &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "original Orca Dispatch creation is unverified", Cause: err}
@@ -231,10 +230,10 @@ func (s *Service) beginNativeOrcaTurn(run *Run, workflow *WorkflowRunRecord, exe
 	s.refreshRun(run)
 	for _, op := range s.domain.Operations {
 		if op.IdempotencyKey == "worker-turn:"+execution.ExecutionID+":"+turn.TurnID && op.Status != "confirmed" {
-			if err := s.stageWorkerOperation(run, op.OperationID, "confirmed", turn.DispatchRequestID, mustJSON(*turn), ""); err != nil {
+			if err := s.setOperationState(op.OperationID, "confirmed", turn.DispatchRequestID, mustJSON(*turn), ""); err != nil {
 				return err
 			}
-			break
+			return s.commitWorker(run, op.OperationID)
 		}
 	}
 	return nil
@@ -269,7 +268,7 @@ func (s *Service) applyNativeOrcaDecision(ctx context.Context, run *Run, workflo
 					if err != nil || messageID == "" {
 						return s.nativeOrcaUncertain(run, "Orca reply outcome is unverified; the original question was not answered twice")
 					}
-					if err := s.changeWorkerOperation(run, op.OperationID, "confirmed", op.PlatformRequestID, mustJSON(map[string]string{"reply_message_id": messageID}), ""); err != nil {
+					if err := s.setOperationState(op.OperationID, "confirmed", op.PlatformRequestID, mustJSON(map[string]string{"reply_message_id": messageID}), ""); err != nil {
 						return err
 					}
 				}
@@ -278,7 +277,7 @@ func (s *Service) applyNativeOrcaDecision(ctx context.Context, run *Run, workflo
 					return err
 				}
 				s.refreshRun(run)
-				return s.commitWorker(run)
+				return s.commitWorker(run, op.OperationID)
 			}
 		}
 		body := nativeOrcaAnswerText(answer, run.Decision.Request)
@@ -295,7 +294,7 @@ func (s *Service) applyNativeOrcaDecision(ctx context.Context, run *Run, workflo
 			}
 			return s.nativeOrcaUncertain(run, "Orca reply receipt lacks its original request identity")
 		}
-		if err := s.changeWorkerOperation(run, opID, "confirmed", receipt.RequestID, receipt.Payload, ""); err != nil {
+		if err := s.setOperationState(opID, "confirmed", receipt.RequestID, receipt.Payload, ""); err != nil {
 			return err
 		}
 		s.setDecisionStatus(run, "reply_accepted")
@@ -303,7 +302,7 @@ func (s *Service) applyNativeOrcaDecision(ctx context.Context, run *Run, workflo
 			return err
 		}
 		s.refreshRun(run)
-		return s.commitWorker(run)
+		return s.commitWorker(run, opID)
 	}
 	if turn.DoneMessageID == "" && execution.CurrentTurnID == turn.TurnID && execution.LastStoppedTurnID != turn.TurnID {
 		return s.sendNativeOrcaFeedback(ctx, run, workflow, execution, turn, answer, commandID)
@@ -313,7 +312,7 @@ func (s *Service) applyNativeOrcaDecision(ctx context.Context, run *Run, workflo
 		s.refreshRun(run)
 		return s.commitWorker(run)
 	}
-	if op := s.operationByKey("orca-native-send:" + execution.ExecutionID + ":" + commandID); op != nil && op.Status != "rejected" {
+	if op := s.nativeOrcaOperation("orca-native-send:" + execution.ExecutionID + ":" + commandID); op != nil && op.Status != "rejected" {
 		execution.Error = ptr("Feedback may have been accepted by the settled Orca Dispatch; it was not copied into a new Task")
 		s.refreshRun(run)
 		return s.commitWorker(run)
@@ -356,7 +355,7 @@ func (s *Service) sendNativeOrcaFeedback(ctx context.Context, run *Run, workflow
 			s.refreshRun(run)
 			return s.commitWorker(run)
 		}
-		if err := s.changeWorkerOperation(run, op.OperationID, "confirmed", op.PlatformRequestID, mustJSON(map[string]string{"message_id": messageID}), ""); err != nil {
+		if err := s.setOperationState(op.OperationID, "confirmed", op.PlatformRequestID, mustJSON(map[string]string{"message_id": messageID}), ""); err != nil {
 			return err
 		}
 		s.setDecisionStatus(run, "reply_accepted")
@@ -364,7 +363,7 @@ func (s *Service) sendNativeOrcaFeedback(ctx context.Context, run *Run, workflow
 			return err
 		}
 		s.refreshRun(run)
-		return s.commitWorker(run)
+		return s.commitWorker(run, op.OperationID)
 	}
 	opID, err := s.startWorkerOperation(run, "orca_native_send", key, map[string]string{"dispatch": turn.DispatchID, "subject": name, "body": body})
 	if err != nil {
@@ -385,7 +384,7 @@ func (s *Service) sendNativeOrcaFeedback(ctx context.Context, run *Run, workflow
 		}
 		return s.nativeOrcaUncertain(run, "Orca accepted feedback without an exact Dispatch receipt")
 	}
-	if err := s.changeWorkerOperation(run, opID, "confirmed", receipt.RequestID, receipt.Payload, ""); err != nil {
+	if err := s.setOperationState(opID, "confirmed", receipt.RequestID, receipt.Payload, ""); err != nil {
 		return err
 	}
 	s.setDecisionStatus(run, "reply_accepted")
@@ -394,5 +393,5 @@ func (s *Service) sendNativeOrcaFeedback(ctx context.Context, run *Run, workflow
 	}
 	execution.LastEvent = ptr("Orca accepted feedback for the current Dispatch; agent consumption is unverified")
 	s.refreshRun(run)
-	return s.commitWorker(run)
+	return s.commitWorker(run, opID)
 }

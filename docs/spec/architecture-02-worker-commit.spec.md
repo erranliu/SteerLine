@@ -1,6 +1,6 @@
 # Spec：架构收口 PR 2 — worker 生命周期显式原子提交
 
-状态：实现候选；与 PR 3 合并交付，待评审；未分配 Task ID。日期：2026-09-30。审计基线：`main@4e786d7`。硬前置：[PR 1：worker 协议与终态边界](architecture-01-worker-protocol.spec.md) 已合入；按用户要求，本 Spec 与 [PR 3](architecture-03-runtime-boundary.spec.md) 在同一个实现 PR 交付。
+状态：已由 #152 合入主干；未分配 Task ID。日期：2026-09-30。审计基线：`main@bba4936`。硬前置：[PR 1：worker 协议与终态边界](architecture-01-worker-protocol.spec.md) 已合入；本 Spec 由一个实现 PR 交付，后继为 [PR 3](architecture-03-runtime-boundary.spec.md)。
 
 ## 1. 目标与依据
 
@@ -76,13 +76,6 @@ worker 每次业务转换明确声明读取前提、修改记录、操作和事�
 
 正常 worker 生命周期不再依赖 Runtime 指纹扫描保存业务变更。每个外部动作都能定位到其已提交意图和回执写入点，每个业务转换都能说明读前提与写集合。[PR 3](architecture-03-runtime-boundary.spec.md) 据此完成剩余调用点迁移和读写模型分离。
 
-## 合并实施记录（2026-09-30）
+## 后续收口（2026-09-30）
 
-实现承接已合并的 #151（`main@bba4936`）。用户要求一次完成并提交一个 PR，因此同时移除原计划留给 PR 3 的过渡写回入口。
-
-- `worker_commit.go` 声明单个固定 worker 的记录前值、控制版本、操作和事件，在同一 SQLite 事务校验并提交 checkpoint。领取、TaskDelivery、答案接收和原生任务控制继续使用现有 CommandService 事务。
-- `service_commit.go` 管理 Service 私有工作副本、已提交快照、待提交事件与操作；提交失败恢复私有快照，不消费事件、不注册成功 worker。数据库失败阻断后续发布和 heartbeat，版本冲突保留权威答案。
-- 准备、轮次、问题/反馈、终态/PR、重启恢复和资源清理统一使用显式 worker 提交；历史事件和 Delivery ack 使用各自声明的事件/操作提交。专用反馈阶段事务已删除。
-- `publishCheckpoint` / `SaveCheckpoint` 只发布服务元数据，业务读视图不再是持久化输入。`SaveRuntime`、全量指纹扫描及 baseline 已删除。
-
-最小新增验证覆盖 checkpoint 最后一笔写入失败时的记录/操作/事件/版本回滚、视图嵌套别名隔离、checkpoint/heartbeat 无业务副作用，以及事务内拒绝已丢弃 Task 的转换。平台流程复用现有模拟与真实本机 Git/SQLite 测试；执行结果以合并 PR 的验证记录为准。
+[PR 3](architecture-03-runtime-boundary.spec.md) 承接 #152 和 #150 的当前代码，删除过渡 Runtime 写回及 baseline；显式提交仍保留问题/答案不可变、固定身份、控制版本、权威版本和回执前提校验。恢复、历史事件、Delivery ack、终态诊断与资源清理也经显式事务提交，checkpoint/heartbeat 只发布服务元数据。手动恢复支持在同一事务退休旧 Attempt 并选择下一代，未提交候选与公开视图隔离。

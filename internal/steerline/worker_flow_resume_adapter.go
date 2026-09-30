@@ -25,11 +25,62 @@ func (s *Service) resumeCodexWorker(ctx context.Context, task *TaskRecord, run *
 	if reconciled {
 		return true, nil
 	}
+	if execution.RecoveryRequired {
+		if execution.Process != nil {
+			switch inspectProcess(execution.Process) {
+			case "matching process still exists":
+				execution.RecoveryState = "live"
+			case "process absent":
+				if execution.CurrentTurnID != "" && execution.CurrentTurnID == execution.LastStoppedTurnID {
+					execution.RecoveryState = "completed"
+				} else {
+					execution.RecoveryState = "interrupted"
+				}
+			default:
+				execution.RecoveryState = "unverified"
+			}
+			s.refreshRun(run)
+			if err := s.commitWorker(run); err != nil {
+				return true, err
+			}
+			if run.Decision != nil && run.Decision.Status == "answer_saved" {
+				return true, s.refreshSavedRecoveryDecision(run, false, "服务重开后请确认旧答案；原轮次不会自动继续。")
+			}
+			if execution.RecoveryState == "completed" && run.Decision != nil && run.Decision.Status == "pending" {
+				if record := s.decisionRecord(run); record != nil && (record.RecoveryVersion != execution.RecoveryVersion || record.RecoveryState != execution.RecoveryState) {
+					oldID := record.DecisionID
+					s.setDecisionStatus(run, "superseded")
+					if err := s.commitWorker(run); err != nil {
+						return true, err
+					}
+					s.setRunDecision(run, nil)
+					if err := s.waitWorkerFlow(run, "原本地 worker 已退出，原轮次已结束。核对当前成果后选择原 thread 或明确使用新会话继续。"); err != nil {
+						return true, err
+					}
+					if next := s.decisionRecord(run); next != nil {
+						next.RecoveryOfDecision = oldID
+						s.markWorkerDecisionWrite(next.DecisionID)
+						return true, s.commitWorker(run)
+					}
+				}
+			}
+			return true, nil
+		}
+		if execution.Process == nil && execution.PendingCommandID == "" && execution.CurrentTurnID == "" {
+			execution.RecoveryState = "interrupted"
+			return true, s.waitWorkerFlow(run, "服务重开后，原 Codex worker 尚未开始执行。请核对工作区并手动继续。")
+		}
+		return true, nil
+	}
 	return s.resumeWorkspaceWorker(ctx, task, run, false)
 }
 
 func (s *Service) resumeNativeOrcaWorker(ctx context.Context, task *TaskRecord, run *Run) (bool, error) {
 	workflow, execution := s.workflowRecords(run)
+	if execution.RecoveryRequired && execution.Process == nil {
+		execution.RecoveryState = "unverified"
+		return true, s.waitWorkerFlow(run, "原 Orca agent 创建状态未核实；重开服务不会自动准备或派发")
+	}
 	if execution.Process == nil {
 		if execution.OrcaNative != nil {
 			return false, s.nativeOrcaUncertain(run, "Original Orca agent creation has no confirmed terminal; preserve the worktree")
@@ -45,7 +96,29 @@ func (s *Service) resumeNativeOrcaWorker(ctx context.Context, task *TaskRecord, 
 		return false, s.pollNativeOrcaWorker(ctx, run)
 	}
 	if err := s.verifyNativeOrcaWorker(ctx, run, execution); err != nil {
+		execution.RecoveryState = "unverified"
+		if execution.RecoveryRequired {
+			return true, s.waitWorkerFlow(run, "Original Orca agent session is unavailable: "+err.Error())
+		}
 		return false, s.nativeOrcaUncertain(run, "Original Orca agent session is unavailable: "+err.Error())
+	}
+	if execution.RecoveryRequired {
+		if execution.RecoveryState != "live" {
+			execution.RecoveryState = "live"
+			s.refreshRun(run)
+			if err := s.commitWorker(run); err != nil {
+				return true, err
+			}
+		}
+		if run.Decision != nil && run.Decision.Status == "answer_saved" {
+			if err := s.refreshSavedRecoveryDecision(run, run.Decision.Request.OrcaAsk != nil, "服务重开后保留了原 Orca 输入；请重新确认后才投递。 "); err != nil {
+				return true, err
+			}
+		}
+		if turn := nativeOrcaCurrentTurn(execution); turn != nil && turn.DispatchID != "" {
+			return true, s.pollNativeOrcaWorker(ctx, run)
+		}
+		return true, s.waitWorkerFlow(run, "原 Orca agent 仍在；未确认的派发输入需人工核对后继续")
 	}
 	if execution.Target.OrchestrationRun == "" {
 		if err := s.prepareNativeOrcaCoordinator(ctx, run, execution); err != nil {
@@ -54,7 +127,7 @@ func (s *Service) resumeNativeOrcaWorker(ctx context.Context, task *TaskRecord, 
 	}
 	if execution.PendingTurnID != "" {
 		turnID := execution.PendingTurnID
-		op := s.operationByKey("worker-turn:" + execution.ExecutionID + ":" + turnID)
+		op := s.nativeOrcaOperation("worker-turn:" + execution.ExecutionID + ":" + turnID)
 		if op == nil {
 			return false, s.nativeOrcaUncertain(run, "Original Orca turn has no saved input intent")
 		}
@@ -82,11 +155,26 @@ func (s *Service) resumeNativeOrcaWorker(ctx context.Context, task *TaskRecord, 
 }
 
 func (s *Service) resumeSupervisedOrcaWorker(ctx context.Context, task *TaskRecord, run *Run) (bool, error) {
+	continued, err := s.resumeWorkspaceWorker(ctx, task, run, true)
+	if err != nil {
+		return continued, err
+	}
+	if execution := s.executionRecord(run); execution != nil && execution.RecoveryRequired && run.Decision != nil && run.Decision.Status == "answer_saved" {
+		return true, s.refreshSavedRecoveryDecision(run, false, "服务重开后保留了原 Orca 输入；请核对 terminal 状态并重新确认。")
+	}
+	return continued, nil
+}
+
+func (s *Service) resumeWorkspaceWorker(ctx context.Context, task *TaskRecord, run *Run, remote bool) (bool, error) {
 	fixed, err := s.workerFlowContext(run)
 	if err != nil {
 		return false, err
 	}
 	workflow, execution, c := fixed.workflow, fixed.execution, fixed.config
+	if execution.RecoveryRequired && execution.Process == nil {
+		execution.RecoveryState = "unverified"
+		return true, s.waitWorkerFlow(run, "原 worker 尚无可核实的进程或 terminal；重开服务不会自动准备工作区或发起执行")
+	}
 	if execution.Process != nil && execution.Process.Kind == "orca" && (execution.PendingTurnID != "" || execution.CurrentTurnID != execution.LastStoppedTurnID) {
 		turnID := execution.PendingTurnID
 		if turnID == "" {
@@ -123,7 +211,7 @@ func (s *Service) resumeSupervisedOrcaWorker(ctx context.Context, task *TaskReco
 			return false, s.waitWorkerFlow(run, "Original worker process identity cannot be verified; its session and files are retained")
 		}
 	}
-	if execution.PendingTurnID != "" {
+	if remote && execution.PendingTurnID != "" {
 		events := filepath.Join(c.RunDir, "runs", run.RunID, "turns", execution.PendingTurnID, "events.jsonl")
 		if outcome, err := codexworker.ReadExecOutcome(events); err == nil && outcome.Completed && outcome.SessionID != "" {
 			return false, s.finishWorkerFlowFor(run, nil)
@@ -133,17 +221,11 @@ func (s *Service) resumeSupervisedOrcaWorker(ctx context.Context, task *TaskReco
 		}
 		return false, nil
 	}
-	return s.resumeWorkspaceWorker(ctx, task, run, true)
-}
-
-func (s *Service) resumeWorkspaceWorker(ctx context.Context, task *TaskRecord, run *Run, remote bool) (bool, error) {
-	fixed, err := s.workerFlowContext(run)
-	if err != nil {
-		return false, err
-	}
-	workflow, execution, c := fixed.workflow, fixed.execution, fixed.config
 	if workflow.Phase != "queued" {
 		return true, nil
+	}
+	if execution.RecoveryRequired {
+		return true, s.waitWorkerFlow(run, "原 worker 已停，等待手动继续")
 	}
 	var preparation *OperationRecord
 	for i := range s.domain.Operations {

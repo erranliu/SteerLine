@@ -15,6 +15,7 @@ import (
 	"syscall"
 	"testing"
 	"time"
+	"unsafe"
 
 	"golang.org/x/sys/windows"
 )
@@ -89,6 +90,58 @@ func TestLifecycleReviewExitedProcessWithRetainedHandle(t *testing.T) {
 	if probe := probeProcess(&identity); probe.State != ProcessAbsent {
 		t.Fatalf("retained exited process handle reported alive: %+v", probe)
 	}
+}
+
+func TestWindowsOwnedWorkerRunsInJobAndStopsWithOwner(t *testing.T) {
+	exe, err := os.Executable()
+	require(t, err)
+	childPath := filepath.Join(t.TempDir(), "child.pid")
+	cmd := exec.Command(exe, "--fake", "spawn-owned-child", childPath)
+	owned, err := startProcess(cmd)
+	require(t, err)
+	defer func() { owned.Close(); _ = cmd.Wait() }()
+	identity := owned.Identity()
+	if inspectProcess(&identity) != "matching process still exists" {
+		t.Fatal("owned worker identity is not live")
+	}
+	var childPID int
+	for deadline := time.Now().Add(3 * time.Second); time.Now().Before(deadline); {
+		data, readErr := os.ReadFile(childPath)
+		if readErr == nil {
+			childPID, err = strconv.Atoi(string(data))
+			require(t, err)
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if childPID == 0 {
+		t.Fatal("owned worker did not start its child")
+	}
+	handle, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, uint32(childPID))
+	require(t, err)
+	childIdentity, err := identityFromHandle(handle, childPID)
+	require(t, err)
+	defer func() {
+		if inspectProcess(&childIdentity) == "matching process still exists" {
+			if child, findErr := os.FindProcess(childPID); findErr == nil {
+				_ = child.Kill()
+			}
+		}
+	}()
+	var inJob uint32
+	ok, _, callErr := windows.NewLazySystemDLL("kernel32.dll").NewProc("IsProcessInJob").Call(uintptr(handle), uintptr(owned.job), uintptr(unsafe.Pointer(&inJob)))
+	windows.CloseHandle(handle)
+	if ok == 0 || inJob == 0 {
+		t.Fatalf("owned child did not inherit the worker Job Object: ok=%d in_job=%d err=%v", ok, inJob, callErr)
+	}
+	owned.Close()
+	for deadline := time.Now().Add(3 * time.Second); time.Now().Before(deadline); {
+		if workerTreeAbsent(identity) && inspectProcess(&childIdentity) == "process absent" {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatal("closing the owner did not terminate the worker and child")
 }
 
 func currentConsoleWindowForTests() uintptr {

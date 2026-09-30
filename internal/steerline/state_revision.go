@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"time"
 )
 
 func recordFingerprint(value any) string { return operationDigest(mustJSON(value)) }
@@ -33,9 +34,14 @@ func controlFingerprint(value any) string {
 			Worktree, Branch, Base, Endpoint, Generation                          string
 			Asks                                                                  []codexAskCall
 			ManualStop                                                            *ManualStopConfirmation
+			Attempt, Owner, Recovery                                              string
+			RecoveryRequired                                                      bool
+			RecoveryVersion                                                       uint64
+			RecoveryMarkedAt                                                      *time.Time
 		}{v.Status, v.LastTurnOutcome, v.SessionID, v.DecisionID, v.CurrentStep,
 			v.PendingCommandID, v.CurrentCommandID, v.PendingTurnID, v.CurrentTurnID, v.LastStoppedTurnID, v.TurnNumber,
-			v.Process, v.Target, v.WorkspaceIntent, v.Workspace.Worktree, v.Workspace.Branch, v.Workspace.Base, v.AppServerEndpoint, v.AppServerGeneration, v.PendingAsks, v.ManualStop})
+			v.Process, v.Target, v.WorkspaceIntent, v.Workspace.Worktree, v.Workspace.Branch, v.Workspace.Base, v.AppServerEndpoint, v.AppServerGeneration, v.PendingAsks, v.ManualStop,
+			v.CurrentAttemptID, v.OwnerServiceInstanceID, v.RecoveryState, v.RecoveryRequired, v.RecoveryVersion, v.RecoveryMarkedAt})
 	case DecisionRecord:
 		return recordFingerprint(struct {
 			ID, Workflow, Execution, Attempt, Question, Status string

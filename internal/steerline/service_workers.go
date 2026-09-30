@@ -46,6 +46,12 @@ func (s *Service) registerWorker(run *Run, worker *Worker) {
 		s.workers = make(map[string]*Worker)
 	}
 	s.workers[run.RunID] = worker
+	if owned, ok := worker.proc.(*childProcess); ok {
+		if s.ownedLocalProcesses == nil {
+			s.ownedLocalProcesses = make(map[string]*childProcess)
+		}
+		s.ownedLocalProcesses[run.RunID] = owned
+	}
 	if s.workerMessages != nil {
 		s.forwardWorker(s.runContext, run.RunID, worker)
 	}

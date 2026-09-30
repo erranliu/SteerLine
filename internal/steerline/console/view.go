@@ -326,6 +326,18 @@ func displayExecutionStatus(run *steerline.Run) string {
 	if historicalFailedRun(run) {
 		return "失败（历史）"
 	}
+	if run.RecoveryRequired {
+		switch run.RecoveryState {
+		case "interrupted":
+			return "已中断，待手动继续"
+		case "unverified", "":
+			return "状态未核实"
+		case "running", "question", "live":
+			return "原 worker 仍在运行"
+		case "completed":
+			return "原轮次已完成，待反馈"
+		}
+	}
 	switch run.ExecutionStatus {
 	case "pending":
 		return "待开始"

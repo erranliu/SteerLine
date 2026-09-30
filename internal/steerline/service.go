@@ -16,20 +16,22 @@ import (
 )
 
 type Service struct {
-	Config            Config
-	baseConfig        Config
-	dispatchConfig    *Config
-	dispatchProfile   *ExecutionProfile
-	State             Runtime
-	domain            DomainSnapshot
-	committed         DomainSnapshot
-	pendingEvents     []DomainEvent
-	pendingOperations map[string]string
-	store             *Store
-	domainStore       *SQLiteStore
-	prs               *PRClient
+	Config               Config
+	baseConfig           Config
+	dispatchConfig       *Config
+	dispatchProfile      *ExecutionProfile
+	State                Runtime
+	domain               DomainSnapshot
+	committed            DomainSnapshot
+	pendingEvents        []DomainEvent
+	pendingOperations    map[string]string
+	workerDecisionWrites map[string]bool
+	store                *Store
+	domainStore          *SQLiteStore
+	prs                  *PRClient
 	// workers owns live observers by authoritative workflow run ID.
 	workers             map[string]*Worker
+	ownedLocalProcesses map[string]*childProcess
 	appServerLaunching  map[string]string // In-flight goroutines, never persisted execution authority.
 	appServerRecovering map[string]bool
 	workerMessages      chan workerMessage
@@ -97,7 +99,7 @@ func NewService(c Config) (_ *Service, retErr error) {
 			_ = db.Close()
 		}
 	}()
-	s := &Service{Config: c, baseConfig: c, domainStore: db, store: &Store{Domain: db, Project: c.identity}, prs: &PRClient{Config: c.PR, Runner: r}, activities: map[string]*ActivityWriter{}, conversationMappers: map[string]*ConversationMapper{}, workers: map[string]*Worker{}}
+	s := &Service{Config: c, baseConfig: c, domainStore: db, store: &Store{Domain: db, Project: c.identity}, prs: &PRClient{Config: c.PR, Runner: r}, activities: map[string]*ActivityWriter{}, conversationMappers: map[string]*ConversationMapper{}, workers: map[string]*Worker{}, ownedLocalProcesses: map[string]*childProcess{}}
 	old, e := loadRuntimeSnapshot(db, c.identity, false)
 	if errors.Is(e, sql.ErrNoRows) {
 		old, e = nil, nil
@@ -119,9 +121,6 @@ func NewService(c Config) (_ *Service, retErr error) {
 			return nil, nativeErr("authority_mismatch", "runtime repository or branch differs from the native authority; preserve state")
 		}
 		s.State = *old
-		if err := s.refreshNativeSnapshot(context.Background()); err != nil {
-			return nil, err
-		}
 		s.State.Control.DispatchMode, s.State.Control.DispatchPaused, s.State.Control.Revision = authority.DispatchMode, authority.DispatchPaused, authority.AuthorityVersion
 		if op := s.State.Control.Operation; op != nil {
 			if !controlIDPattern.MatchString(op.RequestID) || !validControlAction(op.Action) || (op.Phase != "applying" && op.Phase != "completed") || len(op.RequestDigest) != 64 || op.Action == "start_task" && (!controlIDPattern.MatchString(op.RunID) || op.TaskID == "") || op.Phase == "completed" && op.Result == nil {
@@ -129,14 +128,6 @@ func NewService(c Config) (_ *Service, retErr error) {
 			}
 			if op.Phase == "completed" && (op.Result.Version != ControlProtocolVersion || op.Result.RequestID != op.RequestID || op.Result.RequestDigest != op.RequestDigest || op.Result.Action != op.Action || !terminalControlStatus(op.Result.Status)) {
 				return nil, errors.New("completed control receipt does not match its operation")
-			}
-		}
-		for _, run := range s.State.Runs {
-			if run.WorkflowVersion != WorkerFlowVersion {
-				return nil, nativeErr("unsupported_schema", "unsupported workflow version")
-			}
-			if _, err := s.executionConfigForRun(run); err != nil {
-				return nil, err
 			}
 		}
 		if s.State.Control.Operation == nil && s.State.CurrentTask != nil && s.find(*s.State.CurrentTask) == nil {
@@ -148,6 +139,14 @@ func NewService(c Config) (_ *Service, retErr error) {
 	}
 	if err := s.refreshNativeSnapshot(context.Background()); err != nil {
 		return nil, err
+	}
+	for _, run := range s.State.Runs {
+		if run.WorkflowVersion != WorkerFlowVersion {
+			return nil, nativeErr("unsupported_schema", "unsupported workflow version")
+		}
+		if _, err := s.executionConfigForRun(run); err != nil {
+			return nil, err
+		}
 	}
 	s.State.SchemaVersion = WorkerFlowRuntimeSchema
 	capabilities := []string{"answer_decision", "start_task", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "stop_service"}
@@ -170,8 +169,6 @@ func (s *Service) Close() error {
 	return s.domainStore.Close()
 }
 
-// publishCheckpoint publishes only the service checkpoint. Uncommitted business candidates
-// are discarded and cannot become durable through publication or heartbeat.
 func (s *Service) publishCheckpoint() error {
 	if err := s.projectState(); err != nil {
 		return err
@@ -465,7 +462,7 @@ func (s *Service) pollPRsFor(ctx context.Context, runID string) error {
 func (s *Service) eventForRun(run *Run, ev WorkerEvent) error {
 	ack := func(err error) error {
 		if err == nil && ev.Acknowledge != nil {
-			err = s.acknowledgeRemoteDelivery(ev)
+			err = s.acknowledgeRemoteDelivery(run, ev)
 		}
 		if ev.Processed != nil {
 			ev.Processed <- err
@@ -503,7 +500,7 @@ func (s *Service) eventForRun(run *Run, ev WorkerEvent) error {
 	return ack(s.eventWorkerFlowFor(run, ev))
 }
 
-func (s *Service) acknowledgeRemoteDelivery(ev WorkerEvent) error {
+func (s *Service) acknowledgeRemoteDelivery(run *Run, ev WorkerEvent) error {
 	if ev.Acknowledge == nil {
 		return nil
 	}
@@ -517,6 +514,7 @@ func (s *Service) acknowledgeRemoteDelivery(ev WorkerEvent) error {
 	}{ev.RemoteRunID, ev.RemoteDeliveryID})
 	digest := operationDigest(request)
 	operationID := "ack-" + operationDigest([]byte(idempotencyKey))[:32]
+	persist := func() error { return s.commitOperation(operationID) }
 	var operation *OperationRecord
 	for i := range s.domain.Operations {
 		candidate := &s.domain.Operations[i]
@@ -546,7 +544,7 @@ func (s *Service) acknowledgeRemoteDelivery(ev WorkerEvent) error {
 		value := OperationRecord{ProjectIdentity: s.Config.identity, OperationID: operationID, IdempotencyKey: idempotencyKey, Kind: "ack_orca_delivery", Status: "in_flight", PayloadDigest: digest, Request: request, CreatedAt: now(), UpdatedAt: now()}
 		s.domain.Operations = append(s.domain.Operations, value)
 		operation = &s.domain.Operations[len(s.domain.Operations)-1]
-		if err := s.commitOperation(operationID); err != nil {
+		if err := persist(); err != nil {
 			return err
 		}
 		operation = nil
@@ -573,7 +571,7 @@ func (s *Service) acknowledgeRemoteDelivery(ev WorkerEvent) error {
 			operation.Status = "rejected"
 		}
 		operation.UnknownReason = ackErr.Error()
-		if saveErr := s.commitOperation(operationID); saveErr != nil {
+		if saveErr := persist(); saveErr != nil {
 			return errors.Join(ackErr, saveErr)
 		}
 		return ackErr
@@ -583,7 +581,7 @@ func (s *Service) acknowledgeRemoteDelivery(ev WorkerEvent) error {
 			return err
 		}
 	}
-	return s.commitOperation(operationID)
+	return persist()
 }
 
 func ackWorkerEventPersistence(ev WorkerEvent, err error) {
@@ -767,6 +765,9 @@ func (s *Service) run(ctx context.Context, dispatchMode string) (retErr error) {
 	if err := s.refreshNativeSnapshot(ctx); err != nil {
 		return err
 	}
+	if err := s.adoptOrGateServiceExecutions(); err != nil {
+		return err
+	}
 	s.State.Service.Ready = false
 	s.State.Service.Status = "running"
 	s.State.Service.HeartbeatIntervalMS = duration(s.Config.Heartbeat).Milliseconds()
@@ -839,6 +840,9 @@ func (s *Service) run(ctx context.Context, dispatchMode string) (retErr error) {
 		}
 		s.State.Service.Status = "stopping"
 		s.State.Service.Ready = false
+		if err := s.markServiceRecoveryGate(); err != nil {
+			retErr = errors.Join(retErr, err)
+		}
 		s.publishCheckpoint()
 		if e := s.ensureStopApplyingReceipt(); e != nil {
 			retErr = errors.Join(retErr, e)
@@ -923,12 +927,8 @@ func (s *Service) run(ctx context.Context, dispatchMode string) (retErr error) {
 			}
 		}
 	}
-	// On startup query saved PRs, apply any already-answered decisions, then
-	// reconcile claims before any new dispatch.
+	// Recovery observes the original workers before accepting new input.
 	if e := step(s.pollPRs); e != nil {
-		return e
-	}
-	if e := step(s.processCommandsAndDecisions); e != nil {
 		return e
 	}
 	if e := s.reconcile(ctx); e != nil {
@@ -938,6 +938,9 @@ func (s *Service) run(ctx context.Context, dispatchMode string) (retErr error) {
 		}
 	}
 	if e := step(s.resumeConfiguredWork); e != nil {
+		return e
+	}
+	if e := step(s.processCommandsAndDecisions); e != nil {
 		return e
 	}
 	candidateErr := s.refreshCandidates(ctx)
@@ -1015,12 +1018,8 @@ func (s *Service) run(ctx context.Context, dispatchMode string) (retErr error) {
 				return e
 			}
 		case <-controlTick.C:
-			processed := false
-			commandErr := s.processPendingCommandsTracked(ctx, &processed)
-			if processed || commandErr != nil || s.State.Service.Status != "running" || s.State.Service.Error != nil {
-				if e := step(func(context.Context) error { return commandErr }); e != nil {
-					return e
-				}
+			if e := stepIfChanged(s.processPendingCommands); e != nil {
+				return e
 			}
 			if e := s.pollControl(ctx, cancel); e != nil {
 				return e
@@ -1041,6 +1040,13 @@ func (s *Service) finishWorkerInLoop(run *Run, worker *Worker, workerErr error) 
 }
 
 func (s *Service) shutdown() {
+	defer func() {
+		for runID, owned := range s.ownedLocalProcesses {
+			s.interruptOwnedLocalTurn(runID, owned)
+			owned.Close()
+			delete(s.ownedLocalProcesses, runID)
+		}
+	}()
 	if s.runContext != nil && s.runContext.Err() != nil {
 		s.forwarders.Wait()
 		s.drainWorkerMessages()

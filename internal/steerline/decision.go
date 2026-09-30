@@ -19,7 +19,7 @@ import (
 var ErrAnswerConflict = errors.New("answer_conflict: this decision already has a different accepted answer")
 
 func sameDecisionAnswer(a, b DecisionAnswer) bool {
-	return a.DecisionID == b.DecisionID && a.RunID == b.RunID && strings.TrimSpace(a.OptionID) == strings.TrimSpace(b.OptionID) && strings.TrimSpace(a.Note) == strings.TrimSpace(b.Note) && digestValue(a.Answers) == digestValue(b.Answers)
+	return a.DecisionID == b.DecisionID && a.RunID == b.RunID && a.SourceAttemptID == b.SourceAttemptID && a.ExpectedRecoveryVersion == b.ExpectedRecoveryVersion && strings.TrimSpace(a.OptionID) == strings.TrimSpace(b.OptionID) && strings.TrimSpace(a.Note) == strings.TrimSpace(b.Note) && digestValue(a.Answers) == digestValue(b.Answers)
 }
 
 func validateDecisionRequest(req *DecisionRequest) error {
@@ -236,7 +236,7 @@ func ReadDecisionAnswer(r *Run) (DecisionAnswer, error) {
 	if r.Decision.Status == "pending" {
 		return DecisionAnswer{}, errors.New("decision has no accepted answer")
 	}
-	a := DecisionAnswer{DecisionID: r.Decision.ID, RunID: r.RunID, OptionID: r.Decision.OptionID, Note: r.Decision.Note, Answers: r.Decision.Answers, AnsweredBy: r.Decision.AnsweredBy}
+	a := DecisionAnswer{DecisionID: r.Decision.ID, RunID: r.RunID, OptionID: r.Decision.OptionID, Note: r.Decision.Note, Answers: r.Decision.Answers, AnsweredBy: r.Decision.AnsweredBy, SourceAttemptID: r.Decision.SourceAttemptID, ExpectedRecoveryVersion: r.Decision.RecoveryVersion}
 	if r.Decision.AnsweredAt != nil {
 		a.AnsweredAt = *r.Decision.AnsweredAt
 	}
@@ -295,6 +295,7 @@ func SubmitAnswerDecision(ctx context.Context, c Config, runID, decisionID, opti
 		requestedBy = answererName()
 	}
 	answer := DecisionAnswer{DecisionID: decisionID, RunID: run.RunID, OptionID: strings.TrimSpace(optionID), Note: note, AnsweredBy: requestedBy, ExpectedDecisionVersion: expectedDecisionVersion, ExpectedRunRevision: expectedRunRevision, ServiceInstanceID: expectedInstance}
+	answer.SourceAttemptID, answer.ExpectedRecoveryVersion = run.AttemptID, run.RecoveryVersion
 	if run.Decision != nil && run.Decision.ID == decisionID && len(nativeDecisionQuestions(&run.Decision.Request)) > 0 {
 		if err := normalizeNativeDecisionAnswer(&run.Decision.Request, &answer); err != nil {
 			return CommandRecord{}, false, err
@@ -339,6 +340,9 @@ func SubmitAnswerDecision(ctx context.Context, c Config, runID, decisionID, opti
 	run = runtimeRunByID(snapshot, runID)
 	if run == nil {
 		return CommandRecord{}, false, fmt.Errorf("run %s not found", runID)
+	}
+	if run.AttemptID != answer.SourceAttemptID || run.RecoveryVersion != answer.ExpectedRecoveryVersion {
+		return CommandRecord{}, false, errors.New("stale_recovery: worker Attempt or recovery version changed; refresh before answering")
 	}
 	if expectedRunRevision == 0 {
 		expectedRunRevision = run.ControlRevision
@@ -523,6 +527,10 @@ func DecisionReplyEligibility(ctx context.Context, c Config, run *Run) error {
 	}
 	if run.WorkflowVersion != WorkerFlowVersion || !stableExecutionID(run.ExecutionID) || run.AttemptID == "" || run.Decision.AttemptID != run.AttemptID {
 		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "feedback does not belong to the fixed worker execution"}
+	}
+	if run.RecoveryRequired && (run.RecoveryState == "unverified" || run.RecoveryState == "" ||
+		run.RecoveryState == "interrupted" && run.Decision.Request.NativeAsk != nil) {
+		return &BackendError{Code: BackendUnsupported, Diagnostic: "original worker state or native question is not verified; wait for a recovery decision"}
 	}
 	if run.SessionID != nil && !codexThreadID.MatchString(*run.SessionID) {
 		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "saved worker session identity is invalid"}

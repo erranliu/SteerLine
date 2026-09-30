@@ -72,9 +72,9 @@ func snapshotOperation(snapshot *DomainSnapshot, id string) *OperationRecord {
 }
 
 // commitWorker declares the records owned by one fixed worker: its workflow,
-// execution, stable attempt, decisions, staged operation receipts and events.
+// execution, current attempt, declared decisions, operation receipts and events.
 // It never examines other workers or discovers writes through fingerprints.
-func (s *Service) commitWorker(run *Run) error {
+func (s *Service) commitWorker(run *Run, operationIDs ...string) error {
 	if run == nil || s.domainStore == nil {
 		return errors.New("worker commitment requires a run and store")
 	}
@@ -86,15 +86,42 @@ func (s *Service) commitWorker(run *Run) error {
 	}
 	request := workerCommit{Project: workflow.ProjectIdentity, TaskID: workflow.TaskID,
 		WorkflowID: workflow.WorkflowRunID, ExecutionID: execution.ExecutionID, AttemptID: attempt.AttemptID,
-		ControlRevision: before.ControlRevision,
-		Workflow:        &recordWrite[WorkflowRunRecord]{Before: before, After: *workflow},
-		Execution:       &recordWrite[ExecutionRecord]{Before: snapshotExecution(&s.committed, execution.ExecutionID), After: *execution},
-		Attempt:         &recordWrite[StepAttemptRecord]{Before: snapshotAttempt(&s.committed, attempt.AttemptID), After: *attempt},
-		Checkpoint:      runtimeCheckpoint(s.State)}
-	for _, decision := range s.domain.Decisions {
-		if decision.WorkflowRunID == run.RunID {
-			request.Decisions = append(request.Decisions, recordWrite[DecisionRecord]{Before: snapshotDecision(&s.committed, decision.DecisionID), After: decision})
+		ControlRevision:   before.ControlRevision,
+		AuthorityRevision: s.State.Control.Revision,
+		ExpectedAttemptID: attempt.AttemptID,
+		Workflow:          &recordWrite[WorkflowRunRecord]{Before: before, After: *workflow},
+		Execution:         &recordWrite[ExecutionRecord]{Before: snapshotExecution(&s.committed, execution.ExecutionID), After: *execution},
+		Attempt:           &recordWrite[StepAttemptRecord]{Before: snapshotAttempt(&s.committed, attempt.AttemptID), After: *attempt},
+		Checkpoint:        runtimeCheckpoint(s.State)}
+	previousExecution := snapshotExecution(&s.committed, execution.ExecutionID)
+	if previousExecution != nil && previousExecution.CurrentAttemptID != "" && previousExecution.CurrentAttemptID != attempt.AttemptID {
+		request.ExpectedAttemptID = previousExecution.CurrentAttemptID
+		retired := snapshotAttempt(&s.domain, previousExecution.CurrentAttemptID)
+		if retired == nil {
+			return errors.New("recovery lost the original Attempt")
 		}
+		request.RetiredAttempt = &recordWrite[StepAttemptRecord]{Before: snapshotAttempt(&s.committed, retired.AttemptID), After: *retired}
+	}
+	for _, decision := range s.domain.Decisions {
+		if decision.WorkflowRunID != run.RunID {
+			continue
+		}
+		before := snapshotDecision(&s.committed, decision.DecisionID)
+		if s.workerDecisionWrites[decision.DecisionID] {
+			request.Decisions = append(request.Decisions, recordWrite[DecisionRecord]{Before: before, After: decision})
+		} else if decision.DecisionID == execution.DecisionID && before != nil {
+			// Validate the durable answer read without adopting an undeclared candidate.
+			request.Decisions = append(request.Decisions, recordWrite[DecisionRecord]{Before: before, After: *before})
+		}
+	}
+	for _, id := range operationIDs {
+		if id == "" {
+			continue
+		}
+		if s.pendingOperations == nil {
+			s.pendingOperations = map[string]string{}
+		}
+		s.pendingOperations[id] = run.RunID
 	}
 	for id, owner := range s.pendingOperations {
 		if owner != run.RunID {
@@ -111,7 +138,10 @@ func (s *Service) commitWorker(run *Run) error {
 			request.Events = append(request.Events, event)
 		}
 	}
-	return s.commitDeclared(request)
+	if err := s.commitDeclared(request); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (s *Service) commitDeclared(request workerCommit) error {
@@ -141,10 +171,18 @@ func (s *Service) commitDeclared(request workerCommit) error {
 	if request.Execution != nil {
 		*snapshotExecution(&committed, request.ExecutionID) = request.Execution.After
 	}
-	if request.Attempt != nil {
-		*snapshotAttempt(&committed, request.AttemptID) = request.Attempt.After
+	for _, write := range []*recordWrite[StepAttemptRecord]{request.RetiredAttempt, request.Attempt} {
+		if write == nil {
+			continue
+		}
+		if old := snapshotAttempt(&committed, write.After.AttemptID); old != nil {
+			*old = write.After
+		} else {
+			committed.Attempts = append(committed.Attempts, write.After)
+		}
 	}
 	for _, write := range request.Decisions {
+		delete(s.workerDecisionWrites, write.After.DecisionID)
 		if old := snapshotDecision(&committed, write.After.DecisionID); old != nil {
 			*old = write.After
 		} else {

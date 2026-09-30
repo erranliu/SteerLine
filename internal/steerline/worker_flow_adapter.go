@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os/exec"
-
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
+	"os/exec"
+
 	"github.com/erranliu/SteerLine/internal/steerline/workerflow"
 )
 
@@ -96,6 +96,42 @@ func (s *Service) prepareSupervisedOrcaWorker(ctx context.Context, task TaskReco
 	return s.prepareWorkerWorkspace(ctx, task, run, true)
 }
 
+func (s *Service) startCodexWorkerTurn(ctx context.Context, run *Run, commandID, prompt, opID string) error {
+	fixed, err := s.workerFlowContext(run)
+	if err != nil {
+		return err
+	}
+	if s.workerMessages != nil {
+		copyRun, copyExecution, config := *run, *fixed.execution, fixed.config
+		if s.appServerLaunching == nil {
+			s.appServerLaunching = make(map[string]string)
+		}
+		s.appServerLaunching[run.RunID] = commandID
+		s.forwarders.Add(1)
+		go func() {
+			defer s.forwarders.Done()
+			s.launchAppServerTurn(s.runContext, config, copyRun, copyExecution, commandID, prompt, opID)
+		}()
+		return nil
+	}
+	persistThread := func() error {
+		execution := fixed.execution
+		if execution.Process == nil || execution.AppServerGeneration == "" {
+			return errors.New("app-server thread has no verified process generation")
+		}
+		ref := ExecutionRef{Version: ExecutionRecordVersion, Backend: BackendLocal, Protocol: ProtocolLocalCodexAppServer, Target: targetFor(fixed.config), Agent: agentFor(fixed.config), RunID: run.RunID, AttemptID: run.AttemptID, WorkspacePath: deref(run.WorktreePath), WorkspaceBranch: deref(run.WorktreeBranch), BaseCommit: deref(run.BaseCommit), External: *execution.Process, Generation: execution.AppServerGeneration}
+		if err := (executionRecords{root: fixed.config.RunDir}).saveBinding(ref); err != nil {
+			return err
+		}
+		return s.commitWorker(run)
+	}
+	worker, events, platformRequestID, err := startAppServerWorkerTurn(ctx, fixed.config, run, fixed.execution, commandID, prompt, persistThread)
+	if err != nil {
+		return s.failStartedWorkerTurn(run, opID, platformRequestID, err)
+	}
+	return s.acceptStartedWorkerTurn(run, worker, events, platformRequestID, opID, commandID, true)
+}
+
 func (s *Service) startNativeOrcaWorkerTurn(ctx context.Context, run *Run, turnID, prompt, opID string) error {
 	fixed, err := s.workerFlowContext(run)
 	if err != nil {
@@ -114,11 +150,11 @@ func (s *Service) startNativeOrcaWorkerTurn(ctx context.Context, run *Run, turnI
 	if current == nil {
 		return errors.New("native Orca turn has no accepted Dispatch identity")
 	}
-	if err := s.changeWorkerOperation(run, opID, "accepted", current.DispatchRequestID, mustJSON(*current), ""); err != nil {
+	if err := s.setOperationState(opID, "accepted", current.DispatchRequestID, mustJSON(*current), ""); err != nil {
 		return err
 	}
 	s.note(run, "steer", "worker", "accepted", "native Orca Dispatch input accepted", current.DispatchID, map[string]any{"task_id": current.TaskID, "turn_id": turnID})
-	return s.commitWorker(run)
+	return s.commitWorker(run, opID)
 }
 
 func (s *Service) startSupervisedOrcaWorkerTurn(ctx context.Context, run *Run, turnID, prompt, opID string) error {
@@ -134,7 +170,7 @@ func (s *Service) startSupervisedOrcaWorkerTurn(ctx context.Context, run *Run, t
 }
 
 func (s *Service) failStartedWorkerTurn(run *Run, opID, platformRequestID string, startErr error) error {
-	if err := s.stageWorkerOperation(run, opID, "outcome_unknown", platformRequestID, nil, startErr.Error()); err != nil {
+	if err := s.setOperationState(opID, "outcome_unknown", platformRequestID, nil, startErr.Error()); err != nil {
 		return err
 	}
 	fixed, err := s.workerFlowContext(run)
@@ -143,17 +179,16 @@ func (s *Service) failStartedWorkerTurn(run *Run, opID, platformRequestID string
 	}
 	fixed.execution.Status = "blocked"
 	s.refreshRun(run)
-	return s.waitWorkerFlow(run, "Original worker turn start is unverified: "+startErr.Error())
+	return s.waitWorkerFlow(run, "Original worker turn start is unverified: "+startErr.Error(), opID)
 }
 
-func (s *Service) acceptStartedWorkerTurn(run *Run, worker *Worker, events, platformRequestID, opID, commandID string, local bool) error {
+func (s *Service) acceptStartedWorkerTurn(run *Run, worker *Worker, events, platformRequestID, opID, commandID string, local bool) (retErr error) {
 	if worker == nil {
 		return errors.New("accepted worker turn has no observer")
 	}
-	registered := false
 	defer func() {
-		if !registered {
-			_ = worker.detachLocalObservation(context.Background())
+		if retErr != nil && worker.cancelObservation != nil {
+			worker.cancelObservation()
 		}
 	}()
 	fixed, err := s.workerFlowContext(run)
@@ -174,15 +209,14 @@ func (s *Service) acceptStartedWorkerTurn(run *Run, worker *Worker, events, plat
 		s.refreshRun(run)
 	}
 	attempt.Status, attempt.UpdatedAt = "dispatched", now()
-	if err := s.stageWorkerOperation(run, opID, "accepted", platformRequestID, mustJSON(identity), ""); err != nil {
+	if err := s.setOperationState(opID, "accepted", platformRequestID, mustJSON(identity), ""); err != nil {
 		return err
 	}
 	s.note(run, "steer", "worker", "accepted", "original worker turn accepted", commandID, map[string]any{"session_id": execution.SessionID, "turn_number": execution.TurnNumber + 1})
-	if err := s.commitWorker(run); err != nil {
+	if err := s.commitWorker(run, opID); err != nil {
 		return fmt.Errorf("worker started but its exact process receipt could not be saved: %w", err)
 	}
 	s.registerWorker(run, worker)
-	registered = true
 	return nil
 }
 
@@ -216,7 +250,13 @@ func requireWorkerFlowCapabilities(ctx context.Context, c Config) error {
 			return runner.Output(ctx, Command{Executable: executable, Args: args})
 		},
 		HistoryAvailable: func(ctx context.Context) bool { return nativeCodexHistoryAvailable(ctx, c) },
-		StartDetached:    func(cmd *exec.Cmd) error { _, err := startDetachedProcess(cmd); return err },
+		StartManaged: func(cmd *exec.Cmd) (func(), error) {
+			owned, err := startProcess(cmd)
+			if err != nil {
+				return nil, err
+			}
+			return owned.Close, nil
+		},
 	})
 	var unsupported *codexworker.ProbeError
 	if errors.As(err, &unsupported) {
@@ -284,14 +324,14 @@ func copyWorkerFlowConfig(c Config) Config {
 	return c
 }
 
-func (s *Service) deliverResumableWorkerFeedback(ctx context.Context, run *Run, execution *ExecutionRecord, answer DecisionAnswer, commandID string, mode workerflow.Mode) error {
+func (s *Service) deliverResumableWorkerFeedback(ctx context.Context, run *Run, execution *ExecutionRecord, answer DecisionAnswer, commandID string, route workerflow.Mode) error {
 	if execution.SessionID == "" || run.SessionID == nil || *run.SessionID != execution.SessionID {
 		execution.Error = ptr("Feedback is saved, but the original worker session is not yet available for delivery")
 		s.refreshRun(run)
 		return s.commitWorker(run)
 	}
 	if run.Decision.Request.NativeAsk != nil {
-		if mode != workerflow.LocalCodex {
+		if route != workerflow.LocalCodex {
 			return &BackendError{Code: BackendUnsupported, Diagnostic: "native Codex question belongs to a different worker feedback protocol"}
 		}
 		if s.workerMessages != nil && s.workers[run.RunID] == nil {

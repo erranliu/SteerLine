@@ -1,6 +1,7 @@
 package steerline
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -18,19 +19,22 @@ type recordWrite[T any] struct {
 // workerCommit is the bounded write set of one worker transition. Operations
 // and events may also be committed independently by their service owners.
 type workerCommit struct {
-	Project         string
-	TaskID          string
-	WorkflowID      string
-	ExecutionID     string
-	AttemptID       string
-	ControlRevision uint64
-	Workflow        *recordWrite[WorkflowRunRecord]
-	Execution       *recordWrite[ExecutionRecord]
-	Attempt         *recordWrite[StepAttemptRecord]
-	Decisions       []recordWrite[DecisionRecord]
-	Operations      []recordWrite[OperationRecord]
-	Events          []DomainEvent
-	Checkpoint      ServiceCheckpoint
+	Project           string
+	TaskID            string
+	WorkflowID        string
+	ExecutionID       string
+	AttemptID         string
+	ControlRevision   uint64
+	AuthorityRevision uint64
+	ExpectedAttemptID string
+	Workflow          *recordWrite[WorkflowRunRecord]
+	Execution         *recordWrite[ExecutionRecord]
+	Attempt           *recordWrite[StepAttemptRecord]
+	RetiredAttempt    *recordWrite[StepAttemptRecord]
+	Decisions         []recordWrite[DecisionRecord]
+	Operations        []recordWrite[OperationRecord]
+	Events            []DomainEvent
+	Checkpoint        ServiceCheckpoint
 }
 
 type workerCommitResult struct {
@@ -43,6 +47,16 @@ func (s *SQLiteStore) commitWorker(ctx context.Context, request workerCommit) (w
 	err := s.transactSQLite(ctx, func(tx *sqliteTx) error {
 		if request.Project == "" || request.Checkpoint.Repository.Identity != request.Project {
 			return errors.New("worker commit requires its fixed project")
+		}
+		if request.AuthorityRevision != 0 {
+			var revision uint64
+			if err := tx.tx.QueryRowContext(ctx, "SELECT authority_version FROM project_task_authorities WHERE project_identity=?", request.Project).Scan(&revision); err != nil {
+				return err
+			}
+			if revision != request.AuthorityRevision {
+				return nativeErr("stale_revision", "worker authority changed before commitment")
+			}
+
 		}
 		if request.WorkflowID != "" {
 			var task, execution, attempt string
@@ -62,7 +76,11 @@ func (s *SQLiteStore) commitWorker(ctx context.Context, request workerCommit) (w
 			if err := tx.tx.QueryRowContext(ctx, `SELECT attempt_id FROM step_attempts WHERE project_identity=? AND execution_id=? AND step_id='worker' ORDER BY attempt_number DESC LIMIT 1`, request.Project, request.ExecutionID).Scan(&attempt); err != nil {
 				return err
 			}
-			if attempt != request.AttemptID {
+			expected := request.ExpectedAttemptID
+			if expected == "" {
+				expected = request.AttemptID
+			}
+			if attempt != expected {
 				return nativeErr("stale_revision", "worker attempt changed before commitment")
 			}
 		}
@@ -94,8 +112,25 @@ func (s *SQLiteStore) commitWorker(ctx context.Context, request workerCommit) (w
 				return err
 			}
 		}
+		if v := request.RetiredAttempt; v != nil {
+			if v.Before == nil || v.After.AttemptID != request.ExpectedAttemptID || v.After.ExecutionID != request.ExecutionID ||
+				v.After.ProjectIdentity != request.Project || v.After.StepID != "worker" ||
+				request.Attempt == nil || request.Attempt.Before != nil || request.Attempt.After.AttemptNumber != v.Before.AttemptNumber+1 ||
+				request.Execution == nil || request.Execution.Before == nil || request.Execution.After.CurrentAttemptID != request.AttemptID ||
+				request.Execution.Before.Protocol != string(ProtocolLocalCodexAppServer) || !request.Execution.Before.RecoveryRequired ||
+				request.Execution.Before.RecoveryState != "interrupted" && request.Execution.Before.RecoveryState != "completed" ||
+				v.After.InputRevision != v.Before.InputRevision || v.After.ContractDigest != v.Before.ContractDigest ||
+				request.Attempt.After.InputRevision != v.Before.InputRevision || request.Attempt.After.ContractDigest != v.Before.ContractDigest ||
+				recordFingerprint(v.After.ExternalBinding) != recordFingerprint(v.Before.ExternalBinding) ||
+				!v.Before.CreatedAt.Equal(v.After.CreatedAt) || v.After.Status != "stopped" {
+				return errors.New("recovery must retire the original worker Attempt and create its next generation")
+			}
+			if err := checkRecordWrite(tx, "step_attempts", "attempt_id", request.Project, v.After.AttemptID, v.Before); err != nil {
+				return err
+			}
+		}
 		for _, v := range request.Decisions {
-			if v.After.ProjectIdentity != request.Project || v.After.WorkflowRunID != request.WorkflowID || v.After.ExecutionID != request.ExecutionID || v.After.AttemptID != request.AttemptID {
+			if v.After.ProjectIdentity != request.Project || v.After.WorkflowRunID != request.WorkflowID || v.After.ExecutionID != request.ExecutionID || v.After.AttemptID != request.AttemptID && (v.Before == nil || v.Before.AttemptID != v.After.AttemptID) {
 				return errors.New("worker decision write has a different binding")
 			}
 			if err := checkRecordWrite(tx, "decisions", "decision_id", request.Project, v.After.DecisionID, v.Before); err != nil {
@@ -124,6 +159,7 @@ func (s *SQLiteStore) commitWorker(ctx context.Context, request workerCommit) (w
 			if status != "in_progress" {
 				// Completed/discarded tasks may retain diagnostic and cleanup
 				// receipts, but cannot restart business work or replace evidence.
+
 				if v := request.Workflow; v != nil && recordWriteChanged(*v) {
 					return nativeErr("task_not_active", "worker workflow is frozen after task settlement")
 				}
@@ -145,6 +181,27 @@ func (s *SQLiteStore) commitWorker(ctx context.Context, request workerCommit) (w
 				}
 			}
 		}
+		for _, v := range request.Decisions {
+			if v.Before == nil {
+				continue
+			}
+			old, next := *v.Before, v.After
+			if old.WorkflowRunID != next.WorkflowRunID || old.ExecutionID != next.ExecutionID || old.AttemptID != next.AttemptID ||
+				old.Scope != next.Scope || old.QuestionID != next.QuestionID || !old.CreatedAt.Equal(next.CreatedAt) || !bytes.Equal(old.Request, next.Request) {
+				return errors.New("worker decision question identity and request are fixed")
+			}
+			if next.Version < old.Version || old.Status != next.Status && next.Version <= old.Version {
+				return errors.New("worker decision version cannot regress")
+			}
+			if old.Status != next.Status && !(old.Status == "pending" && (next.Status == "answer_saved" || next.Status == "superseded") ||
+				old.Status == "answer_saved" && (next.Status == "reply_accepted" || next.Status == "superseded" || next.Status == "applied")) {
+				return errors.New("worker decision status transition is not allowed")
+			}
+			if len(old.Answer) != 0 && (!bytes.Equal(old.Answer, next.Answer) || old.AnsweredBy != next.AnsweredBy) {
+				return errors.New("worker decision saved answer cannot be changed")
+			}
+		}
+
 		if v := request.Workflow; v != nil && recordWriteChanged(*v) {
 			if err := tx.PutWorkflowRun(v.After); err != nil {
 				return err
@@ -155,9 +212,11 @@ func (s *SQLiteStore) commitWorker(ctx context.Context, request workerCommit) (w
 				return err
 			}
 		}
-		if v := request.Attempt; v != nil && recordWriteChanged(*v) {
-			if err := tx.PutStepAttempt(v.After); err != nil {
-				return err
+		for _, v := range []*recordWrite[StepAttemptRecord]{request.RetiredAttempt, request.Attempt} {
+			if v != nil && recordWriteChanged(*v) {
+				if err := tx.PutStepAttempt(v.After); err != nil {
+					return err
+				}
 			}
 		}
 		for _, v := range request.Decisions {
@@ -180,7 +239,7 @@ func (s *SQLiteStore) commitWorker(ctx context.Context, request workerCommit) (w
 			}
 		}
 		for _, event := range request.Events {
-			if event.ProjectIdentity != request.Project || request.WorkflowID != "" && event.WorkflowRunID != request.WorkflowID {
+			if event.ProjectIdentity != request.Project || request.WorkflowID != "" && (event.WorkflowRunID != request.WorkflowID || event.TaskID != request.TaskID || event.ExecutionID != request.ExecutionID || event.AttemptID != "" && event.AttemptID != request.AttemptID && event.AttemptID != request.ExpectedAttemptID) {
 				return errors.New("worker event has a different binding")
 			}
 			if _, err := tx.AppendEvent(event); err != nil {

@@ -1,5 +1,7 @@
 # Spec：本机 Codex app-server 执行迁移
 
+适用说明（2026-09-30）：服务退出后 worker 必须独立存活、重开自动接续旧输入的规定已由[停服恢复 Spec](worker-service-recovery.spec.md)替代。下文 2026-09-29 的 A/B 验收保留为当时宿主的历史事实；本机受限 Job 的新闭环见[本次验证](../validation/worker-service-recovery/README.md)。
+
 状态：实现及 A/B/C 验收已完成；仅定向 Go race detector 因当前工具链限制留待补验。配套 [Plan](local-codex-app-server.plan.md)。
 
 ## 1. 范围与依据

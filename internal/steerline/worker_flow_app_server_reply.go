@@ -61,11 +61,11 @@ func (s *Service) replyAppServerAsk(ctx context.Context, run *Run, execution *Ex
 		s.refreshRun(run)
 		return s.commitWorker(run)
 	}
-	if err := s.stageWorkerOperation(run, opID, "accepted", ask.CallID, mustJSON(map[string]any{"request_id": ask.RequestID, "call_id": ask.CallID, "sent_at": now()}), ""); err != nil {
+	if err := s.setOperationState(opID, "accepted", ask.CallID, mustJSON(map[string]any{"request_id": ask.RequestID, "call_id": ask.CallID, "sent_at": now()}), ""); err != nil {
 		return err
 	}
 	s.note(run, "steer", "decision", "reply_sent", "answer sent to the original Codex tool request", ask.CallID, nil)
-	return s.commitWorker(run)
+	return s.commitWorker(run, opID)
 }
 
 func sendAppServerAskReply(ctx context.Context, endpoint, workspace string, ask codexAskCall, answers map[string][]string) error {
@@ -101,11 +101,11 @@ func (s *Service) handleAppServerReplyMessage(runID string, message *appServerRe
 			s.refreshRun(run)
 			return s.commitWorker(run)
 		}
-		if err := s.stageWorkerOperation(run, message.opID, "accepted", message.callID, mustJSON(map[string]any{"call_id": message.callID, "sent_at": now()}), ""); err != nil {
+		if err := s.setOperationState(message.opID, "accepted", message.callID, mustJSON(map[string]any{"call_id": message.callID, "sent_at": now()}), ""); err != nil {
 			return err
 		}
 		s.note(run, "steer", "decision", "reply_sent", "answer sent to the original Codex tool request", message.callID, nil)
-		return s.commitWorker(run)
+		return s.commitWorker(run, message.opID)
 	}
 	return errors.New("original Codex question reply operation disappeared")
 }

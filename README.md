@@ -4,7 +4,7 @@ SteerLine 是一款面向工程 AGI 的研究型软件开发工具。它以 road
 
 长期目标是让 AI 能自主完成普通人需要长期借助 AI 才能开发的复杂软件项目。项目目前尚未发布。
 
-[产品愿景](docs/roadmap/product-vision.md) · [当前 Roadmap](docs/roadmap/roadmap.md)
+[产品愿景](docs/roadmap/product-vision.md) · [当前 Roadmap](docs/roadmap/roadmap.md) · [当前代码架构图](docs/architecture/current-code-architecture.md)
 
 ## 构建
 

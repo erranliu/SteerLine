@@ -4,7 +4,7 @@ SteerLine 尚未发布。当前生产配置必须显式设置 `"task_authority":
 
 ## 权威与身份
 
-SQLite schema 5 是 Task、固定 TaskContract、依赖、WorkflowRun、Execution、Decision、Operation、会话事件与 TaskDelivery 的唯一业务权威。现有 v3/v4 库只通过只读元数据检查识别并拒绝，不自动升级，也不开放业务读取；拒绝时保留数据库文件与可能仍在运行的外部执行。运行时投影为 schema 7，可在当前格式内重启恢复。旧投影、旧 WorkflowRun 或旧本地执行协议在工作区准备之前拒绝，并保留原文件及可能仍在运行的外部执行。
+SQLite schema 7 是 Task、固定 TaskContract、依赖、WorkflowRun、Execution、Attempt、Decision、Operation、会话事件与 TaskDelivery 的唯一业务权威。旧 schema 只通过只读元数据检查识别并拒绝，不自动升级，也不开放业务读取；拒绝时保留数据库文件与可能仍在运行的外部执行。运行时投影为 schema 9。旧投影、旧 WorkflowRun 或旧本地执行协议在工作区准备之前拒绝，并保留原文件及可能仍在运行的外部执行。
 
 服务与会话检查点也保存在 SQLite；检查点不复制 Task、WorkflowRun、Execution、Attempt、Decision 或 Operation 行。连接观察只读检查点，恢复和命令在同一只读事务中把检查点与领域表组合。当前配置不使用 `runtime_file`，服务不导出 `runtime.json`。
 
@@ -20,13 +20,13 @@ TaskContract 固定目标仓库、remote、base 分支以及 Spec、Plan 和其�
 
 Task 的 `discarded` 是独立终态，不伪装成 Decision 或完成。连接、进程、回执不明和清理待办保存在 Operation、Execution 与事件中，不增设第二套可写主阶段。
 
-Execution 绑定后端目标、工作区、分支、base、当前／待开始／已停下 turn ID、独立的 Command ID 及 turn 序号。local Codex 的附加身份为原生 thread ID 和 app-server 进程代次，协议为 `local_codex_app_server_v1`。本机 Orca 的附加身份为原生 agent terminal/incarnation、coordinator、Run 和每轮 Task/Dispatch，协议为 `orca_terminal_v2`；agent 由 Orca 按 Profile ID 启动。反馈只推进 turn 和消息身份，不替换 Execution、worker attempt 或会话。受监管远端仍未接入 worker-flow。
+Execution 绑定后端目标、工作区、分支、base、当前／待开始／已停下 turn ID、独立的 Command ID 及 turn 序号，还保存当前 Attempt 指针、服务实例归属、恢复门槛、版本和核验状态。local Codex 的附加身份为原生 thread ID 和 app-server 进程代次，协议为 `local_codex_app_server_v1`。本机 Orca 的附加身份为原生 agent terminal/incarnation、coordinator、Run 和每轮 Task/Dispatch，协议为 `orca_terminal_v2`；agent 由 Orca 按 Profile ID 启动。普通反馈只推进 turn 和消息身份；确认旧 worker 终止后的人工继续可在同一 Execution 中建立下一 Attempt，旧 Attempt 保留原进程和会话身份。受监管远端仍未接入 worker-flow。
 
 ## 工作区与消息
 
 初始工作区在外部创建前保存固定意图。local 路径使用固定 Git worktree 和原生 Codex session；本机 Orca 路径由 Orca 创建 worktree 和 agent terminal，再以新 Task/Dispatch 延续同一 terminal。重启核对原身份，不能按同名标题或路径推断替代会话。工作开始后，中心不会因反馈、dirty 文件、项目检查结果或 PR 出现而 reset、清理或改写 worker 的提交。
 
-每次反馈有固定 Command ID 和 Operation。答案先在 SQLite 保存。local 运行中问题用原 app-server 工具请求 ID 回复，结束后反馈在原 thread 调用 `turn/start`；本机 Orca 运行中问题按原 message ID `reply`，活动补充向原 Dispatch `send`，结算后反馈在原 terminal 上创建新 Task/Dispatch。平台接受回执不等于 agent 已处理。local 通知写入每轮 `appserver.jsonl`，完整正文由原生会话历史补读；Orca 输出按 worker-read 的 source、cursor 和 clipping 展示。回执不明时不更换 ID 重发。详见 [决策与反馈](decisions.md)。
+每次反馈有固定 Command ID 和 Operation。答案先在 SQLite 保存。local 运行中问题用仍有效的 app-server 工具请求 ID 回复，结束后反馈在原 thread 调用 `turn/start`；本机 Orca 运行中问题按原 message ID `reply`，活动补充向原 Dispatch `send`，结算后反馈在原 terminal 上创建新 Task/Dispatch。服务重开先核验旧执行和回执，旧的未送达输入不自动投递；用户须在统一 Decision 入口重新确认。已终止的 local worker 经核实后可用新受管进程和新 Attempt 恢复原 thread，明确选择后也可开新会话。平台接受回执不等于 agent 已处理。local 通知写入每轮 `appserver.jsonl`，完整正文由原生会话历史补读；Orca 输出按 worker-read 的 source、cursor 和 clipping 展示。回执不明时不更换 ID 重发。详见 [决策与反馈](decisions.md)和[停服恢复 Spec](spec/worker-service-recovery.spec.md)。
 
 人工模式允许不同 Task 分别领取；自动模式仍一次占用一个活动执行。暂停派发只限制新领取，不中断当前 worker、待决策反馈或 PR 核验。
 

@@ -20,7 +20,7 @@ type ProbeConfig struct {
 type ProbePort struct {
 	Output           func(context.Context, string, []string) ([]byte, error)
 	HistoryAvailable func(context.Context) bool
-	StartDetached    func(*exec.Cmd) error
+	StartManaged     func(*exec.Cmd) (func(), error)
 }
 
 type ProbeError struct {
@@ -48,7 +48,7 @@ func ProbeCapabilities(ctx context.Context, config ProbeConfig, port ProbePort) 
 	if !port.HistoryAvailable(ctx) {
 		return &ProbeError{Diagnostic: "configured Codex session history cannot be read for exact turn reconciliation"}
 	}
-	probeFile, err := os.CreateTemp(config.RunDir, "worker-detach-probe-*.log")
+	probeFile, err := os.CreateTemp(config.RunDir, "worker-process-probe-*.log")
 	if err != nil {
 		return err
 	}
@@ -56,11 +56,13 @@ func ProbeCapabilities(ctx context.Context, config ProbeConfig, port ProbePort) 
 	defer probeFile.Close()
 	process := exec.CommandContext(ctx, nativeExecutable, append(append([]string(nil), config.Args...), "--version")...)
 	process.Dir, process.Stdout, process.Stderr = config.Repository, probeFile, probeFile
-	if err := port.StartDetached(process); err != nil {
-		return &ProbeError{Diagnostic: "local host cannot retain a worker process when the center stops", Cause: err}
+	closeOwned, err := port.StartManaged(process)
+	if err != nil {
+		return &ProbeError{Diagnostic: "local host cannot start an owned Codex worker process", Cause: err}
 	}
+	defer closeOwned()
 	if err := process.Wait(); err != nil {
-		return &ProbeError{Diagnostic: "detached Codex capability probe failed", Cause: err}
+		return &ProbeError{Diagnostic: "owned Codex capability probe failed", Cause: err}
 	}
 	return nil
 }

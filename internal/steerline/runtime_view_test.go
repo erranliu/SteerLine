@@ -142,8 +142,28 @@ func TestRuntimeViewRejectsInvalidWorkerAttempts(t *testing.T) {
 		for i := 0; i < count; i++ {
 			state.Attempts = append(state.Attempts, StepAttemptRecord{ExecutionID: run.ExecutionID, StepID: "worker", AttemptID: newID(), AttemptNumber: i + 1})
 		}
-		if err := projectRuntime(&state); err == nil || !strings.Contains(err.Error(), "exactly one stable worker attempt") {
+		if err := projectRuntime(&state); err == nil {
 			t.Fatalf("accepted %d worker attempts: %v", count, err)
 		}
+	}
+}
+
+func TestWorkerCommitPreservesExternallyAcceptedDecision(t *testing.T) {
+	service, run := waitingDecisionService(t)
+	ctx := context.Background()
+	commands := CommandService{Store: service.domainStore, Project: service.Config.Identity()}
+	answer := DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, Note: "keep this answer", AnsweredBy: "operator", ExpectedDecisionVersion: run.Decision.Version, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: service.State.Service.InstanceID}
+	command, _, err := commands.AnswerDecision(ctx, answer.DecisionID, answer.ExpectedDecisionVersion, newID(), answer.AnsweredBy, mustJSON(answer))
+	require(t, err)
+	_, _, err = commands.AcceptAnswer(ctx, command, answer)
+	require(t, err)
+	service.executionRecord(run).LastEvent = ptr("actor diagnostic after external answer")
+	if err := service.commitWorker(run); !isNativeErrorCode(err, "stale_revision") {
+		t.Fatalf("stale worker actor did not stop before overwriting the answer: %v", err)
+	}
+	loaded, err := LoadDatabaseRuntime(service.Config)
+	require(t, err)
+	if loaded.Runs[0].Decision.Status != "answer_saved" || loaded.Runs[0].Decision.Note != answer.Note {
+		t.Fatal("worker commit overwrote the externally saved answer")
 	}
 }

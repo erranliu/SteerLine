@@ -369,6 +369,20 @@ func fakeMain(args []string) int {
 	case "sleep":
 		time.Sleep(time.Hour)
 		return 0
+	case "spawn-owned-child":
+		if len(args) != 2 {
+			return 2
+		}
+		child := exec.Command(os.Args[0], "--fake", "sleep")
+		if err := child.Start(); err != nil {
+			return 1
+		}
+		if err := os.WriteFile(args[1], []byte(fmt.Sprint(child.Process.Pid)), 0600); err != nil {
+			_ = child.Process.Kill()
+			return 1
+		}
+		time.Sleep(time.Hour)
+		return 0
 	}
 	return 2
 }

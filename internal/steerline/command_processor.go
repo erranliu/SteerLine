@@ -8,13 +8,6 @@ import (
 )
 
 func (s *Service) processPendingCommands(ctx context.Context) error {
-	return s.processPendingCommandsTracked(ctx, nil)
-}
-
-// processPendingCommandsTracked reports whether a service-owned command was
-// processed. The scheduler uses this to avoid publishing an unchanged runtime
-// on every control poll.
-func (s *Service) processPendingCommandsTracked(ctx context.Context, processed *bool) error {
 	if s.domainStore == nil {
 		return nil
 	}
@@ -29,14 +22,20 @@ func (s *Service) processPendingCommandsTracked(ctx context.Context, processed *
 			if err := ctx.Err(); err != nil {
 				return err
 			}
+			if run := s.findDecision(command.TargetID); run != nil {
+				if execution := s.executionRecord(run); execution != nil && execution.RecoveryRequired && execution.RecoveryMarkedAt != nil && !command.CreatedAt.After(*execution.RecoveryMarkedAt) {
+					result, _ := json.Marshal(map[string]string{"code": "stale_recovery", "error": "saved input predates service recovery; submit a new decision after reviewing the worker state"})
+					if err := service.SetStatus(ctx, command, "rejected", result); err != nil {
+						return err
+					}
+					continue
+				}
+			}
 			if command.Kind != "answer_decision" {
 				if validServiceCommandKind(command.Kind) {
 					return nativeErr("unsupported_schema", "saved command uses a retired recovery action; preserve its state for manual recovery")
 				}
 				continue
-			}
-			if processed != nil {
-				*processed = true
 			}
 			var answer DecisionAnswer
 			if err = decode(command.Payload, &answer); err != nil {
@@ -46,11 +45,32 @@ func (s *Service) processPendingCommandsTracked(ctx context.Context, processed *
 				}
 				continue
 			}
+			if run := s.findDecision(command.TargetID); run != nil {
+				if execution := s.executionRecord(run); execution != nil && execution.RecoveryRequired &&
+					(answer.SourceAttemptID != run.AttemptID || answer.ExpectedRecoveryVersion != execution.RecoveryVersion) {
+					result, _ := json.Marshal(map[string]string{"code": "stale_recovery", "error": "worker Attempt or recovery version changed; refresh before answering"})
+					if err := service.SetStatus(ctx, command, "rejected", result); err != nil {
+						return err
+					}
+					continue
+				}
+			}
 			if command.Status == "pending" {
 				if err = service.SetStatus(ctx, command, "in_flight", nil); err != nil {
 					return err
 				}
 				command.Status = "in_flight"
+			}
+			if run := s.findDecision(command.TargetID); run != nil {
+				if execution := s.executionRecord(run); execution != nil && execution.RecoveryRequired &&
+					(execution.RecoveryState == "unverified" || execution.RecoveryState == "" ||
+						execution.RecoveryState == "interrupted" && run.Decision.Request.NativeAsk != nil) {
+					result, _ := json.Marshal(map[string]string{"code": "recovery_unverified", "error": "the original worker or request is not verified for this answer; review the recovery decision"})
+					if err := service.SetStatus(ctx, command, "rejected", result); err != nil {
+						return err
+					}
+					continue
+				}
 			}
 			if run := s.findDecision(command.TargetID); run != nil && run.Decision != nil && run.Decision.Status == "pending" {
 				if err = s.requireDecisionReplyCapability(ctx, run); err != nil {
@@ -83,11 +103,14 @@ func (s *Service) processPendingCommandsTracked(ctx context.Context, processed *
 				if record.WorkflowRunID != run.RunID || record.ExecutionID != run.ExecutionID || record.AttemptID != run.Decision.AttemptID {
 					return fmt.Errorf("accepted decision %s no longer matches the runtime identity", command.TargetID)
 				}
-				*s.decisionRecord(run) = record
 				if err := s.refreshNativeSnapshot(ctx); err != nil {
 					return err
 				}
-				s.refreshRun(run)
+				run = s.findDecision(command.TargetID)
+				if run == nil {
+					return errors.New("accepted decision disappeared from its committed execution")
+				}
+				delete(s.workerDecisionWrites, record.DecisionID)
 				s.note(run, "steer", "decision", "answer_saved", "decision answer saved", decisionAnswerSummary(run), decisionAnswerMeta(run))
 				if err = s.commitWorker(run); err != nil {
 					return err

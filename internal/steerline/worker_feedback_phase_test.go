@@ -12,11 +12,15 @@ func TestWorkerFeedbackPhaseCommitIsDurableAndRejectsStaleActor(t *testing.T) {
 	ctx := context.Background()
 	workflow, execution := service.workflowRecords(run)
 	workflow.Phase, workflow.PRURL, workflow.PRState = "waiting_pr_merge", "https://git.example/org/repo/pulls/8", "open"
+	require(t, service.commitWorker(run))
 	decision := service.decisionRecord(run)
 	answer := DecisionAnswer{DecisionID: decision.DecisionID, RunID: run.RunID, Note: "continue", AnsweredBy: "operator", AnsweredAt: now(), ExpectedDecisionVersion: decision.Version, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: service.State.Service.InstanceID}
-	decision.Answer, decision.AnsweredBy, decision.Status, decision.UpdatedAt = mustJSON(answer), answer.AnsweredBy, "answer_saved", now()
-	decision.Version++
-	require(t, service.commitWorker(run))
+	commands := CommandService{Store: service.domainStore, Project: service.Config.identity}
+	command, _, err := commands.AnswerDecisionWithID(ctx, newID(), decision.DecisionID, decision.Version, decisionAnswerKey(answer), answer.AnsweredBy, mustJSON(answer))
+	require(t, err)
+	_, _, err = commands.AcceptAnswer(ctx, command, answer)
+	require(t, err)
+	require(t, service.refreshNativeSnapshot(ctx))
 	workflow, execution = service.workflowRecords(run)
 	decision = service.decisionRecord(run)
 	expectedWorkflow, expectedExecution, expectedDecision := *workflow, *execution, *decision

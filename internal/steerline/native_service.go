@@ -36,6 +36,8 @@ func (s *Service) refreshNativeSnapshot(ctx context.Context) error {
 		return err
 	}
 	s.domain = snapshot
+	s.workerDecisionWrites = nil
+	s.pendingOperations = nil
 	var copyErr error
 	s.committed, copyErr = copyDomainSnapshot(snapshot)
 	if copyErr != nil {
@@ -570,7 +572,7 @@ func (s *Service) dispatchNative(ctx context.Context) error {
 		if s.reservedRunID != "" {
 			workflowRunID = s.reservedRunID
 		}
-		receipt, claimErr := (CommandService{Store: s.domainStore, Project: c.identity}).ClaimNativeTask(ctx, c, TaskClaimOptions{TaskID: task.TaskID, RequestID: requestID, ExpectedTaskVersion: task.Version, ExpectedAuthorityVersion: authority.AuthorityVersion, RequestedBy: c.Claimant, Explicit: s.explicitDispatch, WorkflowRunID: workflowRunID, ExecutionProfile: s.dispatchProfile})
+		receipt, claimErr := (CommandService{Store: s.domainStore, Project: c.identity}).ClaimNativeTask(ctx, c, TaskClaimOptions{TaskID: task.TaskID, RequestID: requestID, ExpectedTaskVersion: task.Version, ExpectedAuthorityVersion: authority.AuthorityVersion, RequestedBy: c.Claimant, Explicit: s.explicitDispatch, WorkflowRunID: workflowRunID, ExecutionProfile: s.dispatchProfile, ServiceInstanceID: s.State.Service.InstanceID})
 		if claimErr != nil {
 			if isNativeErrorCode(claimErr, "task_not_ready", "stale_version", "slot_busy", "dispatch_paused", "wrong_mode", "task_discarded") {
 				if s.targetTask != "" {
@@ -604,6 +606,7 @@ func (s *Service) dispatchNative(ctx context.Context) error {
 			execution.Target.Branch = intent.Branch
 		}
 		execution.UpdatedAt = now()
+		execution.OwnerServiceInstanceID = s.State.Service.InstanceID
 		workflow.UpdatedAt = now()
 		attempt.ExternalBinding = execution.Target
 		attempt.UpdatedAt = now()
