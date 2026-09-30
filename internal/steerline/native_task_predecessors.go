@@ -28,8 +28,8 @@ func validateNativePredecessorAddition(graph taskGraphSnapshot, taskID string, p
 
 func (c CommandService) AddNativeTaskPredecessors(ctx context.Context, config Config, input TaskPredecessorAddInput) (TaskPredecessorAddReceipt, error) {
 	var empty TaskPredecessorAddReceipt
-	store, ok := c.Store.(*SQLiteStore)
-	if !ok || c.Project == "" || c.Project != config.Identity() || config.TaskAuthority != "native" {
+	store := c.Store
+	if store == nil || c.Project == "" || c.Project != config.Identity() || config.TaskAuthority != "native" {
 		return empty, nativeErr("authority_mismatch", "predecessor addition requires the configured native project")
 	}
 	if err := ValidateNativeTaskID(input.TaskID); err != nil {

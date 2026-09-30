@@ -36,7 +36,7 @@ type taskDiscardPlan struct {
 }
 
 func (c CommandService) DiscardNativeTask(ctx context.Context, config Config, taskID, requestID string, expectedVersion uint64, reason, requestedBy string) (TaskDiscardReceipt, error) {
-	if _, ok := c.Store.(*SQLiteStore); !ok || c.Project == "" || config.Identity() != c.Project {
+	if c.Store == nil || c.Project == "" || config.Identity() != c.Project {
 		return TaskDiscardReceipt{}, nativeErr("authority_mismatch", "discard requires the configured native project")
 	}
 	if err := ValidateNativeTaskID(taskID); err != nil {
@@ -52,7 +52,7 @@ func (c CommandService) DiscardNativeTask(ctx context.Context, config Config, ta
 	if len(reason) > 4000 {
 		return TaskDiscardReceipt{}, nativeErr("immutable_task", "discard reason exceeds 4000 bytes")
 	}
-	sqlite := c.Store.(*SQLiteStore)
+	sqlite := c.Store
 	request := struct {
 		TaskID          string `json:"task_id"`
 		ExpectedVersion uint64 `json:"expected_version"`

@@ -71,8 +71,8 @@ func (c CommandService) CreateTaskBatch(ctx context.Context, config Config, data
 	if err != nil {
 		return TaskBatchReceipt{}, err
 	}
-	sqlite, ok := c.Store.(*SQLiteStore)
-	if !ok || c.Project == "" || config.Identity() != c.Project || batch.ProjectID != c.Project {
+	sqlite := c.Store
+	if sqlite == nil || c.Project == "" || config.Identity() != c.Project || batch.ProjectID != c.Project {
 		return TaskBatchReceipt{}, nativeErr("authority_mismatch", "batch project_id, command target and configured project must match")
 	}
 	if !controlIDPattern.MatchString(requestID) || expectedAuthorityVersion == 0 {

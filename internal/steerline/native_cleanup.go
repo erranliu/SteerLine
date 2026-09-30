@@ -48,8 +48,8 @@ type NativeWorkspaceCleanupReceipt struct {
 // RecordNativeCleanupReceipt settles one exact cleanup item from a discarded
 // native task. It never changes task identity, discarded status, or readiness.
 func (c CommandService) RecordNativeCleanupReceipt(ctx context.Context, taskID, requestID string, expectedVersion uint64, cleanupItem, requestedBy string, receipt json.RawMessage) (TaskRecord, error) {
-	sqlite, ok := c.Store.(*SQLiteStore)
-	if !ok || c.Project == "" || !controlIDPattern.MatchString(requestID) || expectedVersion == 0 || cleanupItem == "" || !json.Valid(receipt) {
+	sqlite := c.Store
+	if sqlite == nil || c.Project == "" || !controlIDPattern.MatchString(requestID) || expectedVersion == 0 || cleanupItem == "" || !json.Valid(receipt) {
 		return TaskRecord{}, nativeErr("contract_mismatch", "native cleanup receipt requires project, request, version, cleanup identity and JSON evidence")
 	}
 	if err := ValidateNativeTaskID(taskID); err != nil {
