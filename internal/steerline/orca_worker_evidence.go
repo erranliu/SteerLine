@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	remote "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker"
 	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
 
@@ -34,15 +35,9 @@ func readNativeOrcaDelivery(ctx context.Context, c Config, execution *ExecutionR
 		value, err := client.Check(ctx, remoteWorkerRef(ref))
 		return nativeOrcaDeliveryFact{DeliveryID: value.ID, Messages: value.Messages}, remoteWorkerError(err)
 	}
-	delivery, err := orcaworker.CheckInbox(ctx, orcaWorkerMetaCaller(c), execution.OrcaNative.Coordinator.Terminal, execution.Target.OrchestrationRun)
+	delivery, err := orcaworker.ReadDelivery(ctx, orcaWorkerMetaCaller(c), execution.OrcaNative.Coordinator.Terminal, execution.OrcaNative.Coordinator.RuntimeID, execution.Target.OrchestrationRun)
 	if err != nil {
 		return fact, err
-	}
-	if delivery.RuntimeID != execution.OrcaNative.Coordinator.RuntimeID {
-		return fact, errors.New("Orca coordinator runtime changed")
-	}
-	if delivery.RunID != execution.Target.OrchestrationRun || delivery.ConnectionLost || len(delivery.Messages) > 0 && delivery.DeliveryID == "" {
-		return fact, errors.New("Orca inbox delivery identity is unverified")
 	}
 	fact.DeliveryID, fact.Messages = delivery.DeliveryID, delivery.Messages
 	return fact, nil
@@ -87,21 +82,15 @@ func readNativeOrcaSettlement(ctx context.Context, c Config, execution *Executio
 		value, err := remoteClientForExecution(c, execution).Settlement(ctx, remoteWorkerRef(ref), turn.Outcome)
 		return nativeOrcaSettlement{Outcome: value, DispatchID: turn.DispatchID, RuntimeID: execution.Process.CoordinatorRuntimeID}, remoteWorkerError(err)
 	}
-	status, err := orcaworker.VerifySettledDispatch(ctx, orcaWorkerMetaCaller(c), orcaworker.DispatchIdentity{
+	outcome, err := orcaworker.Settlement(ctx, orcaWorkerMetaCaller(c), orcaworker.DispatchIdentity{
 		DispatchID: turn.DispatchID, TaskID: turn.TaskID, RunID: execution.Target.OrchestrationRun,
 		RuntimeID: execution.OrcaNative.Coordinator.RuntimeID, Terminal: execution.Process.Terminal,
 		Incarnation: execution.Process.Incarnation, WorktreeID: execution.Process.WorktreeID,
-	})
+	}, turn.Outcome)
 	if err != nil {
 		return fact, err
 	}
-	if turn.Outcome == "succeeded" && status != "completed" || turn.Outcome == "failed" && status != "failed" {
-		return fact, errors.New("Orca worker_done and Dispatch settlement disagree")
-	}
-	if turn.Outcome != "succeeded" && turn.Outcome != "failed" {
-		return fact, errors.New("Orca worker_done has no verified outcome")
-	}
-	fact.Outcome, fact.DispatchID, fact.RuntimeID = turn.Outcome, turn.DispatchID, execution.OrcaNative.Coordinator.RuntimeID
+	fact.Outcome, fact.DispatchID, fact.RuntimeID = outcome, turn.DispatchID, execution.OrcaNative.Coordinator.RuntimeID
 	return fact, nil
 }
 
@@ -110,7 +99,7 @@ func verifyNativeOrcaActiveDispatch(ctx context.Context, c Config, execution *Ex
 		return errors.New("stopped-center Orca Dispatch has no fixed identity")
 	}
 	if c.hostName() == "orca_supervised" {
-		value, err := (orcaSupervisedBackend{config: c}).Observe(ctx, executionapi.ExecutionRef{Backend: executionapi.BackendOrca, Protocol: executionapi.ProtocolOrcaSupervised, Target: execution.Target, External: *execution.Process})
+		value, err := (remote.NewBackend(remoteWorkerConfig(c))).Observe(ctx, executionapi.ExecutionRef{Backend: executionapi.BackendOrca, Protocol: executionapi.ProtocolOrcaSupervised, Target: execution.Target, External: *execution.Process})
 		if err != nil {
 			return err
 		}
@@ -119,18 +108,5 @@ func verifyNativeOrcaActiveDispatch(ctx context.Context, c Config, execution *Ex
 		}
 		return nil
 	}
-	status, err := orcaworker.VerifyActiveDispatch(ctx, orcaWorkerMetaCaller(c), orcaworker.DispatchIdentity{
-		DispatchID: turn.DispatchID, TaskID: turn.TaskID, RunID: execution.Target.OrchestrationRun,
-		RuntimeID: execution.Process.RuntimeID, Terminal: execution.Process.Terminal,
-	})
-	if errors.Is(err, orcaworker.ErrActiveDispatchIdentity) {
-		return errors.New("stopped-center Orca Dispatch could not be verified as still active")
-	}
-	if err != nil {
-		return err
-	}
-	if status != "dispatched" {
-		return errors.New("stopped-center Orca Dispatch could not be verified as still active")
-	}
-	return nil
+	return orcaworker.VerifyLiveDispatch(ctx, orcaWorkerMetaCaller(c), orcaworker.DispatchIdentity{DispatchID: turn.DispatchID, TaskID: turn.TaskID, RunID: execution.Target.OrchestrationRun, RuntimeID: execution.Process.RuntimeID, Terminal: execution.Process.Terminal})
 }

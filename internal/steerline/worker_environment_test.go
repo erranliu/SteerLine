@@ -120,6 +120,9 @@ func TestWorkerEnvironmentER1ProbeAndSettlementGate(t *testing.T) {
 		t.Run(mode, func(t *testing.T) {
 			f := newEnvironmentFixture(t, fakeNativeOrcaState{ReadinessMode: mode}, "")
 			f.prepare(t)
+			if execution := f.service.executionRecord(f.run); execution.OrcaNative == nil {
+				t.Fatalf("resource preparation did not bind the native worker: %+v", execution.Environment.Blocker)
+			}
 			f.poll(t)
 			wf, e := f.service.workflowRecords(f.run)
 			state := f.state(t)

@@ -3,8 +3,6 @@ package steerline
 import (
 	"context"
 	"errors"
-	"path/filepath"
-	"strings"
 
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
@@ -13,19 +11,6 @@ import (
 func showWorkerOrcaTerminal(ctx context.Context, c Config, handle string) (orcaTerminal, error) {
 	terminal, err := orcaworker.ShowTerminal(ctx, orcaWorkerMetaCaller(c), handle)
 	return terminal, workerOrcaBackendError(err)
-}
-
-func verifyWorkerOrcaTerminal(term orcaTerminal, run *Run) error {
-	if run == nil || run.WorktreePath == nil || run.WorktreeBranch == nil || term.Handle == "" || term.RuntimeID == "" || term.IncarnationID == "" ||
-		canonical(filepath.FromSlash(term.WorktreePath)) != canonical(*run.WorktreePath) ||
-		strings.TrimPrefix(term.Branch, "refs/heads/") != *run.WorktreeBranch {
-		return &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "Orca terminal changed the fixed worker workspace or branch"}
-	}
-	return nil
-}
-
-func workerOrcaIdentity(term orcaTerminal, c Config) executionapi.ProcessIdentity {
-	return executionapi.ProcessIdentity{Kind: "orca", Terminal: term.Handle, RuntimeID: term.RuntimeID, Incarnation: term.IncarnationID, Executable: c.Orca.Executable}
 }
 
 func workerOrcaTerminalIdentity(identity executionapi.ProcessIdentity) orcaworker.TerminalIdentity {
@@ -48,27 +33,13 @@ func (s *Service) closeNativeOrcaTerminal(ctx context.Context, run *Run, executi
 	if op := s.operationByKey(key); op != nil && op.Status == "confirmed" {
 		return nil
 	}
-	term, err := showWorkerOrcaTerminal(ctx, fixedConfig, identity.Terminal)
+	absent, err := orcaworker.InspectCleanupTerminal(ctx, orcaWorkerMetaCaller(fixedConfig), identity, fixedConfig.Repository, role, s.operationByKey(key) != nil)
 	if err != nil {
-		if op := s.operationByKey(key); op != nil {
-			selector := "path:" + filepath.ToSlash(fixedConfig.Repository)
-			if role == "agent" {
-				selector = "id:" + identity.WorktreeID
-			}
-			terms, runtimeID, listErr := nativeOrcaTerminals(ctx, fixedConfig, selector)
-			if listErr == nil && runtimeID == identity.RuntimeID {
-				for _, candidate := range terms {
-					if candidate.Handle == identity.Terminal {
-						return err
-					}
-				}
-				return s.changeWorkerOperation(run, op.OperationID, "confirmed", op.PlatformRequestID, mustJSON(map[string]string{"closed_handle": identity.Terminal, "proof": "absent_on_original_runtime"}), "")
-			}
-		}
-		return err
+		return workerOrcaBackendError(err)
 	}
-	if term.RuntimeID != identity.RuntimeID || term.IncarnationID != identity.Incarnation || role == "agent" && term.WorktreeID != identity.WorktreeID || role == "coordinator" && canonical(filepath.FromSlash(term.WorktreePath)) != canonical(fixedConfig.Repository) {
-		return &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "Orca cleanup terminal was replaced or moved"}
+	if absent {
+		op := s.operationByKey(key)
+		return s.changeWorkerOperation(run, op.OperationID, "confirmed", op.PlatformRequestID, mustJSON(map[string]string{"closed_handle": identity.Terminal, "proof": "absent_on_original_runtime"}), "")
 	}
 	op := s.operationByKey(key)
 	opID := ""
@@ -111,12 +82,8 @@ func (s *Service) finishNativeOrcaCleanup(ctx context.Context, run *Run) error {
 	if state.Coordinator.Terminal == "" || execution.Target.OrchestrationRun == "" {
 		return nil
 	}
-	delivery, err := orcaworker.CheckInbox(ctx, orcaWorkerMetaCaller(fixedConfig), state.Coordinator.Terminal, execution.Target.OrchestrationRun)
-	if err != nil {
-		return err
-	}
-	if delivery.RuntimeID != state.Coordinator.RuntimeID || delivery.RunID != execution.Target.OrchestrationRun || delivery.DeliveryID != "" || len(delivery.Messages) != 0 {
-		return &executionapi.BackendError{Code: executionapi.BackendOutcomeUnknown, Diagnostic: "Orca coordinator inbox is not drained after delivery"}
+	if err := orcaworker.InboxDrained(ctx, orcaWorkerMetaCaller(fixedConfig), state.Coordinator.Terminal, state.Coordinator.RuntimeID, execution.Target.OrchestrationRun); err != nil {
+		return &executionapi.BackendError{Code: executionapi.BackendOutcomeUnknown, Diagnostic: err.Error(), Cause: err}
 	}
 	return s.closeNativeOrcaTerminal(ctx, run, execution, state.Coordinator, "coordinator")
 }

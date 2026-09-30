@@ -199,16 +199,9 @@ func (s *Service) startRemoteOrcaTurn(ctx context.Context, run *Run, execution *
 	if err != nil {
 		return remoteWorkerError(err)
 	}
-	show, err := client.Show(ctx, started)
+	identity, err := client.BindStart(ctx, started, execution.Process, execution.Workspace.Worktree, execution.Workspace.Branch)
 	if err != nil {
 		return remoteWorkerError(err)
-	}
-	if show.Liveness != "live" || show.WorktreePath != execution.Workspace.Worktree || show.Branch != execution.Workspace.Branch {
-		return errors.New("remote worker is not live on its fixed workspace/branch")
-	}
-	identity := executionapi.ProcessIdentity(show.Identity)
-	if execution.Process != nil && remote.SessionID(executionapi.ProcessIdentity(*execution.Process)) != remote.SessionID(show.Identity) {
-		return errors.New("remote continuation replaced the original agent session")
 	}
 	firstBinding := execution.Process == nil
 	execution.Process = &identity
@@ -238,17 +231,7 @@ func (s *Service) verifyRemoteOrcaWorker(ctx context.Context, run *Run, executio
 	}
 	client := remoteClientForExecution(fixed.config, execution)
 	ref := remoteWorkerRef(remoteExecutionRef(run, execution))
-	if _, err := client.VerifyCoordinator(ctx, ref); err != nil {
-		return remoteWorkerError(err)
-	}
-	show, err := client.Show(ctx, remote.StartReceipt{RunID: ref.External.OrchestrationRun, TaskID: ref.External.Task, DispatchID: ref.External.Dispatch, WorktreeID: ref.External.WorktreeID, CenterRuntimeID: ref.External.CoordinatorRuntimeID})
-	if err != nil {
-		return remoteWorkerError(err)
-	}
-	if show.Identity != ref.External || show.Liveness != "live" || show.WorktreePath != execution.Workspace.Worktree || show.Branch != execution.Workspace.Branch {
-		return errors.New("remote agent/session/workspace identity changed or is unverified")
-	}
-	return nil
+	return remoteWorkerError(client.VerifyWorker(ctx, ref))
 }
 
 func (s *Service) resumeRemoteOrcaWorker(ctx context.Context, task *TaskRecord, run *Run) (bool, error) {

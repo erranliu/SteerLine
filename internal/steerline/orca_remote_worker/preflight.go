@@ -36,7 +36,7 @@ func Preflight(ctx context.Context, c Config) (PreflightResult, error) {
 	if centerStatus.State != "ready" || !centerStatus.Reachable || centerStatus.RuntimeID == "" {
 		return PreflightResult{}, errors.New("center Orca runtime is not ready")
 	}
-	if centerStatus.AppVersion != "" && !sameOrcaVersionFamily(centerVersion, centerStatus.AppVersion) {
+	if centerStatus.AppVersion != "" && !SameVersionFamily(centerVersion, centerStatus.AppVersion) {
 		return PreflightResult{}, errors.New("center Orca CLI and runtime versions are from different major.minor families")
 	}
 
@@ -50,7 +50,7 @@ func Preflight(ctx context.Context, c Config) (PreflightResult, error) {
 	if c.ExpectedRemoteRuntime != "" && remoteStatus.RuntimeID != c.ExpectedRemoteRuntime {
 		return PreflightResult{}, &Error{Code: executionapi.BackendIdentityMismatch, Diagnostic: "original remote runtime epoch changed"}
 	}
-	if !sameOrcaVersionFamily(centerVersion, remoteStatus.AppVersion) {
+	if !SameVersionFamily(centerVersion, remoteStatus.AppVersion) {
 		return PreflightResult{}, fmt.Errorf("Orca version-family mismatch: center=%s remote=%s", centerVersion, remoteStatus.AppVersion)
 	}
 	if err = requireOrcaCapabilities(remoteStatus.Capabilities); err != nil {

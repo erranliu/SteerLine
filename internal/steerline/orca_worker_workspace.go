@@ -2,11 +2,8 @@ package steerline
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
-	"time"
 
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
@@ -29,41 +26,8 @@ func workerOrcaBackendError(err error) error {
 	return err
 }
 
-func workerOrcaCall(ctx context.Context, c Config, args ...string) (orcaEnvelope, error) {
-	if c.hostName() != "orca" && c.hostName() != "orca_supervised" {
-		return orcaEnvelope{}, errors.New("worker Orca call has no Orca execution target")
-	}
-	if c.hostName() == "orca_supervised" && (len(args) == 0 || args[0] != "orchestration") {
-		if c.Orca.Supervised == nil || c.Orca.Supervised.EnvironmentID == "" {
-			return orcaEnvelope{}, errors.New("remote worker has no fixed Orca environment")
-		}
-		args = append(args, "--environment", c.Orca.Supervised.EnvironmentID)
-	}
-	out, callErr := (orcaClient{cfg: c}).call(ctx, positiveDuration(c.CommandTimeout, 30*time.Second), args...)
-	envelope, parseErr := parseEnvelope(out)
-	if callErr != nil || parseErr != nil {
-		return envelope, errors.Join(callErr, parseErr)
-	}
-	return envelope, nil
-}
-
-func orcaWorkerCaller(c Config) orcaworker.Call {
-	return func(ctx context.Context, args ...string) (json.RawMessage, error) {
-		env, err := workerOrcaCall(ctx, c, args...)
-		return env.Result, err
-	}
-}
-
-func orcaWorkerMetaCaller(c Config) orcaworker.MetaCall {
-	return func(ctx context.Context, args ...string) (orcaworker.Result, error) {
-		env, err := workerOrcaCall(ctx, c, args...)
-		result := orcaworker.Result{Payload: env.Result, RuntimeID: env.Meta.RuntimeID}
-		if env.Error != nil {
-			result.ErrorCode, result.ErrorData = env.Error.Code, env.Error.Data
-		}
-		return result, err
-	}
-}
+func orcaWorkerCaller(c Config) orcaworker.Call         { return nativeOrcaClient(c).Call }
+func orcaWorkerMetaCaller(c Config) orcaworker.MetaCall { return nativeOrcaClient(c).MetaCall }
 
 func workerOrcaWorktreeName(taskID, runID string) (string, error) {
 	if !canonicalDecimalID(taskID) || !stableExecutionID(runID) {
@@ -81,14 +45,13 @@ func applyWorkerOrcaWorkspace(c Config, run *Run, execution *ExecutionRecord, wo
 	if run == nil || execution == nil || run.ExecutionID != execution.ExecutionID || !commitHash.MatchString(base) {
 		return errors.New("remote worker worktree lacks its fixed execution or base")
 	}
-	branch := strings.TrimPrefix(worktree.Branch, "refs/heads/")
-	if branch == "" || worktree.Path == "" || worktree.Head != base {
-		return errors.New("remote worker worktree identity is incomplete")
+	fact, err := orcaworker.WorkspaceBinding(worktree, c.identity, base)
+	if err != nil {
+		return err
 	}
-	path := worktree.Path
-	execution.WorkspaceIntent = &executionapi.WorkspaceIntent{Path: path, Branch: branch, BaseCommit: base}
-	execution.Target.WorktreeID, execution.Target.Branch = worktree.ID, branch
-	execution.Workspace = WorkspaceEvidence{Repository: c.identity, Worktree: path, Branch: branch, Base: base, Head: base, VerifiedAt: time.Now().UTC()}
+	execution.WorkspaceIntent = &executionapi.WorkspaceIntent{Path: fact.Worktree, Branch: fact.Branch, BaseCommit: fact.Base}
+	execution.Target.WorktreeID, execution.Target.Branch = worktree.ID, fact.Branch
+	execution.Workspace = WorkspaceEvidence{Repository: fact.Repository, Worktree: fact.Worktree, Branch: fact.Branch, Base: fact.Base, Head: fact.Head, VerifiedAt: fact.CheckedAt}
 	refreshExecutionView(run, execution)
 	return nil
 }

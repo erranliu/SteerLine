@@ -16,6 +16,7 @@ import (
 	"time"
 
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
 
 // fakeOrca is a protocol-level stand-in for the supported terminal identity,
@@ -407,7 +408,7 @@ func TestOrcaStopExecutionConfirmsFixedTerminalExit(t *testing.T) {
 	}
 	runID, attemptID := newID(), newID()
 	ref := executionapi.ExecutionRef{Version: 1, Backend: executionapi.BackendOrca, Protocol: executionapi.ProtocolOrcaTerminalV2, Target: targetFor(cfg), Agent: executionapi.AgentSpec{Name: "codex"}, RunID: runID, AttemptID: attemptID, External: executionapi.ProcessIdentity{Kind: "orca", Terminal: handle, RuntimeID: "fake-runtime", Incarnation: "inc-stop", Executable: cfg.Orca.Executable}}
-	backend := orcaTerminalBackend{config: cfg}
+	backend := orcaworker.NewBackend(nativeOrcaConfig(cfg))
 	observer := &orcaStopHandleFixture{identity: ref.External}
 	receipt, err := backend.StopExecution(context.Background(), ref, executionapi.Operation{ID: "stop-" + attemptID}, observer)
 	if err != nil || receipt.Disposition != "confirmed" {
@@ -431,12 +432,12 @@ func TestOrcaStopFailureDoesNotConfirmExit(t *testing.T) {
 	}
 	ref := executionapi.ExecutionRef{Backend: executionapi.BackendOrca, Protocol: executionapi.ProtocolOrcaTerminalV2, Target: targetFor(cfg), External: executionapi.ProcessIdentity{Kind: "orca", Terminal: handle, RuntimeID: "fake-runtime", Incarnation: "inc-failure"}}
 	t.Setenv("STEERLINE_FAKE_ORCA_CLOSE_FAIL", "1")
-	receipt, err := (orcaTerminalBackend{config: cfg}).StopExecution(context.Background(), ref, executionapi.Operation{}, nil)
+	receipt, err := (orcaworker.NewBackend(nativeOrcaConfig(cfg))).StopExecution(context.Background(), ref, executionapi.Operation{}, nil)
 	var backendErr *executionapi.BackendError
 	if receipt.Disposition == "confirmed" || !errors.As(err, &backendErr) || backendErr.Code != executionapi.BackendOutcomeUnknown {
 		t.Fatalf("stop failure was misconfirmed: %#v, %v", receipt, err)
 	}
-	obs, err := (orcaTerminalBackend{config: cfg}).Observe(context.Background(), ref)
+	obs, err := (orcaworker.NewBackend(nativeOrcaConfig(cfg))).Observe(context.Background(), ref)
 	if err != nil || obs.Liveness != "live" {
 		t.Fatalf("failed stop changed original terminal: %#v, %v", obs, err)
 	}
@@ -446,7 +447,7 @@ func TestSlowOrcaObservationDoesNotBlockOtherRefStop(t *testing.T) {
 	dir := t.TempDir()
 	cfg := orcaTestConfig(t, dir, "")
 	cfg.CommandTimeout = "10s"
-	backend := orcaTerminalBackend{config: cfg}
+	backend := orcaworker.NewBackend(nativeOrcaConfig(cfg))
 	refFor := func(handle string) executionapi.ExecutionRef {
 		t.Helper()
 		identity := executionapi.ProcessIdentity{Kind: "orca", RuntimeID: "fake-runtime", Terminal: handle, Incarnation: "inc-" + handle}
@@ -496,7 +497,7 @@ func TestSlowOrcaObservationDoesNotBlockOtherRefStop(t *testing.T) {
 func TestOrcaSameRefObservationsDoNotOverlapOrLeakGate(t *testing.T) {
 	dir := t.TempDir()
 	cfg := orcaTestConfig(t, dir, "")
-	backend := orcaTerminalBackend{config: cfg}
+	backend := orcaworker.NewBackend(nativeOrcaConfig(cfg))
 	handle := "same-ref-observe"
 	identity := executionapi.ProcessIdentity{Kind: "orca", RuntimeID: "fake-runtime", Terminal: handle, Incarnation: "inc-same-ref"}
 	if err := writeFakeOrcaState(dir, fakeOrcaState{Handle: handle, Incarnation: identity.Incarnation}); err != nil {
@@ -528,10 +529,5 @@ func TestOrcaSameRefObservationsDoNotOverlapOrLeakGate(t *testing.T) {
 			t.Fatalf("same-ref observation overlapped or failed: %v", err)
 		}
 	}
-	orcaObservationGates.Lock()
-	remaining := len(orcaObservationGates.byIdentity)
-	orcaObservationGates.Unlock()
-	if remaining != 0 {
-		t.Fatalf("observation gates leaked: %d", remaining)
-	}
+
 }

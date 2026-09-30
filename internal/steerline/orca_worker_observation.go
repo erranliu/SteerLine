@@ -308,14 +308,17 @@ func (s *Service) ackNativeOrcaDelivery(ctx context.Context, run *Run, execution
 	if op != nil {
 		// The ack response may have been lost after Orca advanced its FIFO.
 		// Read the original Run before deciding whether another ack is needed.
-		current, err := orcaworker.CheckInbox(ctx, orcaWorkerMetaCaller(fixedConfig), state.Coordinator.Terminal, execution.Target.OrchestrationRun)
+		var absent bool
+		var err error
+		if fixedConfig.hostName() == "orca_supervised" {
+			absent, err = remoteClientForExecution(fixedConfig, execution).DeliveryAcknowledged(ctx, remoteWorkerRef(remoteExecutionRef(run, execution)), deliveryID)
+		} else {
+			absent, err = orcaworker.DeliveryAcknowledged(ctx, orcaWorkerMetaCaller(fixedConfig), state.Coordinator.Terminal, state.Coordinator.RuntimeID, execution.Target.OrchestrationRun, deliveryID)
+		}
 		if err != nil {
 			return err
 		}
-		if current.RuntimeID != state.Coordinator.RuntimeID || current.RunID != execution.Target.OrchestrationRun {
-			return errors.New("Orca Delivery recovery changed coordinator or Run")
-		}
-		if current.DeliveryID != deliveryID {
+		if absent {
 			return s.changeWorkerOperation(run, op.OperationID, "confirmed", op.PlatformRequestID, mustJSON(map[string]string{"delivery_id": deliveryID, "proof": "absent_from_original_run_fifo"}), "")
 		}
 	}
@@ -329,10 +332,18 @@ func (s *Service) ackNativeOrcaDelivery(ctx context.Context, run *Run, execution
 	} else {
 		opID = op.OperationID
 	}
-	receipt, err := orcaworker.AckInbox(ctx, orcaWorkerMetaCaller(fixedConfig), state.Coordinator.Terminal, execution.Target.OrchestrationRun, deliveryID, state.Coordinator.RuntimeID)
+	var receipt orcaworker.MutationReceipt
+	var err error
+	if fixedConfig.hostName() == "orca_supervised" {
+		var requestID string
+		requestID, err = remoteClientForExecution(fixedConfig, execution).Ack(ctx, remoteWorkerRef(remoteExecutionRef(run, execution)), deliveryID)
+		receipt = orcaworker.MutationReceipt{RequestID: requestID, Payload: mustJSON(map[string]string{"acknowledged": deliveryID})}
+	} else {
+		receipt, err = orcaworker.AckInbox(ctx, orcaWorkerMetaCaller(fixedConfig), state.Coordinator.Terminal, execution.Target.OrchestrationRun, deliveryID, state.Coordinator.RuntimeID)
+	}
 	if err != nil {
 		var callErr *orcaworker.CallError
-		if errors.As(err, &callErr) {
+		if errors.As(err, &callErr) || fixedConfig.hostName() == "orca_supervised" {
 			_ = s.changeWorkerOperation(run, opID, "outcome_unknown", "", nil, err.Error())
 		}
 		return err
@@ -398,10 +409,7 @@ func (s *Service) readNativeOrcaOutput(ctx context.Context, run *Run, execution 
 		}
 	}
 	turn.OutputClipping, turn.OutputFallbackReason = append([]string(nil), result.Clipping...), result.FallbackReason
-	content := strings.Join(result.Terminal.Tail, "\n")
-	if result.Source == "transcript" && len(result.Transcript) > 0 {
-		content = string(result.Transcript)
-	}
+	content := result.DisplayContent()
 	if content != "" {
 		digest := digestValue(struct{ Source, Content string }{result.Source, content})
 		if digest != turn.OutputDigest {

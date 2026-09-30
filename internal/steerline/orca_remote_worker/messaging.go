@@ -196,3 +196,8 @@ func (b Client) FindAnswer(ctx context.Context, ref Ref, questionID, answer stri
 	}
 	return found, nil
 }
+
+func (b Client) DeliveryAcknowledged(ctx context.Context, ref Ref, id string) (bool, error) {
+	v, e := b.Check(ctx, ref)
+	return v.ID != id, e
+}

@@ -4,8 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
-	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
@@ -18,8 +17,12 @@ func nativeOrcaFixedAgentTitle(executionID string) string {
 }
 
 func nativeOrcaFixedAgentCommand(c Config) (string, error) {
+	return nativeOrcaCommand(c, "", nil)
+}
+
+func nativeOrcaCommand(c Config, path string, roots []string) (string, error) {
 	command, err := codexworker.ManagedCommand(codexworker.ManagedCommandOptions{
-		Host: c.hostName(), Agent: c.agentName(), Model: c.Model, ReasoningEffort: c.ReasoningEffort,
+		WorkingDirectory: path, WriteRoots: roots, Host: c.hostName(), Agent: c.agentName(), Model: c.Model, ReasoningEffort: c.ReasoningEffort,
 		Executable: c.Codex.Executable, Args: c.Codex.Args, Sandbox: c.Sandbox, WindowsSandbox: c.WindowsSandbox,
 	})
 	if err != nil {
@@ -83,8 +86,8 @@ func (s *Service) prepareNativeOrcaFixedModelWorker(ctx context.Context, run *Ru
 			return err
 		}
 	}
-	if worktree.Comment != nativeOrcaWorktreeComment(execution.ExecutionID) || worktree.CreatedWithAgent != "" {
-		return &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "fixed Orca worktree belongs to another execution or agent"}
+	if err := orcaworker.VerifyWorktreeOwner(worktree, execution.ExecutionID, fixedConfig.agentName(), true); err != nil {
+		return err
 	}
 	return s.prepareNativeOrcaFixedAgentTerminal(ctx, run, execution, worktree, repoID, base)
 }
@@ -102,7 +105,11 @@ func (s *Service) prepareNativeOrcaFixedAgentTerminal(ctx context.Context, run *
 	}
 	key := "orca-native-agent-terminal:" + execution.ExecutionID
 	op := s.operationByKey(key)
-	terminal, err := fixedOrcaAgentTerminal(terminals, op, title, worktree.ID)
+	var savedReceipt []byte
+	if op != nil {
+		savedReceipt = op.Receipt
+	}
+	terminal, err := orcaworker.FixedAgentTerminal(terminals, savedReceipt, title, worktree.ID)
 	if err != nil {
 		return err
 	}
@@ -129,16 +136,18 @@ func (s *Service) prepareNativeOrcaFixedAgentTerminal(ctx context.Context, run *
 	if terminal.Handle != "" {
 		return &executionapi.BackendError{Code: executionapi.BackendOutcomeUnknown, Diagnostic: "fixed Orca agent terminal exists without its launch intent"}
 	}
-	command, err := nativeOrcaFixedAgentCommand(fixedConfig)
-	if err != nil {
-		return err
-	}
 	writeArgs, err := codexLinkedWorktreeWriteArgs(ctx, fixedConfig, worktree.Path)
 	if err != nil {
 		return err
 	}
-	command = orcaworker.AppendPowerShellArgs(command, writeArgs)
-	command = orcaworker.AppendPowerShellArgs(command, []string{"--cd", worktree.Path})
+	roots := []string{}
+	for i := 1; i < len(writeArgs); i += 2 {
+		roots = append(roots, writeArgs[i])
+	}
+	command, err := nativeOrcaCommand(fixedConfig, worktree.Path, roots)
+	if err != nil {
+		return err
+	}
 	if env := execution.Environment; env != nil {
 		if env.LaunchCommand != "" && env.LaunchCommand != command {
 			return errors.New("managed Orca launch evidence differs from original command")
@@ -180,67 +189,18 @@ func (s *Service) prepareNativeOrcaFixedAgentTerminal(ctx context.Context, run *
 	return s.prepareNativeOrcaCoordinator(ctx, run, execution)
 }
 
-// Orca may rename an agent terminal after it starts. The creation receipt is
-// the immutable link between the launch intent and the live terminal.
-func fixedOrcaAgentTerminal(terminals []orcaTerminal, op *OperationRecord, title, worktreeID string) (orcaTerminal, error) {
-	var expected orcaTerminal
-	if op != nil && len(op.Receipt) != 0 {
-		terminal, err := orcaworker.SavedTerminal(op.Receipt)
-		if err != nil {
-			return orcaTerminal{}, &executionapi.BackendError{Code: executionapi.BackendOutcomeUnknown, Diagnostic: "fixed Orca agent launch receipt is invalid", Cause: err}
-		}
-		expected = terminal
-		if expected.Handle == "" || expected.IncarnationID == "" || expected.WorktreeID != worktreeID || expected.Title != title {
-			return orcaTerminal{}, &executionapi.BackendError{Code: executionapi.BackendOutcomeUnknown, Diagnostic: "fixed Orca agent launch receipt does not match the original intent"}
-		}
-	}
-	var matched orcaTerminal
-	for _, terminal := range terminals {
-		if expected.Handle != "" && terminal.Handle != expected.Handle {
-			continue
-		}
-		if expected.Handle == "" && terminal.Title != title {
-			continue
-		}
-		if terminal.Handle == "" || matched.Handle != "" || terminal.WorktreeID != worktreeID {
-			return orcaTerminal{}, &executionapi.BackendError{Code: executionapi.BackendOutcomeUnknown, Diagnostic: "fixed Orca agent terminal is not unique"}
-		}
-		if expected.Handle != "" && terminal.IncarnationID != expected.IncarnationID {
-			return orcaTerminal{}, &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "fixed Orca agent terminal incarnation changed"}
-		}
-		matched = terminal
-	}
-	return matched, nil
-}
-
 func (s *Service) waitAndBindNativeOrcaFixedAgent(ctx context.Context, run *Run, execution *ExecutionRecord, worktree workerOrcaWorktree, handle, repoID, base string) error {
 	fixed, configErr := s.workerFlowContext(run)
 	if configErr != nil {
 		return configErr
 	}
 	fixedConfig := fixed.config
-	if execution.Environment != nil {
-		return s.bindNativeOrcaAgent(ctx, run, execution, worktree, handle, repoID, base)
-	}
-	deadline := time.Now().Add(min(positiveDuration(fixedConfig.Orca.WaitTimeout, 30*time.Second), 30*time.Second))
-	for {
-		err := s.bindNativeOrcaAgent(ctx, run, execution, worktree, handle, repoID, base)
-		if err == nil {
-			return nil
-		}
-		if time.Now().After(deadline) {
-			return fmt.Errorf("fixed Orca agent did not become identifiable: %w", err)
-		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(time.Second):
+	if execution.Environment == nil {
+		if err := orcaworker.AwaitAgentTerminal(ctx, orcaWorkerMetaCaller(fixedConfig), handle, worktree.Path, strings.TrimPrefix(worktree.Branch, "refs/heads/"), worktree.ID, fixedConfig.agentName(), min(positiveDuration(fixedConfig.Orca.WaitTimeout, 30*time.Second), 30*time.Second), true); err != nil {
+			return err
 		}
 	}
-}
-
-func nativeOrcaSession(p executionapi.ProcessIdentity) string {
-	return "orca-terminal:" + p.RuntimeID + ":" + p.Terminal + ":" + p.Incarnation
+	return s.bindNativeOrcaAgent(ctx, run, execution, worktree, handle, repoID, base)
 }
 
 func nativeOrcaRepo(ctx context.Context, c Config) (string, error) {
@@ -263,10 +223,6 @@ func nativeOrcaCoordinatorMarker(executionID string) string {
 	return "SLCOORD:" + executionID
 }
 
-func nativeOrcaTerminalHasMarker(ctx context.Context, c Config, handle, marker string) (bool, error) {
-	return orcaworker.TerminalHasMarker(ctx, orcaWorkerCaller(c), handle, marker)
-}
-
 func findNativeOrcaRun(ctx context.Context, c Config, objective, coordinator string) (string, error) {
 	return orcaworker.FindRun(ctx, orcaWorkerCaller(c), objective, coordinator)
 }
@@ -277,38 +233,16 @@ func (s *Service) bindNativeOrcaAgent(ctx context.Context, run *Run, execution *
 		return configErr
 	}
 	fixedConfig := fixed.config
-	createdWithExpectedAgent := worktree.CreatedWithAgent == fixedConfig.agentName()
-	if fixedConfig.managedWindowsOrca() || fixedConfig.Model != "" {
-		createdWithExpectedAgent = worktree.CreatedWithAgent == ""
-	}
-	if worktree.Comment != nativeOrcaWorktreeComment(execution.ExecutionID) || !createdWithExpectedAgent {
-		return &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "Orca worktree has no matching execution/agent ownership marker"}
+	if err := orcaworker.VerifyWorktreeOwner(worktree, execution.ExecutionID, fixedConfig.agentName(), fixedConfig.managedWindowsOrca() || fixedConfig.Model != ""); err != nil {
+		return err
 	}
 	if err := applyWorkerOrcaWorkspace(fixedConfig, run, execution, worktree, base); err != nil {
 		return err
 	}
-	if handle == "" {
-		terms, runtimeID, err := nativeOrcaTerminals(ctx, fixedConfig, "id:"+worktree.ID)
-		if err != nil {
-			return err
-		}
-		if len(terms) != 1 || terms[0].AgentIdentity != fixedConfig.agentName() || runtimeID == "" {
-			return &executionapi.BackendError{Code: executionapi.BackendOutcomeUnknown, Diagnostic: "Orca worktree has no unique original agent terminal"}
-		}
-		handle = terms[0].Handle
-	}
-	term, err := showWorkerOrcaTerminal(ctx, fixedConfig, handle)
+	identity, err := orcaworker.BindAgent(ctx, orcaWorkerMetaCaller(fixedConfig), worktree, handle, fixedConfig.agentName(), fixedConfig.Orca.Executable)
 	if err != nil {
-		return err
+		return workerOrcaBackendError(err)
 	}
-	if err := verifyWorkerOrcaTerminal(term, run); err != nil {
-		return err
-	}
-	if term.WorktreeID != worktree.ID || term.AgentIdentity != fixedConfig.agentName() {
-		return &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "Orca started a different worktree or agent"}
-	}
-	identity := workerOrcaIdentity(term, fixedConfig)
-	identity.Kind, identity.WorktreeID = "orca-native", worktree.ID
 	execution.Process = &identity
 	if execution.Environment != nil {
 		execution.Environment.Runtime = identity.RuntimeID
@@ -442,27 +376,10 @@ func (s *Service) prepareNativeOrcaCoordinator(ctx context.Context, run *Run, ex
 				handle = terminal.Handle
 			}
 			if handle == "" {
-				terms, runtimeID, err := nativeOrcaTerminals(ctx, fixedConfig, "path:"+filepath.ToSlash(fixedConfig.Repository))
+				var err error
+				handle, err = orcaworker.FindOriginalCoordinator(ctx, orcaWorkerMetaCaller(fixedConfig), fixedConfig.Repository, execution.Process.RuntimeID, marker)
 				if err != nil {
 					return err
-				}
-				if runtimeID != execution.Process.RuntimeID {
-					return &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "Orca coordinator runtime changed"}
-				}
-				for _, candidate := range terms {
-					if candidate.AgentIdentity != "" {
-						continue
-					}
-					found, err := nativeOrcaTerminalHasMarker(ctx, fixedConfig, candidate.Handle, marker)
-					if err != nil {
-						return err
-					}
-					if found {
-						if handle != "" {
-							return &executionapi.BackendError{Code: executionapi.BackendOutcomeUnknown, Diagnostic: "original Orca coordinator is not uniquely identifiable"}
-						}
-						handle = candidate.Handle
-					}
 				}
 			}
 			if handle == "" {
@@ -557,10 +474,11 @@ func (s *Service) bindNativeOrcaCoordinator(ctx context.Context, run *Run, execu
 	if err != nil {
 		return err
 	}
-	if canonical(filepath.FromSlash(term.WorktreePath)) != canonical(fixedConfig.Repository) || term.RuntimeID != execution.Process.RuntimeID || term.AgentIdentity != "" {
-		return &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "Orca coordinator is not the fixed shell on the local runtime/repository"}
+	identity, err := orcaworker.BindCoordinator(term, fixedConfig.Repository, execution.Process.RuntimeID, fixedConfig.Orca.Executable)
+	if err != nil {
+		return err
 	}
-	execution.OrcaNative.Coordinator = executionapi.ProcessIdentity{Kind: "orca-native-coordinator", Terminal: term.Handle, RuntimeID: term.RuntimeID, Incarnation: term.IncarnationID, Executable: fixedConfig.Orca.Executable}
+	execution.OrcaNative.Coordinator = identity
 	execution.Target.CoordinatorTerminal = term.Handle
 	s.refreshRun(run)
 	return s.commitWorker(run)
@@ -578,23 +496,12 @@ func (s *Service) verifyNativeOrcaWorker(ctx context.Context, run *Run, executio
 	if execution.OrcaNative == nil || execution.Process == nil || execution.Process.Kind != "orca-native" {
 		return errors.New("native Orca worker binding is incomplete")
 	}
-	term, err := showWorkerOrcaTerminal(ctx, fixedConfig, execution.Process.Terminal)
-	if err != nil {
-		return err
-	}
-	if err := verifyWorkerOrcaTerminal(term, run); err != nil {
-		return err
-	}
-	if term.RuntimeID != execution.Process.RuntimeID || term.IncarnationID != execution.Process.Incarnation || term.WorktreeID != execution.Process.WorktreeID || term.AgentIdentity != fixedConfig.agentName() {
-		return &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "original Orca agent terminal or agent has changed"}
+	if err := orcaworker.VerifyAgentTerminal(ctx, orcaWorkerMetaCaller(fixedConfig), *execution.Process, execution.Workspace.Worktree, execution.Workspace.Branch, fixedConfig.agentName()); err != nil {
+		return workerOrcaBackendError(err)
 	}
 	if env := execution.Environment; env != nil {
 		if env.Runtime != execution.Process.RuntimeID || len(env.WriteRoots) == 0 || canonical(env.WriteRoots[0]) != canonical(execution.Workspace.Worktree) {
 			return &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "managed Orca resource permission identity changed"}
-		}
-		command, err := nativeOrcaFixedAgentCommand(fixedConfig)
-		if err != nil {
-			return err
 		}
 		args, err := codexLinkedWorktreeWriteArgs(ctx, fixedConfig, env.WriteRoots[0])
 		if err != nil {
@@ -604,8 +511,10 @@ func (s *Service) verifyNativeOrcaWorker(ctx context.Context, run *Run, executio
 		for i := 1; i < len(args); i += 2 {
 			roots = append(roots, args[i])
 		}
-		command = orcaworker.AppendPowerShellArgs(command, args)
-		command = orcaworker.AppendPowerShellArgs(command, []string{"--cd", env.WriteRoots[0]})
+		command, err := nativeOrcaCommand(fixedConfig, env.WriteRoots[0], roots[1:])
+		if err != nil {
+			return err
+		}
 		if digestValue(roots) != digestValue(env.WriteRoots) || command != env.LaunchCommand {
 			return &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "managed Orca launch command or write roots changed"}
 		}
@@ -617,12 +526,8 @@ func (s *Service) verifyNativeOrcaWorker(ctx context.Context, run *Run, executio
 	}
 	coordinator := execution.OrcaNative.Coordinator
 	if coordinator.Terminal != "" {
-		shown, err := showWorkerOrcaTerminal(ctx, fixedConfig, coordinator.Terminal)
-		if err != nil {
-			return err
-		}
-		if shown.RuntimeID != coordinator.RuntimeID || shown.IncarnationID != coordinator.Incarnation {
-			return &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "original Orca coordinator changed"}
+		if err := orcaworker.VerifyCoordinatorTerminal(ctx, orcaWorkerMetaCaller(fixedConfig), coordinator, fixedConfig.Repository); err != nil {
+			return workerOrcaBackendError(err)
 		}
 	}
 	return nil

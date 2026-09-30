@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	remote "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker"
 	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
 
@@ -375,7 +376,7 @@ func TestSupervisedOrcaRequiresPinnedModelAndKeepsStopUnsupported(t *testing.T) 
 	if err := validateSupervisedOrcaConfig(&c); err != nil {
 		t.Fatalf("supervised config unexpectedly requires an exact Codex CLI pin: %v", err)
 	}
-	report, err := (orcaSupervisedBackend{config: c}).Probe(context.Background(), targetFor(c), agentFor(c))
+	report, err := (remote.NewBackend(remoteWorkerConfig(c))).Probe(context.Background(), targetFor(c), agentFor(c))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -423,7 +424,7 @@ func TestSupervisedOrcaClientPinsLaunchAndReadsExactDispatch(t *testing.T) {
 	receipt, err := orcaworker.CreateRun(context.Background(), client.CenterCall, "remote worker fixture", coordinator, "fake-center-runtime")
 	runID, requestID := receipt.ID, receipt.RequestID
 	c.Orca.Supervised.CoordinatorTerminal = coordinator
-	backend := orcaSupervisedBackend{config: c}
+	backend := remote.NewBackend(remoteWorkerConfig(c))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -440,7 +441,7 @@ func TestSupervisedOrcaClientPinsLaunchAndReadsExactDispatch(t *testing.T) {
 	if started.TaskID != "task-test" || started.DispatchID != "dispatch-test" || started.WorktreeID != "repo-test::C:/remote/spec03-test" || started.PlatformRequestID != "request-worker-start" || started.State != "ready" || started.Stage != "input_accepted" {
 		t.Fatalf("worker start receipt = %+v", started)
 	}
-	observed, err := backend.showWorker(context.Background(), started)
+	observed, err := remoteWorkerClient(c).Show(context.Background(), started)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -490,16 +491,15 @@ func TestSupervisedRunCoordinatorsAreDistinctAndFenced(t *testing.T) {
 
 func TestSettledSupervisedDispatchRetainsExactBindingWithoutLiveTerminal(t *testing.T) {
 	c := supervisedFixtureConfig(t)
-	b := orcaSupervisedBackend{config: c}
 	t.Setenv("STEERLINE_FAKE_SUPERVISED_DISPATCH_STATE", "completed")
 	started := supervisedStartReceipt{RunID: "orca-run-test", TaskID: "task-test", DispatchID: "dispatch-test", WorktreeID: "repo-test::C:/remote/steerline-run", CenterRuntimeID: "fake-center-runtime"}
-	observed, err := b.showWorker(context.Background(), started)
+	observed, err := remoteWorkerClient(c).Show(context.Background(), started)
 	if err != nil {
 		t.Fatal(err)
 	}
 	ref := supervisedPromptTestRef(c, started, observed)
 	t.Setenv("STEERLINE_FAKE_SUPERVISED_SETTLED_NO_TERMINAL", "1")
-	if _, err := b.showWorker(context.Background(), started); err == nil {
+	if _, err := remoteWorkerClient(c).Show(context.Background(), started); err == nil {
 		t.Fatal("settled worker unexpectedly retained a live terminal observation")
 	}
 	if state, err := remoteWorkerClient(c).Settlement(context.Background(), remoteWorkerRef(ref), "succeeded"); err != nil || state != "succeeded" {
@@ -514,7 +514,7 @@ func TestSettledSupervisedDispatchRetainsExactBindingWithoutLiveTerminal(t *test
 	}
 }
 
-func supervisedPromptTestRef(c Config, started supervisedStartReceipt, observation supervisedWorkerObservation) executionapi.ExecutionRef {
+func supervisedPromptTestRef(c Config, started supervisedStartReceipt, observation remote.WorkerObservation) executionapi.ExecutionRef {
 	target := targetFor(c)
 	target.OrchestrationRun = started.RunID
 	target.ExternalTask = started.TaskID
@@ -531,7 +531,7 @@ func TestSupervisedReplyRejectsEscapedOversizeBeforeOrcaCall(t *testing.T) {
 	c := supervisedFixtureConfig(t)
 	started := supervisedStartReceipt{RunID: "orca-run-test", TaskID: "task-test", DispatchID: "dispatch-test"}
 	worktreeID := "repo-test::C:/remote/steerline-run"
-	observation := supervisedWorkerObservation{Identity: executionapi.ProcessIdentity{Kind: "orca_supervised", RuntimeID: "fake-remote-runtime", CoordinatorRuntimeID: "fake-center-runtime", Terminal: "terminal-test", Incarnation: "inc-test", OrchestrationRun: started.RunID, Task: started.TaskID, Dispatch: started.DispatchID, ExecutionHost: "env-home", WorktreeID: worktreeID}, WorktreePath: "C:/remote/steerline-run", Branch: "erranliu/steerline-run"}
+	observation := remote.WorkerObservation{Identity: executionapi.ProcessIdentity{Kind: "orca_supervised", RuntimeID: "fake-remote-runtime", CoordinatorRuntimeID: "fake-center-runtime", Terminal: "terminal-test", Incarnation: "inc-test", OrchestrationRun: started.RunID, Task: started.TaskID, Dispatch: started.DispatchID, ExecutionHost: "env-home", WorktreeID: worktreeID}, WorktreePath: "C:/remote/steerline-run", Branch: "erranliu/steerline-run"}
 	ref := supervisedPromptTestRef(c, started, observation)
 	t.Setenv("STEERLINE_FAKE_SUPERVISED_OBSERVE_UNAVAILABLE", "1")
 	_, err := remoteWorkerClient(c).Reply(context.Background(), remoteWorkerRef(ref), "question-test", "x"+strings.Repeat("\n", 4000))

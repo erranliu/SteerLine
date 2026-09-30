@@ -12,6 +12,7 @@ import (
 	"time"
 
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
 
 func TestExecutionRecordsPinBindingsAndOperations(t *testing.T) {
@@ -69,7 +70,7 @@ func TestExecutionBackendCommonCapabilityContract(t *testing.T) {
 		t.Fatal(err)
 	}
 	c := Config{Host: "local", Repository: t.TempDir(), CommandTimeout: "5s", Codex: Command{Executable: exe, Args: []string{"--fake", "codex"}}, Orca: OrcaConfig{Executable: exe, Args: []string{"--fake", "orca", t.TempDir()}}}
-	backends := []executionapi.ExecutionBackend{localExecutionBackend{config: c}, orcaTerminalBackend{config: c}}
+	backends := []executionapi.ExecutionBackend{localExecutionBackend{config: c}, orcaworker.NewBackend(nativeOrcaConfig(c))}
 	for _, backend := range backends {
 		kind, protocol := backend.Identity()
 		report, err := backend.Probe(context.Background(), executionapi.ExecutionTarget{ID: "fixture"}, executionapi.AgentSpec{Name: "codex"})
@@ -277,7 +278,7 @@ func TestOrcaObservationRejectsReplacedIncarnationAndConnection(t *testing.T) {
 		t.Fatal(err)
 	}
 	ref := executionapi.ExecutionRef{Backend: executionapi.BackendOrca, Protocol: executionapi.ProtocolOrcaTerminalV2, Target: targetFor(cfg), Agent: executionapi.AgentSpec{Name: "codex"}, External: executionapi.ProcessIdentity{Kind: "orca", Terminal: "term-fixed", RuntimeID: "fake-runtime", Incarnation: "inc-original"}}
-	backend := orcaTerminalBackend{config: cfg}
+	backend := orcaworker.NewBackend(nativeOrcaConfig(cfg))
 	if obs, err := backend.Observe(context.Background(), ref); err != nil || obs.Liveness != "live" {
 		t.Fatalf("fixed terminal was not live: %#v, %v", obs, err)
 	}
@@ -288,7 +289,7 @@ func TestOrcaObservationRejectsReplacedIncarnationAndConnection(t *testing.T) {
 	}
 	t.Setenv("STEERLINE_FAKE_ORCA_INCARNATION", "")
 	cfg.Orca.Args = append(cfg.Orca.Args, "different-connection")
-	if _, err := (orcaTerminalBackend{config: cfg}).Observe(context.Background(), ref); !errors.As(err, &mismatch) || mismatch.Code != executionapi.BackendIdentityMismatch {
+	if _, err := (orcaworker.NewBackend(nativeOrcaConfig(cfg))).Observe(context.Background(), ref); !errors.As(err, &mismatch) || mismatch.Code != executionapi.BackendIdentityMismatch {
 		t.Fatalf("changed connection was accepted: %v", err)
 	}
 }
