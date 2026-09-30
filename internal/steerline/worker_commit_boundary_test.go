@@ -2,6 +2,7 @@ package steerline
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"testing"
 )
@@ -138,6 +139,32 @@ func TestWorkerReceiptFailureRetainsIntentAndCancelsUnregisteredObserver(t *test
 		}
 	}
 	t.Fatal("original send intent disappeared after failed receipt commit")
+}
+
+func TestAppServerFailedLaunchKeepsPartialSessionBinding(t *testing.T) {
+	s, run := appServerAuditService(t)
+	commandID := newID()
+	execution := s.executionRecord(run)
+	execution.PendingCommandID = commandID
+	opID, err := s.startWorkerOperation(run, "start_worker_turn", "worker-turn:"+run.ExecutionID+":"+commandID, map[string]string{"command_id": commandID})
+	require(t, err)
+	identity, err := currentProcessIdentity()
+	require(t, err)
+	partial := *s.executionRecord(run)
+	partial.Process = identity
+	partial.AppServerEndpoint, partial.AppServerGeneration = "ws://127.0.0.1:12345", "partial-generation"
+	partial.SessionID = workerFlowMockSession
+	message := &appServerLaunchMessage{phase: "turn_result", commandID: commandID, opID: opID, run: *run, execution: partial, err: errors.New("thread receipt persistence failed")}
+	require(t, s.handleAppServerLaunchMessage(run.RunID, message))
+	snapshot, err := s.domainStore.Query(context.Background(), s.Config.identity)
+	require(t, err)
+	got := snapshot.Executions[0]
+	if got.Process == nil || *got.Process != *identity || got.AppServerEndpoint != partial.AppServerEndpoint || got.AppServerGeneration != partial.AppServerGeneration || got.SessionID != partial.SessionID {
+		t.Fatalf("partial native binding was discarded: %+v", got)
+	}
+	if got.PendingTurnID != "" || s.workers[run.RunID] != nil || snapshotOperation(&snapshot, opID).Status != "outcome_unknown" {
+		t.Fatal("failed launch advanced the original turn or registered an observer")
+	}
 }
 
 func TestWorkerCommitRejectsSavedAnswerRegression(t *testing.T) {

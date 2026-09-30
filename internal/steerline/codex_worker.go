@@ -291,10 +291,22 @@ func (s *Service) handleAppServerLaunchMessage(runID string, message *appServerL
 		return fmt.Errorf("unknown app-server launch phase %q", message.phase)
 	}
 	if message.err != nil {
-		if execution.Process == nil && message.execution.Process != nil {
+		if message.execution.Process != nil {
+			if execution.Process != nil && *execution.Process != *message.execution.Process ||
+				execution.AppServerEndpoint != "" && execution.AppServerEndpoint != message.execution.AppServerEndpoint ||
+				execution.AppServerGeneration != "" && execution.AppServerGeneration != message.execution.AppServerGeneration ||
+				execution.SessionID != "" && message.execution.SessionID != "" && execution.SessionID != message.execution.SessionID {
+				return ErrWorkerTurnStale
+			}
+			if message.execution.SessionID != "" && !codexworker.ValidNativeID(message.execution.SessionID) {
+				return errors.New("partial app-server thread identity is invalid")
+			}
 			execution.Process = message.execution.Process
 			execution.AppServerEndpoint = message.execution.AppServerEndpoint
 			execution.AppServerGeneration = message.execution.AppServerGeneration
+			if message.execution.SessionID != "" {
+				execution.SessionID = message.execution.SessionID
+			}
 			s.refreshRun(run)
 		}
 		return s.failStartedWorkerTurn(run, message.opID, message.turnID, message.err)

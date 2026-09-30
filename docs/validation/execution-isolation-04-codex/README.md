@@ -30,3 +30,9 @@
 ## 已确认的基线剩余项
 
 额外尝试 `TestWorkerEnvironmentER1ProbeAndSettlementGate` 时，其五个 fixture 在初次 poll 报 `native Orca poll has no fixed execution`。在未修改的上述 origin/main 源码归档上独立运行 `go test ./internal/steerline -run '^TestWorkerEnvironmentER1ProbeAndSettlementGate$/^success$' -count=1 -v`，同样失败（9.475s）。因此不把该 fixture 计为本轮通过证据，也不借 #57 修改 Orca 准备/就绪状态机。该基线问题应在后续 Orca 迁移/复审中单独核查；本轮的受管 argv fixture 和冻结资源篡改拒绝回归已通过。
+
+## 协调 session 独立复审
+
+发现异步 `turn_result` 失败处理只保存部分进程身份，丢弃适配器已返回的原生 SessionID。线程回执写入失败等场景会因此失去原会话身份。现已保存完整可得绑定，并拒绝覆盖已有不一致的进程、endpoint、generation 或 session；失败仍保持原操作 outcome_unknown，不登记观察或推进业务轮次。
+
+`TestAppServerFailedLaunchKeepsPartialSessionBinding` 修复前失败、修复后通过。协调 session 运行三个受影响包和 Plan 七项中心回归通过；修复后再次运行部分绑定、观察回执失败、两轮反馈和两个恢复定向用例通过。另在 #56 完整交付分支与本 PR 独立运行 ER1 success 子例，两者均报同一固定执行缺失错误，确认其为已有基线问题并向 #58 交接。
