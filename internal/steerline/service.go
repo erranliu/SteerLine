@@ -16,14 +16,15 @@ import (
 )
 
 type Service struct {
-	Config          Config
-	baseConfig      Config
-	dispatchConfig  *Config
-	dispatchProfile *ExecutionProfile
-	State           Runtime
-	store           *Store
-	domainStore     *SQLiteStore
-	prs             *PRClient
+	Config               Config
+	baseConfig           Config
+	dispatchConfig       *Config
+	dispatchProfile      *ExecutionProfile
+	State                Runtime
+	workerDecisionWrites map[string]bool
+	store                *Store
+	domainStore          *SQLiteStore
+	prs                  *PRClient
 	// workers owns live observers by authoritative workflow run ID.
 	workers             map[string]*Worker
 	appServerLaunching  map[string]string // In-flight goroutines, never persisted execution authority.
@@ -175,6 +176,7 @@ func (s *Service) save() error {
 	if err := s.store.Publish(&s.State); err != nil {
 		return err
 	}
+	s.workerDecisionWrites = nil
 	return projectRuntime(&s.State)
 }
 
@@ -459,7 +461,7 @@ func (s *Service) pollPRsFor(ctx context.Context, runID string) error {
 func (s *Service) eventForRun(run *Run, ev WorkerEvent) error {
 	ack := func(err error) error {
 		if err == nil && ev.Acknowledge != nil {
-			err = s.acknowledgeRemoteDelivery(ev)
+			err = s.acknowledgeRemoteDelivery(run, ev)
 		}
 		if ev.Processed != nil {
 			ev.Processed <- err
@@ -497,7 +499,7 @@ func (s *Service) eventForRun(run *Run, ev WorkerEvent) error {
 	return ack(s.eventWorkerFlowFor(run, ev))
 }
 
-func (s *Service) acknowledgeRemoteDelivery(ev WorkerEvent) error {
+func (s *Service) acknowledgeRemoteDelivery(run *Run, ev WorkerEvent) error {
 	if ev.Acknowledge == nil {
 		return nil
 	}
@@ -511,6 +513,12 @@ func (s *Service) acknowledgeRemoteDelivery(ev WorkerEvent) error {
 	}{ev.RemoteRunID, ev.RemoteDeliveryID})
 	digest := operationDigest(request)
 	operationID := "ack-" + operationDigest([]byte(idempotencyKey))[:32]
+	persist := func() error {
+		if run != nil && run.TaskStatus != "closed" && run.TaskStatus != "discarded" {
+			return s.commitWorker(run, operationID)
+		}
+		return s.save() // Historical/terminal observation migrates in PR 3.
+	}
 	var operation *OperationRecord
 	for i := range s.State.Operations {
 		candidate := &s.State.Operations[i]
@@ -540,7 +548,7 @@ func (s *Service) acknowledgeRemoteDelivery(ev WorkerEvent) error {
 		value := OperationRecord{ProjectIdentity: s.Config.identity, OperationID: operationID, IdempotencyKey: idempotencyKey, Kind: "ack_orca_delivery", Status: "in_flight", PayloadDigest: digest, Request: request, CreatedAt: now(), UpdatedAt: now()}
 		s.State.Operations = append(s.State.Operations, value)
 		operation = &s.State.Operations[len(s.State.Operations)-1]
-		if err := s.save(); err != nil {
+		if err := persist(); err != nil {
 			return err
 		}
 		operation = nil
@@ -567,7 +575,7 @@ func (s *Service) acknowledgeRemoteDelivery(ev WorkerEvent) error {
 			operation.Status = "rejected"
 		}
 		operation.UnknownReason = ackErr.Error()
-		if saveErr := s.save(); saveErr != nil {
+		if saveErr := persist(); saveErr != nil {
 			return errors.Join(ackErr, saveErr)
 		}
 		return ackErr
@@ -577,7 +585,7 @@ func (s *Service) acknowledgeRemoteDelivery(ev WorkerEvent) error {
 			return err
 		}
 	}
-	return s.save()
+	return persist()
 }
 
 func ackWorkerEventPersistence(ev WorkerEvent, err error) {

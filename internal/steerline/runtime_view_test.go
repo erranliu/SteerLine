@@ -81,7 +81,7 @@ func TestAnswerChecksDomainRevisionBeforeCheckpointPublication(t *testing.T) {
 	}
 }
 
-func TestPublicationPreservesExternallyAcceptedDecision(t *testing.T) {
+func TestWorkerCommitPreservesExternallyAcceptedDecision(t *testing.T) {
 	service, run := waitingDecisionService(t)
 	ctx := context.Background()
 	commands := CommandService{Store: service.domainStore, Project: service.Config.Identity()}
@@ -91,15 +91,17 @@ func TestPublicationPreservesExternallyAcceptedDecision(t *testing.T) {
 	_, _, err = commands.AcceptAnswer(ctx, command, answer)
 	require(t, err)
 	service.executionRecord(run).LastEvent = ptr("actor diagnostic after external answer")
-	require(t, service.save())
+	if err := service.commitWorker(run); !isNativeErrorCode(err, "stale_revision") {
+		t.Fatalf("stale worker actor did not stop before overwriting the answer: %v", err)
+	}
 	loaded, err := LoadDatabaseRuntime(service.Config)
 	require(t, err)
 	if loaded.Runs[0].Decision.Status != "answer_saved" || loaded.Runs[0].Decision.Note != answer.Note {
-		t.Fatal("publication overwrote committed answer with actor's stale copy")
+		t.Fatal("worker commit overwrote the externally saved answer")
 	}
 }
 
-func TestPublicationRejectsConflictingDecisionAtomically(t *testing.T) {
+func TestWorkerCommitRejectsConflictingDecisionAtomically(t *testing.T) {
 	service, run := waitingDecisionService(t)
 	ctx := context.Background()
 	commands := CommandService{Store: service.domainStore, Project: service.Config.Identity()}
@@ -112,15 +114,15 @@ func TestPublicationRejectsConflictingDecisionAtomically(t *testing.T) {
 	require(t, err)
 	service.setDecisionStatus(run, "superseded")
 	service.executionRecord(run).LastEvent = ptr("must roll back")
-	if err = service.save(); err == nil || !strings.Contains(err.Error(), "publication_conflict") {
-		t.Fatalf("conflicting publication was not rejected: %v", err)
+	if err = service.commitWorker(run); !isNativeErrorCode(err, "stale_revision") {
+		t.Fatalf("conflicting worker commit was not rejected: %v", err)
 	}
 	after, nextRevision, err := service.domainStore.LoadProjection(ctx, service.Config.Identity())
 	require(t, err)
 	loaded, err := LoadDatabaseRuntime(service.Config)
 	require(t, err)
 	if !bytes.Equal(before, after) || revision != nextRevision || loaded.Runs[0].Decision.Status != "answer_saved" || loaded.Runs[0].Decision.Note != answer.Note || loaded.Runs[0].LastEvent != nil && *loaded.Runs[0].LastEvent == "must roll back" {
-		t.Fatal("conflicting publication changed committed state")
+		t.Fatal("conflicting worker commit changed committed state")
 	}
 }
 

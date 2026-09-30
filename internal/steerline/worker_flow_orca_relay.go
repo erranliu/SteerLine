@@ -79,21 +79,21 @@ func (s *Service) relayNativeOrcaDone(ctx context.Context, run *Run, execution *
 	}
 	intent := *request
 	intent.DispatchCapability = ""
-	opID, err := s.startOperation("orca_native_relay_done", key, intent)
+	opID, err := s.startWorkerOperation(run, "orca_native_relay_done", key, intent)
 	if err != nil {
 		return err
 	}
 	defer removeNativeOrcaRelayRequest(execution.Workspace.Worktree, run.RunID, turn.TurnID)
 	receipt, err := orcaworker.SendDone(ctx, orcaWorkerMetaCaller(fixed.config), *request, execution.Target.OrchestrationRun, execution.Process.Terminal, execution.Process.RuntimeID)
 	if err != nil {
-		_ = s.changeOperation(opID, "outcome_unknown", "", nil, err.Error())
+		_ = s.changeWorkerOperation(run, opID, "outcome_unknown", "", nil, err.Error())
 		return err
 	}
-	if err := s.changeOperation(opID, "accepted", receipt.RequestID, receipt.Payload, ""); err != nil {
+	if err := s.changeWorkerOperation(run, opID, "accepted", receipt.RequestID, receipt.Payload, ""); err != nil {
 		return err
 	}
 	s.note(run, "worker", "orca_relay", "accepted", "Orca accepted the worker's relay request", receipt.ID, map[string]any{"dispatch_id": turn.DispatchID})
-	if err := s.save(); err != nil {
+	if err := s.commitWorker(run); err != nil {
 		return err
 	}
 	return nil

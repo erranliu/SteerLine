@@ -68,7 +68,7 @@ func (s *Service) prepareWorkerOrcaTerminal(ctx context.Context, run *Run) error
 		s.refreshRun(run)
 		return nil
 	}
-	opID, err := s.startOperation("prepare_worker_terminal", "worker-terminal:"+execution.ExecutionID, struct {
+	opID, err := s.startWorkerOperation(run, "prepare_worker_terminal", "worker-terminal:"+execution.ExecutionID, struct {
 		ExecutionID string `json:"execution_id"`
 		Workspace   string `json:"workspace"`
 		Branch      string `json:"branch"`
@@ -82,13 +82,13 @@ func (s *Service) prepareWorkerOrcaTerminal(ctx context.Context, run *Run) error
 	}
 	term, err := createWorkerOrcaTerminal(ctx, fixedConfig, run)
 	if err != nil {
-		_ = s.changeOperation(opID, "outcome_unknown", "", nil, err.Error())
+		_ = s.changeWorkerOperation(run, opID, "outcome_unknown", "", nil, err.Error())
 		return err
 	}
 	identity := workerOrcaIdentity(term, fixedConfig)
 	execution.Process = &identity
 	s.refreshRun(run)
-	if err := s.changeOperation(opID, "confirmed", "", mustJSON(identity), ""); err != nil {
+	if err := s.changeWorkerOperation(run, opID, "confirmed", "", mustJSON(identity), ""); err != nil {
 		return fmt.Errorf("Orca terminal created but its identity could not be persisted: %w", err)
 	}
 	return nil

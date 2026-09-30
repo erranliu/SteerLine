@@ -1,8 +1,8 @@
 package steerline
 
 import (
-	"bytes"
 	"context"
+	"encoding/json"
 	"testing"
 )
 
@@ -50,8 +50,15 @@ func TestWorkerFeedbackPhaseCommitIsDurableAndRejectsStaleActor(t *testing.T) {
 	}
 	afterCheckpoint, _, err := service.domainStore.LoadProjection(ctx, service.Config.Identity())
 	require(t, err)
-	if !bytes.Equal(checkpoint, afterCheckpoint) {
-		t.Fatal("feedback phase commit rewrote the service checkpoint")
+	var before, after ServiceCheckpoint
+	if err := json.Unmarshal(checkpoint, &before); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(afterCheckpoint, &after); err != nil {
+		t.Fatal(err)
+	}
+	if after.Revision != before.Revision+1 {
+		t.Fatal("feedback phase and checkpoint did not advance together")
 	}
 	_, committedRevision, err := service.domainStore.DatabaseVersion(ctx)
 	require(t, err)

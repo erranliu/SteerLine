@@ -80,6 +80,9 @@ func (s *SQLiteStore) saveRuntime(ctx context.Context, runtime Runtime, baseline
 			}
 		}
 		for _, operation := range runtime.Operations {
+			if !changed("operation:"+operation.OperationID, operation) {
+				continue
+			}
 			persisted, _, err := tx.PutOperation(operation)
 			if err != nil {
 				return err

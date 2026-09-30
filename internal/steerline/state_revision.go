@@ -31,6 +31,9 @@ func domainFingerprints(v Runtime) map[string]string {
 	for _, r := range v.Decisions {
 		out["decision:"+r.DecisionID] = recordFingerprint(r)
 	}
+	for _, r := range v.Operations {
+		out["operation:"+r.OperationID] = recordFingerprint(r)
+	}
 	return out
 }
 

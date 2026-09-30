@@ -151,7 +151,7 @@ func (s *Service) startCodexWorkerTurn(ctx context.Context, run *Run, commandID,
 		if err := (executionRecords{root: fixed.config.RunDir}).saveBinding(ref); err != nil {
 			return err
 		}
-		return s.save()
+		return s.commitWorker(run)
 	}
 	worker, events, platformRequestID, err := startAppServerWorkerTurn(ctx, fixed.config, run, fixed.execution, commandID, prompt, persistThread)
 	if err != nil {
@@ -166,7 +166,7 @@ func (s *Service) startNativeOrcaWorkerTurn(ctx context.Context, run *Run, turnI
 		return err
 	}
 	if err := s.startNativeOrcaTurn(ctx, run, fixed.execution, turnID, prompt); err != nil {
-		_ = s.changeOperation(opID, "outcome_unknown", "", nil, err.Error())
+		_ = s.changeWorkerOperation(run, opID, "outcome_unknown", "", nil, err.Error())
 		fixed.execution.Status = "blocked"
 		s.refreshRun(run)
 		return s.nativeOrcaUncertain(run, "Native Orca Dispatch needs reconciliation: "+err.Error())
@@ -178,11 +178,11 @@ func (s *Service) startNativeOrcaWorkerTurn(ctx context.Context, run *Run, turnI
 	if current == nil {
 		return errors.New("native Orca turn has no accepted Dispatch identity")
 	}
-	if err := s.changeOperation(opID, "accepted", current.DispatchRequestID, mustJSON(*current), ""); err != nil {
+	if err := s.changeWorkerOperation(run, opID, "accepted", current.DispatchRequestID, mustJSON(*current), ""); err != nil {
 		return err
 	}
 	s.note(run, "steer", "worker", "accepted", "native Orca Dispatch input accepted", current.DispatchID, map[string]any{"task_id": current.TaskID, "turn_id": turnID})
-	return s.save()
+	return s.commitWorker(run)
 }
 
 func (s *Service) startSupervisedOrcaWorkerTurn(ctx context.Context, run *Run, turnID, prompt, opID string) error {
@@ -207,7 +207,7 @@ func (s *Service) failStartedWorkerTurn(run *Run, opID, platformRequestID string
 	}
 	fixed.execution.Status = "blocked"
 	s.refreshRun(run)
-	return s.waitWorkerFlow(run, "Original worker turn start is unverified: "+startErr.Error())
+	return s.waitWorkerFlow(run, "Original worker turn start is unverified: "+startErr.Error(), opID)
 }
 
 func (s *Service) acceptStartedWorkerTurn(run *Run, worker *Worker, events, platformRequestID, opID, commandID string, local bool) error {
@@ -235,7 +235,7 @@ func (s *Service) acceptStartedWorkerTurn(run *Run, worker *Worker, events, plat
 	if err := s.setOperationState(opID, "accepted", platformRequestID, mustJSON(identity), ""); err != nil {
 		return err
 	}
-	if err := s.save(); err != nil {
+	if err := s.commitWorker(run, opID); err != nil {
 		return fmt.Errorf("worker started but its exact process receipt could not be saved: %w", err)
 	}
 	s.registerWorker(run, worker)
@@ -345,7 +345,7 @@ func (s *Service) deliverResumableWorkerFeedback(ctx context.Context, run *Run, 
 	if execution.SessionID == "" || run.SessionID == nil || *run.SessionID != execution.SessionID {
 		execution.Error = ptr("Feedback is saved, but the original worker session is not yet available for delivery")
 		s.refreshRun(run)
-		return s.save()
+		return s.commitWorker(run)
 	}
 	if run.Decision.Request.NativeAsk != nil {
 		if route != feedbackLocalAppServer {
@@ -368,7 +368,7 @@ func (s *Service) deliverResumableWorkerFeedback(ctx context.Context, run *Run, 
 		}
 		execution.Error = ptr("Feedback delivery remains unverified at the original request ID; no duplicate message was sent")
 		s.refreshRun(run)
-		return s.save()
+		return s.commitWorker(run)
 	}
 	return s.startWorkerFlowTurn(ctx, run, workerFeedbackText(answer, run.Decision.Request), commandID)
 }

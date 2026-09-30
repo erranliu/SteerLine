@@ -84,13 +84,21 @@ func (s *Service) processPendingCommandsTracked(ctx context.Context, processed *
 					return fmt.Errorf("accepted decision %s no longer matches the runtime identity", command.TargetID)
 				}
 				*s.decisionRecord(run) = record
+				s.markWorkerDecisionWrite(record.DecisionID)
+				revision, revisionErr := s.domainStore.workerWorkflowRevision(ctx, s.Config.identity, run.RunID)
+				if revisionErr != nil {
+					return revisionErr
+				}
+				if workflow := s.workflowRecord(run); workflow != nil {
+					workflow.ControlRevision = revision
+				}
 				if s.store.baseline == nil {
 					s.store.baseline = domainFingerprints(s.State)
 				}
 				s.store.baseline["decision:"+record.DecisionID] = recordFingerprint(record)
 				s.refreshRun(run)
 				s.note(run, "steer", "decision", "answer_saved", "decision answer saved", decisionAnswerSummary(run), decisionAnswerMeta(run))
-				if err = s.save(); err != nil {
+				if err = s.commitWorker(run); err != nil {
 					return err
 				}
 			}
