@@ -51,7 +51,7 @@ func (s *Service) executionConfigForRun(run *Run) (Config, error) {
 			return base, nil
 		}
 		fixed := *workflow.ExecutionProfile
-		if fixed.ID == "" || !fixed.VerifyWorkerFlow() {
+		if fixed.ID == "" || !verifyFixedExecutionProfile(fixed) {
 			return Config{}, errors.New("fixed execution profile identity is incomplete")
 		}
 		config := base.ApplyFixedExecutionProfile(fixed)

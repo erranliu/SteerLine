@@ -32,3 +32,5 @@ go test ./internal/steerline -count=1 -run '^(TestExecutionBackendCommonCapabili
 最终命令、实际测试数量、类型所有者和 #55/#56/#57/#58 的剩余接线见[验证与交接记录](../validation/execution-isolation-01-contracts/README.md)。权限、发布责任、恢复和配置行为保持，未启动真实 agent、运行全量或修改中心 Task。
 
 交付前整合主干 PR160（`c2c9f95`），保留环境就绪字段及检查，公共选项同步 Receiver/Action；追加两项宿主等待/冻结资源接线和准备成功子用例均通过。最终摘要已更新为整合后的结果。
+
+质量审计修复 Codex wire 选项解释与 Orca 观察器清理边界，并整合 PR163/PR165（`a458ce7`）：共享持久记录直接使用唯一公共执行类型，保留最新 Query/SQLite 接线。相关包、事务内项目快照、控制台及更新后的最小入口验证通过；详情见[最终审计记录](../validation/execution-isolation-01-contracts/audit.md)。

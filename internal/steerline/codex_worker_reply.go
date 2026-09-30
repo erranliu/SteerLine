@@ -9,6 +9,7 @@ import (
 
 	"github.com/erranliu/SteerLine/internal/steerline/codexapp"
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
+	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
@@ -113,15 +114,6 @@ func (s *Service) handleAppServerReplyMessage(runID string, message *appServerRe
 
 const codexAskToolName = codexapp.AskToolName
 
-type codexAskCall struct {
-	RequestID  json.RawMessage         `json:"request_id"`
-	ThreadID   string                  `json:"thread_id"`
-	TurnID     string                  `json:"turn_id"`
-	CallID     string                  `json:"call_id"`
-	Generation string                  `json:"generation,omitempty"`
-	Questions  []executionapi.Question `json:"questions"`
-}
-
 func parseCodexAskCall(envelope codexapp.Envelope, expectedThread, expectedTurn string) (codexAskCall, error) {
 	wire, err := codexworker.ParseAskEnvelope(envelope, expectedThread, expectedTurn)
 	if err != nil {
@@ -201,3 +193,5 @@ func codexAskDecisionRequest(call codexAskCall) DecisionRequest {
 	request.Context = body.String()
 	return request
 }
+
+type codexAskCall = contracts.CodexAskCall

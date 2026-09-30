@@ -394,7 +394,7 @@ func (s *Service) refreshSlotOccupancy() {
 }
 func (s *Service) refreshCandidates(ctx context.Context) error {
 	queried := now()
-	tasks, err := (QueryService{Store: s.domainStore, Project: s.Config.identity}).ReadyNativeTasks(ctx)
+	tasks, err := (NewQueryService(s.domainStore, s.Config.identity)).ReadyNativeTasks(ctx)
 	if err != nil {
 		return err
 	}

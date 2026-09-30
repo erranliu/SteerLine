@@ -138,7 +138,7 @@ func preflightWorkerFlowState(ctx context.Context, c Config) error {
 			}
 			matched := false
 			for _, workflow := range snapshot.WorkflowRuns {
-				if workflow.WorkflowRunID == execution.WorkflowRunID && workflow.ExecutionProfile != nil && workflow.ExecutionProfile.VerifyWorkerFlow() && workflow.ExecutionProfile.Digest == env.ProfileDigest {
+				if workflow.WorkflowRunID == execution.WorkflowRunID && workflow.ExecutionProfile != nil && verifyFixedExecutionProfile(*workflow.ExecutionProfile) && workflow.ExecutionProfile.Digest == env.ProfileDigest {
 					matched = true
 				}
 			}

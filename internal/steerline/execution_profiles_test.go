@@ -98,7 +98,7 @@ func TestNativeClaimPersistsChosenExecutionProfile(t *testing.T) {
 		t.Fatalf("selected claim did not persist a workflow: %+v / %v", snapshot, err)
 	}
 	wf, execution := snapshot.WorkflowRuns[0], snapshot.Executions[0]
-	if wf.WorkflowVersion != WorkerFlowVersion || wf.ExecutionProfile == nil || wf.ExecutionProfile.ID != profile.ID || !wf.ExecutionProfile.VerifyWorkerFlow() || wf.Runner.Model != "chosen-model" || wf.Runner.ReasoningEffort != "xhigh" || wf.Runner.WindowsSandbox != "elevated" || wf.ExecutionProfile.WindowsSandbox != "elevated" || execution.Backend != string(executionapi.BackendLocal) || execution.CurrentStep != "worker" {
+	if wf.WorkflowVersion != WorkerFlowVersion || wf.ExecutionProfile == nil || wf.ExecutionProfile.ID != profile.ID || !verifyFixedExecutionProfile(*wf.ExecutionProfile) || wf.Runner.Model != "chosen-model" || wf.Runner.ReasoningEffort != "xhigh" || wf.Runner.WindowsSandbox != "elevated" || wf.ExecutionProfile.WindowsSandbox != "elevated" || execution.Backend != string(executionapi.BackendLocal) || execution.CurrentStep != "worker" {
 		t.Fatalf("chosen execution route was not fixed in the claim: %+v / %+v", wf, execution)
 	}
 	base.ExecutionProfiles[0].Model = "later-edit"

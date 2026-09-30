@@ -70,7 +70,7 @@ func TestTaskGraphViewSnapshotAndBoundary(t *testing.T) {
 		{ProjectIdentity: c.Identity(), PredecessorID: "5", SuccessorID: "4"},
 	}
 	seedNativeGraphForView(t, c, commit, store, 6, edges)
-	q := QueryService{Store: store, Project: c.Identity()}
+	q := NewQueryService(store, c.Identity())
 	full, err := q.QueryTaskGraph(ctx, TaskGraphFilter{Limit: 500})
 	if err != nil {
 		t.Fatal(err)
@@ -151,7 +151,7 @@ func TestTaskGraphViewSnapshotAndBoundary(t *testing.T) {
 func TestTaskGraphLimitsAndExportPublication(t *testing.T) {
 	c, commit, store := openDAGFixture(t)
 	seedNativeGraphForView(t, c, commit, store, 502, nil)
-	q := QueryService{Store: store, Project: c.Identity()}
+	q := NewQueryService(store, c.Identity())
 	ctx := context.Background()
 	graph, err := q.QueryTaskGraph(ctx, TaskGraphFilter{Limit: 2})
 	if err != nil {
@@ -263,7 +263,7 @@ func TestTaskGraphReadCoexistsWithWriter(t *testing.T) {
 	if _, err = writer.ExecContext(ctx, `UPDATE project_task_authorities SET updated_at=updated_at WHERE project_identity=?`, c.Identity()); err != nil {
 		t.Fatal(err)
 	}
-	graph, err := (QueryService{Store: reader, Project: c.Identity()}).QueryTaskGraph(ctx, TaskGraphFilter{})
+	graph, err := (NewQueryService(reader, c.Identity())).QueryTaskGraph(ctx, TaskGraphFilter{})
 	if err != nil || len(graph.Nodes) != 1 {
 		t.Fatalf("read-only graph query waited for a center writer: %v / %+v", err, graph)
 	}

@@ -21,3 +21,9 @@
 - `git diff --check` 通过；未改变序列化 schema、权限策略、恢复门槛和副作用提交顺序。原生 schema 只在平台解码器内定义，没有新增公共类型别名或并行实现。
 
 上述结论限于本轮代码审计和确定性回归；不作为真实平台认证或全量故障矩阵结果。
+
+## 最终主干集成
+
+审计推送期间合入 PR163 与 PR165，最终集成基线 `a458ce7`。保留最新查询、共享记录与 SQLite reader 接线，将共有执行字段改为直接引用 `execution`，移除 `contracts` 中重叠的 ProcessIdentity/ExecutionTarget/WorkspaceIntent/DecisionOption/NativeAskQuestion 及中心相应旧别名。持久记录和 Codex/Orca 回答路由仍由 `contracts` 定义，其 Questions 使用唯一公共类型。未将 Query、SQL 或写入权限引入公共执行包。
+
+整合后重新核对 17 组搬迁布局与新主干完全一致；共有类型仅在 `execution` 定义，公共包项目内传递依赖仍只有自身。所有受影响入口及新 reader 包测试编译通过，相关包测试、`go vet`、Linux amd64 交叉编译与现有 `-quick` 入口通过。新的最小入口已经覆盖主干 contracts/query/sqlite 包；另补已有事务内项目快照和控制台答案编辑用例。两个审计复现用例继续通过，最终分组与实际数量已更新到 audit-summary.json。仅因新的主干整合扩大了对应验证，未运行全量或真实 agent。

@@ -1,8 +1,8 @@
 # Spec：worker 环境就绪与宿主阻断恢复
 
-目标：`WORKER-ENVIRONMENT-READINESS`。配套 [Plan](worker-environment-readiness.plan.md)。状态：PR154 原范围已实施并通过最小验收，PR160 待审阅；#59 新权限接线待前置完成。日期：2026-09-30。未分配原生 Task ID；一个实现 PR 交付。最终权限接线及交付前置：[#59 项目执行权限策略](execution-isolation-06-policy.spec.md) 合入；原会话探针和宿主观察可先独立准备。
+目标：`WORKER-ENVIRONMENT-READINESS`。配套 [Plan](worker-environment-readiness.plan.md)。状态：原范围已交付，真实服务闭环及定向验收通过。日期：2026-09-30。原范围由 PR160 合入；后续项目策略移交由独立 [#59](execution-isolation-06-policy.spec.md) 交付，不是原范围的反向前置。
 
-实施基线：PR160 完成 PR154 提交的冻结权限、原会话探针和宿主恢复范围，证据见[验收记录](../validation/worker-environment-readiness/README.md)。后续执行配置隔离规划将权限编译与快照所有者移交给 #59；本文保留该新接线要求，原验收不证明 #59 接线已完成。当前准备/派发/观察代码已整合到 `orca_worker_prepare.go`、`orca_worker_dispatch.go`、`orca_worker_observation.go` 和 `worker_environment.go`。
+原实现完成冻结权限、原会话探针及宿主恢复，证据见[验收记录](../validation/worker-environment-readiness/README.md)。当前准备/派发/观察归 `orca_worker_prepare.go`、`orca_worker_dispatch.go`、`orca_worker_observation.go` 和 `worker_environment.go`。#57/#58 迁移既有实现所有者，#59 将权限来源改为项目策略；原验收可供继承但不证明新项目策略接线已经完成。
 
 ## 1. 问题与目标
 
@@ -45,12 +45,12 @@
 
 ## 3. 冻结执行权限
 
-[项目执行权限策略 #59](execution-isolation-06-policy.spec.md) 统一交付项目授权、Codex 参数编译、安全 args 检查、两阶段冻结及必要展示。本文复用其已落实的策略、配置与资源绑定，不再单独扩充 Profile 顶层 sandbox 或另一套权限快照。权限接线与本任务最终交付以前置 #59 合入为条件；原会话探针、宿主观察和准备 fixture 可先独立开展，不以实验完成绕过前置。
+原范围已经按现行 Profile 交付受管启动、参数拒绝与权限/资源冻结。以下是当前实现边界；后续 [#59](execution-isolation-06-policy.spec.md) 把这些字段转换为项目策略来源，并迁移到同一个新快照，不能把未完成 #59 当作已交付就绪能力的运行或验收前置。
 
-1. 本期 Orca Codex 使用 #59 支持的 workspace 写入、固定 Git 元数据、network allow 与 escalation deny 项目策略，以及显式 `codex.windows_sandbox=elevated|unelevated`。实际 CLI/approval policy 由 Codex 适配器生成，不依赖用户配置或历史批准，不在故障后降级。
-2. 领取时复用固定项目策略和方案，资源绑定时复用实际根目录、Orca runtime 和启动证据；model/effort 未配置的语义保持。准备轮和业务轮使用同一权限，不通过探针增加业务根目录。
-3. 参数冲突与版本能力拒绝由 #59 的同一编译器处理。静态检查只证明设置受支持，本文的原会话工具探针证明实际就绪；两种事实独立记录。
-4. 配置变化只影响新 Execution。本文的重新检查或宿主恢复不能重写旧快照；UI 复用冻结值，补充本任务实际准备/阻断状态。
+1. Windows Orca Codex 当前使用 Profile 的 workspace-write、显式顶层 windows_sandbox=elevated|unelevated、approval=never、strict-config、固定 Git 根与排除隐式临时根。有/无 model 均受管，model/effort 可分别省略；args 只接受当前已核实的安全开关，不在故障后降级。
+2. 领取冻结 Profile/权限契约摘要，资源绑定保存实际根目录、Orca runtime、命令及原身份；准备和业务用同一权限，不由探针增加业务根目录。当前格式的 ready 状态要求保存并核验原工具/收据证据。
+3. 现有参数与版本检查只证明受管配置支持，原会话工具和结算证明实际就绪。Orca unelevated 组合已有实测，不据此放宽 local app-server 的分散根拒绝。
+4. 配置变化只影响新 Execution。重新检查核对原冻结命令、根目录、Decision/Blocker/原身份，不重写快照、延长期限或清除轮询产生的新故障；UI 显示冻结与实际核验事实。
 
 本期不改变 local 后端的启动/恢复语义。必要的共享 DTO 和固定配置字段可复用，但不能为满足 Orca 探针而重启 local worker。
 

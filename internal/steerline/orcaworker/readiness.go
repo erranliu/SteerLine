@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	"io"
 	"os"
 	"path/filepath"
@@ -15,25 +16,9 @@ import (
 
 // ProbeIdentity binds an exact command to one preparation intent, never to a
 // model's assertion or a reusable session health cache.
-type ProbeIdentity struct {
-	Execution     string `json:"execution"`
-	Turn          string `json:"turn"`
-	Nonce         string `json:"nonce"`
-	ProfileDigest string `json:"profile_digest"`
-	Runtime       string `json:"runtime"`
-	Terminal      string `json:"terminal"`
-	Incarnation   string `json:"incarnation"`
-	Worktree      string `json:"worktree"`
-}
+type ProbeIdentity = contracts.ProbeIdentity
 
-type ProbeReceipt struct {
-	ProbeIdentity
-	InputSHA256 string `json:"input_sha256"`
-	GitHead     string `json:"git_head"`
-	Read        bool   `json:"read"`
-	Write       bool   `json:"write"`
-	Delete      bool   `json:"delete"`
-}
+type ProbeReceipt = contracts.ProbeReceipt
 
 func probeDirectory(p ProbeIdentity) (string, error) {
 	if !stableID(p.Execution) || !stableID(p.Turn) || !stableID(p.Nonce) || !filepath.IsAbs(p.Worktree) || p.ProfileDigest == "" || p.Runtime == "" || p.Terminal == "" || p.Incarnation == "" {
@@ -221,15 +206,7 @@ func CleanupProbe(p ProbeIdentity) error {
 	return nil
 }
 
-type ProbeToolEvidence struct {
-	SourceIdentity string `json:"source_identity"`
-	CallID         string `json:"call_id"`
-	MessageID      string `json:"message_id"`
-	Command        string `json:"command"`
-	Marker         string `json:"marker"`
-	Verified       bool   `json:"verified"`
-	FailureCode    string `json:"failure_code,omitempty"`
-}
+type ProbeToolEvidence = contracts.ProbeToolEvidence
 
 var singleCommandWrapper = regexp.MustCompile(`(?s)^\s*text\(\s*await\s+tools\.exec_command\(\s*(\{.*\})\s*\)\s*\)\s*;?\s*$`)
 var savedCommandWrapper = regexp.MustCompile(`(?s)^\s*(?:const|let)\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*=\s*await\s+tools\.exec_command\(\s*(\{.*\})\s*\)\s*;\s*(?:store\(\s*"[^"\r\n]*"\s*,\s*([A-Za-z_$][A-Za-z0-9_$]*)\s*\)\s*;\s*)?text\(\s*([A-Za-z_$][A-Za-z0-9_$]*)\s*\)\s*;?\s*$`)
@@ -284,12 +261,7 @@ type transcriptMessage struct {
 	} `json:"blocks"`
 }
 
-type ToolContext struct {
-	SourceIdentity string `json:"source_identity,omitempty"`
-	TaskBound      bool   `json:"task_bound,omitempty"`
-	CallID         string `json:"call_id,omitempty"`
-	Started        bool   `json:"started,omitempty"`
-}
+type ToolContext = contracts.ToolContext
 
 // Business diagnostics require the current native Task's injected user header
 // and a provider command event after its saved intent. Old tails and assistant

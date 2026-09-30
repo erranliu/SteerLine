@@ -11,6 +11,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
@@ -580,13 +581,6 @@ func (s *Service) applyDecisions(ctx context.Context) error {
 
 // Native Orca Dispatches are unsupervised. The center owns the exact agent
 // terminal created with the worktree and never uses Codex's exec protocol.
-type orcaAskCall struct {
-	RunID      string                  `json:"run_id"`
-	TaskID     string                  `json:"task_id"`
-	DispatchID string                  `json:"dispatch_id"`
-	MessageID  string                  `json:"message_id"`
-	Questions  []executionapi.Question `json:"questions"`
-}
 
 func orcaQuestionID(decision *DecisionState) string {
 	if decision == nil || decision.Request.OrcaAsk == nil {
@@ -594,3 +588,5 @@ func orcaQuestionID(decision *DecisionState) string {
 	}
 	return decision.Request.OrcaAsk.MessageID
 }
+
+type orcaAskCall = contracts.OrcaAskCall

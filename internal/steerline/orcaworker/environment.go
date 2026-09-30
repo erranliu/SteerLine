@@ -4,19 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	"strings"
 )
 
-type HostFact struct {
-	Reason      string `json:"reason"`
-	Confidence  string `json:"confidence"`
-	Source      string `json:"source"`
-	Detail      string `json:"detail,omitempty"`
-	Runtime     string `json:"runtime"`
-	Terminal    string `json:"terminal"`
-	Incarnation string `json:"incarnation"`
-	Turn        string `json:"turn,omitempty"`
-}
+type HostFact = contracts.HostFact
 
 // InspectAgentInput qualifies only a new input, not readiness or settlement.
 // A stale agentIdentity can outlive Codex and refer to its parent shell. Keep

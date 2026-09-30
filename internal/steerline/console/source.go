@@ -94,7 +94,7 @@ func (FileQuerySource) ReadProject(ctx context.Context, ref ProjectRef, selected
 		return result
 	}
 	defer store.Close()
-	view, err := (steerline.QueryService{Store: store, Project: c.Identity()}).ReadProjectView(ctx, selectedTaskID, 500)
+	view, err := (steerline.NewQueryService(store, c.Identity())).ReadProjectView(ctx, selectedTaskID, 500)
 	if err != nil {
 		result.Connection = steerline.ConnectService(ctx, c)
 		result.Observation = result.Connection.Snapshot

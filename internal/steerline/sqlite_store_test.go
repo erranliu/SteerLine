@@ -344,7 +344,7 @@ func TestQueryEventCursorAndLargeBodyPaging(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	query := QueryService{Store: store, Project: project}
+	query := NewQueryService(store, project)
 	page, err := query.ReadEvents(ctx, EventFilter{ExecutionID: "exec", AttemptID: "attempt"}, "", 1)
 	if err != nil {
 		t.Fatal(err)

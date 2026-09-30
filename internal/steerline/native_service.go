@@ -536,7 +536,7 @@ func (s *Service) dispatchNative(ctx context.Context) error {
 		s.dispatchConfig = nil
 		s.dispatchProfile = nil
 	}()
-	ready, err := (QueryService{Store: s.domainStore, Project: c.identity}).ReadyNativeTasks(ctx)
+	ready, err := (NewQueryService(s.domainStore, c.identity)).ReadyNativeTasks(ctx)
 	if err != nil {
 		return err
 	}

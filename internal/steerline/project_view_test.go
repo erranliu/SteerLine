@@ -26,6 +26,14 @@ func requireProjectView(t *testing.T, view ProjectView) {
 	}
 }
 
+func TestProjectViewRejectsNilReader(t *testing.T) {
+	var store *SQLiteStore
+	view, err := NewQueryService(store, "project").ReadProjectView(context.Background(), "", 1)
+	if err == nil || view.Tasks != nil || view.Domain != nil || view.Runtime != nil {
+		t.Fatal("nil reader exposed a successful project view")
+	}
+}
+
 func TestProjectViewSharesTransactionAcrossWriterCommit(t *testing.T) {
 	ctx := context.Background()
 	writer, project, tasks := nativeAuditStore(t)
@@ -79,7 +87,7 @@ func TestProjectViewSharesTransactionAcrossWriterCommit(t *testing.T) {
 		t.Fatalf("writer commit leaked into the pinned project view: %+v", view)
 	}
 	require(t, tx.Commit())
-	next, err := (QueryService{Store: reader, Project: project}).ReadProjectView(ctx, "99", 1)
+	next, err := (NewQueryService(reader, project)).ReadProjectView(ctx, "99", 1)
 	require(t, err)
 	requireProjectView(t, next)
 	if next.Tasks.DatabaseRevision <= page.DatabaseRevision || next.Tasks.GraphRevision != page.GraphRevision+1 ||
@@ -93,7 +101,7 @@ func TestProjectViewSharesTransactionAcrossWriterCommit(t *testing.T) {
 func TestProjectViewKeepsReadOnlySectionsWithoutCheckpointOrSelection(t *testing.T) {
 	ctx := context.Background()
 	store, project, _ := nativeAuditStore(t)
-	query := QueryService{Store: store, Project: project}
+	query := NewQueryService(store, project)
 	view, err := query.ReadProjectView(ctx, "2", 1)
 	require(t, err)
 	requireProjectView(t, view)
@@ -126,7 +134,7 @@ func TestProjectViewKeepsReadOnlySectionsWithoutCheckpointOrSelection(t *testing
 func TestProjectViewConnectionUsesSampledRuntime(t *testing.T) {
 	ctx := context.Background()
 	service := controlReviewService(t)
-	view, err := (QueryService{Store: service.domainStore, Project: service.Config.Identity()}).ReadProjectView(ctx, "", 500)
+	view, err := (NewQueryService(service.domainStore, service.Config.Identity())).ReadProjectView(ctx, "", 500)
 	require(t, err)
 	requireProjectView(t, view)
 	observation := ObserveRuntimeSnapshot(service.Config, view.Runtime, view.RuntimeError, view.SampledAt)
@@ -151,7 +159,7 @@ func TestProjectViewConnectionUsesSampledRuntime(t *testing.T) {
 func TestProjectViewConnectionRechecksHeartbeatAtUse(t *testing.T) {
 	ctx := context.Background()
 	service := controlReviewService(t)
-	view, err := (QueryService{Store: service.domainStore, Project: service.Config.Identity()}).ReadProjectView(ctx, "", 500)
+	view, err := (NewQueryService(service.domainStore, service.Config.Identity())).ReadProjectView(ctx, "", 500)
 	require(t, err)
 	requireProjectView(t, view)
 	for _, test := range []struct {
