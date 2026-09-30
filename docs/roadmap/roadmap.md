@@ -64,11 +64,10 @@ SteerLine 管理任务、原 worker 会话、用户反馈和真实 PR 交付。w
 
 ## 执行配置隔离规划
 
-[项目执行抽象与配置隔离规划](execution-isolation.md) 描述目标分包与并行安排。#54–#58 保持现有行为并迁移职责，#59–#61 接通项目策略和配置隔离；每项各交付一个实现 PR。共同执行要求见[共同约束](../spec/execution-isolation-constraints.md)。
+[项目执行抽象与配置隔离规划](execution-isolation.md) 描述剩余 #55–#61 的分包和并行安排。#55–#58 保持现行三条链路并迁移职责，#59–#61 接通项目策略；已交付 #54 作为工作区/发布前置复用，见[验收记录](../validation/execution-isolation-01-contracts/README.md)。共同要求见[约束](../spec/execution-isolation-constraints.md)。
 
 | 任务 ID | 任务名称 | 交付范围 | 硬前置 | 执行规格 |
 | --- | --- | --- | --- | --- |
-| 54 | 公共执行契约归包 | 共同类型、事实与接口归包 | 无本系列前置 | [Spec](../spec/execution-isolation-01-contracts.spec.md) · [Plan](../spec/execution-isolation-01-contracts.plan.md) |
 | 55 | 工作区与 Git 资源迁移 | Git/worktree 操作与资源解析分离 | #54 | [Spec](../spec/execution-isolation-02-workspace.spec.md) · [Plan](../spec/execution-isolation-02-workspace.plan.md) |
 | 56 | 发布与 PR 实现迁移 | 发布操作及 provider 与中心事务分离 | #54 | [Spec](../spec/execution-isolation-03-publication.spec.md) · [Plan](../spec/execution-isolation-03-publication.plan.md) |
 | 57 | Codex 执行适配器迁移 | Codex 操作、命令与恢复证据归适配器 | #55、#56 | [Spec](../spec/execution-isolation-04-codex.spec.md) · [Plan](../spec/execution-isolation-04-codex.plan.md) |

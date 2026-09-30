@@ -4,21 +4,21 @@
 
 ## 迁移步骤
 
-1. 接收固定启动命令和回执契约，列出 native/supervised 每类资源、意图、原生 ID、消息消费与中心提交点。
-2. 以 orca_worker_prepare/dispatch/observation/evidence 为现有入口，在 orcaworker 迁配置、CLI 操作和业务事实转换，复用 event/message_identity/saved_receipt。依次接通工作区/终端、coordinator/Run、Task/Dispatch、输出/question/done、relay 和结算。资源创建回执分步提交，不把 prepare 变成不透明包内事务。
-3. 替换 Orca 内的 Codex 参数生成，使用中心注入的固定命令。保留 shell 引号与注入策略；同步固定命令 fixture，证明搬迁前后实际 argv 相同。
+1. 接收本机固定命令与公共回执，列出 native/远程资源和中心提交点。远程以已独立 orca_remote_worker 为唯一协议，不重新搬入本机包；删除的 shell/journal/turn 包不列迁移目标。
+2. 以 orca_worker_prepare/dispatch/observation/evidence 为入口，复用 contracts 的 HostFact/探针/环境值和现有 event/message_identity/saved_receipt，迁 CLI 操作与事实转换。依次接资源、Task/Dispatch、消息/工具/relay 和结算；保留单一定义的 DTO 别名，资源回执分步提交，不把 prepare 变成不透明事务。
+3. 本机 native 使用 #57 固定命令，保留 shell/注入与 argv；远程保留原生 worker-start 与 terminal 复用、显式 model/effort 和原值路径，不能替换为中心 argv。
 4. 接通观察/反馈/恢复及准备事实，保留中心 WorkerEnvironment 和可信 HostTarget 的动作受理。平台继续解析输入/HostFact/工具/收据，中心保存 readiness/business、预算、DeferredDecision/Feedback 与重查并发前提。迁移原身份/未知请求/精确 cleanup，PR 线索走公共 helper，持久化后 ack。
-5. 用原消息和 CLI fixture 核验已保存输入、迟到消息、relay、确认顺序与保留资源，不启用 supervised 或重建未知 terminal。
+5. 用当前 native 与远程 fixture 核验原输入/消息/relay/ack 和身份；远程 release/协调 terminal 关闭与任务交付分开，取消继续拒绝。不重建未知 terminal，不把已接通远程改回不可启动。
 
 ## 验证
 
 ```powershell
 go test ./internal/steerline/orcaworker -count=1
 go list -deps ./internal/steerline/orcaworker
-go test ./internal/steerline -count=1 -run '^(TestNativeOrcaFixedLunaLaunchReconcilesOriginalTerminal|TestNativeOrcaRejectsLateDispatchMessages|TestFixedOrcaAgentTerminalRejectsReplacedIncarnation|TestSupervisedTurnEvidenceRetainsQuestionAndEarlierPR|TestUnsupportedOrcaWorkerFlowConfigurationCannotClaim|TestWorkerEnvironmentER1ProbeAndSettlementGate|TestWorkerEnvironmentER3RecheckKeepsOriginalDispatch|TestEnvironmentRecheckCannotClearNewFaultObservedDuringPoll)$'
+go test ./internal/steerline -count=1 -run '^(TestNativeOrcaFixedLunaLaunchReconcilesOriginalTerminal|TestNativeOrcaRejectsLateDispatchMessages|TestFixedOrcaAgentTerminalRejectsReplacedIncarnation|TestRemoteOrcaTwoTurnsKeepSessionAndRequireMergedDelivery|TestRemoteOrcaQuestionLostReplyAndAckAreReconciled|TestRemoteOrcaRejectsReplacementSession|TestWorkerEnvironmentER1ProbeAndSettlementGate|TestWorkerEnvironmentER3RecheckKeepsOriginalDispatch|TestEnvironmentRecheckCannotClearNewFaultObservedDuringPoll)$'
 ```
 
-OC1 用依赖与调用审查；OC2 用原资源与旧消息；OC3 复用 ER1/ER3/重查竞争、原 relay fixture 与包内现有收据/工具/确认测试，迁移而不复制矩阵；OC4 用 supervised fixture 和不可领取断言。名称改变记录映射，不把零命中或 skip 算通过。无启动/权限变化时复用已交付原生材料，不重跑全量或真实业务闭环。
+OC1 用依赖/调用审查；OC2 用原资源/旧消息；OC3 复用环境/重查/relay；OC4 用当前 remote Service 的两轮、丢失回复/ack 与身份拒绝，受影响 start 对账另选现有用例，不复制矩阵。删旧 journal 测试映射到现行协议，不把缺省配置拒绝算成远程整体不可用。无行为变化不补双机认证。
 
 ## 交付
 

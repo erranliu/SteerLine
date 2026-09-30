@@ -6,7 +6,7 @@
 
 由项目明确选择发布责任，固定进 Execution 并用于指令与运行路径，移除 `localPublish`/host 自动决定责任的接线。遵守[共同约束](execution-isolation-constraints.md)，复用 #56 发布请求/provider 和 #57/#58 后端能力。
 
-新增公共纯值 `execution/publication.go` 中的 `execution.PublicationPolicy`，由 `publication/policy.go` 做发布能力匹配；接通项目解析、领取快照、提示词、发布受理和展示。workerflow 不导入含 I/O 的 publication 包。本任务不要求尚无实现的发布组合可用，也不新增宿主远端发布、凭据下发或 PR 合并能力。
+新增 execution/publication.go 的纯值 execution.PublicationPolicy，publication/policy.go 做能力匹配；contracts 冻结记录引用底层值并由中心组合。保持 contracts → execution，底层不导入记录或发布 I/O。复用已接通的远程 worker 发布/中心核验，不新增宿主远端发布、凭据下发或合并能力。
 
 ## 配置与支持矩阵
 
@@ -27,7 +27,8 @@
 | local Codex app-server + 现有 GitHub command 发布实现 | 本期拒绝 | 支持现有精确发布能力 |
 | local + 其他 provider | 本期拒绝 | 未有对应发布实现则拒绝 |
 | 本机 Orca native + 可核验 PR 的现有 provider | 支持现有 worker 发布能力 | 本期拒绝 |
-| supervised 或其他尚不可启动组合 | 保持不可用 | 保持不可用 |
+| 远程 Orca 持续 worker + 已有可核验 provider | 保留已接通 worker 发布与中心真实核验；平台/策略能力按所选目标检查 | 本期拒绝 |
+| 其他没有对应实现的组合 | 明确拒绝 | 明确拒绝 |
 
 只把当前能力显式化，不能以有 query 方法推断有 create 能力。新增支持组合需另有实现及证据，不在本任务用通用命令或 fallback 补齐。同一项目换 Profile 后继续用原 publisher，匹配失败在领取前拒绝并显示原因，不自动改成另一模式。
 
@@ -35,7 +36,7 @@
 
 ## 指令与执行
 
-`workerflow/prompt.go` 使用固定任务契约和 execution.PublicationPolicy 生成共同工作指令。提交/发布责任由 policy 表达，Orca Run/Task/Dispatch 等说明由平台层单独附加，不再让纯提示构造按 host 判断协议。固定 Spec/Plan 引用与用户反馈语义保持。
+`workerflow/prompt.go` 使用固定任务契约和 execution.PublicationPolicy 生成共同指令，contracts 记录引用同一值。发布责任不按 host 推导，native/remote 原生说明归平台层。固定引用与反馈语义保持。
 
 host_service 继续要求绑定原 Execution/当前已结束轮次的显式发布请求，核验 workspace、分支、base、HEAD/index-tree 后保存意图。非当前轮 marker、assistant 普通正文和任意 URL 不能触发宿主 commit/push/create。worker 模式不受理宿主发布 marker，不把 worker 成功或链接当合并证据。
 
@@ -49,7 +50,7 @@ URL 或命令参数包含明文认证信息时在冻结前拒绝并脱敏诊断�
 
 修改项目文件或换默认 Profile 不改变已有执行；缺失/损坏/旧配置或不支持组合在副作用前拒绝，更新 examples 和既有配置说明。上述发布上下文必须本轮接通，不能等 #61 才防止 PR 查询或推送目标漂移。
 
-Query/控制台从 ReadProjectView 同一快照显示所选 publisher、有效组合和执行冻结值，不另拼当前 provider 查询结果替换固定配置。与 [#59](execution-isolation-06-policy.spec.md) 可并行包内开发；共享配置、快照、prompt/UI 文件串行集成。两项扩展同一个 Execution 配置快照，后合入方保留全部字段和完整摘要校验，不能留两份完整快照或在 #61 再合并。
+Query/控制台通过现有 query 读端口/中心投影组合，从 contracts.ProjectView 同一快照显示 publisher 和冻结值，不拼当前 provider 替换固定配置。与 [#59](execution-isolation-06-policy.spec.md) 可并行策略开发；共享 contracts 记录、配置/快照、prompt/UI 串行集成。后合入方保留同一快照的全部字段和完整摘要，不等 #61 再合并两份结构。
 
 ## 最小验收
 

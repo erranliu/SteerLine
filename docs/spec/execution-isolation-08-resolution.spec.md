@@ -6,7 +6,7 @@
 
 接通项目必要能力、工具和认证引用的需求匹配，将配置组合与实现构造集中到注册入口，完成执行配置隔离。遵守[共同约束](execution-isolation-constraints.md)。权限与发布责任在前置已经完整生效，本轮不替它们补欠缺的参数或冻结，也不新建执行模式、安装器或插件系统。
 
-新增 `execution/requirements.go`，收敛 `execution_registry.go`、`execution_profiles.go`、`execution_snapshot.go`、`execution_service.go`，删除无消费者的 mode/反馈路由。更新当前代码架构和执行配置说明。
+execution/requirements.go 定义纯需求值和匹配，contracts 记录引用底层值；收敛注册、Profile、快照组合和执行接线。保留 01 已固定的纯包依赖、contracts/query/sqlite 和独立远程协议，不重写查询/SQL 或远程生命周期。
 
 ## 项目需求契约
 
@@ -38,7 +38,9 @@
 
 ## 配置与注册
 
-项目拥有仓库、任务、PR provider、ExecutionPolicy、execution.PublicationPolicy 和附加需求；全局 Profile 拥有选择的目标、agent、model/effort 与具体实现配置。Codex 和 Orca Config 由各自包解析/校验；中心只在注册组装处选择具体实现，公共契约不增加各家配置字段。
+项目拥有仓库、任务、PR provider、execution.ExecutionPolicy、execution.PublicationPolicy 和需求；全局方案拥有目标、agent、model/effort/实现配置。底层身份/动作/策略值归 execution，业务持久/视图 DTO 归 contracts 并引用底层；行为和原生解释归实现，中心转换/组装。不重迁 01，也不因远程接入在中心加入第二个状态机。
+
+依赖固定为 contracts → execution，query → contracts，sqlite 实现 query 端口；中心组合/写库，execution 不导入任何项目包。实现可用底层值和必要业务 DTO，不能为快照让 execution 导入 contracts。现有单一定义 facade 可保留，主干已删除的公共身份/问题别名不恢复，不扩大为无关重命名。
 
 内建注册键区分 backend、agent 和协议，具体执行目标单独绑定。先做静态配置检查，再做共同约束允许的固定短命只读能力/工具查询，不创建 worker 现场；重复/未知键或不支持组合给出原因，不静默换默认模型、Profile、协议或后端。初版是固定内建组装，不开放用户插件或动态加载代码。
 
@@ -56,15 +58,17 @@
 
 完整检查 import 和生产调用链，列出每类项目规则、共同操作、native 配置/证据和业务写入的所有者。可以保留组装处的具体类型判断，不能把 UI/业务分支换成名称不同的后端枚举来伪装解耦。
 
-沿用统一 ProjectView 与事件 payload 批量读取，配置展示不新增逐条查询或将不同读取版本合并。连接新鲜度在使用时复核，不能凭采样时 alive 或缓存 Ready 放行新动作；最终资格仍由原 Command/领取事务核验。
+沿用 query.Service 分开的 WorkflowReader/EventReader/TaskReader/ProjectReader 和中心 NewQueryService 构造。sqlite.Reader 只返回同事务原始 ProjectRecords，中心 projectReadRecords 水合 Domain/checkpoint 成 contracts.ProjectView，不能直接把 Reader 当作完整 ProjectReader 或迁入业务水合。Query 不接写事务、不下转 SQLiteStore；保留数据库/cursor/项目/任务身份验证、批量正文预算及部分错误。
+
+展示不另读 SQL 或混合版本，连接使用时复核新鲜度；Ready/采样 alive 不放行写动作。需要新增冻结字段时扩展同一 contracts 记录与必要投影，不借机重新抽全局 Store，最终资格仍由原事务核验。
 
 ## 最小验收
 
 | 编号 | 通过条件 |
 | --- | --- |
 | ER1 | 需求匹配正确，目标/版本不符、工具/认证未知或缺失拒绝；空附加需求不绕过强制能力/策略 |
-| ER2 | 后端构造和原生配置解释集中在注册/实现，公共包与纯规则无中心/平台 I/O 依赖，生产状态/反馈/PR 判定不新增后端分支 |
+| ER2 | execution 无项目依赖，contracts 单向引用底层且不导入平台/存储；query 只读，后端配置归实现，业务判定不新增后端分支 |
 | ER3 | 完整配置摘要与资源绑定核验、领取竞争、复制隔离和原快照恢复通过；两执行的配置/正文/身份不串线 |
-| ER4 | local 与 native 现有接线通过，supervised 不启用；测试内增加一个公共契约 fake 实现无需改业务状态机；无重复实现或失效路由 |
+| ER4 | local/native/remote 三链路现行回归通过，原会话/丢失回执/交付/取消边界保持；测试 fake 不改状态机，不把 mock 当双机或权限认证 |
 
 用最小需求表驱动及已有领取/两轮/原生 fixture，运行现有快速入口一次核对最小闭环。无新增启动行为则不重复 #59 真机或人工合并链；mock 新后端仅用于契约证明，不作为生产注册。

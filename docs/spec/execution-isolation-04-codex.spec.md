@@ -18,6 +18,8 @@
 
 固定操作输入来自 execution 契约，workspace 资源来自 #55，发布请求来自 #56。适配器返回部分绑定、请求身份、观察句柄及类型化回执；中心在派发下一动作前持久化它们。不得用回调传入整个中心来隐藏业务写入。需要取消未登记 observer 时返回可取消的现场句柄，不要求公共接口认识中心 Worker。
 
+Command、CodexAskCall 与冻结 Profile 归 contracts，Question/ProcessIdentity/动作与错误归 execution。本轮按真实所有者复用，只迁解释与校验，不复制持久记录或重写 01。execution 不导入 contracts，适配器配置/行为不被持久层反向导入；必要记录到动作输入的转换归中心。
+
 主干已有 `worker_start.go` 的启动协调、`workerflow/recovery.go` 的恢复规则及 `worker_attachment_store.go` 的原子绑定。继续由中心按保存/调用/回执顺序驱动，不在新 backend 内复制一个自动推进的生命周期循环。既有 OS 进程承载通过最小受管进程端口注入，不让 codexworker 反向导入主包平台 helper。
 
 ## 原生证据与恢复
@@ -32,9 +34,11 @@ Codex CLI argv、model/effort、现有 sandbox 参数、Git 附加目录与 prof
 
 Windows Orca 当前有/无 model 均受管，model/effort 可分别省略；保留 approval=never、strict-config、固定 Git 根、排除隐式临时根及原 args 安全集合，不能恢复 opaque agent 分支或 model/effort 成对必填。原生启动设置在环境绑定中仍可与命令/根目录逐次对照；搬包不改变冻结摘要、probe 脚本或收据关联。
 
+上述命令生产者用于本机路径。远程 orca_remote_worker 的原生 worker-start/--agent/--model/--effort 与原 terminal 续聊入口继续归独立协议，不替换成中心 Codex argv 或本机 shell，也不把本机可省略 model/effort 的规则扩到要求显式二者的远程预检。
+
 特别保留主干本地 Windows 设置：受限 local 缺省 elevated 在摘要前规范化并冻结，workspace-write + unelevated 领取前拒绝，read-only 的显式 unelevated 保持可用。`codexapp.LocalSandboxArgs` 的实现解释移入 codexworker 权限层并更新调用/测试，codexapp 只序列化已编译原生参数；不复制另一份 Windows 校验，前五轮配置字段仍保持当前表示。
 
-配置字段定义移入 Codex Config，根配置/冻结表示保持当前行为；#59 再引入项目策略并删除原 sandbox 权限来源，#61 完成最终注册。中心仍负责适配器构造，不把普通业务路径中的原生 method 判断留作 #61 清理。
+实现配置解释归 Codex Config，现有 contracts 固定记录的 JSON/字段保持当前行为；#59 引入项目策略来源，#61 完成注册。不能为把具体 Config 塞进共享快照让 contracts 导入 codexworker。中心负责转换/构造，不把业务路径的原生 method 判断留给 #61。
 
 ## 最小验收
 

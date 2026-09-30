@@ -5,10 +5,10 @@
 ## 实施步骤
 
 1. 承接 #57 的 local Windows 和已有 Orca managed 参数、权限摘要、资源冻结，复用环境就绪原生材料。分开 local app-server 与 Orca TUI 的 Windows 支持：保留 local unelevated 分散根拒绝及已验证的 Orca unelevated 组合，先核对新策略映射等价与证据归属。
-2. 创建 policy/snapshot 类型及项目解析，实现必填、scope/资源校验。删除顶层 sandbox/windows_sandbox 与原生 profile 授权来源，更新版本和 examples；Windows 设置归 Codex Config，按具体路径保留支持与拒绝规则，不统一误禁 unelevated。
-3. 已有 CLI/thread/turn 编译和安全 args 改读冻结项目策略，Orca 有/无 model 继续同一受管命令，model/effort 独立可省略。保留 strict-config/排除隐式根和原准备接线，未知策略不能回落 opaque 创建。
+2. 在 execution 定义纯 policy/校验，contracts 记录引用它；中心组合/摘要，不形成反向导入或第二份记录。删除顶层授权来源并更新版本/示例，保留路径各自的 Windows 支持和拒绝。
+3. 本机 CLI/thread/turn 改读原策略，native 有/无 model 继续受管且 effort 独立；远程保留原生协议和显式 model/effort。远程策略能力必须有目标/版本依据，缺证时明确拒绝请求策略，不因现有 mock 启动就标权限已落实，也不 blanket 删除 remote。
 4. 领取时核对受理版本和完整摘要，冻结策略/Profile；绑定时通过现有附件事务保存资源与实际设置。后续输入/恢复使用原快照，拒绝损坏或扩大根目录。与 #60 串行扩展同一快照，后合入方保留对方字段和摘要校验。
-5. 从已有 ReadProjectView 同一快照接通 Query/控制台要求、冻结值和核验状态，保持部分只读错误及配置不一致启动拒绝，更新说明。同步环境就绪任务的配置归属，保留其探针和宿主恢复范围。
+5. 从已有 query.Service 读端口、中心 ProjectReader 组合及 contracts.ProjectView 同一快照接通展示，保留部分只读错误/不一致启动拒绝，不另读 SQL 补字段。同步环境就绪权限归属，保留探针与恢复。
 6. 在隔离 linked worktree、状态和会话各运行一次 local/Orca 的同类工具检查，核对工作区、Git 写根和明确权限设置，保存版本、身份、启动设置和原生工具结果；仅修改本轮临时文件/索引并精确清理，不重跑环境就绪收据流程。
 
 ## 验证
