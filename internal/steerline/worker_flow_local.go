@@ -19,12 +19,16 @@ func readWorkerTurnOutcome(path string) (workerTurnOutcome, error) {
 	return codexworker.ReadExecOutcome(path)
 }
 
-func workerFlowPrompt(task TaskRecord, contract TaskContract, localPublish bool) (string, error) {
-	if task.TaskID == "" || task.Title == "" || contract.ContractID == "" || contract.SpecRef.Path == "" || contract.PlanRef.Path == "" {
-		return "", errors.New("worker instruction requires a fixed task, Spec and Plan")
+func workerFlowPrompt(task TaskRecord, contract TaskContract, workflowRunID string, localPublish bool) (string, error) {
+	if task.TaskID == "" || task.Title == "" || contract.ContractID == "" || contract.SpecRef.Path == "" || contract.PlanRef.Path == "" || !stableExecutionID(workflowRunID) {
+		return "", errors.New("worker instruction requires a fixed task, Spec, Plan and workflow run")
 	}
 	var prompt strings.Builder
-	fmt.Fprintf(&prompt, "SteerLine task %s: %s\n\n", task.TaskID, task.Title)
+	fmt.Fprintf(&prompt, "SteerLine task %s: %s\nFixed SteerLine workflow_run_id: %s\n", task.TaskID, task.Title, workflowRunID)
+	if !localPublish {
+		prompt.WriteString("Orca Run, Task and Dispatch IDs are separate from this ID.\n")
+	}
+	prompt.WriteString("\n")
 	if localPublish {
 		fmt.Fprintf(&prompt, "Follow the fixed task contract and the project's instructions. Read each reference from its listed Git commit and check its SHA-256. Implement and verify the task, then stage only the intended changes. SteerLine will commit, push, and create a draft PR targeting %s from the host after your explicit publication request. Keep working in this same session when the user sends feedback.\n\n", contract.Branch)
 	} else {

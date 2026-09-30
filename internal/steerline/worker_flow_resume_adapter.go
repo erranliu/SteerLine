@@ -38,6 +38,11 @@ func (s *Service) resumeNativeOrcaWorker(ctx context.Context, task *TaskRecord, 
 	if execution.Process.Kind != "orca-native" {
 		return false, s.nativeOrcaUncertain(run, "Old shell-based Orca execution cannot be resumed as a native Dispatch")
 	}
+	if turn := nativeOrcaCurrentTurn(execution); turn != nil && turn.DoneMessageID != "" && (execution.PendingTurnID == "" || turn.TurnID == execution.PendingTurnID) {
+		// A delivered result can settle after the agent exits; the original
+		// terminal, incarnation, worktree and Dispatch are still verified.
+		return false, s.pollNativeOrcaWorker(ctx, run)
+	}
 	if err := s.verifyNativeOrcaWorker(ctx, run, execution); err != nil {
 		return false, s.nativeOrcaUncertain(run, "Original Orca agent session is unavailable: "+err.Error())
 	}
@@ -193,7 +198,8 @@ func (s *Service) resumeWorkerFlowByMode(ctx context.Context, task *TaskRecord, 
 	case workerflow.LocalCodex:
 		return s.resumeCodexWorker(ctx, task, run)
 	case workerflow.NativeOrca:
-		return s.resumeNativeOrcaWorker(ctx, task, run)
+		_, err := s.resumeNativeOrcaWorker(ctx, task, run)
+		return true, err // Poll every active Orca Run, not only the first one.
 	case workerflow.SupervisedOrca:
 		return s.resumeSupervisedOrcaWorker(ctx, task, run)
 	default:

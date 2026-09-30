@@ -25,6 +25,8 @@ worktree create --agent <冻结的 Profile.Agent>
 
 Orca 负责启动所选 agent、生成并注入带权威身份的 preamble、维护 Task/Dispatch 和消息关系。SteerLine 不自制 preamble、Dispatch capability 或 worker_done，不把 `codex exec resume`、Codex UUID、Codex JSONL 作为 Orca 的协议。
 
+Windows 的 Codex `workspace-write` 进程可能无法连接本机 Orca 命名管道。此时 worker 可在其固定 worktree 内原子写入一份有界的 `worker_done` 请求，包含本轮 SteerLine Run/Turn、Orca Task/Dispatch 身份及原注入 preamble 中的 Dispatch capability。中心先读原 Run inbox；若没有 `worker_done`，再核对原 agent terminal、全部请求身份及仍在派发中的 Dispatch，才代该 worker 调用 Orca `orchestration send`。仍由 Orca 产生并结算 `worker_done`，中心继续从原 Run inbox 核验回执和 Dispatch 状态。回传路径加入仓库本地 exclude，防止被 Git 提交；中心不把 capability 记入数据库或日志，调用后即删除请求文件。请求写入本身不算交付成功，发送结果不明时显式阻塞并对账，不得盲目重发。该通道仅覆盖最终结果，不替代 Orca 原生 question/reply。
+
 Orca 版本匹配文档 `references/low-level-topology.md` 明确：`dispatch --inject` 的 worker 为 `unsupervised`，不创建 supervised terminal resource；`worker-stop`、`worker-abandon`、`worker-retain/release` 不替该路径管理进程。SteerLine 因而承担自己创建的 agent/coordinator terminal 的身份保存、观察、保留、关闭和重启对账。`worker-release` 返回 `retained/no_owned_resource` 不能作为已关闭证明。
 
 这是对通常优先 `worker-start` 的明确选型：本机已复现其 readiness 阻断，而低层原生协议已完成双轮实验。本期不同时实现第二条 supervised 路径；未来修复可用后另行评估资源归属切换，不在现有 Execution 内静默更换。

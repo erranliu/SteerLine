@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"runtime"
 	"strings"
 	"time"
 )
@@ -22,6 +23,11 @@ func nativeOrcaFixedAgentCommand(c Config) (string, error) {
 	}
 	args := append([]string(nil), c.Codex.Args...)
 	args = append(args, "--model", c.Model, "--config", "model_reasoning_effort="+c.ReasoningEffort, "--sandbox", c.Sandbox)
+	if runtime.GOOS == "windows" {
+		// The worker must reach its Git/PR remote while the Codex workspace
+		// sandbox still limits filesystem writes.
+		args = append(args, "--config", "sandbox_workspace_write.network_access=true")
+	}
 	parts := []string{"&", powershellLiteral(c.Codex.Executable)}
 	for _, arg := range args {
 		parts = append(parts, powershellLiteral(arg))
@@ -138,6 +144,13 @@ func (s *Service) prepareNativeOrcaFixedAgentTerminal(ctx context.Context, run *
 	command, err := nativeOrcaFixedAgentCommand(fixedConfig)
 	if err != nil {
 		return err
+	}
+	writeArgs, err := codexLinkedWorktreeWriteArgs(ctx, fixedConfig, worktree.Path)
+	if err != nil {
+		return err
+	}
+	for _, arg := range writeArgs {
+		command += " " + powershellLiteral(arg)
 	}
 	opID, err := s.startOperation("orca_native_agent_terminal", key, map[string]string{"worktree": worktree.ID, "title": title, "model": fixedConfig.Model, "effort": fixedConfig.ReasoningEffort, "command": command})
 	if err != nil {

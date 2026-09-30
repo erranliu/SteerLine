@@ -538,6 +538,9 @@ func (s *Service) startNativeOrcaTurn(ctx context.Context, run *Run, execution *
 	if err := s.verifyNativeOrcaWorker(ctx, run, execution); err != nil {
 		return err
 	}
+	if err := ensureNativeOrcaRelayIgnored(ctx, fixedConfig, execution.Workspace.Worktree); err != nil {
+		return err
+	}
 	if len([]byte(prompt)) > 16<<10 || len([]rune(prompt)) > 12000 {
 		return &BackendError{Code: BackendRejected, Diagnostic: "Orca native task spec exceeds the conservative Windows command-line bound"}
 	}
@@ -1035,9 +1038,14 @@ func (s *Service) nativeOrcaUncertain(run *Run, reason string) error {
 	if run == nil {
 		return errors.New(reason)
 	}
-	s.executionRecord(run).Error = ptr(clip(reason, 2000))
+	execution := s.executionRecord(run)
+	diagnostic := clip(reason, 2000)
+	if execution.Status == "blocked" && execution.Error != nil && *execution.Error == diagnostic {
+		return nil
+	}
+	execution.Error = ptr(diagnostic)
 	s.refreshRun(run)
-	s.executionRecord(run).Status = "blocked"
+	execution.Status = "blocked"
 	s.refreshRun(run)
 	s.note(run, "steer", "worker", "unverified", "Orca observation needs reconciliation", reason, nil)
 	return s.save()
@@ -1067,6 +1075,9 @@ func (s *Service) pollNativeOrcaWorker(ctx context.Context, run *Run) error {
 	if turn.DoneMessageID == "" {
 		env, err := workerOrcaCall(ctx, fixedConfig, "orchestration", "check", "--terminal", state.Coordinator.Terminal, "--run", execution.Target.OrchestrationRun, "--json")
 		if err != nil {
+			if ctx.Err() != nil {
+				return nil // Service shutdown is not a worker failure.
+			}
 			return s.nativeOrcaUncertain(run, "Orca inbox is temporarily unavailable: "+err.Error())
 		}
 		if env.Meta.RuntimeID != state.Coordinator.RuntimeID {
@@ -1166,6 +1177,14 @@ func (s *Service) pollNativeOrcaWorker(ctx context.Context, run *Run) error {
 			return err
 		}
 	}
+	if turn.DoneMessageID == "" {
+		if err := s.relayNativeOrcaDone(ctx, run, execution, turn); err != nil {
+			if ctx.Err() != nil {
+				return nil // Service shutdown is not a worker result failure.
+			}
+			return s.nativeOrcaUncertain(run, "Orca worker result relay needs reconciliation: "+err.Error())
+		}
+	}
 	if err := s.readNativeOrcaOutput(ctx, run, execution, turn); err != nil {
 		execution.Error = ptr(clip("Orca output is bounded or unavailable: "+err.Error(), 2000))
 		s.refreshRun(run)
@@ -1173,6 +1192,29 @@ func (s *Service) pollNativeOrcaWorker(ctx context.Context, run *Run) error {
 	}
 	if turn.DoneMessageID != "" {
 		return s.finishNativeOrcaTurn(ctx, run, workflow, execution, turn)
+	}
+	if execution.Status == "blocked" && execution.Error != nil && strings.Contains(*execution.Error, "context canceled") {
+		shown, err := workerOrcaCall(ctx, fixedConfig, "orchestration", "worker-show", "--dispatch", turn.DispatchID, "--json")
+		if err != nil {
+			return err
+		}
+		var current struct {
+			Dispatch struct {
+				ID     string `json:"id"`
+				RunID  string `json:"runId"`
+				TaskID string `json:"taskId"`
+				Status string `json:"status"`
+			} `json:"dispatch"`
+			Worker struct {
+				AgentTerminalHandle string `json:"agentTerminalHandle"`
+			} `json:"worker"`
+		}
+		if err := json.Unmarshal(shown.Result, &current); err != nil || shown.Meta.RuntimeID != execution.Process.RuntimeID || current.Dispatch.ID != turn.DispatchID || current.Dispatch.RunID != execution.Target.OrchestrationRun || current.Dispatch.TaskID != turn.TaskID || current.Dispatch.Status != "dispatched" || current.Worker.AgentTerminalHandle != execution.Process.Terminal {
+			return errors.New("stopped-center Orca Dispatch could not be verified as still active")
+		}
+		execution.Status, execution.Error = "pending", nil
+		s.refreshRun(run)
+		return s.save()
 	}
 	if workflow.Phase == "executing" && run.ExecutionStatus == "unknown" {
 		execution.Status = "active"
@@ -1424,9 +1466,17 @@ func (s *Service) finishNativeOrcaTurn(ctx context.Context, run *Run, workflow *
 		if err := s.offerWorkerPRFeedback(run, workflow.PRURL); err != nil {
 			return err
 		}
-		return s.save()
+		if err := s.save(); err != nil {
+			return err
+		}
+		removeNativeOrcaRelayRequest(execution.Workspace.Worktree, run.RunID, turn.TurnID)
+		return nil
 	}
-	return s.waitWorkerFlow(run, "The original Orca Dispatch settled ("+turn.Outcome+"). Send feedback to continue the same agent session.")
+	if err := s.waitWorkerFlow(run, "The original Orca Dispatch settled ("+turn.Outcome+"). Send feedback to continue the same agent session."); err != nil {
+		return err
+	}
+	removeNativeOrcaRelayRequest(execution.Workspace.Worktree, run.RunID, turn.TurnID)
+	return nil
 }
 
 func (s *Service) closeNativeOrcaTerminal(ctx context.Context, execution *ExecutionRecord, identity ProcessIdentity, role string) error {
