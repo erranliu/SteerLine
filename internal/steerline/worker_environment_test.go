@@ -34,6 +34,7 @@ func newEnvironmentFixture(t *testing.T, state fakeNativeOrcaState, model string
 	statePath := filepath.Join(stateDir, "native-orca.json")
 	data, _ := json.Marshal(state)
 	require(t, os.WriteFile(statePath, data, 0600))
+	c.PublicationPolicy.Publisher = "worker"
 	c.Host, c.Agent, c.Sandbox, c.WindowsSandbox, c.Model, c.ReasoningEffort, c.Claimant = "orca", "codex", "workspace-write", "unelevated", model, "", "operator"
 	if model != "" {
 		c.ReasoningEffort = "high"

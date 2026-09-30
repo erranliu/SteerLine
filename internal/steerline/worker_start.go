@@ -20,6 +20,10 @@ func (s *Service) prepareWorkerFlow(ctx context.Context, task TaskRecord, run *R
 	if fixed.execution.RecoveryRequired {
 		return errors.New("existing worker execution requires a fresh manual recovery decision")
 	}
+	c := fixed.config
+	if err := c.bindPublicationTarget(ctx); err != nil {
+		return err
+	}
 	adapter, err := s.workerFlowMode(run)
 	if err != nil {
 		return err
@@ -112,7 +116,7 @@ func (s *Service) startInitialWorkerFlowTurn(ctx context.Context, task TaskRecor
 	if err != nil {
 		return s.waitWorkerFlow(run, "Fixed task contract is unavailable: "+err.Error())
 	}
-	prompt, err := workerflow.Prompt(task, contract, run.RunID, c.hostName() == "local")
+	prompt, err := workerflow.Prompt(task, contract, run.RunID, c.PublicationPolicy)
 	if err != nil {
 		return s.waitWorkerFlow(run, err.Error())
 	}
@@ -145,9 +149,16 @@ func (s *Service) startWorkerFlowTurn(ctx context.Context, run *Run, prompt, tur
 	if err != nil {
 		return err
 	}
-	if adapter == workerflow.LocalCodex {
+	c := fixed.config
+	if err := verifyPublicationTargetForRun(ctx, c, run); err != nil {
+		return err
+	}
+	prompt += publicationTargetInstruction(c)
+	if fixed.config.PublicationPolicy.Publisher == executionapi.PublisherHostService {
 		prompt += publication.WorkerInstruction(run.RunID)
-	} else if adapter == workerflow.NativeOrca {
+	}
+	if adapter == workerflow.NativeOrca {
+		prompt += "\nOrca Run, Task and Dispatch IDs are separate from the fixed SteerLine workflow_run_id.\n"
 		prompt += nativeOrcaRelayInstruction(run.RunID, turnID)
 	}
 	execution.PendingTurnID, execution.PendingCommandID = adapter.PendingIdentity(turnID)

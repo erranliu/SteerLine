@@ -84,6 +84,13 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 		return replayTaskClaim(old, requestPayload, options.TaskID, options.RequestedBy)
 	}
 
+	if err := config.bindPublicationTarget(ctx); err != nil {
+		return TaskClaimReceipt{}, err
+	}
+	if options.ExecutionProfile != nil {
+		p := config.bindProjectPolicy(*options.ExecutionProfile)
+		options.ExecutionProfile = &p
+	}
 	if _, err := policyNativeVersion(ctx, config); err != nil {
 		return TaskClaimReceipt{}, err
 	}

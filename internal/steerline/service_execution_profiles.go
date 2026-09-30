@@ -45,7 +45,7 @@ func (s *Service) executionConfigForRun(run *Run) (Config, error) {
 			continue
 		}
 		if workflow.ExecutionProfile == nil {
-			return Config{}, errors.New("execution snapshot v2 is required; preserve original state and external session")
+			return Config{}, errors.New("execution snapshot v3 is required; preserve original state and external session")
 		}
 		fixed := *workflow.ExecutionProfile
 		if fixed.ID == "" || !verifyFixedExecutionProfile(fixed) || workflow.ConfigDigest != fixed.AcceptedConfigVersion {
@@ -67,6 +67,10 @@ func (s *Service) executionConfigForRun(run *Run) (Config, error) {
 			}
 		}
 		config.WorkflowProtocol = WorkerFlowVersion
+		config.Repository, config.Branch = workflow.Repository, fixed.Publication.BaseBranch
+		if fixed.Publication.RemoteURL == "" {
+			return Config{}, errors.New("fixed publication remote URL is missing; preserve original state")
+		}
 		if fixed.Host == "orca_supervised" && run.Target.CoordinatorTerminal != "" {
 			if config.Orca.Supervised == nil {
 				return Config{}, errors.New("fixed supervised profile has no coordinator configuration")

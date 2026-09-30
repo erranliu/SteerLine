@@ -65,6 +65,18 @@ func renderFixedRunExecutionProfile(state projectState, run *steerline.Run) []st
 		"执行方案：" + safeTerminalInlineText(fixed.Name) + " [" + safeTerminalInlineText(fixed.ID) + "] · " + safeTerminalInlineText(executionHostLabel(config)),
 		"Agent / Model / Thinking：" + safeTerminalInlineText(fixed.Agent) + " / " + safeTerminalInlineText(executionModelLabel(config)) + " / " + safeTerminalInlineText(executionEffortLabel(config)),
 	}
+	lines = append(lines, "发布责任："+safeTerminalInlineText(fixed.PublicationPolicy.Publisher), "冻结发布目标："+safeTerminalInlineText(fixed.Publication.Provider.Kind)+" · "+safeTerminalInlineText(fixed.Publication.Provider.BaseURL)+"/"+safeTerminalInlineText(fixed.Publication.Provider.Repository)+" · base "+safeTerminalInlineText(fixed.Publication.BaseBranch), "Git remote："+safeTerminalInlineText(fixed.Publication.Remote)+" · "+safeTerminalInlineText(fixed.Publication.RemoteURL), "发布工具："+safeTerminalInlineText(fixed.Publication.Git.Executable)+" · query "+safeTerminalInlineText(fixed.Publication.Provider.Query.Executable)+" · close "+safeTerminalInlineText(fixed.Publication.Provider.Close.Executable), "认证引用："+safeTerminalInlineText(strings.Join(fixed.Publication.AuthenticationRefs, ", ")))
+	for _, tool := range []struct {
+		name    string
+		command steerline.Command
+	}{{"Git", fixed.Publication.Git}, {"Query", fixed.Publication.Provider.Query}, {"Create", fixed.Publication.Create}, {"Close", fixed.Publication.Provider.Close}} {
+		description := tool.command.Executable + " " + strings.Join(tool.command.Args, " ")
+		if tool.command.Executable == "" {
+			description = "无宿主命令"
+		}
+		lines = append(lines, "冻结 "+tool.name+"："+safeTerminalInlineText(strings.TrimSpace(description)))
+	}
+
 	lines = append(lines, fmt.Sprintf("项目要求：读取 %s · 写入 %s · Git %t · 网络 %s · 越权 %s", fixed.ExecutionPolicy.Filesystem.ReadScope, fixed.ExecutionPolicy.Filesystem.WriteScope, fixed.ExecutionPolicy.Filesystem.GitMetadataWrite, fixed.ExecutionPolicy.Network, fixed.ExecutionPolicy.Escalation), "受理版本："+safeTerminalInlineText(fixed.AcceptedConfigVersion)+" · 来源："+safeTerminalInlineText(fixed.PolicySource))
 	if state.snapshot.Domain != nil {
 		for _, execution := range state.snapshot.Domain.Executions {

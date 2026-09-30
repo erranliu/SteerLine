@@ -2,6 +2,7 @@ package steerline
 
 import (
 	"context"
+	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	"net/url"
 	"strings"
 )
@@ -18,6 +19,12 @@ func configuredRepositoryTarget(ctx context.Context, c Config) (string, error) {
 	target := strings.TrimSpace(string(remoteURL))
 	if target == "" {
 		return "", nativeErr("authority_mismatch", "configured Git remote resolved to an empty repository")
+	}
+	if err := publication.ValidateURL(target); err != nil {
+		return "", err
+	}
+	if c.publicationRemoteURL != "" && target != c.publicationRemoteURL {
+		return "", nativeErr("authority_mismatch", "Git remote differs from the original publication target")
 	}
 	if strings.Contains(target, "://") {
 		parsed, parseErr := url.Parse(target)

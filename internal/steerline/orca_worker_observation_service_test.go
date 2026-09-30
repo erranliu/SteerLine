@@ -12,7 +12,6 @@ import (
 	"runtime"
 	"strings"
 	"testing"
-	"time"
 )
 
 func TestNativeOrcaPRBindingUsesProviderAndRetainsSession(t *testing.T) {
@@ -33,20 +32,26 @@ func TestNativeOrcaPRBindingUsesProviderAndRetainsSession(t *testing.T) {
 	defer server.Close()
 	url := server.URL + "/org/repo/pulls/8"
 	config := publication.Config{Kind: "gitea", BaseURL: server.URL, Repository: "org/repo"}
-	s := Service{Config: Config{PR: config}, prs: publication.NewClient(config, Runner{Timeout: 5 * time.Second}, 5*time.Second)}
-	workflow := WorkflowRunRecord{WorkflowRunID: "wf-8", WorkflowVersion: WorkerFlowVersion, Phase: "executing", Branch: "main"}
-	execution := ExecutionRecord{ExecutionID: "exec-8", WorkflowRunID: workflow.WorkflowRunID, SessionID: "orca-session-8", Workspace: WorkspaceEvidence{Branch: "codex/task-8"}, CurrentTurnID: "turn-8", LastStoppedTurnID: "turn-8"}
-	run := Run{}
+	c := Config{CommandTimeout: "5s", PR: config, Host: "orca", Agent: "codex", ExecutionPolicy: workspacePolicyFixture(), PublicationPolicy: executionPublicationFixture(), WorkflowProtocol: WorkerFlowVersion, Repository: t.TempDir(), Remote: "origin", Branch: "main", Codex: Command{Executable: "codex", WindowsSandbox: "unelevated"}}
+	c.PublicationPolicy.Publisher = "worker"
+	c.publicationRemoteURL = server.URL + "/org/repo.git"
+	fixed := c.projectExecutionProfile().Freeze()
+	workflow := WorkflowRunRecord{WorkflowRunID: "wf-8", WorkflowVersion: WorkerFlowVersion, Phase: "executing", Repository: c.Repository, Branch: "main", ExecutionProfile: &fixed, ConfigDigest: fixed.AcceptedConfigVersion}
+	execution := ExecutionRecord{ExecutionID: "exec-8", CurrentAttemptID: "attempt-8", WorkflowRunID: workflow.WorkflowRunID, SessionID: "orca-session-8", Workspace: WorkspaceEvidence{Branch: "codex/task-8", Worktree: c.Repository}, CurrentTurnID: "turn-8", LastStoppedTurnID: "turn-8"}
+	execution.PolicyResources = policyResourceReceiptFixture(fixed.Digest, c.Repository)
+	run := Run{RunID: workflow.WorkflowRunID, ExecutionID: execution.ExecutionID, AttemptID: "attempt-8", Host: "orca", Agent: "codex", Backend: "orca", Protocol: "orca_terminal_v2", Target: targetFor(c)}
+	s := Service{Config: c, domain: DomainSnapshot{WorkflowRuns: []WorkflowRunRecord{workflow}, Executions: []ExecutionRecord{execution}, Attempts: []StepAttemptRecord{{AttemptID: run.AttemptID, ExecutionID: execution.ExecutionID}}}, runs: []*Run{&run}}
+	wp, ep := s.workflowRecords(&run)
 	headBranch = "codex/other-task"
-	if err := s.bindNativeOrcaPRCandidates(ctx, &run, &workflow, &execution, []string{url}); err == nil || workflow.PRURL != "" || run.PR.URL != nil {
+	if err := s.bindNativeOrcaPRCandidates(ctx, &run, wp, ep, []string{url}); err == nil || wp.PRURL != "" || run.PR.URL != nil {
 		t.Fatalf("unowned PR was bound: workflow=%+v run=%+v error=%v", workflow, run, err)
 	}
 	headBranch = "codex/task-8"
-	if err := s.bindNativeOrcaPRCandidates(ctx, &run, &workflow, &execution, []string{url}); err != nil || workflow.PRURL != url || workflow.Phase != "waiting_pr_merge" {
+	if err := s.bindNativeOrcaPRCandidates(ctx, &run, wp, ep, []string{url}); err != nil || wp.PRURL != url || wp.Phase != "waiting_pr_merge" {
 		t.Fatalf("provider-verified PR was not bound: workflow=%+v error=%v", workflow, err)
 	}
 	state = "closed"
-	if err := s.bindNativeOrcaPRCandidates(ctx, &run, &workflow, &execution, []string{url}); err != nil || workflow.PRState != "closed_unmerged" || workflow.Phase != "waiting_decision" || execution.SessionID != "orca-session-8" || execution.CurrentTurnID != "turn-8" {
+	if err := s.bindNativeOrcaPRCandidates(ctx, &run, wp, ep, []string{url}); err != nil || wp.PRState != "closed_unmerged" || wp.Phase != "waiting_decision" || execution.SessionID != "orca-session-8" || execution.CurrentTurnID != "turn-8" {
 		t.Fatalf("unmerged PR did not return the original session to feedback: workflow=%+v execution=%+v error=%v", workflow, execution, err)
 	}
 }

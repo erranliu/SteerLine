@@ -12,8 +12,9 @@ import (
 	"strings"
 )
 
-// ProviderRef fixes provider identity while keeping command arguments and credentials in runtime configuration.
+// ProviderRef identifies the complete non-secret provider fixed by the Profile.
 type ProviderRef struct {
+	ConfigDigest    string `json:"config_digest"`
 	Kind            string `json:"kind"`
 	BaseURL         string `json:"base_url"`
 	Repository      string `json:"repository"`
@@ -22,9 +23,11 @@ type ProviderRef struct {
 }
 
 func ProviderIdentity(config Config) ProviderRef {
+	full, _ := json.Marshal(config)
+	fullDigest := sha256.Sum256(full)
 	args, _ := json.Marshal(config.Query.Args)
 	digest := sha256.Sum256(args)
-	return ProviderRef{Kind: config.Kind, BaseURL: config.BaseURL, Repository: config.Repository, QueryExecutable: config.Query.Executable, QueryArgsDigest: hex.EncodeToString(digest[:])}
+	return ProviderRef{ConfigDigest: hex.EncodeToString(fullDigest[:]), Kind: config.Kind, BaseURL: config.BaseURL, Repository: config.Repository, QueryExecutable: config.Query.Executable, QueryArgsDigest: hex.EncodeToString(digest[:])}
 }
 func (identity ProviderRef) Matches(config Config) bool { return identity == ProviderIdentity(config) }
 
@@ -38,6 +41,7 @@ type Request struct {
 	TaskID       string                       `json:"task_id"`
 	Workspace    executionapi.WorkspaceIntent `json:"workspace"`
 	GitCommonDir string                       `json:"git_common_dir"`
+	RemoteURL    string                       `json:"remote_url"`
 	Remote       string                       `json:"remote"`
 	BaseBranch   string                       `json:"base_branch"`
 	Provider     ProviderRef                  `json:"provider"`
@@ -80,17 +84,17 @@ func requestDigest(request Request) string {
 	return hex.EncodeToString(sum[:])
 }
 func (request Request) Validate() error {
-	if request.Version != 1 || !runIDPattern.MatchString(request.RunID) || request.ExecutionID == "" || !turnIDPattern.MatchString(request.TurnID) || request.TaskID == "" ||
-		!filepath.IsAbs(request.Workspace.Path) || !filepath.IsAbs(request.GitCommonDir) || request.Workspace.Branch == "" || !validCommit(request.Workspace.BaseCommit) || request.Remote == "" || request.BaseBranch == "" {
+	if request.Version != 2 || !runIDPattern.MatchString(request.RunID) || request.ExecutionID == "" || !turnIDPattern.MatchString(request.TurnID) || request.TaskID == "" ||
+		!filepath.IsAbs(request.Workspace.Path) || !filepath.IsAbs(request.GitCommonDir) || request.Workspace.Branch == "" || !validCommit(request.Workspace.BaseCommit) || request.Remote == "" || request.RemoteURL == "" || ValidateURL(request.RemoteURL) != nil || request.BaseBranch == "" {
 		return errors.New("local publication requires a fixed execution, turn and workspace")
 	}
 	if !regexp.MustCompile(`^codex/[A-Za-z0-9][A-Za-z0-9._-]*-[0-9a-f]{12}$`).MatchString(request.Workspace.Branch) || strings.Contains(request.Workspace.Branch, "..") {
 		return errors.New("local publication execution branch is invalid")
 	}
-	if request.Provider.Kind != "command" || strings.TrimSuffix(request.Provider.BaseURL, "/") != "https://github.com" || request.Provider.QueryExecutable == "" || request.Provider.Repository == "" || !validSHA256(request.Provider.QueryArgsDigest) {
+	if request.Provider.Kind != "command" || strings.TrimSuffix(request.Provider.BaseURL, "/") != "https://github.com" || request.Provider.QueryExecutable == "" || request.Provider.Repository == "" || !validSHA256(request.Provider.QueryArgsDigest) || !validSHA256(request.Provider.ConfigDigest) {
 		return errors.New("local host publication requires a fixed GitHub command provider")
 	}
-	if (Config{Kind: request.Provider.Kind, BaseURL: request.Provider.BaseURL, Repository: request.Provider.Repository}).ValidateRemote("https://github.com/"+request.Provider.Repository+".git") != nil {
+	if (Config{Kind: request.Provider.Kind, BaseURL: request.Provider.BaseURL, Repository: request.Provider.Repository}).ValidateRemote(request.RemoteURL) != nil {
 		return errors.New("local GitHub publication repository is invalid")
 	}
 	return nil

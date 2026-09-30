@@ -258,18 +258,26 @@ func (s *Service) reconcileNativePRCleanup(ctx context.Context, task TaskRecord,
 	if workflow == nil || execution == nil || attempt == nil || workflow.WorkflowVersion != WorkerFlowVersion || attempt.StepID != "worker" || workflow.PRURL != prURL || execution.SessionID == "" {
 		return nativeErr("authority_mismatch", "discarded PR cleanup lacks its fixed worker flow, session and PR URL")
 	}
-	info, err := s.prs.Query(ctx, prURL)
+	fixed, err := s.workerFlowContext(run)
+	if err != nil {
+		return err
+	}
+	info, err := publicationClient(fixed.config).Query(ctx, prURL)
 	if err != nil || info.State == "unknown" {
 		return errors.Join(err, nativeErr("merge_state_unknown", "discarded PR state could not be verified"))
 	}
-	if err := publication.ValidateWorkerPRIdentity(info, prURL, s.Config.PR.Repository, workflow.Branch, execution.Workspace.Branch); err != nil {
+	if err := publication.ValidateWorkerPRIdentity(info, prURL, fixed.config.PR.Repository, workflow.Branch, execution.Workspace.Branch); err != nil {
 		return err
 	}
 	if info.Merged || info.State == "merged" {
 		return nativeErr("task_discarded", "discarded task PR is already merged; preserve delivery evidence for manual recovery")
 	}
 	if info.State == "open" {
-		info, err = s.prs.Close(ctx, prURL)
+		c := fixed.config
+		if err := c.bindPublicationTarget(ctx); err != nil {
+			return err
+		}
+		info, err = publicationClient(c).Close(ctx, prURL)
 		if err != nil {
 			var providerErr *publication.Error
 			if errors.As(err, &providerErr) {
@@ -278,7 +286,7 @@ func (s *Service) reconcileNativePRCleanup(ctx context.Context, task TaskRecord,
 			return err
 		}
 	}
-	if err := publication.ValidateWorkerPRIdentity(info, prURL, s.Config.PR.Repository, workflow.Branch, execution.Workspace.Branch); err != nil {
+	if err := publication.ValidateWorkerPRIdentity(info, prURL, fixed.config.PR.Repository, workflow.Branch, execution.Workspace.Branch); err != nil {
 		return err
 	}
 	if info.State != "closed_unmerged" || info.Merged {
@@ -636,7 +644,11 @@ func (s *Service) nativeCompleteMergedTask(ctx context.Context, run *Run) error 
 	if task == nil || workflow == nil {
 		return nativeErr("inconsistent_delivery", "native delivery task or workflow record is missing")
 	}
-	receipt, err := (CommandService{Store: s.domainStore, Project: s.Config.identity}).CompleteNativeTask(ctx, s.Config, task.TaskID, task.Version, workflow.WorkflowRunID, s.prs)
+	fixed, err := s.workerFlowContext(run)
+	if err != nil {
+		return err
+	}
+	receipt, err := (CommandService{Store: s.domainStore, Project: fixed.config.identity}).CompleteNativeTask(ctx, fixed.config, task.TaskID, task.Version, workflow.WorkflowRunID, publicationClient(fixed.config))
 	if err != nil {
 		return err
 	}

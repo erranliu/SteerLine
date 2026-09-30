@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"regexp"
 	"runtime"
+	"slices"
 	"strings"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	remote "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker"
+	"github.com/erranliu/SteerLine/internal/steerline/publication"
 )
 
 const ProjectExecutionProfileID = "project-default"
@@ -19,20 +21,22 @@ const ProjectExecutionProfileID = "project-default"
 // ExecutionProfile is one complete, named execution route for a native task.
 // Repository authority, PR provider, and task DAG stay project-wide.
 type ExecutionProfile struct {
-	ExecutionPolicy       executionapi.ExecutionPolicy `json:"-"`
-	AcceptedConfigVersion string                       `json:"-"`
-	PolicySource          string                       `json:"-"`
-	ID                    string                       `json:"id"`
-	Name                  string                       `json:"name"`
-	Host                  string                       `json:"host"`
-	Agent                 string                       `json:"agent"`
-	Model                 string                       `json:"model,omitempty"`
-	ReasoningEffort       string                       `json:"reasoning_effort,omitempty"`
-	Sandbox               string                       `json:"-"`
-	WindowsSandbox        string                       `json:"-"`
-	CodexProfile          string                       `json:"profile,omitempty"`
-	Codex                 Command                      `json:"codex"`
-	Orca                  OrcaConfig                   `json:"orca,omitempty"`
+	PublicationPolicy     executionapi.PublicationPolicy `json:"-"`
+	Publication           contracts.PublicationSettings  `json:"-"`
+	ExecutionPolicy       executionapi.ExecutionPolicy   `json:"-"`
+	AcceptedConfigVersion string                         `json:"-"`
+	PolicySource          string                         `json:"-"`
+	ID                    string                         `json:"id"`
+	Name                  string                         `json:"name"`
+	Host                  string                         `json:"host"`
+	Agent                 string                         `json:"agent"`
+	Model                 string                         `json:"model,omitempty"`
+	ReasoningEffort       string                         `json:"reasoning_effort,omitempty"`
+	Sandbox               string                         `json:"-"`
+	WindowsSandbox        string                         `json:"-"`
+	CodexProfile          string                         `json:"profile,omitempty"`
+	Codex                 Command                        `json:"codex"`
+	Orca                  OrcaConfig                     `json:"orca,omitempty"`
 }
 
 // FixedExecutionProfile is stored with a WorkflowRun.
@@ -40,8 +44,19 @@ type FixedExecutionProfile = contracts.FixedExecutionProfile
 
 func (p ExecutionProfile) Freeze() FixedExecutionProfile {
 	p = p.withWindowsSandboxDefault()
+	p.Publication.Provider.Query.Args = slices.Clone(p.Publication.Provider.Query.Args)
+	p.Publication.Provider.Close.Args = slices.Clone(p.Publication.Provider.Close.Args)
+	p.Publication.Git.Args = slices.Clone(p.Publication.Git.Args)
+	p.Publication.Create.Args = slices.Clone(p.Publication.Create.Args)
+	p.Publication.AuthenticationRefs = slices.Clone(p.Publication.AuthenticationRefs)
+	p.Codex.Args = slices.Clone(p.Codex.Args)
+	p.Orca.Args = slices.Clone(p.Orca.Args)
+	if p.Orca.Supervised != nil {
+		sc := *p.Orca.Supervised
+		p.Orca.Supervised = &sc
+	}
 	policy := "never"
-	return FixedExecutionProfile{Version: 2, ExecutionPolicy: p.ExecutionPolicy, PolicyDigest: digestValue(p.ExecutionPolicy), AcceptedConfigVersion: p.AcceptedConfigVersion, PolicySource: p.PolicySource, ID: p.ID, Name: p.Name, Digest: p.Digest(), Host: p.Host, Agent: p.Agent, Model: p.Model, ReasoningEffort: p.ReasoningEffort, Sandbox: p.Sandbox, WindowsSandbox: p.WindowsSandbox, ApprovalPolicy: policy, CodexProfile: p.CodexProfile, Codex: p.Codex, Orca: p.Orca}
+	return FixedExecutionProfile{Version: 3, PublicationPolicy: p.PublicationPolicy, Publication: p.Publication, ExecutionPolicy: p.ExecutionPolicy, PolicyDigest: digestValue(p.ExecutionPolicy), AcceptedConfigVersion: p.AcceptedConfigVersion, PolicySource: p.PolicySource, ID: p.ID, Name: p.Name, Digest: p.Digest(), Host: p.Host, Agent: p.Agent, Model: p.Model, ReasoningEffort: p.ReasoningEffort, Sandbox: p.Sandbox, WindowsSandbox: p.WindowsSandbox, ApprovalPolicy: policy, CodexProfile: p.CodexProfile, Codex: p.Codex, Orca: p.Orca}
 }
 
 func verifyFixedExecutionProfile(p FixedExecutionProfile) bool {
@@ -49,17 +64,19 @@ func verifyFixedExecutionProfile(p FixedExecutionProfile) bool {
 	if err != nil || permissions.Sandbox != p.Sandbox || permissions.WindowsSandbox != p.WindowsSandbox {
 		return false
 	}
-	rebuilt := ExecutionProfile{ExecutionPolicy: p.ExecutionPolicy, AcceptedConfigVersion: p.AcceptedConfigVersion, PolicySource: p.PolicySource, ID: p.ID, Name: p.Name, Host: p.Host, Agent: p.Agent, Model: p.Model, ReasoningEffort: p.ReasoningEffort, Sandbox: p.Sandbox, WindowsSandbox: p.WindowsSandbox, CodexProfile: p.CodexProfile, Codex: p.Codex, Orca: p.Orca}
-	return p.Version == 2 && p.ExecutionPolicy.Validate() == nil && p.PolicyDigest == digestValue(p.ExecutionPolicy) && p.AcceptedConfigVersion != "" && p.PolicySource != "" && p.ApprovalPolicy == "never" && p.Digest != "" && p.Digest == rebuilt.Digest() && (!rebuilt.managedOrcaPermissions() || p.ApprovalPolicy == "never" && codexworker.ValidWindowsSandbox(p.WindowsSandbox))
+	rebuilt := ExecutionProfile{PublicationPolicy: p.PublicationPolicy, Publication: p.Publication, ExecutionPolicy: p.ExecutionPolicy, AcceptedConfigVersion: p.AcceptedConfigVersion, PolicySource: p.PolicySource, ID: p.ID, Name: p.Name, Host: p.Host, Agent: p.Agent, Model: p.Model, ReasoningEffort: p.ReasoningEffort, Sandbox: p.Sandbox, WindowsSandbox: p.WindowsSandbox, CodexProfile: p.CodexProfile, Codex: p.Codex, Orca: p.Orca}
+	return p.Version == 3 && publication.CheckPolicy(p.PublicationPolicy, p.Host, p.Agent, publication.Config(p.Publication.Provider)) == nil && publication.ValidateSettings(p.Publication, p.PublicationPolicy) == nil && p.ExecutionPolicy.Validate() == nil && p.PolicyDigest == digestValue(p.ExecutionPolicy) && p.AcceptedConfigVersion != "" && p.PolicySource != "" && p.ApprovalPolicy == "never" && p.Digest != "" && p.Digest == rebuilt.Digest() && (!rebuilt.managedOrcaPermissions() || p.ApprovalPolicy == "never" && codexworker.ValidWindowsSandbox(p.WindowsSandbox))
 }
 
 func (c Config) ApplyFixedExecutionProfile(p FixedExecutionProfile) Config {
+	c.PublicationPolicy = p.PublicationPolicy
+	c.PR, c.Git, c.Remote, c.publicationRemoteURL, c.Branch = publication.Config(p.Publication.Provider), p.Publication.Git, p.Publication.Remote, p.Publication.RemoteURL, p.Publication.BaseBranch
 	c.Host, c.Agent, c.Model, c.ReasoningEffort = p.Host, p.Agent, p.Model, p.ReasoningEffort
 	c.Sandbox, c.Profile, c.Codex, c.Orca = p.Sandbox, p.CodexProfile, p.Codex, p.Orca
 	c.WindowsSandbox = p.WindowsSandbox
 	c.fixedProfileDigest = p.Digest
 	c.ExecutionPolicy, c.configDigest, c.policySource = p.ExecutionPolicy, p.AcceptedConfigVersion, p.PolicySource
-	return c
+	return copyWorkerFlowConfig(c)
 }
 
 func (p ExecutionProfile) Digest() string {
@@ -67,13 +84,15 @@ func (p ExecutionProfile) Digest() string {
 	return digestValue(struct {
 		ExecutionProfile
 		Version               int
+		PublicationPolicy     executionapi.PublicationPolicy
+		Publication           contracts.PublicationSettings
 		Policy                executionapi.ExecutionPolicy
 		AcceptedConfigVersion string
 		PolicySource          string
 		Sandbox               string
 		WindowsSandbox        string
 		Contract              string
-	}{p, 2, p.ExecutionPolicy, p.AcceptedConfigVersion, p.PolicySource, p.Sandbox, p.WindowsSandbox, codexworker.PolicyContract})
+	}{p, 3, p.PublicationPolicy, p.Publication, p.ExecutionPolicy, p.AcceptedConfigVersion, p.PolicySource, p.Sandbox, p.WindowsSandbox, codexworker.PolicyContract})
 }
 
 func (p ExecutionProfile) managedOrcaPermissions() bool {
@@ -87,6 +106,12 @@ func (p ExecutionProfile) MatchesConfig(c Config) bool {
 }
 
 func (p ExecutionProfile) StaticUnavailableReason() string {
+	if err := publication.CheckPolicy(p.PublicationPolicy, p.Host, p.Agent, publication.Config(p.Publication.Provider)); err != nil {
+		return err.Error()
+	}
+	if err := publication.ValidateSettings(p.Publication, p.PublicationPolicy); err != nil {
+		return err.Error()
+	}
 	if p.Host == "orca" {
 		if err := validateLocalOrcaTargetArgs(p.Orca.Args); err != nil {
 			return err.Error()
@@ -116,6 +141,8 @@ func (p ExecutionProfile) withWindowsSandboxDefault() ExecutionProfile {
 }
 
 func (c Config) bindProjectPolicy(p ExecutionProfile) ExecutionProfile {
+	p.PublicationPolicy = c.PublicationPolicy
+	p.Publication = c.publicationSettings()
 	p.ExecutionPolicy, p.AcceptedConfigVersion, p.PolicySource = c.ExecutionPolicy, c.acceptedConfigVersion(), c.policySource
 	if p.PolicySource == "" {
 		p.PolicySource = "service:explicit-config"
@@ -127,9 +154,11 @@ func (c Config) acceptedConfigVersion() string {
 		return c.configDigest
 	}
 	return digestValue(struct {
+		PublicationPolicy  executionapi.PublicationPolicy
+		Publication        contracts.PublicationSettings
 		Policy             executionapi.ExecutionPolicy
 		Repository, Branch string
-	}{c.ExecutionPolicy, c.Repository, c.Branch})
+	}{c.PublicationPolicy, c.publicationSettings(), c.ExecutionPolicy, c.Repository, c.Branch})
 }
 
 func (p ExecutionProfile) effective() ExecutionProfile {
@@ -203,6 +232,12 @@ func (c Config) ApplyExecutionProfile(p ExecutionProfile) Config {
 }
 
 func validateExecutionProfiles(c Config) error {
+	if err := c.PublicationPolicy.Validate(); err != nil {
+		return err
+	}
+	if err := publication.ValidateNonSecret(c.PR, c.Git); err != nil {
+		return err
+	}
 	if err := c.ExecutionPolicy.Validate(); err != nil {
 		return err
 	}

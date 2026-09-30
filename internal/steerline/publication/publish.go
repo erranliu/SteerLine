@@ -16,6 +16,17 @@ type HostPublisher struct {
 	GitCommand contracts.Command
 	PR         *Client
 }
+
+func (p *HostPublisher) verifyRemote(ctx context.Context, request Request) error {
+	for _, args := range [][]string{{"remote", "get-url", request.Remote}, {"remote", "get-url", "--push", "--all", request.Remote}} {
+		url, err := p.git(ctx, args...)
+		if err != nil || url != request.RemoteURL || ValidateURL(url) != nil {
+			return errors.New("Git remote differs from the fixed publication URL; original state is preserved")
+		}
+	}
+	return nil
+}
+
 type Stage string
 
 const (
@@ -49,6 +60,12 @@ func (p *HostPublisher) Preflight(ctx context.Context, request Request) (Request
 	}
 	if p.Git == nil || p.PR == nil {
 		return Request{}, errors.New("local publisher is not configured")
+	}
+	if err := p.PR.validateHostRequest(request); err != nil {
+		return Request{}, err
+	}
+	if err := p.verifyRemote(ctx, request); err != nil {
+		return Request{}, err
 	}
 	common, err := p.git(ctx, "rev-parse", "--path-format=absolute", "--git-common-dir")
 	if err != nil || canonical(common) != canonical(request.GitCommonDir) {
@@ -96,7 +113,13 @@ func (p *HostPublisher) Publish(ctx context.Context, request Request, record fun
 	if p.Git == nil || p.PR == nil {
 		return result, errors.New("local publisher is not configured")
 	}
+	if err = p.PR.validateHostRequest(request); err != nil {
+		return result, err
+	}
 	defer func() { err = p.PR.redact(err) }()
+	if err = p.verifyRemote(ctx, request); err != nil {
+		return result, err
+	}
 	common, e := p.git(ctx, "rev-parse", "--path-format=absolute", "--git-common-dir")
 	if e != nil || canonical(common) != canonical(request.GitCommonDir) {
 		return result, errors.Join(e, errors.New("local publication Git common directory changed"))
@@ -180,6 +203,9 @@ func (p *HostPublisher) Reconcile(ctx context.Context, request Request) (result 
 		return result, err
 	}
 	defer func() { err = p.PR.redact(err) }()
+	if err = p.verifyRemote(ctx, request); err != nil {
+		return result, err
+	}
 	common, e := p.git(ctx, "rev-parse", "--path-format=absolute", "--git-common-dir")
 	if e != nil || canonical(common) != canonical(request.GitCommonDir) {
 		return result, errors.Join(e, errors.New("recovery Git common directory changed"))

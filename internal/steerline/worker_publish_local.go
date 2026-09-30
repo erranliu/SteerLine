@@ -30,16 +30,19 @@ func (s *Service) publishLocalWorkerRun(ctx context.Context, run *Run, workflow 
 		return empty, configErr
 	}
 	c := fixed.config
-	if run == nil || workflow == nil || execution == nil || run.WorkspaceIntent == nil || run.WorktreePath == nil || workflow.WorkflowRunID != run.RunID || execution.WorkflowRunID != run.RunID || run.Protocol != string(executionapi.ProtocolLocalCodexAppServer) || !codexworker.ValidNativeID(turnID) || execution.CurrentTurnID != turnID || execution.LastStoppedTurnID != turnID || c.hostName() != "local" {
+	if run == nil || workflow == nil || execution == nil || run.WorkspaceIntent == nil || run.WorktreePath == nil || workflow.WorkflowRunID != run.RunID || execution.WorkflowRunID != run.RunID || run.Protocol != string(executionapi.ProtocolLocalCodexAppServer) || !codexworker.ValidNativeID(turnID) || execution.CurrentTurnID != turnID || execution.LastStoppedTurnID != turnID || c.PublicationPolicy.Publisher != executionapi.PublisherHostService {
 		return empty, errors.New("local host publication requires a fixed GitHub command provider and worker execution")
 	}
 	if canonical(*run.WorktreePath) != canonical(run.WorkspaceIntent.Path) || run.WorktreeBranch == nil || *run.WorktreeBranch != run.WorkspaceIntent.Branch || execution.Workspace.Branch != *run.WorktreeBranch || workflow.Branch == "" {
 		return empty, errors.New("local host publication workspace or target branch differs from the fixed execution")
 	}
 
+	if err := c.bindPublicationTarget(ctx); err != nil {
+		return empty, err
+	}
 	client := publication.NewClient(c.PR, Runner{Dir: *run.WorktreePath, Timeout: duration(c.CommandTimeout), Env: map[string]string{"GIT_TERMINAL_PROMPT": "0"}}, duration(c.CommandTimeout))
 	publisher := publication.HostPublisher{Git: Runner{Dir: *run.WorktreePath, Timeout: duration(c.CommandTimeout), Env: map[string]string{"GIT_TERMINAL_PROMPT": "0"}}, GitCommand: c.Git, PR: client}
-	request := publication.Request{Version: 1, RunID: run.RunID, ExecutionID: execution.ExecutionID, TurnID: turnID, TaskID: run.TaskID, Workspace: *run.WorkspaceIntent, GitCommonDir: c.identity, Remote: c.Remote, BaseBranch: workflow.Branch, Provider: publication.ProviderIdentity(c.PR)}
+	request := publication.Request{Version: 2, RunID: run.RunID, ExecutionID: execution.ExecutionID, TurnID: turnID, TaskID: run.TaskID, Workspace: *run.WorkspaceIntent, GitCommonDir: c.identity, Remote: c.Remote, RemoteURL: c.publicationRemoteURL, BaseBranch: workflow.Branch, Provider: publication.ProviderIdentity(c.PR)}
 	request, err := publisher.Preflight(ctx, request)
 
 	if err != nil {
@@ -95,7 +98,7 @@ func (s *Service) reconcileLocalWorkerPublication(ctx context.Context, run *Run)
 		return false, err
 	}
 	c := fixed.config
-	if c.hostName() != "local" {
+	if c.PublicationPolicy.Publisher != executionapi.PublisherHostService {
 		return false, nil
 	}
 	var op *OperationRecord
@@ -116,8 +119,11 @@ func (s *Service) reconcileLocalWorkerPublication(ctx context.Context, run *Run)
 		return false, errors.Join(err, errors.New("saved local publication intent is invalid"))
 	}
 	workflow, execution := s.workflowRecords(run)
-	if workflow == nil || execution == nil || execution.LastStoppedTurnID != request.TurnID || request.ExecutionID != execution.ExecutionID || request.TaskID != run.TaskID || request.BaseBranch != workflow.Branch || request.Remote != c.Remote || request.GitCommonDir != c.identity || !request.Provider.Matches(c.PR) || workflow.Phase != "waiting_decision" || run.FinishTaskStatus != "waiting_decision" || op.IdempotencyKey != "local-publish:"+run.RunID+":"+request.TurnID {
+	if workflow == nil || execution == nil || execution.LastStoppedTurnID != request.TurnID || request.ExecutionID != execution.ExecutionID || request.TaskID != run.TaskID || request.BaseBranch != workflow.Branch || request.Remote != c.Remote || request.RemoteURL != c.publicationRemoteURL || request.GitCommonDir != c.identity || !request.Provider.Matches(c.PR) || workflow.Phase != "waiting_decision" || run.FinishTaskStatus != "waiting_decision" || op.IdempotencyKey != "local-publish:"+run.RunID+":"+request.TurnID {
 		return false, errors.New("saved local publication no longer matches the stopped worker turn")
+	}
+	if err := c.bindPublicationTarget(ctx); err != nil {
+		return false, err
 	}
 	git := Runner{Dir: *run.WorktreePath, Timeout: duration(c.CommandTimeout), Env: map[string]string{"GIT_TERMINAL_PROMPT": "0"}}
 	client := publication.NewClient(c.PR, git, duration(c.CommandTimeout))

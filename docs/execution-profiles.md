@@ -1,6 +1,6 @@
 # 全局执行配置
 
-所有项目共享 `<STEERLINE_HOME>/execution.json` 中的执行方案。项目文件显式配置 execution_policy，定义宿主读取、none/workspace/host 写入、Git 元数据、工具网络和 escalation=deny；仓库、任务与 PR 仍归项目。`host`、`agent`、`codex`、`orca`、`model`、`reasoning_effort`、`execution_profiles` 和 `default_execution_profile` 都只能写在全局文件的方案中。每个项目仍有独立的服务和 native Task DAG。
+所有项目共享 `<STEERLINE_HOME>/execution.json` 中的执行方案。项目文件显式配置 execution_policy 和 publication_policy，定义宿主读取、none/workspace/host 写入、Git 元数据、工具网络和 escalation=deny；仓库、任务与 PR 仍归项目。`host`、`agent`、`codex`、`orca`、`model`、`reasoning_effort`、`execution_profiles` 和 `default_execution_profile` 都只能写在全局文件的方案中。每个项目仍有独立的服务和 native Task DAG。
 
 先将 [执行配置示例](../examples/execution.json) 复制到 `<STEERLINE_HOME>/execution.json`，再按机器环境修改。至少配置一套方案；有多套方案且启用自动派发时，须指定 `default_execution_profile`。只有一套方案时，它自动成为默认方案。完整项目文件见 [项目示例](../examples/config.json)。
 
@@ -90,6 +90,26 @@ Windows 本地受限方案将 `codex.windows_sandbox` 固定为 `elevated`（省
 
 原始参数仅接受独立的 --no-alt-screen、--no-daemon、--search；长短选项、等号和分离值形式的权限、目录、model/effort、配置/Profile、子命令或未知参数均拒绝。model 与 effort 独立：Orca 可分别省略，local 保留 high 默认；原生观察到的默认模型不是固定要求。
 
-领取时冻结 snapshot v2 的策略、来源、受理配置版本及完整摘要；资源阶段记录 Codex 版本、精确 workspace/Git 根、临时根与设置，沿用现有原子附件事务。准备、业务轮、反馈与恢复输入检查原快照/资源，不从运行中的仓库修改或新配置文件补造授权。重新加载由现有服务入口显式受理，对新 Execution 生效；已有执行保持原值。runtime checkpoint 当前格式为 11，旧格式拒绝且保留现场。
+领取时冻结 snapshot v3 的策略、来源、受理配置版本及完整摘要；资源阶段记录 Codex 版本、精确 workspace/Git 根、临时根与设置，沿用现有原子附件事务。准备、业务轮、反馈与恢复输入检查原快照/资源，不从运行中的仓库修改或新配置文件补造授权。重新加载由现有服务入口显式受理，对新 Execution 生效；已有执行保持原值。runtime checkpoint 当前格式为 11，旧格式拒绝且保留现场。
 
 控制台由同一 ProjectView 的 checkpoint/Domain 显示冻结要求、版本、来源、资源和核验范围。设置核验与实际工具核验分开；未观察的工具值显示未核验。服务与控制台配置摘要不同或读取部分错误时阻止新启动。新策略原生工具证据见[本轮验收](validation/execution-isolation-06-policy/README.md)。
+
+
+## 项目发布责任
+
+项目必须配置 `publication_policy.publisher`，只接受 `worker` 或 `host_service`，统一覆盖 commit、push、建 PR。切换 Profile 不改变 publisher；不支持的组合在领取前拒绝，并在方案列表显示原因。
+
+| 执行路径 | worker | host_service |
+| --- | --- | --- |
+| local Codex app-server + GitHub command provider | 拒绝 | 原精确 GitHub draft PR 实现 |
+| local + Gitea/其他 provider | 拒绝 | 拒绝 |
+| 本机 Orca + 可查询的 command/Gitea provider | 原 worker 发布 | 拒绝 |
+| 远程 Orca + 可查询 provider | 保留原 worker 发布能力；权限缺证仍拒绝领取 | 拒绝 |
+
+例如 Orca 项目使用 `"publication_policy":{"publisher":"worker"}`；local GitHub 项目使用 `"publication_policy":{"publisher":"host_service"}`，并配置原生 `pr.query` 命令。仅有 query 不增加 create 能力。示例项目使用 worker/Gitea，需选择匹配的 Orca 方案。
+
+host_service 仍仅受理原 Execution 当前已结束轮次的显式 final marker，先保存固定候选/发布意图，再 commit、push、create；未知结果仅按原请求只读对账。worker 的成功、URL 和 worker_done 均不代替真实 merged 证据，两条路径共用原唯一 TaskDelivery 事务。
+
+v3 在同一个 FixedExecutionProfile/PolicyResources 组合中固定 publisher、provider kind/base_url/repository、query/close 与宿主 create 描述、Git executable/argv、remote 名和实际单一 fetch/push URL、base 与认证环境变量名。恢复、后续轮次、PR 查询/关闭/交付使用原 provider。remote URL 被更改、增加 pushurl 或多推送目标时拒绝副作用。控制台从同一 ProjectView 显示原快照。
+
+URL 的 HTTP 用户信息、密码、query/fragment 和含认证的命令参数在冻结前拒绝，诊断不回显原值；普通 SSH user@host 身份允许。认证只冻结引用，值可沿原引用轮换。宿主发布不会把 token、SSH/工具认证环境值下发给 local worker。已有权限资源格式保留，其 ProfileDigest 指向完整 v3 摘要；v2 Profile 与旧 v1 发布请求不在生产恢复中接受，不迁移或回填。#59 的两份真机报告保留原始格式和摘要，仅作为历史证据核验。

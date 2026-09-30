@@ -68,12 +68,13 @@ func nativeTaskFixture(t *testing.T) (Config, string) {
 		t.Fatalf("fixture remote: %v: %s", err, output)
 	}
 	commit := nativeSeedCommit
-	c := Config{ExecutionPolicy: workspacePolicyFixture(), Codex: Command{Executable: os.Args[0]}, TaskAuthority: "native", WorkflowProtocol: WorkerFlowVersion, Repository: repo, Remote: "origin", Branch: "main", TaskPoll: "10s", PRPoll: "30s", Heartbeat: "5s", CommandTimeout: "10s", ShutdownGrace: "10s", Sandbox: "workspace-write", ExecutableTypes: []string{"task", "bug", "feature", "chore"}, Git: Command{Executable: "git"}}
+	c := Config{PublicationPolicy: executionPublicationFixture(), PR: hostPublicationProviderFixture(), ExecutionPolicy: workspacePolicyFixture(), Codex: Command{Executable: os.Args[0]}, TaskAuthority: "native", WorkflowProtocol: WorkerFlowVersion, Repository: repo, Remote: "origin", Branch: "main", TaskPoll: "10s", PRPoll: "30s", Heartbeat: "5s", CommandTimeout: "10s", ShutdownGrace: "10s", Sandbox: "workspace-write", ExecutableTypes: []string{"task", "bug", "feature", "chore"}, Git: Command{Executable: "git"}}
 	key, err := repoStateKey(c)
 	if err != nil {
 		t.Fatal(err)
 	}
 	c.RunDir = filepath.Join(SteerlineStateRoot(), key)
+	c.Git = Command{Executable: os.Args[0], Args: []string{"--fake", "publication-git", "git"}}
 	return c, commit
 }
 
