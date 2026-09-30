@@ -152,7 +152,7 @@ func startAppServerWorkerTurn(ctx context.Context, c Config, run *Run, execution
 		}
 	}()
 	if execution.SessionID == "" {
-		params, err := codexAppThreadStart(c, *run.WorktreePath, []any{codexAskDynamicTool()})
+		params, err := codexAppThreadStart(c, *run.WorktreePath, []any{codexapp.AskDynamicTool()})
 		if err != nil {
 			return nil, "", "", err
 		}

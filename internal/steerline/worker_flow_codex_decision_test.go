@@ -9,7 +9,7 @@ import (
 )
 
 func TestAppServerThreadUsesNoninteractiveApprovalPolicy(t *testing.T) {
-	params, err := codexAppThreadStart(Config{Sandbox: "workspace-write"}, "C:/fixed/worktree", []any{codexAskDynamicTool()})
+	params, err := codexAppThreadStart(Config{Sandbox: "workspace-write"}, "C:/fixed/worktree", []any{codexapp.AskDynamicTool()})
 	if err != nil || params["approvalPolicy"] != "never" || params["sandbox"] != "workspace-write" {
 		t.Fatalf("worker thread could request an unsupported host approval: %+v %v", params, err)
 	}

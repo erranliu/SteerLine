@@ -24,7 +24,7 @@ func TestCodexAppServerNativeQuestionLive(t *testing.T) {
 	}
 	endpoint := "ws://" + listener.Addr().String()
 	listener.Close()
-	nativeExecutable, err := codexAppServerExecutable(Command{Executable: "codex"})
+	nativeExecutable, err := codexapp.NativeExecutable("codex")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,7 +64,7 @@ func TestCodexAppServerNativeQuestionLive(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(workspace)
-	if err := client.Call(ctx, "thread/start", map[string]any{"cwd": workspace, "approvalPolicy": "never", "sandbox": "read-only", "model": "gpt-6-luna", "dynamicTools": []any{codexAskDynamicTool()}}, &started); err != nil {
+	if err := client.Call(ctx, "thread/start", map[string]any{"cwd": workspace, "approvalPolicy": "never", "sandbox": "read-only", "model": "gpt-6-luna", "dynamicTools": []any{codexapp.AskDynamicTool()}}, &started); err != nil {
 		t.Fatal(err)
 	}
 	var turn struct {
@@ -207,7 +207,7 @@ func TestCodexAppServerNativeQuestionLive(t *testing.T) {
 				if err := replyClient.Call(ctx, "thread/resume", map[string]any{"threadId": started.Thread.ID, "cwd": workspace, "excludeTurns": true}, &resumed); err != nil {
 					t.Fatal(err)
 				}
-				if err := replyClient.ReplyRequest(event.ID, codexAskToolResponse(map[string][]string{call.Questions[0].ID: {"A"}})); err != nil {
+				if err := replyClient.ReplyRequest(event.ID, codexapp.AskToolResponse(map[string][]string{call.Questions[0].ID: {"A"}})); err != nil {
 					t.Fatal(err)
 				}
 				for {

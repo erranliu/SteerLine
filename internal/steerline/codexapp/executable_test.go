@@ -1,4 +1,4 @@
-package steerline
+package codexapp
 
 import (
 	"os"
@@ -8,14 +8,14 @@ import (
 )
 
 func TestAppServerLaunchBindsNativeExecutable(t *testing.T) {
-	path, err := codexAppServerExecutable(Command{Executable: os.Args[0]})
+	path, err := NativeExecutable(os.Args[0])
 	if err != nil || !isNativeCodexExecutable(path) {
 		t.Fatalf("Go test executable was not recognized as a direct process: %q %v", path, err)
 	}
 	if _, err := exec.LookPath("codex"); err != nil {
 		t.Skip("Codex CLI is not installed")
 	}
-	native, err := codexAppServerExecutable(Command{Executable: "codex"})
+	native, err := NativeExecutable("codex")
 	if err != nil || !isNativeCodexExecutable(native) {
 		t.Fatalf("configured Codex command did not bind its native app-server: %q %v", native, err)
 	}

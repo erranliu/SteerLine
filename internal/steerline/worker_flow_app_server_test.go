@@ -518,7 +518,7 @@ func TestMockAppServerThreadAndTurnContract(t *testing.T) {
 		} `json:"thread"`
 	}
 	workspace := t.TempDir()
-	if err := client.Call(ctx, "thread/start", map[string]any{"cwd": workspace, "dynamicTools": []any{codexAskDynamicTool()}}, &started); err != nil {
+	if err := client.Call(ctx, "thread/start", map[string]any{"cwd": workspace, "dynamicTools": []any{codexapp.AskDynamicTool()}}, &started); err != nil {
 		t.Fatal(err)
 	}
 	var turn struct {

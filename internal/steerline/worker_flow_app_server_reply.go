@@ -87,7 +87,7 @@ func sendAppServerAskReply(ctx context.Context, endpoint, workspace string, ask 
 	if resumed.Thread.ID != ask.ThreadID || canonical(resumed.Thread.Cwd) != canonical(workspace) {
 		return errors.New("original Codex question thread/workspace changed before reply")
 	}
-	return client.ReplyRequest(ask.RequestID, codexAskToolResponse(answers))
+	return client.ReplyRequest(ask.RequestID, codexapp.AskToolResponse(answers))
 }
 
 func (s *Service) handleAppServerReplyMessage(runID string, message *appServerReplyMessage) error {
