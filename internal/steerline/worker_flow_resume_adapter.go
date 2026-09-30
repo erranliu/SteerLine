@@ -44,7 +44,7 @@ func (s *Service) resumeCodexWorker(ctx context.Context, task *TaskRecord, run *
 				return true, s.refreshSavedRecoveryDecision(run, false, "服务重开后请确认旧答案；原轮次不会自动继续。")
 			}
 			if execution.RecoveryState == "completed" && run.Decision != nil && run.Decision.Status == "pending" {
-				if record := s.decisionRecord(run); record != nil && record.RecoveryOfDecision == "" {
+				if record := s.decisionRecord(run); record != nil && (record.RecoveryVersion != execution.RecoveryVersion || record.RecoveryState != execution.RecoveryState) {
 					oldID := record.DecisionID
 					s.setDecisionStatus(run, "superseded")
 					if err := s.save(); err != nil {

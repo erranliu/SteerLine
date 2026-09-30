@@ -27,3 +27,5 @@ Orca agent/terminal 已退出、runtime 或 incarnation 无法核实时，当前
 ## 质量审计补验
 
 审计发现领取事务与随后 Service 保存之间存在窗口：若此时退出，未保存服务归属的 Execution 可能被下一个实例当作首次启动。现在领取事务直接写入服务实例；缺少归属的已领取 Execution 进入人工恢复门槛。已接受的旧答案也会先经过来源 Attempt、恢复版本和服务实例时间核验，再允许从等待 PR 合并阶段进入反馈阶段。核验未知的 Orca agent 现在进入统一待决策并保持不可回复；原轮次 `worker-turn` 操作结果不明时，人工继续不能跳过该操作。Windows 受管 Job 定向测试又验证了关闭归属后子进程一同退出。相关定向测试和 quick 入口在本次审计后通过。
+
+复审补充修复：已终止 worker 的重复核验曾反复替换恢复 Decision，现按恢复版本和核验状态保留同一问题；本次恢复后新接受的答案不再被当作旧答案重新确认。迟到的 Attempt/恢复版本核验结果仅结束本地观察，不改新执行，也不使服务退出。未知操作检查同时关联 Execution 和 WorkflowRun，覆盖按 WorkflowRun 绑定的本地发布。`TestDeadWorkerRecoveryPreservesDecisionAndFreshAnswer` 用隔离 SQLite 证明重复轮询、刚接受的答案、迟到核验和未知发布均不产生替代执行。受影响 local/Orca 定向回归通过，quick 摘要为 `steerline-test-feedback/20260930T064527.054131500Z/summary.json`。

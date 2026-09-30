@@ -50,6 +50,7 @@ func appServerPendingAskEvents(path string, run *Run, execution *ExecutionRecord
 
 type appServerRecoveryResult struct {
 	runID     string
+	attemptID string
 	execution ExecutionRecord
 	worker    *Worker
 	completed bool
@@ -65,7 +66,7 @@ func recoverAppServerExecution(ctx context.Context, config Config, run Run, exec
 	probeCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	worker, completed, err := reattachAppServerWorker(probeCtx, config, &run, &execution)
-	result := appServerRecoveryResult{runID: run.RunID, execution: execution, worker: worker, completed: completed, err: err}
+	result := appServerRecoveryResult{runID: run.RunID, attemptID: run.AttemptID, execution: execution, worker: worker, completed: completed, err: err}
 	if err != nil && execution.Process != nil && inspectProcess(execution.Process) == "process absent" {
 		var receipt appServerProcessReceipt
 		raw, readErr := os.ReadFile(filepath.Join(appServerDirectory(config, &run), "process.json"))
@@ -196,8 +197,9 @@ func (s *Service) applyAppServerRecovery(result appServerRecoveryResult) error {
 	if workflow == nil || execution == nil || execution.ExecutionID != result.execution.ExecutionID {
 		return errors.New("app-server recovery changed the fixed execution")
 	}
-	if execution.PendingCommandID != result.execution.PendingCommandID || execution.CurrentCommandID != result.execution.CurrentCommandID || execution.CurrentTurnID != result.execution.CurrentTurnID {
-		return ErrWorkerTurnStale
+	if result.attemptID != "" && result.attemptID != run.AttemptID || execution.RecoveryVersion != result.execution.RecoveryVersion ||
+		execution.PendingCommandID != result.execution.PendingCommandID || execution.CurrentCommandID != result.execution.CurrentCommandID || execution.CurrentTurnID != result.execution.CurrentTurnID {
+		return nil // A late probe cannot change a new Attempt or stop the service.
 	}
 	if result.execution.Process != nil {
 		if execution.Process != nil && *execution.Process != *result.execution.Process {
@@ -238,6 +240,10 @@ func (s *Service) applyAppServerRecovery(result appServerRecoveryResult) error {
 		s.refreshRun(run)
 		if run.Decision != nil && run.Decision.Status == "answer_saved" {
 			return s.refreshSavedRecoveryDecision(run, false, "原 Codex worker 已退出，旧请求已失效。请确认带入新轮次的输入。")
+		}
+		if record := s.decisionRecord(run); record != nil && record.Status == "pending" &&
+			record.RecoveryVersion == execution.RecoveryVersion && record.RecoveryState == execution.RecoveryState {
+			return nil // Repeated probes preserve the displayed recovery decision.
 		}
 		oldDecisionID := ""
 		priorQuestion := ""

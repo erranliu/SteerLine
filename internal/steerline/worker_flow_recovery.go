@@ -11,6 +11,30 @@ import (
 	"github.com/erranliu/SteerLine/internal/steerline/workerflow"
 )
 
+// Operations are bound by their saved request and exact identity components,
+// including host publication which is keyed by WorkflowRun rather than Execution.
+func (s *Service) hasUnknownWorkerOperation(run *Run) bool {
+	for _, op := range s.State.Operations {
+		if op.Status != "outcome_unknown" && op.Status != "in_flight" {
+			continue
+		}
+		var target struct {
+			ExecutionID   string `json:"execution_id"`
+			WorkflowRunID string `json:"workflow_run_id"`
+			RunID         string `json:"run_id"`
+		}
+		if json.Unmarshal(op.Request, &target) == nil && (target.ExecutionID == run.ExecutionID || target.WorkflowRunID == run.RunID || target.RunID == run.RunID) {
+			return true
+		}
+		for _, identity := range strings.Split(op.IdempotencyKey, ":") {
+			if identity == run.ExecutionID || identity == run.RunID {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // beginLocalRecoveryAttempt advances the worker generation in one service
 // write. The prior process and session stay on the retired Attempt; its
 // process receipt and execution binding stay at their original paths.
@@ -57,13 +81,8 @@ func (s *Service) beginLocalRecoveryAttempt(ctx context.Context, run *Run, mode 
 	if !workerTreeAbsent(*execution.Process) {
 		return errors.New("original worker descendants may still write to the worktree")
 	}
-	for _, op := range s.State.Operations {
-		if op.Status != "outcome_unknown" && op.Status != "in_flight" {
-			continue
-		}
-		if strings.Contains(op.IdempotencyKey, execution.ExecutionID) {
-			return errors.New("an earlier external operation has an unknown outcome; reconcile it before continuing")
-		}
+	if s.hasUnknownWorkerOperation(run) {
+		return errors.New("an earlier external operation has an unknown outcome; reconcile it before continuing")
 	}
 	old.WorkerProcess = copyPtr(execution.Process)
 	old.WorkerSessionID = execution.SessionID
@@ -108,6 +127,10 @@ func (s *Service) refreshSavedRecoveryDecision(run *Run, preserveNative bool, re
 	execution := s.executionRecord(run)
 	if execution == nil {
 		return errors.New("saved recovery answer lost its execution")
+	}
+	if old.SourceAttemptID == run.AttemptID && old.RecoveryVersion == execution.RecoveryVersion &&
+		execution.RecoveryMarkedAt != nil && old.AnsweredAt != nil && old.AnsweredAt.After(*execution.RecoveryMarkedAt) {
+		return nil // This answer already authorizes the current recovery revision.
 	}
 	for _, op := range s.State.Operations {
 		if op.IdempotencyKey != "appserver-answer:"+execution.ExecutionID+":"+old.ID {
@@ -165,6 +188,8 @@ func (s *Service) refreshSavedRecoveryDecision(run *Run, preserveNative bool, re
 	}
 	if record := s.decisionRecord(run); record != nil {
 		record.RecoveryOfDecision = old.ID
+		record.RecoveryVersion = execution.RecoveryVersion
+		record.RecoveryState = execution.RecoveryState
 	}
 	return s.save()
 }
@@ -181,6 +206,9 @@ func (s *Service) startManuallyRecoveredInitialCodex(ctx context.Context, run *R
 	if !execution.RecoveryRequired || execution.Process != nil || execution.PendingCommandID != "" || execution.CurrentTurnID != "" ||
 		execution.TurnNumber != 0 && run.DomainAttemptNumber <= 1 || run.WorkspaceIntent == nil {
 		return errors.New("initial worker preparation changed during recovery")
+	}
+	if s.hasUnknownWorkerOperation(run) {
+		return s.waitWorkerFlow(run, "An earlier external operation has an unknown outcome; reconcile it before continuing")
 	}
 	task := nativeTaskRecord(s.State.Tasks, run.DomainTaskID)
 	if task == nil {

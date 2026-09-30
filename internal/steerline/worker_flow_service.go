@@ -132,6 +132,12 @@ func (s *Service) waitWorkerFlow(run *Run, reason string) error {
 			return err
 		}
 		s.setRunDecision(run, decision)
+		if execution.RecoveryRequired {
+			if record := s.decisionRecord(run); record != nil {
+				record.RecoveryVersion = execution.RecoveryVersion
+				record.RecoveryState = execution.RecoveryState
+			}
+		}
 	}
 	workflow.Phase, workflow.UpdatedAt = "waiting_decision", now()
 	if unresolvedNativeTurn && (run.Decision == nil || run.Decision.Status != "pending" && run.Decision.Status != "answer_saved") {
@@ -719,6 +725,10 @@ func (s *Service) applyWorkerFlowDecision(ctx context.Context, run *Run) error {
 	}
 	if execution.RecoveryRequired && (execution.RecoveryState == "unverified" || execution.RecoveryState == "") {
 		return nil // Verify the original worker and pending operations first.
+	}
+	if execution.RecoveryRequired && s.hasUnknownWorkerOperation(run) {
+		execution.RecoveryState = "unverified"
+		return s.waitWorkerFlow(run, "An earlier external operation has an unknown outcome; no recovery input was sent")
 	}
 	if workflow.Phase == "waiting_pr_merge" {
 		decision := s.decisionRecord(run)

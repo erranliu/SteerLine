@@ -183,6 +183,8 @@ type StepAttemptRecord struct {
 }
 
 type DecisionRecord struct {
+	RecoveryVersion    uint64    `json:"recovery_version,omitempty"`
+	RecoveryState      string    `json:"recovery_state,omitempty"`
 	RecoveryOfDecision string    `json:"recovery_of_decision,omitempty"`
 	ProjectIdentity    string    `json:"project_identity"`
 	DecisionID         string    `json:"decision_id"`
