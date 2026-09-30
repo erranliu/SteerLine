@@ -3,6 +3,9 @@ package steerline
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
+	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"os"
 	"path/filepath"
@@ -134,4 +137,47 @@ func TestProjectPolicyMissingBoundResourcesAreNotReconstructed(t *testing.T) {
 	if e.PolicyResources != nil {
 		t.Fatal("original snapshot was backfilled")
 	}
+}
+
+func TestAppServerLaunchMessagePersistsPolicyResources(t *testing.T) {
+	for _, phase := range []string{"thread_ready", "turn_result"} {
+		t.Run(phase, func(t *testing.T) {
+			s, run := appServerAuditService(t)
+			workflow, execution := s.workflowRecords(run)
+			path := run.WorkspaceIntent.Path
+			execution.Workspace = WorkspaceEvidence{Worktree: path, Branch: run.WorkspaceIntent.Branch, Base: run.WorkspaceIntent.BaseCommit}
+			commandID := newID()
+			execution.PendingCommandID = commandID
+			s.refreshRun(run)
+			opID, err := s.startWorkerOperation(run, "start_worker_turn", "worker-turn:"+run.ExecutionID+":"+commandID, map[string]string{"command_id": commandID})
+			require(t, err)
+			identity, err := currentProcessIdentity()
+			require(t, err)
+			partial := *s.executionRecord(run)
+			partial.Process, partial.SessionID = identity, workerFlowMockSession
+			partial.AppServerEndpoint, partial.AppServerGeneration = "ws://127.0.0.1:12345", "policy-generation"
+			resource := contracts.PolicyResources{Version: 2, ProfileDigest: workflow.ExecutionProfile.Digest, NativeVersion: codexworker.PolicyCodexVersion, Contract: codexworker.PolicyContract, Workspace: path, WriteRoots: []string{path}, TemporaryRoots: []string{}}
+			resource.Digest = policyResourceDigest(resource)
+			partial.PolicyResources = &resource
+			message := &appServerLaunchMessage{phase: phase, commandID: commandID, opID: opID, run: *run, execution: partial}
+			if phase == "turn_result" {
+				message.err = errors.New("thread receipt persistence failed")
+			}
+			require(t, s.handleAppServerLaunchMessage(run.RunID, message))
+			snapshot, err := s.domainStore.Query(context.Background(), s.Config.identity)
+			require(t, err)
+			got := snapshot.Executions[0]
+			if got.PolicyResources == nil || got.PolicyResources.Digest != resource.Digest || got.SessionID != partial.SessionID || got.PendingTurnID != "" || s.workers[run.RunID] != nil {
+				t.Fatalf("policy resource receipt was lost or advanced a turn: %+v", got)
+			}
+			_, err = s.executionConfigForRun(run)
+			require(t, err)
+		})
+	}
+}
+
+func policyResourceReceiptFixture(profileDigest, path string) *contracts.PolicyResources {
+	resource := &contracts.PolicyResources{Version: 2, ProfileDigest: profileDigest, NativeVersion: codexworker.PolicyCodexVersion, Contract: codexworker.PolicyContract, Workspace: path, WriteRoots: []string{path}, TemporaryRoots: []string{}}
+	resource.Digest = policyResourceDigest(*resource)
+	return resource
 }

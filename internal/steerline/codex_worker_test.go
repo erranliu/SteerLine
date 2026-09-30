@@ -179,9 +179,18 @@ func fmtBool(value bool) string {
 }
 
 func appServerAuditService(t *testing.T) (*Service, *Run) {
+	return appServerAuditServiceWithPolicy(t, workspacePolicyFixture())
+}
+
+func appServerAuditServiceWithPolicy(t *testing.T, policy executionapi.ExecutionPolicy) (*Service, *Run) {
 	t.Helper()
 	c, commit, store := openDAGFixture(t)
 	c.WorkflowProtocol, c.Host, c.Agent, c.Claimant = WorkerFlowVersion, "local", "codex", "operator"
+	c.ExecutionPolicy = policy
+	if policy.Filesystem.WriteScope == "none" {
+		c.Codex.Executable = os.Args[0]
+	}
+	require(t, validateWorkflowConfig(&c, nil))
 	require(t, c.prepareWorktreeRoot())
 	ctx := context.Background()
 	if out, err := exec.Command("git", "-C", c.Repository, "push", "--quiet", "origin", "HEAD:refs/heads/main").CombinedOutput(); err != nil {
@@ -306,7 +315,7 @@ func TestAppServerServiceTwoTurnsPersistNativeReceipts(t *testing.T) {
 
 func testAppServerServiceTwoTurns(t *testing.T, async bool) {
 	t.Helper()
-	service, run := appServerAuditService(t)
+	service, run := appServerAuditServiceWithPolicy(t, executionapi.ExecutionPolicy{Filesystem: executionapi.FilesystemPolicy{ReadScope: "host", WriteScope: "none"}, Network: "deny", Escalation: "deny"})
 	workspace := t.TempDir()
 	state := &mockAppServerState{cwd: workspace}
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
@@ -328,6 +337,8 @@ func testAppServerServiceTwoTurns(t *testing.T, async bool) {
 		t.Fatal(err)
 	}
 	_, execution := service.workflowRecords(run)
+	execution.Workspace.Worktree, run.WorktreePath = workspace, &workspace
+	require(t, bindPolicyResources(context.Background(), service.Config, execution, workspace, nil))
 	execution.Process, run.Process = identity, identity
 	execution.AppServerEndpoint, execution.AppServerGeneration = "ws://"+listener.Addr().String(), "generation"
 	execution.Workspace.Worktree, run.WorktreePath = workspace, &workspace

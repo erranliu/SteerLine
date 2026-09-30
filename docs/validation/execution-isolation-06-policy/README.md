@@ -47,3 +47,10 @@ Orca 复用的是既有隔离验收仓库的环境，创建了本轮独立 workt
 - go list -deps 验证 execution/codexworker/remote 传递依赖，无中心、query 或 SQL 反向依赖。go test ./... -run '^$' 全仓编译/链接通过，未运行全量测试。git diff --check 通过。
 
 远程双机权限认证仍缺原协议 producer 的落实证据；mock/Service 回归不会被列为真机支持。未提前交付 #60/#61，也未引入旧版兼容或 fallback。
+
+## 协调 session 独立复审
+
+1. 异步 `thread_ready` 和启动失败的 `turn_result` 原先丢弃 `PolicyResources`，原生绑定持久化后再读取原执行会因缺少资源快照被阻断。现已在同一绑定/失败事务保存经过原 Profile/workspace/摘要核验的资源，不覆盖不一致的原快照。两个数据库回归子例修复前失败、修复后通过；两轮反馈 fixture 在领取前冻结只读策略并绑定资源，同步/异步均通过。部分会话绑定与回执失败取消观察 fixture 也已采用新格式并通过。
+2. `network=deny` 原先仍允许 `--search` 并继承用户搜索设置。[官方说明](https://learn.chatgpt.com/docs/web-search)明确托管搜索独立于命令网络沙箱。现静态拒绝此参数，并用已固定 0.159.2 [配置 schema](https://raw.githubusercontent.com/openai/codex/rust-v0.159.2/codex-rs/core/config.schema.json)中的 `web_search="disabled"` 关闭继承搜索；只读/显式 unelevated 支持保留。定向用例修复前失败、修复后通过。
+
+协调 session 独立运行四个受影响包、Plan 六项中心与两项 console 回归通过。原生报告中的两个新策略/资源摘要、原 terminal/incarnation、thread/turn、权限设置及成功工具输出已核对；两份原始报告未改写，最终代码仍核验通过。后续修复复测覆盖异步资源回执、两轮反馈、部分启动身份、提交失败取消观察和只读策略。未重跑完整 readiness、原生工具实验或全量测试。

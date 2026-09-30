@@ -68,3 +68,18 @@ func TestProjectPolicyRejectsAllManagedOverridesBeforeNativeCalls(t *testing.T) 
 		}
 	}
 }
+
+func TestNetworkDenyRejectsLiveSearchAndDisablesInheritedSearch(t *testing.T) {
+	policy := policyFixture()
+	policy.Filesystem.WriteScope, policy.Filesystem.GitMetadataWrite, policy.Network = "none", false, "deny"
+	if _, err := CompilePolicy(policy, "windows", "local", "codex", "unelevated", "", []string{"--search"}); err == nil {
+		t.Error("network deny accepted hosted live search")
+	}
+	permissions, err := CompilePolicy(policy, "windows", "local", "codex", "unelevated", "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(strings.Join(permissions.Args(), " "), `web_search="disabled"`) {
+		t.Error("network deny inherited the user's hosted search configuration")
+	}
+}

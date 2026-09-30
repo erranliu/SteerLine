@@ -277,12 +277,26 @@ func (s *Service) handleAppServerLaunchMessage(runID string, message *appServerL
 	if workflow == nil || execution == nil || execution.ExecutionID != message.execution.ExecutionID || execution.PendingCommandID != message.commandID || run.AttemptID != message.run.AttemptID || run.TaskStatus == "closed" || run.TaskStatus == "discarded" {
 		return ErrWorkerTurnStale
 	}
+	acceptResources := func() error {
+		resource := message.execution.PolicyResources
+		if err := verifyPolicyResources(resource, workflow.ExecutionProfile.Digest, execution.Workspace.Worktree); err != nil {
+			return err
+		}
+		if execution.PolicyResources != nil && execution.PolicyResources.Digest != resource.Digest {
+			return ErrWorkerTurnStale
+		}
+		execution.PolicyResources = resource
+		return nil
+	}
 	if message.phase == "thread_ready" {
 		if message.execution.Process == nil || !codexworker.ValidNativeID(message.execution.SessionID) || message.execution.AppServerEndpoint == "" || message.execution.AppServerGeneration == "" {
 			return errors.New("app-server thread receipt is incomplete")
 		}
 		if execution.Process != nil && *execution.Process != *message.execution.Process || execution.SessionID != "" && execution.SessionID != message.execution.SessionID {
 			return errors.New("app-server thread receipt conflicts with its fixed execution")
+		}
+		if err := acceptResources(); err != nil {
+			return err
 		}
 		ref := executionapi.ExecutionRef{Version: executionapi.ExecutionRecordVersion, Backend: executionapi.BackendLocal, Protocol: executionapi.ProtocolLocalCodexAppServer, Target: targetFor(c), Agent: agentFor(c), RunID: run.RunID, AttemptID: run.AttemptID, WorkspacePath: deref(run.WorktreePath), WorkspaceBranch: deref(run.WorktreeBranch), BaseCommit: deref(run.BaseCommit), External: *message.execution.Process, Generation: message.execution.AppServerGeneration}
 		execution.Process = message.execution.Process
@@ -305,6 +319,9 @@ func (s *Service) handleAppServerLaunchMessage(runID string, message *appServerL
 			}
 			if message.execution.SessionID != "" && !codexworker.ValidNativeID(message.execution.SessionID) {
 				return errors.New("partial app-server thread identity is invalid")
+			}
+			if err := acceptResources(); err != nil {
+				return err
 			}
 			execution.Process = message.execution.Process
 			execution.AppServerEndpoint = message.execution.AppServerEndpoint

@@ -30,6 +30,13 @@ func CompilePolicy(p executionapi.ExecutionPolicy, goos, host, agent, windowsMod
 	if err := ValidateManagedArgs(args); err != nil {
 		return Permissions{}, err
 	}
+	if p.Network == "deny" {
+		for _, arg := range args {
+			if arg == "--search" {
+				return Permissions{}, fmt.Errorf("execution_policy.network=deny does not permit hosted live web search")
+			}
+		}
+	}
 	if host != "local" && host != "orca" || agent != "codex" {
 		return Permissions{}, fmt.Errorf("target %s/%s has no verified mapping for requested execution_policy", host, agent)
 	}
@@ -67,6 +74,9 @@ func VerifyPolicyVersion(version string) error {
 
 func (p Permissions) Args() []string {
 	args := []string{"--config", "sandbox_mode=" + p.Sandbox, "--config", "approval_policy=never", "--config", "windows.sandbox=" + p.WindowsSandbox}
+	if !p.NetworkAccess {
+		args = append(args, "--config", `web_search="disabled"`)
+	}
 	if p.Sandbox == "workspace-write" {
 		args = append(args, "--config", "sandbox_workspace_write.writable_roots=[]", "--config", "sandbox_workspace_write.exclude_tmpdir_env_var=true", "--config", "sandbox_workspace_write.exclude_slash_tmp=true", "--config", "sandbox_workspace_write.network_access=true")
 	}
