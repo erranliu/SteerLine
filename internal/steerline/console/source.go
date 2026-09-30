@@ -82,84 +82,45 @@ func (FileQuerySource) ReadProject(ctx context.Context, ref ProjectRef, selected
 		result.Connection = steerline.ServiceConnection{State: steerline.ConnectionIdentityError, Diagnostic: result.TaskError}
 		return result
 	}
-	connectionCh := make(chan steerline.ServiceConnection, 1)
-	type readerResult struct {
-		store *steerline.SQLiteStore
-		err   error
-	}
-	readerCh := make(chan readerResult, 1)
-	connectionConfig, readerConfig := c, c
-	go func() { connectionCh <- steerline.ConnectService(ctx, connectionConfig) }()
-	go func() {
-		store, err := steerline.OpenNativeTaskReader(ctx, &readerConfig)
-		readerCh <- readerResult{store: store, err: err}
-	}()
-	result.Connection = <-connectionCh
-	result.Observation = result.Connection.Snapshot
-	if _, statErr := os.Stat(filepath.Join(c.RunDir, "steerline.db")); statErr != nil {
-		if reader := <-readerCh; reader.store != nil {
-			_ = reader.store.Close()
-		}
-		if os.IsNotExist(statErr) {
-			result.NativeTaskError = "native task database does not exist; the console remains read-only"
-		} else {
-			result.NativeTaskError = statErr.Error()
-		}
-		result.TaskError, result.DomainError = result.NativeTaskError, result.NativeTaskError
-		return result
-	}
-	reader := <-readerCh
-	store, err := reader.store, reader.err
+	store, err := steerline.OpenNativeTaskReader(ctx, &c)
 	if err != nil {
+		result.Connection = steerline.ConnectService(ctx, c)
+		result.Observation = result.Connection.Snapshot
+		if os.IsNotExist(err) {
+			err = errors.New("native task database does not exist; the console remains read-only")
+		}
 		result.NativeTaskError, result.TaskError, result.DomainError = err.Error(), err.Error(), err.Error()
 		return result
 	}
 	defer store.Close()
-	query := steerline.QueryService{Store: store, Project: c.Identity()}
-	nativeTasks, ready, err := readMatchedNativeTaskSnapshots(ctx,
-		func(ctx context.Context) (steerline.NativeTaskPage, error) {
-			return query.ListNativeTasks(ctx, "", 500)
-		},
-		query.ReadyNativeTaskSnapshot,
-	)
-	if nativeTasks.ProjectID != "" {
-		result.NativeTasks = &nativeTasks
-	}
+	view, err := (steerline.QueryService{Store: store, Project: c.Identity()}).ReadProjectView(ctx, selectedTaskID, 500)
 	if err != nil {
-		result.TaskError = err.Error()
-		if nativeTasks.ProjectID == "" {
-			result.NativeTaskError = err.Error()
-		}
-	} else {
-		result.Tasks = nativeCandidateSnapshot(ref, result.Connection, ready)
-		if selectedTaskID != "" && steerline.ValidateNativeTaskID(selectedTaskID) == nil {
-			found := false
-			for i := range nativeTasks.Tasks {
-				if nativeTasks.Tasks[i].TaskID == selectedTaskID {
-					found = true
-					break
-				}
-			}
-			if !found {
-				selected, showErr := query.ShowNativeTask(ctx, selectedTaskID)
-				if showErr == nil && len(selected.Tasks) == 1 && selected.AuthorityVersion == nativeTasks.AuthorityVersion && selected.DatabaseID == nativeTasks.DatabaseID && selected.DatabaseRevision == nativeTasks.DatabaseRevision && selected.GraphRevision == nativeTasks.GraphRevision {
-					result.SelectedNative = &selected.Tasks[0]
-				} else if showErr == nil {
-					result.NativeTaskError = "cursor_invalidated: selected task uses a different sampled version"
-				} else {
-					result.NativeTaskError = showErr.Error()
-				}
-			}
+		result.Connection = steerline.ConnectService(ctx, c)
+		result.Observation = result.Connection.Snapshot
+		result.NativeTaskError, result.TaskError, result.DomainError = err.Error(), err.Error(), err.Error()
+		return result
+	}
+	result.Observation = steerline.ObserveRuntimeSnapshot(c, view.Runtime, view.RuntimeError, view.SampledAt)
+	result.Connection = steerline.ConnectServiceFromSnapshot(ctx, c, result.Observation)
+	result.Observation = result.Connection.Snapshot
+	result.NativeTasks, result.SelectedNative, result.Domain = view.Tasks, view.SelectedTask, view.Domain
+	if view.TaskError != nil {
+		result.TaskError = view.TaskError.Error()
+		if view.Tasks == nil {
+			result.NativeTaskError = result.TaskError
 		}
 	}
-	domain, queryErr := store.Query(ctx, c.Identity())
-	if queryErr != nil {
-		result.DomainError = queryErr.Error()
-	} else {
-		result.Domain = &domain
+	if view.Ready != nil {
+		result.Tasks = nativeCandidateSnapshot(ref, result.Connection, *view.Ready)
+	}
+	if view.SelectedTaskError != nil {
+		result.NativeTaskError = view.SelectedTaskError.Error()
+	}
+	if view.DomainError != nil {
+		result.DomainError = view.DomainError.Error()
 	}
 	if result.TaskError == "" && result.NativeTaskError == "" && result.DomainError == "" {
-		result.FullReadAt = time.Now()
+		result.FullReadAt = view.SampledAt
 	}
 	return result
 }
@@ -196,32 +157,6 @@ func readProjectDatabaseVersion(ctx context.Context, path string) (string, uint6
 	}
 	defer reader.Close()
 	return reader.DatabaseVersion(ctx)
-}
-
-// A service heartbeat can commit between these two independent read
-// transactions. Retry within one refresh so the UI never publishes the
-// intermediate mismatch as a cached Ready list.
-func readMatchedNativeTaskSnapshots(ctx context.Context, list func(context.Context) (steerline.NativeTaskPage, error), ready func(context.Context) (steerline.NativeReadyTaskSnapshot, error)) (steerline.NativeTaskPage, steerline.NativeReadyTaskSnapshot, error) {
-	var page steerline.NativeTaskPage
-	var candidates steerline.NativeReadyTaskSnapshot
-	for range 3 {
-		if err := ctx.Err(); err != nil {
-			return page, candidates, err
-		}
-		var err error
-		page, err = list(ctx)
-		if err != nil {
-			return steerline.NativeTaskPage{}, candidates, err
-		}
-		candidates, err = ready(ctx)
-		if err != nil {
-			return page, candidates, err
-		}
-		if candidates.ProjectID == page.ProjectID && candidates.AuthorityVersion == page.AuthorityVersion && candidates.GraphRevision == page.GraphRevision && candidates.DatabaseID == page.DatabaseID && candidates.DatabaseRevision == page.DatabaseRevision {
-			return page, candidates, nil
-		}
-	}
-	return page, candidates, errors.New("cursor_invalidated: selected task and Ready candidates use different sampled versions")
 }
 
 func nativeCandidateSnapshot(ref ProjectRef, connection steerline.ServiceConnection, page steerline.NativeReadyTaskSnapshot) *steerline.TaskSnapshot {
