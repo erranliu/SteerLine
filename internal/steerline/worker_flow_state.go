@@ -93,6 +93,24 @@ func ContinueWorkerQuestion(workflow *WorkflowRunRecord, execution *ExecutionRec
 	return nil
 }
 
+// BeginWorkerFeedbackDelivery moves a saved answer for an open PR into the
+// feedback phase before the original worker session receives another turn.
+func BeginWorkerFeedbackDelivery(workflow *WorkflowRunRecord, execution ExecutionRecord, decision DecisionRecord, at time.Time) error {
+	if err := workerFlowBinding(workflow, &execution); err != nil {
+		return err
+	}
+	if workflow.Phase != "waiting_pr_merge" || workflow.SelectedResult != execution.ExecutionID ||
+		workflow.ProjectIdentity != execution.ProjectIdentity || workflow.ProjectIdentity != decision.ProjectIdentity ||
+		execution.DecisionID == "" || execution.DecisionID != decision.DecisionID ||
+		decision.Scope != "execution" || decision.WorkflowRunID != workflow.WorkflowRunID ||
+		decision.ExecutionID != execution.ExecutionID || execution.CurrentStep != "worker" || decision.AttemptID == "" ||
+		decision.Status != "answer_saved" || decision.Version == 0 || at.IsZero() {
+		return errors.New("saved worker feedback no longer belongs to the fixed PR execution")
+	}
+	workflow.Phase, workflow.UpdatedAt = "waiting_decision", at
+	return nil
+}
+
 // StopWorkerTurn accepts only the current turn's terminal observation. The
 // caller passes whether a Decision for this turn is still pending; this fact is
 // read from the existing Decision authority, not copied into Execution.

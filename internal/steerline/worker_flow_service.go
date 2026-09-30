@@ -965,10 +965,23 @@ func (s *Service) applyWorkerFlowDecision(ctx context.Context, run *Run) error {
 		return errors.New("saved feedback no longer belongs to a waiting worker flow")
 	}
 	if workflow.Phase == "waiting_pr_merge" {
-		workflow.Phase, workflow.UpdatedAt = "waiting_decision", now()
-		s.refreshRun(run)
-		if err := s.save(); err != nil {
+		decision := s.decisionRecord(run)
+		key := "workflow:" + workflow.WorkflowRunID
+		if decision == nil || s.store == nil || s.store.baseline == nil || s.store.baseline[key] != recordFingerprint(*workflow) {
+			return errors.New("worker feedback phase has unpublished or missing actor state")
+		}
+		if err := s.store.Err(); err != nil {
 			return err
+		}
+		committed, err := s.domainStore.commitWorkerFeedbackPhase(ctx, *workflow, *execution, *decision)
+		if err != nil {
+			return err
+		}
+		*workflow = committed
+		s.store.baseline[key] = recordFingerprint(committed)
+		s.refreshRun(run)
+		if run.ControlRevision != committed.ControlRevision || run.FinishTaskStatus != "waiting_decision" {
+			return errors.New("committed worker feedback phase could not be projected")
 		}
 	}
 	answer, err := ReadDecisionAnswer(run)
