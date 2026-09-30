@@ -29,8 +29,8 @@ type TaskClaimOptions struct {
 }
 
 func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, options TaskClaimOptions) (TaskClaimReceipt, error) {
-	sqlite, ok := c.Store.(*SQLiteStore)
-	if !ok || c.Project == "" || config.Identity() != c.Project {
+	sqlite := c.Store
+	if sqlite == nil || c.Project == "" || config.Identity() != c.Project {
 		return TaskClaimReceipt{}, nativeErr("authority_mismatch", "claim requires the configured native project")
 	}
 	if config.WorkflowProtocol != WorkerFlowVersion {

@@ -180,7 +180,7 @@ func (q QueryService) ReadEventBody(ctx context.Context, eventID, offset int64, 
 }
 
 type CommandService struct {
-	Store   DomainStore
+	Store   *SQLiteStore
 	Project string
 }
 

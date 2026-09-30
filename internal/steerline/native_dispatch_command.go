@@ -21,8 +21,8 @@ type NativeDispatchUpdate struct {
 }
 
 func (c CommandService) SetNativeDispatchState(ctx context.Context, update NativeDispatchUpdate) (ProjectTaskAuthority, error) {
-	sqlite, ok := c.Store.(*SQLiteStore)
-	if !ok || c.Project == "" {
+	sqlite := c.Store
+	if sqlite == nil || c.Project == "" {
 		return ProjectTaskAuthority{}, nativeErr("authority_mismatch", "dispatch control requires the center SQLite project")
 	}
 	if !controlIDPattern.MatchString(update.RequestID) || update.ExpectedAuthorityVersion == 0 {
