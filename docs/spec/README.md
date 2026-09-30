@@ -29,6 +29,10 @@
 
 [本机 Orca 原生编排 Spec](worker-flow-orca-native.spec.md) / [Plan](worker-flow-orca-native.plan.md) 承接 #36 延期的本机 Orca 接入。状态：待实施，尚未分配 Task ID；Spec 内记录 2026-09-29 的平台实验、低层 Dispatch 选型及中心验收边界。当前功能支持状态以已交付实现为准。
 
+## worker 环境就绪与宿主恢复
+
+[worker 环境就绪与宿主阻断恢复 Spec](worker-environment-readiness.spec.md) / [Plan](worker-environment-readiness.plan.md)。状态：待实施，未分配 Task ID，一个实现 PR 交付。补充本机 Orca + Codex 的冻结权限、原会话工具探针、独立宿主等待观察与原身份恢复，沿用 #36 的五主阶段及原生编排边界。
+
 ## 架构审计收口（3 个 PR）
 
 状态：PR 1 实现候选，PR 2/3 待实施；未分配 Task ID。三份 Spec 按下表顺序各用一个实现 PR 交付。审计基线为 `main@4e786d7`；已合并的具体存储、typed transaction 和固定执行路由改动继续复用。验证遵循项目的最小必要范围。
