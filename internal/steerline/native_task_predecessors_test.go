@@ -25,7 +25,7 @@ func TestAddNativeTaskPredecessorsIsAtomicIdempotentAndBlocksClaim(t *testing.T)
 	if replayed.GraphRevision != receipt.GraphRevision || !sameStrings(replayed.PredecessorIDs, receipt.PredecessorIDs) {
 		t.Fatalf("addition was not idempotent: %+v / %+v", replayed, receipt)
 	}
-	page, err := (QueryService{Store: store, Project: c.Identity()}).ShowNativeTask(ctx, "102")
+	page, err := (NewQueryService(store, c.Identity())).ShowNativeTask(ctx, "102")
 	require(t, err)
 	if page.Tasks[0].DependencyReady || len(page.Tasks[0].UnmetPredecessors) != 2 || page.Tasks[0].UnmetPredecessors[0].TaskID != "101" {
 		t.Fatalf("new predecessor did not block the existing task: %+v", page.Tasks[0])
@@ -44,7 +44,7 @@ func TestAddNativeTaskPredecessorsIsAtomicIdempotentAndBlocksClaim(t *testing.T)
 	if _, err := commands.AddNativeTaskPredecessors(ctx, c, bad); err == nil || !strings.Contains(err.Error(), "stale_version") {
 		t.Fatalf("stale graph revision accepted: %v", err)
 	}
-	graph, err := (QueryService{Store: store, Project: c.Identity()}).TaskGraph(ctx, "", 100)
+	graph, err := (NewQueryService(store, c.Identity())).TaskGraph(ctx, "", 100)
 	require(t, err)
 	if graph.GraphRevision != 2 || len(graph.Edges) != 2 {
 		t.Fatalf("invalid additions wrote partial graph: %+v", graph)
@@ -52,7 +52,7 @@ func TestAddNativeTaskPredecessorsIsAtomicIdempotentAndBlocksClaim(t *testing.T)
 	reopened, err := OpenSQLiteStore(filepath.Join(c.RunDir, "steerline.db"))
 	require(t, err)
 	defer reopened.Close()
-	page, err = (QueryService{Store: reopened, Project: c.Identity()}).ShowNativeTask(ctx, "102")
+	page, err = (NewQueryService(reopened, c.Identity())).ShowNativeTask(ctx, "102")
 	require(t, err)
 	if page.GraphRevision != 2 || page.Tasks[0].DependencyReady || page.Tasks[0].Version != 2 {
 		t.Fatalf("reopened database lost new dependency: %+v", page)

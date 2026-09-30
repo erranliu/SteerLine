@@ -506,7 +506,7 @@ func runNativeTaskCommand(args []string) error {
 		}
 	}
 	defer store.Close()
-	query := steerline.QueryService{Store: store, Project: c.Identity()}
+	query := steerline.NewQueryService(store, c.Identity())
 	var result steerline.NativeTaskPage
 	switch subcommand {
 	case "show":

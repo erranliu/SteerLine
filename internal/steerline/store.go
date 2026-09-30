@@ -11,6 +11,8 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+
+	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
 )
 
 func newID() string {
@@ -185,28 +187,5 @@ func loadRuntimeSnapshot(db *SQLiteStore, project string, requireIdentity bool) 
 // readRuntimeCheckpointTx reads only service metadata; callers hydrate it with
 // domain records from the same transaction before exposing a Runtime.
 func readRuntimeCheckpointTx(ctx context.Context, tx *sql.Tx, project string, requireIdentity bool) (*Runtime, error) {
-	var payload []byte
-	if err := tx.QueryRowContext(ctx, `SELECT payload FROM projection WHERE project_identity=?`, project).Scan(&payload); err != nil {
-		return nil, err
-	}
-	var checkpoint ServiceCheckpoint
-	if err := decode(payload, &checkpoint); err != nil {
-		return nil, err
-	}
-	state := runtimeFromCheckpoint(checkpoint)
-	if state.SchemaVersion != WorkerFlowRuntimeSchema {
-		return nil, fmt.Errorf("unsupported runtime schema %d", state.SchemaVersion)
-	}
-	if requireIdentity && state.Repository.Identity != project {
-		return nil, errors.New("database runtime repository identity mismatch")
-	}
-	var paused int
-	if err := tx.QueryRowContext(ctx, `SELECT dispatch_mode,dispatch_paused,authority_version FROM project_task_authorities WHERE project_identity=?`, project).Scan(&state.Control.DispatchMode, &paused, &state.Control.Revision); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, errors.New("runtime checkpoint has no task authority")
-		}
-		return nil, err
-	}
-	state.Control.DispatchPaused = paused != 0
-	return &state, nil
+	return sqlite.ReadRuntimeCheckpointTx(ctx, tx, project, requireIdentity)
 }

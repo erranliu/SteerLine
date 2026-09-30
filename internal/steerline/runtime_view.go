@@ -3,6 +3,8 @@ package steerline
 import (
 	"encoding/json"
 	"errors"
+
+	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 func runtimeCheckpoint(v Runtime) ServiceCheckpoint {
@@ -15,12 +17,7 @@ func runtimeCheckpoint(v Runtime) ServiceCheckpoint {
 		Repository: v.Repository, Operation: v.Control.Operation, Blockers: v.Control.Blockers, ReservedTask: reserved}
 }
 
-func runtimeFromCheckpoint(c ServiceCheckpoint) Runtime {
-	return Runtime{SchemaVersion: c.SchemaVersion, Revision: c.Revision, UpdatedAt: c.UpdatedAt,
-		HeartbeatAt: c.HeartbeatAt, Service: c.Service, Repository: c.Repository,
-		CurrentTask: c.ReservedTask, SlotOccupied: c.ReservedTask != nil,
-		Control: ControlState{Operation: c.Operation, Blockers: c.Blockers}}
-}
+func runtimeFromCheckpoint(c ServiceCheckpoint) Runtime { return contracts.RuntimeFromCheckpoint(c) }
 
 // projectRuntime is the sole constructor of client Run views. It never writes
 // domain records or uses a previously persisted view to fill missing fields.

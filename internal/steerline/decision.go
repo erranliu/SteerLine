@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 // Decision questions and accepted answers are records in the current SQLite
@@ -578,21 +580,6 @@ func (s *Service) applyDecisions(ctx context.Context) error {
 
 // Native Orca Dispatches are unsupervised. The center owns the exact agent
 // terminal created with the worktree and never uses Codex's exec protocol.
-type orcaAskCall struct {
-	RunID      string              `json:"run_id"`
-	TaskID     string              `json:"task_id"`
-	DispatchID string              `json:"dispatch_id"`
-	MessageID  string              `json:"message_id"`
-	Questions  []nativeAskQuestion `json:"questions"`
-}
-
-type nativeAskQuestion struct {
-	ID            string           `json:"id"`
-	Header        string           `json:"header"`
-	Question      string           `json:"question"`
-	Options       []DecisionOption `json:"options"`
-	AllowFreeText bool             `json:"allow_free_text"`
-}
 
 func orcaQuestionID(decision *DecisionState) string {
 	if decision == nil || decision.Request.OrcaAsk == nil {
@@ -600,3 +587,7 @@ func orcaQuestionID(decision *DecisionState) string {
 	}
 	return decision.Request.OrcaAsk.MessageID
 }
+
+type orcaAskCall = contracts.OrcaAskCall
+
+type nativeAskQuestion = contracts.NativeAskQuestion

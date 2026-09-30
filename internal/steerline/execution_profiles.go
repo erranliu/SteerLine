@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/steerline/codexapp"
+	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 const ProjectExecutionProfileID = "project-default"
@@ -30,21 +31,7 @@ type ExecutionProfile struct {
 }
 
 // FixedExecutionProfile is stored with a WorkflowRun.
-type FixedExecutionProfile struct {
-	ID              string     `json:"id"`
-	Name            string     `json:"name"`
-	Digest          string     `json:"digest"`
-	Host            string     `json:"host"`
-	Agent           string     `json:"agent"`
-	Model           string     `json:"model,omitempty"`
-	ReasoningEffort string     `json:"reasoning_effort,omitempty"`
-	Sandbox         string     `json:"sandbox"`
-	WindowsSandbox  string     `json:"windows_sandbox,omitempty"`
-	ApprovalPolicy  string     `json:"approval_policy,omitempty"`
-	CodexProfile    string     `json:"profile,omitempty"`
-	Codex           Command    `json:"codex"`
-	Orca            OrcaConfig `json:"orca,omitempty"`
-}
+type FixedExecutionProfile = contracts.FixedExecutionProfile
 
 func (p ExecutionProfile) Freeze() FixedExecutionProfile {
 	p = p.withWindowsSandboxDefault()
@@ -55,7 +42,7 @@ func (p ExecutionProfile) Freeze() FixedExecutionProfile {
 	return FixedExecutionProfile{ID: p.ID, Name: p.Name, Digest: p.Digest(), Host: p.Host, Agent: p.Agent, Model: p.Model, ReasoningEffort: p.ReasoningEffort, Sandbox: p.Sandbox, WindowsSandbox: p.WindowsSandbox, ApprovalPolicy: policy, CodexProfile: p.CodexProfile, Codex: p.Codex, Orca: p.Orca}
 }
 
-func (p FixedExecutionProfile) VerifyWorkerFlow() bool {
+func verifyFixedExecutionProfile(p FixedExecutionProfile) bool {
 	rebuilt := ExecutionProfile{ID: p.ID, Name: p.Name, Host: p.Host, Agent: p.Agent, Model: p.Model, ReasoningEffort: p.ReasoningEffort, Sandbox: p.Sandbox, WindowsSandbox: p.WindowsSandbox, CodexProfile: p.CodexProfile, Codex: p.Codex, Orca: p.Orca}
 	return p.Digest != "" && p.Digest == rebuilt.Digest() && (!rebuilt.managedOrcaPermissions() || p.ApprovalPolicy == "never" && (p.WindowsSandbox == "elevated" || p.WindowsSandbox == "unelevated"))
 }

@@ -11,6 +11,9 @@ import (
 	"runtime"
 
 	_ "modernc.org/sqlite"
+
+	"github.com/erranliu/SteerLine/internal/steerline/contracts"
+	"github.com/erranliu/SteerLine/internal/steerline/query"
 )
 
 type DomainTx interface {
@@ -37,27 +40,13 @@ type DomainTx interface {
 }
 
 type DomainStore interface {
+	query.Store
 	Close() error
 	Transact(context.Context, func(DomainTx) error) error
 	LoadProjection(context.Context, string) ([]byte, uint64, error)
-	Query(context.Context, string) (DomainSnapshot, error)
-	Events(context.Context, string, string, string, int64, int, int) ([]DomainEvent, error)
-	EventPayload(context.Context, string, int64, int64, int) ([]byte, int64, string, error)
 	Commands(context.Context, string, string, int) ([]CommandRecord, error)
 	Command(context.Context, string, string) (CommandRecord, error)
 	CommandByIdempotency(context.Context, string, string) (CommandRecord, error)
-	NativeTaskPage(context.Context, string, string, string, uint64, int, int) (NativeTaskPage, error)
-}
-
-type DomainSnapshot struct {
-	Deliveries      []TaskDeliveryRecord `json:"deliveries"`
-	ProjectIdentity string               `json:"project_identity"`
-	Tasks           []TaskRecord         `json:"tasks"`
-	WorkflowRuns    []WorkflowRunRecord  `json:"workflow_runs"`
-	Executions      []ExecutionRecord    `json:"executions"`
-	Attempts        []StepAttemptRecord  `json:"attempts"`
-	Decisions       []DecisionRecord     `json:"decisions"`
-	Operations      []OperationRecord    `json:"operations"`
 }
 
 type SQLiteStore struct {
@@ -174,3 +163,5 @@ func (s *SQLiteStore) transactSQLite(ctx context.Context, fn func(*sqliteTx) err
 	}
 	return tx.Commit()
 }
+
+type DomainSnapshot = contracts.DomainSnapshot

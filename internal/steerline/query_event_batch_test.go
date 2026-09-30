@@ -47,7 +47,7 @@ func TestQueryEventBatchPagingPreservesByteBoundary(t *testing.T) {
 		return err
 	}))
 	counted := &countingEventStore{DomainStore: store}
-	query := QueryService{Store: counted, Project: project}
+	query := NewQueryService(counted, project)
 	filter := EventFilter{ExecutionID: "execution", AttemptID: "attempt"}
 	first, err := query.ReadEvents(ctx, filter, "", 200)
 	require(t, err)
@@ -90,7 +90,7 @@ func TestQueryEventBatchReadCountAndPageLimit(t *testing.T) {
 	for _, limit := range []int{0, 1, eventReadBatchSize, eventReadBatchSize + 1, MaxEventPageSize + 1} {
 		t.Run(fmt.Sprint(limit), func(t *testing.T) {
 			counted := &countingEventStore{DomainStore: store}
-			query := QueryService{Store: counted, Project: project}
+			query := NewQueryService(counted, project)
 			page, err := query.ReadEvents(ctx, EventFilter{ExecutionID: "execution"}, "", limit)
 			require(t, err)
 			expected := limit
@@ -128,7 +128,7 @@ func TestQueryEventBatchDoesNotPrefetchUnusedLargeBodies(t *testing.T) {
 		return nil
 	}))
 	counted := &countingEventStore{DomainStore: store}
-	query := QueryService{Store: counted, Project: project}
+	query := NewQueryService(counted, project)
 	cursor := ""
 	for i, id := range ids {
 		page, err := query.ReadEvents(ctx, EventFilter{ExecutionID: "execution"}, cursor, 200)

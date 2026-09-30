@@ -9,7 +9,7 @@ import (
 func TestLocalWindowsSandboxProfileFreezesAndRestores(t *testing.T) {
 	profile := ExecutionProfile{ID: "local", Name: "Local", Host: "local", Agent: "codex", Sandbox: "workspace-write", WindowsSandbox: "elevated"}
 	fixed := profile.Freeze()
-	if fixed.WindowsSandbox != "elevated" || !fixed.VerifyWorkerFlow() {
+	if fixed.WindowsSandbox != "elevated" || !verifyFixedExecutionProfile(fixed) {
 		t.Fatalf("bad frozen profile: %+v", fixed)
 	}
 	config := (Config{WindowsSandbox: "unelevated"}).ApplyFixedExecutionProfile(fixed)
@@ -17,7 +17,7 @@ func TestLocalWindowsSandboxProfileFreezesAndRestores(t *testing.T) {
 		t.Fatal("current config changed frozen mode")
 	}
 	fixed.WindowsSandbox = "unelevated"
-	if fixed.VerifyWorkerFlow() {
+	if verifyFixedExecutionProfile(fixed) {
 		t.Fatal("sandbox mode drift was accepted")
 	}
 	if runtime.GOOS == "windows" {
