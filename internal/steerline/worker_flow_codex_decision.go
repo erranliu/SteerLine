@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/erranliu/SteerLine/internal/steerline/codexapp"
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 )
 
 const codexAskToolName = codexapp.AskToolName
@@ -31,32 +32,18 @@ type codexAskCall struct {
 }
 
 func parseCodexAskCall(envelope codexapp.Envelope, expectedThread, expectedTurn string) (codexAskCall, error) {
-	var call codexAskCall
-	if envelope.Method != "item/tool/call" || len(envelope.ID) == 0 || !json.Valid(envelope.ID) || !codexThreadID.MatchString(expectedThread) || !codexThreadID.MatchString(expectedTurn) {
-		return call, errors.New("Codex ask event lacks a fixed native request or turn")
-	}
-	var params struct {
-		ThreadID  string          `json:"threadId"`
-		TurnID    string          `json:"turnId"`
-		CallID    string          `json:"callId"`
-		Namespace *string         `json:"namespace"`
-		Tool      string          `json:"tool"`
-		Arguments json.RawMessage `json:"arguments"`
-	}
-	if err := json.Unmarshal(envelope.Params, &params); err != nil {
-		return call, err
-	}
-	if params.ThreadID != expectedThread || params.TurnID != expectedTurn || params.CallID == "" || params.Namespace != nil || params.Tool != codexAskToolName {
-		return call, errors.New("Codex ask request differs from the fixed tool, thread or turn")
+	wire, err := codexworker.ParseAskEnvelope(envelope, expectedThread, expectedTurn)
+	if err != nil {
+		return codexAskCall{}, err
 	}
 	var args struct {
 		Questions []codexAskQuestion `json:"questions"`
 	}
-	if err := decode(params.Arguments, &args); err != nil {
-		return call, fmt.Errorf("Codex ask arguments: %w", err)
+	if err := decode(wire.Arguments, &args); err != nil {
+		return codexAskCall{}, fmt.Errorf("Codex ask arguments: %w", err)
 	}
 	if len(args.Questions) == 0 || len(args.Questions) > 3 {
-		return call, errors.New("Codex ask needs one to three questions")
+		return codexAskCall{}, errors.New("Codex ask needs one to three questions")
 	}
 	seen := map[string]bool{}
 	for i := range args.Questions {
@@ -65,16 +52,16 @@ func parseCodexAskCall(envelope codexapp.Envelope, expectedThread, expectedTurn 
 		q.Header = strings.TrimSpace(q.Header)
 		q.Question = strings.TrimSpace(q.Question)
 		if q.ID == "" || len(q.ID) > 128 || seen[q.ID] || q.Header == "" || len([]rune(q.Header)) > 40 || q.Question == "" || len([]rune(q.Question)) > 2000 {
-			return call, fmt.Errorf("Codex ask question %d has invalid identity or text", i+1)
+			return codexAskCall{}, fmt.Errorf("Codex ask question %d has invalid identity or text", i+1)
 		}
 		seen[q.ID] = true
 		req := DecisionRequest{Question: q.Question, Options: q.Options, AllowFreeText: q.AllowFreeText}
 		if err := validateDecisionRequest(&req); err != nil {
-			return call, fmt.Errorf("Codex ask question %q: %w", q.ID, err)
+			return codexAskCall{}, fmt.Errorf("Codex ask question %q: %w", q.ID, err)
 		}
 		q.Options = req.Options
 	}
-	call = codexAskCall{RequestID: append(json.RawMessage(nil), envelope.ID...), ThreadID: params.ThreadID, TurnID: params.TurnID, CallID: params.CallID, Questions: args.Questions}
+	call := codexAskCall{RequestID: wire.RequestID, ThreadID: wire.ThreadID, TurnID: wire.TurnID, CallID: wire.CallID, Questions: args.Questions}
 	request := codexAskDecisionRequest(call)
 	request.NativeAsk = nil // The process generation is attached by the service writer.
 	if err := validateDecisionRequest(&request); err != nil {

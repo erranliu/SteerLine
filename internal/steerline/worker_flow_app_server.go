@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"time"
 
 	"github.com/erranliu/SteerLine/internal/steerline/codexapp"
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
@@ -229,20 +228,7 @@ func startAppServerWorkerTurn(ctx context.Context, c Config, run *Run, execution
 }
 
 func connectWorkerAppServer(ctx context.Context, endpoint string) (*codexapp.Client, error) {
-	deadline := time.Now().Add(10 * time.Second)
-	var err error
-	for time.Now().Before(deadline) {
-		var client *codexapp.Client
-		client, err = codexapp.Open(ctx, endpoint)
-		if err == nil {
-			return client, nil
-		}
-		if ctx.Err() != nil {
-			return nil, ctx.Err()
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
-	return nil, fmt.Errorf("app-server did not become ready at its fixed endpoint: %w", err)
+	return codexworker.ConnectAppServer(ctx, endpoint)
 }
 
 func observeAppServerWorker(ctx context.Context, worker *Worker, client *codexapp.Client, journal *os.File, runID, attemptID, threadID, turnID string, replay []codexapp.Envelope) {
