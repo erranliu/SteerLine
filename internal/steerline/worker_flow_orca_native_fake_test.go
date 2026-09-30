@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -107,7 +108,14 @@ func fakeNativeOrca(stateDir string, args []string) int {
 			state.Name, state.Base, state.Agent, state.Comment = arg(args, "--name"), arg(args, "--base-branch"), arg(args, "--agent"), arg(args, "--comment")
 			state.CreatedWithAgent = state.Agent
 			state.Path, state.Branch = filepath.Join(stateDir, "worker"), "fake/"+state.Name
-			if state.Name == "" || state.Base == "" || os.MkdirAll(state.Path, 0700) != nil {
+			if state.Name == "" || state.Base == "" || os.MkdirAll(filepath.Dir(state.Path), 0700) != nil {
+				return fakeOrcaErr("invalid_argument", "bad worktree")
+			}
+			if state.Agent == "" {
+				if out, err := exec.Command("git", "-C", state.Repo, "worktree", "add", "--detach", state.Path, state.Base).CombinedOutput(); err != nil {
+					return fakeOrcaErr("invalid_argument", "cannot create test linked worktree: "+string(out))
+				}
+			} else if os.MkdirAll(state.Path, 0700) != nil {
 				return fakeOrcaErr("invalid_argument", "bad worktree")
 			}
 			state.Created = true

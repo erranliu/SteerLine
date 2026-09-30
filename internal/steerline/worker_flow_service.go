@@ -213,7 +213,7 @@ func (s *Service) startInitialWorkerFlowTurn(ctx context.Context, task TaskRecor
 	if err != nil {
 		return s.waitWorkerFlow(run, "Fixed task contract is unavailable: "+err.Error())
 	}
-	prompt, err := workerFlowPrompt(task, contract, c.hostName() == "local")
+	prompt, err := workerFlowPrompt(task, contract, run.RunID, c.hostName() == "local")
 	if err != nil {
 		return s.waitWorkerFlow(run, err.Error())
 	}
@@ -242,6 +242,8 @@ func (s *Service) startWorkerFlowTurn(ctx context.Context, run *Run, prompt, tur
 	}
 	if adapter == workerflow.LocalCodex {
 		prompt += localWorkerPublishInstruction(run.RunID)
+	} else if adapter == workerflow.NativeOrca {
+		prompt += nativeOrcaRelayInstruction(run.RunID, turnID)
 	}
 	execution.PendingTurnID, execution.PendingCommandID = adapter.PendingIdentity(turnID)
 	opID, err := s.startOperation("start_worker_turn", "worker-turn:"+run.ExecutionID+":"+turnID, struct {

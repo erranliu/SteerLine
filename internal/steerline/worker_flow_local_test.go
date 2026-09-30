@@ -22,6 +22,21 @@ import (
 
 const workerFlowMockSession = "00000000-0000-0000-0000-000000000008"
 
+func TestWorkerFlowPromptIncludesFixedWorkflowRunID(t *testing.T) {
+	task := TaskRecord{TaskID: "102", Title: "Native branch A"}
+	contract := TaskContract{ContractID: "fixed", Branch: "main", SpecRef: FileReference{Path: "docs/spec/task.spec.md"}, PlanRef: FileReference{Path: "docs/spec/task.plan.md"}}
+	runID := strings.Repeat("a", 32)
+	for _, localPublish := range []bool{false, true} {
+		prompt, err := workerFlowPrompt(task, contract, runID, localPublish)
+		if err != nil || !strings.Contains(prompt, "Fixed SteerLine workflow_run_id: "+runID) || strings.Contains(prompt, "Orca Run, Task and Dispatch IDs are separate") == localPublish {
+			t.Fatalf("worker prompt omitted its fixed center identity: %q / %v", prompt, err)
+		}
+	}
+	if _, err := workerFlowPrompt(task, contract, "", false); err == nil {
+		t.Fatal("worker prompt accepted a missing workflow run ID")
+	}
+}
+
 func TestWorkerTurnFindsPRBeforeFinalMessage(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "events.jsonl")
 	events := `{"type":"thread.started","thread_id":"00000000-0000-0000-0000-000000000008"}

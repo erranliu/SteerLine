@@ -126,7 +126,7 @@ func TestNativeOrcaFixedLunaLaunchReconcilesOriginalTerminal(t *testing.T) {
 	if err := json.Unmarshal(data, &state); err != nil {
 		t.Fatal(err)
 	}
-	if !state.FixedAgentTerminalCreated || state.CreatedWithAgent != "" || !strings.Contains(state.FixedAgentCommand, "'gpt-6-luna'") || !strings.Contains(state.FixedAgentCommand, "'model_reasoning_effort=xhigh'") || state.Dispatches != 1 {
+	if !state.FixedAgentTerminalCreated || state.CreatedWithAgent != "" || !strings.Contains(state.FixedAgentCommand, "'gpt-6-luna'") || !strings.Contains(state.FixedAgentCommand, "'model_reasoning_effort=xhigh'") || !strings.Contains(state.FixedAgentCommand, "'sandbox_workspace_write.network_access=true'") || strings.Count(state.FixedAgentCommand, "'--add-dir'") != 2 || state.Dispatches != 1 {
 		t.Fatalf("fixed Orca launch was not preserved: %+v", state)
 	}
 }
@@ -550,7 +550,11 @@ func TestNativeOrcaCenterReusesWorkerAfterRestartAndSettlement(t *testing.T) {
 	}
 	workflow, execution = s.workflowRecords(run)
 	if execution.TurnNumber != 5 || len(execution.OrcaNative.Turns) != 5 || execution.OrcaNative.Turns[4].DispatchID != "ctx-5" || workflow.Phase != "waiting_decision" {
-		t.Fatalf("lost Task receipt did not recover in original worker: workflow=%+v execution=%+v", workflow, execution)
+		message := ""
+		if execution.Error != nil {
+			message = *execution.Error
+		}
+		t.Fatalf("lost Task receipt did not recover in original worker: workflow=%+v execution=%+v error=%s", workflow, execution, message)
 	}
 	data, err = os.ReadFile(statePath)
 	if err != nil {
