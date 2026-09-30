@@ -1,4 +1,5 @@
-// Package orcaworker builds fixed Orca worker commands without owning workflow state.
+// Package orcaworker handles Orca worker protocol operations and evidence
+// without owning workflow state or service persistence.
 package orcaworker
 
 import (

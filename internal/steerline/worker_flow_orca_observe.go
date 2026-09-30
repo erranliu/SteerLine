@@ -3,12 +3,8 @@ package steerline
 import (
 	"context"
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
-	"strings"
-	"time"
 
 	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
@@ -57,82 +53,11 @@ func prepareOrcaTurnJournal(c Config, run *Run, turnID string, cursor int64) (st
 	return events, identity, nil
 }
 
-func pullWorkerOrcaTurn(ctx context.Context, c Config, identity ProcessIdentity, turnID, events string, done chan<- error) {
-	finish := func(err error) {
-		select {
-		case done <- err:
-		case <-ctx.Done():
-		}
-	}
-	if exited, err := orcaworker.ReadTurnExit(events, turnID); err != nil {
-		finish(err)
-		return
-	} else if exited != nil {
-		if exited.ExitCode == 0 {
-			finish(nil)
-		} else {
-			finish(fmt.Errorf("original Orca Codex turn exited with code %d", exited.ExitCode))
-		}
-		return
-	}
-	cursor, err := orcaworker.LoadTurnCursor(events)
-	if err != nil {
-		finish(err)
-		return
-	}
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
-	for {
-		batch, err := readWorkerOrcaOutput(ctx, c, identity, cursor)
-		if err != nil {
-			if ctx.Err() == nil {
-				finish(err)
-			}
-			return
-		}
-		for i, raw := range batch.Rows {
-			rowCursor := cursor + int64(i)
-			line := strings.TrimSpace(raw)
-			if encoded, ok := strings.CutPrefix(line, "SLJSON:"+turnID+":"); ok {
-				if err := orcaworker.AppendTurnEvent(events, rowCursor, encoded); err != nil {
-					finish(err)
-					return
-				}
-				continue
-			}
-			if exitText, ok := strings.CutPrefix(line, "SLEND:"+turnID+":"); ok {
-				code, err := strconv.Atoi(exitText)
-				if err != nil || code < 0 {
-					finish(errors.Join(err, errors.New("Orca worker turn has invalid exit status")))
-					return
-				}
-				marker := orcaworker.TurnExit{Version: 1, TurnID: turnID, Cursor: rowCursor, ExitCode: code}
-				if err := AtomicWrite(filepath.Join(filepath.Dir(events), "orca-exit.json"), append(mustJSON(marker), '\n')); err != nil {
-					finish(err)
-					return
-				}
-				if code == 0 {
-					finish(nil)
-				} else {
-					finish(fmt.Errorf("original Orca Codex turn exited with code %d", code))
-				}
-				return
-			}
-		}
-		cursor = batch.NextCursor
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-		}
-	}
-}
-
 func observeWorkerOrcaTurn(c Config, run *Run, turnID string, identity ProcessIdentity, events, sourceIdentity string) *Worker {
 	ctx, cancel := context.WithCancel(context.Background())
 	worker := &Worker{proc: &workerOrcaProcess{config: c, identity: identity}, Events: make(chan WorkerEvent, 64), Done: make(chan error, 1), cancelObservation: cancel, observationDone: make(chan struct{})}
 	waited := make(chan error, 1)
-	go pullWorkerOrcaTurn(ctx, c, identity, turnID, events, waited)
+	go orcaworker.PullTurn(ctx, orcaWorkerMetaCaller(c), workerOrcaTerminalIdentity(identity), turnID, events, waited, AtomicWrite, workerOrcaBackendError)
 	go observeDurableWorkerSegment(ctx, worker, events, sourceIdentity, "orca-jsonl-v1:"+sourceIdentity, run.RunID, run.AttemptID, waited)
 	return worker
 }

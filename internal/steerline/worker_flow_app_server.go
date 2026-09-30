@@ -5,9 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net"
 	"os"
-	"os/exec"
 	"path/filepath"
 
 	"github.com/erranliu/SteerLine/internal/steerline/codexapp"
@@ -74,23 +72,11 @@ func startAppServerWorkerTurn(ctx context.Context, c Config, run *Run, execution
 	if run.ExecutionID != execution.ExecutionID || run.RunID != execution.WorkflowRunID || canonical(*run.WorktreePath) != canonical(execution.Workspace.Worktree) {
 		return nil, "", "", errors.New("app-server execution/workspace identity mismatch")
 	}
-	dir := filepath.Join(c.RunDir, "runs", run.RunID, "turns", commandID)
-	if err := os.MkdirAll(dir, 0700); err != nil {
+	paths, err := codexworker.PrepareTurn(c.RunDir, run.RunID, commandID, prompt, AtomicWrite)
+	if err != nil {
 		return nil, "", "", err
 	}
-	journalPath := filepath.Join(dir, "appserver.jsonl")
-	if _, err := os.Stat(journalPath); err == nil {
-		return nil, "", "", errors.New("original app-server turn journal exists; send must be reconciled, not repeated")
-	} else if !os.IsNotExist(err) {
-		return nil, "", "", err
-	}
-	if err := AtomicWrite(filepath.Join(dir, "prompt.txt"), []byte(prompt)); err != nil {
-		return nil, "", "", err
-	}
-	serverDir := filepath.Join(c.RunDir, "runs", run.RunID, "app-server")
-	if err := os.MkdirAll(serverDir, 0700); err != nil {
-		return nil, "", "", err
-	}
+	dir, journalPath, serverDir := paths.TurnDir, paths.JournalPath, paths.ServerDir
 	var process *os.Process
 	if execution.Process != nil {
 		var receipt appServerProcessReceipt
@@ -107,30 +93,15 @@ func startAppServerWorkerTurn(ctx context.Context, c Config, run *Run, execution
 			return nil, "", "", err
 		}
 	} else {
-		listener, err := net.Listen("tcp", "127.0.0.1:0")
+		identity, launched, endpoint, err := codexworker.LaunchServer(codexworker.LaunchConfig{
+			Executable: c.Codex.Executable, Args: c.Codex.Args, Profile: c.Profile,
+			Workspace: *run.WorktreePath, ServerDir: serverDir,
+		}, startDetachedProcess, func(base []string) []string {
+			return unsetEnv(overrideEnv(base, map[string]string{"STEERLINE_WORKFLOW_RUN_ID": run.RunID, "STEERLINE_EXECUTION_ID": run.ExecutionID}), []string{"BEADS_*", "BD_*"})
+		})
 		if err != nil {
 			return nil, "", "", err
 		}
-		endpoint := "ws://" + listener.Addr().String()
-		_ = listener.Close()
-		command, err := codexAppServerCommand(c, endpoint)
-		if err != nil {
-			return nil, "", "", err
-		}
-		output, err := os.OpenFile(filepath.Join(serverDir, "appserver.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
-		if err != nil {
-			return nil, "", "", err
-		}
-		cmd := exec.Command(command.Executable, command.Args...)
-		cmd.Dir = *run.WorktreePath
-		cmd.Env = unsetEnv(overrideEnv(cmd.Environ(), map[string]string{"STEERLINE_WORKFLOW_RUN_ID": run.RunID, "STEERLINE_EXECUTION_ID": run.ExecutionID}), []string{"BEADS_*", "BD_*"})
-		cmd.Stdout, cmd.Stderr = output, output
-		identity, startErr := startDetachedProcess(cmd)
-		_ = output.Close()
-		if startErr != nil {
-			return nil, "", "", startErr
-		}
-		go func() { _ = cmd.Wait() }()
 		generation := newID()
 		receipt := appServerProcessReceipt{Endpoint: endpoint, Generation: generation, Identity: identity}
 		if err := AtomicWrite(filepath.Join(serverDir, "process.json"), append(mustJSON(receipt), '\n')); err != nil {
@@ -139,7 +110,7 @@ func startAppServerWorkerTurn(ctx context.Context, c Config, run *Run, execution
 		execution.Process = &identity
 		execution.AppServerEndpoint = endpoint
 		execution.AppServerGeneration = generation
-		process = cmd.Process
+		process = launched
 	}
 	client, err := connectWorkerAppServer(ctx, execution.AppServerEndpoint)
 	if err != nil {
