@@ -1,6 +1,6 @@
 # worker 环境就绪实现候选验收
 
-日期：2026-09-30。依据：PR154 原范围的 [Spec](../../spec/worker-environment-readiness.spec.md)、[Plan](../../spec/worker-environment-readiness.plan.md)。状态：审计修复及真实服务闭环通过；实现 PR160 待审阅。
+日期：2026-09-30。依据：PR154 原范围的 [Spec](../../spec/worker-environment-readiness.spec.md)、[Plan](../../spec/worker-environment-readiness.plan.md)。状态：审计修复及真实服务闭环通过，原实现 PR160 已合入。下述证据可供后续分包/策略迁移复用，不认证尚未实施的 #59 项目策略接线。
 
 ## 已取得的证据
 

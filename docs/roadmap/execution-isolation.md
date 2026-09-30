@@ -113,7 +113,9 @@ flowchart LR
 
 权限迁移保留现有 local Windows elevated 默认、冻结与 unelevated 分散根拒绝；新的项目策略由 #59 交付。#60 冻结 publisher 和完整非秘密发布目标，#59/#60 串行扩展同一个执行快照，不等 #61 再合并两份结构。
 
-[worker 环境就绪](../spec/worker-environment-readiness.spec.md)负责原会话工具探针、准备轮次、宿主阻断和恢复。#59 负责公共权限语义及映射；两边的配置、冻结字段和参数冲突检查必须使用同一实现。该 Spec 已明确复用 #59 的策略和配置边界；实际集成保持同一权限实现，不另建顶层 sandbox 授权来源。
+Orca 已交付的显式 Windows 实现选择、无 model 受管命令、安全 args、隐式临时根排除、准备/业务轮分离和宿主恢复由后续迁移保持。已证实的 Orca unelevated 组合不因套用 local 限制而被删除。#54 的已实施契约保持固定；#57 迁移唯一 Codex 参数生产者，#58 基于现成契约承接准备/阻断与可信接收方，保留中心 WorkerEnvironment 和平台工具证据边界。
+
+[worker 环境就绪原范围](../spec/worker-environment-readiness.spec.md)已交付，后续沿用其工具/原子收据/结算与重查并发证据。#59 将已有权限编译和两阶段冻结改为项目策略来源，新快照/授权接线须独立验证；不把已交付能力反向设为等待 #59，也不重复完整就绪工程。
 
 [停服恢复](../spec/worker-service-recovery.spec.md)的人工门槛、代次与原身份核验继续成立；本系列不借搬迁重新自动发送已保存输入或静默替换 worker。[持续 worker 流程](../spec/worker-flow.spec.md)及其后续明确补充仍决定业务状态，测试、修复、审查来自固定任务契约。
 

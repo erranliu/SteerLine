@@ -18,6 +18,8 @@
 
 迁移 `pr.go`、`worker_publish_local.go` 中的外部操作及必要 marker 验证，中心保留工作轮终态关联和发布请求受理。现有宿主发布的 GitHub command provider、精确仓库/执行分支、base、已暂存改动及 HEAD 核验仍成立，不把搬包解释为支持任意 provider 发布。
 
+保留已有轮次用途与发布资格：readiness 的工具结果、worker_done 和 PR 文本不受理为业务发布请求。宿主阻断不能覆盖已核验的 PR 合并事实，发布包不自行清除 blocker 或恢复业务派发。
+
 请求接收固定小输入，不接受 Service、Run、数据库或可写业务指针。工具和认证来源通过非秘密引用或运行时依赖提供；宿主发布路径不向 worker 下发宿主凭据，worker 发布仍使用其目标环境自己的认证。PR 正文/错误/日志不能泄漏 token。结果包含平台身份、Git 进度事实及未知边界，不能用一个 bool 代表提交、推送和建 PR 全部完成。
 
 ## 持久化与失败边界

@@ -2,6 +2,8 @@
 
 本文固定项目执行抽象、适配器职责及迁移规则，由各轮独立 Spec 和 Plan 引用。本文没有任务身份，不单独启动实现，也不代替各轮范围和验收。适用目标：`EXECUTION-ISOLATION`。
 
+#54 的 01 Spec/Plan 已实施并保持固定。本次新增就绪/宿主交接要求面向后续迁移，不反向修改 #54 的范围或验收；#58 以现成公共契约承接平台事实，必要补充在自身 Spec/实现内交付。
+
 ## 业务与实现边界
 
 项目定义执行权限、逻辑仓库与工作区要求、发布责任和必要能力。全局执行方案定义目标、agent、model、reasoning effort 和实现选项。每次领取固定两者的有效组合，资源创建后追加实际绑定，不能从后续配置变化补造已有 Execution 的事实。
@@ -9,6 +11,8 @@
 中心是业务写者，管理 Task、WorkflowRun、Execution、Decision、Operation、消息消费和 TaskDelivery。平台层执行固定意图并返回事实；公共契约不携带可写 Service、Runtime、Run 或业务事务。副作用前意图持久化，成功回执后提交事实；未知结果保留原请求和资源身份，不盲重发。平台确认或消费游标推进在必要内容持久化之后。
 
 输入接受、轮次开始、提问、轮次结束、发布和真实合并分别表达。普通反馈属于原会话；停服恢复遵守[停服恢复 Spec](worker-service-recovery.spec.md)的人工作业门槛，观察重接不自动发送新输入。明确授权的新会话拥有新代次，不能冒充原会话，也不能形成两个未排除活动可能性的 worker。TaskDelivery 继续使用既有唯一事务及真实 provider 合并证据。
+
+主干已有 readiness/business 轮次、WorkerEnvironment 和宿主恢复。准备轮不占业务 CurrentTurn/计数、不关联交付 PR；服务处理可信中心选项，文字反馈仍保存原 worker/question 目标且宿主等待时不注入菜单。接收方及权限来自中心持久记录，不信任 worker 自报的 receiver/action。固定准备 nonce/deadline、原身份重查、准备失败失效与重新检查并发校验在前五轮保持。
 
 ## 包与依赖
 
@@ -31,6 +35,8 @@
 
 只为实际消费者建立接口。共同意图、身份、证据引用和能力结构由 #54 固定；Git/PR 实现各用必要的输入。Codex 启动命令以 executable、独立 argv、工作目录和非秘密环境引用表达，Orca 负责 shell 包装，不把已经拼接的任意命令当成可追加配置的通用入口。
 
+已有原生工具事件、收据、安全文件读取和 HostFact 解释归平台适配器；准备/阻断/DeferredDecision 与业务派发条件归中心。WorkerEnvironment 仍是中心持久事实，不把其整个状态机移入后端，也不建立第二个 readiness 引擎。
+
 ## 迁移与版本
 
 每轮建包即迁入完整职责，更新生产调用与相关测试并删除原实现。不单独交付空包，不长期保留类型别名、转发或双实现。前五轮保持已有行为，尚未迁移的当前调用只能继续使用唯一原实现，不能复制到另一条路径；每轮明确剩余消费者及后续所有者。
@@ -42,6 +48,8 @@
 各轮 Spec 自己固定 task ID、硬前置、接口交接和共享冲突。准备性阅读或低层实验不能绕过领取硬前置。并行包内工作不等于共享中心文件可同时合入；公共契约集中修改，后合入方更新主干并运行受影响接线回归。
 
 主干已完成[协议事实](architecture-01-worker-protocol.spec.md)、[显式原子提交](architecture-02-worker-commit.spec.md)和[Runtime 边界](architecture-03-runtime-boundary.spec.md)的相关实现，worker 业务接线已拆为 start/events/completion/feedback/pr/recovery 等文件。复用 `service_commit.go`、`worker_commit.go`、`worker_attachment_store.go` 的事务和绑定/回执附件，不重新引入 Runtime 写回、文件绑定写入或第二个业务提交入口。本系列只迁移这些边界的消费者与实现所有者。
+
+[环境就绪](worker-environment-readiness.spec.md)原范围已交付，有同原 terminal/incarnation 的工具、原子收据、准备结算和业务派发证据。#57 接收已有受管启动和安全参数检查，#58 迁移平台准备/宿主事实，#59 将其改为项目策略来源；已交付能力不反向依赖尚未完成的 #59。
 
 所有静态配置/model/参数校验须在任何外部副作用前完成。领取前的能力查询可以运行固定、短命的只读版本/help 查询，使用隔离临时文件并精确清理；不得创建 worktree、worker 会话、terminal/Dispatch 或初始化 sandbox。区分这种宿主能力查询与在实际 worker 权限内执行的就绪证明，不把其中一个推定为另一个。
 
