@@ -3,10 +3,10 @@ package steerline
 import (
 	"context"
 	"errors"
-	"fmt"
-	"path/filepath"
 	"runtime"
-	"strings"
+
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
+	"github.com/erranliu/SteerLine/internal/steerline/workspace"
 )
 
 // Windows workspace-write needs Git's shared objects, refs and reflogs, plus
@@ -18,53 +18,13 @@ func codexLinkedWorktreeWriteArgs(ctx context.Context, c Config, worktree string
 	if c.identity == "" {
 		return nil, errors.New("Codex Git sandbox requires a resolved repository identity")
 	}
-	r := gitRunner(c, worktree)
-	readPath := func(args ...string) (string, error) {
-		out, err := r.Output(ctx, c.Git, args...)
-		if err != nil {
-			return "", err
-		}
-		path := strings.TrimSpace(string(out))
-		if !filepath.IsAbs(path) {
-			return "", fmt.Errorf("Git returned a non-absolute metadata path %q", path)
-		}
-		return filepath.EvalSymlinks(path)
-	}
-	common, err := readPath("rev-parse", "--path-format=absolute", "--git-common-dir")
+	repository, err := workspaceRepository(c)
 	if err != nil {
-		return nil, fmt.Errorf("resolve Codex Git common directory: %w", err)
+		return nil, err
 	}
-	if canonical(common) != canonical(c.identity) {
-		return nil, errors.New("Codex Git common directory differs from the fixed repository identity")
-	}
-	objects, err := readPath("rev-parse", "--path-format=absolute", "--git-path", "objects")
+	resources, err := workspace.ResolveLinkedResourcesAt(ctx, workspaceGit(c), repository, worktree)
 	if err != nil {
-		return nil, fmt.Errorf("resolve Codex Git object directory: %w", err)
+		return nil, err
 	}
-	if canonical(objects) != canonical(filepath.Join(common, "objects")) {
-		return nil, errors.New("Codex Git objects are outside the fixed repository")
-	}
-	refs, err := readPath("rev-parse", "--path-format=absolute", "--git-path", "refs")
-	if err != nil {
-		return nil, fmt.Errorf("resolve Codex Git refs directory: %w", err)
-	}
-	if canonical(refs) != canonical(filepath.Join(common, "refs")) {
-		return nil, errors.New("Codex Git refs are outside the fixed repository")
-	}
-	logs, err := readPath("rev-parse", "--path-format=absolute", "--git-path", "logs")
-	if err != nil {
-		return nil, fmt.Errorf("resolve Codex Git reflogs directory: %w", err)
-	}
-	if canonical(logs) != canonical(filepath.Join(common, "logs")) {
-		return nil, errors.New("Codex Git reflogs are outside the fixed repository")
-	}
-	admin, err := readPath("rev-parse", "--absolute-git-dir")
-	if err != nil {
-		return nil, fmt.Errorf("resolve Codex linked-worktree admin directory: %w", err)
-	}
-	rel, err := filepath.Rel(filepath.Join(common, "worktrees"), admin)
-	if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.Dir(rel) != "." {
-		return nil, errors.New("Codex Git admin directory is not a fixed linked worktree")
-	}
-	return []string{"--add-dir", objects, "--add-dir", refs, "--add-dir", logs, "--add-dir", admin}, nil
+	return codexworker.LinkedWorktreeWriteArgs(resources.Objects, resources.Refs, resources.Logs, resources.Admin)
 }

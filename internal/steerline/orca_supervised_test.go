@@ -308,7 +308,7 @@ func supervisedFixtureConfig(t *testing.T) Config {
 
 func supervisedConfigForFixture(t *testing.T, f *fixture) Config {
 	t.Helper()
-	remoteBytes, err := gitRunner(f.c, f.c.Repository).Output(context.Background(), f.c.Git, "remote", "get-url", f.c.Remote)
+	remoteBytes, err := (Runner{Dir: f.c.Repository, Timeout: duration(f.c.CommandTimeout)}).Output(context.Background(), f.c.Git, "remote", "get-url", f.c.Remote)
 	if err != nil {
 		t.Fatal(err)
 	}

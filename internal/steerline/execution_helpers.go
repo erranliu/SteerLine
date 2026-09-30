@@ -4,12 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
-	"os"
-	"path/filepath"
-	"strings"
 
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	"github.com/erranliu/SteerLine/internal/steerline/workspace"
 )
 
 func (s *Service) workflowRecords(run *Run) (*WorkflowRunRecord, *ExecutionRecord) {
@@ -111,40 +108,23 @@ func applyWorkflowWorkspaceTarget(run *Run, execution *ExecutionRecord, workspac
 }
 
 func prepareWorktreeOnly(ctx context.Context, c Config, run *Run) error {
+	_, err := prepareWorktree(ctx, c, run)
+	return err
+}
+
+func prepareWorktree(ctx context.Context, c Config, run *Run) (workspace.Preparation, error) {
 	intent := run.WorkspaceIntent
 	if intent == nil {
-		return errors.New("missing durable workspace intent")
+		return workspace.Preparation{Status: executionapi.OperationRejected}, errors.New("missing durable workspace intent")
 	}
 	if err := c.prepareWorktreeRoot(); err != nil {
-		return err
+		return workspace.Preparation{Status: executionapi.OperationRejected}, err
 	}
-	if canonical(filepath.Dir(intent.Path)) != canonical(c.WorktreeRoot) {
-		return errors.New("workspace intent path no longer matches worktree_root")
-	}
-	if _, err := os.Lstat(intent.Path); !os.IsNotExist(err) {
-		return fmt.Errorf("worktree path already exists or is inaccessible: %s", intent.Path)
-	}
-	if err := os.MkdirAll(c.WorktreeRoot, 0700); err != nil {
-		return err
-	}
-	git := gitRunner(c, c.Repository)
-	if _, err := git.Output(ctx, c.Git, "check-ref-format", "refs/heads/"+intent.Branch); err != nil {
-		return err
-	}
-	refs, err := git.Output(ctx, c.Git, "for-each-ref", "--format=%(refname)", "refs/heads/"+intent.Branch)
+	repository, err := workspaceRepository(c)
 	if err != nil {
-		return err
+		return workspace.Preparation{Status: executionapi.OperationRejected}, err
 	}
-	if strings.TrimSpace(string(refs)) != "" {
-		return errors.New("worktree branch already exists")
-	}
-	if err = os.Mkdir(intent.Path, 0700); err != nil {
-		return err
-	}
-	if _, err = git.Output(ctx, c.Git, "worktree", "add", "--no-track", "-b", intent.Branch, "--", intent.Path, intent.BaseCommit); err != nil {
-		return err
-	}
-	return verifyWorkspace(ctx, c, intent, true)
+	return workspace.Prepare(ctx, workspaceGit(c), repository, c.WorktreeRoot, intent)
 }
 
 func mustJSON(value any) []byte { data, _ := json.Marshal(value); return data }

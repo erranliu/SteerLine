@@ -47,6 +47,61 @@ type NativeWorkspaceCleanupReceipt struct {
 	ObservedAt    time.Time `json:"observed_at"`
 }
 
+// RecordNativeWorkspaceCleanupProgress stores exact, incomplete resource facts
+// while leaving the cleanup item pending for a later reconciliation.
+func (c CommandService) RecordNativeWorkspaceCleanupProgress(ctx context.Context, taskID, requestID string, expectedVersion uint64, cleanupItem, requestedBy string, receipt json.RawMessage) error {
+	if c.Store == nil || c.Project == "" || !controlIDPattern.MatchString(requestID) || expectedVersion == 0 || !json.Valid(receipt) {
+		return nativeErr("contract_mismatch", "workspace cleanup progress requires a fixed request and JSON receipt")
+	}
+	var evidence NativeWorkspaceCleanupReceipt
+	if err := decode(receipt, &evidence); err != nil || evidence.WorkflowRunID == "" || evidence.ExecutionID == "" || evidence.Repository == "" || evidence.Branch == "" || !filepath.IsAbs(evidence.Worktree) || canonical(strings.TrimPrefix(cleanupItem, "workspace_cleanup:")) != canonical(evidence.Worktree) || !strings.HasPrefix(cleanupItem, "workspace_cleanup:") || !validCommit(evidence.BaseCommit) || evidence.ObservedAt.IsZero() {
+		return nativeErr("contract_mismatch", "workspace cleanup progress does not match the exact pending local resources")
+	}
+	if err := ValidateNativeTaskID(taskID); err != nil {
+		return err
+	}
+	if strings.TrimSpace(requestedBy) == "" {
+		requestedBy = DefaultRequestedBy()
+	}
+	request, err := CanonicalJSON(mustJSON(struct {
+		TaskID      string `json:"task_id"`
+		CleanupItem string `json:"cleanup_item"`
+		RequestedBy string `json:"requested_by"`
+	}{taskID, cleanupItem, requestedBy}))
+	if err != nil {
+		return err
+	}
+	nowAt := time.Now().UTC()
+	return c.Store.transactSQLite(ctx, func(tx *sqliteTx) error {
+		var payload []byte
+		if err := tx.tx.QueryRowContext(ctx, `SELECT payload FROM tasks WHERE project_identity=? AND task_id=?`, c.Project, taskID).Scan(&payload); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return nativeErr("task_not_found", "discarded native task was not found")
+			}
+			return err
+		}
+		var task TaskRecord
+		if err := json.Unmarshal(payload, &task); err != nil {
+			return err
+		}
+		pending := false
+		for _, item := range task.CleanupPending {
+			pending = pending || item == cleanupItem
+		}
+		if task.Source != "native" || task.Status != "discarded" || task.Version != expectedVersion || !pending {
+			return nativeErr("stale_version", "workspace cleanup progress requires its current discarded task and pending item")
+		}
+		op := OperationRecord{
+			ProjectIdentity: c.Project, OperationID: "native-cleanup-progress:" + requestID,
+			IdempotencyKey: "native-cleanup-progress:" + requestID, Kind: "native_cleanup_progress",
+			Status: "outcome_unknown", PayloadDigest: digestCanonical(request), Request: request,
+			Receipt: append([]byte(nil), receipt...), CreatedAt: nowAt, UpdatedAt: nowAt,
+		}
+		_, _, err := tx.PutOperation(op)
+		return err
+	})
+}
+
 // RecordNativeCleanupReceipt settles one exact cleanup item from a discarded
 // native task. It never changes task identity, discarded status, or readiness.
 func (c CommandService) RecordNativeCleanupReceipt(ctx context.Context, taskID, requestID string, expectedVersion uint64, cleanupItem, requestedBy string, receipt json.RawMessage) (TaskRecord, error) {

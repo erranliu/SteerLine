@@ -1,6 +1,6 @@
 # Plan 工作区与 Git 资源迁移
 
-任务 ID：55；任务名称：工作区与 Git 资源迁移；目标：`EXECUTION-ISOLATION`。状态：待实施。唯一执行依据：[Spec](execution-isolation-02-workspace.spec.md)。硬前置：#54 合入，一个实现 PR 交付。
+任务 ID：55；任务名称：工作区与 Git 资源迁移；目标：`EXECUTION-ISOLATION`。状态：已实施，待合入。唯一执行依据：[Spec](execution-isolation-02-workspace.spec.md)。硬前置：#54 已合入，一个实现 PR 交付。
 
 ## 迁移步骤
 
