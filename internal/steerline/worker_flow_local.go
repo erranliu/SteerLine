@@ -131,8 +131,8 @@ func workerFlowPrompt(task TaskRecord, contract TaskContract, localPublish bool)
 
 func requireWorkerFlowCapabilities(ctx context.Context, c Config) error {
 	if c.hostName() == "orca" {
-		if c.Model != "" || c.ReasoningEffort != "" || c.Profile != "" || c.Sandbox != "workspace-write" {
-			return &BackendError{Code: BackendUnsupported, Diagnostic: "Orca starts the selected agent with its own settings; model, effort, Codex profile and sandbox overrides are unavailable"}
+		if c.Profile != "" || c.Sandbox != "workspace-write" || (c.Model == "") != (c.ReasoningEffort == "") {
+			return &BackendError{Code: BackendUnsupported, Diagnostic: "Orca requires workspace-write, no Codex profile, and model with reasoning_effort together"}
 		}
 		if _, err := workerOrcaCall(ctx, c, "status", "--json"); err != nil {
 			return err

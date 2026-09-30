@@ -57,11 +57,12 @@ type Config struct {
 	identity                string
 	workerEnv               map[string]string
 	configDigest            string
+	globalExecution         bool
 }
 
-// LoadedConfigDigest identifies the exact config file bytes used to build this
-// value. A console can compare it with a running service before presenting its
-// execution settings as the service's current settings.
+// LoadedConfigDigest identifies the project and global execution file bytes
+// used to build this value. A console compares it with a running service before
+// presenting execution settings as current.
 func (c Config) LoadedConfigDigest() string { return c.configDigest }
 
 type OrcaConfig struct {
@@ -136,9 +137,10 @@ func SteerlineHome() string {
 	return filepath.Join(os.TempDir(), "steerline")
 }
 
-func SteerlineBinDir() string    { return filepath.Join(SteerlineHome(), "bin") }
-func SteerlineEtcDir() string    { return filepath.Join(SteerlineHome(), "etc") }
-func SteerlineStateRoot() string { return filepath.Join(SteerlineHome(), "state") }
+func SteerlineBinDir() string           { return filepath.Join(SteerlineHome(), "bin") }
+func SteerlineEtcDir() string           { return filepath.Join(SteerlineHome(), "etc") }
+func GlobalExecutionConfigPath() string { return filepath.Join(SteerlineHome(), "execution.json") }
+func SteerlineStateRoot() string        { return filepath.Join(SteerlineHome(), "state") }
 
 // repoStateKey derives a worktree-independent key for a repository from its Git
 // common dir, so every worktree and clone of the same repository maps to one
@@ -222,8 +224,6 @@ func LoadConfig(path string) (Config, error) {
 	if err != nil {
 		return c, err
 	}
-	digest := sha256.Sum256(b)
-	c.configDigest = hex.EncodeToString(digest[:])
 	if err = decode(b, &c); err != nil {
 		return c, err
 	}
@@ -235,12 +235,58 @@ func LoadConfig(path string) (Config, error) {
 	}
 	var configFields map[string]json.RawMessage
 	_ = json.Unmarshal(b, &configFields)
-	if _, explicit := configFields["host"]; !explicit {
-		c.Host = "local"
+	for _, field := range []string{"host", "agent", "model", "reasoning_effort", "sandbox", "profile", "codex", "orca", "execution_profiles", "default_execution_profile"} {
+		if _, present := configFields[field]; present {
+			return c, fmt.Errorf("%s belongs in global execution config %s", field, GlobalExecutionConfigPath())
+		}
 	}
-	if c.hostName() == "local" && c.agentName() == "codex" && c.ReasoningEffort == "" {
-		c.ReasoningEffort = "high"
+	globalBytes, err := os.ReadFile(GlobalExecutionConfigPath())
+	if err != nil {
+		return c, fmt.Errorf("load global execution config %s: %w", GlobalExecutionConfigPath(), err)
 	}
+	var global struct {
+		ExecutionProfiles []ExecutionProfile `json:"execution_profiles"`
+		DefaultProfile    string             `json:"default_execution_profile"`
+	}
+	if err := decode(globalBytes, &global); err != nil {
+		return c, fmt.Errorf("global execution config: %w", err)
+	}
+	if len(global.ExecutionProfiles) == 0 {
+		return c, errors.New("global execution config requires at least one execution profile")
+	}
+	var globalRaw struct {
+		ExecutionProfiles []struct {
+			Orca struct {
+				Supervised map[string]json.RawMessage `json:"supervised"`
+			} `json:"orca"`
+		} `json:"execution_profiles"`
+	}
+	_ = json.Unmarshal(trimBOM(globalBytes), &globalRaw)
+	for i, profile := range global.ExecutionProfiles {
+		if profile.Host == "orca_supervised" {
+			if i >= len(globalRaw.ExecutionProfiles) || globalRaw.ExecutionProfiles[i].Orca.Supervised["remote_cancel_available"] == nil {
+				return c, fmt.Errorf("execution profile %s: orca.supervised.remote_cancel_available must be explicitly set to false", profile.ID)
+			}
+		}
+	}
+	c.ExecutionProfiles = global.ExecutionProfiles
+	c.DefaultExecutionProfile = global.DefaultProfile
+	c.globalExecution = true
+	initial := global.ExecutionProfiles[0].effective()
+	if global.DefaultProfile != "" {
+		for _, profile := range global.ExecutionProfiles {
+			if profile.ID == global.DefaultProfile {
+				initial = profile.effective()
+				break
+			}
+		}
+	}
+	c = c.ApplyExecutionProfile(initial)
+	digest := sha256.New()
+	_, _ = digest.Write(b)
+	_, _ = digest.Write([]byte{0})
+	_, _ = digest.Write(globalBytes)
+	c.configDigest = hex.EncodeToString(digest.Sum(nil))
 	base, err := filepath.Abs(filepath.Dir(path))
 	if err != nil {
 		return c, err
@@ -300,11 +346,14 @@ func LoadConfig(path string) (Config, error) {
 		}
 	}
 	if c.Host == "orca" {
-		if c.WorkflowProtocol == WorkerFlowVersion && (c.Model != "" || c.Profile != "" || c.ReasoningEffort != "" || c.Sandbox != "workspace-write") {
-			return c, errors.New("Orca worker-flow uses Orca agent launch settings; model, profile, effort and sandbox overrides are unavailable")
+		if c.WorkflowProtocol == WorkerFlowVersion && (c.Profile != "" || c.Sandbox != "workspace-write" || (c.Model == "") != (c.ReasoningEffort == "")) {
+			return c, errors.New("Orca worker-flow requires workspace-write, no Codex profile, and model with reasoning_effort together")
 		}
 		if c.agentName() != "codex" && (c.Model != "" || c.Profile != "" || c.ReasoningEffort != "") {
 			return c, errors.New("orca model, profile and reasoning_effort overrides require agent=codex")
+		}
+		if c.Model != "" && c.Orca.Shell != "powershell.exe" && c.Orca.Shell != "pwsh.exe" {
+			return c, errors.New("fixed Orca Codex launch requires powershell.exe or pwsh.exe")
 		}
 		if c.Orca.Executable == "" || c.Orca.Shell == "" {
 			return c, errors.New("orca.executable and orca.shell are required")
@@ -314,14 +363,6 @@ func LoadConfig(path string) (Config, error) {
 		}
 	}
 	if c.Host == "orca_supervised" {
-		var orcaFields map[string]json.RawMessage
-		var supervisedFields map[string]json.RawMessage
-		if json.Unmarshal(configFields["orca"], &orcaFields) != nil || json.Unmarshal(orcaFields["supervised"], &supervisedFields) != nil {
-			return c, errors.New("orca.supervised must be an explicit object")
-		}
-		if _, ok := supervisedFields["remote_cancel_available"]; !ok {
-			return c, errors.New("orca.supervised.remote_cancel_available must be explicitly set to false")
-		}
 		if err = validateSupervisedOrcaConfig(&c); err != nil {
 			return c, err
 		}
@@ -465,8 +506,8 @@ func (c *Config) preflightNative(ctx context.Context) error {
 	if c.WorkflowProtocol == WorkerFlowVersion && c.hostName() != "local" && c.hostName() != "orca" {
 		return &BackendError{Code: BackendUnsupported, Diagnostic: "this worker-flow host is not supported"}
 	}
-	if c.WorkflowProtocol == WorkerFlowVersion && c.hostName() == "orca" && (c.Model != "" || c.ReasoningEffort != "" || c.Profile != "" || c.Sandbox != "workspace-write") {
-		return &BackendError{Code: BackendUnsupported, Diagnostic: "Orca starts the selected agent with its own settings; model, effort, Codex profile and sandbox overrides are unavailable"}
+	if c.WorkflowProtocol == WorkerFlowVersion && c.hostName() == "orca" && (c.Profile != "" || c.Sandbox != "workspace-write" || (c.Model == "") != (c.ReasoningEffort == "")) {
+		return &BackendError{Code: BackendUnsupported, Diagnostic: "Orca requires workspace-write, no Codex profile, and model with reasoning_effort together"}
 	}
 	if c.hostName() == "local" && c.agentName() != "codex" {
 		return errors.New("local_process currently supports only agent=codex")

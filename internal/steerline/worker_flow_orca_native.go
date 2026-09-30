@@ -314,7 +314,11 @@ func verifyRecoveredNativeOrcaDispatch(ctx context.Context, c Config, dispatchID
 }
 
 func (s *Service) bindNativeOrcaAgent(ctx context.Context, run *Run, execution *ExecutionRecord, worktree workerOrcaWorktree, handle, repoID, base string) error {
-	if worktree.Comment != nativeOrcaWorktreeComment(execution.ExecutionID) || worktree.CreatedWithAgent != s.Config.agentName() {
+	createdWithExpectedAgent := worktree.CreatedWithAgent == s.Config.agentName()
+	if s.Config.Model != "" {
+		createdWithExpectedAgent = worktree.CreatedWithAgent == ""
+	}
+	if worktree.Comment != nativeOrcaWorktreeComment(execution.ExecutionID) || !createdWithExpectedAgent {
 		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "Orca worktree has no matching execution/agent ownership marker"}
 	}
 	if err := applyWorkerOrcaWorkspace(s.Config, run, execution, worktree, base); err != nil {
@@ -340,6 +344,9 @@ func (s *Service) bindNativeOrcaAgent(ctx context.Context, run *Run, execution *
 	if term.WorktreeID != worktree.ID || term.AgentIdentity != s.Config.agentName() {
 		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "Orca started a different worktree or agent"}
 	}
+	if s.Config.Model != "" && term.Title != nativeOrcaFixedAgentTitle(execution.ExecutionID) {
+		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "Orca terminal does not have the fixed model launch marker"}
+	}
 	identity := workerOrcaIdentity(term, s.Config)
 	identity.Kind, identity.WorktreeID = "orca-native", worktree.ID
 	execution.Process = &identity
@@ -360,7 +367,17 @@ func (s *Service) prepareNativeOrcaWorker(ctx context.Context, run *Run) error {
 		if err := s.verifyNativeOrcaWorker(ctx, run, execution); err != nil {
 			return err
 		}
+		if s.Config.Model != "" {
+			if op := s.nativeOrcaOperation("orca-native-agent-terminal:" + execution.ExecutionID); op != nil && op.Status != "confirmed" {
+				if err := s.changeOperation(op.OperationID, "confirmed", op.PlatformRequestID, mustJSON(map[string]string{"terminal": execution.Process.Terminal}), ""); err != nil {
+					return err
+				}
+			}
+		}
 		return s.prepareNativeOrcaCoordinator(ctx, run, execution)
+	}
+	if s.Config.Model != "" {
+		return s.prepareNativeOrcaFixedModelWorker(ctx, run, execution)
 	}
 	repoID, err := nativeOrcaRepo(ctx, s.Config)
 	if err != nil {
@@ -633,6 +650,9 @@ func (s *Service) verifyNativeOrcaWorker(ctx context.Context, run *Run, executio
 	}
 	if term.RuntimeID != execution.Process.RuntimeID || term.IncarnationID != execution.Process.Incarnation || term.WorktreeID != execution.Process.WorktreeID || term.AgentIdentity != s.Config.agentName() {
 		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "original Orca agent terminal or agent has changed"}
+	}
+	if s.Config.Model != "" && term.Title != nativeOrcaFixedAgentTitle(execution.ExecutionID) {
+		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "original Orca fixed-model terminal has changed"}
 	}
 	coordinator := execution.OrcaNative.Coordinator
 	if coordinator.Terminal != "" {

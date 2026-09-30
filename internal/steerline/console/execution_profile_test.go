@@ -13,6 +13,15 @@ import (
 )
 
 func TestExecutionSettingsOnlyAppearInStartChoiceAndConfigMismatchBlocksStart(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("STEERLINE_HOME", home)
+	global, err := json.Marshal(map[string]any{"execution_profiles": []map[string]any{{"id": "local", "name": "Local Codex", "host": "local", "agent": "codex", "sandbox": "workspace-write", "codex": map[string]string{"executable": "codex"}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(steerline.GlobalExecutionConfigPath(), global, 0600); err != nil {
+		t.Fatal(err)
+	}
 	repo := filepath.Join(t.TempDir(), "repo")
 	if err := os.MkdirAll(repo, 0700); err != nil {
 		t.Fatal(err)
@@ -21,7 +30,7 @@ func TestExecutionSettingsOnlyAppearInStartChoiceAndConfigMismatchBlocksStart(t 
 		t.Fatalf("git init: %v: %s", err, out)
 	}
 	path := filepath.Join(t.TempDir(), "project.json")
-	data, err := json.Marshal(map[string]string{"repository": repo, "branch": "main", "task_authority": "native", "workflow_protocol": steerline.WorkerFlowVersion, "host": "local"})
+	data, err := json.Marshal(map[string]string{"repository": repo, "branch": "main", "task_authority": "native", "workflow_protocol": steerline.WorkerFlowVersion})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -45,7 +54,7 @@ func TestExecutionSettingsOnlyAppearInStartChoiceAndConfigMismatchBlocksStart(t 
 	}
 	m.profileChoice = &executionProfileChoice{taskID: "task-B"}
 	current := renderExecutionProfileChoice(m, m.projects[0], 40)
-	for _, want := range []string{"本地 Codex", "Agent：codex", "未在项目配置固定", "Thinking effort：high", "Sandbox：workspace-write"} {
+	for _, want := range []string{"本地 Codex", "Agent：codex", "未在全局配置固定", "Thinking effort：high", "Sandbox：workspace-write"} {
 		if !strings.Contains(current, want) {
 			t.Fatalf("ready task missed %q: %s", want, current)
 		}

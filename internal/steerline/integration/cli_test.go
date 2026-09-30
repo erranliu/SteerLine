@@ -83,6 +83,10 @@ func TestTaskCLIProcessUsesNativeAuthorityWithoutInitializingMissingRead(t *test
 	configPath := filepath.Join(temp, "native.json")
 	home := filepath.Join(temp, "home")
 	t.Setenv("STEERLINE_HOME", home)
+	if err := os.MkdirAll(home, 0700); err != nil {
+		t.Fatal(err)
+	}
+	writeConfig(t, steerline.GlobalExecutionConfigPath(), map[string]any{"execution_profiles": []map[string]any{{"id": "local", "name": "Local Codex", "host": "local", "agent": "codex", "sandbox": "workspace-write", "codex": map[string]string{"executable": "codex"}}}})
 	writeConfig(t, configPath, map[string]any{
 		"repository":        repo,
 		"remote":            "origin",

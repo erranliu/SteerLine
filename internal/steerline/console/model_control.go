@@ -65,7 +65,7 @@ func (m Model) toggleMode() (tea.Model, tea.Cmd) {
 	}
 	if mode == "auto" {
 		if m.projects[m.selected].ref.Config.DefaultProfileID() == "" {
-			m.status = "自动派发需要在项目配置中指定 default_execution_profile"
+			m.status = "自动派发需要在全局配置中指定 default_execution_profile"
 			return m, nil
 		}
 		if executionConfigMismatch(m.projects[m.selected].ref, m.projects[m.selected].snapshot) {

@@ -11,8 +11,11 @@ import (
 
 type fakeNativeOrcaState struct {
 	Name, Base, Agent, AgentIncarnation, Comment, Path, Branch, Repo string
+	CreatedWithAgent, FixedAgentTitle, FixedAgentCommand             string
 	Created, Coordinator                                             bool
+	FixedAgentTerminalCreated                                        bool
 	LoseWorktreeOnce                                                 bool
+	LoseFixedTerminalOnce                                            bool
 	LoseCoordinatorOnce                                              bool
 	LoseRunOnce                                                      bool
 	Tasks                                                            []string
@@ -62,7 +65,7 @@ func fakeNativeOrca(stateDir string, args []string) int {
 	save := func() { data, _ := json.Marshal(state); _ = AtomicWrite(path, data) }
 	worktreeID := func() string { return "fake-repo::" + filepath.ToSlash(state.Path) }
 	worktree := func() map[string]any {
-		return map[string]any{"id": worktreeID(), "repoId": "fake-repo", "path": filepath.ToSlash(state.Path), "head": state.Base, "baseRef": state.Base, "branch": "refs/heads/" + state.Branch, "displayName": state.Name, "comment": state.Comment, "createdWithAgent": state.Agent}
+		return map[string]any{"id": worktreeID(), "repoId": "fake-repo", "path": filepath.ToSlash(state.Path), "head": state.Base, "baseRef": state.Base, "branch": "refs/heads/" + state.Branch, "displayName": state.Name, "comment": state.Comment, "createdWithAgent": state.CreatedWithAgent}
 	}
 	terminal := func(handle string) map[string]any {
 		if handle == "term-agent" {
@@ -70,7 +73,7 @@ func fakeNativeOrca(stateDir string, args []string) int {
 			if incarnation == "" {
 				incarnation = "inc-agent"
 			}
-			return map[string]any{"handle": handle, "incarnationId": incarnation, "worktreeId": worktreeID(), "worktreePath": filepath.ToSlash(state.Path), "branch": "refs/heads/" + state.Branch, "connected": true, "agentIdentity": state.Agent}
+			return map[string]any{"handle": handle, "title": state.FixedAgentTitle, "incarnationId": incarnation, "worktreeId": worktreeID(), "worktreePath": filepath.ToSlash(state.Path), "branch": "refs/heads/" + state.Branch, "connected": true, "agentIdentity": state.Agent}
 		}
 		return map[string]any{"handle": handle, "incarnationId": "inc-coordinator", "worktreeId": "fake-repo::" + filepath.ToSlash(state.Repo), "worktreePath": filepath.ToSlash(state.Repo), "branch": "refs/heads/main", "connected": true}
 	}
@@ -93,8 +96,9 @@ func fakeNativeOrca(stateDir string, args []string) int {
 				return fakeOrcaErr("name_conflict", "duplicate worktree")
 			}
 			state.Name, state.Base, state.Agent, state.Comment = arg(args, "--name"), arg(args, "--base-branch"), arg(args, "--agent"), arg(args, "--comment")
+			state.CreatedWithAgent = state.Agent
 			state.Path, state.Branch = filepath.Join(stateDir, "worker"), "fake/"+state.Name
-			if state.Name == "" || state.Base == "" || state.Agent == "" || os.MkdirAll(state.Path, 0700) != nil {
+			if state.Name == "" || state.Base == "" || os.MkdirAll(state.Path, 0700) != nil {
 				return fakeOrcaErr("invalid_argument", "bad worktree")
 			}
 			state.Created = true
@@ -110,6 +114,21 @@ func fakeNativeOrca(stateDir string, args []string) int {
 	if len(args) > 1 && args[0] == "terminal" {
 		switch args[1] {
 		case "create":
+			if strings.Contains(arg(args, "--worktree"), "worker") {
+				if state.FixedAgentTerminalCreated || !state.Created || state.CreatedWithAgent != "" || arg(args, "--shell") != "powershell.exe" {
+					return fakeOrcaErr("invalid_argument", "bad fixed agent terminal")
+				}
+				state.FixedAgentTerminalCreated = true
+				state.Agent = "codex"
+				state.FixedAgentTitle, state.FixedAgentCommand = arg(args, "--title"), arg(args, "--command")
+				lost := state.LoseFixedTerminalOnce
+				state.LoseFixedTerminalOnce = false
+				save()
+				if lost {
+					return fakeOrcaErr("runtime_unavailable", "agent terminal created but response was lost")
+				}
+				return fakeOrcaOK(map[string]any{"terminal": terminal("term-agent")})
+			}
 			state.Coordinator = true
 			state.CoordinatorMarker = strings.TrimPrefix(arg(args, "--command"), "echo ")
 			lost := state.LoseCoordinatorOnce
@@ -121,13 +140,13 @@ func fakeNativeOrca(stateDir string, args []string) int {
 			return fakeOrcaOK(map[string]any{"terminal": map[string]any{"handle": "term-coordinator"}})
 		case "show":
 			handle := arg(args, "--terminal")
-			if handle == "term-agent" && state.Created && !state.ClosedAgent || handle == "term-coordinator" && state.Coordinator && !state.ClosedCoordinator {
+			if handle == "term-agent" && state.Created && (state.CreatedWithAgent != "" || state.FixedAgentTerminalCreated) && !state.ClosedAgent || handle == "term-coordinator" && state.Coordinator && !state.ClosedCoordinator {
 				return fakeOrcaOK(map[string]any{"terminal": terminal(handle)})
 			}
 			return fakeOrcaErr("terminal_not_found", "missing terminal")
 		case "list":
 			rows := []any{}
-			if strings.Contains(arg(args, "--worktree"), "worker") && state.Created && !state.ClosedAgent {
+			if strings.Contains(arg(args, "--worktree"), "worker") && state.Created && (state.CreatedWithAgent != "" || state.FixedAgentTerminalCreated) && !state.ClosedAgent {
 				rows = append(rows, terminal("term-agent"))
 			}
 			if strings.Contains(arg(args, "--worktree"), filepath.ToSlash(state.Repo)) && state.Coordinator && !state.ClosedCoordinator {

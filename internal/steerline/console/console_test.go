@@ -1058,6 +1058,13 @@ func TestViewFileKeepsRequestIdentityWithoutCachingReceiptText(t *testing.T) {
 func TestLoadProjectsSupportsZeroPartialAndExplicitConfigs(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("STEERLINE_HOME", home)
+	global, err := json.Marshal(map[string]any{"execution_profiles": []map[string]any{{"id": "local", "name": "Local Codex", "host": "local", "agent": "codex", "sandbox": "workspace-write", "codex": map[string]string{"executable": "codex"}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(steerline.GlobalExecutionConfigPath(), global, 0600); err != nil {
+		t.Fatal(err)
+	}
 	projects, err := LoadProjects("")
 	if err != nil || len(projects) != 0 {
 		t.Fatalf("empty config directory: %+v %v", projects, err)
