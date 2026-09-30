@@ -36,11 +36,12 @@ func TestNativeOrcaQuestionUsesSharedNativeAnswerShape(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			encoded, _ := json.Marshal(tc.payload) // Real Orca inbox payload is a JSON string.
 			message := OrcaInboxMessage{ID: "msg_question", FromHandle: "dispatch:ctx_first", Type: "question", Body: "Which approach?", Payload: encoded}
-			if !nativeOrcaMessageMatches(message, turn, "term_agent") {
-				t.Fatal("the original Dispatch question was not recognized")
+			fact, matched, err := decodeNativeOrcaMessage(message, "run_original", turn, "term_agent")
+			if err != nil || !matched || fact.Question == nil {
+				t.Fatalf("the original Dispatch question was not recognized: %+v / %v", fact, err)
 			}
 			run := &Run{AttemptID: strings.Repeat("2", 32)}
-			decision, err := WriteDecisionRequest(run, nativeOrcaQuestion(message, "run_original", turn))
+			decision, err := WriteDecisionRequest(run, *fact.Question)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -62,15 +63,13 @@ func TestNativeOrcaRejectsLateDispatchMessages(t *testing.T) {
 	turn := OrcaNativeTurn{TaskID: "task_new", DispatchID: "ctx_new"}
 	payload, _ := json.Marshal(`{"taskId":"task_old","dispatchId":"ctx_old","outcome":"succeeded"}`)
 	message := OrcaInboxMessage{ID: "msg_old", FromHandle: "term_agent", Type: "worker_done", Payload: payload}
-	if nativeOrcaMessageMatches(message, turn, "term_agent") {
+	if _, matched, err := decodeNativeOrcaMessage(message, "run_original", turn, "term_agent"); err != nil || matched {
 		t.Fatal("an old worker_done was attributed to the new Dispatch")
 	}
 	message.Payload, _ = json.Marshal(`{"taskId":"task_new","dispatchId":"ctx_new","outcome":"failed"}`)
-	if !nativeOrcaMessageMatches(message, turn, "term_agent") {
-		t.Fatal("current worker_done was not recognized")
-	}
-	if outcome, err := nativeOrcaDoneOutcome(message, turn); err != nil || outcome != "failed" {
-		t.Fatalf("outcome = %q / %v", outcome, err)
+	fact, matched, err := decodeNativeOrcaMessage(message, "run_original", turn, "term_agent")
+	if err != nil || !matched || fact.Outcome != "failed" {
+		t.Fatalf("outcome = %+v / %v", fact, err)
 	}
 }
 

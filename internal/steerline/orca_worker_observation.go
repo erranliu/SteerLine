@@ -6,63 +6,14 @@ import (
 	"os"
 	"strings"
 
-	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
-
-func orcaQuestionID(decision *DecisionState) string {
-	if decision == nil || decision.Request.OrcaAsk == nil {
-		return ""
-	}
-	return decision.Request.OrcaAsk.MessageID
-}
-
-func (s *Service) nativeOrcaOperation(key string) *OperationRecord {
-	for i := range s.domain.Operations {
-		if s.domain.Operations[i].IdempotencyKey == key {
-			return &s.domain.Operations[i]
-		}
-	}
-	return nil
-}
 
 func nativeOrcaCurrentTurn(execution *ExecutionRecord) *OrcaNativeTurn {
 	if execution == nil || execution.OrcaNative == nil || len(execution.OrcaNative.Turns) == 0 {
 		return nil
 	}
 	return &execution.OrcaNative.Turns[len(execution.OrcaNative.Turns)-1]
-}
-
-func nativeOrcaQuestion(message OrcaInboxMessage, runID string, turn OrcaNativeTurn) DecisionRequest {
-	question := strings.TrimSpace(message.Body)
-	if question == "" {
-		question = strings.TrimSpace(message.Subject)
-	}
-	request := DecisionRequest{Question: clip(question, 1800), Context: clip(message.Body, 7000), AllowFreeText: true}
-	if payload, err := supervisedMessagePayload(message); err == nil {
-		parsed := orcaworker.ParseQuestion(payload)
-		if strings.TrimSpace(parsed.Text) != "" {
-			request.Question = clip(parsed.Text, 1800)
-		}
-		for _, option := range parsed.Options {
-			request.Options = append(request.Options, DecisionOption{ID: option.ID, Label: option.Label, Detail: option.Detail})
-		}
-	}
-	request.OrcaAsk = &orcaAskCall{RunID: runID, TaskID: turn.TaskID, DispatchID: turn.DispatchID, MessageID: message.ID, Questions: []nativeAskQuestion{{ID: message.ID, Header: "Orca", Question: request.Question, Options: request.Options, AllowFreeText: true}}}
-	return request
-}
-
-func nativeOrcaMessageMatches(message OrcaInboxMessage, turn OrcaNativeTurn, agentTerminal string) bool {
-	payload, err := supervisedMessagePayload(message)
-	return err == nil && orcaworker.MessageMatches(message.FromHandle, message.Type, payload, turn.TaskID, turn.DispatchID, agentTerminal)
-}
-
-func nativeOrcaDoneOutcome(message OrcaInboxMessage, turn OrcaNativeTurn) (string, error) {
-	payload, err := supervisedMessagePayload(message)
-	if err != nil {
-		return "", err
-	}
-	return orcaworker.DoneOutcome(payload, turn.TaskID, turn.DispatchID)
 }
 
 func nativeOrcaSeen(state *OrcaNativeExecution, id string) bool {
@@ -277,10 +228,6 @@ func (s *Service) pollNativeOrcaWorker(ctx context.Context, run *Run) error {
 	return nil
 }
 
-func (s *Service) bindNativeOrcaPR(ctx context.Context, run *Run, workflow *WorkflowRunRecord, execution *ExecutionRecord, body string) error {
-	return s.bindNativeOrcaPRCandidates(ctx, run, workflow, execution, codexworker.PRClues(body))
-}
-
 func (s *Service) bindNativeOrcaPRCandidates(ctx context.Context, run *Run, workflow *WorkflowRunRecord, execution *ExecutionRecord, urls []string) error {
 	if len(urls) == 0 {
 		return nil
@@ -310,7 +257,7 @@ func (s *Service) ackNativeOrcaDelivery(ctx context.Context, run *Run, execution
 	fixedConfig := fixed.config
 	state := execution.OrcaNative
 	key := "orca-native-ack:" + execution.ExecutionID + ":" + deliveryID
-	op := s.nativeOrcaOperation(key)
+	op := s.operationByKey(key)
 	if op != nil && op.Status == "confirmed" {
 		return nil
 	}

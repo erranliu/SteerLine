@@ -37,15 +37,15 @@ func TestNativeOrcaPRBindingUsesProviderAndRetainsSession(t *testing.T) {
 	execution := ExecutionRecord{ExecutionID: "exec-8", WorkflowRunID: workflow.WorkflowRunID, SessionID: "orca-session-8", Workspace: WorkspaceEvidence{Branch: "codex/task-8"}, CurrentTurnID: "turn-8", LastStoppedTurnID: "turn-8"}
 	run := Run{}
 	headBranch = "codex/other-task"
-	if err := s.bindNativeOrcaPR(ctx, &run, &workflow, &execution, "PR: "+url); err == nil || workflow.PRURL != "" || run.PR.URL != nil {
+	if err := s.bindNativeOrcaPRCandidates(ctx, &run, &workflow, &execution, []string{url}); err == nil || workflow.PRURL != "" || run.PR.URL != nil {
 		t.Fatalf("unowned PR was bound: workflow=%+v run=%+v error=%v", workflow, run, err)
 	}
 	headBranch = "codex/task-8"
-	if err := s.bindNativeOrcaPR(ctx, &run, &workflow, &execution, "PR: "+url); err != nil || workflow.PRURL != url || workflow.Phase != "waiting_pr_merge" {
+	if err := s.bindNativeOrcaPRCandidates(ctx, &run, &workflow, &execution, []string{url}); err != nil || workflow.PRURL != url || workflow.Phase != "waiting_pr_merge" {
 		t.Fatalf("provider-verified PR was not bound: workflow=%+v error=%v", workflow, err)
 	}
 	state = "closed"
-	if err := s.bindNativeOrcaPR(ctx, &run, &workflow, &execution, "PR: "+url); err != nil || workflow.PRState != "closed_unmerged" || workflow.Phase != "waiting_decision" || execution.SessionID != "orca-session-8" || execution.CurrentTurnID != "turn-8" {
+	if err := s.bindNativeOrcaPRCandidates(ctx, &run, &workflow, &execution, []string{url}); err != nil || workflow.PRState != "closed_unmerged" || workflow.Phase != "waiting_decision" || execution.SessionID != "orca-session-8" || execution.CurrentTurnID != "turn-8" {
 		t.Fatalf("unmerged PR did not return the original session to feedback: workflow=%+v execution=%+v error=%v", workflow, execution, err)
 	}
 }

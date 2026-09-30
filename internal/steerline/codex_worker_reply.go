@@ -128,6 +128,10 @@ func parseCodexAskCall(envelope codexapp.Envelope, expectedThread, expectedTurn 
 	if err != nil {
 		return codexAskCall{}, err
 	}
+	return codexAskFromEnvelope(wire)
+}
+
+func codexAskFromEnvelope(wire codexworker.AskEnvelope) (codexAskCall, error) {
 	var args struct {
 		Questions []codexAskQuestion `json:"questions"`
 	}

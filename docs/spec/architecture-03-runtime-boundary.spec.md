@@ -97,7 +97,7 @@ PR 描述附最终写入入口与后端职责映射，说明 PR 2 剩余项全�
 
 Service 私有 `domain` / `committed` 与公开 Runtime 通过深复制隔离。公开业务字段及未提交候选不能经 checkpoint 落盘，重启验证先初始化私有快照，再检查固定执行配置。
 
-原生 Orca 的工作区/agent/coordinator 准备收在 `worker_flow_orca_prepare.go`，Task/Dispatch 和反馈收在 `worker_flow_orca_dispatch.go`，inbox/输出/轮次结算留在 `worker_flow_orca_native.go`，精确终端关闭与交付后清理收在既有 terminal 文件。共享 Operation 查询和问题结构分别移入 operation/decision，消除跨模式的命名和类型归属。
+原生 Orca 的工作区/agent/coordinator 准备收在 `orca_worker_prepare.go`，Task/Dispatch 和反馈收在 `orca_worker_dispatch.go`，inbox/输出/轮次结算留在 `orca_worker_observation.go`，精确终端关闭与交付后清理收在既有 terminal 文件。共享 Operation 查询和问题结构分别移入 operation/decision，消除跨模式的命名和类型归属。
 
 `ExecutionBackend` 移除无生产消费者的 ReadOutput、DetachObservation、ReconcileOperation 要求；输出读取保留在具体后端及协议适配层，移除无调用方的通用恢复/脱离转发方法。明确 unsupported 行为继续保留。
 

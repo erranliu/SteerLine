@@ -20,7 +20,7 @@ SteerLine 是一款面向工程 AGI 的研究型软件开发工具。它以 road
 
 当前生产配置使用 `worker-flow-v1` 和中心 native Task。旧配置或运行状态在外部副作用前拒绝；需要人工核实旧现场，不自动迁移或接管原 worker。
 
-业务状态只持久化在 SQLite 的 Task、WorkflowRun、Execution、Attempt、Decision、Operation 和交付记录中。服务 checkpoint 只保存服务实例、心跳、未完成控制操作及认领前的预留；Runtime/Run 是在同一读取事务中生成的视图，不参与业务写回。工作区准备意图、轮次观察及当前决策绑定由 Execution 保存；回答事务直接校验 WorkflowRun 的持久控制版本，心跳和日志更新不会改变该版本。当前数据库 schema 为 6，checkpoint schema 为 8，旧格式直接拒绝，不自动迁移。
+业务状态只持久化在 SQLite 的 Task、WorkflowRun、Execution、Attempt、Decision、Operation 和交付记录中。服务 checkpoint 只保存服务实例、心跳、未完成控制操作及认领前的预留；Runtime/Run 是在同一读取事务中生成的视图，不参与业务写回。工作区准备意图、轮次观察及当前决策绑定由 Execution 保存；回答事务直接校验 WorkflowRun 的持久控制版本，心跳和日志更新不会改变该版本。当前数据库 schema 为 7，checkpoint schema 为 9，旧格式直接拒绝，不自动迁移。
 
 native 项目控制台还会显示中心任务关系、阻塞原因、Spec 路径和交付定位；离线详情显示采样时间，Ready 缓存不会变成启动许可。完整固定引用保留在中心任务契约中。命令行可用 `steerline task graph -config <path> -task-id <id> -direction upstream -depth 3` 查询关系，或用 `steerline task export -config <path> -format json -output <path>` 导出；覆盖已有导出文件需显式传 `-overwrite`。
 

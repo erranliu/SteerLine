@@ -96,11 +96,6 @@ type ExecutionRecord struct {
 	Workspace              WorkspaceEvidence       `json:"workspace"`
 	Status                 string                  `json:"status"`
 	CurrentStep            string                  `json:"current_step,omitempty"`
-	CandidateRevision      string                  `json:"candidate_revision,omitempty"`
-	VerifiedRevision       string                  `json:"verified_revision,omitempty"`
-	ReviewedRevision       string                  `json:"reviewed_revision,omitempty"`
-	RepairPrerequisiteIDs  []string                `json:"repair_prerequisite_result_ids,omitempty"`
-	RepairRounds           int                     `json:"repair_rounds"`
 	CreatedAt              time.Time               `json:"created_at"`
 	UpdatedAt              time.Time               `json:"updated_at"`
 }
@@ -172,13 +167,10 @@ type StepAttemptRecord struct {
 	Status               string           `json:"status"`
 	InputRevision        string           `json:"input_revision,omitempty"`
 	ContractDigest       string           `json:"contract_digest,omitempty"`
-	PrerequisiteIDs      []string         `json:"prerequisite_result_ids,omitempty"`
-	ResultID             string           `json:"result_id,omitempty"`
 	Result               json.RawMessage  `json:"result,omitempty"`
 	ExternalBinding      ExecutionTarget  `json:"external_binding,omitempty"`
 	NativeLauncherPath   string           `json:"native_launcher_path,omitempty"`
 	NativeLauncherDigest string           `json:"native_launcher_digest,omitempty"`
-	Legacy               bool             `json:"legacy,omitempty"`
 	CreatedAt            time.Time        `json:"created_at"`
 	UpdatedAt            time.Time        `json:"updated_at"`
 }

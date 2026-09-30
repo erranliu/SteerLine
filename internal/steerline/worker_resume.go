@@ -127,7 +127,7 @@ func (s *Service) resumeNativeOrcaWorker(ctx context.Context, task *TaskRecord, 
 	}
 	if execution.PendingTurnID != "" {
 		turnID := execution.PendingTurnID
-		op := s.nativeOrcaOperation("worker-turn:" + execution.ExecutionID + ":" + turnID)
+		op := s.operationByKey("worker-turn:" + execution.ExecutionID + ":" + turnID)
 		if op == nil {
 			return false, s.nativeOrcaUncertain(run, "Original Orca turn has no saved input intent")
 		}

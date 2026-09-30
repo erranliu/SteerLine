@@ -39,8 +39,8 @@
 | 位置 | 所需改动 |
 | --- | --- |
 | `config.go`、`execution_profiles.go` | 开放 `worker-flow-v1` 的本地 `host=orca`；移除 Orca 对 Codex 的硬编码要求。当前低层路径按 agent 使用 Orca 默认模型，明确拒绝不能兑现的按次 model/effort/profile 覆盖；已冻结 Profile 继续支配在途 Execution。 |
-| `worker_flow_local.go`、`worker_flow_orca_terminal.go` | 保留本地 Codex 路径；Orca worker-flow 改用原生 Run/Task/Dispatch API，停止以 shell terminal 包装 `codex exec resume`。Orca 工作区和 agent terminal 由 Orca 创建、SteerLine 以精确身份托管。 |
-| `worker_flow_service.go`、`worker_flow_state.go`、`model.go` | 稳定会话身份改为后端相关的已核实绑定；Orca 用 terminal handle + runtime + incarnation + worktree，当前 Dispatch 每轮更新。`Begin/StopWorkerTurn` 与重启恢复按 Orca `worker_done` 和新 Dispatch 转换，不要求 Codex UUID/JSONL。 |
+| `worker_flow_local.go`、`orca_worker_terminal.go` | 保留本地 Codex 路径；Orca worker-flow 改用原生 Run/Task/Dispatch API，停止以 shell terminal 包装 `codex exec resume`。Orca 工作区和 agent terminal 由 Orca 创建、SteerLine 以精确身份托管。 |
+| `worker_start.go`、`worker_state.go`、`model.go` | 稳定会话身份改为后端相关的已核实绑定；Orca 用 terminal handle + runtime + incarnation + worktree，当前 Dispatch 每轮更新。`Begin/StopWorkerTurn` 与重启恢复按 Orca `worker_done` 和新 Dispatch 转换，不要求 Codex UUID/JSONL。 |
 | `decision.go`、会话读取 | 活跃问题调用 Orca `reply`；已结算反馈创建新 Task/Dispatch 并复用 terminal。Decision 的幂等命令 ID 映射到 Orca 原始 request ID；展示通过 `worker-read`，保留来源和缺口标记。 |
 | `orca_supervised.go` | 复用已有 Run、Task/Dispatch、`worker-show/read`、Delivery 入库/ack 的严格回执解析和身份校验；新增低层派发与 SteerLine 持有的终端关闭对账，不把 `worker-release` 当作 unsupervised 进程清理。远端五步契约不直接套入单 worker。 |
 | 文档与测试 | 更新执行 Profile 文档和 UI 能力提示；加入 Orca 回执契约测试、重启/幂等测试和真实同 terminal 双 Dispatch 验收。 |

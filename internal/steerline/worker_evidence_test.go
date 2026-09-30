@@ -26,7 +26,7 @@ func TestWorkerProtocolFactsPreserveOriginalNativeIdentity(t *testing.T) {
 	}
 	completed := WorkerEvent{Session: thread, AppServer: &codexapp.Envelope{Method: "item/completed", Params: mustJSON(map[string]any{"threadId": thread, "turnId": turn, "item": map[string]any{"id": "call-1", "type": "dynamicToolCall", "status": "completed", "success": true, "contentItems": []any{map[string]string{"type": "inputText", "text": `{"answers":{"choice":["A"]}}`}}}})}}
 	fact, err = decodeWorkerFlowEvent(workerflow.LocalCodex, completed, execution, true)
-	if err != nil || fact.ToolReply == nil || !fact.ToolReply.matchesAnswers(map[string][]string{"choice": {"A"}}) || fact.ToolReply.matchesAnswers(map[string][]string{"choice": {"B"}}) {
+	if err != nil || fact.ToolReply == nil || !fact.ToolReply.MatchesAnswers(map[string][]string{"choice": {"A"}}) || fact.ToolReply.MatchesAnswers(map[string][]string{"choice": {"B"}}) {
 		t.Fatalf("reply fact accepted another answer: %+v %v", fact, err)
 	}
 	completed.AppServer.Params = mustJSON(map[string]any{"threadId": thread, "turnId": "00000000-0000-0000-0000-000000000004", "item": map[string]string{"id": "call-1", "type": "dynamicToolCall"}})

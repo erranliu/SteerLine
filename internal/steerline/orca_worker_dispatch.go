@@ -75,7 +75,7 @@ func (s *Service) startNativeOrcaTurn(ctx context.Context, run *Run, execution *
 	}
 	taskKey := "orca-native-task:" + execution.ExecutionID + ":" + turnID
 	if current == nil {
-		if op := s.nativeOrcaOperation(taskKey); op != nil {
+		if op := s.operationByKey(taskKey); op != nil {
 			id, err := findNativeOrcaTask(ctx, fixedConfig, execution.Target.OrchestrationRun, state.Coordinator.Terminal, prompt)
 			if err != nil {
 				return err
@@ -117,7 +117,7 @@ func (s *Service) startNativeOrcaTurn(ctx context.Context, run *Run, execution *
 	}
 	taskID := current.TaskID
 	dispatchKey := "orca-native-dispatch:" + execution.ExecutionID + ":" + turnID
-	if op := s.nativeOrcaOperation(dispatchKey); op != nil {
+	if op := s.operationByKey(dispatchKey); op != nil {
 		id, runID, handle, incarnation, err := findNativeOrcaDispatch(ctx, fixedConfig, taskID)
 		if err != nil {
 			return &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "original Orca Dispatch creation is unverified", Cause: err}
@@ -312,7 +312,7 @@ func (s *Service) applyNativeOrcaDecision(ctx context.Context, run *Run, workflo
 		s.refreshRun(run)
 		return s.commitWorker(run)
 	}
-	if op := s.nativeOrcaOperation("orca-native-send:" + execution.ExecutionID + ":" + commandID); op != nil && op.Status != "rejected" {
+	if op := s.operationByKey("orca-native-send:" + execution.ExecutionID + ":" + commandID); op != nil && op.Status != "rejected" {
 		execution.Error = ptr("Feedback may have been accepted by the settled Orca Dispatch; it was not copied into a new Task")
 		s.refreshRun(run)
 		return s.commitWorker(run)

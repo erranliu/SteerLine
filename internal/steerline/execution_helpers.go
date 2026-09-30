@@ -45,7 +45,7 @@ func (s *Service) workflowAttempt(run *Run, attemptID string) *StepAttemptRecord
 
 func (s *Service) inspectWorkflowWorkspace(ctx context.Context, run *Run) (WorkspaceEvidence, error) {
 	if run == nil || run.WorktreePath == nil || run.WorktreeBranch == nil || run.BaseCommit == nil || run.WorkspaceIntent == nil {
-		return WorkspaceEvidence{}, errors.New("minimal execution has no recorded workspace")
+		return WorkspaceEvidence{}, errors.New("worker execution has no recorded workspace")
 	}
 	c, configErr := s.executionConfigForRun(run)
 	if configErr != nil {
@@ -73,7 +73,7 @@ func (s *Service) inspectWorkflowWorkspace(ctx context.Context, run *Run) (Works
 	}
 	worktree := *run.WorktreePath
 	if canonical(worktree) != canonical(run.WorkspaceIntent.Path) || *run.WorktreeBranch != run.WorkspaceIntent.Branch || *run.BaseCommit != run.WorkspaceIntent.BaseCommit {
-		return WorkspaceEvidence{}, nativeErr("authority_mismatch", "minimal workspace differs from its fixed durable intent")
+		return WorkspaceEvidence{}, nativeErr("authority_mismatch", "worker workspace differs from its fixed durable intent")
 	}
 	backend := backendFor(c)
 	kind, protocol := backend.Identity()
