@@ -9,8 +9,8 @@ import (
 	"strings"
 )
 
-// Windows workspace-write needs both Git's shared object store and this linked
-// worktree's own admin directory to stage and commit from a Codex step.
+// Windows workspace-write needs Git's shared objects, refs and reflogs, plus
+// this linked worktree's admin directory to stage and commit from a Codex step.
 func codexLinkedWorktreeWriteArgs(ctx context.Context, c Config, worktree string) ([]string, error) {
 	if runtime.GOOS != "windows" || c.Sandbox != "workspace-write" {
 		return nil, nil
@@ -44,6 +44,20 @@ func codexLinkedWorktreeWriteArgs(ctx context.Context, c Config, worktree string
 	if canonical(objects) != canonical(filepath.Join(common, "objects")) {
 		return nil, errors.New("Codex Git objects are outside the fixed repository")
 	}
+	refs, err := readPath("rev-parse", "--path-format=absolute", "--git-path", "refs")
+	if err != nil {
+		return nil, fmt.Errorf("resolve Codex Git refs directory: %w", err)
+	}
+	if canonical(refs) != canonical(filepath.Join(common, "refs")) {
+		return nil, errors.New("Codex Git refs are outside the fixed repository")
+	}
+	logs, err := readPath("rev-parse", "--path-format=absolute", "--git-path", "logs")
+	if err != nil {
+		return nil, fmt.Errorf("resolve Codex Git reflogs directory: %w", err)
+	}
+	if canonical(logs) != canonical(filepath.Join(common, "logs")) {
+		return nil, errors.New("Codex Git reflogs are outside the fixed repository")
+	}
 	admin, err := readPath("rev-parse", "--absolute-git-dir")
 	if err != nil {
 		return nil, fmt.Errorf("resolve Codex linked-worktree admin directory: %w", err)
@@ -52,5 +66,5 @@ func codexLinkedWorktreeWriteArgs(ctx context.Context, c Config, worktree string
 	if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.Dir(rel) != "." {
 		return nil, errors.New("Codex Git admin directory is not a fixed linked worktree")
 	}
-	return []string{"--add-dir", objects, "--add-dir", admin}, nil
+	return []string{"--add-dir", objects, "--add-dir", refs, "--add-dir", logs, "--add-dir", admin}, nil
 }
