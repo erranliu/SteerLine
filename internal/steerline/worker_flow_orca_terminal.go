@@ -161,12 +161,17 @@ func createWorkerOrcaTerminal(ctx context.Context, c Config, run *Run) (orcaTerm
 }
 
 func (s *Service) prepareWorkerOrcaTerminal(ctx context.Context, run *Run) error {
+	fixed, configErr := s.workerFlowContext(run)
+	if configErr != nil {
+		return configErr
+	}
+	fixedConfig := fixed.config
 	workflow, execution := s.workflowRecords(run)
 	if run == nil || workflow == nil || execution == nil || workflow.WorkflowVersion != WorkerFlowVersion || run.WorktreePath == nil || run.WorktreeBranch == nil {
 		return errors.New("Orca terminal preparation lacks the fixed worker workspace")
 	}
 	if execution.Process != nil {
-		term, err := showWorkerOrcaTerminal(ctx, s.Config, execution.Process.Terminal)
+		term, err := showWorkerOrcaTerminal(ctx, fixedConfig, execution.Process.Terminal)
 		if err != nil {
 			return err
 		}
@@ -188,12 +193,12 @@ func (s *Service) prepareWorkerOrcaTerminal(ctx context.Context, run *Run) error
 	if execution == nil {
 		return errors.New("worker execution disappeared after Orca terminal intent was saved")
 	}
-	term, err := createWorkerOrcaTerminal(ctx, s.Config, run)
+	term, err := createWorkerOrcaTerminal(ctx, fixedConfig, run)
 	if err != nil {
 		_ = s.changeOperation(opID, "outcome_unknown", "", nil, err.Error())
 		return err
 	}
-	identity := workerOrcaIdentity(term, s.Config)
+	identity := workerOrcaIdentity(term, fixedConfig)
 	execution.Process = &identity
 	s.refreshRun(run)
 	if err := s.changeOperation(opID, "confirmed", "", mustJSON(identity), ""); err != nil {

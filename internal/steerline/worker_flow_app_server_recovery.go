@@ -251,10 +251,9 @@ func (s *Service) applyAppServerRecovery(result appServerRecoveryResult) error {
 	if run.TaskStatus == "closed" || run.TaskStatus == "discarded" {
 		return nil
 	}
-	if err := s.useFixedRunProfile(run); err != nil {
+	if _, err := s.workerFlowContext(run); err != nil {
 		return err
 	}
-	defer s.parkWorker()
 	workflow, execution := s.workflowRecords(run)
 	if workflow == nil || execution == nil || execution.ExecutionID != result.execution.ExecutionID {
 		return errors.New("app-server recovery changed the fixed execution")
@@ -291,8 +290,7 @@ func (s *Service) applyAppServerRecovery(result appServerRecoveryResult) error {
 	}
 	workflow, execution = s.workflowRecords(run)
 	if result.completed {
-		s.active, s.worker = run, nil
-		return s.finishWorkerFlow(nil)
+		return s.finishWorkerFlowFor(run, nil)
 	}
 	if run.Decision != nil && run.Decision.Status == "pending" && run.Decision.Request.NativeAsk == nil {
 		// A prior connection failure is no longer a reason to request post-turn
@@ -322,7 +320,11 @@ func (s *Service) reconcileAppServerReplyFromJournal(run *Run, workflow *Workflo
 		return nil
 	}
 	ask := *run.Decision.Request.NativeAsk
-	path := filepath.Join(s.Config.RunDir, "runs", run.RunID, "turns", execution.CurrentCommandID, "appserver.jsonl")
+	fixed, err := s.workerFlowContext(run)
+	if err != nil {
+		return err
+	}
+	path := filepath.Join(fixed.config.RunDir, "runs", run.RunID, "turns", execution.CurrentCommandID, "appserver.jsonl")
 	confirmed, err := appServerAnswerEvidence(path, ask, run.Decision.Answers)
 	if err != nil || !confirmed {
 		return err

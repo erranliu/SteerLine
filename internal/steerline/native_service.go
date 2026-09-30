@@ -162,23 +162,20 @@ func (s *Service) reconcileNativeCleanup(ctx context.Context) error {
 				if config.hostName() != "local" {
 					continue // Remote cancellation is not available; keep the exact manual item.
 				}
-				if err := s.selectWorker(run); err != nil {
-					return err
-				}
-				defer s.parkWorker()
-				if _, err := s.requireBackendCapabilities(ctx, backendFor(s.Config), "stop", "observe"); err != nil {
+				worker := s.workers[run.RunID]
+				if _, err := s.requireBackendCapabilities(ctx, backendFor(config), "stop", "observe"); err != nil {
 					s.executionRecord(run).Error = ptr("discarded task worker remains active; verified local stop capability is unavailable: " + clip(err.Error(), 1000))
 					s.refreshRun(run)
 					continue
 				}
-				op, stopErr := s.stopActiveExecution(ctx)
+				op, stopErr := s.stopRunExecution(ctx, run, worker)
 				if stopErr != nil {
 					s.executionRecord(run).Error = ptr("discarded task worker stop requires reconciliation: " + clip(stopErr.Error(), 1000))
 					s.refreshRun(run)
 					continue
 				}
 				if op.Status != OperationConfirmed {
-					backend := backendFor(s.Config)
+					backend := backendFor(config)
 					observation, observeErr := backend.Observe(ctx, *op.Ref)
 					if observeErr != nil || observation.Liveness != "exited" {
 						s.executionRecord(run).Error = ptr("discarded task worker stop is awaiting confirmed process absence")
@@ -200,9 +197,8 @@ func (s *Service) reconcileNativeCleanup(ctx context.Context) error {
 				if err := s.refreshNativeSnapshot(ctx); err != nil {
 					return err
 				}
-				if s.active != nil && s.active.RunID == op.RunID && s.active.AttemptID == op.AttemptID {
+				if s.workers[run.RunID] == worker {
 					delete(s.workers, run.RunID)
-					s.worker, s.active = nil, nil
 					s.State.CurrentTask = nil
 					s.State.SlotOccupied = false
 					if err := s.save(); err != nil {
@@ -503,41 +499,43 @@ func (s *Service) dispatchNative(ctx context.Context) error {
 			return err
 		}
 	}
+	if s.dispatchConfig == nil {
+		return errors.New("native dispatch has no selected execution profile")
+	}
+	c := *s.dispatchConfig
 	defer func() {
-		if s.worker == nil && !s.State.SlotOccupied {
-			s.Config = s.projectExecutionConfig()
-			s.dispatchProfile = nil
-		}
+		s.dispatchConfig = nil
+		s.dispatchProfile = nil
 	}()
-	ready, err := (QueryService{Store: s.domainStore, Project: s.Config.identity}).ReadyNativeTasks(ctx)
+	ready, err := (QueryService{Store: s.domainStore, Project: c.identity}).ReadyNativeTasks(ctx)
 	if err != nil {
 		return err
 	}
 	if len(ready) > 0 {
-		if s.Config.WorkflowProtocol == WorkerFlowVersion {
-			if err = requireWorkerFlowCapabilities(ctx, s.Config); err != nil {
+		if c.WorkflowProtocol == WorkerFlowVersion {
+			if err = requireWorkerFlowCapabilities(ctx, c); err != nil {
 				return err
 			}
 		} else {
 			required := []string{"start", "observe", "workspace_inspection", "output_reading"}
-			if s.Config.hostName() == "orca_supervised" {
+			if c.hostName() == "orca_supervised" {
 				required = append(required, "message_inbox", "resource_settlement")
 			} else {
 				required = append(required, "stop")
 			}
-			if _, err = s.requireBackendCapabilities(ctx, backendFor(s.Config), required...); err != nil {
+			if _, err = s.requireBackendCapabilities(ctx, backendFor(c), required...); err != nil {
 				return err
 			}
 		}
 	}
 	for _, task := range ready {
-		if len(s.Config.ExecutableTypes) > 0 && !contains(s.Config.ExecutableTypes, task.Type) {
+		if len(c.ExecutableTypes) > 0 && !contains(c.ExecutableTypes, task.Type) {
 			continue
 		}
 		if s.targetTask != "" && s.targetTask != task.TaskID {
 			continue
 		}
-		authority, authErr := s.domainStore.nativeAuthority(ctx, s.Config.identity)
+		authority, authErr := s.domainStore.nativeAuthority(ctx, c.identity)
 		if authErr != nil {
 			return authErr
 		}
@@ -549,7 +547,7 @@ func (s *Service) dispatchNative(ctx context.Context) error {
 		if s.reservedRunID != "" {
 			workflowRunID = s.reservedRunID
 		}
-		receipt, claimErr := (CommandService{Store: s.domainStore, Project: s.Config.identity}).ClaimNativeTask(ctx, s.Config, TaskClaimOptions{TaskID: task.TaskID, RequestID: requestID, ExpectedTaskVersion: task.Version, ExpectedAuthorityVersion: authority.AuthorityVersion, RequestedBy: s.Config.Claimant, Explicit: s.explicitDispatch, WorkflowRunID: workflowRunID, ExecutionProfile: s.dispatchProfile})
+		receipt, claimErr := (CommandService{Store: s.domainStore, Project: c.identity}).ClaimNativeTask(ctx, c, TaskClaimOptions{TaskID: task.TaskID, RequestID: requestID, ExpectedTaskVersion: task.Version, ExpectedAuthorityVersion: authority.AuthorityVersion, RequestedBy: c.Claimant, Explicit: s.explicitDispatch, WorkflowRunID: workflowRunID, ExecutionProfile: s.dispatchProfile})
 		if claimErr != nil {
 			if isNativeErrorCode(claimErr, "task_not_ready", "stale_version", "slot_busy", "dispatch_paused", "wrong_mode", "task_discarded") {
 				if s.targetTask != "" {
@@ -575,10 +573,10 @@ func (s *Service) dispatchNative(ctx context.Context) error {
 		if intent == nil {
 			return nativeErr("inconsistent_delivery", "claimed execution lacks its workspace intent")
 		}
-		if execution.Target.WorktreeID != "" || execution.Target.Branch != s.Config.Branch {
+		if execution.Target.WorktreeID != "" || execution.Target.Branch != c.Branch {
 			return nativeErr("authority_mismatch", "claimed execution already has a conflicting workspace identity")
 		}
-		if s.Config.hostName() != "orca_supervised" {
+		if c.hostName() != "orca_supervised" {
 			execution.Target.WorktreeID = intent.Path
 			execution.Target.Branch = intent.Branch
 		}

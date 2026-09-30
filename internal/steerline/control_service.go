@@ -425,10 +425,10 @@ func (s *Service) applyControlAction(ctx context.Context, req ControlRequest, pa
 			if workflow == nil || workflow.ExecutionProfile != nil && (workflow.ExecutionProfile.ID != profileID || workflow.ExecutionProfile.Digest != payload.ExecutionProfileDigest) {
 				return nativeErr("contract_mismatch", "reserved start request differs from the fixed execution profile")
 			}
-			if err := s.useFixedRunProfile(run); err != nil {
+			if _, err := s.executionConfigForRun(run); err != nil {
 				return err
 			}
-			if s.workers[run.RunID] != nil || s.worker != nil && s.active == run {
+			if s.workers[run.RunID] != nil {
 				result.Message = "native task worker identity is persisted and running"
 				return nil
 			}

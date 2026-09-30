@@ -115,7 +115,7 @@ func TestAppServerStartReplayPreservesNativeSavedAnswer(t *testing.T) {
 func TestAppServerRejectedEventReleasesObserver(t *testing.T) {
 	service := &Service{}
 	event := WorkerEvent{RunID: strings.Repeat("a", 32), Persisted: make(chan error, 1)}
-	if err := service.eventWorkerFlow(event); err == nil {
+	if err := service.eventWorkerFlowFor(nil, event); err == nil {
 		t.Fatal("invalid event accepted")
 	}
 	select {
@@ -308,6 +308,8 @@ func TestAppServerServiceTwoTurnsPersistNativeReceipts(t *testing.T) {
 	execution.Workspace.Worktree, run.WorktreePath = workspace, &workspace
 	service.Config.Sandbox = "read-only"
 	service.Config.Codex.Executable = os.Args[0]
+	service.baseConfig.Sandbox = service.Config.Sandbox
+	service.baseConfig.Codex.Executable = service.Config.Codex.Executable
 	path := filepath.Join(service.Config.RunDir, "runs", run.RunID, "app-server", "process.json")
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		t.Fatal(err)
@@ -327,7 +329,6 @@ func TestAppServerServiceTwoTurnsPersistNativeReceipts(t *testing.T) {
 		if worker == nil {
 			t.Fatalf("no observer after start: %s", deref(run.Error))
 		}
-		service.active, service.worker = run, worker
 		for {
 			select {
 			case <-ctx.Done():
@@ -336,7 +337,7 @@ func TestAppServerServiceTwoTurnsPersistNativeReceipts(t *testing.T) {
 				if !ok {
 					goto finished
 				}
-				if err := service.event(event); err != nil {
+				if err := service.eventForRun(run, event); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -346,10 +347,9 @@ func TestAppServerServiceTwoTurnsPersistNativeReceipts(t *testing.T) {
 			t.Fatal(err)
 		}
 		delete(service.workers, run.RunID)
-		if err := service.finishWorkerFlow(nil); err != nil {
+		if err := service.finishWorkerFlowFor(run, nil); err != nil {
 			t.Fatal(err)
 		}
-		service.active, service.worker = nil, nil
 		_, execution = service.workflowRecords(run)
 		if execution.TurnNumber != uint64(i) || execution.CurrentCommandID != commandID || execution.CurrentTurnID == previousTurn || execution.CurrentTurnID != execution.LastStoppedTurnID || execution.SessionID != workerFlowMockSession || execution.Status != "idle" || run.Decision == nil {
 			t.Fatalf("turn %d receipt was not persisted: %+v", i, execution)

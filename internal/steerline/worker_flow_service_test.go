@@ -98,20 +98,16 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openP
 			_, execution := service.workflowRecords(run)
 			t.Fatalf("original worker observer is missing: task=%s execution_status=%s pending_command=%s reason=%q", run.TaskID, execution.Status, execution.PendingCommandID, deref(run.Error))
 		}
-		if err := service.selectWorker(run); err != nil {
-			t.Fatal(err)
-		}
 		for event := range worker.Events {
-			if err := service.event(event); err != nil {
+			if err := service.eventForRun(run, event); err != nil {
 				t.Fatal(err)
 			}
 		}
 		workerErr := <-worker.Done
 		delete(service.workers, run.RunID)
-		if err := service.finished(workerErr); err != nil {
+		if err := service.finishedForRun(run, worker, workerErr); err != nil {
 			t.Fatal(err)
 		}
-		service.parkWorker()
 		if run.FinishTaskStatus != expected || run.Decision == nil || run.Decision.Status != "pending" {
 			t.Fatalf("stopped worker did not reach the unified decision: %+v", run)
 		}

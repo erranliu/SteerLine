@@ -18,15 +18,13 @@ import (
 type Service struct {
 	Config          Config
 	baseConfig      Config
+	dispatchConfig  *Config
 	dispatchProfile *ExecutionProfile
 	State           Runtime
 	store           *Store
 	domainStore     *SQLiteStore
 	prs             *PRClient
-	// worker and active are the run currently being handled by the serial state
-	// machine. workers owns all live observers, keyed by authoritative run ID.
-	worker              *Worker
-	active              *Run
+	// workers owns live observers by authoritative workflow run ID.
 	workers             map[string]*Worker
 	appServerLaunching  map[string]string // In-flight goroutines, never persisted execution authority.
 	appServerRecovering map[string]bool
@@ -130,12 +128,9 @@ func NewService(c Config) (_ *Service, retErr error) {
 			if run.WorkflowVersion != WorkerFlowVersion {
 				return nil, nativeErr("unsupported_schema", "unsupported workflow version")
 			}
-			if err := s.useFixedRunProfile(run); err != nil {
+			if _, err := s.executionConfigForRun(run); err != nil {
 				return nil, err
 			}
-		}
-		if err := s.restoreActiveExecutionProfile(); err != nil {
-			return nil, err
 		}
 		if s.State.Control.Operation == nil && s.State.CurrentTask != nil && s.find(*s.State.CurrentTask) == nil {
 			// Automatic dispatch persists the reservation before fetch. With no run
@@ -352,7 +347,7 @@ func (s *Service) slotReason(ignoreRequestID string) string {
 }
 
 func (s *Service) executionSlotReason(ignoreRequestID string, resumingDecision bool) string {
-	if s.worker != nil || len(s.workers) != 0 {
+	if len(s.workers) != 0 {
 		return "worker is running"
 	}
 	if operation := s.State.Control.Operation; operation != nil && operation.RequestID != ignoreRequestID {
@@ -388,7 +383,7 @@ func (s *Service) executionSlotReason(ignoreRequestID string, resumingDecision b
 
 func (s *Service) refreshSlotOccupancy() {
 	projectSlot(&s.State)
-	s.State.SlotOccupied = s.State.SlotOccupied || s.worker != nil || len(s.workers) != 0
+	s.State.SlotOccupied = s.State.SlotOccupied || len(s.workers) != 0
 }
 func (s *Service) refreshCandidates(ctx context.Context) error {
 	queried := now()
@@ -425,11 +420,10 @@ func decisionMeta(r *Run) map[string]any {
 	return m
 }
 
-func (s *Service) finished(err error) error {
-	run := s.active
-	if s.worker != nil {
-		for ev := range s.worker.Events {
-			if eventErr := s.event(ev); eventErr != nil {
+func (s *Service) finishedForRun(run *Run, worker *Worker, err error) error {
+	if worker != nil {
+		for ev := range worker.Events {
+			if eventErr := s.eventForRun(run, ev); eventErr != nil {
 				s.setError(eventErr)
 			}
 		}
@@ -440,7 +434,7 @@ func (s *Service) finished(err error) error {
 	if replayErr := s.reconcileConversationRun(run); replayErr != nil {
 		s.setError(fmt.Errorf("completed conversation source replay failed: %w", replayErr))
 	}
-	return s.finishWorkerFlow(err)
+	return s.finishWorkerFlowFor(run, err)
 }
 
 func errorString(err error) string {
@@ -462,7 +456,7 @@ func (s *Service) pollPRs(ctx context.Context) error {
 func (s *Service) pollPRsFor(ctx context.Context, runID string) error {
 	return s.pollNativePRs(ctx, runID)
 }
-func (s *Service) event(ev WorkerEvent) error {
+func (s *Service) eventForRun(run *Run, ev WorkerEvent) error {
 	ack := func(err error) error {
 		if err == nil && ev.Acknowledge != nil {
 			err = s.acknowledgeRemoteDelivery(ev)
@@ -478,7 +472,7 @@ func (s *Service) event(ev WorkerEvent) error {
 			return ack(err)
 		}
 	}
-	if ev.RunID != "" && ev.AttemptID != "" && (s.active == nil || s.active.RunID != ev.RunID || s.active.AttemptID != ev.AttemptID) {
+	if ev.RunID != "" && ev.AttemptID != "" && (run == nil || run.RunID != ev.RunID || run.AttemptID != ev.AttemptID) {
 		err := s.recordHistoricalWorkerEvent(ev)
 		ackWorkerEventPersistence(ev, err)
 		if err == nil && len(ev.RemoteMessages) > 0 {
@@ -486,7 +480,7 @@ func (s *Service) event(ev WorkerEvent) error {
 		}
 		return ack(err)
 	}
-	if s.active == nil {
+	if run == nil {
 		if ev.Persisted != nil {
 			err := errors.New("conversation source event has no active run binding")
 			ackWorkerEventPersistence(ev, err)
@@ -497,10 +491,10 @@ func (s *Service) event(ev WorkerEvent) error {
 		}
 		return ack(nil)
 	}
-	if s.active.WorkflowVersion != WorkerFlowVersion {
+	if run.WorkflowVersion != WorkerFlowVersion {
 		return ack(nativeErr("unsupported_schema", "worker event belongs to an unsupported workflow"))
 	}
-	return ack(s.eventWorkerFlow(ev))
+	return ack(s.eventWorkerFlowFor(run, ev))
 }
 
 func (s *Service) acknowledgeRemoteDelivery(ev WorkerEvent) error {
@@ -744,7 +738,6 @@ func (s *Service) RunWithDispatch(ctx context.Context, mode string) error {
 
 func (s *Service) run(ctx context.Context, dispatchMode string) (retErr error) {
 	ctx, cancel := context.WithCancel(ctx)
-	s.parkWorker()
 	s.runContext = ctx
 	s.workerMessages = make(chan workerMessage, 128)
 	for runID, worker := range s.workers {
@@ -884,7 +877,6 @@ func (s *Service) run(ctx context.Context, dispatchMode string) (retErr error) {
 				onlyWhenChanged = false // Fall back to the existing durable publication path.
 			}
 		}
-		defer s.parkWorker()
 		e := fn(ctx)
 		if s.store.Err() != nil {
 			return s.store.Err()
@@ -969,7 +961,6 @@ func (s *Service) run(ctx context.Context, dispatchMode string) (retErr error) {
 		}
 	}
 	for {
-		s.parkWorker()
 		select {
 		case <-ctx.Done():
 			return nil
@@ -1039,18 +1030,14 @@ func (s *Service) run(ctx context.Context, dispatchMode string) (retErr error) {
 	}
 }
 
-func (s *Service) finishWorkerInLoop(workerErr error) error {
-	return s.finished(workerErr)
+func (s *Service) finishWorkerInLoop(run *Run, worker *Worker, workerErr error) error {
+	return s.finishedForRun(run, worker, workerErr)
 }
 
 func (s *Service) shutdown() {
 	if s.runContext != nil && s.runContext.Err() != nil {
 		s.forwarders.Wait()
 		s.drainWorkerMessages()
-	}
-	if len(s.workers) == 0 && s.worker != nil {
-		s.shutdownWorker()
-		return
 	}
 	for len(s.workers) != 0 {
 		var runID string
@@ -1065,28 +1052,25 @@ func (s *Service) shutdown() {
 				break
 			}
 		}
-		if err := s.selectWorker(run); err != nil {
+		if run == nil {
+			s.setError(errors.New("active worker has no fixed workflow run"))
+			return
+		}
+		config, err := s.executionConfigForRun(run)
+		if err != nil {
 			s.setError(err)
 			return // Preserve the original worker identity for restart reconciliation.
 		}
-		stoppingWorker := s.worker
-		s.shutdownWorker()
+		stoppingWorker := s.workers[runID]
+		ctx, cancel := context.WithTimeout(context.Background(), duration(config.ShutdownGrace))
+		err = stoppingWorker.detachLocalObservation(ctx)
+		cancel()
+		if err != nil {
+			s.setError(fmt.Errorf("original worker observation could not be detached: %w", err))
+			return
+		}
 		if s.workers[runID] == stoppingWorker {
 			delete(s.workers, runID)
 		}
-		s.parkWorker()
 	}
-}
-
-func (s *Service) shutdownWorker() {
-	if s.worker == nil {
-		return
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), duration(s.Config.ShutdownGrace))
-	defer cancel()
-	if err := s.worker.detachLocalObservation(ctx); err != nil {
-		s.setError(fmt.Errorf("original worker observation could not be detached: %w", err))
-		return
-	}
-	s.worker = nil
 }

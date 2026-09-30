@@ -131,7 +131,12 @@ func applyWorkerOrcaWorkspace(c Config, run *Run, execution *ExecutionRecord, wo
 }
 
 func (s *Service) prepareRemoteWorkerWorkspace(ctx context.Context, run *Run, execution *ExecutionRecord, operationID string) error {
-	if s.Config.hostName() != "orca_supervised" || run == nil || execution == nil || run.WorkspaceIntent == nil {
+	fixed, configErr := s.workerFlowContext(run)
+	if configErr != nil {
+		return configErr
+	}
+	fixedConfig := fixed.config
+	if fixedConfig.hostName() != "orca_supervised" || run == nil || execution == nil || run.WorkspaceIntent == nil {
 		return errors.New("remote worker workspace has no fixed preparation intent")
 	}
 	base := run.WorkspaceIntent.BaseCommit
@@ -139,15 +144,15 @@ func (s *Service) prepareRemoteWorkerWorkspace(ctx context.Context, run *Run, ex
 	if err != nil {
 		return err
 	}
-	pair, err := probeSupervisedOrcaTarget(ctx, s.Config)
+	pair, err := probeSupervisedOrcaTarget(ctx, fixedConfig)
 	if err != nil {
 		return err
 	}
-	worktree, err := createWorkerOrcaWorktree(ctx, s.Config, pair.RepositoryID, name, base)
+	worktree, err := createWorkerOrcaWorktree(ctx, fixedConfig, pair.RepositoryID, name, base)
 	if err != nil {
 		return err
 	}
-	if err := applyWorkerOrcaWorkspace(s.Config, run, execution, worktree, base); err != nil {
+	if err := applyWorkerOrcaWorkspace(fixedConfig, run, execution, worktree, base); err != nil {
 		return err
 	}
 	if operationID != "" {
@@ -159,25 +164,30 @@ func (s *Service) prepareRemoteWorkerWorkspace(ctx context.Context, run *Run, ex
 }
 
 func (s *Service) recoverRemoteWorkerWorkspace(ctx context.Context, run *Run, execution *ExecutionRecord, operation *OperationRecord) error {
-	if s.Config.hostName() != "orca_supervised" || run == nil || execution == nil || operation == nil || operation.Kind != "prepare_workspace" || run.WorkspaceIntent == nil {
+	fixed, configErr := s.workerFlowContext(run)
+	if configErr != nil {
+		return configErr
+	}
+	fixedConfig := fixed.config
+	if fixedConfig.hostName() != "orca_supervised" || run == nil || execution == nil || operation == nil || operation.Kind != "prepare_workspace" || run.WorkspaceIntent == nil {
 		return errors.New("remote workspace recovery has no original preparation intent")
 	}
 	name, err := workerOrcaWorktreeName(run.RunID)
 	if err != nil {
 		return err
 	}
-	pair, err := probeSupervisedOrcaTarget(ctx, s.Config)
+	pair, err := probeSupervisedOrcaTarget(ctx, fixedConfig)
 	if err != nil {
 		return err
 	}
-	worktree, found, err := findWorkerOrcaWorktree(ctx, s.Config, pair.RepositoryID, name, run.WorkspaceIntent.BaseCommit)
+	worktree, found, err := findWorkerOrcaWorktree(ctx, fixedConfig, pair.RepositoryID, name, run.WorkspaceIntent.BaseCommit)
 	if err != nil {
 		return err
 	}
 	if !found {
 		return errors.New("saved Orca worktree creation has no matching remote worktree; original request will not be repeated")
 	}
-	if err := applyWorkerOrcaWorkspace(s.Config, run, execution, worktree, run.WorkspaceIntent.BaseCommit); err != nil {
+	if err := applyWorkerOrcaWorkspace(fixedConfig, run, execution, worktree, run.WorkspaceIntent.BaseCommit); err != nil {
 		return err
 	}
 	if operation.Status != "confirmed" {

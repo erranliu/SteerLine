@@ -33,7 +33,12 @@ func nativeOrcaFixedAgentCommand(c Config) (string, error) {
 // accepts an agent ID and cannot pass model or effort. Keep worktree and agent
 // terminal as separate, journaled operations for restart reconciliation.
 func (s *Service) prepareNativeOrcaFixedModelWorker(ctx context.Context, run *Run, execution *ExecutionRecord) error {
-	repoID, err := nativeOrcaRepo(ctx, s.Config)
+	fixed, configErr := s.workerFlowContext(run)
+	if configErr != nil {
+		return configErr
+	}
+	fixedConfig := fixed.config
+	repoID, err := nativeOrcaRepo(ctx, fixedConfig)
 	if err != nil {
 		return err
 	}
@@ -42,7 +47,7 @@ func (s *Service) prepareNativeOrcaFixedModelWorker(ctx context.Context, run *Ru
 		return err
 	}
 	base := run.WorkspaceIntent.BaseCommit
-	worktree, exists, err := findWorkerOrcaWorktree(ctx, s.Config, repoID, name, base)
+	worktree, exists, err := findWorkerOrcaWorktree(ctx, fixedConfig, repoID, name, base)
 	if err != nil {
 		return err
 	}
@@ -64,7 +69,7 @@ func (s *Service) prepareNativeOrcaFixedModelWorker(ctx context.Context, run *Ru
 		if err != nil {
 			return err
 		}
-		env, callErr := workerOrcaCall(ctx, s.Config, "worktree", "create", "--repo", "id:"+repoID, "--name", name, "--base-branch", base, "--no-parent", "--setup", "skip", "--comment", nativeOrcaWorktreeComment(execution.ExecutionID), "--json")
+		env, callErr := workerOrcaCall(ctx, fixedConfig, "worktree", "create", "--repo", "id:"+repoID, "--name", name, "--base-branch", base, "--no-parent", "--setup", "skip", "--comment", nativeOrcaWorktreeComment(execution.ExecutionID), "--json")
 		if callErr != nil {
 			_ = s.changeOperation(opID, "outcome_unknown", "", nil, callErr.Error())
 			return &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "fixed Orca worktree creation needs reconciliation", Cause: callErr}
@@ -91,8 +96,13 @@ func (s *Service) prepareNativeOrcaFixedModelWorker(ctx context.Context, run *Ru
 }
 
 func (s *Service) prepareNativeOrcaFixedAgentTerminal(ctx context.Context, run *Run, execution *ExecutionRecord, worktree workerOrcaWorktree, repoID, base string) error {
+	fixed, configErr := s.workerFlowContext(run)
+	if configErr != nil {
+		return configErr
+	}
+	fixedConfig := fixed.config
 	title := nativeOrcaFixedAgentTitle(execution.ExecutionID)
-	terminals, _, err := nativeOrcaTerminals(ctx, s.Config, "id:"+worktree.ID)
+	terminals, _, err := nativeOrcaTerminals(ctx, fixedConfig, "id:"+worktree.ID)
 	if err != nil {
 		return err
 	}
@@ -125,15 +135,15 @@ func (s *Service) prepareNativeOrcaFixedAgentTerminal(ctx context.Context, run *
 	if terminal.Handle != "" {
 		return &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "fixed Orca agent terminal exists without its launch intent"}
 	}
-	command, err := nativeOrcaFixedAgentCommand(s.Config)
+	command, err := nativeOrcaFixedAgentCommand(fixedConfig)
 	if err != nil {
 		return err
 	}
-	opID, err := s.startOperation("orca_native_agent_terminal", key, map[string]string{"worktree": worktree.ID, "title": title, "model": s.Config.Model, "effort": s.Config.ReasoningEffort, "command": command})
+	opID, err := s.startOperation("orca_native_agent_terminal", key, map[string]string{"worktree": worktree.ID, "title": title, "model": fixedConfig.Model, "effort": fixedConfig.ReasoningEffort, "command": command})
 	if err != nil {
 		return err
 	}
-	env, callErr := workerOrcaCall(ctx, s.Config, "terminal", "create", "--worktree", "id:"+worktree.ID, "--title", title, "--shell", s.Config.Orca.Shell, "--command", command, "--json")
+	env, callErr := workerOrcaCall(ctx, fixedConfig, "terminal", "create", "--worktree", "id:"+worktree.ID, "--title", title, "--shell", fixedConfig.Orca.Shell, "--command", command, "--json")
 	if callErr != nil {
 		_ = s.changeOperation(opID, "outcome_unknown", "", nil, callErr.Error())
 		return &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "fixed Orca agent launch needs reconciliation", Cause: callErr}
@@ -197,7 +207,12 @@ func fixedOrcaAgentTerminal(terminals []orcaTerminal, op *OperationRecord, title
 }
 
 func (s *Service) waitAndBindNativeOrcaFixedAgent(ctx context.Context, run *Run, execution *ExecutionRecord, worktree workerOrcaWorktree, handle, repoID, base string) error {
-	deadline := time.Now().Add(min(positiveDuration(s.Config.Orca.WaitTimeout, 30*time.Second), 30*time.Second))
+	fixed, configErr := s.workerFlowContext(run)
+	if configErr != nil {
+		return configErr
+	}
+	fixedConfig := fixed.config
+	deadline := time.Now().Add(min(positiveDuration(fixedConfig.Orca.WaitTimeout, 30*time.Second), 30*time.Second))
 	for {
 		err := s.bindNativeOrcaAgent(ctx, run, execution, worktree, handle, repoID, base)
 		if err == nil {

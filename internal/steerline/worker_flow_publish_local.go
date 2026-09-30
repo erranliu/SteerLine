@@ -36,25 +36,30 @@ func (s *Service) localWorkerRun(runID string) *Run {
 // handoff; it never receives the host's credentials.
 func (s *Service) publishLocalWorkerRun(ctx context.Context, run *Run, workflow *WorkflowRunRecord, execution *ExecutionRecord, turnID string) (PRInfo, error) {
 	var info PRInfo
+	fixed, configErr := s.workerFlowContext(run)
+	if configErr != nil {
+		return info, configErr
+	}
+	c := fixed.config
 	if run == nil || workflow == nil || execution == nil || run.WorkspaceIntent == nil || run.WorktreePath == nil ||
 		workflow.WorkflowRunID != run.RunID || execution.WorkflowRunID != run.RunID || run.Protocol != string(ProtocolLocalCodexAppServer) || !codexThreadID.MatchString(turnID) ||
 		execution.CurrentTurnID != turnID || execution.LastStoppedTurnID != turnID ||
-		s.Config.hostName() != "local" || s.Config.PR.Kind != "command" ||
-		strings.TrimSuffix(s.Config.PR.BaseURL, "/") != "https://github.com" || s.Config.PR.Query.Executable == "" {
+		c.hostName() != "local" || c.PR.Kind != "command" ||
+		strings.TrimSuffix(c.PR.BaseURL, "/") != "https://github.com" || c.PR.Query.Executable == "" {
 		return info, errors.New("local host publication requires a fixed GitHub command provider and worker execution")
 	}
 	if canonical(*run.WorktreePath) != canonical(run.WorkspaceIntent.Path) || run.WorktreeBranch == nil ||
 		*run.WorktreeBranch != run.WorkspaceIntent.Branch || execution.Workspace.Branch != *run.WorktreeBranch ||
-		workflow.Branch == "" || s.Config.PR.Repository == "" {
+		workflow.Branch == "" || c.PR.Repository == "" {
 		return info, errors.New("local host publication workspace or target branch differs from the fixed execution")
 	}
-	git := gitRunner(s.Config, *run.WorktreePath)
+	git := gitRunner(c, *run.WorktreePath)
 	gitText := func(args ...string) (string, error) {
-		out, err := git.Output(ctx, s.Config.Git, args...)
+		out, err := git.Output(ctx, c.Git, args...)
 		return strings.TrimSpace(string(out)), err
 	}
 	common, err := gitText("rev-parse", "--path-format=absolute", "--git-common-dir")
-	if err != nil || canonical(common) != canonical(s.Config.identity) {
+	if err != nil || canonical(common) != canonical(c.identity) {
 		return info, errors.Join(err, errors.New("local publication Git common directory changed"))
 	}
 	branch, err := gitText("symbolic-ref", "--quiet", "--short", "HEAD")
@@ -117,7 +122,7 @@ func (s *Service) publishLocalWorkerRun(ctx context.Context, run *Run, workflow 
 	if err != nil || !validCommit(head) {
 		return info, errors.Join(err, errors.New("host commit head is unavailable"))
 	}
-	if _, err = gitText("push", s.Config.Remote, "HEAD:refs/heads/"+branch); err != nil {
+	if _, err = gitText("push", c.Remote, "HEAD:refs/heads/"+branch); err != nil {
 		return info, fmt.Errorf("host Git push failed: %w", err)
 	}
 	url, err := s.localWorkerPRURL(ctx, run, workflow, head)
@@ -128,7 +133,7 @@ func (s *Service) publishLocalWorkerRun(ctx context.Context, run *Run, workflow 
 	if err != nil || info.HeadRevision != head {
 		return PRInfo{}, errors.Join(err, errors.New("published PR head does not match the fixed local commit"))
 	}
-	if err = BindWorkerPR(workflow, execution, info, url, s.Config.PR.Repository, false); err != nil {
+	if err = BindWorkerPR(workflow, execution, info, url, c.PR.Repository, false); err != nil {
 		return PRInfo{}, err
 	}
 	s.refreshRun(run)
@@ -140,13 +145,18 @@ func (s *Service) publishLocalWorkerRun(ctx context.Context, run *Run, workflow 
 }
 
 func (s *Service) localWorkerPRURL(ctx context.Context, run *Run, workflow *WorkflowRunRecord, head string) (string, error) {
+	fixed, configErr := s.workerFlowContext(run)
+	if configErr != nil {
+		return "", configErr
+	}
+	c := fixed.config
 	existing, err := s.findLocalWorkerPRURL(ctx, run, workflow, head)
 	if err != nil || existing != "" {
 		return existing, err
 	}
-	repo := s.Config.PR.Repository
-	gh := Command{Executable: s.Config.PR.Query.Executable}
-	runner := Runner{Dir: *run.WorktreePath, Timeout: duration(s.Config.CommandTimeout)}
+	repo := c.PR.Repository
+	gh := Command{Executable: c.PR.Query.Executable}
+	runner := Runner{Dir: *run.WorktreePath, Timeout: duration(c.CommandTimeout)}
 	created, err := runner.Output(ctx, gh, "pr", "create", "--repo", repo, "--base", workflow.Branch,
 		"--head", *run.WorktreeBranch, "--draft", "--title", "SteerLine task "+run.TaskID,
 		"--body", "SteerLine worker-flow run "+run.RunID)
@@ -154,20 +164,25 @@ func (s *Service) localWorkerPRURL(ctx context.Context, run *Run, workflow *Work
 		return "", fmt.Errorf("create draft PR from fixed branch: %w", err)
 	}
 	url := strings.TrimSpace(string(created))
-	if _, err = s.Config.PR.PRNumber(url); err != nil {
+	if _, err = c.PR.PRNumber(url); err != nil {
 		return "", fmt.Errorf("created PR URL is invalid: %w", err)
 	}
 	return url, nil
 }
 
 func (s *Service) findLocalWorkerPRURL(ctx context.Context, run *Run, workflow *WorkflowRunRecord, head string) (string, error) {
-	repo := s.Config.PR.Repository
+	fixed, configErr := s.workerFlowContext(run)
+	if configErr != nil {
+		return "", configErr
+	}
+	c := fixed.config
+	repo := c.PR.Repository
 	owner, _, ok := strings.Cut(repo, "/")
 	if !ok || owner == "" {
 		return "", errors.New("local GitHub publication repository is invalid")
 	}
-	gh := Command{Executable: s.Config.PR.Query.Executable}
-	runner := Runner{Dir: *run.WorktreePath, Timeout: duration(s.Config.CommandTimeout)}
+	gh := Command{Executable: c.PR.Query.Executable}
+	runner := Runner{Dir: *run.WorktreePath, Timeout: duration(c.CommandTimeout)}
 	endpoint := fmt.Sprintf("repos/%s/pulls?state=all&head=%s:%s&per_page=100", repo, owner, *run.WorktreeBranch)
 	out, err := runner.Output(ctx, gh, "api", endpoint)
 	if err != nil {
@@ -210,7 +225,15 @@ func (s *Service) findLocalWorkerPRURL(ctx context.Context, run *Run, workflow *
 // before it has saved the receipt. Reconcile only observed, exact identities;
 // never issue another create from an uncertain publication operation.
 func (s *Service) reconcileLocalWorkerPublication(ctx context.Context, run *Run) (bool, error) {
-	if run == nil || s.Config.hostName() != "local" {
+	if run == nil {
+		return false, nil
+	}
+	fixed, configErr := s.workerFlowContext(run)
+	if configErr != nil {
+		return false, configErr
+	}
+	c := fixed.config
+	if c.hostName() != "local" {
 		return false, nil
 	}
 	var op *OperationRecord
@@ -244,13 +267,13 @@ func (s *Service) reconcileLocalWorkerPublication(ctx context.Context, run *Run)
 		workflow.Phase != "waiting_decision" || run.FinishTaskStatus != "waiting_decision" {
 		return false, errors.New("saved local publication no longer matches the stopped worker turn")
 	}
-	git := gitRunner(s.Config, *run.WorktreePath)
+	git := gitRunner(c, *run.WorktreePath)
 	gitText := func(args ...string) (string, error) {
-		out, err := git.Output(ctx, s.Config.Git, args...)
+		out, err := git.Output(ctx, c.Git, args...)
 		return strings.TrimSpace(string(out)), err
 	}
 	common, err := gitText("rev-parse", "--path-format=absolute", "--git-common-dir")
-	if err != nil || canonical(common) != canonical(s.Config.identity) {
+	if err != nil || canonical(common) != canonical(c.identity) {
 		return false, errors.Join(err, errors.New("recovery Git common directory changed"))
 	}
 	branch, err := gitText("symbolic-ref", "--quiet", "--short", "HEAD")
@@ -268,7 +291,7 @@ func (s *Service) reconcileLocalWorkerPublication(ctx context.Context, run *Run)
 	if _, err = gitText("merge-base", "--is-ancestor", intent.StartingHead, "HEAD"); err != nil {
 		return false, fmt.Errorf("recovery commit changed ancestry: %w", err)
 	}
-	remote, err := gitText("ls-remote", s.Config.Remote, "refs/heads/"+intent.Branch)
+	remote, err := gitText("ls-remote", c.Remote, "refs/heads/"+intent.Branch)
 	if err != nil || !strings.HasPrefix(remote, head+"\trefs/heads/"+intent.Branch) {
 		return false, errors.Join(err, errors.New("fixed remote branch does not match the local candidate"))
 	}
@@ -280,7 +303,7 @@ func (s *Service) reconcileLocalWorkerPublication(ctx context.Context, run *Run)
 	if err != nil || info.HeadRevision != head {
 		return false, errors.Join(err, errors.New("recovered PR head does not match the fixed commit"))
 	}
-	if err = BindWorkerPR(workflow, execution, info, url, s.Config.PR.Repository, false); err != nil {
+	if err = BindWorkerPR(workflow, execution, info, url, c.PR.Repository, false); err != nil {
 		return false, err
 	}
 	s.refreshRun(run)
