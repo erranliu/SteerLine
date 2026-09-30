@@ -2,11 +2,13 @@ package steerline
 
 import (
 	"context"
-	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 // Set STEERLINE_ORCA_WORKER_TERMINAL and, for a paired host,
@@ -35,9 +37,9 @@ func TestWorkerFlowOrcaTurnAdapterLive(t *testing.T) {
 	path := filepath.FromSlash(term.WorktreePath)
 	branch := strings.TrimPrefix(term.Branch, "refs/heads/")
 	identity := workerOrcaIdentity(term, c)
-	run := &Run{RunID: strings.Repeat("a", 32), ExecutionID: strings.Repeat("b", 32), AttemptID: strings.Repeat("c", 32), WorkflowVersion: WorkerFlowVersion, Backend: string(BackendOrca), Protocol: string(ProtocolOrcaTerminalV2), Agent: "codex", Target: ExecutionTarget{ID: "orca-live-probe"}, WorktreePath: &path, WorktreeBranch: &branch, Process: &identity}
+	run := &Run{RunID: strings.Repeat("a", 32), ExecutionID: strings.Repeat("b", 32), AttemptID: strings.Repeat("c", 32), WorkflowVersion: WorkerFlowVersion, Backend: string(executionapi.BackendOrca), Protocol: string(executionapi.ProtocolOrcaTerminalV2), Agent: "codex", Target: executionapi.ExecutionTarget{ID: "orca-live-probe"}, WorktreePath: &path, WorktreeBranch: &branch, Process: &identity}
 	if c.hostName() == "orca_supervised" {
-		run.Protocol = string(ProtocolOrcaSupervised)
+		run.Protocol = string(executionapi.ProtocolOrcaSupervised)
 	}
 	execution := &ExecutionRecord{ExecutionID: run.ExecutionID, WorkflowRunID: run.RunID, Process: &identity, Workspace: WorkspaceEvidence{Worktree: path, Branch: branch}}
 	for i, marker := range []string{"WF_ORCA_ADAPTER_FIRST_OK", "WF_ORCA_ADAPTER_FEEDBACK_OK"} {

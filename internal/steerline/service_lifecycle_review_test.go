@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 func TestLifecycleAuditRejectedStartupPreservesOwnerFiles(t *testing.T) {
@@ -99,7 +101,7 @@ func TestRunConfiguredServiceRejectsBeadsBeforeCreatingStartupEvidence(t *testin
 	}
 }
 
-func reviewStartup(t *testing.T, c Config, status string, identity *ProcessIdentity) StartupRecord {
+func reviewStartup(t *testing.T, c Config, status string, identity *executionapi.ProcessIdentity) StartupRecord {
 	t.Helper()
 	id := newID()
 	_, _, err := createStartupAttempt(c, id, true)
@@ -125,7 +127,7 @@ func TestLifecycleReviewMultipleLiveAttemptsRefuseLaunch(t *testing.T) {
 func TestLifecycleReviewStartedProcessEarlyExit(t *testing.T) {
 	s := controlReviewService(t)
 	removeRuntimeProjection(t, s)
-	id := &ProcessIdentity{Kind: "os", PID: 2_000_000_000, Created: "absent", Executable: "absent"}
+	id := &executionapi.ProcessIdentity{Kind: "os", PID: 2_000_000_000, Created: "absent", Executable: "absent"}
 	record := reviewStartup(t, s.Config, "started", id)
 	result, err := waitForStartup(context.Background(), s.Config, record.StartupID, "", StartServiceOptions{WaitTimeout: 30 * time.Millisecond, PollInterval: time.Millisecond})
 	require(t, err)
@@ -239,7 +241,7 @@ func TestLifecycleReviewStopPublicationKeepsObservedInstance(t *testing.T) {
 
 func TestLifecycleReviewOfflineWithHeldLockCannotRestart(t *testing.T) {
 	s := controlReviewService(t)
-	absent := &ProcessIdentity{Kind: "os", PID: 2_000_000_000, Created: "absent", Executable: "absent"}
+	absent := &executionapi.ProcessIdentity{Kind: "os", PID: 2_000_000_000, Created: "absent", Executable: "absent"}
 	s.State.Service.ProcessIdentity = absent
 	s.State.Service.PID = s.State.Service.ProcessIdentity.PID
 	startup, err := readStartupRecord(s.Config, *s.State.Service.StartupID)

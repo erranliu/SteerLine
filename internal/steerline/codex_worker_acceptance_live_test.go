@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 // Historical detached-process acceptance. The current local worker lifecycle
@@ -77,7 +79,7 @@ func TestAppServerServiceParallelRecoveryLive(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	processes := make([]ProcessIdentity, 0, 2)
+	processes := make([]executionapi.ProcessIdentity, 0, 2)
 	t.Cleanup(func() {
 		for _, worker := range service.workers {
 			_ = worker.detachLocalObservation(context.Background())
@@ -248,14 +250,14 @@ func TestAppServerServiceParallelRecoveryLive(t *testing.T) {
 }
 
 type appServerHostExitReceipt struct {
-	Config    Config          `json:"config"`
-	Home      string          `json:"home"`
-	RunID     string          `json:"run_id"`
-	Process   ProcessIdentity `json:"process"`
-	ThreadID  string          `json:"thread_id"`
-	TurnID    string          `json:"turn_id"`
-	CallID    string          `json:"call_id"`
-	Workspace string          `json:"workspace"`
+	Config    Config                       `json:"config"`
+	Home      string                       `json:"home"`
+	RunID     string                       `json:"run_id"`
+	Process   executionapi.ProcessIdentity `json:"process"`
+	ThreadID  string                       `json:"thread_id"`
+	TurnID    string                       `json:"turn_id"`
+	CallID    string                       `json:"call_id"`
+	Workspace string                       `json:"workspace"`
 }
 
 // The helper exits the service-owning process while Codex awaits a tool

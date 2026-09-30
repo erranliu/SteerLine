@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/steerline/codexapp"
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 func ConnectAppServer(ctx context.Context, endpoint string) (*codexapp.Client, error) {
@@ -35,7 +36,7 @@ type AskReply struct {
 	Workspace string
 	ThreadID  string
 	RequestID json.RawMessage
-	Answers   map[string][]string
+	executionapi.Answer
 }
 
 type ThreadReceipt struct {

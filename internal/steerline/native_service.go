@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 func (s *Service) refreshNativeSnapshot(ctx context.Context) error {
@@ -190,7 +192,7 @@ func (s *Service) reconcileNativeCleanup(ctx context.Context) error {
 					}
 					continue
 				}
-				if op.Status != OperationConfirmed {
+				if op.Status != executionapi.OperationConfirmed {
 					backend := backendFor(config)
 					observation, observeErr := backend.Observe(ctx, *op.Ref)
 					if observeErr != nil || observation.Liveness != "exited" {
@@ -310,7 +312,7 @@ func (s *Service) reconcileNativeWorkspaceCleanup(ctx context.Context, task Task
 		return nativeErr("contract_mismatch", "discarded workspace path lacks a fixed branch and base identity")
 	}
 	if hostForExecution(execution.Backend, execution.Protocol) != "local" {
-		return UnsupportedAdapterOperation("WorkspaceCleanup", "remote native worktree cleanup is unavailable")
+		return executionapi.UnsupportedAdapterOperation("WorkspaceCleanup", "remote native worktree cleanup is unavailable")
 	}
 	branch := execution.Target.Branch
 	if _, err = (Runner{Dir: s.Config.Repository, Timeout: duration(s.Config.CommandTimeout)}).Output(ctx, s.Config.Git, "check-ref-format", "refs/heads/"+branch); err != nil {
@@ -329,7 +331,7 @@ func (s *Service) reconcileNativeWorkspaceCleanup(ctx context.Context, task Task
 		}
 	}
 	if registered {
-		intent := WorkspaceIntent{Path: resolved, Branch: branch, BaseCommit: execution.Target.BaseRevision}
+		intent := executionapi.WorkspaceIntent{Path: resolved, Branch: branch, BaseCommit: execution.Target.BaseRevision}
 		if err = verifyWorkspace(ctx, s.Config, &intent, false); err != nil {
 			return fmt.Errorf("discarded workspace identity could not be verified: %w", err)
 		}
@@ -371,17 +373,17 @@ func (s *Service) reconcileNativeWorkspaceCleanup(ctx context.Context, task Task
 	return err
 }
 
-func (s *Service) recordNativeStopCleanup(ctx context.Context, taskID, cleanupItem string, op Operation) error {
+func (s *Service) recordNativeStopCleanup(ctx context.Context, taskID, cleanupItem string, op executionapi.Operation) error {
 	if op.Ref == nil {
-		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "native stop operation has no fixed execution reference"}
+		return &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "native stop operation has no fixed execution reference"}
 	}
 	confirmed, err := s.confirmExecutionStop(op)
 	if err != nil || !confirmed {
-		return errors.Join(err, &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "native stop operation is not confirmed"})
+		return errors.Join(err, &executionapi.BackendError{Code: executionapi.BackendOutcomeUnknown, Diagnostic: "native stop operation is not confirmed"})
 	}
 	records := executionRecords{root: s.Config.RunDir}
 	persisted, err := records.loadOperation(op.RunID, op.AttemptID, op.ID)
-	if err != nil || persisted.Status != OperationConfirmed {
+	if err != nil || persisted.Status != executionapi.OperationConfirmed {
 		return errors.Join(err, nativeErr("outcome_unknown", "confirmed stop was not durably recorded"))
 	}
 	config, configErr := s.executionConfigForWorkflowID(op.RunID)
@@ -419,7 +421,7 @@ func (s *Service) reconcileExitedNativeExecution(ctx context.Context, taskID, cl
 		return nativeErr("outcome_unknown", "discarded task has no fixed local process identity")
 	}
 	if hostForExecution(execution.Backend, execution.Protocol) != "local" {
-		return UnsupportedAdapterOperation("StopExecution", "remote native worker cancellation is unavailable")
+		return executionapi.UnsupportedAdapterOperation("StopExecution", "remote native worker cancellation is unavailable")
 	}
 	workflowRunID := execution.WorkflowRunID
 	config, configErr := s.executionConfigForWorkflowID(workflowRunID)
@@ -452,7 +454,7 @@ func (s *Service) reconcileExitedNativeExecution(ctx context.Context, taskID, cl
 		Policy string
 		Grace  string
 	}{"fixed_local_execution_stop", s.Config.ShutdownGrace}
-	op := Operation{Version: ExecutionRecordVersion, ID: opID, RunID: workflowRunID, AttemptID: attempt.AttemptID, Backend: BackendLocal, Protocol: ref.Protocol, Target: ref.Target, Action: "stop", PayloadDigest: digestValue(payload), Status: OperationConfirmed, StartedAt: now(), UpdatedAt: now(), Diagnostic: observation.Diagnostic, Ref: &ref}
+	op := executionapi.Operation{Version: executionapi.ExecutionRecordVersion, ID: opID, RunID: workflowRunID, AttemptID: attempt.AttemptID, Backend: executionapi.BackendLocal, Protocol: ref.Protocol, Target: ref.Target, Action: "stop", PayloadDigest: digestValue(payload), Status: executionapi.OperationConfirmed, StartedAt: now(), UpdatedAt: now(), Diagnostic: observation.Diagnostic, Ref: &ref}
 	records := executionRecords{root: s.Config.RunDir}
 	expectedOperation := ""
 	if old, loadErr := records.loadOperation(workflowRunID, attempt.AttemptID, opID); loadErr == nil {
@@ -460,8 +462,8 @@ func (s *Service) reconcileExitedNativeExecution(ctx context.Context, taskID, cl
 		if old.PayloadDigest != op.PayloadDigest || old.Ref == nil || digestValue(*old.Ref) != digestValue(ref) {
 			return nativeErr("authority_mismatch", "saved local stop operation differs from the fixed execution identity")
 		}
-		if old.Status != OperationConfirmed {
-			old.Status, old.UpdatedAt, old.Diagnostic = OperationConfirmed, now(), observation.Diagnostic
+		if old.Status != executionapi.OperationConfirmed {
+			old.Status, old.UpdatedAt, old.Diagnostic = executionapi.OperationConfirmed, now(), observation.Diagnostic
 			op = old
 		}
 	} else if !os.IsNotExist(loadErr) {
@@ -685,7 +687,7 @@ func (s *Service) nativeCompleteMergedTask(ctx context.Context, run *Run) error 
 	if err := s.commitWorker(run); err != nil {
 		return err
 	}
-	if run.Protocol == string(ProtocolOrcaTerminalV2) {
+	if run.Protocol == string(executionapi.ProtocolOrcaTerminalV2) {
 		if err := s.finishNativeOrcaCleanup(ctx, run); err != nil {
 			s.executionRecord(run).LastEvent = ptr("Orca delivery completed; owned terminal cleanup needs reconciliation: " + err.Error())
 			s.refreshRun(run)

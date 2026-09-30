@@ -41,8 +41,9 @@ func LaunchServer[T any](config LaunchConfig, start func(*exec.Cmd) (T, error), 
 	if err != nil {
 		return identity, nil, "", err
 	}
+	launch.WorkingDirectory = config.Workspace
 	cmd := exec.Command(launch.Executable, launch.Args...)
-	cmd.Dir = config.Workspace
+	cmd.Dir = launch.WorkingDirectory
 	cmd.Env = environment(cmd.Environ())
 	cmd.Stdout, cmd.Stderr = output, output
 	identity, err = start(cmd)

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
 
@@ -16,10 +17,10 @@ type workerOrcaWorktree = orcaworker.Worktree
 
 func workerOrcaWorkspaceError(err error) error {
 	if errors.Is(err, orcaworker.ErrWorktreeIdentity) {
-		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: err.Error()}
+		return &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: err.Error()}
 	}
 	if errors.Is(err, orcaworker.ErrWorktreeOutcomeUnknown) {
-		return &BackendError{Code: BackendOutcomeUnknown, Diagnostic: orcaworker.ErrWorktreeOutcomeUnknown.Error(), Cause: err}
+		return &executionapi.BackendError{Code: executionapi.BackendOutcomeUnknown, Diagnostic: orcaworker.ErrWorktreeOutcomeUnknown.Error(), Cause: err}
 	}
 	return err
 }
@@ -27,7 +28,7 @@ func workerOrcaWorkspaceError(err error) error {
 func workerOrcaBackendError(err error) error {
 	var platform *orcaworker.PlatformError
 	if errors.As(err, &platform) {
-		return &BackendError{Code: BackendErrorCode(platform.Code), Diagnostic: platform.Diagnostic, Cause: platform.Cause}
+		return &executionapi.BackendError{Code: executionapi.BackendErrorCode(platform.Code), Diagnostic: platform.Diagnostic, Cause: platform.Cause}
 	}
 	return err
 }
@@ -96,7 +97,7 @@ func applyWorkerOrcaWorkspace(c Config, run *Run, execution *ExecutionRecord, wo
 		return errors.New("remote worker worktree identity is incomplete")
 	}
 	path := filepath.FromSlash(worktree.Path)
-	execution.WorkspaceIntent = &WorkspaceIntent{Path: path, Branch: branch, BaseCommit: base}
+	execution.WorkspaceIntent = &executionapi.WorkspaceIntent{Path: path, Branch: branch, BaseCommit: base}
 	execution.Target.WorktreeID, execution.Target.Branch = worktree.ID, branch
 	execution.Workspace = WorkspaceEvidence{Repository: c.identity, Worktree: path, Branch: branch, Base: base, Head: base, VerifiedAt: time.Now().UTC()}
 	refreshExecutionView(run, execution)

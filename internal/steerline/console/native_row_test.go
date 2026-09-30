@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/steerline"
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 func TestNativeTaskAndItsRunShareOneListRow(t *testing.T) {
@@ -14,7 +15,7 @@ func TestNativeTaskAndItsRunShareOneListRow(t *testing.T) {
 	ref.Config.TaskAuthority = "native"
 	snapshot := readySnapshot(ref, now)
 	snapshot.Tasks.Tasks = []steerline.TaskCandidate{{TaskID: "102", Title: "Native branch A"}}
-	run := &steerline.Run{RunID: strings.Repeat("a", 32), TaskID: "102", DomainTaskID: "102", Title: "Native branch A", TaskStatus: "in_progress", ExecutionStatus: "running", FinishTaskStatus: "pending", Process: &steerline.ProcessIdentity{Kind: "orca", Terminal: "term-native-102"}}
+	run := &steerline.Run{RunID: strings.Repeat("a", 32), TaskID: "102", DomainTaskID: "102", Title: "Native branch A", TaskStatus: "in_progress", ExecutionStatus: "running", FinishTaskStatus: "pending", Process: &executionapi.ProcessIdentity{Kind: "orca", Terminal: "term-native-102"}}
 	snapshot.Observation.Runtime.Runs = []*steerline.Run{run}
 	snapshot.NativeTasks = &steerline.NativeTaskPage{Tasks: []steerline.NativeTaskDetail{
 		{TaskRecord: steerline.TaskRecord{TaskID: "102", Title: "Native branch A", Status: "in_progress"}, Successors: []string{"104"}},

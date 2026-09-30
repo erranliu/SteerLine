@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"time"
+
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 func recordFingerprint(value any) string { return operationDigest(mustJSON(value)) }
@@ -28,9 +30,9 @@ func controlFingerprint(value any) string {
 			Status, Outcome, Session, Decision, Step                              string
 			PendingCommand, CurrentCommand, PendingTurn, CurrentTurn, StoppedTurn string
 			TurnNumber                                                            uint64
-			Process                                                               *ProcessIdentity
-			Target                                                                ExecutionTarget
-			Intent                                                                *WorkspaceIntent
+			Process                                                               *executionapi.ProcessIdentity
+			Target                                                                executionapi.ExecutionTarget
+			Intent                                                                *executionapi.WorkspaceIntent
 			Worktree, Branch, Base, Endpoint, Generation                          string
 			Asks                                                                  []codexAskCall
 			ManualStop                                                            *ManualStopConfirmation

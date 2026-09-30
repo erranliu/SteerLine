@@ -6,10 +6,12 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 // These helpers seed typed binding/operation rows explicitly in test fixtures.
-func (r executionRecords) saveBinding(ref ExecutionRef) error {
+func (r executionRecords) saveBinding(ref executionapi.ExecutionRef) error {
 	if err := validateExecutionRef(ref); err != nil {
 		return err
 	}
@@ -29,7 +31,7 @@ func (r executionRecords) saveBinding(ref ExecutionRef) error {
 	}
 	return r.writeRecord("execution_bindings", ref.RunID, ref.AttemptID, "binding", b)
 }
-func (r executionRecords) saveOperation(op Operation) error {
+func (r executionRecords) saveOperation(op executionapi.Operation) error {
 	if err := validateExecutionOperation(op); err != nil {
 		return err
 	}

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/steerline/codexapp"
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 func TestAppServerPendingFeedbackRecoveryUsesNewTurnReceipt(t *testing.T) {
@@ -129,7 +130,7 @@ func TestAppServerRejectedEventReleasesObserver(t *testing.T) {
 }
 
 func TestAppServerRecoveryDoesNotRaceInFlightLaunch(t *testing.T) {
-	run := &Run{RunID: newID(), ExecutionID: newID(), DomainTaskID: "8", Protocol: string(ProtocolLocalCodexAppServer), WorkflowVersion: WorkerFlowVersion}
+	run := &Run{RunID: newID(), ExecutionID: newID(), DomainTaskID: "8", Protocol: string(executionapi.ProtocolLocalCodexAppServer), WorkflowVersion: WorkerFlowVersion}
 	service := &Service{appServerLaunching: map[string]string{run.RunID: newID()}, State: Runtime{}, domain: DomainSnapshot{Tasks: []TaskRecord{{TaskID: "8", Status: "in_progress"}},
 		WorkflowRuns: []WorkflowRunRecord{{WorkflowRunID: run.RunID, WorkflowVersion: WorkerFlowVersion, Phase: "queued"}},
 		Executions:   []ExecutionRecord{{ExecutionID: run.ExecutionID, WorkflowRunID: run.RunID, PendingCommandID: newID()}}}, runs: []*Run{run},
@@ -412,7 +413,7 @@ func TestAppServerAnswerRecoveryPersistsBeforeNextQuestion(t *testing.T) {
 	execution.Status, workflow.Phase = "active", "waiting_decision"
 	run.FinishTaskStatus, run.ExecutionStatus = "waiting_decision", "running"
 	run.SessionID = ptr(execution.SessionID)
-	ask := codexAskCall{RequestID: json.RawMessage(`0`), ThreadID: execution.SessionID, TurnID: execution.CurrentTurnID, CallID: "first", Generation: "generation", Questions: []codexAskQuestion{{ID: "choice", Header: "Choice", Question: "Continue?", AllowFreeText: true}}}
+	ask := codexAskCall{RequestID: json.RawMessage(`0`), ThreadID: execution.SessionID, TurnID: execution.CurrentTurnID, CallID: "first", Generation: "generation", Questions: []executionapi.Question{{ID: "choice", Header: "Choice", Question: "Continue?", AllowFreeText: true}}}
 	var err error
 	run.Decision, err = appServerAskDecision(run, ask)
 	if err != nil {
@@ -480,7 +481,7 @@ func TestAppServerOutcomeUsesNativeTurnAndEarlierPRItem(t *testing.T) {
 }
 
 func TestNativeDecisionRequiresAllQuestionIDs(t *testing.T) {
-	ask := codexAskCall{RequestID: json.RawMessage(`0`), ThreadID: "00000000-0000-0000-0000-000000000001", TurnID: "00000000-0000-0000-0000-000000000002", CallID: "call", Generation: "generation", Questions: []codexAskQuestion{{ID: "one", Header: "One", Question: "First?", Options: []DecisionOption{{ID: "a", Label: "A"}}}, {ID: "two", Header: "Two", Question: "Second?", AllowFreeText: true}}}
+	ask := codexAskCall{RequestID: json.RawMessage(`0`), ThreadID: "00000000-0000-0000-0000-000000000001", TurnID: "00000000-0000-0000-0000-000000000002", CallID: "call", Generation: "generation", Questions: []executionapi.Question{{ID: "one", Header: "One", Question: "First?", Options: []executionapi.DecisionOption{{ID: "a", Label: "A"}}}, {ID: "two", Header: "Two", Question: "Second?", AllowFreeText: true}}}
 	request := DecisionRequest{Question: "Two questions", AllowFreeText: true, NativeAsk: &ask}
 	answer := DecisionAnswer{AnsweredBy: "tester", Note: `{"one":["A"],"two":["scope"]}`}
 	if err := normalizeNativeDecisionAnswer(&request, &answer); err != nil {

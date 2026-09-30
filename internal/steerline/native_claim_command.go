@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	taskdomain "github.com/erranliu/SteerLine/internal/steerline/task"
 )
 
@@ -153,12 +154,12 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 			return TaskClaimReceipt{}, nativeErr("base_missing_delivery", "acquired branch base does not contain a verified predecessor merge commit")
 		}
 	}
-	backend, protocol, err := ExecutionBackendKind(config.hostName())
+	backend, protocol, err := executionapi.ExecutionBackendKind(config.hostName())
 	if err != nil {
 		return TaskClaimReceipt{}, err
 	}
-	if config.WorkflowProtocol == WorkerFlowVersion && backend == string(BackendLocal) {
-		protocol = string(ProtocolLocalCodexAppServer)
+	if config.WorkflowProtocol == WorkerFlowVersion && backend == string(executionapi.BackendLocal) {
+		protocol = string(executionapi.ProtocolLocalCodexAppServer)
 	}
 	target := targetFor(config)
 	target.Branch, target.BaseRevision = config.Branch, base

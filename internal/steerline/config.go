@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/steerline/codexapp"
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 type Command struct {
@@ -523,10 +524,10 @@ func (c *Config) preflightNative(ctx context.Context) error {
 		return err
 	}
 	if c.WorkflowProtocol == WorkerFlowVersion && c.hostName() != "local" && c.hostName() != "orca" {
-		return &BackendError{Code: BackendUnsupported, Diagnostic: "this worker-flow host is not supported"}
+		return &executionapi.BackendError{Code: executionapi.BackendUnsupported, Diagnostic: "this worker-flow host is not supported"}
 	}
 	if c.WorkflowProtocol == WorkerFlowVersion && c.hostName() == "orca" && (c.Profile != "" || c.Sandbox != "workspace-write") {
-		return &BackendError{Code: BackendUnsupported, Diagnostic: "Orca requires workspace-write and no Codex profile"}
+		return &executionapi.BackendError{Code: executionapi.BackendUnsupported, Diagnostic: "Orca requires workspace-write and no Codex profile"}
 	}
 	if c.hostName() == "local" && c.agentName() != "codex" {
 		return errors.New("local_process currently supports only agent=codex")

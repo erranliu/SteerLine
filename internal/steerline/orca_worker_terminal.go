@@ -9,10 +9,11 @@ import (
 	"strings"
 	"time"
 
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
 
-func stageWorkerOrcaPrompt(ctx context.Context, c Config, identity ProcessIdentity, executionID, turnID, prompt string) error {
+func stageWorkerOrcaPrompt(ctx context.Context, c Config, identity executionapi.ProcessIdentity, executionID, turnID, prompt string) error {
 	return orcaworker.StagePrompt(ctx, orcaWorkerMetaCaller(c), workerOrcaTerminalIdentity(identity), positiveDuration(c.CommandTimeout, 30*time.Second), executionID, turnID, prompt, workerOrcaBackendError)
 }
 
@@ -21,14 +22,14 @@ func showWorkerOrcaTerminal(ctx context.Context, c Config, handle string) (orcaT
 	return terminal, workerOrcaBackendError(err)
 }
 
-func verifyWorkerOrcaTerminal(term orcaTerminal, run *Run, expected *ProcessIdentity) error {
+func verifyWorkerOrcaTerminal(term orcaTerminal, run *Run, expected *executionapi.ProcessIdentity) error {
 	if run == nil || run.WorktreePath == nil || run.WorktreeBranch == nil || term.Handle == "" || term.RuntimeID == "" || term.IncarnationID == "" ||
 		canonical(filepath.FromSlash(term.WorktreePath)) != canonical(*run.WorktreePath) ||
 		strings.TrimPrefix(term.Branch, "refs/heads/") != *run.WorktreeBranch {
-		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "Orca terminal changed the fixed worker workspace or branch"}
+		return &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "Orca terminal changed the fixed worker workspace or branch"}
 	}
 	if expected != nil && (expected.Kind != "orca" || expected.Terminal != term.Handle || expected.RuntimeID != term.RuntimeID || expected.Incarnation != term.IncarnationID) {
-		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "Orca terminal runtime, handle or incarnation changed"}
+		return &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "Orca terminal runtime, handle or incarnation changed"}
 	}
 	return nil
 }
@@ -94,33 +95,33 @@ func (s *Service) prepareWorkerOrcaTerminal(ctx context.Context, run *Run) error
 	return nil
 }
 
-func workerOrcaIdentity(term orcaTerminal, c Config) ProcessIdentity {
-	return ProcessIdentity{Kind: "orca", Terminal: term.Handle, RuntimeID: term.RuntimeID, Incarnation: term.IncarnationID, Executable: c.Orca.Executable}
+func workerOrcaIdentity(term orcaTerminal, c Config) executionapi.ProcessIdentity {
+	return executionapi.ProcessIdentity{Kind: "orca", Terminal: term.Handle, RuntimeID: term.RuntimeID, Incarnation: term.IncarnationID, Executable: c.Orca.Executable}
 }
 
 type workerOrcaOutput = orcaworker.Output
 
-func workerOrcaTerminalIdentity(identity ProcessIdentity) orcaworker.TerminalIdentity {
+func workerOrcaTerminalIdentity(identity executionapi.ProcessIdentity) orcaworker.TerminalIdentity {
 	return orcaworker.TerminalIdentity{Kind: identity.Kind, Handle: identity.Terminal, RuntimeID: identity.RuntimeID, Incarnation: identity.Incarnation}
 }
 
-func readWorkerOrcaOutput(ctx context.Context, c Config, identity ProcessIdentity, cursor int64) (workerOrcaOutput, error) {
+func readWorkerOrcaOutput(ctx context.Context, c Config, identity executionapi.ProcessIdentity, cursor int64) (workerOrcaOutput, error) {
 	output, err := orcaworker.ReadOutput(ctx, orcaWorkerMetaCaller(c), workerOrcaTerminalIdentity(identity), cursor)
 	return output, workerOrcaBackendError(err)
 }
 
-func sendWorkerOrcaCommand(ctx context.Context, c Config, identity ProcessIdentity, command string) (string, error) {
+func sendWorkerOrcaCommand(ctx context.Context, c Config, identity executionapi.ProcessIdentity, command string) (string, error) {
 	requestID, err := orcaworker.SendCommand(ctx, orcaWorkerMetaCaller(c), workerOrcaTerminalIdentity(identity), command)
 	return requestID, workerOrcaBackendError(err)
 }
 
 type workerOrcaProcess struct {
 	config   Config
-	identity ProcessIdentity
+	identity executionapi.ProcessIdentity
 }
 
-func (p *workerOrcaProcess) Identity() ProcessIdentity { return p.identity }
-func (p *workerOrcaProcess) Close()                    {} // Only the center observer stops.
+func (p *workerOrcaProcess) Identity() executionapi.ProcessIdentity { return p.identity }
+func (p *workerOrcaProcess) Close()                                 {} // Only the center observer stops.
 func (p *workerOrcaProcess) Kill() {
 	if p.config.hostName() != "orca" {
 		return // Remote cancellation is not a certified capability.
@@ -213,7 +214,7 @@ func resumeWorkerOrcaTurn(c Config, run *Run, turnID string) (*Worker, error) {
 	return observeWorkerOrcaTurn(c, run, turnID, *run.Process, events, sourceIdentity), nil
 }
 
-func currentWorkerOrcaCursor(ctx context.Context, c Config, identity ProcessIdentity) (int64, error) {
+func currentWorkerOrcaCursor(ctx context.Context, c Config, identity executionapi.ProcessIdentity) (int64, error) {
 	cursor, err := orcaworker.CurrentCursor(ctx, orcaWorkerMetaCaller(c), identity.Terminal, identity.RuntimeID)
 	return cursor, workerOrcaBackendError(err)
 }
@@ -244,7 +245,7 @@ func prepareOrcaTurnJournal(c Config, run *Run, turnID string, cursor int64) (st
 	}
 	_ = f.Close()
 	segment := "orca-jsonl-v1:" + identity
-	marker := ConversationSourceMarker{Version: 1, ProjectID: c.identity, WorkflowID: run.RunID, ExecutionID: run.ExecutionID, AttemptID: run.AttemptID, Backend: BackendOrca, Protocol: ExecutionProtocol(run.Protocol), Agent: "codex", TargetID: run.Target.ID, Source: "codex-jsonl", SourceSegment: segment, SourceIdentity: identity, RecordName: "events.jsonl", CreatedAt: now(), ReaderCommand: codexReaderCommand(c)}
+	marker := ConversationSourceMarker{Version: 1, ProjectID: c.identity, WorkflowID: run.RunID, ExecutionID: run.ExecutionID, AttemptID: run.AttemptID, Backend: executionapi.BackendOrca, Protocol: executionapi.ExecutionProtocol(run.Protocol), Agent: "codex", TargetID: run.Target.ID, Source: "codex-jsonl", SourceSegment: segment, SourceIdentity: identity, RecordName: "events.jsonl", CreatedAt: now(), ReaderCommand: codexReaderCommand(c)}
 	if err := marker.validate(); err != nil {
 		return "", "", err
 	}
@@ -257,7 +258,7 @@ func prepareOrcaTurnJournal(c Config, run *Run, turnID string, cursor int64) (st
 	return events, identity, nil
 }
 
-func observeWorkerOrcaTurn(c Config, run *Run, turnID string, identity ProcessIdentity, events, sourceIdentity string) *Worker {
+func observeWorkerOrcaTurn(c Config, run *Run, turnID string, identity executionapi.ProcessIdentity, events, sourceIdentity string) *Worker {
 	ctx, cancel := context.WithCancel(context.Background())
 	worker := &Worker{proc: &workerOrcaProcess{config: c, identity: identity}, Events: make(chan WorkerEvent, 64), Done: make(chan error, 1), cancelObservation: cancel, observationDone: make(chan struct{})}
 	waited := make(chan error, 1)
@@ -266,7 +267,7 @@ func observeWorkerOrcaTurn(c Config, run *Run, turnID string, identity ProcessId
 	return worker
 }
 
-func (s *Service) closeNativeOrcaTerminal(ctx context.Context, run *Run, execution *ExecutionRecord, identity ProcessIdentity, role string) error {
+func (s *Service) closeNativeOrcaTerminal(ctx context.Context, run *Run, execution *ExecutionRecord, identity executionapi.ProcessIdentity, role string) error {
 	if execution == nil {
 		return errors.New("Orca terminal has no fixed execution")
 	}
@@ -276,7 +277,7 @@ func (s *Service) closeNativeOrcaTerminal(ctx context.Context, run *Run, executi
 	}
 	fixedConfig := copyWorkerFlowConfig(config)
 	if identity.Terminal == "" || identity.Incarnation == "" || identity.RuntimeID == "" || identity.RuntimeID != execution.Process.RuntimeID {
-		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "Orca terminal cleanup lacks its original identity"}
+		return &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "Orca terminal cleanup lacks its original identity"}
 	}
 	key := "orca-native-close:" + execution.ExecutionID + ":" + role
 	if op := s.operationByKey(key); op != nil && op.Status == "confirmed" {
@@ -302,7 +303,7 @@ func (s *Service) closeNativeOrcaTerminal(ctx context.Context, run *Run, executi
 		return err
 	}
 	if term.RuntimeID != identity.RuntimeID || term.IncarnationID != identity.Incarnation || role == "agent" && term.WorktreeID != identity.WorktreeID || role == "coordinator" && canonical(filepath.FromSlash(term.WorktreePath)) != canonical(fixedConfig.Repository) {
-		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "Orca cleanup terminal was replaced or moved"}
+		return &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "Orca cleanup terminal was replaced or moved"}
 	}
 	op := s.operationByKey(key)
 	opID := ""
@@ -350,7 +351,7 @@ func (s *Service) finishNativeOrcaCleanup(ctx context.Context, run *Run) error {
 		return err
 	}
 	if delivery.RuntimeID != state.Coordinator.RuntimeID || delivery.RunID != execution.Target.OrchestrationRun || delivery.DeliveryID != "" || len(delivery.Messages) != 0 {
-		return &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "Orca coordinator inbox is not drained after delivery"}
+		return &executionapi.BackendError{Code: executionapi.BackendOutcomeUnknown, Diagnostic: "Orca coordinator inbox is not drained after delivery"}
 	}
 	return s.closeNativeOrcaTerminal(ctx, run, execution, state.Coordinator, "coordinator")
 }

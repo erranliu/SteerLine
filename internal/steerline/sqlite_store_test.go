@@ -14,6 +14,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 func TestCheckpointDoesNotSynthesizeControlOperations(t *testing.T) {
@@ -147,7 +149,7 @@ func TestSQLiteRejectsParallelExecutionsInOneWorkflow(t *testing.T) {
 			return err
 		}
 		for _, id := range []string{"exec-a"} {
-			if err := tx.PutExecution(ExecutionRecord{ProjectIdentity: project, ExecutionID: id, WorkflowRunID: "wf-1", Agent: id, Status: "active", CurrentStep: "implement", Target: ExecutionTarget{WorktreeID: "worktree-" + id, Branch: "branch-" + id, Dispatch: "dispatch-" + id}}); err != nil {
+			if err := tx.PutExecution(ExecutionRecord{ProjectIdentity: project, ExecutionID: id, WorkflowRunID: "wf-1", Agent: id, Status: "active", CurrentStep: "implement", Target: executionapi.ExecutionTarget{WorktreeID: "worktree-" + id, Branch: "branch-" + id, Dispatch: "dispatch-" + id}}); err != nil {
 				return err
 			}
 			if err := tx.PutStepAttempt(StepAttemptRecord{ProjectIdentity: project, AttemptID: "attempt-" + id, ExecutionID: id, StepID: "implement", AttemptNumber: 1, Status: "running"}); err != nil {
@@ -201,7 +203,7 @@ func TestCommandIdempotencyAndDecisionVersionArbitration(t *testing.T) {
 	s := openDomainTestStore(t)
 	project := "repo:commands"
 	request := DecisionRequest{Question: "choose", AllowFreeText: true}
-	run := &Run{TaskID: "task", RunID: "wf", DomainTaskID: "task", ExecutionID: "exec", AttemptID: "attempt", ControlRevision: 5, Host: "orca", Backend: string(BackendOrca), Protocol: string(ProtocolOrcaTerminalV2), WorkflowVersion: "legacy-v1", ExecutionStatus: "succeeded", FinishTaskStatus: "waiting_decision", Decision: &DecisionState{ID: "decision", AttemptID: "attempt", Version: 1, Status: "pending", Request: request}}
+	run := &Run{TaskID: "task", RunID: "wf", DomainTaskID: "task", ExecutionID: "exec", AttemptID: "attempt", ControlRevision: 5, Host: "orca", Backend: string(executionapi.BackendOrca), Protocol: string(executionapi.ProtocolOrcaTerminalV2), WorkflowVersion: "legacy-v1", ExecutionStatus: "succeeded", FinishTaskStatus: "waiting_decision", Decision: &DecisionState{ID: "decision", AttemptID: "attempt", Version: 1, Status: "pending", Request: request}}
 	projection := ServiceCheckpoint{SchemaVersion: WorkerFlowRuntimeSchema, Revision: 1, Repository: Repository{Identity: project}, Service: ServiceState{InstanceID: "service", Status: "running", Ready: true}}
 	err := s.Transact(ctx, func(tx DomainTx) error {
 		if err := tx.PutTask(TaskRecord{ProjectIdentity: project, TaskID: "task", Status: "in_progress", Version: 1}); err != nil {
@@ -590,7 +592,7 @@ func seedNativeDecision(t *testing.T, db *SQLiteStore, project, runID, decisionI
 	t.Helper()
 	ctx := context.Background()
 	nowTime := now()
-	request := DecisionRequest{Question: "Choose", Options: []DecisionOption{{ID: "yes", Label: "Yes"}, {ID: "no", Label: "No"}}}
+	request := DecisionRequest{Question: "Choose", Options: []executionapi.DecisionOption{{ID: "yes", Label: "Yes"}, {ID: "no", Label: "No"}}}
 	err := db.Transact(ctx, func(tx DomainTx) error {
 		raw := tx.(*sqliteTx).tx
 		if err := tx.PutProjectTaskAuthority(ProjectTaskAuthority{ProjectIdentity: project, Authority: "native", AuthorityVersion: 1, Repository: "repo", Remote: "origin", Branch: "main", DispatchMode: "manual", DispatchPaused: true, CreatedAt: nowTime, UpdatedAt: nowTime}); err != nil {

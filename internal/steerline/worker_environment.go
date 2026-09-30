@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
 
@@ -61,9 +62,9 @@ func (s *Service) blockWorkerEnvironment(run *Run, fact orcaworker.HostFact) err
 			env.DeferredDecisionID = run.Decision.ID
 		}
 	}
-	options := []DecisionOption{{ID: "recheck_environment", Label: "重新检查环境", Receiver: "center", Action: "recheck_environment"}}
+	options := []executionapi.DecisionOption{{ID: "recheck_environment", Label: "重新检查环境", Receiver: "center", Action: "recheck_environment"}}
 	if execution.Process != nil || env.OriginalTerminal != nil {
-		options = append([]DecisionOption{{ID: "open_terminal", Label: "打开原 terminal", Receiver: "center", Action: "open_terminal"}}, options...)
+		options = append([]executionapi.DecisionOption{{ID: "open_terminal", Label: "打开原 terminal", Receiver: "center", Action: "open_terminal"}}, options...)
 	}
 	request := DecisionRequest{Question: "Worker 环境需要核实", Context: fmt.Sprintf("原因：%s\n可信程度：%s\n来源：%s\n%s\n请在原生界面处理必要授权，然后重新检查。", fact.Reason, fact.Confidence, fact.Source, fact.Detail), Options: options, AllowFreeText: true, HostTarget: &HostActionTarget{ExecutionID: execution.ExecutionID, TurnID: turnID, BlockerID: env.Blocker.ID}}
 	decision, err := WriteDecisionRequest(run, request)

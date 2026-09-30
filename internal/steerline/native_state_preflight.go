@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 func validateNativeStateLocation(c Config) error {
@@ -338,7 +340,7 @@ func validateNativeExecutionArtifacts(root string) error {
 				}
 				continue
 			}
-			var report CapabilityReport
+			var report executionapi.CapabilityReport
 			if decode(data, &report) != nil || report.Version != 1 || entry.Name() != capabilityReportKey(report)+".json" {
 				return nativeErr("authority_mismatch", "native capability report identity or digest is invalid")
 			}

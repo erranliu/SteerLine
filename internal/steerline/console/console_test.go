@@ -15,6 +15,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/erranliu/SteerLine/internal/steerline"
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 type testClock struct{ now time.Time }
@@ -43,7 +44,7 @@ func (q *testQuerySource) ReadConversation(context.Context, ProjectRef, steerlin
 func (q *testQuerySource) ReadBody(context.Context, ProjectRef, steerline.ConversationBodyRef, int64, int) (steerline.ConversationBodyPage, error) {
 	return q.body, nil
 }
-func (q *testQuerySource) ReadCapabilities(context.Context, ProjectRef, steerline.BackendKind, steerline.ExecutionProtocol, string, string, string, string, string) ([]steerline.ConversationCapabilityReport, error) {
+func (q *testQuerySource) ReadCapabilities(context.Context, ProjectRef, executionapi.BackendKind, executionapi.ExecutionProtocol, string, string, string, string, string) ([]steerline.ConversationCapabilityReport, error) {
 	return nil, nil
 }
 
@@ -143,9 +144,9 @@ func decisionSnapshot(ref ProjectRef, now time.Time) (ProjectSnapshot, *steerlin
 	snapshot := readySnapshot(ref, now)
 	runtime := snapshot.Connection.Snapshot.Runtime
 	runtime.Service.Capabilities = append(runtime.Service.Capabilities, "answer_decision")
-	options := make([]steerline.DecisionOption, 12)
+	options := make([]executionapi.DecisionOption, 12)
 	for i := range options {
-		options[i] = steerline.DecisionOption{ID: fmt.Sprintf("o%d", i), Label: fmt.Sprintf("选项 %d", i+1), Detail: fmt.Sprintf("详细说明 %02d：完整内容", i+1)}
+		options[i] = executionapi.DecisionOption{ID: fmt.Sprintf("o%d", i), Label: fmt.Sprintf("选项 %d", i+1), Detail: fmt.Sprintf("详细说明 %02d：完整内容", i+1)}
 	}
 	run := &steerline.Run{TaskID: "task-decision", RunID: "0123456789abcdef0123456789abcdef", AttemptID: "fedcba9876543210fedcba9876543210", ControlRevision: 9, WorkflowVersion: steerline.WorkerFlowVersion, ExecutionID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", Host: "local", Backend: "local", Protocol: "local_process", FinishTaskStatus: "waiting_decision", ExecutionStatus: "succeeded", Decision: &steerline.DecisionState{ID: "decision-0123456789abcdef0123456789ab", AttemptID: "fedcba9876543210fedcba9876543210", Version: 3, Status: "pending", Request: steerline.DecisionRequest{Question: strings.Repeat("问题", 24), Context: "背景第一行\n背景第二行", Options: options, Recommended: "o10", AllowFreeText: true}}}
 	runtime.Runs = []*steerline.Run{run}
@@ -497,7 +498,7 @@ func TestRefreshTicksDoNotStackSlowProjectReads(t *testing.T) {
 func TestProjectSnapshotReuseRequiresSameLiveIdentityAndDatabaseVersion(t *testing.T) {
 	now := time.Now()
 	ref := testProject("alpha")
-	process := &steerline.ProcessIdentity{PID: 42}
+	process := &executionapi.ProcessIdentity{PID: 42}
 	runtime := &steerline.Runtime{Repository: steerline.Repository{Identity: ref.Identity}, Service: steerline.ServiceState{ProcessIdentity: process}, HeartbeatAt: now}
 	previous := ProjectSnapshot{
 		SelectedTaskID: "14", FullReadAt: now,
@@ -506,7 +507,7 @@ func TestProjectSnapshotReuseRequiresSameLiveIdentityAndDatabaseVersion(t *testi
 		NativeTasks: &steerline.NativeTaskPage{ProjectID: ref.Identity, DatabaseID: "database", DatabaseRevision: 7},
 		Tasks:       &steerline.TaskSnapshot{}, Domain: &steerline.DomainSnapshot{},
 	}
-	probe := func(*steerline.ProcessIdentity) steerline.ProcessProbe {
+	probe := func(*executionapi.ProcessIdentity) steerline.ProcessProbe {
 		return steerline.ProcessProbe{State: steerline.ProcessMatches}
 	}
 	version := func(context.Context, string) (string, uint64, error) { return "database", 7, nil }
@@ -517,12 +518,12 @@ func TestProjectSnapshotReuseRequiresSameLiveIdentityAndDatabaseVersion(t *testi
 		name     string
 		selected string
 		snapshot ProjectSnapshot
-		probe    func(*steerline.ProcessIdentity) steerline.ProcessProbe
+		probe    func(*executionapi.ProcessIdentity) steerline.ProcessProbe
 		version  func(context.Context, string) (string, uint64, error)
 	}{
 		{name: "selection changed", selected: "15", snapshot: previous, probe: probe, version: version},
 		{name: "database revision changed", selected: "14", snapshot: previous, probe: probe, version: func(context.Context, string) (string, uint64, error) { return "database", 8, nil }},
-		{name: "process exited", selected: "14", snapshot: previous, probe: func(*steerline.ProcessIdentity) steerline.ProcessProbe {
+		{name: "process exited", selected: "14", snapshot: previous, probe: func(*executionapi.ProcessIdentity) steerline.ProcessProbe {
 			return steerline.ProcessProbe{State: steerline.ProcessAbsent}
 		}, version: version},
 		{name: "database probe failed", selected: "14", snapshot: previous, probe: probe, version: func(context.Context, string) (string, uint64, error) { return "", 0, errors.New("unavailable") }},
@@ -733,7 +734,7 @@ func TestConsoleNativeLocalAndOrcaFixtureUseSameFoldScript(t *testing.T) {
 			for turnIndex, turn := range sample.Thread.Turns {
 				startTime := time.Unix(turn.StartedAt, 0).UTC()
 				endTime := time.Unix(turn.CompletedAt, 0).UTC()
-				base := steerline.ConversationEvent{Version: 1, ProjectID: "native-project", WorkflowID: "native-workflow", ExecutionID: "native-execution", AttemptID: "native-attempt", Backend: steerline.BackendKind(sample.Backend), Protocol: steerline.ExecutionProtocol(sample.Protocol), Agent: "codex", TargetID: "native-target", Source: sample.Source, SourceSegment: "native-segment", SourceIdentity: "native-source", SessionID: sample.Thread.ID, SessionQuality: steerline.IdentityNative, TurnID: turn.ID, TurnQuality: steerline.IdentityNative, Phase: steerline.MessagePhaseUnknown, OccurredAt: &startTime, ReceivedAt: startTime}
+				base := steerline.ConversationEvent{Version: 1, ProjectID: "native-project", WorkflowID: "native-workflow", ExecutionID: "native-execution", AttemptID: "native-attempt", Backend: executionapi.BackendKind(sample.Backend), Protocol: executionapi.ExecutionProtocol(sample.Protocol), Agent: "codex", TargetID: "native-target", Source: sample.Source, SourceSegment: "native-segment", SourceIdentity: "native-source", SessionID: sample.Thread.ID, SessionQuality: steerline.IdentityNative, TurnID: turn.ID, TurnQuality: steerline.IdentityNative, Phase: steerline.MessagePhaseUnknown, OccurredAt: &startTime, ReceivedAt: startTime}
 				started := base
 				started.EventID = int64(len(events) + 1)
 				started.Type = steerline.ConversationTurnStarted
@@ -792,7 +793,7 @@ func TestConsoleNativeLocalAndOrcaFixtureUseSameFoldScript(t *testing.T) {
 			if finals != 2 || commentary < 1 {
 				t.Fatalf("native message phases were lost: finals=%d commentary=%d", finals, commentary)
 			}
-			if sample.Backend == string(steerline.BackendOrca) && tools < 2 {
+			if sample.Backend == string(executionapi.BackendOrca) && tools < 2 {
 				t.Fatalf("Orca tool activity lost: %d", tools)
 			}
 			state := projectState{view: ProjectView{Groups: choices, Follow: true}, conversationEvents: events}

@@ -4,23 +4,39 @@ import (
 	"errors"
 
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/workerflow"
 )
 
 // Worker protocol adapters verify native evidence before the service changes
 // business records. Empty fields mean that the source did not provide a fact.
 type workerFlowEventFact struct {
-	Source        string
-	SourceEventID string
-	SourceCursor  string
-	SessionID     string
-	StartedTurnID string
-	Question      *codexAskCall
-	ToolReply     *codexworker.ToolReplyFact
+	executionapi.EventFact
+	Question *codexAskCall
 }
 
-func decodeWorkerFlowEvent(mode workerflow.Mode, ev WorkerEvent, execution *ExecutionRecord, inspectReply bool) (workerFlowEventFact, error) {
-	fact := workerFlowEventFact{Source: ev.Source, SourceEventID: ev.SourceEventID, SourceCursor: ev.SourceCursor}
+// workerSessionContext converts persisted records to fixed, value-only input.
+// The adapter cannot write WorkflowRun, Execution or Decision records through it.
+func workerSessionContext(run *Run, record *ExecutionRecord) *executionapi.SessionContext {
+	if record == nil {
+		return nil
+	}
+	fixed := &executionapi.SessionContext{
+		ProjectID: record.ProjectIdentity, WorkflowRunID: record.WorkflowRunID,
+		ExecutionID: record.ExecutionID, AttemptID: record.CurrentAttemptID,
+		Agent: executionapi.AgentSpec{Name: record.Agent}, Target: record.Target,
+		SessionID: record.SessionID, Generation: record.AppServerGeneration,
+		CurrentTurnID: record.CurrentTurnID, PendingTurnID: record.PendingTurnID,
+		CurrentCommandID: record.CurrentCommandID, PendingCommandID: record.PendingCommandID,
+	}
+	if run != nil {
+		fixed.TaskID = run.TaskID
+	}
+	return fixed
+}
+
+func decodeWorkerFlowEvent(mode workerflow.Mode, ev WorkerEvent, execution *executionapi.SessionContext, inspectReply bool) (workerFlowEventFact, error) {
+	fact := workerFlowEventFact{EventFact: executionapi.EventFact{Source: ev.Source, SourceEventID: ev.SourceEventID, SourceCursor: ev.SourceCursor, SourceIdentity: ev.SourceIdentity, SourceSegment: ev.SourceSegment, SourceOffset: ev.SourceOffset, SourceLength: ev.SourceLength}}
 	if execution == nil {
 		return fact, errors.New("worker event has no fixed execution")
 	}
@@ -28,11 +44,11 @@ func decodeWorkerFlowEvent(mode workerflow.Mode, ev WorkerEvent, execution *Exec
 		return fact, errors.New("native Orca messages require the fixed Dispatch adapter")
 	}
 	if mode == workerflow.SupervisedOrca && ev.AppServer != nil {
-		return fact, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "supervised Orca event used the local app-server protocol"}
+		return fact, &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "supervised Orca event used the local app-server protocol"}
 	}
 	if ev.Session != "" {
 		if !codexThreadID.MatchString(ev.Session) || execution.SessionID != "" && execution.SessionID != ev.Session {
-			return fact, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "worker event changed the original Codex session"}
+			return fact, &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "worker event changed the original Codex session"}
 		}
 		fact.SessionID = ev.Session
 	}
@@ -61,23 +77,16 @@ func decodeWorkerFlowEvent(mode workerflow.Mode, ev WorkerEvent, execution *Exec
 		if err != nil {
 			return fact, err
 		}
-		call.Generation = execution.AppServerGeneration
+		call.Generation = execution.Generation
 		fact.Question = &call
 	}
 	return fact, nil
 }
 
+// Only observed turn values cross the public boundary. Publication intent and
+// legacy supervised question heuristics remain center business interpretation.
 type workerTurnEvidence struct {
-	SourcePath       string
-	TurnID           string
-	CommandID        string
-	SessionID        string
-	Started          bool
-	Completed        bool
-	Succeeded        bool
-	LastMessage      string
-	Failure          string
-	PRCandidates     []string
+	executionapi.TurnEvidence
 	QuestionHint     bool
 	PublishRequested bool
 	LocalCodex       bool

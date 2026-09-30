@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/workerflow"
 )
 
@@ -182,7 +183,7 @@ func (s *Service) resolveStoppedWorkerTurn(run *Run, workflow *WorkflowRunRecord
 		}
 	}
 	if resolution.Question {
-		decision, err := WriteDecisionRequest(run, DecisionRequest{Question: clip(strings.TrimSpace(resolution.LastMessage), 1800), Context: clip(context, 7000), Options: []DecisionOption{{ID: "continue", Label: "Continue current work"}}, AllowFreeText: true})
+		decision, err := WriteDecisionRequest(run, DecisionRequest{Question: clip(strings.TrimSpace(resolution.LastMessage), 1800), Context: clip(context, 7000), Options: []executionapi.DecisionOption{{ID: "continue", Label: "Continue current work"}}, AllowFreeText: true})
 		if err == nil {
 			s.setRunDecision(run, decision)
 		}

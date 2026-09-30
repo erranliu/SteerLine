@@ -3,6 +3,8 @@ package steerline
 import (
 	"errors"
 	"fmt"
+
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 func (s *Service) projectExecutionConfig() Config {
@@ -65,9 +67,9 @@ func (s *Service) executionConfigForRun(run *Run) (Config, error) {
 		if workflow.WorkflowVersion != WorkerFlowVersion {
 			return Config{}, fmt.Errorf("fixed execution profile uses an unsupported workflow version")
 		}
-		backend, protocol, err := ExecutionBackendKind(fixed.Host)
-		if workflow.WorkflowVersion == WorkerFlowVersion && backend == string(BackendLocal) {
-			protocol = string(ProtocolLocalCodexAppServer)
+		backend, protocol, err := executionapi.ExecutionBackendKind(fixed.Host)
+		if workflow.WorkflowVersion == WorkerFlowVersion && backend == string(executionapi.BackendLocal) {
+			protocol = string(executionapi.ProtocolLocalCodexAppServer)
 		}
 		if err != nil || run.Host != fixed.Host || run.Agent != fixed.Agent || run.Backend != string(backend) || run.Protocol != string(protocol) || run.Target.ID != targetFor(config).ID {
 			return Config{}, errors.New("fixed execution profile differs from the persisted run identity")

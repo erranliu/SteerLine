@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 func fakeSupervisedEnvelope(runtime string, result any) int {
@@ -376,7 +378,7 @@ func TestSupervisedOrcaRequiresPinnedModelAndKeepsStopUnsupported(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if capabilityStatus(report, "stop") != CapabilityUnsupported || capabilityStatus(report, "start") != CapabilityNotTested {
+	if capabilityStatus(report, "stop") != executionapi.CapabilityUnsupported || capabilityStatus(report, "start") != executionapi.CapabilityNotTested {
 		t.Fatalf("supervised capabilities = %+v", report.Capabilities)
 	}
 	records := executionRecords{root: t.TempDir()}
@@ -386,7 +388,7 @@ func TestSupervisedOrcaRequiresPinnedModelAndKeepsStopUnsupported(t *testing.T) 
 	if _, err = records.loadCapabilityReport(report); err != nil {
 		t.Fatalf("load capability report without a Codex CLI pin: %v", err)
 	}
-	if _, err = executionStopperFor(Config{Host: "orca_supervised"}); err == nil || !isBackendError(err, BackendUnsupported) {
+	if _, err = executionStopperFor(Config{Host: "orca_supervised"}); err == nil || !isBackendError(err, executionapi.BackendUnsupported) {
 		t.Fatalf("StopExecution error = %v", err)
 	}
 }
@@ -394,7 +396,7 @@ func TestSupervisedOrcaRequiresPinnedModelAndKeepsStopUnsupported(t *testing.T) 
 func TestSupervisedOrcaExecutionBindingRequiresExactDispatchIdentity(t *testing.T) {
 	c := supervisedFixtureConfig(t)
 	runID, attemptID := newID(), newID()
-	ref := ExecutionRef{Version: ExecutionRecordVersion, Backend: BackendOrca, Protocol: ProtocolOrcaSupervised, Target: targetFor(c), Agent: agentFor(c), RunID: runID, AttemptID: attemptID, WorkspacePath: "C:/remote/worktree", WorkspaceBranch: "erranliu/remote", BaseCommit: strings.Repeat("a", 40), External: ProcessIdentity{Kind: "orca_supervised", RuntimeID: "runtime-1", OrchestrationRun: "run-1", Task: "task-1", Dispatch: "dispatch-1", ExecutionHost: "host-1", WorktreeID: "repo-1::C:/remote/worktree"}}
+	ref := executionapi.ExecutionRef{Version: executionapi.ExecutionRecordVersion, Backend: executionapi.BackendOrca, Protocol: executionapi.ProtocolOrcaSupervised, Target: targetFor(c), Agent: agentFor(c), RunID: runID, AttemptID: attemptID, WorkspacePath: "C:/remote/worktree", WorkspaceBranch: "erranliu/remote", BaseCommit: strings.Repeat("a", 40), External: executionapi.ProcessIdentity{Kind: "orca_supervised", RuntimeID: "runtime-1", OrchestrationRun: "run-1", Task: "task-1", Dispatch: "dispatch-1", ExecutionHost: "host-1", WorktreeID: "repo-1::C:/remote/worktree"}}
 	if err := validateExecutionRef(ref); err != nil {
 		t.Fatalf("complete supervised binding rejected: %v", err)
 	}
@@ -402,8 +404,8 @@ func TestSupervisedOrcaExecutionBindingRequiresExactDispatchIdentity(t *testing.
 	if err := validateExecutionRef(ref); err == nil {
 		t.Fatal("supervised binding without its exact Dispatch was accepted")
 	}
-	backend, protocol, err := ExecutionBackendKind("orca_supervised")
-	if err != nil || backend != string(BackendOrca) || protocol != string(ProtocolOrcaSupervised) {
+	backend, protocol, err := executionapi.ExecutionBackendKind("orca_supervised")
+	if err != nil || backend != string(executionapi.BackendOrca) || protocol != string(executionapi.ProtocolOrcaSupervised) {
 		t.Fatalf("backend resolution = %q/%q, %v", backend, protocol, err)
 	}
 }
@@ -440,9 +442,9 @@ func TestSupervisedOrcaClientPinsLaunchAndReadsExactDispatch(t *testing.T) {
 	}
 	target := targetFor(c)
 	target.OrchestrationRun, target.ExternalTask, target.Dispatch, target.WorktreeID, target.ExecutionHost = runID, started.TaskID, started.DispatchID, started.WorktreeID, "env-home"
-	ref := ExecutionRef{Version: ExecutionRecordVersion, Backend: BackendOrca, Protocol: ProtocolOrcaSupervised, Target: target, Agent: agentFor(c), RunID: workflowRunID, AttemptID: newID(), External: observed.Identity}
+	ref := executionapi.ExecutionRef{Version: executionapi.ExecutionRecordVersion, Backend: executionapi.BackendOrca, Protocol: executionapi.ProtocolOrcaSupervised, Target: target, Agent: agentFor(c), RunID: workflowRunID, AttemptID: newID(), External: observed.Identity}
 	t.Setenv("STEERLINE_FAKE_SUPERVISED_WORKER_EPOCH", "replacement-remote-runtime")
-	if _, err := backend.Observe(context.Background(), ref); err == nil || !isBackendError(err, BackendIdentityMismatch) {
+	if _, err := backend.Observe(context.Background(), ref); err == nil || !isBackendError(err, executionapi.BackendIdentityMismatch) {
 		t.Fatalf("replacement remote runtime was treated as the original Dispatch: %v", err)
 	}
 }
@@ -451,7 +453,7 @@ func TestSupervisedOrcaClientRejectsReturnedReplacementWorktree(t *testing.T) {
 	c := supervisedFixtureConfig(t)
 	backend := orcaSupervisedBackend{config: c}
 	_, err := backend.startWorker(context.Background(), "orca-run-test", newID(), "verify", "read only", "id:repo-test::C:/remote/expected", "", "", "")
-	if err == nil || !isBackendError(err, BackendIdentityMismatch) {
+	if err == nil || !isBackendError(err, executionapi.BackendIdentityMismatch) {
 		t.Fatalf("replacement worktree error = %v", err)
 	}
 }
@@ -469,12 +471,12 @@ func TestSupervisedRunCoordinatorsAreDistinctAndFenced(t *testing.T) {
 		t.Fatalf("WorkflowRuns shared a coordinator: %q / %q, %v", first, second, err)
 	}
 	t.Setenv("STEERLINE_FAKE_SUPERVISED_RUN_COORDINATOR", first)
-	ref := ExecutionRef{RunID: a, Target: ExecutionTarget{CoordinatorTerminal: first}, External: ProcessIdentity{Kind: "orca_supervised", OrchestrationRun: "orca-run-test", CoordinatorRuntimeID: "fake-center-runtime"}}
+	ref := executionapi.ExecutionRef{RunID: a, Target: executionapi.ExecutionTarget{CoordinatorTerminal: first}, External: executionapi.ProcessIdentity{Kind: "orca_supervised", OrchestrationRun: "orca-run-test", CoordinatorRuntimeID: "fake-center-runtime"}}
 	if _, err := backend.checkDelivery(context.Background(), ref); err != nil {
 		t.Fatalf("exact coordinator was fenced: %v", err)
 	}
 	t.Setenv("STEERLINE_FAKE_SUPERVISED_RUN_COORDINATOR", second)
-	if _, err := backend.checkDelivery(context.Background(), ref); err == nil || !isBackendError(err, BackendIdentityMismatch) {
+	if _, err := backend.checkDelivery(context.Background(), ref); err == nil || !isBackendError(err, executionapi.BackendIdentityMismatch) {
 		t.Fatalf("Run rebinding was not rejected before inbox read: %v", err)
 	}
 }
@@ -496,16 +498,16 @@ func TestSettledSupervisedDispatchRetainsExactBindingWithoutLiveTerminal(t *test
 	if state, err := b.settledWorker(context.Background(), ref, "succeeded"); err != nil || state != "succeeded" {
 		t.Fatalf("durable settled Dispatch was rejected: %q, %v", state, err)
 	}
-	if _, err := b.settledWorker(context.Background(), ref, "failed"); !isBackendError(err, BackendIdentityMismatch) {
+	if _, err := b.settledWorker(context.Background(), ref, "failed"); !isBackendError(err, executionapi.BackendIdentityMismatch) {
 		t.Fatalf("conflicting worker_done outcome was accepted: %v", err)
 	}
 	t.Setenv("STEERLINE_FAKE_SUPERVISED_WORKER_EPOCH", "replacement-remote-runtime")
-	if _, err := b.settledWorker(context.Background(), ref, "succeeded"); !isBackendError(err, BackendIdentityMismatch) {
+	if _, err := b.settledWorker(context.Background(), ref, "succeeded"); !isBackendError(err, executionapi.BackendIdentityMismatch) {
 		t.Fatalf("replacement remote runtime was accepted: %v", err)
 	}
 }
 
-func supervisedPromptTestRef(c Config, started supervisedStartReceipt, observation supervisedWorkerObservation) ExecutionRef {
+func supervisedPromptTestRef(c Config, started supervisedStartReceipt, observation supervisedWorkerObservation) executionapi.ExecutionRef {
 	target := targetFor(c)
 	target.OrchestrationRun = started.RunID
 	target.ExternalTask = started.TaskID
@@ -515,29 +517,29 @@ func supervisedPromptTestRef(c Config, started supervisedStartReceipt, observati
 	target.Branch = observation.Branch
 	target.BaseRevision = strings.Repeat("a", 40)
 	target.CoordinatorTerminal = c.Orca.Supervised.CoordinatorTerminal
-	return ExecutionRef{Version: ExecutionRecordVersion, Backend: BackendOrca, Protocol: ProtocolOrcaSupervised, Target: target, Agent: AgentSpec{Name: "codex"}, RunID: newID(), AttemptID: "attempt-test", WorkspacePath: observation.WorktreePath, WorkspaceBranch: observation.Branch, BaseCommit: target.BaseRevision, External: observation.Identity, Generation: observation.Identity.RuntimeID + ":" + observation.Identity.Incarnation}
+	return executionapi.ExecutionRef{Version: executionapi.ExecutionRecordVersion, Backend: executionapi.BackendOrca, Protocol: executionapi.ProtocolOrcaSupervised, Target: target, Agent: executionapi.AgentSpec{Name: "codex"}, RunID: newID(), AttemptID: "attempt-test", WorkspacePath: observation.WorktreePath, WorkspaceBranch: observation.Branch, BaseCommit: target.BaseRevision, External: observation.Identity, Generation: observation.Identity.RuntimeID + ":" + observation.Identity.Incarnation}
 }
 
 func TestSupervisedReplyRejectsEscapedOversizeBeforeOrcaCall(t *testing.T) {
 	c := supervisedFixtureConfig(t)
 	started := supervisedStartReceipt{RunID: "orca-run-test", TaskID: "task-test", DispatchID: "dispatch-test"}
 	worktreeID := "repo-test::C:/remote/steerline-run"
-	observation := supervisedWorkerObservation{Identity: ProcessIdentity{Kind: "orca_supervised", RuntimeID: "fake-remote-runtime", CoordinatorRuntimeID: "fake-center-runtime", Terminal: "terminal-test", Incarnation: "inc-test", OrchestrationRun: started.RunID, Task: started.TaskID, Dispatch: started.DispatchID, ExecutionHost: "env-home", WorktreeID: worktreeID}, WorktreePath: "C:/remote/steerline-run", Branch: "erranliu/steerline-run"}
+	observation := supervisedWorkerObservation{Identity: executionapi.ProcessIdentity{Kind: "orca_supervised", RuntimeID: "fake-remote-runtime", CoordinatorRuntimeID: "fake-center-runtime", Terminal: "terminal-test", Incarnation: "inc-test", OrchestrationRun: started.RunID, Task: started.TaskID, Dispatch: started.DispatchID, ExecutionHost: "env-home", WorktreeID: worktreeID}, WorktreePath: "C:/remote/steerline-run", Branch: "erranliu/steerline-run"}
 	ref := supervisedPromptTestRef(c, started, observation)
 	t.Setenv("STEERLINE_FAKE_SUPERVISED_OBSERVE_UNAVAILABLE", "1")
 	_, err := (orcaSupervisedBackend{config: c}).replyQuestion(context.Background(), ref, "question-test", "x"+strings.Repeat("\n", 4000))
-	if !isBackendError(err, BackendRejected) || !strings.Contains(err.Error(), "serialized message exceeds") {
+	if !isBackendError(err, executionapi.BackendRejected) || !strings.Contains(err.Error(), "serialized message exceeds") {
 		t.Fatalf("escaped oversized reply reached Orca observation or send: %v", err)
 	}
 	_, err = (orcaSupervisedBackend{config: c}).replyQuestion(context.Background(), ref, "question-test", "yes")
-	if !isBackendError(err, BackendUnreachable) {
+	if !isBackendError(err, executionapi.BackendUnreachable) {
 		t.Fatalf("bounded reply was rejected before Orca observation: %v", err)
 	}
 }
 
 func TestSupervisedPrepareKeepsPlatformWorktreeIdentitySeparateFromPath(t *testing.T) {
 	const worktreeID = "repo-test::C:/remote/steerline-run"
-	run := &Run{Protocol: string(ProtocolOrcaSupervised), Target: ExecutionTarget{WorktreeID: worktreeID}}
+	run := &Run{Protocol: string(executionapi.ProtocolOrcaSupervised), Target: executionapi.ExecutionTarget{WorktreeID: worktreeID}}
 	execution := &ExecutionRecord{Protocol: run.Protocol, Target: run.Target}
 	run.Target.WorktreeID = "incorrect-view-only-id"
 	workspace := WorkspaceEvidence{Worktree: "C:/remote/steerline-run", Branch: "erranliu/steerline-run", Base: strings.Repeat("a", 40), Head: strings.Repeat("a", 40)}
@@ -603,7 +605,7 @@ func TestLoadConfigRequiresExplicitRemoteCancellationFalse(t *testing.T) {
 	}
 }
 
-func isBackendError(err error, want BackendErrorCode) bool {
-	var backendErr *BackendError
+func isBackendError(err error, want executionapi.BackendErrorCode) bool {
+	var backendErr *executionapi.BackendError
 	return errors.As(err, &backendErr) && backendErr.Code == want
 }

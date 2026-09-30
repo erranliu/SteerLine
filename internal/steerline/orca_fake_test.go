@@ -14,6 +14,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 // fakeOrca is a protocol-level stand-in for the supported terminal identity,
@@ -305,7 +307,7 @@ func TestOrcaReadOutputBindsCursorToExactSource(t *testing.T) {
 		t.Fatal(err)
 	}
 	runID, attemptID := newID(), newID()
-	ref := ExecutionRef{Version: 1, Backend: BackendOrca, Protocol: ProtocolOrcaTerminalV2, Target: targetFor(cfg), Agent: AgentSpec{Name: "codex"}, RunID: runID, AttemptID: attemptID, External: ProcessIdentity{Kind: "orca", Terminal: handle, RuntimeID: "fake-runtime", Incarnation: "inc-output", Executable: cfg.Orca.Executable}}
+	ref := executionapi.ExecutionRef{Version: 1, Backend: executionapi.BackendOrca, Protocol: executionapi.ProtocolOrcaTerminalV2, Target: targetFor(cfg), Agent: executionapi.AgentSpec{Name: "codex"}, RunID: runID, AttemptID: attemptID, External: executionapi.ProcessIdentity{Kind: "orca", Terminal: handle, RuntimeID: "fake-runtime", Incarnation: "inc-output", Executable: cfg.Orca.Executable}}
 	backend := orcaTerminalBackend{config: cfg}
 	first, err := backend.ReadOutput(context.Background(), ref, "", 1)
 	if err != nil || string(first.Data) != "one" || first.Source != "stream" || first.NextCursor == "" {
@@ -343,7 +345,7 @@ func TestOrcaReadOutputReportsRetentionGapOnInitialRead(t *testing.T) {
 	if err := writeFakeOrcaState(dir, state); err != nil {
 		t.Fatal(err)
 	}
-	ref := ExecutionRef{Version: 1, Backend: BackendOrca, Protocol: ProtocolOrcaTerminalV2, Target: targetFor(cfg), Agent: AgentSpec{Name: "codex"}, RunID: newID(), AttemptID: newID(), External: ProcessIdentity{Kind: "orca", Terminal: handle, RuntimeID: "fake-runtime", Incarnation: state.Incarnation, Executable: cfg.Orca.Executable}}
+	ref := executionapi.ExecutionRef{Version: 1, Backend: executionapi.BackendOrca, Protocol: executionapi.ProtocolOrcaTerminalV2, Target: targetFor(cfg), Agent: executionapi.AgentSpec{Name: "codex"}, RunID: newID(), AttemptID: newID(), External: executionapi.ProcessIdentity{Kind: "orca", Terminal: handle, RuntimeID: "fake-runtime", Incarnation: state.Incarnation, Executable: cfg.Orca.Executable}}
 	batch, err := (orcaTerminalBackend{config: cfg}).ReadOutput(context.Background(), ref, "", 1)
 	if err != nil {
 		t.Fatal(err)
@@ -376,7 +378,7 @@ func TestOrcaNativeRetentionGap(t *testing.T) {
 	exe, err := exec.LookPath("orca")
 	require(t, err)
 	config := Config{Repository: probe.Workspace, Host: "orca", CommandTimeout: "15s", Orca: OrcaConfig{Executable: exe}}
-	ref := ExecutionRef{Version: 1, Backend: BackendOrca, Protocol: ProtocolOrcaTerminalV2, Target: targetFor(config), Agent: AgentSpec{Name: "codex"}, RunID: "retention-probe-run", AttemptID: "retention-probe-attempt", WorkspacePath: probe.Workspace, External: ProcessIdentity{Kind: "orca", Terminal: probe.Terminal, RuntimeID: probe.Runtime, Incarnation: probe.Incarnation, Executable: exe}}
+	ref := executionapi.ExecutionRef{Version: 1, Backend: executionapi.BackendOrca, Protocol: executionapi.ProtocolOrcaTerminalV2, Target: targetFor(config), Agent: executionapi.AgentSpec{Name: "codex"}, RunID: "retention-probe-run", AttemptID: "retention-probe-attempt", WorkspacePath: probe.Workspace, External: executionapi.ProcessIdentity{Kind: "orca", Terminal: probe.Terminal, RuntimeID: probe.Runtime, Incarnation: probe.Incarnation, Executable: exe}}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	first, err := (orcaTerminalBackend{config: config}).ReadOutput(ctx, ref, "", 5)
@@ -414,7 +416,7 @@ func TestOrcaNativeHostWait(t *testing.T) {
 	exe, err := exec.LookPath("orca")
 	require(t, err)
 	config := Config{Repository: probe.Workspace, Host: "orca", CommandTimeout: "15s", Orca: OrcaConfig{Executable: exe}}
-	identity := ProcessIdentity{Kind: "orca", Terminal: probe.Terminal, RuntimeID: probe.Runtime, Incarnation: probe.Incarnation, Executable: exe}
+	identity := executionapi.ProcessIdentity{Kind: "orca", Terminal: probe.Terminal, RuntimeID: probe.Runtime, Incarnation: probe.Incarnation, Executable: exe}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	term, err := inspectBoundOrcaTerminal(ctx, config, identity)
@@ -434,7 +436,7 @@ func TestOrcaNativeHostWait(t *testing.T) {
 	require(t, err)
 	defer store.Close()
 	runID, attemptID := newID(), newID()
-	run := &Run{RunID: runID, AttemptID: attemptID, ExecutionID: "host-wait-execution", Backend: string(BackendOrca), Protocol: string(ProtocolOrcaTerminalV2), Agent: "codex", Target: targetFor(config), Process: &identity}
+	run := &Run{RunID: runID, AttemptID: attemptID, ExecutionID: "host-wait-execution", Backend: string(executionapi.BackendOrca), Protocol: string(executionapi.ProtocolOrcaTerminalV2), Agent: "codex", Target: targetFor(config), Process: &identity}
 	service := &Service{Config: Config{identity: "project"}, domainStore: store}
 	source := WorkerEvent{RunID: runID, AttemptID: attemptID, Source: "orca-terminal-v2", SourceSegment: "orca-host-wait-v1:probe", SourceEventID: "host-wait:probe", SourceIdentity: "terminal:" + probe.Runtime + ":" + probe.Terminal + ":" + probe.Incarnation, SourceSeq: 1, Session: "terminal:" + probe.Terminal + ":" + probe.Incarnation, InputWait: true, Diagnostic: "Orca reports a host-level agent wait; no SteerLine business Decision was created"}
 	require(t, service.recordConversationEvent(run, source))
@@ -485,7 +487,7 @@ func TestInspectOrcaTerminal(t *testing.T) {
 	if e := writeFakeOrcaState(dir, fakeOrcaState{Handle: "h1", Incarnation: "inc1"}); e != nil {
 		t.Fatal(e)
 	}
-	live := &ProcessIdentity{Kind: "orca", Terminal: "h1", Incarnation: "inc1"}
+	live := &executionapi.ProcessIdentity{Kind: "orca", Terminal: "h1", Incarnation: "inc1"}
 	if got := inspectProcessWithConfig(c, live); got != "matching process still exists" {
 		t.Fatalf("live terminal: %q", got)
 	}
@@ -493,7 +495,7 @@ func TestInspectOrcaTerminal(t *testing.T) {
 	if got := inspectProcessWithConfig(c, live); !strings.Contains(got, "replaced") {
 		t.Fatalf("replaced terminal: %q", got)
 	}
-	missing := &ProcessIdentity{Kind: "orca", Terminal: "nope"}
+	missing := &executionapi.ProcessIdentity{Kind: "orca", Terminal: "nope"}
 	if got := inspectProcessWithConfig(c, missing); !strings.Contains(got, "unverifiable") {
 		t.Fatalf("missing terminal: %q", got)
 	}
@@ -507,9 +509,9 @@ func TestOrcaStopExecutionConfirmsFixedTerminalExit(t *testing.T) {
 		t.Fatal(err)
 	}
 	runID, attemptID := newID(), newID()
-	ref := ExecutionRef{Version: 1, Backend: BackendOrca, Protocol: ProtocolOrcaTerminalV2, Target: targetFor(cfg), Agent: AgentSpec{Name: "codex"}, RunID: runID, AttemptID: attemptID, External: ProcessIdentity{Kind: "orca", Terminal: handle, RuntimeID: "fake-runtime", Incarnation: "inc-stop", Executable: cfg.Orca.Executable}}
+	ref := executionapi.ExecutionRef{Version: 1, Backend: executionapi.BackendOrca, Protocol: executionapi.ProtocolOrcaTerminalV2, Target: targetFor(cfg), Agent: executionapi.AgentSpec{Name: "codex"}, RunID: runID, AttemptID: attemptID, External: executionapi.ProcessIdentity{Kind: "orca", Terminal: handle, RuntimeID: "fake-runtime", Incarnation: "inc-stop", Executable: cfg.Orca.Executable}}
 	backend := orcaTerminalBackend{config: cfg}
-	receipt, err := backend.StopExecution(context.Background(), ref, Operation{ID: "stop-" + attemptID}, nil)
+	receipt, err := backend.StopExecution(context.Background(), ref, executionapi.Operation{ID: "stop-" + attemptID}, nil)
 	if err != nil || receipt.Disposition != "confirmed" {
 		t.Fatalf("stop receipt=%#v err=%v", receipt, err)
 	}
@@ -526,11 +528,11 @@ func TestOrcaStopFailureDoesNotConfirmExit(t *testing.T) {
 	if err := writeFakeOrcaState(dir, fakeOrcaState{Handle: handle, Incarnation: "inc-failure"}); err != nil {
 		t.Fatal(err)
 	}
-	ref := ExecutionRef{Backend: BackendOrca, Protocol: ProtocolOrcaTerminalV2, Target: targetFor(cfg), External: ProcessIdentity{Kind: "orca", Terminal: handle, RuntimeID: "fake-runtime", Incarnation: "inc-failure"}}
+	ref := executionapi.ExecutionRef{Backend: executionapi.BackendOrca, Protocol: executionapi.ProtocolOrcaTerminalV2, Target: targetFor(cfg), External: executionapi.ProcessIdentity{Kind: "orca", Terminal: handle, RuntimeID: "fake-runtime", Incarnation: "inc-failure"}}
 	t.Setenv("STEERLINE_FAKE_ORCA_CLOSE_FAIL", "1")
-	receipt, err := (orcaTerminalBackend{config: cfg}).StopExecution(context.Background(), ref, Operation{}, nil)
-	var backendErr *BackendError
-	if receipt.Disposition == "confirmed" || !errors.As(err, &backendErr) || backendErr.Code != BackendOutcomeUnknown {
+	receipt, err := (orcaTerminalBackend{config: cfg}).StopExecution(context.Background(), ref, executionapi.Operation{}, nil)
+	var backendErr *executionapi.BackendError
+	if receipt.Disposition == "confirmed" || !errors.As(err, &backendErr) || backendErr.Code != executionapi.BackendOutcomeUnknown {
 		t.Fatalf("stop failure was misconfirmed: %#v, %v", receipt, err)
 	}
 	obs, err := (orcaTerminalBackend{config: cfg}).Observe(context.Background(), ref)
@@ -544,13 +546,13 @@ func TestSlowOrcaObservationDoesNotBlockOtherRefStop(t *testing.T) {
 	cfg := orcaTestConfig(t, dir, "")
 	cfg.CommandTimeout = "10s"
 	backend := orcaTerminalBackend{config: cfg}
-	refFor := func(handle string) ExecutionRef {
+	refFor := func(handle string) executionapi.ExecutionRef {
 		t.Helper()
-		identity := ProcessIdentity{Kind: "orca", RuntimeID: "fake-runtime", Terminal: handle, Incarnation: "inc-" + handle}
+		identity := executionapi.ProcessIdentity{Kind: "orca", RuntimeID: "fake-runtime", Terminal: handle, Incarnation: "inc-" + handle}
 		if err := writeFakeOrcaState(dir, fakeOrcaState{Handle: handle, Incarnation: identity.Incarnation}); err != nil {
 			t.Fatal(err)
 		}
-		return ExecutionRef{Backend: BackendOrca, Protocol: ProtocolOrcaTerminalV2, Target: targetFor(cfg), External: identity}
+		return executionapi.ExecutionRef{Backend: executionapi.BackendOrca, Protocol: executionapi.ProtocolOrcaTerminalV2, Target: targetFor(cfg), External: identity}
 	}
 	slow, stopped := refFor("slow-observe"), refFor("quick-stop")
 	marker := filepath.Join(dir, "slow-show-started")
@@ -574,7 +576,7 @@ func TestSlowOrcaObservationDoesNotBlockOtherRefStop(t *testing.T) {
 	stopCtx, cancelStop := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancelStop()
 	started := time.Now()
-	receipt, err := backend.StopExecution(stopCtx, stopped, Operation{}, nil)
+	receipt, err := backend.StopExecution(stopCtx, stopped, executionapi.Operation{}, nil)
 	if err != nil || receipt.Disposition != "confirmed" || time.Since(started) >= 3*time.Second {
 		t.Fatalf("other ref stop waited for slow observation: %#v %v", receipt, err)
 	}
@@ -595,11 +597,11 @@ func TestOrcaSameRefObservationsDoNotOverlapOrLeakGate(t *testing.T) {
 	cfg := orcaTestConfig(t, dir, "")
 	backend := orcaTerminalBackend{config: cfg}
 	handle := "same-ref-observe"
-	identity := ProcessIdentity{Kind: "orca", RuntimeID: "fake-runtime", Terminal: handle, Incarnation: "inc-same-ref"}
+	identity := executionapi.ProcessIdentity{Kind: "orca", RuntimeID: "fake-runtime", Terminal: handle, Incarnation: "inc-same-ref"}
 	if err := writeFakeOrcaState(dir, fakeOrcaState{Handle: handle, Incarnation: identity.Incarnation}); err != nil {
 		t.Fatal(err)
 	}
-	ref := ExecutionRef{Backend: BackendOrca, Protocol: ProtocolOrcaTerminalV2, Target: targetFor(cfg), External: identity}
+	ref := executionapi.ExecutionRef{Backend: executionapi.BackendOrca, Protocol: executionapi.ProtocolOrcaTerminalV2, Target: targetFor(cfg), External: identity}
 	marker := filepath.Join(dir, "first-show-started")
 	t.Setenv("STEERLINE_FAKE_ORCA_SLOW_SHOW_HANDLE", handle)
 	t.Setenv("STEERLINE_FAKE_ORCA_SLOW_SHOW_STARTED", marker)

@@ -3,16 +3,19 @@ package orcaworker
 import (
 	"encoding/json"
 	"strings"
+
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 // MessageFact belongs to one verified Dispatch. It carries no business state.
 type MessageFact struct {
-	Kind       string
-	MessageID  string
-	TaskID     string
-	DispatchID string
-	Question   *Question
-	Outcome    string
+	Kind         string
+	MessageID    string
+	TaskID       string
+	DispatchID   string
+	Question     *executionapi.Question
+	PRCandidates []string
+	Outcome      string
 }
 
 // MessagePayload unwraps the JSON string used by the native inbox. Some
@@ -44,13 +47,19 @@ func DecodeMessage(message Message, taskID, dispatchID, agentTerminal string) (M
 				question.Text = strings.TrimSpace(message.Subject)
 			}
 		}
-		fact.Question = &question
+		fact.Question = &executionapi.Question{ID: message.ID, Header: "Orca", Question: question.Text, AllowFreeText: true}
+		for _, option := range question.Options {
+			fact.Question.Options = append(fact.Question.Options, executionapi.DecisionOption{ID: option.ID, Label: option.Label, Detail: option.Detail})
+		}
 	case "worker_done":
 		outcome, err := DoneOutcome(payload, taskID, dispatchID)
 		if err != nil {
 			return fact, true, err
 		}
 		fact.Outcome = outcome
+		fact.PRCandidates = executionapi.PRClues(message.Body)
+	case "status":
+		fact.PRCandidates = executionapi.PRClues(message.Body)
 	}
 	return fact, true, nil
 }

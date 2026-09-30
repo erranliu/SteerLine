@@ -17,6 +17,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/erranliu/SteerLine/internal/steerline"
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 var (
@@ -1002,7 +1003,7 @@ func renderSession(state projectState, row *consoleRow, width, height int, now t
 		for _, report := range state.capabilities {
 			lines = append(lines, "能力："+safeTerminalText(string(report.Backend)+" / "+string(report.Protocol)+" / "+report.Agent)+" · 来源 "+safeTerminalText(report.Source+"/"+report.SourceIdentity)+" · 检查 "+report.CheckedAt.Local().Format(timeLayout))
 			for _, capability := range report.Capabilities {
-				if capability.Status != steerline.CapabilityVerified {
+				if capability.Status != executionapi.CapabilityVerified {
 					lines = append(lines, "  "+safeTerminalText(capability.Name)+" = "+safeTerminalText(string(capability.Status))+" · "+safeTerminalText(capability.Evidence))
 				}
 			}

@@ -4,6 +4,8 @@ import (
 	"errors"
 	"testing"
 	"time"
+
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 func TestWorkerFlowKeepsSessionThroughFeedbackAndPRChanges(t *testing.T) {
@@ -101,7 +103,7 @@ func TestWorkerFlowDeliveryGateUsesSessionAndPRWithoutStepResults(t *testing.T) 
 }
 
 func TestWorkerFeedbackKeepsOptionAndAdditionalText(t *testing.T) {
-	request := DecisionRequest{Options: []DecisionOption{{ID: "continue", Label: "Continue current work"}}, AllowFreeText: true}
+	request := DecisionRequest{Options: []executionapi.DecisionOption{{ID: "continue", Label: "Continue current work"}}, AllowFreeText: true}
 	answer := DecisionAnswer{OptionID: "continue", Note: "Keep the partially committed changes and fix the compiler error."}
 	message := workerFeedbackText(answer, request)
 	if message != "Selected option: Continue current work\n\nAdditional instructions:\nKeep the partially committed changes and fix the compiler error." {

@@ -3,9 +3,11 @@ package steerline
 import (
 	"context"
 	"errors"
-	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 	"path/filepath"
 	"strings"
+
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
 
 // Orca's Windows named pipe is inaccessible to commands in Codex's
@@ -53,7 +55,7 @@ func (s *Service) relayNativeOrcaDone(ctx context.Context, run *Run, execution *
 	}
 	key := "orca-native-relay-done:" + execution.ExecutionID + ":" + turn.TurnID
 	if s.operationByKey(key) != nil {
-		return &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "Orca result relay was already attempted, but the original Run inbox has no worker_done; preserve the Dispatch for reconciliation"}
+		return &executionapi.BackendError{Code: executionapi.BackendOutcomeUnknown, Diagnostic: "Orca result relay was already attempted, but the original Run inbox has no worker_done; preserve the Dispatch for reconciliation"}
 	}
 	request, err := readNativeOrcaDoneRequest(path, execution.Workspace.Worktree, run, turn)
 	if err != nil || request == nil {

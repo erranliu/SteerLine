@@ -23,12 +23,12 @@ func TestDecodeMessageBindsPayloadVariantsToOriginalDispatch(t *testing.T) {
 	}
 	message := Message{ID: "question-original", FromHandle: "dispatch:ctx-original", Type: "question", Body: "Fallback question", Payload: json.RawMessage(`{"taskId":"task-original","dispatchId":"ctx-original","question":"Which path?","options":["Direct"]}`)}
 	fact, matched, err := DecodeMessage(message, "task-original", "ctx-original", "term-original")
-	if err != nil || !matched || fact.Question == nil || fact.Question.Text != "Which path?" || len(fact.Question.Options) != 1 || fact.Question.Options[0].ID != "option-1" {
+	if err != nil || !matched || fact.Question == nil || fact.Question.Question != "Which path?" || fact.Question.ID != message.ID || fact.Question.Header != "Orca" || !fact.Question.AllowFreeText || len(fact.Question.Options) != 1 || fact.Question.Options[0].ID != "option-1" {
 		t.Fatalf("structured question was lost: %+v / %v", fact, err)
 	}
 	message.Payload = json.RawMessage(`{"taskId":"task-original","dispatchId":"ctx-original"}`)
 	fact, matched, err = DecodeMessage(message, "task-original", "ctx-original", "term-original")
-	if err != nil || !matched || fact.Question == nil || fact.Question.Text != "Fallback question" {
+	if err != nil || !matched || fact.Question == nil || fact.Question.Question != "Fallback question" {
 		t.Fatalf("question fallback was lost: %+v / %v", fact, err)
 	}
 }

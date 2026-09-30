@@ -4,11 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
-	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 	"os/exec"
 	"strings"
 
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 	"github.com/erranliu/SteerLine/internal/steerline/workerflow"
 )
 
@@ -16,19 +17,19 @@ import (
 // claim time, including projects that do not use named execution profiles.
 func workerFlowModeFor(config Config, run *Run, execution *ExecutionRecord) (workerflow.Mode, error) {
 	if run == nil || execution == nil {
-		return 0, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "worker flow has no fixed run or execution"}
+		return 0, &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "worker flow has no fixed run or execution"}
 	}
-	backend, protocol, err := ExecutionBackendKind(config.hostName())
+	backend, protocol, err := executionapi.ExecutionBackendKind(config.hostName())
 	if err != nil {
 		return 0, nativeErr("unsupported_schema", err.Error())
 	}
-	if backend == string(BackendLocal) {
-		protocol = string(ProtocolLocalCodexAppServer)
+	if backend == string(executionapi.BackendLocal) {
+		protocol = string(executionapi.ProtocolLocalCodexAppServer)
 	}
 	if run.Host != config.hostName() || run.Agent != config.agentName() || execution.Agent != run.Agent ||
 		run.Backend != backend || execution.Backend != backend || run.Protocol != protocol || execution.Protocol != protocol ||
 		run.Target.ID == "" || run.Target.ID != execution.Target.ID || run.Target.ID != targetFor(config).ID {
-		return 0, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "fixed worker target differs from its persisted execution"}
+		return 0, &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "fixed worker target differs from its persisted execution"}
 	}
 	mode, err := workerflow.SelectMode(run.Protocol, config.hostName())
 	if err != nil {
@@ -44,7 +45,7 @@ func (s *Service) workerFlowMode(run *Run) (workerflow.Mode, error) {
 		return 0, err
 	}
 	if fixed.workflow.WorkflowVersion != WorkerFlowVersion {
-		return 0, &BackendError{Code: BackendIdentityMismatch, Diagnostic: "fixed worker target differs from its persisted execution"}
+		return 0, &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "fixed worker target differs from its persisted execution"}
 	}
 	return workerFlowModeFor(fixed.config, run, fixed.execution)
 }
@@ -123,7 +124,7 @@ func (s *Service) startCodexWorkerTurn(ctx context.Context, run *Run, commandID,
 		if execution.Process == nil || execution.AppServerGeneration == "" {
 			return errors.New("app-server thread has no verified process generation")
 		}
-		ref := ExecutionRef{Version: ExecutionRecordVersion, Backend: BackendLocal, Protocol: ProtocolLocalCodexAppServer, Target: targetFor(fixed.config), Agent: agentFor(fixed.config), RunID: run.RunID, AttemptID: run.AttemptID, WorkspacePath: deref(run.WorktreePath), WorkspaceBranch: deref(run.WorktreeBranch), BaseCommit: deref(run.BaseCommit), External: *execution.Process, Generation: execution.AppServerGeneration}
+		ref := executionapi.ExecutionRef{Version: executionapi.ExecutionRecordVersion, Backend: executionapi.BackendLocal, Protocol: executionapi.ProtocolLocalCodexAppServer, Target: targetFor(fixed.config), Agent: agentFor(fixed.config), RunID: run.RunID, AttemptID: run.AttemptID, WorkspacePath: deref(run.WorktreePath), WorkspaceBranch: deref(run.WorktreeBranch), BaseCommit: deref(run.BaseCommit), External: *execution.Process, Generation: execution.AppServerGeneration}
 		return s.commitWorkerBinding(run, ref)
 	}
 	worker, events, platformRequestID, err := startAppServerWorkerTurn(ctx, fixed.config, run, fixed.execution, commandID, prompt, persistThread)
@@ -231,7 +232,7 @@ func requireWorkerFlowCapabilities(ctx context.Context, c Config) error {
 	if c.hostName() == "orca" {
 		if c.managedWindowsOrca() {
 			if _, err := nativeOrcaFixedAgentCommand(c); err != nil {
-				return &BackendError{Code: BackendUnsupported, Diagnostic: err.Error(), Cause: err}
+				return &executionapi.BackendError{Code: executionapi.BackendUnsupported, Diagnostic: err.Error(), Cause: err}
 			}
 			runner := Runner{Dir: c.Repository, Timeout: duration(c.CommandTimeout)}
 			help, err := runner.Output(ctx, Command{Executable: c.Codex.Executable}, "--help")
@@ -245,7 +246,7 @@ func requireWorkerFlowCapabilities(ctx context.Context, c Config) error {
 			}
 		}
 		if c.Profile != "" || c.Sandbox != "workspace-write" {
-			return &BackendError{Code: BackendUnsupported, Diagnostic: "Orca requires workspace-write and no Codex profile"}
+			return &executionapi.BackendError{Code: executionapi.BackendUnsupported, Diagnostic: "Orca requires workspace-write and no Codex profile"}
 		}
 		if err := orcaworker.CheckStatus(ctx, orcaWorkerCaller(c)); err != nil {
 			return err
@@ -254,10 +255,10 @@ func requireWorkerFlowCapabilities(ctx context.Context, c Config) error {
 		return err
 	}
 	if c.agentName() != "codex" {
-		return &BackendError{Code: BackendUnsupported, Diagnostic: "resumable worker flow requires Codex"}
+		return &executionapi.BackendError{Code: executionapi.BackendUnsupported, Diagnostic: "resumable worker flow requires Codex"}
 	}
 	if c.hostName() != "local" {
-		return &BackendError{Code: BackendUnsupported, Diagnostic: "this worker-flow host is not supported"}
+		return &executionapi.BackendError{Code: executionapi.BackendUnsupported, Diagnostic: "this worker-flow host is not supported"}
 	}
 	command := c.Codex
 	if err := resolveCommand(&command); err != nil {
@@ -282,7 +283,7 @@ func requireWorkerFlowCapabilities(ctx context.Context, c Config) error {
 	})
 	var unsupported *codexworker.ProbeError
 	if errors.As(err, &unsupported) {
-		return &BackendError{Code: BackendUnsupported, Diagnostic: unsupported.Diagnostic, Cause: unsupported.Cause}
+		return &executionapi.BackendError{Code: executionapi.BackendUnsupported, Diagnostic: unsupported.Diagnostic, Cause: unsupported.Cause}
 	}
 	return err
 }
@@ -354,7 +355,7 @@ func (s *Service) deliverResumableWorkerFeedback(ctx context.Context, run *Run, 
 	}
 	if run.Decision.Request.NativeAsk != nil {
 		if route != workerflow.LocalCodex {
-			return &BackendError{Code: BackendUnsupported, Diagnostic: "native Codex question belongs to a different worker feedback protocol"}
+			return &executionapi.BackendError{Code: executionapi.BackendUnsupported, Diagnostic: "native Codex question belongs to a different worker feedback protocol"}
 		}
 		if s.workerMessages != nil && s.workers[run.RunID] == nil {
 			return nil // Recovery must attach the original observer before replying.

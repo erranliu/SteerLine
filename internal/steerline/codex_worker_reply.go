@@ -5,10 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/erranliu/SteerLine/internal/steerline/codexapp"
 	"strings"
 
+	"github.com/erranliu/SteerLine/internal/steerline/codexapp"
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 func (s *Service) replyAppServerAsk(ctx context.Context, run *Run, execution *ExecutionRecord, answer DecisionAnswer) error {
@@ -17,7 +18,7 @@ func (s *Service) replyAppServerAsk(ctx context.Context, run *Run, execution *Ex
 	}
 	ask := run.Decision.Request.NativeAsk
 	if execution.Process == nil || inspectProcess(execution.Process) != "matching process still exists" || execution.AppServerEndpoint == "" || execution.AppServerGeneration != ask.Generation || execution.SessionID != ask.ThreadID || execution.CurrentTurnID != ask.TurnID || execution.LastStoppedTurnID == ask.TurnID || run.Decision.ID != answer.DecisionID {
-		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "native answer no longer belongs to the live original app-server request"}
+		return &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "native answer no longer belongs to the live original app-server request"}
 	}
 	key := "appserver-answer:" + execution.ExecutionID + ":" + answer.DecisionID
 	for _, op := range s.domain.Operations {
@@ -71,7 +72,7 @@ func (s *Service) replyAppServerAsk(ctx context.Context, run *Run, execution *Ex
 func sendAppServerAskReply(ctx context.Context, endpoint, workspace string, ask codexAskCall, answers map[string][]string) error {
 	return codexworker.SendAskReply(ctx, codexworker.AskReply{
 		Endpoint: endpoint, Workspace: workspace, ThreadID: ask.ThreadID,
-		RequestID: ask.RequestID, Answers: answers,
+		RequestID: ask.RequestID, Answer: executionapi.Answer{Answers: answers},
 	})
 }
 
@@ -112,15 +113,13 @@ func (s *Service) handleAppServerReplyMessage(runID string, message *appServerRe
 
 const codexAskToolName = codexapp.AskToolName
 
-type codexAskQuestion = nativeAskQuestion
-
 type codexAskCall struct {
-	RequestID  json.RawMessage    `json:"request_id"`
-	ThreadID   string             `json:"thread_id"`
-	TurnID     string             `json:"turn_id"`
-	CallID     string             `json:"call_id"`
-	Generation string             `json:"generation,omitempty"`
-	Questions  []codexAskQuestion `json:"questions"`
+	RequestID  json.RawMessage         `json:"request_id"`
+	ThreadID   string                  `json:"thread_id"`
+	TurnID     string                  `json:"turn_id"`
+	CallID     string                  `json:"call_id"`
+	Generation string                  `json:"generation,omitempty"`
+	Questions  []executionapi.Question `json:"questions"`
 }
 
 func parseCodexAskCall(envelope codexapp.Envelope, expectedThread, expectedTurn string) (codexAskCall, error) {
@@ -136,11 +135,11 @@ func codexAskCallFromEnvelope(wire codexworker.AskEnvelope) (codexAskCall, error
 	if err != nil {
 		return codexAskCall{}, fmt.Errorf("Codex ask arguments: %w", err)
 	}
-	var args struct{ Questions []codexAskQuestion }
+	var args struct{ Questions []executionapi.Question }
 	for _, q := range questions {
-		question := codexAskQuestion{ID: q.ID, Header: q.Header, Question: q.Question, AllowFreeText: q.AllowFreeText}
+		question := executionapi.Question{ID: q.ID, Header: q.Header, Question: q.Question, AllowFreeText: q.AllowFreeText}
 		for _, o := range q.Options {
-			question.Options = append(question.Options, DecisionOption{ID: o.ID, Label: o.Label, Detail: o.Detail})
+			question.Options = append(question.Options, executionapi.DecisionOption{ID: o.ID, Label: o.Label, Detail: o.Detail})
 		}
 		args.Questions = append(args.Questions, question)
 	}
@@ -177,7 +176,7 @@ func codexAskDecisionRequest(call codexAskCall) DecisionRequest {
 	if len(call.Questions) == 1 {
 		q := call.Questions[0]
 		request.Question = q.Question
-		request.Options = append([]DecisionOption(nil), q.Options...)
+		request.Options = append([]executionapi.DecisionOption(nil), q.Options...)
 		request.AllowFreeText = q.AllowFreeText
 		return request
 	}

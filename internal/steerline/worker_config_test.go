@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 func TestWorkerFlowConfigRejectsOldProjectGates(t *testing.T) {
@@ -57,8 +59,8 @@ func TestUnsupportedOrcaWorkerFlowConfigurationCannotClaim(t *testing.T) {
 		t.Run(host, func(t *testing.T) {
 			c := Config{WorkflowProtocol: WorkerFlowVersion, Host: host, Agent: "codex"}
 			err := requireWorkerFlowCapabilities(context.Background(), c)
-			var backend *BackendError
-			if !errors.As(err, &backend) || backend.Code != BackendUnsupported {
+			var backend *executionapi.BackendError
+			if !errors.As(err, &backend) || backend.Code != executionapi.BackendUnsupported {
 				t.Fatalf("unsupported Orca configuration reached an external claim path: %v", err)
 			}
 		})
@@ -168,7 +170,7 @@ func TestWorkerFlowRejectsOldLocalExecutionProtocol(t *testing.T) {
 	if old.ExecutionID == "" {
 		t.Fatal("claimed execution is missing")
 	}
-	old.Protocol = string(ProtocolLocalProcess)
+	old.Protocol = string(executionapi.ProtocolLocalProcess)
 	if err := store.Transact(ctx, func(tx DomainTx) error { return tx.PutExecution(old) }); err != nil {
 		t.Fatal(err)
 	}

@@ -11,7 +11,8 @@ import (
 )
 
 func readWorkerTurnEvidence(fixed workerFlowContext, mode workerflow.Mode) (workerTurnEvidence, error) {
-	run, execution, c := fixed.run, fixed.execution, fixed.config
+	run, c := fixed.run, fixed.config
+	execution := workerSessionContext(run, fixed.execution)
 	var fact workerTurnEvidence
 	if run == nil || execution == nil {
 		return fact, errors.New("worker turn has no fixed execution")

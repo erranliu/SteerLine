@@ -1,6 +1,10 @@
 package steerline
 
-import "testing"
+import (
+	"testing"
+
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+)
 
 func TestWorkerFlowContextKeepsFixedRunAndCopiesConfig(t *testing.T) {
 	run := &Run{RunID: "run", ExecutionID: "execution", AttemptID: "attempt"}
@@ -38,7 +42,7 @@ func TestWorkerFlowContextsDoNotExchangeExecutionProfiles(t *testing.T) {
 		id := route.ID
 		fixed := route.Freeze()
 		selected := base.ApplyFixedExecutionProfile(fixed)
-		run := &Run{RunID: id, ExecutionID: id + "-execution", AttemptID: id + "-attempt", Host: "local", Agent: "codex", Backend: string(BackendLocal), Protocol: string(ProtocolLocalCodexAppServer), Target: targetFor(selected), ExecutionStatus: "pending"}
+		run := &Run{RunID: id, ExecutionID: id + "-execution", AttemptID: id + "-attempt", Host: "local", Agent: "codex", Backend: string(executionapi.BackendLocal), Protocol: string(executionapi.ProtocolLocalCodexAppServer), Target: targetFor(selected), ExecutionStatus: "pending"}
 		service.State.Runs = append(service.State.Runs, run)
 		service.domain.WorkflowRuns = append(service.domain.WorkflowRuns, WorkflowRunRecord{WorkflowRunID: id, WorkflowVersion: WorkerFlowVersion, ExecutionProfile: &fixed})
 		service.domain.Executions = append(service.domain.Executions, ExecutionRecord{ExecutionID: run.ExecutionID, WorkflowRunID: id})

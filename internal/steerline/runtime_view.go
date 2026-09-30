@@ -3,6 +3,8 @@ package steerline
 import (
 	"encoding/json"
 	"errors"
+
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 func runtimeCheckpoint(v Runtime) ServiceCheckpoint {
@@ -154,7 +156,7 @@ func refreshExecutionView(run *Run, e *ExecutionRecord) {
 		if e.Workspace.Worktree == "" {
 			branch, base = e.WorkspaceIntent.Branch, e.WorkspaceIntent.BaseCommit
 		}
-		if path == "" && e.Protocol != string(ProtocolOrcaSupervised) {
+		if path == "" && e.Protocol != string(executionapi.ProtocolOrcaSupervised) {
 			path = e.WorkspaceIntent.Path
 		}
 		if branch == "" {

@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 const maxConversationBodyBytes = 16 << 20
@@ -593,11 +595,11 @@ func (s *SQLiteStore) SaveConversationCapabilityReport(ctx context.Context, repo
 		}
 		seen[capability.Name] = true
 		switch capability.Status {
-		case CapabilityVerified, CapabilityUnsupported, CapabilityNotTested:
+		case executionapi.CapabilityVerified, executionapi.CapabilityUnsupported, executionapi.CapabilityNotTested:
 		default:
 			return fmt.Errorf("invalid conversation capability status %q", capability.Status)
 		}
-		if capability.Status == CapabilityVerified && capability.Evidence == "" {
+		if capability.Status == executionapi.CapabilityVerified && capability.Evidence == "" {
 			return fmt.Errorf("verified conversation capability %q requires evidence", capability.Name)
 		}
 	}
@@ -609,7 +611,7 @@ func (s *SQLiteStore) SaveConversationCapabilityReport(ctx context.Context, repo
 	return err
 }
 
-func (s *SQLiteStore) ConversationCapabilityReports(ctx context.Context, backend BackendKind, protocol ExecutionProtocol, targetID string, limit int) ([]ConversationCapabilityReport, error) {
+func (s *SQLiteStore) ConversationCapabilityReports(ctx context.Context, backend executionapi.BackendKind, protocol executionapi.ExecutionProtocol, targetID string, limit int) ([]ConversationCapabilityReport, error) {
 	if limit < 1 {
 		limit = 100
 	}

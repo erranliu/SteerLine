@@ -5,17 +5,18 @@ import (
 	"errors"
 	"testing"
 
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/workerflow"
 )
 
 func TestWorkerFlowAdapterUsesFixedProtocol(t *testing.T) {
 	config := Config{Repository: "repo", Host: "local", Agent: "codex"}
 	target := targetFor(config)
-	run := &Run{RunID: "run", ExecutionID: "execution", AttemptID: "attempt", Host: "local", Agent: "codex", Backend: string(BackendLocal), Protocol: string(ProtocolLocalCodexAppServer), Target: target}
+	run := &Run{RunID: "run", ExecutionID: "execution", AttemptID: "attempt", Host: "local", Agent: "codex", Backend: string(executionapi.BackendLocal), Protocol: string(executionapi.ProtocolLocalCodexAppServer), Target: target}
 	service := Service{
 		Config: config,
 		domain: DomainSnapshot{WorkflowRuns: []WorkflowRunRecord{{WorkflowRunID: "run", WorkflowVersion: WorkerFlowVersion}},
-			Executions: []ExecutionRecord{{ExecutionID: "execution", WorkflowRunID: "run", Agent: "codex", Backend: string(BackendLocal), Protocol: string(ProtocolLocalCodexAppServer), Target: target}},
+			Executions: []ExecutionRecord{{ExecutionID: "execution", WorkflowRunID: "run", Agent: "codex", Backend: string(executionapi.BackendLocal), Protocol: string(executionapi.ProtocolLocalCodexAppServer), Target: target}},
 			Attempts:   []StepAttemptRecord{{AttemptID: "attempt", ExecutionID: "execution"}}},
 	}
 	mode, err := service.workerFlowMode(run)
@@ -30,7 +31,7 @@ func TestWorkerFlowAdapterUsesFixedProtocol(t *testing.T) {
 		t.Fatal("Codex command identity was treated as a native turn receipt")
 	}
 	wrong := *run
-	wrong.Protocol = string(ProtocolOrcaTerminalV2)
+	wrong.Protocol = string(executionapi.ProtocolOrcaTerminalV2)
 	if _, err := service.workerFlowMode(&wrong); err == nil {
 		t.Fatal("local execution accepted an Orca protocol adapter")
 	}
@@ -55,8 +56,8 @@ func TestWorkerFlowRejectsConfigDriftBeforePreparationOrTurnIntent(t *testing.T)
 		func() error { return service.startWorkerFlowTurn(ctx, run, "fixed prompt", newID()) },
 	} {
 		err := action()
-		var backendErr *BackendError
-		if !errors.As(err, &backendErr) || backendErr.Code != BackendIdentityMismatch {
+		var backendErr *executionapi.BackendError
+		if !errors.As(err, &backendErr) || backendErr.Code != executionapi.BackendIdentityMismatch {
 			t.Fatalf("configuration drift reached a worker side effect: %v", err)
 		}
 	}
@@ -72,16 +73,16 @@ func TestWorkerFlowRejectsConfigDriftBeforePreparationOrTurnIntent(t *testing.T)
 func TestWorkerFlowModeUsesFixedExecutionIdentity(t *testing.T) {
 	for _, test := range []struct {
 		host     string
-		protocol ExecutionProtocol
+		protocol executionapi.ExecutionProtocol
 		want     workerflow.Mode
 	}{
-		{"local", ProtocolLocalCodexAppServer, workerflow.LocalCodex},
-		{"orca", ProtocolOrcaTerminalV2, workerflow.NativeOrca},
-		{"orca_supervised", ProtocolOrcaSupervised, workerflow.SupervisedOrca},
+		{"local", executionapi.ProtocolLocalCodexAppServer, workerflow.LocalCodex},
+		{"orca", executionapi.ProtocolOrcaTerminalV2, workerflow.NativeOrca},
+		{"orca_supervised", executionapi.ProtocolOrcaSupervised, workerflow.SupervisedOrca},
 	} {
 		t.Run(test.host, func(t *testing.T) {
 			config := Config{Host: test.host, Agent: "codex", Orca: OrcaConfig{Executable: "orca", Supervised: &SupervisedOrcaConfig{ConnectionID: "fixed-connection", EnvironmentID: "fixed-environment"}}}
-			backend, _, err := ExecutionBackendKind(test.host)
+			backend, _, err := executionapi.ExecutionBackendKind(test.host)
 			require(t, err)
 			target := targetFor(config)
 			run := &Run{Host: test.host, Agent: "codex", Backend: backend, Protocol: string(test.protocol), Target: target}
@@ -99,7 +100,7 @@ func TestWorkerFlowModeUsesFixedExecutionIdentity(t *testing.T) {
 			if _, err := workerFlowModeFor(changed, run, execution); !feedbackIdentityMismatch(err) {
 				t.Fatalf("replacement host routed fixed feedback: %v", err)
 			}
-			execution.Protocol = string(ProtocolLocalProcess)
+			execution.Protocol = string(executionapi.ProtocolLocalProcess)
 			if _, err := workerFlowModeFor(config, run, execution); !feedbackIdentityMismatch(err) {
 				t.Fatalf("replacement protocol routed fixed feedback: %v", err)
 			}
@@ -108,6 +109,6 @@ func TestWorkerFlowModeUsesFixedExecutionIdentity(t *testing.T) {
 }
 
 func feedbackIdentityMismatch(err error) bool {
-	var backendErr *BackendError
-	return errors.As(err, &backendErr) && backendErr.Code == BackendIdentityMismatch
+	var backendErr *executionapi.BackendError
+	return errors.As(err, &backendErr) && backendErr.Code == executionapi.BackendIdentityMismatch
 }

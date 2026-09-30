@@ -1,6 +1,6 @@
 # Spec 公共执行契约归包
 
-任务 ID：54；任务名称：公共执行契约归包；目标：`EXECUTION-ISOLATION`。状态：待实施。配套 [Plan](execution-isolation-01-contracts.plan.md)。无本系列未完成任务硬前置，一个实现 PR 交付。
+任务 ID：54；任务名称：公共执行契约归包；目标：`EXECUTION-ISOLATION`。状态：已实施，待合入。配套 [Plan](execution-isolation-01-contracts.plan.md)。无本系列未完成任务硬前置，一个实现 PR 交付。
 
 ## 目标与范围
 

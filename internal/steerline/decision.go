@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 	"unicode/utf8"
+
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 // Decision questions and accepted answers are records in the current SQLite
@@ -215,7 +217,7 @@ func normalizeNativeDecisionAnswer(req *DecisionRequest, answer *DecisionAnswer)
 	return validateDecisionAnswer(req, answer)
 }
 
-func nativeDecisionQuestions(req *DecisionRequest) []nativeAskQuestion {
+func nativeDecisionQuestions(req *DecisionRequest) []executionapi.Question {
 	if req == nil {
 		return nil
 	}
@@ -528,7 +530,7 @@ func DecisionReplyEligibility(ctx context.Context, c Config, run *Run) error {
 		return errors.New("decision is not pending on the current native run")
 	}
 	if run.WorkflowVersion != WorkerFlowVersion || !stableExecutionID(run.ExecutionID) || run.AttemptID == "" || run.Decision.AttemptID != run.AttemptID {
-		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "feedback does not belong to the fixed worker execution"}
+		return &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "feedback does not belong to the fixed worker execution"}
 	}
 	if target := run.Decision.Request.HostTarget; target != nil {
 		if target.ExecutionID != run.ExecutionID || !stableExecutionID(target.TurnID) || !stableExecutionID(target.BlockerID) {
@@ -538,10 +540,10 @@ func DecisionReplyEligibility(ctx context.Context, c Config, run *Run) error {
 	}
 	if run.RecoveryRequired && (run.RecoveryState == "unverified" || run.RecoveryState == "" ||
 		run.RecoveryState == "interrupted" && run.Decision.Request.NativeAsk != nil) {
-		return &BackendError{Code: BackendUnsupported, Diagnostic: "original worker state or native question is not verified; wait for a recovery decision"}
+		return &executionapi.BackendError{Code: executionapi.BackendUnsupported, Diagnostic: "original worker state or native question is not verified; wait for a recovery decision"}
 	}
 	if run.SessionID != nil && !codexThreadID.MatchString(*run.SessionID) {
-		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "saved worker session identity is invalid"}
+		return &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "saved worker session identity is invalid"}
 	}
 	return ctx.Err()
 }
@@ -579,19 +581,11 @@ func (s *Service) applyDecisions(ctx context.Context) error {
 // Native Orca Dispatches are unsupervised. The center owns the exact agent
 // terminal created with the worktree and never uses Codex's exec protocol.
 type orcaAskCall struct {
-	RunID      string              `json:"run_id"`
-	TaskID     string              `json:"task_id"`
-	DispatchID string              `json:"dispatch_id"`
-	MessageID  string              `json:"message_id"`
-	Questions  []nativeAskQuestion `json:"questions"`
-}
-
-type nativeAskQuestion struct {
-	ID            string           `json:"id"`
-	Header        string           `json:"header"`
-	Question      string           `json:"question"`
-	Options       []DecisionOption `json:"options"`
-	AllowFreeText bool             `json:"allow_free_text"`
+	RunID      string                  `json:"run_id"`
+	TaskID     string                  `json:"task_id"`
+	DispatchID string                  `json:"dispatch_id"`
+	MessageID  string                  `json:"message_id"`
+	Questions  []executionapi.Question `json:"questions"`
 }
 
 func orcaQuestionID(decision *DecisionState) string {

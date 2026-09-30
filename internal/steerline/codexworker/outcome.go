@@ -7,10 +7,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"github.com/erranliu/SteerLine/internal/steerline/codexapp"
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 const maxJournalRecord = 8 << 20
@@ -25,26 +25,11 @@ type Outcome struct {
 	PRCandidates []string
 }
 
-var prURL = regexp.MustCompile(`https?://[^\s<>"']+/(?:pulls|pull)/[0-9]+`)
-
-func PRClues(text string) []string {
-	seen := map[string]bool{}
-	var urls []string
-	for _, raw := range prURL.FindAllString(text, -1) {
-		url := strings.TrimRight(raw, ".,;:!?)）")
-		if !seen[url] {
-			seen[url] = true
-			urls = append(urls, url)
-		}
-	}
-	return urls
-}
-
 func ReadExecOutcome(eventsPath string) (Outcome, error) {
 	var outcome Outcome
 	seenPR := map[string]bool{}
 	addPRClues := func(message string) {
-		for _, url := range PRClues(message) {
+		for _, url := range executionapi.PRClues(message) {
 			if !seenPR[url] {
 				seenPR[url] = true
 				outcome.PRCandidates = append(outcome.PRCandidates, url)
@@ -113,7 +98,7 @@ func ReadAppServerOutcome(path, threadID, turnID string) (Outcome, error) {
 	var outcome Outcome
 	seenPR := map[string]bool{}
 	addPR := func(message string) {
-		for _, candidate := range PRClues(message) {
+		for _, candidate := range executionapi.PRClues(message) {
 			if !seenPR[candidate] {
 				seenPR[candidate] = true
 				outcome.PRCandidates = append(outcome.PRCandidates, candidate)
