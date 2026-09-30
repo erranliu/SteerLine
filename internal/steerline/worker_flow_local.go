@@ -1,112 +1,22 @@
 package steerline
 
 import (
-	"bufio"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
-	"regexp"
 	"strings"
 
 	"github.com/erranliu/SteerLine/internal/steerline/codexapp"
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 )
 
-type workerTurnOutcome struct {
-	SessionID    string
-	NativeStatus string
-	Started      bool
-	Completed    bool
-	LastMessage  string
-	Failure      string
-	PRCandidates []string
-}
+type workerTurnOutcome = codexworker.Outcome
 
-var workerPRURL = regexp.MustCompile(`https?://[^\s<>"']+/(?:pulls|pull)/[0-9]+`)
-
-func workerPRClues(text string) []string {
-	seen := map[string]bool{}
-	var urls []string
-	for _, raw := range workerPRURL.FindAllString(text, -1) {
-		url := strings.TrimRight(raw, ".,;:!?)）")
-		if !seen[url] {
-			seen[url] = true
-			urls = append(urls, url)
-		}
-	}
-	return urls
-}
-
-func readWorkerTurnOutcome(eventsPath string) (workerTurnOutcome, error) {
-	var outcome workerTurnOutcome
-	seenPR := map[string]bool{}
-	addPRClues := func(message string) {
-		for _, url := range workerPRClues(message) {
-			if !seenPR[url] {
-				seenPR[url] = true
-				outcome.PRCandidates = append(outcome.PRCandidates, url)
-			}
-		}
-	}
-	file, err := os.Open(eventsPath)
-	if err != nil {
-		return outcome, err
-	}
-	defer file.Close()
-	scanner := bufio.NewScanner(file)
-	scanner.Buffer(make([]byte, 64<<10), JournalMaxRecord)
-	for lines := 0; scanner.Scan(); lines++ {
-		if lines >= 100000 {
-			return outcome, errors.New("worker turn journal exceeds its observation limit")
-		}
-		var event struct {
-			Type     string `json:"type"`
-			ThreadID string `json:"thread_id"`
-			Error    struct {
-				Message string `json:"message"`
-			} `json:"error"`
-			Item struct {
-				Type string `json:"type"`
-				Text string `json:"text"`
-			} `json:"item"`
-		}
-		if err := json.Unmarshal(scanner.Bytes(), &event); err != nil {
-			return outcome, fmt.Errorf("worker turn journal has unreadable output: %w", err)
-		}
-		switch event.Type {
-		case "thread.started":
-			if outcome.SessionID != "" && outcome.SessionID != event.ThreadID {
-				return outcome, errors.New("worker turn changed native session identity")
-			}
-			outcome.SessionID = event.ThreadID
-		case "turn.started":
-			outcome.Started = true
-		case "turn.completed":
-			outcome.Completed = true
-			outcome.NativeStatus = "completed"
-		case "turn.failed", "error":
-			outcome.Failure = event.Error.Message
-		case "item.completed":
-			if event.Item.Type == "agent_message" && event.Item.Text != "" {
-				outcome.LastMessage = event.Item.Text
-				addPRClues(event.Item.Text)
-			}
-		}
-	}
-	if err := scanner.Err(); err != nil {
-		return outcome, err
-	}
-	lastPath := filepath.Join(filepath.Dir(eventsPath), "last-message.txt")
-	if info, err := os.Stat(lastPath); err == nil && info.Size() <= 1<<20 {
-		if data, err := os.ReadFile(lastPath); err == nil && strings.TrimSpace(string(data)) != "" {
-			outcome.LastMessage = string(data)
-			addPRClues(outcome.LastMessage)
-		}
-	}
-	return outcome, nil
+func workerPRClues(text string) []string { return codexworker.PRClues(text) }
+func readWorkerTurnOutcome(path string) (workerTurnOutcome, error) {
+	return codexworker.ReadExecOutcome(path)
 }
 
 func workerFlowPrompt(task TaskRecord, contract TaskContract, localPublish bool) (string, error) {

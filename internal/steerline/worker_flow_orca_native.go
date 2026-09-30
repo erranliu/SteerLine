@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
 
 // Native Orca Dispatches are unsupervised. The center owns the exact agent
@@ -101,186 +103,23 @@ func nativeOrcaCoordinatorMarker(executionID string) string {
 }
 
 func nativeOrcaTerminalHasMarker(ctx context.Context, c Config, handle, marker string) (bool, error) {
-	env, err := workerOrcaCall(ctx, c, "terminal", "read", "--terminal", handle, "--limit", "1000", "--json")
-	if err != nil {
-		return false, err
-	}
-	var result struct {
-		Terminal struct {
-			Handle string   `json:"handle"`
-			Tail   []string `json:"tail"`
-		} `json:"terminal"`
-	}
-	if err := json.Unmarshal(env.Result, &result); err != nil || result.Terminal.Handle != handle {
-		return false, errors.Join(err, errors.New("Orca terminal marker read changed handle"))
-	}
-	for _, line := range result.Terminal.Tail {
-		if strings.Contains(line, marker) {
-			return true, nil
-		}
-	}
-	return false, nil
+	return orcaworker.TerminalHasMarker(ctx, orcaWorkerCaller(c), handle, marker)
 }
-
 func findNativeOrcaRun(ctx context.Context, c Config, objective, coordinator string) (string, error) {
-	cursor := ""
-	found := ""
-	for page := 0; page < 100; page++ {
-		args := []string{"orchestration", "run-list", "--limit", "1000", "--json"}
-		if cursor != "" {
-			args = append(args, "--cursor", cursor)
-		}
-		env, err := workerOrcaCall(ctx, c, args...)
-		if err != nil {
-			return "", err
-		}
-		var listing struct {
-			Runs []struct {
-				ID          string `json:"id"`
-				Objective   string `json:"objective"`
-				Coordinator string `json:"coordinator_handle"`
-			} `json:"runs"`
-			NextCursor string `json:"nextCursor"`
-		}
-		if err := json.Unmarshal(env.Result, &listing); err != nil {
-			return "", err
-		}
-		for _, candidate := range listing.Runs {
-			if candidate.Objective == objective && candidate.Coordinator == coordinator {
-				if found != "" {
-					return "", errors.New("more than one Orca Run has the fixed execution identity")
-				}
-				found = candidate.ID
-			}
-		}
-		if listing.NextCursor == "" {
-			return found, nil
-		}
-		if listing.NextCursor == cursor {
-			return "", errors.New("Orca Run pagination did not advance")
-		}
-		cursor = listing.NextCursor
-	}
-	return "", errors.New("Orca Run inventory exceeded its recovery bound")
+	return orcaworker.FindRun(ctx, orcaWorkerCaller(c), objective, coordinator)
 }
-
 func findNativeOrcaTask(ctx context.Context, c Config, runID, coordinator, spec string) (string, error) {
-	env, err := workerOrcaCall(ctx, c, "orchestration", "task-list", "--run", runID, "--json")
-	if err != nil {
-		return "", err
-	}
-	var listing struct {
-		RunID string `json:"runId"`
-		Tasks []struct {
-			ID      string `json:"id"`
-			RunID   string `json:"run_id"`
-			Spec    string `json:"spec"`
-			Creator string `json:"created_by_terminal_handle"`
-		} `json:"tasks"`
-		Count int `json:"count"`
-	}
-	if err := json.Unmarshal(env.Result, &listing); err != nil || listing.RunID != runID || listing.Count != len(listing.Tasks) {
-		return "", errors.Join(err, errors.New("Orca Task inventory is incomplete or changed Run"))
-	}
-	found := ""
-	for _, candidate := range listing.Tasks {
-		if candidate.RunID == runID && candidate.Spec == spec && candidate.Creator == coordinator {
-			if found != "" {
-				return "", errors.New("more than one Orca Task matches the original turn spec")
-			}
-			found = candidate.ID
-		}
-	}
-	return found, nil
+	return orcaworker.FindTask(ctx, orcaWorkerCaller(c), runID, coordinator, spec)
 }
-
 func findNativeOrcaDispatch(ctx context.Context, c Config, taskID string) (string, string, string, string, error) {
-	env, err := workerOrcaCall(ctx, c, "orchestration", "dispatch-show", "--task", taskID, "--json")
-	if err != nil {
-		return "", "", "", "", err
-	}
-	var result struct {
-		Dispatch struct {
-			ID          string `json:"id"`
-			TaskID      string `json:"task_id"`
-			RunID       string `json:"run_id"`
-			Assignee    string `json:"assignee_handle"`
-			Incarnation string `json:"process_incarnation"`
-		} `json:"dispatch"`
-	}
-	if err := json.Unmarshal(env.Result, &result); err != nil {
-		return "", "", "", "", err
-	}
-	if result.Dispatch.ID == "" || result.Dispatch.TaskID != taskID {
-		return "", "", "", "", errors.New("Orca Dispatch is missing or changed Task")
-	}
-	return result.Dispatch.ID, result.Dispatch.RunID, result.Dispatch.Assignee, result.Dispatch.Incarnation, nil
+	return orcaworker.FindDispatch(ctx, orcaWorkerCaller(c), taskID)
 }
-
 func findNativeOrcaReply(ctx context.Context, c Config, runID, dispatchID, questionID, answer string) (string, error) {
-	env, err := workerOrcaCall(ctx, c, "orchestration", "inbox", "--limit", "1000", "--full", "--json")
-	if err != nil {
-		return "", err
-	}
-	var result struct {
-		Messages []struct {
-			ID     string `json:"id"`
-			RunID  string `json:"run_id"`
-			From   string `json:"from_handle"`
-			To     string `json:"to_handle"`
-			Thread string `json:"thread_id"`
-			Body   string `json:"body"`
-			Type   string `json:"type"`
-		} `json:"messages"`
-	}
-	if err := json.Unmarshal(env.Result, &result); err != nil {
-		return "", err
-	}
-	found := ""
-	for _, message := range result.Messages {
-		if message.RunID != runID || message.Thread != questionID || message.From != "run:"+runID || message.To != "dispatch:"+dispatchID || message.Type != "status" {
-			continue
-		}
-		if message.Body != answer || message.ID == "" || found != "" {
-			return "", errors.New("original Orca question has conflicting or duplicate reply history")
-		}
-		found = message.ID
-	}
-	return found, nil
+	return orcaworker.FindReply(ctx, orcaWorkerCaller(c), runID, dispatchID, questionID, answer)
 }
-
 func findNativeOrcaSend(ctx context.Context, c Config, runID, dispatchID, subject, body string) (string, error) {
-	env, err := workerOrcaCall(ctx, c, "orchestration", "inbox", "--limit", "1000", "--full", "--json")
-	if err != nil {
-		return "", err
-	}
-	var result struct {
-		Messages []struct {
-			ID      string `json:"id"`
-			RunID   string `json:"run_id"`
-			From    string `json:"from_handle"`
-			To      string `json:"to_handle"`
-			Subject string `json:"subject"`
-			Body    string `json:"body"`
-			Type    string `json:"type"`
-		} `json:"messages"`
-	}
-	if err := json.Unmarshal(env.Result, &result); err != nil {
-		return "", err
-	}
-	found := ""
-	for _, message := range result.Messages {
-		if message.RunID != runID || message.From != "run:"+runID || message.To != "dispatch:"+dispatchID || message.Subject != subject || message.Type != "status" {
-			continue
-		}
-		if message.Body != body || message.ID == "" || found != "" {
-			return "", errors.New("Orca feedback has conflicting or duplicate send history")
-		}
-		found = message.ID
-	}
-	return found, nil
+	return orcaworker.FindSend(ctx, orcaWorkerCaller(c), runID, dispatchID, subject, body)
 }
-
 func verifyRecoveredNativeOrcaDispatch(ctx context.Context, c Config, dispatchID, taskID, runID string, identity ProcessIdentity) error {
 	env, err := workerOrcaCall(ctx, c, "orchestration", "worker-show", "--dispatch", dispatchID, "--json")
 	if err != nil {
@@ -314,37 +153,42 @@ func verifyRecoveredNativeOrcaDispatch(ctx context.Context, c Config, dispatchID
 }
 
 func (s *Service) bindNativeOrcaAgent(ctx context.Context, run *Run, execution *ExecutionRecord, worktree workerOrcaWorktree, handle, repoID, base string) error {
-	createdWithExpectedAgent := worktree.CreatedWithAgent == s.Config.agentName()
-	if s.Config.Model != "" {
+	fixed, configErr := s.workerFlowContext(run)
+	if configErr != nil {
+		return configErr
+	}
+	fixedConfig := fixed.config
+	createdWithExpectedAgent := worktree.CreatedWithAgent == fixedConfig.agentName()
+	if fixedConfig.Model != "" {
 		createdWithExpectedAgent = worktree.CreatedWithAgent == ""
 	}
 	if worktree.Comment != nativeOrcaWorktreeComment(execution.ExecutionID) || !createdWithExpectedAgent {
 		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "Orca worktree has no matching execution/agent ownership marker"}
 	}
-	if err := applyWorkerOrcaWorkspace(s.Config, run, execution, worktree, base); err != nil {
+	if err := applyWorkerOrcaWorkspace(fixedConfig, run, execution, worktree, base); err != nil {
 		return err
 	}
 	if handle == "" {
-		terms, runtimeID, err := nativeOrcaTerminals(ctx, s.Config, "id:"+worktree.ID)
+		terms, runtimeID, err := nativeOrcaTerminals(ctx, fixedConfig, "id:"+worktree.ID)
 		if err != nil {
 			return err
 		}
-		if len(terms) != 1 || terms[0].AgentIdentity != s.Config.agentName() || runtimeID == "" {
+		if len(terms) != 1 || terms[0].AgentIdentity != fixedConfig.agentName() || runtimeID == "" {
 			return &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "Orca worktree has no unique original agent terminal"}
 		}
 		handle = terms[0].Handle
 	}
-	term, err := showWorkerOrcaTerminal(ctx, s.Config, handle)
+	term, err := showWorkerOrcaTerminal(ctx, fixedConfig, handle)
 	if err != nil {
 		return err
 	}
 	if err := verifyWorkerOrcaTerminal(term, run, nil); err != nil {
 		return err
 	}
-	if term.WorktreeID != worktree.ID || term.AgentIdentity != s.Config.agentName() {
+	if term.WorktreeID != worktree.ID || term.AgentIdentity != fixedConfig.agentName() {
 		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "Orca started a different worktree or agent"}
 	}
-	identity := workerOrcaIdentity(term, s.Config)
+	identity := workerOrcaIdentity(term, fixedConfig)
 	identity.Kind, identity.WorktreeID = "orca-native", worktree.ID
 	execution.Process = &identity
 	s.refreshRun(run)
@@ -353,8 +197,13 @@ func (s *Service) bindNativeOrcaAgent(ctx context.Context, run *Run, execution *
 }
 
 func (s *Service) prepareNativeOrcaWorker(ctx context.Context, run *Run) error {
+	fixed, configErr := s.workerFlowContext(run)
+	if configErr != nil {
+		return configErr
+	}
+	fixedConfig := fixed.config
 	workflow, execution := s.workflowRecords(run)
-	if run == nil || workflow == nil || execution == nil || run.WorkspaceIntent == nil || s.Config.hostName() != "orca" {
+	if run == nil || workflow == nil || execution == nil || run.WorkspaceIntent == nil || fixedConfig.hostName() != "orca" {
 		return errors.New("native Orca preparation lacks a fixed worker claim")
 	}
 	if execution.Process != nil {
@@ -364,7 +213,7 @@ func (s *Service) prepareNativeOrcaWorker(ctx context.Context, run *Run) error {
 		if err := s.verifyNativeOrcaWorker(ctx, run, execution); err != nil {
 			return err
 		}
-		if s.Config.Model != "" {
+		if fixedConfig.Model != "" {
 			if op := s.nativeOrcaOperation("orca-native-agent-terminal:" + execution.ExecutionID); op != nil && op.Status != "confirmed" {
 				receipt := op.Receipt
 				if len(receipt) == 0 {
@@ -377,10 +226,10 @@ func (s *Service) prepareNativeOrcaWorker(ctx context.Context, run *Run) error {
 		}
 		return s.prepareNativeOrcaCoordinator(ctx, run, execution)
 	}
-	if s.Config.Model != "" {
+	if fixedConfig.Model != "" {
 		return s.prepareNativeOrcaFixedModelWorker(ctx, run, execution)
 	}
-	repoID, err := nativeOrcaRepo(ctx, s.Config)
+	repoID, err := nativeOrcaRepo(ctx, fixedConfig)
 	if err != nil {
 		return err
 	}
@@ -389,7 +238,7 @@ func (s *Service) prepareNativeOrcaWorker(ctx context.Context, run *Run) error {
 		return err
 	}
 	base := run.WorkspaceIntent.BaseCommit
-	worktree, exists, err := findWorkerOrcaWorktree(ctx, s.Config, repoID, name, base)
+	worktree, exists, err := findWorkerOrcaWorktree(ctx, fixedConfig, repoID, name, base)
 	if err != nil {
 		return err
 	}
@@ -424,11 +273,11 @@ func (s *Service) prepareNativeOrcaWorker(ctx context.Context, run *Run) error {
 	if exists {
 		return errors.New("fixed Orca worktree already exists without the original creation intent; preserve it for manual reconciliation")
 	}
-	opID, err := s.startOperation("orca_native_worktree", key, map[string]string{"repo_id": repoID, "name": name, "base": base, "agent": s.Config.agentName(), "comment": nativeOrcaWorktreeComment(execution.ExecutionID)})
+	opID, err := s.startOperation("orca_native_worktree", key, map[string]string{"repo_id": repoID, "name": name, "base": base, "agent": fixedConfig.agentName(), "comment": nativeOrcaWorktreeComment(execution.ExecutionID)})
 	if err != nil {
 		return err
 	}
-	env, callErr := workerOrcaCall(ctx, s.Config, "worktree", "create", "--repo", "id:"+repoID, "--name", name, "--base-branch", base, "--no-parent", "--setup", "skip", "--agent", s.Config.agentName(), "--comment", nativeOrcaWorktreeComment(execution.ExecutionID), "--json")
+	env, callErr := workerOrcaCall(ctx, fixedConfig, "worktree", "create", "--repo", "id:"+repoID, "--name", name, "--base-branch", base, "--no-parent", "--setup", "skip", "--agent", fixedConfig.agentName(), "--comment", nativeOrcaWorktreeComment(execution.ExecutionID), "--json")
 	if callErr != nil {
 		_ = s.changeOperation(opID, "outcome_unknown", "", nil, callErr.Error())
 		return &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "Orca worktree/agent creation has no confirmed receipt; do not create another agent", Cause: callErr}
@@ -477,6 +326,11 @@ func (s *Service) prepareNativeOrcaWorker(ctx context.Context, run *Run) error {
 }
 
 func (s *Service) prepareNativeOrcaCoordinator(ctx context.Context, run *Run, execution *ExecutionRecord) error {
+	fixed, configErr := s.workerFlowContext(run)
+	if configErr != nil {
+		return configErr
+	}
+	fixedConfig := fixed.config
 	state := execution.OrcaNative
 	if state == nil || execution.Process == nil {
 		return errors.New("Orca agent binding is missing")
@@ -497,7 +351,7 @@ func (s *Service) prepareNativeOrcaCoordinator(ctx context.Context, run *Run, ex
 				handle = receipt.Terminal.Handle
 			}
 			if handle == "" {
-				terms, runtimeID, err := nativeOrcaTerminals(ctx, s.Config, "path:"+filepath.ToSlash(s.Config.Repository))
+				terms, runtimeID, err := nativeOrcaTerminals(ctx, fixedConfig, "path:"+filepath.ToSlash(fixedConfig.Repository))
 				if err != nil {
 					return err
 				}
@@ -508,7 +362,7 @@ func (s *Service) prepareNativeOrcaCoordinator(ctx context.Context, run *Run, ex
 					if candidate.AgentIdentity != "" {
 						continue
 					}
-					found, err := nativeOrcaTerminalHasMarker(ctx, s.Config, candidate.Handle, marker)
+					found, err := nativeOrcaTerminalHasMarker(ctx, fixedConfig, candidate.Handle, marker)
 					if err != nil {
 						return err
 					}
@@ -532,11 +386,11 @@ func (s *Service) prepareNativeOrcaCoordinator(ctx context.Context, run *Run, ex
 				}
 			}
 		} else {
-			opID, err := s.startOperation("orca_native_coordinator", key, map[string]string{"execution_id": execution.ExecutionID, "repository": s.Config.Repository, "title": title})
+			opID, err := s.startOperation("orca_native_coordinator", key, map[string]string{"execution_id": execution.ExecutionID, "repository": fixedConfig.Repository, "title": title})
 			if err != nil {
 				return err
 			}
-			env, err := workerOrcaCall(ctx, s.Config, "terminal", "create", "--worktree", "path:"+filepath.ToSlash(s.Config.Repository), "--title", title, "--shell", "cmd.exe", "--command", "echo "+marker, "--json")
+			env, err := workerOrcaCall(ctx, fixedConfig, "terminal", "create", "--worktree", "path:"+filepath.ToSlash(fixedConfig.Repository), "--title", title, "--shell", "cmd.exe", "--command", "echo "+marker, "--json")
 			if err != nil {
 				_ = s.changeOperation(opID, "outcome_unknown", "", nil, err.Error())
 				return err
@@ -566,7 +420,7 @@ func (s *Service) prepareNativeOrcaCoordinator(ctx context.Context, run *Run, ex
 		objective := "SteerLine worker " + execution.ExecutionID
 		key := "orca-native-run:" + execution.ExecutionID
 		if op := s.nativeOrcaOperation(key); op != nil {
-			id, err := findNativeOrcaRun(ctx, s.Config, objective, state.Coordinator.Terminal)
+			id, err := findNativeOrcaRun(ctx, fixedConfig, objective, state.Coordinator.Terminal)
 			if err != nil {
 				return err
 			}
@@ -588,7 +442,7 @@ func (s *Service) prepareNativeOrcaCoordinator(ctx context.Context, run *Run, ex
 		if err != nil {
 			return err
 		}
-		env, err := workerOrcaCall(ctx, s.Config, "orchestration", "run-create", "--objective", objective, "--from", state.Coordinator.Terminal, "--json")
+		env, err := workerOrcaCall(ctx, fixedConfig, "orchestration", "run-create", "--objective", objective, "--from", state.Coordinator.Terminal, "--json")
 		if err != nil {
 			_ = s.changeOperation(opID, "outcome_unknown", "", nil, err.Error())
 			return err
@@ -624,14 +478,19 @@ func (s *Service) prepareNativeOrcaCoordinator(ctx context.Context, run *Run, ex
 }
 
 func (s *Service) bindNativeOrcaCoordinator(ctx context.Context, run *Run, execution *ExecutionRecord, handle string) error {
-	term, err := showWorkerOrcaTerminal(ctx, s.Config, handle)
+	fixed, configErr := s.workerFlowContext(run)
+	if configErr != nil {
+		return configErr
+	}
+	fixedConfig := fixed.config
+	term, err := showWorkerOrcaTerminal(ctx, fixedConfig, handle)
 	if err != nil {
 		return err
 	}
-	if canonical(filepath.FromSlash(term.WorktreePath)) != canonical(s.Config.Repository) || term.RuntimeID != execution.Process.RuntimeID || term.AgentIdentity != "" {
+	if canonical(filepath.FromSlash(term.WorktreePath)) != canonical(fixedConfig.Repository) || term.RuntimeID != execution.Process.RuntimeID || term.AgentIdentity != "" {
 		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "Orca coordinator is not the fixed shell on the local runtime/repository"}
 	}
-	execution.OrcaNative.Coordinator = ProcessIdentity{Kind: "orca-native-coordinator", Terminal: term.Handle, RuntimeID: term.RuntimeID, Incarnation: term.IncarnationID, Executable: s.Config.Orca.Executable}
+	execution.OrcaNative.Coordinator = ProcessIdentity{Kind: "orca-native-coordinator", Terminal: term.Handle, RuntimeID: term.RuntimeID, Incarnation: term.IncarnationID, Executable: fixedConfig.Orca.Executable}
 	execution.Target.CoordinatorTerminal = term.Handle
 	execution.Target.CoordinatorTerminal = term.Handle
 	s.refreshRun(run)
@@ -639,22 +498,27 @@ func (s *Service) bindNativeOrcaCoordinator(ctx context.Context, run *Run, execu
 }
 
 func (s *Service) verifyNativeOrcaWorker(ctx context.Context, run *Run, execution *ExecutionRecord) error {
+	fixed, configErr := s.workerFlowContext(run)
+	if configErr != nil {
+		return configErr
+	}
+	fixedConfig := fixed.config
 	if execution.OrcaNative == nil || execution.Process == nil || execution.Process.Kind != "orca-native" {
 		return errors.New("native Orca worker binding is incomplete")
 	}
-	term, err := showWorkerOrcaTerminal(ctx, s.Config, execution.Process.Terminal)
+	term, err := showWorkerOrcaTerminal(ctx, fixedConfig, execution.Process.Terminal)
 	if err != nil {
 		return err
 	}
 	if err := verifyWorkerOrcaTerminal(term, run, nil); err != nil {
 		return err
 	}
-	if term.RuntimeID != execution.Process.RuntimeID || term.IncarnationID != execution.Process.Incarnation || term.WorktreeID != execution.Process.WorktreeID || term.AgentIdentity != s.Config.agentName() {
+	if term.RuntimeID != execution.Process.RuntimeID || term.IncarnationID != execution.Process.Incarnation || term.WorktreeID != execution.Process.WorktreeID || term.AgentIdentity != fixedConfig.agentName() {
 		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "original Orca agent terminal or agent has changed"}
 	}
 	coordinator := execution.OrcaNative.Coordinator
 	if coordinator.Terminal != "" {
-		shown, err := showWorkerOrcaTerminal(ctx, s.Config, coordinator.Terminal)
+		shown, err := showWorkerOrcaTerminal(ctx, fixedConfig, coordinator.Terminal)
 		if err != nil {
 			return err
 		}
@@ -666,6 +530,11 @@ func (s *Service) verifyNativeOrcaWorker(ctx context.Context, run *Run, executio
 }
 
 func (s *Service) startNativeOrcaTurn(ctx context.Context, run *Run, execution *ExecutionRecord, turnID, prompt string) error {
+	fixed, configErr := s.workerFlowContext(run)
+	if configErr != nil {
+		return configErr
+	}
+	fixedConfig := fixed.config
 	if err := s.verifyNativeOrcaWorker(ctx, run, execution); err != nil {
 		return err
 	}
@@ -689,7 +558,7 @@ func (s *Service) startNativeOrcaTurn(ctx context.Context, run *Run, execution *
 	taskKey := "orca-native-task:" + execution.ExecutionID + ":" + turnID
 	if current == nil {
 		if op := s.nativeOrcaOperation(taskKey); op != nil {
-			id, err := findNativeOrcaTask(ctx, s.Config, execution.Target.OrchestrationRun, state.Coordinator.Terminal, prompt)
+			id, err := findNativeOrcaTask(ctx, fixedConfig, execution.Target.OrchestrationRun, state.Coordinator.Terminal, prompt)
 			if err != nil {
 				return err
 			}
@@ -711,7 +580,7 @@ func (s *Service) startNativeOrcaTurn(ctx context.Context, run *Run, execution *
 			if err != nil {
 				return err
 			}
-			env, err := workerOrcaCall(ctx, s.Config, "orchestration", "task-create", "--spec", prompt, "--task-title", run.Title, "--run", execution.Target.OrchestrationRun, "--from", state.Coordinator.Terminal, "--json")
+			env, err := workerOrcaCall(ctx, fixedConfig, "orchestration", "task-create", "--spec", prompt, "--task-title", run.Title, "--run", execution.Target.OrchestrationRun, "--from", state.Coordinator.Terminal, "--json")
 			if err != nil {
 				_ = s.changeOperation(taskOp, "outcome_unknown", "", nil, err.Error())
 				return err
@@ -739,14 +608,14 @@ func (s *Service) startNativeOrcaTurn(ctx context.Context, run *Run, execution *
 	taskID := current.TaskID
 	dispatchKey := "orca-native-dispatch:" + execution.ExecutionID + ":" + turnID
 	if op := s.nativeOrcaOperation(dispatchKey); op != nil {
-		id, runID, handle, incarnation, err := findNativeOrcaDispatch(ctx, s.Config, taskID)
+		id, runID, handle, incarnation, err := findNativeOrcaDispatch(ctx, fixedConfig, taskID)
 		if err != nil {
 			return &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "original Orca Dispatch creation is unverified", Cause: err}
 		}
 		if runID != execution.Target.OrchestrationRun || handle != execution.Process.Terminal || !strings.HasSuffix(incarnation, ":"+execution.Process.Incarnation) {
 			return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "recovered Orca Dispatch targets a different worker or Run"}
 		}
-		if err := verifyRecoveredNativeOrcaDispatch(ctx, s.Config, id, taskID, runID, *execution.Process); err != nil {
+		if err := verifyRecoveredNativeOrcaDispatch(ctx, fixedConfig, id, taskID, runID, *execution.Process); err != nil {
 			return err
 		}
 		current.DispatchID, current.DispatchRequestID = id, op.PlatformRequestID
@@ -760,10 +629,10 @@ func (s *Service) startNativeOrcaTurn(ctx context.Context, run *Run, execution *
 	if err != nil {
 		return err
 	}
-	deadline := time.Now().Add(positiveDuration(s.Config.Orca.WaitTimeout, 2*time.Minute))
+	deadline := time.Now().Add(positiveDuration(fixedConfig.Orca.WaitTimeout, 2*time.Minute))
 	var env orcaEnvelope
 	for {
-		env, err = workerOrcaCall(ctx, s.Config, "orchestration", "dispatch", "--task", taskID, "--to", execution.Process.Terminal, "--run", execution.Target.OrchestrationRun, "--from", state.Coordinator.Terminal, "--inject", "--json")
+		env, err = workerOrcaCall(ctx, fixedConfig, "orchestration", "dispatch", "--task", taskID, "--to", execution.Process.Terminal, "--run", execution.Target.OrchestrationRun, "--from", state.Coordinator.Terminal, "--inject", "--json")
 		if err == nil {
 			break
 		}
@@ -961,6 +830,11 @@ func (s *Service) beginNativeOrcaTurn(run *Run, workflow *WorkflowRunRecord, exe
 }
 
 func (s *Service) applyNativeOrcaDecision(ctx context.Context, run *Run, workflow *WorkflowRunRecord, execution *ExecutionRecord, answer DecisionAnswer, commandID string) error {
+	fixed, configErr := s.workerFlowContext(run)
+	if configErr != nil {
+		return configErr
+	}
+	fixedConfig := fixed.config
 	turn := nativeOrcaCurrentTurn(execution)
 	if execution.Process == nil || execution.Process.Kind != "orca-native" || execution.OrcaNative == nil || turn == nil || turn.DispatchID == "" {
 		return s.waitWorkerFlow(run, "Original Orca Dispatch identity is unavailable; feedback was retained")
@@ -980,7 +854,7 @@ func (s *Service) applyNativeOrcaDecision(ctx context.Context, run *Run, workflo
 		for _, op := range s.State.Operations {
 			if op.IdempotencyKey == key {
 				if op.Status != "confirmed" && op.Status != "accepted" {
-					messageID, err := findNativeOrcaReply(ctx, s.Config, execution.Target.OrchestrationRun, turn.DispatchID, orcaQuestionID(run.Decision), nativeOrcaAnswerText(answer, run.Decision.Request))
+					messageID, err := findNativeOrcaReply(ctx, fixedConfig, execution.Target.OrchestrationRun, turn.DispatchID, orcaQuestionID(run.Decision), nativeOrcaAnswerText(answer, run.Decision.Request))
 					if err != nil || messageID == "" {
 						return s.nativeOrcaUncertain(run, "Orca reply outcome is unverified; the original question was not answered twice")
 					}
@@ -1001,7 +875,7 @@ func (s *Service) applyNativeOrcaDecision(ctx context.Context, run *Run, workflo
 		if err != nil {
 			return err
 		}
-		env, err := workerOrcaCall(ctx, s.Config, "orchestration", "reply", "--id", orcaQuestionID(run.Decision), "--body", body, "--run", execution.Target.OrchestrationRun, "--from", execution.OrcaNative.Coordinator.Terminal, "--json")
+		env, err := workerOrcaCall(ctx, fixedConfig, "orchestration", "reply", "--id", orcaQuestionID(run.Decision), "--body", body, "--run", execution.Target.OrchestrationRun, "--from", execution.OrcaNative.Coordinator.Terminal, "--json")
 		if err != nil {
 			_ = s.changeOperation(opID, "outcome_unknown", "", nil, err.Error())
 			return s.nativeOrcaUncertain(run, "Orca reply outcome needs reconciliation: "+err.Error())
@@ -1066,6 +940,11 @@ func (s *Service) applyNativeOrcaDecision(ctx context.Context, run *Run, workflo
 }
 
 func (s *Service) sendNativeOrcaFeedback(ctx context.Context, run *Run, workflow *WorkflowRunRecord, execution *ExecutionRecord, turn *OrcaNativeTurn, answer DecisionAnswer, commandID string) error {
+	fixed, configErr := s.workerFlowContext(run)
+	if configErr != nil {
+		return configErr
+	}
+	fixedConfig := fixed.config
 	key := "orca-native-send:" + execution.ExecutionID + ":" + commandID
 	name := "SteerLine feedback " + commandID
 	body := workerFeedbackText(answer, run.Decision.Request)
@@ -1079,7 +958,7 @@ func (s *Service) sendNativeOrcaFeedback(ctx context.Context, run *Run, workflow
 			s.refreshRun(run)
 			return s.save()
 		}
-		messageID, err := findNativeOrcaSend(ctx, s.Config, execution.Target.OrchestrationRun, turn.DispatchID, name, body)
+		messageID, err := findNativeOrcaSend(ctx, fixedConfig, execution.Target.OrchestrationRun, turn.DispatchID, name, body)
 		if err != nil || messageID == "" {
 			execution.Error = ptr("Orca feedback send remains unverified; it was not copied to another Dispatch")
 			s.refreshRun(run)
@@ -1099,7 +978,7 @@ func (s *Service) sendNativeOrcaFeedback(ctx context.Context, run *Run, workflow
 	if err != nil {
 		return err
 	}
-	env, err := workerOrcaCall(ctx, s.Config, "orchestration", "send", "--subject", name, "--body", body, "--type", "status", "--to", "dispatch:"+turn.DispatchID, "--run", execution.Target.OrchestrationRun, "--from", execution.OrcaNative.Coordinator.Terminal, "--json")
+	env, err := workerOrcaCall(ctx, fixedConfig, "orchestration", "send", "--subject", name, "--body", body, "--type", "status", "--to", "dispatch:"+turn.DispatchID, "--run", execution.Target.OrchestrationRun, "--from", execution.OrcaNative.Coordinator.Terminal, "--json")
 	if err != nil {
 		if env.Error != nil && env.Error.Code == "dispatch_inactive" {
 			_ = s.changeOperation(opID, "rejected", "", nil, err.Error())
@@ -1165,6 +1044,11 @@ func (s *Service) nativeOrcaUncertain(run *Run, reason string) error {
 }
 
 func (s *Service) pollNativeOrcaWorker(ctx context.Context, run *Run) error {
+	fixed, configErr := s.workerFlowContext(run)
+	if configErr != nil {
+		return configErr
+	}
+	fixedConfig := fixed.config
 	workflow, execution := s.workflowRecords(run)
 	if workflow == nil || execution == nil || execution.OrcaNative == nil {
 		return errors.New("native Orca poll has no fixed execution")
@@ -1181,7 +1065,7 @@ func (s *Service) pollNativeOrcaWorker(ctx context.Context, run *Run) error {
 		return errors.New("native Orca inbox has no bound coordinator/Run")
 	}
 	if turn.DoneMessageID == "" {
-		env, err := workerOrcaCall(ctx, s.Config, "orchestration", "check", "--terminal", state.Coordinator.Terminal, "--run", execution.Target.OrchestrationRun, "--json")
+		env, err := workerOrcaCall(ctx, fixedConfig, "orchestration", "check", "--terminal", state.Coordinator.Terminal, "--run", execution.Target.OrchestrationRun, "--json")
 		if err != nil {
 			return s.nativeOrcaUncertain(run, "Orca inbox is temporarily unavailable: "+err.Error())
 		}
@@ -1313,7 +1197,7 @@ func (s *Service) bindNativeOrcaPR(ctx context.Context, run *Run, workflow *Work
 		return err
 	}
 	pendingQuestion := run.Decision != nil && run.Decision.Status == "pending" && orcaQuestionID(run.Decision) != ""
-	if err := BindWorkerPR(workflow, execution, info, urls[0], s.Config.PR.Repository, pendingQuestion); err != nil {
+	if err := BindWorkerPR(workflow, execution, info, urls[0], s.projectExecutionConfig().PR.Repository, pendingQuestion); err != nil {
 		return err
 	}
 	workflow.PRURL, workflow.PRState = info.URL, info.State
@@ -1322,6 +1206,11 @@ func (s *Service) bindNativeOrcaPR(ctx context.Context, run *Run, workflow *Work
 }
 
 func (s *Service) ackNativeOrcaDelivery(ctx context.Context, run *Run, execution *ExecutionRecord, deliveryID string) error {
+	fixed, configErr := s.workerFlowContext(run)
+	if configErr != nil {
+		return configErr
+	}
+	fixedConfig := fixed.config
 	state := execution.OrcaNative
 	key := "orca-native-ack:" + execution.ExecutionID + ":" + deliveryID
 	op := s.nativeOrcaOperation(key)
@@ -1331,7 +1220,7 @@ func (s *Service) ackNativeOrcaDelivery(ctx context.Context, run *Run, execution
 	if op != nil {
 		// The ack response may have been lost after Orca advanced its FIFO.
 		// Read the original Run before deciding whether another ack is needed.
-		observed, err := workerOrcaCall(ctx, s.Config, "orchestration", "check", "--terminal", state.Coordinator.Terminal, "--run", execution.Target.OrchestrationRun, "--json")
+		observed, err := workerOrcaCall(ctx, fixedConfig, "orchestration", "check", "--terminal", state.Coordinator.Terminal, "--run", execution.Target.OrchestrationRun, "--json")
 		if err != nil {
 			return err
 		}
@@ -1356,7 +1245,7 @@ func (s *Service) ackNativeOrcaDelivery(ctx context.Context, run *Run, execution
 	} else {
 		opID = op.OperationID
 	}
-	env, err := workerOrcaCall(ctx, s.Config, "orchestration", "check", "--terminal", state.Coordinator.Terminal, "--run", execution.Target.OrchestrationRun, "--ack", deliveryID, "--json")
+	env, err := workerOrcaCall(ctx, fixedConfig, "orchestration", "check", "--terminal", state.Coordinator.Terminal, "--run", execution.Target.OrchestrationRun, "--ack", deliveryID, "--json")
 	if err != nil {
 		_ = s.changeOperation(opID, "outcome_unknown", "", nil, err.Error())
 		return err
@@ -1380,6 +1269,11 @@ func (s *Service) ackNativeOrcaDelivery(ctx context.Context, run *Run, execution
 }
 
 func (s *Service) readNativeOrcaOutput(ctx context.Context, run *Run, execution *ExecutionRecord, turn *OrcaNativeTurn) error {
+	fixed, configErr := s.workerFlowContext(run)
+	if configErr != nil {
+		return configErr
+	}
+	fixedConfig := fixed.config
 	attempt := s.workflowAttempt(run, run.AttemptID)
 	if attempt == nil {
 		return errors.New("worker output has no attempt")
@@ -1388,10 +1282,10 @@ func (s *Service) readNativeOrcaOutput(ctx context.Context, run *Run, execution 
 	if attempt.OutputCursor != "" {
 		args = append(args, "--cursor", attempt.OutputCursor)
 	}
-	env, err := workerOrcaCall(ctx, s.Config, args...)
+	env, err := workerOrcaCall(ctx, fixedConfig, args...)
 	if err != nil && strings.Contains(err.Error(), "source_changed") {
 		attempt.OutputCursor = ""
-		env, err = workerOrcaCall(ctx, s.Config, "orchestration", "worker-read", "--dispatch", turn.DispatchID, "--source", "auto", "--limit", "100", "--json")
+		env, err = workerOrcaCall(ctx, fixedConfig, "orchestration", "worker-read", "--dispatch", turn.DispatchID, "--source", "auto", "--limit", "100", "--json")
 	}
 	if err != nil {
 		return err
@@ -1457,7 +1351,12 @@ func (s *Service) readNativeOrcaOutput(ctx context.Context, run *Run, execution 
 }
 
 func (s *Service) finishNativeOrcaTurn(ctx context.Context, run *Run, workflow *WorkflowRunRecord, execution *ExecutionRecord, turn *OrcaNativeTurn) error {
-	env, err := workerOrcaCall(ctx, s.Config, "orchestration", "worker-show", "--dispatch", turn.DispatchID, "--json")
+	fixed, configErr := s.workerFlowContext(run)
+	if configErr != nil {
+		return configErr
+	}
+	fixedConfig := fixed.config
+	env, err := workerOrcaCall(ctx, fixedConfig, "orchestration", "worker-show", "--dispatch", turn.DispatchID, "--json")
 	if err != nil {
 		return s.nativeOrcaUncertain(run, "Orca worker_done arrived but Dispatch settlement is unverified: "+err.Error())
 	}
@@ -1531,6 +1430,14 @@ func (s *Service) finishNativeOrcaTurn(ctx context.Context, run *Run, workflow *
 }
 
 func (s *Service) closeNativeOrcaTerminal(ctx context.Context, execution *ExecutionRecord, identity ProcessIdentity, role string) error {
+	if execution == nil {
+		return errors.New("Orca terminal has no fixed execution")
+	}
+	config, configErr := s.executionConfigForWorkflowID(execution.WorkflowRunID)
+	if configErr != nil {
+		return configErr
+	}
+	fixedConfig := copyWorkerFlowConfig(config)
 	if identity.Terminal == "" || identity.Incarnation == "" || identity.RuntimeID == "" || identity.RuntimeID != execution.Process.RuntimeID {
 		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "Orca terminal cleanup lacks its original identity"}
 	}
@@ -1538,14 +1445,14 @@ func (s *Service) closeNativeOrcaTerminal(ctx context.Context, execution *Execut
 	if op := s.nativeOrcaOperation(key); op != nil && op.Status == "confirmed" {
 		return nil
 	}
-	term, err := showWorkerOrcaTerminal(ctx, s.Config, identity.Terminal)
+	term, err := showWorkerOrcaTerminal(ctx, fixedConfig, identity.Terminal)
 	if err != nil {
 		if op := s.nativeOrcaOperation(key); op != nil {
-			selector := "path:" + filepath.ToSlash(s.Config.Repository)
+			selector := "path:" + filepath.ToSlash(fixedConfig.Repository)
 			if role == "agent" {
 				selector = "id:" + identity.WorktreeID
 			}
-			terms, runtimeID, listErr := nativeOrcaTerminals(ctx, s.Config, selector)
+			terms, runtimeID, listErr := nativeOrcaTerminals(ctx, fixedConfig, selector)
 			if listErr == nil && runtimeID == identity.RuntimeID {
 				for _, candidate := range terms {
 					if candidate.Handle == identity.Terminal {
@@ -1557,7 +1464,7 @@ func (s *Service) closeNativeOrcaTerminal(ctx context.Context, execution *Execut
 		}
 		return err
 	}
-	if term.RuntimeID != identity.RuntimeID || term.IncarnationID != identity.Incarnation || role == "agent" && term.WorktreeID != identity.WorktreeID || role == "coordinator" && canonical(filepath.FromSlash(term.WorktreePath)) != canonical(s.Config.Repository) {
+	if term.RuntimeID != identity.RuntimeID || term.IncarnationID != identity.Incarnation || role == "agent" && term.WorktreeID != identity.WorktreeID || role == "coordinator" && canonical(filepath.FromSlash(term.WorktreePath)) != canonical(fixedConfig.Repository) {
 		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "Orca cleanup terminal was replaced or moved"}
 	}
 	op := s.nativeOrcaOperation(key)
@@ -1570,7 +1477,7 @@ func (s *Service) closeNativeOrcaTerminal(ctx context.Context, execution *Execut
 	} else {
 		opID = op.OperationID
 	}
-	env, err := workerOrcaCall(ctx, s.Config, "terminal", "close", "--terminal", identity.Terminal, "--json")
+	env, err := workerOrcaCall(ctx, fixedConfig, "terminal", "close", "--terminal", identity.Terminal, "--json")
 	if err != nil {
 		_ = s.changeOperation(opID, "outcome_unknown", "", nil, err.Error())
 		return err
@@ -1588,6 +1495,11 @@ func (s *Service) closeNativeOrcaTerminal(ctx context.Context, execution *Execut
 }
 
 func (s *Service) finishNativeOrcaCleanup(ctx context.Context, run *Run) error {
+	fixed, configErr := s.workerFlowContext(run)
+	if configErr != nil {
+		return configErr
+	}
+	fixedConfig := fixed.config
 	workflow, execution := s.workflowRecords(run)
 	if run == nil || workflow == nil || execution == nil || execution.OrcaNative == nil || execution.Process == nil || execution.Process.Kind != "orca-native" || workflow.Phase != "completed" {
 		return nil
@@ -1602,7 +1514,7 @@ func (s *Service) finishNativeOrcaCleanup(ctx context.Context, run *Run) error {
 	if state.Coordinator.Terminal == "" || execution.Target.OrchestrationRun == "" {
 		return nil
 	}
-	env, err := workerOrcaCall(ctx, s.Config, "orchestration", "check", "--terminal", state.Coordinator.Terminal, "--run", execution.Target.OrchestrationRun, "--json")
+	env, err := workerOrcaCall(ctx, fixedConfig, "orchestration", "check", "--terminal", state.Coordinator.Terminal, "--run", execution.Target.OrchestrationRun, "--json")
 	if err != nil {
 		return err
 	}

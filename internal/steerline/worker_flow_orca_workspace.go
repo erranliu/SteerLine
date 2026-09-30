@@ -8,18 +8,20 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
 
-type workerOrcaWorktree struct {
-	ID               string `json:"id"`
-	RepoID           string `json:"repoId"`
-	Path             string `json:"path"`
-	Branch           string `json:"branch"`
-	Head             string `json:"head"`
-	DisplayName      string `json:"displayName"`
-	BaseRef          string `json:"baseRef"`
-	Comment          string `json:"comment,omitempty"`
-	CreatedWithAgent string `json:"createdWithAgent,omitempty"`
+type workerOrcaWorktree = orcaworker.Worktree
+
+func workerOrcaWorkspaceError(err error) error {
+	if errors.Is(err, orcaworker.ErrWorktreeIdentity) {
+		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: err.Error()}
+	}
+	if errors.Is(err, orcaworker.ErrWorktreeOutcomeUnknown) {
+		return &BackendError{Code: BackendOutcomeUnknown, Diagnostic: orcaworker.ErrWorktreeOutcomeUnknown.Error(), Cause: err}
+	}
+	return err
 }
 
 func workerOrcaCall(ctx context.Context, c Config, args ...string) (orcaEnvelope, error) {
@@ -40,6 +42,13 @@ func workerOrcaCall(ctx context.Context, c Config, args ...string) (orcaEnvelope
 	return envelope, nil
 }
 
+func orcaWorkerCaller(c Config) orcaworker.Call {
+	return func(ctx context.Context, args ...string) (json.RawMessage, error) {
+		env, err := workerOrcaCall(ctx, c, args...)
+		return env.Result, err
+	}
+}
+
 func workerOrcaWorktreeName(runID string) (string, error) {
 	if !stableExecutionID(runID) {
 		return "", errors.New("Orca worktree requires a stable workflow identity")
@@ -48,70 +57,15 @@ func workerOrcaWorktreeName(runID string) (string, error) {
 }
 
 func validateWorkerOrcaWorktree(value workerOrcaWorktree, name, repoID, base string) error {
-	branch := strings.TrimPrefix(value.Branch, "refs/heads/")
-	if value.DisplayName != name || value.RepoID != repoID || value.ID == "" ||
-		!filepath.IsAbs(filepath.FromSlash(value.Path)) || branch == "" ||
-		value.Head != base || value.BaseRef != base {
-		return &BackendError{Code: BackendIdentityMismatch, Diagnostic: "Orca worktree does not match the fixed name, repository, base and branch"}
-	}
-	return nil
+	return workerOrcaWorkspaceError(orcaworker.ValidateWorktree(value, name, repoID, base))
 }
-
 func findWorkerOrcaWorktree(ctx context.Context, c Config, repoID, name, base string) (workerOrcaWorktree, bool, error) {
-	env, err := workerOrcaCall(ctx, c, "worktree", "list", "--repo", "id:"+repoID, "--limit", "1000", "--json")
-	if err != nil {
-		return workerOrcaWorktree{}, false, err
-	}
-	var listing struct {
-		Worktrees []workerOrcaWorktree `json:"worktrees"`
-		Truncated bool                 `json:"truncated"`
-	}
-	if err := json.Unmarshal(env.Result, &listing); err != nil || listing.Truncated {
-		return workerOrcaWorktree{}, false, errors.Join(err, errors.New("Orca worktree list is incomplete"))
-	}
-	var found *workerOrcaWorktree
-	for i := range listing.Worktrees {
-		candidate := &listing.Worktrees[i]
-		if candidate.DisplayName != name {
-			continue
-		}
-		if found != nil {
-			return workerOrcaWorktree{}, false, errors.New("more than one Orca worktree has the fixed worker name")
-		}
-		found = candidate
-	}
-	if found == nil {
-		return workerOrcaWorktree{}, false, nil
-	}
-	if err := validateWorkerOrcaWorktree(*found, name, repoID, base); err != nil {
-		return workerOrcaWorktree{}, false, err
-	}
-	return *found, true, nil
+	worktree, found, err := orcaworker.FindWorktree(ctx, orcaWorkerCaller(c), repoID, name, base)
+	return worktree, found, workerOrcaWorkspaceError(err)
 }
-
 func createWorkerOrcaWorktree(ctx context.Context, c Config, repoID, name, base string) (workerOrcaWorktree, error) {
-	if found, exists, err := findWorkerOrcaWorktree(ctx, c, repoID, name, base); err != nil {
-		return workerOrcaWorktree{}, err
-	} else if exists {
-		return found, nil
-	}
-	env, callErr := workerOrcaCall(ctx, c, "worktree", "create", "--repo", "id:"+repoID, "--name", name, "--base-branch", base, "--no-parent", "--setup", "skip", "--json")
-	if callErr != nil {
-		if found, exists, err := findWorkerOrcaWorktree(ctx, c, repoID, name, base); err == nil && exists {
-			return found, nil
-		}
-		return workerOrcaWorktree{}, &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "remote worker worktree creation has no confirmed receipt", Cause: callErr}
-	}
-	var result struct {
-		Worktree workerOrcaWorktree `json:"worktree"`
-	}
-	if err := json.Unmarshal(env.Result, &result); err != nil {
-		return workerOrcaWorktree{}, err
-	}
-	if err := validateWorkerOrcaWorktree(result.Worktree, name, repoID, base); err != nil {
-		return workerOrcaWorktree{}, err
-	}
-	return result.Worktree, nil
+	worktree, err := orcaworker.CreateWorktree(ctx, orcaWorkerCaller(c), repoID, name, base)
+	return worktree, workerOrcaWorkspaceError(err)
 }
 
 func applyWorkerOrcaWorkspace(c Config, run *Run, execution *ExecutionRecord, worktree workerOrcaWorktree, base string) error {
@@ -131,7 +85,12 @@ func applyWorkerOrcaWorkspace(c Config, run *Run, execution *ExecutionRecord, wo
 }
 
 func (s *Service) prepareRemoteWorkerWorkspace(ctx context.Context, run *Run, execution *ExecutionRecord, operationID string) error {
-	if s.Config.hostName() != "orca_supervised" || run == nil || execution == nil || run.WorkspaceIntent == nil {
+	fixed, configErr := s.workerFlowContext(run)
+	if configErr != nil {
+		return configErr
+	}
+	fixedConfig := fixed.config
+	if fixedConfig.hostName() != "orca_supervised" || run == nil || execution == nil || run.WorkspaceIntent == nil {
 		return errors.New("remote worker workspace has no fixed preparation intent")
 	}
 	base := run.WorkspaceIntent.BaseCommit
@@ -139,15 +98,15 @@ func (s *Service) prepareRemoteWorkerWorkspace(ctx context.Context, run *Run, ex
 	if err != nil {
 		return err
 	}
-	pair, err := probeSupervisedOrcaTarget(ctx, s.Config)
+	pair, err := probeSupervisedOrcaTarget(ctx, fixedConfig)
 	if err != nil {
 		return err
 	}
-	worktree, err := createWorkerOrcaWorktree(ctx, s.Config, pair.RepositoryID, name, base)
+	worktree, err := createWorkerOrcaWorktree(ctx, fixedConfig, pair.RepositoryID, name, base)
 	if err != nil {
 		return err
 	}
-	if err := applyWorkerOrcaWorkspace(s.Config, run, execution, worktree, base); err != nil {
+	if err := applyWorkerOrcaWorkspace(fixedConfig, run, execution, worktree, base); err != nil {
 		return err
 	}
 	if operationID != "" {
@@ -159,25 +118,30 @@ func (s *Service) prepareRemoteWorkerWorkspace(ctx context.Context, run *Run, ex
 }
 
 func (s *Service) recoverRemoteWorkerWorkspace(ctx context.Context, run *Run, execution *ExecutionRecord, operation *OperationRecord) error {
-	if s.Config.hostName() != "orca_supervised" || run == nil || execution == nil || operation == nil || operation.Kind != "prepare_workspace" || run.WorkspaceIntent == nil {
+	fixed, configErr := s.workerFlowContext(run)
+	if configErr != nil {
+		return configErr
+	}
+	fixedConfig := fixed.config
+	if fixedConfig.hostName() != "orca_supervised" || run == nil || execution == nil || operation == nil || operation.Kind != "prepare_workspace" || run.WorkspaceIntent == nil {
 		return errors.New("remote workspace recovery has no original preparation intent")
 	}
 	name, err := workerOrcaWorktreeName(run.RunID)
 	if err != nil {
 		return err
 	}
-	pair, err := probeSupervisedOrcaTarget(ctx, s.Config)
+	pair, err := probeSupervisedOrcaTarget(ctx, fixedConfig)
 	if err != nil {
 		return err
 	}
-	worktree, found, err := findWorkerOrcaWorktree(ctx, s.Config, pair.RepositoryID, name, run.WorkspaceIntent.BaseCommit)
+	worktree, found, err := findWorkerOrcaWorktree(ctx, fixedConfig, pair.RepositoryID, name, run.WorkspaceIntent.BaseCommit)
 	if err != nil {
 		return err
 	}
 	if !found {
 		return errors.New("saved Orca worktree creation has no matching remote worktree; original request will not be repeated")
 	}
-	if err := applyWorkerOrcaWorkspace(s.Config, run, execution, worktree, run.WorkspaceIntent.BaseCommit); err != nil {
+	if err := applyWorkerOrcaWorkspace(fixedConfig, run, execution, worktree, run.WorkspaceIntent.BaseCommit); err != nil {
 		return err
 	}
 	if operation.Status != "confirmed" {

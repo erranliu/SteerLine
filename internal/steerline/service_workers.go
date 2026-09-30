@@ -136,27 +136,6 @@ forwarded:
 	}
 }
 
-func (s *Service) selectWorker(run *Run) error {
-	if run == nil {
-		return errors.New("worker run is missing")
-	}
-	worker := s.workers[run.RunID]
-	if worker == nil {
-		return errors.New("worker identity is no longer active")
-	}
-	config, err := s.executionConfigForRun(run)
-	if err != nil {
-		return err
-	}
-	s.Config, s.active, s.worker = config, run, worker
-	return nil
-}
-
-func (s *Service) parkWorker() {
-	s.worker, s.active = nil, nil
-	s.Config = s.projectExecutionConfig()
-}
-
 func (s *Service) handleWorkerMessage(message workerMessage) error {
 	if message.recovery != nil {
 		delete(s.appServerRecovering, message.runID)
@@ -181,19 +160,18 @@ func (s *Service) handleWorkerMessage(message workerMessage) error {
 			break
 		}
 	}
-	if err := s.selectWorker(run); err != nil {
-		return err
+	if run == nil || run.RunID != message.runID {
+		return errors.New("worker message has no fixed workflow run")
 	}
-	defer s.parkWorker()
 	if message.event != nil {
 		if message.event.RunID != "" && message.event.RunID != message.runID {
 			return errors.New("worker event belongs to another workflow run")
 		}
-		return s.event(*message.event)
+		return s.eventForRun(run, *message.event)
 	}
 	if !message.done {
 		return nil
 	}
 	delete(s.workers, message.runID)
-	return s.finishWorkerInLoop(message.err)
+	return s.finishWorkerInLoop(run, message.worker, message.err)
 }

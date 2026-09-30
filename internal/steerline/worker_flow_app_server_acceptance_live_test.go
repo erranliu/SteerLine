@@ -100,13 +100,9 @@ func TestAppServerServiceParallelRecoveryLive(t *testing.T) {
 	})
 	processEvent := func(run *Run, event WorkerEvent) {
 		t.Helper()
-		if err := service.selectWorker(run); err != nil {
+		if err := service.eventForRun(run, event); err != nil {
 			t.Fatal(err)
 		}
-		if err := service.event(event); err != nil {
-			t.Fatal(err)
-		}
-		service.parkWorker()
 	}
 	finish := func(run *Run) {
 		t.Helper()
@@ -127,14 +123,9 @@ func TestAppServerServiceParallelRecoveryLive(t *testing.T) {
 					t.Fatal(err)
 				}
 				delete(service.workers, run.RunID)
-				if err := service.useFixedRunProfile(run); err != nil {
+				if err := service.finishWorkerFlowFor(run, nil); err != nil {
 					t.Fatal(err)
 				}
-				service.active, service.worker = run, worker
-				if err := service.finishWorkerFlow(nil); err != nil {
-					t.Fatal(err)
-				}
-				service.parkWorker()
 				return
 			}
 		}
@@ -356,13 +347,9 @@ func TestAppServerHostExitHelper(t *testing.T) {
 			if !ok {
 				t.Fatal("native turn ended before host exit")
 			}
-			if err := service.selectWorker(run); err != nil {
+			if err := service.eventForRun(run, event); err != nil {
 				t.Fatal(err)
 			}
-			if err := service.event(event); err != nil {
-				t.Fatal(err)
-			}
-			service.parkWorker()
 		}
 	}
 	_, execution = service.workflowRecords(run)
@@ -469,27 +456,18 @@ func TestAppServerHostExitRecoveryLive(t *testing.T) {
 			t.Fatal("recovered native turn did not finish")
 		case event, ok := <-worker.Events:
 			if ok {
-				if err := service.selectWorker(run); err != nil {
+				if err := service.eventForRun(run, event); err != nil {
 					t.Fatal(err)
 				}
-				if err := service.event(event); err != nil {
-					t.Fatal(err)
-				}
-				service.parkWorker()
 				continue
 			}
 			if err := <-worker.Done; err != nil {
 				t.Fatal(err)
 			}
 			delete(service.workers, run.RunID)
-			if err := service.useFixedRunProfile(run); err != nil {
+			if err := service.finishWorkerFlowFor(run, nil); err != nil {
 				t.Fatal(err)
 			}
-			service.active, service.worker = run, worker
-			if err := service.finishWorkerFlow(nil); err != nil {
-				t.Fatal(err)
-			}
-			service.parkWorker()
 			_, execution = service.workflowRecords(run)
 			if execution.LastStoppedTurnID != receipt.TurnID || run.Decision == nil || run.Decision.Request.NativeAsk != nil {
 				t.Fatal("new host did not settle the original native turn")

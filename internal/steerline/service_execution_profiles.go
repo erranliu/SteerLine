@@ -18,7 +18,8 @@ func (s *Service) selectDispatchProfile(id, digest string) error {
 	if err != nil {
 		return err
 	}
-	s.Config = selected
+	selected = copyWorkerFlowConfig(selected)
+	s.dispatchConfig = &selected
 	s.dispatchProfile = &profile
 	return nil
 }
@@ -30,15 +31,6 @@ func (s *Service) selectDefaultDispatchProfile() error {
 		return errors.New("automatic dispatch requires default_execution_profile")
 	}
 	return s.selectDispatchProfile(id, "")
-}
-
-func (s *Service) useFixedRunProfile(run *Run) error {
-	config, err := s.executionConfigForRun(run)
-	if err != nil {
-		return err
-	}
-	s.Config = config
-	return nil
 }
 
 func (s *Service) executionConfigForRun(run *Run) (Config, error) {
@@ -92,27 +84,4 @@ func (s *Service) executionConfigForWorkflowID(id string) (Config, error) {
 		}
 	}
 	return Config{}, errors.New("workflow has no persisted run for its execution profile")
-}
-
-func (s *Service) restoreActiveExecutionProfile() error {
-	s.Config = s.projectExecutionConfig()
-	var only *Run
-	for _, run := range s.State.Runs {
-		if run == nil {
-			continue
-		}
-		if run.ExecutionStatus == "pending" || run.ExecutionStatus == "running" || run.ExecutionStatus == "unknown" || run.FinishTaskStatus == "waiting_decision" {
-			if _, err := s.executionConfigForRun(run); err != nil {
-				return err
-			}
-			if only != nil {
-				return nil
-			}
-			only = run
-		}
-	}
-	if only != nil {
-		return s.useFixedRunProfile(only)
-	}
-	return nil
 }

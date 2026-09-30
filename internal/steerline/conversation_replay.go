@@ -40,6 +40,16 @@ func (s *Service) conversationJournalSources() []conversationJournalSource {
 		if run == nil || run.RunID == "" || !(run.Backend == string(BackendLocal) && run.Protocol == string(ProtocolLocalProcess) || run.WorkflowVersion == WorkerFlowVersion && run.Backend == string(BackendOrca) && (run.Protocol == string(ProtocolOrcaTerminalV2) || run.Protocol == string(ProtocolOrcaSupervised))) {
 			continue
 		}
+		readerCommand := codexReaderCommand(s.projectExecutionConfig())
+		readerDiagnostic := ""
+		if run.WorkflowVersion == WorkerFlowVersion {
+			if fixed, err := s.executionConfigForRun(run); err == nil {
+				readerCommand = codexReaderCommand(fixed)
+			} else {
+				readerCommand = Command{}
+				readerDiagnostic = "fixed execution profile is unavailable: " + err.Error()
+			}
+		}
 		root := filepath.Join(s.Config.RunDir, "runs", run.RunID)
 		add := func(path, attempt string) {
 			if path == "" || !stableExecutionID(attempt) || !stableExecutionID(run.ExecutionID) || run.DomainTaskID == "" {
@@ -68,8 +78,9 @@ func (s *Service) conversationJournalSources() []conversationJournalSource {
 				Protocol: ExecutionProtocol(run.Protocol), Agent: run.Agent, TargetID: run.Target.ID,
 				ExternalRef: conversationExternalRef(run.Process), ProjectID: s.Config.identity,
 				Ended: run.EndedAt != nil, FileID: fileID,
-				Workspace: deref(run.WorktreePath), ReaderCommand: codexReaderCommand(s.Config),
+				Workspace: deref(run.WorktreePath), ReaderCommand: readerCommand,
 			}
+			source.Diagnostic = readerDiagnostic
 			if markerErr != nil {
 				source.Diagnostic = fmt.Sprintf("source marker is unreadable: %v", markerErr)
 			} else {
@@ -84,6 +95,7 @@ func (s *Service) conversationJournalSources() []conversationJournalSource {
 					source.ExpectedFileID = marker.SourceIdentity
 					if marker.ReaderCommand.Executable != "" {
 						source.ReaderCommand = marker.ReaderCommand
+						source.Diagnostic = ""
 					}
 					source.CodexHome = marker.CodexHome
 				}

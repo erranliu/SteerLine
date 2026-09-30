@@ -133,20 +133,16 @@ func testWorkerFlowOrcaServiceFirstFeedbackLive(t *testing.T, remote bool) {
 		if worker == nil {
 			t.Fatalf("original Orca worker observer is missing: finish=%q execution=%q reason=%q", run.FinishTaskStatus, run.ExecutionStatus, deref(run.Error))
 		}
-		if err := service.selectWorker(run); err != nil {
-			t.Fatal(err)
-		}
 		for event := range worker.Events {
-			if err := service.event(event); err != nil {
+			if err := service.eventForRun(run, event); err != nil {
 				t.Fatal(err)
 			}
 		}
 		workerErr := <-worker.Done
 		delete(service.workers, run.RunID)
-		if err := service.finished(workerErr); err != nil {
+		if err := service.finishedForRun(run, worker, workerErr); err != nil {
 			t.Fatal(err)
 		}
-		service.parkWorker()
 		if run.FinishTaskStatus != "waiting_decision" || run.Decision == nil || run.Decision.Status != "pending" {
 			status := "missing"
 			if run.Decision != nil {

@@ -68,10 +68,11 @@ func (s *Service) handleAppServerLaunchMessage(runID string, message *appServerL
 	if run == nil || run.Protocol != string(ProtocolLocalCodexAppServer) {
 		return errors.New("app-server launch no longer belongs to a local execution")
 	}
-	if err := s.useFixedRunProfile(run); err != nil {
+	fixed, err := s.workerFlowContext(run)
+	if err != nil {
 		return err
 	}
-	defer s.parkWorker()
+	c := fixed.config
 	workflow, execution := s.workflowRecords(run)
 	if workflow == nil || execution == nil || execution.ExecutionID != message.execution.ExecutionID || execution.PendingCommandID != message.commandID || run.AttemptID != message.run.AttemptID || run.TaskStatus == "closed" || run.TaskStatus == "discarded" {
 		return ErrWorkerTurnStale
@@ -83,8 +84,8 @@ func (s *Service) handleAppServerLaunchMessage(runID string, message *appServerL
 		if execution.Process != nil && *execution.Process != *message.execution.Process || execution.SessionID != "" && execution.SessionID != message.execution.SessionID {
 			return errors.New("app-server thread receipt conflicts with its fixed execution")
 		}
-		ref := ExecutionRef{Version: ExecutionRecordVersion, Backend: BackendLocal, Protocol: ProtocolLocalCodexAppServer, Target: targetFor(s.Config), Agent: agentFor(s.Config), RunID: run.RunID, AttemptID: run.AttemptID, WorkspacePath: deref(run.WorktreePath), WorkspaceBranch: deref(run.WorktreeBranch), BaseCommit: deref(run.BaseCommit), External: *message.execution.Process, Generation: message.execution.AppServerGeneration}
-		if err := (executionRecords{root: s.Config.RunDir}).saveBinding(ref); err != nil {
+		ref := ExecutionRef{Version: ExecutionRecordVersion, Backend: BackendLocal, Protocol: ProtocolLocalCodexAppServer, Target: targetFor(c), Agent: agentFor(c), RunID: run.RunID, AttemptID: run.AttemptID, WorkspacePath: deref(run.WorktreePath), WorkspaceBranch: deref(run.WorktreeBranch), BaseCommit: deref(run.BaseCommit), External: *message.execution.Process, Generation: message.execution.AppServerGeneration}
+		if err := (executionRecords{root: c.RunDir}).saveBinding(ref); err != nil {
 			return err
 		}
 		execution.Process = message.execution.Process

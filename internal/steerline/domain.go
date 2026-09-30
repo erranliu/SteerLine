@@ -6,12 +6,13 @@ import (
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/steerline/task"
+	"github.com/erranliu/SteerLine/internal/steerline/workerflow"
 )
 
 // Task records are defined in task. The remaining domain entities are durable
 // center records; Runtime/Run remains a CLI and console read model.
 // WorkerFlowVersion is the persisted protocol for a single resumable worker session.
-const WorkerFlowVersion = "worker-flow-v1"
+const WorkerFlowVersion = workerflow.Version
 
 type TaskRecord = task.TaskRecord
 type FileReference = task.FileReference

@@ -2,9 +2,6 @@ package steerline
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,51 +9,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
-
-const workerOrcaPromptChunkBytes = 512
-
-func workerOrcaPromptRoot(executionID, turnID string) string {
-	return "SteerLineWorkerFlow\\" + executionID + "\\" + turnID
-}
-
-func workerOrcaPromptChunks(prompt string) [][]byte {
-	data := []byte(prompt)
-	chunks := make([][]byte, 0, (len(data)+workerOrcaPromptChunkBytes-1)/workerOrcaPromptChunkBytes)
-	for len(data) > 0 {
-		count := min(len(data), workerOrcaPromptChunkBytes)
-		chunks = append(chunks, data[:count])
-		data = data[count:]
-	}
-	return chunks
-}
-
-func workerOrcaChunkCommand(executionID, turnID string, index int, chunk []byte) (string, string, error) {
-	if !stableExecutionID(executionID) || !stableExecutionID(turnID) || index < 0 || len(chunk) == 0 || len(chunk) > workerOrcaPromptChunkBytes {
-		return "", "", errors.New("Orca prompt chunk has invalid identity or size")
-	}
-	digest := sha256.Sum256(chunk)
-	sha := hex.EncodeToString(digest[:])
-	marker := fmt.Sprintf("SLCHUNK:%s:%d:%s", turnID, index, sha)
-	var script strings.Builder
-	script.WriteString("$root = Join-Path ([IO.Path]::GetTempPath()) ")
-	script.WriteString(powershellLiteral(workerOrcaPromptRoot(executionID, turnID)))
-	script.WriteString("\n[IO.Directory]::CreateDirectory($root) | Out-Null\n")
-	script.WriteString("$path = Join-Path $root ")
-	script.WriteString(powershellLiteral(fmt.Sprintf("prompt-%04d.bin", index)))
-	script.WriteString("\n$data = [Convert]::FromBase64String('")
-	script.WriteString(base64.StdEncoding.EncodeToString(chunk))
-	script.WriteString("')\nif (-not [IO.File]::Exists($path)) { $file = [IO.File]::Open($path, [IO.FileMode]::CreateNew); try { $file.Write($data, 0, $data.Length) } finally { $file.Close() } }\n")
-	script.WriteString("if ((Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant() -cne ")
-	script.WriteString(powershellLiteral(sha))
-	script.WriteString(") { throw 'fixed prompt chunk differs from the original request' }\nWrite-Output ")
-	script.WriteString(powershellLiteral(marker))
-	line := "powershell.exe -NoLogo -NoProfile -EncodedCommand " + encodePowerShell(script.String())
-	if len(line) > 30000 {
-		return "", "", errors.New("Orca prompt chunk exceeds the Windows command limit")
-	}
-	return line, marker, nil
-}
 
 func waitWorkerOrcaMarker(ctx context.Context, c Config, identity ProcessIdentity, cursor int64, marker string) error {
 	deadline, cancel := context.WithTimeout(ctx, positiveDuration(c.CommandTimeout, 30*time.Second))
@@ -83,8 +38,8 @@ func waitWorkerOrcaMarker(ctx context.Context, c Config, identity ProcessIdentit
 }
 
 func stageWorkerOrcaPrompt(ctx context.Context, c Config, identity ProcessIdentity, executionID, turnID, prompt string) error {
-	for index, chunk := range workerOrcaPromptChunks(prompt) {
-		command, marker, err := workerOrcaChunkCommand(executionID, turnID, index, chunk)
+	for index, chunk := range orcaworker.PromptChunks(prompt) {
+		command, marker, err := orcaworker.ChunkCommand(executionID, turnID, index, chunk)
 		if err != nil {
 			return err
 		}
@@ -161,12 +116,17 @@ func createWorkerOrcaTerminal(ctx context.Context, c Config, run *Run) (orcaTerm
 }
 
 func (s *Service) prepareWorkerOrcaTerminal(ctx context.Context, run *Run) error {
+	fixed, configErr := s.workerFlowContext(run)
+	if configErr != nil {
+		return configErr
+	}
+	fixedConfig := fixed.config
 	workflow, execution := s.workflowRecords(run)
 	if run == nil || workflow == nil || execution == nil || workflow.WorkflowVersion != WorkerFlowVersion || run.WorktreePath == nil || run.WorktreeBranch == nil {
 		return errors.New("Orca terminal preparation lacks the fixed worker workspace")
 	}
 	if execution.Process != nil {
-		term, err := showWorkerOrcaTerminal(ctx, s.Config, execution.Process.Terminal)
+		term, err := showWorkerOrcaTerminal(ctx, fixedConfig, execution.Process.Terminal)
 		if err != nil {
 			return err
 		}
@@ -188,12 +148,12 @@ func (s *Service) prepareWorkerOrcaTerminal(ctx context.Context, run *Run) error
 	if execution == nil {
 		return errors.New("worker execution disappeared after Orca terminal intent was saved")
 	}
-	term, err := createWorkerOrcaTerminal(ctx, s.Config, run)
+	term, err := createWorkerOrcaTerminal(ctx, fixedConfig, run)
 	if err != nil {
 		_ = s.changeOperation(opID, "outcome_unknown", "", nil, err.Error())
 		return err
 	}
-	identity := workerOrcaIdentity(term, s.Config)
+	identity := workerOrcaIdentity(term, fixedConfig)
 	execution.Process = &identity
 	s.refreshRun(run)
 	if err := s.changeOperation(opID, "confirmed", "", mustJSON(identity), ""); err != nil {
@@ -282,69 +242,6 @@ func sendWorkerOrcaCommand(ctx context.Context, c Config, identity ProcessIdenti
 		return "", &BackendError{Code: BackendOutcomeUnknown, Diagnostic: "Orca did not confirm input acceptance on the original terminal", Cause: err}
 	}
 	return result.Send.Prompt.RequestID, nil
-}
-
-func workerOrcaTurnCommand(c Config, executionID, worktree, sessionID, turnID, prompt string, addDirs []string) (string, error) {
-	if !stableExecutionID(executionID) || !stableExecutionID(turnID) || strings.TrimSpace(prompt) == "" || !filepath.IsAbs(worktree) || sessionID != "" && !codexThreadID.MatchString(sessionID) {
-		return "", errors.New("Orca worker turn lacks fixed prompt, workspace or session")
-	}
-	command := c.Codex.Executable
-	if command == "" {
-		return "", errors.New("Orca worker Codex executable is not configured")
-	}
-	args := append([]string{}, c.Codex.Args...)
-	args = append(args, "exec", "--json", "--sandbox", c.Sandbox, "-C", worktree)
-	for _, dir := range addDirs {
-		args = append(args, "--add-dir", dir)
-	}
-	if c.Model != "" {
-		args = append(args, "--model", c.Model)
-	}
-	if c.ReasoningEffort != "" {
-		args = append(args, "--config", "model_reasoning_effort="+c.ReasoningEffort)
-	}
-	if c.Profile != "" {
-		args = append(args, "--profile", c.Profile)
-	}
-	if sessionID != "" {
-		args = append(args, "resume", sessionID)
-	}
-	args = append(args, "-")
-	var script strings.Builder
-	script.WriteString("$OutputEncoding = [Text.UTF8Encoding]::new($false)\n")
-	script.WriteString("$root = Join-Path ([IO.Path]::GetTempPath()) ")
-	script.WriteString(powershellLiteral(workerOrcaPromptRoot(executionID, turnID)))
-	script.WriteString("\n$stream = [IO.MemoryStream]::new()\n")
-	script.WriteString("for ($index = 0; $index -lt ")
-	script.WriteString(strconv.Itoa(len(workerOrcaPromptChunks(prompt))))
-	script.WriteString("; $index++) { $path = Join-Path $root ('prompt-{0:D4}.bin' -f $index); $part = [IO.File]::ReadAllBytes($path); $stream.Write($part, 0, $part.Length) }\n")
-	script.WriteString("$bytes = $stream.ToArray(); $sha = [Security.Cryptography.SHA256]::Create(); try { $digest = ([BitConverter]::ToString($sha.ComputeHash($bytes))).Replace('-', '').ToLowerInvariant() } finally { $sha.Dispose() }\n")
-	fullDigest := sha256.Sum256([]byte(prompt))
-	script.WriteString("if ($digest -cne ")
-	script.WriteString(powershellLiteral(hex.EncodeToString(fullDigest[:])))
-	script.WriteString(") { throw 'fixed worker prompt digest differs from the saved message' }\n")
-	script.WriteString("$lock = Join-Path $root 'launch.lock'; try { $file = [IO.File]::Open($lock, [IO.FileMode]::CreateNew); try { $saved = [Text.Encoding]::UTF8.GetBytes($digest); $file.Write($saved, 0, $saved.Length) } finally { $file.Close() } } catch [IO.IOException] { if ([IO.File]::Exists($lock) -and [IO.File]::ReadAllText($lock) -ceq $digest) { Write-Output 'SLALREADY:")
-	script.WriteString(turnID)
-	script.WriteString("'; exit 0 }; throw }\n")
-	script.WriteString("$prompt = [Text.Encoding]::UTF8.GetString($bytes)\n")
-	script.WriteString("$prompt | & ")
-	script.WriteString(powershellLiteral(command))
-	for _, arg := range args {
-		script.WriteByte(' ')
-		script.WriteString(powershellLiteral(arg))
-	}
-	script.WriteString(" | ForEach-Object { Write-Output ('SLJSON:")
-	script.WriteString(turnID)
-	script.WriteString(":' + [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($_))) }\n")
-	script.WriteString("Write-Output ('SLEND:")
-	script.WriteString(turnID)
-	script.WriteString(":' + $LASTEXITCODE)\n")
-	encoded := encodePowerShell(script.String())
-	line := "powershell.exe -NoLogo -NoProfile -EncodedCommand " + encoded
-	if len(line) > 30000 {
-		return "", fmt.Errorf("worker launch command exceeds Windows command limit")
-	}
-	return line, nil
 }
 
 type workerOrcaProcess struct {
@@ -442,7 +339,7 @@ func startWorkerOrcaTurn(ctx context.Context, c Config, run *Run, execution *Exe
 	if err != nil {
 		return nil, "", "", err
 	}
-	command, err := workerOrcaTurnCommand(c, execution.ExecutionID, *run.WorktreePath, execution.SessionID, turnID, prompt, dirs)
+	command, err := orcaworker.TurnCommand(orcaworker.TurnOptions{Executable: c.Codex.Executable, Args: c.Codex.Args, Sandbox: c.Sandbox, Model: c.Model, ReasoningEffort: c.ReasoningEffort, Profile: c.Profile}, execution.ExecutionID, *run.WorktreePath, execution.SessionID, turnID, prompt, dirs)
 	if err != nil {
 		return nil, "", "", err
 	}

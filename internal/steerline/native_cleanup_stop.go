@@ -6,9 +6,8 @@ import (
 	"os"
 )
 
-func (s *Service) stopActiveExecution(ctx context.Context) (Operation, error) {
-	r := s.active
-	if r == nil || s.worker == nil {
+func (s *Service) stopRunExecution(ctx context.Context, r *Run, worker *Worker) (Operation, error) {
+	if r == nil || worker == nil {
 		return Operation{}, errors.New("there is no active execution to stop")
 	}
 	config, configErr := s.executionConfigForRun(r)
@@ -49,7 +48,7 @@ func (s *Service) stopActiveExecution(ctx context.Context) (Operation, error) {
 	if err = records.saveOperation(op); err != nil {
 		return Operation{}, err
 	}
-	receipt, stopErr := backend.StopExecution(ctx, ref, op, s.worker)
+	receipt, stopErr := backend.StopExecution(ctx, ref, op, worker)
 	if stopErr != nil {
 		var be *BackendError
 		if errors.As(stopErr, &be) && (be.Code == BackendOutcomeUnknown || be.Code == BackendUnreachable || be.Code == BackendIdentityMismatch) {
