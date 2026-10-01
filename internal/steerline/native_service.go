@@ -535,7 +535,7 @@ func (s *Service) dispatchNative(ctx context.Context) error {
 		if execution.Target.WorktreeID != "" || execution.Target.Branch != c.Branch {
 			return nativeErr("authority_mismatch", "claimed execution already has a conflicting workspace identity")
 		}
-		if c.hostName() != "orca_supervised" {
+		if c.hostName() == "local" {
 			execution.Target.WorktreeID = intent.Path
 			execution.Target.Branch = intent.Branch
 		}

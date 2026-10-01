@@ -66,8 +66,8 @@ PR185 的执行 session 已停写。协调 session 已 rebase 到 `7e79a9b315129
 
 | 原断言 | 当前承载与所有者 |
 | --- | --- |
-| root app-server 两轮、失败 session/turn 回执与 worker_commit_boundary | root CD64 聚合入口调用原断言；中心提交屏障只有一份 |
-| root native 原会话恢复/问题/丢 ack/丢 reply | root CD64 原会话入口；接入通用生命周期及原恢复人工门槛 |
+| root app-server 两轮/receipt barrier (`codex_worker_test.go:TestAppServerServiceTwoTurnsPersistNativeReceipts`) | 已删除 root 私有 fixture 用例；迁至 `steerlineintegration/lifecycle_test.go:TestCD64OriginalSessionReconciliation/app_server_two_turns`，通过公开配置、CommandService、QueryService、`NewServiceWithLifecycleResolver` 和正式 Codex 生命周期适配器跑完整 `RunWithDispatch`。断言一条原 Session/Process、一个 prepare receipt、两个不同 StartTurn receipt、两个确认终态 Turn、Run 保持 waiting decision，且无 TaskDelivery。 |
+| root native 原会话恢复/问题/丢 ack/丢 reply (`orca_worker_observation_service_test.go:TestNativeOrcaCenterReusesWorkerAfterRestartAndSettlement`) | 已删除 root 私有 actor fixture 用例；迁至 `steerlineintegration/lifecycle_test.go:TestCD64OriginalSessionReconciliation/native_original_session_manual_gate`，通过相同公开 Service/Command/Query 入口和正式 Orca 生命周期适配器执行隔离协议 mock。断言 readiness + business Dispatch、原 terminal/incarnation/Session/Run/Task/Dispatch/Worktree、question Delivery 先消费后 ack、Lost Ack 只读对账且仅一次写入、重开人工门槛中无额外 Dispatch/reply/send、公开回答后原 Dispatch settlement 与确认 reply，且无 TaskDelivery。 |
 | 删除的 remote service 文件中的四个 Protocol 回归（两轮/settlement、丢 start、丢 reply+ack、替换 session） | `internal/steerlineintegration/remote_protocol_test.go`，归 outer CD64 入口；唯一 remote 假进程随消费者移动到 `remote_fake_test.go`，不虚构 remote Claim 成功 |
 | 删除的 native relay 原 turn/Dispatch capability 断言 | `internal/steerline/orcaworker/relay_binding_test.go`；直接调用实现的 `ReadDoneRequest` |
 | 删除的消息提交失败不得 ack | `core_decoupling_64_review_test.go` 的中性中心失败注入，归 CD64 intent/receipt 入口 |
@@ -89,3 +89,17 @@ PR185 的执行 session 已停写。协调 session 已 rebase 到 `7e79a9b315129
 复审中的结构缺口仍需核对：外层构造用例目前仅构造空 Service 并选步，实际 local/native 流程断言仍由 root 聚合入口承载；remote 四个完整协议断言已由外层入口承载。合并之前完成 Spec 规定的外层流程覆盖归属及剩余完整 diff 审核，不以目录/接口存在代替流程命中。活动 roadmap 的 #64 继续保留。
 
 `6a48136fd51450e359909c770897b03b1e1b893e` 固定 commit 的第三次组合验收已通过：`20261001T212539.240306100Z/summary.json`，passed/complete 均为 true，execution 258.3s，source_commit 精确匹配、工作区 clean；quick-core 6/6、quick-rules 87/87、targeted 33/33。已核对 root 两个命名入口、宿主 ER2/ER4、local 两轮、native 原会话，以及 outer remote 四个协议子用例实际 pass。此后继续复审发现并修复同一 Run 多轮 relay：原 done 历史只按原 Task/Dispatch 过滤，relay 完成标记改为每 Turn 独立；native state codec 更新至 9，拒绝 8。新增两个实际历史/observer 回归通过（0.948s）。6a48136 的通过报告不冒充这些后续修复的最终 head 认证。
+
+## 外层真实服务流程迁移与最终候选（2026-10-02）
+
+本节更新上文“仍须完成外层流程覆盖”的历史状态；#64 仍在活动 roadmap，本轮不移除任务、不启动 #65，也不合并 PR。`steerlineintegration` 现在使用临时 Git/SQLite、公开 CommandService 建任务并更新 dispatch authority、公开 task/runtime Query、`NewServiceWithLifecycleResolver` 和正式 `codexworker`/`orcaworker` 生命周期构造器。服务通过 `RunWithDispatch` 消费任务与决策；测试不调用 root 私有 actor/Store 写入，也不从 outer shell 启动 root `go test`。
+
+原断言归属现为：
+
+- app-server 两轮 → outer `app_server_two_turns`。外层测试通过服务启动和公开答案命令驱动两轮，核对原 thread/process、唯一 session preparation、两个不同 turn receipt、最终停止的 Turn 和未交付状态；旧 root `TestAppServerServiceTwoTurnsPersistNativeReceipts` 已删除。
+- native 原会话/重开人工门槛 → outer `native_original_session_manual_gate`。共享 `testprotocol.NativeOrcaState` 协议 fixture 供 root environment unit tests 与 outer 流程共用；outer 使用真实 Orca lifecycle port，核对 readiness 与 business 两个 Dispatch、原 terminal/incarnation/session/workspace/Run/Task/Dispatch、question 内容提交后消费并对 Lost Ack 做单次只读对账、重启保持 RecoveryRequired 且不重发输入、公开答案绑定原问题后完成原 Dispatch settlement；旧 root `TestNativeOrcaCenterReusesWorkerAfterRestartAndSettlement` 已删除。
+- remote Protocol 四组原断言继续位于 `steerlineintegration/remote_protocol_test.go` 并由同名 outer CD64 聚合入口运行；remote Claim 仍由 root admission 拒绝断言覆盖。fixture 仅模拟传输协议，不构成 permission 认证。
+
+新增外层生产流程暴露并修复的必要接线缺口：`lifecycleSetupForRun` 现在提供同一正式 ManagedProcessHost；native 目标在 adapter 提交实际 Worktree ID 前不再伪填 local path；Claim 原子提交只比较 mutable profile 对当前配置的 `MatchesConfig`，不再混比 mutable Profile 与 FixedExecutionProfile 两个不同摘要域；session receipt/通用操作在刷新后安全地重建 pending-operation 写集合；Lost Delivery Ack 在原操作上立即做只读 Reconcile，活动 observer 不会使它滞留。每项均由 outer local/native 服务流程实际命中。
+
+outer 两个实际流程定向诊断已通过（app-server 两轮与 native 原会话人工门槛）；最终 quick+CD64 组合报告、按包/命名事件计数、source head 与 `git diff --check` 结果在本段完成最终验证后补记。PR 仍为 #185 open，未合并；唯一尚未迁出的既定所有者仍是 #65 宿主 evidence/history/source 与 #66 默认组合组装。

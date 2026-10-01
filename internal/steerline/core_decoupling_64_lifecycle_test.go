@@ -16,7 +16,5 @@ func TestCD64IntentReceiptAndRecoveryGate(t *testing.T) {
 }
 
 func TestCD64OriginalSessionReconciliation(t *testing.T) {
-	t.Run("app_server_two_turns", TestAppServerServiceTwoTurnsPersistNativeReceipts)
-	t.Run("native_original_session", TestNativeOrcaCenterReusesWorkerAfterRestartAndSettlement)
 	t.Run("remote_admission_stays_blocked", TestRemotePublicationClaimRequiresPermissionEvidence)
 }

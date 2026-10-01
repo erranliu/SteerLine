@@ -92,7 +92,7 @@ func lifecycleSetupForRun(run *Run, fixed workerFlowContext, snapshot executiona
 	return executionapi.LifecycleSetup{
 		Snapshot: snapshot.Clone(), ProfileData: cloneImplementationData(fixed.config.ImplementationData),
 		ProfileID: fixed.config.selectedProfileID, AcceptedConfigVersion: fixed.config.acceptedConfigVersion(),
-		Policy: fixed.config.ExecutionPolicy, RepositoryPath: fixed.config.Repository,
+		Policy: fixed.config.ExecutionPolicy, ProcessHost: localManagedProcessHost{timeout: duration(fixed.config.CommandTimeout)}, RepositoryPath: fixed.config.Repository,
 		RunDirectory: fixed.config.RunDir, CommandTimeout: duration(fixed.config.CommandTimeout),
 		AttemptNumber: run.DomainAttemptNumber, BlockedEnvironment: blocked,
 		GitExecutable: fixed.config.Git.Executable, GitArgs: append([]string(nil), fixed.config.Git.Args...),
@@ -1168,6 +1168,9 @@ func (s *Service) executeLifecycleStep(ctx context.Context, run *Run, lifecycle 
 		fixed.attempt.Status, fixed.attempt.UpdatedAt = "dispatched", now()
 		s.refreshRun(run)
 	}
+	if s.pendingOperations == nil {
+		s.pendingOperations = make(map[string]string)
+	}
 	s.pendingOperations[opID] = run.RunID
 	s.refreshRun(run)
 	var attachment workerCommitAttachment
@@ -1339,6 +1342,20 @@ func (s *Service) acknowledgeLifecycleDelivery(run *Run, deliveryID string) erro
 	if validationErr := receipt.ValidateFor(request); validationErr != nil {
 		return validationErr
 	}
+	if prior == nil && (err != nil || receipt.Disposition == executionapi.OperationUnknown) {
+		// An acknowledgement with a lost receipt is never repeated. Reconcile its
+		// original operation immediately so a live observer cannot strand the
+		// committed delivery behind its own pending-consumption gate.
+		reconciled, _, reconcileErr := lifecycle.Reconcile(context.Background(), request.Clone())
+		if validationErr := reconciled.ValidateFor(request); validationErr != nil {
+			return validationErr
+		}
+		if reconcileErr == nil && reconciled.Disposition == executionapi.OperationConfirmed {
+			receipt, err = reconciled, nil
+		} else if reconcileErr != nil {
+			err = errors.Join(err, reconcileErr)
+		}
+	}
 	if mergeErr := mergeLifecycleExecutionReceipt(fixed.execution, receipt); mergeErr != nil {
 		return mergeErr
 	}
@@ -1482,6 +1499,9 @@ func (s *Service) applyAppServerSessionReceipt(run *Run, request executionapi.Li
 	}
 	if err := s.setOperationState(request.Operation.ID, status, receipt.State.SessionID, mustJSON(receipt), receipt.Diagnostic); err != nil {
 		return executionapi.LifecycleRequest{}, false, err
+	}
+	if s.pendingOperations == nil {
+		s.pendingOperations = make(map[string]string)
 	}
 	s.pendingOperations[request.Operation.ID] = run.RunID
 	s.refreshRun(run)
