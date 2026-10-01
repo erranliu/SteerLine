@@ -97,6 +97,9 @@ func (s *SQLiteStore) commitWorker(ctx context.Context, request workerCommit) (w
 			if err := checkRecordWrite(tx, "workflow_runs", "workflow_run_id", request.Project, v.After.WorkflowRunID, v.Before); err != nil {
 				return err
 			}
+			if v.Before != nil && (recordFingerprint(v.Before.ExecutionProfile) != recordFingerprint(v.After.ExecutionProfile) || v.Before.ConfigDigest != v.After.ConfigDigest || v.Before.Repository != v.After.Repository || v.Before.Branch != v.After.Branch) {
+				return errors.New("worker transition cannot replace its original execution snapshot")
+			}
 		}
 		if request.Execution != nil {
 			v := request.Execution

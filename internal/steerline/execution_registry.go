@@ -174,10 +174,13 @@ func workerFlowRegistrationFor(config Config, run *Run, execution *ExecutionReco
 	if err != nil {
 		return nil, err
 	}
-	if run.Host != entry.Host || run.Agent != entry.Key.Agent || execution.Agent != run.Agent || run.Backend != string(entry.Key.Backend) || execution.Backend != run.Backend || run.Protocol != string(entry.Key.Protocol) || execution.Protocol != run.Protocol || run.Target.ID == "" || run.Target.ID != execution.Target.ID || run.Target.ID != entry.Target(config).ID {
+	if run.Host != entry.Host || run.Agent != entry.Key.Agent || execution.Agent != run.Agent || run.Backend != string(entry.Key.Backend) || execution.Backend != run.Backend || run.Protocol != string(entry.Key.Protocol) || execution.Protocol != run.Protocol || run.Target != execution.Target || !sameConfiguredExecutionTarget(run.Target, entry.Target(config)) {
 		return nil, &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "fixed worker target differs from its persisted execution"}
 	}
 	return entry, nil
+}
+func sameConfiguredExecutionTarget(actual, configured executionapi.ExecutionTarget) bool {
+	return actual.ID != "" && actual.ID == configured.ID && actual.ConnectionID == configured.ConnectionID && actual.ExternalRuntime == configured.ExternalRuntime
 }
 func (s *Service) workerFlowRegistration(run *Run) (*executionRegistration, error) {
 	fixed, err := s.workerFlowContext(run)

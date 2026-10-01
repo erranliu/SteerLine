@@ -183,10 +183,18 @@ func appServerAuditService(t *testing.T) (*Service, *Run) {
 }
 
 func appServerAuditServiceWithPolicy(t *testing.T, policy executionapi.ExecutionPolicy) (*Service, *Run) {
+	return appServerAuditServiceWithRequirements(t, policy, executionapi.ExecutionRequirements{}, "")
+}
+
+func appServerAuditServiceWithRequirements(t *testing.T, policy executionapi.ExecutionPolicy, requirements executionapi.ExecutionRequirements, tokenEnv string) (*Service, *Run) {
 	t.Helper()
 	c, commit, store := openDAGFixture(t)
 	c.WorkflowProtocol, c.Host, c.Agent, c.Claimant = WorkerFlowVersion, "local", "codex", "operator"
 	c.ExecutionPolicy = policy
+	c.ExecutionRequirements = requirements
+	if tokenEnv != "" {
+		c.PR.TokenEnv = tokenEnv
+	}
 	if policy.Filesystem.WriteScope == "none" {
 		c.Codex.Executable = os.Args[0]
 	}

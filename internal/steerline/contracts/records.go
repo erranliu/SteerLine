@@ -52,6 +52,7 @@ type StepRunnerSettings struct {
 }
 
 type ExecutionRecord struct {
+	CurrentRequirementsError      *string                              `json:"current_requirements_error,omitempty"`
 	CurrentRequirementsEvaluation *executionapi.RequirementsEvaluation `json:"current_requirements_evaluation,omitempty"`
 	PolicyResources               *PolicyResources                     `json:"policy_resources,omitempty"`
 	RecoveryRequired              bool                                 `json:"recovery_required,omitempty"`

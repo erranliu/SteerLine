@@ -225,25 +225,27 @@ func (s *Service) checkCurrentExecutionRequirements(ctx context.Context, fixed w
 	evaluation, err := evaluateExecutionRequirements(ctx, fixed.config)
 	if err == nil {
 		fixed.execution.CurrentRequirementsEvaluation = &evaluation
+		if fixed.execution.CurrentRequirementsError != nil {
+			fixed.execution.CurrentRequirementsError = nil
+			return s.commitWorker(fixed.run)
+		}
 		return nil
 	}
 	reason := "Execution requirements blocked: " + err.Error()
-	if fixed.execution.Status == "blocked" && fixed.execution.Error != nil && *fixed.execution.Error == reason {
+	if fixed.execution.CurrentRequirementsError != nil && *fixed.execution.CurrentRequirementsError == reason {
 		return err
 	}
 	fixed.execution.CurrentRequirementsEvaluation = &evaluation
-	fixed.execution.Status = "blocked"
-	fixed.execution.Error = ptr(reason)
-	s.refreshRun(fixed.run)
+	fixed.execution.CurrentRequirementsError = ptr(reason)
+	// Requirements gate future inputs; they are not a native liveness fact.
 	return errors.Join(err, s.commitWorker(fixed.run))
 }
+
 func (s *Service) resumeRegisteredWorkerFlow(ctx context.Context, task *TaskRecord, run *Run, entry *executionRegistration) (bool, error) {
-	fixed, err := s.workerFlowContext(run)
-	if err != nil {
+	if _, err := s.workerFlowContext(run); err != nil {
 		return false, err
 	}
-	if err = s.checkCurrentExecutionRequirements(ctx, fixed); err != nil {
-		return true, err
-	}
+	// Original observation/reconciliation must continue even when a new input is
+	// blocked. Fresh mutation intents are gated at startWorkerOperation.
 	return entry.Resume(s, ctx, task, run)
 }

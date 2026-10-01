@@ -71,7 +71,7 @@ func verifyFixedExecutionProfile(p FixedExecutionProfile) bool {
 	if err != nil || permissions.Sandbox != p.Sandbox || permissions.WindowsSandbox != p.WindowsSandbox {
 		return false
 	}
-	rebuilt := ExecutionProfile{ExecutionRequirements: p.ExecutionRequirements, PublicationPolicy: p.PublicationPolicy, Publication: p.Publication, ExecutionPolicy: p.ExecutionPolicy, AcceptedConfigVersion: p.AcceptedConfigVersion, PolicySource: p.PolicySource, ID: p.ID, Name: p.Name, Host: p.Host, Agent: p.Agent, Model: p.Model, ReasoningEffort: p.ReasoningEffort, Sandbox: p.Sandbox, WindowsSandbox: p.WindowsSandbox, CodexProfile: p.CodexProfile, Codex: p.Codex, Orca: p.Orca}
+	rebuilt := ExecutionProfile{RequirementsEvaluation: p.RequirementsEvaluation, ExecutionRequirements: p.ExecutionRequirements, PublicationPolicy: p.PublicationPolicy, Publication: p.Publication, ExecutionPolicy: p.ExecutionPolicy, AcceptedConfigVersion: p.AcceptedConfigVersion, PolicySource: p.PolicySource, ID: p.ID, Name: p.Name, Host: p.Host, Agent: p.Agent, Model: p.Model, ReasoningEffort: p.ReasoningEffort, Sandbox: p.Sandbox, WindowsSandbox: p.WindowsSandbox, CodexProfile: p.CodexProfile, Codex: p.Codex, Orca: p.Orca}
 	return p.Version == 4 && p.ImplementationVersion == executionImplementationVersion && verifyRequirementsSnapshot(p) && publication.CheckPolicy(p.PublicationPolicy, p.Host, p.Agent, publication.Config(p.Publication.Provider)) == nil && publication.ValidateSettings(p.Publication, p.PublicationPolicy) == nil && p.ExecutionPolicy.Validate() == nil && p.PolicyDigest == digestValue(p.ExecutionPolicy) && p.AcceptedConfigVersion != "" && p.PolicySource != "" && p.ApprovalPolicy == "never" && p.Digest != "" && p.Digest == rebuilt.Digest() && (!rebuilt.managedOrcaPermissions() || p.ApprovalPolicy == "never" && codexworker.ValidWindowsSandbox(p.WindowsSandbox))
 }
 
@@ -92,18 +92,19 @@ func (p ExecutionProfile) Digest() string {
 	p = p.withWindowsSandboxDefault()
 	return digestValue(struct {
 		ExecutionProfile
-		Version               int
-		ExecutionRequirements executionapi.ExecutionRequirements
-		ImplementationVersion string
-		PublicationPolicy     executionapi.PublicationPolicy
-		Publication           contracts.PublicationSettings
-		Policy                executionapi.ExecutionPolicy
-		AcceptedConfigVersion string
-		PolicySource          string
-		Sandbox               string
-		WindowsSandbox        string
-		Contract              string
-	}{p, 4, p.ExecutionRequirements, executionImplementationVersion, p.PublicationPolicy, p.Publication, p.ExecutionPolicy, p.AcceptedConfigVersion, p.PolicySource, p.Sandbox, p.WindowsSandbox, codexworker.PolicyContract})
+		Version                    int
+		ExecutionRequirements      executionapi.ExecutionRequirements
+		ImplementationVersion      string
+		RequirementsEvidenceDigest string
+		PublicationPolicy          executionapi.PublicationPolicy
+		Publication                contracts.PublicationSettings
+		Policy                     executionapi.ExecutionPolicy
+		AcceptedConfigVersion      string
+		PolicySource               string
+		Sandbox                    string
+		WindowsSandbox             string
+		Contract                   string
+	}{p, 4, p.ExecutionRequirements, executionImplementationVersion, requirementsEvidenceDigest(p.RequirementsEvaluation), p.PublicationPolicy, p.Publication, p.ExecutionPolicy, p.AcceptedConfigVersion, p.PolicySource, p.Sandbox, p.WindowsSandbox, codexworker.PolicyContract})
 }
 
 func (p ExecutionProfile) managedOrcaPermissions() bool {
@@ -166,8 +167,12 @@ func (c Config) bindProjectPolicy(p ExecutionProfile) ExecutionProfile {
 	}
 	p.ExecutionRequirements = c.ExecutionRequirements.Clone()
 	p.RequirementsEvaluation = c.requirementsEvaluation
+	if p.RequirementsEvaluation != nil {
+		e := p.RequirementsEvaluation.Clone()
+		p.RequirementsEvaluation = &e
+	}
 	p.PublicationPolicy = c.PublicationPolicy
-	p.Publication = c.publicationSettings()
+	p.Publication = clonePublicationSettings(c.publicationSettings())
 	p.ExecutionPolicy, p.AcceptedConfigVersion, p.PolicySource = c.ExecutionPolicy, c.acceptedConfigVersion(), c.policySource
 	if p.PolicySource == "" {
 		p.PolicySource = "service:explicit-config"

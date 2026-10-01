@@ -221,7 +221,7 @@ func TestExecutionRequirementsClaimAndRestartBlockWithoutChangingSnapshot(t *tes
 	}
 	snapshot, err := store.Query(ctx, c.Identity())
 	require(t, err)
-	if snapshot.Executions[0].Status != "blocked" || snapshot.Executions[0].CurrentRequirementsEvaluation == nil || snapshot.Executions[0].CurrentRequirementsEvaluation.Credentials[0].Status != executionapi.RequirementMissing {
+	if snapshot.Executions[0].CurrentRequirementsError == nil || snapshot.Executions[0].CurrentRequirementsEvaluation == nil || snapshot.Executions[0].CurrentRequirementsEvaluation.Credentials[0].Status != executionapi.RequirementMissing {
 		t.Fatal("current blocking fact was not persisted")
 	}
 }

@@ -136,6 +136,6 @@ URL 的 HTTP 用户信息、密码、query/fragment 和含认证的命令参数�
 
 内建注册键为 `local/codex/local_codex_app_server_v1`、`orca/codex/orca_terminal_v2`、`orca/codex/orca_supervised`；具体目标单独绑定。未知、重复或歧义组合拒绝，注册是固定代码组装，没有插件加载。准备、启动、观察/停止构造、事件/结算、等待/反馈、恢复与清理都由原记录选择注册操作。
 
-v4 在同一快照中增加需求、非秘密评估及独立证据摘要和 `builtin-execution-v1` 实现配置版本。完整配置摘要包含需求及原权限/发布/Profile 配置，实际资源继续单独核验。领取事务重新读取已受理的项目和全局文件字节摘要；查验后改变配置必须重新加载并检查。重启使用原快照，当前工具/引用丢失只新增 Execution 的阻断事实，不改历史快照。控制台使用同一 ProjectView 展示领取时与当前检查的时间和来源。checkpoint schema 11 及资源格式保持；旧 Profile 明确拒绝，不回填。
+v4 在同一快照中增加需求、非秘密评估及独立证据摘要和 `builtin-execution-v1` 实现配置版本。完整配置摘要包含需求及原权限/发布/Profile 配置，实际资源继续单独核验。证据摘要也纳入完整 Profile 摘要。原 worktree 根从持久 WorkspaceIntent 恢复。领取事务重新读取已受理的项目和全局文件字节摘要；查验后改变配置必须重新加载并检查。重启使用原快照，当前工具/引用丢失只新增 Execution 的阻断事实，不改历史快照。控制台使用同一 ProjectView 展示领取时与当前检查的时间和来源。checkpoint schema 11 及资源格式保持；旧 Profile 明确拒绝，不回填。
 
 验证与限制见 [#61 验收记录](validation/execution-isolation-08-resolution/README.md)。远程两轮 Service 成功场景仍被前置权限缺证门槛拒绝，未把协议 mock 当作权限或双机认证。

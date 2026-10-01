@@ -76,7 +76,17 @@ func CertifyExecutionBackend(ctx context.Context, c Config, paths []string) (exe
 		}
 	}
 	backend := backendFor(c)
-	probe, err := backend.Probe(ctx, targetFor(c), agentFor(c))
+	var probe executionapi.CapabilityReport
+	var err error
+	if c.WorkflowProtocol == WorkerFlowVersion {
+		entry, registrationErr := registrationFor(c)
+		if registrationErr != nil {
+			return executionapi.CapabilityReport{}, registrationErr
+		}
+		probe, err = entry.ProbeRequirements(ctx, c)
+	} else {
+		probe, err = backend.Probe(ctx, targetFor(c), agentFor(c))
+	}
 	if err != nil {
 		return executionapi.CapabilityReport{}, err
 	}

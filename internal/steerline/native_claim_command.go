@@ -41,6 +41,9 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 	if err := validateWorkflowConfig(&config, nil); err != nil {
 		return TaskClaimReceipt{}, err
 	}
+	if err := config.prepareWorktreeRoot(); err != nil {
+		return TaskClaimReceipt{}, err
+	}
 	if config.managedWindowsOrca() {
 		if _, err := nativeOrcaFixedAgentCommand(config); err != nil {
 			return TaskClaimReceipt{}, err

@@ -112,6 +112,9 @@ func renderFixedRunExecutionProfile(state projectState, run *steerline.Run) []st
 				continue
 			}
 			lines = append(lines, renderRequirementsEvaluation(execution.CurrentRequirementsEvaluation, "当前需求检查")...)
+			if execution.CurrentRequirementsError != nil {
+				lines = append(lines, "需求阻断："+safeTerminalInlineText(*execution.CurrentRequirementsError))
+			}
 			status := "资源与工具未核验"
 			if resource := execution.PolicyResources; resource != nil {
 				status = "原生设置已核验；工具未核验"

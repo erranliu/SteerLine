@@ -208,6 +208,9 @@ func (s *Service) resumeCodexWorkspace(ctx context.Context, task *TaskRecord, ru
 		return false, s.waitWorkerFlow(run, "Saved workspace preparation has no fixed worktree identity")
 	}
 	if _, err := os.Lstat(run.WorkspaceIntent.Path); os.IsNotExist(err) && preparation.Status != "confirmed" {
+		if err := s.checkCurrentExecutionRequirements(ctx, fixed); err != nil {
+			return false, err
+		}
 		if err := prepareWorktreeOnly(ctx, c, run); err != nil {
 			return false, s.waitWorkerFlow(run, "Original workspace preparation cannot be reconciled: "+err.Error())
 		}

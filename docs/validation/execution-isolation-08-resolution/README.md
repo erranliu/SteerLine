@@ -8,7 +8,7 @@
 | --- | --- | --- |
 | ExecutionPolicy、PublicationPolicy、ExecutionRequirements 的纯值/校验 | execution；后端权限解释由 codexworker / orca_remote_worker，发布支持矩阵由 publication | 中心组合策略及 Profile，contracts 持有同一冻结记录 |
 | 必需能力与附加需求匹配 | 既有认证报告、内容绑定证据和精确目标/agent/协议/版本；注册项只做版本查询，不能升级 verified | 中心在领取前评估，contracts 保存非秘密评估，领取事务复核候选 |
-| Git / go / python 版本与引用存在性 | 固定注册检查器；Git 使用冻结命令，local 使用与 worker 相同的认证引用剔除环境及 PATH；native 终端 PATH/remote 缺查询入口则 unknown；pr.token_env 只查冻结 provider 的 service 引用 | 中心保存领取证据与独立证据摘要，准备/反馈/业务轮/宿主发布与恢复的后续阻断事实写入 Execution；不保存秘密/秘密摘要 |
+| Git / go / python 版本与引用存在性 | 固定注册检查器；Git 使用冻结命令，local 使用与 worker 相同的认证引用剔除环境及 PATH；native 终端 PATH/remote 缺查询入口则 unknown；pr.token_env 只查冻结 provider 的 service 引用 | 中心保存领取证据，证据摘要也纳入完整 Profile 摘要，准备/反馈/业务轮/宿主发布与恢复的后续阻断事实写入 Execution；不保存秘密/秘密摘要 |
 | 工作区创建、核验与资源绑定 | workspace 的 Git/资源实现；remote 保留独立协议目标/资源 | 中心保存意图、原资源与回执附件，沿用唯一 worker commit 事务 |
 | 准备、启动、原问题/反馈、事件与结算 | codexworker / orcaworker / orca_remote_worker 的参数、身份、原生报告；PendingIdentity 在对应适配器 | 注册回调接通原 Service 协调器；workerflow 只保留纯状态/提示词；等待与结算根据类型化事实推进 |
 | 观察、停止、恢复对账、交付后清理 | 注册项构造对应 backend；Stopper 按小接口能力拒绝；thread/terminal/Dispatch 原身份归实现 | 中心保留人工恢复门槛、代次、原 Operation、原回执和唯一 TaskDelivery |
@@ -31,7 +31,7 @@
 
 - ER1：execution requirements 表驱动覆盖目标/agent/协议/版本错配、未核验/unsupported、工具版本/missing/unknown、引用 site/missing/unknown、未知/重复 ID。中心验证三个工具版本归一、缺解析器/错误输出、无 token_env 不冒用宿主登录、证据无秘密；空需求保留 publisher/CLI/remote 权限门槛；剔除 worker PATH 的引用不能再用服务 PATH 证明 go/python 存在。
 - ER2：注册重复/未知与测试操作替换；`go list -deps` 及直接 import 检查；两个 query 端口用例、console `TestFileQuerySourceReadsCombinedProjectView` 通过。控制台使用同一 ProjectView 展示原/当前需求证据、时间和来源，权限就绪另列。
-- ER3：Profile 上下文两用例、两执行独立 Profile 冻结/恢复、漂移先拒绝、同事务项目视图、快照复制/原值恢复、真实 Claim 竞争通过。新增用例在工具检查期间修改项目配置文件，领取事务以 stale_profile 拒绝且 Task 仍 open；重新核验后可领取，重启后 token 消失新增持久 blocked 事实，原快照字节不变。
+- ER3：Profile 上下文两用例、两执行独立 Profile 冻结/恢复、漂移先拒绝、同事务项目视图、快照复制/原值恢复、真实 Claim 竞争通过。新增用例在工具检查期间修改项目配置文件，领取事务以 stale_profile 拒绝且 Task 仍 open；重新核验后可领取，重启后 token 消失新增独立的需求阻断事实，原快照字节不变。
 - ER4 已通过部分：`TestAppServerServiceTwoTurnsPersistNativeReceipts` 的同步/service_messages 两种路径；`TestNativeOrcaFixedLunaLaunchReconcilesOriginalTerminal`；固定原协议/事件事实与 `TestRemotePublicationClaimRequiresPermissionEvidence`。remote 协议包在 quick 中通过，远程取消保持 unsupported。
 - `go test ./internal/steerline/execution ./internal/steerline/workerflow -count=1` 通过。
 - 最终 `go run ./cmd/test-feedback -quick` 通过（执行 21.2s），execution 已纳入 quick，contracts/query/sqlite/远程协议包及两项核心闭环均覆盖；未运行全量或并行全量。
@@ -48,3 +48,19 @@ Plan 原九项中心命令真实执行并命中所有目标，远程两项仍失
 两项均在 ClaimNativeTask 静态权限检查返回 `requested execution_policy ... lacks remote worker-start enforcement evidence`。这与 [#60 验收记录](../execution-isolation-07-publish-policy/README.md) 已记录的 #59 门槛相同；本轮没有放松它，也没有修改/删除原两轮和丢失回执成功测试。真实 Claim 拒绝行为与纯远程协议测试通过，不能代称这两个 Service 成功场景通过，原 ER4 的三链路全成功条件尚未满足。
 
 Spec 明确本轮不替前置补权限参数、冻结或重新认证全部原生能力，因此后续需要单独补齐原生权限证据并处理这一验收冲突。本轮没有把 mock 视为双机、原生权限、登录或远端授权认证。
+
+## PR174 修改质量审计与修复
+
+用户要求审计并转为可合并 PR。以下问题已修复，复现测试在修复前失败、修复后通过；没有用本轮审计解除前置远程权限门槛。
+
+1. Profile 列表的发布参数与评估指针仍共享项目值：组装时完整复制，修改返回方案不再污染项目配置。
+2. 注册/恢复只比较 target ID：补全 connection/runtime 核验，并核对 Run 与 Execution 的完整资源 target，禁止同 ID 换端。
+3. 重启使用当前 worktree root，直接 Claim 还可能保存相对路径：领取前验证完整根，恢复使用原持久 WorkspaceIntent 的绝对父目录，真实 Git fixture 证明当前 root 改变不影响原准备。
+4. 缺工具/引用会把 native active 状态改为 blocked 并阻止原会话对账：独立持久 CurrentRequirementsError，保留生命周期；观察/旧回执对账继续，新的及尚未发送的副作用意图必须通过当前需求检查。清理、确认消费与结果结算仍可执行；引用恢复时清除独立阻断原因。
+5. 重算需求证据自身摘要可以保留原 Profile 摘要：证据摘要纳入完整摘要，旧资源绑定不能接受替换的证据。
+6. worker commit 可改领取快照：事务拒绝修改原 Profile/config digest/repository/branch，拒绝时数据库保持原值。
+7. 认证 producer 的 local_process 报告与 app-server 需求 key 断开：worker-flow 认证使用注册项的精确协议/版本查询，旧协议证据拒绝。测试通过实际 Certify→load→requirements 消费链，仍仅证明契约；不将测试 fixture 当作原生认证。
+
+审计新增六项 `TestResolutionAudit*`；补充原 local/Orca 认证 fixture 的当前原生版本。定向审计、需求领取/重启、两 Profile 与复制测试通过。local 同步/异步两轮、native 固定终端、原 provider/宿主发布、Claim 竞争和远程真实拒绝八项回归通过（71.874s）；console 两项同源读取/原值展示通过；quick 通过（21.6s），未跑全量。传递依赖、diff 与文档链接核验保持有效。
+
+远程两项 Service 成功场景仍是上述已披露的前置缺证限制；本 PR 可作为需求/注册与现行拒绝边界的实现进入合并评审，不能据 ready 状态声称原 ER4 三链路成功验收全部通过。
