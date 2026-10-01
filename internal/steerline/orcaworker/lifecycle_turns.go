@@ -228,7 +228,7 @@ func (l *ExecutionLifecycle) reportCompletion(ctx context.Context, request execu
 	if err != nil {
 		return receipt, nativeCallError(err)
 	}
-	state.RelayReady = true
+	turn.RelayReported = true
 	receipt.Disposition, receipt.RequestID = executionapi.OperationAccepted, report.RequestID
 	receipt.Operation.Receipt = append([]byte(nil), report.Payload...)
 	receipt.State.ResourceID = report.ID
@@ -252,7 +252,7 @@ func (l *ExecutionLifecycle) reconcileCompletion(ctx context.Context, request ex
 	if err != nil || id == "" {
 		return receipt, nil, err
 	}
-	state.RelayReady = true
+	turn.RelayReported = true
 	receipt.Disposition, receipt.RequestID = executionapi.OperationConfirmed, id
 	receipt.State.ResourceID = id
 	receipt.Implementation, err = l.targetEnvelope(request.Snapshot, request.Snapshot.Ref.Target, request.Snapshot.Ref.External, state)

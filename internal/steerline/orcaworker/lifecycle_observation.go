@@ -161,7 +161,7 @@ func (o *nativeLifecycleObserver) observe(ctx context.Context) {
 				return
 			}
 		}
-		if !o.state.RelayReady {
+		if turn != nil && !turn.RelayReported {
 			if !o.reportRelay(ctx, turn) {
 				return
 			}
@@ -290,7 +290,7 @@ func (o *nativeLifecycleObserver) reportRelay(ctx context.Context, turn *NativeT
 	if !o.sendAndWait(ctx, event) {
 		return false
 	}
-	o.state.RelayReady = true
+	turn.RelayReported = true
 	return true
 }
 

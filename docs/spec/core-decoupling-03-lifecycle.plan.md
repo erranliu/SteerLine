@@ -87,3 +87,5 @@ PR185 的执行 session 已停写。协调 session 已 rebase 到 `7e79a9b315129
 第二次协调组合报告 `20261001T211702.780936400Z/summary.json` 仍为失败：quick-core 6/6、quick-rules 87/87、targeted 31/33；native 原会话准备在丢资源回执后保留了 PendingCommand，但 recheck 拒绝继续同一准备 Command。该问题已修复，随后该原会话单例通过（33.025s）。宿主 ER2 单例及 ER4 deadline/迟到结果单例也已通过（ER4 26.476s）；修复 worker 开始事件覆盖 HostTarget waiting phase，保留完整结算事件后才确认测试的观察完成。该失败组合报告不作为最终 head 的通过证据。
 
 复审中的结构缺口仍需核对：外层构造用例目前仅构造空 Service 并选步，实际 local/native 流程断言仍由 root 聚合入口承载；remote 四个完整协议断言已由外层入口承载。合并之前完成 Spec 规定的外层流程覆盖归属及剩余完整 diff 审核，不以目录/接口存在代替流程命中。活动 roadmap 的 #64 继续保留。
+
+`6a48136fd51450e359909c770897b03b1e1b893e` 固定 commit 的第三次组合验收已通过：`20261001T212539.240306100Z/summary.json`，passed/complete 均为 true，execution 258.3s，source_commit 精确匹配、工作区 clean；quick-core 6/6、quick-rules 87/87、targeted 33/33。已核对 root 两个命名入口、宿主 ER2/ER4、local 两轮、native 原会话，以及 outer remote 四个协议子用例实际 pass。此后继续复审发现并修复同一 Run 多轮 relay：原 done 历史只按原 Task/Dispatch 过滤，relay 完成标记改为每 Turn 独立；native state codec 更新至 9，拒绝 8。新增两个实际历史/observer 回归通过（0.948s）。6a48136 的通过报告不冒充这些后续修复的最终 head 认证。

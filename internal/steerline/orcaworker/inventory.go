@@ -323,7 +323,10 @@ func FindDone(ctx context.Context, call Call, runID, fromTerminal, taskID, dispa
 		if message.RunID != runID || message.From != fromTerminal || message.To != "run:"+runID || message.Type != "worker_done" {
 			continue
 		}
-		if message.ID == "" || message.TaskID != taskID || message.Dispatch != dispatchID || message.Subject != subject || message.Body != body || message.Outcome != outcome || found != "" {
+		if message.TaskID != taskID || message.Dispatch != dispatchID {
+			continue
+		}
+		if message.ID == "" || message.Subject != subject || message.Body != body || message.Outcome != outcome || found != "" {
 			return "", errors.New("Orca worker_done has conflicting or duplicate report history")
 		}
 		found = message.ID

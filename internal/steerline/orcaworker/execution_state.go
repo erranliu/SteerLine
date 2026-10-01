@@ -12,7 +12,7 @@ import (
 )
 
 const ExecutionStateCodecKey = "orca.execution-state"
-const ExecutionStateCodecVersion = 8
+const ExecutionStateCodecVersion = 9
 
 // NativeExecutionState contains provider identities and observation positions.
 // WorkflowRun, Decision and Operation remain the authorities for business state.
@@ -25,13 +25,13 @@ type NativeExecutionState struct {
 	SeenMessages       []string                     `json:"seen_messages,omitempty"`
 	CoordinatorClosed  bool                         `json:"coordinator_closed,omitempty"`
 	AgentClosed        bool                         `json:"agent_closed,omitempty"`
-	RelayReady         bool                         `json:"relay_ready,omitempty"`
 	RelayIgnored       bool                         `json:"relay_ignored,omitempty"`
 	AgentBound         bool                         `json:"agent_bound,omitempty"`
 	AgentLaunchCommand string                       `json:"agent_launch_command,omitempty"`
 }
 
 type NativeTurnState struct {
+	RelayReported          bool                  `json:"relay_reported,omitempty"`
 	ToolContext            contracts.ToolContext `json:"tool_context,omitempty"`
 	InjectionAttempts      int                   `json:"injection_attempts,omitempty"`
 	Purpose                string                `json:"purpose,omitempty"`
