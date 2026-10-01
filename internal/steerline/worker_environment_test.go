@@ -238,6 +238,33 @@ func TestWorkerEnvironmentER3RecheckKeepsOriginalDispatch(t *testing.T) {
 	}
 }
 
+func TestWorkerEnvironmentRestartRequiresConfirmationBeforeBusinessInput(t *testing.T) {
+	f := newEnvironmentFixture(t, fakeNativeOrcaState{ReadinessMode: "hold"}, "")
+	f.prepare(t)
+	require(t, f.service.Close())
+	s, err := NewService(f.config)
+	require(t, err)
+	f.service, f.run = s, s.find("8154")
+	require(t, s.markServiceRecoveryGate())
+	f.update(t, func(state *fakeNativeOrcaState) { state.ReadinessMode = "success" })
+	require(t, s.resumeConfiguredWork(context.Background()))
+	for i := 0; i < 3 && !s.executionRecord(f.run).Environment.Preparation.Verified; i++ {
+		f.poll(t)
+	}
+	e := s.executionRecord(f.run)
+	if !e.RecoveryRequired || !e.Environment.Preparation.Verified || f.state(t).Dispatches != 1 || e.TurnNumber != 0 {
+		t.Fatalf("restart readiness sent business input or lost original facts: preparation=%+v error=%q turn=%+v", e.Environment.Preparation, deref(e.Error), nativeOrcaCurrentTurn(e))
+	}
+	if e.Environment.Blocker == nil || e.Environment.Blocker.Fact.Reason != "service_recovery_required" {
+		t.Fatal("verified readiness did not retain an actionable recovery gate")
+	}
+	f.recheck(t)
+	e = s.executionRecord(f.run)
+	if e.RecoveryRequired || !e.Environment.Ready || f.state(t).Dispatches != 2 {
+		t.Fatalf("explicit confirmation did not continue the original worker: %+v", e)
+	}
+}
+
 func TestWorkerEnvironmentER4DeadlineRestartAndLostReceipt(t *testing.T) {
 	f := newEnvironmentFixture(t, fakeNativeOrcaState{ReadinessMode: "hold", LoseDispatchAt: 1}, "")
 	f.prepare(t)

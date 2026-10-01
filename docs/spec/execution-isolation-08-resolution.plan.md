@@ -16,7 +16,7 @@
 go test ./internal/steerline/execution ./internal/steerline/workerflow -count=1
 go list -deps ./internal/steerline/contracts ./internal/steerline/execution ./internal/steerline/workerflow ./internal/steerline/query
 go test ./internal/steerline/query -count=1 -run '^(TestReadyQueriesRejectMissingCapabilityAndProject|TestTaskQueriesRejectReaderScopeAndCursorDrift)$'
-go test ./internal/steerline -count=1 -run '^(TestWorkerFlowContextsDoNotExchangeExecutionProfiles|TestWorkerFlowContextKeepsFixedRunAndCopiesConfig|TestWorkerFlowClaimsFreezeIndependentLocalProfiles|TestWorkerFlowRejectsConfigDriftBeforePreparationOrTurnIntent|TestAppServerServiceTwoTurnsPersistNativeReceipts|TestNativeOrcaFixedLunaLaunchReconcilesOriginalTerminal|TestRemoteOrcaTwoTurnsKeepSessionAndRequireMergedDelivery|TestRemoteOrcaLostStartReconcilesAfterRestartWithoutResend|TestProjectViewSharesTransactionAcrossWriterCommit)$'
+go test ./internal/steerline -count=1 -run '^(TestWorkerFlowContextsDoNotExchangeExecutionProfiles|TestWorkerFlowContextKeepsFixedRunAndCopiesConfig|TestWorkerFlowClaimsFreezeIndependentLocalProfiles|TestWorkerFlowRejectsConfigDriftBeforePreparationOrTurnIntent|TestAppServerServiceTwoTurnsPersistNativeReceipts|TestNativeOrcaFixedLunaLaunchReconcilesOriginalTerminal|TestRemoteOrcaProtocolTwoTurnsKeepSessionAndSettleResources|TestRemoteOrcaProtocolLostStartReconcilesWithoutResend|TestRemoteOrcaServiceAdmissionRejectsMissingPermissionEvidence|TestProjectViewSharesTransactionAcrossWriterCommit)$'
 go test ./internal/steerline/console -count=1 -run '^TestFileQuerySourceReadsCombinedProjectView$'
 go run ./cmd/test-feedback -quick
 ```
@@ -34,3 +34,5 @@ PR 附最终配置归属、注册键、业务/平台/事务所有者和删除清
 补充定向验证包含 `TestExecutionRequirements.*`、`TestRequirementVersionParsers`、`TestEmptyExecutionRequirementsKeepMandatoryChecks`、`TestClaimRechecksAcceptedConfigFiles`、`TestExecutionRegistry.*`、`TestNativeClaimCompetitionCreatesOnlyOneWorkflowReservation` 及固定协议/事实断言。query/console fixture 保留同事务与部分错误断言；没有全量或真机重新认证。
 
 PR174 用户要求的修改质量审计已补完整目标核验、Profile 组装复制、原资源根恢复、证据完整摘要及事务不可变保护；需求阻断与原 worker 生命周期分离，观察/对账保留，新增副作用意图复核当前需求。认证报告 producer/consumer 使用同一注册协议 key。审计复现与验证见同一验收记录；转 ready 不代表远程缺证成功场景得到认证。
+
+远程原成功 fixture 已按当前准入契约拆为 Protocol 回归和真实 Claim 拒绝；上述命令不计作 ER4 远程 Service 成功，追加恢复修复见[清理记录](../validation/execution-isolation-cleanup/README.md)。

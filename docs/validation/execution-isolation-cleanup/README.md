@@ -36,9 +36,9 @@ go test ./internal/steerline -count=1 -run '^(TestRegisteredOrca.*|TestNativeOrc
 
 未运行全量测试、真实 agent 或双机认证。
 
-## 尚未通过的验收
+## 基线失败与追加修复
 
-以下五项在当前分支（22.0s）及 `git archive 7350e84` 的独立主干副本（21.0s）复跑，失败位置和原因一致，确认是基线既有失败；不能计作成功：
+清理初版的以下五项在分支（22.0s）及 `git archive 7350e84` 的独立主干副本（21.0s）复跑，失败位置和原因一致，确认是基线既有失败；不能计作成功：
 
 - `TestNativeOrcaCenterReusesWorkerAfterRestartAndSettlement`：fixture 使用 opencode，领取报 unregistered execution combination；后续完整 Service 重启/回执流程未执行。
 - `TestRemoteOrcaTwoTurnsKeepSessionAndRequireMergedDelivery`
@@ -46,4 +46,20 @@ go test ./internal/steerline -count=1 -run '^(TestRegisteredOrca.*|TestNativeOrc
 - `TestRemoteOrcaQuestionLostReplyAndAckAreReconciled`
 - `TestRemoteOrcaRejectsReplacementSession`
 
-四个 remote 用例均在 Claim 被 #59 权限证据门槛拒绝。本轮保留这些测试及准入拒绝，不通过 mock 认证、跳过测试或开放旧组合消除失败。旧 opencode fixture 需要改造为受支持方案并完成完整回归；远程成功验收需要原生 worker-start 权限落实证据。工具 PATH/target 认证缺乏固定查询入口的限制继续按 #61 返回 unknown 或拒绝。
+追加修复后不再保留与准入契约冲突的失败 fixture：
+
+- 本机原用例迁到 Codex/PowerShell，使用完整受管准备、有效工具/收据/结算，准备轮与业务轮分别计数；保留 worktree/coordinator/Run 创建回执丢失、五轮业务、回复/send/Task/Dispatch 丢失、Service 重启及替换身份拒绝。未知资源和派发使用公开 recheck 对账，不跳过人工门槛。
+- 原四个 remote Service 成功用例改为四个名称明确的 Protocol 回归，继续覆盖两轮原 session/workspace、未结算 release 拒绝、精确清理、重建 adapter 后的丢失 start 只读对账、reply/ack 丢失及 replacement 拒绝。测试直接调用原适配器，没有 Claim 绕过、注册 gate 替换或权限证据伪造。合并交付的中心规则继续由 quick 的 TaskDelivery/provider 用例覆盖。
+- 新增真实完整任务的 `TestRemoteOrcaServiceAdmissionRejectsMissingPermissionEvidence`：Claim 在任何外部 probe 前拒绝，整份 DomainSnapshot 保持不变。
+- 实际暴露并修复两个生产问题：remote StartTask 复用前先 Show 并比较原 peer/coordinator/terminal/incarnation/Dispatch 完整身份及 liveness；managed native 的 resume 保留 RecoveryRequired，准备结算也不能自动派发业务，必须经原环境 recheck 确认。
+- `TestWorkerEnvironmentRestartRequiresConfirmationBeforeBusinessInput` 证明重启后的原准备证据可以完成，业务 Dispatch 数在人工确认前保持 0；确认后继续同一 worker。
+
+追加验证：本机完整恢复用例通过（90.5s）；环境准备 ER1 正向/故障矩阵、ER4 期限/丢失回执及新增重启门槛回归通过（139.2s）。remote 协议/Service 准入、注册操作及固定终端恢复组通过（54.0s），最小入口通过（execution=25.0s），构建、go vet 与 diff 检查均通过，未跑全量。相关中心命令：
+
+```powershell
+go test ./internal/steerline -count=1 -run '^TestNativeOrcaCenterReusesWorkerAfterRestartAndSettlement$'
+go test ./internal/steerline -count=1 -run '^(TestWorkerEnvironmentRestartRequiresConfirmationBeforeBusinessInput|TestWorkerEnvironmentER1ProbeAndSettlementGate|TestWorkerEnvironmentER4DeadlineRestartAndLostReceipt)$'
+go test ./internal/steerline -count=1 -run '^(TestRemoteOrca(Protocol|ServiceAdmission).*|TestRegisteredOrca.*|TestRemotePublicationClaimRequiresPermissionEvidence|TestNativeOrcaFixedLunaLaunchReconcilesOriginalTerminal|TestNativeOrcaFixedLunaLaunchReconcilesRenamedTerminalAfterRestart)$'
+```
+
+远程 Service 的成功准入仍需要原生 worker-start 权限落实证据，ER4 的真实三链路成功条件仍未完成；协议模拟通过不能替代它。工具 PATH/target 认证的固定查询限制继续按 #61 返回 unknown 或拒绝。

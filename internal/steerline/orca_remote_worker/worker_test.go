@@ -56,7 +56,7 @@ func TestRemoteContinuationRequiresOriginalPeerAndTerminal(t *testing.T) {
 			t.Fatal("center lifecycle routed to peer")
 		}
 		if args[1] == "worker-show" {
-			return wire("center", map[string]any{"dispatch": map[string]string{"id": "old-dispatch", "runId": "run", "taskId": "old", "status": "completed"}, "worker": map[string]string{"dispatchId": "old-dispatch", "worktreeId": "repo::/srv/worker", "agentTerminalHandle": "agent", "state": "succeeded"}, "server": map[string]string{"environmentId": "peer-env"}, "projection": map[string]any{"host": map[string]string{"id": "peer-env"}}, "remoteRuntimeEpoch": "peer"}), nil
+			return wire("center", map[string]any{"dispatch": map[string]string{"id": "old-dispatch", "runId": "run", "taskId": "old", "status": "completed"}, "worker": map[string]string{"dispatchId": "old-dispatch", "worktreeId": "repo::/srv/worker", "agentTerminalHandle": "agent", "state": "succeeded"}, "server": map[string]string{"environmentId": "peer-env"}, "projection": map[string]any{"host": map[string]string{"id": "peer-env"}, "liveness": map[string]string{"verdict": "live"}}, "terminal": map[string]string{"handle": "agent", "incarnationId": "inc", "worktreeId": "repo::/srv/worker", "worktreePath": "/srv/worker", "branch": "worker"}, "observation": map[string]bool{"exactWorker": true}, "remoteRuntimeEpoch": "peer"}), nil
 		}
 		if args[1] != "worker-start" {
 			t.Fatalf("unexpected platform call %v", args)

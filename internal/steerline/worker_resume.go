@@ -72,12 +72,9 @@ func (s *Service) resumeCodexWorker(ctx context.Context, task *TaskRecord, run *
 
 func (s *Service) resumeNativeOrcaWorker(ctx context.Context, task *TaskRecord, run *Run) (bool, error) {
 	workflow, execution := s.workflowRecords(run)
-	if execution.Environment != nil {
-		if execution.Process != nil {
-			if err := s.verifyNativeOrcaWorker(ctx, run, execution); err == nil {
-				execution.RecoveryRequired = false
-			}
-		}
+	// Managed executions retain the same restart authorization gate as other
+	// native sessions. Readiness observation cannot authorize fresh worker input.
+	if execution.Environment != nil && !execution.RecoveryRequired {
 		if turn := nativeOrcaCurrentTurn(execution); turn != nil && turn.DispatchID != "" {
 			return true, s.pollNativeOrcaWorker(ctx, run)
 		}

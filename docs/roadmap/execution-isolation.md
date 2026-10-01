@@ -99,9 +99,9 @@ flowchart TD
 
 ## 剩余验证
 
-#59 的远程 worker-start 权限落实证据目前缺失。四个旧远程 Service 成功测试（两轮、丢失 start、问题回执丢失、替换会话）均在领取前拒绝；成功场景不能计作已通过，也不能用 mock 解除门槛。远程协议包与真实 Claim 的拒绝行为已有确定性回归。后续处理该证据门槛需要独立范围和原生验证，本轮不新增远程权限 producer。
+#59 的远程 worker-start 权限落实证据目前缺失。原四个 Service 成功 fixture 的准入前提与当前契约冲突，已拆为真实 Claim 拒绝回归及四个协议层正向回归（两轮、丢失 start、问题回执丢失、替换会话）。协议测试直接调用已有适配器，不伪造权限证据；不能计作远程 Service 领取成功或双机认证。后续处理该证据门槛需要独立范围和原生验证，本轮不新增远程权限 producer。
 
-旧 `TestNativeOrcaCenterReusesWorkerAfterRestartAndSettlement` 使用未注册的 opencode 组合，在领取前拒绝，未覆盖其后续恢复/回执流程。现有 Codex 固定终端恢复用例及本轮直接操作回执丢失回归不能替代这个完整流程；需在后续单独改造夹具并完成该验收，不开放旧组合。
+`TestNativeOrcaCenterReusesWorkerAfterRestartAndSettlement` 已迁到受支持的 Codex/PowerShell 路径，完成受管准备轮后验证五个业务轮、Service 重启、回执丢失、原身份与精确清理。worktree/coordinator/Run 和未知业务派发通过公开 recheck 对账，保留人工门槛。追加修复受管恢复自动清除重启门槛、准备完成后未经确认派发业务，以及远程续聊发送前缺少 incarnation 核验的问题，见[清理记录](../validation/execution-isolation-cleanup/README.md)。
 
 本机 Orca 终端 PATH 与远程工具/target 认证尚无固定只读查询入口。附加需求对无法查询的项返回 unknown 或明确拒绝，不能据此安装工具、登录或新建隐藏 worker。能力报告缺失仍显示未核验。
 

@@ -24,6 +24,13 @@ func (b Client) StartTask(ctx context.Context, runID, taskID, worktreeID string,
 		if previous.Kind != "orca_supervised" || previous.RuntimeID != pair.RemoteRuntime || previous.CoordinatorRuntimeID != pair.CenterRuntime || previous.ExecutionHost != pair.EnvironmentID || previous.WorktreeID != worktreeID || previous.Terminal == "" || previous.Incarnation == "" {
 			return StartReceipt{}, &Error{Code: executionapi.BackendIdentityMismatch, Diagnostic: "remote continuation changed original agent binding"}
 		}
+		original, err := b.Show(ctx, StartReceipt{RunID: previous.OrchestrationRun, TaskID: previous.Task, DispatchID: previous.Dispatch, WorktreeID: previous.WorktreeID, CenterRuntimeID: previous.CoordinatorRuntimeID})
+		if err != nil {
+			return StartReceipt{}, err
+		}
+		if original.Identity != *previous || original.Liveness != "live" {
+			return StartReceipt{}, &Error{Code: executionapi.BackendIdentityMismatch, Diagnostic: "remote continuation requires the original live agent incarnation"}
+		}
 		if _, err := b.Settlement(ctx, Ref{Backend: executionapi.BackendOrca, Protocol: executionapi.ProtocolOrcaSupervised, Target: executionapi.ExecutionTarget{ID: "orca-supervised:" + b.config.Settings.ConnectionID, ConnectionID: b.config.Settings.ConnectionID, ExternalRuntime: pair.EnvironmentID, OrchestrationRun: previous.OrchestrationRun, ExternalTask: previous.Task, Dispatch: previous.Dispatch, ExecutionHost: previous.ExecutionHost, WorktreeID: worktreeID}, External: *previous}, ""); err != nil {
 			return StartReceipt{}, err
 		}

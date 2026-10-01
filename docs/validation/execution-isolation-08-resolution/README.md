@@ -64,3 +64,7 @@ Spec 明确本轮不替前置补权限参数、冻结或重新认证全部原生
 审计新增六项 `TestResolutionAudit*`；补充原 local/Orca 认证 fixture 的当前原生版本。定向审计、需求领取/重启、两 Profile 与复制测试通过。local 同步/异步两轮、native 固定终端、原 provider/宿主发布、Claim 竞争和远程真实拒绝八项回归通过（71.874s）；console 两项同源读取/原值展示通过；quick 通过（21.6s），未跑全量。传递依赖、diff 与文档链接核验保持有效。
 
 远程两项 Service 成功场景仍是上述已披露的前置缺证限制；本 PR 可作为需求/注册与现行拒绝边界的实现进入合并评审，不能据 ready 状态声称原 ER4 三链路成功验收全部通过。
+
+## PR175 失败用例追加修复
+
+上文保留 PR174 时的原 ER4 失败事实。后续已将本机完整恢复 fixture 迁到受支持 Codex 路径，将四个远程正向 fixture 拆为直接适配器协议回归及真实 Claim 拒绝；修复了远程续聊缺少原 incarnation 核验和受管重启自动清除人工门槛的问题。现行测试通过及命令见[清理记录](../execution-isolation-cleanup/README.md)。未伪造权限证据或声明 ER4 远程 Service 成功，原生支持缺口仍成立。
