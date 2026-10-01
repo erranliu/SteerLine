@@ -7,9 +7,53 @@ import (
 	"io"
 	"strings"
 	"time"
+
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 const ProfileCodecKey = "orca.worker-profile"
+
+func NormalizeProfilePayload(payload []byte, host string) ([]byte, []string, error) {
+	settings, err := DecodeProfileConfig(payload)
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := settings.Validate(); err != nil {
+		return nil, nil, err
+	}
+	if host == "orca" {
+		if err := ValidateLocalTargetArgs(settings.Args); err != nil {
+			return nil, nil, err
+		}
+	}
+	encoded, err := EncodeProfileConfig(settings)
+	return encoded, nil, err
+}
+
+func ValidateProfileSelection(policy executionapi.ExecutionPolicy, agent string, codexPayload, orcaPayload []byte) error {
+	codex, err := codexworker.DecodeProfileConfig(codexPayload)
+	if err != nil {
+		return err
+	}
+	orca, err := DecodeProfileConfig(orcaPayload)
+	if err != nil {
+		return err
+	}
+	if policy.Filesystem.WriteScope != "workspace" || codex.Profile != "" {
+		return errors.New("Orca worker-flow requires workspace-write and no Codex profile")
+	}
+	if agent != "codex" && (codex.Model != "" || codex.Profile != "" || codex.ReasoningEffort != "") {
+		return errors.New("Orca model, profile and reasoning_effort overrides require agent=codex")
+	}
+	if codex.Model != "" && orca.Shell != "powershell.exe" && orca.Shell != "pwsh.exe" {
+		return errors.New("fixed Orca Codex launch requires powershell.exe or pwsh.exe")
+	}
+	if codex.Model != "" && codex.Executable == "" {
+		return errors.New("fixed Orca Codex launch requires codex.executable")
+	}
+	return nil
+}
 
 // ProfileConfig is the native Orca command configuration accepted by its codec.
 type ProfileConfig struct {

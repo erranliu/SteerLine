@@ -7,9 +7,45 @@ import (
 	"io"
 	"strings"
 	"time"
+
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
 
 const ProfileCodecKey = "orca.supervised-profile"
+
+func NormalizeProfilePayload(payload []byte) ([]byte, []string, error) {
+	settings, err := DecodeProfileConfig(payload)
+	if err != nil {
+		return nil, nil, err
+	}
+	encoded, err := EncodeProfileConfig(settings)
+	return encoded, []string{"目标环境：" + settings.EnvironmentID, "连接：" + settings.ConnectionID}, err
+}
+
+func ValidateProfileSelection(policy executionapi.ExecutionPolicy, agent string, codexPayload, orcaPayload, remotePayload []byte) error {
+	codex, err := codexworker.DecodeProfileConfig(codexPayload)
+	if err != nil {
+		return err
+	}
+	orca, err := orcaworker.DecodeProfileConfig(orcaPayload)
+	if err != nil {
+		return err
+	}
+	remoteProfile, err := DecodeProfileConfig(remotePayload)
+	if err != nil {
+		return err
+	}
+	selected := Selection{Agent: agent, Model: codex.Model, ReasoningEffort: codex.ReasoningEffort, Executable: orca.Executable, Shell: orca.Shell, WaitTimeout: orca.WaitTimeout,
+		Settings: &SelectionSettings{Settings: Settings{ConnectionID: remoteProfile.ConnectionID, EnvironmentID: remoteProfile.EnvironmentID, RepositorySelector: remoteProfile.RepositorySelector,
+			CoordinatorTerminal: remoteProfile.CoordinatorTerminal, ExpectedCodexVersion: remoteProfile.ExpectedCodexVersion, PollInterval: remoteProfile.PollInterval},
+			RemoteCancelAvailable: remoteProfile.RemoteCancelAvailable, CapabilityReportVersion: remoteProfile.CapabilityReportVersion}}
+	if err := selected.Validate(); err != nil {
+		return err
+	}
+	return CheckPolicy(policy, selected.Settings.Settings)
+}
 
 // ProfileConfig is owned by the remote implementation codec.
 type ProfileConfig struct {

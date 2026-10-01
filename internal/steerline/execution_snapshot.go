@@ -47,7 +47,7 @@ func verifyPolicyResources(p *contracts.PolicyResources, profileDigest, workspac
 	return nil
 }
 func bindPolicyResources(ctx context.Context, c Config, e *ExecutionRecord, workspace string, linkedArgs []string) error {
-	manualRestart := e.Process == nil && e.RecoveryState == "resuming"
+	manualRestart := awaitingLocalRecoveryResources(e)
 	if e.PolicyResources == nil && (e.Process != nil || e.Generation != "") && !manualRestart {
 		return errors.New("original execution policy resource snapshot is missing; preserve the native session")
 	}

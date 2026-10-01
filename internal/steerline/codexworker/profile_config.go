@@ -12,6 +12,53 @@ import (
 
 const ProfileCodecKey = "codex.worker-profile"
 
+// NormalizeProfilePayload owns the native defaults and non-secret projection.
+func NormalizeProfilePayload(payload []byte, policy executionapi.ExecutionPolicy, goos, host, agent string) ([]byte, []string, error) {
+	settings, err := DecodeProfileConfig(payload)
+	if err != nil {
+		return nil, nil, err
+	}
+	if settings.Executable == "" {
+		return nil, nil, errors.New("Codex implementation requires an executable")
+	}
+	if settings.Model != strings.TrimSpace(settings.Model) || strings.ContainsAny(settings.Model, "\r\n\x00") {
+		return nil, nil, errors.New("invalid model")
+	}
+	display := []string{}
+	if host == "orca_supervised" {
+		if err := ValidateManagedArgs(settings.Args); err != nil {
+			return nil, nil, err
+		}
+		if settings.Profile != "" || settings.WindowsSandbox != "" {
+			return nil, nil, errors.New("remote Codex profile does not accept local profile or Windows sandbox overrides")
+		}
+		if settings.ReasoningEffort != "" && !ValidReasoningEffort(settings.ReasoningEffort) {
+			return nil, nil, errors.New("invalid reasoning_effort")
+		}
+	} else {
+		settings, err = NormalizeProfileConfig(settings, policy, goos, host, agent)
+		if err != nil {
+			return nil, nil, err
+		}
+		permissions, err := CompilePolicy(policy, goos, host, agent, settings.WindowsSandbox, settings.Profile, settings.Args)
+		if err != nil {
+			return nil, nil, err
+		}
+		display = append(display, "权限："+permissions.Sandbox)
+		if permissions.WindowsSandbox != "" {
+			display = append(display, "Windows 权限："+permissions.WindowsSandbox)
+		}
+	}
+	if settings.Model != "" {
+		display = append(display, "Model："+settings.Model)
+	}
+	if settings.ReasoningEffort != "" {
+		display = append(display, "Reasoning effort："+settings.ReasoningEffort)
+	}
+	encoded, err := EncodeProfileConfig(settings)
+	return encoded, display, err
+}
+
 // ProfileConfig is the implementation-owned, normalized worker configuration.
 type ProfileConfig struct {
 	Executable      string   `json:"executable"`

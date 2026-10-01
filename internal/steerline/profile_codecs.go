@@ -24,86 +24,19 @@ var builtinProfileCodecs = map[string]implementationProfileCodec{
 	codexworker.ProfileCodecKey: {
 		key: codexworker.ProfileCodecKey, version: 1,
 		normalize: func(payload []byte, policy executionapi.ExecutionPolicy, host, agent string) ([]byte, []string, error) {
-			settings, err := codexworker.DecodeProfileConfig(payload)
-			if err != nil {
-				return nil, nil, err
-			}
-			if settings.Executable == "" {
-				return nil, nil, errors.New("Codex implementation requires an executable")
-			}
-			if host == "orca_supervised" {
-				if err := codexworker.ValidateManagedArgs(settings.Args); err != nil {
-					return nil, nil, err
-				}
-				if settings.Profile != "" || settings.WindowsSandbox != "" {
-					return nil, nil, errors.New("remote Codex profile does not accept local profile or Windows sandbox overrides")
-				}
-				if settings.ReasoningEffort != "" && !codexworker.ValidReasoningEffort(settings.ReasoningEffort) {
-					return nil, nil, errors.New("invalid reasoning_effort")
-				}
-				encoded, err := codexworker.EncodeProfileConfig(settings)
-				display := []string{}
-				if settings.Model != "" {
-					display = append(display, "Model："+settings.Model)
-				}
-				if settings.ReasoningEffort != "" {
-					display = append(display, "Reasoning effort："+settings.ReasoningEffort)
-				}
-				return encoded, display, err
-			}
-			settings, err = codexworker.NormalizeProfileConfig(settings, policy, runtime.GOOS, host, agent)
-			if err != nil {
-				return nil, nil, err
-			}
-			encoded, err := codexworker.EncodeProfileConfig(settings)
-			if err != nil {
-				return nil, nil, err
-			}
-			permissions, err := codexworker.CompilePolicy(policy, runtime.GOOS, host, agent, settings.WindowsSandbox, settings.Profile, settings.Args)
-			if err != nil {
-				return nil, nil, err
-			}
-			display := []string{"权限：" + permissions.Sandbox}
-			if permissions.WindowsSandbox != "" {
-				display = append(display, "Windows 权限："+permissions.WindowsSandbox)
-			}
-			if settings.Model != "" {
-				display = append(display, "Model："+settings.Model)
-			}
-			if settings.ReasoningEffort != "" {
-				display = append(display, "Reasoning effort："+settings.ReasoningEffort)
-			}
-			return encoded, display, nil
+			return codexworker.NormalizeProfilePayload(payload, policy, runtime.GOOS, host, agent)
 		},
 	},
 	orcaworker.ProfileCodecKey: {
 		key: orcaworker.ProfileCodecKey, version: 1,
 		normalize: func(payload []byte, _ executionapi.ExecutionPolicy, host, _ string) ([]byte, []string, error) {
-			settings, err := orcaworker.DecodeProfileConfig(payload)
-			if err != nil {
-				return nil, nil, err
-			}
-			if err = orcaworker.ValidateProfileConfig(settings); err != nil {
-				return nil, nil, err
-			}
-			if host == "orca" {
-				if err = orcaworker.ValidateLocalTargetArgs(settings.Args); err != nil {
-					return nil, nil, err
-				}
-			}
-			encoded, err := orcaworker.EncodeProfileConfig(settings)
-			return encoded, nil, err
+			return orcaworker.NormalizeProfilePayload(payload, host)
 		},
 	},
 	remote.ProfileCodecKey: {
 		key: remote.ProfileCodecKey, version: 1,
 		normalize: func(payload []byte, _ executionapi.ExecutionPolicy, _, _ string) ([]byte, []string, error) {
-			settings, err := remote.DecodeProfileConfig(payload)
-			if err != nil {
-				return nil, nil, err
-			}
-			encoded, err := remote.EncodeProfileConfig(settings)
-			return encoded, []string{"目标环境：" + settings.EnvironmentID, "连接：" + settings.ConnectionID}, err
+			return remote.NormalizeProfilePayload(payload)
 		},
 	},
 }
@@ -112,6 +45,10 @@ func normalizeImplementationInputs(inputs []executionapi.ImplementationConfigInp
 	if projectID == "" || profileID == "" || acceptedVersion == "" {
 		return nil, nil, errors.New("implementation configuration is missing project, profile or accepted version")
 	}
+	inputs = cloneImplementationInputs(inputs)
+	slices.SortFunc(inputs, func(a, b executionapi.ImplementationConfigInput) int {
+		return strings.Compare(a.ImplementationKey, b.ImplementationKey)
+	})
 	seen := map[string]bool{}
 	data := make([]executionapi.ImplementationDataEnvelope, 0, len(inputs))
 	display := []string{}
@@ -145,48 +82,15 @@ func normalizeImplementationInputs(inputs []executionapi.ImplementationConfigInp
 		return nil, nil, errors.New("execution profile has incomplete implementation configuration")
 	}
 	if host == "orca" {
-		codex, err := codexworker.DecodeProfileConfig(payloadForImplementation(data, codexworker.ProfileCodecKey))
-		orca, orcaErr := orcaworker.DecodeProfileConfig(payloadForImplementation(data, orcaworker.ProfileCodecKey))
-		if err != nil || orcaErr != nil {
-			return nil, nil, errors.New("Orca profile codecs could not be verified")
-		}
-		if policy.Filesystem.WriteScope != "workspace" || codex.Profile != "" {
-			return nil, nil, errors.New("Orca worker-flow requires workspace-write and no Codex profile")
-		}
-		if agent != "codex" && (codex.Model != "" || codex.Profile != "" || codex.ReasoningEffort != "") {
-			return nil, nil, errors.New("Orca model, profile and reasoning_effort overrides require agent=codex")
-		}
-		if codex.Model != "" && orca.Shell != "powershell.exe" && orca.Shell != "pwsh.exe" {
-			return nil, nil, errors.New("fixed Orca Codex launch requires powershell.exe or pwsh.exe")
-		}
-		if codex.Model != "" && codex.Executable == "" {
-			return nil, nil, errors.New("fixed Orca Codex launch requires codex.executable")
+		if err := orcaworker.ValidateProfileSelection(policy, agent, payloadForImplementation(data, codexworker.ProfileCodecKey), payloadForImplementation(data, orcaworker.ProfileCodecKey)); err != nil {
+			return nil, nil, err
 		}
 	}
 	if host == "orca_supervised" {
-		codex, err := codexworker.DecodeProfileConfig(payloadForImplementation(data, codexworker.ProfileCodecKey))
-		orca, orcaErr := orcaworker.DecodeProfileConfig(payloadForImplementation(data, orcaworker.ProfileCodecKey))
-		remoteProfile, remoteErr := remote.DecodeProfileConfig(payloadForImplementation(data, remote.ProfileCodecKey))
-		if err != nil {
-			return nil, nil, err
-		}
-		if orcaErr != nil {
-			return nil, nil, orcaErr
-		}
-		if remoteErr != nil {
-			return nil, nil, remoteErr
-		}
-		selected := remote.Selection{Agent: agent, Model: codex.Model, ReasoningEffort: codex.ReasoningEffort, Executable: orca.Executable, Shell: orca.Shell, WaitTimeout: orca.WaitTimeout, Settings: &remote.SelectionSettings{Settings: remote.Settings{ConnectionID: remoteProfile.ConnectionID, EnvironmentID: remoteProfile.EnvironmentID, RepositorySelector: remoteProfile.RepositorySelector, CoordinatorTerminal: remoteProfile.CoordinatorTerminal, ExpectedCodexVersion: remoteProfile.ExpectedCodexVersion, PollInterval: remoteProfile.PollInterval}, RemoteCancelAvailable: remoteProfile.RemoteCancelAvailable, CapabilityReportVersion: remoteProfile.CapabilityReportVersion}}
-		if err := selected.Validate(); err != nil {
-			return nil, nil, err
-		}
-		if err := remote.CheckPolicy(policy, selected.Settings.Settings); err != nil {
+		if err := remote.ValidateProfileSelection(policy, agent, payloadForImplementation(data, codexworker.ProfileCodecKey), payloadForImplementation(data, orcaworker.ProfileCodecKey), payloadForImplementation(data, remote.ProfileCodecKey)); err != nil {
 			return nil, nil, err
 		}
 	}
-	slices.SortFunc(data, func(a, b executionapi.ImplementationDataEnvelope) int {
-		return strings.Compare(a.ImplementationKey, b.ImplementationKey)
-	})
 	return data, display, nil
 }
 

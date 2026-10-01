@@ -20,8 +20,8 @@ func TestWorkerFlowContextKeepsFixedRunAndCopiesConfig(t *testing.T) {
 	run.Host, run.Agent, run.Backend, run.Protocol, run.Target = "local", "codex", "local", string(executionapi.ProtocolLocalCodexAppServer), targetFor(config)
 	service := Service{
 		Config: config,
-		domain: DomainSnapshot{WorkflowRuns: []WorkflowRunRecord{{WorkflowRunID: "run", WorkflowVersion: WorkerFlowVersion, Repository: config.Repository, Branch: config.Branch, ConfigDigest: fixedProfile.AcceptedConfigVersion, ExecutionProfile: &fixedProfile}},
-			Executions: []ExecutionRecord{{ExecutionID: "execution", WorkflowRunID: "run"}},
+		domain: DomainSnapshot{WorkflowRuns: []WorkflowRunRecord{{ProjectIdentity: configurationProjectIdentity(config), WorkflowRunID: "run", WorkflowVersion: WorkerFlowVersion, Repository: config.Repository, Branch: config.Branch, ConfigDigest: fixedProfile.AcceptedConfigVersion, ExecutionProfile: &fixedProfile}},
+			Executions: []ExecutionRecord{{ProjectIdentity: configurationProjectIdentity(config), ExecutionID: "execution", WorkflowRunID: "run", CurrentAttemptID: run.AttemptID, ConfigurationDigest: fixedProfile.Digest}},
 			Attempts:   []StepAttemptRecord{{AttemptID: "attempt", ExecutionID: "execution"}}},
 	}
 	fixed, err := service.workerFlowContext(run)
@@ -53,8 +53,8 @@ func TestWorkerFlowContextsDoNotExchangeExecutionProfiles(t *testing.T) {
 		selected := base.ApplyFixedExecutionProfile(fixed)
 		run := &Run{RunID: id, ExecutionID: id + "-execution", AttemptID: id + "-attempt", Host: "local", Agent: "codex", Backend: string(executionapi.BackendLocal), Protocol: string(executionapi.ProtocolLocalCodexAppServer), Target: targetFor(selected), ExecutionStatus: "pending"}
 		service.State.Runs = append(service.State.Runs, run)
-		service.domain.WorkflowRuns = append(service.domain.WorkflowRuns, WorkflowRunRecord{WorkflowRunID: id, WorkflowVersion: WorkerFlowVersion, Repository: base.Repository, Branch: base.Branch, ConfigDigest: fixed.AcceptedConfigVersion, ExecutionProfile: &fixed})
-		service.domain.Executions = append(service.domain.Executions, ExecutionRecord{ExecutionID: run.ExecutionID, WorkflowRunID: id})
+		service.domain.WorkflowRuns = append(service.domain.WorkflowRuns, WorkflowRunRecord{ProjectIdentity: configurationProjectIdentity(base), WorkflowRunID: id, WorkflowVersion: WorkerFlowVersion, Repository: base.Repository, Branch: base.Branch, ConfigDigest: fixed.AcceptedConfigVersion, ExecutionProfile: &fixed})
+		service.domain.Executions = append(service.domain.Executions, ExecutionRecord{ProjectIdentity: configurationProjectIdentity(base), ExecutionID: run.ExecutionID, WorkflowRunID: id, CurrentAttemptID: run.AttemptID, ConfigurationDigest: fixed.Digest})
 		service.domain.Attempts = append(service.domain.Attempts, StepAttemptRecord{AttemptID: run.AttemptID, ExecutionID: run.ExecutionID})
 	}
 	first, err := service.workerFlowContext(service.State.Runs[0])

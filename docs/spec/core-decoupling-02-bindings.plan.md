@@ -49,11 +49,24 @@ Codex、Orca 本机和 Orca 远端配置及校验分别归属 `codexworker`、`o
 
 旧到新断言映射：`TestProjectPolicyFrozenSnapshotRejectsDamageAndPreservesAuthority` → `TestCD63FrozenConfigAndBinding/fixed_profile_integrity`；`TestClaimRechecksAcceptedConfigFiles` → `accepted_config_recheck`；`TestAppServerLaunchMessagePersistsPolicyResources` → `resource_receipt_commit/thread_ready` 与 `turn_result`；`TestWorkerFlowContextsDoNotExchangeExecutionProfiles` → `profile_copy_isolation`；`TestResolutionAuditRequirementsDoNotBlockOriginalObservation` → `original_observation_survives_requirement_drift`；`TestRemotePublicationClaimRequiresPermissionEvidence` → `remote_missing_evidence_still_blocks_claim`；历史权限报告的拒绝断言归 `legacy_permission_evidence_rejected`。#62 route 的既有 `TestQuestionRouteVersionIdentityDigestAndLimit`、Codex/Orca native question-route 用例现验证共享封套的版本、身份和摘要。
 
-最终 quick JSON 报告：`C:\Users\lmas1\AppData\Local\Temp\steerline-test-feedback\20261001T102421.603799000Z\summary.json`，`passed=true`、complete。实际 JSON 事件为 quick-core 1/1 包、6/6 tests；quick-rules 9/9 包、74/74 tests；quick-targeted 3/3 包、29/29 tests（根包 18、Codex 7、Orca 本机 4）。
+最终 quick JSON 报告：`C:\Users\lmas1\AppData\Local\Temp\steerline-test-feedback\20261001T110142.429138300Z\summary.json`，`passed=true`、complete。实际 JSON 事件为 quick-core 1/1 包、6/6 tests；quick-rules 9/9 包、75/75 tests；quick-targeted 3/3 包、37/37 tests（根包 25、Codex 8、Orca 本机 4）。
 
 命中明细：root `TestCD63FrozenConfigAndBinding` 实际包含 question route identity 与 receipt barrier、固定配置/资源/恢复/事务子例；`codexworker.TestCD63CodecIdentityAndVersion/shared_question_envelope` 与 `orcaworker.TestCD63CodecIdentityAndVersion/shared_question_envelope` 各自实际调用既有 #62 原生路由回归；quick-rules 实际命中 `execution.TestCD63CodecIdentityAndVersion`、`execution.TestQuestionRouteVersionIdentityDigestAndLimit` 及 `orca_remote_worker.TestCD63CodecIdentityAndVersion`。因此三个实现配置 codec、共同 envelope、question route、中心冻结接线和 remote profile codec 均有包/用例事件证据；没有依靠其他包的通过数推断命中。
 
-`go test ./internal/steerline/console -run '^$' -count=1` 编译通过（0 tests 执行）；`go list -deps ./internal/steerline/contracts ./internal/steerline/execution` 通过，106 个依赖中没有具体实现包；`git diff --check` exit 0，只有工作树 LF→CRLF 规范化提示、无 whitespace finding。remote 缺权限证据的领取拒绝子例通过；未进行真实远端权限认证，也未触发 business dispatch。
+`go test ./internal/steerline/console -run '^$' -count=1` 编译通过（0 tests 执行）；`go list -deps ./internal/steerline/contracts ./internal/steerline/execution` 通过，108 个依赖中没有具体实现包；`git diff --check` exit 0，只有工作树 LF→CRLF 规范化提示、无 whitespace finding。remote 缺权限证据的领取拒绝子例通过；未进行真实远端权限认证，也未触发 business dispatch。
+
+## 质量审计补修
+
+对实现基线 `4ba7d4db783c1a6f18ef12c999488e79f22e9d27` 的审计修复如下，均保持单写者与原身份约束：
+
+- 封套摘要绑定规范化 JSON 字节，兼容同一当前格式的 compact/indent 输出及 HTML escaping；构造和读取都保存独立的规范化载荷。64 KiB 验证改用有效 JSON，分别确认精确上限与超限拒绝。
+- 人工确认后原 thread 的新 Attempt seed 可在 process-free、pending/resuming 阶段完成资源绑定并通过重启预检；已绑定进程或非恢复状态丢失原 receipt 仍拒绝。Execution 的配置摘要须匹配 WorkflowRun 的完整固定快照。
+- 重复绑定不再被临时 decoder 当作“缺失”；codec 必须匹配原协议，已绑定 app-server 不能只保存恢复 seed。原生 coordinator 须匹配持久 target/runtime，app-server endpoint 在连接前使用同一 loopback/port 校验。
+- Orca 环境重检查找回 Dispatch 或清空 output cursor 后写回新封套，重新轮询后重新读取临时 turn view；避免确认操作只落盘 receipt、丢失原绑定身份。
+- native profile 的规范化、支持校验和非秘密展示投影全部归属实现包；根包 codec 目录只组装通用封套。remote Codex 同样执行 model 校验。
+- 修正迁移后 fixture 的 native UUID、固定快照/受理摘要及实际 Git remote 接线；通用 workerflow 的 opaque session 断言仍保留。
+
+新增回归实际命中 `execution.TestCD63CodecIdentityAndVersion/formatted_JSON_round_trip`、root `TestCD63FrozenConfigAndBinding/recovery_seed_resources`、`binding_codec_isolation`（含 duplicate/protocol/seed/native-target 子例）、`environment_recheck_bindings` 和 Codex `binding_endpoint_validated_before_connection`。原生传输的两个 `TestCodexSocket*`、配置副本的两个 worker-context 用例，以及受影响 Task CAS/前置领取/活跃丢弃/精确 PR 丢弃和 worker delivery gate 用例定向通过；未扩展为全量测试或原生认证矩阵。
 
 ## 验收映射与 PR 交付清单
 

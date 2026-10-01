@@ -9,6 +9,9 @@ func TestCD63FrozenConfigAndBinding(t *testing.T) {
 	}{
 		{"fixed_profile_integrity", TestProjectPolicyFrozenSnapshotRejectsDamageAndPreservesAuthority},
 		{"accepted_config_recheck", TestClaimRechecksAcceptedConfigFiles},
+		{"recovery_seed_resources", testCD63RecoverySeedResources},
+		{"environment_recheck_bindings", TestWorkerEnvironmentER4DeadlineRestartAndLostReceipt},
+		{"binding_codec_isolation", testCD63BindingCodecIsolation},
 		{"resource_receipt_commit", TestAppServerLaunchMessagePersistsPolicyResources},
 		{"question_route_identity", TestCD62NativeFactsAndQuestionRoute},
 		{"question_route_receipt_barrier", TestCD62QuestionReceiptBarrier},

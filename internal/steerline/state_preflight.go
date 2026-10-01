@@ -128,7 +128,20 @@ func preflightWorkerFlowState(ctx context.Context, c Config) error {
 		}
 	}
 	for _, execution := range snapshot.Executions {
-		if execution.Process != nil || execution.Generation != "" {
+		boundSnapshot := false
+		for _, workflow := range snapshot.WorkflowRuns {
+			if workflow.WorkflowRunID == execution.WorkflowRunID && workflow.ProjectIdentity == execution.ProjectIdentity && workflow.ExecutionProfile != nil && execution.ConfigurationDigest == workflow.ExecutionProfile.Digest {
+				boundSnapshot = true
+				break
+			}
+		}
+		if !boundSnapshot {
+			return nativeErr("unsupported_schema", "execution is not bound to its original configuration snapshot")
+		}
+		if err := validateExecutionImplementationData(&execution); err != nil {
+			return nativeErr("unsupported_schema", "execution implementation binding is invalid: "+err.Error())
+		}
+		if (execution.Process != nil || execution.Generation != "") && !awaitingLocalRecoveryResources(&execution) {
 			if execution.PolicyResources == nil {
 				return nativeErr("unsupported_schema", "bound execution requires its original policy resource snapshot; preserve external state")
 			}

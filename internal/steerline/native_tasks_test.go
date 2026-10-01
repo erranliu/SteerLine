@@ -417,7 +417,7 @@ func TestNativeTaskCASGuardsAndDeliveryProjection(t *testing.T) {
 	}
 	run := WorkflowRunRecord{ProjectIdentity: project, WorkflowRunID: "wf-7", TaskID: "7", WorkflowVersion: WorkerFlowVersion, Phase: "waiting_pr_merge", SelectedResult: "exec-7", PRURL: "https://forge.invalid/org/repo/pulls/4", CreatedAt: created, UpdatedAt: created}
 	execution := ExecutionRecord{ProjectIdentity: project, ExecutionID: "exec-7", CurrentAttemptID: "attempt-7", WorkflowRunID: "wf-7", Backend: string(executionapi.BackendLocal), Protocol: string(executionapi.ProtocolLocalCodexAppServer), Agent: "codex", Workspace: WorkspaceEvidence{Branch: "codex/task-7"}, Status: "succeeded", CurrentStep: "waiting_pr_merge", CreatedAt: created, UpdatedAt: created}
-	setTestCodexBinding(t, &execution, "ws://127.0.0.1:12345", "native-generation", "session-7")
+	setTestCodexBinding(t, &execution, "ws://127.0.0.1:12345", "native-generation", workerFlowMockSession)
 	err = store.Transact(ctx, func(tx DomainTx) error {
 		if err := tx.PutWorkflowRun(run); err != nil {
 			return err

@@ -46,11 +46,14 @@ type NativeTurnState struct {
 }
 
 type ExecutionStateIdentity struct {
-	ProjectID    string
-	ExecutionID  string
-	AttemptID    string
-	Generation   string
-	ConfigDigest string
+	ProjectID           string
+	ExecutionID         string
+	AttemptID           string
+	Generation          string
+	ConfigDigest        string
+	Protocol            executionapi.ExecutionProtocol
+	Process             executionapi.ProcessIdentity
+	CoordinatorTerminal string
 }
 
 func NewExecutionStateEnvelope(identity ExecutionStateIdentity, state NativeExecutionState) (executionapi.ImplementationDataEnvelope, error) {
@@ -74,6 +77,9 @@ func DecodeExecutionStateEnvelope(envelope executionapi.ImplementationDataEnvelo
 		return NativeExecutionState{}, err
 	}
 	var state NativeExecutionState
+	if payload := bytes.TrimSpace(envelope.Payload); len(payload) == 0 || payload[0] != '{' {
+		return NativeExecutionState{}, errors.New("native execution state payload must be an object")
+	}
 	decoder := json.NewDecoder(bytes.NewReader(envelope.Payload))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&state); err != nil {
@@ -81,6 +87,15 @@ func DecodeExecutionStateEnvelope(envelope executionapi.ImplementationDataEnvelo
 	}
 	if err := decoder.Decode(new(any)); err != io.EOF {
 		return NativeExecutionState{}, errors.New("native execution state payload has trailing JSON")
+	}
+	if identity.CoordinatorTerminal != "" && state.Coordinator.Terminal != identity.CoordinatorTerminal {
+		return NativeExecutionState{}, errors.New("native coordinator differs from the original execution target")
+	}
+	if identity.Protocol == executionapi.ProtocolOrcaTerminalV2 && identity.Process.RuntimeID != "" && state.Coordinator.Terminal != "" && state.Coordinator.RuntimeID != identity.Process.RuntimeID {
+		return NativeExecutionState{}, errors.New("native coordinator belongs to a different local runtime")
+	}
+	if identity.Protocol == executionapi.ProtocolOrcaSupervised && identity.Process.RuntimeID != "" && state.RemoteRuntimeID != identity.Process.RuntimeID {
+		return NativeExecutionState{}, errors.New("native state belongs to a different remote runtime")
 	}
 	return state, nil
 }

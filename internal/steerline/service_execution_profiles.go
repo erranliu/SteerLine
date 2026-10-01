@@ -46,7 +46,7 @@ func (s *Service) executionConfigForRun(run *Run) (Config, error) {
 			continue
 		}
 		if workflow.ExecutionProfile == nil {
-			return Config{}, errors.New("execution snapshot v4 is required; preserve original state and external session")
+			return Config{}, errors.New("execution snapshot v5 is required; preserve original state and external session")
 		}
 		fixed := *workflow.ExecutionProfile
 		if fixed.ID == "" || !verifyFixedExecutionProfile(fixed) || workflow.ConfigDigest != fixed.AcceptedConfigVersion {
@@ -59,11 +59,14 @@ func (s *Service) executionConfigForRun(run *Run) (Config, error) {
 		for i := range s.domain.Executions {
 			e := &s.domain.Executions[i]
 			if e.WorkflowRunID == workflow.WorkflowRunID {
+				if e.ProjectIdentity != workflow.ProjectIdentity || e.ConfigurationDigest != fixed.Digest {
+					return Config{}, errors.New("execution binding differs from its original project or configuration snapshot")
+				}
 				if err := validateExecutionImplementationData(e); err != nil {
 					return Config{}, &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "fixed implementation binding failed verification", Cause: err}
 				}
 			}
-			if e.WorkflowRunID == workflow.WorkflowRunID && e.PolicyResources == nil && (e.Process != nil || e.Generation != "") {
+			if e.WorkflowRunID == workflow.WorkflowRunID && e.PolicyResources == nil && (e.Process != nil || e.Generation != "") && !awaitingLocalRecoveryResources(e) {
 				return Config{}, errors.New("bound execution lost its original policy resource snapshot")
 			}
 			if e.WorkflowRunID == workflow.WorkflowRunID && e.PolicyResources != nil {

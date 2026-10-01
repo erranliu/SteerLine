@@ -324,6 +324,10 @@ func TestWorkerEnvironmentER4DeadlineRestartAndLostReceipt(t *testing.T) {
 	if f.state(t).Dispatches != 1 {
 		t.Fatal("response loss duplicated dispatch")
 	}
+	e = f.service.executionRecord(f.run)
+	if turn := nativeOrcaCurrentTurn(e); turn == nil || turn.DispatchID == "" {
+		t.Fatal("reconciled Dispatch identity was not written back to its binding envelope")
+	}
 	require(t, f.service.Close())
 	s, err := NewService(f.config)
 	require(t, err)
@@ -351,6 +355,7 @@ func TestWorkerEnvironmentER4DeadlineRestartAndLostReceipt(t *testing.T) {
 	}
 	business := nativeOrcaCurrentTurn(e)
 	business.IntentAt = now().Add(-3 * time.Minute)
+	require(t, persistNativeOrcaTurn(e, business))
 	require(t, s.commitWorker(f.run))
 	require(t, s.observeWorkerEnvironment(context.Background(), f.run))
 	if e.Environment.Blocker == nil || e.Environment.Blocker.Fact.Reason != "business_start_unverified" {

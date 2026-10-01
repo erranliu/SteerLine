@@ -6,6 +6,8 @@ import (
 	"errors"
 	"io"
 
+	"github.com/erranliu/SteerLine/internal/steerline/codexapp"
+
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
@@ -30,6 +32,11 @@ func NewAppServerBindingEnvelope(identity AppServerBindingIdentity, binding AppS
 		binding.Endpoint == "" && (binding.SessionID == "" || binding.Generation != "") ||
 		binding.Endpoint != "" && binding.Generation == "" {
 		return executionapi.ImplementationDataEnvelope{}, errors.New("app-server binding is incomplete")
+	}
+	if binding.Endpoint != "" {
+		if err := codexapp.ValidateEndpoint(binding.Endpoint); err != nil {
+			return executionapi.ImplementationDataEnvelope{}, err
+		}
 	}
 	payload, err := json.Marshal(binding)
 	if err != nil {
@@ -63,6 +70,11 @@ func DecodeAppServerBindingEnvelope(envelope executionapi.ImplementationDataEnve
 		binding.Endpoint == "" && (binding.SessionID == "" || binding.Generation != "") ||
 		binding.Endpoint != "" && binding.Generation == "" {
 		return AppServerBinding{}, errors.New("app-server binding differs from its fixed native identity")
+	}
+	if binding.Endpoint != "" {
+		if err := codexapp.ValidateEndpoint(binding.Endpoint); err != nil {
+			return AppServerBinding{}, err
+		}
 	}
 	return binding, nil
 }

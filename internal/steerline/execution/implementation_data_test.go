@@ -1,13 +1,44 @@
 package execution
 
 import (
+	"bytes"
 	"encoding/json"
+	"strings"
 	"testing"
 )
 
 func TestCD63CodecIdentityAndVersion(t *testing.T) {
 	t.Run("profile envelope scope and deep copy", TestImplementationDataEnvelopeBindsScopeAndCopiesPayload)
 	t.Run("resource envelope identity and bounds", TestImplementationDataEnvelopeRejectsBadIdentityVersionAndSize)
+	t.Run("formatted JSON round trip", testImplementationDataFormattedRoundTrip)
+}
+
+func testImplementationDataFormattedRoundTrip(t *testing.T) {
+	envelope, err := NewImplementationDataEnvelope(ImplementationDataEnvelope{
+		CodecVersion: 1, Purpose: ImplementationConfigPurpose, ImplementationKey: "worker",
+		ProjectID: "project", ProfileID: "default", AcceptedConfigVersion: "accepted",
+	}, []byte(`{ "settings": { "label": "<agent>&" } }`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, indent := range []bool{false, true} {
+		var encoded []byte
+		if indent {
+			encoded, err = json.MarshalIndent(envelope, "", "  ")
+		} else {
+			encoded, err = json.Marshal(envelope)
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		var restored ImplementationDataEnvelope
+		if err := json.Unmarshal(encoded, &restored); err != nil {
+			t.Fatalf("round trip (indent=%t): %v", indent, err)
+		}
+		if restored.Digest != envelope.Digest || !bytes.Equal(restored.Payload, envelope.Payload) {
+			t.Fatal("JSON formatting changed the accepted payload or digest")
+		}
+	}
 }
 
 func TestImplementationDataEnvelopeBindsScopeAndCopiesPayload(t *testing.T) {
@@ -69,10 +100,12 @@ func TestImplementationDataEnvelopeRejectsBadIdentityVersionAndSize(t *testing.T
 		t.Fatal("unknown envelope version was accepted")
 	}
 	oversized := base
-	oversized.Payload = make([]byte, ImplementationDataMaxBytes+1)
-	oversized.Payload[0] = '{'
-	oversized.Payload[len(oversized.Payload)-1] = '}'
+	oversized.Payload = []byte(`"` + strings.Repeat("x", ImplementationDataMaxBytes) + `"`)
 	if _, err := NewImplementationDataEnvelope(oversized, oversized.Payload); err == nil {
 		t.Fatal("oversized envelope payload was accepted")
+	}
+	boundary := []byte(`"` + strings.Repeat("x", ImplementationDataMaxBytes-2) + `"`)
+	if _, err := NewImplementationDataEnvelope(base, boundary); err != nil {
+		t.Fatalf("64 KiB payload was rejected: %v", err)
 	}
 }

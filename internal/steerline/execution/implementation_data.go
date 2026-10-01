@@ -59,8 +59,12 @@ type implementationDataWire struct {
 }
 
 func NewImplementationDataEnvelope(e ImplementationDataEnvelope, payload []byte) (ImplementationDataEnvelope, error) {
+	canonical, err := canonicalImplementationPayload(payload)
+	if err != nil {
+		return ImplementationDataEnvelope{}, err
+	}
 	e.Version = ImplementationDataVersion
-	e.Payload = append([]byte(nil), payload...)
+	e.Payload = canonical
 	e.Digest = ""
 	if err := e.validateFields(); err != nil {
 		return ImplementationDataEnvelope{}, err
@@ -143,26 +147,47 @@ func (e *ImplementationDataEnvelope) UnmarshalJSON(data []byte) error {
 		}
 		return err
 	}
-	if len(wire.Payload) == 0 || !json.Valid(wire.Payload) {
-		return errors.New("implementation data payload is not valid JSON")
+	payload, err := canonicalImplementationPayload(wire.Payload)
+	if err != nil {
+		return err
 	}
-	*e = ImplementationDataEnvelope{
+	decoded := ImplementationDataEnvelope{
 		Version: wire.Version, CodecVersion: wire.CodecVersion, Purpose: wire.Purpose,
 		ImplementationKey: wire.ImplementationKey, ProjectID: wire.ProjectID,
 		ProfileID: wire.ProfileID, AcceptedConfigVersion: wire.AcceptedConfigVersion,
 		ExecutionID: wire.ExecutionID, AttemptID: wire.AttemptID, Generation: wire.Generation,
 		ConfigDigest: wire.ConfigDigest, WorkflowRunID: wire.WorkflowRunID, TurnID: wire.TurnID,
-		QuestionID: wire.QuestionID, Digest: wire.Digest, Payload: append([]byte(nil), wire.Payload...),
+		QuestionID: wire.QuestionID, Digest: wire.Digest, Payload: payload,
 	}
-	return e.Validate()
+	if err := decoded.Validate(); err != nil {
+		return err
+	}
+	*e = decoded
+	return nil
+}
+
+// Match encoding/json's whitespace and HTML escaping so formatting an outer
+// document cannot change the identity of the embedded payload.
+func canonicalImplementationPayload(payload []byte) ([]byte, error) {
+	if len(payload) == 0 || !json.Valid(payload) {
+		return nil, errors.New("implementation data payload is not valid JSON")
+	}
+	encoded, err := json.Marshal(json.RawMessage(payload))
+	if err != nil {
+		return nil, err
+	}
+	if len(encoded) > ImplementationDataMaxBytes {
+		return nil, errors.New("implementation data payload exceeds 64 KiB")
+	}
+	return encoded, nil
 }
 
 func (e ImplementationDataEnvelope) validateFields() error {
 	if e.Version != ImplementationDataVersion || e.CodecVersion <= 0 || e.ImplementationKey == "" || e.ProjectID == "" {
 		return errors.New("implementation data has an unsupported version or incomplete owner identity")
 	}
-	if len(e.Payload) == 0 || len(e.Payload) > ImplementationDataMaxBytes || !json.Valid(e.Payload) {
-		return errors.New("implementation data payload is empty, invalid or exceeds 64 KiB")
+	if _, err := canonicalImplementationPayload(e.Payload); err != nil {
+		return err
 	}
 	switch e.Purpose {
 	case ImplementationConfigPurpose:
@@ -184,6 +209,7 @@ func (e ImplementationDataEnvelope) validateFields() error {
 }
 
 func (e ImplementationDataEnvelope) computeDigest() string {
+	payload, _ := canonicalImplementationPayload(e.Payload) // Validate checks JSON and bounds first.
 	material := struct {
 		Version               int    `json:"version"`
 		CodecVersion          int    `json:"codec_version"`
@@ -202,7 +228,7 @@ func (e ImplementationDataEnvelope) computeDigest() string {
 		Payload               []byte `json:"payload"`
 	}{e.Version, e.CodecVersion, e.Purpose, e.ImplementationKey, e.ProjectID, e.ProfileID,
 		e.AcceptedConfigVersion, e.ExecutionID, e.AttemptID, e.Generation, e.ConfigDigest,
-		e.WorkflowRunID, e.TurnID, e.QuestionID, e.Payload}
+		e.WorkflowRunID, e.TurnID, e.QuestionID, payload}
 	encoded, _ := json.Marshal(material)
 	sum := sha256.Sum256(encoded)
 	return hex.EncodeToString(sum[:])

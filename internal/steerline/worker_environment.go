@@ -395,6 +395,9 @@ func (s *Service) applyEnvironmentAction(ctx context.Context, run *Run, answer D
 				return s.renewEnvironmentDecision(run)
 			}
 			turn.DispatchID = id
+			if err := persistNativeOrcaTurn(execution, turn); err != nil {
+				return err
+			}
 			s.bindNativeOrcaDispatch(run, execution, turn)
 			if original.Status != "accepted" && original.Status != "confirmed" {
 				if err := s.changeWorkerOperation(run, original.OperationID, "accepted", original.PlatformRequestID, mustJSON(*turn), ""); err != nil {
@@ -413,10 +416,14 @@ func (s *Service) applyEnvironmentAction(ctx context.Context, run *Run, answer D
 		// when earlier bounded/unsupported pages provided no tool proof.
 		if turn.Settled && !env.Preparation.Evidence.Verified && env.Preparation.Evidence.CallID == "" {
 			turn.OutputCursor = ""
+			if err := persistNativeOrcaTurn(execution, turn); err != nil {
+				return err
+			}
 		}
 		if err := s.pollNativeOrcaWorker(ctx, run); err != nil {
 			return err
 		}
+		turn = nativeOrcaCurrentTurn(execution)
 		if !env.Preparation.Verified && !now().Before(env.Preparation.Deadline) {
 			return s.renewEnvironmentDecision(run)
 		}
@@ -425,7 +432,8 @@ func (s *Service) applyEnvironmentAction(ctx context.Context, run *Run, answer D
 		if err := s.pollNativeOrcaWorker(ctx, run); err != nil {
 			return err
 		}
-		if execution.CurrentTurnID != turn.TurnID && !turn.Settled {
+		turn = nativeOrcaCurrentTurn(execution)
+		if turn == nil || execution.CurrentTurnID != turn.TurnID && !turn.Settled {
 			return s.renewEnvironmentDecision(run)
 		}
 	}
