@@ -1,5 +1,7 @@
 # 分级测试最小实现验证
 
+补充：用户要求完整基线并 rebase 最新主干后的结果见[测试基线](baseline-2026-10-01/README.md)。分级 E2E 和环境检查经夹具换行修正后通过，整体 Go 回归仍有 47 个顶层测试失败；以下为最初候选的最小验证历史记录。
+
 日期：2026-10-01。Spec：[分级测试与共享 E2E 环境](../../spec/tiered-e2e-testing.spec.md)；Plan：[实施与测试计划](../../spec/tiered-e2e-testing.plan.md)。源码基线 `49d71c9` 加本实现工作区改动；每份原始报告保留当时的源码 commit、工作区状态、工具/机器条件及构建 SHA-256。本次为 Windows controlled 验证，未运行 full、真实 Codex/Orca、远端或 UI 测试。
 
 ## 结果
