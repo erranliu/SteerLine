@@ -3,9 +3,11 @@ package steerline
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	"github.com/erranliu/SteerLine/internal/steerline/projection"
 )
 
 func TestCD62NativeFactsAndQuestionRoute(t *testing.T) {
@@ -59,9 +61,10 @@ func TestCD62NativeFactsAndQuestionRoute(t *testing.T) {
 func TestCD62QuestionReceiptBarrier(t *testing.T) {
 	t.Run("all_question_ids_validated", TestRoutedDecisionRequiresAllQuestionIDs)
 	t.Run("legacy_decision_format_is_rejected", func(t *testing.T) {
-		legacy := DecisionRecord{DecisionID: "decision", WorkflowRunID: "workflow", QuestionID: "question", Request: []byte(`{"question":"old","native_ask":{"call_id":"call"}}`)}
-		if _, err := decisionView(legacy); err == nil {
-			t.Fatal("legacy native question data was read as a current decision")
+		legacy := DecisionRecord{ProjectIdentity: "project", DecisionID: "decision", WorkflowRunID: "workflow", ExecutionID: "execution", AttemptID: "attempt", Version: 1, QuestionID: "question", Request: []byte(`{"question":"old","native_ask":{"call_id":"call"}}`)}
+		_, err := projection.Run(TaskRecord{TaskID: "task"}, WorkflowRunRecord{WorkflowRunID: "workflow", TaskID: "task", WorkflowVersion: WorkerFlowVersion}, ExecutionRecord{ExecutionID: "execution", WorkflowRunID: "workflow", CurrentAttemptID: "attempt", CurrentStep: "worker", DecisionID: "decision"}, []StepAttemptRecord{{AttemptID: "attempt", ExecutionID: "execution", StepID: "worker"}}, []DecisionRecord{legacy}, nil)
+		if err == nil || !strings.Contains(err.Error(), "unsupported format") {
+			t.Fatalf("legacy native question data was not rejected by the shared projection: %v", err)
 		}
 		var execution ExecutionRecord
 		if err := json.Unmarshal([]byte(`{"pending_asks":[]}`), &execution); err == nil {

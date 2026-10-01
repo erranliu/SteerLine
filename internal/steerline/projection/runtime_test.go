@@ -13,7 +13,7 @@ import (
 func projectionFixture(t *testing.T) (contracts.DomainSnapshot, Metadata) {
 	t.Helper()
 	at := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
-	request, err := json.Marshal(contracts.DecisionRequest{Question: "Continue?", AllowFreeText: true})
+	request, err := json.Marshal(contracts.DecisionRequest{FormatVersion: contracts.DecisionRequestFormatVersion, Question: "Continue?", AllowFreeText: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -29,7 +29,7 @@ func projectionFixture(t *testing.T) (contracts.DomainSnapshot, Metadata) {
 		Executions: []contracts.ExecutionRecord{{ExecutionID: "execution", WorkflowRunID: "run", CurrentStep: "worker", CurrentAttemptID: "attempt", Backend: string(executionapi.BackendLocal), Protocol: string(executionapi.ProtocolLocalCodexAppServer), Agent: "codex", Status: "active", DecisionID: "decision",
 			Process: &executionapi.ProcessIdentity{Kind: "codex", PID: 12}, WorkspaceIntent: &executionapi.WorkspaceIntent{Path: "/work/tree", Branch: "codex/task"}, TurnStartedAt: &at}},
 		Attempts:  []contracts.StepAttemptRecord{{AttemptID: "attempt", ExecutionID: "execution", StepID: "worker", AttemptNumber: 1}},
-		Decisions: []contracts.DecisionRecord{{DecisionID: "decision", WorkflowRunID: "run", ExecutionID: "execution", AttemptID: "attempt", Version: 2, Status: "answer_saved", Request: request, Answer: answer}},
+		Decisions: []contracts.DecisionRecord{{DecisionID: "decision", QuestionID: "decision", ProjectIdentity: "project", WorkflowRunID: "run", ExecutionID: "execution", AttemptID: "attempt", Version: 2, Status: "answer_saved", Request: request, Answer: answer}},
 	}
 	metadata := Metadata{Checkpoint: contracts.ServiceCheckpoint{SchemaVersion: contracts.WorkerFlowRuntimeSchema, Revision: 7, HeartbeatAt: at,
 		Repository: contracts.Repository{Identity: "project"}, Service: contracts.ServiceState{Capabilities: []string{"answer_decision"}},

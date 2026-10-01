@@ -163,6 +163,7 @@ func cloneExecutionQuestions(questions []executionapi.Question) []executionapi.Q
 		copy[i].Options = append([]executionapi.DecisionOption(nil), questions[i].Options...)
 	}
 	return copy
+}
 
 // ReadDecisionAnswer returns the answer already committed to the current
 // service projection. A pending decision has no answer; clients cannot create
