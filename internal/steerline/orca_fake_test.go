@@ -348,7 +348,7 @@ func TestOrcaNativeHostWait(t *testing.T) {
 	service := &Service{Config: Config{identity: "project"}, domainStore: store}
 	source := WorkerEvent{RunID: runID, AttemptID: attemptID, Source: "orca-terminal-v2", SourceSegment: "orca-host-wait-v1:probe", SourceEventID: "host-wait:probe", SourceIdentity: "terminal:" + probe.Runtime + ":" + probe.Terminal + ":" + probe.Incarnation, SourceSeq: 1, Session: "terminal:" + probe.Terminal + ":" + probe.Incarnation, InputWait: true, Diagnostic: "Orca reports a host-level agent wait; no SteerLine business Decision was created"}
 	require(t, service.recordConversationEvent(run, source))
-	page, err := (ConversationQueryService{Store: store, Project: "project"}).ReadConversation(ctx, ConversationFilter{ExecutionID: run.ExecutionID, AttemptID: attemptID}, "", 10)
+	page, err := NewConversationQueryService(store, "project").ReadConversation(ctx, ConversationFilter{ExecutionID: run.ExecutionID, AttemptID: attemptID}, "", 10)
 	require(t, err)
 	if len(page.Events) != 1 || page.Events[0].Type != ConversationInputWait || page.Events[0].Status != "waiting" || page.Events[0].Attributes["wait_origin"] != "host" || page.Events[0].Attributes["business_decision"] != false || page.Events[0].Evidence["wait_source"] != "orca-terminal-show.agentWait" {
 		t.Fatalf("real host wait was confused with a business decision: %+v", page.Events)
