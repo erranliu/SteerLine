@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
@@ -68,70 +67,7 @@ func writeDecisionRequestWithID(r *Run, req DecisionRequest, decisionID string) 
 }
 
 func validateDecisionAnswer(req *DecisionRequest, a *DecisionAnswer) error {
-	a.OptionID = strings.TrimSpace(a.OptionID)
-	if req.HostTarget == nil {
-		a.Note = strings.TrimSpace(a.Note)
-	}
-	a.AnsweredBy = strings.TrimSpace(a.AnsweredBy)
-	if a.AnsweredBy == "" {
-		return errors.New("answer requires answered_by")
-	}
-	if !utf8.ValidString(a.OptionID) || !utf8.ValidString(a.Note) || !utf8.ValidString(a.AnsweredBy) {
-		return errors.New("answer fields must be valid UTF-8")
-	}
-	if len([]rune(a.Note)) > 4000 {
-		return errors.New("answer note exceeds the 4000 character protocol limit")
-	}
-	if len([]rune(a.AnsweredBy)) > 200 {
-		return errors.New("answered_by exceeds the 200 character protocol limit")
-	}
-	if questions := nativeDecisionQuestions(req); len(questions) > 0 {
-		if len(a.Answers) != len(questions) {
-			return errors.New("native answer must include every question ID")
-		}
-		for _, q := range questions {
-			values, ok := a.Answers[q.ID]
-			if !ok || len(values) == 0 || len(values) > 2 {
-				return fmt.Errorf("native answer for %q is missing or too long", q.ID)
-			}
-			for _, value := range values {
-				if strings.TrimSpace(value) == "" || !utf8.ValidString(value) || len([]rune(value)) > 4000 {
-					return fmt.Errorf("native answer for %q is invalid", q.ID)
-				}
-			}
-			if len(q.Options) > 0 && !q.AllowFreeText {
-				offered := false
-				for _, option := range q.Options {
-					if values[0] == option.ID || values[0] == option.Label {
-						offered = true
-						break
-					}
-				}
-				if !offered {
-					return fmt.Errorf("native answer for %q is not offered", q.ID)
-				}
-			}
-		}
-		return nil
-	}
-	if len(req.Options) > 0 {
-		if a.OptionID == "" {
-			if req.AllowFreeText && a.Note != "" {
-				return nil
-			}
-			return errors.New("answer requires an offered option")
-		}
-		for _, o := range req.Options {
-			if o.ID == a.OptionID {
-				return nil
-			}
-		}
-		return fmt.Errorf("option %q is not one of the offered options", a.OptionID)
-	}
-	if a.Note == "" {
-		return errors.New("this decision requires a free-text note")
-	}
-	return nil
+	return contracts.ValidateDecisionAnswer(req, a)
 }
 
 func normalizeNativeDecisionAnswer(req *DecisionRequest, answer *DecisionAnswer) error {
@@ -174,16 +110,7 @@ func normalizeNativeDecisionAnswer(req *DecisionRequest, answer *DecisionAnswer)
 }
 
 func nativeDecisionQuestions(req *DecisionRequest) []executionapi.Question {
-	if req == nil {
-		return nil
-	}
-	if req.NativeAsk != nil {
-		return req.NativeAsk.Questions
-	}
-	if req.OrcaAsk != nil {
-		return req.OrcaAsk.Questions
-	}
-	return nil
+	return contracts.DecisionQuestions(req)
 }
 
 // ReadDecisionAnswer returns the answer already committed to the current

@@ -1,6 +1,6 @@
 # SteerLine 当前代码架构图
 
-快照日期：2026-10-01。源码基线：`49d71c9`（PR #176 已合入），叠加本轮执行隔离清理与恢复修复。本文起源于 [PR #153](https://github.com/erranliu/SteerLine/pull/153)，包含 PR #166 控制台渲染拆分与 #54–#61 执行隔离系列；最新 PR #174 已交付执行需求检查、内置注册与 v4 固定执行快照，包含会话只读查询拆包；执行隔离的合入与验收边界见[验收记录](../validation/execution-isolation-cleanup/README.md)。
+快照日期：2026-10-01。源码基线：`9e13ac4a5a68682b38cd7189b29f860777316c39`（已 rebase 并核对远端 `origin/main`）。本文起源于 [PR #153](https://github.com/erranliu/SteerLine/pull/153)，包含 #54–#61 执行隔离、PR #175 清理/恢复修复、PR #178 混合发布方案和已合入的 PR #176 会话查询；叠加本轮纯 Runtime/Run 投影归包。执行隔离的合入与验收边界见[验收记录](../validation/execution-isolation-cleanup/README.md)。
 
 本文描述当前检出的代码：系统边界、实际 Go 包依赖、核心包内部职责、任务执行、人工决策、数据模型、日志与恢复。图中的职责分组不代表已拆成独立包或服务。箭头含义在各图前说明；未来方案与当前可启动路径分开列出，第 10 节给出后续解耦与复用建议。
 
@@ -83,20 +83,21 @@ flowchart LR
     P8["execution"]
     P9["orca_remote_worker"]
     P10["orcaworker"]
-    P11["publication"]
-    P12["query"]
-    P13["sqlite"]
-    P14["task"]
-    P15["taskgraph"]
-    P16["taskview"]
-    P17["workerflow"]
-    P18["workspace"]
-    P19["internal/testfeedback"]
+    P11["projection"]
+    P12["publication"]
+    P13["query"]
+    P14["sqlite"]
+    P15["task"]
+    P16["taskgraph"]
+    P17["taskview"]
+    P18["workerflow"]
+    P19["workspace"]
+    P20["internal/testfeedback"]
 
     P1 --> P3
     P1 --> P6
     P2 --> P3
-    P2 --> P19
+    P2 --> P20
     P3 --> P4
     P3 --> P5
     P3 --> P7
@@ -107,37 +108,42 @@ flowchart LR
     P3 --> P12
     P3 --> P13
     P3 --> P14
-    P3 --> P16
+    P3 --> P15
     P3 --> P17
     P3 --> P18
+    P3 --> P19
     P5 --> P4
     P5 --> P7
     P5 --> P8
     P6 --> P3
     P6 --> P8
     P7 --> P8
-    P7 --> P14
-    P7 --> P16
+    P7 --> P15
+    P7 --> P17
     P9 --> P8
     P9 --> P10
     P10 --> P7
     P10 --> P8
     P11 --> P7
     P11 --> P8
+    P11 --> P18
     P12 --> P7
     P12 --> P8
-    P12 --> P14
-    P12 --> P16
     P13 --> P7
     P13 --> P8
-    P13 --> P12
-    P13 --> P14
+    P13 --> P15
+    P13 --> P17
+    P14 --> P7
+    P14 --> P8
+    P14 --> P11
+    P14 --> P13
     P14 --> P15
-    P16 --> P14
-    P16 --> P15
-    P17 --> P8
-    P17 --> P14
+    P15 --> P16
+    P17 --> P15
+    P17 --> P16
     P18 --> P8
+    P18 --> P15
+    P19 --> P8
 ```
 
 | 包 | 当前职责 | 非测试 Go 文件 |
@@ -154,6 +160,7 @@ flowchart LR
 | `orca_remote_worker` | 远端预检、启动/复用、观察、mailbox、工作区和清理协议；当前策略入口拒绝新执行 | 12 |
 | `orcaworker` | Orca CLI/资源/终端/派发/消息/观察/对账、shell 包装、就绪与宿主事实 | 22 |
 | `publication` | Git 发布、候选核验与对账、PR/provider、发布责任支持与非秘密目标校验 | 7 |
+| `projection` | 从领域快照、checkpoint 和任务权威元数据构建 Runtime/Run；纯选择、状态、决策和 slot 转换，无 I/O | 3 |
 | `query` | 按消费者分开的只读接口、领域/会话事件、正文/raw/能力读取、任务分页、DAG 与 Ready 查询规则 | 6 |
 | `sqlite` | 领域/会话/能力/命令/任务/DAG/checkpoint 与组合快照的 SQLite 只读适配 | 7 |
 | `task` | 任务契约、批次、状态、依赖资格、交付和命令规则 | 10 |
@@ -163,7 +170,7 @@ flowchart LR
 | `workspace` | 本机 Git/worktree 准备、身份检查、精确资源解析与清理；不写业务状态 | 5 |
 | `internal/testfeedback` | Go test JSON 结果汇总 | 1 |
 
-合计 **20 个包目录、268 个非测试 Go 文件、45 条项目内 import 边**。统计覆盖 `cmd/` 与 `internal/`；不含 `_test.go`、测试数据、脚本和文档。适配器、工作区与发布实现已经归包，中心通过内置注册集中接线，并保留业务权威与事务。
+合计 **21 个包目录、271 个非测试 Go 文件、50 条项目内 import 边**。统计覆盖 `cmd/` 与 `internal/`；不含 `_test.go`、测试数据、脚本和文档。适配器、工作区与发布实现已经归包，中心通过内置注册集中接线，并保留业务权威与事务。
 
 ## 3. 中心、独立实现与当前接线
 
@@ -191,7 +198,7 @@ flowchart TB
     Flow --> Publish["worker_publish_local / worker_pr<br/>发布受理与 PR 关联"]
     Publish --> Publication["publication.HostPublisher / Client<br/>候选核验、commit/push/create、PR/provider 与对账"]
     Publication -->|外部事实返回中心| Publish
-    Service --> Recovery["worker_recovery / execution_recovery<br/>人工恢复授权与业务代次"]
+    Service --> Recovery["worker_recovery<br/>人工恢复授权与业务代次"]
     Recovery --> Wiring
     Service --> Conversations["conversation_service / replay / codex_conversation<br/>来源绑定、采集协调与游标提交"]
     Conversations --> Mapper["codexworker.ConversationMapper / HistoryClient<br/>原生历史、正文与事件归一"]
@@ -201,10 +208,8 @@ flowchart TB
     Commit --> Store
     Publish --> Commit
     Conversations --> Store
-    Query["query.Service<br/>Workflow / Event / Task / Project Reader"] -->|前三类| ReadSQL["sqlite.Reader<br/>领域、任务、DAG、事件和 checkpoint 查询"]
-    Query -->|ProjectReader| Project["project_view 中心接线<br/>SQLiteStore.ReadProjectView"]
-    Project --> ReadSQL
-    Project --> Projection["runtime_view<br/>只读 Runtime / Run 投影"]
+    Query["query.Service<br/>Workflow / Event / Task / Project Reader"] --> ReadSQL["sqlite.Reader<br/>四类 Reader 与同事务组合读取"]
+    ReadSQL --> Projection["projection.Build<br/>领域快照 + checkpoint + 派发元数据<br/>独立 Runtime / Run"]
     Store --> Projection
     CQ["query.ConversationService<br/>Event / Body / Raw / Capability Reader"] --> ReadSQL
 ```
@@ -221,14 +226,14 @@ flowchart TB
 | 远程 Orca 平台实现 | `orca_remote_worker/`、`orca_remote_adapter.go`、`orca_remote_service.go` | 独立协议与原资源对账保留；当前缺少策略落实回执，虽已注册，新执行在权限 admission 拒绝 |
 | 环境就绪与宿主处理 | `worker_environment.go`、`contracts/environment.go`、`orcaworker/readiness.go` / `environment.go` | 准备轮、Ready、blocker、重查及反馈暂存归中心；工具证据、收据与宿主事实归适配器 |
 | 共享会话与决策数据 | `contracts/conversation.go`、`contracts/activity.go`、`contracts/decision_content.go` | 数据类型已归 contracts，原生解释与中心持久化分开 |
-| 查询、投影与存储 | `query/`、`sqlite/`、`project_view.go`、`runtime_view.go`、`conversation_store.go` | 领域和产品会话只读 SQL 已归 sqlite；会话写入/checkpoint 恢复与 Runtime 投影仍由中心拥有 |
+| 查询、投影与存储 | `query/`、`sqlite/`、`project_view.go`、`runtime_view.go`、`conversation_store.go` | 领域、会话和组合 ProjectView 读取归 sqlite；Runtime/Run 构建归 projection；写入/checkpoint 恢复仍在中心 |
 | 控制台渲染 | `console/view_tasks.go`、`view_conversation.go`、`conversation_anchor.go`、`view_text.go` | 列表、正文、锚点和文本处理已同包拆文件；配置、提交资格和产品状态保留原入口 |
 
-中心保留内置注册、Config/执行配置解析、平台进程承载与原生证据到业务记录的转换，不能将已完成适配器迁移理解为中心已无实现接线。尤其 `execution_backend.go` 仍含通用执行记录/输出与本机观察桥，`codex_conversation.go` 仍负责历史绑定与持久化协调。共享公共定义没有业务写入权。
+中心保留内置注册、Config/执行配置解析、平台进程承载与原生证据到业务记录的转换。`execution_backend.go` 保留能力证据/执行记录及注册接线；旧的 journal/output 观察已移除，`codex_conversation.go` 仍负责历史绑定与持久化协调。共享公共定义没有业务写入权。
 
 ### 3.1 已提交视图与原子写入
 
-箭头表示数据流。下列写集合、事务执行器与投影目前都在中心包，`sqlite.Reader` 只承担读取。工作副本不能作为已提交视图发布；数据库命令与 worker 转换共用数据库，但有各自的事务入口。
+箭头表示数据流。写集合和事务执行器仍在中心；纯投影已在 projection 包，sqlite.Reader 组合读取后调用相同投影。工作副本不能作为已提交视图发布；数据库命令与 worker 转换共用数据库，但有各自的事务入口。
 
 ```mermaid
 flowchart LR
@@ -236,10 +241,11 @@ flowchart LR
     Declare --> Writer["worker_commit + SQLiteStore<br/>核验前值 / revision / attempt<br/>同一事务写业务记录与 checkpoint"]
     Writer --> DB[("SQLite 业务权威")]
     Writer --> Committed["Service.committed<br/>成功后更新已提交副本"]
-    Committed --> Copy["深复制 + runtime_view<br/>构建公开 Runtime / Run"]
+    Committed --> Copy["projection.Build<br/>复制记录与 metadata<br/>构建公开 Runtime / Run"]
     Copy --> Public["Service.State<br/>客户端只读视图"]
+    Actor --> Private["projection.Runs → 中心 projectActor<br/>按 run ID 应用到原私有 Run 指针"]
     DB --> Reader["sqlite.Reader<br/>同一读事务：记录 + checkpoint"]
-    Reader --> Project["project_view + runtime_view<br/>组合 ProjectView"]
+    Reader --> Project["sqlite.ProjectReader + projection.Build<br/>同一已采集快照组合 ProjectView"]
     Project --> Client["QueryService → CLI / TUI"]
     Heartbeat["heartbeat / publishCheckpoint"] -->|只写服务元数据| DB
 ```
@@ -250,12 +256,12 @@ flowchart LR
 
 ### 3.2 项目策略、执行方案与两阶段冻结
 
-箭头表示配置和证据的生成通路。项目定义权限及发布责任，全局 execution.json 只选择执行位置、agent、model、effort 与实现选项。策略不会因换 Profile 隐式改变。
+箭头表示配置和证据的生成通路。项目定义执行权限和发布责任。固定 host_service/worker 时方案不得覆盖；项目显式选择 execution_profile 时，全局每套方案必须声明自己的 publication_policy。领取仍冻结有效 publisher 和非秘密发布目标，不根据后续配置切换已开始的执行。
 
 ```mermaid
 flowchart LR
     Project["项目 policy / publication_policy / requirements<br/>repository、Git remote、PR provider"] --> Compile["策略与方案与附加需求匹配<br/>注册核验 / CompilePolicy / CheckPolicy / Match"]
-    Profiles["全局执行方案<br/>host、agent、model、effort<br/>codex.windows_sandbox / Orca 连接"] --> Compile
+    Profiles["全局执行方案<br/>host、agent、model、effort<br/>显式委托时的发布责任 / 实现选项"] --> Compile
     Compile -->|拒绝不支持的组合| Reject["副作用前拒绝<br/>无自动降级或 publisher 切换"]
     Compile -->|领取事务| Fixed["WorkflowRun.ExecutionProfile v4<br/>策略、publisher、provider、Git 目标<br/>需求及领取证据、实现版本、配置版本和 digest"]
     Fixed --> Prepare["工作区及 native 资源准备"]
@@ -546,21 +552,21 @@ Service 将私有领域工作副本、已提交快照和私有工作 Run 分开�
 
 当前依赖边界：execution 的策略、需求与 Match 只依赖标准库，workspace 只依赖 execution；publication 使用 contracts / execution，workerflow 只使用 task / execution。Codex、Orca 与远程适配器不导入中心或 SQL；中心提供受管进程、命令执行和事务接线。contracts 使用 execution / task / taskview，包含已归包的会话、活动和发布记录；它不是无依赖的纯类型包。Codex app-server 原生参数、可执行文件与 Windows 权限解释已移到 codexworker，codexapp 保留传输与原生问题客户端。
 
-query.Service 持有 WorkflowReader、EventReader、TaskReader、ProjectReader；前三类由 sqlite.Reader 实现，组合 ProjectReader 仍由中心完成 Runtime 投影。产品会话查询由 query.ConversationService 使用四类小 Reader，sqlite.Reader 实现事件、正文、raw 和能力读取；中心 NewConversationQueryService 只负责连接与 Reader 接线。写事务、checkpoint 恢复和 Runtime 投影尚未整体归包。存在类型别名或工厂桥接不代表另一条实现路径。
+query.Service 的 WorkflowReader、EventReader、TaskReader、ProjectReader 均由 sqlite.Reader 实现；同事务采样后使用 projection.Build 构建组合 Runtime，中心只保留开库与薄接线。产品会话查询由 query.ConversationService 使用四类小 Reader，sqlite.Reader 实现事件、正文、raw 和能力读取；中心 NewConversationQueryService 只负责连接与 Reader 接线。写事务和 checkpoint 恢复仍在中心；纯 Runtime/Run 构建已归 projection。存在类型别名或工厂桥接不代表另一条实现路径。
 
 ## 9. 快照验证与维护
 
-本轮基于 `7350e84` 完成会话只读查询拆包，并保留先前 rebase 后的完整架构更新。核对 268 个生产 Go 文件、20 个真实包目录、45 条项目内 import、schema 与关键路径。10 张 Mermaid 图语法、全量源码索引、真实依赖边与相对链接及 `git diff --check` 通过。
+本轮基于 `9e13ac4` 提取 projection 纯投影包，核对 271 个生产 Go 文件、21 个真实包目录、50 条项目内 import、schema 与关键路径。10 张 Mermaid 图语法、全量源码索引、真实依赖边与相对链接及 `git diff --check` 通过。
 
-验证：项目 -quick 最小入口通过（执行 20.8 秒）；contracts/query/sqlite 包测试、8 个定向会话/历史用例、控制台会话/正文/折叠/滚动专项及受影响包 go vet 通过。query 层不导入 database/sql 或 sqlite，7 个保留的写入/checkpoint/mapper 函数体与基线完全一致。未运行项目全量测试或平台认证，未做完整视觉渲染验收。
+验证：项目 -quick 最小入口通过（rebase 后执行 28.1 秒），已将 projection 加入固定最小包入口；projection/contracts/sqlite 包测试、Runtime 私有/公开隔离、actor 指针复用、固定 WAL 快照、缺失 checkpoint/选择、原生答案校验与提交冲突等定向用例，以及受影响包 go vet 与测试入口自身测试通过。projection 的直接和传递项目依赖限于 contracts、execution、workerflow、task/taskview/taskgraph，无 SQL、平台适配、Service 或配置 I/O。未运行项目全量测试、平台认证或完整视觉渲染验收。
 
-控制台包整体测试中的 TestEnterOnlyOpensDetailAndStartKeepsOneRequestID、TestStartIsNotPublishedWhenRequestIdentityCannotBePersisted、TestControlRequestIDFromErrorRemainsQueryOnly 失败；使用 Go overlay 编译未修改主干代码复现相同失败（publication_policy 缺失及后续 nil 指针），本轮没有扩大范围修改执行方案测试 fixture。受影响会话专项不受该基线问题影响。
+TestProjectViewConnectionUsesSampledRuntime 与 TestProjectViewConnectionRechecksHeartbeatAtUse 在本轮及未修改主干的 Go overlay 验证中均因 PublicationPolicy fixture 的支持组合失败，尚未进入连接断言。本轮保留该基线限制，不修改无关 fixture；固定读事务、元数据版本和数据独立性使用通过的现有及新用例验证。
 
 维护时同步核对配置与策略来源、可启动组合、adapter 与中心的写入边界、两阶段冻结版本、schema、checkpoint、控制协议、外部身份和交付事务。新增生产源码更新全量索引，生产支持范围变化同步图 1、图 4 与第 8 节。
 
 ## 10. 后续重构建议与已完成项
 
-本轮源码核对确认 #54–#61 已合入，不能继续将工作区、发布或平台适配迁移列为未实施建议。中心有 115 个生产 Go 文件，剩余集中职责是配置组装、业务状态、事务、部分查询/投影和会话持久化；已归包的实现继续通过固定输入及回执与中心协作。
+本轮源码核对确认 #54–#61 已合入，不能继续将工作区、发布或平台适配迁移列为未实施建议。中心有 115 个生产 Go 文件，剩余集中职责是配置组装、业务状态、事务、查询组装和会话持久化；已归包的实现继续通过固定输入及回执与中心协作。
 
 ### 10.1 已完成的执行隔离与控制台拆分
 
@@ -578,33 +584,35 @@ query.Service 持有 WorkflowReader、EventReader、TaskReader、ProjectReader�
 
 执行隔离的配置与注册实现已合入，远程成功准入仍待权限证据；后续重构复用已有策略、需求、内置注册和事务，不重建 backend、readiness 或 publication 引擎。注册回调仍接通原中心协调函数，不拥有第二套业务状态。类型所有者、删除项与原始验证证据见 [#61 验收记录](../validation/execution-isolation-08-resolution/README.md)；该历史验收不是本次重新运行。远端能否 admission 放行取决于具体权限落实证据，不能以完成注册代替能力认证。
 
-本轮通过 `orca_execution_operations.go` 将 inbox、结算、原 Dispatch 核验、回复/重查和确认/重查绑定到注册项；本机结果转发/清理使用注册回调。中心仍持有 intent、receipt、Decision、恢复门槛和 TaskDelivery 事务，配置校验与固定身份映射也仍保留平台知识。无人调用的旧恢复/journal 观察和包装入口已删除，仅验收消费的辅助入口移入测试文件。受管 native 重启不再自动清除人工确认，准备完成后也需确认才派发业务；remote 续聊在发送前核对原 incarnation。删除依据与最小验证见[清理记录](../validation/execution-isolation-cleanup/README.md)。
+PR #175 通过 `orca_execution_operations.go` 将 inbox、结算、原 Dispatch 核验、回复/重查和确认/重查绑定到注册项；本机结果转发/清理使用注册回调。中心仍持有 intent、receipt、Decision、恢复门槛和 TaskDelivery 事务，配置校验与固定身份映射也仍保留平台知识。无人调用的旧恢复/journal 观察和包装入口已删除，仅验收消费的辅助入口移入测试文件。受管 native 重启不再自动清除人工确认，准备完成后也需确认才派发业务；remote 续聊在发送前核对原 incarnation。删除依据与最小验证见[清理记录](../validation/execution-isolation-cleanup/README.md)。
 
-### 10.2 会话只读查询：本轮已落地
+### 10.2 会话只读查询：PR #176 已落地
 
 后端无关查询 DTO、游标筛选与分页返回类型在 contracts/conversation_query.go；query.ConversationService 分别消费 ConversationEventReader、ConversationBodyReader、ConversationRawReader、ConversationCapabilityReader，无 SQLite 具体类型、连接所有权或写接口。事件字节预算、cursor、正文摘要/版本/UTF-8 与 raw 完整性保持原规则，SQL 和默认/显式来源选择归 sqlite/conversation.go。
 
 中心 conversation_query.go 仅保留公开类型别名、cursor 入口和 Reader 组装；控制台与已有采集测试改用构造入口。conversation_store.go 的 7 个写入/checkpoint/mapper 恢复函数保持原实现，CommitConversation 仍原子提交事件、正文版本及 source cursor。没有改 schema、JSON/cursor 格式、原生采集或 worker 状态机，也没有增加第二条查询路径。
 
-最小入口已自动覆盖 query/sqlite 新测试；只读 SQLite 用例验证四类读取、项目/来源隔离与 canonical/raw 选择，独立 Reader 用例覆盖无数据库分页、cursor 和正文/raw 规则。下一优先方向转为纯 Runtime 投影及真实消费者写入接口。
+最小入口已自动覆盖 query/sqlite 新测试；只读 SQLite 用例验证四类读取、项目/来源隔离与 canonical/raw 选择，独立 Reader 用例覆盖无数据库分页、cursor 和正文/raw 规则。纯 Runtime 投影本轮继续落地；下一优先方向转为真实消费者写入接口。
 
-### 10.3 纯 Runtime 投影与写入接口：各自独立迁移
+### 10.3 纯 Runtime 投影已落地，写入接口待后续收窄
 
-组合 ProjectReader 仍由 project_view.go 接上 runtime_view.go。建议提取依赖记录和纯规则的投影器，服务公开视图与组合查询共用 `DomainSnapshot + ServiceCheckpoint → Runtime / Run`，保持工作副本与公开对象的指针隔离及同一读快照，避免搬包时引入 I/O 或当前配置回填。
+projection.Build 从 DomainSnapshot、ServiceCheckpoint 与独立任务权威的派发模式/暂停/版本构建全新 Runtime；它复制嵌套记录和元数据，保留 JSON payload 外的 ControlRevision。projection.Run/Runs 统一处理记录选择、execution 状态、工作区展示、决策绑定、交付与 slot 规则。接受答案和投影读取共用 contracts.ValidateDecisionAnswer 的纯内容校验，授权、版本和持久化仍由中心负责。
 
-CommandService 与 Service 仍依赖具体 SQLiteStore，DomainTx 的任务、决策、操作和 graph 接口较宽。可先按命令提交/接受答案、worker 转换、领取/交付的真实消费者收窄接口，再迁移 SQL 写实现。沿用 workerCommit 的前值和固定身份，业务记录、执行绑定、操作回执与 checkpoint 仍由原事务提交；不为分包增加第二个提交入口或拆开原子写集合。
+Service.projectState、数据库 Runtime 加载、sqlite.Reader.ReadProjectView 使用同一投影器；ProjectReader 不再依赖中心 projectReadRecords。SQL 仍在同一读事务采集记录、任务和 checkpoint，投影不再次开库或读取当前配置，也不从旧客户端 Run 补造缺失记录。中心 projectActor 单独将新的私有 Run 值按 run ID 应用到原指针，保留在途 worker 持有的对象身份；公开 Runtime 不复用这些指针。写集合、业务权威、schema 和序列化格式保持原职责。
+
+CommandService 与 Service 仍依赖具体 SQLiteStore，DomainTx 的任务、决策、操作和 graph 接口较宽。后续按命令提交/接受答案、worker 转换、领取/交付的真实消费者收窄接口，再迁移 SQL 写实现。沿用 workerCommit 的前值和固定身份，业务记录、执行绑定、操作回执与 checkpoint 仍由原事务提交；不为分包增加第二个提交入口或拆开原子写集合。
 
 ### 10.4 控制台后续接线与并行边界
 
 任务列表、会话正文、身份 token/锚点和文本处理的同包拆分已经完成。后续可继续拆分 model 和主 view 的活动、决策等局部职责；配置选择、源读取及提交资格应复用已落地的注册与冻结接线，不提前复制一套 UI 框架或状态规则。
 
-会话只读查询已完成；后续纯投影与控制台模型的局部整理可在约定共享文件归属后并行，配置或注册接线的变更继续集中处理。纯投影须先约定 runtime_view、contracts/runtime 及展示函数的唯一修改者；写事务搬迁与配置或注册接线修改仍宜独立串行集成。
+会话只读查询和纯投影均已完成；后续消费者写接口收窄与控制台模型的局部整理可在约定共享文件归属后并行，配置或注册接线的变更继续集中处理。写事务搬迁与配置或注册接线修改仍宜独立串行集成。
 
 每项实现迁移完整职责、接通真实消费者并删除原实现。最小验收使用既有受影响用例、依赖检查及必要中心接线，不新增旧版兼容、自动回退或全量故障矩阵。本节只更新建议和状态，不创建新任务或改变已有任务契约。
 
 ## 附录：全部非测试 Go 源文件索引
 
-当前 268 个生产源码文件，按实际目录列出；测试辅助文件不计入。
+下列索引覆盖 `cmd/` 与 `internal/` 中全部非测试 `.go` 文件，按真实包目录分组。
 
 ### cmd/orca-probe
 
@@ -885,6 +893,14 @@ CommandService 与 Service 仍依赖具体 SQLiteStore，DomainTx 的任务、�
 | [terminal.go](../../internal/steerline/orcaworker/terminal.go) |
 | [terminal_protocol.go](../../internal/steerline/orcaworker/terminal_protocol.go) |
 | [workspace.go](../../internal/steerline/orcaworker/workspace.go) |
+
+### internal/steerline/projection
+
+| 源文件 |
+| --- |
+| [run.go](../../internal/steerline/projection/run.go) |
+| [runtime.go](../../internal/steerline/projection/runtime.go) |
+| [selectors.go](../../internal/steerline/projection/selectors.go) |
 
 ### internal/steerline/publication
 

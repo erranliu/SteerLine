@@ -57,6 +57,25 @@ func TestRuntimeViewCannotWriteBusinessState(t *testing.T) {
 	}
 }
 
+func TestActorProjectionReusesPrivatePointersWithoutPublishingCandidates(t *testing.T) {
+	service, run := waitingDecisionService(t)
+	public := service.State.Runs[0]
+	execution := service.executionRecord(run)
+	execution.LastEvent = ptr("uncommitted actor diagnostic")
+	require(t, service.projectActor())
+	if service.find(run.TaskID) != run || run.LastEvent == nil || *run.LastEvent != "uncommitted actor diagnostic" {
+		t.Fatal("actor projection replaced its original Run pointer or ignored working records")
+	}
+	if public.LastEvent != nil && *public.LastEvent == "uncommitted actor diagnostic" {
+		t.Fatal("private projection changed the public committed sample")
+	}
+	require(t, service.projectState())
+	if service.find(run.TaskID) != run || service.State.Runs[0] == run || service.State.Runs[0] == public ||
+		service.State.Runs[0].LastEvent != nil && *service.State.Runs[0].LastEvent == "uncommitted actor diagnostic" {
+		t.Fatal("refresh failed to preserve private identity and independently rebuild the public sample")
+	}
+}
+
 func TestAnswerChecksDomainRevisionBeforeCheckpointPublication(t *testing.T) {
 	service, run := waitingDecisionService(t)
 	ctx := context.Background()

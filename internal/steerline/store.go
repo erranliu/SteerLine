@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"sync"
 
+	"github.com/erranliu/SteerLine/internal/steerline/projection"
 	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
 )
 
@@ -48,12 +49,6 @@ func atomicWriteWith(path string, data []byte, write func(*os.File, []byte) erro
 		return e
 	}
 	return replaceFile(name, path)
-}
-
-func hydrateRuntime(v *Runtime, snapshot DomainSnapshot) {
-	v.Tasks, v.WorkflowRuns, v.Executions = snapshot.Tasks, snapshot.WorkflowRuns, snapshot.Executions
-	v.Attempts, v.Decisions, v.Operations = snapshot.Attempts, snapshot.Decisions, snapshot.Operations
-	v.Deliveries = snapshot.Deliveries
 }
 
 // Store serializes publication with heartbeat. SQLite is the only durable
@@ -177,11 +172,11 @@ func loadRuntimeSnapshot(db *SQLiteStore, project string, requireIdentity bool) 
 	if err = tx.Commit(); err != nil {
 		return nil, err
 	}
-	hydrateRuntime(state, snapshot)
-	if err = projectRuntime(state); err != nil {
+	view, err := projection.Build(snapshot, projection.MetadataOf(*state))
+	if err != nil {
 		return nil, err
 	}
-	return state, nil
+	return &view, nil
 }
 
 // readRuntimeCheckpointTx reads only service metadata; callers hydrate it with

@@ -13,6 +13,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	remote "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker"
+	"github.com/erranliu/SteerLine/internal/steerline/projection"
 	"github.com/erranliu/SteerLine/internal/steerline/publication"
 )
 
@@ -400,16 +401,7 @@ func validateExecutionProfiles(c Config) error {
 }
 
 func hostForExecution(backend, protocol string) string {
-	switch {
-	case backend == string(executionapi.BackendLocal) && (protocol == string(executionapi.ProtocolLocalProcess) || protocol == string(executionapi.ProtocolLocalCodexAppServer)):
-		return "local"
-	case backend == string(executionapi.BackendOrca) && protocol == string(executionapi.ProtocolOrcaTerminalV2):
-		return "orca"
-	case backend == string(executionapi.BackendOrca) && protocol == string(executionapi.ProtocolOrcaSupervised):
-		return "orca_supervised"
-	default:
-		return ""
-	}
+	return projection.HostForExecution(backend, protocol)
 }
 
 func validateLocalOrcaTargetArgs(args []string) error {

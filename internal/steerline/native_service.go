@@ -5,12 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	"os"
 	"path/filepath"
 	"strings"
 
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	"github.com/erranliu/SteerLine/internal/steerline/projection"
+	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	"github.com/erranliu/SteerLine/internal/steerline/workspace"
 )
 
@@ -52,49 +53,16 @@ func (s *Service) refreshNativeSnapshot(ctx context.Context) error {
 	return s.projectState()
 }
 
-func latestNativeWorkflow(workflows []WorkflowRunRecord, taskID string) *WorkflowRunRecord {
-	var latest *WorkflowRunRecord
-	for i := range workflows {
-		workflow := &workflows[i]
-		if workflow.TaskID != taskID {
-			continue
-		}
-		if latest == nil || workflow.CreatedAt.After(latest.CreatedAt) || workflow.CreatedAt.Equal(latest.CreatedAt) && workflow.WorkflowRunID > latest.WorkflowRunID {
-			latest = workflow
-		}
-	}
-	return latest
+func latestNativeWorkflow(records []WorkflowRunRecord, taskID string) *WorkflowRunRecord {
+	return projection.LatestWorkflow(records, taskID)
 }
 
-func latestWorkflowExecution(executions []ExecutionRecord, workflowRunID string) *ExecutionRecord {
-	var latest *ExecutionRecord
-	for i := range executions {
-		execution := &executions[i]
-		if execution.WorkflowRunID != workflowRunID {
-			continue
-		}
-		if latest == nil || execution.CreatedAt.After(latest.CreatedAt) || execution.CreatedAt.Equal(latest.CreatedAt) && execution.ExecutionID > latest.ExecutionID {
-			latest = execution
-		}
-	}
-	return latest
+func latestWorkflowExecution(records []ExecutionRecord, workflowID string) *ExecutionRecord {
+	return projection.LatestExecution(records, workflowID)
 }
 
-func latestCurrentNativeAttempt(attempts []StepAttemptRecord, execution *ExecutionRecord) *StepAttemptRecord {
-	if execution == nil || execution.CurrentStep == "" {
-		return nil
-	}
-	var latest *StepAttemptRecord
-	for i := range attempts {
-		attempt := &attempts[i]
-		if attempt.ExecutionID != execution.ExecutionID || attempt.StepID != execution.CurrentStep {
-			continue
-		}
-		if latest == nil || attempt.AttemptNumber > latest.AttemptNumber {
-			latest = attempt
-		}
-	}
-	return latest
+func latestCurrentNativeAttempt(records []StepAttemptRecord, execution *ExecutionRecord) *StepAttemptRecord {
+	return projection.CurrentAttempt(records, execution)
 }
 
 func latestNativeExecutionAttempt(attempts []StepAttemptRecord, executionID string) *StepAttemptRecord {
@@ -460,23 +428,6 @@ func nativeExecutionIDForAttempt(attempts []StepAttemptRecord, attemptID string)
 		}
 	}
 	return ""
-}
-
-func nativeRuntimeFinishStatus(task TaskRecord, workflow WorkflowRunRecord) string {
-	switch {
-	case task.Status == "closed" && workflow.Phase == "blocked":
-		return "blocked"
-	case task.Status == "closed" || workflow.Phase == "completed":
-		return "completed"
-	case workflow.Phase == "waiting_pr_merge":
-		return "waiting_pr_merge"
-	case workflow.Phase == "waiting_decision":
-		return "waiting_decision"
-	case workflow.Phase == "blocked" || task.Status == "discarded":
-		return "blocked"
-	default:
-		return "pending"
-	}
 }
 
 func (s *Service) dispatchNative(ctx context.Context) error {
