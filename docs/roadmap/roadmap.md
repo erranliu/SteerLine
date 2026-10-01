@@ -4,11 +4,10 @@ SteerLine 管理任务、原 worker 会话、用户反馈和真实 PR 交付。w
 
 ## 执行、候选与版本
 
-优先交付 #36。多候选在每个候选内部保持同一 worker，创建与交付作为完整功能交付；不再先做旧步骤规则提取或全面 SQL 搬包。版本入口可独立准备，提升在持续会话基线后完成。
+复用[持续 worker 基础 #36](../spec/worker-flow.spec.md)。多候选在每个候选内部保持同一 worker，创建与交付作为完整功能交付；版本入口可独立准备，提升保持现有会话和恢复门槛。
 
 | 任务 ID | 任务名称 | 交付范围 | 硬前置 | 执行规格 |
 | --- | --- | --- | --- | --- |
-| 36 | 单 worker 持续执行与统一待决策 | 原会话持续交互、统一待决策、移除中心项目验证、真实 PR 交付 | 无 | [Spec](../spec/worker-flow.spec.md) · [Plan](../spec/worker-flow.plan.md) |
 | 37 | 多候选会话与唯一PR交付 | 候选创建与完整运行、反馈隔离、唯一交付及落选事实 | `#36` | [Spec](../spec/candidate-workers.spec.md) · [Plan](../spec/candidate-workers.plan.md) |
 | 38 | 候选观察界面 | 候选列表/选择和原会话反馈的 TUI 增量 | `#37` | [Spec](../spec/candidate-console.spec.md) · [Plan](../spec/candidate-console.plan.md) |
 | 39 | 多候选本机与远端真机验收 | 多候选本机/远端竞争和混合后端增量验收 | `#38` | [Spec](../spec/candidate-native-acceptance.spec.md) · [Plan](../spec/candidate-native-acceptance.plan.md) |
@@ -54,7 +53,7 @@ SteerLine 管理任务、原 worker 会话、用户反馈和真实 PR 交付。w
 
 ## 推进顺序
 
-- #36、#40、#43、#44 可在隔离资源上准备；后继只在其硬前置真实交付后开始。
+- #40、#43、#44 可在隔离资源上准备；#36 仅作为已具备基础保留，后继仍按各自固定 Spec 开工。
 - #37 → #38 → #39 是多候选增量链；#40/#36 → #41，与 #39 一起汇入 #42。
 - #36 → #45 后分为规划链与执行 UI；#53 汇合原生页面及第一阶段组合验收。
 
@@ -62,16 +61,17 @@ SteerLine 管理任务、原 worker 会话、用户反馈和真实 PR 交付。w
 
 [架构约束](architecture-constraints.md) · [控制台约束](console-constraints.md) · [第一阶段交付](phase-1-delivery.md)
 
-## 执行配置隔离规划
+## 主包与执行实现解耦
 
-[项目执行抽象与配置隔离规划](execution-isolation.md) 描述剩余 #55–#61 的分包和并行安排。#55–#58 保持现行三条链路并迁移职责，#59–#61 接通项目策略；已交付 #54 作为工作区/发布前置复用，见[验收记录](../validation/execution-isolation-01-contracts/README.md)。共同要求见[约束](../spec/execution-isolation-constraints.md)。
+[主包解耦规划](core-implementation-decoupling.md)继续完成通用业务与具体实现的边界。既有执行策略、工作区、发布和需求契约作为基础复用，不再列入活动实施清单；剩余原生验收限制见[既有验收记录](../validation/execution-isolation-cleanup/README.md)。本目标严格要求主包直属生产/测试文件名与源码无平台关键字，且没有具体实现的直接或传递依赖，不能靠改名或转移可写 Service 达标。
 
 | 任务 ID | 任务名称 | 交付范围 | 硬前置 | 执行规格 |
 | --- | --- | --- | --- | --- |
-| 55 | 工作区与 Git 资源迁移 | Git/worktree 操作与资源解析分离 | #54 | [Spec](../spec/execution-isolation-02-workspace.spec.md) · [Plan](../spec/execution-isolation-02-workspace.plan.md) |
-| 56 | 发布与 PR 实现迁移 | 发布操作及 provider 与中心事务分离 | #54 | [Spec](../spec/execution-isolation-03-publication.spec.md) · [Plan](../spec/execution-isolation-03-publication.plan.md) |
-| 57 | Codex 执行适配器迁移 | Codex 操作、命令与恢复证据归适配器 | #55、#56 | [Spec](../spec/execution-isolation-04-codex.spec.md) · [Plan](../spec/execution-isolation-04-codex.plan.md) |
-| 58 | Orca 执行适配器迁移 | Orca 资源、派发、观察与对账归适配器 | #57 | [Spec](../spec/execution-isolation-05-orca.spec.md) · [Plan](../spec/execution-isolation-05-orca.plan.md) |
-| 59 | 项目执行权限策略 | 项目权限、参数映射、冻结与必要原生证据 | #58 | [Spec](../spec/execution-isolation-06-policy.spec.md) · [Plan](../spec/execution-isolation-06-policy.plan.md) |
-| 60 | 项目发布责任契约 | 显式 publisher、支持矩阵及执行冻结 | #58 | [Spec](../spec/execution-isolation-07-publish-policy.spec.md) · [Plan](../spec/execution-isolation-07-publish-policy.plan.md) |
-| 61 | 执行需求与配置注册收口 | 需求匹配、实现注册与配置隔离收口 | #59、#60 | [Spec](../spec/execution-isolation-08-resolution.spec.md) · [Plan](../spec/execution-isolation-08-resolution.plan.md) |
+| 62 | 通用执行事件与问题边界 | 通用事件、问题路由与回答回执；原生解码不进入业务消费者 | #61 | [Spec](../spec/core-decoupling-01-events.spec.md) · [Plan](../spec/core-decoupling-01-events.plan.md) |
+| 63 | 执行配置与原生绑定所有权 | 原生配置/绑定严格 codec、固定版本与两阶段封套 | #62 | [Spec](../spec/core-decoupling-02-bindings.spec.md) · [Plan](../spec/core-decoupling-02-bindings.plan.md) |
+| 64 | 通用执行生命周期与副作用接线 | 统一分步 intent/receipt 与观察/对账；移除 Service 平台回调 | #63 | [Spec](../spec/core-decoupling-03-lifecycle.spec.md) · [Plan](../spec/core-decoupling-03-lifecycle.plan.md) |
+| 65 | 会话采集与宿主交互实现隔离 | 历史来源/mapper/宿主解释归实现，采集预算和准备授权留中心 | #64 | [Spec](../spec/core-decoupling-04-conversation.spec.md) · [Plan](../spec/core-decoupling-04-conversation.plan.md) |
+| 66 | 内置实现组装与主包依赖反转 | 内置目录与具体构造外移，产品入口显式注入；主包生产清零 | #65 | [Spec](../spec/core-decoupling-05-composition.spec.md) · [Plan](../spec/core-decoupling-05-composition.plan.md) |
+| 67 | 主包隔离守卫与测试归位 | 主包测试清零、结构守卫与外层第三实现闭环 | #66 | [Spec](../spec/core-decoupling-06-boundary.spec.md) · [Plan](../spec/core-decoupling-06-boundary.plan.md) |
+
+按 #62 → #63 → #64 → #65 → #66 → #67 串行交付。#61 的已有能力是 #62 的基础；新共同要求见[约束](../spec/core-decoupling-constraints.md)。每阶段迁移完整消费者并当场删除对应原实现，#66 完成生产清零，#67 只负责测试归位和边界守卫。
