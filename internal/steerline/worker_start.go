@@ -102,11 +102,12 @@ func (s *Service) startWorkerFlowTurn(ctx context.Context, run *Run, prompt, tur
 	if execution.RecoveryRequired {
 		return errors.New("worker turn requires a fresh manual recovery decision")
 	}
+	sessionID, _ := executionSessionFacts(execution)
 	if workflow.WorkflowVersion != WorkerFlowVersion || !stableExecutionID(turnID) ||
-		execution.PendingTurnID != "" || execution.PendingCommandID != "" || execution.SessionID != "" && execution.CurrentTurnID != "" && execution.LastStoppedTurnID != execution.CurrentTurnID {
+		execution.PendingTurnID != "" || execution.PendingCommandID != "" || sessionID != "" && execution.CurrentTurnID != "" && execution.LastStoppedTurnID != execution.CurrentTurnID {
 		return errors.New("worker turn cannot start without one idle original session")
 	}
-	if execution.SessionID == "" && execution.TurnNumber != 0 && run.DomainAttemptNumber <= 1 {
+	if sessionID == "" && execution.TurnNumber != 0 && run.DomainAttemptNumber <= 1 {
 		return errors.New("worker session was lost; replacement is not allowed")
 	}
 	if attempt.StepID != "worker" {
@@ -136,7 +137,7 @@ func (s *Service) startWorkerFlowTurn(ctx context.Context, run *Run, prompt, tur
 		SessionID   string `json:"session_id,omitempty"`
 		TurnID      string `json:"turn_id"`
 		Prompt      string `json:"prompt"`
-	}{run.ExecutionID, execution.SessionID, turnID, prompt})
+	}{run.ExecutionID, sessionID, turnID, prompt})
 	if err != nil {
 		return err
 	}

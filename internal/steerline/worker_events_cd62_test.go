@@ -31,13 +31,12 @@ func TestCD62NativeFactsAndQuestionRoute(t *testing.T) {
 		s, run := appServerAuditService(t)
 		workflow, record := s.workflowRecords(run)
 		commandID := newID()
-		record.PolicyResources = policyResourceReceiptFixture(workflow.ExecutionProfile.Digest, record.Workspace.Worktree)
-		record.SessionID = "opaque-session"
+		record.PolicyResources = policyResourceReceiptFixture(workflow.ExecutionProfile.Digest, record.Workspace.Worktree, record)
 		record.PendingCommandID, record.PendingTurnID = commandID, "opaque-turn"
 		s.refreshRun(run)
 		_, err := s.startWorkerOperation(run, "start_worker_turn", "worker-turn:"+record.ExecutionID+":"+commandID, map[string]string{"command_id": commandID})
 		require(t, err)
-		event := WorkerEvent{RunID: run.RunID, AttemptID: run.AttemptID, Fact: executionapi.EventFact{Kind: executionapi.EventStarted, SessionID: record.SessionID, StartedTurnID: record.PendingTurnID}}
+		event := WorkerEvent{RunID: run.RunID, AttemptID: run.AttemptID, Fact: executionapi.EventFact{Kind: executionapi.EventStarted, SessionID: "opaque-session", StartedTurnID: record.PendingTurnID}}
 		foreign := event
 		foreign.Fact.StartedTurnID = "other-turn"
 		if err := s.eventWorkerFlowFor(run, foreign); err == nil || s.executionRecord(run).TurnNumber != 0 {
@@ -69,7 +68,8 @@ func TestCD62NativeFactsAndQuestionRoute(t *testing.T) {
 	}
 	run := &Run{RunID: identity.WorkflowRunID, ExecutionID: identity.ExecutionID, AttemptID: identity.AttemptID}
 	execution := &ExecutionRecord{ProjectIdentity: identity.ProjectID, WorkflowRunID: identity.WorkflowRunID, ExecutionID: identity.ExecutionID,
-		CurrentAttemptID: identity.AttemptID, AppServerGeneration: identity.Generation, CurrentTurnID: identity.TurnID}
+		CurrentAttemptID: identity.AttemptID, Generation: identity.Generation, CurrentTurnID: identity.TurnID, Protocol: string(executionapi.ProtocolLocalCodexAppServer)}
+	setTestCodexBinding(t, execution, "ws://127.0.0.1:12345", identity.Generation, workerFlowMockSession)
 	if err := validateQuestionRouteForRun(run, execution, &route, []executionapi.Question{question}, route.ImplementationKey, route.CodecVersion); err != nil {
 		t.Fatalf("center rejected a fixed generic question route: %v", err)
 	}

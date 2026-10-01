@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
@@ -35,7 +36,8 @@ func TestLiveLocalCapabilityEvidence(t *testing.T) {
 	if result, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("initialize isolated repository: %v: %s", err, result)
 	}
-	c := Config{Repository: repo, RunDir: filepath.Join(root, "state"), Host: "local", Agent: "codex", Codex: Command{Executable: executable}, CommandTimeout: "30s"}
+	c := Config{Repository: repo, RunDir: filepath.Join(root, "state"), Host: "local", Agent: "codex", CommandTimeout: "30s"}
+	setTestCodexProfile(t, &c, codexworker.ProfileConfig{Executable: executable})
 	backend := localExecutionBackend{config: c}
 	target := targetFor(c)
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)

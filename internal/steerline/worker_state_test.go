@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
@@ -34,7 +35,7 @@ func TestWorkerFlowKeepsSessionThroughFeedbackAndPRChanges(t *testing.T) {
 		t.Fatalf("stopped turn did not await PR merge: phase=%s error=%v", wf.Phase, err)
 	}
 	begin("turn-2") // User asks for more work while the PR remains open.
-	if wf.Phase != "executing" || exec.SessionID != "session-8" || exec.TurnNumber != 2 {
+	if wf.Phase != "executing" || exec.TurnNumber != 2 {
 		t.Fatalf("feedback changed execution identity: workflow=%+v execution=%+v", wf, exec)
 	}
 	if err := BindWorkerPR(&wf, &exec, pr("pr-8", "closed_unmerged"), "pr-8", "o/r", false); err != nil {
@@ -91,12 +92,13 @@ func TestWorkerFlowDeliveryGateUsesSessionAndPRWithoutStepResults(t *testing.T) 
 	task := TaskRecord{TaskID: "8", ContractID: "contract-8"}
 	contract := TaskContract{ContractID: "contract-8", Digest: "fixed-digest"}
 	wf := WorkflowRunRecord{WorkflowRunID: "wf-8", TaskID: task.TaskID, WorkflowVersion: WorkerFlowVersion, Phase: "waiting_pr_merge", SelectedResult: "exec-8", PRURL: "https://git.example/o/r/pulls/8"}
-	exec := ExecutionRecord{ExecutionID: "exec-8", WorkflowRunID: wf.WorkflowRunID, SessionID: "session-8", Workspace: WorkspaceEvidence{Branch: "codex/task-8", Dirty: true}, Status: "idle"}
+	exec := ExecutionRecord{ExecutionID: "exec-8", CurrentAttemptID: "attempt-8", WorkflowRunID: wf.WorkflowRunID, Protocol: string(executionapi.ProtocolLocalCodexAppServer), Workspace: WorkspaceEvidence{Branch: "codex/task-8", Dirty: true}, Status: "idle"}
+	setTestCodexBinding(t, &exec, "ws://127.0.0.1:12345", "generation", "session-8")
 	prURL, err := validateNativeDeliveryGates(task, contract, wf, exec)
 	if err != nil || prURL != wf.PRURL {
 		t.Fatalf("workflow requires an obsolete step result: prURL=%q error=%v", prURL, err)
 	}
-	exec.SessionID = ""
+	removeImplementationEnvelope(&exec, codexworker.ExecutionBindingCodecKey)
 	if _, err := validateNativeDeliveryGates(task, contract, wf, exec); err == nil {
 		t.Fatal("accepted delivery without a bound worker session")
 	}

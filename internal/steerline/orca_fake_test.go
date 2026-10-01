@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
@@ -323,7 +324,8 @@ func TestOrcaNativeHostWait(t *testing.T) {
 	}
 	exe, err := exec.LookPath("orca")
 	require(t, err)
-	config := Config{Repository: probe.Workspace, Host: "orca", CommandTimeout: "15s", Orca: OrcaConfig{Executable: exe}}
+	config := Config{Repository: probe.Workspace, Host: "orca", Agent: "codex", CommandTimeout: "15s"}
+	setTestImplementationProfiles(t, &config, codexworker.ProfileConfig{Executable: "codex"}, &orcaworker.ProfileConfig{Executable: exe, Shell: "cmd.exe", WaitTimeout: "1m"})
 	identity := executionapi.ProcessIdentity{Kind: "orca", Terminal: probe.Terminal, RuntimeID: probe.Runtime, Incarnation: probe.Incarnation, Executable: exe}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
@@ -362,7 +364,9 @@ func orcaTestConfig(t *testing.T, dir, _ string) Config {
 	if e != nil {
 		t.Fatal(e)
 	}
-	return Config{Repository: dir, RunDir: dir, CommandTimeout: "5s", Host: "orca", Orca: OrcaConfig{Executable: exe, Args: []string{"--fake", "orca", dir}, Shell: "cmd.exe", WaitTimeout: "5s"}}
+	c := Config{Repository: dir, RunDir: dir, CommandTimeout: "5s", Host: "orca", Agent: "codex"}
+	setTestImplementationProfiles(t, &c, codexworker.ProfileConfig{Executable: "codex"}, &orcaworker.ProfileConfig{Executable: exe, Args: []string{"--fake", "orca", dir}, Shell: "cmd.exe", WaitTimeout: "5s"})
+	return c
 }
 
 func TestOrcaPreflightDoesNotRequireUnusedLocalCodex(t *testing.T) {
@@ -378,12 +382,14 @@ func TestOrcaPreflightDoesNotRequireUnusedLocalCodex(t *testing.T) {
 	f.c.Host = "orca"
 	fixtureGit(t, f.c.Repository, "remote", "add", "web", f.server.URL+"/owner/repo.git")
 	f.c.Remote = "web"
-	f.c.Orca = OrcaConfig{Executable: exe, Args: []string{"--fake", "orca", stateDir}, Shell: "cmd.exe", WaitTimeout: "5s"}
-	f.c.Codex.Executable = filepath.Join(stateDir, "missing-codex.exe")
+	f.c.Host, f.c.Agent = "orca", "codex"
+	setTestImplementationProfiles(t, &f.c, codexworker.ProfileConfig{Executable: filepath.Join(stateDir, "missing-codex.exe")}, &orcaworker.ProfileConfig{Executable: exe, Args: []string{"--fake", "orca", stateDir}, Shell: "cmd.exe", WaitTimeout: "5s"})
 	if err = f.c.Preflight(context.Background(), false); err != nil {
 		t.Fatalf("Orca native agent required unused local Codex: %v", err)
 	}
-	f.c.Model = "requires-direct-codex"
+	codex := codexProfileSettings(f.c)
+	codex.Model = "requires-direct-codex"
+	setTestCodexProfile(t, &f.c, codex)
 	if err = f.c.Preflight(context.Background(), false); err == nil {
 		t.Fatal("direct Codex override did not require its executable")
 	}
@@ -407,7 +413,7 @@ func TestOrcaStopExecutionConfirmsFixedTerminalExit(t *testing.T) {
 		t.Fatal(err)
 	}
 	runID, attemptID := newID(), newID()
-	ref := executionapi.ExecutionRef{Version: 1, Backend: executionapi.BackendOrca, Protocol: executionapi.ProtocolOrcaTerminalV2, Target: targetFor(cfg), Agent: executionapi.AgentSpec{Name: "codex"}, RunID: runID, AttemptID: attemptID, External: executionapi.ProcessIdentity{Kind: "orca", Terminal: handle, RuntimeID: "fake-runtime", Incarnation: "inc-stop", Executable: cfg.Orca.Executable}}
+	ref := executionapi.ExecutionRef{Version: 1, Backend: executionapi.BackendOrca, Protocol: executionapi.ProtocolOrcaTerminalV2, Target: targetFor(cfg), Agent: executionapi.AgentSpec{Name: "codex"}, RunID: runID, AttemptID: attemptID, External: executionapi.ProcessIdentity{Kind: "orca", Terminal: handle, RuntimeID: "fake-runtime", Incarnation: "inc-stop", Executable: orcaProfileSettings(cfg).Executable}}
 	backend := orcaworker.NewBackend(nativeOrcaConfig(cfg))
 	observer := &orcaStopHandleFixture{identity: ref.External}
 	receipt, err := backend.StopExecution(context.Background(), ref, executionapi.Operation{ID: "stop-" + attemptID}, observer)

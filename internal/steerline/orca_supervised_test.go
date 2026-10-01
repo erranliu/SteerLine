@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	remote "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker"
 	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
@@ -322,9 +323,7 @@ func supervisedConfigForFixture(t *testing.T, f *fixture) Config {
 	c := f.c
 	c.Host = "orca_supervised"
 	c.Agent = "codex"
-	c.Model = "gpt-6-luna"
-	c.ReasoningEffort = "high"
-	c.Orca = OrcaConfig{Executable: exe, Args: []string{"--fake", "orca-supervised"}, Shell: "powershell", WaitTimeout: "5s", Supervised: &SupervisedOrcaConfig{ConnectionID: "home-connection", EnvironmentID: "env-home", RepositorySelector: "id:repo-test", CoordinatorTerminal: "term-coordinator", ExpectedCodexVersion: "codex-cli 0.156.1", PollInterval: "2s", CapabilityReportVersion: 1}}
+	setTestImplementationProfiles(t, &c, codexworker.ProfileConfig{Executable: "codex", Model: "gpt-6-luna", ReasoningEffort: "high"}, &orcaworker.ProfileConfig{Executable: exe, Args: []string{"--fake", "orca-supervised"}, Shell: "powershell", WaitTimeout: "5s"}, &remote.ProfileConfig{ConnectionID: "home-connection", EnvironmentID: "env-home", RepositorySelector: "id:repo-test", CoordinatorTerminal: "term-coordinator", ExpectedCodexVersion: "codex-cli 0.156.1", PollInterval: "2s", CapabilityReportVersion: 1})
 	return c
 }
 
@@ -362,18 +361,27 @@ func TestSupervisedOrcaPreflightRejectsVersionOrCapabilityDrift(t *testing.T) {
 
 func TestSupervisedOrcaRequiresPinnedModelAndKeepsStopUnsupported(t *testing.T) {
 	c := supervisedFixtureConfig(t)
-	c.Model = ""
-	if err := validateSupervisedOrcaConfig(&c); err == nil {
+	codexSettings := codexProfileSettings(c)
+	codexSettings.Model = ""
+	setTestCodexProfile(t, &c, codexSettings)
+	if err := validateImplementationProfileData(c); err == nil {
 		t.Fatal("missing model unexpectedly accepted")
 	}
-	c.Model = "gpt-6-luna"
-	c.Orca.Supervised.RemoteCancelAvailable = true
-	if err := validateSupervisedOrcaConfig(&c); err == nil {
+	codexSettings.Model = "gpt-6-luna"
+	setTestCodexProfile(t, &c, codexSettings)
+	remoteSettings := remoteProfileSettings(c)
+	remoteSettings.RemoteCancelAvailable = true
+	orcaSettings := orcaProfileSettings(c)
+	setTestImplementationProfiles(t, &c, codexProfileSettings(c), &orcaSettings, &remoteSettings)
+	if err := validateImplementationProfileData(c); err == nil {
 		t.Fatal("remote cancellation was enabled")
 	}
-	c.Orca.Supervised.RemoteCancelAvailable = false
-	c.Orca.Supervised.ExpectedCodexVersion = ""
-	if err := validateSupervisedOrcaConfig(&c); err != nil {
+	remoteSettings = remoteProfileSettings(c)
+	remoteSettings.RemoteCancelAvailable = false
+	remoteSettings.ExpectedCodexVersion = ""
+	orcaSettings = orcaProfileSettings(c)
+	setTestImplementationProfiles(t, &c, codexProfileSettings(c), &orcaSettings, &remoteSettings)
+	if err := validateImplementationProfileData(c); err != nil {
 		t.Fatalf("supervised config unexpectedly requires an exact Codex CLI pin: %v", err)
 	}
 	report, err := (remote.NewBackend(remoteWorkerConfig(c))).Probe(context.Background(), targetFor(c), agentFor(c))
@@ -423,7 +431,10 @@ func TestSupervisedOrcaClientPinsLaunchAndReadsExactDispatch(t *testing.T) {
 	}
 	receipt, err := orcaworker.CreateRun(context.Background(), client.CenterCall, "remote worker fixture", coordinator, "fake-center-runtime")
 	runID, requestID := receipt.ID, receipt.RequestID
-	c.Orca.Supervised.CoordinatorTerminal = coordinator
+	remoteSettings := remoteProfileSettings(c)
+	remoteSettings.CoordinatorTerminal = coordinator
+	orcaSettings := orcaProfileSettings(c)
+	setTestImplementationProfiles(t, &c, codexProfileSettings(c), &orcaSettings, &remoteSettings)
 	backend := remote.NewBackend(remoteWorkerConfig(c))
 	if err != nil {
 		t.Fatal(err)
@@ -523,7 +534,7 @@ func supervisedPromptTestRef(c Config, started supervisedStartReceipt, observati
 	target.WorktreeID = observation.Identity.WorktreeID
 	target.Branch = observation.Branch
 	target.BaseRevision = strings.Repeat("a", 40)
-	target.CoordinatorTerminal = c.Orca.Supervised.CoordinatorTerminal
+	target.CoordinatorTerminal = remoteProfileSettings(c).CoordinatorTerminal
 	return executionapi.ExecutionRef{Version: executionapi.ExecutionRecordVersion, Backend: executionapi.BackendOrca, Protocol: executionapi.ProtocolOrcaSupervised, Target: target, Agent: executionapi.AgentSpec{Name: "codex"}, RunID: newID(), AttemptID: "attempt-test", WorkspacePath: observation.WorktreePath, WorkspaceBranch: observation.Branch, BaseCommit: target.BaseRevision, External: observation.Identity, Generation: observation.Identity.RuntimeID + ":" + observation.Identity.Incarnation}
 }
 

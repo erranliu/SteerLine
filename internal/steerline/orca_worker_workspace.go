@@ -74,11 +74,19 @@ func (s *Service) prepareRemoteWorkerWorkspace(ctx context.Context, run *Run, ex
 	if err != nil {
 		return err
 	}
-	if execution.OrcaNative == nil {
-		execution.OrcaNative = &OrcaNativeExecution{RemoteRuntimeID: pair.RemoteRuntime}
+	state, err := decodeOrcaExecutionState(execution)
+	if err != nil {
+		return err
 	}
-	if execution.OrcaNative.RemoteRuntimeID != pair.RemoteRuntime {
+	if state == nil {
+		state = &implementationExecutionView{}
+	}
+	if state.RemoteRuntimeID != "" && state.RemoteRuntimeID != pair.RemoteRuntime {
 		return &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "original remote workspace runtime changed"}
+	}
+	state.RemoteRuntimeID = pair.RemoteRuntime
+	if err := storeOrcaExecutionState(execution, state); err != nil {
+		return err
 	}
 	if err := s.commitWorker(run); err != nil {
 		return err
@@ -115,7 +123,8 @@ func (s *Service) recoverRemoteWorkerWorkspace(ctx context.Context, run *Run, ex
 	if err != nil {
 		return err
 	}
-	if execution.OrcaNative == nil || execution.OrcaNative.RemoteRuntimeID != pair.RemoteRuntime {
+	state, stateErr := decodeOrcaExecutionState(execution)
+	if stateErr != nil || state == nil || state.RemoteRuntimeID != pair.RemoteRuntime {
 		return &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "original remote workspace runtime is unverified"}
 	}
 	worktree, found, err := remoteWorkerClient(fixedConfig).FindWorktree(ctx, pair, name, run.WorkspaceIntent.BaseCommit)

@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
@@ -69,8 +70,12 @@ func TestExecutionBackendCommonCapabilityContract(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	c := Config{Host: "local", Repository: t.TempDir(), CommandTimeout: "5s", Codex: Command{Executable: exe}, Orca: OrcaConfig{Executable: exe, Args: []string{"--fake", "orca", t.TempDir()}}}
-	backends := []executionapi.ExecutionBackend{localExecutionBackend{config: c}, orcaworker.NewBackend(nativeOrcaConfig(c))}
+	c := Config{Host: "local", Agent: "codex", Repository: t.TempDir(), CommandTimeout: "5s"}
+	setTestImplementationProfiles(t, &c, codexworker.ProfileConfig{Executable: exe}, nil)
+	orcaConfig := c
+	orcaConfig.Host = "orca"
+	setTestImplementationProfiles(t, &orcaConfig, codexworker.ProfileConfig{Executable: exe}, &orcaworker.ProfileConfig{Executable: exe, Args: []string{"--fake", "orca", t.TempDir()}, Shell: "cmd.exe", WaitTimeout: "5s"})
+	backends := []executionapi.ExecutionBackend{localExecutionBackend{config: c}, orcaworker.NewBackend(nativeOrcaConfig(orcaConfig))}
 	for _, backend := range backends {
 		kind, protocol := backend.Identity()
 		report, err := backend.Probe(context.Background(), executionapi.ExecutionTarget{ID: "fixture"}, executionapi.AgentSpec{Name: "codex"})
@@ -105,7 +110,8 @@ func TestNativeCapabilityCheckKeepsFixedAgent(t *testing.T) {
 	}
 	f.c.Host = "orca"
 	f.c.Agent = "codex"
-	f.c.Orca = OrcaConfig{Executable: exe, Args: []string{"--fake", "orca", f.c.RunDir}, Shell: "cmd.exe", WaitTimeout: "5s"}
+	f.c.Host, f.c.Agent = "orca", "codex"
+	setTestOrcaProfile(t, &f.c, orcaworker.ProfileConfig{Executable: exe, Args: []string{"--fake", "orca", f.c.RunDir}, Shell: "cmd.exe", WaitTimeout: "5s"})
 	seedFakeCapabilities(t, f.c)
 	fixedTarget, fixedAgent := targetFor(f.c), agentFor(f.c)
 	f.c.Agent = "pi"
@@ -242,7 +248,8 @@ func TestOrcaCertificationRequiresAgentAndTerminalEvidence(t *testing.T) {
 	}
 	f.c.Host = "orca"
 	f.c.Agent = "codex"
-	f.c.Orca = OrcaConfig{Executable: exe, Args: []string{"--fake", "orca", t.TempDir()}, Shell: "cmd.exe", WaitTimeout: "5s"}
+	f.c.Host, f.c.Agent = "orca", "codex"
+	setTestOrcaProfile(t, &f.c, orcaworker.ProfileConfig{Executable: exe, Args: []string{"--fake", "orca", t.TempDir()}, Shell: "cmd.exe", WaitTimeout: "5s"})
 	common := map[string]any{"version": 1, "captured_at": time.Now().UTC(), "platform": runtime.GOOS + "/" + runtime.GOARCH, "backend": "orca", "protocol": "orca_terminal_v2", "target_id": targetFor(f.c).ID, "agent": "codex", "orca_version": "fake-orca/1", "codex_version": "codex-cli 0.159.2", "stop_status": "confirmed"}
 	write := func(name string, fields map[string]any) string {
 		t.Helper()
@@ -297,7 +304,9 @@ func TestOrcaObservationRejectsReplacedIncarnationAndConnection(t *testing.T) {
 		t.Fatalf("replacement incarnation was accepted: %v", err)
 	}
 	t.Setenv("STEERLINE_FAKE_ORCA_INCARNATION", "")
-	cfg.Orca.Args = append(cfg.Orca.Args, "different-connection")
+	orcaSettings := orcaProfileSettings(cfg)
+	orcaSettings.Args = append(orcaSettings.Args, "different-connection")
+	setTestOrcaProfile(t, &cfg, orcaSettings)
 	if _, err := (orcaworker.NewBackend(nativeOrcaConfig(cfg))).Observe(context.Background(), ref); !errors.As(err, &mismatch) || mismatch.Code != executionapi.BackendIdentityMismatch {
 		t.Fatalf("changed connection was accepted: %v", err)
 	}

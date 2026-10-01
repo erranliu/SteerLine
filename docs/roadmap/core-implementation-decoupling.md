@@ -62,7 +62,6 @@ flowchart TD
 
 | 任务 ID | 任务名称 | 交付范围 | 硬前置 | 执行规格 |
 | --- | --- | --- | --- | --- |
-| 63 | 执行配置与原生绑定所有权 | 原生配置/绑定/游标 codec 与通用冻结/持久封套分离 | #62 | [Spec](../spec/core-decoupling-02-bindings.spec.md) · [Plan](../spec/core-decoupling-02-bindings.plan.md) |
 | 64 | 通用执行生命周期与副作用接线 | 中心以统一分步 intent/receipt 推进准备、启动、观察、反馈、恢复、清理 | #63 | [Spec](../spec/core-decoupling-03-lifecycle.spec.md) · [Plan](../spec/core-decoupling-03-lifecycle.plan.md) |
 | 65 | 会话采集与宿主交互实现隔离 | 具体 history/mapper/来源发现及宿主解释归实现，预算/授权/持久化留中心 | #64 | [Spec](../spec/core-decoupling-04-conversation.spec.md) · [Plan](../spec/core-decoupling-04-conversation.plan.md) |
 | 66 | 内置实现组装与主包依赖反转 | 目录/工厂/默认值移到外层，所有产品入口显式注入同一能力 | #65 | [Spec](../spec/core-decoupling-05-composition.spec.md) · [Plan](../spec/core-decoupling-05-composition.plan.md) |
@@ -70,7 +69,7 @@ flowchart TD
 
 ## 顺序与交接
 
-剩余 #63 → #64 → #65 → #66 → #67 串行交付，每项一个实现 PR。#63 复用[通用事件与问题 #62](../spec/core-decoupling-01-events.spec.md)及[验收记录](../validation/core-decoupling-01-events/README.md)，不意味着整个主包隔离已完成。
+剩余 #64 → #65 → #66 → #67 串行交付，每项一个实现 PR。#64 消费 #63 已交付的配置与原生绑定封套；#63 复用[通用事件与问题 #62](../spec/core-decoupling-01-events.spec.md)及[验收记录](../validation/core-decoupling-01-events/README.md)，不意味着整个主包隔离已完成。
 
 | 交接 | 下游获得的实际能力 | 共享修改与开工门槛 |
 | --- | --- | --- |

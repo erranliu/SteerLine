@@ -85,9 +85,9 @@ func TestOrcaExecutionProfilesNameAgentModelEffortAndRemoteTarget(t *testing.T) 
 		config steerline.Config
 		want   []string
 	}{
-		{config: steerline.Config{TaskAuthority: "native", Host: "orca", Agent: "pi", Sandbox: "workspace-write"}, want: []string{"Orca 本机终端", "Agent：pi", "Model：由所选 agent 决定", "Thinking effort：不适用"}},
-		{config: steerline.Config{TaskAuthority: "native", Host: "orca", Agent: "codex", Model: "chosen-model", ReasoningEffort: "xhigh", Sandbox: "workspace-write"}, want: []string{"Orca 本机终端", "Agent：codex", "Model：chosen-model", "Thinking effort：xhigh"}},
-		{config: steerline.Config{TaskAuthority: "native", Host: "orca_supervised", Agent: "codex", Model: "remote-model", ReasoningEffort: "high", Sandbox: "workspace-write", Orca: steerline.OrcaConfig{Supervised: &steerline.SupervisedOrcaConfig{EnvironmentID: "remote-env", ConnectionID: "fixed-connection"}}}, want: []string{"Orca 受监管远程", "Model：remote-model", "Thinking effort：high", "目标环境：remote-env", "连接：fixed-connection"}},
+		{config: steerline.Config{TaskAuthority: "native", Host: "orca", Agent: "pi"}, want: []string{"Orca 本机终端", "Agent：pi", "Model：由所选 agent 决定", "Thinking effort：不适用"}},
+		{config: steerline.Config{TaskAuthority: "native", Host: "orca", Agent: "codex", ImplementationDisplay: []string{"Model：chosen-model", "Reasoning effort：xhigh"}}, want: []string{"Orca 本机终端", "Agent：codex", "Model：chosen-model", "Thinking effort：xhigh"}},
+		{config: steerline.Config{TaskAuthority: "native", Host: "orca_supervised", Agent: "codex", ImplementationDisplay: []string{"Model：remote-model", "Reasoning effort：high", "目标环境：remote-env", "连接：fixed-connection"}}, want: []string{"Orca 受监管远程", "Model：remote-model", "Thinking effort：high", "目标环境：remote-env", "连接：fixed-connection"}},
 	} {
 		ref := ProjectRef{Config: sample.config}
 		m := Model{width: 120, profileChoice: &executionProfileChoice{taskID: "task"}}

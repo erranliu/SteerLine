@@ -20,14 +20,16 @@ func positiveDuration(s string, def time.Duration) time.Duration {
 }
 func nativeOrcaClient(c Config) orcaworker.Client { return orcaworker.New(nativeOrcaConfig(c)) }
 func nativeOrcaConfig(c Config) orcaworker.Config {
+	orca := orcaProfileSettings(c)
+	codex := codexProfileSettings(c)
 	cfg := orcaworker.Config{Repository: c.Repository, CommandTimeout: c.CommandTimeout, Target: targetFor(c), Output: func(ctx context.Context, timeout time.Duration, args ...string) ([]byte, error) {
-		return (Runner{Dir: c.Repository, Timeout: timeout}).Output(ctx, Command{Executable: c.Orca.Executable, Args: c.Orca.Args}, args...)
+		return (Runner{Dir: c.Repository, Timeout: timeout}).Output(ctx, Command{Executable: orca.Executable, Args: orca.Args}, args...)
 	}, InspectWorkspace: func(ctx context.Context, ref executionapi.ExecutionRef) (executionapi.WorkspaceInspection, error) {
 		return inspectBoundWorkspace(ctx, c, ref)
 	}}
 	if c.needsCodexExecutable() {
 		cfg.AgentVersion = func(ctx context.Context) (string, error) {
-			out, e := (Runner{Dir: c.Repository, Timeout: positiveDuration(c.CommandTimeout, 30*time.Second)}).Output(ctx, c.Codex, "--version")
+			out, e := (Runner{Dir: c.Repository, Timeout: positiveDuration(c.CommandTimeout, 30*time.Second)}).Output(ctx, Command{Executable: codex.Executable, Args: codex.Args}, "--version")
 			return string(out), e
 		}
 	}

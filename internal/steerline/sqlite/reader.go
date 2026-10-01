@@ -9,7 +9,7 @@ import (
 	taskrules "github.com/erranliu/SteerLine/internal/steerline/task"
 )
 
-const SchemaVersion = 8
+const SchemaVersion = 9
 
 type Reader struct {
 	db            *sql.DB

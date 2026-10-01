@@ -21,7 +21,7 @@ func TestDeadWorkerRecoveryPreservesDecisionAndFreshAnswer(t *testing.T) {
 	}
 	workflow, execution := service.workflowRecords(run)
 	execution.Process = &identity
-	execution.SessionID = workerFlowMockSession
+	setTestCodexBinding(t, execution, "ws://127.0.0.1:12345", "generation", workerFlowMockSession)
 	execution.CurrentTurnID = "00000000-0000-0000-0000-000000000001"
 	execution.CurrentCommandID, execution.TurnNumber = newID(), 1
 	execution.Status, workflow.Phase = "active", "executing"

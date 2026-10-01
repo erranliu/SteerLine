@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
 
@@ -35,13 +36,13 @@ func newEnvironmentFixture(t *testing.T, state fakeNativeOrcaState, model string
 	data, _ := json.Marshal(state)
 	require(t, os.WriteFile(statePath, data, 0600))
 	c.PublicationPolicy.Publisher = "worker"
-	c.Host, c.Agent, c.Sandbox, c.WindowsSandbox, c.Model, c.ReasoningEffort, c.Claimant = "orca", "codex", "workspace-write", "unelevated", model, "", "operator"
-	if model != "" {
-		c.ReasoningEffort = "high"
-	}
-	c.Codex = Command{Executable: exe, WindowsSandbox: "unelevated"}
-	c.Orca = OrcaConfig{Executable: exe, Args: []string{"--fake", "orca-native", stateDir}, Shell: "powershell.exe", WaitTimeout: "2m"}
+	c.Host, c.Agent, c.Claimant = "orca", "codex", "operator"
 	c.configDigest = digestValue(c)
+	effort := ""
+	if model != "" {
+		effort = "high"
+	}
+	setTestImplementationProfiles(t, &c, codexworker.ProfileConfig{Executable: exe, WindowsSandbox: "unelevated", Model: model, ReasoningEffort: effort}, &orcaworker.ProfileConfig{Executable: exe, Args: []string{"--fake", "orca-native", stateDir}, Shell: "powershell.exe", WaitTimeout: "2m"})
 	commands := CommandService{Store: store, Project: c.Identity()}
 	input := taskBatchFixture(t, c, commit, batchTasks(8154), nil)
 	validation, err := commands.ValidateTaskBatch(ctx, c, input)
@@ -121,14 +122,15 @@ func TestWorkerEnvironmentER1ProbeAndSettlementGate(t *testing.T) {
 		t.Run(mode, func(t *testing.T) {
 			f := newEnvironmentFixture(t, fakeNativeOrcaState{ReadinessMode: mode}, "")
 			f.prepare(t)
-			if execution := f.service.executionRecord(f.run); execution.OrcaNative == nil {
+			if execution := f.service.executionRecord(f.run); testOrcaState(t, execution) == nil {
 				t.Fatalf("resource preparation did not bind the native worker: %+v", execution.Environment.Blocker)
 			}
 			f.poll(t)
 			wf, e := f.service.workflowRecords(f.run)
 			state := f.state(t)
 			if mode == "success" {
-				if state.Dispatches != 2 || !e.Environment.Ready || e.TurnNumber != 0 || e.CurrentTurnID != "" || len(e.OrcaNative.Turns) != 2 || e.OrcaNative.Turns[0].Purpose != "readiness" {
+				stateData := testOrcaState(t, e)
+				if state.Dispatches != 2 || !e.Environment.Ready || e.TurnNumber != 0 || e.CurrentTurnID != "" || len(stateData.Turns) != 2 || stateData.Turns[0].Purpose != "readiness" {
 					t.Fatalf("preparation leaked business state or failed: wf=%+v execution=%+v state=%+v", wf, e, state)
 				}
 				f.poll(t)

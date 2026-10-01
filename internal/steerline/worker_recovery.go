@@ -56,7 +56,7 @@ func (s *Service) beginLocalRecoveryAttempt(ctx context.Context, run *Run, mode 
 		execution.Process == nil || inspectProcess(execution.Process) != "process absent" {
 		return errors.New("the original worker process and its descendants are not confirmed stopped")
 	}
-	if mode == "continue" && !codexworker.ValidNativeID(execution.SessionID) {
+	if mode == "continue" && !codexworker.ValidNativeID(codexSessionID(execution)) {
 		return errors.New("the original Codex thread identity is unavailable; choose a new session")
 	}
 	if execution.Workspace.Worktree == "" || run.WorktreePath == nil || canonical(*run.WorktreePath) != canonical(execution.Workspace.Worktree) {
@@ -67,7 +67,11 @@ func (s *Service) beginLocalRecoveryAttempt(ctx context.Context, run *Run, mode 
 		return errors.New("the original worktree and branch could not be reverified")
 	}
 	applyWorkflowWorkspaceEvidence(run, execution, workspace)
-	if !codexBackend(fixed.config, run).ManagedProcessAbsent(codexBinding(execution)) {
+	binding, err := codexBinding(execution)
+	if err != nil {
+		return err
+	}
+	if !codexBackend(fixed.config, run).ManagedProcessAbsent(binding) {
 		return errors.New("the original process tree is not proven to be service managed")
 	}
 	if owned := s.ownedLocalProcesses[run.RunID]; owned != nil {
@@ -84,7 +88,6 @@ func (s *Service) beginLocalRecoveryAttempt(ctx context.Context, run *Run, mode 
 		return errors.New("an earlier external operation has an unknown outcome; reconcile it before continuing")
 	}
 	old.WorkerProcess = copyPtr(execution.Process)
-	old.WorkerSessionID = execution.SessionID
 	old.Status, old.UpdatedAt = "stopped", now()
 	if run.Decision != nil {
 		s.setDecisionStatus(run, "applied")
@@ -100,7 +103,8 @@ func (s *Service) beginLocalRecoveryAttempt(ctx context.Context, run *Run, mode 
 	})
 	execution.Process = nil
 	execution.CurrentAttemptID = newAttemptID
-	execution.AppServerEndpoint, execution.AppServerGeneration = "", ""
+	removeImplementationEnvelope(execution, codexworker.ExecutionBindingCodecKey)
+	execution.PolicyResources = nil
 	execution.PendingCommandID, execution.CurrentCommandID = "", ""
 	execution.PendingTurnID, execution.CurrentTurnID, execution.LastStoppedTurnID = "", "", ""
 	execution.PendingQuestions = nil
@@ -108,8 +112,13 @@ func (s *Service) beginLocalRecoveryAttempt(ctx context.Context, run *Run, mode 
 	execution.LogPath = nil
 	execution.Status, execution.LastTurnOutcome, execution.RecoveryState = "pending", "", "resuming"
 	execution.RecoveryRequired = false
-	if mode == "new_session" {
-		execution.SessionID = ""
+	if mode == "continue" {
+		execution.Generation = newID()
+		if err := applyCodexBinding(execution, codexworker.Binding{SessionID: binding.SessionID}); err != nil {
+			return err
+		}
+	} else {
+		execution.Generation = ""
 	}
 	execution.UpdatedAt = created
 	s.refreshRun(run)

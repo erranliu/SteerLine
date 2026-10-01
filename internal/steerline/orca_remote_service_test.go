@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	remote "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker"
 	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
@@ -27,7 +28,8 @@ func newRemoteProtocolFixture(t *testing.T) *remoteProtocolFixture {
 	dir := t.TempDir()
 	state := remoteFixtureState{Origin: "https://git.example/org/repo.git", Base: strings.Repeat("a", 40), Name: "worker", Path: "/srv/steerline/worker", Branch: "remote/worker", Coordinator: "term-remote-coordinator"}
 	require(t, os.WriteFile(filepath.Join(dir, "remote.json"), mustJSON(state), 0600))
-	c := Config{Repository: dir, CommandTimeout: "5s", Host: "orca_supervised", Agent: "codex", Model: "gpt-6-luna", ReasoningEffort: "high", Orca: OrcaConfig{Executable: os.Args[0], Args: []string{"--fake", "orca-remote-worker", dir}, WaitTimeout: "2s", Supervised: &SupervisedOrcaConfig{ConnectionID: "home-connection", EnvironmentID: "env-home", RepositorySelector: "id:repo-test", CoordinatorTerminal: state.Coordinator, PollInterval: "1ms"}}}
+	c := Config{Repository: dir, CommandTimeout: "5s", Host: "orca_supervised", Agent: "codex"}
+	setTestImplementationProfiles(t, &c, codexworker.ProfileConfig{Executable: os.Args[0], Model: "gpt-6-luna", ReasoningEffort: "high"}, &orcaworker.ProfileConfig{Executable: os.Args[0], Args: []string{"--fake", "orca-remote-worker", dir}, WaitTimeout: "2s", Shell: "cmd.exe"}, &remote.ProfileConfig{ConnectionID: "home-connection", EnvironmentID: "env-home", RepositorySelector: "id:repo-test", CoordinatorTerminal: state.Coordinator, PollInterval: "1ms", CapabilityReportVersion: 1})
 	cfg := remoteWorkerConfig(c)
 	cfg.ExpectedRemoteRuntime = "peer"
 	cfg.Origin = func(context.Context) ([]byte, error) { return []byte(state.Origin), nil }
@@ -52,7 +54,7 @@ func changeRemoteFixture(t *testing.T, dir string, change func(*remoteFixtureSta
 }
 func (f *remoteProtocolFixture) task(t *testing.T, prompt string) string {
 	t.Helper()
-	receipt, err := orcaworker.CreateTask(context.Background(), f.client.CenterCall, prompt, "fixture task", "remote-run", f.config.Orca.Supervised.CoordinatorTerminal, "center")
+	receipt, err := orcaworker.CreateTask(context.Background(), f.client.CenterCall, prompt, "fixture task", "remote-run", remoteProfileSettings(f.config).CoordinatorTerminal, "center")
 	require(t, err)
 	return receipt.ID
 }
@@ -216,11 +218,11 @@ func TestRemoteOrcaServiceAdmissionRejectsMissingPermissionEvidence(t *testing.T
 	require(t, store.Transact(ctx, func(tx DomainTx) error {
 		return tx.(*sqliteTx).UpdateProjectTaskAuthorityCAS(authority, authority.AuthorityVersion-1)
 	}))
-	c.Host, c.Agent, c.Model, c.ReasoningEffort = "orca_supervised", "codex", "gpt-6-luna", "high"
+	c.Host, c.Agent = "orca_supervised", "codex"
 	c.PublicationPolicy.Publisher = executionapi.PublisherWorker
 	c.PR = publication.Config{Kind: "gitea", BaseURL: "https://git.example", Repository: "org/repo"}
-	c.Orca = OrcaConfig{Executable: "must-not-be-called", Supervised: &SupervisedOrcaConfig{ConnectionID: "home-connection", EnvironmentID: "env-home", RepositorySelector: "id:repo-test"}}
-	c.Git.Executable, c.Codex.Executable = "must-not-be-called", "must-not-be-called"
+	setTestImplementationProfiles(t, &c, codexworker.ProfileConfig{Executable: "must-not-be-called", Model: "gpt-6-luna", ReasoningEffort: "high"}, &orcaworker.ProfileConfig{Executable: "must-not-be-called", Shell: "cmd.exe", WaitTimeout: "1m"}, &remote.ProfileConfig{ConnectionID: "home-connection", EnvironmentID: "env-home", RepositorySelector: "id:repo-test", CoordinatorTerminal: "term-coordinator", PollInterval: "1s", CapabilityReportVersion: 1})
+	c.Git.Executable = "must-not-be-called"
 	before, err := store.Query(ctx, c.Identity())
 	require(t, err)
 	_, err = commands.ClaimNativeTask(ctx, c, TaskClaimOptions{TaskID: "901", RequestID: newID(), ExpectedTaskVersion: 1, ExpectedAuthorityVersion: authority.AuthorityVersion, RequestedBy: "operator", Explicit: true})

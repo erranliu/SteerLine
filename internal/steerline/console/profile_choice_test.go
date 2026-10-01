@@ -9,15 +9,24 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/erranliu/SteerLine/internal/steerline"
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
+	"github.com/erranliu/SteerLine/internal/steerline/contracts"
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
+
+func consoleLocalProfile(id, name, model, effort string) steerline.ExecutionProfile {
+	payload, _ := codexworker.EncodeProfileConfig(codexworker.ProfileConfig{Executable: "codex", Model: model, ReasoningEffort: effort})
+	return steerline.ExecutionProfile{ID: id, Name: name, Host: "local", Agent: "codex", ImplementationConfigs: []executionapi.ImplementationConfigInput{{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 1, Payload: payload}}}
+}
 
 func TestReadyStartChoosesConfiguredProfileAndBindsRequest(t *testing.T) {
 	now := time.Now().UTC()
 	ref := testProject("profiles")
 	ref.Config.TaskAuthority = "native"
 	ref.Config.WorkflowProtocol = steerline.WorkerFlowVersion
-	ref.Config.Host, ref.Config.Agent, ref.Config.Sandbox = "local", "codex", "workspace-write"
-	other := steerline.ExecutionProfile{ID: "local-strong", Name: "本地 Codex 高强度", Host: "local", Agent: "codex", Model: "chosen-model", ReasoningEffort: "xhigh", Sandbox: "workspace-write"}
+	ref.Config.Host, ref.Config.Agent = "local", "codex"
+	ref.Config.ExecutionPolicy = executionapi.ExecutionPolicy{Filesystem: executionapi.FilesystemPolicy{ReadScope: "host", WriteScope: "workspace"}, Network: "deny", Escalation: "deny"}
+	other := consoleLocalProfile("local-strong", "本地 Codex 高强度", "chosen-model", "xhigh")
 	ref.Config.ExecutionProfiles = []steerline.ExecutionProfile{other}
 	control := &testControlClient{}
 	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{readySnapshot(ref, now)}, control, now)
@@ -52,14 +61,12 @@ func TestReadyStartChoosesConfiguredProfileAndBindsRequest(t *testing.T) {
 }
 
 func TestRunDetailUsesItsFixedProfileAfterProjectConfigChanges(t *testing.T) {
-	profile := steerline.ExecutionProfile{ID: "orca-remote", Name: "远程审查", Host: "orca_supervised", Agent: "codex", Model: "fixed-model", ReasoningEffort: "xhigh", Sandbox: "workspace-write"}
-	profile.PublicationPolicy.Publisher = "worker"
-	profile.Publication.Provider.Kind, profile.Publication.Provider.BaseURL, profile.Publication.Provider.Repository = "gitea", "https://fixed.invalid", "org/repo"
-	profile.Publication.Remote, profile.Publication.RemoteURL, profile.Publication.BaseBranch = "origin", "ssh://git@fixed.invalid/org/repo.git", "main"
-	profile.Publication.AuthenticationRefs = []string{"FIXED_TOKEN"}
-	fixed := profile.Freeze()
+	fixed := steerline.FixedExecutionProfile{ID: "orca-remote", Name: "远程审查", Host: "orca_supervised", Agent: "codex", ImplementationDisplay: []string{"Model：fixed-model", "Reasoning effort：xhigh", "目标环境：remote-env", "连接：fixed-connection"}, PublicationPolicy: executionapi.PublicationPolicy{Publisher: "worker"}, Publication: contracts.PublicationSettings{}}
+	fixed.Publication.Provider.Kind, fixed.Publication.Provider.BaseURL, fixed.Publication.Provider.Repository = "gitea", "https://fixed.invalid", "org/repo"
+	fixed.Publication.Remote, fixed.Publication.RemoteURL, fixed.Publication.BaseBranch = "origin", "ssh://git@fixed.invalid/org/repo.git", "main"
+	fixed.Publication.AuthenticationRefs = []string{"FIXED_TOKEN"}
 	run := &steerline.Run{RunID: "run-1", TaskID: "101", Backend: "orca", Agent: "codex"}
-	state := projectState{ref: ProjectRef{Config: steerline.Config{Host: "local", Model: "new-project-default"}}, snapshot: ProjectSnapshot{Domain: &steerline.DomainSnapshot{WorkflowRuns: []steerline.WorkflowRunRecord{{WorkflowRunID: run.RunID, ExecutionProfile: &fixed}}}}}
+	state := projectState{ref: ProjectRef{Config: steerline.Config{Host: "local", Agent: "codex", ImplementationDisplay: []string{"Model：new-project-default"}}}, snapshot: ProjectSnapshot{Domain: &steerline.DomainSnapshot{WorkflowRuns: []steerline.WorkflowRunRecord{{WorkflowRunID: run.RunID, ExecutionProfile: &fixed}}}}}
 	shown := strings.Join(renderFixedRunExecutionProfile(state, run), "\n")
 	for _, want := range []string{"远程审查", "orca-remote", "Orca 受监管远程", "fixed-model", "xhigh", "发布责任：worker", "https://fixed.invalid/org/repo", "ssh://git@fixed.invalid/org/repo.git", "FIXED_TOKEN"} {
 		if !strings.Contains(shown, want) {
@@ -72,7 +79,7 @@ func TestLongExecutionProfileListKeepsSelectionVisible(t *testing.T) {
 	ref := testProject("many")
 	ref.Config.Host, ref.Config.Agent = "local", "codex"
 	for i := 0; i < 28; i++ {
-		ref.Config.ExecutionProfiles = append(ref.Config.ExecutionProfiles, steerline.ExecutionProfile{ID: "profile-" + strconv.Itoa(i), Name: "方案 " + strconv.Itoa(i), Host: "local", Agent: "codex", Model: "model-" + strconv.Itoa(i), Sandbox: "workspace-write"})
+		ref.Config.ExecutionProfiles = append(ref.Config.ExecutionProfiles, consoleLocalProfile("profile-"+strconv.Itoa(i), "方案 "+strconv.Itoa(i), "model-"+strconv.Itoa(i), "high"))
 	}
 	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{readySnapshot(ref, time.Now().UTC())}, &testControlClient{}, time.Now().UTC())
 	m.width, m.height = 80, 24

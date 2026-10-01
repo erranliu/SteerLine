@@ -258,7 +258,8 @@ func (s *SQLiteStore) commitWorker(ctx context.Context, request workerCommit) (w
 				return errors.New("execution binding differs from the committed receipt")
 			}
 			execution := request.Execution.After
-			if string(ref.Backend) != execution.Backend || string(ref.Protocol) != execution.Protocol || ref.Agent.Name != execution.Agent || ref.Target.ID != execution.Target.ID || ref.Target.ConnectionID != execution.Target.ConnectionID || ref.Target.ExternalRuntime != execution.Target.ExternalRuntime || ref.Protocol == executionapi.ProtocolLocalCodexAppServer && ref.Generation != execution.AppServerGeneration {
+			binding, bindingErr := decodeCodexAppServerBinding(&execution)
+			if string(ref.Backend) != execution.Backend || string(ref.Protocol) != execution.Protocol || ref.Agent.Name != execution.Agent || ref.Target.ID != execution.Target.ID || ref.Target.ConnectionID != execution.Target.ConnectionID || ref.Target.ExternalRuntime != execution.Target.ExternalRuntime || ref.Protocol == executionapi.ProtocolLocalCodexAppServer && (bindingErr != nil || ref.Generation != binding.Generation) {
 				return errors.New("execution binding changed the fixed backend or generation")
 			}
 			if err := tx.putExecutionBinding(*ref); err != nil {

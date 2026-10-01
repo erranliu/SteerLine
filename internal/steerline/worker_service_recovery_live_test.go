@@ -76,7 +76,7 @@ func TestLocalCodexManualRecoveryLive(t *testing.T) {
 	_, execution := service.workflowRecords(run)
 	if execution == nil || execution.RecoveryState != "interrupted" || !execution.RecoveryRequired ||
 		run.Decision == nil || run.Decision.Status != "pending" || run.Decision.Request.QuestionRoute != nil ||
-		service.workers[run.RunID] != nil || run.AttemptID != oldAttempt || execution.SessionID != receipt.ThreadID ||
+		service.workers[run.RunID] != nil || run.AttemptID != oldAttempt || codexSessionID(execution) != receipt.ThreadID ||
 		execution.Workspace.Worktree != receipt.Workspace || !strings.Contains(run.Decision.Request.Context, "Should I reply A or B?") {
 		t.Fatalf("reopen did not wait for manual recovery: state=%q worker=%t decision=%+v", execution.RecoveryState, service.workers[run.RunID] != nil, run.Decision)
 	}
@@ -110,7 +110,7 @@ func TestLocalCodexManualRecoveryLive(t *testing.T) {
 	worker := service.workers[run.RunID]
 	_, execution = service.workflowRecords(run)
 	if worker == nil || execution.Process == nil || *execution.Process == receipt.Process || run.AttemptID == oldAttempt ||
-		len(service.domain.Attempts) != 2 || execution.SessionID != receipt.ThreadID ||
+		len(service.domain.Attempts) != 2 || codexSessionID(execution) != receipt.ThreadID ||
 		execution.Workspace.Worktree != receipt.Workspace || execution.PendingCommandID == "" && execution.CurrentCommandID == "" {
 		t.Fatalf("manual continuation did not bind a new process and Attempt: worker=%t attempt=%s state=%q", worker != nil, run.AttemptID, execution.RecoveryState)
 	}
@@ -134,7 +134,7 @@ func TestLocalCodexManualRecoveryLive(t *testing.T) {
 			if execution.LastStoppedTurnID == "" || execution.LastStoppedTurnID == receipt.TurnID || execution.TurnNumber < 2 {
 				t.Fatal("manual recovery did not complete a distinct native turn")
 			}
-			t.Logf("manual Codex recovery: old_pid=%d new_pid=%d thread=%s old_turn=%s new_turn=%s old_attempt=%s new_attempt=%s", receipt.Process.PID, execution.Process.PID, execution.SessionID, receipt.TurnID, execution.LastStoppedTurnID, oldAttempt, run.AttemptID)
+			t.Logf("manual Codex recovery: old_pid=%d new_pid=%d thread=%s old_turn=%s new_turn=%s old_attempt=%s new_attempt=%s", receipt.Process.PID, execution.Process.PID, codexSessionID(execution), receipt.TurnID, execution.LastStoppedTurnID, oldAttempt, run.AttemptID)
 			return
 		}
 	}

@@ -51,7 +51,7 @@ func recoverOrcaFeedback(s *Service, ctx context.Context, run *Run, execution *E
 	return false, nil
 }
 
-func reconcileNativeResultRelay(s *Service, ctx context.Context, run *Run, execution *ExecutionRecord, turn *OrcaNativeTurn) (bool, error) {
+func reconcileNativeResultRelay(s *Service, ctx context.Context, run *Run, execution *ExecutionRecord, turn *implementationTurnView) (bool, error) {
 	workflow := s.workflowRecord(run)
 	if turn.DoneMessageID == "" {
 		if execution.RecoveryRequired {
@@ -104,6 +104,6 @@ func reconcileNativeResultRelay(s *Service, ctx context.Context, run *Run, execu
 
 	return false, nil
 }
-func clearNativeResultRelay(e *ExecutionRecord, run *Run, t *OrcaNativeTurn) {
+func clearNativeResultRelay(e *ExecutionRecord, run *Run, t *implementationTurnView) {
 	removeNativeOrcaRelayRequest(e.Workspace.Worktree, run.RunID, t.TurnID)
 }

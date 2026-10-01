@@ -128,13 +128,13 @@ func preflightWorkerFlowState(ctx context.Context, c Config) error {
 		}
 	}
 	for _, execution := range snapshot.Executions {
-		if execution.Process != nil || execution.SessionID != "" {
+		if execution.Process != nil || execution.Generation != "" {
 			if execution.PolicyResources == nil {
 				return nativeErr("unsupported_schema", "bound execution requires its original policy resource snapshot; preserve external state")
 			}
 			matched := false
 			for _, workflow := range snapshot.WorkflowRuns {
-				if workflow.WorkflowRunID == execution.WorkflowRunID && workflow.ExecutionProfile != nil && verifyPolicyResources(execution.PolicyResources, workflow.ExecutionProfile.Digest, execution.Workspace.Worktree) == nil {
+				if workflow.WorkflowRunID == execution.WorkflowRunID && workflow.ExecutionProfile != nil && verifyPolicyResources(execution.PolicyResources, workflow.ExecutionProfile.Digest, execution.Workspace.Worktree, &execution) == nil {
 					matched = true
 				}
 			}
@@ -163,7 +163,8 @@ func preflightWorkerFlowState(ctx context.Context, c Config) error {
 			if p.Verified && (p.Receipt == nil || !p.Evidence.Verified || p.Receipt.ProbeIdentity != p.Probe || p.Receipt.InputSHA256 != p.InputDigest) {
 				return nativeErr("unsupported_schema", "managed Orca readiness lacks verified receipt/tool facts")
 			}
-			if env.Ready && (!p.Verified || p.Invalidated || execution.Process == nil || execution.OrcaNative == nil) {
+			state, stateErr := decodeOrcaExecutionState(&execution)
+			if env.Ready && (!p.Verified || p.Invalidated || execution.Process == nil || stateErr != nil || state == nil) {
 				return nativeErr("unsupported_schema", "managed Orca ready state has no verified original session")
 			}
 			if execution.Process != nil && (env.Runtime != execution.Process.RuntimeID || env.LaunchCommand == "" || len(env.WriteRoots) == 0 || canonical(env.WriteRoots[0]) != canonical(execution.Workspace.Worktree)) {

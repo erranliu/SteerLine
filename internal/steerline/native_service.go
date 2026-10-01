@@ -223,7 +223,8 @@ func (s *Service) reconcileNativePRCleanup(ctx context.Context, task TaskRecord,
 	}
 	workflow, execution := s.workflowRecords(run)
 	attempt := s.workflowAttempt(run, run.AttemptID)
-	if workflow == nil || execution == nil || attempt == nil || workflow.WorkflowVersion != WorkerFlowVersion || attempt.StepID != "worker" || workflow.PRURL != prURL || execution.SessionID == "" {
+	sessionID, _ := executionSessionFacts(execution)
+	if workflow == nil || execution == nil || attempt == nil || workflow.WorkflowVersion != WorkerFlowVersion || attempt.StepID != "worker" || workflow.PRURL != prURL || sessionID == "" {
 		return nativeErr("authority_mismatch", "discarded PR cleanup lacks its fixed worker flow, session and PR URL")
 	}
 	fixed, err := s.workerFlowContext(run)

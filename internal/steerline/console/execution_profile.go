@@ -58,8 +58,8 @@ func executionModelLabel(c steerline.Config) string {
 	if executionAgentName(c) != "codex" {
 		return "由所选 agent 决定"
 	}
-	if c.Model != "" {
-		return c.Model
+	if value := executionDisplayValue(c.ImplementationDisplay, "Model："); value != "" {
+		return value
 	}
 	return "未在全局配置固定（由 Codex 配置决定）"
 }
@@ -68,10 +68,19 @@ func executionEffortLabel(c steerline.Config) string {
 	if executionAgentName(c) != "codex" {
 		return "不适用"
 	}
-	if c.ReasoningEffort != "" {
-		return c.ReasoningEffort
+	if value := executionDisplayValue(c.ImplementationDisplay, "Reasoning effort："); value != "" {
+		return value
 	}
 	return "默认强度（未固定，由目标 agent 决定）"
+}
+
+func executionDisplayValue(fields []string, prefix string) string {
+	for _, field := range fields {
+		if strings.HasPrefix(field, prefix) {
+			return strings.TrimPrefix(field, prefix)
+		}
+	}
+	return ""
 }
 
 func renderFixedRunExecutionProfile(state projectState, run *steerline.Run) []string {
@@ -79,7 +88,7 @@ func renderFixedRunExecutionProfile(state projectState, run *steerline.Run) []st
 	if fixed == nil {
 		return nil
 	}
-	config := steerline.Config{Host: fixed.Host, Agent: fixed.Agent, Model: fixed.Model, ReasoningEffort: fixed.ReasoningEffort}
+	config := steerline.Config{Host: fixed.Host, Agent: fixed.Agent, ImplementationDisplay: fixed.ImplementationDisplay}
 	lines := []string{
 		"执行方案：" + safeTerminalInlineText(fixed.Name) + " [" + safeTerminalInlineText(fixed.ID) + "] · " + safeTerminalInlineText(executionHostLabel(config)),
 		"Agent / Model / Thinking：" + safeTerminalInlineText(fixed.Agent) + " / " + safeTerminalInlineText(executionModelLabel(config)) + " / " + safeTerminalInlineText(executionEffortLabel(config)),
@@ -98,6 +107,9 @@ func renderFixedRunExecutionProfile(state projectState, run *steerline.Run) []st
 
 	lines = append(lines, fmt.Sprintf("项目要求：读取 %s · 写入 %s · Git %t · 网络 %s · 越权 %s", fixed.ExecutionPolicy.Filesystem.ReadScope, fixed.ExecutionPolicy.Filesystem.WriteScope, fixed.ExecutionPolicy.Filesystem.GitMetadataWrite, fixed.ExecutionPolicy.Network, fixed.ExecutionPolicy.Escalation), "受理版本："+safeTerminalInlineText(fixed.AcceptedConfigVersion)+" · 来源："+safeTerminalInlineText(fixed.PolicySource))
 	lines = append(lines, "附加能力："+safeTerminalInlineText(strings.Join(fixed.ExecutionRequirements.Capabilities, ", ")))
+	for _, field := range fixed.ImplementationDisplay {
+		lines = append(lines, "实现配置："+safeTerminalInlineText(field))
+	}
 	for _, tool := range fixed.ExecutionRequirements.Tools {
 		version := tool.ExactVersion
 		if version == "" {
@@ -118,7 +130,7 @@ func renderFixedRunExecutionProfile(state projectState, run *steerline.Run) []st
 			status := "资源与工具未核验"
 			if resource := execution.PolicyResources; resource != nil {
 				status = "原生设置已核验；工具未核验"
-				lines = append(lines, "原生版本："+safeTerminalInlineText(resource.NativeVersion)+" · 写根："+safeTerminalInlineText(strings.Join(resource.WriteRoots, ", ")), "临时写根：无（隐式临时目录已排除）")
+				lines = append(lines, "已绑定写根："+safeTerminalInlineText(strings.Join(resource.WriteRoots, ", ")), "临时写根：无（隐式临时目录已排除）")
 			}
 			if execution.Environment != nil && execution.Environment.Ready {
 				status = "原会话工具与准备结算已核验"
@@ -127,7 +139,6 @@ func renderFixedRunExecutionProfile(state projectState, run *steerline.Run) []st
 		}
 	}
 	if fixed.Agent == "codex" {
-		lines = append(lines, "冻结权限："+safeTerminalInlineText(fixed.Sandbox)+" · Windows "+safeTerminalInlineText(fixed.WindowsSandbox)+" · Approval "+safeTerminalInlineText(fixed.ApprovalPolicy))
 		if state.snapshot.Domain != nil {
 			for _, execution := range state.snapshot.Domain.Executions {
 				if execution.ExecutionID != run.ExecutionID || execution.Environment == nil {
@@ -152,7 +163,7 @@ func renderRunExecutionProfileSummary(state projectState, run *steerline.Run) []
 	if fixed == nil {
 		return nil
 	}
-	config := steerline.Config{Host: fixed.Host, Agent: fixed.Agent, Model: fixed.Model, ReasoningEffort: fixed.ReasoningEffort}
+	config := steerline.Config{Host: fixed.Host, Agent: fixed.Agent, ImplementationDisplay: fixed.ImplementationDisplay}
 	return []string{"执行方案：" + safeTerminalInlineText(executionHostLabel(config)) + " · " + safeTerminalInlineText(executionAgentName(config)) + " · " + safeTerminalInlineText(executionModelLabel(config)) + " · " + safeTerminalInlineText(executionEffortLabel(config))}
 }
 

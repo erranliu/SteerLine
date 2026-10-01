@@ -235,6 +235,7 @@ func selectedNativeDeliveryState(snapshot DomainSnapshot, taskID, workflowRunID 
 }
 
 func validateNativeDeliveryGates(record TaskRecord, contract TaskContract, workflow WorkflowRunRecord, execution ExecutionRecord) (string, error) {
+	sessionID, _ := executionSessionFacts(&execution)
 	return taskdomain.DeliveryPR(record, contract, taskdomain.DeliveryGate{
 		WorkflowVersion:     workflow.WorkflowVersion,
 		WorkflowTaskID:      workflow.TaskID,
@@ -243,7 +244,7 @@ func validateNativeDeliveryGates(record TaskRecord, contract TaskContract, workf
 		ExecutionWorkflowID: execution.WorkflowRunID,
 		WorkflowRunID:       workflow.WorkflowRunID,
 		PRURL:               workflow.PRURL,
-		SessionID:           execution.SessionID,
+		SessionID:           sessionID,
 		WorkspaceBranch:     execution.Workspace.Branch,
 		Phase:               workflow.Phase,
 	}, WorkerFlowVersion)
@@ -320,7 +321,7 @@ func (c CommandService) commitNativeDelivery(ctx context.Context, s *SQLiteStore
 			return err
 		}
 		if digestValue(currentWorkflow.ExecutionProfile) != digestValue(workflow.ExecutionProfile) || digestValue(currentExecution.PolicyResources) != digestValue(execution.PolicyResources) || currentWorkflow.WorkflowRunID != workflow.WorkflowRunID || currentWorkflow.SelectedResult != execution.ExecutionID || currentPRURL != prURL ||
-			currentWorkflow.WorkflowVersion != workflow.WorkflowVersion || currentExecution.SessionID != execution.SessionID ||
+			currentWorkflow.WorkflowVersion != workflow.WorkflowVersion || digestValue(currentExecution.ImplementationData) != digestValue(execution.ImplementationData) ||
 			currentExecution.Workspace.Branch != execution.Workspace.Branch {
 			return nativeErr("immutable_task", "selected result or PR binding changed during platform verification")
 		}

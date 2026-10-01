@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	remote "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker"
+	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	"os"
 	"path/filepath"
@@ -30,24 +32,6 @@ func executionPublicationFixture() executionapi.PublicationPolicy {
 }
 func hostPublicationProviderFixture() publication.Config {
 	return publication.Config{Kind: "command", BaseURL: "https://github.com", Repository: "owner/repo", Query: Command{Executable: os.Args[0], Args: []string{"api", "repos/{repository}/pulls/{number}"}}, Close: Command{Executable: os.Args[0], Args: []string{"pr", "close", "{pr_url}"}}}
-}
-
-// Historical evidence is verified in its original v2 format only here. It is
-// deliberately rejected by the production v3 validator, never migrated.
-func verifyHistoricalPolicyProfile(t *testing.T, p FixedExecutionProfile) bool {
-	t.Helper()
-	rebuilt := ExecutionProfile{ExecutionPolicy: p.ExecutionPolicy, AcceptedConfigVersion: p.AcceptedConfigVersion, PolicySource: p.PolicySource, ID: p.ID, Name: p.Name, Host: p.Host, Agent: p.Agent, Model: p.Model, ReasoningEffort: p.ReasoningEffort, Sandbox: p.Sandbox, WindowsSandbox: p.WindowsSandbox, CodexProfile: p.CodexProfile, Codex: p.Codex, Orca: p.Orca}
-	digest := digestValue(struct {
-		ExecutionProfile
-		Version               int
-		Policy                executionapi.ExecutionPolicy
-		AcceptedConfigVersion string
-		PolicySource          string
-		Sandbox               string
-		WindowsSandbox        string
-		Contract              string
-	}{rebuilt, 2, p.ExecutionPolicy, p.AcceptedConfigVersion, p.PolicySource, p.Sandbox, p.WindowsSandbox, codexworker.PolicyContract})
-	return p.Version == 2 && p.Digest == digest && p.PolicyDigest == digestValue(p.ExecutionPolicy) && !verifyFixedExecutionProfile(p)
 }
 
 func TestPublicationPolicyFrozenConfigurationAndCredentials(t *testing.T) {
@@ -137,7 +121,8 @@ func TestPublicationOriginalProviderAfterRestartAndRemoteDrift(t *testing.T) {
 }
 
 func TestPublicationAndPermissionChecksRemainCombined(t *testing.T) {
-	c := Config{WorkflowProtocol: WorkerFlowVersion, ExecutionPolicy: workspacePolicyFixture(), PublicationPolicy: executionapi.PublicationPolicy{Publisher: "worker"}, PR: publication.Config{Kind: "gitea", BaseURL: "https://forge.invalid", Repository: "org/repo"}, Host: "orca_supervised", Agent: "codex", Orca: OrcaConfig{Supervised: &SupervisedOrcaConfig{EnvironmentID: "remote-env", ConnectionID: "peer", RepositorySelector: "id:repo"}}}
+	c := Config{WorkflowProtocol: WorkerFlowVersion, ExecutionPolicy: workspacePolicyFixture(), PublicationPolicy: executionapi.PublicationPolicy{Publisher: "worker"}, PR: publication.Config{Kind: "gitea", BaseURL: "https://forge.invalid", Repository: "org/repo"}, Host: "orca_supervised", Agent: "codex"}
+	setTestImplementationProfiles(t, &c, codexworker.ProfileConfig{Executable: "codex", Model: "gpt-6-luna", ReasoningEffort: "high"}, &orcaworker.ProfileConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "1m"}, &remote.ProfileConfig{ConnectionID: "peer", EnvironmentID: "remote-env", RepositorySelector: "id:repo", CoordinatorTerminal: "terminal", PollInterval: "1s", CapabilityReportVersion: 1})
 	if err := publication.CheckPolicy(c.PublicationPolicy, c.Host, c.Agent, c.PR); err != nil {
 		t.Fatal("existing remote worker publication was removed")
 	}
@@ -148,7 +133,9 @@ func TestPublicationAndPermissionChecksRemainCombined(t *testing.T) {
 	c.PublicationPolicy.Publisher = "host_service"
 	c.PR = hostPublicationProviderFixture()
 	c.ExecutionPolicy.Network = "deny"
-	c.Codex.Args = []string{"--search"}
+	settings := codexProfileSettings(c)
+	settings.Args = []string{"--search"}
+	setTestCodexProfile(t, &c, settings)
 	if err := validateWorkflowConfig(&c, nil); err == nil || !strings.Contains(err.Error(), "live web search") {
 		t.Fatalf("publication bypassed network deny: %v", err)
 	}
@@ -159,10 +146,10 @@ func TestRemotePublicationClaimRequiresPermissionEvidence(t *testing.T) {
 	c.Host, c.Agent = "orca_supervised", "codex"
 	c.PublicationPolicy.Publisher = executionapi.PublisherWorker
 	c.PR = publication.Config{Kind: "gitea", BaseURL: "https://forge.invalid", Repository: "org/repo"}
-	c.Orca.Supervised = &SupervisedOrcaConfig{ConnectionID: "peer", EnvironmentID: "remote-env", RepositorySelector: "id:repo", ExpectedCodexVersion: "0.159.2"}
+	setTestImplementationProfiles(t, &c, codexworker.ProfileConfig{Executable: "must-not-be-called", Model: "gpt-6-luna", ReasoningEffort: "high"}, &orcaworker.ProfileConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "1m"}, &remote.ProfileConfig{ConnectionID: "peer", EnvironmentID: "remote-env", RepositorySelector: "id:repo", CoordinatorTerminal: "terminal", ExpectedCodexVersion: "0.159.2", PollInterval: "1s", CapabilityReportVersion: 1})
 	// Missing enforcement evidence must reject before Git, version, or remote
 	// probes, even though this route's existing worker publication is supported.
-	c.Git.Executable, c.Codex.Executable = "must-not-be-called", "must-not-be-called"
+	c.Git.Executable = "must-not-be-called"
 	require(t, publication.CheckPolicy(c.PublicationPolicy, c.Host, c.Agent, c.PR))
 	before, err := store.Query(context.Background(), c.Identity())
 	require(t, err)

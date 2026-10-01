@@ -12,7 +12,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
 
-const executionImplementationVersion = "builtin-execution-v1"
+const executionImplementationVersion = "builtin-execution-v2"
 
 // Registration keys identify implementations; concrete targets remain separate.
 // All service callbacks run on the center writer and retain its existing commits.
@@ -24,8 +24,8 @@ type executionRegistrationKey struct {
 type executionRegistration struct {
 	VerifyWorker         func(*Service, context.Context, *Run, *ExecutionRecord) error
 	OrcaOperations       func(Config) orcaExecutionOperations
-	RelayResult          func(*Service, context.Context, *Run, *ExecutionRecord, *OrcaNativeTurn) (bool, error)
-	ClearRelay           func(*ExecutionRecord, *Run, *OrcaNativeTurn)
+	RelayResult          func(*Service, context.Context, *Run, *ExecutionRecord, *implementationTurnView) (bool, error)
+	ClearRelay           func(*ExecutionRecord, *Run, *implementationTurnView)
 	WorkspaceRequest     func(*Run) (workerWorkspacePreparationInput, error)
 	PrepareWorkspace     func(*Service, context.Context, *Run, string) (bool, error)
 	WaitFacts            func(*Run, *ExecutionRecord) workerWaitFacts
@@ -110,10 +110,11 @@ func init() {
 			PrepareFeedback: prepareOrcaFeedback, RecoverFeedback: recoverOrcaFeedback, DeliverFeedback: (*Service).applyNativeOrcaDecision,
 			Backend: func(c Config) executionapi.ExecutionBackend { return orcaworker.NewBackend(nativeOrcaConfig(c)) },
 			Target: func(c Config) executionapi.ExecutionTarget {
+				settings := orcaProfileSettings(c)
 				return executionapi.ExecutionTarget{ID: "orca:" + digestValue(struct {
 					Executable string
 					Args       []string
-				}{c.Orca.Executable, c.Orca.Args})[:24]}
+				}{settings.Executable, settings.Args})[:24]}
 			},
 			ProbeRequirements: func(ctx context.Context, c Config) (executionapi.CapabilityReport, error) {
 				return orcaworker.NewBackend(nativeOrcaConfig(c)).Probe(ctx, targetFor(c), agentFor(c))
@@ -126,10 +127,11 @@ func init() {
 			DeliverFeedback: (*Service).applyNativeOrcaDecision,
 			Backend:         func(c Config) executionapi.ExecutionBackend { return remote.NewBackend(remoteWorkerConfig(c)) },
 			Target: func(c Config) executionapi.ExecutionTarget {
-				if c.Orca.Supervised == nil {
+				supervised := remoteProfileSettings(c)
+				if supervised.ConnectionID == "" {
 					return executionapi.ExecutionTarget{}
 				}
-				return executionapi.ExecutionTarget{ID: "orca-supervised:" + c.Orca.Supervised.ConnectionID, ConnectionID: c.Orca.Supervised.ConnectionID, ExternalRuntime: c.Orca.Supervised.EnvironmentID}
+				return executionapi.ExecutionTarget{ID: "orca-supervised:" + supervised.ConnectionID, ConnectionID: supervised.ConnectionID, ExternalRuntime: supervised.EnvironmentID}
 			},
 			ProbeRequirements: func(ctx context.Context, c Config) (executionapi.CapabilityReport, error) {
 				return remote.NewBackend(remoteWorkerConfig(c)).Probe(ctx, targetFor(c), agentFor(c))

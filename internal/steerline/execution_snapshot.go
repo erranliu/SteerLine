@@ -3,6 +3,7 @@ package steerline
 import (
 	"context"
 	"errors"
+	"fmt"
 	"reflect"
 	"runtime"
 	"strings"
@@ -10,14 +11,16 @@ import (
 
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 func policyNativeVersion(ctx context.Context, c Config) (string, error) {
 	if err := validateWorkflowConfig(&c, nil); err != nil {
 		return "", err
 	}
-	native, err := codexworker.NativeExecutable(c.Codex.Executable)
+	native, err := codexworker.ProfileExecutable(c.ImplementationData, codexworker.ProfileConfigIdentity{
+		ProjectID: configurationProjectIdentity(c), ProfileID: c.selectedProfileID,
+		AcceptedConfigVersion: c.acceptedConfigVersion(),
+	})
 	if err != nil {
 		return "", err
 	}
@@ -29,61 +32,59 @@ func policyNativeVersion(ctx context.Context, c Config) (string, error) {
 	return version, codexworker.VerifyPolicyVersion(version)
 }
 func policyResourceDigest(p contracts.PolicyResources) string { p.Digest = ""; return digestValue(p) }
-func verifyPolicyResources(p *contracts.PolicyResources, profileDigest, workspace string) error {
-	if p == nil || p.Version != 2 || p.Digest != policyResourceDigest(*p) || p.ProfileDigest != profileDigest || p.Workspace != workspace || p.Contract != codexworker.PolicyContract || codexworker.VerifyPolicyVersion(p.NativeVersion) != nil || len(p.TemporaryRoots) != 0 {
+func verifyPolicyResources(p *contracts.PolicyResources, profileDigest, workspace string, records ...*ExecutionRecord) error {
+	if p == nil || p.Version != 3 || p.Digest != policyResourceDigest(*p) || p.ProfileDigest != profileDigest || p.Workspace != workspace || len(p.TemporaryRoots) != 0 || p.ImplementationData.ConfigDigest != profileDigest {
 		return errors.New("execution policy resource snapshot differs from original settings or identity")
+	}
+	identity := codexworker.PolicyResourceIdentity{ProjectID: p.ImplementationData.ProjectID, ExecutionID: p.ImplementationData.ExecutionID, AttemptID: p.ImplementationData.AttemptID, Generation: p.ImplementationData.Generation, ConfigDigest: profileDigest}
+	if len(records) > 0 && records[0] != nil {
+		record := records[0]
+		identity = codexworker.PolicyResourceIdentity{ProjectID: record.ProjectIdentity, ExecutionID: record.ExecutionID, AttemptID: record.CurrentAttemptID, Generation: record.Generation, ConfigDigest: record.ConfigurationDigest}
+	}
+	if _, err := codexworker.DecodePolicyResourceEnvelope(p.ImplementationData, identity); err != nil {
+		return fmt.Errorf("execution policy resource codec rejected its binding: %w", err)
 	}
 	return nil
 }
 func bindPolicyResources(ctx context.Context, c Config, e *ExecutionRecord, workspace string, linkedArgs []string) error {
-	if e.PolicyResources == nil && (e.Process != nil || e.SessionID != "") {
+	manualRestart := e.Process == nil && e.RecoveryState == "resuming"
+	if e.PolicyResources == nil && (e.Process != nil || e.Generation != "") && !manualRestart {
 		return errors.New("original execution policy resource snapshot is missing; preserve the native session")
 	}
-	permissions, err := codexworker.CompilePolicy(c.ExecutionPolicy, runtime.GOOS, c.hostName(), c.agentName(), c.Codex.WindowsSandbox, c.Profile, c.Codex.Args)
-	if err != nil {
+	if err := validateWorkflowConfig(&c, nil); err != nil {
 		return err
 	}
-	version, err := policyNativeVersion(ctx, c)
-	if err != nil {
-		return err
+	if e.Generation == "" {
+		e.Generation = newID()
 	}
-	roots, err := codexworker.WritableRoots(linkedArgs)
-	if err != nil {
-		return err
-	}
-	var command executionapi.LaunchCommand
-	if c.hostName() == "orca" {
-		native, nativeErr := codexworker.NativeExecutable(c.Codex.Executable)
-		if nativeErr != nil {
-			return nativeErr
-		}
-		command, err = codexworker.ManagedCommand(codexworker.ManagedCommandOptions{Policy: c.ExecutionPolicy, Host: c.hostName(), Agent: c.agentName(), Executable: native, Args: c.Codex.Args, WindowsSandbox: permissions.WindowsSandbox, Sandbox: permissions.Sandbox, Model: c.Model, ReasoningEffort: c.ReasoningEffort, WorkingDirectory: workspace, WriteRoots: roots})
-	} else {
-		native, nativeErr := codexworker.NativeExecutable(c.Codex.Executable)
-		if nativeErr != nil {
-			return nativeErr
-		}
-		command = executionapi.LaunchCommand{Executable: native, Args: append(append([]string(nil), c.Codex.Args...), permissions.Args()...), WorkingDirectory: workspace}
-	}
-	if err != nil {
-		return err
-	}
-	if permissions.Sandbox == "workspace-write" {
-		roots = append([]string{workspace}, roots...)
-	}
-	evidence := contracts.PolicyResources{Version: 2, ProfileDigest: c.fixedProfileDigest, NativeVersion: version, Contract: permissions.Contract, Workspace: workspace, WriteRoots: roots, TemporaryRoots: []string{}, Settings: command}
+	profileDigest := c.fixedProfileDigest
 	// A named profile retains its selected name/ID in the full configuration digest.
-	if evidence.ProfileDigest == "" {
-		evidence.ProfileDigest = c.projectExecutionProfile().Digest()
+	if profileDigest == "" {
+		profileDigest = c.projectExecutionProfile().Digest()
 	}
+	if e.ConfigurationDigest != "" && e.ConfigurationDigest != profileDigest {
+		return errors.New("execution configuration digest differs from the accepted profile")
+	}
+	e.ConfigurationDigest = profileDigest
+	identity := codexworker.PolicyResourceIdentity{ProjectID: e.ProjectIdentity, ExecutionID: e.ExecutionID, AttemptID: e.CurrentAttemptID, Generation: e.Generation, ConfigDigest: profileDigest}
+	bound, err := codexworker.BuildPolicyResourceEnvelope(ctx, codexworker.PolicyResourceBuildRequest{
+		ProfileData:      c.ImplementationData,
+		ProfileIdentity:  codexworker.ProfileConfigIdentity{ProjectID: configurationProjectIdentity(c), ProfileID: c.selectedProfileID, AcceptedConfigVersion: c.acceptedConfigVersion()},
+		ResourceIdentity: identity, Policy: c.ExecutionPolicy, Host: c.hostName(), Agent: c.agentName(),
+		GOOS: runtime.GOOS, Workspace: workspace, LinkedWriteArgs: linkedArgs,
+	}, func(ctx context.Context, executable string) (string, error) {
+		raw, err := (Runner{Dir: c.Repository, Timeout: min(positiveDuration(c.CommandTimeout, 10*time.Second), 10*time.Second)}).Output(ctx, Command{Executable: executable}, "--version")
+		if err != nil {
+			return "", err
+		}
+		return strings.TrimSpace(string(raw)), nil
+	})
+	if err != nil {
+		return err
+	}
+	evidence := contracts.PolicyResources{Version: 3, ProfileDigest: profileDigest, Workspace: workspace, WriteRoots: bound.WriteRoots, TemporaryRoots: []string{}, ImplementationData: bound.Envelope}
 	evidence.Digest = policyResourceDigest(evidence)
 	if e.PolicyResources != nil {
-		// Windows native resolution may normalize slashes/case. Preserve the
-		// original receipt bytes and digest when the executable identity is equal.
-		if canonical(e.PolicyResources.Settings.Executable) == canonical(evidence.Settings.Executable) {
-			evidence.Settings.Executable = e.PolicyResources.Settings.Executable
-			evidence.Digest = policyResourceDigest(evidence)
-		}
 		if !reflect.DeepEqual(*e.PolicyResources, evidence) {
 			return errors.New("native resources/settings expanded or changed after binding")
 		}

@@ -8,7 +8,7 @@ import (
 
 // Verified start facts can be replayed after recovery. Only the first
 // confirmed start consumes a pending Command and accepts post-turn feedback.
-func (s *Service) recordWorkerTurnStarted(run *Run, workflow *WorkflowRunRecord, execution *ExecutionRecord, turnID string) (string, error) {
+func (s *Service) recordWorkerTurnStarted(run *Run, workflow *WorkflowRunRecord, execution *ExecutionRecord, turnID string, sessionFacts ...string) (string, error) {
 	commandID := execution.PendingCommandID
 	fresh := commandID != ""
 	if !fresh && execution.CurrentTurnID == turnID && execution.LastStoppedTurnID != turnID {
@@ -27,7 +27,11 @@ func (s *Service) recordWorkerTurnStarted(run *Run, workflow *WorkflowRunRecord,
 	if operation == nil {
 		return "", errors.New("turn start has no saved input operation")
 	}
-	if err := BeginWorkerTurn(workflow, execution, execution.SessionID, turnID); err != nil {
+	sessionID, _ := executionSessionFacts(execution)
+	if len(sessionFacts) > 0 && sessionFacts[0] != "" {
+		sessionID = sessionFacts[0]
+	}
+	if err := BeginWorkerTurn(workflow, execution, sessionID, turnID); err != nil {
 		return "", err
 	}
 	execution.CurrentCommandID, execution.PendingCommandID = commandID, ""
@@ -46,7 +50,7 @@ func (s *Service) recordWorkerTurnStarted(run *Run, workflow *WorkflowRunRecord,
 	if operation.Status == "confirmed" {
 		return operation.OperationID, nil
 	}
-	return operation.OperationID, TransitionOperation(operation, "confirmed", turnID, mustJSON(map[string]string{"session_id": execution.SessionID, "turn_id": turnID}), "")
+	return operation.OperationID, TransitionOperation(operation, "confirmed", turnID, mustJSON(map[string]string{"session_id": sessionID, "turn_id": turnID}), "")
 }
 
 func (s *Service) eventWorkerFlowFor(run *Run, ev WorkerEvent) (resultErr error) {
@@ -86,14 +90,13 @@ func (s *Service) eventWorkerFlowFor(run *Run, ev WorkerEvent) (resultErr error)
 		return errors.New(ev.Diagnostic)
 	}
 	if fact.SessionID != "" {
-		if execution.SessionID != "" && fact.SessionID != execution.SessionID {
+		sessionID, _ := executionSessionFacts(execution)
+		if sessionID != "" && fact.SessionID != sessionID || sessionID == "" && execution.Process != nil {
 			return ErrWorkerTurnStale
 		}
-		execution.SessionID = fact.SessionID
-		s.refreshRun(run)
 	}
 	if fact.StartedTurnID != "" && fact.Kind == executionapi.EventStarted {
-		opID, err := s.recordWorkerTurnStarted(run, workflow, execution, fact.StartedTurnID)
+		opID, err := s.recordWorkerTurnStarted(run, workflow, execution, fact.StartedTurnID, fact.SessionID)
 		if err != nil {
 			return err
 		}
@@ -133,7 +136,8 @@ func (s *Service) eventWorkerFlowFor(run *Run, ev WorkerEvent) (resultErr error)
 	}
 	if reply := fact.ToolReply; reply != nil && run.Decision != nil && run.Decision.Request.QuestionRoute != nil {
 		route := run.Decision.Request.QuestionRoute
-		if reply.CallID == route.QuestionID && (reply.TurnID == "" || reply.TurnID == route.TurnID) && (reply.ThreadID == "" || reply.ThreadID == execution.SessionID) {
+		sessionID, _ := executionSessionFacts(execution)
+		if reply.CallID == route.QuestionID && (reply.TurnID == "" || reply.TurnID == route.TurnID) && (reply.ThreadID == "" || reply.ThreadID == sessionID) {
 			if run.Decision.Status == "answer_saved" && reply.Status == "completed" && reply.Success != nil && *reply.Success && reply.MatchesAnswers(run.Decision.Answers) {
 				confirmed := false
 				for _, op := range s.domain.Operations {
@@ -246,8 +250,9 @@ func validateQuestionRouteForRun(run *Run, execution *ExecutionRecord, route *ex
 	if run == nil || execution == nil || route == nil {
 		return errors.New("question route has no fixed execution")
 	}
+	_, generation := executionSessionFacts(execution)
 	want := executionapi.QuestionRouteIdentity{ProjectID: execution.ProjectIdentity, WorkflowRunID: run.RunID,
-		ExecutionID: execution.ExecutionID, AttemptID: run.AttemptID, Generation: execution.AppServerGeneration,
+		ExecutionID: execution.ExecutionID, AttemptID: run.AttemptID, Generation: generation,
 		TurnID: route.TurnID, QuestionID: route.QuestionID}
 	if route.TurnID != execution.CurrentTurnID && route.TurnID != execution.PendingTurnID {
 		return ErrWorkerTurnStale

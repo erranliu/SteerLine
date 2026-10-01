@@ -27,22 +27,23 @@ func controlFingerprint(value any) string {
 		}{v.Phase, v.SelectedResult, v.PRURL, v.PRState, v.PendingDecisions})
 	case ExecutionRecord:
 		return recordFingerprint(struct {
-			Status, Outcome, Session, Decision, Step                              string
+			Status, Outcome, Decision, Step                                        string
 			PendingCommand, CurrentCommand, PendingTurn, CurrentTurn, StoppedTurn string
 			TurnNumber                                                            uint64
 			Process                                                               *executionapi.ProcessIdentity
 			Target                                                                executionapi.ExecutionTarget
 			Intent                                                                *executionapi.WorkspaceIntent
-			Worktree, Branch, Base, Endpoint, Generation                          string
+			Worktree, Branch, Base, Generation, ConfigurationDigest               string
+			ImplementationData                                                    []executionapi.ImplementationDataEnvelope
 			PendingQuestions                                                      []PendingQuestion
 			ManualStop                                                            *ManualStopConfirmation
 			Attempt, Owner, Recovery                                              string
 			RecoveryRequired                                                      bool
 			RecoveryVersion                                                       uint64
 			RecoveryMarkedAt                                                      *time.Time
-		}{v.Status, v.LastTurnOutcome, v.SessionID, v.DecisionID, v.CurrentStep,
+		}{v.Status, v.LastTurnOutcome, v.DecisionID, v.CurrentStep,
 			v.PendingCommandID, v.CurrentCommandID, v.PendingTurnID, v.CurrentTurnID, v.LastStoppedTurnID, v.TurnNumber,
-			v.Process, v.Target, v.WorkspaceIntent, v.Workspace.Worktree, v.Workspace.Branch, v.Workspace.Base, v.AppServerEndpoint, v.AppServerGeneration, v.PendingQuestions, v.ManualStop,
+			v.Process, v.Target, v.WorkspaceIntent, v.Workspace.Worktree, v.Workspace.Branch, v.Workspace.Base, v.Generation, v.ConfigurationDigest, v.ImplementationData, v.PendingQuestions, v.ManualStop,
 			v.CurrentAttemptID, v.OwnerServiceInstanceID, v.RecoveryState, v.RecoveryRequired, v.RecoveryVersion, v.RecoveryMarkedAt})
 	case DecisionRecord:
 		return recordFingerprint(struct {

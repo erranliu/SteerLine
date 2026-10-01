@@ -42,12 +42,14 @@ func TestAppServerPendingFeedbackRecoveryUsesNewTurnReceipt(t *testing.T) {
 			}
 			c := Config{RunDir: t.TempDir()}
 			run := &Run{RunID: newID(), WorktreePath: &workspace}
-			execution := &ExecutionRecord{Process: identity, SessionID: workerFlowMockSession, AppServerEndpoint: "ws://" + listener.Addr().String(), AppServerGeneration: "generation", CurrentCommandID: newID(), CurrentTurnID: first, LastStoppedTurnID: first, PendingCommandID: newID()}
+			endpoint := "ws://" + listener.Addr().String()
+			execution := &ExecutionRecord{Process: identity, CurrentCommandID: newID(), CurrentTurnID: first, LastStoppedTurnID: first, PendingCommandID: newID()}
+			setTestCodexBinding(t, execution, endpoint, "generation", workerFlowMockSession)
 			serverDir := filepath.Join(c.RunDir, "runs", run.RunID, "app-server")
 			if err := os.MkdirAll(serverDir, 0700); err != nil {
 				t.Fatal(err)
 			}
-			if err := AtomicWrite(filepath.Join(serverDir, "process.json"), mustJSON(codexworker.ProcessReceipt{Endpoint: execution.AppServerEndpoint, Generation: execution.AppServerGeneration, Identity: *identity})); err != nil {
+			if err := AtomicWrite(filepath.Join(serverDir, "process.json"), mustJSON(codexworker.ProcessReceipt{Endpoint: endpoint, Generation: "generation", Identity: *identity})); err != nil {
 				t.Fatal(err)
 			}
 			turnDir := filepath.Join(c.RunDir, "runs", run.RunID, "turns", execution.PendingCommandID)
@@ -87,7 +89,8 @@ func TestAppServerStartReplayPreservesNativeSavedAnswer(t *testing.T) {
 	commandID := newID()
 	run := &Run{RunID: newID(), ExecutionID: newID(), AttemptID: newID(), Decision: &DecisionState{Status: "answer_saved"}}
 	workflow := &WorkflowRunRecord{WorkflowRunID: run.RunID, WorkflowVersion: WorkerFlowVersion, Phase: "waiting_decision"}
-	execution := &ExecutionRecord{ExecutionID: run.ExecutionID, WorkflowRunID: run.RunID, CurrentStep: "worker", SessionID: workerFlowMockSession, CurrentTurnID: first, LastStoppedTurnID: first, PendingTurnID: second, PendingCommandID: commandID, TurnNumber: 1}
+	execution := &ExecutionRecord{ExecutionID: run.ExecutionID, WorkflowRunID: run.RunID, CurrentStep: "worker", CurrentTurnID: first, LastStoppedTurnID: first, PendingTurnID: second, PendingCommandID: commandID, TurnNumber: 1}
+	setTestCodexBinding(t, execution, "ws://127.0.0.1:12345", "generation", workerFlowMockSession)
 	service := &Service{domain: DomainSnapshot{Operations: []OperationRecord{{OperationID: newID(), IdempotencyKey: "worker-turn:" + run.ExecutionID + ":" + commandID, Status: "outcome_unknown"}}}}
 	run.TaskID, run.DomainTaskID, workflow.TaskID = "task", "task", "task"
 	service.domain.Tasks = []TaskRecord{{TaskID: "task", Status: "in_progress"}}
@@ -199,7 +202,7 @@ func appServerAuditServiceWithRequirements(t *testing.T, policy executionapi.Exe
 		c.PR.TokenEnv = tokenEnv
 	}
 	if policy.Filesystem.WriteScope == "none" {
-		c.Codex.Executable = os.Args[0]
+		setTestCodexProfile(t, &c, codexworker.ProfileConfig{Executable: os.Args[0]})
 	}
 	require(t, validateWorkflowConfig(&c, nil))
 	require(t, c.prepareWorktreeRoot())
@@ -240,9 +243,10 @@ func appServerAuditServiceWithRequirements(t *testing.T, policy executionapi.Exe
 func TestAppServerUnknownTurnDoesNotOfferPostTurnFeedback(t *testing.T) {
 	service, run := appServerAuditService(t)
 	workflow, execution := service.workflowRecords(run)
-	execution.SessionID, execution.CurrentTurnID, execution.CurrentCommandID = workerFlowMockSession, "00000000-0000-0000-0000-000000000001", newID()
+	execution.CurrentTurnID, execution.CurrentCommandID = "00000000-0000-0000-0000-000000000001", newID()
+	setTestCodexBinding(t, execution, "ws://127.0.0.1:12345", "generation", workerFlowMockSession)
 	execution.Status, workflow.Phase = "blocked", "executing"
-	run.SessionID, run.ExecutionStatus = ptr(execution.SessionID), "unknown"
+	run.ExecutionStatus = "unknown"
 	if err := service.waitWorkerFlow(run, "observation disconnected"); err != nil {
 		t.Fatal(err)
 	}
@@ -274,15 +278,15 @@ func TestAppServerSlowRecoveryLeavesServiceWriterAvailable(t *testing.T) {
 	}
 	defer listener.Close()
 	execution.Process, run.Process = identity, identity
-	execution.AppServerEndpoint, execution.AppServerGeneration = "ws://"+listener.Addr().String(), "generation"
-	execution.SessionID, execution.CurrentTurnID, execution.CurrentCommandID = workerFlowMockSession, "00000000-0000-0000-0000-000000000001", newID()
+	endpoint := "ws://" + listener.Addr().String()
+	setTestCodexBinding(t, execution, endpoint, "generation", workerFlowMockSession)
+	execution.CurrentTurnID, execution.CurrentCommandID = "00000000-0000-0000-0000-000000000001", newID()
 	execution.Status, workflow.Phase = "active", "executing"
-	run.SessionID = ptr(execution.SessionID)
 	path := filepath.Join(service.Config.RunDir, "runs", run.RunID, "app-server", "process.json")
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		t.Fatal(err)
 	}
-	if err := AtomicWrite(path, mustJSON(codexworker.ProcessReceipt{Endpoint: execution.AppServerEndpoint, Generation: execution.AppServerGeneration, Identity: *identity})); err != nil {
+	if err := AtomicWrite(path, mustJSON(codexworker.ProcessReceipt{Endpoint: endpoint, Generation: "generation", Identity: *identity})); err != nil {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -354,17 +358,16 @@ func testAppServerServiceTwoTurns(t *testing.T, async bool) {
 	execution.Workspace.Worktree, run.WorktreePath = workspace, &workspace
 	require(t, bindPolicyResources(context.Background(), fixedConfig, execution, workspace, nil))
 	execution.Process, run.Process = identity, identity
-	execution.AppServerEndpoint, execution.AppServerGeneration = "ws://"+listener.Addr().String(), "generation"
+	endpoint := "ws://" + listener.Addr().String()
+	setTestCodexBinding(t, execution, endpoint, "generation", workerFlowMockSession)
 	execution.Workspace.Worktree, run.WorktreePath = workspace, &workspace
-	service.Config.Sandbox = "read-only"
-	service.Config.Codex.Executable = os.Args[0]
-	service.baseConfig.Sandbox = service.Config.Sandbox
-	service.baseConfig.Codex.Executable = service.Config.Codex.Executable
+	setTestCodexProfile(t, &service.Config, codexworker.ProfileConfig{Executable: os.Args[0]})
+	setTestCodexProfile(t, &service.baseConfig, codexworker.ProfileConfig{Executable: os.Args[0]})
 	path := filepath.Join(service.Config.RunDir, "runs", run.RunID, "app-server", "process.json")
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		t.Fatal(err)
 	}
-	if err := AtomicWrite(path, mustJSON(codexworker.ProcessReceipt{Endpoint: execution.AppServerEndpoint, Generation: execution.AppServerGeneration, Identity: *identity})); err != nil {
+	if err := AtomicWrite(path, mustJSON(codexworker.ProcessReceipt{Endpoint: endpoint, Generation: "generation", Identity: *identity})); err != nil {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -425,7 +428,7 @@ func testAppServerServiceTwoTurns(t *testing.T, async bool) {
 			}
 		}
 		_, execution = service.workflowRecords(run)
-		if execution.TurnNumber != uint64(i) || execution.CurrentCommandID != commandID || execution.CurrentTurnID == previousTurn || execution.CurrentTurnID != execution.LastStoppedTurnID || execution.SessionID != workerFlowMockSession || execution.Status != "idle" || run.Decision == nil {
+		if execution.TurnNumber != uint64(i) || execution.CurrentCommandID != commandID || execution.CurrentTurnID == previousTurn || execution.CurrentTurnID != execution.LastStoppedTurnID || codexSessionID(execution) != workerFlowMockSession || execution.Status != "idle" || run.Decision == nil {
 			t.Fatalf("turn %d receipt was not persisted: %+v", i, execution)
 		}
 		previousTurn = execution.CurrentTurnID
@@ -435,12 +438,11 @@ func testAppServerServiceTwoTurns(t *testing.T, async bool) {
 func testAppServerAnswerRecoveryPersistsBeforeNextQuestion(t *testing.T) {
 	service, run := appServerAuditService(t)
 	workflow, execution := service.workflowRecords(run)
-	execution.SessionID, execution.CurrentTurnID, execution.CurrentCommandID = workerFlowMockSession, "00000000-0000-0000-0000-000000000001", newID()
+	execution.CurrentTurnID, execution.CurrentCommandID = "00000000-0000-0000-0000-000000000001", newID()
 	execution.Status, workflow.Phase = "active", "waiting_decision"
 	run.FinishTaskStatus, run.ExecutionStatus = "waiting_decision", "running"
-	run.SessionID = ptr(execution.SessionID)
-	execution.AppServerGeneration = "generation"
-	execution.PolicyResources = policyResourceReceiptFixture(workflow.ExecutionProfile.Digest, execution.Workspace.Worktree)
+	setTestCodexBinding(t, execution, "ws://127.0.0.1:12345", "generation", workerFlowMockSession)
+	execution.PolicyResources = policyResourceReceiptFixture(workflow.ExecutionProfile.Digest, execution.Workspace.Worktree, execution)
 	fixed := *workerSessionContext(run, execution)
 	fixed.ProjectID = service.Config.identity
 	ask := codexDecisionFixture(t, fixed, "first", []executionapi.Question{{ID: "choice", Header: "Choice", Question: "Continue?", AllowFreeText: true}})
@@ -585,7 +587,8 @@ func TestAppServerStartedEventCommitsOperationReceipt(t *testing.T) {
 	service, run := appServerAuditService(t)
 	_, execution := service.workflowRecords(run)
 	commandID, turnID := newID(), "00000000-0000-0000-0000-000000000001"
-	execution.SessionID, execution.PendingCommandID, execution.PendingTurnID = workerFlowMockSession, commandID, turnID
+	setTestCodexBinding(t, execution, "ws://127.0.0.1:12345", "generation", workerFlowMockSession)
+	execution.PendingCommandID, execution.PendingTurnID = commandID, turnID
 	opID, err := service.startWorkerOperation(run, "start_worker_turn", "worker-turn:"+run.ExecutionID+":"+commandID, map[string]string{"command_id": commandID})
 	require(t, err)
 	event := WorkerEvent{Fact: executionapi.EventFact{Kind: executionapi.EventStarted, SessionID: workerFlowMockSession, StartedTurnID: turnID}}

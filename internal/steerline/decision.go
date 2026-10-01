@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
@@ -476,9 +475,6 @@ func DecisionReplyEligibility(ctx context.Context, c Config, run *Run) error {
 	if run.RecoveryRequired && (run.RecoveryState == "unverified" || run.RecoveryState == "" ||
 		run.RecoveryState == "interrupted" && run.Decision.Request.QuestionRoute != nil) {
 		return &executionapi.BackendError{Code: executionapi.BackendUnsupported, Diagnostic: "original worker state or native question is not verified; wait for a recovery decision"}
-	}
-	if run.SessionID != nil && !codexworker.ValidNativeID(*run.SessionID) {
-		return &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "saved worker session identity is invalid"}
 	}
 	return ctx.Err()
 }

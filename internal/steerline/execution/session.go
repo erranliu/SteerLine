@@ -19,28 +19,13 @@ type Question struct {
 	AllowFreeText bool             `json:"allow_free_text"`
 }
 
-// QuestionRoute is a bounded, versioned implementation-owned answer route.
-// The center verifies its identity and digest but does not inspect Payload.
-type QuestionRoute struct {
-	Version           int    `json:"version"`
-	ImplementationKey string `json:"implementation_key"`
-	CodecVersion      int    `json:"codec_version"`
-	Purpose           string `json:"purpose"`
-	ProjectID         string `json:"project_id"`
-	WorkflowRunID     string `json:"workflow_run_id"`
-	ExecutionID       string `json:"execution_id"`
-	AttemptID         string `json:"attempt_id"`
-	Generation        string `json:"generation"`
-	TurnID            string `json:"turn_id"`
-	QuestionID        string `json:"question_id"`
-	Digest            string `json:"digest"`
-	Payload           []byte `json:"payload"`
-}
+// QuestionRoute is the question-purpose view of the shared implementation envelope.
+type QuestionRoute = ImplementationDataEnvelope
 
 const (
-	QuestionRouteVersion       = 1
-	QuestionRouteMaxBytes      = 64 << 10
-	QuestionRouteAnswerPurpose = "answer"
+	QuestionRouteVersion       = ImplementationDataVersion
+	QuestionRouteMaxBytes      = ImplementationDataMaxBytes
+	QuestionRouteAnswerPurpose = ImplementationQuestionPurpose
 )
 
 type QuestionRouteIdentity struct {

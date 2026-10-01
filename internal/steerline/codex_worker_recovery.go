@@ -39,7 +39,11 @@ func recoverAppServerExecution(ctx context.Context, config Config, run Run, exec
 	if execution.PendingCommandID != "" {
 		commandID, turnID = execution.PendingCommandID, execution.PendingTurnID
 	}
-	native, err := codexBackend(config, &run).Recover(probeCtx, codexBinding(&execution), commandID, turnID, knownCodexAsks(&run, &execution))
+	binding, err := codexBinding(&execution)
+	if err != nil {
+		return appServerRecoveryResult{runID: run.RunID, attemptID: run.AttemptID, execution: execution, err: err}
+	}
+	native, err := codexBackend(config, &run).Recover(probeCtx, binding, commandID, turnID, knownCodexAsks(&run, &execution))
 	worker := applyCodexRecovery(&run, &execution, native)
 	result := appServerRecoveryResult{runID: run.RunID, attemptID: run.AttemptID, execution: execution, worker: worker, completed: native.Completed, dead: native.Dead, err: err}
 	return result
@@ -160,9 +164,13 @@ func (s *Service) applyAppServerRecovery(result appServerRecoveryResult) error {
 		if execution.Process != nil && *execution.Process != *result.execution.Process {
 			return s.waitWorkerFlow(run, "Original app-server process identity changed during recovery")
 		}
-		execution.Process = result.execution.Process
-		execution.AppServerEndpoint = result.execution.AppServerEndpoint
-		execution.AppServerGeneration = result.execution.AppServerGeneration
+		binding, err := codexBinding(&result.execution)
+		if err != nil {
+			return s.waitWorkerFlow(run, "Original app-server binding failed verification")
+		}
+		if err := applyCodexBinding(execution, binding); err != nil {
+			return s.waitWorkerFlow(run, "Original app-server binding could not be committed")
+		}
 		s.refreshRun(run)
 	}
 	if result.dead {
@@ -179,8 +187,11 @@ func (s *Service) applyAppServerRecovery(result appServerRecoveryResult) error {
 		}
 		execution.RecoveryState = string(workerflow.ClassifyRecovery(workerflow.RecoveryFacts{WorkerAbsent: true, WritersAbsent: true, Completed: result.completed}))
 		if result.completed {
-			if execution.SessionID == "" {
-				execution.SessionID = result.execution.SessionID
+			if codexSessionID(execution) == "" {
+				binding, bindingErr := codexBinding(&result.execution)
+				if bindingErr != nil || applyCodexBinding(execution, binding) != nil {
+					return s.waitWorkerFlow(run, "Original app-server thread identity could not be committed")
+				}
 			}
 			if execution.PendingTurnID == "" {
 				execution.PendingTurnID = result.execution.PendingTurnID
@@ -226,10 +237,16 @@ func (s *Service) applyAppServerRecovery(result appServerRecoveryResult) error {
 		execution.Status = "blocked"
 		return s.waitWorkerFlow(run, "Original app-server turn cannot be reconciled: "+result.err.Error())
 	}
-	if execution.SessionID != "" && execution.SessionID != result.execution.SessionID {
+	if codexSessionID(execution) != "" && codexSessionID(execution) != codexSessionID(&result.execution) {
 		return s.waitWorkerFlow(run, "Original app-server thread identity changed during recovery")
 	}
-	execution.SessionID = result.execution.SessionID
+	binding, bindingErr := codexBinding(&result.execution)
+	if bindingErr != nil {
+		return s.waitWorkerFlow(run, "Original app-server binding failed verification")
+	}
+	if bindingErr = applyCodexBinding(execution, binding); bindingErr != nil {
+		return s.waitWorkerFlow(run, "Original app-server binding could not be committed")
+	}
 	execution.RecoveryState = string(workerflow.ClassifyRecovery(workerflow.RecoveryFacts{WorkerLive: true, QuestionPending: run.Decision != nil && run.Decision.Request.QuestionRoute != nil}))
 	s.refreshRun(run)
 	if execution.PendingCommandID != "" {

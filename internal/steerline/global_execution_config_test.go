@@ -6,18 +6,20 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 )
 
 func TestGlobalExecutionProfilesSharedAcrossProjects(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("STEERLINE_HOME", home)
 	profiles := []ExecutionProfile{
-		{ID: "local", Name: "本地", Host: "local", Agent: "codex", Sandbox: "workspace-write", Codex: Command{Executable: "codex"}},
-		{ID: "strong", Name: "高强度", Host: "local", Agent: "codex", Model: "chosen-model", ReasoningEffort: "xhigh", Sandbox: "danger-full-access", Codex: Command{Executable: "codex"}},
+		testExecutionProfile(t, "local", "本地", "local", "codex", codexworker.ProfileConfig{Executable: "codex"}, nil),
+		testExecutionProfile(t, "strong", "高强度", "local", "codex", codexworker.ProfileConfig{Executable: "codex", Model: "chosen-model", ReasoningEffort: "xhigh"}, nil),
 	}
 	writeGlobal := func() {
 		t.Helper()
-		data, err := json.Marshal(map[string]any{"default_execution_profile": "local", "execution_profiles": profiles})
+		data, err := json.Marshal(map[string]any{"version": 2, "default_execution_profile": "local", "execution_profiles": profiles})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -48,11 +50,11 @@ func TestGlobalExecutionProfilesSharedAcrossProjects(t *testing.T) {
 		t.Fatalf("global profiles were not shared: first=%+v second=%+v", first.AvailableExecutionProfiles(), second.AvailableExecutionProfiles())
 	}
 	selected, profile, err := second.ResolveExecutionProfile("strong", second.bindProjectPolicy(profiles[1]).Digest())
-	if err != nil || selected.Model != "chosen-model" || profile.ID != "strong" {
+	if err != nil || codexProfileSettings(selected).Model != "chosen-model" || profile.ID != "strong" {
 		t.Fatalf("global profile selection failed: %+v / %v", selected, err)
 	}
 	oldDigest := second.LoadedConfigDigest()
-	profiles[1].Model = "later-edit"
+	profiles[1].ImplementationConfigs[0].Payload = mustJSON(codexworker.ProfileConfig{Executable: "codex", Model: "later-edit", ReasoningEffort: "xhigh"})
 	writeGlobal()
 	updated, err := LoadConfig(secondPath)
 	if err != nil {

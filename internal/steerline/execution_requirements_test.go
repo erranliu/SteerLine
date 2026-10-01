@@ -11,7 +11,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	remote "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker"
+	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
 
 func TestExecutionRequirementsExistenceAndNonSecretEvidence(t *testing.T) {
@@ -60,7 +63,14 @@ func TestExecutionRequirementsExistenceAndNonSecretEvidence(t *testing.T) {
 
 func TestExecutionRequirementsCannotInferOtherTargetEnvironment(t *testing.T) {
 	for _, host := range []string{"orca", "orca_supervised"} {
-		c := Config{Host: host, Agent: "codex", Orca: OrcaConfig{Executable: "must-not-run", Supervised: &SupervisedOrcaConfig{ConnectionID: "connection", EnvironmentID: "remote"}}}
+		c := Config{Host: host, Agent: "codex"}
+		orca := &orcaworker.ProfileConfig{Executable: "must-not-run", Shell: "cmd.exe", WaitTimeout: "1m"}
+		if host == "orca_supervised" {
+			remoteSettings := &remote.ProfileConfig{ConnectionID: "connection", EnvironmentID: "remote", RepositorySelector: "repo", CoordinatorTerminal: "terminal", PollInterval: "1s", CapabilityReportVersion: 1}
+			setTestImplementationProfiles(t, &c, codexworker.ProfileConfig{Executable: "codex"}, orca, remoteSettings)
+		} else {
+			setTestImplementationProfiles(t, &c, codexworker.ProfileConfig{Executable: "codex"}, orca)
+		}
 		c.ExecutionRequirements.Tools = []executionapi.ToolRequirement{{ID: "go"}}
 		e, err := evaluateExecutionRequirements(context.Background(), c)
 		if err == nil || len(e.Tools) != 1 || e.Tools[0].Status != executionapi.RequirementUnknown || e.Tools[0].Target != targetFor(c) {
@@ -303,7 +313,9 @@ func TestRequirementVersionParsers(t *testing.T) {
 
 func TestEmptyExecutionRequirementsKeepMandatoryChecks(t *testing.T) {
 	c := workerContextConfigFixture()
-	c.Codex.Executable = "must-not-be-called"
+	codex := codexProfileSettings(c)
+	codex.Executable = "must-not-be-called"
+	setTestCodexProfile(t, &c, codex)
 	c.PublicationPolicy.Publisher = executionapi.PublisherWorker
 	if err := requireWorkerFlowCapabilities(context.Background(), c); err == nil || !strings.Contains(err.Error(), "publication_policy") {
 		t.Fatalf("empty requirements bypassed publisher check: %v", err)
@@ -314,7 +326,9 @@ func TestEmptyExecutionRequirementsKeepMandatoryChecks(t *testing.T) {
 	}
 	c.Host = "orca_supervised"
 	c.PublicationPolicy.Publisher = executionapi.PublisherWorker
-	c.Orca.Supervised = &SupervisedOrcaConfig{ConnectionID: "peer", EnvironmentID: "remote", RepositorySelector: "id:repo"}
+	orca := &orcaworker.ProfileConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "1m"}
+	remoteSettings := &remote.ProfileConfig{ConnectionID: "peer", EnvironmentID: "remote", RepositorySelector: "id:repo", CoordinatorTerminal: "terminal", PollInterval: "1s", CapabilityReportVersion: 1}
+	setTestImplementationProfiles(t, &c, codexProfileSettings(c), orca, remoteSettings)
 	if err := requireWorkerFlowCapabilities(context.Background(), c); err == nil || !strings.Contains(err.Error(), "enforcement evidence") {
 		t.Fatalf("empty requirements bypassed remote policy: %v", err)
 	}

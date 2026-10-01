@@ -10,7 +10,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 	"github.com/erranliu/SteerLine/internal/steerline/publication"
 )
 
@@ -25,9 +27,13 @@ func TestProfileSelectionDigestMatchesServicePreflight(t *testing.T) {
 	}
 	profiles := mixedPublicationProfiles()
 	for i := range profiles {
-		profiles[i].Codex.Executable = os.Args[0]
+		settings := codexProfileFromInputs(profiles[i].ImplementationConfigs)
+		settings.Executable = os.Args[0]
+		payload, err := codexworker.EncodeProfileConfig(settings)
+		require(t, err)
+		profiles[i].ImplementationConfigs[0].Payload = payload
 	}
-	global, err := json.Marshal(map[string]any{"default_execution_profile": "local", "execution_profiles": profiles})
+	global, err := json.Marshal(map[string]any{"version": 2, "default_execution_profile": "local", "execution_profiles": profiles})
 	require(t, err)
 	require(t, os.WriteFile(GlobalExecutionConfigPath(), global, 0600))
 	project, err := json.Marshal(map[string]any{
@@ -61,9 +67,12 @@ func TestProfileSelectionDigestMatchesServicePreflight(t *testing.T) {
 func mixedPublicationProfiles() []ExecutionProfile {
 	host := executionapi.PublicationPolicy{Publisher: "host_service"}
 	worker := executionapi.PublicationPolicy{Publisher: "worker"}
+	localCodex, _ := codexworker.EncodeProfileConfig(codexworker.ProfileConfig{Executable: "codex.exe", WindowsSandbox: "elevated"})
+	orcaCodex, _ := codexworker.EncodeProfileConfig(codexworker.ProfileConfig{Executable: "codex.exe", WindowsSandbox: "unelevated"})
+	orcaOptions, _ := orcaworker.EncodeProfileConfig(orcaworker.ProfileConfig{Executable: "orca.exe", Shell: "powershell.exe", WaitTimeout: "15m"})
 	return []ExecutionProfile{
-		{ID: "local", Name: "Local", Host: "local", Agent: "codex", ConfiguredPublicationPolicy: &host, Codex: Command{Executable: "codex.exe", WindowsSandbox: "elevated"}},
-		{ID: "orca", Name: "Orca", Host: "orca", Agent: "codex", ConfiguredPublicationPolicy: &worker, Codex: Command{Executable: "codex.exe", WindowsSandbox: "unelevated"}, Orca: OrcaConfig{Executable: "orca.exe", Shell: "powershell.exe", WaitTimeout: "15m"}},
+		{ID: "local", Name: "Local", Host: "local", Agent: "codex", ConfiguredPublicationPolicy: &host, ImplementationConfigs: []executionapi.ImplementationConfigInput{{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 1, Payload: localCodex}}},
+		{ID: "orca", Name: "Orca", Host: "orca", Agent: "codex", ConfiguredPublicationPolicy: &worker, ImplementationConfigs: []executionapi.ImplementationConfigInput{{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 1, Payload: orcaCodex}, {ImplementationKey: orcaworker.ProfileCodecKey, CodecVersion: 1, Payload: orcaOptions}}},
 	}
 }
 

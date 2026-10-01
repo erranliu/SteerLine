@@ -26,7 +26,11 @@ func reattachAppServerWorker(ctx context.Context, c Config, run *Run, e *Executi
 	if e.PendingCommandID != "" {
 		commandID, turnID = e.PendingCommandID, e.PendingTurnID
 	}
-	result, err := codexBackend(c, run).Reattach(ctx, codexBinding(e), commandID, turnID, knownCodexAsks(run, e))
+	binding, err := codexBinding(e)
+	if err != nil {
+		return nil, false, err
+	}
+	result, err := codexBackend(c, run).Reattach(ctx, binding, commandID, turnID, knownCodexAsks(run, e))
 	return applyCodexRecovery(run, e, result), result.Completed, err
 }
 

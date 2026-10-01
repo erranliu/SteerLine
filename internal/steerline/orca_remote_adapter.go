@@ -13,12 +13,12 @@ type supervisedPreflight = remote.PreflightResult
 type supervisedStartReceipt = remote.StartReceipt
 
 func remoteWorkerConfig(c Config) remote.Config {
-	cfg := remote.Config{Repository: c.Repository, ProjectID: c.identity, Agent: c.agentName(), Model: c.Model, ReasoningEffort: c.ReasoningEffort, CommandTimeout: c.CommandTimeout, Call: nativeOrcaClient(c).Raw, Origin: func(ctx context.Context) ([]byte, error) {
+	codex := codexProfileSettings(c)
+	supervised := remoteProfileSettings(c)
+	cfg := remote.Config{Repository: c.Repository, ProjectID: c.identity, Agent: c.agentName(), Model: codex.Model, ReasoningEffort: codex.ReasoningEffort, CommandTimeout: c.CommandTimeout, Call: nativeOrcaClient(c).Raw, Origin: func(ctx context.Context) ([]byte, error) {
 		return (Runner{Dir: c.Repository, Timeout: positiveDuration(c.CommandTimeout, 30*time.Second)}).Output(ctx, c.Git, "remote", "get-url", c.Remote)
 	}}
-	if sc := c.Orca.Supervised; sc != nil {
-		cfg.Settings = remote.Settings{ConnectionID: sc.ConnectionID, EnvironmentID: sc.EnvironmentID, RepositorySelector: sc.RepositorySelector, CoordinatorTerminal: sc.CoordinatorTerminal, ExpectedCodexVersion: sc.ExpectedCodexVersion, PollInterval: sc.PollInterval}
-	}
+	cfg.Settings = remote.Settings{ConnectionID: supervised.ConnectionID, EnvironmentID: supervised.EnvironmentID, RepositorySelector: supervised.RepositorySelector, CoordinatorTerminal: supervised.CoordinatorTerminal, ExpectedCodexVersion: supervised.ExpectedCodexVersion, PollInterval: supervised.PollInterval}
 	return cfg
 }
 func remoteWorkerClient(c Config) remote.Client { return remote.New(remoteWorkerConfig(c)) }
@@ -33,7 +33,7 @@ func remoteWorkerRef(ref executionapi.ExecutionRef) remote.Ref {
 	return remote.FromExecutionRef(ref)
 }
 func probeSupervisedOrcaTarget(ctx context.Context, c Config) (supervisedPreflight, error) {
-	if err := validateSupervisedOrcaConfig(&c); err != nil {
+	if err := validateImplementationProfileData(c); err != nil {
 		return supervisedPreflight{}, err
 	}
 	v, e := remote.Preflight(ctx, remoteWorkerConfig(c))

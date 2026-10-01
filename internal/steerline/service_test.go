@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
@@ -173,7 +174,7 @@ func newFixture(t *testing.T) *fixture {
 	f.c.Claimant = "native-fixture"
 	f.c.Heartbeat, f.c.TaskPoll, f.c.PRPoll, f.c.CommandTimeout, f.c.ShutdownGrace = "100ms", "100ms", "100ms", "5s", "1s"
 	f.c.PR = publication.Config{Kind: "gitea", BaseURL: f.server.URL, Repository: "owner/repo"}
-	f.c.Codex = Command{Executable: executable}
+	setTestCodexProfile(t, &f.c, codexworker.ProfileConfig{Executable: executable})
 	f.c.WorkflowProtocol = WorkerFlowVersion
 	if err = f.c.ResolveIdentity(context.Background()); err != nil {
 		t.Fatal(err)

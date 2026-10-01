@@ -14,7 +14,7 @@ type Repository struct {
 	Identity string `json:"identity"`
 }
 
-const WorkerFlowRuntimeSchema = 11
+const WorkerFlowRuntimeSchema = 12
 const DecisionRequestFormatVersion = 2
 
 type PendingQuestion struct {
@@ -123,10 +123,8 @@ type TaskCandidate struct {
 	Summary string `json:"summary,omitempty"`
 }
 
-// ProcessIdentity is the host-neutral identity of a running worker. OS hosts use
-// PID/Created/Executable; Orca terminal-v2 uses Terminal/RuntimeID/Incarnation;
-// supervised Orca uses coordinator/remote runtime epochs and exact Run/Task/
-// Dispatch/execution-host/worktree identity. Kind names the protocol family.
+// ProcessIdentity is a host-neutral identity of a running worker. Concrete
+// process and session bindings are stored in implementation data envelopes.
 type Run struct {
 	RecoveryRequired     bool                          `json:"recovery_required,omitempty"`
 	RecoveryState        string                        `json:"recovery_state,omitempty"`
@@ -154,7 +152,6 @@ type Run struct {
 	BeadsStatus          string                        `json:"beads_status,omitempty"`
 	ExecutionStatus      string                        `json:"execution_status"`
 	FinishTaskStatus     string                        `json:"finish_task_status"`
-	SessionID            *string                       `json:"codex_session_id"`
 	Process              *executionapi.ProcessIdentity `json:"process"`
 	StartedAt            *time.Time                    `json:"started_at"`
 	EndedAt              *time.Time                    `json:"ended_at"`

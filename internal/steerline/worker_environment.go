@@ -117,7 +117,7 @@ func (s *Service) observeWorkerEnvironment(ctx context.Context, run *Run) error 
 	if !env.Preparation.Verified && !now().Before(env.Preparation.Deadline) {
 		return s.blockWorkerEnvironment(run, orcaworker.HostFact{Reason: "preparation_unverified", Confidence: "unverified", Source: "preparation.deadline", Turn: env.Preparation.TurnID})
 	}
-	if turn := nativeOrcaCurrentTurn(execution); turn != nil && turn.Purpose == "business" && !turn.Settled && turn.DoneMessageID == "" && execution.CurrentTurnID != turn.TurnID && !now().Before(turn.IntentAt.Add(positiveDuration(config.Orca.WaitTimeout, 2*time.Minute))) {
+	if turn := nativeOrcaCurrentTurn(execution); turn != nil && turn.Purpose == "business" && !turn.Settled && turn.DoneMessageID == "" && execution.CurrentTurnID != turn.TurnID && !now().Before(turn.IntentAt.Add(positiveDuration(orcaProfileSettings(config).WaitTimeout, 2*time.Minute))) {
 		return s.blockWorkerEnvironment(run, orcaworker.HostFact{Reason: "business_start_unverified", Confidence: "unverified", Source: "dispatch.intent.deadline", Turn: turn.TurnID})
 	}
 	return nil
@@ -261,7 +261,7 @@ func (s *Service) reconcileEnvironmentBusinessIntent(ctx context.Context, run *R
 	return nil
 }
 
-func (s *Service) finishOrcaPreparation(ctx context.Context, run *Run, execution *ExecutionRecord, turn *OrcaNativeTurn, outcome string) error {
+func (s *Service) finishOrcaPreparation(ctx context.Context, run *Run, execution *ExecutionRecord, turn *implementationTurnView, outcome string) error {
 	p := execution.Environment.Preparation
 	if turn.TurnID != p.TurnID {
 		return nil
@@ -441,7 +441,7 @@ func (s *Service) applyEnvironmentAction(ctx context.Context, run *Run, answer D
 		}
 		env.History = append(env.History, *env.Preparation)
 		started := now()
-		env.Preparation = &WorkerPreparation{TurnID: newID(), Nonce: newID(), StartedAt: started, Deadline: started.Add(positiveDuration(fixed.config.Orca.WaitTimeout, 2*time.Minute))}
+		env.Preparation = &WorkerPreparation{TurnID: newID(), Nonce: newID(), StartedAt: started, Deadline: started.Add(positiveDuration(orcaProfileSettings(fixed.config).WaitTimeout, 2*time.Minute))}
 	}
 	if ok, err := s.reconcileEnvironmentQuestion(ctx, run); err != nil {
 		return err
@@ -496,8 +496,12 @@ func (s *Service) reconcileEnvironmentQuestion(ctx context.Context, run *Run) (b
 	if request.QuestionRoute == nil {
 		return true, nil
 	}
+	state, err := decodeOrcaExecutionState(e)
+	if err != nil || state == nil {
+		return false, errors.New("original question has no verified implementation state")
+	}
 	settled := false
-	for _, turn := range e.OrcaNative.Turns {
+	for _, turn := range state.Turns {
 		if turn.TurnID == request.QuestionRoute.TurnID {
 			settled = turn.Settled
 		}
@@ -550,12 +554,16 @@ func (s *Service) reconcileEnvironmentQuestion(ctx context.Context, run *Run) (b
 func (s *Service) restoreEnvironmentDecision(run *Run) {
 	execution := s.executionRecord(run)
 	env := execution.Environment
+	state, stateErr := decodeOrcaExecutionState(execution)
+	if stateErr != nil || state == nil {
+		return
+	}
 	execution.DecisionID = env.DeferredDecisionID
 	env.DeferredDecisionID = ""
 	s.refreshRun(run)
 	if run.Decision != nil && run.Decision.Request.QuestionRoute != nil {
 		active := false
-		for _, turn := range execution.OrcaNative.Turns {
+		for _, turn := range state.Turns {
 			if turn.TurnID == run.Decision.Request.QuestionRoute.TurnID && !turn.Settled {
 				active = true
 			}
@@ -607,10 +615,14 @@ func (s *Service) flushEnvironmentFeedback(ctx context.Context, run *Run) error 
 	if json.Unmarshal(record.Answer, &answer) != nil || json.Unmarshal(record.Request, &request) != nil || record.ExecutionID != e.ExecutionID {
 		return errors.New("deferred feedback identity differs from the original execution")
 	}
-	var turn *OrcaNativeTurn
-	for i := range e.OrcaNative.Turns {
-		if e.OrcaNative.Turns[i].TurnID == feedback.TurnID {
-			turn = &e.OrcaNative.Turns[i]
+	var turn *implementationTurnView
+	state, err := decodeOrcaExecutionState(e)
+	if err != nil || state == nil {
+		return errors.New("deferred feedback has no verified implementation state")
+	}
+	for i := range state.Turns {
+		if state.Turns[i].TurnID == feedback.TurnID {
+			turn = &state.Turns[i]
 			break
 		}
 	}

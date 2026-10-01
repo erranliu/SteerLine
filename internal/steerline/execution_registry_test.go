@@ -8,7 +8,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	remote "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker"
+	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
 
 func TestWorkerFlowAdapterUsesFixedProtocol(t *testing.T) {
@@ -88,7 +91,13 @@ func TestWorkerFlowModeUsesFixedExecutionIdentity(t *testing.T) {
 		{"orca_supervised", executionapi.ProtocolOrcaSupervised, executionapi.ProtocolOrcaSupervised},
 	} {
 		t.Run(test.host, func(t *testing.T) {
-			config := Config{Host: test.host, Agent: "codex", Orca: OrcaConfig{Executable: "orca", Supervised: &SupervisedOrcaConfig{ConnectionID: "fixed-connection", EnvironmentID: "fixed-environment"}}}
+			config := Config{Host: test.host, Agent: "codex"}
+			orca := &orcaworker.ProfileConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "1m"}
+			var remoteSettings *remote.ProfileConfig
+			if test.host == "orca_supervised" {
+				remoteSettings = &remote.ProfileConfig{ConnectionID: "fixed-connection", EnvironmentID: "fixed-environment", RepositorySelector: "repo", CoordinatorTerminal: "terminal", PollInterval: "1s", CapabilityReportVersion: 1}
+			}
+			setTestImplementationProfiles(t, &config, codexworker.ProfileConfig{Executable: "codex"}, orca, remoteSettings)
 			backend, _, err := executionapi.ExecutionBackendKind(test.host)
 			require(t, err)
 			target := targetFor(config)
@@ -121,7 +130,8 @@ func feedbackIdentityMismatch(err error) bool {
 }
 
 func TestRegisteredOrcaOperationsOwnDeliveryAndSettlement(t *testing.T) {
-	c := Config{Host: "orca", Agent: "codex", Orca: OrcaConfig{Executable: "must-not-run"}}
+	c := Config{Host: "orca", Agent: "codex"}
+	setTestImplementationProfiles(t, &c, codexworker.ProfileConfig{Executable: "codex"}, &orcaworker.ProfileConfig{Executable: "must-not-run", Shell: "cmd.exe", WaitTimeout: "1m"})
 	entry, err := registrationFor(c)
 	require(t, err)
 	original := builtinExecutionRegistry
@@ -130,21 +140,22 @@ func TestRegisteredOrcaOperationsOwnDeliveryAndSettlement(t *testing.T) {
 	delivery, settlement, verified := false, false, false
 	fake.OrcaOperations = func(Config) orcaExecutionOperations {
 		ops := nativeOrcaOperations(c)
-		ops.Delivery = func(context.Context, *Run, *ExecutionRecord, *OrcaNativeTurn) (executionapi.EventBatch, error) {
+		ops.Delivery = func(context.Context, *Run, *ExecutionRecord, *implementationTurnView) (executionapi.EventBatch, error) {
 			delivery = true
 			return executionapi.EventBatch{DeliveryID: "fixed-delivery", Facts: []executionapi.EventFact{{SourceEventID: "fixed-message", Matched: true}}}, nil
 		}
-		ops.Settlement = func(context.Context, *ExecutionRecord, *OrcaNativeTurn) (nativeOrcaSettlement, error) {
+		ops.Settlement = func(context.Context, *ExecutionRecord, *implementationTurnView) (nativeOrcaSettlement, error) {
 			settlement = true
 			return nativeOrcaSettlement{Outcome: "completed", DispatchID: "fixed-dispatch"}, nil
 		}
-		ops.VerifyActive = func(context.Context, *ExecutionRecord, *OrcaNativeTurn) error { verified = true; return nil }
+		ops.VerifyActive = func(context.Context, *ExecutionRecord, *implementationTurnView) error { verified = true; return nil }
 		return ops
 	}
 	builtinExecutionRegistry = map[executionRegistrationKey]*executionRegistration{fake.Key: &fake}
-	e := &ExecutionRecord{OrcaNative: &OrcaNativeExecution{Coordinator: executionapi.ProcessIdentity{Terminal: "coordinator"}}, Process: &executionapi.ProcessIdentity{Terminal: "original"}, Target: executionapi.ExecutionTarget{OrchestrationRun: "original-run"}}
+	e := &ExecutionRecord{ProjectIdentity: "test-project", ExecutionID: "test-execution", CurrentAttemptID: "test-attempt", ConfigurationDigest: c.fixedProfileDigest, Process: &executionapi.ProcessIdentity{Terminal: "original"}, Target: executionapi.ExecutionTarget{OrchestrationRun: "original-run"}}
+	setTestOrcaState(t, e, &implementationExecutionView{Coordinator: executionapi.ProcessIdentity{Terminal: "coordinator", RuntimeID: "runtime"}})
 	run := &Run{RunID: "workflow", ExecutionID: "execution", AttemptID: "attempt"}
-	tnr := &OrcaNativeTurn{TaskID: "task", DispatchID: "fixed-dispatch", TurnID: "fixed-turn"}
+	tnr := &implementationTurnView{TaskID: "task", DispatchID: "fixed-dispatch", TurnID: "fixed-turn"}
 	d, err := readNativeOrcaDelivery(context.Background(), c, run, e, tnr)
 	require(t, err)
 	result, err := readNativeOrcaSettlement(context.Background(), c, e, tnr)
@@ -169,25 +180,34 @@ func TestRegisteredOrcaAckReconcilesLostReceipt(t *testing.T) {
 		t.Run(host, func(t *testing.T) {
 			ctx := context.Background()
 			dir := t.TempDir()
-			c := Config{Host: host, Agent: "codex", Repository: dir, CommandTimeout: "5s", Orca: OrcaConfig{Executable: os.Args[0], WaitTimeout: "1ms"}}
+			c := Config{Host: host, Agent: "codex", Repository: dir, CommandTimeout: "5s"}
+			orca := &orcaworker.ProfileConfig{Executable: os.Args[0], WaitTimeout: "1ms", Shell: "cmd.exe"}
+			remoteSettings := &remote.ProfileConfig{}
+			state := &implementationExecutionView{}
 			run := &Run{RunID: strings.Repeat("a", 32)}
-			e := &ExecutionRecord{Process: &executionapi.ProcessIdentity{}, OrcaNative: &OrcaNativeExecution{}}
+			e := &ExecutionRecord{ProjectIdentity: "test-project", ExecutionID: "test-execution", CurrentAttemptID: "test-attempt", ConfigurationDigest: "test-config-digest", Process: &executionapi.ProcessIdentity{}}
 			deliveryID := "delivery-ask-1"
 			if host == "orca" {
-				c.Orca.Args = []string{"--fake", "orca-native", dir}
+				orca.Args = []string{"--fake", "orca-native", dir}
 				require(t, os.WriteFile(filepath.Join(dir, "native-orca.json"), mustJSON(fakeNativeOrcaState{Dispatches: 1, LoseAckOnce: true}), 0600))
 				e.Target.OrchestrationRun = "run-fake"
-				e.OrcaNative.Coordinator = executionapi.ProcessIdentity{Terminal: "term-coordinator", RuntimeID: "fake-runtime"}
+				state.Coordinator = executionapi.ProcessIdentity{Terminal: "term-coordinator", RuntimeID: "fake-runtime"}
 			} else {
-				c.Orca.Args = []string{"--fake", "orca-remote-worker", dir}
-				c.Orca.Supervised = &SupervisedOrcaConfig{ConnectionID: "home-connection", EnvironmentID: "env-home", CoordinatorTerminal: "term-remote-coordinator", PollInterval: "1ms"}
+				orca.Args = []string{"--fake", "orca-remote-worker", dir}
+				remoteSettings = &remote.ProfileConfig{ConnectionID: "home-connection", EnvironmentID: "env-home", RepositorySelector: "repo", CoordinatorTerminal: "term-remote-coordinator", PollInterval: "1ms", CapabilityReportVersion: 1}
 				require(t, os.WriteFile(filepath.Join(dir, "remote.json"), mustJSON(remoteFixtureState{Coordinator: "term-remote-coordinator", LoseAck: true, Question: true, Tasks: []remoteFixtureTask{{ID: "task-1", Dispatch: "dispatch-1"}}}), 0600))
 				e.Target = targetFor(c)
 				e.Target.OrchestrationRun, e.Target.CoordinatorTerminal = "remote-run", "term-remote-coordinator"
 				e.Process = &executionapi.ProcessIdentity{Kind: "orca_supervised", OrchestrationRun: "remote-run", CoordinatorRuntimeID: "center"}
-				e.OrcaNative.Coordinator = executionapi.ProcessIdentity{Terminal: "term-remote-coordinator", RuntimeID: "center"}
+				state.Coordinator = executionapi.ProcessIdentity{Terminal: "term-remote-coordinator", RuntimeID: "center"}
 				deliveryID = "delivery-dispatch-1-question"
 			}
+			if host == "orca_supervised" {
+				setTestImplementationProfiles(t, &c, codexworker.ProfileConfig{Executable: "codex"}, orca, remoteSettings)
+			} else {
+				setTestImplementationProfiles(t, &c, codexworker.ProfileConfig{Executable: "codex"}, orca)
+			}
+			setTestOrcaState(t, e, state)
 			ops, err := orcaOperationsFor(c)
 			require(t, err)
 			acknowledged, err := ops.DeliveryAcknowledged(ctx, run, e, deliveryID)

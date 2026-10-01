@@ -269,7 +269,8 @@ func commitNativePRCleanupReceipt(ctx context.Context, tx *sqliteTx, project str
 	if err := json.Unmarshal(attemptPayload, &attempt); err != nil {
 		return err
 	}
-	if workflow.WorkflowVersion != WorkerFlowVersion || workflow.TaskID != task.TaskID || workflow.Repository != evidence.Repository || workflow.Branch != evidence.BaseBranch || workflow.SelectedResult != evidence.ExecutionID || workflow.PRURL != evidence.PRURL || execution.ExecutionID != evidence.ExecutionID || execution.WorkflowRunID != evidence.WorkflowRunID || execution.SessionID == "" || execution.Workspace.Branch == "" || attempt.StepID != "worker" || attempt.ExecutionID != evidence.ExecutionID || attempt.AttemptID != evidence.AttemptID {
+	sessionID, _ := executionSessionFacts(&execution)
+	if workflow.WorkflowVersion != WorkerFlowVersion || workflow.TaskID != task.TaskID || workflow.Repository != evidence.Repository || workflow.Branch != evidence.BaseBranch || workflow.SelectedResult != evidence.ExecutionID || workflow.PRURL != evidence.PRURL || execution.ExecutionID != evidence.ExecutionID || execution.WorkflowRunID != evidence.WorkflowRunID || sessionID == "" || execution.Workspace.Branch == "" || attempt.StepID != "worker" || attempt.ExecutionID != evidence.ExecutionID || attempt.AttemptID != evidence.AttemptID {
 		return nativeErr("authority_mismatch", "native PR cleanup receipt does not match the fixed worker flow and PR")
 	}
 	var authorityBranch string

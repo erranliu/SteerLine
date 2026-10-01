@@ -114,8 +114,9 @@ func TestWorkerReceiptFailureRetainsIntentAndCancelsUnregisteredObserver(t *test
 	execution := s.executionRecord(run)
 	workflow, _ := s.workflowRecords(run)
 	execution.Workspace.Worktree = run.WorkspaceIntent.Path
-	execution.PolicyResources = policyResourceReceiptFixture(workflow.ExecutionProfile.Digest, execution.Workspace.Worktree)
-	execution.PendingCommandID, execution.SessionID = commandID, workerFlowMockSession
+	execution.PolicyResources = policyResourceReceiptFixture(workflow.ExecutionProfile.Digest, execution.Workspace.Worktree, execution)
+	execution.PendingCommandID = commandID
+	setTestCodexBinding(t, execution, "ws://127.0.0.1:12345", "generation", workerFlowMockSession)
 	opID, err := s.startWorkerOperation(run, "start_worker_turn", "worker-turn:"+run.ExecutionID+":"+commandID, map[string]string{"command_id": commandID})
 	require(t, err)
 	baseline := recordFingerprint(*snapshotOperation(&s.committed, opID))
@@ -156,16 +157,17 @@ func TestAppServerFailedLaunchKeepsPartialSessionBinding(t *testing.T) {
 	identity, err := currentProcessIdentity()
 	require(t, err)
 	partial := *s.executionRecord(run)
-	partial.PolicyResources = policyResourceReceiptFixture(workflow.ExecutionProfile.Digest, partial.Workspace.Worktree)
+	partial.PolicyResources = policyResourceReceiptFixture(workflow.ExecutionProfile.Digest, partial.Workspace.Worktree, &partial)
 	partial.Process = identity
-	partial.AppServerEndpoint, partial.AppServerGeneration = "ws://127.0.0.1:12345", "partial-generation"
-	partial.SessionID = workerFlowMockSession
+	setTestCodexBinding(t, &partial, "ws://127.0.0.1:12345", "partial-generation", workerFlowMockSession)
 	message := &appServerLaunchMessage{phase: "turn_result", commandID: commandID, opID: opID, run: *run, execution: partial, err: errors.New("thread receipt persistence failed")}
 	require(t, s.handleAppServerLaunchMessage(run.RunID, message))
 	snapshot, err := s.domainStore.Query(context.Background(), s.Config.identity)
 	require(t, err)
 	got := snapshot.Executions[0]
-	if got.Process == nil || *got.Process != *identity || got.AppServerEndpoint != partial.AppServerEndpoint || got.AppServerGeneration != partial.AppServerGeneration || got.SessionID != partial.SessionID {
+	gotBinding, bindingErr := decodeCodexAppServerBinding(&got)
+	partialBinding, partialBindingErr := decodeCodexAppServerBinding(&partial)
+	if bindingErr != nil || partialBindingErr != nil || got.Process == nil || *got.Process != *identity || gotBinding.Endpoint != partialBinding.Endpoint || gotBinding.Generation != partialBinding.Generation || codexSessionID(&got) != codexSessionID(&partial) {
 		t.Fatalf("partial native binding was discarded: %+v", got)
 	}
 	if got.PendingTurnID != "" || s.workers[run.RunID] != nil || snapshotOperation(&snapshot, opID).Status != "outcome_unknown" {

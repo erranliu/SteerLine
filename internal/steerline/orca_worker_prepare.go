@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"runtime"
 	"strings"
 	"time"
 
@@ -21,24 +22,30 @@ func nativeOrcaFixedAgentCommand(c Config) (string, error) {
 }
 
 func nativeOrcaCommand(c Config, path string, roots []string) (string, error) {
+	codex := codexProfileSettings(c)
+	orca := orcaProfileSettings(c)
+	permissions, err := codexworker.CompilePolicy(c.ExecutionPolicy, runtime.GOOS, c.hostName(), c.agentName(), codex.WindowsSandbox, codex.Profile, codex.Args)
+	if err != nil {
+		return "", err
+	}
 	if path != "" {
-		if err := codexworker.ValidateManagedArgs(c.Codex.Args); err != nil {
+		if err := codexworker.ValidateManagedArgs(codex.Args); err != nil {
 			return "", err
 		}
-		native, err := codexworker.NativeExecutable(c.Codex.Executable)
+		native, err := codexworker.NativeExecutable(codex.Executable)
 		if err != nil {
 			return "", err
 		}
-		c.Codex.Executable = native
+		codex.Executable = native
 	}
 	command, err := codexworker.ManagedCommand(codexworker.ManagedCommandOptions{
-		Policy: c.ExecutionPolicy, WorkingDirectory: path, WriteRoots: roots, Host: c.hostName(), Agent: c.agentName(), Model: c.Model, ReasoningEffort: c.ReasoningEffort,
-		Executable: c.Codex.Executable, Args: c.Codex.Args, Sandbox: c.Sandbox, WindowsSandbox: c.WindowsSandbox,
+		Policy: c.ExecutionPolicy, WorkingDirectory: path, WriteRoots: roots, Host: c.hostName(), Agent: c.agentName(), Model: codex.Model, ReasoningEffort: codex.ReasoningEffort,
+		Executable: codex.Executable, Args: codex.Args, Sandbox: permissions.Sandbox, WindowsSandbox: permissions.WindowsSandbox,
 	})
 	if err != nil {
 		return "", err
 	}
-	return orcaworker.WrapAgentCommand(command, c.Orca.Shell)
+	return orcaworker.WrapAgentCommand(command, orca.Shell)
 }
 
 // A fixed Orca model needs a launch command: worktree create --agent only
@@ -174,11 +181,13 @@ func (s *Service) prepareNativeOrcaFixedAgentTerminal(ctx context.Context, run *
 			env.WriteRoots = append(env.WriteRoots, writeArgs[i])
 		}
 	}
-	opID, err := s.startWorkerOperation(run, "orca_native_agent_terminal", key, map[string]string{"worktree": worktree.ID, "title": title, "model": fixedConfig.Model, "effort": fixedConfig.ReasoningEffort, "command": command})
+	codex := codexProfileSettings(fixedConfig)
+	orca := orcaProfileSettings(fixedConfig)
+	opID, err := s.startWorkerOperation(run, "orca_native_agent_terminal", key, map[string]string{"worktree": worktree.ID, "title": title, "model": codex.Model, "effort": codex.ReasoningEffort, "command": command})
 	if err != nil {
 		return err
 	}
-	platform, callErr := orcaworker.CreateFixedAgentTerminal(ctx, orcaWorkerMetaCaller(fixedConfig), worktree.ID, title, fixedConfig.Orca.Shell, command)
+	platform, callErr := orcaworker.CreateFixedAgentTerminal(ctx, orcaWorkerMetaCaller(fixedConfig), worktree.ID, title, orca.Shell, command)
 	if callErr != nil {
 		_ = s.changeWorkerOperation(run, opID, "outcome_unknown", "", nil, callErr.Error())
 		return &executionapi.BackendError{Code: executionapi.BackendOutcomeUnknown, Diagnostic: "fixed Orca agent launch needs reconciliation", Cause: callErr}
@@ -215,7 +224,7 @@ func (s *Service) waitAndBindNativeOrcaFixedAgent(ctx context.Context, run *Run,
 	}
 	fixedConfig := fixed.config
 	if execution.Environment == nil {
-		if err := orcaworker.AwaitAgentTerminal(ctx, orcaWorkerMetaCaller(fixedConfig), handle, worktree.Path, strings.TrimPrefix(worktree.Branch, "refs/heads/"), worktree.ID, fixedConfig.agentName(), min(positiveDuration(fixedConfig.Orca.WaitTimeout, 30*time.Second), 30*time.Second), true); err != nil {
+		if err := orcaworker.AwaitAgentTerminal(ctx, orcaWorkerMetaCaller(fixedConfig), handle, worktree.Path, strings.TrimPrefix(worktree.Branch, "refs/heads/"), worktree.ID, fixedConfig.agentName(), min(positiveDuration(orcaProfileSettings(fixedConfig).WaitTimeout, 30*time.Second), 30*time.Second), true); err != nil {
 			return err
 		}
 	}
@@ -252,13 +261,13 @@ func (s *Service) bindNativeOrcaAgent(ctx context.Context, run *Run, execution *
 		return configErr
 	}
 	fixedConfig := fixed.config
-	if err := orcaworker.VerifyWorktreeOwner(worktree, execution.ExecutionID, fixedConfig.agentName(), fixedConfig.managedWindowsOrca() || fixedConfig.Model != ""); err != nil {
+	if err := orcaworker.VerifyWorktreeOwner(worktree, execution.ExecutionID, fixedConfig.agentName(), fixedConfig.managedWindowsOrca() || codexProfileSettings(fixedConfig).Model != ""); err != nil {
 		return err
 	}
 	if err := applyWorkerOrcaWorkspace(fixedConfig, run, execution, worktree, base); err != nil {
 		return err
 	}
-	identity, err := orcaworker.BindAgent(ctx, orcaWorkerMetaCaller(fixedConfig), worktree, handle, fixedConfig.agentName(), fixedConfig.Orca.Executable)
+	identity, err := orcaworker.BindAgent(ctx, orcaWorkerMetaCaller(fixedConfig), worktree, handle, fixedConfig.agentName(), orcaProfileSettings(fixedConfig).Executable)
 	if err != nil {
 		return workerOrcaBackendError(err)
 	}
@@ -267,7 +276,17 @@ func (s *Service) bindNativeOrcaAgent(ctx context.Context, run *Run, execution *
 		execution.Environment.Runtime = identity.RuntimeID
 	}
 	s.refreshRun(run)
-	execution.OrcaNative = &OrcaNativeExecution{RepositoryID: repoID}
+	state, err := decodeOrcaExecutionState(execution)
+	if err != nil {
+		return err
+	}
+	if state == nil {
+		state = &implementationExecutionView{}
+	}
+	state.RepositoryID = repoID
+	if err := storeOrcaExecutionState(execution, state); err != nil {
+		return err
+	}
 	return s.commitWorker(run)
 }
 
@@ -282,13 +301,17 @@ func (s *Service) prepareNativeOrcaWorker(ctx context.Context, run *Run) error {
 		return errors.New("native Orca preparation lacks a fixed worker claim")
 	}
 	if execution.Process != nil {
-		if execution.Process.Kind != "orca-native" || execution.OrcaNative == nil {
+		state, stateErr := decodeOrcaExecutionState(execution)
+		if stateErr != nil {
+			return stateErr
+		}
+		if execution.Process.Kind != "orca-native" || state == nil {
 			return errors.New("old Orca worker state cannot be continued by the native protocol")
 		}
 		if err := s.verifyNativeOrcaWorker(ctx, run, execution); err != nil {
 			return err
 		}
-		if fixedConfig.managedWindowsOrca() || fixedConfig.Model != "" {
+		if fixedConfig.managedWindowsOrca() || codexProfileSettings(fixedConfig).Model != "" {
 			if op := s.operationByKey("orca-native-agent-terminal:" + execution.ExecutionID); op != nil && op.Status != "confirmed" {
 				receipt := op.Receipt
 				if len(receipt) == 0 {
@@ -301,7 +324,7 @@ func (s *Service) prepareNativeOrcaWorker(ctx context.Context, run *Run) error {
 		}
 		return s.prepareNativeOrcaCoordinator(ctx, run, execution)
 	}
-	if fixedConfig.managedWindowsOrca() || fixedConfig.Model != "" {
+	if fixedConfig.managedWindowsOrca() || codexProfileSettings(fixedConfig).Model != "" {
 		return s.prepareNativeOrcaFixedModelWorker(ctx, run, execution)
 	}
 	repoID, err := nativeOrcaRepo(ctx, fixedConfig)
@@ -377,7 +400,10 @@ func (s *Service) prepareNativeOrcaCoordinator(ctx context.Context, run *Run, ex
 		return configErr
 	}
 	fixedConfig := fixed.config
-	state := execution.OrcaNative
+	state, stateErr := decodeOrcaExecutionState(execution)
+	if stateErr != nil {
+		return stateErr
+	}
 	if state == nil || execution.Process == nil {
 		return errors.New("Orca agent binding is missing")
 	}
@@ -438,6 +464,10 @@ func (s *Service) prepareNativeOrcaCoordinator(ctx context.Context, run *Run, ex
 			}
 		}
 	}
+	state, stateErr = decodeOrcaExecutionState(execution)
+	if stateErr != nil || state == nil {
+		return errors.New("Orca coordinator binding is unavailable after its receipt commit")
+	}
 	if execution.Target.OrchestrationRun == "" {
 		objective := "SteerLine worker " + execution.ExecutionID
 		key := "orca-native-run:" + execution.ExecutionID
@@ -493,13 +523,20 @@ func (s *Service) bindNativeOrcaCoordinator(ctx context.Context, run *Run, execu
 	if err != nil {
 		return err
 	}
-	identity, err := orcaworker.BindCoordinator(term, fixedConfig.Repository, execution.Process.RuntimeID, fixedConfig.Orca.Executable)
+	identity, err := orcaworker.BindCoordinator(term, fixedConfig.Repository, execution.Process.RuntimeID, orcaProfileSettings(fixedConfig).Executable)
 	if err != nil {
 		return err
 	}
-	execution.OrcaNative.Coordinator = identity
+	state, err := decodeOrcaExecutionState(execution)
+	if err != nil || state == nil {
+		return errors.New("Orca coordinator state is unavailable")
+	}
+	state.Coordinator = identity
 	execution.Target.CoordinatorTerminal = term.Handle
 	s.refreshRun(run)
+	if err := storeOrcaExecutionState(execution, state); err != nil {
+		return err
+	}
 	return s.commitWorker(run)
 }
 
@@ -519,7 +556,11 @@ func (s *Service) verifyLocalNativeOrcaWorker(ctx context.Context, run *Run, exe
 		return configErr
 	}
 	fixedConfig := fixed.config
-	if execution.OrcaNative == nil || execution.Process == nil || execution.Process.Kind != "orca-native" {
+	state, stateErr := decodeOrcaExecutionState(execution)
+	if stateErr != nil {
+		return stateErr
+	}
+	if state == nil || execution.Process == nil || execution.Process.Kind != "orca-native" {
 		return errors.New("native Orca worker binding is incomplete")
 	}
 	if err := orcaworker.VerifyAgentTerminal(ctx, orcaWorkerMetaCaller(fixedConfig), *execution.Process, execution.Workspace.Worktree, execution.Workspace.Branch, fixedConfig.agentName()); err != nil {
@@ -556,7 +597,7 @@ func (s *Service) verifyLocalNativeOrcaWorker(ctx context.Context, run *Run, exe
 			return &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "managed Orca launch differs from its original operation"}
 		}
 	}
-	coordinator := execution.OrcaNative.Coordinator
+	coordinator := state.Coordinator
 	if coordinator.Terminal != "" {
 		if err := orcaworker.VerifyCoordinatorTerminal(ctx, orcaWorkerMetaCaller(fixedConfig), coordinator, fixedConfig.Repository); err != nil {
 			return workerOrcaBackendError(err)

@@ -7,30 +7,8 @@ import (
 )
 
 type Command struct {
-	WindowsSandbox string   `json:"windows_sandbox,omitempty"`
-	Executable     string   `json:"executable"`
-	Args           []string `json:"args"`
-}
-
-type OrcaConfig struct {
-	Executable   string                `json:"executable"`
-	Args         []string              `json:"args"`
-	Shell        string                `json:"shell"`
-	WaitTimeout  string                `json:"wait_timeout"`
-	KeepTerminal bool                  `json:"keep_terminal"`
-	Activate     bool                  `json:"activate"`
-	Supervised   *SupervisedOrcaConfig `json:"supervised,omitempty"`
-}
-
-type SupervisedOrcaConfig struct {
-	ConnectionID            string `json:"connection_id"`
-	EnvironmentID           string `json:"environment_id"`
-	RepositorySelector      string `json:"repository_selector"`
-	CoordinatorTerminal     string `json:"coordinator_terminal"`
-	ExpectedCodexVersion    string `json:"expected_codex_version,omitempty"` // Optional exact pin; empty accepts and records the observed CLI version.
-	PollInterval            string `json:"poll_interval"`
-	CapabilityReportVersion int    `json:"capability_report_version"`
-	RemoteCancelAvailable   bool   `json:"remote_cancel_available"`
+	Executable string   `json:"executable"`
+	Args       []string `json:"args"`
 }
 
 type LegacyCompletionConfig struct {
@@ -59,42 +37,35 @@ type ControlReceipt struct {
 }
 
 type FixedExecutionProfile struct {
-	ExecutionRequirements      executionapi.ExecutionRequirements   `json:"execution_requirements"`
-	RequirementsEvaluation     *executionapi.RequirementsEvaluation `json:"requirements_evaluation,omitempty"`
-	RequirementsEvidenceDigest string                               `json:"requirements_evidence_digest,omitempty"`
-	ImplementationVersion      string                               `json:"implementation_version"`
-	PublicationPolicy          executionapi.PublicationPolicy       `json:"publication_policy"`
-	Publication                PublicationSettings                  `json:"publication"`
-	Version                    int                                  `json:"version"`
-	ExecutionPolicy            executionapi.ExecutionPolicy         `json:"execution_policy"`
-	PolicyDigest               string                               `json:"policy_digest"`
-	AcceptedConfigVersion      string                               `json:"accepted_config_version"`
-	PolicySource               string                               `json:"policy_source"`
-	ID                         string                               `json:"id"`
-	Name                       string                               `json:"name"`
-	Digest                     string                               `json:"digest"`
-	Host                       string                               `json:"host"`
-	Agent                      string                               `json:"agent"`
-	Model                      string                               `json:"model,omitempty"`
-	ReasoningEffort            string                               `json:"reasoning_effort,omitempty"`
-	Sandbox                    string                               `json:"sandbox"`
-	WindowsSandbox             string                               `json:"windows_sandbox,omitempty"`
-	ApprovalPolicy             string                               `json:"approval_policy,omitempty"`
-	CodexProfile               string                               `json:"profile,omitempty"`
-	Codex                      Command                              `json:"codex"`
-	Orca                       OrcaConfig                           `json:"orca,omitempty"`
+	ExecutionRequirements      executionapi.ExecutionRequirements        `json:"execution_requirements"`
+	RequirementsEvaluation     *executionapi.RequirementsEvaluation      `json:"requirements_evaluation,omitempty"`
+	RequirementsEvidenceDigest string                                    `json:"requirements_evidence_digest,omitempty"`
+	ImplementationVersion      string                                    `json:"implementation_version"`
+	ImplementationKey          string                                    `json:"implementation_key"`
+	ImplementationData         []executionapi.ImplementationDataEnvelope `json:"implementation_data"`
+	ImplementationDisplay      []string                                  `json:"implementation_display,omitempty"`
+	PublicationPolicy          executionapi.PublicationPolicy            `json:"publication_policy"`
+	Publication                PublicationSettings                       `json:"publication"`
+	Version                    int                                       `json:"version"`
+	ExecutionPolicy            executionapi.ExecutionPolicy              `json:"execution_policy"`
+	PolicyDigest               string                                    `json:"policy_digest"`
+	AcceptedConfigVersion      string                                    `json:"accepted_config_version"`
+	PolicySource               string                                    `json:"policy_source"`
+	ID                         string                                    `json:"id"`
+	Name                       string                                    `json:"name"`
+	Digest                     string                                    `json:"digest"`
+	Host                       string                                    `json:"host"`
+	Agent                      string                                    `json:"agent"`
 }
 
 // PolicyResources is the resource stage of the same execution snapshot.
 // Native configuration verification does not assert successful worker tools.
 type PolicyResources struct {
-	Version        int                        `json:"version"`
-	Digest         string                     `json:"digest"`
-	ProfileDigest  string                     `json:"profile_digest"`
-	NativeVersion  string                     `json:"native_version"`
-	Contract       string                     `json:"contract"`
-	Workspace      string                     `json:"workspace"`
-	WriteRoots     []string                   `json:"write_roots"`
-	TemporaryRoots []string                   `json:"temporary_roots"`
-	Settings       executionapi.LaunchCommand `json:"settings"`
+	Version            int                                     `json:"version"`
+	Digest             string                                  `json:"digest"`
+	ProfileDigest      string                                  `json:"profile_digest"`
+	Workspace          string                                  `json:"workspace"`
+	WriteRoots         []string                                `json:"write_roots"`
+	TemporaryRoots     []string                                `json:"temporary_roots"`
+	ImplementationData executionapi.ImplementationDataEnvelope `json:"implementation_data"`
 }

@@ -1,19 +1,22 @@
 package steerline
 
 import (
+	"bytes"
 	"os"
 	"testing"
 
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 func TestWorkerFlowContextKeepsFixedRunAndCopiesConfig(t *testing.T) {
 	run := &Run{RunID: "run", ExecutionID: "execution", AttemptID: "attempt"}
 	config := workerContextConfigFixture()
-	config.Codex.Args = []string{"--no-alt-screen"}
+	settings := codexProfileSettings(config)
+	settings.Args = []string{"--no-alt-screen"}
+	setTestCodexProfile(t, &config, settings)
 	config.workerEnv = map[string]string{"A": "original"}
-	config.Orca.Supervised = &SupervisedOrcaConfig{CoordinatorTerminal: "original"}
-	fixedProfile := config.projectExecutionProfile().Freeze()
+	fixedProfile := config.projectExecutionProfile().Freeze(configurationProjectIdentity(config))
 	run.Host, run.Agent, run.Backend, run.Protocol, run.Target = "local", "codex", "local", string(executionapi.ProtocolLocalCodexAppServer), targetFor(config)
 	service := Service{
 		Config: config,
@@ -25,10 +28,9 @@ func TestWorkerFlowContextKeepsFixedRunAndCopiesConfig(t *testing.T) {
 	if err != nil || fixed.run != run || fixed.execution.ExecutionID != "execution" {
 		t.Fatalf("fixed worker context lost its identity: %+v %v", fixed, err)
 	}
-	fixed.config.Codex.Args[0] = "changed"
+	fixed.config.ImplementationData[0].Payload[0] = '['
 	fixed.config.workerEnv["A"] = "changed"
-	fixed.config.Orca.Supervised.CoordinatorTerminal = "changed"
-	if service.Config.Codex.Args[0] != "--no-alt-screen" || service.Config.workerEnv["A"] != "original" || service.Config.Orca.Supervised.CoordinatorTerminal != "original" {
+	if codexProfileSettings(service.Config).Args[0] != "--no-alt-screen" || service.Config.workerEnv["A"] != "original" {
 		t.Fatal("fixed worker context shares mutable configuration with the project")
 	}
 	wrong := *run
@@ -41,13 +43,13 @@ func TestWorkerFlowContextKeepsFixedRunAndCopiesConfig(t *testing.T) {
 func TestWorkerFlowContextsDoNotExchangeExecutionProfiles(t *testing.T) {
 	base := workerContextConfigFixture()
 	routes := []ExecutionProfile{
-		{ID: "first", Name: "First", Host: "local", Agent: "codex", Model: "model-a", Sandbox: "read-only", Codex: Command{Executable: "codex-a", Args: []string{"--search"}}},
-		{ID: "second", Name: "Second", Host: "local", Agent: "codex", Model: "model-b", Sandbox: "workspace-write", Codex: Command{Executable: "codex-b", Args: []string{"--no-alt-screen"}}},
+		testExecutionProfile(t, "first", "First", "local", "codex", codexworker.ProfileConfig{Executable: "codex-a", Model: "model-a", Args: []string{"--search"}}, nil),
+		testExecutionProfile(t, "second", "Second", "local", "codex", codexworker.ProfileConfig{Executable: "codex-b", Model: "model-b", Args: []string{"--no-alt-screen"}}, nil),
 	}
 	service := Service{Config: base, baseConfig: base}
 	for _, route := range routes {
 		id := route.ID
-		fixed := base.bindProjectPolicy(route).Freeze()
+		fixed := base.bindProjectPolicy(route).Freeze(configurationProjectIdentity(base))
 		selected := base.ApplyFixedExecutionProfile(fixed)
 		run := &Run{RunID: id, ExecutionID: id + "-execution", AttemptID: id + "-attempt", Host: "local", Agent: "codex", Backend: string(executionapi.BackendLocal), Protocol: string(executionapi.ProtocolLocalCodexAppServer), Target: targetFor(selected), ExecutionStatus: "pending"}
 		service.State.Runs = append(service.State.Runs, run)
@@ -63,12 +65,16 @@ func TestWorkerFlowContextsDoNotExchangeExecutionProfiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	first.config.Codex.Args[0] = "changed"
-	if first.config.Model != "model-a" || second.config.Model != "model-b" || second.config.Codex.Args[0] != "--no-alt-screen" || service.Config.Model != "" {
+	basePayload := append([]byte(nil), base.ImplementationData[0].Payload...)
+	first.config.ImplementationData[0].Payload[0] = '['
+	secondSettings, _ := codexworker.DecodeProfileConfig(second.config.ImplementationData[0].Payload)
+	projectSettings := codexProfileSettings(service.Config)
+	if first.config.ImplementationData[0].Payload[0] != '[' || !bytes.Equal(basePayload, base.ImplementationData[0].Payload) || secondSettings.Model != "model-b" || secondSettings.Args[0] != "--no-alt-screen" || projectSettings.Model != "" {
 		t.Fatalf("fixed worker routes were mixed: first=%+v second=%+v project=%+v", first.config, second.config, service.Config)
 	}
 }
 
 func workerContextConfigFixture() Config {
-	return Config{Repository: "repo", Branch: "main", Remote: "origin", publicationRemoteURL: "https://github.com/owner/repo.git", Host: "local", Agent: "codex", WorkflowProtocol: WorkerFlowVersion, ExecutionPolicy: workspacePolicyFixture(), PublicationPolicy: executionPublicationFixture(), PR: hostPublicationProviderFixture(), Git: Command{Executable: "git"}, Codex: Command{Executable: os.Args[0]}}
+	config := Config{Repository: "repo", Branch: "main", Remote: "origin", publicationRemoteURL: "https://github.com/owner/repo.git", Host: "local", Agent: "codex", WorkflowProtocol: WorkerFlowVersion, ExecutionPolicy: workspacePolicyFixture(), PublicationPolicy: executionPublicationFixture(), PR: hostPublicationProviderFixture(), Git: Command{Executable: "git"}}
+	return withTestImplementationProfiles(config, codexworker.ProfileConfig{Executable: os.Args[0]}, nil)
 }

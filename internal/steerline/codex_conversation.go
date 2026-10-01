@@ -22,7 +22,8 @@ func localCodexHistoryBindingPath(dir, session string) string {
 }
 
 func codexReaderCommand(c Config) Command {
-	return codexworker.ReaderCommand(c.Codex, c.Profile)
+	settings := codexProfileSettings(c)
+	return codexworker.ReaderCommand(Command{Executable: settings.Executable, Args: settings.Args}, settings.Profile)
 }
 func codexEnvironmentHome() string { return codexworker.EnvironmentHome() }
 func nativeCodexHistoryAvailable(ctx context.Context, c Config) bool {
@@ -431,7 +432,7 @@ func (s *Service) recordCodexHistoryCapabilities(ctx context.Context, b codexwor
 		if configErr != nil {
 			return configErr
 		}
-		if config.Orca.Executable == "" {
+		if orcaProfileSettings(config).Executable == "" {
 			return errors.New("Orca capability report lacks a configured version probe")
 		}
 		response, probeErr := nativeOrcaClient(config).Raw(ctx, positiveDuration(config.CommandTimeout, 30*time.Second), "--version")
