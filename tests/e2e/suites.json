@@ -1,0 +1,4 @@
+[
+  {"id":"smoke.delivery","level":"L2","suite":"smoke","package":"./tests/e2e/smoke","test":"TestDeliverySmoke","env":"controlled"},
+  {"id":"recovery.waiting-merge-restart","level":"L3","suite":"recovery","package":"./tests/e2e/suites/recovery","test":"TestWaitingMergeRestart","env":"controlled"}
+]

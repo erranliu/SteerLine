@@ -69,6 +69,10 @@
 | 71 | 产品客户端适配层与CLI接入 | #68 | [Spec](core-decoupling-10-client.spec.md) | [Plan](core-decoupling-10-client.plan.md) |
 | 72 | TUI与中心实现解耦 | #71 | [Spec](core-decoupling-11-tui.spec.md) | [Plan](core-decoupling-11-tui.plan.md) |
 
+## 分级测试基础
+
+[分级测试与共享 E2E 环境 Spec](tiered-e2e-testing.spec.md) / [Plan](tiered-e2e-testing.plan.md)：已实现并通过[最小验证](../validation/tiered-e2e-testing/README.md)，待 PR 评审，未分配 Task ID。首期沿用 L1，新增独立 L2 交付 smoke、L3 等待合并后服务重启场景，共用 controlled 测试项目/任务环境管理；Windows 串行最小实现，不新增真实平台或全量测试门槛。
+
 ## 共同约束
 
 - [执行架构](execution-architecture.spec.md)与[原生任务](native-task-constraints.md)：身份、单写者、当前格式恢复和真实交付；被 #36 替代的旧执行语义不继续要求。

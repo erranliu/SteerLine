@@ -1,0 +1,8 @@
+{"Time":"2026-10-01T10:59:28.2494154+08:00","Action":"start","Package":"github.com/erranliu/SteerLine/tests/e2e/smoke"}
+{"Time":"2026-10-01T10:59:28.4535996+08:00","Action":"run","Package":"github.com/erranliu/SteerLine/tests/e2e/smoke","Test":"TestDeliverySmoke"}
+{"Time":"2026-10-01T10:59:28.4535996+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/e2e/smoke","Test":"TestDeliverySmoke","Output":"=== RUN   TestDeliverySmoke\n"}
+{"Time":"2026-10-01T11:00:35.7361306+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/e2e/smoke","Test":"TestDeliverySmoke","Output":"--- PASS: TestDeliverySmoke (67.28s)\n"}
+{"Time":"2026-10-01T11:00:35.7366741+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/tests/e2e/smoke","Test":"TestDeliverySmoke","Elapsed":67.28}
+{"Time":"2026-10-01T11:00:35.7366741+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/e2e/smoke","Output":"PASS\n"}
+{"Time":"2026-10-01T11:00:35.7437353+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/e2e/smoke","Output":"ok  \tgithub.com/erranliu/SteerLine/tests/e2e/smoke\t67.494s\n"}
+{"Time":"2026-10-01T11:00:35.7437353+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/tests/e2e/smoke","Elapsed":67.494}
