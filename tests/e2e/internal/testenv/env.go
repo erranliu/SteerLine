@@ -2,6 +2,7 @@
 package testenv
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -163,6 +164,8 @@ func (s *Scenario) NewProject(name string) *Project {
 	for _, name := range []string{"task.spec.md", "task.plan.md"} {
 		raw, err := os.ReadFile(filepath.Join(s.Run.Root, "tests", "e2e", "testdata", "tasks", name))
 		s.Must(err)
+		// Git may check out templates as CRLF; fixture contracts use stable LF bytes.
+		raw = bytes.ReplaceAll(raw, []byte("\r\n"), []byte("\n"))
 		s.Must(os.WriteFile(filepath.Join(p.Repo, "docs", "spec", name), raw, 0600))
 	}
 	p.git(p.Repo, "add", ".")
