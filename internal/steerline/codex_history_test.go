@@ -849,11 +849,11 @@ func TestCodexHistorySourceDiscoveryRejectsWrongWorkspace(t *testing.T) {
 		t.Fatal("the exact source binding was not discovered")
 	}
 	wrong := t.TempDir()
-	s.State.Runs[0].WorktreePath = &wrong
+	s.runs[0].WorktreePath = &wrong
 	if len(s.codexHistorySources()) != 0 || s.State.Service.Error == nil {
 		t.Fatal("a mismatched workspace was read or silently ignored")
 	}
-	s.State.Runs[0].WorktreePath = &workspace
+	s.runs[0].WorktreePath = &workspace
 	b.SessionID = "00000000-0000-0000-0000-000000000002"
 	require(t, writeCodexHistoryBinding(localCodexHistoryBindingPath(filepath.Dir(logPath), b.SessionID), b))
 	sources := s.codexHistorySources()

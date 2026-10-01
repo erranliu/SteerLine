@@ -158,6 +158,9 @@ func (s *Service) advanceOrcaPreparation(ctx context.Context, run *Run) error {
 	if env.Blocker != nil {
 		return nil
 	}
+	if execution.RecoveryRequired {
+		return s.blockWorkerEnvironment(run, orcaworker.HostFact{Reason: "service_recovery_required", Confidence: "confirmed", Source: "service.recovery", Detail: "原准备状态已保留；重新检查后才允许继续派发。"})
+	}
 	if env.Preparation.Verified && !env.Preparation.Invalidated {
 		env.Ready = true
 		if execution.PendingTurnID != "" {

@@ -1,6 +1,6 @@
 # Spec Codex 执行适配器迁移
 
-任务 ID：57；任务名称：Codex 执行适配器迁移；目标：`EXECUTION-ISOLATION`。状态：已实施，待合入。配套 [Plan](execution-isolation-04-codex.plan.md)。硬前置：[#55](execution-isolation-02-workspace.spec.md)、[#56](execution-isolation-03-publication.spec.md) 合入，一个实现 PR 交付。
+任务 ID：57；任务名称：Codex 执行适配器迁移；目标：`EXECUTION-ISOLATION`。状态：已合入 PR #170。配套 [Plan](execution-isolation-04-codex.plan.md)。硬前置：[#55](execution-isolation-02-workspace.spec.md)、[#56](execution-isolation-03-publication.spec.md) 合入，一个实现 PR 交付。
 
 ## 目标与范围
 

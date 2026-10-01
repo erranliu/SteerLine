@@ -22,6 +22,10 @@ type executionRegistrationKey struct {
 	Protocol executionapi.ExecutionProtocol
 }
 type executionRegistration struct {
+	VerifyWorker      func(*Service, context.Context, *Run, *ExecutionRecord) error
+	OrcaOperations    func(Config) orcaExecutionOperations
+	RelayResult       func(*Service, context.Context, *Run, *ExecutionRecord, *OrcaNativeTurn) (bool, error)
+	ClearRelay        func(*ExecutionRecord, *Run, *OrcaNativeTurn)
 	WorkspaceRequest  func(*Run) (workerWorkspacePreparationInput, error)
 	PrepareWorkspace  func(*Service, context.Context, *Run, string) (bool, error)
 	WaitFacts         func(*Run, *ExecutionRecord) workerWaitFacts
@@ -56,6 +60,9 @@ func buildExecutionRegistry(entries []executionRegistration) (map[executionRegis
 		if entry.Preflight == nil || entry.Prepare == nil || entry.Start == nil || entry.Resume == nil || entry.PendingIdentity == nil || entry.Backend == nil || entry.Target == nil || entry.ProbeRequirements == nil || entry.QueryTool == nil || entry.DeliverFeedback == nil || entry.DecodeEvent == nil || entry.ReadTurn == nil {
 			return nil, fmt.Errorf("incomplete execution operations: %+v", entry.Key)
 		}
+		if entry.Key.Backend == executionapi.BackendOrca && (entry.OrcaOperations == nil || entry.VerifyWorker == nil) {
+			return nil, fmt.Errorf("incomplete Orca operations: %+v", entry.Key)
+		}
 		route := entry.Host + ":" + entry.Key.Agent
 		if routes[route] {
 			return nil, fmt.Errorf("ambiguous execution combination %s", route)
@@ -88,7 +95,7 @@ func init() {
 			QueryTool: queryHostRequirementTool,
 		},
 		{
-			Key: executionRegistrationKey{executionapi.BackendOrca, "codex", executionapi.ProtocolOrcaTerminalV2}, Host: "orca", Preflight: preflightNativeWorkerFlow, Cleanup: (*Service).finishNativeOrcaCleanup,
+			Key: executionRegistrationKey{executionapi.BackendOrca, "codex", executionapi.ProtocolOrcaTerminalV2}, Host: "orca", OrcaOperations: nativeOrcaOperations, VerifyWorker: (*Service).verifyLocalNativeOrcaWorker, RelayResult: reconcileNativeResultRelay, ClearRelay: clearNativeResultRelay, Preflight: preflightNativeWorkerFlow, Cleanup: (*Service).finishNativeOrcaCleanup,
 			Prepare: (*Service).prepareNativeOrcaWorkerFlow, Start: (*Service).startNativeOrcaWorkerTurn,
 			Resume: func(s *Service, ctx context.Context, task *TaskRecord, run *Run) (bool, error) {
 				_, err := s.resumeNativeOrcaWorker(ctx, task, run)
@@ -112,7 +119,7 @@ func init() {
 			}, QueryTool: queryNativeRequirementTool,
 		},
 		{
-			Key: executionRegistrationKey{executionapi.BackendOrca, "codex", executionapi.ProtocolOrcaSupervised}, Host: "orca_supervised", Preflight: preflightRemoteWorkerFlow, WorkspaceRequest: remoteWorkerWorkspaceRequest, PrepareWorkspace: prepareRegisteredRemoteWorkspace, Cleanup: (*Service).finishRemoteOrcaCleanup,
+			Key: executionRegistrationKey{executionapi.BackendOrca, "codex", executionapi.ProtocolOrcaSupervised}, Host: "orca_supervised", OrcaOperations: remoteOrcaOperations, VerifyWorker: (*Service).verifyRemoteOrcaWorker, Preflight: preflightRemoteWorkerFlow, WorkspaceRequest: remoteWorkerWorkspaceRequest, PrepareWorkspace: prepareRegisteredRemoteWorkspace, Cleanup: (*Service).finishRemoteOrcaCleanup,
 			Prepare: (*Service).prepareSupervisedOrcaWorker, Start: (*Service).startSupervisedOrcaWorkerTurn, Resume: (*Service).resumeSupervisedOrcaWorker,
 			PendingIdentity: remote.PendingIdentity, DecodeEvent: rejectDispatchEvent, ReadTurn: rejectDispatchTurn,
 			DeliverFeedback: (*Service).applyNativeOrcaDecision,

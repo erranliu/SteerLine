@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/erranliu/SteerLine/internal/steerline/codexapp"
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/workerflow"
@@ -19,10 +18,6 @@ func appServerAnswerEvidence(path string, ask codexAskCall, answers map[string][
 
 // A crash can happen after a native request is journaled but before its
 // Decision reaches SQLite. Replay only requests not completed or persisted.
-func appServerPendingAskEvents(path string, run *Run, e *ExecutionRecord, turnID string) ([]codexapp.Envelope, error) {
-	return codexworker.PendingAskEvents(path, e.SessionID, turnID, knownCodexAsks(run, e))
-}
-
 type appServerRecoveryResult struct {
 	runID     string
 	attemptID string

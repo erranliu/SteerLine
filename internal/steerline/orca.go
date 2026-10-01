@@ -33,12 +33,6 @@ func nativeOrcaConfig(c Config) orcaworker.Config {
 	}
 	return cfg
 }
-func showBoundOrcaTerminal(ctx context.Context, c Config, identity executionapi.ProcessIdentity) (orcaTerminal, error) {
-	return nativeOrcaClient(c).ShowBoundTerminal(ctx, targetFor(c), identity)
-}
-func inspectBoundOrcaTerminal(ctx context.Context, c Config, identity executionapi.ProcessIdentity) (orcaTerminal, error) {
-	return nativeOrcaClient(c).InspectBoundTerminal(ctx, targetFor(c), identity)
-}
 func validateOrcaRepositoryRegistration(ctx context.Context, c Config) error {
 	_, err := orcaworker.FindRepo(ctx, nativeOrcaClient(c).Call, c.Repository)
 	if errors.Is(err, orcaworker.ErrRepoUnavailable) {

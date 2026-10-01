@@ -1,6 +1,6 @@
 # Plan 项目执行权限策略
 
-任务 ID：59；任务名称：项目执行权限策略；目标：`EXECUTION-ISOLATION`。状态：待实施。唯一执行依据：[Spec](execution-isolation-06-policy.spec.md)。硬前置：#58 合入，一个实现 PR 交付。
+任务 ID：59；任务名称：项目执行权限策略；目标：`EXECUTION-ISOLATION`。状态：已合入 PR #172；remote 成功场景仍受 #59 权限证据门槛限制。唯一执行依据：[Spec](execution-isolation-06-policy.spec.md)。硬前置：#58 合入，一个实现 PR 交付。
 
 ## 实施步骤
 

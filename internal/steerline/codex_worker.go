@@ -199,21 +199,6 @@ func applyCodexRecovery(run *Run, e *ExecutionRecord, result codexworker.Recover
 	}
 	return nil
 }
-func reattachAppServerWorker(ctx context.Context, c Config, run *Run, e *ExecutionRecord) (*Worker, bool, error) {
-	if run == nil || e == nil || run.WorktreePath == nil {
-		return nil, false, errors.New("app-server recovery lacks execution/workspace")
-	}
-	commandID, turnID := e.CurrentCommandID, e.CurrentTurnID
-	if e.PendingCommandID != "" {
-		commandID, turnID = e.PendingCommandID, e.PendingTurnID
-	}
-	result, err := codexBackend(c, run).Reattach(ctx, codexBinding(e), commandID, turnID, knownCodexAsks(run, e))
-	return applyCodexRecovery(run, e, result), result.Completed, err
-}
-
-// Network I/O belongs to the Execution. Only handleAppServerLaunchMessage
-// writes the service projection and SQLite, including the mandatory receipt
-// barrier between thread/start and turn/start.
 func (s *Service) launchAppServerTurn(ctx context.Context, config Config, run Run, execution ExecutionRecord, commandID, prompt, opID string) {
 	timeout := positiveDuration(config.CommandTimeout, 30*time.Second)
 	if timeout > 30*time.Second {

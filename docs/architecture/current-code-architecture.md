@@ -1,6 +1,6 @@
 # SteerLine 当前代码架构图
 
-快照日期：2026-10-01。源码基线：`7350e842bf1c33d50add3050e7bdfc8faa81c162`（已 rebase 并核对远端 `origin/main`）。本文起源于 [PR #153](https://github.com/erranliu/SteerLine/pull/153)，包含 PR #166 控制台渲染拆分与 #54–#61 执行隔离系列；最新 PR #174 已交付执行需求检查、内置注册与 v4 固定执行快照，叠加本轮会话只读查询拆包。
+快照日期：2026-10-01。源码基线：`49d71c9`（PR #176 已合入），叠加本轮执行隔离清理与恢复修复。本文起源于 [PR #153](https://github.com/erranliu/SteerLine/pull/153)，包含 PR #166 控制台渲染拆分与 #54–#61 执行隔离系列；最新 PR #174 已交付执行需求检查、内置注册与 v4 固定执行快照，包含会话只读查询拆包；执行隔离的合入与验收边界见[总纲](../roadmap/execution-isolation.md)。
 
 本文描述当前检出的代码：系统边界、实际 Go 包依赖、核心包内部职责、任务执行、人工决策、数据模型、日志与恢复。图中的职责分组不代表已拆成独立包或服务。箭头含义在各图前说明；未来方案与当前可启动路径分开列出，第 10 节给出后续解耦与复用建议。
 
@@ -576,7 +576,9 @@ query.Service 持有 WorkflowReader、EventReader、TaskReader、ProjectReader�
 | 控制台渲染拆分 | view_tasks、view_conversation、conversation_anchor、view_text 同包分工 | PR #166 |
 | #61 执行需求和配置注册 | ExecutionRequirements、内置注册、v4 快照与当前需求阻断 | PR #174 |
 
-执行隔离系列已收口；后续重构复用已有策略、需求、内置注册和事务，不重建 backend、readiness 或 publication 引擎。注册回调仍接通原中心协调函数，不拥有第二套业务状态。类型所有者、删除项与原始验证证据见 [#61 验收记录](../validation/execution-isolation-08-resolution/README.md)；该历史验收不是本次重新运行。远端能否 admission 放行取决于具体权限落实证据，不能以完成注册代替能力认证。
+执行隔离的配置与注册实现已合入，远程成功准入仍待权限证据；后续重构复用已有策略、需求、内置注册和事务，不重建 backend、readiness 或 publication 引擎。注册回调仍接通原中心协调函数，不拥有第二套业务状态。类型所有者、删除项与原始验证证据见 [#61 验收记录](../validation/execution-isolation-08-resolution/README.md)；该历史验收不是本次重新运行。远端能否 admission 放行取决于具体权限落实证据，不能以完成注册代替能力认证。
+
+本轮通过 `orca_execution_operations.go` 将 inbox、结算、原 Dispatch 核验、回复/重查和确认/重查绑定到注册项；本机结果转发/清理使用注册回调。中心仍持有 intent、receipt、Decision、恢复门槛和 TaskDelivery 事务，配置校验与固定身份映射也仍保留平台知识。无人调用的旧恢复/journal 观察和包装入口已删除，仅验收消费的辅助入口移入测试文件。受管 native 重启不再自动清除人工确认，准备完成后也需确认才派发业务；remote 续聊在发送前核对原 incarnation。删除依据与最小验证见[清理记录](../validation/execution-isolation-cleanup/README.md)。
 
 ### 10.2 会话只读查询：本轮已落地
 
@@ -602,7 +604,7 @@ CommandService 与 Service 仍依赖具体 SQLiteStore，DomainTx 的任务、�
 
 ## 附录：全部非测试 Go 源文件索引
 
-下列索引覆盖 `cmd/` 与 `internal/` 中全部非测试 `.go` 文件，按真实包目录分组。
+当前 268 个生产源码文件，按实际目录列出；测试辅助文件不计入。
 
 ### cmd/orca-probe
 
@@ -656,7 +658,6 @@ CommandService 与 Service 仍依赖具体 SQLiteStore，DomainTx 的任务、�
 | [execution_capability.go](../../internal/steerline/execution_capability.go) |
 | [execution_helpers.go](../../internal/steerline/execution_helpers.go) |
 | [execution_profiles.go](../../internal/steerline/execution_profiles.go) |
-| [execution_recovery.go](../../internal/steerline/execution_recovery.go) |
 | [execution_registry.go](../../internal/steerline/execution_registry.go) |
 | [execution_requirements.go](../../internal/steerline/execution_requirements.go) |
 | [execution_snapshot.go](../../internal/steerline/execution_snapshot.go) |
@@ -690,6 +691,7 @@ CommandService 与 Service 仍依赖具体 SQLiteStore，DomainTx 的任务、�
 | [observation.go](../../internal/steerline/observation.go) |
 | [operation.go](../../internal/steerline/operation.go) |
 | [orca.go](../../internal/steerline/orca.go) |
+| [orca_execution_operations.go](../../internal/steerline/orca_execution_operations.go) |
 | [orca_feedback_hooks.go](../../internal/steerline/orca_feedback_hooks.go) |
 | [orca_remote_adapter.go](../../internal/steerline/orca_remote_adapter.go) |
 | [orca_remote_service.go](../../internal/steerline/orca_remote_service.go) |

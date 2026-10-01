@@ -34,6 +34,7 @@ type fakeNativeOrcaState struct {
 	LoseRunOnce                                                      bool
 	Tasks                                                            []string
 	Dispatches                                                       int
+	FirstBusinessDispatch                                            int
 	LoseDispatchAt                                                   int
 	LoseTaskAt                                                       int
 	EscalationAt                                                     int
@@ -80,6 +81,10 @@ func fakeNativeOrca(stateDir string, args []string) int {
 		state.Acked = map[string]bool{}
 	}
 	save := func() { data, _ := json.Marshal(state); _ = AtomicWrite(path, data) }
+	firstBusinessDispatch := state.FirstBusinessDispatch
+	if firstBusinessDispatch == 0 {
+		firstBusinessDispatch = 1
+	}
 	worktreeID := func() string { return "fake-repo::" + filepath.ToSlash(state.Path) }
 	worktree := func() map[string]any {
 		return map[string]any{"id": worktreeID(), "repoId": "fake-repo", "path": filepath.ToSlash(state.Path), "head": state.Base, "baseRef": state.Base, "branch": "refs/heads/" + state.Branch, "displayName": state.Name, "comment": state.Comment, "createdWithAgent": state.CreatedWithAgent}
@@ -185,7 +190,7 @@ func fakeNativeOrca(stateDir string, args []string) int {
 			}
 			return fakeOrcaOK(map[string]any{"terminals": rows, "truncated": false})
 		case "read":
-			if state.EnvironmentMode && arg(args, "--terminal") == "term-agent" {
+			if (state.EnvironmentMode || state.FirstBusinessDispatch > 1) && arg(args, "--terminal") == "term-agent" {
 				return fakeOrcaOK(map[string]any{"terminal": map[string]any{"handle": "term-agent", "source": "screen", "tail": []string{"› Ask Codex to do anything", "? for shortcuts"}}})
 			}
 			if arg(args, "--terminal") == "term-agent" && state.PendingPaste {
@@ -230,7 +235,7 @@ func fakeNativeOrca(stateDir string, args []string) int {
 			}
 			return fakeOrcaOK(map[string]any{"run": map[string]any{"id": "run-fake"}, "mutation": map[string]any{"requestId": "request-run"}})
 		case "reply":
-			if arg(args, "--id") != "msg-ask-1" || state.Dispatches != 1 {
+			if arg(args, "--id") != "msg-ask-1" || state.Dispatches != firstBusinessDispatch {
 				return fakeOrcaErr("invalid_argument", "wrong question")
 			}
 			state.Replies++
@@ -241,7 +246,7 @@ func fakeNativeOrca(stateDir string, args []string) int {
 			if lost {
 				return fakeOrcaErr("runtime_unavailable", "reply was accepted but response was lost")
 			}
-			return fakeOrcaOK(map[string]any{"question": map[string]any{"message_id": "msg-ask-1", "dispatch_id": "ctx-1", "answer_body": arg(args, "--body")}, "mutation": map[string]any{"requestId": "request-reply-1"}})
+			return fakeOrcaOK(map[string]any{"question": map[string]any{"message_id": "msg-ask-1", "dispatch_id": fmt.Sprintf("ctx-%d", firstBusinessDispatch), "answer_body": arg(args, "--body")}, "mutation": map[string]any{"requestId": "request-reply-1"}})
 		case "inbox":
 			feedbackDispatch := state.EscalationAt
 			if state.EnvironmentMode {
@@ -249,7 +254,7 @@ func fakeNativeOrca(stateDir string, args []string) int {
 			}
 			messages := []any{}
 			if state.Replies > 0 {
-				messages = append(messages, map[string]any{"id": "msg-reply-1", "run_id": "run-fake", "from_handle": "run:run-fake", "to_handle": "dispatch:ctx-1", "thread_id": "msg-ask-1", "body": state.ReplyBody, "type": "status"})
+				messages = append(messages, map[string]any{"id": "msg-reply-1", "run_id": "run-fake", "from_handle": "run:run-fake", "to_handle": fmt.Sprintf("dispatch:ctx-%d", firstBusinessDispatch), "thread_id": "msg-ask-1", "body": state.ReplyBody, "type": "status"})
 			}
 			if state.Sends > 0 {
 				messages = append(messages, map[string]any{"id": "msg-send-1", "run_id": "run-fake", "from_handle": "run:run-fake", "to_handle": fmt.Sprintf("dispatch:ctx-%d", feedbackDispatch), "subject": state.SendSubject, "body": state.SendBody, "type": "status"})
@@ -386,9 +391,9 @@ func fakeNativeOrca(stateDir string, args []string) int {
 				}
 				return fakeOrcaOK(map[string]any{"runId": "run-fake", "messages": []any{}})
 			}
-			if state.Dispatches == 1 && state.Replies == 0 && !state.Acked["delivery-ask-1"] {
-				payload, _ := json.Marshal(map[string]any{"taskId": "task-1", "dispatchId": "ctx-1", "question": "Which approach?", "options": []string{"Direct path"}})
-				message := map[string]any{"id": "msg-ask-1", "from_handle": "dispatch:ctx-1", "type": "question", "body": "Which approach?", "payload": string(payload)}
+			if state.Dispatches == firstBusinessDispatch && state.Replies == 0 && !state.Acked["delivery-ask-1"] {
+				payload, _ := json.Marshal(map[string]any{"taskId": fmt.Sprintf("task-%d", firstBusinessDispatch), "dispatchId": fmt.Sprintf("ctx-%d", firstBusinessDispatch), "question": "Which approach?", "options": []string{"Direct path"}})
+				message := map[string]any{"id": "msg-ask-1", "from_handle": fmt.Sprintf("dispatch:ctx-%d", firstBusinessDispatch), "type": "question", "body": "Which approach?", "payload": string(payload)}
 				return fakeOrcaOK(map[string]any{"runId": "run-fake", "deliveryId": "delivery-ask-1", "messages": []any{message}})
 			}
 			if state.Dispatches == state.EscalationAt && state.Sends == 0 && !state.Acked[fmt.Sprintf("delivery-escalation-%d", state.EscalationAt)] {
@@ -396,7 +401,7 @@ func fakeNativeOrca(stateDir string, args []string) int {
 				message := map[string]any{"id": fmt.Sprintf("msg-escalation-%d", n), "from_handle": fmt.Sprintf("dispatch:ctx-%d", n), "type": "escalation", "subject": "Need more guidance", "body": "Send guidance to the current Dispatch"}
 				return fakeOrcaOK(map[string]any{"runId": "run-fake", "deliveryId": fmt.Sprintf("delivery-escalation-%d", n), "messages": []any{message}})
 			}
-			if state.Dispatches > 0 && (state.Dispatches > 1 || state.Replies > 0) && (state.Dispatches != state.EscalationAt || state.Sends > 0) && !state.Acked[fmt.Sprintf("delivery-done-%d", state.Dispatches)] {
+			if state.Dispatches > 0 && (state.Dispatches > firstBusinessDispatch || state.Replies > 0) && (state.Dispatches != state.EscalationAt || state.Sends > 0) && !state.Acked[fmt.Sprintf("delivery-done-%d", state.Dispatches)] {
 				n := state.Dispatches
 				payload, _ := json.Marshal(map[string]any{"taskId": fmt.Sprintf("task-%d", n), "dispatchId": fmt.Sprintf("ctx-%d", n), "outcome": "succeeded"})
 				message := map[string]any{"id": fmt.Sprintf("msg-%d", n), "from_handle": "term-agent", "type": "worker_done", "body": fmt.Sprintf("DONE %d", n), "payload": string(payload)}
@@ -437,6 +442,9 @@ func fakeNativeOrca(stateDir string, args []string) int {
 		case "worker-show":
 			n, _ := strconv.Atoi(strings.TrimPrefix(arg(args, "--dispatch"), "ctx-"))
 			status := "completed"
+			if !state.EnvironmentMode && (n == firstBusinessDispatch && state.Replies == 0 || state.EscalationAt > 0 && n == state.EscalationAt && state.Sends == 0) {
+				status = "dispatched"
+			}
 			if state.EnvironmentMode && n > 0 {
 				if strings.HasPrefix(state.Tasks[n-1], "Readiness preparation only.") {
 					if state.ReadinessMode == "hold" || state.ReadinessMode == "tool_failure" {
