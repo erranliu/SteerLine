@@ -1,6 +1,7 @@
 package steerline
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 
@@ -295,6 +296,31 @@ func (s *Service) startWorkerOperation(run *Run, kind, key string, payload any) 
 	if err != nil {
 		return "", err
 	}
+	workflow := s.workflowRecord(run)
+	if workerOperationRequiresRequirements(kind) && workflow != nil && workflow.ExecutionProfile != nil && !workflow.ExecutionProfile.ExecutionRequirements.Empty() {
+		fixed, err := s.workerFlowContext(run)
+		if err != nil {
+			return "", err
+		}
+		// Existing outcomes remain read-only reconcileable; a pending intent has
+		// not been sent and still needs current requirements before transmission.
+		needsCheck := true
+		for _, op := range s.domain.Operations {
+			if op.IdempotencyKey == key && op.Status != "pending" {
+				needsCheck = false
+				break
+			}
+		}
+		if needsCheck {
+			ctx := s.runContext
+			if ctx == nil {
+				ctx = context.Background()
+			}
+			if err = s.checkCurrentExecutionRequirements(ctx, fixed); err != nil {
+				return "", err
+			}
+		}
+	}
 	for _, existing := range s.domain.Operations {
 		if existing.IdempotencyKey != key {
 			continue
@@ -315,4 +341,13 @@ func (s *Service) startWorkerOperation(run *Run, kind, key string, payload any) 
 	}
 	s.pendingOperations[operation.OperationID] = run.RunID
 	return operation.OperationID, s.commitWorker(run)
+}
+
+func workerOperationRequiresRequirements(kind string) bool {
+	switch kind {
+	case "orca_remote_release", "orca_remote_coordinator_close", "orca_native_terminal_close", "orca_native_ack", "orca_native_relay_done":
+		return false
+	default:
+		return true
+	}
 }

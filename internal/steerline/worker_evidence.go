@@ -5,14 +5,14 @@ import (
 
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
-	"github.com/erranliu/SteerLine/internal/steerline/workerflow"
 )
 
 // Worker protocol adapters verify native evidence before the service changes
 // business records. Empty fields mean that the source did not provide a fact.
 type workerFlowEventFact struct {
 	executionapi.EventFact
-	Question *codexAskCall
+	Question           *codexAskCall
+	StartedUsesCommand bool
 }
 
 // workerSessionContext converts persisted records to fixed, value-only input.
@@ -35,13 +35,10 @@ func workerSessionContext(run *Run, record *ExecutionRecord) *executionapi.Sessi
 	return fixed
 }
 
-func decodeWorkerFlowEvent(mode workerflow.Mode, ev WorkerEvent, execution *executionapi.SessionContext, inspectReply bool) (workerFlowEventFact, error) {
+func decodeCodexWorkerFlowEvent(ev WorkerEvent, execution *executionapi.SessionContext, inspectReply bool) (workerFlowEventFact, error) {
 	fact := workerFlowEventFact{EventFact: executionapi.EventFact{Source: ev.Source, SourceEventID: ev.SourceEventID, SourceCursor: ev.SourceCursor, SourceIdentity: ev.SourceIdentity, SourceSegment: ev.SourceSegment, SourceOffset: ev.SourceOffset, SourceLength: ev.SourceLength}}
 	if execution == nil {
 		return fact, errors.New("worker event has no fixed execution")
-	}
-	if mode != workerflow.LocalCodex {
-		return fact, errors.New("Orca messages require their fixed Dispatch adapter")
 	}
 	if ev.Session != "" {
 		if err := codexworker.ValidateSession(ev.Session, execution.SessionID); err != nil {
@@ -60,6 +57,7 @@ func decodeWorkerFlowEvent(mode workerflow.Mode, ev WorkerEvent, execution *exec
 		return fact, err
 	}
 	fact.StartedTurnID, fact.ToolReply = native.StartedTurnID, native.ToolReply
+	fact.StartedUsesCommand = native.StartedTurnID != ""
 	if native.Question != nil {
 		call := *native.Question
 		call.Generation = execution.Generation
@@ -71,5 +69,12 @@ func decodeWorkerFlowEvent(mode workerflow.Mode, ev WorkerEvent, execution *exec
 type workerTurnEvidence struct {
 	executionapi.TurnEvidence
 	PublishRequested bool
-	LocalCodex       bool
+}
+
+// These facts describe original turn/question readiness, not backend identity.
+type workerWaitFacts struct {
+	PreserveUnresolvedTurn bool
+	PreserveActiveStatus   bool
+	ContextPrefix          string
+	Options                []executionapi.DecisionOption
 }

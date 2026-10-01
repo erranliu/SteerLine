@@ -189,9 +189,9 @@ func TestOperationRecordRejectsCorruptionBeforeUse(t *testing.T) {
 }
 
 func TestNativeEvidenceCertificationRequiresFixedTargetAndVersion(t *testing.T) {
-	f := newFixture(t)
+	c, _ := nativeTaskFixture(t)
 	path := filepath.Join(t.TempDir(), "local-native.json")
-	evidence := map[string]any{"version": 1, "captured_at": time.Now().UTC(), "platform": runtime.GOOS + "/" + runtime.GOARCH, "backend": "local", "protocol": "local_process", "target_id": targetFor(f.c).ID, "agent": "codex", "codex_version": "fake-codex/1", "output_sha256": strings.Repeat("a", 64), "output_bytes": 77, "stop_status": "confirmed", "process_absent": true}
+	evidence := map[string]any{"version": 1, "captured_at": time.Now().UTC(), "platform": runtime.GOOS + "/" + runtime.GOARCH, "backend": "local", "protocol": "local_codex_app_server_v1", "target_id": targetFor(c).ID, "agent": "codex", "codex_version": "codex-cli 0.159.2", "output_sha256": strings.Repeat("a", 64), "output_bytes": 77, "stop_status": "confirmed", "process_absent": true}
 	write := func() {
 		t.Helper()
 		data, err := json.Marshal(evidence)
@@ -203,7 +203,7 @@ func TestNativeEvidenceCertificationRequiresFixedTargetAndVersion(t *testing.T) 
 		}
 	}
 	write()
-	report, err := CertifyExecutionBackend(context.Background(), f.c, []string{path})
+	report, err := CertifyExecutionBackend(context.Background(), c, []string{path})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -215,12 +215,21 @@ func TestNativeEvidenceCertificationRequiresFixedTargetAndVersion(t *testing.T) 
 	if capabilityStatus(report, "retry") != executionapi.CapabilityNotTested {
 		t.Fatalf("legacy backend retry capability was retained: %#v", report.Capabilities)
 	}
+	c.ExecutionRequirements.Capabilities = []string{"workspace_inspection"}
+	_, err = evaluateExecutionRequirements(context.Background(), c)
+	require(t, err)
+	evidence["protocol"] = "local_process"
+	write()
+	if _, err = CertifyExecutionBackend(context.Background(), c, []string{path}); err == nil {
+		t.Fatal("old protocol evidence satisfied registered app-server route")
+	}
+	evidence["protocol"] = "local_codex_app_server_v1"
 	evidence["target_id"] = "different-target"
 	write()
-	if _, err = CertifyExecutionBackend(context.Background(), f.c, []string{path}); err == nil {
+	if _, err = CertifyExecutionBackend(context.Background(), c, []string{path}); err == nil {
 		t.Fatal("foreign target evidence certified")
 	}
-	if _, err = (executionRecords{root: f.c.RunDir}).loadCapabilityReport(report); err != nil {
+	if _, err = (executionRecords{root: c.RunDir}).loadCapabilityReport(report); err != nil {
 		t.Fatalf("certified evidence did not survive source artifact change: %v", err)
 	}
 }
@@ -234,7 +243,7 @@ func TestOrcaCertificationRequiresAgentAndTerminalEvidence(t *testing.T) {
 	f.c.Host = "orca"
 	f.c.Agent = "codex"
 	f.c.Orca = OrcaConfig{Executable: exe, Args: []string{"--fake", "orca", t.TempDir()}, Shell: "cmd.exe", WaitTimeout: "5s"}
-	common := map[string]any{"version": 1, "captured_at": time.Now().UTC(), "platform": runtime.GOOS + "/" + runtime.GOARCH, "backend": "orca", "protocol": "orca_terminal_v2", "target_id": targetFor(f.c).ID, "agent": "codex", "orca_version": "fake-orca/1", "stop_status": "confirmed"}
+	common := map[string]any{"version": 1, "captured_at": time.Now().UTC(), "platform": runtime.GOOS + "/" + runtime.GOARCH, "backend": "orca", "protocol": "orca_terminal_v2", "target_id": targetFor(f.c).ID, "agent": "codex", "orca_version": "fake-orca/1", "codex_version": "codex-cli 0.159.2", "stop_status": "confirmed"}
 	write := func(name string, fields map[string]any) string {
 		t.Helper()
 		copy := map[string]any{}

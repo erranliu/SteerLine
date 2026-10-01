@@ -20,11 +20,11 @@ func (s *Service) finishWorkerFlowFor(run *Run, workerErr error) error {
 	if task := nativeTaskRecord(s.domain.Tasks, run.DomainTaskID); task != nil && (task.Status == "closed" || task.Status == "discarded") {
 		return nil // A late process exit cannot reopen a terminal Task.
 	}
-	mode, err := s.workerFlowMode(run)
+	mode, err := s.workerFlowRegistration(run)
 	if err != nil {
 		return err
 	}
-	evidence, readErr := readWorkerTurnEvidence(fixed, mode)
+	evidence, readErr := mode.ReadTurn(fixed)
 	if readErr != nil {
 		execution.Status = "blocked"
 		s.refreshRun(run)
@@ -57,34 +57,18 @@ func (s *Service) finishWorkerFlowFor(run *Run, workerErr error) error {
 		s.refreshRun(run)
 		return s.waitWorkerFlow(run, "The original worker process exited without a confirmed completed turn; its output and session are retained")
 	}
-	if evidence.LocalCodex {
-		execution.PendingAsks = nil // Requests from a terminal turn cannot enter a later turn.
-	}
-	if evidence.LocalCodex && run.Decision != nil && run.Decision.Request.NativeAsk != nil {
-		if run.Decision.Status == "pending" {
-			s.setDecisionStatus(run, "superseded")
-			if err := s.commitWorker(run); err != nil {
-				return err
-			}
-			workflow, execution = s.workflowRecords(run)
-			s.setRunDecision(run, nil)
-		} else if run.Decision.Status == "answer_saved" {
-			if err := StopWorkerTurn(workflow, execution, turnID, true); err != nil {
-				return err
-			}
-			execution.TurnEndedAt = ptr(now())
-			execution.Status = "blocked"
-			s.refreshRun(run)
-			execution.Error = ptr("Native turn ended before the original answer delivery was confirmed; the saved answer and request are retained")
-			s.refreshRun(run)
-			return s.commitWorker(run)
+	if mode.SettleRequests != nil {
+		handled, err := mode.SettleRequests(s, run, workflow, execution, evidence)
+		if handled || err != nil {
+			return err
 		}
+		workflow, execution = s.workflowRecords(run)
 	}
 	if run.Decision != nil && run.Decision.Status == "answer_saved" {
 		answer, answerErr := ReadDecisionAnswer(run)
 		if answerErr == nil {
 			command, commandErr := s.domainStore.CommandByIdempotency(context.Background(), c.identity, decisionAnswerKey(answer))
-			if commandErr == nil && command.Kind == "answer_decision" && (command.CommandID == turnID || evidence.LocalCodex && command.CommandID == execution.CurrentCommandID) {
+			if commandErr == nil && command.Kind == "answer_decision" && (command.CommandID == turnID || evidence.CommandID != "" && command.CommandID == evidence.CommandID) {
 				s.setDecisionStatus(run, "reply_accepted")
 			}
 		}

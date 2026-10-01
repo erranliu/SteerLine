@@ -19,10 +19,11 @@ func validServiceCommandKind(kind string) bool {
 }
 
 type Runner struct {
-	Dir     string
-	Timeout time.Duration
-	Env     map[string]string
-	Input   []byte
+	Dir         string
+	Timeout     time.Duration
+	Env         map[string]string
+	Environment []string
+	Input       []byte
 }
 type limitedBuffer struct {
 	bytes.Buffer
@@ -43,6 +44,9 @@ func (r Runner) Output(ctx context.Context, command Command, args ...string) ([]
 	defer cancel()
 	cmd := exec.Command(command.Executable, append(append([]string{}, command.Args...), args...)...)
 	cmd.Dir = r.Dir
+	if r.Environment != nil {
+		cmd.Env = append([]string{}, r.Environment...)
+	}
 	if r.Input != nil {
 		cmd.Stdin = bytes.NewReader(r.Input)
 	}

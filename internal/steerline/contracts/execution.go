@@ -77,26 +77,30 @@ type OrcaAskCall struct {
 }
 
 type FixedExecutionProfile struct {
-	PublicationPolicy     executionapi.PublicationPolicy `json:"publication_policy"`
-	Publication           PublicationSettings            `json:"publication"`
-	Version               int                            `json:"version"`
-	ExecutionPolicy       executionapi.ExecutionPolicy   `json:"execution_policy"`
-	PolicyDigest          string                         `json:"policy_digest"`
-	AcceptedConfigVersion string                         `json:"accepted_config_version"`
-	PolicySource          string                         `json:"policy_source"`
-	ID                    string                         `json:"id"`
-	Name                  string                         `json:"name"`
-	Digest                string                         `json:"digest"`
-	Host                  string                         `json:"host"`
-	Agent                 string                         `json:"agent"`
-	Model                 string                         `json:"model,omitempty"`
-	ReasoningEffort       string                         `json:"reasoning_effort,omitempty"`
-	Sandbox               string                         `json:"sandbox"`
-	WindowsSandbox        string                         `json:"windows_sandbox,omitempty"`
-	ApprovalPolicy        string                         `json:"approval_policy,omitempty"`
-	CodexProfile          string                         `json:"profile,omitempty"`
-	Codex                 Command                        `json:"codex"`
-	Orca                  OrcaConfig                     `json:"orca,omitempty"`
+	ExecutionRequirements      executionapi.ExecutionRequirements   `json:"execution_requirements"`
+	RequirementsEvaluation     *executionapi.RequirementsEvaluation `json:"requirements_evaluation,omitempty"`
+	RequirementsEvidenceDigest string                               `json:"requirements_evidence_digest,omitempty"`
+	ImplementationVersion      string                               `json:"implementation_version"`
+	PublicationPolicy          executionapi.PublicationPolicy       `json:"publication_policy"`
+	Publication                PublicationSettings                  `json:"publication"`
+	Version                    int                                  `json:"version"`
+	ExecutionPolicy            executionapi.ExecutionPolicy         `json:"execution_policy"`
+	PolicyDigest               string                               `json:"policy_digest"`
+	AcceptedConfigVersion      string                               `json:"accepted_config_version"`
+	PolicySource               string                               `json:"policy_source"`
+	ID                         string                               `json:"id"`
+	Name                       string                               `json:"name"`
+	Digest                     string                               `json:"digest"`
+	Host                       string                               `json:"host"`
+	Agent                      string                               `json:"agent"`
+	Model                      string                               `json:"model,omitempty"`
+	ReasoningEffort            string                               `json:"reasoning_effort,omitempty"`
+	Sandbox                    string                               `json:"sandbox"`
+	WindowsSandbox             string                               `json:"windows_sandbox,omitempty"`
+	ApprovalPolicy             string                               `json:"approval_policy,omitempty"`
+	CodexProfile               string                               `json:"profile,omitempty"`
+	Codex                      Command                              `json:"codex"`
+	Orca                       OrcaConfig                           `json:"orca,omitempty"`
 }
 
 // PolicyResources is the resource stage of the same execution snapshot.

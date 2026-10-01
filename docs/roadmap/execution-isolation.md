@@ -4,7 +4,7 @@
 
 SteerLine 将项目执行规则与 Codex、Orca 等具体实现分开。项目定义权限边界、工作区要求、发布责任和必要能力；执行方案选择目标、agent、model 与实现选项；适配器落实固定请求并返回事实。更换执行方案时，项目规则不会随之隐式变化。
 
-剩余规划为 #55–#61 七项任务：前四项迁移职责，后三项落实项目策略和配置隔离。已交付 #54 的公共执行契约作为 #55/#56 必要前置复用，见[验收记录](../validation/execution-isolation-01-contracts/README.md)，01 文档不回写。每项剩余任务各有独立 Spec/Plan 和实现 PR，执行要求见[共同约束](../spec/execution-isolation-constraints.md)。
+配置隔离的实现已收口到 #61；当前剩余项是远程 Service 成功场景的权限证据与验收冲突，见 [#61 验收记录](../validation/execution-isolation-08-resolution/README.md)。公共契约、策略、工作区和发布实现继续遵守[共同约束](../spec/execution-isolation-constraints.md)，不重复迁移。
 
 ## 抽象范围
 
@@ -56,7 +56,7 @@ flowchart TD
     Center --> Data["contracts 共享记录与纯值"]
     Flow --> Contract["execution 公共契约"]
     Flow --> Data
-    Contract --> Data
+    Data --> Contract
     Data --> Task["task 规则"]
     Data --> TaskView["taskview DTO helper"]
     Workspace --> Contract
@@ -82,49 +82,17 @@ flowchart TD
 
 主要依赖固定为 contracts → execution，execution 不导入项目包；query/平台使用必要底层值与业务 DTO，SQL 只采样原始记录，中心组合投影/事务。现有 facade 别名指向单一定义可保留，01 已删除的公共别名不恢复。远程协议保持独立，不能用中心工作区或命令代替远端现场。
 
-## 任务与独立交付
+## 剩余验证
 
-| 任务 | 交付范围 | 硬前置 | 执行规格 |
-| --- | --- | --- | --- |
-| #55 | 工作区与 Git 资源迁移 | #54 | [Spec](../spec/execution-isolation-02-workspace.spec.md) · [Plan](../spec/execution-isolation-02-workspace.plan.md) |
-| #56 | 发布与 PR 实现迁移 | #54 | [Spec](../spec/execution-isolation-03-publication.spec.md) · [Plan](../spec/execution-isolation-03-publication.plan.md) |
-| #57 | Codex 执行适配器迁移 | #55、#56 | [Spec](../spec/execution-isolation-04-codex.spec.md) · [Plan](../spec/execution-isolation-04-codex.plan.md) |
-| #58 | Orca 执行适配器迁移 | #57 | [Spec](../spec/execution-isolation-05-orca.spec.md) · [Plan](../spec/execution-isolation-05-orca.plan.md) |
-| #59 | 项目执行权限策略 | #58 | [Spec](../spec/execution-isolation-06-policy.spec.md) · [Plan](../spec/execution-isolation-06-policy.plan.md) |
-| #60 | 项目发布责任契约 | #58 | [Spec](../spec/execution-isolation-07-publish-policy.spec.md) · [Plan](../spec/execution-isolation-07-publish-policy.plan.md) |
-| #61 | 执行需求与配置注册收口 | #59、#60 | [Spec](../spec/execution-isolation-08-resolution.spec.md) · [Plan](../spec/execution-isolation-08-resolution.plan.md) |
+#59 的远程 worker-start 权限落实证据目前缺失。原远程两轮和丢失 start 后 Service 恢复测试仍在领取前拒绝；成功场景不能计作已通过，也不能用 mock 解除门槛。远程协议包与真实 Claim 的拒绝行为已有确定性回归。后续处理该证据门槛需要独立范围和原生验证，本轮不新增远程权限 producer。
 
-## 顺序与并行条件
-
-```mermaid
-flowchart LR
-    P1["#54 公共契约"] --> P2["#55 工作区"]
-    P1 --> P3["#56 发布实现"]
-    P2 --> P4["#57 Codex"]
-    P3 --> P4
-    P4 --> P5["#58 Orca"]
-    P5 --> P6["#59 权限策略"]
-    P5 --> P7["#60 发布策略"]
-    P6 --> P8["#61 配置与注册"]
-    P7 --> P8
-```
-
-实线是本系列最终集成的前置关系，不表示所有准备工作必须等待。默认串行沿上述关系推进；采用并行开发时按下表限定范围。
-
-| 组合 | 开工条件 | 并行范围和集成条件 |
-| --- | --- | --- |
-| #55 与 #56 | #54 合入，共同请求及资源类型已固定 | 两个独立包可完整并行；共享中心文件指定一个集成人，后合入方更新基线并验证共同接线 |
-| #57 与 #58 | 公共契约固定后可准备 Orca 低层迁移 | Orca 协议与事实整理可提前；#58 最终基于已合入 #57，使用其命令构造并删除原 Codex 参数拼接 |
-| #59 与 #60 | #58 合入 | 行为/适配可并行；contracts 共享值/记录、项目配置、快照、提示词/UI 串行集成，每项完整接通 |
-| #61 | #59、#60 合入 | 基于两类完整策略进行最后组合和依赖检查 |
-
-公共契约修改集中处理，不能在两个并行 PR 中各自发展同一类型。明确接口生产者、消费者和共享文件所有者；后合入方核验双方的契约与持久化顺序。未知依赖或文件不重叠不构成可并行证据，也不能改变已经固定到任务 Spec 的串行要求。
+本机 Orca 终端 PATH 与远程工具/target 认证尚无固定只读查询入口。附加需求对无法查询的项返回 unknown 或明确拒绝，不能据此安装工具、登录或新建隐藏 worker。能力报告缺失仍显示未核验。
 
 ## 每轮迁移与验证
 
 每轮先明确类型、函数、消费者、依赖及副作用所有者，再建包移入完整职责，更新生产调用和必要测试，删除原实现。每次合入都应形成可编译、可独立工作的结果。当前轮范围内不得保留双实现、旧版兼容或提交失败后回退到旧路径；不把必要的接线与删除留给最后一轮。
 
-剩余前四轮保持现有三条链路，后三轮交付配置行为变化。远程取消仍不支持，协议/Service 回归不作为双机认证。格式变化按[项目规则](../../AGENTS.md)拒绝旧格式并保留现场，不迁移、双写或跨后端回退；当前格式内恢复/幂等仍成立。
+当前实现保留三条协议链路和各自的能力拒绝。远程取消仍不支持，协议/Service 回归不作为双机认证。格式变化按[项目规则](../../AGENTS.md)拒绝旧格式并保留现场，不迁移、双写或跨后端回退；当前格式内恢复/幂等仍成立。
 
 验证默认使用已有最小入口、受影响包的定向用例和必要的 import 检查，复用现有 fixture。搬迁不增加完整故障矩阵或重新认证全部平台；实际启动和权限行为改变时补必要的原生证据，模拟测试不能代替权限落实证明。只有具体失败或未解决风险才扩大测试，确需全量时使用现有并行入口。
 

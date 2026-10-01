@@ -3,6 +3,7 @@ package steerline
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
 
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
@@ -45,7 +46,7 @@ func (s *Service) executionConfigForRun(run *Run) (Config, error) {
 			continue
 		}
 		if workflow.ExecutionProfile == nil {
-			return Config{}, errors.New("execution snapshot v3 is required; preserve original state and external session")
+			return Config{}, errors.New("execution snapshot v4 is required; preserve original state and external session")
 		}
 		fixed := *workflow.ExecutionProfile
 		if fixed.ID == "" || !verifyFixedExecutionProfile(fixed) || workflow.ConfigDigest != fixed.AcceptedConfigVersion {
@@ -68,6 +69,12 @@ func (s *Service) executionConfigForRun(run *Run) (Config, error) {
 		}
 		config.WorkflowProtocol = WorkerFlowVersion
 		config.Repository, config.Branch = workflow.Repository, fixed.Publication.BaseBranch
+		if run.WorkspaceIntent != nil {
+			if !filepath.IsAbs(run.WorkspaceIntent.Path) {
+				return Config{}, errors.New("original workspace intent has no absolute resource path")
+			}
+			config.WorktreeRoot = filepath.Dir(run.WorkspaceIntent.Path)
+		}
 		if fixed.Publication.RemoteURL == "" {
 			return Config{}, errors.New("fixed publication remote URL is missing; preserve original state")
 		}
@@ -82,11 +89,12 @@ func (s *Service) executionConfigForRun(run *Run) (Config, error) {
 		if workflow.WorkflowVersion != WorkerFlowVersion {
 			return Config{}, fmt.Errorf("fixed execution profile uses an unsupported workflow version")
 		}
-		backend, protocol, err := executionapi.ExecutionBackendKind(fixed.Host)
-		if workflow.WorkflowVersion == WorkerFlowVersion && backend == string(executionapi.BackendLocal) {
-			protocol = string(executionapi.ProtocolLocalCodexAppServer)
+		entry, err := registrationFor(config)
+		backend, protocol := executionapi.BackendKind(""), executionapi.ExecutionProtocol("")
+		if err == nil {
+			backend, protocol = entry.Key.Backend, entry.Key.Protocol
 		}
-		if err != nil || run.Host != fixed.Host || run.Agent != fixed.Agent || run.Backend != string(backend) || run.Protocol != string(protocol) || run.Target.ID != targetFor(config).ID {
+		if err != nil || run.Host != fixed.Host || run.Agent != fixed.Agent || run.Backend != string(backend) || run.Protocol != string(protocol) || !sameConfiguredExecutionTarget(run.Target, targetFor(config)) {
 			return Config{}, errors.New("fixed execution profile differs from the persisted run identity")
 		}
 		return config, nil

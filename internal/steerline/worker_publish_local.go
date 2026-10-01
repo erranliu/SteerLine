@@ -36,6 +36,9 @@ func (s *Service) publishLocalWorkerRun(ctx context.Context, run *Run, workflow 
 	if canonical(*run.WorktreePath) != canonical(run.WorkspaceIntent.Path) || run.WorktreeBranch == nil || *run.WorktreeBranch != run.WorkspaceIntent.Branch || execution.Workspace.Branch != *run.WorktreeBranch || workflow.Branch == "" {
 		return empty, errors.New("local host publication workspace or target branch differs from the fixed execution")
 	}
+	if err := s.checkCurrentExecutionRequirements(ctx, fixed); err != nil {
+		return empty, err
+	}
 
 	if err := c.bindPublicationTarget(ctx); err != nil {
 		return empty, err

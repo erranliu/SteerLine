@@ -352,19 +352,21 @@ func (s *Service) resumeConfiguredWork(ctx context.Context) error {
 		return err
 	}
 	for _, run := range s.runs {
-		if run == nil || run.WorkflowVersion != WorkerFlowVersion || (run.Protocol != string(executionapi.ProtocolOrcaTerminalV2) && run.Protocol != string(executionapi.ProtocolOrcaSupervised)) {
+		if run == nil || run.WorkflowVersion != WorkerFlowVersion {
 			continue
 		}
 		workflow, execution := s.workflowRecords(run)
-		if workflow == nil || execution == nil || workflow.Phase != "completed" || execution.OrcaNative == nil {
+		if workflow == nil || execution == nil || workflow.Phase != "completed" {
 			continue
 		}
-		var cleanupErr error
-		if run.Protocol == string(executionapi.ProtocolOrcaSupervised) {
-			cleanupErr = s.finishRemoteOrcaCleanup(ctx, run)
-		} else {
-			cleanupErr = s.finishNativeOrcaCleanup(ctx, run)
+		entry, err := s.workerFlowRegistration(run)
+		if err != nil {
+			return err
 		}
+		if entry.Cleanup == nil {
+			continue
+		}
+		cleanupErr := entry.Cleanup(s, ctx, run)
 		if err := cleanupErr; err != nil {
 			execution.LastEvent = ptr("Orca delivery completed; owned terminal cleanup needs reconciliation: " + err.Error())
 			s.refreshRun(run)
@@ -389,11 +391,11 @@ func (s *Service) resumeWorkerFlow(ctx context.Context) error {
 		if task == nil || workflow == nil || execution == nil || task.Status != "in_progress" || workflow.Phase == "completed" {
 			continue
 		}
-		adapter, err := s.workerFlowMode(run)
+		adapter, err := s.workerFlowRegistration(run)
 		if err != nil {
 			return err
 		}
-		_, err = s.resumeWorkerFlowByMode(ctx, task, run, adapter)
+		_, err = s.resumeRegisteredWorkerFlow(ctx, task, run, adapter)
 		if err != nil {
 			return err
 		}

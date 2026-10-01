@@ -2,8 +2,6 @@ package steerline
 
 import (
 	"errors"
-
-	"github.com/erranliu/SteerLine/internal/steerline/workerflow"
 )
 
 func (s *Service) eventWorkerFlowFor(run *Run, ev WorkerEvent) (resultErr error) {
@@ -25,11 +23,11 @@ func (s *Service) eventWorkerFlowFor(run *Run, ev WorkerEvent) (resultErr error)
 		}
 		return nil
 	}
-	mode, err := s.workerFlowMode(run)
+	mode, err := s.workerFlowRegistration(run)
 	if err != nil {
 		return err
 	}
-	fact, err := decodeWorkerFlowEvent(mode, ev, workerSessionContext(run, execution), run.Decision != nil && run.Decision.Request.NativeAsk != nil)
+	fact, err := mode.DecodeEvent(ev, workerSessionContext(run, execution), run.Decision != nil && run.Decision.Request.NativeAsk != nil)
 	if err != nil {
 		return err
 	}
@@ -38,7 +36,7 @@ func (s *Service) eventWorkerFlowFor(run *Run, ev WorkerEvent) (resultErr error)
 		execution.SessionID = fact.SessionID
 		s.refreshRun(run)
 	}
-	if fact.StartedTurnID != "" && fact.Question == nil && mode == workerflow.LocalCodex {
+	if fact.StartedTurnID != "" && fact.Question == nil && fact.StartedUsesCommand {
 		opID, err := s.recordAppServerTurnStarted(run, workflow, execution, fact.StartedTurnID)
 		if err != nil {
 			return err

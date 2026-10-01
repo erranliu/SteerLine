@@ -183,10 +183,18 @@ func appServerAuditService(t *testing.T) (*Service, *Run) {
 }
 
 func appServerAuditServiceWithPolicy(t *testing.T, policy executionapi.ExecutionPolicy) (*Service, *Run) {
+	return appServerAuditServiceWithRequirements(t, policy, executionapi.ExecutionRequirements{}, "")
+}
+
+func appServerAuditServiceWithRequirements(t *testing.T, policy executionapi.ExecutionPolicy, requirements executionapi.ExecutionRequirements, tokenEnv string) (*Service, *Run) {
 	t.Helper()
 	c, commit, store := openDAGFixture(t)
 	c.WorkflowProtocol, c.Host, c.Agent, c.Claimant = WorkerFlowVersion, "local", "codex", "operator"
 	c.ExecutionPolicy = policy
+	c.ExecutionRequirements = requirements
+	if tokenEnv != "" {
+		c.PR.TokenEnv = tokenEnv
+	}
 	if policy.Filesystem.WriteScope == "none" {
 		c.Codex.Executable = os.Args[0]
 	}
@@ -316,7 +324,10 @@ func TestAppServerServiceTwoTurnsPersistNativeReceipts(t *testing.T) {
 func testAppServerServiceTwoTurns(t *testing.T, async bool) {
 	t.Helper()
 	service, run := appServerAuditServiceWithPolicy(t, executionapi.ExecutionPolicy{Filesystem: executionapi.FilesystemPolicy{ReadScope: "host", WriteScope: "none"}, Network: "deny", Escalation: "deny"})
-	workspace := t.TempDir()
+	fixedConfig, err := service.executionConfigForRun(run)
+	require(t, err)
+	require(t, prepareWorktreeOnly(context.Background(), fixedConfig, run))
+	workspace := *run.WorktreePath
 	state := &mockAppServerState{cwd: workspace}
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -338,7 +349,7 @@ func testAppServerServiceTwoTurns(t *testing.T, async bool) {
 	}
 	_, execution := service.workflowRecords(run)
 	execution.Workspace.Worktree, run.WorktreePath = workspace, &workspace
-	require(t, bindPolicyResources(context.Background(), service.Config, execution, workspace, nil))
+	require(t, bindPolicyResources(context.Background(), fixedConfig, execution, workspace, nil))
 	execution.Process, run.Process = identity, identity
 	execution.AppServerEndpoint, execution.AppServerGeneration = "ws://"+listener.Addr().String(), "generation"
 	execution.Workspace.Worktree, run.WorktreePath = workspace, &workspace

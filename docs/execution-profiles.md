@@ -90,7 +90,7 @@ Windows 本地受限方案将 `codex.windows_sandbox` 固定为 `elevated`（省
 
 原始参数仅接受独立的 --no-alt-screen、--no-daemon、--search；长短选项、等号和分离值形式的权限、目录、model/effort、配置/Profile、子命令或未知参数均拒绝。model 与 effort 独立：Orca 可分别省略，local 保留 high 默认；原生观察到的默认模型不是固定要求。
 
-领取时冻结 snapshot v3 的策略、来源、受理配置版本及完整摘要；资源阶段记录 Codex 版本、精确 workspace/Git 根、临时根与设置，沿用现有原子附件事务。准备、业务轮、反馈与恢复输入检查原快照/资源，不从运行中的仓库修改或新配置文件补造授权。重新加载由现有服务入口显式受理，对新 Execution 生效；已有执行保持原值。runtime checkpoint 当前格式为 11，旧格式拒绝且保留现场。
+领取时冻结 snapshot v4 的策略、来源、受理配置版本及完整摘要；资源阶段记录 Codex 版本、精确 workspace/Git 根、临时根与设置，沿用现有原子附件事务。准备、业务轮、反馈与恢复输入检查原快照/资源，不从运行中的仓库修改或新配置文件补造授权。重新加载由现有服务入口显式受理，对新 Execution 生效；已有执行保持原值。runtime checkpoint 当前格式为 11，旧格式拒绝且保留现场。
 
 控制台由同一 ProjectView 的 checkpoint/Domain 显示冻结要求、版本、来源、资源和核验范围。设置核验与实际工具核验分开；未观察的工具值显示未核验。服务与控制台配置摘要不同或读取部分错误时阻止新启动。新策略原生工具证据见[本轮验收](validation/execution-isolation-06-policy/README.md)。
 
@@ -110,6 +110,32 @@ Windows 本地受限方案将 `codex.windows_sandbox` 固定为 `elevated`（省
 
 host_service 仍仅受理原 Execution 当前已结束轮次的显式 final marker，先保存固定候选/发布意图，再 commit、push、create；未知结果仅按原请求只读对账。worker 的成功、URL 和 worker_done 均不代替真实 merged 证据，两条路径共用原唯一 TaskDelivery 事务。
 
-v3 在同一个 FixedExecutionProfile/PolicyResources 组合中固定 publisher、provider kind/base_url/repository、query/close 与宿主 create 描述、Git executable/argv、remote 名和实际单一 fetch/push URL、base 与认证环境变量名。恢复、后续轮次、PR 查询/关闭/交付使用原 provider。remote URL 被更改、增加 pushurl 或多推送目标时拒绝副作用。控制台从同一 ProjectView 显示原快照。
+v4 在同一个 FixedExecutionProfile/PolicyResources 组合中固定 publisher、provider kind/base_url/repository、query/close 与宿主 create 描述、Git executable/argv、remote 名和实际单一 fetch/push URL、base 与认证环境变量名。恢复、后续轮次、PR 查询/关闭/交付使用原 provider。remote URL 被更改、增加 pushurl 或多推送目标时拒绝副作用。控制台从同一 ProjectView 显示原快照。
 
-URL 的 HTTP 用户信息、密码、query/fragment 和含认证的命令参数在冻结前拒绝，诊断不回显原值；普通 SSH user@host 身份允许。认证只冻结引用，值可沿原引用轮换。宿主发布不会把 token、SSH/工具认证环境值下发给 local worker。已有权限资源格式保留，其 ProfileDigest 指向完整 v3 摘要；v2 Profile 与旧 v1 发布请求不在生产恢复中接受，不迁移或回填。#59 的两份真机报告保留原始格式和摘要，仅作为历史证据核验。
+URL 的 HTTP 用户信息、密码、query/fragment 和含认证的命令参数在冻结前拒绝，诊断不回显原值；普通 SSH user@host 身份允许。认证只冻结引用，值可沿原引用轮换。宿主发布不会把 token、SSH/工具认证环境值下发给 local worker。已有权限资源格式保留，其 ProfileDigest 指向完整 v4 摘要；v3 及更早 Profile 与旧 v1 发布请求不在生产恢复中接受，不迁移或回填。#59 的两份真机报告保留原始格式和摘要，仅作为历史证据核验。
+
+## 附加执行需求与注册
+
+项目可配置 `execution_requirements`，省略或空对象表示没有附加需求。权限、发布责任及 worker-flow 原有预检仍强制执行。
+
+```json
+{
+  "execution_requirements": {
+    "capabilities": ["workspace_inspection"],
+    "tools": [{"id": "git"}],
+    "credentials": [{"id": "pr.token_env", "site": "service"}]
+  }
+}
+```
+
+能力只消费经过内容绑定核验、目标/agent/backend/协议/版本完全相符的当前报告。版本查询或受管 CLI 支持不生成 verified；没有报告、unsupported、not_tested 或未知 ID 都拒绝。此例需要原目标的 workspace_inspection 认证报告；没有该证据时不能领取。
+
+工具注册 `git`、`go`、`python`，只执行固定版本查询。省略 `exact_version` 只要求存在；声明后精确比较归一版本，例如 Git `2.51.0.windows.1`、Go `1.26.4`、Python `3.13.1`。解析失败为 unknown。Git 使用原冻结 executable/argv；local 的 go/python 使用与实际 worker 相同的认证引用剔除环境及 PATH，Go 查询固定 GOTOOLCHAIN=local，防止下载工具链。它检查已安装工具链，不断言模块构建会选择同一版本。本机 Orca 只可证明冻结的宿主工作区 Git；终端 PATH 无固定只读查询，因此 go/python 为 unknown。远程工具查询尚无对应协议，全部为 unknown，不能使用中心查询代替。不能声明自定义检查命令。
+
+首版认证引用只注册 `pr.token_env` 的 service site，使用原冻结 provider 的环境变量名。未声明 token_env 的 command provider 即使宿主已登录也不满足此引用；不要求所有项目配置 token。target site 和未知引用拒绝。结果只保存 present/missing/unknown、来源、检查器版本、目标和时间，不保存秘密值或摘要，也不证明登录、远端授权或 worker 沙箱权限。
+
+内建注册键为 `local/codex/local_codex_app_server_v1`、`orca/codex/orca_terminal_v2`、`orca/codex/orca_supervised`；具体目标单独绑定。未知、重复或歧义组合拒绝，注册是固定代码组装，没有插件加载。准备、启动、观察/停止构造、事件/结算、等待/反馈、恢复与清理都由原记录选择注册操作。
+
+v4 在同一快照中增加需求、非秘密评估及独立证据摘要和 `builtin-execution-v1` 实现配置版本。完整配置摘要包含需求及原权限/发布/Profile 配置，实际资源继续单独核验。证据摘要也纳入完整 Profile 摘要。原 worktree 根从持久 WorkspaceIntent 恢复。领取事务重新读取已受理的项目和全局文件字节摘要；查验后改变配置必须重新加载并检查。重启使用原快照，当前工具/引用丢失只新增 Execution 的阻断事实，不改历史快照。控制台使用同一 ProjectView 展示领取时与当前检查的时间和来源。checkpoint schema 11 及资源格式保持；旧 Profile 明确拒绝，不回填。
+
+验证与限制见 [#61 验收记录](validation/execution-isolation-08-resolution/README.md)。远程两轮 Service 成功场景仍被前置权限缺证门槛拒绝，未把协议 mock 当作权限或双机认证。

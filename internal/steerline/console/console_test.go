@@ -1106,7 +1106,7 @@ func TestLoadProjectsSupportsZeroPartialAndExplicitConfigs(t *testing.T) {
 
 func writeConsoleTestConfig(t *testing.T, path, repository, runDir string) {
 	t.Helper()
-	data, err := json.Marshal(map[string]any{"execution_policy": map[string]any{"filesystem": map[string]any{"read_scope": "host", "write_scope": "workspace", "git_metadata_write": true}, "network": "allow", "escalation": "deny"}, "repository": repository, "branch": "main", "task_authority": "native", "workflow_protocol": steerline.WorkerFlowVersion})
+	data, err := json.Marshal(map[string]any{"publication_policy": executionapi.PublicationPolicy{Publisher: executionapi.PublisherHostService}, "pr": map[string]any{"kind": "command", "base_url": "https://github.com", "repository": "Org/Repo", "query": map[string]any{"executable": "gh"}}, "execution_policy": map[string]any{"filesystem": map[string]any{"read_scope": "host", "write_scope": "workspace", "git_metadata_write": true}, "network": "allow", "escalation": "deny"}, "repository": repository, "branch": "main", "task_authority": "native", "workflow_protocol": steerline.WorkerFlowVersion})
 	if err != nil {
 		t.Fatal(err)
 	}

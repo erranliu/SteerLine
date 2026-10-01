@@ -5,9 +5,28 @@ import (
 	"strings"
 
 	"github.com/erranliu/SteerLine/internal/steerline"
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 const executionConfigChanged = "服务与控制台加载的执行配置不同；重开控制台并核对服务配置"
+
+func renderRequirementsEvaluation(e *executionapi.RequirementsEvaluation, label string) []string {
+	if e == nil {
+		return nil
+	}
+	lines := []string{label + "：" + e.CheckedAt.Format("2006-01-02 15:04:05Z07:00") + " · " + safeTerminalInlineText(e.Target.ID) + "（工具/引用存在性，不证明沙箱权限或远端授权）"}
+	if e.Capabilities != nil {
+		for _, cap := range e.Capabilities.Capabilities {
+			lines = append(lines, "能力："+safeTerminalInlineText(cap.Name)+" · "+safeTerminalInlineText(string(cap.Status))+" · 版本 "+safeTerminalInlineText(e.Capabilities.PlatformVersion))
+		}
+	}
+	for _, values := range [][]executionapi.RequirementEvidence{e.Tools, e.Credentials} {
+		for _, item := range values {
+			lines = append(lines, "需求证据："+safeTerminalInlineText(item.Site+"/"+item.ID)+" · "+safeTerminalInlineText(string(item.Status))+" · "+safeTerminalInlineText(item.Version)+" · "+safeTerminalInlineText(item.Source))
+		}
+	}
+	return lines
+}
 
 func executionConfigMismatch(ref ProjectRef, snapshot ProjectSnapshot) bool {
 	runtime := snapshot.Connection.Snapshot.Runtime
@@ -78,10 +97,23 @@ func renderFixedRunExecutionProfile(state projectState, run *steerline.Run) []st
 	}
 
 	lines = append(lines, fmt.Sprintf("项目要求：读取 %s · 写入 %s · Git %t · 网络 %s · 越权 %s", fixed.ExecutionPolicy.Filesystem.ReadScope, fixed.ExecutionPolicy.Filesystem.WriteScope, fixed.ExecutionPolicy.Filesystem.GitMetadataWrite, fixed.ExecutionPolicy.Network, fixed.ExecutionPolicy.Escalation), "受理版本："+safeTerminalInlineText(fixed.AcceptedConfigVersion)+" · 来源："+safeTerminalInlineText(fixed.PolicySource))
+	lines = append(lines, "附加能力："+safeTerminalInlineText(strings.Join(fixed.ExecutionRequirements.Capabilities, ", ")))
+	for _, tool := range fixed.ExecutionRequirements.Tools {
+		version := tool.ExactVersion
+		if version == "" {
+			version = "存在即可"
+		}
+		lines = append(lines, "必需工具："+safeTerminalInlineText(tool.ID)+" · "+safeTerminalInlineText(version))
+	}
+	lines = append(lines, renderRequirementsEvaluation(fixed.RequirementsEvaluation, "领取时需求检查")...)
 	if state.snapshot.Domain != nil {
 		for _, execution := range state.snapshot.Domain.Executions {
 			if execution.ExecutionID != run.ExecutionID {
 				continue
+			}
+			lines = append(lines, renderRequirementsEvaluation(execution.CurrentRequirementsEvaluation, "当前需求检查")...)
+			if execution.CurrentRequirementsError != nil {
+				lines = append(lines, "需求阻断："+safeTerminalInlineText(*execution.CurrentRequirementsError))
 			}
 			status := "资源与工具未核验"
 			if resource := execution.PolicyResources; resource != nil {
