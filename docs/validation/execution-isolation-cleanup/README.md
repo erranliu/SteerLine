@@ -63,3 +63,9 @@ go test ./internal/steerline -count=1 -run '^(TestRemoteOrca(Protocol|ServiceAdm
 ```
 
 远程 Service 的成功准入仍需要原生 worker-start 权限落实证据，ER4 的真实三链路成功条件仍未完成；协议模拟通过不能替代它。工具 PATH/target 认证的固定查询限制继续按 #61 返回 unknown 或拒绝。
+
+## 主干整合
+
+追加修复后整合 `49d71c9`（PR #176 会话只读查询拆包）。冲突仅在架构文档：保留新会话 Reader/端口/SQLite 接线与依赖图，叠加执行清理和恢复边界，重新生成完整源码索引。最终为 268 个生产文件、20 个包，中心 115 个文件；前文 263/114 是整合前的清理快照。
+
+合并后最小入口通过（execution=24.2s），会话/history 确定性回归、构建及 go vet 通过；真实 native history 验收未启用。额外回归发现来源发现测试已构造私有 runs 却仍修改空的 State.Runs，修正为操作同一私有集合，保留错误 workspace 拒绝和原 session 保留断言。

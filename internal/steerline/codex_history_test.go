@@ -128,7 +128,7 @@ func TestCodexHistoryReconcilesLateFinalInEarlierTurn(t *testing.T) {
 	if len(saved.Pending) != 0 {
 		t.Fatalf("resolved native turn remained pending: %+v", saved)
 	}
-	query := ConversationQueryService{Store: store, Project: b.ProjectID}
+	query := NewConversationQueryService(store, b.ProjectID)
 	page, err := query.ReadConversation(ctx, ConversationFilter{ExecutionID: b.ExecutionID, AttemptID: b.AttemptID}, "", 100)
 	require(t, err)
 	turns, lateFinal := map[string]int{}, 0
@@ -192,7 +192,7 @@ func TestCodexHistoryReconcilesFinalTextArrivingAfterTerminalStatus(t *testing.T
 			t.Fatalf("missing text falsely verified final content: %+v", capability)
 		}
 	}
-	query := ConversationQueryService{Store: store, Project: "project"}
+	query := NewConversationQueryService(store, "project")
 	filter := ConversationFilter{ExecutionID: binding.ExecutionID, AttemptID: binding.AttemptID}
 	page, err := query.ReadConversation(ctx, filter, "", 100)
 	require(t, err)
@@ -262,7 +262,7 @@ func TestCodexHistoryEmptyPageDoesNotHideRawProgress(t *testing.T) {
 	defer cancel()
 	_, err = service.collectCodexHistoryPage(ctx, binding)
 	require(t, err)
-	query := ConversationQueryService{Store: store, Project: "project"}
+	query := NewConversationQueryService(store, "project")
 	filter := ConversationFilter{ExecutionID: binding.ExecutionID, AttemptID: binding.AttemptID}
 	page, err := query.ReadConversation(ctx, filter, "", 100)
 	require(t, err)
@@ -322,7 +322,7 @@ func TestCodexHistoryDisconnectKeepsVisibleGapAndCheckpoint(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal("disconnected history source did not report failure")
 	}
-	query := ConversationQueryService{Store: store, Project: "project"}
+	query := NewConversationQueryService(store, "project")
 	filter := ConversationFilter{ExecutionID: binding.ExecutionID, AttemptID: binding.AttemptID, Source: "codex-app-server"}
 	page, err := query.ReadConversation(ctx, filter, "", 100)
 	require(t, err)
@@ -532,7 +532,7 @@ func TestCodexHistoryRealLocalToolInterleaveFixture(t *testing.T) {
 	if first[0].Type != ConversationTurnStarted || first[2].Type != ConversationMessageComplete || first[2].Phase != MessagePhaseCommentary || first[3].Type != ConversationToolCompleted || first[3].Status != "completed" || first[4].Type != ConversationMessageComplete || first[4].Phase != MessagePhaseFinalAnswer || first[5].Type != ConversationTurnCompleted || first[5].FinalAvailability != FinalAvailable {
 		t.Fatalf("real commentary/tool/final order or turn completion was lost: %+v", first)
 	}
-	query := ConversationQueryService{Store: store, Project: "project"}
+	query := NewConversationQueryService(store, "project")
 	for _, tc := range []struct {
 		index int
 		want  string
@@ -578,7 +578,7 @@ func TestCodexHistoryRealSourceReplacement(t *testing.T) {
 			t.Fatalf("real source %s did not reach its final page", binding.SessionID)
 		}
 	}
-	query := ConversationQueryService{Store: store, Project: bindings[0].ProjectID}
+	query := NewConversationQueryService(store, bindings[0].ProjectID)
 	filter := ConversationFilter{ExecutionID: bindings[0].ExecutionID, AttemptID: bindings[0].AttemptID, Source: "codex-app-server"}
 	page, err := query.ReadConversation(ctx, filter, "", 100)
 	require(t, err)
@@ -666,7 +666,7 @@ func TestCodexHistoryRealFailedTurnFixture(t *testing.T) {
 	if events[2].Raw == nil {
 		t.Fatal("real failure lost its raw error evidence")
 	}
-	page, err := (ConversationQueryService{Store: store, Project: "project"}).ReadRaw(context.Background(), *events[2].Raw, 0, 4096)
+	page, err := NewConversationQueryService(store, "project").ReadRaw(context.Background(), *events[2].Raw, 0, 4096)
 	require(t, err)
 	if !page.Complete || !strings.Contains(string(page.Data), "401 Unauthorized") {
 		t.Fatalf("real failure error evidence changed: %+v", page)
@@ -695,7 +695,7 @@ func TestCodexHistoryRealFailedAcceptance(t *testing.T) {
 	service := &Service{domainStore: store}
 	_, err = service.collectCodexHistoryPage(ctx, binding)
 	require(t, err)
-	query := ConversationQueryService{Store: store, Project: binding.ProjectID}
+	query := NewConversationQueryService(store, binding.ProjectID)
 	filter := ConversationFilter{ExecutionID: binding.ExecutionID, AttemptID: binding.AttemptID, Source: "codex-app-server"}
 	page, err := query.ReadConversation(ctx, filter, "", 100)
 	require(t, err)
@@ -792,7 +792,7 @@ func TestCodexHistoryCanonicalSourceKeepsRawReadable(t *testing.T) {
 	native.Type, native.ItemKey = ConversationSession, ""
 	_, err = store.CommitConversation(ctx, []ConversationWrite{{Event: native}}, ConversationCheckpoint{})
 	require(t, err)
-	query := ConversationQueryService{Store: store, Project: "project"}
+	query := NewConversationQueryService(store, "project")
 	page, err := query.ReadConversation(ctx, ConversationFilter{}, "", 100)
 	require(t, err)
 	if len(page.Events) != 1 || page.Events[0].Source != "codex-app-server" {
@@ -849,11 +849,11 @@ func TestCodexHistorySourceDiscoveryRejectsWrongWorkspace(t *testing.T) {
 		t.Fatal("the exact source binding was not discovered")
 	}
 	wrong := t.TempDir()
-	s.State.Runs[0].WorktreePath = &wrong
+	s.runs[0].WorktreePath = &wrong
 	if len(s.codexHistorySources()) != 0 || s.State.Service.Error == nil {
 		t.Fatal("a mismatched workspace was read or silently ignored")
 	}
-	s.State.Runs[0].WorktreePath = &workspace
+	s.runs[0].WorktreePath = &workspace
 	b.SessionID = "00000000-0000-0000-0000-000000000002"
 	require(t, writeCodexHistoryBinding(localCodexHistoryBindingPath(filepath.Dir(logPath), b.SessionID), b))
 	sources := s.codexHistorySources()
@@ -898,7 +898,7 @@ func TestCodexHistoryNativeAcceptance(t *testing.T) {
 			if !settled {
 				t.Fatal("native turn paging did not reach the final turn")
 			}
-			query := ConversationQueryService{Store: store, Project: binding.ProjectID}
+			query := NewConversationQueryService(store, binding.ProjectID)
 			filter := ConversationFilter{ExecutionID: binding.ExecutionID, AttemptID: binding.AttemptID}
 			page, err := query.ReadConversation(ctx, filter, "", 1000)
 			require(t, err)
@@ -964,7 +964,7 @@ func TestCodexHistoryNativeAcceptance(t *testing.T) {
 			require(t, err)
 			defer store.Close()
 			service.domainStore = store
-			query.Store = store
+			query = NewConversationQueryService(store, binding.ProjectID)
 			for i := 0; i < 2; i++ {
 				_, err = service.collectCodexHistoryPage(ctx, binding)
 				require(t, err)

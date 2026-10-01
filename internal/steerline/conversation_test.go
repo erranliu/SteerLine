@@ -86,7 +86,7 @@ func TestConversationMissingTextPreservesSnapshotAndEmptyFinal(t *testing.T) {
 	if events[1].Body == nil || events[2].Body != nil || events[3].Body != nil || events[3].FinalAvailability != FinalUnknown || events[4].FinalAvailability != FinalUnknown {
 		t.Fatalf("missing text erased a snapshot or claimed a final: %+v", events)
 	}
-	query := ConversationQueryService{Store: store, Project: "project"}
+	query := NewConversationQueryService(store, "project")
 	kept, err := query.ReadMessageBody(ctx, *events[1].Body, 0, 100)
 	require(t, err)
 	if string(kept.Data) != "kept" || !kept.Complete {
@@ -175,7 +175,7 @@ func TestConversationSQLiteDedupesBodiesAndPagesUnicodeByRevision(t *testing.T) 
 		t.Fatalf("source replay was not idempotent: first=%+v replay=%+v", committed, duplicate)
 	}
 
-	query := ConversationQueryService{Store: store, Project: "project"}
+	query := NewConversationQueryService(store, "project")
 	var restored strings.Builder
 	offset := int64(0)
 	for {
@@ -283,7 +283,7 @@ func TestConversationCommitDoesNotAdvanceCheckpointOnInvalidBody(t *testing.T) {
 	if _, err = store.CommitConversation(ctx, []ConversationWrite{write}, conversationTestCheckpoint(1, `{"byte_offset":4}`)); err == nil {
 		t.Fatal("invalid body unexpectedly committed")
 	}
-	page, err := (ConversationQueryService{Store: store, Project: "project"}).ReadConversation(ctx, ConversationFilter{ExecutionID: "execution", AttemptID: "attempt"}, "", 10)
+	page, err := NewConversationQueryService(store, "project").ReadConversation(ctx, ConversationFilter{ExecutionID: "execution", AttemptID: "attempt"}, "", 10)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -303,7 +303,7 @@ func TestConversationBodyAndRawCorruptionCannotReadAsComplete(t *testing.T) {
 	write := conversationTestWrite("bytes:0:4", 1, "complete", []byte("hello 🙂"), []byte("raw-record"))
 	events, err := store.CommitConversation(ctx, []ConversationWrite{write}, conversationTestCheckpoint(1, `{"byte_offset":4}`))
 	require(t, err)
-	query := ConversationQueryService{Store: store, Project: "project"}
+	query := NewConversationQueryService(store, "project")
 	if page, err := query.ReadMessageBody(ctx, *events[0].Body, 0, 64); err != nil || !page.Complete {
 		t.Fatalf("intact body was unreadable: page=%+v err=%v", page, err)
 	}
@@ -349,7 +349,7 @@ func TestConversationLongUnicodeFinalIsExactAcrossPages(t *testing.T) {
 	if ref == nil || ref.Bytes <= 4096 || ref.Completeness != BodyComplete {
 		t.Fatalf("final body was truncated or partial: %+v", ref)
 	}
-	query := ConversationQueryService{Store: store, Project: "project"}
+	query := NewConversationQueryService(store, "project")
 	var restored bytes.Buffer
 	for offset := int64(0); ; {
 		page, err := query.ReadMessageBody(ctx, *ref, offset, 257)
@@ -460,7 +460,7 @@ func TestConversationLateOldAttemptCannotCrossNewAttempt(t *testing.T) {
 	if len(newEvents) != 1 || len(oldEvents) != 1 || newEvents[0].EventID == oldEvents[0].EventID || newEvents[0].Body.ItemKey == oldEvents[0].Body.ItemKey {
 		t.Fatalf("late old event reused the new attempt identity: old=%+v new=%+v", oldEvents, newEvents)
 	}
-	query := ConversationQueryService{Store: store, Project: "project"}
+	query := NewConversationQueryService(store, "project")
 	for _, tc := range []struct {
 		attempt string
 		ref     ConversationBodyRef
@@ -631,7 +631,7 @@ func TestConversationLiveSourceFailureKeepsGapAndMapperPosition(t *testing.T) {
 	if cp.LocalSeq != 1 {
 		t.Fatal("source checkpoint advanced after a failed read")
 	}
-	page, err := (ConversationQueryService{Store: store, Project: "project"}).ReadConversation(ctx, ConversationFilter{ExecutionID: executionID, AttemptID: runID}, "", 10)
+	page, err := NewConversationQueryService(store, "project").ReadConversation(ctx, ConversationFilter{ExecutionID: executionID, AttemptID: runID}, "", 10)
 	require(t, err)
 	if len(page.Events) != 2 || page.Events[1].Type != ConversationGap || page.Events[1].Status != "source_unavailable" || page.Events[1].Raw == nil {
 		t.Fatalf("failed source was not visible with raw evidence: %+v", page.Events)
@@ -676,7 +676,7 @@ func TestConversationChangedLiveBytesCannotBindOrCheckpoint(t *testing.T) {
 	if _, err = store.ConversationCheckpoint(ctx, "project", executionID, runID, "codex-jsonl", segment); err == nil {
 		t.Fatal("rewritten source advanced the checkpoint")
 	}
-	page, err := (ConversationQueryService{Store: store, Project: "project"}).ReadConversation(ctx, ConversationFilter{ExecutionID: executionID, AttemptID: runID, Source: "codex-jsonl"}, "", 10)
+	page, err := NewConversationQueryService(store, "project").ReadConversation(ctx, ConversationFilter{ExecutionID: executionID, AttemptID: runID, Source: "codex-jsonl"}, "", 10)
 	require(t, err)
 	if len(page.Events) != 1 || page.Events[0].Type != ConversationGap || page.Events[0].Status != "source_unavailable" {
 		t.Fatalf("rewritten source did not leave a visible gap: %+v", page.Events)
@@ -693,7 +693,7 @@ func TestConversationOrcaHostWaitPersistsWithoutBusinessDecision(t *testing.T) {
 	service := &Service{Config: Config{identity: "project"}, domainStore: store}
 	source := WorkerEvent{RunID: run.RunID, AttemptID: run.AttemptID, Source: "orca-terminal-v2", SourceSegment: "orca-host-wait-v1:probe", SourceEventID: "host-wait:probe", SourceIdentity: "terminal:runtime:handle:incarnation", SourceSeq: 1, Session: "terminal:handle:incarnation", InputWait: true}
 	require(t, service.recordConversationEvent(run, source))
-	page, err := (ConversationQueryService{Store: store, Project: "project"}).ReadConversation(ctx, ConversationFilter{ExecutionID: run.ExecutionID, AttemptID: run.AttemptID}, "", 10)
+	page, err := NewConversationQueryService(store, "project").ReadConversation(ctx, ConversationFilter{ExecutionID: run.ExecutionID, AttemptID: run.AttemptID}, "", 10)
 	require(t, err)
 	if len(page.Events) != 1 || page.Events[0].Type != ConversationInputWait || page.Events[0].Status != "waiting" || page.Events[0].ItemQuality != IdentityUnknown || page.Events[0].Attributes["wait_origin"] != "host" || page.Events[0].Attributes["business_decision"] != false {
 		t.Fatalf("Orca host wait was not persisted separately from business input: %+v", page.Events)
@@ -759,7 +759,7 @@ func TestConversationJournalReplayIsBoundedAndIdempotent(t *testing.T) {
 	if err = service.replayConversationJournal(ctx, sources[0]); err != nil {
 		t.Fatal(err)
 	}
-	query := ConversationQueryService{Store: store, Project: "project"}
+	query := NewConversationQueryService(store, "project")
 	page, err := query.ReadConversation(ctx, ConversationFilter{ExecutionID: executionID, AttemptID: attemptID}, "", 10)
 	if err != nil {
 		t.Fatal(err)
