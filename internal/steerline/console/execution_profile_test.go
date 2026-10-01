@@ -30,7 +30,7 @@ func TestExecutionSettingsOnlyAppearInStartChoiceAndConfigMismatchBlocksStart(t 
 		t.Fatalf("git init: %v: %s", err, out)
 	}
 	path := filepath.Join(t.TempDir(), "project.json")
-	data, err := json.Marshal(map[string]any{"execution_policy": map[string]any{"filesystem": map[string]any{"read_scope": "host", "write_scope": "workspace", "git_metadata_write": true}, "network": "allow", "escalation": "deny"}, "repository": repo, "branch": "main", "task_authority": "native", "workflow_protocol": steerline.WorkerFlowVersion})
+	data, err := json.Marshal(map[string]any{"publication_policy": map[string]string{"publisher": "host_service"}, "execution_policy": map[string]any{"filesystem": map[string]any{"read_scope": "host", "write_scope": "workspace", "git_metadata_write": true}, "network": "allow", "escalation": "deny"}, "repository": repo, "branch": "main", "task_authority": "native", "workflow_protocol": steerline.WorkerFlowVersion})
 	if err != nil {
 		t.Fatal(err)
 	}

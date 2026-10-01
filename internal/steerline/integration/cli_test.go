@@ -86,9 +86,9 @@ func TestTaskCLIProcessUsesNativeAuthorityWithoutInitializingMissingRead(t *test
 	if err := os.MkdirAll(home, 0700); err != nil {
 		t.Fatal(err)
 	}
-	writeConfig(t, steerline.GlobalExecutionConfigPath(), map[string]any{"execution_profiles": []map[string]any{{"id": "local", "name": "Local Codex", "host": "local", "agent": "codex", "sandbox": "workspace-write", "codex": map[string]string{"executable": "codex"}}}})
+	writeConfig(t, steerline.GlobalExecutionConfigPath(), map[string]any{"execution_profiles": []map[string]any{{"id": "local", "name": "Local Codex", "host": "local", "agent": "codex", "codex": map[string]string{"executable": "codex"}}}})
 	writeConfig(t, configPath, map[string]any{
-		"repository":        repo,
+		"execution_policy": map[string]any{"filesystem": map[string]any{"read_scope": "host", "write_scope": "workspace", "git_metadata_write": true}, "network": "allow", "escalation": "deny"}, "publication_policy": map[string]string{"publisher": "host_service"}, "repository": repo,
 		"remote":            "origin",
 		"branch":            "main",
 		"task_authority":    "native",

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -369,7 +370,7 @@ func orcaTestConfig(t *testing.T, dir, _ string) Config {
 	return c
 }
 
-func TestOrcaPreflightDoesNotRequireUnusedLocalCodex(t *testing.T) {
+func TestOrcaPreflightRequiresConfiguredCodexPolicyMapping(t *testing.T) {
 	f := newFixture(t)
 	exe, err := os.Executable()
 	if err != nil {
@@ -380,12 +381,15 @@ func TestOrcaPreflightDoesNotRequireUnusedLocalCodex(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.c.Host = "orca"
+	f.c.PublicationPolicy.Publisher = "worker"
+	f.c.PR = publication.Config{Kind: "gitea", BaseURL: f.server.URL, Repository: "owner/repo"}
+	f.c.Git = Command{Executable: exe, Args: []string{"--fake", "git-proxy", "git"}}
 	fixtureGit(t, f.c.Repository, "remote", "add", "web", f.server.URL+"/owner/repo.git")
 	f.c.Remote = "web"
 	f.c.Host, f.c.Agent = "orca", "codex"
-	setTestImplementationProfiles(t, &f.c, codexworker.ProfileConfig{Executable: filepath.Join(stateDir, "missing-codex.exe")}, &orcaworker.ProfileConfig{Executable: exe, Args: []string{"--fake", "orca", stateDir}, Shell: "cmd.exe", WaitTimeout: "5s"})
-	if err = f.c.Preflight(context.Background(), false); err != nil {
-		t.Fatalf("Orca native agent required unused local Codex: %v", err)
+	setTestImplementationProfiles(t, &f.c, codexworker.ProfileConfig{Executable: filepath.Join(stateDir, "missing-codex.exe"), WindowsSandbox: "unelevated"}, &orcaworker.ProfileConfig{Executable: exe, Args: []string{"--fake", "orca", stateDir}, Shell: "powershell.exe", WaitTimeout: "5s"})
+	if err = f.c.Preflight(context.Background(), false); err == nil || !strings.Contains(err.Error(), "missing-codex.exe") {
+		t.Fatalf("Orca policy mapping did not require its fixed native Codex: %v", err)
 	}
 	codex := codexProfileSettings(f.c)
 	codex.Model = "requires-direct-codex"

@@ -2,6 +2,7 @@ package steerline
 
 import (
 	"context"
+	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	"os"
 	"path/filepath"
 	"strings"
@@ -25,7 +26,7 @@ func TestDecisionSubmissionRequiresNativeAuthorityBeforeStateAccess(t *testing.T
 }
 
 func TestNativeDecisionRequestAndAnswerValidation(t *testing.T) {
-	request := DecisionRequest{Question: "  choose  ", Options: []executionapi.DecisionOption{{ID: " keep ", Label: " Keep "}, {ID: "replace", Label: "Replace"}}, Recommended: "keep", AllowFreeText: true}
+	request := DecisionRequest{FormatVersion: contracts.DecisionRequestFormatVersion, Question: "  choose  ", Options: []executionapi.DecisionOption{{ID: " keep ", Label: " Keep "}, {ID: "replace", Label: "Replace"}}, Recommended: "keep", AllowFreeText: true}
 	if err := validateDecisionRequest(&request); err != nil {
 		t.Fatal(err)
 	}
@@ -42,6 +43,7 @@ func TestNativeDecisionRequestAndAnswerValidation(t *testing.T) {
 		{Question: strings.Repeat("界", 2001), Options: []executionapi.DecisionOption{{ID: "keep", Label: "Keep"}}},
 	}
 	for i, candidate := range invalid {
+		candidate.FormatVersion = contracts.DecisionRequestFormatVersion
 		originalQuestion := candidate.Question
 		if err := validateDecisionRequest(&candidate); err == nil {
 			t.Fatalf("invalid decision request %d was accepted", i)

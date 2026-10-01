@@ -31,10 +31,11 @@ func TestWorkerFeedbackPhaseCommitIsDurableAndRejectsStaleActor(t *testing.T) {
 	baseConfig := service.baseConfig
 	service.baseConfig.Host = "orca"
 	beforeOperations := len(service.domain.Operations)
-	err = service.applyWorkerFlowDecision(ctx, run)
+	// Later default changes must not retarget a previously frozen execution.
+	fixedConfig, fixedErr := service.executionConfigForRun(run)
 	service.baseConfig = baseConfig
-	if !feedbackIdentityMismatch(err) {
-		t.Fatalf("configuration drift reached feedback delivery: %v", err)
+	if fixedErr != nil || fixedConfig.Host != expectedWorkflow.ExecutionProfile.Host {
+		t.Fatalf("mutable defaults changed frozen feedback target: %v", fixedErr)
 	}
 	_, rejectedRevision, err := service.domainStore.DatabaseVersion(ctx)
 	require(t, err)

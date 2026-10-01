@@ -238,7 +238,7 @@ func TestStartPayloadRequiresCompleteExecutionProfileSelection(t *testing.T) {
 
 func TestUnsupportedLocalAgentProfileIsMarkedUnavailable(t *testing.T) {
 	profile := ExecutionProfile{ID: "local-pi", Name: "Local Pi", Host: "local", Agent: "pi"}
-	if reason := profile.StaticUnavailableReason(); !strings.Contains(reason, "codex") {
+	if reason := profile.StaticUnavailableReason(); !strings.Contains(reason, "unsupported:") || !strings.Contains(reason, "host=local agent=pi") {
 		t.Fatalf("unsupported native agent was shown as selectable: %q", reason)
 	}
 }

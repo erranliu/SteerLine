@@ -297,6 +297,9 @@ func TestWorkerEnvironmentER3RecheckKeepsOriginalDispatch(t *testing.T) {
 	f := newEnvironmentFixture(t, fakeNativeOrcaState{ReadinessMode: "hold"}, "")
 	f.prepare(t)
 	_, e := f.service.workflowRecords(f.run)
+	if e.Process == nil || nativeOrcaCurrentTurn(e) == nil {
+		t.Fatalf("readiness fixture has no original dispatch: execution=%+v error=%v environment=%+v", e, e.Error, e.Environment)
+	}
 	original := *e.Process
 	turn := nativeOrcaCurrentTurn(e)
 	originalDispatch := turn.DispatchID
@@ -318,6 +321,7 @@ func TestWorkerEnvironmentER3RecheckKeepsOriginalDispatch(t *testing.T) {
 	}
 	f.update(t, func(s *fakeNativeOrcaState) { s.AgentIncarnation = "replacement" })
 	f.poll(t)
+	_, e = f.service.workflowRecords(f.run)
 	if e.Environment.Blocker == nil || e.Environment.Blocker.Fact.Reason != "identity_mismatch" {
 		t.Fatal("replacement identity was accepted")
 	}

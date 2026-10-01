@@ -10,7 +10,7 @@ import (
 
 func minimalConfig(repo string) Config {
 	return Config{
-		TaskAuthority:    "native",
+		PublicationPolicy: executionPublicationFixture(), PR: hostPublicationProviderFixture(), ExecutionPolicy: workspacePolicyFixture(), TaskAuthority: "native",
 		WorkflowProtocol: WorkerFlowVersion,
 		Repository:       repo,
 		Git:              Command{Executable: "git"},
