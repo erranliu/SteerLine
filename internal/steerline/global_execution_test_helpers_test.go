@@ -1,12 +1,32 @@
 package steerline
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"testing"
 
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 )
+
+// Frozen publication fixtures describe the current supported route before a unit
+// test mutates records. They do not reconstruct missing production snapshots.
+func publicationSnapshotFixture(t *testing.T, c Config) FixedExecutionProfile {
+	t.Helper()
+	if c.PR.Kind == "gitea" {
+		c.Host, c.Agent = "orca", "codex"
+		c.PublicationPolicy.Publisher = "worker"
+		c.Codex.WindowsSandbox = "unelevated"
+		c.Orca.Shell, c.Orca.WaitTimeout = "powershell.exe", "1m"
+	}
+	require(t, validateWorkflowConfig(&c, nil))
+	require(t, c.bindPublicationTarget(context.Background()))
+	p := c.projectExecutionProfile().Freeze()
+	if !verifyFixedExecutionProfile(p) {
+		t.Fatal("invalid publication snapshot fixture")
+	}
+	return p
+}
 
 func writeGlobalExecutionFixture(t *testing.T, profiles []ExecutionProfile, defaultID string) {
 	t.Helper()

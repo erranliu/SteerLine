@@ -28,6 +28,10 @@ func TestReadyStartChoosesConfiguredProfileAndBindsRequest(t *testing.T) {
 	ref.Config.ExecutionPolicy = executionapi.ExecutionPolicy{Filesystem: executionapi.FilesystemPolicy{ReadScope: "host", WriteScope: "workspace"}, Network: "deny", Escalation: "deny"}
 	other := consoleLocalProfile("local-strong", "本地 Codex 高强度", "chosen-model", "xhigh")
 	ref.Config.ExecutionProfiles = []steerline.ExecutionProfile{other}
+	_, bound, err := ref.Config.ResolveExecutionProfile(other.ID, "")
+	if err != nil {
+		t.Fatal(err)
+	}
 	control := &testControlClient{}
 	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{readySnapshot(ref, now)}, control, now)
 	m.profile = &viewProfile{dir: t.TempDir()}
@@ -50,7 +54,7 @@ func TestReadyStartChoosesConfiguredProfileAndBindsRequest(t *testing.T) {
 	updated, _ = m.Update(result)
 	m = updated.(Model)
 	var payload steerline.ControlPayload
-	if err := json.Unmarshal(control.request.Payload, &payload); err != nil || payload.TaskID != "task-B" || payload.ExecutionProfileID != other.ID || payload.ExecutionProfileDigest != other.Digest() {
+	if err := json.Unmarshal(control.request.Payload, &payload); err != nil || payload.TaskID != "task-B" || payload.ExecutionProfileID != other.ID || payload.ExecutionProfileDigest != bound.Digest() {
 		t.Fatalf("start request changed the selected profile: %+v / %v", payload, err)
 	}
 	for _, action := range m.projects[0].actions {

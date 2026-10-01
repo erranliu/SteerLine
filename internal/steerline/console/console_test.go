@@ -16,6 +16,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/erranliu/SteerLine/internal/steerline"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	"github.com/erranliu/SteerLine/internal/steerline/publication"
 )
 
 type testClock struct{ now time.Time }
@@ -111,7 +112,7 @@ func (c *testControlClient) DecisionEligibility(context.Context, ProjectRef, *st
 }
 
 func testProject(key string) ProjectRef {
-	return ProjectRef{Key: key, Name: key, ConfigPath: "/tmp/" + key + ".json", RunDir: "/tmp/" + key + "-state", Identity: "/repo/" + key, Config: steerline.Config{TaskPoll: "1s", ShutdownGrace: "10s"}}
+	return ProjectRef{Key: key, Name: key, ConfigPath: "/tmp/" + key + ".json", RunDir: "/tmp/" + key + "-state", Identity: "/repo/" + key, Config: steerline.Config{TaskAuthority: "native", WorkflowProtocol: steerline.WorkerFlowVersion, Host: "local", Agent: "codex", TaskPoll: "1s", ShutdownGrace: "10s", ExecutionPolicy: executionapi.ExecutionPolicy{Filesystem: executionapi.FilesystemPolicy{ReadScope: "host", WriteScope: "workspace", GitMetadataWrite: true}, Network: "allow", Escalation: "deny"}, PublicationPolicy: executionapi.PublicationPolicy{Publisher: "host_service"}, PR: publication.Config{Kind: "command", BaseURL: "https://github.com", Repository: "owner/repo", Query: steerline.Command{Executable: "unused-gh"}}, Codex: steerline.Command{Executable: "codex"}}}
 }
 
 func readySnapshot(ref ProjectRef, now time.Time) ProjectSnapshot {

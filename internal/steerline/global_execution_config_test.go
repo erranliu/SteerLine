@@ -31,7 +31,7 @@ func TestGlobalExecutionProfilesSharedAcrossProjects(t *testing.T) {
 	loadProject := func() (Config, string) {
 		t.Helper()
 		path := filepath.Join(t.TempDir(), "project.json")
-		data, err := json.Marshal(map[string]any{"execution_policy": workspacePolicyFixture(), "repository": configTestRepository(t), "branch": "main", "task_authority": "native", "workflow_protocol": WorkerFlowVersion})
+		data, err := json.Marshal(map[string]any{"publication_policy": executionPublicationFixture(), "pr": hostPublicationProviderFixture(), "execution_policy": workspacePolicyFixture(), "repository": configTestRepository(t), "branch": "main", "task_authority": "native", "workflow_protocol": WorkerFlowVersion})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -71,7 +71,7 @@ func TestGlobalExecutionProfilesSharedAcrossProjects(t *testing.T) {
 func TestProjectExecutionSettingsAreRejected(t *testing.T) {
 	t.Setenv("STEERLINE_HOME", t.TempDir())
 	path := filepath.Join(t.TempDir(), "project.json")
-	data, err := json.Marshal(map[string]any{"execution_policy": workspacePolicyFixture(), "repository": configTestRepository(t), "branch": "main", "task_authority": "native", "workflow_protocol": WorkerFlowVersion, "host": "local"})
+	data, err := json.Marshal(map[string]any{"publication_policy": executionPublicationFixture(), "pr": hostPublicationProviderFixture(), "execution_policy": workspacePolicyFixture(), "repository": configTestRepository(t), "branch": "main", "task_authority": "native", "workflow_protocol": WorkerFlowVersion, "host": "local"})
 	if err != nil {
 		t.Fatal(err)
 	}

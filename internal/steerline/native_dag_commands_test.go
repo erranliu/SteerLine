@@ -255,7 +255,8 @@ func TestNativeCommandsRejectConfigurationBindingDriftBeforeSideEffects(t *testi
 	if _, err := commands.DiscardNativeTask(ctx, drifted, "50", strings.Repeat("8", 32), 1, "configuration drift", "operator"); err == nil || !strings.Contains(err.Error(), "authority_mismatch") {
 		t.Fatalf("discard used a changed branch with the registered authority: %v", err)
 	}
-	if _, err := commands.CompleteNativeTask(ctx, drifted, "50", 1, "invalid-workflow", &fixedTaskDeliveryVerifier{}); err == nil || !strings.Contains(err.Error(), "authority_mismatch") {
+	verifier := &fixedTaskDeliveryVerifier{}
+	if _, err := commands.CompleteNativeTask(ctx, drifted, "50", 1, "invalid-workflow", verifier); !isNativeErrorCode(err, "inconsistent_delivery") || verifier.calls != 0 {
 		t.Fatalf("delivery used a changed branch with the registered authority: %v", err)
 	}
 	for table, want := range map[string]int{"tasks": 1, "commands": 1, "operations": 0} {
@@ -737,7 +738,8 @@ func TestTaskDiscardRequestPersistsUnknownAndThenDiscardsOnlyAfterUnmergedProof(
 	}
 	task := page.Tasks[0].TaskRecord
 	createdAt := time.Now().UTC()
-	workflow := WorkflowRunRecord{ProjectIdentity: c.Identity(), WorkflowRunID: "wf-71", TaskID: "71", WorkflowVersion: WorkerFlowVersion, Phase: "executing", SelectedResult: "exec-71", CreatedAt: createdAt, UpdatedAt: createdAt}
+	frozen := publicationSnapshotFixture(t, c)
+	workflow := WorkflowRunRecord{Repository: c.Repository, Branch: c.Branch, ExecutionProfile: &frozen, ConfigDigest: frozen.AcceptedConfigVersion, ProjectIdentity: c.Identity(), WorkflowRunID: "wf-71", TaskID: "71", WorkflowVersion: WorkerFlowVersion, Phase: "executing", SelectedResult: "exec-71", CreatedAt: createdAt, UpdatedAt: createdAt}
 	execution := ExecutionRecord{ProjectIdentity: c.Identity(), ExecutionID: "exec-71", WorkflowRunID: "wf-71", Status: "blocked", CurrentStep: "worker", CreatedAt: createdAt, UpdatedAt: createdAt}
 	task.Status = "in_progress"
 	task.Claimant = "worker"

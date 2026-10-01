@@ -20,6 +20,7 @@ func TestDeadWorkerRecoveryPreservesDecisionAndFreshAnswer(t *testing.T) {
 		t.Fatal("isolated worker tree did not exit")
 	}
 	workflow, execution := service.workflowRecords(run)
+	execution.PolicyResources = policyResourceReceiptFixture(workflow.ExecutionProfile.Digest, execution.Workspace.Worktree)
 	execution.Process = &identity
 	setTestCodexBinding(t, execution, "ws://127.0.0.1:12345", "generation", workerFlowMockSession)
 	execution.CurrentTurnID = "00000000-0000-0000-0000-000000000001"

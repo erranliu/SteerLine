@@ -29,7 +29,8 @@ func TestWorkerOrcaWorktreeNameIncludesTaskNumberAndRunIdentity(t *testing.T) {
 }
 
 func TestNativeOrcaAgentSelectionUsesFrozenProfile(t *testing.T) {
-	base := Config{Host: "orca", Agent: "codex", ExecutionPolicy: workspacePolicyFixture()}
+	base := Config{Host: "orca", Agent: "codex", ExecutionPolicy: workspacePolicyFixture(), PublicationPolicy: executionPublicationFixture(), PR: hostPublicationProviderFixture()}
+	base.PublicationPolicy.Publisher = "worker"
 	for _, agent := range []string{"codex", "opencode"} {
 		codex := codexworker.ProfileConfig{Executable: "codex.exe"}
 		orca := &orcaworker.ProfileConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "2m"}
@@ -43,10 +44,18 @@ func TestNativeOrcaAgentSelectionUsesFrozenProfile(t *testing.T) {
 		if err := validateExecutionProfiles(base); err != nil {
 			t.Fatal(err)
 		}
+		profile = base.bindProjectPolicy(profile)
+		if agent != "codex" {
+			if reason := profile.StaticUnavailableReason(); reason == "" {
+				t.Fatal("unsupported policy mapping was selectable")
+			}
+			continue
+		}
 		frozen := profile.Freeze()
 		if !verifyFixedExecutionProfile(frozen) {
 			t.Fatal("profile digest changed while freezing")
 		}
+		base.Agent = "opencode" // Current defaults must not redirect the frozen route.
 		selected := base.ApplyFixedExecutionProfile(frozen)
 		if selected.agentName() != agent || selected.needsCodexExecutable() != (agent == "codex") {
 			t.Fatalf("Orca agent selection was tied to Codex: %+v", selected)

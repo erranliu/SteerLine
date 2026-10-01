@@ -114,13 +114,13 @@ func TestNativeCapabilityCheckKeepsFixedAgent(t *testing.T) {
 	setTestOrcaProfile(t, &f.c, orcaworker.ProfileConfig{Executable: exe, Args: []string{"--fake", "orca", f.c.RunDir}, Shell: "cmd.exe", WaitTimeout: "5s"})
 	seedFakeCapabilities(t, f.c)
 	fixedTarget, fixedAgent := targetFor(f.c), agentFor(f.c)
+	backend := backendFor(f.c)
 	f.c.Agent = "pi"
 	s := &Service{Config: f.c}
-	backend := backendFor(f.c)
 	if _, err := s.requireBackendCapabilitiesFor(context.Background(), backend, fixedTarget, fixedAgent, "workspace_inspection"); err != nil {
 		t.Fatalf("native capability was lost after changing the default agent: %v", err)
 	}
-	if _, err := s.requireBackendCapabilities(context.Background(), backend, "workspace_inspection"); err == nil {
+	if _, err := s.requireBackendCapabilities(context.Background(), backendFor(f.c), "workspace_inspection"); err == nil {
 		t.Fatal("new default agent reused evidence for another fixed agent")
 	}
 }
