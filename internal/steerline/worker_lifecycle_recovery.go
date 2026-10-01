@@ -77,7 +77,7 @@ func (s *Service) resumeAppServerWorkers(ctx context.Context) error {
 		if err != nil {
 			continue
 		}
-		if lifecycle == nil {
+		if lifecycle == nil || lifecycle.PolicyCapabilities().ResumeActiveObservation {
 			continue
 		}
 		request, requestErr := s.originalLifecycleRequest(run, fixed)
@@ -162,6 +162,9 @@ func (s *Service) applyAppServerRecovery(result appServerRecoveryResult) error {
 	}
 	if err := result.receipt.ValidateFor(result.request); err != nil {
 		return err
+	}
+	if err := s.validateLifecycleResultBinding(run, result.request); err != nil {
+		return nil // A late read-only probe cannot overwrite a committed binding.
 	}
 	if result.request.Snapshot.Session.ExecutionID != execution.ExecutionID || result.request.Snapshot.ResourceGeneration != execution.Generation ||
 		result.attemptID != "" && result.attemptID != run.AttemptID || execution.RecoveryVersion != result.execution.RecoveryVersion ||

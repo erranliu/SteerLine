@@ -154,6 +154,9 @@ func (s *SQLiteStore) commitWorker(ctx context.Context, request workerCommit) (w
 			if v.Before != nil && v.Before.Status != v.After.Status && !allowedOperationTransitions[v.Before.Status][v.After.Status] {
 				return fmt.Errorf("operation transition %s -> %s is not allowed", v.Before.Status, v.After.Status)
 			}
+			if v.Before != nil && recordFingerprint(v.Before.LifecycleIdentity) != recordFingerprint(v.After.LifecycleIdentity) {
+				return errors.New("worker operation cannot replace its original lifecycle binding identity")
+			}
 			if v.Before == nil && v.After.Status != "pending" && v.After.Status != "in_flight" {
 				return errors.New("new operation requires an original pending or in-flight intent")
 			}

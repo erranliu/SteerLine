@@ -37,6 +37,7 @@ func (r *integrationResolver) ResolveLifecycle(setup executionapi.LifecycleSetup
 }
 
 func TestCD64OriginalSessionReconciliation(t *testing.T) {
+	t.Run("remote_protocol_original_assertions", testCD64RemoteProtocolAssertions)
 	ctx := context.Background()
 	home := t.TempDir()
 	t.Setenv("STEERLINE_HOME", home)

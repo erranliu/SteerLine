@@ -1,4 +1,4 @@
-package steerline
+package steerlineintegration
 
 import (
 	"encoding/json"
@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"testing"
 )
 
 type remoteFixtureTask struct {
@@ -267,4 +268,27 @@ func fakeRemoteOrca(dir string, args []string) int {
 	}
 	save()
 	return fakeSupervisedEnvelope(runtimeID, result)
+}
+
+func TestMain(m *testing.M) {
+	if len(os.Args) > 2 && os.Args[1] == "--fake-remote" {
+		os.Exit(fakeRemoteOrca(os.Args[2], os.Args[3:]))
+	}
+	os.Exit(m.Run())
+}
+func arg(args []string, key string) string {
+	for i := 0; i+1 < len(args); i++ {
+		if args[i] == key {
+			return args[i+1]
+		}
+	}
+	return ""
+}
+func fakeOrcaErr(code, diagnostic string) int {
+	_ = json.NewEncoder(os.Stdout).Encode(map[string]any{"ok": false, "error": map[string]any{"code": code, "diagnostic": diagnostic}})
+	return 1
+}
+func fakeSupervisedEnvelope(runtime string, result any) int {
+	_ = json.NewEncoder(os.Stdout).Encode(map[string]any{"ok": true, "result": result, "_meta": map[string]string{"runtimeId": runtime}})
+	return 0
 }

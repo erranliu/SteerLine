@@ -119,3 +119,10 @@ func TestCD62QuestionReceiptBarrier(t *testing.T) {
 	})
 	t.Run("TestAppServerAnswerRecoveryPersistsBeforeNextQuestion", testAppServerAnswerRecoveryPersistsBeforeNextQuestion)
 }
+
+func nativeOrcaAnswerText(answer DecisionAnswer, request DecisionRequest) string {
+	if request.QuestionRoute == nil {
+		return workerFeedbackText(answer, request)
+	}
+	return strings.Join(answer.Answers[request.QuestionRoute.QuestionID], "\n\n")
+}

@@ -85,6 +85,9 @@ func driveTestLifecycleWorker(service *Service, run *Run) error {
 	if service == nil || run == nil {
 		return errors.New("lifecycle test worker is missing")
 	}
+	if err := service.observeWorkerEnvironment(context.Background(), run); err != nil {
+		return err
+	}
 	if service.workers[run.RunID] == nil {
 		lifecycle, _, err := service.lifecycleForRun(run)
 		if err != nil {
@@ -102,7 +105,8 @@ func driveTestLifecycleWorker(service *Service, run *Run) error {
 				return err
 			}
 		}
-		if execution.Environment != nil && (execution.Environment.Ready || execution.Environment.Blocker != nil) {
+		turn := nativeOrcaCurrentTurn(execution)
+		if execution.Environment != nil && (execution.Environment.Ready || execution.Environment.Blocker != nil && (turn == nil || turn.Purpose != "readiness" || execution.Environment.Preparation.Verified || turn.Settled && turn.Outcome == "failed")) {
 			return nil
 		}
 		select {
@@ -324,10 +328,12 @@ func TestWorkerEnvironmentER3RecheckKeepsOriginalDispatch(t *testing.T) {
 func TestWorkerEnvironmentRestartRequiresConfirmationBeforeBusinessInput(t *testing.T) {
 	f := newEnvironmentFixture(t, fakeNativeOrcaState{ReadinessMode: "hold"}, "")
 	f.prepare(t)
+	stopTestLifecycleMessages(f.service, f.workerCancel)
 	require(t, f.service.Close())
 	s, err := NewService(f.config)
 	require(t, err)
 	f.service, f.run = s, s.find("8154")
+	f.workerCancel = enableTestLifecycleMessages(s)
 	require(t, s.markServiceRecoveryGate())
 	f.update(t, func(state *fakeNativeOrcaState) { state.ReadinessMode = "success" })
 	require(t, s.resumeConfiguredWork(context.Background()))
@@ -363,10 +369,12 @@ func TestWorkerEnvironmentER4DeadlineRestartAndLostReceipt(t *testing.T) {
 	if turn := nativeOrcaCurrentTurn(e); turn == nil || turn.DispatchID == "" {
 		t.Fatal("reconciled Dispatch identity was not written back to its binding envelope")
 	}
+	stopTestLifecycleMessages(f.service, f.workerCancel)
 	require(t, f.service.Close())
 	s, err := NewService(f.config)
 	require(t, err)
 	f.service, f.run = s, s.find("8154")
+	f.workerCancel = enableTestLifecycleMessages(s)
 	_, e = s.workflowRecords(f.run)
 	if e.Environment.Preparation.Nonce != nonce || !e.Environment.Preparation.Deadline.Equal(deadline) {
 		t.Fatal("restart reset preparation identity or deadline")

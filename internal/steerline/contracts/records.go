@@ -179,18 +179,19 @@ type DomainEvent struct {
 }
 
 type OperationRecord struct {
-	ProjectIdentity   string    `json:"project_identity"`
-	OperationID       string    `json:"operation_id"`
-	IdempotencyKey    string    `json:"idempotency_key"`
-	Kind              string    `json:"kind"`
-	Status            string    `json:"status"`
-	PayloadDigest     string    `json:"payload_digest"`
-	Request           []byte    `json:"request,omitempty"`
-	PlatformRequestID string    `json:"platform_request_id,omitempty"`
-	Receipt           []byte    `json:"receipt,omitempty"`
-	UnknownReason     string    `json:"unknown_reason,omitempty"`
-	CreatedAt         time.Time `json:"created_at"`
-	UpdatedAt         time.Time `json:"updated_at"`
+	ProjectIdentity   string                                   `json:"project_identity"`
+	OperationID       string                                   `json:"operation_id"`
+	IdempotencyKey    string                                   `json:"idempotency_key"`
+	Kind              string                                   `json:"kind"`
+	Status            string                                   `json:"status"`
+	PayloadDigest     string                                   `json:"payload_digest"`
+	Request           []byte                                   `json:"request,omitempty"`
+	LifecycleIdentity *executionapi.LifecycleOperationIdentity `json:"lifecycle_identity,omitempty"`
+	PlatformRequestID string                                   `json:"platform_request_id,omitempty"`
+	Receipt           []byte                                   `json:"receipt,omitempty"`
+	UnknownReason     string                                   `json:"unknown_reason,omitempty"`
+	CreatedAt         time.Time                                `json:"created_at"`
+	UpdatedAt         time.Time                                `json:"updated_at"`
 }
 
 type CommandRecord struct {

@@ -79,6 +79,7 @@ func testCD63BindingCodecIsolation(t *testing.T) {
 		snapshot := executionapi.LifecycleSnapshot{Ref: ref, Session: session, ConfigurationDigest: copy.ConfigurationDigest, ResourceGeneration: copy.Generation, Implementation: cloneImplementationData(copy.ImplementationData), Workspace: executionapi.WorkspaceIntent{Path: workspace}}
 		input := executionapi.TurnInput{CommandID: newID(), Prompt: "original saved input"}
 		operation := executionapi.Operation{Version: 1, ID: newID(), RunID: copy.WorkflowRunID, AttemptID: copy.CurrentAttemptID, Backend: ref.Backend, Protocol: ref.Protocol, Target: ref.Target, Action: string(executionapi.LifecyclePrepareSession), PayloadDigest: operationDigest(mustJSON(input)), Status: executionapi.OperationInFlight, Ref: &ref}
+		operation.LifecycleIdentity = &executionapi.LifecycleOperationIdentity{ProjectID: snapshot.Session.ProjectID, ExecutionID: snapshot.Session.ExecutionID, ConfigurationDigest: snapshot.ConfigurationDigest, ResourceGeneration: snapshot.ResourceGeneration, InputBindingDigest: executionapi.LifecycleBindingDigest(snapshot), Ref: snapshot.Ref}
 		startCalled := false
 		lifecycle := codexworker.ExecutionLifecycle{Backend: codexworker.Backend{Config: codexworker.Config{Policy: workspacePolicyFixture(), Executable: os.Args[0], Workspace: workspace, RunDir: t.TempDir(), RunID: copy.WorkflowRunID, ServerDir: serverDir, Sandbox: "workspace-write", WindowsSandbox: "elevated"}, Process: codexworker.ProcessPort{Start: func(*exec.Cmd) (executionapi.StopHandle, error) {
 			startCalled = true

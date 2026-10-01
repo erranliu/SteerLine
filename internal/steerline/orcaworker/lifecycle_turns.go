@@ -171,6 +171,9 @@ func (l *ExecutionLifecycle) reconcileInput(ctx context.Context, request executi
 	if turn == nil || turn.DispatchID == "" {
 		return receipt, nil, errors.New("native Orca input reconciliation has no original Dispatch")
 	}
+	if err := l.verifyAgent(ctx, request.Snapshot, process); err != nil {
+		return receipt, nil, err
+	}
 	pending, err := InspectPendingPaste(ctx, l.client.MetaCall, workerTerminalIdentity(process))
 	if err != nil {
 		return receipt, nil, nativeCallError(err)
@@ -436,13 +439,13 @@ func (l *ExecutionLifecycle) cleanup(ctx context.Context, request executionapi.L
 	}
 	identity := request.Input.Cleanup.Resources[0]
 	role := "agent"
-	if identity.Terminal == state.Coordinator.Terminal {
+	if identity == state.Coordinator {
 		role = "coordinator"
 		if err := InboxDrained(ctx, l.client.MetaCall, state.Coordinator.Terminal, state.Coordinator.RuntimeID, request.Snapshot.Ref.Target.OrchestrationRun); err != nil {
 			return receipt, err
 		}
 		state.CoordinatorClosed = true
-	} else if identity.Terminal == request.Snapshot.Ref.External.Terminal && identity.Incarnation == request.Snapshot.Ref.External.Incarnation {
+	} else if identity == request.Snapshot.Ref.External {
 		state.AgentClosed = true
 	} else {
 		return nativeReceipt(request, executionapi.OperationRejected), &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "native Orca cleanup differs from the fixed resource list"}
@@ -479,12 +482,12 @@ func (l *ExecutionLifecycle) reconcileCleanup(ctx context.Context, request execu
 	}
 	identity := request.Input.Cleanup.Resources[0]
 	role := "agent"
-	if identity.Terminal == state.Coordinator.Terminal {
+	if identity == state.Coordinator {
 		role = "coordinator"
 		if err := InboxDrained(ctx, l.client.MetaCall, state.Coordinator.Terminal, state.Coordinator.RuntimeID, request.Snapshot.Ref.Target.OrchestrationRun); err != nil {
 			return receipt, nil, err
 		}
-	} else if identity.Terminal != request.Snapshot.Ref.External.Terminal || identity.Incarnation != request.Snapshot.Ref.External.Incarnation {
+	} else if identity != request.Snapshot.Ref.External {
 		return nativeReceipt(request, executionapi.OperationRejected), nil, &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "native Orca cleanup reconciliation changed its original terminal"}
 	}
 	absent, err := InspectCleanupTerminal(ctx, l.client.MetaCall, identity, l.setup.RepositoryPath, role, true)
@@ -512,6 +515,9 @@ func (l *ExecutionLifecycle) StopLifecycle(ctx context.Context, request executio
 		return nativeReceipt(request, executionapi.OperationRejected), executionapi.UnsupportedAdapterOperation(request.Operation.Action, "native Orca stop has no original terminal")
 	}
 	receipt := nativeReceipt(request, executionapi.OperationUnknown)
+	if err := l.verifyAgent(ctx, request.Snapshot, request.Snapshot.Ref.External); err != nil {
+		return receipt, err
+	}
 	closed, err := l.client.CloseTerminalChecked(ctx, request.Snapshot.Ref.External.Terminal, request.Snapshot.Ref.External.RuntimeID)
 	if err != nil {
 		return receipt, nativeCallError(err)

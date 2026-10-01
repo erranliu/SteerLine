@@ -81,6 +81,7 @@ func remoteLifecycleRequest(snapshot executionapi.LifecycleSnapshot, action exec
 	operation := executionapi.Operation{Version: 1, ID: "operation-id", RunID: snapshot.Session.WorkflowRunID, AttemptID: snapshot.Session.AttemptID,
 		Backend: snapshot.Ref.Backend, Protocol: snapshot.Ref.Protocol, Target: snapshot.Ref.Target, Action: string(action), IdempotencyKey: "operation-key",
 		PayloadDigest: hex.EncodeToString(digest[:]), Status: executionapi.OperationInFlight, Ref: &snapshot.Ref}
+	operation.LifecycleIdentity = &executionapi.LifecycleOperationIdentity{ProjectID: snapshot.Session.ProjectID, ExecutionID: snapshot.Session.ExecutionID, ConfigurationDigest: snapshot.ConfigurationDigest, ResourceGeneration: snapshot.ResourceGeneration, InputBindingDigest: executionapi.LifecycleBindingDigest(snapshot), Ref: snapshot.Ref}
 	return executionapi.LifecycleRequest{Snapshot: snapshot, Operation: operation, Input: input}
 }
 
@@ -206,6 +207,33 @@ func TestLifecycleConfirmsOriginalDeliveryAckByReadOnlyInbox(t *testing.T) {
 	receipt, observer, err := lifecycle.Reconcile(context.Background(), request)
 	if err != nil || observer != nil || receipt.Disposition != executionapi.OperationConfirmed || receipt.DeliveryID != "delivery-original" || callCount != 2 {
 		t.Fatalf("original ack was not confirmed read-only: receipt=%+v calls=%d err=%v", receipt, callCount, err)
+	}
+}
+
+func TestLifecycleReconcilesReleasedDispatchWithDistinctTurnID(t *testing.T) {
+	snapshot, state := remoteSnapshotForTest(t)
+	state.Turns = []orcaworker.NativeTurnState{{TurnID: "turn", TaskID: "task", DispatchID: "dispatch", Settled: true}}
+	envelope, err := orcaworker.NewExecutionStateEnvelope(stateIdentity(snapshot), state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot.Implementation = []executionapi.ImplementationDataEnvelope{envelope}
+	config := lifecycleRemoteTestConfig(func(_ context.Context, _ time.Duration, args ...string) ([]byte, error) {
+		if len(args) >= 2 && args[0] == "orchestration" && args[1] == "worker-list" {
+			return remoteEnvelope("center-runtime", map[string]any{"workers": []any{map[string]any{"RunID": "run", "TaskID": "task", "DispatchID": "dispatch", "WorktreeID": "repo::worktree", "State": "released"}}}), nil
+		}
+		t.Fatalf("release reconciliation attempted a mutation: %v", args)
+		return nil, errors.New("unexpected call")
+	})
+	lifecycle := &ExecutionLifecycle{setup: executionapi.LifecycleSetup{Snapshot: snapshot}, config: config, client: New(config)}
+	request := remoteLifecycleRequest(snapshot, executionapi.LifecycleCleanup, executionapi.LifecycleInput{Cleanup: &executionapi.CleanupInput{Resources: []executionapi.ProcessIdentity{snapshot.Ref.External}}})
+	receipt, _, err := lifecycle.Reconcile(context.Background(), request)
+	if err != nil || receipt.Disposition != executionapi.OperationConfirmed || len(receipt.Implementation) != 1 {
+		t.Fatalf("released Dispatch could not be reconciled: %+v / %v", receipt, err)
+	}
+	updated, err := orcaworker.DecodeExecutionStateEnvelope(receipt.Implementation[0], stateIdentity(snapshot))
+	if err != nil || !updated.Turns[0].Released {
+		t.Fatalf("release receipt did not advance the original turn: %+v / %v", updated, err)
 	}
 }
 

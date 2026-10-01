@@ -86,7 +86,14 @@ func TestNativeOrcaCenterReusesWorkerAfterRestartAndSettlement(t *testing.T) {
 	}
 	_, execution := s.workflowRecords(run)
 	if !execution.Environment.Ready || run.Target.Dispatch != "ctx-2" || execution.TurnNumber != 0 {
-		t.Fatalf("readiness did not settle before business input: environment=%+v execution=%+v target=%+v", execution.Environment, execution, run.Target)
+		state := testOrcaState(t, execution)
+		if state != nil {
+			t.Logf("resource state: agent_bound=%v coordinator=%s relay_ignored=%v", state.AgentBound, state.Coordinator.Terminal, state.RelayIgnored)
+		}
+		for _, operation := range s.domain.Operations {
+			t.Logf("operation key=%s kind=%s status=%s request=%s", operation.IdempotencyKey, operation.Kind, operation.Status, operation.Request)
+		}
+		t.Fatalf("readiness did not settle before business input: ready=%v blocker=%+v preparation=%+v error=%q dispatch=%s turn_number=%d", execution.Environment.Ready, execution.Environment.Blocker, execution.Environment.Preparation, deref(execution.Error), run.Target.Dispatch, execution.TurnNumber)
 	}
 
 	data, err := os.ReadFile(statePath)

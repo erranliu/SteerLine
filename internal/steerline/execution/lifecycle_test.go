@@ -49,7 +49,7 @@ func TestLifecycleCandidateRequiresOneMatchingInput(t *testing.T) {
 
 func TestLifecycleRequestRequiresOriginalDurableOperation(t *testing.T) {
 	request := LifecycleRequest{
-		Operation: Operation{ID: "operation", Action: string(LifecycleStartTurn), PayloadDigest: "digest"},
+		Operation: Operation{ID: "operation", Action: string(LifecycleStartTurn), PayloadDigest: "digest", Ref: &ExecutionRef{}, LifecycleIdentity: &LifecycleOperationIdentity{InputBindingDigest: "binding-digest"}},
 		Input:     LifecycleInput{Turn: &TurnInput{CommandID: "command", Prompt: "prompt"}},
 	}
 	if err := request.Validate(); err != nil {

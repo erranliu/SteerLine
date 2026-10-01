@@ -327,6 +327,21 @@ func (s *Service) startWorkerOperation(run *Run, kind, key string, payload any) 
 	}
 	operation := OperationRecord{ProjectIdentity: s.Config.identity, OperationID: newID(), IdempotencyKey: key, Kind: kind,
 		Status: "in_flight", PayloadDigest: operationDigest(request), Request: request, CreatedAt: now(), UpdatedAt: now()}
+	if lifecycleOperationKind(kind) {
+		fixed, err := s.workerFlowContext(run)
+		if err != nil {
+			return "", err
+		}
+		snapshot, err := s.lifecycleSnapshot(run, fixed.workflow, fixed.execution, fixed.attempt, nil)
+		if err != nil {
+			return "", err
+		}
+		operation.LifecycleIdentity = &executionapi.LifecycleOperationIdentity{
+			ProjectID: snapshot.Session.ProjectID, ExecutionID: snapshot.Session.ExecutionID,
+			ConfigurationDigest: snapshot.ConfigurationDigest, ResourceGeneration: snapshot.ResourceGeneration,
+			InputBindingDigest: executionapi.LifecycleBindingDigest(snapshot), Ref: snapshot.Ref,
+		}
+	}
 	s.domain.Operations = append(s.domain.Operations, operation)
 	if s.pendingOperations == nil {
 		s.pendingOperations = make(map[string]string)
@@ -335,9 +350,14 @@ func (s *Service) startWorkerOperation(run *Run, kind, key string, payload any) 
 	return operation.OperationID, s.commitWorker(run)
 }
 
+func lifecycleOperationKind(kind string) bool {
+	return knownLifecycleAction(executionapi.LifecycleAction(kind)) || kind == "prepare_worker_session" ||
+		kind == "start_worker_turn" || kind == "submit_worker_input" || kind == "reply_execution_question" || kind == "stop_worker_observation"
+}
+
 func workerOperationRequiresRequirements(kind string) bool {
 	switch kind {
-	case "orca_remote_release", "orca_remote_coordinator_close", "orca_native_terminal_close", "orca_native_ack", "orca_native_relay_done", "stop_worker_observation", "cleanup_resources":
+	case "orca_remote_release", "orca_remote_coordinator_close", "orca_native_terminal_close", "orca_native_ack", "orca_native_relay_done", "stop_worker_observation", "cleanup_resources", "acknowledge_delivery":
 		return false
 	default:
 		return true

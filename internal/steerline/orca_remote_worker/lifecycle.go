@@ -777,7 +777,7 @@ func (l *ExecutionLifecycle) reconcileCleanup(ctx context.Context, request execu
 			receipt.Disposition, receipt.Diagnostic = executionapi.OperationUnknown, "original worker release remains unconfirmed"
 			return receipt, nil, backendError(checkErr)
 		}
-		turn := findTurn(&state, resource.Dispatch)
+		turn := findDispatchTurn(&state, resource.Dispatch)
 		if turn == nil {
 			return receipt, nil, errors.New("released Dispatch has no fixed turn state")
 		}
@@ -828,7 +828,7 @@ func (l *ExecutionLifecycle) cleanup(ctx context.Context, request executionapi.L
 	ref := RemoteRef(request.Snapshot.Ref)
 	resource := input.Resources[0]
 	if resource.Kind == "orca_supervised" {
-		turn := findTurn(&state, resource.Dispatch)
+		turn := findDispatchTurn(&state, resource.Dispatch)
 		if turn == nil || !turn.Settled || turn.Released || resource != request.Snapshot.Ref.External {
 			return receipt, &Error{Code: executionapi.BackendIdentityMismatch, Diagnostic: "remote release differs from the exact settled original Dispatch"}
 		}
@@ -972,6 +972,18 @@ func findTurn(state *orcaworker.NativeExecutionState, id string) *orcaworker.Nat
 	}
 	for i := range state.Turns {
 		if state.Turns[i].TurnID == id {
+			return &state.Turns[i]
+		}
+	}
+	return nil
+}
+
+func findDispatchTurn(state *orcaworker.NativeExecutionState, dispatchID string) *orcaworker.NativeTurnState {
+	if state == nil || dispatchID == "" {
+		return nil
+	}
+	for i := range state.Turns {
+		if state.Turns[i].DispatchID == dispatchID {
 			return &state.Turns[i]
 		}
 	}

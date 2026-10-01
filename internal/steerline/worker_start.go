@@ -176,8 +176,13 @@ func (s *Service) startWorkerFlowTurn(ctx context.Context, run *Run, prompt, tur
 		return errors.New("worker turn requires a fresh manual recovery decision")
 	}
 	sessionID, _ := executionSessionFacts(execution)
+	// Resource creation may have committed the preparation Command before the
+	// original turn could be sent. A human recheck continues that same saved
+	// preparation identity; it does not allocate another turn or bypass a gate.
+	resumePreparation := readinessTurn && execution.PendingCommandID == turnID &&
+		execution.PendingTurnID == "" && s.workers[run.RunID] == nil
 	if workflow.WorkflowVersion != WorkerFlowVersion || !stableExecutionID(turnID) ||
-		execution.PendingTurnID != "" || execution.PendingCommandID != "" || sessionID != "" && execution.CurrentTurnID != "" && execution.LastStoppedTurnID != execution.CurrentTurnID {
+		execution.PendingTurnID != "" || execution.PendingCommandID != "" && !resumePreparation || sessionID != "" && execution.CurrentTurnID != "" && execution.LastStoppedTurnID != execution.CurrentTurnID {
 		return errors.New("worker turn cannot start without one idle original session")
 	}
 	if sessionID == "" && execution.TurnNumber != 0 && run.DomainAttemptNumber <= 1 {

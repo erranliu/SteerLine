@@ -62,8 +62,8 @@ func InspectPendingPaste(ctx context.Context, call MetaCall, identity TerminalId
 	if json.Unmarshal(env.Payload, &result) != nil || env.RuntimeID != identity.RuntimeID || result.Terminal.Handle != identity.Handle {
 		return false, &PlatformError{Code: "identity_mismatch", Diagnostic: "Orca prompt screen came from a different worker terminal"}
 	}
-	if result.Terminal.Source != "screen" || !screenHasPendingPaste(result.Terminal.Tail) {
-		return false, nil
+	if result.Terminal.Source != "screen" {
+		return false, &PlatformError{Code: "outcome_unknown", Diagnostic: "original paste state is unavailable from the terminal screen"}
 	}
 	term, err := ShowTerminal(ctx, call, identity.Handle)
 	if err != nil {
@@ -72,7 +72,7 @@ func InspectPendingPaste(ctx context.Context, call MetaCall, identity TerminalId
 	if term.RuntimeID != identity.RuntimeID || term.IncarnationID != identity.Incarnation {
 		return false, &PlatformError{Code: "identity_mismatch", Diagnostic: "Orca pending prompt terminal was replaced"}
 	}
-	return true, nil
+	return screenHasPendingPaste(result.Terminal.Tail), nil
 }
 
 func SubmitPendingPaste(ctx context.Context, call MetaCall, identity TerminalIdentity) (bool, error) {

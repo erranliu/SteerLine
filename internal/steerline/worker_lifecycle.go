@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
+	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
@@ -151,6 +151,11 @@ func (s *Service) resumeLifecycleWorkerFlow(ctx context.Context, task *TaskRecor
 		return false, err
 	}
 	execution := fixed.execution
+	if execution.Environment != nil {
+		if err := s.observeWorkerEnvironment(ctx, run); err != nil {
+			return true, err
+		}
+	}
 	if execution.PendingDeliveryID != "" {
 		if err := s.acknowledgeLifecycleDelivery(run, execution.PendingDeliveryID); err != nil {
 			return true, err
@@ -162,7 +167,8 @@ func (s *Service) resumeLifecycleWorkerFlow(ctx context.Context, task *TaskRecor
 		execution = fixed.execution
 	}
 	for _, operation := range s.domain.Operations {
-		if operation.Kind != string(executionapi.LifecycleAcknowledge) || operation.Status != "in_flight" && operation.Status != "outcome_unknown" && operation.Status != "accepted" {
+		if !strings.HasPrefix(operation.IdempotencyKey, "worker-delivery-ack:"+execution.ExecutionID+":") ||
+			operation.Kind != string(executionapi.LifecycleAcknowledge) || operation.Status != "in_flight" && operation.Status != "outcome_unknown" && operation.Status != "accepted" {
 			continue
 		}
 		var input executionapi.AcknowledgeInput
@@ -205,7 +211,7 @@ func (s *Service) resumeLifecycleWorkerFlow(ctx context.Context, task *TaskRecor
 			return true, s.advanceOrcaPreparation(ctx, run)
 		}
 	}
-	if execution.PendingCommandID != "" || execution.CurrentTurnID != "" && execution.CurrentTurnID != execution.LastStoppedTurnID {
+	if !execution.RecoveryRequired && (execution.PendingCommandID != "" || execution.CurrentTurnID != "" && execution.CurrentTurnID != execution.LastStoppedTurnID) {
 		if lifecycle, _, lifecycleErr := s.lifecycleForRun(run); lifecycleErr == nil && lifecycle.PolicyCapabilities().ResumeActiveObservation {
 			return true, s.resumeLifecycleObservation(ctx, run, lifecycle)
 		}
@@ -391,6 +397,9 @@ func lifecycleSnapshot(run *Run, workflow *WorkflowRunRecord, execution *Executi
 	}
 	if run.WorkspaceIntent != nil {
 		snapshot.WorkspacePlan = *run.WorkspaceIntent
+		if snapshot.Ref.BaseCommit == "" {
+			snapshot.Ref.BaseCommit = run.WorkspaceIntent.BaseCommit
+		}
 	}
 	if run.Decision != nil && run.Decision.Request.QuestionRoute != nil {
 		snapshot.KnownQuestionIDs = append(snapshot.KnownQuestionIDs, run.Decision.Request.QuestionRoute.QuestionID)
@@ -438,14 +447,19 @@ func (s *Service) lifecycleSnapshot(run *Run, workflow *WorkflowRunRecord, execu
 		if !knownLifecycleAction(action) {
 			continue
 		}
+		if identity := record.LifecycleIdentity; identity == nil || identity.ExecutionID != execution.ExecutionID || identity.Ref.AttemptID != run.AttemptID {
+			continue
+		}
 		attemptID := run.AttemptID
-		snapshot.Operations = append(snapshot.Operations, executionapi.Operation{
+		operation := executionapi.Operation{
 			Version: executionapi.ExecutionRecordVersion, ID: record.OperationID, RunID: run.RunID, AttemptID: attemptID,
 			Backend: executionapi.BackendKind(execution.Backend), Protocol: executionapi.ExecutionProtocol(execution.Protocol), Target: execution.Target,
 			Action: string(action), IdempotencyKey: record.IdempotencyKey, Request: append([]byte(nil), record.Request...), Receipt: append([]byte(nil), record.Receipt...), PayloadDigest: record.PayloadDigest,
 			Status: executionapi.OperationStatus(record.Status), StartedAt: record.CreatedAt, UpdatedAt: record.UpdatedAt,
 			Ref: &snapshot.Ref,
-		})
+		}
+		bindOriginalLifecycleIdentity(&operation, record)
+		snapshot.Operations = append(snapshot.Operations, operation)
 	}
 	return snapshot.Clone(), nil
 }
@@ -473,7 +487,7 @@ func unresolvedLifecycleCandidate(snapshot executionapi.LifecycleSnapshot) (exec
 }
 
 func lifecycleRequest(snapshot executionapi.LifecycleSnapshot, operation OperationRecord, action executionapi.LifecycleAction, input executionapi.LifecycleInput) executionapi.LifecycleRequest {
-	return executionapi.LifecycleRequest{
+	request := executionapi.LifecycleRequest{
 		Snapshot: snapshot.Clone(),
 		Operation: executionapi.Operation{
 			Version: executionapi.ExecutionRecordVersion, ID: operation.OperationID,
@@ -486,10 +500,41 @@ func lifecycleRequest(snapshot executionapi.LifecycleSnapshot, operation Operati
 		},
 		Input: input.Clone(),
 	}
+	bindOriginalLifecycleIdentity(&request.Operation, operation)
+	return request
 }
 
-func codexLifecycleTurnInput(commandID, prompt string, linkedArgs []string) executionapi.TurnInput {
-	return executionapi.TurnInput{CommandID: commandID, Prompt: prompt, LinkedWorktreeArgs: append([]string(nil), linkedArgs...)}
+func bindOriginalLifecycleIdentity(operation *executionapi.Operation, record OperationRecord) {
+	if record.LifecycleIdentity == nil {
+		return
+	}
+	identity := *record.LifecycleIdentity
+	operation.LifecycleIdentity = &identity
+	ref := identity.Ref
+	operation.Ref, operation.RunID, operation.AttemptID = &ref, ref.RunID, ref.AttemptID
+	operation.Backend, operation.Protocol, operation.Target = ref.Backend, ref.Protocol, ref.Target
+}
+
+func (s *Service) validateLifecycleResultBinding(run *Run, request executionapi.LifecycleRequest) error {
+	fixed, err := s.workerFlowContext(run)
+	if err != nil {
+		return err
+	}
+	current, err := s.lifecycleSnapshot(run, fixed.workflow, fixed.execution, fixed.attempt, nil)
+	if err != nil {
+		return err
+	}
+	if current.Session.ProjectID != request.Snapshot.Session.ProjectID || current.Session.ExecutionID != request.Snapshot.Session.ExecutionID ||
+		current.Session.AttemptID != request.Snapshot.Session.AttemptID || current.ConfigurationDigest != request.Snapshot.ConfigurationDigest ||
+		current.ResourceGeneration != request.Snapshot.ResourceGeneration ||
+		executionapi.LifecycleBindingDigest(current) != executionapi.LifecycleBindingDigest(request.Snapshot) {
+		return ErrWorkerTurnStale
+	}
+	return nil
+}
+
+func lifecycleTurnInput(commandID, prompt string, linkedArgs []string) executionapi.TurnInput {
+	return executionapi.TurnInput{CommandID: commandID, Prompt: prompt, Purpose: "business", LinkedWorktreeArgs: append([]string(nil), linkedArgs...)}
 }
 
 func (s *Service) originalLifecycleRequest(run *Run, fixed workerFlowContext) (executionapi.LifecycleRequest, error) {
@@ -534,9 +579,42 @@ func mergeLifecycleExecutionReceipt(execution *ExecutionRecord, receipt executio
 	if execution == nil {
 		return errors.New("lifecycle receipt has no fixed execution record")
 	}
+	// A rejected receipt must not leave even a partial private candidate which
+	// a later diagnostic commit could accidentally publish.
+	var candidate ExecutionRecord
+	if err := json.Unmarshal(mustJSON(execution), &candidate); err != nil {
+		return err
+	}
+	if err := mergeLifecycleExecutionCandidate(&candidate, receipt); err != nil {
+		return err
+	}
+	// Preparation coordination keeps these actor-owned pointers while applying
+	// several receipts. Publish the valid candidate into them only now.
+	if execution.Environment != nil && candidate.Environment != nil {
+		if execution.Environment.Preparation != nil && candidate.Environment.Preparation != nil {
+			*execution.Environment.Preparation = *candidate.Environment.Preparation
+			candidate.Environment.Preparation = execution.Environment.Preparation
+		}
+		*execution.Environment = *candidate.Environment
+		candidate.Environment = execution.Environment
+	}
+	*execution = candidate
+	return nil
+}
+
+func mergeLifecycleExecutionCandidate(execution *ExecutionRecord, receipt executionapi.LifecycleReceipt) error {
 	if receipt.Target != nil {
 		current, next := execution.Target, *receipt.Target
 		if next.ID != current.ID || next.ConnectionID != current.ConnectionID || next.ExternalRuntime != current.ExternalRuntime {
+			return ErrWorkerTurnStale
+		}
+		for _, field := range [][2]string{{current.WorktreeID, next.WorktreeID},
+			{current.CoordinatorTerminal, next.CoordinatorTerminal}, {current.OrchestrationRun, next.OrchestrationRun}, {current.ExecutionHost, next.ExecutionHost}} {
+			if field[0] != "" && field[0] != field[1] {
+				return ErrWorkerTurnStale
+			}
+		}
+		if current.WorktreeID != "" && (current.Branch != next.Branch || current.BaseRevision != next.BaseRevision) {
 			return ErrWorkerTurnStale
 		}
 		execution.Target = next
@@ -546,6 +624,9 @@ func mergeLifecycleExecutionReceipt(execution *ExecutionRecord, receipt executio
 			return ErrWorkerTurnStale
 		}
 		workspace := receipt.Workspace
+		if !execution.Workspace.VerifiedAt.IsZero() && execution.Workspace.Worktree != "" && (canonical(execution.Workspace.Worktree) != canonical(workspace.Worktree) || execution.Workspace.Branch != workspace.Branch) {
+			return ErrWorkerTurnStale
+		}
 		if workspace.Worktree == "" || workspace.Branch == "" || workspace.Base == "" || workspace.Head == "" {
 			return errors.New("lifecycle workspace receipt is incomplete")
 		}
@@ -600,13 +681,9 @@ func mergeLifecycleExecutionReceipt(execution *ExecutionRecord, receipt executio
 			return err
 		}
 	}
-	if execution.Environment != nil && execution.Process != nil && execution.PolicyResources != nil {
-		if state, err := decodeOrcaExecutionState(execution); err != nil {
-			return err
-		} else if state != nil && state.AgentLaunchCommand != "" {
-			execution.Environment.LaunchCommand = state.AgentLaunchCommand
-			execution.Environment.WriteRoots = append([]string(nil), execution.PolicyResources.WriteRoots...)
-		}
+	if execution.Environment != nil && execution.Process != nil && execution.PolicyResources != nil && receipt.State.LaunchCommand != "" {
+		execution.Environment.LaunchCommand = receipt.State.LaunchCommand
+		execution.Environment.WriteRoots = append([]string(nil), execution.PolicyResources.WriteRoots...)
 	}
 	return nil
 }
@@ -624,7 +701,7 @@ func (s *Service) startWorkerLifecycle(ctx context.Context, run *Run, lifecycle 
 	if fixed.execution.ConfigurationDigest != "" && fixed.execution.ConfigurationDigest != fixed.workflow.ExecutionProfile.Digest {
 		return errors.New("worker lifecycle configuration identity differs from the accepted profile")
 	}
-	input := codexLifecycleTurnInput(commandID, prompt, nil)
+	input := lifecycleTurnInput(commandID, prompt, nil)
 	if fixed.execution.Environment != nil && fixed.execution.Environment.Preparation != nil && fixed.execution.Environment.Preparation.TurnID == commandID {
 		input.Purpose = "readiness"
 	}
@@ -966,7 +1043,7 @@ func (s *Service) executeLifecycleStep(ctx context.Context, run *Run, lifecycle 
 	if err := validateSavedLifecycleOperation(operation, candidate.Action, input); err != nil {
 		return err
 	}
-	if candidate.Action == executionapi.LifecycleCreateResource && input.Resource != nil && input.Resource.Purpose == "agent-terminal" &&
+	if candidate.Action == executionapi.LifecycleCreateResource &&
 		lifecycle.PolicyCapabilities().LinkedWorkspaceWriteRoots && fixed.execution.PolicyResources == nil {
 		var linkedArgs []string
 		if fixed.config.ExecutionPolicy.Filesystem.WriteScope == "workspace-write" {
@@ -1008,7 +1085,8 @@ func (s *Service) executeLifecycleStep(ctx context.Context, run *Run, lifecycle 
 	} else {
 		receipt, observer, callErr = lifecycle.Execute(ctx, request.Clone())
 	}
-	if !reconciled && (callErr != nil || receipt.Disposition == executionapi.OperationUnknown) {
+	hadUnknownMutation := !reconciled && (callErr != nil || receipt.Disposition == executionapi.OperationUnknown)
+	if hadUnknownMutation {
 		if observer != nil {
 			_ = observer.Close(context.Background())
 			observer = nil
@@ -1037,7 +1115,7 @@ func (s *Service) executeLifecycleStep(ctx context.Context, run *Run, lifecycle 
 	}
 	previousProcess := fixed.execution.Process
 	if err := mergeLifecycleExecutionReceipt(fixed.execution, receipt); err != nil {
-		return s.waitWorkerFlow(run, "lifecycle receipt changed the fixed resource identity: "+err.Error())
+		return errors.Join(s.waitWorkerFlow(run, "lifecycle receipt changed the fixed resource identity: "+err.Error()), err)
 	}
 	if receipt.Process != nil && fixed.execution.PolicyResources == nil && lifecycle.PolicyCapabilities().LinkedWorkspaceWriteRoots {
 		var linkedArgs []string
@@ -1105,6 +1183,11 @@ func (s *Service) executeLifecycleStep(ctx context.Context, run *Run, lifecycle 
 	}
 	if worker != nil {
 		s.registerWorker(run, worker)
+	}
+	if hadUnknownMutation && fixed.execution.Environment != nil {
+		// The original identity can be reconciled while still preserving the
+		// explicit host recheck which an uncertain preparation requires.
+		return errors.Join(s.blockWorkerEnvironment(run, contracts.HostFact{Reason: "resource_preparation_unverified", Confidence: "unverified", Source: "lifecycle.reconciliation", Detail: "Original operation was reconciled after losing its mutation receipt; confirm the retained environment before more input."}), errLifecycleNeedsReconciliation)
 	}
 	if callErr != nil || status == "outcome_unknown" || status == "rejected" {
 		if candidate.Action == executionapi.LifecycleCleanup {
@@ -1351,6 +1434,9 @@ func (s *Service) applyAppServerSessionReceipt(run *Run, request executionapi.Li
 	if err := receipt.ValidateFor(request); err != nil {
 		return executionapi.LifecycleRequest{}, false, err
 	}
+	if err := s.validateLifecycleResultBinding(run, request); err != nil {
+		return executionapi.LifecycleRequest{}, false, err
+	}
 	fixed, err := s.workerFlowContext(run)
 	if err != nil {
 		return executionapi.LifecycleRequest{}, false, err
@@ -1365,43 +1451,17 @@ func (s *Service) applyAppServerSessionReceipt(run *Run, request executionapi.Li
 		return executionapi.LifecycleRequest{}, false, err
 	}
 	execution := fixed.execution
-	if receipt.State.SessionID != "" {
-		if execution.SessionID != "" && execution.SessionID != receipt.State.SessionID {
-			return executionapi.LifecycleRequest{}, false, ErrWorkerTurnStale
-		}
-		execution.SessionID = receipt.State.SessionID
+	if receipt.Handle != nil && (receipt.Process == nil || receipt.Handle.Identity() != *receipt.Process) {
+		return executionapi.LifecycleRequest{}, false, ErrWorkerTurnStale
 	}
-	if receipt.State.SessionGeneration != "" {
-		if execution.SessionGeneration != "" && execution.SessionGeneration != receipt.State.SessionGeneration {
-			return executionapi.LifecycleRequest{}, false, ErrWorkerTurnStale
-		}
-		execution.SessionGeneration = receipt.State.SessionGeneration
+	if err := mergeLifecycleExecutionReceipt(execution, receipt); err != nil {
+		return executionapi.LifecycleRequest{}, false, err
 	}
-	if receipt.Process != nil {
-		if execution.Process != nil && *execution.Process != *receipt.Process {
-			return executionapi.LifecycleRequest{}, false, ErrWorkerTurnStale
+	if owned, ok := receipt.Handle.(*childProcess); ok {
+		if s.ownedLocalProcesses == nil {
+			s.ownedLocalProcesses = make(map[string]*childProcess)
 		}
-		process := *receipt.Process
-		execution.Process = &process
-	}
-	if receipt.Handle != nil {
-		if receipt.Process == nil || receipt.Handle.Identity() != *receipt.Process {
-			return executionapi.LifecycleRequest{}, false, ErrWorkerTurnStale
-		}
-		if owned, ok := receipt.Handle.(*childProcess); ok {
-			if s.ownedLocalProcesses == nil {
-				s.ownedLocalProcesses = make(map[string]*childProcess)
-			}
-			s.ownedLocalProcesses[run.RunID] = owned
-		}
-	}
-	for _, envelope := range receipt.Implementation {
-		if err := envelope.ValidateResourceIdentity(execution.ProjectIdentity, execution.ExecutionID, execution.CurrentAttemptID, execution.Generation, execution.ConfigurationDigest); err != nil {
-			return executionapi.LifecycleRequest{}, false, err
-		}
-		if err := putImplementationEnvelope(execution, envelope); err != nil {
-			return executionapi.LifecycleRequest{}, false, err
-		}
+		s.ownedLocalProcesses[run.RunID] = owned
 	}
 	if receipt.EventPath != "" {
 		fixed.attempt.EventPath = receipt.EventPath
@@ -1471,6 +1531,12 @@ func lifecycleExecutionRef(run *Run, execution *ExecutionRecord, generation stri
 
 func (s *Service) applyAppServerTurnReceipt(run *Run, request executionapi.LifecycleRequest, receipt executionapi.LifecycleReceipt, observer executionapi.LifecycleObserver, executeErr error) error {
 	if err := receipt.ValidateFor(request); err != nil {
+		if observer != nil {
+			_ = observer.Close(context.Background())
+		}
+		return err
+	}
+	if err := s.validateLifecycleResultBinding(run, request); err != nil {
 		if observer != nil {
 			_ = observer.Close(context.Background())
 		}
@@ -1601,6 +1667,8 @@ func (s *Service) deliverLifecycleEnvironmentFeedback(ctx context.Context, run *
 	if err != nil {
 		return err
 	}
+	// Host feedback is a status message, never an answer to the restored worker question.
+	snapshot.QuestionRoute = nil
 	lifecycleRequest := lifecycleRequest(snapshot, *operation, executionapi.LifecycleDeliverFeedback, input)
 	var receipt executionapi.LifecycleReceipt
 	var callErr error
@@ -1639,4 +1707,40 @@ func (s *Service) deliverLifecycleEnvironmentFeedback(ctx context.Context, run *
 	return nil
 }
 
-var _ executionapi.LifecyclePort = codexworker.ExecutionLifecycle{}
+// Deferred host feedback retains the same question/turn and Operation. This
+// path never sends input, even when the current business turn has changed.
+func (s *Service) reconcileDeferredLifecycleFeedback(ctx context.Context, run *Run, operation *OperationRecord,
+	input executionapi.LifecycleInput, route *executionapi.QuestionRoute, turnID string) (bool, error) {
+	if err := validateSavedLifecycleOperation(operation, executionapi.LifecycleDeliverFeedback, input); err != nil {
+		return false, err
+	}
+	lifecycle, fixed, err := s.lifecycleForRun(run)
+	if err != nil {
+		return false, err
+	}
+	snapshot, err := s.lifecycleSnapshot(run, fixed.workflow, fixed.execution, fixed.attempt, nil)
+	if err != nil {
+		return false, err
+	}
+	snapshot.QuestionRoute = route
+	snapshot.Session.CurrentTurnID, snapshot.Session.PendingTurnID = turnID, ""
+	snapshot.Session.CurrentCommandID, snapshot.Session.PendingCommandID = turnID, ""
+	request := lifecycleRequest(snapshot, *operation, executionapi.LifecycleDeliverFeedback, input)
+	if err := request.Validate(); err != nil {
+		return false, err
+	}
+	receipt, observer, err := lifecycle.Reconcile(ctx, request.Clone())
+	if observer != nil {
+		_ = observer.Close(context.Background())
+	}
+	if validationErr := receipt.ValidateFor(request); validationErr != nil {
+		return false, validationErr
+	}
+	if err != nil || receipt.Disposition != executionapi.OperationConfirmed || !receipt.State.InputAccepted {
+		return false, err
+	}
+	if err := s.changeWorkerOperation(run, operation.OperationID, "confirmed", receipt.RequestID, mustJSON(receipt), ""); err != nil {
+		return false, err
+	}
+	return true, nil
+}

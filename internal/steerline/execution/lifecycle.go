@@ -3,6 +3,8 @@ package execution
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -210,6 +212,10 @@ func (snapshot LifecycleSnapshot) Clone() LifecycleSnapshot {
 	operations := make([]Operation, len(snapshot.Operations))
 	for i, operation := range snapshot.Operations {
 		operations[i] = operation
+		if operation.LifecycleIdentity != nil {
+			identity := *operation.LifecycleIdentity
+			operations[i].LifecycleIdentity = &identity
+		}
 		operations[i].ResidualResources = append([]string(nil), operation.ResidualResources...)
 		operations[i].Request = append([]byte(nil), operation.Request...)
 		operations[i].Receipt = append([]byte(nil), operation.Receipt...)
@@ -268,6 +274,16 @@ func (request LifecycleRequest) Validate() error {
 	if request.Operation.ID == "" || request.Operation.PayloadDigest == "" || request.Operation.Action == "" {
 		return errors.New("lifecycle request has no durable operation identity")
 	}
+	if identity := request.Operation.LifecycleIdentity; identity == nil {
+		return errors.New("lifecycle request has no original durable resource binding")
+	} else {
+		if identity.ProjectID != request.Snapshot.Session.ProjectID || identity.ExecutionID != request.Snapshot.Session.ExecutionID ||
+			identity.Ref.RunID != request.Snapshot.Session.WorkflowRunID || identity.Ref.AttemptID != request.Snapshot.Session.AttemptID ||
+			identity.ConfigurationDigest != request.Snapshot.ConfigurationDigest || identity.ResourceGeneration != request.Snapshot.ResourceGeneration ||
+			identity.InputBindingDigest == "" || !sameLifecycleRef(&identity.Ref, request.Operation.Ref) {
+			return errors.New("lifecycle intent belongs to a different original execution or generation")
+		}
+	}
 	candidate := LifecycleCandidate{Action: LifecycleAction(request.Operation.Action), Input: request.Input}
 	return candidate.Validate()
 }
@@ -280,6 +296,10 @@ func (request LifecycleRequest) Clone() LifecycleRequest {
 	if request.Operation.Ref != nil {
 		ref := *request.Operation.Ref
 		request.Operation.Ref = &ref
+	}
+	if request.Operation.LifecycleIdentity != nil {
+		identity := *request.Operation.LifecycleIdentity
+		request.Operation.LifecycleIdentity = &identity
 	}
 	request.Input = request.Input.Clone()
 	return request
@@ -319,6 +339,7 @@ type LifecycleStateFacts struct {
 	ResourceID        string `json:"resource_id,omitempty"`
 	RuntimeID         string `json:"runtime_id,omitempty"`
 	WorktreeID        string `json:"worktree_id,omitempty"`
+	LaunchCommand     string `json:"launch_command,omitempty"`
 }
 
 func (receipt LifecycleReceipt) Clone() LifecycleReceipt {
@@ -341,6 +362,10 @@ func (receipt LifecycleReceipt) Clone() LifecycleReceipt {
 		workspace := *receipt.Workspace
 		receipt.Workspace = &workspace
 	}
+	if receipt.Operation.LifecycleIdentity != nil {
+		identity := *receipt.Operation.LifecycleIdentity
+		receipt.Operation.LifecycleIdentity = &identity
+	}
 	receipt.Implementation = cloneImplementationData(receipt.Implementation)
 	receipt.Facts = cloneFacts(receipt.Facts)
 	if receipt.TurnEvidence != nil {
@@ -358,13 +383,33 @@ func (receipt LifecycleReceipt) ValidateFor(request LifecycleRequest) error {
 	want, got := request.Operation, receipt.Operation
 	if got.ID != want.ID || got.RunID != want.RunID || got.AttemptID != want.AttemptID || got.Backend != want.Backend || got.IdempotencyKey != want.IdempotencyKey ||
 		got.Protocol != want.Protocol || got.Target != want.Target || got.Action != want.Action || got.PayloadDigest != want.PayloadDigest || !bytes.Equal(got.Request, want.Request) ||
-		!sameLifecycleRef(got.Ref, want.Ref) {
+		!sameLifecycleRef(got.Ref, want.Ref) || !sameLifecycleOperationIdentity(got.LifecycleIdentity, want.LifecycleIdentity) {
 		return fmt.Errorf("lifecycle receipt changed its original operation identity or input binding (id=%t run=%t attempt=%t backend=%t protocol=%t target=%t action=%t digest=%t ref=%t)", got.ID == want.ID, got.RunID == want.RunID, got.AttemptID == want.AttemptID, got.Backend == want.Backend, got.Protocol == want.Protocol, got.Target == want.Target, got.Action == want.Action, got.PayloadDigest == want.PayloadDigest, sameLifecycleRef(got.Ref, want.Ref))
 	}
 	if receipt.Disposition != OperationAccepted && receipt.Disposition != OperationConfirmed && receipt.Disposition != OperationRejected && receipt.Disposition != OperationUnknown {
 		return errors.New("lifecycle receipt has no terminal or accepted disposition")
 	}
 	return nil
+}
+
+func LifecycleBindingDigest(snapshot LifecycleSnapshot) string {
+	value := struct {
+		Ref               ExecutionRef
+		SessionID         string
+		SessionGeneration string
+		Implementation    []ImplementationDataEnvelope
+		PolicyResources   *ImplementationDataEnvelope
+	}{snapshot.Ref, snapshot.Session.SessionID, snapshot.Session.Generation, snapshot.Implementation, snapshot.PolicyResources}
+	wire, _ := json.Marshal(value)
+	digest := sha256.Sum256(wire)
+	return hex.EncodeToString(digest[:])
+}
+
+func sameLifecycleOperationIdentity(a, b *LifecycleOperationIdentity) bool {
+	if a == nil || b == nil {
+		return a == nil && b == nil
+	}
+	return *a == *b
 }
 
 // CandidateForOperation reconstructs the original single-step value so a

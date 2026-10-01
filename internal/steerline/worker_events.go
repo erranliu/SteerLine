@@ -35,12 +35,15 @@ func (s *Service) recordWorkerTurnStarted(run *Run, workflow *WorkflowRunRecord,
 	if err := BeginWorkerTurn(workflow, execution, sessionID, turnID); err != nil {
 		return "", err
 	}
+	if execution.Environment != nil && execution.Environment.Blocker != nil {
+		workflow.Phase = "waiting_decision"
+	}
 	execution.CurrentCommandID, execution.PendingCommandID = commandID, ""
 	if fresh {
 		if attempt := s.workflowAttempt(run, run.AttemptID); attempt != nil {
 			attempt.Status, attempt.UpdatedAt = "running", now()
 		}
-		if run.Decision != nil && run.Decision.Status == "answer_saved" && run.Decision.Request.QuestionRoute == nil {
+		if run.Decision != nil && run.Decision.Status == "answer_saved" && run.Decision.Request.QuestionRoute == nil && run.Decision.Request.HostTarget == nil {
 			s.setDecisionStatus(run, "reply_accepted")
 		}
 		execution.Status, execution.Error = "active", nil

@@ -147,6 +147,9 @@ func (s *Service) applyLifecycleQuestionAnswerReceipt(run *Run, request executio
 	if err := receipt.ValidateFor(request); err != nil {
 		return err
 	}
+	if err := s.validateLifecycleResultBinding(run, request); err != nil {
+		return err
+	}
 	if run == nil || run.TaskStatus == "closed" || run.TaskStatus == "discarded" || run.Decision == nil ||
 		run.Decision.Status != "answer_saved" || run.Decision.ID != request.Input.Feedback.DecisionID ||
 		run.Decision.Request.QuestionRoute == nil || run.Decision.Request.QuestionRoute.QuestionID != request.Input.Feedback.QuestionID {

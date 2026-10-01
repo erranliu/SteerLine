@@ -508,16 +508,8 @@ func (s *Service) reconcileEnvironmentQuestion(ctx context.Context, run *Run) (b
 	if request.QuestionRoute == nil {
 		return true, nil
 	}
-	state, err := decodeOrcaExecutionState(e)
-	if err != nil || state == nil {
-		return false, errors.New("original question has no verified implementation state")
-	}
-	settled := false
-	for _, turn := range state.Turns {
-		if turn.TurnID == request.QuestionRoute.TurnID {
-			settled = turn.Settled
-		}
-	}
+	settled := e.LastStoppedTurnID == request.QuestionRoute.TurnID ||
+		env.Preparation != nil && env.Preparation.Verified && env.Preparation.TurnID == request.QuestionRoute.TurnID
 	if !settled {
 		return true, nil
 	}
@@ -527,26 +519,13 @@ func (s *Service) reconcileEnvironmentQuestion(ctx context.Context, run *Run) (b
 		if json.Unmarshal(record.Answer, &answer) != nil {
 			return false, errors.New("original saved answer is invalid")
 		}
-		command, err := s.domainStore.CommandByIdempotency(ctx, s.Config.identity, decisionAnswerKey(answer))
-		if err != nil {
-			return false, err
-		}
-		op := s.operationByKey("orca-native-reply:" + e.ExecutionID + ":" + command.CommandID)
+		op := s.operationByKey("worker-question-answer:" + e.ExecutionID + ":" + record.DecisionID)
 		if op != nil {
 			if op.Status != "confirmed" && op.Status != "accepted" {
-				config, err := s.executionConfigForRun(run)
-				if err != nil {
-					return false, err
-				}
-				_, ask, err := decodeNativeOrcaQuestionRoute(run, e, request.QuestionRoute)
-				if err != nil {
-					return false, err
-				}
-				id, err := findNativeOrcaReply(ctx, config, ask.RunID, ask.DispatchID, ask.MessageID, nativeOrcaAnswerText(answer, request))
-				if err != nil || id == "" {
-					return false, nil
-				}
-				if err := s.changeWorkerOperation(run, op.OperationID, "confirmed", op.PlatformRequestID, mustJSON(map[string]string{"reply_message_id": id}), ""); err != nil {
+				input := executionapi.LifecycleInput{Feedback: &executionapi.FeedbackInput{DecisionID: record.DecisionID, QuestionID: request.QuestionRoute.QuestionID,
+					Message: workerFeedbackText(answer, request), Answer: &executionapi.Answer{Answers: answer.Answers}}}
+				confirmed, err := s.reconcileDeferredLifecycleFeedback(ctx, run, op, input, request.QuestionRoute, request.QuestionRoute.TurnID)
+				if err != nil || !confirmed {
 					return false, err
 				}
 			}
@@ -627,30 +606,20 @@ func (s *Service) flushEnvironmentFeedback(ctx context.Context, run *Run) error 
 	if json.Unmarshal(record.Answer, &answer) != nil || json.Unmarshal(record.Request, &request) != nil || record.ExecutionID != e.ExecutionID {
 		return errors.New("deferred feedback identity differs from the original execution")
 	}
-	var turn *implementationTurnView
-	state, err := decodeOrcaExecutionState(e)
-	if err != nil || state == nil {
-		return errors.New("deferred feedback has no verified implementation state")
-	}
-	for i := range state.Turns {
-		if state.Turns[i].TurnID == feedback.TurnID {
-			turn = &state.Turns[i]
-			break
-		}
-	}
 	config, err := s.executionConfigForRun(run)
 	if err != nil {
 		return err
 	}
-	op := s.operationByKey("orca-native-send:" + e.ExecutionID + ":" + feedback.CommandID)
-	if turn == nil || turn.Settled || turn.Purpose != "business" || nativeOrcaCurrentTurn(e).TurnID != turn.TurnID {
-		// Unknown delivery stays bound to its old Dispatch and only reads history.
-		if op != nil && op.Status != "confirmed" && op.Status != "accepted" && op.Status != "rejected" && turn != nil {
-			id, err := findNativeOrcaSend(ctx, config, e.Target.OrchestrationRun, turn.DispatchID, "SteerLine feedback "+feedback.CommandID, workerFeedbackText(answer, request))
-			if err != nil || id == "" {
-				return nil
-			}
-			if err := s.changeWorkerOperation(run, op.OperationID, "confirmed", op.PlatformRequestID, mustJSON(map[string]string{"message_id": id}), ""); err != nil {
+	op := s.operationByKey("worker-environment-feedback:" + e.ExecutionID + ":" + feedback.CommandID)
+	active := feedback.TurnID != "" && feedback.TurnID == e.CurrentTurnID && feedback.TurnID != e.LastStoppedTurnID &&
+		(env.Preparation == nil || feedback.TurnID != env.Preparation.TurnID)
+	if !active {
+		// An unknown old send is read-only and remains on its original turn.
+		if op != nil && op.Status != "confirmed" && op.Status != "accepted" && op.Status != "rejected" {
+			input := executionapi.LifecycleInput{Feedback: &executionapi.FeedbackInput{DecisionID: record.DecisionID,
+				Message: workerFeedbackText(answer, request), Answer: &executionapi.Answer{Answers: answer.Answers}}}
+			confirmed, err := s.reconcileDeferredLifecycleFeedback(ctx, run, op, input, nil, feedback.TurnID)
+			if err != nil || !confirmed {
 				return err
 			}
 		}
