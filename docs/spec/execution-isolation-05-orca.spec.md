@@ -1,6 +1,6 @@
 # Spec Orca 执行适配器迁移
 
-任务 ID：58；任务名称：Orca 执行适配器迁移；目标：`EXECUTION-ISOLATION`。状态：待实施。配套 [Plan](execution-isolation-05-orca.plan.md)。硬前置：[#57](execution-isolation-04-codex.spec.md) 合入，一个实现 PR 交付。
+任务 ID：58；任务名称：Orca 执行适配器迁移；目标：`EXECUTION-ISOLATION`。状态：已合入 PR #171。配套 [Plan](execution-isolation-05-orca.plan.md)。硬前置：[#57](execution-isolation-04-codex.spec.md) 合入，一个实现 PR 交付。
 
 ## 目标与范围
 

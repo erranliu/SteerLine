@@ -1,6 +1,6 @@
 # SteerLine 当前代码架构图
 
-快照日期：2026-09-30。源码基线：`78c187224e58aeaa409ad7635fe7efb18e935e00`（已 rebase 并核对远端 `origin/main`），叠加本轮控制台同包渲染拆分。本文起源于 [PR #153](https://github.com/erranliu/SteerLine/pull/153)，当前包含 worker 生命周期重组、显式原子提交、停服恢复、组合查询、环境就绪、PR #163 查询拆包、PR #162 远程 Orca worker 和 PR #164 公共执行契约（#54）。后续工作区、发布及适配器迁移仍依照 #55–#61 规划。
+快照日期：2026-10-01。源码基线：`7350e84`（PR #174 已合入主干），叠加本轮执行隔离清理。本文起源于 [PR #153](https://github.com/erranliu/SteerLine/pull/153)，已包含 #54–#61 的公共契约、工作区、发布、适配器、权限和需求注册实现；已合入与原生验收完成分别记录，见[执行隔离总纲](../roadmap/execution-isolation.md)。
 
 本文描述当前检出的代码：系统边界、实际 Go 包依赖、核心包内部职责、任务执行、人工决策、数据模型、日志与恢复。图中的职责分组不代表已拆成独立包或服务。箭头含义在各图前说明；未来方案与当前可启动路径分开列出，第 10 节给出后续解耦与复用建议。
 
@@ -70,66 +70,89 @@ flowchart TB
 
 ```mermaid
 flowchart LR
-    CLI["cmd/steerline"] --> Core["internal/steerline<br/>111 个非测试 Go 文件"]
-    CLI --> Console["console"]
-    Console --> Core
-
-    Core --> Contracts["contracts"]
-    Core --> QueryPackage["query"]
-    Core --> SQLiteReader["sqlite"]
-    Contracts --> Task
-    Contracts --> TaskView
-    QueryPackage --> Contracts
-    QueryPackage --> Task
-    QueryPackage --> TaskView
-    SQLiteReader --> Contracts
-    SQLiteReader --> QueryPackage
-    SQLiteReader --> Task
-
-    Core --> Task["task"]
-    Core --> TaskView["taskview"]
-    Core --> Flow["workerflow"]
-    Core --> CW["codexworker"]
-    Core --> CA["codexapp"]
-    Core --> OW["orcaworker"]
-    Core --> RW["orca_remote_worker"]
-    RW --> OW
-    OW --> Contracts
-    Task --> Graph["taskgraph"]
-    TaskView --> Task
-    TaskView --> Graph
-    Flow --> Task
-    CW --> CA
-    Core --> Execution["execution 公共契约"]
-    Console --> Execution
-    CW --> Execution
-    CA --> Execution
-    OW --> Execution
-    Contracts --> Execution
-    RW --> Execution
-
-    Feedback["cmd/test-feedback"] --> Core
-    Feedback --> Summary["internal/testfeedback"]
-    Probe["cmd/orca-probe<br/>仅使用标准库"]
+    P0["cmd/orca-probe"]
+    P1["cmd/steerline"]
+    P2["cmd/test-feedback"]
+    P3["internal/steerline"]
+    P4["internal/steerline/codexapp"]
+    P5["internal/steerline/codexworker"]
+    P6["internal/steerline/console"]
+    P7["internal/steerline/contracts"]
+    P8["internal/steerline/execution"]
+    P9["internal/steerline/orca_remote_worker"]
+    P10["internal/steerline/orcaworker"]
+    P11["internal/steerline/publication"]
+    P12["internal/steerline/query"]
+    P13["internal/steerline/sqlite"]
+    P14["internal/steerline/task"]
+    P15["internal/steerline/taskgraph"]
+    P16["internal/steerline/taskview"]
+    P17["internal/steerline/workerflow"]
+    P18["internal/steerline/workspace"]
+    P19["internal/testfeedback"]
+    P1 --> P3
+    P1 --> P6
+    P2 --> P19
+    P3 --> P4
+    P3 --> P5
+    P3 --> P7
+    P3 --> P8
+    P3 --> P9
+    P3 --> P10
+    P3 --> P11
+    P3 --> P12
+    P3 --> P13
+    P3 --> P14
+    P3 --> P16
+    P3 --> P17
+    P3 --> P18
+    P5 --> P4
+    P5 --> P7
+    P5 --> P8
+    P6 --> P3
+    P6 --> P8
+    P7 --> P8
+    P7 --> P14
+    P7 --> P16
+    P9 --> P8
+    P9 --> P10
+    P10 --> P7
+    P10 --> P8
+    P11 --> P7
+    P11 --> P8
+    P12 --> P7
+    P12 --> P14
+    P12 --> P16
+    P13 --> P7
+    P13 --> P12
+    P13 --> P14
+    P14 --> P15
+    P16 --> P14
+    P16 --> P15
+    P17 --> P8
+    P17 --> P14
+    P18 --> P8
 ```
 
 | 包 | 当前职责 | 非测试 Go 文件 |
 | --- | --- | ---: |
 | `cmd/steerline` | 产品命令入口、服务启动、控制台和任务命令路由 | 1 |
-| `internal/steerline` | 服务编排、业务持久化、平台适配接线、查询和控制 | 111 |
+| `internal/steerline` | 服务编排、业务持久化、平台适配接线、查询和控制 | 114 |
 | `console` | TUI 状态、导航、任务列表、活动/会话/正文、执行方案和决策编辑；渲染与锚点按职责分文件 | 18 |
-| `contracts` | 共享持久记录、运行视图、执行配置与查询 DTO，严格 JSON 解码 | 7 |
+| `contracts` | 共享持久记录、运行视图、执行配置与查询 DTO，严格 JSON 解码 | 12 |
 | `query` | 按消费者分开的只读接口、事件/任务分页、DAG 与 Ready 查询规则 | 4 |
 | `sqlite` | 领域、事件、命令、任务、DAG、checkpoint 与组合快照的 SQLite 只读适配 | 6 |
 | `task` | 任务契约、批次、状态、依赖资格、交付和命令规则 | 10 |
 | `taskgraph` | DAG 校验、遍历、前后置关系和图算法 | 1 |
 | `taskview` | 任务展示、分页和投影规则 | 3 |
-| `workerflow` | 单个可续聊 worker 的纯状态规则、模式选择和提示构造 | 4 |
-| `execution` | 公共执行身份、输入/回答、事实、回执、能力、工作区与错误；无业务写库权 | 7 |
-| `codexapp` | Codex app-server 参数、客户端、原生问题与 WebSocket 协议 | 7 |
-| `codexworker` | app-server 启动、连接、能力探测、轮次观察、journal 与回答 | 11 |
-| `orcaworker` | Orca task/dispatch、terminal、消息、relay、输出与工作区协议、环境就绪证据 | 16 |
-| `orca_remote_worker` | 远端预检、启动/复用、观察、mailbox、工作区和清理协议 | 8 |
+| `workerflow` | 单个可续聊 worker 的纯状态规则、恢复和提示构造 | 3 |
+| `execution` | 公共执行身份、输入/回答、事实、回执、能力、工作区与错误；无业务写库权 | 10 |
+| `codexapp` | Codex app-server 参数、客户端、原生问题与 WebSocket 协议 | 4 |
+| `codexworker` | app-server 启动、连接、能力探测、轮次观察、journal 与回答 | 25 |
+| `orcaworker` | Orca task/dispatch、terminal、消息、relay、输出与工作区协议、环境就绪证据 | 22 |
+| `orca_remote_worker` | 远端预检、启动/复用、观察、mailbox、工作区和清理协议 | 12 |
+| `workspace` | Git worktree 准备、核验、资源解析和清理 | 5 |
+| `publication` | 发布请求、Git 发布、PR provider 查询与责任匹配 | 7 |
 | `cmd/orca-probe` | 只读能力探测与脱敏证据采集 | 1 |
 | `cmd/test-feedback` | 最小/定向/全量测试调度、日志与反馈报告 | 4 |
 | `internal/testfeedback` | Go test JSON 结果汇总 | 1 |
@@ -161,7 +184,7 @@ flowchart TB
     Flow --> Publish["worker_publish_local<br/>受控 commit / push / draft PR"]
     Publish --> PR["pr / native_delivery_command<br/>PR 身份、合并证据和交付"]
     Flow --> PR
-    Service --> Recovery["recovery / execution_recovery / worker_recovery<br/>app-server 与 worker 恢复对账"]
+    Service --> Recovery["recovery / worker_recovery<br/>app-server 与 worker 恢复对账"]
     Recovery --> Binding
     Service --> Conversation["conversation_* / codex_history<br/>事件归一、正文、游标和补读"]
     Service --> Activity["activity / journal_reader<br/>活动与原始日志"]
@@ -199,7 +222,7 @@ flowchart TB
 | 日志与会话 | `activity.go`、`journal_*.go`、`conversation*.go`、`codex_conversation.go` | 原始日志、归一事件、正文版本与最终回复分别处理 |
 | 查询与数据契约 | `query/`、`contracts/`、`project_view.go` | 查询按四类只读能力接线，不依赖中心、SQLite 具体类型或写事务；数据 JSON 字段保持不变 |
 | 持久化与投影 | `sqlite/`、`sqlite_store*.go`、`service_commit.go`、`worker_commit.go`、`execution_store.go`、`runtime_view.go` | 领域查询 SQL 在 sqlite 包，会话 SQL 仍在中心；中心拥有连接、schema 初始化、原子写入和 Runtime 业务投影 |
-| 恢复与平台 | `recovery.go`、`execution_recovery.go`、`platform_*.go`、`spawner.go` | 对账原身份；不因超时、观察断线或重启直接创建替代执行 |
+| 恢复与平台 | `recovery.go`、`worker_recovery.go`、`platform_*.go`、`spawner.go` | 对账原身份；不因超时、观察断线或重启直接创建替代执行 |
 
 当前生产代码另已删除无生产消费者的旧 Orca shell 轮次、prompt/pull/journal、游标 reader 和 helper；有价值的远端身份/结算/回复测试直接验证独立包。通用 `Worker` 类型位于 `worker_types.go`。当前生产代码已移除旧步骤校验 `remoteprotocol`、Execution 的候选/验证/审查修订与修复轮数字段，以及 Attempt 的旧前置结果、结果 ID 和 legacy 标记。`CurrentStep` / `StepID` 仍固定为 `worker`，WorkflowRun 继续表示本次任务执行。原生事件解码位于 `codexworker/event_fact.go` 与 `orcaworker/event.go`；父包的 `worker_evidence.go`、`codex_worker_evidence.go`、`orca_worker_evidence.go` 仅负责固定记录和有类型事实的适配。中心恢复、启动、事件、结算、PR、反馈分别落在相应 `worker_*.go`，写入仍只经显式事务。
 
@@ -460,7 +483,7 @@ Service 将私有领域工作副本、已提交快照和私有工作 Run 分开�
 | `docs/phase-2/prototype/index.html` | 五页交互原型，演示数据与按钮没有接真实服务 |
 | WinUI 3、规划主 agent、规划 worktree、受控文档发布、HTTP/JSON/SSE | 第二阶段 Spec/方案，当前 `cmd/`、`internal/` 中没有对应产品实现 |
 | stable/dev 固定版本选择与发布 | 当前只有本地构建、安装相关代码；固定版本运行交付仍为 Spec |
-| `orca_supervised` | 已通过 orca_remote_worker 接入 worker-flow；预检固定中心/远端 peer、版本与原生资源身份，远端取消仍不支持 |
+| `orca_supervised` | 协议已通过 orca_remote_worker 接入；固定两端身份与版本。#59 权限落实证据缺失，当前新领取拒绝，不能计作完整 Service 成功验收；远端取消仍不支持 |
 | Pi 输出归一代码 | `activity.go` 中存在归一器，不代表当前本机 worker-flow 支持 Pi 执行 |
 | `workspace` / `publication` 包及 `codexworker` / `orcaworker` 的扩展 | #55–#61 的目标归属；公共 execution 契约已合入，前两个包尚不存在，上层执行实现仍待迁移 |
 
@@ -468,7 +491,7 @@ Service 将私有领域工作副本、已提交快照和私有工作 Run 分开�
 
 ## 9. 快照验证与维护
 
-本轮基于 `78c1872` 更新架构文档并完成控制台同包渲染拆分。核对范围包括当前主干 SHA、`cmd/` 与 `internal/` 的 220 个非测试 Go 文件及 18 个真实包目录、项目内 import、源码相对链接、schema 常量和关键生产调用。8 张 Mermaid 图语法解析、37 条真实 import 与图中依赖的精确比对及 `git diff --check` 通过；未进行完整视觉渲染验收。控制台包既有测试与 `go vet` 通过；84 个非 import 声明搬迁前后的 Go AST 格式化内容一致，没有改写函数逻辑。未运行项目全量测试或平台认证。
+本轮基于 `7350e84` 核对执行隔离清理，源码索引覆盖 `cmd/` 与 `internal/` 的 263 个非测试 Go 文件及 20 个实际包目录。包数量和文件索引按当前文件系统重新生成；删除的 `execution_recovery.go` 不再列入。定向测试、最小入口、依赖与链接检查见[清理记录](../validation/execution-isolation-cleanup/README.md)。未运行全量测试或重新进行真实 agent、双机及权限认证。
 
 已有实现验证入口与证据：环境就绪见[验收记录](../validation/worker-environment-readiness/README.md)，停服恢复见[验证记录](../validation/worker-service-recovery/README.md)，执行隔离规划与现有就绪行为的对齐见[主干同步记录](../validation/execution-isolation-main-sync/README.md)。查询拆包与组合快照的现有测试分别位于 `query/`、`sqlite/`、`project_view_test.go`、`query_event_batch_test.go`；worker 写边界测试位于 `worker_commit_boundary_test.go`、`runtime_view_test.go`。后续重构复用这些定向用例及项目最小入口。
 
@@ -478,17 +501,19 @@ Service 将私有领域工作副本、已提交快照和私有工作 Run 分开�
 
 ## 10. 后续重构建议：解耦与代码复用
 
-当前拆包已建立 `task` / `taskgraph` / `taskview` 纯规则、`workerflow` 状态规则和 `query` / `sqlite` 只读边界。剩余耦合主要集中在中心：111 个生产 Go 文件；`Service` 同时持有私有工作副本、已提交副本、数据库、PR client、worker 观察器、会话 mapper 和控制状态。下面按收益与前置排序；10.1 的执行隔离已收口，10.5 的纯渲染拆分已完成，其余重构建议尚未实现，不改变已绑定的任务 Spec。
+当前拆包已建立 `task` / `taskgraph` / `taskview` 纯规则、`workerflow` 状态规则和 `query` / `sqlite` 只读边界。剩余耦合主要集中在中心：114 个生产 Go 文件；`Service` 同时持有私有工作副本、已提交副本、数据库、PR client、worker 观察器、会话 mapper 和控制状态。下面按收益与前置排序；10.1 的执行配置隔离已合入，但原生验收仍有明确缺口，10.5 的纯渲染拆分已完成，其余重构建议尚未实现，不改变已绑定的任务 Spec。
 
-### 10.1 执行配置隔离已收口
+### 10.1 执行配置隔离与验收边界
 
 项目持有 execution 的纯权限/发布/需求值；全局 Profile 选择目标、agent、model/effort 与原生选项。`execution_registry.go` 以 backend/agent/协议注册固定操作，目标另行绑定；业务准备、启动、事件、结算、等待/反馈、恢复和清理使用注册回调及类型化事实。`workerflow` 保留纯状态规则和提示词，原 `mode.go` 与业务 ByMode 路由已删除。PendingIdentity 由三种对应适配器解释，不把命令意图当作原生 turn。
 
 中心仍唯一拥有 WorkflowRun/Execution/Decision/Operation 和 TaskDelivery 写事务；注册回调只接通原协调函数。原生 thread/terminal/Dispatch、版本、权限编译和证据解释归 codexworker/orcaworker/orca_remote_worker，Git/PR 归 workspace/publication。恢复以 v4 原组合快照和独立资源绑定为依据，当前配置只影响新执行；当前需求缺失新增阻断事实，不重写领取证据。详细所有者、删除项、依赖检查和远程验收限制见 [#61 验收记录](../validation/execution-isolation-08-resolution/README.md)。
 
+本轮把 Orca inbox、结算、原 Dispatch 核验、回复/重查和确认/重查绑定到 `orca_execution_operations.go` 的注册操作；本机结果转发及其清理使用注册回调。中心协调文件继续持有事务、恢复门槛与 TaskDelivery，不属于待删除旧实现。无人调用的旧恢复、journal 观察和包装函数已删除；仅由验收消费的辅助入口移入测试文件，详情见[清理记录](../validation/execution-isolation-cleanup/README.md)。配置校验、固定身份映射与平台专属准备仍保留具体实现知识，尚未达到所有中心文件完全无平台知识的目标。
+
 contracts → execution，execution 不依赖项目包；query 使用四类只读端口，sqlite 采样同事务原始 ProjectRecords，中心 NewQueryService/projectReadRecords 水合 ProjectView。没有新增 SQL、写端口或混合版本展示。
 
-源码：[execution_registry.go](../../internal/steerline/execution_registry.go)、[execution_requirements.go](../../internal/steerline/execution_requirements.go)、[requirements.go](../../internal/steerline/execution/requirements.go)、[worker_execution.go](../../internal/steerline/worker_execution.go)。
+源码：[orca_execution_operations.go](../../internal/steerline/orca_execution_operations.go)、[execution_registry.go](../../internal/steerline/execution_registry.go)、[execution_requirements.go](../../internal/steerline/execution_requirements.go)、[requirements.go](../../internal/steerline/execution/requirements.go)、[worker_execution.go](../../internal/steerline/worker_execution.go)。
 
 ### 10.2 收窄写入接口，再迁移 SQLite 写实现
 
@@ -559,7 +584,7 @@ contracts → execution，execution 不依赖项目包；query 使用四类只�
 
 ## 附录：全部非测试 Go 源文件索引
 
-下列索引覆盖 `cmd/` 与 `internal/` 中全部非测试 `.go` 文件，按真实包目录分组。
+当前 263 个生产源码文件，按实际目录列出；测试辅助文件不计入。
 
 ### cmd/orca-probe
 
@@ -588,6 +613,7 @@ contracts → execution，execution 不依赖项目包；query 使用四类只�
 | --- |
 | [activity.go](../../internal/steerline/activity.go) |
 | [codex_conversation.go](../../internal/steerline/codex_conversation.go) |
+| [codex_feedback_hooks.go](../../internal/steerline/codex_feedback_hooks.go) |
 | [codex_git_sandbox.go](../../internal/steerline/codex_git_sandbox.go) |
 | [codex_history_port.go](../../internal/steerline/codex_history_port.go) |
 | [codex_worker.go](../../internal/steerline/codex_worker.go) |
@@ -608,14 +634,12 @@ contracts → execution，execution 不依赖项目包；query 使用四类只�
 | [decision.go](../../internal/steerline/decision.go) |
 | [domain.go](../../internal/steerline/domain.go) |
 | [execution_backend.go](../../internal/steerline/execution_backend.go) |
-| [execution_registry.go](../../internal/steerline/execution_registry.go) |
-| [execution_requirements.go](../../internal/steerline/execution_requirements.go) |
-| [codex_feedback_hooks.go](../../internal/steerline/codex_feedback_hooks.go) |
-| [orca_feedback_hooks.go](../../internal/steerline/orca_feedback_hooks.go) |
 | [execution_capability.go](../../internal/steerline/execution_capability.go) |
 | [execution_helpers.go](../../internal/steerline/execution_helpers.go) |
 | [execution_profiles.go](../../internal/steerline/execution_profiles.go) |
-| [execution_recovery.go](../../internal/steerline/execution_recovery.go) |
+| [execution_registry.go](../../internal/steerline/execution_registry.go) |
+| [execution_requirements.go](../../internal/steerline/execution_requirements.go) |
+| [execution_snapshot.go](../../internal/steerline/execution_snapshot.go) |
 | [execution_store.go](../../internal/steerline/execution_store.go) |
 | [journal_platform_linux.go](../../internal/steerline/journal_platform_linux.go) |
 | [journal_platform_other.go](../../internal/steerline/journal_platform_other.go) |
@@ -646,6 +670,8 @@ contracts → execution，execution 不依赖项目包；query 使用四类只�
 | [observation.go](../../internal/steerline/observation.go) |
 | [operation.go](../../internal/steerline/operation.go) |
 | [orca.go](../../internal/steerline/orca.go) |
+| [orca_execution_operations.go](../../internal/steerline/orca_execution_operations.go) |
+| [orca_feedback_hooks.go](../../internal/steerline/orca_feedback_hooks.go) |
 | [orca_remote_adapter.go](../../internal/steerline/orca_remote_adapter.go) |
 | [orca_remote_service.go](../../internal/steerline/orca_remote_service.go) |
 | [orca_worker_dispatch.go](../../internal/steerline/orca_worker_dispatch.go) |
@@ -660,6 +686,7 @@ contracts → execution，execution 不依赖项目包；query 使用四类只�
 | [pr.go](../../internal/steerline/pr.go) |
 | [project_view.go](../../internal/steerline/project_view.go) |
 | [projects.go](../../internal/steerline/projects.go) |
+| [publication_snapshot.go](../../internal/steerline/publication_snapshot.go) |
 | [query_command.go](../../internal/steerline/query_command.go) |
 | [recovery.go](../../internal/steerline/recovery.go) |
 | [render.go](../../internal/steerline/render.go) |
@@ -687,8 +714,8 @@ contracts → execution，execution 不依赖项目包；query 使用四类只�
 | [worker_environment.go](../../internal/steerline/worker_environment.go) |
 | [worker_events.go](../../internal/steerline/worker_events.go) |
 | [worker_evidence.go](../../internal/steerline/worker_evidence.go) |
-| [worker_feedback.go](../../internal/steerline/worker_feedback.go) |
 | [worker_execution.go](../../internal/steerline/worker_execution.go) |
+| [worker_feedback.go](../../internal/steerline/worker_feedback.go) |
 | [worker_pr.go](../../internal/steerline/worker_pr.go) |
 | [worker_process.go](../../internal/steerline/worker_process.go) |
 | [worker_publish_local.go](../../internal/steerline/worker_publish_local.go) |
@@ -697,6 +724,7 @@ contracts → execution，execution 不依赖项目包；query 使用四类只�
 | [worker_start.go](../../internal/steerline/worker_start.go) |
 | [worker_state.go](../../internal/steerline/worker_state.go) |
 | [worker_types.go](../../internal/steerline/worker_types.go) |
+| [workspace_config.go](../../internal/steerline/workspace_config.go) |
 
 ### internal/steerline/codexapp
 
@@ -711,18 +739,31 @@ contracts → execution，execution 不依赖项目包；query 使用四类只�
 
 | 源文件 |
 | --- |
-| [intent.go](../../internal/steerline/codexworker/intent.go) |
+| [activity.go](../../internal/steerline/codexworker/activity.go) |
 | [ask.go](../../internal/steerline/codexworker/ask.go) |
 | [ask_journal.go](../../internal/steerline/codexworker/ask_journal.go) |
+| [backend.go](../../internal/steerline/codexworker/backend.go) |
 | [capability.go](../../internal/steerline/codexworker/capability.go) |
+| [command.go](../../internal/steerline/codexworker/command.go) |
+| [config.go](../../internal/steerline/codexworker/config.go) |
 | [connection.go](../../internal/steerline/codexworker/connection.go) |
+| [conversation.go](../../internal/steerline/codexworker/conversation.go) |
 | [doc.go](../../internal/steerline/codexworker/doc.go) |
 | [event_fact.go](../../internal/steerline/codexworker/event_fact.go) |
+| [executable.go](../../internal/steerline/codexworker/executable.go) |
+| [history.go](../../internal/steerline/codexworker/history.go) |
+| [history_binding.go](../../internal/steerline/codexworker/history_binding.go) |
+| [intent.go](../../internal/steerline/codexworker/intent.go) |
 | [journal.go](../../internal/steerline/codexworker/journal.go) |
 | [launch.go](../../internal/steerline/codexworker/launch.go) |
+| [native_params.go](../../internal/steerline/codexworker/native_params.go) |
 | [observe.go](../../internal/steerline/codexworker/observe.go) |
 | [outcome.go](../../internal/steerline/codexworker/outcome.go) |
 | [params.go](../../internal/steerline/codexworker/params.go) |
+| [permissions.go](../../internal/steerline/codexworker/permissions.go) |
+| [policy.go](../../internal/steerline/codexworker/policy.go) |
+| [recovery.go](../../internal/steerline/codexworker/recovery.go) |
+| [session_launcher.go](../../internal/steerline/codexworker/session_launcher.go) |
 
 ### internal/steerline/console
 
@@ -751,9 +792,14 @@ contracts → execution，execution 不依赖项目包；query 使用四类只�
 
 | 源文件 |
 | --- |
+| [activity.go](../../internal/steerline/contracts/activity.go) |
+| [conversation.go](../../internal/steerline/contracts/conversation.go) |
+| [decision_content.go](../../internal/steerline/contracts/decision_content.go) |
 | [environment.go](../../internal/steerline/contracts/environment.go) |
 | [execution.go](../../internal/steerline/contracts/execution.go) |
 | [json.go](../../internal/steerline/contracts/json.go) |
+| [pr.go](../../internal/steerline/contracts/pr.go) |
+| [publication.go](../../internal/steerline/contracts/publication.go) |
 | [query.go](../../internal/steerline/contracts/query.go) |
 | [records.go](../../internal/steerline/contracts/records.go) |
 | [runtime.go](../../internal/steerline/contracts/runtime.go) |
@@ -764,11 +810,13 @@ contracts → execution，execution 不依赖项目包；query 使用四类只�
 | 源文件 |
 | --- |
 | [backend.go](../../internal/steerline/execution/backend.go) |
-| [requirements.go](../../internal/steerline/execution/requirements.go) |
 | [capability.go](../../internal/steerline/execution/capability.go) |
 | [errors.go](../../internal/steerline/execution/errors.go) |
 | [event.go](../../internal/steerline/execution/event.go) |
 | [operation.go](../../internal/steerline/execution/operation.go) |
+| [policy.go](../../internal/steerline/execution/policy.go) |
+| [publication.go](../../internal/steerline/execution/publication.go) |
+| [requirements.go](../../internal/steerline/execution/requirements.go) |
 | [session.go](../../internal/steerline/execution/session.go) |
 | [workspace.go](../../internal/steerline/execution/workspace.go) |
 
@@ -776,9 +824,12 @@ contracts → execution，execution 不依赖项目包；query 使用四类只�
 
 | 源文件 |
 | --- |
+| [backend.go](../../internal/steerline/orca_remote_worker/backend.go) |
+| [config.go](../../internal/steerline/orca_remote_worker/config.go) |
 | [intent.go](../../internal/steerline/orca_remote_worker/intent.go) |
 | [messaging.go](../../internal/steerline/orca_remote_worker/messaging.go) |
 | [observation.go](../../internal/steerline/orca_remote_worker/observation.go) |
+| [policy.go](../../internal/steerline/orca_remote_worker/policy.go) |
 | [preflight.go](../../internal/steerline/orca_remote_worker/preflight.go) |
 | [run.go](../../internal/steerline/orca_remote_worker/run.go) |
 | [start.go](../../internal/steerline/orca_remote_worker/start.go) |
@@ -790,11 +841,16 @@ contracts → execution，execution 不依赖项目包；query 使用四类只�
 
 | 源文件 |
 | --- |
-| [intent.go](../../internal/steerline/orcaworker/intent.go) |
+| [backend.go](../../internal/steerline/orcaworker/backend.go) |
+| [binding.go](../../internal/steerline/orcaworker/binding.go) |
+| [client.go](../../internal/steerline/orcaworker/client.go) |
 | [command.go](../../internal/steerline/orcaworker/command.go) |
+| [config.go](../../internal/steerline/orcaworker/config.go) |
 | [dispatch_submit.go](../../internal/steerline/orcaworker/dispatch_submit.go) |
 | [environment.go](../../internal/steerline/orcaworker/environment.go) |
 | [event.go](../../internal/steerline/orcaworker/event.go) |
+| [events.go](../../internal/steerline/orcaworker/events.go) |
+| [intent.go](../../internal/steerline/orcaworker/intent.go) |
 | [inventory.go](../../internal/steerline/orcaworker/inventory.go) |
 | [message.go](../../internal/steerline/orcaworker/message.go) |
 | [message_identity.go](../../internal/steerline/orcaworker/message_identity.go) |
@@ -807,6 +863,18 @@ contracts → execution，execution 不依赖项目包；query 使用四类只�
 | [terminal.go](../../internal/steerline/orcaworker/terminal.go) |
 | [terminal_protocol.go](../../internal/steerline/orcaworker/terminal_protocol.go) |
 | [workspace.go](../../internal/steerline/orcaworker/workspace.go) |
+
+### internal/steerline/publication
+
+| 源文件 |
+| --- |
+| [command.go](../../internal/steerline/publication/command.go) |
+| [gitea.go](../../internal/steerline/publication/gitea.go) |
+| [policy.go](../../internal/steerline/publication/policy.go) |
+| [pr.go](../../internal/steerline/publication/pr.go) |
+| [provider.go](../../internal/steerline/publication/provider.go) |
+| [publish.go](../../internal/steerline/publication/publish.go) |
+| [request.go](../../internal/steerline/publication/request.go) |
 
 ### internal/steerline/query
 
@@ -864,6 +932,16 @@ contracts → execution，execution 不依赖项目包；query 使用四类只�
 | [prompt.go](../../internal/steerline/workerflow/prompt.go) |
 | [recovery.go](../../internal/steerline/workerflow/recovery.go) |
 | [state.go](../../internal/steerline/workerflow/state.go) |
+
+### internal/steerline/workspace
+
+| 源文件 |
+| --- |
+| [cleanup.go](../../internal/steerline/workspace/cleanup.go) |
+| [git.go](../../internal/steerline/workspace/git.go) |
+| [inspect.go](../../internal/steerline/workspace/inspect.go) |
+| [prepare.go](../../internal/steerline/workspace/prepare.go) |
+| [resources.go](../../internal/steerline/workspace/resources.go) |
 
 ### internal/testfeedback
 

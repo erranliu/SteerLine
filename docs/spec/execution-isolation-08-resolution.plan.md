@@ -1,6 +1,6 @@
 # Plan 执行需求与配置注册收口
 
-任务 ID：61；任务名称：执行需求与配置注册收口；目标：`EXECUTION-ISOLATION`。状态：已实现，ER4 远程 Service 成功场景仍待权限证据；见[验收记录](../validation/execution-isolation-08-resolution/README.md)。唯一执行依据：[Spec](execution-isolation-08-resolution.spec.md)。硬前置：#59、#60 合入，一个实现 PR 交付。
+任务 ID：61；任务名称：执行需求与配置注册收口；目标：`EXECUTION-ISOLATION`。状态：已合入 PR #174，ER4 远程 Service 成功场景仍待权限证据；见[验收记录](../validation/execution-isolation-08-resolution/README.md)。唯一执行依据：[Spec](execution-isolation-08-resolution.spec.md)。硬前置：#59、#60 合入，一个实现 PR 交付。
 
 ## 实施步骤
 

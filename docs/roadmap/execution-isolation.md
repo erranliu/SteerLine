@@ -4,7 +4,22 @@
 
 SteerLine 将项目执行规则与 Codex、Orca 等具体实现分开。项目定义权限边界、工作区要求、发布责任和必要能力；执行方案选择目标、agent、model 与实现选项；适配器落实固定请求并返回事实。更换执行方案时，项目规则不会随之隐式变化。
 
-配置隔离的实现已收口到 #61；当前剩余项是远程 Service 成功场景的权限证据与验收冲突，见 [#61 验收记录](../validation/execution-isolation-08-resolution/README.md)。公共契约、策略、工作区和发布实现继续遵守[共同约束](../spec/execution-isolation-constraints.md)，不重复迁移。
+#54–#61 的实现已合入；项目配置隔离、固定快照和内置注册已交付。本轮继续清理无调用生产代码、测试辅助入口和 Orca 共享业务消费者的平台分派，见[清理记录](../validation/execution-isolation-cleanup/README.md)。中心仍保留必要协调、配置校验和固定身份映射，不能把本系列表述为所有中心平台知识都已消除。远程权限证据和部分旧验收夹具仍有缺口，见下文及 [#61 验收记录](../validation/execution-isolation-08-resolution/README.md)。公共契约、策略、工作区和发布实现继续遵守[共同约束](../spec/execution-isolation-constraints.md)。
+
+## 实际交付状态
+
+| 阶段 | 主干合入依据 | 验收边界 |
+| --- | --- | --- |
+| #54 公共契约 | PR #164，后续同步 PR #167 | 历史 Spec/Plan 保持固定，本表记录当前状态 |
+| #55 工作区 | PR #169 | 本机工作区与 Git 操作归 workspace |
+| #56 发布 | PR #168 | 发布及 provider 操作归 publication |
+| #57 Codex | PR #170 | 原生参数与 app-server 协议归对应适配器 |
+| #58 Orca | PR #171 | 本机/远程协议独立；业务协调及事务留中心 |
+| #59 权限 | PR #172 | remote 无落实证据，领取拒绝；不能算成功认证 |
+| #60 发布责任 | PR #173 | 发布责任/目标冻结，remote 仍受 #59 准入限制 |
+| #61 需求与注册 | PR #174 | 定向验收通过；ER4 remote 成功场景未通过 |
+
+上述合入事实来自主干 merge 历史，不等于全部原生场景通过。
 
 ## 抽象范围
 
@@ -38,8 +53,8 @@ SteerLine 将项目执行规则与 Codex、Orca 等具体实现分开。项目�
 | `orcaworker` | 增加 `backend.go`、`config.go`、`events.go`，复用已有协议文件 | Orca 资源、终端、派发、消息、观察和对账 |
 | `orca_remote_worker` | 复用已有 preflight/start/messaging/observation/run 与配置 | 远程原生会话、两端身份、消息/回执/结算，不重新并入本机 shell 路径 |
 | `workerflow` | 保留 `state.go`、`recovery.go`，调整 `prompt.go` | 纯业务规则和固定任务指令；后端选择移出 `mode.go` |
-| 主包 `steerline` | `project_config.go`、`execution_profiles.go`、`execution_registry.go`、`execution_snapshot.go`、`execution_service.go` | 项目配置、全局方案、实现组装、快照组合与执行事务接线 |
-| 主包 `steerline` | 保留 `worker_start.go`、`worker_events.go`、`worker_completion.go`、`worker_feedback.go`、`worker_pr.go`、`worker_state.go` 等现有接线 | 业务推进、待决策和 TaskDelivery 事务，沿用已完成的 worker 文件重组 |
+| 主包 `steerline` | `project_config.go`、`execution_profiles.go`、`execution_registry.go`、`execution_snapshot.go`、`orca_execution_operations.go` | 项目配置、全局方案、实现组装、快照组合与执行事务接线 |
+| 主包 `steerline` | 保留 `worker_start.go`、`worker_events.go`、`worker_completion.go`、`worker_feedback.go`、`worker_pr.go`、`worker_state.go` 等现有接线 | 业务推进、待决策和 TaskDelivery 事务；orca_worker_* 的协调接线保留，不按文件名前缀批量删除 |
 
 业务持久/查询 DTO 归 contracts，底层执行类型由已交付 execution 唯一拥有。query 定义只读端口，sqlite 读原始记录，中心组合投影并拥有连接/schema/业务写入；不复制记录或让底层反向依赖它们。
 
@@ -84,7 +99,9 @@ flowchart TD
 
 ## 剩余验证
 
-#59 的远程 worker-start 权限落实证据目前缺失。原远程两轮和丢失 start 后 Service 恢复测试仍在领取前拒绝；成功场景不能计作已通过，也不能用 mock 解除门槛。远程协议包与真实 Claim 的拒绝行为已有确定性回归。后续处理该证据门槛需要独立范围和原生验证，本轮不新增远程权限 producer。
+#59 的远程 worker-start 权限落实证据目前缺失。四个旧远程 Service 成功测试（两轮、丢失 start、问题回执丢失、替换会话）均在领取前拒绝；成功场景不能计作已通过，也不能用 mock 解除门槛。远程协议包与真实 Claim 的拒绝行为已有确定性回归。后续处理该证据门槛需要独立范围和原生验证，本轮不新增远程权限 producer。
+
+旧 `TestNativeOrcaCenterReusesWorkerAfterRestartAndSettlement` 使用未注册的 opencode 组合，在领取前拒绝，未覆盖其后续恢复/回执流程。现有 Codex 固定终端恢复用例及本轮直接操作回执丢失回归不能替代这个完整流程；需在后续单独改造夹具并完成该验收，不开放旧组合。
 
 本机 Orca 终端 PATH 与远程工具/target 认证尚无固定只读查询入口。附加需求对无法查询的项返回 unknown 或明确拒绝，不能据此安装工具、登录或新建隐藏 worker。能力报告缺失仍显示未核验。
 

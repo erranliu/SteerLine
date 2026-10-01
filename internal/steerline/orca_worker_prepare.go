@@ -501,9 +501,16 @@ func (s *Service) bindNativeOrcaCoordinator(ctx context.Context, run *Run, execu
 }
 
 func (s *Service) verifyNativeOrcaWorker(ctx context.Context, run *Run, execution *ExecutionRecord) error {
-	if run.Protocol == string(executionapi.ProtocolOrcaSupervised) {
-		return s.verifyRemoteOrcaWorker(ctx, run, execution)
+	entry, err := s.workerFlowRegistration(run)
+	if err != nil {
+		return err
 	}
+	if entry.VerifyWorker == nil {
+		return unsupported("worker identity verification")
+	}
+	return entry.VerifyWorker(s, ctx, run, execution)
+}
+func (s *Service) verifyLocalNativeOrcaWorker(ctx context.Context, run *Run, execution *ExecutionRecord) error {
 	fixed, configErr := s.workerFlowContext(run)
 	if configErr != nil {
 		return configErr

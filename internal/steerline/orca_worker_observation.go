@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"os"
 	"strings"
 
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
@@ -194,52 +193,14 @@ func (s *Service) pollNativeOrcaWorker(ctx context.Context, run *Run) (retErr er
 			return err
 		}
 	}
-	if turn.DoneMessageID == "" && fixedConfig.hostName() != "orca_supervised" {
-		if execution.RecoveryRequired {
-			path, pathErr := nativeOrcaRelayPath(execution.Workspace.Worktree, run.RunID, turn.TurnID)
-			if pathErr != nil {
-				return s.nativeOrcaUncertain(run, "Orca result relay path cannot be verified: "+pathErr.Error())
-			}
-			if _, statErr := os.Stat(path); statErr == nil {
-				request, readErr := readNativeOrcaDoneRequest(path, execution.Workspace.Worktree, run, turn)
-				if readErr != nil || request == nil {
-					return s.nativeOrcaUncertain(run, "Orca result relay request cannot be verified")
-				}
-				execution.RecoveryState = "relay_pending"
-				if run.Decision == nil || len(run.Decision.Request.Options) != 1 || run.Decision.Request.Options[0].ID != "forward_result" {
-					oldDecisionID := ""
-					contextText := "原 worker 已写入结果请求。请核对原 Dispatch、结果与当前工作区后决定是否转发。"
-					if run.Decision != nil && (run.Decision.Status == "pending" || run.Decision.Status == "answer_saved") {
-						oldDecisionID = run.Decision.ID
-						contextText += "\n\n原待答输入：" + run.Decision.Request.Question + "\n" + run.Decision.Request.Context
-						s.setDecisionStatus(run, "superseded")
-						if err := s.commitWorker(run); err != nil {
-							return err
-						}
-						s.setRunDecision(run, nil)
-					}
-					decision, err := WriteDecisionRequest(run, DecisionRequest{Question: "Forward the original Orca worker result?", Context: clip(contextText, 7000), Options: []executionapi.DecisionOption{{ID: "forward_result", Label: "转发原结果"}}, AllowFreeText: true})
-					if err != nil {
-						return err
-					}
-					s.setRunDecision(run, decision)
-					if record := s.decisionRecord(run); record != nil {
-						record.RecoveryOfDecision = oldDecisionID
-					}
-				}
-				workflow.Phase, workflow.UpdatedAt = "waiting_decision", now()
-				s.refreshRun(run)
-				return s.commitWorker(run)
-			} else if !os.IsNotExist(statErr) {
-				return s.nativeOrcaUncertain(run, "Orca result relay file cannot be inspected: "+statErr.Error())
-			}
-			return nil // Restart observation never sends a new worker_done.
-		}
-		if err := s.relayNativeOrcaDone(ctx, run, execution, turn); err != nil {
-			if ctx.Err() != nil {
-				return nil // Service shutdown is not a worker result failure.
-			}
-			return s.nativeOrcaUncertain(run, "Orca worker result relay needs reconciliation: "+err.Error())
+	entry, err := s.workerFlowRegistration(run)
+	if err != nil {
+		return err
+	}
+	if entry.RelayResult != nil {
+		handled, err := entry.RelayResult(s, ctx, run, execution, turn)
+		if handled || err != nil {
+			return err
 		}
 	}
 	if err := s.readNativeOrcaOutput(ctx, run, execution, turn); err != nil {
@@ -303,6 +264,10 @@ func (s *Service) ackNativeOrcaDelivery(ctx context.Context, run *Run, execution
 		return configErr
 	}
 	fixedConfig := fixed.config
+	ops, err := orcaOperationsFor(fixedConfig)
+	if err != nil {
+		return err
+	}
 	state := execution.OrcaNative
 	key := "orca-native-ack:" + execution.ExecutionID + ":" + deliveryID
 	op := s.operationByKey(key)
@@ -314,11 +279,7 @@ func (s *Service) ackNativeOrcaDelivery(ctx context.Context, run *Run, execution
 		// Read the original Run before deciding whether another ack is needed.
 		var absent bool
 		var err error
-		if fixedConfig.hostName() == "orca_supervised" {
-			absent, err = remoteClientForExecution(fixedConfig, execution).DeliveryAcknowledged(ctx, remoteWorkerRef(remoteExecutionRef(run, execution)), deliveryID)
-		} else {
-			absent, err = orcaworker.DeliveryAcknowledged(ctx, orcaWorkerMetaCaller(fixedConfig), state.Coordinator.Terminal, state.Coordinator.RuntimeID, execution.Target.OrchestrationRun, deliveryID)
-		}
+		absent, err = ops.DeliveryAcknowledged(ctx, run, execution, deliveryID)
 		if err != nil {
 			return err
 		}
@@ -336,18 +297,10 @@ func (s *Service) ackNativeOrcaDelivery(ctx context.Context, run *Run, execution
 	} else {
 		opID = op.OperationID
 	}
-	var receipt orcaworker.MutationReceipt
-	var err error
-	if fixedConfig.hostName() == "orca_supervised" {
-		var requestID string
-		requestID, err = remoteClientForExecution(fixedConfig, execution).Ack(ctx, remoteWorkerRef(remoteExecutionRef(run, execution)), deliveryID)
-		receipt = orcaworker.MutationReceipt{RequestID: requestID, Payload: mustJSON(map[string]string{"acknowledged": deliveryID})}
-	} else {
-		receipt, err = orcaworker.AckInbox(ctx, orcaWorkerMetaCaller(fixedConfig), state.Coordinator.Terminal, execution.Target.OrchestrationRun, deliveryID, state.Coordinator.RuntimeID)
-	}
+	receipt, err := ops.Ack(ctx, run, execution, deliveryID)
 	if err != nil {
-		var callErr *orcaworker.CallError
-		if errors.As(err, &callErr) || fixedConfig.hostName() == "orca_supervised" {
+		var outcome *executionapi.BackendError
+		if errors.As(err, &outcome) && outcome.Code == executionapi.BackendOutcomeUnknown {
 			_ = s.changeWorkerOperation(run, opID, "outcome_unknown", "", nil, err.Error())
 		}
 		return err
@@ -479,8 +432,13 @@ func (s *Service) finishNativeOrcaTurn(ctx context.Context, run *Run, workflow *
 	if err := s.resolveStoppedWorkerTurn(run, workflow, execution, stoppedWorkerResolution{TurnID: turn.TurnID, WaitReason: "The original Orca Dispatch settled (" + settlement.Outcome + "). Send feedback to continue the same agent session."}); err != nil {
 		return err
 	}
-	if fixed.config.hostName() != "orca_supervised" {
-		removeNativeOrcaRelayRequest(execution.Workspace.Worktree, run.RunID, turn.TurnID)
+	entry, err := s.workerFlowRegistration(run)
+	if err != nil {
+		return err
 	}
+	if entry.ClearRelay != nil {
+		entry.ClearRelay(execution, run, turn)
+	}
+
 	return nil
 }

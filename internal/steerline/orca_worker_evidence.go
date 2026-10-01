@@ -5,7 +5,6 @@ import (
 	"errors"
 
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
-	remote "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker"
 	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
 
@@ -29,18 +28,14 @@ func readNativeOrcaDelivery(ctx context.Context, c Config, execution *ExecutionR
 	if execution == nil || execution.OrcaNative == nil || execution.OrcaNative.Coordinator.Terminal == "" || execution.Target.OrchestrationRun == "" {
 		return fact, errors.New("native Orca inbox has no bound coordinator/Run")
 	}
-	if c.hostName() == "orca_supervised" {
-		client := remoteClientForExecution(c, execution)
-		ref := executionapi.ExecutionRef{RunID: execution.WorkflowRunID, Target: execution.Target, External: *execution.Process}
-		value, err := client.Check(ctx, remoteWorkerRef(ref))
-		return nativeOrcaDeliveryFact{DeliveryID: value.ID, Messages: value.Messages}, remoteWorkerError(err)
+	if execution.Process == nil {
+		return fact, errors.New("inbox has no fixed process identity")
 	}
-	delivery, err := orcaworker.ReadDelivery(ctx, orcaWorkerMetaCaller(c), execution.OrcaNative.Coordinator.Terminal, execution.OrcaNative.Coordinator.RuntimeID, execution.Target.OrchestrationRun)
+	ops, err := orcaOperationsFor(c)
 	if err != nil {
 		return fact, err
 	}
-	fact.DeliveryID, fact.Messages = delivery.DeliveryID, delivery.Messages
-	return fact, nil
+	return ops.Delivery(ctx, execution)
 }
 
 func decodeNativeOrcaMessage(message OrcaInboxMessage, runID string, turn OrcaNativeTurn, agentTerminal string) (nativeOrcaMessageFact, bool, error) {
@@ -77,36 +72,20 @@ func readNativeOrcaSettlement(ctx context.Context, c Config, execution *Executio
 	if execution == nil || execution.OrcaNative == nil || execution.Process == nil || turn == nil {
 		return fact, errors.New("Orca settlement has no fixed execution identity")
 	}
-	if c.hostName() == "orca_supervised" {
-		ref := executionapi.ExecutionRef{Backend: executionapi.BackendOrca, Protocol: executionapi.ProtocolOrcaSupervised, Target: execution.Target, External: *execution.Process}
-		value, err := remoteClientForExecution(c, execution).Settlement(ctx, remoteWorkerRef(ref), turn.Outcome)
-		return nativeOrcaSettlement{Outcome: value, DispatchID: turn.DispatchID, RuntimeID: execution.Process.CoordinatorRuntimeID}, remoteWorkerError(err)
-	}
-	outcome, err := orcaworker.Settlement(ctx, orcaWorkerMetaCaller(c), orcaworker.DispatchIdentity{
-		DispatchID: turn.DispatchID, TaskID: turn.TaskID, RunID: execution.Target.OrchestrationRun,
-		RuntimeID: execution.OrcaNative.Coordinator.RuntimeID, Terminal: execution.Process.Terminal,
-		Incarnation: execution.Process.Incarnation, WorktreeID: execution.Process.WorktreeID,
-	}, turn.Outcome)
+	ops, err := orcaOperationsFor(c)
 	if err != nil {
 		return fact, err
 	}
-	fact.Outcome, fact.DispatchID, fact.RuntimeID = outcome, turn.DispatchID, execution.OrcaNative.Coordinator.RuntimeID
-	return fact, nil
+	return ops.Settlement(ctx, execution, turn)
 }
 
 func verifyNativeOrcaActiveDispatch(ctx context.Context, c Config, execution *ExecutionRecord, turn *OrcaNativeTurn) error {
 	if execution == nil || execution.Process == nil || turn == nil {
 		return errors.New("stopped-center Orca Dispatch has no fixed identity")
 	}
-	if c.hostName() == "orca_supervised" {
-		value, err := (remote.NewBackend(remoteWorkerConfig(c))).Observe(ctx, executionapi.ExecutionRef{Backend: executionapi.BackendOrca, Protocol: executionapi.ProtocolOrcaSupervised, Target: execution.Target, External: *execution.Process})
-		if err != nil {
-			return err
-		}
-		if value.Liveness != "live" {
-			return errors.New("remote Dispatch liveness is unverified")
-		}
-		return nil
+	ops, err := orcaOperationsFor(c)
+	if err != nil {
+		return err
 	}
-	return orcaworker.VerifyLiveDispatch(ctx, orcaWorkerMetaCaller(c), orcaworker.DispatchIdentity{DispatchID: turn.DispatchID, TaskID: turn.TaskID, RunID: execution.Target.OrchestrationRun, RuntimeID: execution.Process.RuntimeID, Terminal: execution.Process.Terminal})
+	return ops.VerifyActive(ctx, execution, turn)
 }

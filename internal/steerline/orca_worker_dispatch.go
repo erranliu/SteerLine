@@ -46,9 +46,6 @@ func (s *Service) startNativeOrcaTurn(ctx context.Context, run *Run, execution *
 		return configErr
 	}
 	fixedConfig := fixed.config
-	if fixedConfig.hostName() == "orca_supervised" {
-		return s.startRemoteOrcaTurn(ctx, run, execution, turnID, prompt)
-	}
 	if err := s.verifyNativeOrcaWorker(ctx, run, execution); err != nil {
 		return err
 	}
@@ -263,6 +260,11 @@ func (s *Service) applyNativeOrcaDecision(ctx context.Context, run *Run, workflo
 		return configErr
 	}
 	fixedConfig := fixed.config
+	ops, err := orcaOperationsFor(fixedConfig)
+	if err != nil {
+		return err
+	}
+
 	turn := nativeOrcaCurrentTurn(execution)
 	if turn != nil && turn.Purpose == "readiness" && run.Decision.Request.OrcaAsk == nil {
 		for i := len(execution.OrcaNative.Turns) - 1; i >= 0; i-- {
@@ -300,11 +302,7 @@ func (s *Service) applyNativeOrcaDecision(ctx context.Context, run *Run, workflo
 				if op.Status != "confirmed" && op.Status != "accepted" {
 					var messageID string
 					var err error
-					if fixedConfig.hostName() == "orca_supervised" {
-						messageID, err = remoteClientForExecution(fixedConfig, execution).FindAnswer(ctx, remoteWorkerRef(remoteExecutionRef(run, execution)), orcaQuestionID(run.Decision), nativeOrcaAnswerText(answer, run.Decision.Request))
-					} else {
-						messageID, err = findNativeOrcaReply(ctx, fixedConfig, execution.Target.OrchestrationRun, turn.DispatchID, orcaQuestionID(run.Decision), nativeOrcaAnswerText(answer, run.Decision.Request))
-					}
+					messageID, err = ops.FindAnswer(ctx, run, execution, turn, orcaQuestionID(run.Decision), nativeOrcaAnswerText(answer, run.Decision.Request))
 					if err != nil || messageID == "" {
 						return s.nativeOrcaUncertain(run, "Orca reply outcome is unverified; the original question was not answered twice")
 					}
@@ -325,12 +323,7 @@ func (s *Service) applyNativeOrcaDecision(ctx context.Context, run *Run, workflo
 		if err != nil {
 			return err
 		}
-		var receipt orcaworker.MutationReceipt
-		if fixedConfig.hostName() == "orca_supervised" {
-			receipt, err = remoteOrcaQuestionReply(ctx, fixedConfig, run, execution, orcaQuestionID(run.Decision), body)
-		} else {
-			receipt, err = orcaworker.ReplyQuestion(ctx, orcaWorkerMetaCaller(fixedConfig), orcaQuestionID(run.Decision), body, execution.Target.OrchestrationRun, execution.OrcaNative.Coordinator.Terminal, turn.DispatchID, execution.OrcaNative.Coordinator.RuntimeID)
-		}
+		receipt, err := ops.Reply(ctx, run, execution, turn, orcaQuestionID(run.Decision), body)
 		if err != nil {
 			var callErr *orcaworker.CallError
 			if errors.As(err, &callErr) {
