@@ -196,6 +196,9 @@ func (s *Service) prepareNativeOrcaFixedAgentTerminal(ctx context.Context, run *
 		return err
 	}
 	if err := s.waitAndBindNativeOrcaFixedAgent(ctx, run, execution, worktree, parsedTerminal.Handle, repoID, base); err != nil {
+		if errors.Is(err, orcaworker.ErrAgentStarting) {
+			return err // Keep the accepted creation receipt for the next actor pass.
+		}
 		_ = s.changeWorkerOperation(run, opID, "outcome_unknown", "", platform.Payload, err.Error())
 		return err
 	}

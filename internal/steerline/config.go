@@ -66,6 +66,7 @@ type Config struct {
 	workerEnv               map[string]string
 	configDigest            string
 	globalExecution         bool
+	profilePublication      bool
 }
 
 // LoadedConfigDigest identifies the project and global execution file bytes
@@ -199,7 +200,7 @@ func LoadConfig(path string) (Config, error) {
 	if err := c.ExecutionRequirements.Validate(); err != nil {
 		return c, err
 	}
-	if err := c.PublicationPolicy.Validate(); err != nil {
+	if err := validateProjectPublicationPolicy(c.PublicationPolicy); err != nil {
 		return c, err
 	}
 	if err := publication.ValidateNonSecret(c.PR, c.Git); err != nil {
@@ -413,6 +414,11 @@ func (c Config) Identity() string     { return c.identity }
 // or create runtime directories. Control clients use it without constructing a
 // Service or taking ownership of scheduler state.
 func (c *Config) ResolveIdentity(ctx context.Context) error {
+	// Readers and the service must identify the same native Git executable
+	// before they compute a selectable execution profile's digest.
+	if err := resolveCommand(&c.Git); err != nil {
+		return err
+	}
 	repository, err := workspace.ResolveRepository(ctx, workspaceGit(*c), c.Repository)
 	if err != nil {
 		return err

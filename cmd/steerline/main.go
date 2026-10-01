@@ -43,6 +43,7 @@ func run() error {
 	dispatchMode := fs.String("dispatch", "auto", "run dispatch mode: auto|manual")
 	startupID := fs.String("startup-id", "", "internal startup attempt ID")
 	taskID := fs.String("task-id", "", "control start_task target")
+	executionProfile := fs.String("execution-profile", "", "control start_task execution profile ID")
 	controlMode := fs.String("mode", "", "control set_dispatch_mode value: auto|manual")
 	requestID := fs.String("request-id", "", "control request to query")
 	waitReceipt := fs.Bool("wait", false, "control: wait for a terminal receipt")
@@ -60,6 +61,9 @@ func run() error {
 	}
 	if fs.NArg() != 0 {
 		return fmt.Errorf("unexpected positional arguments")
+	}
+	if *executionProfile != "" && (command != "control" || *action != "start_task" || *requestID != "") {
+		return fmt.Errorf("-execution-profile is only valid with control -action start_task")
 	}
 	if command == "codex-session-launch" {
 		return steerline.RunCodexSessionLauncher(context.Background(), *config)
@@ -192,7 +196,10 @@ func run() error {
 			if *controlMode != "" {
 				return fmt.Errorf("start_task does not accept -mode")
 			}
-			payload = map[string]string{"task_id": *taskID}
+			payload, e = startTaskControlPayload(ctx, &c, *taskID, *executionProfile)
+			if e != nil {
+				return e
+			}
 		case "set_dispatch_mode":
 			if *controlMode == "" {
 				return fmt.Errorf("set_dispatch_mode requires -mode auto|manual")
@@ -279,6 +286,20 @@ func run() error {
 		return nil
 	}
 	return fmt.Errorf("unsupported command %q", command)
+}
+
+func startTaskControlPayload(ctx context.Context, c *steerline.Config, taskID, profileID string) (map[string]string, error) {
+	if profileID == "" {
+		return nil, errors.New("start_task requires -execution-profile")
+	}
+	if err := c.ResolveIdentity(ctx); err != nil {
+		return nil, err
+	}
+	_, profile, err := c.ResolveExecutionProfile(profileID, "")
+	if err != nil {
+		return nil, err
+	}
+	return map[string]string{"task_id": taskID, "execution_profile_id": profile.ID, "execution_profile_digest": profile.Digest()}, nil
 }
 
 func waitServiceCommand(ctx context.Context, c steerline.Config, commandID string, timeout time.Duration) (steerline.CommandRecord, error) {
