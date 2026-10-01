@@ -1,0 +1,577 @@
+{
+  "domain": {
+    "deliveries": null,
+    "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-436179475\\recovery.waiting-merge-restart\\recovery\\repo\\.git",
+    "tasks": [
+      {
+        "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-436179475\\recovery.waiting-merge-restart\\recovery\\repo\\.git",
+        "task_id": "1",
+        "batch_id": "931b8e51340c1db6cd342e99fe985637",
+        "title": "E2E a",
+        "type": "task",
+        "priority": 2,
+        "contract_id": "e2e-a",
+        "claimant": "e2e",
+        "source": "native",
+        "status": "closed",
+        "version": 3,
+        "created_at": "2026-10-01T03:02:46.719174Z",
+        "updated_at": "2026-10-01T03:03:44.0633158Z"
+      }
+    ],
+    "workflow_runs": [
+      {
+        "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-436179475\\recovery.waiting-merge-restart\\recovery\\repo\\.git",
+        "workflow_run_id": "1108fa66b6f353f10cc1a809699c6462",
+        "task_id": "1",
+        "workflow_version": "worker-flow-v1",
+        "config_digest": "351a182385a731ca22375cd0688286d832d59ffb9fe6ba05096b0b52626e8008",
+        "execution_profile": {
+          "execution_requirements": {},
+          "implementation_version": "builtin-execution-v1",
+          "publication_policy": {
+            "publisher": "host_service"
+          },
+          "publication": {
+            "provider": {
+              "kind": "command",
+              "base_url": "https://github.com",
+              "repository": "e2e/project",
+              "token_env": "",
+              "query": {
+                "executable": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-test-feedback\\20261001T030225.133702400Z\\build\\controlled-helper.exe",
+                "args": [
+                  "provider",
+                  "--e2e-state",
+                  "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-436179475\\recovery.waiting-merge-restart\\recovery\\provider.json"
+                ]
+              },
+              "close": {
+                "executable": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-test-feedback\\20261001T030225.133702400Z\\build\\controlled-helper.exe",
+                "args": [
+                  "provider",
+                  "--e2e-state",
+                  "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-436179475\\recovery.waiting-merge-restart\\recovery\\provider.json"
+                ]
+              }
+            },
+            "create": {
+              "executable": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-test-feedback\\20261001T030225.133702400Z\\build\\controlled-helper.exe",
+              "args": [
+                "pr",
+                "create",
+                "--repo",
+                "{repository}",
+                "--base",
+                "{base}",
+                "--head",
+                "{head}",
+                "--draft",
+                "--title",
+                "{title}",
+                "--body",
+                "{body}"
+              ]
+            },
+            "git": {
+              "executable": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-test-feedback\\20261001T030225.133702400Z\\build\\controlled-helper.exe",
+              "args": [
+                "git"
+              ]
+            },
+            "remote": "origin",
+            "remote_url": "https://github.com/e2e/project.git",
+            "base_branch": "main",
+            "authentication_refs": [
+              "SSH_AUTH_SOCK",
+              "GIT_CONFIG_GLOBAL",
+              "GIT_SSH_COMMAND",
+              "GH_TOKEN",
+              "GITHUB_TOKEN",
+              "GH_CONFIG_DIR"
+            ]
+          },
+          "version": 4,
+          "execution_policy": {
+            "filesystem": {
+              "read_scope": "host",
+              "write_scope": "workspace",
+              "git_metadata_write": true
+            },
+            "network": "allow",
+            "escalation": "deny"
+          },
+          "policy_digest": "eb73cd337c8039a73a57274b2f2dce8d671fc7a4e971d60286b3a0d17e2d9b2a",
+          "accepted_config_version": "351a182385a731ca22375cd0688286d832d59ffb9fe6ba05096b0b52626e8008",
+          "policy_source": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-436179475\\recovery.waiting-merge-restart\\recovery\\project.json",
+          "id": "controlled",
+          "name": "Controlled E2E",
+          "digest": "3d66aa4a713de476ddd3483584ac709e789527c809224e9811d109bd5cef4914",
+          "host": "local",
+          "agent": "codex",
+          "reasoning_effort": "high",
+          "sandbox": "workspace-write",
+          "windows_sandbox": "elevated",
+          "approval_policy": "never",
+          "codex": {
+            "windows_sandbox": "elevated",
+            "executable": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-test-feedback\\20261001T030225.133702400Z\\build\\controlled-helper.exe",
+            "args": null
+          },
+          "orca": {
+            "executable": "",
+            "args": null,
+            "shell": "",
+            "wait_timeout": "",
+            "keep_terminal": false,
+            "activate": false
+          }
+        },
+        "runner": {
+          "codex": {
+            "windows_sandbox": "elevated",
+            "executable": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-test-feedback\\20261001T030225.133702400Z\\build\\controlled-helper.exe",
+            "args": null
+          },
+          "sandbox": "workspace-write",
+          "windows_sandbox": "elevated",
+          "reasoning_effort": "high"
+        },
+        "phase": "completed",
+        "repository": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-436179475\\recovery.waiting-merge-restart\\recovery\\repo",
+        "branch": "main",
+        "selected_result_id": "60e8c180da548b31956bdecd89e838a6",
+        "pr_url": "https://github.com/e2e/project/pull/1",
+        "pr_state": "merged",
+        "pr_queried_at": "2026-10-01T03:03:43.4921425Z",
+        "pr_merged_at": "2026-10-01T03:03:43.310222Z",
+        "pr_merge_commit": "551b1601fec693aec0e44edf473bd102fb382b7a",
+        "created_at": "2026-10-01T03:03:05.9226148Z",
+        "updated_at": "2026-10-01T03:03:44.0638515Z"
+      }
+    ],
+    "executions": [
+      {
+        "policy_resources": {
+          "version": 2,
+          "digest": "459aea1c6636f42178bedb788b50e2141ad55e4ea52c53ec6225f8504f418708",
+          "profile_digest": "3d66aa4a713de476ddd3483584ac709e789527c809224e9811d109bd5cef4914",
+          "native_version": "codex-cli 0.159.2",
+          "contract": "codex-policy-v1:0.159.2:explicit-roots:no-temp:never",
+          "workspace": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-436179475\\recovery.waiting-merge-restart\\recovery\\home\\worktrees\\1108fa66b6f353f10cc1a809699c6462",
+          "write_roots": [
+            "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-436179475\\recovery.waiting-merge-restart\\recovery\\home\\worktrees\\1108fa66b6f353f10cc1a809699c6462",
+            "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-436179475\\recovery.waiting-merge-restart\\recovery\\repo\\.git\\objects",
+            "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-436179475\\recovery.waiting-merge-restart\\recovery\\repo\\.git\\refs",
+            "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-436179475\\recovery.waiting-merge-restart\\recovery\\repo\\.git\\logs",
+            "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-436179475\\recovery.waiting-merge-restart\\recovery\\repo\\.git\\worktrees\\1108fa66b6f353f10cc1a809699c6462"
+          ],
+          "temporary_roots": [],
+          "settings": {
+            "Executable": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-test-feedback\\20261001T030225.133702400Z\\build\\controlled-helper.exe",
+            "Args": [
+              "--config",
+              "sandbox_mode=workspace-write",
+              "--config",
+              "approval_policy=never",
+              "--config",
+              "windows.sandbox=elevated",
+              "--config",
+              "sandbox_workspace_write.writable_roots=[]",
+              "--config",
+              "sandbox_workspace_write.exclude_tmpdir_env_var=true",
+              "--config",
+              "sandbox_workspace_write.exclude_slash_tmp=true",
+              "--config",
+              "sandbox_workspace_write.network_access=true"
+            ],
+            "WorkingDirectory": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-436179475\\recovery.waiting-merge-restart\\recovery\\home\\worktrees\\1108fa66b6f353f10cc1a809699c6462",
+            "EnvironmentRefs": null
+          }
+        },
+        "recovery_required": true,
+        "recovery_version": 2,
+        "recovery_state": "completed",
+        "recovery_marked_at": "2026-10-01T03:03:36.3752042Z",
+        "workspace_intent": {
+          "path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-436179475\\recovery.waiting-merge-restart\\recovery\\home\\worktrees\\1108fa66b6f353f10cc1a809699c6462",
+          "branch": "codex/1-1108fa66b6f3",
+          "base_commit": "8d43175dddf86f14a9ee88f2ab9efb9a4c6f4c53"
+        },
+        "turn_started_at": "2026-10-01T03:03:17.5350711Z",
+        "turn_ended_at": "2026-10-01T03:03:17.6438974Z",
+        "last_turn_outcome": "succeeded",
+        "log_path": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-436179475\\recovery.waiting-merge-restart\\recovery\\home\\state\\repo-c9b3d4050fa6\\runs\\1108fa66b6f353f10cc1a809699c6462\\turns\\3f81bfa819945ea0ed1ed3e35b396c1e\\appserver.jsonl",
+        "last_event": "turn/completed",
+        "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-436179475\\recovery.waiting-merge-restart\\recovery\\repo\\.git",
+        "execution_id": "60e8c180da548b31956bdecd89e838a6",
+        "current_attempt_id": "b7aeea59ed0aa832ee68f0ec7a5cc954",
+        "owner_service_instance_id": "b60ad49401f4424a9d602ebb964e67bb",
+        "workflow_run_id": "1108fa66b6f353f10cc1a809699c6462",
+        "agent": "codex",
+        "backend": "local",
+        "protocol": "local_codex_app_server_v1",
+        "process": {
+          "kind": "os",
+          "pid": 36200,
+          "created": "01dd515167796c25",
+          "executable": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-test-feedback\\20261001t030225.133702400z\\build\\controlled-helper.exe"
+        },
+        "session_id": "460f2c5a-204d-466b-a215-4527df8c62b3",
+        "decision_id": "68ecf4c1244d50fd77089367e4cffa88",
+        "app_server_endpoint": "ws://127.0.0.1:53095",
+        "app_server_generation": "cdfbd2b25169adcc018678b2151c5f3b",
+        "current_command_id": "3f81bfa819945ea0ed1ed3e35b396c1e",
+        "current_turn_id": "d2c9282a-39e1-4dce-9114-22fd69e8ead1",
+        "turn_number": 1,
+        "last_stopped_turn_id": "d2c9282a-39e1-4dce-9114-22fd69e8ead1",
+        "target": {
+          "id": "local:windows:liuming-asus",
+          "worktree_id": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-436179475\\recovery.waiting-merge-restart\\recovery\\home\\worktrees\\1108fa66b6f353f10cc1a809699c6462",
+          "branch": "codex/1-1108fa66b6f3",
+          "base_revision": "8d43175dddf86f14a9ee88f2ab9efb9a4c6f4c53"
+        },
+        "workspace": {
+          "repository": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-436179475\\recovery.waiting-merge-restart\\recovery\\repo\\.git",
+          "worktree": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-436179475\\recovery.waiting-merge-restart\\recovery\\home\\worktrees\\1108fa66b6f353f10cc1a809699c6462",
+          "branch": "codex/1-1108fa66b6f3",
+          "base": "8d43175dddf86f14a9ee88f2ab9efb9a4c6f4c53",
+          "head": "8d43175dddf86f14a9ee88f2ab9efb9a4c6f4c53",
+          "verified_at": "2026-10-01T03:03:12.2105405Z"
+        },
+        "status": "idle",
+        "current_step": "worker",
+        "created_at": "2026-10-01T03:03:05.9226148Z",
+        "updated_at": "2026-10-01T03:03:36.9345702Z"
+      }
+    ],
+    "attempts": [
+      {
+        "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-436179475\\recovery.waiting-merge-restart\\recovery\\repo\\.git",
+        "attempt_id": "b7aeea59ed0aa832ee68f0ec7a5cc954",
+        "execution_id": "60e8c180da548b31956bdecd89e838a6",
+        "step_id": "worker",
+        "attempt_number": 1,
+        "event_path": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-436179475\\recovery.waiting-merge-restart\\recovery\\home\\state\\repo-c9b3d4050fa6\\runs\\1108fa66b6f353f10cc1a809699c6462\\turns\\3f81bfa819945ea0ed1ed3e35b396c1e\\appserver.jsonl",
+        "status": "running",
+        "input_revision": "8d43175dddf86f14a9ee88f2ab9efb9a4c6f4c53",
+        "contract_digest": "33bbe1b483aae14d79398f22ef136bb3634c0233d51e4595cb70d05a1ddcef12",
+        "external_binding": {
+          "id": "local:windows:liuming-asus",
+          "worktree_id": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-436179475\\recovery.waiting-merge-restart\\recovery\\home\\worktrees\\1108fa66b6f353f10cc1a809699c6462",
+          "branch": "codex/1-1108fa66b6f3",
+          "base_revision": "8d43175dddf86f14a9ee88f2ab9efb9a4c6f4c53"
+        },
+        "created_at": "2026-10-01T03:03:05.9226148Z",
+        "updated_at": "2026-10-01T03:03:17.5350711Z"
+      }
+    ],
+    "decisions": [
+      {
+        "recovery_version": 2,
+        "recovery_state": "completed",
+        "recovery_of_decision": "e5b66b70efdfc1a7a42678889d5fb4ee",
+        "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-436179475\\recovery.waiting-merge-restart\\recovery\\repo\\.git",
+        "decision_id": "68ecf4c1244d50fd77089367e4cffa88",
+        "scope": "execution",
+        "workflow_run_id": "1108fa66b6f353f10cc1a809699c6462",
+        "execution_id": "60e8c180da548b31956bdecd89e838a6",
+        "attempt_id": "b7aeea59ed0aa832ee68f0ec7a5cc954",
+        "question_id": "68ecf4c1244d50fd77089367e4cffa88",
+        "request": "eyJxdWVzdGlvbiI6IlRoZSB3b3JrZXIgc3RvcHBlZC4gV2hhdCBzaG91bGQgaXQgZG8gbmV4dD8iLCJjb250ZXh0Ijoi5pys6L2u5bey57uT5p2f77yM5o+Q5Lqk5ZCO5bCG5Zyo5Y6fIENvZGV4IOS8muivneW8gOWni+S4i+S4gOi9ruOAglxuXG7ljp/mnKzlnLAgd29ya2VyIOW3sumAgOWHuu+8jOWOn+i9ruasoeW3sue7k+adn+OAguaguOWvueW9k+WJjeaIkOaenOWQjumAieaLqeWOnyB0aHJlYWQg5oiW5piO56Gu5L2/55So5paw5Lya6K+d57un57ut44CCIiwib3B0aW9ucyI6W3siaWQiOiJjb250aW51ZSIsImxhYmVsIjoi5Y6fIENvZGV4IOS8muivnee7p+e7rSIsImRldGFpbCI6IuWcqOaWsOeahOacrOWcsOi/m+eoi+S4reaguOWunuW5tuaBouWkjeWOnyB0aHJlYWQifSx7ImlkIjoibmV3X3Nlc3Npb24iLCJsYWJlbCI6IuaWsOS8muivnee7p+e7rSIsImRldGFpbCI6IuS9v+eUqOeOsOacieW3peS9nOWMuuWSjOaMgeS5heWOhuWPsuS9nOS4uuS4iuS4i+aWhyJ9XSwiYWxsb3dfZnJlZV90ZXh0Ijp0cnVlfQ==",
+        "status": "pending",
+        "version": 1,
+        "created_at": "2026-10-01T03:03:36.9340323Z",
+        "updated_at": "2026-10-01T03:03:36.9340323Z"
+      },
+      {
+        "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-436179475\\recovery.waiting-merge-restart\\recovery\\repo\\.git",
+        "decision_id": "e5b66b70efdfc1a7a42678889d5fb4ee",
+        "scope": "execution",
+        "workflow_run_id": "1108fa66b6f353f10cc1a809699c6462",
+        "execution_id": "60e8c180da548b31956bdecd89e838a6",
+        "attempt_id": "b7aeea59ed0aa832ee68f0ec7a5cc954",
+        "question_id": "e5b66b70efdfc1a7a42678889d5fb4ee",
+        "request": "eyJxdWVzdGlvbiI6IlRoZSB3b3JrZXIgc3RvcHBlZC4gV2hhdCBzaG91bGQgaXQgZG8gbmV4dD8iLCJjb250ZXh0IjoiUFIg5bey5qC45a6e5bm2562J5b6F5ZCI5bm244CC5pys6L2u5bey57uT5p2f77yM5o+Q5Lqk5Y+N6aaI5ZCO5bCG5Zyo5Y6fIENvZGV4IOS8muivneW8gOWni+S4i+S4gOi9ruOAgiIsIm9wdGlvbnMiOlt7ImlkIjoiY29udGludWUiLCJsYWJlbCI6IkNvbnRpbnVlIGN1cnJlbnQgd29yayJ9XSwiYWxsb3dfZnJlZV90ZXh0Ijp0cnVlfQ==",
+        "status": "superseded",
+        "version": 2,
+        "created_at": "2026-10-01T03:03:23.6092691Z",
+        "updated_at": "2026-10-01T03:03:36.9168826Z"
+      }
+    ],
+    "operations": null
+  },
+  "page": {
+    "protocol": "native-tasks/v1",
+    "project_id": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-436179475\\recovery.waiting-merge-restart\\recovery\\repo\\.git",
+    "authority_version": 2,
+    "graph_revision": 2,
+    "database_revision": 696,
+    "database_id": "29ab9a03baddff965357faf5ee0383e3",
+    "sampled_at": "2026-10-01T03:03:54.4019984Z",
+    "capabilities": {
+      "dependency_readiness": "provided",
+      "dependency_blockers": "provided",
+      "startup_blockers": "provided"
+    },
+    "tasks": [
+      {
+        "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-436179475\\recovery.waiting-merge-restart\\recovery\\repo\\.git",
+        "task_id": "1",
+        "batch_id": "931b8e51340c1db6cd342e99fe985637",
+        "title": "E2E a",
+        "type": "task",
+        "contract_id": "e2e-a",
+        "claimant": "e2e",
+        "source": "native",
+        "status": "closed",
+        "version": 3,
+        "created_at": "2026-10-01T03:02:46.719174Z",
+        "updated_at": "2026-10-01T03:03:44.0633158Z",
+        "project_id": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-436179475\\recovery.waiting-merge-restart\\recovery\\repo\\.git",
+        "priority": 2,
+        "contract": {
+          "contract_id": "e2e-a",
+          "repository": "https://github.com/e2e/project.git",
+          "remote": "origin",
+          "branch": "main",
+          "spec_ref": {
+            "path": "docs/spec/task.spec.md",
+            "commit": "8d43175dddf86f14a9ee88f2ab9efb9a4c6f4c53",
+            "sha256": "a7da27f4d08ba5b2dc9ee65c983a54065dab93ea20d90ef9244d6408e001cf43"
+          },
+          "plan_ref": {
+            "path": "docs/spec/task.plan.md",
+            "commit": "8d43175dddf86f14a9ee88f2ab9efb9a4c6f4c53",
+            "sha256": "ba5d19debb7029d03d2b304168c3e7f812ccd1c380aae8aee098c65f5e0e4b29"
+          },
+          "common_refs": [],
+          "acceptance_refs": [
+            {
+              "path": "docs/spec/task.spec.md",
+              "commit": "8d43175dddf86f14a9ee88f2ab9efb9a4c6f4c53",
+              "sha256": "a7da27f4d08ba5b2dc9ee65c983a54065dab93ea20d90ef9244d6408e001cf43"
+            }
+          ],
+          "digest": "33bbe1b483aae14d79398f22ef136bb3634c0233d51e4595cb70d05a1ddcef12"
+        },
+        "workflow_runs": [
+          {
+            "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-436179475\\recovery.waiting-merge-restart\\recovery\\repo\\.git",
+            "workflow_run_id": "1108fa66b6f353f10cc1a809699c6462",
+            "task_id": "1",
+            "workflow_version": "worker-flow-v1",
+            "config_digest": "351a182385a731ca22375cd0688286d832d59ffb9fe6ba05096b0b52626e8008",
+            "execution_profile": {
+              "execution_requirements": {},
+              "implementation_version": "builtin-execution-v1",
+              "publication_policy": {
+                "publisher": "host_service"
+              },
+              "publication": {
+                "provider": {
+                  "kind": "command",
+                  "base_url": "https://github.com",
+                  "repository": "e2e/project",
+                  "token_env": "",
+                  "query": {
+                    "executable": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-test-feedback\\20261001T030225.133702400Z\\build\\controlled-helper.exe",
+                    "args": [
+                      "provider",
+                      "--e2e-state",
+                      "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-436179475\\recovery.waiting-merge-restart\\recovery\\provider.json"
+                    ]
+                  },
+                  "close": {
+                    "executable": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-test-feedback\\20261001T030225.133702400Z\\build\\controlled-helper.exe",
+                    "args": [
+                      "provider",
+                      "--e2e-state",
+                      "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-436179475\\recovery.waiting-merge-restart\\recovery\\provider.json"
+                    ]
+                  }
+                },
+                "create": {
+                  "executable": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-test-feedback\\20261001T030225.133702400Z\\build\\controlled-helper.exe",
+                  "args": [
+                    "pr",
+                    "create",
+                    "--repo",
+                    "{repository}",
+                    "--base",
+                    "{base}",
+                    "--head",
+                    "{head}",
+                    "--draft",
+                    "--title",
+                    "{title}",
+                    "--body",
+                    "{body}"
+                  ]
+                },
+                "git": {
+                  "executable": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-test-feedback\\20261001T030225.133702400Z\\build\\controlled-helper.exe",
+                  "args": [
+                    "git"
+                  ]
+                },
+                "remote": "origin",
+                "remote_url": "https://github.com/e2e/project.git",
+                "base_branch": "main",
+                "authentication_refs": [
+                  "SSH_AUTH_SOCK",
+                  "GIT_CONFIG_GLOBAL",
+                  "GIT_SSH_COMMAND",
+                  "GH_TOKEN",
+                  "GITHUB_TOKEN",
+                  "GH_CONFIG_DIR"
+                ]
+              },
+              "version": 4,
+              "execution_policy": {
+                "filesystem": {
+                  "read_scope": "host",
+                  "write_scope": "workspace",
+                  "git_metadata_write": true
+                },
+                "network": "allow",
+                "escalation": "deny"
+              },
+              "policy_digest": "eb73cd337c8039a73a57274b2f2dce8d671fc7a4e971d60286b3a0d17e2d9b2a",
+              "accepted_config_version": "351a182385a731ca22375cd0688286d832d59ffb9fe6ba05096b0b52626e8008",
+              "policy_source": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-436179475\\recovery.waiting-merge-restart\\recovery\\project.json",
+              "id": "controlled",
+              "name": "Controlled E2E",
+              "digest": "3d66aa4a713de476ddd3483584ac709e789527c809224e9811d109bd5cef4914",
+              "host": "local",
+              "agent": "codex",
+              "reasoning_effort": "high",
+              "sandbox": "workspace-write",
+              "windows_sandbox": "elevated",
+              "approval_policy": "never",
+              "codex": {
+                "windows_sandbox": "elevated",
+                "executable": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-test-feedback\\20261001T030225.133702400Z\\build\\controlled-helper.exe",
+                "args": null
+              },
+              "orca": {
+                "executable": "",
+                "args": null,
+                "shell": "",
+                "wait_timeout": "",
+                "keep_terminal": false,
+                "activate": false
+              }
+            },
+            "runner": {
+              "codex": {
+                "windows_sandbox": "elevated",
+                "executable": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-test-feedback\\20261001T030225.133702400Z\\build\\controlled-helper.exe",
+                "args": null
+              },
+              "sandbox": "workspace-write",
+              "windows_sandbox": "elevated",
+              "reasoning_effort": "high"
+            },
+            "phase": "completed",
+            "repository": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-436179475\\recovery.waiting-merge-restart\\recovery\\repo",
+            "branch": "main",
+            "selected_result_id": "60e8c180da548b31956bdecd89e838a6",
+            "pr_url": "https://github.com/e2e/project/pull/1",
+            "pr_state": "merged",
+            "pr_queried_at": "2026-10-01T03:03:43.4921425Z",
+            "pr_merged_at": "2026-10-01T03:03:43.310222Z",
+            "pr_merge_commit": "551b1601fec693aec0e44edf473bd102fb382b7a",
+            "created_at": "2026-10-01T03:03:05.9226148Z",
+            "updated_at": "2026-10-01T03:03:44.0638515Z"
+          }
+        ],
+        "delivery": {
+          "project_id": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-436179475\\recovery.waiting-merge-restart\\recovery\\repo\\.git",
+          "task_id": "1",
+          "selected_workflow_run_id": "1108fa66b6f353f10cc1a809699c6462",
+          "pr_instance": "https://github.com",
+          "pr_repository": "e2e/project",
+          "pr_number": 1,
+          "pr_url": "https://github.com/e2e/project/pull/1",
+          "merge_commit": "551b1601fec693aec0e44edf473bd102fb382b7a",
+          "merged_at": "2026-10-01T03:03:43.310222Z",
+          "recorded_at": "2026-10-01T03:03:44.0580591Z",
+          "evidence": {
+            "pr_instance": "https://github.com",
+            "url": "https://github.com/e2e/project/pull/1",
+            "repository": "e2e/project",
+            "number": 1,
+            "base_branch": "main",
+            "state": "merged",
+            "merged": true,
+            "merged_at": "2026-10-01T03:03:43.310222Z",
+            "merge_commit": "551b1601fec693aec0e44edf473bd102fb382b7a"
+          }
+        },
+        "predecessors": [],
+        "successors": [
+          "2"
+        ],
+        "dependency_ready": false,
+        "unmet_predecessors": [],
+        "startup_blockers": [
+          "task_not_open"
+        ]
+      },
+      {
+        "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-436179475\\recovery.waiting-merge-restart\\recovery\\repo\\.git",
+        "task_id": "2",
+        "batch_id": "931b8e51340c1db6cd342e99fe985637",
+        "title": "E2E b",
+        "type": "task",
+        "contract_id": "e2e-b",
+        "source": "native",
+        "status": "open",
+        "version": 1,
+        "created_at": "2026-10-01T03:02:46.719174Z",
+        "updated_at": "2026-10-01T03:02:46.719174Z",
+        "project_id": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-436179475\\recovery.waiting-merge-restart\\recovery\\repo\\.git",
+        "priority": 2,
+        "contract": {
+          "contract_id": "e2e-b",
+          "repository": "https://github.com/e2e/project.git",
+          "remote": "origin",
+          "branch": "main",
+          "spec_ref": {
+            "path": "docs/spec/task.spec.md",
+            "commit": "8d43175dddf86f14a9ee88f2ab9efb9a4c6f4c53",
+            "sha256": "a7da27f4d08ba5b2dc9ee65c983a54065dab93ea20d90ef9244d6408e001cf43"
+          },
+          "plan_ref": {
+            "path": "docs/spec/task.plan.md",
+            "commit": "8d43175dddf86f14a9ee88f2ab9efb9a4c6f4c53",
+            "sha256": "ba5d19debb7029d03d2b304168c3e7f812ccd1c380aae8aee098c65f5e0e4b29"
+          },
+          "common_refs": [],
+          "acceptance_refs": [
+            {
+              "path": "docs/spec/task.spec.md",
+              "commit": "8d43175dddf86f14a9ee88f2ab9efb9a4c6f4c53",
+              "sha256": "a7da27f4d08ba5b2dc9ee65c983a54065dab93ea20d90ef9244d6408e001cf43"
+            }
+          ],
+          "digest": "4389c6250d66a74825e081d0e9b8d8d432e73402ccb9524a5fe68c71419c6a45"
+        },
+        "workflow_runs": [],
+        "predecessors": [
+          {
+            "task_id": "1",
+            "status": "closed",
+            "delivered": true
+          }
+        ],
+        "successors": [],
+        "dependency_ready": true,
+        "unmet_predecessors": [],
+        "startup_blockers": []
+      }
+    ],
+    "has_more": false
+  }
+}

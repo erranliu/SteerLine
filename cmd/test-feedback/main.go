@@ -29,6 +29,9 @@ type options struct {
 	goTestArgs     []string
 	quick          bool
 	workers        int
+	level          string
+	suite          string
+	e2eEnv         string
 }
 
 type environment struct {
@@ -89,6 +92,9 @@ func run(args []string) int {
 	}
 	if parsed.quick || parsed.workers == 3 {
 		return runScoped(parsed)
+	}
+	if parsed.level == "L2" || parsed.level == "L3" {
+		return runE2E(parsed)
 	}
 
 	goArgs := parsed.goTestArgs
@@ -227,11 +233,60 @@ func parseOptions(args []string) (options, error) {
 	flags.IntVar(&opts.exitCode, "exit-code", 0, "exit code from the command that produced -summarize-log")
 	flags.BoolVar(&opts.quick, "quick", false, "run the fixed minimal closed loop and pure rule packages")
 	flags.IntVar(&opts.workers, "workers", 1, "complete test suite processes: 1 or 3")
+	flags.StringVar(&opts.level, "level", "", "test level: L1, L2 or L3")
+	flags.StringVar(&opts.suite, "suite", "", "comma-separated L3 suites")
+	flags.StringVar(&opts.e2eEnv, "env", "", "E2E environment: controlled")
 	if err := flags.Parse(toolArgs); err != nil {
 		return opts, fmt.Errorf("test-feedback options: %w", err)
 	}
 	if len(flags.Args()) != 0 {
 		return opts, fmt.Errorf("Go test arguments must follow --")
+	}
+	seenOptions := map[string]bool{}
+	for _, arg := range toolArgs {
+		if strings.HasPrefix(arg, "-") {
+			key := strings.TrimLeft(strings.SplitN(arg, "=", 2)[0], "-")
+			if flags.Lookup(key) != nil {
+				if seenOptions[key] {
+					return opts, fmt.Errorf("duplicate -%s", key)
+				}
+				seenOptions[key] = true
+			}
+		}
+	}
+	switch opts.level {
+	case "":
+		if seenOptions["suite"] || seenOptions["env"] {
+			return opts, fmt.Errorf("-suite/-env require -level")
+		}
+	case "L1":
+		if seenOptions["quick"] || seenOptions["suite"] || seenOptions["env"] {
+			return opts, fmt.Errorf("L1 does not accept quick, suite or env")
+		}
+		opts.quick = true
+	case "L2", "L3":
+		for _, key := range []string{"quick", "workers", "build-only", "summarize-log"} {
+			if seenOptions[key] {
+				return opts, fmt.Errorf("E2E cannot combine -%s", key)
+			}
+		}
+		if len(goArgs) > 0 {
+			return opts, fmt.Errorf("E2E does not accept raw Go arguments")
+		}
+		if opts.level == "L2" && seenOptions["suite"] {
+			return opts, fmt.Errorf("L2 has a fixed smoke selection")
+		}
+		if opts.level == "L3" && opts.suite == "" {
+			return opts, fmt.Errorf("L3 requires -suite")
+		}
+		if opts.e2eEnv == "" {
+			opts.e2eEnv = "controlled"
+		}
+		if opts.e2eEnv != "controlled" {
+			return opts, fmt.Errorf("unsupported E2E environment %q", opts.e2eEnv)
+		}
+	default:
+		return opts, fmt.Errorf("invalid test level %q", opts.level)
 	}
 	if opts.buildOnly && len(goArgs) != 0 {
 		return opts, fmt.Errorf("-build-only cannot be combined with Go test arguments")
@@ -259,7 +314,7 @@ func parseOptions(args []string) (options, error) {
 		return opts, fmt.Errorf("-workers=3 only runs the complete deterministic suite")
 	}
 	if opts.out == "" {
-		if opts.quick || opts.workers == 3 {
+		if opts.quick || opts.workers == 3 || opts.level == "L2" || opts.level == "L3" {
 			opts.out = filepath.Join(os.TempDir(), "steerline-test-feedback", time.Now().UTC().Format("20060102T150405.000000000Z"))
 		} else {
 			opts.out = filepath.Join("docs", "validation", "test-feedback", "runs", time.Now().UTC().Format("20060102T150405Z"))

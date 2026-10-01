@@ -1,0 +1,123 @@
+{
+  "scope": "e2e",
+  "level": "L3",
+  "env": "controlled",
+  "environment": {
+    "source_commit": "49d71c970dce9a2e9a7471e9ce7bcd1ccb23e96a",
+    "worktree_status": " M AGENTS.md\n M cmd/test-feedback/main.go\n M cmd/test-feedback/process_unix.go\n M cmd/test-feedback/process_windows.go\n M docs/spec/README.md\n?? cmd/test-feedback/e2e.go\n?? cmd/test-feedback/e2e_test.go\n?? docs/spec/tiered-e2e-testing.plan.md\n?? docs/spec/tiered-e2e-testing.spec.md\n?? internal/testprocess/process.go\n?? internal/testprocess/process_unix.go\n?? internal/testprocess/process_windows.go\n?? tests/e2e/README.md\n?? tests/e2e/internal/controlled/github.go\n?? tests/e2e/internal/controlled/gitserver.go\n?? tests/e2e/internal/controlled/helper.go\n?? tests/e2e/internal/controlled/state.go\n?? tests/e2e/internal/driver/driver.go\n?? tests/e2e/internal/driver/driver_test.go\n?? tests/e2e/internal/testenv/env.go\n?? tests/e2e/internal/testenv/env_test.go\n?? tests/e2e/internal/testenv/query.go\n?? tests/e2e/smoke/delivery_test.go\n?? tests/e2e/suites.json\n?? tests/e2e/suites/recovery/waiting_merge_restart_test.go\n?? tests/e2e/testdata/controlled-helper/main.go\n?? tests/e2e/testdata/projects/minimal/README.md\n?? tests/e2e/testdata/tasks/task.plan.md\n?? tests/e2e/testdata/tasks/task.spec.md",
+    "go_version": "go version go1.26.4 windows/amd64",
+    "go_env": {
+      "GOARCH": "amd64",
+      "GOCACHE": "C:\\Users\\lmas1\\AppData\\Local\\go-build",
+      "GOFLAGS": "",
+      "GOOS": "windows",
+      "GOTOOLCHAIN": "auto"
+    },
+    "os": "windows",
+    "architecture": "amd64",
+    "machine": {
+      "host_name": "liuming-asus",
+      "logical_cpu_count": 20,
+      "processor_identifier": "AMD64 Family 26 Model 36 Stepping 0, AuthenticAMD"
+    },
+    "concurrency": {
+      "GOMAXPROCS_environment": "unset",
+      "go_build_package_parallel": "Go default",
+      "go_test_parallel": "default 20",
+      "runtime_GOMAXPROCS": "20"
+    },
+    "build_cache_condition": "as found; no explicit cache clear",
+    "enabled_native_acceptance_switches": [],
+    "native_acceptance_note": "controlled worker and provider; no native certification"
+  },
+  "selected_scenarios": [
+    {
+      "id": "recovery.waiting-merge-restart",
+      "level": "L3",
+      "suite": "recovery",
+      "package": "./tests/e2e/suites/recovery",
+      "test": "TestWaitingMergeRestart",
+      "env": "controlled"
+    }
+  ],
+  "groups": [
+    {
+      "id": "e2e-1",
+      "command": [
+        "go",
+        "test",
+        "-tags=e2e",
+        "-json",
+        "-count=1",
+        "-p=1",
+        "-parallel=1",
+        "-timeout=6m",
+        "-run=^(TestWaitingMergeRestart)$",
+        "./tests/e2e/suites/recovery"
+      ],
+      "assigned_tests": [
+        "TestWaitingMergeRestart"
+      ],
+      "assigned_packages": [
+        "./tests/e2e/suites/recovery"
+      ],
+      "stdout_json_log": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-test-feedback\\20261001T030225.133702400Z\\e2e-1.jsonl",
+      "stderr_log": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-test-feedback\\20261001T030225.133702400Z\\e2e-1.stderr.txt",
+      "wall_seconds": 85.9988349,
+      "exit_code": 0,
+      "summary": {
+        "status": "passed",
+        "passed": true,
+        "complete": true,
+        "command_exit_code": 0,
+        "package_count": 1,
+        "passed_packages": 1,
+        "failed_packages": [],
+        "skipped_packages": [],
+        "test_count": 1,
+        "passed_tests": 1,
+        "failed_tests": 0,
+        "skipped_tests": 0,
+        "packages": [
+          {
+            "package": "github.com/erranliu/SteerLine/tests/e2e/suites/recovery",
+            "status": "pass",
+            "elapsed_seconds": 84.917
+          }
+        ],
+        "tests": [
+          {
+            "package": "github.com/erranliu/SteerLine/tests/e2e/suites/recovery",
+            "name": "TestWaitingMergeRestart",
+            "status": "pass",
+            "elapsed_seconds": 84.73
+          }
+        ],
+        "slowest_tests": [
+          {
+            "package": "github.com/erranliu/SteerLine/tests/e2e/suites/recovery",
+            "name": "TestWaitingMergeRestart",
+            "status": "pass",
+            "elapsed_seconds": 84.73
+          }
+        ],
+        "failures": [],
+        "skipped": [],
+        "incomplete_reasons": [],
+        "test_event_wall_seconds": 84.9174531,
+        "has_test_event_wall": true
+      }
+    }
+  ],
+  "build_sha256": {
+    "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-test-feedback\\20261001T030225.133702400Z\\build\\controlled-helper.exe": "80c377a0a9077e503e5a0af7dfcb4cb62c8d47aaa018faacfba8fcd0f11a9adb",
+    "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-test-feedback\\20261001T030225.133702400Z\\build\\steerline.exe": "5d4391a31d83092e1b7da17a511ad831dce5217585b63b6181d5fa019f5adc68"
+  },
+  "preparation_seconds": 3.1376322,
+  "execution_seconds": 86.0335191,
+  "passed": true,
+  "cleanup_complete": true,
+  "errors": [],
+  "started_at": "2026-10-01T03:02:25.1364509Z",
+  "finished_at": "2026-10-01T03:03:54.5914265Z"
+}
