@@ -97,7 +97,7 @@ func TestAppServerStartReplayPreservesNativeSavedAnswer(t *testing.T) {
 	run.Decision.ID, run.Decision.Version = newID(), 1
 	run.Decision.AttemptID = run.AttemptID
 	service.setRunDecision(run, run.Decision)
-	if _, err := service.recordAppServerTurnStarted(run, workflow, execution, second); err != nil {
+	if _, err := service.recordWorkerTurnStarted(run, workflow, execution, second); err != nil {
 		t.Fatal(err)
 	}
 	if execution.CurrentCommandID != commandID || execution.CurrentTurnID != second || execution.PendingCommandID != "" || execution.TurnNumber != 2 || run.Decision.Status != "reply_accepted" || service.domain.Operations[0].Status != "confirmed" {
@@ -108,7 +108,7 @@ func TestAppServerStartReplayPreservesNativeSavedAnswer(t *testing.T) {
 	service.setRunDecision(run, &DecisionState{ID: newID(), AttemptID: run.AttemptID, Version: 1, Status: "answer_saved", Request: request})
 	workflow.Phase = "waiting_decision"
 	run.FinishTaskStatus = "waiting_decision"
-	if _, err := service.recordAppServerTurnStarted(run, workflow, execution, second); err != nil {
+	if _, err := service.recordWorkerTurnStarted(run, workflow, execution, second); err != nil {
 		t.Fatal(err)
 	}
 	if execution.TurnNumber != 2 || run.Decision.Status != "answer_saved" || workflow.Phase != "waiting_decision" || run.FinishTaskStatus != "waiting_decision" {

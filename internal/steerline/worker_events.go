@@ -6,6 +6,49 @@ import (
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
+// Verified start facts can be replayed after recovery. Only the first
+// confirmed start consumes a pending Command and accepts post-turn feedback.
+func (s *Service) recordWorkerTurnStarted(run *Run, workflow *WorkflowRunRecord, execution *ExecutionRecord, turnID string) (string, error) {
+	commandID := execution.PendingCommandID
+	fresh := commandID != ""
+	if !fresh && execution.CurrentTurnID == turnID && execution.LastStoppedTurnID != turnID {
+		commandID = execution.CurrentCommandID
+	}
+	if !stableExecutionID(commandID) || turnID == "" || fresh && execution.PendingTurnID != turnID {
+		return "", errors.New("turn start lacks its fixed input command or verified receipt")
+	}
+	var operation *OperationRecord
+	for i := range s.domain.Operations {
+		if s.domain.Operations[i].IdempotencyKey == "worker-turn:"+run.ExecutionID+":"+commandID {
+			operation = &s.domain.Operations[i]
+			break
+		}
+	}
+	if operation == nil {
+		return "", errors.New("turn start has no saved input operation")
+	}
+	if err := BeginWorkerTurn(workflow, execution, execution.SessionID, turnID); err != nil {
+		return "", err
+	}
+	execution.CurrentCommandID, execution.PendingCommandID = commandID, ""
+	if fresh {
+		if attempt := s.workflowAttempt(run, run.AttemptID); attempt != nil {
+			attempt.Status, attempt.UpdatedAt = "running", now()
+		}
+		if run.Decision != nil && run.Decision.Status == "answer_saved" && run.Decision.Request.QuestionRoute == nil {
+			s.setDecisionStatus(run, "reply_accepted")
+		}
+		execution.Status, execution.Error = "active", nil
+		s.refreshRun(run)
+		execution.TurnStartedAt, execution.TurnEndedAt = ptr(now()), nil
+		s.refreshRun(run)
+	}
+	if operation.Status == "confirmed" {
+		return operation.OperationID, nil
+	}
+	return operation.OperationID, TransitionOperation(operation, "confirmed", turnID, mustJSON(map[string]string{"session_id": execution.SessionID, "turn_id": turnID}), "")
+}
+
 func (s *Service) eventWorkerFlowFor(run *Run, ev WorkerEvent) (resultErr error) {
 	defer func() { ackWorkerEventPersistence(ev, resultErr) }()
 	workflow, execution := s.workflowRecords(run)
@@ -50,7 +93,7 @@ func (s *Service) eventWorkerFlowFor(run *Run, ev WorkerEvent) (resultErr error)
 		s.refreshRun(run)
 	}
 	if fact.StartedTurnID != "" && fact.Kind == executionapi.EventStarted {
-		opID, err := s.recordAppServerTurnStarted(run, workflow, execution, fact.StartedTurnID)
+		opID, err := s.recordWorkerTurnStarted(run, workflow, execution, fact.StartedTurnID)
 		if err != nil {
 			return err
 		}
@@ -152,14 +195,14 @@ func (s *Service) eventWorkerFlowFor(run *Run, ev WorkerEvent) (resultErr error)
 }
 
 func (s *Service) routedQuestionSeen(run *Run, execution *ExecutionRecord, route *executionapi.QuestionRoute, questions []executionapi.Question) (bool, error) {
-	if run.Decision != nil && run.Decision.Request.QuestionRoute != nil && run.Decision.Request.QuestionRoute.QuestionID == route.QuestionID {
+	if run.Decision != nil && sameQuestionOrigin(run.Decision.Request.QuestionRoute, route) {
 		if err := sameRoutedQuestion(route, questions, run.Decision.Request.QuestionRoute, run.Decision.Request.Questions); err != nil {
 			return true, err
 		}
 		return true, nil
 	}
 	for _, pending := range execution.PendingQuestions {
-		if pending.Route.QuestionID != route.QuestionID {
+		if !sameQuestionOrigin(&pending.Route, route) {
 			continue
 		}
 		if err := sameRoutedQuestion(route, questions, &pending.Route, pending.Questions); err != nil {
@@ -175,8 +218,8 @@ func (s *Service) routedQuestionSeen(run *Run, execution *ExecutionRecord, route
 		if err := decode(record.Request, &request); err != nil {
 			return false, err
 		}
-		if request.QuestionRoute == nil {
-			return false, errors.New("reused question identity conflicts with a saved ordinary decision")
+		if !sameQuestionOrigin(request.QuestionRoute, route) {
+			continue
 		}
 		if err := sameRoutedQuestion(route, questions, request.QuestionRoute, request.Questions); err != nil {
 			return false, err
@@ -184,6 +227,12 @@ func (s *Service) routedQuestionSeen(run *Run, execution *ExecutionRecord, route
 		return true, nil
 	}
 	return false, nil
+}
+
+func sameQuestionOrigin(a, b *executionapi.QuestionRoute) bool {
+	return a != nil && b != nil && a.ProjectID == b.ProjectID && a.WorkflowRunID == b.WorkflowRunID &&
+		a.ExecutionID == b.ExecutionID && a.AttemptID == b.AttemptID && a.Generation == b.Generation &&
+		a.TurnID == b.TurnID && a.QuestionID == b.QuestionID
 }
 
 func sameRoutedQuestion(route *executionapi.QuestionRoute, questions []executionapi.Question, oldRoute *executionapi.QuestionRoute, oldQuestions []executionapi.Question) error {

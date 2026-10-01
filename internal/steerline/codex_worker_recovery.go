@@ -234,7 +234,7 @@ func (s *Service) applyAppServerRecovery(result appServerRecoveryResult) error {
 	s.refreshRun(run)
 	if execution.PendingCommandID != "" {
 		execution.PendingTurnID = result.execution.PendingTurnID
-		opID, err := s.recordAppServerTurnStarted(run, workflow, execution, execution.PendingTurnID)
+		opID, err := s.recordWorkerTurnStarted(run, workflow, execution, execution.PendingTurnID)
 		if err != nil {
 			return s.waitWorkerFlow(run, "Original turn start could not be reconciled: "+err.Error())
 		}

@@ -22,49 +22,6 @@ func appServerDirectory(c Config, run *Run) string {
 	return filepath.Join(c.RunDir, "runs", run.RunID, "app-server")
 }
 
-// Native start notifications can be replayed after recovery. Only the first
-// confirmed start consumes a pending Command and accepts post-turn feedback.
-func (s *Service) recordAppServerTurnStarted(run *Run, workflow *WorkflowRunRecord, execution *ExecutionRecord, turnID string) (string, error) {
-	commandID := execution.PendingCommandID
-	fresh := commandID != ""
-	if !fresh && execution.CurrentTurnID == turnID && execution.LastStoppedTurnID != turnID {
-		commandID = execution.CurrentCommandID
-	}
-	if !stableExecutionID(commandID) || !codexworker.ValidNativeID(turnID) || fresh && execution.PendingTurnID != turnID {
-		return "", errors.New("app-server turn start lacks its fixed command or native turn receipt")
-	}
-	var operation *OperationRecord
-	for i := range s.domain.Operations {
-		if s.domain.Operations[i].IdempotencyKey == "worker-turn:"+run.ExecutionID+":"+commandID {
-			operation = &s.domain.Operations[i]
-			break
-		}
-	}
-	if operation == nil {
-		return "", errors.New("app-server native turn has no saved start operation")
-	}
-	if err := BeginWorkerTurn(workflow, execution, execution.SessionID, turnID); err != nil {
-		return "", err
-	}
-	execution.CurrentCommandID, execution.PendingCommandID = commandID, ""
-	if fresh {
-		if attempt := s.workflowAttempt(run, run.AttemptID); attempt != nil {
-			attempt.Status, attempt.UpdatedAt = "running", now()
-		}
-		if run.Decision != nil && run.Decision.Status == "answer_saved" && run.Decision.Request.QuestionRoute == nil {
-			s.setDecisionStatus(run, "reply_accepted")
-		}
-		execution.Status, execution.Error = "active", nil
-		s.refreshRun(run)
-		execution.TurnStartedAt, execution.TurnEndedAt = ptr(now()), nil
-		s.refreshRun(run)
-	}
-	if operation.Status == "confirmed" {
-		return operation.OperationID, nil
-	}
-	return operation.OperationID, TransitionOperation(operation, "confirmed", turnID, mustJSON(map[string]string{"session_id": execution.SessionID, "turn_id": turnID}), "")
-}
-
 func codexBackend(c Config, run *Run) codexworker.Backend {
 	return codexworker.Backend{Config: codexworker.Config{Policy: c.ExecutionPolicy, Executable: c.Codex.Executable, Args: c.Codex.Args, Profile: c.Profile, Sandbox: c.Sandbox, WindowsSandbox: c.WindowsSandbox, Model: c.Model, ReasoningEffort: c.ReasoningEffort, Workspace: deref(run.WorktreePath), RunDir: c.RunDir, RunID: run.RunID, ServerDir: appServerDirectory(c, run), Environment: func(base []string) []string {
 		return workerProcessEnvironment(c, run, base)

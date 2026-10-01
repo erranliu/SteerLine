@@ -2,8 +2,10 @@ package orcaworker
 
 import (
 	"encoding/json"
+	"reflect"
 	"testing"
 
+	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
@@ -12,6 +14,23 @@ func TestCD62NativeFactsAndQuestionRoute(t *testing.T) {
 		TaskID: "task-original", Target: executionapi.ExecutionTarget{OrchestrationRun: "run-original"}, Generation: "incarnation-original", CurrentTurnID: "turn-original"}
 	t.Run("TestNativeOrcaRejectsLateDispatchMessages", func(t *testing.T) {
 		testCD62OrcaLateDispatch(t, fixed)
+	})
+	t.Run("replayed_question_matches_normalized_saved_content", func(t *testing.T) {
+		message := Message{ID: "question", FromHandle: "dispatch:ctx-original", Type: "question", Payload: json.RawMessage(`{"taskId":"task-original","dispatchId":"ctx-original","question":"  Which path?  ","options":["  Direct  "]}`)}
+		first, matched, err := DecodeMessage(message, "task-original", "ctx-original", "term-original", fixed)
+		if err != nil || !matched || len(first.Questions) != 1 {
+			t.Fatalf("first question was not decoded: %+v / %v", first, err)
+		}
+		saved := first.Questions[0]
+		content := contracts.DecisionRequest{Question: saved.Question, Options: append([]executionapi.DecisionOption(nil), saved.Options...), AllowFreeText: saved.AllowFreeText}
+		if err := contracts.NormalizeDecisionContent(&content); err != nil {
+			t.Fatal(err)
+		}
+		saved.Question, saved.Options = content.Question, content.Options
+		replayed, _, err := DecodeMessage(message, "task-original", "ctx-original", "term-original", fixed)
+		if err != nil || !reflect.DeepEqual(saved, replayed.Questions[0]) {
+			t.Fatalf("same original question conflicts with its normalized persisted content: saved=%+v replay=%+v error=%v", saved, replayed.Questions, err)
+		}
 	})
 	message := Message{ID: "question-original", FromHandle: "dispatch:ctx-original", Type: "question", Body: "Fallback question", Payload: json.RawMessage(`{"taskId":"task-original","dispatchId":"ctx-original","question":"Which path?","options":["Direct"]}`)}
 	fact, matched, err := DecodeMessage(message, "task-original", "ctx-original", "term-original", fixed)

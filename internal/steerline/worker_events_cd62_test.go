@@ -11,6 +11,53 @@ import (
 )
 
 func TestCD62NativeFactsAndQuestionRoute(t *testing.T) {
+	t.Run("question_ids_are_scoped_to_the_original_turn", func(t *testing.T) {
+		old := simpleQuestionRoute(t, "example.impl", "project", "workflow", "execution", "attempt", "generation", "old-turn", "reused-call")
+		current := simpleQuestionRoute(t, "example.impl", "project", "workflow", "execution", "attempt", "generation", "current-turn", "reused-call")
+		oldQuestions := []executionapi.Question{{ExecutionID: "execution", AttemptID: "attempt", Generation: "generation", TurnID: "old-turn", ID: "choice", Question: "Previous question", AllowFreeText: true}}
+		currentQuestions := cloneExecutionQuestions(oldQuestions)
+		currentQuestions[0].TurnID, currentQuestions[0].Question = "current-turn", "New question"
+		request := decisionRequestFromEventFact(executionapi.EventFact{QuestionRoute: &old, Questions: oldQuestions})
+		s := &Service{domain: DomainSnapshot{Decisions: []DecisionRecord{{ExecutionID: "execution", QuestionID: old.QuestionID, Request: mustJSON(request)}}}}
+		seen, err := s.routedQuestionSeen(&Run{}, &ExecutionRecord{ExecutionID: "execution"}, &current, currentQuestions)
+		if err != nil || seen {
+			t.Fatalf("a call ID from an earlier turn conflicts with a new bound question: seen=%t err=%v", seen, err)
+		}
+		if _, err := s.routedQuestionSeen(&Run{}, &ExecutionRecord{ExecutionID: "execution"}, &old, currentQuestions); err == nil {
+			t.Fatal("changed content for the same original question was accepted")
+		}
+	})
+	t.Run("opaque_started_turn_and_gap", func(t *testing.T) {
+		s, run := appServerAuditService(t)
+		workflow, record := s.workflowRecords(run)
+		commandID := newID()
+		record.PolicyResources = policyResourceReceiptFixture(workflow.ExecutionProfile.Digest, record.Workspace.Worktree)
+		record.SessionID = "opaque-session"
+		record.PendingCommandID, record.PendingTurnID = commandID, "opaque-turn"
+		s.refreshRun(run)
+		_, err := s.startWorkerOperation(run, "start_worker_turn", "worker-turn:"+record.ExecutionID+":"+commandID, map[string]string{"command_id": commandID})
+		require(t, err)
+		event := WorkerEvent{RunID: run.RunID, AttemptID: run.AttemptID, Fact: executionapi.EventFact{Kind: executionapi.EventStarted, SessionID: record.SessionID, StartedTurnID: record.PendingTurnID}}
+		foreign := event
+		foreign.Fact.StartedTurnID = "other-turn"
+		if err := s.eventWorkerFlowFor(run, foreign); err == nil || s.executionRecord(run).TurnNumber != 0 {
+			t.Fatal("start without the original input receipt advanced a turn")
+		}
+		require(t, s.eventWorkerFlowFor(run, event))
+		workflow, record = s.workflowRecords(run)
+		if record.CurrentTurnID != "opaque-turn" || record.PendingCommandID != "" || record.TurnNumber != 1 {
+			t.Fatalf("generic start was not accepted against its fixed intent: %+v", record)
+		}
+		require(t, s.eventWorkerFlowFor(run, event))
+		if s.executionRecord(run).TurnNumber != 1 {
+			t.Fatal("replayed start counted a second turn")
+		}
+		event.Fact = executionapi.EventFact{Kind: executionapi.EventGap, Gap: true}
+		require(t, s.eventWorkerFlowFor(run, event))
+		if s.executionRecord(run).LastStoppedTurnID != "" || s.workflowRecord(run).Phase != workflow.Phase {
+			t.Fatal("observation gap was treated as a stopped worker")
+		}
+	})
 	identity := executionapi.QuestionRouteIdentity{ProjectID: "project", WorkflowRunID: "workflow", ExecutionID: "execution", AttemptID: "attempt", Generation: "generation", TurnID: "turn", QuestionID: "receipt-1"}
 	route := simpleQuestionRoute(t, "example.third-party", identity.ProjectID, identity.WorkflowRunID, identity.ExecutionID, identity.AttemptID, identity.Generation, identity.TurnID, identity.QuestionID)
 	question := executionapi.Question{ExecutionID: identity.ExecutionID, AttemptID: identity.AttemptID, Generation: identity.Generation, TurnID: identity.TurnID,

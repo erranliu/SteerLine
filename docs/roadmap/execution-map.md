@@ -1,6 +1,6 @@
 # 执行依赖与交接
 
-本图对应[主 roadmap](roadmap.md)中的 23 项活动规划。每项执行以独立 Spec/Plan 为准，运行时资格以中心 DAG 为权威。
+本图对应[主 roadmap](roadmap.md)中的 22 项活动规划。每项执行以独立 Spec/Plan 为准，运行时资格以中心 DAG 为权威。
 
 ## 固定前置
 

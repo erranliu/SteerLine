@@ -8,6 +8,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
@@ -52,6 +53,11 @@ func DecodeMessage(message Message, taskID, dispatchID, agentTerminal string, fi
 		for _, option := range question.Options {
 			fact.Questions[0].Options = append(fact.Questions[0].Options, executionapi.DecisionOption{ID: option.ID, Label: option.Label, Detail: option.Detail})
 		}
+		content := contracts.DecisionRequest{Question: fact.Questions[0].Question, Options: fact.Questions[0].Options, AllowFreeText: fact.Questions[0].AllowFreeText}
+		if err := contracts.NormalizeDecisionContent(&content); err != nil {
+			return fact, true, err
+		}
+		fact.Questions[0].Question, fact.Questions[0].Options = content.Question, content.Options
 		data := QuestionRouteData{RunID: fixed.Target.OrchestrationRun, TaskID: taskID, DispatchID: dispatchID, MessageID: message.ID, Terminal: agentTerminal}
 		encoded, err := json.Marshal(data)
 		if err != nil {
