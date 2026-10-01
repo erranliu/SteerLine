@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
+	"github.com/erranliu/SteerLine/internal/steerline/projection"
 	queryrules "github.com/erranliu/SteerLine/internal/steerline/query"
 	taskrules "github.com/erranliu/SteerLine/internal/steerline/task"
 )
@@ -86,4 +87,28 @@ func (s Reader) ReadProjectRecordsTx(ctx context.Context, tx *sql.Tx, project, s
 		return ProjectRecords{View: view, Metadata: runtime}
 	}
 	return ProjectRecords{View: view}
+}
+
+// ReadProjectView samples all records in one transaction, then applies the shared pure projector.
+func (s Reader) ReadProjectView(ctx context.Context, project, selectedTaskID string, limit int) (contracts.ProjectView, error) {
+	records, err := s.ReadProjectRecords(ctx, project, selectedTaskID, limit)
+	if err != nil {
+		return contracts.ProjectView{}, err
+	}
+	return projectView(records), nil
+}
+func (s Reader) ReadProjectViewTx(ctx context.Context, tx *sql.Tx, project, selectedTaskID string, limit int) contracts.ProjectView {
+	return projectView(s.ReadProjectRecordsTx(ctx, tx, project, selectedTaskID, limit))
+}
+func projectView(records ProjectRecords) contracts.ProjectView {
+	view := records.View
+	if metadata := records.Metadata; metadata != nil {
+		projected, err := projection.Build(*view.Domain, projection.MetadataOf(*metadata))
+		if err != nil {
+			view.RuntimeError = err
+		} else {
+			view.Runtime = &projected
+		}
+	}
+	return view
 }

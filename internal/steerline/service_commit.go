@@ -6,38 +6,20 @@ import (
 	"errors"
 
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	"github.com/erranliu/SteerLine/internal/steerline/projection"
 )
 
 func copyDomainSnapshot(snapshot DomainSnapshot) (DomainSnapshot, error) {
-	var copy DomainSnapshot
-	data, err := json.Marshal(snapshot)
-	if err == nil {
-		err = json.Unmarshal(data, &copy)
-	}
-	if err == nil {
-		for i := range snapshot.WorkflowRuns {
-			copy.WorkflowRuns[i].ControlRevision = snapshot.WorkflowRuns[i].ControlRevision
-		}
-	}
-	return copy, err
+	return projection.CloneDomain(snapshot)
 }
 
 // projectState builds independently owned read views from committed records.
 // Worker candidates live in domain and are never publication input.
 func (s *Service) projectState() error {
-	copy, err := copyDomainSnapshot(s.committed)
+	metadata := projection.MetadataOf(s.State)
+	metadata.Checkpoint = runtimeCheckpoint(s.State)
+	view, err := projection.Build(s.committed, metadata)
 	if err != nil {
-		return err
-	}
-	checkpoint := runtimeCheckpoint(s.State)
-	var metadata ServiceCheckpoint
-	if err := json.Unmarshal(mustJSON(checkpoint), &metadata); err != nil {
-		return err
-	}
-	view := runtimeFromCheckpoint(metadata)
-	view.Control.DispatchMode, view.Control.DispatchPaused, view.Control.Revision = s.State.Control.DispatchMode, s.State.Control.DispatchPaused, s.State.Control.Revision
-	hydrateRuntime(&view, copy)
-	if err := projectRuntime(&view); err != nil {
 		return err
 	}
 	s.State = view
@@ -47,13 +29,23 @@ func (s *Service) projectState() error {
 // Working projections are private to the single center actor. Public Runtime
 // objects are built from committed rows and share no Run pointers with them.
 func (s *Service) projectActor() error {
-	view := runtimeFromCheckpoint(runtimeCheckpoint(s.State))
-	hydrateRuntime(&view, s.domain)
-	view.Runs = s.runs
-	if err := projectRuntime(&view); err != nil {
+	runs, err := projection.Runs(s.domain)
+	if err != nil {
 		return err
 	}
-	s.runs = view.Runs
+	previous := make(map[string]*Run, len(s.runs))
+	for _, run := range s.runs {
+		if run != nil {
+			previous[run.RunID] = run
+		}
+	}
+	for i, view := range runs {
+		if existing := previous[view.RunID]; existing != nil {
+			*existing = *view
+			runs[i] = existing
+		}
+	}
+	s.runs = runs
 	return nil
 }
 

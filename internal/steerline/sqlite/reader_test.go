@@ -87,6 +87,14 @@ func TestReaderPortsUseCurrentDatabaseAndPreserveReadOnlyBinding(t *testing.T) {
 		t.Fatal(err)
 	}
 	service := query.Service{Project: "project", Workflows: reader, Tasks: reader, Events: reader}
+	combined, err := query.NewService(reader, "project").ReadProjectView(ctx, "2", 1)
+	if err != nil || combined.Runtime == nil || combined.RuntimeError != nil || combined.Domain == nil || combined.SelectedTask == nil || combined.SelectedTask.TaskID != "2" {
+		t.Fatalf("SQLite reader could not independently compose the project view: %+v %v", combined, err)
+	}
+	combined.Runtime.Tasks[0].Title = "view-only"
+	if combined.Domain.Tasks[0].Title == "view-only" {
+		t.Fatal("project Runtime aliases the separately returned domain snapshot")
+	}
 	ready, err := service.ReadyNativeTasks(ctx)
 	if err != nil || len(ready) != 1 || ready[0].TaskID != "1" {
 		t.Fatalf("independent task reader lost readiness: %+v %v", ready, err)

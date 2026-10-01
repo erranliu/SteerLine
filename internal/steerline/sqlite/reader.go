@@ -27,3 +27,5 @@ func NewReader(db *sql.DB, binding *taskrules.ProjectTaskAuthority) Reader {
 var _ query.WorkflowReader = Reader{}
 var _ query.EventReader = Reader{}
 var _ query.TaskReader = Reader{}
+
+var _ query.ProjectReader = Reader{}
