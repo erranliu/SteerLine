@@ -304,6 +304,10 @@ func copyWorkerFlowConfig(c Config) Config {
 			e := profiles[i].RequirementsEvaluation.Clone()
 			profiles[i].RequirementsEvaluation = &e
 		}
+		if profiles[i].ConfiguredPublicationPolicy != nil {
+			policy := *profiles[i].ConfiguredPublicationPolicy
+			profiles[i].ConfiguredPublicationPolicy = &policy
+		}
 		profiles[i].Codex.Args = append([]string(nil), profiles[i].Codex.Args...)
 		profiles[i].Orca.Args = append([]string(nil), profiles[i].Orca.Args...)
 		if profiles[i].Orca.Supervised != nil {

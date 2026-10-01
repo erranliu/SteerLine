@@ -155,6 +155,45 @@ func TestWorkerEnvironmentER1ProbeAndSettlementGate(t *testing.T) {
 	}
 }
 
+func TestWorkerEnvironmentWaitsForOriginalAgentDetection(t *testing.T) {
+	f := newEnvironmentFixture(t, fakeNativeOrcaState{HoldFixedAgentIdentity: true, ReadinessMode: "hold"}, "")
+	f.prepare(t)
+	_, execution := f.service.workflowRecords(f.run)
+	env := execution.Environment
+	if env.Blocker != nil || execution.Process != nil || env.OriginalTerminal == nil || env.Ready {
+		t.Fatalf("unidentified startup became a blocker or a ready agent: %+v", env)
+	}
+	deadline, nonce := env.Preparation.Deadline, env.Preparation.Nonce
+	terminal := *env.OriginalTerminal
+	key := "orca-native-agent-terminal:" + execution.ExecutionID
+	op := f.service.operationByKey(key)
+	if op == nil || op.Status != "accepted" || f.state(t).Dispatches != 0 {
+		t.Fatal("startup receipt lost or input sent before agent identification")
+	}
+	// Another actor pass must only observe the original launch.
+	require(t, f.service.advanceOrcaPreparation(context.Background(), f.run))
+	if env.Blocker != nil || !env.Preparation.Deadline.Equal(deadline) || env.Preparation.Nonce != nonce || *env.OriginalTerminal != terminal {
+		t.Fatal("waiting reset the preparation or replaced the original terminal")
+	}
+	f.update(t, func(state *fakeNativeOrcaState) { state.HoldFixedAgentIdentity = false })
+	require(t, f.service.advanceOrcaPreparation(context.Background(), f.run))
+	if execution.Process == nil || execution.Process.Terminal != terminal.Terminal || execution.Process.Incarnation != terminal.Incarnation || f.service.operationByKey(key).Status != "confirmed" || f.state(t).Dispatches != 1 {
+		t.Fatal("agent identification did not resume the same launch exactly once")
+	}
+}
+
+func TestWorkerEnvironmentUnidentifiedAgentKeepsOriginalDeadline(t *testing.T) {
+	f := newEnvironmentFixture(t, fakeNativeOrcaState{HoldFixedAgentIdentity: true}, "")
+	f.prepare(t)
+	execution := f.service.executionRecord(f.run)
+	execution.Environment.Preparation.Deadline = now().Add(-time.Second)
+	require(t, f.service.commitWorker(f.run))
+	require(t, f.service.advanceOrcaPreparation(context.Background(), f.run))
+	if execution.Environment.Blocker == nil || execution.Environment.Blocker.Fact.Reason != "preparation_unverified" || f.state(t).Dispatches != 0 {
+		t.Fatal("unidentified startup bypassed its deadline or dispatched work")
+	}
+}
+
 func TestWorkerEnvironmentER2HostWaitPreservesQuestionAndPR(t *testing.T) {
 	f := newEnvironmentFixture(t, fakeNativeOrcaState{}, "chosen-model")
 	f.prepare(t)

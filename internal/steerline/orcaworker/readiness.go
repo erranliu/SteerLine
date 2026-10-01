@@ -209,8 +209,9 @@ func CleanupProbe(p ProbeIdentity) error {
 type ProbeToolEvidence = contracts.ProbeToolEvidence
 
 var singleCommandWrapper = regexp.MustCompile(`(?s)^\s*text\(\s*await\s+tools\.exec_command\(\s*(\{.*\})\s*\)\s*\)\s*;?\s*$`)
-var savedCommandWrapper = regexp.MustCompile(`(?s)^\s*(?:const|let)\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*=\s*await\s+tools\.exec_command\(\s*(\{.*\})\s*\)\s*;\s*(?:store\(\s*"[^"\r\n]*"\s*,\s*([A-Za-z_$][A-Za-z0-9_$]*)\s*\)\s*;\s*)?text\(\s*([A-Za-z_$][A-Za-z0-9_$]*)\s*\)\s*;?\s*$`)
+var savedCommandWrapper = regexp.MustCompile(`(?s)^\s*(?:const|let)\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*=\s*await\s+tools\.exec_command\(\s*(\{.*\})\s*\)\s*;\s*(?:store\(\s*"[^"\r\n]*"\s*,\s*([A-Za-z_$][A-Za-z0-9_$]*)\s*\)\s*;\s*)?text\(\s*(?:([A-Za-z_$][A-Za-z0-9_$]*)|JSON\.stringify\(\s*([A-Za-z_$][A-Za-z0-9_$]*)\s*\))\s*\)\s*;?\s*$`)
 var commandObjectKeys = regexp.MustCompile(`([,{]\s*)(cmd|max_output_tokens|yield_time_ms|workdir|shell|login|tty)\s*:`)
+var projectedCommandWrapper = regexp.MustCompile(`(?s)^\s*(?:const|let)\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*=\s*await\s+tools\.exec_command\(\s*(\{.*\})\s*\)\s*;\s*text\(\s*([A-Za-z_$][A-Za-z0-9_$]*)\.output\s*\)\s*;?\s*$`)
 
 func commandInvocation(name, input string) (string, bool) {
 	if name == "exec" {
@@ -219,7 +220,14 @@ func commandInvocation(name, input string) (string, bool) {
 			input = match[1]
 		} else {
 			stored := savedCommandWrapper.FindStringSubmatch(input)
-			if len(stored) != 5 || stored[1] != stored[4] || stored[3] != "" && stored[3] != stored[1] {
+			if len(stored) != 6 {
+				return "", false
+			}
+			printed := stored[4]
+			if printed == "" {
+				printed = stored[5]
+			}
+			if stored[1] != printed || stored[3] != "" && stored[3] != stored[1] {
 				return "", false
 			}
 			input = stored[2]
@@ -244,6 +252,24 @@ func commandInvocation(name, input string) (string, bool) {
 		return "", false
 	}
 	return cmd, true
+}
+
+// Projecting stdout proves a command attempt, but loses the native exit code.
+// It cannot qualify a readiness result or classify ordinary stdout as a native
+// initialization failure.
+func businessCommandInvocation(name, input string) (command string, invoked, fullResult bool) {
+	if command, ok := commandInvocation(name, input); ok {
+		return command, true, true
+	}
+	if name != "exec" {
+		return "", false, false
+	}
+	match := projectedCommandWrapper.FindStringSubmatch(input)
+	if len(match) != 4 || match[1] != match[3] {
+		return "", false, false
+	}
+	command, ok := commandInvocation("exec", "const "+match[1]+" = await tools.exec_command("+match[2]+"); text("+match[1]+");")
+	return command, ok, false
 }
 
 type transcriptMessage struct {
@@ -297,8 +323,10 @@ func ObserveToolInitialization(output WorkerOutput, taskID string, intentMillis 
 		for _, block := range message.Blocks {
 			if block.Type == "tool-call" && message.Role == "assistant" {
 				prior.CallID = ""
-				if _, invoked := commandInvocation(block.Name, block.Input); invoked && prior.TaskBound && message.Timestamp >= intentMillis && block.CallID != "" {
-					prior.CallID = block.CallID
+				if _, invoked, fullResult := businessCommandInvocation(block.Name, block.Input); invoked && prior.TaskBound && message.Timestamp >= intentMillis && block.CallID != "" {
+					if fullResult {
+						prior.CallID = block.CallID
+					}
 					prior.Started = true
 				}
 			}

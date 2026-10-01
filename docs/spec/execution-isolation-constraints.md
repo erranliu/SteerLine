@@ -6,7 +6,7 @@
 
 ## 业务与实现边界
 
-项目定义执行权限、逻辑仓库与工作区要求、发布责任和必要能力。全局执行方案定义目标、agent、model、reasoning effort 和实现选项。每次领取固定两者的有效组合，资源创建后追加实际绑定，不能从后续配置变化补造已有 Execution 的事实。
+项目定义执行权限、逻辑仓库与工作区要求、发布责任（固定责任或显式委派给所选执行方案）和必要能力。全局执行方案定义目标、agent、model、reasoning effort 和实现选项；项目授权 execution_profile 发布责任时，方案必须显式提供 worker 或 host_service。每次领取固定两者的有效组合，资源创建后追加实际绑定，不能从后续配置变化补造已有 Execution 的事实。
 
 中心是业务写者，管理 Task、WorkflowRun、Execution、Decision、Operation、消息消费和 TaskDelivery。平台层执行固定意图并返回事实；公共契约不携带可写 Service、Runtime、Run 或业务事务。副作用前意图持久化，成功回执后提交事实；未知结果保留原请求和资源身份，不盲重发。平台确认或消费游标推进在必要内容持久化之后。
 

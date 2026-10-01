@@ -126,6 +126,34 @@ func TestActualSavedCommandWrapperProvidesProbeEvidence(t *testing.T) {
 	}
 }
 
+func TestActualStringifiedCommandWrapperProvidesProbeEvidence(t *testing.T) {
+	data, err := os.ReadFile("../../../docs/validation/worker-environment-readiness/platform-stringified-wrapper-20261001.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fixture struct {
+		Command, Nonce, Digest string
+		Messages               json.RawMessage
+	}
+	if err := json.Unmarshal(data, &fixture); err != nil {
+		t.Fatal(err)
+	}
+	transcript, _ := json.Marshal(map[string]any{"messages": fixture.Messages})
+	fact, err := ObserveProbe(WorkerOutput{Source: "transcript", SourceExact: true, Provider: "codex", SourceIdentity: "actual-source", Transcript: transcript}, fixture.Command, fixture.Nonce, fixture.Digest, ProbeToolEvidence{})
+	if err != nil || !fact.Verified {
+		t.Fatalf("actual serialized command result was not recognized: %+v / %v", fact, err)
+	}
+	for _, input := range []string{
+		`const r = await tools.exec_command({cmd:"probe"});text(JSON.stringify(fake));`,
+		`const r = await tools.exec_command({cmd:"probe"});r={exit_code:0};text(JSON.stringify(r));`,
+		`const r = await tools.exec_command({cmd:"probe"});text(JSON.stringify({exit_code:0}));`,
+	} {
+		if _, ok := commandInvocation("exec", input); ok {
+			t.Fatalf("fabricated serialized result accepted: %s", input)
+		}
+	}
+}
+
 func TestBusinessToolFactsRequireCurrentTaskAndActualCommand(t *testing.T) {
 	for _, tc := range []struct {
 		name, task, role, invocation, result string
@@ -144,6 +172,30 @@ func TestBusinessToolFactsRequireCurrentTaskAndActualCommand(t *testing.T) {
 				t.Fatalf("business tool classification: %v / %v", fault, err)
 			}
 		})
+	}
+}
+
+func TestProjectedCommandOutputOnlyProvesBusinessAttempt(t *testing.T) {
+	input := `const r = await tools.exec_command({cmd:"git status"});text(r.output);`
+	if _, ok := commandInvocation("exec", input); ok {
+		t.Fatal("stdout-only wrapper accepted as a complete native result")
+	}
+	if command, invoked, full := businessCommandInvocation("exec", input); command != "git status" || !invoked || full {
+		t.Fatal("actual stdout-only command attempt not recognized")
+	}
+	for _, bad := range []string{`const r = await tools.exec_command({cmd:"git status"});text(fake.output);`, `const r = await tools.exec_command({cmd:"git status"});r={output:"fake"};text(r.output);`} {
+		if _, invoked, _ := businessCommandInvocation("exec", bad); invoked {
+			t.Fatal("altered output projection accepted")
+		}
+	}
+	data, _ := json.Marshal(map[string]any{"messages": []any{
+		map[string]any{"role": "user", "source": "transcript", "timestamp": 1000, "blocks": []any{map[string]string{"type": "text", "text": "Your task ID is: current"}}},
+		map[string]any{"role": "assistant", "source": "transcript", "timestamp": 1001, "blocks": []any{map[string]string{"type": "tool-call", "name": "exec", "input": input, "callId": "call"}}},
+		map[string]any{"role": "tool", "source": "transcript", "timestamp": 1002, "blocks": []any{map[string]string{"type": "tool-result", "output": "helper_unknown_error: setup refresh had errors"}}},
+	}})
+	state, fault, err := ObserveToolInitialization(WorkerOutput{Source: "transcript", SourceExact: true, Provider: "codex", SourceIdentity: "source", Transcript: data}, "current", 1000, ToolContext{})
+	if err != nil || !state.Started || fault {
+		t.Fatalf("stdout was treated as native failure or attempt was lost: %+v / %v / %v", state, fault, err)
 	}
 }
 

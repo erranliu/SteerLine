@@ -18,27 +18,32 @@ import (
 
 const ProjectExecutionProfileID = "project-default"
 
+// PublisherExecutionProfile explicitly delegates publication ownership to the
+// selected profile. Executions always freeze a resolved worker/host_service value.
+const PublisherExecutionProfile = "execution_profile"
+
 // ExecutionProfile is one complete, named execution route for a native task.
 // Repository authority, PR provider, and task DAG stay project-wide.
 type ExecutionProfile struct {
-	ExecutionRequirements  executionapi.ExecutionRequirements   `json:"-"`
-	RequirementsEvaluation *executionapi.RequirementsEvaluation `json:"-"`
-	PublicationPolicy      executionapi.PublicationPolicy       `json:"-"`
-	Publication            contracts.PublicationSettings        `json:"-"`
-	ExecutionPolicy        executionapi.ExecutionPolicy         `json:"-"`
-	AcceptedConfigVersion  string                               `json:"-"`
-	PolicySource           string                               `json:"-"`
-	ID                     string                               `json:"id"`
-	Name                   string                               `json:"name"`
-	Host                   string                               `json:"host"`
-	Agent                  string                               `json:"agent"`
-	Model                  string                               `json:"model,omitempty"`
-	ReasoningEffort        string                               `json:"reasoning_effort,omitempty"`
-	Sandbox                string                               `json:"-"`
-	WindowsSandbox         string                               `json:"-"`
-	CodexProfile           string                               `json:"profile,omitempty"`
-	Codex                  Command                              `json:"codex"`
-	Orca                   OrcaConfig                           `json:"orca,omitempty"`
+	ConfiguredPublicationPolicy *executionapi.PublicationPolicy      `json:"publication_policy,omitempty"`
+	ExecutionRequirements       executionapi.ExecutionRequirements   `json:"-"`
+	RequirementsEvaluation      *executionapi.RequirementsEvaluation `json:"-"`
+	PublicationPolicy           executionapi.PublicationPolicy       `json:"-"`
+	Publication                 contracts.PublicationSettings        `json:"-"`
+	ExecutionPolicy             executionapi.ExecutionPolicy         `json:"-"`
+	AcceptedConfigVersion       string                               `json:"-"`
+	PolicySource                string                               `json:"-"`
+	ID                          string                               `json:"id"`
+	Name                        string                               `json:"name"`
+	Host                        string                               `json:"host"`
+	Agent                       string                               `json:"agent"`
+	Model                       string                               `json:"model,omitempty"`
+	ReasoningEffort             string                               `json:"reasoning_effort,omitempty"`
+	Sandbox                     string                               `json:"-"`
+	WindowsSandbox              string                               `json:"-"`
+	CodexProfile                string                               `json:"profile,omitempty"`
+	Codex                       Command                              `json:"codex"`
+	Orca                        OrcaConfig                           `json:"orca,omitempty"`
 }
 
 // FixedExecutionProfile is stored with a WorkflowRun.
@@ -78,6 +83,7 @@ func verifyFixedExecutionProfile(p FixedExecutionProfile) bool {
 func (c Config) ApplyFixedExecutionProfile(p FixedExecutionProfile) Config {
 	c.ExecutionRequirements = p.ExecutionRequirements.Clone()
 	c.requirementsEvaluation = p.RequirementsEvaluation
+	c.profilePublication = false
 	c.PublicationPolicy = p.PublicationPolicy
 	c.PR, c.Git, c.Remote, c.publicationRemoteURL, c.Branch = publication.Config(p.Publication.Provider), p.Publication.Git, p.Publication.Remote, p.Publication.RemoteURL, p.Publication.BaseBranch
 	c.Host, c.Agent, c.Model, c.ReasoningEffort = p.Host, p.Agent, p.Model, p.ReasoningEffort
@@ -90,6 +96,8 @@ func (c Config) ApplyFixedExecutionProfile(p FixedExecutionProfile) Config {
 
 func (p ExecutionProfile) Digest() string {
 	p = p.withWindowsSandboxDefault()
+	// Only the resolved responsibility belongs in the immutable execution digest.
+	p.ConfiguredPublicationPolicy = nil
 	return digestValue(struct {
 		ExecutionProfile
 		Version                    int
@@ -159,6 +167,10 @@ func (p ExecutionProfile) withWindowsSandboxDefault() ExecutionProfile {
 }
 
 func (c Config) bindProjectPolicy(p ExecutionProfile) ExecutionProfile {
+	if p.ConfiguredPublicationPolicy != nil {
+		policy := *p.ConfiguredPublicationPolicy
+		p.ConfiguredPublicationPolicy = &policy
+	}
 	p.Codex.Args = slices.Clone(p.Codex.Args)
 	p.Orca.Args = slices.Clone(p.Orca.Args)
 	if p.Orca.Supervised != nil {
@@ -172,12 +184,31 @@ func (c Config) bindProjectPolicy(p ExecutionProfile) ExecutionProfile {
 		p.RequirementsEvaluation = &e
 	}
 	p.PublicationPolicy = c.PublicationPolicy
-	p.Publication = clonePublicationSettings(c.publicationSettings())
+	if c.publicationUsesProfile() {
+		p.PublicationPolicy = executionapi.PublicationPolicy{}
+		if p.ConfiguredPublicationPolicy != nil {
+			p.PublicationPolicy = *p.ConfiguredPublicationPolicy
+		}
+	}
+	publicationConfig := c
+	publicationConfig.PublicationPolicy = p.PublicationPolicy
+	p.Publication = clonePublicationSettings(publicationConfig.publicationSettings())
 	p.ExecutionPolicy, p.AcceptedConfigVersion, p.PolicySource = c.ExecutionPolicy, c.acceptedConfigVersion(), c.policySource
 	if p.PolicySource == "" {
 		p.PolicySource = "service:explicit-config"
 	}
 	return p.effective()
+}
+
+func (c Config) publicationUsesProfile() bool {
+	return c.profilePublication || c.PublicationPolicy.Publisher == PublisherExecutionProfile
+}
+
+func validateProjectPublicationPolicy(p executionapi.PublicationPolicy) error {
+	if p.Publisher == PublisherExecutionProfile {
+		return nil
+	}
+	return p.Validate()
 }
 func (c Config) acceptedConfigVersion() string {
 	if c.configDigest != "" {
@@ -201,7 +232,12 @@ func (p ExecutionProfile) effective() ExecutionProfile {
 }
 
 func (c Config) projectExecutionProfile() ExecutionProfile {
-	return c.bindProjectPolicy(ExecutionProfile{ID: ProjectExecutionProfileID, Name: "项目默认", Host: c.hostName(), Agent: c.agentName(), Model: c.Model, ReasoningEffort: c.ReasoningEffort, Sandbox: c.Sandbox, WindowsSandbox: c.WindowsSandbox, CodexProfile: c.Profile, Codex: c.Codex, Orca: c.Orca})
+	p := ExecutionProfile{ID: ProjectExecutionProfileID, Name: "项目默认", Host: c.hostName(), Agent: c.agentName(), Model: c.Model, ReasoningEffort: c.ReasoningEffort, Sandbox: c.Sandbox, WindowsSandbox: c.WindowsSandbox, CodexProfile: c.Profile, Codex: c.Codex, Orca: c.Orca}
+	if c.publicationUsesProfile() && c.PublicationPolicy.Publisher != PublisherExecutionProfile {
+		policy := c.PublicationPolicy
+		p.ConfiguredPublicationPolicy = &policy
+	}
+	return c.bindProjectPolicy(p)
 }
 
 func (c Config) AvailableExecutionProfiles() []ExecutionProfile {
@@ -255,6 +291,8 @@ func (c Config) ResolveExecutionProfile(id, expectedDigest string) (Config, Exec
 
 func (c Config) ApplyExecutionProfile(p ExecutionProfile) Config {
 	p = c.bindProjectPolicy(p)
+	c.profilePublication = c.publicationUsesProfile()
+	c.PublicationPolicy = p.PublicationPolicy
 	c.Host, c.Agent, c.Model, c.ReasoningEffort = p.Host, p.Agent, p.Model, p.ReasoningEffort
 	c.Sandbox, c.Profile, c.Codex, c.Orca = p.Sandbox, p.CodexProfile, p.Codex, p.Orca
 	c.WindowsSandbox = p.WindowsSandbox
@@ -266,7 +304,7 @@ func validateExecutionProfiles(c Config) error {
 	if err := c.ExecutionRequirements.Validate(); err != nil {
 		return err
 	}
-	if err := c.PublicationPolicy.Validate(); err != nil {
+	if err := validateProjectPublicationPolicy(c.PublicationPolicy); err != nil {
 		return err
 	}
 	if err := publication.ValidateNonSecret(c.PR, c.Git); err != nil {
@@ -281,6 +319,16 @@ func validateExecutionProfiles(c Config) error {
 	}
 	pattern := regexp.MustCompile(`^[a-z][a-z0-9-]{0,63}$`)
 	for _, p := range c.ExecutionProfiles {
+		if c.publicationUsesProfile() {
+			if p.ConfiguredPublicationPolicy == nil {
+				return fmt.Errorf("execution profile %s requires publication_policy when the project publisher is execution_profile", p.ID)
+			}
+		}
+		if p.ConfiguredPublicationPolicy != nil {
+			if err := p.ConfiguredPublicationPolicy.Validate(); err != nil {
+				return fmt.Errorf("execution profile %s: %w", p.ID, err)
+			}
+		}
 		if !pattern.MatchString(p.ID) || ids[p.ID] || strings.TrimSpace(p.Name) == "" {
 			return fmt.Errorf("execution profile ID or name is invalid: %q", p.ID)
 		}

@@ -8,7 +8,7 @@
 2. 在 execution/publication.go 定义纯值，publication 做能力匹配；contracts 记录引用底层值，中心接通 publisher，保持 contracts → execution、不引入反向导入或发布 I/O。支持矩阵包含当前远程 worker，不把缺少双机认证误写为代码不可启动。
 3. prompt 从固定 publisher 生成责任；平台 preamble 单独构造。宿主模式接回原 marker 受理和发布意图，worker 模式仅收集候选并经相同 provider 核验。
 4. 领取/恢复接通 publisher/provider/remote/工具/引用冻结、完整摘要与版本拒绝；冻结前拒绝并脱敏秘密 URL/参数，按原执行构造 provider。与 #59 串行扩展同一个 contracts 快照，不预填未实施字段。现有 query 读端口和 ProjectView 投影展示非秘密责任/目标。
-5. 更新 examples/配置说明，删除旧布尔与隐式选择。与 #59 串行集成共享文件，保留 TaskDelivery 和当前恢复门槛。
+5. 更新 examples/配置说明，删除旧布尔与隐式选择。支持项目显式 execution_profile 委派和全局方案的明确 publication_policy；解析后构造发布描述并冻结到同一 v4 执行记录，选择字段不进入执行快照。与 #59 串行集成共享文件，保留 TaskDelivery 和当前恢复门槛。
 
 ## 验证
 
@@ -26,3 +26,7 @@ PP1 用最小 publisher/profile/provider 表驱动检查；PP2 复用提示、ma
 ## 交付
 
 PR 附支持矩阵、固定请求与两条生产路径，说明两类项目策略的串行集成结果。向 #61 交接 publisher 能力与快照，不交付另一种发布后端或自动选择策略。
+
+## 同项目混合执行的最小验证
+
+定向运行 `TestProfilePublicationMixedRoutesAndFrozenResponsibility`、`TestProfilePublicationRequiresExplicitProjectAndProfilePolicies`、`TestFiveGlobalLunaProfilesLoadAndFreeze`，加既有宿主发布/重启冻结测试。安装后核对本机与 Orca 全部方案可选择，102 原 PR 与冻结发布责任保持。无需重新派发真实任务或跑全量测试。

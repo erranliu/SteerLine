@@ -3,6 +3,7 @@ package orcaworker
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -10,6 +11,10 @@ import (
 
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
+
+// ErrAgentStarting is a live original terminal whose agent detection is pending.
+// It never authorizes a replacement terminal or a new launch.
+var ErrAgentStarting = errors.New("fixed Orca agent is still initializing")
 
 // Orca may rename an agent terminal after it starts. The creation receipt is
 // the immutable link between the launch intent and the live terminal.
@@ -154,7 +159,13 @@ func BindAgent(ctx context.Context, call MetaCall, worktree Worktree, handle, ag
 	if err := ValidateWorkspaceTerminal(term, worktree.Path, strings.TrimPrefix(worktree.Branch, "refs/heads/")); err != nil {
 		return executionapi.ProcessIdentity{}, err
 	}
-	if term.WorktreeID != worktree.ID || term.AgentIdentity != agent {
+	if term.WorktreeID != worktree.ID {
+		return executionapi.ProcessIdentity{}, &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "Orca started a different worktree or agent"}
+	}
+	if term.AgentIdentity == "" {
+		return executionapi.ProcessIdentity{}, ErrAgentStarting
+	}
+	if term.AgentIdentity != agent {
 		return executionapi.ProcessIdentity{}, &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "Orca started a different worktree or agent"}
 	}
 	identity := TerminalProcess(term, executable)

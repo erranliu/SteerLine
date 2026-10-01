@@ -182,6 +182,9 @@ func (s *Service) advanceOrcaPreparation(ctx context.Context, run *Run) error {
 	prepareCtx, cancel := context.WithTimeout(ctx, min(remaining, positiveDuration(fixed.config.CommandTimeout, 10*time.Second)))
 	defer cancel()
 	if err = s.prepareNativeOrcaWorker(prepareCtx, run); err != nil {
+		if errors.Is(err, orcaworker.ErrAgentStarting) {
+			return nil // Reobserve the same launch within its persisted deadline.
+		}
 		if ctx.Err() != nil {
 			return nil
 		}

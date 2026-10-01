@@ -21,6 +21,12 @@
 }
 ```
 
+CLI 手动启动同样必须指定方案 ID，并通过相同配置摘要和服务回执校验：
+
+```powershell
+steerline control -config <project.json> -action start_task -task-id <id> -execution-profile <profile-id> -wait
+```
+
 按 `s` 打开全局方案列表，`↑/↓` 选择，`Enter` 确认，`Esc` 取消。服务在领取前核对方案 ID、摘要、Task 资格与目标能力；同一 Task 领取时冻结方案。编辑或删除全局方案不会重定向已开始的任务。控制台和服务加载的项目或全局文件内容不同时，控制台阻止新启动和自动派发；修改配置后重启服务并重新打开控制台。
 
 Orca 本机 Codex 方案使用 `host=orca`、`agent=codex`，项目要求 workspace 写入、Git 元数据写入与网络 allow，必须显式填写 `codex.windows_sandbox`（`elevated` 或 `unelevated`）、原生 `codex.executable`、`orca.executable`、PowerShell `orca.shell` 和正的 `orca.wait_timeout`。示例选择 `unelevated`；选择方式由配置决定，故障后不会自动切换。model 和 reasoning_effort 可分别省略；省略时保留启动器默认解析语义。
@@ -97,7 +103,7 @@ Windows 本地受限方案将 `codex.windows_sandbox` 固定为 `elevated`（省
 
 ## 项目发布责任
 
-项目必须配置 `publication_policy.publisher`，只接受 `worker` 或 `host_service`，统一覆盖 commit、push、建 PR。切换 Profile 不改变 publisher；不支持的组合在领取前拒绝，并在方案列表显示原因。
+项目必须配置 `publication_policy.publisher`，接受 `worker`、`host_service` 或 `execution_profile`，统一覆盖 commit、push、建 PR。固定 worker/host_service 项目始终使用项目责任；execution_profile 项目使用所选全局方案明确填写的责任。不支持的组合在领取前拒绝，并在方案列表显示原因。
 
 | 执行路径 | worker | host_service |
 | --- | --- | --- |
@@ -107,6 +113,8 @@ Windows 本地受限方案将 `codex.windows_sandbox` 固定为 `elevated`（省
 | 远程 Orca + 可查询 provider | 保留原 worker 发布能力；权限缺证仍拒绝领取 | 拒绝 |
 
 例如 Orca 项目使用 `"publication_policy":{"publisher":"worker"}`；local GitHub 项目使用 `"publication_policy":{"publisher":"host_service"}`，并配置原生 `pr.query` 命令。仅有 query 不增加 create 能力。示例项目使用 worker/Gitea，需选择匹配的 Orca 方案。
+
+同一 GitHub 项目要同时提供本机 Codex 与 Orca，可填写 `"publication_policy":{"publisher":"execution_profile"}`，并配置原生 GitHub command provider。全局 local 方案填写 `"publication_policy":{"publisher":"host_service"}`，Orca 方案填写 `"publication_policy":{"publisher":"worker"}`。每个方案必须明确填写，不能嵌套 execution_profile 或按能力自动选责任。修改配置后重启服务和控制台；已有执行沿用原冻结值。
 
 host_service 仍仅受理原 Execution 当前已结束轮次的显式 final marker，先保存固定候选/发布意图，再 commit、push、create；未知结果仅按原请求只读对账。worker 的成功、URL 和 worker_done 均不代替真实 merged 证据，两条路径共用原唯一 TaskDelivery 事务。
 
