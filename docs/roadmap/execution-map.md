@@ -1,12 +1,13 @@
 # 执行依赖与交接
 
-本图对应[主 roadmap](roadmap.md)中的 25 项活动规划。每项执行以独立 Spec/Plan 为准，运行时资格以中心 DAG 为权威。
+本图对应[主 roadmap](roadmap.md)中的 23 项活动规划。每项执行以独立 Spec/Plan 为准，运行时资格以中心 DAG 为权威。
 
 ## 固定前置
 
+#36 的持续 worker 功能和 #61 的执行需求/注册基础是后继可复用能力，不再作为活动实施任务；原验收范围分别以[持续 worker Spec](../spec/worker-flow.spec.md)和[执行隔离验收](../validation/execution-isolation-08-resolution/README.md)为准。图中基础节点只表示后继依赖，未完成的原生验收限制不据此解除。
+
 | 任务 ID | 任务名称 | 交付范围 | 硬前置 | 执行规格 |
 | --- | --- | --- | --- | --- |
-| 36 | 单 worker 持续执行与统一待决策 | 原会话持续交互、统一待决策、移除中心项目验证、真实 PR 交付 | 无 | [Spec](../spec/worker-flow.spec.md) · [Plan](../spec/worker-flow.plan.md) |
 | 37 | 多候选会话与唯一PR交付 | 候选创建与完整运行、反馈隔离、唯一交付及落选事实 | `#36` | [Spec](../spec/candidate-workers.spec.md) · [Plan](../spec/candidate-workers.plan.md) |
 | 38 | 候选观察界面 | 候选列表/选择和原会话反馈的 TUI 增量 | `#37` | [Spec](../spec/candidate-console.spec.md) · [Plan](../spec/candidate-console.plan.md) |
 | 39 | 多候选本机与远端真机验收 | 多候选本机/远端竞争和混合后端增量验收 | `#38` | [Spec](../spec/candidate-native-acceptance.spec.md) · [Plan](../spec/candidate-native-acceptance.plan.md) |
@@ -69,41 +70,37 @@ flowchart LR
 
 不同任务人工并行和自动派发策略沿既有能力；共享工作区、平台宿主、构建或 SQLite 接线时串行协调。新任务只有固定前置整体交付后可领取，没有接口提前完成的放行状态。
 
-## 执行配置隔离
+## 主包与执行实现解耦
 
-目标：`EXECUTION-ISOLATION`。各任务的硬前置如下；准备性阅读与低层实验不构成提前领取资格。承接主干已完成的 worker 事实、协调器、显式提交及只读 Runtime，迁移所有者不重建这些机制。
+目标：`CORE-IMPLEMENTATION-DECOUPLING`。详情见[目标规划](core-implementation-decoupling.md)，执行要求见[共同约束](../spec/core-decoupling-constraints.md)。既有 #61 的纯需求/注册基础可直接消费；不等待 remote 权限证据补齐，也不解除其现行拒绝。
 
 | 任务 ID | 任务名称 | 交付范围 | 硬前置 | 执行规格 |
 | --- | --- | --- | --- | --- |
-| 55 | 工作区与 Git 资源迁移 | Git/worktree 操作与资源解析分离 | #54 | [Spec](../spec/execution-isolation-02-workspace.spec.md) · [Plan](../spec/execution-isolation-02-workspace.plan.md) |
-| 56 | 发布与 PR 实现迁移 | 发布操作及 provider 与中心事务分离 | #54 | [Spec](../spec/execution-isolation-03-publication.spec.md) · [Plan](../spec/execution-isolation-03-publication.plan.md) |
-| 57 | Codex 执行适配器迁移 | Codex 操作、命令与恢复证据归适配器 | #55、#56 | [Spec](../spec/execution-isolation-04-codex.spec.md) · [Plan](../spec/execution-isolation-04-codex.plan.md) |
-| 58 | Orca 执行适配器迁移 | Orca 资源、派发、观察与对账归适配器 | #57 | [Spec](../spec/execution-isolation-05-orca.spec.md) · [Plan](../spec/execution-isolation-05-orca.plan.md) |
-| 59 | 项目执行权限策略 | 项目权限、参数映射、冻结与必要原生证据 | #58 | [Spec](../spec/execution-isolation-06-policy.spec.md) · [Plan](../spec/execution-isolation-06-policy.plan.md) |
-| 60 | 项目发布责任契约 | 显式 publisher、支持矩阵及执行冻结 | #58 | [Spec](../spec/execution-isolation-07-publish-policy.spec.md) · [Plan](../spec/execution-isolation-07-publish-policy.plan.md) |
-| 61 | 执行需求与配置注册收口 | 需求匹配、实现注册与配置隔离收口 | #59、#60 | [Spec](../spec/execution-isolation-08-resolution.spec.md) · [Plan](../spec/execution-isolation-08-resolution.plan.md) |
+| 62 | 通用执行事件与问题边界 | 通用事件、问题路由与回答回执；原生解码不进入业务消费者 | #61 | [Spec](../spec/core-decoupling-01-events.spec.md) · [Plan](../spec/core-decoupling-01-events.plan.md) |
+| 63 | 执行配置与原生绑定所有权 | 原生配置/绑定严格 codec、固定版本与两阶段封套 | #62 | [Spec](../spec/core-decoupling-02-bindings.spec.md) · [Plan](../spec/core-decoupling-02-bindings.plan.md) |
+| 64 | 通用执行生命周期与副作用接线 | 统一分步 intent/receipt 与观察/对账；移除 Service 平台回调 | #63 | [Spec](../spec/core-decoupling-03-lifecycle.spec.md) · [Plan](../spec/core-decoupling-03-lifecycle.plan.md) |
+| 65 | 会话采集与宿主交互实现隔离 | 历史来源/mapper/宿主解释归实现，采集预算和准备授权留中心 | #64 | [Spec](../spec/core-decoupling-04-conversation.spec.md) · [Plan](../spec/core-decoupling-04-conversation.plan.md) |
+| 66 | 内置实现组装与主包依赖反转 | 内置目录与具体构造外移，产品入口显式注入；主包生产清零 | #65 | [Spec](../spec/core-decoupling-05-composition.spec.md) · [Plan](../spec/core-decoupling-05-composition.plan.md) |
+| 67 | 主包隔离守卫与测试归位 | 主包测试清零、结构守卫与外层第三实现闭环 | #66 | [Spec](../spec/core-decoupling-06-boundary.spec.md) · [Plan](../spec/core-decoupling-06-boundary.plan.md) |
 
 ```mermaid
 flowchart LR
-    E54["#54 公共契约"] --> E55["#55 工作区"]
-    E54 --> E56["#56 发布实现"]
-    E55 --> E57["#57 Codex"]
-    E56 --> E57
-    E57 --> E58["#58 Orca"]
-    E58 --> E59["#59 权限"]
-    E58 --> E60["#60 发布责任"]
-    E59 --> E61["#61 需求与注册"]
-    E60 --> E61
+    Foundation["既有 #61 基础"] --> C62["#62 事件与问题"]
+    C62 --> C63["#63 配置与绑定"]
+    C63 --> C64["#64 生命周期与副作用"]
+    C64 --> C65["#65 采集与宿主"]
+    C65 --> C66["#66 外层组装"]
+    C66 --> C67["#67 测试与守卫"]
 ```
 
-| 所有者与组合 | 接口交接及开工条件 | 共享冲突与集成规则 |
+| 交接 | 接口前置与开工条件 | 共享修改及集成要求 |
 | --- | --- | --- |
-| #54 → #55/#56 | 公共工作区、操作、事件和请求契约；#54 合入后可完整并行 | 公共类型集中修改；准备、Git 和发布中心接线由集成人串行处理 |
-| #55/#56 → #57 | 规范资源、PR/provider 与发布请求，前置整体合入 | #57 不复制资源解析或发布事务 |
-| #57 → #58 | 迁移现有有/无 model 受管命令、安全 args 和固定 argv；#58 领取等待 #57 | #54 后可整理原平台/准备 fixture；#58 保留中心 WorkerEnvironment 与原工具证据边界 |
-| #58 → #59/#60 | 本地 Codex/native/remote 原契约；#58 合入后可并行策略行为开发 | 纯策略归 execution，contracts 引用它并扩记录；共享快照/摘要/配置/UI 串行集成，保持单向依赖 |
-| #59/#60 → #61 | 实际权限和 publisher 的支持矩阵、冻结与展示；两前置均合入 | #61 只做需求/注册和最终调用检查，不补欠缺上游行为 |
+| #62 → #63 | 通用事件/问题、可信路由封套及唯一原生 codec 已交付 | WorkerEvent/Decision/contracts 形状串行，#63 复用路由 codec，不造第二份 |
+| #63 → #64 | 配置/绑定封套、两阶段冻结和 codec 已真实接通 | Config/Profile/记录/schema/摘要先整体交付；尚存 lifecycle 的唯一 codec 临时视图在 #64 删除，不回填旧持久字段 |
+| #64 → #65 | 单步 intent/receipt 和只读对账端口已交付 | actor/workerMessages/消费屏障唯一，宿主与采集不取得业务写权 |
+| #65 → #66 | 通用采集、宿主端口与 Service 字段已交付 | 客户端/mapper/native 状态归实现，外层只组合，不搬走中心事务 |
+| #66 → #67 | 所有产品入口显式注入，主包生产清零 | #67 迁剩余平台测试和加守卫，不承担生产消费者搬迁 |
 
-worker 环境就绪原范围已交付，#54 已实施的契约保持固定；#57/#58 在后续迁移中承接其平台事实与所有者，#59 改为项目策略来源。准备和宿主恢复不反向依赖未完成 #59；保留原 nonce/deadline、轮次用途、工具/收据/结算和可信中心动作，新策略冻结接线由 #59 验证。原硬前置与并行组不变。
+六任务按硬前置整体交付后开工，一项一个实现 PR。可以提前只读盘点、审阅接口和准备 fixture；不能把接口草案或包内实验当作提前领取资格。所有阶段共享 execution/contracts、Service 和恢复入口，不按文件不同允许并行实施。旧到新测试路径映射随职责迁移交付，quick 不得因名称变化漏跑或重复矩阵。
 
-已交付 #54 的底层执行类型由 contracts 引用，01 文档不回写；它仅作为 #55/#56 必要前置保留。#59/#60/#61 的纯策略在 execution、业务冻结记录在 contracts，防止反向导入。远程协议已独立并接通，由 #58 承接原身份/回执/取消边界，认证状态与策略落实分别表达。查询/SQL 不重新拆包，剩余任务依赖不变。
+与多候选/本机 API/版本隔离工作同时进行时，涉及 Config、ExecutionRecord、Service、恢复、事件/问题、CLI 或 query 构造入口的修改需串行集成；既有任务的固定 Spec 不被本表自动修改。API 消费通用业务端口，新实现适配和组装不进入产品 UI。中心 DAG 不因本次规划文件变化自动建任务或改边。
