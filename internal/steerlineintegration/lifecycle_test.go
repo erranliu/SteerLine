@@ -527,11 +527,28 @@ func submitIntegrationAnswer(t *testing.T, ctx context.Context, config steerline
 	if run.Decision.Request.QuestionRoute != nil {
 		option = ""
 	}
-	_, _, err := steerline.SubmitDecisionAnswer(ctx, config, steerline.AnswerOptions{
+	answer := steerline.AnswerOptions{
 		RunID: run.RunID, DecisionID: run.Decision.ID, Option: option, Note: "Continue the original work.",
 		By: "operator", ExpectedVersion: run.Decision.Version,
-	})
-	require(t, err)
+	}
+	deadline := time.NewTimer(30 * time.Second)
+	defer deadline.Stop()
+	for {
+		_, _, err := steerline.SubmitDecisionAnswer(ctx, config, answer)
+		if err == nil {
+			return
+		}
+		if !strings.Contains(err.Error(), "stale_instance: SQLite projection does not match the ready service instance") {
+			require(t, err)
+		}
+		select {
+		case <-ctx.Done():
+			t.Fatalf("public answer command kept seeing a stale service projection: %v", ctx.Err())
+		case <-deadline.C:
+			t.Fatalf("public answer command did not observe a ready service projection: %v", err)
+		case <-time.After(100 * time.Millisecond):
+		}
+	}
 }
 
 func assertQueriedTaskPhase(t *testing.T, ctx context.Context, config steerline.Config, taskID, phase string) {
