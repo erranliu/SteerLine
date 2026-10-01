@@ -13,6 +13,10 @@ import (
 func projectionFixture(t *testing.T) (contracts.DomainSnapshot, Metadata) {
 	t.Helper()
 	at := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+	implementationData, err := executionapi.NewImplementationDataEnvelope(executionapi.ImplementationDataEnvelope{CodecVersion: 1, Purpose: executionapi.ImplementationConfigPurpose, ImplementationKey: "codex.worker-profile", ProjectID: "project", ProfileID: "default", AcceptedConfigVersion: "accepted-v2"}, []byte(`{"args":["original"]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
 	request, err := json.Marshal(contracts.DecisionRequest{FormatVersion: contracts.DecisionRequestFormatVersion, Question: "Continue?", AllowFreeText: true})
 	if err != nil {
 		t.Fatal(err)
@@ -25,7 +29,7 @@ func projectionFixture(t *testing.T) (contracts.DomainSnapshot, Metadata) {
 		ProjectIdentity: "project",
 		Tasks:           []contracts.TaskRecord{{TaskID: "task", Title: "Task", Status: "in_progress"}},
 		WorkflowRuns: []contracts.WorkflowRunRecord{{WorkflowRunID: "run", TaskID: "task", WorkflowVersion: workerflow.Version, SelectedResult: "execution", Phase: "waiting_decision", ControlRevision: 42,
-			ExecutionProfile: &contracts.FixedExecutionProfile{Version: 4, Codex: contracts.Command{Args: []string{"original"}}}}},
+			ExecutionProfile: &contracts.FixedExecutionProfile{Version: 5, ImplementationData: []executionapi.ImplementationDataEnvelope{implementationData}}}},
 		Executions: []contracts.ExecutionRecord{{ExecutionID: "execution", WorkflowRunID: "run", CurrentStep: "worker", CurrentAttemptID: "attempt", Backend: string(executionapi.BackendLocal), Protocol: string(executionapi.ProtocolLocalCodexAppServer), Agent: "codex", Status: "active", DecisionID: "decision",
 			Process: &executionapi.ProcessIdentity{Kind: "codex", PID: 12}, WorkspaceIntent: &executionapi.WorkspaceIntent{Path: "/work/tree", Branch: "codex/task"}, TurnStartedAt: &at}},
 		Attempts:  []contracts.StepAttemptRecord{{AttemptID: "attempt", ExecutionID: "execution", StepID: "worker", AttemptNumber: 1}},
@@ -58,10 +62,10 @@ func TestBuildOwnsRecordsAndMetadataAcrossRefreshes(t *testing.T) {
 	first.Runs[0].WorkspaceIntent.Path = "view-only"
 	first.Runs[0].Decision.Request.Question = "view-only question"
 	first.Executions[0].WorkspaceIntent.Path = "row-only"
-	first.WorkflowRuns[0].ExecutionProfile.Codex.Args[0] = "changed"
+	first.WorkflowRuns[0].ExecutionProfile.ImplementationData[0].Payload[0] = '['
 	first.Service.Capabilities[0] = "changed"
 	first.Control.Operation.Payload[0] = 'x'
-	if snapshot.Executions[0].Process.PID != 12 || snapshot.Executions[0].WorkspaceIntent.Path != "/work/tree" || snapshot.WorkflowRuns[0].ExecutionProfile.Codex.Args[0] != "original" || metadata.Checkpoint.Service.Capabilities[0] != "answer_decision" || metadata.Checkpoint.Operation.Payload[0] != '{' {
+	if snapshot.Executions[0].Process.PID != 12 || snapshot.Executions[0].WorkspaceIntent.Path != "/work/tree" || snapshot.WorkflowRuns[0].ExecutionProfile.ImplementationData[0].Payload[0] != '{' || metadata.Checkpoint.Service.Capabilities[0] != "answer_decision" || metadata.Checkpoint.Operation.Payload[0] != '{' {
 		t.Fatal("view mutation changed snapshot or metadata")
 	}
 	if second.Runs[0].Process.PID != 12 || second.Runs[0].WorkspaceIntent.Path != "/work/tree" || second.Runs[0].Decision.Request.Question != "Continue?" {

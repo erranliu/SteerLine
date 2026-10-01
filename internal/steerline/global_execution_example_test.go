@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -42,7 +43,8 @@ func TestFiveGlobalLunaProfilesLoadAndFreeze(t *testing.T) {
 	}
 	for i, expected := range want {
 		profile := profiles[i]
-		if profile.ID != expected.id || profile.Host != expected.host || profile.Agent != "codex" || profile.Model != "gpt-6-luna" || profile.ReasoningEffort != expected.effort || profile.Sandbox != "workspace-write" || !verifyFixedExecutionProfile(profile.Freeze()) {
+		codex := codexProfileFromInputs(profile.ImplementationConfigs)
+		if profile.ID != expected.id || profile.Host != expected.host || profile.Agent != "codex" || codex.Model != "gpt-6-luna" || codex.ReasoningEffort != expected.effort || !slices.Contains(profile.ImplementationDisplay, "权限：workspace-write") || !verifyFixedExecutionProfile(profile.Freeze()) {
 			t.Fatalf("profile %d = %+v", i, profile)
 		}
 		if profile.Host == "orca" {

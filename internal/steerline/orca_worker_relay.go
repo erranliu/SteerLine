@@ -48,11 +48,11 @@ func removeNativeOrcaRelayRequest(worktree, runID, turnID string) {
 	orcaworker.RemoveRelayRequest(worktree, runID, turnID)
 }
 
-func readNativeOrcaDoneRequest(path, worktree string, run *Run, turn *OrcaNativeTurn) (*nativeOrcaDoneRequest, error) {
+func readNativeOrcaDoneRequest(path, worktree string, run *Run, turn *implementationTurnView) (*nativeOrcaDoneRequest, error) {
 	return orcaworker.ReadDoneRequest(path, worktree, run.RunID, turn.TurnID, turn.TaskID, turn.DispatchID)
 }
 
-func (s *Service) relayNativeOrcaDone(ctx context.Context, run *Run, execution *ExecutionRecord, turn *OrcaNativeTurn) error {
+func (s *Service) relayNativeOrcaDone(ctx context.Context, run *Run, execution *ExecutionRecord, turn *implementationTurnView) error {
 	path, err := nativeOrcaRelayPath(execution.Workspace.Worktree, run.RunID, turn.TurnID)
 	if err != nil {
 		return err

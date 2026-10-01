@@ -7,7 +7,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	remote "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker"
+	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
 
 func TestResolutionAuditProfilesDoNotAliasProjectValues(t *testing.T) {
@@ -23,7 +26,8 @@ func TestResolutionAuditProfilesDoNotAliasProjectValues(t *testing.T) {
 }
 
 func TestResolutionAuditRegistrationRejectsBaseTargetDrift(t *testing.T) {
-	c := Config{Host: "orca_supervised", Agent: "codex", Orca: OrcaConfig{Supervised: &SupervisedOrcaConfig{ConnectionID: "peer", EnvironmentID: "original"}}}
+	c := Config{Host: "orca_supervised", Agent: "codex"}
+	setTestImplementationProfiles(t, &c, codexworker.ProfileConfig{Executable: "codex", Model: "model", ReasoningEffort: "high"}, &orcaworker.ProfileConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "1m"}, &remote.ProfileConfig{ConnectionID: "peer", EnvironmentID: "original", RepositorySelector: "repo", CoordinatorTerminal: "terminal", PollInterval: "1s", CapabilityReportVersion: 1})
 	target := targetFor(c)
 	run := &Run{Host: c.Host, Agent: c.Agent, Backend: "orca", Protocol: string(executionapi.ProtocolOrcaSupervised), Target: target}
 	record := &ExecutionRecord{Agent: c.Agent, Backend: run.Backend, Protocol: run.Protocol, Target: target}
@@ -117,7 +121,7 @@ func TestResolutionAuditWorkerCommitCannotReplaceSnapshot(t *testing.T) {
 	before, err := s.domainStore.Query(context.Background(), s.Config.Identity())
 	require(t, err)
 	workflow := s.workflowRecord(run)
-	workflow.ExecutionProfile.Model = "replacement"
+	workflow.ExecutionProfile.ImplementationData[0].Payload[0] = '['
 	if err = s.commitWorker(run); err == nil {
 		t.Fatal("worker commit replaced original snapshot")
 	}

@@ -7,6 +7,9 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
+	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
 
 // Explicit opt-in: a registered isolated test repository and a pinned smoke
@@ -25,7 +28,8 @@ func TestWorkerEnvironmentNativeReadinessLive(t *testing.T) {
 	}
 	t.Setenv("STEERLINE_HOME", stateRoot)
 	ctx := context.Background()
-	c := Config{TaskAuthority: "native", WorkflowProtocol: WorkerFlowVersion, Repository: repo, Remote: "origin", Branch: "main", RunDir: filepath.Join(stateRoot, "state"), WorktreeRoot: filepath.Join(stateRoot, "worktrees"), Host: "orca", Agent: "codex", Sandbox: "workspace-write", WindowsSandbox: "unelevated", Claimant: "readiness-acceptance", ExecutableTypes: []string{"task"}, Git: Command{Executable: "git"}, Codex: Command{Executable: codex}, Orca: OrcaConfig{Executable: "orca", Shell: "powershell.exe", WaitTimeout: "4m"}, CommandTimeout: "10s", TaskPoll: "10s", PRPoll: "30s", Heartbeat: "5s", ShutdownGrace: "10s"}
+	c := Config{TaskAuthority: "native", WorkflowProtocol: WorkerFlowVersion, Repository: repo, Remote: "origin", Branch: "main", RunDir: filepath.Join(stateRoot, "state"), WorktreeRoot: filepath.Join(stateRoot, "worktrees"), Host: "orca", Agent: "codex", Claimant: "readiness-acceptance", ExecutableTypes: []string{"task"}, Git: Command{Executable: "git"}, CommandTimeout: "10s", TaskPoll: "10s", PRPoll: "30s", Heartbeat: "5s", ShutdownGrace: "10s"}
+	setTestImplementationProfiles(t, &c, codexworker.ProfileConfig{Executable: codex, WindowsSandbox: "unelevated"}, &orcaworker.ProfileConfig{Executable: "orca", Shell: "powershell.exe", WaitTimeout: "4m"})
 	key, err := repoStateKey(c)
 	require(t, err)
 	c.RunDir = filepath.Join(SteerlineStateRoot(), key)
@@ -99,22 +103,23 @@ func TestWorkerEnvironmentNativeReadinessLive(t *testing.T) {
 			require(t, s.advanceOrcaPreparation(ctx, run))
 		}
 		e = s.executionRecord(run)
-		if e.OrcaNative != nil && len(e.OrcaNative.Turns) == 2 && e.OrcaNative.Turns[1].Settled {
-			if !e.Environment.Ready || !e.Environment.Preparation.Verified || e.TurnNumber != 1 || e.OrcaNative.Turns[0].Purpose != "readiness" || e.OrcaNative.Turns[1].Purpose != "business" || e.OrcaNative.Turns[0].DispatchID == e.OrcaNative.Turns[1].DispatchID || e.OrcaNative.Turns[1].Outcome != "succeeded" {
+		state := testOrcaState(t, e)
+		if state != nil && len(state.Turns) == 2 && state.Turns[1].Settled {
+			if !e.Environment.Ready || !e.Environment.Preparation.Verified || e.TurnNumber != 1 || state.Turns[0].Purpose != "readiness" || state.Turns[1].Purpose != "business" || state.Turns[0].DispatchID == state.Turns[1].DispatchID || state.Turns[1].Outcome != "succeeded" {
 				t.Fatalf("live session continuity failed: %+v", e)
 			}
 			if e.Process.Terminal != e.Environment.Preparation.Probe.Terminal || e.Process.Incarnation != e.Environment.Preparation.Probe.Incarnation {
 				t.Fatal("business replaced readiness session")
 			}
-			report := map[string]any{"captured_at": now(), "workflow_run_id": run.RunID, "execution_id": e.ExecutionID, "profile": s.workflowRecord(run).ExecutionProfile, "environment": e.Environment, "turns": e.OrcaNative.Turns, "process": e.Process, "state_root": stateRoot, "scope": "real readiness probe and settlement, exactly one business Dispatch, original terminal/incarnation, business command and settlement; no PR delivery"}
+			report := map[string]any{"captured_at": now(), "workflow_run_id": run.RunID, "execution_id": e.ExecutionID, "profile": s.workflowRecord(run).ExecutionProfile, "environment": e.Environment, "turns": state.Turns, "process": e.Process, "state_root": stateRoot, "scope": "real readiness probe and settlement, exactly one business Dispatch, original terminal/incarnation, business command and settlement; no PR delivery"}
 			data, _ := json.MarshalIndent(report, "", "  ")
 			if path := os.Getenv("STEERLINE_READINESS_LIVE_REPORT"); path != "" {
 				require(t, os.WriteFile(path, data, 0600))
 			}
-			t.Logf("real readiness and business settled: %s / %s", e.OrcaNative.Turns[0].DispatchID, e.OrcaNative.Turns[1].DispatchID)
+			t.Logf("real readiness and business settled: %s / %s", state.Turns[0].DispatchID, state.Turns[1].DispatchID)
 			// Exact settled resources were created by this isolated center.
 			require(t, s.closeNativeOrcaTerminal(ctx, run, e, *e.Process, "agent"))
-			require(t, s.closeNativeOrcaTerminal(ctx, run, e, e.OrcaNative.Coordinator, "coordinator"))
+			require(t, s.closeNativeOrcaTerminal(ctx, run, e, state.Coordinator, "coordinator"))
 			return
 		}
 		time.Sleep(time.Second)

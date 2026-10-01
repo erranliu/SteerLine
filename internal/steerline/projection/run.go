@@ -46,9 +46,6 @@ func Run(task contracts.TaskRecord, workflow contracts.WorkflowRunRecord, execut
 		}
 		run.AttemptID, run.DomainAttemptNumber = attempt.AttemptID, attempt.AttemptNumber
 	}
-	if execution.SessionID != "" && (execution.Process == nil || execution.Process.Kind != "orca-native") {
-		run.SessionID = ptr(execution.SessionID)
-	}
 	run = Execution(run, execution)
 	if workflow.PRURL != "" {
 		run.PR.URL = ptr(workflow.PRURL)
@@ -124,9 +121,6 @@ func Execution(run contracts.Run, e contracts.ExecutionRecord) contracts.Run {
 	}
 	if base != "" {
 		run.BaseCommit = ptr(base)
-	}
-	if e.SessionID != "" && (e.Process == nil || e.Process.Kind != "orca-native") {
-		run.SessionID = ptr(e.SessionID)
 	}
 	return run
 }

@@ -4,11 +4,13 @@ import (
 	"encoding/json"
 	"os"
 	"testing"
+
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 )
 
 func writeGlobalExecutionFixture(t *testing.T, profiles []ExecutionProfile, defaultID string) {
 	t.Helper()
-	data, err := json.Marshal(map[string]any{"execution_profiles": profiles, "default_execution_profile": defaultID})
+	data, err := json.Marshal(map[string]any{"version": 2, "execution_profiles": profiles, "default_execution_profile": defaultID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -19,7 +21,7 @@ func writeGlobalExecutionFixture(t *testing.T, profiles []ExecutionProfile, defa
 
 func localGlobalExecutionFixture(t *testing.T) {
 	t.Helper()
-	writeGlobalExecutionFixture(t, []ExecutionProfile{{ID: "local", Name: "Local Codex", Host: "local", Agent: "codex", Sandbox: "workspace-write", Codex: Command{Executable: "codex"}}}, "local")
+	writeGlobalExecutionFixture(t, []ExecutionProfile{testExecutionProfile(t, "local", "Local Codex", "local", "codex", codexworker.ProfileConfig{Executable: "codex"}, nil)}, "local")
 }
 
 func projectConfigJSON(t *testing.T, c Config) []byte {

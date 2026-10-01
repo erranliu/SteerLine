@@ -168,7 +168,11 @@ func verifyRequirementsSnapshot(p FixedExecutionProfile) bool {
 		return p.ExecutionRequirements.Empty()
 	}
 	e := *p.RequirementsEvaluation
-	c := Config{Host: p.Host, Agent: p.Agent, Orca: p.Orca}
+	projectID := ""
+	if len(p.ImplementationData) > 0 {
+		projectID = p.ImplementationData[0].ProjectID
+	}
+	c := Config{Host: p.Host, Agent: p.Agent, selectedProfileID: p.ID, configDigest: p.AcceptedConfigVersion, identity: projectID, ImplementationData: cloneImplementationData(p.ImplementationData), fixedProfileDigest: p.Digest}
 	entry, err := registrationFor(c)
 	if err != nil {
 		return false

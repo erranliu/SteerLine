@@ -26,7 +26,6 @@ type WorkflowRunRecord struct {
 	WorkflowVersion  string                 `json:"workflow_version"`
 	ConfigDigest     string                 `json:"config_digest,omitempty"`
 	ExecutionProfile *FixedExecutionProfile `json:"execution_profile,omitempty"`
-	Runner           StepRunnerSettings     `json:"runner"`
 	Phase            string                 `json:"phase"`
 	Repository       string                 `json:"repository,omitempty"`
 	Branch           string                 `json:"branch,omitempty"`
@@ -43,60 +42,50 @@ type WorkflowRunRecord struct {
 	UpdatedAt        time.Time              `json:"updated_at"`
 }
 
-type StepRunnerSettings struct {
-	Codex           Command `json:"codex"`
-	Sandbox         string  `json:"sandbox"`
-	WindowsSandbox  string  `json:"windows_sandbox,omitempty"`
-	Model           string  `json:"model,omitempty"`
-	ReasoningEffort string  `json:"reasoning_effort,omitempty"`
-	Profile         string  `json:"profile,omitempty"`
-}
-
 type ExecutionRecord struct {
-	CurrentRequirementsError      *string                              `json:"current_requirements_error,omitempty"`
-	CurrentRequirementsEvaluation *executionapi.RequirementsEvaluation `json:"current_requirements_evaluation,omitempty"`
-	PolicyResources               *PolicyResources                     `json:"policy_resources,omitempty"`
-	RecoveryRequired              bool                                 `json:"recovery_required,omitempty"`
-	RecoveryVersion               uint64                               `json:"recovery_version,omitempty"`
-	RecoveryState                 string                               `json:"recovery_state,omitempty"`
-	RecoveryMarkedAt              *time.Time                           `json:"recovery_marked_at,omitempty"`
-	WorkspaceIntent               *executionapi.WorkspaceIntent        `json:"workspace_intent,omitempty"`
-	TurnStartedAt                 *time.Time                           `json:"turn_started_at,omitempty"`
-	TurnEndedAt                   *time.Time                           `json:"turn_ended_at,omitempty"`
-	LastTurnOutcome               string                               `json:"last_turn_outcome,omitempty"`
-	LogPath                       *string                              `json:"log_path,omitempty"`
-	LastEvent                     *string                              `json:"last_event,omitempty"`
-	Summary                       *string                              `json:"summary,omitempty"`
-	Error                         *string                              `json:"error,omitempty"`
-	ManualStop                    *ManualStopConfirmation              `json:"manual_stop,omitempty"`
-	ProjectIdentity               string                               `json:"project_identity"`
-	ExecutionID                   string                               `json:"execution_id"`
-	CurrentAttemptID              string                               `json:"current_attempt_id,omitempty"`
-	OwnerServiceInstanceID        string                               `json:"owner_service_instance_id,omitempty"`
-	WorkflowRunID                 string                               `json:"workflow_run_id"`
-	Agent                         string                               `json:"agent,omitempty"`
-	Backend                       string                               `json:"backend,omitempty"`
-	Protocol                      string                               `json:"protocol,omitempty"`
-	Process                       *executionapi.ProcessIdentity        `json:"process,omitempty"`
-	OrcaNative                    *OrcaNativeExecution                 `json:"orca_native,omitempty"`
-	Environment                   *WorkerEnvironment                   `json:"environment,omitempty"`
-	SessionID                     string                               `json:"session_id,omitempty"`
-	DecisionID                    string                               `json:"decision_id,omitempty"`
-	AppServerEndpoint             string                               `json:"app_server_endpoint,omitempty"`
-	AppServerGeneration           string                               `json:"app_server_generation,omitempty"`
-	PendingCommandID              string                               `json:"pending_command_id,omitempty"`
-	CurrentCommandID              string                               `json:"current_command_id,omitempty"`
-	PendingQuestions              []PendingQuestion                    `json:"pending_questions,omitempty"`
-	PendingTurnID                 string                               `json:"pending_turn_id,omitempty"`
-	CurrentTurnID                 string                               `json:"current_turn_id,omitempty"`
-	TurnNumber                    uint64                               `json:"turn_number,omitempty"`
-	LastStoppedTurnID             string                               `json:"last_stopped_turn_id,omitempty"`
-	Target                        executionapi.ExecutionTarget         `json:"target"`
-	Workspace                     WorkspaceEvidence                    `json:"workspace"`
-	Status                        string                               `json:"status"`
-	CurrentStep                   string                               `json:"current_step,omitempty"`
-	CreatedAt                     time.Time                            `json:"created_at"`
-	UpdatedAt                     time.Time                            `json:"updated_at"`
+	CurrentRequirementsError      *string                                   `json:"current_requirements_error,omitempty"`
+	CurrentRequirementsEvaluation *executionapi.RequirementsEvaluation      `json:"current_requirements_evaluation,omitempty"`
+	ImplementationData            []executionapi.ImplementationDataEnvelope `json:"implementation_data,omitempty"`
+	PolicyResources               *PolicyResources                          `json:"policy_resources,omitempty"`
+	RecoveryRequired              bool                                      `json:"recovery_required,omitempty"`
+	RecoveryVersion               uint64                                    `json:"recovery_version,omitempty"`
+	RecoveryState                 string                                    `json:"recovery_state,omitempty"`
+	RecoveryMarkedAt              *time.Time                                `json:"recovery_marked_at,omitempty"`
+	WorkspaceIntent               *executionapi.WorkspaceIntent             `json:"workspace_intent,omitempty"`
+	TurnStartedAt                 *time.Time                                `json:"turn_started_at,omitempty"`
+	TurnEndedAt                   *time.Time                                `json:"turn_ended_at,omitempty"`
+	Generation                    string                                    `json:"generation,omitempty"`
+	ConfigurationDigest           string                                    `json:"configuration_digest,omitempty"`
+	LastTurnOutcome               string                                    `json:"last_turn_outcome,omitempty"`
+	LogPath                       *string                                   `json:"log_path,omitempty"`
+	LastEvent                     *string                                   `json:"last_event,omitempty"`
+	Summary                       *string                                   `json:"summary,omitempty"`
+	Error                         *string                                   `json:"error,omitempty"`
+	ManualStop                    *ManualStopConfirmation                   `json:"manual_stop,omitempty"`
+	ProjectIdentity               string                                    `json:"project_identity"`
+	ExecutionID                   string                                    `json:"execution_id"`
+	CurrentAttemptID              string                                    `json:"current_attempt_id,omitempty"`
+	OwnerServiceInstanceID        string                                    `json:"owner_service_instance_id,omitempty"`
+	WorkflowRunID                 string                                    `json:"workflow_run_id"`
+	Agent                         string                                    `json:"agent,omitempty"`
+	Backend                       string                                    `json:"backend,omitempty"`
+	Protocol                      string                                    `json:"protocol,omitempty"`
+	Process                       *executionapi.ProcessIdentity             `json:"process,omitempty"`
+	Environment                   *WorkerEnvironment                        `json:"environment,omitempty"`
+	DecisionID                    string                                    `json:"decision_id,omitempty"`
+	PendingCommandID              string                                    `json:"pending_command_id,omitempty"`
+	CurrentCommandID              string                                    `json:"current_command_id,omitempty"`
+	PendingQuestions              []PendingQuestion                         `json:"pending_questions,omitempty"`
+	PendingTurnID                 string                                    `json:"pending_turn_id,omitempty"`
+	CurrentTurnID                 string                                    `json:"current_turn_id,omitempty"`
+	TurnNumber                    uint64                                    `json:"turn_number,omitempty"`
+	LastStoppedTurnID             string                                    `json:"last_stopped_turn_id,omitempty"`
+	Target                        executionapi.ExecutionTarget              `json:"target"`
+	Workspace                     WorkspaceEvidence                         `json:"workspace"`
+	Status                        string                                    `json:"status"`
+	CurrentStep                   string                                    `json:"current_step,omitempty"`
+	CreatedAt                     time.Time                                 `json:"created_at"`
+	UpdatedAt                     time.Time                                 `json:"updated_at"`
 }
 
 func (e *ExecutionRecord) UnmarshalJSON(data []byte) error {
@@ -116,38 +105,6 @@ func (e *ExecutionRecord) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// OrcaNativeExecution stores provider identities and observation positions.
-// WorkflowRun, Decision and Operation remain the authorities for business state.
-type OrcaNativeExecution struct {
-	RemoteRuntimeID string                       `json:"remote_runtime_id,omitempty"`
-	RepositoryID    string                       `json:"repository_id"`
-	Coordinator     executionapi.ProcessIdentity `json:"coordinator"`
-	Turns           []OrcaNativeTurn             `json:"turns,omitempty"`
-	DeliveryID      string                       `json:"delivery_id,omitempty"`
-	SeenMessages    []string                     `json:"seen_messages,omitempty"`
-}
-
-type OrcaNativeTurn struct {
-	ToolContext          ToolContext `json:"tool_context,omitempty"`
-	InjectionAttempts    int         `json:"injection_attempts,omitempty"`
-	Purpose              string      `json:"purpose,omitempty"`
-	IntentAt             time.Time   `json:"intent_at"`
-	Settled              bool        `json:"settled,omitempty"`
-	TurnID               string      `json:"turn_id"`
-	TaskID               string      `json:"task_id"`
-	DispatchID           string      `json:"dispatch_id"`
-	TaskRequestID        string      `json:"task_request_id,omitempty"`
-	DispatchRequestID    string      `json:"dispatch_request_id,omitempty"`
-	DoneMessageID        string      `json:"done_message_id,omitempty"`
-	Outcome              string      `json:"outcome,omitempty"`
-	OutputSource         string      `json:"output_source,omitempty"`
-	OutputCursor         string      `json:"output_cursor,omitempty"`
-	OutputComplete       bool        `json:"output_complete,omitempty"`
-	OutputClipping       []string    `json:"output_clipping,omitempty"`
-	OutputFallbackReason string      `json:"output_fallback_reason,omitempty"`
-	OutputDigest         string      `json:"output_digest,omitempty"`
-}
-
 type WorkspaceEvidence struct {
 	Repository string    `json:"repository,omitempty"`
 	Worktree   string    `json:"worktree,omitempty"`
@@ -160,7 +117,6 @@ type WorkspaceEvidence struct {
 
 type StepAttemptRecord struct {
 	WorkerProcess        *executionapi.ProcessIdentity `json:"worker_process,omitempty"`
-	WorkerSessionID      string                        `json:"worker_session_id,omitempty"`
 	ProjectIdentity      string                        `json:"project_identity"`
 	AttemptID            string                        `json:"attempt_id"`
 	ExecutionID          string                        `json:"execution_id"`

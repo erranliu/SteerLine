@@ -69,10 +69,13 @@ func (s *Service) finishNativeOrcaCleanup(ctx context.Context, run *Run) error {
 	}
 	fixedConfig := fixed.config
 	workflow, execution := s.workflowRecords(run)
-	if run == nil || workflow == nil || execution == nil || execution.OrcaNative == nil || execution.Process == nil || execution.Process.Kind != "orca-native" || workflow.Phase != "completed" {
+	state, stateErr := decodeOrcaExecutionState(execution)
+	if stateErr != nil {
+		return stateErr
+	}
+	if run == nil || workflow == nil || execution == nil || state == nil || execution.Process == nil || execution.Process.Kind != "orca-native" || workflow.Phase != "completed" {
 		return nil
 	}
-	state := execution.OrcaNative
 	if execution.PendingTurnID != "" || execution.CurrentTurnID == "" || execution.CurrentTurnID != execution.LastStoppedTurnID || state.DeliveryID != "" {
 		return nil // Delivery succeeded, but the external worker or inbox is not yet safe to close.
 	}

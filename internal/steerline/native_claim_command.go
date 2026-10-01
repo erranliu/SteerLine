@@ -191,23 +191,21 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 	if workflowRunID == "" {
 		workflowRunID = newID()
 	}
-	runner := StepRunnerSettings{Codex: config.Codex, Sandbox: config.Sandbox, WindowsSandbox: config.WindowsSandbox, Model: config.Model, ReasoningEffort: config.ReasoningEffort, Profile: config.Profile}
-	runner.Codex.Args = append([]string(nil), config.Codex.Args...)
-	wfr := WorkflowRunRecord{ProjectIdentity: c.Project, WorkflowRunID: workflowRunID, TaskID: task.TaskID, WorkflowVersion: WorkerFlowVersion, ConfigDigest: config.acceptedConfigVersion(), Runner: runner, Phase: "queued", Repository: config.Repository, Branch: config.Branch, SelectedResult: executionID, CreatedAt: created, UpdatedAt: created}
+	wfr := WorkflowRunRecord{ProjectIdentity: c.Project, WorkflowRunID: workflowRunID, TaskID: task.TaskID, WorkflowVersion: WorkerFlowVersion, ConfigDigest: config.acceptedConfigVersion(), Phase: "queued", Repository: config.Repository, Branch: config.Branch, SelectedResult: executionID, CreatedAt: created, UpdatedAt: created}
 	if options.ExecutionProfile != nil {
-		fixed := options.ExecutionProfile.Freeze()
+		fixed := options.ExecutionProfile.Freeze(config.identity)
 		wfr.ExecutionProfile = &fixed
 	}
 	if wfr.ExecutionProfile == nil {
-		fixed := config.projectExecutionProfile().Freeze()
+		fixed := config.projectExecutionProfile().Freeze(config.identity)
 		wfr.ExecutionProfile = &fixed
 	}
-	execution := ExecutionRecord{ProjectIdentity: c.Project, ExecutionID: executionID, CurrentAttemptID: attemptID, OwnerServiceInstanceID: options.ServiceInstanceID, WorkflowRunID: workflowRunID, Agent: config.agentName(), Backend: string(backend), Protocol: string(protocol), Target: target, Workspace: WorkspaceEvidence{Repository: config.identity, Branch: config.Branch, Base: base}, Status: "pending", CurrentStep: "worker", CreatedAt: created, UpdatedAt: created}
+	execution := ExecutionRecord{ProjectIdentity: c.Project, ExecutionID: executionID, CurrentAttemptID: attemptID, ConfigurationDigest: wfr.ExecutionProfile.Digest, OwnerServiceInstanceID: options.ServiceInstanceID, WorkflowRunID: workflowRunID, Agent: config.agentName(), Backend: string(backend), Protocol: string(protocol), Target: target, Workspace: WorkspaceEvidence{Repository: config.identity, Branch: config.Branch, Base: base}, Status: "pending", CurrentStep: "worker", CreatedAt: created, UpdatedAt: created}
 	if config.managedWindowsOrca() {
 		if _, err := nativeOrcaFixedAgentCommand(config); err != nil {
 			return TaskClaimReceipt{}, err
 		}
-		execution.Environment = &WorkerEnvironment{ProfileDigest: wfr.ExecutionProfile.Digest, Preparation: &WorkerPreparation{TurnID: newID(), Nonce: newID(), StartedAt: created, Deadline: created.Add(positiveDuration(config.Orca.WaitTimeout, 2*time.Minute))}}
+		execution.Environment = &WorkerEnvironment{ProfileDigest: wfr.ExecutionProfile.Digest, Preparation: &WorkerPreparation{TurnID: newID(), Nonce: newID(), StartedAt: created, Deadline: created.Add(positiveDuration(orcaProfileSettings(config).WaitTimeout, 2*time.Minute))}}
 	}
 	execution.WorkspaceIntent, err = planWorkspace(config, task.TaskID, workflowRunID, base)
 	if err != nil {

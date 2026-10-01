@@ -2,7 +2,6 @@ package steerline
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -13,10 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
-	remote "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker"
 	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	"github.com/erranliu/SteerLine/internal/steerline/workspace"
 )
@@ -30,38 +27,34 @@ type Config struct {
 	requirementsEvaluation  *executionapi.RequirementsEvaluation
 	executionConfigPath     string
 	publicationRemoteURL    string
+	selectedProfileID       string
 	PublicationPolicy       executionapi.PublicationPolicy     `json:"publication_policy"`
 	ExecutionPolicy         executionapi.ExecutionPolicy       `json:"execution_policy"`
 	ExecutionRequirements   executionapi.ExecutionRequirements `json:"execution_requirements,omitempty"`
 	policySource            string
-	Repository              string             `json:"repository"`
-	TaskAuthority           string             `json:"task_authority,omitempty"`
-	Remote                  string             `json:"remote"`
-	Branch                  string             `json:"branch"`
-	RunDir                  string             `json:"run_dir"`
-	WorktreeRoot            string             `json:"worktree_root"`
-	Claimant                string             `json:"claimant"`
-	Git                     Command            `json:"git"`
-	Codex                   Command            `json:"codex"`
-	WorkflowProtocol        string             `json:"workflow_protocol,omitempty"`
-	ExecutableTypes         []string           `json:"executable_types"`
-	TaskPoll                string             `json:"task_poll"`
-	PRPoll                  string             `json:"pr_poll"`
-	Heartbeat               string             `json:"heartbeat"`
-	CommandTimeout          string             `json:"command_timeout"`
-	ShutdownGrace           string             `json:"shutdown_grace"`
-	Model                   string             `json:"model"`
-	ReasoningEffort         string             `json:"reasoning_effort"`
-	Sandbox                 string             `json:"-"`
-	WindowsSandbox          string             `json:"-"`
-	Profile                 string             `json:"profile"`
-	Agent                   string             `json:"agent"`
-	Host                    string             `json:"host"`
-	ExecutionProfiles       []ExecutionProfile `json:"execution_profiles,omitempty"`
-	DefaultExecutionProfile string             `json:"default_execution_profile,omitempty"`
-	StallTimeout            string             `json:"stall_timeout"`
-	Orca                    OrcaConfig         `json:"orca"`
-	PR                      publication.Config `json:"pr"`
+	Repository              string                                    `json:"repository"`
+	TaskAuthority           string                                    `json:"task_authority,omitempty"`
+	Remote                  string                                    `json:"remote"`
+	Branch                  string                                    `json:"branch"`
+	RunDir                  string                                    `json:"run_dir"`
+	WorktreeRoot            string                                    `json:"worktree_root"`
+	Claimant                string                                    `json:"claimant"`
+	Git                     Command                                   `json:"git"`
+	ImplementationData      []executionapi.ImplementationDataEnvelope `json:"-"`
+	ImplementationDisplay   []string                                  `json:"-"`
+	WorkflowProtocol        string                                    `json:"workflow_protocol,omitempty"`
+	ExecutableTypes         []string                                  `json:"executable_types"`
+	TaskPoll                string                                    `json:"task_poll"`
+	PRPoll                  string                                    `json:"pr_poll"`
+	Heartbeat               string                                    `json:"heartbeat"`
+	CommandTimeout          string                                    `json:"command_timeout"`
+	ShutdownGrace           string                                    `json:"shutdown_grace"`
+	Agent                   string                                    `json:"agent"`
+	Host                    string                                    `json:"host"`
+	ExecutionProfiles       []ExecutionProfile                        `json:"execution_profiles,omitempty"`
+	DefaultExecutionProfile string                                    `json:"default_execution_profile,omitempty"`
+	StallTimeout            string                                    `json:"stall_timeout"`
+	PR                      publication.Config                        `json:"pr"`
 	identity                string
 	workerEnv               map[string]string
 	configDigest            string
@@ -180,7 +173,7 @@ func InstallSelf() (string, error) {
 }
 
 func LoadConfig(path string) (Config, error) {
-	c := Config{Remote: "origin", TaskPoll: "10s", PRPoll: "30s", Heartbeat: "5s", CommandTimeout: "30s", ShutdownGrace: "10s", Git: Command{Executable: "git"}, Codex: Command{Executable: "codex"}, ExecutableTypes: []string{"task", "bug", "feature", "chore"}, Agent: "codex", Host: "orca", StallTimeout: "5m", Orca: OrcaConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "15m"}}
+	c := Config{Remote: "origin", TaskPoll: "10s", PRPoll: "30s", Heartbeat: "5s", CommandTimeout: "30s", ShutdownGrace: "10s", Git: Command{Executable: "git"}, ExecutableTypes: []string{"task", "bug", "feature", "chore"}, StallTimeout: "5m"}
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return c, err
@@ -208,45 +201,31 @@ func LoadConfig(path string) (Config, error) {
 	}
 	c.policySource, _ = filepath.Abs(path)
 	c.executionConfigPath = GlobalExecutionConfigPath()
-	var configFields map[string]json.RawMessage
-	_ = json.Unmarshal(b, &configFields)
-	for _, field := range []string{"host", "agent", "model", "reasoning_effort", "sandbox", "windows_sandbox", "profile", "codex", "orca", "execution_profiles", "default_execution_profile"} {
-		if _, present := configFields[field]; present {
-			return c, fmt.Errorf("%s belongs in global execution config %s", field, GlobalExecutionConfigPath())
-		}
+	if c.Host != "" || c.Agent != "" || len(c.ExecutionProfiles) != 0 || c.DefaultExecutionProfile != "" {
+		return c, fmt.Errorf("execution profiles belong in global execution config %s", GlobalExecutionConfigPath())
 	}
 	globalBytes, err := os.ReadFile(GlobalExecutionConfigPath())
 	if err != nil {
 		return c, fmt.Errorf("load global execution config %s: %w", GlobalExecutionConfigPath(), err)
 	}
 	var global struct {
+		Version           int                `json:"version"`
 		ExecutionProfiles []ExecutionProfile `json:"execution_profiles"`
 		DefaultProfile    string             `json:"default_execution_profile"`
 	}
 	if err := decode(globalBytes, &global); err != nil {
 		return c, fmt.Errorf("global execution config: %w", err)
 	}
+	if global.Version != 2 {
+		return c, errors.New("global execution config version must be 2; older development formats are unsupported and their state must be preserved")
+	}
 	if len(global.ExecutionProfiles) == 0 {
 		return c, errors.New("global execution config requires at least one execution profile")
-	}
-	var globalRaw struct {
-		ExecutionProfiles []struct {
-			Orca struct {
-				Supervised map[string]json.RawMessage `json:"supervised"`
-			} `json:"orca"`
-		} `json:"execution_profiles"`
-	}
-	_ = json.Unmarshal(trimBOM(globalBytes), &globalRaw)
-	for i, profile := range global.ExecutionProfiles {
-		if profile.Host == "orca_supervised" {
-			if i >= len(globalRaw.ExecutionProfiles) || globalRaw.ExecutionProfiles[i].Orca.Supervised["remote_cancel_available"] == nil {
-				return c, fmt.Errorf("execution profile %s: orca.supervised.remote_cancel_available must be explicitly set to false", profile.ID)
-			}
-		}
 	}
 	c.ExecutionProfiles = global.ExecutionProfiles
 	c.DefaultExecutionProfile = global.DefaultProfile
 	c.globalExecution = true
+	c.configDigest = loadedConfigDigest(b, globalBytes)
 	if err := validateExecutionProfiles(c); err != nil {
 		return c, err
 	}
@@ -260,7 +239,6 @@ func LoadConfig(path string) (Config, error) {
 		}
 	}
 	c = c.ApplyExecutionProfile(initial)
-	c.configDigest = loadedConfigDigest(b, globalBytes)
 	base, err := filepath.Abs(filepath.Dir(path))
 	if err != nil {
 		return c, err
@@ -301,9 +279,6 @@ func LoadConfig(path string) (Config, error) {
 		}
 	}
 
-	if c.ReasoningEffort != "" && !codexworker.ValidReasoningEffort(c.ReasoningEffort) {
-		return c, fmt.Errorf("invalid reasoning_effort %q", c.ReasoningEffort)
-	}
 	// Empty means "use the default" so programmatic Configs stay valid.
 	if c.Host != "" && c.Host != "local" && c.Host != "orca" && c.Host != "orca_supervised" {
 		return c, errors.New("host must be local, orca, or orca_supervised")
@@ -311,33 +286,6 @@ func LoadConfig(path string) (Config, error) {
 	if c.StallTimeout != "" {
 		if d, e := time.ParseDuration(c.StallTimeout); e != nil || d < 0 {
 			return c, errors.New("stall_timeout must be zero or a positive duration")
-		}
-	}
-	if c.Host == "orca" {
-		if c.WorkflowProtocol == WorkerFlowVersion && c.managedWindowsOrca() {
-			if _, err := nativeOrcaFixedAgentCommand(c); err != nil {
-				return c, err
-			}
-		}
-		if c.WorkflowProtocol == WorkerFlowVersion && c.Profile != "" {
-			return c, errors.New("Orca worker-flow requires workspace-write and no Codex profile")
-		}
-		if c.agentName() != "codex" && (c.Model != "" || c.Profile != "" || c.ReasoningEffort != "") {
-			return c, errors.New("orca model, profile and reasoning_effort overrides require agent=codex")
-		}
-		if c.Model != "" && c.Orca.Shell != "powershell.exe" && c.Orca.Shell != "pwsh.exe" {
-			return c, errors.New("fixed Orca Codex launch requires powershell.exe or pwsh.exe")
-		}
-		if c.Orca.Executable == "" || c.Orca.Shell == "" {
-			return c, errors.New("orca.executable and orca.shell are required")
-		}
-		if d, e := time.ParseDuration(c.Orca.WaitTimeout); e != nil || d <= 0 {
-			return c, errors.New("orca.wait_timeout must be a positive duration")
-		}
-	}
-	if c.Host == "orca_supervised" {
-		if err = validateSupervisedOrcaConfig(&c); err != nil {
-			return c, err
 		}
 	}
 	if len(c.ExecutableTypes) == 0 {
@@ -357,17 +305,6 @@ func LoadConfig(path string) (Config, error) {
 	return c, nil
 }
 
-func validateSupervisedOrcaConfig(c *Config) error {
-	if c == nil {
-		return errors.New("orca_supervised currently requires agent=codex")
-	}
-	selected := remote.Selection{Agent: c.agentName(), Model: c.Model, ReasoningEffort: c.ReasoningEffort, Executable: c.Orca.Executable, Shell: c.Orca.Shell, WaitTimeout: c.Orca.WaitTimeout}
-	if sc := c.Orca.Supervised; sc != nil {
-		selected.Settings = &remote.SelectionSettings{Settings: remoteWorkerConfig(*c).Settings, RemoteCancelAvailable: sc.RemoteCancelAvailable, CapabilityReportVersion: sc.CapabilityReportVersion}
-	}
-	return selected.Validate()
-}
-
 func validateWorkflowConfig(c *Config, _ []byte) error {
 	if _, err := registrationFor(*c); err != nil {
 		return err
@@ -384,27 +321,7 @@ func validateWorkflowConfig(c *Config, _ []byte) error {
 	if c.WorkflowProtocol != WorkerFlowVersion {
 		return errors.New("only worker-flow-v1 is supported")
 	}
-	if c.ReasoningEffort != "" && !codexworker.ValidReasoningEffort(c.ReasoningEffort) {
-		return errors.New("invalid reasoning_effort")
-	}
-	if c.Model != strings.TrimSpace(c.Model) || strings.ContainsAny(c.Model, "\r\n\x00") {
-		return errors.New("invalid model")
-	}
-	if c.hostName() == "orca_supervised" {
-		return remote.CheckPolicy(c.ExecutionPolicy, remoteWorkerConfig(*c).Settings)
-	}
-	if c.hostName() == "orca" {
-		if err := validateLocalOrcaTargetArgs(c.Orca.Args); err != nil {
-			return err
-		}
-	}
-	permissions, err := codexworker.CompilePolicy(c.ExecutionPolicy, runtime.GOOS, c.hostName(), c.agentName(), c.Codex.WindowsSandbox, c.Profile, c.Codex.Args)
-	if err != nil {
-		return err
-	}
-	c.Sandbox, c.WindowsSandbox = permissions.Sandbox, permissions.WindowsSandbox
-	c.Codex.WindowsSandbox = permissions.WindowsSandbox
-	return nil
+	return validateImplementationProfileData(*c)
 }
 
 func duration(s string) time.Duration { d, _ := time.ParseDuration(s); return d }
@@ -428,6 +345,24 @@ func (c *Config) ResolveIdentity(ctx context.Context) error {
 		return errors.New("configured repository identity changed after it was resolved")
 	}
 	c.identity = identity
+	if c.selectedProfileID != "" {
+		var selected ExecutionProfile
+		found := false
+		if c.globalExecution {
+			for _, profile := range c.ExecutionProfiles {
+				if profile.ID == c.selectedProfileID {
+					selected, found = profile, true
+					break
+				}
+			}
+		} else if c.selectedProfileID == ProjectExecutionProfileID {
+			selected, found = c.projectExecutionProfile(), true
+		}
+		if !found {
+			return errors.New("selected execution profile is not available after project identity resolution")
+		}
+		*c = c.ApplyExecutionProfile(c.bindProjectPolicy(selected))
+	}
 	return nil
 }
 
@@ -446,7 +381,8 @@ func (c Config) agentName() string {
 	return c.Agent
 }
 func (c Config) needsCodexExecutable() bool {
-	return c.requiresLocalCodex() || c.managedWindowsOrca() || c.hostName() == "orca" && c.agentName() == "codex" && (c.Model != "" || c.ReasoningEffort != "" || c.Profile != "")
+	settings := codexProfileSettings(c)
+	return c.requiresLocalCodex() || c.managedWindowsOrca() || c.hostName() == "orca" && c.agentName() == "codex" && (settings.Model != "" || settings.ReasoningEffort != "" || settings.Profile != "")
 }
 func resolveCommand(c *Command) error {
 	p, e := exec.LookPath(c.Executable)
@@ -483,25 +419,28 @@ func (c *Config) preflightNative(ctx context.Context) error {
 	if c.WorkflowProtocol == WorkerFlowVersion && c.hostName() != "local" && c.hostName() != "orca" && c.hostName() != "orca_supervised" {
 		return &executionapi.BackendError{Code: executionapi.BackendUnsupported, Diagnostic: "this worker-flow host is not supported"}
 	}
-	if c.WorkflowProtocol == WorkerFlowVersion && c.hostName() == "orca" && (c.Profile != "" || c.Sandbox != "workspace-write") {
+	codex := codexProfileSettings(*c)
+	orca := orcaProfileSettings(*c)
+	if c.WorkflowProtocol == WorkerFlowVersion && c.hostName() == "orca" && (codex.Profile != "" || c.ExecutionPolicy.Filesystem.WriteScope != "workspace-write") {
 		return &executionapi.BackendError{Code: executionapi.BackendUnsupported, Diagnostic: "Orca requires workspace-write and no Codex profile"}
 	}
 	if c.hostName() == "local" && c.agentName() != "codex" {
 		return errors.New("local_process currently supports only agent=codex")
 	}
 	commands := []*Command{&c.Git}
-	var err error
-	if c.needsCodexExecutable() {
-		commands = append(commands, &c.Codex)
-	}
 	for _, command := range commands {
 		if err := resolveCommand(command); err != nil {
 			return err
 		}
 	}
+	if c.needsCodexExecutable() {
+		if _, err := exec.LookPath(codex.Executable); err != nil {
+			return err
+		}
+	}
 	git := Runner{Dir: c.Repository, Timeout: duration(c.CommandTimeout)}
 	if c.hostName() == "orca" {
-		if _, err := (Runner{Dir: c.Repository, Timeout: duration(c.CommandTimeout)}).Output(ctx, Command{Executable: c.Orca.Executable, Args: c.Orca.Args}, "status", "--json"); err != nil {
+		if _, err := (Runner{Dir: c.Repository, Timeout: duration(c.CommandTimeout)}).Output(ctx, Command{Executable: orca.Executable, Args: orca.Args}, "status", "--json"); err != nil {
 			return fmt.Errorf("orca host is not reachable: %w", err)
 		}
 	}
@@ -530,7 +469,7 @@ func (c *Config) preflightNative(ctx context.Context) error {
 		return err
 	}
 	if c.hostName() == "orca_supervised" {
-		if err = validateSupervisedOrcaConfig(c); err != nil {
+		if err = validateImplementationProfileData(*c); err != nil {
 			return err
 		}
 		if _, err = probeSupervisedOrcaTarget(ctx, *c); err != nil {
@@ -590,12 +529,8 @@ func inside(root, path string) bool {
 
 type Command = contracts.Command
 
-type OrcaConfig = contracts.OrcaConfig
-
-type SupervisedOrcaConfig = contracts.SupervisedOrcaConfig
-
 type LegacyCompletionConfig = contracts.LegacyCompletionConfig
 
 func (c Config) managedWindowsOrca() bool {
-	return runtime.GOOS == "windows" && c.hostName() == "orca" && c.agentName() == "codex"
+	return runtime.GOOS == "windows" && c.hostName() == "orca" && c.agentName() == "codex" && codexProfileSettings(c).WindowsSandbox != ""
 }

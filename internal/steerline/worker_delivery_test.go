@@ -3,12 +3,15 @@ package steerline
 import (
 	"context"
 	"encoding/json"
+	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 func TestWorkerFlowDeliveryCommitsWithoutStepGatesAndUnlocksSuccessor(t *testing.T) {
@@ -35,7 +38,8 @@ func TestWorkerFlowDeliveryCommitsWithoutStepGatesAndUnlocksSuccessor(t *testing
 	created := time.Now().UTC()
 	url := "https://git.example/o/r/pulls/8"
 	wf := WorkflowRunRecord{ProjectIdentity: c.Identity(), WorkflowRunID: "worker-flow-wf-8", TaskID: task.TaskID, WorkflowVersion: WorkerFlowVersion, Phase: "waiting_pr_merge", Repository: c.Repository, Branch: "main", SelectedResult: "worker-flow-exec-8", PRURL: url, PRState: "open", CreatedAt: created, UpdatedAt: created}
-	execution := ExecutionRecord{ProjectIdentity: c.Identity(), ExecutionID: wf.SelectedResult, WorkflowRunID: wf.WorkflowRunID, Agent: "codex", Status: "idle", SessionID: "session-8", Workspace: WorkspaceEvidence{Branch: "codex/task-8", Dirty: true}, CreatedAt: created, UpdatedAt: created}
+	execution := ExecutionRecord{ProjectIdentity: c.Identity(), ExecutionID: wf.SelectedResult, CurrentAttemptID: "attempt-8", ConfigurationDigest: wf.ExecutionProfile.Digest, WorkflowRunID: wf.WorkflowRunID, Backend: string(executionapi.BackendLocal), Protocol: string(executionapi.ProtocolLocalCodexAppServer), Agent: "codex", Status: "idle", Workspace: WorkspaceEvidence{Branch: "codex/task-8", Dirty: true}, CreatedAt: created, UpdatedAt: created}
+	setTestCodexBinding(t, &execution, "ws://127.0.0.1:12345", "generation", workerFlowMockSession)
 	claimed := task
 	claimed.Status = "in_progress"
 	claimed.Claimant = "operator"
@@ -87,8 +91,11 @@ func TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged(t *testing.T)
 		t.Fatalf("set isolated remote: %v: %s", err, out)
 	}
 	c.Git = Command{Executable: "git"}
+	settings := codexProfileSettings(c)
 	c.Host = "orca"
-	c.Codex.WindowsSandbox = "unelevated"
+	settings.WindowsSandbox = "unelevated"
+	orcaSettings := orcaworker.ProfileConfig{Executable: "orca", Shell: "pwsh.exe", WaitTimeout: "30s"}
+	setTestImplementationProfiles(t, &c, settings, &orcaSettings)
 	c.PublicationPolicy.Publisher = "worker"
 	c.WorkflowProtocol = WorkerFlowVersion
 	c.PR = publication.Config{Kind: "command", BaseURL: "https://forge.invalid", Repository: "org/repo", Query: Command{Executable: "gh"}}
@@ -119,8 +126,12 @@ func TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged(t *testing.T)
 	wf := WorkflowRunRecord{ProjectIdentity: c.Identity(), WorkflowRunID: "worker-flow-wf-8", TaskID: "8", WorkflowVersion: WorkerFlowVersion, Phase: "waiting_pr_merge", Repository: c.Repository, Branch: "main", SelectedResult: "worker-flow-exec-8", PRURL: url, PRState: "open", CreatedAt: at, UpdatedAt: at}
 	require(t, c.bindPublicationTarget(ctx))
 	fixed := c.projectExecutionProfile().Freeze()
+	if !verifyFixedExecutionProfile(fixed) {
+		t.Fatal("delivery fixture did not freeze a valid execution profile")
+	}
 	wf.ExecutionProfile, wf.ConfigDigest = &fixed, fixed.AcceptedConfigVersion
-	execution := ExecutionRecord{ProjectIdentity: c.Identity(), ExecutionID: wf.SelectedResult, WorkflowRunID: wf.WorkflowRunID, Agent: "codex", Status: "idle", SessionID: "session-8", Workspace: WorkspaceEvidence{Branch: "codex/task-8"}, CreatedAt: at, UpdatedAt: at}
+	execution := ExecutionRecord{ProjectIdentity: c.Identity(), ExecutionID: wf.SelectedResult, CurrentAttemptID: "attempt-8", ConfigurationDigest: wf.ExecutionProfile.Digest, WorkflowRunID: wf.WorkflowRunID, Backend: string(executionapi.BackendLocal), Protocol: string(executionapi.ProtocolLocalCodexAppServer), Agent: "codex", Status: "idle", Workspace: WorkspaceEvidence{Branch: "codex/task-8"}, CreatedAt: at, UpdatedAt: at}
+	setTestCodexBinding(t, &execution, "ws://127.0.0.1:12345", "generation", workerFlowMockSession)
 	claimed := task
 	claimed.Status, claimed.Claimant, claimed.Version, claimed.UpdatedAt = "in_progress", "operator", task.Version+1, at
 	if err := store.Transact(ctx, func(domainTx DomainTx) error {

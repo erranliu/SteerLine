@@ -227,7 +227,8 @@ func (t *sqliteTx) PutTaskDelivery(v TaskDeliveryRecord) error {
 	if err := json.Unmarshal(executionPayload, &execution); err != nil {
 		return err
 	}
-	if execution.SessionID == "" || execution.Workspace.Branch == "" {
+	sessionID, _ := executionSessionFacts(&execution)
+	if sessionID == "" || execution.Workspace.Branch == "" {
 		return nativeErr("contract_mismatch", "delivery has no bound worker session or branch")
 	}
 	_, err = t.tx.ExecContext(t.ctx, `INSERT INTO task_deliveries(project_identity,task_id,selected_workflow_run_id,pr_instance,pr_repository,pr_number,pr_url,merge_commit,merged_at,recorded_at,evidence) VALUES(?,?,?,?,?,?,?,?,?,?,?)`, v.ProjectIdentity, v.TaskID, v.SelectedWorkflowRunID, v.PRInstance, v.PRRepository, v.PRNumber, v.PRURL, v.MergeCommit, v.MergedAt.UTC().Format(time.RFC3339Nano), v.RecordedAt.UTC().Format(time.RFC3339Nano), []byte(v.Evidence))
@@ -420,7 +421,8 @@ func (t *sqliteTx) completeNativeDeliveryWorkflow(project, taskID string) error 
 		if err = json.Unmarshal(executionPayload, &execution); err != nil {
 			return err
 		}
-		if execution.SessionID == "" || execution.Workspace.Branch == "" {
+		sessionID, _ := executionSessionFacts(&execution)
+		if sessionID == "" || execution.Workspace.Branch == "" {
 			return nativeErr("contract_mismatch", "selected worker flow lacks its session or branch")
 		}
 		delivery := TaskDeliveryRecord{TaskID: taskID, SelectedWorkflowRunID: runID, PRURL: proof.URL, MergeCommit: proof.MergeCommit, MergedAt: proof.MergedAt}

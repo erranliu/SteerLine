@@ -31,13 +31,26 @@ type codexSocket struct {
 
 const maxMessageSize = 16 << 20
 
-func dialCodexSocket(ctx context.Context, endpoint string) (*codexSocket, error) {
+func ValidateEndpoint(endpoint string) error {
+	_, err := parseCodexEndpoint(endpoint)
+	return err
+}
+
+func parseCodexEndpoint(endpoint string) (*url.URL, error) {
 	u, err := url.Parse(endpoint)
 	if err != nil || u.Scheme != "ws" || u.Hostname() != "127.0.0.1" || u.Port() == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
 		return nil, errors.New("Codex app-server endpoint must be a loopback WebSocket URL")
 	}
-	if _, err := strconv.Atoi(u.Port()); err != nil {
+	if port, err := strconv.Atoi(u.Port()); err != nil || port < 1 || port > 65535 {
 		return nil, errors.New("Codex app-server endpoint has an invalid port")
+	}
+	return u, nil
+}
+
+func dialCodexSocket(ctx context.Context, endpoint string) (*codexSocket, error) {
+	u, err := parseCodexEndpoint(endpoint)
+	if err != nil {
+		return nil, err
 	}
 	conn, err := (&net.Dialer{}).DialContext(ctx, "tcp", u.Host)
 	if err != nil {

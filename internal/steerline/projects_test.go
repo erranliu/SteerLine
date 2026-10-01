@@ -22,7 +22,6 @@ func minimalConfig(repo string) Config {
 		Heartbeat:        "5s",
 		CommandTimeout:   "30s",
 		ShutdownGrace:    "10s",
-		Sandbox:          "workspace-write",
 	}
 }
 

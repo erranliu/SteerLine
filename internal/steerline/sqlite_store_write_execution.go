@@ -73,13 +73,20 @@ func (t *sqliteTx) PutWorkflowRun(v WorkflowRunRecord) error {
 }
 
 func nativeWorkflowPin(v WorkflowRunRecord) ([]byte, error) {
+	profileDigest := ""
+	implementationKey := ""
+	if v.ExecutionProfile != nil {
+		profileDigest = v.ExecutionProfile.Digest
+		implementationKey = v.ExecutionProfile.ImplementationKey
+	}
 	return encodePayload(struct {
-		WorkflowVersion string
-		ConfigDigest    string
-		Runner          StepRunnerSettings
-		Repository      string
-		Branch          string
-	}{v.WorkflowVersion, v.ConfigDigest, v.Runner, v.Repository, v.Branch})
+		WorkflowVersion   string
+		ConfigDigest      string
+		ProfileDigest     string
+		ImplementationKey string
+		Repository        string
+		Branch            string
+	}{v.WorkflowVersion, v.ConfigDigest, profileDigest, implementationKey, v.Repository, v.Branch})
 }
 func (t *sqliteTx) PutExecution(v ExecutionRecord) error {
 	if v.ProjectIdentity == "" || v.ExecutionID == "" || v.WorkflowRunID == "" || v.Status == "" {
@@ -101,7 +108,9 @@ func (t *sqliteTx) PutExecution(v ExecutionRecord) error {
 		}
 		newWorkerGeneration := old.CurrentAttemptID != "" && v.CurrentAttemptID != old.CurrentAttemptID &&
 			v.RecoveryVersion >= old.RecoveryVersion && v.RecoveryState == "resuming"
-		if !newWorkerGeneration && old.SessionID != "" && old.SessionID != v.SessionID || v.TurnNumber < old.TurnNumber ||
+		oldSession, _ := executionSessionFacts(&old)
+		newSession, _ := executionSessionFacts(&v)
+		if !newWorkerGeneration && oldSession != "" && oldSession != newSession || v.TurnNumber < old.TurnNumber ||
 			!newWorkerGeneration && v.TurnNumber == old.TurnNumber && old.CurrentTurnID != "" && old.CurrentTurnID != v.CurrentTurnID ||
 			!newWorkerGeneration && v.TurnNumber == old.TurnNumber && old.LastStoppedTurnID != "" && old.LastStoppedTurnID != v.LastStoppedTurnID && v.LastStoppedTurnID != v.CurrentTurnID {
 			return nativeErr("immutable_task", "worker session or observed turn identity cannot be replaced or rewound")
@@ -148,7 +157,6 @@ func (t *sqliteTx) PutStepAttempt(v StepAttemptRecord) error {
 			return err
 		}
 		if old.WorkerProcess != nil && (v.WorkerProcess == nil || *old.WorkerProcess != *v.WorkerProcess) ||
-			old.WorkerSessionID != "" && old.WorkerSessionID != v.WorkerSessionID ||
 			old.Status == "stopped" && v.Status != "stopped" {
 			return nativeErr("immutable_task", "retired worker Attempt identity or status cannot be replaced")
 		}

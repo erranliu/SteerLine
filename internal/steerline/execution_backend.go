@@ -294,7 +294,8 @@ func (b localExecutionBackend) Probe(ctx context.Context, target executionapi.Ex
 	if agent.Name != "codex" {
 		return executionapi.CapabilityReport{}, unsupported("local_process agent " + agent.Name)
 	}
-	out, err := (Runner{Dir: b.config.Repository, Timeout: positiveDuration(b.config.CommandTimeout, 30*time.Second)}).Output(ctx, b.config.Codex, "--version")
+	settings := codexProfileSettings(b.config)
+	out, err := (Runner{Dir: b.config.Repository, Timeout: positiveDuration(b.config.CommandTimeout, 30*time.Second)}).Output(ctx, Command{Executable: settings.Executable, Args: settings.Args}, "--version")
 	if err != nil {
 		return executionapi.CapabilityReport{}, &executionapi.BackendError{Code: executionapi.BackendUnreachable, Diagnostic: "local Codex version probe failed", Cause: err}
 	}

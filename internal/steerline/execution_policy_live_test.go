@@ -50,17 +50,22 @@ func TestExecutionPolicyNativeToolsLive(t *testing.T) {
 	} else {
 		git(source, "clone", "--quiet", "--local", "--no-hardlinks", source, repository)
 	}
-	c := Config{ExecutionPolicy: workspacePolicyFixture(), policySource: "acceptance:explicit-policy59", WorkflowProtocol: WorkerFlowVersion, Repository: repository, RunDir: filepath.Join(root, "state"), CommandTimeout: "90s", Git: Command{Executable: "git"}, Codex: Command{Executable: executable}, Host: host, Agent: "codex", Orca: OrcaConfig{Executable: "orca", Shell: "powershell.exe", WaitTimeout: "4m"}}
+	c := Config{ExecutionPolicy: workspacePolicyFixture(), policySource: "acceptance:explicit-policy59", WorkflowProtocol: WorkerFlowVersion, Repository: repository, RunDir: filepath.Join(root, "state"), CommandTimeout: "90s", Git: Command{Executable: "git"}, Host: host, Agent: "codex"}
+	codex := codexworker.ProfileConfig{Executable: executable}
+	orca := &orcaworker.ProfileConfig{Executable: "orca", Shell: "powershell.exe", WaitTimeout: "4m"}
 	if host == "orca" {
-		c.Codex.WindowsSandbox = "unelevated"
+		codex.WindowsSandbox = "unelevated"
+	} else {
+		orca = nil
 	}
-	require(t, validateWorkflowConfig(&c, nil))
-	require(t, c.ResolveIdentity(ctx))
 	c.configDigest = digestValue(struct {
 		Policy executionapi.ExecutionPolicy
 		Host   string
 	}{c.ExecutionPolicy, host})
-	profile := c.projectExecutionProfile().Freeze()
+	setTestImplementationProfiles(t, &c, codex, orca)
+	require(t, validateWorkflowConfig(&c, nil))
+	require(t, c.ResolveIdentity(ctx))
+	profile := c.projectExecutionProfile().Freeze(c.identity)
 	c = c.ApplyFixedExecutionProfile(profile)
 	e := ExecutionRecord{ExecutionID: newID(), WorkflowRunID: newID(), Target: targetFor(c)}
 	run := &Run{RunID: e.WorkflowRunID, ExecutionID: e.ExecutionID, AttemptID: newID()}
@@ -89,7 +94,7 @@ func TestExecutionPolicyNativeToolsLive(t *testing.T) {
 		command, err := nativeOrcaCommand(c, path, e.PolicyResources.WriteRoots[1:])
 		require(t, err)
 		title := "policy59-" + e.ExecutionID
-		raw, err = orcaworker.CreateFixedAgentTerminal(ctx, client.MetaCall, worktree.ID, title, c.Orca.Shell, command)
+		raw, err = orcaworker.CreateFixedAgentTerminal(ctx, client.MetaCall, worktree.ID, title, orcaProfileSettings(c).Shell, command)
 		require(t, err)
 		terminal, err = orcaworker.ParseFixedAgentTerminalReceipt(raw, worktree.ID, title)
 		require(t, err)
@@ -335,7 +340,10 @@ func TestExecutionPolicyNativeToolsCollectLive(t *testing.T) {
 		} `json:"payload"`
 	}
 	require(t, json.Unmarshal([]byte(first), &meta))
-	e.SessionID = meta.Payload.ID
+	binding, err := codexBinding(&e)
+	require(t, err)
+	binding.SessionID = meta.Payload.ID
+	require(t, applyCodexBinding(&e, binding))
 	evidence := map[string]any{"captured_at": now(), "scope": "new policy mapping; original persisted snapshot; native tool collection only; no resend or readiness receipt", "profile": saved.Profile, "execution": e, "result": result, "state_root": saved.StateRoot, "journal_path": journal, "native_events": policyNativeEvents(events, nonce)}
 	data, err := json.MarshalIndent(evidence, "", "  ")
 	require(t, err)

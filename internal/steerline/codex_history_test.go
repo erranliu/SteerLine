@@ -14,6 +14,7 @@ import (
 
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
 
 func TestCodexHistoryServerHelper(t *testing.T) {
@@ -888,7 +889,8 @@ func TestCodexHistoryNativeAcceptance(t *testing.T) {
 			if binding.Backend == executionapi.BackendOrca {
 				orcaExe, lookErr := exec.LookPath("orca")
 				require(t, lookErr)
-				service.Config.Orca.Executable = orcaExe
+				service.Config.Host, service.Config.Agent = "orca", "codex"
+				setTestImplementationProfiles(t, &service.Config, codexworker.ProfileConfig{Executable: "codex"}, &orcaworker.ProfileConfig{Executable: orcaExe, Shell: "cmd.exe", WaitTimeout: "15m"})
 			}
 			settled := false
 			for n := 0; n < 8 && !settled; n++ {

@@ -8,7 +8,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	remote "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker"
+	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
 
 // TestSupervisedOrcaRealP10ReplyGate exercises the actual supervised reply
@@ -26,14 +29,16 @@ func TestSupervisedOrcaRealP10ReplyGate(t *testing.T) {
 		}
 		return value
 	}
-	c := Config{
-		Host: "orca_supervised", CommandTimeout: "30s",
-		Orca: OrcaConfig{Executable: "orca", Supervised: &SupervisedOrcaConfig{
-			ConnectionID:        need("STEERLINE_REAL_P10_CONNECTION_ID"),
-			EnvironmentID:       need("STEERLINE_REAL_P10_ENVIRONMENT_ID"),
-			CoordinatorTerminal: need("STEERLINE_REAL_P10_COORDINATOR_TERMINAL"),
-		}},
-	}
+	c := Config{Host: "orca_supervised", Agent: "codex", CommandTimeout: "30s"}
+	setTestImplementationProfiles(t, &c, codexworker.ProfileConfig{Executable: "codex", Model: "gpt-6-luna", ReasoningEffort: "high"}, &orcaworker.ProfileConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "5m"}, &remote.ProfileConfig{
+		ConnectionID:            need("STEERLINE_REAL_P10_CONNECTION_ID"),
+		EnvironmentID:           need("STEERLINE_REAL_P10_ENVIRONMENT_ID"),
+		RepositorySelector:      need("STEERLINE_REAL_P10_REPOSITORY_SELECTOR"),
+		CoordinatorTerminal:     need("STEERLINE_REAL_P10_COORDINATOR_TERMINAL"),
+		PollInterval:            "2s",
+		CapabilityReportVersion: 1,
+		RemoteCancelAvailable:   false,
+	})
 	started := supervisedStartReceipt{
 		RunID:           need("STEERLINE_REAL_P10_RUN_ID"),
 		TaskID:          need("STEERLINE_REAL_P10_TASK_ID"),
@@ -62,7 +67,7 @@ func TestSupervisedOrcaRealP10ReplyGate(t *testing.T) {
 		Run        string `json:"run"`
 		From       string `json:"from"`
 		Dispatch   string `json:"dispatch"`
-	}{questionID, oversized, started.RunID, c.Orca.Supervised.CoordinatorTerminal, started.DispatchID})
+	}{questionID, oversized, started.RunID, remoteProfileSettings(c).CoordinatorTerminal, started.DispatchID})
 	if err != nil || len(serialized) <= maxSupervisedMessageBytes {
 		t.Fatalf("probe answer did not exceed the serialized limit: bytes=%d error=%v", len(serialized), err)
 	}

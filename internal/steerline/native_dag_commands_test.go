@@ -3,6 +3,7 @@ package steerline
 import (
 	"context"
 	"encoding/json"
+	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	"net/http"
 	"net/http/httptest"
@@ -13,6 +14,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 func taskBatchFixture(t *testing.T, c Config, commit string, tasks []TaskBatchTask, edges []TaskBatchEdge) []byte {
@@ -482,7 +485,7 @@ func TestNativeClaimAllowsManualParallelButKeepsAutoSlot(t *testing.T) {
 		t.Fatalf("native claim initialized workspace repository with a non-identity path: %+v", snapshot.Executions)
 	}
 	alteredWorkflow := page.Tasks[0].WorkflowRuns[0]
-	alteredWorkflow.Runner.Model = "changed-after-claim"
+	alteredWorkflow.ExecutionProfile.ImplementationData[0].Payload[0] = '['
 	if err = store.Transact(ctx, func(tx DomainTx) error { return tx.PutWorkflowRun(alteredWorkflow) }); err == nil || !strings.Contains(err.Error(), "immutable_task") {
 		t.Fatalf("claim workflow gates were edited after reservation: %v", err)
 	}
@@ -564,7 +567,8 @@ func TestNativeClaimBlocksWhenFetchedBaseMissesPredecessorMerge(t *testing.T) {
 	task := page.Tasks[0].TaskRecord
 	created := time.Now().UTC()
 	run := WorkflowRunRecord{ProjectIdentity: c.Identity(), WorkflowRunID: "wf-120", TaskID: "120", WorkflowVersion: WorkerFlowVersion, Phase: "waiting_pr_merge", SelectedResult: "exec-120", PRURL: "https://forge.invalid/org/repo/pulls/120", PRState: "merged", CreatedAt: created, UpdatedAt: created}
-	execution := ExecutionRecord{ProjectIdentity: c.Identity(), ExecutionID: "exec-120", WorkflowRunID: "wf-120", Status: "succeeded", CurrentStep: "worker", SessionID: "session-120", Workspace: WorkspaceEvidence{Branch: "codex/task-120"}, CreatedAt: created, UpdatedAt: created}
+	execution := ExecutionRecord{ProjectIdentity: c.Identity(), ExecutionID: "exec-120", CurrentAttemptID: "attempt-120", WorkflowRunID: "wf-120", Backend: string(executionapi.BackendLocal), Protocol: string(executionapi.ProtocolLocalCodexAppServer), Agent: "codex", Status: "succeeded", CurrentStep: "worker", Workspace: WorkspaceEvidence{Branch: "codex/task-120"}, CreatedAt: created, UpdatedAt: created}
+	setTestCodexBinding(t, &execution, "ws://127.0.0.1:12345", "native-generation", workerFlowMockSession)
 	mergeCommit := strings.Repeat("f", 40)
 	mergedAt := created.Add(-time.Minute)
 	prURL := "https://forge.invalid/org/repo/pulls/120"
@@ -808,6 +812,8 @@ func TestTaskDiscardRequiresPreciseUnmergedPRAndRetainsUnknownIntent(t *testing.
 	ctx := context.Background()
 	c, commit := nativeTaskFixture(t)
 	remoteURL := server.URL + "/org/repo.git"
+	c.PR = publication.Config{Kind: "gitea", BaseURL: server.URL, Repository: "org/repo"}
+	c.Git = Command{Executable: "git"}
 	if out, err := exec.Command("git", "-C", c.Repository, "remote", "set-url", "origin", remoteURL).CombinedOutput(); err != nil {
 		t.Fatalf("set fixture remote: %v: %s", err, out)
 	}
@@ -823,7 +829,6 @@ func TestTaskDiscardRequiresPreciseUnmergedPRAndRetainsUnknownIntent(t *testing.
 		t.Fatal(err)
 	}
 	defer store.Close()
-	c.PR = publication.Config{Kind: "gitea", BaseURL: server.URL, Repository: "org/repo"}
 	commands := CommandService{Store: store, Project: c.Identity()}
 	payload := taskBatchFixture(t, c, commit, batchTasks(90, 91, 92, 94, 95), nil)
 	if _, err = commands.CreateTaskBatch(ctx, c, payload, strings.Repeat("f", 32), 1, "planner"); err != nil {
@@ -1001,7 +1006,11 @@ func TestTaskDiscardDuringActiveExecutionKeepsSlotAndCleanupIdentity(t *testing.
 	created := time.Now().UTC()
 	workspace := WorkspaceEvidence{Repository: c.Repository, Worktree: "tree-72", Branch: "codex/72", Base: commit, Head: commit, VerifiedAt: created}
 	run := WorkflowRunRecord{ProjectIdentity: c.Identity(), WorkflowRunID: "wf-72", TaskID: "72", WorkflowVersion: WorkerFlowVersion, Phase: "executing", SelectedResult: "exec-72", CreatedAt: created, UpdatedAt: created}
+	require(t, c.bindPublicationTarget(ctx))
+	fixed := c.projectExecutionProfile().Freeze()
+	run.ExecutionProfile, run.ConfigDigest, run.Repository, run.Branch = &fixed, fixed.AcceptedConfigVersion, c.Repository, c.Branch
 	execution := ExecutionRecord{ProjectIdentity: c.Identity(), ExecutionID: "exec-72", WorkflowRunID: run.WorkflowRunID, Status: "active", CurrentStep: "worker", Workspace: workspace, CreatedAt: created, UpdatedAt: created}
+	execution.ConfigurationDigest = fixed.Digest
 	attempt := StepAttemptRecord{ProjectIdentity: c.Identity(), AttemptID: "attempt-72", ExecutionID: execution.ExecutionID, StepID: "worker", AttemptNumber: 1, Status: "running", ContractDigest: contract.Digest, CreatedAt: created, UpdatedAt: created}
 	task.Status = "in_progress"
 	task.Claimant = "worker"
@@ -1044,6 +1053,17 @@ func TestTaskDiscardDuringActiveExecutionKeepsSlotAndCleanupIdentity(t *testing.
 
 func seedPublishedForDiscard(t *testing.T, ctx context.Context, c Config, store *SQLiteStore, taskID, commit, prURL string) {
 	t.Helper()
+	if c.PR.Kind == "gitea" {
+		codex := codexProfileSettings(c)
+		c.Host, c.PublicationPolicy.Publisher = "orca", "worker"
+		codex.WindowsSandbox = "unelevated"
+		setTestImplementationProfiles(t, &c, codex, &orcaworker.ProfileConfig{Executable: codex.Executable, Shell: "pwsh.exe", WaitTimeout: "30s"})
+	}
+	require(t, c.bindPublicationTarget(ctx))
+	fixed := c.projectExecutionProfile().Freeze()
+	if !verifyFixedExecutionProfile(fixed) {
+		t.Fatal("published discard fixture has no valid frozen profile")
+	}
 	page, err := (NewQueryService(store, c.Identity())).ShowNativeTask(ctx, taskID)
 	if err != nil {
 		t.Fatal(err)
@@ -1054,7 +1074,16 @@ func seedPublishedForDiscard(t *testing.T, ctx context.Context, c Config, store 
 	executionID := "exec-" + taskID
 	workspace := WorkspaceEvidence{Repository: c.Repository, Worktree: "tree-" + taskID, Branch: "codex/" + taskID, Base: commit, Head: commit, VerifiedAt: created}
 	run := WorkflowRunRecord{ProjectIdentity: c.Identity(), WorkflowRunID: runID, TaskID: taskID, WorkflowVersion: WorkerFlowVersion, Phase: "waiting_pr_merge", SelectedResult: executionID, PRURL: prURL, PRState: "open", CreatedAt: created, UpdatedAt: created}
-	execution := ExecutionRecord{ProjectIdentity: c.Identity(), ExecutionID: executionID, WorkflowRunID: runID, Status: "idle", CurrentStep: "worker", SessionID: "session-" + taskID, Workspace: workspace, CreatedAt: created, UpdatedAt: created}
+	run.ExecutionProfile, run.ConfigDigest, run.Repository, run.Branch = &fixed, fixed.AcceptedConfigVersion, c.Repository, c.Branch
+	execution := ExecutionRecord{ProjectIdentity: c.Identity(), ExecutionID: executionID, CurrentAttemptID: "attempt-" + taskID, WorkflowRunID: runID, Backend: string(executionapi.BackendLocal), Protocol: string(executionapi.ProtocolLocalCodexAppServer), Agent: "codex", Status: "idle", CurrentStep: "worker", Workspace: workspace, CreatedAt: created, UpdatedAt: created}
+	execution.ConfigurationDigest = fixed.Digest
+	if c.Host == "orca" {
+		execution.Backend, execution.Protocol = string(executionapi.BackendOrca), string(executionapi.ProtocolOrcaTerminalV2)
+		execution.Process = &executionapi.ProcessIdentity{Kind: "orca-native", Terminal: "agent-" + taskID, RuntimeID: "runtime", Incarnation: "original"}
+		setTestOrcaState(t, &execution, &implementationExecutionView{RepositoryID: "repo"})
+	} else {
+		setTestCodexBinding(t, &execution, "ws://127.0.0.1:12345", "native-generation", workerFlowMockSession)
+	}
 	task.Status = "in_progress"
 	task.Claimant = "worker"
 	task.Version++

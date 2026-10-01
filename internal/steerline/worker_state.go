@@ -12,12 +12,16 @@ import (
 
 var ErrWorkerTurnStale = workerflow.ErrTurnStale
 
-func workerFlowState(workflow *WorkflowRunRecord, execution *ExecutionRecord) workerflow.State {
+func workerFlowState(workflow *WorkflowRunRecord, execution *ExecutionRecord, sessionOverride ...string) workerflow.State {
+	sessionID, _ := executionSessionFacts(execution)
+	if len(sessionOverride) > 0 && sessionOverride[0] != "" {
+		sessionID = sessionOverride[0]
+	}
 	return workerflow.State{
 		WorkflowRunID: workflow.WorkflowRunID, TaskID: workflow.TaskID, WorkflowVersion: workflow.WorkflowVersion,
 		Phase: workflow.Phase, PRURL: workflow.PRURL, PRState: workflow.PRState,
 		WorkflowUpdatedAt: workflow.UpdatedAt, ExecutionID: execution.ExecutionID,
-		ExecutionWorkflowRunID: execution.WorkflowRunID, SessionID: execution.SessionID,
+		ExecutionWorkflowRunID: execution.WorkflowRunID, SessionID: sessionID,
 		PendingTurnID: execution.PendingTurnID, CurrentTurnID: execution.CurrentTurnID,
 		LastStoppedTurnID: execution.LastStoppedTurnID, ExecutionStatus: execution.Status,
 		TurnNumber: execution.TurnNumber, ExecutionUpdatedAt: execution.UpdatedAt,
@@ -27,8 +31,7 @@ func workerFlowState(workflow *WorkflowRunRecord, execution *ExecutionRecord) wo
 func applyWorkerFlowState(workflow *WorkflowRunRecord, execution *ExecutionRecord, state workerflow.State) {
 	workflow.Phase, workflow.PRURL, workflow.PRState, workflow.UpdatedAt =
 		state.Phase, state.PRURL, state.PRState, state.WorkflowUpdatedAt
-	execution.SessionID, execution.PendingTurnID, execution.CurrentTurnID =
-		state.SessionID, state.PendingTurnID, state.CurrentTurnID
+	execution.PendingTurnID, execution.CurrentTurnID = state.PendingTurnID, state.CurrentTurnID
 	execution.LastStoppedTurnID, execution.Status, execution.TurnNumber, execution.UpdatedAt =
 		state.LastStoppedTurnID, state.ExecutionStatus, state.TurnNumber, state.ExecutionUpdatedAt
 }
@@ -45,7 +48,7 @@ func BeginWorkerTurn(workflow *WorkflowRunRecord, execution *ExecutionRecord, se
 	if err := workerFlowBinding(workflow, execution); err != nil {
 		return err
 	}
-	next, err := workerflow.BeginTurn(workerFlowState(workflow, execution), sessionID, turnID, time.Now().UTC())
+	next, err := workerflow.BeginTurn(workerFlowState(workflow, execution, sessionID), sessionID, turnID, time.Now().UTC())
 	if err == nil {
 		applyWorkerFlowState(workflow, execution, next)
 	}

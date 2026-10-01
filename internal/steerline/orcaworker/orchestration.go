@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 )
 
 type MutationReceipt struct {
@@ -35,8 +36,14 @@ func CreateRun(ctx context.Context, call MetaCall, objective, coordinator, runti
 			RequestID string `json:"requestId"`
 		} `json:"mutation"`
 	}
-	if err := json.Unmarshal(envelope.Payload, &result); err != nil || result.Run.ID == "" || result.Mutation.RequestID == "" || envelope.RuntimeID != runtimeID {
-		return MutationReceipt{}, errors.New("Orca Run receipt lacks exact runtime, Run or request identity")
+	if err := json.Unmarshal(envelope.Payload, &result); err != nil {
+		return MutationReceipt{}, fmt.Errorf("Orca Run receipt is invalid JSON: %w", err)
+	}
+	if result.Run.ID == "" || result.Mutation.RequestID == "" {
+		return MutationReceipt{}, errors.New("Orca Run receipt lacks its Run or mutation request identity")
+	}
+	if envelope.RuntimeID != runtimeID {
+		return MutationReceipt{}, fmt.Errorf("Orca Run receipt belongs to runtime %q, expected %q", envelope.RuntimeID, runtimeID)
 	}
 	return MutationReceipt{ID: result.Run.ID, RequestID: result.Mutation.RequestID, Payload: envelope.Payload}, nil
 }

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"runtime"
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
@@ -23,7 +24,9 @@ func appServerDirectory(c Config, run *Run) string {
 }
 
 func codexBackend(c Config, run *Run) codexworker.Backend {
-	return codexworker.Backend{Config: codexworker.Config{Policy: c.ExecutionPolicy, Executable: c.Codex.Executable, Args: c.Codex.Args, Profile: c.Profile, Sandbox: c.Sandbox, WindowsSandbox: c.WindowsSandbox, Model: c.Model, ReasoningEffort: c.ReasoningEffort, Workspace: deref(run.WorktreePath), RunDir: c.RunDir, RunID: run.RunID, ServerDir: appServerDirectory(c, run), Environment: func(base []string) []string {
+	settings := codexProfileSettings(c)
+	permissions, _ := codexworker.CompilePolicy(c.ExecutionPolicy, runtime.GOOS, c.hostName(), c.agentName(), settings.WindowsSandbox, settings.Profile, settings.Args)
+	return codexworker.Backend{Config: codexworker.Config{Policy: c.ExecutionPolicy, Executable: settings.Executable, Args: settings.Args, Profile: settings.Profile, Sandbox: permissions.Sandbox, WindowsSandbox: settings.WindowsSandbox, Model: settings.Model, ReasoningEffort: settings.ReasoningEffort, Workspace: deref(run.WorktreePath), RunDir: c.RunDir, RunID: run.RunID, ServerDir: appServerDirectory(c, run), Environment: func(base []string) []string {
 		return workerProcessEnvironment(c, run, base)
 	}}, Process: codexworker.ProcessPort{Start: codexProcessStart, Inspect: inspectProcess, NewGeneration: newID, WriteAtomic: AtomicWrite}}
 }
@@ -31,14 +34,19 @@ func workerProcessEnvironment(c Config, run *Run, base []string) []string {
 	blocked := append(c.publicationSettings().AuthenticationRefs, "BEADS_*", "BD_*", "GH_TOKEN", "GITHUB_TOKEN", "GITEA_TOKEN", "GIT_CONFIG_COUNT", "GIT_CONFIG_KEY_*", "GIT_CONFIG_VALUE_*")
 	return unsetEnv(overrideEnv(base, map[string]string{"STEERLINE_WORKFLOW_RUN_ID": run.RunID, "STEERLINE_EXECUTION_ID": run.ExecutionID}), blocked)
 }
-func codexBinding(e *ExecutionRecord) codexworker.Binding {
-	return codexworker.Binding{Process: e.Process, Endpoint: e.AppServerEndpoint, Generation: e.AppServerGeneration, SessionID: e.SessionID}
+func codexBinding(e *ExecutionRecord) (codexworker.Binding, error) {
+	if e == nil {
+		return codexworker.Binding{}, errors.New("app-server binding has no execution")
+	}
+	native, err := decodeCodexAppServerBinding(e)
+	if err != nil {
+		return codexworker.Binding{}, err
+	}
+	return codexworker.Binding{Process: e.Process, Endpoint: native.Endpoint, Generation: native.Generation, SessionID: native.SessionID}, nil
 }
-func applyCodexBinding(e *ExecutionRecord, b codexworker.Binding) {
+func applyCodexBinding(e *ExecutionRecord, b codexworker.Binding) error {
 	e.Process = b.Process
-	e.AppServerEndpoint = b.Endpoint
-	e.AppServerGeneration = b.Generation
-	e.SessionID = b.SessionID
+	return storeCodexAppServerBinding(e, b)
 }
 func startAppServerWorkerTurn(ctx context.Context, c Config, run *Run, execution *ExecutionRecord, commandID, prompt string, persistThread func() error) (*Worker, string, string, error) {
 	if run == nil || execution == nil || run.WorkflowVersion != WorkerFlowVersion || run.Protocol != string(executionapi.ProtocolLocalCodexAppServer) || run.WorktreePath == nil || run.AttemptID == "" {
@@ -49,7 +57,7 @@ func startAppServerWorkerTurn(ctx context.Context, c Config, run *Run, execution
 	}
 	var linkedArgs []string
 	var err error
-	if c.Sandbox == "workspace-write" {
+	if c.ExecutionPolicy.Filesystem.WriteScope == "workspace-write" {
 		linkedArgs, err = codexLinkedWorktreeWriteArgs(ctx, c, *run.WorktreePath)
 		if err != nil {
 			return nil, "", "", err
@@ -60,14 +68,20 @@ func startAppServerWorkerTurn(ctx context.Context, c Config, run *Run, execution
 	}
 	backend := codexBackend(c, run)
 	input := executionapi.TurnInput{CommandID: commandID, Prompt: prompt}
-	session, binding, err := backend.PrepareSession(ctx, codexBinding(execution), input)
-	applyCodexBinding(execution, binding)
+	fixedBinding, err := codexBinding(execution)
+	if err != nil {
+		return nil, "", "", err
+	}
+	session, binding, err := backend.PrepareSession(ctx, fixedBinding, input)
+	if bindingErr := applyCodexBinding(execution, binding); bindingErr != nil {
+		return nil, "", "", bindingErr
+	}
 	if err != nil {
 		return nil, "", "", err
 	}
 	defer session.Close()
-	history := codexworker.HistoryBinding{Version: 1, ProjectID: c.identity, TaskID: run.DomainTaskID, WorkflowID: run.RunID, ExecutionID: run.ExecutionID, AttemptID: run.AttemptID, Backend: executionapi.BackendLocal, Protocol: executionapi.ProtocolLocalCodexAppServer, TargetID: run.Target.ID, ExternalRef: conversationExternalRef(execution.Process), Workspace: *run.WorktreePath, SessionID: execution.SessionID, Command: codexReaderCommand(c), Home: codexEnvironmentHome()}
-	if err = writeCodexHistoryBinding(localCodexHistoryBindingPath(session.Paths.TurnDir, execution.SessionID), history); err != nil {
+	history := codexworker.HistoryBinding{Version: 1, ProjectID: c.identity, TaskID: run.DomainTaskID, WorkflowID: run.RunID, ExecutionID: run.ExecutionID, AttemptID: run.AttemptID, Backend: executionapi.BackendLocal, Protocol: executionapi.ProtocolLocalCodexAppServer, TargetID: run.Target.ID, ExternalRef: conversationExternalRef(execution.Process), Workspace: *run.WorktreePath, SessionID: binding.SessionID, Command: codexReaderCommand(c), Home: codexEnvironmentHome()}
+	if err = writeCodexHistoryBinding(localCodexHistoryBindingPath(session.Paths.TurnDir, binding.SessionID), history); err != nil {
 		return nil, "", "", err
 	}
 	refreshExecutionView(run, execution)
@@ -94,12 +108,16 @@ func (s *Service) interruptOwnedLocalTurn(runID string, owned *childProcess) {
 		}
 		execution := s.executionRecord(run)
 		if execution == nil || execution.Process == nil || *execution.Process != owned.Identity() ||
-			!codexworker.ValidNativeID(execution.SessionID) || !codexworker.ValidNativeID(execution.CurrentTurnID) ||
-			execution.CurrentTurnID == execution.LastStoppedTurnID || execution.AppServerEndpoint == "" {
+			!codexworker.ValidNativeID(codexSessionID(execution)) || !codexworker.ValidNativeID(execution.CurrentTurnID) ||
+			execution.CurrentTurnID == execution.LastStoppedTurnID {
+			return
+		}
+		binding, err := codexBinding(execution)
+		if err != nil || binding.Endpoint == "" {
 			return
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		_ = codexworker.Interrupt(ctx, execution.AppServerEndpoint, execution.SessionID, execution.CurrentTurnID)
+		_ = codexworker.Interrupt(ctx, binding.Endpoint, binding.SessionID, execution.CurrentTurnID)
 		cancel()
 		return
 	}
@@ -156,7 +174,9 @@ func knownCodexAsks(run *Run, e *ExecutionRecord) []string {
 	return calls
 }
 func applyCodexRecovery(run *Run, e *ExecutionRecord, result codexworker.Recovery) *Worker {
-	applyCodexBinding(e, result.Binding)
+	if err := applyCodexBinding(e, result.Binding); err != nil {
+		return nil
+	}
 	if e.PendingCommandID != "" {
 		e.PendingTurnID = result.TurnID
 	}
@@ -234,32 +254,41 @@ func (s *Service) handleAppServerLaunchMessage(runID string, message *appServerL
 	if workflow == nil || execution == nil || execution.ExecutionID != message.execution.ExecutionID || execution.PendingCommandID != message.commandID || run.AttemptID != message.run.AttemptID || run.TaskStatus == "closed" || run.TaskStatus == "discarded" {
 		return ErrWorkerTurnStale
 	}
+	messageBinding, err := codexBinding(&message.execution)
+	if err != nil {
+		return err
+	}
+	currentBinding, err := codexBinding(execution)
+	if err != nil {
+		return err
+	}
 	acceptResources := func() error {
 		resource := message.execution.PolicyResources
-		if err := verifyPolicyResources(resource, workflow.ExecutionProfile.Digest, execution.Workspace.Worktree); err != nil {
+		if err := verifyPolicyResources(resource, workflow.ExecutionProfile.Digest, execution.Workspace.Worktree, &message.execution); err != nil {
 			return err
 		}
 		if execution.PolicyResources != nil && execution.PolicyResources.Digest != resource.Digest {
 			return ErrWorkerTurnStale
 		}
 		execution.PolicyResources = resource
+		execution.Generation = message.execution.Generation
+		execution.ConfigurationDigest = message.execution.ConfigurationDigest
 		return nil
 	}
 	if message.phase == "thread_ready" {
-		if message.execution.Process == nil || !codexworker.ValidNativeID(message.execution.SessionID) || message.execution.AppServerEndpoint == "" || message.execution.AppServerGeneration == "" {
+		if message.execution.Process == nil || !codexworker.ValidNativeID(messageBinding.SessionID) || messageBinding.Endpoint == "" || messageBinding.Generation == "" {
 			return errors.New("app-server thread receipt is incomplete")
 		}
-		if execution.Process != nil && *execution.Process != *message.execution.Process || execution.SessionID != "" && execution.SessionID != message.execution.SessionID {
+		if execution.Process != nil && *execution.Process != *message.execution.Process || currentBinding.SessionID != "" && currentBinding.SessionID != messageBinding.SessionID {
 			return errors.New("app-server thread receipt conflicts with its fixed execution")
 		}
 		if err := acceptResources(); err != nil {
 			return err
 		}
-		ref := executionapi.ExecutionRef{Version: executionapi.ExecutionRecordVersion, Backend: executionapi.BackendLocal, Protocol: executionapi.ProtocolLocalCodexAppServer, Target: targetFor(c), Agent: agentFor(c), RunID: run.RunID, AttemptID: run.AttemptID, WorkspacePath: deref(run.WorktreePath), WorkspaceBranch: deref(run.WorktreeBranch), BaseCommit: deref(run.BaseCommit), External: *message.execution.Process, Generation: message.execution.AppServerGeneration}
-		execution.Process = message.execution.Process
-		execution.AppServerEndpoint = message.execution.AppServerEndpoint
-		execution.AppServerGeneration = message.execution.AppServerGeneration
-		execution.SessionID = message.execution.SessionID
+		ref := executionapi.ExecutionRef{Version: executionapi.ExecutionRecordVersion, Backend: executionapi.BackendLocal, Protocol: executionapi.ProtocolLocalCodexAppServer, Target: targetFor(c), Agent: agentFor(c), RunID: run.RunID, AttemptID: run.AttemptID, WorkspacePath: deref(run.WorktreePath), WorkspaceBranch: deref(run.WorktreeBranch), BaseCommit: deref(run.BaseCommit), External: *message.execution.Process, Generation: messageBinding.Generation}
+		if err := applyCodexBinding(execution, messageBinding); err != nil {
+			return err
+		}
 		s.refreshRun(run)
 		return s.commitWorkerBinding(run, ref)
 	}
@@ -269,28 +298,29 @@ func (s *Service) handleAppServerLaunchMessage(runID string, message *appServerL
 	if message.err != nil {
 		if message.execution.Process != nil {
 			if execution.Process != nil && *execution.Process != *message.execution.Process ||
-				execution.AppServerEndpoint != "" && execution.AppServerEndpoint != message.execution.AppServerEndpoint ||
-				execution.AppServerGeneration != "" && execution.AppServerGeneration != message.execution.AppServerGeneration ||
-				execution.SessionID != "" && message.execution.SessionID != "" && execution.SessionID != message.execution.SessionID {
+				currentBinding.Endpoint != "" && currentBinding.Endpoint != messageBinding.Endpoint ||
+				currentBinding.Generation != "" && currentBinding.Generation != messageBinding.Generation ||
+				currentBinding.SessionID != "" && messageBinding.SessionID != "" && currentBinding.SessionID != messageBinding.SessionID {
 				return ErrWorkerTurnStale
 			}
-			if message.execution.SessionID != "" && !codexworker.ValidNativeID(message.execution.SessionID) {
+			if messageBinding.SessionID != "" && !codexworker.ValidNativeID(messageBinding.SessionID) {
 				return errors.New("partial app-server thread identity is invalid")
 			}
 			if err := acceptResources(); err != nil {
 				return err
 			}
-			execution.Process = message.execution.Process
-			execution.AppServerEndpoint = message.execution.AppServerEndpoint
-			execution.AppServerGeneration = message.execution.AppServerGeneration
-			if message.execution.SessionID != "" {
-				execution.SessionID = message.execution.SessionID
+			if messageBinding.Endpoint != "" {
+				if err := applyCodexBinding(execution, messageBinding); err != nil {
+					return err
+				}
+			} else {
+				execution.Process = message.execution.Process
 			}
 			s.refreshRun(run)
 		}
 		return s.failStartedWorkerTurn(run, message.opID, message.turnID, message.err)
 	}
-	if message.worker == nil || !codexworker.ValidNativeID(message.turnID) || execution.Process == nil || message.worker.proc.Identity() != *execution.Process || message.execution.SessionID != execution.SessionID || message.execution.AppServerGeneration != execution.AppServerGeneration {
+	if message.worker == nil || !codexworker.ValidNativeID(message.turnID) || execution.Process == nil || message.worker.proc.Identity() != *execution.Process || messageBinding.SessionID != currentBinding.SessionID || messageBinding.Generation != currentBinding.Generation {
 		return errors.New("app-server turn result differs from its fixed thread/process")
 	}
 	return s.acceptStartedWorkerTurn(run, message.worker, message.events, message.turnID, message.opID, message.commandID, true)

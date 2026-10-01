@@ -20,11 +20,11 @@ func remoteExecutionRef(run *Run, execution *ExecutionRecord) executionapi.Execu
 
 func remoteClientForExecution(c Config, execution *ExecutionRecord) remote.Client {
 	cfg := remoteWorkerConfig(c)
-	if execution.OrcaNative != nil {
-		cfg.ExpectedRemoteRuntime = execution.OrcaNative.RemoteRuntimeID
-	}
-	if execution.OrcaNative != nil && execution.OrcaNative.Coordinator.Terminal != "" {
-		cfg.Settings.CoordinatorTerminal = execution.OrcaNative.Coordinator.Terminal
+	if state, err := decodeOrcaExecutionState(execution); err == nil && state != nil {
+		cfg.ExpectedRemoteRuntime = state.RemoteRuntimeID
+		if state.Coordinator.Terminal != "" {
+			cfg.Settings.CoordinatorTerminal = state.Coordinator.Terminal
+		}
 	}
 	return remote.New(cfg)
 }
@@ -39,14 +39,20 @@ func (s *Service) prepareRemoteOrcaCoordinator(ctx context.Context, run *Run) er
 	if err != nil {
 		return err
 	}
-	if execution.OrcaNative == nil {
-		execution.OrcaNative = &OrcaNativeExecution{}
+	state, err := decodeOrcaExecutionState(execution)
+	if err != nil {
+		return err
 	}
-	state := execution.OrcaNative
+	if state == nil {
+		state = &implementationExecutionView{}
+	}
 	if state.RemoteRuntimeID != "" && state.RemoteRuntimeID != pair.RemoteRuntime {
 		return errors.New("original remote runtime changed")
 	}
 	state.RemoteRuntimeID = pair.RemoteRuntime
+	if err := storeOrcaExecutionState(execution, state); err != nil {
+		return err
+	}
 	client := remoteWorkerClient(fixed.config)
 	if state.Coordinator.Terminal == "" {
 		key := "orca-remote-coordinator:" + execution.ExecutionID
@@ -82,6 +88,9 @@ func (s *Service) prepareRemoteOrcaCoordinator(ctx context.Context, run *Run) er
 		state.Coordinator = executionapi.ProcessIdentity(identity)
 		execution.Target.CoordinatorTerminal = handle
 		s.refreshRun(run)
+		if err := storeOrcaExecutionState(execution, state); err != nil {
+			return err
+		}
 		if err := s.changeWorkerOperation(run, op.OperationID, "confirmed", op.PlatformRequestID, mustJSON(state.Coordinator), ""); err != nil {
 			return err
 		}
@@ -128,12 +137,12 @@ func (s *Service) startRemoteOrcaTurn(ctx context.Context, run *Run, execution *
 	if err != nil {
 		return err
 	}
-	if execution.OrcaNative == nil || execution.OrcaNative.Coordinator.Terminal == "" || execution.Target.OrchestrationRun == "" {
+	state, stateErr := decodeOrcaExecutionState(execution)
+	if stateErr != nil || state == nil || state.Coordinator.Terminal == "" || execution.Target.OrchestrationRun == "" {
 		return errors.New("remote worker has no prepared coordinator/Run")
 	}
 	client := remoteClientForExecution(fixed.config, execution)
-	state := execution.OrcaNative
-	var turn *OrcaNativeTurn
+	var turn *implementationTurnView
 	for i := range state.Turns {
 		if state.Turns[i].TurnID == turnID {
 			turn = &state.Turns[i]
@@ -168,7 +177,10 @@ func (s *Service) startRemoteOrcaTurn(ctx context.Context, run *Run, execution *
 				return err
 			}
 		}
-		state.Turns = append(state.Turns, OrcaNativeTurn{Purpose: "business", IntentAt: now(), TurnID: turnID, TaskID: receipt.ID, TaskRequestID: receipt.RequestID})
+		state.Turns = append(state.Turns, implementationTurnView{Purpose: "business", IntentAt: now(), TurnID: turnID, TaskID: receipt.ID, TaskRequestID: receipt.RequestID})
+		if err := storeOrcaExecutionState(execution, state); err != nil {
+			return err
+		}
 		turn = &state.Turns[len(state.Turns)-1]
 		if err := s.changeWorkerOperation(run, op.OperationID, "confirmed", receipt.RequestID, mustJSON(*turn), ""); err != nil {
 			return err
@@ -180,7 +192,8 @@ func (s *Service) startRemoteOrcaTurn(ctx context.Context, run *Run, execution *
 	if op != nil {
 		started, err = client.RecoverStart(ctx, execution.Target.OrchestrationRun, turn.TaskID, execution.Target.WorktreeID, state.Coordinator.RuntimeID)
 	} else {
-		id, intentErr := s.startWorkerOperation(run, "orca_remote_start", key, map[string]string{"execution_id": execution.ExecutionID, "task_id": turn.TaskID, "worktree_id": execution.Target.WorktreeID, "session_id": execution.SessionID})
+		sessionID, _ := executionSessionFacts(execution)
+		id, intentErr := s.startWorkerOperation(run, "orca_remote_start", key, map[string]string{"execution_id": execution.ExecutionID, "task_id": turn.TaskID, "worktree_id": execution.Target.WorktreeID, "session_id": sessionID})
 		if intentErr != nil {
 			return intentErr
 		}
@@ -206,6 +219,9 @@ func (s *Service) startRemoteOrcaTurn(ctx context.Context, run *Run, execution *
 	firstBinding := execution.Process == nil
 	execution.Process = &identity
 	turn.DispatchID, turn.DispatchRequestID = started.DispatchID, started.PlatformRequestID
+	if err := storeOrcaExecutionState(execution, state); err != nil {
+		return err
+	}
 	execution.Target.ExecutionHost = identity.ExecutionHost
 	s.bindNativeOrcaDispatch(run, execution, turn)
 	s.refreshRun(run)
@@ -248,7 +264,8 @@ func (s *Service) resumeRemoteOrcaWorker(ctx context.Context, task *TaskRecord, 
 			return true, s.nativeOrcaUncertain(run, err.Error())
 		}
 	}
-	if execution.OrcaNative == nil || execution.OrcaNative.Coordinator.Terminal == "" || execution.Target.OrchestrationRun == "" {
+	state, stateErr := decodeOrcaExecutionState(execution)
+	if stateErr != nil || state == nil || state.Coordinator.Terminal == "" || execution.Target.OrchestrationRun == "" {
 		if err := s.prepareRemoteOrcaCoordinator(ctx, run); err != nil {
 			return true, s.nativeOrcaUncertain(run, err.Error())
 		}
@@ -307,7 +324,11 @@ func (s *Service) finishRemoteOrcaCleanup(ctx context.Context, run *Run) error {
 	}
 	execution := fixed.execution
 	turn := nativeOrcaCurrentTurn(execution)
-	if turn == nil || turn.DoneMessageID == "" || execution.PendingTurnID != "" || execution.LastStoppedTurnID != turn.TurnID || execution.OrcaNative.DeliveryID != "" {
+	state, stateErr := decodeOrcaExecutionState(execution)
+	if stateErr != nil || state == nil {
+		return errors.New("remote cleanup has no verified implementation binding")
+	}
+	if turn == nil || turn.DoneMessageID == "" || execution.PendingTurnID != "" || execution.LastStoppedTurnID != turn.TurnID || state.DeliveryID != "" {
 		return nil
 	}
 	client := remoteClientForExecution(fixed.config, execution)
@@ -338,13 +359,13 @@ func (s *Service) finishRemoteOrcaCleanup(ctx context.Context, run *Run) error {
 	}
 	uncertain := op != nil
 	if op == nil {
-		_, err = s.startWorkerOperation(run, "orca_remote_coordinator_close", key, map[string]string{"execution_id": execution.ExecutionID, "coordinator": execution.OrcaNative.Coordinator.Terminal})
+		_, err = s.startWorkerOperation(run, "orca_remote_coordinator_close", key, map[string]string{"execution_id": execution.ExecutionID, "coordinator": state.Coordinator.Terminal})
 		if err != nil {
 			return err
 		}
 		op = s.operationByKey(key)
 	}
-	receipt, err := client.CloseCoordinator(ctx, ref, executionapi.ProcessIdentity(execution.OrcaNative.Coordinator), uncertain)
+	receipt, err := client.CloseCoordinator(ctx, ref, executionapi.ProcessIdentity(state.Coordinator), uncertain)
 	if err != nil {
 		_ = s.changeWorkerOperation(run, op.OperationID, "outcome_unknown", "", nil, err.Error())
 		return err

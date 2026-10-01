@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
 
@@ -28,14 +29,16 @@ func TestWorkerOrcaWorktreeNameIncludesTaskNumberAndRunIdentity(t *testing.T) {
 }
 
 func TestNativeOrcaAgentSelectionUsesFrozenProfile(t *testing.T) {
-	base := Config{Host: "orca", Agent: "codex", Sandbox: "workspace-write"}
+	base := Config{Host: "orca", Agent: "codex", ExecutionPolicy: workspacePolicyFixture()}
 	for _, agent := range []string{"codex", "opencode"} {
-		profile := ExecutionProfile{ID: "orca-" + agent, Name: "Orca " + agent, Host: "orca", Agent: agent, Sandbox: "workspace-write", Orca: OrcaConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "2m"}}
+		codex := codexworker.ProfileConfig{Executable: "codex.exe"}
+		orca := &orcaworker.ProfileConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "2m"}
 		if agent == "codex" {
-			profile.WindowsSandbox = "unelevated"
-			profile.Codex = Command{Executable: "codex.exe"}
-			profile.Orca.Shell = "powershell.exe"
+			codex.WindowsSandbox = "unelevated"
+			orca.Shell = "powershell.exe"
 		}
+		profile := testExecutionProfile(t, "orca-"+agent, "Orca "+agent, "orca", agent, codex, orca)
+		profile = base.bindProjectPolicy(profile)
 		base.ExecutionProfiles = []ExecutionProfile{profile}
 		if err := validateExecutionProfiles(base); err != nil {
 			t.Fatal(err)

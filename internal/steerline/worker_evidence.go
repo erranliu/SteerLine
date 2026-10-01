@@ -8,11 +8,12 @@ func workerSessionContext(run *Run, record *ExecutionRecord) *executionapi.Sessi
 	if record == nil {
 		return nil
 	}
+	sessionID, generation := executionSessionFacts(record)
 	fixed := &executionapi.SessionContext{
 		ProjectID: record.ProjectIdentity, WorkflowRunID: record.WorkflowRunID,
 		ExecutionID: record.ExecutionID, AttemptID: record.CurrentAttemptID,
 		Agent: executionapi.AgentSpec{Name: record.Agent}, Target: record.Target,
-		SessionID: record.SessionID, Generation: record.AppServerGeneration,
+		SessionID: sessionID, Generation: generation,
 		CurrentTurnID: record.CurrentTurnID, PendingTurnID: record.PendingTurnID,
 		CurrentCommandID: record.CurrentCommandID, PendingCommandID: record.PendingCommandID,
 	}

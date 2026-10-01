@@ -4,7 +4,7 @@ SteerLine 尚未发布。当前生产配置必须显式设置 `"task_authority":
 
 ## 权威与身份
 
-SQLite schema 8 是 Task、固定 TaskContract、依赖、WorkflowRun、Execution、Attempt、Decision、Operation、会话事件与 TaskDelivery 的唯一业务权威。旧 schema 只通过只读元数据检查识别并拒绝，不自动升级，也不开放业务读取；拒绝时保留数据库文件与可能仍在运行的外部执行。运行时投影为 schema 10。旧投影、旧 WorkflowRun 或旧本地执行协议在工作区准备之前拒绝，并保留原文件及可能仍在运行的外部执行。
+SQLite schema 9 是 Task、固定 TaskContract、依赖、WorkflowRun、Execution、Attempt、Decision、Operation、会话事件与 TaskDelivery 的唯一业务权威。旧 schema 只通过只读元数据检查识别并拒绝，不自动升级，也不开放业务读取；拒绝时保留数据库文件与可能仍在运行的外部执行。运行时投影为 schema 12。旧投影、旧 WorkflowRun 或旧本地执行协议在工作区准备之前拒绝，并保留原文件及可能仍在运行的外部执行。
 
 服务与会话检查点也保存在 SQLite；检查点不复制 Task、WorkflowRun、Execution、Attempt、Decision 或 Operation 行。连接观察只读检查点，恢复和命令在同一只读事务中把检查点与领域表组合。当前配置不使用 `runtime_file`，服务不导出 `runtime.json`。
 
@@ -54,4 +54,6 @@ Execution 的 `environment` 保存领取时的 Profile digest、准备 turn/nonc
 
 ## 本地 Windows sandbox 配置冻结
 
-`ExecutionProfile`、`FixedExecutionProfile` 和 `StepRunnerSettings` 的 `windows_sandbox` 保存原生实现方式（`elevated` / `unelevated`），与文件权限范围 `sandbox` 分开。Windows local 受限方案的有效默认值为 `elevated`，该值进入 Profile digest 并在领取时持久化。恢复读取原冻结 Profile，不使用当前全局配置改写已开始的 Execution。本地 linked-worktree workspace-write + unelevated 在领取前拒绝；参数拼接再次验证，外部进程不启动。此改动不引入数据库迁移或 Orca readiness 状态。
+FixedExecutionProfile v5 只保存通用策略、实现 key/version 和有界的实现配置封套；Codex codec 拥有 `windows_sandbox`（`elevated` / `unelevated`）并将有效配置纳入 Profile digest。Windows local 受限方案的有效默认值为 `elevated`，领取时随封套冻结。PolicyResources v3 保存通用 workspace/权限根及 Codex 资源封套；ExecutionRecord 的原生 thread、endpoint 与 process generation 位于 Codex binding envelope，Orca terminal、Dispatch、coordinator 和 cursor 位于 Orca execution-state envelope。恢复读取原冻结 Profile 与原绑定，不使用当前全局配置改写已开始的 Execution。当前全局配置格式为 version 2，runtime checkpoint 为 schema 12，SQLite 为 schema 9；格式变化拒绝旧数据，不迁移或回填。
+
+Decision 的实现问题路由也复用同一 64 KiB 封套，以 answer purpose 固定原 WorkflowRun、Execution、Attempt、generation、turn 和 question；回答路由不能冒充配置或资源封套。

@@ -11,9 +11,13 @@ type nativeOrcaSettlement struct {
 	RuntimeID  string
 }
 
-func readNativeOrcaSettlement(ctx context.Context, c Config, execution *ExecutionRecord, turn *OrcaNativeTurn) (nativeOrcaSettlement, error) {
+func readNativeOrcaSettlement(ctx context.Context, c Config, execution *ExecutionRecord, turn *implementationTurnView) (nativeOrcaSettlement, error) {
 	var fact nativeOrcaSettlement
-	if execution == nil || execution.OrcaNative == nil || execution.Process == nil || turn == nil {
+	state, stateErr := decodeOrcaExecutionState(execution)
+	if stateErr != nil {
+		return fact, stateErr
+	}
+	if execution == nil || state == nil || execution.Process == nil || turn == nil {
 		return fact, errors.New("worker settlement has no fixed execution identity")
 	}
 	ops, err := orcaOperationsFor(c)
@@ -23,7 +27,7 @@ func readNativeOrcaSettlement(ctx context.Context, c Config, execution *Executio
 	return ops.Settlement(ctx, execution, turn)
 }
 
-func verifyNativeOrcaActiveDispatch(ctx context.Context, c Config, execution *ExecutionRecord, turn *OrcaNativeTurn) error {
+func verifyNativeOrcaActiveDispatch(ctx context.Context, c Config, execution *ExecutionRecord, turn *implementationTurnView) error {
 	if execution == nil || execution.Process == nil || turn == nil {
 		return errors.New("active dispatch verification has no fixed identity")
 	}

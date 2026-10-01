@@ -9,7 +9,7 @@ import (
 
 func TestNativeOrcaDoneRequestBindsCurrentTurn(t *testing.T) {
 	run := &Run{RunID: "60bc979788fbee3d491f49d2eeca10c1"}
-	turn := &OrcaNativeTurn{TurnID: "65986a5980b8c67c5588cb2fd04c0fa4", TaskID: "task-current", DispatchID: "ctx-current"}
+	turn := &implementationTurnView{TurnID: "65986a5980b8c67c5588cb2fd04c0fa4", TaskID: "task-current", DispatchID: "ctx-current"}
 	worktree := t.TempDir()
 	path, err := nativeOrcaRelayPath(worktree, run.RunID, turn.TurnID)
 	if err != nil {

@@ -34,7 +34,11 @@ func (s *Service) replyAppServerAsk(ctx context.Context, run *Run, execution *Ex
 	if err != nil {
 		return err
 	}
-	if err := codexBackend(fixed.config, run).ValidateReply(codexBinding(execution), ask.Generation, ask.ThreadID, ask.TurnID, execution.CurrentTurnID, execution.LastStoppedTurnID); err != nil {
+	binding, err := codexBinding(execution)
+	if err != nil {
+		return err
+	}
+	if err := codexBackend(fixed.config, run).ValidateReply(binding, ask.Generation, ask.ThreadID, ask.TurnID, execution.CurrentTurnID, execution.LastStoppedTurnID); err != nil {
 		return err
 	}
 	key := "worker-question-answer:" + execution.ExecutionID + ":" + answer.DecisionID
@@ -59,7 +63,7 @@ func (s *Service) replyAppServerAsk(ctx context.Context, run *Run, execution *Ex
 	if s.workerMessages != nil {
 		askCopy := ask
 		answers := answer.Answers
-		endpoint, workspace, runID := execution.AppServerEndpoint, execution.Workspace.Worktree, run.RunID
+		endpoint, workspace, runID := binding.Endpoint, execution.Workspace.Worktree, run.RunID
 		s.forwarders.Add(1)
 		go func() {
 			defer s.forwarders.Done()
@@ -72,7 +76,7 @@ func (s *Service) replyAppServerAsk(ctx context.Context, run *Run, execution *Ex
 		}()
 		return nil
 	}
-	err = sendAppServerAskReply(ctx, execution.AppServerEndpoint, execution.Workspace.Worktree, ask, answer.Answers)
+	err = sendAppServerAskReply(ctx, binding.Endpoint, execution.Workspace.Worktree, ask, answer.Answers)
 	if err != nil {
 		_ = s.changeWorkerOperation(run, opID, "outcome_unknown", ask.CallID, nil, err.Error())
 		execution.Error = ptr("Original Codex question reply is unverified: " + err.Error())

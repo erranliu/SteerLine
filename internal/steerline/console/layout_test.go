@@ -151,7 +151,7 @@ func TestTaskPreviewKeepsOneIdentityAndShowsFixedExecutionPlan(t *testing.T) {
 	run := &steerline.Run{TaskID: "102", DomainTaskID: "102", RunID: "run-102", Title: "进行中的任务", TaskStatus: "in_progress", ExecutionStatus: "running"}
 	snapshot.Observation.Runtime.Runs = []*steerline.Run{run}
 	snapshot.NativeTasks = &steerline.NativeTaskPage{Tasks: []steerline.NativeTaskDetail{{TaskRecord: steerline.TaskRecord{TaskID: "102", Title: run.Title, Status: "in_progress"}, Successors: []string{"104"}}}}
-	fixed := (steerline.ExecutionProfile{ID: "orca-local", Name: "本机执行", Host: "orca", Agent: "codex", Model: "gpt-6-luna", ReasoningEffort: "xhigh"}).Freeze()
+	fixed := steerline.FixedExecutionProfile{ID: "orca-local", Name: "本机执行", Host: "orca", Agent: "codex", ImplementationDisplay: []string{"Model：gpt-6-luna", "Reasoning effort：xhigh"}}
 	snapshot.Domain = &steerline.DomainSnapshot{WorkflowRuns: []steerline.WorkflowRunRecord{{WorkflowRunID: run.RunID, ExecutionProfile: &fixed}}}
 	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, &testControlClient{}, now)
 	m.projects[0].selectedKey = "run:" + run.RunID

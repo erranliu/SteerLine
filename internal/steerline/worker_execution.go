@@ -64,10 +64,11 @@ func (s *Service) startCodexWorkerTurn(ctx context.Context, run *Run, commandID,
 	}
 	persistThread := func() error {
 		execution := fixed.execution
-		if execution.Process == nil || execution.AppServerGeneration == "" {
+		binding, err := codexBinding(execution)
+		if err != nil || execution.Process == nil || binding.Generation == "" {
 			return errors.New("app-server thread has no verified process generation")
 		}
-		ref := executionapi.ExecutionRef{Version: executionapi.ExecutionRecordVersion, Backend: executionapi.BackendLocal, Protocol: executionapi.ProtocolLocalCodexAppServer, Target: targetFor(fixed.config), Agent: agentFor(fixed.config), RunID: run.RunID, AttemptID: run.AttemptID, WorkspacePath: deref(run.WorktreePath), WorkspaceBranch: deref(run.WorktreeBranch), BaseCommit: deref(run.BaseCommit), External: *execution.Process, Generation: execution.AppServerGeneration}
+		ref := executionapi.ExecutionRef{Version: executionapi.ExecutionRecordVersion, Backend: executionapi.BackendLocal, Protocol: executionapi.ProtocolLocalCodexAppServer, Target: targetFor(fixed.config), Agent: agentFor(fixed.config), RunID: run.RunID, AttemptID: run.AttemptID, WorkspacePath: deref(run.WorktreePath), WorkspaceBranch: deref(run.WorktreeBranch), BaseCommit: deref(run.BaseCommit), External: *execution.Process, Generation: binding.Generation}
 		return s.commitWorkerBinding(run, ref)
 	}
 	worker, events, platformRequestID, err := startAppServerWorkerTurn(ctx, fixed.config, run, fixed.execution, commandID, prompt, persistThread)
@@ -170,7 +171,8 @@ func (s *Service) acceptStartedWorkerTurn(run *Run, worker *Worker, events, plat
 	if err := s.setOperationState(opID, "accepted", platformRequestID, mustJSON(identity), ""); err != nil {
 		return err
 	}
-	s.note(run, "steer", "worker", "accepted", "original worker turn accepted", commandID, map[string]any{"session_id": execution.SessionID, "turn_number": execution.TurnNumber + 1})
+	sessionID, _ := executionSessionFacts(execution)
+	s.note(run, "steer", "worker", "accepted", "original worker turn accepted", commandID, map[string]any{"session_id": sessionID, "turn_number": execution.TurnNumber + 1})
 	if err := s.commitWorker(run, opID); err != nil {
 		return fmt.Errorf("worker started but its exact process receipt could not be saved: %w", err)
 	}
@@ -189,7 +191,8 @@ func requireWorkerFlowCapabilities(ctx context.Context, c Config) error {
 	return entry.Preflight(ctx, c)
 }
 func preflightRemoteWorkerFlow(ctx context.Context, c Config) error {
-	if c.agentName() != "codex" || c.Model == "" || c.ReasoningEffort == "" || c.Sandbox != "workspace-write" || c.Profile != "" || c.Orca.Supervised == nil {
+	codex := codexProfileSettings(c)
+	if c.agentName() != "codex" || codex.Model == "" || codex.ReasoningEffort == "" || c.ExecutionPolicy.Filesystem.WriteScope != "workspace-write" || codex.Profile != "" || remoteProfileSettings(c).ConnectionID == "" {
 		return &executionapi.BackendError{Code: executionapi.BackendUnsupported, Diagnostic: "remote Orca requires Codex, model/effort, workspace-write and a fixed supervised target"}
 	}
 	_, err := probeSupervisedOrcaTarget(ctx, c)
@@ -197,19 +200,20 @@ func preflightRemoteWorkerFlow(ctx context.Context, c Config) error {
 
 }
 func preflightNativeWorkerFlow(ctx context.Context, c Config) error {
+	codex := codexProfileSettings(c)
 	if c.managedWindowsOrca() {
 		if _, err := nativeOrcaFixedAgentCommand(c); err != nil {
 			return &executionapi.BackendError{Code: executionapi.BackendUnsupported, Diagnostic: err.Error(), Cause: err}
 		}
 		runner := Runner{Dir: c.Repository, Timeout: duration(c.CommandTimeout)}
-		if err := codexworker.ProbeManagedCLI(ctx, c.Codex, func(ctx context.Context, executable string, args []string) ([]byte, error) {
+		if err := codexworker.ProbeManagedCLI(ctx, Command{Executable: codex.Executable, Args: codex.Args}, func(ctx context.Context, executable string, args []string) ([]byte, error) {
 			return runner.Output(ctx, Command{Executable: executable, Args: args})
 		}); err != nil {
 			return err
 		}
 	}
 
-	if c.Profile != "" || c.Sandbox != "workspace-write" {
+	if codex.Profile != "" || c.ExecutionPolicy.Filesystem.WriteScope != "workspace-write" {
 		return &executionapi.BackendError{Code: executionapi.BackendUnsupported, Diagnostic: "Orca requires workspace-write and no Codex profile"}
 	}
 	if err := orcaworker.CheckStatus(ctx, orcaWorkerCaller(c)); err != nil {
@@ -220,22 +224,26 @@ func preflightNativeWorkerFlow(ctx context.Context, c Config) error {
 
 }
 func preflightCodexWorkerFlow(ctx context.Context, c Config) error {
+	codex := codexProfileSettings(c)
 	if c.agentName() != "codex" {
 		return &executionapi.BackendError{Code: executionapi.BackendUnsupported, Diagnostic: "resumable worker flow requires Codex"}
 	}
 	if c.hostName() != "local" {
 		return &executionapi.BackendError{Code: executionapi.BackendUnsupported, Diagnostic: "this worker-flow host is not supported"}
 	}
-	if err := (codexworker.Config{Policy: c.ExecutionPolicy, Args: c.Codex.Args, Sandbox: c.Sandbox, WindowsSandbox: c.WindowsSandbox, ReasoningEffort: c.ReasoningEffort}).Validate(runtime.GOOS); err != nil {
+	permissions, err := codexworker.CompilePolicy(c.ExecutionPolicy, runtime.GOOS, c.hostName(), c.agentName(), codex.WindowsSandbox, codex.Profile, codex.Args)
+	if err != nil {
 		return err
 	}
-	command := c.Codex
+	if err := (codexworker.Config{Policy: c.ExecutionPolicy, Args: codex.Args, Sandbox: permissions.Sandbox, WindowsSandbox: permissions.WindowsSandbox, ReasoningEffort: codex.ReasoningEffort}).Validate(runtime.GOOS); err != nil {
+		return err
+	}
+	command := Command{Executable: codex.Executable, Args: codex.Args}
 	if err := resolveCommand(&command); err != nil {
 		return err
 	}
-	c.Codex = command
 	runner := Runner{Dir: c.Repository, Timeout: duration(c.CommandTimeout)}
-	err := codexworker.ProbeCapabilities(ctx, codexworker.ProbeConfig{
+	err = codexworker.ProbeCapabilities(ctx, codexworker.ProbeConfig{
 		Executable: command.Executable, Args: command.Args, Repository: c.Repository, RunDir: c.RunDir,
 	}, codexworker.ProbePort{
 		Output: func(ctx context.Context, executable string, args []string) ([]byte, error) {
@@ -293,8 +301,8 @@ func copyWorkerFlowConfig(c Config) Config {
 	}
 	c.ExecutableTypes = append([]string(nil), c.ExecutableTypes...)
 	c.Git.Args = append([]string(nil), c.Git.Args...)
-	c.Codex.Args = append([]string(nil), c.Codex.Args...)
-	c.Orca.Args = append([]string(nil), c.Orca.Args...)
+	c.ImplementationData = cloneImplementationData(c.ImplementationData)
+	c.ImplementationDisplay = append([]string(nil), c.ImplementationDisplay...)
 	profiles := make([]ExecutionProfile, len(c.ExecutionProfiles))
 	copy(profiles, c.ExecutionProfiles)
 	for i := range profiles {
@@ -308,20 +316,13 @@ func copyWorkerFlowConfig(c Config) Config {
 			policy := *profiles[i].ConfiguredPublicationPolicy
 			profiles[i].ConfiguredPublicationPolicy = &policy
 		}
-		profiles[i].Codex.Args = append([]string(nil), profiles[i].Codex.Args...)
-		profiles[i].Orca.Args = append([]string(nil), profiles[i].Orca.Args...)
-		if profiles[i].Orca.Supervised != nil {
-			supervised := *profiles[i].Orca.Supervised
-			profiles[i].Orca.Supervised = &supervised
-		}
+		profiles[i].ImplementationConfigs = cloneImplementationInputs(profiles[i].ImplementationConfigs)
+		profiles[i].ImplementationData = cloneImplementationData(profiles[i].ImplementationData)
+		profiles[i].ImplementationDisplay = append([]string(nil), profiles[i].ImplementationDisplay...)
 	}
 	c.ExecutionProfiles = profiles
 	c.PR.Query.Args = append([]string(nil), c.PR.Query.Args...)
 	c.PR.Close.Args = append([]string(nil), c.PR.Close.Args...)
-	if c.Orca.Supervised != nil {
-		supervised := *c.Orca.Supervised
-		c.Orca.Supervised = &supervised
-	}
 	if c.workerEnv != nil {
 		env := make(map[string]string, len(c.workerEnv))
 		for key, value := range c.workerEnv {
@@ -333,7 +334,8 @@ func copyWorkerFlowConfig(c Config) Config {
 }
 
 func (s *Service) deliverResumableWorkerFeedback(ctx context.Context, run *Run, execution *ExecutionRecord, answer DecisionAnswer, commandID string) error {
-	if execution.SessionID == "" || run.SessionID == nil || *run.SessionID != execution.SessionID {
+	sessionID, _ := executionSessionFacts(execution)
+	if sessionID == "" {
 		execution.Error = ptr("Feedback is saved, but the original worker session is not yet available for delivery")
 		s.refreshRun(run)
 		return s.commitWorker(run)

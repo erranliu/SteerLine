@@ -4,13 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
+	"github.com/erranliu/SteerLine/internal/steerline/contracts"
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 func workspacePolicyFixture() executionapi.ExecutionPolicy {
@@ -19,7 +20,7 @@ func workspacePolicyFixture() executionapi.ExecutionPolicy {
 
 func TestProjectPolicyRejectsMissingOrOldConfiguration(t *testing.T) {
 	t.Setenv("STEERLINE_HOME", t.TempDir())
-	writeGlobalExecutionFixture(t, []ExecutionProfile{{ID: "local", Name: "Local", Host: "local", Agent: "codex", Codex: Command{Executable: "codex"}}}, "local")
+	writeGlobalExecutionFixture(t, []ExecutionProfile{testExecutionProfile(t, "local", "Local", "local", "codex", codexworker.ProfileConfig{Executable: "codex"}, nil)}, "local")
 	body := map[string]any{"publication_policy": executionPublicationFixture(), "repository": configTestRepository(t), "branch": "main", "task_authority": "native", "workflow_protocol": WorkerFlowVersion}
 	path := filepath.Join(t.TempDir(), "project.json")
 	write := func() {
@@ -58,13 +59,31 @@ func TestProjectPolicyRejectsMissingOrOldConfiguration(t *testing.T) {
 func TestProjectPolicyClaimRejectsStaticConflictsBeforeNativeQuery(t *testing.T) {
 	c, _, store := openDAGFixture(t)
 	commands := CommandService{Store: store, Project: c.Identity()}
-	c.Codex.Executable = filepath.Join(t.TempDir(), "must-never-be-called.exe")
+	codex := codexProfileSettings(c)
+	codex.Executable = filepath.Join(t.TempDir(), "must-never-be-called.exe")
+	setTestCodexProfile(t, &c, codex)
 	for _, mutate := range []func(*Config){
 		func(c *Config) { c.ExecutionPolicy = executionapi.ExecutionPolicy{} },
-		func(c *Config) { c.Codex.Args = []string{"--add-dir=C:/"} },
-		func(c *Config) { c.Codex.Args = []string{"-c", "approval_policy=on-request"} },
-		func(c *Config) { c.ReasoningEffort = "unrecognized" },
-		func(c *Config) { c.Profile = "native-profile" },
+		func(c *Config) {
+			settings := codexProfileSettings(*c)
+			settings.Args = []string{"--add-dir=C:/"}
+			setTestCodexProfile(t, c, settings)
+		},
+		func(c *Config) {
+			settings := codexProfileSettings(*c)
+			settings.Args = []string{"-c", "approval_policy=on-request"}
+			setTestCodexProfile(t, c, settings)
+		},
+		func(c *Config) {
+			settings := codexProfileSettings(*c)
+			settings.ReasoningEffort = "unrecognized"
+			setTestCodexProfile(t, c, settings)
+		},
+		func(c *Config) {
+			settings := codexProfileSettings(*c)
+			settings.Profile = "native-profile"
+			setTestCodexProfile(t, c, settings)
+		},
 		func(c *Config) { c.Host = "orca_supervised" },
 	} {
 		candidate := c
@@ -77,19 +96,22 @@ func TestProjectPolicyClaimRejectsStaticConflictsBeforeNativeQuery(t *testing.T)
 }
 
 func TestProjectPolicyFrozenSnapshotRejectsDamageAndPreservesAuthority(t *testing.T) {
-	c := Config{PublicationPolicy: executionPublicationFixture(), PR: hostPublicationProviderFixture(), ExecutionPolicy: workspacePolicyFixture(), Repository: "repository", Branch: "main", Host: "local", Agent: "codex", Codex: Command{Executable: "codex"}}
-	original := c.projectExecutionProfile().Freeze()
+	c := Config{PublicationPolicy: executionPublicationFixture(), PR: hostPublicationProviderFixture(), ExecutionPolicy: workspacePolicyFixture(), Repository: "repository", Branch: "main", Host: "local", Agent: "codex"}
+	setTestCodexProfile(t, &c, codexworker.ProfileConfig{Executable: "codex"})
+	original := c.projectExecutionProfile().Freeze(configurationProjectIdentity(c))
 	if !verifyFixedExecutionProfile(original) {
 		t.Fatalf("valid snapshot rejected: %+v", original)
 	}
 	c.ExecutionPolicy.Network = "deny"
-	c.Codex.WindowsSandbox = "unelevated"
+	codex := codexProfileSettings(c)
+	codex.WindowsSandbox = "unelevated"
+	setTestCodexProfile(t, &c, codex)
 	restored := c.ApplyFixedExecutionProfile(original)
-	if restored.ExecutionPolicy.Network != "allow" || restored.Codex.WindowsSandbox != "elevated" {
+	if restored.ExecutionPolicy.Network != "allow" || codexProfileSettings(restored).WindowsSandbox != "elevated" {
 		t.Fatal("current config rewrote existing authority")
 	}
 	for _, mutate := range []func(*FixedExecutionProfile){
-		func(p *FixedExecutionProfile) { p.Version = 1 }, func(p *FixedExecutionProfile) { p.ExecutionPolicy.Network = "deny" }, func(p *FixedExecutionProfile) { p.Sandbox = "danger-full-access" }, func(p *FixedExecutionProfile) { p.WindowsSandbox = "unelevated" }, func(p *FixedExecutionProfile) { p.AcceptedConfigVersion = "edited" }, func(p *FixedExecutionProfile) { p.PolicyDigest = "edited" },
+		func(p *FixedExecutionProfile) { p.Version = 1 }, func(p *FixedExecutionProfile) { p.ExecutionPolicy.Network = "deny" }, func(p *FixedExecutionProfile) { p.ImplementationData[0].Payload[0] = '[' }, func(p *FixedExecutionProfile) { p.AcceptedConfigVersion = "edited" }, func(p *FixedExecutionProfile) { p.PolicyDigest = "edited" },
 	} {
 		copy := original
 		mutate(&copy)
@@ -107,17 +129,25 @@ func TestProjectPolicyNativeReportsRetainOriginalSnapshotDigests(t *testing.T) {
 			Profile   FixedExecutionProfile `json:"profile"`
 			Execution ExecutionRecord       `json:"execution"`
 		}
-		require(t, json.Unmarshal(raw, &report))
-		if !verifyHistoricalPolicyProfile(t, report.Profile) {
-			t.Fatalf("native report no longer matches final snapshot: %s", name)
+		if err := json.Unmarshal(raw, &report); err != nil {
+			// Historical native-shaped receipts are no longer a supported wire format.
+			if !strings.Contains(err.Error(), "unknown field") {
+				t.Fatalf("historical native report failed for an unrelated reason: %v", err)
+			}
+			continue
 		}
-		require(t, verifyPolicyResources(report.Execution.PolicyResources, report.Profile.Digest, report.Execution.Workspace.Worktree))
+		if verifyFixedExecutionProfile(report.Profile) {
+			t.Fatalf("old native report was accepted as current format: %s", name)
+		}
+		if verifyPolicyResources(report.Execution.PolicyResources, report.Profile.Digest, report.Execution.Workspace.Worktree, &report.Execution) == nil {
+			t.Fatalf("historical native permission receipt was accepted as current evidence: %s", name)
+		}
 	}
 }
 
 func TestProjectPolicyRejectsGlobalConflictsBeforeRepositoryProbe(t *testing.T) {
 	t.Setenv("STEERLINE_HOME", t.TempDir())
-	writeGlobalExecutionFixture(t, []ExecutionProfile{{ID: "local", Name: "Local", Host: "local", Agent: "codex", Codex: Command{Executable: "codex", Args: []string{"--config", "sandbox_mode=danger-full-access"}}}}, "local")
+	writeGlobalExecutionFixture(t, []ExecutionProfile{testExecutionProfile(t, "local", "Local", "local", "codex", codexworker.ProfileConfig{Executable: "codex", Args: []string{"--config", "sandbox_mode=danger-full-access"}}, nil)}, "local")
 	path := filepath.Join(t.TempDir(), "project.json")
 	raw, err := json.Marshal(map[string]any{"execution_policy": workspacePolicyFixture(), "repository": t.TempDir(), "branch": "main", "task_authority": "native", "workflow_protocol": WorkerFlowVersion, "git": map[string]string{"executable": "must-never-be-called"}})
 	require(t, err)
@@ -129,8 +159,8 @@ func TestProjectPolicyRejectsGlobalConflictsBeforeRepositoryProbe(t *testing.T) 
 }
 
 func TestProjectPolicyMissingBoundResourcesAreNotReconstructed(t *testing.T) {
-	c := Config{ExecutionPolicy: workspacePolicyFixture(), Codex: Command{Executable: "must-not-be-called"}}
-	e := ExecutionRecord{SessionID: "original-native-session"}
+	c := Config{ExecutionPolicy: workspacePolicyFixture()}
+	e := ExecutionRecord{Generation: "original-generation"}
 	if err := bindPolicyResources(context.Background(), c, &e, "workspace", nil); err == nil || !strings.Contains(err.Error(), "snapshot is missing") {
 		t.Fatalf("missing original resources were reconstructed: %v", err)
 	}
@@ -154,11 +184,10 @@ func TestAppServerLaunchMessagePersistsPolicyResources(t *testing.T) {
 			identity, err := currentProcessIdentity()
 			require(t, err)
 			partial := *s.executionRecord(run)
-			partial.Process, partial.SessionID = identity, workerFlowMockSession
-			partial.AppServerEndpoint, partial.AppServerGeneration = "ws://127.0.0.1:12345", "policy-generation"
-			resource := contracts.PolicyResources{Version: 2, ProfileDigest: workflow.ExecutionProfile.Digest, NativeVersion: codexworker.PolicyCodexVersion, Contract: codexworker.PolicyContract, Workspace: path, WriteRoots: []string{path}, TemporaryRoots: []string{}}
-			resource.Digest = policyResourceDigest(resource)
-			partial.PolicyResources = &resource
+			partial.Process = identity
+			setTestCodexBinding(t, &partial, "ws://127.0.0.1:12345", "policy-generation", workerFlowMockSession)
+			resource := policyResourceReceiptFixture(workflow.ExecutionProfile.Digest, path, &partial)
+			partial.PolicyResources = resource
 			message := &appServerLaunchMessage{phase: phase, commandID: commandID, opID: opID, run: *run, execution: partial}
 			if phase == "turn_result" {
 				message.err = errors.New("thread receipt persistence failed")
@@ -167,7 +196,7 @@ func TestAppServerLaunchMessagePersistsPolicyResources(t *testing.T) {
 			snapshot, err := s.domainStore.Query(context.Background(), s.Config.identity)
 			require(t, err)
 			got := snapshot.Executions[0]
-			if got.PolicyResources == nil || got.PolicyResources.Digest != resource.Digest || got.SessionID != partial.SessionID || got.PendingTurnID != "" || s.workers[run.RunID] != nil {
+			if got.PolicyResources == nil || got.PolicyResources.Digest != resource.Digest || codexSessionID(&got) != workerFlowMockSession || got.PendingTurnID != "" || s.workers[run.RunID] != nil {
 				t.Fatalf("policy resource receipt was lost or advanced a turn: %+v", got)
 			}
 			_, err = s.executionConfigForRun(run)
@@ -176,8 +205,27 @@ func TestAppServerLaunchMessagePersistsPolicyResources(t *testing.T) {
 	}
 }
 
-func policyResourceReceiptFixture(profileDigest, path string) *contracts.PolicyResources {
-	resource := &contracts.PolicyResources{Version: 2, ProfileDigest: profileDigest, NativeVersion: codexworker.PolicyCodexVersion, Contract: codexworker.PolicyContract, Workspace: path, WriteRoots: []string{path}, TemporaryRoots: []string{}}
+func policyResourceReceiptFixture(profileDigest, path string, record *ExecutionRecord) *contracts.PolicyResources {
+	if record.ProjectIdentity == "" {
+		record.ProjectIdentity = "test-project"
+	}
+	if record.ExecutionID == "" {
+		record.ExecutionID = "test-execution"
+	}
+	if record.CurrentAttemptID == "" {
+		record.CurrentAttemptID = "test-attempt"
+	}
+	if record.Generation == "" {
+		record.Generation = newID()
+	}
+	if record.ConfigurationDigest == "" {
+		record.ConfigurationDigest = profileDigest
+	}
+	envelope, err := codexworker.NewPolicyResourceEnvelope(codexworker.PolicyResourceIdentity{ProjectID: record.ProjectIdentity, ExecutionID: record.ExecutionID, AttemptID: record.CurrentAttemptID, Generation: record.Generation, ConfigDigest: profileDigest}, codexworker.PolicyResourcePayload{NativeVersion: codexworker.PolicyCodexVersion, Contract: codexworker.PolicyContract, Settings: executionapi.LaunchCommand{Executable: "codex", WorkingDirectory: path}})
+	if err != nil {
+		panic(err)
+	}
+	resource := &contracts.PolicyResources{Version: 3, ProfileDigest: profileDigest, Workspace: path, WriteRoots: []string{path}, TemporaryRoots: []string{}, ImplementationData: envelope}
 	resource.Digest = policyResourceDigest(*resource)
 	return resource
 }

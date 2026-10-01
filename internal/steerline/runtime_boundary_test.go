@@ -20,7 +20,8 @@ func TestWorkerBindingRollsBackWithItsCheckpoint(t *testing.T) {
 	identity, err := currentProcessIdentity()
 	require(t, err)
 	execution := s.executionRecord(run)
-	execution.Process, execution.AppServerGeneration = identity, "generation"
+	execution.Process = identity
+	setTestCodexBinding(t, execution, "ws://127.0.0.1:12345", "generation", workerFlowMockSession)
 	execution.Workspace.Worktree = filepath.Join(t.TempDir(), "worker")
 	execution.Workspace.Branch, execution.Workspace.Base = execution.WorkspaceIntent.Branch, execution.WorkspaceIntent.BaseCommit
 	s.refreshRun(run)
@@ -50,7 +51,8 @@ func TestExecutionStopIntentAndUnknownReceiptUseOriginalBinding(t *testing.T) {
 	identity, err := currentProcessIdentity()
 	require(t, err)
 	execution := s.executionRecord(run)
-	execution.Process, execution.AppServerGeneration = identity, "generation"
+	execution.Process = identity
+	setTestCodexBinding(t, execution, "ws://127.0.0.1:12345", "generation", workerFlowMockSession)
 	execution.Workspace.Worktree = filepath.Join(t.TempDir(), "worker")
 	execution.Workspace.Branch, execution.Workspace.Base = execution.WorkspaceIntent.Branch, execution.WorkspaceIntent.BaseCommit
 	s.refreshRun(run)

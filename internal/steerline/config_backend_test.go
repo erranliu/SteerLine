@@ -7,6 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
+	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
 
 func configTestRepository(t *testing.T) string {
@@ -23,11 +26,13 @@ func TestConfigKeepsOrcaCodexNativeByDefault(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.json")
 	write := func(host string) Config {
 		t.Helper()
-		profile := ExecutionProfile{ID: "selected", Name: "Selected", Host: host, Agent: "codex", Sandbox: "workspace-write", Codex: Command{Executable: "codex"}, Orca: OrcaConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "15m"}}
+		codex := codexworker.ProfileConfig{Executable: "codex"}
+		orca := &orcaworker.ProfileConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "15m"}
 		if host == "orca" {
-			profile.Codex.WindowsSandbox = "unelevated"
-			profile.Orca.Shell = "powershell.exe"
+			codex.WindowsSandbox = "unelevated"
+			orca.Shell = "powershell.exe"
 		}
+		profile := testExecutionProfile(t, "selected", "Selected", host, "codex", codex, orca)
 		writeGlobalExecutionFixture(t, []ExecutionProfile{profile}, "selected")
 		data, err := json.Marshal(map[string]any{"execution_policy": workspacePolicyFixture(), "repository": configTestRepository(t), "branch": "main", "task_authority": "native", "workflow_protocol": WorkerFlowVersion})
 		if err != nil {
@@ -43,11 +48,11 @@ func TestConfigKeepsOrcaCodexNativeByDefault(t *testing.T) {
 		return cfg
 	}
 	orca := write("orca")
-	if orca.ReasoningEffort != "" || orca.WorkflowProtocol != WorkerFlowVersion {
+	if codexProfileSettings(orca).ReasoningEffort != "" || orca.WorkflowProtocol != WorkerFlowVersion {
 		t.Fatalf("Orca worker flow acquired old project steps or a local model default: %+v", orca)
 	}
 	local := write("local")
-	if local.ReasoningEffort != "high" || !local.needsCodexExecutable() {
+	if codexProfileSettings(local).ReasoningEffort != "high" || !local.needsCodexExecutable() {
 		t.Fatalf("local Codex defaults changed: %+v", local)
 	}
 }

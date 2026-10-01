@@ -29,7 +29,44 @@ git diff --check
 
 最终验证将定向组与 quick 合在一次现有入口中；execution/contracts/query/sqlite/remote 协议包已由 quick-rules 运行，不再重复单独跑整包。CD63 的 remote codec 用例由 quick-rules 命中；必须核对按包/用例的实际 JSON 测试事件。调试失败可以定向重跑，稳定后不重复矩阵。
 
-这些命令在本次规划中未执行。Spec 的各项验收对应通用/原生 fixture、固定身份与提交屏障、依赖和删除审查，实际命中数量与旧到新映射随实现记录。纯规则不跑平台矩阵，集成只跑受影响代表路径；quick 稳定后一次，没有具体失败不扩为全量。
+Spec 的各项验收对应通用/原生 fixture、固定身份与提交屏障、依赖和删除审查；本轮结果和实际命中按下方实施记录登记。纯规则不跑平台矩阵，集成只跑受影响代表路径；quick 稳定后一次，没有具体失败不扩为全量。
+
+## 本轮实施记录
+
+通用 `ImplementationDataEnvelope` v1 统一承载配置、资源和 answer-purpose 问题路由，包含 codec/version、身份范围、64 KiB 有界 JSON 载荷和完整摘要；配置、资源、问题分别绑定 Project/Profile/受理版本、Execution/Attempt/generation/config digest、WorkflowRun/Execution/Attempt/generation/turn/question。#62 的 `QuestionRoute` 现在是该封套的用途视图，问题 codec 仍由对应实现严格解释。
+
+Codex、Orca 本机和 Orca 远端配置及校验分别归属 `codexworker`、`orcaworker`、`orca_remote_worker`；Codex app-server 绑定和 permission resource payload 归 `codexworker`，Orca execution/turn 状态归 `orcaworker`。contracts 不再持久化 native 配置、app-server endpoint/session/generation、Orca state 或 `worker_session_id`；projection 不再导出 `codex_session_id`。根包 snapshot 只组装通用权限根和 codec 资源封套。
+
+格式拒绝点：全局 `execution.json` v2、FixedExecutionProfile v5、`builtin-execution-v2`、PolicyResources v3、runtime checkpoint schema 12、SQLite schema 9。旧开发格式、旧资源快照和旧问题路由摘要不读取、不迁移、不回填；历史验收 JSON 保持原始内容供拒绝路径核验。
+
+仍通过唯一 codec 临时读取新封套、待 #64/#65 删除的生命周期与采集消费者：
+
+- 共享读取入口在 `implementation_bindings.go`：`decodeCodexAppServerBinding`、`decodeOrcaExecutionState`、`executionSessionFacts`、`codexSessionID`、`codexBinding`；持久化只调用对应 store helper 写回 envelope。
+- #64 Codex lifecycle：`codex_worker.go` 的 `codexBinding`/`startAppServerWorkerTurn`，`worker_events.go` 的 `eventWorkerFlowFor`/`recordWorkerTurnStarted`/`validateQuestionRouteForRun`，`worker_state.go:workerFlowState`，`worker_start.go:startWorkerFlowTurn`，`worker_commit.go:commitWorker`，`worker_execution.go:acceptStartedWorkerTurn`/`deliverResumableWorkerFeedback`，`worker_resume.go:resumeNativeOrcaWorker`，`codex_worker_recovery.go` 与 `codex_worker_reply.go` 的恢复/回答调用，及 `native_cleanup.go`、`native_service.go`、`native_delivery_command.go`、`sqlite_store_write_execution.go`、`sqlite_store_write_native.go` 通过 `executionSessionFacts` 固定交付/写屏障。
+- #64 Orca lifecycle：`orca_worker_prepare.go` 的准备/恢复/terminal binding，`orca_worker_dispatch.go` 的 dispatch/反馈/问题路由，`orca_worker_observation.go` 的 inbox/output/settlement，`orca_worker_settlement.go:readNativeOrcaSettlement`，`orca_worker_terminal.go:finishNativeOrcaCleanup`，`orca_worker_workspace.go:prepareRemoteWorkerWorkspace`/`recoverRemoteWorkerWorkspace`，`orca_remote_service.go` 的 prepare/start/resume/cleanup，`orca_execution_operations.go:nativeOrcaOperations`/`readNativeOrcaDelivery`，`worker_environment.go` 的 readiness/feedback/recovery，以及 `state_preflight.go:preflightWorkerFlowState`。
+- #65 session collection：`codex_conversation.go:codexReaderCommand`/`recordCodexHistoryCapabilities` 继续通过实现配置 codec 取得 history reader 命令；来源发现、读取和 mapper 尚未搬迁。
+- #66 final assembly：`config.go:preflightNative`/`needsCodexExecutable`/`managedWindowsOrca`、`execution_registry.go:init`、`execution_backend.go:localExecutionBackend.Probe`、`codex_worker.go:codexBackend`、`orca.go:nativeOrcaConfig`、`orca_remote_adapter.go:remoteWorkerConfig` 保留实现 codec 的唯一配置组装入口，后续随目录/工厂一起外移。
+
+旧到新断言映射：`TestProjectPolicyFrozenSnapshotRejectsDamageAndPreservesAuthority` → `TestCD63FrozenConfigAndBinding/fixed_profile_integrity`；`TestClaimRechecksAcceptedConfigFiles` → `accepted_config_recheck`；`TestAppServerLaunchMessagePersistsPolicyResources` → `resource_receipt_commit/thread_ready` 与 `turn_result`；`TestWorkerFlowContextsDoNotExchangeExecutionProfiles` → `profile_copy_isolation`；`TestResolutionAuditRequirementsDoNotBlockOriginalObservation` → `original_observation_survives_requirement_drift`；`TestRemotePublicationClaimRequiresPermissionEvidence` → `remote_missing_evidence_still_blocks_claim`；历史权限报告的拒绝断言归 `legacy_permission_evidence_rejected`。#62 route 的既有 `TestQuestionRouteVersionIdentityDigestAndLimit`、Codex/Orca native question-route 用例现验证共享封套的版本、身份和摘要。
+
+最终 quick JSON 报告：`C:\Users\lmas1\AppData\Local\Temp\steerline-test-feedback\20261001T110142.429138300Z\summary.json`，`passed=true`、complete。实际 JSON 事件为 quick-core 1/1 包、6/6 tests；quick-rules 9/9 包、75/75 tests；quick-targeted 3/3 包、37/37 tests（根包 25、Codex 8、Orca 本机 4）。
+
+命中明细：root `TestCD63FrozenConfigAndBinding` 实际包含 question route identity 与 receipt barrier、固定配置/资源/恢复/事务子例；`codexworker.TestCD63CodecIdentityAndVersion/shared_question_envelope` 与 `orcaworker.TestCD63CodecIdentityAndVersion/shared_question_envelope` 各自实际调用既有 #62 原生路由回归；quick-rules 实际命中 `execution.TestCD63CodecIdentityAndVersion`、`execution.TestQuestionRouteVersionIdentityDigestAndLimit` 及 `orca_remote_worker.TestCD63CodecIdentityAndVersion`。因此三个实现配置 codec、共同 envelope、question route、中心冻结接线和 remote profile codec 均有包/用例事件证据；没有依靠其他包的通过数推断命中。
+
+`go test ./internal/steerline/console -run '^$' -count=1` 编译通过（0 tests 执行）；`go list -deps ./internal/steerline/contracts ./internal/steerline/execution` 通过，108 个依赖中没有具体实现包；`git diff --check` exit 0，只有工作树 LF→CRLF 规范化提示、无 whitespace finding。remote 缺权限证据的领取拒绝子例通过；未进行真实远端权限认证，也未触发 business dispatch。
+
+## 质量审计补修
+
+对实现基线 `4ba7d4db783c1a6f18ef12c999488e79f22e9d27` 的审计修复如下，均保持单写者与原身份约束：
+
+- 封套摘要绑定规范化 JSON 字节，兼容同一当前格式的 compact/indent 输出及 HTML escaping；构造和读取都保存独立的规范化载荷。64 KiB 验证改用有效 JSON，分别确认精确上限与超限拒绝。
+- 人工确认后原 thread 的新 Attempt seed 可在 process-free、pending/resuming 阶段完成资源绑定并通过重启预检；已绑定进程或非恢复状态丢失原 receipt 仍拒绝。Execution 的配置摘要须匹配 WorkflowRun 的完整固定快照。
+- 重复绑定不再被临时 decoder 当作“缺失”；codec 必须匹配原协议，已绑定 app-server 不能只保存恢复 seed。原生 coordinator 须匹配持久 target/runtime，app-server endpoint 在连接前使用同一 loopback/port 校验。
+- Orca 环境重检查找回 Dispatch 或清空 output cursor 后写回新封套，重新轮询后重新读取临时 turn view；避免确认操作只落盘 receipt、丢失原绑定身份。
+- native profile 的规范化、支持校验和非秘密展示投影全部归属实现包；根包 codec 目录只组装通用封套。remote Codex 同样执行 model 校验。
+- 修正迁移后 fixture 的 native UUID、固定快照/受理摘要及实际 Git remote 接线；通用 workerflow 的 opaque session 断言仍保留。
+
+新增回归实际命中 `execution.TestCD63CodecIdentityAndVersion/formatted_JSON_round_trip`、root `TestCD63FrozenConfigAndBinding/recovery_seed_resources`、`binding_codec_isolation`（含 duplicate/protocol/seed/native-target 子例）、`environment_recheck_bindings` 和 Codex `binding_endpoint_validated_before_connection`。原生传输的两个 `TestCodexSocket*`、配置副本的两个 worker-context 用例，以及受影响 Task CAS/前置领取/活跃丢弃/精确 PR 丢弃和 worker delivery gate 用例定向通过；未扩展为全量测试或原生认证矩阵。
 
 ## 验收映射与 PR 交付清单
 

@@ -88,7 +88,11 @@ func (s *Service) resumeNativeOrcaWorker(ctx context.Context, task *TaskRecord, 
 		return true, s.waitWorkerFlow(run, "原 Orca agent 创建状态未核实；重开服务不会自动准备或派发")
 	}
 	if execution.Process == nil {
-		if execution.OrcaNative != nil {
+		state, stateErr := decodeOrcaExecutionState(execution)
+		if stateErr != nil {
+			return true, stateErr
+		}
+		if state != nil {
 			return false, s.nativeOrcaUncertain(run, "Original Orca agent creation has no confirmed terminal; preserve the worktree")
 		}
 		return false, s.prepareWorkerFlow(ctx, *task, run)
