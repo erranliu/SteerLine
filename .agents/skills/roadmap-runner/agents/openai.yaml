@@ -1,0 +1,4 @@
+interface:
+  display_name: "Roadmap Runner"
+  short_description: "顺序创建执行 session，独立复审修复并按已审核提交合并 PR"
+  default_prompt: "用 $roadmap-runner 按顺序执行指定 roadmap，每 20 分钟检查，执行 session 固定 Luna xhigh，自查提 PR 后由协调 session 复审修复并合并。"
