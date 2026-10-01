@@ -57,6 +57,18 @@
 | 60 | 项目发布责任契约 | #58 | [Spec](execution-isolation-07-publish-policy.spec.md) | [Plan](execution-isolation-07-publish-policy.plan.md) |
 | 61 | 执行需求与配置注册收口 | #59、#60 | [Spec](execution-isolation-08-resolution.spec.md) | [Plan](execution-isolation-08-resolution.plan.md) |
 
+## 主包解耦后续清理与存储/客户端
+
+目标：`CORE-IMPLEMENTATION-DECOUPLING`。#64–#67 的既有范围继续按各自独立规格交付；以下任务遵守[后续维护共同约束](core-maintenance-constraints.md)，#68 后两线可按共享修改归属并行。
+
+| 任务 ID | 任务名称 | 硬前置 | Spec | Plan |
+| --- | --- | --- | --- | --- |
+| 68 | 主包解耦重构后代码清理 | #67 | [Spec](core-decoupling-07-cleanup.spec.md) | [Plan](core-decoupling-07-cleanup.plan.md) |
+| 69 | 中心写入端口收窄 | #68 | [Spec](core-decoupling-08-write-ports.spec.md) | [Plan](core-decoupling-08-write-ports.plan.md) |
+| 70 | SQLite写入实现归包 | #69 | [Spec](core-decoupling-09-sqlite.spec.md) | [Plan](core-decoupling-09-sqlite.plan.md) |
+| 71 | 产品客户端适配层与CLI接入 | #68 | [Spec](core-decoupling-10-client.spec.md) | [Plan](core-decoupling-10-client.plan.md) |
+| 72 | TUI与中心实现解耦 | #71 | [Spec](core-decoupling-11-tui.spec.md) | [Plan](core-decoupling-11-tui.plan.md) |
+
 ## 共同约束
 
 - [执行架构](execution-architecture.spec.md)与[原生任务](native-task-constraints.md)：身份、单写者、当前格式恢复和真实交付；被 #36 替代的旧执行语义不继续要求。

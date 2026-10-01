@@ -71,5 +71,12 @@ SteerLine 管理任务、原 worker 会话、用户反馈和真实 PR 交付。w
 | 65 | 会话采集与宿主交互实现隔离 | 历史来源/mapper/宿主解释归实现，采集预算和准备授权留中心 | #64 | [Spec](../spec/core-decoupling-04-conversation.spec.md) · [Plan](../spec/core-decoupling-04-conversation.plan.md) |
 | 66 | 内置实现组装与主包依赖反转 | 内置目录与具体构造外移，产品入口显式注入；主包生产清零 | #65 | [Spec](../spec/core-decoupling-05-composition.spec.md) · [Plan](../spec/core-decoupling-05-composition.plan.md) |
 | 67 | 主包隔离守卫与测试归位 | 主包测试清零、结构守卫与外层第三实现闭环 | #66 | [Spec](../spec/core-decoupling-06-boundary.spec.md) · [Plan](../spec/core-decoupling-06-boundary.plan.md) |
+| 68 | 主包解耦重构后代码清理 | 最终调用关系下的死代码/重复规则/无用辅助清理与索引同步 | #67 | [Spec](../spec/core-decoupling-07-cleanup.spec.md) · [Plan](../spec/core-decoupling-07-cleanup.plan.md) |
+| 69 | 中心写入端口收窄 | 窄提交契约接通命令/worker/任务/DAG/交付/会话，保留原子边界 | #68 | [Spec](../spec/core-decoupling-08-write-ports.spec.md) · [Plan](../spec/core-decoupling-08-write-ports.plan.md) |
+| 70 | SQLite写入实现归包 | 连接/schema/SQL/事务归唯一存储模块，复用只读 Reader | #69 | [Spec](../spec/core-decoupling-09-sqlite.spec.md) · [Plan](../spec/core-decoupling-09-sqlite.plan.md) |
+| 71 | 产品客户端适配层与CLI接入 | 产品纯契约、唯一默认 adapter 和 CLI 产品读取/命令消费者 | #68 | [Spec](../spec/core-decoupling-10-client.spec.md) · [Plan](../spec/core-decoupling-10-client.plan.md) |
+| 72 | TUI与中心实现解耦 | TUI 消费产品接口，删除中心/存储依赖及默认 I/O 薄桥 | #71 | [Spec](../spec/core-decoupling-11-tui.spec.md) · [Plan](../spec/core-decoupling-11-tui.plan.md) |
 
-剩余任务按 #64 → #65 → #66 → #67 串行交付。#64 的硬前置 #63 已交付；#63 消费 #62 固定的通用事件、问题与回答路由接口，#61 的需求基础及共同要求见[约束](../spec/core-decoupling-constraints.md)。每阶段迁移完整消费者并当场删除对应原实现，#66 完成生产清零，#67 只负责测试归位和边界守卫。
+先按 #64 → #65 → #66 → #67 → #68 串行交付，再分为可并行的存储 #69 → #70 与客户端 #71 → #72。#64 的硬前置 #63 已交付；#63 消费 #62 固定的通用事件、问题与回答路由接口，#61 的需求基础及 #64–#67 共同要求见[约束](../spec/core-decoupling-constraints.md)。每阶段迁移完整消费者并当场删除对应原实现，#66 完成生产清零，#67 只负责测试归位和边界守卫；#68 不接收这些前置应完成的删除。
+
+#68–#72 的范围及共享修改见[后续维护约束](../spec/core-maintenance-constraints.md)。存储线拥有提交契约/Store/schema，客户端线拥有产品 DTO/CLI/TUI；共享 contracts 形状及组装/quick 段顺序集成。两线均保持原子提交和当前格式恢复，完整实现只在各自硬前置整体交付后开始，不扩展 #45 传输或 UI 范围，也不通过规划变化创建中心任务。
