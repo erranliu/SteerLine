@@ -170,39 +170,91 @@ func TestProjectPolicyMissingBoundResourcesAreNotReconstructed(t *testing.T) {
 }
 
 func TestAppServerLaunchMessagePersistsPolicyResources(t *testing.T) {
-	for _, phase := range []string{"thread_ready", "turn_result"} {
-		t.Run(phase, func(t *testing.T) {
-			s, run := appServerAuditService(t)
-			workflow, execution := s.workflowRecords(run)
-			path := run.WorkspaceIntent.Path
-			execution.Workspace = WorkspaceEvidence{Worktree: path, Branch: run.WorkspaceIntent.Branch, Base: run.WorkspaceIntent.BaseCommit}
-			commandID := newID()
-			execution.PendingCommandID = commandID
-			s.refreshRun(run)
-			opID, err := s.startWorkerOperation(run, "start_worker_turn", "worker-turn:"+run.ExecutionID+":"+commandID, map[string]string{"command_id": commandID})
-			require(t, err)
-			identity, err := currentProcessIdentity()
-			require(t, err)
-			partial := *s.executionRecord(run)
-			partial.Process = identity
-			setTestCodexBinding(t, &partial, "ws://127.0.0.1:12345", "policy-generation", workerFlowMockSession)
-			resource := policyResourceReceiptFixture(workflow.ExecutionProfile.Digest, path, &partial)
-			partial.PolicyResources = resource
-			message := &appServerLaunchMessage{phase: phase, commandID: commandID, opID: opID, run: *run, execution: partial}
-			if phase == "turn_result" {
-				message.err = errors.New("thread receipt persistence failed")
-			}
-			require(t, s.handleAppServerLaunchMessage(run.RunID, message))
-			snapshot, err := s.domainStore.Query(context.Background(), s.Config.identity)
-			require(t, err)
-			got := snapshot.Executions[0]
-			if got.PolicyResources == nil || got.PolicyResources.Digest != resource.Digest || codexSessionID(&got) != workerFlowMockSession || got.PendingTurnID != "" || s.workers[run.RunID] != nil {
-				t.Fatalf("policy resource receipt was lost or advanced a turn: %+v", got)
-			}
-			_, err = s.executionConfigForRun(run)
-			require(t, err)
-		})
-	}
+	t.Run("session_receipt", func(t *testing.T) {
+		s, run := appServerAuditService(t)
+		workflow, execution := s.workflowRecords(run)
+		path := run.WorkspaceIntent.Path
+		execution.Workspace = WorkspaceEvidence{Worktree: path, Branch: run.WorkspaceIntent.Branch, Base: run.WorkspaceIntent.BaseCommit}
+		commandID := newID()
+		execution.Generation = newID()
+		execution.PendingCommandID = commandID
+		execution.ConfigurationDigest = workflow.ExecutionProfile.Digest
+		s.refreshRun(run)
+		input := executionapi.TurnInput{CommandID: commandID, Prompt: "fixed task instruction"}
+		key := "worker-session:" + run.ExecutionID + ":" + commandID
+		opID, err := s.startWorkerOperation(run, "prepare_worker_session", key, &input)
+		require(t, err)
+		identity, err := currentProcessIdentity()
+		require(t, err)
+		partial := *s.executionRecord(run)
+		partial.Process = identity
+		setTestCodexBinding(t, &partial, "ws://127.0.0.1:12345", "policy-generation", workerFlowMockSession)
+		resource := policyResourceReceiptFixture(workflow.ExecutionProfile.Digest, path, &partial)
+		s.executionRecord(run).PolicyResources = resource
+		snapshot, err := lifecycleSnapshot(run, s.workflowRecord(run), s.executionRecord(run), s.workflowAttempt(run, run.AttemptID), &input)
+		require(t, err)
+		operation := s.operationByKey(key)
+		request := lifecycleRequest(snapshot, *operation, executionapi.LifecyclePrepareSession, executionapi.LifecycleInput{Turn: &input})
+		receipt := executionapi.LifecycleReceipt{
+			Operation: request.Operation, Disposition: executionapi.OperationUnknown,
+			RequestID: workerFlowMockSession, Process: identity,
+			Implementation: partial.ImplementationData,
+			State:          executionapi.LifecycleStateFacts{SessionID: workerFlowMockSession, SessionGeneration: "policy-generation"},
+		}
+		message := &appServerLaunchMessage{phase: "session_prepared", request: request, receipt: receipt, err: errors.New("session receipt persistence failed")}
+		require(t, s.handleAppServerLaunchMessage(run.RunID, message))
+		snapshotResult, err := s.domainStore.Query(context.Background(), s.Config.identity)
+		require(t, err)
+		got := snapshotResult.Executions[0]
+		if got.PolicyResources == nil || got.PolicyResources.Digest != resource.Digest || got.SessionID != workerFlowMockSession || got.PendingTurnID != "" || s.workers[run.RunID] != nil {
+			t.Fatalf("policy resource receipt was lost or advanced a turn: %+v", got)
+		}
+		if snapshotOperation(&snapshotResult, opID).Status != "outcome_unknown" {
+			t.Fatal("unverified session receipt changed the original operation identity")
+		}
+		_, err = s.executionConfigForRun(run)
+		require(t, err)
+	})
+
+	t.Run("turn_result", func(t *testing.T) {
+		s, run := appServerAuditService(t)
+		workflow, execution := s.workflowRecords(run)
+		path := run.WorkspaceIntent.Path
+		execution.Workspace = WorkspaceEvidence{Worktree: path, Branch: run.WorkspaceIntent.Branch, Base: run.WorkspaceIntent.BaseCommit}
+		commandID := newID()
+		execution.PendingCommandID = commandID
+		identity, err := currentProcessIdentity()
+		require(t, err)
+		execution.Process = identity
+		setTestCodexBinding(t, execution, "ws://127.0.0.1:12345", "policy-generation", workerFlowMockSession)
+		execution.SessionID, execution.SessionGeneration = workerFlowMockSession, "policy-generation"
+		resource := policyResourceReceiptFixture(workflow.ExecutionProfile.Digest, path, execution)
+		execution.PolicyResources = resource
+		s.refreshRun(run)
+		input := executionapi.TurnInput{CommandID: commandID, Prompt: "fixed task instruction"}
+		key := "worker-turn:" + run.ExecutionID + ":" + commandID
+		opID, err := s.startWorkerOperation(run, "start_worker_turn", key, &input)
+		require(t, err)
+		snapshot, err := lifecycleSnapshot(run, s.workflowRecord(run), execution, s.workflowAttempt(run, run.AttemptID), &input)
+		require(t, err)
+		operation := s.operationByKey(key)
+		request := lifecycleRequest(snapshot, *operation, executionapi.LifecycleStartTurn, executionapi.LifecycleInput{Turn: &input})
+		receipt := executionapi.LifecycleReceipt{Operation: request.Operation, Disposition: executionapi.OperationUnknown, RequestID: workerFlowMockSession, Process: identity,
+			Implementation: cloneImplementationData(execution.ImplementationData), State: executionapi.LifecycleStateFacts{SessionID: workerFlowMockSession, SessionGeneration: "policy-generation"}}
+		message := &appServerLaunchMessage{phase: "turn_result", request: request, receipt: receipt, err: errors.New("turn receipt persistence failed")}
+		require(t, s.handleAppServerLaunchMessage(run.RunID, message))
+		snapshotResult, err := s.domainStore.Query(context.Background(), s.Config.identity)
+		require(t, err)
+		got := snapshotResult.Executions[0]
+		if got.PolicyResources == nil || got.PolicyResources.Digest != resource.Digest || got.SessionID != workerFlowMockSession || got.PendingTurnID != "" || s.workers[run.RunID] != nil {
+			t.Fatalf("policy resource receipt was lost or advanced a turn: %+v", got)
+		}
+		if snapshotOperation(&snapshotResult, opID).Status != "outcome_unknown" {
+			t.Fatal("unverified turn receipt changed the original operation identity")
+		}
+		_, err = s.executionConfigForRun(run)
+		require(t, err)
+	})
 }
 
 func policyResourceReceiptFixture(profileDigest, path string, record *ExecutionRecord) *contracts.PolicyResources {

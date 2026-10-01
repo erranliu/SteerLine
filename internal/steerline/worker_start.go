@@ -27,11 +27,37 @@ func (s *Service) prepareWorkerFlow(ctx context.Context, task TaskRecord, run *R
 	if err := c.bindPublicationTarget(ctx); err != nil {
 		return err
 	}
-	adapter, err := s.workerFlowRegistration(run)
+	lifecycle, fixed, err := s.lifecycleForRun(run)
 	if err != nil {
 		return err
 	}
-	return adapter.Prepare(s, ctx, task, run)
+	snapshot, err := s.lifecycleSnapshot(run, fixed.workflow, fixed.execution, fixed.attempt, nil)
+	if err != nil {
+		return err
+	}
+	report, err := lifecycle.PreflightLifecycle(ctx, lifecycleSetupForRun(run, fixed, snapshot))
+	if err != nil {
+		return err
+	}
+	if err := validateLifecycleStartCapability(snapshot.Ref, report); err != nil {
+		return err
+	}
+	if fixed.execution.Environment != nil {
+		return s.advanceOrcaPreparation(ctx, run)
+	}
+	return s.prepareWorkerWorkspace(ctx, task, run)
+}
+
+func validateLifecycleStartCapability(ref executionapi.ExecutionRef, report executionapi.CapabilityReport) error {
+	if report.Version <= 0 || report.Backend != ref.Backend || report.Protocol != ref.Protocol || report.Target != ref.Target || report.Agent != ref.Agent {
+		return &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "lifecycle preflight report differs from the fixed execution target"}
+	}
+	for _, capability := range report.Capabilities {
+		if capability.Name == "start" && capability.Status == executionapi.CapabilityVerified {
+			return nil
+		}
+	}
+	return &executionapi.BackendError{Code: executionapi.BackendUnsupported, Diagnostic: "lifecycle preflight did not verify start capability"}
 }
 
 type workerWorkspacePreparationInput struct {
@@ -48,27 +74,73 @@ func workerWorkspaceRequest(run *Run) (workerWorkspacePreparationInput, error) {
 	return workerWorkspacePreparationInput{WorkflowRunID: run.RunID, ExecutionID: run.ExecutionID, Workspace: *run.WorkspaceIntent}, nil
 }
 func (s *Service) prepareWorkerWorkspace(ctx context.Context, task TaskRecord, run *Run) error {
-	entry, err := s.workerFlowRegistration(run)
+	input, err := workerWorkspaceRequest(run)
 	if err != nil {
 		return err
 	}
-	if entry.WorkspaceRequest == nil || entry.PrepareWorkspace == nil {
-		return unsupported("workspace preparation")
-	}
-	input, err := entry.WorkspaceRequest(run)
+	lifecycle, fixed, err := s.lifecycleForRun(run)
 	if err != nil {
 		return err
 	}
-	opID, err := s.startWorkerOperation(run, "prepare_workspace", "worker-workspace:"+run.ExecutionID, input)
+	snapshot, err := s.lifecycleSnapshot(run, fixed.workflow, fixed.execution, fixed.attempt, nil)
 	if err != nil {
 		return err
 	}
-	if _, err = s.workerFlowContext(run); err != nil {
-		return errors.New("worker claim disappeared after preparation intent was saved")
+	candidate, pending, err := unresolvedLifecycleCandidate(snapshot)
+	if err != nil {
+		return err
 	}
-	prepared, err := entry.PrepareWorkspace(s, ctx, run, opID)
+	if !pending || candidate.Action != executionapi.LifecyclePrepareWorkspace {
+		candidate, err = lifecycle.Next(ctx, snapshot.Clone())
+		if err != nil {
+			return err
+		}
+	}
+	if err = candidate.Validate(); err != nil {
+		return err
+	}
+	prepared := false
+	if candidate.Done {
+		if fixed.execution.Workspace.Worktree != "" {
+			prepared = true
+		} else if operation := s.operationByKey("worker-workspace:" + run.ExecutionID); operation != nil {
+			_, resumeErr := s.resumeWorkerWorkspace(ctx, &task, run)
+			return resumeErr
+		} else {
+			opID, startErr := s.startWorkerOperation(run, "prepare_workspace", "worker-workspace:"+run.ExecutionID, input)
+			if startErr != nil {
+				return startErr
+			}
+			if _, err = s.workerFlowContext(run); err != nil {
+				return errors.New("worker claim disappeared after preparation intent was saved")
+			}
+			prepared, err = prepareLocalWorkerWorkspace(s, ctx, run, opID)
+		}
+	} else if candidate.Action == executionapi.LifecyclePrepareWorkspace {
+		workspaceIntent := executionapi.WorkspaceIntent{Path: input.Workspace.Path, Branch: input.Workspace.Branch, BaseCommit: input.Workspace.BaseCommit}
+		if candidate.Input.Workspace == nil || *candidate.Input.Workspace != workspaceIntent {
+			return errors.New("lifecycle planner changed the saved workspace intent")
+		}
+		prepared, err = true, s.executeLifecycleStep(ctx, run, lifecycle, candidate)
+	} else if fixed.execution.Workspace.Worktree != "" {
+		prepared = true
+	} else {
+		return errors.New("lifecycle resource planning must prepare its workspace before other resources")
+	}
 	if !prepared || err != nil {
+		if errors.Is(err, errLifecycleNeedsReconciliation) {
+			return nil
+		}
 		return err
+	}
+	if err := s.prepareLifecycleResources(ctx, run, lifecycle); err != nil {
+		return err
+	}
+	if fixed.execution.Environment != nil {
+		return nil
+	}
+	if run.Decision != nil || fixed.workflow.Phase != "queued" {
+		return nil
 	}
 	return s.startInitialWorkerFlowTurn(ctx, task, run)
 }
@@ -96,7 +168,8 @@ func (s *Service) startWorkerFlowTurn(ctx context.Context, run *Run, prompt, tur
 		return err
 	}
 	workflow, execution, attempt := fixed.workflow, fixed.execution, fixed.attempt
-	if execution.Environment != nil && (!execution.Environment.Ready || execution.Environment.Blocker != nil) {
+	readinessTurn := execution.Environment != nil && execution.Environment.Preparation != nil && execution.Environment.Preparation.TurnID == turnID
+	if execution.Environment != nil && (!execution.Environment.Ready || execution.Environment.Blocker != nil) && !readinessTurn {
 		return errors.New("business input requires verified readiness and no host blocker")
 	}
 	if execution.RecoveryRequired {
@@ -113,10 +186,6 @@ func (s *Service) startWorkerFlowTurn(ctx context.Context, run *Run, prompt, tur
 	if attempt.StepID != "worker" {
 		return errors.New("worker turn has no fixed worker attempt")
 	}
-	adapter, err := s.workerFlowRegistration(run)
-	if err != nil {
-		return err
-	}
 	c := fixed.config
 	if err := verifyPublicationTargetForRun(ctx, c, run); err != nil {
 		return err
@@ -128,21 +197,10 @@ func (s *Service) startWorkerFlowTurn(ctx context.Context, run *Run, prompt, tur
 	if fixed.config.PublicationPolicy.Publisher == executionapi.PublisherHostService {
 		prompt += publication.WorkerInstruction(run.RunID)
 	}
-	if adapter.TurnInstruction != nil {
-		prompt += adapter.TurnInstruction(run.RunID, turnID)
-	}
-	execution.PendingTurnID, execution.PendingCommandID = adapter.PendingIdentity(turnID)
-	opID, err := s.startWorkerOperation(run, "start_worker_turn", "worker-turn:"+run.ExecutionID+":"+turnID, struct {
-		ExecutionID string `json:"execution_id"`
-		SessionID   string `json:"session_id,omitempty"`
-		TurnID      string `json:"turn_id"`
-		Prompt      string `json:"prompt"`
-	}{run.ExecutionID, sessionID, turnID, prompt})
+	execution.PendingTurnID, execution.PendingCommandID = "", turnID
+	lifecycle, fixed, err := s.lifecycleForRun(run)
 	if err != nil {
 		return err
 	}
-	if _, err := s.workerFlowContext(run); err != nil {
-		return errors.New("worker turn disappeared after send intent was saved")
-	}
-	return adapter.Start(s, ctx, run, turnID, prompt, opID)
+	return s.startWorkerLifecycle(ctx, run, lifecycle, fixed, turnID, prompt)
 }

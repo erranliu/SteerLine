@@ -142,7 +142,10 @@ Write-Output ('SLPOLICY59:%s:' + ($result | ConvertTo-Json -Compress))
 		backend := codexBackend(c, run)
 		input := executionapi.TurnInput{CommandID: newID(), Prompt: prompt}
 		session, binding, err := backend.PrepareSession(ctx, codexworker.Binding{}, input)
-		applyCodexBinding(&e, binding)
+		if binding.Endpoint != "" || binding.SessionID != "" {
+			setTestCodexBinding(t, &e, binding.Endpoint, binding.Generation, binding.SessionID)
+			e.Process = binding.Process
+		}
 		require(t, err)
 		defer session.Close()
 		observer, turn, err := backend.StartTurn(ctx, session, input, writeArgs)
@@ -340,10 +343,18 @@ func TestExecutionPolicyNativeToolsCollectLive(t *testing.T) {
 		} `json:"payload"`
 	}
 	require(t, json.Unmarshal([]byte(first), &meta))
-	binding, err := codexBinding(&e)
+	envelope, ok, err := implementationEnvelope(&e, codexworker.ExecutionBindingCodecKey)
+	require(t, err)
+	if !ok {
+		t.Fatal("saved native execution lost its app-server binding envelope")
+	}
+	binding, err := codexworker.DecodeAppServerBindingEnvelope(envelope, codexworker.AppServerBindingIdentity{
+		ProjectID: e.ProjectIdentity, ExecutionID: e.ExecutionID, AttemptID: e.CurrentAttemptID,
+		Generation: e.Generation, ConfigDigest: e.ConfigurationDigest,
+	})
 	require(t, err)
 	binding.SessionID = meta.Payload.ID
-	require(t, applyCodexBinding(&e, binding))
+	setTestCodexBinding(t, &e, binding.Endpoint, binding.Generation, binding.SessionID)
 	evidence := map[string]any{"captured_at": now(), "scope": "new policy mapping; original persisted snapshot; native tool collection only; no resend or readiness receipt", "profile": saved.Profile, "execution": e, "result": result, "state_root": saved.StateRoot, "journal_path": journal, "native_events": policyNativeEvents(events, nonce)}
 	data, err := json.MarshalIndent(evidence, "", "  ")
 	require(t, err)

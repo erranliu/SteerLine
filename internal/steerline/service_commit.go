@@ -337,7 +337,7 @@ func (s *Service) startWorkerOperation(run *Run, kind, key string, payload any) 
 
 func workerOperationRequiresRequirements(kind string) bool {
 	switch kind {
-	case "orca_remote_release", "orca_remote_coordinator_close", "orca_native_terminal_close", "orca_native_ack", "orca_native_relay_done":
+	case "orca_remote_release", "orca_remote_coordinator_close", "orca_native_terminal_close", "orca_native_ack", "orca_native_relay_done", "stop_worker_observation", "cleanup_resources":
 		return false
 	default:
 		return true

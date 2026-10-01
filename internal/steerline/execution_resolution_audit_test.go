@@ -61,7 +61,7 @@ func TestResolutionAuditRestoresOriginalWorkspaceRoot(t *testing.T) {
 	}
 }
 
-func TestResolutionAuditRequirementsDoNotBlockOriginalObservation(t *testing.T) {
+func TestResolutionAuditRequirementsBlockOnlyNewWorkerIntents(t *testing.T) {
 	tokenEnv := "STEERLINE_AUDIT_TOKEN"
 	t.Setenv(tokenEnv, "reference-present")
 	r := executionapi.ExecutionRequirements{Credentials: []executionapi.CredentialRequirement{{ID: "pr.token_env", Site: "service"}}}
@@ -69,17 +69,8 @@ func TestResolutionAuditRequirementsDoNotBlockOriginalObservation(t *testing.T) 
 	t.Setenv(tokenEnv, "")
 	entry, err := s.workerFlowRegistration(run)
 	require(t, err)
-	copy := *entry
-	observed := false
-	copy.Resume = func(_ *Service, _ context.Context, _ *TaskRecord, _ *Run) (bool, error) {
-		observed = true
-		return true, nil
-	}
-	task := nativeTaskRecord(s.domain.Tasks, run.TaskID)
-	_, err = s.resumeRegisteredWorkerFlow(context.Background(), task, run, &copy)
-	require(t, err)
-	if !observed {
-		t.Fatal("missing reference suppressed original observer")
+	if entry.Lifecycle == nil {
+		t.Fatal("original execution has no lifecycle port for observation")
 	}
 	fixed, err := s.workerFlowContext(run)
 	require(t, err)

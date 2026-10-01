@@ -3,6 +3,7 @@ package steerline
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,10 +16,11 @@ import (
 )
 
 type environmentFixture struct {
-	service   *Service
-	config    Config
-	statePath string
-	run       *Run
+	service      *Service
+	config       Config
+	statePath    string
+	run          *Run
+	workerCancel context.CancelFunc
 }
 
 func newEnvironmentFixture(t *testing.T, state fakeNativeOrcaState, model string) *environmentFixture {
@@ -63,8 +65,9 @@ func newEnvironmentFixture(t *testing.T, state fakeNativeOrcaState, model string
 	require(t, err)
 	s, err := NewService(c)
 	require(t, err)
-	f := &environmentFixture{service: s, config: c, statePath: statePath, run: s.find("8154")}
-	t.Cleanup(func() { _ = f.service.Close() })
+	workerCancel := enableTestLifecycleMessages(s)
+	f := &environmentFixture{service: s, config: c, statePath: statePath, run: s.find("8154"), workerCancel: workerCancel}
+	t.Cleanup(func() { stopTestLifecycleMessages(f.service, f.workerCancel); _ = f.service.Close() })
 	return f
 }
 
@@ -75,7 +78,39 @@ func (f *environmentFixture) prepare(t *testing.T) {
 }
 func (f *environmentFixture) poll(t *testing.T) {
 	t.Helper()
-	require(t, f.service.pollNativeOrcaWorker(context.Background(), f.run))
+	require(t, driveTestLifecycleWorker(f.service, f.run))
+}
+
+func driveTestLifecycleWorker(service *Service, run *Run) error {
+	if service == nil || run == nil {
+		return errors.New("lifecycle test worker is missing")
+	}
+	if service.workers[run.RunID] == nil {
+		lifecycle, _, err := service.lifecycleForRun(run)
+		if err != nil {
+			return err
+		}
+		if err := service.resumeLifecycleObservation(context.Background(), run, lifecycle); err != nil {
+			return err
+		}
+	}
+	for i := 0; i < 20; i++ {
+		service.drainWorkerMessages()
+		_, execution := service.workflowRecords(run)
+		if turn := nativeOrcaCurrentTurn(execution); turn != nil && turn.Purpose == "readiness" && !turn.Settled {
+			if err := service.readNativeOrcaOutput(context.Background(), run, execution, turn); err != nil && execution.Environment.Blocker == nil {
+				return err
+			}
+		}
+		if execution.Environment != nil && (execution.Environment.Ready || execution.Environment.Blocker != nil) {
+			return nil
+		}
+		select {
+		case <-time.After(100 * time.Millisecond):
+		}
+	}
+	service.drainWorkerMessages()
+	return nil
 }
 func (f *environmentFixture) state(t *testing.T) fakeNativeOrcaState {
 	t.Helper()
@@ -394,7 +429,7 @@ func TestManagedOrcaFrozenResourceEvidenceIsVerifiedBeforeInput(t *testing.T) {
 	f.prepare(t)
 	e := f.service.executionRecord(f.run)
 	e.Environment.WriteRoots = append(e.Environment.WriteRoots, "C:/")
-	if err := f.service.verifyNativeOrcaWorker(context.Background(), f.run, e); err == nil {
+	if err := f.service.verifyHostExecutionEvidence(context.Background(), f.run, e); err == nil {
 		t.Fatal("changed writable roots were accepted")
 	}
 }

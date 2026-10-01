@@ -1,6 +1,7 @@
 package steerline
 
 import (
+	"context"
 	"errors"
 
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
@@ -186,6 +187,32 @@ func (s *Service) eventWorkerFlowFor(run *Run, ev WorkerEvent) (resultErr error)
 		execution.LastEvent = ptr(ev.Summary)
 		s.refreshRun(run)
 	}
+	for _, envelope := range ev.Implementation {
+		if err := envelope.ValidateResourceIdentity(execution.ProjectIdentity, execution.ExecutionID, execution.CurrentAttemptID, execution.Generation, execution.ConfigurationDigest); err != nil {
+			return err
+		}
+		if err := putImplementationEnvelope(execution, envelope); err != nil {
+			return err
+		}
+	}
+	if ev.DeliveryFinal && ev.DeliveryID != "" {
+		if execution.PendingDeliveryID != "" && execution.PendingDeliveryID != ev.DeliveryID {
+			return ErrWorkerTurnStale
+		}
+		execution.PendingDeliveryID = ev.DeliveryID
+		s.refreshRun(run)
+	}
+	var completionCandidate *executionapi.LifecycleCandidate
+	if ev.Candidate != nil {
+		candidate := ev.Candidate.Clone()
+		if err := candidate.Validate(); err != nil || candidate.Action != executionapi.LifecycleReportCompletion || candidate.Input.Completion == nil {
+			return errors.Join(err, errors.New("worker observer proposed an unsupported follow-up action"))
+		}
+		if candidate.Input.Completion.TurnID != execution.PendingTurnID && candidate.Input.Completion.TurnID != execution.CurrentTurnID {
+			return ErrWorkerTurnStale
+		}
+		completionCandidate = &candidate
+	}
 	if ev.Activity.Kind != "" {
 		if err := s.recordConversationEvent(run, ev); err != nil {
 			return err
@@ -195,7 +222,22 @@ func (s *Service) eventWorkerFlowFor(run *Run, ev WorkerEvent) (resultErr error)
 	} else if ev.Persisted != nil {
 		return errors.New("worker source event lacks activity classification")
 	}
-	return s.commitWorker(run, operationIDs...)
+	if err := s.commitWorker(run, operationIDs...); err != nil {
+		return err
+	}
+	if completionCandidate != nil {
+		lifecycle, _, err := s.lifecycleForRun(run)
+		if err != nil {
+			return err
+		}
+		if err := s.executeLifecycleStep(context.Background(), run, lifecycle, *completionCandidate); err != nil {
+			return err
+		}
+	}
+	if ev.DeliveryFinal && ev.DeliveryID != "" {
+		return s.acknowledgeLifecycleDelivery(run, ev.DeliveryID)
+	}
+	return nil
 }
 
 func (s *Service) routedQuestionSeen(run *Run, execution *ExecutionRecord, route *executionapi.QuestionRoute, questions []executionapi.Question) (bool, error) {

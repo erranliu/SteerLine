@@ -77,6 +77,7 @@ func DecodeMessage(message Message, taskID, dispatchID, agentTerminal string, fi
 			return fact, true, err
 		}
 		fact.Kind, fact.Completed, fact.Outcome = executionapi.EventCompleted, true, outcome
+		fact.LastMessage = strings.TrimSpace(message.Body)
 		fact.PRCandidates = executionapi.PRClues(message.Body)
 	case "status":
 		fact.Kind = executionapi.EventStatus

@@ -51,6 +51,37 @@ func InspectAgentInput(ctx context.Context, call MetaCall, identity TerminalIden
 	return fact, false, nil
 }
 
+// ObserveTurnRunning reports only explicit busy markers in the original Codex screen.
+// A Dispatch acceptance or an idle prompt alone is not a turn-start receipt.
+func ObserveTurnRunning(ctx context.Context, call MetaCall, identity TerminalIdentity) (bool, error) {
+	fact, err := ObserveHost(ctx, call, identity)
+	if err != nil {
+		return false, err
+	}
+	if fact.Reason != "" {
+		return false, &PlatformError{Code: "identity_mismatch", Diagnostic: fact.Reason}
+	}
+	envelope, err := call(ctx, "terminal", "read", "--terminal", identity.Handle, "--screen", "--json")
+	if err != nil {
+		return false, err
+	}
+	var result struct {
+		Terminal struct {
+			Handle string   `json:"handle"`
+			Source string   `json:"source"`
+			Tail   []string `json:"tail"`
+		} `json:"terminal"`
+	}
+	if json.Unmarshal(envelope.Payload, &result) != nil || envelope.RuntimeID != identity.RuntimeID || result.Terminal.Handle != identity.Handle {
+		return false, errors.New("turn-start observation changed original terminal identity")
+	}
+	if result.Terminal.Source != "screen" {
+		return false, nil
+	}
+	text := strings.ToLower(strings.Join(result.Terminal.Tail, "\n"))
+	return strings.Contains(text, "esc to interrupt") || strings.Contains(text, "working (") || strings.Contains(text, "running hook"), nil
+}
+
 // ObserveHost keeps exit and waiting facts even when sending is impossible.
 // Unknown/disconnected observations are gaps, never a fabricated process exit.
 func ObserveHost(ctx context.Context, call MetaCall, identity TerminalIdentity) (HostFact, error) {

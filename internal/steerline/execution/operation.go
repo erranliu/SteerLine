@@ -24,6 +24,9 @@ type Operation struct {
 	Protocol          ExecutionProtocol `json:"protocol"`
 	Target            ExecutionTarget   `json:"target"`
 	Action            string            `json:"action"`
+	IdempotencyKey    string            `json:"idempotency_key,omitempty"`
+	Request           []byte            `json:"request,omitempty"`
+	Receipt           []byte            `json:"receipt,omitempty"`
 	PayloadDigest     string            `json:"payload_digest"`
 	Status            OperationStatus   `json:"status"`
 	StartedAt         time.Time         `json:"started_at"`

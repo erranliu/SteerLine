@@ -41,26 +41,30 @@ type QuestionRouteIdentity struct {
 // SessionContext freezes center identity separately from verified native session
 // and turn IDs. It contains values only, with no business mutation authority.
 type SessionContext struct {
-	ProjectID        string
-	TaskID           string
-	WorkflowRunID    string
-	ExecutionID      string
-	AttemptID        string
-	Agent            AgentSpec
-	Target           ExecutionTarget
-	SessionID        string
-	Generation       string
-	CurrentTurnID    string
-	PendingTurnID    string
-	CurrentCommandID string
-	PendingCommandID string
+	ProjectID         string
+	TaskID            string
+	WorkflowRunID     string
+	ExecutionID       string
+	AttemptID         string
+	Agent             AgentSpec
+	Target            ExecutionTarget
+	SessionID         string
+	Generation        string
+	CurrentTurnID     string
+	PendingTurnID     string
+	LastStoppedTurnID string
+	CurrentCommandID  string
+	PendingCommandID  string
+	AttemptNumber     int
 }
 
 // TurnInput identifies a fixed input operation; accepting it does not prove
 // that its native turn has started. The native session route is bound separately.
 type TurnInput struct {
-	CommandID string
-	Prompt    string
+	CommandID          string
+	Prompt             string
+	Purpose            string
+	LinkedWorktreeArgs []string `json:"linked_worktree_args,omitempty"`
 }
 
 // Answer is the structured answer content for the original verified question.

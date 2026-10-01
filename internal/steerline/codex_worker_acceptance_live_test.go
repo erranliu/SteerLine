@@ -180,7 +180,7 @@ func TestAppServerServiceParallelRecoveryLive(t *testing.T) {
 		}
 	}
 	_, execution8 := service.workflowRecords(run8)
-	firstTurn, firstThread, firstWorkspace := execution8.CurrentTurnID, codexSessionID(execution8), execution8.Workspace.Worktree
+	firstTurn, firstThread, firstWorkspace := execution8.CurrentTurnID, execution8.SessionID, execution8.Workspace.Worktree
 	if execution8.Process == nil || firstTurn == "" || firstThread == "" {
 		t.Fatal("first task lost its native process, thread or turn")
 	}
@@ -198,7 +198,7 @@ func TestAppServerServiceParallelRecoveryLive(t *testing.T) {
 		t.Fatal("second task completion displaced the first native question")
 	}
 	_, execution9 = service.workflowRecords(run9)
-	if codexSessionID(execution9) == firstThread || execution9.CurrentTurnID == "" {
+	if execution9.SessionID == firstThread || execution9.CurrentTurnID == "" {
 		t.Fatal("second task did not retain an independent native thread and turn")
 	}
 	callID := run8.Decision.Request.QuestionRoute.QuestionID
@@ -224,12 +224,12 @@ func TestAppServerServiceParallelRecoveryLive(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, execution8 = service.workflowRecords(run8)
-	if run8.Decision == nil || run8.Decision.Request.QuestionRoute == nil || run8.Decision.Request.QuestionRoute.QuestionID != callID || codexSessionID(execution8) != firstThread || execution8.CurrentTurnID != firstTurn || service.workers[run8.RunID] == nil {
+	if run8.Decision == nil || run8.Decision.Request.QuestionRoute == nil || run8.Decision.Request.QuestionRoute.QuestionID != callID || execution8.SessionID != firstThread || execution8.CurrentTurnID != firstTurn || service.workers[run8.RunID] == nil {
 		ask := ""
 		if run8.Decision != nil && run8.Decision.Request.QuestionRoute != nil {
 			ask = run8.Decision.Request.QuestionRoute.QuestionID
 		}
-		t.Fatalf("restart failed to reattach original question: task=%s decision=%s ask=%s/%s execution=%s thread=%s/%s turn=%s/%s stopped=%s worker=%t reason=%q", run8.TaskStatus, decisionStatus, ask, callID, execution8.Status, codexSessionID(execution8), firstThread, execution8.CurrentTurnID, firstTurn, execution8.LastStoppedTurnID, service.workers[run8.RunID] != nil, deref(run8.Error))
+		t.Fatalf("restart failed to reattach original question: task=%s decision=%s ask=%s/%s execution=%s thread=%s/%s turn=%s/%s stopped=%s worker=%t reason=%q", run8.TaskStatus, decisionStatus, ask, callID, execution8.Status, execution8.SessionID, firstThread, execution8.CurrentTurnID, firstTurn, execution8.LastStoppedTurnID, service.workers[run8.RunID] != nil, deref(run8.Error))
 	}
 	service.State.Service.Ready, service.State.Service.Status = true, "running"
 	if err := service.publishCheckpoint(); err != nil {
@@ -244,10 +244,10 @@ func TestAppServerServiceParallelRecoveryLive(t *testing.T) {
 	answer(run8, nil, "Feedback: reply ACK only.")
 	finish(run8)
 	_, execution8 = service.workflowRecords(run8)
-	if codexSessionID(execution8) != firstThread || execution8.Workspace.Worktree != firstWorkspace || execution8.CurrentTurnID == firstTurn || execution8.TurnNumber != 2 {
+	if execution8.SessionID != firstThread || execution8.Workspace.Worktree != firstWorkspace || execution8.CurrentTurnID == firstTurn || execution8.TurnNumber != 2 {
 		t.Fatal("post-turn feedback did not stay on the original thread and worktree")
 	}
-	t.Logf("service-level native acceptance: run8=%s thread=%s turns=%s,%s; run9=%s thread=%s turn=%s; recovered call=%s", run8.RunID, firstThread, firstTurn, execution8.CurrentTurnID, run9.RunID, codexSessionID(execution9), execution9.CurrentTurnID, callID)
+	t.Logf("service-level native acceptance: run8=%s thread=%s turns=%s,%s; run9=%s thread=%s turn=%s; recovered call=%s", run8.RunID, firstThread, firstTurn, execution8.CurrentTurnID, run9.RunID, execution9.SessionID, execution9.CurrentTurnID, callID)
 }
 
 type appServerHostExitReceipt struct {
@@ -357,7 +357,7 @@ func TestAppServerHostExitHelper(t *testing.T) {
 	if execution.Process == nil {
 		t.Fatal("native app-server has no durable process identity")
 	}
-	receipt := appServerHostExitReceipt{Config: c, Home: os.Getenv("STEERLINE_HOME"), RunID: run.RunID, Process: *execution.Process, ThreadID: codexSessionID(execution), TurnID: execution.CurrentTurnID, CallID: run.Decision.Request.QuestionRoute.QuestionID, Workspace: execution.Workspace.Worktree}
+	receipt := appServerHostExitReceipt{Config: c, Home: os.Getenv("STEERLINE_HOME"), RunID: run.RunID, Process: *execution.Process, ThreadID: execution.SessionID, TurnID: execution.CurrentTurnID, CallID: run.Decision.Request.QuestionRoute.QuestionID, Workspace: execution.Workspace.Worktree}
 	if err := AtomicWrite(filepath.Join(root, "host-exit-receipt.json"), mustJSON(receipt)); err != nil {
 		t.Fatal(err)
 	}
@@ -425,7 +425,7 @@ func TestAppServerHostExitRecoveryLive(t *testing.T) {
 	}
 	worker := service.workers[run.RunID]
 	_, execution := service.workflowRecords(run)
-	if worker == nil || run.Decision == nil || run.Decision.Request.QuestionRoute == nil || run.Decision.Request.QuestionRoute.QuestionID != receipt.CallID || codexSessionID(execution) != receipt.ThreadID || execution.CurrentTurnID != receipt.TurnID || execution.Workspace.Worktree != receipt.Workspace {
+	if worker == nil || run.Decision == nil || run.Decision.Request.QuestionRoute == nil || run.Decision.Request.QuestionRoute.QuestionID != receipt.CallID || execution.SessionID != receipt.ThreadID || execution.CurrentTurnID != receipt.TurnID || execution.Workspace.Worktree != receipt.Workspace {
 		t.Fatalf("new host did not recover the original request: worker=%t reason=%q", worker != nil, deref(run.Error))
 	}
 	defer worker.detachLocalObservation(context.Background())

@@ -5,11 +5,20 @@ import (
 	"encoding/json"
 	"errors"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
+
+func WorkerWorktreeName(taskID, workflowRunID string) (string, error) {
+	number, err := strconv.ParseUint(taskID, 10, 64)
+	if err != nil || number == 0 || strconv.FormatUint(number, 10) != taskID || !stableID(workflowRunID) {
+		return "", errors.New("Orca worktree requires a canonical task number and stable workflow identity")
+	}
+	return "sl-" + taskID + "-" + workflowRunID, nil
+}
 
 var ErrWorktreeIdentity = errors.New("Orca worktree does not match the fixed name, repository, base and branch")
 

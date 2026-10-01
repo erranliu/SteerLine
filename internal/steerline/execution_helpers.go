@@ -101,7 +101,7 @@ func applyWorkflowWorkspaceEvidence(run *Run, execution *ExecutionRecord, worksp
 }
 
 func applyWorkflowWorkspaceTarget(run *Run, execution *ExecutionRecord, workspace WorkspaceEvidence) {
-	if execution.Protocol != string(executionapi.ProtocolOrcaSupervised) {
+	if execution.Target.WorktreeID == "" {
 		execution.Target.WorktreeID = workspace.Worktree
 	}
 	execution.Target.Branch = workspace.Branch

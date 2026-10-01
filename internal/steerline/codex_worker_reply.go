@@ -2,102 +2,228 @@ package steerline
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 
-	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
-func (s *Service) replyAppServerAsk(ctx context.Context, run *Run, execution *ExecutionRecord, answer DecisionAnswer) error {
-	if run == nil || run.Decision == nil || run.Decision.Request.QuestionRoute == nil || execution == nil {
-		return errors.New("saved native answer has no fixed request")
+func (s *Service) deliverLifecycleQuestionAnswer(ctx context.Context, run *Run, execution *ExecutionRecord, answer DecisionAnswer) error {
+	if run == nil || run.Decision == nil || run.Decision.Request.QuestionRoute == nil || execution == nil || run.Decision.ID != answer.DecisionID {
+		return errors.New("saved answer has no fixed original question")
 	}
-	fixed, err := s.workerFlowContext(run)
+	lifecycle, fixed, err := s.lifecycleForRun(run)
 	if err != nil {
 		return err
 	}
-	args, err := codexLinkedWorktreeWriteArgs(ctx, fixed.config, execution.Workspace.Worktree)
-	if err != nil {
-		return err
+	if fixed.execution != execution && fixed.execution.ExecutionID != execution.ExecutionID {
+		return ErrWorkerTurnStale
 	}
-	if execution.PolicyResources == nil {
-		return errors.New("original permission resources are missing")
-	}
-	if err := bindPolicyResources(ctx, fixed.config, execution, execution.Workspace.Worktree, args); err != nil {
-		return err
-	}
-	if run.Decision.ID != answer.DecisionID {
-		return &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "native answer changed its fixed decision"}
-	}
-	ask, err := codexworker.DecodeQuestionRoute(*run.Decision.Request.QuestionRoute, *workerSessionContext(run, execution))
-	if err != nil {
-		return err
-	}
-	binding, err := codexBinding(execution)
-	if err != nil {
-		return err
-	}
-	if err := codexBackend(fixed.config, run).ValidateReply(binding, ask.Generation, ask.ThreadID, ask.TurnID, execution.CurrentTurnID, execution.LastStoppedTurnID); err != nil {
-		return err
-	}
-	key := "worker-question-answer:" + execution.ExecutionID + ":" + answer.DecisionID
-	for _, op := range s.domain.Operations {
-		if op.IdempotencyKey == key {
-			return nil /* The original reply may already be applying; reconcile, never resend. */
+	if lifecycle.PolicyCapabilities().LinkedWorkspaceWriteRoots {
+		args, err := codexLinkedWorktreeWriteArgs(ctx, fixed.config, execution.Workspace.Worktree)
+		if err != nil {
+			return err
+		}
+		if err := bindPolicyResources(ctx, fixed.config, execution, execution.Workspace.Worktree, args); err != nil {
+			return err
 		}
 	}
-	request := struct {
-		ExecutionID string              `json:"execution_id"`
-		Generation  string              `json:"generation"`
-		ThreadID    string              `json:"thread_id"`
-		TurnID      string              `json:"turn_id"`
-		CallID      string              `json:"call_id"`
-		RequestID   json.RawMessage     `json:"request_id"`
-		Answers     map[string][]string `json:"answers"`
-	}{execution.ExecutionID, ask.Generation, ask.ThreadID, ask.TurnID, ask.CallID, ask.RequestID, answer.Answers}
-	opID, err := s.startWorkerOperation(run, "reply_execution_question", key, request)
+	key := "worker-question-answer:" + execution.ExecutionID + ":" + answer.DecisionID
+	input := executionapi.LifecycleInput{Feedback: &executionapi.FeedbackInput{
+		DecisionID: answer.DecisionID, QuestionID: run.Decision.Request.QuestionRoute.QuestionID,
+		Message: workerFeedbackText(answer, run.Decision.Request), Answer: &executionapi.Answer{Answers: answer.Answers},
+	}}
+	if operation := s.operationByKey(key); operation != nil {
+		return s.reconcileLifecycleQuestionAnswer(ctx, run, lifecycle, fixed, operation, input)
+	}
+	operationID, err := s.startWorkerOperation(run, "reply_execution_question", key, input.Feedback)
 	if err != nil {
+		return err
+	}
+	operation := s.operationByKey(key)
+	if operation == nil || operation.OperationID != operationID {
+		return errors.New("saved answer operation disappeared before delivery")
+	}
+	if err := validateSavedLifecycleOperation(operation, executionapi.LifecycleDeliverFeedback, input); err != nil {
+		return err
+	}
+	snapshot, err := s.lifecycleSnapshot(run, fixed.workflow, execution, fixed.attempt, nil)
+	if err != nil {
+		return err
+	}
+	request := lifecycleRequest(snapshot, *operation, executionapi.LifecycleDeliverFeedback, input)
+	if err := request.Validate(); err != nil {
 		return err
 	}
 	if s.workerMessages != nil {
-		askCopy := ask
-		answers := answer.Answers
-		endpoint, workspace, runID := binding.Endpoint, execution.Workspace.Worktree, run.RunID
+		runID := run.RunID
+		ctx = s.runContext
 		s.forwarders.Add(1)
 		go func() {
 			defer s.forwarders.Done()
-			err := sendAppServerAskReply(s.runContext, endpoint, workspace, askCopy, answers)
-			message := &appServerReplyMessage{decisionID: answer.DecisionID, opID: opID, callID: askCopy.CallID, err: err}
+			receipt, observer, executeErr := lifecycle.Execute(ctx, request.Clone())
+			if observer != nil {
+				_ = observer.Close(context.Background())
+			}
+			message := &lifecycleReplyMessage{request: request, receipt: receipt.Clone(), err: executeErr}
 			select {
 			case s.workerMessages <- workerMessage{runID: runID, reply: message}:
-			case <-s.runContext.Done():
+			case <-ctx.Done():
 			}
 		}()
 		return nil
 	}
-	err = sendAppServerAskReply(ctx, binding.Endpoint, execution.Workspace.Worktree, ask, answer.Answers)
-	if err != nil {
-		_ = s.changeWorkerOperation(run, opID, "outcome_unknown", ask.CallID, nil, err.Error())
-		execution.Error = ptr("Original Codex question reply is unverified: " + err.Error())
-		s.refreshRun(run)
-		return s.commitWorker(run)
+	receipt, observer, executeErr := lifecycle.Execute(ctx, request.Clone())
+	if observer != nil {
+		_ = observer.Close(context.Background())
 	}
-	if err := s.setOperationState(opID, "accepted", ask.CallID, mustJSON(map[string]any{"request_id": ask.RequestID, "call_id": ask.CallID, "sent_at": now()}), ""); err != nil {
+	return s.applyLifecycleQuestionAnswerReceipt(run, request, receipt, executeErr)
+}
+
+func (s *Service) reconcileLifecycleQuestionAnswer(ctx context.Context, run *Run, lifecycle executionapi.LifecyclePort, fixed workerFlowContext, operation *OperationRecord, input executionapi.LifecycleInput) error {
+	if operation == nil || operation.Status == "pending" {
+		return errors.New("original answer has no persisted send operation")
+	}
+	if err := validateSavedLifecycleOperation(operation, executionapi.LifecycleDeliverFeedback, input); err != nil {
 		return err
 	}
-	s.note(run, "steer", "decision", "reply_sent", "answer sent to the original Codex tool request", ask.CallID, nil)
-	return s.commitWorker(run, opID)
+	if operation.Status == "accepted" || operation.Status == "confirmed" {
+		return nil // The original send may have reached the native question; never resend it.
+	}
+	snapshot, err := s.lifecycleSnapshot(run, fixed.workflow, fixed.execution, fixed.attempt, nil)
+	if err != nil {
+		return err
+	}
+	request := lifecycleRequest(snapshot, *operation, executionapi.LifecycleDeliverFeedback, input)
+	if err := request.Validate(); err != nil {
+		return err
+	}
+	receipt, observer, reconcileErr := lifecycle.Reconcile(ctx, request)
+	if observer != nil {
+		_ = observer.Close(context.Background())
+	}
+	if err := receipt.ValidateFor(request); err != nil {
+		return err
+	}
+	if reconcileErr != nil || receipt.Disposition != executionapi.OperationConfirmed || !receipt.State.InputAccepted {
+		if reconcileErr != nil {
+			return reconcileErr
+		}
+		if receipt.Diagnostic != "" {
+			return errors.New(receipt.Diagnostic)
+		}
+		return nil // The original unknown operation remains read-only and requires later evidence.
+	}
+	return s.confirmLifecycleQuestionAnswer(run, request, receipt)
 }
 
-func sendAppServerAskReply(ctx context.Context, endpoint, workspace string, ask codexworker.AskRouteData, answers map[string][]string) error {
-	return codexworker.SendAskReply(ctx, codexworker.AskReply{
-		Endpoint: endpoint, Workspace: workspace, ThreadID: ask.ThreadID,
-		RequestID: ask.RequestID, Answer: executionapi.Answer{Answers: answers},
-	})
+func (s *Service) reconcileSavedLifecycleQuestionAnswer(ctx context.Context, run *Run) error {
+	if run == nil || run.Decision == nil || run.Decision.Status != "answer_saved" || run.Decision.Request.QuestionRoute == nil {
+		return nil
+	}
+	key := "worker-question-answer:" + run.ExecutionID + ":" + run.Decision.ID
+	operation := s.operationByKey(key)
+	if operation == nil || operation.Status == "accepted" || operation.Status == "confirmed" {
+		return nil
+	}
+	if operation.Status != "in_flight" && operation.Status != "outcome_unknown" {
+		return errors.New("saved app-server answer has no reconcileable original send operation")
+	}
+	lifecycle, fixed, err := s.lifecycleForRun(run)
+	if err != nil {
+		return err
+	}
+	answer, err := ReadDecisionAnswer(run)
+	if err != nil {
+		return err
+	}
+	input := executionapi.LifecycleInput{Feedback: &executionapi.FeedbackInput{
+		DecisionID: answer.DecisionID, QuestionID: run.Decision.Request.QuestionRoute.QuestionID,
+		Message: workerFeedbackText(answer, run.Decision.Request), Answer: &executionapi.Answer{Answers: answer.Answers},
+	}}
+	return s.reconcileLifecycleQuestionAnswer(ctx, run, lifecycle, fixed, operation, input)
 }
 
-func (s *Service) handleAppServerReplyMessage(runID string, message *appServerReplyMessage) error {
+func (s *Service) applyLifecycleQuestionAnswerReceipt(run *Run, request executionapi.LifecycleRequest, receipt executionapi.LifecycleReceipt, executeErr error) error {
+	if err := receipt.ValidateFor(request); err != nil {
+		return err
+	}
+	if run == nil || run.TaskStatus == "closed" || run.TaskStatus == "discarded" || run.Decision == nil ||
+		run.Decision.Status != "answer_saved" || run.Decision.ID != request.Input.Feedback.DecisionID ||
+		run.Decision.Request.QuestionRoute == nil || run.Decision.Request.QuestionRoute.QuestionID != request.Input.Feedback.QuestionID {
+		return nil
+	}
+	if err := validateSavedLifecycleOperation(snapshotOperation(&s.domain, request.Operation.ID), executionapi.LifecycleDeliverFeedback, request.Input); err != nil {
+		return err
+	}
+	for _, operation := range s.domain.Operations {
+		if operation.OperationID == request.Operation.ID && operation.Status == "confirmed" {
+			return nil // The matching native tool item committed first.
+		}
+	}
+	if executeErr != nil || receipt.Disposition == executionapi.OperationUnknown || receipt.Disposition == executionapi.OperationRejected {
+		reason := receipt.Diagnostic
+		if executeErr != nil {
+			reason = executeErr.Error()
+		}
+		status := string(receipt.Disposition)
+		if status != "rejected" {
+			status = "outcome_unknown"
+		}
+		if err := s.setOperationState(request.Operation.ID, status, receipt.RequestID, mustJSON(receipt), reason); err != nil {
+			return err
+		}
+		if execution := s.executionRecord(run); execution != nil {
+			execution.Error = ptr("Original question answer delivery is unverified: " + reason)
+			s.refreshRun(run)
+		}
+		return s.commitWorker(run, request.Operation.ID)
+	}
+	if receipt.Disposition == executionapi.OperationConfirmed && receipt.State.InputAccepted {
+		return s.confirmLifecycleQuestionAnswer(run, request, receipt)
+	}
+	if receipt.Disposition != executionapi.OperationAccepted || !receipt.State.InputAccepted {
+		return errors.New("question answer result has no accepted original request")
+	}
+	if err := s.setOperationState(request.Operation.ID, "accepted", receipt.RequestID, mustJSON(receipt), ""); err != nil {
+		return err
+	}
+	s.note(run, "steer", "decision", "reply_sent", "answer was sent to the original execution question", receipt.RequestID, nil)
+	return s.commitWorker(run, request.Operation.ID)
+}
+
+func (s *Service) confirmLifecycleQuestionAnswer(run *Run, request executionapi.LifecycleRequest, receipt executionapi.LifecycleReceipt) error {
+	if run == nil || run.Decision == nil || run.Decision.ID != request.Input.Feedback.DecisionID || run.Decision.Status != "answer_saved" {
+		return nil
+	}
+	if err := s.setOperationState(request.Operation.ID, "confirmed", receipt.RequestID, mustJSON(receipt), ""); err != nil {
+		return err
+	}
+	s.setDecisionStatus(run, "reply_accepted")
+	workflow, execution := s.workflowRecords(run)
+	if workflow == nil || execution == nil {
+		return errors.New("confirmed answer lost its original execution")
+	}
+	if len(execution.PendingQuestions) > 0 {
+		next := execution.PendingQuestions[0]
+		execution.PendingQuestions = execution.PendingQuestions[1:]
+		decision, err := WriteDecisionRequest(run, decisionRequestFromEventFact(executionapi.EventFact{Questions: next.Questions, QuestionRoute: &next.Route}))
+		if err != nil {
+			return err
+		}
+		s.setRunDecision(run, decision)
+	} else if workflow.Phase == "waiting_decision" {
+		if err := ContinueWorkerQuestion(workflow, execution, execution.CurrentTurnID); err != nil {
+			return err
+		}
+		s.refreshRun(run)
+	}
+	return s.commitWorker(run, request.Operation.ID)
+}
+
+func (s *Service) handleLifecycleFeedbackMessage(runID string, message *lifecycleReplyMessage) error {
+	if message == nil {
+		return errors.New("lifecycle reply result is required")
+	}
 	var run *Run
 	for _, candidate := range s.runs {
 		if candidate != nil && candidate.RunID == runID {
@@ -105,29 +231,17 @@ func (s *Service) handleAppServerReplyMessage(runID string, message *appServerRe
 			break
 		}
 	}
-	if run == nil || run.TaskStatus == "closed" || run.TaskStatus == "discarded" || run.Decision == nil || run.Decision.Status != "answer_saved" || run.Decision.ID != message.decisionID || run.Decision.Request.QuestionRoute == nil || run.Decision.Request.QuestionRoute.QuestionID != message.callID {
-		return nil // A terminal or replaced Decision cannot be changed by a late reply result.
+	if run == nil {
+		return nil
 	}
-	for _, op := range s.domain.Operations {
-		if op.OperationID != message.opID {
-			continue
-		}
-		if op.Status == "confirmed" {
-			return nil // The matching native tool item arrived before the send result.
-		}
-		if message.err != nil {
-			if err := s.changeWorkerOperation(run, op.OperationID, "outcome_unknown", message.callID, nil, message.err.Error()); err != nil {
-				return err
-			}
-			s.executionRecord(run).Error = ptr("Original Codex question reply is unverified: " + message.err.Error())
-			s.refreshRun(run)
-			return s.commitWorker(run)
-		}
-		if err := s.setOperationState(message.opID, "accepted", message.callID, mustJSON(map[string]any{"call_id": message.callID, "sent_at": now()}), ""); err != nil {
-			return err
-		}
-		s.note(run, "steer", "decision", "reply_sent", "answer sent to the original Codex tool request", message.callID, nil)
-		return s.commitWorker(run, message.opID)
+	feedback := message.request.Input.Feedback
+	if run.TaskStatus == "closed" || run.TaskStatus == "discarded" || run.Decision == nil || run.Decision.Status != "answer_saved" ||
+		feedback == nil || run.Decision.ID != feedback.DecisionID || run.Decision.Request.QuestionRoute == nil ||
+		run.Decision.Request.QuestionRoute.QuestionID != feedback.QuestionID {
+		return nil // A terminal or replaced Decision cannot be changed by a late native result.
 	}
-	return errors.New("original Codex question reply operation disappeared")
+	if message.request.Operation.ID == "" {
+		return errors.New("lifecycle reply result lacks its original durable operation")
+	}
+	return s.applyLifecycleQuestionAnswerReceipt(run, message.request, message.receipt, message.err)
 }

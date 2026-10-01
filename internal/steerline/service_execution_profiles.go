@@ -66,7 +66,7 @@ func (s *Service) executionConfigForRun(run *Run) (Config, error) {
 					return Config{}, &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "fixed implementation binding failed verification", Cause: err}
 				}
 			}
-			if e.WorkflowRunID == workflow.WorkflowRunID && e.PolicyResources == nil && (e.Process != nil || e.Generation != "") && !awaitingLocalRecoveryResources(e) {
+			if e.WorkflowRunID == workflow.WorkflowRunID && e.PolicyResources == nil && e.Process != nil && !awaitingRecoveryResources(e) {
 				return Config{}, errors.New("bound execution lost its original policy resource snapshot")
 			}
 			if e.WorkflowRunID == workflow.WorkflowRunID && e.PolicyResources != nil {

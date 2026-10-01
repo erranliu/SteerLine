@@ -44,34 +44,44 @@ func screenHasPendingPaste(lines []string) bool {
 	return false
 }
 
-func SubmitPendingPaste(ctx context.Context, call MetaCall, identity TerminalIdentity) (bool, error) {
+func InspectPendingPaste(ctx context.Context, call MetaCall, identity TerminalIdentity) (bool, error) {
 	if identity.Kind != "orca-native" || identity.Handle == "" || identity.RuntimeID == "" || identity.Incarnation == "" {
 		return false, errors.New("native Orca prompt has no fixed worker terminal")
 	}
+	env, err := call(ctx, "terminal", "read", "--terminal", identity.Handle, "--json")
+	if err != nil {
+		return false, err
+	}
+	var result struct {
+		Terminal struct {
+			Handle string   `json:"handle"`
+			Source string   `json:"source"`
+			Tail   []string `json:"tail"`
+		} `json:"terminal"`
+	}
+	if json.Unmarshal(env.Payload, &result) != nil || env.RuntimeID != identity.RuntimeID || result.Terminal.Handle != identity.Handle {
+		return false, &PlatformError{Code: "identity_mismatch", Diagnostic: "Orca prompt screen came from a different worker terminal"}
+	}
+	if result.Terminal.Source != "screen" || !screenHasPendingPaste(result.Terminal.Tail) {
+		return false, nil
+	}
+	term, err := ShowTerminal(ctx, call, identity.Handle)
+	if err != nil {
+		return false, err
+	}
+	if term.RuntimeID != identity.RuntimeID || term.IncarnationID != identity.Incarnation {
+		return false, &PlatformError{Code: "identity_mismatch", Diagnostic: "Orca pending prompt terminal was replaced"}
+	}
+	return true, nil
+}
+
+func SubmitPendingPaste(ctx context.Context, call MetaCall, identity TerminalIdentity) (bool, error) {
 	for attempt := 0; attempt < 4; attempt++ {
-		env, err := call(ctx, "terminal", "read", "--terminal", identity.Handle, "--json")
+		pending, err := InspectPendingPaste(ctx, call, identity)
 		if err != nil {
 			return false, err
 		}
-		var result struct {
-			Terminal struct {
-				Handle string   `json:"handle"`
-				Source string   `json:"source"`
-				Tail   []string `json:"tail"`
-			} `json:"terminal"`
-		}
-		if json.Unmarshal(env.Payload, &result) != nil || env.RuntimeID != identity.RuntimeID ||
-			result.Terminal.Handle != identity.Handle {
-			return false, &PlatformError{Code: "identity_mismatch", Diagnostic: "Orca prompt screen came from a different worker terminal"}
-		}
-		if result.Terminal.Source == "screen" && screenHasPendingPaste(result.Terminal.Tail) {
-			term, err := ShowTerminal(ctx, call, identity.Handle)
-			if err != nil {
-				return false, err
-			}
-			if term.RuntimeID != identity.RuntimeID || term.IncarnationID != identity.Incarnation {
-				return false, &PlatformError{Code: "identity_mismatch", Diagnostic: "Orca pending prompt terminal was replaced"}
-			}
+		if pending {
 			sent, err := call(ctx, "terminal", "send", "--terminal", identity.Handle, "--enter", "--json")
 			if err != nil {
 				return false, err

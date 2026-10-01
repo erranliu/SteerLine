@@ -7,7 +7,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/workerflow"
 )
@@ -41,23 +40,20 @@ func (s *Service) hasUnknownWorkerOperation(run *Run) bool {
 // process receipt and execution binding stay at their original paths.
 func (s *Service) beginLocalRecoveryAttempt(ctx context.Context, run *Run, mode string) error {
 	if mode == "" {
-		mode = "continue" // Free-text feedback keeps the verified original thread.
+		mode = "continue"
 	}
 	if mode != "continue" && mode != "new_session" {
-		return errors.New("choose the original Codex session or explicitly choose a new session")
+		return errors.New("choose the original session or explicitly choose a new session")
 	}
-	fixed, err := s.workerFlowContext(run)
+	lifecycle, fixed, err := s.lifecycleForRun(run)
 	if err != nil {
 		return err
 	}
-	execution, old := fixed.execution, fixed.attempt
-	if run.Protocol != string(executionapi.ProtocolLocalCodexAppServer) || !execution.RecoveryRequired ||
+	workflow, execution, old := fixed.workflow, fixed.execution, fixed.attempt
+	if !execution.RecoveryRequired ||
 		(execution.RecoveryState != "interrupted" && execution.RecoveryState != "completed") ||
 		execution.Process == nil || inspectProcess(execution.Process) != "process absent" {
 		return errors.New("the original worker process and its descendants are not confirmed stopped")
-	}
-	if mode == "continue" && !codexworker.ValidNativeID(codexSessionID(execution)) {
-		return errors.New("the original Codex thread identity is unavailable; choose a new session")
 	}
 	if execution.Workspace.Worktree == "" || run.WorktreePath == nil || canonical(*run.WorktreePath) != canonical(execution.Workspace.Worktree) {
 		return errors.New("the original worktree identity is not verified")
@@ -67,12 +63,19 @@ func (s *Service) beginLocalRecoveryAttempt(ctx context.Context, run *Run, mode 
 		return errors.New("the original worktree and branch could not be reverified")
 	}
 	applyWorkflowWorkspaceEvidence(run, execution, workspace)
-	binding, err := codexBinding(execution)
+	previous, err := s.lifecycleSnapshot(run, fixed.workflow, execution, old, nil)
 	if err != nil {
 		return err
 	}
-	if !codexBackend(fixed.config, run).ManagedProcessAbsent(binding) {
+	recovery, err := lifecycle.VerifyManualRecovery(ctx, previous)
+	if err != nil {
+		return err
+	}
+	if !recovery.ManagedProcess || !recovery.ProcessAbsent {
 		return errors.New("the original process tree is not proven to be service managed")
+	}
+	if mode == "continue" && (!recovery.SessionAvailable || execution.SessionID == "") {
+		return errors.New("the original session identity is unavailable; choose a new session")
 	}
 	if owned := s.ownedLocalProcesses[run.RunID]; owned != nil {
 		if owned.Identity() != *execution.Process {
@@ -87,6 +90,7 @@ func (s *Service) beginLocalRecoveryAttempt(ctx context.Context, run *Run, mode 
 	if s.hasUnknownWorkerOperation(run) {
 		return errors.New("an earlier external operation has an unknown outcome; reconcile it before continuing")
 	}
+	originalSession := execution.SessionID
 	old.WorkerProcess = copyPtr(execution.Process)
 	old.Status, old.UpdatedAt = "stopped", now()
 	if run.Decision != nil {
@@ -103,25 +107,40 @@ func (s *Service) beginLocalRecoveryAttempt(ctx context.Context, run *Run, mode 
 	})
 	execution.Process = nil
 	execution.CurrentAttemptID = newAttemptID
-	removeImplementationEnvelope(execution, codexworker.ExecutionBindingCodecKey)
+	execution.ImplementationData = nil
 	execution.PolicyResources = nil
 	execution.PendingCommandID, execution.CurrentCommandID = "", ""
 	execution.PendingTurnID, execution.CurrentTurnID, execution.LastStoppedTurnID = "", "", ""
 	execution.PendingQuestions = nil
+	execution.SessionGeneration = ""
 	execution.TurnStartedAt, execution.TurnEndedAt = nil, nil
 	execution.LogPath = nil
 	execution.Status, execution.LastTurnOutcome, execution.RecoveryState = "pending", "", "resuming"
 	execution.RecoveryRequired = false
 	if mode == "continue" {
 		execution.Generation = newID()
-		if err := applyCodexBinding(execution, codexworker.Binding{SessionID: binding.SessionID}); err != nil {
-			return err
-		}
+		execution.SessionID = originalSession
 	} else {
 		execution.Generation = ""
+		execution.SessionID = ""
 	}
 	execution.UpdatedAt = created
 	s.refreshRun(run)
+	if mode == "continue" {
+		workflow, execution = s.workflowRecords(run)
+		attempt := s.workflowAttempt(run, run.AttemptID)
+		next, err := s.lifecycleSnapshot(run, workflow, execution, attempt, nil)
+		if err != nil {
+			return err
+		}
+		seed, err := lifecycle.BindRecovery(ctx, previous, next)
+		if err != nil {
+			return err
+		}
+		if err := putImplementationEnvelope(execution, seed); err != nil {
+			return err
+		}
+	}
 	return s.commitWorker(run)
 }
 
@@ -167,7 +186,7 @@ func (s *Service) refreshSavedRecoveryDecision(run *Run, preserveNative bool, re
 						continue
 					}
 					execution.RecoveryState = "unverified"
-					return s.nativeOrcaUncertain(run, "Original Orca reply/send has an unknown outcome; reconcile its receipt before confirming again")
+					return s.waitWorkerFlow(run, "Original Orca reply/send has an unknown outcome; reconcile its receipt before confirming again")
 				}
 			}
 		}
@@ -368,16 +387,15 @@ func (s *Service) resumeConfiguredWork(ctx context.Context) error {
 		if workflow == nil || execution == nil || workflow.Phase != "completed" {
 			continue
 		}
-		entry, err := s.workerFlowRegistration(run)
-		if err != nil {
-			return err
+		var cleanupErr error
+		lifecycle, _, resolveErr := s.lifecycleForRun(run)
+		if resolveErr != nil {
+			cleanupErr = resolveErr
+		} else {
+			cleanupErr = s.cleanupLifecycleResources(ctx, run, lifecycle)
 		}
-		if entry.Cleanup == nil {
-			continue
-		}
-		cleanupErr := entry.Cleanup(s, ctx, run)
-		if err := cleanupErr; err != nil {
-			execution.LastEvent = ptr("Orca delivery completed; owned terminal cleanup needs reconciliation: " + err.Error())
+		if cleanupErr != nil {
+			execution.LastEvent = ptr("Task delivery completed; owned execution cleanup needs reconciliation: " + cleanupErr.Error())
 			s.refreshRun(run)
 			if saveErr := s.commitWorker(run); saveErr != nil {
 				return saveErr

@@ -200,7 +200,7 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 		fixed := config.projectExecutionProfile().Freeze(config.identity)
 		wfr.ExecutionProfile = &fixed
 	}
-	execution := ExecutionRecord{ProjectIdentity: c.Project, ExecutionID: executionID, CurrentAttemptID: attemptID, ConfigurationDigest: wfr.ExecutionProfile.Digest, OwnerServiceInstanceID: options.ServiceInstanceID, WorkflowRunID: workflowRunID, Agent: config.agentName(), Backend: string(backend), Protocol: string(protocol), Target: target, Workspace: WorkspaceEvidence{Repository: config.identity, Branch: config.Branch, Base: base}, Status: "pending", CurrentStep: "worker", CreatedAt: created, UpdatedAt: created}
+	execution := ExecutionRecord{ProjectIdentity: c.Project, ExecutionID: executionID, CurrentAttemptID: attemptID, Generation: newID(), ConfigurationDigest: wfr.ExecutionProfile.Digest, OwnerServiceInstanceID: options.ServiceInstanceID, WorkflowRunID: workflowRunID, Agent: config.agentName(), Backend: string(backend), Protocol: string(protocol), Target: target, Workspace: WorkspaceEvidence{Repository: config.identity, Branch: config.Branch, Base: base}, Status: "pending", CurrentStep: "worker", CreatedAt: created, UpdatedAt: created}
 	if config.managedWindowsOrca() {
 		if _, err := nativeOrcaFixedAgentCommand(config); err != nil {
 			return TaskClaimReceipt{}, err

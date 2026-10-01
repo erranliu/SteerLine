@@ -156,9 +156,21 @@ func setTestCodexBinding(t *testing.T, record *ExecutionRecord, endpoint, genera
 	if record.Generation == "" {
 		record.Generation = "test-resource-generation"
 	}
-	if err := applyCodexBinding(record, codexworker.Binding{Process: record.Process, Endpoint: endpoint, Generation: generation, SessionID: sessionID}); err != nil {
+	envelope, err := codexworker.NewAppServerBindingEnvelope(codexworker.AppServerBindingIdentity{
+		ProjectID: record.ProjectIdentity, ExecutionID: record.ExecutionID, AttemptID: record.CurrentAttemptID,
+		Generation: record.Generation, ConfigDigest: record.ConfigurationDigest,
+	}, codexworker.AppServerBinding{Endpoint: endpoint, Generation: generation, SessionID: sessionID})
+	if err != nil {
 		t.Fatal(err)
 	}
+	if record.Process != nil {
+		process := *record.Process
+		record.Process = &process
+	}
+	if err := putImplementationEnvelope(record, envelope); err != nil {
+		t.Fatal(err)
+	}
+	record.SessionID, record.SessionGeneration = sessionID, generation
 }
 
 func setTestOrcaState(t *testing.T, record *ExecutionRecord, state *implementationExecutionView) {

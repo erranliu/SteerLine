@@ -295,3 +295,38 @@ func FindSend(ctx context.Context, call Call, runID, dispatchID, subject, body s
 	}
 	return found, nil
 }
+
+func FindDone(ctx context.Context, call Call, runID, fromTerminal, taskID, dispatchID, subject, body, outcome string) (string, error) {
+	raw, err := call(ctx, "orchestration", "inbox", "--limit", "1000", "--full", "--json")
+	if err != nil {
+		return "", err
+	}
+	var result struct {
+		Messages []struct {
+			ID       string `json:"id"`
+			RunID    string `json:"run_id"`
+			From     string `json:"from_handle"`
+			To       string `json:"to_handle"`
+			Subject  string `json:"subject"`
+			Body     string `json:"body"`
+			Type     string `json:"type"`
+			TaskID   string `json:"task_id"`
+			Dispatch string `json:"dispatch_id"`
+			Outcome  string `json:"outcome"`
+		} `json:"messages"`
+	}
+	if err := json.Unmarshal(raw, &result); err != nil {
+		return "", err
+	}
+	found := ""
+	for _, message := range result.Messages {
+		if message.RunID != runID || message.From != fromTerminal || message.To != "run:"+runID || message.Type != "worker_done" {
+			continue
+		}
+		if message.ID == "" || message.TaskID != taskID || message.Dispatch != dispatchID || message.Subject != subject || message.Body != body || message.Outcome != outcome || found != "" {
+			return "", errors.New("Orca worker_done has conflicting or duplicate report history")
+		}
+		found = message.ID
+	}
+	return found, nil
+}

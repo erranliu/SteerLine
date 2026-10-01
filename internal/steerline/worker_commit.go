@@ -182,7 +182,7 @@ func (s *SQLiteStore) commitWorker(ctx context.Context, request workerCommit) (w
 					}
 				}
 				for _, v := range request.Operations {
-					if v.Before == nil && v.After.Kind != "orca_native_terminal_close" && v.After.Kind != "orca_remote_release" && v.After.Kind != "orca_remote_coordinator_close" {
+					if v.Before == nil && v.After.Kind != "orca_native_terminal_close" && v.After.Kind != "orca_remote_release" && v.After.Kind != "orca_remote_coordinator_close" && v.After.Kind != "cleanup_resources" {
 						return nativeErr("task_not_active", "settled worker cannot start another action")
 					}
 				}
@@ -258,8 +258,7 @@ func (s *SQLiteStore) commitWorker(ctx context.Context, request workerCommit) (w
 				return errors.New("execution binding differs from the committed receipt")
 			}
 			execution := request.Execution.After
-			binding, bindingErr := decodeCodexAppServerBinding(&execution)
-			if string(ref.Backend) != execution.Backend || string(ref.Protocol) != execution.Protocol || ref.Agent.Name != execution.Agent || ref.Target.ID != execution.Target.ID || ref.Target.ConnectionID != execution.Target.ConnectionID || ref.Target.ExternalRuntime != execution.Target.ExternalRuntime || ref.Protocol == executionapi.ProtocolLocalCodexAppServer && (bindingErr != nil || ref.Generation != binding.Generation) {
+			if string(ref.Backend) != execution.Backend || string(ref.Protocol) != execution.Protocol || ref.Agent.Name != execution.Agent || ref.Target.ID != execution.Target.ID || ref.Target.ConnectionID != execution.Target.ConnectionID || ref.Target.ExternalRuntime != execution.Target.ExternalRuntime || ref.Generation != execution.SessionGeneration {
 				return errors.New("execution binding changed the fixed backend or generation")
 			}
 			if err := tx.putExecutionBinding(*ref); err != nil {

@@ -31,6 +31,7 @@ func workerFlowState(workflow *WorkflowRunRecord, execution *ExecutionRecord, se
 func applyWorkerFlowState(workflow *WorkflowRunRecord, execution *ExecutionRecord, state workerflow.State) {
 	workflow.Phase, workflow.PRURL, workflow.PRState, workflow.UpdatedAt =
 		state.Phase, state.PRURL, state.PRState, state.WorkflowUpdatedAt
+	execution.SessionID = state.SessionID
 	execution.PendingTurnID, execution.CurrentTurnID = state.PendingTurnID, state.CurrentTurnID
 	execution.LastStoppedTurnID, execution.Status, execution.TurnNumber, execution.UpdatedAt =
 		state.LastStoppedTurnID, state.ExecutionStatus, state.TurnNumber, state.ExecutionUpdatedAt

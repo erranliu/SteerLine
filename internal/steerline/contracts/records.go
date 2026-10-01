@@ -55,6 +55,9 @@ type ExecutionRecord struct {
 	TurnStartedAt                 *time.Time                                `json:"turn_started_at,omitempty"`
 	TurnEndedAt                   *time.Time                                `json:"turn_ended_at,omitempty"`
 	Generation                    string                                    `json:"generation,omitempty"`
+	SessionID                     string                                    `json:"session_id,omitempty"`
+	SessionGeneration             string                                    `json:"session_generation,omitempty"`
+	PendingDeliveryID             string                                    `json:"pending_delivery_id,omitempty"`
 	ConfigurationDigest           string                                    `json:"configuration_digest,omitempty"`
 	LastTurnOutcome               string                                    `json:"last_turn_outcome,omitempty"`
 	LogPath                       *string                                   `json:"log_path,omitempty"`

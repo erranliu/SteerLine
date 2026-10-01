@@ -93,6 +93,7 @@ type EventFact struct {
 	Matched         bool
 	Outcome         string
 	PRCandidates    []string
+	LastMessage     string
 }
 
 type EventKind string
