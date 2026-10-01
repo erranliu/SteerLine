@@ -12,7 +12,7 @@ import (
 // Consumer-sized platform operations. The service retains intents, commits,
 // decisions and delivery; platform calls do not write center business state.
 type orcaExecutionOperations struct {
-	Delivery             func(context.Context, *ExecutionRecord) (nativeOrcaDeliveryFact, error)
+	Delivery             func(context.Context, *Run, *ExecutionRecord, *OrcaNativeTurn) (executionapi.EventBatch, error)
 	Settlement           func(context.Context, *ExecutionRecord, *OrcaNativeTurn) (nativeOrcaSettlement, error)
 	VerifyActive         func(context.Context, *ExecutionRecord, *OrcaNativeTurn) error
 	DeliveryAcknowledged func(context.Context, *Run, *ExecutionRecord, string) (bool, error)
@@ -36,14 +36,52 @@ func orcaOperationsFor(c Config) (orcaExecutionOperations, error) {
 	return ops, nil
 }
 
+func readNativeOrcaDelivery(ctx context.Context, c Config, run *Run, execution *ExecutionRecord, turn *OrcaNativeTurn) (executionapi.EventBatch, error) {
+	if run == nil || execution == nil || execution.OrcaNative == nil || execution.OrcaNative.Coordinator.Terminal == "" || execution.Target.OrchestrationRun == "" {
+		return executionapi.EventBatch{}, errors.New("inbox has no bound coordinator/Run")
+	}
+	if execution.Process == nil || turn == nil {
+		return executionapi.EventBatch{}, errors.New("inbox has no fixed process or turn identity")
+	}
+	ops, err := orcaOperationsFor(c)
+	if err != nil {
+		return executionapi.EventBatch{}, err
+	}
+	return ops.Delivery(ctx, run, execution, turn)
+}
+
+func decodeNativeOrcaInbox(inbox orcaworker.Inbox, run *Run, execution *ExecutionRecord, turn *OrcaNativeTurn) (executionapi.EventBatch, error) {
+	if run == nil || execution == nil || execution.Process == nil || turn == nil {
+		return executionapi.EventBatch{}, errors.New("inbox decoding has no fixed execution, recipient or turn")
+	}
+	fixed := workerSessionContext(run, execution)
+	fixed.TaskID = turn.TaskID
+	fixed.CurrentTurnID = turn.TurnID
+	fixed.Generation = nativeOrcaGeneration(execution)
+	return orcaworker.DecodeInbox(inbox, turn.TaskID, turn.DispatchID, execution.Process.Terminal, *fixed)
+}
+
+func nativeOrcaGeneration(execution *ExecutionRecord) string {
+	if execution == nil {
+		return ""
+	}
+	if execution.Process != nil && execution.Process.Incarnation != "" {
+		return execution.Process.Incarnation
+	}
+	if execution.OrcaNative != nil {
+		return execution.OrcaNative.Coordinator.RuntimeID
+	}
+	return ""
+}
+
 func nativeOrcaOperations(c Config) orcaExecutionOperations {
 	return orcaExecutionOperations{
-		Delivery: func(ctx context.Context, e *ExecutionRecord) (nativeOrcaDeliveryFact, error) {
+		Delivery: func(ctx context.Context, run *Run, e *ExecutionRecord, turn *OrcaNativeTurn) (executionapi.EventBatch, error) {
 			d, err := orcaworker.ReadDelivery(ctx, orcaWorkerMetaCaller(c), e.OrcaNative.Coordinator.Terminal, e.OrcaNative.Coordinator.RuntimeID, e.Target.OrchestrationRun)
 			if err != nil {
-				return nativeOrcaDeliveryFact{}, err
+				return executionapi.EventBatch{}, err
 			}
-			return nativeOrcaDeliveryFact{DeliveryID: d.DeliveryID, Messages: d.Messages}, nil
+			return decodeNativeOrcaInbox(d, run, e, turn)
 		},
 		Settlement: func(ctx context.Context, e *ExecutionRecord, t *OrcaNativeTurn) (nativeOrcaSettlement, error) {
 			value, err := orcaworker.Settlement(ctx, orcaWorkerMetaCaller(c), orcaworker.DispatchIdentity{DispatchID: t.DispatchID, TaskID: t.TaskID, RunID: e.Target.OrchestrationRun, RuntimeID: e.OrcaNative.Coordinator.RuntimeID, Terminal: e.Process.Terminal, Incarnation: e.Process.Incarnation, WorktreeID: e.Process.WorktreeID}, t.Outcome)
@@ -77,10 +115,13 @@ func nativeOrcaOperations(c Config) orcaExecutionOperations {
 
 func remoteOrcaOperations(c Config) orcaExecutionOperations {
 	return orcaExecutionOperations{
-		Delivery: func(ctx context.Context, e *ExecutionRecord) (nativeOrcaDeliveryFact, error) {
+		Delivery: func(ctx context.Context, run *Run, e *ExecutionRecord, turn *OrcaNativeTurn) (executionapi.EventBatch, error) {
 			ref := executionapi.ExecutionRef{RunID: e.WorkflowRunID, Target: e.Target, External: *e.Process}
 			d, err := remoteClientForExecution(c, e).Check(ctx, remoteWorkerRef(ref))
-			return nativeOrcaDeliveryFact{DeliveryID: d.ID, Messages: d.Messages}, remoteWorkerError(err)
+			if err != nil {
+				return executionapi.EventBatch{}, remoteWorkerError(err)
+			}
+			return decodeNativeOrcaInbox(orcaworker.Inbox{RunID: e.Target.OrchestrationRun, DeliveryID: d.ID, Messages: d.Messages}, run, e, turn)
 		},
 		Settlement: func(ctx context.Context, e *ExecutionRecord, t *OrcaNativeTurn) (nativeOrcaSettlement, error) {
 			ref := executionapi.ExecutionRef{Backend: executionapi.BackendOrca, Protocol: executionapi.ProtocolOrcaSupervised, Target: e.Target, External: *e.Process}

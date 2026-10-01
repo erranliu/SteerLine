@@ -22,32 +22,33 @@ type executionRegistrationKey struct {
 	Protocol executionapi.ExecutionProtocol
 }
 type executionRegistration struct {
-	VerifyWorker      func(*Service, context.Context, *Run, *ExecutionRecord) error
-	OrcaOperations    func(Config) orcaExecutionOperations
-	RelayResult       func(*Service, context.Context, *Run, *ExecutionRecord, *OrcaNativeTurn) (bool, error)
-	ClearRelay        func(*ExecutionRecord, *Run, *OrcaNativeTurn)
-	WorkspaceRequest  func(*Run) (workerWorkspacePreparationInput, error)
-	PrepareWorkspace  func(*Service, context.Context, *Run, string) (bool, error)
-	WaitFacts         func(*Run, *ExecutionRecord) workerWaitFacts
-	SettleRequests    func(*Service, *Run, *WorkflowRunRecord, *ExecutionRecord, workerTurnEvidence) (bool, error)
-	Cleanup           func(*Service, context.Context, *Run) error
-	Key               executionRegistrationKey
-	Preflight         func(context.Context, Config) error
-	Host              string
-	Prepare           func(*Service, context.Context, TaskRecord, *Run) error
-	Start             func(*Service, context.Context, *Run, string, string, string) error
-	Resume            func(*Service, context.Context, *TaskRecord, *Run) (bool, error)
-	PendingIdentity   func(string) (string, string)
-	TurnInstruction   func(string, string) string
-	DecodeEvent       func(WorkerEvent, *executionapi.SessionContext, bool) (workerFlowEventFact, error)
-	ReadTurn          func(workerFlowContext) (workerTurnEvidence, error)
-	PrepareFeedback   func(*Service, context.Context, *Run, *ExecutionRecord, DecisionAnswer, string) (bool, error)
-	RecoverFeedback   func(*Service, context.Context, *Run, *ExecutionRecord, DecisionAnswer, string) (bool, error)
-	DeliverFeedback   func(*Service, context.Context, *Run, *WorkflowRunRecord, *ExecutionRecord, DecisionAnswer, string) error
-	Backend           func(Config) executionapi.ExecutionBackend
-	Target            func(Config) executionapi.ExecutionTarget
-	ProbeRequirements func(context.Context, Config) (executionapi.CapabilityReport, error)
-	QueryTool         func(context.Context, Config, string) executionapi.RequirementEvidence
+	VerifyWorker         func(*Service, context.Context, *Run, *ExecutionRecord) error
+	OrcaOperations       func(Config) orcaExecutionOperations
+	RelayResult          func(*Service, context.Context, *Run, *ExecutionRecord, *OrcaNativeTurn) (bool, error)
+	ClearRelay           func(*ExecutionRecord, *Run, *OrcaNativeTurn)
+	WorkspaceRequest     func(*Run) (workerWorkspacePreparationInput, error)
+	PrepareWorkspace     func(*Service, context.Context, *Run, string) (bool, error)
+	WaitFacts            func(*Run, *ExecutionRecord) workerWaitFacts
+	SettleRequests       func(*Service, *Run, *WorkflowRunRecord, *ExecutionRecord, workerTurnEvidence) (bool, error)
+	Cleanup              func(*Service, context.Context, *Run) error
+	Key                  executionRegistrationKey
+	QuestionCodecKey     string
+	QuestionCodecVersion int
+	Preflight            func(context.Context, Config) error
+	Host                 string
+	Prepare              func(*Service, context.Context, TaskRecord, *Run) error
+	Start                func(*Service, context.Context, *Run, string, string, string) error
+	Resume               func(*Service, context.Context, *TaskRecord, *Run) (bool, error)
+	PendingIdentity      func(string) (string, string)
+	TurnInstruction      func(string, string) string
+	ReadTurn             func(workerFlowContext) (workerTurnEvidence, error)
+	PrepareFeedback      func(*Service, context.Context, *Run, *ExecutionRecord, DecisionAnswer, string) (bool, error)
+	RecoverFeedback      func(*Service, context.Context, *Run, *ExecutionRecord, DecisionAnswer, string) (bool, error)
+	DeliverFeedback      func(*Service, context.Context, *Run, *WorkflowRunRecord, *ExecutionRecord, DecisionAnswer, string) error
+	Backend              func(Config) executionapi.ExecutionBackend
+	Target               func(Config) executionapi.ExecutionTarget
+	ProbeRequirements    func(context.Context, Config) (executionapi.CapabilityReport, error)
+	QueryTool            func(context.Context, Config, string) executionapi.RequirementEvidence
 }
 
 func buildExecutionRegistry(entries []executionRegistration) (map[executionRegistrationKey]*executionRegistration, error) {
@@ -57,7 +58,7 @@ func buildExecutionRegistry(entries []executionRegistration) (map[executionRegis
 		if entry.Key.Backend == "" || entry.Key.Agent == "" || entry.Key.Protocol == "" || entry.Host == "" || result[entry.Key] != nil {
 			return nil, fmt.Errorf("duplicate or incomplete execution registration: %+v", entry.Key)
 		}
-		if entry.Preflight == nil || entry.Prepare == nil || entry.Start == nil || entry.Resume == nil || entry.PendingIdentity == nil || entry.Backend == nil || entry.Target == nil || entry.ProbeRequirements == nil || entry.QueryTool == nil || entry.DeliverFeedback == nil || entry.DecodeEvent == nil || entry.ReadTurn == nil {
+		if entry.Preflight == nil || entry.Prepare == nil || entry.Start == nil || entry.Resume == nil || entry.PendingIdentity == nil || entry.QuestionCodecKey == "" || entry.QuestionCodecVersion <= 0 || entry.Backend == nil || entry.Target == nil || entry.ProbeRequirements == nil || entry.QueryTool == nil || entry.DeliverFeedback == nil || entry.ReadTurn == nil {
 			return nil, fmt.Errorf("incomplete execution operations: %+v", entry.Key)
 		}
 		if entry.Key.Backend == executionapi.BackendOrca && (entry.OrcaOperations == nil || entry.VerifyWorker == nil) {
@@ -81,7 +82,7 @@ func init() {
 		{
 			Key: executionRegistrationKey{executionapi.BackendLocal, "codex", executionapi.ProtocolLocalCodexAppServer}, Host: "local", Preflight: preflightCodexWorkerFlow, WorkspaceRequest: workerWorkspaceRequest, PrepareWorkspace: prepareLocalWorkerWorkspace, WaitFacts: codexWorkerWaitFacts, SettleRequests: settleCodexRequests,
 			Prepare: (*Service).prepareCodexWorker, Start: (*Service).startCodexWorkerTurn, Resume: (*Service).resumeCodexWorker,
-			PendingIdentity: codexworker.PendingIdentity, DecodeEvent: decodeCodexWorkerFlowEvent, ReadTurn: readCodexWorkerTurnEvidence,
+			PendingIdentity: codexworker.PendingIdentity, QuestionCodecKey: codexworker.QuestionRouteImplementationKey, QuestionCodecVersion: 1, ReadTurn: readCodexWorkerTurnEvidence,
 			RecoverFeedback: recoverCodexFeedback, DeliverFeedback: deliverCodexFeedback,
 			Backend: func(c Config) executionapi.ExecutionBackend { return localExecutionBackend{config: c} },
 			Target: func(Config) executionapi.ExecutionTarget {
@@ -101,11 +102,11 @@ func init() {
 				_, err := s.resumeNativeOrcaWorker(ctx, task, run)
 				return true, err
 			},
-			PendingIdentity: orcaworker.PendingIdentity,
+			PendingIdentity: orcaworker.PendingIdentity, QuestionCodecKey: orcaworker.QuestionRouteImplementationKey, QuestionCodecVersion: 1,
 			TurnInstruction: func(run, turn string) string {
 				return "\nOrca Run, Task and Dispatch IDs are separate from the fixed SteerLine workflow_run_id.\n" + nativeOrcaRelayInstruction(run, turn)
 			},
-			DecodeEvent: rejectDispatchEvent, ReadTurn: rejectDispatchTurn,
+			ReadTurn:        rejectDispatchTurn,
 			PrepareFeedback: prepareOrcaFeedback, RecoverFeedback: recoverOrcaFeedback, DeliverFeedback: (*Service).applyNativeOrcaDecision,
 			Backend: func(c Config) executionapi.ExecutionBackend { return orcaworker.NewBackend(nativeOrcaConfig(c)) },
 			Target: func(c Config) executionapi.ExecutionTarget {
@@ -121,7 +122,7 @@ func init() {
 		{
 			Key: executionRegistrationKey{executionapi.BackendOrca, "codex", executionapi.ProtocolOrcaSupervised}, Host: "orca_supervised", OrcaOperations: remoteOrcaOperations, VerifyWorker: (*Service).verifyRemoteOrcaWorker, Preflight: preflightRemoteWorkerFlow, WorkspaceRequest: remoteWorkerWorkspaceRequest, PrepareWorkspace: prepareRegisteredRemoteWorkspace, Cleanup: (*Service).finishRemoteOrcaCleanup,
 			Prepare: (*Service).prepareSupervisedOrcaWorker, Start: (*Service).startSupervisedOrcaWorkerTurn, Resume: (*Service).resumeSupervisedOrcaWorker,
-			PendingIdentity: remote.PendingIdentity, DecodeEvent: rejectDispatchEvent, ReadTurn: rejectDispatchTurn,
+			PendingIdentity: remote.PendingIdentity, QuestionCodecKey: orcaworker.QuestionRouteImplementationKey, QuestionCodecVersion: 1, ReadTurn: rejectDispatchTurn,
 			DeliverFeedback: (*Service).applyNativeOrcaDecision,
 			Backend:         func(c Config) executionapi.ExecutionBackend { return remote.NewBackend(remoteWorkerConfig(c)) },
 			Target: func(c Config) executionapi.ExecutionTarget {
@@ -164,9 +165,6 @@ func registrationFor(c Config) (*executionRegistration, error) {
 		}
 	}
 	return nil, &executionapi.BackendError{Code: executionapi.BackendUnsupported, Diagnostic: fmt.Sprintf("unregistered execution combination host=%s agent=%s", c.hostName(), c.agentName())}
-}
-func rejectDispatchEvent(WorkerEvent, *executionapi.SessionContext, bool) (workerFlowEventFact, error) {
-	return workerFlowEventFact{}, unsupported("Orca event without fixed Dispatch receipt")
 }
 func rejectDispatchTurn(workerFlowContext) (workerTurnEvidence, error) {
 	return workerTurnEvidence{}, unsupported("Orca settlement without fixed Dispatch receipt")

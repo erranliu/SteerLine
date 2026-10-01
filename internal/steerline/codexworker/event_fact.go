@@ -5,18 +5,22 @@ import (
 	"errors"
 
 	"github.com/erranliu/SteerLine/internal/steerline/codexapp"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 type EventFact struct {
 	executionapi.EventFact
-	Question *contracts.CodexAskCall
 }
 
 // DecodeEvent checks native identities before exposing facts to the center.
-func DecodeEvent(envelope codexapp.Envelope, threadID, turnID string, inspectReply bool) (EventFact, error) {
+func DecodeEvent(envelope codexapp.Envelope, fixed executionapi.SessionContext, inspectReply bool) (EventFact, error) {
 	var fact EventFact
+	threadID := fixed.SessionID
+	turnID := fixed.CurrentTurnID
+	if turnID == "" {
+		turnID = fixed.PendingTurnID
+	}
+	fact.SessionID = threadID
 	switch envelope.Method {
 	case "turn/started":
 		var params struct {
@@ -29,12 +33,25 @@ func DecodeEvent(envelope codexapp.Envelope, threadID, turnID string, inspectRep
 			return fact, errors.New("app-server turn start changed its fixed thread")
 		}
 		fact.StartedTurnID = params.Turn.ID
+		fact.Kind = executionapi.EventStarted
 	case "item/tool/call":
 		call, err := ParseAskCall(envelope, threadID, turnID)
 		if err != nil {
 			return fact, err
 		}
-		fact.Question = &call
+		route, err := NewQuestionRoute(call, fixed)
+		if err != nil {
+			return fact, err
+		}
+		for i := range call.Questions {
+			call.Questions[i].ExecutionID = fixed.ExecutionID
+			call.Questions[i].AttemptID = fixed.AttemptID
+			call.Questions[i].Generation = fixed.Generation
+			call.Questions[i].TurnID = call.Route.TurnID
+		}
+		fact.Kind = executionapi.EventQuestion
+		fact.EventFact.Questions = call.Questions
+		fact.QuestionRoute = &route
 	case "item/completed":
 		if !inspectReply {
 			return fact, nil
@@ -70,6 +87,19 @@ func DecodeEvent(envelope codexapp.Envelope, threadID, turnID string, inspectRep
 			}
 		}
 		fact.ToolReply = &reply
+		fact.Kind = executionapi.EventCompleted
+	case "turn/completed":
+		var params struct {
+			ThreadID string `json:"threadId"`
+			Turn     struct {
+				ID string `json:"id"`
+			} `json:"turn"`
+		}
+		if json.Unmarshal(envelope.Params, &params) != nil || params.ThreadID != threadID || params.Turn.ID != turnID {
+			return fact, errors.New("app-server turn completion changed its fixed identity")
+		}
+		fact.Kind = executionapi.EventCompleted
+		fact.Completed = true
 	}
 	return fact, nil
 }

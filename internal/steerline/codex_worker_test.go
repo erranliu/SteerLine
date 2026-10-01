@@ -97,16 +97,18 @@ func TestAppServerStartReplayPreservesNativeSavedAnswer(t *testing.T) {
 	run.Decision.ID, run.Decision.Version = newID(), 1
 	run.Decision.AttemptID = run.AttemptID
 	service.setRunDecision(run, run.Decision)
-	if _, err := service.recordAppServerTurnStarted(run, workflow, execution, second); err != nil {
+	if _, err := service.recordWorkerTurnStarted(run, workflow, execution, second); err != nil {
 		t.Fatal(err)
 	}
 	if execution.CurrentCommandID != commandID || execution.CurrentTurnID != second || execution.PendingCommandID != "" || execution.TurnNumber != 2 || run.Decision.Status != "reply_accepted" || service.domain.Operations[0].Status != "confirmed" {
 		t.Fatalf("second turn receipt was not applied: %+v %+v", execution, run.Decision)
 	}
-	service.setRunDecision(run, &DecisionState{ID: newID(), AttemptID: run.AttemptID, Version: 1, Status: "answer_saved", Request: DecisionRequest{NativeAsk: &codexAskCall{CallID: "pending"}}})
+	fixed := executionapi.SessionContext{ProjectID: "project", WorkflowRunID: run.RunID, ExecutionID: run.ExecutionID, AttemptID: run.AttemptID, SessionID: workerFlowMockSession, Generation: "generation", CurrentTurnID: second}
+	request := codexDecisionFixture(t, fixed, "pending", []executionapi.Question{{ID: "choice", Question: "Continue?", AllowFreeText: true}})
+	service.setRunDecision(run, &DecisionState{ID: newID(), AttemptID: run.AttemptID, Version: 1, Status: "answer_saved", Request: request})
 	workflow.Phase = "waiting_decision"
 	run.FinishTaskStatus = "waiting_decision"
-	if _, err := service.recordAppServerTurnStarted(run, workflow, execution, second); err != nil {
+	if _, err := service.recordWorkerTurnStarted(run, workflow, execution, second); err != nil {
 		t.Fatal(err)
 	}
 	if execution.TurnNumber != 2 || run.Decision.Status != "answer_saved" || workflow.Phase != "waiting_decision" || run.FinishTaskStatus != "waiting_decision" {
@@ -153,7 +155,8 @@ func TestAppServerRecoveryDoesNotRaceInFlightLaunch(t *testing.T) {
 
 func TestAppServerLateReplyCannotModifyTerminalTask(t *testing.T) {
 	for _, status := range []string{"closed", "discarded"} {
-		run := &Run{RunID: newID(), TaskStatus: status, Decision: &DecisionState{ID: newID(), Status: "answer_saved", Request: DecisionRequest{NativeAsk: &codexAskCall{CallID: "original"}}}}
+		route := simpleQuestionRoute(t, codexworker.QuestionRouteImplementationKey, "project", newID(), newID(), newID(), "generation", "turn", "original")
+		run := &Run{RunID: newID(), TaskStatus: status, Decision: &DecisionState{ID: newID(), Status: "answer_saved", Request: DecisionRequest{QuestionRoute: &route}}}
 		service := &Service{State: Runtime{}, domain: DomainSnapshot{Operations: []OperationRecord{{OperationID: "reply", Status: "in_flight"}}}, runs: []*Run{run}}
 		before := digestValue(struct {
 			View   Runtime
@@ -429,16 +432,20 @@ func testAppServerServiceTwoTurns(t *testing.T, async bool) {
 	}
 }
 
-func TestAppServerAnswerRecoveryPersistsBeforeNextQuestion(t *testing.T) {
+func testAppServerAnswerRecoveryPersistsBeforeNextQuestion(t *testing.T) {
 	service, run := appServerAuditService(t)
 	workflow, execution := service.workflowRecords(run)
 	execution.SessionID, execution.CurrentTurnID, execution.CurrentCommandID = workerFlowMockSession, "00000000-0000-0000-0000-000000000001", newID()
 	execution.Status, workflow.Phase = "active", "waiting_decision"
 	run.FinishTaskStatus, run.ExecutionStatus = "waiting_decision", "running"
 	run.SessionID = ptr(execution.SessionID)
-	ask := codexAskCall{RequestID: json.RawMessage(`0`), ThreadID: execution.SessionID, TurnID: execution.CurrentTurnID, CallID: "first", Generation: "generation", Questions: []executionapi.Question{{ID: "choice", Header: "Choice", Question: "Continue?", AllowFreeText: true}}}
+	execution.AppServerGeneration = "generation"
+	execution.PolicyResources = policyResourceReceiptFixture(workflow.ExecutionProfile.Digest, execution.Workspace.Worktree)
+	fixed := *workerSessionContext(run, execution)
+	fixed.ProjectID = service.Config.identity
+	ask := codexDecisionFixture(t, fixed, "first", []executionapi.Question{{ID: "choice", Header: "Choice", Question: "Continue?", AllowFreeText: true}})
 	var err error
-	run.Decision, err = appServerAskDecision(run, ask)
+	run.Decision, err = WriteDecisionRequest(run, ask)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -448,18 +455,17 @@ func TestAppServerAnswerRecoveryPersistsBeforeNextQuestion(t *testing.T) {
 	record.Answer = mustJSON(DecisionAnswer{DecisionID: record.DecisionID, RunID: run.RunID, Answers: map[string][]string{"choice": {"A"}}, AnsweredBy: "tester", AnsweredAt: now()})
 	service.refreshRun(run)
 	firstID := run.Decision.ID
-	if _, err := service.startWorkerOperation(run, "reply_appserver_question", "appserver-answer:"+execution.ExecutionID+":"+firstID, map[string]string{"call": "first"}); err != nil {
+	if _, err := service.startWorkerOperation(run, "reply_execution_question", "worker-question-answer:"+execution.ExecutionID+":"+firstID, map[string]string{"call": "first"}); err != nil {
 		t.Fatal(err)
 	}
 	workflow, execution = service.workflowRecords(run)
-	next := ask
-	next.CallID, next.RequestID = "second", json.RawMessage(`1`)
-	execution.PendingAsks = []codexAskCall{next}
+	next := codexDecisionFixture(t, fixed, "second", []executionapi.Question{{ID: "choice", Header: "Choice", Question: "Continue?", AllowFreeText: true}})
+	execution.PendingQuestions = []PendingQuestion{{Questions: next.Questions, Route: *next.QuestionRoute}}
 	path := filepath.Join(service.Config.RunDir, "runs", run.RunID, "turns", execution.CurrentCommandID, "appserver.jsonl")
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		t.Fatal(err)
 	}
-	event := codexapp.Envelope{Method: "item/completed", Params: mustJSON(map[string]any{"threadId": ask.ThreadID, "turnId": ask.TurnID, "item": map[string]any{"id": ask.CallID, "type": "dynamicToolCall", "status": "completed", "success": true, "contentItems": []any{map[string]string{"type": "inputText", "text": `{"answers":{"choice":["A"]}}`}}}})}
+	event := codexapp.Envelope{Method: "item/completed", Params: mustJSON(map[string]any{"threadId": fixed.SessionID, "turnId": fixed.CurrentTurnID, "item": map[string]any{"id": "first", "type": "dynamicToolCall", "status": "completed", "success": true, "contentItems": []any{map[string]string{"type": "inputText", "text": `{"answers":{"choice":["A"]}}`}}}})}
 	if err := AtomicWrite(path, append(mustJSON(event), '\n')); err != nil {
 		t.Fatal(err)
 	}
@@ -476,7 +482,7 @@ func TestAppServerAnswerRecoveryPersistsBeforeNextQuestion(t *testing.T) {
 			found = decision.Status == "reply_accepted"
 		}
 	}
-	if !found || run.Decision.Request.NativeAsk.CallID != "second" || len(snapshot.Executions[0].PendingAsks) != 0 {
+	if !found || run.Decision.Request.QuestionRoute.QuestionID != "second" || len(snapshot.Executions[0].PendingQuestions) != 0 {
 		t.Fatalf("original acceptance lost while advancing questions: %+v", snapshot.Decisions)
 	}
 }
@@ -503,9 +509,13 @@ func TestAppServerOutcomeUsesNativeTurnAndEarlierPRItem(t *testing.T) {
 	}
 }
 
-func TestNativeDecisionRequiresAllQuestionIDs(t *testing.T) {
-	ask := codexAskCall{RequestID: json.RawMessage(`0`), ThreadID: "00000000-0000-0000-0000-000000000001", TurnID: "00000000-0000-0000-0000-000000000002", CallID: "call", Generation: "generation", Questions: []executionapi.Question{{ID: "one", Header: "One", Question: "First?", Options: []executionapi.DecisionOption{{ID: "a", Label: "A"}}}, {ID: "two", Header: "Two", Question: "Second?", AllowFreeText: true}}}
-	request := DecisionRequest{Question: "Two questions", AllowFreeText: true, NativeAsk: &ask}
+func TestRoutedDecisionRequiresAllQuestionIDs(t *testing.T) {
+	route := simpleQuestionRoute(t, "example.implementation", "project", "workflow", "execution", "attempt", "generation", "turn", "native-question")
+	questions := []executionapi.Question{
+		{ExecutionID: "execution", AttemptID: "attempt", Generation: "generation", TurnID: "turn", ID: "one", Header: "One", Question: "First?", Options: []executionapi.DecisionOption{{ID: "a", Label: "A"}}},
+		{ExecutionID: "execution", AttemptID: "attempt", Generation: "generation", TurnID: "turn", ID: "two", Header: "Two", Question: "Second?", AllowFreeText: true},
+	}
+	request := DecisionRequest{FormatVersion: 2, Question: "Two questions", AllowFreeText: true, Questions: questions, QuestionRoute: &route}
 	answer := DecisionAnswer{AnsweredBy: "tester", Note: `{"one":["A"],"two":["scope"]}`}
 	if err := normalizeNativeDecisionAnswer(&request, &answer); err != nil {
 		t.Fatal(err)
@@ -516,50 +526,6 @@ func TestNativeDecisionRequiresAllQuestionIDs(t *testing.T) {
 	delete(answer.Answers, "two")
 	if err := validateDecisionAnswer(&request, &answer); err == nil {
 		t.Fatal("missing second answer was accepted")
-	}
-}
-
-func TestAppServerRecoveryReplaysOnlyUnresolvedQuestion(t *testing.T) {
-	thread, turn := "00000000-0000-0000-0000-000000000001", "00000000-0000-0000-0000-000000000002"
-	path := filepath.Join(t.TempDir(), "appserver.jsonl")
-	makeCall := func(id string) codexapp.Envelope {
-		return codexapp.Envelope{ID: json.RawMessage(`0`), Method: "item/tool/call", Params: mustJSON(map[string]any{"threadId": thread, "turnId": turn, "callId": id, "tool": codexapp.AskToolName, "arguments": map[string]any{"questions": []any{map[string]any{"id": "choice", "header": "Choice", "question": "Continue?", "options": []any{map[string]any{"id": "yes", "label": "Yes"}}, "allow_free_text": false}}}})}
-	}
-	events := []codexapp.Envelope{makeCall("resolved"), {Method: "item/completed", Params: mustJSON(map[string]any{"threadId": thread, "turnId": turn, "item": map[string]any{"type": "dynamicToolCall", "id": "resolved"}})}, makeCall("pending")}
-	var raw []byte
-	for _, event := range events {
-		raw = append(raw, append(mustJSON(event), '\n')...)
-	}
-	if err := os.WriteFile(path, raw, 0600); err != nil {
-		t.Fatal(err)
-	}
-	run := &Run{}
-	execution := &ExecutionRecord{SessionID: thread}
-	replay, err := appServerPendingAskEvents(path, run, execution, turn)
-	if err != nil || len(replay) != 1 {
-		t.Fatalf("unresolved request not recovered: %d %v", len(replay), err)
-	}
-	call, err := codexworker.ParseAskCall(replay[0], thread, turn)
-	if err != nil || call.CallID != "pending" {
-		t.Fatalf("wrong native request replayed: %+v %v", call, err)
-	}
-}
-
-func TestAppServerAnswerEvidenceRequiresMatchingNativeContent(t *testing.T) {
-	thread, turn := "00000000-0000-0000-0000-000000000001", "00000000-0000-0000-0000-000000000002"
-	path := filepath.Join(t.TempDir(), "appserver.jsonl")
-	call := codexAskCall{ThreadID: thread, TurnID: turn, CallID: "call-1"}
-	completed := codexapp.Envelope{Method: "item/completed", Params: mustJSON(map[string]any{"threadId": thread, "turnId": turn, "item": map[string]any{"id": call.CallID, "type": "dynamicToolCall", "status": "completed", "success": true, "contentItems": []any{map[string]string{"type": "inputText", "text": `{"answers":{"choice":["A"]}}`}}}})}
-	if err := os.WriteFile(path, append(mustJSON(completed), '\n'), 0600); err != nil {
-		t.Fatal(err)
-	}
-	matched, err := appServerAnswerEvidence(path, call, map[string][]string{"choice": {"A"}})
-	if err != nil || !matched {
-		t.Fatalf("matching reply was lost: %v %v", matched, err)
-	}
-	matched, err = appServerAnswerEvidence(path, call, map[string][]string{"choice": {"B"}})
-	if err != nil || matched {
-		t.Fatalf("wrong answer was accepted: %v %v", matched, err)
 	}
 }
 
@@ -622,7 +588,7 @@ func TestAppServerStartedEventCommitsOperationReceipt(t *testing.T) {
 	execution.SessionID, execution.PendingCommandID, execution.PendingTurnID = workerFlowMockSession, commandID, turnID
 	opID, err := service.startWorkerOperation(run, "start_worker_turn", "worker-turn:"+run.ExecutionID+":"+commandID, map[string]string{"command_id": commandID})
 	require(t, err)
-	event := WorkerEvent{AppServer: &codexapp.Envelope{Method: "turn/started", Params: mustJSON(map[string]any{"threadId": workerFlowMockSession, "turn": map[string]string{"id": turnID}})}}
+	event := WorkerEvent{Fact: executionapi.EventFact{Kind: executionapi.EventStarted, SessionID: workerFlowMockSession, StartedTurnID: turnID}}
 	require(t, service.eventWorkerFlowFor(run, event))
 	snapshot, err := service.domainStore.Query(context.Background(), service.Config.identity)
 	require(t, err)

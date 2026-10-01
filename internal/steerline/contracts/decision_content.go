@@ -69,6 +69,46 @@ func NormalizeDecisionContent(req *DecisionRequest) error {
 	return nil
 }
 
+func ValidateDecisionRequest(req *DecisionRequest) error {
+	if err := NormalizeDecisionText(req); err != nil {
+		return err
+	}
+	if req.FormatVersion != DecisionRequestFormatVersion {
+		return errors.New("decision request has an unsupported format version")
+	}
+	if req.QuestionRoute == nil {
+		if len(req.Questions) != 0 {
+			return errors.New("decision questions require an implementation route")
+		}
+	} else {
+		if err := req.QuestionRoute.Validate(); err != nil {
+			return err
+		}
+		if len(req.Questions) == 0 || len(req.Questions) > 3 {
+			return errors.New("routed decision has no questions or exceeds the question limit")
+		}
+		seen := map[string]bool{}
+		for i := range req.Questions {
+			q := &req.Questions[i]
+			if q.ID == "" || seen[q.ID] || q.ExecutionID != req.QuestionRoute.ExecutionID || q.AttemptID != req.QuestionRoute.AttemptID || q.Generation != req.QuestionRoute.Generation || q.TurnID != req.QuestionRoute.TurnID {
+				return errors.New("decision question differs from its fixed execution, generation or turn")
+			}
+			seen[q.ID] = true
+			content := DecisionRequest{FormatVersion: DecisionRequestFormatVersion, Question: q.Question, Options: q.Options, AllowFreeText: q.AllowFreeText}
+			if err := NormalizeDecisionContent(&content); err != nil {
+				return err
+			}
+			for _, option := range content.Options {
+				if option.Receiver != "" || option.Action != "" {
+					return errors.New("routed question options cannot carry center action authority")
+				}
+			}
+			q.Question, q.Options = content.Question, content.Options
+		}
+	}
+	return NormalizeDecisionContent(req)
+}
+
 // ValidateDecisionAnswer normalizes and validates saved answer content, without authorization or I/O.
 func ValidateDecisionAnswer(req *DecisionRequest, a *DecisionAnswer) error {
 	a.OptionID = strings.TrimSpace(a.OptionID)
@@ -139,14 +179,8 @@ func ValidateDecisionAnswer(req *DecisionRequest, a *DecisionAnswer) error {
 
 // DecisionQuestions returns the typed questions already bound to a persisted request.
 func DecisionQuestions(req *DecisionRequest) []executionapi.Question {
-	if req == nil {
+	if req == nil || req.QuestionRoute == nil {
 		return nil
 	}
-	if req.NativeAsk != nil {
-		return req.NativeAsk.Questions
-	}
-	if req.OrcaAsk != nil {
-		return req.OrcaAsk.Questions
-	}
-	return nil
+	return req.Questions
 }

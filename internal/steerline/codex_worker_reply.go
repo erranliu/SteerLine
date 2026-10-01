@@ -6,12 +6,11 @@ import (
 	"errors"
 
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 func (s *Service) replyAppServerAsk(ctx context.Context, run *Run, execution *ExecutionRecord, answer DecisionAnswer) error {
-	if run == nil || run.Decision == nil || run.Decision.Request.NativeAsk == nil || execution == nil {
+	if run == nil || run.Decision == nil || run.Decision.Request.QuestionRoute == nil || execution == nil {
 		return errors.New("saved native answer has no fixed request")
 	}
 	fixed, err := s.workerFlowContext(run)
@@ -28,14 +27,17 @@ func (s *Service) replyAppServerAsk(ctx context.Context, run *Run, execution *Ex
 	if err := bindPolicyResources(ctx, fixed.config, execution, execution.Workspace.Worktree, args); err != nil {
 		return err
 	}
-	ask := run.Decision.Request.NativeAsk
 	if run.Decision.ID != answer.DecisionID {
 		return &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "native answer changed its fixed decision"}
+	}
+	ask, err := codexworker.DecodeQuestionRoute(*run.Decision.Request.QuestionRoute, *workerSessionContext(run, execution))
+	if err != nil {
+		return err
 	}
 	if err := codexBackend(fixed.config, run).ValidateReply(codexBinding(execution), ask.Generation, ask.ThreadID, ask.TurnID, execution.CurrentTurnID, execution.LastStoppedTurnID); err != nil {
 		return err
 	}
-	key := "appserver-answer:" + execution.ExecutionID + ":" + answer.DecisionID
+	key := "worker-question-answer:" + execution.ExecutionID + ":" + answer.DecisionID
 	for _, op := range s.domain.Operations {
 		if op.IdempotencyKey == key {
 			return nil /* The original reply may already be applying; reconcile, never resend. */
@@ -50,12 +52,12 @@ func (s *Service) replyAppServerAsk(ctx context.Context, run *Run, execution *Ex
 		RequestID   json.RawMessage     `json:"request_id"`
 		Answers     map[string][]string `json:"answers"`
 	}{execution.ExecutionID, ask.Generation, ask.ThreadID, ask.TurnID, ask.CallID, ask.RequestID, answer.Answers}
-	opID, err := s.startWorkerOperation(run, "reply_appserver_question", key, request)
+	opID, err := s.startWorkerOperation(run, "reply_execution_question", key, request)
 	if err != nil {
 		return err
 	}
 	if s.workerMessages != nil {
-		askCopy := *ask
+		askCopy := ask
 		answers := answer.Answers
 		endpoint, workspace, runID := execution.AppServerEndpoint, execution.Workspace.Worktree, run.RunID
 		s.forwarders.Add(1)
@@ -70,7 +72,7 @@ func (s *Service) replyAppServerAsk(ctx context.Context, run *Run, execution *Ex
 		}()
 		return nil
 	}
-	err = sendAppServerAskReply(ctx, execution.AppServerEndpoint, execution.Workspace.Worktree, *ask, answer.Answers)
+	err = sendAppServerAskReply(ctx, execution.AppServerEndpoint, execution.Workspace.Worktree, ask, answer.Answers)
 	if err != nil {
 		_ = s.changeWorkerOperation(run, opID, "outcome_unknown", ask.CallID, nil, err.Error())
 		execution.Error = ptr("Original Codex question reply is unverified: " + err.Error())
@@ -84,7 +86,7 @@ func (s *Service) replyAppServerAsk(ctx context.Context, run *Run, execution *Ex
 	return s.commitWorker(run, opID)
 }
 
-func sendAppServerAskReply(ctx context.Context, endpoint, workspace string, ask codexAskCall, answers map[string][]string) error {
+func sendAppServerAskReply(ctx context.Context, endpoint, workspace string, ask codexworker.AskRouteData, answers map[string][]string) error {
 	return codexworker.SendAskReply(ctx, codexworker.AskReply{
 		Endpoint: endpoint, Workspace: workspace, ThreadID: ask.ThreadID,
 		RequestID: ask.RequestID, Answer: executionapi.Answer{Answers: answers},
@@ -99,7 +101,7 @@ func (s *Service) handleAppServerReplyMessage(runID string, message *appServerRe
 			break
 		}
 	}
-	if run == nil || run.TaskStatus == "closed" || run.TaskStatus == "discarded" || run.Decision == nil || run.Decision.Status != "answer_saved" || run.Decision.ID != message.decisionID || run.Decision.Request.NativeAsk == nil || run.Decision.Request.NativeAsk.CallID != message.callID {
+	if run == nil || run.TaskStatus == "closed" || run.TaskStatus == "discarded" || run.Decision == nil || run.Decision.Status != "answer_saved" || run.Decision.ID != message.decisionID || run.Decision.Request.QuestionRoute == nil || run.Decision.Request.QuestionRoute.QuestionID != message.callID {
 		return nil // A terminal or replaced Decision cannot be changed by a late reply result.
 	}
 	for _, op := range s.domain.Operations {
@@ -125,5 +127,3 @@ func (s *Service) handleAppServerReplyMessage(runID string, message *appServerRe
 	}
 	return errors.New("original Codex question reply operation disappeared")
 }
-
-type codexAskCall = contracts.CodexAskCall

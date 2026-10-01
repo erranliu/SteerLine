@@ -1,22 +1,9 @@
 package steerline
 
-import (
-	"errors"
+import executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 
-	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
-)
-
-// Worker protocol adapters verify native evidence before the service changes
-// business records. Empty fields mean that the source did not provide a fact.
-type workerFlowEventFact struct {
-	executionapi.EventFact
-	Question           *codexAskCall
-	StartedUsesCommand bool
-}
-
-// workerSessionContext converts persisted records to fixed, value-only input.
-// The adapter cannot write WorkflowRun, Execution or Decision records through it.
+// workerSessionContext copies the fixed execution identity into a value-only
+// input for implementation codecs.
 func workerSessionContext(run *Run, record *ExecutionRecord) *executionapi.SessionContext {
 	if record == nil {
 		return nil
@@ -35,37 +22,8 @@ func workerSessionContext(run *Run, record *ExecutionRecord) *executionapi.Sessi
 	return fixed
 }
 
-func decodeCodexWorkerFlowEvent(ev WorkerEvent, execution *executionapi.SessionContext, inspectReply bool) (workerFlowEventFact, error) {
-	fact := workerFlowEventFact{EventFact: executionapi.EventFact{Source: ev.Source, SourceEventID: ev.SourceEventID, SourceCursor: ev.SourceCursor, SourceIdentity: ev.SourceIdentity, SourceSegment: ev.SourceSegment, SourceOffset: ev.SourceOffset, SourceLength: ev.SourceLength}}
-	if execution == nil {
-		return fact, errors.New("worker event has no fixed execution")
-	}
-	if ev.Session != "" {
-		if err := codexworker.ValidateSession(ev.Session, execution.SessionID); err != nil {
-			return fact, err
-		}
-		fact.SessionID = ev.Session
-	}
-	if ev.AppServer == nil {
-		if ev.Activity.Kind == "turn" && ev.Activity.Status == "started" {
-			return fact, errors.New("app-server turn start has no native evidence")
-		}
-		return fact, nil
-	}
-	native, err := codexworker.DecodeEvent(*ev.AppServer, execution.SessionID, execution.CurrentTurnID, inspectReply)
-	if err != nil {
-		return fact, err
-	}
-	fact.StartedTurnID, fact.ToolReply = native.StartedTurnID, native.ToolReply
-	fact.StartedUsesCommand = native.StartedTurnID != ""
-	if native.Question != nil {
-		call := *native.Question
-		call.Generation = execution.Generation
-		fact.Question = &call
-	}
-	return fact, nil
-}
-
+// Worker protocol adapters verify native evidence before the service changes
+// business records. Empty fields mean that the source did not provide a fact.
 type workerTurnEvidence struct {
 	executionapi.TurnEvidence
 	PublishRequested bool

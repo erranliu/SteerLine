@@ -11,8 +11,8 @@ import (
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
-func appServerAskDecision(run *Run, call codexAskCall) (*DecisionState, error) {
-	return WriteDecisionRequest(run, codexworker.AskDecisionRequest(call))
+func appServerAskDecision(run *Run, questions []executionapi.Question, route executionapi.QuestionRoute) (*DecisionState, error) {
+	return WriteDecisionRequest(run, decisionRequestFromEventFact(executionapi.EventFact{Questions: questions, QuestionRoute: &route}))
 }
 
 func appServerDirectory(c Config, run *Run) string {
@@ -20,49 +20,6 @@ func appServerDirectory(c Config, run *Run) string {
 		return filepath.Join(c.RunDir, "runs", run.RunID, "attempts", run.AttemptID, "app-server")
 	}
 	return filepath.Join(c.RunDir, "runs", run.RunID, "app-server")
-}
-
-// Native start notifications can be replayed after recovery. Only the first
-// confirmed start consumes a pending Command and accepts post-turn feedback.
-func (s *Service) recordAppServerTurnStarted(run *Run, workflow *WorkflowRunRecord, execution *ExecutionRecord, turnID string) (string, error) {
-	commandID := execution.PendingCommandID
-	fresh := commandID != ""
-	if !fresh && execution.CurrentTurnID == turnID && execution.LastStoppedTurnID != turnID {
-		commandID = execution.CurrentCommandID
-	}
-	if !stableExecutionID(commandID) || !codexworker.ValidNativeID(turnID) || fresh && execution.PendingTurnID != turnID {
-		return "", errors.New("app-server turn start lacks its fixed command or native turn receipt")
-	}
-	var operation *OperationRecord
-	for i := range s.domain.Operations {
-		if s.domain.Operations[i].IdempotencyKey == "worker-turn:"+run.ExecutionID+":"+commandID {
-			operation = &s.domain.Operations[i]
-			break
-		}
-	}
-	if operation == nil {
-		return "", errors.New("app-server native turn has no saved start operation")
-	}
-	if err := BeginWorkerTurn(workflow, execution, execution.SessionID, turnID); err != nil {
-		return "", err
-	}
-	execution.CurrentCommandID, execution.PendingCommandID = commandID, ""
-	if fresh {
-		if attempt := s.workflowAttempt(run, run.AttemptID); attempt != nil {
-			attempt.Status, attempt.UpdatedAt = "running", now()
-		}
-		if run.Decision != nil && run.Decision.Status == "answer_saved" && run.Decision.Request.NativeAsk == nil {
-			s.setDecisionStatus(run, "reply_accepted")
-		}
-		execution.Status, execution.Error = "active", nil
-		s.refreshRun(run)
-		execution.TurnStartedAt, execution.TurnEndedAt = ptr(now()), nil
-		s.refreshRun(run)
-	}
-	if operation.Status == "confirmed" {
-		return operation.OperationID, nil
-	}
-	return operation.OperationID, TransitionOperation(operation, "confirmed", turnID, mustJSON(map[string]string{"session_id": execution.SessionID, "turn_id": turnID}), "")
 }
 
 func codexBackend(c Config, run *Run) codexworker.Backend {
@@ -125,7 +82,9 @@ func startAppServerWorkerTurn(ctx context.Context, c Config, run *Run, execution
 	if err != nil {
 		return nil, "", turnID, err
 	}
-	return attachCodexObservation(observer, run.RunID, run.AttemptID, execution.SessionID), session.Paths.JournalPath, turnID, nil
+	fixed := workerSessionContext(run, execution)
+	fixed.CurrentTurnID, fixed.PendingTurnID = turnID, turnID
+	return attachCodexObservation(observer, run.RunID, run.AttemptID, *fixed), session.Paths.JournalPath, turnID, nil
 }
 
 func (s *Service) interruptOwnedLocalTurn(runID string, owned *childProcess) {
@@ -148,7 +107,7 @@ func (s *Service) interruptOwnedLocalTurn(runID string, owned *childProcess) {
 
 // attachCodexObservation maps typed platform output into the existing center
 // event queue. The adapter owns cancellation, protocol I/O and journal files.
-func attachCodexObservation(observer *codexworker.Observation, runID, attemptID, threadID string) *Worker {
+func attachCodexObservation(observer *codexworker.Observation, runID, attemptID string, fixed executionapi.SessionContext) *Worker {
 	ctx, cancel := context.WithCancel(context.Background())
 	worker := &Worker{proc: observer.Process, Events: make(chan WorkerEvent, 64), Done: make(chan error, 1), cancelObservation: func() { cancel(); observer.Cancel() }, observationDone: make(chan struct{})}
 	go func() {
@@ -156,10 +115,17 @@ func attachCodexObservation(observer *codexworker.Observation, runID, attemptID,
 		defer func() { observer.Cancel(); <-observer.Finished; cancel() }()
 		defer close(worker.Events)
 		for observed := range observer.Events {
-			event := WorkerEvent{RunID: runID, AttemptID: attemptID, Source: "codex-app-server", Session: threadID, Summary: observed.Summary, Activity: ActivityEvent{Source: "codex", Kind: observed.Kind, Status: observed.Status, Title: observed.Title}}
+			event := WorkerEvent{RunID: runID, AttemptID: attemptID, Source: "codex-app-server", Summary: observed.Summary, Activity: ActivityEvent{Source: "codex", Kind: observed.Kind, Status: observed.Status, Title: observed.Title}}
 			if observed.Forward {
-				envelope := observed.Envelope
-				event.AppServer = &envelope
+				fact, err := codexworker.DecodeEvent(observed.Envelope, fixed, true)
+				if err != nil {
+					observed.Persisted <- err
+					observer.Cancel()
+					return
+				}
+				event.Fact = fact.EventFact
+				event.Fact.Source = event.Source
+				event.Fact.SourceEventID = observed.Envelope.Method + ":" + digestValue(observed.Envelope)
 			}
 			accepted := deliverDurableWorkerEvent(ctx, worker, event)
 			if accepted {
@@ -181,11 +147,11 @@ func readAppServerTurnOutcome(path, threadID, turnID string) (codexworker.Outcom
 }
 func knownCodexAsks(run *Run, e *ExecutionRecord) []string {
 	var calls []string
-	if run.Decision != nil && run.Decision.Request.NativeAsk != nil {
-		calls = append(calls, run.Decision.Request.NativeAsk.CallID)
+	if run.Decision != nil && run.Decision.Request.QuestionRoute != nil {
+		calls = append(calls, run.Decision.Request.QuestionRoute.QuestionID)
 	}
-	for _, call := range e.PendingAsks {
-		calls = append(calls, call.CallID)
+	for _, question := range e.PendingQuestions {
+		calls = append(calls, question.Route.QuestionID)
 	}
 	return calls
 }
@@ -195,7 +161,9 @@ func applyCodexRecovery(run *Run, e *ExecutionRecord, result codexworker.Recover
 		e.PendingTurnID = result.TurnID
 	}
 	if result.Observer != nil {
-		return attachCodexObservation(result.Observer, run.RunID, run.AttemptID, e.SessionID)
+		fixed := workerSessionContext(run, e)
+		fixed.CurrentTurnID, fixed.PendingTurnID = result.TurnID, result.TurnID
+		return attachCodexObservation(result.Observer, run.RunID, run.AttemptID, *fixed)
 	}
 	return nil
 }

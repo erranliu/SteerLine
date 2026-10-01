@@ -13,10 +13,34 @@ import (
 )
 
 func nativeOrcaAnswerText(answer DecisionAnswer, request DecisionRequest) string {
-	if request.OrcaAsk == nil {
+	if request.QuestionRoute == nil {
 		return workerFeedbackText(answer, request)
 	}
-	return strings.Join(answer.Answers[request.OrcaAsk.MessageID], "\n\n")
+	return strings.Join(answer.Answers[request.QuestionRoute.QuestionID], "\n\n")
+}
+
+func nativeOrcaQuestionRoute(run *Run, execution *ExecutionRecord) (*OrcaNativeTurn, orcaworker.QuestionRouteData, error) {
+	if run == nil || run.Decision == nil || run.Decision.Request.QuestionRoute == nil {
+		return nil, orcaworker.QuestionRouteData{}, errors.New("question route has no fixed execution or recipient")
+	}
+	return decodeNativeOrcaQuestionRoute(run, execution, run.Decision.Request.QuestionRoute)
+}
+
+func decodeNativeOrcaQuestionRoute(run *Run, execution *ExecutionRecord, route *executionapi.QuestionRoute) (*OrcaNativeTurn, orcaworker.QuestionRouteData, error) {
+	if run == nil || execution == nil || execution.Process == nil || execution.OrcaNative == nil || route == nil {
+		return nil, orcaworker.QuestionRouteData{}, errors.New("question route has no fixed execution or recipient")
+	}
+	for i := range execution.OrcaNative.Turns {
+		turn := &execution.OrcaNative.Turns[i]
+		fixed := workerSessionContext(run, execution)
+		fixed.TaskID, fixed.CurrentTurnID = turn.TaskID, turn.TurnID
+		fixed.Generation = nativeOrcaGeneration(execution)
+		data, err := orcaworker.DecodeQuestionRoute(*route, *fixed, turn.TaskID, turn.DispatchID, execution.Process.Terminal)
+		if err == nil {
+			return turn, data, nil
+		}
+	}
+	return nil, orcaworker.QuestionRouteData{}, errors.New("question route does not match a saved Turn, Dispatch and recipient")
 }
 
 func findNativeOrcaTask(ctx context.Context, c Config, runID, coordinator, spec string) (string, error) {
@@ -266,17 +290,10 @@ func (s *Service) applyNativeOrcaDecision(ctx context.Context, run *Run, workflo
 	}
 
 	turn := nativeOrcaCurrentTurn(execution)
-	if turn != nil && turn.Purpose == "readiness" && run.Decision.Request.OrcaAsk == nil {
+	var routeData *orcaworker.QuestionRouteData
+	if turn != nil && turn.Purpose == "readiness" && run.Decision.Request.QuestionRoute == nil {
 		for i := len(execution.OrcaNative.Turns) - 1; i >= 0; i-- {
 			if execution.OrcaNative.Turns[i].Purpose == "business" {
-				turn = &execution.OrcaNative.Turns[i]
-				break
-			}
-		}
-	}
-	if ask := run.Decision.Request.OrcaAsk; ask != nil {
-		for i := range execution.OrcaNative.Turns {
-			if execution.OrcaNative.Turns[i].DispatchID == ask.DispatchID {
 				turn = &execution.OrcaNative.Turns[i]
 				break
 			}
@@ -285,12 +302,19 @@ func (s *Service) applyNativeOrcaDecision(ctx context.Context, run *Run, workflo
 	if execution.Process == nil || (execution.Process.Kind != "orca-native" && execution.Process.Kind != "orca_supervised") || execution.OrcaNative == nil || turn == nil || turn.DispatchID == "" {
 		return s.waitWorkerFlow(run, "Original Orca Dispatch identity is unavailable; feedback was retained")
 	}
+	if run.Decision.Request.QuestionRoute != nil {
+		resolvedTurn, decoded, decodeErr := nativeOrcaQuestionRoute(run, execution)
+		if decodeErr != nil {
+			return s.nativeOrcaUncertain(run, "Saved question route cannot be verified: "+decodeErr.Error())
+		}
+		turn, routeData = resolvedTurn, &decoded
+	}
 	if err := s.verifyNativeOrcaWorker(ctx, run, execution); err != nil {
 		execution.Error = ptr("Feedback retained: original Orca session is unavailable: " + err.Error())
 		s.refreshRun(run)
 		return s.commitWorker(run)
 	}
-	if orcaQuestionID(run.Decision) != "" {
+	if routeData != nil {
 		if turn.DoneMessageID != "" || execution.LastStoppedTurnID == turn.TurnID {
 			execution.Error = ptr("The original Orca question expired with its Dispatch; feedback was retained")
 			s.refreshRun(run)
@@ -302,7 +326,7 @@ func (s *Service) applyNativeOrcaDecision(ctx context.Context, run *Run, workflo
 				if op.Status != "confirmed" && op.Status != "accepted" {
 					var messageID string
 					var err error
-					messageID, err = ops.FindAnswer(ctx, run, execution, turn, orcaQuestionID(run.Decision), nativeOrcaAnswerText(answer, run.Decision.Request))
+					messageID, err = ops.FindAnswer(ctx, run, execution, turn, routeData.MessageID, nativeOrcaAnswerText(answer, run.Decision.Request))
 					if err != nil || messageID == "" {
 						return s.nativeOrcaUncertain(run, "Orca reply outcome is unverified; the original question was not answered twice")
 					}
@@ -319,11 +343,11 @@ func (s *Service) applyNativeOrcaDecision(ctx context.Context, run *Run, workflo
 			}
 		}
 		body := nativeOrcaAnswerText(answer, run.Decision.Request)
-		opID, err := s.startWorkerOperation(run, "orca_native_reply", key, map[string]string{"question": orcaQuestionID(run.Decision), "answer": body, "dispatch": turn.DispatchID})
+		opID, err := s.startWorkerOperation(run, "orca_native_reply", key, map[string]string{"question": routeData.MessageID, "answer": body, "dispatch": turn.DispatchID})
 		if err != nil {
 			return err
 		}
-		receipt, err := ops.Reply(ctx, run, execution, turn, orcaQuestionID(run.Decision), body)
+		receipt, err := ops.Reply(ctx, run, execution, turn, routeData.MessageID, body)
 		if err != nil {
 			var callErr *orcaworker.CallError
 			if errors.As(err, &callErr) {

@@ -23,6 +23,7 @@ type ManualStopConfirmation = contracts.ManualStopConfirmation
 type DecisionRequest = contracts.DecisionRequest
 type DecisionState = contracts.DecisionState
 type DecisionAnswer = contracts.DecisionAnswer
+type PendingQuestion = contracts.PendingQuestion
 type PRState = contracts.PRState
 
 func ptr[T any](v T) *T { return &v }

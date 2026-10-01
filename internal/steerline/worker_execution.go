@@ -338,7 +338,7 @@ func (s *Service) deliverResumableWorkerFeedback(ctx context.Context, run *Run, 
 		s.refreshRun(run)
 		return s.commitWorker(run)
 	}
-	if run.Decision.Request.NativeAsk != nil {
+	if run.Decision.Request.QuestionRoute != nil {
 		if s.workerMessages != nil && s.workers[run.RunID] == nil {
 			return nil // Recovery must attach the original observer before replying.
 		}

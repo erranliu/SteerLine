@@ -36,8 +36,8 @@ func codexWorkerWaitFacts(_ *Run, e *ExecutionRecord) workerWaitFacts {
 	return facts
 }
 func settleCodexRequests(s *Service, run *Run, workflow *WorkflowRunRecord, execution *ExecutionRecord, evidence workerTurnEvidence) (bool, error) {
-	execution.PendingAsks = nil // Requests expire with this completed turn.
-	if run.Decision != nil && run.Decision.Request.NativeAsk != nil {
+	execution.PendingQuestions = nil // Requests expire with this completed turn.
+	if run.Decision != nil && run.Decision.Request.QuestionRoute != nil {
 		if run.Decision.Status == "pending" {
 			s.setDecisionStatus(run, "superseded")
 			if err := s.commitWorker(run); err != nil {

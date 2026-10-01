@@ -12,8 +12,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/erranliu/SteerLine/internal/steerline/codexapp"
-	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
@@ -30,11 +28,6 @@ func reattachAppServerWorker(ctx context.Context, c Config, run *Run, e *Executi
 	}
 	result, err := codexBackend(c, run).Reattach(ctx, codexBinding(e), commandID, turnID, knownCodexAsks(run, e))
 	return applyCodexRecovery(run, e, result), result.Completed, err
-}
-
-// Replay native pending asks through the same parser used by recovery.
-func appServerPendingAskEvents(path string, run *Run, e *ExecutionRecord, turnID string) ([]codexapp.Envelope, error) {
-	return codexworker.PendingAskEvents(path, e.SessionID, turnID, knownCodexAsks(run, e))
 }
 
 func (s *Service) requireBackendCapabilities(ctx context.Context, backend executionapi.ExecutionProbe, names ...string) (executionapi.CapabilityReport, error) {

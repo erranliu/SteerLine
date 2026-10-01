@@ -26,6 +26,23 @@ func nativeOrcaSeen(state *OrcaNativeExecution, id string) bool {
 	return false
 }
 
+func (s *Service) validateNativeOrcaQuestionFact(run *Run, execution *ExecutionRecord, turn *OrcaNativeTurn, fact executionapi.EventFact) error {
+	if run == nil || execution == nil || execution.Process == nil || turn == nil || fact.QuestionRoute == nil || len(fact.Questions) == 0 {
+		return errors.New("inbox question lacks its fixed route or execution")
+	}
+	if fact.QuestionRoute.TurnID != turn.TurnID {
+		return ErrWorkerTurnStale
+	}
+	mode, err := s.workerFlowRegistration(run)
+	if err != nil {
+		return err
+	}
+	want := executionapi.QuestionRouteIdentity{ProjectID: execution.ProjectIdentity, WorkflowRunID: run.RunID,
+		ExecutionID: execution.ExecutionID, AttemptID: run.AttemptID, Generation: nativeOrcaGeneration(execution),
+		TurnID: turn.TurnID, QuestionID: fact.QuestionRoute.QuestionID}
+	return validateQuestionRoute(fact.QuestionRoute, fact.Questions, want, mode.QuestionCodecKey, mode.QuestionCodecVersion)
+}
+
 func (s *Service) nativeOrcaUncertain(run *Run, reason string) error {
 	if run == nil {
 		return errors.New(reason)
@@ -73,7 +90,7 @@ func (s *Service) pollNativeOrcaWorker(ctx context.Context, run *Run) (retErr er
 		return errors.New("native Orca inbox has no bound coordinator/Run")
 	}
 	if turn.DoneMessageID == "" {
-		delivery, err := readNativeOrcaDelivery(ctx, fixedConfig, execution)
+		delivery, err := readNativeOrcaDelivery(ctx, fixedConfig, run, execution, turn)
 		if err != nil {
 			if ctx.Err() != nil {
 				return nil // Service shutdown is not a worker failure.
@@ -83,26 +100,43 @@ func (s *Service) pollNativeOrcaWorker(ctx context.Context, run *Run) (retErr er
 			}
 			execution.LastEvent = ptr("Orca inbox observation gap: " + clip(err.Error(), 500))
 		}
-		if len(delivery.Messages) > 0 {
-			for _, message := range delivery.Messages {
-				if message.ID == "" || nativeOrcaSeen(state, message.ID) {
+		if len(delivery.Facts) > 0 {
+			for _, fact := range delivery.Facts {
+				if fact.SourceEventID == "" {
 					continue
 				}
-				fact, matched, err := decodeNativeOrcaMessage(message, execution.Target.OrchestrationRun, *turn, execution.Process.Terminal)
-				if err != nil {
-					return err
+				if fact.Kind == executionapi.EventQuestion {
+					if err := s.validateNativeOrcaQuestionFact(run, execution, turn, fact); err != nil {
+						return err
+					}
 				}
-				if !matched {
-					state.SeenMessages = append(state.SeenMessages, message.ID)
+				if nativeOrcaSeen(state, fact.SourceEventID) {
+					if fact.Kind == executionapi.EventQuestion && fact.QuestionRoute != nil {
+						seen, err := s.routedQuestionSeen(run, execution, fact.QuestionRoute, fact.Questions)
+						if err != nil {
+							return err
+						}
+						if !seen {
+							return errors.New("replayed inbox question identity has no matching persisted route")
+						}
+					}
+					continue
+				}
+				if !fact.Matched {
+					state.SeenMessages = append(state.SeenMessages, fact.SourceEventID)
 					continue
 				}
 				switch fact.Kind {
-				case "question":
+				case executionapi.EventQuestion:
 					if err := s.beginNativeOrcaTurn(run, workflow, execution, turn); err != nil {
 						return err
 					}
-					if run.Decision == nil || orcaQuestionID(run.Decision) != fact.MessageID {
-						decision, err := WriteDecisionRequest(run, *fact.Question)
+					seen, err := s.routedQuestionSeen(run, execution, fact.QuestionRoute, fact.Questions)
+					if err != nil {
+						return err
+					}
+					if !seen {
+						decision, err := WriteDecisionRequest(run, decisionRequestFromEventFact(fact))
 						if err != nil {
 							return err
 						}
@@ -116,18 +150,18 @@ func (s *Service) pollNativeOrcaWorker(ctx context.Context, run *Run) (retErr er
 						workflow.Phase = "waiting_decision"
 					}
 					s.refreshRun(run)
-				case "worker_done":
+				case executionapi.EventCompleted:
 					if err := s.beginNativeOrcaTurn(run, workflow, execution, turn); err != nil {
 						return err
 					}
-					turn.DoneMessageID, turn.Outcome = fact.MessageID, fact.Outcome
+					turn.DoneMessageID, turn.Outcome = fact.SourceEventID, fact.Outcome
 					if turn.Purpose != "readiness" {
 						if err := s.bindNativeOrcaPRCandidates(ctx, run, workflow, execution, fact.PRCandidates); err != nil {
 							execution.Error = ptr(clip(err.Error(), 2000))
 							s.refreshRun(run)
 						}
 					}
-				case "status":
+				case executionapi.EventStatus:
 					if err := s.beginNativeOrcaTurn(run, workflow, execution, turn); err != nil {
 						return err
 					}
@@ -137,12 +171,12 @@ func (s *Service) pollNativeOrcaWorker(ctx context.Context, run *Run) (retErr er
 							s.refreshRun(run)
 						}
 					}
-				case "escalation":
+				case executionapi.EventEscalation:
 					if err := s.beginNativeOrcaTurn(run, workflow, execution, turn); err != nil {
 						return err
 					}
 					if run.Decision == nil || run.Decision.Request.HostTarget != nil || run.Decision.Status != "pending" && run.Decision.Status != "answer_saved" {
-						decision, err := WriteDecisionRequest(run, *fact.Question)
+						decision, err := WriteDecisionRequest(run, decisionRequestFromEventFact(fact))
 						if err != nil {
 							return err
 						}
@@ -157,7 +191,7 @@ func (s *Service) pollNativeOrcaWorker(ctx context.Context, run *Run) (retErr er
 					}
 					s.refreshRun(run)
 				}
-				state.SeenMessages = append(state.SeenMessages, message.ID)
+				state.SeenMessages = append(state.SeenMessages, fact.SourceEventID)
 			}
 			state.DeliveryID = delivery.DeliveryID
 			if turn.Purpose == "readiness" && execution.Environment != nil {
@@ -403,7 +437,7 @@ func (s *Service) finishNativeOrcaTurn(ctx context.Context, run *Run, workflow *
 			}
 			var request DecisionRequest
 			_ = json.Unmarshal(record.Request, &request)
-			if request.OrcaAsk != nil && request.OrcaAsk.DispatchID == turn.DispatchID {
+			if request.QuestionRoute != nil && request.QuestionRoute.TurnID == turn.TurnID {
 				record.Status = "superseded"
 				record.Version++
 				record.UpdatedAt = now()

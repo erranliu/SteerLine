@@ -15,6 +15,12 @@ type Repository struct {
 }
 
 const WorkerFlowRuntimeSchema = 11
+const DecisionRequestFormatVersion = 2
+
+type PendingQuestion struct {
+	Questions []executionapi.Question    `json:"questions"`
+	Route     executionapi.QuestionRoute `json:"route"`
+}
 
 // ServiceCheckpoint contains only service-owned recovery state. Task and worker
 // state is read from domain rows in the same transaction as this checkpoint.
@@ -191,13 +197,14 @@ type ManualStopConfirmation struct {
 
 // DecisionRequest is the structured question carried in an R-a result.
 type DecisionRequest struct {
+	FormatVersion int                           `json:"format_version"`
 	Question      string                        `json:"question"`
 	Context       string                        `json:"context,omitempty"`
 	Options       []executionapi.DecisionOption `json:"options"`
+	Questions     []executionapi.Question       `json:"questions,omitempty"`
+	QuestionRoute *executionapi.QuestionRoute   `json:"question_route,omitempty"`
 	Recommended   string                        `json:"recommended,omitempty"`
 	AllowFreeText bool                          `json:"allow_free_text,omitempty"`
-	NativeAsk     *CodexAskCall                 `json:"native_ask,omitempty"`
-	OrcaAsk       *OrcaAskCall                  `json:"orca_ask,omitempty"`
 	HostTarget    *HostActionTarget             `json:"host_target,omitempty"`
 }
 

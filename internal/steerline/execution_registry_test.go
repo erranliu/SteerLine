@@ -130,9 +130,9 @@ func TestRegisteredOrcaOperationsOwnDeliveryAndSettlement(t *testing.T) {
 	delivery, settlement, verified := false, false, false
 	fake.OrcaOperations = func(Config) orcaExecutionOperations {
 		ops := nativeOrcaOperations(c)
-		ops.Delivery = func(context.Context, *ExecutionRecord) (nativeOrcaDeliveryFact, error) {
+		ops.Delivery = func(context.Context, *Run, *ExecutionRecord, *OrcaNativeTurn) (executionapi.EventBatch, error) {
 			delivery = true
-			return nativeOrcaDeliveryFact{DeliveryID: "fixed-delivery"}, nil
+			return executionapi.EventBatch{DeliveryID: "fixed-delivery", Facts: []executionapi.EventFact{{SourceEventID: "fixed-message", Matched: true}}}, nil
 		}
 		ops.Settlement = func(context.Context, *ExecutionRecord, *OrcaNativeTurn) (nativeOrcaSettlement, error) {
 			settlement = true
@@ -143,9 +143,10 @@ func TestRegisteredOrcaOperationsOwnDeliveryAndSettlement(t *testing.T) {
 	}
 	builtinExecutionRegistry = map[executionRegistrationKey]*executionRegistration{fake.Key: &fake}
 	e := &ExecutionRecord{OrcaNative: &OrcaNativeExecution{Coordinator: executionapi.ProcessIdentity{Terminal: "coordinator"}}, Process: &executionapi.ProcessIdentity{Terminal: "original"}, Target: executionapi.ExecutionTarget{OrchestrationRun: "original-run"}}
-	d, err := readNativeOrcaDelivery(context.Background(), c, e)
+	run := &Run{RunID: "workflow", ExecutionID: "execution", AttemptID: "attempt"}
+	tnr := &OrcaNativeTurn{TaskID: "task", DispatchID: "fixed-dispatch", TurnID: "fixed-turn"}
+	d, err := readNativeOrcaDelivery(context.Background(), c, run, e, tnr)
 	require(t, err)
-	tnr := &OrcaNativeTurn{DispatchID: "fixed-dispatch"}
 	result, err := readNativeOrcaSettlement(context.Background(), c, e, tnr)
 	require(t, err)
 	require(t, verifyNativeOrcaActiveDispatch(context.Background(), c, e, tnr))
