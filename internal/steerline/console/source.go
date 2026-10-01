@@ -224,7 +224,7 @@ func (FileQuerySource) ReadConversation(ctx context.Context, ref ProjectRef, fil
 		return steerline.ConversationPage{}, err
 	}
 	defer store.Close()
-	query := steerline.ConversationQueryService{Store: store, Project: ref.Identity}
+	query := steerline.NewConversationQueryService(store, ref.Identity)
 	return query.ReadConversation(ctx, filter, cursor, steerline.MaxEventPageSize)
 }
 
@@ -234,7 +234,7 @@ func (FileQuerySource) ReadBody(ctx context.Context, ref ProjectRef, body steerl
 		return steerline.ConversationBodyPage{}, err
 	}
 	defer store.Close()
-	return (steerline.ConversationQueryService{Store: store, Project: ref.Identity}).ReadMessageBody(ctx, body, offset, limit)
+	return steerline.NewConversationQueryService(store, ref.Identity).ReadMessageBody(ctx, body, offset, limit)
 }
 
 func (FileQuerySource) ReadCapabilities(ctx context.Context, ref ProjectRef, backend executionapi.BackendKind, protocol executionapi.ExecutionProtocol, targetID, executionID, attemptID, source, sourceIdentity string) ([]steerline.ConversationCapabilityReport, error) {
@@ -243,7 +243,7 @@ func (FileQuerySource) ReadCapabilities(ctx context.Context, ref ProjectRef, bac
 		return nil, err
 	}
 	defer store.Close()
-	reports, err := store.ConversationCapabilityReports(ctx, backend, protocol, targetID, 100)
+	reports, err := steerline.NewConversationQueryService(store, ref.Identity).ReadCapabilities(ctx, backend, protocol, targetID, 100)
 	if err != nil {
 		return nil, err
 	}
