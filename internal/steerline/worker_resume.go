@@ -117,7 +117,7 @@ func (s *Service) resumeNativeOrcaWorker(ctx context.Context, task *TaskRecord, 
 			}
 		}
 		if run.Decision != nil && run.Decision.Status == "answer_saved" {
-			if err := s.refreshSavedRecoveryDecision(run, run.Decision.Request.OrcaAsk != nil, "服务重开后保留了原 Orca 输入；请重新确认后才投递。 "); err != nil {
+			if err := s.refreshSavedRecoveryDecision(run, run.Decision.Request.QuestionRoute != nil, "服务重开后保留了原 Orca 输入；请重新确认后才投递。 "); err != nil {
 				return true, err
 			}
 		}

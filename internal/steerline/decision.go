@@ -26,21 +26,7 @@ func sameDecisionAnswer(a, b DecisionAnswer) bool {
 }
 
 func validateDecisionRequest(req *DecisionRequest) error {
-	if err := contracts.NormalizeDecisionText(req); err != nil {
-		return err
-	}
-	if req.NativeAsk != nil {
-		if err := codexworker.ValidateSavedAsk(*req.NativeAsk); err != nil {
-			return err
-		}
-	}
-	if req.OrcaAsk != nil {
-		ask := req.OrcaAsk
-		if req.NativeAsk != nil || ask.RunID == "" || ask.TaskID == "" || ask.DispatchID == "" || ask.MessageID == "" || len(ask.Questions) != 1 || ask.Questions[0].ID != ask.MessageID {
-			return errors.New("Orca decision lacks its original Run, Task, Dispatch or question binding")
-		}
-	}
-	return contracts.NormalizeDecisionContent(req)
+	return contracts.ValidateDecisionRequest(req)
 }
 
 // WriteDecisionRequest creates a new decision identity in the service-owned
@@ -49,12 +35,69 @@ func WriteDecisionRequest(r *Run, req DecisionRequest) (*DecisionState, error) {
 	return writeDecisionRequestWithID(r, req, newID())
 }
 
+func decisionRequestFromEventFact(fact executionapi.EventFact) DecisionRequest {
+	request := DecisionRequest{FormatVersion: contracts.DecisionRequestFormatVersion, Question: fact.QuestionText,
+		Context: fact.QuestionContext, Options: append([]executionapi.DecisionOption(nil), fact.QuestionOptions...), AllowFreeText: fact.AllowFreeText}
+	if len(fact.Questions) == 0 {
+		return request
+	}
+	request.Questions = cloneExecutionQuestions(fact.Questions)
+	if fact.QuestionRoute != nil {
+		route := fact.QuestionRoute.Clone()
+		request.QuestionRoute = &route
+	}
+	if len(fact.Questions) == 1 {
+		question := fact.Questions[0]
+		request.Question = question.Question
+		request.Options = append([]executionapi.DecisionOption(nil), question.Options...)
+		request.AllowFreeText = question.AllowFreeText
+		if request.Context == "" && fact.QuestionRoute != nil {
+			request.Context = "A human answer is required to continue the original execution."
+		}
+		return request
+	}
+	request.Question = fmt.Sprintf("Current execution has %d questions requiring an answer", len(fact.Questions))
+	var body strings.Builder
+	if request.Context == "" && fact.QuestionRoute != nil {
+		request.Context = "A human answer is required to continue the original execution."
+	}
+	if request.Context != "" {
+		body.WriteString(request.Context)
+		body.WriteString("\n\n")
+	}
+	body.WriteString("Answer every question using JSON keyed by question ID.")
+	for _, question := range fact.Questions {
+		fmt.Fprintf(&body, "\n\n[%s] %s: %s", question.ID, question.Header, question.Question)
+		for _, option := range question.Options {
+			fmt.Fprintf(&body, "\n- %s: %s", option.ID, option.Label)
+			if option.Detail != "" {
+				fmt.Fprintf(&body, " (%s)", option.Detail)
+			}
+		}
+		if question.AllowFreeText {
+			body.WriteString("\nFree text is allowed.")
+		}
+	}
+	request.Context = body.String()
+	request.AllowFreeText = true
+	return request
+}
+
 func writeDecisionRequestWithID(r *Run, req DecisionRequest, decisionID string) (*DecisionState, error) {
 	if r == nil || strings.TrimSpace(decisionID) == "" {
 		return nil, errors.New("decision requires a run and stable ID")
 	}
+	req.FormatVersion = contracts.DecisionRequestFormatVersion
 	if e := validateDecisionRequest(&req); e != nil {
 		return nil, e
+	}
+	if req.QuestionRoute != nil && (req.QuestionRoute.WorkflowRunID != r.RunID || req.QuestionRoute.ExecutionID != r.ExecutionID || req.QuestionRoute.AttemptID != r.AttemptID) {
+		return nil, errors.New("question route does not belong to the decision's fixed execution and attempt")
+	}
+	req.Questions = cloneExecutionQuestions(req.Questions)
+	if req.QuestionRoute != nil {
+		route := req.QuestionRoute.Clone()
+		req.QuestionRoute = &route
 	}
 	st := &DecisionState{
 		ID:        decisionID,
@@ -71,10 +114,10 @@ func validateDecisionAnswer(req *DecisionRequest, a *DecisionAnswer) error {
 }
 
 func normalizeNativeDecisionAnswer(req *DecisionRequest, answer *DecisionAnswer) error {
-	if req == nil || len(nativeDecisionQuestions(req)) == 0 || answer == nil {
+	if req == nil || len(decisionQuestions(req)) == 0 || answer == nil {
 		return errors.New("native answer has no fixed question")
 	}
-	questions := nativeDecisionQuestions(req)
+	questions := decisionQuestions(req)
 	if len(answer.Answers) != 0 {
 		return validateDecisionAnswer(req, answer)
 	}
@@ -109,9 +152,17 @@ func normalizeNativeDecisionAnswer(req *DecisionRequest, answer *DecisionAnswer)
 	return validateDecisionAnswer(req, answer)
 }
 
-func nativeDecisionQuestions(req *DecisionRequest) []executionapi.Question {
+func decisionQuestions(req *DecisionRequest) []executionapi.Question {
 	return contracts.DecisionQuestions(req)
 }
+
+func cloneExecutionQuestions(questions []executionapi.Question) []executionapi.Question {
+	copy := make([]executionapi.Question, len(questions))
+	for i := range questions {
+		copy[i] = questions[i]
+		copy[i].Options = append([]executionapi.DecisionOption(nil), questions[i].Options...)
+	}
+	return copy
 
 // ReadDecisionAnswer returns the answer already committed to the current
 // service projection. A pending decision has no answer; clients cannot create
@@ -183,7 +234,7 @@ func SubmitAnswerDecision(ctx context.Context, c Config, runID, decisionID, opti
 	}
 	answer := DecisionAnswer{DecisionID: decisionID, RunID: run.RunID, OptionID: strings.TrimSpace(optionID), Note: note, AnsweredBy: requestedBy, ExpectedDecisionVersion: expectedDecisionVersion, ExpectedRunRevision: expectedRunRevision, ServiceInstanceID: expectedInstance}
 	answer.SourceAttemptID, answer.ExpectedRecoveryVersion = run.AttemptID, run.RecoveryVersion
-	if run.Decision != nil && run.Decision.ID == decisionID && len(nativeDecisionQuestions(&run.Decision.Request)) > 0 {
+	if run.Decision != nil && run.Decision.ID == decisionID && len(decisionQuestions(&run.Decision.Request)) > 0 {
 		if err := normalizeNativeDecisionAnswer(&run.Decision.Request, &answer); err != nil {
 			return CommandRecord{}, false, err
 		}
@@ -422,7 +473,7 @@ func DecisionReplyEligibility(ctx context.Context, c Config, run *Run) error {
 		return ctx.Err()
 	}
 	if run.RecoveryRequired && (run.RecoveryState == "unverified" || run.RecoveryState == "" ||
-		run.RecoveryState == "interrupted" && run.Decision.Request.NativeAsk != nil) {
+		run.RecoveryState == "interrupted" && run.Decision.Request.QuestionRoute != nil) {
 		return &executionapi.BackendError{Code: executionapi.BackendUnsupported, Diagnostic: "original worker state or native question is not verified; wait for a recovery decision"}
 	}
 	if run.SessionID != nil && !codexworker.ValidNativeID(*run.SessionID) {
@@ -465,10 +516,8 @@ func (s *Service) applyDecisions(ctx context.Context) error {
 // terminal created with the worktree and never uses Codex's exec protocol.
 
 func orcaQuestionID(decision *DecisionState) string {
-	if decision == nil || decision.Request.OrcaAsk == nil {
+	if decision == nil || decision.Request.QuestionRoute == nil {
 		return ""
 	}
-	return decision.Request.OrcaAsk.MessageID
+	return decision.Request.QuestionRoute.QuestionID
 }
-
-type orcaAskCall = contracts.OrcaAskCall

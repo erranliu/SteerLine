@@ -76,7 +76,6 @@ flowchart LR
 
 | 任务 ID | 任务名称 | 交付范围 | 硬前置 | 执行规格 |
 | --- | --- | --- | --- | --- |
-| 62 | 通用执行事件与问题边界 | 通用事件、问题路由与回答回执；原生解码不进入业务消费者 | #61 | [Spec](../spec/core-decoupling-01-events.spec.md) · [Plan](../spec/core-decoupling-01-events.plan.md) |
 | 63 | 执行配置与原生绑定所有权 | 原生配置/绑定严格 codec、固定版本与两阶段封套 | #62 | [Spec](../spec/core-decoupling-02-bindings.spec.md) · [Plan](../spec/core-decoupling-02-bindings.plan.md) |
 | 64 | 通用执行生命周期与副作用接线 | 统一分步 intent/receipt 与观察/对账；移除 Service 平台回调 | #63 | [Spec](../spec/core-decoupling-03-lifecycle.spec.md) · [Plan](../spec/core-decoupling-03-lifecycle.plan.md) |
 | 65 | 会话采集与宿主交互实现隔离 | 历史来源/mapper/宿主解释归实现，采集预算和准备授权留中心 | #64 | [Spec](../spec/core-decoupling-04-conversation.spec.md) · [Plan](../spec/core-decoupling-04-conversation.plan.md) |
@@ -85,8 +84,8 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    Foundation["既有 #61 基础"] --> C62["#62 事件与问题"]
-    C62 --> C63["#63 配置与绑定"]
+    Foundation["既有 #61 基础"] --> E62["#62 通用事件与路由接口"]
+    E62 --> C63["#63 配置与绑定"]
     C63 --> C64["#64 生命周期与副作用"]
     C64 --> C65["#65 采集与宿主"]
     C65 --> C66["#66 外层组装"]
@@ -101,6 +100,6 @@ flowchart LR
 | #65 → #66 | 通用采集、宿主端口与 Service 字段已交付 | 客户端/mapper/native 状态归实现，外层只组合，不搬走中心事务 |
 | #66 → #67 | 所有产品入口显式注入，主包生产清零 | #67 迁剩余平台测试和加守卫，不承担生产消费者搬迁 |
 
-六任务按硬前置整体交付后开工，一项一个实现 PR。可以提前只读盘点、审阅接口和准备 fixture；不能把接口草案或包内实验当作提前领取资格。所有阶段共享 execution/contracts、Service 和恢复入口，不按文件不同允许并行实施。旧到新测试路径映射随职责迁移交付，quick 不得因名称变化漏跑或重复矩阵。
+剩余五项按硬前置整体交付后开工，一项一个实现 PR。可以提前只读盘点、审阅接口和准备 fixture；不能把接口草案或包内实验当作提前领取资格。所有阶段共享 execution/contracts、Service 和恢复入口，不按文件不同允许并行实施。旧到新测试路径映射随职责迁移交付，quick 不得因名称变化漏跑或重复矩阵。
 
 与多候选/本机 API/版本隔离工作同时进行时，涉及 Config、ExecutionRecord、Service、恢复、事件/问题、CLI 或 query 构造入口的修改需串行集成；既有任务的固定 Spec 不被本表自动修改。API 消费通用业务端口，新实现适配和组装不进入产品 UI。中心 DAG 不因本次规划文件变化自动建任务或改边。

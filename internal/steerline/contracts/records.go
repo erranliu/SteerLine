@@ -2,6 +2,7 @@ package contracts
 
 import (
 	"encoding/json"
+	"errors"
 	"time"
 
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
@@ -85,7 +86,7 @@ type ExecutionRecord struct {
 	AppServerGeneration           string                               `json:"app_server_generation,omitempty"`
 	PendingCommandID              string                               `json:"pending_command_id,omitempty"`
 	CurrentCommandID              string                               `json:"current_command_id,omitempty"`
-	PendingAsks                   []CodexAskCall                       `json:"pending_asks,omitempty"`
+	PendingQuestions              []PendingQuestion                    `json:"pending_questions,omitempty"`
 	PendingTurnID                 string                               `json:"pending_turn_id,omitempty"`
 	CurrentTurnID                 string                               `json:"current_turn_id,omitempty"`
 	TurnNumber                    uint64                               `json:"turn_number,omitempty"`
@@ -96,6 +97,23 @@ type ExecutionRecord struct {
 	CurrentStep                   string                               `json:"current_step,omitempty"`
 	CreatedAt                     time.Time                            `json:"created_at"`
 	UpdatedAt                     time.Time                            `json:"updated_at"`
+}
+
+func (e *ExecutionRecord) UnmarshalJSON(data []byte) error {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return err
+	}
+	if _, retired := fields["pending_asks"]; retired {
+		return errors.New("execution record contains retired native question data; preserve it for manual recovery")
+	}
+	type executionRecordJSON ExecutionRecord
+	var decoded executionRecordJSON
+	if err := DecodeJSON(data, &decoded); err != nil {
+		return err
+	}
+	*e = ExecutionRecord(decoded)
+	return nil
 }
 
 // OrcaNativeExecution stores provider identities and observation positions.

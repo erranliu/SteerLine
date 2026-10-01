@@ -14,8 +14,6 @@ import (
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
-	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
 
 type Service struct {
@@ -464,26 +462,15 @@ func (s *Service) pollPRsFor(ctx context.Context, runID string) error {
 }
 func (s *Service) eventForRun(run *Run, ev WorkerEvent) error {
 	ack := func(err error) error {
-		if err == nil && ev.Acknowledge != nil {
-			err = s.acknowledgeRemoteDelivery(run, ev)
-		}
 		if ev.Processed != nil {
 			ev.Processed <- err
 			close(ev.Processed)
 		}
 		return err
 	}
-	if len(ev.RemoteMessages) > 0 {
-		if err := s.persistRemoteWorkerMessages(ev); err != nil {
-			return ack(err)
-		}
-	}
 	if ev.RunID != "" && ev.AttemptID != "" && (run == nil || run.RunID != ev.RunID || run.AttemptID != ev.AttemptID) {
 		err := s.recordHistoricalWorkerEvent(ev)
 		ackWorkerEventPersistence(ev, err)
-		if err == nil && len(ev.RemoteMessages) > 0 {
-			err = s.commitEvents()
-		}
 		return ack(err)
 	}
 	if run == nil {
@@ -492,99 +479,12 @@ func (s *Service) eventForRun(run *Run, ev WorkerEvent) error {
 			ackWorkerEventPersistence(ev, err)
 			return ack(err)
 		}
-		if len(ev.RemoteMessages) > 0 {
-			return ack(s.commitEvents())
-		}
 		return ack(nil)
 	}
 	if run.WorkflowVersion != WorkerFlowVersion {
 		return ack(nativeErr("unsupported_schema", "worker event belongs to an unsupported workflow"))
 	}
 	return ack(s.eventWorkerFlowFor(run, ev))
-}
-
-func (s *Service) acknowledgeRemoteDelivery(run *Run, ev WorkerEvent) error {
-	if ev.Acknowledge == nil {
-		return nil
-	}
-	if ev.RemoteRunID == "" || ev.RemoteDeliveryID == "" {
-		return &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "remote Delivery acknowledgement lacks exact Run/Delivery identity"}
-	}
-	idempotencyKey := "orca-delivery-ack:" + ev.RemoteRunID + ":" + ev.RemoteDeliveryID
-	request := mustJSON(struct {
-		RunID      string `json:"run_id"`
-		DeliveryID string `json:"delivery_id"`
-	}{ev.RemoteRunID, ev.RemoteDeliveryID})
-	digest := operationDigest(request)
-	operationID := "ack-" + operationDigest([]byte(idempotencyKey))[:32]
-	persist := func() error { return s.commitOperation(operationID) }
-	var operation *OperationRecord
-	for i := range s.domain.Operations {
-		candidate := &s.domain.Operations[i]
-		if candidate.OperationID != operationID && candidate.IdempotencyKey != idempotencyKey {
-			continue
-		}
-		if candidate.OperationID != operationID || candidate.IdempotencyKey != idempotencyKey || candidate.Kind != "ack_orca_delivery" || candidate.PayloadDigest != digest || string(candidate.Request) != string(request) {
-			return errors.New("Orca Delivery acknowledgement identity conflicts with its persisted operation")
-		}
-		operation = candidate
-		break
-	}
-	if operation != nil {
-		switch operation.Status {
-		case "confirmed":
-			return nil
-		case "rejected":
-			return &executionapi.BackendError{Code: executionapi.BackendRejected, Diagnostic: "the exact Orca Delivery acknowledgement was previously rejected: " + operation.UnknownReason}
-		case "in_flight":
-			return &executionapi.BackendError{Code: executionapi.BackendOutcomeUnknown, Diagnostic: "the exact Orca Delivery acknowledgement is already in flight"}
-		case "outcome_unknown":
-			// Ack is idempotent by the exact Delivery ID; retry only that ID.
-		default:
-			return &executionapi.BackendError{Code: executionapi.BackendProtocolInvalid, Diagnostic: "Orca Delivery acknowledgement has an invalid persisted operation status"}
-		}
-	} else {
-		value := OperationRecord{ProjectIdentity: s.Config.identity, OperationID: operationID, IdempotencyKey: idempotencyKey, Kind: "ack_orca_delivery", Status: "in_flight", PayloadDigest: digest, Request: request, CreatedAt: now(), UpdatedAt: now()}
-		s.domain.Operations = append(s.domain.Operations, value)
-		operation = &s.domain.Operations[len(s.domain.Operations)-1]
-		if err := persist(); err != nil {
-			return err
-		}
-		operation = nil
-		for i := range s.domain.Operations {
-			if s.domain.Operations[i].OperationID == operationID {
-				operation = &s.domain.Operations[i]
-				break
-			}
-		}
-		if operation == nil {
-			return errors.New("persisted Orca Delivery acknowledgement operation disappeared")
-		}
-	}
-	requestID, ackErr := ev.Acknowledge()
-	receipt := mustJSON(map[string]any{"run_id": ev.RemoteRunID, "delivery_id": ev.RemoteDeliveryID, "acknowledged": ackErr == nil, "error": errorString(ackErr)})
-	operation.PlatformRequestID = requestID
-	operation.Receipt = receipt
-	operation.UpdatedAt = now()
-	if ackErr != nil {
-		var backendErr *executionapi.BackendError
-		if errors.As(ackErr, &backendErr) && (backendErr.Code == executionapi.BackendOutcomeUnknown || backendErr.Code == executionapi.BackendUnreachable || backendErr.Code == executionapi.BackendIdentityMismatch || backendErr.Code == executionapi.BackendProtocolInvalid) {
-			operation.Status = "outcome_unknown"
-		} else {
-			operation.Status = "rejected"
-		}
-		operation.UnknownReason = ackErr.Error()
-		if saveErr := persist(); saveErr != nil {
-			return errors.Join(ackErr, saveErr)
-		}
-		return ackErr
-	}
-	if operation.Status != "confirmed" {
-		if err := TransitionOperation(operation, "confirmed", requestID, receipt, ""); err != nil {
-			return err
-		}
-	}
-	return persist()
 }
 
 func ackWorkerEventPersistence(ev WorkerEvent, err error) {
@@ -595,71 +495,6 @@ func ackWorkerEventPersistence(ev WorkerEvent, err error) {
 	case ev.Persisted <- err:
 	default:
 	}
-}
-
-func (s *Service) persistRemoteWorkerMessages(ev WorkerEvent) error {
-	if !stableExecutionID(ev.RunID) || !stableExecutionID(ev.AttemptID) || ev.RemoteRunID == "" {
-		return &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "remote inbox batch lacks fixed local Run/attempt or external Orca Run identity"}
-	}
-	var run *Run
-	for _, candidate := range s.runs {
-		if candidate != nil && candidate.RunID == ev.RunID {
-			run = candidate
-			break
-		}
-	}
-	if run == nil {
-		return &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "remote inbox batch belongs to an unknown local Run"}
-	}
-	taskID := run.DomainTaskID
-	if taskID == "" {
-		taskID = run.TaskID
-	}
-	source := "orca-run:" + ev.RemoteRunID
-	for _, message := range ev.RemoteMessages {
-		if message.ID == "" || message.Type == "" {
-			return &executionapi.BackendError{Code: executionapi.BackendProtocolInvalid, Diagnostic: "remote inbox message lacks a stable ID or type"}
-		}
-		duplicate := false
-		for _, existing := range s.pendingEvents {
-			if existing.ExternalSource == source && existing.ExternalID == message.ID {
-				duplicate = true
-				break
-			}
-		}
-		if duplicate {
-			continue
-		}
-		payload, err := json.Marshal(message)
-		if err != nil {
-			return err
-		}
-		messageAttempt := ""
-		messageTaskID, messageDispatchID := orcaworker.MessageIdentity(message)
-		if messageDispatchID != "" {
-			for _, attempt := range s.domain.Attempts {
-				if attempt.ExecutionID != run.ExecutionID || attempt.ExternalBinding.Dispatch != messageDispatchID {
-					continue
-				}
-				if messageTaskID == "" || attempt.ExternalBinding.ExternalTask == messageTaskID {
-					messageAttempt = attempt.AttemptID
-					break
-				}
-			}
-		}
-		received := message.CreatedAt
-		if received.IsZero() {
-			received = now()
-		}
-		event := DomainEvent{ProjectIdentity: s.Config.identity, TaskID: taskID, WorkflowRunID: ev.RunID, ExecutionID: run.ExecutionID, AttemptID: messageAttempt, ExternalSource: source, ExternalID: message.ID, Type: "orca." + message.Type, ReceivedAt: received, PayloadBytes: len(payload), PayloadDigest: operationDigest(payload)}
-		if len(payload) <= maxSupervisedMessageBytes {
-			event.Payload = payload
-		} else {
-			event.PayloadOmitted = true
-		}
-		s.pendingEvents = append(s.pendingEvents, event)
-	}
-	return nil
 }
 
 func (s *Service) recordHistoricalWorkerEvent(ev WorkerEvent) error {

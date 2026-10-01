@@ -133,12 +133,26 @@ func Execution(run contracts.Run, e contracts.ExecutionRecord) contracts.Run {
 
 func decisionView(record contracts.DecisionRecord) (*contracts.DecisionState, error) {
 	var request contracts.DecisionRequest
-	if err := json.Unmarshal(record.Request, &request); err != nil {
+	if err := contracts.DecodeJSON(record.Request, &request); err != nil || request.FormatVersion != contracts.DecisionRequestFormatVersion {
+		return nil, errors.New("persisted decision request has an unsupported format; preserve it for manual recovery")
+	}
+	if err := contracts.ValidateDecisionRequest(&request); err != nil {
 		return nil, err
 	}
 	decision := &contracts.DecisionState{ID: record.DecisionID, AttemptID: record.AttemptID, Version: record.Version, Request: request, Status: record.Status}
-	if request.OrcaAsk != nil && request.OrcaAsk.MessageID != record.QuestionID {
-		return nil, errors.New("persisted Orca question differs from its decision binding")
+	expectedQuestionID := record.DecisionID
+	if request.QuestionRoute != nil {
+		if err := request.QuestionRoute.ValidateIdentity(executionapi.QuestionRouteIdentity{
+			ProjectID: record.ProjectIdentity, WorkflowRunID: record.WorkflowRunID, ExecutionID: record.ExecutionID,
+			AttemptID: record.AttemptID, Generation: request.QuestionRoute.Generation,
+			TurnID: request.QuestionRoute.TurnID, QuestionID: request.QuestionRoute.QuestionID,
+		}); err != nil {
+			return nil, err
+		}
+		expectedQuestionID = request.QuestionRoute.QuestionID
+	}
+	if expectedQuestionID != record.QuestionID {
+		return nil, errors.New("persisted question route differs from its decision binding")
 	}
 	if len(record.Answer) > 0 {
 		var answer contracts.DecisionAnswer

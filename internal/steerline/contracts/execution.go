@@ -1,7 +1,6 @@
 package contracts
 
 import (
-	"encoding/json"
 	"time"
 
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
@@ -57,23 +56,6 @@ type ControlReceipt struct {
 	DecisionID      string     `json:"decision_id,omitempty"`
 	ControlRevision uint64     `json:"control_revision,omitempty"`
 	RunRevision     uint64     `json:"run_revision,omitempty"`
-}
-
-type CodexAskCall struct {
-	RequestID  json.RawMessage         `json:"request_id"`
-	ThreadID   string                  `json:"thread_id"`
-	TurnID     string                  `json:"turn_id"`
-	CallID     string                  `json:"call_id"`
-	Generation string                  `json:"generation,omitempty"`
-	Questions  []executionapi.Question `json:"questions"`
-}
-
-type OrcaAskCall struct {
-	RunID      string                  `json:"run_id"`
-	TaskID     string                  `json:"task_id"`
-	DispatchID string                  `json:"dispatch_id"`
-	MessageID  string                  `json:"message_id"`
-	Questions  []executionapi.Question `json:"questions"`
 }
 
 type FixedExecutionProfile struct {

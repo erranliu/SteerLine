@@ -136,7 +136,7 @@ func PendingAskEvents(path, threadID, turnID string, knownCalls []string) ([]cod
 	var replay []codexapp.Envelope
 	for _, e := range journal.Calls {
 		call, _ := ParseAskCall(e, threadID, turnID)
-		if !journal.Completed[call.CallID] && !known[call.CallID] {
+		if !journal.Completed[call.Route.CallID] && !known[call.Route.CallID] {
 			replay = append(replay, e)
 		}
 	}

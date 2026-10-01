@@ -125,8 +125,8 @@ func (s *Service) observeWorkerEnvironment(ctx context.Context, run *Run) error 
 
 func (s *Service) setOrcaQuestion(run *Run, decision *DecisionState) {
 	execution := s.executionRecord(run)
-	if execution.Environment != nil && execution.Environment.Blocker == nil && decision.Request.OrcaAsk != nil {
-		if turn := nativeOrcaCurrentTurn(execution); turn != nil && turn.Purpose == "readiness" && run.Decision != nil && run.Decision.Request.OrcaAsk == nil {
+	if execution.Environment != nil && execution.Environment.Blocker == nil && decision.Request.QuestionRoute != nil {
+		if turn := nativeOrcaCurrentTurn(execution); turn != nil && turn.Purpose == "readiness" && run.Decision != nil && run.Decision.Request.QuestionRoute == nil {
 			execution.Environment.DeferredDecisionID = run.Decision.ID
 		}
 	}
@@ -280,7 +280,7 @@ func (s *Service) finishOrcaPreparation(ctx context.Context, run *Run, execution
 		return s.commitWorker(run)
 	}
 	p.Verified = true
-	if run.Decision != nil && run.Decision.Request.OrcaAsk != nil && run.Decision.Request.OrcaAsk.DispatchID == turn.DispatchID {
+	if run.Decision != nil && run.Decision.Request.QuestionRoute != nil && run.Decision.Request.QuestionRoute.TurnID == turn.TurnID {
 		if run.Decision.Status == "answer_saved" {
 			return s.blockWorkerEnvironment(run, orcaworker.HostFact{Reason: "answer_delivery_unverified", Confidence: "unverified", Source: "orca.question.reply", Turn: turn.TurnID})
 		}
@@ -493,12 +493,12 @@ func (s *Service) reconcileEnvironmentQuestion(ctx context.Context, run *Run) (b
 	if json.Unmarshal(record.Request, &request) != nil {
 		return false, errors.New("original question request is invalid")
 	}
-	if request.OrcaAsk == nil {
+	if request.QuestionRoute == nil {
 		return true, nil
 	}
 	settled := false
 	for _, turn := range e.OrcaNative.Turns {
-		if turn.DispatchID == request.OrcaAsk.DispatchID {
+		if turn.TurnID == request.QuestionRoute.TurnID {
 			settled = turn.Settled
 		}
 	}
@@ -522,7 +522,10 @@ func (s *Service) reconcileEnvironmentQuestion(ctx context.Context, run *Run) (b
 				if err != nil {
 					return false, err
 				}
-				ask := request.OrcaAsk
+				_, ask, err := decodeNativeOrcaQuestionRoute(run, e, request.QuestionRoute)
+				if err != nil {
+					return false, err
+				}
 				id, err := findNativeOrcaReply(ctx, config, ask.RunID, ask.DispatchID, ask.MessageID, nativeOrcaAnswerText(answer, request))
 				if err != nil || id == "" {
 					return false, nil
@@ -550,11 +553,10 @@ func (s *Service) restoreEnvironmentDecision(run *Run) {
 	execution.DecisionID = env.DeferredDecisionID
 	env.DeferredDecisionID = ""
 	s.refreshRun(run)
-	if run.Decision != nil && run.Decision.Request.OrcaAsk != nil {
-		ask := run.Decision.Request.OrcaAsk
+	if run.Decision != nil && run.Decision.Request.QuestionRoute != nil {
 		active := false
 		for _, turn := range execution.OrcaNative.Turns {
-			if turn.DispatchID == ask.DispatchID && !turn.Settled {
+			if turn.TurnID == run.Decision.Request.QuestionRoute.TurnID && !turn.Settled {
 				active = true
 			}
 		}

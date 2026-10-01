@@ -75,7 +75,7 @@ func TestLocalCodexManualRecoveryLive(t *testing.T) {
 	}
 	_, execution := service.workflowRecords(run)
 	if execution == nil || execution.RecoveryState != "interrupted" || !execution.RecoveryRequired ||
-		run.Decision == nil || run.Decision.Status != "pending" || run.Decision.Request.NativeAsk != nil ||
+		run.Decision == nil || run.Decision.Status != "pending" || run.Decision.Request.QuestionRoute != nil ||
 		service.workers[run.RunID] != nil || run.AttemptID != oldAttempt || execution.SessionID != receipt.ThreadID ||
 		execution.Workspace.Worktree != receipt.Workspace || !strings.Contains(run.Decision.Request.Context, "Should I reply A or B?") {
 		t.Fatalf("reopen did not wait for manual recovery: state=%q worker=%t decision=%+v", execution.RecoveryState, service.workers[run.RunID] != nil, run.Decision)

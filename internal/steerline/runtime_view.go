@@ -61,8 +61,8 @@ func (s *Service) setRunDecision(run *Run, decision *DecisionState) {
 	record := DecisionRecord{ProjectIdentity: s.Config.identity, DecisionID: decision.ID, Scope: "execution",
 		WorkflowRunID: run.RunID, ExecutionID: run.ExecutionID, AttemptID: decision.AttemptID, QuestionID: decision.ID,
 		Request: mustJSON(decision.Request), Status: decision.Status, Version: decision.Version, CreatedAt: now(), UpdatedAt: now()}
-	if decision.Request.OrcaAsk != nil {
-		record.QuestionID = decision.Request.OrcaAsk.MessageID
+	if decision.Request.QuestionRoute != nil {
+		record.QuestionID = decision.Request.QuestionRoute.QuestionID
 	}
 	for i := range s.domain.Decisions {
 		if s.domain.Decisions[i].DecisionID == record.DecisionID {

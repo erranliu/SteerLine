@@ -67,11 +67,10 @@ SteerLine 管理任务、原 worker 会话、用户反馈和真实 PR 交付。w
 
 | 任务 ID | 任务名称 | 交付范围 | 硬前置 | 执行规格 |
 | --- | --- | --- | --- | --- |
-| 62 | 通用执行事件与问题边界 | 通用事件、问题路由与回答回执；原生解码不进入业务消费者 | #61 | [Spec](../spec/core-decoupling-01-events.spec.md) · [Plan](../spec/core-decoupling-01-events.plan.md) |
 | 63 | 执行配置与原生绑定所有权 | 原生配置/绑定严格 codec、固定版本与两阶段封套 | #62 | [Spec](../spec/core-decoupling-02-bindings.spec.md) · [Plan](../spec/core-decoupling-02-bindings.plan.md) |
 | 64 | 通用执行生命周期与副作用接线 | 统一分步 intent/receipt 与观察/对账；移除 Service 平台回调 | #63 | [Spec](../spec/core-decoupling-03-lifecycle.spec.md) · [Plan](../spec/core-decoupling-03-lifecycle.plan.md) |
 | 65 | 会话采集与宿主交互实现隔离 | 历史来源/mapper/宿主解释归实现，采集预算和准备授权留中心 | #64 | [Spec](../spec/core-decoupling-04-conversation.spec.md) · [Plan](../spec/core-decoupling-04-conversation.plan.md) |
 | 66 | 内置实现组装与主包依赖反转 | 内置目录与具体构造外移，产品入口显式注入；主包生产清零 | #65 | [Spec](../spec/core-decoupling-05-composition.spec.md) · [Plan](../spec/core-decoupling-05-composition.plan.md) |
 | 67 | 主包隔离守卫与测试归位 | 主包测试清零、结构守卫与外层第三实现闭环 | #66 | [Spec](../spec/core-decoupling-06-boundary.spec.md) · [Plan](../spec/core-decoupling-06-boundary.plan.md) |
 
-按 #62 → #63 → #64 → #65 → #66 → #67 串行交付。#61 的已有能力是 #62 的基础；新共同要求见[约束](../spec/core-decoupling-constraints.md)。每阶段迁移完整消费者并当场删除对应原实现，#66 完成生产清零，#67 只负责测试归位和边界守卫。
+剩余任务按 #63 → #64 → #65 → #66 → #67 串行交付。#63 消费 #62 固定的通用事件、问题与回答路由接口；#61 的需求基础及共同要求见[约束](../spec/core-decoupling-constraints.md)。每阶段迁移完整消费者并当场删除对应原实现，#66 完成生产清零，#67 只负责测试归位和边界守卫。

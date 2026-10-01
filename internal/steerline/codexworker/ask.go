@@ -1,9 +1,11 @@
 package codexworker
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"regexp"
 	"strings"
 
@@ -20,6 +22,21 @@ type AskEnvelope struct {
 	TurnID    string
 	CallID    string
 	Arguments json.RawMessage
+}
+
+const QuestionRouteImplementationKey = "codex.appserver"
+
+type AskRouteData struct {
+	RequestID  json.RawMessage `json:"request_id"`
+	ThreadID   string          `json:"thread_id"`
+	TurnID     string          `json:"turn_id"`
+	CallID     string          `json:"call_id"`
+	Generation string          `json:"-"`
+}
+
+type AskCall struct {
+	Route     AskRouteData
+	Questions []executionapi.Question
 }
 
 // ParseAskEnvelope verifies the native tool and turn binding. The caller
@@ -51,20 +68,20 @@ func ParseAskEnvelope(envelope codexapp.Envelope, expectedThread, expectedTurn s
 	}, nil
 }
 
-func ParseAskCall(envelope codexapp.Envelope, threadID, turnID string) (contracts.CodexAskCall, error) {
+func ParseAskCall(envelope codexapp.Envelope, threadID, turnID string) (AskCall, error) {
 	wire, err := ParseAskEnvelope(envelope, threadID, turnID)
 	if err != nil {
-		return contracts.CodexAskCall{}, err
+		return AskCall{}, err
 	}
-	return AskCall(wire)
+	return decodeAskCall(wire)
 }
-func AskCall(wire AskEnvelope) (contracts.CodexAskCall, error) {
+func decodeAskCall(wire AskEnvelope) (AskCall, error) {
 	questions, err := DecodeQuestions(wire.Arguments)
 	if err != nil {
-		return contracts.CodexAskCall{}, err
+		return AskCall{}, err
 	}
 	if len(questions) == 0 || len(questions) > 3 {
-		return contracts.CodexAskCall{}, errors.New("Codex ask needs one to three questions")
+		return AskCall{}, errors.New("Codex ask needs one to three questions")
 	}
 	seen := map[string]bool{}
 	for i := range questions {
@@ -73,37 +90,37 @@ func AskCall(wire AskEnvelope) (contracts.CodexAskCall, error) {
 		q.Header = strings.TrimSpace(q.Header)
 		q.Question = strings.TrimSpace(q.Question)
 		if q.ID == "" || len(q.ID) > 128 || seen[q.ID] || q.Header == "" || len([]rune(q.Header)) > 40 || q.Question == "" || len([]rune(q.Question)) > 2000 {
-			return contracts.CodexAskCall{}, fmt.Errorf("Codex ask question %d has invalid identity or text", i+1)
+			return AskCall{}, fmt.Errorf("Codex ask question %d has invalid identity or text", i+1)
 		}
 		seen[q.ID] = true
 		req := contracts.DecisionRequest{Question: q.Question, Options: q.Options, AllowFreeText: q.AllowFreeText}
 		if err := contracts.NormalizeDecisionContent(&req); err != nil {
-			return contracts.CodexAskCall{}, fmt.Errorf("Codex ask question %q: %w", q.ID, err)
+			return AskCall{}, fmt.Errorf("Codex ask question %q: %w", q.ID, err)
 		}
 		q.Options = req.Options
 	}
-	call := contracts.CodexAskCall{RequestID: wire.RequestID, ThreadID: wire.ThreadID, TurnID: wire.TurnID, CallID: wire.CallID, Questions: questions}
-	request := AskDecisionRequest(call)
-	request.NativeAsk = nil
+	call := AskCall{Route: AskRouteData{RequestID: append(json.RawMessage(nil), wire.RequestID...), ThreadID: wire.ThreadID, TurnID: wire.TurnID, CallID: wire.CallID}, Questions: questions}
+	request := decisionPresentation(questions)
 	if err := contracts.NormalizeDecisionContent(&request); err != nil {
-		return contracts.CodexAskCall{}, fmt.Errorf("Codex ask cannot be displayed completely: %w", err)
+		return AskCall{}, fmt.Errorf("Codex ask cannot be displayed completely: %w", err)
 	}
 	return call, nil
 }
-func AskDecisionRequest(call contracts.CodexAskCall) contracts.DecisionRequest {
-	request := contracts.DecisionRequest{Context: "Codex 正在等待回答；提交后会继续当前轮次。", AllowFreeText: true, NativeAsk: &call}
-	if len(call.Questions) == 1 {
-		q := call.Questions[0]
+
+func decisionPresentation(questions []executionapi.Question) contracts.DecisionRequest {
+	request := contracts.DecisionRequest{FormatVersion: 2, Context: "执行当前问题需要人工回答；提交后将继续原执行。", AllowFreeText: true}
+	if len(questions) == 1 {
+		q := questions[0]
 		request.Question = q.Question
 		request.Options = append([]executionapi.DecisionOption(nil), q.Options...)
 		request.AllowFreeText = q.AllowFreeText
 		return request
 	}
-	request.Question = fmt.Sprintf("Codex 有 %d 个问题需要回答", len(call.Questions))
+	request.Question = fmt.Sprintf("当前执行有 %d 个问题需要回答", len(questions))
 	var body strings.Builder
 	body.WriteString(request.Context)
-	body.WriteString(" 多题请在备注中提交 JSON，例如 {\"question_id\":[\"answer\"]}，每个问题 ID 都须填写。")
-	for _, q := range call.Questions {
+	body.WriteString(" 多题请提交以问题 ID 为键的 JSON，并回答每个问题。")
+	for _, q := range questions {
 		fmt.Fprintf(&body, "\n\n[%s] %s：%s", q.ID, q.Header, q.Question)
 		for _, option := range q.Options {
 			fmt.Fprintf(&body, "\n- %s：%s", option.ID, option.Label)
@@ -121,11 +138,49 @@ func AskDecisionRequest(call contracts.CodexAskCall) contracts.DecisionRequest {
 	return request
 }
 
-// ValidateSavedAsk verifies only native binding; the center separately owns
-// decision authorization, accepted answers and Execution/Attempt eligibility.
-func ValidateSavedAsk(ask contracts.CodexAskCall) error {
-	if !ValidNativeID(ask.ThreadID) || !ValidNativeID(ask.TurnID) || ask.CallID == "" || ask.Generation == "" || len(ask.RequestID) == 0 || !json.Valid(ask.RequestID) || len(ask.Questions) == 0 || len(ask.Questions) > 3 {
-		return errors.New("native decision lacks its fixed app-server request binding")
+func NewQuestionRoute(call AskCall, fixed executionapi.SessionContext) (executionapi.QuestionRoute, error) {
+	fixedTurn := fixed.CurrentTurnID
+	if fixedTurn == "" {
+		fixedTurn = fixed.PendingTurnID
 	}
-	return nil
+	if !ValidNativeID(call.Route.ThreadID) || !ValidNativeID(call.Route.TurnID) || call.Route.CallID == "" ||
+		!json.Valid(call.Route.RequestID) || call.Route.ThreadID != fixed.SessionID || call.Route.TurnID != fixedTurn {
+		return executionapi.QuestionRoute{}, errors.New("native question route differs from its fixed session or turn")
+	}
+	payload, err := json.Marshal(call.Route)
+	if err != nil {
+		return executionapi.QuestionRoute{}, err
+	}
+	return executionapi.NewQuestionRoute(QuestionRouteImplementationKey, 1, executionapi.QuestionRouteIdentity{
+		ProjectID: fixed.ProjectID, WorkflowRunID: fixed.WorkflowRunID, ExecutionID: fixed.ExecutionID,
+		AttemptID: fixed.AttemptID, Generation: fixed.Generation, TurnID: call.Route.TurnID, QuestionID: call.Route.CallID,
+	}, payload)
+}
+
+func DecodeQuestionRoute(route executionapi.QuestionRoute, fixed executionapi.SessionContext) (AskRouteData, error) {
+	want := executionapi.QuestionRouteIdentity{ProjectID: fixed.ProjectID, WorkflowRunID: fixed.WorkflowRunID,
+		ExecutionID: fixed.ExecutionID, AttemptID: fixed.AttemptID, Generation: fixed.Generation,
+		TurnID: route.TurnID, QuestionID: route.QuestionID}
+	if route.ImplementationKey != QuestionRouteImplementationKey || route.CodecVersion != 1 || route.Purpose != executionapi.QuestionRouteAnswerPurpose {
+		return AskRouteData{}, errors.New("unsupported native question route codec")
+	}
+	if err := route.ValidateIdentity(want); err != nil {
+		return AskRouteData{}, err
+	}
+	var data AskRouteData
+	decoder := json.NewDecoder(bytes.NewReader(route.Payload))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&data); err != nil {
+		return AskRouteData{}, err
+	}
+	if err := decoder.Decode(new(any)); err != io.EOF {
+		return AskRouteData{}, errors.New("native question route has trailing data")
+	}
+	if !ValidNativeID(data.ThreadID) || !ValidNativeID(data.TurnID) || data.ThreadID != fixed.SessionID ||
+		data.TurnID != route.TurnID || data.CallID != route.QuestionID || len(data.RequestID) == 0 || !json.Valid(data.RequestID) {
+		return AskRouteData{}, errors.New("native question route payload changed its original request identity")
+	}
+	data.RequestID = append(json.RawMessage(nil), data.RequestID...)
+	data.Generation = route.Generation
+	return data, nil
 }

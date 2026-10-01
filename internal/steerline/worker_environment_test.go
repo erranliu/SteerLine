@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
 
 type environmentFixture struct {
@@ -201,7 +201,14 @@ func TestWorkerEnvironmentER2HostWaitPreservesQuestionAndPR(t *testing.T) {
 	f.poll(t)
 	wf, e := f.service.workflowRecords(f.run)
 	turn := nativeOrcaCurrentTurn(e)
-	question, err := WriteDecisionRequest(f.run, DecisionRequest{Question: "Business question", AllowFreeText: true, OrcaAsk: &orcaAskCall{RunID: e.Target.OrchestrationRun, TaskID: turn.TaskID, DispatchID: turn.DispatchID, MessageID: "original-question", Questions: []executionapi.Question{{ID: "original-question", Question: "Business question", AllowFreeText: true}}}})
+	fixed := workerSessionContext(f.run, e)
+	fixed.TaskID, fixed.CurrentTurnID, fixed.Generation = turn.TaskID, turn.TurnID, nativeOrcaGeneration(e)
+	message := orcaworker.Message{ID: "original-question", FromHandle: "dispatch:" + turn.DispatchID, Type: "question", Body: "Business question", Payload: mustJSON(map[string]any{"taskId": turn.TaskID, "dispatchId": turn.DispatchID, "question": "Business question"})}
+	fact, matched, err := orcaworker.DecodeMessage(message, turn.TaskID, turn.DispatchID, e.Process.Terminal, *fixed)
+	if err != nil || !matched {
+		t.Fatalf("question fixture did not produce an implementation-owned route: %v", err)
+	}
+	question, err := WriteDecisionRequest(f.run, decisionRequestFromEventFact(fact))
 	require(t, err)
 	f.service.setRunDecision(f.run, question)
 	require(t, f.service.commitWorker(f.run))

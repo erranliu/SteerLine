@@ -28,6 +28,19 @@ type Question struct {
 	Options []QuestionOption
 }
 
+// MessagePayload unwraps the JSON string used by the native inbox. Some
+// surfaces return the structured payload directly.
+func MessagePayload(message Message) []byte {
+	if len(message.Payload) == 0 || string(message.Payload) == "null" {
+		return nil
+	}
+	var text string
+	if json.Unmarshal(message.Payload, &text) == nil {
+		return []byte(text)
+	}
+	return append([]byte(nil), message.Payload...)
+}
+
 // ParseQuestion extracts Orca's optional structured question. The service
 // supplies the human-facing fallback text and persists the Decision.
 func ParseQuestion(payload []byte) Question {

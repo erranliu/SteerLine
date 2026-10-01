@@ -70,14 +70,50 @@ type TurnEvidence struct {
 // EventFact contains verified execution facts. Empty fields convey no evidence.
 // Source identity and cursor always refer to the original native observation.
 type EventFact struct {
-	Source         string
-	SourceEventID  string
-	SourceIdentity string
-	SourceCursor   string
-	SourceSegment  string
-	SourceOffset   int64
-	SourceLength   int64
-	SessionID      string
-	StartedTurnID  string
-	ToolReply      *ToolReplyFact
+	Kind            EventKind
+	Source          string
+	SourceEventID   string
+	SourceIdentity  string
+	SourceCursor    string
+	SourceSegment   string
+	SourceOffset    int64
+	SourceLength    int64
+	SessionID       string
+	StartedTurnID   string
+	Questions       []Question
+	QuestionRoute   *QuestionRoute
+	QuestionText    string
+	QuestionContext string
+	QuestionOptions []DecisionOption
+	AllowFreeText   bool
+	ToolReply       *ToolReplyFact
+	InputAccepted   bool
+	Completed       bool
+	Gap             bool
+	Matched         bool
+	Outcome         string
+	PRCandidates    []string
+}
+
+type EventKind string
+
+const (
+	EventInputAccepted EventKind = "input_accepted"
+	EventStarted       EventKind = "started"
+	EventQuestion      EventKind = "question"
+	EventCompleted     EventKind = "completed"
+	EventGap           EventKind = "gap"
+	EventStatus        EventKind = "status"
+	EventEscalation    EventKind = "escalation"
+)
+
+// EventBatch couples generic event facts to the source's consumption token.
+// The token is only valid for acknowledgement after the facts are committed.
+type EventBatch struct {
+	Source        string
+	DeliveryID    string
+	ExecutionID   string
+	AttemptID     string
+	ExternalRunID string
+	Facts         []EventFact
 }

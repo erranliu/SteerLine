@@ -12,7 +12,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/steerline/workerflow"
 )
 
-func appServerAnswerEvidence(path string, ask codexAskCall, answers map[string][]string) (bool, error) {
+func appServerAnswerEvidence(path string, ask codexworker.AskRouteData, answers map[string][]string) (bool, error) {
 	return codexworker.AnswerEvidence(path, ask.ThreadID, ask.TurnID, ask.CallID, answers)
 }
 
@@ -81,7 +81,7 @@ func (s *Service) resumeAppServerWorkers(ctx context.Context) error {
 			decisionCopy := *run.Decision
 			runCopy.Decision = &decisionCopy
 		}
-		executionCopy.PendingAsks = append([]codexAskCall(nil), execution.PendingAsks...)
+		executionCopy.PendingQuestions = clonePendingQuestions(execution.PendingQuestions)
 		if s.State.Service.Ready && s.workerMessages != nil {
 			if s.appServerRecovering == nil {
 				s.appServerRecovering = make(map[string]bool)
@@ -190,7 +190,7 @@ func (s *Service) applyAppServerRecovery(result appServerRecoveryResult) error {
 			}
 			return s.commitWorker(run)
 		}
-		execution.PendingAsks = nil
+		execution.PendingQuestions = nil
 		execution.Status = "blocked"
 		s.refreshRun(run)
 		if run.Decision != nil && run.Decision.Status == "answer_saved" {
@@ -230,7 +230,7 @@ func (s *Service) applyAppServerRecovery(result appServerRecoveryResult) error {
 		return s.waitWorkerFlow(run, "Original app-server thread identity changed during recovery")
 	}
 	execution.SessionID = result.execution.SessionID
-	execution.RecoveryState = string(workerflow.ClassifyRecovery(workerflow.RecoveryFacts{WorkerLive: true, QuestionPending: run.Decision != nil && run.Decision.Request.NativeAsk != nil}))
+	execution.RecoveryState = string(workerflow.ClassifyRecovery(workerflow.RecoveryFacts{WorkerLive: true, QuestionPending: run.Decision != nil && run.Decision.Request.QuestionRoute != nil}))
 	s.refreshRun(run)
 	if execution.PendingCommandID != "" {
 		execution.PendingTurnID = result.execution.PendingTurnID
@@ -246,7 +246,7 @@ func (s *Service) applyAppServerRecovery(result appServerRecoveryResult) error {
 		return s.waitWorkerFlow(run, "Original Codex answer cannot be reconciled: "+err.Error())
 	}
 	if run.Decision != nil && run.Decision.Status == "answer_saved" {
-		if err := s.refreshSavedRecoveryDecision(run, run.Decision.Request.NativeAsk != nil, "服务重开后保留了旧答案；请重新确认后才投递。 "); err != nil {
+		if err := s.refreshSavedRecoveryDecision(run, run.Decision.Request.QuestionRoute != nil, "服务重开后保留了旧答案；请重新确认后才投递。 "); err != nil {
 			return err
 		}
 	}
@@ -254,7 +254,7 @@ func (s *Service) applyAppServerRecovery(result appServerRecoveryResult) error {
 	if result.completed {
 		return s.finishWorkerFlowFor(run, nil)
 	}
-	if run.Decision != nil && run.Decision.Status == "pending" && run.Decision.Request.NativeAsk == nil {
+	if run.Decision != nil && run.Decision.Status == "pending" && run.Decision.Request.QuestionRoute == nil {
 		// A prior connection failure is no longer a reason to request post-turn
 		// feedback. Keep the resolved record before exposing native questions.
 		s.setDecisionStatus(run, "superseded")
@@ -278,11 +278,15 @@ func (s *Service) applyAppServerRecovery(result appServerRecoveryResult) error {
 }
 
 func (s *Service) reconcileAppServerReplyFromJournal(run *Run, workflow *WorkflowRunRecord, execution *ExecutionRecord) error {
-	if run.Decision == nil || run.Decision.Status != "answer_saved" || run.Decision.Request.NativeAsk == nil || !stableExecutionID(execution.CurrentCommandID) {
+	if run.Decision == nil || run.Decision.Status != "answer_saved" || run.Decision.Request.QuestionRoute == nil || !stableExecutionID(execution.CurrentCommandID) {
 		return nil
 	}
-	ask := *run.Decision.Request.NativeAsk
 	fixed, err := s.workerFlowContext(run)
+	if err != nil {
+		return err
+	}
+	context := workerSessionContext(run, execution)
+	ask, err := codexworker.DecodeQuestionRoute(*run.Decision.Request.QuestionRoute, *context)
 	if err != nil {
 		return err
 	}
@@ -291,7 +295,7 @@ func (s *Service) reconcileAppServerReplyFromJournal(run *Run, workflow *Workflo
 	if err != nil || !confirmed {
 		return err
 	}
-	key := "appserver-answer:" + execution.ExecutionID + ":" + run.Decision.ID
+	key := "worker-question-answer:" + execution.ExecutionID + ":" + run.Decision.ID
 	var operation *OperationRecord
 	for i := range s.domain.Operations {
 		if s.domain.Operations[i].IdempotencyKey == key {
@@ -312,10 +316,10 @@ func (s *Service) reconcileAppServerReplyFromJournal(run *Run, workflow *Workflo
 		return err
 	}
 	workflow, execution = s.workflowRecords(run)
-	if len(execution.PendingAsks) > 0 {
-		next := execution.PendingAsks[0]
-		execution.PendingAsks = execution.PendingAsks[1:]
-		decision, err := appServerAskDecision(run, next)
+	if len(execution.PendingQuestions) > 0 {
+		next := execution.PendingQuestions[0]
+		execution.PendingQuestions = execution.PendingQuestions[1:]
+		decision, err := appServerAskDecision(run, next.Questions, next.Route)
 		if err != nil {
 			return err
 		}
@@ -327,4 +331,12 @@ func (s *Service) reconcileAppServerReplyFromJournal(run *Run, workflow *Workflo
 		s.refreshRun(run)
 	}
 	return s.commitWorker(run)
+}
+
+func clonePendingQuestions(values []PendingQuestion) []PendingQuestion {
+	copy := make([]PendingQuestion, len(values))
+	for i := range values {
+		copy[i] = PendingQuestion{Questions: cloneExecutionQuestions(values[i].Questions), Route: values[i].Route.Clone()}
+	}
+	return copy
 }

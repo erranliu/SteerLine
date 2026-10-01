@@ -103,7 +103,7 @@ func (s *Service) beginLocalRecoveryAttempt(ctx context.Context, run *Run, mode 
 	execution.AppServerEndpoint, execution.AppServerGeneration = "", ""
 	execution.PendingCommandID, execution.CurrentCommandID = "", ""
 	execution.PendingTurnID, execution.CurrentTurnID, execution.LastStoppedTurnID = "", "", ""
-	execution.PendingAsks = nil
+	execution.PendingQuestions = nil
 	execution.TurnStartedAt, execution.TurnEndedAt = nil, nil
 	execution.LogPath = nil
 	execution.Status, execution.LastTurnOutcome, execution.RecoveryState = "pending", "", "resuming"
@@ -132,7 +132,7 @@ func (s *Service) refreshSavedRecoveryDecision(run *Run, preserveNative bool, re
 		return nil // This answer already authorizes the current recovery revision.
 	}
 	for _, op := range s.domain.Operations {
-		if op.IdempotencyKey != "appserver-answer:"+execution.ExecutionID+":"+old.ID {
+		if op.IdempotencyKey != "worker-question-answer:"+execution.ExecutionID+":"+old.ID {
 			continue
 		}
 		if op.Status == "confirmed" {
@@ -144,7 +144,7 @@ func (s *Service) refreshSavedRecoveryDecision(run *Run, preserveNative bool, re
 			return s.waitWorkerFlow(run, "Original answer send has an unknown outcome; reconcile its native result before confirming again")
 		}
 	}
-	if s.domainStore != nil && (old.Request.OrcaAsk != nil || run.Protocol == string(executionapi.ProtocolOrcaTerminalV2)) {
+	if s.domainStore != nil && (old.Request.QuestionRoute != nil || run.Protocol == string(executionapi.ProtocolOrcaTerminalV2)) {
 		oldAnswer := DecisionAnswer{DecisionID: old.ID, RunID: run.RunID, OptionID: old.OptionID, Note: old.Note, Answers: old.Answers, SourceAttemptID: old.SourceAttemptID, ExpectedRecoveryVersion: old.RecoveryVersion}
 		if command, err := s.domainStore.CommandByIdempotency(context.Background(), s.Config.identity, decisionAnswerKey(oldAnswer)); err == nil {
 			for _, op := range s.domain.Operations {
@@ -195,7 +195,7 @@ func (s *Service) refreshSavedRecoveryDecision(run *Run, preserveNative bool, re
 }
 
 func (s *Service) startManuallyRecoveredInitialCodex(ctx context.Context, run *Run, answer DecisionAnswer, commandID string) error {
-	if answer.OptionID != "continue" || run.Decision == nil || run.Decision.Request.NativeAsk != nil {
+	if answer.OptionID != "continue" || run.Decision == nil || run.Decision.Request.QuestionRoute != nil {
 		return errors.New("initial local execution requires an explicit continue decision")
 	}
 	fixed, err := s.workerFlowContext(run)

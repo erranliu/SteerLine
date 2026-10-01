@@ -290,7 +290,7 @@ func (s *Service) resumeRemoteOrcaWorker(ctx context.Context, task *TaskRecord, 
 			return true, err
 		}
 		if run.Decision != nil && run.Decision.Status == "answer_saved" {
-			return true, s.refreshSavedRecoveryDecision(run, run.Decision.Request.OrcaAsk != nil, "Remote input was retained after service restart; confirm it against the original Dispatch.")
+			return true, s.refreshSavedRecoveryDecision(run, run.Decision.Request.QuestionRoute != nil, "Remote input was retained after service restart; confirm it against the original Dispatch.")
 		}
 		return true, nil
 	}
