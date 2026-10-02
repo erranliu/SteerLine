@@ -15,13 +15,14 @@ import (
 func TestCD67CoreBoundary(t *testing.T) {
 	t.Run("negative_source_fixtures", func(t *testing.T) {
 		for _, fixture := range []struct {
-			name, filename, source, helper, implementation string
-			want                                           string
+			name, filename, source, helper, helperPath, implementation string
+			want                                                       string
 		}{
 			{name: "mixed_case_text_in_other_os_test", filename: "neutral_linux_test.go", source: "//go:build linux\n\npackage steerline\n// OrCa forbidden\n", want: "platform text"},
 			{name: "mixed_case_filename", filename: "CoDeX_windows_test.go", source: "package steerline\n", want: "platform text"},
 			{name: "direct_import_behind_tag", filename: "neutral_plan9.go", source: "//go:build plan9\n\npackage steerline\nimport _ \"github.com/erranliu/SteerLine/internal/steerlineapp\"\n", want: "forbidden dependency"},
 			{name: "transitive_helper_edge", filename: "neutral.go", source: "package steerline\nimport _ \"github.com/erranliu/SteerLine/internal/helper\"\n", helper: "package helper\nimport _ \"github.com/erranliu/SteerLine/internal/steerlineintegration\"\n", want: "forbidden dependency"},
+			{name: "nested_generated_name_is_not_an_exclusion", filename: "neutral.go", source: "package steerline\nimport _ \"github.com/erranliu/SteerLine/internal/helper/bin\"\n", helperPath: "internal/helper/bin/edge_freebsd.go", helper: "package bin\nimport _ \"github.com/erranliu/SteerLine/internal/steerlineapp\"\n", want: "forbidden dependency"},
 			{name: "reverse_implementation_edge", filename: "neutral.go", source: "package steerline\n", implementation: "package codexworker\nimport _ \"github.com/erranliu/SteerLine/internal/helper\"\n", helper: "package helper\nimport _ \"github.com/erranliu/SteerLine/internal/steerline\"\n", want: "reverse dependency"},
 		} {
 			t.Run(fixture.name, func(t *testing.T) {
@@ -33,7 +34,11 @@ func TestCD67CoreBoundary(t *testing.T) {
 				}
 				write("internal/steerline/"+fixture.filename, fixture.source)
 				if fixture.helper != "" {
-					write("internal/helper/edge_freebsd.go", fixture.helper)
+					path := fixture.helperPath
+					if path == "" {
+						path = "internal/helper/edge_freebsd.go"
+					}
+					write(path, fixture.helper)
 				}
 				if fixture.implementation != "" {
 					write("internal/steerline/codexworker/edge_darwin.go", fixture.implementation)

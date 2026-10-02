@@ -57,7 +57,7 @@ func ScanSource(root string) (Report, error) {
 		if entry.IsDir() {
 			// These directories contain repository metadata or generated outputs,
 			// not project packages. There are no exclusions inside the core.
-			if path != root && (entry.Name() == ".git" || entry.Name() == "bin" || entry.Name() == ".codex" || entry.Name() == ".agents") {
+			if filepath.Dir(path) == filepath.Clean(root) && (entry.Name() == ".git" || entry.Name() == "bin" || entry.Name() == ".codex" || entry.Name() == ".agents") {
 				return filepath.SkipDir
 			}
 			return nil
