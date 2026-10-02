@@ -1,0 +1,47 @@
+[
+  {
+    "log": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-console-rebase189-20261002-220548\\test.jsonl",
+    "top_level_results": {
+      "pass": 62,
+      "fail": 3,
+      "skip": 0
+    },
+    "test_failures": [
+      {
+        "Package": "github.com/erranliu/SteerLine/internal/steerline/console",
+        "Test": "TestTaskPreviewKeepsOneIdentityAndShowsFixedExecutionPlan",
+        "Elapsed": 0
+      },
+      {
+        "Package": "github.com/erranliu/SteerLine/internal/steerline/console",
+        "Test": "TestNativeTaskAndItsRunShareOneListRow",
+        "Elapsed": 0
+      },
+      {
+        "Package": "github.com/erranliu/SteerLine/internal/steerline/console",
+        "Test": "TestFileQuerySourceReadsCombinedProjectView",
+        "Elapsed": 2.76
+      }
+    ],
+    "diagnostics": [
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline/console",
+        "test": "TestTaskPreviewKeepsOneIdentityAndShowsFixedExecutionPlan",
+        "message": "layout_test.go:165: task preview lost \"执行方案：Orca 本机终端 · codex · gpt-6-luna · xhigh\": 详情"
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline/console",
+        "test": "TestNativeTaskAndItsRunShareOneListRow",
+        "message": "native_row_test.go:32: coalesced row lost task relations or execution detail: 详情"
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerline/console",
+        "test": "TestFileQuerySourceReadsCombinedProjectView",
+        "message": "project_source_test.go:87: console did not consume the combined project view: {SelectedTaskID:10 FullReadAt:2026-10-02 14:05:55.1602662 +0000 UTC Connection:{Snapshot:{Runtime:<nil> State:none SampledAt:2026-10-02 14:05:55.1602662 +0000 UTC HeartbeatAge:0s FreshnessLimit:15s ClockSkew:false Error:} Process:{State: Reason:} State:no-record IdentityMatched:false ConfigMatched:false Protocol:0 Capabilities:[] CanControl:false CanStop:false CanStart:true StartupID: Diagnostic:} Observation:{Runtime:<nil> State:none SampledAt:2026-10-02 14:05:55.1602662 +0000 UTC HeartbeatAge:0s FreshnessLimit:15s ClockSkew:false Error:} Tasks:0x39e7b1e32180 TaskError: NativeTasks:0x39e7b1e9a600 SelectedNative:0x39e7b1e65500 NativeTaskError: Domain:0x39e7b2026840 DomainError:}"
+      }
+    ],
+    "build_failures": [],
+    "package_terminals": 1,
+    "skips": []
+  }
+]

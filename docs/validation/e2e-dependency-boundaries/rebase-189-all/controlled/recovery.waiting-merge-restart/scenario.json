@@ -1,0 +1,40 @@
+{
+  "cleanup_complete": true,
+  "cleanup_errors": null,
+  "components": {
+    "provider": "controlled",
+    "worker": "controlled"
+  },
+  "context_error": "<nil>",
+  "finished_at": "2026-10-02T13:56:24.3090219Z",
+  "id": "recovery.waiting-merge-restart",
+  "passed": true,
+  "real_pr": null,
+  "resources": [
+    {
+      "created_at": "2026-10-02T13:54:51.813268Z",
+      "kind": "project",
+      "path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-1167647544\\recovery.waiting-merge-restart\\recovery",
+      "pid": 0
+    },
+    {
+      "created_at": "2026-10-02T13:54:52.7052829Z",
+      "kind": "process",
+      "path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-l3-rebase189-controlled-20261002-215322\\build\\controlled-helper.exe",
+      "pid": 47748
+    },
+    {
+      "created_at": "2026-10-02T13:55:10.7169105Z",
+      "kind": "process",
+      "path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-l3-rebase189-controlled-20261002-215322\\build\\steerline.exe",
+      "pid": 42280
+    },
+    {
+      "created_at": "2026-10-02T13:55:53.5341095Z",
+      "kind": "process",
+      "path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-l3-rebase189-controlled-20261002-215322\\build\\steerline.exe",
+      "pid": 29920
+    }
+  ],
+  "usage_verified": false
+}

@@ -1,0 +1,38 @@
+[
+  {
+    "label": "full",
+    "raw_output": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-full-rebase189-20261002-214931"
+  },
+  {
+    "label": "l2",
+    "raw_output": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-l2-rebase189-20261002-214755"
+  },
+  {
+    "label": "controlled",
+    "raw_output": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-l3-rebase189-controlled-20261002-215322"
+  },
+  {
+    "label": "delivery.local-codex",
+    "raw_output": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-l3-rebase189-delivery-local-20261002-215701"
+  },
+  {
+    "label": "delivery.orca-codex",
+    "raw_output": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-l3-rebase189-delivery-orca-20261002-220030"
+  },
+  {
+    "label": "recovery.local-codex",
+    "raw_output": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-l3-rebase189-recovery-local-20261002-220141"
+  },
+  {
+    "label": "recovery.orca-codex",
+    "raw_output": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-l3-rebase189-recovery-orca-20261002-220433"
+  },
+  {
+    "label": "infra",
+    "raw_output": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-e2einfra-rebase189-20261002-215740"
+  },
+  {
+    "label": "console",
+    "raw_output": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-console-rebase189-20261002-220548"
+  }
+]

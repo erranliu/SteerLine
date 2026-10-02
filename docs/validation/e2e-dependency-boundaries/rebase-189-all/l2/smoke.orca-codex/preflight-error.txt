@@ -1,0 +1,1 @@
+steerline: service preflight: unsupported: terminal host requires workspace-write and an empty agent profile

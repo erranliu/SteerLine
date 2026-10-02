@@ -1,0 +1,40 @@
+{
+  "cleanup_complete": true,
+  "cleanup_errors": null,
+  "components": {
+    "provider": "controlled",
+    "worker": "local-codex"
+  },
+  "context_error": "<nil>",
+  "finished_at": "2026-10-02T14:04:13.1997133Z",
+  "id": "recovery.local-codex",
+  "passed": true,
+  "real_pr": null,
+  "resources": [
+    {
+      "created_at": "2026-10-02T14:01:50.234885Z",
+      "kind": "project",
+      "path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-2885822810\\recovery.local-codex\\live",
+      "pid": 0
+    },
+    {
+      "created_at": "2026-10-02T14:01:51.4080317Z",
+      "kind": "process",
+      "path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-l3-rebase189-recovery-local-20261002-220141\\build\\controlled-helper.exe",
+      "pid": 32344
+    },
+    {
+      "created_at": "2026-10-02T14:02:16.1313809Z",
+      "kind": "process",
+      "path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-l3-rebase189-recovery-local-20261002-220141\\build\\steerline.exe",
+      "pid": 38332
+    },
+    {
+      "created_at": "2026-10-02T14:03:41.0130458Z",
+      "kind": "process",
+      "path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-l3-rebase189-recovery-local-20261002-220141\\build\\steerline.exe",
+      "pid": 19644
+    }
+  ],
+  "usage_verified": true
+}

@@ -1,0 +1,26 @@
+[
+  {
+    "log": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-e2einfra-rebase189-20261002-215740\\test.jsonl",
+    "top_level_results": {
+      "pass": 15,
+      "fail": 0,
+      "skip": 1
+    },
+    "test_failures": [],
+    "diagnostics": [
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/native",
+        "test": "TestSandboxReadinessExistingAccounts",
+        "message": "sandbox_test.go:64: set STEERLINE_E2E_SANDBOX_PREFLIGHT_HOME for the no-token native credential check"
+      }
+    ],
+    "build_failures": [],
+    "package_terminals": 6,
+    "skips": [
+      {
+        "test": "TestSandboxReadinessExistingAccounts",
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/native"
+      }
+    ]
+  }
+]

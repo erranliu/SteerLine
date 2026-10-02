@@ -1,0 +1,199 @@
+{
+  "scope": "e2e",
+  "level": "L3",
+  "env": "controlled",
+  "environment": {
+    "source_commit": "b01b222484874138060538adfe3d860b58869cf0",
+    "worktree_status": "clean (this run's logs and summary excluded)",
+    "go_version": "go version go1.26.4 windows/amd64",
+    "go_env": {
+      "GOARCH": "amd64",
+      "GOCACHE": "C:\\Users\\lmas1\\AppData\\Local\\go-build",
+      "GOFLAGS": "",
+      "GOOS": "windows",
+      "GOTOOLCHAIN": "auto"
+    },
+    "os": "windows",
+    "architecture": "amd64",
+    "machine": {
+      "host_name": "liuming-asus",
+      "logical_cpu_count": 20,
+      "processor_identifier": "AMD64 Family 26 Model 36 Stepping 0, AuthenticAMD"
+    },
+    "concurrency": {
+      "GOMAXPROCS_environment": "unset",
+      "go_build_package_parallel": "Go default",
+      "go_test_parallel": "default 20",
+      "runtime_GOMAXPROCS": "20"
+    },
+    "build_cache_condition": "as found; no explicit cache clear",
+    "enabled_native_acceptance_switches": [],
+    "native_acceptance_note": "controlled worker/provider; no model requests"
+  },
+  "selected_scenarios": [
+    {
+      "id": "delivery.basic",
+      "level": "L3",
+      "suite": "delivery",
+      "package": "./tests/e2e/suites/delivery",
+      "test": "TestBasicDelivery",
+      "env": "controlled"
+    },
+    {
+      "id": "recovery.waiting-merge-restart",
+      "level": "L3",
+      "suite": "recovery",
+      "package": "./tests/e2e/suites/recovery",
+      "test": "TestWaitingMergeRestart",
+      "env": "controlled"
+    }
+  ],
+  "groups": [
+    {
+      "id": "e2e-1",
+      "command": [
+        "go",
+        "test",
+        "-tags=e2e",
+        "-json",
+        "-count=1",
+        "-p=1",
+        "-parallel=1",
+        "-timeout=6m",
+        "-run=^(TestBasicDelivery)$",
+        "./tests/e2e/suites/delivery"
+      ],
+      "assigned_tests": [
+        "TestBasicDelivery"
+      ],
+      "assigned_packages": [
+        "./tests/e2e/suites/delivery"
+      ],
+      "stdout_json_log": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-l3-rebase189-controlled-20261002-215322\\e2e-1.jsonl",
+      "stderr_log": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-l3-rebase189-controlled-20261002-215322\\e2e-1.stderr.txt",
+      "wall_seconds": 75.8643762,
+      "exit_code": 0,
+      "summary": {
+        "status": "passed",
+        "passed": true,
+        "complete": true,
+        "command_exit_code": 0,
+        "package_count": 1,
+        "passed_packages": 1,
+        "failed_packages": [],
+        "skipped_packages": [],
+        "test_count": 1,
+        "passed_tests": 1,
+        "failed_tests": 0,
+        "skipped_tests": 0,
+        "packages": [
+          {
+            "package": "github.com/erranliu/SteerLine/tests/e2e/suites/delivery",
+            "status": "pass",
+            "elapsed_seconds": 73.833
+          }
+        ],
+        "tests": [
+          {
+            "package": "github.com/erranliu/SteerLine/tests/e2e/suites/delivery",
+            "name": "TestBasicDelivery",
+            "status": "pass",
+            "elapsed_seconds": 72.49
+          }
+        ],
+        "slowest_tests": [
+          {
+            "package": "github.com/erranliu/SteerLine/tests/e2e/suites/delivery",
+            "name": "TestBasicDelivery",
+            "status": "pass",
+            "elapsed_seconds": 72.49
+          }
+        ],
+        "failures": [],
+        "skipped": [],
+        "incomplete_reasons": [],
+        "test_event_wall_seconds": 73.8327711,
+        "has_test_event_wall": true
+      }
+    },
+    {
+      "id": "e2e-2",
+      "command": [
+        "go",
+        "test",
+        "-tags=e2e",
+        "-json",
+        "-count=1",
+        "-p=1",
+        "-parallel=1",
+        "-timeout=6m",
+        "-run=^(TestWaitingMergeRestart)$",
+        "./tests/e2e/suites/recovery"
+      ],
+      "assigned_tests": [
+        "TestWaitingMergeRestart"
+      ],
+      "assigned_packages": [
+        "./tests/e2e/suites/recovery"
+      ],
+      "stdout_json_log": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-l3-rebase189-controlled-20261002-215322\\e2e-2.jsonl",
+      "stderr_log": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-l3-rebase189-controlled-20261002-215322\\e2e-2.stderr.txt",
+      "wall_seconds": 95.9261723,
+      "exit_code": 0,
+      "summary": {
+        "status": "passed",
+        "passed": true,
+        "complete": true,
+        "command_exit_code": 0,
+        "package_count": 1,
+        "passed_packages": 1,
+        "failed_packages": [],
+        "skipped_packages": [],
+        "test_count": 1,
+        "passed_tests": 1,
+        "failed_tests": 0,
+        "skipped_tests": 0,
+        "packages": [
+          {
+            "package": "github.com/erranliu/SteerLine/tests/e2e/suites/recovery",
+            "status": "pass",
+            "elapsed_seconds": 93.82
+          }
+        ],
+        "tests": [
+          {
+            "package": "github.com/erranliu/SteerLine/tests/e2e/suites/recovery",
+            "name": "TestWaitingMergeRestart",
+            "status": "pass",
+            "elapsed_seconds": 92.5
+          }
+        ],
+        "slowest_tests": [
+          {
+            "package": "github.com/erranliu/SteerLine/tests/e2e/suites/recovery",
+            "name": "TestWaitingMergeRestart",
+            "status": "pass",
+            "elapsed_seconds": 92.5
+          }
+        ],
+        "failures": [],
+        "skipped": [],
+        "incomplete_reasons": [],
+        "test_event_wall_seconds": 93.8204919,
+        "has_test_event_wall": true
+      }
+    }
+  ],
+  "build_sha256": {
+    "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-l3-rebase189-controlled-20261002-215322\\build\\controlled-helper.exe": "c9a85d126b3c5549e6cce3f8c069d10c8f8363a8b5371e92962dec689c6796b0",
+    "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-l3-rebase189-controlled-20261002-215322\\build\\steerline.exe": "1659eef8dc397d2048edb0fc5743424e066877e0e67cc1f152eb2b555522f224"
+  },
+  "preparation_seconds": 9.0508218,
+  "execution_seconds": 171.8464585,
+  "passed": true,
+  "cleanup_complete": true,
+  "errors": null,
+  "started_at": "2026-10-02T13:53:23.1075171Z",
+  "finished_at": "2026-10-02T13:56:24.3821832Z",
+  "coverage": "selected-L3"
+}
