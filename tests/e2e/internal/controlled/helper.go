@@ -18,7 +18,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
+	"github.com/erranliu/SteerLine/tests/e2e/internal/native"
 	"github.com/google/uuid"
 )
 
@@ -61,7 +61,7 @@ func Main(args []string) error {
 	}
 	for _, a := range args {
 		if a == "--version" {
-			fmt.Println(codexworker.PolicyCodexVersion)
+			fmt.Println(native.SupportedCodexVersion)
 			return nil
 		}
 	}

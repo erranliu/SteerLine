@@ -16,7 +16,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	"github.com/erranliu/SteerLine/internal/testprocess"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/native"
 )
@@ -56,7 +55,7 @@ func run() error {
 	}
 	fmt.Fprintln(os.Stdout, "Codex home:", absHome)
 	return ensureSandbox(absHome, *checkOnly, native.CheckSandboxReady, func() error {
-		executable, err := codexworker.NativeExecutable(*command)
+		executable, err := native.CodexExecutable(*command)
 		if err != nil {
 			return err
 		}
