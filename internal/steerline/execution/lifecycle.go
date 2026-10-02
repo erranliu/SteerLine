@@ -634,6 +634,7 @@ type LifecycleRecoveryPort interface {
 }
 
 type LifecyclePolicyCapabilities struct {
+	ActiveTurnFeedback        bool
 	LinkedWorkspaceWriteRoots bool
 	SeparateTurnStart         bool
 	ResumeActiveObservation   bool

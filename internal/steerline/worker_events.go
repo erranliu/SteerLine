@@ -2,6 +2,7 @@ package steerline
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
@@ -45,6 +46,26 @@ func (s *Service) recordWorkerTurnStarted(run *Run, workflow *WorkflowRunRecord,
 		}
 		if run.Decision != nil && run.Decision.Status == "answer_saved" && run.Decision.Request.QuestionRoute == nil && run.Decision.Request.HostTarget == nil {
 			s.setDecisionStatus(run, "reply_accepted")
+		}
+		// A host gate may display another Decision while this original business
+		// input starts. Consume only the answer bound to its accepted Command.
+		if environment := execution.Environment; s.domainStore != nil && environment != nil && environment.DeferredDecisionID != "" {
+			for i := range s.domain.Decisions {
+				deferred := &s.domain.Decisions[i]
+				if deferred.DecisionID != environment.DeferredDecisionID || deferred.ExecutionID != execution.ExecutionID || deferred.AttemptID != run.AttemptID || deferred.Status != "answer_saved" {
+					continue
+				}
+				var request DecisionRequest
+				var answer DecisionAnswer
+				if json.Unmarshal(deferred.Request, &request) != nil || json.Unmarshal(deferred.Answer, &answer) != nil || request.QuestionRoute != nil || request.HostTarget != nil {
+					continue
+				}
+				command, err := s.domainStore.CommandByIdempotency(context.Background(), s.Config.identity, decisionAnswerKey(answer))
+				if err == nil && command.CommandID == commandID && command.Status == "accepted" && command.TargetID == deferred.DecisionID {
+					deferred.Status, deferred.Version, deferred.UpdatedAt = "reply_accepted", deferred.Version+1, now()
+					s.markWorkerDecisionWrite(deferred.DecisionID)
+				}
+			}
 		}
 		execution.Status, execution.Error = "active", nil
 		s.refreshRun(run)
@@ -137,6 +158,25 @@ func (s *Service) eventWorkerFlowFor(run *Run, ev WorkerEvent) (resultErr error)
 		}
 		s.refreshRun(run)
 		s.note(run, "steer", "decision", "pending", "Execution is waiting for an answer", routeID, decisionMeta(run))
+	}
+	if fact.Kind == executionapi.EventEscalation && fact.Matched && fact.SourceEventID != "" && execution.CurrentTurnID != "" && execution.CurrentTurnID != execution.LastStoppedTurnID &&
+		(run.Decision == nil || run.Decision.Status != "pending" && run.Decision.Status != "answer_saved") &&
+		(execution.Environment == nil || execution.Environment.Blocker == nil && (execution.Environment.Preparation == nil || execution.Environment.Preparation.TurnID != execution.CurrentTurnID)) {
+		request := decisionRequestFromEventFact(fact)
+		if request.Question == "" {
+			return errors.New("matched guidance event lacks its question")
+		}
+		request.Options = []executionapi.DecisionOption{{ID: "continue", Label: "Continue current work"}}
+		request.AllowFreeText = true
+		decision, err := WriteDecisionRequest(run, request)
+		if err != nil {
+			return err
+		}
+		s.setRunDecision(run, decision)
+		if err := NoteWorkerQuestion(workflow, execution, execution.CurrentTurnID); err != nil {
+			return err
+		}
+		s.refreshRun(run)
 	}
 	if reply := fact.ToolReply; reply != nil && run.Decision != nil && run.Decision.Request.QuestionRoute != nil {
 		route := run.Decision.Request.QuestionRoute

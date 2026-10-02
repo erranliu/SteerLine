@@ -60,10 +60,7 @@ func (s *Service) deliverLifecycleQuestionAnswer(ctx context.Context, run *Run, 
 		s.forwarders.Add(1)
 		go func() {
 			defer s.forwarders.Done()
-			receipt, observer, executeErr := lifecycle.Execute(ctx, request.Clone())
-			if observer != nil {
-				_ = observer.Close(context.Background())
-			}
+			receipt, executeErr := executeLifecycleQuestionFeedback(ctx, lifecycle, request)
 			message := &lifecycleReplyMessage{request: request, receipt: receipt.Clone(), err: executeErr}
 			select {
 			case s.workerMessages <- workerMessage{runID: runID, reply: message}:
@@ -72,11 +69,27 @@ func (s *Service) deliverLifecycleQuestionAnswer(ctx context.Context, run *Run, 
 		}()
 		return nil
 	}
+	receipt, executeErr := executeLifecycleQuestionFeedback(ctx, lifecycle, request)
+	return s.applyLifecycleQuestionAnswerReceipt(run, request, receipt, executeErr)
+}
+
+// A lost reply receipt may be confirmed immediately by its original read-only
+// reconciliation. An active observer must not strand that saved answer forever.
+func executeLifecycleQuestionFeedback(ctx context.Context, lifecycle executionapi.LifecyclePort, request executionapi.LifecycleRequest) (executionapi.LifecycleReceipt, error) {
 	receipt, observer, executeErr := lifecycle.Execute(ctx, request.Clone())
 	if observer != nil {
-		_ = observer.Close(context.Background())
+		_ = observer.Close(ctx)
 	}
-	return s.applyLifecycleQuestionAnswerReceipt(run, request, receipt, executeErr)
+	if executeErr != nil || receipt.Disposition == executionapi.OperationUnknown {
+		confirmed, observation, reconcileErr := lifecycle.Reconcile(ctx, request.Clone())
+		if observation != nil {
+			_ = observation.Close(ctx)
+		}
+		if reconcileErr == nil && confirmed.Disposition == executionapi.OperationConfirmed && confirmed.State.InputAccepted {
+			return confirmed, nil
+		}
+	}
+	return receipt, executeErr
 }
 
 func (s *Service) reconcileLifecycleQuestionAnswer(ctx context.Context, run *Run, lifecycle executionapi.LifecyclePort, fixed workerFlowContext, operation *OperationRecord, input executionapi.LifecycleInput) error {
@@ -147,9 +160,6 @@ func (s *Service) applyLifecycleQuestionAnswerReceipt(run *Run, request executio
 	if err := receipt.ValidateFor(request); err != nil {
 		return err
 	}
-	if err := s.validateLifecycleResultBinding(run, request); err != nil {
-		return err
-	}
 	if run == nil || run.TaskStatus == "closed" || run.TaskStatus == "discarded" || run.Decision == nil ||
 		run.Decision.Status != "answer_saved" || run.Decision.ID != request.Input.Feedback.DecisionID ||
 		run.Decision.Request.QuestionRoute == nil || run.Decision.Request.QuestionRoute.QuestionID != request.Input.Feedback.QuestionID {
@@ -162,6 +172,24 @@ func (s *Service) applyLifecycleQuestionAnswerReceipt(run *Run, request executio
 		if operation.OperationID == request.Operation.ID && operation.Status == "confirmed" {
 			return nil // The matching native tool item committed first.
 		}
+	}
+	// Feedback confirms an input fact and attaches no resource candidate.
+	// Observer cursors/seen-message updates may change opaque state meanwhile;
+	// retain the exact physical/session/policy/question binding and current CAS.
+	if receipt.Process != nil || receipt.Target != nil || receipt.Workspace != nil || len(receipt.Implementation) != 0 {
+		return errors.New("question feedback receipt cannot replace execution resources")
+	}
+	fixed, err := s.workerFlowContext(run)
+	if err != nil {
+		return err
+	}
+	current, err := s.lifecycleSnapshot(run, fixed.workflow, fixed.execution, fixed.attempt, nil)
+	if err != nil {
+		return err
+	}
+	original := request.Snapshot
+	if current.Ref != original.Ref || current.Session.SessionID != original.Session.SessionID || current.Session.Generation != original.Session.Generation || current.ConfigurationDigest != original.ConfigurationDigest || current.ResourceGeneration != original.ResourceGeneration || recordFingerprint(current.PolicyResources) != recordFingerprint(original.PolicyResources) || recordFingerprint(current.QuestionRoute) != recordFingerprint(original.QuestionRoute) {
+		return ErrWorkerTurnStale
 	}
 	if executeErr != nil || receipt.Disposition == executionapi.OperationUnknown || receipt.Disposition == executionapi.OperationRejected {
 		reason := receipt.Diagnostic

@@ -25,7 +25,7 @@ type ExecutionLifecycle struct {
 }
 
 func (l *ExecutionLifecycle) PolicyCapabilities() executionapi.LifecyclePolicyCapabilities {
-	return executionapi.LifecyclePolicyCapabilities{ResumeActiveObservation: true}
+	return executionapi.LifecyclePolicyCapabilities{ResumeActiveObservation: true, ActiveTurnFeedback: true}
 }
 
 func NewExecutionLifecycle(setup executionapi.LifecycleSetup) (executionapi.LifecyclePort, error) {

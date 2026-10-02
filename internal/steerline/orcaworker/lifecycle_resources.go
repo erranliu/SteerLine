@@ -578,6 +578,13 @@ func (l *ExecutionLifecycle) createConversation(ctx context.Context, request exe
 	if nativeTurn(&state, intent.TurnID) != nil {
 		return nativeReceipt(request, executionapi.OperationRejected), errors.New("native Orca Task input already has a fixed turn record")
 	}
+	if err := l.verifyAgent(ctx, request.Snapshot, request.Snapshot.Ref.External); err != nil {
+		return nativeReceipt(request, executionapi.OperationRejected), err
+	}
+	absent, err := InspectCleanupTerminal(ctx, l.client.MetaCall, state.Coordinator, l.setup.RepositoryPath, "coordinator", false)
+	if err != nil || absent {
+		return nativeReceipt(request, executionapi.OperationRejected), errors.Join(err, errors.New("original Task coordinator is unavailable"))
+	}
 	spec := l.taskSpec(request.Snapshot, intent.TurnID, intent.Objective)
 	created, err := CreateTask(ctx, l.client.MetaCall, spec, intent.Name, request.Snapshot.Ref.Target.OrchestrationRun, state.Coordinator.Terminal, state.Coordinator.RuntimeID)
 	if err != nil {

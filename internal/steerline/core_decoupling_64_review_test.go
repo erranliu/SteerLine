@@ -54,6 +54,7 @@ func TestCD64ReviewReceiptAndRecoveryIsolation(t *testing.T) {
 		execution := s.executionRecord(run)
 		workflow := s.workflowRecord(run)
 		execution.Generation, execution.ConfigurationDigest = "resources", workflow.ExecutionProfile.Digest
+		execution.Workspace = WorkspaceEvidence{Repository: s.Config.identity, Worktree: run.WorkspaceIntent.Path, Branch: run.WorkspaceIntent.Branch, Base: run.WorkspaceIntent.BaseCommit}
 		identity := executionapi.ProcessIdentity{Kind: "fixture-process", PID: 42, Created: "original-generation"}
 		execution.Process = &identity
 		execution.PolicyResources = policyResourceReceiptFixture(workflow.ExecutionProfile.Digest, execution.Workspace.Worktree, execution)
@@ -105,6 +106,7 @@ func TestCD64ReviewReceiptAndRecoveryIsolation(t *testing.T) {
 		execution := s.executionRecord(run)
 		workflow := s.workflowRecord(run)
 		execution.Generation, execution.ConfigurationDigest = "resources", workflow.ExecutionProfile.Digest
+		execution.Workspace = WorkspaceEvidence{Repository: s.Config.identity, Worktree: run.WorkspaceIntent.Path, Branch: run.WorkspaceIntent.Branch, Base: run.WorkspaceIntent.BaseCommit}
 		input := executionapi.TurnInput{CommandID: newID(), Prompt: "original"}
 		key := "worker-session:" + execution.ExecutionID + ":" + input.CommandID
 		_, err := s.startWorkerOperation(run, "prepare_worker_session", key, &input)
@@ -126,6 +128,7 @@ func TestCD64ReviewReceiptAndRecoveryIsolation(t *testing.T) {
 		execution := s.executionRecord(run)
 		workflow := s.workflowRecord(run)
 		execution.Generation, execution.ConfigurationDigest = "resources", workflow.ExecutionProfile.Digest
+		execution.Workspace = WorkspaceEvidence{Repository: s.Config.identity, Worktree: run.WorkspaceIntent.Path, Branch: run.WorkspaceIntent.Branch, Base: run.WorkspaceIntent.BaseCommit}
 		input := executionapi.TurnInput{CommandID: newID(), Prompt: "original"}
 		execution.PendingCommandID = input.CommandID
 		execution.PolicyResources = policyResourceReceiptFixture(workflow.ExecutionProfile.Digest, execution.Workspace.Worktree, execution)

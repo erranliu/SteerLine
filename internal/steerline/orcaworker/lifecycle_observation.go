@@ -51,16 +51,22 @@ func (l *ExecutionLifecycle) ObserveLifecycle(ctx context.Context, snapshot exec
 }
 
 func latestBusinessTurn(state *NativeExecutionState, snapshot executionapi.LifecycleSnapshot) *NativeTurnState {
-	if state == nil {
-		return nil
-	}
-	if snapshot.Session.CurrentTurnID != "" {
-		if turn := nativeTurn(state, snapshot.Session.CurrentTurnID); turn != nil {
+	// Before the start receipt commits, the center has a Command but no Turn.
+	// This implementation owns the Command-to-native-Turn binding in its codec.
+	if snapshot.Session.PendingCommandID != "" {
+		if turn := nativeTurn(state, snapshot.Session.PendingCommandID); turn != nil {
 			return turn
 		}
 	}
+	// A pending original input takes precedence over the last completed turn.
+	// Otherwise recovery would replay old settlement while a new Dispatch waits.
 	if snapshot.Session.PendingTurnID != "" {
 		if turn := nativeTurn(state, snapshot.Session.PendingTurnID); turn != nil {
+			return turn
+		}
+	}
+	if snapshot.Session.CurrentTurnID != "" {
+		if turn := nativeTurn(state, snapshot.Session.CurrentTurnID); turn != nil {
 			return turn
 		}
 	}

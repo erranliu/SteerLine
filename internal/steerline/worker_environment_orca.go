@@ -10,24 +10,10 @@ import (
 )
 
 // Native Orca calls below are retained for the host-evidence boundary assigned to #65.
-func orcaWorkerCaller(c Config) orcaworker.Call         { return nativeOrcaClient(c).Call }
 func orcaWorkerMetaCaller(c Config) orcaworker.MetaCall { return nativeOrcaClient(c).MetaCall }
 
 func workerOrcaTerminalIdentity(identity executionapi.ProcessIdentity) orcaworker.TerminalIdentity {
 	return orcaworker.TerminalIdentity{Kind: identity.Kind, Handle: identity.Terminal, RuntimeID: identity.RuntimeID, Incarnation: identity.Incarnation}
-}
-
-func nativeOrcaGeneration(execution *ExecutionRecord) string {
-	if execution == nil {
-		return ""
-	}
-	if state, err := decodeOrcaExecutionState(execution); err == nil && state != nil && state.Coordinator.RuntimeID != "" {
-		return state.Coordinator.RuntimeID
-	}
-	if execution.Process != nil && execution.Process.Incarnation != "" {
-		return execution.Process.Incarnation
-	}
-	return ""
 }
 
 func (s *Service) verifyHostExecutionEvidence(ctx context.Context, run *Run, execution *ExecutionRecord) error {

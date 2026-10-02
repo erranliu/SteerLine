@@ -2,6 +2,7 @@ package steerline
 
 import (
 	"context"
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"testing"
 )
 
@@ -10,6 +11,7 @@ func TestWorkerRecoveryAttemptCommitsAtomically(t *testing.T) {
 		t.Run(map[bool]string{false: "committed", true: "checkpoint_failure"}[fail], func(t *testing.T) {
 			service, run := waitingDecisionService(t)
 			execution := service.executionRecord(run)
+			execution.Process = &executionapi.ProcessIdentity{Kind: "os", PID: 42, Created: "stopped-fixture-process"}
 			execution.RecoveryRequired, execution.RecoveryState = true, "interrupted"
 			require(t, service.commitWorker(run))
 			oldID := run.AttemptID

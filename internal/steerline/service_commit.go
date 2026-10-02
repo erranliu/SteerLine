@@ -351,7 +351,7 @@ func (s *Service) startWorkerOperation(run *Run, kind, key string, payload any) 
 }
 
 func lifecycleOperationKind(kind string) bool {
-	return knownLifecycleAction(executionapi.LifecycleAction(kind)) || kind == "prepare_worker_session" ||
+	return knownLifecycleAction(executionapi.LifecycleAction(kind)) || kind == "worker_input_value" || kind == "prepare_worker_session" ||
 		kind == "start_worker_turn" || kind == "submit_worker_input" || kind == "reply_execution_question" || kind == "stop_worker_observation"
 }
 

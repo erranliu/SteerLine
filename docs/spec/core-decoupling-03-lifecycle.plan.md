@@ -51,7 +51,7 @@ PR 附本阶段消费者/所有者和删除清单、版本变化、旧到新测�
 
 生产生命周期通过 `execution.LifecyclePort` 接通原 actor/workerMessages 与事务：选步、单个已保存操作、只读对账、观察、恢复、工作区检查、停止和精确清理。正式生产注入构造 `NewServiceWithLifecycleResolver` 的唯一默认目录最终外移仍归 #66。
 
-中心失败注入及准备/业务门槛归 root CD64 intent 入口；local 两轮与 native 原会话重开已通过公开 Command/Query/Service 迁至 outer CD64 原会话入口，同一入口承载四个 remote Protocol 回归。旧到新映射、修复、版本、失败证据和剩余所有者见[验收记录](../validation/core-decoupling-03-lifecycle/README.md)。无可写私有状态导出，无虚构 remote 准入成功。
+中心失败注入及准备/业务门槛归 root CD64 intent 入口；local 两轮与 native 原会话重开已通过公开 Command/Query/Service 迁至 outer CD64 原会话入口；native 入口同时保留丢 Dispatch/Task/reply/send/ack、替换 incarnation 拒绝与精确清理的原断言，同一入口承载四个 remote Protocol 回归。旧到新映射、修复、版本、失败证据和剩余所有者见[验收记录](../validation/core-decoupling-03-lifecycle/README.md)。无可写私有状态导出，无虚构 remote 准入成功。
 
 串行参数只限定包和用例执行并发，名称与断言保持。默认包并发实测在 app-server 等待中超时，串行组通过；尚不能仅据此确定根因。外层启动立即注册关闭回调，失败也关闭服务与 Reader。
 

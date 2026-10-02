@@ -52,6 +52,7 @@ type NativeOrcaState struct {
 	LoseCloseOnce                                                    bool
 	ClosedAgent                                                      bool
 	ClosedCoordinator                                                bool
+	CloseRequests                                                    []string
 	Replies                                                          int
 	ReplyBody                                                        string
 	LoseReplyOnce                                                    bool
@@ -219,6 +220,8 @@ func FakeNativeOrca(stateDir string, args []string) int {
 			return nativeOrcaOK(map[string]any{"send": map[string]any{"handle": "term-agent", "accepted": true, "bytesWritten": 1}})
 		case "close":
 			handle := nativeArg(args, "--terminal")
+			state.CloseRequests = append(state.CloseRequests, handle)
+			save()
 			if handle == "term-agent" && !state.ClosedAgent {
 				state.ClosedAgent = true
 			} else if handle == "term-coordinator" && !state.ClosedCoordinator {
@@ -537,7 +540,7 @@ func nativeOrcaErr(code, message string) int {
 	return 1
 }
 
-func ReadNativeOrcaState(stateDir string) (NativeOrcaState, error) {
+func readNativeOrcaState(stateDir string) (NativeOrcaState, error) {
 	var state NativeOrcaState
 	raw, err := os.ReadFile(filepath.Join(stateDir, "native-orca.json"))
 	if err != nil {
@@ -547,13 +550,44 @@ func ReadNativeOrcaState(stateDir string) (NativeOrcaState, error) {
 	return state, err
 }
 
-func WriteNativeOrcaState(stateDir string, state NativeOrcaState) error {
-	if err := os.MkdirAll(stateDir, 0700); err != nil {
-		return err
+func ReadNativeOrcaState(stateDir string) (NativeOrcaState, error) {
+	unlock, err := lockNativeOrcaState(stateDir)
+	if err != nil {
+		return NativeOrcaState{}, err
 	}
+	defer unlock()
+	return readNativeOrcaState(stateDir)
+}
+
+func writeNativeOrcaState(stateDir string, state NativeOrcaState) error {
 	raw, err := json.Marshal(state)
 	if err != nil {
 		return err
 	}
 	return nativeAtomicWrite(filepath.Join(stateDir, "native-orca.json"), raw)
+}
+
+func WriteNativeOrcaState(stateDir string, state NativeOrcaState) error {
+	unlock, err := lockNativeOrcaState(stateDir)
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	return writeNativeOrcaState(stateDir, state)
+}
+
+// Update shares the executable fixture's lock so a test cannot overwrite an
+// acknowledgement or resource receipt with a previously read state snapshot.
+func UpdateNativeOrcaState(stateDir string, update func(*NativeOrcaState)) error {
+	unlock, err := lockNativeOrcaState(stateDir)
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	state, err := readNativeOrcaState(stateDir)
+	if err != nil {
+		return err
+	}
+	update(&state)
+	return writeNativeOrcaState(stateDir, state)
 }

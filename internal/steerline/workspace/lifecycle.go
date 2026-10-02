@@ -2,8 +2,9 @@ package workspace
 
 import (
 	"context"
-	"github.com/erranliu/SteerLine/internal/steerline/execution"
 	"time"
+
+	"github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 // InspectLifecycleWorkspace verifies a host-local workspace against its original

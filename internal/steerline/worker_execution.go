@@ -156,9 +156,6 @@ func (s *Service) deliverResumableWorkerFeedback(ctx context.Context, run *Run, 
 		}
 		return s.deliverLifecycleQuestionAnswer(ctx, run, execution, answer)
 	}
-	if execution.Status == "active" || s.workers[run.RunID] != nil {
-		return nil // Preserve the answer until the original turn stops.
-	}
 	for _, operation := range s.domain.Operations {
 		if operation.IdempotencyKey != "worker-turn:"+execution.ExecutionID+":"+commandID {
 			continue
@@ -170,6 +167,21 @@ func (s *Service) deliverResumableWorkerFeedback(ctx context.Context, run *Run, 
 		s.refreshRun(run)
 		return s.commitWorker(run)
 	}
+	priorStatus := s.operationByKey("worker-environment-feedback:" + execution.ExecutionID + ":" + commandID)
+	liveTurn := execution.CurrentTurnID != "" && execution.CurrentTurnID != execution.LastStoppedTurnID && execution.PendingCommandID == "" && (execution.Status == "active" || execution.Status == "running" || s.workers[run.RunID] != nil)
+	if priorStatus != nil || liveTurn {
+		lifecycle, _, err := s.lifecycleForRun(run)
+		if err != nil {
+			return err
+		}
+		if priorStatus == nil && !lifecycle.PolicyCapabilities().ActiveTurnFeedback {
+			return nil // This implementation preserves input until the original turn stops.
+		}
+		return s.deliverLifecycleEnvironmentFeedback(ctx, run, answer, commandID, run.Decision.Request, s.decisionRecord(run))
+	}
+	if execution.PendingCommandID != "" || s.workers[run.RunID] != nil {
+		return nil
+	} // Preserve input while the original start is pending.
 	return s.startWorkerFlowTurn(ctx, run, workerFeedbackText(answer, run.Decision.Request), commandID)
 }
 

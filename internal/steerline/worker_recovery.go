@@ -15,6 +15,9 @@ import (
 // including host publication which is keyed by WorkflowRun rather than Execution.
 func (s *Service) hasUnknownWorkerOperation(run *Run) bool {
 	for _, op := range s.domain.Operations {
+		if op.Kind == "worker_input_value" {
+			continue
+		} // This journal has no external outcome to reconcile.
 		if op.Status != "outcome_unknown" && op.Status != "in_flight" {
 			continue
 		}

@@ -78,13 +78,22 @@ func testIntegratedNativeOriginalSessionGate(t *testing.T) {
 	if runtime.GOOS != "windows" {
 		t.Skip("native Orca protocol fixture uses the Windows host contract")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Minute)
 	defer cancel()
 	fixture := newLifecycleProject(t, "orca")
-	initial := testprotocol.NativeOrcaState{EnvironmentMode: true, BusinessActive: true, FirstBusinessDispatch: 2, EndReadinessOnBusiness: true, LoseQuestionAckOnce: true}
+	initial := testprotocol.NativeOrcaState{EnvironmentMode: true, BusinessActive: true, FirstBusinessDispatch: 2, EndReadinessOnBusiness: true, LoseQuestionAckOnce: true, LoseReplyOnce: true}
 	require(t, testprotocol.WriteNativeOrcaState(fixture.nativeStateDir, initial))
 	createIntegrationTask(t, ctx, fixture, 902)
-	resolver := &integrationLifecycleResolver{}
+	resolver := &integrationLifecycleResolver{beforeNativeExecute: func(request executionapi.LifecycleRequest) error {
+		if request.Operation.Action == string(executionapi.LifecycleCreateResource) && request.Input.Resource != nil && request.Input.Resource.Purpose == "conversation" {
+			return testprotocol.UpdateNativeOrcaState(fixture.nativeStateDir, func(state *testprotocol.NativeOrcaState) {
+				if len(state.Tasks) == 5 {
+					state.AgentIncarnation = "replaced-agent"
+				}
+			})
+		}
+		return nil
+	}}
 	firstService := startIntegrationService(t, ctx, fixture.config, resolver)
 	claimIntegrationTask(t, ctx, fixture, 902, firstService.instanceID)
 	first := waitIntegrationRun(t, ctx, firstService, fixture.config, func(run *steerline.Run, execution *steerline.ExecutionRecord) bool {
@@ -141,7 +150,7 @@ func testIntegratedNativeOriginalSessionGate(t *testing.T) {
 	}
 	state, err := testprotocol.ReadNativeOrcaState(fixture.nativeStateDir)
 	require(t, err)
-	if state.Dispatches != 2 || state.Replies != 1 || state.Sends != 0 || !state.Acked["delivery-ask-1"] || !state.QuestionAckLossArmed || state.LoseAckOnce {
+	if state.Dispatches != 2 || state.Replies != 1 || state.Sends != 0 || !state.Acked["delivery-ask-1"] || !state.QuestionAckLossArmed || state.LoseAckOnce || state.LoseReplyOnce {
 		t.Fatalf("native dispatch/reply/ack was repeated or changed route: %+v", state)
 	}
 	if resolver.count(executionapi.ProtocolOrcaTerminalV2) == 0 {
@@ -152,6 +161,122 @@ func testIntegratedNativeOriginalSessionGate(t *testing.T) {
 	}
 	assertNoTaskDelivery(t, settled.runtime, settled.run)
 	assertQueriedTaskPhase(t, ctx, fixture.config, "902", "waiting_decision")
+	// Preserve the original native producer regressions, using public answers
+	// rather than the removed private actor methods.
+	current := settled
+	for _, next := range []struct {
+		dispatch int
+		loss     string
+	}{{3, "dispatch"}, {4, "send"}, {5, "task"}} {
+		t.Logf("native original mutation case: %s", next.loss)
+		require(t, testprotocol.UpdateNativeOrcaState(fixture.nativeStateDir, func(state *testprotocol.NativeOrcaState) {
+			switch next.loss {
+			case "dispatch":
+				state.LoseDispatchAt = next.dispatch
+			case "send":
+				state.EscalationAt, state.LoseSendOnce = next.dispatch, true
+			case "task":
+				state.LoseTaskAt = next.dispatch
+			}
+		}))
+		submitIntegrationAnswer(t, ctx, fixture.config, current.run)
+		answeredHosts := map[string]bool{}
+		current = waitIntegrationRun(t, ctx, secondService, fixture.config, func(run *steerline.Run, execution *steerline.ExecutionRecord) bool {
+			if run.Decision != nil && run.Decision.Status == "pending" && run.Decision.Request.HostTarget != nil && !answeredHosts[run.Decision.ID] {
+				answeredHosts[run.Decision.ID] = true
+				submitIntegrationAnswerOption(t, ctx, fixture.config, run, "recheck_environment")
+			}
+			if next.loss == "send" && run.Decision != nil && run.Decision.Status == "pending" && run.Decision.Request.QuestionRoute == nil && run.Decision.Request.HostTarget == nil && execution.Target.Dispatch == "ctx-4" && execution.CurrentTurnID != execution.LastStoppedTurnID && !answeredHosts[run.Decision.ID] {
+				answeredHosts[run.Decision.ID] = true
+				submitIntegrationAnswer(t, ctx, fixture.config, run)
+			}
+			return execution.Target.Dispatch == fmt.Sprintf("ctx-%d", next.dispatch) && execution.CurrentTurnID == execution.LastStoppedTurnID &&
+				run.Decision != nil && run.Decision.Status == "pending" && run.Decision.Request.HostTarget == nil && run.Decision.Request.QuestionRoute == nil
+		})
+		state, err := testprotocol.ReadNativeOrcaState(fixture.nativeStateDir)
+		require(t, err)
+		if state.Dispatches != next.dispatch || len(state.Tasks) != next.dispatch || state.Replies != 1 || current.run.Process == nil || !sameNativePhysicalProcess(*current.run.Process, original) || current.execution.SessionID != sessionID || derefString(current.run.WorktreePath) != workspace {
+			t.Fatalf("native %s recovery repeated a mutation or replaced the original binding: state=%+v execution=%+v", next.loss, state, current.execution)
+		}
+		if next.loss == "send" && (state.Sends != 1 || state.LoseSendOnce) {
+			t.Fatalf("native status feedback lost its original one-write reconciliation: %+v", state)
+		}
+		assertNoTaskDelivery(t, current.runtime, current.run)
+	}
+	state, err = testprotocol.ReadNativeOrcaState(fixture.nativeStateDir)
+	require(t, err)
+	submitIntegrationAnswer(t, ctx, fixture.config, current.run)
+	rejected := waitIntegrationRun(t, ctx, secondService, fixture.config, func(run *steerline.Run, execution *steerline.ExecutionRecord) bool {
+		state, err := testprotocol.ReadNativeOrcaState(fixture.nativeStateDir)
+		require(t, err)
+		return state.AgentIncarnation == "replaced-agent" && (execution.Error != nil || execution.Environment != nil && execution.Environment.Blocker != nil)
+	})
+	preserved := false
+	for _, decision := range rejected.runtime.Decisions {
+		if decision.DecisionID == current.run.Decision.ID && decision.Status == "answer_saved" {
+			preserved = true
+		}
+	}
+	if !preserved {
+		t.Fatal("replaced incarnation discarded its original accepted answer")
+	}
+	state, err = testprotocol.ReadNativeOrcaState(fixture.nativeStateDir)
+	require(t, err)
+	if state.AgentIncarnation != "replaced-agent" || len(state.Tasks) != 5 || state.Dispatches != 5 || state.Replies != 1 || state.Sends != 1 || rejected.execution.Target.Dispatch != "ctx-5" || rejected.run.Process == nil || !sameNativePhysicalProcess(*rejected.run.Process, original) {
+		t.Fatal("replaced native incarnation consumed saved input or changed the original resources")
+	}
+	// Protocol cleanup after stopping the fixture verifies the exact saved
+	// terminals. It does not fabricate a merged PR or a TaskDelivery.
+	secondService.stop(t)
+	require(t, testprotocol.UpdateNativeOrcaState(fixture.nativeStateDir, func(state *testprotocol.NativeOrcaState) { state.AgentIncarnation = ""; state.LoseCloseOnce = true }))
+	client := orcaworker.New(orcaworker.Config{Repository: fixture.repository, CommandTimeout: "10s", Target: rejected.execution.Target,
+		Output: func(callContext context.Context, timeout time.Duration, args ...string) ([]byte, error) {
+			callContext, cancel := context.WithTimeout(callContext, timeout)
+			defer cancel()
+			command := exec.CommandContext(callContext, os.Args[0], append([]string{"--fake", "native-orca", fixture.nativeStateDir}, args...)...)
+			command.Dir = fixture.repository
+			return command.CombinedOutput()
+		}})
+	if _, err := client.CloseTerminalChecked(ctx, original.Terminal, original.RuntimeID); err == nil {
+		t.Fatal("lost native close receipt was guessed as confirmed")
+	}
+	absent, err := orcaworker.InspectCleanupTerminal(ctx, client.MetaCall, original, fixture.repository, "agent", true)
+	require(t, err)
+	if !absent {
+		t.Fatal("original agent close could not be reconciled read-only")
+	}
+	var coordinator executionapi.ProcessIdentity
+	for _, envelope := range rejected.execution.ImplementationData {
+		if envelope.ImplementationKey == orcaworker.ExecutionStateCodecKey {
+			saved, err := orcaworker.DecodeExecutionStateEnvelope(envelope, orcaworker.ExecutionStateIdentity{
+				ProjectID: fixture.config.Identity(), ExecutionID: rejected.execution.ExecutionID, AttemptID: rejected.execution.CurrentAttemptID,
+				Generation: rejected.execution.Generation, ConfigDigest: rejected.execution.ConfigurationDigest, Protocol: executionapi.ProtocolOrcaTerminalV2,
+				Process: *rejected.execution.Process, CoordinatorTerminal: rejected.execution.Target.CoordinatorTerminal})
+			require(t, err)
+			coordinator = saved.Coordinator
+		}
+	}
+	if coordinator.Terminal == "" {
+		t.Fatal("cleanup lost its original coordinator binding")
+	}
+	closed, err := client.CloseTerminalChecked(ctx, coordinator.Terminal, coordinator.RuntimeID)
+	require(t, err)
+	if closed.Disposition != "confirmed" {
+		t.Fatal("original coordinator close was not confirmed")
+	}
+	state, err = testprotocol.ReadNativeOrcaState(fixture.nativeStateDir)
+	require(t, err)
+	if !state.ClosedAgent || !state.ClosedCoordinator || len(state.CloseRequests) != 2 || state.CloseRequests[0] != original.Terminal || state.CloseRequests[1] != coordinator.Terminal {
+		t.Fatalf("native cleanup repeated close or chose other resources: %+v", state)
+	}
+	assertNoTaskDelivery(t, rejected.runtime, rejected.run)
+
+}
+
+func sameNativePhysicalProcess(a, b executionapi.ProcessIdentity) bool {
+	// Task/Dispatch identify successive turns; all physical resource fields stay fixed.
+	a.Task, a.Dispatch, b.Task, b.Dispatch = "", "", "", ""
+	return a == b
 }
 
 type integrationFixture struct {
@@ -333,8 +458,9 @@ func fixtureGitOutput(t *testing.T, args ...string) string {
 }
 
 type integrationLifecycleResolver struct {
-	mu    sync.Mutex
-	calls map[executionapi.ExecutionProtocol]int
+	mu                  sync.Mutex
+	calls               map[executionapi.ExecutionProtocol]int
+	beforeNativeExecute func(executionapi.LifecycleRequest) error
 }
 
 func (r *integrationLifecycleResolver) ResolveLifecycle(setup executionapi.LifecycleSetup) (executionapi.LifecyclePort, error) {
@@ -348,10 +474,29 @@ func (r *integrationLifecycleResolver) ResolveLifecycle(setup executionapi.Lifec
 	case executionapi.ProtocolLocalCodexAppServer:
 		return codexworker.NewExecutionLifecycle(setup)
 	case executionapi.ProtocolOrcaTerminalV2:
-		return orcaworker.NewExecutionLifecycle(setup)
+		port, err := orcaworker.NewExecutionLifecycle(setup)
+		if err != nil {
+			return nil, err
+		}
+		if r.beforeNativeExecute != nil {
+			return integrationFaultLifecycle{LifecyclePort: port, before: r.beforeNativeExecute}, nil
+		}
+		return port, nil
 	default:
 		return nil, executionapi.UnsupportedAdapterOperation("ResolveLifecycle", "integration fixture does not authenticate this protocol")
 	}
+}
+
+type integrationFaultLifecycle struct {
+	executionapi.LifecyclePort
+	before func(executionapi.LifecycleRequest) error
+}
+
+func (p integrationFaultLifecycle) Execute(ctx context.Context, request executionapi.LifecycleRequest) (executionapi.LifecycleReceipt, executionapi.LifecycleObserver, error) {
+	if err := p.before(request.Clone()); err != nil {
+		return executionapi.LifecycleReceipt{Operation: request.Operation, Disposition: executionapi.OperationRejected, Diagnostic: err.Error()}, nil, err
+	}
+	return p.LifecyclePort.Execute(ctx, request.Clone())
 }
 
 func (r *integrationLifecycleResolver) count(protocol executionapi.ExecutionProtocol) int {
@@ -441,13 +586,20 @@ func waitIntegrationRun(t *testing.T, ctx context.Context, service *runningInteg
 	predicate func(*steerline.Run, *steerline.ExecutionRecord) bool) integrationRunSnapshot {
 	t.Helper()
 	var result integrationRunSnapshot
+	t.Cleanup(func() {
+		if t.Failed() && result.runtime != nil {
+			t.Logf("last public lifecycle: decision=%s current=%s pending=%s command=%s pendingCommand=%s status=%s error=%v", mustJSON(result.run.Decision), result.execution.CurrentTurnID, result.execution.PendingTurnID, result.execution.CurrentCommandID, result.execution.PendingCommandID, result.execution.Status, result.execution.Error)
+		}
+	})
 	waitFor(t, 2*time.Minute, func() bool {
 		select {
 		case err := <-service.done:
 			service.stopped = true
-			view, queryErr := service.queries.ReadProjectView(ctx, "901", 100)
+			diagnosticContext, diagnosticCancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer diagnosticCancel()
+			view, queryErr := service.queries.ReadProjectView(diagnosticContext, "901", 100)
 			if queryErr != nil {
-				view, queryErr = service.queries.ReadProjectView(ctx, "902", 100)
+				view, queryErr = service.queries.ReadProjectView(diagnosticContext, "902", 100)
 			}
 			var runtimeState *steerline.Runtime
 			if view.Runtime != nil {
@@ -475,6 +627,9 @@ func waitIntegrationRun(t *testing.T, ctx context.Context, service *runningInteg
 					execution = &runtimeState.Executions[i]
 					break
 				}
+			}
+			if execution != nil {
+				result = integrationRunSnapshot{runtime: runtimeState, run: run, execution: execution}
 			}
 			if execution != nil && predicate(run, execution) {
 				result = integrationRunSnapshot{runtime: runtimeState, run: run, execution: execution}
@@ -538,6 +693,11 @@ func submitIntegrationAnswer(t *testing.T, ctx context.Context, config steerline
 	if run.Decision.Request.QuestionRoute != nil {
 		option = ""
 	}
+	submitIntegrationAnswerOption(t, ctx, config, run, option)
+}
+
+func submitIntegrationAnswerOption(t *testing.T, ctx context.Context, config steerline.Config, run *steerline.Run, option string) {
+	t.Helper()
 	answer := steerline.AnswerOptions{
 		RunID: run.RunID, DecisionID: run.Decision.ID, Option: option, Note: "Continue the original work.",
 		By: "operator", ExpectedVersion: run.Decision.Version,
@@ -549,7 +709,30 @@ func submitIntegrationAnswer(t *testing.T, ctx context.Context, config steerline
 		if err == nil {
 			return
 		}
-		if !strings.Contains(err.Error(), "stale_instance: SQLite projection does not match the ready service instance") {
+		if strings.Contains(err.Error(), "stale_revision:") {
+			// Refresh this displayed question after a known rejection. A renewed
+			// generic/host choice must retain the exact request and target; a
+			// different native question or consumed answer is never retried.
+			reader, readErr := steerline.OpenNativeTaskReader(ctx, &config)
+			require(t, readErr)
+			view, readErr := steerline.NewQueryService(reader, config.Identity()).ReadProjectView(ctx, run.TaskID, 100)
+			closeErr := reader.Close()
+			require(t, readErr)
+			require(t, closeErr)
+			found := false
+			if view.Runtime != nil {
+				for _, current := range view.Runtime.Runs {
+					if current != nil && current.RunID == run.RunID && current.ExecutionID == run.ExecutionID && current.AttemptID == run.AttemptID && current.Decision != nil && current.Decision.Status == "pending" &&
+						(current.Decision.ID == run.Decision.ID || current.Decision.Request.QuestionRoute == nil && run.Decision.Request.QuestionRoute == nil && derefString(current.LogPath) == derefString(run.LogPath) && string(mustJSON(current.Decision.Request)) == string(mustJSON(run.Decision.Request))) {
+						answer.DecisionID, answer.ExpectedVersion = current.Decision.ID, current.Decision.Version
+						found = true
+					}
+				}
+			}
+			if !found {
+				t.Fatalf("stale displayed decision changed its original question/target: %v", err)
+			}
+		} else if !strings.Contains(err.Error(), "stale_instance: SQLite projection does not match the ready service instance") {
 			require(t, err)
 		}
 		select {

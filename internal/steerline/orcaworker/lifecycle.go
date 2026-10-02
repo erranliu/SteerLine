@@ -109,7 +109,7 @@ func nativeTargetID(config ProfileConfig) string {
 }
 
 func (l *ExecutionLifecycle) PolicyCapabilities() executionapi.LifecyclePolicyCapabilities {
-	return executionapi.LifecyclePolicyCapabilities{LinkedWorkspaceWriteRoots: true, SeparateTurnStart: true, ResumeActiveObservation: true}
+	return executionapi.LifecyclePolicyCapabilities{LinkedWorkspaceWriteRoots: true, SeparateTurnStart: true, ActiveTurnFeedback: true, ResumeActiveObservation: true}
 }
 
 func (l *ExecutionLifecycle) PreflightLifecycle(ctx context.Context, setup executionapi.LifecycleSetup) (executionapi.CapabilityReport, error) {

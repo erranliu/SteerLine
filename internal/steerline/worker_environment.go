@@ -163,7 +163,13 @@ func (s *Service) advanceOrcaPreparation(ctx context.Context, run *Run) error {
 	}
 	if env.Preparation.Verified && !env.Preparation.Invalidated {
 		env.Ready = true
-		if execution.PendingTurnID != "" {
+		if execution.TurnNumber > 0 && execution.CurrentTurnID != "" && execution.CurrentTurnID == execution.LastStoppedTurnID && execution.PendingCommandID == "" && execution.PendingTurnID == "" && fixed.workflow.Phase != "waiting_pr_merge" &&
+			(run.Decision == nil || run.Decision.Status == "reply_accepted" || run.Decision.Status == "applied") {
+			// A turn may complete while a host gate hides its consumed answer.
+			// Successful manual recheck restores a fresh choice, never new input.
+			return s.waitWorkerFlow(run, "The original turn completed while the environment was being checked.")
+		}
+		if execution.PendingCommandID != "" || execution.PendingTurnID != "" {
 			return s.reconcileEnvironmentBusinessIntent(ctx, run)
 		}
 		if execution.TurnNumber == 0 && execution.PendingTurnID == "" {
@@ -246,26 +252,42 @@ func (s *Service) reconcileEnvironmentBusinessIntent(ctx context.Context, run *R
 	if err != nil {
 		return err
 	}
-	e := fixed.execution
-	op := s.operationByKey("worker-turn:" + e.ExecutionID + ":" + e.PendingTurnID)
-	if op == nil {
-		return s.blockWorkerEnvironment(run, orcaworker.HostFact{Reason: "business_dispatch_unverified", Confidence: "unverified", Source: "business.operation"})
+	commandID := fixed.execution.PendingCommandID
+	if commandID == "" {
+		return errors.New("saved business input lost its original Command")
 	}
+	operation := s.operationByKey("worker-input-value:" + fixed.execution.ExecutionID + ":" + commandID)
 	var input executionapi.TurnInput
-	if json.Unmarshal(op.Request, &input) != nil || input.CommandID != e.PendingTurnID || input.Prompt == "" {
-		return errors.New("saved business input is invalid")
+	if operation == nil || operation.Kind != "worker_input_value" || (operation.Status != "confirmed" && operation.Status != "in_flight") || operation.LifecycleIdentity == nil || operation.LifecycleIdentity.ExecutionID != run.ExecutionID || operation.LifecycleIdentity.Ref.AttemptID != run.AttemptID || operation.LifecycleIdentity.ConfigurationDigest != fixed.execution.ConfigurationDigest || operation.LifecycleIdentity.ResourceGeneration != fixed.execution.Generation || operation.PayloadDigest != operationDigest(operation.Request) || json.Unmarshal(operation.Request, &input) != nil || input.CommandID != commandID || input.Prompt == "" {
+		return errors.New("saved business input is invalid or belongs to another original execution")
+	}
+	// A value journal alone does not authorize replay of an old saved answer.
+	// Resume only an already-journaled external step, through its original intent.
+	externalIntent := false
+	for _, candidate := range s.domain.Operations {
+		if candidate.LifecycleIdentity == nil || candidate.LifecycleIdentity.ExecutionID != run.ExecutionID || candidate.LifecycleIdentity.Ref.AttemptID != run.AttemptID {
+			continue
+		}
+		if candidate.IdempotencyKey == "worker-turn:"+run.ExecutionID+":"+commandID {
+			externalIntent = true
+			break
+		}
+		if candidate.Kind == string(executionapi.LifecycleCreateResource) {
+			var resource executionapi.ResourceIntent
+			if json.Unmarshal(candidate.Request, &resource) == nil && resource.TurnID == commandID {
+				externalIntent = true
+				break
+			}
+		}
+	}
+	if !externalIntent {
+		return errors.New("original input has no external intent; a saved answer needs fresh confirmation")
 	}
 	lifecycle, _, err := s.lifecycleForRun(run)
 	if err != nil {
 		return err
 	}
-	candidate := executionapi.LifecycleCandidate{Action: executionapi.LifecycleStartTurn, Input: executionapi.LifecycleInput{Turn: &input}}
-	if err := s.executeLifecycleStep(ctx, run, lifecycle, candidate); errors.Is(err, errLifecycleNeedsReconciliation) {
-		return nil
-	} else if err != nil {
-		return s.blockWorkerEnvironment(run, orcaworker.HostFact{Reason: "business_dispatch_unverified", Confidence: "unverified", Source: "business.operation", Detail: clip(err.Error(), 1000)})
-	}
-	return nil
+	return s.startWorkerLifecycle(ctx, run, lifecycle, fixed, input.CommandID, input.Prompt)
 }
 
 func (s *Service) finishOrcaPreparation(ctx context.Context, run *Run, execution *ExecutionRecord, turn *implementationTurnView, outcome string) error {

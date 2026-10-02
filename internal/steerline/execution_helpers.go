@@ -54,11 +54,27 @@ func (s *Service) inspectWorkflowWorkspace(ctx context.Context, run *Run) (Works
 	if err != nil {
 		return WorkspaceEvidence{}, err
 	}
+	if snapshot.Ref.WorkspacePath == "" {
+		// A lost or not-yet-committed resource receipt is inspected against the
+		// original persisted intent. This read does not publish the candidate.
+		operation := s.operationByKey("worker-workspace:" + run.ExecutionID)
+		var saved struct {
+			WorkflowRunID string                       `json:"workflow_run_id"`
+			ExecutionID   string                       `json:"execution_id"`
+			Workspace     executionapi.WorkspaceIntent `json:"workspace"`
+		}
+		if operation == nil || operation.Kind != "prepare_workspace" || operation.LifecycleIdentity == nil || operation.LifecycleIdentity.ExecutionID != run.ExecutionID || operation.LifecycleIdentity.Ref.AttemptID != run.AttemptID ||
+			json.Unmarshal(operation.Request, &saved) != nil || saved.WorkflowRunID != run.RunID || saved.ExecutionID != run.ExecutionID || saved.Workspace != *run.WorkspaceIntent || operationDigest(operation.Request) != operation.PayloadDigest {
+			return WorkspaceEvidence{}, errors.New("workspace inspection has no matching committed resource or preparation intent")
+		}
+		snapshot.Ref.WorkspacePath, snapshot.Ref.WorkspaceBranch, snapshot.Ref.BaseCommit = saved.Workspace.Path, saved.Workspace.Branch, saved.Workspace.BaseCommit
+		snapshot.Workspace = saved.Workspace
+	}
 	inspection, err := port.InspectLifecycleWorkspace(ctx, snapshot)
 	if err != nil {
 		return WorkspaceEvidence{}, err
 	}
-	if canonical(inspection.Worktree) != canonical(snapshot.Ref.WorkspacePath) || inspection.Branch != snapshot.Ref.WorkspaceBranch || inspection.Base != snapshot.Ref.BaseCommit || !revisionPattern.MatchString(inspection.Head) {
+	if inspection.Worktree != snapshot.Ref.WorkspacePath || inspection.Branch != snapshot.Ref.WorkspaceBranch || inspection.Base != snapshot.Ref.BaseCommit || !revisionPattern.MatchString(inspection.Head) {
 		return WorkspaceEvidence{}, nativeErr("contract_mismatch", "workspace inspection differs from its committed identity")
 	}
 	return WorkspaceEvidence{Repository: inspection.Repository, Worktree: inspection.Worktree, Branch: inspection.Branch, Base: inspection.Base, Head: inspection.Head, Dirty: inspection.Dirty, VerifiedAt: inspection.CheckedAt}, nil

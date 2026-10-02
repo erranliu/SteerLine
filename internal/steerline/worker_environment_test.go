@@ -13,6 +13,7 @@ import (
 
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
+	"github.com/erranliu/SteerLine/internal/steerline/testprotocol"
 )
 
 type environmentFixture struct {
@@ -126,10 +127,7 @@ func (f *environmentFixture) state(t *testing.T) fakeNativeOrcaState {
 }
 func (f *environmentFixture) update(t *testing.T, change func(*fakeNativeOrcaState)) {
 	t.Helper()
-	state := f.state(t)
-	change(&state)
-	data, _ := json.Marshal(state)
-	require(t, AtomicWrite(f.statePath, data))
+	require(t, testprotocol.UpdateNativeOrcaState(filepath.Dir(f.statePath), change))
 }
 func (f *environmentFixture) recheck(t *testing.T) {
 	f.answer(t, "recheck_environment", "")

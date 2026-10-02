@@ -207,7 +207,8 @@ func (s *Service) resumeLifecycleWorkerFlow(ctx context.Context, task *TaskRecor
 			}
 			return true, s.resumeLifecycleObservation(ctx, run, lifecycle)
 		}
-		if !execution.Environment.Ready {
+		if !execution.Environment.Ready || execution.CurrentTurnID != "" && execution.CurrentTurnID == execution.LastStoppedTurnID && execution.PendingCommandID == "" && execution.PendingTurnID == "" &&
+			(run.Decision == nil || run.Decision.Status == "reply_accepted" || run.Decision.Status == "applied") {
 			return true, s.advanceOrcaPreparation(ctx, run)
 		}
 	}
@@ -717,6 +718,28 @@ func (s *Service) startWorkerLifecycle(ctx context.Context, run *Run, lifecycle 
 			return err
 		}
 	}
+	// Resource creation may precede the start operation. Preserve the complete
+	// original input (including its write grant) before any such mutation.
+	inputKey := "worker-input-value:" + fixed.execution.ExecutionID + ":" + commandID
+	if saved := s.operationByKey(inputKey); saved != nil {
+		if saved.Kind != "worker_input_value" || (saved.Status != "confirmed" && saved.Status != "in_flight") || saved.LifecycleIdentity == nil || saved.LifecycleIdentity.ExecutionID != run.ExecutionID || saved.LifecycleIdentity.Ref.AttemptID != run.AttemptID || saved.LifecycleIdentity.ConfigurationDigest != fixed.execution.ConfigurationDigest || saved.LifecycleIdentity.ResourceGeneration != fixed.execution.Generation || saved.PayloadDigest != operationDigest(saved.Request) || !bytes.Equal(saved.Request, mustJSON(&input)) {
+			return errors.New("pending worker input differs from its original committed value")
+		}
+		if saved.Status == "in_flight" {
+			if err := s.changeWorkerOperation(run, saved.OperationID, "confirmed", commandID, mustJSON(&input), ""); err != nil {
+				return err
+			}
+		}
+	} else {
+		inputID, err := s.startWorkerOperation(run, "worker_input_value", inputKey, &input)
+		if err != nil {
+			return err
+		}
+		if err := s.changeWorkerOperation(run, inputID, "confirmed", commandID, mustJSON(&input), ""); err != nil {
+			return err
+		}
+	}
+
 	var candidate executionapi.LifecycleCandidate
 	var snapshot executionapi.LifecycleSnapshot
 	var err error
@@ -1086,7 +1109,7 @@ func (s *Service) executeLifecycleStep(ctx context.Context, run *Run, lifecycle 
 	} else {
 		receipt, observer, callErr = lifecycle.Execute(ctx, request.Clone())
 	}
-	hadUnknownMutation := !reconciled && (callErr != nil || receipt.Disposition == executionapi.OperationUnknown)
+	hadUnknownMutation := !reconciled && (receipt.Disposition == executionapi.OperationUnknown || callErr != nil && receipt.Disposition != executionapi.OperationRejected)
 	if hadUnknownMutation {
 		if observer != nil {
 			_ = observer.Close(context.Background())
@@ -1136,7 +1159,10 @@ func (s *Service) executeLifecycleStep(ctx context.Context, run *Run, lifecycle 
 	status := string(receipt.Disposition)
 	diagnostic := receipt.Diagnostic
 	if callErr != nil {
-		status, diagnostic = "outcome_unknown", callErr.Error()
+		diagnostic = callErr.Error()
+		if receipt.Disposition != executionapi.OperationRejected {
+			status = "outcome_unknown"
+		}
 	} else if status == "accepted" && receipt.State.ResourceID == "" && receipt.State.WorktreeID == "" && receipt.Process == nil {
 		status, diagnostic = "outcome_unknown", "resource lifecycle receipt did not identify its accepted resource"
 	}
@@ -1668,6 +1694,17 @@ func (s *Service) deliverLifecycleEnvironmentFeedback(ctx context.Context, run *
 		Message: workerFeedbackText(answer, request), Answer: &executionapi.Answer{Answers: answer.Answers}}}
 	key := "worker-environment-feedback:" + fixed.execution.ExecutionID + ":" + commandID
 	prior := s.operationByKey(key)
+	if prior != nil && prior.Status == "confirmed" {
+		if record.Status == "reply_accepted" {
+			return nil
+		}
+		record.Status, record.Version, record.UpdatedAt = "reply_accepted", record.Version+1, now()
+		s.markWorkerDecisionWrite(record.DecisionID)
+		return s.commitWorker(run)
+	}
+	if prior != nil && prior.Status == "rejected" {
+		return s.waitWorkerFlow(run, "The original feedback operation was rejected; no duplicate input was sent")
+	}
 	var operationID string
 	if prior != nil && prior.Status != "pending" {
 		operationID = prior.OperationID
@@ -1705,7 +1742,7 @@ func (s *Service) deliverLifecycleEnvironmentFeedback(ctx context.Context, run *
 	if callErr != nil {
 		status, diagnostic = "outcome_unknown", callErr.Error()
 	}
-	if receipt.Disposition != executionapi.OperationConfirmed {
+	if receipt.Disposition != executionapi.OperationConfirmed || !receipt.State.InputAccepted {
 		if status != "outcome_unknown" {
 			status = "outcome_unknown"
 		}
