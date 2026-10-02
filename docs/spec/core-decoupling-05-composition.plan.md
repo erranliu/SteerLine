@@ -23,7 +23,7 @@
 
 ```powershell
 go build ./cmd/steerline ./cmd/test-feedback
-go run ./cmd/test-feedback -quick -- ./internal/steerlineapp ./internal/steerlineintegration -count=1 -run '^(TestCD66ExplicitCatalogAndEntrypoints|TestCD66FixedProfileRecovery)$'
+go run ./cmd/test-feedback -quick -- -p 1 -parallel 1 ./internal/steerline ./internal/steerlineapp ./internal/steerlineintegration -count=1 -run '^(TestCD66ExplicitCatalogAndEntrypoints|TestCD66FixedProfileRecovery)$'
 go list -deps ./internal/steerline
 git diff --check
 ```
@@ -43,6 +43,8 @@ git diff --check
 PR 附本阶段消费者/所有者和删除清单、版本变化、旧到新测试路径映射及实际命中；未运行的原生证据单独列限制。下游只能接收已实际接通的契约，不以空包、双路或仅声明接口替代交付。
 
 ## 交接
+
+2026-10-02 实际验收：clean `755885d52f23c1bb98c4b8c4e7e9cdaf6b97454b` 在完全访问环境命中 core 6、rules 90、targeted 22，全部通过、无跳过。新增中心命名入口复用资源候选断言，并验证丢失准备记录及启动缺目录的写入前拒绝；未替换或豁免原组合。复审问题、失败诊断及最终报告见[验收记录](../validation/core-decoupling-05-composition/README.md)。
 
 #67 获得生产清零及可独立构造应用的目录、工厂和通用端口，最终只验守卫与整理残留测试。
 

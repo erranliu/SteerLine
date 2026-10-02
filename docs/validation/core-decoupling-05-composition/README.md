@@ -1,10 +1,36 @@
-# #66 内置实现组装与主包依赖反转：候选交接记录
+# #66 内置实现组装与主包依赖反转：交付与复审记录
 
 记录日期：2026-10-02。执行依据：[Spec](../../spec/core-decoupling-05-composition.spec.md)、[Plan](../../spec/core-decoupling-05-composition.plan.md)、[共同约束](../../spec/core-decoupling-constraints.md)。
 
-**状态：实现候选已停写，等待协调会话独立复审及完整权限验收；未提交、未发布 PR、未合并，#67 未启动。规定的 quick + CD66 组合验收失败，不能据本记录认定 #66 已验收。**
+**状态：协调会话已独立复审、修复并完成完全访问环境最小验收，等待本 PR 合并。#67 仅在平台确认本 PR 真实合并后启动。以下执行阶段记录保留其原候选和失败结果，不能用来认证后续源码。**
 
-## 候选身份
+## 协调独立复审与最终验收
+
+执行候选提交 `4ab14ef`；协调修复提交 `755885d52f23c1bb98c4b8c4e7e9cdaf6b97454b`，审核基线 `5bbbfcd6a16d34cdfd77dfa8894c1661a885b799`。亲自阅读实际 diff、Spec/Plan、产品入口、固定 profile/资源恢复及测试迁移；未向实现导出业务写入口。
+
+确认并修复：
+
+- `state_preflight.go` 丢失准备记录时漏检：目录新增纯值 `ReadinessRequired`，按原固定 profile 在恢复写入前拒绝；Claim 和预检使用同一要求，准备预算不变。
+- `service_client.go` 与 app `capability.go`：启动/认证先拒绝缺目录、缺端口或非法配置，再访问 Git/目标或写 startup 记录。
+- `worker_lifecycle.go` 初建资源仍按旧写范围文本判断，外层使用当前 `workspace`，令后续 Git 授权不同于已冻结资源，原生准备一直未结算。统一当前契约，在首个 agent 资源操作前固定完整 Git 元数据授权，后续不得扩张。
+- changed-config fixture 重载后未解析项目身份，原生清理 codec 拒绝空 owner；补原项目解析，保留原配置/原会话/人工门槛和故障断言。可选权限 fixture 补显式目录，未启用 live 测试。
+- process host 在已取消 context 下先拒绝，避免创建子进程。
+
+最终一次组合命令（原 CD66 两入口不变，补中心拒绝/rollback 回归包）：
+
+```powershell
+go run ./cmd/test-feedback -quick -- -p 1 -parallel 1 ./internal/steerline ./internal/steerlineapp ./internal/steerlineintegration -count=1 -run '^(TestCD66ExplicitCatalogAndEntrypoints|TestCD66FixedProfileRecovery)$'
+```
+
+实际 clean 源码 `755885d` 的报告：`C:/Users/lmas1/AppData/Local/Temp/steerline-test-feedback/20261002T130911.299555300Z/summary.json`。准备 1.1 秒、执行 180.5 秒；core 6/6，rules 90/90（9 包，含原 CD63 两 codec 入口），targeted 22/22（中心 7、app 7、integration 8），无失败/跳过，所有组 complete。实际 JSON 核对包含离线持久查询/控制台、写入拒绝、两阶段 app-server、当前配置改变后的原生会话恢复及 Dispatch/send/task/ack 故障断言。
+
+前置诊断报告 `20261002T125258.414211400Z/summary.json` 为失败：core 6、rules 90 通过，原生准备 deadline 失败；仅作定位证据，没有豁免。首次协调定向补丁编译发现 fixture 回调名称错误，修正后 root/app 回归通过。随后原生定向已通过准备和故障恢复，清理因 fixture 空 owner 失败，补原身份后最终组合通过。
+
+产品 `go build ./cmd/steerline ./cmd/test-feedback`、Linux app/core 编译、4 个受影响 console 代表回归及 diff 检查通过。独立扫描 root 100 个直属生产 Go 文件无关键字/文件名命中；Windows/Linux deps 232/221，无具体实现、app、integration、processhost；三实现无反向 core/app、console 无 app 依赖。全构建标签源码 import 图另核对中心传递边，无禁用依赖。最终仅文档追加不改变上述 Go 内容；最终 PR head/base 另由平台复审记录绑定。
+
+新所有者和旧到新映射见下表。生产搬迁已完成；#67 负责仍可编译的具体测试/fixture 和最终守卫。没有运行全量、真实业务服务/任务库/产品 CLI 或新的原生权限认证；remote 既有限制保持。
+
+## 执行阶段候选身份（历史）
 
 - worktree：`C:\Users\lmas1\.codex\worktrees\6aa1\SteerLine`。
 - 基线/当前 Git HEAD：`5bbbfcd6a16d34cdfd77dfa8894c1661a885b799`（#65 合并基线，开始时与 origin/main 一致）。当前 detached HEAD，候选为未提交修改。
@@ -53,7 +79,7 @@
 
 root fixture 的 LoadConfig/home 等辅助已改为明确的 `loadFixtureConfig/fixtureHome` 命名；它们不是生产 shim。没有为测试导出任意中心私有写入接口。
 
-## 实际验证
+## 执行阶段实际验证（历史，不认证协调最终 head）
 
 本轮使用 worktree 内 Go cache，未跑全量测试、真实产品 CLI、服务或任务数据库。测试资源限隔离 Git/SQLite/协议 mock；fixture 中的 Git 子进程失败后未重试该组，也未更换权限。
 
@@ -92,7 +118,7 @@ quick-rules 实际命中 `execution/TestCD63CodecIdentityAndVersion` 及 `profil
 
 根包直属非测试 Go 文件 100 个，大小写不敏感文件名/源码 `codex|orca` 零命中，无忽略名单。这是 #66 生产检查；尚未宣称 #67 的全部测试清零、守卫及第三实现闭环通过。详见 [boundary-checks.json](boundary-checks.json)。最终 `git -c core.autocrlf=false diff --check` 结果记录在 validation-results.json。
 
-## 原始报告位置与权限限制
+## 执行阶段原始报告位置与权限限制（历史）
 
 原始报告保存在本 worktree 已有忽略规则 `/bin/` 下的 `bin/cd66-validation/20261002/`。`required-combination`、`safe-after-fixes`、`final-app`、`final-safe` 各有原始 summary、JSONL、stderr；依赖列表为 `deps-windows.txt/deps-linux.txt`。这些原始文件不是本 PR 的跟踪内容；提交的 JSON 记录保留其摘要及测试事件。
 

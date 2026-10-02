@@ -63,14 +63,12 @@ SteerLine 管理任务、原 worker 会话、用户反馈和真实 PR 交付。w
 
 ## 主包与执行实现解耦
 
-2026-10-02：#66 的[未提交候选记录](../validation/core-decoupling-05-composition/README.md)已保存。规定组合验收未通过，等待协调会话独立复审、发布及完整权限验证；#66 未合并，#67 未启动。
+2026-10-02：#65 已合并；#66 外层组装与主包生产隔离已实现并独立复审修复，完全访问组合 core 6/rules 90/targeted 22 全通过，见[交付与复审记录](../validation/core-decoupling-05-composition/README.md)。本 PR 真实合并后才启动 #67；活动表保留剩余任务。
 
-[主包解耦规划](core-implementation-decoupling.md)继续完成通用业务与具体实现的边界。#63 的配置和原生绑定契约已交付，任务身份及验收依据保留在其 Spec/Plan；本活动清单从 #65 继续。既有执行策略、工作区、发布和需求契约作为基础复用，不再列入活动实施清单；剩余原生验收限制见[既有验收记录](../validation/execution-isolation-cleanup/README.md)。本目标严格要求主包直属生产/测试文件名与源码无平台关键字，且没有具体实现的直接或传递依赖，不能靠改名或转移可写 Service 达标。
+[主包解耦规划](core-implementation-decoupling.md)继续完成通用业务与具体实现的边界。#63 的配置和原生绑定契约已交付，任务身份及验收依据保留在其 Spec/Plan；本活动清单从 #67 继续。既有执行策略、工作区、发布和需求契约作为基础复用，不再列入活动实施清单；剩余原生验收限制见[既有验收记录](../validation/execution-isolation-cleanup/README.md)。本目标严格要求主包直属生产/测试文件名与源码无平台关键字，且没有具体实现的直接或传递依赖，不能靠改名或转移可写 Service 达标。
 
 | 任务 ID | 任务名称 | 交付范围 | 硬前置 | 执行规格 |
 | --- | --- | --- | --- | --- |
-| 65 | 会话采集与宿主交互实现隔离 | 历史来源/mapper/宿主解释归实现，采集预算和准备授权留中心 | #64 | [Spec](../spec/core-decoupling-04-conversation.spec.md) · [Plan](../spec/core-decoupling-04-conversation.plan.md) |
-| 66 | 内置实现组装与主包依赖反转 | 内置目录与具体构造外移，产品入口显式注入；主包生产清零 | #65 | [Spec](../spec/core-decoupling-05-composition.spec.md) · [Plan](../spec/core-decoupling-05-composition.plan.md) |
 | 67 | 主包隔离守卫与测试归位 | 主包测试清零、结构守卫与外层第三实现闭环 | #66 | [Spec](../spec/core-decoupling-06-boundary.spec.md) · [Plan](../spec/core-decoupling-06-boundary.plan.md) |
 | 68 | 主包解耦重构后代码清理 | 最终调用关系下的死代码/重复规则/无用辅助清理与索引同步 | #67 | [Spec](../spec/core-decoupling-07-cleanup.spec.md) · [Plan](../spec/core-decoupling-07-cleanup.plan.md) |
 | 69 | 中心写入端口收窄 | 窄提交契约接通命令/worker/任务/DAG/交付/会话，保留原子边界 | #68 | [Spec](../spec/core-decoupling-08-write-ports.spec.md) · [Plan](../spec/core-decoupling-08-write-ports.plan.md) |
