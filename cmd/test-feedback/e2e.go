@@ -273,7 +273,7 @@ func runE2E(opts options) (code int) {
 	if err != nil {
 		return fail(err)
 	}
-	config, err := json.Marshal(map[string]string{"Root": root, "Binary": binary, "Helper": helper, "Output": out, "Scratch": scratch, "AuthHome": authHome})
+	config, err := json.Marshal(map[string]string{"Root": root, "Binary": binary, "Helper": helper, "Output": out, "Scratch": scratch, "AuthHome": authHome, "Level": opts.level})
 	if err != nil {
 		return fail(err)
 	}

@@ -1,0 +1,29 @@
+{
+  "version": 2,
+  "digest": "eb17442dcb4edbd8f0f9aa1e334ecfd6b46c229138890ecce8651a30fae65485",
+  "profile_digest": "236283a0494e4e80b71c8ba772e0ad4d1d1efa71015682d57ab80c05faeaf9e8",
+  "native_version": "codex-cli 0.159.2",
+  "contract": "codex-policy-v1:0.159.2:host-write:network-allow:never",
+  "workspace": "C:/Users/lmas1/orca/workspaces/repo/sl-1-c1e300478e59d13521599481bb63fcdc",
+  "write_roots": [],
+  "temporary_roots": [],
+  "settings": {
+    "Executable": "C:\\Users\\lmas1\\.local\\bin\\node_modules\\@openai\\codex\\node_modules\\@openai\\codex-win32-x64\\vendor\\x86_64-pc-windows-msvc\\bin\\codex.exe",
+    "Args": [
+      "--no-daemon",
+      "--model",
+      "gpt-6-luna",
+      "--config",
+      "model_reasoning_effort=medium",
+      "--strict-config",
+      "--config",
+      "sandbox_mode=danger-full-access",
+      "--config",
+      "approval_policy=never",
+      "--cd",
+      "C:/Users/lmas1/orca/workspaces/repo/sl-1-c1e300478e59d13521599481bb63fcdc"
+    ],
+    "WorkingDirectory": "C:/Users/lmas1/orca/workspaces/repo/sl-1-c1e300478e59d13521599481bb63fcdc",
+    "EnvironmentRefs": null
+  }
+}
