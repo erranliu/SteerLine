@@ -306,7 +306,7 @@ func TestExecutionPolicyNativeToolsCollectLive(t *testing.T) {
 	}
 	e := saved.Execution
 	require(t, verifyPolicyResources(testConfigWithDirectory(Config{}).ApplyFixedExecutionProfile(saved.Profile), e.PolicyResources, saved.Profile.Digest, e.Workspace.Worktree))
-	c := (Config{Repository: filepath.Dir(e.Workspace.Repository), identity: e.Workspace.Repository, CommandTimeout: "90s"}).ApplyFixedExecutionProfile(saved.Profile)
+	c := testConfigWithDirectory(Config{Repository: filepath.Dir(e.Workspace.Repository), identity: e.Workspace.Repository, CommandTimeout: "90s"}).ApplyFixedExecutionProfile(saved.Profile)
 	client := nativeOrcaClient(c)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()

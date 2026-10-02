@@ -72,6 +72,7 @@ func NewBuiltinDirectory(processHost executionapi.ManagedProcessHost) (*steerlin
 			ValidateConfig:            validateLocalConfig,
 			Preflight:                 preflightLocalConfig,
 			PrepareClaim:              prepareLocalClaim,
+			ReadinessRequired:         func(steerline.Config) bool { return false },
 			BuildPolicyResource:       buildPolicyResource,
 			VerifyPolicyResource:      verifyPolicyResource,
 			LinkedWorktreeWriteArgs:   linkedWorktreeWriteArgs,
@@ -96,6 +97,7 @@ func NewBuiltinDirectory(processHost executionapi.ManagedProcessHost) (*steerlin
 			ValidateConfig:            validateTerminalConfig,
 			Preflight:                 preflightTerminalConfig,
 			PrepareClaim:              prepareTerminalClaim,
+			ReadinessRequired:         terminalReadinessRequired,
 			BuildPolicyResource:       buildPolicyResource,
 			VerifyPolicyResource:      verifyPolicyResource,
 			LinkedWorktreeWriteArgs:   linkedWorktreeWriteArgs,
@@ -120,6 +122,7 @@ func NewBuiltinDirectory(processHost executionapi.ManagedProcessHost) (*steerlin
 			ValidateConfig:            validateSupervisedConfig,
 			Preflight:                 preflightSupervisedConfig,
 			PrepareClaim:              prepareSupervisedClaim,
+			ReadinessRequired:         func(steerline.Config) bool { return false },
 			BuildPolicyResource:       buildPolicyResource,
 			VerifyPolicyResource:      verifyPolicyResource,
 			LinkedWorktreeWriteArgs:   linkedWorktreeWriteArgs,
@@ -324,11 +327,7 @@ func prepareTerminalClaim(ctx context.Context, c steerline.Config) (steerline.Cl
 	if _, err := policyToolVersion(ctx, c); err != nil {
 		return steerline.ClaimPreparation{}, err
 	}
-	settings, err := codexSettings(c)
-	if err != nil {
-		return steerline.ClaimPreparation{}, err
-	}
-	if runtime.GOOS != "windows" || settings.WindowsSandbox == "" {
+	if !terminalReadinessRequired(c) {
 		return steerline.ClaimPreparation{}, nil
 	}
 	if _, err := managedTerminalCommand(c, "", nil); err != nil {
@@ -339,6 +338,13 @@ func prepareTerminalClaim(ctx context.Context, c steerline.Config) (steerline.Cl
 		timeout = 2 * time.Minute
 	}
 	return steerline.ClaimPreparation{RequiresReadiness: true, WaitTimeout: timeout}, nil
+}
+
+// A pure fixed-profile requirement shared by claim and persisted-state
+// preflight. Reopening must reject missing readiness evidence before writing.
+func terminalReadinessRequired(c steerline.Config) bool {
+	settings, err := codexSettings(c)
+	return err == nil && runtime.GOOS == "windows" && settings.WindowsSandbox != ""
 }
 
 func prepareSupervisedClaim(ctx context.Context, c steerline.Config) (steerline.ClaimPreparation, error) {

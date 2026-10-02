@@ -35,7 +35,6 @@ func TestWorkerEnvironmentNativeReadinessLive(t *testing.T) {
 	c.RunDir = filepath.Join(fixtureStateRoot(), key)
 	c.StateRoot, c.RepositoryStateKey = fixtureStateRoot(), key
 	c.WorktreeRoot = filepath.Join(c.RunDir, "worktrees")
-	c.WorktreeRoot = filepath.Join(c.RunDir, "worktrees")
 	require(t, c.ResolveIdentity(ctx))
 	require(t, requireWorkerFlowCapabilities(ctx, c))
 	project, err := OpenNativeTaskProject(ctx, &c)

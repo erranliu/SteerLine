@@ -1060,7 +1060,7 @@ func (s *Service) executeLifecycleStep(ctx context.Context, run *Run, lifecycle 
 	if candidate.Action == executionapi.LifecycleCreateResource &&
 		lifecycle.PolicyCapabilities().LinkedWorkspaceWriteRoots && fixed.execution.PolicyResources == nil {
 		var linkedArgs []string
-		if fixed.config.ExecutionPolicy.Filesystem.WriteScope == "workspace-write" {
+		if fixed.config.ExecutionPolicy.Filesystem.WriteScope == "workspace" {
 			linkedArgs, err = linkedWorktreeWriteArgs(ctx, fixed.config, fixed.execution.Workspace.Worktree)
 			if err != nil {
 				return err
@@ -1133,7 +1133,7 @@ func (s *Service) executeLifecycleStep(ctx context.Context, run *Run, lifecycle 
 	}
 	if receipt.Process != nil && fixed.execution.PolicyResources == nil && lifecycle.PolicyCapabilities().LinkedWorkspaceWriteRoots {
 		var linkedArgs []string
-		if fixed.config.ExecutionPolicy.Filesystem.WriteScope == "workspace-write" {
+		if fixed.config.ExecutionPolicy.Filesystem.WriteScope == "workspace" {
 			linkedArgs, err = linkedWorktreeWriteArgs(ctx, fixed.config, fixed.execution.Workspace.Worktree)
 			if err != nil {
 				return err

@@ -40,6 +40,9 @@ func (Host) NewProcessGeneration() string {
 func (Host) WriteExecutionFile(path string, value []byte) error { return writeAtomic(path, value) }
 
 func (host Host) OutputCommand(ctx context.Context, command executionapi.LaunchCommand) ([]byte, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if host.Timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, host.Timeout)

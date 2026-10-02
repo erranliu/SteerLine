@@ -694,6 +694,12 @@ func StartService(ctx context.Context, c Config, configPath string, opts StartSe
 	if err := ctx.Err(); err != nil {
 		return ServiceStartResult{}, err
 	}
+	if err := validateWorkflowConfig(&c, nil); err != nil {
+		return ServiceStartResult{}, err
+	}
+	if c.ProcessHost == nil {
+		return ServiceStartResult{}, errors.New("managed process host is required")
+	}
 	var err error
 	if err = c.ResolveIdentity(ctx); err != nil {
 		return ServiceStartResult{}, fmt.Errorf("resolve service target: %w", err)
@@ -1075,6 +1081,12 @@ type ServiceFactory func(Config) (*Service, error)
 func RunConfiguredService(ctx context.Context, c Config, mode, startupID, console string, construct ServiceFactory) (retErr error) {
 	if construct == nil {
 		return errors.New("application service constructor is required")
+	}
+	if err := validateWorkflowConfig(&c, nil); err != nil {
+		return err
+	}
+	if c.ProcessHost == nil {
+		return errors.New("managed process host is required")
 	}
 	if err := requireNativeTaskAuthority(c); err != nil {
 		return err

@@ -613,6 +613,7 @@ func waitIntegrationRun(t *testing.T, ctx context.Context, service *runningInteg
 	t.Cleanup(func() {
 		if t.Failed() && result.runtime != nil {
 			t.Logf("last public lifecycle: decision=%s current=%s stopped=%s turns=%d pending=%s command=%s pendingCommand=%s status=%s error=%s", mustJSON(result.run.Decision), result.execution.CurrentTurnID, result.execution.LastStoppedTurnID, result.execution.TurnNumber, result.execution.PendingTurnID, result.execution.CurrentCommandID, result.execution.PendingCommandID, result.execution.Status, derefString(result.execution.Error))
+			t.Logf("original preparation evidence: %s; last event: %s", mustJSON(result.execution.Environment), derefString(result.execution.LastEvent))
 		}
 	})
 	waitFor(t, 2*time.Minute, func() bool {

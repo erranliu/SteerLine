@@ -82,6 +82,10 @@ func TestCD66ExplicitCatalogAndEntrypoints(t *testing.T) {
 		if _, err := CertifyExecutionBackend(context.Background(), steerline.Config{RunDir: state}, []string{"missing.json"}); err == nil || !strings.Contains(err.Error(), "task_authority=native") {
 			t.Fatalf("capability entry lost its authority admission: %v", err)
 		}
+		c.TaskAuthority, c.WorkflowProtocol, c.Git.Executable = "native", steerline.WorkerFlowVersion, "must-not-be-called"
+		if _, err := CertifyExecutionBackend(context.Background(), c, []string{"missing.json"}); err == nil || !strings.Contains(err.Error(), "directory") {
+			t.Fatalf("capability entry reached target without directory: %v", err)
+		}
 	})
 	t.Run("duplicate_keys_versions_and_missing_capability", func(t *testing.T) {
 		if _, err := steerline.NewExecutionDirectory("v", []steerline.ImplementationProfileCodec{codec}, []steerline.ExecutionRegistration{entry, entry}); err == nil {

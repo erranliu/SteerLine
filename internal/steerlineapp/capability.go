@@ -53,6 +53,15 @@ func CertifyExecutionBackend(ctx context.Context, config steerline.Config, paths
 	if len(paths) == 0 {
 		return executionapi.CapabilityReport{}, errors.New("at least one capability evidence file is required")
 	}
+	if config.ExecutionDirectory == nil || config.ProcessHost == nil {
+		return executionapi.CapabilityReport{}, errors.New("execution directory and process host are required")
+	}
+	if err := config.ValidateProfiles(); err != nil {
+		return executionapi.CapabilityReport{}, err
+	}
+	if err := config.ExecutionDirectory.ValidateProfileData(config); err != nil {
+		return executionapi.CapabilityReport{}, err
+	}
 	if config.Identity() == "" {
 		if err := config.ResolveIdentity(ctx); err != nil {
 			return executionapi.CapabilityReport{}, err

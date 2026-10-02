@@ -66,7 +66,7 @@ func consoleFixtureConfig(c steerline.Config, path string) steerline.Config {
 			return nil, errors.New("fixture does not launch")
 		}, ValidateConfig: func(context.Context, steerline.Config) error { return nil }, Preflight: func(context.Context, steerline.Config) error { return nil }, PrepareClaim: func(context.Context, steerline.Config) (steerline.ClaimPreparation, error) {
 			return steerline.ClaimPreparation{}, nil
-		}, BuildPolicyResource: func(context.Context, steerline.PolicyResourceBuildRequest) (steerline.PolicyResourceBuildResult, error) {
+		}, ReadinessRequired: func(steerline.Config) bool { return false }, BuildPolicyResource: func(context.Context, steerline.PolicyResourceBuildRequest) (steerline.PolicyResourceBuildResult, error) {
 			return steerline.PolicyResourceBuildResult{}, errors.New("fixture does not build resources")
 		}, VerifyPolicyResource: func(executionapi.ImplementationDataEnvelope, steerline.PolicyResourceIdentity) error { return nil }, LinkedWorktreeWriteArgs: func(context.Context, steerline.Config, string) ([]string, error) { return nil, nil }, ValidTurnID: func(string) bool { return true }, CleanupCapabilities: []string{"observe"}, ValidateRef: func(executionapi.ExecutionRef) error { return nil }, ValidatePublicationPolicy: func(p executionapi.PublicationPolicy, _ publication.Config) error { return p.Validate() }}
 	d, err := steerline.NewExecutionDirectory("fixture-v1", []steerline.ImplementationProfileCodec{codec}, []steerline.ExecutionRegistration{entry})

@@ -48,6 +48,7 @@ func changedIntegrationConfig(t *testing.T, fixture integrationFixture) steerlin
 	require(t, os.WriteFile(steerlineapp.GlobalExecutionConfigPath(), raw, 0600))
 	config, err := steerlineapp.LoadConfig(fixture.configPath)
 	require(t, err)
+	require(t, config.ResolveIdentity(context.Background()))
 	if config.ExecutionDirectory == fixture.config.ExecutionDirectory || config.LoadedConfigDigest() == fixture.config.LoadedConfigDigest() {
 		t.Fatal("changed config reused the old catalog instance or accepted digest")
 	}

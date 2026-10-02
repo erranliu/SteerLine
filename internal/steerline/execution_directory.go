@@ -85,6 +85,7 @@ type ExecutionRegistration struct {
 	ValidateConfig            func(context.Context, Config) error
 	Preflight                 func(context.Context, Config) error
 	PrepareClaim              func(context.Context, Config) (ClaimPreparation, error)
+	ReadinessRequired         func(Config) bool
 	BuildPolicyResource       func(context.Context, PolicyResourceBuildRequest) (PolicyResourceBuildResult, error)
 	VerifyPolicyResource      func(executionapi.ImplementationDataEnvelope, PolicyResourceIdentity) error
 	LinkedWorktreeWriteArgs   func(context.Context, Config, string) ([]string, error)
@@ -153,7 +154,7 @@ func NewExecutionDirectory(version string, codecs []ImplementationProfileCodec, 
 		if _, exists := directory.routes[route]; exists {
 			return nil, fmt.Errorf("ambiguous execution route %q", route)
 		}
-		if entry.Lifecycle == nil || entry.QuestionCodecKey == "" || entry.QuestionCodecVersion <= 0 || entry.Backend == nil || entry.Target == nil || entry.ProbeRequirements == nil || entry.QueryTool == nil || entry.ValidateConfig == nil || entry.Preflight == nil || entry.PrepareClaim == nil || entry.BuildPolicyResource == nil || entry.VerifyPolicyResource == nil || entry.LinkedWorktreeWriteArgs == nil || entry.ValidatePublicationPolicy == nil || entry.ValidateRef == nil {
+		if entry.Lifecycle == nil || entry.QuestionCodecKey == "" || entry.QuestionCodecVersion <= 0 || entry.Backend == nil || entry.Target == nil || entry.ProbeRequirements == nil || entry.QueryTool == nil || entry.ValidateConfig == nil || entry.Preflight == nil || entry.PrepareClaim == nil || entry.ReadinessRequired == nil || entry.BuildPolicyResource == nil || entry.VerifyPolicyResource == nil || entry.LinkedWorktreeWriteArgs == nil || entry.ValidatePublicationPolicy == nil || entry.ValidateRef == nil {
 			return nil, fmt.Errorf("execution directory contains incomplete operations: %+v", key)
 		}
 		if len(entry.ProfileCodecKeys) == 0 {

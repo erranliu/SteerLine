@@ -2,12 +2,51 @@ package steerline
 
 import (
 	"context"
+	"os"
 	"strings"
 	"testing"
 
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
+
+func TestCD66ExplicitCatalogAndEntrypoints(t *testing.T) {
+	t.Run("resource_candidates", TestCD66CandidateResourceIdentityAndCommitRollback)
+	t.Run("missing_readiness_rejects_before_reopen_write", func(t *testing.T) {
+		service, run := appServerAuditService(t)
+		entry, err := registrationFor(service.Config)
+		require(t, err)
+		entry.ReadinessRequired = func(Config) bool { return true }
+		config := service.Config
+		config.ExecutionDirectory = testDirectoryWithReplacement(t, config.ExecutionDirectory, entry)
+		if service.executionRecord(run).Environment != nil {
+			t.Fatal("fixture must lack required preparation evidence")
+		}
+		_, before, err := service.domainStore.DatabaseVersion(context.Background())
+		require(t, err)
+		if err := preflightWorkerFlowState(context.Background(), config); err == nil || !strings.Contains(err.Error(), "preparation intent") {
+			t.Fatalf("missing original readiness was accepted: %v", err)
+		}
+		_, after, err := service.domainStore.DatabaseVersion(context.Background())
+		require(t, err)
+		if before != after {
+			t.Fatal("failed recovery preflight wrote persistent state")
+		}
+	})
+	t.Run("service_entries_reject_missing_catalog_before_target", func(t *testing.T) {
+		state := t.TempDir() + "/absent"
+		config := Config{TaskAuthority: "native", WorkflowProtocol: WorkerFlowVersion, Repository: "must-not-be-read", RunDir: state, Git: Command{Executable: "must-not-be-called"}}
+		if _, err := StartService(context.Background(), config, "unused.json", StartServiceOptions{}); err == nil || !strings.Contains(err.Error(), "directory") {
+			t.Fatalf("start reached target without directory: %v", err)
+		}
+		if err := RunConfiguredService(context.Background(), config, "manual", "", "off", func(Config) (*Service, error) { t.Fatal("rejected startup called constructor"); return nil, nil }); err == nil || !strings.Contains(err.Error(), "directory") {
+			t.Fatalf("run reached target without directory: %v", err)
+		}
+		if _, err := os.Stat(state); !os.IsNotExist(err) {
+			t.Fatal("rejected startup created state")
+		}
+	})
+}
 
 func TestCD66CandidateResourceIdentityAndCommitRollback(t *testing.T) {
 	t.Run("missing_workspace_root_has_no_core_default", func(t *testing.T) {

@@ -160,7 +160,7 @@ func preflightWorkerFlowState(ctx context.Context, c Config) error {
 				return nativeErr("unsupported_schema", "execution policy resources differ from the original snapshot")
 			}
 		}
-		if execution.Environment != nil {
+		if entry.ReadinessRequired(fixedConfig) || execution.Environment != nil {
 			env := execution.Environment
 			if env == nil || env.Preparation == nil || !stableExecutionID(env.Preparation.TurnID) || !stableExecutionID(env.Preparation.Nonce) || env.Preparation.StartedAt.IsZero() || !env.Preparation.Deadline.After(env.Preparation.StartedAt) {
 				return nativeErr("unsupported_schema", "execution readiness lacks its frozen preparation intent")
