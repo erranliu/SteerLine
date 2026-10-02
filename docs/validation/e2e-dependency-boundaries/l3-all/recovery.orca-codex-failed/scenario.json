@@ -1,0 +1,58 @@
+{
+  "cleanup_complete": true,
+  "cleanup_errors": null,
+  "components": {
+    "provider": "controlled",
+    "worker": "orca-codex"
+  },
+  "context_error": "\u003cnil\u003e",
+  "finished_at": "2026-10-02T09:47:46.1449029Z",
+  "id": "recovery.orca-codex",
+  "passed": false,
+  "real_pr": null,
+  "resources": [
+    {
+      "created_at": "2026-10-02T09:43:44.8237714Z",
+      "kind": "project",
+      "path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-2610078284\\recovery.orca-codex\\live",
+      "pid": 0
+    },
+    {
+      "created_at": "2026-10-02T09:43:45.8793938Z",
+      "kind": "process",
+      "path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-l3-all-recovery-orca-20261002-174336\\build\\controlled-helper.exe",
+      "pid": 30844
+    },
+    {
+      "created_at": "2026-10-02T09:43:53.1066404Z",
+      "kind": "orca-repo",
+      "path": "2b4e23ad-0102-4134-aa17-bbd7f4704bb7",
+      "pid": 0
+    },
+    {
+      "created_at": "2026-10-02T09:44:08.7943676Z",
+      "kind": "process",
+      "path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-l3-all-recovery-orca-20261002-174336\\build\\steerline.exe",
+      "pid": 28260
+    },
+    {
+      "created_at": "2026-10-02T09:47:22.7218386Z",
+      "kind": "process",
+      "path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-l3-all-recovery-orca-20261002-174336\\build\\steerline.exe",
+      "pid": 13220
+    },
+    {
+      "created_at": "2026-10-02T09:47:40.856812Z",
+      "kind": "orca-worktree",
+      "path": "2b4e23ad-0102-4134-aa17-bbd7f4704bb7::C:/Users/lmas1/AppData/Local/Temp/steerline-e2e-2610078284/recovery.orca-codex/live/repo",
+      "pid": 0
+    },
+    {
+      "created_at": "2026-10-02T09:47:41.9612939Z",
+      "kind": "orca-worktree",
+      "path": "2b4e23ad-0102-4134-aa17-bbd7f4704bb7::C:/Users/lmas1/orca/workspaces/repo/sl-1-75f233b8233d1592550b2f075c85c9f1",
+      "pid": 0
+    }
+  ],
+  "usage_verified": false
+}
