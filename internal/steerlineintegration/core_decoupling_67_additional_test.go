@@ -87,9 +87,10 @@ func TestCD67AdditionalImplementation(t *testing.T) {
 func testAdditionalImplementation(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
-	fixture := newLifecycleProject(t, "local")
+	fixture := newLifecycleProjectBase(t, "local", false)
 	provider := newAdditionalProvider(t)
 	fixture.remoteURL = provider.server.URL + "/owner/repo.git"
+	fixtureGitCommand(t, "-C", fixture.repository, "remote", "set-url", "origin", fixture.remoteURL)
 	t.Setenv("STEERLINE_TEST_REMOTE_URL", fixture.remoteURL)
 	ledger := &additionalLedger{path: filepath.Join(filepath.Dir(fixture.configPath), "fixture-ledger.json"), observers: map[string]*additionalObserver{}, publicationURL: provider.server.URL + "/owner/repo/pulls/901"}
 	directory := additionalDirectory(t, ledger)
@@ -105,6 +106,9 @@ func testAdditionalImplementation(t *testing.T) {
 	require(t, os.WriteFile(fixture.configPath, mustJSON(project), 0600))
 	fixture.config, err = steerlineapp.LoadConfigWithDirectory(fixture.configPath, directory, steerlineapp.NewProcessHost(10*time.Second))
 	require(t, err)
+	projectStore, err := steerline.OpenNativeTaskProject(ctx, &fixture.config)
+	require(t, err)
+	require(t, projectStore.Close())
 	createIntegrationTask(t, ctx, fixture, 901)
 	service := startIntegrationServiceWithSources(t, ctx, fixture.config, directory, additionalSources{})
 	claimIntegrationTask(t, ctx, fixture, 901, service.instanceID)
@@ -166,11 +170,36 @@ func testAdditionalImplementation(t *testing.T) {
 	provider.mu.Lock()
 	provider.merged, provider.mergedAt = true, time.Now().UTC()
 	provider.mu.Unlock()
-	delivered := waitIntegrationRun(t, ctx, service2, config2, func(run *steerline.Run, e *steerline.ExecutionRecord) bool {
-		return run.TaskStatus == "closed" && run.FinishTaskStatus == "completed"
+	mergedInfo, err := (&publication.Client{Config: config2.PR, Timeout: 10 * time.Second}).Query(ctx, ledger.publicationURL)
+	require(t, err)
+	if !mergedInfo.Merged || mergedInfo.State != "merged" || mergedInfo.MergeCommit == nil || *mergedInfo.MergeCommit != fixture.commit {
+		t.Fatal("isolated provider did not expose its original merged receipt")
+	}
+	// Settled executions leave the active runtime projection. Verify delivery
+	// through the public task detail, which retains its authoritative receipt.
+	var delivered contracts.NativeTaskPage
+	var deliveryServiceError string
+	t.Cleanup(func() {
+		if t.Failed() {
+			t.Logf("last task delivery query: %s; service error=%v", mustJSON(delivered), deliveryServiceError)
+		}
 	})
+	waitFor(t, 2*time.Minute, func() bool {
+		var err error
+		delivered, err = service2.queries.ShowNativeTask(ctx, "901")
+		if snapshot, queryErr := service2.queries.ReadProjectView(ctx, "901", 100); queryErr == nil && snapshot.Runtime != nil && snapshot.Runtime.Service.Error != nil {
+			deliveryServiceError = *snapshot.Runtime.Service.Error
+			t.Fatalf("production delivery reported an error: %s", deliveryServiceError)
+		}
+		return err == nil && len(delivered.Tasks) == 1 && delivered.Tasks[0].Status == "closed" && delivered.Tasks[0].Delivery != nil
+	})
+	view, err := service2.queries.ReadProjectView(ctx, "901", 100)
+	require(t, err)
+	if view.Runtime == nil {
+		t.Fatal("delivery lost its public runtime records")
+	}
 	count := 0
-	for _, delivery := range delivered.runtime.Deliveries {
+	for _, delivery := range view.Runtime.Deliveries {
 		if delivery.TaskID == "901" {
 			count++
 			if delivery.SelectedWorkflowRunID != first.run.RunID || delivery.MergeCommit != fixture.commit || delivery.PRURL != ledger.publicationURL {
@@ -180,6 +209,9 @@ func testAdditionalImplementation(t *testing.T) {
 	}
 	if count != 1 {
 		t.Fatalf("production provider delivery count=%d, want one", count)
+	}
+	if delivery := delivered.Tasks[0].Delivery; delivery.SelectedWorkflowRunID != first.run.RunID || delivery.MergeCommit != fixture.commit || delivery.PRURL != ledger.publicationURL {
+		t.Fatal("task detail lost its original selected workflow/provider delivery")
 	}
 	waitFor(t, 20*time.Second, func() bool {
 		ledger2.mu.Lock()

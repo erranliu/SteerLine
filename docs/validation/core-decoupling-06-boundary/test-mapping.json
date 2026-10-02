@@ -954,5 +954,20 @@
     "new": "internal/steerline/worker_receipts_business_test.go",
     "owner": "steerline",
     "change": "private writer/replay/late reply/answer receipt assertions retained with neutral blocking and reconcile ports"
+  },
+  {
+    "old": "internal/steerline/orca_worker_observation_test.go",
+    "test": "TestNativeOrcaAgentSelectionUsesFrozenProfile",
+    "new": "internal/steerlineapp/agent_selection_cd67_test.go",
+    "owner": "steerlineapp",
+    "change": "Actual builtin directory freezes its registered agent and rejects unregistered opencode; old copied catalog falsely admitted it. Generic two-agent frozen-selection assertion is preserved by TestFixedProfileRetainsSelectedAgent using one neutral implementation. No native support added."
+  },
+  {
+    "old": "internal/steerline/orca_worker_observation_test.go",
+    "test": "TestNativeOrcaAgentSelectionUsesFrozenProfile",
+    "new": "internal/steerline/fixed_agent_business_test.go",
+    "new_test": "TestFixedProfileRetainsSelectedAgent",
+    "owner": "steerline",
+    "change": "Both registered neutral agent identities keep their original fixed selection after default-agent changes; actual directory resolution and frozen digest checked. One codec and lifecycle implementation serves both identities."
   }
 ]

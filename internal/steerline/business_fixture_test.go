@@ -56,7 +56,7 @@ func neutralCodecs() []ImplementationProfileCodec {
 		return mustJSON(value), display, nil
 	}}}
 }
-func newNeutralDirectory() (*ExecutionDirectory, error) {
+func newNeutralDirectory(agents ...string) (*ExecutionDirectory, error) {
 	key := ExecutionRegistrationKey{Backend: executionapi.BackendLocal, Protocol: neutralProtocol, Agent: "fixture"}
 	entry := ExecutionRegistration{Key: key, ProfileKey: "fixture/stream-v1", Host: "local", WorkspaceBranchPrefix: "fixture", LocalWorkspace: true, ProfileCodecKeys: []string{neutralProfileKey}, QuestionCodecKey: neutralQuestionKey, QuestionCodecVersion: 1,
 		Target: func(c Config) executionapi.ExecutionTarget {
@@ -92,7 +92,19 @@ func newNeutralDirectory() (*ExecutionDirectory, error) {
 			return provider.ValidateRemote(provider.BaseURL + "/" + provider.Repository + ".git")
 		},
 	}
-	return NewExecutionDirectory("fixture-directory-v1", neutralCodecs(), []ExecutionRegistration{entry})
+	if len(agents) == 0 {
+		agents = []string{"fixture"}
+	}
+	entries := make([]ExecutionRegistration, 0, len(agents))
+	for _, agent := range agents {
+		registration := entry
+		registration.Key.Agent = agent
+		if agent != "fixture" {
+			registration.ProfileKey = "fixture/stream-v1/" + agent
+		}
+		entries = append(entries, registration)
+	}
+	return NewExecutionDirectory("fixture-directory-v1", neutralCodecs(), entries)
 }
 func neutralProfileSettings(c Config) neutralSettings {
 	data, err := c.DecodeImplementationConfig(neutralProfileKey)

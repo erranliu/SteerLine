@@ -299,6 +299,11 @@ type integrationFixture struct {
 }
 
 func newLifecycleProject(t *testing.T, host string) integrationFixture {
+	return newLifecycleProjectBase(t, host, true)
+}
+
+// Some catalog fixtures bind their final provider before opening authority.
+func newLifecycleProjectBase(t *testing.T, host string, openAuthority bool) integrationFixture {
 	t.Helper()
 	root := t.TempDir()
 	t.Setenv("STEERLINE_INTEGRATION_HISTORY_FILE", filepath.Join(root, "app-server-history.json"))
@@ -371,9 +376,11 @@ func newLifecycleProject(t *testing.T, host string) integrationFixture {
 	config, err := steerlineapp.LoadConfig(configPath)
 	require(t, err)
 	config.Claimant = "integration"
-	project, err := steerline.OpenNativeTaskProject(context.Background(), &config)
-	require(t, err)
-	require(t, project.Close())
+	if openAuthority {
+		project, err := steerline.OpenNativeTaskProject(context.Background(), &config)
+		require(t, err)
+		require(t, project.Close())
+	}
 	return integrationFixture{config: config, configPath: configPath, repository: repository, bareRemote: bare, remoteURL: remoteURL, commit: commit, nativeStateDir: stateDir}
 }
 

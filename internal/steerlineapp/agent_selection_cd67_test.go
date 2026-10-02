@@ -1,13 +1,15 @@
-package steerline
+package steerlineapp
 
 import (
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
+	"strings"
 	"testing"
 )
 
 func TestNativeOrcaAgentSelectionUsesFrozenProfile(t *testing.T) {
-	base := Config{Host: "orca", Agent: "codex", ExecutionPolicy: workspacePolicyFixture()}
+	base := bindUnitDirectory(t, Config{Host: "orca", Agent: "codex", ExecutionPolicy: workspacePolicyFixture(), PublicationPolicy: executionapi.PublicationPolicy{Publisher: executionapi.PublisherWorker}})
 	for _, agent := range []string{"codex", "opencode"} {
 		codex := codexworker.ProfileConfig{Executable: "codex.exe"}
 		orca := &orcaworker.ProfileConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "2m"}
@@ -16,17 +18,24 @@ func TestNativeOrcaAgentSelectionUsesFrozenProfile(t *testing.T) {
 			orca.Shell = "powershell.exe"
 		}
 		profile := testExecutionProfile(t, "orca-"+agent, "Orca "+agent, "orca", agent, codex, orca)
-		profile = base.bindProjectPolicy(profile)
+		profile = boundProfile(base, profile)
 		base.ExecutionProfiles = []ExecutionProfile{profile}
-		if err := validateExecutionProfiles(base); err != nil {
+		err := base.ValidateProfiles()
+		if agent == "opencode" {
+			if err == nil || !strings.Contains(err.Error(), "no implementation is configured") {
+				t.Fatalf("unregistered native agent was admitted: %v", err)
+			}
+			continue
+		}
+		if err != nil {
 			t.Fatal(err)
 		}
-		frozen := profile.Freeze()
-		if !testVerifyFixedExecutionProfile(frozen) {
+		frozen := profile.Freeze(base.Identity())
+		if base.CheckFixedProfile(frozen) != nil {
 			t.Fatal("profile digest changed while freezing")
 		}
 		selected := base.ApplyFixedExecutionProfile(frozen)
-		if selected.agentName() != agent || selected.needsCodexExecutable() != (agent == "codex") {
+		if selected.Agent != agent || (selected.Agent == "codex") != (agent == "codex") {
 			t.Fatalf("Orca agent selection was tied to Codex: %+v", selected)
 		}
 	}

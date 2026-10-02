@@ -2,7 +2,19 @@
 
 记录日期：2026-10-02。依据 [Spec](../../spec/core-decoupling-06-boundary.spec.md)、[Plan](../../spec/core-decoupling-06-boundary.plan.md)、[共同约束](../../spec/core-decoupling-constraints.md)。
 
-**状态：#67 未完成，不能合并；这是部分实现的续做交接，不是完整候选的验收报告。尚未完成 root 测试归位、quick 接入、第三实现实际闭环和唯一交付证明。#67 保持活动任务，不启动 #68。**
+**状态：#67 未完成，不能合并；仍需完成 root 测试归位、quick 接入、完整映射与最终组合验收。第三中性实现的原输入/重启人工确认/唯一交付及资源结算闭环已在协调的完全访问环境定向通过，但不代替 #67 整体交付。**
+
+## 协调接管的阶段记录
+
+2026-10-02 22:57 UTC：执行 turn 因上下文窗口耗尽失败，平台已确认停止；协调在同一 f775 工作区接管，保留全部修改，没有替换执行聊天或增加并发写者。执行者未完成的迁移保存为本地阶段 commit `604cbc0`。本节之后的首次工作区身份、源码摘要和权限限制均为历史快照，不代表当前候选。
+
+- 原生注册 agent 的冻结测试迁到应用包，使用真实目录；通用“两种显式 agent 均保持原固定选择”断言由主包单一中性实现承接。真实目录不注册的 agent 仍拒绝，不宣称扩大原生支持。两个定向命名用例通过。
+- 第三实现先绑定最终隔离 provider，再通过公开入口建立任务权威，修复原 fixture 更改仓库身份后的 `authority_mismatch`。
+- 创建会话回执补齐版本化原资源绑定封套，保存原 session、generation、process 和 target；重启观察验证封套与实际固定身份，保留 SQLite 一致性校验。缺失封套曾导致真实交付事务报 `contract_mismatch`，已修复 fixture。
+- 合并后经公开任务详情查询核对关闭和权威交付，保留原 selected workflow、PR 和 merge commit、仅一次输入/答案、唯一 TaskDelivery 与仅一次资源结算断言。
+- 定向报告：`C:/Users/lmas1/.codex/task-state/roadmap-runner/task67-third-original-binding/summary.json`，2 个 parent/subtest 全通过、0 fail/skip、complete，29.650 秒。测试基于 dirty `604cbc0` 加上述修复；不是完整 #67 的已审核 head。此前失败报告同目录 `task67-third-positive-parent604cbc0`、`task67-third-provider-bound`、`task67-third-task-detail`、`task67-third-delivery-diagnostic`、`task67-third-delivery-error` 保留，不豁免失败。
+
+当前已获用户授权在 #67 真实交付后继续 #68–#72；下述首次限制“不启动 #68”表示前置未交付前不启动，不表示新的总范围止于 #67。
 
 ## 工作区和源码身份
 

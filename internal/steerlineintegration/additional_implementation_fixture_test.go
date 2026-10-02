@@ -44,6 +44,13 @@ type additionalSaved struct {
 	PRCandidates []string                                 `json:"pr_candidates,omitempty"`
 }
 
+type additionalBinding struct {
+	Session    string                       `json:"session"`
+	Generation string                       `json:"generation"`
+	Process    executionapi.ProcessIdentity `json:"process"`
+	Target     executionapi.ExecutionTarget `json:"target"`
+}
+
 func (l *additionalLedger) read() (additionalSaved, error) {
 	var value additionalSaved
 	data, err := os.ReadFile(l.path)
@@ -154,6 +161,16 @@ func (p *additionalPort) Execute(ctx context.Context, request executionapi.Lifec
 		}
 		value.Session, value.Generation = "fixture-original-session", request.Snapshot.ResourceGeneration
 		value.Process = executionapi.ProcessIdentity{Kind: "fixture", RuntimeID: "fixture-runtime", Terminal: "fixture-resource", Incarnation: "fixture-original"}
+		binding, bindingErr := executionapi.NewImplementationDataEnvelope(executionapi.ImplementationDataEnvelope{
+			ImplementationKey: additionalKey, CodecVersion: 1, Purpose: executionapi.ImplementationResourcePurpose,
+			ProjectID: request.Snapshot.Session.ProjectID, ExecutionID: request.Snapshot.Session.ExecutionID,
+			AttemptID: request.Snapshot.Session.AttemptID, Generation: request.Snapshot.ResourceGeneration,
+			ConfigDigest: request.Snapshot.ConfigurationDigest,
+		}, mustJSON(additionalBinding{Session: value.Session, Generation: value.Generation, Process: value.Process, Target: request.Snapshot.Ref.Target}))
+		if bindingErr != nil {
+			return receipt, nil, bindingErr
+		}
+		receipt.Implementation = []executionapi.ImplementationDataEnvelope{binding}
 		receipt.Disposition = executionapi.OperationConfirmed
 		receipt.Process = &value.Process
 		receipt.State = executionapi.LifecycleStateFacts{SessionID: value.Session, SessionGeneration: value.Generation}
@@ -235,6 +252,23 @@ func (p *additionalPort) ObserveLifecycle(_ context.Context, snapshot executiona
 	}
 	if snapshot.Session.SessionID != value.Session || snapshot.Session.Generation != value.Generation || snapshot.Ref.External != value.Process {
 		return executionapi.LifecycleReceipt{}, nil, errors.New("fixture observation replaced original identity")
+	}
+	if len(snapshot.Implementation) != 1 {
+		return executionapi.LifecycleReceipt{}, nil, errors.New("fixture observation lost original resource binding")
+	}
+	envelope := snapshot.Implementation[0]
+	if envelope.ImplementationKey != additionalKey || envelope.CodecVersion != 1 {
+		return executionapi.LifecycleReceipt{}, nil, errors.New("fixture resource binding codec changed")
+	}
+	if err := envelope.ValidateResourceIdentity(snapshot.Session.ProjectID, snapshot.Session.ExecutionID, snapshot.Session.AttemptID, snapshot.ResourceGeneration, snapshot.ConfigurationDigest); err != nil {
+		return executionapi.LifecycleReceipt{}, nil, err
+	}
+	var binding additionalBinding
+	if err := contracts.DecodeJSON(envelope.Payload, &binding); err != nil {
+		return executionapi.LifecycleReceipt{}, nil, err
+	}
+	if binding.Session != value.Session || binding.Generation != value.Generation || binding.Process != value.Process || binding.Target != snapshot.Ref.Target {
+		return executionapi.LifecycleReceipt{}, nil, errors.New("fixture original binding payload changed")
 	}
 	if _, exists := value.Inputs[snapshot.Session.CurrentTurnID]; !exists {
 		return executionapi.LifecycleReceipt{}, nil, errors.New("fixture observation has no persistent original input")
