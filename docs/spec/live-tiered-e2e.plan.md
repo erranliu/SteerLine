@@ -16,6 +16,7 @@
 10. fixture 明确 readiness 保留完整原生命令结果 JSON，禁止只投影 stdout 或手写 exit 文本；核验器仍要求真实 exit_code、marker 与绑定身份。准备转业务阶段的原输入目标未就绪，可通过已有公开 recheck_environment 一次重查原环境，不重建终端或重发业务输入；新阻断或再次未就绪仍失败。
 11. Orca 接受长提示后，等待原终端的 bracketed-paste 草稿稳定至少一秒再完成一次 Enter，记录提交后的原终端状态；CLI 写入字节的 ack 不等于模型已启动，不重新发送提示。
 12. Rebase 到 2026-10-02 最新 main 的 #63 implementation envelope 契约：配置使用 version 2 implementation_configs，原生 profile/session/Orca state/policy resource 经实现 codec 和原执行身份验证后读取；不补旧字段兼容。合并 full-access 资源契约及 Orca host 策略支持，统一选择/冻结摘要以避免未变配置被 atomic claim 判为 stale。
+13. 继续 rebase 到包含 PR #185 的 `84097f3`，保留主干 lifecycle ports、原始输入恢复与新原子领取校验；删除冲突中的旧中心原生预检接线。复用新 codec，不重新引入已移除字段；以定向生命周期回归、e2e 编译和 L2 controlled smoke 验证，不重复真实模型请求。记录见 `docs/validation/tiered-e2e-testing/rebase-185/`。
 
 ## 测试计划
 
