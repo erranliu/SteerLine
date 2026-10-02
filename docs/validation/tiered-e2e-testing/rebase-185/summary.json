@@ -1,0 +1,124 @@
+{
+  "scope": "e2e",
+  "level": "L2",
+  "env": "controlled",
+  "environment": {
+    "source_commit": "8faaa0d5512eb18f9aa3740ba2c76dd8cd7b45fa",
+    "worktree_status": "clean (this run's logs and summary excluded)",
+    "go_version": "go version go1.26.4 windows/amd64",
+    "go_env": {
+      "GOARCH": "amd64",
+      "GOCACHE": "C:\\Users\\lmas1\\AppData\\Local\\go-build",
+      "GOFLAGS": "",
+      "GOOS": "windows",
+      "GOTOOLCHAIN": "auto"
+    },
+    "os": "windows",
+    "architecture": "amd64",
+    "machine": {
+      "host_name": "liuming-asus",
+      "logical_cpu_count": 20,
+      "processor_identifier": "AMD64 Family 26 Model 36 Stepping 0, AuthenticAMD"
+    },
+    "concurrency": {
+      "GOMAXPROCS_environment": "unset",
+      "go_build_package_parallel": "Go default",
+      "go_test_parallel": "default 20",
+      "runtime_GOMAXPROCS": "20"
+    },
+    "build_cache_condition": "as found; no explicit cache clear",
+    "enabled_native_acceptance_switches": [],
+    "native_acceptance_note": "controlled worker/provider; no model requests"
+  },
+  "selected_scenarios": [
+    {
+      "id": "smoke.delivery",
+      "level": "L2",
+      "suite": "smoke",
+      "package": "./tests/e2e/smoke",
+      "test": "TestDeliverySmoke",
+      "env": "controlled"
+    }
+  ],
+  "groups": [
+    {
+      "id": "e2e-1",
+      "command": [
+        "go",
+        "test",
+        "-tags=e2e",
+        "-json",
+        "-count=1",
+        "-p=1",
+        "-parallel=1",
+        "-timeout=6m",
+        "-run=^(TestDeliverySmoke)$",
+        "./tests/e2e/smoke"
+      ],
+      "assigned_tests": [
+        "TestDeliverySmoke"
+      ],
+      "assigned_packages": [
+        "./tests/e2e/smoke"
+      ],
+      "stdout_json_log": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-rebase185-l2-controlled-20261002-120402\\e2e-1.jsonl",
+      "stderr_log": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-rebase185-l2-controlled-20261002-120402\\e2e-1.stderr.txt",
+      "wall_seconds": 77.7043568,
+      "exit_code": 0,
+      "summary": {
+        "status": "passed",
+        "passed": true,
+        "complete": true,
+        "command_exit_code": 0,
+        "package_count": 1,
+        "passed_packages": 1,
+        "failed_packages": [],
+        "skipped_packages": [],
+        "test_count": 1,
+        "passed_tests": 1,
+        "failed_tests": 0,
+        "skipped_tests": 0,
+        "packages": [
+          {
+            "package": "github.com/erranliu/SteerLine/tests/e2e/smoke",
+            "status": "pass",
+            "elapsed_seconds": 75.75
+          }
+        ],
+        "tests": [
+          {
+            "package": "github.com/erranliu/SteerLine/tests/e2e/smoke",
+            "name": "TestDeliverySmoke",
+            "status": "pass",
+            "elapsed_seconds": 74.61
+          }
+        ],
+        "slowest_tests": [
+          {
+            "package": "github.com/erranliu/SteerLine/tests/e2e/smoke",
+            "name": "TestDeliverySmoke",
+            "status": "pass",
+            "elapsed_seconds": 74.61
+          }
+        ],
+        "failures": [],
+        "skipped": [],
+        "incomplete_reasons": [],
+        "test_event_wall_seconds": 75.7486449,
+        "has_test_event_wall": true
+      }
+    }
+  ],
+  "build_sha256": {
+    "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-rebase185-l2-controlled-20261002-120402\\build\\controlled-helper.exe": "0179e2ae19ab03949966fa69a4192d3e48e88b6d6d02b27e3eabb98866be4587",
+    "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-rebase185-l2-controlled-20261002-120402\\build\\steerline.exe": "320670051569a5d5ed0f74ef69dd4e71a85bcd9ef3b8bfc5d1f391cd529550fe"
+  },
+  "preparation_seconds": 6.4987172,
+  "execution_seconds": 77.7394142,
+  "passed": true,
+  "cleanup_complete": true,
+  "errors": null,
+  "started_at": "2026-10-02T04:04:03.6842739Z",
+  "finished_at": "2026-10-02T04:05:28.3519756Z",
+  "coverage": "gate-only"
+}
