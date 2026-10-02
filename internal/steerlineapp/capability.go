@@ -1,4 +1,4 @@
-package steerline
+package steerlineapp
 
 import (
 	"context"
@@ -12,11 +12,12 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/steerline"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	remote "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker"
 )
 
-type nativeCapabilityEvidence struct {
+type capabilityEvidence struct {
 	Version               int                            `json:"version"`
 	CapturedAt            time.Time                      `json:"captured_at"`
 	Platform              string                         `json:"platform"`
@@ -42,70 +43,57 @@ type nativeCapabilityEvidence struct {
 	StopConfirmed         bool                           `json:"stop_confirmed"`
 }
 
-func evidenceDigest(value string) bool {
-	if len(value) != 64 {
-		return false
+func CertifyExecutionBackend(ctx context.Context, config steerline.Config, paths []string) (executionapi.CapabilityReport, error) {
+	if config.TaskAuthority != "native" {
+		return executionapi.CapabilityReport{}, errors.New("task_authority=native is required")
 	}
-	_, err := hex.DecodeString(value)
-	return err == nil
-}
-
-func markVerified(report *executionapi.CapabilityReport, name, evidence string) {
-	for i := range report.Capabilities {
-		if report.Capabilities[i].Name == name {
-			report.Capabilities[i].Status = executionapi.CapabilityVerified
-			report.Capabilities[i].Evidence = evidence
-			return
-		}
-	}
-}
-
-// CertifyExecutionBackend imports evidence captured by the native acceptance
-// harness for this backend, agent, target, platform and CLI version family.
-// Repository and run-dir locks exclude the live Service while the report is saved.
-func CertifyExecutionBackend(ctx context.Context, c Config, paths []string) (executionapi.CapabilityReport, error) {
-	if err := requireNativeTaskAuthority(c); err != nil {
-		return executionapi.CapabilityReport{}, err
+	if config.WorkflowProtocol != steerline.WorkerFlowVersion {
+		return executionapi.CapabilityReport{}, errors.New("only the current worker flow can be certified")
 	}
 	if len(paths) == 0 {
-		return executionapi.CapabilityReport{}, errors.New("at least one native evidence file is required")
+		return executionapi.CapabilityReport{}, errors.New("at least one capability evidence file is required")
 	}
-	if c.identity == "" {
-		if err := c.ResolveIdentity(ctx); err != nil {
+	if config.ExecutionDirectory == nil || config.ProcessHost == nil {
+		return executionapi.CapabilityReport{}, errors.New("execution directory and process host are required")
+	}
+	if err := config.ValidateProfiles(); err != nil {
+		return executionapi.CapabilityReport{}, err
+	}
+	if err := config.ExecutionDirectory.ValidateProfileData(config); err != nil {
+		return executionapi.CapabilityReport{}, err
+	}
+	if config.Identity() == "" {
+		if err := config.ResolveIdentity(ctx); err != nil {
 			return executionapi.CapabilityReport{}, err
 		}
 	}
-	backend := backendFor(c)
-	var probe executionapi.CapabilityReport
-	var err error
-	if c.WorkflowProtocol == WorkerFlowVersion {
-		entry, registrationErr := registrationFor(c)
-		if registrationErr != nil {
-			return executionapi.CapabilityReport{}, registrationErr
-		}
-		probe, err = entry.ProbeRequirements(ctx, c)
-	} else {
-		probe, err = backend.Probe(ctx, targetFor(c), agentFor(c))
+	if config.ExecutionDirectory == nil {
+		return executionapi.CapabilityReport{}, errors.New("execution directory is required")
 	}
+	entry, err := config.ExecutionDirectory.Resolve(config)
+	if err != nil {
+		return executionapi.CapabilityReport{}, err
+	}
+	probe, err := entry.ProbeRequirements(ctx, config)
 	if err != nil {
 		return executionapi.CapabilityReport{}, err
 	}
 	if runtime.GOOS != "windows" {
-		return executionapi.CapabilityReport{}, errors.New("PR 4A native capability certification currently requires Windows evidence")
+		return executionapi.CapabilityReport{}, errors.New("native capability certification requires Windows evidence")
 	}
 	proofs := map[string]string{}
 	copies := map[string][]byte{}
 	for _, path := range paths {
-		b, readErr := os.ReadFile(path)
+		data, readErr := os.ReadFile(path)
 		if readErr != nil {
 			return executionapi.CapabilityReport{}, readErr
 		}
-		if len(b) == 0 || len(b) > 64<<10 {
-			return executionapi.CapabilityReport{}, fmt.Errorf("native evidence size is invalid: %s", path)
+		if len(data) == 0 || len(data) > 64<<10 {
+			return executionapi.CapabilityReport{}, fmt.Errorf("capability evidence size is invalid: %s", path)
 		}
-		var evidence nativeCapabilityEvidence
-		if readErr = json.Unmarshal(b, &evidence); readErr != nil {
-			return executionapi.CapabilityReport{}, fmt.Errorf("invalid native evidence %s: %w", path, readErr)
+		var evidence capabilityEvidence
+		if readErr = json.Unmarshal(data, &evidence); readErr != nil {
+			return executionapi.CapabilityReport{}, fmt.Errorf("invalid capability evidence %s: %w", path, readErr)
 		}
 		version := evidence.CodexVersion
 		if probe.Backend == executionapi.BackendOrca {
@@ -116,76 +104,90 @@ func CertifyExecutionBackend(ctx context.Context, c Config, paths []string) (exe
 			versionMatches = remote.SameVersionFamily(version, probe.PlatformVersion)
 		}
 		if evidence.Version != 1 || evidence.CapturedAt.IsZero() || evidence.Platform != runtime.GOOS+"/"+runtime.GOARCH || evidence.Backend != probe.Backend || evidence.Protocol != probe.Protocol || evidence.TargetID != probe.Target.ID || evidence.Agent != probe.Agent.Name || !versionMatches {
-			return executionapi.CapabilityReport{}, fmt.Errorf("native evidence identity, target, platform or version differs from current backend: %s", path)
+			return executionapi.CapabilityReport{}, fmt.Errorf("capability evidence identity, target, platform or version differs from the selected implementation: %s", path)
 		}
 		if probe.Backend == executionapi.BackendOrca && evidence.CodexVersion != probe.AgentVersion {
-			return executionapi.CapabilityReport{}, fmt.Errorf("native evidence does not match Orca's native/override agent launch mode and version: %s", path)
+			return executionapi.CapabilityReport{}, fmt.Errorf("capability evidence does not match the selected agent launch mode and version: %s", path)
 		}
-		sum := sha256.Sum256(b)
-		stablePath := filepath.Join(c.RunDir, "execution", "v1", "evidence", hex.EncodeToString(sum[:])+".json")
-		copies[stablePath] = b
-		ref := stablePath + "#sha256=" + hex.EncodeToString(sum[:])
+		sum := sha256.Sum256(data)
+		stablePath := filepath.Join(config.RunDir, "execution", "v1", "evidence", hex.EncodeToString(sum[:])+".json")
+		copies[stablePath] = data
+		reference := stablePath + "#sha256=" + hex.EncodeToString(sum[:])
 		switch {
 		case probe.Backend == executionapi.BackendLocal && evidence.ProcessAbsent && evidence.StopStatus == executionapi.OperationConfirmed && evidence.OutputBytes > 0 && evidenceDigest(evidence.OutputSHA256):
 			for _, name := range []string{"start", "observe", "stop", "workspace_inspection", "output_reading"} {
-				proofs[name] = ref
+				proofs[name] = reference
 			}
 		case probe.Backend == executionapi.BackendOrca && evidence.WorktreeCreated && evidence.AgentTerminalBound && evidence.InitialOutputObserved && evidence.StopStatus == executionapi.OperationConfirmed && evidence.GitClean:
-			proofs["start"] = ref
+			proofs["start"] = reference
 		case probe.Backend == executionapi.BackendOrca && evidence.ReconnectMatched && evidence.StopStatus == executionapi.OperationConfirmed && evidence.WorktreeRetained && evidence.OutputBytes > 0 && evidenceDigest(evidence.OutputSHA256) && evidence.OutputSource != "":
 			for _, name := range []string{"observe", "stop", "output_reading"} {
-				proofs[name] = ref
+				proofs[name] = reference
 			}
 		case probe.Backend == executionapi.BackendOrca && evidence.WorkspaceInspected && evidence.BaseAncestor && evidence.GitClean:
-			proofs["workspace_inspection"] = ref
+			proofs["workspace_inspection"] = reference
 		default:
-			return executionapi.CapabilityReport{}, fmt.Errorf("native evidence does not prove a supported capability: %s", path)
+			return executionapi.CapabilityReport{}, fmt.Errorf("capability evidence does not prove a supported capability: %s", path)
 		}
 	}
 	for _, name := range []string{"start", "observe", "stop", "workspace_inspection", "output_reading"} {
 		if proofs[name] == "" {
-			return executionapi.CapabilityReport{}, fmt.Errorf("native evidence does not prove required %s capability", name)
+			return executionapi.CapabilityReport{}, fmt.Errorf("capability evidence does not prove required %s capability", name)
 		}
 	}
-	for name, ref := range proofs {
-		markVerified(&probe, name, ref)
+	for name, reference := range proofs {
+		markCapabilityVerified(&probe, name, reference)
 	}
-	probe.CheckedAt = now()
-	if err = os.MkdirAll(c.RunDir, 0700); err != nil {
+	probe.CheckedAt = time.Now().UTC()
+	if err := os.MkdirAll(config.RunDir, 0700); err != nil {
 		return executionapi.CapabilityReport{}, err
 	}
-	repoLock, err := LockRepository(c.identity)
+	repoLock, err := steerline.LockRepository(config.Identity())
 	if err != nil {
 		return executionapi.CapabilityReport{}, err
 	}
 	defer repoLock.Close()
-	runLock, err := LockRepository(c.RunDir)
+	runLock, err := steerline.LockRepository(config.RunDir)
 	if err != nil {
 		return executionapi.CapabilityReport{}, err
 	}
 	defer runLock.Close()
-	records := executionRecords{root: c.RunDir}
 	for path, data := range copies {
-		if existing, readErr := os.ReadFile(path); readErr == nil {
-			if string(existing) != string(data) {
-				return executionapi.CapabilityReport{}, fmt.Errorf("content-addressed native evidence conflicts with existing file: %s", path)
+		if current, readErr := os.ReadFile(path); readErr == nil {
+			if string(current) != string(data) {
+				return executionapi.CapabilityReport{}, fmt.Errorf("content-addressed evidence conflicts with existing file: %s", path)
 			}
 		} else if !os.IsNotExist(readErr) {
 			return executionapi.CapabilityReport{}, readErr
 		} else {
-			if mkdirErr := os.MkdirAll(filepath.Dir(path), 0700); mkdirErr != nil {
-				return executionapi.CapabilityReport{}, mkdirErr
+			if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+				return executionapi.CapabilityReport{}, err
 			}
-			if writeErr := AtomicWrite(path, data); writeErr != nil {
-				return executionapi.CapabilityReport{}, writeErr
+			if err := steerline.AtomicWrite(path, data); err != nil {
+				return executionapi.CapabilityReport{}, err
 			}
 		}
 	}
-	if _, loadErr := records.loadCapabilityReport(probe); loadErr != nil && !os.IsNotExist(loadErr) {
-		return executionapi.CapabilityReport{}, loadErr
-	}
-	if err = records.saveCapabilityReport(probe); err != nil {
+	if err := steerline.SaveExecutionCapabilityReport(config, probe); err != nil {
 		return executionapi.CapabilityReport{}, err
 	}
 	return probe, nil
+}
+
+func evidenceDigest(value string) bool {
+	if len(value) != 64 {
+		return false
+	}
+	_, err := hex.DecodeString(value)
+	return err == nil
+}
+
+func markCapabilityVerified(report *executionapi.CapabilityReport, name, reference string) {
+	for index := range report.Capabilities {
+		if report.Capabilities[index].Name == name {
+			report.Capabilities[index].Status = executionapi.CapabilityVerified
+			report.Capabilities[index].Evidence = reference
+			return
+		}
+	}
 }

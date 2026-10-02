@@ -24,12 +24,11 @@ func (s *Service) stopRunExecution(ctx context.Context, r *Run, worker *Worker) 
 	if ref.RunID != r.RunID || ref.AttemptID != r.AttemptID || r.Process == nil || ref.External != *r.Process {
 		return executionapi.Operation{}, &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "active execution binding does not match runtime identity"}
 	}
-	backend := backendFor(config)
-	kind, protocol := backend.Identity()
-	if kind == executionapi.BackendLocal && ref.Protocol == executionapi.ProtocolLocalCodexAppServer {
-		protocol = ref.Protocol
+	entry, registryErr := registrationFor(config)
+	if registryErr != nil {
+		return executionapi.Operation{}, registryErr
 	}
-	if kind != ref.Backend || protocol != ref.Protocol {
+	if entry.Key.Backend != ref.Backend || entry.Key.Protocol != ref.Protocol || entry.Key.Agent != ref.Agent.Name {
 		return executionapi.Operation{}, &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "configured backend/protocol differs from fixed execution"}
 	}
 	stopper, stopperErr := executionStopperFor(config)
@@ -111,9 +110,8 @@ func (s *Service) confirmExecutionStop(op executionapi.Operation) (bool, error) 
 		return false, readErr
 	}
 	expected := recordFingerprint(saved)
-	// The adapter already persisted an exact stop receipt. Orca's terminal show
-	// may later report an orphaned/disconnected tab even after ptyKilled=true;
-	// that weaker observation must not erase the durable close evidence.
+	// The adapter already persisted an exact stop receipt. A weaker later
+	// observation must not erase durable close evidence.
 	if op.Status == executionapi.OperationConfirmed {
 		persisted, err := records.loadOperation(op.RunID, op.AttemptID, op.ID)
 		if err != nil {

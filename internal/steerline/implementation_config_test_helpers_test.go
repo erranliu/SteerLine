@@ -11,7 +11,7 @@ import (
 
 func testExecutionProfile(t *testing.T, id, name, host, agent string, codex codexworker.ProfileConfig, orca *orcaworker.ProfileConfig, remoteSettings ...*remote.ProfileConfig) ExecutionProfile {
 	t.Helper()
-	profile := ExecutionProfile{ID: id, Name: name, Host: host, Agent: agent}
+	profile := ExecutionProfile{directory: testImplementationDirectory(t), ID: id, Name: name, Host: host, Agent: agent}
 	codexPayload, err := codexworker.EncodeProfileConfig(codex)
 	if err != nil {
 		t.Fatal(err)
@@ -53,6 +53,7 @@ func setTestImplementationProfiles(t *testing.T, config *Config, codex codexwork
 }
 
 func withTestImplementationProfiles(config Config, codex codexworker.ProfileConfig, orca *orcaworker.ProfileConfig, remoteSettings ...*remote.ProfileConfig) Config {
+	config = testConfigWithDirectory(config)
 	if config.configDigest == "" {
 		config.configDigest = "test-accepted-config-v2"
 	}
@@ -116,6 +117,8 @@ func withTestImplementationProfiles(config Config, codex codexworker.ProfileConf
 	config.ImplementationDisplay = nil
 	config.selectedProfileID = profileID
 	profile := config.projectExecutionProfile()
+	config.ImplementationData = cloneImplementationData(profile.ImplementationData)
+	config.ImplementationDisplay = append([]string(nil), profile.ImplementationDisplay...)
 	config.fixedProfileDigest = profile.DigestFor(projectID)
 	return config
 }

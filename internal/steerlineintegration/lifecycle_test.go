@@ -21,6 +21,7 @@ import (
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 	"github.com/erranliu/SteerLine/internal/steerline/testprotocol"
+	"github.com/erranliu/SteerLine/internal/steerlineapp"
 )
 
 // This suite starts the production service with its formal resolver injection,
@@ -75,7 +76,8 @@ func testIntegratedAppServerTwoTurns(t *testing.T) {
 	}
 }
 
-func testIntegratedNativeOriginalSessionGate(t *testing.T) {
+func testIntegratedNativeOriginalSessionGate(t *testing.T) { testIntegratedNativeSessionGate(t, false) }
+func testIntegratedNativeSessionGate(t *testing.T, changeConfig bool) {
 	if runtime.GOOS != "windows" {
 		t.Skip("native Orca protocol fixture uses the Windows host contract")
 	}
@@ -122,7 +124,9 @@ func testIntegratedNativeOriginalSessionGate(t *testing.T) {
 		t.Fatal("question consumption changed the original Dispatch or question")
 	}
 	firstService.stop(t)
-
+	if changeConfig {
+		fixture.config = changedIntegrationConfig(t, fixture)
+	}
 	secondService := startIntegrationService(t, ctx, fixture.config, resolver)
 	defer secondService.stop(t)
 	recovered := waitIntegrationRun(t, ctx, secondService, fixture.config, func(run *steerline.Run, execution *steerline.ExecutionRecord) bool {
@@ -134,6 +138,9 @@ func testIntegratedNativeOriginalSessionGate(t *testing.T) {
 		recovered.execution.SessionID != sessionID || recovered.execution.SessionGeneration != sessionGeneration ||
 		derefString(recovered.run.WorktreePath) != workspace || recovered.run.Target.OrchestrationRun != runID || recovered.run.Target.Dispatch != dispatchID {
 		t.Fatalf("service restart replaced the original native resources: run=%+v execution=%+v", recovered.run, recovered.execution)
+	}
+	if changeConfig && string(integrationFixedProfileJSON(t, first.runtime, first.run.RunID)) != string(integrationFixedProfileJSON(t, recovered.runtime, recovered.run.RunID)) {
+		t.Fatal("changed current config rewrote the original frozen key, codec, target or policy")
 	}
 	if state, err := testprotocol.ReadNativeOrcaState(fixture.nativeStateDir); err != nil || state.Dispatches != 2 || state.Replies != 0 || state.Sends != 0 {
 		t.Fatalf("restart crossed the manual input gate: state=%+v err=%v", state, err)
@@ -281,6 +288,7 @@ func sameNativePhysicalProcess(a, b executionapi.ProcessIdentity) bool {
 }
 
 type integrationFixture struct {
+	configPath     string
 	config         steerline.Config
 	repository     string
 	bareRemote     string
@@ -345,8 +353,8 @@ func newLifecycleProject(t *testing.T, host string) integrationFixture {
 		"execution_profiles": []any{map[string]any{"id": "fixture", "name": "Integration fixture", "host": host, "agent": "codex", "implementation_configs": implementationConfigs}},
 	})
 	require(t, err)
-	require(t, os.MkdirAll(filepath.Dir(steerline.GlobalExecutionConfigPath()), 0700))
-	require(t, os.WriteFile(steerline.GlobalExecutionConfigPath(), globalData, 0600))
+	require(t, os.MkdirAll(filepath.Dir(steerlineapp.GlobalExecutionConfigPath()), 0700))
+	require(t, os.WriteFile(steerlineapp.GlobalExecutionConfigPath(), globalData, 0600))
 	projectData, err := json.Marshal(map[string]any{
 		"repository": repository, "remote": "origin", "branch": "main", "task_authority": "native", "workflow_protocol": "worker-flow-v1",
 		"task_poll": "1s", "pr_poll": "1m", "heartbeat": "1s", "command_timeout": "15s", "shutdown_grace": "5s",
@@ -359,13 +367,13 @@ func newLifecycleProject(t *testing.T, host string) integrationFixture {
 	require(t, err)
 	configPath := filepath.Join(root, "project.json")
 	require(t, os.WriteFile(configPath, projectData, 0600))
-	config, err := steerline.LoadConfig(configPath)
+	config, err := steerlineapp.LoadConfig(configPath)
 	require(t, err)
 	config.Claimant = "integration"
 	project, err := steerline.OpenNativeTaskProject(context.Background(), &config)
 	require(t, err)
 	require(t, project.Close())
-	return integrationFixture{config: config, repository: repository, bareRemote: bare, remoteURL: remoteURL, commit: commit, nativeStateDir: stateDir}
+	return integrationFixture{config: config, configPath: configPath, repository: repository, bareRemote: bare, remoteURL: remoteURL, commit: commit, nativeStateDir: stateDir}
 }
 
 func createIntegrationTask(t *testing.T, ctx context.Context, fixture integrationFixture, id int64) {
@@ -460,6 +468,7 @@ func fixtureGitOutput(t *testing.T, args ...string) string {
 }
 
 type integrationLifecycleResolver struct {
+	directory           *steerline.ExecutionDirectory
 	mu                  sync.Mutex
 	calls               map[executionapi.ExecutionProtocol]int
 	beforeNativeExecute func(executionapi.LifecycleRequest) error
@@ -472,14 +481,14 @@ func (r *integrationLifecycleResolver) ResolveLifecycle(setup executionapi.Lifec
 	}
 	r.calls[setup.Snapshot.Ref.Protocol]++
 	r.mu.Unlock()
+	port, err := r.directory.ResolveLifecycle(setup)
+	if err != nil {
+		return nil, err
+	}
 	switch setup.Snapshot.Ref.Protocol {
 	case executionapi.ProtocolLocalCodexAppServer:
-		return codexworker.NewExecutionLifecycle(setup)
+		return port, nil
 	case executionapi.ProtocolOrcaTerminalV2:
-		port, err := orcaworker.NewExecutionLifecycle(setup)
-		if err != nil {
-			return nil, err
-		}
 		if r.beforeNativeExecute != nil {
 			host, ok := port.(contracts.HostEnvironmentPort)
 			if !ok {
@@ -531,7 +540,10 @@ type runningIntegrationService struct {
 
 func startIntegrationService(t *testing.T, parent context.Context, config steerline.Config, resolver executionapi.LifecycleResolver) *runningIntegrationService {
 	t.Helper()
-	service, err := steerline.NewServiceWithLifecycleResolver(config, resolver, codexworker.NewConversationAdapter())
+	if decorated, ok := resolver.(*integrationLifecycleResolver); ok {
+		decorated.directory = config.ExecutionDirectory
+	}
+	service, err := steerlineapp.NewServiceWithLifecycleResolver(config, resolver)
 	require(t, err)
 	reader, err := steerline.OpenNativeTaskReader(parent, &config)
 	require(t, err)
@@ -601,6 +613,7 @@ func waitIntegrationRun(t *testing.T, ctx context.Context, service *runningInteg
 	t.Cleanup(func() {
 		if t.Failed() && result.runtime != nil {
 			t.Logf("last public lifecycle: decision=%s current=%s stopped=%s turns=%d pending=%s command=%s pendingCommand=%s status=%s error=%s", mustJSON(result.run.Decision), result.execution.CurrentTurnID, result.execution.LastStoppedTurnID, result.execution.TurnNumber, result.execution.PendingTurnID, result.execution.CurrentCommandID, result.execution.PendingCommandID, result.execution.Status, derefString(result.execution.Error))
+			t.Logf("original preparation evidence: %s; last event: %s", mustJSON(result.execution.Environment), derefString(result.execution.LastEvent))
 		}
 	})
 	waitFor(t, 2*time.Minute, func() bool {

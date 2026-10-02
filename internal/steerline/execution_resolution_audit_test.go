@@ -102,7 +102,7 @@ func TestResolutionAuditEvidenceCannotChangeUnderOriginalProfileDigest(t *testin
 	changed.CheckedAt = changed.CheckedAt.Add(time.Second)
 	fixed.RequirementsEvaluation = &changed
 	fixed.RequirementsEvidenceDigest = requirementsEvidenceDigest(&changed)
-	if verifyFixedExecutionProfile(fixed) {
+	if testVerifyFixedExecutionProfile(fixed) {
 		t.Fatal("evidence replacement retained original full profile digest")
 	}
 }

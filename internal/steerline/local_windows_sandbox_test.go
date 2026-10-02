@@ -14,7 +14,7 @@ func TestLocalWindowsSandboxProfileFreezesAndRestores(t *testing.T) {
 	setTestCodexProfile(t, &config, codexworker.ProfileConfig{Executable: "codex", WindowsSandbox: "elevated"})
 	profile := config.projectExecutionProfile()
 	fixed := profile.Freeze(configurationProjectIdentity(config))
-	if !verifyFixedExecutionProfile(fixed) || !strings.Contains(strings.Join(fixed.ImplementationDisplay, " "), "Windows 权限：elevated") {
+	if !testVerifyFixedExecutionProfile(fixed) || !strings.Contains(strings.Join(fixed.ImplementationDisplay, " "), "Windows 权限：elevated") {
 		t.Fatalf("bad frozen profile: %+v", fixed)
 	}
 	changed := config
@@ -24,7 +24,7 @@ func TestLocalWindowsSandboxProfileFreezesAndRestores(t *testing.T) {
 		t.Fatal("current config changed frozen mode")
 	}
 	fixed.ImplementationData[0].Payload[0] = '['
-	if verifyFixedExecutionProfile(fixed) {
+	if testVerifyFixedExecutionProfile(fixed) {
 		t.Fatal("sandbox mode drift was accepted")
 	}
 	if runtime.GOOS == "windows" {

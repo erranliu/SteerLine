@@ -7,25 +7,21 @@ import (
 	"testing"
 )
 
-func TestPublicationPolicySupportMatrix(t *testing.T) {
+func TestPublicationPolicyValidatesProviderValues(t *testing.T) {
 	github := Config{Kind: "command", BaseURL: "https://github.com", Repository: "owner/repo", Query: contracts.Command{Executable: "gh"}}
 	gitea := Config{Kind: "gitea", BaseURL: "https://forge.invalid", Repository: "owner/repo"}
-	for _, row := range []struct {
-		host, publisher string
-		provider        Config
-		supported       bool
-	}{
-		{"local", "host_service", github, true}, {"local", "worker", github, false}, {"local", "host_service", gitea, false},
-		{"orca", "worker", github, true}, {"orca", "worker", gitea, true}, {"orca", "host_service", github, false},
-		{"orca_supervised", "worker", gitea, true}, {"orca_supervised", "host_service", github, false},
-		{"other", "worker", github, false}, {"orca", "", github, false}, {"orca", "automatic", github, false},
-		{"orca", "worker", Config{Kind: "command", BaseURL: github.BaseURL, Repository: github.Repository}, false},
-	} {
-		t.Run(row.host+"/"+row.publisher+"/"+row.provider.Kind, func(t *testing.T) {
-			if err := CheckPolicy(executionapi.PublicationPolicy{Publisher: row.publisher}, row.host, "codex", row.provider); (err == nil) != row.supported {
-				t.Fatalf("support=%t error=%v", row.supported, err)
+	for _, provider := range []Config{github, gitea} {
+		for _, publisher := range []string{string(executionapi.PublisherWorker), string(executionapi.PublisherHostService)} {
+			if err := CheckPolicy(executionapi.PublicationPolicy{Publisher: publisher}, provider); err != nil {
+				t.Fatalf("valid policy/provider was rejected: %s/%s: %v", publisher, provider.Kind, err)
 			}
-		})
+		}
+	}
+	if err := CheckPolicy(executionapi.PublicationPolicy{Publisher: "automatic"}, github); err == nil {
+		t.Fatal("unknown publisher was accepted")
+	}
+	if err := CheckPolicy(executionapi.PublicationPolicy{Publisher: executionapi.PublisherWorker}, Config{Kind: "gitea", BaseURL: "file://invalid"}); err == nil {
+		t.Fatal("invalid provider was accepted")
 	}
 }
 

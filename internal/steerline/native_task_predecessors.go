@@ -27,6 +27,9 @@ func validateNativePredecessorAddition(graph taskGraphSnapshot, taskID string, p
 }
 
 func (c CommandService) AddNativeTaskPredecessors(ctx context.Context, config Config, input TaskPredecessorAddInput) (TaskPredecessorAddReceipt, error) {
+	if err := validateWorkflowConfig(&config, nil); err != nil {
+		return TaskPredecessorAddReceipt{}, err
+	}
 	var empty TaskPredecessorAddReceipt
 	store := c.Store
 	if store == nil || c.Project == "" || c.Project != config.Identity() || config.TaskAuthority != "native" {

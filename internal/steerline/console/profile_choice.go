@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/erranliu/SteerLine/internal/steerline"
 )
 
 func (m Model) handleExecutionProfileChoice(key tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -90,16 +89,10 @@ func renderExecutionProfileChoice(m Model, state projectState, height int) strin
 		lines = append(lines, line)
 	}
 	profile := profiles[choice.index]
-	lines = append(lines, "", "选中方案", "  位置："+safeTerminalInlineText(executionHostLabel(profileConfig(profile))),
-		"  Agent："+safeTerminalInlineText(profile.Agent),
-		"  Model："+safeTerminalInlineText(executionModelLabel(profileConfig(profile))),
-		"  Thinking effort："+safeTerminalInlineText(executionEffortLabel(profileConfig(profile))),
-		"  写入权限："+safeTerminalInlineText(executionDisplayValue(profile.ImplementationDisplay, "权限：")))
+	lines = append(lines, "", "选中方案", "  位置："+safeTerminalInlineText(profile.Host),
+		"  Agent："+safeTerminalInlineText(profile.Agent))
 	lines = append(lines, fmt.Sprintf("  项目要求：读 %s / 写 %s / Git %t / 网络 %s / 越权 %s", profile.ExecutionPolicy.Filesystem.ReadScope, profile.ExecutionPolicy.Filesystem.WriteScope, profile.ExecutionPolicy.Filesystem.GitMetadataWrite, profile.ExecutionPolicy.Network, profile.ExecutionPolicy.Escalation), "  受理版本："+safeTerminalInlineText(profile.AcceptedConfigVersion), "  发布责任："+safeTerminalInlineText(profile.PublicationPolicy.Publisher), "  发布 provider："+safeTerminalInlineText(profile.Publication.Provider.Kind)+" · "+safeTerminalInlineText(profile.Publication.Provider.BaseURL)+"/"+safeTerminalInlineText(profile.Publication.Provider.Repository))
 	for _, field := range profile.ImplementationDisplay {
-		if strings.HasPrefix(field, "权限：") {
-			continue
-		}
 		lines = append(lines, "  实现设置："+safeTerminalInlineText(field))
 	}
 	if reason := profile.StaticUnavailableReason(); reason != "" {
@@ -111,8 +104,4 @@ func renderExecutionProfileChoice(m Model, state projectState, height int) strin
 		lines = append(lines, "", "服务会在领取前核验目标能力；未验证的方案不会启动执行。")
 	}
 	return strings.Join(fitLines(wrapLines(lines, m.width), m.width, height), "\n")
-}
-
-func profileConfig(profile steerline.ExecutionProfile) steerline.Config {
-	return steerline.Config{Host: profile.Host, Agent: profile.Agent, ImplementationDisplay: profile.ImplementationDisplay}
 }

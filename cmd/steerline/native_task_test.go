@@ -15,22 +15,27 @@ import (
 	"testing"
 
 	"github.com/erranliu/SteerLine/internal/steerline"
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	"github.com/erranliu/SteerLine/internal/steerlineapp"
 )
 
 func TestNativeTaskBatchCLIValidatesCreatesAndDiscardsFixedTaskIDs(t *testing.T) {
 	t.Setenv("STEERLINE_HOME", t.TempDir())
+	profilePayload, _ := codexworker.EncodeProfileConfig(codexworker.ProfileConfig{Executable: "codex", WindowsSandbox: "elevated"})
 	global, err := json.Marshal(map[string]any{
-		"execution_profiles":        []map[string]any{{"id": "local", "name": "Local Codex", "host": "local", "agent": "codex", "sandbox": "workspace-write", "codex": map[string]string{"executable": "codex"}}},
+		"version":                   2,
+		"execution_profiles":        []map[string]any{{"id": "local", "name": "Local Codex", "host": "local", "agent": "codex", "implementation_configs": []executionapi.ImplementationConfigInput{{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 1, Payload: profilePayload}}}},
 		"default_execution_profile": "local",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(steerline.GlobalExecutionConfigPath(), global, 0600); err != nil {
+	if err := os.WriteFile(steerlineapp.GlobalExecutionConfigPath(), global, 0600); err != nil {
 		t.Fatal(err)
 	}
 	repo := filepath.Join(t.TempDir(), "repo")
-	remoteURL := "https://forge.invalid/org/repo.git"
+	remoteURL := "https://github.com/org/repo.git"
 	for _, args := range [][]string{{"init", "--quiet", "-b", "main", repo}, {"-C", repo, "remote", "add", "origin", remoteURL}} {
 		if out, err := exec.Command("git", args...).CombinedOutput(); err != nil {
 			t.Fatalf("git %v: %v: %s", args, err, out)
@@ -57,11 +62,11 @@ func TestNativeTaskBatchCLIValidatesCreatesAndDiscardsFixedTaskIDs(t *testing.T)
 	}
 	commit := strings.TrimSpace(string(head))
 	configPath := filepath.Join(t.TempDir(), "native.json")
-	configJSON, _ := json.Marshal(map[string]any{"repository": repo, "remote": "origin", "branch": "main", "task_authority": "native", "workflow_protocol": steerline.WorkerFlowVersion, "executable_types": []string{"task"}})
+	configJSON, _ := json.Marshal(map[string]any{"repository": repo, "remote": "origin", "branch": "main", "task_authority": "native", "workflow_protocol": steerline.WorkerFlowVersion, "executable_types": []string{"task"}, "execution_policy": executionapi.ExecutionPolicy{Filesystem: executionapi.FilesystemPolicy{ReadScope: "host", WriteScope: "workspace", GitMetadataWrite: true}, Network: "allow", Escalation: "deny"}, "publication_policy": executionapi.PublicationPolicy{Publisher: executionapi.PublisherHostService}, "pr": map[string]any{"kind": "command", "base_url": "https://github.com", "repository": "org/repo", "query": map[string]any{"executable": "gh"}}})
 	if err = os.WriteFile(configPath, configJSON, 0600); err != nil {
 		t.Fatal(err)
 	}
-	c, err := steerline.LoadConfig(configPath)
+	c, err := steerlineapp.LoadConfig(configPath)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -234,7 +234,7 @@ func appServerAuditServiceWithRequirements(t *testing.T, policy executionapi.Exe
 	if _, err := commands.ClaimNativeTask(ctx, c, TaskClaimOptions{TaskID: "8", RequestID: newID(), ExpectedTaskVersion: 1, ExpectedAuthorityVersion: authority.AuthorityVersion, RequestedBy: "operator", Explicit: true}); err != nil {
 		t.Fatal(err)
 	}
-	service, err := NewService(c)
+	service, err := newTestService(c)
 	if err != nil {
 		t.Fatal(err)
 	}

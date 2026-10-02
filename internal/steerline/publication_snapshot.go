@@ -52,14 +52,18 @@ func publicationClient(c Config) *publication.Client {
 }
 
 func verifyPublicationTargetForRun(ctx context.Context, c Config, run *Run) error {
-	if run != nil && run.WorktreePath != nil && c.hostName() != "orca_supervised" {
+	entry, err := registrationFor(c)
+	if err != nil {
+		return err
+	}
+	if run != nil && run.WorktreePath != nil && entry.LocalWorkspace {
 		c.Repository = *run.WorktreePath
 	}
 	return c.bindPublicationTarget(ctx)
 }
 
 func fixedWorkflowPublicationConfig(c Config, w WorkflowRunRecord) (Config, error) {
-	if w.ExecutionProfile == nil || !verifyFixedExecutionProfile(*w.ExecutionProfile) || w.ConfigDigest != w.ExecutionProfile.AcceptedConfigVersion || w.Repository == "" || w.Branch != w.ExecutionProfile.Publication.BaseBranch || w.ExecutionProfile.Publication.RemoteURL == "" {
+	if w.ExecutionProfile == nil || !verifyFixedExecutionProfile(*w.ExecutionProfile, c.ExecutionDirectory) || w.ConfigDigest != w.ExecutionProfile.AcceptedConfigVersion || w.Repository == "" || w.Branch != w.ExecutionProfile.Publication.BaseBranch || w.ExecutionProfile.Publication.RemoteURL == "" {
 		return Config{}, errors.New("publication requires the original v5 execution snapshot; preserve original state")
 	}
 	c = c.ApplyFixedExecutionProfile(*w.ExecutionProfile)

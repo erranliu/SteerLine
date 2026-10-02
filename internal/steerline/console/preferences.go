@@ -84,8 +84,11 @@ type viewProfile struct {
 	lock *steerline.RepoLock
 }
 
-func acquireViewProfile() (*viewProfile, ViewFile, string, error) {
-	root := filepath.Join(steerline.SteerlineHome(), "ui", "views")
+func acquireViewProfile(home string) (*viewProfile, ViewFile, string, error) {
+	if strings.TrimSpace(home) == "" {
+		return nil, ViewFile{}, "", errors.New("application home directory is required")
+	}
+	root := filepath.Join(home, "ui", "views")
 	if err := os.MkdirAll(root, 0700); err != nil {
 		return nil, ViewFile{}, "", err
 	}

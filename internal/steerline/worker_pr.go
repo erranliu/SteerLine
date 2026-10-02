@@ -19,7 +19,7 @@ func (s *Service) offerWorkerPRFeedback(run *Run, url string) error {
 	}
 	decision, err := WriteDecisionRequest(run, DecisionRequest{
 		Question: "The worker stopped. What should it do next?",
-		Context:  "PR 已核实并等待合并。本轮已结束，提交反馈后将在原 Codex 会话开始下一轮。",
+		Context:  "PR 已核实并等待合并。本轮已结束，提交反馈后将在原 worker 会话开始下一轮。",
 		Options:  []executionapi.DecisionOption{{ID: "continue", Label: "Continue current work"}}, AllowFreeText: true,
 	})
 	if err != nil {

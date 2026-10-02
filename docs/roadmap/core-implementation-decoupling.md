@@ -8,7 +8,7 @@
 
 ## 范围与关键缺口
 
-通用事件/问题及配置/原生绑定封套已具备；生命周期已使用纯值端口和中心单写者；剩余平台知识在会话/宿主证据、来源/mapper 和唯一默认构造目录。采集/宿主暂用唯一 codec 的实现视图，最终工厂仍需外移。后续写消费者仍依赖具体 Store/宽事务接口，TUI 仍混合产品读取与默认 I/O，需要在执行隔离收口后继续解耦。
+通用事件/问题、配置/原生绑定封套、来源/mapper/宿主端口及外层唯一构造已经接通；主包生产源码与依赖清零。剩余平台测试/fixture 和最终结构守卫归 #67。后续写消费者仍依赖具体 Store/宽事务接口，TUI 仍混合产品读取与默认 I/O，需要在执行隔离收口后继续解耦。
 
 需要同时解决类型、调用、存储载荷、工厂和测试归属。仅改文件名、把整个 Service 接口传入子包、在 contracts 中保存另一份原生业务状态，均不能完成目标。中心继续拥有唯一业务写者、intent/receipt 提交屏障、人工恢复门槛和 TaskDelivery；平台实现不获得这些写权限。
 
@@ -59,7 +59,6 @@ flowchart TD
 
 | 任务 ID | 任务名称 | 交付范围 | 硬前置 | 执行规格 |
 | --- | --- | --- | --- | --- |
-| 66 | 内置实现组装与主包依赖反转 | 目录/工厂/默认值移到外层，所有产品入口显式注入同一能力 | #65 | [Spec](../spec/core-decoupling-05-composition.spec.md) · [Plan](../spec/core-decoupling-05-composition.plan.md) |
 | 67 | 主包隔离守卫与测试归位 | 主包源码/测试清零、依赖守卫、第三实现接线和最小完整回归 | #66 | [Spec](../spec/core-decoupling-06-boundary.spec.md) · [Plan](../spec/core-decoupling-06-boundary.plan.md) |
 | 68 | 主包解耦重构后代码清理 | 按最终调用关系删除死代码/重复规则/无用辅助，同步模块及验证索引 | #67 | [Spec](../spec/core-decoupling-07-cleanup.spec.md) · [Plan](../spec/core-decoupling-07-cleanup.plan.md) |
 | 69 | 中心写入端口收窄 | 命令、worker、任务/DAG/交付及会话的窄提交接口接通真实消费者 | #68 | [Spec](../spec/core-decoupling-08-write-ports.spec.md) · [Plan](../spec/core-decoupling-08-write-ports.plan.md) |
@@ -68,6 +67,8 @@ flowchart TD
 | 72 | TUI与中心实现解耦 | TUI 消费注入产品接口，删除中心/存储依赖和默认 I/O 薄桥 | #71 | [Spec](../spec/core-decoupling-11-tui.spec.md) · [Plan](../spec/core-decoupling-11-tui.plan.md) |
 
 ## 顺序与交接
+
+2026-10-02：#65 已合并；#66 外层组装与主包生产隔离已实现并独立复审修复，完全访问组合 core 6/rules 90/targeted 22 全通过，见[交付与复审记录](../validation/core-decoupling-05-composition/README.md)。本 PR 真实合并后才启动 #67；活动表保留剩余任务。
 
 #65 → #66 → #67 → #68 串行交付；#68 后分为存储 #69 → #70 和客户端 #71 → #72，两线可按下述修改归属并行，每项一个实现 PR。#65 消费[生命周期端口](../validation/core-decoupling-03-lifecycle/README.md)；#63 复用[通用事件与问题 #62](../spec/core-decoupling-01-events.spec.md)及[验收记录](../validation/core-decoupling-01-events/README.md)，不意味着整个主包隔离已完成。
 

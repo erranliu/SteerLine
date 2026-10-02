@@ -301,12 +301,12 @@ func TestExecutionPolicyNativeToolsCollectLive(t *testing.T) {
 		Scope     string                `json:"scope"`
 	}
 	require(t, decode(raw, &saved))
-	if saved.Scope != "in-progress native policy check" || !verifyFixedExecutionProfile(saved.Profile) {
+	if saved.Scope != "in-progress native policy check" || !testVerifyFixedExecutionProfile(saved.Profile) {
 		t.Fatal("not an original incomplete native check")
 	}
 	e := saved.Execution
-	require(t, verifyPolicyResources(e.PolicyResources, saved.Profile.Digest, e.Workspace.Worktree))
-	c := (Config{Repository: filepath.Dir(e.Workspace.Repository), identity: e.Workspace.Repository, CommandTimeout: "90s"}).ApplyFixedExecutionProfile(saved.Profile)
+	require(t, verifyPolicyResources(testConfigWithDirectory(Config{}).ApplyFixedExecutionProfile(saved.Profile), e.PolicyResources, saved.Profile.Digest, e.Workspace.Worktree))
+	c := testConfigWithDirectory(Config{Repository: filepath.Dir(e.Workspace.Repository), identity: e.Workspace.Repository, CommandTimeout: "90s"}).ApplyFixedExecutionProfile(saved.Profile)
 	client := nativeOrcaClient(c)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()

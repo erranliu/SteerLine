@@ -176,12 +176,12 @@ func (s *Service) applyAppServerRecovery(result appServerRecoveryResult) error {
 	}
 	s.refreshRun(run)
 	if result.dead {
-		if owned := s.ownedLocalProcesses[run.RunID]; owned != nil {
+		if owned := s.ownedProcesses[run.RunID]; owned != nil {
 			if owned.Identity() != *execution.Process {
 				return s.waitWorkerFlow(run, "Original managed process identity changed during recovery")
 			}
 			owned.Close()
-			delete(s.ownedLocalProcesses, run.RunID)
+			delete(s.ownedProcesses, run.RunID)
 		}
 		if !workerTreeAbsent(*execution.Process) {
 			execution.RecoveryState = string(workerflow.RecoveryUnverified)
@@ -204,7 +204,7 @@ func (s *Service) applyAppServerRecovery(result appServerRecoveryResult) error {
 		execution.Status = "blocked"
 		s.refreshRun(run)
 		if run.Decision != nil && run.Decision.Status == "answer_saved" {
-			return s.refreshSavedRecoveryDecision(run, false, "原 Codex worker 已退出，旧请求已失效。请确认带入新轮次的输入。")
+			return s.refreshSavedRecoveryDecision(run, false, "原 worker 已退出，旧请求已失效。请确认带入新轮次的输入。")
 		}
 		if record := s.decisionRecord(run); record != nil && record.Status == "pending" &&
 			record.RecoveryVersion == execution.RecoveryVersion && record.RecoveryState == execution.RecoveryState {
@@ -221,7 +221,7 @@ func (s *Service) applyAppServerRecovery(result appServerRecoveryResult) error {
 			}
 			s.setRunDecision(run, nil)
 		}
-		if err := s.waitWorkerFlow(run, "原 Codex worker 已退出，原轮次没有可信完成结果。请核对当前工作区后手动继续。\n\n原问题："+priorQuestion); err != nil {
+		if err := s.waitWorkerFlow(run, "原 worker 已退出，原轮次没有可信完成结果。请核对当前工作区后手动继续。\n\n原问题："+priorQuestion); err != nil {
 			return err
 		}
 		if record := s.decisionRecord(run); record != nil && oldDecisionID != "" {
@@ -262,7 +262,7 @@ func (s *Service) applyAppServerRecovery(result appServerRecoveryResult) error {
 		}
 	}
 	if err := s.reconcileSavedLifecycleQuestionAnswer(context.Background(), run); err != nil {
-		return s.waitWorkerFlow(run, "Original Codex answer cannot be reconciled: "+err.Error())
+		return s.waitWorkerFlow(run, "Original worker answer cannot be reconciled: "+err.Error())
 	}
 	if run.Decision != nil && run.Decision.Status == "answer_saved" {
 		if err := s.refreshSavedRecoveryDecision(run, run.Decision.Request.QuestionRoute != nil, "服务重开后保留了旧答案；请重新确认后才投递。 "); err != nil {

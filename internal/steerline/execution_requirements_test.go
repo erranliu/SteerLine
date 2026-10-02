@@ -118,7 +118,7 @@ func TestExecutionRequirementsSnapshotCopiesAndRestoresOriginal(t *testing.T) {
 	c.requirementsEvaluation = &e
 	profile := c.projectExecutionProfile()
 	fixed := profile.Freeze()
-	if !verifyFixedExecutionProfile(fixed) {
+	if !testVerifyFixedExecutionProfile(fixed) {
 		t.Fatal("valid evaluated snapshot rejected")
 	}
 	profile.ExecutionRequirements.Tools[0].ID = "go"
@@ -140,12 +140,12 @@ func TestExecutionRequirementsSnapshotCopiesAndRestoresOriginal(t *testing.T) {
 	}
 	tampered := fixed
 	tampered.Version = 3
-	if verifyFixedExecutionProfile(tampered) {
+	if testVerifyFixedExecutionProfile(tampered) {
 		t.Fatal("old execution snapshot accepted")
 	}
 	tampered = fixed
 	tampered.RequirementsEvidenceDigest = "other"
-	if verifyFixedExecutionProfile(tampered) {
+	if testVerifyFixedExecutionProfile(tampered) {
 		t.Fatal("evidence digest drift accepted")
 	}
 }
@@ -189,18 +189,14 @@ func TestExecutionRequirementsClaimAndRestartBlockWithoutChangingSnapshot(t *tes
 	c.configDigest = loadedConfigDigest(projectBytes, globalBytes)
 	entry, err := registrationFor(c)
 	require(t, err)
-	original := builtinExecutionRegistry
-	fake := *entry
+	fake := entry
 	fake.QueryTool = func(ctx context.Context, config Config, id string) executionapi.RequirementEvidence {
 		e := entry.QueryTool(ctx, config, id)
 		require(t, os.WriteFile(c.policySource, append(projectBytes, ' '), 0600))
 		return e
 	}
-	registry, err := buildExecutionRegistry([]executionRegistration{fake})
-	require(t, err)
-	builtinExecutionRegistry = registry
+	c.ExecutionDirectory = testDirectoryWithReplacement(t, c.ExecutionDirectory, fake)
 	_, err = commands.ClaimNativeTask(ctx, c, options)
-	builtinExecutionRegistry = original
 	if !isNativeErrorCode(err, "stale_profile") {
 		t.Fatalf("configuration changed during evaluation but claim was accepted: %v", err)
 	}
@@ -212,7 +208,7 @@ func TestExecutionRequirementsClaimAndRestartBlockWithoutChangingSnapshot(t *tes
 	require(t, os.WriteFile(c.policySource, projectBytes, 0600))
 	_, err = commands.ClaimNativeTask(ctx, c, options)
 	require(t, err)
-	s, err := NewService(c)
+	s, err := newTestService(c)
 	require(t, err)
 	defer s.Close()
 	run := s.find("8")
@@ -241,7 +237,7 @@ func TestClaimRechecksAcceptedConfigFiles(t *testing.T) {
 	localGlobalExecutionFixture(t)
 	c := workerContextConfigFixture()
 	c.policySource = filepath.Join(t.TempDir(), "project.json")
-	c.executionConfigPath = GlobalExecutionConfigPath()
+	c.executionConfigPath = fixtureGlobalExecutionConfigPath()
 	project := []byte(`{"execution_requirements":{}}`)
 	require(t, os.WriteFile(c.policySource, project, 0600))
 	global, err := os.ReadFile(c.executionConfigPath)
@@ -264,22 +260,22 @@ func TestExecutionRegistryRejectsDuplicatesAndRequiresLifecyclePorts(t *testing.
 	c := workerContextConfigFixture()
 	entry, err := registrationFor(c)
 	require(t, err)
-	if _, err = buildExecutionRegistry([]executionRegistration{*entry, *entry}); err == nil {
+	if _, err = NewExecutionDirectory(c.ExecutionDirectory.Version(), testImplementationCodecs(), []ExecutionRegistration{entry, entry}); err == nil {
 		t.Fatal("duplicate key accepted")
 	}
-	for _, cfg := range []Config{{Host: "unknown", Agent: "codex"}, {Host: "local", Agent: "unknown"}} {
+	for _, cfg := range []Config{{ExecutionDirectory: c.ExecutionDirectory, Host: "unknown", Agent: "codex"}, {ExecutionDirectory: c.ExecutionDirectory, Host: "local", Agent: "unknown"}} {
 		if _, err = registrationFor(cfg); err == nil {
 			t.Fatal("unknown combination accepted")
 		}
 	}
-	for _, registered := range builtinExecutionRegistry {
+	for _, registered := range c.ExecutionDirectory.entries {
 		if registered.Lifecycle == nil {
 			t.Fatal("registered implementation has no lifecycle port")
 		}
 	}
-	incomplete := *entry
+	incomplete := entry
 	incomplete.Lifecycle = nil
-	if _, err = buildExecutionRegistry([]executionRegistration{incomplete}); err == nil {
+	if _, err = NewExecutionDirectory(c.ExecutionDirectory.Version(), testImplementationCodecs(), []ExecutionRegistration{incomplete}); err == nil {
 		t.Fatal("registration without a lifecycle port was accepted")
 	}
 }

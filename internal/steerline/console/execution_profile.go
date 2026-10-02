@@ -34,64 +34,14 @@ func executionConfigMismatch(ref ProjectRef, snapshot ProjectSnapshot) bool {
 		runtime.Service.ConfigDigest != ref.Config.LoadedConfigDigest()
 }
 
-func executionHostLabel(c steerline.Config) string {
-	switch c.Host {
-	case "local", "":
-		return "本地 Codex"
-	case "orca":
-		return "Orca 本机终端"
-	case "orca_supervised":
-		return "Orca 受监管远程"
-	default:
-		return "执行后端未知"
-	}
-}
-
-func executionAgentName(c steerline.Config) string {
-	if strings.TrimSpace(c.Agent) == "" {
-		return "codex"
-	}
-	return c.Agent
-}
-
-func executionModelLabel(c steerline.Config) string {
-	if executionAgentName(c) != "codex" {
-		return "由所选 agent 决定"
-	}
-	if value := executionDisplayValue(c.ImplementationDisplay, "Model："); value != "" {
-		return value
-	}
-	return "未在全局配置固定（由 Codex 配置决定）"
-}
-
-func executionEffortLabel(c steerline.Config) string {
-	if executionAgentName(c) != "codex" {
-		return "不适用"
-	}
-	if value := executionDisplayValue(c.ImplementationDisplay, "Reasoning effort："); value != "" {
-		return value
-	}
-	return "默认强度（未固定，由目标 agent 决定）"
-}
-
-func executionDisplayValue(fields []string, prefix string) string {
-	for _, field := range fields {
-		if strings.HasPrefix(field, prefix) {
-			return strings.TrimPrefix(field, prefix)
-		}
-	}
-	return ""
-}
-
 func renderFixedRunExecutionProfile(state projectState, run *steerline.Run) []string {
 	fixed := fixedRunExecutionProfile(state, run)
 	if fixed == nil {
 		return nil
 	}
-	config := steerline.Config{Host: fixed.Host, Agent: fixed.Agent, ImplementationDisplay: fixed.ImplementationDisplay}
 	lines := []string{
-		"执行方案：" + safeTerminalInlineText(fixed.Name) + " [" + safeTerminalInlineText(fixed.ID) + "] · " + safeTerminalInlineText(executionHostLabel(config)),
-		"Agent / Model / Thinking：" + safeTerminalInlineText(fixed.Agent) + " / " + safeTerminalInlineText(executionModelLabel(config)) + " / " + safeTerminalInlineText(executionEffortLabel(config)),
+		"执行方案：" + safeTerminalInlineText(fixed.Name) + " [" + safeTerminalInlineText(fixed.ID) + "] · " + safeTerminalInlineText(fixed.Host),
+		"Agent：" + safeTerminalInlineText(fixed.Agent),
 	}
 	lines = append(lines, "发布责任："+safeTerminalInlineText(fixed.PublicationPolicy.Publisher), "冻结发布目标："+safeTerminalInlineText(fixed.Publication.Provider.Kind)+" · "+safeTerminalInlineText(fixed.Publication.Provider.BaseURL)+"/"+safeTerminalInlineText(fixed.Publication.Provider.Repository)+" · base "+safeTerminalInlineText(fixed.Publication.BaseBranch), "Git remote："+safeTerminalInlineText(fixed.Publication.Remote)+" · "+safeTerminalInlineText(fixed.Publication.RemoteURL), "发布工具："+safeTerminalInlineText(fixed.Publication.Git.Executable)+" · query "+safeTerminalInlineText(fixed.Publication.Provider.Query.Executable)+" · close "+safeTerminalInlineText(fixed.Publication.Provider.Close.Executable), "认证引用："+safeTerminalInlineText(strings.Join(fixed.Publication.AuthenticationRefs, ", ")))
 	for _, tool := range []struct {
@@ -138,20 +88,18 @@ func renderFixedRunExecutionProfile(state projectState, run *steerline.Run) []st
 			lines = append(lines, "权限核验："+status)
 		}
 	}
-	if fixed.Agent == "codex" {
-		if state.snapshot.Domain != nil {
-			for _, execution := range state.snapshot.Domain.Executions {
-				if execution.ExecutionID != run.ExecutionID || execution.Environment == nil {
-					continue
-				}
-				status := "准备未核实"
-				if execution.Environment.Ready {
-					status = "工具探针与原生结算已核实"
-				}
-				lines = append(lines, "环境："+status)
-				if blocker := execution.Environment.Blocker; blocker != nil {
-					lines = append(lines, "宿主阻断："+safeTerminalInlineText(blocker.Fact.Reason)+" · "+safeTerminalInlineText(blocker.Fact.Confidence)+" · "+safeTerminalInlineText(blocker.Fact.Source))
-				}
+	if state.snapshot.Domain != nil {
+		for _, execution := range state.snapshot.Domain.Executions {
+			if execution.ExecutionID != run.ExecutionID || execution.Environment == nil {
+				continue
+			}
+			status := "准备未核实"
+			if execution.Environment.Ready {
+				status = "准备结算已核实"
+			}
+			lines = append(lines, "环境："+status)
+			if blocker := execution.Environment.Blocker; blocker != nil {
+				lines = append(lines, "宿主阻断："+safeTerminalInlineText(blocker.Fact.Reason)+" · "+safeTerminalInlineText(blocker.Fact.Confidence)+" · "+safeTerminalInlineText(blocker.Fact.Source))
 			}
 		}
 	}
@@ -163,8 +111,7 @@ func renderRunExecutionProfileSummary(state projectState, run *steerline.Run) []
 	if fixed == nil {
 		return nil
 	}
-	config := steerline.Config{Host: fixed.Host, Agent: fixed.Agent, ImplementationDisplay: fixed.ImplementationDisplay}
-	return []string{"执行方案：" + safeTerminalInlineText(executionHostLabel(config)) + " · " + safeTerminalInlineText(executionAgentName(config)) + " · " + safeTerminalInlineText(executionModelLabel(config)) + " · " + safeTerminalInlineText(executionEffortLabel(config))}
+	return []string{"执行方案：" + safeTerminalInlineText(fixed.Host) + " · " + safeTerminalInlineText(fixed.Agent) + " · " + safeTerminalInlineText(strings.Join(fixed.ImplementationDisplay, " · "))}
 }
 
 func fixedRunExecutionProfile(state projectState, run *steerline.Run) *steerline.FixedExecutionProfile {

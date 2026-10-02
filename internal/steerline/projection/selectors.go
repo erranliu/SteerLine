@@ -2,7 +2,6 @@ package projection
 
 import (
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 func LatestWorkflow(workflows []contracts.WorkflowRunRecord, taskID string) *contracts.WorkflowRunRecord {
@@ -64,18 +63,5 @@ func finishStatus(task contracts.TaskRecord, workflow contracts.WorkflowRunRecor
 		return "blocked"
 	default:
 		return "pending"
-	}
-}
-
-func HostForExecution(backend, protocol string) string {
-	switch {
-	case backend == string(executionapi.BackendLocal) && (protocol == string(executionapi.ProtocolLocalProcess) || protocol == string(executionapi.ProtocolLocalCodexAppServer)):
-		return "local"
-	case backend == string(executionapi.BackendOrca) && protocol == string(executionapi.ProtocolOrcaTerminalV2):
-		return "orca"
-	case backend == string(executionapi.BackendOrca) && protocol == string(executionapi.ProtocolOrcaSupervised):
-		return "orca_supervised"
-	default:
-		return ""
 	}
 }

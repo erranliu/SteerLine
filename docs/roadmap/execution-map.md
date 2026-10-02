@@ -76,8 +76,6 @@ flowchart LR
 
 | 任务 ID | 任务名称 | 交付范围 | 硬前置 | 执行规格 |
 | --- | --- | --- | --- | --- |
-| 65 | 会话采集与宿主交互实现隔离 | 历史来源/mapper/宿主解释归实现，采集预算和准备授权留中心 | #64 | [Spec](../spec/core-decoupling-04-conversation.spec.md) · [Plan](../spec/core-decoupling-04-conversation.plan.md) |
-| 66 | 内置实现组装与主包依赖反转 | 内置目录与具体构造外移，产品入口显式注入；主包生产清零 | #65 | [Spec](../spec/core-decoupling-05-composition.spec.md) · [Plan](../spec/core-decoupling-05-composition.plan.md) |
 | 67 | 主包隔离守卫与测试归位 | 主包测试清零、结构守卫与外层第三实现闭环 | #66 | [Spec](../spec/core-decoupling-06-boundary.spec.md) · [Plan](../spec/core-decoupling-06-boundary.plan.md) |
 | 68 | 主包解耦重构后代码清理 | 最终调用关系下的死代码/重复规则/无用辅助清理与索引同步 | #67 | [Spec](../spec/core-decoupling-07-cleanup.spec.md) · [Plan](../spec/core-decoupling-07-cleanup.plan.md) |
 | 69 | 中心写入端口收窄 | 窄提交契约接通命令/worker/任务/DAG/交付/会话，保留原子边界 | #68 | [Spec](../spec/core-decoupling-08-write-ports.spec.md) · [Plan](../spec/core-decoupling-08-write-ports.plan.md) |
@@ -110,6 +108,8 @@ flowchart LR
 | #71 → #72 | 实际 CLI 消费的产品纯契约、唯一 adapter 和暂存桥清单 | TUI 切换消费者并删除桥，不另建 I/O；模型/渲染不解释平台配置或写资格 |
 
 #65–#68 按硬前置串行整体交付后开工，一项一个实现 PR。#65 使用已交付配置/绑定封套和[生命周期端口](../validation/core-decoupling-03-lifecycle/README.md)，不重建副作用协调。可以提前只读盘点、审阅接口和准备 fixture；不能把接口草案或包内实验当作提前领取资格。前述串行阶段共享 execution/contracts、Service 和恢复入口，不按文件不同允许并行实施。旧到新测试路径映射随职责迁移交付，quick 不得因名称变化漏跑或重复矩阵。
+
+2026-10-02：#65 已合并；#66 外层组装与主包生产隔离已实现并独立复审修复，完全访问组合 core 6/rules 90/targeted 22 全通过，见[交付与复审记录](../validation/core-decoupling-05-composition/README.md)。本 PR 真实合并后才启动 #67；活动表保留剩余任务。
 
 #68 后按[后续维护约束](../spec/core-maintenance-constraints.md)并行存储 #69 → #70 与客户端 #71 → #72，各自仍等待硬前置。写端口/中心提交/SQL/schema 的修改由存储线负责；产品 DTO/CLI/adapter/TUI 由客户端线负责。两线通过稳定应用 Query/Command 接口隔离，不存在存储先完成才允许客户端开工的隐含边。共享类型形状和应用组装、守卫/quick 构造段必须指定所有者并顺序集成；冲突未解决时暂停该共享改动，不能用双实现或任意写入口绕过。
 

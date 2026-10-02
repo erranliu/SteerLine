@@ -6,7 +6,6 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/publication"
 )
@@ -30,7 +29,11 @@ func (s *Service) publishLocalWorkerRun(ctx context.Context, run *Run, workflow 
 		return empty, configErr
 	}
 	c := fixed.config
-	if run == nil || workflow == nil || execution == nil || run.WorkspaceIntent == nil || run.WorktreePath == nil || workflow.WorkflowRunID != run.RunID || execution.WorkflowRunID != run.RunID || run.Protocol != string(executionapi.ProtocolLocalCodexAppServer) || !codexworker.ValidNativeID(turnID) || execution.CurrentTurnID != turnID || execution.LastStoppedTurnID != turnID || c.PublicationPolicy.Publisher != executionapi.PublisherHostService {
+	entry, err := registrationFor(c)
+	if err != nil {
+		return empty, err
+	}
+	if run == nil || workflow == nil || execution == nil || run.WorkspaceIntent == nil || run.WorktreePath == nil || workflow.WorkflowRunID != run.RunID || execution.WorkflowRunID != run.RunID || run.Protocol != string(entry.Key.Protocol) || !entry.ValidTurnID(turnID) || execution.CurrentTurnID != turnID || execution.LastStoppedTurnID != turnID || c.PublicationPolicy.Publisher != executionapi.PublisherHostService {
 		return empty, errors.New("local host publication requires a fixed GitHub command provider and worker execution")
 	}
 	if canonical(*run.WorktreePath) != canonical(run.WorkspaceIntent.Path) || run.WorktreeBranch == nil || *run.WorktreeBranch != run.WorkspaceIntent.Branch || execution.Workspace.Branch != *run.WorktreeBranch || workflow.Branch == "" {
@@ -46,7 +49,7 @@ func (s *Service) publishLocalWorkerRun(ctx context.Context, run *Run, workflow 
 	client := publication.NewClient(c.PR, Runner{Dir: *run.WorktreePath, Timeout: duration(c.CommandTimeout), Env: map[string]string{"GIT_TERMINAL_PROMPT": "0"}}, duration(c.CommandTimeout))
 	publisher := publication.HostPublisher{Git: Runner{Dir: *run.WorktreePath, Timeout: duration(c.CommandTimeout), Env: map[string]string{"GIT_TERMINAL_PROMPT": "0"}}, GitCommand: c.Git, PR: client}
 	request := publication.Request{Version: 2, RunID: run.RunID, ExecutionID: execution.ExecutionID, TurnID: turnID, TaskID: run.TaskID, Workspace: *run.WorkspaceIntent, GitCommonDir: c.identity, Remote: c.Remote, RemoteURL: c.publicationRemoteURL, BaseBranch: workflow.Branch, Provider: publication.ProviderIdentity(c.PR)}
-	request, err := publisher.Preflight(ctx, request)
+	request, err = publisher.Preflight(ctx, request)
 
 	if err != nil {
 		return empty, err
@@ -104,6 +107,10 @@ func (s *Service) reconcileLocalWorkerPublication(ctx context.Context, run *Run)
 	if c.PublicationPolicy.Publisher != executionapi.PublisherHostService {
 		return false, nil
 	}
+	entry, err := registrationFor(c)
+	if err != nil {
+		return false, err
+	}
 	var op *OperationRecord
 	for i := range s.domain.Operations {
 		candidate := &s.domain.Operations[i]
@@ -118,7 +125,7 @@ func (s *Service) reconcileLocalWorkerPublication(ctx context.Context, run *Run)
 		return false, nil
 	}
 	var request publication.Request
-	if err = json.Unmarshal(op.Request, &request); err != nil || request.ValidateCandidate() != nil || request.RunID != run.RunID || run.Protocol != string(executionapi.ProtocolLocalCodexAppServer) || run.WorktreePath == nil || run.WorktreeBranch == nil || request.Workspace.Path != *run.WorktreePath || request.Workspace.Branch != *run.WorktreeBranch {
+	if err = json.Unmarshal(op.Request, &request); err != nil || request.ValidateCandidate() != nil || request.RunID != run.RunID || run.Protocol != string(entry.Key.Protocol) || !entry.ValidTurnID(request.TurnID) || run.WorktreePath == nil || run.WorktreeBranch == nil || request.Workspace.Path != *run.WorktreePath || request.Workspace.Branch != *run.WorktreeBranch {
 		return false, errors.Join(err, errors.New("saved local publication intent is invalid"))
 	}
 	workflow, execution := s.workflowRecords(run)

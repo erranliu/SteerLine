@@ -45,7 +45,7 @@ func TestLocalCodexManualRecoveryLive(t *testing.T) {
 		t.Fatal("owned Codex app-server survived its service Job close")
 	}
 	t.Setenv("STEERLINE_HOME", receipt.Home)
-	service, err := NewService(receipt.Config)
+	service, err := newTestService(receipt.Config)
 	if err != nil {
 		t.Fatal(err)
 	}

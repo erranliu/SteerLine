@@ -103,6 +103,16 @@ type workerCommitAttachment struct {
 }
 
 func (s *Service) commitWorkerAttached(run *Run, attachment workerCommitAttachment, operationIDs ...string) error {
+	if attachment.Binding != nil {
+		if s.Config.ExecutionDirectory == nil {
+			s.discardWorkerCandidates(operationIDs...)
+			return errors.New("execution directory is required for binding commitment")
+		}
+		if err := s.Config.ExecutionDirectory.ValidateRef(*attachment.Binding); err != nil {
+			s.discardWorkerCandidates(operationIDs...)
+			return err
+		}
+	}
 	if run == nil || s.domainStore == nil {
 		return errors.New("worker commitment requires a run and store")
 	}
@@ -173,19 +183,27 @@ func (s *Service) commitWorkerAttached(run *Run, attachment workerCommitAttachme
 	return nil
 }
 
+func (s *Service) discardWorkerCandidates(operationIDs ...string) {
+	if restored, err := copyDomainSnapshot(s.committed); err == nil {
+		s.domain = restored
+	}
+	for _, id := range operationIDs {
+		delete(s.pendingOperations, id)
+	}
+	_ = s.projectState()
+}
+
 func (s *Service) commitDeclared(request workerCommit) error {
 	request.Checkpoint.UpdatedAt, request.Checkpoint.HeartbeatAt = now(), now()
 	result, err := s.store.commitWorker(request)
 	if err != nil {
 		// Candidates have no durable authority. Restore the actor's working copy
 		// without publishing a successful checkpoint or advancing consumption.
-		if restored, restoreErr := copyDomainSnapshot(s.committed); restoreErr == nil {
-			s.domain = restored
-		}
+		var operationIDs []string
 		for _, write := range request.Operations {
-			delete(s.pendingOperations, write.After.OperationID)
+			operationIDs = append(operationIDs, write.After.OperationID)
 		}
-		_ = s.projectState()
+		s.discardWorkerCandidates(operationIDs...)
 		return err
 	}
 	committed, copyErr := copyDomainSnapshot(s.committed)

@@ -29,7 +29,7 @@ func projectionFixture(t *testing.T) (contracts.DomainSnapshot, Metadata) {
 		ProjectIdentity: "project",
 		Tasks:           []contracts.TaskRecord{{TaskID: "task", Title: "Task", Status: "in_progress"}},
 		WorkflowRuns: []contracts.WorkflowRunRecord{{WorkflowRunID: "run", TaskID: "task", WorkflowVersion: workerflow.Version, SelectedResult: "execution", Phase: "waiting_decision", ControlRevision: 42,
-			ExecutionProfile: &contracts.FixedExecutionProfile{Version: 5, ImplementationData: []executionapi.ImplementationDataEnvelope{implementationData}}}},
+			ExecutionProfile: &contracts.FixedExecutionProfile{Version: 5, Host: "local", ImplementationData: []executionapi.ImplementationDataEnvelope{implementationData}}}},
 		Executions: []contracts.ExecutionRecord{{ExecutionID: "execution", WorkflowRunID: "run", CurrentStep: "worker", CurrentAttemptID: "attempt", Backend: string(executionapi.BackendLocal), Protocol: string(executionapi.ProtocolLocalCodexAppServer), Agent: "codex", Status: "active", DecisionID: "decision",
 			Process: &executionapi.ProcessIdentity{Kind: "codex", PID: 12}, WorkspaceIntent: &executionapi.WorkspaceIntent{Path: "/work/tree", Branch: "codex/task"}, TurnStartedAt: &at}},
 		Attempts:  []contracts.StepAttemptRecord{{AttemptID: "attempt", ExecutionID: "execution", StepID: "worker", AttemptNumber: 1}},
@@ -123,9 +123,9 @@ func TestProjectionRetainsDeliveryAndReservationRules(t *testing.T) {
 }
 
 func TestExecutionProjectionKeepsRemotePathAndWhitespaceSemantics(t *testing.T) {
-	execution := contracts.ExecutionRecord{Backend: string(executionapi.BackendOrca), Protocol: string(executionapi.ProtocolOrcaSupervised), WorkspaceIntent: &executionapi.WorkspaceIntent{Path: "service-local-path", Branch: "codex/task"}, Status: "idle", LastTurnOutcome: " "}
+	execution := contracts.ExecutionRecord{Backend: string(executionapi.BackendOrca), Protocol: string(executionapi.ProtocolOrcaSupervised), Target: executionapi.ExecutionTarget{ConnectionID: "peer", ExternalRuntime: "remote"}, WorkspaceIntent: &executionapi.WorkspaceIntent{Path: "service-local-path", Branch: "codex/task"}, Status: "idle", LastTurnOutcome: " "}
 	run := Execution(contracts.Run{}, execution)
-	if run.WorktreePath != nil || *run.WorktreeBranch != "codex/task" || executionViewStatus(execution) != " " || HostForExecution(execution.Backend, execution.Protocol) != "orca_supervised" {
+	if run.WorktreePath != nil || *run.WorktreeBranch != "codex/task" || executionViewStatus(execution) != " " || workflowExecutionHost(contracts.WorkflowRunRecord{ExecutionProfile: &contracts.FixedExecutionProfile{Host: "orca_supervised"}}) != "orca_supervised" {
 		t.Fatal("remote intent was shown as an actual local workspace or whitespace fallback changed")
 	}
 }

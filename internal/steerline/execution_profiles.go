@@ -7,10 +7,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
-	"github.com/erranliu/SteerLine/internal/steerline/projection"
 	"github.com/erranliu/SteerLine/internal/steerline/publication"
 )
 
@@ -21,6 +19,7 @@ const fixedExecutionProfileVersion = 5
 // ExecutionProfile contains general routing/policy facts and opaque inputs for
 // strict implementation codecs. Native profile fields live in their owners.
 type ExecutionProfile struct {
+	directory                   *ExecutionDirectory
 	ConfiguredPublicationPolicy *executionapi.PublicationPolicy           `json:"publication_policy,omitempty"`
 	ExecutionRequirements       executionapi.ExecutionRequirements        `json:"-"`
 	RequirementsEvaluation      *executionapi.RequirementsEvaluation      `json:"-"`
@@ -41,7 +40,19 @@ type ExecutionProfile struct {
 
 type FixedExecutionProfile = contracts.FixedExecutionProfile
 
+// CheckFixedProfile reports whether the injected version directory can read
+// this exact frozen profile without replacing its implementation identity.
+func (c Config) CheckFixedProfile(profile FixedExecutionProfile) error {
+	if !verifyFixedExecutionProfile(profile, c.ExecutionDirectory) {
+		return &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "fixed execution profile key, version, codec or digest is unsupported"}
+	}
+	return nil
+}
+
 func (p ExecutionProfile) Freeze(projectIDs ...string) FixedExecutionProfile {
+	if p.directory == nil {
+		return FixedExecutionProfile{}
+	}
 	projectID := p.projectIdentity
 	if len(projectIDs) > 0 && projectIDs[0] != "" {
 		projectID = projectIDs[0]
@@ -53,7 +64,11 @@ func (p ExecutionProfile) Freeze(projectIDs ...string) FixedExecutionProfile {
 	if accepted == "" {
 		accepted = "unaccepted-profile-input"
 	}
-	data, display, _ := normalizeImplementationInputs(p.ImplementationConfigs, p.ExecutionPolicy, p.Host, p.Agent, projectID, p.ID, accepted)
+	var data []executionapi.ImplementationDataEnvelope
+	var display []string
+	if p.directory != nil {
+		data, display, _ = p.directory.NormalizeProfile(p.ImplementationConfigs, p.ExecutionPolicy, p.Host, p.Agent, projectID, p.ID, accepted)
+	}
 	p.ExecutionRequirements = p.ExecutionRequirements.Clone()
 	if p.RequirementsEvaluation != nil {
 		evaluation := p.RequirementsEvaluation.Clone()
@@ -65,8 +80,8 @@ func (p ExecutionProfile) Freeze(projectIDs ...string) FixedExecutionProfile {
 	p.Publication.Create.Args = slices.Clone(p.Publication.Create.Args)
 	p.Publication.AuthenticationRefs = slices.Clone(p.Publication.AuthenticationRefs)
 	fixed := FixedExecutionProfile{
-		Version: fixedExecutionProfileVersion, ImplementationVersion: executionImplementationVersion,
-		ImplementationKey: profileImplementationKey(p.Host, p.Agent), ImplementationData: cloneImplementationData(data),
+		Version: fixedExecutionProfileVersion, ImplementationVersion: p.directory.Version(),
+		ImplementationKey: profileImplementationKey(p.directory, p.Host, p.Agent), ImplementationData: cloneImplementationData(data),
 		ImplementationDisplay: slices.Clone(display), ExecutionRequirements: p.ExecutionRequirements,
 		RequirementsEvaluation: p.RequirementsEvaluation, RequirementsEvidenceDigest: requirementsEvidenceDigest(p.RequirementsEvaluation),
 		PublicationPolicy: p.PublicationPolicy, Publication: p.Publication, ExecutionPolicy: p.ExecutionPolicy,
@@ -82,13 +97,17 @@ func fixedExecutionProfileDigest(p FixedExecutionProfile) string {
 	return digestValue(p)
 }
 
-func verifyFixedExecutionProfile(p FixedExecutionProfile) bool {
-	if p.Version != fixedExecutionProfileVersion || p.ImplementationVersion != executionImplementationVersion ||
+func verifyFixedExecutionProfile(p FixedExecutionProfile, directory *ExecutionDirectory) bool {
+	if directory == nil || p.Version != fixedExecutionProfileVersion || p.ImplementationVersion != directory.Version() ||
 		p.ImplementationKey == "" || p.ID == "" || p.Name == "" || p.AcceptedConfigVersion == "" ||
 		p.PolicySource == "" || p.Digest == "" || p.Digest != fixedExecutionProfileDigest(p) ||
-		!verifyRequirementsSnapshot(p) || publication.CheckPolicy(p.PublicationPolicy, p.Host, p.Agent, publication.Config(p.Publication.Provider)) != nil ||
+		!verifyRequirementsSnapshot(p, directory) ||
 		publication.ValidateSettings(p.Publication, p.PublicationPolicy) != nil || p.ExecutionPolicy.Validate() != nil ||
 		p.PolicyDigest != digestValue(p.ExecutionPolicy) {
+		return false
+	}
+	entry, err := directory.Resolve(Config{ExecutionDirectory: directory, Host: p.Host, Agent: p.Agent})
+	if err != nil || entry.ValidatePublicationPolicy(p.PublicationPolicy, publication.Config(p.Publication.Provider)) != nil {
 		return false
 	}
 	if p.PublicationPolicy.Publisher == PublisherExecutionProfile {
@@ -105,20 +124,26 @@ func verifyFixedExecutionProfile(p FixedExecutionProfile) bool {
 		}
 		inputs = append(inputs, executionapi.ImplementationConfigInput{ImplementationKey: envelope.ImplementationKey, CodecVersion: envelope.CodecVersion, Payload: append([]byte(nil), envelope.Payload...)})
 	}
-	data, display, err := normalizeImplementationInputs(inputs, p.ExecutionPolicy, p.Host, p.Agent, projectID, p.ID, p.AcceptedConfigVersion)
+	data, display, err := directory.NormalizeProfile(inputs, p.ExecutionPolicy, p.Host, p.Agent, projectID, p.ID, p.AcceptedConfigVersion)
 	if err != nil || digestValue(data) != digestValue(p.ImplementationData) || digestValue(display) != digestValue(p.ImplementationDisplay) {
 		return false
 	}
-	return p.ImplementationKey == profileImplementationKey(p.Host, p.Agent)
+	return p.ImplementationKey == profileImplementationKey(directory, p.Host, p.Agent)
 }
 
 func (c Config) ApplyFixedExecutionProfile(p FixedExecutionProfile) Config {
+	c.frozenExecutionConfig = true
 	c.ExecutionRequirements = p.ExecutionRequirements.Clone()
 	c.requirementsEvaluation = p.RequirementsEvaluation
 	c.profilePublication = false
 	c.PublicationPolicy = p.PublicationPolicy
 	c.PR, c.Git, c.Remote, c.publicationRemoteURL, c.Branch = publication.Config(p.Publication.Provider), p.Publication.Git, p.Publication.Remote, p.Publication.RemoteURL, p.Publication.BaseBranch
 	c.Host, c.Agent = p.Host, p.Agent
+	if c.ExecutionDirectory != nil {
+		if entry, err := c.ExecutionDirectory.Resolve(Config{ExecutionDirectory: c.ExecutionDirectory, Host: p.Host, Agent: p.Agent}); err == nil {
+			c.WorkspaceBranchPrefix = entry.WorkspaceBranchPrefix
+		}
+	}
 	c.ImplementationData = cloneImplementationData(p.ImplementationData)
 	c.ImplementationDisplay = slices.Clone(p.ImplementationDisplay)
 	c.selectedProfileID = p.ID
@@ -130,6 +155,9 @@ func (c Config) ApplyFixedExecutionProfile(p FixedExecutionProfile) Config {
 func (p ExecutionProfile) Digest() string { return p.DigestFor(p.projectIdentity) }
 
 func (p ExecutionProfile) DigestFor(projectID string) string {
+	if p.directory == nil {
+		return ""
+	}
 	if projectID == "" {
 		projectID = "unresolved-project"
 	}
@@ -137,7 +165,7 @@ func (p ExecutionProfile) DigestFor(projectID string) string {
 	if accepted == "" {
 		accepted = "unaccepted-profile-input"
 	}
-	data, display, err := normalizeImplementationInputs(p.ImplementationConfigs, p.ExecutionPolicy, p.Host, p.Agent, projectID, p.ID, accepted)
+	data, display, err := p.directory.NormalizeProfile(p.ImplementationConfigs, p.ExecutionPolicy, p.Host, p.Agent, projectID, p.ID, accepted)
 	if err != nil {
 		return ""
 	}
@@ -161,7 +189,7 @@ func (p ExecutionProfile) DigestFor(projectID string) string {
 		Name                       string
 		Host                       string
 		Agent                      string
-	}{profileImplementationKey(p.Host, p.Agent), executionImplementationVersion, data, display, p.ExecutionRequirements,
+	}{profileImplementationKey(p.directory, p.Host, p.Agent), p.directory.Version(), data, display, p.ExecutionRequirements,
 		p.RequirementsEvaluation, requirementsEvidenceDigest(p.RequirementsEvaluation), p.PublicationPolicy, publication,
 		p.ExecutionPolicy, digestValue(p.ExecutionPolicy), accepted, p.PolicySource, p.ID, p.Name, p.Host, p.Agent})
 }
@@ -190,13 +218,17 @@ func (p ExecutionProfile) MatchesConfig(c Config) bool {
 }
 
 func (p ExecutionProfile) StaticUnavailableReason() string {
+	if p.directory == nil {
+		return "execution directory is required"
+	}
 	if err := p.ExecutionRequirements.Validate(); err != nil {
 		return err.Error()
 	}
-	if _, err := registrationFor(Config{Host: p.Host, Agent: p.Agent}); err != nil {
+	entry, err := p.directory.Resolve(Config{ExecutionDirectory: p.directory, Host: p.Host, Agent: p.Agent})
+	if err != nil {
 		return err.Error()
 	}
-	if err := publication.CheckPolicy(p.PublicationPolicy, p.Host, p.Agent, publication.Config(p.Publication.Provider)); err != nil {
+	if err := entry.ValidatePublicationPolicy(p.PublicationPolicy, publication.Config(p.Publication.Provider)); err != nil {
 		return err.Error()
 	}
 	if err := publication.ValidateSettings(p.Publication, p.PublicationPolicy); err != nil {
@@ -210,13 +242,14 @@ func (p ExecutionProfile) StaticUnavailableReason() string {
 	if accepted == "" {
 		accepted = "unaccepted-profile-input"
 	}
-	if _, _, err := normalizeImplementationInputs(p.ImplementationConfigs, p.ExecutionPolicy, p.Host, p.Agent, projectID, p.ID, accepted); err != nil {
+	if _, _, err := p.directory.NormalizeProfile(p.ImplementationConfigs, p.ExecutionPolicy, p.Host, p.Agent, projectID, p.ID, accepted); err != nil {
 		return err.Error()
 	}
 	return ""
 }
 
 func (c Config) bindProjectPolicy(p ExecutionProfile) ExecutionProfile {
+	p.directory = c.ExecutionDirectory
 	if p.ConfiguredPublicationPolicy != nil {
 		policy := *p.ConfiguredPublicationPolicy
 		p.ConfiguredPublicationPolicy = &policy
@@ -239,7 +272,10 @@ func (c Config) bindProjectPolicy(p ExecutionProfile) ExecutionProfile {
 		p.PolicySource = "service:explicit-config"
 	}
 	p.projectIdentity = configurationProjectIdentity(c)
-	data, display, err := normalizeImplementationInputs(p.ImplementationConfigs, p.ExecutionPolicy, p.Host, p.Agent, p.projectIdentity, p.ID, p.AcceptedConfigVersion)
+	if p.directory == nil {
+		return p
+	}
+	data, display, err := p.directory.NormalizeProfile(p.ImplementationConfigs, p.ExecutionPolicy, p.Host, p.Agent, p.projectIdentity, p.ID, p.AcceptedConfigVersion)
 	if err == nil {
 		p.ImplementationData, p.ImplementationDisplay = data, display
 	}
@@ -332,10 +368,18 @@ func (c Config) ResolveExecutionProfile(id, expectedDigest string) (Config, Exec
 }
 
 func (c Config) ApplyExecutionProfile(p ExecutionProfile) Config {
+	c.frozenExecutionConfig = false
 	p = c.bindProjectPolicy(p)
 	c.profilePublication = c.publicationUsesProfile()
 	c.PublicationPolicy = p.PublicationPolicy
 	c.Host, c.Agent = p.Host, p.Agent
+	if c.ExecutionDirectory != nil {
+		if entry, err := c.ExecutionDirectory.Resolve(Config{ExecutionDirectory: c.ExecutionDirectory, Host: p.Host, Agent: p.Agent}); err == nil {
+			c.WorkspaceBranchPrefix = entry.WorkspaceBranchPrefix
+		} else {
+			c.WorkspaceBranchPrefix = ""
+		}
+	}
 	c.ImplementationData = cloneImplementationData(p.ImplementationData)
 	c.ImplementationDisplay = slices.Clone(p.ImplementationDisplay)
 	c.selectedProfileID = p.ID
@@ -344,6 +388,9 @@ func (c Config) ApplyExecutionProfile(p ExecutionProfile) Config {
 }
 
 func validateExecutionProfiles(c Config) error {
+	if c.ExecutionDirectory == nil {
+		return errors.New("execution directory is required")
+	}
 	if err := c.ExecutionRequirements.Validate(); err != nil {
 		return err
 	}
@@ -385,12 +432,15 @@ func validateExecutionProfiles(c Config) error {
 	return nil
 }
 
-func profileImplementationKey(host, agent string) string {
-	entry, err := registrationFor(Config{Host: host, Agent: agent})
+func profileImplementationKey(directory *ExecutionDirectory, host, agent string) string {
+	if directory == nil {
+		return ""
+	}
+	entry, err := directory.Resolve(Config{ExecutionDirectory: directory, Host: host, Agent: agent})
 	if err != nil {
 		return ""
 	}
-	return string(entry.Key.Backend) + "/" + string(entry.Key.Protocol) + "/" + entry.Key.Agent
+	return entry.ProfileKey
 }
 
 func cloneImplementationData(values []executionapi.ImplementationDataEnvelope) []executionapi.ImplementationDataEnvelope {
@@ -424,18 +474,4 @@ func configurationProjectIdentity(c Config) string {
 		return canonical(c.Repository)
 	}
 	return "unresolved-project"
-}
-
-func codexProfileFromInputs(inputs []executionapi.ImplementationConfigInput) codexworker.ProfileConfig {
-	for _, input := range inputs {
-		if input.ImplementationKey == codexworker.ProfileCodecKey {
-			settings, _ := codexworker.DecodeProfileConfig(input.Payload)
-			return settings
-		}
-	}
-	return codexworker.ProfileConfig{}
-}
-
-func hostForExecution(backend, protocol string) string {
-	return projection.HostForExecution(backend, protocol)
 }

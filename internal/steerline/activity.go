@@ -12,7 +12,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
@@ -62,13 +61,15 @@ type Normalizer interface {
 	Normalize(line []byte) []ActivityEvent
 }
 
-// DetectNormalizer picks a normalizer from the first line of a stream. Codex
-// starts with thread.started; pi starts with a versioned session header.
-func DetectNormalizer(firstLine []byte) Normalizer {
-	if NewPiNormalizer().Detect(firstLine) {
-		return NewPiNormalizer()
+// DetectNormalizer selects from the normalizers explicitly supplied by the
+// application. The center has no built-in protocol fallback.
+func DetectNormalizer(firstLine []byte, normalizers ...Normalizer) Normalizer {
+	for _, normalizer := range normalizers {
+		if normalizer != nil && normalizer.Detect(firstLine) {
+			return normalizer
+		}
 	}
-	return NewCodexNormalizer()
+	return nil
 }
 
 func activityPath(logPath string) string {
@@ -249,8 +250,6 @@ func rawToText(raw json.RawMessage) string {
 	}
 	return string(raw)
 }
-
-func NewCodexNormalizer() Normalizer { return codexworker.NewNormalizer() }
 
 // ---- pi ----
 

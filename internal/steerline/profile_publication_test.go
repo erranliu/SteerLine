@@ -35,7 +35,7 @@ func TestProfileSelectionDigestMatchesServicePreflight(t *testing.T) {
 	}
 	global, err := json.Marshal(map[string]any{"version": 2, "default_execution_profile": "local", "execution_profiles": profiles})
 	require(t, err)
-	require(t, os.WriteFile(GlobalExecutionConfigPath(), global, 0600))
+	require(t, os.WriteFile(fixtureGlobalExecutionConfigPath(), global, 0600))
 	project, err := json.Marshal(map[string]any{
 		"repository": repository, "remote": "origin", "branch": "main", "task_authority": "native", "workflow_protocol": WorkerFlowVersion,
 		"git": Command{Executable: "git"}, "execution_policy": workspacePolicyFixture(),
@@ -44,12 +44,12 @@ func TestProfileSelectionDigestMatchesServicePreflight(t *testing.T) {
 	require(t, err)
 	path := filepath.Join(t.TempDir(), "project.json")
 	require(t, os.WriteFile(path, project, 0600))
-	client, err := LoadConfig(path)
+	client, err := loadFixtureConfig(path)
 	require(t, err)
 	// Match the console's makeProjectRef path, without running service preflight.
 	require(t, client.ResolveIdentity(context.Background()))
 	chosen := client.AvailableExecutionProfiles()
-	service, err := LoadConfig(path)
+	service, err := loadFixtureConfig(path)
 	require(t, err)
 	require(t, service.Preflight(context.Background(), true))
 	for _, profile := range chosen {
@@ -88,13 +88,13 @@ func TestProfilePublicationMixedRoutesAndFrozenResponsibility(t *testing.T) {
 		require(t, os.WriteFile(path, data, 0600))
 	}
 	profiles := mixedPublicationProfiles()
-	writeJSON(GlobalExecutionConfigPath(), map[string]any{"default_execution_profile": "local", "execution_profiles": profiles})
+	writeJSON(fixtureGlobalExecutionConfigPath(), map[string]any{"default_execution_profile": "local", "execution_profiles": profiles})
 	path := filepath.Join(t.TempDir(), "project.json")
 	writeJSON(path, map[string]any{
 		"repository": configTestRepository(t), "branch": "main", "task_authority": "native", "workflow_protocol": WorkerFlowVersion,
 		"execution_policy": workspacePolicyFixture(), "publication_policy": map[string]string{"publisher": PublisherExecutionProfile}, "pr": hostPublicationProviderFixture(),
 	})
-	c, err := LoadConfig(path)
+	c, err := loadFixtureConfig(path)
 	require(t, err)
 	if c.PublicationPolicy.Publisher != "host_service" {
 		t.Fatal("default route did not resolve its explicit publisher")
@@ -117,7 +117,7 @@ func TestProfilePublicationMixedRoutesAndFrozenResponsibility(t *testing.T) {
 			t.Fatal("publication create command was bound using another route's policy")
 		}
 		fixed := bound.Freeze()
-		if !verifyFixedExecutionProfile(fixed) {
+		if !testVerifyFixedExecutionProfile(fixed) {
 			t.Fatal("resolved profile cannot be restored from its execution snapshot")
 		}
 		before := bound.Digest()

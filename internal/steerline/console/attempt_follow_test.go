@@ -2,6 +2,7 @@ package console
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -50,7 +51,7 @@ func TestConsoleRestoresOnlyExplicitHistoryAttemptPin(t *testing.T) {
 	for _, pinned := range []bool{false, true} {
 		t.Run(map[bool]string{false: "automatic-follow", true: "manual-history"}[pinned], func(t *testing.T) {
 			t.Setenv("STEERLINE_HOME", t.TempDir())
-			profile, prefs, _, err := acquireViewProfile()
+			profile, prefs, _, err := acquireViewProfile(os.Getenv("STEERLINE_HOME"))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -62,7 +63,7 @@ func TestConsoleRestoresOnlyExplicitHistoryAttemptPin(t *testing.T) {
 				t.Fatal(err)
 			}
 			profile.close()
-			model, err := NewModel(context.Background(), []ProjectRef{ref}, Options{})
+			model, err := NewModel(context.Background(), []ProjectRef{ref}, Options{ApplicationHome: os.Getenv("STEERLINE_HOME")})
 			if err != nil {
 				t.Fatal(err)
 			}

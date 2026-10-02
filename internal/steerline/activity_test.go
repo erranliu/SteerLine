@@ -2,6 +2,7 @@ package steerline
 
 import (
 	"encoding/json"
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	"os"
 	"path/filepath"
 	"strings"
@@ -45,10 +46,10 @@ func TestActivityWriterDeduplicatesItemAcrossReopen(t *testing.T) {
 }
 
 func TestDetectNormalizer(t *testing.T) {
-	if got := DetectNormalizer([]byte(`{"type":"session","version":3,"id":"x"}`)); got.Name() != "pi" {
+	if got := DetectNormalizer([]byte(`{"type":"session","version":3,"id":"x"}`), NewPiNormalizer(), codexworker.NewNormalizer()); got.Name() != "pi" {
 		t.Fatalf("pi session header detected as %s", got.Name())
 	}
-	if got := DetectNormalizer([]byte(`{"type":"thread.started","thread_id":"t"}`)); got.Name() != "codex" {
+	if got := DetectNormalizer([]byte(`{"type":"thread.started","thread_id":"t"}`), NewPiNormalizer(), codexworker.NewNormalizer()); got.Name() != "codex" {
 		t.Fatalf("codex stream detected as %s", got.Name())
 	}
 }
@@ -67,7 +68,7 @@ func TestCodexNormalizer(t *testing.T) {
 		`{"type":"item.completed","item":{"id":"i5","type":"brand_new_item","payload":1}}`,
 	}
 	want := []string{"session", "turn", "command", "command", "message", "file_change", "reasoning", "usage", "error", "unknown"}
-	n := NewCodexNormalizer()
+	n := codexworker.NewNormalizer()
 	for i, line := range lines {
 		got := n.Normalize([]byte(line))
 		if len(got) != 1 {

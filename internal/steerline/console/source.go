@@ -17,14 +17,32 @@ import (
 // ProjectRef is the identity of a console view. ConfigPath and RunDir are both
 // part of the key so two configs for one repository keep separate view state.
 type ProjectRef struct {
-	Key        string
-	Name       string
-	ConfigPath string
-	Config     steerline.Config
-	Identity   string
-	RunDir     string
-	Error      string
-	Conflict   string
+	Key                string
+	Name               string
+	ConfigPath         string
+	Config             steerline.Config
+	NormalizerSelector func([]byte) steerline.Normalizer
+	ApplicationHome    string
+	ApplicationBin     string
+	Identity           string
+	RunDir             string
+	Error              string
+	Conflict           string
+}
+
+type ProjectConfigFile struct {
+	Name string
+	Path string
+	Err  error
+}
+
+// ConfigSource is supplied by the outer application. The console has no
+// default loader or implementation directory of its own.
+type ConfigSource interface {
+	ConfigFiles() ([]ProjectConfigFile, error)
+	LoadConfig(string) (steerline.Config, error)
+	NormalizerSelector([]byte) steerline.Normalizer
+	ApplicationPaths() (home, bin, etc string)
 }
 
 type ProjectSnapshot struct {
@@ -212,7 +230,7 @@ func (FileQuerySource) ReadActivity(ctx context.Context, ref ProjectRef, runID, 
 	if strings.TrimSpace(runID) == "" || strings.TrimSpace(path) == "" {
 		return LogBatch{}, errors.New("activity query identity or record path is missing")
 	}
-	return newFileSource(ref.Config).ReadLog(path, cursor)
+	return newFileSource(ref.Config, ref.NormalizerSelector).ReadLog(path, cursor)
 }
 
 func (FileQuerySource) ReadConversation(ctx context.Context, ref ProjectRef, filter steerline.ConversationFilter, cursor string) (steerline.ConversationPage, error) {

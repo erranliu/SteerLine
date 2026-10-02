@@ -11,23 +11,16 @@ import (
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
-// Query capability does not imply create capability. Host creation remains
-// exactly the existing GitHub command implementation.
-func CheckPolicy(p executionapi.PublicationPolicy, host, agent string, provider Config) error {
+// CheckPolicy validates publication values without selecting an execution
+// implementation. The application directory owns support decisions.
+func CheckPolicy(p executionapi.PublicationPolicy, provider Config) error {
 	if err := p.Validate(); err != nil {
 		return err
 	}
 	if err := provider.ValidateRemote(strings.TrimSuffix(provider.BaseURL, "/") + "/" + provider.Repository + ".git"); err != nil {
 		return errors.New("publication provider requires a valid kind/base_url/repository")
 	}
-	query := provider.Kind == "gitea" || provider.Kind == "command" && provider.Query.Executable != ""
-	if p.Publisher == executionapi.PublisherWorker && (host == "orca" || host == "orca_supervised") && query {
-		return nil
-	}
-	if p.Publisher == executionapi.PublisherHostService && host == "local" && agent == "codex" && provider.Kind == "command" && strings.TrimSuffix(provider.BaseURL, "/") == "https://github.com" && provider.Query.Executable != "" {
-		return nil
-	}
-	return executionapi.UnsupportedAdapterOperation("PublicationPolicy", "publication_policy is unsupported by the selected host/provider; publisher will not be changed")
+	return nil
 }
 
 func CreateDescription(p executionapi.PublicationPolicy, provider Config) contracts.Command {

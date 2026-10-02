@@ -54,7 +54,7 @@ var runIDPattern = regexp.MustCompile(`^[0-9a-f]{32}$`)
 var turnIDPattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 
 func WorkerInstruction(runID string) string {
-	return "\nLocal publication: stage only the files you intend to deliver. Do not commit, push, or create a PR from this Codex session. When the task is ready for a draft PR, end your final reply with this exact line (outside a code block):\nSTEERLINE_PUBLISH_READY " + runID + "\nIf you still need input or the work is incomplete, omit that line.\n"
+	return "\nLocal publication: stage only the files you intend to deliver. Do not commit, push, or create a PR from this worker session. When the task is ready for a draft PR, end your final reply with this exact line (outside a code block):\nSTEERLINE_PUBLISH_READY " + runID + "\nIf you still need input or the work is incomplete, omit that line.\n"
 }
 func RequestedByWorker(message, runID string) bool {
 	if !runIDPattern.MatchString(runID) {
@@ -88,7 +88,8 @@ func (request Request) Validate() error {
 		!filepath.IsAbs(request.Workspace.Path) || !filepath.IsAbs(request.GitCommonDir) || request.Workspace.Branch == "" || !validCommit(request.Workspace.BaseCommit) || request.Remote == "" || request.RemoteURL == "" || ValidateURL(request.RemoteURL) != nil || request.BaseBranch == "" {
 		return errors.New("local publication requires a fixed execution, turn and workspace")
 	}
-	if !regexp.MustCompile(`^codex/[A-Za-z0-9][A-Za-z0-9._-]*-[0-9a-f]{12}$`).MatchString(request.Workspace.Branch) || strings.Contains(request.Workspace.Branch, "..") {
+	branchPrefix, branchName, hasPrefix := strings.Cut(request.Workspace.Branch, "/")
+	if !hasPrefix || !regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`).MatchString(branchPrefix) || !regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*-[0-9a-f]{12}$`).MatchString(branchName) || strings.Contains(request.Workspace.Branch, "..") {
 		return errors.New("local publication execution branch is invalid")
 	}
 	if request.Provider.Kind != "command" || strings.TrimSuffix(request.Provider.BaseURL, "/") != "https://github.com" || request.Provider.QueryExecutable == "" || request.Provider.Repository == "" || !validSHA256(request.Provider.QueryArgsDigest) || !validSHA256(request.Provider.ConfigDigest) {

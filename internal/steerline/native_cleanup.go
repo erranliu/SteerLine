@@ -340,7 +340,7 @@ func commitNativeExecutionStopReceipt(ctx context.Context, tx *sqliteTx, project
 	if err := json.Unmarshal(executionPayload, &execution); err != nil {
 		return err
 	}
-	if workflow.TaskID != task.TaskID || execution.ExecutionID != evidence.ExecutionID || execution.WorkflowRunID != evidence.WorkflowRunID || execution.Process == nil || *execution.Process != op.Ref.External || execution.Target.ID != op.Ref.Target.ID || execution.Backend != string(executionapi.BackendLocal) || execution.Protocol != string(op.Protocol) || (op.Protocol != executionapi.ProtocolLocalProcess && op.Protocol != executionapi.ProtocolLocalCodexAppServer) {
+	if workflow.TaskID != task.TaskID || execution.ExecutionID != evidence.ExecutionID || execution.WorkflowRunID != evidence.WorkflowRunID || execution.Process == nil || *execution.Process != op.Ref.External || execution.Target.ID != op.Ref.Target.ID || execution.Backend != string(op.Backend) || execution.Protocol != string(op.Protocol) {
 		return nativeErr("authority_mismatch", "native stop receipt does not match the center's fixed execution identity")
 	}
 	var attemptPayload []byte

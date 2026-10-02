@@ -80,12 +80,12 @@ func (s *Service) beginLocalRecoveryAttempt(ctx context.Context, run *Run, mode 
 	if mode == "continue" && (!recovery.SessionAvailable || execution.SessionID == "") {
 		return errors.New("the original session identity is unavailable; choose a new session")
 	}
-	if owned := s.ownedLocalProcesses[run.RunID]; owned != nil {
+	if owned := s.ownedProcesses[run.RunID]; owned != nil {
 		if owned.Identity() != *execution.Process {
 			return errors.New("owned process identity changed before recovery")
 		}
 		owned.Close()
-		delete(s.ownedLocalProcesses, run.RunID)
+		delete(s.ownedProcesses, run.RunID)
 	}
 	if !workerTreeAbsent(*execution.Process) {
 		return errors.New("original worker descendants may still write to the worktree")
@@ -206,7 +206,7 @@ func (s *Service) refreshSavedRecoveryDecision(run *Run, preserveNative bool, re
 	return s.commitWorker(run)
 }
 
-func (s *Service) startManuallyRecoveredInitialCodex(ctx context.Context, run *Run, answer DecisionAnswer, commandID string) error {
+func (s *Service) startManuallyRecoveredInitialWorker(ctx context.Context, run *Run, answer DecisionAnswer, commandID string) error {
 	if answer.OptionID != "continue" || run.Decision == nil || run.Decision.Request.QuestionRoute != nil {
 		return errors.New("initial local execution requires an explicit continue decision")
 	}

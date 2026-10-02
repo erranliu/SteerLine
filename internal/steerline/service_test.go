@@ -191,7 +191,7 @@ func (f *fixture) service(t *testing.T) *Service {
 	if err = store.Close(); err != nil {
 		t.Fatal(err)
 	}
-	service, err := NewService(f.c)
+	service, err := newTestService(f.c)
 	if err != nil {
 		t.Fatal(err)
 	}

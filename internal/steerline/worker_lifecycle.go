@@ -6,9 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os/exec"
 	"strings"
-	"time"
 
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
@@ -57,42 +55,13 @@ func (s *Service) acceptStartedWorkerTurn(run *Run, worker *Worker, events, plat
 	return nil
 }
 
-type builtinLifecycleResolver struct{}
-
-func (builtinLifecycleResolver) ResolveLifecycle(setup executionapi.LifecycleSetup) (executionapi.LifecyclePort, error) {
-	ref := setup.Snapshot.Ref
-	key := executionRegistrationKey{Backend: ref.Backend, Agent: ref.Agent.Name, Protocol: ref.Protocol}
-	entry := builtinExecutionRegistry[key]
-	if entry == nil || entry.Lifecycle == nil {
-		return nil, &executionapi.BackendError{Code: executionapi.BackendUnsupported, Diagnostic: "no lifecycle implementation is registered for the fixed execution"}
-	}
-	setup.ProcessHost = localManagedProcessHost{timeout: setup.CommandTimeout}
-	return entry.Lifecycle(setup.Clone())
-}
-
-type localManagedProcessHost struct{ timeout time.Duration }
-
-func (localManagedProcessHost) StartManaged(command *exec.Cmd) (executionapi.StopHandle, error) {
-	return startProcess(command)
-}
-func (localManagedProcessHost) InspectProcess(identity *executionapi.ProcessIdentity) string {
-	return inspectProcess(identity)
-}
-func (localManagedProcessHost) NewProcessGeneration() string { return newID() }
-func (localManagedProcessHost) WriteExecutionFile(path string, value []byte) error {
-	return AtomicWrite(path, value)
-}
-func (host localManagedProcessHost) OutputCommand(ctx context.Context, command executionapi.LaunchCommand) ([]byte, error) {
-	return (Runner{Dir: command.WorkingDirectory, Timeout: host.timeout}).Output(ctx, Command{Executable: command.Executable, Args: append([]string(nil), command.Args...)})
-}
-
 func lifecycleSetupForRun(run *Run, fixed workerFlowContext, snapshot executionapi.LifecycleSnapshot) executionapi.LifecycleSetup {
 	blocked := append([]string(nil), fixed.config.publicationSettings().AuthenticationRefs...)
 	blocked = append(blocked, "BEADS_*", "BD_*", "GH_TOKEN", "GITHUB_TOKEN", "GITEA_TOKEN", "GIT_CONFIG_COUNT", "GIT_CONFIG_KEY_*", "GIT_CONFIG_VALUE_*")
 	return executionapi.LifecycleSetup{
 		Snapshot: snapshot.Clone(), ProfileData: cloneImplementationData(fixed.config.ImplementationData),
 		ProfileID: fixed.config.selectedProfileID, AcceptedConfigVersion: fixed.config.acceptedConfigVersion(),
-		Policy: fixed.config.ExecutionPolicy, ProcessHost: localManagedProcessHost{timeout: duration(fixed.config.CommandTimeout)}, RepositoryPath: fixed.config.Repository,
+		Policy: fixed.config.ExecutionPolicy, ProcessHost: fixed.config.ProcessHost, RepositoryPath: fixed.config.Repository,
 		RunDirectory: fixed.config.RunDir, CommandTimeout: duration(fixed.config.CommandTimeout),
 		AttemptNumber: run.DomainAttemptNumber, BlockedEnvironment: blocked,
 		GitExecutable: fixed.config.Git.Executable, GitArgs: append([]string(nil), fixed.config.Git.Args...),
@@ -100,9 +69,11 @@ func lifecycleSetupForRun(run *Run, fixed workerFlowContext, snapshot executiona
 	}
 }
 
-func lifecycleSetupForConfig(c Config, entry *executionRegistration) executionapi.LifecycleSetup {
+func lifecycleSetupForConfig(c Config, entry ExecutionRegistration) (executionapi.LifecycleSetup, error) {
 	if c.identity == "" {
-		_ = c.ResolveIdentity(context.Background())
+		if err := c.ResolveIdentity(context.Background()); err != nil {
+			return executionapi.LifecycleSetup{}, err
+		}
 	}
 	ref := executionapi.ExecutionRef{
 		Version: executionapi.ExecutionRecordVersion, Backend: entry.Key.Backend, Protocol: entry.Key.Protocol,
@@ -122,11 +93,11 @@ func lifecycleSetupForConfig(c Config, entry *executionRegistration) executionap
 	return executionapi.LifecycleSetup{
 		Snapshot: snapshot, ProfileData: cloneImplementationData(c.ImplementationData),
 		ProfileID: c.selectedProfileID, AcceptedConfigVersion: c.acceptedConfigVersion(),
-		Policy: c.ExecutionPolicy, ProcessHost: localManagedProcessHost{timeout: duration(c.CommandTimeout)},
+		Policy: c.ExecutionPolicy, ProcessHost: c.ProcessHost,
 		RepositoryPath: c.Repository, RunDirectory: c.RunDir, CommandTimeout: duration(c.CommandTimeout),
 		AttemptNumber: 1, BlockedEnvironment: blocked, GitExecutable: c.Git.Executable,
 		GitArgs: append([]string(nil), c.Git.Args...), RemoteName: c.Remote, TargetBranch: c.Branch,
-	}
+	}, nil
 }
 
 func (s *Service) lifecycleForRun(run *Run) (executionapi.LifecyclePort, workerFlowContext, error) {
@@ -724,7 +695,7 @@ func (s *Service) startWorkerLifecycle(ctx context.Context, run *Run, lifecycle 
 	}
 	policyCapabilities := lifecycle.PolicyCapabilities()
 	if policyCapabilities.LinkedWorkspaceWriteRoots {
-		args, err := codexLinkedWorktreeWriteArgs(ctx, fixed.config, fixed.execution.Workspace.Worktree)
+		args, err := linkedWorktreeWriteArgs(ctx, fixed.config, fixed.execution.Workspace.Worktree)
 		if err != nil {
 			return err
 		}
@@ -909,7 +880,7 @@ func (s *Service) startWorkerLifecycle(ctx context.Context, run *Run, lifecycle 
 	}
 }
 
-func (s *Service) interruptOwnedLocalTurn(runID string, owned *childProcess) {
+func (s *Service) interruptOwnedLocalTurn(runID string, owned executionapi.StopHandle) {
 	if owned == nil {
 		return
 	}
@@ -1089,8 +1060,8 @@ func (s *Service) executeLifecycleStep(ctx context.Context, run *Run, lifecycle 
 	if candidate.Action == executionapi.LifecycleCreateResource &&
 		lifecycle.PolicyCapabilities().LinkedWorkspaceWriteRoots && fixed.execution.PolicyResources == nil {
 		var linkedArgs []string
-		if fixed.config.ExecutionPolicy.Filesystem.WriteScope == "workspace-write" {
-			linkedArgs, err = codexLinkedWorktreeWriteArgs(ctx, fixed.config, fixed.execution.Workspace.Worktree)
+		if fixed.config.ExecutionPolicy.Filesystem.WriteScope == "workspace" {
+			linkedArgs, err = linkedWorktreeWriteArgs(ctx, fixed.config, fixed.execution.Workspace.Worktree)
 			if err != nil {
 				return err
 			}
@@ -1162,8 +1133,8 @@ func (s *Service) executeLifecycleStep(ctx context.Context, run *Run, lifecycle 
 	}
 	if receipt.Process != nil && fixed.execution.PolicyResources == nil && lifecycle.PolicyCapabilities().LinkedWorkspaceWriteRoots {
 		var linkedArgs []string
-		if fixed.config.ExecutionPolicy.Filesystem.WriteScope == "workspace-write" {
-			linkedArgs, err = codexLinkedWorktreeWriteArgs(ctx, fixed.config, fixed.execution.Workspace.Worktree)
+		if fixed.config.ExecutionPolicy.Filesystem.WriteScope == "workspace" {
+			linkedArgs, err = linkedWorktreeWriteArgs(ctx, fixed.config, fixed.execution.Workspace.Worktree)
 			if err != nil {
 				return err
 			}
@@ -1520,11 +1491,11 @@ func (s *Service) applyAppServerSessionReceipt(run *Run, request executionapi.Li
 	if err := mergeLifecycleExecutionReceipt(execution, receipt); err != nil {
 		return executionapi.LifecycleRequest{}, false, err
 	}
-	if owned, ok := receipt.Handle.(*childProcess); ok {
-		if s.ownedLocalProcesses == nil {
-			s.ownedLocalProcesses = make(map[string]*childProcess)
+	if owned, ok := receipt.Handle.(executionapi.OwnedProcessHandle); ok && owned.OwnedProcess() {
+		if s.ownedProcesses == nil {
+			s.ownedProcesses = make(map[string]executionapi.StopHandle)
 		}
-		s.ownedLocalProcesses[run.RunID] = owned
+		s.ownedProcesses[run.RunID] = owned
 	}
 	if receipt.EventPath != "" {
 		fixed.attempt.EventPath = receipt.EventPath

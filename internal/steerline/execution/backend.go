@@ -60,6 +60,13 @@ type StopHandle interface {
 	Close()
 }
 
+// OwnedProcessHandle distinguishes a managed process tree owned by this
+// service from a read-only attachment to an original external resource.
+type OwnedProcessHandle interface {
+	StopHandle
+	OwnedProcess() bool
+}
+
 type ExecutionStopper interface {
 	StopExecution(context.Context, ExecutionRef, Operation, StopHandle) (StopReceipt, error)
 }

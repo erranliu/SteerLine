@@ -1,4 +1,4 @@
-package steerline
+package steerlineapp
 
 import (
 	"os"
@@ -10,12 +10,12 @@ import (
 func TestSteerlineHomeAndDirs(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("STEERLINE_HOME", home)
-	if got := SteerlineHome(); got != filepath.Clean(home) {
+	if got := HomeDir(); got != filepath.Clean(home) {
 		t.Fatalf("home=%q want %q", got, home)
 	}
-	if SteerlineBinDir() != filepath.Join(home, "bin") ||
-		SteerlineEtcDir() != filepath.Join(home, "etc") ||
-		SteerlineStateRoot() != filepath.Join(home, "state") {
+	if BinDir() != filepath.Join(home, "bin") ||
+		EtcDir() != filepath.Join(home, "etc") ||
+		StateRoot() != filepath.Join(home, "state") {
 		t.Fatal("derived directories are wrong")
 	}
 }

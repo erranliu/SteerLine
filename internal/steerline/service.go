@@ -13,7 +13,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
@@ -36,7 +35,7 @@ type Service struct {
 	domainStore          *SQLiteStore
 	// workers owns live observers by authoritative workflow run ID.
 	workers             map[string]*Worker
-	ownedLocalProcesses map[string]*childProcess
+	ownedProcesses      map[string]executionapi.StopHandle
 	appServerLaunching  map[string]string // In-flight goroutines, never persisted execution authority.
 	appServerRecovering map[string]bool
 	workerMessages      chan workerMessage
@@ -65,17 +64,15 @@ type Service struct {
 	startupID         string
 }
 
-func NewService(c Config) (_ *Service, retErr error) {
-	return NewServiceWithLifecycleResolver(c, builtinLifecycleResolver{}, codexworker.NewConversationAdapter())
-}
-
-// NewServiceWithLifecycleResolver constructs the same service with an
-// explicitly supplied implementation directory. Lifecycle operations receive
+// NewService constructs a service from one explicit, immutable implementation
+// directory and its conversation source port. Lifecycle operations receive
 // only execution values and already-persisted operation intents.
-func NewServiceWithLifecycleResolver(c Config, resolver executionapi.LifecycleResolver, conversationSources contracts.ConversationSourcePort) (_ *Service, retErr error) {
-	if resolver == nil || conversationSources == nil {
-		return nil, errors.New("execution lifecycle and conversation source ports are required")
+func NewService(c Config, directory *ExecutionDirectory, resolver executionapi.LifecycleResolver, conversationSources contracts.ConversationSourcePort, processHost executionapi.ManagedProcessHost) (_ *Service, retErr error) {
+	if directory == nil || resolver == nil || conversationSources == nil || processHost == nil {
+		return nil, errors.New("execution directory, conversation source and process host ports are required")
 	}
+	c.ExecutionDirectory = directory
+	c.ProcessHost = processHost
 	if err := requireNativeTaskAuthority(c); err != nil {
 		return nil, err
 	}
@@ -112,7 +109,7 @@ func NewServiceWithLifecycleResolver(c Config, resolver executionapi.LifecycleRe
 			_ = db.Close()
 		}
 	}()
-	s := &Service{Config: c, baseConfig: c, lifecycleResolver: resolver, conversationSources: conversationSources, domainStore: db, store: &Store{Domain: db, Project: c.identity}, activities: map[string]*ActivityWriter{}, workers: map[string]*Worker{}, ownedLocalProcesses: map[string]*childProcess{}}
+	s := &Service{Config: c, baseConfig: c, lifecycleResolver: resolver, conversationSources: conversationSources, domainStore: db, store: &Store{Domain: db, Project: c.identity}, activities: map[string]*ActivityWriter{}, workers: map[string]*Worker{}, ownedProcesses: map[string]executionapi.StopHandle{}}
 	old, e := loadRuntimeSnapshot(db, c.identity, false)
 	if errors.Is(e, sql.ErrNoRows) {
 		old, e = nil, nil
@@ -892,10 +889,10 @@ func (s *Service) finishWorkerInLoop(run *Run, worker *Worker, workerErr error) 
 
 func (s *Service) shutdown() {
 	defer func() {
-		for runID, owned := range s.ownedLocalProcesses {
+		for runID, owned := range s.ownedProcesses {
 			s.interruptOwnedLocalTurn(runID, owned)
 			owned.Close()
-			delete(s.ownedLocalProcesses, runID)
+			delete(s.ownedProcesses, runID)
 		}
 	}()
 	if s.runContext != nil && s.runContext.Err() != nil {

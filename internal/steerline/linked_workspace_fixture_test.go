@@ -11,7 +11,8 @@ import (
 // Windows workspace-write needs Git's shared objects, refs and reflogs, plus
 // this linked worktree's admin directory to stage and commit from a Codex step.
 func codexLinkedWorktreeWriteArgs(ctx context.Context, c Config, worktree string) ([]string, error) {
-	if c.ExecutionPolicy.Filesystem.WriteScope != "workspace-write" || !c.ExecutionPolicy.Filesystem.GitMetadataWrite {
+	c = testConfigWithDirectory(c)
+	if c.ExecutionPolicy.Filesystem.WriteScope != "workspace" || !c.ExecutionPolicy.Filesystem.GitMetadataWrite {
 		return nil, nil
 	}
 	if c.identity == "" {

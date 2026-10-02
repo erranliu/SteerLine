@@ -19,7 +19,7 @@ func (s *Service) deliverLifecycleQuestionAnswer(ctx context.Context, run *Run, 
 		return ErrWorkerTurnStale
 	}
 	if lifecycle.PolicyCapabilities().LinkedWorkspaceWriteRoots {
-		args, err := codexLinkedWorktreeWriteArgs(ctx, fixed.config, execution.Workspace.Worktree)
+		args, err := linkedWorktreeWriteArgs(ctx, fixed.config, execution.Workspace.Worktree)
 		if err != nil {
 			return err
 		}

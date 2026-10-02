@@ -9,14 +9,13 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/erranliu/SteerLine/internal/steerline"
-	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
+
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 func consoleLocalProfile(id, name, model, effort string) steerline.ExecutionProfile {
-	payload, _ := codexworker.EncodeProfileConfig(codexworker.ProfileConfig{Executable: "codex", Model: model, ReasoningEffort: effort})
-	return steerline.ExecutionProfile{ID: id, Name: name, Host: "local", Agent: "codex", ImplementationConfigs: []executionapi.ImplementationConfigInput{{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 1, Payload: payload}}}
+	return consoleFixtureProfile(id, name, "local", "codex", []string{"Model：" + model, "Reasoning effort：" + effort})
 }
 
 func TestReadyStartChoosesConfiguredProfileAndBindsRequest(t *testing.T) {
@@ -50,7 +49,8 @@ func TestReadyStartChoosesConfiguredProfileAndBindsRequest(t *testing.T) {
 	updated, _ = m.Update(result)
 	m = updated.(Model)
 	var payload steerline.ControlPayload
-	if err := json.Unmarshal(control.request.Payload, &payload); err != nil || payload.TaskID != "task-B" || payload.ExecutionProfileID != other.ID || payload.ExecutionProfileDigest != other.Digest() {
+	_, accepted, resolveErr := ref.Config.ResolveExecutionProfile(other.ID, "")
+	if err := json.Unmarshal(control.request.Payload, &payload); err != nil || resolveErr != nil || payload.TaskID != "task-B" || payload.ExecutionProfileID != other.ID || payload.ExecutionProfileDigest != accepted.Digest() {
 		t.Fatalf("start request changed the selected profile: %+v / %v", payload, err)
 	}
 	for _, action := range m.projects[0].actions {
@@ -68,7 +68,7 @@ func TestRunDetailUsesItsFixedProfileAfterProjectConfigChanges(t *testing.T) {
 	run := &steerline.Run{RunID: "run-1", TaskID: "101", Backend: "orca", Agent: "codex"}
 	state := projectState{ref: ProjectRef{Config: steerline.Config{Host: "local", Agent: "codex", ImplementationDisplay: []string{"Model：new-project-default"}}}, snapshot: ProjectSnapshot{Domain: &steerline.DomainSnapshot{WorkflowRuns: []steerline.WorkflowRunRecord{{WorkflowRunID: run.RunID, ExecutionProfile: &fixed}}}}}
 	shown := strings.Join(renderFixedRunExecutionProfile(state, run), "\n")
-	for _, want := range []string{"远程审查", "orca-remote", "Orca 受监管远程", "fixed-model", "xhigh", "发布责任：worker", "https://fixed.invalid/org/repo", "ssh://git@fixed.invalid/org/repo.git", "FIXED_TOKEN"} {
+	for _, want := range []string{"远程审查", "orca-remote", "orca_supervised", "fixed-model", "xhigh", "发布责任：worker", "https://fixed.invalid/org/repo", "ssh://git@fixed.invalid/org/repo.git", "FIXED_TOKEN"} {
 		if !strings.Contains(shown, want) {
 			t.Fatalf("run adopted current project defaults instead of fixed profile: %s", shown)
 		}

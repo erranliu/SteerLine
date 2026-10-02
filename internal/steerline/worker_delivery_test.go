@@ -126,7 +126,7 @@ func TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged(t *testing.T)
 	wf := WorkflowRunRecord{ProjectIdentity: c.Identity(), WorkflowRunID: "worker-flow-wf-8", TaskID: "8", WorkflowVersion: WorkerFlowVersion, Phase: "waiting_pr_merge", Repository: c.Repository, Branch: "main", SelectedResult: "worker-flow-exec-8", PRURL: url, PRState: "open", CreatedAt: at, UpdatedAt: at}
 	require(t, c.bindPublicationTarget(ctx))
 	fixed := c.projectExecutionProfile().Freeze()
-	if !verifyFixedExecutionProfile(fixed) {
+	if !testVerifyFixedExecutionProfile(fixed) {
 		t.Fatal("delivery fixture did not freeze a valid execution profile")
 	}
 	wf.ExecutionProfile, wf.ConfigDigest = &fixed, fixed.AcceptedConfigVersion

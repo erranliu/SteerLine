@@ -56,7 +56,7 @@ func TestAppServerServiceParallelRecoveryLive(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	service, err := NewService(c)
+	service, err := newTestService(c)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -209,7 +209,7 @@ func TestAppServerServiceParallelRecoveryLive(t *testing.T) {
 	if err := service.Close(); err != nil {
 		t.Fatal(err)
 	}
-	service, err = NewService(c)
+	service, err = newTestService(c)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -303,7 +303,7 @@ func TestAppServerHostExitHelper(t *testing.T) {
 	if _, err := commands.ClaimNativeTask(ctx, c, TaskClaimOptions{TaskID: "8", RequestID: newID(), ExpectedTaskVersion: graph.ByID["8"].Version, ExpectedAuthorityVersion: graph.Authority.AuthorityVersion, RequestedBy: "operator", Explicit: true}); err != nil {
 		t.Fatal(err)
 	}
-	service, err := NewService(c)
+	service, err := newTestService(c)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -411,7 +411,7 @@ func TestAppServerHostExitRecoveryLive(t *testing.T) {
 	t.Setenv("STEERLINE_HOME", receipt.Home)
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
 	defer cancel()
-	service, err := NewService(receipt.Config)
+	service, err := newTestService(receipt.Config)
 	if err != nil {
 		t.Fatal(err)
 	}

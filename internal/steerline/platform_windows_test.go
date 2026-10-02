@@ -181,17 +181,17 @@ func TestWindowsStartServiceRequiresVisibleWindow(t *testing.T) {
 	_, configPath := lifecycleConfigFile(t, f, f.c.RunDir)
 	testExe, err := os.Executable()
 	require(t, err)
-	home := SteerlineHome()
-	_, err = InstallLaunchers()
+	home := fixtureHome()
+	_, err = InstallLaunchers(fixtureHome())
 	require(t, err)
-	result, err := StartService(context.Background(), configPath, StartServiceOptions{Executable: testExe})
+	result, err := testStartService(context.Background(), configPath, StartServiceOptions{Executable: testExe})
 	require(t, err)
 	if result.Status != "failed" || !strings.Contains(result.Error, "steerline install") {
 		t.Fatalf("missing installed binary was not explained: %+v", result)
 	}
 	require(t, os.MkdirAll(filepath.Join(home, "bin"), 0700))
 	require(t, os.WriteFile(filepath.Join(home, "bin", "steerline.exe"), []byte("test-only installed path"), 0600))
-	result, err = StartService(context.Background(), configPath, StartServiceOptions{Executable: testExe})
+	result, err = testStartService(context.Background(), configPath, StartServiceOptions{Executable: testExe})
 	require(t, err)
 	configAbsolute, err := filepath.Abs(configPath)
 	require(t, err)
@@ -207,7 +207,7 @@ func TestWindowsStartServiceRequiresVisibleWindow(t *testing.T) {
 func TestWindowsServiceWindowMissingConfigIsLiteral(t *testing.T) {
 	installDir := filepath.Join(t.TempDir(), "home with spaces")
 	t.Setenv("STEERLINE_HOME", installDir)
-	_, err := InstallLaunchers()
+	_, err := InstallLaunchers(fixtureHome())
 	require(t, err)
 	require(t, os.MkdirAll(filepath.Join(installDir, "bin"), 0700))
 	require(t, os.WriteFile(filepath.Join(installDir, "bin", "steerline.exe"), []byte("not executed"), 0600))
@@ -268,7 +268,7 @@ func TestWindowsPendingStartupPreservesMismatchClassification(t *testing.T) {
 				require(t, err)
 				before, err := os.ReadFile(path)
 				require(t, err)
-				if _, err := LoadConfig(configPath); err == nil {
+				if _, err := loadFixtureConfig(configPath); err == nil {
 					t.Fatal("startup evidence from another repository was accepted")
 				}
 				after, err := os.ReadFile(path)
@@ -278,7 +278,7 @@ func TestWindowsPendingStartupPreservesMismatchClassification(t *testing.T) {
 				}
 				return
 			}
-			result, err := StartService(context.Background(), configPath, StartServiceOptions{})
+			result, err := testStartService(context.Background(), configPath, StartServiceOptions{})
 			require(t, err)
 			if result.Status != "pending" || result.Connection.State != expected ||
 				result.Connection.Process.State != ProcessMatches || result.Connection.CanStart ||
@@ -343,7 +343,7 @@ func launchWindowsVisibleServiceWindow(t *testing.T, config Config, configPath s
 	require(t, err)
 	require(t, os.WriteFile(filepath.Join(home, "bin", "steerline.exe"), data, 0700))
 	t.Setenv("STEERLINE_HOME", home)
-	_, err = InstallLaunchers()
+	_, err = InstallLaunchers(fixtureHome())
 	require(t, err)
 	testExe, err := os.Executable()
 	require(t, err)

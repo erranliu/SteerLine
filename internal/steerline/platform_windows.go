@@ -178,6 +178,7 @@ type childProcess struct {
 }
 
 func (p *childProcess) Identity() executionapi.ProcessIdentity { return p.identity }
+func (*childProcess) OwnedProcess() bool                       { return true }
 func (p *childProcess) Kill() {
 	p.mu.Lock()
 	defer p.mu.Unlock()

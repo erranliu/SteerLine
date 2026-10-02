@@ -1,4 +1,4 @@
-package steerline
+package steerlineapp
 
 import (
 	"os"
@@ -10,6 +10,7 @@ import (
 
 func minimalConfig(repo string) Config {
 	return Config{
+		PublicationPolicy: executionPublicationFixture(), PR: hostPublicationProviderFixture(), ExecutionPolicy: workspacePolicyFixture(),
 		TaskAuthority:    "native",
 		WorkflowProtocol: WorkerFlowVersion,
 		Repository:       repo,
@@ -39,10 +40,10 @@ func projectRepo(t *testing.T) string {
 func writeProjectConfig(t *testing.T, name string, c Config) {
 	t.Helper()
 	b := projectConfigJSON(t, c)
-	if e := os.MkdirAll(SteerlineEtcDir(), 0700); e != nil {
+	if e := os.MkdirAll(EtcDir(), 0700); e != nil {
 		t.Fatal(e)
 	}
-	if e := os.WriteFile(filepath.Join(SteerlineEtcDir(), name+".json"), b, 0600); e != nil {
+	if e := os.WriteFile(filepath.Join(EtcDir(), name+".json"), b, 0600); e != nil {
 		t.Fatal(e)
 	}
 }

@@ -20,7 +20,7 @@ func TestProjectPublicationPolicyRequiredBeforeRepositoryProbe(t *testing.T) {
 		raw, err := json.Marshal(map[string]any{"publication_policy": policy, "execution_policy": workspacePolicyFixture(), "repository": "must-not-be-probed", "branch": "main", "task_authority": "native", "workflow_protocol": WorkerFlowVersion, "git": map[string]string{"executable": "must-not-be-called"}})
 		require(t, err)
 		require(t, os.WriteFile(path, raw, 0600))
-		_, err = LoadConfig(path)
+		_, err = loadFixtureConfig(path)
 		if err == nil || !strings.Contains(err.Error(), "publication_policy.publisher") {
 			t.Fatalf("missing/invalid policy reached repository probe: %v", err)
 		}
@@ -65,12 +65,12 @@ func TestPublicationPolicyFrozenConfigurationAndCredentials(t *testing.T) {
 	}
 	copy := original
 	copy.Publication.Provider.TokenEnv = "edited"
-	if verifyFixedExecutionProfile(copy) {
+	if testVerifyFixedExecutionProfile(copy) {
 		t.Fatal("changed auth reference accepted")
 	}
 	copy = original
 	copy.Version = 2
-	if verifyFixedExecutionProfile(copy) {
+	if testVerifyFixedExecutionProfile(copy) {
 		t.Fatal("old snapshot accepted")
 	}
 }
@@ -86,7 +86,7 @@ func TestPublicationOriginalProviderAfterRestartAndRemoteDrift(t *testing.T) {
 	changed.PR.Query = Command{Executable: "must-not-be-called", Args: []string{"changed"}}
 	changed.PR.Close = changed.PR.Query
 	changed.PR.TokenEnv = "CHANGED_AUTH_REF"
-	s, err := NewService(changed)
+	s, err := newTestService(changed)
 	require(t, err)
 	defer s.Close()
 	run := s.find(f.run.TaskID)
@@ -123,7 +123,8 @@ func TestPublicationOriginalProviderAfterRestartAndRemoteDrift(t *testing.T) {
 func TestPublicationAndPermissionChecksRemainCombined(t *testing.T) {
 	c := Config{WorkflowProtocol: WorkerFlowVersion, ExecutionPolicy: workspacePolicyFixture(), PublicationPolicy: executionapi.PublicationPolicy{Publisher: "worker"}, PR: publication.Config{Kind: "gitea", BaseURL: "https://forge.invalid", Repository: "org/repo"}, Host: "orca_supervised", Agent: "codex"}
 	setTestImplementationProfiles(t, &c, codexworker.ProfileConfig{Executable: "codex", Model: "gpt-6-luna", ReasoningEffort: "high"}, &orcaworker.ProfileConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "1m"}, &remote.ProfileConfig{ConnectionID: "peer", EnvironmentID: "remote-env", RepositorySelector: "id:repo", CoordinatorTerminal: "terminal", PollInterval: "1s", CapabilityReportVersion: 1})
-	if err := publication.CheckPolicy(c.PublicationPolicy, c.Host, c.Agent, c.PR); err != nil {
+	entry, err := registrationFor(c)
+	if err != nil || entry.ValidatePublicationPolicy(c.PublicationPolicy, c.PR) != nil {
 		t.Fatal("existing remote worker publication was removed")
 	}
 	if reason := c.projectExecutionProfile().StaticUnavailableReason(); !strings.Contains(reason, "requested execution_policy") {
@@ -150,7 +151,9 @@ func TestRemotePublicationClaimRequiresPermissionEvidence(t *testing.T) {
 	// Missing enforcement evidence must reject before Git, version, or remote
 	// probes, even though this route's existing worker publication is supported.
 	c.Git.Executable = "must-not-be-called"
-	require(t, publication.CheckPolicy(c.PublicationPolicy, c.Host, c.Agent, c.PR))
+	entry, err := registrationFor(c)
+	require(t, err)
+	require(t, entry.ValidatePublicationPolicy(c.PublicationPolicy, c.PR))
 	before, err := store.Query(context.Background(), c.Identity())
 	require(t, err)
 	_, err = (CommandService{Store: store, Project: c.Identity()}).ClaimNativeTask(context.Background(), c, TaskClaimOptions{TaskID: "60", RequestID: newID(), ExpectedTaskVersion: 1, ExpectedAuthorityVersion: 1})

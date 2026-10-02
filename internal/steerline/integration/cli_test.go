@@ -12,6 +12,9 @@ import (
 	"testing"
 
 	"github.com/erranliu/SteerLine/internal/steerline"
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	"github.com/erranliu/SteerLine/internal/steerlineapp"
 )
 
 var cliPath string
@@ -86,15 +89,19 @@ func TestTaskCLIProcessUsesNativeAuthorityWithoutInitializingMissingRead(t *test
 	if err := os.MkdirAll(home, 0700); err != nil {
 		t.Fatal(err)
 	}
-	writeConfig(t, steerline.GlobalExecutionConfigPath(), map[string]any{"execution_profiles": []map[string]any{{"id": "local", "name": "Local Codex", "host": "local", "agent": "codex", "sandbox": "workspace-write", "codex": map[string]string{"executable": "codex"}}}})
+	profilePayload, _ := codexworker.EncodeProfileConfig(codexworker.ProfileConfig{Executable: "codex", WindowsSandbox: "elevated"})
+	writeConfig(t, steerlineapp.GlobalExecutionConfigPath(), map[string]any{"version": 2, "execution_profiles": []map[string]any{{"id": "local", "name": "Local Codex", "host": "local", "agent": "codex", "implementation_configs": []executionapi.ImplementationConfigInput{{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 1, Payload: profilePayload}}}}})
 	writeConfig(t, configPath, map[string]any{
-		"repository":        repo,
-		"remote":            "origin",
-		"branch":            "main",
-		"task_authority":    "native",
-		"workflow_protocol": steerline.WorkerFlowVersion,
+		"repository":         repo,
+		"remote":             "origin",
+		"branch":             "main",
+		"task_authority":     "native",
+		"workflow_protocol":  steerline.WorkerFlowVersion,
+		"execution_policy":   executionapi.ExecutionPolicy{Filesystem: executionapi.FilesystemPolicy{ReadScope: "host", WriteScope: "workspace", GitMetadataWrite: true}, Network: "allow", Escalation: "deny"},
+		"publication_policy": executionapi.PublicationPolicy{Publisher: executionapi.PublisherHostService},
+		"pr":                 map[string]any{"kind": "command", "base_url": "https://github.com", "repository": "owner/repo", "query": map[string]any{"executable": "gh"}},
 	})
-	config, err := steerline.LoadConfig(configPath)
+	config, err := steerlineapp.LoadConfig(configPath)
 	if err != nil {
 		t.Fatal(err)
 	}

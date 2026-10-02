@@ -16,7 +16,7 @@ func TestRuntimeCorruptionNotOverwritten(t *testing.T) {
 	require(t, db.Transact(context.Background(), func(tx DomainTx) error {
 		return tx.PutProjection(f.c.Identity(), 99, []byte("truncated{"))
 	}))
-	if _, e := NewService(f.c); e == nil {
+	if _, e := newTestService(f.c); e == nil {
 		t.Fatal("corrupt snapshot accepted")
 	}
 	b, _, err := db.LoadProjection(context.Background(), f.c.Identity())

@@ -33,6 +33,7 @@ func TestCodexLinkedWorktreeWriteArgsOnlyGrantsFixedGitPaths(t *testing.T) {
 	runGit("-C", repo, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-qm", "base")
 	runGit("-C", repo, "worktree", "add", "-qb", "validation", worktree)
 	c := Config{Repository: repo, Git: Command{Executable: "git"}, CommandTimeout: "10s", ExecutionPolicy: workspacePolicyFixture()}
+	c = testConfigWithDirectory(c)
 	if err := c.ResolveIdentity(ctx); err != nil {
 		t.Fatal(err)
 	}
