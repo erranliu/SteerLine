@@ -275,7 +275,7 @@ func TestAppServerUnknownTurnDoesNotOfferPostTurnFeedback(t *testing.T) {
 func TestAppServerSlowRecoveryLeavesServiceWriterAvailable(t *testing.T) {
 	service, run := appServerAuditService(t)
 	workflow, execution := service.workflowRecords(run)
-	execution.PolicyResources = policyResourceReceiptFixture(workflow.ExecutionProfile.Digest, execution.Workspace.Worktree)
+	execution.PolicyResources = policyResourceReceiptFixture(workflow.ExecutionProfile.Digest, execution.Workspace.Worktree, execution)
 	identity, err := currentProcessIdentity()
 	if err != nil {
 		t.Fatal(err)

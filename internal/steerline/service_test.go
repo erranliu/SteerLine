@@ -490,7 +490,8 @@ func seedFakeCapabilities(t *testing.T, c Config) {
 	}
 	report := capabilityReport(backend, protocol, targetFor(c), agentFor(c), version)
 	if backend == executionapi.BackendOrca && c.needsCodexExecutable() {
-		out, err := (Runner{Dir: c.Repository, Timeout: 5 * time.Second}).Output(context.Background(), c.Codex, "--version")
+		settings := codexProfileSettings(c)
+		out, err := (Runner{Dir: c.Repository, Timeout: 5 * time.Second}).Output(context.Background(), Command{Executable: settings.Executable, Args: settings.Args}, "--version")
 		require(t, err)
 		report.AgentVersion = strings.TrimSpace(string(out))
 	}

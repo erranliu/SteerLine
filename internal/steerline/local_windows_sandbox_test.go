@@ -46,10 +46,11 @@ func TestLocalWindowsSandboxProfileFreezesAndRestores(t *testing.T) {
 		}
 	}
 	orcaConfig := Config{ExecutionPolicy: workspacePolicyFixture(), PublicationPolicy: executionPublicationFixture(), PR: hostPublicationProviderFixture(), Host: "orca", Agent: "codex", Repository: "repo", Branch: "main"}
-	setTestImplementationProfiles(t, &orcaConfig, codexworker.ProfileConfig{Executable: "codex"}, &orcaworker.ProfileConfig{Executable: "orca", Shell: "powershell.exe", WaitTimeout: "1m"})
+	orcaConfig.PublicationPolicy.Publisher = "worker"
+	setTestImplementationProfiles(t, &orcaConfig, codexworker.ProfileConfig{Executable: "codex", WindowsSandbox: "unelevated"}, &orcaworker.ProfileConfig{Executable: "orca", Shell: "powershell.exe", WaitTimeout: "1m"})
 	orcaProfile := orcaConfig.projectExecutionProfile()
 	orcaSettings, err := codexworker.DecodeProfileConfig(orcaProfile.Freeze(configurationProjectIdentity(orcaConfig)).ImplementationData[0].Payload)
-	if err != nil || orcaSettings.WindowsSandbox != "" {
+	if err != nil || orcaSettings.WindowsSandbox != "unelevated" {
 		t.Fatal("local default changed Orca path")
 	}
 }
