@@ -1,0 +1,59 @@
+{
+  "execution_id": "f0b6b998742a0834a41af98a1e20f0da",
+  "attempt_id": "26fd7fceb3ab20e847d3b73b490b42bf",
+  "configuration_digest": "b4b37eec3ed31519aafd06717fdf92d0d535d3539ba7c5b9dab2c9b7fa417587",
+  "generation": "08bc63fa04a9031be208b15a0541901f",
+  "process": {
+    "kind": "os",
+    "pid": 25864,
+    "created": "01dd5244b0d9f4da",
+    "executable": "c:\\users\\lmas1\\.local\\bin\\node_modules\\@openai\\codex\\node_modules\\@openai\\codex-win32-x64\\vendor\\x86_64-pc-windows-msvc\\bin\\codex.exe"
+  },
+  "execution_policy": {
+    "filesystem": {
+      "read_scope": "host",
+      "write_scope": "host",
+      "git_metadata_write": false
+    },
+    "network": "allow",
+    "escalation": "deny"
+  },
+  "policy_resources": {
+    "version": 3,
+    "digest": "2d852ca0f470c06ce740a2abe96ce384faeffcbbb0a193d798006c61a33fc977",
+    "profile_digest": "b4b37eec3ed31519aafd06717fdf92d0d535d3539ba7c5b9dab2c9b7fa417587",
+    "workspace": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-895281489\\smoke.local-codex\\live\\home\\worktrees\\ffcf2cab6879722cdea3d3444c759452",
+    "write_roots": [],
+    "temporary_roots": [],
+    "implementation_data": {
+      "version": 1,
+      "codec_version": 1,
+      "purpose": "execution-resources",
+      "implementation_key": "codex.policy-resources",
+      "project_id": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-895281489\\smoke.local-codex\\live\\repo\\.git",
+      "execution_id": "f0b6b998742a0834a41af98a1e20f0da",
+      "attempt_id": "26fd7fceb3ab20e847d3b73b490b42bf",
+      "generation": "08bc63fa04a9031be208b15a0541901f",
+      "config_digest": "b4b37eec3ed31519aafd06717fdf92d0d535d3539ba7c5b9dab2c9b7fa417587",
+      "digest": "ab153a6913d67a00d058f3ff60ecb5e018b1a9cfb1f7e775a76119cc9456afbe",
+      "payload": {
+        "native_version": "codex-cli 0.159.2",
+        "contract": "codex-policy-v1:0.159.2:host-write:network-allow:never",
+        "settings": {
+          "Executable": "C:\\Users\\lmas1\\.local\\bin\\node_modules\\@openai\\codex\\node_modules\\@openai\\codex-win32-x64\\vendor\\x86_64-pc-windows-msvc\\bin\\codex.exe",
+          "Args": [
+            "--config",
+            "sandbox_mode=danger-full-access",
+            "--config",
+            "approval_policy=never"
+          ],
+          "WorkingDirectory": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-895281489\\smoke.local-codex\\live\\home\\worktrees\\ffcf2cab6879722cdea3d3444c759452",
+          "EnvironmentRefs": null
+        }
+      }
+    }
+  },
+  "ready": null,
+  "preparation_verified": null,
+  "orca_turns": []
+}
