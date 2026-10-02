@@ -194,6 +194,7 @@ type LifecycleSnapshot struct {
 	PolicyResources     *ImplementationDataEnvelope
 	Operations          []Operation
 	Workspace           WorkspaceIntent
+	WorkspaceDirty      bool
 	WorkspacePlan       WorkspaceIntent
 	PendingTurn         *TurnInput
 	QuestionRoute       *QuestionRoute
@@ -623,6 +624,10 @@ type LifecycleRecoveryEvidence struct {
 	ProcessAbsent    bool
 }
 
+type LifecycleWorkspacePort interface {
+	InspectLifecycleWorkspace(context.Context, LifecycleSnapshot) (WorkspaceInspection, error)
+}
+
 type LifecycleRecoveryPort interface {
 	VerifyManualRecovery(context.Context, LifecycleSnapshot) (LifecycleRecoveryEvidence, error)
 	BindRecovery(context.Context, LifecycleSnapshot, LifecycleSnapshot) (ImplementationDataEnvelope, error)
@@ -650,6 +655,7 @@ type LifecyclePort interface {
 	LifecycleStopPort
 	LifecycleCleanupPort
 	LifecycleRecoveryPort
+	LifecycleWorkspacePort
 	LifecyclePolicyPort
 }
 

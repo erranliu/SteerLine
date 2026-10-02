@@ -13,7 +13,6 @@ import (
 	"time"
 
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
-	remote "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker"
 	"github.com/erranliu/SteerLine/internal/steerline/workspace"
 )
 
@@ -410,55 +409,28 @@ func (s *Service) inspectRunProcess(run *Run) string {
 	if run == nil || run.Process == nil {
 		return "execution identity unavailable"
 	}
-	c, configErr := s.executionConfigForRun(run)
-	if configErr != nil {
-		return "fixed execution profile unavailable: " + configErr.Error()
+	lifecycle, fixed, err := s.lifecycleForRun(run)
+	if err != nil {
+		return "fixed execution identity unavailable: " + err.Error()
 	}
-	records := executionRecords{root: c.RunDir}
-	ref, err := records.loadBinding(run.RunID, run.AttemptID)
-	if err == nil {
-		if ref.Protocol == executionapi.ProtocolOrcaSupervised {
-			execution := s.executionRecord(run)
-			if execution == nil || execution.Process == nil || *execution.Process != *run.Process ||
-				!remote.SameBaseTarget(ref.Target, execution.Target) || ref.External.Kind != "orca_supervised" ||
-				ref.External.RuntimeID != run.Process.RuntimeID || ref.External.CoordinatorRuntimeID != run.Process.CoordinatorRuntimeID ||
-				ref.External.Terminal != run.Process.Terminal || ref.External.Incarnation != run.Process.Incarnation ||
-				ref.External.ExecutionHost != run.Process.ExecutionHost || ref.External.WorktreeID != run.Process.WorktreeID ||
-				ref.WorkspacePath != execution.Workspace.Worktree || ref.WorkspaceBranch != execution.Workspace.Branch || ref.BaseCommit != execution.Workspace.Base {
-				return "remote session conflicts with its original execution binding"
-			}
-			// The session binding stays immutable across turns. Inspect the current
-			// Dispatch stored by the center's committed worker transition.
-			ref = remoteExecutionRef(run, execution)
-		}
-		if ref.External != *run.Process || ref.Backend == "" || ref.Protocol == "" || ref.Target.ID == "" {
-			return "execution binding conflicts with runtime identity"
-		}
-		if ref.Protocol == executionapi.ProtocolOrcaSupervised && !remote.SameBaseTarget(ref.Target, targetFor(c)) || ref.Protocol != executionapi.ProtocolOrcaSupervised && ref.Target != targetFor(c) {
-			return "execution target changed; refusing to inspect through a replacement backend connection"
-		}
-		backend := backendFor(c)
-		kind, protocol := backend.Identity()
-		if kind != ref.Backend || protocol != ref.Protocol {
-			return "execution backend or protocol differs from the fixed binding"
-		}
-		obs, observeErr := backend.Observe(context.Background(), ref)
-		if observeErr != nil {
-			return "execution identity unverifiable: " + observeErr.Error()
-		}
-		if obs.Liveness == "live" {
-			return "matching process still exists"
-		}
-		if obs.Liveness == "exited" {
-			if ref.Backend == executionapi.BackendLocal {
-				return "process absent"
-			}
-			return "orca terminal exited"
-		}
-		return "execution identity unverifiable: " + obs.Diagnostic
+	if fixed.execution.Process == nil || *fixed.execution.Process != *run.Process {
+		return "execution binding conflicts with runtime identity"
 	}
-	if !os.IsNotExist(err) {
+	snapshot, err := s.lifecycleSnapshot(run, fixed.workflow, fixed.execution, fixed.attempt, nil)
+	if err != nil {
 		return "execution binding invalid: " + err.Error()
 	}
-	return "execution binding unavailable; refusing to inspect through current configuration"
+	ctx, cancel := context.WithTimeout(context.Background(), positiveDuration(fixed.config.CommandTimeout, 30*time.Second))
+	defer cancel()
+	evidence, err := lifecycle.VerifyManualRecovery(ctx, snapshot)
+	if err != nil {
+		return "execution identity unverifiable: " + err.Error()
+	}
+	if evidence.ProcessAbsent {
+		return "process absent"
+	}
+	if evidence.ManagedProcess && evidence.SessionAvailable {
+		return "matching process still exists"
+	}
+	return "execution identity unverifiable"
 }

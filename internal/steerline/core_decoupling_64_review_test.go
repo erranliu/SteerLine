@@ -23,7 +23,55 @@ func (recoveryOnlyResolver) ResolveLifecycle(executionapi.LifecycleSetup) (execu
 	return recoveryOnlyLifecycle{}, nil
 }
 
+type inspectionLifecycle struct {
+	executionapi.LifecyclePort
+	want executionapi.ProcessIdentity
+	ref  executionapi.LifecycleSnapshot
+}
+
+func (p *inspectionLifecycle) VerifyManualRecovery(_ context.Context, snapshot executionapi.LifecycleSnapshot) (executionapi.LifecycleRecoveryEvidence, error) {
+	p.ref = snapshot.Clone()
+	if snapshot.Ref.External != p.want {
+		return executionapi.LifecycleRecoveryEvidence{}, ErrWorkerTurnStale
+	}
+	return executionapi.LifecycleRecoveryEvidence{ManagedProcess: true, SessionAvailable: true}, nil
+}
+
+func (p *inspectionLifecycle) InspectLifecycleWorkspace(_ context.Context, snapshot executionapi.LifecycleSnapshot) (executionapi.WorkspaceInspection, error) {
+	p.ref = snapshot.Clone()
+	return executionapi.WorkspaceInspection{Repository: snapshot.Session.ProjectID, Worktree: snapshot.Ref.WorkspacePath, Branch: snapshot.Ref.WorkspaceBranch, Base: snapshot.Ref.BaseCommit, Head: snapshot.Ref.BaseCommit, Dirty: snapshot.WorkspaceDirty}, nil
+}
+
+type inspectionResolver struct{ port *inspectionLifecycle }
+
+func (r inspectionResolver) ResolveLifecycle(executionapi.LifecycleSetup) (executionapi.LifecyclePort, error) {
+	return r.port, nil
+}
+
 func TestCD64ReviewReceiptAndRecoveryIsolation(t *testing.T) {
+	t.Run("recovery_preview_uses_original_lifecycle_port", func(t *testing.T) {
+		s, run := appServerAuditService(t)
+		execution := s.executionRecord(run)
+		workflow := s.workflowRecord(run)
+		execution.Generation, execution.ConfigurationDigest = "resources", workflow.ExecutionProfile.Digest
+		identity := executionapi.ProcessIdentity{Kind: "fixture-process", PID: 42, Created: "original-generation"}
+		execution.Process = &identity
+		execution.PolicyResources = policyResourceReceiptFixture(workflow.ExecutionProfile.Digest, execution.Workspace.Worktree, execution)
+		s.refreshRun(run)
+		port := &inspectionLifecycle{want: identity}
+		s.lifecycleResolver = inspectionResolver{port: port}
+		if got := s.inspectRunProcess(run); got != "matching process still exists" {
+			t.Fatalf("inspection bypassed the injected original lifecycle: %q", got)
+		}
+		if port.ref.Session.ExecutionID != execution.ExecutionID || port.ref.Session.AttemptID != run.AttemptID {
+			t.Fatal("recovery preview lost original execution/attempt identity")
+		}
+		evidence, err := s.inspectWorkflowWorkspace(context.Background(), run)
+		require(t, err)
+		if evidence.Worktree != execution.Workspace.Worktree || port.ref.Ref.Target != execution.Target || port.ref.Session.AttemptID != run.AttemptID {
+			t.Fatal("workspace inspection bypassed the original lifecycle binding")
+		}
+	})
 	t.Run("delivery_commit_failure_never_acknowledges", testCD64InboxCommitBeforeAck)
 	t.Run("invalid_receipt_keeps_binding", func(t *testing.T) {
 		execution := ExecutionRecord{ProjectIdentity: "project", ExecutionID: "execution", CurrentAttemptID: "attempt", Generation: "generation", ConfigurationDigest: "config",

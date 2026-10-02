@@ -172,25 +172,6 @@ func (s *Service) refreshSavedRecoveryDecision(run *Run, preserveNative bool, re
 			return s.waitWorkerFlow(run, "Original answer send has an unknown outcome; reconcile its native result before confirming again")
 		}
 	}
-	if s.domainStore != nil && (old.Request.QuestionRoute != nil || run.Protocol == string(executionapi.ProtocolOrcaTerminalV2)) {
-		oldAnswer := DecisionAnswer{DecisionID: old.ID, RunID: run.RunID, OptionID: old.OptionID, Note: old.Note, Answers: old.Answers, SourceAttemptID: old.SourceAttemptID, ExpectedRecoveryVersion: old.RecoveryVersion}
-		if command, err := s.domainStore.CommandByIdempotency(context.Background(), s.Config.identity, decisionAnswerKey(oldAnswer)); err == nil {
-			for _, op := range s.domain.Operations {
-				if op.IdempotencyKey == "orca-native-reply:"+execution.ExecutionID+":"+command.CommandID ||
-					op.IdempotencyKey == "orca-native-send:"+execution.ExecutionID+":"+command.CommandID {
-					if op.Status == "confirmed" {
-						s.setDecisionStatus(run, "reply_accepted")
-						return s.commitWorker(run)
-					}
-					if op.Status != "in_flight" && op.Status != "accepted" && op.Status != "outcome_unknown" {
-						continue
-					}
-					execution.RecoveryState = "unverified"
-					return s.waitWorkerFlow(run, "Original Orca reply/send has an unknown outcome; reconcile its receipt before confirming again")
-				}
-			}
-		}
-	}
 	oldInput := "Prior saved answer: " + workerFeedbackText(DecisionAnswer{OptionID: old.OptionID, Note: old.Note}, old.Request)
 	if len(old.Answers) != 0 {
 		oldInput += "\nNative answers: " + string(mustJSON(old.Answers))

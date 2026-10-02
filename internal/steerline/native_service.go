@@ -535,10 +535,8 @@ func (s *Service) dispatchNative(ctx context.Context) error {
 		if execution.Target.WorktreeID != "" || execution.Target.Branch != c.Branch {
 			return nativeErr("authority_mismatch", "claimed execution already has a conflicting workspace identity")
 		}
-		if c.hostName() == "local" {
-			execution.Target.WorktreeID = intent.Path
-			execution.Target.Branch = intent.Branch
-		}
+		// A workspace intent is a plan. Its resource identity is attached only
+		// after the preparation receipt commits, through the shared write set.
 		execution.UpdatedAt = now()
 		execution.OwnerServiceInstanceID = s.State.Service.InstanceID
 		workflow.UpdatedAt = now()

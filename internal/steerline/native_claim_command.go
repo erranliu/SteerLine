@@ -243,8 +243,11 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 		if !ok {
 			return nativeErr("task_not_found", "native task was not found")
 		}
-		if options.ExecutionProfile != nil && !options.ExecutionProfile.MatchesConfig(config) {
-			return nativeErr("stale_profile", "selected Profile digest changed before atomic claim")
+		if options.ExecutionProfile != nil {
+			currentProfile := options.ExecutionProfile.Freeze(config.identity)
+			if !options.ExecutionProfile.MatchesConfig(config) || currentProfile.Digest != wfr.ExecutionProfile.Digest {
+				return nativeErr("stale_profile", "selected Profile changed before atomic claim")
+			}
 		}
 		if current.Authority.AuthorityVersion != options.ExpectedAuthorityVersion || current.Authority.GraphRevision != graph.Authority.GraphRevision || currentTask.Version != options.ExpectedTaskVersion || currentTask.Status != "open" {
 			return nativeErr("stale_version", "task or project authority changed during claim preflight")

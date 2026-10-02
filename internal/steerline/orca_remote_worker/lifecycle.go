@@ -1222,3 +1222,11 @@ func lifecycleSnapshotWithBinding(snapshot executionapi.LifecycleSnapshot, targe
 }
 
 var _ executionapi.LifecyclePort = (*ExecutionLifecycle)(nil)
+
+func (l *ExecutionLifecycle) InspectLifecycleWorkspace(ctx context.Context, snapshot executionapi.LifecycleSnapshot) (executionapi.WorkspaceInspection, error) {
+	inspection, err := NewBackend(l.config).InspectWorkspace(ctx, snapshot.Ref)
+	if err == nil {
+		inspection.Dirty = snapshot.WorkspaceDirty
+	}
+	return inspection, err
+}

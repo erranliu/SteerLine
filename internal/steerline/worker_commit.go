@@ -124,7 +124,7 @@ func (s *SQLiteStore) commitWorker(ctx context.Context, request workerCommit) (w
 				v.After.ProjectIdentity != request.Project || v.After.StepID != "worker" ||
 				request.Attempt == nil || request.Attempt.Before != nil || request.Attempt.After.AttemptNumber != v.Before.AttemptNumber+1 ||
 				request.Execution == nil || request.Execution.Before == nil || request.Execution.After.CurrentAttemptID != request.AttemptID ||
-				request.Execution.Before.Protocol != string(executionapi.ProtocolLocalCodexAppServer) || !request.Execution.Before.RecoveryRequired ||
+				request.Execution.Before.Process == nil || request.Execution.Before.Process.Kind != "os" || !request.Execution.Before.RecoveryRequired ||
 				request.Execution.Before.RecoveryState != "interrupted" && request.Execution.Before.RecoveryState != "completed" ||
 				v.After.InputRevision != v.Before.InputRevision || v.After.ContractDigest != v.Before.ContractDigest ||
 				request.Attempt.After.InputRevision != v.Before.InputRevision || request.Attempt.After.ContractDigest != v.Before.ContractDigest ||
@@ -185,7 +185,7 @@ func (s *SQLiteStore) commitWorker(ctx context.Context, request workerCommit) (w
 					}
 				}
 				for _, v := range request.Operations {
-					if v.Before == nil && v.After.Kind != "orca_native_terminal_close" && v.After.Kind != "orca_remote_release" && v.After.Kind != "orca_remote_coordinator_close" && v.After.Kind != "cleanup_resources" {
+					if v.Before == nil && v.After.Kind != "cleanup_resources" {
 						return nativeErr("task_not_active", "settled worker cannot start another action")
 					}
 				}

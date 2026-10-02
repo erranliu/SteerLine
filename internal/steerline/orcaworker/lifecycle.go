@@ -11,6 +11,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	"github.com/erranliu/SteerLine/internal/steerline/workspace"
 )
 
 // ExecutionLifecycle owns native Orca requests and interprets their receipts.
@@ -455,3 +456,7 @@ func (l *ExecutionLifecycle) boundProcess(snapshot executionapi.LifecycleSnapsho
 }
 
 var _ executionapi.LifecyclePort = (*ExecutionLifecycle)(nil)
+
+func (l *ExecutionLifecycle) InspectLifecycleWorkspace(ctx context.Context, snapshot executionapi.LifecycleSnapshot) (executionapi.WorkspaceInspection, error) {
+	return workspace.InspectLifecycleWorkspace(ctx, l.setup, snapshot)
+}

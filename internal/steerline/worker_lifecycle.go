@@ -387,6 +387,7 @@ func lifecycleSnapshot(run *Run, workflow *WorkflowRunRecord, execution *Executi
 		ConfigurationDigest: execution.ConfigurationDigest,
 		ResourceGeneration:  execution.Generation,
 		Implementation:      cloneImplementationData(execution.ImplementationData),
+		WorkspaceDirty:      execution.Workspace.Dirty,
 		Workspace:           executionapi.WorkspaceIntent{Path: execution.Workspace.Worktree, Branch: execution.Workspace.Branch, BaseCommit: execution.Workspace.Base},
 		OutputCursor:        attempt.OutputCursor, PendingTurn: pending,
 		PendingDeliveryID: execution.PendingDeliveryID,

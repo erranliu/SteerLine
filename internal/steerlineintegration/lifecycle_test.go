@@ -45,6 +45,9 @@ func testIntegratedAppServerTwoTurns(t *testing.T) {
 	first := waitIntegrationRun(t, ctx, service, fixture.config, func(run *steerline.Run, execution *steerline.ExecutionRecord) bool {
 		return run.Decision != nil && run.Decision.Status == "pending" && execution.TurnNumber == 1 && execution.CurrentTurnID == execution.LastStoppedTurnID
 	})
+	if first.run.Process == nil {
+		t.Fatal("first app-server receipt omitted its process identity")
+	}
 	firstSession, firstProcess, firstTurn := first.execution.SessionID, *first.run.Process, first.execution.CurrentTurnID
 	if firstSession != integrationAppServerSession || firstProcess.Kind != "os" || firstTurn == "" {
 		t.Fatalf("first app-server receipt lost its original session/process/turn: session=%q process=%+v turn=%q", firstSession, firstProcess, firstTurn)
@@ -88,6 +91,9 @@ func testIntegratedNativeOriginalSessionGate(t *testing.T) {
 		return run.Decision != nil && run.Decision.Status == "pending" && run.Decision.Request.QuestionRoute != nil &&
 			execution.CurrentTurnID != "" && execution.Target.Dispatch == "ctx-2" && execution.TurnNumber == 1
 	})
+	if first.run.Process == nil {
+		t.Fatal("native receipt omitted its process identity")
+	}
 	original := *first.run.Process
 	sessionID, sessionGeneration := first.execution.SessionID, first.execution.SessionGeneration
 	workspace, runID, dispatchID := derefString(first.run.WorktreePath), first.run.Target.OrchestrationRun, first.run.Target.Dispatch
@@ -363,6 +369,7 @@ type runningIntegrationService struct {
 	cancel     context.CancelFunc
 	done       chan error
 	stopped    bool
+	closed     bool
 }
 
 func startIntegrationService(t *testing.T, parent context.Context, config steerline.Config, resolver executionapi.LifecycleResolver) *runningIntegrationService {
@@ -374,6 +381,7 @@ func startIntegrationService(t *testing.T, parent context.Context, config steerl
 	ctx, cancel := context.WithCancel(parent)
 	harness := &runningIntegrationService{service: service, config: config, reader: reader,
 		queries: steerline.NewQueryService(reader, config.Identity()), cancel: cancel, done: make(chan error, 1)}
+	t.Cleanup(func() { harness.stop(t) })
 	go func() { harness.done <- service.RunWithDispatch(ctx, "manual") }()
 	waitFor(t, 30*time.Second, func() bool {
 		select {
@@ -397,18 +405,21 @@ func startIntegrationService(t *testing.T, parent context.Context, config steerl
 
 func (h *runningIntegrationService) stop(t *testing.T) {
 	t.Helper()
-	if h == nil || h.stopped {
+	if h == nil || h.closed {
 		return
 	}
+	h.closed = true
 	h.cancel()
-	select {
-	case err := <-h.done:
-		h.stopped = true
-		if err != nil {
-			t.Errorf("public service shutdown: %v", err)
+	if !h.stopped {
+		select {
+		case err := <-h.done:
+			h.stopped = true
+			if err != nil {
+				t.Errorf("public service shutdown: %v", err)
+			}
+		case <-time.After(20 * time.Second):
+			t.Error("public service did not stop")
 		}
-	case <-time.After(20 * time.Second):
-		t.Error("public service did not stop")
 	}
 	if err := h.service.Close(); err != nil {
 		t.Errorf("close service database: %v", err)

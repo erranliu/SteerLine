@@ -12,12 +12,14 @@ import (
 
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	"github.com/erranliu/SteerLine/internal/steerline/workspace"
 )
 
 // ExecutionLifecycle owns app-server session setup, turn input, observation,
 // and reconciliation. Every mutating call receives one center-persisted
 // operation; the returned binding must be committed before another step.
 type ExecutionLifecycle struct {
+	setup          executionapi.LifecycleSetup
 	Backend        Backend
 	HistoryCommand contracts.Command
 	ProbeLifecycle func(context.Context, executionapi.LifecycleSetup) (executionapi.CapabilityReport, error)
@@ -67,7 +69,7 @@ func NewExecutionLifecycle(setup executionapi.LifecycleSetup) (executionapi.Life
 		return nil, err
 	}
 	history := ReaderCommand(contracts.Command{Executable: profile.Executable, Args: append([]string(nil), profile.Args...)}, profile.Profile)
-	return ExecutionLifecycle{Backend: backend, HistoryCommand: history, ProbeLifecycle: func(ctx context.Context, probeSetup executionapi.LifecycleSetup) (executionapi.CapabilityReport, error) {
+	return ExecutionLifecycle{setup: setup, Backend: backend, HistoryCommand: history, ProbeLifecycle: func(ctx context.Context, probeSetup executionapi.LifecycleSetup) (executionapi.CapabilityReport, error) {
 		probeSetup.ProcessHost = setup.ProcessHost
 		return probeLifecycleCapabilities(ctx, backend, history, probeSetup)
 	}}, nil
@@ -693,4 +695,8 @@ func (observer *lifecycleObserver) forward() {
 			return
 		}
 	}
+}
+
+func (l ExecutionLifecycle) InspectLifecycleWorkspace(ctx context.Context, snapshot executionapi.LifecycleSnapshot) (executionapi.WorkspaceInspection, error) {
+	return workspace.InspectLifecycleWorkspace(ctx, l.setup, snapshot)
 }
