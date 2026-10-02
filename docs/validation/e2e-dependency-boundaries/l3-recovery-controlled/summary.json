@@ -1,0 +1,124 @@
+{
+  "scope": "e2e",
+  "level": "L3",
+  "env": "controlled",
+  "environment": {
+    "source_commit": "8b1094d14cf107cc840374074547e05dcd305cba",
+    "worktree_status": " M cmd/test-feedback/scoped.go\n M tests/e2e/README.md\n M tests/e2e/cmd/sandbox-setup/main.go\n M tests/e2e/internal/controlled/helper.go\n M tests/e2e/internal/driver/driver.go\n M tests/e2e/internal/testenv/live.go\n M tests/e2e/internal/testenv/permissions.go\n M tests/e2e/internal/testenv/query.go\n?? docs/spec/e2e-dependency-boundaries.plan.md\n?? docs/spec/e2e-dependency-boundaries.spec.md\n?? internal/testboundary/boundary_test.go\n?? tests/e2e/internal/evidence/execution.go\n?? tests/e2e/internal/evidence/execution_test.go\n?? tests/e2e/internal/native/product_adapters.go\n?? tests/e2e/internal/native/product_adapters_test.go",
+    "go_version": "go version go1.26.4 windows/amd64",
+    "go_env": {
+      "GOARCH": "amd64",
+      "GOCACHE": "C:\\Users\\lmas1\\AppData\\Local\\go-build",
+      "GOFLAGS": "",
+      "GOOS": "windows",
+      "GOTOOLCHAIN": "auto"
+    },
+    "os": "windows",
+    "architecture": "amd64",
+    "machine": {
+      "host_name": "liuming-asus",
+      "logical_cpu_count": 20,
+      "processor_identifier": "AMD64 Family 26 Model 36 Stepping 0, AuthenticAMD"
+    },
+    "concurrency": {
+      "GOMAXPROCS_environment": "unset",
+      "go_build_package_parallel": "Go default",
+      "go_test_parallel": "default 20",
+      "runtime_GOMAXPROCS": "20"
+    },
+    "build_cache_condition": "as found; no explicit cache clear",
+    "enabled_native_acceptance_switches": [],
+    "native_acceptance_note": "controlled worker/provider; no model requests"
+  },
+  "selected_scenarios": [
+    {
+      "id": "recovery.waiting-merge-restart",
+      "level": "L3",
+      "suite": "recovery",
+      "package": "./tests/e2e/suites/recovery",
+      "test": "TestWaitingMergeRestart",
+      "env": "controlled"
+    }
+  ],
+  "groups": [
+    {
+      "id": "e2e-1",
+      "command": [
+        "go",
+        "test",
+        "-tags=e2e",
+        "-json",
+        "-count=1",
+        "-p=1",
+        "-parallel=1",
+        "-timeout=6m",
+        "-run=^(TestWaitingMergeRestart)$",
+        "./tests/e2e/suites/recovery"
+      ],
+      "assigned_tests": [
+        "TestWaitingMergeRestart"
+      ],
+      "assigned_packages": [
+        "./tests/e2e/suites/recovery"
+      ],
+      "stdout_json_log": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-boundary-l3-20261002-165326\\e2e-1.jsonl",
+      "stderr_log": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-boundary-l3-20261002-165326\\e2e-1.stderr.txt",
+      "wall_seconds": 82.5973257,
+      "exit_code": 0,
+      "summary": {
+        "status": "passed",
+        "passed": true,
+        "complete": true,
+        "command_exit_code": 0,
+        "package_count": 1,
+        "passed_packages": 1,
+        "failed_packages": [],
+        "skipped_packages": [],
+        "test_count": 1,
+        "passed_tests": 1,
+        "failed_tests": 0,
+        "skipped_tests": 0,
+        "packages": [
+          {
+            "package": "github.com/erranliu/SteerLine/tests/e2e/suites/recovery",
+            "status": "pass",
+            "elapsed_seconds": 81.09
+          }
+        ],
+        "tests": [
+          {
+            "package": "github.com/erranliu/SteerLine/tests/e2e/suites/recovery",
+            "name": "TestWaitingMergeRestart",
+            "status": "pass",
+            "elapsed_seconds": 80.3
+          }
+        ],
+        "slowest_tests": [
+          {
+            "package": "github.com/erranliu/SteerLine/tests/e2e/suites/recovery",
+            "name": "TestWaitingMergeRestart",
+            "status": "pass",
+            "elapsed_seconds": 80.3
+          }
+        ],
+        "failures": [],
+        "skipped": [],
+        "incomplete_reasons": [],
+        "test_event_wall_seconds": 81.0884407,
+        "has_test_event_wall": true
+      }
+    }
+  ],
+  "build_sha256": {
+    "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-boundary-l3-20261002-165326\\build\\controlled-helper.exe": "50c593cb586a11cbd473cb2cb81f7c46f7506e8aa0e4890e55f435a54c507dc3",
+    "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-boundary-l3-20261002-165326\\build\\steerline.exe": "e40718e582467d964cd80d3e623e7c3290e3b69139d3253844b5824d81fdbb5c"
+  },
+  "preparation_seconds": 4.1374353,
+  "execution_seconds": 82.6275824,
+  "passed": true,
+  "cleanup_complete": true,
+  "errors": null,
+  "started_at": "2026-10-02T08:53:26.8744856Z",
+  "finished_at": "2026-10-02T08:54:53.9708869Z",
+  "coverage": "selected-L3"
+}
