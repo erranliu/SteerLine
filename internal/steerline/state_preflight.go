@@ -147,7 +147,7 @@ func preflightWorkerFlowState(ctx context.Context, c Config) error {
 		if resolveErr != nil || execution.Backend != string(entry.Key.Backend) || execution.Agent != entry.Key.Agent || execution.Protocol != string(entry.Key.Protocol) {
 			return nativeErr("unsupported_schema", "execution identity differs from its fixed implementation snapshot")
 		}
-		if execution.Process != nil && !awaitingRecoveryResources(&execution) {
+		if (execution.Process != nil || execution.SessionID != "") && !awaitingRecoveryResources(&execution) {
 			if execution.PolicyResources == nil {
 				return nativeErr("unsupported_schema", "bound execution requires its original policy resource snapshot; preserve external state")
 			}

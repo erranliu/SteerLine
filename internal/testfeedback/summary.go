@@ -14,11 +14,12 @@ const maxJSONLine = 32 << 20
 
 // Event is one event from go test -json.
 type Event struct {
-	Time    string   `json:"Time"`
-	Action  string   `json:"Action"`
-	Package string   `json:"Package"`
-	Test    string   `json:"Test,omitempty"`
-	Elapsed *float64 `json:"Elapsed,omitempty"`
+	ImportPath string   `json:"ImportPath,omitempty"`
+	Time       string   `json:"Time"`
+	Action     string   `json:"Action"`
+	Package    string   `json:"Package"`
+	Test       string   `json:"Test,omitempty"`
+	Elapsed    *float64 `json:"Elapsed,omitempty"`
 }
 
 type Package struct {
@@ -41,6 +42,7 @@ type Summary struct {
 	CommandExitCode      int       `json:"command_exit_code"`
 	PackageCount         int       `json:"package_count"`
 	PassedPackages       int       `json:"passed_packages"`
+	BuildFailures        []string  `json:"build_failures,omitempty"`
 	FailedPackages       []string  `json:"failed_packages"`
 	SkippedPackages      []string  `json:"skipped_packages"`
 	TestCount            int       `json:"test_count"`
@@ -102,6 +104,14 @@ func Parse(raw []byte, commandExitCode int) Summary {
 		var event Event
 		if err := json.Unmarshal(line, &event); err != nil {
 			addIncomplete(fmt.Sprintf("invalid JSON at line %d: %v", lineNumber, err))
+			continue
+		}
+		if event.Action == "build-output" || event.Action == "build-fail" {
+			if event.ImportPath == "" || event.Package != "" || event.Test != "" {
+				addIncomplete(fmt.Sprintf("invalid build event at line %d", lineNumber))
+			} else if event.Action == "build-fail" {
+				s.BuildFailures = append(s.BuildFailures, event.ImportPath)
+			}
 			continue
 		}
 		if event.Package == "" || event.Action == "" {
@@ -192,7 +202,7 @@ func Parse(raw []byte, commandExitCode int) Summary {
 	if len(startedPackages) == 0 && len(finishedPackages) == 0 {
 		addIncomplete("JSON log contains no package start or terminal event")
 	}
-	if commandExitCode != 0 && s.Complete && s.FailedTests == 0 && len(s.FailedPackages) == 0 {
+	if commandExitCode != 0 && s.Complete && s.FailedTests == 0 && len(s.FailedPackages) == 0 && len(s.BuildFailures) == 0 {
 		addIncomplete(fmt.Sprintf("go test process exited with code %d without a terminal test failure", commandExitCode))
 	}
 
@@ -222,11 +232,11 @@ func Parse(raw []byte, commandExitCode int) Summary {
 	} else {
 		s.SlowestTests = []Test{}
 	}
-	s.Passed = commandExitCode == 0 && s.Complete && s.FailedTests == 0 && len(s.FailedPackages) == 0
+	s.Passed = commandExitCode == 0 && s.Complete && s.FailedTests == 0 && len(s.FailedPackages) == 0 && len(s.BuildFailures) == 0
 	s.Status = "passed"
 	if !s.Complete {
 		s.Status = "incomplete"
-	} else if commandExitCode != 0 || s.FailedTests > 0 || len(s.FailedPackages) > 0 {
+	} else if commandExitCode != 0 || s.FailedTests > 0 || len(s.FailedPackages) > 0 || len(s.BuildFailures) > 0 {
 		s.Status = "failed"
 	}
 	return s

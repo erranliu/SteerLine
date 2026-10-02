@@ -6,6 +6,8 @@ import (
 	"os/exec"
 	"strings"
 	"testing"
+
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 func TestDeadWorkerRecoveryPreservesDecisionAndFreshAnswer(t *testing.T) {
@@ -29,7 +31,9 @@ func TestDeadWorkerRecoveryPreservesDecisionAndFreshAnswer(t *testing.T) {
 	service.refreshRun(run)
 	service.markServiceRecoveryGate()
 	require(t, service.commitWorker(run))
-	result := appServerRecoveryResult{runID: run.RunID, attemptID: run.AttemptID, execution: *execution, dead: true}
+	result := appServerRecoveryFixture(t, service, run)
+	result.dead = true
+	result.receipt.State.WorkerAbsent, result.receipt.State.WritersAbsent = true, true
 	require(t, service.applyAppServerRecovery(result))
 	if run.Decision == nil || run.Decision.Status != "pending" || execution.RecoveryState != "interrupted" {
 		t.Fatal("dead worker did not create a recovery decision")
@@ -71,4 +75,22 @@ func TestDeadWorkerRecoveryPreservesDecisionAndFreshAnswer(t *testing.T) {
 		execution.Error == nil || !strings.Contains(*execution.Error, "external operation has an unknown outcome") {
 		t.Fatal("WorkflowRun publication uncertainty was bypassed by manual recovery")
 	}
+}
+
+// Recovery observations must carry the same durable original operation as a
+// real lifecycle reconciliation, even when the external observer is a fixture.
+func appServerRecoveryFixture(t *testing.T, service *Service, run *Run) appServerRecoveryResult {
+	t.Helper()
+	execution := service.executionRecord(run)
+	input := executionapi.TurnInput{CommandID: execution.CurrentCommandID, Prompt: "original persisted input"}
+	_, err := service.startWorkerOperation(run, "start_worker_turn", "worker-turn:"+execution.ExecutionID+":"+input.CommandID, &input)
+	require(t, err)
+	fixed, err := service.workerFlowContext(run)
+	require(t, err)
+	request, err := service.originalLifecycleRequest(run, fixed)
+	require(t, err)
+	execution = service.executionRecord(run)
+	return appServerRecoveryResult{runID: run.RunID, attemptID: run.AttemptID, execution: *execution, request: request,
+		receipt: executionapi.LifecycleReceipt{Operation: request.Operation, Disposition: executionapi.OperationConfirmed,
+			State: executionapi.LifecycleStateFacts{SessionID: execution.SessionID, SessionGeneration: execution.SessionGeneration, TurnID: execution.CurrentTurnID}}}
 }

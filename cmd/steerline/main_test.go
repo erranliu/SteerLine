@@ -90,6 +90,7 @@ func TestWaitServiceCommandResolvesIdentityAndKeepsPolling(t *testing.T) {
 		RunDir:     filepath.Join(t.TempDir(), "state"),
 		Git:        steerline.Command{Executable: "git"},
 	}
+	config.ProcessHost = steerlineapp.NewProcessHost(30 * time.Second)
 	resolvedConfig := config
 	if err := resolvedConfig.ResolveIdentity(context.Background()); err != nil {
 		t.Fatalf("resolve test repository identity: %v", err)

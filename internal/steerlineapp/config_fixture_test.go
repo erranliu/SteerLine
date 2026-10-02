@@ -127,7 +127,7 @@ func nativeTaskFixture(t *testing.T) (Config, string) {
 	fixtureGit(t, repo, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false", "commit", "-qm", "fixture")
 	fixtureGit(t, repo, "remote", "add", "origin", "https://github.com/owner/repo.git")
 	localGlobalExecutionFixture(t)
-	c := Config{Repository: repo, Remote: "origin", Branch: "main", TaskAuthority: "native", WorkflowProtocol: WorkerFlowVersion, ExecutionPolicy: workspacePolicyFixture(), PublicationPolicy: executionPublicationFixture(), PR: hostPublicationProviderFixture()}
+	c := Config{TaskPoll: "10s", PRPoll: "30s", Heartbeat: "5s", CommandTimeout: "30s", ShutdownGrace: "10s", ExecutableTypes: []string{"task"}, Git: Command{Executable: "git"}, Repository: repo, Remote: "origin", Branch: "main", TaskAuthority: "native", WorkflowProtocol: WorkerFlowVersion, ExecutionPolicy: workspacePolicyFixture(), PublicationPolicy: executionPublicationFixture(), PR: hostPublicationProviderFixture()}
 	path := filepath.Join(t.TempDir(), "project.json")
 	require(t, os.WriteFile(path, projectConfigJSON(t, c), 0600))
 	c, err := LoadConfig(path)

@@ -262,7 +262,9 @@ func TestAppServerUnknownTurnDoesNotOfferPostTurnFeedback(t *testing.T) {
 	}
 	worker := &Worker{cancelObservation: func() {}, observationDone: make(chan struct{})}
 	close(worker.observationDone)
-	if err := service.applyAppServerRecovery(appServerRecoveryResult{runID: run.RunID, execution: *execution, worker: worker}); err != nil {
+	result := appServerRecoveryFixture(t, service, run)
+	result.worker = worker
+	if err := service.applyAppServerRecovery(result); err != nil {
 		t.Fatal(err)
 	}
 	workflow, execution = service.workflowRecords(run)

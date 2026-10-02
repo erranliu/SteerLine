@@ -105,10 +105,12 @@ func newTestDirectory() (*ExecutionDirectory, error) {
 			ValidateProfileSelection: func(policy executionapi.ExecutionPolicy, agent string, payloads map[string][]byte) error {
 				return orcaworker.ValidateProfileSelection(policy, agent, payloads[codexworker.ProfileCodecKey], payloads[orcaworker.ProfileCodecKey])
 			},
-			ValidateConfig:            func(context.Context, Config) error { return nil },
-			Preflight:                 func(context.Context, Config) error { return nil },
-			PrepareClaim:              testPrepareClaim,
-			ReadinessRequired:         func(c Config) bool { return runtime.GOOS == "windows" && codexProfileSettings(c).WindowsSandbox != "" },
+			ValidateConfig: func(context.Context, Config) error { return nil },
+			Preflight:      func(context.Context, Config) error { return nil },
+			PrepareClaim:   testPrepareClaim,
+			ReadinessRequired: func(c Config) bool {
+				return runtime.GOOS == "windows" && (codexProfileSettings(c).WindowsSandbox != "" || c.ExecutionPolicy.Filesystem.WriteScope == "host")
+			},
 			BuildPolicyResource:       testBuildPolicyResource,
 			VerifyPolicyResource:      testVerifyPolicyResource,
 			LinkedWorktreeWriteArgs:   codexLinkedWorktreeWriteArgs,
@@ -251,7 +253,7 @@ func testPrepareClaim(ctx context.Context, c Config) (ClaimPreparation, error) {
 	if err := codexworker.VerifyPolicyVersion(strings.TrimSpace(string(out))); err != nil {
 		return ClaimPreparation{}, err
 	}
-	if runtime.GOOS == "windows" && c.Host == "orca" && settings.WindowsSandbox != "" {
+	if runtime.GOOS == "windows" && c.Host == "orca" && (settings.WindowsSandbox != "" || c.ExecutionPolicy.Filesystem.WriteScope == "host") {
 		if _, err := nativeOrcaFixedAgentCommand(c); err != nil {
 			return ClaimPreparation{}, err
 		}

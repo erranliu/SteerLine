@@ -30,6 +30,9 @@ func consoleFixtureProfile(id, name, host, agent string, display []string) steer
 }
 
 func consoleFixtureConfig(c steerline.Config, path string) steerline.Config {
+	if len(c.ExecutableTypes) == 0 {
+		c.ExecutableTypes = []string{"task", "bug", "feature", "chore"}
+	}
 	if c.Host == "" {
 		c.Host = "local"
 	}
