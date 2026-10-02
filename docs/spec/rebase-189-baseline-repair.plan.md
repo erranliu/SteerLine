@@ -17,3 +17,7 @@
 Full 新暴露的问题包括重构后只读 metadata probe 与权限 admission 混用、异步 fixture 在派发前耗尽轮询次数，以及原配置的 raw policy 变更未进入 immutable pin。修复 fixture 的层级和条件等待；nativeWorkflowPin 固定整个原 profile，定向 `TestNativeClaimAllowsManualParallelButKeepsAutoSlot` 必须拒绝合法 JSON 的 policy 变更。真实 Orca probe 已原生执行成功但 exec pragma 未被 evidence 识别；只接受合法 `// @exec` 调度参数行，保留完整原命令、工具结果、身份、marker/exit 验证。新增 pragma 正向与篡改拒绝单测，`go test ./internal/steerline/orcaworker -count=1` 后重新使用独立现场运行完整 L2 与受影响 Orca L3，保留首轮失败与 usage。
 
 异步测试驱动按真实 actor 顺序 drain 后恢复原任务，派发受理后才开始观测次数预算；重启时停止并重新绑定测试 actor 消息通道。Windows fixture 锁删除中的 AccessDenied 按同一十秒锁窗口等待，不创建新锁路径、不放宽生产权限。对应 core ER1/ER3/ER4/原终端恢复定向与 `go test ./internal/steerlineintegration -run '^TestCD65HistoryAndPreparation$' -count=1`，必须保持原 Dispatch 和清理断言。
+
+组合回归暴露 fixture 过早为只有资源的 Session 注册 observer，占据 actor 后阻止首次 Task/Dispatch。测试驱动只为已受理 Dispatch 恢复 observer，保持生产 actor 原准备顺序。增加组合入口 `TestCD64IntentReceiptAndRecoveryGate` / `TestCD65HistoryAndPreparation` / `TestCD65SourceCommitAndHostGate` 定向复核，之后再运行完整 L1/Full，保留失败运行证据。
+
+Windows 完整环境的多个 Git 校验共享准备阶段的命令预算；测试 fixture 明确使用产品默认 30 秒，而真实 4/10 分钟期限不变。workspace 校验保留原命令错误原因。多个组合用例总运行超过 `go test` 默认十分钟，定向组合入口使用与 Full 一致的 `-timeout=45m`，各场景自身期限不变，原十分钟超时日志保留。

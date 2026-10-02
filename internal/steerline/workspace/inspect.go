@@ -106,7 +106,7 @@ func Verify(ctx context.Context, git Git, repository Repository, intent *Intent,
 			return errors.New("worktree HEAD differs from pinned base")
 		}
 	} else if _, err := git.Output(ctx, intent.Path, "merge-base", "--is-ancestor", intent.BaseCommit, "HEAD"); err != nil {
-		return errors.New("worktree HEAD no longer contains pinned base")
+		return fmt.Errorf("worktree HEAD no longer contains pinned base: %w", err)
 	}
 	return nil
 }

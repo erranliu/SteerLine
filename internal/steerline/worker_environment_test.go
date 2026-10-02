@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -33,6 +34,7 @@ func newEnvironmentFixtureWithPolicy(t *testing.T, state fakeNativeOrcaState, mo
 	t.Helper()
 	ctx := context.Background()
 	c, commit, store := openDAGFixture(t)
+	c.CommandTimeout = "30s"
 	if out, err := exec.Command("git", "-C", c.Repository, "push", "--quiet", "origin", "HEAD:refs/heads/main").CombinedOutput(); err != nil {
 		t.Fatalf("fixture base: %v: %s", err, out)
 	}
@@ -99,7 +101,10 @@ func driveTestLifecycleWorker(service *Service, run *Run) error {
 	if err := service.observeWorkerEnvironment(context.Background(), run); err != nil {
 		return err
 	}
-	if service.workers[run.RunID] == nil {
+	initialTurn := nativeOrcaCurrentTurn(service.executionRecord(run))
+	// A resource-only observer would occupy the actor before its first Task
+	// and Dispatch exist. Resume observation only for an accepted turn.
+	if service.workers[run.RunID] == nil && initialTurn != nil && initialTurn.DispatchID != "" {
 		lifecycle, _, err := service.lifecycleForRun(run)
 		if err != nil {
 			return err
@@ -112,10 +117,16 @@ func driveTestLifecycleWorker(service *Service, run *Run) error {
 	observedPolls := 0
 	for time.Now().Before(deadline) {
 		service.drainWorkerMessages()
-		if err := service.resumeConfiguredWork(context.Background()); err != nil {
+		_, execution := service.workflowRecords(run)
+		pendingTurn := nativeOrcaCurrentTurn(execution)
+		if execution.Environment != nil && !execution.Environment.Ready && execution.Environment.Blocker == nil && (pendingTurn == nil || pendingTurn.DispatchID == "") {
+			if err := service.advanceWorkerPreparation(context.Background(), run); err != nil {
+				return err
+			}
+		} else if err := service.resumeConfiguredWork(context.Background()); err != nil {
 			return err
 		}
-		_, execution := service.workflowRecords(run)
+		_, execution = service.workflowRecords(run)
 		if turn := nativeOrcaCurrentTurn(execution); turn != nil && turn.Purpose == "readiness" && !turn.Settled {
 			if err := service.readNativeOrcaOutput(context.Background(), run, execution, turn); err != nil && execution.Environment.Blocker == nil {
 				return err
@@ -138,6 +149,10 @@ func driveTestLifecycleWorker(service *Service, run *Run) error {
 		}
 	}
 	service.drainWorkerMessages()
+	if nativeOrcaCurrentTurn(service.executionRecord(run)) == nil {
+		e := service.executionRecord(run)
+		return fmt.Errorf("fixture pending: worker=%t current=%q pending=%q ready=%t blocker=%v error=%q", service.workers[run.RunID] != nil, e.CurrentTurnID, e.PendingCommandID, e.Environment.Ready, e.Environment.Blocker != nil, deref(e.Error))
+	}
 	return nil
 }
 func (f *environmentFixture) state(t *testing.T) fakeNativeOrcaState {
@@ -189,7 +204,7 @@ func TestWorkerEnvironmentER1ProbeAndSettlementGate(t *testing.T) {
 			if mode == "success" {
 				stateData := testOrcaState(t, e)
 				if state.Dispatches != 2 || !e.Environment.Ready || e.TurnNumber != 0 || e.CurrentTurnID != "" || len(stateData.Turns) != 2 || stateData.Turns[0].Purpose != "readiness" {
-					t.Fatalf("preparation leaked business state or failed: wf=%+v execution=%+v state=%+v", wf, e, state)
+					t.Fatalf("preparation incomplete: phase=%s dispatches=%d number=%d current=%q ready=%t verified=%t evidence=%+v error=%q", wf.Phase, state.Dispatches, e.TurnNumber, e.CurrentTurnID, e.Environment.Ready, e.Environment.Preparation.Verified, e.Environment.Preparation.Evidence, deref(e.Error))
 				}
 				f.poll(t)
 				if e.TurnNumber != 1 {
