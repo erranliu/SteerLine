@@ -99,6 +99,17 @@ func OpenHistory(ctx context.Context, command contracts.Command, dir, home strin
 	return c, nil
 }
 
+func HistoryAvailable(ctx context.Context, command contracts.Command, dir string, start func(*exec.Cmd) (executionapi.StopHandle, error)) bool {
+	probeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	client, err := OpenHistory(probeCtx, command, dir, "", start)
+	if err != nil {
+		return false
+	}
+	client.Close()
+	return true
+}
+
 func (c *HistoryClient) Close() {
 	_ = c.input.Close()
 	c.proc.Kill()
@@ -226,6 +237,7 @@ func MapHistoryTurn(base contracts.ConversationEvent, turn HistoryTurn, sequence
 	}
 	base.Version = contracts.ConversationVersion
 	base.Source = "codex-app-server"
+	base.SourceRole = contracts.ConversationSourceCanonical
 	base.TurnID, base.TurnQuality = turn.ID, contracts.IdentityNative
 	base.SessionQuality = contracts.IdentityNative
 	base.ItemQuality = contracts.IdentityUnknown

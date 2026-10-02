@@ -4,35 +4,13 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
-const ConversationVersion = 1
-const ConversationSourceMarkerName = "conversation-source.v1.json"
-
-type ConversationSourceMarker struct {
-	Version        int                            `json:"v"`
-	ProjectID      string                         `json:"project_id"`
-	WorkflowID     string                         `json:"workflow_id"`
-	ExecutionID    string                         `json:"execution_id"`
-	AttemptID      string                         `json:"attempt_id"`
-	Backend        executionapi.BackendKind       `json:"backend"`
-	Protocol       executionapi.ExecutionProtocol `json:"protocol"`
-	Agent          string                         `json:"agent"`
-	TargetID       string                         `json:"target_id"`
-	Source         string                         `json:"source"`
-	SourceSegment  string                         `json:"source_segment"`
-	SourceIdentity string                         `json:"source_identity"`
-	RecordName     string                         `json:"record_name"`
-	CreatedAt      time.Time                      `json:"created_at"`
-	ReaderCommand  Command                        `json:"reader_command,omitempty"`
-	CodexHome      string                         `json:"codex_home,omitempty"`
-}
+const ConversationVersion = contracts.ConversationVersion
 
 type ConversationEventType = contracts.ConversationEventType
 type IdentityQuality = contracts.IdentityQuality
@@ -103,15 +81,6 @@ func sourceEventFallback(e ConversationEvent, raw []byte) string {
 	// No source identity was available. Persist uniquely and expose the missing
 	// identity instead of deleting equal text as a duplicate.
 	return "unidentified:" + newID()
-}
-
-func (m ConversationSourceMarker) validate() error {
-	local := m.Backend == executionapi.BackendLocal && m.Protocol == executionapi.ProtocolLocalProcess && m.SourceSegment == "local-jsonl-v1:"+m.SourceIdentity
-	orca := m.Backend == executionapi.BackendOrca && (m.Protocol == executionapi.ProtocolOrcaTerminalV2 || m.Protocol == executionapi.ProtocolOrcaSupervised) && m.SourceSegment == "orca-jsonl-v1:"+m.SourceIdentity
-	if m.Version != 1 || m.ProjectID == "" || m.WorkflowID == "" || m.ExecutionID == "" || m.AttemptID == "" || !local && !orca || m.Agent == "" || m.TargetID == "" || m.Source != "codex-jsonl" || m.SourceIdentity == "" || m.RecordName != "events.jsonl" || m.CreatedAt.IsZero() {
-		return errors.New("conversation source marker is incomplete or unsupported")
-	}
-	return nil
 }
 
 func nonEmpty(values ...string) string {

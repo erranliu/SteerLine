@@ -29,6 +29,7 @@ const (
 	LifecycleStopObservation  LifecycleAction = "stop_observation"
 	LifecycleStopExecution    LifecycleAction = "stop_execution"
 	LifecycleCleanup          LifecycleAction = "cleanup_resources"
+	LifecycleHostAction       LifecycleAction = "host_action"
 )
 
 // LifecycleInput is a closed value union. Exactly one member must match the
@@ -43,6 +44,7 @@ type LifecycleInput struct {
 	Ack        *AcknowledgeInput `json:"ack,omitempty"`
 	Stop       *StopInput        `json:"stop,omitempty"`
 	Cleanup    *CleanupInput     `json:"cleanup,omitempty"`
+	Host       *HostActionInput  `json:"host,omitempty"`
 }
 
 type FeedbackInput struct {
@@ -109,6 +111,9 @@ func (input LifecycleInput) Validate(action LifecycleAction) error {
 	if input.Cleanup != nil {
 		count++
 	}
+	if input.Host != nil {
+		count++
+	}
 	valid := false
 	switch action {
 	case LifecyclePrepareWorkspace:
@@ -127,6 +132,8 @@ func (input LifecycleInput) Validate(action LifecycleAction) error {
 		valid = input.Stop != nil
 	case LifecycleCleanup:
 		valid = input.Cleanup != nil
+	case LifecycleHostAction:
+		valid = input.Host != nil && input.Host.Validate() == nil
 	}
 	if count != 1 || !valid {
 		return errors.New("lifecycle input does not match exactly one action")
@@ -176,6 +183,22 @@ func (input LifecycleInput) Clone() LifecycleInput {
 			value.Workspace = &workspace
 		}
 		input.Cleanup = &value
+	}
+	if input.Host != nil {
+		value := *input.Host
+		if value.Probe != nil {
+			probe := *value.Probe
+			value.Probe = &probe
+		}
+		if value.Process != nil {
+			process := *value.Process
+			value.Process = &process
+		}
+		if value.Authorization != nil {
+			authorization := *value.Authorization
+			value.Authorization = &authorization
+		}
+		input.Host = &value
 	}
 	return input
 }
@@ -258,7 +281,7 @@ func (candidate LifecycleCandidate) Validate() error {
 	switch candidate.Action {
 	case LifecyclePrepareWorkspace, LifecycleCreateResource, LifecyclePrepareSession, LifecycleStartTurn, LifecycleSubmitInput, LifecycleReportCompletion,
 		LifecycleDeliverFeedback, LifecycleAcknowledge, LifecycleStopObservation,
-		LifecycleStopExecution, LifecycleCleanup:
+		LifecycleStopExecution, LifecycleCleanup, LifecycleHostAction:
 		return candidate.Input.Validate(candidate.Action)
 	default:
 		return errors.New("unsupported lifecycle action")
@@ -478,6 +501,12 @@ func CandidateForOperation(operation Operation) (LifecycleCandidate, error) {
 			return LifecycleCandidate{}, err
 		}
 		input.Cleanup = &value
+	case LifecycleHostAction:
+		var value HostActionInput
+		if err := decode(&value); err != nil {
+			return LifecycleCandidate{}, err
+		}
+		input.Host = &value
 	default:
 		return LifecycleCandidate{}, errors.New("saved Operation is not a lifecycle action")
 	}

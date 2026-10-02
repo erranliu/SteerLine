@@ -9,6 +9,32 @@ import (
 	"testing"
 )
 
+func TestProbeContentBuildIsPureAndWritesAreExplicit(t *testing.T) {
+	worktree := t.TempDir()
+	identity := ProbeIdentity{Execution: strings.Repeat("a", 32), Turn: strings.Repeat("b", 32), Nonce: strings.Repeat("c", 32),
+		ProfileDigest: "profile", Runtime: "runtime", Terminal: "terminal", Incarnation: "incarnation", Worktree: worktree}
+	plan, err := BuildProbe(identity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(worktree, ".steerline-readiness", identity.Execution, identity.Turn)
+	if _, err = os.Stat(dir); !os.IsNotExist(err) {
+		t.Fatalf("pure probe planning wrote files: %v", err)
+	}
+	if err = WriteProbe(identity, plan); err != nil {
+		t.Fatal(err)
+	}
+	if ready, err := CheckProbeFiles(identity, plan); err != nil || !ready {
+		t.Fatalf("persisted probe does not match its plan: ready=%v err=%v", ready, err)
+	}
+	if err = CleanupProbe(identity); err != nil {
+		t.Fatal(err)
+	}
+	if absent, err := ProbeFilesAbsent(identity); err != nil || !absent {
+		t.Fatalf("probe cleanup was not observed: absent=%v err=%v", absent, err)
+	}
+}
+
 func TestReadinessEvidenceUsesActualPlatformToolBlocks(t *testing.T) {
 	data, err := os.ReadFile("../../../docs/validation/worker-environment-readiness/platform-gate-2026-09-30.json")
 	if err != nil {

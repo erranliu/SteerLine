@@ -4,7 +4,6 @@ import (
 	"errors"
 
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
-	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
 
 func implementationEnvelope(record *ExecutionRecord, key string) (executionapi.ImplementationDataEnvelope, bool, error) {
@@ -71,48 +70,6 @@ func validateExecutionImplementationData(record *ExecutionRecord) error {
 		}
 	}
 	return nil
-}
-
-func orcaStateIdentity(record *ExecutionRecord) orcaworker.ExecutionStateIdentity {
-	process := executionapi.ProcessIdentity{}
-	if record.Process != nil {
-		process = *record.Process
-	}
-	return orcaworker.ExecutionStateIdentity{
-		ProjectID: record.ProjectIdentity, ExecutionID: record.ExecutionID,
-		AttemptID: record.CurrentAttemptID, Generation: record.Generation,
-		ConfigDigest: record.ConfigurationDigest,
-		Protocol:     executionapi.ExecutionProtocol(record.Protocol), Process: process, CoordinatorTerminal: record.Target.CoordinatorTerminal,
-	}
-}
-
-func decodeOrcaExecutionState(record *ExecutionRecord) (*implementationExecutionView, error) {
-	envelope, ok, err := implementationEnvelope(record, orcaworker.ExecutionStateCodecKey)
-	if err != nil {
-		return nil, err
-	}
-	if !ok {
-		return nil, nil
-	}
-	state, err := orcaworker.DecodeExecutionStateEnvelope(envelope, orcaStateIdentity(record))
-	if err != nil {
-		return nil, err
-	}
-	return &state, nil
-}
-
-func storeOrcaExecutionState(record *ExecutionRecord, state *implementationExecutionView) error {
-	if state == nil {
-		return errors.New("native execution state is required")
-	}
-	if record.Generation == "" {
-		record.Generation = newID()
-	}
-	envelope, err := orcaworker.NewExecutionStateEnvelope(orcaStateIdentity(record), *state)
-	if err != nil {
-		return err
-	}
-	return putImplementationEnvelope(record, envelope)
 }
 
 // A manually confirmed new Attempt can carry the original session before its

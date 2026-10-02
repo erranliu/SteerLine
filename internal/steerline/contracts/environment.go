@@ -1,21 +1,13 @@
 package contracts
 
 import (
+	"context"
 	"time"
 
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
-type ProbeIdentity struct {
-	Execution     string `json:"execution"`
-	Turn          string `json:"turn"`
-	Nonce         string `json:"nonce"`
-	ProfileDigest string `json:"profile_digest"`
-	Runtime       string `json:"runtime"`
-	Terminal      string `json:"terminal"`
-	Incarnation   string `json:"incarnation"`
-	Worktree      string `json:"worktree"`
-}
+type ProbeIdentity = executionapi.ProbeIdentity
 
 type ProbeReceipt struct {
 	ProbeIdentity
@@ -41,6 +33,42 @@ type ToolContext struct {
 	TaskBound      bool   `json:"task_bound,omitempty"`
 	CallID         string `json:"call_id,omitempty"`
 	Started        bool   `json:"started,omitempty"`
+}
+
+type ProbePlan struct {
+	Command      string `json:"command"`
+	InputDigest  string `json:"input_digest"`
+	ScriptDigest string `json:"script_digest"`
+}
+
+type HostInputObservation struct {
+	Fact  HostFact `json:"fact"`
+	Ready bool     `json:"ready"`
+}
+
+type HostTurnFacts struct {
+	TurnID, TaskID, Purpose, Outcome     string
+	IntentAt, Deadline                   time.Time
+	Settled, HasDispatch, HasDoneMessage bool
+}
+
+type HostOutput struct {
+	Source, Cursor, Content, FallbackReason                             string
+	ContentComplete, SourceChanged, UpdateAttemptCursor, ContentChanged bool
+	Clipping                                                            []string
+	Fact                                                                *HostFact
+}
+
+type HostEnvironmentPort interface {
+	PlatformVersion(context.Context) (string, error)
+	ObserveHost(context.Context, executionapi.ProcessIdentity) (HostFact, error)
+	InspectAgentInput(context.Context, executionapi.ProcessIdentity) (HostInputObservation, error)
+	CurrentTurn(executionapi.LifecycleSnapshot) (*HostTurnFacts, error)
+	ResetTurnOutput(executionapi.LifecycleSnapshot, string) (executionapi.ImplementationDataEnvelope, error)
+	PrepareProbe(ProbeIdentity) (ProbePlan, error)
+	ProbePrompt(ProbePlan, string, string) string
+	ReadProbe(ProbeIdentity, string) (*ProbeReceipt, error)
+	ReadWorkerOutput(context.Context, executionapi.LifecycleSnapshot, *WorkerEnvironment, string) (HostOutput, executionapi.ImplementationDataEnvelope, error)
 }
 
 type HostFact struct {

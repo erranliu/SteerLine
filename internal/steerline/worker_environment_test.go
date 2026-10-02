@@ -210,12 +210,12 @@ func TestWorkerEnvironmentWaitsForOriginalAgentDetection(t *testing.T) {
 		t.Fatal("startup receipt lost or input sent before agent identification")
 	}
 	// Another actor pass must only observe the original launch.
-	require(t, f.service.advanceOrcaPreparation(context.Background(), f.run))
+	require(t, f.service.advanceWorkerPreparation(context.Background(), f.run))
 	if env.Blocker != nil || !env.Preparation.Deadline.Equal(deadline) || env.Preparation.Nonce != nonce || *env.OriginalTerminal != terminal {
 		t.Fatal("waiting reset the preparation or replaced the original terminal")
 	}
 	f.update(t, func(state *fakeNativeOrcaState) { state.HoldFixedAgentIdentity = false })
-	require(t, f.service.advanceOrcaPreparation(context.Background(), f.run))
+	require(t, f.service.advanceWorkerPreparation(context.Background(), f.run))
 	if execution.Process == nil || execution.Process.Terminal != terminal.Terminal || execution.Process.Incarnation != terminal.Incarnation || f.service.operationByKey(key).Status != "confirmed" || f.state(t).Dispatches != 1 {
 		t.Fatal("agent identification did not resume the same launch exactly once")
 	}
@@ -227,7 +227,7 @@ func TestWorkerEnvironmentUnidentifiedAgentKeepsOriginalDeadline(t *testing.T) {
 	execution := f.service.executionRecord(f.run)
 	execution.Environment.Preparation.Deadline = now().Add(-time.Second)
 	require(t, f.service.commitWorker(f.run))
-	require(t, f.service.advanceOrcaPreparation(context.Background(), f.run))
+	require(t, f.service.advanceWorkerPreparation(context.Background(), f.run))
 	if execution.Environment.Blocker == nil || execution.Environment.Blocker.Fact.Reason != "preparation_unverified" || f.state(t).Dispatches != 0 {
 		t.Fatal("unidentified startup bypassed its deadline or dispatched work")
 	}

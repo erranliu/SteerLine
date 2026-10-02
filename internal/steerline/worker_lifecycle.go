@@ -209,7 +209,7 @@ func (s *Service) resumeLifecycleWorkerFlow(ctx context.Context, task *TaskRecor
 		}
 		if !execution.Environment.Ready || execution.CurrentTurnID != "" && execution.CurrentTurnID == execution.LastStoppedTurnID && execution.PendingCommandID == "" && execution.PendingTurnID == "" &&
 			(run.Decision == nil || run.Decision.Status == "reply_accepted" || run.Decision.Status == "applied") {
-			return true, s.advanceOrcaPreparation(ctx, run)
+			return true, s.advanceWorkerPreparation(ctx, run)
 		}
 	}
 	if !execution.RecoveryRequired && (execution.PendingCommandID != "" || execution.CurrentTurnID != "" && execution.CurrentTurnID != execution.LastStoppedTurnID) {
@@ -342,7 +342,7 @@ func (s *Service) reconcilePendingLifecycleSteps(ctx context.Context, run *Run, 
 		}
 		switch candidate.Action {
 		case executionapi.LifecyclePrepareWorkspace, executionapi.LifecycleCreateResource,
-			executionapi.LifecycleStartTurn, executionapi.LifecycleSubmitInput, executionapi.LifecycleReportCompletion:
+			executionapi.LifecycleStartTurn, executionapi.LifecycleSubmitInput, executionapi.LifecycleReportCompletion, executionapi.LifecycleHostAction:
 			if err := s.executeLifecycleStep(ctx, run, lifecycle, candidate); err != nil {
 				if errors.Is(err, errLifecycleNeedsReconciliation) {
 					return true, nil
@@ -470,7 +470,7 @@ func knownLifecycleAction(action executionapi.LifecycleAction) bool {
 	switch action {
 	case executionapi.LifecyclePrepareWorkspace, executionapi.LifecycleCreateResource, executionapi.LifecyclePrepareSession,
 		executionapi.LifecycleStartTurn, executionapi.LifecycleSubmitInput, executionapi.LifecycleReportCompletion, executionapi.LifecycleDeliverFeedback,
-		executionapi.LifecycleAcknowledge, executionapi.LifecycleStopObservation, executionapi.LifecycleStopExecution, executionapi.LifecycleCleanup:
+		executionapi.LifecycleAcknowledge, executionapi.LifecycleStopObservation, executionapi.LifecycleStopExecution, executionapi.LifecycleCleanup, executionapi.LifecycleHostAction:
 		return true
 	default:
 		return false
@@ -972,6 +972,8 @@ func validateSavedLifecycleOperation(operation *OperationRecord, action executio
 		value = input.Stop
 	case executionapi.LifecycleCleanup:
 		value = input.Cleanup
+	case executionapi.LifecycleHostAction:
+		value = input.Host
 	case executionapi.LifecyclePrepareWorkspace:
 		value = input.Workspace
 	default:
@@ -1008,6 +1010,8 @@ func lifecycleInputValue(action executionapi.LifecycleAction, input executionapi
 		return input.Stop, nil
 	case executionapi.LifecycleCleanup:
 		return input.Cleanup, nil
+	case executionapi.LifecycleHostAction:
+		return input.Host, nil
 	default:
 		return nil, errors.New("unsupported lifecycle operation action")
 	}

@@ -43,7 +43,7 @@ func (s *Service) prepareWorkerFlow(ctx context.Context, task TaskRecord, run *R
 		return err
 	}
 	if fixed.execution.Environment != nil {
-		return s.advanceOrcaPreparation(ctx, run)
+		return s.advanceWorkerPreparation(ctx, run)
 	}
 	return s.prepareWorkerWorkspace(ctx, task, run)
 }

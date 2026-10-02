@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strconv"
 	"strings"
 )
 
@@ -47,28 +46,9 @@ func (p conversationJournalPosition) journalCursor(path string) JournalCursor {
 	return JournalCursor{Path: path, FileID: p.FileID, Generation: p.Generation, Offset: p.ByteOffset, ScanOffset: p.ByteOffset, HeaderLength: p.HeaderLength, HeaderHash: p.HeaderHash, AnchorOffset: p.AnchorOffset, AnchorLength: p.AnchorLength, AnchorHash: p.AnchorHash, Initialized: true}
 }
 
-func journalGenerationForSegment(fileID, segment string) (uint64, error) {
-	prefix := "local-jsonl-v1:" + fileID
-	if strings.HasPrefix(segment, "orca-jsonl-v1:"+fileID) {
-		prefix = "orca-jsonl-v1:" + fileID
-	}
-	if segment == prefix {
-		return 1, nil
-	}
-	if !strings.HasPrefix(segment, prefix+":") {
-		return 0, errors.New("conversation source segment and file identity differ")
-	}
-	generation, err := strconv.ParseUint(strings.TrimPrefix(segment, prefix+":"), 10, 64)
-	if err != nil || generation < 1 {
-		return 0, errors.New("conversation source generation is invalid")
-	}
-	return generation, nil
-}
-
-func currentConversationJournalPosition(ctx context.Context, store *SQLiteStore, project, execution, attempt, source, segment, path, fileID string, offset int64, seq uint64) (conversationJournalPosition, error) {
-	generation, err := journalGenerationForSegment(fileID, segment)
-	if err != nil {
-		return conversationJournalPosition{}, err
+func currentConversationJournalPosition(ctx context.Context, store *SQLiteStore, project, execution, attempt, source, segment string, generation uint64, path, fileID string, offset int64, seq uint64) (conversationJournalPosition, error) {
+	if generation == 0 {
+		return conversationJournalPosition{}, errors.New("conversation source generation is invalid")
 	}
 	var previous *conversationJournalPosition
 	checkpoint, err := store.ConversationCheckpoint(ctx, project, execution, attempt, source, segment)
@@ -167,8 +147,21 @@ func marshalConversationJournalPosition(p conversationJournalPosition) (string, 
 	return string(b), err
 }
 
-func (s *SQLiteStore) ValidateConversationCheckpointFormat(ctx context.Context, project string) error {
-	rows, err := s.db.QueryContext(ctx, `SELECT execution_id,attempt_id,source_segment,source_identity,cursor,local_seq FROM conversation_source_cursors WHERE project_identity=? AND source='codex-jsonl'`, project)
+func (s *SQLiteStore) ValidateConversationCheckpointFormat(ctx context.Context, project string, sources []string) error {
+	if len(sources) == 0 {
+		return nil
+	}
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(sources)), ",")
+	args := make([]any, 0, len(sources)+1)
+	args = append(args, project)
+	for _, source := range sources {
+		if source == "" {
+			return errors.New("conversation checkpoint source is empty")
+		}
+		args = append(args, source)
+	}
+	query := `SELECT execution_id,attempt_id,source_segment,source_identity,cursor,local_seq FROM conversation_source_cursors WHERE project_identity=? AND source IN (` + placeholders + `)`
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return err
 	}

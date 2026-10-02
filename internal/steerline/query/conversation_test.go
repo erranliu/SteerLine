@@ -6,8 +6,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
+	"time"
 	"unicode/utf8"
 
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
@@ -50,7 +52,9 @@ func TestConversationQueriesUseIndependentEventPortAndBoundCursor(t *testing.T) 
 		if after >= 2 {
 			return nil, nil
 		}
-		payload, _ := json.Marshal(contracts.ConversationEvent{ProjectID: project, ExecutionID: filter.ExecutionID, AttemptID: filter.AttemptID})
+		payload, _ := json.Marshal(contracts.ConversationEvent{Version: contracts.ConversationVersion, ProjectID: project, ExecutionID: filter.ExecutionID, AttemptID: filter.AttemptID,
+			Source: filter.Source, SourceRole: contracts.ConversationSourceFallback, SourceSegment: "segment", SourceEventID: fmt.Sprintf("event:%d", after+1), SessionQuality: contracts.IdentityUnknown, TurnQuality: contracts.IdentityUnknown,
+			ItemQuality: contracts.IdentityUnknown, SourceEventQuality: contracts.IdentityDerived, Type: contracts.ConversationObservation, Phase: contracts.MessagePhaseUnknown, ReceivedAt: time.Now().UTC()})
 		return &contracts.ConversationEventRecord{EventID: after + 1, PayloadBytes: len(payload), Payload: payload}, nil
 	})}
 	first, err := service.ReadConversation(ctx, filter, "", 1)
@@ -75,7 +79,10 @@ func TestConversationQueriesUseIndependentEventPortAndBoundCursor(t *testing.T) 
 }
 
 func TestConversationPageBudgetDefersOverflowPayloadDecoding(t *testing.T) {
-	payload, _ := json.Marshal(contracts.ConversationEvent{Attributes: map[string]any{"text": strings.Repeat("x", MaxEventPageBytes-4096)}})
+	payload, _ := json.Marshal(contracts.ConversationEvent{Version: contracts.ConversationVersion, ProjectID: "project", ExecutionID: "execution", AttemptID: "attempt",
+		Source: "fixture", SourceRole: contracts.ConversationSourceFallback, SourceSegment: "segment", SourceEventID: "event:1", SessionQuality: contracts.IdentityUnknown, TurnQuality: contracts.IdentityUnknown,
+		ItemQuality: contracts.IdentityUnknown, SourceEventQuality: contracts.IdentityDerived, Type: contracts.ConversationObservation, Phase: contracts.MessagePhaseUnknown,
+		ReceivedAt: time.Now().UTC(), Diagnostic: strings.Repeat("x", MaxEventPageBytes-4096)})
 	if len(payload) >= MaxEventPageBytes {
 		t.Fatal("fixture must leave room for a budget boundary")
 	}
@@ -91,6 +98,37 @@ func TestConversationPageBudgetDefersOverflowPayloadDecoding(t *testing.T) {
 	}
 	if _, err := service.ReadConversation(context.Background(), contracts.ConversationFilter{}, page.NextCursor, 10); err == nil {
 		t.Fatal("next page must still encounter the unconsumed corrupt record")
+	}
+}
+
+func TestConversationReaderRejectsPreviousEventFormat(t *testing.T) {
+	old, err := json.Marshal(contracts.ConversationEvent{Version: 1, ProjectID: "project", ExecutionID: "execution", AttemptID: "attempt", Source: "fixture",
+		SourceSegment: "segment", SourceEventID: "old-event", SessionQuality: contracts.IdentityUnknown, TurnQuality: contracts.IdentityUnknown, ItemQuality: contracts.IdentityUnknown,
+		SourceEventQuality: contracts.IdentityDerived, Type: contracts.ConversationObservation, Phase: contracts.MessagePhaseUnknown, ReceivedAt: time.Now().UTC()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := ConversationService{Project: "project", Events: conversationEvents(func(context.Context, string, contracts.ConversationFilter, int64) (*contracts.ConversationEventRecord, error) {
+		return &contracts.ConversationEventRecord{EventID: 1, PayloadBytes: len(old), Payload: old}, nil
+	})}
+	if _, err = service.ReadConversation(context.Background(), contracts.ConversationFilter{}, "", 1); err == nil || !strings.Contains(err.Error(), "unsupported schema") && !strings.Contains(err.Error(), "missing versioned identity") {
+		t.Fatalf("previous conversation event format was read without migration: %v", err)
+	}
+}
+
+func TestConversationReaderRejectsMissingSourceRole(t *testing.T) {
+	payload, err := json.Marshal(contracts.ConversationEvent{Version: contracts.ConversationVersion, ProjectID: "project", ExecutionID: "execution", AttemptID: "attempt",
+		Source: "fixture", SourceSegment: "segment", SourceEventID: "event:1", SessionQuality: contracts.IdentityUnknown, TurnQuality: contracts.IdentityUnknown,
+		ItemQuality: contracts.IdentityUnknown, SourceEventQuality: contracts.IdentityDerived, Type: contracts.ConversationObservation, Phase: contracts.MessagePhaseUnknown,
+		ReceivedAt: time.Now().UTC()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := ConversationService{Project: "project", Events: conversationEvents(func(context.Context, string, contracts.ConversationFilter, int64) (*contracts.ConversationEventRecord, error) {
+		return &contracts.ConversationEventRecord{EventID: 1, PayloadBytes: len(payload), Payload: payload}, nil
+	})}
+	if _, err = service.ReadConversation(context.Background(), contracts.ConversationFilter{}, "", 1); err == nil || !strings.Contains(err.Error(), "source role") {
+		t.Fatalf("event without an explicit source role was accepted: %v", err)
 	}
 }
 

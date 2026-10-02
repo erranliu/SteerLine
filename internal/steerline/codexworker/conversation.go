@@ -20,6 +20,25 @@ type ConversationMapper struct {
 	turnFinalSeen  map[string]bool
 }
 
+func (m *ConversationMapper) MapRecord(event contracts.ConversationEvent, raw []byte) contracts.ConversationWrite {
+	return m.MapCodexJSONL(event, raw)
+}
+
+// RestoreConversationMapper reconstructs ephemeral mapping state from the
+// committed conversation projection. Callers discard the returned mapper when
+// its corresponding batch fails to commit and restore it from the same
+// committed snapshot on retry.
+func RestoreConversationMapper(snapshot contracts.ConversationMapperSnapshot) *ConversationMapper {
+	m := &ConversationMapper{}
+	if snapshot.Session != nil {
+		m.RestoreSession(*snapshot.Session)
+	}
+	if snapshot.Turn != nil {
+		m.RestoreTurn(*snapshot.Turn, snapshot.FinalSeen)
+	}
+	return m
+}
+
 // MapCodexJSONL maps observed JSONL fields only. In particular, turn completion
 // does not promote an item to final_answer, and an absent phase stays unknown.
 func (m *ConversationMapper) MapCodexJSONL(ctx contracts.ConversationEvent, raw []byte) contracts.ConversationWrite {
@@ -29,6 +48,7 @@ func (m *ConversationMapper) MapCodexJSONL(ctx contracts.ConversationEvent, raw 
 	ctx.Version = contracts.ConversationVersion
 	ctx.Backend, ctx.Protocol = executionapi.BackendLocal, executionapi.ProtocolLocalProcess
 	ctx.Source = "codex-jsonl"
+	ctx.SourceRole = contracts.ConversationSourceFallback
 	ctx.SourceSegment = nonEmpty(ctx.SourceSegment, "local-jsonl-v1")
 	ctx.SessionQuality = contracts.IdentityUnknown
 	ctx.TurnQuality = contracts.IdentityUnknown

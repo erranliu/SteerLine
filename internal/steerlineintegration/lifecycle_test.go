@@ -519,7 +519,7 @@ type runningIntegrationService struct {
 
 func startIntegrationService(t *testing.T, parent context.Context, config steerline.Config, resolver executionapi.LifecycleResolver) *runningIntegrationService {
 	t.Helper()
-	service, err := steerline.NewServiceWithLifecycleResolver(config, resolver)
+	service, err := steerline.NewServiceWithLifecycleResolver(config, resolver, codexworker.NewConversationAdapter())
 	require(t, err)
 	reader, err := steerline.OpenNativeTaskReader(parent, &config)
 	require(t, err)

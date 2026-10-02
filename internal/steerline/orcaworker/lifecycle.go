@@ -284,6 +284,9 @@ func (l *ExecutionLifecycle) Execute(ctx context.Context, request executionapi.L
 	case executionapi.LifecycleCleanup:
 		receipt, err := l.cleanup(ctx, request)
 		return receipt, nil, err
+	case executionapi.LifecycleHostAction:
+		receipt, err := l.ExecuteHostAction(ctx, request)
+		return receipt, nil, err
 	default:
 		return nativeReceipt(request, executionapi.OperationRejected), nil,
 			executionapi.UnsupportedAdapterOperation(request.Operation.Action, "native Orca action is unsupported")
@@ -314,6 +317,9 @@ func (l *ExecutionLifecycle) Reconcile(ctx context.Context, request executionapi
 		return l.reconcileAck(ctx, request)
 	case executionapi.LifecycleCleanup:
 		return l.reconcileCleanup(ctx, request)
+	case executionapi.LifecycleHostAction:
+		receipt, err := l.ReconcileHostAction(ctx, request)
+		return receipt, nil, err
 	default:
 		return nativeReceipt(request, executionapi.OperationUnknown), nil, nil
 	}

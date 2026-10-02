@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -15,7 +14,6 @@ import (
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 // SpawnSpec is everything a host needs to run one worker. It contains no
@@ -97,21 +95,15 @@ func (LocalSpawner) Start(ctx context.Context, spec SpawnSpec) (*Worker, error) 
 	}
 	spec.SourceIdentity = sourceIdentity
 	if spec.ConversationJSONL {
-		marker := ConversationSourceMarker{Version: 1, ProjectID: spec.ProjectID, WorkflowID: spec.WorkflowID, ExecutionID: spec.ExecutionID, AttemptID: spec.AttemptID, Backend: executionapi.BackendLocal, Protocol: executionapi.ProtocolLocalProcess, Agent: spec.Agent, TargetID: spec.TargetID, Source: "codex-jsonl", SourceSegment: "local-jsonl-v1:" + sourceIdentity, SourceIdentity: sourceIdentity, RecordName: "events.jsonl", CreatedAt: now()}
-		marker.ReaderCommand, marker.CodexHome = spec.ConversationReader, codexEnvironmentHome()
-		if home, ok := spec.Env["CODEX_HOME"]; ok {
-			marker.CodexHome = home
+		home := codexworker.EnvironmentHome()
+		if configuredHome, ok := spec.Env["CODEX_HOME"]; ok {
+			home = configuredHome
 		}
-		if err := marker.validate(); err != nil {
-			logFile.Close()
-			return nil, err
-		}
-		markerBytes, err := json.Marshal(marker)
-		if err != nil {
-			logFile.Close()
-			return nil, err
-		}
-		if err = AtomicWrite(filepath.Join(filepath.Dir(spec.EventsPath), ConversationSourceMarkerName), append(markerBytes, '\n')); err != nil {
+		if err := codexworker.WriteConversationSourceMarker(filepath.Join(filepath.Dir(spec.EventsPath), codexworker.ConversationSourceMarkerName), codexworker.ConversationSourceMarkerInput{
+			ProjectID: spec.ProjectID, WorkflowID: spec.WorkflowID, ExecutionID: spec.ExecutionID, AttemptID: spec.AttemptID,
+			Agent: spec.Agent, TargetID: spec.TargetID, SourceIdentity: sourceIdentity,
+			ReaderCommand: spec.ConversationReader, CodexHome: home, CreatedAt: now(),
+		}, AtomicWrite); err != nil {
 			logFile.Close()
 			return nil, fmt.Errorf("persist conversation source marker: %w", err)
 		}
@@ -197,9 +189,9 @@ func (LocalSpawner) Start(ctx context.Context, spec SpawnSpec) (*Worker, error) 
 				ev.RunID, ev.AttemptID = spec.RunID, spec.AttemptID
 				ev.SourceIdentity = spec.SourceIdentity
 				if spec.ConversationJSONL {
-					ev.Source, ev.SourceSegment = "codex-jsonl", "local-jsonl-v1:"+spec.SourceIdentity
+					ev.Source, ev.SourceSegment = codexworker.ConversationJSONLSource, codexworker.LocalProcessJournalSegment(spec.SourceIdentity)
 				} else {
-					ev.Source, ev.SourceSegment = "local-command-output", "local-command-v1:"+spec.SourceIdentity
+					ev.Source, ev.SourceSegment = codexworker.LocalCommandOutputSource, codexworker.LocalCommandJournalSegment(spec.SourceIdentity)
 				}
 				select {
 				case parsed <- ev:
@@ -312,7 +304,7 @@ func streamWorkerEventsWithEmit(reader io.Reader, normalizer Normalizer, emit fu
 func emitWorkerLine(line, rawRecord []byte, normalizer Normalizer, sourceSeq uint64, sourceOffset, sourceLength int64, emit func(WorkerEvent)) {
 	event, err := codexworker.DecodeExecLine(line)
 	if err != nil {
-		emit(WorkerEvent{Summary: "unparsed raw event", Activity: ActivityEvent{Source: normalizer.Name(), Kind: "unknown", Title: "unparsed raw event", Meta: map[string]any{"raw_sha256": hashJournalBytes(line), "raw_bytes": len(line)}}, Raw: append([]byte(nil), rawRecord...), SourceSeq: sourceSeq, SourceOffset: sourceOffset, SourceLength: sourceLength, SourceSegment: "local-jsonl-v1"})
+		emit(WorkerEvent{Summary: "unparsed raw event", Activity: ActivityEvent{Source: normalizer.Name(), Kind: "unknown", Title: "unparsed raw event", Meta: map[string]any{"raw_sha256": hashJournalBytes(line), "raw_bytes": len(line)}}, Raw: append([]byte(nil), rawRecord...), SourceSeq: sourceSeq, SourceOffset: sourceOffset, SourceLength: sourceLength})
 		return
 	}
 	summary, session := event.Summary, event.SessionID
@@ -328,6 +320,6 @@ func emitWorkerLine(line, rawRecord []byte, normalizer Normalizer, sourceSeq uin
 			}
 			activity.Meta["raw_sha256"], activity.Meta["raw_bytes"] = hashJournalBytes(line), len(line)
 		}
-		emit(WorkerEvent{Session: session, Summary: summary, Activity: activity, Raw: append([]byte(nil), rawRecord...), SourceSeq: sourceSeq, SourceOffset: sourceOffset, SourceLength: sourceLength, SourceSegment: "local-jsonl-v1"})
+		emit(WorkerEvent{Session: session, Summary: summary, Activity: activity, Raw: append([]byte(nil), rawRecord...), SourceSeq: sourceSeq, SourceOffset: sourceOffset, SourceLength: sourceLength})
 	}
 }

@@ -24,13 +24,13 @@ func TestConversationReaderKeepsSourceScopeOnReadOnlyConnection(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer writer.Close()
-	event := contracts.ConversationEvent{Version: 1, ProjectID: "project", ExecutionID: "execution", AttemptID: "attempt", Source: "codex-jsonl", SourceSegment: "segment", SourceEventID: "raw", ItemKey: "item", Type: contracts.ConversationMessageComplete, Phase: contracts.MessagePhaseFinalAnswer, SessionQuality: contracts.IdentityUnknown, TurnQuality: contracts.IdentityUnknown, ItemQuality: contracts.IdentityUnknown, SourceEventQuality: contracts.IdentityDerived, ReceivedAt: time.Now().UTC()}
+	event := contracts.ConversationEvent{Version: contracts.ConversationVersion, ProjectID: "project", ExecutionID: "execution", AttemptID: "attempt", Source: "fallback-demo", SourceRole: contracts.ConversationSourceFallback, SourceSegment: "segment", SourceEventID: "raw", ItemKey: "item", Type: contracts.ConversationMessageComplete, Phase: contracts.MessagePhaseFinalAnswer, SessionQuality: contracts.IdentityUnknown, TurnQuality: contracts.IdentityUnknown, ItemQuality: contracts.IdentityUnknown, SourceEventQuality: contracts.IdentityDerived, ReceivedAt: time.Now().UTC()}
 	committed, err := writer.CommitConversation(ctx, []contracts.ConversationWrite{{Event: event, Body: []byte("你好🙂"), BodyMode: "complete", Raw: []byte("raw bytes")}}, contracts.ConversationCheckpoint{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	native := event
-	native.Source, native.SourceEventID, native.Type = "codex-app-server", "session", contracts.ConversationSession
+	native.Source, native.SourceRole, native.SourceEventID, native.Type = "canonical-demo", contracts.ConversationSourceCanonical, "session", contracts.ConversationSession
 	other := event
 	other.ProjectID = "other-project"
 	if _, err := writer.CommitConversation(ctx, []contracts.ConversationWrite{{Event: native}, {Event: other}}, contracts.ConversationCheckpoint{}); err != nil {
@@ -54,10 +54,10 @@ func TestConversationReaderKeepsSourceScopeOnReadOnlyConnection(t *testing.T) {
 	service := query.ConversationService{Project: "project", Events: reader, Bodies: reader, Raw: reader, Capabilities: reader}
 	filter := contracts.ConversationFilter{ExecutionID: event.ExecutionID, AttemptID: event.AttemptID}
 	page, err := service.ReadConversation(ctx, filter, "", 10)
-	if err != nil || len(page.Events) != 1 || page.Events[0].Source != "codex-app-server" {
+	if err != nil || len(page.Events) != 1 || page.Events[0].Source != "canonical-demo" {
 		t.Fatalf("canonical source selection changed: %+v %v", page, err)
 	}
-	filter.Source = "codex-jsonl"
+	filter.Source = "fallback-demo"
 	page, err = service.ReadConversation(ctx, filter, "", 10)
 	if err != nil || len(page.Events) != 1 || page.Events[0].ProjectID != "project" {
 		t.Fatalf("explicit raw source crossed scope: %+v %v", page, err)
@@ -77,7 +77,7 @@ func TestConversationReaderKeepsSourceScopeOnReadOnlyConnection(t *testing.T) {
 	service.Project = "other-project"
 	filter.Source = ""
 	page, err = service.ReadConversation(ctx, filter, "", 10)
-	if err != nil || len(page.Events) != 1 || page.Events[0].Source != "codex-jsonl" {
+	if err != nil || len(page.Events) != 1 || page.Events[0].Source != "fallback-demo" {
 		t.Fatalf("another project's native session hid raw evidence: %+v %v", page, err)
 	}
 }
