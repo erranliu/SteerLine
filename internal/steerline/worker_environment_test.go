@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 	"github.com/erranliu/SteerLine/internal/steerline/testprotocol"
 )
@@ -199,13 +200,19 @@ func TestWorkerEnvironmentWaitsForOriginalAgentDetection(t *testing.T) {
 	f.prepare(t)
 	_, execution := f.service.workflowRecords(f.run)
 	env := execution.Environment
-	if env.Blocker != nil || execution.Process != nil || env.OriginalTerminal == nil || env.Ready {
+	if env.Blocker != nil || execution.Process == nil || env.OriginalTerminal == nil || *execution.Process != *env.OriginalTerminal || env.Ready {
 		t.Fatalf("unidentified startup became a blocker or a ready agent: %+v", env)
 	}
 	deadline, nonce := env.Preparation.Deadline, env.Preparation.Nonce
 	terminal := *env.OriginalTerminal
-	key := "orca-native-agent-terminal:" + execution.ExecutionID
-	op := f.service.operationByKey(key)
+	var op *OperationRecord
+	for i := range f.service.domain.Operations {
+		candidate := &f.service.domain.Operations[i]
+		var input executionapi.ResourceIntent
+		if candidate.Kind == string(executionapi.LifecycleCreateResource) && json.Unmarshal(candidate.Request, &input) == nil && input.Purpose == "agent-terminal" {
+			op = candidate
+		}
+	}
 	if op == nil || op.Status != "accepted" || f.state(t).Dispatches != 0 {
 		t.Fatal("startup receipt lost or input sent before agent identification")
 	}
@@ -216,7 +223,7 @@ func TestWorkerEnvironmentWaitsForOriginalAgentDetection(t *testing.T) {
 	}
 	f.update(t, func(state *fakeNativeOrcaState) { state.HoldFixedAgentIdentity = false })
 	require(t, f.service.advanceOrcaPreparation(context.Background(), f.run))
-	if execution.Process == nil || execution.Process.Terminal != terminal.Terminal || execution.Process.Incarnation != terminal.Incarnation || f.service.operationByKey(key).Status != "confirmed" || f.state(t).Dispatches != 1 {
+	if execution.Process == nil || execution.Process.Terminal != terminal.Terminal || execution.Process.Incarnation != terminal.Incarnation || !testOrcaState(t, execution).AgentBound || f.state(t).Dispatches != 1 {
 		t.Fatal("agent identification did not resume the same launch exactly once")
 	}
 }

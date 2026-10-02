@@ -15,6 +15,7 @@ import (
 )
 
 var errLifecycleNeedsReconciliation = errors.New("lifecycle operation is waiting for read-only reconciliation")
+var errLifecycleResourcePending = errors.New("original lifecycle resource is still initializing")
 
 // acceptStartedWorkerTurn commits a generic, already-accepted observer handle.
 // It remains the shared persistence boundary used by receipt commit-failure tests.
@@ -1070,7 +1071,7 @@ func (s *Service) executeLifecycleStep(ctx context.Context, run *Run, lifecycle 
 	if candidate.Action == executionapi.LifecycleCreateResource &&
 		lifecycle.PolicyCapabilities().LinkedWorkspaceWriteRoots && fixed.execution.PolicyResources == nil {
 		var linkedArgs []string
-		if fixed.config.ExecutionPolicy.Filesystem.WriteScope == "workspace-write" {
+		if fixed.config.ExecutionPolicy.Filesystem.WriteScope == "workspace" {
 			linkedArgs, err = codexLinkedWorktreeWriteArgs(ctx, fixed.config, fixed.execution.Workspace.Worktree)
 			if err != nil {
 				return err
@@ -1143,7 +1144,7 @@ func (s *Service) executeLifecycleStep(ctx context.Context, run *Run, lifecycle 
 	}
 	if receipt.Process != nil && fixed.execution.PolicyResources == nil && lifecycle.PolicyCapabilities().LinkedWorkspaceWriteRoots {
 		var linkedArgs []string
-		if fixed.config.ExecutionPolicy.Filesystem.WriteScope == "workspace-write" {
+		if fixed.config.ExecutionPolicy.Filesystem.WriteScope == "workspace" {
 			linkedArgs, err = codexLinkedWorktreeWriteArgs(ctx, fixed.config, fixed.execution.Workspace.Worktree)
 			if err != nil {
 				return err
@@ -1213,6 +1214,9 @@ func (s *Service) executeLifecycleStep(ctx context.Context, run *Run, lifecycle 
 	}
 	if worker != nil {
 		s.registerWorker(run, worker)
+	}
+	if status == "accepted" && receipt.State.ResourcePending && candidate.Action == executionapi.LifecycleCreateResource {
+		return errLifecycleResourcePending
 	}
 	if hadUnknownMutation && fixed.execution.Environment != nil {
 		// The original identity can be reconciled while still preserving the

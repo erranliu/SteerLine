@@ -187,12 +187,15 @@ func (s *Service) advanceOrcaPreparation(ctx context.Context, run *Run) error {
 	}
 	prepareCtx, cancel := context.WithTimeout(ctx, min(remaining, positiveDuration(fixed.config.CommandTimeout, 10*time.Second)))
 	defer cancel()
-	if execution.Workspace.Worktree == "" || execution.Process == nil {
+	if execution.Workspace.Worktree == "" || execution.Process == nil || execution.Target.CoordinatorTerminal == "" || execution.Target.OrchestrationRun == "" {
 		task := nativeTaskRecord(s.domain.Tasks, run.TaskID)
 		if task == nil {
 			return errors.New("readiness execution lost its fixed task")
 		}
 		if err = s.prepareWorkerWorkspace(prepareCtx, *task, run); err != nil {
+			if errors.Is(err, errLifecycleResourcePending) {
+				return nil
+			}
 			if ctx.Err() != nil {
 				return nil
 			}
