@@ -1,7 +1,9 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"github.com/erranliu/SteerLine/internal/testfeedback"
 	"os"
 	"path/filepath"
@@ -22,10 +24,14 @@ func TestLevelSelectionsRejectAmbiguity(t *testing.T) {
 	for _, level := range []string{"L2", "L3"} {
 		args := []string{"-level=" + level}
 		if level == "L3" {
-			args = append(args, "-suite=recovery")
+			args = append(args, "-suite=recovery", "-env=controlled")
 		}
 		opts, err := parseOptions(args)
-		if err != nil || opts.e2eEnv != "controlled" {
+		expected := "gated"
+		if level == "L3" {
+			expected = "controlled"
+		}
+		if err != nil || opts.e2eEnv != expected {
 			t.Fatalf("%v: %v", args, err)
 		}
 	}
@@ -58,6 +64,15 @@ func TestManifestRejectsMissingDuplicateAndUnknownSelection(t *testing.T) {
 	save([]e2eScenario{entry, entry})
 	if _, err := selectE2E(root, opts); err == nil {
 		t.Fatal("duplicate accepted")
+	}
+	other := entry
+	other.ID = "recovery.live"
+	other.Test = "TestLive"
+	other.Env = "live"
+	other.Chain = "local-codex"
+	save([]e2eScenario{entry, other})
+	if _, err := selectE2E(root, opts); err == nil {
+		t.Fatal("package mixing live into controlled gate accepted")
 	}
 	save(nil)
 	if _, err := selectE2E(root, opts); err == nil {
@@ -99,5 +114,49 @@ func TestE2EResultRequiresCompleteLogsAndCleanupEvidence(t *testing.T) {
 	}
 	if err := writeJSON(filepath.Join(dir, "scenario.json", "impossible.json"), map[string]bool{"passed": true}); err == nil {
 		t.Fatal("report write failure was ignored")
+	}
+}
+
+func TestL2FailureStopsBeforeNativeEnvironmentCallback(t *testing.T) {
+	names := []string{"controlled", "live"}
+	groups := map[string][]e2eScenario{"controlled": {{Env: "controlled", ID: "gate"}}, "live": {{Env: "live", ID: "native"}}}
+	for _, failure := range []error{errors.New("test failed"), errors.New("cleanup failed"), errors.New("usage/evidence missing")} {
+		nativeCalls := 0
+		errs, blocked := executeE2EPackages(context.Background(), names, groups, true, func(_ int, pkg string) error {
+			if pkg == "controlled" {
+				return failure
+			}
+			nativeCalls++
+			return nil
+		})
+		if len(errs) != 1 || len(blocked) != 1 || nativeCalls != 0 {
+			t.Fatalf("gate leaked: %v %v %d", errs, blocked, nativeCalls)
+		}
+	}
+	calls := 0
+	errs, blocked := executeE2EPackages(context.Background(), names, groups, true, func(_ int, _ string) error { calls++; return nil })
+	if len(errs) != 0 || len(blocked) != 0 || calls != 2 {
+		t.Fatal("successful gate did not run live stage")
+	}
+}
+func TestL3ExactScenarioSelectionRejectsWrongEnvironment(t *testing.T) {
+	root, err := e2eRoot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"delivery.local-codex", "delivery.orca-codex"} {
+		entries, err := selectE2E(root, options{level: "L3", suite: "delivery", e2eEnv: "live", scenario: id})
+		if err != nil || len(entries) != 1 || entries[0].ID != id {
+			t.Fatalf("independent selection %s: %v %v", id, entries, err)
+		}
+	}
+	for _, opts := range []options{
+		{level: "L3", suite: "delivery", e2eEnv: "controlled", scenario: "delivery.local-codex"},
+		{level: "L3", suite: "recovery", e2eEnv: "live", scenario: "delivery.local-codex"},
+		{level: "L3", suite: "delivery", e2eEnv: "live", scenario: "delivery.local-codex,delivery.local-codex"},
+	} {
+		if _, err := selectE2E(root, opts); err == nil {
+			t.Fatal("invalid scenario selection accepted")
+		}
 	}
 }

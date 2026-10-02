@@ -34,7 +34,7 @@ func argument(args []string, key string) string {
 func Main(args []string) error {
 
 	if len(args) > 0 && args[0] == "git-server" {
-		return gitServer(argument(args, "--root"), argument(args, "--address-file"))
+		return gitServer(argument(args, "--root"), argument(args, "--address-file"), argument(args, "--e2e-state"))
 	}
 	path := argument(args, "--e2e-state")
 	if path == "" {

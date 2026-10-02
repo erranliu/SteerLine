@@ -18,6 +18,29 @@ func workspacePolicyFixture() executionapi.ExecutionPolicy {
 	return executionapi.ExecutionPolicy{Filesystem: executionapi.FilesystemPolicy{ReadScope: "host", WriteScope: "workspace", GitMetadataWrite: true}, Network: "allow", Escalation: "deny"}
 }
 
+func TestFullAccessProfileFreezeSurvivesClaimValidation(t *testing.T) {
+	for _, host := range []string{"local", "orca"} {
+		policy := workspacePolicyFixture()
+		policy.Filesystem.WriteScope, policy.Filesystem.GitMetadataWrite = "host", false
+		c := Config{PublicationPolicy: executionPublicationFixture(), PR: hostPublicationProviderFixture(), ExecutionPolicy: policy, Repository: "repository", Branch: "main", Host: host, Agent: "codex", Codex: Command{Executable: "codex"}}
+		if host == "orca" {
+			c.PublicationPolicy.Publisher = "worker"
+		}
+		original := c.projectExecutionProfile().Freeze()
+		if original.Sandbox != "danger-full-access" || original.WindowsSandbox != "" || !verifyFixedExecutionProfile(original) {
+			t.Fatalf("%s full-access snapshot rejected at claim: %+v", host, original)
+		}
+		restored := c.ApplyFixedExecutionProfile(original)
+		if restored.ExecutionPolicy.Filesystem.WriteScope != "host" || restored.Sandbox != "danger-full-access" || restored.WindowsSandbox != "" {
+			t.Fatal("frozen full-access authority was not restored")
+		}
+		original.WindowsSandbox = "elevated"
+		if verifyFixedExecutionProfile(original) {
+			t.Fatal("full-access snapshot accepted a changed Windows sandbox mode")
+		}
+	}
+}
+
 func TestProjectPolicyRejectsMissingOrOldConfiguration(t *testing.T) {
 	t.Setenv("STEERLINE_HOME", t.TempDir())
 	writeGlobalExecutionFixture(t, []ExecutionProfile{testExecutionProfile(t, "local", "Local", "local", "codex", codexworker.ProfileConfig{Executable: "codex"}, nil)}, "local")

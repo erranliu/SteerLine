@@ -10,6 +10,38 @@ func policyFixture() executionapi.ExecutionPolicy {
 	return executionapi.ExecutionPolicy{Filesystem: executionapi.FilesystemPolicy{ReadScope: "host", WriteScope: "workspace", GitMetadataWrite: true}, Network: "allow", Escalation: "deny"}
 }
 
+func TestExplicitHostPolicyMapsBothWindowsWorkersToFullAccess(t *testing.T) {
+	policy := policyFixture()
+	policy.Filesystem.WriteScope, policy.Filesystem.GitMetadataWrite = "host", false
+	for _, host := range []string{"local", "orca"} {
+		permissions, err := CompilePolicy(policy, "windows", host, "codex", "", "", nil)
+		if err != nil || permissions.Sandbox != "danger-full-access" || permissions.WindowsSandbox != "" || permissions.ApprovalPolicy != "never" || !permissions.NetworkAccess || permissions.Contract != FullAccessPolicyContract {
+			t.Fatalf("full-access mapping missing for %s: %+v/%v", host, permissions, err)
+		}
+		args := strings.Join(permissions.Args(), " ")
+		if strings.Contains(args, "windows.sandbox") || strings.Contains(args, "sandbox_workspace_write") {
+			t.Fatal("full access injected sandbox initialization/settings")
+		}
+		params, err := TurnStartParams("worktree", "session", "command", "prompt", permissions.Sandbox, "model", "medium", nil)
+		if err != nil || params["sandboxPolicy"].(map[string]any)["type"] != "dangerFullAccess" || params["approvalPolicy"] != "never" {
+			t.Fatal("turn policy differs from compiled full-access launch")
+		}
+		if host == "orca" {
+			launch, err := ManagedCommand(ManagedCommandOptions{Policy: policy, Host: host, Agent: "codex", Executable: "codex.exe", Sandbox: permissions.Sandbox})
+			if err != nil || !strings.Contains(strings.Join(launch.Args, " "), "sandbox_mode=danger-full-access") {
+				t.Fatalf("managed Orca launch lost full access: %+v/%v", launch, err)
+			}
+		}
+		if _, err := CompilePolicy(policy, "windows", host, "codex", "elevated", "", nil); err == nil {
+			t.Fatal("full access claimed a Windows sandbox implementation")
+		}
+	}
+	policy.Network = "deny"
+	if _, err := CompilePolicy(policy, "windows", "local", "codex", "", "", nil); err == nil {
+		t.Fatal("network deny was silently widened to full access")
+	}
+}
+
 func TestProjectPolicyCompilerSupportsOnlyVerifiedTargetMappings(t *testing.T) {
 	for _, tc := range []struct {
 		host, mode string

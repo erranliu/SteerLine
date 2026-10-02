@@ -23,12 +23,15 @@ type ManagedCommandOptions struct {
 }
 
 func ManagedCommand(options ManagedCommandOptions) (executionapi.LaunchCommand, error) {
-	if options.Host != "orca" || options.Agent != "codex" || options.Executable == "" || options.Sandbox != "workspace-write" || !ValidWindowsSandbox(options.WindowsSandbox) {
-		return executionapi.LaunchCommand{}, errors.New("managed Orca launch requires Codex, executable, workspace-write and explicit windows_sandbox (elevated or unelevated)")
+	if options.Host != "orca" || options.Agent != "codex" || options.Executable == "" {
+		return executionapi.LaunchCommand{}, errors.New("managed Orca launch requires Codex and an executable")
 	}
 	permissions, err := CompilePolicy(options.Policy, runtime.GOOS, options.Host, options.Agent, options.WindowsSandbox, "", options.Args)
 	if err != nil {
 		return executionapi.LaunchCommand{}, err
+	}
+	if options.Sandbox != permissions.Sandbox || (permissions.Sandbox == "danger-full-access" && len(options.WriteRoots) != 0) {
+		return executionapi.LaunchCommand{}, errors.New("managed Orca settings differ from the explicit execution_policy")
 	}
 	options.Sandbox, options.WindowsSandbox = permissions.Sandbox, permissions.WindowsSandbox
 	args := append([]string(nil), options.Args...)
