@@ -26,6 +26,10 @@ type environmentFixture struct {
 }
 
 func newEnvironmentFixture(t *testing.T, state fakeNativeOrcaState, model string) *environmentFixture {
+	return newEnvironmentFixtureWithPolicy(t, state, model, false)
+}
+
+func newEnvironmentFixtureWithPolicy(t *testing.T, state fakeNativeOrcaState, model string, fullAccess bool) *environmentFixture {
 	t.Helper()
 	ctx := context.Background()
 	c, commit, store := openDAGFixture(t)
@@ -46,7 +50,12 @@ func newEnvironmentFixture(t *testing.T, state fakeNativeOrcaState, model string
 	if model != "" {
 		effort = "high"
 	}
-	setTestImplementationProfiles(t, &c, codexworker.ProfileConfig{Executable: exe, WindowsSandbox: "unelevated", Model: model, ReasoningEffort: effort}, &orcaworker.ProfileConfig{Executable: exe, Args: []string{"--fake", "orca-native", stateDir}, Shell: "powershell.exe", WaitTimeout: "2m"})
+	windowsSandbox := "unelevated"
+	if fullAccess {
+		c.ExecutionPolicy.Filesystem.WriteScope, c.ExecutionPolicy.Filesystem.GitMetadataWrite = "host", false
+		windowsSandbox = ""
+	}
+	setTestImplementationProfiles(t, &c, codexworker.ProfileConfig{Executable: exe, WindowsSandbox: windowsSandbox, Model: model, ReasoningEffort: effort}, &orcaworker.ProfileConfig{Executable: exe, Args: []string{"--fake", "orca-native", stateDir}, Shell: "powershell.exe", WaitTimeout: "2m"})
 	commands := CommandService{Store: store, Project: c.Identity()}
 	input := taskBatchFixture(t, c, commit, batchTasks(8154), nil)
 	validation, err := commands.ValidateTaskBatch(ctx, c, input)
