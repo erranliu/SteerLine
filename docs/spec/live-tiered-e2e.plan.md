@@ -24,6 +24,8 @@
 
 首轮修复后本地真实链路通过、PR #34 合并；Orca 已通过 agent 绑定并创建 coordinator，但 E2E control helper 的 25s 回执等待先于原生资源准备完成而结束。将回执等待绑定到产品请求已有的 ExpiresAt（2m）；外层 helper 进程预算覆盖 25s 身份解析、2m 回执和 5s 退出，普通 CLI 仍为 30s，不修改产品截止、不重发请求。
 
+将“空线程不能 resume”同时补入 L2 controlled helper，并以协议单测验证完成回合后才可恢复且不增加 dispatch/session 数；真实 L2 运行后对这个纯受控 fixture 修改独立重跑 controlled 门槛，不重复模型请求。
+
 | 级别 | 组/场景 | 环境 | 命令 | 时点与通过条件 | 证据 |
 |---|---|---|---|---|---|
 | L1 定向 | local.first-turn / feedback / partial-receipt | 本机、受控 app-server，无 token | `go test ./internal/steerline -run '^(TestWorkerFlowServiceFirstFeedbackKeepsSessionAndWorkspace\|TestMockAppServerThreadAndTurnContract\|TestAppServerFailedPreparationKeepsPartialSessionBinding)$' -count=1` | 修复后；空线程 resume 被 mock 拒绝，首次回合与同会话反馈仍通过，部分身份保留 | 本轮命令输出 |
