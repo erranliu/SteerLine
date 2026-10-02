@@ -1,0 +1,222 @@
+{
+  "scope": "e2e",
+  "level": "L2",
+  "env": "gated",
+  "environment": {
+    "source_commit": "9ac38521e202334ed338efc102d075c774a572f7",
+    "worktree_status": "clean (this run's logs and summary excluded)",
+    "go_version": "go version go1.26.4 windows/amd64",
+    "go_env": {
+      "GOARCH": "amd64",
+      "GOCACHE": "C:\\Users\\lmas1\\AppData\\Local\\go-build",
+      "GOFLAGS": "",
+      "GOOS": "windows",
+      "GOTOOLCHAIN": "auto"
+    },
+    "os": "windows",
+    "architecture": "amd64",
+    "machine": {
+      "host_name": "liuming-asus",
+      "logical_cpu_count": 20,
+      "processor_identifier": "AMD64 Family 26 Model 36 Stepping 0, AuthenticAMD"
+    },
+    "concurrency": {
+      "GOMAXPROCS_environment": "unset",
+      "go_build_package_parallel": "Go default",
+      "go_test_parallel": "default 20",
+      "runtime_GOMAXPROCS": "20"
+    },
+    "build_cache_condition": "as found; no explicit cache clear",
+    "enabled_native_acceptance_switches": [],
+    "native_acceptance_note": "controlled gate, then native gpt-6-luna/medium on both chains with real SteerlineTest GitHub PRs"
+  },
+  "selected_scenarios": [
+    {
+      "id": "smoke.delivery",
+      "level": "L2",
+      "suite": "smoke",
+      "package": "./tests/e2e/smoke",
+      "test": "TestDeliverySmoke",
+      "env": "controlled"
+    },
+    {
+      "id": "smoke.local-codex",
+      "level": "L2",
+      "suite": "smoke",
+      "package": "./tests/e2e/live",
+      "test": "TestSmokeLocalCodex",
+      "env": "live",
+      "chain": "local-codex"
+    },
+    {
+      "id": "smoke.orca-codex",
+      "level": "L2",
+      "suite": "smoke",
+      "package": "./tests/e2e/live",
+      "test": "TestSmokeOrcaCodex",
+      "env": "live",
+      "chain": "orca-codex"
+    }
+  ],
+  "groups": [
+    {
+      "id": "e2e-1",
+      "command": [
+        "go",
+        "test",
+        "-tags=e2e",
+        "-json",
+        "-count=1",
+        "-p=1",
+        "-parallel=1",
+        "-timeout=6m",
+        "-run=^(TestDeliverySmoke)$",
+        "./tests/e2e/smoke"
+      ],
+      "assigned_tests": [
+        "TestDeliverySmoke"
+      ],
+      "assigned_packages": [
+        "./tests/e2e/smoke"
+      ],
+      "stdout_json_log": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-l2-final189-20261002-225547\\e2e-1.jsonl",
+      "stderr_log": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-l2-final189-20261002-225547\\e2e-1.stderr.txt",
+      "wall_seconds": 102.840191,
+      "exit_code": 0,
+      "summary": {
+        "status": "passed",
+        "passed": true,
+        "complete": true,
+        "command_exit_code": 0,
+        "package_count": 1,
+        "passed_packages": 1,
+        "failed_packages": [],
+        "skipped_packages": [],
+        "test_count": 1,
+        "passed_tests": 1,
+        "failed_tests": 0,
+        "skipped_tests": 0,
+        "packages": [
+          {
+            "package": "github.com/erranliu/SteerLine/tests/e2e/smoke",
+            "status": "pass",
+            "elapsed_seconds": 100.272
+          }
+        ],
+        "tests": [
+          {
+            "package": "github.com/erranliu/SteerLine/tests/e2e/smoke",
+            "name": "TestDeliverySmoke",
+            "status": "pass",
+            "elapsed_seconds": 99.1
+          }
+        ],
+        "slowest_tests": [
+          {
+            "package": "github.com/erranliu/SteerLine/tests/e2e/smoke",
+            "name": "TestDeliverySmoke",
+            "status": "pass",
+            "elapsed_seconds": 99.1
+          }
+        ],
+        "failures": [],
+        "skipped": [],
+        "incomplete_reasons": [],
+        "test_event_wall_seconds": 100.272286,
+        "has_test_event_wall": true
+      }
+    },
+    {
+      "id": "e2e-2",
+      "command": [
+        "go",
+        "test",
+        "-tags=e2e",
+        "-json",
+        "-count=1",
+        "-p=1",
+        "-parallel=1",
+        "-timeout=35m",
+        "-run=^(TestSmokeLocalCodex|TestSmokeOrcaCodex)$",
+        "./tests/e2e/live"
+      ],
+      "assigned_tests": [
+        "TestSmokeLocalCodex",
+        "TestSmokeOrcaCodex"
+      ],
+      "assigned_packages": [
+        "./tests/e2e/live"
+      ],
+      "stdout_json_log": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-l2-final189-20261002-225547\\e2e-2.jsonl",
+      "stderr_log": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-l2-final189-20261002-225547\\e2e-2.stderr.txt",
+      "wall_seconds": 528.4787605,
+      "exit_code": 0,
+      "summary": {
+        "status": "passed",
+        "passed": true,
+        "complete": true,
+        "command_exit_code": 0,
+        "package_count": 1,
+        "passed_packages": 1,
+        "failed_packages": [],
+        "skipped_packages": [],
+        "test_count": 2,
+        "passed_tests": 2,
+        "failed_tests": 0,
+        "skipped_tests": 0,
+        "packages": [
+          {
+            "package": "github.com/erranliu/SteerLine/tests/e2e/live",
+            "status": "pass",
+            "elapsed_seconds": 525.786
+          }
+        ],
+        "tests": [
+          {
+            "package": "github.com/erranliu/SteerLine/tests/e2e/live",
+            "name": "TestSmokeOrcaCodex",
+            "status": "pass",
+            "elapsed_seconds": 389
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/tests/e2e/live",
+            "name": "TestSmokeLocalCodex",
+            "status": "pass",
+            "elapsed_seconds": 135.5
+          }
+        ],
+        "slowest_tests": [
+          {
+            "package": "github.com/erranliu/SteerLine/tests/e2e/live",
+            "name": "TestSmokeOrcaCodex",
+            "status": "pass",
+            "elapsed_seconds": 389
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/tests/e2e/live",
+            "name": "TestSmokeLocalCodex",
+            "status": "pass",
+            "elapsed_seconds": 135.5
+          }
+        ],
+        "failures": [],
+        "skipped": [],
+        "incomplete_reasons": [],
+        "test_event_wall_seconds": 525.785513,
+        "has_test_event_wall": true
+      }
+    }
+  ],
+  "build_sha256": {
+    "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-l2-final189-20261002-225547\\build\\controlled-helper.exe": "7912f40b1fce3e05f56ac1a783c41ea1866a17af65512250dc9ad5589ce0ce41",
+    "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-l2-final189-20261002-225547\\build\\steerline.exe": "3124843a9cdf2cb86c1c18d60639632b3b32ee8b8f9c5ac79a84511f6ada85b9"
+  },
+  "preparation_seconds": 10.3266524,
+  "execution_seconds": 631.3867599,
+  "passed": true,
+  "cleanup_complete": true,
+  "errors": null,
+  "started_at": "2026-10-02T14:55:48.0804233Z",
+  "finished_at": "2026-10-02T15:06:30.3084787Z",
+  "coverage": "full-L2"
+}

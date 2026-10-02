@@ -1,0 +1,125 @@
+{
+  "scope": "e2e",
+  "level": "L3",
+  "env": "live",
+  "environment": {
+    "source_commit": "9ac38521e202334ed338efc102d075c774a572f7",
+    "worktree_status": " M internal/steerline/profile_publication_test.go\n M internal/steerline/testprotocol/native_orca.go\n M internal/steerline/worker_delivery_test.go",
+    "go_version": "go version go1.26.4 windows/amd64",
+    "go_env": {
+      "GOARCH": "amd64",
+      "GOCACHE": "C:\\Users\\lmas1\\AppData\\Local\\go-build",
+      "GOFLAGS": "",
+      "GOOS": "windows",
+      "GOTOOLCHAIN": "auto"
+    },
+    "os": "windows",
+    "architecture": "amd64",
+    "machine": {
+      "host_name": "liuming-asus",
+      "logical_cpu_count": 20,
+      "processor_identifier": "AMD64 Family 26 Model 36 Stepping 0, AuthenticAMD"
+    },
+    "concurrency": {
+      "GOMAXPROCS_environment": "unset",
+      "go_build_package_parallel": "Go default",
+      "go_test_parallel": "default 20",
+      "runtime_GOMAXPROCS": "20"
+    },
+    "build_cache_condition": "as found; no explicit cache clear",
+    "enabled_native_acceptance_switches": [],
+    "native_acceptance_note": "native gpt-6-luna/medium; loopback provider"
+  },
+  "selected_scenarios": [
+    {
+      "id": "delivery.orca-codex",
+      "level": "L3",
+      "suite": "delivery",
+      "package": "./tests/e2e/live",
+      "test": "TestDeliveryOrcaCodex",
+      "env": "live",
+      "chain": "orca-codex"
+    }
+  ],
+  "groups": [
+    {
+      "id": "e2e-1",
+      "command": [
+        "go",
+        "test",
+        "-tags=e2e",
+        "-json",
+        "-count=1",
+        "-p=1",
+        "-parallel=1",
+        "-timeout=35m",
+        "-run=^(TestDeliveryOrcaCodex)$",
+        "./tests/e2e/live"
+      ],
+      "assigned_tests": [
+        "TestDeliveryOrcaCodex"
+      ],
+      "assigned_packages": [
+        "./tests/e2e/live"
+      ],
+      "stdout_json_log": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-l3-delivery-final189-20261002-230939\\e2e-1.jsonl",
+      "stderr_log": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-l3-delivery-final189-20261002-230939\\e2e-1.stderr.txt",
+      "wall_seconds": 263.9291846,
+      "exit_code": 0,
+      "summary": {
+        "status": "passed",
+        "passed": true,
+        "complete": true,
+        "command_exit_code": 0,
+        "package_count": 1,
+        "passed_packages": 1,
+        "failed_packages": [],
+        "skipped_packages": [],
+        "test_count": 1,
+        "passed_tests": 1,
+        "failed_tests": 0,
+        "skipped_tests": 0,
+        "packages": [
+          {
+            "package": "github.com/erranliu/SteerLine/tests/e2e/live",
+            "status": "pass",
+            "elapsed_seconds": 261.339
+          }
+        ],
+        "tests": [
+          {
+            "package": "github.com/erranliu/SteerLine/tests/e2e/live",
+            "name": "TestDeliveryOrcaCodex",
+            "status": "pass",
+            "elapsed_seconds": 259.95
+          }
+        ],
+        "slowest_tests": [
+          {
+            "package": "github.com/erranliu/SteerLine/tests/e2e/live",
+            "name": "TestDeliveryOrcaCodex",
+            "status": "pass",
+            "elapsed_seconds": 259.95
+          }
+        ],
+        "failures": [],
+        "skipped": [],
+        "incomplete_reasons": [],
+        "test_event_wall_seconds": 261.3386684,
+        "has_test_event_wall": true
+      }
+    }
+  ],
+  "build_sha256": {
+    "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-l3-delivery-final189-20261002-230939\\build\\controlled-helper.exe": "7912f40b1fce3e05f56ac1a783c41ea1866a17af65512250dc9ad5589ce0ce41",
+    "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-l3-delivery-final189-20261002-230939\\build\\steerline.exe": "3124843a9cdf2cb86c1c18d60639632b3b32ee8b8f9c5ac79a84511f6ada85b9"
+  },
+  "preparation_seconds": 7.2394621,
+  "execution_seconds": 263.9867903,
+  "passed": true,
+  "cleanup_complete": true,
+  "errors": null,
+  "started_at": "2026-10-02T15:09:40.8149939Z",
+  "finished_at": "2026-10-02T15:14:12.6227577Z",
+  "coverage": "selected-L3"
+}
