@@ -24,7 +24,9 @@ func TestDeliverySmoke(t *testing.T) {
 			t.Fatal("successor started or became ready before merge")
 		}
 	}
-	if open.Domain.Executions[0].Workspace.Worktree == "" || open.Domain.Executions[0].SessionID != open.Helper.Session {
+	session, err := testenv.ExecutionSession(open.Domain.Executions[0])
+	env.Must(err)
+	if open.Domain.Executions[0].Workspace.Worktree == "" || session != open.Helper.Session {
 		t.Fatal("execution did not bind assigned workspace/session")
 	}
 	p.Merge()

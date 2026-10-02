@@ -87,12 +87,14 @@ func (s *Scenario) NewLiveProject(name, chain string) *Project {
 	config["command_timeout"] = "60s"
 	config["execution_policy"] = fullAccessPolicy()
 	s.Must(controlled.Write(p.Config, config))
-	profile := map[string]any{"id": chain, "name": "Real E2E " + chain, "host": host, "agent": "codex", "model": native.Model, "reasoning_effort": native.Effort, "codex": map[string]any{"executable": codex}}
+	codexConfig := map[string]any{"executable": codex, "model": native.Model, "reasoning_effort": native.Effort}
+	implementations := []any{map[string]any{"implementation_key": codexworker.ProfileCodecKey, "codec_version": 1, "payload": codexConfig}}
 	if orcaConfig != nil {
-		profile["orca"] = orcaConfig
-		profile["codex"].(map[string]any)["args"] = []string{"--no-daemon"}
+		implementations = append(implementations, map[string]any{"implementation_key": orcaworker.ProfileCodecKey, "codec_version": 1, "payload": orcaConfig})
+		codexConfig["args"] = []string{"--no-daemon"}
 	}
-	s.Must(controlled.Write(filepath.Join(p.Home, "execution.json"), map[string]any{"execution_profiles": []any{profile}, "default_execution_profile": chain}))
+	profile := map[string]any{"id": chain, "name": "Real E2E " + chain, "host": host, "agent": "codex", "implementation_configs": implementations}
+	s.Must(controlled.Write(filepath.Join(p.Home, "execution.json"), map[string]any{"version": 2, "execution_profiles": []any{profile}, "default_execution_profile": chain}))
 	p.Driver.Profile = chain
 
 	s.Must(os.WriteFile(filepath.Join(p.Repo, "AGENTS.md"), []byte("# Isolated SteerLine E2E fixture\n\nFor a readiness-only Dispatch, run only its exact probe command and report the result; do not inspect business task references. Preserve the COMPLETE native command tool result, including its exit_code and output. If using the exec JavaScript wrapper, use exactly `const r = await tools.exec_command({cmd: <exact probe command>, login: false}); text(r);`. Do not project r.output, stringify individual fields, add exit= text, or transform the result: the readiness verifier consumes the full native JSON result. For business work, only implement the bound task. Invoke shell tools with login=false to disable unrelated user shell profiles. Initially HEAD equals the reference commit: confirm with git rev-parse HEAD, then use Get-FileHash directly on docs/spec/task.spec.md and task.plan.md. Read those original files. Do not reconstruct files from git show text or PowerShell pipelines: newline conversion changes their hashes. Any scratch work must stay inside this assigned worktree, and must not be staged. No questions or other tasks are needed: the fixture contract specifies the entire output and publication action.\n"), 0600))
@@ -265,8 +267,8 @@ func (p *Project) NativeUsage(snap Snapshot, label string) (native.Usage, error)
 		return u, errors.New("usage needs one bound execution")
 	}
 	e := snap.Domain.Executions[0]
-	profile := snap.Domain.WorkflowRuns[0].ExecutionProfile
-	if profile == nil || profile.Model != native.Model || profile.ReasoningEffort != native.Effort {
+	profile, profileErr := frozenCodexSettings(snap)
+	if profileErr != nil || profile.Model != native.Model || profile.ReasoningEffort != native.Effort {
 		return u, errors.New("frozen native model/effort mismatch")
 	}
 	var evidence []byte
@@ -277,7 +279,11 @@ func (p *Project) NativeUsage(snap Snapshot, label string) (native.Usage, error)
 		if readErr != nil {
 			return u, readErr
 		}
-		u, evidence, err = native.AppServerUsage(raw, e.SessionID, e.CurrentTurnID)
+		session, bindErr := ExecutionSession(e)
+		if bindErr != nil {
+			return u, bindErr
+		}
+		u, evidence, err = native.AppServerUsage(raw, session, e.CurrentTurnID)
 	} else {
 		// Only this project's home is scanned. Exactly one native session must match
 		// the bound workspace; user/global sessions cannot become usage evidence.
@@ -341,10 +347,12 @@ func LiveDelivery(s *Scenario, chain string, restart bool) {
 		s.t.Fatal("native execution identity/turn missing")
 	}
 	if chain == "orca-codex" {
-		if e.OrcaNative == nil || len(e.OrcaNative.Turns) != 2 || !e.Environment.Ready || !e.Environment.Preparation.Verified {
+		state, stateErr := nativeOrcaState(e)
+		s.Must(stateErr)
+		if len(state.Turns) != 2 || !e.Environment.Ready || !e.Environment.Preparation.Verified {
 			s.t.Fatal("real Orca readiness/business continuity missing")
 		}
-		for _, turn := range e.OrcaNative.Turns {
+		for _, turn := range state.Turns {
 			if !turn.Settled || turn.Outcome != "succeeded" {
 				s.t.Fatal("real Orca turn did not succeed")
 			}
@@ -372,7 +380,11 @@ func LiveDelivery(s *Scenario, chain string, restart bool) {
 		p.AssertFullAccess(after)
 		p.Record("after-restart", after)
 		a := after.Domain.Executions[0]
-		if before.Page.ProjectID != after.Page.ProjectID || before.Page.DatabaseID != after.Page.DatabaseID || e.ExecutionID != a.ExecutionID || e.WorkflowRunID != a.WorkflowRunID || e.SessionID != a.SessionID || e.Workspace.Worktree != a.Workspace.Worktree || e.CurrentTurnID != a.CurrentTurnID || e.TurnNumber != a.TurnNumber || len(before.Domain.Attempts) != len(after.Domain.Attempts) {
+		originalSession, bindErr := ExecutionSession(e)
+		s.Must(bindErr)
+		afterSession, bindErr := ExecutionSession(a)
+		s.Must(bindErr)
+		if before.Page.ProjectID != after.Page.ProjectID || before.Page.DatabaseID != after.Page.DatabaseID || e.ExecutionID != a.ExecutionID || e.WorkflowRunID != a.WorkflowRunID || originalSession != afterSession || e.Workspace.Worktree != a.Workspace.Worktree || e.CurrentTurnID != a.CurrentTurnID || e.TurnNumber != a.TurnNumber || len(before.Domain.Attempts) != len(after.Domain.Attempts) {
 			s.t.Fatal("restart replaced execution identity or repeated turn")
 		}
 		afterUsage, err := p.NativeUsage(after, "after-restart")

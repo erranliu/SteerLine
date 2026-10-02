@@ -58,7 +58,7 @@ func TestUnsupportedOrcaWorkerFlowConfigurationCannotClaim(t *testing.T) {
 	for _, host := range []string{"orca", "orca_supervised"} {
 		t.Run(host, func(t *testing.T) {
 			// The target is rejected by registration before any platform probe.
-			c := Config{WorkflowProtocol: WorkerFlowVersion, Host: host, Agent: "unregistered-agent", ExecutionPolicy: workspacePolicyFixture(), PublicationPolicy: executionPublicationFixture(), PR: hostPublicationProviderFixture(), Codex: Command{Executable: "must-not-be-called"}, Orca: OrcaConfig{Executable: "must-not-be-called"}}
+			c := Config{WorkflowProtocol: WorkerFlowVersion, Host: host, Agent: "unregistered-agent", ExecutionPolicy: workspacePolicyFixture(), PublicationPolicy: executionPublicationFixture(), PR: hostPublicationProviderFixture()}
 			err := requireWorkerFlowCapabilities(context.Background(), c)
 			var backend *executionapi.BackendError
 			if !errors.As(err, &backend) || backend.Code != executionapi.BackendUnsupported {

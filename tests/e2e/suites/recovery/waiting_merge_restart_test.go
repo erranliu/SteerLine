@@ -25,7 +25,11 @@ func TestWaitingMergeRestart(t *testing.T) {
 	p.AssertFullAccess(after)
 	p.Record("after-restart", after)
 	first, second := before.Domain.Executions[0], after.Domain.Executions[0]
-	if before.Page.ProjectID != after.Page.ProjectID || before.Page.DatabaseID != after.Page.DatabaseID || before.Domain.WorkflowRuns[0].WorkflowRunID != after.Domain.WorkflowRuns[0].WorkflowRunID || first.ExecutionID != second.ExecutionID || first.SessionID != second.SessionID || first.Workspace.Worktree != second.Workspace.Worktree || first.Workspace.Branch != second.Workspace.Branch || len(before.Domain.Attempts) != len(after.Domain.Attempts) {
+	firstSession, err := testenv.ExecutionSession(first)
+	env.Must(err)
+	secondSession, err := testenv.ExecutionSession(second)
+	env.Must(err)
+	if before.Page.ProjectID != after.Page.ProjectID || before.Page.DatabaseID != after.Page.DatabaseID || before.Domain.WorkflowRuns[0].WorkflowRunID != after.Domain.WorkflowRuns[0].WorkflowRunID || first.ExecutionID != second.ExecutionID || firstSession != secondSession || first.Workspace.Worktree != second.Workspace.Worktree || first.Workspace.Branch != second.Workspace.Branch || len(before.Domain.Attempts) != len(after.Domain.Attempts) {
 		t.Fatal("restart replaced original task/database/execution/workspace identity")
 	}
 	if after.Helper.Sessions != before.Helper.Sessions || after.Helper.Dispatches != before.Helper.Dispatches {

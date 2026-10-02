@@ -137,33 +137,13 @@ func (p ExecutionProfile) DigestFor(projectID string) string {
 	if accepted == "" {
 		accepted = "unaccepted-profile-input"
 	}
-	data, display, err := normalizeImplementationInputs(p.ImplementationConfigs, p.ExecutionPolicy, p.Host, p.Agent, projectID, p.ID, accepted)
+	_, _, err := normalizeImplementationInputs(p.ImplementationConfigs, p.ExecutionPolicy, p.Host, p.Agent, projectID, p.ID, accepted)
 	if err != nil {
 		return ""
 	}
-	p.RequirementsEvaluation = cloneRequirementsEvaluation(p.RequirementsEvaluation)
-	publication := clonePublicationSettingsValue(p.Publication)
-	return digestValue(struct {
-		ImplementationKey          string
-		ImplementationVersion      string
-		ImplementationData         []executionapi.ImplementationDataEnvelope
-		ImplementationDisplay      []string
-		ExecutionRequirements      executionapi.ExecutionRequirements
-		RequirementsEvaluation     *executionapi.RequirementsEvaluation
-		RequirementsEvidenceDigest string
-		PublicationPolicy          executionapi.PublicationPolicy
-		Publication                contracts.PublicationSettings
-		ExecutionPolicy            executionapi.ExecutionPolicy
-		PolicyDigest               string
-		AcceptedConfigVersion      string
-		PolicySource               string
-		ID                         string
-		Name                       string
-		Host                       string
-		Agent                      string
-	}{profileImplementationKey(p.Host, p.Agent), executionImplementationVersion, data, display, p.ExecutionRequirements,
-		p.RequirementsEvaluation, requirementsEvidenceDigest(p.RequirementsEvaluation), p.PublicationPolicy, publication,
-		p.ExecutionPolicy, digestValue(p.ExecutionPolicy), accepted, p.PolicySource, p.ID, p.Name, p.Host, p.Agent})
+	// Selection, atomic claim and recovery bind the same immutable envelope.
+	// Hashing a second projection gave unchanged profiles different digests.
+	return p.Freeze(projectID).Digest
 }
 
 func cloneRequirementsEvaluation(value *executionapi.RequirementsEvaluation) *executionapi.RequirementsEvaluation {
