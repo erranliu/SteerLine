@@ -15,13 +15,17 @@ func (s *Service) waitWorkerFlow(run *Run, reason string, operationIDs ...string
 	if workflow.Phase == "completed" || run.TaskStatus == "closed" || run.TaskStatus == "discarded" {
 		return nil
 	}
-	entry, err := s.workerFlowRegistration(run)
-	if err != nil {
-		return err
+	facts := workerWaitFacts{
+		PreserveActiveStatus:   execution.Status == "active" && execution.CurrentTurnID != "" && execution.CurrentTurnID != execution.LastStoppedTurnID,
+		PreserveUnresolvedTurn: !execution.RecoveryRequired && (execution.PendingCommandID != "" || execution.CurrentTurnID != "" && execution.CurrentTurnID != execution.LastStoppedTurnID),
 	}
-	facts := workerWaitFacts{}
-	if entry.WaitFacts != nil {
-		facts = entry.WaitFacts(run, execution)
+	if execution.CurrentTurnID != "" && execution.CurrentTurnID == execution.LastStoppedTurnID {
+		facts.ContextPrefix = "The previous turn ended. Further input will use the same fixed execution session.\n\n"
+	}
+	if execution.RecoveryRequired && (execution.RecoveryState == "interrupted" || execution.RecoveryState == "completed") && execution.Process != nil {
+		facts.Options = []executionapi.DecisionOption{{ID: "continue", Label: "Continue the original session", Detail: "Verify and resume the original session identity"}, {ID: "new_session", Label: "Continue in a new session", Detail: "Use the existing workspace and saved history"}}
+	} else if execution.RecoveryRequired && execution.RecoveryState == "interrupted" {
+		facts.Options = []executionapi.DecisionOption{{ID: "continue", Label: "Continue this execution", Detail: "Verify or prepare its original workspace first"}}
 	}
 	unresolvedNativeTurn := facts.PreserveUnresolvedTurn
 	if !unresolvedNativeTurn && (run.Decision == nil || run.Decision.Status != "pending" && run.Decision.Status != "answer_saved") {
@@ -86,8 +90,7 @@ func (s *Service) applyWorkerFlowDecision(ctx context.Context, run *Run) error {
 	if err != nil {
 		return err
 	}
-	route, err := workerFlowRegistrationFor(config, run, execution)
-	if err != nil {
+	if _, err := workerFlowRegistrationFor(config, run, execution); err != nil {
 		return err
 	}
 	answer, err := ReadDecisionAnswer(run)
@@ -101,11 +104,8 @@ func (s *Service) applyWorkerFlowDecision(ctx context.Context, run *Run) error {
 	if err := s.checkCurrentExecutionRequirements(ctx, fixed); err != nil {
 		return err
 	}
-	if route.PrepareFeedback != nil {
-		handled, err := route.PrepareFeedback(s, ctx, run, execution, answer, command.CommandID)
-		if handled || err != nil {
-			return err
-		}
+	if run.Decision.Request.HostTarget != nil {
+		return s.applyEnvironmentAction(ctx, run, answer, command.CommandID)
 	}
 	if execution.Environment != nil && execution.Environment.Blocker != nil {
 		return nil
@@ -145,11 +145,15 @@ func (s *Service) applyWorkerFlowDecision(ctx context.Context, run *Run) error {
 		}
 	}
 	if execution.RecoveryRequired {
-		if route.RecoverFeedback != nil {
-			handled, err := route.RecoverFeedback(s, ctx, run, execution, answer, command.CommandID)
-			if handled || err != nil {
-				return err
+		if execution.RecoveryState == "interrupted" || execution.RecoveryState == "completed" {
+			if execution.Process == nil && execution.SessionID == "" && execution.TurnNumber == 0 {
+				return s.startManuallyRecoveredInitialCodex(ctx, run, answer, command.CommandID)
 			}
+			prompt := "The previous worker process stopped. Inspect the current worktree, Git status, existing work, and persistent task history before continuing. Do not replay an earlier request blindly.\n\n" + workerFeedbackText(answer, run.Decision.Request)
+			if err := s.beginLocalRecoveryAttempt(ctx, run, answer.OptionID); err != nil {
+				return s.waitWorkerFlow(run, "Manual execution recovery did not pass its original identity checks: "+err.Error())
+			}
+			return s.startWorkerFlowTurn(ctx, run, prompt, command.CommandID)
 		}
 		if execution.RecoveryState != "live" && execution.RecoveryState != "running" && execution.RecoveryState != "question" {
 			return nil
@@ -159,5 +163,8 @@ func (s *Service) applyWorkerFlowDecision(ctx context.Context, run *Run) error {
 			return err
 		}
 	}
-	return route.DeliverFeedback(s, ctx, run, workflow, execution, answer, command.CommandID)
+	if run.Decision.Request.QuestionRoute != nil {
+		return s.deliverLifecycleQuestionAnswer(ctx, run, execution, answer)
+	}
+	return s.deliverResumableWorkerFeedback(ctx, run, execution, answer, command.CommandID)
 }

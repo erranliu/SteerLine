@@ -7,12 +7,14 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/steerline/codexapp"
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
+	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
@@ -73,7 +75,7 @@ func TestAppServerPendingFeedbackRecoveryUsesNewTurnReceipt(t *testing.T) {
 			if err != nil || !completed || worker != nil || execution.PendingTurnID != second {
 				t.Fatalf("pending feedback was not recovered: %v %v %+v", completed, err, execution)
 			}
-			outcome, err := readAppServerTurnOutcome(filepath.Join(turnDir, "appserver.jsonl"), workerFlowMockSession, second)
+			outcome, err := codexworker.ReadAppServerOutcome(filepath.Join(turnDir, "appserver.jsonl"), workerFlowMockSession, second)
 			if err != nil || !outcome.Completed {
 				t.Fatalf("wrong recovered turn journal: %+v %v", outcome, err)
 			}
@@ -87,11 +89,12 @@ func TestAppServerPendingFeedbackRecoveryUsesNewTurnReceipt(t *testing.T) {
 func TestAppServerStartReplayPreservesNativeSavedAnswer(t *testing.T) {
 	first, second := "00000000-0000-0000-0000-000000000001", "00000000-0000-0000-0000-000000000002"
 	commandID := newID()
-	run := &Run{RunID: newID(), ExecutionID: newID(), AttemptID: newID(), Decision: &DecisionState{Status: "answer_saved"}}
+	run := &Run{RunID: newID(), ExecutionID: newID(), AttemptID: newID(), Decision: &DecisionState{Status: "answer_saved", Request: DecisionRequest{FormatVersion: contracts.DecisionRequestFormatVersion, Question: "Continue?", AllowFreeText: true}}}
 	workflow := &WorkflowRunRecord{WorkflowRunID: run.RunID, WorkflowVersion: WorkerFlowVersion, Phase: "waiting_decision"}
-	execution := &ExecutionRecord{ExecutionID: run.ExecutionID, WorkflowRunID: run.RunID, CurrentStep: "worker", CurrentTurnID: first, LastStoppedTurnID: first, PendingTurnID: second, PendingCommandID: commandID, TurnNumber: 1}
+	execution := &ExecutionRecord{ExecutionID: run.ExecutionID, WorkflowRunID: run.RunID, CurrentAttemptID: run.AttemptID, CurrentStep: "worker", CurrentTurnID: first, LastStoppedTurnID: first, PendingTurnID: second, PendingCommandID: commandID, TurnNumber: 1}
 	setTestCodexBinding(t, execution, "ws://127.0.0.1:12345", "generation", workerFlowMockSession)
 	service := &Service{domain: DomainSnapshot{Operations: []OperationRecord{{OperationID: newID(), IdempotencyKey: "worker-turn:" + run.ExecutionID + ":" + commandID, Status: "outcome_unknown"}}}}
+	service.Config.identity = "test-project"
 	run.TaskID, run.DomainTaskID, workflow.TaskID = "task", "task", "task"
 	service.domain.Tasks = []TaskRecord{{TaskID: "task", Status: "in_progress"}}
 	service.domain.Attempts = []StepAttemptRecord{{ExecutionID: run.ExecutionID, AttemptID: run.AttemptID, StepID: "worker", AttemptNumber: 1}}
@@ -104,9 +107,9 @@ func TestAppServerStartReplayPreservesNativeSavedAnswer(t *testing.T) {
 		t.Fatal(err)
 	}
 	if execution.CurrentCommandID != commandID || execution.CurrentTurnID != second || execution.PendingCommandID != "" || execution.TurnNumber != 2 || run.Decision.Status != "reply_accepted" || service.domain.Operations[0].Status != "confirmed" {
-		t.Fatalf("second turn receipt was not applied: %+v %+v", execution, run.Decision)
+		t.Fatalf("second turn receipt was not applied: execution=%+v decision=%+v", execution, run.Decision)
 	}
-	fixed := executionapi.SessionContext{ProjectID: "project", WorkflowRunID: run.RunID, ExecutionID: run.ExecutionID, AttemptID: run.AttemptID, SessionID: workerFlowMockSession, Generation: "generation", CurrentTurnID: second}
+	fixed := executionapi.SessionContext{ProjectID: execution.ProjectIdentity, WorkflowRunID: run.RunID, ExecutionID: run.ExecutionID, AttemptID: run.AttemptID, SessionID: workerFlowMockSession, Generation: execution.SessionGeneration, CurrentTurnID: second}
 	request := codexDecisionFixture(t, fixed, "pending", []executionapi.Question{{ID: "choice", Question: "Continue?", AllowFreeText: true}})
 	service.setRunDecision(run, &DecisionState{ID: newID(), AttemptID: run.AttemptID, Version: 1, Status: "answer_saved", Request: request})
 	workflow.Phase = "waiting_decision"
@@ -115,7 +118,7 @@ func TestAppServerStartReplayPreservesNativeSavedAnswer(t *testing.T) {
 		t.Fatal(err)
 	}
 	if execution.TurnNumber != 2 || run.Decision.Status != "answer_saved" || workflow.Phase != "waiting_decision" || run.FinishTaskStatus != "waiting_decision" {
-		t.Fatal("start replay accepted an unsent answer or changed the waiting state")
+		t.Fatalf("start replay accepted an unsent answer or changed the waiting state: turns=%d decision=%s phase=%s finish=%s", execution.TurnNumber, run.Decision.Status, workflow.Phase, run.FinishTaskStatus)
 	}
 }
 
@@ -165,7 +168,8 @@ func TestAppServerLateReplyCannotModifyTerminalTask(t *testing.T) {
 			View   Runtime
 			Domain DomainSnapshot
 		}{service.State, service.domain})
-		if err := service.handleAppServerReplyMessage(run.RunID, &appServerReplyMessage{decisionID: run.Decision.ID, opID: "reply", callID: "original"}); err != nil {
+		late := &lifecycleReplyMessage{request: executionapi.LifecycleRequest{Input: executionapi.LifecycleInput{Feedback: &executionapi.FeedbackInput{DecisionID: run.Decision.ID, QuestionID: "original"}}}}
+		if err := service.handleLifecycleFeedbackMessage(run.RunID, late); err != nil {
 			t.Fatal(err)
 		}
 		if before != digestValue(struct {
@@ -202,7 +206,9 @@ func appServerAuditServiceWithRequirements(t *testing.T, policy executionapi.Exe
 		c.PR.TokenEnv = tokenEnv
 	}
 	if policy.Filesystem.WriteScope == "none" {
-		setTestCodexProfile(t, &c, codexworker.ProfileConfig{Executable: os.Args[0]})
+		settings, err := codexworker.NormalizeProfileConfig(codexworker.ProfileConfig{Executable: os.Args[0]}, policy, runtime.GOOS, "local", "codex")
+		require(t, err)
+		setTestCodexProfile(t, &c, settings)
 	}
 	require(t, validateWorkflowConfig(&c, nil))
 	require(t, c.prepareWorktreeRoot())
@@ -280,8 +286,13 @@ func TestAppServerSlowRecoveryLeavesServiceWriterAvailable(t *testing.T) {
 	execution.Process, run.Process = identity, identity
 	endpoint := "ws://" + listener.Addr().String()
 	setTestCodexBinding(t, execution, endpoint, "generation", workerFlowMockSession)
+	execution.PolicyResources = policyResourceReceiptFixture(workflow.ExecutionProfile.Digest, execution.Workspace.Worktree, execution)
 	execution.CurrentTurnID, execution.CurrentCommandID = "00000000-0000-0000-0000-000000000001", newID()
 	execution.Status, workflow.Phase = "active", "executing"
+	input := executionapi.TurnInput{CommandID: execution.CurrentCommandID, Prompt: "original persisted input"}
+	if _, err := service.startWorkerOperation(run, "start_worker_turn", "worker-turn:"+execution.ExecutionID+":"+input.CommandID, &input); err != nil {
+		t.Fatal(err)
+	}
 	path := filepath.Join(service.Config.RunDir, "runs", run.RunID, "app-server", "process.json")
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		t.Fatal(err)
@@ -317,124 +328,6 @@ func TestAppServerSlowRecoveryLeavesServiceWriterAvailable(t *testing.T) {
 	}
 }
 
-func TestAppServerServiceTwoTurnsPersistNativeReceipts(t *testing.T) {
-	for _, test := range []struct {
-		name  string
-		async bool
-	}{{"synchronous", false}, {"service_messages", true}} {
-		t.Run(test.name, func(t *testing.T) {
-			testAppServerServiceTwoTurns(t, test.async)
-		})
-	}
-}
-
-func testAppServerServiceTwoTurns(t *testing.T, async bool) {
-	t.Helper()
-	service, run := appServerAuditServiceWithPolicy(t, executionapi.ExecutionPolicy{Filesystem: executionapi.FilesystemPolicy{ReadScope: "host", WriteScope: "none"}, Network: "deny", Escalation: "deny"})
-	fixedConfig, err := service.executionConfigForRun(run)
-	require(t, err)
-	require(t, prepareWorktreeOnly(context.Background(), fixedConfig, run))
-	workspace := *run.WorktreePath
-	state := &mockAppServerState{cwd: workspace}
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer listener.Close()
-	go func() {
-		for {
-			conn, err := listener.Accept()
-			if err != nil {
-				return
-			}
-			go mockAppServerConnection(conn, state)
-		}
-	}()
-	identity, err := currentProcessIdentity()
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, execution := service.workflowRecords(run)
-	execution.Workspace.Worktree, run.WorktreePath = workspace, &workspace
-	require(t, bindPolicyResources(context.Background(), fixedConfig, execution, workspace, nil))
-	execution.Process, run.Process = identity, identity
-	endpoint := "ws://" + listener.Addr().String()
-	setTestCodexBinding(t, execution, endpoint, "generation", workerFlowMockSession)
-	execution.Workspace.Worktree, run.WorktreePath = workspace, &workspace
-	setTestCodexProfile(t, &service.Config, codexworker.ProfileConfig{Executable: os.Args[0]})
-	setTestCodexProfile(t, &service.baseConfig, codexworker.ProfileConfig{Executable: os.Args[0]})
-	path := filepath.Join(service.Config.RunDir, "runs", run.RunID, "app-server", "process.json")
-	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
-		t.Fatal(err)
-	}
-	if err := AtomicWrite(path, mustJSON(codexworker.ProcessReceipt{Endpoint: endpoint, Generation: "generation", Identity: *identity})); err != nil {
-		t.Fatal(err)
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	if async {
-		service.runContext = ctx
-		service.workerMessages = make(chan workerMessage, 64)
-	}
-	previousTurn := ""
-	for i := 1; i <= 2; i++ {
-		commandID := newID()
-		selectedConfig := service.Config
-		if i == 1 {
-			service.Config.Host = "orca" // Current dispatch selection cannot replace this local run.
-		}
-		err := service.startWorkerFlowTurn(ctx, run, "complete this turn", commandID)
-		service.Config = selectedConfig
-		if err != nil {
-			t.Fatal(err)
-		}
-		if async {
-			for stopped := false; !stopped; {
-				select {
-				case <-ctx.Done():
-					t.Fatal("service launch/observer did not complete")
-				case message := <-service.workerMessages:
-					if err := service.handleWorkerMessage(message); err != nil {
-						t.Fatal(err)
-					}
-					stopped = message.done
-				}
-			}
-		} else {
-			worker := service.workers[run.RunID]
-			if worker == nil {
-				t.Fatalf("no observer after start: %s", deref(run.Error))
-			}
-			for {
-				select {
-				case <-ctx.Done():
-					t.Fatal("service observer did not complete")
-				case event, ok := <-worker.Events:
-					if !ok {
-						goto finished
-					}
-					if err := service.eventForRun(run, event); err != nil {
-						t.Fatal(err)
-					}
-				}
-			}
-		finished:
-			if err := <-worker.Done; err != nil {
-				t.Fatal(err)
-			}
-			delete(service.workers, run.RunID)
-			if err := service.finishWorkerFlowFor(run, nil); err != nil {
-				t.Fatal(err)
-			}
-		}
-		_, execution = service.workflowRecords(run)
-		if execution.TurnNumber != uint64(i) || execution.CurrentCommandID != commandID || execution.CurrentTurnID == previousTurn || execution.CurrentTurnID != execution.LastStoppedTurnID || codexSessionID(execution) != workerFlowMockSession || execution.Status != "idle" || run.Decision == nil {
-			t.Fatalf("turn %d receipt was not persisted: %+v", i, execution)
-		}
-		previousTurn = execution.CurrentTurnID
-	}
-}
-
 func testAppServerAnswerRecoveryPersistsBeforeNextQuestion(t *testing.T) {
 	service, run := appServerAuditService(t)
 	workflow, execution := service.workflowRecords(run)
@@ -443,6 +336,8 @@ func testAppServerAnswerRecoveryPersistsBeforeNextQuestion(t *testing.T) {
 	run.FinishTaskStatus, run.ExecutionStatus = "waiting_decision", "running"
 	setTestCodexBinding(t, execution, "ws://127.0.0.1:12345", "generation", workerFlowMockSession)
 	execution.PolicyResources = policyResourceReceiptFixture(workflow.ExecutionProfile.Digest, execution.Workspace.Worktree, execution)
+	execution.CurrentCommandID = newID()
+	execution.CurrentTurnID = "00000000-0000-0000-0000-000000000003"
 	fixed := *workerSessionContext(run, execution)
 	fixed.ProjectID = service.Config.identity
 	ask := codexDecisionFixture(t, fixed, "first", []executionapi.Question{{ID: "choice", Header: "Choice", Question: "Continue?", AllowFreeText: true}})
@@ -454,13 +349,16 @@ func testAppServerAnswerRecoveryPersistsBeforeNextQuestion(t *testing.T) {
 	service.setRunDecision(run, run.Decision)
 	record := service.decisionRecord(run)
 	record.Status, record.AnsweredBy = "answer_saved", "tester"
-	record.Answer = mustJSON(DecisionAnswer{DecisionID: record.DecisionID, RunID: run.RunID, Answers: map[string][]string{"choice": {"A"}}, AnsweredBy: "tester", AnsweredAt: now()})
+	acceptedAnswer := DecisionAnswer{DecisionID: record.DecisionID, RunID: run.RunID, Answers: map[string][]string{"choice": {"A"}}, AnsweredBy: "tester", AnsweredAt: now()}
+	record.Answer = mustJSON(acceptedAnswer)
 	service.refreshRun(run)
 	firstID := run.Decision.ID
-	if _, err := service.startWorkerOperation(run, "reply_execution_question", "worker-question-answer:"+execution.ExecutionID+":"+firstID, map[string]string{"call": "first"}); err != nil {
+	feedback := &executionapi.FeedbackInput{DecisionID: firstID, QuestionID: ask.QuestionRoute.QuestionID, Answer: &executionapi.Answer{Answers: acceptedAnswer.Answers}}
+	if _, err := service.startWorkerOperation(run, "reply_execution_question", "worker-question-answer:"+execution.ExecutionID+":"+firstID, feedback); err != nil {
 		t.Fatal(err)
 	}
 	workflow, execution = service.workflowRecords(run)
+	fixed = *workerSessionContext(run, execution)
 	next := codexDecisionFixture(t, fixed, "second", []executionapi.Question{{ID: "choice", Header: "Choice", Question: "Continue?", AllowFreeText: true}})
 	execution.PendingQuestions = []PendingQuestion{{Questions: next.Questions, Route: *next.QuestionRoute}}
 	path := filepath.Join(service.Config.RunDir, "runs", run.RunID, "turns", execution.CurrentCommandID, "appserver.jsonl")
@@ -471,7 +369,7 @@ func testAppServerAnswerRecoveryPersistsBeforeNextQuestion(t *testing.T) {
 	if err := AtomicWrite(path, append(mustJSON(event), '\n')); err != nil {
 		t.Fatal(err)
 	}
-	if err := service.reconcileAppServerReplyFromJournal(run, workflow, execution); err != nil {
+	if err := service.reconcileSavedLifecycleQuestionAnswer(context.Background(), run); err != nil {
 		t.Fatal(err)
 	}
 	snapshot, err := service.domainStore.Query(context.Background(), service.Config.identity)
@@ -505,7 +403,7 @@ func TestAppServerOutcomeUsesNativeTurnAndEarlierPRItem(t *testing.T) {
 	if err := os.WriteFile(path, raw, 0600); err != nil {
 		t.Fatal(err)
 	}
-	outcome, err := readAppServerTurnOutcome(path, thread, turn)
+	outcome, err := codexworker.ReadAppServerOutcome(path, thread, turn)
 	if err != nil || !outcome.Started || !outcome.Completed || outcome.NativeStatus != "completed" || outcome.LastMessage != "Done" || len(outcome.PRCandidates) != 1 || outcome.PRCandidates[0] != "https://git.example/o/r/pulls/8" {
 		t.Fatalf("native outcome lost evidence: %+v %v", outcome, err)
 	}

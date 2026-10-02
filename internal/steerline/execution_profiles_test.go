@@ -203,6 +203,7 @@ func TestWorkerFlowClaimsFreezeIndependentLocalProfiles(t *testing.T) {
 	}
 	edited := c
 	edited.ExecutionProfiles = append([]ExecutionProfile(nil), c.ExecutionProfiles...)
+	edited.ExecutionProfiles[0].ImplementationConfigs = cloneImplementationInputs(c.ExecutionProfiles[0].ImplementationConfigs)
 	edited.ExecutionProfiles[0].ImplementationConfigs[0].Payload = mustJSON(codexworker.ProfileConfig{Executable: "codex", Model: "later-project-edit", ReasoningEffort: "high"})
 	reopened, err := NewService(edited)
 	if err != nil {

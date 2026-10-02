@@ -98,7 +98,7 @@ func TestWorkerEnvironmentNativeReadinessLive(t *testing.T) {
 			require(t, err)
 			require(t, s.processCommandsAndDecisions(ctx))
 		} else if turn := nativeOrcaCurrentTurn(e); turn != nil && turn.DispatchID != "" {
-			require(t, s.pollNativeOrcaWorker(ctx, run))
+			require(t, driveTestLifecycleWorker(s, run))
 		} else {
 			require(t, s.advanceOrcaPreparation(ctx, run))
 		}
@@ -118,8 +118,9 @@ func TestWorkerEnvironmentNativeReadinessLive(t *testing.T) {
 			}
 			t.Logf("real readiness and business settled: %s / %s", state.Turns[0].DispatchID, state.Turns[1].DispatchID)
 			// Exact settled resources were created by this isolated center.
-			require(t, s.closeNativeOrcaTerminal(ctx, run, e, *e.Process, "agent"))
-			require(t, s.closeNativeOrcaTerminal(ctx, run, e, state.Coordinator, "coordinator"))
+			lifecycle, _, err := s.lifecycleForRun(run)
+			require(t, err)
+			require(t, s.cleanupLifecycleResources(ctx, run, lifecycle))
 			return
 		}
 		time.Sleep(time.Second)

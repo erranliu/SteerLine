@@ -66,7 +66,7 @@ func (t *sqliteTx) PutOperation(v OperationRecord) (OperationRecord, bool, error
 		if err = json.Unmarshal([]byte(payload), &existing); err != nil {
 			return v, false, err
 		}
-		if existing.Kind != v.Kind || !sameOperationRequest(existing.Request, v.Request) {
+		if existing.Kind != v.Kind || !sameOperationRequest(existing.Request, v.Request) || recordFingerprint(existing.LifecycleIdentity) != recordFingerprint(v.LifecycleIdentity) {
 			return v, false, errors.New("operation request content cannot change")
 		}
 		if oldID == v.OperationID {
@@ -95,12 +95,19 @@ func (t *sqliteTx) UpdateOperation(v OperationRecord) error {
 	if v.ProjectIdentity == "" || v.OperationID == "" || v.IdempotencyKey == "" || v.PayloadDigest == "" || v.Status == "" {
 		return errors.New("operation identity, digest and status are required")
 	}
-	var digest string
-	if err := t.tx.QueryRowContext(t.ctx, `SELECT payload_digest FROM operations WHERE project_identity=? AND operation_id=?`, v.ProjectIdentity, v.OperationID).Scan(&digest); err != nil {
+	var digest, originalPayload string
+	if err := t.tx.QueryRowContext(t.ctx, `SELECT payload_digest,payload FROM operations WHERE project_identity=? AND operation_id=?`, v.ProjectIdentity, v.OperationID).Scan(&digest, &originalPayload); err != nil {
 		return err
 	}
 	if digest != v.PayloadDigest {
 		return errors.New("operation payload digest cannot change")
+	}
+	var original OperationRecord
+	if err := json.Unmarshal([]byte(originalPayload), &original); err != nil {
+		return err
+	}
+	if recordFingerprint(original.LifecycleIdentity) != recordFingerprint(v.LifecycleIdentity) {
+		return errors.New("operation cannot replace its original lifecycle binding identity")
 	}
 	b, err := encodePayload(v)
 	if err != nil {

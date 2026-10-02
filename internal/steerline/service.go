@@ -14,11 +14,13 @@ import (
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 type Service struct {
 	Config               Config
 	baseConfig           Config
+	lifecycleResolver    executionapi.LifecycleResolver
 	dispatchConfig       *Config
 	dispatchProfile      *ExecutionProfile
 	State                Runtime
@@ -63,6 +65,16 @@ type Service struct {
 }
 
 func NewService(c Config) (_ *Service, retErr error) {
+	return NewServiceWithLifecycleResolver(c, builtinLifecycleResolver{})
+}
+
+// NewServiceWithLifecycleResolver constructs the same service with an
+// explicitly supplied implementation directory. Lifecycle operations receive
+// only execution values and already-persisted operation intents.
+func NewServiceWithLifecycleResolver(c Config, resolver executionapi.LifecycleResolver) (_ *Service, retErr error) {
+	if resolver == nil {
+		return nil, errors.New("execution lifecycle resolver is required")
+	}
 	if err := requireNativeTaskAuthority(c); err != nil {
 		return nil, err
 	}
@@ -99,7 +111,7 @@ func NewService(c Config) (_ *Service, retErr error) {
 			_ = db.Close()
 		}
 	}()
-	s := &Service{Config: c, baseConfig: c, domainStore: db, store: &Store{Domain: db, Project: c.identity}, activities: map[string]*ActivityWriter{}, conversationMappers: map[string]*codexworker.ConversationMapper{}, workers: map[string]*Worker{}, ownedLocalProcesses: map[string]*childProcess{}}
+	s := &Service{Config: c, baseConfig: c, lifecycleResolver: resolver, domainStore: db, store: &Store{Domain: db, Project: c.identity}, activities: map[string]*ActivityWriter{}, conversationMappers: map[string]*codexworker.ConversationMapper{}, workers: map[string]*Worker{}, ownedLocalProcesses: map[string]*childProcess{}}
 	old, e := loadRuntimeSnapshot(db, c.identity, false)
 	if errors.Is(e, sql.ErrNoRows) {
 		old, e = nil, nil

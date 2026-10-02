@@ -1,4 +1,4 @@
-package steerline
+package steerlineintegration
 
 import (
 	"context"
@@ -8,17 +8,20 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
+	"crypto/rand"
+	"encoding/hex"
+	"errors"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	remote "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker"
 	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
-	"github.com/erranliu/SteerLine/internal/steerline/publication"
+	"os/exec"
+	"time"
 )
 
 // Protocol fixtures invoke production adapters without claiming a Service run
 // or fabricating permission enforcement evidence. Admission is tested separately.
 type remoteProtocolFixture struct {
-	config                 Config
+	config                 remote.Config
 	client                 remote.Client
 	dir, runID, worktreeID string
 }
@@ -28,12 +31,16 @@ func newRemoteProtocolFixture(t *testing.T) *remoteProtocolFixture {
 	dir := t.TempDir()
 	state := remoteFixtureState{Origin: "https://git.example/org/repo.git", Base: strings.Repeat("a", 40), Name: "worker", Path: "/srv/steerline/worker", Branch: "remote/worker", Coordinator: "term-remote-coordinator"}
 	require(t, os.WriteFile(filepath.Join(dir, "remote.json"), mustJSON(state), 0600))
-	c := Config{Repository: dir, CommandTimeout: "5s", Host: "orca_supervised", Agent: "codex"}
-	setTestImplementationProfiles(t, &c, codexworker.ProfileConfig{Executable: os.Args[0], Model: "gpt-6-luna", ReasoningEffort: "high"}, &orcaworker.ProfileConfig{Executable: os.Args[0], Args: []string{"--fake", "orca-remote-worker", dir}, WaitTimeout: "2s", Shell: "cmd.exe"}, &remote.ProfileConfig{ConnectionID: "home-connection", EnvironmentID: "env-home", RepositorySelector: "id:repo-test", CoordinatorTerminal: state.Coordinator, PollInterval: "1ms", CapabilityReportVersion: 1})
-	cfg := remoteWorkerConfig(c)
+	cfg := remote.Config{Repository: dir, ProjectID: "project", Agent: "codex", Model: "gpt-6-luna", ReasoningEffort: "high", CommandTimeout: "5s",
+		Settings: remote.Settings{ConnectionID: "home-connection", EnvironmentID: "env-home", RepositorySelector: "id:repo-test", CoordinatorTerminal: state.Coordinator, PollInterval: "1ms"},
+		Call: func(ctx context.Context, timeout time.Duration, args ...string) ([]byte, error) {
+			ctx, cancel := context.WithTimeout(ctx, timeout)
+			defer cancel()
+			return exec.CommandContext(ctx, os.Args[0], append([]string{"--fake-remote", dir}, args...)...).Output()
+		}}
 	cfg.ExpectedRemoteRuntime = "peer"
 	cfg.Origin = func(context.Context) ([]byte, error) { return []byte(state.Origin), nil }
-	f := &remoteProtocolFixture{config: c, client: remote.New(cfg), dir: dir, runID: newID(), worktreeID: "repo-test::" + state.Path}
+	f := &remoteProtocolFixture{config: cfg, client: remote.New(cfg), dir: dir, runID: newID(), worktreeID: "repo-test::" + state.Path}
 	_, err := orcaworker.CreateRun(context.Background(), f.client.CenterCall, "remote protocol fixture", state.Coordinator, "center")
 	require(t, err)
 	return f
@@ -54,7 +61,7 @@ func changeRemoteFixture(t *testing.T, dir string, change func(*remoteFixtureSta
 }
 func (f *remoteProtocolFixture) task(t *testing.T, prompt string) string {
 	t.Helper()
-	receipt, err := orcaworker.CreateTask(context.Background(), f.client.CenterCall, prompt, "fixture task", "remote-run", remoteProfileSettings(f.config).CoordinatorTerminal, "center")
+	receipt, err := orcaworker.CreateTask(context.Background(), f.client.CenterCall, prompt, "fixture task", "remote-run", f.config.Settings.CoordinatorTerminal, "center")
 	require(t, err)
 	return receipt.ID
 }
@@ -63,7 +70,7 @@ func (f *remoteProtocolFixture) bind(t *testing.T, start remote.StartReceipt, pr
 	state := readRemoteFixture(t, f.dir)
 	identity, err := f.client.BindStart(context.Background(), start, previous, state.Path, state.Branch)
 	require(t, err)
-	target := targetFor(f.config)
+	target := executionapi.ExecutionTarget{ID: "orca-supervised:home-connection", ConnectionID: "home-connection", ExternalRuntime: "env-home"}
 	target.OrchestrationRun, target.ExternalTask, target.Dispatch, target.ExecutionHost, target.WorktreeID, target.CoordinatorTerminal = identity.OrchestrationRun, identity.Task, identity.Dispatch, identity.ExecutionHost, identity.WorktreeID, state.Coordinator
 	return remote.Ref{Backend: executionapi.BackendOrca, Protocol: executionapi.ProtocolOrcaSupervised, RunID: f.runID, Target: target, External: identity, WorkspacePath: state.Path, WorkspaceBranch: state.Branch, BaseCommit: state.Base}
 }
@@ -75,10 +82,7 @@ func (f *remoteProtocolFixture) start(t *testing.T, previous *executionapi.Proce
 	return f.bind(t, receipt, previous)
 }
 func (f *remoteProtocolFixture) reconnect() {
-	cfg := remoteWorkerConfig(f.config)
-	cfg.ExpectedRemoteRuntime = "peer"
-	cfg.Origin = func(context.Context) ([]byte, error) { return []byte("https://git.example/org/repo.git"), nil }
-	f.client = remote.New(cfg)
+	f.client = remote.New(f.config)
 }
 func (f *remoteProtocolFixture) finish(t *testing.T, ref remote.Ref) {
 	t.Helper()
@@ -98,7 +102,7 @@ func (f *remoteProtocolFixture) finish(t *testing.T, ref remote.Ref) {
 	}
 }
 
-func TestRemoteOrcaProtocolTwoTurnsKeepSessionAndSettleResources(t *testing.T) {
+func testRemoteOrcaProtocolTwoTurnsKeepSessionAndSettleResources(t *testing.T) {
 	ctx := context.Background()
 	f := newRemoteProtocolFixture(t)
 	first := f.start(t, nil)
@@ -124,13 +128,13 @@ func TestRemoteOrcaProtocolTwoTurnsKeepSessionAndSettleResources(t *testing.T) {
 		t.Fatalf("settled resources not cleaned: %+v", state)
 	}
 }
-func TestRemoteOrcaProtocolLostStartReconcilesWithoutResend(t *testing.T) {
+func testRemoteOrcaProtocolLostStartReconcilesWithoutResend(t *testing.T) {
 	ctx := context.Background()
 	f := newRemoteProtocolFixture(t)
 	task := f.task(t, "original saved input")
 	changeRemoteFixture(t, f.dir, func(s *remoteFixtureState) { s.LoseStart = true })
 	_, err := f.client.StartTask(ctx, "remote-run", task, f.worktreeID, nil)
-	if !isBackendError(remoteWorkerError(err), executionapi.BackendOutcomeUnknown) {
+	if !isBackendError(err, executionapi.BackendOutcomeUnknown) {
 		t.Fatalf("lost receipt guessed successful start: %v", err)
 	}
 	f.reconnect()
@@ -150,7 +154,7 @@ func TestRemoteOrcaProtocolLostStartReconcilesWithoutResend(t *testing.T) {
 		t.Fatal("lost receipt recovery sent another start")
 	}
 }
-func TestRemoteOrcaProtocolQuestionLostReplyAndAckAreReconciled(t *testing.T) {
+func testRemoteOrcaProtocolQuestionLostReplyAndAckAreReconciled(t *testing.T) {
 	ctx := context.Background()
 	f := newRemoteProtocolFixture(t)
 	ref := f.start(t, nil)
@@ -161,7 +165,7 @@ func TestRemoteOrcaProtocolQuestionLostReplyAndAckAreReconciled(t *testing.T) {
 		t.Fatalf("question missing: %+v", delivery)
 	}
 	_, err = f.client.Ack(ctx, ref, delivery.ID)
-	if !isBackendError(remoteWorkerError(err), executionapi.BackendOutcomeUnknown) {
+	if !isBackendError(err, executionapi.BackendOutcomeUnknown) {
 		t.Fatalf("lost ack receipt not uncertain: %v", err)
 	}
 	acknowledged, err := f.client.DeliveryAcknowledged(ctx, ref, delivery.ID)
@@ -172,7 +176,7 @@ func TestRemoteOrcaProtocolQuestionLostReplyAndAckAreReconciled(t *testing.T) {
 	changeRemoteFixture(t, f.dir, func(s *remoteFixtureState) { s.LoseReply = true })
 	question := delivery.Messages[0].ID
 	_, err = f.client.Reply(ctx, ref, question, "left")
-	if !isBackendError(remoteWorkerError(err), executionapi.BackendOutcomeUnknown) {
+	if !isBackendError(err, executionapi.BackendOutcomeUnknown) {
 		t.Fatalf("lost reply not uncertain: %v", err)
 	}
 	id, err := f.client.FindAnswer(ctx, ref, question, "left")
@@ -181,13 +185,13 @@ func TestRemoteOrcaProtocolQuestionLostReplyAndAckAreReconciled(t *testing.T) {
 		t.Fatal("answer reconciliation repeated or lost original reply")
 	}
 }
-func TestRemoteOrcaProtocolRejectsReplacementSession(t *testing.T) {
+func testRemoteOrcaProtocolRejectsReplacementSession(t *testing.T) {
 	ctx := context.Background()
 	f := newRemoteProtocolFixture(t)
 	ref := f.start(t, nil)
 	f.finish(t, ref)
 	changeRemoteFixture(t, f.dir, func(s *remoteFixtureState) { s.ChangedIdentity = true })
-	if err := f.client.VerifyWorker(ctx, ref); !isBackendError(remoteWorkerError(err), executionapi.BackendIdentityMismatch) {
+	if err := f.client.VerifyWorker(ctx, ref); !isBackendError(err, executionapi.BackendIdentityMismatch) {
 		t.Fatalf("replacement identity was accepted: %v", err)
 	}
 	task := f.task(t, "continue original session")
@@ -199,39 +203,40 @@ func TestRemoteOrcaProtocolRejectsReplacementSession(t *testing.T) {
 	}
 }
 
-func TestRemoteOrcaServiceAdmissionRejectsMissingPermissionEvidence(t *testing.T) {
-	ctx := context.Background()
-	c, commit, store := openDAGFixture(t)
-	commands := CommandService{Store: store, Project: c.Identity()}
-	input := taskBatchFixture(t, c, commit, batchTasks(901), nil)
-	validation, err := commands.ValidateTaskBatch(ctx, c, input)
-	require(t, err)
-	if !validation.Valid {
-		t.Fatalf("invalid task fixture: %+v", validation)
+func testCD64RemoteProtocolAssertions(t *testing.T) {
+	t.Run("two_turns_and_settlement", testRemoteOrcaProtocolTwoTurnsKeepSessionAndSettleResources)
+	t.Run("lost_start_no_resend", testRemoteOrcaProtocolLostStartReconcilesWithoutResend)
+	t.Run("lost_reply_and_ack", testRemoteOrcaProtocolQuestionLostReplyAndAckAreReconciled)
+	t.Run("replacement_session_rejected", testRemoteOrcaProtocolRejectsReplacementSession)
+}
+func require(t *testing.T, err error) {
+	t.Helper()
+	if err != nil {
+		t.Fatal(err)
 	}
-	_, err = commands.CreateTaskBatch(ctx, c, input, newID(), validation.AuthorityVersion, "operator")
-	require(t, err)
-	authority, err := store.nativeAuthority(ctx, c.Identity())
-	require(t, err)
-	authority.AuthorityVersion++
-	authority.DispatchPaused = false
-	require(t, store.Transact(ctx, func(tx DomainTx) error {
-		return tx.(*sqliteTx).UpdateProjectTaskAuthorityCAS(authority, authority.AuthorityVersion-1)
-	}))
-	c.Host, c.Agent = "orca_supervised", "codex"
-	c.PublicationPolicy.Publisher = executionapi.PublisherWorker
-	c.PR = publication.Config{Kind: "gitea", BaseURL: "https://git.example", Repository: "org/repo"}
-	setTestImplementationProfiles(t, &c, codexworker.ProfileConfig{Executable: "must-not-be-called", Model: "gpt-6-luna", ReasoningEffort: "high"}, &orcaworker.ProfileConfig{Executable: "must-not-be-called", Shell: "cmd.exe", WaitTimeout: "1m"}, &remote.ProfileConfig{ConnectionID: "home-connection", EnvironmentID: "env-home", RepositorySelector: "id:repo-test", CoordinatorTerminal: "term-coordinator", PollInterval: "1s", CapabilityReportVersion: 1})
-	c.Git.Executable = "must-not-be-called"
-	before, err := store.Query(ctx, c.Identity())
-	require(t, err)
-	_, err = commands.ClaimNativeTask(ctx, c, TaskClaimOptions{TaskID: "901", RequestID: newID(), ExpectedTaskVersion: 1, ExpectedAuthorityVersion: authority.AuthorityVersion, RequestedBy: "operator", Explicit: true})
-	if !isBackendError(err, executionapi.BackendUnsupported) || !strings.Contains(err.Error(), "enforcement evidence") {
-		t.Fatalf("remote policy was not rejected before any probe: %v", err)
+}
+func newID() string {
+	var value [16]byte
+	if _, err := rand.Read(value[:]); err != nil {
+		panic(err)
 	}
-	after, err := store.Query(ctx, c.Identity())
-	require(t, err)
-	if digestValue(before) != digestValue(after) {
-		t.Fatal("rejected remote claim mutated project/task/execution state")
+	return hex.EncodeToString(value[:])
+}
+func mustJSON(value any) []byte {
+	wire, err := json.Marshal(value)
+	if err != nil {
+		panic(err)
 	}
+	return wire
+}
+func AtomicWrite(path string, value []byte) error {
+	temporary := path + ".tmp"
+	if err := os.WriteFile(temporary, value, 0600); err != nil {
+		return err
+	}
+	return os.Rename(temporary, path)
+}
+func isBackendError(err error, code executionapi.BackendErrorCode) bool {
+	var remoteErr *remote.Error
+	return errors.As(err, &remoteErr) && remoteErr.Code == code
 }

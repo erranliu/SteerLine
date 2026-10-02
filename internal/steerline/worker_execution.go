@@ -3,184 +3,18 @@ package steerline
 import (
 	"context"
 	"errors"
-	"fmt"
 	"os/exec"
 	"runtime"
 
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
-	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
 
-func (s *Service) prepareCodexWorker(ctx context.Context, task TaskRecord, run *Run) error {
-	fixed, err := s.workerFlowContext(run)
-	if err != nil {
-		return err
-	}
-	if err := requireWorkerFlowCapabilities(ctx, fixed.config); err != nil {
-		return err
-	}
-	return s.prepareWorkerWorkspace(ctx, task, run)
-}
-
-func (s *Service) prepareNativeOrcaWorkerFlow(ctx context.Context, task TaskRecord, run *Run) error {
-	if execution := s.executionRecord(run); execution.Environment != nil {
-		return s.advanceOrcaPreparation(ctx, run)
-	}
-	if err := s.prepareNativeOrcaWorker(ctx, run); err != nil {
-		return s.nativeOrcaUncertain(run, "Native Orca worker preparation needs reconciliation: "+err.Error())
-	}
-	return s.startInitialWorkerFlowTurn(ctx, task, run)
-}
-
-func (s *Service) prepareSupervisedOrcaWorker(ctx context.Context, task TaskRecord, run *Run) error {
-	fixed, err := s.workerFlowContext(run)
-	if err != nil {
-		return err
-	}
-	if err := requireWorkerFlowCapabilities(ctx, fixed.config); err != nil {
-		return err
-	}
-	return s.prepareWorkerWorkspace(ctx, task, run)
-}
-
-func (s *Service) startCodexWorkerTurn(ctx context.Context, run *Run, commandID, prompt, opID string) error {
-	fixed, err := s.workerFlowContext(run)
-	if err != nil {
-		return err
-	}
-	if s.workerMessages != nil {
-		copyRun, copyExecution, config := *run, *fixed.execution, fixed.config
-		if s.appServerLaunching == nil {
-			s.appServerLaunching = make(map[string]string)
-		}
-		s.appServerLaunching[run.RunID] = commandID
-		s.forwarders.Add(1)
-		go func() {
-			defer s.forwarders.Done()
-			s.launchAppServerTurn(s.runContext, config, copyRun, copyExecution, commandID, prompt, opID)
-		}()
-		return nil
-	}
-	persistThread := func() error {
-		execution := fixed.execution
-		binding, err := codexBinding(execution)
-		if err != nil || execution.Process == nil || binding.Generation == "" {
-			return errors.New("app-server thread has no verified process generation")
-		}
-		ref := executionapi.ExecutionRef{Version: executionapi.ExecutionRecordVersion, Backend: executionapi.BackendLocal, Protocol: executionapi.ProtocolLocalCodexAppServer, Target: targetFor(fixed.config), Agent: agentFor(fixed.config), RunID: run.RunID, AttemptID: run.AttemptID, WorkspacePath: deref(run.WorktreePath), WorkspaceBranch: deref(run.WorktreeBranch), BaseCommit: deref(run.BaseCommit), External: *execution.Process, Generation: binding.Generation}
-		return s.commitWorkerBinding(run, ref)
-	}
-	worker, events, platformRequestID, err := startAppServerWorkerTurn(ctx, fixed.config, run, fixed.execution, commandID, prompt, persistThread)
-	if err != nil {
-		return s.failStartedWorkerTurn(run, opID, platformRequestID, err)
-	}
-	return s.acceptStartedWorkerTurn(run, worker, events, platformRequestID, opID, commandID, true)
-}
-
-func (s *Service) startNativeOrcaWorkerTurn(ctx context.Context, run *Run, turnID, prompt, opID string) error {
-	fixed, err := s.workerFlowContext(run)
-	if err != nil {
-		return err
-	}
-	if err := s.startNativeOrcaTurn(ctx, run, fixed.execution, turnID, prompt); err != nil {
-		_ = s.changeWorkerOperation(run, opID, "outcome_unknown", "", nil, err.Error())
-		if ctx.Err() != nil {
-			return nil
-		}
-		fixed.execution.Status = "blocked"
-		s.refreshRun(run)
-		if fixed.execution.Environment != nil {
-			return s.blockWorkerEnvironment(run, orcaworker.HostFact{Reason: "business_dispatch_unverified", Confidence: "unverified", Source: "business.operation", Detail: clip(err.Error(), 1000)})
-		}
-		return s.nativeOrcaUncertain(run, "Native Orca Dispatch needs reconciliation: "+err.Error())
-	}
-	fixed.attempt.Status, fixed.attempt.UpdatedAt = "dispatched", now()
-	fixed.execution.Status = "pending"
-	s.refreshRun(run)
-	current := nativeOrcaCurrentTurn(fixed.execution)
-	if current == nil {
-		return errors.New("native Orca turn has no accepted Dispatch identity")
-	}
-	if err := s.setOperationState(opID, "accepted", current.DispatchRequestID, mustJSON(*current), ""); err != nil {
-		return err
-	}
-	s.note(run, "steer", "worker", "accepted", "native Orca Dispatch input accepted", current.DispatchID, map[string]any{"task_id": current.TaskID, "turn_id": turnID})
-	return s.commitWorker(run, opID)
-}
-
-func (s *Service) startSupervisedOrcaWorkerTurn(ctx context.Context, run *Run, turnID, prompt, opID string) error {
-	fixed, err := s.workerFlowContext(run)
-	if err != nil {
-		return err
-	}
-	if err := s.startRemoteOrcaTurn(ctx, run, fixed.execution, turnID, prompt); err != nil {
-		_ = s.changeWorkerOperation(run, opID, "outcome_unknown", "", nil, err.Error())
-		return s.nativeOrcaUncertain(run, "Remote Orca start requires reconciliation: "+err.Error())
-	}
-	turn := nativeOrcaCurrentTurn(fixed.execution)
-	if turn == nil || turn.DispatchID == "" {
-		return errors.New("remote worker has no accepted Dispatch")
-	}
-	fixed.attempt.Status, fixed.attempt.UpdatedAt = "dispatched", now()
-	fixed.execution.Status = "pending"
-	s.refreshRun(run)
-	return s.changeWorkerOperation(run, opID, "accepted", turn.DispatchRequestID, mustJSON(*turn), "")
-}
-
-func (s *Service) failStartedWorkerTurn(run *Run, opID, platformRequestID string, startErr error) error {
-	if err := s.setOperationState(opID, "outcome_unknown", platformRequestID, nil, startErr.Error()); err != nil {
-		return err
-	}
-	fixed, err := s.workerFlowContext(run)
-	if err != nil {
-		return err
-	}
-	fixed.execution.Status = "blocked"
-	s.refreshRun(run)
-	return s.waitWorkerFlow(run, "Original worker turn start is unverified: "+startErr.Error(), opID)
-}
-
-func (s *Service) acceptStartedWorkerTurn(run *Run, worker *Worker, events, platformRequestID, opID, commandID string, local bool) (retErr error) {
-	if worker == nil {
-		return errors.New("accepted worker turn has no observer")
-	}
-	defer func() {
-		if retErr != nil && worker.cancelObservation != nil {
-			worker.cancelObservation()
-		}
-	}()
-	fixed, err := s.workerFlowContext(run)
-	if err != nil {
-		return err
-	}
-	execution, attempt := fixed.execution, fixed.attempt
-	if local {
-		execution.PendingTurnID = platformRequestID
-	}
-	identity := worker.proc.Identity()
-	execution.Process = &identity
-	execution.Status = "pending"
-	s.refreshRun(run)
-	if attempt.EventPath == "" {
-		attempt.EventPath = events
-		execution.LogPath = ptr(events)
-		s.refreshRun(run)
-	}
-	attempt.Status, attempt.UpdatedAt = "dispatched", now()
-	if err := s.setOperationState(opID, "accepted", platformRequestID, mustJSON(identity), ""); err != nil {
-		return err
-	}
-	sessionID, _ := executionSessionFacts(execution)
-	s.note(run, "steer", "worker", "accepted", "original worker turn accepted", commandID, map[string]any{"session_id": sessionID, "turn_number": execution.TurnNumber + 1})
-	if err := s.commitWorker(run, opID); err != nil {
-		return fmt.Errorf("worker started but its exact process receipt could not be saved: %w", err)
-	}
-	s.registerWorker(run, worker)
-	return nil
-}
-
 func requireWorkerFlowCapabilities(ctx context.Context, c Config) error {
+	return requireWorkerFlowCapabilitiesWithResolver(ctx, c, builtinLifecycleResolver{})
+}
+
+func requireWorkerFlowCapabilitiesWithResolver(ctx context.Context, c Config, resolver executionapi.LifecycleResolver) error {
 	if err := validateWorkflowConfig(&c, nil); err != nil {
 		return err
 	}
@@ -188,40 +22,16 @@ func requireWorkerFlowCapabilities(ctx context.Context, c Config) error {
 	if err != nil {
 		return err
 	}
-	return entry.Preflight(ctx, c)
-}
-func preflightRemoteWorkerFlow(ctx context.Context, c Config) error {
-	codex := codexProfileSettings(c)
-	if c.agentName() != "codex" || codex.Model == "" || codex.ReasoningEffort == "" || c.ExecutionPolicy.Filesystem.WriteScope != "workspace-write" || codex.Profile != "" || remoteProfileSettings(c).ConnectionID == "" {
-		return &executionapi.BackendError{Code: executionapi.BackendUnsupported, Diagnostic: "remote Orca requires Codex, model/effort, workspace-write and a fixed supervised target"}
+	setup := lifecycleSetupForConfig(c, entry)
+	lifecycle, probeErr := resolver.ResolveLifecycle(setup.Clone())
+	if probeErr != nil {
+		return probeErr
 	}
-	_, err := probeSupervisedOrcaTarget(ctx, c)
-	return err
-
-}
-func preflightNativeWorkerFlow(ctx context.Context, c Config) error {
-	codex := codexProfileSettings(c)
-	if c.managedWindowsOrca() {
-		if _, err := nativeOrcaFixedAgentCommand(c); err != nil {
-			return &executionapi.BackendError{Code: executionapi.BackendUnsupported, Diagnostic: err.Error(), Cause: err}
-		}
-		runner := Runner{Dir: c.Repository, Timeout: duration(c.CommandTimeout)}
-		if err := codexworker.ProbeManagedCLI(ctx, Command{Executable: codex.Executable, Args: codex.Args}, func(ctx context.Context, executable string, args []string) ([]byte, error) {
-			return runner.Output(ctx, Command{Executable: executable, Args: args})
-		}); err != nil {
-			return err
-		}
+	report, probeErr := lifecycle.PreflightLifecycle(ctx, setup.Clone())
+	if probeErr != nil {
+		return probeErr
 	}
-
-	if codex.Profile != "" || c.ExecutionPolicy.Filesystem.WriteScope != "workspace-write" {
-		return &executionapi.BackendError{Code: executionapi.BackendUnsupported, Diagnostic: "Orca requires workspace-write and no Codex profile"}
-	}
-	if err := orcaworker.CheckStatus(ctx, orcaWorkerCaller(c)); err != nil {
-		return err
-	}
-	_, err := nativeOrcaRepo(ctx, c)
-	return err
-
+	return validateLifecycleStartCapability(setup.Snapshot.Ref, report)
 }
 func preflightCodexWorkerFlow(ctx context.Context, c Config) error {
 	codex := codexProfileSettings(c)
@@ -344,10 +154,7 @@ func (s *Service) deliverResumableWorkerFeedback(ctx context.Context, run *Run, 
 		if s.workerMessages != nil && s.workers[run.RunID] == nil {
 			return nil // Recovery must attach the original observer before replying.
 		}
-		return s.replyAppServerAsk(ctx, run, execution, answer)
-	}
-	if execution.Status == "active" || s.workers[run.RunID] != nil {
-		return nil // Preserve the answer until the original turn stops.
+		return s.deliverLifecycleQuestionAnswer(ctx, run, execution, answer)
 	}
 	for _, operation := range s.domain.Operations {
 		if operation.IdempotencyKey != "worker-turn:"+execution.ExecutionID+":"+commandID {
@@ -360,6 +167,21 @@ func (s *Service) deliverResumableWorkerFeedback(ctx context.Context, run *Run, 
 		s.refreshRun(run)
 		return s.commitWorker(run)
 	}
+	priorStatus := s.operationByKey("worker-environment-feedback:" + execution.ExecutionID + ":" + commandID)
+	liveTurn := execution.CurrentTurnID != "" && execution.CurrentTurnID != execution.LastStoppedTurnID && execution.PendingCommandID == "" && (execution.Status == "active" || execution.Status == "running" || s.workers[run.RunID] != nil)
+	if priorStatus != nil || liveTurn {
+		lifecycle, _, err := s.lifecycleForRun(run)
+		if err != nil {
+			return err
+		}
+		if priorStatus == nil && !lifecycle.PolicyCapabilities().ActiveTurnFeedback {
+			return nil // This implementation preserves input until the original turn stops.
+		}
+		return s.deliverLifecycleEnvironmentFeedback(ctx, run, answer, commandID, run.Decision.Request, s.decisionRecord(run))
+	}
+	if execution.PendingCommandID != "" || s.workers[run.RunID] != nil {
+		return nil
+	} // Preserve input while the original start is pending.
 	return s.startWorkerFlowTurn(ctx, run, workerFeedbackText(answer, run.Decision.Request), commandID)
 }
 
@@ -412,30 +234,6 @@ func prepareLocalWorkerWorkspace(s *Service, ctx context.Context, run *Run, opID
 	applyWorkflowWorkspaceEvidence(run, execution, workspace)
 	if err = s.changeWorkerOperation(run, opID, "confirmed", "", mustJSON(workspace), ""); err != nil {
 		return false, err
-	}
-	return true, nil
-}
-func remoteWorkerWorkspaceRequest(run *Run) (workerWorkspacePreparationInput, error) {
-	input, err := workerWorkspaceRequest(run)
-	if err != nil {
-		return input, err
-	}
-	input.RemoteName, err = workerOrcaWorktreeName(run.TaskID, run.RunID)
-	return input, err
-}
-func prepareRegisteredRemoteWorkspace(s *Service, ctx context.Context, run *Run, opID string) (bool, error) {
-	fixed, err := s.workerFlowContext(run)
-	if err != nil {
-		return false, err
-	}
-	if err = s.prepareRemoteWorkerWorkspace(ctx, run, fixed.execution, opID); err != nil {
-		_ = s.changeWorkerOperation(run, opID, "outcome_unknown", "", nil, err.Error())
-		fixed.execution.Status = "blocked"
-		s.refreshRun(run)
-		return false, s.waitWorkerFlow(run, "Workspace preparation needs reconciliation: "+err.Error())
-	}
-	if err = s.prepareRemoteOrcaCoordinator(ctx, run); err != nil {
-		return false, s.waitWorkerFlow(run, "Original Orca terminal preparation is unverified: "+err.Error())
 	}
 	return true, nil
 }

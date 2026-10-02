@@ -1,12 +1,269 @@
-package steerline
+package steerlineintegration
 
 import (
+	"bufio"
+	"crypto/sha1"
+	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net"
+	"net/http"
+	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
+	"testing"
+
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
+	"github.com/erranliu/SteerLine/internal/steerline/testprotocol"
 )
+
+func fakeIntegrationCommand(args []string) int {
+	if len(args) == 0 {
+		return 2
+	}
+	switch args[0] {
+	case "native-orca":
+		if len(args) < 2 {
+			return 2
+		}
+		return testprotocol.FakeNativeOrca(args[1], args[2:])
+	case "publication-git":
+		return fakePublicationGit(args[1:])
+	case "codex":
+		return fakeCodexCommand(args[1:])
+	default:
+		return 2
+	}
+}
+
+func fakePublicationGit(args []string) int {
+	if len(args) == 0 {
+		return 2
+	}
+	if len(args) >= 4 && args[0] == "git" && args[1] == "remote" && args[2] == "get-url" {
+		fmt.Println(os.Getenv("STEERLINE_TEST_REMOTE_URL"))
+		return 0
+	}
+	gitArgs := append([]string(nil), args...)
+	if gitArgs[0] == "git" {
+		gitArgs = gitArgs[1:]
+	}
+	if len(gitArgs) > 0 && gitArgs[0] == "fetch" {
+		remote := os.Getenv("STEERLINE_FAKE_GIT_FETCH_REMOTE")
+		for i := 1; i < len(gitArgs); i++ {
+			if gitArgs[i] == "origin" && remote != "" {
+				gitArgs[i] = remote
+				break
+			}
+		}
+	}
+	command := exec.Command("git", gitArgs...)
+	command.Stdout, command.Stderr = os.Stdout, os.Stderr
+	if err := command.Run(); err != nil {
+		if exit, ok := err.(*exec.ExitError); ok {
+			return exit.ExitCode()
+		}
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	return 0
+}
+
+func fakeCodexCommand(args []string) int {
+	for _, arg := range args {
+		if arg == "--version" {
+			fmt.Println(codexworker.PolicyCodexVersion)
+			return 0
+		}
+	}
+	if slicesContains(args, "--help") {
+		fmt.Println("--strict-config --sandbox --ask-for-approval never --config")
+		return 0
+	}
+	if slicesContains(args, "--stdio") {
+		return fakeCodexStdio()
+	}
+	if slicesContains(args, "--listen") {
+		return fakeCodexWebSocket(args)
+	}
+	return 2
+}
+
+func slicesContains(values []string, expected string) bool {
+	for _, value := range values {
+		if value == expected {
+			return true
+		}
+	}
+	return false
+}
+
+func fakeCodexStdio() int {
+	scanner := bufio.NewScanner(os.Stdin)
+	for scanner.Scan() {
+		var request struct {
+			ID     json.RawMessage `json:"id"`
+			Method string          `json:"method"`
+		}
+		if json.Unmarshal(scanner.Bytes(), &request) != nil || len(request.ID) == 0 {
+			continue
+		}
+		if request.Method == "initialize" {
+			_ = json.NewEncoder(os.Stdout).Encode(map[string]any{"id": request.ID, "result": map[string]string{"userAgent": codexworker.PolicyCodexVersion, "codexHome": os.TempDir(), "platformOs": "windows"}})
+		}
+	}
+	return 0
+}
+
+const integrationAppServerSession = "00000000-0000-0000-0000-000000000901"
+
+type integrationAppServerState struct {
+	mu    sync.Mutex
+	turns []map[string]any
+}
+
+func fakeCodexWebSocket(args []string) int {
+	endpoint := ""
+	for i := 0; i+1 < len(args); i++ {
+		if args[i] == "--listen" {
+			endpoint = args[i+1]
+			break
+		}
+	}
+	u, err := url.Parse(endpoint)
+	if err != nil || u.Scheme != "ws" || u.Host == "" {
+		return 21
+	}
+	listener, err := net.Listen("tcp", u.Host)
+	if err != nil {
+		return 22
+	}
+	state := &integrationAppServerState{}
+	for {
+		connection, err := listener.Accept()
+		if err != nil {
+			return 0
+		}
+		go integrationAppServerConnection(connection, state)
+	}
+}
+
+func integrationAppServerConnection(connection net.Conn, state *integrationAppServerState) {
+	defer connection.Close()
+	reader := bufio.NewReader(connection)
+	request, err := http.ReadRequest(reader)
+	if err != nil || request.Header.Get("Upgrade") != "websocket" {
+		return
+	}
+	accept := sha1.Sum([]byte(request.Header.Get("Sec-WebSocket-Key") + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"))
+	if _, err := io.WriteString(connection, "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: "+base64.StdEncoding.EncodeToString(accept[:])+"\r\n\r\n"); err != nil {
+		return
+	}
+	send := func(value any) error {
+		payload, err := json.Marshal(value)
+		if err != nil {
+			return err
+		}
+		frame := []byte{0x81}
+		switch {
+		case len(payload) < 126:
+			frame = append(frame, byte(len(payload)))
+		case len(payload) <= 65535:
+			frame = append(frame, 126, byte(len(payload)>>8), byte(len(payload)))
+		default:
+			frame = append(frame, 127, 0, 0, 0, 0, byte(len(payload)>>24), byte(len(payload)>>16), byte(len(payload)>>8), byte(len(payload)))
+		}
+		_, err = connection.Write(append(frame, payload...))
+		return err
+	}
+	for {
+		header := make([]byte, 2)
+		if _, err := io.ReadFull(reader, header); err != nil || header[0]&0x0f != 1 || header[1]&0x80 == 0 {
+			return
+		}
+		size := uint64(header[1] & 0x7f)
+		if size == 126 {
+			var short uint16
+			if binary.Read(reader, binary.BigEndian, &short) != nil {
+				return
+			}
+			size = uint64(short)
+		} else if size == 127 && binary.Read(reader, binary.BigEndian, &size) != nil {
+			return
+		}
+		if size > 16<<20 {
+			return
+		}
+		mask := make([]byte, 4)
+		if _, err := io.ReadFull(reader, mask); err != nil {
+			return
+		}
+		payload := make([]byte, size)
+		if _, err := io.ReadFull(reader, payload); err != nil {
+			return
+		}
+		for i := range payload {
+			payload[i] ^= mask[i%4]
+		}
+		var message struct {
+			ID     json.RawMessage `json:"id"`
+			Method string          `json:"method"`
+			Params json.RawMessage `json:"params"`
+		}
+		if json.Unmarshal(payload, &message) != nil || len(message.ID) == 0 {
+			continue
+		}
+		response := map[string]any{"id": message.ID}
+		switch message.Method {
+		case "initialize":
+			response["result"] = map[string]string{"userAgent": codexworker.PolicyCodexVersion, "codexHome": os.TempDir(), "platformOs": "windows"}
+		case "thread/start", "thread/resume":
+			cwd, _ := os.Getwd()
+			response["result"] = map[string]any{"thread": map[string]any{"id": integrationAppServerSession, "cwd": cwd}}
+		case "thread/read":
+			state.mu.Lock()
+			turns := append([]map[string]any(nil), state.turns...)
+			state.mu.Unlock()
+			response["result"] = map[string]any{"thread": map[string]any{"id": integrationAppServerSession, "turns": turns}}
+		case "turn/start":
+			var params struct {
+				Input []struct {
+					Text string `json:"text"`
+				} `json:"input"`
+			}
+			_ = json.Unmarshal(message.Params, &params)
+			state.mu.Lock()
+			turnID := fmt.Sprintf("00000000-0000-0000-0000-%012d", len(state.turns)+1)
+			text := "completed integration turn"
+			if len(params.Input) != 0 {
+				text = "completed: " + params.Input[0].Text
+			}
+			item := map[string]any{"type": "agentMessage", "id": "message-" + turnID, "phase": "final_answer", "text": text}
+			turn := map[string]any{"id": turnID, "status": "completed", "completedAt": len(state.turns) + 1, "items": []any{item}}
+			state.turns = append(state.turns, turn)
+			state.mu.Unlock()
+			response["result"] = map[string]any{"turn": map[string]any{"id": turnID, "status": "inProgress"}}
+			if send(response) != nil || send(map[string]any{"method": "turn/started", "params": map[string]any{"threadId": integrationAppServerSession, "turn": map[string]any{"id": turnID}}}) != nil ||
+				send(map[string]any{"method": "item/completed", "params": map[string]any{"threadId": integrationAppServerSession, "turnId": turnID, "item": item}}) != nil ||
+				send(map[string]any{"method": "turn/completed", "params": map[string]any{"threadId": integrationAppServerSession, "turn": turn}}) != nil {
+				return
+			}
+			continue
+		case "turn/interrupt":
+			response["result"] = map[string]any{"accepted": true}
+		default:
+			response["error"] = map[string]any{"code": -32601, "message": "unsupported integration app-server method"}
+		}
+		if send(response) != nil {
+			return
+		}
+	}
+}
 
 type remoteFixtureTask struct {
 	ID, Spec, Dispatch, Outcome string
@@ -267,4 +524,51 @@ func fakeRemoteOrca(dir string, args []string) int {
 	}
 	save()
 	return fakeSupervisedEnvelope(runtimeID, result)
+}
+
+func TestMain(m *testing.M) {
+	if len(os.Args) > 2 && os.Args[1] == "--fake-remote" {
+		os.Exit(fakeRemoteOrca(os.Args[2], os.Args[3:]))
+	}
+	for i, arg := range os.Args {
+		if arg == "--fake" {
+			os.Exit(fakeIntegrationCommand(os.Args[i+1:]))
+		}
+	}
+	joined := strings.Join(os.Args[1:], " ")
+	if len(os.Args) > 1 && os.Args[1] == "--version" {
+		fmt.Println(codexworker.PolicyCodexVersion)
+		os.Exit(0)
+	}
+	if len(os.Args) > 1 && os.Args[1] == "--help" {
+		fmt.Println("--strict-config --sandbox --ask-for-approval never --config")
+		os.Exit(0)
+	}
+	if strings.Contains(joined, "app-server") && !strings.HasPrefix(os.Args[1], "-test") {
+		if strings.Contains(joined, "--help") {
+			fmt.Println("app-server --listen")
+			os.Exit(0)
+		}
+		if strings.Contains(joined, "--stdio") {
+			os.Exit(fakeCodexStdio())
+		}
+		os.Exit(fakeCodexWebSocket(os.Args[1:]))
+	}
+	os.Exit(m.Run())
+}
+func arg(args []string, key string) string {
+	for i := 0; i+1 < len(args); i++ {
+		if args[i] == key {
+			return args[i+1]
+		}
+	}
+	return ""
+}
+func fakeOrcaErr(code, diagnostic string) int {
+	_ = json.NewEncoder(os.Stdout).Encode(map[string]any{"ok": false, "error": map[string]any{"code": code, "diagnostic": diagnostic}})
+	return 1
+}
+func fakeSupervisedEnvelope(runtime string, result any) int {
+	_ = json.NewEncoder(os.Stdout).Encode(map[string]any{"ok": true, "result": result, "_meta": map[string]string{"runtimeId": runtime}})
+	return 0
 }

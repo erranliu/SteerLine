@@ -163,7 +163,13 @@ func (s *Service) advanceOrcaPreparation(ctx context.Context, run *Run) error {
 	}
 	if env.Preparation.Verified && !env.Preparation.Invalidated {
 		env.Ready = true
-		if execution.PendingTurnID != "" {
+		if execution.TurnNumber > 0 && execution.CurrentTurnID != "" && execution.CurrentTurnID == execution.LastStoppedTurnID && execution.PendingCommandID == "" && execution.PendingTurnID == "" && fixed.workflow.Phase != "waiting_pr_merge" &&
+			(run.Decision == nil || run.Decision.Status == "reply_accepted" || run.Decision.Status == "applied") {
+			// A turn may complete while a host gate hides its consumed answer.
+			// Successful manual recheck restores a fresh choice, never new input.
+			return s.waitWorkerFlow(run, "The original turn completed while the environment was being checked.")
+		}
+		if execution.PendingCommandID != "" || execution.PendingTurnID != "" {
 			return s.reconcileEnvironmentBusinessIntent(ctx, run)
 		}
 		if execution.TurnNumber == 0 && execution.PendingTurnID == "" {
@@ -181,14 +187,20 @@ func (s *Service) advanceOrcaPreparation(ctx context.Context, run *Run) error {
 	}
 	prepareCtx, cancel := context.WithTimeout(ctx, min(remaining, positiveDuration(fixed.config.CommandTimeout, 10*time.Second)))
 	defer cancel()
-	if err = s.prepareNativeOrcaWorker(prepareCtx, run); err != nil {
-		if errors.Is(err, orcaworker.ErrAgentStarting) {
-			return nil // Reobserve the same launch within its persisted deadline.
+	if execution.Workspace.Worktree == "" || execution.Process == nil {
+		task := nativeTaskRecord(s.domain.Tasks, run.TaskID)
+		if task == nil {
+			return errors.New("readiness execution lost its fixed task")
 		}
-		if ctx.Err() != nil {
+		if err = s.prepareWorkerWorkspace(prepareCtx, *task, run); err != nil {
+			if ctx.Err() != nil {
+				return nil
+			}
+			return s.blockWorkerEnvironment(run, orcaworker.HostFact{Reason: "resource_preparation_unverified", Confidence: "unverified", Source: "orca.resource.operation", Detail: clip(err.Error(), 1000)})
+		}
+		if execution.Workspace.Worktree == "" || execution.Process == nil || run.Decision != nil {
 			return nil
 		}
-		return s.blockWorkerEnvironment(run, orcaworker.HostFact{Reason: "resource_preparation_unverified", Confidence: "unverified", Source: "orca.resource.operation", Detail: clip(err.Error(), 1000)})
 	}
 	if err := s.observeWorkerEnvironment(ctx, run); err != nil {
 		return err
@@ -222,8 +234,8 @@ func (s *Service) advanceOrcaPreparation(ctx context.Context, run *Run) error {
 	} else if p.Probe != identity {
 		return s.blockWorkerEnvironment(run, orcaworker.HostFact{Reason: "identity_mismatch", Confidence: "confirmed", Source: "readiness.probe.identity"})
 	}
-	prompt := orcaworker.ProbePrompt(p.Command, p.Nonce, p.ScriptDigest) + nativeOrcaRelayInstruction(run.RunID, p.TurnID)
-	if err = s.startNativeOrcaTurn(prepareCtx, run, execution, p.TurnID, prompt); err != nil {
+	prompt := orcaworker.ProbePrompt(p.Command, p.Nonce, p.ScriptDigest)
+	if err = s.startWorkerFlowTurn(prepareCtx, run, prompt, p.TurnID); err != nil {
 		if ctx.Err() != nil {
 			return nil
 		}
@@ -240,31 +252,54 @@ func (s *Service) reconcileEnvironmentBusinessIntent(ctx context.Context, run *R
 	if err != nil {
 		return err
 	}
-	e := fixed.execution
-	op := s.operationByKey("worker-turn:" + e.ExecutionID + ":" + e.PendingTurnID)
-	if op == nil {
-		return s.blockWorkerEnvironment(run, orcaworker.HostFact{Reason: "business_dispatch_unverified", Confidence: "unverified", Source: "business.operation"})
+	commandID := fixed.execution.PendingCommandID
+	if commandID == "" {
+		return errors.New("saved business input lost its original Command")
 	}
-	var input struct {
-		Prompt string `json:"prompt"`
+	operation := s.operationByKey("worker-input-value:" + fixed.execution.ExecutionID + ":" + commandID)
+	var input executionapi.TurnInput
+	if operation == nil || operation.Kind != "worker_input_value" || (operation.Status != "confirmed" && operation.Status != "in_flight") || operation.LifecycleIdentity == nil || operation.LifecycleIdentity.ExecutionID != run.ExecutionID || operation.LifecycleIdentity.Ref.AttemptID != run.AttemptID || operation.LifecycleIdentity.ConfigurationDigest != fixed.execution.ConfigurationDigest || operation.LifecycleIdentity.ResourceGeneration != fixed.execution.Generation || operation.PayloadDigest != operationDigest(operation.Request) || json.Unmarshal(operation.Request, &input) != nil || input.CommandID != commandID || input.Prompt == "" {
+		return errors.New("saved business input is invalid or belongs to another original execution")
 	}
-	if json.Unmarshal(op.Request, &input) != nil || input.Prompt == "" {
-		return errors.New("saved business input is invalid")
+	// A value journal alone does not authorize replay of an old saved answer.
+	// Resume only an already-journaled external step, through its original intent.
+	externalIntent := false
+	for _, candidate := range s.domain.Operations {
+		if candidate.LifecycleIdentity == nil || candidate.LifecycleIdentity.ExecutionID != run.ExecutionID || candidate.LifecycleIdentity.Ref.AttemptID != run.AttemptID {
+			continue
+		}
+		if candidate.IdempotencyKey == "worker-turn:"+run.ExecutionID+":"+commandID {
+			externalIntent = true
+			break
+		}
+		if candidate.Kind == string(executionapi.LifecycleCreateResource) {
+			var resource executionapi.ResourceIntent
+			if json.Unmarshal(candidate.Request, &resource) == nil && resource.TurnID == commandID {
+				externalIntent = true
+				break
+			}
+		}
 	}
-	if err := s.startNativeOrcaTurn(ctx, run, e, e.PendingTurnID, input.Prompt); err != nil {
-		return s.blockWorkerEnvironment(run, orcaworker.HostFact{Reason: "business_dispatch_unverified", Confidence: "unverified", Source: "business.operation", Detail: clip(err.Error(), 1000)})
+	if !externalIntent {
+		return errors.New("original input has no external intent; a saved answer needs fresh confirmation")
 	}
-	turn := nativeOrcaCurrentTurn(e)
-	if op.Status != "confirmed" && op.Status != "accepted" {
-		return s.changeWorkerOperation(run, op.OperationID, "accepted", turn.DispatchRequestID, mustJSON(*turn), "")
+	lifecycle, _, err := s.lifecycleForRun(run)
+	if err != nil {
+		return err
 	}
-	return nil
+	return s.startWorkerLifecycle(ctx, run, lifecycle, fixed, input.CommandID, input.Prompt)
 }
 
 func (s *Service) finishOrcaPreparation(ctx context.Context, run *Run, execution *ExecutionRecord, turn *implementationTurnView, outcome string) error {
 	p := execution.Environment.Preparation
 	if turn.TurnID != p.TurnID {
 		return nil
+	}
+	if execution.PendingTurnID == turn.TurnID {
+		execution.PendingTurnID = ""
+	}
+	if execution.PendingCommandID == turn.TurnID {
+		execution.PendingCommandID = ""
 	}
 	if outcome != "succeeded" {
 		return s.blockWorkerEnvironment(run, orcaworker.HostFact{Reason: "preparation_failed", Confidence: "confirmed", Source: "orca.dispatch.settlement", Turn: turn.TurnID})
@@ -300,7 +335,7 @@ func (s *Service) finishOrcaPreparation(ctx context.Context, run *Run, execution
 	if err := orcaworker.CleanupProbe(p.Probe); err != nil {
 		execution.LastEvent = ptr("准备证据已保存；文件清理待核实：" + err.Error())
 	}
-	removeNativeOrcaRelayRequest(execution.Workspace.Worktree, run.RunID, turn.TurnID)
+	orcaworker.RemoveRelayRequest(execution.Workspace.Worktree, run.RunID, turn.TurnID)
 	if execution.Environment.Blocker != nil {
 		return nil
 	}
@@ -379,37 +414,20 @@ func (s *Service) applyEnvironmentAction(ctx context.Context, run *Run, answer D
 		if err != nil || fact.Reason != "" {
 			return s.renewEnvironmentDecision(run)
 		}
-		if err := s.verifyNativeOrcaWorker(ctx, run, execution); err != nil {
+		if err := s.verifyHostExecutionEvidence(ctx, run, execution); err != nil {
 			return s.renewEnvironmentDecision(run)
 		}
 	}
 	turn := nativeOrcaCurrentTurn(execution)
 	if turn != nil && turn.DispatchID == "" && turn.TaskID != "" && execution.Process != nil {
-		key := "orca-native-dispatch:" + execution.ExecutionID + ":" + turn.TurnID
-		if turn.InjectionAttempts > 0 {
-			key += fmt.Sprintf(":retry:%d", turn.InjectionAttempts)
-		}
-		if original := s.operationByKey(key); original != nil && original.Status != "rejected" {
-			id, err := orcaworker.RecoverDispatch(ctx, orcaWorkerMetaCaller(fixed.config), turn.TaskID, execution.Target.OrchestrationRun, *execution.Process)
-			if err != nil {
-				return s.renewEnvironmentDecision(run)
-			}
-			turn.DispatchID = id
-			if err := persistNativeOrcaTurn(execution, turn); err != nil {
-				return err
-			}
-			s.bindNativeOrcaDispatch(run, execution, turn)
-			if original.Status != "accepted" && original.Status != "confirmed" {
-				if err := s.changeWorkerOperation(run, original.OperationID, "accepted", original.PlatformRequestID, mustJSON(*turn), ""); err != nil {
-					return err
-				}
-			}
-		}
-	}
-	if turn != nil && turn.DispatchID != "" {
-		if err := orcaworker.VerifyRecoveredDispatch(ctx, orcaWorkerMetaCaller(fixed.config), orcaworker.DispatchIdentity{DispatchID: turn.DispatchID, TaskID: turn.TaskID, RunID: execution.Target.OrchestrationRun, RuntimeID: execution.Process.RuntimeID, Terminal: execution.Process.Terminal, Incarnation: execution.Process.Incarnation, WorktreeID: execution.Process.WorktreeID}); err != nil {
+		lifecycle, _, err := s.lifecycleForRun(run)
+		if err != nil {
 			return s.renewEnvironmentDecision(run)
 		}
+		if _, err := s.reconcilePendingLifecycleSteps(ctx, run, lifecycle); err != nil {
+			return s.renewEnvironmentDecision(run)
+		}
+		turn = nativeOrcaCurrentTurn(execution)
 	}
 	if turn != nil && turn.Purpose == "readiness" && !env.Preparation.Invalidated {
 		// An explicit recheck may reread a settled probe's historical tool records
@@ -420,7 +438,9 @@ func (s *Service) applyEnvironmentAction(ctx context.Context, run *Run, answer D
 				return err
 			}
 		}
-		if err := s.pollNativeOrcaWorker(ctx, run); err != nil {
+		if lifecycle, _, err := s.lifecycleForRun(run); err != nil {
+			return err
+		} else if err := s.resumeLifecycleObservation(ctx, run, lifecycle); err != nil {
 			return err
 		}
 		turn = nativeOrcaCurrentTurn(execution)
@@ -429,7 +449,9 @@ func (s *Service) applyEnvironmentAction(ctx context.Context, run *Run, answer D
 		}
 	}
 	if blocker.Fact.Reason == "business_start_unverified" && turn != nil && execution.CurrentTurnID != turn.TurnID {
-		if err := s.pollNativeOrcaWorker(ctx, run); err != nil {
+		if lifecycle, _, err := s.lifecycleForRun(run); err != nil {
+			return err
+		} else if err := s.resumeLifecycleObservation(ctx, run, lifecycle); err != nil {
 			return err
 		}
 		turn = nativeOrcaCurrentTurn(execution)
@@ -476,7 +498,11 @@ func (s *Service) applyEnvironmentAction(ctx context.Context, run *Run, answer D
 		return s.advanceOrcaPreparation(ctx, run)
 	}
 	if turn != nil && turn.DispatchID != "" && !turn.Settled {
-		return s.pollNativeOrcaWorker(ctx, run)
+		if lifecycle, _, err := s.lifecycleForRun(run); err != nil {
+			return err
+		} else {
+			return s.resumeLifecycleObservation(ctx, run, lifecycle)
+		}
 	}
 	return s.advanceOrcaPreparation(ctx, run)
 }
@@ -504,16 +530,8 @@ func (s *Service) reconcileEnvironmentQuestion(ctx context.Context, run *Run) (b
 	if request.QuestionRoute == nil {
 		return true, nil
 	}
-	state, err := decodeOrcaExecutionState(e)
-	if err != nil || state == nil {
-		return false, errors.New("original question has no verified implementation state")
-	}
-	settled := false
-	for _, turn := range state.Turns {
-		if turn.TurnID == request.QuestionRoute.TurnID {
-			settled = turn.Settled
-		}
-	}
+	settled := e.LastStoppedTurnID == request.QuestionRoute.TurnID ||
+		env.Preparation != nil && env.Preparation.Verified && env.Preparation.TurnID == request.QuestionRoute.TurnID
 	if !settled {
 		return true, nil
 	}
@@ -523,26 +541,13 @@ func (s *Service) reconcileEnvironmentQuestion(ctx context.Context, run *Run) (b
 		if json.Unmarshal(record.Answer, &answer) != nil {
 			return false, errors.New("original saved answer is invalid")
 		}
-		command, err := s.domainStore.CommandByIdempotency(ctx, s.Config.identity, decisionAnswerKey(answer))
-		if err != nil {
-			return false, err
-		}
-		op := s.operationByKey("orca-native-reply:" + e.ExecutionID + ":" + command.CommandID)
+		op := s.operationByKey("worker-question-answer:" + e.ExecutionID + ":" + record.DecisionID)
 		if op != nil {
 			if op.Status != "confirmed" && op.Status != "accepted" {
-				config, err := s.executionConfigForRun(run)
-				if err != nil {
-					return false, err
-				}
-				_, ask, err := decodeNativeOrcaQuestionRoute(run, e, request.QuestionRoute)
-				if err != nil {
-					return false, err
-				}
-				id, err := findNativeOrcaReply(ctx, config, ask.RunID, ask.DispatchID, ask.MessageID, nativeOrcaAnswerText(answer, request))
-				if err != nil || id == "" {
-					return false, nil
-				}
-				if err := s.changeWorkerOperation(run, op.OperationID, "confirmed", op.PlatformRequestID, mustJSON(map[string]string{"reply_message_id": id}), ""); err != nil {
+				input := executionapi.LifecycleInput{Feedback: &executionapi.FeedbackInput{DecisionID: record.DecisionID, QuestionID: request.QuestionRoute.QuestionID,
+					Message: workerFeedbackText(answer, request), Answer: &executionapi.Answer{Answers: answer.Answers}}}
+				confirmed, err := s.reconcileDeferredLifecycleFeedback(ctx, run, op, input, request.QuestionRoute, request.QuestionRoute.TurnID)
+				if err != nil || !confirmed {
 					return false, err
 				}
 			}
@@ -623,30 +628,20 @@ func (s *Service) flushEnvironmentFeedback(ctx context.Context, run *Run) error 
 	if json.Unmarshal(record.Answer, &answer) != nil || json.Unmarshal(record.Request, &request) != nil || record.ExecutionID != e.ExecutionID {
 		return errors.New("deferred feedback identity differs from the original execution")
 	}
-	var turn *implementationTurnView
-	state, err := decodeOrcaExecutionState(e)
-	if err != nil || state == nil {
-		return errors.New("deferred feedback has no verified implementation state")
-	}
-	for i := range state.Turns {
-		if state.Turns[i].TurnID == feedback.TurnID {
-			turn = &state.Turns[i]
-			break
-		}
-	}
 	config, err := s.executionConfigForRun(run)
 	if err != nil {
 		return err
 	}
-	op := s.operationByKey("orca-native-send:" + e.ExecutionID + ":" + feedback.CommandID)
-	if turn == nil || turn.Settled || turn.Purpose != "business" || nativeOrcaCurrentTurn(e).TurnID != turn.TurnID {
-		// Unknown delivery stays bound to its old Dispatch and only reads history.
-		if op != nil && op.Status != "confirmed" && op.Status != "accepted" && op.Status != "rejected" && turn != nil {
-			id, err := findNativeOrcaSend(ctx, config, e.Target.OrchestrationRun, turn.DispatchID, "SteerLine feedback "+feedback.CommandID, workerFeedbackText(answer, request))
-			if err != nil || id == "" {
-				return nil
-			}
-			if err := s.changeWorkerOperation(run, op.OperationID, "confirmed", op.PlatformRequestID, mustJSON(map[string]string{"message_id": id}), ""); err != nil {
+	op := s.operationByKey("worker-environment-feedback:" + e.ExecutionID + ":" + feedback.CommandID)
+	active := feedback.TurnID != "" && feedback.TurnID == e.CurrentTurnID && feedback.TurnID != e.LastStoppedTurnID &&
+		(env.Preparation == nil || feedback.TurnID != env.Preparation.TurnID)
+	if !active {
+		// An unknown old send is read-only and remains on its original turn.
+		if op != nil && op.Status != "confirmed" && op.Status != "accepted" && op.Status != "rejected" {
+			input := executionapi.LifecycleInput{Feedback: &executionapi.FeedbackInput{DecisionID: record.DecisionID,
+				Message: workerFeedbackText(answer, request), Answer: &executionapi.Answer{Answers: answer.Answers}}}
+			confirmed, err := s.reconcileDeferredLifecycleFeedback(ctx, run, op, input, nil, feedback.TurnID)
+			if err != nil || !confirmed {
 				return err
 			}
 		}
@@ -670,11 +665,11 @@ func (s *Service) flushEnvironmentFeedback(ctx context.Context, run *Run) error 
 		if fact.Reason != "" {
 			return s.blockWorkerEnvironment(run, fact)
 		}
-		if err := s.verifyNativeOrcaWorker(ctx, run, e); err != nil {
+		if err := s.verifyHostExecutionEvidence(ctx, run, e); err != nil {
 			e.LastEvent = ptr("待投递文字的原会话未核实：" + clip(err.Error(), 500))
 			return s.commitWorker(run)
 		}
-		if err := s.sendNativeOrcaFeedbackToDecision(ctx, run, wf, e, turn, answer, feedback.CommandID, request, record.DecisionID, false); err != nil {
+		if err := s.deliverLifecycleEnvironmentFeedback(ctx, run, answer, feedback.CommandID, request, record); err != nil {
 			return err
 		}
 		if record.Status != "reply_accepted" {

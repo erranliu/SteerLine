@@ -124,7 +124,7 @@ func (s *SQLiteStore) commitWorker(ctx context.Context, request workerCommit) (w
 				v.After.ProjectIdentity != request.Project || v.After.StepID != "worker" ||
 				request.Attempt == nil || request.Attempt.Before != nil || request.Attempt.After.AttemptNumber != v.Before.AttemptNumber+1 ||
 				request.Execution == nil || request.Execution.Before == nil || request.Execution.After.CurrentAttemptID != request.AttemptID ||
-				request.Execution.Before.Protocol != string(executionapi.ProtocolLocalCodexAppServer) || !request.Execution.Before.RecoveryRequired ||
+				request.Execution.Before.Process == nil || request.Execution.Before.Process.Kind != "os" || !request.Execution.Before.RecoveryRequired ||
 				request.Execution.Before.RecoveryState != "interrupted" && request.Execution.Before.RecoveryState != "completed" ||
 				v.After.InputRevision != v.Before.InputRevision || v.After.ContractDigest != v.Before.ContractDigest ||
 				request.Attempt.After.InputRevision != v.Before.InputRevision || request.Attempt.After.ContractDigest != v.Before.ContractDigest ||
@@ -154,6 +154,9 @@ func (s *SQLiteStore) commitWorker(ctx context.Context, request workerCommit) (w
 			if v.Before != nil && v.Before.Status != v.After.Status && !allowedOperationTransitions[v.Before.Status][v.After.Status] {
 				return fmt.Errorf("operation transition %s -> %s is not allowed", v.Before.Status, v.After.Status)
 			}
+			if v.Before != nil && recordFingerprint(v.Before.LifecycleIdentity) != recordFingerprint(v.After.LifecycleIdentity) {
+				return errors.New("worker operation cannot replace its original lifecycle binding identity")
+			}
 			if v.Before == nil && v.After.Status != "pending" && v.After.Status != "in_flight" {
 				return errors.New("new operation requires an original pending or in-flight intent")
 			}
@@ -182,7 +185,7 @@ func (s *SQLiteStore) commitWorker(ctx context.Context, request workerCommit) (w
 					}
 				}
 				for _, v := range request.Operations {
-					if v.Before == nil && v.After.Kind != "orca_native_terminal_close" && v.After.Kind != "orca_remote_release" && v.After.Kind != "orca_remote_coordinator_close" {
+					if v.Before == nil && v.After.Kind != "cleanup_resources" {
 						return nativeErr("task_not_active", "settled worker cannot start another action")
 					}
 				}
@@ -258,8 +261,7 @@ func (s *SQLiteStore) commitWorker(ctx context.Context, request workerCommit) (w
 				return errors.New("execution binding differs from the committed receipt")
 			}
 			execution := request.Execution.After
-			binding, bindingErr := decodeCodexAppServerBinding(&execution)
-			if string(ref.Backend) != execution.Backend || string(ref.Protocol) != execution.Protocol || ref.Agent.Name != execution.Agent || ref.Target.ID != execution.Target.ID || ref.Target.ConnectionID != execution.Target.ConnectionID || ref.Target.ExternalRuntime != execution.Target.ExternalRuntime || ref.Protocol == executionapi.ProtocolLocalCodexAppServer && (bindingErr != nil || ref.Generation != binding.Generation) {
+			if string(ref.Backend) != execution.Backend || string(ref.Protocol) != execution.Protocol || ref.Agent.Name != execution.Agent || ref.Target.ID != execution.Target.ID || ref.Target.ConnectionID != execution.Target.ConnectionID || ref.Target.ExternalRuntime != execution.Target.ExternalRuntime || ref.Generation != execution.SessionGeneration {
 				return errors.New("execution binding changed the fixed backend or generation")
 			}
 			if err := tx.putExecutionBinding(*ref); err != nil {

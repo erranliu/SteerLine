@@ -22,12 +22,12 @@
 实施时先记录所选旧用例的原位置、新位置及断言归属。下列 CD 用例名称是本任务交付的验收入口：可以把现有断言迁入同名用例或用带子用例的入口组合，不能另跑一份相同矩阵。每个命名入口及约定的各实现包必须实际命中，不能仅以进程 exit=0 或其他包有测试判断通过；原有生产缺口才补断言。外层集成包可由生命周期阶段按实际消费者创建，不得导出任意中心私有写入口。
 
 ```powershell
-go run ./cmd/test-feedback -quick -- ./internal/steerline ./internal/steerlineintegration -count=1 -run '^(TestCD64IntentReceiptAndRecoveryGate|TestCD64OriginalSessionReconciliation)$'
+go run ./cmd/test-feedback -quick -- -p 1 -parallel 1 ./internal/steerline ./internal/steerlineintegration -count=1 -run '^(TestCD64IntentReceiptAndRecoveryGate|TestCD64OriginalSessionReconciliation)$'
 go list -deps ./internal/steerline/codexworker ./internal/steerline/orcaworker ./internal/steerline/orca_remote_worker
 git diff --check
 ```
 
-最终验证将定向组与 quick 合在一次现有入口中；execution/contracts/query/sqlite/remote 协议包已由 quick-rules 运行，不再重复单独跑整包。CD63 的 remote codec 用例由 quick-rules 命中；必须核对按包/用例的实际 JSON 测试事件。调试失败可以定向重跑，稳定后不重复矩阵。
+最终验证将定向组与 quick 合在一次现有入口中；`-p 1 -parallel 1` 串行运行 root 与 outer 包，固定本次最小验收的执行顺序。execution/contracts/query/sqlite/remote 协议包已由 quick-rules 运行，不再重复单独跑整包。CD63 的 remote codec 用例由 quick-rules 命中；必须核对按包/用例的实际 JSON 测试事件。调试失败可以定向重跑，稳定后不重复矩阵。
 
 这些命令在本次规划中未执行。Spec 的各项验收对应通用/原生 fixture、固定身份与提交屏障、依赖和删除审查，实际命中数量与旧到新映射随实现记录。纯规则不跑平台矩阵，集成只跑受影响代表路径；quick 稳定后一次，没有具体失败不扩为全量。
 
@@ -46,3 +46,13 @@ PR 附本阶段消费者/所有者和删除清单、版本变化、旧到新测�
 #65 获得不需要平台类型的准备/观察/消费/宿主操作交接；#66 获得不接可写 Service 的实现构造接口。原生命周期不形成新引擎。
 
 格式改变明确更新版本并拒绝旧开发格式；不加迁移/双写/fallback。保留原请求、资源身份、深复制及单写者事务。PR 和验证记录使用实际行为与支持限制，不能把结构迁移算作 remote 权限证据补齐。
+
+## 实际交付与验证归属
+
+生产生命周期通过 `execution.LifecyclePort` 接通原 actor/workerMessages 与事务：选步、单个已保存操作、只读对账、观察、恢复、工作区检查、停止和精确清理。正式生产注入构造 `NewServiceWithLifecycleResolver` 的唯一默认目录最终外移仍归 #66。
+
+中心失败注入及准备/业务门槛归 root CD64 intent 入口；local 两轮与 native 原会话重开已通过公开 Command/Query/Service 迁至 outer CD64 原会话入口；native 入口同时保留丢 Dispatch/Task/reply/send/ack、替换 incarnation 拒绝与精确清理的原断言，同一入口承载四个 remote Protocol 回归。旧到新映射、修复、版本、失败证据和剩余所有者见[验收记录](../validation/core-decoupling-03-lifecycle/README.md)。无可写私有状态导出，无虚构 remote 准入成功。
+
+串行参数只限定包和用例执行并发，名称与断言保持。默认包并发实测在 app-server 等待中超时，串行组通过；尚不能仅据此确定根因。外层启动立即注册关闭回调，失败也关闭服务与 Reader。
+
+SQLite schema 10、runtime/checkpoint schema 15；native execution-state codec 9、local binding 1、supervised 使用同一 native state codec 9。拒绝旧开发格式，不迁移、双写或 fallback。#65 接管来源/history/mapper、宿主证据、准备文件及 open-terminal；#66 接管唯一默认目录与产品入口；#67 完成剩余测试归位和隔离守卫。生命周期消费者和原操作桥本轮删除，不延期交给后继。

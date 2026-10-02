@@ -11,7 +11,10 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
+	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
@@ -22,16 +25,42 @@ func reattachAppServerWorker(ctx context.Context, c Config, run *Run, e *Executi
 	if run == nil || e == nil || run.WorktreePath == nil {
 		return nil, false, errors.New("app-server recovery lacks execution/workspace")
 	}
-	commandID, turnID := e.CurrentCommandID, e.CurrentTurnID
-	if e.PendingCommandID != "" {
-		commandID, turnID = e.PendingCommandID, e.PendingTurnID
+	command := codexReaderCommand(c)
+	lifecycle := codexworker.ExecutionLifecycle{Backend: codexBackend(c, run), HistoryCommand: contracts.Command{Executable: command.Executable, Args: append([]string(nil), command.Args...)}}
+	session := executionapi.SessionContext{
+		ProjectID: e.ProjectIdentity, TaskID: run.TaskID, WorkflowRunID: run.RunID,
+		ExecutionID: e.ExecutionID, AttemptID: e.CurrentAttemptID, Agent: executionapi.AgentSpec{Name: run.Agent},
+		Target: e.Target, SessionID: e.SessionID, Generation: e.SessionGeneration,
+		CurrentTurnID: e.CurrentTurnID, PendingTurnID: e.PendingTurnID,
+		CurrentCommandID: e.CurrentCommandID, PendingCommandID: e.PendingCommandID,
 	}
-	binding, err := codexBinding(e)
-	if err != nil {
-		return nil, false, err
+	ref := executionapi.ExecutionRef{
+		Version: executionapi.ExecutionRecordVersion, Backend: executionapi.BackendLocal,
+		Protocol: executionapi.ProtocolLocalCodexAppServer, Target: e.Target, Agent: executionapi.AgentSpec{Name: run.Agent},
+		RunID: run.RunID, AttemptID: run.AttemptID, WorkspacePath: e.Workspace.Worktree,
+		WorkspaceBranch: e.Workspace.Branch, BaseCommit: e.Workspace.Base, Generation: e.Generation,
 	}
-	result, err := codexBackend(c, run).Reattach(ctx, binding, commandID, turnID, knownCodexAsks(run, e))
-	return applyCodexRecovery(run, e, result), result.Completed, err
+	if e.Process != nil {
+		ref.External = *e.Process
+	}
+	snapshot := executionapi.LifecycleSnapshot{
+		Ref: ref, Session: session, ConfigurationDigest: e.ConfigurationDigest, ResourceGeneration: e.Generation,
+		Implementation: cloneImplementationData(e.ImplementationData),
+		Workspace:      executionapi.WorkspaceIntent{Path: e.Workspace.Worktree, Branch: e.Workspace.Branch, BaseCommit: e.Workspace.Base},
+	}
+	if run.Decision != nil && run.Decision.Request.QuestionRoute != nil {
+		route := run.Decision.Request.QuestionRoute.Clone()
+		snapshot.QuestionRoute = &route
+		snapshot.KnownQuestionIDs = append(snapshot.KnownQuestionIDs, route.QuestionID)
+	}
+	receipt, observer, err := lifecycle.ObserveLifecycle(ctx, snapshot)
+	if mergeErr := mergeLifecycleExecutionReceipt(e, receipt); mergeErr != nil && err == nil {
+		err = mergeErr
+	}
+	if e.PendingCommandID != "" && receipt.State.TurnID != "" {
+		e.PendingTurnID = receipt.State.TurnID
+	}
+	return workerFromLifecycle(run.RunID, run.AttemptID, observer), receipt.State.TurnCompleted, err
 }
 
 func (s *Service) requireBackendCapabilities(ctx context.Context, backend executionapi.ExecutionProbe, names ...string) (executionapi.CapabilityReport, error) {
@@ -153,4 +182,19 @@ func readOutputPrefix(f *os.File, offset int64) (string, error) {
 }
 func inspectBoundOrcaTerminal(ctx context.Context, c Config, identity executionapi.ProcessIdentity) (orcaTerminal, error) {
 	return nativeOrcaClient(c).InspectBoundTerminal(ctx, targetFor(c), identity)
+}
+
+func appServerDirectory(c Config, run *Run) string {
+	if run.DomainAttemptNumber > 1 {
+		return filepath.Join(c.RunDir, "runs", run.RunID, "attempts", run.AttemptID, "app-server")
+	}
+	return filepath.Join(c.RunDir, "runs", run.RunID, "app-server")
+}
+
+func codexBackend(c Config, run *Run) codexworker.Backend {
+	settings := codexProfileSettings(c)
+	permissions, _ := codexworker.CompilePolicy(c.ExecutionPolicy, runtime.GOOS, c.hostName(), c.agentName(), settings.WindowsSandbox, settings.Profile, settings.Args)
+	return codexworker.Backend{Config: codexworker.Config{Policy: c.ExecutionPolicy, Executable: settings.Executable, Args: settings.Args, Profile: settings.Profile, Sandbox: permissions.Sandbox, WindowsSandbox: settings.WindowsSandbox, Model: settings.Model, ReasoningEffort: settings.ReasoningEffort, Workspace: deref(run.WorktreePath), RunDir: c.RunDir, RunID: run.RunID, ServerDir: appServerDirectory(c, run), Environment: func(base []string) []string {
+		return workerProcessEnvironment(c, run, base)
+	}}, Process: codexworker.ProcessPort{Start: codexProcessStart, Inspect: inspectProcess, NewGeneration: newID, WriteAtomic: AtomicWrite}}
 }

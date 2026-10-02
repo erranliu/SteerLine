@@ -1,7 +1,6 @@
 package steerline
 
 import (
-	"context"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -119,26 +118,11 @@ func TestCD62QuestionReceiptBarrier(t *testing.T) {
 		}
 	})
 	t.Run("TestAppServerAnswerRecoveryPersistsBeforeNextQuestion", testAppServerAnswerRecoveryPersistsBeforeNextQuestion)
-	t.Run("message_persisted_before_ack", testCD62InboxCommitBeforeAck)
 }
 
-func testCD62InboxCommitBeforeAck(t *testing.T) {
-	f := newEnvironmentFixture(t, fakeNativeOrcaState{}, "chosen-model")
-	f.prepare(t)
-	f.poll(t)
-	f.poll(t)
-	_, execution := f.service.workflowRecords(f.run)
-	if nativeOrcaCurrentTurn(execution) == nil {
-		t.Fatal("fixture did not create the fixed execution turn")
+func nativeOrcaAnswerText(answer DecisionAnswer, request DecisionRequest) string {
+	if request.QuestionRoute == nil {
+		return workerFeedbackText(answer, request)
 	}
-	_, err := f.service.domainStore.db.Exec(`CREATE TRIGGER reject_question_commit BEFORE UPDATE ON projection BEGIN SELECT RAISE(FAIL, 'question commit failed'); END`)
-	require(t, err)
-	err = f.service.pollNativeOrcaWorker(context.Background(), f.run)
-	if err == nil {
-		t.Fatal("question delivery committed despite the injected transaction failure")
-	}
-	state := f.state(t)
-	if state.Acked["delivery-ask-1"] {
-		t.Fatal("message acknowledgement ran before question and consumption facts committed")
-	}
+	return strings.Join(answer.Answers[request.QuestionRoute.QuestionID], "\n\n")
 }

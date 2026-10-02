@@ -3,9 +3,6 @@ package steerline
 import (
 	"context"
 	"errors"
-	"os"
-	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
@@ -32,9 +29,8 @@ func TestWorkerFlowAdapterUsesFixedProtocol(t *testing.T) {
 	if mode.Key.Protocol != executionapi.ProtocolLocalCodexAppServer {
 		t.Fatalf("local fixed protocol chose %v", mode)
 	}
-	service.domain.Executions[0].PendingTurnID, service.domain.Executions[0].PendingCommandID = mode.PendingIdentity("command")
-	if service.domain.Executions[0].PendingCommandID != "command" || service.domain.Executions[0].PendingTurnID != "" {
-		t.Fatal("Codex command identity was treated as a native turn receipt")
+	if mode.Lifecycle == nil {
+		t.Fatal("fixed local protocol has no lifecycle port")
 	}
 	wrong := *run
 	wrong.Protocol = string(executionapi.ProtocolOrcaTerminalV2)
@@ -129,101 +125,10 @@ func feedbackIdentityMismatch(err error) bool {
 	return errors.As(err, &backendErr) && backendErr.Code == executionapi.BackendIdentityMismatch
 }
 
-func TestRegisteredOrcaOperationsOwnDeliveryAndSettlement(t *testing.T) {
-	c := Config{Host: "orca", Agent: "codex"}
-	setTestImplementationProfiles(t, &c, codexworker.ProfileConfig{Executable: "codex"}, &orcaworker.ProfileConfig{Executable: "must-not-run", Shell: "cmd.exe", WaitTimeout: "1m"})
-	entry, err := registrationFor(c)
-	require(t, err)
-	original := builtinExecutionRegistry
-	defer func() { builtinExecutionRegistry = original }()
-	fake := *entry
-	delivery, settlement, verified := false, false, false
-	fake.OrcaOperations = func(Config) orcaExecutionOperations {
-		ops := nativeOrcaOperations(c)
-		ops.Delivery = func(context.Context, *Run, *ExecutionRecord, *implementationTurnView) (executionapi.EventBatch, error) {
-			delivery = true
-			return executionapi.EventBatch{DeliveryID: "fixed-delivery", Facts: []executionapi.EventFact{{SourceEventID: "fixed-message", Matched: true}}}, nil
+func TestEveryRegisteredExecutionUsesTheLifecyclePort(t *testing.T) {
+	for key, entry := range builtinExecutionRegistry {
+		if entry.Lifecycle == nil {
+			t.Fatalf("%+v has no lifecycle port", key)
 		}
-		ops.Settlement = func(context.Context, *ExecutionRecord, *implementationTurnView) (nativeOrcaSettlement, error) {
-			settlement = true
-			return nativeOrcaSettlement{Outcome: "completed", DispatchID: "fixed-dispatch"}, nil
-		}
-		ops.VerifyActive = func(context.Context, *ExecutionRecord, *implementationTurnView) error { verified = true; return nil }
-		return ops
-	}
-	builtinExecutionRegistry = map[executionRegistrationKey]*executionRegistration{fake.Key: &fake}
-	e := &ExecutionRecord{ProjectIdentity: "test-project", ExecutionID: "test-execution", CurrentAttemptID: "test-attempt", ConfigurationDigest: c.fixedProfileDigest, Process: &executionapi.ProcessIdentity{Terminal: "original"}, Target: executionapi.ExecutionTarget{OrchestrationRun: "original-run"}}
-	setTestOrcaState(t, e, &implementationExecutionView{Coordinator: executionapi.ProcessIdentity{Terminal: "coordinator", RuntimeID: "runtime"}})
-	run := &Run{RunID: "workflow", ExecutionID: "execution", AttemptID: "attempt"}
-	tnr := &implementationTurnView{TaskID: "task", DispatchID: "fixed-dispatch", TurnID: "fixed-turn"}
-	d, err := readNativeOrcaDelivery(context.Background(), c, run, e, tnr)
-	require(t, err)
-	result, err := readNativeOrcaSettlement(context.Background(), c, e, tnr)
-	require(t, err)
-	require(t, verifyNativeOrcaActiveDispatch(context.Background(), c, e, tnr))
-	if !delivery || !settlement || !verified || d.DeliveryID != "fixed-delivery" || result.DispatchID != "fixed-dispatch" {
-		t.Fatal("business consumer bypassed registered target operations")
-	}
-	incomplete := *entry
-	incomplete.OrcaOperations = nil
-	if _, err = buildExecutionRegistry([]executionRegistration{incomplete}); err == nil {
-		t.Fatal("missing registered Orca operations accepted")
-	}
-	fake.OrcaOperations = func(Config) orcaExecutionOperations { return orcaExecutionOperations{} }
-	if _, err = orcaOperationsFor(c); !isBackendError(err, executionapi.BackendUnsupported) {
-		t.Fatalf("incomplete operation set did not fail before invocation: %v", err)
-	}
-}
-
-func TestRegisteredOrcaAckReconcilesLostReceipt(t *testing.T) {
-	for _, host := range []string{"orca", "orca_supervised"} {
-		t.Run(host, func(t *testing.T) {
-			ctx := context.Background()
-			dir := t.TempDir()
-			c := Config{Host: host, Agent: "codex", Repository: dir, CommandTimeout: "5s"}
-			orca := &orcaworker.ProfileConfig{Executable: os.Args[0], WaitTimeout: "1ms", Shell: "cmd.exe"}
-			remoteSettings := &remote.ProfileConfig{}
-			state := &implementationExecutionView{}
-			run := &Run{RunID: strings.Repeat("a", 32)}
-			e := &ExecutionRecord{ProjectIdentity: "test-project", ExecutionID: "test-execution", CurrentAttemptID: "test-attempt", ConfigurationDigest: "test-config-digest", Process: &executionapi.ProcessIdentity{}}
-			deliveryID := "delivery-ask-1"
-			if host == "orca" {
-				orca.Args = []string{"--fake", "orca-native", dir}
-				require(t, os.WriteFile(filepath.Join(dir, "native-orca.json"), mustJSON(fakeNativeOrcaState{Dispatches: 1, LoseAckOnce: true}), 0600))
-				e.Target.OrchestrationRun = "run-fake"
-				state.Coordinator = executionapi.ProcessIdentity{Terminal: "term-coordinator", RuntimeID: "fake-runtime"}
-			} else {
-				orca.Args = []string{"--fake", "orca-remote-worker", dir}
-				remoteSettings = &remote.ProfileConfig{ConnectionID: "home-connection", EnvironmentID: "env-home", RepositorySelector: "repo", CoordinatorTerminal: "term-remote-coordinator", PollInterval: "1ms", CapabilityReportVersion: 1}
-				require(t, os.WriteFile(filepath.Join(dir, "remote.json"), mustJSON(remoteFixtureState{Coordinator: "term-remote-coordinator", LoseAck: true, Question: true, Tasks: []remoteFixtureTask{{ID: "task-1", Dispatch: "dispatch-1"}}}), 0600))
-				e.Target = targetFor(c)
-				e.Target.OrchestrationRun, e.Target.CoordinatorTerminal = "remote-run", "term-remote-coordinator"
-				e.Process = &executionapi.ProcessIdentity{Kind: "orca_supervised", OrchestrationRun: "remote-run", CoordinatorRuntimeID: "center"}
-				state.Coordinator = executionapi.ProcessIdentity{Terminal: "term-remote-coordinator", RuntimeID: "center"}
-				deliveryID = "delivery-dispatch-1-question"
-			}
-			if host == "orca_supervised" {
-				setTestImplementationProfiles(t, &c, codexworker.ProfileConfig{Executable: "codex"}, orca, remoteSettings)
-			} else {
-				setTestImplementationProfiles(t, &c, codexworker.ProfileConfig{Executable: "codex"}, orca)
-			}
-			setTestOrcaState(t, e, state)
-			ops, err := orcaOperationsFor(c)
-			require(t, err)
-			acknowledged, err := ops.DeliveryAcknowledged(ctx, run, e, deliveryID)
-			require(t, err)
-			if acknowledged {
-				t.Fatal("pending delivery was treated as acknowledged")
-			}
-			_, err = ops.Ack(ctx, run, e, deliveryID)
-			if !isBackendError(err, executionapi.BackendOutcomeUnknown) {
-				t.Fatalf("lost acknowledgement receipt was not uncertain: %v", err)
-			}
-			acknowledged, err = ops.DeliveryAcknowledged(ctx, run, e, deliveryID)
-			require(t, err)
-			if !acknowledged {
-				t.Fatal("original applied acknowledgement could not be reconciled without resending")
-			}
-		})
 	}
 }

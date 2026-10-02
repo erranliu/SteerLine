@@ -141,7 +141,7 @@ func preflightWorkerFlowState(ctx context.Context, c Config) error {
 		if err := validateExecutionImplementationData(&execution); err != nil {
 			return nativeErr("unsupported_schema", "execution implementation binding is invalid: "+err.Error())
 		}
-		if (execution.Process != nil || execution.Generation != "") && !awaitingLocalRecoveryResources(&execution) {
+		if execution.Process != nil && !awaitingRecoveryResources(&execution) {
 			if execution.PolicyResources == nil {
 				return nativeErr("unsupported_schema", "bound execution requires its original policy resource snapshot; preserve external state")
 			}

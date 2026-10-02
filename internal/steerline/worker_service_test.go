@@ -142,7 +142,7 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openP
 	if len(run.Decision.Request.Options) != 1 || run.Decision.Request.Options[0].ID != "continue" || !run.Decision.Request.AllowFreeText {
 		t.Fatalf("unified decision cannot accept both feedback forms: %+v", run.Decision.Request)
 	}
-	firstSession := codexSessionID(service.executionRecord(run))
+	firstSession := service.executionRecord(run).SessionID
 	if err := service.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -151,7 +151,7 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openP
 		t.Fatal(err)
 	}
 	run = service.find("8")
-	if run == nil || run.RunID != receipt.WorkflowRunID || run.ExecutionID != receipt.ExecutionID || codexSessionID(service.executionRecord(run)) != firstSession || run.Decision == nil || run.Decision.Status != "pending" {
+	if run == nil || run.RunID != receipt.WorkflowRunID || run.ExecutionID != receipt.ExecutionID || service.executionRecord(run).SessionID != firstSession || run.Decision == nil || run.Decision.Status != "pending" {
 		t.Fatalf("current-format restart lost the waiting worker: run=%+v", run)
 	}
 	partial := filepath.Join(firstWorktree, "partial.txt")
@@ -228,9 +228,9 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openP
 	}
 	workflow, execution := service.workflowRecords(run)
 	if workflow == nil || execution == nil || workflow.WorkflowRunID != receipt.WorkflowRunID || execution.ExecutionID != receipt.ExecutionID ||
-		run.AttemptID != receipt.AttemptID || codexSessionID(execution) != workerFlowMockSession || execution.TurnNumber != 2 ||
+		run.AttemptID != receipt.AttemptID || execution.SessionID != workerFlowMockSession || execution.TurnNumber != 2 ||
 		canonical(deref(run.WorktreePath)) != canonical(firstWorktree) || len(service.domain.Attempts) != 1 {
-		t.Fatalf("feedback replaced the fixed worker: workflow=%q/%q execution=%q/%q session=%q turn=%d attempt=%q/%q worktree=%q/%q attempts=%d", workflow.WorkflowRunID, receipt.WorkflowRunID, execution.ExecutionID, receipt.ExecutionID, codexSessionID(execution), execution.TurnNumber, run.AttemptID, receipt.AttemptID, deref(run.WorktreePath), firstWorktree, len(service.domain.Attempts))
+		t.Fatalf("feedback replaced the fixed worker: workflow=%q/%q execution=%q/%q session=%q turn=%d attempt=%q/%q worktree=%q/%q attempts=%d", workflow.WorkflowRunID, receipt.WorkflowRunID, execution.ExecutionID, receipt.ExecutionID, execution.SessionID, execution.TurnNumber, run.AttemptID, receipt.AttemptID, deref(run.WorktreePath), firstWorktree, len(service.domain.Attempts))
 	}
 	currentHead, err := exec.Command("git", "-C", firstWorktree, "rev-parse", "HEAD").Output()
 	if err != nil || strings.TrimSpace(string(currentHead)) != strings.TrimSpace(string(head)) {

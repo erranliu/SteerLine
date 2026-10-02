@@ -5,6 +5,9 @@ import (
 	"errors"
 	"path/filepath"
 	"testing"
+
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 func TestWorkerCommitWritesOnlyDeclaredRowsAndCheckpoint(t *testing.T) {
@@ -145,33 +148,48 @@ func TestWorkerReceiptFailureRetainsIntentAndCancelsUnregisteredObserver(t *test
 	t.Fatal("original send intent disappeared after failed receipt commit")
 }
 
-func TestAppServerFailedLaunchKeepsPartialSessionBinding(t *testing.T) {
+func TestAppServerFailedPreparationKeepsPartialSessionBinding(t *testing.T) {
 	s, run := appServerAuditService(t)
 	commandID := newID()
 	execution := s.executionRecord(run)
 	workflow, _ := s.workflowRecords(run)
 	execution.Workspace.Worktree = run.WorkspaceIntent.Path
+	execution.Generation = newID()
+	execution.ConfigurationDigest = workflow.ExecutionProfile.Digest
 	execution.PendingCommandID = commandID
-	opID, err := s.startWorkerOperation(run, "start_worker_turn", "worker-turn:"+run.ExecutionID+":"+commandID, map[string]string{"command_id": commandID})
+	input := executionapi.TurnInput{CommandID: commandID, Prompt: "original saved prompt"}
+	resource := policyResourceReceiptFixture(workflow.ExecutionProfile.Digest, execution.Workspace.Worktree, execution)
+	execution.PolicyResources = resource
+	s.refreshRun(run)
+	opID, err := s.startWorkerOperation(run, "prepare_worker_session", "worker-session:"+run.ExecutionID+":"+commandID, &input)
 	require(t, err)
 	identity, err := currentProcessIdentity()
 	require(t, err)
 	partial := *s.executionRecord(run)
-	partial.PolicyResources = policyResourceReceiptFixture(workflow.ExecutionProfile.Digest, partial.Workspace.Worktree, &partial)
 	partial.Process = identity
 	setTestCodexBinding(t, &partial, "ws://127.0.0.1:12345", "partial-generation", workerFlowMockSession)
-	message := &appServerLaunchMessage{phase: "turn_result", commandID: commandID, opID: opID, run: *run, execution: partial, err: errors.New("thread receipt persistence failed")}
+	lifeSnapshot, err := lifecycleSnapshot(run, workflow, execution, s.workflowAttempt(run, run.AttemptID), &input)
+	require(t, err)
+	operation := s.operationByKey("worker-session:" + run.ExecutionID + ":" + commandID)
+	request := lifecycleRequest(lifeSnapshot, *operation, executionapi.LifecyclePrepareSession, executionapi.LifecycleInput{Turn: &input})
+	receipt := executionapi.LifecycleReceipt{Operation: request.Operation, Disposition: executionapi.OperationUnknown, Process: identity,
+		Implementation: cloneImplementationData(partial.ImplementationData),
+		State:          executionapi.LifecycleStateFacts{SessionID: workerFlowMockSession, SessionGeneration: "partial-generation"}}
+	message := &appServerLaunchMessage{phase: "session_prepared", request: request, receipt: receipt, err: errors.New("session receipt persistence failed")}
 	require(t, s.handleAppServerLaunchMessage(run.RunID, message))
 	snapshot, err := s.domainStore.Query(context.Background(), s.Config.identity)
 	require(t, err)
 	got := snapshot.Executions[0]
-	gotBinding, bindingErr := decodeCodexAppServerBinding(&got)
-	partialBinding, partialBindingErr := decodeCodexAppServerBinding(&partial)
-	if bindingErr != nil || partialBindingErr != nil || got.Process == nil || *got.Process != *identity || gotBinding.Endpoint != partialBinding.Endpoint || gotBinding.Generation != partialBinding.Generation || codexSessionID(&got) != codexSessionID(&partial) {
+	bindingIdentity := func(record *ExecutionRecord) codexworker.AppServerBindingIdentity {
+		return codexworker.AppServerBindingIdentity{ProjectID: record.ProjectIdentity, ExecutionID: record.ExecutionID, AttemptID: record.CurrentAttemptID, Generation: record.Generation, ConfigDigest: record.ConfigurationDigest}
+	}
+	gotBinding, bindingErr := codexworker.DecodeAppServerBindingEnvelope(got.ImplementationData[0], bindingIdentity(&got))
+	partialBinding, partialBindingErr := codexworker.DecodeAppServerBindingEnvelope(partial.ImplementationData[0], bindingIdentity(&partial))
+	if bindingErr != nil || partialBindingErr != nil || got.Process == nil || *got.Process != *identity || gotBinding.Endpoint != partialBinding.Endpoint || gotBinding.Generation != partialBinding.Generation || got.SessionID != partial.SessionID {
 		t.Fatalf("partial native binding was discarded: %+v", got)
 	}
 	if got.PendingTurnID != "" || s.workers[run.RunID] != nil || snapshotOperation(&snapshot, opID).Status != "outcome_unknown" {
-		t.Fatal("failed launch advanced the original turn or registered an observer")
+		t.Fatal("failed preparation advanced the original turn or registered an observer")
 	}
 }
 

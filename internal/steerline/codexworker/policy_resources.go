@@ -75,6 +75,10 @@ func ProfileExecutable(data []executionapi.ImplementationDataEnvelope, identity 
 	return NativeExecutable(settings.Executable)
 }
 
+func DecodeProfileConfigEnvelope(data []executionapi.ImplementationDataEnvelope, identity ProfileConfigIdentity) (ProfileConfig, error) {
+	return profileConfigFromEnvelopes(data, identity)
+}
+
 func BuildPolicyResourceEnvelope(ctx context.Context, request PolicyResourceBuildRequest, probe PolicyVersionProbe) (BoundPolicyResources, error) {
 	if probe == nil || request.Workspace == "" || request.ResourceIdentity.Generation == "" || request.ResourceIdentity.ConfigDigest == "" {
 		return BoundPolicyResources{}, errors.New("permission resource build identity or version probe is incomplete")

@@ -55,6 +55,9 @@ type ExecutionRecord struct {
 	TurnStartedAt                 *time.Time                                `json:"turn_started_at,omitempty"`
 	TurnEndedAt                   *time.Time                                `json:"turn_ended_at,omitempty"`
 	Generation                    string                                    `json:"generation,omitempty"`
+	SessionID                     string                                    `json:"session_id,omitempty"`
+	SessionGeneration             string                                    `json:"session_generation,omitempty"`
+	PendingDeliveryID             string                                    `json:"pending_delivery_id,omitempty"`
 	ConfigurationDigest           string                                    `json:"configuration_digest,omitempty"`
 	LastTurnOutcome               string                                    `json:"last_turn_outcome,omitempty"`
 	LogPath                       *string                                   `json:"log_path,omitempty"`
@@ -176,18 +179,19 @@ type DomainEvent struct {
 }
 
 type OperationRecord struct {
-	ProjectIdentity   string    `json:"project_identity"`
-	OperationID       string    `json:"operation_id"`
-	IdempotencyKey    string    `json:"idempotency_key"`
-	Kind              string    `json:"kind"`
-	Status            string    `json:"status"`
-	PayloadDigest     string    `json:"payload_digest"`
-	Request           []byte    `json:"request,omitempty"`
-	PlatformRequestID string    `json:"platform_request_id,omitempty"`
-	Receipt           []byte    `json:"receipt,omitempty"`
-	UnknownReason     string    `json:"unknown_reason,omitempty"`
-	CreatedAt         time.Time `json:"created_at"`
-	UpdatedAt         time.Time `json:"updated_at"`
+	ProjectIdentity   string                                   `json:"project_identity"`
+	OperationID       string                                   `json:"operation_id"`
+	IdempotencyKey    string                                   `json:"idempotency_key"`
+	Kind              string                                   `json:"kind"`
+	Status            string                                   `json:"status"`
+	PayloadDigest     string                                   `json:"payload_digest"`
+	Request           []byte                                   `json:"request,omitempty"`
+	LifecycleIdentity *executionapi.LifecycleOperationIdentity `json:"lifecycle_identity,omitempty"`
+	PlatformRequestID string                                   `json:"platform_request_id,omitempty"`
+	Receipt           []byte                                   `json:"receipt,omitempty"`
+	UnknownReason     string                                   `json:"unknown_reason,omitempty"`
+	CreatedAt         time.Time                                `json:"created_at"`
+	UpdatedAt         time.Time                                `json:"updated_at"`
 }
 
 type CommandRecord struct {

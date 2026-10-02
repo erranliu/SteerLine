@@ -4,6 +4,7 @@ package execution
 
 import (
 	"context"
+	"os/exec"
 )
 
 // Backend and protocol are deliberately independent; persisted refs carry both.
@@ -61,6 +62,17 @@ type StopHandle interface {
 
 type ExecutionStopper interface {
 	StopExecution(context.Context, ExecutionRef, Operation, StopHandle) (StopReceipt, error)
+}
+
+// ManagedProcessHost is a small host-owned process boundary. Implementations
+// receive a fixed command constructed by an execution adapter; they never
+// receive a Service, Run, or persistence handle.
+type ManagedProcessHost interface {
+	StartManaged(*exec.Cmd) (StopHandle, error)
+	InspectProcess(*ProcessIdentity) string
+	NewProcessGeneration() string
+	WriteExecutionFile(string, []byte) error
+	OutputCommand(context.Context, LaunchCommand) ([]byte, error)
 }
 type ProcessIdentity struct {
 	Kind                 string `json:"kind,omitempty"`

@@ -4,31 +4,28 @@
 
 使主包只处理通用任务/执行契约和业务事务，具体执行方式由实现包和外层应用组装负责。最终 `internal/steerline/` 直属生产与测试 Go 文件的文件名、标识符、字面量、注释和 import 均不包含 Codex/Orca 关键字；主包直接及传递依赖不包含对应实现包。新执行实现不要求修改中心状态机、配置分支或恢复逻辑。
 
-承接[执行隔离验收记录](../validation/execution-isolation-cleanup/README.md)对应的纯值、策略、需求、快照与适配器包，继续推进剩余的平台协调、原生数据和具体组装，随后清理重构残留并推进存储、客户端两条线。#64–#67 执行要求固定在[解耦共同约束](../spec/core-decoupling-constraints.md)，#68–#72 见[后续维护共同约束](../spec/core-maintenance-constraints.md)；每项独立 Spec/Plan，本规划不是实现入口。
+承接[执行隔离验收记录](../validation/execution-isolation-cleanup/README.md)对应的纯值、策略、需求、快照与适配器包，继续推进剩余的平台协调、原生数据和具体组装，随后清理重构残留并推进存储、客户端两条线。#65–#67 执行要求固定在[解耦共同约束](../spec/core-decoupling-constraints.md)，#68–#72 见[后续维护共同约束](../spec/core-maintenance-constraints.md)；每项独立 Spec/Plan，本规划不是实现入口。
 
 ## 范围与关键缺口
 
-通用事件/问题及配置/原生绑定封套已具备；剩余平台知识仍贯穿注册、生命周期、会话与构造：回调接受可写 Service/Run，生命周期/采集通过唯一 codec 使用临时实现视图，Service 持有具体 mapper/观察器，最终工厂仍需外移。后续写消费者仍依赖具体 Store/宽事务接口，TUI 仍混合产品读取与默认 I/O，需要在执行隔离收口后继续解耦。
+通用事件/问题及配置/原生绑定封套已具备；生命周期已使用纯值端口和中心单写者；剩余平台知识在会话/宿主证据、来源/mapper 和唯一默认构造目录。采集/宿主暂用唯一 codec 的实现视图，最终工厂仍需外移。后续写消费者仍依赖具体 Store/宽事务接口，TUI 仍混合产品读取与默认 I/O，需要在执行隔离收口后继续解耦。
 
 需要同时解决类型、调用、存储载荷、工厂和测试归属。仅改文件名、把整个 Service 接口传入子包、在 contracts 中保存另一份原生业务状态，均不能完成目标。中心继续拥有唯一业务写者、intent/receipt 提交屏障、人工恢复门槛和 TaskDelivery；平台实现不获得这些写权限。
 
-#64–#67 不搬迁 Store/SQLite 写层；#68 清理完成后，由 #69/#70 单独收窄写端口并迁移存储实现，#71/#72 建立产品客户端适配并切换 CLI/TUI。整个目标不引入插件系统、不扩展平台支持或 remote 权限证据。remote 仍按现有能力明确拒绝不支持的请求，其协议回归与真实准入验收分别表达。
+#65–#67 不搬迁 Store/SQLite 写层；#68 清理完成后，由 #69/#70 单独收窄写端口并迁移存储实现，#71/#72 建立产品客户端适配并切换 CLI/TUI。整个目标不引入插件系统、不扩展平台支持或 remote 权限证据。remote 仍按现有能力明确拒绝不支持的请求，其协议回归与真实准入验收分别表达。
 
 ## 现有文件的迁移归属
 
-以下路径相对于 `internal/steerline/` 直属目录，覆盖现有 20 个平台命名生产文件。一个文件混有多种职责时按方法及消费者拆分，完成该职责时删除对应原实现；不能将整个文件搬入实现包并把业务写者一起带走。
+以下路径相对于 `internal/steerline/`，只列剩余消费者；生命周期删除/断言归属见[验收记录](../validation/core-decoupling-03-lifecycle/README.md)。
 
-| 文件组 | 迁移任务 | 中心保留的内容 |
+| 剩余消费者 | 迁移任务 | 中心保留 |
 | --- | --- | --- |
-| `codex_worker_evidence.go`、`orca_worker_evidence.go` | #62 原生解码与通用事实；剩余结算 I/O 在 #64 | 通用事件的业务接受与持久化 |
-| `codex_git_sandbox.go` | #63 固定资源/权限编译输入归对应实现 | 项目策略及资源回执摘要/归属核验 |
-| `codex_worker.go`、`codex_worker_recovery.go`、`codex_worker_reply.go`、`codex_feedback_hooks.go` | #64 分步启动/恢复/回复及结果解释 | 通用业务资格、恢复人工门槛、原子写集合 |
-| `orca_worker_prepare.go`、`orca_worker_dispatch.go`、`orca_worker_observation.go`、`orca_worker_terminal.go`、`orca_worker_workspace.go`、`orca_worker_relay.go`、`orca_remote_service.go`、`orca_execution_operations.go` | #64 操作/观察/对账归实现、协调通用化；宿主/工具解释交 #65 | 准备/业务用途、已持久操作推进、Decision、消费与 TaskDelivery |
-| `orca_feedback_hooks.go` | #64 回复/结果协调通用化；#65 宿主动作与准备接线 | 可信动作和文字反馈资格 |
-| `codex_conversation.go`、`codex_history_port.go` | #65 来源发现、读取、mapper 和原生采集构造 | 通用采集预算、正文/来源事务与 checkpoint |
-| `orca.go`、`orca_remote_adapter.go` | #63 具体配置转换；#64 I/O 调用；#66 仅有消费者的剩余构造外移 | 无平台转发或别名入口 |
+| `codex_conversation.go`、`codex_history_port.go`、`conversation_*` | #65 来源/读取/mapper/采集构造 | 预算、正文/来源事务与 checkpoint |
+| `worker_environment_orca.go`、`implementation_bindings.go`、`worker_environment.go` 及准备输出采集 | #65 宿主证据/工具、准备文件、open-terminal 与原生视图 | 授权、nonce/deadline、人工门槛与消费 |
+| `orca_worker_prepare.go` 剩余命令编译、`orca.go`、`orca_remote_adapter.go`、Config/Profile/registry 与产品入口 | #66 唯一默认工厂与应用组合；#65 接走宿主调用 | 通用端口/快照/事务 |
+| 剩余平台 fixture/测试 | #67 随真实入口归位与守卫 | 一份中性业务矩阵 |
 
-普通文件也必须一起调整：Config/Profile/snapshot/registry 在 #63/#66 处理；worker_* 业务与 Service 观察接线在 #62/#64 处理；conversation_*、worker_environment 和具体 mapper 字段在 #65 处理；Claim/查询/CLI/控制台构造在 #66 处理。最终扫描全部直属文件，不能仅以这 20 个文件删除完毕判定完成。
+最终扫描全部直属文件及依赖，不能仅按删除清单判断完成。
 
 ## 目标所有者
 
@@ -62,7 +59,6 @@ flowchart TD
 
 | 任务 ID | 任务名称 | 交付范围 | 硬前置 | 执行规格 |
 | --- | --- | --- | --- | --- |
-| 64 | 通用执行生命周期与副作用接线 | 中心以统一分步 intent/receipt 推进准备、启动、观察、反馈、恢复、清理 | #63 | [Spec](../spec/core-decoupling-03-lifecycle.spec.md) · [Plan](../spec/core-decoupling-03-lifecycle.plan.md) |
 | 65 | 会话采集与宿主交互实现隔离 | 具体 history/mapper/来源发现及宿主解释归实现，预算/授权/持久化留中心 | #64 | [Spec](../spec/core-decoupling-04-conversation.spec.md) · [Plan](../spec/core-decoupling-04-conversation.plan.md) |
 | 66 | 内置实现组装与主包依赖反转 | 目录/工厂/默认值移到外层，所有产品入口显式注入同一能力 | #65 | [Spec](../spec/core-decoupling-05-composition.spec.md) · [Plan](../spec/core-decoupling-05-composition.plan.md) |
 | 67 | 主包隔离守卫与测试归位 | 主包源码/测试清零、依赖守卫、第三实现接线和最小完整回归 | #66 | [Spec](../spec/core-decoupling-06-boundary.spec.md) · [Plan](../spec/core-decoupling-06-boundary.plan.md) |
@@ -74,21 +70,20 @@ flowchart TD
 
 ## 顺序与交接
 
-#64 → #65 → #66 → #67 → #68 串行交付；#68 后分为存储 #69 → #70 和客户端 #71 → #72，两线可按下述修改归属并行，每项一个实现 PR。#64 消费 #63 已交付的配置与原生绑定封套；#63 复用[通用事件与问题 #62](../spec/core-decoupling-01-events.spec.md)及[验收记录](../validation/core-decoupling-01-events/README.md)，不意味着整个主包隔离已完成。
+#65 → #66 → #67 → #68 串行交付；#68 后分为存储 #69 → #70 和客户端 #71 → #72，两线可按下述修改归属并行，每项一个实现 PR。#65 消费[生命周期端口](../validation/core-decoupling-03-lifecycle/README.md)；#63 复用[通用事件与问题 #62](../spec/core-decoupling-01-events.spec.md)及[验收记录](../validation/core-decoupling-01-events/README.md)，不意味着整个主包隔离已完成。
 
 | 交接 | 下游获得的实际能力 | 共享修改与开工门槛 |
 | --- | --- | --- |
 | #62 → #63 | 已接通的通用事件与问题路由/回执封套 | WorkerEvent、Decision 和 contracts 的共有形状整体交付后再扩配置/绑定 |
-| #63 → #64 | 固定实现 key/版本、codec、快照和原资源事实 | Config/Profile/ExecutionRecord/摘要串行；配置和持久消费者已迁移，唯一 codec 的生命周期临时视图在 #64 删除 |
 | #64 → #65 | 单步副作用、只读对账、统一收据与 actor 交接 | 准备/业务轮、消息消费和恢复门槛继续唯一归中心；采集不推进业务 |
 | #65 → #66 | 与具体客户端/mapper 无关的中心服务与采集端口 | Service 字段、来源 checkpoint 与宿主动作固定后再外移最终构造 |
 | #66 → #67 | 所有入口均可显式注入，无根包默认平台注册 | 完整产品构建/入口接线通过后再锁定零关键字、依赖和扩展性守卫 |
-| #67 → #68 | 完整生产/测试隔离、实际构造与守卫 | 只清理最终可删残留，#64–#67 必须完成的迁移/删除不能延期 |
+| #67 → #68 | 完整生产/测试隔离、实际构造与守卫 | 只清理最终可删残留，#65–#67 必须完成的迁移/删除不能延期 |
 | #68 → #69/#71 | 清理后的唯一调用链、模块和测试归属 | 写端口/中心提交归 #69；公共客户端 DTO/CLI/adapter 归 #71，共享组装段顺序集成 |
 | #69 → #70 | 已被全部实际消费者使用的窄提交契约 | SQL/schema/连接归 #70，保持原子写集合与只读快照，客户端契约不变 |
 | #71 → #72 | CLI 已消费的纯产品契约与唯一 adapter | TUI 只迁视图消费者并删除暂存薄桥，不另建查询/控制或资格实现 |
 
-可以提前只读盘点、准备 fixture 或审阅契约；完整实现等待硬前置交付。#64–#68 共享配置、契约、Service 和恢复路径，不按文件不重叠推定可并行。#69/#70 与 #71/#72 的并行按独立接口及下节修改归属落实。
+可以提前只读盘点、准备 fixture 或审阅契约；完整实现等待硬前置交付。#65–#68 共享配置、契约、Service 和恢复路径，不按文件不重叠推定可并行。#69/#70 与 #71/#72 的并行按独立接口及下节修改归属落实。
 
 每个阶段迁走自己的完整消费者并当场删除原实现与无用转发；#63 只允许尚未进入生命周期/采集阶段的方法通过唯一 codec 消费临时解码视图，不保留旧持久字段，由 #64/#65 删除。#67 只负责最终边界证明和剩余测试归位，不承担前五项遗留的生产搬迁。平台专属测试随职责迁移，中心通用规则改用中性 fake，完整原生集成断言通过外层应用入口保留。
 

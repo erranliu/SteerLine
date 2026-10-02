@@ -260,7 +260,7 @@ func TestClaimRechecksAcceptedConfigFiles(t *testing.T) {
 	}
 }
 
-func TestExecutionRegistryRejectsDuplicateUnknownAndUsesRegisteredOperations(t *testing.T) {
+func TestExecutionRegistryRejectsDuplicatesAndRequiresLifecyclePorts(t *testing.T) {
 	c := workerContextConfigFixture()
 	entry, err := registrationFor(c)
 	require(t, err)
@@ -272,24 +272,15 @@ func TestExecutionRegistryRejectsDuplicateUnknownAndUsesRegisteredOperations(t *
 			t.Fatal("unknown combination accepted")
 		}
 	}
-	// Test-only substitution exercises the same service coordination path.
-	s, run := appServerAuditService(t)
-	original := builtinExecutionRegistry
-	defer func() { builtinExecutionRegistry = original }()
-	called := false
-	fake := *entry
-	fake.Prepare = func(_ *Service, _ context.Context, _ TaskRecord, got *Run) error {
-		called = got.RunID == run.RunID
-		return nil
+	for _, registered := range builtinExecutionRegistry {
+		if registered.Lifecycle == nil {
+			t.Fatal("registered implementation has no lifecycle port")
+		}
 	}
-	registry, err := buildExecutionRegistry([]executionRegistration{fake})
-	require(t, err)
-	builtinExecutionRegistry = registry
-	before := len(s.domain.Operations)
-	task := nativeTaskRecord(s.domain.Tasks, run.TaskID)
-	require(t, s.prepareWorkerFlow(context.Background(), *task, run))
-	if !called || len(s.domain.Operations) != before {
-		t.Fatal("business coordinator ignored registration or created native side effects")
+	incomplete := *entry
+	incomplete.Lifecycle = nil
+	if _, err = buildExecutionRegistry([]executionRegistration{incomplete}); err == nil {
+		t.Fatal("registration without a lifecycle port was accepted")
 	}
 }
 

@@ -3,46 +3,99 @@ package steerline
 import (
 	"context"
 	"errors"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"strings"
+	"time"
+
+	"github.com/erranliu/SteerLine/internal/steerline/contracts"
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	"github.com/erranliu/SteerLine/internal/steerline/publication"
 )
 
 func (s *Service) finishWorkerFlowFor(run *Run, workerErr error) error {
-	fixed, contextErr := s.workerFlowContext(run)
-	if contextErr != nil {
-		return contextErr
+	lifecycle, fixed, err := s.lifecycleForRun(run)
+	if err != nil {
+		return err
 	}
-	c := fixed.config
 	workflow, execution := s.workflowRecords(run)
 	if run == nil || workflow == nil || execution == nil || workflow.WorkflowVersion != WorkerFlowVersion {
 		return errors.New("finished worker lacks its fixed execution")
 	}
 	if task := nativeTaskRecord(s.domain.Tasks, run.DomainTaskID); task != nil && (task.Status == "closed" || task.Status == "discarded") {
-		return nil // A late process exit cannot reopen a terminal Task.
+		return nil
 	}
-	mode, err := s.workerFlowRegistration(run)
+	snapshot, err := s.lifecycleSnapshot(run, workflow, execution, fixed.attempt, nil)
 	if err != nil {
 		return err
 	}
-	evidence, readErr := mode.ReadTurn(fixed)
-	if readErr != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), min(positiveDuration(fixed.config.CommandTimeout, 30*time.Second), 30*time.Second))
+	defer cancel()
+	receipt, observer, observeErr := lifecycle.ObserveLifecycle(ctx, snapshot)
+	if observer != nil {
+		worker := workerFromLifecycle(run.RunID, run.AttemptID, observer)
+		if worker == nil {
+			return errors.New("lifecycle observation returned no fixed stop handle")
+		}
+		if err := mergeLifecycleExecutionReceipt(execution, receipt); err != nil {
+			_ = worker.detachLocalObservation(context.Background())
+			return err
+		}
+		s.refreshRun(run)
+		if err := s.commitWorker(run); err != nil {
+			_ = worker.detachLocalObservation(context.Background())
+			return err
+		}
+		s.registerWorker(run, worker)
+		return nil
+	}
+	if observeErr != nil || receipt.TurnEvidence == nil {
 		execution.Status = "blocked"
 		s.refreshRun(run)
-		return s.waitWorkerFlow(run, readErr.Error())
+		reason := "the original execution returned no confirmed turn result"
+		if observeErr != nil {
+			reason = observeErr.Error()
+		} else if receipt.Diagnostic != "" {
+			reason = receipt.Diagnostic
+		}
+		return s.waitWorkerFlow(run, reason)
 	}
-	turnID := evidence.TurnID
+	if err := mergeLifecycleExecutionReceipt(execution, receipt); err != nil {
+		return s.waitWorkerFlow(run, "the original execution binding could not be reconciled: "+err.Error())
+	}
+	if execution.Environment != nil && execution.Environment.Preparation != nil && receipt.State.TurnID == execution.Environment.Preparation.TurnID && receipt.State.TurnCompleted {
+		turn := nativeOrcaCurrentTurn(execution)
+		if turn == nil || turn.TurnID != execution.Environment.Preparation.TurnID {
+			return s.waitWorkerFlow(run, "the original preparation Dispatch receipt is unavailable")
+		}
+		if err := s.readNativeOrcaOutput(context.Background(), run, execution, turn); err != nil {
+			if s.store.Err() != nil {
+				return s.store.Err()
+			}
+			return s.blockWorkerEnvironment(run, contracts.HostFact{Reason: "preparation_output_unverified", Confidence: "unverified", Source: "orca.worker-read", Detail: clip(err.Error(), 1000), Turn: turn.TurnID})
+		}
+		return s.finishOrcaPreparation(context.Background(), run, execution, turn, turn.Outcome)
+	}
+	evidence := workerTurnEvidence{TurnEvidence: *receipt.TurnEvidence}
+	if !evidence.Started || evidence.SessionID == "" || evidence.TurnID == "" || !evidence.Completed {
+		execution.Status = "blocked"
+		s.refreshRun(run)
+		return s.waitWorkerFlow(run, "the original execution did not provide a complete turn receipt")
+	}
+	if execution.SessionID != evidence.SessionID || execution.CurrentTurnID != evidence.TurnID && execution.PendingTurnID != evidence.TurnID ||
+		execution.CurrentCommandID != evidence.CommandID && execution.PendingCommandID != evidence.CommandID {
+		return s.waitWorkerFlow(run, "the original turn receipt differs from its fixed execution input")
+	}
 	if execution.CurrentTurnID == "" {
-		if err := BeginWorkerTurn(workflow, execution, evidence.SessionID, turnID); err != nil {
-			return s.waitWorkerFlow(run, "Original turn start could not be reconciled: "+err.Error())
+		if err := BeginWorkerTurn(workflow, execution, evidence.SessionID, evidence.TurnID); err != nil {
+			return s.waitWorkerFlow(run, "original turn start could not be reconciled: "+err.Error())
 		}
 		s.refreshRun(run)
 		for _, operation := range s.domain.Operations {
 			if operation.IdempotencyKey == "worker-turn:"+run.ExecutionID+":"+evidence.CommandID && operation.Status != "confirmed" {
 				requestID := operation.PlatformRequestID
 				if requestID == "" {
-					requestID = turnID
+					requestID = evidence.TurnID
 				}
-				if err := s.setOperationState(operation.OperationID, "confirmed", requestID, mustJSON(map[string]string{"session_id": evidence.SessionID, "turn_id": turnID}), ""); err != nil {
+				if err := s.setOperationState(operation.OperationID, "confirmed", requestID, mustJSON(map[string]string{"session_id": evidence.SessionID, "turn_id": evidence.TurnID}), ""); err != nil {
 					return err
 				}
 				if err := s.commitWorker(run, operation.OperationID); err != nil {
@@ -55,22 +108,27 @@ func (s *Service) finishWorkerFlowFor(run *Run, workerErr error) error {
 	if !evidence.Completed {
 		execution.Status = "blocked"
 		s.refreshRun(run)
-		return s.waitWorkerFlow(run, "The original worker process exited without a confirmed completed turn; its output and session are retained")
+		return s.waitWorkerFlow(run, "the original worker exited without a confirmed completed turn; its output and session are retained")
 	}
-	if mode.SettleRequests != nil {
-		handled, err := mode.SettleRequests(s, run, workflow, execution, evidence)
-		if handled || err != nil {
-			return err
-		}
-		workflow, execution = s.workflowRecords(run)
+	if len(execution.PendingQuestions) > 0 {
+		execution.PendingQuestions = nil
 	}
-	if run.Decision != nil && run.Decision.Status == "answer_saved" {
-		answer, answerErr := ReadDecisionAnswer(run)
-		if answerErr == nil {
-			command, commandErr := s.domainStore.CommandByIdempotency(context.Background(), c.identity, decisionAnswerKey(answer))
-			if commandErr == nil && command.Kind == "answer_decision" && (command.CommandID == turnID || evidence.CommandID != "" && command.CommandID == evidence.CommandID) {
-				s.setDecisionStatus(run, "reply_accepted")
+	if run.Decision != nil && run.Decision.Request.QuestionRoute != nil {
+		if run.Decision.Status == "pending" {
+			s.setDecisionStatus(run, "superseded")
+			if err := s.commitWorker(run); err != nil {
+				return err
 			}
+			s.setRunDecision(run, nil)
+		} else if run.Decision.Status == "answer_saved" {
+			if err := StopWorkerTurn(workflow, execution, evidence.TurnID, true); err != nil {
+				return err
+			}
+			execution.TurnEndedAt = ptr(now())
+			execution.Status = "blocked"
+			execution.Error = ptr("Original turn ended before the saved answer was confirmed; the answer and question remain available for reconciliation")
+			s.refreshRun(run)
+			return s.commitWorker(run)
 		}
 	}
 	issue := ""
@@ -83,12 +141,12 @@ func (s *Service) finishWorkerFlowFor(run *Run, workerErr error) error {
 	if len(evidence.PRCandidates) == 1 {
 		candidate := evidence.PRCandidates[0]
 		workflow.PRCandidateURL = candidate
-		info, err := publicationClient(c).Query(context.Background(), candidate)
-		if err == nil {
-			err = BindWorkerPR(workflow, execution, info, candidate, c.PR.Repository, false)
+		info, queryErr := publicationClient(fixed.config).Query(context.Background(), candidate)
+		if queryErr == nil {
+			queryErr = BindWorkerPR(workflow, execution, info, candidate, fixed.config.PR.Repository, false)
 		}
-		if err != nil {
-			issue = strings.TrimSpace(issue + "; PR link is not verified: " + err.Error())
+		if queryErr != nil {
+			issue = strings.TrimSpace(issue + "; PR link is not verified: " + queryErr.Error())
 		}
 	} else if len(evidence.PRCandidates) > 1 {
 		issue = strings.TrimSpace(issue + "; several PR links were reported: " + strings.Join(evidence.PRCandidates, ", "))
@@ -101,12 +159,12 @@ func (s *Service) finishWorkerFlowFor(run *Run, workerErr error) error {
 	if evidence.Succeeded {
 		turnOutcome = "succeeded"
 	}
-	if err := s.stopVerifiedWorkerTurn(run, workflow, execution, turnID, turnOutcome, question); err != nil {
+	if err := s.stopVerifiedWorkerTurn(run, workflow, execution, evidence.TurnID, turnOutcome, question); err != nil {
 		return err
 	}
-	if evidence.PublishRequested && c.PublicationPolicy.Publisher == executionapi.PublisherHostService {
+	if publication.RequestedByWorker(evidence.LastMessage, run.RunID) && fixed.config.PublicationPolicy.Publisher == executionapi.PublisherHostService {
 		runID := run.RunID
-		_, publishErr := s.publishLocalWorkerRun(context.Background(), run, workflow, execution, turnID)
+		_, publishErr := s.publishLocalWorkerRun(context.Background(), run, workflow, execution, evidence.TurnID)
 		run = s.localWorkerRun(runID)
 		workflow, execution = s.workflowRecords(run)
 		if run == nil || workflow == nil || execution == nil {
@@ -116,5 +174,5 @@ func (s *Service) finishWorkerFlowFor(run *Run, workerErr error) error {
 			issue = strings.TrimSpace(issue + "; host publication failed: " + publishErr.Error())
 		}
 	}
-	return s.resolveStoppedWorkerTurn(run, workflow, execution, stoppedWorkerResolution{TurnID: turnID, LastMessage: evidence.LastMessage, Issue: issue, Question: question, RecordPRStop: true})
+	return s.resolveStoppedWorkerTurn(run, workflow, execution, stoppedWorkerResolution{TurnID: evidence.TurnID, LastMessage: evidence.LastMessage, Issue: issue, Question: question, RecordPRStop: true})
 }

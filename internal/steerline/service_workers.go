@@ -3,6 +3,8 @@ package steerline
 import (
 	"context"
 	"errors"
+
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 // workerMessage is delivered to the single service state machine. Worker
@@ -14,28 +16,29 @@ type workerMessage struct {
 	done     bool
 	err      error
 	launch   *appServerLaunchMessage
-	reply    *appServerReplyMessage
+	reply    *lifecycleReplyMessage
 	recovery *appServerRecoveryResult
 }
 
 type appServerLaunchMessage struct {
-	phase     string
-	commandID string
-	opID      string
-	run       Run
-	execution ExecutionRecord
-	worker    *Worker
-	events    string
-	turnID    string
-	err       error
-	ack       chan error
+	phase    string
+	request  executionapi.LifecycleRequest
+	receipt  executionapi.LifecycleReceipt
+	observer executionapi.LifecycleObserver
+	worker   *Worker
+	err      error
+	ack      chan appServerLaunchAck
 }
 
-type appServerReplyMessage struct {
-	decisionID string
-	opID       string
-	callID     string
-	err        error
+type appServerLaunchAck struct {
+	Proceed bool
+	Request executionapi.LifecycleRequest
+}
+
+type lifecycleReplyMessage struct {
+	request executionapi.LifecycleRequest
+	receipt executionapi.LifecycleReceipt
+	err     error
 }
 
 func (s *Service) registerWorker(run *Run, worker *Worker) {
@@ -151,7 +154,7 @@ func (s *Service) handleWorkerMessage(message workerMessage) error {
 		return s.handleAppServerLaunchMessage(message.runID, message.launch)
 	}
 	if message.reply != nil {
-		return s.handleAppServerReplyMessage(message.runID, message.reply)
+		return s.handleLifecycleFeedbackMessage(message.runID, message.reply)
 	}
 	if s.workers[message.runID] != message.worker {
 		if message.event != nil {

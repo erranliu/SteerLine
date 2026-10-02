@@ -249,7 +249,5 @@ func (s *Service) resumeRegisteredWorkerFlow(ctx context.Context, task *TaskReco
 	if _, err := s.workerFlowContext(run); err != nil {
 		return false, err
 	}
-	// Original observation/reconciliation must continue even when a new input is
-	// blocked. Fresh mutation intents are gated at startWorkerOperation.
-	return entry.Resume(s, ctx, task, run)
+	return s.resumeLifecycleWorkerFlow(ctx, task, run)
 }

@@ -16,7 +16,7 @@ func TestCD63FrozenConfigAndBinding(t *testing.T) {
 		{"question_route_identity", TestCD62NativeFactsAndQuestionRoute},
 		{"question_route_receipt_barrier", TestCD62QuestionReceiptBarrier},
 		{"profile_copy_isolation", TestWorkerFlowContextsDoNotExchangeExecutionProfiles},
-		{"original_observation_survives_requirement_drift", TestResolutionAuditRequirementsDoNotBlockOriginalObservation},
+		{"requirements_block_new_intents", TestResolutionAuditRequirementsBlockOnlyNewWorkerIntents},
 		{"legacy_permission_evidence_rejected", TestProjectPolicyNativeReportsRetainOriginalSnapshotDigests},
 		{"remote_missing_evidence_still_blocks_claim", TestRemotePublicationClaimRequiresPermissionEvidence},
 	} {

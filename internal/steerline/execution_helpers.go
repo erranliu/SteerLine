@@ -6,7 +6,6 @@ import (
 	"errors"
 
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
-	remote "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker"
 	"github.com/erranliu/SteerLine/internal/steerline/workspace"
 )
 
@@ -47,50 +46,38 @@ func (s *Service) inspectWorkflowWorkspace(ctx context.Context, run *Run) (Works
 	if run == nil || run.WorktreePath == nil || run.WorktreeBranch == nil || run.BaseCommit == nil || run.WorkspaceIntent == nil {
 		return WorkspaceEvidence{}, errors.New("worker execution has no recorded workspace")
 	}
-	c, configErr := s.executionConfigForRun(run)
-	if configErr != nil {
-		return WorkspaceEvidence{}, configErr
-	}
-	if run.Backend == string(executionapi.BackendOrca) && run.Protocol == string(executionapi.ProtocolOrcaSupervised) {
-		execution := s.executionRecord(run)
-		if execution == nil || execution.Process == nil {
-			return WorkspaceEvidence{}, errors.New("supervised workspace has no execution binding")
-		}
-		target := execution.Target
-		fixed := targetFor(c)
-		if target.ID != fixed.ID || target.ConnectionID != fixed.ConnectionID || target.ExternalRuntime != fixed.ExternalRuntime {
-			return WorkspaceEvidence{}, nativeErr("authority_mismatch", "supervised target differs from its fixed execution")
-		}
-		ref := executionapi.ExecutionRef{Version: executionapi.ExecutionRecordVersion, Backend: executionapi.BackendOrca, Protocol: executionapi.ProtocolOrcaSupervised, Target: target, RunID: run.RunID, AttemptID: run.AttemptID, External: *execution.Process, WorkspacePath: execution.Workspace.Worktree, WorkspaceBranch: execution.Workspace.Branch, BaseCommit: execution.Workspace.Base}
-		inspection, err := (remote.NewBackend(remoteWorkerConfig(c))).InspectWorkspace(ctx, ref)
-		if err != nil {
-			return WorkspaceEvidence{}, err
-		}
-		if execution := s.executionRecord(run); execution != nil {
-			inspection.Dirty = execution.Workspace.Dirty
-		}
-		return WorkspaceEvidence{Repository: inspection.Repository, Worktree: inspection.Worktree, Branch: inspection.Branch, Base: inspection.Base, Head: inspection.Head, Dirty: inspection.Dirty, VerifiedAt: inspection.CheckedAt}, nil
-	}
-	worktree := *run.WorktreePath
-	if canonical(worktree) != canonical(run.WorkspaceIntent.Path) || *run.WorktreeBranch != run.WorkspaceIntent.Branch || *run.BaseCommit != run.WorkspaceIntent.BaseCommit {
-		return WorkspaceEvidence{}, nativeErr("authority_mismatch", "worker workspace differs from its fixed durable intent")
-	}
-	backend := backendFor(c)
-	kind, protocol := backend.Identity()
-	if kind == executionapi.BackendLocal && run.Protocol == string(executionapi.ProtocolLocalCodexAppServer) {
-		protocol = executionapi.ProtocolLocalCodexAppServer
-	}
-	if string(kind) != run.Backend || string(protocol) != run.Protocol || run.Target.ID != targetFor(c).ID {
-		return WorkspaceEvidence{}, executionapi.UnsupportedAdapterOperation("InspectWorkspace", "configured target differs from the native execution identity")
-	}
-	inspection, err := backend.InspectWorkspace(ctx, executionapi.ExecutionRef{Version: executionapi.ExecutionRecordVersion, Backend: kind, Protocol: protocol, Target: targetFor(c), RunID: run.RunID, AttemptID: run.AttemptID, WorkspacePath: worktree, WorkspaceBranch: *run.WorktreeBranch, BaseCommit: *run.BaseCommit})
+	port, fixed, err := s.lifecycleForRun(run)
 	if err != nil {
 		return WorkspaceEvidence{}, err
 	}
-	if canonical(inspection.Worktree) != canonical(worktree) || inspection.Branch != *run.WorktreeBranch || inspection.Base != *run.BaseCommit || !revisionPattern.MatchString(inspection.Head) {
-		return WorkspaceEvidence{}, nativeErr("contract_mismatch", "native target workspace inspection differs from its fixed identity")
+	snapshot, err := s.lifecycleSnapshot(run, fixed.workflow, fixed.execution, fixed.attempt, nil)
+	if err != nil {
+		return WorkspaceEvidence{}, err
 	}
-	return WorkspaceEvidence{Repository: c.identity, Worktree: canonical(worktree), Branch: inspection.Branch, Base: inspection.Base, Head: inspection.Head, Dirty: inspection.Dirty, VerifiedAt: inspection.CheckedAt}, nil
+	if snapshot.Ref.WorkspacePath == "" {
+		// A lost or not-yet-committed resource receipt is inspected against the
+		// original persisted intent. This read does not publish the candidate.
+		operation := s.operationByKey("worker-workspace:" + run.ExecutionID)
+		var saved struct {
+			WorkflowRunID string                       `json:"workflow_run_id"`
+			ExecutionID   string                       `json:"execution_id"`
+			Workspace     executionapi.WorkspaceIntent `json:"workspace"`
+		}
+		if operation == nil || operation.Kind != "prepare_workspace" || operation.LifecycleIdentity == nil || operation.LifecycleIdentity.ExecutionID != run.ExecutionID || operation.LifecycleIdentity.Ref.AttemptID != run.AttemptID ||
+			json.Unmarshal(operation.Request, &saved) != nil || saved.WorkflowRunID != run.RunID || saved.ExecutionID != run.ExecutionID || saved.Workspace != *run.WorkspaceIntent || operationDigest(operation.Request) != operation.PayloadDigest {
+			return WorkspaceEvidence{}, errors.New("workspace inspection has no matching committed resource or preparation intent")
+		}
+		snapshot.Ref.WorkspacePath, snapshot.Ref.WorkspaceBranch, snapshot.Ref.BaseCommit = saved.Workspace.Path, saved.Workspace.Branch, saved.Workspace.BaseCommit
+		snapshot.Workspace = saved.Workspace
+	}
+	inspection, err := port.InspectLifecycleWorkspace(ctx, snapshot)
+	if err != nil {
+		return WorkspaceEvidence{}, err
+	}
+	if inspection.Worktree != snapshot.Ref.WorkspacePath || inspection.Branch != snapshot.Ref.WorkspaceBranch || inspection.Base != snapshot.Ref.BaseCommit || !revisionPattern.MatchString(inspection.Head) {
+		return WorkspaceEvidence{}, nativeErr("contract_mismatch", "workspace inspection differs from its committed identity")
+	}
+	return WorkspaceEvidence{Repository: inspection.Repository, Worktree: inspection.Worktree, Branch: inspection.Branch, Base: inspection.Base, Head: inspection.Head, Dirty: inspection.Dirty, VerifiedAt: inspection.CheckedAt}, nil
 }
 
 func applyWorkflowWorkspaceEvidence(run *Run, execution *ExecutionRecord, workspace WorkspaceEvidence) {
@@ -101,7 +88,7 @@ func applyWorkflowWorkspaceEvidence(run *Run, execution *ExecutionRecord, worksp
 }
 
 func applyWorkflowWorkspaceTarget(run *Run, execution *ExecutionRecord, workspace WorkspaceEvidence) {
-	if execution.Protocol != string(executionapi.ProtocolOrcaSupervised) {
+	if execution.Target.WorktreeID == "" {
 		execution.Target.WorktreeID = workspace.Worktree
 	}
 	execution.Target.Branch = workspace.Branch

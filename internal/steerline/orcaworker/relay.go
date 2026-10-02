@@ -38,6 +38,32 @@ func EnsureReadinessIgnored(repositoryGitDir string) error {
 	return ensureIgnored(repositoryGitDir, "/.steerline-readiness/")
 }
 
+func RelayIgnored(repositoryGitDir string) (bool, error) {
+	root, err := os.OpenRoot(repositoryGitDir)
+	if err != nil {
+		return false, err
+	}
+	defer root.Close()
+	reader, err := root.Open("info/exclude")
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	defer reader.Close()
+	data, err := io.ReadAll(io.LimitReader(reader, (1<<20)+1))
+	if err != nil || len(data) > 1<<20 {
+		return false, errors.Join(err, errors.New("native Orca relay exclude is unexpectedly large"))
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		if strings.TrimSpace(line) == "/.steerline-relay/" {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 func ensureIgnored(repositoryGitDir, pattern string) error {
 	root, err := os.OpenRoot(repositoryGitDir)
 	if err != nil {

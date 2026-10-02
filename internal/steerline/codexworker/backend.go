@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sync"
 
 	"github.com/erranliu/SteerLine/internal/steerline/codexapp"
@@ -54,6 +55,20 @@ func (h *SessionHandle) Close() {
 	if h.owned && h.process != nil {
 		h.process.Close()
 	}
+}
+
+// Detach closes the app-server connection while retaining the exact process
+// handle for the center to own after it commits the session receipt.
+func (h *SessionHandle) Detach() executionapi.StopHandle {
+	if h == nil {
+		return nil
+	}
+	if h.client != nil {
+		h.client.Close()
+		h.client = nil
+	}
+	h.owned = false
+	return h.process
 }
 func encode(v any) []byte { b, _ := json.Marshal(v); return append(b, '\n') }
 func (b Backend) PrepareSession(ctx context.Context, fixed Binding, input executionapi.TurnInput) (handle *SessionHandle, receipt Binding, err error) {
@@ -138,7 +153,7 @@ func (b Backend) PrepareSession(ctx context.Context, fixed Binding, input execut
 // StartTurn is a separate operation: the center must persist PrepareSession's
 // partial binding before calling it. No persistence callback drives the backend.
 func (b Backend) StartTurn(ctx context.Context, h *SessionHandle, input executionapi.TurnInput, linkedArgs []string) (*Observation, string, error) {
-	if h == nil || h.client == nil || input != h.input {
+	if h == nil || h.client == nil || input.CommandID != h.input.CommandID || input.Prompt != h.input.Prompt || !slices.Equal(input.LinkedWorktreeArgs, h.input.LinkedWorktreeArgs) {
 		return nil, "", errors.New("app-server turn changed its prepared request identity or input")
 	}
 	params, err := TurnParams(ctx, TurnParamsInput{Worktree: b.Config.Workspace, ThreadID: h.Binding.SessionID, TurnInput: input, Sandbox: b.Config.Sandbox, Model: b.Config.Model, ReasoningEffort: b.Config.ReasoningEffort}, func(context.Context, string) ([]string, error) { return linkedArgs, nil })
@@ -174,8 +189,17 @@ func (b Backend) readProcess() (ProcessReceipt, error) {
 	return saved, err
 }
 func (b Backend) ManagedProcessAbsent(fixed Binding) bool {
+	managed, absent := b.ManagedProcessState(fixed)
+	return managed && absent
+}
+
+func (b Backend) ManagedProcessState(fixed Binding) (managed, absent bool) {
 	saved, err := b.readProcess()
-	return err == nil && fixed.Process != nil && saved.Managed && saved.Identity == *fixed.Process && saved.Endpoint == fixed.Endpoint && saved.Generation == fixed.Generation && b.Process.Inspect(fixed.Process) == "process absent"
+	if err != nil || fixed.Process == nil || !saved.Managed || saved.Identity != *fixed.Process || saved.Endpoint != fixed.Endpoint || saved.Generation != fixed.Generation {
+		return false, false
+	}
+	state := b.Process.Inspect(fixed.Process)
+	return true, state == "process absent"
 }
 func (b Backend) ValidateReply(fixed Binding, generation, threadID, turnID, currentTurn, lastStopped string) error {
 	if fixed.Process == nil || b.Process.Inspect(fixed.Process) != "matching process still exists" || fixed.Endpoint == "" || fixed.Generation != generation || fixed.SessionID != threadID || currentTurn != turnID || lastStopped == turnID {

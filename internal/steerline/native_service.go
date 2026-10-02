@@ -472,7 +472,7 @@ func (s *Service) dispatchNative(ctx context.Context) error {
 	}
 	if len(ready) > 0 {
 		if c.WorkflowProtocol == WorkerFlowVersion {
-			if err = requireWorkerFlowCapabilities(ctx, c); err != nil {
+			if err = requireWorkerFlowCapabilitiesWithResolver(ctx, c, s.lifecycleResolver); err != nil {
 				return err
 			}
 		} else {
@@ -535,10 +535,8 @@ func (s *Service) dispatchNative(ctx context.Context) error {
 		if execution.Target.WorktreeID != "" || execution.Target.Branch != c.Branch {
 			return nativeErr("authority_mismatch", "claimed execution already has a conflicting workspace identity")
 		}
-		if c.hostName() != "orca_supervised" {
-			execution.Target.WorktreeID = intent.Path
-			execution.Target.Branch = intent.Branch
-		}
+		// A workspace intent is a plan. Its resource identity is attached only
+		// after the preparation receipt commits, through the shared write set.
 		execution.UpdatedAt = now()
 		execution.OwnerServiceInstanceID = s.State.Service.InstanceID
 		workflow.UpdatedAt = now()
@@ -621,18 +619,19 @@ func (s *Service) nativeCompleteMergedTask(ctx context.Context, run *Run) error 
 	if err := s.commitWorker(run); err != nil {
 		return err
 	}
-	if run.Protocol == string(executionapi.ProtocolOrcaTerminalV2) || run.Protocol == string(executionapi.ProtocolOrcaSupervised) {
-		var cleanupErr error
-		if run.Protocol == string(executionapi.ProtocolOrcaSupervised) {
-			cleanupErr = s.finishRemoteOrcaCleanup(ctx, run)
+	var cleanupErr error
+	if workflow.WorkflowVersion == WorkerFlowVersion {
+		lifecycle, _, lifecycleErr := s.lifecycleForRun(run)
+		if lifecycleErr != nil {
+			cleanupErr = lifecycleErr
 		} else {
-			cleanupErr = s.finishNativeOrcaCleanup(ctx, run)
+			cleanupErr = s.cleanupLifecycleResources(ctx, run, lifecycle)
 		}
-		if err := cleanupErr; err != nil {
-			s.executionRecord(run).LastEvent = ptr("Orca delivery completed; owned terminal cleanup needs reconciliation: " + err.Error())
-			s.refreshRun(run)
-			return s.commitWorker(run)
-		}
+	}
+	if cleanupErr != nil {
+		s.executionRecord(run).LastEvent = ptr("Task delivery completed; owned execution cleanup needs reconciliation: " + cleanupErr.Error())
+		s.refreshRun(run)
+		return s.commitWorker(run)
 	}
 	return nil
 }

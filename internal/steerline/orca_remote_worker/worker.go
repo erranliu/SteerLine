@@ -59,7 +59,11 @@ func (b Client) FindCoordinator(ctx context.Context, title, runtimeID string) (s
 }
 
 func (b Client) FindTask(ctx context.Context, runID, spec, runtimeID string) (string, error) {
-	return orcaworker.FindTask(ctx, b.centerPayload(runtimeID), runID, b.config.Settings.CoordinatorTerminal, spec)
+	return b.FindTaskFrom(ctx, runID, b.config.Settings.CoordinatorTerminal, spec, runtimeID)
+}
+
+func (b Client) FindTaskFrom(ctx context.Context, runID, coordinator, spec, runtimeID string) (string, error) {
+	return orcaworker.FindTask(ctx, b.centerPayload(runtimeID), runID, coordinator, spec)
 }
 
 // RecoverStart only reads the original Task. Absence never authorizes a second start.
@@ -217,4 +221,56 @@ func (b Client) Release(ctx context.Context, ref Ref) (orcaworker.MutationReceip
 		return orcaworker.MutationReceipt{}, &Error{Code: executionapi.BackendOutcomeUnknown, Diagnostic: "remote release did not confirm exact settled Dispatch"}
 	}
 	return orcaworker.MutationReceipt{RequestID: result.Mutation.RequestID, Payload: env.Payload}, nil
+}
+
+// ReleaseAcknowledged inspects the worker inventory only. A missing or
+// uncertain row never authorizes a replacement release request.
+func (b Client) ReleaseAcknowledged(ctx context.Context, ref Ref) (bool, error) {
+	if err := validateSupervisedRef(b.config, ref); err != nil {
+		return false, err
+	}
+	cursor := ""
+	for page := 0; page < 100; page++ {
+		args := []string{"orchestration", "worker-list", "--run", ref.External.OrchestrationRun, "--include-remote", "--limit", "100", "--json"}
+		if cursor != "" {
+			args = append(args, "--cursor", cursor)
+		}
+		result, err := b.CenterCall(ctx, args...)
+		if err != nil {
+			return false, err
+		}
+		if result.RuntimeID != ref.External.CoordinatorRuntimeID {
+			return false, &Error{Code: executionapi.BackendIdentityMismatch, Diagnostic: "worker inventory came from a different coordinator runtime"}
+		}
+		var listing struct {
+			Workers []struct {
+				RunID, TaskID, DispatchID, WorktreeID, State, TerminalState string
+			} `json:"workers"`
+			NextCursor string `json:"nextCursor"`
+			Truncated  bool   `json:"truncated"`
+		}
+		if err := json.Unmarshal(result.Payload, &listing); err != nil || listing.Truncated {
+			return false, errors.Join(err, errors.New("worker inventory is incomplete"))
+		}
+		for _, worker := range listing.Workers {
+			if worker.DispatchID != ref.External.Dispatch {
+				continue
+			}
+			if worker.RunID != ref.External.OrchestrationRun || worker.TaskID != ref.External.Task || worker.WorktreeID != ref.External.WorktreeID {
+				return false, &Error{Code: executionapi.BackendIdentityMismatch, Diagnostic: "worker inventory changed the original Run/Task/worktree identity"}
+			}
+			if worker.State == "released" || worker.TerminalState == "released" {
+				return true, nil
+			}
+			return false, nil
+		}
+		if listing.NextCursor == "" {
+			return false, nil
+		}
+		if listing.NextCursor == cursor {
+			return false, errors.New("worker inventory cursor did not advance")
+		}
+		cursor = listing.NextCursor
+	}
+	return false, errors.New("worker inventory exceeded its bounded page count")
 }

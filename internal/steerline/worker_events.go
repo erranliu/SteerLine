@@ -1,6 +1,8 @@
 package steerline
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
 
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
@@ -34,13 +36,36 @@ func (s *Service) recordWorkerTurnStarted(run *Run, workflow *WorkflowRunRecord,
 	if err := BeginWorkerTurn(workflow, execution, sessionID, turnID); err != nil {
 		return "", err
 	}
+	if execution.Environment != nil && execution.Environment.Blocker != nil {
+		workflow.Phase = "waiting_decision"
+	}
 	execution.CurrentCommandID, execution.PendingCommandID = commandID, ""
 	if fresh {
 		if attempt := s.workflowAttempt(run, run.AttemptID); attempt != nil {
 			attempt.Status, attempt.UpdatedAt = "running", now()
 		}
-		if run.Decision != nil && run.Decision.Status == "answer_saved" && run.Decision.Request.QuestionRoute == nil {
+		if run.Decision != nil && run.Decision.Status == "answer_saved" && run.Decision.Request.QuestionRoute == nil && run.Decision.Request.HostTarget == nil {
 			s.setDecisionStatus(run, "reply_accepted")
+		}
+		// A host gate may display another Decision while this original business
+		// input starts. Consume only the answer bound to its accepted Command.
+		if environment := execution.Environment; s.domainStore != nil && environment != nil && environment.DeferredDecisionID != "" {
+			for i := range s.domain.Decisions {
+				deferred := &s.domain.Decisions[i]
+				if deferred.DecisionID != environment.DeferredDecisionID || deferred.ExecutionID != execution.ExecutionID || deferred.AttemptID != run.AttemptID || deferred.Status != "answer_saved" {
+					continue
+				}
+				var request DecisionRequest
+				var answer DecisionAnswer
+				if json.Unmarshal(deferred.Request, &request) != nil || json.Unmarshal(deferred.Answer, &answer) != nil || request.QuestionRoute != nil || request.HostTarget != nil {
+					continue
+				}
+				command, err := s.domainStore.CommandByIdempotency(context.Background(), s.Config.identity, decisionAnswerKey(answer))
+				if err == nil && command.CommandID == commandID && command.Status == "accepted" && command.TargetID == deferred.DecisionID {
+					deferred.Status, deferred.Version, deferred.UpdatedAt = "reply_accepted", deferred.Version+1, now()
+					s.markWorkerDecisionWrite(deferred.DecisionID)
+				}
+			}
 		}
 		execution.Status, execution.Error = "active", nil
 		s.refreshRun(run)
@@ -134,6 +159,25 @@ func (s *Service) eventWorkerFlowFor(run *Run, ev WorkerEvent) (resultErr error)
 		s.refreshRun(run)
 		s.note(run, "steer", "decision", "pending", "Execution is waiting for an answer", routeID, decisionMeta(run))
 	}
+	if fact.Kind == executionapi.EventEscalation && fact.Matched && fact.SourceEventID != "" && execution.CurrentTurnID != "" && execution.CurrentTurnID != execution.LastStoppedTurnID &&
+		(run.Decision == nil || run.Decision.Status != "pending" && run.Decision.Status != "answer_saved") &&
+		(execution.Environment == nil || execution.Environment.Blocker == nil && (execution.Environment.Preparation == nil || execution.Environment.Preparation.TurnID != execution.CurrentTurnID)) {
+		request := decisionRequestFromEventFact(fact)
+		if request.Question == "" {
+			return errors.New("matched guidance event lacks its question")
+		}
+		request.Options = []executionapi.DecisionOption{{ID: "continue", Label: "Continue current work"}}
+		request.AllowFreeText = true
+		decision, err := WriteDecisionRequest(run, request)
+		if err != nil {
+			return err
+		}
+		s.setRunDecision(run, decision)
+		if err := NoteWorkerQuestion(workflow, execution, execution.CurrentTurnID); err != nil {
+			return err
+		}
+		s.refreshRun(run)
+	}
 	if reply := fact.ToolReply; reply != nil && run.Decision != nil && run.Decision.Request.QuestionRoute != nil {
 		route := run.Decision.Request.QuestionRoute
 		sessionID, _ := executionSessionFacts(execution)
@@ -186,6 +230,32 @@ func (s *Service) eventWorkerFlowFor(run *Run, ev WorkerEvent) (resultErr error)
 		execution.LastEvent = ptr(ev.Summary)
 		s.refreshRun(run)
 	}
+	for _, envelope := range ev.Implementation {
+		if err := envelope.ValidateResourceIdentity(execution.ProjectIdentity, execution.ExecutionID, execution.CurrentAttemptID, execution.Generation, execution.ConfigurationDigest); err != nil {
+			return err
+		}
+		if err := putImplementationEnvelope(execution, envelope); err != nil {
+			return err
+		}
+	}
+	if ev.DeliveryFinal && ev.DeliveryID != "" {
+		if execution.PendingDeliveryID != "" && execution.PendingDeliveryID != ev.DeliveryID {
+			return ErrWorkerTurnStale
+		}
+		execution.PendingDeliveryID = ev.DeliveryID
+		s.refreshRun(run)
+	}
+	var completionCandidate *executionapi.LifecycleCandidate
+	if ev.Candidate != nil {
+		candidate := ev.Candidate.Clone()
+		if err := candidate.Validate(); err != nil || candidate.Action != executionapi.LifecycleReportCompletion || candidate.Input.Completion == nil {
+			return errors.Join(err, errors.New("worker observer proposed an unsupported follow-up action"))
+		}
+		if candidate.Input.Completion.TurnID != execution.PendingTurnID && candidate.Input.Completion.TurnID != execution.CurrentTurnID {
+			return ErrWorkerTurnStale
+		}
+		completionCandidate = &candidate
+	}
 	if ev.Activity.Kind != "" {
 		if err := s.recordConversationEvent(run, ev); err != nil {
 			return err
@@ -195,7 +265,22 @@ func (s *Service) eventWorkerFlowFor(run *Run, ev WorkerEvent) (resultErr error)
 	} else if ev.Persisted != nil {
 		return errors.New("worker source event lacks activity classification")
 	}
-	return s.commitWorker(run, operationIDs...)
+	if err := s.commitWorker(run, operationIDs...); err != nil {
+		return err
+	}
+	if completionCandidate != nil {
+		lifecycle, _, err := s.lifecycleForRun(run)
+		if err != nil {
+			return err
+		}
+		if err := s.executeLifecycleStep(context.Background(), run, lifecycle, *completionCandidate); err != nil {
+			return err
+		}
+	}
+	if ev.DeliveryFinal && ev.DeliveryID != "" {
+		return s.acknowledgeLifecycleDelivery(run, ev.DeliveryID)
+	}
+	return nil
 }
 
 func (s *Service) routedQuestionSeen(run *Run, execution *ExecutionRecord, route *executionapi.QuestionRoute, questions []executionapi.Question) (bool, error) {

@@ -3,9 +3,7 @@ package steerline
 import (
 	"errors"
 
-	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
-	remote "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker"
 	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
 
@@ -68,36 +66,9 @@ func validateExecutionImplementationData(record *ExecutionRecord) error {
 			return errors.New("execution contains duplicate implementation binding envelopes")
 		}
 		seen[envelope.ImplementationKey] = true
-		switch envelope.ImplementationKey {
-		case orcaworker.ExecutionStateCodecKey:
-			if record.Protocol != string(executionapi.ProtocolOrcaTerminalV2) && record.Protocol != string(executionapi.ProtocolOrcaSupervised) {
-				return errors.New("Orca binding codec differs from the fixed execution protocol")
-			}
-			if _, err := orcaworker.DecodeExecutionStateEnvelope(envelope, orcaStateIdentity(record)); err != nil {
-				return err
-			}
-		case codexworker.ExecutionBindingCodecKey:
-			if record.Protocol != string(executionapi.ProtocolLocalCodexAppServer) {
-				return errors.New("app-server binding codec differs from the fixed execution protocol")
-			}
-			binding, err := codexworker.DecodeAppServerBindingEnvelope(envelope, codexBindingIdentity(record))
-			if err != nil {
-				return err
-			}
-			if record.Process != nil && (binding.Endpoint == "" || binding.Generation == "") {
-				return errors.New("bound app-server process lacks its original endpoint and native generation")
-			}
-		default:
-			return errors.New("execution contains an unknown implementation binding codec")
+		if err := envelope.ValidateResourceIdentity(record.ProjectIdentity, record.ExecutionID, record.CurrentAttemptID, record.Generation, record.ConfigurationDigest); err != nil {
+			return err
 		}
-	}
-	if record.Protocol == string(executionapi.ProtocolOrcaTerminalV2) || record.Protocol == string(executionapi.ProtocolOrcaSupervised) {
-		if record.Process != nil && !seen[orcaworker.ExecutionStateCodecKey] {
-			return errors.New("original Orca execution binding is missing; preserve the external session")
-		}
-	}
-	if record.Protocol == string(executionapi.ProtocolLocalCodexAppServer) && record.Process != nil && !seen[codexworker.ExecutionBindingCodecKey] {
-		return errors.New("original app-server binding is missing; preserve the external session")
 	}
 	return nil
 }
@@ -144,75 +115,19 @@ func storeOrcaExecutionState(record *ExecutionRecord, state *implementationExecu
 	return putImplementationEnvelope(record, envelope)
 }
 
-func codexBindingIdentity(record *ExecutionRecord) codexworker.AppServerBindingIdentity {
-	return codexworker.AppServerBindingIdentity{
-		ProjectID: record.ProjectIdentity, ExecutionID: record.ExecutionID,
-		AttemptID: record.CurrentAttemptID, Generation: record.Generation, ConfigDigest: record.ConfigurationDigest,
-	}
-}
-
-func decodeCodexAppServerBinding(record *ExecutionRecord) (codexworker.AppServerBinding, error) {
-	envelope, ok, err := implementationEnvelope(record, codexworker.ExecutionBindingCodecKey)
-	if err != nil {
-		return codexworker.AppServerBinding{}, err
-	}
-	if !ok {
-		return codexworker.AppServerBinding{}, nil
-	}
-	return codexworker.DecodeAppServerBindingEnvelope(envelope, codexBindingIdentity(record))
-}
-
-// A manually confirmed new Attempt can carry the original thread before its
-// new process resources exist. A live or previously bound process cannot.
-func awaitingLocalRecoveryResources(record *ExecutionRecord) bool {
-	if record == nil || record.Protocol != string(executionapi.ProtocolLocalCodexAppServer) ||
-		record.Process != nil || record.Status != "pending" || record.RecoveryState != "resuming" ||
+// A manually confirmed new Attempt can carry the original session before its
+// new process resources exist. This is a generic recovery stage, not a live binding.
+func awaitingRecoveryResources(record *ExecutionRecord) bool {
+	if record == nil || record.Process != nil || record.Status != "pending" || record.RecoveryState != "resuming" ||
 		record.RecoveryRequired || record.Generation == "" || record.CurrentTurnID != "" || record.PendingTurnID != "" {
 		return false
 	}
-	binding, err := decodeCodexAppServerBinding(record)
-	return err == nil && binding.SessionID != "" && binding.Endpoint == "" && binding.Generation == ""
-}
-
-func codexSessionID(record *ExecutionRecord) string {
-	binding, err := decodeCodexAppServerBinding(record)
-	if err != nil {
-		return ""
-	}
-	return binding.SessionID
+	return record.SessionID != "" && record.SessionGeneration == ""
 }
 
 func executionSessionFacts(record *ExecutionRecord) (string, string) {
 	if record == nil {
 		return "", ""
 	}
-	switch executionapi.ExecutionProtocol(record.Protocol) {
-	case executionapi.ProtocolLocalCodexAppServer:
-		binding, err := decodeCodexAppServerBinding(record)
-		if err == nil {
-			return binding.SessionID, binding.Generation
-		}
-	case executionapi.ProtocolOrcaTerminalV2:
-		if record.Process != nil {
-			return orcaworker.SessionID(*record.Process), nativeOrcaGeneration(record)
-		}
-	case executionapi.ProtocolOrcaSupervised:
-		if record.Process != nil {
-			return remote.SessionID(executionapi.ProcessIdentity(*record.Process)), nativeOrcaGeneration(record)
-		}
-	}
-	return "", ""
-}
-
-func storeCodexAppServerBinding(record *ExecutionRecord, binding codexworker.Binding) error {
-	if binding.Endpoint == "" && binding.SessionID == "" && binding.Generation == "" {
-		return nil
-	}
-	envelope, err := codexworker.NewAppServerBindingEnvelope(codexBindingIdentity(record), codexworker.AppServerBinding{
-		Endpoint: binding.Endpoint, SessionID: binding.SessionID, Generation: binding.Generation,
-	})
-	if err != nil {
-		return err
-	}
-	return putImplementationEnvelope(record, envelope)
+	return record.SessionID, record.SessionGeneration
 }

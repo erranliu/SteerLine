@@ -11,18 +11,18 @@ import (
 
 func TestWorkerOrcaWorktreeNameIncludesTaskNumberAndRunIdentity(t *testing.T) {
 	runID := strings.Repeat("a", 32)
-	name, err := workerOrcaWorktreeName("103", runID)
+	name, err := orcaworker.WorkerWorktreeName("103", runID)
 	if err != nil || name != "sl-103-"+runID {
 		t.Fatalf("worktree name = %q / %v", name, err)
 	}
-	if other, err := workerOrcaWorktreeName("104", runID); err != nil || other == name {
+	if other, err := orcaworker.WorkerWorktreeName("104", runID); err != nil || other == name {
 		t.Fatalf("different tasks shared a worktree name: %q / %v", other, err)
 	}
-	if other, err := workerOrcaWorktreeName("103", strings.Repeat("b", 32)); err != nil || other == name {
+	if other, err := orcaworker.WorkerWorktreeName("103", strings.Repeat("b", 32)); err != nil || other == name {
 		t.Fatalf("different runs shared a worktree name: %q / %v", other, err)
 	}
 	for _, taskID := range []string{"", "0103", "task-103", "../103"} {
-		if _, err := workerOrcaWorktreeName(taskID, runID); err == nil {
+		if _, err := orcaworker.WorkerWorktreeName(taskID, runID); err == nil {
 			t.Fatalf("invalid task number %q was accepted", taskID)
 		}
 	}
@@ -55,7 +55,7 @@ func TestNativeOrcaAgentSelectionUsesFrozenProfile(t *testing.T) {
 }
 
 func TestFixedOrcaAgentTerminalRejectsReplacedIncarnation(t *testing.T) {
-	title := nativeOrcaFixedAgentTitle(strings.Repeat("a", 32))
+	title := orcaworker.FixedAgentTitle(strings.Repeat("a", 32))
 	receipt, err := json.Marshal(map[string]any{"terminal": map[string]string{
 		"handle": "term-original", "incarnationId": "inc-original", "worktreeId": "repo::worktree", "title": title,
 	}})
