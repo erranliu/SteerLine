@@ -175,6 +175,10 @@ func handleRPC(path string, raw []byte, send func(any) error) error {
 		if s.Session == "" || params.ThreadID != s.Session {
 			return fmt.Errorf("unknown controlled session")
 		}
+		if message.Method == "thread/resume" && len(s.Turns) == 0 {
+			response["error"] = map[string]any{"code": -32600, "message": "no rollout found for thread id " + s.Session}
+			break
+		}
 		response["result"] = map[string]any{"thread": map[string]any{"id": s.Session, "cwd": s.Cwd, "turns": s.Turns}}
 	case "turn/start":
 		var params struct {
