@@ -1,0 +1,14 @@
+{
+  "source": "app-server/thread/tokenUsage/updated",
+  "session_id": "01a0fc7a-0b42-7a30-9e29-1213eafa31a2",
+  "turn_id": "01a0fc7a-1442-7572-96c7-fd8f620a4cc2",
+  "model": "gpt-6-luna",
+  "reasoning_effort": "medium",
+  "tokens": {
+    "input_tokens": 95918,
+    "cached_input_tokens": 63232,
+    "output_tokens": 670,
+    "reasoning_output_tokens": 139,
+    "total_tokens": 96588
+  }
+}

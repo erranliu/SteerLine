@@ -1,0 +1,125 @@
+{
+  "scope": "e2e",
+  "level": "L3",
+  "env": "live",
+  "environment": {
+    "source_commit": "54a1f81ad32cbff76c324523ce5c03eaa05fcef3",
+    "worktree_status": "clean (this run's logs and summary excluded)",
+    "go_version": "go version go1.26.4 windows/amd64",
+    "go_env": {
+      "GOARCH": "amd64",
+      "GOCACHE": "C:\\Users\\lmas1\\AppData\\Local\\go-build",
+      "GOFLAGS": "",
+      "GOOS": "windows",
+      "GOTOOLCHAIN": "auto"
+    },
+    "os": "windows",
+    "architecture": "amd64",
+    "machine": {
+      "host_name": "liuming-asus",
+      "logical_cpu_count": 20,
+      "processor_identifier": "AMD64 Family 26 Model 36 Stepping 0, AuthenticAMD"
+    },
+    "concurrency": {
+      "GOMAXPROCS_environment": "unset",
+      "go_build_package_parallel": "Go default",
+      "go_test_parallel": "default 20",
+      "runtime_GOMAXPROCS": "20"
+    },
+    "build_cache_condition": "as found; no explicit cache clear",
+    "enabled_native_acceptance_switches": [],
+    "native_acceptance_note": "native gpt-6-luna/medium; loopback provider"
+  },
+  "selected_scenarios": [
+    {
+      "id": "delivery.local-codex",
+      "level": "L3",
+      "suite": "delivery",
+      "package": "./tests/e2e/live",
+      "test": "TestDeliveryLocalCodex",
+      "env": "live",
+      "chain": "local-codex"
+    }
+  ],
+  "groups": [
+    {
+      "id": "e2e-1",
+      "command": [
+        "go",
+        "test",
+        "-tags=e2e",
+        "-json",
+        "-count=1",
+        "-p=1",
+        "-parallel=1",
+        "-timeout=35m",
+        "-run=^(TestDeliveryLocalCodex)$",
+        "./tests/e2e/live"
+      ],
+      "assigned_tests": [
+        "TestDeliveryLocalCodex"
+      ],
+      "assigned_packages": [
+        "./tests/e2e/live"
+      ],
+      "stdout_json_log": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-l3-rebase187-delivery-local-20261002-194453\\e2e-1.jsonl",
+      "stderr_log": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-l3-rebase187-delivery-local-20261002-194453\\e2e-1.stderr.txt",
+      "wall_seconds": 134.1856065,
+      "exit_code": 0,
+      "summary": {
+        "status": "passed",
+        "passed": true,
+        "complete": true,
+        "command_exit_code": 0,
+        "package_count": 1,
+        "passed_packages": 1,
+        "failed_packages": [],
+        "skipped_packages": [],
+        "test_count": 1,
+        "passed_tests": 1,
+        "failed_tests": 0,
+        "skipped_tests": 0,
+        "packages": [
+          {
+            "package": "github.com/erranliu/SteerLine/tests/e2e/live",
+            "status": "pass",
+            "elapsed_seconds": 132.231
+          }
+        ],
+        "tests": [
+          {
+            "package": "github.com/erranliu/SteerLine/tests/e2e/live",
+            "name": "TestDeliveryLocalCodex",
+            "status": "pass",
+            "elapsed_seconds": 131
+          }
+        ],
+        "slowest_tests": [
+          {
+            "package": "github.com/erranliu/SteerLine/tests/e2e/live",
+            "name": "TestDeliveryLocalCodex",
+            "status": "pass",
+            "elapsed_seconds": 131
+          }
+        ],
+        "failures": [],
+        "skipped": [],
+        "incomplete_reasons": [],
+        "test_event_wall_seconds": 132.2285552,
+        "has_test_event_wall": true
+      }
+    }
+  ],
+  "build_sha256": {
+    "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-l3-rebase187-delivery-local-20261002-194453\\build\\controlled-helper.exe": "6de85a4e0bb317344ca834ef88aba8e2c320da3a3c0a903587128f3655f6d0bf",
+    "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-l3-rebase187-delivery-local-20261002-194453\\build\\steerline.exe": "29dc4192f6ab7290e81dce0b56eb634868c99e2900c643799dac1fed2a63771c"
+  },
+  "preparation_seconds": 5.4896082,
+  "execution_seconds": 134.2198507,
+  "passed": true,
+  "cleanup_complete": true,
+  "errors": null,
+  "started_at": "2026-10-02T11:44:54.1956029Z",
+  "finished_at": "2026-10-02T11:47:14.3145056Z",
+  "coverage": "selected-L3"
+}

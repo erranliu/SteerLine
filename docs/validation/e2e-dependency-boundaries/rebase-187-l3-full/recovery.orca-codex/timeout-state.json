@@ -1,0 +1,65 @@
+{
+  "phase": "queued",
+  "status": "pending",
+  "execution": "d397a84a6f29305b66f8bec95167432e",
+  "attempt": "c539127c8d4b9af6cb6a547193a9b7bb",
+  "pending_command": "c899ac60054797b58f6f765b2183b9c6",
+  "pending_turn": "c899ac60054797b58f6f765b2183b9c6",
+  "ready": true,
+  "preparation_verified": true,
+  "process": {
+    "kind": "orca",
+    "executable": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-3224967451\\recovery.orca-codex\\live\\home\\bin\\orca-env.exe",
+    "terminal": "term_ca1da750-65af-4eae-b7ae-1e0aa0ae9e8b",
+    "runtime_id": "29aeca94-b4a2-45df-bbdf-5de8dac5b15e",
+    "incarnation": "ba99ff8c-0519-458e-8b44-7decded72b63",
+    "orchestration_run": "run_8530f704172f",
+    "task": "task_04d0dd8d6903",
+    "dispatch": "ctx_67aa6601325f",
+    "worktree_id": "c05d51cd-0893-4443-8b1f-89928531d840::C:/Users/lmas1/orca/workspaces/repo/sl-1-3a9606c2b6cb4ea3a28c90afa7667235"
+  },
+  "config_digest": "ad650b5497a1adb8ed44792818301fcf3a853acafab88031fc11ebb2b07e241b",
+  "policy_resources": {
+    "version": 3,
+    "digest": "0e3d98a10bdfb0b6c1c12aca016e0c5f625c6542ff4480855ea1b9b5a0a03b9a",
+    "profile_digest": "ad650b5497a1adb8ed44792818301fcf3a853acafab88031fc11ebb2b07e241b",
+    "workspace": "C:/Users/lmas1/orca/workspaces/repo/sl-1-3a9606c2b6cb4ea3a28c90afa7667235",
+    "write_roots": [],
+    "temporary_roots": [],
+    "implementation_data": {
+      "version": 1,
+      "codec_version": 1,
+      "purpose": "execution-resources",
+      "implementation_key": "codex.policy-resources",
+      "project_id": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-3224967451\\recovery.orca-codex\\live\\repo\\.git",
+      "execution_id": "d397a84a6f29305b66f8bec95167432e",
+      "attempt_id": "c539127c8d4b9af6cb6a547193a9b7bb",
+      "generation": "e5441300f2c5f770cc7148173478b51a",
+      "config_digest": "ad650b5497a1adb8ed44792818301fcf3a853acafab88031fc11ebb2b07e241b",
+      "digest": "c8a846f29fde31cfe605e63e1adc565ad6ca0b9e2646660c15714ed668285f93",
+      "payload": {
+        "native_version": "codex-cli 0.159.2",
+        "contract": "codex-policy-v1:0.159.2:host-write:network-allow:never",
+        "settings": {
+          "Executable": "C:\\Users\\lmas1\\.local\\bin\\node_modules\\@openai\\codex\\node_modules\\@openai\\codex-win32-x64\\vendor\\x86_64-pc-windows-msvc\\bin\\codex.exe",
+          "Args": [
+            "--no-daemon",
+            "--model",
+            "gpt-6-luna",
+            "--config",
+            "model_reasoning_effort=medium",
+            "--strict-config",
+            "--config",
+            "sandbox_mode=danger-full-access",
+            "--config",
+            "approval_policy=never",
+            "--cd",
+            "C:/Users/lmas1/orca/workspaces/repo/sl-1-3a9606c2b6cb4ea3a28c90afa7667235"
+          ],
+          "WorkingDirectory": "C:/Users/lmas1/orca/workspaces/repo/sl-1-3a9606c2b6cb4ea3a28c90afa7667235",
+          "EnvironmentRefs": null
+        }
+      }
+    }
+  }
+}

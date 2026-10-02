@@ -1,0 +1,128 @@
+[
+  {
+    "group": "core-1",
+    "test": "TestAppServerUnknownTurnDoesNotOfferPostTurnFeedback",
+    "seconds": 12.96,
+    "detail": "codex_worker_test.go:266: lifecycle request has no durable operation identity"
+  },
+  {
+    "group": "core-1",
+    "test": "TestConfigKeepsOrcaCodexNativeByDefault",
+    "seconds": 0.22,
+    "detail": "config_backend_test.go:50: execution profile selected: capability_unsupported PublicationPolicy: publication_policy is unsupported by the selected host/provider; publisher will not be changed"
+  },
+  {
+    "group": "core-1",
+    "test": "TestCD63FrozenConfigAndBinding/recovery_seed_resources",
+    "seconds": 12.02,
+    "detail": "core_decoupling_63_audit_test.go:40: missing original resource receipt was accepted outside pending recovery"
+  },
+  {
+    "group": "core-1",
+    "test": "TestCD63FrozenConfigAndBinding",
+    "seconds": 116.31,
+    "detail": ""
+  },
+  {
+    "group": "core-1",
+    "test": "TestConfigLoadsLocalAndRemoteOrcaProfilesWithoutProbingTargets",
+    "seconds": 0.4,
+    "detail": "execution_profiles_test.go:45: configured profiles were not loaded: [{ConfiguredPublicationPolicy:<nil> ExecutionRequirements:{Capabilities:[] Tools:[] Credentials:[]} RequirementsEvaluation:<nil> PublicationPolicy:{Publisher:} Publication:{Provider:{Kind: BaseURL: Repository: TokenEnv: Query:{Executable: Args:[]} Close:{Executable: Args:[]}} Create:{Executable: Args:[]} Git:{Executable: Args:[]} Remote: RemoteURL: BaseBranch: AuthenticationRefs:[]} ExecutionPolicy:{Filesystem:{ReadScope: WriteScope: GitMetadataWrite:false} Network: Escalation:} ImplementationConfigs:[{ImplementationKey:codex.worker-profile CodecVersion:1 Payload:[123 34 101 120 101 99 117 116 97 98 108 101 34 58 34 99 111 100 101 120 34 44 34 97 114 103 115 34 58 110 117 108 108 125]}] ImplementationData:[] ImplementationDisplay:[] AcceptedConfigVersion: PolicySource: ID:local Name:本地 Host:local Agent:codex projectIdentity:} {ConfiguredPublicationPolicy:<nil> ExecutionRequirements:{Capabilities:[] Tools:[] Credentials:[]} RequirementsEvaluation:<nil> PublicationPolicy:{Publisher:} Publication:{Provider:{Kind: BaseURL: Repository: TokenEnv: Query:{Executable: Args:[]} Close:{Executable: Args:[]}} Create:{Executable"
+  },
+  {
+    "group": "core-1",
+    "test": "TestEmptyExecutionRequirementsKeepMandatoryChecks",
+    "seconds": 0,
+    "detail": "execution_requirements_test.go:324: empty requirements bypassed remote policy: orca_supervised requires explicit model and reasoning_effort; the remote Orca default is never inherited"
+  },
+  {
+    "group": "core-1",
+    "test": "TestNativeOrcaFixedLunaLaunchReconcilesOriginalTerminal",
+    "seconds": 15.11,
+    "detail": "worker_environment_test.go:465: unknown terminal receipt guessed"
+  },
+  {
+    "group": "core-1",
+    "test": "TestProfilePublicationMixedRoutesAndFrozenResponsibility",
+    "seconds": 0.12,
+    "detail": "profile_publication_test.go:98: global execution config version must be 2; older development formats are unsupported and their state must be preserved"
+  },
+  {
+    "group": "core-1",
+    "test": "TestWorkerFlowDeliveryGateUsesSessionAndPRWithoutStepResults",
+    "seconds": 0,
+    "detail": "worker_state_test.go:103: accepted delivery without a bound worker session"
+  },
+  {
+    "group": "core-2",
+    "test": "TestCodexLinkedWorktreeWriteArgsOnlyGrantsFixedGitPaths",
+    "seconds": 1.04,
+    "detail": "codex_git_sandbox_test.go:48: unexpected Codex Git write grants: []"
+  },
+  {
+    "group": "core-2",
+    "test": "TestExecutionRequirementsClaimAndRestartBlockWithoutChangingSnapshot",
+    "seconds": 4.79,
+    "detail": "execution_requirements_test.go:205: configuration changed during evaluation but claim was accepted: implementation profile payload is not canonical or its identity changed"
+  },
+  {
+    "group": "core-2",
+    "test": "TestNativeClaimAllowsManualParallelButKeepsAutoSlot",
+    "seconds": 19.15,
+    "detail": "native_dag_commands_test.go:491: claim workflow gates were edited after reservation: json: error calling MarshalJSON for type execution.ImplementationDataEnvelope: implementation data payload is not valid JSON"
+  },
+  {
+    "group": "core-2",
+    "test": "TestSupervisedOrcaPreflightPinsRemoteIdentityAndVersionFamily",
+    "seconds": 1.3,
+    "detail": "orca_supervised_test.go:334: unsupported: requested execution_policy (read=host write=workspace git=true network=allow escalation=deny) lacks remote worker-start enforcement evidence: environment=env-home connection=home-connection repository=id:repo-test Codex=codex-cli 0.156.1"
+  },
+  {
+    "group": "core-2",
+    "test": "TestSupervisedOrcaPreflightRejectsVersionOrCapabilityDrift",
+    "seconds": 1.17,
+    "detail": "orca_supervised_test.go:348: version mismatch error = unsupported: requested execution_policy (read=host write=workspace git=true network=allow escalation=deny) lacks remote worker-start enforcement evidence: environment=env-home connection=home-connection repository=id:repo-test Codex=codex-cli 0.156.1"
+  },
+  {
+    "group": "core-2",
+    "test": "TestNativeOrcaFixedLunaLaunchReconcilesRenamedTerminalAfterRestart",
+    "seconds": 20.46,
+    "detail": "worker_environment_test.go:480: original launch was not reconciled: {EnvironmentMode:true EndReadinessOnBusiness:false ReadinessMode: HostWait:[110 117 108 108] InboxUnavailable:false BusinessActive:true ProbeCommand:powershell.exe -NoProfile -ExecutionPolicy Bypass -File '.steerline-readiness/f6ef131e231ce489d544b067ccfef2bf/036d801983cb3b46efefebc68b8d9673/probe.ps1' ProbeNonce:54b0ea957a841079be5b1fa47d07c2a0 ProbeDigest:87ca5ef8b402a42cf40d86f330e390f864f7078220d9b45748d4ff4a3d6ddef0 Name:sl-8154-2d67ceb0765d069d62f2b5d207194117 Base:21c032db62d8f995797c2fc626665d9ba89a5fd1 Agent:codex AgentIncarnation: Comment:SteerLine execution f6ef131e231ce489d544b067ccfef2bf Path:C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-test-492670516\\tmp\\TestNativeOrcaFixedLunaLaunchReconcilesRenamedTerminalAfterResta3239872432\\004\\worker Branch:fake/sl-8154-2d67ceb0765d069d62f2b5d207194117 Repo:C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-test-492670516\\tmp\\TestNativeOrcaFixedLunaLaunchReconcilesRenamedTerminalAfterResta3239872432\\002\\repo CreatedWithAgent: FixedAgentTitle:SteerLine agent f6ef131e231ce489d544b067ccfef2bf FixedAgentCommand:& 'C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-full-rebase187-20261002-193752\\core.te"
+  },
+  {
+    "group": "core-2",
+    "test": "TestEnvironmentRecheckCannotClearNewFaultObservedDuringPoll",
+    "seconds": 21.15,
+    "detail": "worker_environment_test.go:447: old recheck cleared newer fault: &{OriginalTerminal:0x374dc48f70 ProfileDigest:8c700a6f256833e032734649e05411abeb32eab2d7ba12c377a260bb7b706551 LaunchCommand:& 'C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-full-rebase187-20261002-193752\\core.test.exe' '--strict-config' '--config' 'sandbox_mode=workspace-write' '--config' 'approval_policy=never' '--config' 'windows.sandbox=unelevated' '--config' 'sandbox_workspace_write.writable_roots=[]' '--config' 'sandbox_workspace_write.exclude_tmpdir_env_var=true' '--config' 'sandbox_workspace_write.exclude_slash_tmp=true' '--config' 'sandbox_workspace_write.network_access=true' '--add-dir' 'C:/Users/lmas1/AppData/Local/Temp/sl-test-492670516/tmp/TestEnvironmentRecheckCannotClearNewFaultObservedDuringPoll1711237784/004/worker' '--cd' 'C:/Users/lmas1/AppData/Local/Temp/sl-test-492670516/tmp/TestEnvironmentRecheckCannotClearNewFaultObservedDuringPoll1711237784/004/worker' WriteRoots:[C:/Users/lmas1/AppData/Local/Temp/sl-test-492670516/tmp/TestEnvironmentRecheckCannotClearNewFaultObservedDuringPoll1711237784/004/worker] Runtime:fake-runtime Preparation:0x374dd1a600 History:[] Blocker:<nil> DeferredDecisionID: DeferredFeedba"
+  },
+  {
+    "group": "core-3",
+    "test": "TestNativeEvidenceCertificationRequiresFixedTargetAndVersion",
+    "seconds": 1.18,
+    "detail": "execution_backend_test.go:226: implementation profile payload is not canonical or its identity changed"
+  },
+  {
+    "group": "core-3",
+    "test": "TestWorkerFlowAdapterUsesFixedProtocol",
+    "seconds": 0,
+    "detail": "execution_registry_test.go:27: execution binding differs from its original project or configuration snapshot"
+  },
+  {
+    "group": "core-3",
+    "test": "TestExecutionRequirementsDoNotUpgradeProbeToVerified",
+    "seconds": 0,
+    "detail": "execution_requirements_test.go:93: implementation profile payload is not canonical or its identity changed"
+  },
+  {
+    "group": "core-3",
+    "test": "TestSupervisedOrcaRequiresPinnedModelAndKeepsStopUnsupported",
+    "seconds": 360.866,
+    "detail": "panic: remote cancellation is fixed unavailable [recovered, repanicked]\n\ngoroutine 21754 [running]:\ntesting.tRunner.func1.2({0x7ff7f17d2960, 0x325e499a2d60})\n\tC:/Users/lmas1/.codex/tools/go/go1.26.4/go/src/testing/testing.go:1974 +0x239\ntesting.tRunner.func1()\n\tC:/Users/lmas1/.codex/tools/go/go1.26.4/go/src/testing/testing.go:1977 +0x349\npanic({0x7ff7f17d2960?, 0x325e499a2d60?})\n\tC:/Users/lmas1/.codex/tools/go/go1.26.4/go/src/runtime/panic.go:860 +0x13a\ngithub.com/erranliu/SteerLine/internal/steerline.withTestImplementationProfiles({{0x0, 0x0}, 0x0, {0x0, 0x0}, {0x0, 0x0}, {0x7ff7f1894172, 0xf}, {{0x7ff7f18914b0, ...}}, ...}, ...)\n\tC:/Users/lmas1/.codex/worktrees/4ac5/SteerLine/internal/steerline/implementation_config_test_helpers_test.go:104 +0x12ea\ngithub.com/erranliu/SteerLine/internal/steerline.setTestImplementationProfiles(0x7ff7f188ee04?, 0x325e4a531bf0, {{0x325e499918d8, 0x5}, {0x0, 0x0, 0x0}, {0x0, 0x0}, {0x0, ...}, ...}, ...)\n\tC:/Users/lmas1/.codex/worktrees/4ac5/SteerLine/internal/steerline/implementation_config_test_helpers_test.go:52 +0x3b8\ngithub.com/erranliu/SteerLine/internal/steerline.TestSupervisedOrcaRequiresPinnedModelAndKeepsStopUnsupported(0x325e4a157600)\n\tC:/U"
+  },
+  {
+    "group": "other-packages",
+    "test": "TestTaskCLIProcessUsesNativeAuthorityWithoutInitializingMissingRead",
+    "seconds": 0.28,
+    "detail": "cli_test.go:99: global execution config: json: unknown field \"codex\""
+  }
+]

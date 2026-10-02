@@ -1,0 +1,7 @@
+{"Time":"2026-10-02T19:52:40.9224842+08:00","Action":"start","Package":"github.com/erranliu/SteerLine/cmd/orca-probe"}
+{"Time":"2026-10-02T19:52:40.9224842+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/cmd/orca-probe","Output":"?   \tgithub.com/erranliu/SteerLine/cmd/orca-probe\t[no test files]\n"}
+{"Time":"2026-10-02T19:52:40.9224842+08:00","Action":"skip","Package":"github.com/erranliu/SteerLine/cmd/orca-probe","Elapsed":0}
+{"ImportPath":"github.com/erranliu/SteerLine/cmd/steerline [github.com/erranliu/SteerLine/cmd/steerline.test]","Action":"build-output","Output":"# github.com/erranliu/SteerLine/cmd/steerline [github.com/erranliu/SteerLine/cmd/steerline.test]\n"}
+{"ImportPath":"github.com/erranliu/SteerLine/cmd/steerline [github.com/erranliu/SteerLine/cmd/steerline.test]","Action":"build-output","Output":"cmd\\steerline\\main_test.go:28:146: unknown field Codex in struct literal of type steerline.ExecutionProfile\n"}
+{"ImportPath":"github.com/erranliu/SteerLine/cmd/steerline [github.com/erranliu/SteerLine/cmd/steerline.test]","Action":"build-output","Output":"cmd\\steerline\\main_test.go:28:195: unknown field WindowsSandbox in struct literal of type steerline.Command\n"}
+{"ImportPath":"github.com/erranliu/SteerLine/cmd/steerline [github.com/erranliu/SteerLine/cmd/steerline.test]","Action":"build-fail"}
