@@ -49,3 +49,18 @@ Orca recovery 首轮真实执行成功，但服务重启的旧启动检查要求
 | L2 | smoke.delivery + smoke.local-codex + smoke.orca-codex | gated，真实阶段 full access，luna/medium，SteerlineTest | `go run ./cmd/test-feedback -level=L2 -out=<fresh>` | 定向通过后；无 token 门槛先通过，两条真实 PR 创建/合并、正数 usage、原生身份和清理通过 | 同目录 summary/scenario/usage |
 
 不重复 L3/full：用户指定 rebase 与完整 L2；已有 L3 历史证据保留，不能当作新主干上的 L3 通过记录。
+
+## 用户追加：rebase #189 后重跑全部测试
+
+将父分支及回归记录 rebase 到 main `a670e9d`（#189 composition）。保留当前配置入口、实现目录和校验；测试 driver 改用 steerlineapp.LoadConfig，边界检查覆盖 steerlineapp，完全访问 roots 校验使用公共执行策略。先编译全部 E2E 包，再跑以下完整矩阵；真实场景串行、gpt-6-luna / medium、完全访问，不自动重试。
+
+| 级别 | 组/场景 | 环境 | 命令 | 时点与通过条件 | 证据 |
+|---|---|---|---|---|---|
+| 编译/定向 | 全 E2E、适配器/边界 | 本机、无 token | `go test -tags=e2e ./cmd/steerline ./cmd/test-feedback ./internal/testboundary ./tests/e2e/... -run '^$' -count=1`；`go test ./internal/testboundary ./tests/e2e/internal/... ./cmd/test-feedback -count=1` | rebase 后；编译和适配器校验通过 | rebase-189-all/README.md |
+| full | 全部确定性 Go 测试 | 本机、三 worker | `go run ./cmd/test-feedback -workers=3 -out=<fresh>` | 与分级测试并行；无失败/遗漏，报告完整 | rebase-189-all/full/ |
+| L2 | smoke.delivery、smoke.local-codex、smoke.orca-codex | gated；真实 GitHub SteerlineTest | `go run ./cmd/test-feedback -level=L2 -out=<fresh>` | 门槛先通过；两条真实 PR 合并、正数 usage、清理通过 | rebase-189-all/l2/ |
+| L3 | delivery.basic、recovery.waiting-merge-restart | controlled | `go run ./cmd/test-feedback -level=L3 '-suite=delivery,recovery' -env=controlled -out=<fresh>` | 独立交付/重启、原身份和清理通过 | rebase-189-all/controlled/ |
+| L3 | delivery.local-codex、delivery.orca-codex | live、loopback provider | 分别 `go run ./cmd/test-feedback -level=L3 -suite=delivery -env=live '-scenario=<ID>' -out=<fresh>` | 各自独立；模型/权限、正数 usage、交付/清理通过 | rebase-189-all/各场景/ |
+| L3 | recovery.local-codex、recovery.orca-codex | live、loopback provider | 分别 `go run ./cmd/test-feedback -level=L3 -suite=recovery -env=live '-scenario=<ID>' -out=<fresh>` | 各自独立；原身份恢复、重启无新增 usage、交付/清理通过 | rebase-189-all/各场景/ |
+
+本轮按用户明确要求选择全部级别；L1 固定包包含在完整确定性回归中，不重复 quick。失败保留原始证据，不以历史通过记录替代本轮结果。证据根目录为 `docs/validation/e2e-dependency-boundaries/`。

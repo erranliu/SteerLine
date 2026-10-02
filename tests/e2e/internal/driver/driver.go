@@ -14,6 +14,7 @@ import (
 
 	"github.com/erranliu/SteerLine/internal/steerline"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
+	"github.com/erranliu/SteerLine/internal/steerlineapp"
 	"github.com/erranliu/SteerLine/internal/testprocess"
 )
 
@@ -106,7 +107,7 @@ func MainControl(args []string) error {
 	if *action != "resume_dispatch" && *action != "start_task" {
 		return fmt.Errorf("unsupported E2E control action")
 	}
-	c, err := steerline.LoadConfig(*config)
+	c, err := steerlineapp.LoadConfig(*config)
 	if err != nil {
 		return err
 	}
@@ -178,7 +179,7 @@ func MainView(args []string) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	c, err := steerline.LoadConfig(*config)
+	c, err := steerlineapp.LoadConfig(*config)
 	if err != nil {
 		return err
 	}
