@@ -532,5 +532,6 @@ type Command = contracts.Command
 type LegacyCompletionConfig = contracts.LegacyCompletionConfig
 
 func (c Config) managedWindowsOrca() bool {
-	return runtime.GOOS == "windows" && c.hostName() == "orca" && c.agentName() == "codex" && codexProfileSettings(c).WindowsSandbox != ""
+	return runtime.GOOS == "windows" && c.hostName() == "orca" && c.agentName() == "codex" &&
+		(c.ExecutionPolicy.Filesystem.WriteScope == "host" || codexProfileSettings(c).WindowsSandbox != "")
 }

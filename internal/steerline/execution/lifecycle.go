@@ -376,6 +376,7 @@ type LifecycleStateFacts struct {
 	QuestionPending   bool   `json:"question_pending,omitempty"`
 	Stopped           bool   `json:"stopped,omitempty"`
 	ResourceID        string `json:"resource_id,omitempty"`
+	ResourcePending   bool   `json:"resource_pending,omitempty"`
 	RuntimeID         string `json:"runtime_id,omitempty"`
 	WorktreeID        string `json:"worktree_id,omitempty"`
 	LaunchCommand     string `json:"launch_command,omitempty"`
@@ -427,6 +428,9 @@ func (receipt LifecycleReceipt) ValidateFor(request LifecycleRequest) error {
 	}
 	if receipt.Disposition != OperationAccepted && receipt.Disposition != OperationConfirmed && receipt.Disposition != OperationRejected && receipt.Disposition != OperationUnknown {
 		return errors.New("lifecycle receipt has no terminal or accepted disposition")
+	}
+	if receipt.State.ResourcePending && (receipt.Disposition != OperationAccepted || request.Operation.Action != string(LifecycleCreateResource) || receipt.State.ResourceID == "") {
+		return errors.New("pending lifecycle resource lacks its accepted original resource identity")
 	}
 	return nil
 }

@@ -26,10 +26,15 @@
 
 将“空线程不能 resume”同时补入 L2 controlled helper，并以协议单测验证完成回合后才可恢复且不增加 dispatch/session 数；真实 L2 运行后对这个纯受控 fixture 修改独立重跑 controlled 门槛，不重复模型请求。
 
+第二轮本地 PR #35 合并；Orca 业务成功并提 PR #36，但严格断言发现 full access 被 managedWindowsOrca 的 sandbox 字段条件漏掉，未建立 readiness intent。修复 Windows 本地 Orca 的 host-write 分类，使完全访问仍走原 readiness/business 两回合；不降低两回合/环境准备断言。同步修正 lifecycle 两处误用原生 sandbox 名作为项目 WriteScope 的比较。通过 full-access freeze/环境与生命周期定向检查后，再执行完整 L2；失败 PR #36 已按所有权关闭，现场清理完成。
+
+环境审计同时修正初始化等待：原 agent 尚未识别时返回带原 ResourceID 的 accepted/resource_pending 回执，中心提交身份后让出 actor，下一轮只检查原终端；不长时间阻塞 writer、不变更原准备 deadline，也不制造 blocker。环境准备继续检查 coordinator/workflow 是否齐备。更新等待测试以核对已提交的原进程身份和当前 codec 的 AgentBound，而非旧 operation key/未提交进程假设。
+
 | 级别 | 组/场景 | 环境 | 命令 | 时点与通过条件 | 证据 |
 |---|---|---|---|---|---|
 | L1 定向 | local.first-turn / feedback / partial-receipt | 本机、受控 app-server，无 token | `go test ./internal/steerline -run '^(TestWorkerFlowServiceFirstFeedbackKeepsSessionAndWorkspace\|TestMockAppServerThreadAndTurnContract\|TestAppServerFailedPreparationKeepsPartialSessionBinding)$' -count=1` | 修复后；空线程 resume 被 mock 拒绝，首次回合与同会话反馈仍通过，部分身份保留 | 本轮命令输出 |
 | L1 定向 | orca.original-agent-detection 与相关包 | 本机，无 token | `go test ./internal/steerline/codexworker ./internal/steerline/orcaworker ./internal/steerline/execution ./cmd/test-feedback ./tests/e2e/internal/... -count=1` | L2 前；仅同终端启动状态等待，其他身份立即拒绝，相关回归通过 | 本轮命令输出 |
+| L1 定向 | full-access readiness / 原启动 deadline / 反馈 | 本机、受控 Orca，无 token | `go test ./internal/steerline -run '^(TestFullAccessProfileFreezeSurvivesClaimValidation\|TestWorkerEnvironmentWaitsForOriginalAgentDetection\|TestWorkerEnvironmentUnidentifiedAgentKeepsOriginalDeadline\|TestWorkerEnvironmentER2HostWaitPreservesQuestionAndPR\|TestWorkerEnvironmentER1ProbeAndSettlementGate)$' -count=1` | 初始化等待修正后；原资源启动状态不阻断/重建，deadline 不重置，readiness 成功与失败门槛、原问题反馈通过 | 本轮定向输出（107.128s） |
 | L2 | smoke.delivery + smoke.local-codex + smoke.orca-codex | controlled 门槛 + live，full access，luna/medium，SteerlineTest | `go run ./cmd/test-feedback -level=L2 -out=<fresh>` | 定向通过后；受控失败时不进真实阶段，两条链路真实 PR 交付、正数 usage 和清理全部通过 | `docs/validation/tiered-e2e-testing/smoke-lifecycle-fix/` |
 
 本次暂不选择 L3/full：用户要求修复并重跑 smoke；L2 覆盖本次改变的两条原生准备/首回合路径，L1 覆盖后续反馈与身份拒绝。
