@@ -1,0 +1,14 @@
+{
+  "source": "codex/session-jsonl",
+  "session_id": "01a0fba7-0cb7-7b83-974d-b17ba1ab24e1",
+  "cwd": "C:/Users/lmas1/orca/workspaces/repo/sl-1-5866dcfeeebef807fd8d30ad5d4392e6",
+  "model": "gpt-6-luna",
+  "reasoning_effort": "medium",
+  "tokens": {
+    "input_tokens": 288772,
+    "cached_input_tokens": 255488,
+    "output_tokens": 2576,
+    "reasoning_output_tokens": 975,
+    "total_tokens": 291348
+  }
+}
