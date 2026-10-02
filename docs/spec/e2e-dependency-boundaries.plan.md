@@ -50,6 +50,19 @@ Orca recovery 首轮真实执行成功，但服务重启的旧启动检查要求
 
 不重复 L3/full：用户指定 rebase 与完整 L2；已有 L3 历史证据保留，不能当作新主干上的 L3 通过记录。
 
+## 用户追加：新主干全 L3 与并行完整 Go 回归
+
+按用户明确要求，在包含 main `5bbbfcd` / #187 的当前候选 `a3fb771` 上重跑全 L3 和完整测试。确定性 full 使用三 worker 入口，拒绝 real/native opt-in 开关；与独立 L3 环境并行执行。L3 真实资源仍串行，每个场景新现场、full access、gpt-6-luna / medium，loopback Git/PR provider，无外部测试 PR。
+
+| 级别 | 组/场景 ID | 环境 | 命令 | 时点与通过条件 | 证据 |
+|---|---|---|---|---|---|
+| full | 全部确定性 Go 包/登记测试 | 本机、三 worker、无真实模型开关 | `go run ./cmd/test-feedback -workers=3 -out=<fresh>` | 先启动；覆盖完整、无遗漏/失败，全部组通过 | `docs/validation/e2e-dependency-boundaries/rebase-187-l3-full/full/` |
+| L3 | delivery.basic + recovery.waiting-merge-restart | controlled、无模型 | `go run ./cmd/test-feedback -level=L3 '-suite=delivery,recovery' -env=controlled -out=<fresh>` | 独立受控验证；交付/恢复、原身份和清理通过 | 同目录 controlled/ |
+| L3 | delivery.local-codex / delivery.orca-codex | live、full access | 分别运行 `go run ./cmd/test-feedback -level=L3 -suite=delivery -env=live '-scenario=<精确 ID>' -out=<fresh>` | 各自串行；正数原生 usage、交付/清理通过，Orca 两回合 succeeded | 同目录各场景/ |
+| L3 | recovery.local-codex / recovery.orca-codex | live、full access | 分别运行 `go run ./cmd/test-feedback -level=L3 -suite=recovery -env=live '-scenario=<精确 ID>' -out=<fresh>` | 各自串行；原身份/权限恢复、usage 不增加、无新模型回合，交付/清理通过 | 同目录各场景/ |
+
+不重复 L2：最新主干完整 L2 已有通过证据，当前按用户要求验证 L3/full。失败保留原运行与 usage，确认原因后才修复和用新现场重跑，不自动重试、不把失败局部算成功。
+
 ## 用户追加：rebase #189 后重跑全部测试
 
 将父分支及回归记录 rebase 到 main `a670e9d`（#189 composition）。保留当前配置入口、实现目录和校验；测试 driver 改用 steerlineapp.LoadConfig，边界检查覆盖 steerlineapp，完全访问 roots 校验使用公共执行策略。先编译全部 E2E 包，再跑以下完整矩阵；真实场景串行、gpt-6-luna / medium、完全访问，不自动重试。
