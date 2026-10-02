@@ -22,6 +22,8 @@
 
 本次 #185 后 smoke 修复：本地 lifecycle 保留空线程的原连接到中心提交会话身份并启动首个回合，拒绝/取消时释放连接，进程仍由中心管理；start 失败保留 SessionID，使未知结果进入阻断状态。Orca 仅等待原终端的空 agentIdentity 完成识别，替换终端、不同 agent、退出及工作区变化立即拒绝。受控 Codex mock 同步增加“空线程不能 resume”的原生约束。
 
+首轮修复后本地真实链路通过、PR #34 合并；Orca 已通过 agent 绑定并创建 coordinator，但 E2E control helper 的 25s 回执等待先于原生资源准备完成而结束。将回执等待绑定到产品请求已有的 ExpiresAt（2m）；外层 helper 进程预算覆盖 25s 身份解析、2m 回执和 5s 退出，普通 CLI 仍为 30s，不修改产品截止、不重发请求。
+
 | 级别 | 组/场景 | 环境 | 命令 | 时点与通过条件 | 证据 |
 |---|---|---|---|---|---|
 | L1 定向 | local.first-turn / feedback / partial-receipt | 本机、受控 app-server，无 token | `go test ./internal/steerline -run '^(TestWorkerFlowServiceFirstFeedbackKeepsSessionAndWorkspace\|TestMockAppServerThreadAndTurnContract\|TestAppServerFailedPreparationKeepsPartialSessionBinding)$' -count=1` | 修复后；空线程 resume 被 mock 拒绝，首次回合与同会话反馈仍通过，部分身份保留 | 本轮命令输出 |
