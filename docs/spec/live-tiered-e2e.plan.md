@@ -30,6 +30,8 @@
 
 环境审计同时修正初始化等待：原 agent 尚未识别时返回带原 ResourceID 的 accepted/resource_pending 回执，中心提交身份后让出 actor，下一轮只检查原终端；不长时间阻塞 writer、不变更原准备 deadline，也不制造 blocker。环境准备继续检查 coordinator/workflow 是否齐备。更新等待测试以核对已提交的原进程身份和当前 codec 的 AgentBound，而非旧 operation key/未提交进程假设。
 
+反馈重复回归复现 Windows fixture 状态文件读写占用；环境测试读取统一使用 testprotocol.ReadNativeOrcaState，与后台 helper/update 共用状态锁，避免直接 ReadFile 和写入竞态。针对同一反馈场景重复两次验证；这只修改受控测试，真实 L2 无需因此重发。
+
 | 级别 | 组/场景 | 环境 | 命令 | 时点与通过条件 | 证据 |
 |---|---|---|---|---|---|
 | L1 定向 | local.first-turn / feedback / partial-receipt | 本机、受控 app-server，无 token | `go test ./internal/steerline -run '^(TestWorkerFlowServiceFirstFeedbackKeepsSessionAndWorkspace\|TestMockAppServerThreadAndTurnContract\|TestAppServerFailedPreparationKeepsPartialSessionBinding)$' -count=1` | 修复后；空线程 resume 被 mock 拒绝，首次回合与同会话反馈仍通过，部分身份保留 | 本轮命令输出 |
