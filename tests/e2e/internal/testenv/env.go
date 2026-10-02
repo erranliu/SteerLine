@@ -26,7 +26,7 @@ import (
 	"github.com/google/uuid"
 )
 
-type Run struct{ Root, Binary, Helper, Output, Scratch, AuthHome string }
+type Run struct{ Root, Binary, Helper, Output, Scratch, AuthHome, Level string }
 type Scenario struct {
 	Run              Run
 	ID, Root, Output string
@@ -185,9 +185,13 @@ func (s *Scenario) NewProject(name string) *Project {
 	p.git(p.Repo, "remote", "set-url", "origin", p.RemoteURL)
 	s.Must(controlled.Write(p.Provider, controlled.State{GitURL: "http://" + address + "/e2e/project.git"}))
 	query := map[string]any{"executable": s.Run.Helper, "args": []string{"provider", "--e2e-state", p.Provider}}
+	policy := map[string]any{"filesystem": map[string]any{"read_scope": "host", "write_scope": "workspace", "git_metadata_write": true}, "network": "allow", "escalation": "deny"}
+	if s.Run.Level == "L3" {
+		policy = fullAccessPolicy()
+	}
 	s.Must(controlled.Write(p.Config, map[string]any{
 		"repository": p.Repo, "remote": "origin", "branch": "main", "task_authority": "native", "workflow_protocol": "worker-flow-v1", "worktree_root": filepath.Join(p.Home, "worktrees"), "claimant": "e2e", "git": map[string]any{"executable": s.Run.Helper, "args": []string{"git"}},
-		"publication_policy": map[string]any{"publisher": "host_service"}, "execution_policy": map[string]any{"filesystem": map[string]any{"read_scope": "host", "write_scope": "workspace", "git_metadata_write": true}, "network": "allow", "escalation": "deny"},
+		"publication_policy": map[string]any{"publisher": "host_service"}, "execution_policy": policy,
 		"pr": map[string]any{"kind": "command", "base_url": "https://github.com", "repository": "e2e/project", "query": query, "close": query}, "task_poll": "100ms", "pr_poll": "100ms", "heartbeat": "100ms", "command_timeout": "30s", "shutdown_grace": "5s",
 	}))
 	s.Must(controlled.Write(filepath.Join(p.Home, "execution.json"), map[string]any{"execution_profiles": []any{map[string]any{"id": "controlled", "name": "Controlled E2E", "host": "local", "agent": "codex", "codex": map[string]any{"executable": s.Run.Helper}}}, "default_execution_profile": "controlled"}))
@@ -394,7 +398,7 @@ func (p *Project) WaitPhase(phase string) Snapshot {
 				}
 				if e.Environment != nil && e.Environment.Blocker != nil {
 					reason := e.Environment.Blocker.Fact.Reason
-					if (reason == "agent_input_unverified" || reason == "resource_preparation_unverified" || reason == "preparation_dispatch_unverified") && !rechecked {
+					if (reason == "agent_input_unverified" || reason == "resource_preparation_unverified" || reason == "preparation_dispatch_unverified" || reason == "business_dispatch_unverified") && !rechecked {
 						rechecked = true
 						_, err := p.Driver.Run(p.Scenario.Context, "answer", "-config", p.Config, "-run-id", e.WorkflowRunID, "-option", "recheck_environment", "-by", "e2e")
 						return false, err

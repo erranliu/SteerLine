@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "digest": "afd6efc066392f9788dff649955fbd73dee54e00b41a91208c54c35606b34868",
+  "profile_digest": "59c3c267ac7169262a65c98eb556d1c5f76704b8dd9366a415d8175980313a16",
+  "native_version": "codex-cli 0.159.2",
+  "contract": "codex-policy-v1:0.159.2:host-write:network-allow:never",
+  "workspace": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-3091988128\\delivery.basic\\delivery\\home\\worktrees\\3573d4a2390f99091afb796dc46b1c81",
+  "write_roots": [],
+  "temporary_roots": [],
+  "settings": {
+    "Executable": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-l3-full-access-controlled-20261002-094021\\build\\controlled-helper.exe",
+    "Args": [
+      "--config",
+      "sandbox_mode=danger-full-access",
+      "--config",
+      "approval_policy=never"
+    ],
+    "WorkingDirectory": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-3091988128\\delivery.basic\\delivery\\home\\worktrees\\3573d4a2390f99091afb796dc46b1c81",
+    "EnvironmentRefs": null
+  }
+}

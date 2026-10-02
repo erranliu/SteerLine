@@ -111,6 +111,8 @@ func OrcaMain(args []string) error {
 			// The UI input queue is asynchronous: an accepted RPC may precede
 			// the composer update. Observe without injecting any new text.
 			deadline := time.Now().Add(25 * time.Second)
+			lastDraft := ""
+			stableSince := time.Now()
 			for {
 				screen.Reset()
 				read = exec.Command(c.Executable, "terminal", "read", "--terminal", terminal, "--limit", "50", "--json")
@@ -118,7 +120,19 @@ func OrcaMain(args []string) error {
 				if readErr := testprocess.Run(ctx, read); readErr != nil {
 					return readErr
 				}
-				if strings.Contains(screen.String(), "[Pasted Content ") || strings.Contains(screen.String(), "esc to interrupt") || time.Now().After(deadline) {
+				var current struct {
+					Result struct {
+						Terminal struct{ Handle, Source, Draft string } `json:"terminal"`
+					} `json:"result"`
+				}
+				if json.Unmarshal([]byte(screen.String()), &current) == nil && current.Result.Terminal.Handle == terminal && current.Result.Terminal.Source == "screen" {
+					if current.Result.Terminal.Draft != lastDraft {
+						lastDraft, stableSince = current.Result.Terminal.Draft, time.Now()
+					}
+				}
+				// A bracketed-paste preview may appear before the queued prompt's
+				// remaining bytes arrive. Submit only after the full draft settles.
+				if (strings.Contains(lastDraft, "[Pasted Content ") && time.Since(stableSince) >= time.Second) || strings.Contains(screen.String(), "esc to interrupt") || time.Now().After(deadline) {
 					break
 				}
 				select {
@@ -163,6 +177,17 @@ func OrcaMain(args []string) error {
 					}
 					if sendErr != nil {
 						return sendErr
+					}
+					// Observe the original terminal after the one accepted Enter;
+					// an acknowledgement is not proof that the agent has started.
+					screen.Reset()
+					confirm := exec.Command(c.Executable, "terminal", "read", "--terminal", terminal, "--limit", "50", "--json")
+					confirm.Stdout = &screen
+					if readErr := testprocess.Run(ctx, confirm); readErr != nil {
+						return readErr
+					}
+					if logErr := os.WriteFile(filepath.Join(c.LogDir, fmt.Sprintf("after-submit-%d.json", time.Now().UnixNano())), []byte(screen.String()), 0600); logErr != nil {
+						return logErr
 					}
 				}
 			}
