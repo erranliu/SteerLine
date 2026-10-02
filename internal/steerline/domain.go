@@ -4,7 +4,6 @@ import (
 	"regexp"
 
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 	"github.com/erranliu/SteerLine/internal/steerline/task"
 	"github.com/erranliu/SteerLine/internal/steerline/workerflow"
 )
@@ -27,8 +26,6 @@ type ExecutionRecord = contracts.ExecutionRecord
 
 // These aliases are temporary decoded views for the not-yet-migrated lifecycle
 // consumers. Persisted records carry only implementation data envelopes.
-type implementationExecutionView = orcaworker.NativeExecutionState
-type implementationTurnView = orcaworker.NativeTurnState
 type WorkspaceEvidence = contracts.WorkspaceEvidence
 type StepAttemptRecord = contracts.StepAttemptRecord
 type DecisionRecord = contracts.DecisionRecord

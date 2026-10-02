@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -17,137 +16,9 @@ import (
 	"unicode/utf8"
 
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
+	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
-
-func TestConversationMapperKeepsTurnAndPhaseEvidenceExplicit(t *testing.T) {
-	mapper := &codexworker.ConversationMapper{}
-	base := ConversationEvent{ProjectID: "project", ExecutionID: "execution", AttemptID: "attempt", SourceSegment: "local-jsonl-v1", SourceEventQuality: IdentityDerived, SessionQuality: IdentityUnknown, TurnQuality: IdentityUnknown, ItemQuality: IdentityUnknown}
-	mapLine := func(seq uint64, start int64, line string) ConversationEvent {
-		event := base
-		event.SourceSeq = seq
-		event.SourceEventID = fmt.Sprintf("bytes:%d:%d", start, start+int64(len(line))+1)
-		write := mapper.MapCodexJSONL(event, []byte(line+"\n"))
-		return write.Event
-	}
-
-	session := mapLine(1, 0, `{"type":"thread.started","thread_id":"thread-native"}`)
-	if session.Type != ConversationSession || session.SessionID != "thread-native" || session.SessionQuality != IdentityNative {
-		t.Fatalf("session identity was not preserved: %+v", session)
-	}
-	started := mapLine(2, 54, `{"type":"turn.started"}`)
-	if started.Type != ConversationTurnStarted || started.TurnID == "" || started.TurnQuality != IdentityDerived || started.Evidence["turn_derivation"] != "codex-jsonl-turn-boundary-v1" {
-		t.Fatalf("explicit boundary was not assigned a derived turn identity: %+v", started)
-	}
-	message := mapLine(3, 78, `{"type":"item.completed","item":{"id":"same-item","type":"agent_message","text":"hello"}}`)
-	if message.Type != ConversationMessageComplete || message.Phase != MessagePhaseUnknown || message.FinalAvailability == FinalAvailable {
-		t.Fatalf("message completion was promoted to a final phase: %+v", message)
-	}
-	ended := mapLine(4, 180, `{"type":"turn.completed"}`)
-	if ended.Type != ConversationTurnCompleted || ended.TurnID != started.TurnID || ended.FinalAvailability != FinalUnknown {
-		t.Fatalf("turn boundary did not remain distinct from message phase: %+v", ended)
-	}
-	secondTurn := mapLine(5, 205, `{"type":"turn.started"}`)
-	secondMessage := mapLine(6, 229, `{"type":"item.completed","item":{"id":"same-item","type":"agent_message","phase":"final_answer","text":"done"}}`)
-	if secondMessage.TurnID != secondTurn.TurnID || secondMessage.ItemKey == message.ItemKey || secondMessage.Phase != MessagePhaseFinalAnswer || secondMessage.FinalAvailability != FinalAvailable {
-		t.Fatalf("cross-turn item identity or verified phase was lost: first=%+v second=%+v", message, secondMessage)
-	}
-}
-
-func TestConversationMissingTextPreservesSnapshotAndEmptyFinal(t *testing.T) {
-	if _, present := stringFieldPresent(map[string]json.RawMessage{"text": json.RawMessage(" null ")}, "text"); present {
-		t.Fatal("JSON null was treated as explicit empty message text")
-	}
-	if text, present := stringFieldPresent(map[string]json.RawMessage{"text": json.RawMessage(`""`)}, "text"); !present || text != "" {
-		t.Fatal("explicit empty message text was treated as missing")
-	}
-	ctx := context.Background()
-	store, err := OpenSQLiteStore(filepath.Join(t.TempDir(), "conversation.db"))
-	require(t, err)
-	defer store.Close()
-	mapper := &codexworker.ConversationMapper{}
-	lines := []string{
-		`{"type":"turn.started"}`,
-		`{"type":"item.updated","item":{"id":"message","type":"agent_message","text":"kept"}}`,
-		`{"type":"item.updated","item":{"id":"message","type":"agent_message","status":"in_progress"}}`,
-		`{"type":"item.completed","item":{"id":"message","type":"agent_message","phase":"final_answer"}}`,
-		`{"type":"turn.completed"}`,
-		`{"type":"turn.started"}`,
-		`{"type":"item.completed","item":{"id":"empty","type":"agent_message","phase":"final_answer","text":""}}`,
-	}
-	var events []ConversationEvent
-	for i, line := range lines {
-		base := ConversationEvent{ProjectID: "project", WorkflowID: "workflow", ExecutionID: "execution", AttemptID: "attempt", SourceSegment: "segment", SourceEventID: fmt.Sprintf("seq:%d", i+1), SourceSeq: uint64(i + 1)}
-		write := mapper.MapCodexJSONL(base, []byte(line+"\n"))
-		committed, commitErr := store.CommitConversation(ctx, []ConversationWrite{write}, ConversationCheckpoint{})
-		require(t, commitErr)
-		events = append(events, committed[0])
-	}
-	if events[1].Body == nil || events[2].Body != nil || events[3].Body != nil || events[3].FinalAvailability != FinalUnknown || events[4].FinalAvailability != FinalUnknown {
-		t.Fatalf("missing text erased a snapshot or claimed a final: %+v", events)
-	}
-	query := NewConversationQueryService(store, "project")
-	kept, err := query.ReadMessageBody(ctx, *events[1].Body, 0, 100)
-	require(t, err)
-	if string(kept.Data) != "kept" || !kept.Complete {
-		t.Fatalf("missing text changed the previous snapshot: %+v", kept)
-	}
-	if events[6].Body == nil || events[6].Body.Completeness != BodyComplete || events[6].Body.Bytes != 0 || events[6].FinalAvailability != FinalAvailable {
-		t.Fatalf("explicit empty final was not preserved as complete: %+v", events[6])
-	}
-	empty, err := query.ReadMessageBody(ctx, *events[6].Body, 0, 100)
-	require(t, err)
-	if !empty.Complete || len(empty.Data) != 0 {
-		t.Fatalf("explicit empty final was not readable: %+v", empty)
-	}
-}
-
-func TestConversationMapperNativeCodexTwoTurnFixture(t *testing.T) {
-	raw, err := os.ReadFile(filepath.Join("..", "..", "docs", "validation", "pr-04b-local-codex-native-2026-09-25.jsonl"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	mapper := &codexworker.ConversationMapper{}
-	var starts, completions []ConversationEvent
-	var messages []ConversationEvent
-	var offset int64
-	for seq, line := range bytes.Split(bytes.TrimSuffix(raw, []byte("\n")), []byte("\n")) {
-		event := ConversationEvent{
-			ProjectID: "project", ExecutionID: "execution", AttemptID: "attempt",
-			SourceSegment: "native-fixture", SourceEventID: fmt.Sprintf("bytes:%d:%d", offset, offset+int64(len(line))+1),
-			SourceSeq: uint64(seq + 1),
-		}
-		mapped := mapper.MapCodexJSONL(event, append(append([]byte(nil), line...), '\n')).Event
-		switch mapped.Type {
-		case ConversationTurnStarted:
-			starts = append(starts, mapped)
-		case ConversationTurnCompleted:
-			completions = append(completions, mapped)
-		case ConversationMessageComplete:
-			messages = append(messages, mapped)
-		}
-		offset += int64(len(line)) + 1
-	}
-	if len(starts) != 2 || len(completions) != 2 || len(messages) != 3 {
-		t.Fatalf("native fixture lost events: starts=%d completions=%d messages=%d", len(starts), len(completions), len(messages))
-	}
-	if starts[0].TurnID == starts[1].TurnID || starts[0].TurnQuality != IdentityDerived || starts[1].TurnQuality != IdentityDerived {
-		t.Fatalf("native turn boundaries were not assigned distinct derived identities: %+v", starts)
-	}
-	for i := range completions {
-		if completions[i].TurnID != starts[i].TurnID || completions[i].FinalAvailability != FinalUnknown {
-			t.Fatalf("native completion was misattributed or promoted to a final answer: %+v", completions[i])
-		}
-	}
-	if messages[0].ItemID != "item_0" || messages[2].ItemID != "item_1" || messages[1].ItemKey == messages[2].ItemKey {
-		t.Fatalf("native item identity was not scoped by turn: %+v", messages)
-	}
-	for _, message := range messages {
-		if message.Phase != MessagePhaseUnknown || message.SessionID != "native-session-redacted" || message.SessionQuality != IdentityNative {
-			t.Fatalf("native fixture lacks phase and has a stable session ID: %+v", message)
-		}
-	}
-}
 
 func TestConversationSQLiteDedupesBodiesAndPagesUnicodeByRevision(t *testing.T) {
 	ctx := context.Background()
@@ -290,7 +161,7 @@ func TestConversationCommitDoesNotAdvanceCheckpointOnInvalidBody(t *testing.T) {
 	if len(page.Events) != 0 {
 		t.Fatalf("event committed without its valid body: %+v", page.Events)
 	}
-	if _, err = store.ConversationCheckpoint(ctx, "project", "execution", "attempt", "codex-jsonl", "segment-1"); err == nil {
+	if _, err = store.ConversationCheckpoint(ctx, "project", "execution", "attempt", codexworker.ConversationJSONLSource, "segment-1"); err == nil {
 		t.Fatal("checkpoint advanced after the event transaction failed")
 	}
 }
@@ -428,7 +299,7 @@ func TestConversationSQLiteFullRollsBackContentAndCursor(t *testing.T) {
 	if count != 0 {
 		t.Fatal("event survived SQLite full condition")
 	}
-	if _, err = store.ConversationCheckpoint(ctx, "project", "execution", "attempt", "codex-jsonl", "segment-1"); err == nil {
+	if _, err = store.ConversationCheckpoint(ctx, "project", "execution", "attempt", codexworker.ConversationJSONLSource, "segment-1"); err == nil {
 		t.Fatal("checkpoint advanced after SQLite full condition")
 	}
 	require(t, store.Close())
@@ -476,7 +347,7 @@ func TestConversationLateOldAttemptCannotCrossNewAttempt(t *testing.T) {
 		if string(body.Data) != tc.want || !body.Complete {
 			t.Fatalf("attempt body was overwritten: %+v", body)
 		}
-		checkpoint, err := store.ConversationCheckpoint(ctx, "project", "execution", tc.attempt, "codex-jsonl", "segment-1")
+		checkpoint, err := store.ConversationCheckpoint(ctx, "project", "execution", tc.attempt, codexworker.ConversationJSONLSource, "segment-1")
 		require(t, err)
 		if checkpoint.LocalSeq != 1 {
 			t.Fatalf("attempt cursor changed: %+v", checkpoint)
@@ -505,8 +376,8 @@ func TestConversationProcessExitMidTransactionHelper(t *testing.T) {
 	}{
 		{"raw", `INSERT INTO conversation_raw(project_identity,execution_id,attempt_id,raw_id,source_event_key,payload,sha256,byte_count,created_at) VALUES('project','execution','attempt','raw','source-event',X'61','digest',1,'now')`},
 		{"body", `INSERT INTO conversation_bodies(project_identity,execution_id,attempt_id,item_key,revision,body,sha256,byte_count,source,completeness,created_at) VALUES('project','execution','attempt','item',1,X'61','digest',1,'source','complete','now')`},
-		{"event", `INSERT INTO conversation_events(project_identity,execution_id,attempt_id,source_event_key,source,source_segment,event_type,received_at,payload_bytes,payload) VALUES('project','execution','attempt','source-event','codex-jsonl','segment-1','message.complete','now',2,X'7b7d')`},
-		{"cursor", `INSERT INTO conversation_source_cursors(project_identity,execution_id,attempt_id,source,source_segment,local_seq,updated_at) VALUES('project','execution','attempt','codex-jsonl','segment-1',1,'now')`},
+		{"event", fmt.Sprintf(`INSERT INTO conversation_events(project_identity,execution_id,attempt_id,source_event_key,source,source_segment,event_type,received_at,payload_bytes,payload) VALUES('project','execution','attempt','source-event','%s','segment-1','message.complete','now',2,X'7b7d')`, codexworker.ConversationJSONLSource)},
+		{"cursor", fmt.Sprintf(`INSERT INTO conversation_source_cursors(project_identity,execution_id,attempt_id,source,source_segment,local_seq,updated_at) VALUES('project','execution','attempt','%s','segment-1',1,'now')`, codexworker.ConversationJSONLSource)},
 	}
 	for _, step := range steps {
 		_, err = tx.ExecContext(context.Background(), step.query)
@@ -569,7 +440,7 @@ func TestConversationCommitRejectsChangedRawAtSameSourceIdentity(t *testing.T) {
 	if _, err = store.CommitConversation(ctx, []ConversationWrite{changed}, conversationTestCheckpoint(2, `{"byte_offset":8}`)); err == nil {
 		t.Fatal("rewritten bytes reused one source event identity")
 	}
-	checkpoint, err := store.ConversationCheckpoint(ctx, "project", "execution", "attempt", "codex-jsonl", "segment-1")
+	checkpoint, err := store.ConversationCheckpoint(ctx, "project", "execution", "attempt", codexworker.ConversationJSONLSource, "segment-1")
 	require(t, err)
 	if checkpoint.LocalSeq != 1 {
 		t.Fatal("source cursor advanced after conflicting raw bytes")
@@ -591,7 +462,7 @@ func TestConversationCheckpointPreflightRejectsUnanchoredState(t *testing.T) {
 	write := conversationTestWrite("bytes:0:4", 1, "complete", []byte("body"), []byte("raw"))
 	_, err = store.CommitConversation(ctx, []ConversationWrite{write}, conversationTestCheckpoint(1, `{"byte_offset":4}`))
 	require(t, err)
-	if err = store.ValidateConversationCheckpointFormat(ctx, "project"); err == nil || !strings.Contains(err.Error(), "unsupported conversation checkpoint") {
+	if err = store.ValidateConversationCheckpointFormat(ctx, "project", codexworker.NewConversationAdapter().JournalSources()); err == nil || !strings.Contains(err.Error(), "unsupported conversation checkpoint") {
 		t.Fatalf("unanchored old state was accepted: %v", err)
 	}
 }
@@ -612,9 +483,11 @@ func TestConversationLiveSourceFailureKeepsGapAndMapperPosition(t *testing.T) {
 	defer store.Close()
 	executionID, taskID := newID(), "501"
 	run := &Run{TaskID: taskID, RunID: runID, AttemptID: runID, ExecutionID: executionID, DomainTaskID: taskID, WorkflowVersion: "minimal-v1", Backend: string(executionapi.BackendLocal), Protocol: string(executionapi.ProtocolLocalProcess), Agent: "codex", Target: executionapi.ExecutionTarget{ID: "local"}, LogPath: &path}
-	s := &Service{Config: Config{RunDir: root, identity: "project"}, domainStore: store, State: Runtime{}, runs: []*Run{run}}
-	segment := "local-jsonl-v1:" + fileID
-	first := WorkerEvent{RunID: runID, AttemptID: runID, Source: "codex-jsonl", SourceSegment: segment, SourceIdentity: fileID, SourceSeq: 1, SourceOffset: 0, SourceLength: int64(len(firstRaw)), Raw: firstRaw}
+	port := codexworker.NewConversationAdapter()
+	s := &Service{Config: Config{RunDir: root, identity: "project"}, conversationSources: port, domainStore: store, State: Runtime{}, runs: []*Run{run}}
+	sourceName := port.JournalSource(executionapi.BackendLocal, executionapi.ProtocolLocalProcess)
+	segment := port.JournalSegment(executionapi.BackendLocal, executionapi.ProtocolLocalProcess, fileID)
+	first := WorkerEvent{RunID: runID, AttemptID: runID, Source: sourceName, SourceSegment: segment, SourceIdentity: fileID, SourceSeq: 1, SourceOffset: 0, SourceLength: int64(len(firstRaw)), Raw: firstRaw}
 	require(t, s.recordConversationEvent(run, first))
 	secondRaw := []byte(`{"type":"turn.started"}` + "\n")
 	second := first
@@ -622,11 +495,12 @@ func TestConversationLiveSourceFailureKeepsGapAndMapperPosition(t *testing.T) {
 	if err = s.recordConversationEvent(run, second); err == nil {
 		t.Fatal("source beyond the durable file was committed")
 	}
-	mapper := s.conversationMappers[runID+":"+runID+":"+segment]
-	if mapper == nil || mapper.CurrentTurn() != "" {
-		t.Fatal("failed source read advanced the in-memory turn mapper")
+	mapper, err := store.ConversationMapperSnapshot(ctx, "project", executionID, runID, sourceName, segment)
+	require(t, err)
+	if mapper.Turn != nil {
+		t.Fatal("failed source read advanced mapper state derived from committed events")
 	}
-	cp, err := store.ConversationCheckpoint(ctx, "project", executionID, runID, "codex-jsonl", segment)
+	cp, err := store.ConversationCheckpoint(ctx, "project", executionID, runID, sourceName, segment)
 	require(t, err)
 	if cp.LocalSeq != 1 {
 		t.Fatal("source checkpoint advanced after a failed read")
@@ -656,49 +530,25 @@ func TestConversationChangedLiveBytesCannotBindOrCheckpoint(t *testing.T) {
 	file, fileID, err := openJournal(path)
 	require(t, err)
 	require(t, file.Close())
-	segment := "local-jsonl-v1:" + fileID
-	marker := ConversationSourceMarker{Version: 1, ProjectID: "project", WorkflowID: runID, ExecutionID: executionID, AttemptID: runID, Backend: executionapi.BackendLocal, Protocol: executionapi.ProtocolLocalProcess, Agent: "codex", TargetID: "local", Source: "codex-jsonl", SourceSegment: segment, SourceIdentity: fileID, RecordName: "events.jsonl", CreatedAt: time.Now().UTC(), ReaderCommand: Command{Executable: "codex"}}
-	markerBytes, err := json.Marshal(marker)
-	require(t, err)
-	require(t, AtomicWrite(filepath.Join(filepath.Dir(path), ConversationSourceMarkerName), markerBytes))
+	port := codexworker.NewConversationAdapter()
+	sourceName := port.JournalSource(executionapi.BackendLocal, executionapi.ProtocolLocalProcess)
+	segment := port.JournalSegment(executionapi.BackendLocal, executionapi.ProtocolLocalProcess, fileID)
 	store, err := OpenSQLiteStore(filepath.Join(root, "steerline.db"))
 	require(t, err)
 	defer store.Close()
 	run := &Run{TaskID: taskID, RunID: runID, AttemptID: runID, ExecutionID: executionID, DomainTaskID: taskID, WorkflowVersion: "minimal-v1", Backend: string(executionapi.BackendLocal), Protocol: string(executionapi.ProtocolLocalProcess), Agent: "codex", Target: executionapi.ExecutionTarget{ID: "local"}, WorktreePath: &root, LogPath: &path}
-	serviceConfig := Config{RunDir: root, identity: "project"}
-	setTestCodexProfile(t, &serviceConfig, codexworker.ProfileConfig{Executable: "codex"})
-	service := &Service{Config: serviceConfig, domainStore: store}
-	source := WorkerEvent{RunID: runID, AttemptID: runID, Source: "codex-jsonl", SourceSegment: segment, SourceIdentity: fileID, SourceSeq: 1, SourceOffset: 0, SourceLength: int64(len(forged)), Raw: forged, Session: forgedSession}
+	service := &Service{Config: Config{RunDir: root, identity: "project"}, conversationSources: port, domainStore: store}
+	source := WorkerEvent{RunID: runID, AttemptID: runID, Source: sourceName, SourceSegment: segment, SourceIdentity: fileID, SourceSeq: 1, SourceOffset: 0, SourceLength: int64(len(forged)), Raw: forged, Session: forgedSession}
 	if err = service.recordConversationEvent(run, source); err == nil || !strings.Contains(err.Error(), "source bytes changed") {
 		t.Fatalf("rewritten source bytes were accepted: %v", err)
 	}
-	if _, err = os.Stat(localCodexHistoryBindingPath(filepath.Dir(path), forgedSession)); !os.IsNotExist(err) {
-		t.Fatalf("undurable session was bound before source verification: %v", err)
-	}
-	if _, err = store.ConversationCheckpoint(ctx, "project", executionID, runID, "codex-jsonl", segment); err == nil {
+	if _, err = store.ConversationCheckpoint(ctx, "project", executionID, runID, sourceName, segment); err == nil {
 		t.Fatal("rewritten source advanced the checkpoint")
 	}
-	page, err := NewConversationQueryService(store, "project").ReadConversation(ctx, ConversationFilter{ExecutionID: executionID, AttemptID: runID, Source: "codex-jsonl"}, "", 10)
+	page, err := NewConversationQueryService(store, "project").ReadConversation(ctx, ConversationFilter{ExecutionID: executionID, AttemptID: runID, Source: sourceName}, "", 10)
 	require(t, err)
 	if len(page.Events) != 1 || page.Events[0].Type != ConversationGap || page.Events[0].Status != "source_unavailable" {
 		t.Fatalf("rewritten source did not leave a visible gap: %+v", page.Events)
-	}
-}
-
-func TestConversationOrcaHostWaitPersistsWithoutBusinessDecision(t *testing.T) {
-	ctx := context.Background()
-	store, err := OpenSQLiteStore(filepath.Join(t.TempDir(), "wait.db"))
-	require(t, err)
-	defer store.Close()
-	runID, attemptID, executionID, taskID := newID(), newID(), newID(), "503"
-	run := &Run{TaskID: taskID, DomainTaskID: taskID, RunID: runID, AttemptID: attemptID, ExecutionID: executionID, WorkflowVersion: "minimal-v1", Backend: string(executionapi.BackendOrca), Protocol: string(executionapi.ProtocolOrcaTerminalV2), Agent: "codex", Target: executionapi.ExecutionTarget{ID: "orca:probe"}}
-	service := &Service{Config: Config{identity: "project"}, domainStore: store}
-	source := WorkerEvent{RunID: run.RunID, AttemptID: run.AttemptID, Source: "orca-terminal-v2", SourceSegment: "orca-host-wait-v1:probe", SourceEventID: "host-wait:probe", SourceIdentity: "terminal:runtime:handle:incarnation", SourceSeq: 1, Session: "terminal:handle:incarnation", InputWait: true}
-	require(t, service.recordConversationEvent(run, source))
-	page, err := NewConversationQueryService(store, "project").ReadConversation(ctx, ConversationFilter{ExecutionID: run.ExecutionID, AttemptID: run.AttemptID}, "", 10)
-	require(t, err)
-	if len(page.Events) != 1 || page.Events[0].Type != ConversationInputWait || page.Events[0].Status != "waiting" || page.Events[0].ItemQuality != IdentityUnknown || page.Events[0].Attributes["wait_origin"] != "host" || page.Events[0].Attributes["business_decision"] != false {
-		t.Fatalf("Orca host wait was not persisted separately from business input: %+v", page.Events)
 	}
 }
 
@@ -730,12 +580,9 @@ func TestConversationJournalReplayIsBoundedAndIdempotent(t *testing.T) {
 	if err = sourceFile.Close(); err != nil {
 		t.Fatal(err)
 	}
-	marker := ConversationSourceMarker{Version: 1, ProjectID: "project", WorkflowID: runID, ExecutionID: executionID, AttemptID: attemptID, Backend: executionapi.BackendLocal, Protocol: executionapi.ProtocolLocalProcess, Agent: "codex", TargetID: "local-test", Source: "codex-jsonl", SourceSegment: "local-jsonl-v1:" + fileID, SourceIdentity: fileID, RecordName: "events.jsonl", CreatedAt: time.Now().UTC()}
-	markerBytes, err := json.Marshal(marker)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = AtomicWrite(filepath.Join(runRoot, ConversationSourceMarkerName), append(markerBytes, '\n')); err != nil {
+	if err = codexworker.WriteConversationSourceMarker(filepath.Join(runRoot, codexworker.ConversationSourceMarkerName), codexworker.ConversationSourceMarkerInput{
+		ProjectID: "project", WorkflowID: runID, ExecutionID: executionID, AttemptID: attemptID, Agent: "codex", TargetID: "local-test", SourceIdentity: fileID, CreatedAt: time.Now().UTC(),
+	}, AtomicWrite); err != nil {
 		t.Fatal(err)
 	}
 	store, err := OpenSQLiteStore(filepath.Join(projectRoot, "steerline.db"))
@@ -744,8 +591,7 @@ func TestConversationJournalReplayIsBoundedAndIdempotent(t *testing.T) {
 	}
 	defer store.Close()
 	serviceConfig := Config{RunDir: projectRoot, identity: "project"}
-	setTestCodexProfile(t, &serviceConfig, codexworker.ProfileConfig{Executable: "codex"})
-	service := &Service{Config: serviceConfig, domainStore: store, State: Runtime{}, domain: DomainSnapshot{Attempts: []StepAttemptRecord{{ProjectIdentity: "project", AttemptID: attemptID, ExecutionID: executionID, StepID: "implement", EventPath: path, Status: "succeeded"}}}, runs: []*Run{{TaskID: taskID, RunID: runID, AttemptID: attemptID, ExecutionID: executionID, DomainTaskID: taskID, WorkflowVersion: "minimal-v1", Backend: string(executionapi.BackendLocal), Protocol: string(executionapi.ProtocolLocalProcess), Agent: "codex", Target: executionapi.ExecutionTarget{ID: "local-test"}, WorktreePath: &projectRoot, LogPath: &path, EndedAt: ptr(time.Now().UTC())}}}
+	service := &Service{Config: serviceConfig, conversationSources: codexworker.NewConversationAdapter(), domainStore: store, State: Runtime{}, domain: DomainSnapshot{Attempts: []StepAttemptRecord{{ProjectIdentity: "project", AttemptID: attemptID, ExecutionID: executionID, StepID: "implement", EventPath: path, Status: "succeeded"}}}, runs: []*Run{{TaskID: taskID, RunID: runID, AttemptID: attemptID, ExecutionID: executionID, DomainTaskID: taskID, WorkflowVersion: "minimal-v1", Backend: string(executionapi.BackendLocal), Protocol: string(executionapi.ProtocolLocalProcess), Agent: "codex", Target: executionapi.ExecutionTarget{ID: "local-test"}, WorktreePath: &projectRoot, LogPath: &path, EndedAt: ptr(time.Now().UTC())}}}
 	oldRunID := newID()
 	oldRoot := filepath.Join(projectRoot, "runs", oldRunID)
 	if err = os.MkdirAll(oldRoot, 0700); err != nil {
@@ -790,12 +636,14 @@ func TestConversationJournalReplayIsBoundedAndIdempotent(t *testing.T) {
 	if err != nil || len(page.Events) != 4 {
 		t.Fatalf("replay was not idempotent: count=%d err=%v", len(page.Events), err)
 	}
-	checkpoint, err := store.ConversationCheckpoint(ctx, "project", executionID, attemptID, "codex-jsonl", sources[0].FileID)
+	journalSource := service.conversationSources.JournalSource(executionapi.BackendLocal, executionapi.ProtocolLocalProcess)
+	checkpoint, err := store.ConversationCheckpoint(ctx, "project", executionID, attemptID, journalSource, sources[0].FileID)
 	if err == nil {
 		// Checkpoints are addressed by the full source segment, not only the file ID.
 		t.Fatalf("checkpoint lookup unexpectedly accepted a partial segment: %+v", checkpoint)
 	}
-	checkpoint, err = store.ConversationCheckpoint(ctx, "project", executionID, attemptID, "codex-jsonl", "local-jsonl-v1:"+sources[0].FileID)
+	segment := service.conversationSources.JournalSegment(executionapi.BackendLocal, executionapi.ProtocolLocalProcess, sources[0].FileID)
+	checkpoint, err = store.ConversationCheckpoint(ctx, "project", executionID, attemptID, journalSource, segment)
 	if err != nil || checkpoint.LocalSeq != 4 {
 		t.Fatalf("source cursor did not reach the last committed record: checkpoint=%+v err=%v", checkpoint, err)
 	}
@@ -819,7 +667,7 @@ func TestConversationJournalReplayIsBoundedAndIdempotent(t *testing.T) {
 	require(t, service.replayConversationJournal(ctx, sources[0]))
 	changed, err := query.ReadConversation(ctx, ConversationFilter{ExecutionID: executionID, AttemptID: attemptID}, "", 20)
 	require(t, err)
-	if len(changed.Events) != 9 || changed.Events[4].Type != ConversationGap || changed.Events[4].Status != "source_changed" || changed.Events[5].SessionID != "00000000-0000-0000-0000-000000000002" || changed.Events[2].Body == nil || len(service.codexHistorySources()) != 2 {
+	if len(changed.Events) != 9 || changed.Events[4].Type != ConversationGap || changed.Events[4].Status != "source_changed" || changed.Events[5].SessionID != "00000000-0000-0000-0000-000000000002" || changed.Events[2].Body == nil {
 		t.Fatalf("in-place source rewrite hid its gap or damaged old history: %+v", changed.Events)
 	}
 }
@@ -828,7 +676,7 @@ func conversationTestWrite(sourceID string, seq uint64, mode string, body, raw [
 	event := ConversationEvent{
 		Version: ConversationVersion, ProjectID: "project", TaskID: "task", WorkflowID: "workflow",
 		ExecutionID: "execution", AttemptID: "attempt", Backend: executionapi.BackendLocal, Protocol: executionapi.ProtocolLocalProcess,
-		Agent: "codex", TargetID: "local-test", Source: "codex-jsonl", SourceSegment: "segment-1",
+		Agent: "codex", TargetID: "local-test", Source: codexworker.ConversationJSONLSource, SourceRole: contracts.ConversationSourceFallback, SourceSegment: "segment-1",
 		SessionID: "session", SessionQuality: IdentityNative, TurnID: "turn", TurnQuality: IdentityDerived,
 		ItemID: "same-item", ItemQuality: IdentityNative, SourceEventID: sourceID, SourceEventQuality: IdentityDerived,
 		SourceSeq: seq, Type: ConversationMessageDelta, Phase: MessagePhaseUnknown, ReceivedAt: time.Now().UTC(),
@@ -839,5 +687,5 @@ func conversationTestWrite(sourceID string, seq uint64, mode string, body, raw [
 }
 
 func conversationTestCheckpoint(seq uint64, cursor string) ConversationCheckpoint {
-	return ConversationCheckpoint{ProjectID: "project", ExecutionID: "execution", AttemptID: "attempt", Source: "codex-jsonl", SourceSegment: "segment-1", SourceIdentity: "local-test", Generation: "1", Cursor: cursor, LocalSeq: seq, UpdatedAt: time.Now().UTC()}
+	return ConversationCheckpoint{ProjectID: "project", ExecutionID: "execution", AttemptID: "attempt", Source: codexworker.ConversationJSONLSource, SourceSegment: "segment-1", SourceIdentity: "local-test", Generation: "1", Cursor: cursor, LocalSeq: seq, UpdatedAt: time.Now().UTC()}
 }

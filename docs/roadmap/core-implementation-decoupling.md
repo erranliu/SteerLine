@@ -59,7 +59,6 @@ flowchart TD
 
 | 任务 ID | 任务名称 | 交付范围 | 硬前置 | 执行规格 |
 | --- | --- | --- | --- | --- |
-| 65 | 会话采集与宿主交互实现隔离 | 具体 history/mapper/来源发现及宿主解释归实现，预算/授权/持久化留中心 | #64 | [Spec](../spec/core-decoupling-04-conversation.spec.md) · [Plan](../spec/core-decoupling-04-conversation.plan.md) |
 | 66 | 内置实现组装与主包依赖反转 | 目录/工厂/默认值移到外层，所有产品入口显式注入同一能力 | #65 | [Spec](../spec/core-decoupling-05-composition.spec.md) · [Plan](../spec/core-decoupling-05-composition.plan.md) |
 | 67 | 主包隔离守卫与测试归位 | 主包源码/测试清零、依赖守卫、第三实现接线和最小完整回归 | #66 | [Spec](../spec/core-decoupling-06-boundary.spec.md) · [Plan](../spec/core-decoupling-06-boundary.plan.md) |
 | 68 | 主包解耦重构后代码清理 | 按最终调用关系删除死代码/重复规则/无用辅助，同步模块及验证索引 | #67 | [Spec](../spec/core-decoupling-07-cleanup.spec.md) · [Plan](../spec/core-decoupling-07-cleanup.plan.md) |

@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
+	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
@@ -32,98 +32,55 @@ type conversationJournalSource struct {
 	ExpectedFileID string
 	Diagnostic     string
 	Workspace      string
-	ReaderCommand  Command
-	CodexHome      string
 }
 
 func (s *Service) conversationJournalSources() []conversationJournalSource {
-	sources := []conversationJournalSource{}
-	seen := map[string]bool{}
+	if s.conversationSources == nil {
+		return nil
+	}
+	discovery := contracts.ConversationDiscovery{ProjectID: s.Config.identity, RunDirectory: s.Config.RunDir, Repository: s.Config.Repository}
 	for _, run := range s.runs {
-		if run == nil || run.RunID == "" || !(run.Backend == string(executionapi.BackendLocal) && run.Protocol == string(executionapi.ProtocolLocalProcess) || run.WorkflowVersion == WorkerFlowVersion && run.Backend == string(executionapi.BackendOrca) && (run.Protocol == string(executionapi.ProtocolOrcaTerminalV2) || run.Protocol == string(executionapi.ProtocolOrcaSupervised))) {
+		if run == nil || run.RunID == "" || run.ExecutionID == "" || run.DomainTaskID == "" {
 			continue
 		}
-		readerCommand := codexReaderCommand(s.projectExecutionConfig())
-		readerDiagnostic := ""
-		if run.WorkflowVersion == WorkerFlowVersion {
-			if fixed, err := s.executionConfigForRun(run); err == nil {
-				readerCommand = codexReaderCommand(fixed)
-			} else {
-				readerCommand = Command{}
-				readerDiagnostic = "fixed execution profile is unavailable: " + err.Error()
-			}
-		}
-		root := filepath.Join(s.Config.RunDir, "runs", run.RunID)
-		add := func(path, attempt string) {
-			if path == "" || !stableExecutionID(attempt) || !stableExecutionID(run.ExecutionID) || run.DomainTaskID == "" {
-				return
-			}
-			clean := filepath.Clean(path)
-			if filepath.Base(clean) != "events.jsonl" || !inside(root, clean) || seen[clean] {
-				return
-			}
-			markerPath := filepath.Join(filepath.Dir(clean), ConversationSourceMarkerName)
-			markerBytes, markerErr := os.ReadFile(markerPath)
-			if os.IsNotExist(markerErr) {
-				// Raw logs without the current source marker belong to an earlier
-				// development format; leave them available to the existing raw reader.
-				return
-			}
-			f, fileID, err := openJournal(clean)
-			if err != nil {
-				return
-			}
-			_ = f.Close()
-			seen[clean] = true
-			source := conversationJournalSource{
-				Path: clean, RunID: run.RunID, TaskID: run.DomainTaskID, WorkflowID: run.RunID,
-				ExecutionID: run.ExecutionID, AttemptID: attempt, Backend: executionapi.BackendKind(run.Backend),
-				Protocol: executionapi.ExecutionProtocol(run.Protocol), Agent: run.Agent, TargetID: run.Target.ID,
-				ExternalRef: conversationExternalRef(run.Process), ProjectID: s.Config.identity,
-				Ended: run.EndedAt != nil, FileID: fileID,
-				Workspace: deref(run.WorktreePath), ReaderCommand: readerCommand,
-			}
-			source.Diagnostic = readerDiagnostic
-			if markerErr != nil {
-				source.Diagnostic = fmt.Sprintf("source marker is unreadable: %v", markerErr)
-			} else {
-				var marker ConversationSourceMarker
-				if decodeErr := json.Unmarshal(markerBytes, &marker); decodeErr != nil {
-					source.Diagnostic = fmt.Sprintf("source marker is invalid: %v", decodeErr)
-				} else if validateErr := marker.validate(); validateErr != nil {
-					source.Diagnostic = validateErr.Error()
-				} else if marker.ProjectID != s.Config.identity || marker.WorkflowID != run.RunID || marker.ExecutionID != run.ExecutionID || marker.AttemptID != attempt || marker.Backend != executionapi.BackendKind(run.Backend) || marker.Protocol != executionapi.ExecutionProtocol(run.Protocol) || marker.Agent != run.Agent || marker.TargetID != run.Target.ID {
-					source.Diagnostic = "source marker identity does not match the fixed run and attempt"
-				} else {
-					source.ExpectedFileID = marker.SourceIdentity
-					if marker.ReaderCommand.Executable != "" {
-						source.ReaderCommand = marker.ReaderCommand
-						source.Diagnostic = ""
-					}
-					source.CodexHome = marker.CodexHome
-				}
-			}
-			sources = append(sources, source)
-		}
+		base := ConversationEvent{Version: ConversationVersion, ProjectID: s.Config.identity, TaskID: run.DomainTaskID, WorkflowID: run.RunID, AttemptID: run.AttemptID,
+			ExecutionID: run.ExecutionID, Backend: executionapi.BackendKind(run.Backend), Protocol: executionapi.ExecutionProtocol(run.Protocol), Agent: run.Agent, TargetID: run.Target.ID}
+		runSource := contracts.ConversationRunSource{Base: base, RunDirectory: filepath.Join(s.Config.RunDir, "runs", run.RunID), Workspace: deref(run.WorktreePath),
+			WorkerFlow: run.WorkflowVersion == WorkerFlowVersion, Process: conversationProcessSnapshot(run.Process)}
 		for _, attempt := range s.domain.Attempts {
-			if run.ExecutionID != "" && attempt.ExecutionID == run.ExecutionID && attempt.EventPath != "" {
-				add(attempt.EventPath, attempt.AttemptID)
+			if attempt.ExecutionID != run.ExecutionID || attempt.EventPath == "" || !stableExecutionID(attempt.AttemptID) {
+				continue
 			}
-		}
-		if run.WorkflowVersion == WorkerFlowVersion {
-			turnRoot := filepath.Join(root, "turns")
-			if entries, err := os.ReadDir(turnRoot); err == nil && len(entries) <= 4096 {
-				for _, entry := range entries {
-					if entry.IsDir() && stableExecutionID(entry.Name()) {
-						add(filepath.Join(turnRoot, entry.Name(), "events.jsonl"), run.AttemptID)
-					}
-				}
+			ended := attempt.AttemptID != run.AttemptID || run.EndedAt != nil
+			if run.WorkflowVersion == WorkerFlowVersion && attempt.AttemptID == run.AttemptID {
+				ended = run.TaskStatus == "closed" || run.TaskStatus == "discarded"
 			}
+			runSource.Attempts = append(runSource.Attempts, contracts.ConversationAttemptSource{AttemptID: attempt.AttemptID, EventPath: attempt.EventPath, Ended: ended})
 		}
+		discovery.Runs = append(discovery.Runs, runSource)
+	}
+	identify := func(path string) (string, error) {
+		file, identity, err := openJournal(path)
+		if err != nil {
+			return "", err
+		}
+		return identity, file.Close()
+	}
+	found, err := s.conversationSources.DiscoverJournals(context.Background(), discovery, identify)
+	if err != nil {
+		s.setError(err)
+		return nil
+	}
+	sources := make([]conversationJournalSource, 0, len(found))
+	for _, value := range found {
+		event := value.Event
+		sources = append(sources, conversationJournalSource{Path: value.Path, RunID: event.WorkflowID, TaskID: event.TaskID, WorkflowID: event.WorkflowID,
+			ExecutionID: event.ExecutionID, AttemptID: value.AttemptID, Backend: event.Backend, Protocol: event.Protocol, Agent: event.Agent, TargetID: event.TargetID,
+			ExternalRef: event.ExternalRef, ProjectID: event.ProjectID, Ended: value.Ended, FileID: value.FileID, ExpectedFileID: value.ExpectedFileID,
+			Diagnostic: value.Diagnostic, Workspace: value.Workspace})
 	}
 	return sources
 }
-
 func (s *Service) runConversationReplayQueue(ctx context.Context, requests <-chan []conversationJournalSource, errorsOut chan<- error) {
 	for {
 		select {
@@ -158,7 +115,7 @@ func (s *Service) runConversationReplayQueue(ctx context.Context, requests <-cha
 }
 
 func (s *Service) reconcileConversationRun(run *Run) error {
-	if run == nil || !(run.Backend == string(executionapi.BackendLocal) && run.Protocol == string(executionapi.ProtocolLocalProcess) || run.WorkflowVersion == WorkerFlowVersion && run.Backend == string(executionapi.BackendOrca) && (run.Protocol == string(executionapi.ProtocolOrcaTerminalV2) || run.Protocol == string(executionapi.ProtocolOrcaSupervised))) {
+	if run == nil {
 		return nil
 	}
 	if s.conversationReplayRequests == nil {
@@ -186,17 +143,20 @@ func (s *Service) reconcileConversationRun(run *Run) error {
 func (s *Service) replayConversationJournal(ctx context.Context, source conversationJournalSource) error {
 	const batchRecords = 256
 	readCursor := JournalCursor{}
-	mapper := &codexworker.ConversationMapper{}
+	if s.conversationSources == nil {
+		return errors.New("conversation source port is required")
+	}
+	journalSource := s.conversationSources.JournalSource(source.Backend, source.Protocol)
+	if journalSource == "" {
+		return errors.New("conversation implementation does not support journal replay for this execution")
+	}
+	mapper := s.conversationSources.RestoreMapper(contracts.ConversationMapperSnapshot{})
 	var sourceSeq uint64
-	checkpoints, err := s.domainStore.ConversationSourceCheckpoints(ctx, source.ProjectID, source.ExecutionID, source.AttemptID, "codex-jsonl")
+	checkpoints, err := s.domainStore.ConversationSourceCheckpoints(ctx, source.ProjectID, source.ExecutionID, source.AttemptID, journalSource)
 	if err != nil {
 		return err
 	}
-	segmentPrefix := "local-jsonl-v1:"
-	if source.Backend == executionapi.BackendOrca {
-		segmentPrefix = "orca-jsonl-v1:"
-	}
-	segment := segmentPrefix + source.FileID
+	segment := s.conversationSources.JournalSegment(source.Backend, source.Protocol, source.FileID)
 	generation := source.FileID
 	knownSegment := false
 	var prior *ConversationCheckpoint
@@ -226,10 +186,11 @@ func (s *Service) replayConversationJournal(ctx context.Context, source conversa
 			readCursor.HeaderHash = "modified-since-checkpoint"
 		}
 		sourceSeq = position.SourceSeq
-		mapper, err = s.domainStore.RestoreConversationMapper(ctx, source.ProjectID, source.ExecutionID, source.AttemptID, "codex-jsonl", segment)
-		if err != nil {
-			return err
+		snapshot, snapshotErr := s.domainStore.ConversationMapperSnapshot(ctx, source.ProjectID, source.ExecutionID, source.AttemptID, journalSource, segment)
+		if snapshotErr != nil {
+			return snapshotErr
 		}
+		mapper = s.conversationSources.RestoreMapper(snapshot)
 	}
 	if !knownSegment && (prior != nil || source.ExpectedFileID != "" && source.ExpectedFileID != source.FileID) {
 		previousIdentity := source.ExpectedFileID
@@ -240,7 +201,7 @@ func (s *Service) replayConversationJournal(ctx context.Context, source conversa
 			Version: ConversationVersion, ProjectID: source.ProjectID, TaskID: source.TaskID,
 			WorkflowID: source.WorkflowID, ExecutionID: source.ExecutionID, AttemptID: source.AttemptID,
 			Backend: source.Backend, Protocol: source.Protocol, Agent: source.Agent, TargetID: source.TargetID,
-			ExternalRef: source.ExternalRef, Source: "codex-jsonl", SourceSegment: segment,
+			ExternalRef: source.ExternalRef, Source: journalSource, SourceRole: contracts.ConversationSourceFallback, SourceSegment: segment,
 			SourceIdentity: source.FileID, SessionQuality: IdentityUnknown, TurnQuality: IdentityUnknown,
 			ItemQuality: IdentityUnknown, SourceEventID: "source-changed:" + previousIdentity + ":" + source.FileID,
 			SourceEventQuality: IdentityDerived, Type: ConversationGap, Phase: MessagePhaseUnknown,
@@ -279,13 +240,13 @@ func (s *Service) replayConversationJournal(ctx context.Context, source conversa
 				source.FileID = batch.Cursor.FileID
 			}
 			generation = fmt.Sprintf("%s:%d", source.FileID, batch.Cursor.Generation)
-			segment = segmentPrefix + generation
-			mapper, sourceSeq = &codexworker.ConversationMapper{}, 0
+			segment = s.conversationSources.JournalSegment(source.Backend, source.Protocol, generation)
+			mapper, sourceSeq = s.conversationSources.RestoreMapper(contracts.ConversationMapperSnapshot{}), 0
 			gap := ConversationEvent{
 				Version: ConversationVersion, ProjectID: source.ProjectID, TaskID: source.TaskID,
 				WorkflowID: source.WorkflowID, ExecutionID: source.ExecutionID, AttemptID: source.AttemptID,
 				Backend: source.Backend, Protocol: source.Protocol, Agent: source.Agent, TargetID: source.TargetID,
-				ExternalRef: source.ExternalRef, Source: "codex-jsonl", SourceSegment: segment,
+				ExternalRef: source.ExternalRef, Source: journalSource, SourceRole: contracts.ConversationSourceFallback, SourceSegment: segment,
 				SourceIdentity: source.FileID, SessionQuality: IdentityUnknown, TurnQuality: IdentityUnknown,
 				ItemQuality: IdentityUnknown, SourceEventID: "source-changed:" + previousIdentity + ":" + source.FileID,
 				SourceEventQuality: IdentityDerived, Type: ConversationGap, Phase: MessagePhaseUnknown,
@@ -320,7 +281,7 @@ func (s *Service) replayConversationJournal(ctx context.Context, source conversa
 				Version: ConversationVersion, ProjectID: source.ProjectID, TaskID: source.TaskID,
 				WorkflowID: source.WorkflowID, ExecutionID: source.ExecutionID, AttemptID: source.AttemptID,
 				Backend: source.Backend, Protocol: source.Protocol, Agent: source.Agent, TargetID: source.TargetID,
-				ExternalRef: source.ExternalRef, Source: "codex-jsonl", SourceSegment: segment,
+				ExternalRef: source.ExternalRef, Source: journalSource, SourceRole: contracts.ConversationSourceFallback, SourceSegment: segment,
 				SourceIdentity: source.FileID, SourceCursor: string(cursor),
 				SessionQuality: IdentityUnknown, TurnQuality: IdentityUnknown, ItemQuality: IdentityUnknown,
 				SourceEventID: fmt.Sprintf("bytes:%d:%d", record.Offset, end), SourceEventQuality: IdentityDerived,
@@ -333,17 +294,11 @@ func (s *Service) replayConversationJournal(ctx context.Context, source conversa
 				continue
 			}
 			raw := append(append([]byte(nil), record.Data...), '\n')
-			mapped := mapper.MapCodexJSONL(base, raw)
-			if mapped.Event.Type == ConversationSession && codexworker.ValidNativeID(mapped.Event.SessionID) {
-				binding := codexworker.HistoryBinding{Version: 1, ProjectID: source.ProjectID, TaskID: source.TaskID, WorkflowID: source.WorkflowID, ExecutionID: source.ExecutionID, AttemptID: source.AttemptID, Backend: source.Backend, Protocol: source.Protocol, TargetID: source.TargetID, ExternalRef: source.ExternalRef, Workspace: source.Workspace, SessionID: mapped.Event.SessionID, Command: source.ReaderCommand, Home: source.CodexHome}
-				if err = writeCodexHistoryBinding(localCodexHistoryBindingPath(filepath.Dir(source.Path), binding.SessionID), binding); err != nil {
-					return err
-				}
-			}
+			mapped := mapper.MapRecord(base, raw)
 			writes = append(writes, mapped)
 		}
 		if len(writes) > 0 {
-			position, positionErr := currentConversationJournalPosition(ctx, s.domainStore, source.ProjectID, source.ExecutionID, source.AttemptID, "codex-jsonl", segment, source.Path, source.FileID, batch.Cursor.Offset, sourceSeq)
+			position, positionErr := currentConversationJournalPosition(ctx, s.domainStore, source.ProjectID, source.ExecutionID, source.AttemptID, journalSource, segment, batch.Cursor.Generation, source.Path, source.FileID, batch.Cursor.Offset, sourceSeq)
 			if positionErr != nil {
 				return positionErr
 			}
@@ -351,7 +306,7 @@ func (s *Service) replayConversationJournal(ctx context.Context, source conversa
 			if positionErr != nil {
 				return positionErr
 			}
-			checkpoint := ConversationCheckpoint{ProjectID: source.ProjectID, ExecutionID: source.ExecutionID, AttemptID: source.AttemptID, Source: "codex-jsonl", SourceSegment: segment, SourceIdentity: source.FileID, Generation: generation, Cursor: checkpointCursor, LocalSeq: sourceSeq, AllowReplay: true, UpdatedAt: now()}
+			checkpoint := ConversationCheckpoint{ProjectID: source.ProjectID, ExecutionID: source.ExecutionID, AttemptID: source.AttemptID, Source: journalSource, SourceSegment: segment, SourceIdentity: source.FileID, Generation: generation, Cursor: checkpointCursor, LocalSeq: sourceSeq, AllowReplay: true, UpdatedAt: now()}
 			if _, err = s.domainStore.CommitConversation(ctx, writes, checkpoint); err != nil {
 				return err
 			}
@@ -374,11 +329,16 @@ func (s *Service) replayConversationJournal(ctx context.Context, source conversa
 	}
 }
 
-func (s *Service) replayConversationTail(ctx context.Context, source conversationJournalSource, segment, generation string, mapper *codexworker.ConversationMapper, data []byte, start int64, oldSeq uint64) error {
+func (s *Service) replayConversationTail(ctx context.Context, source conversationJournalSource, segment, generation string, mapper contracts.ConversationMapper, data []byte, start int64, oldSeq uint64) error {
+	journalSource := s.conversationSources.JournalSource(source.Backend, source.Protocol)
 	sequence := oldSeq + 1
 	raw := append([]byte(nil), data...)
 	end := start + int64(len(raw))
-	position, err := currentConversationJournalPosition(ctx, s.domainStore, source.ProjectID, source.ExecutionID, source.AttemptID, "codex-jsonl", segment, source.Path, source.FileID, end, sequence)
+	positionGeneration, err := s.conversationSources.JournalGeneration(source.FileID, segment)
+	if err != nil {
+		return err
+	}
+	position, err := currentConversationJournalPosition(ctx, s.domainStore, source.ProjectID, source.ExecutionID, source.AttemptID, journalSource, segment, positionGeneration, source.Path, source.FileID, end, sequence)
 	if err != nil {
 		return err
 	}
@@ -392,7 +352,7 @@ func (s *Service) replayConversationTail(ctx context.Context, source conversatio
 			Version: ConversationVersion, ProjectID: source.ProjectID, TaskID: source.TaskID,
 			WorkflowID: source.WorkflowID, ExecutionID: source.ExecutionID, AttemptID: source.AttemptID,
 			Backend: source.Backend, Protocol: source.Protocol, Agent: source.Agent, TargetID: source.TargetID,
-			ExternalRef: source.ExternalRef, Source: "codex-jsonl", SourceSegment: segment,
+			ExternalRef: source.ExternalRef, Source: journalSource, SourceRole: contracts.ConversationSourceFallback, SourceSegment: segment,
 			SourceIdentity: source.FileID, SourceCursor: string(cursor), SessionQuality: IdentityUnknown,
 			TurnQuality: IdentityUnknown, ItemQuality: IdentityUnknown, SourceEventID: fmt.Sprintf("bytes:%d:%d", start, end),
 			SourceEventQuality: IdentityDerived, SourceSeq: sequence, Type: ConversationGap, Phase: MessagePhaseUnknown,
@@ -407,23 +367,28 @@ func (s *Service) replayConversationTail(ctx context.Context, source conversatio
 		Version: ConversationVersion, ProjectID: source.ProjectID, TaskID: source.TaskID,
 		WorkflowID: source.WorkflowID, ExecutionID: source.ExecutionID, AttemptID: source.AttemptID,
 		Backend: source.Backend, Protocol: source.Protocol, Agent: source.Agent, TargetID: source.TargetID,
-		ExternalRef: source.ExternalRef, Source: "codex-jsonl", SourceSegment: segment,
+		ExternalRef: source.ExternalRef, Source: journalSource, SourceRole: contracts.ConversationSourceFallback, SourceSegment: segment,
 		SourceIdentity: source.FileID, SourceCursor: string(cursor), SessionQuality: IdentityUnknown,
 		TurnQuality: IdentityUnknown, ItemQuality: IdentityUnknown, SourceEventID: fmt.Sprintf("bytes:%d:%d", start, end),
 		SourceEventQuality: IdentityDerived, SourceSeq: sequence, Phase: MessagePhaseUnknown, ReceivedAt: now(),
 		Evidence: map[string]string{"source_record": "events.jsonl", "byte_start": fmt.Sprint(start), "byte_end": fmt.Sprint(end), "identity_rule": "source-file-byte-range-v1", "replay": "true", "unterminated_final_record": "true"},
 	}
-	write := mapper.MapCodexJSONL(base, raw)
-	checkpoint := ConversationCheckpoint{ProjectID: source.ProjectID, ExecutionID: source.ExecutionID, AttemptID: source.AttemptID, Source: "codex-jsonl", SourceSegment: segment, SourceIdentity: source.FileID, Generation: generation, Cursor: string(cursor), LocalSeq: sequence, AllowReplay: true, UpdatedAt: now()}
+	write := mapper.MapRecord(base, raw)
+	checkpoint := ConversationCheckpoint{ProjectID: source.ProjectID, ExecutionID: source.ExecutionID, AttemptID: source.AttemptID, Source: journalSource, SourceSegment: segment, SourceIdentity: source.FileID, Generation: generation, Cursor: string(cursor), LocalSeq: sequence, AllowReplay: true, UpdatedAt: now()}
 	_, err = s.domainStore.CommitConversation(ctx, []ConversationWrite{write}, checkpoint)
 	return err
 }
 
 func (s *Service) replayConversationTailGap(ctx context.Context, source conversationJournalSource, segment, generation string, start, end int64, sequence uint64) error {
+	journalSource := s.conversationSources.JournalSource(source.Backend, source.Protocol)
 	if end < start {
 		return errors.New("incomplete conversation source range is invalid")
 	}
-	position, err := currentConversationJournalPosition(ctx, s.domainStore, source.ProjectID, source.ExecutionID, source.AttemptID, "codex-jsonl", segment, source.Path, source.FileID, end, sequence)
+	positionGeneration, err := s.conversationSources.JournalGeneration(source.FileID, segment)
+	if err != nil {
+		return err
+	}
+	position, err := currentConversationJournalPosition(ctx, s.domainStore, source.ProjectID, source.ExecutionID, source.AttemptID, journalSource, segment, positionGeneration, source.Path, source.FileID, end, sequence)
 	if err != nil {
 		return err
 	}
@@ -435,7 +400,7 @@ func (s *Service) replayConversationTailGap(ctx context.Context, source conversa
 		Version: ConversationVersion, ProjectID: source.ProjectID, TaskID: source.TaskID,
 		WorkflowID: source.WorkflowID, ExecutionID: source.ExecutionID, AttemptID: source.AttemptID,
 		Backend: source.Backend, Protocol: source.Protocol, Agent: source.Agent, TargetID: source.TargetID,
-		ExternalRef: source.ExternalRef, Source: "codex-jsonl", SourceSegment: segment,
+		ExternalRef: source.ExternalRef, Source: journalSource, SourceRole: contracts.ConversationSourceFallback, SourceSegment: segment,
 		SourceIdentity: source.FileID, SourceCursor: string(cursor), SessionQuality: IdentityUnknown,
 		TurnQuality: IdentityUnknown, ItemQuality: IdentityUnknown, SourceEventID: fmt.Sprintf("bytes:%d:%d", start, end),
 		SourceEventQuality: IdentityDerived, SourceSeq: sequence, Type: ConversationGap, Phase: MessagePhaseUnknown,

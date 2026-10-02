@@ -25,7 +25,8 @@ func reattachAppServerWorker(ctx context.Context, c Config, run *Run, e *Executi
 	if run == nil || e == nil || run.WorktreePath == nil {
 		return nil, false, errors.New("app-server recovery lacks execution/workspace")
 	}
-	command := codexReaderCommand(c)
+	settings := codexProfileSettings(c)
+	command := codexworker.ReaderCommand(Command{Executable: settings.Executable, Args: settings.Args}, settings.Profile)
 	lifecycle := codexworker.ExecutionLifecycle{Backend: codexBackend(c, run), HistoryCommand: contracts.Command{Executable: command.Executable, Args: append([]string(nil), command.Args...)}}
 	session := executionapi.SessionContext{
 		ProjectID: e.ProjectIdentity, TaskID: run.TaskID, WorkflowRunID: run.RunID,
@@ -196,5 +197,5 @@ func codexBackend(c Config, run *Run) codexworker.Backend {
 	permissions, _ := codexworker.CompilePolicy(c.ExecutionPolicy, runtime.GOOS, c.hostName(), c.agentName(), settings.WindowsSandbox, settings.Profile, settings.Args)
 	return codexworker.Backend{Config: codexworker.Config{Policy: c.ExecutionPolicy, Executable: settings.Executable, Args: settings.Args, Profile: settings.Profile, Sandbox: permissions.Sandbox, WindowsSandbox: settings.WindowsSandbox, Model: settings.Model, ReasoningEffort: settings.ReasoningEffort, Workspace: deref(run.WorktreePath), RunDir: c.RunDir, RunID: run.RunID, ServerDir: appServerDirectory(c, run), Environment: func(base []string) []string {
 		return workerProcessEnvironment(c, run, base)
-	}}, Process: codexworker.ProcessPort{Start: codexProcessStart, Inspect: inspectProcess, NewGeneration: newID, WriteAtomic: AtomicWrite}}
+	}}, Process: codexworker.ProcessPort{Start: localManagedProcessHost{}.StartManaged, Inspect: inspectProcess, NewGeneration: newID, WriteAtomic: AtomicWrite}}
 }

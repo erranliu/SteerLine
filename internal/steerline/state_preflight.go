@@ -176,8 +176,7 @@ func preflightWorkerFlowState(ctx context.Context, c Config) error {
 			if p.Verified && (p.Receipt == nil || !p.Evidence.Verified || p.Receipt.ProbeIdentity != p.Probe || p.Receipt.InputSHA256 != p.InputDigest) {
 				return nativeErr("unsupported_schema", "managed Orca readiness lacks verified receipt/tool facts")
 			}
-			state, stateErr := decodeOrcaExecutionState(&execution)
-			if env.Ready && (!p.Verified || p.Invalidated || execution.Process == nil || stateErr != nil || state == nil) {
+			if env.Ready && (!p.Verified || p.Invalidated || execution.Process == nil || execution.SessionID == "" || execution.SessionGeneration == "") {
 				return nativeErr("unsupported_schema", "managed Orca ready state has no verified original session")
 			}
 			if execution.Process != nil && (env.Runtime != execution.Process.RuntimeID || env.LaunchCommand == "" || len(env.WriteRoots) == 0 || canonical(env.WriteRoots[0]) != canonical(execution.Workspace.Worktree)) {

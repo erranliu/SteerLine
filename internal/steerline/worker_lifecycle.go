@@ -209,7 +209,7 @@ func (s *Service) resumeLifecycleWorkerFlow(ctx context.Context, task *TaskRecor
 		}
 		if !execution.Environment.Ready || execution.CurrentTurnID != "" && execution.CurrentTurnID == execution.LastStoppedTurnID && execution.PendingCommandID == "" && execution.PendingTurnID == "" &&
 			(run.Decision == nil || run.Decision.Status == "reply_accepted" || run.Decision.Status == "applied") {
-			return true, s.advanceOrcaPreparation(ctx, run)
+			return true, s.advanceWorkerPreparation(ctx, run)
 		}
 	}
 	if !execution.RecoveryRequired && (execution.PendingCommandID != "" || execution.CurrentTurnID != "" && execution.CurrentTurnID != execution.LastStoppedTurnID) {
@@ -342,7 +342,7 @@ func (s *Service) reconcilePendingLifecycleSteps(ctx context.Context, run *Run, 
 		}
 		switch candidate.Action {
 		case executionapi.LifecyclePrepareWorkspace, executionapi.LifecycleCreateResource,
-			executionapi.LifecycleStartTurn, executionapi.LifecycleSubmitInput, executionapi.LifecycleReportCompletion:
+			executionapi.LifecycleStartTurn, executionapi.LifecycleSubmitInput, executionapi.LifecycleReportCompletion, executionapi.LifecycleHostAction:
 			if err := s.executeLifecycleStep(ctx, run, lifecycle, candidate); err != nil {
 				if errors.Is(err, errLifecycleNeedsReconciliation) {
 					return true, nil
@@ -396,6 +396,21 @@ func lifecycleSnapshot(run *Run, workflow *WorkflowRunRecord, execution *Executi
 	if execution.PolicyResources != nil {
 		resource := execution.PolicyResources.ImplementationData.Clone()
 		snapshot.PolicyResources = &resource
+	}
+	if execution.Environment != nil && execution.Environment.Preparation != nil && execution.Environment.Preparation.Probe.Nonce != "" {
+		probe := execution.Environment.Preparation.Probe
+		snapshot.PreparationProbe = &probe
+	}
+	if execution.Environment != nil && execution.Environment.OriginalTerminal != nil {
+		identity := *execution.Environment.OriginalTerminal
+		snapshot.OriginalHost = &identity
+	}
+	if run.Decision != nil && run.Decision.Request.HostTarget != nil && execution.Environment != nil && execution.Environment.Blocker != nil {
+		target := run.Decision.Request.HostTarget
+		blocker := execution.Environment.Blocker
+		if target.ExecutionID == execution.ExecutionID && target.TurnID == blocker.TurnID && target.BlockerID == blocker.ID && run.Decision.ID == blocker.DecisionID {
+			snapshot.HostAuthorization = &executionapi.HostActionAuthorization{ExecutionID: execution.ExecutionID, AttemptID: run.AttemptID, TurnID: target.TurnID, DecisionID: run.Decision.ID, BlockerID: target.BlockerID, DecisionVersion: run.Decision.Version}
+		}
 	}
 	if run.WorkspaceIntent != nil {
 		snapshot.WorkspacePlan = *run.WorkspaceIntent
@@ -470,7 +485,7 @@ func knownLifecycleAction(action executionapi.LifecycleAction) bool {
 	switch action {
 	case executionapi.LifecyclePrepareWorkspace, executionapi.LifecycleCreateResource, executionapi.LifecyclePrepareSession,
 		executionapi.LifecycleStartTurn, executionapi.LifecycleSubmitInput, executionapi.LifecycleReportCompletion, executionapi.LifecycleDeliverFeedback,
-		executionapi.LifecycleAcknowledge, executionapi.LifecycleStopObservation, executionapi.LifecycleStopExecution, executionapi.LifecycleCleanup:
+		executionapi.LifecycleAcknowledge, executionapi.LifecycleStopObservation, executionapi.LifecycleStopExecution, executionapi.LifecycleCleanup, executionapi.LifecycleHostAction:
 		return true
 	default:
 		return false
@@ -972,6 +987,8 @@ func validateSavedLifecycleOperation(operation *OperationRecord, action executio
 		value = input.Stop
 	case executionapi.LifecycleCleanup:
 		value = input.Cleanup
+	case executionapi.LifecycleHostAction:
+		value = input.Host
 	case executionapi.LifecyclePrepareWorkspace:
 		value = input.Workspace
 	default:
@@ -1008,6 +1025,8 @@ func lifecycleInputValue(action executionapi.LifecycleAction, input executionapi
 		return input.Stop, nil
 	case executionapi.LifecycleCleanup:
 		return input.Cleanup, nil
+	case executionapi.LifecycleHostAction:
+		return input.Host, nil
 	default:
 		return nil, errors.New("unsupported lifecycle operation action")
 	}

@@ -557,7 +557,7 @@ func TestFailedRefreshKeepsLastGoodReadOnlyDataAndCurrentError(t *testing.T) {
 }
 
 func TestFoldReducerUsesExplicitTurnAndPreservesManualIntent(t *testing.T) {
-	turn := steerline.ConversationEvent{Version: 1, ProjectID: "p", ExecutionID: "e", AttemptID: "a", Source: "codex-app-server", SourceSegment: "segment", SessionID: "s", SessionQuality: steerline.IdentityNative, TurnID: "turn-1", TurnQuality: steerline.IdentityNative, Type: steerline.ConversationTurnStarted, Phase: steerline.MessagePhaseUnknown, FinalAvailability: steerline.FinalPending}
+	turn := steerline.ConversationEvent{Version: steerline.ConversationVersion, ProjectID: "p", ExecutionID: "e", AttemptID: "a", Source: "codex-app-server", SourceSegment: "segment", SessionID: "s", SessionQuality: steerline.IdentityNative, TurnID: "turn-1", TurnQuality: steerline.IdentityNative, Type: steerline.ConversationTurnStarted, Phase: steerline.MessagePhaseUnknown, FinalAvailability: steerline.FinalPending}
 	commentary := turn
 	commentary.EventID = 2
 	commentary.Type = steerline.ConversationMessageDelta
@@ -602,7 +602,7 @@ func TestFoldReducerUsesExplicitTurnAndPreservesManualIntent(t *testing.T) {
 }
 
 func TestLateFinalReclassifiesSameItemAndOlderRevisionCannotOverwrite(t *testing.T) {
-	base := steerline.ConversationEvent{Version: 1, ProjectID: "p", ExecutionID: "e", AttemptID: "a", Source: "codex-app-server", SourceSegment: "segment", SessionID: "s", SessionQuality: steerline.IdentityNative, TurnID: "turn", TurnQuality: steerline.IdentityNative, ItemID: "item", ItemKey: "stable-item", ItemQuality: steerline.IdentityNative, SourceEventQuality: steerline.IdentityNative, Type: steerline.ConversationMessageSnapshot, Phase: steerline.MessagePhaseUnknown}
+	base := steerline.ConversationEvent{Version: steerline.ConversationVersion, ProjectID: "p", ExecutionID: "e", AttemptID: "a", Source: "codex-app-server", SourceSegment: "segment", SessionID: "s", SessionQuality: steerline.IdentityNative, TurnID: "turn", TurnQuality: steerline.IdentityNative, ItemID: "item", ItemKey: "stable-item", ItemQuality: steerline.IdentityNative, SourceEventQuality: steerline.IdentityNative, Type: steerline.ConversationMessageSnapshot, Phase: steerline.MessagePhaseUnknown}
 	process := base
 	process.EventID = 2
 	process.SourceRevision = 2
@@ -639,7 +639,7 @@ func TestLateFinalReclassifiesSameItemAndOlderRevisionCannotOverwrite(t *testing
 }
 
 func TestFinalPhaseDoesNotPromoteNonMessageEvents(t *testing.T) {
-	event := steerline.ConversationEvent{Version: 1, ProjectID: "p", ExecutionID: "e", AttemptID: "a", Source: "source", SourceSegment: "segment", SessionID: "session", SessionQuality: steerline.IdentityNative, TurnID: "turn", TurnQuality: steerline.IdentityNative, ItemID: "tool", ItemKey: "tool-key", ItemQuality: steerline.IdentityNative, SourceEventQuality: steerline.IdentityNative, Type: steerline.ConversationToolCompleted, Phase: steerline.MessagePhaseFinalAnswer}
+	event := steerline.ConversationEvent{Version: steerline.ConversationVersion, ProjectID: "p", ExecutionID: "e", AttemptID: "a", Source: "source", SourceSegment: "segment", SessionID: "session", SessionQuality: steerline.IdentityNative, TurnID: "turn", TurnQuality: steerline.IdentityNative, ItemID: "tool", ItemKey: "tool-key", ItemQuality: steerline.IdentityNative, SourceEventQuality: steerline.IdentityNative, Type: steerline.ConversationToolCompleted, Phase: steerline.MessagePhaseFinalAnswer}
 	view, _ := BuildConversationView([]steerline.ConversationEvent{event}, map[string]FoldChoice{})
 	if len(view.Groups) != 1 || len(view.Groups[0].Finals) != 0 || len(view.Groups[0].Process) != 1 {
 		t.Fatalf("non-message event was presented as a final reply: %+v", view.Groups)
@@ -647,7 +647,7 @@ func TestFinalPhaseDoesNotPromoteNonMessageEvents(t *testing.T) {
 }
 
 func TestSessionScrollAnchorMovesToGroupHeaderWhenAutoFoldHidesItem(t *testing.T) {
-	base := steerline.ConversationEvent{Version: 1, ProjectID: "p", TaskID: "task", WorkflowID: "workflow", ExecutionID: "execution", AttemptID: "attempt", Source: "codex-app-server", SourceSegment: "segment", SessionID: "session", SessionQuality: steerline.IdentityNative, TurnID: "turn", TurnQuality: steerline.IdentityNative, Phase: steerline.MessagePhaseUnknown}
+	base := steerline.ConversationEvent{Version: steerline.ConversationVersion, ProjectID: "p", TaskID: "task", WorkflowID: "workflow", ExecutionID: "execution", AttemptID: "attempt", Source: "codex-app-server", SourceSegment: "segment", SessionID: "session", SessionQuality: steerline.IdentityNative, TurnID: "turn", TurnQuality: steerline.IdentityNative, Phase: steerline.MessagePhaseUnknown}
 	started := base
 	started.Type = steerline.ConversationTurnStarted
 	message := base
@@ -734,7 +734,7 @@ func TestConsoleNativeLocalAndOrcaFixtureUseSameFoldScript(t *testing.T) {
 			for turnIndex, turn := range sample.Thread.Turns {
 				startTime := time.Unix(turn.StartedAt, 0).UTC()
 				endTime := time.Unix(turn.CompletedAt, 0).UTC()
-				base := steerline.ConversationEvent{Version: 1, ProjectID: "native-project", WorkflowID: "native-workflow", ExecutionID: "native-execution", AttemptID: "native-attempt", Backend: executionapi.BackendKind(sample.Backend), Protocol: executionapi.ExecutionProtocol(sample.Protocol), Agent: "codex", TargetID: "native-target", Source: sample.Source, SourceSegment: "native-segment", SourceIdentity: "native-source", SessionID: sample.Thread.ID, SessionQuality: steerline.IdentityNative, TurnID: turn.ID, TurnQuality: steerline.IdentityNative, Phase: steerline.MessagePhaseUnknown, OccurredAt: &startTime, ReceivedAt: startTime}
+				base := steerline.ConversationEvent{Version: steerline.ConversationVersion, ProjectID: "native-project", WorkflowID: "native-workflow", ExecutionID: "native-execution", AttemptID: "native-attempt", Backend: executionapi.BackendKind(sample.Backend), Protocol: executionapi.ExecutionProtocol(sample.Protocol), Agent: "codex", TargetID: "native-target", Source: sample.Source, SourceSegment: "native-segment", SourceIdentity: "native-source", SessionID: sample.Thread.ID, SessionQuality: steerline.IdentityNative, TurnID: turn.ID, TurnQuality: steerline.IdentityNative, Phase: steerline.MessagePhaseUnknown, OccurredAt: &startTime, ReceivedAt: startTime}
 				started := base
 				started.EventID = int64(len(events) + 1)
 				started.Type = steerline.ConversationTurnStarted
@@ -810,7 +810,7 @@ func TestConsoleNativeLocalAndOrcaFixtureUseSameFoldScript(t *testing.T) {
 }
 
 func TestStableTurnKeysSeparateSameItemIDsAndUnknownTurnDoesNotFold(t *testing.T) {
-	base := steerline.ConversationEvent{Version: 1, ProjectID: "p", ExecutionID: "e", AttemptID: "a", Source: "source", SourceSegment: "seg", SessionID: "session", SessionQuality: steerline.IdentityNative, ItemID: "same", ItemQuality: steerline.IdentityNative, Phase: steerline.MessagePhaseUnknown}
+	base := steerline.ConversationEvent{Version: steerline.ConversationVersion, ProjectID: "p", ExecutionID: "e", AttemptID: "a", Source: "source", SourceSegment: "seg", SessionID: "session", SessionQuality: steerline.IdentityNative, ItemID: "same", ItemQuality: steerline.IdentityNative, Phase: steerline.MessagePhaseUnknown}
 	a := base
 	a.TurnID = "turn-a"
 	a.TurnQuality = steerline.IdentityNative

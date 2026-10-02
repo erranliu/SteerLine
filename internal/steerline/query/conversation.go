@@ -81,6 +81,9 @@ func (q ConversationService) ReadConversation(ctx context.Context, filter contra
 		if err = json.Unmarshal(payload, &event); err != nil {
 			return contracts.ConversationPage{}, fmt.Errorf("decode conversation event %d: %w", id, err)
 		}
+		if err = event.Validate(); err != nil {
+			return contracts.ConversationPage{}, fmt.Errorf("validate conversation event %d: %w", id, err)
+		}
 		event.EventID = id
 		page.Events = append(page.Events, event)
 		page.PayloadBytes += payloadBytes
@@ -108,6 +111,9 @@ func (q ConversationService) readOne(ctx context.Context, filter contracts.Conve
 	}
 	var event contracts.ConversationEvent
 	if err := json.Unmarshal(record.Payload, &event); err != nil {
+		return nil, err
+	}
+	if err := event.Validate(); err != nil {
 		return nil, err
 	}
 	event.EventID = record.EventID

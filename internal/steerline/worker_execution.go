@@ -59,7 +59,10 @@ func preflightCodexWorkerFlow(ctx context.Context, c Config) error {
 		Output: func(ctx context.Context, executable string, args []string) ([]byte, error) {
 			return runner.Output(ctx, Command{Executable: executable, Args: args})
 		},
-		HistoryAvailable: func(ctx context.Context) bool { return nativeCodexHistoryAvailable(ctx, c) },
+		HistoryAvailable: func(ctx context.Context) bool {
+			historyCommand := codexworker.ReaderCommand(Command{Executable: codex.Executable, Args: codex.Args}, codex.Profile)
+			return codexworker.HistoryAvailable(ctx, historyCommand, c.Repository, localManagedProcessHost{timeout: duration(c.CommandTimeout)}.StartManaged)
+		},
 		StartManaged: func(cmd *exec.Cmd) (func(), error) {
 			owned, err := startProcess(cmd)
 			if err != nil {

@@ -3,109 +3,94 @@ package steerline
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
-	"fmt"
+	"path/filepath"
 
-	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
+	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
-func (s *Service) recordConversationEvent(run *Run, source WorkerEvent) (retErr error) {
+func (s *Service) recordConversationEvent(run *Run, source WorkerEvent) error {
 	if run == nil || len(source.Raw) == 0 && !source.SourceGap && !source.InputWait || s.domainStore == nil {
 		return nil
 	}
-	if source.Source == "orca-terminal-v2" {
-		return s.recordOrcaTerminalEvent(run, source)
-	}
-	if source.Source != "" && source.Source != "codex-jsonl" {
-		return nil
-	}
-	executionID := run.ExecutionID
-	if !stableExecutionID(executionID) {
-		return nativeErr("contract_mismatch", "conversation event has no fixed native execution identity")
+	if !stableExecutionID(run.ExecutionID) {
+		return nativeErr("contract_mismatch", "conversation event has no fixed execution identity")
 	}
 	attemptID := source.AttemptID
 	if attemptID == "" {
 		attemptID = run.AttemptID
 	}
 	if !stableExecutionID(attemptID) {
-		return nativeErr("contract_mismatch", "conversation event has no fixed native attempt identity")
+		return nativeErr("contract_mismatch", "conversation event has no fixed attempt identity")
 	}
-	segment := nonEmpty(source.SourceSegment, "local-jsonl-v1:"+source.SourceIdentity)
-	mapperKey := run.RunID + ":" + attemptID + ":" + segment
-	if s.conversationMappers == nil {
-		s.conversationMappers = map[string]*codexworker.ConversationMapper{}
+	base := ConversationEvent{Version: ConversationVersion, ProjectID: s.Config.identity, TaskID: run.DomainTaskID, WorkflowID: run.RunID,
+		ExecutionID: run.ExecutionID, AttemptID: attemptID, Backend: executionapi.BackendKind(run.Backend), Protocol: executionapi.ExecutionProtocol(run.Protocol),
+		Agent: run.Agent, TargetID: run.Target.ID, SourceEventID: source.SourceEventID, SessionQuality: IdentityUnknown, TurnQuality: IdentityUnknown, ItemQuality: IdentityUnknown}
+	input := contracts.ConversationInput{Event: base, Process: run.Process, Source: source.Source, Segment: source.SourceSegment, Identity: source.SourceIdentity,
+		Cursor: source.SourceCursor, Generation: processGeneration(run.Process), Session: source.Session, SourceSeq: source.SourceSeq,
+		SourceOffset: source.SourceOffset, SourceLength: source.SourceLength, Raw: append([]byte(nil), source.Raw...), Diagnostic: source.Diagnostic,
+		Gap: source.SourceGap, InputWait: source.InputWait, SourceChanged: source.SourceChanged}
+	if input.Process != nil {
+		process := *input.Process
+		input.Process = &process
 	}
-	mapper := s.conversationMappers[mapperKey]
-	if mapper == nil {
-		var err error
-		mapper, err = s.domainStore.RestoreConversationMapper(context.Background(), s.Config.identity, executionID, attemptID, "codex-jsonl", segment)
-		if err != nil {
-			return err
+	if s.conversationSources == nil {
+		return errors.New("conversation source port is required")
+	}
+	journalSource := s.conversationSources.JournalSource(base.Backend, base.Protocol)
+	segment := source.SourceSegment
+	if segment == "" {
+		segment = s.conversationSources.JournalSegment(base.Backend, base.Protocol, source.SourceIdentity)
+	}
+	if journalSource != "" && segment != "" {
+		snapshot, snapshotErr := s.domainStore.ConversationMapperSnapshot(context.Background(), s.Config.identity, run.ExecutionID, attemptID, journalSource, segment)
+		if snapshotErr != nil {
+			return snapshotErr
 		}
-		s.conversationMappers[mapperKey] = mapper
+		input.Mapper = snapshot
 	}
-	previousMapper := mapper.Clone()
-	defer func() {
-		if retErr != nil {
-			*mapper = *previousMapper
+	var mapper contracts.ConversationInputMapper = s.conversationSources
+	if lifecycle, _, lifecycleErr := s.lifecycleForRun(run); lifecycleErr == nil {
+		if implementationMapper, ok := lifecycle.(contracts.ConversationInputMapper); ok {
+			mapper = implementationMapper
 		}
-	}()
-	checkpointCursor, err := json.Marshal(struct {
-		ByteOffset int64  `json:"byte_offset"`
-		ByteLength int64  `json:"byte_length"`
-		SourceSeq  uint64 `json:"source_seq"`
-	}{source.SourceOffset, source.SourceLength, source.SourceSeq})
+	} else if run.WorkflowVersion == WorkerFlowVersion {
+		return lifecycleErr
+	}
+	batch, err := mapper.MapConversation(input)
 	if err != nil {
 		return err
 	}
-	sourceIdentity := nonEmpty(source.SourceIdentity, "local-events:"+run.RunID+":"+attemptID)
-	evidence := map[string]string{
-		"source_record": "events.jsonl",
-		"byte_start":    fmt.Sprint(source.SourceOffset),
-		"byte_end":      fmt.Sprint(source.SourceOffset + source.SourceLength),
-		"identity_rule": "source-file-byte-range-v1",
+	if len(batch.Writes) == 0 {
+		return nil
 	}
-	if source.Diagnostic != "" {
-		evidence["collector_diagnostic"] = source.Diagnostic
+	if err = validateConversationSourceWrites(base, batch.Writes); err != nil {
+		return err
 	}
-	event := ConversationEvent{
-		Version: ConversationVersion, ProjectID: s.Config.identity, TaskID: run.DomainTaskID,
-		WorkflowID: run.RunID, ExecutionID: executionID, AttemptID: attemptID,
-		Backend: executionapi.BackendKind(run.Backend), Protocol: executionapi.ExecutionProtocol(run.Protocol), Agent: run.Agent,
-		TargetID: run.Target.ID, ExternalRef: conversationExternalRef(run.Process),
-		Source: "codex-jsonl", SourceSegment: segment, SourceIdentity: sourceIdentity, SourceCursor: string(checkpointCursor), SessionQuality: IdentityUnknown,
-		TurnQuality: IdentityUnknown, ItemQuality: IdentityUnknown, SourceEventQuality: IdentityDerived,
-		SourceEventID: fmt.Sprintf("bytes:%d:%d", source.SourceOffset, source.SourceOffset+source.SourceLength),
-		SourceSeq:     source.SourceSeq, ReceivedAt: now(), Evidence: evidence,
+	checkpoint := batch.Checkpoint
+	if checkpoint.ProjectID != base.ProjectID || checkpoint.ExecutionID != base.ExecutionID || checkpoint.AttemptID != base.AttemptID {
+		return errors.New("conversation mapper checkpoint changed the original execution identity")
 	}
-	var write ConversationWrite
-	if source.SourceGap {
-		event.Type, event.Phase, event.Status = ConversationGap, MessagePhaseUnknown, "gap"
-		event.Diagnostic = source.Diagnostic
-		write = ConversationWrite{Event: event}
-	} else {
-		if source.Session != "" {
-			event.SessionID, event.SessionQuality = source.Session, IdentityNative
+	if batch.VerifySourcePosition && source.SourceIdentity != "" {
+		paths := []string{}
+		for _, attempt := range s.domain.Attempts {
+			if attempt.AttemptID == attemptID && attempt.ExecutionID == run.ExecutionID && attempt.EventPath != "" {
+				paths = append(paths, attempt.EventPath)
+			}
 		}
-		write = mapper.MapCodexJSONL(event, source.Raw)
-	}
-	checkpoint := ConversationCheckpoint{
-		ProjectID: s.Config.identity, ExecutionID: executionID, AttemptID: attemptID,
-		Source: event.Source, SourceSegment: segment,
-		SourceIdentity: sourceIdentity,
-		Generation:     sourceIdentity, Cursor: string(checkpointCursor), LocalSeq: source.SourceSeq,
-	}
-	if source.Source == "codex-jsonl" && source.SourceIdentity != "" {
-		path := s.localConversationLogPath(run, attemptID)
-		if run.WorkflowVersion == WorkerFlowVersion {
-			path = s.workerFlowSourcePath(run, source.SourceIdentity)
+		path, pathErr := s.conversationSources.LiveJournalPath(context.Background(), contracts.ConversationJournalPathRequest{
+			RunDirectory: filepath.Join(s.Config.RunDir, "runs", run.RunID), WorkflowID: run.RunID, ExecutionID: run.ExecutionID, AttemptID: attemptID,
+			SourceIdentity: source.SourceIdentity, LogPath: deref(run.LogPath), EventPaths: paths, WorkerFlow: run.WorkflowVersion == WorkerFlowVersion})
+		if pathErr != nil {
+			return pathErr
 		}
-		if path == "" {
-			return errors.New("Codex conversation source path is unavailable")
+		event := batch.Writes[len(batch.Writes)-1].Event
+		generation, generationErr := s.conversationSources.JournalGeneration(source.SourceIdentity, event.SourceSegment)
+		if generationErr != nil {
+			return generationErr
 		}
-		position, positionErr := currentConversationJournalPosition(context.Background(), s.domainStore, s.Config.identity, executionID, attemptID, event.Source, segment, path, source.SourceIdentity, source.SourceOffset+source.SourceLength, source.SourceSeq)
+		position, positionErr := currentConversationJournalPosition(context.Background(), s.domainStore, s.Config.identity, run.ExecutionID, attemptID, event.Source, event.SourceSegment, generation, path, source.SourceIdentity, source.SourceOffset+source.SourceLength, source.SourceSeq)
 		if positionErr == nil && !source.SourceGap && len(source.Raw) > 0 {
 			positionErr = verifyConversationSourceBytes(path, source.SourceIdentity, source.SourceOffset, source.SourceLength, source.Raw)
 		}
@@ -124,11 +109,9 @@ func (s *Service) recordConversationEvent(run *Run, source WorkerEvent) (retErr 
 		if positionErr != nil {
 			return positionErr
 		}
+		checkpoint.SourceIdentity, checkpoint.Generation, checkpoint.LocalSeq, checkpoint.AllowReplay = source.SourceIdentity, source.SourceIdentity, source.SourceSeq, true
 	}
-	if err := s.bindLocalCodexHistory(run, source); err != nil {
-		return err
-	}
-	_, err = s.domainStore.CommitConversation(context.Background(), []ConversationWrite{write}, checkpoint)
+	_, err = s.domainStore.CommitConversation(context.Background(), batch.Writes, checkpoint)
 	return err
 }
 
@@ -154,82 +137,30 @@ func verifyConversationSourceBytes(path, expectedFileID string, offset, length i
 	return nil
 }
 
-func (s *Service) recordOrcaTerminalEvent(run *Run, source WorkerEvent) error {
-	executionID := run.ExecutionID
-	if !stableExecutionID(executionID) {
-		return nativeErr("contract_mismatch", "Orca conversation event has no fixed native execution identity")
-	}
-	attemptID := source.AttemptID
-	if attemptID == "" {
-		attemptID = run.AttemptID
-	}
-	if !stableExecutionID(attemptID) {
-		return nativeErr("contract_mismatch", "Orca conversation event has no fixed native attempt identity")
-	}
-	segment := nonEmpty(source.SourceSegment, "orca-terminal-v2-unsegmented")
-	eventID := source.SourceEventID
-	quality := IdentityDerived
-	if eventID == "" {
-		eventID, quality = "unidentified:"+newID(), IdentityUnknown
-	}
-	event := ConversationEvent{
-		Version: ConversationVersion, ProjectID: s.Config.identity, TaskID: run.DomainTaskID,
-		WorkflowID: run.RunID, ExecutionID: executionID, AttemptID: attemptID,
-		Backend: executionapi.BackendOrca, Protocol: executionapi.ProtocolOrcaTerminalV2, Agent: run.Agent,
-		TargetID: run.Target.ID, ExternalRef: conversationExternalRef(run.Process),
-		Source: "orca-terminal-v2", SourceSegment: segment, SourceIdentity: source.SourceIdentity,
-		SourceCursor: source.SourceCursor, SessionID: source.Session, SessionQuality: IdentityUnknown, TurnQuality: IdentityUnknown, ItemQuality: IdentityUnknown,
-		SourceEventID: eventID, SourceEventQuality: quality, SourceSeq: source.SourceSeq,
-		Phase: MessagePhaseUnknown, Status: "observed", ReceivedAt: now(),
-		Evidence:   map[string]string{"capture": "terminal-read", "turn_boundary": "unknown", "message_phase": "unknown", "source_changed": fmt.Sprint(source.SourceChanged)},
-		Diagnostic: source.Diagnostic,
-	}
-	if source.Session != "" {
-		event.SessionQuality = IdentityDerived
-	}
-	write := ConversationWrite{Event: event}
-	if source.SourceGap {
-		event.Type, event.Status = ConversationGap, "gap"
-		if len(source.Raw) > 0 {
-			event.ItemID, event.ItemQuality = event.SourceEventID, IdentityDerived
-			event.ItemKey = conversationItemKey(event, event.ItemID)
-			event.Attributes = map[string]any{"content_kind": "terminal_observation", "source_changed": source.SourceChanged}
-			write = ConversationWrite{Event: event, Body: append([]byte(nil), source.Raw...), BodyMode: "snapshot", Raw: append([]byte(nil), source.Raw...), BodySource: "orca-terminal-stream"}
-		} else {
-			write.Event = event
-		}
-	} else if source.InputWait {
-		event.Type, event.Status = ConversationInputWait, "waiting"
-		event.Attributes = map[string]any{"wait_origin": "host", "business_decision": false}
-		event.Evidence["wait_source"] = "orca-terminal-show.agentWait"
-		write.Event = event
-	} else {
-		event.Type, event.ItemID, event.ItemQuality = ConversationObservation, eventID, IdentityDerived
-		event.ItemKey = conversationItemKey(event, event.ItemID)
-		write = ConversationWrite{Event: event, Body: append([]byte(nil), source.Raw...), BodyMode: "snapshot", Raw: append([]byte(nil), source.Raw...), BodySource: "orca-terminal-stream"}
-	}
-	generation := ""
-	if run.Process != nil {
-		generation = run.Process.Incarnation
-	}
-	checkpoint := ConversationCheckpoint{
-		ProjectID: s.Config.identity, ExecutionID: executionID, AttemptID: attemptID,
-		Source: event.Source, SourceSegment: segment, SourceIdentity: source.SourceIdentity,
-		Generation: generation, Cursor: source.SourceCursor, LocalSeq: source.SourceSeq,
-	}
-	_, err := s.domainStore.CommitConversation(context.Background(), []ConversationWrite{write}, checkpoint)
-	return err
-}
-
-func conversationExternalRef(identity *executionapi.ProcessIdentity) string {
-	if identity == nil {
+func processGeneration(process *executionapi.ProcessIdentity) string {
+	if process == nil {
 		return ""
 	}
-	if identity.Kind == "orca" && identity.Terminal != "" {
-		return "terminal:" + identity.Terminal + "@" + identity.Incarnation
+	return process.Incarnation
+}
+
+func conversationProcessSnapshot(process *executionapi.ProcessIdentity) *executionapi.ProcessIdentity {
+	if process == nil {
+		return nil
 	}
-	if identity.Kind == "os" && identity.PID > 0 {
-		return fmt.Sprintf("process:%d@%s", identity.PID, identity.Created)
+	identity := *process
+	return &identity
+}
+
+func validateConversationSourceWrites(expected ConversationEvent, writes []ConversationWrite) error {
+	for _, write := range writes {
+		event := write.Event
+		if event.ProjectID != expected.ProjectID || event.TaskID != expected.TaskID || event.WorkflowID != expected.WorkflowID || event.ExecutionID != expected.ExecutionID || event.AttemptID != expected.AttemptID || event.Backend != expected.Backend || event.Protocol != expected.Protocol || event.Agent != expected.Agent || event.TargetID != expected.TargetID {
+			return errors.New("conversation source changed its fixed project, execution or attempt owner")
+		}
+		if expected.Source != "" && (event.Source != expected.Source || event.SourceSegment != expected.SourceSegment || event.SourceIdentity != expected.SourceIdentity) {
+			return errors.New("conversation source changed its discovered source identity")
+		}
 	}
-	return ""
+	return nil
 }

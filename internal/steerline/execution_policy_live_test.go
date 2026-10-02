@@ -248,7 +248,7 @@ Write-Output ('SLPOLICY59:%s:' + ($result | ConvertTo-Json -Compress))
 
 func findPolicyNativeJournal(t *testing.T, workspace string) string {
 	t.Helper()
-	home := codexEnvironmentHome()
+	home := codexworker.EnvironmentHome()
 	if supplied := os.Getenv("STEERLINE_POLICY_LIVE_NATIVE_HOME"); supplied != "" {
 		home = supplied
 	}

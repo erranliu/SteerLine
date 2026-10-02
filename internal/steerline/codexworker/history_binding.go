@@ -1,15 +1,125 @@
 package codexworker
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
+
+const ConversationSourceMarkerName = "conversation-source.v1.json"
+const ConversationJSONLSource = "codex-jsonl"
+const LocalCommandOutputSource = "local-command-output"
+
+func LocalProcessJournalSegment(identity string) string {
+	return JournalSegment(executionapi.BackendLocal, executionapi.ProtocolLocalProcess, identity)
+}
+
+func LocalCommandJournalSegment(identity string) string { return "local-command-v1:" + identity }
+
+func JournalSource(backend executionapi.BackendKind, protocol executionapi.ExecutionProtocol) string {
+	if backend == executionapi.BackendLocal && (protocol == executionapi.ProtocolLocalProcess || protocol == executionapi.ProtocolLocalCodexAppServer) ||
+		backend == executionapi.BackendOrca && (protocol == executionapi.ProtocolOrcaTerminalV2 || protocol == executionapi.ProtocolOrcaSupervised) {
+		return ConversationJSONLSource
+	}
+	return ""
+}
+
+func JournalSegment(backend executionapi.BackendKind, protocol executionapi.ExecutionProtocol, identity string) string {
+	prefix := ""
+	if backend == executionapi.BackendLocal && (protocol == executionapi.ProtocolLocalProcess || protocol == executionapi.ProtocolLocalCodexAppServer) {
+		prefix = "local-jsonl-v1:"
+	} else if backend == executionapi.BackendOrca && (protocol == executionapi.ProtocolOrcaTerminalV2 || protocol == executionapi.ProtocolOrcaSupervised) {
+		prefix = "orca-jsonl-v1:"
+	}
+	if prefix == "" {
+		return ""
+	}
+	return prefix + identity
+}
+
+func JournalGeneration(fileIdentity, segment string) (uint64, error) {
+	prefix := JournalSegment(executionapi.BackendLocal, executionapi.ProtocolLocalProcess, fileIdentity)
+	if strings.HasPrefix(segment, JournalSegment(executionapi.BackendOrca, executionapi.ProtocolOrcaTerminalV2, fileIdentity)) {
+		prefix = JournalSegment(executionapi.BackendOrca, executionapi.ProtocolOrcaTerminalV2, fileIdentity)
+	}
+	if prefix == "" || segment == prefix {
+		if segment == prefix {
+			return 1, nil
+		}
+		return 0, errors.New("conversation source segment has an unsupported identity")
+	}
+	if !strings.HasPrefix(segment, prefix+":") {
+		return 0, errors.New("conversation source segment and file identity differ")
+	}
+	generation, err := strconv.ParseUint(strings.TrimPrefix(segment, prefix+":"), 10, 64)
+	if err != nil || generation < 1 {
+		return 0, errors.New("conversation source generation is invalid")
+	}
+	return generation, nil
+}
+
+type ConversationSourceMarkerInput struct {
+	ProjectID, WorkflowID, ExecutionID, AttemptID string
+	Agent, TargetID, SourceIdentity               string
+	ReaderCommand                                 contracts.Command
+	CodexHome                                     string
+	CreatedAt                                     time.Time
+}
+
+type ConversationSourceMarker struct {
+	Version        int                            `json:"v"`
+	ProjectID      string                         `json:"project_id"`
+	WorkflowID     string                         `json:"workflow_id"`
+	ExecutionID    string                         `json:"execution_id"`
+	AttemptID      string                         `json:"attempt_id"`
+	Backend        executionapi.BackendKind       `json:"backend"`
+	Protocol       executionapi.ExecutionProtocol `json:"protocol"`
+	Agent          string                         `json:"agent"`
+	TargetID       string                         `json:"target_id"`
+	Source         string                         `json:"source"`
+	SourceSegment  string                         `json:"source_segment"`
+	SourceIdentity string                         `json:"source_identity"`
+	RecordName     string                         `json:"record_name"`
+	CreatedAt      time.Time                      `json:"created_at"`
+	ReaderCommand  contracts.Command              `json:"reader_command,omitempty"`
+	CodexHome      string                         `json:"codex_home,omitempty"`
+}
+
+func (m ConversationSourceMarker) Validate() error {
+	local := m.Backend == executionapi.BackendLocal && m.Protocol == executionapi.ProtocolLocalProcess && m.SourceSegment == JournalSegment(m.Backend, m.Protocol, m.SourceIdentity)
+	orca := m.Backend == executionapi.BackendOrca && (m.Protocol == executionapi.ProtocolOrcaTerminalV2 || m.Protocol == executionapi.ProtocolOrcaSupervised) && m.SourceSegment == JournalSegment(m.Backend, m.Protocol, m.SourceIdentity)
+	if m.Version != 1 || m.ProjectID == "" || m.WorkflowID == "" || m.ExecutionID == "" || m.AttemptID == "" || !local && !orca || m.Agent == "" || m.TargetID == "" || m.Source != ConversationJSONLSource || m.SourceIdentity == "" || m.RecordName != "events.jsonl" || m.CreatedAt.IsZero() {
+		return errors.New("conversation source marker is incomplete or unsupported")
+	}
+	return nil
+}
+
+func WriteConversationSourceMarker(path string, input ConversationSourceMarkerInput, writeAtomic func(string, []byte) error) error {
+	marker := ConversationSourceMarker{Version: 1, ProjectID: input.ProjectID, WorkflowID: input.WorkflowID, ExecutionID: input.ExecutionID, AttemptID: input.AttemptID,
+		Backend: executionapi.BackendLocal, Protocol: executionapi.ProtocolLocalProcess, Agent: input.Agent, TargetID: input.TargetID, Source: ConversationJSONLSource,
+		SourceSegment: LocalProcessJournalSegment(input.SourceIdentity), SourceIdentity: input.SourceIdentity, RecordName: "events.jsonl",
+		CreatedAt: input.CreatedAt, ReaderCommand: input.ReaderCommand, CodexHome: input.CodexHome}
+	if marker.CreatedAt.IsZero() {
+		marker.CreatedAt = time.Now().UTC()
+	}
+	if err := marker.Validate(); err != nil {
+		return err
+	}
+	data, err := json.Marshal(marker)
+	if err != nil {
+		return err
+	}
+	return writeAtomic(path, append(data, '\n'))
+}
 
 type HistoryBinding struct {
 	Version     int                            `json:"v"`
@@ -48,7 +158,7 @@ func (b HistoryBinding) Identity() string {
 	}{b.SessionID, b.Home, canonicalPath(b.Workspace), b.Command})
 }
 func (b HistoryBinding) Event() contracts.ConversationEvent {
-	return contracts.ConversationEvent{Version: 1, ProjectID: b.ProjectID, TaskID: b.TaskID, WorkflowID: b.WorkflowID, ExecutionID: b.ExecutionID, AttemptID: b.AttemptID, Backend: b.Backend, Protocol: b.Protocol, Agent: "codex", TargetID: b.TargetID, ExternalRef: b.ExternalRef, Source: "codex-app-server", SourceSegment: b.Identity(), SourceIdentity: b.Identity(), SessionID: b.SessionID, SessionQuality: contracts.IdentityNative, TurnQuality: contracts.IdentityUnknown, ItemQuality: contracts.IdentityUnknown, SourceEventQuality: contracts.IdentityDerived, Phase: contracts.MessagePhaseUnknown, ReceivedAt: time.Now().UTC()}
+	return contracts.ConversationEvent{Version: contracts.ConversationVersion, ProjectID: b.ProjectID, TaskID: b.TaskID, WorkflowID: b.WorkflowID, ExecutionID: b.ExecutionID, AttemptID: b.AttemptID, Backend: b.Backend, Protocol: b.Protocol, Agent: "codex", TargetID: b.TargetID, ExternalRef: b.ExternalRef, Source: "codex-app-server", SourceRole: contracts.ConversationSourceCanonical, SourceSegment: b.Identity(), SourceIdentity: b.Identity(), SessionID: b.SessionID, SessionQuality: contracts.IdentityNative, TurnQuality: contracts.IdentityUnknown, ItemQuality: contracts.IdentityUnknown, SourceEventQuality: contracts.IdentityDerived, Phase: contracts.MessagePhaseUnknown, ReceivedAt: time.Now().UTC()}
 }
 func WriteHistoryBinding(path string, b HistoryBinding, writeAtomic func(string, []byte) error) error {
 	if old, err := os.ReadFile(path); err == nil {
@@ -72,12 +182,48 @@ func WriteHistoryBinding(path string, b HistoryBinding, writeAtomic func(string,
 
 func ReadHistoryBinding(path string) (HistoryBinding, error) {
 	var b HistoryBinding
-	raw, err := os.ReadFile(path)
+	raw, err := readConversationSourceFile(path)
 	if err != nil {
 		return b, err
 	}
-	if err = json.Unmarshal(raw, &b); err != nil {
+	if err = decodeConversationSourceValue(raw, &b); err != nil {
 		return b, err
 	}
 	return b, b.Validate()
+}
+
+func readConversationSourceFile(path string) ([]byte, error) {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() || info.Size() > maxConversationCursorBytes {
+		return nil, errors.New("conversation source binding must be a regular file within 64 KiB")
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	raw, err := io.ReadAll(io.LimitReader(file, maxConversationCursorBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(raw) > maxConversationCursorBytes {
+		return nil, errors.New("conversation source binding exceeds 64 KiB")
+	}
+	return raw, nil
+}
+
+func decodeConversationSourceValue(raw []byte, value any) error {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(value); err != nil {
+		return err
+	}
+	var extra any
+	if err := decoder.Decode(&extra); err != io.EOF {
+		return errors.New("conversation source binding has trailing data")
+	}
+	return nil
 }

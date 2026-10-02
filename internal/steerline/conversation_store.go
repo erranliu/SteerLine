@@ -12,7 +12,6 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
@@ -264,39 +263,46 @@ func (s *SQLiteStore) ConversationSourceCheckpoints(ctx context.Context, project
 	return out, rows.Err()
 }
 
-func (s *SQLiteStore) RestoreConversationMapper(ctx context.Context, project, execution, attempt, source, segment string) (*codexworker.ConversationMapper, error) {
-	mapper := &codexworker.ConversationMapper{}
+func (s *SQLiteStore) ConversationMapperSnapshot(ctx context.Context, project, execution, attempt, source, segment string) (contracts.ConversationMapperSnapshot, error) {
+	var snapshot contracts.ConversationMapperSnapshot
 	var payload []byte
 	err := s.db.QueryRowContext(ctx, `SELECT payload FROM conversation_events WHERE project_identity=? AND execution_id=? AND attempt_id=? AND source=? AND source_segment=? AND event_type=? ORDER BY event_id DESC LIMIT 1`, project, execution, attempt, source, segment, ConversationSession).Scan(&payload)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return nil, err
+		return snapshot, err
 	}
 	if err == nil {
 		var event ConversationEvent
 		if err = json.Unmarshal(payload, &event); err != nil {
-			return nil, err
+			return snapshot, err
 		}
-		mapper.RestoreSession(event)
+		if err = event.Validate(); err != nil {
+			return snapshot, err
+		}
+		snapshot.Session = &event
 	}
 	payload = nil
 	err = s.db.QueryRowContext(ctx, `SELECT payload FROM conversation_events WHERE project_identity=? AND execution_id=? AND attempt_id=? AND source=? AND source_segment=? AND event_type=? ORDER BY event_id DESC LIMIT 1`, project, execution, attempt, source, segment, ConversationTurnStarted).Scan(&payload)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return nil, err
+		return snapshot, err
 	}
 	if err == nil {
 		var event ConversationEvent
 		if err = json.Unmarshal(payload, &event); err != nil {
-			return nil, err
+			return snapshot, err
+		}
+		if err = event.Validate(); err != nil {
+			return snapshot, err
 		}
 
 		var count int
 		err = s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM conversation_events WHERE project_identity=? AND execution_id=? AND attempt_id=? AND source=? AND source_segment=? AND turn_id=? AND event_type=? AND phase=?`, project, execution, attempt, source, segment, event.TurnID, ConversationMessageComplete, MessagePhaseFinalAnswer).Scan(&count)
 		if err != nil {
-			return nil, err
+			return snapshot, err
 		}
-		mapper.RestoreTurn(event, count > 0)
+		snapshot.Turn = &event
+		snapshot.FinalSeen = count > 0
 	}
-	return mapper, nil
+	return snapshot, nil
 }
 
 func (s *SQLiteStore) SaveConversationCapabilityReport(ctx context.Context, report ConversationCapabilityReport) error {

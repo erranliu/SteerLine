@@ -1,20 +1,29 @@
 package contracts
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os/exec"
 	"strings"
 	"time"
 
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
-const ConversationVersion = 1
+const ConversationVersion = 2
 
 type ConversationEventType string
+
+type ConversationSourceRole string
+
+const (
+	ConversationSourceCanonical ConversationSourceRole = "canonical"
+	ConversationSourceFallback  ConversationSourceRole = "fallback"
+)
 
 const (
 	ConversationSession         ConversationEventType = "session"
@@ -86,6 +95,7 @@ type ConversationEvent struct {
 	TargetID           string                         `json:"target_id,omitempty"`
 	ExternalRef        string                         `json:"external_ref,omitempty"`
 	Source             string                         `json:"source"`
+	SourceRole         ConversationSourceRole         `json:"source_role,omitempty"`
 	SourceSegment      string                         `json:"source_segment"`
 	SourceIdentity     string                         `json:"source_identity,omitempty"`
 	SourceCursor       string                         `json:"source_cursor,omitempty"`
@@ -155,6 +165,130 @@ type ConversationCheckpoint struct {
 	AllowReplay    bool      `json:"-"`
 }
 
+// ConversationMapperSnapshot is the minimum committed history an implementation
+// needs to reconstruct transient mapping state. It keeps mapper state derived
+// from committed events instead of making a mutable mapper a second cursor.
+type ConversationMapperSnapshot struct {
+	Session   *ConversationEvent `json:"session,omitempty"`
+	Turn      *ConversationEvent `json:"turn,omitempty"`
+	FinalSeen bool               `json:"final_seen,omitempty"`
+}
+
+// ConversationMapper maps one source record to shared values. Implementations
+// keep any candidate state local to the mapper instance; callers reconstruct
+// it from committed events after a failed batch.
+type ConversationMapper interface {
+	MapRecord(ConversationEvent, []byte) ConversationWrite
+}
+
+type ConversationInput struct {
+	Event         ConversationEvent
+	Process       *executionapi.ProcessIdentity
+	Source        string
+	Segment       string
+	Identity      string
+	Cursor        string
+	Generation    string
+	Session       string
+	SourceSeq     uint64
+	SourceOffset  int64
+	SourceLength  int64
+	Raw           []byte
+	Diagnostic    string
+	Gap           bool
+	InputWait     bool
+	SourceChanged bool
+	Mapper        ConversationMapperSnapshot
+}
+
+type ConversationMappedBatch struct {
+	Writes               []ConversationWrite
+	Checkpoint           ConversationCheckpoint
+	VerifySourcePosition bool
+}
+
+type ConversationInputMapper interface {
+	MapConversation(ConversationInput) (ConversationMappedBatch, error)
+}
+
+type ConversationSourcePort interface {
+	ConversationInputMapper
+	RestoreMapper(ConversationMapperSnapshot) ConversationMapper
+	JournalSources() []string
+	JournalSource(executionapi.BackendKind, executionapi.ExecutionProtocol) string
+	JournalSegment(executionapi.BackendKind, executionapi.ExecutionProtocol, string) string
+	JournalGeneration(fileIdentity, segment string) (uint64, error)
+	LiveJournalPath(context.Context, ConversationJournalPathRequest) (string, error)
+	DiscoverHistory(context.Context, ConversationDiscovery) (ConversationDiscoveryResult, error)
+	DiscoverJournals(context.Context, ConversationDiscovery, func(string) (string, error)) ([]ConversationJournalSource, error)
+	ReadHistory(context.Context, ConversationHistoryReadRequest, func(*exec.Cmd) (executionapi.StopHandle, error)) (ConversationHistoryBatch, error)
+}
+
+type ConversationJournalPathRequest struct {
+	RunDirectory, WorkflowID, ExecutionID, AttemptID, SourceIdentity, LogPath string
+	EventPaths                                                                []string
+	WorkerFlow                                                                bool
+}
+
+type ConversationDiscovery struct {
+	ProjectID, RunDirectory, Repository string
+	Runs                                []ConversationRunSource
+}
+
+type ConversationRunSource struct {
+	Base         ConversationEvent
+	RunDirectory string
+	Workspace    string
+	WorkerFlow   bool
+	Process      *executionapi.ProcessIdentity
+	Attempts     []ConversationAttemptSource
+}
+
+type ConversationAttemptSource struct {
+	AttemptID string
+	EventPath string
+	FileID    string
+	Ended     bool
+}
+
+type ConversationJournalSource struct {
+	Path, AttemptID, FileID, ExpectedFileID, Diagnostic, Workspace string
+	Event                                                          ConversationEvent
+	Ended                                                          bool
+}
+
+type ConversationHistorySource struct {
+	Identity                string
+	BindingPath             string
+	Workspace               string
+	Event                   ConversationEvent
+	Ended                   bool
+	RequiresPlatformVersion bool
+}
+
+type ConversationDiscoveryResult struct {
+	Sources []ConversationHistorySource
+	Writes  []ConversationWrite
+}
+
+type ConversationHistoryReadRequest struct {
+	Source          ConversationHistorySource
+	Cursor          string
+	HasCheckpoint   bool
+	Repository      string
+	RunDirectory    string
+	PlatformVersion string
+}
+
+type ConversationHistoryBatch struct {
+	Writes       []ConversationWrite
+	Cursor       string
+	Sequence     uint64
+	Settled      bool
+	More         bool
+	Capabilities *ConversationCapabilityReport
+}
+
 type ConversationCapability struct {
 	Name     string                        `json:"name"`
 	Status   executionapi.CapabilityStatus `json:"status"`
@@ -196,6 +330,9 @@ func (e ConversationEvent) SourceKey() string {
 func (e ConversationEvent) Validate() error {
 	if e.Version != ConversationVersion || e.ProjectID == "" || e.ExecutionID == "" || e.AttemptID == "" || e.Source == "" || e.SourceSegment == "" || e.Type == "" || e.SourceEventID == "" {
 		return errors.New("conversation event is missing versioned identity or source evidence")
+	}
+	if e.SourceRole != ConversationSourceCanonical && e.SourceRole != ConversationSourceFallback {
+		return errors.New("conversation event has an unsupported source role")
 	}
 	if e.ReceivedAt.IsZero() {
 		return errors.New("conversation event is missing received_at")

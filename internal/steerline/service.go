@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
+	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
@@ -21,6 +22,7 @@ type Service struct {
 	Config               Config
 	baseConfig           Config
 	lifecycleResolver    executionapi.LifecycleResolver
+	conversationSources  contracts.ConversationSourcePort
 	dispatchConfig       *Config
 	dispatchProfile      *ExecutionProfile
 	State                Runtime
@@ -45,7 +47,6 @@ type Service struct {
 	// activities holds one journal per run so PR and delivery events always land in
 	// their own run's file, even after the worker exited.
 	activities                 map[string]*ActivityWriter
-	conversationMappers        map[string]*codexworker.ConversationMapper
 	conversationReplayRequests chan []conversationJournalSource
 	conversationReplayErrors   chan error
 	// Console selects service-side rendering: "", "off", "pretty", "summary" or "json".
@@ -65,15 +66,15 @@ type Service struct {
 }
 
 func NewService(c Config) (_ *Service, retErr error) {
-	return NewServiceWithLifecycleResolver(c, builtinLifecycleResolver{})
+	return NewServiceWithLifecycleResolver(c, builtinLifecycleResolver{}, codexworker.NewConversationAdapter())
 }
 
 // NewServiceWithLifecycleResolver constructs the same service with an
 // explicitly supplied implementation directory. Lifecycle operations receive
 // only execution values and already-persisted operation intents.
-func NewServiceWithLifecycleResolver(c Config, resolver executionapi.LifecycleResolver) (_ *Service, retErr error) {
-	if resolver == nil {
-		return nil, errors.New("execution lifecycle resolver is required")
+func NewServiceWithLifecycleResolver(c Config, resolver executionapi.LifecycleResolver, conversationSources contracts.ConversationSourcePort) (_ *Service, retErr error) {
+	if resolver == nil || conversationSources == nil {
+		return nil, errors.New("execution lifecycle and conversation source ports are required")
 	}
 	if err := requireNativeTaskAuthority(c); err != nil {
 		return nil, err
@@ -111,7 +112,7 @@ func NewServiceWithLifecycleResolver(c Config, resolver executionapi.LifecycleRe
 			_ = db.Close()
 		}
 	}()
-	s := &Service{Config: c, baseConfig: c, lifecycleResolver: resolver, domainStore: db, store: &Store{Domain: db, Project: c.identity}, activities: map[string]*ActivityWriter{}, conversationMappers: map[string]*codexworker.ConversationMapper{}, workers: map[string]*Worker{}, ownedLocalProcesses: map[string]*childProcess{}}
+	s := &Service{Config: c, baseConfig: c, lifecycleResolver: resolver, conversationSources: conversationSources, domainStore: db, store: &Store{Domain: db, Project: c.identity}, activities: map[string]*ActivityWriter{}, workers: map[string]*Worker{}, ownedLocalProcesses: map[string]*childProcess{}}
 	old, e := loadRuntimeSnapshot(db, c.identity, false)
 	if errors.Is(e, sql.ErrNoRows) {
 		old, e = nil, nil
@@ -169,7 +170,7 @@ func NewServiceWithLifecycleResolver(c Config, resolver executionapi.LifecycleRe
 		return nil, fmt.Errorf("identify service process: %w", err)
 	}
 	s.State.Service.ProcessIdentity = identity
-	if err := db.ValidateConversationCheckpointFormat(context.Background(), c.identity); err != nil {
+	if err := db.ValidateConversationCheckpointFormat(context.Background(), c.identity, conversationSources.JournalSources()); err != nil {
 		return nil, err
 	}
 	return s, nil
@@ -586,14 +587,14 @@ func (s *Service) run(ctx context.Context, dispatchMode string) (retErr error) {
 		s.forwardWorker(ctx, runID, worker)
 	}
 	var conversationReplayDone <-chan struct{}
-	var codexHistoryDone <-chan struct{}
+	var historyCollectorDone <-chan struct{}
 	defer func() {
 		cancel()
 		if conversationReplayDone != nil {
 			<-conversationReplayDone
 		}
-		if codexHistoryDone != nil {
-			<-codexHistoryDone
+		if historyCollectorDone != nil {
+			<-historyCollectorDone
 		}
 		s.conversationReplayRequests = nil
 		s.conversationReplayErrors = nil
@@ -624,14 +625,18 @@ func (s *Service) run(ctx context.Context, dispatchMode string) (retErr error) {
 	if len(replaySources) > 0 {
 		s.conversationReplayRequests <- replaySources
 	}
-	historyRequests := make(chan []codexworker.HistoryBinding, 1)
+	historyRequests := make(chan []contracts.ConversationHistorySource, 1)
 	historyDone := make(chan struct{})
-	codexHistoryDone = historyDone
+	historyCollectorDone = historyDone
 	go func() {
 		defer close(historyDone)
-		s.runCodexHistoryCollector(ctx, historyRequests, s.conversationReplayErrors)
+		s.runConversationHistoryCollector(ctx, historyRequests, s.conversationReplayErrors)
 	}()
-	historyRequests <- s.codexHistorySources()
+	historySources, err := s.discoverConversationHistory(ctx)
+	if err != nil {
+		return err
+	}
+	historyRequests <- historySources
 	historyTick := time.NewTicker(2 * time.Second)
 	defer historyTick.Stop()
 	heartDone := make(chan struct{})
@@ -812,8 +817,16 @@ func (s *Service) run(ctx context.Context, dispatchMode string) (retErr error) {
 		case <-ctx.Done():
 			return nil
 		case <-historyTick.C:
+			historySources, discoverErr := s.discoverConversationHistory(ctx)
+			if discoverErr != nil {
+				select {
+				case s.conversationReplayErrors <- discoverErr:
+				default:
+				}
+				continue
+			}
 			select {
-			case historyRequests <- s.codexHistorySources():
+			case historyRequests <- historySources:
 			default:
 			}
 		case replayErr := <-s.conversationReplayErrors:

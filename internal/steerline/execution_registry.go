@@ -14,6 +14,13 @@ import (
 
 const executionImplementationVersion = "builtin-execution-v2"
 
+// This entrypoint only assembles the existing launcher process/file ports.
+// The default application assembly moves out of the center in #66.
+func RunCodexSessionLauncher(ctx context.Context, requestPath string) error {
+	host := localManagedProcessHost{}
+	return codexworker.RunSessionLauncher(ctx, requestPath, host.StartManaged, host.WriteExecutionFile)
+}
+
 // Registration keys identify implementations; concrete targets remain separate.
 // All service callbacks run on the center writer and retain its existing commits.
 type executionRegistrationKey struct {

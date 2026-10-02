@@ -2,6 +2,9 @@ package orcaworker
 
 import (
 	"context"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
@@ -92,6 +95,64 @@ func TestNativeLifecyclePlansCommittedResourcesAndSeparateInput(t *testing.T) {
 	step, err = lifecycle.Next(context.Background(), snapshot)
 	if err != nil || step.Action != executionapi.LifecycleSubmitInput {
 		t.Fatalf("input submission plan step=%+v error=%v", step, err)
+	}
+}
+
+func TestProbeMutationRunsAsOneDurableLifecycleAction(t *testing.T) {
+	gitDir, worktree := t.TempDir(), t.TempDir()
+	if err := os.MkdirAll(filepath.Join(gitDir, "info"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	identity := executionapi.ProbeIdentity{Execution: stableIDValue(7), Turn: stableIDValue(8), Nonce: stableIDValue(9), ProfileDigest: "profile",
+		Runtime: "runtime", Terminal: "terminal", Incarnation: "incarnation", Worktree: worktree}
+	snapshot := executionapi.LifecycleSnapshot{Ref: executionapi.ExecutionRef{Backend: executionapi.BackendOrca, Protocol: executionapi.ProtocolOrcaTerminalV2,
+		WorkspacePath: worktree, External: executionapi.ProcessIdentity{Kind: "orca", Terminal: "terminal", RuntimeID: "runtime", Incarnation: "incarnation"}},
+		Session:             executionapi.SessionContext{ProjectID: gitDir, ExecutionID: identity.Execution, AttemptID: stableIDValue(10), WorkflowRunID: stableIDValue(11)},
+		ConfigurationDigest: "config", ResourceGeneration: stableIDValue(12)}
+	state := NativeExecutionState{Coordinator: executionapi.ProcessIdentity{Kind: "orca", Terminal: "coordinator", RuntimeID: "runtime", Incarnation: "incarnation"},
+		Turns: []NativeTurnState{{TurnID: identity.Turn, Purpose: "readiness"}}}
+	snapshot.PreparationProbe = &identity
+	envelope, err := NewExecutionStateEnvelope(ExecutionStateIdentity{ProjectID: snapshot.Session.ProjectID, ExecutionID: snapshot.Session.ExecutionID,
+		AttemptID: snapshot.Session.AttemptID, Generation: snapshot.ResourceGeneration, ConfigDigest: snapshot.ConfigurationDigest,
+		Protocol: snapshot.Ref.Protocol, Process: snapshot.Ref.External}, state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot.Implementation = []executionapi.ImplementationDataEnvelope{envelope}
+	lifecycle := &ExecutionLifecycle{setup: executionapi.LifecycleSetup{Snapshot: snapshot}, client: New(Config{}), orca: ProfileConfig{WaitTimeout: "1m"}}
+	request := executionapi.LifecycleRequest{Snapshot: snapshot, Operation: executionapi.Operation{ID: "operation", Action: string(executionapi.LifecycleHostAction), PayloadDigest: "digest"},
+		Input: executionapi.LifecycleInput{Host: &executionapi.HostActionInput{Kind: executionapi.HostPrepareProbeFiles, Probe: &identity}}}
+	receipt, err := lifecycle.ExecuteHostAction(context.Background(), request)
+	if err != nil || receipt.Disposition != executionapi.OperationConfirmed {
+		t.Fatalf("probe file action receipt=%+v error=%v", receipt, err)
+	}
+	plan, err := BuildProbe(identity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if present, err := CheckProbeFiles(identity, plan); err != nil || !present {
+		t.Fatalf("probe files were not prepared by the action: present=%v err=%v", present, err)
+	}
+	ignored, err := ReadinessIgnored(gitDir)
+	if err != nil || !ignored {
+		t.Fatalf("probe ignore rule was not prepared by the action: ignored=%v err=%v", ignored, err)
+	}
+	reconciled, err := lifecycle.ReconcileHostAction(context.Background(), request)
+	if err != nil || reconciled.Disposition != executionapi.OperationConfirmed {
+		t.Fatalf("probe action receipt could not be reconciled read-only: %+v err=%v", reconciled, err)
+	}
+	cleanup := request
+	cleanup.Operation.ID = "cleanup-operation"
+	cleanup.Input.Host = &executionapi.HostActionInput{Kind: executionapi.HostCleanupProbeFiles, Probe: &identity}
+	if _, err = lifecycle.ExecuteHostAction(context.Background(), cleanup); err != nil {
+		t.Fatal(err)
+	}
+	if absent, err := ProbeFilesAbsent(identity); err != nil || !absent {
+		t.Fatalf("cleanup action left probe files: absent=%v err=%v", absent, err)
+	}
+	exclude, err := os.ReadFile(filepath.Join(gitDir, "info", "exclude"))
+	if err != nil || !strings.Contains(string(exclude), "/.steerline-readiness/") {
+		t.Fatalf("persisted ignore rule disappeared during probe cleanup: %q err=%v", exclude, err)
 	}
 }
 

@@ -17,6 +17,7 @@ import (
 
 	"github.com/erranliu/SteerLine/internal/steerline"
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
+	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 	"github.com/erranliu/SteerLine/internal/steerline/testprotocol"
@@ -291,6 +292,7 @@ type integrationFixture struct {
 func newLifecycleProject(t *testing.T, host string) integrationFixture {
 	t.Helper()
 	root := t.TempDir()
+	t.Setenv("STEERLINE_INTEGRATION_HISTORY_FILE", filepath.Join(root, "app-server-history.json"))
 	home := filepath.Join(root, "home")
 	t.Setenv("STEERLINE_HOME", home)
 	repository, bare := filepath.Join(root, "repo"), filepath.Join(root, "origin.git")
@@ -479,7 +481,15 @@ func (r *integrationLifecycleResolver) ResolveLifecycle(setup executionapi.Lifec
 			return nil, err
 		}
 		if r.beforeNativeExecute != nil {
-			return integrationFaultLifecycle{LifecyclePort: port, before: r.beforeNativeExecute}, nil
+			host, ok := port.(contracts.HostEnvironmentPort)
+			if !ok {
+				return nil, fmt.Errorf("native fixture adapter lacks its host port")
+			}
+			mapper, ok := port.(contracts.ConversationInputMapper)
+			if !ok {
+				return nil, fmt.Errorf("native fixture adapter lacks its conversation mapper")
+			}
+			return integrationFaultLifecycle{LifecyclePort: port, HostEnvironmentPort: host, ConversationInputMapper: mapper, before: r.beforeNativeExecute}, nil
 		}
 		return port, nil
 	default:
@@ -489,6 +499,8 @@ func (r *integrationLifecycleResolver) ResolveLifecycle(setup executionapi.Lifec
 
 type integrationFaultLifecycle struct {
 	executionapi.LifecyclePort
+	contracts.HostEnvironmentPort
+	contracts.ConversationInputMapper
 	before func(executionapi.LifecycleRequest) error
 }
 
@@ -519,7 +531,7 @@ type runningIntegrationService struct {
 
 func startIntegrationService(t *testing.T, parent context.Context, config steerline.Config, resolver executionapi.LifecycleResolver) *runningIntegrationService {
 	t.Helper()
-	service, err := steerline.NewServiceWithLifecycleResolver(config, resolver)
+	service, err := steerline.NewServiceWithLifecycleResolver(config, resolver, codexworker.NewConversationAdapter())
 	require(t, err)
 	reader, err := steerline.OpenNativeTaskReader(parent, &config)
 	require(t, err)
@@ -588,7 +600,7 @@ func waitIntegrationRun(t *testing.T, ctx context.Context, service *runningInteg
 	var result integrationRunSnapshot
 	t.Cleanup(func() {
 		if t.Failed() && result.runtime != nil {
-			t.Logf("last public lifecycle: decision=%s current=%s pending=%s command=%s pendingCommand=%s status=%s error=%v", mustJSON(result.run.Decision), result.execution.CurrentTurnID, result.execution.PendingTurnID, result.execution.CurrentCommandID, result.execution.PendingCommandID, result.execution.Status, result.execution.Error)
+			t.Logf("last public lifecycle: decision=%s current=%s stopped=%s turns=%d pending=%s command=%s pendingCommand=%s status=%s error=%s", mustJSON(result.run.Decision), result.execution.CurrentTurnID, result.execution.LastStoppedTurnID, result.execution.TurnNumber, result.execution.PendingTurnID, result.execution.CurrentCommandID, result.execution.PendingCommandID, result.execution.Status, derefString(result.execution.Error))
 		}
 	})
 	waitFor(t, 2*time.Minute, func() bool {

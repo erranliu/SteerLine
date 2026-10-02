@@ -16,13 +16,13 @@ var _ query.ConversationBodyReader = Reader{}
 var _ query.ConversationRawReader = Reader{}
 var _ query.ConversationCapabilityReader = Reader{}
 
-// Native session evidence supersedes raw projections only within the same
+// A committed canonical source hides fallback projections only within the same
 // project/execution/attempt. Explicit source queries retain the raw observations.
 func conversationSourcePredicate(filter contracts.ConversationFilter, args []any) (string, []any) {
 	if filter.Source != "" {
 		return ` AND source=?`, append(args, filter.Source)
 	}
-	return ` AND (event_type IN ('gap','input.wait') OR source NOT IN ('codex-jsonl','orca-terminal-v2','orca-reply-receipt') OR NOT EXISTS (SELECT 1 FROM conversation_events native WHERE native.project_identity=conversation_events.project_identity AND native.execution_id=conversation_events.execution_id AND native.attempt_id=conversation_events.attempt_id AND native.source='codex-app-server' AND native.event_type='session'))`, args
+	return ` AND (event_type IN ('gap','input.wait') OR COALESCE(json_extract(payload,'$.source_role'),'')<>'fallback' OR NOT EXISTS (SELECT 1 FROM conversation_events canonical WHERE canonical.project_identity=conversation_events.project_identity AND canonical.execution_id=conversation_events.execution_id AND canonical.attempt_id=conversation_events.attempt_id AND canonical.event_type='session' AND json_extract(canonical.payload,'$.source_role')='canonical'))`, args
 }
 
 // NextConversationEvent returns stored bytes; decoding and page budgets belong to query.

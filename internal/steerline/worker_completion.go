@@ -62,17 +62,20 @@ func (s *Service) finishWorkerFlowFor(run *Run, workerErr error) error {
 		return s.waitWorkerFlow(run, "the original execution binding could not be reconciled: "+err.Error())
 	}
 	if execution.Environment != nil && execution.Environment.Preparation != nil && receipt.State.TurnID == execution.Environment.Preparation.TurnID && receipt.State.TurnCompleted {
-		turn := nativeOrcaCurrentTurn(execution)
+		turn, turnErr := s.currentHostTurn(run)
+		if turnErr != nil {
+			return turnErr
+		}
 		if turn == nil || turn.TurnID != execution.Environment.Preparation.TurnID {
 			return s.waitWorkerFlow(run, "the original preparation Dispatch receipt is unavailable")
 		}
-		if err := s.readNativeOrcaOutput(context.Background(), run, execution, turn); err != nil {
+		if err := s.readHostOutput(context.Background(), run); err != nil {
 			if s.store.Err() != nil {
 				return s.store.Err()
 			}
-			return s.blockWorkerEnvironment(run, contracts.HostFact{Reason: "preparation_output_unverified", Confidence: "unverified", Source: "orca.worker-read", Detail: clip(err.Error(), 1000), Turn: turn.TurnID})
+			return s.blockWorkerEnvironment(run, contracts.HostFact{Reason: "preparation_output_unverified", Confidence: "unverified", Source: "host.worker-output", Detail: clip(err.Error(), 1000), Turn: turn.TurnID})
 		}
-		return s.finishOrcaPreparation(context.Background(), run, execution, turn, turn.Outcome)
+		return s.finishWorkerPreparation(context.Background(), run, execution, turn, turn.Outcome)
 	}
 	evidence := workerTurnEvidence{TurnEvidence: *receipt.TurnEvidence}
 	if !evidence.Started || evidence.SessionID == "" || evidence.TurnID == "" || !evidence.Completed {

@@ -78,29 +78,46 @@ Write-Output ('SLREADINESS:' + $p.nonce + ':' + (Get-FileHash -LiteralPath (Join
 
 func sha(data []byte) string { sum := sha256.Sum256(data); return hex.EncodeToString(sum[:]) }
 
-func PrepareProbe(p ProbeIdentity) (command, inputDigest, scriptDigest string, err error) {
+func BuildProbe(p ProbeIdentity) (contracts.ProbePlan, error) {
 	dir, err := probeDirectory(p)
 	if err != nil {
-		return "", "", "", err
+		return contracts.ProbePlan{}, err
+	}
+	input, err := json.Marshal(p)
+	if err != nil {
+		return contracts.ProbePlan{}, err
+	}
+	script := []byte(probeScript())
+	return contracts.ProbePlan{Command: "powershell.exe -NoProfile -ExecutionPolicy Bypass -File " + powershellLiteral(filepath.ToSlash(filepath.Join(dir, "probe.ps1"))), InputDigest: sha(input), ScriptDigest: sha(script)}, nil
+}
+
+func WriteProbe(p ProbeIdentity, plan contracts.ProbePlan) error {
+	expected, err := BuildProbe(p)
+	if err != nil || expected != plan {
+		return errors.Join(err, errors.New("readiness probe plan differs from its original identity"))
+	}
+	dir, err := probeDirectory(p)
+	if err != nil {
+		return err
 	}
 	if err = noLinks(p.Worktree, dir); err != nil {
-		return "", "", "", err
+		return err
 	}
 	root, err := os.OpenRoot(p.Worktree)
 	if err != nil {
-		return "", "", "", err
+		return err
 	}
 	defer root.Close()
 	parent := ""
 	for _, part := range strings.Split(dir, string(filepath.Separator)) {
 		parent = filepath.Join(parent, part)
 		if err = root.Mkdir(parent, 0700); err != nil && !errors.Is(err, os.ErrExist) {
-			return "", "", "", err
+			return err
 		}
 	}
 	input, err := json.Marshal(p)
 	if err != nil {
-		return "", "", "", err
+		return err
 	}
 	script := []byte(probeScript())
 	for _, f := range []struct {
@@ -109,7 +126,7 @@ func PrepareProbe(p ProbeIdentity) (command, inputDigest, scriptDigest string, e
 	}{{"input.json", input}, {"probe.ps1", script}} {
 		path := filepath.Join(dir, f.name)
 		if err = noLinks(p.Worktree, path); err != nil {
-			return "", "", "", err
+			return err
 		}
 		reader, readErr := root.Open(path)
 		var old []byte
@@ -119,23 +136,84 @@ func PrepareProbe(p ProbeIdentity) (command, inputDigest, scriptDigest string, e
 		}
 		if readErr == nil {
 			if string(old) != string(f.data) {
-				return "", "", "", errors.New("original readiness input changed")
+				return errors.New("original readiness input changed")
 			}
 			continue
 		}
 		if !errors.Is(readErr, os.ErrNotExist) {
-			return "", "", "", readErr
+			return readErr
 		}
 		out, e := root.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 		if e != nil {
-			return "", "", "", e
+			return e
 		}
 		_, e = out.Write(f.data)
 		if e = errors.Join(e, out.Sync(), out.Close()); e != nil {
-			return "", "", "", e
+			return e
 		}
 	}
-	return "powershell.exe -NoProfile -ExecutionPolicy Bypass -File " + powershellLiteral(filepath.ToSlash(filepath.Join(dir, "probe.ps1"))), sha(input), sha(script), nil
+	return nil
+}
+
+func CheckProbeFiles(p ProbeIdentity, plan contracts.ProbePlan) (bool, error) {
+	expected, err := BuildProbe(p)
+	if err != nil || expected != plan {
+		return false, errors.Join(err, errors.New("readiness probe plan differs from its original identity"))
+	}
+	dir, err := probeDirectory(p)
+	if err != nil {
+		return false, err
+	}
+	if err = noLinks(p.Worktree, dir); err != nil {
+		return false, err
+	}
+	root, err := os.OpenRoot(p.Worktree)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return false, nil
+		}
+		return false, err
+	}
+	defer root.Close()
+	input, err := json.Marshal(p)
+	if err != nil {
+		return false, err
+	}
+	for _, expectedFile := range []struct {
+		name string
+		data []byte
+	}{{"input.json", input}, {"probe.ps1", []byte(probeScript())}} {
+		if err = noLinks(p.Worktree, filepath.Join(dir, expectedFile.name)); err != nil {
+			return false, err
+		}
+		file, openErr := root.Open(filepath.Join(dir, expectedFile.name))
+		if errors.Is(openErr, os.ErrNotExist) {
+			return false, nil
+		}
+		if openErr != nil {
+			return false, openErr
+		}
+		actual, readErr := io.ReadAll(io.LimitReader(file, int64(len(expectedFile.data)+1)))
+		readErr = errors.Join(readErr, file.Close())
+		if readErr != nil {
+			return false, readErr
+		}
+		if string(actual) != string(expectedFile.data) {
+			return false, nil
+		}
+	}
+	return true, nil
+}
+
+func PrepareProbe(p ProbeIdentity) (command, inputDigest, scriptDigest string, err error) {
+	plan, err := BuildProbe(p)
+	if err != nil {
+		return "", "", "", err
+	}
+	if err = WriteProbe(p, plan); err != nil {
+		return "", "", "", err
+	}
+	return plan.Command, plan.InputDigest, plan.ScriptDigest, nil
 }
 
 func ReadProbe(p ProbeIdentity, digest string) (*ProbeReceipt, error) {
@@ -204,6 +282,36 @@ func CleanupProbe(p ProbeIdentity) error {
 		}
 	}
 	return nil
+}
+
+func ProbeFilesAbsent(p ProbeIdentity) (bool, error) {
+	dir, err := probeDirectory(p)
+	if err != nil {
+		return false, err
+	}
+	if err = noLinks(p.Worktree, dir); err != nil {
+		return false, err
+	}
+	root, err := os.OpenRoot(p.Worktree)
+	if errors.Is(err, os.ErrNotExist) {
+		return true, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	defer root.Close()
+	for _, name := range []string{"input.json", "probe.ps1", "receipt.json"} {
+		file, openErr := root.Open(filepath.Join(dir, name))
+		if errors.Is(openErr, os.ErrNotExist) {
+			continue
+		}
+		if openErr != nil {
+			return false, openErr
+		}
+		_ = file.Close()
+		return false, nil
+	}
+	return true, nil
 }
 
 type ProbeToolEvidence = contracts.ProbeToolEvidence

@@ -39,6 +39,14 @@ func EnsureReadinessIgnored(repositoryGitDir string) error {
 }
 
 func RelayIgnored(repositoryGitDir string) (bool, error) {
+	return ignoredPattern(repositoryGitDir, "/.steerline-relay/")
+}
+
+func ReadinessIgnored(repositoryGitDir string) (bool, error) {
+	return ignoredPattern(repositoryGitDir, "/.steerline-readiness/")
+}
+
+func ignoredPattern(repositoryGitDir, pattern string) (bool, error) {
 	root, err := os.OpenRoot(repositoryGitDir)
 	if err != nil {
 		return false, err
@@ -57,7 +65,7 @@ func RelayIgnored(repositoryGitDir string) (bool, error) {
 		return false, errors.Join(err, errors.New("native Orca relay exclude is unexpectedly large"))
 	}
 	for _, line := range strings.Split(string(data), "\n") {
-		if strings.TrimSpace(line) == "/.steerline-relay/" {
+		if strings.TrimSpace(line) == pattern {
 			return true, nil
 		}
 	}
@@ -110,15 +118,20 @@ func RelayPath(worktree, runID, turnID string) (string, error) {
 	return filepath.Join(worktree, ".steerline-relay", runID, turnID+".json"), nil
 }
 
-func RemoveRelayRequest(worktree, runID, turnID string) {
+func RemoveRelayRequest(worktree, runID, turnID string) error {
 	if _, err := RelayPath(worktree, runID, turnID); err != nil {
-		return
+		return err
 	}
 	root, err := os.OpenRoot(worktree)
-	if err == nil {
-		defer root.Close()
-		_ = root.Remove(filepath.Join(".steerline-relay", runID, turnID+".json"))
+	if err != nil {
+		return err
 	}
+	defer root.Close()
+	removeErr := root.Remove(filepath.Join(".steerline-relay", runID, turnID+".json"))
+	if errors.Is(removeErr, os.ErrNotExist) {
+		return nil
+	}
+	return removeErr
 }
 
 func ReadDoneRequest(path, worktree, runID, turnID, taskID, dispatchID string) (*DoneRequest, error) {

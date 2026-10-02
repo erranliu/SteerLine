@@ -1,8 +1,26 @@
 package execution
 
 import (
+	"path/filepath"
 	"testing"
 )
+
+func TestHostMutationRequiresOneFixedOriginalTarget(t *testing.T) {
+	probe := ProbeIdentity{Execution: "execution", Turn: "turn", Nonce: "nonce", ProfileDigest: "profile", Runtime: "runtime", Terminal: "terminal", Incarnation: "incarnation", Worktree: filepath.Join(t.TempDir(), "worktree")}
+	if err := (HostActionInput{Kind: HostPrepareProbeFiles, Probe: &probe}).Validate(); err != nil {
+		t.Fatalf("valid probe mutation rejected: %v", err)
+	}
+	if err := (HostActionInput{Kind: HostPrepareProbeFiles, Probe: &probe, Process: &ProcessIdentity{Kind: "orca"}}).Validate(); err == nil {
+		t.Fatal("ambiguous host mutation union was accepted")
+	}
+	authorization := &HostActionAuthorization{ExecutionID: "execution", AttemptID: "attempt", TurnID: "turn", DecisionID: "decision", BlockerID: "blocker", DecisionVersion: 1}
+	if err := (HostActionInput{Kind: HostOpenOriginal, Process: &ProcessIdentity{Kind: "orca", Terminal: "terminal", RuntimeID: "runtime", Incarnation: "incarnation"}, Authorization: authorization}).Validate(); err != nil {
+		t.Fatalf("fixed original host target rejected: %v", err)
+	}
+	if err := (LifecycleCandidate{Action: LifecycleHostAction, Input: LifecycleInput{Host: &HostActionInput{Kind: HostOpenOriginal}}}).Validate(); err == nil {
+		t.Fatal("host mutation without an original process identity was accepted")
+	}
+}
 
 func TestLifecycleCandidateRequiresOneMatchingInput(t *testing.T) {
 	tests := []struct {

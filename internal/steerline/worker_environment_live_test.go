@@ -100,7 +100,7 @@ func TestWorkerEnvironmentNativeReadinessLive(t *testing.T) {
 		} else if turn := nativeOrcaCurrentTurn(e); turn != nil && turn.DispatchID != "" {
 			require(t, driveTestLifecycleWorker(s, run))
 		} else {
-			require(t, s.advanceOrcaPreparation(ctx, run))
+			require(t, s.advanceWorkerPreparation(ctx, run))
 		}
 		e = s.executionRecord(run)
 		state := testOrcaState(t, e)

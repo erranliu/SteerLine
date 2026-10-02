@@ -7,12 +7,13 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
-	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
 
-func environmentTurn(execution *ExecutionRecord) string {
-	if turn := nativeOrcaCurrentTurn(execution); turn != nil {
+func (s *Service) environmentTurn(run *Run) string {
+	execution := s.executionRecord(run)
+	if turn, err := s.currentHostTurn(run); err == nil && turn != nil {
 		if p := execution.Environment.Preparation; !p.Verified && turn.Settled && turn.TurnID != p.TurnID {
 			return p.TurnID
 		}
@@ -21,13 +22,13 @@ func environmentTurn(execution *ExecutionRecord) string {
 	return execution.Environment.Preparation.TurnID
 }
 
-func (s *Service) blockWorkerEnvironment(run *Run, fact orcaworker.HostFact) error {
+func (s *Service) blockWorkerEnvironment(run *Run, fact contracts.HostFact) error {
 	wf, execution := s.workflowRecords(run)
 	if execution == nil || execution.Environment == nil || wf.Phase == "completed" || wf.Phase == "abandoned" || run.TaskStatus == "closed" || run.TaskStatus == "discarded" {
 		return nil
 	}
 	env := execution.Environment
-	turnID := environmentTurn(execution)
+	turnID := s.environmentTurn(run)
 	if fact.Turn != "" && fact.Turn != turnID {
 		return nil
 	}
@@ -94,7 +95,12 @@ func (s *Service) observeWorkerEnvironment(ctx context.Context, run *Run) error 
 	}
 	if identity != nil {
 		queryCtx, cancel := context.WithTimeout(ctx, positiveDuration(config.CommandTimeout, 10*time.Second))
-		fact, observeErr := orcaworker.ObserveHost(queryCtx, orcaWorkerMetaCaller(config), workerOrcaTerminalIdentity(*identity))
+		host, _, _, _, hostErr := s.hostEnvironmentForRun(run)
+		if hostErr != nil {
+			cancel()
+			return hostErr
+		}
+		fact, observeErr := host.ObserveHost(queryCtx, *identity)
 		cancel()
 		if observeErr == nil && fact.Reason != "" {
 			return s.blockWorkerEnvironment(run, fact)
@@ -115,42 +121,26 @@ func (s *Service) observeWorkerEnvironment(ctx context.Context, run *Run) error 
 		return s.blockWorkerEnvironment(run, env.Blocker.Fact)
 	}
 	if !env.Preparation.Verified && !now().Before(env.Preparation.Deadline) {
-		return s.blockWorkerEnvironment(run, orcaworker.HostFact{Reason: "preparation_unverified", Confidence: "unverified", Source: "preparation.deadline", Turn: env.Preparation.TurnID})
+		return s.blockWorkerEnvironment(run, contracts.HostFact{Reason: "preparation_unverified", Confidence: "unverified", Source: "preparation.deadline", Turn: env.Preparation.TurnID})
 	}
-	if turn := nativeOrcaCurrentTurn(execution); turn != nil && turn.Purpose == "business" && !turn.Settled && turn.DoneMessageID == "" && execution.CurrentTurnID != turn.TurnID && !now().Before(turn.IntentAt.Add(positiveDuration(orcaProfileSettings(config).WaitTimeout, 2*time.Minute))) {
-		return s.blockWorkerEnvironment(run, orcaworker.HostFact{Reason: "business_start_unverified", Confidence: "unverified", Source: "dispatch.intent.deadline", Turn: turn.TurnID})
+	if turn, turnErr := s.currentHostTurn(run); turnErr != nil {
+		return turnErr
+	} else if turn != nil && turn.Purpose == "business" && !turn.Settled && !turn.HasDoneMessage && execution.CurrentTurnID != turn.TurnID && !now().Before(turn.Deadline) {
+		return s.blockWorkerEnvironment(run, contracts.HostFact{Reason: "business_start_unverified", Confidence: "unverified", Source: "dispatch.intent.deadline", Turn: turn.TurnID})
 	}
 	return nil
 }
 
-func (s *Service) setOrcaQuestion(run *Run, decision *DecisionState) {
-	execution := s.executionRecord(run)
-	if execution.Environment != nil && execution.Environment.Blocker == nil && decision.Request.QuestionRoute != nil {
-		if turn := nativeOrcaCurrentTurn(execution); turn != nil && turn.Purpose == "readiness" && run.Decision != nil && run.Decision.Request.QuestionRoute == nil {
-			execution.Environment.DeferredDecisionID = run.Decision.ID
-		}
-	}
-	if execution.Environment == nil || execution.Environment.Blocker == nil {
-		s.setRunDecision(run, decision)
-		return
-	}
-	hostDecision := execution.DecisionID
-	s.setRunDecision(run, decision)
-	execution.Environment.DeferredDecisionID = decision.ID
-	execution.DecisionID = hostDecision
-	s.refreshRun(run)
-}
-
-// Preparation owns one persisted budget spanning resource creation and native
+// Preparation owns one persisted budget spanning resource creation and host
 // settlement. Each actor pass performs bounded work; restarts reuse its intent.
-func (s *Service) advanceOrcaPreparation(ctx context.Context, run *Run) error {
+func (s *Service) advanceWorkerPreparation(ctx context.Context, run *Run) error {
 	fixed, err := s.workerFlowContext(run)
 	if err != nil {
 		return err
 	}
 	execution, env := fixed.execution, fixed.execution.Environment
 	if env == nil {
-		return errors.New("managed Orca execution has no persisted readiness intent")
+		return errors.New("managed execution has no persisted preparation intent")
 	}
 	if err := s.observeWorkerEnvironment(ctx, run); err != nil {
 		return err
@@ -159,7 +149,7 @@ func (s *Service) advanceOrcaPreparation(ctx context.Context, run *Run) error {
 		return nil
 	}
 	if execution.RecoveryRequired {
-		return s.blockWorkerEnvironment(run, orcaworker.HostFact{Reason: "service_recovery_required", Confidence: "confirmed", Source: "service.recovery", Detail: "原准备状态已保留；重新检查后才允许继续派发。"})
+		return s.blockWorkerEnvironment(run, contracts.HostFact{Reason: "service_recovery_required", Confidence: "confirmed", Source: "service.recovery", Detail: "原准备状态已保留；重新检查后才允许继续派发。"})
 	}
 	if env.Preparation.Verified && !env.Preparation.Invalidated {
 		env.Ready = true
@@ -196,7 +186,7 @@ func (s *Service) advanceOrcaPreparation(ctx context.Context, run *Run) error {
 			if ctx.Err() != nil {
 				return nil
 			}
-			return s.blockWorkerEnvironment(run, orcaworker.HostFact{Reason: "resource_preparation_unverified", Confidence: "unverified", Source: "orca.resource.operation", Detail: clip(err.Error(), 1000)})
+			return s.blockWorkerEnvironment(run, contracts.HostFact{Reason: "resource_preparation_unverified", Confidence: "unverified", Source: "host.resource-operation", Detail: clip(err.Error(), 1000)})
 		}
 		if execution.Workspace.Worktree == "" || execution.Process == nil || run.Decision != nil {
 			return nil
@@ -209,32 +199,49 @@ func (s *Service) advanceOrcaPreparation(ctx context.Context, run *Run) error {
 		return nil
 	}
 	p := env.Preparation
-	if turn := nativeOrcaCurrentTurn(execution); turn == nil || turn.DispatchID == "" {
-		fact, ready, err := orcaworker.InspectAgentInput(prepareCtx, orcaWorkerMetaCaller(fixed.config), workerOrcaTerminalIdentity(*execution.Process))
-		if err != nil {
-			return s.blockWorkerEnvironment(run, orcaworker.HostFact{Reason: "agent_input_unverified", Confidence: "unverified", Source: "orca.terminal.input", Detail: clip(err.Error(), 500)})
+	turn, turnErr := s.currentHostTurn(run)
+	if turnErr != nil {
+		return turnErr
+	}
+	if turn == nil || !turn.HasDispatch {
+		host, _, _, _, hostErr := s.hostEnvironmentForRun(run)
+		if hostErr != nil {
+			return hostErr
 		}
-		if !ready {
-			return s.blockWorkerEnvironment(run, fact)
+		observation, err := host.InspectAgentInput(prepareCtx, *execution.Process)
+		if err != nil {
+			return s.blockWorkerEnvironment(run, contracts.HostFact{Reason: "agent_input_unverified", Confidence: "unverified", Source: "host.input-qualification", Detail: clip(err.Error(), 500)})
+		}
+		if !observation.Ready {
+			return s.blockWorkerEnvironment(run, observation.Fact)
 		}
 	}
-	identity := orcaworker.ProbeIdentity{Execution: execution.ExecutionID, Turn: p.TurnID, Nonce: p.Nonce, ProfileDigest: env.ProfileDigest, Runtime: execution.Process.RuntimeID, Terminal: execution.Process.Terminal, Incarnation: execution.Process.Incarnation, Worktree: execution.Workspace.Worktree}
+	identity := executionapi.ProbeIdentity{Execution: execution.ExecutionID, Turn: p.TurnID, Nonce: p.Nonce, ProfileDigest: env.ProfileDigest, Runtime: execution.Process.RuntimeID, Terminal: execution.Process.Terminal, Incarnation: execution.Process.Incarnation, Worktree: execution.Workspace.Worktree}
+	host, lifecycle, _, _, err := s.hostEnvironmentForRun(run)
+	if err != nil {
+		return err
+	}
 	if p.Command == "" {
-		if err = orcaworker.EnsureReadinessIgnored(fixed.config.identity); err != nil {
-			return err
+		plan, planErr := host.PrepareProbe(identity)
+		if planErr != nil {
+			return s.blockWorkerEnvironment(run, contracts.HostFact{Reason: "probe_preparation_failed", Confidence: "confirmed", Source: "readiness.files", Detail: planErr.Error()})
 		}
-		p.Probe = identity
-		p.Command, p.InputDigest, p.ScriptDigest, err = orcaworker.PrepareProbe(identity)
-		if err != nil {
-			return s.blockWorkerEnvironment(run, orcaworker.HostFact{Reason: "probe_preparation_failed", Confidence: "confirmed", Source: "readiness.files", Detail: err.Error()})
-		}
+		p.Probe, p.Command, p.InputDigest, p.ScriptDigest = identity, plan.Command, plan.InputDigest, plan.ScriptDigest
 		if err = s.commitWorker(run); err != nil {
 			return err
 		}
-	} else if p.Probe != identity {
-		return s.blockWorkerEnvironment(run, orcaworker.HostFact{Reason: "identity_mismatch", Confidence: "confirmed", Source: "readiness.probe.identity"})
 	}
-	prompt := orcaworker.ProbePrompt(p.Command, p.Nonce, p.ScriptDigest)
+	if p.Probe != identity {
+		return s.blockWorkerEnvironment(run, contracts.HostFact{Reason: "identity_mismatch", Confidence: "confirmed", Source: "readiness.probe.identity"})
+	}
+	if err = s.executeHostAction(prepareCtx, run, lifecycle, executionapi.HostActionInput{Kind: executionapi.HostPrepareProbeFiles, Probe: &identity}); err != nil {
+		if ctx.Err() != nil {
+			return nil
+		}
+		return s.blockWorkerEnvironment(run, contracts.HostFact{Reason: "probe_preparation_failed", Confidence: "confirmed", Source: "readiness.files", Detail: err.Error()})
+	}
+	plan := contracts.ProbePlan{Command: p.Command, InputDigest: p.InputDigest, ScriptDigest: p.ScriptDigest}
+	prompt := host.ProbePrompt(plan, p.Nonce, p.ScriptDigest)
 	if err = s.startWorkerFlowTurn(prepareCtx, run, prompt, p.TurnID); err != nil {
 		if ctx.Err() != nil {
 			return nil
@@ -242,7 +249,7 @@ func (s *Service) advanceOrcaPreparation(ctx context.Context, run *Run) error {
 		if env.Blocker != nil {
 			return nil
 		}
-		return s.blockWorkerEnvironment(run, orcaworker.HostFact{Reason: "preparation_dispatch_unverified", Confidence: "unverified", Source: "orca.dispatch.operation", Detail: clip(err.Error(), 1000)})
+		return s.blockWorkerEnvironment(run, contracts.HostFact{Reason: "preparation_dispatch_unverified", Confidence: "unverified", Source: "host.operation-receipt", Detail: clip(err.Error(), 1000)})
 	}
 	return s.commitWorker(run)
 }
@@ -290,7 +297,7 @@ func (s *Service) reconcileEnvironmentBusinessIntent(ctx context.Context, run *R
 	return s.startWorkerLifecycle(ctx, run, lifecycle, fixed, input.CommandID, input.Prompt)
 }
 
-func (s *Service) finishOrcaPreparation(ctx context.Context, run *Run, execution *ExecutionRecord, turn *implementationTurnView, outcome string) error {
+func (s *Service) finishWorkerPreparation(ctx context.Context, run *Run, execution *ExecutionRecord, turn *contracts.HostTurnFacts, outcome string) error {
 	p := execution.Environment.Preparation
 	if turn.TurnID != p.TurnID {
 		return nil
@@ -302,12 +309,16 @@ func (s *Service) finishOrcaPreparation(ctx context.Context, run *Run, execution
 		execution.PendingCommandID = ""
 	}
 	if outcome != "succeeded" {
-		return s.blockWorkerEnvironment(run, orcaworker.HostFact{Reason: "preparation_failed", Confidence: "confirmed", Source: "orca.dispatch.settlement", Turn: turn.TurnID})
+		return s.blockWorkerEnvironment(run, contracts.HostFact{Reason: "preparation_failed", Confidence: "confirmed", Source: "host.operation-settlement", Turn: turn.TurnID})
 	}
 	if p.Receipt == nil {
-		receipt, err := orcaworker.ReadProbe(p.Probe, p.InputDigest)
+		host, _, _, _, hostErr := s.hostEnvironmentForRun(run)
+		if hostErr != nil {
+			return hostErr
+		}
+		receipt, err := host.ReadProbe(p.Probe, p.InputDigest)
 		if err != nil {
-			return s.blockWorkerEnvironment(run, orcaworker.HostFact{Reason: "probe_receipt_invalid", Confidence: "confirmed", Source: "readiness.receipt", Detail: err.Error(), Turn: turn.TurnID})
+			return s.blockWorkerEnvironment(run, contracts.HostFact{Reason: "probe_receipt_invalid", Confidence: "confirmed", Source: "readiness.receipt", Detail: err.Error(), Turn: turn.TurnID})
 		}
 		p.Receipt = receipt
 	}
@@ -317,7 +328,7 @@ func (s *Service) finishOrcaPreparation(ctx context.Context, run *Run, execution
 	p.Verified = true
 	if run.Decision != nil && run.Decision.Request.QuestionRoute != nil && run.Decision.Request.QuestionRoute.TurnID == turn.TurnID {
 		if run.Decision.Status == "answer_saved" {
-			return s.blockWorkerEnvironment(run, orcaworker.HostFact{Reason: "answer_delivery_unverified", Confidence: "unverified", Source: "orca.question.reply", Turn: turn.TurnID})
+			return s.blockWorkerEnvironment(run, contracts.HostFact{Reason: "answer_delivery_unverified", Confidence: "unverified", Source: "host.question-reply", Turn: turn.TurnID})
 		}
 		if run.Decision.Status == "pending" {
 			s.setDecisionStatus(run, "superseded")
@@ -325,21 +336,31 @@ func (s *Service) finishOrcaPreparation(ctx context.Context, run *Run, execution
 		s.restoreEnvironmentDecision(run)
 	}
 	if !now().Before(p.Deadline) && !execution.Environment.Ready && execution.Environment.Blocker == nil {
-		if err := s.blockWorkerEnvironment(run, orcaworker.HostFact{Reason: "preparation_unverified", Confidence: "unverified", Source: "preparation.deadline", Turn: turn.TurnID}); err != nil {
+		if err := s.blockWorkerEnvironment(run, contracts.HostFact{Reason: "preparation_unverified", Confidence: "unverified", Source: "preparation.deadline", Turn: turn.TurnID}); err != nil {
 			return err
 		}
 	}
 	if err := s.commitWorker(run); err != nil {
 		return err
 	}
-	if err := orcaworker.CleanupProbe(p.Probe); err != nil {
+	hostInput := executionapi.HostActionInput{Kind: executionapi.HostCleanupProbeFiles, Probe: &p.Probe}
+	if err := func() error {
+		_, lifecycle, _, _, hostErr := s.hostEnvironmentForRun(run)
+		if hostErr != nil {
+			return hostErr
+		}
+		return s.executeHostAction(ctx, run, lifecycle, hostInput)
+	}(); err != nil {
 		execution.LastEvent = ptr("准备证据已保存；文件清理待核实：" + err.Error())
 	}
-	orcaworker.RemoveRelayRequest(execution.Workspace.Worktree, run.RunID, turn.TurnID)
+	if _, lifecycle, _, _, hostErr := s.hostEnvironmentForRun(run); hostErr == nil {
+		cleanup := executionapi.HostActionInput{Kind: executionapi.HostRemoveFeedback, Worktree: execution.Workspace.Worktree, WorkflowRun: run.RunID, TurnID: turn.TurnID}
+		_ = s.executeHostAction(ctx, run, lifecycle, cleanup)
+	}
 	if execution.Environment.Blocker != nil {
 		return nil
 	}
-	return s.advanceOrcaPreparation(ctx, run)
+	return s.advanceWorkerPreparation(ctx, run)
 }
 
 func (s *Service) applyEnvironmentAction(ctx context.Context, run *Run, answer DecisionAnswer, commandID string) error {
@@ -379,16 +400,21 @@ func (s *Service) applyEnvironmentAction(ctx context.Context, run *Run, answer D
 		if identity == nil {
 			return errors.New("original terminal is not bound")
 		}
-		fact, err := orcaworker.ObserveHost(ctx, orcaWorkerMetaCaller(fixed.config), workerOrcaTerminalIdentity(*identity))
+		host, lifecycle, _, _, err := s.hostEnvironmentForRun(run)
+		if err != nil {
+			return err
+		}
+		fact, err := host.ObserveHost(ctx, *identity)
 		if err != nil {
 			return err
 		}
 		if fact.Reason == "identity_mismatch" || fact.Reason == "terminal_exited" {
 			return errors.New("original terminal cannot be located")
 		}
-		// Switching is a locating UI action; it grants no permissions.
-		_, err = nativeOrcaClient(fixed.config).MetaCall(ctx, "terminal", "switch", "--terminal", identity.Terminal, "--json")
-		if err != nil {
+		original := *identity
+		authorization := &executionapi.HostActionAuthorization{ExecutionID: target.ExecutionID, AttemptID: run.AttemptID, TurnID: target.TurnID,
+			DecisionID: answer.DecisionID, BlockerID: target.BlockerID, DecisionVersion: run.Decision.Version}
+		if err = s.executeHostAction(ctx, run, lifecycle, executionapi.HostActionInput{Kind: executionapi.HostOpenOriginal, Process: &original, Authorization: authorization}); err != nil {
 			return err
 		}
 		return s.renewEnvironmentDecision(run)
@@ -410,7 +436,11 @@ func (s *Service) applyEnvironmentAction(ctx context.Context, run *Run, answer D
 		return nil
 	}
 	if execution.Process != nil {
-		fact, err := orcaworker.ObserveHost(ctx, orcaWorkerMetaCaller(fixed.config), workerOrcaTerminalIdentity(*execution.Process))
+		host, _, _, _, hostErr := s.hostEnvironmentForRun(run)
+		if hostErr != nil {
+			return hostErr
+		}
+		fact, err := host.ObserveHost(ctx, *execution.Process)
 		if err != nil || fact.Reason != "" {
 			return s.renewEnvironmentDecision(run)
 		}
@@ -418,8 +448,11 @@ func (s *Service) applyEnvironmentAction(ctx context.Context, run *Run, answer D
 			return s.renewEnvironmentDecision(run)
 		}
 	}
-	turn := nativeOrcaCurrentTurn(execution)
-	if turn != nil && turn.DispatchID == "" && turn.TaskID != "" && execution.Process != nil {
+	turn, turnErr := s.currentHostTurn(run)
+	if turnErr != nil {
+		return s.renewEnvironmentDecision(run)
+	}
+	if turn != nil && !turn.HasDispatch && turn.TaskID != "" && execution.Process != nil {
 		lifecycle, _, err := s.lifecycleForRun(run)
 		if err != nil {
 			return s.renewEnvironmentDecision(run)
@@ -427,14 +460,13 @@ func (s *Service) applyEnvironmentAction(ctx context.Context, run *Run, answer D
 		if _, err := s.reconcilePendingLifecycleSteps(ctx, run, lifecycle); err != nil {
 			return s.renewEnvironmentDecision(run)
 		}
-		turn = nativeOrcaCurrentTurn(execution)
+		turn, _ = s.currentHostTurn(run)
 	}
 	if turn != nil && turn.Purpose == "readiness" && !env.Preparation.Invalidated {
 		// An explicit recheck may reread a settled probe's historical tool records
 		// when earlier bounded/unsupported pages provided no tool proof.
 		if turn.Settled && !env.Preparation.Evidence.Verified && env.Preparation.Evidence.CallID == "" {
-			turn.OutputCursor = ""
-			if err := persistNativeOrcaTurn(execution, turn); err != nil {
+			if err := s.resetHostTurnOutput(run, turn.TurnID); err != nil {
 				return err
 			}
 		}
@@ -443,7 +475,7 @@ func (s *Service) applyEnvironmentAction(ctx context.Context, run *Run, answer D
 		} else if err := s.resumeLifecycleObservation(ctx, run, lifecycle); err != nil {
 			return err
 		}
-		turn = nativeOrcaCurrentTurn(execution)
+		turn, _ = s.currentHostTurn(run)
 		if !env.Preparation.Verified && !now().Before(env.Preparation.Deadline) {
 			return s.renewEnvironmentDecision(run)
 		}
@@ -454,13 +486,13 @@ func (s *Service) applyEnvironmentAction(ctx context.Context, run *Run, answer D
 		} else if err := s.resumeLifecycleObservation(ctx, run, lifecycle); err != nil {
 			return err
 		}
-		turn = nativeOrcaCurrentTurn(execution)
+		turn, _ = s.currentHostTurn(run)
 		if turn == nil || execution.CurrentTurnID != turn.TurnID && !turn.Settled {
 			return s.renewEnvironmentDecision(run)
 		}
 	}
 	// Polling can install a newer blocker; an old action cannot clear it.
-	if env.Blocker == nil || env.Blocker.ID != blocker.ID || run.Decision == nil || run.Decision.ID != actionDecisionID || run.Decision.Version != actionDecisionVersion || environmentTurn(execution) != target.TurnID {
+	if env.Blocker == nil || env.Blocker.ID != blocker.ID || run.Decision == nil || run.Decision.ID != actionDecisionID || run.Decision.Version != actionDecisionVersion || s.environmentTurn(run) != target.TurnID {
 		return s.changeWorkerOperation(run, op.OperationID, "confirmed", commandID, mustJSON(map[string]string{"result": "stale_target", "blocker_id": blocker.ID}), "")
 	}
 	// Reconcile original resource/Dispatch operations through their exact saved
@@ -469,9 +501,17 @@ func (s *Service) applyEnvironmentAction(ctx context.Context, run *Run, answer D
 		if turn == nil || !turn.Settled {
 			return s.renewEnvironmentDecision(run)
 		}
+		host, _, _, _, hostErr := s.hostEnvironmentForRun(run)
+		if hostErr != nil {
+			return hostErr
+		}
+		budget := host.PreparationBudget()
+		if budget <= 0 {
+			return errors.New("host preparation budget must be positive")
+		}
 		env.History = append(env.History, *env.Preparation)
 		started := now()
-		env.Preparation = &WorkerPreparation{TurnID: newID(), Nonce: newID(), StartedAt: started, Deadline: started.Add(positiveDuration(orcaProfileSettings(fixed.config).WaitTimeout, 2*time.Minute))}
+		env.Preparation = &WorkerPreparation{TurnID: newID(), Nonce: newID(), StartedAt: started, Deadline: started.Add(budget)}
 	}
 	if ok, err := s.reconcileEnvironmentQuestion(ctx, run); err != nil {
 		return err
@@ -495,16 +535,16 @@ func (s *Service) applyEnvironmentAction(ctx context.Context, run *Run, answer D
 		return err
 	}
 	if env.Preparation.Verified && !env.Preparation.Invalidated {
-		return s.advanceOrcaPreparation(ctx, run)
+		return s.advanceWorkerPreparation(ctx, run)
 	}
-	if turn != nil && turn.DispatchID != "" && !turn.Settled {
+	if turn != nil && turn.HasDispatch && !turn.Settled {
 		if lifecycle, _, err := s.lifecycleForRun(run); err != nil {
 			return err
 		} else {
 			return s.resumeLifecycleObservation(ctx, run, lifecycle)
 		}
 	}
-	return s.advanceOrcaPreparation(ctx, run)
+	return s.advanceWorkerPreparation(ctx, run)
 }
 
 func (s *Service) reconcileEnvironmentQuestion(ctx context.Context, run *Run) (bool, error) {
@@ -567,20 +607,15 @@ func (s *Service) reconcileEnvironmentQuestion(ctx context.Context, run *Run) (b
 func (s *Service) restoreEnvironmentDecision(run *Run) {
 	execution := s.executionRecord(run)
 	env := execution.Environment
-	state, stateErr := decodeOrcaExecutionState(execution)
-	if stateErr != nil || state == nil {
+	turn, turnErr := s.currentHostTurn(run)
+	if turnErr != nil || turn == nil {
 		return
 	}
 	execution.DecisionID = env.DeferredDecisionID
 	env.DeferredDecisionID = ""
 	s.refreshRun(run)
 	if run.Decision != nil && run.Decision.Request.QuestionRoute != nil {
-		active := false
-		for _, turn := range state.Turns {
-			if turn.TurnID == run.Decision.Request.QuestionRoute.TurnID && !turn.Settled {
-				active = true
-			}
-		}
+		active := turn.TurnID == run.Decision.Request.QuestionRoute.TurnID && !turn.Settled
 		if !active && run.Decision.Status == "pending" {
 			s.setDecisionStatus(run, "superseded")
 			execution.DecisionID = ""
@@ -628,10 +663,6 @@ func (s *Service) flushEnvironmentFeedback(ctx context.Context, run *Run) error 
 	if json.Unmarshal(record.Answer, &answer) != nil || json.Unmarshal(record.Request, &request) != nil || record.ExecutionID != e.ExecutionID {
 		return errors.New("deferred feedback identity differs from the original execution")
 	}
-	config, err := s.executionConfigForRun(run)
-	if err != nil {
-		return err
-	}
 	op := s.operationByKey("worker-environment-feedback:" + e.ExecutionID + ":" + feedback.CommandID)
 	active := feedback.TurnID != "" && feedback.TurnID == e.CurrentTurnID && feedback.TurnID != e.LastStoppedTurnID &&
 		(env.Preparation == nil || feedback.TurnID != env.Preparation.TurnID)
@@ -657,7 +688,11 @@ func (s *Service) flushEnvironmentFeedback(ctx context.Context, run *Run) error 
 		}
 		e.LastEvent = ptr("宿主等待期间的文字保留了原目标；过期反馈未改投新轮次。")
 	} else {
-		fact, err := orcaworker.ObserveHost(ctx, orcaWorkerMetaCaller(config), workerOrcaTerminalIdentity(*e.Process))
+		host, _, _, _, hostErr := s.hostEnvironmentForRun(run)
+		if hostErr != nil {
+			return hostErr
+		}
+		fact, err := host.ObserveHost(ctx, *e.Process)
 		if err != nil {
 			e.LastEvent = ptr("待投递文字的原宿主观察未核实：" + clip(err.Error(), 500))
 			return s.commitWorker(run)
