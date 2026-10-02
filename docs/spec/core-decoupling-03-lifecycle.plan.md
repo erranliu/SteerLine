@@ -22,12 +22,12 @@
 实施时先记录所选旧用例的原位置、新位置及断言归属。下列 CD 用例名称是本任务交付的验收入口：可以把现有断言迁入同名用例或用带子用例的入口组合，不能另跑一份相同矩阵。每个命名入口及约定的各实现包必须实际命中，不能仅以进程 exit=0 或其他包有测试判断通过；原有生产缺口才补断言。外层集成包可由生命周期阶段按实际消费者创建，不得导出任意中心私有写入口。
 
 ```powershell
-go run ./cmd/test-feedback -quick -- ./internal/steerline ./internal/steerlineintegration -count=1 -run '^(TestCD64IntentReceiptAndRecoveryGate|TestCD64OriginalSessionReconciliation)$'
+go run ./cmd/test-feedback -quick -- -p 1 -parallel 1 ./internal/steerline ./internal/steerlineintegration -count=1 -run '^(TestCD64IntentReceiptAndRecoveryGate|TestCD64OriginalSessionReconciliation)$'
 go list -deps ./internal/steerline/codexworker ./internal/steerline/orcaworker ./internal/steerline/orca_remote_worker
 git diff --check
 ```
 
-最终验证将定向组与 quick 合在一次现有入口中；execution/contracts/query/sqlite/remote 协议包已由 quick-rules 运行，不再重复单独跑整包。CD63 的 remote codec 用例由 quick-rules 命中；必须核对按包/用例的实际 JSON 测试事件。调试失败可以定向重跑，稳定后不重复矩阵。
+最终验证将定向组与 quick 合在一次现有入口中；`-p 1 -parallel 1` 串行运行 root 与 outer 包，避免两个进程同时驱动生命周期测试。execution/contracts/query/sqlite/remote 协议包已由 quick-rules 运行，不再重复单独跑整包。CD63 的 remote codec 用例由 quick-rules 命中；必须核对按包/用例的实际 JSON 测试事件。调试失败可以定向重跑，稳定后不重复矩阵。
 
 这些命令在本次规划中未执行。Spec 的各项验收对应通用/原生 fixture、固定身份与提交屏障、依赖和删除审查，实际命中数量与旧到新映射随实现记录。纯规则不跑平台矩阵，集成只跑受影响代表路径；quick 稳定后一次，没有具体失败不扩为全量。
 
@@ -78,7 +78,7 @@ PR185 的执行 session 已停写。协调 session 已 rebase 到 `7e79a9b315129
 
 诊断已实际通过：中心新增回执/恢复隔离回归；外层四个 remote Protocol 回归；remote released Dispatch 只读对账；native 原会话用例；provider PR 绑定与 relay 原身份用例；宿主 ER2 及 ER4 的失败定位修复。没有跑全量测试。
 
-第一次协调 quick 报告 `20261001T204916.682627800Z/summary.json` 为失败：quick-core 6/6、quick-rules 87/87 通过，targeted 29/31，native 资源准备受初始计划分支与真实资源分支的边界影响；已修复，仅在资源实际绑定后固定其分支。该报告期间又有后续代码修复，不能作为最终候选认证。正在以稳定后的源码重新运行原 Plan 命令，最终 JSON/命中及 head 另记。
+第一次协调 quick 报告 `20261001T204916.682627800Z/summary.json` 为失败：quick-core 6/6、quick-rules 87/87 通过，targeted 29/31，native 资源准备受初始计划分支与真实资源分支的边界影响；已修复，仅在资源实际绑定后固定其分支。该报告期间又有后续代码修复，不能作为最终候选认证。
 
 曾用宽泛 `TestLifecycle.*` 诊断误匹配服务启动旧用例，它们在 config admission 被 publication policy 拒绝；`41773e8` 的协调工作区上单个相同用例也失败。本轮无基线豁免；这些结果不代替必需验收。
 
@@ -102,4 +102,4 @@ PR185 的执行 session 已停写。协调 session 已 rebase 到 `7e79a9b315129
 
 新增外层生产流程暴露并修复的必要接线缺口：`lifecycleSetupForRun` 现在提供同一正式 ManagedProcessHost；native 目标在 adapter 提交实际 Worktree ID 前不再伪填 local path；Claim 原子提交只比较 mutable profile 对当前配置的 `MatchesConfig`，不再混比 mutable Profile 与 FixedExecutionProfile 两个不同摘要域；session receipt/通用操作在刷新后安全地重建 pending-operation 写集合；Lost Delivery Ack 在原操作上立即做只读 Reconcile，活动 observer 不会使它滞留。每项均由 outer local/native 服务流程实际命中。
 
-outer 两个实际流程定向诊断已通过（app-server 两轮与 native 原会话人工门槛）；最终 quick+CD64 组合报告、按包/命名事件计数、source head 与 `git diff --check` 结果在本段完成最终验证后补记。PR 仍为 #185 open，未合并；唯一尚未迁出的既定所有者仍是 #65 宿主 evidence/history/source 与 #66 默认组合组装。
+outer 两个实际流程定向诊断已通过（app-server 两轮与 native 原会话人工门槛）。最终组合反馈报告：`C:\Users\lmas1\AppData\Local\Temp\steerline-test-feedback\20261002T000328.055843300Z\summary.json`，`passed=true`、`complete=true`，execution 186.32s；source commit `507a7f05b32e2d6ca682123897eee980a2374880`，工作区 clean。quick-core 为 1 包/6 个测试事件通过，quick-rules 为 9 包/87 个测试事件通过，quick-targeted 为 2 包/31 个测试事件通过；无失败、跳过或未匹配。JSON 明确记录 `TestCD64IntentReceiptAndRecoveryGate`、`TestCD64OriginalSessionReconciliation`、outer `app_server_two_turns`、`native_original_session_manual_gate`、四个 remote Protocol 子用例及 root `remote_admission_stays_blocked` 均 pass。默认包并发的一次诊断报告 `20261001T235533.314495800Z\summary.json` targeted 未通过（app-server 子用例等到服务上下文超时；root、native 与 remote 项通过）；最终入口据此显式串行 root 与 outer 包，随后全组通过。`go list -deps` 通过，SteerLine 内部依赖集合为 `codexapp`、`execution`、`taskgraph`、`task`、`taskview`、`contracts`、`codexworker`、`orcaworker`、`orca_remote_worker`；`go test ./internal/steerline ./internal/steerlineintegration ./internal/steerline/testprotocol -run '^$' -count=1` 与 `git diff --check` 通过。remote fixture 只模拟协议，不认证权限；远端发布 admission 仍被阻止。PR #185 仍 open，未合并；未迁出的既定所有者仍是 #65 宿主 evidence/history/source 与 #66 默认组合组装，roadmap 中 #64 继续 active。
