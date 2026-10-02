@@ -1,0 +1,137 @@
+{
+  "scope": "e2e",
+  "level": "L3",
+  "env": "live",
+  "environment": {
+    "source_commit": "5ebf7044580aa4b9f623f4520b4cba29f5758f5b",
+    "worktree_status": " M docs/spec/e2e-dependency-boundaries.plan.md\n?? docs/validation/e2e-dependency-boundaries/l3-all/controlled/delivery.basic/scenario.json\n?? docs/validation/e2e-dependency-boundaries/l3-all/controlled/recovery.waiting-merge-restart/scenario.json\n?? docs/validation/e2e-dependency-boundaries/l3-all/controlled/summary.json\n?? docs/validation/e2e-dependency-boundaries/l3-all/delivery.local-codex/live-before-usage.json\n?? docs/validation/e2e-dependency-boundaries/l3-all/delivery.local-codex/live-cleanup-usage.json\n?? docs/validation/e2e-dependency-boundaries/l3-all/delivery.local-codex/live-final-usage.json\n?? docs/validation/e2e-dependency-boundaries/l3-all/delivery.local-codex/scenario.json\n?? docs/validation/e2e-dependency-boundaries/l3-all/delivery.local-codex/summary.json\n?? docs/validation/e2e-dependency-boundaries/l3-all/delivery.orca-codex/live-before-usage.json\n?? docs/validation/e2e-dependency-boundaries/l3-all/delivery.orca-codex/live-cleanup-usage.json\n?? docs/validation/e2e-dependency-boundaries/l3-all/delivery.orca-codex/live-final-usage.json\n?? docs/validation/e2e-dependency-boundaries/l3-all/delivery.orca-codex/scenario.json\n?? docs/validation/e2e-dependency-boundaries/l3-all/delivery.orca-codex/summary.json",
+    "go_version": "go version go1.26.4 windows/amd64",
+    "go_env": {
+      "GOARCH": "amd64",
+      "GOCACHE": "C:\\Users\\lmas1\\AppData\\Local\\go-build",
+      "GOFLAGS": "",
+      "GOOS": "windows",
+      "GOTOOLCHAIN": "auto"
+    },
+    "os": "windows",
+    "architecture": "amd64",
+    "machine": {
+      "host_name": "liuming-asus",
+      "logical_cpu_count": 20,
+      "processor_identifier": "AMD64 Family 26 Model 36 Stepping 0, AuthenticAMD"
+    },
+    "concurrency": {
+      "GOMAXPROCS_environment": "unset",
+      "go_build_package_parallel": "Go default",
+      "go_test_parallel": "default 20",
+      "runtime_GOMAXPROCS": "20"
+    },
+    "build_cache_condition": "as found; no explicit cache clear",
+    "enabled_native_acceptance_switches": [],
+    "native_acceptance_note": "native gpt-6-luna/medium; loopback provider"
+  },
+  "selected_scenarios": [
+    {
+      "id": "recovery.orca-codex",
+      "level": "L3",
+      "suite": "recovery",
+      "package": "./tests/e2e/live",
+      "test": "TestRecoveryOrcaCodex",
+      "env": "live",
+      "chain": "orca-codex"
+    }
+  ],
+  "groups": [
+    {
+      "id": "e2e-1",
+      "command": [
+        "go",
+        "test",
+        "-tags=e2e",
+        "-json",
+        "-count=1",
+        "-p=1",
+        "-parallel=1",
+        "-timeout=35m",
+        "-run=^(TestRecoveryOrcaCodex)$",
+        "./tests/e2e/live"
+      ],
+      "assigned_tests": [
+        "TestRecoveryOrcaCodex"
+      ],
+      "assigned_packages": [
+        "./tests/e2e/live"
+      ],
+      "stdout_json_log": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-l3-all-recovery-orca-20261002-174336\\e2e-1.jsonl",
+      "stderr_log": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-l3-all-recovery-orca-20261002-174336\\e2e-1.stderr.txt",
+      "wall_seconds": 243.7166528,
+      "exit_code": 1,
+      "error": "exit status 1",
+      "summary": {
+        "status": "failed",
+        "passed": false,
+        "complete": true,
+        "command_exit_code": 1,
+        "package_count": 1,
+        "passed_packages": 0,
+        "failed_packages": [
+          "github.com/erranliu/SteerLine/tests/e2e/live"
+        ],
+        "skipped_packages": [],
+        "test_count": 1,
+        "passed_tests": 0,
+        "failed_tests": 1,
+        "skipped_tests": 0,
+        "packages": [
+          {
+            "package": "github.com/erranliu/SteerLine/tests/e2e/live",
+            "status": "fail",
+            "elapsed_seconds": 242.187
+          }
+        ],
+        "tests": [
+          {
+            "package": "github.com/erranliu/SteerLine/tests/e2e/live",
+            "name": "TestRecoveryOrcaCodex",
+            "status": "fail",
+            "elapsed_seconds": 241.33
+          }
+        ],
+        "slowest_tests": [
+          {
+            "package": "github.com/erranliu/SteerLine/tests/e2e/live",
+            "name": "TestRecoveryOrcaCodex",
+            "status": "fail",
+            "elapsed_seconds": 241.33
+          }
+        ],
+        "failures": [
+          {
+            "package": "github.com/erranliu/SteerLine/tests/e2e/live",
+            "name": "TestRecoveryOrcaCodex",
+            "status": "fail",
+            "elapsed_seconds": 241.33
+          }
+        ],
+        "skipped": [],
+        "incomplete_reasons": [],
+        "test_event_wall_seconds": 242.1833803,
+        "has_test_event_wall": true
+      }
+    }
+  ],
+  "build_sha256": {
+    "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-l3-all-recovery-orca-20261002-174336\\build\\controlled-helper.exe": "50c593cb586a11cbd473cb2cb81f7c46f7506e8aa0e4890e55f435a54c507dc3",
+    "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-l3-all-recovery-orca-20261002-174336\\build\\steerline.exe": "e40718e582467d964cd80d3e623e7c3290e3b69139d3253844b5824d81fdbb5c"
+  },
+  "preparation_seconds": 4.7528088,
+  "execution_seconds": 243.7418831,
+  "passed": false,
+  "cleanup_complete": true,
+  "errors": [
+    "e2e-1: failed/incomplete/skipped tests"
+  ],
+  "started_at": "2026-10-02T09:43:37.240304Z",
+  "finished_at": "2026-10-02T09:47:46.221328Z",
+  "coverage": "selected-L3"
+}
