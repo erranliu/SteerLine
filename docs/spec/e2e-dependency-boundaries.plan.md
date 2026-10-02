@@ -36,3 +36,16 @@
 Orca recovery 首轮真实执行成功，但服务重启的旧启动检查要求 writable roots 非空，与 full access 的空 roots 契约冲突。改为比较环境 roots 与已通过 codec/身份验证的原 PolicyResources roots；runtime 和启动命令仍必需，不补旧数据或放宽资源变更。新增 `TestOrcaRestartPreflightRetainsOriginalPolicyRoots`，以真实受控 claim/resource 持久化验证 workspace/full access 启动以及 roots 变更拒绝。
 
 修复后先运行 `go test ./internal/steerline -run '^(TestOrcaRestartPreflightRetainsOriginalPolicyRoots|TestManagedOrcaFrozenResourceEvidenceIsVerifiedBeforeInput)$' -count=1` 和 `go test ./internal/testboundary -count=1`，无 token；通过后只独立重跑 `recovery.orca-codex`。已成功的其他场景不因这个 Orca 重启检查重复调用模型；首轮失败及 usage 单独保留。
+
+## 用户追加：rebase 最新 main 后完整 L2
+
+先将 #180 的分支 rebase 到 `5bbbfcd`（包含 #187 host/source 隔离），再将 #188 的两笔增量接到新父分支，保留两个 PR 的边界。冲突仅涉及原终端检测测试，使用主干的新 `advanceWorkerPreparation` 入口并保留 codec 的 AgentBound 断言，不恢复旧入口。rebase 完成候选为 `e27735a`。
+
+| 级别 | 组/场景 ID | 环境 | 命令 | 时点与通过条件 | 证据 |
+|---|---|---|---|---|---|
+| L1 定向 | 依赖边界、codec、driver/runner | 本机，无模型 | `go test ./internal/testboundary ./tests/e2e/internal/... ./cmd/test-feedback -count=1` | rebase 后；新接口/配置与抽取层回归通过 | `docs/validation/e2e-dependency-boundaries/rebase-187-l2/` |
+| L1 定向 | 原终端准备、空线程首回合/反馈、原权限恢复 | 本机、受控实现，无模型 | `go test ./internal/steerline -run '^(TestWorkerEnvironmentWaitsForOriginalAgentDetection|TestOrcaRestartPreflightRetainsOriginalPolicyRoots|TestWorkerFlowServiceFirstFeedbackKeepsSessionAndWorkspace)$' -count=1` | 冲突后；新准备入口、原身份、完全访问 roots、同会话反馈通过 | 同目录验证记录 |
+| 编译 | 全部 E2E 场景 | 本机，不运行场景 | `go test -tags=e2e ./tests/e2e/live ./tests/e2e/smoke ./tests/e2e/suites/... -run '^$' -count=1` | 真实阶段前；场景与最新主干接口可编译 | 命令输出 |
+| L2 | smoke.delivery + smoke.local-codex + smoke.orca-codex | gated，真实阶段 full access，luna/medium，SteerlineTest | `go run ./cmd/test-feedback -level=L2 -out=<fresh>` | 定向通过后；无 token 门槛先通过，两条真实 PR 创建/合并、正数 usage、原生身份和清理通过 | 同目录 summary/scenario/usage |
+
+不重复 L3/full：用户指定 rebase 与完整 L2；已有 L3 历史证据保留，不能当作新主干上的 L3 通过记录。
