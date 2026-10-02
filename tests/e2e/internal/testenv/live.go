@@ -11,10 +11,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
-	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 	"github.com/erranliu/SteerLine/internal/testprocess"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
+	"github.com/erranliu/SteerLine/tests/e2e/internal/evidence"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/native"
 )
 
@@ -30,10 +29,10 @@ func (s *Scenario) NewLiveProject(name, chain string) *Project {
 	if strings.HasPrefix(s.ID, "smoke.") {
 		p.enableGitHub()
 	}
-	codex, err := codexworker.NativeExecutable("codex")
+	codex, err := native.CodexExecutable("codex")
 	s.Must(err)
 	publisher, host := "host_service", "local"
-	var orcaConfig any
+	var orcaConfig map[string]any
 	if chain == "orca-codex" {
 		host, publisher = "orca", "worker"
 		command := os.Getenv("ORCA_CLI_COMMAND")
@@ -87,12 +86,7 @@ func (s *Scenario) NewLiveProject(name, chain string) *Project {
 	config["command_timeout"] = "60s"
 	config["execution_policy"] = fullAccessPolicy()
 	s.Must(controlled.Write(p.Config, config))
-	codexConfig := map[string]any{"executable": codex, "model": native.Model, "reasoning_effort": native.Effort}
-	implementations := []any{map[string]any{"implementation_key": codexworker.ProfileCodecKey, "codec_version": 1, "payload": codexConfig}}
-	if orcaConfig != nil {
-		implementations = append(implementations, map[string]any{"implementation_key": orcaworker.ProfileCodecKey, "codec_version": 1, "payload": orcaConfig})
-		codexConfig["args"] = []string{"--no-daemon"}
-	}
+	implementations := native.WorkerImplementationConfigs(codex, orcaConfig)
 	profile := map[string]any{"id": chain, "name": "Real E2E " + chain, "host": host, "agent": "codex", "implementation_configs": implementations}
 	s.Must(controlled.Write(filepath.Join(p.Home, "execution.json"), map[string]any{"version": 2, "execution_profiles": []any{profile}, "default_execution_profile": chain}))
 	p.Driver.Profile = chain
@@ -156,7 +150,7 @@ Write-Output $receipt.url
 		_, err := p.orca(s.Context, "repo", "add", "--path", p.Repo, "--json")
 		s.Must(err)
 		// Read registration by the exact owned repository path, never display name.
-		p.OrcaRepoID, err = orcaworker.FindRepo(s.Context, p.orca, p.Repo)
+		p.OrcaRepoID, err = native.FindOrcaRepo(s.Context, p.orca, p.Repo)
 		s.Must(err)
 		p.OrcaSetupID, err = p.findSetup(s.Context)
 		s.Must(err)
@@ -172,10 +166,10 @@ func (p *Project) orca(ctx context.Context, args ...string) (json.RawMessage, er
 	var out, stderr strings.Builder
 	cmd.Stdout, cmd.Stderr = &out, &stderr
 	err := testprocess.Run(ctx, cmd)
-	envelope, parseErr := orcaworker.ParseEnvelope([]byte(out.String()))
+	payload, parseErr := native.OrcaPayload([]byte(out.String()))
 	record := map[string]any{"command": append([]string{p.OrcaExecutable}, args...), "stdout": out.String(), "stderr": stderr.String(), "error": fmt.Sprint(err)}
 	logErr := controlled.Write(filepath.Join(p.Scenario.Output, fmt.Sprintf("orca-call-%d.json", time.Now().UnixNano())), record)
-	return envelope.Result, errors.Join(err, parseErr, logErr)
+	return payload, errors.Join(err, parseErr, logErr)
 }
 func (p *Project) findSetup(ctx context.Context) (string, error) {
 	raw, err := p.orca(ctx, "project", "setups", "--json")
@@ -203,8 +197,8 @@ func (p *Project) cleanupOrca() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	if p.OrcaRepoID == "" {
-		id, err := orcaworker.FindRepo(ctx, p.orca, p.Repo)
-		if errors.Is(err, orcaworker.ErrRepoUnavailable) {
+		id, err := native.FindOrcaRepo(ctx, p.orca, p.Repo)
+		if errors.Is(err, native.ErrOrcaRepoUnavailable) {
 			return nil
 		}
 		if err != nil {
@@ -216,18 +210,12 @@ func (p *Project) cleanupOrca() error {
 	if err != nil {
 		return err
 	}
-	var listing struct {
-		Worktrees []orcaworker.Worktree `json:"worktrees"`
-		Truncated bool                  `json:"truncated"`
-	}
-	if err := json.Unmarshal(raw, &listing); err != nil {
+	worktrees, err := native.OrcaWorktrees(raw)
+	if err != nil {
 		return err
 	}
-	if listing.Truncated {
-		return errors.New("owned worktree inventory truncated")
-	}
 	var failures []error
-	for _, w := range listing.Worktrees {
+	for _, w := range worktrees {
 		if w.RepoID != p.OrcaRepoID || w.ID == "" {
 			failures = append(failures, errors.New("Orca cleanup inventory ownership mismatch"))
 			continue
@@ -267,11 +255,11 @@ func (p *Project) NativeUsage(snap Snapshot, label string) (native.Usage, error)
 		return u, errors.New("usage needs one bound execution")
 	}
 	e := snap.Domain.Executions[0]
-	profile, profileErr := frozenCodexSettings(snap)
-	if profileErr != nil || profile.Model != native.Model || profile.ReasoningEffort != native.Effort {
+	profile, profileErr := evidence.ModelSelection(snap.Domain)
+	if profileErr != nil || profile.Model != native.Model || profile.Effort != native.Effort {
 		return u, errors.New("frozen native model/effort mismatch")
 	}
-	var evidence []byte
+	var usageEvidence []byte
 	var err error
 	if p.Chain == "local-codex" {
 		path := filepath.Join(filepath.Dir(p.Database), "runs", e.WorkflowRunID, "turns", e.CurrentCommandID, "appserver.jsonl")
@@ -283,7 +271,7 @@ func (p *Project) NativeUsage(snap Snapshot, label string) (native.Usage, error)
 		if bindErr != nil {
 			return u, bindErr
 		}
-		u, evidence, err = native.AppServerUsage(raw, session, e.CurrentTurnID)
+		u, usageEvidence, err = native.AppServerUsage(raw, session, e.CurrentTurnID)
 	} else {
 		// Only this project's home is scanned. Exactly one native session must match
 		// the bound workspace; user/global sessions cannot become usage evidence.
@@ -310,7 +298,7 @@ func (p *Project) NativeUsage(snap Snapshot, label string) (native.Usage, error)
 			}
 			matches++
 			var parseErr error
-			u, evidence, parseErr = native.RolloutUsage(raw, e.Workspace.Worktree)
+			u, usageEvidence, parseErr = native.RolloutUsage(raw, e.Workspace.Worktree)
 			return parseErr
 		})
 		if err == nil && matches != 1 {
@@ -320,7 +308,7 @@ func (p *Project) NativeUsage(snap Snapshot, label string) (native.Usage, error)
 	if err != nil {
 		return u, err
 	}
-	if err := os.WriteFile(filepath.Join(p.Scenario.Output, p.Name+"-"+label+"-usage.jsonl"), evidence, 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(p.Scenario.Output, p.Name+"-"+label+"-usage.jsonl"), usageEvidence, 0600); err != nil {
 		return u, err
 	}
 	if err := controlled.Write(filepath.Join(p.Scenario.Output, p.Name+"-"+label+"-usage.json"), u); err != nil {
@@ -347,16 +335,7 @@ func LiveDelivery(s *Scenario, chain string, restart bool) {
 		s.t.Fatal("native execution identity/turn missing")
 	}
 	if chain == "orca-codex" {
-		state, stateErr := nativeOrcaState(e)
-		s.Must(stateErr)
-		if len(state.Turns) != 2 || !e.Environment.Ready || !e.Environment.Preparation.Verified {
-			s.t.Fatal("real Orca readiness/business continuity missing")
-		}
-		for _, turn := range state.Turns {
-			if !turn.Settled || turn.Outcome != "succeeded" {
-				s.t.Fatal("real Orca turn did not succeed")
-			}
-		}
+		s.Must(evidence.OrcaReadiness(e))
 	}
 	for _, task := range before.Page.Tasks {
 		if task.TaskID == p.Tasks["b"].ID && (task.DependencyReady || len(task.WorkflowRuns) > 0) {

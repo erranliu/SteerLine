@@ -161,6 +161,16 @@ func ReadWorkflow(ctx context.Context, database, project string) (contracts.Doma
 	return steerline.NewQueryService(reader, project).Workflow(ctx, "")
 }
 
+// ReadProjectView uses the product reader's public transaction contract.
+func ReadProjectView(ctx context.Context, database, project string) (contracts.ProjectView, error) {
+	reader, err := steerline.OpenSQLiteReader(database)
+	if err != nil {
+		return contracts.ProjectView{}, err
+	}
+	defer reader.Close()
+	return steerline.NewQueryService(reader, project).ReadProjectView(ctx, "", 100)
+}
+
 // MainView exposes the same public read transaction for fixture diagnostics.
 func MainView(args []string) error {
 	fs := flag.NewFlagSet("E2E view", flag.ContinueOnError)
