@@ -25,16 +25,7 @@ func (s *Scenario) NewLiveProject(name, chain string) *Project {
 	}
 	p := s.NewProject(name)
 	p.Chain = chain
-	windows := "elevated"
-	if chain == "orca-codex" {
-		windows = "unelevated"
-	}
-	fullAccess := strings.HasPrefix(s.ID, "smoke.")
-	authMode := windows
-	if fullAccess {
-		windows, authMode = "", "full-access"
-	}
-	s.Must(native.SeedAuth(s.Run.AuthHome, filepath.Join(p.Home, "codex"), authMode))
+	s.Must(native.SeedAuth(s.Run.AuthHome, filepath.Join(p.Home, "codex"), "full-access"))
 	s.Must(native.TrustProject(filepath.Join(p.Home, "codex"), p.Repo))
 	if strings.HasPrefix(s.ID, "smoke.") {
 		p.enableGitHub()
@@ -81,7 +72,7 @@ func (s *Scenario) NewLiveProject(name, chain string) *Project {
 		pwsh, err := exec.LookPath("pwsh")
 		s.Must(err)
 		if strings.Contains(strings.ToLower(pwsh), "windowsapps") {
-			s.t.Fatal("live Orca requires a standalone PowerShell executable for its restricted token")
+			s.t.Fatal("live Orca requires a standalone PowerShell executable for reproducible shell execution")
 		}
 		s.Must(controlled.Write(filepath.Join(p.Home, "orca-env.json"), native.OrcaEnvironment{Executable: p.OrcaExecutable, Home: p.Home, LogDir: logDir, PowerShellDir: filepath.Dir(pwsh)}))
 		// This deadline covers native terminal creation, metadata binding, model
@@ -94,14 +85,9 @@ func (s *Scenario) NewLiveProject(name, chain string) *Project {
 	s.Must(json.Unmarshal(raw, &config))
 	config["publication_policy"] = map[string]string{"publisher": publisher}
 	config["command_timeout"] = "60s"
-	if fullAccess {
-		config["execution_policy"] = map[string]any{"filesystem": map[string]any{"read_scope": "host", "write_scope": "host", "git_metadata_write": false}, "network": "allow", "escalation": "deny"}
-	}
+	config["execution_policy"] = fullAccessPolicy()
 	s.Must(controlled.Write(p.Config, config))
-	profile := map[string]any{"id": chain, "name": "Real E2E " + chain, "host": host, "agent": "codex", "model": native.Model, "reasoning_effort": native.Effort, "codex": map[string]any{"executable": codex, "windows_sandbox": windows}}
-	if fullAccess {
-		delete(profile["codex"].(map[string]any), "windows_sandbox")
-	}
+	profile := map[string]any{"id": chain, "name": "Real E2E " + chain, "host": host, "agent": "codex", "model": native.Model, "reasoning_effort": native.Effort, "codex": map[string]any{"executable": codex}}
 	if orcaConfig != nil {
 		profile["orca"] = orcaConfig
 		profile["codex"].(map[string]any)["args"] = []string{"--no-daemon"}
@@ -109,21 +95,7 @@ func (s *Scenario) NewLiveProject(name, chain string) *Project {
 	s.Must(controlled.Write(filepath.Join(p.Home, "execution.json"), map[string]any{"execution_profiles": []any{profile}, "default_execution_profile": chain}))
 	p.Driver.Profile = chain
 
-	if chain == "local-codex" && !fullAccess {
-		probe := exec.Command(codex, "sandbox", "--permission-profile", ":workspace", "-C", p.Repo, "-c", "windows.sandbox=elevated", "-c", "sandbox_workspace_write.network_access=true", "powershell.exe", "-NoProfile", "-Command", "Write-Output STEERLINE_NATIVE_SHELL_READY")
-		probe.Env = p.Driver.Command(s.Context).Env
-		var stdout, stderr strings.Builder
-		probe.Stdout, probe.Stderr = &stdout, &stderr
-		probeCtx, cancel := context.WithTimeout(s.Context, 45*time.Second)
-		probeErr := testprocess.Run(probeCtx, probe)
-		cancel()
-		s.Must(controlled.Write(filepath.Join(s.Output, "native-shell-preflight.json"), map[string]any{"stdout": stdout.String(), "stderr": stderr.String(), "error": fmt.Sprint(probeErr)}))
-		s.Must(probeErr)
-		if !strings.Contains(stdout.String(), "STEERLINE_NATIVE_SHELL_READY") {
-			s.t.Fatal("native shell preflight failed before model request")
-		}
-	}
-	s.Must(os.WriteFile(filepath.Join(p.Repo, "AGENTS.md"), []byte("# Isolated SteerLine E2E fixture\n\nFor a readiness-only Dispatch, run only its exact probe command and report the result; do not inspect business task references. For business work, only implement the bound task. Invoke shell tools with login=false to disable unrelated user shell profiles. Initially HEAD equals the reference commit: confirm with git rev-parse HEAD, then use Get-FileHash directly on docs/spec/task.spec.md and task.plan.md. Read those original files. Do not reconstruct files from git show text or PowerShell pipelines: newline conversion changes their hashes. Do not write to TEMP/TMP; that directory is intentionally outside the allowed write scope. Any scratch work must stay inside this assigned worktree, and must not be staged. No questions or other tasks are needed: the fixture contract specifies the entire output and publication action.\n"), 0600))
+	s.Must(os.WriteFile(filepath.Join(p.Repo, "AGENTS.md"), []byte("# Isolated SteerLine E2E fixture\n\nFor a readiness-only Dispatch, run only its exact probe command and report the result; do not inspect business task references. Preserve the COMPLETE native command tool result, including its exit_code and output. If using the exec JavaScript wrapper, use exactly `const r = await tools.exec_command({cmd: <exact probe command>, login: false}); text(r);`. Do not project r.output, stringify individual fields, add exit= text, or transform the result: the readiness verifier consumes the full native JSON result. For business work, only implement the bound task. Invoke shell tools with login=false to disable unrelated user shell profiles. Initially HEAD equals the reference commit: confirm with git rev-parse HEAD, then use Get-FileHash directly on docs/spec/task.spec.md and task.plan.md. Read those original files. Do not reconstruct files from git show text or PowerShell pipelines: newline conversion changes their hashes. Any scratch work must stay inside this assigned worktree, and must not be staged. No questions or other tasks are needed: the fixture contract specifies the entire output and publication action.\n"), 0600))
 	spec := "# Live delivery fixture\n\nCreate result.txt containing exactly `real model delivery` followed by a newline. Verify the file. Stage only result.txt. Do not modify any other tracked file.\n\n"
 	if chain == "local-codex" {
 		spec += "The host service publishes. End your final reply with the exact STEERLINE_PUBLISH_READY line provided in the task instruction. Do not commit, push, or run publish.ps1.\n"
@@ -154,15 +126,16 @@ if ($LASTEXITCODE -ne 0) { throw 'stage failed' }
 git -c user.name=E2E -c user.email=e2e@example.invalid -c commit.gpgsign=false commit -m 'Real model delivery'
 if ($LASTEXITCODE -ne 0) { throw 'commit failed' }
 $branch = git symbolic-ref --short HEAD
+if ($branch -ceq 'main') { throw 'publication must push the assigned PR head, not the base branch' }
 $head = git rev-parse HEAD
-git push '%s' ('HEAD:refs/heads/' + $branch)
+git -c 'url.%s.insteadOf=https://github.com/e2e/project.git' push origin ('HEAD:refs/heads/' + $branch)
 if ($LASTEXITCODE -ne 0) { throw 'push failed' }
 $body = @{branch=$branch; head=$head} | ConvertTo-Json -Compress
 $receipt = Invoke-RestMethod -Method Post -Uri '%s/__e2e/pull' -ContentType 'application/json' -Body $body
 Write-Output $receipt.url
 `, state.GitURL, base)
 			s.Must(os.WriteFile(filepath.Join(p.Repo, "publish.ps1"), []byte(script), 0600))
-			spec += "You own publication. After writing result.txt, execute `powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./publish.ps1` once. This fixture script commits and pushes the staged file to the isolated Git server and creates the fixture PR. Report its returned URL in your final reply. Do not call gh or real GitHub.\n"
+			spec += "You own publication. After writing result.txt, execute `powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./publish.ps1` once. The assigned working branch is the PR HEAD; main in the dispatch is the PR BASE, never a request to push to main. The origin URL remains the dispatch's https://github.com/e2e/project.git identity; only the script's single push command uses url.insteadOf to route its transport to the loopback server. This does not change repository config or the remote identity seen by task validation. The explicitly authorized loopback PR endpoint represents that same fixture provider. The script commits, pushes origin's assigned head and creates the fixture PR. Report its returned URL in your final reply. Do not call gh or real GitHub.\n"
 		}
 	}
 	spec += "\n## Acceptance\n\nThe committed result.txt equals the specified content and is delivered after the fixture PR merges.\n"
@@ -363,11 +336,7 @@ func LiveDelivery(s *Scenario, chain string, restart bool) {
 		s.t.Fatal("native worker did not publish fixture PR")
 	}
 	e := before.Domain.Executions[0]
-	if p.RealPR {
-		if e.PolicyResources == nil || e.PolicyResources.Contract != codexworker.FullAccessPolicyContract || len(e.PolicyResources.WriteRoots) != 0 {
-			s.t.Fatal("L2 live smoke did not bind explicit full-access policy")
-		}
-	}
+	p.AssertFullAccess(before)
 	if e.Process == nil || e.Workspace.Worktree == "" || e.TurnNumber != 1 {
 		s.t.Fatal("native execution identity/turn missing")
 	}
@@ -400,6 +369,7 @@ func LiveDelivery(s *Scenario, chain string, restart bool) {
 	if restart {
 		p.RestartService()
 		after := p.WaitPhase("waiting_pr_merge")
+		p.AssertFullAccess(after)
 		p.Record("after-restart", after)
 		a := after.Domain.Executions[0]
 		if before.Page.ProjectID != after.Page.ProjectID || before.Page.DatabaseID != after.Page.DatabaseID || e.ExecutionID != a.ExecutionID || e.WorkflowRunID != a.WorkflowRunID || e.SessionID != a.SessionID || e.Workspace.Worktree != a.Workspace.Worktree || e.CurrentTurnID != a.CurrentTurnID || e.TurnNumber != a.TurnNumber || len(before.Domain.Attempts) != len(after.Domain.Attempts) {
@@ -413,6 +383,7 @@ func LiveDelivery(s *Scenario, chain string, restart bool) {
 	}
 	p.Merge()
 	done := p.WaitPhase("completed")
+	p.AssertFullAccess(done)
 	p.Record("completed", done)
 	for _, task := range done.Page.Tasks {
 		if task.TaskID == p.Tasks["a"].ID && (task.Status != "closed" || task.Delivery == nil || task.Delivery.SelectedWorkflowRunID != e.WorkflowRunID) {

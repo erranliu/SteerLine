@@ -43,9 +43,11 @@ controlled 使用真实 SteerLine、Git、SQLite，helper 实现最小 app-serve
 
 ## 真实环境
 
-L2 smoke 的 local-codex 和 orca-codex 均采用显式完全访问（host 写入、network allow → danger-full-access、approval_policy=never），固定 `gpt-6-luna` / `medium`。不复制/预检 sandbox 账号、不运行 sandbox canary，不需要管理员初始化。L2 的受控门槛保持原配置；两条真实场景都核对 full-access 冻结资源契约并完成真实 PR 交付。下面 sandbox 准备说明适用于保留原权限模式的 L3；初始化脚本不是 L2 前置条件。
+L2 smoke 的两条真实链路和 L3 controlled/live 所有场景均采用显式完全访问（host 写入、network allow → danger-full-access、approval_policy=never）。真实执行固定 `gpt-6-luna` / `medium`。不复制/预检 sandbox 账号、不运行 sandbox canary，不需要管理员初始化。L2 的受控门槛保持原配置；L3 级别由 runner 明确传入，新增组也采用同一权限。共享断言核对实际冻结权限/资源契约，recovery 重启后再次核对。
 
-真实执行固定 `gpt-6-luna` / `medium`，需要本机 `codex-cli 0.159.2`（当前产品权限映射）、Codex 登录认证和本地 Orca。每个项目创建独立 Codex home，复制来源 auth.json；仅 local-codex 的 elevated 模式检查和复制 `.sandbox/setup_marker.json`、`.sandbox-secrets/sandbox_users.json`。orca-codex 的 unelevated 模式使用当前用户受限 token，不依赖专用账号或其管理员初始化。写入最小模型和本次仓库信任配置，不复制历史或全局项目配置。来源为当前 CODEX_HOME，未设置时使用用户 .codex。独立 worker 按 SteerLine execution_policy 启动，不继承启动它的 Codex App 会话的“完全访问”模式。
+真实执行需要本机 `codex-cli 0.159.2`（当前产品权限映射）、Codex 登录认证和本地 Orca。每个真实项目创建独立 Codex home，只复制来源 auth.json，写入最小模型和本次仓库信任配置，不复制 sandbox 账号、历史或全局项目配置。来源为当前 CODEX_HOME，未设置时使用用户 .codex。独立 worker 按 SteerLine execution_policy 启动，不继承启动它的 Codex App 会话的“完全访问”模式。
+
+以下 sandbox 工具供其他需要 elevated 的开发场景显式使用，不属于 L2/L3 前置条件。
 
 elevated Windows sandbox 是机器级预置能力：先在测试外完成一次原生管理员初始化，再复用其有效凭据。该模式的项目创建前检查当前版本的标记和两个账号，使用禁止 UI 的 DPAPI 解密及 Windows 账号登录验证；不创建或修复账号。缺失、版本不符或账号失效立即失败，不进入模型阶段。正常复用时，原生执行器刷新本次目录 ACL 不需要管理员弹窗；若运行期间账号或系统策略变化，仍可能触发原生修复，不能承诺所有系统状态下绝无 UAC。
 
@@ -71,6 +73,10 @@ go test ./tests/e2e/internal/native -run '^TestSandboxReadinessExistingAccounts$
 L2 使用用户授权的 [SteerlineTest](https://github.com/erranliu/SteerlineTest)，需要 gh 写权限。每次克隆独立仓库，以 `codex/e2e/<随机ID>/<场景>/base` 保存最小 fixture 树及测试合同，不改变 main。正式 worker 分支针对该 base 创建真实 PR。local-codex 由中心发布；orca-codex 由模型执行 fixture publish.ps1，真实 commit/push/gh create。测试按匹配的 head SHA 转 ready 并合并，由真实 provider 确认交付。清理只关闭本次仍 open 的 PR、删除本次分支，保留真实 GitHub PR 历史。认证只存在项目 scratch，以环境引用传递，不写入产物。
 
 L3 live 使用 loopback Git/PR provider，两条链路均执行真实模型；与无 token 环境分别选择。Orca 使用真实 CLI 创建、绑定、结算、清理资源。测试 CLI 适配器为新建终端注入隔离环境；当前版本长文本注入若明确停在 Pasted Content 输入框，则完成该原终端的一次 Enter，不重发文本。readiness 探针、业务命令和结算都需要真实模型及原生证据，不合成权限或成功回执。
+
+长提示提交前先等待原终端的粘贴草稿稳定至少一秒，并记录提交后状态；accepted/bytesWritten 不代表 agent 已启动。readiness 的 JavaScript exec wrapper 必须保留完整原生工具结果 JSON，不能只打印 stdout 或手写 exit 文本。原输入目标短暂未就绪时，场景可通过正式 recheck_environment 一次检查原环境，保持原 Task/terminal/Dispatch，不能重发旧业务输入。
+
+L3 Orca 发布脚本使用 origin 的正式仓库身份，仅对单次 push 以 Git `url.insteadOf` 路由到本项目 loopback 服务；不改仓库级配置，以免影响正式 remote 校验。工作分支为 PR head，main 为 PR base，脚本禁止直接向 main 推送。
 
 ## 产物与失败
 

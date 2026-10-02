@@ -15,12 +15,14 @@ func TestWaitingMergeRestart(t *testing.T) {
 	p.StartService()
 	p.Claim("a")
 	before := p.WaitPhase("waiting_pr_merge")
+	p.AssertFullAccess(before)
 	p.Record("before-restart", before)
 	if before.Helper.Sessions != 1 || before.Helper.Dispatches != 1 || before.Helper.PR.State != "open" {
 		t.Fatal("business turn was not completed with open PR")
 	}
 	p.RestartService()
 	after := p.WaitPhase("waiting_pr_merge")
+	p.AssertFullAccess(after)
 	p.Record("after-restart", after)
 	first, second := before.Domain.Executions[0], after.Domain.Executions[0]
 	if before.Page.ProjectID != after.Page.ProjectID || before.Page.DatabaseID != after.Page.DatabaseID || before.Domain.WorkflowRuns[0].WorkflowRunID != after.Domain.WorkflowRuns[0].WorkflowRunID || first.ExecutionID != second.ExecutionID || first.SessionID != second.SessionID || first.Workspace.Worktree != second.Workspace.Worktree || first.Workspace.Branch != second.Workspace.Branch || len(before.Domain.Attempts) != len(after.Domain.Attempts) {
