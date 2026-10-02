@@ -21,3 +21,5 @@ Full 新暴露的问题包括重构后只读 metadata probe 与权限 admission 
 组合回归暴露 fixture 过早为只有资源的 Session 注册 observer，占据 actor 后阻止首次 Task/Dispatch。测试驱动只为已受理 Dispatch 恢复 observer，保持生产 actor 原准备顺序。增加组合入口 `TestCD64IntentReceiptAndRecoveryGate` / `TestCD65HistoryAndPreparation` / `TestCD65SourceCommitAndHostGate` 定向复核，之后再运行完整 L1/Full，保留失败运行证据。
 
 Windows 完整环境的多个 Git 校验共享准备阶段的命令预算；测试 fixture 明确使用产品默认 30 秒，而真实 4/10 分钟期限不变。workspace 校验保留原命令错误原因。多个组合用例总运行超过 `go test` 默认十分钟，定向组合入口使用与 Full 一致的 `-timeout=45m`，各场景自身期限不变，原十分钟超时日志保留。
+
+组合测试的历史轮询本体通过，但 Windows 在 SQLite 关闭后暂时占用 fixture 文件，导致 TempDir 清理失败。只对该 fixture 自己的 `history-budget.db` 在关闭后进行两秒有界清理等待；定向 `TestCD65SourceCommitAndHostGate/active_and_historical_source_budgets_rotate` 通过。该改动仅为测试清理，Full 固定候选 026621f 的测试本体与生产代码不变；保留此前独立组合清理失败记录。

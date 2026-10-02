@@ -3,6 +3,7 @@ package steerline
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -81,7 +82,24 @@ func (p *testConversationHistoryPort) ReadHistory(_ context.Context, request con
 }
 
 func TestCD65HistoryBudgetRotatesSources(t *testing.T) {
-	store, err := OpenSQLiteStore(t.TempDir() + "/history-budget.db")
+	databasePath := t.TempDir() + "/history-budget.db"
+	// Close the collector/store first; tolerate only a short Windows close
+	// handoff on this fixture-owned file before TempDir removes its parent.
+	t.Cleanup(func() {
+		deadline := time.Now().Add(2 * time.Second)
+		for {
+			err := os.Remove(databasePath)
+			if err == nil || os.IsNotExist(err) {
+				return
+			}
+			if time.Now().After(deadline) {
+				t.Errorf("fixture database cleanup: %v", err)
+				return
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	})
+	store, err := OpenSQLiteStore(databasePath)
 	require(t, err)
 	defer store.Close()
 	port := &testConversationHistoryPort{}
