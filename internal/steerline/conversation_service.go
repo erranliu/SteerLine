@@ -26,11 +26,15 @@ func (s *Service) recordConversationEvent(run *Run, source WorkerEvent) error {
 	}
 	base := ConversationEvent{Version: ConversationVersion, ProjectID: s.Config.identity, TaskID: run.DomainTaskID, WorkflowID: run.RunID,
 		ExecutionID: run.ExecutionID, AttemptID: attemptID, Backend: executionapi.BackendKind(run.Backend), Protocol: executionapi.ExecutionProtocol(run.Protocol),
-		Agent: run.Agent, TargetID: run.Target.ID, SessionQuality: IdentityUnknown, TurnQuality: IdentityUnknown, ItemQuality: IdentityUnknown}
+		Agent: run.Agent, TargetID: run.Target.ID, SourceEventID: source.SourceEventID, SessionQuality: IdentityUnknown, TurnQuality: IdentityUnknown, ItemQuality: IdentityUnknown}
 	input := contracts.ConversationInput{Event: base, Process: run.Process, Source: source.Source, Segment: source.SourceSegment, Identity: source.SourceIdentity,
 		Cursor: source.SourceCursor, Generation: processGeneration(run.Process), Session: source.Session, SourceSeq: source.SourceSeq,
 		SourceOffset: source.SourceOffset, SourceLength: source.SourceLength, Raw: append([]byte(nil), source.Raw...), Diagnostic: source.Diagnostic,
 		Gap: source.SourceGap, InputWait: source.InputWait, SourceChanged: source.SourceChanged}
+	if input.Process != nil {
+		process := *input.Process
+		input.Process = &process
+	}
 	if s.conversationSources == nil {
 		return errors.New("conversation source port is required")
 	}
@@ -51,6 +55,8 @@ func (s *Service) recordConversationEvent(run *Run, source WorkerEvent) error {
 		if implementationMapper, ok := lifecycle.(contracts.ConversationInputMapper); ok {
 			mapper = implementationMapper
 		}
+	} else if run.WorkflowVersion == WorkerFlowVersion {
+		return lifecycleErr
 	}
 	batch, err := mapper.MapConversation(input)
 	if err != nil {
@@ -59,7 +65,13 @@ func (s *Service) recordConversationEvent(run *Run, source WorkerEvent) error {
 	if len(batch.Writes) == 0 {
 		return nil
 	}
+	if err = validateConversationSourceWrites(base, batch.Writes); err != nil {
+		return err
+	}
 	checkpoint := batch.Checkpoint
+	if checkpoint.ProjectID != base.ProjectID || checkpoint.ExecutionID != base.ExecutionID || checkpoint.AttemptID != base.AttemptID {
+		return errors.New("conversation mapper checkpoint changed the original execution identity")
+	}
 	if batch.VerifySourcePosition && source.SourceIdentity != "" {
 		paths := []string{}
 		for _, attempt := range s.domain.Attempts {
@@ -130,4 +142,25 @@ func processGeneration(process *executionapi.ProcessIdentity) string {
 		return ""
 	}
 	return process.Incarnation
+}
+
+func conversationProcessSnapshot(process *executionapi.ProcessIdentity) *executionapi.ProcessIdentity {
+	if process == nil {
+		return nil
+	}
+	identity := *process
+	return &identity
+}
+
+func validateConversationSourceWrites(expected ConversationEvent, writes []ConversationWrite) error {
+	for _, write := range writes {
+		event := write.Event
+		if event.ProjectID != expected.ProjectID || event.TaskID != expected.TaskID || event.WorkflowID != expected.WorkflowID || event.ExecutionID != expected.ExecutionID || event.AttemptID != expected.AttemptID || event.Backend != expected.Backend || event.Protocol != expected.Protocol || event.Agent != expected.Agent || event.TargetID != expected.TargetID {
+			return errors.New("conversation source changed its fixed project, execution or attempt owner")
+		}
+		if expected.Source != "" && (event.Source != expected.Source || event.SourceSegment != expected.SourceSegment || event.SourceIdentity != expected.SourceIdentity) {
+			return errors.New("conversation source changed its discovered source identity")
+		}
+	}
+	return nil
 }

@@ -43,10 +43,10 @@ func (s *Service) conversationJournalSources() []conversationJournalSource {
 		if run == nil || run.RunID == "" || run.ExecutionID == "" || run.DomainTaskID == "" {
 			continue
 		}
-		base := ConversationEvent{Version: ConversationVersion, ProjectID: s.Config.identity, TaskID: run.DomainTaskID, WorkflowID: run.RunID,
+		base := ConversationEvent{Version: ConversationVersion, ProjectID: s.Config.identity, TaskID: run.DomainTaskID, WorkflowID: run.RunID, AttemptID: run.AttemptID,
 			ExecutionID: run.ExecutionID, Backend: executionapi.BackendKind(run.Backend), Protocol: executionapi.ExecutionProtocol(run.Protocol), Agent: run.Agent, TargetID: run.Target.ID}
 		runSource := contracts.ConversationRunSource{Base: base, RunDirectory: filepath.Join(s.Config.RunDir, "runs", run.RunID), Workspace: deref(run.WorktreePath),
-			WorkerFlow: run.WorkflowVersion == WorkerFlowVersion, Process: run.Process}
+			WorkerFlow: run.WorkflowVersion == WorkerFlowVersion, Process: conversationProcessSnapshot(run.Process)}
 		for _, attempt := range s.domain.Attempts {
 			if attempt.ExecutionID != run.ExecutionID || attempt.EventPath == "" || !stableExecutionID(attempt.AttemptID) {
 				continue

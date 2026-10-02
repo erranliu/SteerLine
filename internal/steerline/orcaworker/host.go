@@ -20,6 +20,9 @@ func (l *ExecutionLifecycle) MapConversation(input contracts.ConversationInput) 
 }
 
 func MapTerminalConversation(input contracts.ConversationInput) (contracts.ConversationMappedBatch, error) {
+	if input.Source != "orca-terminal-v2" {
+		return contracts.ConversationMappedBatch{}, nil
+	}
 	event := input.Event
 	if event.ProjectID == "" || event.ExecutionID == "" || event.AttemptID == "" {
 		return contracts.ConversationMappedBatch{}, errors.New("terminal conversation has no fixed execution identity")
@@ -122,18 +125,34 @@ func (l *ExecutionLifecycle) InspectAgentInput(ctx context.Context, identity exe
 	return contracts.HostInputObservation{Fact: fact, Ready: ready}, err
 }
 
+func (l *ExecutionLifecycle) PreparationBudget() time.Duration {
+	timeout, err := time.ParseDuration(l.orca.WaitTimeout)
+	if err != nil || timeout <= 0 {
+		return 2 * time.Minute
+	}
+	return timeout
+}
+
 func (l *ExecutionLifecycle) CurrentTurn(snapshot executionapi.LifecycleSnapshot) (*contracts.HostTurnFacts, error) {
+	// Before resources have been created there is no native turn to inspect.
+	// A missing binding for an already bound process remains an error.
+	if snapshot.Ref.External.Terminal == "" {
+		bound := false
+		for _, envelope := range snapshot.Implementation {
+			bound = bound || envelope.ImplementationKey == ExecutionStateCodecKey
+		}
+		if !bound {
+			return nil, nil
+		}
+	}
 	state, _, err := l.readHostState(snapshot)
 	if err != nil || len(state.Turns) == 0 {
 		return nil, err
 	}
 	turn := state.Turns[len(state.Turns)-1]
-	waitTimeout, timeoutErr := time.ParseDuration(l.orca.WaitTimeout)
-	if timeoutErr != nil || waitTimeout <= 0 {
-		waitTimeout = 15 * time.Minute
-	}
+	waitTimeout := l.PreparationBudget()
 	return &contracts.HostTurnFacts{TurnID: turn.TurnID, TaskID: turn.TaskID, Purpose: turn.Purpose, Outcome: turn.Outcome,
-		IntentAt: turn.IntentAt, Deadline: turn.IntentAt.Add(waitTimeout + 2*time.Minute), Settled: turn.Settled,
+		IntentAt: turn.IntentAt, Deadline: turn.IntentAt.Add(waitTimeout), Settled: turn.Settled,
 		HasDispatch: turn.DispatchID != "", HasDoneMessage: turn.DoneMessageID != ""}, nil
 }
 
@@ -161,7 +180,7 @@ func (l *ExecutionLifecycle) ReadProbe(identity executionapi.ProbeIdentity, dige
 	return ReadProbe(identity, digest)
 }
 
-func (l *ExecutionLifecycle) ReadWorkerOutput(ctx context.Context, snapshot executionapi.LifecycleSnapshot, environment *contracts.WorkerEnvironment, attemptCursor string) (contracts.HostOutput, executionapi.ImplementationDataEnvelope, error) {
+func (l *ExecutionLifecycle) ReadWorkerOutput(ctx context.Context, snapshot executionapi.LifecycleSnapshot, input contracts.HostReadInput) (contracts.HostOutput, executionapi.ImplementationDataEnvelope, error) {
 	state, _, err := l.readHostState(snapshot)
 	if err != nil {
 		return contracts.HostOutput{}, executionapi.ImplementationDataEnvelope{}, err
@@ -187,8 +206,9 @@ func (l *ExecutionLifecycle) ReadWorkerOutput(ctx context.Context, snapshot exec
 	turn.OutputSource, turn.OutputComplete = result.Source, result.ContentComplete
 	turn.OutputClipping = append([]string(nil), result.Clipping...)
 	turn.OutputFallbackReason = result.FallbackReason
-	if turn.Purpose == "readiness" && environment != nil && environment.Preparation != nil {
-		preparation := environment.Preparation
+	var probeEvidence *contracts.ProbeToolEvidence
+	if turn.Purpose == "readiness" && input.Probe != nil {
+		preparation := *input.Probe
 		if resetCursor {
 			preparation.Evidence = contracts.ProbeToolEvidence{}
 		}
@@ -196,14 +216,15 @@ func (l *ExecutionLifecycle) ReadWorkerOutput(ctx context.Context, snapshot exec
 		if err != nil {
 			return contracts.HostOutput{}, executionapi.ImplementationDataEnvelope{}, err
 		}
+		probeEvidence = &preparation.Evidence
 		if preparation.Evidence.FailureCode != "" {
 			fact := contracts.HostFact{Reason: preparation.Evidence.FailureCode, Confidence: "confirmed", Source: "host.transcript.tool-result", Turn: turn.TurnID}
 			turn.OutputDigest = digestValue(struct{ Source, Content string }{result.Source, result.DisplayContent()})
 			envelope, encodeErr := NewExecutionStateEnvelope(l.hostStateIdentity(snapshot), state)
-			return contracts.HostOutput{Fact: &fact}, envelope, encodeErr
+			return contracts.HostOutput{Fact: &fact, ProbeEvidence: probeEvidence}, envelope, encodeErr
 		}
 	}
-	if turn.Purpose == "business" && environment != nil {
+	if turn.Purpose == "business" {
 		if resetCursor {
 			turn.ToolContext = contracts.ToolContext{}
 		}
@@ -232,7 +253,7 @@ func (l *ExecutionLifecycle) ReadWorkerOutput(ctx context.Context, snapshot exec
 	}
 	return contracts.HostOutput{Source: result.Source, Cursor: cursor, Content: content, ContentComplete: result.ContentComplete,
 		SourceChanged: result.SourceChanged, UpdateAttemptCursor: turn.Purpose != "readiness", Clipping: append([]string(nil), result.Clipping...),
-		FallbackReason: result.FallbackReason, Fact: fact, ContentChanged: changed}, envelope, nil
+		FallbackReason: result.FallbackReason, Fact: fact, ContentChanged: changed, ProbeEvidence: probeEvidence}, envelope, nil
 }
 
 func (l *ExecutionLifecycle) ExecuteHostAction(ctx context.Context, request executionapi.LifecycleRequest) (executionapi.LifecycleReceipt, error) {
@@ -265,15 +286,12 @@ func (l *ExecutionLifecycle) ExecuteHostAction(ctx context.Context, request exec
 		}
 	case executionapi.HostOpenOriginal:
 		authorization := input.Authorization
-		if input.Process == nil || snapshot.Ref.External != *input.Process || authorization == nil || authorization.ExecutionID != snapshot.Session.ExecutionID || authorization.AttemptID != snapshot.Session.AttemptID {
+		original := input.Process != nil && (snapshot.Ref.External == *input.Process || snapshot.OriginalHost != nil && *snapshot.OriginalHost == *input.Process)
+		if !original || authorization == nil || snapshot.HostAuthorization == nil || *authorization != *snapshot.HostAuthorization || authorization.ExecutionID != snapshot.Session.ExecutionID || authorization.AttemptID != snapshot.Session.AttemptID {
 			return nativeReceipt(request, executionapi.OperationRejected), errors.New("host action differs from the original process")
 		}
-		state, _, stateErr := l.readHostState(snapshot)
-		if stateErr != nil || len(state.Turns) == 0 || state.Turns[len(state.Turns)-1].TurnID != authorization.TurnID {
-			return nativeReceipt(request, executionapi.OperationRejected), errors.Join(stateErr, errors.New("host action differs from the original turn"))
-		}
 		fact, err := ObserveHost(ctx, l.client.MetaCall, workerTerminalIdentity(*input.Process))
-		if err != nil || fact.Reason != "" {
+		if err != nil || fact.Reason != "" && fact.Reason != "host_wait" {
 			return nativeReceipt(request, executionapi.OperationUnknown), errors.Join(err, errors.New("original host identity is not verified"))
 		}
 		if _, err = l.client.MetaCall(ctx, "terminal", "switch", "--terminal", input.Process.Terminal, "--json"); err != nil {
@@ -303,6 +321,9 @@ func (l *ExecutionLifecycle) ReconcileHostAction(_ context.Context, request exec
 	}
 	switch input.Kind {
 	case executionapi.HostPrepareProbeFiles:
+		if err := l.validateProbeTarget(request.Snapshot, *input.Probe); err != nil {
+			return nativeReceipt(request, executionapi.OperationRejected), err
+		}
 		plan, err := BuildProbe(*input.Probe)
 		if err != nil {
 			return nativeReceipt(request, executionapi.OperationRejected), err
@@ -316,6 +337,9 @@ func (l *ExecutionLifecycle) ReconcileHostAction(_ context.Context, request exec
 			return nativeReceipt(request, executionapi.OperationConfirmed), nil
 		}
 	case executionapi.HostCleanupProbeFiles:
+		if err := l.validateProbeTarget(request.Snapshot, *input.Probe); err != nil {
+			return nativeReceipt(request, executionapi.OperationRejected), err
+		}
 		absent, err := ProbeFilesAbsent(*input.Probe)
 		if err != nil {
 			return nativeReceipt(request, executionapi.OperationUnknown), err
@@ -324,6 +348,13 @@ func (l *ExecutionLifecycle) ReconcileHostAction(_ context.Context, request exec
 			return nativeReceipt(request, executionapi.OperationConfirmed), nil
 		}
 	case executionapi.HostRemoveFeedback:
+		if input.Worktree != request.Snapshot.Ref.WorkspacePath || input.WorkflowRun != request.Snapshot.Session.WorkflowRunID {
+			return nativeReceipt(request, executionapi.OperationRejected), errors.New("feedback cleanup differs from its original execution")
+		}
+		state, _, stateErr := l.readHostState(request.Snapshot)
+		if stateErr != nil || len(state.Turns) == 0 || state.Turns[len(state.Turns)-1].TurnID != input.TurnID {
+			return nativeReceipt(request, executionapi.OperationRejected), errors.Join(stateErr, errors.New("feedback cleanup differs from the original turn"))
+		}
 		path, err := RelayPath(input.Worktree, input.WorkflowRun, input.TurnID)
 		if err != nil {
 			return nativeReceipt(request, executionapi.OperationRejected), err
@@ -367,9 +398,8 @@ func (l *ExecutionLifecycle) validateProbeTarget(snapshot executionapi.Lifecycle
 		probe.Terminal != snapshot.Ref.External.Terminal || probe.Incarnation != snapshot.Ref.External.Incarnation {
 		return errors.New("probe action differs from its original execution host")
 	}
-	state, _, err := l.readHostState(snapshot)
-	if err != nil || len(state.Turns) == 0 || state.Turns[len(state.Turns)-1].TurnID != probe.Turn {
-		return errors.Join(err, errors.New("probe action differs from the original preparation turn"))
+	if snapshot.PreparationProbe == nil || *snapshot.PreparationProbe != probe {
+		return errors.New("probe action differs from the committed preparation identity")
 	}
 	return nil
 }

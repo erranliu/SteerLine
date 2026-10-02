@@ -46,7 +46,9 @@ func (m *ConversationMapper) MapCodexJSONL(ctx contracts.ConversationEvent, raw 
 		m = &ConversationMapper{}
 	}
 	ctx.Version = contracts.ConversationVersion
-	ctx.Backend, ctx.Protocol = executionapi.BackendLocal, executionapi.ProtocolLocalProcess
+	if ctx.Backend == "" && ctx.Protocol == "" {
+		ctx.Backend, ctx.Protocol = executionapi.BackendLocal, executionapi.ProtocolLocalProcess
+	}
 	ctx.Source = "codex-jsonl"
 	ctx.SourceRole = contracts.ConversationSourceFallback
 	ctx.SourceSegment = nonEmpty(ctx.SourceSegment, "local-jsonl-v1")

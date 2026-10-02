@@ -12,6 +12,15 @@ import (
 
 func TestCD65HistoryAndPreparation(t *testing.T) {
 	t.Run("history_commits_without_advancing_business_gate", testCD65HistoryCommitsOnly)
+	t.Run("BindingCannotChangeAttempt", TestCodexHistoryBindingCannotChangeAttempt)
+	t.Run("CanonicalSourceKeepsRawReadable", TestCodexHistoryCanonicalSourceKeepsRawReadable)
+	t.Run("MissingTextDoesNotClaimFinalBody", TestCodexHistoryMissingTextDoesNotClaimFinalBody)
+	t.Run("NativeFixtures", TestCodexHistoryNativeFixtures)
+	t.Run("RealCancelledTurnFixture", TestCodexHistoryRealCancelledTurnFixture)
+	t.Run("RealFailedTurnFixture", TestCodexHistoryRealFailedTurnFixture)
+	t.Run("RealLocalToolInterleaveFixture", TestCodexHistoryRealLocalToolInterleaveFixture)
+	t.Run("TurnCompletionAndLateFinal", TestCodexHistoryTurnCompletionAndLateFinal)
+
 	if runtime.GOOS == "windows" {
 		t.Run("preparation_reuses_original_host_after_restart", testIntegratedNativeOriginalSessionGate)
 	}
@@ -21,11 +30,11 @@ func testCD65HistoryCommitsOnly(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	fixture := newLifecycleProject(t, "local")
-	createIntegrationTask(t, ctx, fixture, 905)
+	createIntegrationTask(t, ctx, fixture, 901)
 	resolver := &integrationLifecycleResolver{}
 	service := startIntegrationService(t, ctx, fixture.config, resolver)
 	defer service.stop(t)
-	claimIntegrationTask(t, ctx, fixture, 905, service.instanceID)
+	claimIntegrationTask(t, ctx, fixture, 901, service.instanceID)
 	run := waitIntegrationRun(t, ctx, service, fixture.config, func(run *steerline.Run, execution *steerline.ExecutionRecord) bool {
 		return run.Decision != nil && run.Decision.Status == "pending" && execution.TurnNumber == 1 && execution.CurrentTurnID == execution.LastStoppedTurnID
 	})
@@ -35,10 +44,15 @@ func testCD65HistoryCommitsOnly(t *testing.T) {
 	filter := steerline.ConversationFilter{ExecutionID: run.execution.ExecutionID, AttemptID: run.run.AttemptID, Source: "codex-app-server"}
 	query := steerline.NewConversationQueryService(service.reader, fixture.config.Identity())
 	var page steerline.ConversationPage
+	var pageError error
+	t.Cleanup(func() {
+		if t.Failed() {
+			t.Logf("last history page: error=%v events=%s", pageError, mustJSON(page.Events))
+		}
+	})
 	waitFor(t, 30*time.Second, func() bool {
-		var err error
-		page, err = query.ReadConversation(ctx, filter, "", 50)
-		return err == nil && len(page.Events) >= 5
+		page, pageError = query.ReadConversation(ctx, filter, "", 50)
+		return pageError == nil && len(page.Events) >= 5
 	})
 	sessions, starts, finals, completed := 0, 0, 0, 0
 	var sourceSegment string
@@ -76,7 +90,7 @@ func testCD65HistoryCommitsOnly(t *testing.T) {
 	if checkpoint.Cursor == "" || checkpoint.LocalSeq == 0 {
 		t.Fatal("conversation source checkpoint was not committed with its mapped batch")
 	}
-	assertQueriedTaskPhase(t, ctx, fixture.config, "905", "waiting_decision")
+	assertQueriedTaskPhase(t, ctx, fixture.config, "901", "waiting_decision")
 	if run.run.Decision == nil || run.run.Decision.Status != "pending" {
 		t.Fatal("history collection advanced the pending business decision")
 	}

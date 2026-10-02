@@ -38,6 +38,64 @@ type codexPendingTurn struct {
 	Digest string `json:"digest"`
 }
 
+type historyPositionEnvelope struct {
+	Version           int                `json:"version"`
+	ImplementationKey string             `json:"implementation_key"`
+	CodecVersion      int                `json:"codec_version"`
+	Purpose           string             `json:"purpose"`
+	ProjectID         string             `json:"project_id"`
+	ExecutionID       string             `json:"execution_id"`
+	AttemptID         string             `json:"attempt_id"`
+	SourceIdentity    string             `json:"source_identity"`
+	BindingDigest     string             `json:"binding_digest"`
+	Digest            string             `json:"digest"`
+	Payload           codexHistoryCursor `json:"payload"`
+}
+
+func historyPosition(binding HistoryBinding, cursor codexHistoryCursor) historyPositionEnvelope {
+	return historyPositionEnvelope{Version: 1, ImplementationKey: "codex.history-position", CodecVersion: 1, Purpose: "source-position",
+		ProjectID: binding.ProjectID, ExecutionID: binding.ExecutionID, AttemptID: binding.AttemptID, SourceIdentity: binding.Identity(), BindingDigest: digestValue(binding), Payload: cursor}
+}
+
+func encodeHistoryPosition(binding HistoryBinding, cursor codexHistoryCursor) (string, error) {
+	value := historyPosition(binding, cursor)
+	value.Digest = digestValue(value)
+	raw, err := json.Marshal(value)
+	if err != nil {
+		return "", err
+	}
+	if len(raw) > maxConversationCursorBytes {
+		return "", errors.New("history source cursor exceeds the persisted budget")
+	}
+	return string(raw), nil
+}
+
+func decodeHistoryPosition(binding HistoryBinding, raw string) (codexHistoryCursor, error) {
+	var value historyPositionEnvelope
+	if len(raw) > maxConversationCursorBytes {
+		return codexHistoryCursor{}, errors.New("persisted history source cursor exceeds the read budget")
+	}
+	if err := decodeConversationSourceValue([]byte(raw), &value); err != nil {
+		return codexHistoryCursor{}, err
+	}
+	digest := value.Digest
+	value.Digest = ""
+	expected := historyPosition(binding, value.Payload)
+	if value.Version != expected.Version || value.ImplementationKey != expected.ImplementationKey || value.CodecVersion != expected.CodecVersion || value.Purpose != expected.Purpose || value.ProjectID != expected.ProjectID || value.ExecutionID != expected.ExecutionID || value.AttemptID != expected.AttemptID || value.SourceIdentity != expected.SourceIdentity || value.BindingDigest != expected.BindingDigest || digest == "" || digest != digestValue(value) {
+		return codexHistoryCursor{}, errors.New("history position differs from its versioned original source binding")
+	}
+	cursor := value.Payload
+	if cursor.NextPending < 0 || len(cursor.Pending) > 1024 || len(cursor.Cursor) > MaxHistoryCursorBytes {
+		return codexHistoryCursor{}, errors.New("history position exceeds its native cursor limits")
+	}
+	for _, pending := range cursor.Pending {
+		if pending.ID == "" || pending.Cursor == "" || len(pending.Cursor) > MaxHistoryCursorBytes {
+			return codexHistoryCursor{}, errors.New("history position has an invalid pending turn anchor")
+		}
+	}
+	return cursor, nil
+}
+
 func NewConversationAdapter() contracts.ConversationSourcePort {
 	return &ConversationAdapter{}
 }
@@ -47,6 +105,9 @@ func (a *ConversationAdapter) RestoreMapper(snapshot contracts.ConversationMappe
 }
 
 func (a *ConversationAdapter) MapConversation(input contracts.ConversationInput) (contracts.ConversationMappedBatch, error) {
+	if input.Source != "" && input.Source != ConversationJSONLSource {
+		return contracts.ConversationMappedBatch{}, nil
+	}
 	batch, err := a.MapRealtime(input)
 	if err == nil {
 		batch.VerifySourcePosition = input.Event.Backend == executionapi.BackendLocal
@@ -94,6 +155,7 @@ func (a *ConversationAdapter) MapRealtime(input contracts.ConversationInput) (co
 	}
 	event := input.Event
 	event.Version, event.Source, event.SourceRole, event.SourceSegment, event.SourceIdentity = contracts.ConversationVersion, ConversationJSONLSource, contracts.ConversationSourceFallback, segment, identity
+	event.ExternalRef = conversationExternalRef(input.Process)
 	event.SourceCursor = string(cursor)
 	event.SessionQuality, event.TurnQuality, event.ItemQuality = contracts.IdentityUnknown, contracts.IdentityUnknown, contracts.IdentityUnknown
 	event.SourceEventQuality, event.SourceSeq, event.ReceivedAt = contracts.IdentityDerived, input.SourceSeq, time.Now().UTC()
@@ -135,12 +197,12 @@ func (a *ConversationAdapter) LiveJournalPath(ctx context.Context, request contr
 				continue
 			}
 			dir := filepath.Join(root, entry.Name())
-			markerData, readErr := os.ReadFile(filepath.Join(dir, ConversationSourceMarkerName))
+			markerData, readErr := readConversationSourceFile(filepath.Join(dir, ConversationSourceMarkerName))
 			if readErr != nil {
 				continue
 			}
 			var marker ConversationSourceMarker
-			if json.Unmarshal(markerData, &marker) == nil && marker.Validate() == nil && marker.SourceIdentity == request.SourceIdentity &&
+			if decodeConversationSourceValue(markerData, &marker) == nil && marker.Validate() == nil && marker.SourceIdentity == request.SourceIdentity &&
 				marker.WorkflowID == request.WorkflowID && marker.ExecutionID == request.ExecutionID && marker.AttemptID == request.AttemptID {
 				return filepath.Join(dir, "events.jsonl"), nil
 			}
@@ -173,7 +235,24 @@ func (a *ConversationAdapter) DiscoverHistory(ctx context.Context, discovery con
 		if base.Agent != "codex" || base.ProjectID != discovery.ProjectID || base.WorkflowID == "" || base.ExecutionID == "" || run.RunDirectory == "" {
 			continue
 		}
-		for _, attempt := range run.Attempts {
+		attempts := append([]contracts.ConversationAttemptSource(nil), run.Attempts...)
+		if run.WorkerFlow {
+			entries, readErr := os.ReadDir(filepath.Join(run.RunDirectory, "turns"))
+			if readErr == nil && len(entries) <= 4096 {
+				ended := false
+				for _, attempt := range run.Attempts {
+					if attempt.AttemptID == base.AttemptID {
+						ended = attempt.Ended
+					}
+				}
+				for _, entry := range entries {
+					if entry.IsDir() && validExecutionID(entry.Name()) {
+						attempts = append(attempts, contracts.ConversationAttemptSource{AttemptID: base.AttemptID, EventPath: filepath.Join(run.RunDirectory, "turns", entry.Name(), "events.jsonl"), Ended: ended})
+					}
+				}
+			}
+		}
+		for _, attempt := range attempts {
 			if attempt.EventPath == "" || !validExecutionID(attempt.AttemptID) || !insidePath(run.RunDirectory, attempt.EventPath) {
 				continue
 			}
@@ -274,7 +353,7 @@ func (a *ConversationAdapter) DiscoverJournals(ctx context.Context, discovery co
 				continue
 			}
 			markerPath := filepath.Join(filepath.Dir(path), ConversationSourceMarkerName)
-			markerData, markerErr := os.ReadFile(markerPath)
+			markerData, markerErr := readConversationSourceFile(markerPath)
 			if os.IsNotExist(markerErr) {
 				continue
 			}
@@ -294,7 +373,7 @@ func (a *ConversationAdapter) DiscoverJournals(ctx context.Context, discovery co
 				continue
 			}
 			var marker ConversationSourceMarker
-			if err := json.Unmarshal(markerData, &marker); err != nil {
+			if err := decodeConversationSourceValue(markerData, &marker); err != nil {
 				source.Diagnostic = fmt.Sprintf("source marker is invalid: %v", err)
 			} else if err = marker.Validate(); err != nil {
 				source.Diagnostic = err.Error()
@@ -311,15 +390,14 @@ func (a *ConversationAdapter) DiscoverJournals(ctx context.Context, discovery co
 
 func (a *ConversationAdapter) ReadHistory(ctx context.Context, request contracts.ConversationHistoryReadRequest, start func(*exec.Cmd) (executionapi.StopHandle, error)) (contracts.ConversationHistoryBatch, error) {
 	binding, err := ReadHistoryBinding(request.Source.BindingPath)
-	if err != nil || request.Source.Identity != binding.Identity()+":"+binding.AttemptID || request.Source.Event.ExecutionID != binding.ExecutionID || request.Source.Event.AttemptID != binding.AttemptID || request.Source.Event.SourceSegment != binding.Identity() || canonicalPath(request.Source.Workspace) != canonicalPath(binding.Workspace) {
+	event := request.Source.Event
+	if err != nil || request.Source.Identity != binding.Identity()+":"+binding.AttemptID || event.ProjectID != binding.ProjectID || event.TaskID != binding.TaskID || event.WorkflowID != binding.WorkflowID || event.ExecutionID != binding.ExecutionID || event.AttemptID != binding.AttemptID || event.Backend != binding.Backend || event.Protocol != binding.Protocol || event.TargetID != binding.TargetID || event.ExternalRef != binding.ExternalRef || event.SessionID != binding.SessionID || event.SourceIdentity != binding.Identity() || event.SourceSegment != binding.Identity() || canonicalPath(request.Source.Workspace) != canonicalPath(binding.Workspace) {
 		return contracts.ConversationHistoryBatch{}, errors.New("history source is no longer bound to its discovered execution")
 	}
 	var cursor codexHistoryCursor
 	if request.Cursor != "" {
-		if len(request.Cursor) > maxConversationCursorBytes {
-			return contracts.ConversationHistoryBatch{}, errors.New("persisted history source cursor exceeds the read budget")
-		}
-		if err := json.Unmarshal([]byte(request.Cursor), &cursor); err != nil {
+		cursor, err = decodeHistoryPosition(binding, request.Cursor)
+		if err != nil {
 			return contracts.ConversationHistoryBatch{}, err
 		}
 	}
@@ -422,12 +500,9 @@ func (a *ConversationAdapter) ReadHistory(ctx context.Context, request contracts
 		}
 	}
 	cursor.Sequence += uint64(len(writes))
-	encoded, err := json.Marshal(cursor)
+	encoded, err := encodeHistoryPosition(binding, cursor)
 	if err != nil {
 		return contracts.ConversationHistoryBatch{}, err
-	}
-	if len(encoded) > maxConversationCursorBytes {
-		return contracts.ConversationHistoryBatch{}, errors.New("history source cursor exceeds the persisted budget")
 	}
 	settled := false
 	if pendingIndex < 0 && len(cursor.Pending) == 0 && len(page.Data) > 0 {
@@ -449,7 +524,7 @@ func (a *ConversationAdapter) ReadHistory(ctx context.Context, request contracts
 		PlatformVersion: platformVersion, Target: executionapi.ExecutionTarget{ID: binding.TargetID}, ExecutionID: binding.ExecutionID, AttemptID: binding.AttemptID,
 		Source: "codex-app-server", SourceIdentity: binding.Identity(), CheckedAt: time.Now().UTC()}
 	report.Capabilities = historyCapabilities(binding, page, request.HasCheckpoint)
-	return contracts.ConversationHistoryBatch{Writes: writes, Cursor: string(encoded), Sequence: cursor.Sequence, Settled: settled, More: page.NextCursor != nil, Capabilities: report}, nil
+	return contracts.ConversationHistoryBatch{Writes: writes, Cursor: encoded, Sequence: cursor.Sequence, Settled: settled, More: page.NextCursor != nil && *page.NextCursor != "", Capabilities: report}, nil
 }
 
 func historyCapabilities(binding HistoryBinding, page HistoryPage, hadCheckpoint bool) []contracts.ConversationCapability {

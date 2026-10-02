@@ -275,6 +275,9 @@ func (s *SQLiteStore) ConversationMapperSnapshot(ctx context.Context, project, e
 		if err = json.Unmarshal(payload, &event); err != nil {
 			return snapshot, err
 		}
+		if err = event.Validate(); err != nil {
+			return snapshot, err
+		}
 		snapshot.Session = &event
 	}
 	payload = nil
@@ -285,6 +288,9 @@ func (s *SQLiteStore) ConversationMapperSnapshot(ctx context.Context, project, e
 	if err == nil {
 		var event ConversationEvent
 		if err = json.Unmarshal(payload, &event); err != nil {
+			return snapshot, err
+		}
+		if err = event.Validate(); err != nil {
 			return snapshot, err
 		}
 

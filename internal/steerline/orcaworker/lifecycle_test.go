@@ -111,6 +111,7 @@ func TestProbeMutationRunsAsOneDurableLifecycleAction(t *testing.T) {
 		ConfigurationDigest: "config", ResourceGeneration: stableIDValue(12)}
 	state := NativeExecutionState{Coordinator: executionapi.ProcessIdentity{Kind: "orca", Terminal: "coordinator", RuntimeID: "runtime", Incarnation: "incarnation"},
 		Turns: []NativeTurnState{{TurnID: identity.Turn, Purpose: "readiness"}}}
+	snapshot.PreparationProbe = &identity
 	envelope, err := NewExecutionStateEnvelope(ExecutionStateIdentity{ProjectID: snapshot.Session.ProjectID, ExecutionID: snapshot.Session.ExecutionID,
 		AttemptID: snapshot.Session.AttemptID, Generation: snapshot.ResourceGeneration, ConfigDigest: snapshot.ConfigurationDigest,
 		Protocol: snapshot.Ref.Protocol, Process: snapshot.Ref.External}, state)

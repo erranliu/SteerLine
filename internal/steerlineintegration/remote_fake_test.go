@@ -17,6 +17,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	"github.com/erranliu/SteerLine/internal/steerline/testprotocol"
@@ -109,15 +110,89 @@ func fakeCodexStdio() int {
 		var request struct {
 			ID     json.RawMessage `json:"id"`
 			Method string          `json:"method"`
+			Params struct {
+				ThreadID  string `json:"threadId"`
+				Cursor    string `json:"cursor"`
+				Limit     int    `json:"limit"`
+				ItemsView string `json:"itemsView"`
+			} `json:"params"`
 		}
 		if json.Unmarshal(scanner.Bytes(), &request) != nil || len(request.ID) == 0 {
 			continue
 		}
+		if request.Method == "initialized" {
+			continue
+		}
+		response := map[string]any{"id": request.ID}
 		if request.Method == "initialize" {
-			_ = json.NewEncoder(os.Stdout).Encode(map[string]any{"id": request.ID, "result": map[string]string{"userAgent": codexworker.PolicyCodexVersion, "codexHome": os.TempDir(), "platformOs": "windows"}})
+			response["result"] = map[string]string{"userAgent": codexworker.PolicyCodexVersion, "codexHome": codexworker.EnvironmentHome(), "platformOs": "windows"}
+		} else {
+			var history struct {
+				Cwd   string           `json:"cwd"`
+				Turns []map[string]any `json:"turns"`
+			}
+			err := withIntegrationHistoryFile(func(path string) error {
+				raw, err := os.ReadFile(path)
+				if err != nil {
+					return err
+				}
+				return json.Unmarshal(raw, &history)
+			})
+			if err != nil || request.Params.ThreadID != integrationAppServerSession {
+				response["error"] = map[string]any{"code": -32602, "message": "original history session is unavailable"}
+			} else if request.Method == "thread/read" {
+				response["result"] = map[string]any{"thread": map[string]any{"id": integrationAppServerSession, "cwd": history.Cwd}}
+			} else if request.Method == "thread/turns/list" && request.Params.Limit == 1 && request.Params.ItemsView == "full" {
+				index := 0
+				if request.Params.Cursor != "" {
+					if _, err := fmt.Sscanf(request.Params.Cursor, "turn:%d", &index); err != nil {
+						return 27
+					}
+				}
+				if index < 0 || index > len(history.Turns) {
+					return 28
+				}
+				data := []map[string]any{}
+				var next, previous any
+				if index < len(history.Turns) {
+					turn := history.Turns[index]
+					turn["itemsView"] = "full"
+					data = append(data, turn)
+					previous = fmt.Sprintf("turn:%d", index)
+					if index+1 < len(history.Turns) {
+						next = fmt.Sprintf("turn:%d", index+1)
+					}
+				}
+				response["result"] = map[string]any{"data": data, "nextCursor": next, "backwardsCursor": previous}
+			} else {
+				response["error"] = map[string]any{"code": -32601, "message": "unsupported history request"}
+			}
+		}
+		if json.NewEncoder(os.Stdout).Encode(response) != nil {
+			return 29
 		}
 	}
 	return 0
+}
+
+func withIntegrationHistoryFile(call func(string) error) error {
+	path := os.Getenv("STEERLINE_INTEGRATION_HISTORY_FILE")
+	if path == "" {
+		return fmt.Errorf("history fixture path is not configured")
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		lock, err := os.OpenFile(path+".lock", os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+		if err == nil {
+			_ = lock.Close()
+			defer os.Remove(path + ".lock")
+			return call(path)
+		}
+		if !os.IsExist(err) || time.Now().After(deadline) {
+			return err
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }
 
 const integrationAppServerSession = "00000000-0000-0000-0000-000000000901"
@@ -246,6 +321,17 @@ func integrationAppServerConnection(connection net.Conn, state *integrationAppSe
 			item := map[string]any{"type": "agentMessage", "id": "message-" + turnID, "phase": "final_answer", "text": text}
 			turn := map[string]any{"id": turnID, "status": "completed", "completedAt": len(state.turns) + 1, "items": []any{item}}
 			state.turns = append(state.turns, turn)
+			cwd, _ := os.Getwd()
+			if err := withIntegrationHistoryFile(func(path string) error {
+				data, err := json.Marshal(map[string]any{"cwd": cwd, "turns": state.turns})
+				if err != nil {
+					return err
+				}
+				return AtomicWrite(path, data)
+			}); err != nil {
+				state.mu.Unlock()
+				return
+			}
 			state.mu.Unlock()
 			response["result"] = map[string]any{"turn": map[string]any{"id": turnID, "status": "inProgress"}}
 			if send(response) != nil || send(map[string]any{"method": "turn/started", "params": map[string]any{"threadId": integrationAppServerSession, "turn": map[string]any{"id": turnID}}}) != nil ||

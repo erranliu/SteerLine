@@ -1,8 +1,10 @@
 package codexworker
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -180,12 +182,48 @@ func WriteHistoryBinding(path string, b HistoryBinding, writeAtomic func(string,
 
 func ReadHistoryBinding(path string) (HistoryBinding, error) {
 	var b HistoryBinding
-	raw, err := os.ReadFile(path)
+	raw, err := readConversationSourceFile(path)
 	if err != nil {
 		return b, err
 	}
-	if err = json.Unmarshal(raw, &b); err != nil {
+	if err = decodeConversationSourceValue(raw, &b); err != nil {
 		return b, err
 	}
 	return b, b.Validate()
+}
+
+func readConversationSourceFile(path string) ([]byte, error) {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() || info.Size() > maxConversationCursorBytes {
+		return nil, errors.New("conversation source binding must be a regular file within 64 KiB")
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	raw, err := io.ReadAll(io.LimitReader(file, maxConversationCursorBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(raw) > maxConversationCursorBytes {
+		return nil, errors.New("conversation source binding exceeds 64 KiB")
+	}
+	return raw, nil
+}
+
+func decodeConversationSourceValue(raw []byte, value any) error {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(value); err != nil {
+		return err
+	}
+	var extra any
+	if err := decoder.Decode(&extra); err != io.EOF {
+		return errors.New("conversation source binding has trailing data")
+	}
+	return nil
 }

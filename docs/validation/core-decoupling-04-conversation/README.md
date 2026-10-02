@@ -1,6 +1,6 @@
 # CORE-IMPLEMENTATION-DECOUPLING #65 验收记录
 
-任务：会话采集与宿主交互实现隔离。基线：`84097f3d0856d7b5d16036a53f6ed82016fb3593`（本地 `HEAD` 与 `origin/main` 相同）。本工作树保留未提交候选改动；没有创建分支、提交或 PR。
+任务：会话采集与宿主交互实现隔离。基线：`84097f3d0856d7b5d16036a53f6ed82016fb3593`（本地 `HEAD` 与 `origin/main` 相同）。执行候选已由协调端提交为 `c941c87`；协调端在原工作区、执行聊天停写后独立复审并修复。当前分支为 `codex/65-conversation-host-isolation`，最终组合验收和 PR 尚待完成。
 
 ## 所有者与删除
 
@@ -14,7 +14,7 @@
 
 删除 root 的 `codex_conversation.go`、`codex_history_port.go`、`codex_history_test.go` 和平台专属 `worker_environment_orca.go`。通用宿主桥接位于 `worker_environment_host.go`。Service 不再持有具体 mapper 或按 backend 选择映射；它使用实现提供的通用 mapper 和来源能力。来源 mapper 每批从已提交事件重建，失败时候选 cursor 与候选 mapper 状态一并丢弃。宿主文件/terminal 变更通过持久生命周期动作执行。
 
-会话事件从版本 1 改为版本 2，新增必填通用来源角色 `canonical` / `fallback`；校验拒绝缺失/非法角色，查询拒绝旧事件格式。SQLite schema 仍为 7，未增加旧格式读取或迁移路径。产品默认构造仍由当前 Service 默认构造器提供，按路线图由 #66 外移。
+会话事件从版本 1 改为版本 2，新增必填通用来源角色 `canonical` / `fallback`；校验拒绝缺失/非法角色，查询拒绝旧事件格式。SQLite schema 11 / runtime 16；旧开发数据库和快照明确拒绝，无迁移、双写或 fallback。历史 checkpoint 使用实现拥有的 `codex.history-position` v1 / codec 1 / `source-position` 封套，固定 Project/Execution/Attempt/来源及完整绑定摘要，载荷和整体摘要共同校验，64 KiB 上限。产品默认构造仍由当前 Service 默认构造器提供，按路线图由 #66 外移。
 
 ## 旧到新测试归属
 
@@ -55,3 +55,17 @@ fatal: Could not read from remote repository.
 ```
 
 这是当前工作树运行环境对 Git 子进程的限制；依据协调要求未继续重试。编译和安全的包内测试通过不能替代 quick/native fixture 验收。协调者需在可运行 Git fixtures 的完整权限环境执行 Plan quick，并复核未运行的原生断言后再发布。
+
+## 协调独立复审修复（验收进行中）
+
+- 资源建立前的宿主轮次观察返回暂无轮次；已绑定资源缺失/损坏仍拒绝。首轮 probe 文件操作绑定已提交的准备身份（包括原 nonce/profile/资源），不要求尚未创建的 Dispatch；对账同样核验原目标。
+- 宿主读取仅接收独立的命令/nonce/工具证据值，回传候选工具证据；实现不能修改中心 Environment/Blocker。打开原 terminal 校验固定 Decision/版本/blocker 和原 terminal，可定位正在等待授权的原目标，仍不解除人工门槛。
+- 历史及 journal 发现携带当前 Attempt；补扫原 workflow 的轮次目录，保留 prepare-session 阶段的历史绑定。来源读取复核完整所属字段，批次在进入事务前核对原执行归属。原探针期限没有增加额外两分钟。
+- 原生生命周期状态通知不会被重新解释成 JSONL 或 terminal 会话。mapper 保留输入平台/协议和原 source event ID；候选/发现用的 Process 都是独立值。
+- 恢复 8 个原生历史 fixture / 公共 Store+Query 的原断言到 `internal/steerlineintegration/conversation_history_fixture_test.go`，包括两平台两轮、工具交错、取消/失败、晚到 final、缺失/空正文、canonical 选择与 raw/旧 Attempt、绑定跨 Attempt 拒绝。它们收于 CD65 外层命名入口，不新增私有 actor 写接口。
+- 公开协议 mock 的只读 stdio 端实现 thread/read、thread/turns/list，读取业务 WebSocket mock 实际保存的轮次；宿主故障包装器转发完整正式 host/mapper 端口。fixture 读写共用锁，不放宽原身份、正文、Dispatch/send/Task/ack 断言。
+- 保留产品 launcher 的唯一默认装配入口在既有目录文件中，由 #66 随目录外移；删除原采集实现后产品仍可编译。
+
+完全访问环境第一份组合报告 `C:/Users/lmas1/AppData/Local/Temp/steerline-test-feedback/20261002T063652.289809400Z/summary.json` 真实失败（363.0s）。它不再受 sandbox Git 拒绝阻断：失败包含初始宿主状态、准备身份、公开 history 接线/夹具缺口，均需实修，无验收豁免。
+
+后续定向诊断已通过中心全部 CD65（127.727s）、原生外层会话/恢复流程（该组局部成功）、公开历史单用例（17.391s），以及恢复的历史 fixture、来源 position 原归属/未知版本/摘要及 pending-anchor 拒绝、宿主动作与实现编译。诊断时源码仍在修复，不能将它们标作最终 SHA 完整验收。最终 head 的组合 quick/JSON 命中还需完成。

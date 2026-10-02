@@ -587,14 +587,14 @@ func (s *Service) run(ctx context.Context, dispatchMode string) (retErr error) {
 		s.forwardWorker(ctx, runID, worker)
 	}
 	var conversationReplayDone <-chan struct{}
-	var codexHistoryDone <-chan struct{}
+	var historyCollectorDone <-chan struct{}
 	defer func() {
 		cancel()
 		if conversationReplayDone != nil {
 			<-conversationReplayDone
 		}
-		if codexHistoryDone != nil {
-			<-codexHistoryDone
+		if historyCollectorDone != nil {
+			<-historyCollectorDone
 		}
 		s.conversationReplayRequests = nil
 		s.conversationReplayErrors = nil
@@ -627,7 +627,7 @@ func (s *Service) run(ctx context.Context, dispatchMode string) (retErr error) {
 	}
 	historyRequests := make(chan []contracts.ConversationHistorySource, 1)
 	historyDone := make(chan struct{})
-	codexHistoryDone = historyDone
+	historyCollectorDone = historyDone
 	go func() {
 		defer close(historyDone)
 		s.runConversationHistoryCollector(ctx, historyRequests, s.conversationReplayErrors)

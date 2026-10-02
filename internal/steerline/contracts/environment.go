@@ -57,9 +57,22 @@ type HostOutput struct {
 	ContentComplete, SourceChanged, UpdateAttemptCursor, ContentChanged bool
 	Clipping                                                            []string
 	Fact                                                                *HostFact
+	ProbeEvidence                                                       *ProbeToolEvidence
+}
+
+// HostReadInput contains only immutable evidence needed to inspect one output.
+// The implementation cannot mutate the center's preparation or blocker state.
+type HostReadInput struct {
+	Probe *HostProbeObservation
+}
+
+type HostProbeObservation struct {
+	Command, Nonce, ScriptDigest string
+	Evidence                     ProbeToolEvidence
 }
 
 type HostEnvironmentPort interface {
+	PreparationBudget() time.Duration
 	PlatformVersion(context.Context) (string, error)
 	ObserveHost(context.Context, executionapi.ProcessIdentity) (HostFact, error)
 	InspectAgentInput(context.Context, executionapi.ProcessIdentity) (HostInputObservation, error)
@@ -68,7 +81,7 @@ type HostEnvironmentPort interface {
 	PrepareProbe(ProbeIdentity) (ProbePlan, error)
 	ProbePrompt(ProbePlan, string, string) string
 	ReadProbe(ProbeIdentity, string) (*ProbeReceipt, error)
-	ReadWorkerOutput(context.Context, executionapi.LifecycleSnapshot, *WorkerEnvironment, string) (HostOutput, executionapi.ImplementationDataEnvelope, error)
+	ReadWorkerOutput(context.Context, executionapi.LifecycleSnapshot, HostReadInput) (HostOutput, executionapi.ImplementationDataEnvelope, error)
 }
 
 type HostFact struct {

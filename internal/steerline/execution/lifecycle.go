@@ -225,9 +225,24 @@ type LifecycleSnapshot struct {
 	PendingDeliveryID   string
 	KnownQuestionIDs    []string
 	PendingQuestions    []Question
+	PreparationProbe    *ProbeIdentity
+	OriginalHost        *ProcessIdentity
+	HostAuthorization   *HostActionAuthorization
 }
 
 func (snapshot LifecycleSnapshot) Clone() LifecycleSnapshot {
+	if snapshot.OriginalHost != nil {
+		identity := *snapshot.OriginalHost
+		snapshot.OriginalHost = &identity
+	}
+	if snapshot.HostAuthorization != nil {
+		authorization := *snapshot.HostAuthorization
+		snapshot.HostAuthorization = &authorization
+	}
+	if snapshot.PreparationProbe != nil {
+		probe := *snapshot.PreparationProbe
+		snapshot.PreparationProbe = &probe
+	}
 	snapshot.Implementation = cloneImplementationData(snapshot.Implementation)
 	if snapshot.PolicyResources != nil {
 		resource := snapshot.PolicyResources.Clone()

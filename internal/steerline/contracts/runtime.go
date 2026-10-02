@@ -14,7 +14,7 @@ type Repository struct {
 	Identity string `json:"identity"`
 }
 
-const WorkerFlowRuntimeSchema = 15
+const WorkerFlowRuntimeSchema = 16
 const DecisionRequestFormatVersion = 2
 
 type PendingQuestion struct {

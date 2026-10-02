@@ -63,12 +63,23 @@ func (s *Service) readHostOutput(ctx context.Context, run *Run) error {
 	if attempt == nil {
 		return errors.New("host output has no original attempt")
 	}
-	output, envelope, err := host.ReadWorkerOutput(ctx, snapshot, fixed.execution.Environment, attempt.OutputCursor)
+	input := contracts.HostReadInput{}
+	if environment := fixed.execution.Environment; environment != nil && environment.Preparation != nil {
+		p := environment.Preparation
+		input.Probe = &contracts.HostProbeObservation{Command: p.Command, Nonce: p.Nonce, ScriptDigest: p.ScriptDigest, Evidence: p.Evidence}
+	}
+	output, envelope, err := host.ReadWorkerOutput(ctx, snapshot, input)
 	if err != nil {
 		return err
 	}
 	if err = mergeLifecycleExecutionReceipt(fixed.execution, executionapi.LifecycleReceipt{Implementation: []executionapi.ImplementationDataEnvelope{envelope}}); err != nil {
 		return err
+	}
+	if output.ProbeEvidence != nil {
+		if snapshot.PreparationProbe == nil || fixed.execution.Environment == nil || fixed.execution.Environment.Preparation == nil || fixed.execution.Environment.Preparation.Probe != *snapshot.PreparationProbe {
+			return ErrWorkerTurnStale
+		}
+		fixed.execution.Environment.Preparation.Evidence = *output.ProbeEvidence
 	}
 	if output.UpdateAttemptCursor {
 		if output.SourceChanged {

@@ -397,6 +397,21 @@ func lifecycleSnapshot(run *Run, workflow *WorkflowRunRecord, execution *Executi
 		resource := execution.PolicyResources.ImplementationData.Clone()
 		snapshot.PolicyResources = &resource
 	}
+	if execution.Environment != nil && execution.Environment.Preparation != nil && execution.Environment.Preparation.Probe.Nonce != "" {
+		probe := execution.Environment.Preparation.Probe
+		snapshot.PreparationProbe = &probe
+	}
+	if execution.Environment != nil && execution.Environment.OriginalTerminal != nil {
+		identity := *execution.Environment.OriginalTerminal
+		snapshot.OriginalHost = &identity
+	}
+	if run.Decision != nil && run.Decision.Request.HostTarget != nil && execution.Environment != nil && execution.Environment.Blocker != nil {
+		target := run.Decision.Request.HostTarget
+		blocker := execution.Environment.Blocker
+		if target.ExecutionID == execution.ExecutionID && target.TurnID == blocker.TurnID && target.BlockerID == blocker.ID && run.Decision.ID == blocker.DecisionID {
+			snapshot.HostAuthorization = &executionapi.HostActionAuthorization{ExecutionID: execution.ExecutionID, AttemptID: run.AttemptID, TurnID: target.TurnID, DecisionID: run.Decision.ID, BlockerID: target.BlockerID, DecisionVersion: run.Decision.Version}
+		}
+	}
 	if run.WorkspaceIntent != nil {
 		snapshot.WorkspacePlan = *run.WorkspaceIntent
 		if snapshot.Ref.BaseCommit == "" {

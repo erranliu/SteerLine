@@ -186,7 +186,7 @@ func (s *Service) advanceWorkerPreparation(ctx context.Context, run *Run) error 
 			if ctx.Err() != nil {
 				return nil
 			}
-		return s.blockWorkerEnvironment(run, contracts.HostFact{Reason: "resource_preparation_unverified", Confidence: "unverified", Source: "host.resource-operation", Detail: clip(err.Error(), 1000)})
+			return s.blockWorkerEnvironment(run, contracts.HostFact{Reason: "resource_preparation_unverified", Confidence: "unverified", Source: "host.resource-operation", Detail: clip(err.Error(), 1000)})
 		}
 		if execution.Workspace.Worktree == "" || execution.Process == nil || run.Decision != nil {
 			return nil
@@ -501,9 +501,17 @@ func (s *Service) applyEnvironmentAction(ctx context.Context, run *Run, answer D
 		if turn == nil || !turn.Settled {
 			return s.renewEnvironmentDecision(run)
 		}
+		host, _, _, _, hostErr := s.hostEnvironmentForRun(run)
+		if hostErr != nil {
+			return hostErr
+		}
+		budget := host.PreparationBudget()
+		if budget <= 0 {
+			return errors.New("host preparation budget must be positive")
+		}
 		env.History = append(env.History, *env.Preparation)
 		started := now()
-		env.Preparation = &WorkerPreparation{TurnID: newID(), Nonce: newID(), StartedAt: started, Deadline: started.Add(positiveDuration(orcaProfileSettings(fixed.config).WaitTimeout, 2*time.Minute))}
+		env.Preparation = &WorkerPreparation{TurnID: newID(), Nonce: newID(), StartedAt: started, Deadline: started.Add(budget)}
 	}
 	if ok, err := s.reconcileEnvironmentQuestion(ctx, run); err != nil {
 		return err

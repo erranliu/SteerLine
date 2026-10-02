@@ -188,8 +188,8 @@ func TestHistoryPageCandidateIsRecreatedAfterDiscardAndLateFinalKeepsTurnIdentit
 	if err != nil {
 		t.Fatal(err)
 	}
-	var cursor codexHistoryCursor
-	if err = json.Unmarshal([]byte(second.Cursor), &cursor); err != nil {
+	cursor, err := decodeHistoryPosition(binding, second.Cursor)
+	if err != nil {
 		t.Fatal(err)
 	}
 	if len(cursor.Pending) != 1 || cursor.Pending[0].ID != "first-turn" {
@@ -200,8 +200,8 @@ func TestHistoryPageCandidateIsRecreatedAfterDiscardAndLateFinalKeepsTurnIdentit
 	if err != nil {
 		t.Fatal(err)
 	}
-	var finalCursor codexHistoryCursor
-	if err = json.Unmarshal([]byte(resolved.Cursor), &finalCursor); err != nil {
+	finalCursor, err := decodeHistoryPosition(binding, resolved.Cursor)
+	if err != nil {
 		t.Fatal(err)
 	}
 	if len(finalCursor.Pending) != 0 {
@@ -242,4 +242,91 @@ func historyFixtureBinding(workspace, workflow, execution, attempt, session stri
 	return HistoryBinding{Version: 1, ProjectID: "project", TaskID: "task", WorkflowID: workflow, ExecutionID: execution, AttemptID: attempt,
 		Backend: executionapi.BackendLocal, Protocol: executionapi.ProtocolLocalProcess, TargetID: "local", Workspace: workspace,
 		SessionID: session, Command: contracts.Command{Executable: os.Args[0], Args: []string{"-test.run=^TestConversationHistoryProtocolHelper$"}}}
+}
+
+func TestHistoryPositionCannotCrossItsOriginalBinding(t *testing.T) {
+	binding := historyFixtureBinding(t.TempDir(), strings.Repeat("a", 32), strings.Repeat("b", 32), strings.Repeat("c", 32), "00000000-0000-0000-0000-000000000005")
+	cursor := codexHistoryCursor{Cursor: "native-anchor", Sequence: 3, Pending: []codexPendingTurn{{ID: "turn", Cursor: "original-anchor", Digest: "item-digest"}}}
+	encoded, err := encodeHistoryPosition(binding, cursor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	restored, err := decodeHistoryPosition(binding, encoded)
+	if err != nil || restored.Sequence != cursor.Sequence || restored.Pending[0].Cursor != cursor.Pending[0].Cursor {
+		t.Fatalf("position did not retain its original pending anchor: %+v %v", restored, err)
+	}
+	for _, field := range []string{"project", "execution", "attempt", "target", "workspace", "command"} {
+		t.Run(field, func(t *testing.T) {
+			changed := binding
+			switch field {
+			case "project":
+				changed.ProjectID = "other"
+			case "execution":
+				changed.ExecutionID = "other"
+			case "attempt":
+				changed.AttemptID = "other"
+			case "target":
+				changed.TargetID = "other"
+			case "workspace":
+				changed.Workspace = t.TempDir()
+			case "command":
+				changed.Command.Args = append(append([]string(nil), binding.Command.Args...), "changed")
+			}
+			if _, err := decodeHistoryPosition(changed, encoded); err == nil {
+				t.Fatal("position moved to a different source owner")
+			}
+		})
+	}
+	for _, field := range []string{"version", "codec", "purpose", "digest", "pending"} {
+		t.Run(field, func(t *testing.T) {
+			var value historyPositionEnvelope
+			if err := json.Unmarshal([]byte(encoded), &value); err != nil {
+				t.Fatal(err)
+			}
+			switch field {
+			case "version":
+				value.Version++
+			case "codec":
+				value.CodecVersion++
+			case "purpose":
+				value.Purpose = "profile-config"
+			case "digest":
+				value.Payload.Sequence++
+			case "pending":
+				value.Payload.NextPending = -1
+			}
+			if field != "digest" {
+				value.Digest = ""
+				value.Digest = digestValue(value)
+			}
+			data, _ := json.Marshal(value)
+			if _, err := decodeHistoryPosition(binding, string(data)); err == nil {
+				t.Fatal("invalid position metadata or pending anchor was accepted")
+			}
+		})
+	}
+	if _, err := decodeHistoryPosition(binding, `{"cursor":"old-unscoped-anchor"}`); err == nil {
+		t.Fatal("old unscoped cursor was accepted")
+	}
+}
+
+func TestHistoryReadRejectsReplacedProjectBeforeOpeningClient(t *testing.T) {
+	binding := historyFixtureBinding(t.TempDir(), strings.Repeat("a", 32), strings.Repeat("b", 32), strings.Repeat("c", 32), "00000000-0000-0000-0000-000000000006")
+	path := filepath.Join(t.TempDir(), "binding.json")
+	if err := WriteHistoryBinding(path, binding, func(path string, data []byte) error { return os.WriteFile(path, data, 0600) }); err != nil {
+		t.Fatal(err)
+	}
+	source := contracts.ConversationHistorySource{Identity: binding.Identity() + ":" + binding.AttemptID, BindingPath: path, Workspace: binding.Workspace, Event: binding.Event()}
+	binding.ProjectID = "different-project"
+	data, _ := json.Marshal(binding)
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := NewConversationAdapter().ReadHistory(context.Background(), contracts.ConversationHistoryReadRequest{Source: source}, func(*exec.Cmd) (executionapi.StopHandle, error) {
+		t.Fatal("replaced source opened a reader process")
+		return nil, nil
+	})
+	if err == nil {
+		t.Fatal("replaced project binding was accepted")
+	}
 }

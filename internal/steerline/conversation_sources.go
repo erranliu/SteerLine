@@ -21,10 +21,10 @@ func (s *Service) discoverConversationHistory(ctx context.Context) ([]contracts.
 		if run == nil || run.RunID == "" || run.ExecutionID == "" || run.DomainTaskID == "" {
 			continue
 		}
-		base := ConversationEvent{Version: ConversationVersion, ProjectID: s.Config.identity, TaskID: run.DomainTaskID, WorkflowID: run.RunID,
+		base := ConversationEvent{Version: ConversationVersion, ProjectID: s.Config.identity, TaskID: run.DomainTaskID, WorkflowID: run.RunID, AttemptID: run.AttemptID,
 			ExecutionID: run.ExecutionID, Backend: executionapi.BackendKind(run.Backend), Protocol: executionapi.ExecutionProtocol(run.Protocol), Agent: run.Agent, TargetID: run.Target.ID,
 			SessionQuality: IdentityUnknown, TurnQuality: IdentityUnknown, ItemQuality: IdentityUnknown}
-		runSource := contracts.ConversationRunSource{Base: base, RunDirectory: filepath.Join(s.Config.RunDir, "runs", run.RunID), Workspace: deref(run.WorktreePath)}
+		runSource := contracts.ConversationRunSource{Base: base, RunDirectory: filepath.Join(s.Config.RunDir, "runs", run.RunID), Workspace: deref(run.WorktreePath), WorkerFlow: run.WorkflowVersion == WorkerFlowVersion, Process: conversationProcessSnapshot(run.Process)}
 		for _, attempt := range s.domain.Attempts {
 			if attempt.ExecutionID != run.ExecutionID || attempt.EventPath == "" {
 				continue
@@ -89,6 +89,9 @@ func (s *Service) collectConversationHistoryPage(ctx context.Context, source con
 	batch, err := s.conversationSources.ReadHistory(ctx, contracts.ConversationHistoryReadRequest{Source: source, Cursor: previousCursor, HasCheckpoint: hadCheckpoint,
 		Repository: s.Config.Repository, RunDirectory: s.Config.RunDir, PlatformVersion: platformVersion}, localManagedProcessHost{timeout: duration(s.Config.CommandTimeout)}.StartManaged)
 	if err != nil {
+		return false, err
+	}
+	if err = validateConversationSourceWrites(event, batch.Writes); err != nil {
 		return false, err
 	}
 	if len(batch.Cursor) > MaxEventPageBytes {
