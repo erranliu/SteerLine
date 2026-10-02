@@ -51,7 +51,11 @@ func (c *Client) Run(ctx context.Context, args ...string) ([]byte, error) {
 	return c.run(ctx, c.Binary, args...)
 }
 func (c *Client) run(ctx context.Context, binary string, args ...string) ([]byte, error) {
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	return c.runWithTimeout(ctx, 30*time.Second, binary, args...)
+}
+
+func (c *Client) runWithTimeout(ctx context.Context, timeout time.Duration, binary string, args ...string) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	cmd := exec.Command(binary, args...)
 	cmd.Env = Environment(os.Environ(), c.Home, c.StatePath)
@@ -81,7 +85,10 @@ func (c *Client) Control(ctx context.Context, helper, action, taskID string) err
 	if profile == "" {
 		profile = "controlled"
 	}
-	_, err := c.run(ctx, helper, "control", "-config", c.Config, "-action", action, "-task-id", taskID, "-profile", profile)
+	// ResolveIdentity is bounded at 25s; the product control request has a 2m
+	// lifetime. Native preparation must get that same receipt window, without
+	// submitting another request when a terminal is still starting.
+	_, err := c.runWithTimeout(ctx, 150*time.Second, helper, "control", "-config", c.Config, "-action", action, "-task-id", taskID, "-profile", profile)
 	return err
 }
 
@@ -121,7 +128,7 @@ func MainControl(args []string) error {
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
+	ctx, cancel := context.WithDeadline(context.Background(), request.ExpiresAt)
 	defer cancel()
 	receipt, err := steerline.WaitControlReceipt(ctx, c, request.RequestID, 100*time.Millisecond)
 	if err != nil {
