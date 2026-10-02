@@ -106,7 +106,7 @@ func newTestDirectory() (*ExecutionDirectory, error) {
 				return orcaworker.ValidateProfileSelection(policy, agent, payloads[codexworker.ProfileCodecKey], payloads[orcaworker.ProfileCodecKey])
 			},
 			ValidateConfig: func(context.Context, Config) error { return nil },
-			Preflight:      func(context.Context, Config) error { return nil },
+			Preflight:      func(ctx context.Context, c Config) error { _, err := testPrepareClaim(ctx, c); return err },
 			PrepareClaim:   testPrepareClaim,
 			ReadinessRequired: func(c Config) bool {
 				return runtime.GOOS == "windows" && (codexProfileSettings(c).WindowsSandbox != "" || c.ExecutionPolicy.Filesystem.WriteScope == "host")
@@ -184,9 +184,8 @@ func orcaQuestionID(decision *DecisionState) string {
 }
 
 func probeSupervisedOrcaTarget(ctx context.Context, c Config) (remote.PreflightResult, error) {
-	if err := validateImplementationProfileData(c); err != nil {
-		return remote.PreflightResult{}, err
-	}
+	// This fixture probes read-only target metadata, not claim admission.
+	// Admission's remote enforcement gate is covered separately.
 	result, err := remote.Preflight(ctx, remoteWorkerConfig(c))
 	return result, remoteWorkerError(err)
 }
@@ -353,7 +352,7 @@ func validatePublication(providerPolicy executionapi.PublicationPolicy, provider
 	} else if providerPolicy.Publisher == executionapi.PublisherWorker && query {
 		return nil
 	}
-	return executionapi.UnsupportedAdapterOperation("PublicationPolicy", "publication policy unsupported by test directory")
+	return executionapi.UnsupportedAdapterOperation("PublicationPolicy", "publication_policy unsupported by test directory")
 }
 
 func testLocalPublicationPolicy(policy executionapi.PublicationPolicy, provider publication.Config) error {
@@ -578,7 +577,9 @@ func fixtureRepositoryStateKey(c Config) (string, error) {
 	return RepositoryStateKey(repository.CommonDir), nil
 }
 
-func loadFixtureConfig(path string) (Config, error) {
+func loadFixtureConfig(path string) (Config, error)      { return loadConfigFixture(path, true) }
+func loadQueryFixtureConfig(path string) (Config, error) { return loadConfigFixture(path, false) }
+func loadConfigFixture(path string, requireSupport bool) (Config, error) {
 	c := Config{Remote: "origin", TaskPoll: "10s", PRPoll: "30s", Heartbeat: "5s", CommandTimeout: "30s", ShutdownGrace: "10s", Git: Command{Executable: "git"}, ExecutableTypes: []string{"task", "bug", "feature", "chore"}, StallTimeout: "5m"}
 	projectPath, err := filepath.Abs(path)
 	if err != nil {
@@ -602,6 +603,11 @@ func loadFixtureConfig(path string) (Config, error) {
 	}
 	if err := c.ExecutionRequirements.Validate(); err != nil {
 		return c, err
+	}
+	if c.PublicationPolicy.Publisher != PublisherExecutionProfile {
+		if err := c.PublicationPolicy.Validate(); err != nil {
+			return c, err
+		}
 	}
 	if err := publication.ValidateNonSecret(c.PR, c.Git); err != nil {
 		return c, err
@@ -632,6 +638,11 @@ func loadFixtureConfig(path string) (Config, error) {
 	c.ExecutionDirectory, c.ProcessHost, c.StateRoot = directory, testProcessHost{}, fixtureStateRoot()
 	c.ExecutionProfiles, c.DefaultExecutionProfile = global.ExecutionProfiles, global.DefaultProfile
 	c.BindApplicationConfig(directory, projectPath, globalPath, loadedConfigDigest(projectBytes, globalBytes), true)
+	if requireSupport {
+		if err := validateExecutionProfiles(c); err != nil {
+			return c, err
+		}
+	}
 	base := filepath.Dir(projectPath)
 	if c.Repository == "" || c.Branch == "" {
 		return c, errors.New("repository and branch are required")
@@ -653,9 +664,6 @@ func loadFixtureConfig(path string) (Config, error) {
 		c.WorktreeRoot = filepath.Join(c.RunDir, "worktrees")
 	} else if !filepath.IsAbs(c.WorktreeRoot) {
 		c.WorktreeRoot = filepath.Join(base, c.WorktreeRoot)
-	}
-	if err := validateExecutionProfiles(c); err != nil {
-		return c, err
 	}
 	initial := global.ExecutionProfiles[0]
 	if global.DefaultProfile != "" {

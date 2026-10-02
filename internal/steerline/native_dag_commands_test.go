@@ -3,6 +3,7 @@ package steerline
 import (
 	"context"
 	"encoding/json"
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	"net/http"
@@ -486,7 +487,7 @@ func TestNativeClaimAllowsManualParallelButKeepsAutoSlot(t *testing.T) {
 		t.Fatalf("native claim initialized workspace repository with a non-identity path: %+v", snapshot.Executions)
 	}
 	alteredWorkflow := page.Tasks[0].WorkflowRuns[0]
-	alteredWorkflow.ExecutionProfile.ImplementationData[0].Payload[0] = '['
+	alteredWorkflow.ExecutionProfile.ExecutionPolicy.Network = "deny"
 	if err = store.Transact(ctx, func(tx DomainTx) error { return tx.PutWorkflowRun(alteredWorkflow) }); err == nil || !strings.Contains(err.Error(), "immutable_task") {
 		t.Fatalf("claim workflow gates were edited after reservation: %v", err)
 	}
@@ -815,6 +816,11 @@ func TestTaskDiscardRequiresPreciseUnmergedPRAndRetainsUnknownIntent(t *testing.
 	c, commit := nativeTaskFixture(t)
 	remoteURL := server.URL + "/org/repo.git"
 	c.PR = publication.Config{Kind: "gitea", BaseURL: server.URL, Repository: "org/repo"}
+	c.Host, c.Agent = "orca", "codex"
+	c.PublicationPolicy.Publisher = "worker"
+	c.globalExecution = false
+	c.ExecutionProfiles, c.DefaultExecutionProfile = nil, ""
+	setTestImplementationProfiles(t, &c, codexworker.ProfileConfig{Executable: "codex", WindowsSandbox: "unelevated"}, &orcaworker.ProfileConfig{Executable: "orca", Shell: "powershell.exe", WaitTimeout: "1m"})
 	c.Git = Command{Executable: "git"}
 	if out, err := exec.Command("git", "-C", c.Repository, "remote", "set-url", "origin", remoteURL).CombinedOutput(); err != nil {
 		t.Fatalf("set fixture remote: %v: %s", err, out)

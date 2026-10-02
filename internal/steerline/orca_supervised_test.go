@@ -372,17 +372,19 @@ func TestSupervisedOrcaRequiresPinnedModelAndKeepsStopUnsupported(t *testing.T) 
 	remoteSettings := remoteProfileSettings(c)
 	remoteSettings.RemoteCancelAvailable = true
 	orcaSettings := orcaProfileSettings(c)
-	setTestImplementationProfiles(t, &c, codexProfileSettings(c), &orcaSettings, &remoteSettings)
-	if err := validateImplementationProfileData(c); err == nil {
-		t.Fatal("remote cancellation was enabled")
+	if _, err := remote.EncodeProfileConfig(remoteSettings); err == nil || !strings.Contains(err.Error(), "fixed unavailable") {
+		t.Fatalf("remote cancellation was enabled: %v", err)
 	}
 	remoteSettings = remoteProfileSettings(c)
 	remoteSettings.RemoteCancelAvailable = false
 	remoteSettings.ExpectedCodexVersion = ""
 	orcaSettings = orcaProfileSettings(c)
 	setTestImplementationProfiles(t, &c, codexProfileSettings(c), &orcaSettings, &remoteSettings)
-	if err := validateImplementationProfileData(c); err != nil {
-		t.Fatalf("supervised config unexpectedly requires an exact Codex CLI pin: %v", err)
+	if _, err := remote.EncodeProfileConfig(remoteSettings); err != nil {
+		t.Fatalf("optional Codex CLI pin was required by codec: %v", err)
+	}
+	if err := validateImplementationProfileData(c); err == nil || !strings.Contains(err.Error(), "enforcement evidence") {
+		t.Fatalf("missing remote policy evidence bypassed admission: %v", err)
 	}
 	report, err := (remote.NewBackend(remoteWorkerConfig(c))).Probe(context.Background(), targetFor(c), agentFor(c))
 	if err != nil {
@@ -398,7 +400,7 @@ func TestSupervisedOrcaRequiresPinnedModelAndKeepsStopUnsupported(t *testing.T) 
 	if _, err = records.loadCapabilityReport(report); err != nil {
 		t.Fatalf("load capability report without a Codex CLI pin: %v", err)
 	}
-	if _, err = executionStopperFor(Config{Host: "orca_supervised"}); err == nil || !isBackendError(err, executionapi.BackendUnsupported) {
+	if _, err = executionStopperFor(testConfigWithDirectory(Config{Host: "orca_supervised"})); err == nil || !isBackendError(err, executionapi.BackendUnsupported) {
 		t.Fatalf("StopExecution error = %v", err)
 	}
 }
@@ -579,48 +581,37 @@ func TestSupervisedPrepareKeepsPlatformWorktreeIdentitySeparateFromPath(t *testi
 func TestLoadConfigRequiresExplicitRemoteCancellationFalse(t *testing.T) {
 	c := supervisedFixtureConfig(t)
 	t.Setenv("STEERLINE_HOME", t.TempDir())
+	c.PublicationPolicy.Publisher = "worker"
 	c.RunDir, c.WorktreeRoot = "", ""
 	profile := c.projectExecutionProfile()
 	profile.ID, profile.Name = "remote", "Remote"
-	encoded, err := json.Marshal(profile)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var fields map[string]json.RawMessage
-	if err = json.Unmarshal(encoded, &fields); err != nil {
-		t.Fatal(err)
-	}
-	var orca map[string]json.RawMessage
-	if err = json.Unmarshal(fields["orca"], &orca); err != nil {
-		t.Fatal(err)
-	}
-	var supervised map[string]json.RawMessage
-	if err = json.Unmarshal(orca["supervised"], &supervised); err != nil {
-		t.Fatal(err)
-	}
-	delete(supervised, "remote_cancel_available")
-	orca["supervised"], _ = json.Marshal(supervised)
-	fields["orca"], _ = json.Marshal(orca)
-	withoutPolicy, _ := json.Marshal(map[string]any{"execution_profiles": []any{fields}, "default_execution_profile": "remote"})
 	configPath := filepath.Join(t.TempDir(), "steerline.json")
-	if err = os.WriteFile(configPath, projectConfigJSON(t, c), 0600); err != nil {
-		t.Fatal(err)
-	}
-	if err = os.WriteFile(fixtureGlobalExecutionConfigPath(), withoutPolicy, 0600); err != nil {
-		t.Fatal(err)
-	}
-	if _, err = loadFixtureConfig(configPath); err == nil || !strings.Contains(err.Error(), "explicitly set to false") {
-		t.Fatalf("missing remote cancellation policy error = %v", err)
-	}
-	supervised["remote_cancel_available"] = json.RawMessage("true")
-	orca["supervised"], _ = json.Marshal(supervised)
-	fields["orca"], _ = json.Marshal(orca)
-	withEnabledStop, _ := json.Marshal(map[string]any{"execution_profiles": []any{fields}, "default_execution_profile": "remote"})
-	if err = os.WriteFile(fixtureGlobalExecutionConfigPath(), withEnabledStop, 0600); err != nil {
-		t.Fatal(err)
-	}
-	if _, err = loadFixtureConfig(configPath); err == nil || !strings.Contains(err.Error(), "fixed unavailable") {
-		t.Fatalf("enabled remote cancellation error = %v", err)
+	require(t, os.WriteFile(configPath, projectConfigJSON(t, c), 0600))
+	for _, mode := range []string{"missing", "enabled"} {
+		changed := profile
+		changed.ImplementationConfigs = cloneImplementationInputs(profile.ImplementationConfigs)
+		for i := range changed.ImplementationConfigs {
+			input := &changed.ImplementationConfigs[i]
+			if input.ImplementationKey != remote.ProfileCodecKey {
+				continue
+			}
+			var payload map[string]any
+			require(t, json.Unmarshal(input.Payload, &payload))
+			delete(payload, "remote_cancel_available")
+			if mode == "enabled" {
+				payload["remote_cancel_available"] = true
+			}
+			input.Payload, _ = json.Marshal(payload)
+		}
+		writeGlobalExecutionFixture(t, []ExecutionProfile{changed}, "remote")
+		_, err := loadFixtureConfig(configPath)
+		want := "explicitly set to false"
+		if mode == "enabled" {
+			want = "fixed unavailable"
+		}
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Fatalf("%s cancellation policy accepted: %v", mode, err)
+		}
 	}
 }
 

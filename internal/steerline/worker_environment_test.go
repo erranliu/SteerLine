@@ -108,8 +108,13 @@ func driveTestLifecycleWorker(service *Service, run *Run) error {
 			return err
 		}
 	}
-	for i := 0; i < 20; i++ {
+	deadline := time.Now().Add(45 * time.Second)
+	observedPolls := 0
+	for time.Now().Before(deadline) {
 		service.drainWorkerMessages()
+		if err := service.resumeConfiguredWork(context.Background()); err != nil {
+			return err
+		}
 		_, execution := service.workflowRecords(run)
 		if turn := nativeOrcaCurrentTurn(execution); turn != nil && turn.Purpose == "readiness" && !turn.Settled {
 			if err := service.readNativeOrcaOutput(context.Background(), run, execution, turn); err != nil && execution.Environment.Blocker == nil {
@@ -117,6 +122,14 @@ func driveTestLifecycleWorker(service *Service, run *Run) error {
 			}
 		}
 		turn := nativeOrcaCurrentTurn(execution)
+		// Async resource steps must accept the original Dispatch before the
+		// observation budget starts; slow parallel fixtures are not absence.
+		if turn != nil && turn.DispatchID != "" {
+			observedPolls++
+		}
+		if observedPolls >= 20 {
+			return nil
+		}
 		if execution.Environment != nil && (execution.Environment.Ready || execution.Environment.Blocker != nil && (turn == nil || turn.Purpose != "readiness" || execution.Environment.Preparation.Verified || turn.Settled && turn.Outcome == "failed")) {
 			return nil
 		}
@@ -310,6 +323,7 @@ func TestWorkerEnvironmentER2HostWaitPreservesQuestionAndPR(t *testing.T) {
 func TestWorkerEnvironmentER3RecheckKeepsOriginalDispatch(t *testing.T) {
 	f := newEnvironmentFixture(t, fakeNativeOrcaState{ReadinessMode: "hold"}, "")
 	f.prepare(t)
+	f.poll(t)
 	_, e := f.service.workflowRecords(f.run)
 	if e.Process == nil || nativeOrcaCurrentTurn(e) == nil {
 		t.Fatalf("readiness fixture has no original dispatch: execution=%+v error=%v environment=%+v", e, e.Error, e.Environment)
@@ -434,6 +448,7 @@ func TestWorkerEnvironmentER4DeadlineRestartAndLostReceipt(t *testing.T) {
 func TestEnvironmentRecheckCannotClearNewFaultObservedDuringPoll(t *testing.T) {
 	f := newEnvironmentFixture(t, fakeNativeOrcaState{ReadinessMode: "hold"}, "")
 	f.prepare(t)
+	f.poll(t)
 	f.update(t, func(state *fakeNativeOrcaState) {
 		state.HostWait = json.RawMessage(`{"kind":"approval","source":"structured"}`)
 	})
@@ -442,6 +457,7 @@ func TestEnvironmentRecheckCannotClearNewFaultObservedDuringPoll(t *testing.T) {
 	oldBlocker := e.Environment.Blocker.ID
 	f.update(t, func(state *fakeNativeOrcaState) { state.HostWait = nil; state.ReadinessMode = "tool_failure" })
 	f.recheck(t)
+	f.poll(t)
 	e = f.service.executionRecord(f.run)
 	if e.Environment.Blocker == nil || e.Environment.Blocker.ID == oldBlocker || e.Environment.Blocker.Fact.Reason != "tool_initialization_failed" || f.run.Decision == nil || f.run.Decision.Status != "pending" || f.state(t).Dispatches != 1 {
 		t.Fatalf("old recheck cleared newer fault: %+v / %+v", e.Environment, f.run.Decision)
@@ -462,13 +478,18 @@ func testManagedLaunchRecovery(t *testing.T, renamed bool) {
 	f := newEnvironmentFixture(t, fakeNativeOrcaState{LoseFixedTerminalOnce: !renamed, RenameFixedAgentAfterCreate: renamed}, "gpt-6-luna")
 	f.prepare(t)
 	if !renamed && f.run.Process != nil {
-		t.Fatal("unknown terminal receipt guessed")
+		e := f.service.executionRecord(f.run)
+		if e.Environment.OriginalTerminal == nil || *f.run.Process != *e.Environment.OriginalTerminal || !testOrcaState(t, e).AgentBound {
+			t.Fatal("unknown terminal receipt guessed")
+		}
 	}
 	if renamed {
+		stopTestLifecycleMessages(f.service, f.workerCancel)
 		require(t, f.service.Close())
 		s, err := newTestService(f.config)
 		require(t, err)
 		f.service, f.run = s, s.find("8154")
+		f.workerCancel = enableTestLifecycleMessages(s)
 		require(t, s.resumeConfiguredWork(context.Background()))
 	} else {
 		f.recheck(t)

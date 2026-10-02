@@ -88,7 +88,7 @@ func TestProfilePublicationMixedRoutesAndFrozenResponsibility(t *testing.T) {
 		require(t, os.WriteFile(path, data, 0600))
 	}
 	profiles := mixedPublicationProfiles()
-	writeJSON(fixtureGlobalExecutionConfigPath(), map[string]any{"default_execution_profile": "local", "execution_profiles": profiles})
+	writeJSON(fixtureGlobalExecutionConfigPath(), map[string]any{"version": 2, "default_execution_profile": "local", "execution_profiles": profiles})
 	path := filepath.Join(t.TempDir(), "project.json")
 	writeJSON(path, map[string]any{
 		"repository": configTestRepository(t), "branch": "main", "task_authority": "native", "workflow_protocol": WorkerFlowVersion,

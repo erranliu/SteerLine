@@ -59,6 +59,7 @@ func TestUnsupportedOrcaWorkerFlowConfigurationCannotClaim(t *testing.T) {
 		t.Run(host, func(t *testing.T) {
 			// The target is rejected by registration before any platform probe.
 			c := Config{WorkflowProtocol: WorkerFlowVersion, Host: host, Agent: "unregistered-agent", ExecutionPolicy: workspacePolicyFixture(), PublicationPolicy: executionPublicationFixture(), PR: hostPublicationProviderFixture()}
+			c = testConfigWithDirectory(c)
 			err := requireWorkerFlowCapabilities(context.Background(), c)
 			var backend *executionapi.BackendError
 			if !errors.As(err, &backend) || backend.Code != executionapi.BackendUnsupported {

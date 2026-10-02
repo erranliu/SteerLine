@@ -13,3 +13,7 @@
 | L3 | delivery.orca-codex、recovery.orca-codex | live、完全访问，luna/medium | 分别 `go run ./cmd/test-feedback -level=L3 -suite=<组> -env=live '-scenario=<ID>' -out=<fresh>` | Orca 定向后；两回合准备、原执行交付/重启、usage/清理通过 | baseline-repair-189/各场景/ |
 
 本次选择 L1/Full 为用户明确要求，L2 和 Orca L3 覆盖修改的原生入口；不重复已通过且本次不变的本地 L3。证据根 `docs/validation/e2e-dependency-boundaries/`。每次真实运行独立现场、失败不自动重试。
+
+Full 新暴露的问题包括重构后只读 metadata probe 与权限 admission 混用、异步 fixture 在派发前耗尽轮询次数，以及原配置的 raw policy 变更未进入 immutable pin。修复 fixture 的层级和条件等待；nativeWorkflowPin 固定整个原 profile，定向 `TestNativeClaimAllowsManualParallelButKeepsAutoSlot` 必须拒绝合法 JSON 的 policy 变更。真实 Orca probe 已原生执行成功但 exec pragma 未被 evidence 识别；只接受合法 `// @exec` 调度参数行，保留完整原命令、工具结果、身份、marker/exit 验证。新增 pragma 正向与篡改拒绝单测，`go test ./internal/steerline/orcaworker -count=1` 后重新使用独立现场运行完整 L2 与受影响 Orca L3，保留首轮失败与 usage。
+
+异步测试驱动按真实 actor 顺序 drain 后恢复原任务，派发受理后才开始观测次数预算；重启时停止并重新绑定测试 actor 消息通道。Windows fixture 锁删除中的 AccessDenied 按同一十秒锁窗口等待，不创建新锁路径、不放宽生产权限。对应 core ER1/ER3/ER4/原终端恢复定向与 `go test ./internal/steerlineintegration -run '^TestCD65HistoryAndPreparation$' -count=1`，必须保持原 Dispatch 和清理断言。

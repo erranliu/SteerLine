@@ -75,9 +75,10 @@ func TestExecutionBackendCommonCapabilityContract(t *testing.T) {
 	orcaConfig.Host = "orca"
 	setTestImplementationProfiles(t, &orcaConfig, codexworker.ProfileConfig{Executable: exe}, &orcaworker.ProfileConfig{Executable: exe, Args: []string{"--fake", "orca", t.TempDir()}, Shell: "cmd.exe", WaitTimeout: "5s"})
 	backends := []executionapi.ExecutionBackend{localExecutionBackend{config: c}, orcaworker.NewBackend(nativeOrcaConfig(orcaConfig))}
-	for _, backend := range backends {
+	for index, backend := range backends {
 		kind, protocol := backend.Identity()
-		report, err := backend.Probe(context.Background(), executionapi.ExecutionTarget{ID: "fixture"}, executionapi.AgentSpec{Name: "codex"})
+		targets := []executionapi.ExecutionTarget{testLocalTarget(), testTerminalTarget(orcaConfig)}
+		report, err := backend.Probe(context.Background(), targets[index], executionapi.AgentSpec{Name: "codex"})
 		if err != nil {
 			t.Fatal(err)
 		}

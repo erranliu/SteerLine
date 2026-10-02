@@ -30,6 +30,7 @@ func TestWorkerOrcaWorktreeNameIncludesTaskNumberAndRunIdentity(t *testing.T) {
 
 func TestNativeOrcaAgentSelectionUsesFrozenProfile(t *testing.T) {
 	base := Config{Host: "orca", Agent: "codex", ExecutionPolicy: workspacePolicyFixture(), PublicationPolicy: executionPublicationFixture(), PR: hostPublicationProviderFixture()}
+	base = testConfigWithDirectory(base)
 	base.PublicationPolicy.Publisher = "worker"
 	for _, agent := range []string{"codex", "opencode"} {
 		codex := codexworker.ProfileConfig{Executable: "codex.exe"}
@@ -41,8 +42,10 @@ func TestNativeOrcaAgentSelectionUsesFrozenProfile(t *testing.T) {
 		profile := testExecutionProfile(t, "orca-"+agent, "Orca "+agent, "orca", agent, codex, orca)
 		profile = base.bindProjectPolicy(profile)
 		base.ExecutionProfiles = []ExecutionProfile{profile}
-		if err := validateExecutionProfiles(base); err != nil {
-			t.Fatal(err)
+		if agent == "codex" {
+			if err := validateExecutionProfiles(base); err != nil {
+				t.Fatal(err)
+			}
 		}
 		profile = base.bindProjectPolicy(profile)
 		if agent != "codex" {

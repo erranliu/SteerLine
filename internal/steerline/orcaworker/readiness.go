@@ -323,6 +323,21 @@ var projectedCommandWrapper = regexp.MustCompile(`(?s)^\s*(?:const|let)\s+([A-Za
 
 func commandInvocation(name, input string) (string, bool) {
 	if name == "exec" {
+		input = strings.TrimSpace(input)
+		if strings.HasPrefix(input, "// @exec:") {
+			line, body, ok := strings.Cut(input, "\n")
+			var options map[string]json.RawMessage
+			if !ok || json.Unmarshal([]byte(strings.TrimSpace(strings.TrimPrefix(line, "// @exec:"))), &options) != nil {
+				return "", false
+			}
+			for key, raw := range options {
+				var value int
+				if (key != "yield_time_ms" && key != "max_output_tokens") || json.Unmarshal(raw, &value) != nil || value <= 0 {
+					return "", false
+				}
+			}
+			input = body
+		}
 		match := singleCommandWrapper.FindStringSubmatch(input)
 		if len(match) == 2 {
 			input = match[1]
