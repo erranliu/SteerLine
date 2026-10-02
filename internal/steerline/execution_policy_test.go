@@ -6,7 +6,6 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -37,18 +36,18 @@ func TestFullAccessProfileFreezeSurvivesClaimValidation(t *testing.T) {
 		if c.projectExecutionProfile().DigestFor(configurationProjectIdentity(c)) != original.Digest {
 			t.Fatal("selection digest differs from its unchanged frozen envelope")
 		}
-		if !verifyFixedExecutionProfile(original) {
+		if !verifyFixedExecutionProfile(original, c.ExecutionDirectory) {
 			t.Fatalf("%s full-access snapshot rejected at claim: %+v", host, original)
 		}
 		restored := c.ApplyFixedExecutionProfile(original)
-		if got, want := restored.managedWindowsOrca(), runtime.GOOS == "windows" && host == "orca"; got != want {
-			t.Fatalf("full-access readiness classification: host=%s got=%t want=%t", host, got, want)
+		if restored.ExecutionDirectory != c.ExecutionDirectory {
+			t.Fatal("frozen profile lost its injected execution directory")
 		}
 		if restored.ExecutionPolicy.Filesystem.WriteScope != "host" || codexProfileSettings(restored).WindowsSandbox != "" {
 			t.Fatal("frozen full-access authority was not restored")
 		}
 		original.ImplementationData[0].Payload[0] = '['
-		if verifyFixedExecutionProfile(original) {
+		if verifyFixedExecutionProfile(original, c.ExecutionDirectory) {
 			t.Fatal("full-access snapshot accepted a changed Windows sandbox mode")
 		}
 	}

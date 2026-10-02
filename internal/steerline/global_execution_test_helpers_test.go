@@ -25,7 +25,7 @@ func publicationSnapshotFixture(t *testing.T, c Config) FixedExecutionProfile {
 	require(t, validateWorkflowConfig(&c, nil))
 	require(t, c.bindPublicationTarget(context.Background()))
 	p := c.projectExecutionProfile().Freeze()
-	if !verifyFixedExecutionProfile(p) {
+	if !verifyFixedExecutionProfile(p, c.ExecutionDirectory) {
 		t.Fatal("invalid publication snapshot fixture")
 	}
 	return p
