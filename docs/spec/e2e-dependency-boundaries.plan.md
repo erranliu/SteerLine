@@ -18,3 +18,21 @@
 | 编译 | 全部 E2E 场景 | 本机，不运行场景 | `go test -tags=e2e ./tests/e2e/live ./tests/e2e/smoke ./tests/e2e/suites/... -run '^$' -count=1` | 抽取后；真实/受控场景编译通过 | 命令输出 |
 
 证据目录：`docs/validation/e2e-dependency-boundaries/`。不选 L2 live、L3 live 和 full：生产执行与原生操作语义不变，抽取使用原 codec，证据单测覆盖两条原生链路；本次验证无需额外 token、测试 PR 或全量基线。
+
+## 用户追加：全部 L3 验收
+
+按用户要求在当前候选 `5ebf704` 上验证全部六个 L3 场景。两种环境分别运行；每个真实场景独立运行，Windows 原生资源串行，full access，gpt-6-luna / medium。保留失败证据，定位后才用新现场重跑；runner 不自动重试。L3 使用 loopback provider，不创建外部 GitHub PR。
+
+| 级别 | 组/场景 ID | 环境 | 命令 | 时点与通过条件 | 证据 |
+|---|---|---|---|---|---|
+| L3 | delivery.basic + recovery.waiting-merge-restart | controlled，无模型 | `go run ./cmd/test-feedback -level=L3 '-suite=delivery,recovery' -env=controlled -out=<fresh>` | 先验证两项受控交付/恢复和清理 | `docs/validation/e2e-dependency-boundaries/l3-all/controlled/` |
+| L3 | delivery.local-codex | live，full access | `go run ./cmd/test-feedback -level=L3 -suite=delivery -env=live '-scenario=delivery.local-codex' -out=<fresh>` | 独立原生交付、固定模型/effort、正数原生 usage、清理通过 | 同目录 delivery.local-codex/ |
+| L3 | delivery.orca-codex | live，full access | `go run ./cmd/test-feedback -level=L3 -suite=delivery -env=live '-scenario=delivery.orca-codex' -out=<fresh>` | 同上，readiness/business 均成功 | 同目录 delivery.orca-codex/ |
+| L3 | recovery.local-codex | live，full access | `go run ./cmd/test-feedback -level=L3 -suite=recovery -env=live '-scenario=recovery.local-codex' -out=<fresh>` | 原身份/权限恢复，重启与交付轮询不增加 usage，无新模型回合，交付/清理通过 | 同目录 recovery.local-codex/ |
+| L3 | recovery.orca-codex | live，full access | `go run ./cmd/test-feedback -level=L3 -suite=recovery -env=live '-scenario=recovery.orca-codex' -out=<fresh>` | 同上，原 readiness/business 与原终端保留 | 同目录 recovery.orca-codex/ |
+
+不重复 L1/L2/full：本次是用户明确指定的全 L3 验收；此前 L1 和 smoke 的证据保留，当前运行报告独立记录。若需改代码，再选择对应定向回归。
+
+Orca recovery 首轮真实执行成功，但服务重启的旧启动检查要求 writable roots 非空，与 full access 的空 roots 契约冲突。改为比较环境 roots 与已通过 codec/身份验证的原 PolicyResources roots；runtime 和启动命令仍必需，不补旧数据或放宽资源变更。新增 `TestOrcaRestartPreflightRetainsOriginalPolicyRoots`，以真实受控 claim/resource 持久化验证 workspace/full access 启动以及 roots 变更拒绝。
+
+修复后先运行 `go test ./internal/steerline -run '^(TestOrcaRestartPreflightRetainsOriginalPolicyRoots|TestManagedOrcaFrozenResourceEvidenceIsVerifiedBeforeInput)$' -count=1` 和 `go test ./internal/testboundary -count=1`，无 token；通过后只独立重跑 `recovery.orca-codex`。已成功的其他场景不因这个 Orca 重启检查重复调用模型；首轮失败及 usage 单独保留。

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
@@ -181,7 +182,9 @@ func preflightWorkerFlowState(ctx context.Context, c Config) error {
 			if env.Ready && (!p.Verified || p.Invalidated || execution.Process == nil || execution.SessionID == "" || execution.SessionGeneration == "") {
 				return nativeErr("unsupported_schema", "ready execution has no verified original session")
 			}
-			if execution.Process != nil && (env.Runtime != execution.Process.RuntimeID || env.LaunchCommand == "" || len(env.WriteRoots) == 0 || canonical(env.WriteRoots[0]) != canonical(execution.Workspace.Worktree)) {
+			// The original policy resources were verified above. Full access has
+			// no bounded roots; workspace access must retain its exact root list.
+			if execution.Process != nil && (env.Runtime != execution.Process.RuntimeID || env.LaunchCommand == "" || execution.PolicyResources == nil || !slices.Equal(env.WriteRoots, execution.PolicyResources.WriteRoots)) {
 				return nativeErr("unsupported_schema", "execution resource evidence is incomplete or changed")
 			}
 		}
