@@ -64,3 +64,5 @@ Orca recovery 首轮真实执行成功，但服务重启的旧启动检查要求
 | L3 | recovery.local-codex、recovery.orca-codex | live、loopback provider | 分别 `go run ./cmd/test-feedback -level=L3 -suite=recovery -env=live '-scenario=<ID>' -out=<fresh>` | 各自独立；原身份恢复、重启无新增 usage、交付/清理通过 | rebase-189-all/各场景/ |
 
 本轮按用户明确要求选择全部级别；L1 固定包包含在完整确定性回归中，不重复 quick。失败保留原始证据，不以历史通过记录替代本轮结果。证据根目录为 `docs/validation/e2e-dependency-boundaries/`。
+
+补充执行：`go test -json -tags=e2e ./tests/e2e/internal/... ./tests/e2e/cmd/... -count=1`，验证环境隔离和资源清理（无 token）；证据 rebase-189-all/infra/。完整运行暴露 console 冲突遗留的未使用绑定和 import；仅修正编译后运行 `go test -json ./internal/steerline/console -count=1`，证据 rebase-189-all/console/。不重复完整回归或真实模型：此修正只涉及 console 测试的未使用声明，完整运行中的其他基线失败保持失败记录。
