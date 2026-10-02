@@ -29,7 +29,7 @@ func TestWorkerFeedbackPhaseCommitIsDurableAndRejectsStaleActor(t *testing.T) {
 	_, beforeRevision, err := service.domainStore.DatabaseVersion(ctx)
 	require(t, err)
 	baseConfig := service.baseConfig
-	service.baseConfig.Host = "orca"
+	service.baseConfig.Host = "unregistered"
 	beforeOperations := len(service.domain.Operations)
 	err = service.applyWorkerFlowDecision(ctx, run)
 	service.baseConfig = baseConfig

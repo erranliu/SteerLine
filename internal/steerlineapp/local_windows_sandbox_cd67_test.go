@@ -1,6 +1,7 @@
-package steerline
+package steerlineapp
 
 import (
+	"context"
 	"runtime"
 	"strings"
 	"testing"
@@ -12,8 +13,8 @@ import (
 func TestLocalWindowsSandboxProfileFreezesAndRestores(t *testing.T) {
 	config := Config{ExecutionPolicy: workspacePolicyFixture(), PublicationPolicy: executionPublicationFixture(), PR: hostPublicationProviderFixture(), Host: "local", Agent: "codex", Repository: "repo", Branch: "main"}
 	setTestCodexProfile(t, &config, codexworker.ProfileConfig{Executable: "codex", WindowsSandbox: "elevated"})
-	profile := config.projectExecutionProfile()
-	fixed := profile.Freeze(configurationProjectIdentity(config))
+	profile := unitProjectProfile(config)
+	fixed := profile.Freeze()
 	if !testVerifyFixedExecutionProfile(fixed) || !strings.Contains(strings.Join(fixed.ImplementationDisplay, " "), "Windows 权限：elevated") {
 		t.Fatalf("bad frozen profile: %+v", fixed)
 	}
@@ -29,8 +30,8 @@ func TestLocalWindowsSandboxProfileFreezesAndRestores(t *testing.T) {
 	}
 	if runtime.GOOS == "windows" {
 		setTestCodexProfile(t, &config, codexworker.ProfileConfig{Executable: "codex"})
-		profile = config.projectExecutionProfile()
-		settings, err := codexworker.DecodeProfileConfig(profile.Freeze(configurationProjectIdentity(config)).ImplementationData[0].Payload)
+		profile = unitProjectProfile(config)
+		settings, err := codexworker.DecodeProfileConfig(profile.Freeze().ImplementationData[0].Payload)
 		if err != nil || settings.WindowsSandbox != "elevated" {
 			t.Fatal("default mode was not frozen")
 		}
@@ -41,15 +42,24 @@ func TestLocalWindowsSandboxProfileFreezesAndRestores(t *testing.T) {
 		}
 		invalid := Config{Host: "local", Agent: "codex", WorkflowProtocol: WorkerFlowVersion, ExecutionPolicy: workspacePolicyFixture()}
 		setTestCodexProfile(t, &invalid, codexworker.ProfileConfig{Executable: "codex", WindowsSandbox: "unelevated"})
-		if err := validateWorkflowConfig(&invalid, nil); err == nil {
+		entry, err := invalid.ExecutionDirectory.Resolve(invalid)
+		require(t, err)
+		if err := entry.ValidateConfig(context.Background(), invalid); err == nil {
 			t.Fatal("claim validation accepted unsupported sandbox")
 		}
 	}
 	orcaConfig := Config{ExecutionPolicy: workspacePolicyFixture(), PublicationPolicy: executionPublicationFixture(), PR: hostPublicationProviderFixture(), Host: "orca", Agent: "codex", Repository: "repo", Branch: "main"}
-	setTestImplementationProfiles(t, &orcaConfig, codexworker.ProfileConfig{Executable: "codex"}, &orcaworker.ProfileConfig{Executable: "orca", Shell: "powershell.exe", WaitTimeout: "1m"})
-	orcaProfile := orcaConfig.projectExecutionProfile()
-	orcaSettings, err := codexworker.DecodeProfileConfig(orcaProfile.Freeze(configurationProjectIdentity(orcaConfig)).ImplementationData[0].Payload)
+	orcaConfig = bindUnitDirectory(t, orcaConfig)
+	orcaProfile := testExecutionProfile(t, ProjectExecutionProfileID, "Terminal", "orca", "codex", codexworker.ProfileConfig{Executable: "codex"}, &orcaworker.ProfileConfig{Executable: "orca", Shell: "powershell.exe", WaitTimeout: "1m"})
+	raw, err := codexworker.EncodeProfileConfig(codexworker.ProfileConfig{Executable: "codex"})
+	require(t, err)
+	orcaProfile.ImplementationConfigs[0].Payload = raw
+	orcaProfile = boundProfile(orcaConfig, orcaProfile)
+	orcaSettings, err := codexworker.DecodeProfileConfig(orcaProfile.ImplementationConfigs[0].Payload)
 	if err != nil || orcaSettings.WindowsSandbox != "" {
 		t.Fatal("local default changed Orca path")
+	}
+	if orcaProfile.StaticUnavailableReason() == "" {
+		t.Fatal("terminal profile without explicit native sandbox mapping was offered")
 	}
 }

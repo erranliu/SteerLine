@@ -26,19 +26,22 @@ type additionalPort struct {
 	ledger *additionalLedger
 }
 type additionalLedger struct {
-	mu        sync.Mutex
-	path      string
-	observers map[string]*additionalObserver
-	reads     int
+	mu             sync.Mutex
+	path           string
+	observers      map[string]*additionalObserver
+	reads          int
+	publicationURL string
 }
 type additionalSaved struct {
-	Session    string                                   `json:"session"`
-	Generation string                                   `json:"generation"`
-	Process    executionapi.ProcessIdentity             `json:"process"`
-	Inputs     map[string]executionapi.TurnInput        `json:"inputs"`
-	Receipts   map[string]executionapi.LifecycleReceipt `json:"receipts"`
-	Answers    map[string]executionapi.FeedbackInput    `json:"answers"`
-	Settled    bool                                     `json:"settled"`
+	Session      string                                   `json:"session"`
+	Generation   string                                   `json:"generation"`
+	Process      executionapi.ProcessIdentity             `json:"process"`
+	Inputs       map[string]executionapi.TurnInput        `json:"inputs"`
+	Receipts     map[string]executionapi.LifecycleReceipt `json:"receipts"`
+	Answers      map[string]executionapi.FeedbackInput    `json:"answers"`
+	Settled      bool                                     `json:"settled"`
+	CleanupCount int                                      `json:"cleanup_count"`
+	PRCandidates []string                                 `json:"pr_candidates,omitempty"`
 }
 
 func (l *additionalLedger) read() (additionalSaved, error) {
@@ -95,6 +98,18 @@ func (p *additionalPort) PolicyCapabilities() executionapi.LifecyclePolicyCapabi
 	return executionapi.LifecyclePolicyCapabilities{LinkedWorkspaceWriteRoots: true, ResumeActiveObservation: true, ActiveTurnFeedback: true}
 }
 func (p *additionalPort) Next(_ context.Context, snapshot executionapi.LifecycleSnapshot) (executionapi.LifecycleCandidate, error) {
+	if snapshot.TaskDelivered {
+		p.ledger.mu.Lock()
+		value, err := p.ledger.read()
+		p.ledger.mu.Unlock()
+		if err != nil {
+			return executionapi.LifecycleCandidate{}, err
+		}
+		if value.CleanupCount != 0 {
+			return executionapi.LifecycleCandidate{Done: true}, nil
+		}
+		return executionapi.LifecycleCandidate{Action: executionapi.LifecycleCleanup, Input: executionapi.LifecycleInput{Cleanup: &executionapi.CleanupInput{Resources: []executionapi.ProcessIdentity{snapshot.Ref.External}}}}, nil
+	}
 	if snapshot.Workspace.Path == "" {
 		intent := snapshot.WorkspacePlan
 		return executionapi.LifecycleCandidate{Action: executionapi.LifecyclePrepareWorkspace, Input: executionapi.LifecycleInput{Workspace: &intent}}, nil
@@ -151,6 +166,9 @@ func (p *additionalPort) Execute(ctx context.Context, request executionapi.Lifec
 			return receipt, nil, errors.New("original input was resent")
 		}
 		value.Inputs[turn.CommandID] = turn
+		if p.ledger.publicationURL != "" {
+			value.PRCandidates = []string{p.ledger.publicationURL}
+		}
 		receipt.Disposition = executionapi.OperationAccepted
 		receipt.Process = &value.Process
 		receipt.State = executionapi.LifecycleStateFacts{SessionID: value.Session, SessionGeneration: value.Generation, TurnID: turn.CommandID, InputAccepted: true, TurnStarted: true}
@@ -162,6 +180,16 @@ func (p *additionalPort) Execute(ctx context.Context, request executionapi.Lifec
 		value.Settled = true
 		receipt.Disposition = executionapi.OperationConfirmed
 		receipt.State = executionapi.LifecycleStateFacts{InputAccepted: true, TurnID: request.Snapshot.Session.CurrentTurnID}
+	case executionapi.LifecycleCleanup:
+		if !request.Snapshot.TaskDelivered || !value.Settled || request.Snapshot.Ref.External != value.Process {
+			return receipt, nil, errors.New("fixture cleanup lacks original delivered resource identity")
+		}
+		value.CleanupCount++
+		if value.CleanupCount != 1 {
+			return receipt, nil, errors.New("fixture cleanup was repeated")
+		}
+		receipt.Disposition = executionapi.OperationConfirmed
+		receipt.State = executionapi.LifecycleStateFacts{WorkerAbsent: true, WritersAbsent: true}
 	default:
 		return receipt, nil, executionapi.UnsupportedAdapterOperation(request.Operation.Action, "fixture capability is unsupported")
 	}
@@ -215,7 +243,7 @@ func (p *additionalPort) ObserveLifecycle(_ context.Context, snapshot executiona
 		turn := snapshot.Session.CurrentTurnID
 		return executionapi.LifecycleReceipt{Disposition: executionapi.OperationConfirmed, Process: &value.Process,
 			State:        executionapi.LifecycleStateFacts{SessionID: value.Session, SessionGeneration: value.Generation, TurnID: turn, TurnCompleted: true},
-			TurnEvidence: &executionapi.TurnEvidence{SourcePath: p.ledger.path, SessionID: value.Session, TurnID: turn, CommandID: turn, Started: true, Completed: true, Succeeded: true}}, nil, nil
+			TurnEvidence: &executionapi.TurnEvidence{SourcePath: p.ledger.path, SessionID: value.Session, TurnID: turn, CommandID: turn, Started: true, Completed: true, Succeeded: true, PRCandidates: append([]string(nil), value.PRCandidates...)}}, nil, nil
 	}
 	return executionapi.LifecycleReceipt{Disposition: executionapi.OperationConfirmed, Process: &value.Process, State: executionapi.LifecycleStateFacts{SessionID: value.Session, SessionGeneration: value.Generation, TurnID: snapshot.Session.CurrentTurnID}}, p.observer(snapshot, value, snapshot.Session.CurrentTurnID), nil
 }
@@ -238,8 +266,12 @@ func (p *additionalPort) InspectLifecycleWorkspace(ctx context.Context, snapshot
 func (p *additionalPort) StopLifecycle(_ context.Context, request executionapi.LifecycleRequest, _ executionapi.StopHandle) (executionapi.LifecycleReceipt, error) {
 	return executionapi.LifecycleReceipt{Operation: request.Operation, Disposition: executionapi.OperationRejected}, errors.New("fixture cancellation is unsupported")
 }
-func (p *additionalPort) CleanupLifecycle(_ context.Context, request executionapi.LifecycleRequest) (executionapi.LifecycleReceipt, error) {
-	return executionapi.LifecycleReceipt{Operation: request.Operation, Disposition: executionapi.OperationConfirmed, State: executionapi.LifecycleStateFacts{WorkerAbsent: true, WritersAbsent: true}}, nil
+func (p *additionalPort) CleanupLifecycle(ctx context.Context, request executionapi.LifecycleRequest) (executionapi.LifecycleReceipt, error) {
+	receipt, observer, err := p.Execute(ctx, request)
+	if observer != nil {
+		_ = observer.Close(ctx)
+	}
+	return receipt, err
 }
 
 type additionalHandle struct{ identity executionapi.ProcessIdentity }
@@ -308,7 +340,7 @@ func (p *additionalPort) observer(snapshot executionapi.LifecycleSnapshot, value
 		}
 		ack := make(chan error, 1)
 		select {
-		case o.events <- executionapi.LifecycleEvent{Fact: executionapi.EventFact{Kind: executionapi.EventCompleted, Completed: true, Matched: true, Outcome: "completed"}, Kind: "completed", Status: "completed", Title: "Fixture completed", Persisted: ack}:
+		case o.events <- executionapi.LifecycleEvent{Fact: executionapi.EventFact{Kind: executionapi.EventCompleted, Completed: true, Matched: true, Outcome: "completed", PRCandidates: append([]string(nil), value.PRCandidates...)}, Kind: "completed", Status: "completed", Title: "Fixture completed", Persisted: ack}:
 		case <-o.closed:
 			return
 		}

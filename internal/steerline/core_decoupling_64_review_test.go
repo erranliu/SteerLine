@@ -50,14 +50,14 @@ func (r inspectionResolver) ResolveLifecycle(executionapi.LifecycleSetup) (execu
 
 func TestCD64ReviewReceiptAndRecoveryIsolation(t *testing.T) {
 	t.Run("recovery_preview_uses_original_lifecycle_port", func(t *testing.T) {
-		s, run := appServerAuditService(t)
+		s, run := neutralAuditService(t)
 		execution := s.executionRecord(run)
 		workflow := s.workflowRecord(run)
 		execution.Generation, execution.ConfigurationDigest = "resources", workflow.ExecutionProfile.Digest
 		execution.Workspace = WorkspaceEvidence{Repository: s.Config.identity, Worktree: run.WorkspaceIntent.Path, Branch: run.WorkspaceIntent.Branch, Base: run.WorkspaceIntent.BaseCommit}
 		identity := executionapi.ProcessIdentity{Kind: "fixture-process", PID: 42, Created: "original-generation"}
 		execution.Process = &identity
-		execution.PolicyResources = policyResourceReceiptFixture(workflow.ExecutionProfile.Digest, execution.Workspace.Worktree, execution)
+		execution.PolicyResources = neutralPolicyReceipt(workflow.ExecutionProfile.Digest, execution.Workspace.Worktree, execution)
 		s.refreshRun(run)
 		port := &inspectionLifecycle{want: identity}
 		s.lifecycleResolver = inspectionResolver{port: port}
@@ -102,7 +102,7 @@ func TestCD64ReviewReceiptAndRecoveryIsolation(t *testing.T) {
 		}
 	})
 	t.Run("intent_does_not_rebind_to_current_attempt", func(t *testing.T) {
-		s, run := appServerAuditService(t)
+		s, run := neutralAuditService(t)
 		execution := s.executionRecord(run)
 		workflow := s.workflowRecord(run)
 		execution.Generation, execution.ConfigurationDigest = "resources", workflow.ExecutionProfile.Digest
@@ -124,14 +124,14 @@ func TestCD64ReviewReceiptAndRecoveryIsolation(t *testing.T) {
 		}
 	})
 	t.Run("late_session_receipt_rejects_changed_binding", func(t *testing.T) {
-		s, run := appServerAuditService(t)
+		s, run := neutralAuditService(t)
 		execution := s.executionRecord(run)
 		workflow := s.workflowRecord(run)
 		execution.Generation, execution.ConfigurationDigest = "resources", workflow.ExecutionProfile.Digest
 		execution.Workspace = WorkspaceEvidence{Repository: s.Config.identity, Worktree: run.WorkspaceIntent.Path, Branch: run.WorkspaceIntent.Branch, Base: run.WorkspaceIntent.BaseCommit}
 		input := executionapi.TurnInput{CommandID: newID(), Prompt: "original"}
 		execution.PendingCommandID = input.CommandID
-		execution.PolicyResources = policyResourceReceiptFixture(workflow.ExecutionProfile.Digest, execution.Workspace.Worktree, execution)
+		execution.PolicyResources = neutralPolicyReceipt(workflow.ExecutionProfile.Digest, execution.Workspace.Worktree, execution)
 		key := "worker-session:" + execution.ExecutionID + ":" + input.CommandID
 		_, err := s.startWorkerOperation(run, "prepare_worker_session", key, &input)
 		require(t, err)

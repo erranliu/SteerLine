@@ -2,11 +2,10 @@ package steerline
 
 import (
 	"context"
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"os"
 	"path/filepath"
 	"testing"
-
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 type recordedStopProcess struct {
@@ -16,16 +15,16 @@ type recordedStopProcess struct {
 }
 
 func TestWorkerBindingRollsBackWithItsCheckpoint(t *testing.T) {
-	s, run := appServerAuditService(t)
+	s, run := neutralAuditService(t)
 	identity, err := currentProcessIdentity()
 	require(t, err)
 	execution := s.executionRecord(run)
 	execution.Process = identity
-	setTestCodexBinding(t, execution, "ws://127.0.0.1:12345", "generation", workerFlowMockSession)
+	setNeutralBinding(t, execution, "ws://127.0.0.1:12345", "generation", workerFlowMockSession)
 	execution.Workspace.Worktree = filepath.Join(t.TempDir(), "worker")
 	execution.Workspace.Branch, execution.Workspace.Base = execution.WorkspaceIntent.Branch, execution.WorkspaceIntent.BaseCommit
 	s.refreshRun(run)
-	ref := executionapi.ExecutionRef{Version: executionapi.ExecutionRecordVersion, Backend: executionapi.BackendLocal, Protocol: executionapi.ProtocolLocalCodexAppServer, Target: targetFor(s.Config), Agent: agentFor(s.Config), RunID: run.RunID, AttemptID: run.AttemptID, WorkspacePath: execution.Workspace.Worktree, WorkspaceBranch: execution.Workspace.Branch, BaseCommit: execution.Workspace.Base, External: *identity, Generation: "generation"}
+	ref := executionapi.ExecutionRef{Version: executionapi.ExecutionRecordVersion, Backend: executionapi.BackendLocal, Protocol: neutralProtocol, Target: targetFor(s.Config), Agent: agentFor(s.Config), RunID: run.RunID, AttemptID: run.AttemptID, WorkspacePath: execution.Workspace.Worktree, WorkspaceBranch: execution.Workspace.Branch, BaseCommit: execution.Workspace.Base, External: *identity, Generation: "generation"}
 	_, err = s.domainStore.db.Exec(`CREATE TRIGGER reject_binding_checkpoint BEFORE INSERT ON projection BEGIN SELECT RAISE(FAIL,'binding checkpoint failure'); END`)
 	require(t, err)
 	if err := s.commitWorkerBinding(run, ref); err == nil {
@@ -46,17 +45,17 @@ func (p *recordedStopProcess) Kill()                                  { p.before
 func (p *recordedStopProcess) Close()                                 {}
 
 func TestExecutionStopIntentAndUnknownReceiptUseOriginalBinding(t *testing.T) {
-	s, run := appServerAuditService(t)
+	s, run := neutralAuditService(t)
 	ctx := context.Background()
 	identity, err := currentProcessIdentity()
 	require(t, err)
 	execution := s.executionRecord(run)
 	execution.Process = identity
-	setTestCodexBinding(t, execution, "ws://127.0.0.1:12345", "generation", workerFlowMockSession)
+	setNeutralBinding(t, execution, "ws://127.0.0.1:12345", "generation", workerFlowMockSession)
 	execution.Workspace.Worktree = filepath.Join(t.TempDir(), "worker")
 	execution.Workspace.Branch, execution.Workspace.Base = execution.WorkspaceIntent.Branch, execution.WorkspaceIntent.BaseCommit
 	s.refreshRun(run)
-	ref := executionapi.ExecutionRef{Version: executionapi.ExecutionRecordVersion, Backend: executionapi.BackendLocal, Protocol: executionapi.ProtocolLocalCodexAppServer, Target: targetFor(s.Config), Agent: agentFor(s.Config), RunID: run.RunID, AttemptID: run.AttemptID, WorkspacePath: execution.Workspace.Worktree, WorkspaceBranch: execution.Workspace.Branch, BaseCommit: execution.Workspace.Base, External: *identity, Generation: "generation"}
+	ref := executionapi.ExecutionRef{Version: executionapi.ExecutionRecordVersion, Backend: executionapi.BackendLocal, Protocol: neutralProtocol, Target: targetFor(s.Config), Agent: agentFor(s.Config), RunID: run.RunID, AttemptID: run.AttemptID, WorkspacePath: execution.Workspace.Worktree, WorkspaceBranch: execution.Workspace.Branch, BaseCommit: execution.Workspace.Base, External: *identity, Generation: "generation"}
 	require(t, s.commitWorkerBinding(run, ref))
 	records := executionRecords{root: s.Config.RunDir}
 	process := &recordedStopProcess{identity: *identity, beforeKill: func() {

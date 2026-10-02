@@ -12,9 +12,4 @@ func TestCD64IntentReceiptAndRecoveryGate(t *testing.T) {
 	t.Run("receipt_failure_retains_intent", TestWorkerReceiptFailureRetainsIntentAndCancelsUnregisteredObserver)
 	t.Run("partial_session_binding_survives", TestAppServerFailedPreparationKeepsPartialSessionBinding)
 	t.Run("worker_commit_rolls_back", TestWorkerCommitRollsBackOnStaleRecordAndCheckpointFailure)
-	t.Run("unknown_feedback_reconciles", TestAppServerPendingFeedbackRecoveryUsesNewTurnReceipt)
-}
-
-func TestCD64OriginalSessionReconciliation(t *testing.T) {
-	t.Run("remote_admission_stays_blocked", TestRemotePublicationClaimRequiresPermissionEvidence)
 }

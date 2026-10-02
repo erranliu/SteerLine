@@ -3,15 +3,14 @@ package steerline
 import (
 	"context"
 	"fmt"
+	"github.com/erranliu/SteerLine/internal/steerline/contracts"
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"os/exec"
 	"strconv"
 	"strings"
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 func TestCD65SourceCommitAndHostGate(t *testing.T) {
@@ -44,7 +43,7 @@ func testCD65HostGateKeepsTrustedActionSeparate(t *testing.T) {
 			t.Fatalf("host action was not expressed as a trusted center option: %+v", option)
 		}
 	}
-	process := executionapi.ProcessIdentity{Kind: "orca", Terminal: "terminal", RuntimeID: "runtime", Incarnation: "generation"}
+	process := executionapi.ProcessIdentity{Kind: "fixture", Terminal: "terminal", RuntimeID: "runtime", Incarnation: "generation"}
 	authorization := &executionapi.HostActionAuthorization{ExecutionID: "execution", AttemptID: "attempt", TurnID: "turn", DecisionID: decision.ID, BlockerID: "blocker", DecisionVersion: decision.Version}
 	if err := (executionapi.HostActionInput{Kind: executionapi.HostOpenOriginal, Process: &process, Authorization: authorization}).Validate(); err != nil {
 		t.Fatalf("original host action was not accepted by its durable value contract: %v", err)

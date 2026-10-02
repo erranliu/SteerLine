@@ -9,7 +9,7 @@ import (
 
 func waitingDecisionService(t *testing.T) (*Service, *Run) {
 	t.Helper()
-	service, run := appServerAuditService(t)
+	service, run := neutralAuditService(t)
 	_, execution := service.workflowRecords(run)
 	execution.Status, execution.LastTurnOutcome = "idle", "succeeded"
 	service.State.Service.Ready = true

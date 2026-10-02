@@ -35,5 +35,924 @@
     "new": "internal/steerlineintegration/worker_codex_live_test.go",
     "owner": "steerlineintegration",
     "live": "STEERLINE_CODEX_APP_SERVER_LIVE"
+  },
+  {
+    "old": "internal/steerline/orca_supervised_test.go",
+    "test": "TestSupervisedOrcaPreflightPinsRemoteIdentityAndVersionFamily",
+    "new": "internal/steerline/orca_remote_worker/original_protocol_cd67_test.go",
+    "owner": "orca_remote_worker_test"
+  },
+  {
+    "old": "internal/steerline/orca_supervised_test.go",
+    "test": "TestSupervisedOrcaPreflightRejectsVersionOrCapabilityDrift",
+    "new": "internal/steerline/orca_remote_worker/original_protocol_cd67_test.go",
+    "owner": "orca_remote_worker_test"
+  },
+  {
+    "old": "internal/steerline/orca_supervised_test.go",
+    "test": "TestSupervisedOrcaClientPinsLaunchAndReadsExactDispatch",
+    "new": "internal/steerline/orca_remote_worker/original_protocol_cd67_test.go",
+    "owner": "orca_remote_worker_test"
+  },
+  {
+    "old": "internal/steerline/orca_supervised_test.go",
+    "test": "TestSupervisedOrcaClientRejectsReturnedReplacementWorktree",
+    "new": "internal/steerline/orca_remote_worker/original_protocol_cd67_test.go",
+    "owner": "orca_remote_worker_test"
+  },
+  {
+    "old": "internal/steerline/orca_supervised_test.go",
+    "test": "TestSupervisedRunCoordinatorsAreDistinctAndFenced",
+    "new": "internal/steerline/orca_remote_worker/original_protocol_cd67_test.go",
+    "owner": "orca_remote_worker_test"
+  },
+  {
+    "old": "internal/steerline/orca_supervised_test.go",
+    "test": "TestSettledSupervisedDispatchRetainsExactBindingWithoutLiveTerminal",
+    "new": "internal/steerline/orca_remote_worker/original_protocol_cd67_test.go",
+    "owner": "orca_remote_worker_test"
+  },
+  {
+    "old": "internal/steerline/orca_supervised_test.go",
+    "test": "TestSupervisedReplyRejectsEscapedOversizeBeforeOrcaCall",
+    "new": "internal/steerline/orca_remote_worker/original_protocol_cd67_test.go",
+    "owner": "orca_remote_worker_test"
+  },
+  {
+    "old": "internal/steerline/orca_supervised_test.go",
+    "test": "supervisedPromptTestRef",
+    "new": "internal/steerline/orca_remote_worker/original_protocol_cd67_test.go",
+    "owner": "orca_remote_worker_test"
+  },
+  {
+    "old": "internal/steerline/native_tasks_test.go",
+    "test": "TestNativeFixtureSeedAndCopiesAreIndependent",
+    "new": "internal/steerline/native_tasks_test.go",
+    "owner": "steerline",
+    "change": "business assertion retained with one neutral implementation and generic envelopes"
+  },
+  {
+    "old": "internal/steerline/native_tasks_test.go",
+    "test": "TestNativeProjectInitializesOnceAndRejectsMismatchedBinding",
+    "new": "internal/steerline/native_tasks_test.go",
+    "owner": "steerline",
+    "change": "business assertion retained with one neutral implementation and generic envelopes"
+  },
+  {
+    "old": "internal/steerline/native_tasks_test.go",
+    "test": "TestNativePreflightAllowsItsEmptyRunLockFile",
+    "new": "internal/steerline/native_tasks_test.go",
+    "owner": "steerline",
+    "change": "business assertion retained with one neutral implementation and generic envelopes"
+  },
+  {
+    "old": "internal/steerline/native_tasks_test.go",
+    "test": "TestNativeTaskQuerySnapshotPagingPersistenceAndIsolation",
+    "new": "internal/steerline/native_tasks_test.go",
+    "owner": "steerline",
+    "change": "business assertion retained with one neutral implementation and generic envelopes"
+  },
+  {
+    "old": "internal/steerline/native_tasks_test.go",
+    "test": "TestNativeTaskCASGuardsAndDeliveryProjection",
+    "new": "internal/steerline/native_tasks_test.go",
+    "owner": "steerline",
+    "change": "business assertion retained with one neutral implementation and generic envelopes"
+  },
+  {
+    "old": "internal/steerline/native_tasks_test.go",
+    "test": "TestNativeDiscardCASKeepsAuditAndNeverReusesID",
+    "new": "internal/steerline/native_tasks_test.go",
+    "owner": "steerline",
+    "change": "business assertion retained with one neutral implementation and generic envelopes"
+  },
+  {
+    "old": "internal/steerline/native_tasks_test.go",
+    "test": "TestTaskContractPinsCommittedBlobsAndRejectsInvalidReferences",
+    "new": "internal/steerline/native_tasks_test.go",
+    "owner": "steerline",
+    "change": "business assertion retained with one neutral implementation and generic envelopes"
+  },
+  {
+    "old": "internal/steerline/native_tasks_test.go",
+    "test": "TestAcceptanceHeadingRecognizesChineseAndEnglish",
+    "new": "internal/steerline/native_tasks_test.go",
+    "owner": "steerline",
+    "change": "business assertion retained with one neutral implementation and generic envelopes"
+  },
+  {
+    "old": "internal/steerline/native_tasks_test.go",
+    "test": "TestTaskContractRejectsCommittedSymlinkReferences",
+    "new": "internal/steerline/native_tasks_test.go",
+    "owner": "steerline",
+    "change": "business assertion retained with one neutral implementation and generic envelopes"
+  },
+  {
+    "old": "internal/steerline/native_tasks_test.go",
+    "test": "TestNativeInitializationRejectsBeadsStateAndCustomDatabaseFork",
+    "new": "internal/steerline/native_tasks_test.go",
+    "owner": "steerline",
+    "change": "business assertion retained with one neutral implementation and generic envelopes"
+  },
+  {
+    "old": "internal/steerline/native_tasks_test.go",
+    "test": "TestNativeInitializationRefusesExistingBeadsTaskDatabase",
+    "new": "internal/steerline/native_tasks_test.go",
+    "owner": "steerline",
+    "change": "business assertion retained with one neutral implementation and generic envelopes"
+  },
+  {
+    "old": "internal/steerline/native_tasks_test.go",
+    "test": "TestNewServiceRejectsNonNativeAuthorityBeforeCreatingState",
+    "new": "internal/steerline/native_tasks_test.go",
+    "owner": "steerline",
+    "change": "business assertion retained with one neutral implementation and generic envelopes"
+  },
+  {
+    "old": "internal/steerline/native_tasks_test.go",
+    "test": "TestNativeStoreRejectsRetiredSQLiteRunProjectionBeforeAuthorityOpen",
+    "new": "internal/steerline/native_tasks_test.go",
+    "owner": "steerline",
+    "change": "business assertion retained with one neutral implementation and generic envelopes"
+  },
+  {
+    "old": "internal/steerline/native_tasks_test.go",
+    "test": "TestNativeDatabaseInitializesCurrentSchema",
+    "new": "internal/steerline/native_tasks_test.go",
+    "owner": "steerline",
+    "change": "business assertion retained with one neutral implementation and generic envelopes"
+  },
+  {
+    "old": "internal/steerline/native_tasks_test.go",
+    "test": "TestSchemaOneCenterDatabaseIsRejectedWithoutMutation",
+    "new": "internal/steerline/native_tasks_test.go",
+    "owner": "steerline",
+    "change": "business assertion retained with one neutral implementation and generic envelopes"
+  },
+  {
+    "old": "internal/steerline/native_tasks_test.go",
+    "test": "TestNativeCursorErrorHasStableCode",
+    "new": "internal/steerline/native_tasks_test.go",
+    "owner": "steerline",
+    "change": "business assertion retained with one neutral implementation and generic envelopes"
+  },
+  {
+    "old": "internal/steerline/native_dag_commands_test.go",
+    "test": "TestTaskBatchStrictDecodeAndDeterministicCyclePath",
+    "new": "internal/steerline/native_dag_commands_test.go",
+    "owner": "steerline",
+    "change": "business assertion retained with one neutral implementation and generic envelopes"
+  },
+  {
+    "old": "internal/steerline/native_dag_commands_test.go",
+    "test": "TestCreateTaskBatchAtomicIdempotentAndQueryable",
+    "new": "internal/steerline/native_dag_commands_test.go",
+    "owner": "steerline",
+    "change": "business assertion retained with one neutral implementation and generic envelopes"
+  },
+  {
+    "old": "internal/steerline/native_dag_commands_test.go",
+    "test": "TestCreateTaskBatchRollsBackEveryWriteWhenEdgeInsertFails",
+    "new": "internal/steerline/native_dag_commands_test.go",
+    "owner": "steerline",
+    "change": "business assertion retained with one neutral implementation and generic envelopes"
+  },
+  {
+    "old": "internal/steerline/native_dag_commands_test.go",
+    "test": "TestNativeCommandsRejectConfigurationBindingDriftBeforeSideEffects",
+    "new": "internal/steerline/native_dag_commands_test.go",
+    "owner": "steerline",
+    "change": "business assertion retained with one neutral implementation and generic envelopes"
+  },
+  {
+    "old": "internal/steerline/native_dag_commands_test.go",
+    "test": "TestTaskBatchRejectsDuplicateAndCrossProjectDependencies",
+    "new": "internal/steerline/native_dag_commands_test.go",
+    "owner": "steerline",
+    "change": "business assertion retained with one neutral implementation and generic envelopes"
+  },
+  {
+    "old": "internal/steerline/native_dag_commands_test.go",
+    "test": "TestTaskDependencyStateRequiresEveryPredecessorDelivery",
+    "new": "internal/steerline/native_dag_commands_test.go",
+    "owner": "steerline",
+    "change": "business assertion retained with one neutral implementation and generic envelopes"
+  },
+  {
+    "old": "internal/steerline/native_dag_commands_test.go",
+    "test": "TestNativeClaimAllowsManualParallelButKeepsAutoSlot",
+    "new": "internal/steerline/native_dag_commands_test.go",
+    "owner": "steerline",
+    "change": "business assertion retained with one neutral implementation and generic envelopes"
+  },
+  {
+    "old": "internal/steerline/native_dag_commands_test.go",
+    "test": "TestNativeClaimBlocksWhenFetchedBaseMissesPredecessorMerge",
+    "new": "internal/steerline/native_dag_commands_test.go",
+    "owner": "steerline",
+    "change": "business assertion retained with one neutral implementation and generic envelopes"
+  },
+  {
+    "old": "internal/steerline/native_dag_commands_test.go",
+    "test": "TestNativeClaimCompetitionCreatesOnlyOneWorkflowReservation",
+    "new": "internal/steerline/native_dag_commands_test.go",
+    "owner": "steerline",
+    "change": "business assertion retained with one neutral implementation and generic envelopes"
+  },
+  {
+    "old": "internal/steerline/native_dag_commands_test.go",
+    "test": "TestTaskDiscardRequestPersistsUnknownAndThenDiscardsOnlyAfterUnmergedProof",
+    "new": "internal/steerline/native_dag_commands_test.go",
+    "owner": "steerline",
+    "change": "business assertion retained with one neutral implementation and generic envelopes"
+  },
+  {
+    "old": "internal/steerline/native_dag_commands_test.go",
+    "test": "TestTaskDiscardRequiresPreciseUnmergedPRAndRetainsUnknownIntent",
+    "new": "internal/steerline/native_dag_commands_test.go",
+    "owner": "steerline",
+    "change": "business assertion retained with one neutral implementation and generic envelopes"
+  },
+  {
+    "old": "internal/steerline/native_dag_commands_test.go",
+    "test": "TestTaskDiscardDuringActiveExecutionKeepsSlotAndCleanupIdentity",
+    "new": "internal/steerline/native_dag_commands_test.go",
+    "owner": "steerline",
+    "change": "business assertion retained with one neutral implementation and generic envelopes"
+  },
+  {
+    "old": "internal/steerline/sqlite_store_test.go",
+    "test": "TestCheckpointDoesNotSynthesizeControlOperations",
+    "new": "internal/steerline/sqlite_store_test.go",
+    "owner": "steerline",
+    "change": "business assertion retained with one neutral implementation and generic envelopes"
+  },
+  {
+    "old": "internal/steerline/sqlite_store_test.go",
+    "test": "TestSQLiteV3IsRejectedWithoutUpgrade",
+    "new": "internal/steerline/sqlite_store_test.go",
+    "owner": "steerline",
+    "change": "business assertion retained with one neutral implementation and generic envelopes"
+  },
+  {
+    "old": "internal/steerline/sqlite_store_test.go",
+    "test": "TestSQLiteV4IsRejectedWithoutUpgrade",
+    "new": "internal/steerline/sqlite_store_test.go",
+    "owner": "steerline",
+    "change": "business assertion retained with one neutral implementation and generic envelopes"
+  },
+  {
+    "old": "internal/steerline/sqlite_store_test.go",
+    "test": "TestSQLiteV5IsRejectedWithoutUpgrade",
+    "new": "internal/steerline/sqlite_store_test.go",
+    "owner": "steerline",
+    "change": "business assertion retained with one neutral implementation and generic envelopes"
+  },
+  {
+    "old": "internal/steerline/sqlite_store_test.go",
+    "test": "TestSQLiteRejectsParallelExecutionsInOneWorkflow",
+    "new": "internal/steerline/sqlite_store_test.go",
+    "owner": "steerline",
+    "change": "business assertion retained with one neutral implementation and generic envelopes"
+  },
+  {
+    "old": "internal/steerline/sqlite_store_test.go",
+    "test": "TestSQLiteTransactionRollsBackAllDomainWrites",
+    "new": "internal/steerline/sqlite_store_test.go",
+    "owner": "steerline",
+    "change": "business assertion retained with one neutral implementation and generic envelopes"
+  },
+  {
+    "old": "internal/steerline/sqlite_store_test.go",
+    "test": "TestCommandIdempotencyAndDecisionVersionArbitration",
+    "new": "internal/steerline/sqlite_store_test.go",
+    "owner": "steerline",
+    "change": "business assertion retained with one neutral implementation and generic envelopes"
+  },
+  {
+    "old": "internal/steerline/sqlite_store_test.go",
+    "test": "TestPreflightRejectsUnknownSQLiteSchemaWithoutMutation",
+    "new": "internal/steerline/sqlite_store_test.go",
+    "owner": "steerline",
+    "change": "business assertion retained with one neutral implementation and generic envelopes"
+  },
+  {
+    "old": "internal/steerline/sqlite_store_test.go",
+    "test": "TestPreflightRejectsRetiredWholeRunResultCommandWithoutMutation",
+    "new": "internal/steerline/sqlite_store_test.go",
+    "owner": "steerline",
+    "change": "business assertion retained with one neutral implementation and generic envelopes"
+  },
+  {
+    "old": "internal/steerline/sqlite_store_test.go",
+    "test": "TestQueryEventCursorAndLargeBodyPaging",
+    "new": "internal/steerline/sqlite_store_test.go",
+    "owner": "steerline",
+    "change": "business assertion retained with one neutral implementation and generic envelopes"
+  },
+  {
+    "old": "internal/steerline/sqlite_store_test.go",
+    "test": "TestOperationIdempotencyKeepsOneDurableIntent",
+    "new": "internal/steerline/sqlite_store_test.go",
+    "owner": "steerline",
+    "change": "business assertion retained with one neutral implementation and generic envelopes"
+  },
+  {
+    "old": "internal/steerline/sqlite_store_test.go",
+    "test": "TestDecisionAnswerFirstWinsIdempotencyAndConflictAreTransactional",
+    "new": "internal/steerline/sqlite_store_test.go",
+    "owner": "steerline",
+    "change": "business assertion retained with one neutral implementation and generic envelopes"
+  },
+  {
+    "old": "internal/steerline/sqlite_store_test.go",
+    "test": "TestDecisionAnswerCommandClientProcess",
+    "new": "internal/steerline/sqlite_store_test.go",
+    "owner": "steerline",
+    "change": "business assertion retained with one neutral implementation and generic envelopes"
+  },
+  {
+    "old": "internal/steerline/sqlite_store_test.go",
+    "test": "TestDecisionAnswerSeparateClientProcessesUseOneFirstWinsCommand",
+    "new": "internal/steerline/sqlite_store_test.go",
+    "owner": "steerline",
+    "change": "business assertion retained with one neutral implementation and generic envelopes"
+  },
+  {
+    "old": "internal/steerline/worker_context_test.go",
+    "test": "TestWorkerFlowContextKeepsFixedRunAndCopiesConfig",
+    "new": "internal/steerline/worker_context_test.go",
+    "owner": "steerline",
+    "change": "business assertion retained with one neutral implementation and generic envelopes"
+  },
+  {
+    "old": "internal/steerline/worker_context_test.go",
+    "test": "TestWorkerFlowContextsDoNotExchangeExecutionProfiles",
+    "new": "internal/steerline/worker_context_test.go",
+    "owner": "steerline",
+    "change": "business assertion retained with one neutral implementation and generic envelopes"
+  },
+  {
+    "old": "internal/steerline/worker_state_test.go",
+    "test": "TestWorkerFlowKeepsSessionThroughFeedbackAndPRChanges",
+    "new": "internal/steerline/worker_state_test.go",
+    "owner": "steerline",
+    "change": "business assertion retained with one neutral implementation and generic envelopes"
+  },
+  {
+    "old": "internal/steerline/worker_state_test.go",
+    "test": "TestWorkerFlowRejectsReplacementsAndLateTurns",
+    "new": "internal/steerline/worker_state_test.go",
+    "owner": "steerline",
+    "change": "business assertion retained with one neutral implementation and generic envelopes"
+  },
+  {
+    "old": "internal/steerline/worker_state_test.go",
+    "test": "TestWorkerFlowDeliveryGateUsesSessionAndPRWithoutStepResults",
+    "new": "internal/steerline/worker_state_test.go",
+    "owner": "steerline",
+    "change": "business assertion retained with one neutral implementation and generic envelopes"
+  },
+  {
+    "old": "internal/steerline/worker_state_test.go",
+    "test": "TestWorkerFeedbackKeepsOptionAndAdditionalText",
+    "new": "internal/steerline/worker_state_test.go",
+    "owner": "steerline",
+    "change": "business assertion retained with one neutral implementation and generic envelopes"
+  },
+  {
+    "old": "internal/steerline/worker_delivery_test.go",
+    "test": "TestWorkerFlowDeliveryCommitsWithoutStepGatesAndUnlocksSuccessor",
+    "new": "internal/steerline/worker_delivery_test.go",
+    "owner": "steerline",
+    "change": "business assertion retained with one neutral implementation and generic envelopes"
+  },
+  {
+    "old": "internal/steerline/worker_delivery_test.go",
+    "test": "TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged",
+    "new": "internal/steerline/worker_delivery_test.go",
+    "owner": "steerline",
+    "change": "business assertion retained with one neutral implementation and generic envelopes"
+  },
+  {
+    "old": "internal/steerline/worker_delivery_test.go",
+    "test": "TestWorkerFlowClaimNeedsNoProjectSteps",
+    "new": "internal/steerline/worker_delivery_test.go",
+    "owner": "steerline",
+    "change": "business assertion retained with one neutral implementation and generic envelopes"
+  },
+  {
+    "old": "internal/steerline/worker_feedback_phase_test.go",
+    "test": "TestWorkerFeedbackPhaseCommitIsDurableAndRejectsStaleActor",
+    "new": "internal/steerline/worker_feedback_phase_test.go",
+    "owner": "steerline",
+    "change": "business assertion retained with one neutral implementation and generic envelopes"
+  },
+  {
+    "old": "internal/steerline/runtime_boundary_test.go",
+    "test": "TestWorkerBindingRollsBackWithItsCheckpoint",
+    "new": "internal/steerline/runtime_boundary_test.go",
+    "owner": "steerline",
+    "change": "business assertion retained with one neutral implementation and generic envelopes"
+  },
+  {
+    "old": "internal/steerline/runtime_boundary_test.go",
+    "test": "TestExecutionStopIntentAndUnknownReceiptUseOriginalBinding",
+    "new": "internal/steerline/runtime_boundary_test.go",
+    "owner": "steerline",
+    "change": "business assertion retained with one neutral implementation and generic envelopes"
+  },
+  {
+    "old": "internal/steerline/core_decoupling_66_test.go",
+    "test": "TestCD66ExplicitCatalogAndEntrypoints",
+    "new": "internal/steerline/core_decoupling_66_test.go",
+    "owner": "steerline",
+    "change": "business assertion retained with one neutral implementation and generic envelopes"
+  },
+  {
+    "old": "internal/steerline/core_decoupling_66_test.go",
+    "test": "TestCD66CandidateResourceIdentityAndCommitRollback",
+    "new": "internal/steerline/core_decoupling_66_test.go",
+    "owner": "steerline",
+    "change": "business assertion retained with one neutral implementation and generic envelopes"
+  },
+  {
+    "old": "internal/steerline/core_decoupling_65_test.go",
+    "test": "TestCD65SourceCommitAndHostGate",
+    "new": "internal/steerline/core_decoupling_65_test.go",
+    "owner": "steerline",
+    "change": "central business assertion retained with neutral value envelopes"
+  },
+  {
+    "old": "internal/steerline/core_decoupling_65_test.go",
+    "test": "TestCD65HistoryAndPreparation",
+    "new": "internal/steerline/core_decoupling_65_test.go",
+    "owner": "steerline",
+    "change": "central business assertion retained with neutral value envelopes"
+  },
+  {
+    "old": "internal/steerline/core_decoupling_65_test.go",
+    "test": "TestCD65HistoryBudgetRotatesSources",
+    "new": "internal/steerline/core_decoupling_65_test.go",
+    "owner": "steerline",
+    "change": "central business assertion retained with neutral value envelopes"
+  },
+  {
+    "old": "internal/steerline/core_decoupling_65_test.go",
+    "test": "TestCD65HistoryCursorCommitsWithItsConversationBatch",
+    "new": "internal/steerline/core_decoupling_65_test.go",
+    "owner": "steerline",
+    "change": "central business assertion retained with neutral value envelopes"
+  },
+  {
+    "old": "internal/steerline/worker_commit_boundary_test.go",
+    "test": "TestWorkerCommitWritesOnlyDeclaredRowsAndCheckpoint",
+    "new": "internal/steerline/worker_commit_boundary_test.go",
+    "owner": "steerline",
+    "change": "central business assertion retained with neutral value envelopes"
+  },
+  {
+    "old": "internal/steerline/worker_commit_boundary_test.go",
+    "test": "TestWorkerCommitRollsBackOnStaleRecordAndCheckpointFailure",
+    "new": "internal/steerline/worker_commit_boundary_test.go",
+    "owner": "steerline",
+    "change": "central business assertion retained with neutral value envelopes"
+  },
+  {
+    "old": "internal/steerline/worker_commit_boundary_test.go",
+    "test": "TestWorkerReceiptFailureRetainsIntentAndCancelsUnregisteredObserver",
+    "new": "internal/steerline/worker_commit_boundary_test.go",
+    "owner": "steerline",
+    "change": "central business assertion retained with neutral value envelopes"
+  },
+  {
+    "old": "internal/steerline/worker_commit_boundary_test.go",
+    "test": "TestAppServerFailedPreparationKeepsPartialSessionBinding",
+    "new": "internal/steerline/worker_commit_boundary_test.go",
+    "owner": "steerline",
+    "change": "central business assertion retained with neutral value envelopes"
+  },
+  {
+    "old": "internal/steerline/worker_commit_boundary_test.go",
+    "test": "TestWorkerCommitRejectsSavedAnswerRegression",
+    "new": "internal/steerline/worker_commit_boundary_test.go",
+    "owner": "steerline",
+    "change": "central business assertion retained with neutral value envelopes"
+  },
+  {
+    "old": "internal/steerline/worker_commit_boundary_test.go",
+    "test": "TestWorkerIntentIsDurableBeforeDispatchAndFailurePreventsDispatch",
+    "new": "internal/steerline/worker_commit_boundary_test.go",
+    "owner": "steerline",
+    "change": "central business assertion retained with neutral value envelopes"
+  },
+  {
+    "old": "internal/steerline/execution_resolution_audit_test.go",
+    "test": "TestResolutionAuditProfilesDoNotAliasProjectValues",
+    "new": "internal/steerline/execution_resolution_audit_test.go",
+    "owner": "steerline",
+    "change": "central business assertion retained with neutral value envelopes"
+  },
+  {
+    "old": "internal/steerline/execution_resolution_audit_test.go",
+    "test": "TestResolutionAuditRegistrationRejectsBaseTargetDrift",
+    "new": "internal/steerline/execution_resolution_audit_test.go",
+    "owner": "steerline",
+    "change": "central business assertion retained with neutral value envelopes"
+  },
+  {
+    "old": "internal/steerline/execution_resolution_audit_test.go",
+    "test": "TestResolutionAuditRestoresOriginalWorkspaceRoot",
+    "new": "internal/steerline/execution_resolution_audit_test.go",
+    "owner": "steerline",
+    "change": "central business assertion retained with neutral value envelopes"
+  },
+  {
+    "old": "internal/steerline/execution_resolution_audit_test.go",
+    "test": "TestResolutionAuditRequirementsBlockOnlyNewWorkerIntents",
+    "new": "internal/steerline/execution_resolution_audit_test.go",
+    "owner": "steerline",
+    "change": "central business assertion retained with neutral value envelopes"
+  },
+  {
+    "old": "internal/steerline/execution_resolution_audit_test.go",
+    "test": "TestResolutionAuditEvidenceCannotChangeUnderOriginalProfileDigest",
+    "new": "internal/steerline/execution_resolution_audit_test.go",
+    "owner": "steerline",
+    "change": "central business assertion retained with neutral value envelopes"
+  },
+  {
+    "old": "internal/steerline/execution_resolution_audit_test.go",
+    "test": "TestResolutionAuditWorkerCommitCannotReplaceSnapshot",
+    "new": "internal/steerline/execution_resolution_audit_test.go",
+    "owner": "steerline",
+    "change": "central business assertion retained with neutral value envelopes"
+  },
+  {
+    "old": "internal/steerline/worker_events_cd62_test.go",
+    "test": "TestCD62NativeFactsAndQuestionRoute",
+    "new": "internal/steerline/worker_events_cd62_test.go",
+    "owner": "steerline",
+    "change": "central business assertion retained with neutral value envelopes"
+  },
+  {
+    "old": "internal/steerline/worker_events_cd62_test.go",
+    "test": "TestCD62QuestionReceiptBarrier",
+    "new": "internal/steerline/worker_events_cd62_test.go",
+    "owner": "steerline",
+    "change": "central business assertion retained with neutral value envelopes"
+  },
+  {
+    "old": "internal/steerline/worker_recovery_test.go",
+    "test": "TestDeadWorkerRecoveryPreservesDecisionAndFreshAnswer",
+    "new": "internal/steerline/worker_recovery_test.go",
+    "owner": "steerline",
+    "change": "central business assertion retained with neutral value envelopes"
+  },
+  {
+    "old": "internal/steerline/profile_publication_test.go",
+    "test": "TestProfileSelectionDigestMatchesServicePreflight",
+    "new": "internal/steerlineapp/profile_publication_cd67_test.go",
+    "owner": "steerlineapp",
+    "change": "original publication support/selection/frozen responsibility assertions via real app loader and public config values"
+  },
+  {
+    "old": "internal/steerline/profile_publication_test.go",
+    "test": "TestProfilePublicationMixedRoutesAndFrozenResponsibility",
+    "new": "internal/steerlineapp/profile_publication_cd67_test.go",
+    "owner": "steerlineapp",
+    "change": "original publication support/selection/frozen responsibility assertions via real app loader and public config values"
+  },
+  {
+    "old": "internal/steerline/profile_publication_test.go",
+    "test": "TestProfilePublicationRequiresExplicitProjectAndProfilePolicies",
+    "new": "internal/steerlineapp/profile_publication_cd67_test.go",
+    "owner": "steerlineapp",
+    "change": "original publication support/selection/frozen responsibility assertions via real app loader and public config values"
+  },
+  {
+    "old": "internal/steerline/execution_profiles_test.go",
+    "test": "TestConfigLoadsLocalAndRemoteOrcaProfilesWithoutProbingTargets",
+    "new": "internal/steerlineapp/profile_selection_cd67_test.go",
+    "owner": "steerlineapp"
+  },
+  {
+    "old": "internal/steerline/execution_profiles_test.go",
+    "test": "TestUnsupportedLocalAgentProfileIsMarkedUnavailable",
+    "new": "internal/steerlineapp/profile_selection_cd67_test.go",
+    "owner": "steerlineapp"
+  },
+  {
+    "old": "internal/steerline/execution_policy_test.go",
+    "test": "TestProjectPolicyRejectsMissingOrOldConfiguration",
+    "new": "internal/steerlineapp/policy_admission_cd67_test.go",
+    "owner": "steerlineapp"
+  },
+  {
+    "old": "internal/steerline/execution_policy_test.go",
+    "test": "TestProjectPolicyRejectsGlobalConflictsBeforeRepositoryProbe",
+    "new": "internal/steerlineapp/policy_admission_cd67_test.go",
+    "owner": "steerlineapp"
+  },
+  {
+    "old": "internal/steerline/publication_policy_test.go",
+    "test": "TestProjectPublicationPolicyRequiredBeforeRepositoryProbe",
+    "new": "internal/steerlineapp/publication_admission_cd67_test.go",
+    "owner": "steerlineapp"
+  },
+  {
+    "old": "internal/steerline/execution_policy_test.go",
+    "test": "TestProjectPolicyFrozenSnapshotRejectsDamageAndPreservesAuthority",
+    "new": "internal/steerlineapp/policy_snapshot_cd67_test.go",
+    "owner": "steerlineapp"
+  },
+  {
+    "old": "internal/steerline/local_windows_sandbox_test.go",
+    "test": "TestLocalWindowsSandboxProfileFreezesAndRestores",
+    "new": "internal/steerlineapp/local_windows_sandbox_cd67_test.go",
+    "owner": "steerlineapp"
+  },
+  {
+    "old": "internal\\steerline\\execution_profiles_test.go",
+    "test": "TestNativeClaimPersistsChosenExecutionProfile",
+    "new": "internal\\steerline\\execution_profiles_test.go",
+    "owner": "steerline",
+    "change": "claim/fixed-profile/parallel assertion retained with neutral codec"
+  },
+  {
+    "old": "internal\\steerline\\execution_profiles_test.go",
+    "test": "TestAutomaticDispatchRequiresAnExplicitDefaultWithMultipleProfiles",
+    "new": "internal\\steerline\\execution_profiles_test.go",
+    "owner": "steerline",
+    "change": "claim/fixed-profile/parallel assertion retained with neutral codec"
+  },
+  {
+    "old": "internal\\steerline\\execution_profiles_test.go",
+    "test": "TestWorkerFlowClaimsFreezeIndependentLocalProfiles",
+    "new": "internal\\steerline\\execution_profiles_test.go",
+    "owner": "steerline",
+    "change": "claim/fixed-profile/parallel assertion retained with neutral codec"
+  },
+  {
+    "old": "internal\\steerline\\execution_profiles_test.go",
+    "test": "TestStartPayloadRequiresCompleteExecutionProfileSelection",
+    "new": "internal\\steerline\\execution_profiles_test.go",
+    "owner": "steerline",
+    "change": "claim/fixed-profile/parallel assertion retained with neutral codec"
+  },
+  {
+    "old": "internal/steerline/execution_policy_test.go",
+    "test": "TestProjectPolicyClaimRejectsStaticConflictsBeforeNativeQuery",
+    "new": "internal/steerlineintegration/policy_admission_cd67_test.go",
+    "owner": "steerlineintegration"
+  },
+  {
+    "old": "internal/steerline/execution_policy_test.go",
+    "test": "TestProjectPolicyNativeReportsRetainOriginalSnapshotDigests",
+    "new": "internal/steerlineintegration/policy_admission_cd67_test.go",
+    "owner": "steerlineintegration"
+  },
+  {
+    "old": "internal/steerline/publication_policy_test.go",
+    "test": "TestPublicationAndPermissionChecksRemainCombined",
+    "new": "internal/steerlineintegration/remote_admission_cd67_test.go",
+    "owner": "steerlineintegration"
+  },
+  {
+    "old": "internal/steerline/publication_policy_test.go",
+    "test": "TestRemotePublicationClaimRequiresPermissionEvidence",
+    "new": "internal/steerlineintegration/remote_admission_cd67_test.go",
+    "owner": "steerlineintegration"
+  },
+  {
+    "old": "internal/steerline/execution_requirements_test.go",
+    "test": "TestExecutionRequirementsCannotInferOtherTargetEnvironment",
+    "new": "internal/steerlineintegration/requirement_admission_cd67_test.go",
+    "owner": "steerlineintegration"
+  },
+  {
+    "old": "internal/steerline/execution_requirements_test.go",
+    "test": "TestEmptyExecutionRequirementsKeepMandatoryChecks",
+    "new": "internal/steerlineintegration/requirement_admission_cd67_test.go",
+    "owner": "steerlineintegration"
+  },
+  {
+    "old": "internal/steerline/execution_requirements_test.go",
+    "test": "TestRequirementVersionParsers",
+    "new": "internal/steerlineapp/requirement_tools_cd67_test.go",
+    "owner": "steerlineapp"
+  },
+  {
+    "old": "internal/steerline/execution_requirements_test.go",
+    "test": "TestRequirementToolsUseWorkerEnvironment",
+    "new": "internal/steerlineapp/requirement_tools_cd67_test.go",
+    "owner": "steerlineapp"
+  },
+  {
+    "old": "internal\\steerline\\execution_requirements_test.go",
+    "test": "TestExecutionRequirementsExistenceAndNonSecretEvidence",
+    "new": "internal\\steerline\\execution_requirements_test.go",
+    "owner": "steerline",
+    "change": "requirement arbitration/evidence/claim assertions retained with neutral target callback"
+  },
+  {
+    "old": "internal\\steerline\\execution_requirements_test.go",
+    "test": "TestExecutionRequirementsDoNotUpgradeProbeToVerified",
+    "new": "internal\\steerline\\execution_requirements_test.go",
+    "owner": "steerline",
+    "change": "requirement arbitration/evidence/claim assertions retained with neutral target callback"
+  },
+  {
+    "old": "internal\\steerline\\execution_requirements_test.go",
+    "test": "TestExecutionRequirementsSnapshotCopiesAndRestoresOriginal",
+    "new": "internal\\steerline\\execution_requirements_test.go",
+    "owner": "steerline",
+    "change": "requirement arbitration/evidence/claim assertions retained with neutral target callback"
+  },
+  {
+    "old": "internal\\steerline\\execution_requirements_test.go",
+    "test": "TestExecutionRequirementsClaimAndRestartBlockWithoutChangingSnapshot",
+    "new": "internal\\steerline\\execution_requirements_test.go",
+    "owner": "steerline",
+    "change": "requirement arbitration/evidence/claim assertions retained with neutral target callback"
+  },
+  {
+    "old": "internal\\steerline\\execution_requirements_test.go",
+    "test": "TestClaimRechecksAcceptedConfigFiles",
+    "new": "internal\\steerline\\execution_requirements_test.go",
+    "owner": "steerline",
+    "change": "requirement arbitration/evidence/claim assertions retained with neutral target callback"
+  },
+  {
+    "old": "internal\\steerline\\execution_requirements_test.go",
+    "test": "TestExecutionRegistryRejectsDuplicatesAndRequiresLifecyclePorts",
+    "new": "internal\\steerline\\execution_requirements_test.go",
+    "owner": "steerline",
+    "change": "requirement arbitration/evidence/claim assertions retained with neutral target callback"
+  },
+  {
+    "old": "internal\\steerline\\execution_registry_test.go",
+    "test": "TestWorkerFlowAdapterUsesFixedProtocol",
+    "new": "internal\\steerline\\execution_registry_test.go",
+    "owner": "steerline",
+    "change": "one neutral fixed-identity matrix; actual built-in route vectors additionally owned by app"
+  },
+  {
+    "old": "internal\\steerline\\execution_registry_test.go",
+    "test": "TestWorkerFlowRejectsConfigDriftBeforePreparationOrTurnIntent",
+    "new": "internal\\steerline\\execution_registry_test.go",
+    "owner": "steerline",
+    "change": "one neutral fixed-identity matrix; actual built-in route vectors additionally owned by app"
+  },
+  {
+    "old": "internal\\steerline\\execution_registry_test.go",
+    "test": "TestWorkerFlowModeUsesFixedExecutionIdentity",
+    "new": "internal\\steerline\\execution_registry_test.go",
+    "owner": "steerline",
+    "change": "one neutral fixed-identity matrix; actual built-in route vectors additionally owned by app"
+  },
+  {
+    "old": "internal\\steerline\\execution_registry_test.go",
+    "test": "TestEveryRegisteredExecutionUsesTheLifecyclePort",
+    "new": "internal\\steerline\\execution_registry_test.go",
+    "owner": "steerline",
+    "change": "one neutral fixed-identity matrix; actual built-in route vectors additionally owned by app"
+  },
+  {
+    "old": "internal/steerline/execution_registry_test.go",
+    "test": "TestWorkerFlowModeUsesFixedExecutionIdentity/{local,orca,orca_supervised}",
+    "new": "internal/steerlineapp/registry_identity_cd67_test.go",
+    "owner": "steerlineapp",
+    "change": "native catalog vectors retained without duplicating central state machine"
+  },
+  {
+    "old": "internal/steerline/core_decoupling_63_audit_test.go",
+    "test": "testCD63BindingCodecIsolation",
+    "new": "internal/steerline/codexworker/binding_isolation_cd67_test.go",
+    "owner": "codexworker_test"
+  },
+  {
+    "old": "internal/steerline/worker_local_test.go",
+    "test": "TestWorkerFlowMockCodexHelper",
+    "new": "internal/steerline/codexworker/mock_helper_cd67_test.go",
+    "owner": "codexworker_test"
+  },
+  {
+    "old": "internal/steerline/codex_worker_test.go",
+    "test": "TestAppServerOutcomeUsesNativeTurnAndEarlierPRItem",
+    "new": "internal/steerline/codexworker/stream_contract_cd67_test.go",
+    "owner": "codexworker_test"
+  },
+  {
+    "old": "internal/steerline/codex_worker_test.go",
+    "test": "TestMockAppServerThreadAndTurnContract",
+    "new": "internal/steerline/codexworker/stream_contract_cd67_test.go",
+    "owner": "codexworker_test"
+  },
+  {
+    "old": "internal/steerline/codex_git_sandbox_test.go",
+    "test": "TestCodexLinkedWorktreeWriteArgsOnlyGrantsFixedGitPaths",
+    "new": "internal/steerline/codexworker/linked_workspace_cd67_test.go",
+    "owner": "codexworker",
+    "change": "original fixed objects/refs/logs/admin grants and foreign repository rejection use real workspace and implementation ports"
+  },
+  {
+    "old": "internal/steerline/orca_supervised_p10_real_test.go",
+    "test": "TestSupervisedOrcaRealP10ReplyGate",
+    "new": "internal/steerline/orca_remote_worker/p10_live_cd67_test.go",
+    "owner": "orca_remote_worker",
+    "live_switches": [
+      "STEERLINE_REAL_P10_REPLY_PROBE",
+      "STEERLINE_REAL_P10_SEND_BOUNDED_REPLY"
+    ],
+    "change": "original exact live run/task/dispatch/terminal and serialized-size assertions retained on implementation client; no service/database mutation"
+  },
+  {
+    "old": "internal/steerline/orca_supervised_test.go",
+    "test": "TestSupervisedOrcaRequiresPinnedModelAndKeepsStopUnsupported",
+    "new": "internal/steerlineintegration/supervised_configuration_cd67_test.go",
+    "owner": "steerlineintegration"
+  },
+  {
+    "old": "internal/steerline/orca_supervised_test.go",
+    "test": "TestSupervisedOrcaExecutionBindingRequiresExactDispatchIdentity",
+    "new": "internal/steerlineintegration/supervised_configuration_cd67_test.go",
+    "owner": "steerlineintegration"
+  },
+  {
+    "old": "internal/steerline/orca_supervised_test.go",
+    "test": "TestSupervisedPrepareKeepsPlatformWorktreeIdentitySeparateFromPath",
+    "new": "internal/steerline/workspace_identity_business_test.go",
+    "owner": "steerline"
+  },
+  {
+    "old": "internal/steerline/orca_supervised_test.go",
+    "test": "TestLoadConfigRequiresExplicitRemoteCancellationFalse",
+    "new": "internal/steerline/orca_remote_worker/cancellation_config_cd67_test.go",
+    "owner": "orca_remote_worker",
+    "change": "same missing/true rejection assertions on current owned codec input; retired nested fixture removed"
+  },
+  {
+    "old": "internal\\steerline\\codex_worker_test.go",
+    "test": "TestAppServerStartReplayPreservesNativeSavedAnswer",
+    "new": "internal/steerline/worker_receipts_business_test.go",
+    "owner": "steerline",
+    "change": "private writer/replay/late reply/answer receipt assertions retained with neutral blocking and reconcile ports"
+  },
+  {
+    "old": "internal\\steerline\\codex_worker_test.go",
+    "test": "TestAppServerRejectedEventReleasesObserver",
+    "new": "internal/steerline/worker_receipts_business_test.go",
+    "owner": "steerline",
+    "change": "private writer/replay/late reply/answer receipt assertions retained with neutral blocking and reconcile ports"
+  },
+  {
+    "old": "internal\\steerline\\codex_worker_test.go",
+    "test": "TestAppServerRecoveryDoesNotRaceInFlightLaunch",
+    "new": "internal/steerline/worker_receipts_business_test.go",
+    "owner": "steerline",
+    "change": "private writer/replay/late reply/answer receipt assertions retained with neutral blocking and reconcile ports"
+  },
+  {
+    "old": "internal\\steerline\\codex_worker_test.go",
+    "test": "TestAppServerLateReplyCannotModifyTerminalTask",
+    "new": "internal/steerline/worker_receipts_business_test.go",
+    "owner": "steerline",
+    "change": "private writer/replay/late reply/answer receipt assertions retained with neutral blocking and reconcile ports"
+  },
+  {
+    "old": "internal\\steerline\\codex_worker_test.go",
+    "test": "TestAppServerUnknownTurnDoesNotOfferPostTurnFeedback",
+    "new": "internal/steerline/worker_receipts_business_test.go",
+    "owner": "steerline",
+    "change": "private writer/replay/late reply/answer receipt assertions retained with neutral blocking and reconcile ports"
+  },
+  {
+    "old": "internal\\steerline\\codex_worker_test.go",
+    "test": "TestAppServerSlowRecoveryLeavesServiceWriterAvailable",
+    "new": "internal/steerline/worker_receipts_business_test.go",
+    "owner": "steerline",
+    "change": "private writer/replay/late reply/answer receipt assertions retained with neutral blocking and reconcile ports"
+  },
+  {
+    "old": "internal\\steerline\\codex_worker_test.go",
+    "test": "testAppServerAnswerRecoveryPersistsBeforeNextQuestion",
+    "new": "internal/steerline/worker_receipts_business_test.go",
+    "owner": "steerline",
+    "change": "private writer/replay/late reply/answer receipt assertions retained with neutral blocking and reconcile ports"
+  },
+  {
+    "old": "internal\\steerline\\codex_worker_test.go",
+    "test": "TestRoutedDecisionRequiresAllQuestionIDs",
+    "new": "internal/steerline/worker_receipts_business_test.go",
+    "owner": "steerline",
+    "change": "private writer/replay/late reply/answer receipt assertions retained with neutral blocking and reconcile ports"
+  },
+  {
+    "old": "internal\\steerline\\codex_worker_test.go",
+    "test": "TestAppServerStartedEventCommitsOperationReceipt",
+    "new": "internal/steerline/worker_receipts_business_test.go",
+    "owner": "steerline",
+    "change": "private writer/replay/late reply/answer receipt assertions retained with neutral blocking and reconcile ports"
   }
 ]

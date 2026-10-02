@@ -13,6 +13,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/steerline"
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	remote "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker"
 	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 	"github.com/erranliu/SteerLine/internal/steerline/publication"
 )
@@ -20,6 +21,7 @@ import (
 type Config = steerline.Config
 type Command = steerline.Command
 type ExecutionProfile = steerline.ExecutionProfile
+type FixedExecutionProfile = steerline.FixedExecutionProfile
 
 const WorkerFlowVersion = steerline.WorkerFlowVersion
 const ProjectExecutionProfileID = steerline.ProjectExecutionProfileID
@@ -34,12 +36,12 @@ func executionPublicationFixture() executionapi.PublicationPolicy {
 func hostPublicationProviderFixture() publication.Config {
 	return publication.Config{Kind: "command", BaseURL: "https://github.com", Repository: "owner/repo", Query: Command{Executable: "gh"}}
 }
-func testExecutionProfile(t *testing.T, id, name, host, agent string, worker codexworker.ProfileConfig, terminal *orcaworker.ProfileConfig) ExecutionProfile {
+func testExecutionProfile(t *testing.T, id, name, host, agent string, worker codexworker.ProfileConfig, terminal *orcaworker.ProfileConfig, remoteConfig ...*remote.ProfileConfig) ExecutionProfile {
 	t.Helper()
 	if worker.WindowsSandbox == "" {
 		if host == "local" {
 			worker.WindowsSandbox = "elevated"
-		} else {
+		} else if host == "orca" {
 			worker.WindowsSandbox = "unelevated"
 		}
 	}
@@ -53,6 +55,14 @@ func testExecutionProfile(t *testing.T, id, name, host, agent string, worker cod
 		payload, err := orcaworker.EncodeProfileConfig(*terminal)
 		require(t, err)
 		p.ImplementationConfigs = append(p.ImplementationConfigs, executionapi.ImplementationConfigInput{ImplementationKey: orcaworker.ProfileCodecKey, CodecVersion: 1, Payload: payload})
+	}
+	if host == "orca_supervised" {
+		if len(remoteConfig) == 0 || remoteConfig[0] == nil {
+			t.Fatal("remote settings missing")
+		}
+		payload, err := remote.EncodeProfileConfig(*remoteConfig[0])
+		require(t, err)
+		p.ImplementationConfigs = append(p.ImplementationConfigs, executionapi.ImplementationConfigInput{ImplementationKey: remote.ProfileCodecKey, CodecVersion: 1, Payload: payload})
 	}
 	return p
 }
@@ -134,4 +144,58 @@ func nativeTaskFixture(t *testing.T) (Config, string) {
 	require(t, err)
 	require(t, c.ResolveIdentity(context.Background()))
 	return c, fixtureGit(t, repo, "rev-parse", "HEAD")
+}
+
+func bindUnitDirectory(t *testing.T, c Config) Config {
+	t.Helper()
+	if c.ExecutionPolicy.Filesystem.ReadScope == "" {
+		c.ExecutionPolicy = workspacePolicyFixture()
+	}
+	if c.PublicationPolicy.Publisher == "" {
+		c.PublicationPolicy = executionPublicationFixture()
+	}
+	if c.PR.Kind == "" {
+		c.PR = hostPublicationProviderFixture()
+	}
+	host := NewProcessHost(time.Second)
+	directory, err := NewBuiltinDirectory(host)
+	require(t, err)
+	c.ProcessHost = host
+	c.BindApplicationConfig(directory, "fixture-project.json", "fixture-global.json", "fixture-accepted-v1", true)
+	return c
+}
+func boundProfile(c Config, p ExecutionProfile) ExecutionProfile {
+	c.ExecutionProfiles = []ExecutionProfile{p}
+	for _, bound := range c.AvailableExecutionProfiles() {
+		if bound.ID == p.ID {
+			return bound
+		}
+	}
+	panic("bound profile absent")
+}
+func digestValue(value any) string { return shortDigest(value) }
+
+func unitProjectProfile(c Config) ExecutionProfile {
+	inputs := make([]executionapi.ImplementationConfigInput, 0, len(c.ImplementationData))
+	for _, e := range c.ImplementationData {
+		inputs = append(inputs, executionapi.ImplementationConfigInput{ImplementationKey: e.ImplementationKey, CodecVersion: e.CodecVersion, Payload: e.Payload})
+	}
+	return boundProfile(c, ExecutionProfile{ID: ProjectExecutionProfileID, Name: "Project default", Host: c.Host, Agent: c.Agent, ImplementationConfigs: inputs})
+}
+func setTestImplementationProfiles(t *testing.T, c *Config, worker codexworker.ProfileConfig, terminal *orcaworker.ProfileConfig, remoteConfig ...*remote.ProfileConfig) {
+	t.Helper()
+	if c.ExecutionDirectory == nil {
+		*c = bindUnitDirectory(t, *c)
+	}
+	p := testExecutionProfile(t, ProjectExecutionProfileID, "Project default", c.Host, c.Agent, worker, terminal, remoteConfig...)
+	*c = c.ApplyExecutionProfile(p)
+}
+func setTestCodexProfile(t *testing.T, c *Config, worker codexworker.ProfileConfig) {
+	t.Helper()
+	var terminal *orcaworker.ProfileConfig
+	if c.Host != "local" {
+		settings, _ := terminalSettings(*c)
+		terminal = &settings
+	}
+	setTestImplementationProfiles(t, c, worker, terminal)
 }

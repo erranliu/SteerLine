@@ -7,6 +7,8 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/erranliu/SteerLine/internal/steerline/contracts"
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,10 +16,6 @@ import (
 	"testing"
 	"time"
 	"unicode/utf8"
-
-	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 func TestConversationSQLiteDedupesBodiesAndPagesUnicodeByRevision(t *testing.T) {
@@ -161,7 +159,7 @@ func TestConversationCommitDoesNotAdvanceCheckpointOnInvalidBody(t *testing.T) {
 	if len(page.Events) != 0 {
 		t.Fatalf("event committed without its valid body: %+v", page.Events)
 	}
-	if _, err = store.ConversationCheckpoint(ctx, "project", "execution", "attempt", codexworker.ConversationJSONLSource, "segment-1"); err == nil {
+	if _, err = store.ConversationCheckpoint(ctx, "project", "execution", "attempt", neutralJournalSource, "segment-1"); err == nil {
 		t.Fatal("checkpoint advanced after the event transaction failed")
 	}
 }
@@ -299,7 +297,7 @@ func TestConversationSQLiteFullRollsBackContentAndCursor(t *testing.T) {
 	if count != 0 {
 		t.Fatal("event survived SQLite full condition")
 	}
-	if _, err = store.ConversationCheckpoint(ctx, "project", "execution", "attempt", codexworker.ConversationJSONLSource, "segment-1"); err == nil {
+	if _, err = store.ConversationCheckpoint(ctx, "project", "execution", "attempt", neutralJournalSource, "segment-1"); err == nil {
 		t.Fatal("checkpoint advanced after SQLite full condition")
 	}
 	require(t, store.Close())
@@ -347,7 +345,7 @@ func TestConversationLateOldAttemptCannotCrossNewAttempt(t *testing.T) {
 		if string(body.Data) != tc.want || !body.Complete {
 			t.Fatalf("attempt body was overwritten: %+v", body)
 		}
-		checkpoint, err := store.ConversationCheckpoint(ctx, "project", "execution", tc.attempt, codexworker.ConversationJSONLSource, "segment-1")
+		checkpoint, err := store.ConversationCheckpoint(ctx, "project", "execution", tc.attempt, neutralJournalSource, "segment-1")
 		require(t, err)
 		if checkpoint.LocalSeq != 1 {
 			t.Fatalf("attempt cursor changed: %+v", checkpoint)
@@ -376,8 +374,8 @@ func TestConversationProcessExitMidTransactionHelper(t *testing.T) {
 	}{
 		{"raw", `INSERT INTO conversation_raw(project_identity,execution_id,attempt_id,raw_id,source_event_key,payload,sha256,byte_count,created_at) VALUES('project','execution','attempt','raw','source-event',X'61','digest',1,'now')`},
 		{"body", `INSERT INTO conversation_bodies(project_identity,execution_id,attempt_id,item_key,revision,body,sha256,byte_count,source,completeness,created_at) VALUES('project','execution','attempt','item',1,X'61','digest',1,'source','complete','now')`},
-		{"event", fmt.Sprintf(`INSERT INTO conversation_events(project_identity,execution_id,attempt_id,source_event_key,source,source_segment,event_type,received_at,payload_bytes,payload) VALUES('project','execution','attempt','source-event','%s','segment-1','message.complete','now',2,X'7b7d')`, codexworker.ConversationJSONLSource)},
-		{"cursor", fmt.Sprintf(`INSERT INTO conversation_source_cursors(project_identity,execution_id,attempt_id,source,source_segment,local_seq,updated_at) VALUES('project','execution','attempt','%s','segment-1',1,'now')`, codexworker.ConversationJSONLSource)},
+		{"event", fmt.Sprintf(`INSERT INTO conversation_events(project_identity,execution_id,attempt_id,source_event_key,source,source_segment,event_type,received_at,payload_bytes,payload) VALUES('project','execution','attempt','source-event','%s','segment-1','message.complete','now',2,X'7b7d')`, neutralJournalSource)},
+		{"cursor", fmt.Sprintf(`INSERT INTO conversation_source_cursors(project_identity,execution_id,attempt_id,source,source_segment,local_seq,updated_at) VALUES('project','execution','attempt','%s','segment-1',1,'now')`, neutralJournalSource)},
 	}
 	for _, step := range steps {
 		_, err = tx.ExecContext(context.Background(), step.query)
@@ -440,7 +438,7 @@ func TestConversationCommitRejectsChangedRawAtSameSourceIdentity(t *testing.T) {
 	if _, err = store.CommitConversation(ctx, []ConversationWrite{changed}, conversationTestCheckpoint(2, `{"byte_offset":8}`)); err == nil {
 		t.Fatal("rewritten bytes reused one source event identity")
 	}
-	checkpoint, err := store.ConversationCheckpoint(ctx, "project", "execution", "attempt", codexworker.ConversationJSONLSource, "segment-1")
+	checkpoint, err := store.ConversationCheckpoint(ctx, "project", "execution", "attempt", neutralJournalSource, "segment-1")
 	require(t, err)
 	if checkpoint.LocalSeq != 1 {
 		t.Fatal("source cursor advanced after conflicting raw bytes")
@@ -462,7 +460,7 @@ func TestConversationCheckpointPreflightRejectsUnanchoredState(t *testing.T) {
 	write := conversationTestWrite("bytes:0:4", 1, "complete", []byte("body"), []byte("raw"))
 	_, err = store.CommitConversation(ctx, []ConversationWrite{write}, conversationTestCheckpoint(1, `{"byte_offset":4}`))
 	require(t, err)
-	if err = store.ValidateConversationCheckpointFormat(ctx, "project", codexworker.NewConversationAdapter().JournalSources()); err == nil || !strings.Contains(err.Error(), "unsupported conversation checkpoint") {
+	if err = store.ValidateConversationCheckpointFormat(ctx, "project", neutralJournalPort{}.JournalSources()); err == nil || !strings.Contains(err.Error(), "unsupported conversation checkpoint") {
 		t.Fatalf("unanchored old state was accepted: %v", err)
 	}
 }
@@ -473,7 +471,7 @@ func TestConversationLiveSourceFailureKeepsGapAndMapperPosition(t *testing.T) {
 	runID := newID()
 	path := filepath.Join(root, "runs", runID, "events.jsonl")
 	require(t, os.MkdirAll(filepath.Dir(path), 0700))
-	firstRaw := []byte(`{"type":"thread.started","thread_id":"source-session"}` + "\n")
+	firstRaw := []byte(`{"kind":"session","session":"source-session"}` + "\n")
 	require(t, os.WriteFile(path, firstRaw, 0600))
 	file, fileID, err := openJournal(path)
 	require(t, err)
@@ -482,14 +480,14 @@ func TestConversationLiveSourceFailureKeepsGapAndMapperPosition(t *testing.T) {
 	require(t, err)
 	defer store.Close()
 	executionID, taskID := newID(), "501"
-	run := &Run{TaskID: taskID, RunID: runID, AttemptID: runID, ExecutionID: executionID, DomainTaskID: taskID, WorkflowVersion: "minimal-v1", Backend: string(executionapi.BackendLocal), Protocol: string(executionapi.ProtocolLocalProcess), Agent: "codex", Target: executionapi.ExecutionTarget{ID: "local"}, LogPath: &path}
-	port := codexworker.NewConversationAdapter()
+	run := &Run{TaskID: taskID, RunID: runID, AttemptID: runID, ExecutionID: executionID, DomainTaskID: taskID, WorkflowVersion: "minimal-v1", Backend: string(executionapi.BackendLocal), Protocol: string(executionapi.ProtocolLocalProcess), Agent: "fixture", Target: executionapi.ExecutionTarget{ID: "local"}, LogPath: &path}
+	port := neutralJournalPort{}
 	s := &Service{Config: Config{RunDir: root, identity: "project"}, conversationSources: port, domainStore: store, State: Runtime{}, runs: []*Run{run}}
 	sourceName := port.JournalSource(executionapi.BackendLocal, executionapi.ProtocolLocalProcess)
 	segment := port.JournalSegment(executionapi.BackendLocal, executionapi.ProtocolLocalProcess, fileID)
 	first := WorkerEvent{RunID: runID, AttemptID: runID, Source: sourceName, SourceSegment: segment, SourceIdentity: fileID, SourceSeq: 1, SourceOffset: 0, SourceLength: int64(len(firstRaw)), Raw: firstRaw}
 	require(t, s.recordConversationEvent(run, first))
-	secondRaw := []byte(`{"type":"turn.started"}` + "\n")
+	secondRaw := []byte(`{"kind":"turn"}` + "\n")
 	second := first
 	second.Raw, second.SourceSeq, second.SourceOffset, second.SourceLength = secondRaw, 2, int64(len(firstRaw)), int64(len(secondRaw))
 	if err = s.recordConversationEvent(run, second); err == nil {
@@ -521,8 +519,8 @@ func TestConversationChangedLiveBytesCannotBindOrCheckpoint(t *testing.T) {
 	require(t, os.MkdirAll(filepath.Dir(path), 0700))
 	actualSession := "00000000-0000-0000-0000-000000000001"
 	forgedSession := "00000000-0000-0000-0000-000000000002"
-	actual := []byte(`{"type":"thread.started","thread_id":"` + actualSession + `"}` + "\n")
-	forged := []byte(`{"type":"thread.started","thread_id":"` + forgedSession + `"}` + "\n")
+	actual := []byte(`{"kind":"session","session":"` + actualSession + `"}` + "\n")
+	forged := []byte(`{"kind":"session","session":"` + forgedSession + `"}` + "\n")
 	if len(actual) != len(forged) {
 		t.Fatal("same-length source rewrite fixture is invalid")
 	}
@@ -530,13 +528,13 @@ func TestConversationChangedLiveBytesCannotBindOrCheckpoint(t *testing.T) {
 	file, fileID, err := openJournal(path)
 	require(t, err)
 	require(t, file.Close())
-	port := codexworker.NewConversationAdapter()
+	port := neutralJournalPort{}
 	sourceName := port.JournalSource(executionapi.BackendLocal, executionapi.ProtocolLocalProcess)
 	segment := port.JournalSegment(executionapi.BackendLocal, executionapi.ProtocolLocalProcess, fileID)
 	store, err := OpenSQLiteStore(filepath.Join(root, "steerline.db"))
 	require(t, err)
 	defer store.Close()
-	run := &Run{TaskID: taskID, RunID: runID, AttemptID: runID, ExecutionID: executionID, DomainTaskID: taskID, WorkflowVersion: "minimal-v1", Backend: string(executionapi.BackendLocal), Protocol: string(executionapi.ProtocolLocalProcess), Agent: "codex", Target: executionapi.ExecutionTarget{ID: "local"}, WorktreePath: &root, LogPath: &path}
+	run := &Run{TaskID: taskID, RunID: runID, AttemptID: runID, ExecutionID: executionID, DomainTaskID: taskID, WorkflowVersion: "minimal-v1", Backend: string(executionapi.BackendLocal), Protocol: string(executionapi.ProtocolLocalProcess), Agent: "fixture", Target: executionapi.ExecutionTarget{ID: "local"}, WorktreePath: &root, LogPath: &path}
 	service := &Service{Config: Config{RunDir: root, identity: "project"}, conversationSources: port, domainStore: store}
 	source := WorkerEvent{RunID: runID, AttemptID: runID, Source: sourceName, SourceSegment: segment, SourceIdentity: fileID, SourceSeq: 1, SourceOffset: 0, SourceLength: int64(len(forged)), Raw: forged, Session: forgedSession}
 	if err = service.recordConversationEvent(run, source); err == nil || !strings.Contains(err.Error(), "source bytes changed") {
@@ -564,10 +562,10 @@ func TestConversationJournalReplayIsBoundedAndIdempotent(t *testing.T) {
 	}
 	path := filepath.Join(runRoot, "events.jsonl")
 	lines := []string{
-		`{"type":"thread.started","thread_id":"00000000-0000-0000-0000-000000000001"}`,
-		`{"type":"turn.started"}`,
-		`{"type":"item.completed","item":{"id":"item-a","type":"agent_message","text":"` + strings.Repeat("长文 🙂 ", 1000) + `"}}`,
-		`{"type":"turn.completed"}`,
+		`{"kind":"session","session":"00000000-0000-0000-0000-000000000001"}`,
+		`{"kind":"turn"}`,
+		`{"kind":"message","id":"item-a","text":"` + strings.Repeat("长文 🙂 ", 1000) + `"}`,
+		`{"kind":"completed"}`,
 	}
 	contents := strings.Join(lines, "\r\n") + "\r\n"
 	if err := os.WriteFile(path, []byte(contents), 0600); err != nil {
@@ -580,28 +578,25 @@ func TestConversationJournalReplayIsBoundedAndIdempotent(t *testing.T) {
 	if err = sourceFile.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if err = codexworker.WriteConversationSourceMarker(filepath.Join(runRoot, codexworker.ConversationSourceMarkerName), codexworker.ConversationSourceMarkerInput{
-		ProjectID: "project", WorkflowID: runID, ExecutionID: executionID, AttemptID: attemptID, Agent: "codex", TargetID: "local-test", SourceIdentity: fileID, CreatedAt: time.Now().UTC(),
-	}, AtomicWrite); err != nil {
-		t.Fatal(err)
-	}
+	require(t, AtomicWrite(filepath.Join(runRoot, "fixture-source.json"), mustJSON(neutralJournalMarker{ProjectID: "project", WorkflowID: runID, ExecutionID: executionID, AttemptID: attemptID, SourceIdentity: fileID})))
+
 	store, err := OpenSQLiteStore(filepath.Join(projectRoot, "steerline.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer store.Close()
 	serviceConfig := Config{RunDir: projectRoot, identity: "project"}
-	service := &Service{Config: serviceConfig, conversationSources: codexworker.NewConversationAdapter(), domainStore: store, State: Runtime{}, domain: DomainSnapshot{Attempts: []StepAttemptRecord{{ProjectIdentity: "project", AttemptID: attemptID, ExecutionID: executionID, StepID: "implement", EventPath: path, Status: "succeeded"}}}, runs: []*Run{{TaskID: taskID, RunID: runID, AttemptID: attemptID, ExecutionID: executionID, DomainTaskID: taskID, WorkflowVersion: "minimal-v1", Backend: string(executionapi.BackendLocal), Protocol: string(executionapi.ProtocolLocalProcess), Agent: "codex", Target: executionapi.ExecutionTarget{ID: "local-test"}, WorktreePath: &projectRoot, LogPath: &path, EndedAt: ptr(time.Now().UTC())}}}
+	service := &Service{Config: serviceConfig, conversationSources: neutralJournalPort{}, domainStore: store, State: Runtime{}, domain: DomainSnapshot{Attempts: []StepAttemptRecord{{ProjectIdentity: "project", AttemptID: attemptID, ExecutionID: executionID, StepID: "implement", EventPath: path, Status: "succeeded"}}}, runs: []*Run{{TaskID: taskID, RunID: runID, AttemptID: attemptID, ExecutionID: executionID, DomainTaskID: taskID, WorkflowVersion: "minimal-v1", Backend: string(executionapi.BackendLocal), Protocol: string(executionapi.ProtocolLocalProcess), Agent: "fixture", Target: executionapi.ExecutionTarget{ID: "local-test"}, WorktreePath: &projectRoot, LogPath: &path, EndedAt: ptr(time.Now().UTC())}}}
 	oldRunID := newID()
 	oldRoot := filepath.Join(projectRoot, "runs", oldRunID)
 	if err = os.MkdirAll(oldRoot, 0700); err != nil {
 		t.Fatal(err)
 	}
 	oldPath := filepath.Join(oldRoot, "events.jsonl")
-	if err = os.WriteFile(oldPath, []byte(`{"type":"thread.started","thread_id":"old-development-session"}`+"\n"), 0600); err != nil {
+	if err = os.WriteFile(oldPath, []byte(`{"kind":"session","session":"old-development-session"}`+"\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	service.State.Runs = append(service.State.Runs, &Run{TaskID: "505", RunID: oldRunID, AttemptID: oldRunID, ExecutionID: newID(), DomainTaskID: "505", WorkflowVersion: "minimal-v1", Backend: string(executionapi.BackendLocal), Protocol: string(executionapi.ProtocolLocalProcess), Agent: "codex", Target: executionapi.ExecutionTarget{ID: "local-test"}, LogPath: &oldPath, EndedAt: ptr(time.Now().UTC())})
+	service.State.Runs = append(service.State.Runs, &Run{TaskID: "505", RunID: oldRunID, AttemptID: oldRunID, ExecutionID: newID(), DomainTaskID: "505", WorkflowVersion: "minimal-v1", Backend: string(executionapi.BackendLocal), Protocol: string(executionapi.ProtocolLocalProcess), Agent: "fixture", Target: executionapi.ExecutionTarget{ID: "local-test"}, LogPath: &oldPath, EndedAt: ptr(time.Now().UTC())})
 	sources := service.conversationJournalSources()
 	if len(sources) != 1 {
 		t.Fatalf("expected one validated local source, got %+v", sources)
@@ -676,7 +671,7 @@ func conversationTestWrite(sourceID string, seq uint64, mode string, body, raw [
 	event := ConversationEvent{
 		Version: ConversationVersion, ProjectID: "project", TaskID: "task", WorkflowID: "workflow",
 		ExecutionID: "execution", AttemptID: "attempt", Backend: executionapi.BackendLocal, Protocol: executionapi.ProtocolLocalProcess,
-		Agent: "codex", TargetID: "local-test", Source: codexworker.ConversationJSONLSource, SourceRole: contracts.ConversationSourceFallback, SourceSegment: "segment-1",
+		Agent: "fixture", TargetID: "local-test", Source: neutralJournalSource, SourceRole: contracts.ConversationSourceFallback, SourceSegment: "segment-1",
 		SessionID: "session", SessionQuality: IdentityNative, TurnID: "turn", TurnQuality: IdentityDerived,
 		ItemID: "same-item", ItemQuality: IdentityNative, SourceEventID: sourceID, SourceEventQuality: IdentityDerived,
 		SourceSeq: seq, Type: ConversationMessageDelta, Phase: MessagePhaseUnknown, ReceivedAt: time.Now().UTC(),
@@ -687,5 +682,5 @@ func conversationTestWrite(sourceID string, seq uint64, mode string, body, raw [
 }
 
 func conversationTestCheckpoint(seq uint64, cursor string) ConversationCheckpoint {
-	return ConversationCheckpoint{ProjectID: "project", ExecutionID: "execution", AttemptID: "attempt", Source: codexworker.ConversationJSONLSource, SourceSegment: "segment-1", SourceIdentity: "local-test", Generation: "1", Cursor: cursor, LocalSeq: seq, UpdatedAt: time.Now().UTC()}
+	return ConversationCheckpoint{ProjectID: "project", ExecutionID: "execution", AttemptID: "attempt", Source: neutralJournalSource, SourceSegment: "segment-1", SourceIdentity: "local-test", Generation: "1", Cursor: cursor, LocalSeq: seq, UpdatedAt: time.Now().UTC()}
 }

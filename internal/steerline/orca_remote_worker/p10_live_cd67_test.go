@@ -1,22 +1,18 @@
-package steerline
+package orca_remote_worker_test
 
 import (
 	"context"
 	"encoding/json"
-	"os"
-	"strings"
-	"testing"
-	"time"
-
-	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	remote "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker"
 	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
+	"os"
+	"os/exec"
+	"strings"
+	"testing"
+	"time"
 )
 
-// TestSupervisedOrcaRealP10ReplyGate exercises the actual supervised reply
-// entry point against one still-open question on the isolated home target.
-// It is intentionally opt-in and never creates a worker or task itself.
 func TestSupervisedOrcaRealP10ReplyGate(t *testing.T) {
 	if os.Getenv("STEERLINE_REAL_P10_REPLY_PROBE") != "1" {
 		t.Skip("set STEERLINE_REAL_P10_REPLY_PROBE=1 with an exact live question")
@@ -29,17 +25,14 @@ func TestSupervisedOrcaRealP10ReplyGate(t *testing.T) {
 		}
 		return value
 	}
-	c := Config{Host: "orca_supervised", Agent: "codex", CommandTimeout: "30s"}
-	setTestImplementationProfiles(t, &c, codexworker.ProfileConfig{Executable: "codex", Model: "gpt-6-luna", ReasoningEffort: "high"}, &orcaworker.ProfileConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "5m"}, &remote.ProfileConfig{
-		ConnectionID:            need("STEERLINE_REAL_P10_CONNECTION_ID"),
-		EnvironmentID:           need("STEERLINE_REAL_P10_ENVIRONMENT_ID"),
-		RepositorySelector:      need("STEERLINE_REAL_P10_REPOSITORY_SELECTOR"),
-		CoordinatorTerminal:     need("STEERLINE_REAL_P10_COORDINATOR_TERMINAL"),
-		PollInterval:            "2s",
-		CapabilityReportVersion: 1,
-		RemoteCancelAvailable:   false,
-	})
-	started := supervisedStartReceipt{
+	settings := remote.Settings{ConnectionID: need("STEERLINE_REAL_P10_CONNECTION_ID"), EnvironmentID: need("STEERLINE_REAL_P10_ENVIRONMENT_ID"), RepositorySelector: need("STEERLINE_REAL_P10_REPOSITORY_SELECTOR"), CoordinatorTerminal: need("STEERLINE_REAL_P10_COORDINATOR_TERMINAL"), PollInterval: "2s"}
+	c := remote.Config{Agent: "codex", Model: "gpt-6-luna", ReasoningEffort: "high", CommandTimeout: "30s", Settings: settings, Call: orcaworker.New(orcaworker.Config{CommandTimeout: "30s", Output: func(ctx context.Context, timeout time.Duration, args ...string) ([]byte, error) {
+		ctx, cancel := context.WithTimeout(ctx, timeout)
+		defer cancel()
+		return exec.CommandContext(ctx, "orca", args...).Output()
+	}}).Raw}
+
+	started := remote.StartReceipt{
 		RunID:           need("STEERLINE_REAL_P10_RUN_ID"),
 		TaskID:          need("STEERLINE_REAL_P10_TASK_ID"),
 		DispatchID:      need("STEERLINE_REAL_P10_DISPATCH_ID"),
@@ -48,7 +41,7 @@ func TestSupervisedOrcaRealP10ReplyGate(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	observed, err := remoteWorkerClient(c).Show(ctx, started)
+	observed, err := remote.New(c).Show(ctx, started)
 	if err != nil || observed.Liveness != "live" {
 		t.Fatalf("exact home worker is not live: observation=%+v error=%v", observed, err)
 	}
@@ -67,16 +60,16 @@ func TestSupervisedOrcaRealP10ReplyGate(t *testing.T) {
 		Run        string `json:"run"`
 		From       string `json:"from"`
 		Dispatch   string `json:"dispatch"`
-	}{questionID, oversized, started.RunID, remoteProfileSettings(c).CoordinatorTerminal, started.DispatchID})
-	if err != nil || len(serialized) <= maxSupervisedMessageBytes {
+	}{questionID, oversized, started.RunID, c.Settings.CoordinatorTerminal, started.DispatchID})
+	if err != nil || len(serialized) <= remote.MaxMessageBytes {
 		t.Fatalf("probe answer did not exceed the serialized limit: bytes=%d error=%v", len(serialized), err)
 	}
-	if _, err = remoteWorkerClient(c).Reply(ctx, remoteWorkerRef(ref), questionID, oversized); !isBackendError(remoteWorkerError(err), executionapi.BackendRejected) || !strings.Contains(err.Error(), "serialized message exceeds") {
+	if _, err = remote.New(c).Reply(ctx, remote.FromExecutionRef(ref), questionID, oversized); !isBackendError(identityError(err), executionapi.BackendRejected) || !strings.Contains(err.Error(), "serialized message exceeds") {
 		t.Fatalf("oversized answer did not fail before Orca send: %v", err)
 	}
 	t.Logf("oversized serialized reply rejected before observation/send: %d bytes, question=%s, dispatch=%s", len(serialized), questionID, started.DispatchID)
 	if os.Getenv("STEERLINE_REAL_P10_SEND_BOUNDED_REPLY") == "1" {
-		requestID, replyErr := remoteWorkerClient(c).Reply(ctx, remoteWorkerRef(ref), questionID, need("STEERLINE_REAL_P10_BOUNDED_REPLY"))
+		requestID, replyErr := remote.New(c).Reply(ctx, remote.FromExecutionRef(ref), questionID, need("STEERLINE_REAL_P10_BOUNDED_REPLY"))
 		if replyErr != nil || requestID == "" {
 			t.Fatalf("bounded reply to exact home question was not accepted: request=%q error=%v", requestID, replyErr)
 		}

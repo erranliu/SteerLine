@@ -1,19 +1,18 @@
-package steerline
+package steerlineapp
 
 import (
 	"context"
 	"encoding/json"
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
+	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
-
-	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
-	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
-	"github.com/erranliu/SteerLine/internal/steerline/publication"
 )
 
 func TestProfileSelectionDigestMatchesServicePreflight(t *testing.T) {
@@ -35,7 +34,7 @@ func TestProfileSelectionDigestMatchesServicePreflight(t *testing.T) {
 	}
 	global, err := json.Marshal(map[string]any{"version": 2, "default_execution_profile": "local", "execution_profiles": profiles})
 	require(t, err)
-	require(t, os.WriteFile(fixtureGlobalExecutionConfigPath(), global, 0600))
+	require(t, os.WriteFile(GlobalExecutionConfigPath(), global, 0600))
 	project, err := json.Marshal(map[string]any{
 		"repository": repository, "remote": "origin", "branch": "main", "task_authority": "native", "workflow_protocol": WorkerFlowVersion,
 		"git": Command{Executable: "git"}, "execution_policy": workspacePolicyFixture(),
@@ -44,12 +43,12 @@ func TestProfileSelectionDigestMatchesServicePreflight(t *testing.T) {
 	require(t, err)
 	path := filepath.Join(t.TempDir(), "project.json")
 	require(t, os.WriteFile(path, project, 0600))
-	client, err := loadFixtureConfig(path)
+	client, err := LoadConfig(path)
 	require(t, err)
 	// Match the console's makeProjectRef path, without running service preflight.
 	require(t, client.ResolveIdentity(context.Background()))
 	chosen := client.AvailableExecutionProfiles()
-	service, err := loadFixtureConfig(path)
+	service, err := LoadConfig(path)
 	require(t, err)
 	require(t, service.Preflight(context.Background(), true))
 	for _, profile := range chosen {
@@ -88,13 +87,13 @@ func TestProfilePublicationMixedRoutesAndFrozenResponsibility(t *testing.T) {
 		require(t, os.WriteFile(path, data, 0600))
 	}
 	profiles := mixedPublicationProfiles()
-	writeJSON(fixtureGlobalExecutionConfigPath(), map[string]any{"default_execution_profile": "local", "execution_profiles": profiles})
+	writeJSON(GlobalExecutionConfigPath(), map[string]any{"version": 2, "default_execution_profile": "local", "execution_profiles": profiles})
 	path := filepath.Join(t.TempDir(), "project.json")
 	writeJSON(path, map[string]any{
 		"repository": configTestRepository(t), "branch": "main", "task_authority": "native", "workflow_protocol": WorkerFlowVersion,
 		"execution_policy": workspacePolicyFixture(), "publication_policy": map[string]string{"publisher": PublisherExecutionProfile}, "pr": hostPublicationProviderFixture(),
 	})
-	c, err := loadFixtureConfig(path)
+	c, err := LoadConfig(path)
 	require(t, err)
 	if c.PublicationPolicy.Publisher != "host_service" {
 		t.Fatal("default route did not resolve its explicit publisher")
@@ -130,7 +129,7 @@ func TestProfilePublicationMixedRoutesAndFrozenResponsibility(t *testing.T) {
 		changed.PublicationPolicy = executionapi.PublicationPolicy{Publisher: "worker"}
 		changed.PR = publication.Config{Kind: "gitea", BaseURL: "https://changed.invalid", Repository: "changed/repo"}
 		restored := changed.ApplyFixedExecutionProfile(fixed)
-		if restored.PublicationPolicy != fixed.PublicationPolicy || digestValue(restored.publicationSettings()) != digestValue(fixed.Publication) || !restored.projectExecutionProfile().MatchesConfig(restored) {
+		if restored.PublicationPolicy != fixed.PublicationPolicy || digestValue(restored.PR) != digestValue(fixed.Publication.Provider) || digestValue(restored.Git) != digestValue(fixed.Publication.Git) || restored.Remote != fixed.Publication.Remote || restored.Branch != fixed.Publication.BaseBranch || !boundProfile(restored, profile).MatchesConfig(restored) {
 			t.Fatal("current profile/project changed the original execution publisher/provider")
 		}
 	}
@@ -145,18 +144,19 @@ func TestProfilePublicationMixedRoutesAndFrozenResponsibility(t *testing.T) {
 }
 
 func TestProfilePublicationRequiresExplicitProjectAndProfilePolicies(t *testing.T) {
-	c := Config{ExecutionPolicy: workspacePolicyFixture(), PublicationPolicy: executionapi.PublicationPolicy{Publisher: PublisherExecutionProfile}, PR: hostPublicationProviderFixture(), ExecutionProfiles: mixedPublicationProfiles(), globalExecution: true}
+	c := Config{ExecutionPolicy: workspacePolicyFixture(), PublicationPolicy: executionapi.PublicationPolicy{Publisher: PublisherExecutionProfile}, PR: hostPublicationProviderFixture(), ExecutionProfiles: mixedPublicationProfiles()}
+	c = bindUnitDirectory(t, c)
 	for _, publisher := range []string{"", PublisherExecutionProfile, "automatic"} {
 		profiles := mixedPublicationProfiles()
 		profiles[1].ConfiguredPublicationPolicy = &executionapi.PublicationPolicy{Publisher: publisher}
 		c.ExecutionProfiles = profiles
-		if err := validateExecutionProfiles(c); err == nil || !strings.Contains(err.Error(), "publication_policy.publisher") {
+		if err := c.ValidateProfiles(); err == nil || !strings.Contains(err.Error(), "publication_policy.publisher") {
 			t.Fatalf("invalid unresolved publisher accepted: %q / %v", publisher, err)
 		}
 	}
 	c.ExecutionProfiles = mixedPublicationProfiles()
 	c.ExecutionProfiles[1].ConfiguredPublicationPolicy = nil
-	if err := validateExecutionProfiles(c); err == nil || !strings.Contains(err.Error(), "requires publication_policy") {
+	if err := c.ValidateProfiles(); err == nil || !strings.Contains(err.Error(), "requires publication_policy") {
 		t.Fatalf("missing profile responsibility accepted: %v", err)
 	}
 	c.PublicationPolicy.Publisher = "host_service"

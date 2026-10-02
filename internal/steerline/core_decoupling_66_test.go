@@ -2,23 +2,21 @@ package steerline
 
 import (
 	"context"
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"os"
 	"strings"
 	"testing"
-
-	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 func TestCD66ExplicitCatalogAndEntrypoints(t *testing.T) {
 	t.Run("resource_candidates", TestCD66CandidateResourceIdentityAndCommitRollback)
 	t.Run("missing_readiness_rejects_before_reopen_write", func(t *testing.T) {
-		service, run := appServerAuditService(t)
+		service, run := neutralAuditService(t)
 		entry, err := registrationFor(service.Config)
 		require(t, err)
 		entry.ReadinessRequired = func(Config) bool { return true }
 		config := service.Config
-		config.ExecutionDirectory = testDirectoryWithReplacement(t, config.ExecutionDirectory, entry)
+		config.ExecutionDirectory = neutralDirectoryWithReplacement(t, config.ExecutionDirectory, entry)
 		if service.executionRecord(run).Environment != nil {
 			t.Fatal("fixture must lack required preparation evidence")
 		}
@@ -63,10 +61,11 @@ func TestCD66CandidateResourceIdentityAndCommitRollback(t *testing.T) {
 		entry, err := registrationFor(config)
 		require(t, err)
 		entry.BuildPolicyResource = func(_ context.Context, request PolicyResourceBuildRequest) (PolicyResourceBuildResult, error) {
-			envelope, err := codexworker.NewPolicyResourceEnvelope(codexworker.PolicyResourceIdentity{ProjectID: "foreign", ExecutionID: request.Resource.ExecutionID, AttemptID: request.Resource.AttemptID, Generation: request.Resource.Generation, ConfigDigest: request.Resource.ConfigDigest}, codexworker.PolicyResourcePayload{NativeVersion: "codex-cli 0.159.2", Contract: codexworker.PolicyContract, Settings: executionapi.LaunchCommand{Executable: "never-run", WorkingDirectory: request.Workspace}})
-			return PolicyResourceBuildResult{Envelope: envelope, WriteRoots: []string{request.Workspace}}, err
+			request.Resource.ProjectID = "foreign"
+			result, err := neutralBuildPolicyResource(context.Background(), request)
+			return PolicyResourceBuildResult{Envelope: result.Envelope, WriteRoots: result.WriteRoots}, err
 		}
-		config.ExecutionDirectory = testDirectoryWithReplacement(t, config.ExecutionDirectory, entry)
+		config.ExecutionDirectory = neutralDirectoryWithReplacement(t, config.ExecutionDirectory, entry)
 		record := ExecutionRecord{ProjectIdentity: "project", ExecutionID: newID(), CurrentAttemptID: newID(), Generation: newID()}
 		if err := bindPolicyResources(context.Background(), config, &record, "workspace", nil); err == nil {
 			t.Fatal("foreign resource owner was accepted")
@@ -78,7 +77,7 @@ func TestCD66CandidateResourceIdentityAndCommitRollback(t *testing.T) {
 	t.Run("invalid_binding_restores_private_candidates", func(t *testing.T) {
 		config := workerContextConfigFixture()
 		service := Service{Config: config, committed: DomainSnapshot{Tasks: []TaskRecord{{TaskID: "task", Status: "open"}}}, domain: DomainSnapshot{Tasks: []TaskRecord{{TaskID: "task", Status: "closed"}}}, pendingOperations: map[string]string{"pending": "run"}}
-		ref := executionapi.ExecutionRef{Version: executionapi.ExecutionRecordVersion, Backend: executionapi.BackendLocal, Protocol: executionapi.ProtocolLocalCodexAppServer, Agent: executionapi.AgentSpec{Name: "codex"}, Target: targetFor(config), RunID: newID(), AttemptID: newID(), WorkspacePath: "workspace", WorkspaceBranch: "fixture/task", BaseCommit: strings.Repeat("a", 40), External: executionapi.ProcessIdentity{Kind: "os", Created: "original", Executable: "never-run"}}
+		ref := executionapi.ExecutionRef{Version: executionapi.ExecutionRecordVersion, Backend: executionapi.BackendLocal, Protocol: neutralProtocol, Agent: executionapi.AgentSpec{Name: "fixture"}, Target: targetFor(config), RunID: newID(), AttemptID: newID(), WorkspacePath: "workspace", WorkspaceBranch: "fixture/task", BaseCommit: strings.Repeat("a", 40), External: executionapi.ProcessIdentity{Kind: "os", Created: "original", Executable: "never-run"}}
 		if err := service.commitWorkerAttached(&Run{RunID: "run"}, workerCommitAttachment{Binding: &ref}, "pending"); err == nil {
 			t.Fatal("incomplete resource identity was committed")
 		}

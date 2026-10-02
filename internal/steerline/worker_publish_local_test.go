@@ -82,7 +82,7 @@ type localWorkerPublicationFixture struct {
 func newLocalWorkerPublicationFixture(t *testing.T) localWorkerPublicationFixture {
 	t.Helper()
 	ctx := context.Background()
-	s, run := appServerAuditService(t)
+	s, run := neutralAuditService(t)
 	c := s.Config
 	base := run.WorkspaceIntent.BaseCommit
 	c.CommandTimeout = "10s"

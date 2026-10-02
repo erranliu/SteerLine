@@ -88,7 +88,10 @@ func testAdditionalImplementation(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 	fixture := newLifecycleProject(t, "local")
-	ledger := &additionalLedger{path: filepath.Join(filepath.Dir(fixture.configPath), "fixture-ledger.json"), observers: map[string]*additionalObserver{}}
+	provider := newAdditionalProvider(t)
+	fixture.remoteURL = provider.server.URL + "/owner/repo.git"
+	t.Setenv("STEERLINE_TEST_REMOTE_URL", fixture.remoteURL)
+	ledger := &additionalLedger{path: filepath.Join(filepath.Dir(fixture.configPath), "fixture-ledger.json"), observers: map[string]*additionalObserver{}, publicationURL: provider.server.URL + "/owner/repo/pulls/901"}
 	directory := additionalDirectory(t, ledger)
 	global := map[string]any{"version": 2, "default_execution_profile": "fixture", "execution_profiles": []any{map[string]any{"id": "fixture", "name": "Neutral fixture", "host": "fixture", "agent": "fixture", "implementation_configs": []executionapi.ImplementationConfigInput{{ImplementationKey: additionalKey, CodecVersion: 1, Payload: []byte(`{"target":"fixture:fixed"}`)}}}}}
 	require(t, os.WriteFile(steerlineapp.GlobalExecutionConfigPath(), mustJSON(global), 0600))
@@ -97,6 +100,8 @@ func testAdditionalImplementation(t *testing.T) {
 	var project map[string]any
 	require(t, json.Unmarshal(projectData, &project))
 	project["publication_policy"] = executionapi.PublicationPolicy{Publisher: executionapi.PublisherWorker}
+	project["pr"] = publication.Config{Kind: "gitea", BaseURL: provider.server.URL, Repository: "owner/repo"}
+	project["pr_poll"] = "1s"
 	require(t, os.WriteFile(fixture.configPath, mustJSON(project), 0600))
 	fixture.config, err = steerlineapp.LoadConfigWithDirectory(fixture.configPath, directory, steerlineapp.NewProcessHost(10*time.Second))
 	require(t, err)
@@ -116,6 +121,9 @@ func testAdditionalImplementation(t *testing.T) {
 		t.Fatal("fixture did not persist the original target, session and input")
 	}
 	oldAttempt, oldProcess := first.run.AttemptID, *first.run.Process
+	provider.mu.Lock()
+	provider.branch, provider.head = first.execution.Workspace.Branch, first.execution.Workspace.Base
+	provider.mu.Unlock()
 	assertNoTaskDelivery(t, first.runtime, first.run)
 	service.stop(t)
 	ledger2 := &additionalLedger{path: ledger.path, observers: map[string]*additionalObserver{}}
@@ -155,6 +163,43 @@ func testAdditionalImplementation(t *testing.T) {
 		t.Fatal("manual answer repeated input or lost its original receipt")
 	}
 	assertNoTaskDelivery(t, settled.runtime, settled.run)
+	provider.mu.Lock()
+	provider.merged, provider.mergedAt = true, time.Now().UTC()
+	provider.mu.Unlock()
+	delivered := waitIntegrationRun(t, ctx, service2, config2, func(run *steerline.Run, e *steerline.ExecutionRecord) bool {
+		return run.TaskStatus == "closed" && run.FinishTaskStatus == "completed"
+	})
+	count := 0
+	for _, delivery := range delivered.runtime.Deliveries {
+		if delivery.TaskID == "901" {
+			count++
+			if delivery.SelectedWorkflowRunID != first.run.RunID || delivery.MergeCommit != fixture.commit || delivery.PRURL != ledger.publicationURL {
+				t.Fatal("delivery replaced original selected workflow/provider merge fact")
+			}
+		}
+	}
+	if count != 1 {
+		t.Fatalf("production provider delivery count=%d, want one", count)
+	}
+	waitFor(t, 20*time.Second, func() bool {
+		ledger2.mu.Lock()
+		defer ledger2.mu.Unlock()
+		value, err := ledger2.read()
+		return err == nil && value.CleanupCount == 1
+	})
+	ledger2.mu.Lock()
+	saved, err = ledger2.read()
+	ledger2.mu.Unlock()
+	require(t, err)
+	if saved.CleanupCount != 1 || len(saved.Inputs) != 1 || len(saved.Answers) != 1 {
+		t.Fatal("delivery cleanup duplicated an external mutation or lost original input")
+	}
+	provider.mu.Lock()
+	queries := provider.queries
+	provider.mu.Unlock()
+	if queries == 0 {
+		t.Fatal("delivery bypassed the production publication query")
+	}
 	// The fake does not certify missing tools, permission evidence or alternate
 	// targets. The same accepted catalog refuses each unsupported new claim.
 	for _, target := range []string{"fixture:changed", ""} {

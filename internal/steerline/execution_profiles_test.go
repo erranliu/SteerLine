@@ -3,63 +3,14 @@ package steerline
 import (
 	"context"
 	"encoding/json"
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"slices"
 	"strings"
 	"testing"
-
-	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
-	remote "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker"
-	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
-
-func TestConfigLoadsLocalAndRemoteOrcaProfilesWithoutProbingTargets(t *testing.T) {
-	if runtime.GOOS != "windows" {
-		t.Skip("local Orca terminal target uses Windows PowerShell")
-	}
-	base, _ := nativeTaskFixture(t)
-	t.Setenv("STEERLINE_HOME", t.TempDir())
-	localOrca := testExecutionProfile(t, "orca-local", "Orca 本机", "orca", "codex", codexworker.ProfileConfig{Executable: "codex", WindowsSandbox: "unelevated"}, &orcaworker.ProfileConfig{Executable: "orca", Shell: "powershell.exe", WaitTimeout: "15m"})
-	remoteOrca := testExecutionProfile(t, "orca-remote", "Orca 远程", "orca_supervised", "codex", codexworker.ProfileConfig{Executable: "codex", Model: "chosen-model", ReasoningEffort: "xhigh"}, &orcaworker.ProfileConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "15m"}, &remote.ProfileConfig{ConnectionID: "connection", EnvironmentID: "environment", RepositorySelector: "repo", CoordinatorTerminal: "terminal", PollInterval: "5s", CapabilityReportVersion: 1})
-	local := testExecutionProfile(t, "local", "本地", "local", "codex", codexworker.ProfileConfig{Executable: "codex"}, nil)
-	writeGlobalExecutionFixture(t, []ExecutionProfile{local, localOrca, remoteOrca}, "local")
-	input := map[string]any{"publication_policy": executionPublicationFixture(), "pr": hostPublicationProviderFixture(), "execution_policy": workspacePolicyFixture(), "repository": base.Repository, "branch": "main", "task_authority": "native", "workflow_protocol": WorkerFlowVersion}
-	path := filepath.Join(t.TempDir(), "config.json")
-	write := func() {
-		t.Helper()
-		data, err := json.Marshal(input)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err = os.WriteFile(path, data, 0600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	write()
-	loaded, err := loadFixtureConfig(path)
-	if err != nil || len(loaded.AvailableExecutionProfiles()) != 3 || loaded.DefaultProfileID() != "local" {
-		t.Fatalf("configured profiles were not loaded: %+v / %v", loaded.ExecutionProfiles, err)
-	}
-	for _, profile := range loaded.AvailableExecutionProfiles() {
-		selected, chosen, err := loaded.ResolveExecutionProfile(profile.ID, profile.Digest())
-		if profile.Host != "local" {
-			if err == nil || !strings.Contains(err.Error(), "publication_policy") {
-				t.Fatalf("unproven remote policy was accepted: %v", err)
-			}
-			continue
-		}
-		if err != nil || selected.Host != profile.Host {
-			t.Fatalf("Orca profile changed route: %+v / %v", chosen, err)
-		}
-		if profile.StaticUnavailableReason() != "" {
-			t.Fatalf("Orca profile availability is wrong: %+v", profile)
-		}
-	}
-}
 
 func TestNativeClaimPersistsChosenExecutionProfile(t *testing.T) {
 	ctx := context.Background()
@@ -67,7 +18,7 @@ func TestNativeClaimPersistsChosenExecutionProfile(t *testing.T) {
 	if out, err := exec.Command("git", "-C", base.Repository, "push", "origin", "main").CombinedOutput(); err != nil {
 		t.Fatalf("push fixture base: %v: %s", err, out)
 	}
-	profile := testExecutionProfile(t, "local-strong", "本地高强度", "local", "codex", codexworker.ProfileConfig{Executable: os.Args[0], Model: "chosen-model", ReasoningEffort: "xhigh", WindowsSandbox: "elevated"}, nil)
+	profile := neutralProfile(t, "local-strong", "本地高强度", neutralSettings{Executable: os.Args[0], Model: "chosen-model", ReasoningEffort: "xhigh"})
 	base.ExecutionProfiles = []ExecutionProfile{profile}
 	reader, err := OpenNativeTaskProject(ctx, &base)
 	if err != nil {
@@ -108,14 +59,14 @@ func TestNativeClaimPersistsChosenExecutionProfile(t *testing.T) {
 		t.Fatalf("selected claim did not persist a workflow: %+v / %v", snapshot, err)
 	}
 	wf, execution := snapshot.WorkflowRuns[0], snapshot.Executions[0]
-	if wf.WorkflowVersion != WorkerFlowVersion || wf.ExecutionProfile == nil || wf.ExecutionProfile.ID != profile.ID || !testVerifyFixedExecutionProfile(*wf.ExecutionProfile) || !slices.Contains(wf.ExecutionProfile.ImplementationDisplay, "Model：chosen-model") || !slices.Contains(wf.ExecutionProfile.ImplementationDisplay, "Reasoning effort：xhigh") || execution.Backend != string(executionapi.BackendLocal) || execution.CurrentStep != "worker" {
+	if wf.WorkflowVersion != WorkerFlowVersion || wf.ExecutionProfile == nil || wf.ExecutionProfile.ID != profile.ID || !neutralVerifyFixedExecutionProfile(*wf.ExecutionProfile) || !slices.Contains(wf.ExecutionProfile.ImplementationDisplay, "Model：chosen-model") || !slices.Contains(wf.ExecutionProfile.ImplementationDisplay, "Reasoning effort：xhigh") || execution.Backend != string(executionapi.BackendLocal) || execution.CurrentStep != "worker" {
 		t.Fatalf("chosen execution route was not fixed in the claim: %+v / %+v", wf, execution)
 	}
-	base.ExecutionProfiles[0].ImplementationConfigs[0].Payload = mustJSON(codexworker.ProfileConfig{Executable: os.Args[0], Model: "later-edit", ReasoningEffort: "xhigh", WindowsSandbox: "elevated"})
-	run := &Run{RunID: wf.WorkflowRunID, Host: "local", Agent: "codex", Backend: execution.Backend, Protocol: execution.Protocol, Target: execution.Target}
+	base.ExecutionProfiles[0].ImplementationConfigs[0].Payload = mustJSON(neutralSettings{Executable: os.Args[0], Model: "later-edit", ReasoningEffort: "xhigh"})
+	run := &Run{RunID: wf.WorkflowRunID, Host: "local", Agent: "fixture", Backend: execution.Backend, Protocol: execution.Protocol, Target: execution.Target}
 	service := &Service{Config: base, baseConfig: base, State: Runtime{}, domain: DomainSnapshot{WorkflowRuns: snapshot.WorkflowRuns}, runs: []*Run{run}}
 	fixed, err := service.executionConfigForRun(run)
-	if err != nil || codexProfileSettings(fixed).Model != "chosen-model" || fixed.ExecutionPolicy.Filesystem.WriteScope != "workspace" {
+	if err != nil || neutralProfileSettings(fixed).Model != "chosen-model" || fixed.ExecutionPolicy.Filesystem.WriteScope != "workspace" {
 		t.Fatalf("recovery adopted the edited preset: %+v / %v", fixed, err)
 	}
 }
@@ -123,7 +74,7 @@ func TestNativeClaimPersistsChosenExecutionProfile(t *testing.T) {
 func TestAutomaticDispatchRequiresAnExplicitDefaultWithMultipleProfiles(t *testing.T) {
 	ctx := context.Background()
 	base, _ := nativeTaskFixture(t)
-	base.ExecutionProfiles = []ExecutionProfile{testExecutionProfile(t, "other", "另一个本地配置", "local", "codex", codexworker.ProfileConfig{Executable: "codex"}, nil)}
+	base.ExecutionProfiles = []ExecutionProfile{neutralProfile(t, "other", "另一个本地配置", neutralSettings{Executable: "fixture"})}
 	reader, err := OpenNativeTaskProject(ctx, &base)
 	if err != nil {
 		t.Fatal(err)
@@ -143,12 +94,12 @@ func TestAutomaticDispatchRequiresAnExplicitDefaultWithMultipleProfiles(t *testi
 	if err := store.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if service, err := newTestService(base); err == nil {
+	if service, err := newNeutralService(base); err == nil {
 		service.Close()
 		t.Fatal("automatic dispatch started without a configured profile")
 	}
 	base.DefaultExecutionProfile = ProjectExecutionProfileID
-	service, err := newTestService(base)
+	service, err := newNeutralService(base)
 	if err != nil {
 		t.Fatalf("explicit default did not restore auto mode: %v", err)
 	}
@@ -160,8 +111,8 @@ func TestWorkerFlowClaimsFreezeIndependentLocalProfiles(t *testing.T) {
 	c, commit, store := openDAGFixture(t)
 	c.WorkflowProtocol, c.Claimant = WorkerFlowVersion, "operator"
 	c.ExecutionProfiles = []ExecutionProfile{
-		testExecutionProfile(t, "local-first", "First local", "local", "codex", codexworker.ProfileConfig{Executable: "codex", Model: "first-model", ReasoningEffort: "high"}, nil),
-		testExecutionProfile(t, "local-second", "Second local", "local", "codex", codexworker.ProfileConfig{Executable: "codex", Model: "second-model", ReasoningEffort: "xhigh"}, nil),
+		neutralProfile(t, "local-first", "First local", neutralSettings{Executable: "fixture", Model: "first-model", ReasoningEffort: "high"}),
+		neutralProfile(t, "local-second", "Second local", neutralSettings{Executable: "fixture", Model: "second-model", ReasoningEffort: "xhigh"}),
 	}
 	if out, err := exec.Command("git", "-C", c.Repository, "push", "--quiet", "origin", "HEAD:refs/heads/main").CombinedOutput(); err != nil {
 		t.Fatalf("push isolated fixture: %v: %s", err, out)
@@ -194,7 +145,7 @@ func TestWorkerFlowClaimsFreezeIndependentLocalProfiles(t *testing.T) {
 			t.Fatalf("claim task %s with local profile: receipt=%+v err=%v", taskID, receipt, err)
 		}
 	}
-	service, err := newTestService(c)
+	service, err := newNeutralService(c)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -204,8 +155,8 @@ func TestWorkerFlowClaimsFreezeIndependentLocalProfiles(t *testing.T) {
 	edited := c
 	edited.ExecutionProfiles = append([]ExecutionProfile(nil), c.ExecutionProfiles...)
 	edited.ExecutionProfiles[0].ImplementationConfigs = cloneImplementationInputs(c.ExecutionProfiles[0].ImplementationConfigs)
-	edited.ExecutionProfiles[0].ImplementationConfigs[0].Payload = mustJSON(codexworker.ProfileConfig{Executable: "codex", Model: "later-project-edit", ReasoningEffort: "high"})
-	reopened, err := newTestService(edited)
+	edited.ExecutionProfiles[0].ImplementationConfigs[0].Payload = mustJSON(neutralSettings{Executable: "fixture", Model: "later-project-edit", ReasoningEffort: "high"})
+	reopened, err := newNeutralService(edited)
 	if err != nil {
 		t.Fatalf("current-format restart changed the fixed local profiles: %v", err)
 	}
@@ -217,7 +168,7 @@ func TestWorkerFlowClaimsFreezeIndependentLocalProfiles(t *testing.T) {
 		}
 		workflow, execution := reopened.workflowRecords(run)
 		fixed, err := reopened.executionConfigForRun(run)
-		if err != nil || workflow == nil || workflow.WorkflowVersion != WorkerFlowVersion || workflow.ExecutionProfile == nil || workflow.ExecutionProfile.ID != c.ExecutionProfiles[index].ID || execution == nil || execution.ExecutionID != workflow.SelectedResult || codexProfileSettings(fixed).Model != codexProfileFromInputs(c.ExecutionProfiles[index].ImplementationConfigs).Model || len(reopened.domain.Attempts) != 2 {
+		if err != nil || workflow == nil || workflow.WorkflowVersion != WorkerFlowVersion || workflow.ExecutionProfile == nil || workflow.ExecutionProfile.ID != c.ExecutionProfiles[index].ID || execution == nil || execution.ExecutionID != workflow.SelectedResult || neutralProfileSettings(fixed).Model != neutralProfileFromInputs(c.ExecutionProfiles[index].ImplementationConfigs).Model || len(reopened.domain.Attempts) != 2 {
 			t.Fatalf("task %s adopted another local profile or step chain: workflow=%+v execution=%+v config=%+v err=%v", taskID, workflow, execution, fixed, err)
 		}
 	}
@@ -233,12 +184,5 @@ func TestStartPayloadRequiresCompleteExecutionProfileSelection(t *testing.T) {
 		if _, err := decodeControlPayload(ControlRequest{Action: "start_task", Payload: json.RawMessage(payload)}); err == nil {
 			t.Fatalf("incomplete or mixed start payload was accepted: %s", payload)
 		}
-	}
-}
-
-func TestUnsupportedLocalAgentProfileIsMarkedUnavailable(t *testing.T) {
-	profile := ExecutionProfile{ID: "local-pi", Name: "Local Pi", Host: "local", Agent: "pi"}
-	if reason := profile.StaticUnavailableReason(); !strings.Contains(reason, "codex") {
-		t.Fatalf("unsupported native agent was shown as selectable: %q", reason)
 	}
 }

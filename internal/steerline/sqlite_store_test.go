@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,12 +15,10 @@ import (
 	"sync"
 	"testing"
 	"time"
-
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 func TestCheckpointDoesNotSynthesizeControlOperations(t *testing.T) {
-	service, _ := appServerAuditService(t)
+	service, _ := neutralAuditService(t)
 	before := recordFingerprint(service.committed.Operations)
 	for _, action := range []string{"set_dispatch_mode", "stop_service"} {
 		service.State.Control.Operation = &ControlOperation{RequestID: newID(), Action: action, Phase: "applying", RequestDigest: strings.Repeat("b", 64)}
@@ -203,7 +202,7 @@ func TestCommandIdempotencyAndDecisionVersionArbitration(t *testing.T) {
 	s := openDomainTestStore(t)
 	project := "repo:commands"
 	request := DecisionRequest{Question: "choose", AllowFreeText: true}
-	run := &Run{TaskID: "task", RunID: "wf", DomainTaskID: "task", ExecutionID: "exec", AttemptID: "attempt", ControlRevision: 5, Host: "orca", Backend: string(executionapi.BackendOrca), Protocol: string(executionapi.ProtocolOrcaTerminalV2), WorkflowVersion: "legacy-v1", ExecutionStatus: "succeeded", FinishTaskStatus: "waiting_decision", Decision: &DecisionState{ID: "decision", AttemptID: "attempt", Version: 1, Status: "pending", Request: request}}
+	run := &Run{TaskID: "task", RunID: "wf", DomainTaskID: "task", ExecutionID: "exec", AttemptID: "attempt", ControlRevision: 5, Host: "unregistered", Backend: string(executionapi.BackendLocal), Protocol: string(neutralProtocol), WorkflowVersion: "legacy-v1", ExecutionStatus: "succeeded", FinishTaskStatus: "waiting_decision", Decision: &DecisionState{ID: "decision", AttemptID: "attempt", Version: 1, Status: "pending", Request: request}}
 	projection := ServiceCheckpoint{SchemaVersion: WorkerFlowRuntimeSchema, Revision: 1, Repository: Repository{Identity: project}, Service: ServiceState{InstanceID: "service", Status: "running", Ready: true}}
 	err := s.Transact(ctx, func(tx DomainTx) error {
 		if err := tx.PutTask(TaskRecord{ProjectIdentity: project, TaskID: "task", Status: "in_progress", Version: 1}); err != nil {

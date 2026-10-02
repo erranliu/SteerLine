@@ -2,18 +2,16 @@ package steerline
 
 import (
 	"errors"
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"testing"
 	"time"
-
-	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 func TestWorkerFlowKeepsSessionThroughFeedbackAndPRChanges(t *testing.T) {
 	wf := WorkflowRunRecord{WorkflowRunID: "wf-8", TaskID: "8", WorkflowVersion: WorkerFlowVersion, Phase: "queued", Branch: "main"}
-	exec := ExecutionRecord{ExecutionID: "exec-8", WorkflowRunID: wf.WorkflowRunID, Status: "pending", Workspace: WorkspaceEvidence{Branch: "codex/task-8"}}
+	exec := ExecutionRecord{ExecutionID: "exec-8", WorkflowRunID: wf.WorkflowRunID, Status: "pending", Workspace: WorkspaceEvidence{Branch: "fixture/task-8"}}
 	pr := func(url, state string) PRInfo {
-		return PRInfo{URL: url, Repository: "o/r", BaseBranch: "main", HeadRepository: "o/r", HeadBranch: "codex/task-8", HeadRevision: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", State: state}
+		return PRInfo{URL: url, Repository: "o/r", BaseBranch: "main", HeadRepository: "o/r", HeadBranch: "fixture/task-8", HeadRevision: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", State: state}
 	}
 	begin := func(turn string) {
 		t.Helper()
@@ -92,13 +90,14 @@ func TestWorkerFlowDeliveryGateUsesSessionAndPRWithoutStepResults(t *testing.T) 
 	task := TaskRecord{TaskID: "8", ContractID: "contract-8"}
 	contract := TaskContract{ContractID: "contract-8", Digest: "fixed-digest"}
 	wf := WorkflowRunRecord{WorkflowRunID: "wf-8", TaskID: task.TaskID, WorkflowVersion: WorkerFlowVersion, Phase: "waiting_pr_merge", SelectedResult: "exec-8", PRURL: "https://git.example/o/r/pulls/8"}
-	exec := ExecutionRecord{ExecutionID: "exec-8", CurrentAttemptID: "attempt-8", WorkflowRunID: wf.WorkflowRunID, Protocol: string(executionapi.ProtocolLocalCodexAppServer), Workspace: WorkspaceEvidence{Branch: "codex/task-8", Dirty: true}, Status: "idle"}
-	setTestCodexBinding(t, &exec, "ws://127.0.0.1:12345", "generation", workerFlowMockSession)
+	exec := ExecutionRecord{ExecutionID: "exec-8", CurrentAttemptID: "attempt-8", WorkflowRunID: wf.WorkflowRunID, Protocol: string(neutralProtocol), Workspace: WorkspaceEvidence{Branch: "fixture/task-8", Dirty: true}, Status: "idle"}
+	setNeutralBinding(t, &exec, "ws://127.0.0.1:12345", "generation", workerFlowMockSession)
 	prURL, err := validateNativeDeliveryGates(task, contract, wf, exec)
 	if err != nil || prURL != wf.PRURL {
 		t.Fatalf("workflow requires an obsolete step result: prURL=%q error=%v", prURL, err)
 	}
-	removeImplementationEnvelope(&exec, codexworker.ExecutionBindingCodecKey)
+	removeImplementationEnvelope(&exec, neutralBindingKey)
+	exec.SessionID, exec.SessionGeneration = "", ""
 	if _, err := validateNativeDeliveryGates(task, contract, wf, exec); err == nil {
 		t.Fatal("accepted delivery without a bound worker session")
 	}
