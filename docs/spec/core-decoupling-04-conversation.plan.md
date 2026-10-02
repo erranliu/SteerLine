@@ -50,3 +50,5 @@ PR 附本阶段消费者/所有者和删除清单、版本变化、旧到新测�
 ## 实现接线记录
 
 所有者、删除与原断言迁移见 [验收记录](../validation/core-decoupling-04-conversation/README.md)。会话事件 2、SQLite 11 / runtime 16，native history position 带明确来源封套与 64 KiB 上限；旧格式拒绝，不添加迁移。原生 fixture 随消费者归实现或外层，中心保留预算、内容/位置事务、准备/业务资格和人工门槛。协调端在执行聊天停写后完成权限环境交接、独立复审修复和组合验收；诊断通过不代替最终 head 的 JSON 命中。
+
+最终组合验收：clean `942622ead61615fc636e52c075fa7d6cec330ed8`，core 6 / rules 90 / targeted 29 全通过，326.5s；命名入口与 root/outer 所有所选子用例实际命中。源码与最终文档更新的等价性、审核/合并 head/base 由 PR 审核记录说明，报告路径见验收记录。三实现依赖、产品构建、diff 和 task identity 检查通过；未跑全量/真实认证。

@@ -1,6 +1,6 @@
 # CORE-IMPLEMENTATION-DECOUPLING #65 验收记录
 
-任务：会话采集与宿主交互实现隔离。基线：`84097f3d0856d7b5d16036a53f6ed82016fb3593`（本地 `HEAD` 与 `origin/main` 相同）。执行候选已由协调端提交为 `c941c87`；协调端在原工作区、执行聊天停写后独立复审并修复。当前分支为 `codex/65-conversation-host-isolation`，最终组合验收和 PR 尚待完成。
+任务：会话采集与宿主交互实现隔离。基线：`84097f3d0856d7b5d16036a53f6ed82016fb3593`（本地 `HEAD` 与 `origin/main` 相同）。执行候选已由协调端提交为 `c941c87`；协调端在原工作区、执行聊天停写后独立复审并修复。当前分支为 `codex/65-conversation-host-isolation`，最终组合验收已通过，PR 发布与合并由协调端完成。
 
 ## 所有者与删除
 
@@ -79,3 +79,15 @@ fatal: Could not read from remote repository.
 旧 `bindLocalCodexHistory` 没有当前产品消费者：当前唯一 native 产品任务流注册 local app-server；`SpawnerFor/LocalSpawner` 只有定义和直接测试使用。原始 JSONL 的当前格式 marker/映射/重放仍保留在实现侧；不添加旧 minimal/exec 产品任务或兼容读取。#66 接手唯一默认装配（含 launcher）和遗留装配/辅助定义的实际消费者审查，#67 接手中心业务规则中余下的协议 fixture 归位和最终零关键字守卫。原 source replacement 的实际 Attempt 提交和准备/业务资格断言保持当前 CD65 命中。
 
 完整组合 `C:/Users/lmas1/AppData/Local/Temp/steerline-test-feedback/20261002T075514.734700900Z/summary.json` 在 clean `f828ba94355d5522f029264703207bed22f590d5` 通过，244.35s：core 6/6、rules 90/90、targeted 28/28，未失败/跳过。后续增加来源发现归属拒绝及保留可选 native 入口后，再对最终提交执行同一组合验收；前一通过记录不冒称后续 SHA。
+
+## 最终最小验收
+
+完整组合在 clean `942622ead61615fc636e52c075fa7d6cec330ed8` 实际通过：
+
+```text
+go run ./cmd/test-feedback -quick -- -p 1 -parallel 1 ./internal/steerline ./internal/steerlineintegration -count=1 -run '^(TestCD65SourceCommitAndHostGate|TestCD65HistoryAndPreparation)$'
+```
+
+报告：`C:/Users/lmas1/AppData/Local/Temp/steerline-test-feedback/20261002T090847.846752200Z/summary.json`，execution 326.5s，passed/complete，core **6/6**、rules **90/90**、targeted **29/29**，无失败/跳过。两个命名入口及 root/outer 包、来源失败原 cursor/mapper、发现跨项目拒绝、历史页提交、来源替换实际 Attempt 证据、ER1/ER3/ER4、外层公开 history 和 native 原会话重启门槛、恢复的 native fixtures 全部真实命中。
+
+附加受影响实现端口/position 与原归属、未知版本/摘要/pending-anchor 拒绝定向测试通过；三实现 `go list -deps` 无中心反向依赖；产品 `go build ./cmd/steerline`、diff check、73 个 task identity 检查通过。没有跑全量，没有启用原生认证开关，remote 准入限制保持拒绝。后续本记录的文档更新不修改上述已验证 Go 内容。
