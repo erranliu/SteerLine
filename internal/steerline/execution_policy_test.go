@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -40,6 +41,9 @@ func TestFullAccessProfileFreezeSurvivesClaimValidation(t *testing.T) {
 			t.Fatalf("%s full-access snapshot rejected at claim: %+v", host, original)
 		}
 		restored := c.ApplyFixedExecutionProfile(original)
+		if got, want := restored.managedWindowsOrca(), runtime.GOOS == "windows" && host == "orca"; got != want {
+			t.Fatalf("full-access readiness classification: host=%s got=%t want=%t", host, got, want)
+		}
 		if restored.ExecutionPolicy.Filesystem.WriteScope != "host" || codexProfileSettings(restored).WindowsSandbox != "" {
 			t.Fatal("frozen full-access authority was not restored")
 		}
