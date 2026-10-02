@@ -87,3 +87,5 @@
 - [双执行后端](pr-04a-execution-backends.spec.md)、[会话事件](pr-04b-conversation-events.spec.md)、[服务生命周期](pr-03-service-lifecycle.spec.md)。
 - [旧中心模型](02-execution-model-and-adapter.md)、[旧远端闭环](03-remote-execution-and-viewer.md)、[旧人工决策](pr-05-intervention.spec.md)、[旧控制台](pr-04-console.spec.md)。
 - [Hosting](hosting-spec.md)与[边界说明](../hosting.md)。
+
+[L2/L3 真实执行 Spec](live-tiered-e2e.spec.md) / [Plan](live-tiered-e2e.plan.md)：L2 受控门槛后执行本地 Codex 与 Orca+Codex，使用真实 SteerlineTest GitHub PR；L3 delivery/recovery 按环境和场景独立选择，固定 gpt-6-luna/medium，校验原生 token usage。

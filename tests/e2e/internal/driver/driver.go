@@ -19,6 +19,7 @@ import (
 
 type Client struct {
 	Binary, Config, Home, StatePath, LogDir string
+	Profile                                 string
 	sequence                                int
 }
 
@@ -33,6 +34,10 @@ func Environment(base []string, home, state string) []string {
 		result = append(result, v)
 	}
 	temp := filepath.Join(home, "temp")
+	if token, err := os.ReadFile(filepath.Join(home, "github-token")); err == nil {
+		// Project credential contents never enter command/evidence records.
+		result = append(result, "GH_TOKEN="+strings.TrimSpace(string(token)))
+	}
 	return append(result, "STEERLINE_HOME="+home, "STEERLINE_E2E_CONTROLLED_STATE="+state, "CODEX_HOME="+filepath.Join(home, "codex"), "TEMP="+temp, "TMP="+temp, "GOFLAGS=", "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL="+os.DevNull, "GIT_TERMINAL_PROMPT=0", "NO_PROXY=127.0.0.1,localhost")
 }
 
@@ -72,7 +77,11 @@ func (c *Client) run(ctx context.Context, binary string, args ...string) ([]byte
 }
 
 func (c *Client) Control(ctx context.Context, helper, action, taskID string) error {
-	_, err := c.run(ctx, helper, "control", "-config", c.Config, "-action", action, "-task-id", taskID)
+	profile := c.Profile
+	if profile == "" {
+		profile = "controlled"
+	}
+	_, err := c.run(ctx, helper, "control", "-config", c.Config, "-action", action, "-task-id", taskID, "-profile", profile)
 	return err
 }
 
@@ -83,6 +92,7 @@ func MainControl(args []string) error {
 	config := fs.String("config", "", "project config")
 	action := fs.String("action", "", "control action")
 	taskID := fs.String("task-id", "", "task ID")
+	profileID := fs.String("profile", "controlled", "execution profile ID")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -93,9 +103,15 @@ func MainControl(args []string) error {
 	if err != nil {
 		return err
 	}
+	identityCtx, identityCancel := context.WithTimeout(context.Background(), 25*time.Second)
+	err = c.ResolveIdentity(identityCtx)
+	identityCancel()
+	if err != nil {
+		return err
+	}
 	var payload any
 	if *action == "start_task" {
-		_, profile, err := c.ResolveExecutionProfile("controlled", "")
+		_, profile, err := c.ResolveExecutionProfile(*profileID, "")
 		if err != nil {
 			return err
 		}
@@ -136,4 +152,32 @@ func ReadWorkflow(ctx context.Context, database, project string) (contracts.Doma
 	}
 	defer reader.Close()
 	return steerline.NewQueryService(reader, project).Workflow(ctx, "")
+}
+
+// MainView exposes the same public read transaction for fixture diagnostics.
+func MainView(args []string) error {
+	fs := flag.NewFlagSet("E2E view", flag.ContinueOnError)
+	config := fs.String("config", "", "project config")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	c, err := steerline.LoadConfig(*config)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
+	defer cancel()
+	if err := c.ResolveIdentity(ctx); err != nil {
+		return err
+	}
+	reader, err := steerline.OpenSQLiteReader(filepath.Join(c.RunDir, "steerline.db"))
+	if err != nil {
+		return err
+	}
+	defer reader.Close()
+	view, err := steerline.NewQueryService(reader, c.Identity()).ReadProjectView(ctx, "", 100)
+	if err != nil {
+		return err
+	}
+	return json.NewEncoder(os.Stdout).Encode(view)
 }

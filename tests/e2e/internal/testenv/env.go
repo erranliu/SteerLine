@@ -26,7 +26,7 @@ import (
 	"github.com/google/uuid"
 )
 
-type Run struct{ Root, Binary, Helper, Output, Scratch string }
+type Run struct{ Root, Binary, Helper, Output, Scratch, AuthHome string }
 type Scenario struct {
 	Run              Run
 	ID, Root, Output string
@@ -37,6 +37,7 @@ type Scenario struct {
 	processes        []*testprocess.Process
 	files            []*os.File
 	resources        []map[string]any
+	usageVerified    bool
 }
 type Project struct {
 	Scenario                                                              *Scenario
@@ -46,15 +47,20 @@ type Project struct {
 	GitServer                                                             *testprocess.Process
 	serviceGeneration                                                     int
 	Tasks                                                                 map[string]Task
+	Chain, OrcaExecutable, OrcaRepoID, OrcaSetupID                        string
+	RealPR                                                                bool
+	BaseBranch, DefaultBranch                                             string
+	RealPRProof                                                           *contracts.PRInfo
 }
 type Task struct {
 	ID       string
 	Contract task.TaskContract
 }
 type Snapshot struct {
-	Page   contracts.NativeTaskPage `json:"page"`
-	Domain contracts.DomainSnapshot `json:"domain"`
-	Helper controlled.State         `json:"helper"`
+	Page    contracts.NativeTaskPage `json:"page"`
+	Domain  contracts.DomainSnapshot `json:"domain"`
+	Helper  controlled.State         `json:"helper"`
+	Runtime *contracts.Runtime       `json:"runtime,omitempty"`
 }
 
 func NewScenario(t *testing.T, id string) *Scenario {
@@ -75,7 +81,11 @@ func newScenario(t *testing.T, id string, run Run) *Scenario {
 			t.Fatal("E2E requires absolute run paths; use test-feedback")
 		}
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	timeout := 5 * time.Minute
+	if strings.Contains(id, "local-codex") || strings.Contains(id, "orca-codex") {
+		timeout = 10 * time.Minute
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	s := &Scenario{Run: run, ID: id, Root: filepath.Join(run.Scratch, id), Output: filepath.Join(run.Output, "scenarios", id), Context: ctx, cancel: cancel, t: t}
 	t.Cleanup(s.cleanup)
 	for _, dir := range []string{s.Root, s.Output} {
@@ -121,6 +131,7 @@ func (s *Scenario) NewProject(name string) *Project {
 	}
 	root := filepath.Join(s.Root, name)
 	p := &Project{Scenario: s, Name: name, Root: root, Home: filepath.Join(root, "home"), Repo: filepath.Join(root, "repo"), Remote: filepath.Join(root, "remotes", "e2e", "project.git"), Config: filepath.Join(root, "project.json"), Database: filepath.Join(root, "home", "state", "steerline.db"), Provider: filepath.Join(root, "provider.json"), Tasks: map[string]Task{}}
+	p.BaseBranch = "main"
 	s.projects = append(s.projects, p)
 	s.register("project", root, 0)
 	for _, dir := range []string{root, filepath.Dir(p.Remote), filepath.Join(p.Home, "temp"), filepath.Join(p.Home, "codex"), filepath.Join(p.Home, "bin"), filepath.Join(p.Home, "etc")} {
@@ -136,7 +147,7 @@ func (s *Scenario) NewProject(name string) *Project {
 	// A real loopback HTTP Git backend preserves remote URL identity validation.
 	addressPath := filepath.Join(root, "git-address.json")
 	p.git(p.Repo, "--git-dir", p.Remote, "config", "http.receivepack", "true")
-	cmd := exec.Command(s.Run.Helper, "git-server", "--root", filepath.Join(root, "remotes"), "--address-file", addressPath)
+	cmd := exec.Command(s.Run.Helper, "git-server", "--root", filepath.Join(root, "remotes"), "--address-file", addressPath, "--e2e-state", p.Provider)
 	cmd.Env = driver.Environment(os.Environ(), p.Home, p.Provider)
 	server := s.start(cmd, name+"-git-server")
 	p.GitServer = server
@@ -240,7 +251,7 @@ func (p *Project) CreateTasks() {
 	// task validate is the product's project initialization and validation path.
 	batch := task.TaskBatchInput{SchemaVersion: task.BatchSchemaVersion}
 	for i, key := range []string{"a", "b"} {
-		contract := task.TaskContract{ContractID: "e2e-" + key, Repository: p.RemoteURL, Remote: "origin", Branch: "main", SpecRef: spec, PlanRef: plan, CommonRefs: []task.FileReference{}, AcceptanceRefs: []task.FileReference{spec}}
+		contract := task.TaskContract{ContractID: "e2e-" + key, Repository: p.RemoteURL, Remote: "origin", Branch: p.BaseBranch, SpecRef: spec, PlanRef: plan, CommonRefs: []task.FileReference{}, AcceptanceRefs: []task.FileReference{spec}}
 		digest, err := task.ContractDigest(contract)
 		s.Must(err)
 		contract.Digest = digest
@@ -338,22 +349,73 @@ func (p *Project) Snapshot() (Snapshot, error) {
 	}
 	// The product reader samples tasks and execution facts in one read transaction.
 	snap.Page, snap.Domain = *view.Tasks, *view.Domain
+	snap.Runtime = view.Runtime
 	snap.Helper, err = controlled.Read(p.Provider)
+	if err == nil && p.RealPR {
+		snap.Helper.PR, err = p.githubPR(snap)
+	}
 	return snap, err
 }
 func (p *Project) WaitPhase(phase string) Snapshot {
 	var result Snapshot
+	lastPhase := ""
+	rechecked := false
 	p.Scenario.Wait("workflow "+phase, func() (bool, error) {
 		snap, err := p.Snapshot()
 		result = snap
 		if err != nil {
 			return false, err
 		}
+		if p.Chain != "" && len(snap.Domain.WorkflowRuns) == 1 {
+			current := snap.Domain.WorkflowRuns[0].Phase
+			if current != lastPhase {
+				p.Record("latest-phase", snap)
+				lastPhase = current
+			}
+			if current == "waiting_decision" && len(snap.Domain.Executions) == 1 {
+				e := snap.Domain.Executions[0]
+				if e.Environment == nil || e.Environment.Blocker == nil {
+					message := "pending decision"
+					pending := false
+					if e.Error != nil {
+						message = *e.Error
+					}
+					if snap.Runtime != nil {
+						for _, run := range snap.Runtime.Runs {
+							if run.RunID == e.WorkflowRunID && run.Decision != nil {
+								message = run.Decision.Request.Context
+								pending = true
+							}
+						}
+					}
+					if pending {
+						p.Scenario.t.Fatalf("native worker stopped before delivery: %s; see latest-phase snapshot", message)
+					}
+				}
+				if e.Environment != nil && e.Environment.Blocker != nil {
+					reason := e.Environment.Blocker.Fact.Reason
+					if (reason == "agent_input_unverified" || reason == "resource_preparation_unverified" || reason == "preparation_dispatch_unverified") && !rechecked {
+						rechecked = true
+						_, err := p.Driver.Run(p.Scenario.Context, "answer", "-config", p.Config, "-run-id", e.WorkflowRunID, "-option", "recheck_environment", "-by", "e2e")
+						return false, err
+					}
+					if reason != "agent_input_unverified" {
+						p.Scenario.t.Fatalf("native environment blocked: %s; see latest-phase snapshot", reason)
+					}
+				}
+			}
+		}
 		return len(snap.Domain.WorkflowRuns) == 1 && snap.Domain.WorkflowRuns[0].Phase == phase && len(snap.Domain.Executions) == 1 && snap.Domain.Executions[0].Status != "active", nil
 	})
 	return result
 }
-func (p *Project) Merge() { p.Scenario.Must(controlled.Merge(p.Scenario.Context, p.Provider, p.Repo)) }
+func (p *Project) Merge() {
+	if p.RealPR {
+		p.Scenario.Must(p.mergeGitHub())
+		return
+	}
+	p.Scenario.Must(controlled.Merge(p.Scenario.Context, p.Provider, p.Repo))
+}
 func (p *Project) Record(label string, snap Snapshot) {
 	p.Scenario.Must(controlled.Write(filepath.Join(p.Scenario.Output, p.Name+"-"+label+".json"), snap))
 }
@@ -378,6 +440,16 @@ func (s *Scenario) cleanup() {
 		if err != nil {
 			_ = controlled.Write(filepath.Join(s.Output, p.Name+"-diagnostic.json"), map[string]string{"error": err.Error()})
 		}
+		if p.Chain != "" {
+			if err := p.captureNativeDiagnostics(); err != nil {
+				failures = append(failures, "native diagnostics: "+err.Error())
+			}
+			snap, err := p.Snapshot()
+			if err == nil {
+				u, usageErr := p.NativeUsage(snap, "cleanup")
+				_ = controlled.Write(filepath.Join(s.Output, p.Name+"-cleanup-usage-result.json"), map[string]any{"usage": u, "error": fmt.Sprint(usageErr)})
+			}
+		}
 	}
 	for i := len(s.processes) - 1; i >= 0; i-- {
 		if err := s.processes[i].Stop(ctx); err != nil {
@@ -389,13 +461,39 @@ func (s *Scenario) cleanup() {
 			failures = append(failures, err.Error())
 		}
 	}
+	for _, p := range s.projects {
+		if p.OrcaExecutable != "" {
+			if err := p.cleanupOrca(); err != nil {
+				failures = append(failures, err.Error())
+			}
+		}
+	}
+	for _, p := range s.projects {
+		if p.RealPR {
+			if err := p.cleanupGitHub(); err != nil {
+				failures = append(failures, err.Error())
+			}
+		}
+	}
 	if err := RemoveOwned(s.Run.Scratch, s.Root); err != nil {
 		failures = append(failures, err.Error())
 	}
 	if len(failures) > 0 {
 		s.t.Errorf("E2E cleanup: %s", strings.Join(failures, "; "))
 	}
-	evidence := map[string]any{"id": s.ID, "passed": !s.t.Failed() && s.Context.Err() == nil, "context_error": fmt.Sprint(s.Context.Err()), "cleanup_complete": len(failures) == 0, "cleanup_errors": failures, "resources": s.resources, "components": map[string]string{"worker": "controlled", "provider": "controlled"}, "finished_at": time.Now().UTC()}
+	worker := "controlled"
+	provider := "controlled"
+	var realPR *contracts.PRInfo
+	for _, p := range s.projects {
+		if p.Chain != "" {
+			worker = p.Chain
+		}
+		if p.RealPR {
+			provider = "github/" + githubRepository
+			realPR = p.RealPRProof
+		}
+	}
+	evidence := map[string]any{"id": s.ID, "passed": !s.t.Failed() && s.Context.Err() == nil, "context_error": fmt.Sprint(s.Context.Err()), "cleanup_complete": len(failures) == 0, "cleanup_errors": failures, "resources": s.resources, "components": map[string]string{"worker": worker, "provider": provider}, "usage_verified": s.usageVerified, "real_pr": realPR, "finished_at": time.Now().UTC()}
 	if err := controlled.Write(filepath.Join(s.Output, "scenario.json"), evidence); err != nil {
 		s.t.Errorf("write scenario evidence: %v", err)
 	}
