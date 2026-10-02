@@ -1,0 +1,194 @@
+[
+  {
+    "report": "initial-focused",
+    "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+    "test": "TestCD67AdditionalImplementation",
+    "action": "run"
+  },
+  {
+    "report": "initial-focused",
+    "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+    "test": "TestCD67AdditionalImplementation/neutral_fixed_input_restart_and_fresh_manual_answer",
+    "action": "run"
+  },
+  {
+    "report": "initial-focused",
+    "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+    "test": "TestCD67AdditionalImplementation/neutral_fixed_input_restart_and_fresh_manual_answer",
+    "action": "fail"
+  },
+  {
+    "report": "initial-focused",
+    "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+    "test": "TestCD67AdditionalImplementation",
+    "action": "fail"
+  },
+  {
+    "report": "initial-focused",
+    "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+    "test": "TestCD67CoreBoundary",
+    "action": "run"
+  },
+  {
+    "report": "initial-focused",
+    "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+    "test": "TestCD67CoreBoundary/negative_source_fixtures",
+    "action": "run"
+  },
+  {
+    "report": "initial-focused",
+    "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+    "test": "TestCD67CoreBoundary/negative_source_fixtures/mixed_case_text_in_other_os_test",
+    "action": "run"
+  },
+  {
+    "report": "initial-focused",
+    "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+    "test": "TestCD67CoreBoundary/negative_source_fixtures/mixed_case_text_in_other_os_test",
+    "action": "pass"
+  },
+  {
+    "report": "initial-focused",
+    "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+    "test": "TestCD67CoreBoundary/negative_source_fixtures/mixed_case_filename",
+    "action": "run"
+  },
+  {
+    "report": "initial-focused",
+    "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+    "test": "TestCD67CoreBoundary/negative_source_fixtures/mixed_case_filename",
+    "action": "pass"
+  },
+  {
+    "report": "initial-focused",
+    "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+    "test": "TestCD67CoreBoundary/negative_source_fixtures/direct_import_behind_tag",
+    "action": "run"
+  },
+  {
+    "report": "initial-focused",
+    "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+    "test": "TestCD67CoreBoundary/negative_source_fixtures/direct_import_behind_tag",
+    "action": "pass"
+  },
+  {
+    "report": "initial-focused",
+    "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+    "test": "TestCD67CoreBoundary/negative_source_fixtures/transitive_helper_edge",
+    "action": "run"
+  },
+  {
+    "report": "initial-focused",
+    "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+    "test": "TestCD67CoreBoundary/negative_source_fixtures/transitive_helper_edge",
+    "action": "pass"
+  },
+  {
+    "report": "initial-focused",
+    "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+    "test": "TestCD67CoreBoundary/negative_source_fixtures/reverse_implementation_edge",
+    "action": "run"
+  },
+  {
+    "report": "initial-focused",
+    "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+    "test": "TestCD67CoreBoundary/negative_source_fixtures/reverse_implementation_edge",
+    "action": "pass"
+  },
+  {
+    "report": "initial-focused",
+    "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+    "test": "TestCD67CoreBoundary/negative_source_fixtures",
+    "action": "pass"
+  },
+  {
+    "report": "initial-focused",
+    "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+    "test": "TestCD67CoreBoundary",
+    "action": "pass"
+  },
+  {
+    "report": "initial-focused",
+    "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+    "test": "TestDetectNormalizer",
+    "action": "run"
+  },
+  {
+    "report": "initial-focused",
+    "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+    "test": "TestDetectNormalizer",
+    "action": "pass"
+  },
+  {
+    "report": "initial-focused",
+    "package": "github.com/erranliu/SteerLine/internal/steerline/codexworker",
+    "test": "TestCodexNormalizer",
+    "action": "run"
+  },
+  {
+    "report": "initial-focused",
+    "package": "github.com/erranliu/SteerLine/internal/steerline/codexworker",
+    "test": "TestCodexNormalizer",
+    "action": "pass"
+  },
+  {
+    "report": "initial-focused",
+    "package": "github.com/erranliu/SteerLine/internal/steerline/codexworker",
+    "test": "TestWorkerTurnFindsPRBeforeFinalMessage",
+    "action": "run"
+  },
+  {
+    "report": "initial-focused",
+    "package": "github.com/erranliu/SteerLine/internal/steerline/codexworker",
+    "test": "TestWorkerTurnFindsPRBeforeFinalMessage",
+    "action": "pass"
+  },
+  {
+    "report": "initial-focused",
+    "package": "github.com/erranliu/SteerLine/internal/steerline/orcaworker",
+    "test": "TestWorkerOrcaWorktreeNameIncludesTaskNumberAndRunIdentity",
+    "action": "run"
+  },
+  {
+    "report": "initial-focused",
+    "package": "github.com/erranliu/SteerLine/internal/steerline/orcaworker",
+    "test": "TestWorkerOrcaWorktreeNameIncludesTaskNumberAndRunIdentity",
+    "action": "pass"
+  },
+  {
+    "report": "initial-focused",
+    "package": "github.com/erranliu/SteerLine/internal/steerline/orcaworker",
+    "test": "TestFixedOrcaAgentTerminalRejectsReplacedIncarnation",
+    "action": "run"
+  },
+  {
+    "report": "initial-focused",
+    "package": "github.com/erranliu/SteerLine/internal/steerline/orcaworker",
+    "test": "TestFixedOrcaAgentTerminalRejectsReplacedIncarnation",
+    "action": "pass"
+  },
+  {
+    "report": "boundary-current",
+    "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+    "test": "TestCD67CoreBoundary",
+    "action": "run"
+  },
+  {
+    "report": "boundary-current",
+    "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+    "test": "TestCD67CoreBoundary/repository_all_tags_and_production_graphs",
+    "action": "run"
+  },
+  {
+    "report": "boundary-current",
+    "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+    "test": "TestCD67CoreBoundary/repository_all_tags_and_production_graphs",
+    "action": "fail"
+  },
+  {
+    "report": "boundary-current",
+    "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+    "test": "TestCD67CoreBoundary",
+    "action": "fail"
+  }
+]

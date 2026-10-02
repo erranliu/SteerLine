@@ -1,0 +1,39 @@
+[
+  {
+    "old": "internal/steerline/activity_test.go",
+    "test": "TestCodexNormalizer",
+    "new": "internal/steerline/codexworker/normalizer_cd67_test.go",
+    "owner": "codexworker"
+  },
+  {
+    "old": "internal/steerline/activity_test.go",
+    "test": "TestDetectNormalizer",
+    "new": "internal/steerlineintegration/normalizer_composition_test.go",
+    "owner": "steerlineintegration"
+  },
+  {
+    "old": "internal/steerline/worker_local_test.go",
+    "test": "TestWorkerTurnFindsPRBeforeFinalMessage",
+    "new": "internal/steerline/codexworker/outcome_cd67_test.go",
+    "owner": "codexworker"
+  },
+  {
+    "old": "internal/steerline/orca_worker_observation_test.go",
+    "test": "TestWorkerOrcaWorktreeNameIncludesTaskNumberAndRunIdentity",
+    "new": "internal/steerline/orcaworker/identity_cd67_test.go",
+    "owner": "orcaworker"
+  },
+  {
+    "old": "internal/steerline/orca_worker_observation_test.go",
+    "test": "TestFixedOrcaAgentTerminalRejectsReplacedIncarnation",
+    "new": "internal/steerline/orcaworker/identity_cd67_test.go",
+    "owner": "orcaworker"
+  },
+  {
+    "old": "internal/steerline/worker_codex_live_test.go",
+    "test": "TestCodexAppServerNativeQuestionLive",
+    "new": "internal/steerlineintegration/worker_codex_live_test.go",
+    "owner": "steerlineintegration",
+    "live": "STEERLINE_CODEX_APP_SERVER_LIVE"
+  }
+]

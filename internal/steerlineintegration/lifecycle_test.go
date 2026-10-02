@@ -539,11 +539,21 @@ type runningIntegrationService struct {
 }
 
 func startIntegrationService(t *testing.T, parent context.Context, config steerline.Config, resolver executionapi.LifecycleResolver) *runningIntegrationService {
+	return startIntegrationServiceWithSources(t, parent, config, resolver, nil)
+}
+
+func startIntegrationServiceWithSources(t *testing.T, parent context.Context, config steerline.Config, resolver executionapi.LifecycleResolver, sources contracts.ConversationSourcePort) *runningIntegrationService {
 	t.Helper()
 	if decorated, ok := resolver.(*integrationLifecycleResolver); ok {
 		decorated.directory = config.ExecutionDirectory
 	}
-	service, err := steerlineapp.NewServiceWithLifecycleResolver(config, resolver)
+	var service *steerline.Service
+	var err error
+	if sources == nil {
+		service, err = steerlineapp.NewServiceWithLifecycleResolver(config, resolver)
+	} else {
+		service, err = steerlineapp.NewServiceWithPorts(config, resolver, sources)
+	}
 	require(t, err)
 	reader, err := steerline.OpenNativeTaskReader(parent, &config)
 	require(t, err)

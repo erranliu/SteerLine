@@ -1,0 +1,169 @@
+package steerlineintegration
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/erranliu/SteerLine/internal/steerline"
+	"github.com/erranliu/SteerLine/internal/steerline/contracts"
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	"github.com/erranliu/SteerLine/internal/steerline/publication"
+	"github.com/erranliu/SteerLine/internal/steerlineapp"
+)
+
+func additionalDirectory(t *testing.T, ledger *additionalLedger) *steerline.ExecutionDirectory {
+	t.Helper()
+	key := steerline.ExecutionRegistrationKey{Backend: "fixture", Protocol: additionalProtocol, Agent: "fixture"}
+	codec := steerline.ImplementationProfileCodec{Key: additionalKey, Version: 1, Normalize: func(data []byte, policy executionapi.ExecutionPolicy, host, agent string) ([]byte, []string, error) {
+		var value struct {
+			Target string `json:"target"`
+		}
+		if err := contracts.DecodeJSON(data, &value); err != nil {
+			return nil, nil, err
+		}
+		if value.Target != "fixture:fixed" || host != "fixture" || agent != "fixture" || policy.Filesystem.WriteScope != "none" || policy.Network != "deny" {
+			return nil, nil, errors.New("fixture supports only its fixed offline, read-only target")
+		}
+		return bytes.Clone(data), []string{"isolated fake; native permissions unverified"}, nil
+	}}
+	port := func(setup executionapi.LifecycleSetup) (executionapi.LifecyclePort, error) {
+		return &additionalPort{setup: setup.Clone(), ledger: ledger}, nil
+	}
+	entry := steerline.ExecutionRegistration{Key: key, ProfileKey: "fixture/stream-v1", WorkspaceBranchPrefix: "fixture", LocalWorkspace: true, ProfileCodecKeys: []string{additionalKey}, QuestionCodecKey: additionalKey, QuestionCodecVersion: 1, Host: "fixture",
+		Lifecycle: port, Target: func(steerline.Config) executionapi.ExecutionTarget {
+			return executionapi.ExecutionTarget{ID: "fixture:fixed"}
+		}, Backend: func(steerline.Config) executionapi.ExecutionBackend { return &additionalPort{ledger: ledger} },
+		ProbeRequirements: func(_ context.Context, c steerline.Config) (executionapi.CapabilityReport, error) {
+			return additionalReport(executionapi.ExecutionRef{Backend: key.Backend, Protocol: key.Protocol, Target: executionapi.ExecutionTarget{ID: "fixture:fixed"}, Agent: executionapi.AgentSpec{Name: c.Agent}}), nil
+		},
+		QueryTool: func(_ context.Context, _ steerline.Config, id string) executionapi.RequirementEvidence {
+			return executionapi.RequirementEvidence{ID: id, Site: "target", Target: executionapi.ExecutionTarget{ID: "fixture:fixed"}, Status: executionapi.RequirementUnknown, Source: "fixture:tools-unsupported", CheckedAt: time.Now().UTC()}
+		},
+		ValidateConfig: func(context.Context, steerline.Config) error { return nil }, Preflight: func(context.Context, steerline.Config) error { return nil }, PrepareClaim: func(context.Context, steerline.Config) (steerline.ClaimPreparation, error) {
+			return steerline.ClaimPreparation{}, nil
+		}, ReadinessRequired: func(steerline.Config) bool { return false },
+		BuildPolicyResource: func(_ context.Context, r steerline.PolicyResourceBuildRequest) (steerline.PolicyResourceBuildResult, error) {
+			e, err := executionapi.NewImplementationDataEnvelope(executionapi.ImplementationDataEnvelope{ImplementationKey: additionalKey, CodecVersion: 1, Purpose: executionapi.ImplementationResourcePurpose, ProjectID: r.Resource.ProjectID, ExecutionID: r.Resource.ExecutionID, AttemptID: r.Resource.AttemptID, Generation: r.Resource.Generation, ConfigDigest: r.Resource.ConfigDigest}, []byte(`{"policy":"isolated-read-only"}`))
+			return steerline.PolicyResourceBuildResult{Envelope: e}, err
+		}, VerifyPolicyResource: func(e executionapi.ImplementationDataEnvelope, id steerline.PolicyResourceIdentity) error {
+			if e.ImplementationKey != additionalKey || e.CodecVersion != 1 {
+				return errors.New("fixture resource codec changed")
+			}
+			return e.ValidateResourceIdentity(id.ProjectID, id.ExecutionID, id.AttemptID, id.Generation, id.ConfigDigest)
+		},
+		LinkedWorktreeWriteArgs: func(context.Context, steerline.Config, string) ([]string, error) { return nil, nil }, ValidTurnID: func(value string) bool { return len(value) == 32 }, CleanupCapabilities: []string{"observe", "resource_settlement"},
+		ValidateRef: func(ref executionapi.ExecutionRef) error {
+			if ref.Protocol != additionalProtocol || ref.Target.ID != "fixture:fixed" || ref.External.Kind != "fixture" || ref.External.Incarnation != "fixture-original" {
+				return errors.New("fixture binding identity changed")
+			}
+			return nil
+		},
+		ValidatePublicationPolicy: func(policy executionapi.PublicationPolicy, _ publication.Config) error {
+			if policy.Publisher != executionapi.PublisherWorker {
+				return errors.New("fixture uses worker publication")
+			}
+			return nil
+		},
+	}
+	directory, err := steerline.NewExecutionDirectory("fixture-directory-v1", []steerline.ImplementationProfileCodec{codec}, []steerline.ExecutionRegistration{entry})
+	require(t, err)
+	return directory
+}
+
+func TestCD67AdditionalImplementation(t *testing.T) {
+	t.Run("neutral_fixed_input_restart_and_fresh_manual_answer", testAdditionalImplementation)
+	t.Run("supported_app_server_receipt_barriers", testIntegratedAppServerTwoTurns)
+	t.Run("supported_terminal_recovery_and_original_identity", func(t *testing.T) { testIntegratedNativeSessionGate(t, true) })
+	t.Run("remote_protocol_is_not_permission_authentication", testCD64RemoteProtocolAssertions)
+}
+
+func testAdditionalImplementation(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+	fixture := newLifecycleProject(t, "local")
+	ledger := &additionalLedger{path: filepath.Join(filepath.Dir(fixture.configPath), "fixture-ledger.json"), observers: map[string]*additionalObserver{}}
+	directory := additionalDirectory(t, ledger)
+	global := map[string]any{"version": 2, "default_execution_profile": "fixture", "execution_profiles": []any{map[string]any{"id": "fixture", "name": "Neutral fixture", "host": "fixture", "agent": "fixture", "implementation_configs": []executionapi.ImplementationConfigInput{{ImplementationKey: additionalKey, CodecVersion: 1, Payload: []byte(`{"target":"fixture:fixed"}`)}}}}}
+	require(t, os.WriteFile(steerlineapp.GlobalExecutionConfigPath(), mustJSON(global), 0600))
+	projectData, err := os.ReadFile(fixture.configPath)
+	require(t, err)
+	var project map[string]any
+	require(t, json.Unmarshal(projectData, &project))
+	project["publication_policy"] = executionapi.PublicationPolicy{Publisher: executionapi.PublisherWorker}
+	require(t, os.WriteFile(fixture.configPath, mustJSON(project), 0600))
+	fixture.config, err = steerlineapp.LoadConfigWithDirectory(fixture.configPath, directory, steerlineapp.NewProcessHost(10*time.Second))
+	require(t, err)
+	createIntegrationTask(t, ctx, fixture, 901)
+	service := startIntegrationServiceWithSources(t, ctx, fixture.config, directory, additionalSources{})
+	claimIntegrationTask(t, ctx, fixture, 901, service.instanceID)
+	first := waitIntegrationRun(t, ctx, service, fixture.config, func(run *steerline.Run, e *steerline.ExecutionRecord) bool {
+		return run.Decision != nil && run.Decision.Status == "pending" && run.Decision.Request.QuestionRoute != nil && e.TurnNumber == 1
+	})
+	originalInput := []byte(nil)
+	for _, op := range first.runtime.Operations {
+		if op.Kind == "worker_input_value" {
+			originalInput = bytes.Clone(op.Request)
+		}
+	}
+	if len(originalInput) == 0 || first.execution.Target.ID != "fixture:fixed" || first.execution.SessionID != "fixture-original-session" {
+		t.Fatal("fixture did not persist the original target, session and input")
+	}
+	oldAttempt, oldProcess := first.run.AttemptID, *first.run.Process
+	assertNoTaskDelivery(t, first.runtime, first.run)
+	service.stop(t)
+	ledger2 := &additionalLedger{path: ledger.path, observers: map[string]*additionalObserver{}}
+	directory2 := additionalDirectory(t, ledger2)
+	config2, err := steerlineapp.LoadConfigWithDirectory(fixture.configPath, directory2, steerlineapp.NewProcessHost(10*time.Second))
+	require(t, err)
+	if config2.ExecutionDirectory == directory {
+		t.Fatal("restart reused a mutable directory")
+	}
+	service2 := startIntegrationServiceWithSources(t, ctx, config2, directory2, additionalSources{})
+	defer service2.stop(t)
+	recovered := waitIntegrationRun(t, ctx, service2, config2, func(run *steerline.Run, e *steerline.ExecutionRecord) bool {
+		return e.RecoveryRequired && e.RecoveryState == "live" && run.Decision != nil && run.Decision.Status == "pending"
+	})
+	ledger2.mu.Lock()
+	saved, err := ledger2.read()
+	reads := ledger2.reads
+	ledger2.mu.Unlock()
+	require(t, err)
+	if reads == 0 || len(saved.Inputs) != 1 || len(saved.Answers) != 0 || recovered.run.AttemptID != oldAttempt || *recovered.run.Process != oldProcess {
+		t.Fatal("restart mutated input or replaced the original identity before manual confirmation")
+	}
+	for _, op := range recovered.runtime.Operations {
+		if op.Kind == "worker_input_value" && !bytes.Equal(op.Request, originalInput) {
+			t.Fatal("restart changed persistent original input")
+		}
+	}
+	submitIntegrationAnswer(t, ctx, config2, recovered.run)
+	settled := waitIntegrationRun(t, ctx, service2, config2, func(run *steerline.Run, e *steerline.ExecutionRecord) bool {
+		return e.LastStoppedTurnID == first.execution.CurrentTurnID && !e.RecoveryRequired && run.Decision != nil && run.Decision.Status == "pending" && run.Decision.Request.QuestionRoute == nil
+	})
+	ledger2.mu.Lock()
+	saved, err = ledger2.read()
+	ledger2.mu.Unlock()
+	require(t, err)
+	if len(saved.Inputs) != 1 || len(saved.Answers) != 1 || settled.execution.TurnNumber != 1 || settled.execution.SessionID != first.execution.SessionID || *settled.run.Process != oldProcess || !decisionWasAccepted(settled.runtime, recovered.run.Decision.ID) {
+		t.Fatal("manual answer repeated input or lost its original receipt")
+	}
+	assertNoTaskDelivery(t, settled.runtime, settled.run)
+	// The fake does not certify missing tools, permission evidence or alternate
+	// targets. The same accepted catalog refuses each unsupported new claim.
+	for _, target := range []string{"fixture:changed", ""} {
+		_, _, err := directory.NormalizeProfile([]executionapi.ImplementationConfigInput{{ImplementationKey: additionalKey, CodecVersion: 1, Payload: mustJSON(map[string]string{"target": target})}}, config2.ExecutionPolicy, "fixture", "fixture", config2.Identity(), "fixture", config2.LoadedConfigDigest())
+		if err == nil {
+			t.Fatal("alternate target admitted")
+		}
+	}
+	if !strings.Contains(strings.Join(config2.AvailableExecutionProfiles()[0].Freeze(config2.Identity()).ImplementationDisplay, " "), "unverified") {
+		t.Fatal("fixture hid its native authentication limit")
+	}
+}

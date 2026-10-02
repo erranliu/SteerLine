@@ -1,4 +1,4 @@
-package steerline
+package steerlineintegration
 
 import (
 	"context"

@@ -1,0 +1,67 @@
+package steerlineintegration
+
+import (
+	"context"
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"testing"
+
+	"github.com/erranliu/SteerLine/internal/coreboundary"
+)
+
+func TestCD67CoreBoundary(t *testing.T) {
+	t.Run("negative_source_fixtures", func(t *testing.T) {
+		for _, fixture := range []struct {
+			name, filename, source, helper, implementation string
+			want                                           string
+		}{
+			{name: "mixed_case_text_in_other_os_test", filename: "neutral_linux_test.go", source: "//go:build linux\n\npackage steerline\n// OrCa forbidden\n", want: "platform text"},
+			{name: "mixed_case_filename", filename: "CoDeX_windows_test.go", source: "package steerline\n", want: "platform text"},
+			{name: "direct_import_behind_tag", filename: "neutral_plan9.go", source: "//go:build plan9\n\npackage steerline\nimport _ \"github.com/erranliu/SteerLine/internal/steerlineapp\"\n", want: "forbidden dependency"},
+			{name: "transitive_helper_edge", filename: "neutral.go", source: "package steerline\nimport _ \"github.com/erranliu/SteerLine/internal/helper\"\n", helper: "package helper\nimport _ \"github.com/erranliu/SteerLine/internal/steerlineintegration\"\n", want: "forbidden dependency"},
+			{name: "reverse_implementation_edge", filename: "neutral.go", source: "package steerline\n", implementation: "package codexworker\nimport _ \"github.com/erranliu/SteerLine/internal/helper\"\n", helper: "package helper\nimport _ \"github.com/erranliu/SteerLine/internal/steerline\"\n", want: "reverse dependency"},
+		} {
+			t.Run(fixture.name, func(t *testing.T) {
+				root := t.TempDir()
+				write := func(path, source string) {
+					t.Helper()
+					require(t, os.MkdirAll(filepath.Dir(filepath.Join(root, path)), 0700))
+					require(t, os.WriteFile(filepath.Join(root, path), []byte(source), 0600))
+				}
+				write("internal/steerline/"+fixture.filename, fixture.source)
+				if fixture.helper != "" {
+					write("internal/helper/edge_freebsd.go", fixture.helper)
+				}
+				if fixture.implementation != "" {
+					write("internal/steerline/codexworker/edge_darwin.go", fixture.implementation)
+				}
+				report, err := coreboundary.ScanSource(root)
+				require(t, err)
+				if !strings.Contains(strings.Join(report.Violations, "\n"), fixture.want) {
+					t.Fatalf("fixture escaped guard: %+v", report)
+				}
+			})
+		}
+	})
+	t.Run("repository_all_tags_and_production_graphs", func(t *testing.T) {
+		_, file, _, ok := runtime.Caller(0)
+		if !ok {
+			t.Fatal("missing source location")
+		}
+		root := filepath.Clean(filepath.Join(filepath.Dir(file), "../.."))
+		report, err := coreboundary.Check(context.Background(), root)
+		require(t, err)
+		raw, err := json.Marshal(report)
+		require(t, err)
+		t.Log(string(raw))
+		if report.CoreFiles == 0 || report.Dependencies["windows"] == 0 || report.Dependencies["linux"] == 0 {
+			t.Fatal("empty boundary scan")
+		}
+		if len(report.Violations) != 0 {
+			t.Fatalf("core boundary violations:\n%s", strings.Join(report.Violations, "\n"))
+		}
+	})
+}

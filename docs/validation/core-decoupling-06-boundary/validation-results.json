@@ -1,0 +1,306 @@
+[
+  {
+    "report": "initial-focused",
+    "path": "C:\\Users\\lmas1\\.codex\\worktrees\\f775\\SteerLine\\bin\\cd67\\initial-focused\\summary.json",
+    "summary": {
+      "status": "failed",
+      "passed": false,
+      "complete": true,
+      "command_exit_code": 1,
+      "package_count": 3,
+      "passed_packages": 2,
+      "failed_packages": [
+        "github.com/erranliu/SteerLine/internal/steerlineintegration"
+      ],
+      "skipped_packages": [],
+      "test_count": 14,
+      "passed_tests": 12,
+      "failed_tests": 2,
+      "skipped_tests": 0,
+      "packages": [
+        {
+          "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+          "status": "fail",
+          "elapsed_seconds": 1.143
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/internal/steerline/codexworker",
+          "status": "pass",
+          "elapsed_seconds": 0.967
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/internal/steerline/orcaworker",
+          "status": "pass",
+          "elapsed_seconds": 0.856
+        }
+      ],
+      "tests": [
+        {
+          "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+          "name": "TestCD67AdditionalImplementation",
+          "status": "fail",
+          "elapsed_seconds": 0.77
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+          "name": "TestCD67AdditionalImplementation/neutral_fixed_input_restart_and_fresh_manual_answer",
+          "status": "fail",
+          "elapsed_seconds": 0.77
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+          "name": "TestCD67CoreBoundary",
+          "status": "pass",
+          "elapsed_seconds": 0.1
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+          "name": "TestCD67CoreBoundary/negative_source_fixtures",
+          "status": "pass",
+          "elapsed_seconds": 0.1
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+          "name": "TestCD67CoreBoundary/negative_source_fixtures/direct_import_behind_tag",
+          "status": "pass",
+          "elapsed_seconds": 0.03
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+          "name": "TestCD67CoreBoundary/negative_source_fixtures/reverse_implementation_edge",
+          "status": "pass",
+          "elapsed_seconds": 0.03
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+          "name": "TestCD67CoreBoundary/negative_source_fixtures/mixed_case_text_in_other_os_test",
+          "status": "pass",
+          "elapsed_seconds": 0.02
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+          "name": "TestCD67CoreBoundary/negative_source_fixtures/transitive_helper_edge",
+          "status": "pass",
+          "elapsed_seconds": 0.02
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/internal/steerline/codexworker",
+          "name": "TestWorkerTurnFindsPRBeforeFinalMessage",
+          "status": "pass",
+          "elapsed_seconds": 0.01
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+          "name": "TestCD67CoreBoundary/negative_source_fixtures/mixed_case_filename",
+          "status": "pass",
+          "elapsed_seconds": 0.01
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/internal/steerline/codexworker",
+          "name": "TestCodexNormalizer",
+          "status": "pass",
+          "elapsed_seconds": 0
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/internal/steerline/orcaworker",
+          "name": "TestFixedOrcaAgentTerminalRejectsReplacedIncarnation",
+          "status": "pass",
+          "elapsed_seconds": 0
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/internal/steerline/orcaworker",
+          "name": "TestWorkerOrcaWorktreeNameIncludesTaskNumberAndRunIdentity",
+          "status": "pass",
+          "elapsed_seconds": 0
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+          "name": "TestDetectNormalizer",
+          "status": "pass",
+          "elapsed_seconds": 0
+        }
+      ],
+      "slowest_tests": [
+        {
+          "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+          "name": "TestCD67AdditionalImplementation",
+          "status": "fail",
+          "elapsed_seconds": 0.77
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+          "name": "TestCD67AdditionalImplementation/neutral_fixed_input_restart_and_fresh_manual_answer",
+          "status": "fail",
+          "elapsed_seconds": 0.77
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+          "name": "TestCD67CoreBoundary",
+          "status": "pass",
+          "elapsed_seconds": 0.1
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+          "name": "TestCD67CoreBoundary/negative_source_fixtures",
+          "status": "pass",
+          "elapsed_seconds": 0.1
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+          "name": "TestCD67CoreBoundary/negative_source_fixtures/direct_import_behind_tag",
+          "status": "pass",
+          "elapsed_seconds": 0.03
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+          "name": "TestCD67CoreBoundary/negative_source_fixtures/reverse_implementation_edge",
+          "status": "pass",
+          "elapsed_seconds": 0.03
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+          "name": "TestCD67CoreBoundary/negative_source_fixtures/mixed_case_text_in_other_os_test",
+          "status": "pass",
+          "elapsed_seconds": 0.02
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+          "name": "TestCD67CoreBoundary/negative_source_fixtures/transitive_helper_edge",
+          "status": "pass",
+          "elapsed_seconds": 0.02
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/internal/steerline/codexworker",
+          "name": "TestWorkerTurnFindsPRBeforeFinalMessage",
+          "status": "pass",
+          "elapsed_seconds": 0.01
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+          "name": "TestCD67CoreBoundary/negative_source_fixtures/mixed_case_filename",
+          "status": "pass",
+          "elapsed_seconds": 0.01
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/internal/steerline/codexworker",
+          "name": "TestCodexNormalizer",
+          "status": "pass",
+          "elapsed_seconds": 0
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/internal/steerline/orcaworker",
+          "name": "TestFixedOrcaAgentTerminalRejectsReplacedIncarnation",
+          "status": "pass",
+          "elapsed_seconds": 0
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/internal/steerline/orcaworker",
+          "name": "TestWorkerOrcaWorktreeNameIncludesTaskNumberAndRunIdentity",
+          "status": "pass",
+          "elapsed_seconds": 0
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+          "name": "TestDetectNormalizer",
+          "status": "pass",
+          "elapsed_seconds": 0
+        }
+      ],
+      "failures": [
+        {
+          "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+          "name": "TestCD67AdditionalImplementation",
+          "status": "fail",
+          "elapsed_seconds": 0.77
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+          "name": "TestCD67AdditionalImplementation/neutral_fixed_input_restart_and_fresh_manual_answer",
+          "status": "fail",
+          "elapsed_seconds": 0.77
+        }
+      ],
+      "skipped": [],
+      "incomplete_reasons": [],
+      "test_event_wall_seconds": 4.1821393,
+      "has_test_event_wall": true
+    },
+    "summary_sha256": "fb0f676c4df64609a5afc92e7499bb4cb43ec4de325e7548c53181167f6743b1",
+    "events_sha256": "bd810c158439fd340261e138f198da8fe2b6405cb9396c14b2a52e1ba5d75a92"
+  },
+  {
+    "report": "boundary-current",
+    "path": "C:\\Users\\lmas1\\.codex\\worktrees\\f775\\SteerLine\\bin\\cd67\\boundary-current\\summary.json",
+    "summary": {
+      "status": "failed",
+      "passed": false,
+      "complete": true,
+      "command_exit_code": 1,
+      "package_count": 1,
+      "passed_packages": 0,
+      "failed_packages": [
+        "github.com/erranliu/SteerLine/internal/steerlineintegration"
+      ],
+      "skipped_packages": [],
+      "test_count": 2,
+      "passed_tests": 0,
+      "failed_tests": 2,
+      "skipped_tests": 0,
+      "packages": [
+        {
+          "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+          "status": "fail",
+          "elapsed_seconds": 9.448
+        }
+      ],
+      "tests": [
+        {
+          "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+          "name": "TestCD67CoreBoundary",
+          "status": "fail",
+          "elapsed_seconds": 9.19
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+          "name": "TestCD67CoreBoundary/repository_all_tags_and_production_graphs",
+          "status": "fail",
+          "elapsed_seconds": 9.19
+        }
+      ],
+      "slowest_tests": [
+        {
+          "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+          "name": "TestCD67CoreBoundary",
+          "status": "fail",
+          "elapsed_seconds": 9.19
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+          "name": "TestCD67CoreBoundary/repository_all_tags_and_production_graphs",
+          "status": "fail",
+          "elapsed_seconds": 9.19
+        }
+      ],
+      "failures": [
+        {
+          "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+          "name": "TestCD67CoreBoundary",
+          "status": "fail",
+          "elapsed_seconds": 9.19
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+          "name": "TestCD67CoreBoundary/repository_all_tags_and_production_graphs",
+          "status": "fail",
+          "elapsed_seconds": 9.19
+        }
+      ],
+      "skipped": [],
+      "incomplete_reasons": [],
+      "test_event_wall_seconds": 9.4476604,
+      "has_test_event_wall": true
+    },
+    "summary_sha256": "ab494986dc495696d2963686c7857d7fdb9ab045885ece834918f6b372a742ff",
+    "events_sha256": "f90358473dadb263a2870e509bff7c5d669de18b301ba2363505f7501984e5be"
+  }
+]
