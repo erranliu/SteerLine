@@ -120,10 +120,8 @@ func driveTestLifecycleWorker(service *Service, run *Run) error {
 }
 func (f *environmentFixture) state(t *testing.T) fakeNativeOrcaState {
 	t.Helper()
-	data, err := os.ReadFile(f.statePath)
+	state, err := testprotocol.ReadNativeOrcaState(filepath.Dir(f.statePath))
 	require(t, err)
-	var state fakeNativeOrcaState
-	require(t, json.Unmarshal(data, &state))
 	return state
 }
 func (f *environmentFixture) update(t *testing.T, change func(*fakeNativeOrcaState)) {
