@@ -69,10 +69,34 @@ func VerifyAgentTerminal(ctx context.Context, call MetaCall, p executionapi.Proc
 	if err := ValidateWorkspaceTerminal(term, path, branch); err != nil {
 		return err
 	}
-	if term.RuntimeID != p.RuntimeID || term.IncarnationID != p.Incarnation || term.WorktreeID != p.WorktreeID || term.AgentIdentity != agent {
+	if term.Handle != p.Terminal || term.RuntimeID != p.RuntimeID || term.IncarnationID != p.Incarnation || term.WorktreeID != p.WorktreeID {
+		return &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "original Orca agent terminal or agent has changed"}
+	}
+	if term.AgentIdentity == "" && !term.Exited() && term.Connected && !term.Orphaned {
+		return ErrAgentStarting
+	}
+	if term.AgentIdentity != agent {
 		return &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "original Orca agent terminal or agent has changed"}
 	}
 	return nil
+}
+
+// AwaitFixedAgentTerminal waits only for detection on the original process.
+// Replacement, workspace changes and a different agent fail immediately.
+func AwaitFixedAgentTerminal(ctx context.Context, call MetaCall, p executionapi.ProcessIdentity, path, branch, agent string, timeout time.Duration) error {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	for {
+		err := VerifyAgentTerminal(ctx, call, p, path, branch, agent)
+		if !errors.Is(err, ErrAgentStarting) {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("fixed Orca agent detection did not finish: %w", ctx.Err())
+		case <-time.After(time.Second):
+		}
+	}
 }
 func VerifyCoordinatorTerminal(ctx context.Context, call MetaCall, p executionapi.ProcessIdentity, repository string) error {
 	term, err := ShowTerminal(ctx, call, p.Terminal)

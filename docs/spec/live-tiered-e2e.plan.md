@@ -20,6 +20,16 @@
 
 ## 测试计划
 
+本次 #185 后 smoke 修复：本地 lifecycle 保留空线程的原连接到中心提交会话身份并启动首个回合，拒绝/取消时释放连接，进程仍由中心管理；start 失败保留 SessionID，使未知结果进入阻断状态。Orca 仅等待原终端的空 agentIdentity 完成识别，替换终端、不同 agent、退出及工作区变化立即拒绝。受控 Codex mock 同步增加“空线程不能 resume”的原生约束。
+
+| 级别 | 组/场景 | 环境 | 命令 | 时点与通过条件 | 证据 |
+|---|---|---|---|---|---|
+| L1 定向 | local.first-turn / feedback / partial-receipt | 本机、受控 app-server，无 token | `go test ./internal/steerline -run '^(TestWorkerFlowServiceFirstFeedbackKeepsSessionAndWorkspace\|TestMockAppServerThreadAndTurnContract\|TestAppServerFailedPreparationKeepsPartialSessionBinding)$' -count=1` | 修复后；空线程 resume 被 mock 拒绝，首次回合与同会话反馈仍通过，部分身份保留 | 本轮命令输出 |
+| L1 定向 | orca.original-agent-detection 与相关包 | 本机，无 token | `go test ./internal/steerline/codexworker ./internal/steerline/orcaworker ./internal/steerline/execution ./cmd/test-feedback ./tests/e2e/internal/... -count=1` | L2 前；仅同终端启动状态等待，其他身份立即拒绝，相关回归通过 | 本轮命令输出 |
+| L2 | smoke.delivery + smoke.local-codex + smoke.orca-codex | controlled 门槛 + live，full access，luna/medium，SteerlineTest | `go run ./cmd/test-feedback -level=L2 -out=<fresh>` | 定向通过后；受控失败时不进真实阶段，两条链路真实 PR 交付、正数 usage 和清理全部通过 | `docs/validation/tiered-e2e-testing/smoke-lifecycle-fix/` |
+
+本次暂不选择 L3/full：用户要求修复并重跑 smoke；L2 覆盖本次改变的两条原生准备/首回合路径，L1 覆盖后续反馈与身份拒绝。
+
 | 级别 | 组/场景 | 环境 | 命令 | 时点与通过条件 | 证据 |
 |---|---|---|---|---|---|
 | L1 定向 | 选择、门槛、usage、环境辅助 | 本机，无模型请求 | `go test ./cmd/test-feedback ./tests/e2e/internal/... -count=1` | 实现后；非法选择拒绝、门槛失败调用数为零、usage 匹配/去重正确 | 命令输出 |
