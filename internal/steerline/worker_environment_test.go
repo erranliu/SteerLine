@@ -303,6 +303,11 @@ func TestWorkerEnvironmentER2HostWaitPreservesQuestionAndPR(t *testing.T) {
 	}
 	f.update(t, func(s *fakeNativeOrcaState) { s.HostWait = nil; s.InboxUnavailable = false })
 	f.recheck(t)
+	deadline := time.Now().Add(45 * time.Second)
+	for f.state(t).Sends == 0 && time.Now().Before(deadline) {
+		f.poll(t)
+		time.Sleep(10 * time.Millisecond)
+	}
 	wf, e = f.service.workflowRecords(f.run)
 	if state := f.state(t); state.Sends != 1 || state.SendBody != note || len(e.Environment.DeferredFeedback) != 0 || f.run.Decision == nil || orcaQuestionID(f.run.Decision) != "original-question" {
 		t.Fatalf("deferred feedback lost original text or question: sends=%d body=%q queue=%+v decision=%+v event=%q turn=%+v", state.Sends, state.SendBody, e.Environment.DeferredFeedback, f.run.Decision, deref(e.LastEvent), nativeOrcaCurrentTurn(e))

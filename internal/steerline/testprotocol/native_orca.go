@@ -445,7 +445,9 @@ func FakeNativeOrca(stateDir string, args []string) int {
 				}
 				if state.ReadinessMode == "oral" {
 					blocks = []any{map[string]any{"role": "assistant", "source": "transcript", "blocks": []any{map[string]any{"type": "text", "text": "OK"}}}}
-				} else {
+				} else if state.ReadinessMode != "hold" {
+					// A held tool call has no completion receipt yet. Later success
+					// or failure belongs to this same call, never another injection.
 					blocks = append(blocks, map[string]any{"id": "result", "role": "tool", "source": "transcript", "blocks": []any{map[string]any{"type": "tool-result", "output": resultText}}})
 				}
 				return nativeOrcaOK(map[string]any{"dispatchId": nativeArg(args, "--dispatch"), "source": "transcript", "provider": "codex", "sourceIdentity": "probe-source", "sourceExact": true, "contentComplete": true, "nextCursor": "probe-cursor", "transcript": map[string]any{"messages": blocks}})

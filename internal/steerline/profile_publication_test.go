@@ -145,7 +145,7 @@ func TestProfilePublicationMixedRoutesAndFrozenResponsibility(t *testing.T) {
 }
 
 func TestProfilePublicationRequiresExplicitProjectAndProfilePolicies(t *testing.T) {
-	c := Config{ExecutionPolicy: workspacePolicyFixture(), PublicationPolicy: executionapi.PublicationPolicy{Publisher: PublisherExecutionProfile}, PR: hostPublicationProviderFixture(), ExecutionProfiles: mixedPublicationProfiles(), globalExecution: true}
+	c := testConfigWithDirectory(Config{ExecutionPolicy: workspacePolicyFixture(), PublicationPolicy: executionapi.PublicationPolicy{Publisher: PublisherExecutionProfile}, PR: hostPublicationProviderFixture(), ExecutionProfiles: mixedPublicationProfiles(), globalExecution: true})
 	for _, publisher := range []string{"", PublisherExecutionProfile, "automatic"} {
 		profiles := mixedPublicationProfiles()
 		profiles[1].ConfiguredPublicationPolicy = &executionapi.PublicationPolicy{Publisher: publisher}
