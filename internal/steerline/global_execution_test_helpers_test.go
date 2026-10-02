@@ -16,8 +16,11 @@ func publicationSnapshotFixture(t *testing.T, c Config) FixedExecutionProfile {
 	if c.PR.Kind == "gitea" {
 		c.Host, c.Agent = "orca", "codex"
 		c.PublicationPolicy.Publisher = "worker"
-		c.Codex.WindowsSandbox = "unelevated"
-		c.Orca.Shell, c.Orca.WaitTimeout = "powershell.exe", "1m"
+		codex := codexProfileSettings(c)
+		codex.WindowsSandbox = "unelevated"
+		orca := orcaProfileSettings(c)
+		orca.Shell, orca.WaitTimeout = "powershell.exe", "1m"
+		setTestImplementationProfiles(t, &c, codex, &orca)
 	}
 	require(t, validateWorkflowConfig(&c, nil))
 	require(t, c.bindPublicationTarget(context.Background()))

@@ -12,6 +12,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
 
 func workspacePolicyFixture() executionapi.ExecutionPolicy {
@@ -22,19 +23,27 @@ func TestFullAccessProfileFreezeSurvivesClaimValidation(t *testing.T) {
 	for _, host := range []string{"local", "orca"} {
 		policy := workspacePolicyFixture()
 		policy.Filesystem.WriteScope, policy.Filesystem.GitMetadataWrite = "host", false
-		c := Config{PublicationPolicy: executionPublicationFixture(), PR: hostPublicationProviderFixture(), ExecutionPolicy: policy, Repository: "repository", Branch: "main", Host: host, Agent: "codex", Codex: Command{Executable: "codex"}}
+		c := Config{PublicationPolicy: executionPublicationFixture(), PR: hostPublicationProviderFixture(), ExecutionPolicy: policy, Repository: "repository", Branch: "main", Host: host, Agent: "codex"}
 		if host == "orca" {
 			c.PublicationPolicy.Publisher = "worker"
 		}
-		original := c.projectExecutionProfile().Freeze()
-		if original.Sandbox != "danger-full-access" || original.WindowsSandbox != "" || !verifyFixedExecutionProfile(original) {
+		if host == "orca" {
+			setTestImplementationProfiles(t, &c, codexworker.ProfileConfig{Executable: "codex"}, &orcaworker.ProfileConfig{Executable: "orca", Shell: "powershell.exe", WaitTimeout: "1m"})
+		} else {
+			setTestCodexProfile(t, &c, codexworker.ProfileConfig{Executable: "codex"})
+		}
+		original := c.projectExecutionProfile().Freeze(configurationProjectIdentity(c))
+		if c.projectExecutionProfile().DigestFor(configurationProjectIdentity(c)) != original.Digest {
+			t.Fatal("selection digest differs from its unchanged frozen envelope")
+		}
+		if !verifyFixedExecutionProfile(original) {
 			t.Fatalf("%s full-access snapshot rejected at claim: %+v", host, original)
 		}
 		restored := c.ApplyFixedExecutionProfile(original)
-		if restored.ExecutionPolicy.Filesystem.WriteScope != "host" || restored.Sandbox != "danger-full-access" || restored.WindowsSandbox != "" {
+		if restored.ExecutionPolicy.Filesystem.WriteScope != "host" || codexProfileSettings(restored).WindowsSandbox != "" {
 			t.Fatal("frozen full-access authority was not restored")
 		}
-		original.WindowsSandbox = "elevated"
+		original.ImplementationData[0].Payload[0] = '['
 		if verifyFixedExecutionProfile(original) {
 			t.Fatal("full-access snapshot accepted a changed Windows sandbox mode")
 		}
@@ -57,6 +66,7 @@ func TestProjectPolicyRejectsMissingOrOldConfiguration(t *testing.T) {
 		t.Fatalf("missing authority accepted: %v", err)
 	}
 	body["execution_policy"] = workspacePolicyFixture()
+	body["pr"] = hostPublicationProviderFixture()
 	for _, field := range []string{"sandbox", "windows_sandbox"} {
 		body[field] = "workspace-write"
 		write()

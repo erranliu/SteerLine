@@ -40,8 +40,8 @@ func ValidateProfileSelection(policy executionapi.ExecutionPolicy, agent string,
 	if err != nil {
 		return err
 	}
-	if policy.Filesystem.WriteScope != "workspace" || codex.Profile != "" {
-		return errors.New("Orca worker-flow requires workspace-write and no Codex profile")
+	if (policy.Filesystem.WriteScope != "workspace" && policy.Filesystem.WriteScope != "host") || codex.Profile != "" {
+		return errors.New("Orca worker-flow requires a supported project policy and no Codex profile")
 	}
 	if agent != "codex" && (codex.Model != "" || codex.Profile != "" || codex.ReasoningEffort != "") {
 		return errors.New("Orca model, profile and reasoning_effort overrides require agent=codex")
